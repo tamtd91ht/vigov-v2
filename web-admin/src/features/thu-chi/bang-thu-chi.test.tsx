@@ -18,7 +18,8 @@ import {
   DongKhoanMuc,
   FormDoiCachTinh,
   FormGoKemLyDo,
-  FormSuaDong,
+  LINE_ORDER_TITLE,
+  LineOrderDialog,
   SheetSelectionBar,
   TheChiSoNam,
   TheTomTat,
@@ -38,6 +39,8 @@ import {
   CANH_BAO_GO_BANG,
   cauQuyDoi,
   CAU_THIEU_QUYEN_XEM,
+  cellValueDraft,
+  cellValueEdit,
   docSoNhap,
   donViCuaBang,
   DOT_TRONG,
@@ -51,6 +54,8 @@ import {
   nhanSuaO,
   nhanThemCon,
   NHAN_SUA_TEN,
+  NO_REPORT_YET,
+  PARENT_SUMS_CHILDREN,
   PHAN_CHUA_DUNG,
 } from "./nhan-thu-chi";
 import { FormSuaBang } from "./sua-bang";
@@ -151,10 +156,8 @@ function veBang(coGhi: boolean, coXacNhan: boolean, duLieu = bang()): string {
       coGhi={coGhi}
       coXacNhan={coXacNhan}
       dangGui={false}
-      dangSuaDong={null}
-      moSua={() => {}}
-      huySua={() => {}}
-      luuSua={() => {}}
+      saveLine={async () => null}
+      openLineOrder={() => {}}
       moThem={() => {}}
       moGoDong={() => {}}
       datTong={() => {}}
@@ -206,7 +209,8 @@ function renderLine(line: finance_dongRa): string {
           coXacNhan={false}
           dangGui={false}
           moRongDoi={() => {}}
-          moSua={() => {}}
+          saveLine={async () => null}
+          openLineOrder={() => {}}
           them={() => {}}
           go={() => {}}
           datTong={() => {}}
@@ -284,7 +288,8 @@ function renderLineAs(line: finance_dongRa, coGhi: boolean): string {
           coXacNhan={false}
           dangGui={false}
           moRongDoi={() => {}}
-          moSua={() => {}}
+          saveLine={async () => null}
+          openLineOrder={() => {}}
           them={() => {}}
           go={() => {}}
           datTong={() => {}}
@@ -315,7 +320,10 @@ describe("Ô SỐ BẤM ĐỂ SỬA TẠI CHỖ (§4.1, NS-01)", () => {
 
   it("dòng Cộng theo đợt hay cộng con: không ô số nào là nút (máy chủ từ chối số gõ tay)", () => {
     for (const method of ["entries", "children"]) {
-      expect(renderLineAs({ ...MANUAL, method }, true)).not.toContain("Sửa số ");
+      // `Sửa số <cột>` — not the row's `Sửa số thứ tự…` button, which every editable row has.
+      const html = renderLineAs({ ...MANUAL, method }, true);
+      expect(html).not.toContain("Sửa số Dự toán năm");
+      expect(html).not.toContain("Sửa số Chi ngân sách");
     }
   });
 });
@@ -395,14 +403,24 @@ describe("con số ra tới trang", () => {
     expect(html).not.toContain("3.401.673,3");
   });
 
-  it("ô phần trăm in ĐÚNG phần vạn máy chủ gửi — không tự chia `values`", () => {
-    // `values` của dòng cho 3.401.673,3 / 5.502.660 = 61,82%. Máy chủ gửi 9127 CÓ CHỦ Ý khác đi: nếu
-    // trang tự chia thì nó ra 61,82% và ca này đỏ.
+  it("ô phần trăm in ĐÚNG phần vạn máy chủ gửi — không tự chia `values` — làm tròn một chữ số lẻ", () => {
+    // `values` của dòng cho 3.401.673,3 / 5.502.660 = 61,8%. Máy chủ gửi 9127 CÓ CHỦ Ý khác đi: nếu
+    // trang tự chia thì nó ra 61,8% và ca này đỏ. One decimal, as the prototype (owner, 09/10/2026).
     const html = renderLine(dong({ method: "manual", percent_basis_points: { C3: 9127 } }));
 
-    expect(html).toContain("91,27%");
-    expect(html).not.toContain("61,82%");
+    expect(html).toContain(">91,3%<");
+    expect(html).not.toContain("91,27%");
+    expect(html).not.toContain("61,8");
     expect(html).not.toContain("Không tính được");
+  });
+
+  it("số trong bảng làm tròn MỘT chữ số lẻ theo đơn vị của bảng; ô sửa vẫn điền con số CHÍNH XÁC", () => {
+    // 1.234.567,89 triệu đồng — prints 1.234.567,9; the box the officer opens holds the exact digits.
+    const line = dong({ id: "I", name: "Chi đầu tư phát triển", method: "manual", values: { C1: 1234567890000, C2: null } });
+    const html = renderLine(line);
+    expect(html).toContain(">1.234.567,9<");
+    expect(html).not.toContain("1.234.567,89");
+    expect(cellValueDraft(line, "C1", "trieu-dong")).toBe("1.234.567,89");
   });
 
   it("ô phần trăm null kèm câu: dấu 'Không tính được' và NGUYÊN câu máy chủ, không phải 0%", () => {
@@ -457,7 +475,8 @@ describe("con số ra tới trang", () => {
             coXacNhan={false}
             dangGui={false}
             moRongDoi={() => {}}
-            moSua={() => {}}
+            saveLine={async () => null}
+            openLineOrder={() => {}}
             them={() => {}}
             go={() => {}}
             datTong={() => {}}
@@ -481,6 +500,7 @@ describe("con số ra tới trang", () => {
       <TheTomTat
         bang={bang().sheet}
         tomTat={{ unavailable_reason: cau, cells: [], indicator: { name: "Chi đạt dự toán", basis_points: null } }}
+        columns={COT}
         soKhoanMuc={59}
         donVi={donViCuaBang(bang().sheet)}
       />,
@@ -488,6 +508,29 @@ describe("con số ra tới trang", () => {
 
     expect(html).toContain(cau);
     expect(html).not.toContain("0%");
+  });
+
+  it("thẻ tóm tắt: MỘT ô cho MỖI cột của bảng, kể cả cột %, nhãn là tên cột, số theo đơn vị của bảng", () => {
+    const headline = dong({ percent_basis_points: { C3: 9127 } });
+    const html = renderToStaticMarkup(
+      <TheTomTat
+        bang={bang().sheet}
+        tomTat={TOM_TAT}
+        columns={COT}
+        headline={headline}
+        soKhoanMuc={2}
+        donVi={donViCuaBang(bang().sheet)}
+      />,
+    );
+    const labels = [...html.matchAll(/<dt[^>]*>(.*?)<\/dt>/g)].map((m) => m[1]);
+    const values = [...html.matchAll(/<dd[^>]*>(.*?)<\/dd>/g)].map((m) => m[1]);
+    // Three columns, three tiles — the server's indicator is no longer a fourth tile here.
+    expect(labels).toEqual(["Dự toán năm", "Chi ngân sách", "So sánh TH/DT (%)"]);
+    // In the SHEET'S unit (triệu đồng), one decimal — not `compactDong` ("3,8 nghìn tỷ").
+    expect(values).toEqual(["3.794.740", "3.463.459,2", "91,3%"]);
+    expect(html).not.toContain("tỷ");
+    // The exact figure stays on hover.
+    expect(html).toContain('title="3.463.459,2 triệu đồng"');
   });
 });
 
@@ -547,10 +590,8 @@ describe("cây khoản mục và thanh công cụ", () => {
         coGhi={false}
         coXacNhan={false}
         dangGui={false}
-        dangSuaDong={null}
-        moSua={() => {}}
-        huySua={() => {}}
-        luuSua={() => {}}
+        saveLine={async () => null}
+        openLineOrder={() => {}}
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}
@@ -587,100 +628,48 @@ describe("biểu mẫu ghi", () => {
     expect(html).toContain(CANH_BAO_GO_BANG);
   });
 
-  it("dòng CÓ CON không có ô số nào để gõ, và nói ra vì sao", () => {
-    const html = renderToStaticMarkup(
-      <table>
-        <tbody>
-          <FormSuaDong
-            dong={dong({ method: "children" })}
-            cot={[COT[0]!, COT[1]!]}
-            donVi={donViCuaBang(bang().sheet)}
-            soCotBang={7}
-            dangGui={false}
-            huy={() => {}}
-            luu={() => {}}
-          />
-        </tbody>
-      </table>,
-    );
-
-    expect(html).not.toContain('name="gia:C1"');
-    expect(html).toContain("tổng các con");
-  });
-
-  it("dòng KHÔNG có con mở đủ ô số của các cột `so`, và không mở ô cho cột phần trăm", () => {
-    const html = renderToStaticMarkup(
-      <table>
-        <tbody>
-          <FormSuaDong
-            dong={dong({ method: "manual" })}
-            cot={[COT[0]!, COT[1]!]}
-            donVi={donViCuaBang(bang().sheet)}
-            soCotBang={7}
-            dangGui={false}
-            huy={() => {}}
-            luu={() => {}}
-          />
-        </tbody>
-      </table>,
-    );
-
-    expect(html).toContain('name="gia:C1"');
-    expect(html).toContain('name="gia:C2"');
-    expect(html).not.toContain('name="gia:C3"');
-    // Điền sẵn THEO ĐƠN VỊ CỦA BẢNG — đúng chuỗi trang in, đọc ngược lại ra đúng số đồng cũ.
-    expect(html).toContain('value="3.401.673,3"');
-    expect(html).not.toContain('type="number" step="1" value');
+  it("ô số sửa tại chỗ điền sẵn THEO ĐƠN VỊ CỦA BẢNG — đọc ngược lại ra đúng số đồng cũ", () => {
+    const line = dong({ method: "manual" });
+    expect(cellValueDraft(line, "C2", "trieu-dong")).toBe("3.401.673,3");
+    // Enter without typing sends nothing.
+    expect(cellValueEdit(line, COT[1]!, "3.401.673,3", "trieu-dong")).toEqual({ kind: "unchanged" });
   });
 
   it("giá trị máy chủ gửi mà JS không đọc chính xác được: ô sửa điền NGUYÊN chữ số, không điền rỗng", () => {
-    // Ô rỗng lúc "Lưu khoản mục" nghĩa là XOÁ TRẮNG ô ấy (`values[cot] = null`). Điền rỗng cho một giá
-    // trị đọc hỏng thì một lần sửa TÊN khoản mục lặng lẽ xoá một con số ngân sách đang lưu. Chữ số thô
-    // bị `docSoNhap` từ chối kèm một câu, nên lần lưu dừng lại và cán bộ thấy có chuyện.
-    const html = renderToStaticMarkup(
-      <table>
-        <tbody>
-          <FormSuaDong
-            dong={dong({ method: "manual", values: { C1: 9007199254740994, C2: null } })}
-            cot={[COT[0]!, COT[1]!]}
-            donVi={donViCuaBang(bang().sheet)}
-            soCotBang={7}
-            dangGui={false}
-            huy={() => {}}
-            luu={() => {}}
-          />
-        </tbody>
-      </table>,
-    );
-
-    const giaTriO = (id: string) =>
-      new RegExp(`name="gia:${id}"[^>]*value="([^"]*)"`).exec(html)?.[1];
-    expect(giaTriO("C1")).toBe("9007199254740994");
+    // Ô rỗng lúc lưu nghĩa là XOÁ TRẮNG ô ấy (`values[cot] = null`). Điền rỗng cho một giá trị đọc hỏng
+    // thì một lần bấm vào ô rồi rời đi lặng lẽ xoá một con số ngân sách đang lưu. Chữ số thô bị
+    // `docSoNhap` từ chối kèm một câu, nên lần lưu dừng lại và cán bộ thấy có chuyện.
+    const line = dong({ method: "manual", values: { C1: 9007199254740994, C2: null } });
+    expect(cellValueDraft(line, "C1", "trieu-dong")).toBe("9007199254740994");
     // Ô thật sự trống (máy chủ gửi `null`) thì vẫn điền rỗng — đó là "trống", không phải "hỏng".
-    expect(giaTriO("C2")).toBe("");
+    expect(cellValueDraft(line, "C2", "trieu-dong")).toBe("");
     // Và chữ số thô ấy KHÔNG lọt qua ô đọc như một con số (đơn vị bảng là triệu đồng).
     expect(docSoNhap("9007199254740994", "trieu-dong").loai).toBe("loi");
+    expect(cellValueEdit(line, COT[0]!, "9007199254740994", "trieu-dong").kind).toBe("invalid");
   });
 
-  it("dòng `entries` không có ô số nào để gõ, và nói ra rằng số lấy từ các đợt", () => {
-    const html = renderToStaticMarkup(
-      <table>
-        <tbody>
-          <FormSuaDong
-            dong={dong({ method: "entries" })}
-            cot={[COT[0]!, COT[1]!]}
-            donVi={donViCuaBang(bang().sheet)}
-            soCotBang={7}
-            dangGui={false}
-            huy={() => {}}
-            luu={() => {}}
-          />
-        </tbody>
-      </table>,
-    );
+  it("ô số: gõ số mới gửi ĐÚNG MỘT cột, xoá trắng gửi null, gõ sai thì giữ ô mở với câu lý do", () => {
+    const line = dong({ method: "manual" });
+    expect(cellValueEdit(line, COT[0]!, "1,5", "trieu-dong")).toEqual({
+      kind: "save",
+      body: { values: { C1: 1500000 } },
+    });
+    expect(cellValueEdit(line, COT[0]!, "", "trieu-dong")).toEqual({ kind: "save", body: { values: { C1: null } } });
+    const wrong = cellValueEdit(line, COT[0]!, "1.5", "trieu-dong");
+    expect(wrong.kind).toBe("invalid");
+  });
+});
 
-    expect(html).not.toContain('name="gia:C1"');
-    expect(html).toContain("Cộng theo đợt");
+describe("TT và thứ tự hiển thị — hộp nhỏ riêng", () => {
+  it("chỉ hai trường, điền sẵn giá trị của dòng; tiêu đề nói đúng việc", () => {
+    const html = renderToStaticMarkup(
+      <LineOrderDialog dong={dong({ no: "I", order: 3 })} dangGui={false} huy={() => {}} luu={() => {}} />,
+    );
+    expect(html).toContain(LINE_ORDER_TITLE);
+    expect(html).toMatch(/name="no"[^>]*value="I"/);
+    expect(html).toMatch(/name="order"[^>]*value="3"/);
+    expect(html).not.toContain('name="name"');
+    expect(html).not.toContain('name="gia:');
   });
 });
 
@@ -763,13 +752,28 @@ describe("thẻ chỉ số — `Chênh lệch thu – chi luỹ kế`", () => {
 });
 
 describe("cách tính — ô chọn trên dòng lá", () => {
-  it("chỉ dòng LÁ có ô chọn; dòng có con hiện 'Cộng khoản mục con' chỉ đọc", () => {
+  /** The opening `<select …>` tag and its options, by `aria-label`. */
+  function selectByLabel(html: string, label: string): string {
+    const at = html.indexOf(`aria-label="${nhuTrongHTML(label)}"`);
+    expect(at).toBeGreaterThan(-1);
+    const start = html.lastIndexOf("<select", at);
+    return html.slice(start, html.indexOf("</select>", at));
+  }
+
+  it("ba lựa chọn; dòng có con: ô chọn VÔ HIỆU, hiện 'Cộng khoản mục con'; dòng lá: lựa chọn ấy vô hiệu", () => {
     const html = veBang(true, false);
 
-    expect(html).toContain(nhuTrongHTML("Cách tính của Chi đầu tư phát triển"));
-    expect(html).not.toContain(nhuTrongHTML("Cách tính của CHI NGÂN SÁCH NHÀ NƯỚC"));
-    expect(html).toContain("Cộng khoản mục con");
-    expect(html).toContain('value="entries"');
+    const parent = selectByLabel(html, "Cách tính của CHI NGÂN SÁCH NHÀ NƯỚC");
+    expect(parent).toMatch(/^<select[^>]* disabled=""/);
+    expect(parent).toContain(nhuTrongHTML(PARENT_SUMS_CHILDREN));
+    expect(parent).toContain('<option value="children" selected="">Cộng khoản mục con</option>');
+
+    const leaf = selectByLabel(html, "Cách tính của Chi đầu tư phát triển");
+    expect(leaf).not.toMatch(/^<select[^>]* disabled=""/);
+    expect(leaf).toContain('<option value="manual" selected="">Nhập trực tiếp</option>');
+    expect(leaf).toContain('<option value="entries">Cộng theo đợt</option>');
+    // Never sent (the server answers 400): shown, not choosable.
+    expect(leaf).toContain('<option value="children" disabled="">Cộng khoản mục con</option>');
   });
 
   it("thiếu `budget.update`: KHÔNG ô chọn nào, cách tính hiện thành chữ", () => {
@@ -823,7 +827,6 @@ describe("hộp các đợt thu, chi (§5)", () => {
       <NoiDungHopDot
         closes={[]}
         sheetYear={2026}
-        method="entries"
         cot={COT_SO}
         donVi={DON_VI}
         danhSach={{ pha: "xong", duLieu: danhSach }}
@@ -834,21 +837,26 @@ describe("hộp các đợt thu, chi (§5)", () => {
     );
   }
 
-  it("nút ⇄ CHỈ trên dòng lá, và người chỉ đọc cũng mở được (danh sách là `budget.read`)", () => {
+  it("nút ⇄ trên MỌI dòng: dòng lá mở được (cả người chỉ đọc); dòng có con VÔ HIỆU và nói vì sao", () => {
     const html = veBang(false, false);
 
-    expect(html).toContain(nhuTrongHTML(nhanNutDot("Chi đầu tư phát triển")));
+    const leafAt = html.indexOf(`aria-label="${nhuTrongHTML(nhanNutDot("Chi đầu tư phát triển"))}"`);
+    expect(leafAt).toBeGreaterThan(-1);
+    expect(html.slice(html.lastIndexOf("<button", leafAt), html.indexOf(">", leafAt))).not.toContain('disabled=""');
+    // The parent's button is there, disabled, named by the reason — never as "Các đợt thu, chi của …".
     expect(html).not.toContain(nhuTrongHTML(nhanNutDot("CHI NGÂN SÁCH NHÀ NƯỚC")));
+    const parentAt = html.indexOf(`aria-label="${nhuTrongHTML(PARENT_SUMS_CHILDREN)}"`);
+    expect(parentAt).toBeGreaterThan(-1);
+    expect(html.slice(html.lastIndexOf("<button", parentAt), html.indexOf(">", parentAt))).toContain('disabled=""');
   });
 
-  it("tiêu đề VIẾT HOA, câu mô tả nguyên văn §5, và câu điều kiện 'Cộng theo đợt'", () => {
+  it("tiêu đề là tên khoản mục NGUYÊN VĂN, câu mô tả nguyên văn §5 ngay dưới, không thêm dòng phụ", () => {
     const html = renderToStaticMarkup(
       <HopDotThuChi
         closes={[]}
         sheetYear={2026}
         khoanMucId="I"
         tenKhoanMuc="Chi đầu tư phát triển"
-        method="manual"
         cot={COT_SO}
         donVi={DON_VI}
         coGhi
@@ -858,10 +866,15 @@ describe("hộp các đợt thu, chi (§5)", () => {
       />,
     );
 
-    expect(html).toContain("CHI ĐẦU TƯ PHÁT TRIỂN");
+    expect(html).toContain(">Chi đầu tư phát triển</h2>");
+    expect(html).not.toContain("CHI ĐẦU TƯ PHÁT TRIỂN");
     expect(html).toContain(MO_TA_HOP_DOT);
-    expect(html).toContain("Cộng theo đợt");
-    expect(html).toContain("chưa được cộng");
+    // The two extra lines (summing condition, unit) and the list heading are gone (prototype).
+    expect(html).not.toContain("chưa được cộng");
+    expect(html).not.toContain("Số tiền theo đơn vị của bảng");
+    expect(html).not.toContain("Các đợt đã ghi</h4>");
+    // Money labels are the column's own label.
+    expect(html).toContain(">Dự toán năm</label>");
     // A centred modal now, as the prototype's `FiscalEntriesDialog` (native `<dialog>`).
     expect(html).toContain("<dialog");
   });
@@ -873,7 +886,6 @@ describe("hộp các đợt thu, chi (§5)", () => {
         sheetYear={2026}
         khoanMucId="I"
         tenKhoanMuc="Chi đầu tư phát triển"
-        method="entries"
         cot={COT_SO}
         donVi={DON_VI}
         coGhi={false}
@@ -888,8 +900,14 @@ describe("hộp các đợt thu, chi (§5)", () => {
     expect(html).not.toContain(">Ghi đợt<");
   });
 
-  it("danh sách rỗng hiện 'Chưa ghi đợt nào.'", () => {
-    expect(veNoiDung(false, { line_id: "I", method: "entries", entries: [] })).toContain(DOT_TRONG);
+  it("danh sách rỗng hiện 'Chưa ghi đợt nào.' — một dòng chữ, không biểu tượng", () => {
+    const html = veNoiDung(false, { line_id: "I", method: "entries", entries: [] });
+    expect(html).toContain(`<p class="m-0 py-8 text-center text-[12.5px] text-ink-muted">${DOT_TRONG}</p>`);
+    expect(html).not.toContain("<svg");
+  });
+
+  it("danh sách nằm trong khung cao tối đa 24rem, tự cuộn", () => {
+    expect(veNoiDung(false)).toContain("max-h-[24rem]");
   });
 
   it("'Đơn vị, cá nhân' in NGUYÊN chuỗi máy chủ đã che — không thử khôi phục", () => {
@@ -907,14 +925,14 @@ describe("hộp các đợt thu, chi (§5)", () => {
     expect(veNoiDung(false)).not.toContain("Gỡ đợt");
   });
 
-  it("có `budget.confirm`: nút gỡ đợt hiện", () => {
-    expect(veNoiDung(true)).toContain("Gỡ đợt");
+  it("có `budget.confirm`: nút gỡ đợt hiện — chỉ biểu tượng thùng rác đỏ, tên đọc được", () => {
+    const html = veNoiDung(true);
+    expect(html).toContain('aria-label="Gỡ đợt ngày 20/9/2026"');
+    expect(html).not.toContain(">Gỡ đợt<");
   });
 
   it("biểu mẫu ghi đợt có ô tiền CHỈ cho cột số, là ô CHỮ, và bốn trường của §5", () => {
-    const html = renderToStaticMarkup(
-      <FormGhiDot cot={COT_SO} donVi={DON_VI} dangGui={false} gui={() => {}} />,
-    );
+    const html = renderToStaticMarkup(<FormGhiDot cot={COT_SO} dangGui={false} gui={() => {}} />);
 
     expect(html).toContain('name="dot-gia:C1"');
     expect(html).toContain('name="dot-gia:C2"');
@@ -941,6 +959,48 @@ describe("hộp các đợt thu, chi (§5)", () => {
     expect(html).toContain('id="go-dot-reason"');
     expect(html).toContain('name="reason"');
     expect(html).toContain("required");
+  });
+});
+
+describe("thanh chọn bảng — nút kỳ rời, như prototype", () => {
+  /** The opening tag of the sheet button whose words are `text`. */
+  function sheetButton(html: string, text: string): string {
+    const at = html.indexOf(`>${text}</button>`);
+    expect(at).toBeGreaterThan(-1);
+    return html.slice(html.lastIndexOf("<button", at), at + 1);
+  }
+
+  it("kỳ đang chọn: nền navy chữ trắng, `aria-selected=true`; kỳ kia: viền nhạt chữ xám, `false`", () => {
+    const html = renderSelectionBar(false, false);
+    const chosen = sheetButton(html, "Chi ngân sách 2026");
+    const other = sheetButton(html, "Thu ngân sách 2026");
+
+    expect(chosen).toContain('aria-selected="true"');
+    expect(chosen).toContain("border-navy bg-navy text-white");
+    expect(other).toContain('aria-selected="false"');
+    expect(other).toContain("border-line bg-surface text-ink-muted");
+    for (const tag of [chosen, other]) {
+      expect(tag).toContain("rounded-[8px] border border-solid px-3 py-1.5");
+      expect(tag).toContain("text-[12.5px]");
+      expect(tag).toContain('role="tab"');
+    }
+    // Separate buttons with a 6px gap — no grey segmented track that scrolls sideways.
+    expect(html).toContain('role="tablist" aria-label="Chọn bảng thu hoặc bảng chi" class="flex flex-wrap gap-1.5"');
+    expect(html).not.toContain("bg-muted p-[3px]");
+  });
+
+  it("`Gỡ` là nút viền chữ thường (outline), không nền đỏ; thứ tự Nạp · Sửa · Gỡ", () => {
+    const html = renderSelectionBar(true, true);
+    const at = html.indexOf('aria-label="Gỡ bảng"');
+    const tag = html.slice(html.lastIndexOf("<button", at), html.indexOf(">", at));
+    expect(tag).toContain("text-foreground");
+    expect(tag).not.toContain("text-destructive");
+    const order = ["Nạp từ Excel", "Sửa thông tin bảng", 'aria-label="Gỡ bảng"'].map((s) => html.indexOf(s));
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  it("câu trạng thái rỗng là câu của prototype, nguyên văn", () => {
+    expect(NO_REPORT_YET).toBe("Chưa có báo cáo nào. Nạp tệp Excel của Phòng Tài chính để bắt đầu.");
   });
 });
 
@@ -1146,10 +1206,8 @@ function veBangJSX() {
       coGhi
       coXacNhan
       dangGui={false}
-      dangSuaDong={null}
-      moSua={() => {}}
-      huySua={() => {}}
-      luuSua={() => {}}
+      saveLine={async () => null}
+      openLineOrder={() => {}}
       moThem={() => {}}
       moGoDong={() => {}}
       datTong={() => {}}

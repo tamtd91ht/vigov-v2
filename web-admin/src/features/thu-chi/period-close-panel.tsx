@@ -6,7 +6,6 @@ import { useState, type FormEvent } from "react";
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba"; // vi-name-ok: existing idempotency-key generator
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { Field } from "@/components/ui/field";
@@ -92,22 +91,29 @@ export function BudgetPeriodClosePanel({
     return true;
   }
 
+  // The spec's shell for this kept block (spec 03 §B): the prototype's card — a 10px hairline box, no
+  // shadow, `px-4 py-3` — with the title at the size of the other blocks' titles (14px navy bold).
+  // Its own markup rather than `Card` + overrides: `rounded-card` / `shadow-card` are theme names
+  // tailwind-merge does not know, so an override would leave both radius classes on the element.
+  // `data-slot="card"` keeps the history table's scroller from drawing a second frame (`globals.css`).
   return (
-    <Card as="section" aria-labelledby="tieu-de-chot-ky">
-      <CardHeader className="justify-between">
-        <div className="min-w-0">
-          <CardTitle as="h3" id="tieu-de-chot-ky" className="inline-flex items-center gap-2">
-            <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-            Chốt kỳ ngân sách năm {year}
-          </CardTitle>
-          <p className="m-0 mt-1 text-[13px] text-ink-500">
-            Chốt theo tháng khoá việc thêm, gỡ đợt thu chi của tháng đó. Chốt cả năm khoá thêm việc
-            sửa bảng, khoản mục và số liệu của năm.
-          </p>
-        </div>
-      </CardHeader>
+    <section
+      data-slot="card"
+      aria-labelledby="tieu-de-chot-ky"
+      className="flex min-w-0 flex-col gap-3 rounded-[10px] border border-solid border-line bg-surface px-4 py-3"
+    >
+      <div className="min-w-0">
+        <h3 id="tieu-de-chot-ky" className="m-0 inline-flex items-center gap-2 text-[14px] leading-snug font-bold text-navy">
+          <LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0 text-brand-600" />
+          Chốt kỳ ngân sách năm {year}
+        </h3>
+        <p className="m-0 mt-0.5 text-[11.5px] text-ink-muted">
+          Chốt theo tháng khoá việc thêm, gỡ đợt thu chi của tháng đó. Chốt cả năm khoá thêm việc
+          sửa bảng, khoản mục và số liệu của năm.
+        </p>
+      </div>
 
-      <div className="flex min-w-0 flex-col gap-4 p-4">
+      <div className="flex min-w-0 flex-col gap-3">
       {error !== null && (
         <p className="thong-bao-loi m-0" role="alert">
           {error}
@@ -196,7 +202,7 @@ export function BudgetPeriodClosePanel({
           />
         ))}
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -216,12 +222,7 @@ export function PeriodCloseList({
   onReopen: (close: finance_budgetPeriodCloseOut) => void;
 }) {
   if (closes.length === 0) {
-    return (
-      <p className="m-0 inline-flex items-center gap-2 text-sm text-ink-500">
-        <LockKeyholeOpen aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0" />
-        Năm này chưa có kỳ nào được chốt.
-      </p>
-    );
+    return <p className="m-0 text-[12.5px] text-ink-muted">Năm này chưa có kỳ nào được chốt.</p>;
   }
   return (
     <TableScroll aria-label="Các lần chốt kỳ ngân sách" className="rounded-xl">
@@ -309,10 +310,13 @@ export function CloseForm({
   chosen: (body: finance_budgetPeriodCloseIn) => void;
   invalid: (message: string) => void;
 }) {
+  // One row, as spec 03 §B draws it: the label "Kỳ cần chốt" (11.5px), the select (the spec's standard
+  // native select, 36px, 12.5px), and `Button size="sm"` "Chốt kỳ…". No divider and no sub-heading —
+  // the block's own title already says what this is; the form keeps an accessible name of its own.
   return (
     <form
-      aria-labelledby="tieu-de-chot-mot-ky"
-      className="flex min-w-0 flex-col gap-3 border-t border-line pt-4"
+      aria-label="Chốt một kỳ"
+      className="flex min-w-0 flex-wrap items-center gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         const fd = new FormData(e.currentTarget);
@@ -321,35 +325,37 @@ export function CloseForm({
         else invalid(built.thongBao);
       }}
     >
-      <h4 id="tieu-de-chot-mot-ky" className="m-0 text-sm font-semibold text-ink-900">
-        Chốt một kỳ
-      </h4>
-      {/* One select and its button on one bottom-aligned row (spec §6.2). The select no longer
-          carries `o-chon`: that class is the TICK-BOX wrapper, and on a `<select>` it picked up
-          `display: flex` from `globals.css` `.o-chon`. `Field` draws the frame and the chevron. */}
-      <div className="flex min-w-0 flex-wrap items-end gap-3">
-        <Field label="Kỳ cần chốt" htmlFor="chot-ky-period" kind="select">
-          <select id="chot-ky-period" name="period" required defaultValue="">
-            <option value="" disabled>
-              Chọn kỳ
-            </option>
-            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-              <option key={m} value={String(m)}>
-                Tháng {m}/{year}
-              </option>
-            ))}
-            <option value="year">Cả năm {year}</option>
-          </select>
-        </Field>
-        <Button
-          type="submit"
-          variant="primary"
-          icon={<LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          disabled={busy}
-        >
-          Chốt kỳ…
-        </Button>
-      </div>
+      <label htmlFor="chot-ky-period" className="text-[11.5px] font-medium text-ink">
+        Kỳ cần chốt
+      </label>
+      {/* `min-w-0` / `min-h-9` / `pl-3` beat the legacy select frame's 12rem floor, 36px floor and
+          padding (`globals.css`, `legacy` layer); its chevron image stays. */}
+      <select
+        id="chot-ky-period"
+        name="period"
+        required
+        defaultValue=""
+        className="h-9 min-h-9 min-w-0 rounded-md border border-solid border-line bg-surface pl-3 text-[12.5px] md:text-[12.5px]"
+      >
+        <option value="" disabled>
+          Chọn kỳ
+        </option>
+        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+          <option key={m} value={String(m)}>
+            Tháng {m}/{year}
+          </option>
+        ))}
+        <option value="year">Cả năm {year}</option>
+      </select>
+      <Button
+        type="submit"
+        variant="primary"
+        size="sm"
+        icon={<LockKeyhole aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+        disabled={busy}
+      >
+        Chốt kỳ…
+      </Button>
     </form>
   );
 }

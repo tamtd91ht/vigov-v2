@@ -298,6 +298,24 @@ describe("PERMISSION — the denied branch", () => {
     expect(panel).toContain("Năm này chưa có kỳ nào được chốt.");
   });
 
+  it("spec 03 §B layout: plain empty sentence (no icon), no divider or sub-heading, one row label · select · small button", () => {
+    const panel = renderToStaticMarkup(
+      <BudgetPeriodClosePanel year={2026} view={{ phase: "ready", closes: [] }} canConfirm onChanged={() => {}} />,
+    );
+    expect(panel).toContain('<p class="m-0 text-[12.5px] text-ink-muted">Năm này chưa có kỳ nào được chốt.</p>');
+    expect(panel).not.toContain(">Chốt một kỳ</h4>");
+    expect(panel).not.toMatch(/border-t[\s"]/);
+    expect(panel).toContain('aria-label="Chốt một kỳ"');
+    expect(panel).toContain(">Kỳ cần chốt</label>");
+    expect(panel).toContain("text-[11.5px]");
+    // `Button size="sm"`: the 28px height.
+    const at = panel.indexOf(">Chốt kỳ…</button>");
+    expect(panel.slice(panel.lastIndexOf("<button", at), at)).toContain("h-7");
+    // The shell: a 10px hairline box without shadow.
+    expect(panel).toContain("rounded-[10px] border border-solid border-line bg-surface px-4 py-3");
+    expect(panel).not.toContain("shadow-card");
+  });
+
   it("an unreadable history shows the server sentence verbatim", () => {
     const html = renderToStaticMarkup(
       <BudgetPeriodClosePanel
@@ -315,7 +333,6 @@ describe("entries dialog: lock state and adjustment entries", () => {
   function renderEntries(closes: readonly finance_budgetPeriodCloseOut[]): string {
     return renderToStaticMarkup(
       <NoiDungHopDot
-        method="entries"
         cot={COT}
         donVi={UNIT}
         danhSach={{ pha: "xong", duLieu: ENTRIES }}
@@ -349,7 +366,7 @@ describe("entries dialog: lock state and adjustment entries", () => {
 
   it("entry form has the optional adjustment reason field, capped at 500", () => {
     const html = renderToStaticMarkup(
-      <FormGhiDot cot={COT} donVi={UNIT} dangGui={false} gui={() => {}} />,
+      <FormGhiDot cot={COT} dangGui={false} gui={() => {}} />,
     );
     expect(html).toContain('name="adjustment_reason"');
     expect(html).toMatch(/name="adjustment_reason"[^>]*maxLength="500"/);
@@ -372,7 +389,6 @@ describe("entries dialog: lock state and adjustment entries", () => {
       <HopDotThuChi
         khoanMucId="I"
         tenKhoanMuc="Chi đầu tư phát triển"
-        method="entries"
         cot={COT}
         donVi={UNIT}
         coGhi
@@ -392,7 +408,6 @@ describe("entries dialog: lock state and adjustment entries", () => {
       <HopDotThuChi
         khoanMucId="I"
         tenKhoanMuc="Chi đầu tư phát triển"
-        method="entries"
         cot={COT}
         donVi={UNIT}
         coGhi
@@ -440,10 +455,8 @@ describe("sheet under a year close", () => {
         coXacNhan
         sheetLock={sheetLock}
         dangGui={false}
-        dangSuaDong={null}
-        moSua={() => {}}
-        huySua={() => {}}
-        luuSua={() => {}}
+        saveLine={async () => null}
+        openLineOrder={() => {}}
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}

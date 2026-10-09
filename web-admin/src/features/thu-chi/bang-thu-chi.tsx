@@ -15,25 +15,22 @@ import {
   Pencil,
   Plus,
   Star,
-  TableProperties,
   Trash2,
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
-import { Field } from "@/components/ui/field";
+import { controlClass, Field } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import { Skeleton, SkeletonRows } from "@/components/ui/skeleton";
-import { Tab, TabList } from "@/components/ui/tabs";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { listBudgetPeriodCloses } from "@/lib/api/budget-period-close";
@@ -77,21 +74,24 @@ import {
   CANH_BAO_GO_KHOAN_MUC,
   canhBaoDoiCachTinh,
   cauQuyDoi,
-  chonDuocCachTinh,
+  cellNameEdit,
+  cellValueDraft,
+  cellValueEdit,
   cotSo,
   donViCuaBang,
   dongSangChuoi,
   dungCay,
-  dungGiaSuaDong,
+  editKeyIntent,
+  formatSheetAmount,
   GHI_CHU_CHENH_LECH,
   isUnresolvedPercentColumn,
+  lineOrderBody,
   lyDoKhongTinh,
   moiDongCoCon,
   NHAN_CHENH_LECH,
   nhanBoDem,
   nhanCachTinh,
   nhanChiSo,
-  nhanChuaCoBang,
   nhanDatDongTong,
   nhanGoKhoanMuc,
   nhanNutDot,
@@ -101,12 +101,15 @@ import {
   nhanSuaO,
   nhanThemCon,
   NHAN_SUA_TEN,
+  NO_REPORT_YET,
   O_KHONG_TINH_DUOC,
   O_TRONG,
-  percentCell,
+  PARENT_SUMS_CHILDREN,
+  percentCellRounded,
   phangCay,
   subtitleParts,
   suaDuocOSo,
+  type CellEditOutcome,
   type DongHien,
   type DonViHien,
 } from "./nhan-thu-chi";
@@ -130,8 +133,9 @@ function Glyph({ icon: Icon, className }: { icon: LucideIcon; className?: string
  * BỐ CỤC THEO PROTOTYPE (`vigov-require/apps/admin/src/components/budget/FiscalReportPanel.tsx`,
  * ADR 0068 lần 5), từ trên xuống: thanh chọn bảng (năm · `Chi ngân sách 2026` · `Thu ngân sách 2026`
  * bên trái; `Nạp từ Excel` · `Lập bảng` · `Sửa thông tin bảng` · `Gỡ` bên phải) → thẻ báo cáo (tiêu
- * đề, dòng phụ, câu dòng tổng, các ô số) → thanh công cụ của cây → bảng cây. Thêm, sửa bảng, gỡ, đổi
- * cách tính, các đợt là HỘP THOẠI như prototype.
+ * đề, dòng phụ, câu dòng tổng, một ô cho mỗi cột) → thanh công cụ của cây → bảng cây. Tên khoản mục
+ * và ô số SỬA NGAY TRONG Ô như prototype (quyết định 09/10/2026); thêm, sửa bảng, gỡ, đổi cách tính,
+ * TT / thứ tự hiển thị, các đợt là HỘP THOẠI.
  *
  * KHÁC PROTOTYPE CÓ LÝ DO: `Nạp từ Excel` nạp ngay như prototype (`budget-import-button.tsx`, ADR 0081
  * #6), và biểu mẫu `Lập bảng` vẫn đứng cạnh nó cho xã không có tệp; prototype không có năm nên có ô
@@ -168,6 +172,8 @@ type DangMo =
   | { kieu: "suaBang" }
   | { kieu: "createSheet" }
   | { kieu: "cachTinh"; dong: finance_dongRa; den: CachTinhChon }
+  // TT and display order: the two fields the in-cell edit does not cover.
+  | { kieu: "lineOrder"; dong: finance_dongRa }
   // Hộp `⇄` GIỮ cột và đơn vị lúc mở: sau mỗi lần ghi đợt bảng được đọc lại, và trong lúc đọc lại
   // hộp không được biến mất cùng thông báo "Đã ghi đợt" của nó.
   | { kieu: "dot"; dong: finance_dongRa; cot: readonly finance_cotRa[]; donVi: DonViHien };
@@ -206,7 +212,6 @@ export function BangThuChi() {
 
   const [thuGon, datThuGon] = useState<ReadonlySet<string>>(new Set());
   const [dangMo, datDangMo] = useState<DangMo | null>(null);
-  const [dangSuaDong, datDangSuaDong] = useState<string | null>(null);
   const [loiGhi, datLoiGhi] = useState<string | null>(null);
   const [dangGui, datDangGui] = useState(false);
 
@@ -277,8 +282,24 @@ export function BangThuChi() {
     }
     datLoiGhi(null);
     datDangMo(null);
-    datDangSuaDong(null);
     datLanTai((n) => n + 1);
+  }
+
+  /**
+   * One in-cell save (name or one figure). Resolves to the server's refusal, VERBATIM, or `null` on
+   * success — the cell prints the refusal under its own box ("errors in place"), so it is NOT also
+   * printed above the table. Success re-reads everything, as every write does (see `lanTai`).
+   */
+  function saveLine(id: string, body: SuaDongVao): Promise<string | null> {
+    datDangGui(true);
+    return suaKhoanMuc(id, body).then((kq) => {
+      if (!kq.ok) {
+        datDangGui(false);
+        return kq.thongBao;
+      }
+      xong(kq);
+      return null;
+    });
   }
 
   /** Closes the open dialog — never while its request is in flight (the outcome would be hidden). */
@@ -291,12 +312,13 @@ export function BangThuChi() {
   /** Switching year or sheet drops every half-done edit: it belonged to the other sheet. */
   function resetEdits(): void {
     datDangMo(null);
-    datDangSuaDong(null);
     datLoiGhi(null);
   }
 
   return (
-    <section className="man-giai-ngan flex min-w-0 flex-col gap-3" aria-labelledby="tieu-de-thu-chi">
+    // `mt-0`: `.man-giai-ngan` (legacy layer) adds a 2rem top margin for pages whose header sits
+    // apart; here the header's own `mb-4` is the gap (spec 02 "Khung").
+    <section className="man-giai-ngan mt-0 flex min-w-0 flex-col gap-3" aria-labelledby="tieu-de-thu-chi">
       {/* The page's `<h1>` already says this; the heading stays as the region's accessible name. */}
       <h2 id="tieu-de-thu-chi" className="an-thi-giac">
         Thu - Chi ngân sách xã
@@ -347,7 +369,7 @@ export function BangThuChi() {
         tabIndex={0}
         className="flex min-w-0 flex-col gap-3 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
       >
-        {/* A write refused while NO dialog is open (the in-place row edit, the headline star). */}
+        {/* A write refused while NO dialog is open (the headline star). */}
         {loiGhi !== null && dangMo === null && (
           <p className="thong-bao-loi m-0" role="alert">
             {loiGhi}
@@ -365,22 +387,16 @@ export function BangThuChi() {
 
         {bang.pha === "loi" && (
           <Card>
-            <CardContent className="flex flex-col gap-4">
+            <CardContent className="flex flex-col gap-3">
               {/* KHÔNG ĐOÁN VÌ SAO KHÔNG ĐỌC ĐƯỢC: hiện NGUYÊN câu máy chủ. 404 ở tuyến này thường
                   là "xã chưa lập bảng", nhưng phân biệt bằng cách đọc câu chữ là dựng lại đúng thứ
-                  `goi.ts` cố ý giấu đi — nên câu dưới nói cả hai khả năng và không khẳng định.
-                  The server's sentence (e.g. "ngan_sach: không có bảng ngân sách này trong xã") is
-                  shown VERBATIM per ADR 0035 §A — a muted note, not a red alarm, because the usual
-                  cause is "not set up yet". Rewording it is a separate, open decision. */}
+                  `goi.ts` cố ý giấu đi. The server's sentence is shown VERBATIM per ADR 0035 §A — a
+                  muted note, not a red alarm, because the usual cause is "not set up yet". */}
               <Notice tone="neutral" icon={Database} role="alert">
                 {bang.thongBao}
               </Notice>
-              <EmptyState
-                icon={TableProperties}
-                tone="neutral"
-                title={nhanChuaCoBang(nam, loai)}
-                className="py-4"
-              />
+              {/* The prototype's empty sentence, verbatim (owner decision 09/10/2026). */}
+              <p className="m-0 text-[12.5px] text-ink-muted">{NO_REPORT_YET}</p>
             </CardContent>
           </Card>
         )}
@@ -394,15 +410,10 @@ export function BangThuChi() {
             coXacNhan={coXacNhan}
             sheetLock={sheetLock}
             dangGui={dangGui}
-            dangSuaDong={dangSuaDong}
-            moSua={(id) => {
-              datDangSuaDong(id);
-              datDangMo(null);
-            }}
-            huySua={() => datDangSuaDong(null)}
-            luuSua={(id, than) => {
-              datDangGui(true);
-              suaKhoanMuc(id, than).then(xong);
+            saveLine={saveLine}
+            openLineOrder={(dong) => {
+              resetEdits();
+              datDangMo({ kieu: "lineOrder", dong });
             }}
             moThem={(chaId, tenCha, thuTuGoiY) => {
               resetEdits();
@@ -526,6 +537,19 @@ export function BangThuChi() {
         />
       )}
 
+      {dangMo !== null && dangMo.kieu === "lineOrder" && (
+        <LineOrderDialog
+          dong={dangMo.dong}
+          dangGui={dangGui}
+          huy={closeDialog}
+          serverError={loiGhi}
+          luu={(body) => {
+            datDangGui(true);
+            suaKhoanMuc(dangMo.dong.id, body).then(xong);
+          }}
+        />
+      )}
+
       {dangMo !== null && dangMo.kieu === "cachTinh" && (
         <ConfirmModal formId={CONFIRM_FORM_ID} onDismiss={closeDialog} error={loiGhi}>
           <FormDoiCachTinh
@@ -585,7 +609,6 @@ export function BangThuChi() {
           key={dangMo.dong.id}
           khoanMucId={dangMo.dong.id}
           tenKhoanMuc={dangMo.dong.name}
-          method={dangMo.dong.method}
           cot={dangMo.cot}
           donVi={dangMo.donVi}
           coGhi={coGhi}
@@ -632,13 +655,22 @@ function ConfirmModal({
 }
 
 /**
+ * One sheet button of the selection bar — the prototype's period button (`FiscalReportPanel.tsx:162-174`):
+ * separate bordered buttons, the selected one solid navy. Native `<button>` chrome is off by hand
+ * (`[font-family:inherit]`, explicit colours): Tailwind's preflight is not loaded in this app.
+ */
+const SHEET_BUTTON =
+  "cursor-pointer rounded-[8px] border border-solid px-3 py-1.5 [font-family:inherit] text-[12.5px] leading-tight font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500";
+
+/**
  * The prototype's first card (`FiscalReportPanel.tsx:159-234`): which sheet is on screen on the left,
  * the sheet's own actions on the right.
  *
- * LEFT — the year select, then the two sheets of that year as segment buttons (`Chi ngân sách 2026`,
+ * LEFT — the year select, then the two sheets of that year as separate buttons (`Chi ngân sách 2026`,
  * `Thu ngân sách 2026`). The prototype lists the IMPORTED reports and has no year (the file carries
  * it); this contract reads one sheet per year and kind, so the year is a control and both kinds are
- * always offered — a kind with no sheet yet opens on its empty state.
+ * always offered — a kind with no sheet yet opens on its empty state. The buttons keep TAB semantics
+ * (`tablist` / `tab` / `aria-selected`) because they drive the `tabpanel` below.
  *
  * RIGHT — `Nạp từ Excel` at the prototype's place (ADR 0081 #6: loads the selected year's sheets from the
  * finance office's file); `Lập bảng` beside it while the sheet does not exist (the form for a commune
@@ -693,20 +725,25 @@ export function SheetSelectionBar({
             ))}
           </select>
         </Field>
-        <TabList aria-label="Chọn bảng thu hoặc bảng chi" className="gap-1.5">
+        <div role="tablist" aria-label="Chọn bảng thu hoặc bảng chi" className="flex flex-wrap gap-1.5">
           {(["chi", "thu"] as const).map((l) => (
-            <Tab
+            <button
               key={l}
+              type="button"
+              role="tab"
               id={`tab-ngan-sach-${l}`}
-              selected={kind === l}
+              aria-selected={kind === l}
               aria-controls={`bang-ngan-sach-${l}`}
-              className="h-8 px-3 text-[13px]"
+              className={cn(
+                SHEET_BUTTON,
+                kind === l ? "border-navy bg-navy text-white" : "border-line bg-surface text-ink-muted",
+              )}
               onClick={() => onKindChange(l)}
             >
               {nhanTab(l, year)}
-            </Tab>
+            </button>
           ))}
-        </TabList>
+        </div>
       </div>
 
       {(canRecord || canConfirm) && (
@@ -738,10 +775,12 @@ export function SheetSelectionBar({
             </Button>
           )}
           {canConfirm && sheetState === "ready" && (
-            // The prototype's word is `Gỡ`; the accessible name says WHAT is removed.
+            // The prototype's `Button size="sm" variant="outline"` — the normal text colour, not red:
+            // the reason dialog behind it is where the consequence is said. The accessible name says
+            // WHAT is removed.
             <Button
               type="button"
-              variant="danger"
+              variant="outline"
               size="sm"
               icon={<Glyph icon={Trash2} />}
               aria-label="Gỡ bảng"
@@ -770,18 +809,19 @@ export function SheetSelectionBar({
  *
  * SỐ TIỀN Ở THẺ NÀY TÍNH BẰNG ĐỒNG: thẻ nằm ngoài hai bảng và con số chênh lệch đọc từ CẢ HAI bảng,
  * hai bảng có thể mang hai đơn vị khác nhau. Ô in dạng gọn (`compactDong`, "853,3 tỷ đồng"); con số
- * đầy đủ kèm chữ "đồng" nằm ở `title` của ô.
+ * đầy đủ kèm chữ "đồng" nằm ở `title` của ô. (The table and the summary tiles print in the sheet's
+ * unit instead — this card spans two sheets, so it keeps đồng.)
  */
 export function TheChiSoNam({ chiSo }: { chiSo: finance_chiSoNamRa }) {
   const balance = chiSo.balance;
   const balanceText = nhanSoTienChiSo(balance, "dong");
   return (
-    <Card className="flex min-w-0 flex-col gap-2 px-4 py-3">
-      <h3 className="m-0 inline-flex min-w-0 items-center gap-2 text-[15px] leading-snug font-bold text-ink-900">
-        <Glyph icon={Gauge} className="size-[18px] shrink-0 text-brand-600" />
+    <Card className="flex min-w-0 flex-col px-4 py-3">
+      <h3 className="m-0 inline-flex min-w-0 items-center gap-2 text-[14px] leading-snug font-bold text-navy">
+        <Glyph icon={Gauge} className="size-4 shrink-0 text-brand-600" />
         Chỉ số ngân sách năm {chiSo.year}
       </h3>
-      <dl className={FIGURE_TILES}>
+      <dl className={cn(FIGURE_TILES, "mt-2")}>
         <OChiSo chi={chiSo.revenue_achievement} />
         <OChiSo chi={chiSo.expenditure_achievement} />
         <FigureTile label={NHAN_CHENH_LECH} exact={exactDong(balance.amount)}>
@@ -808,7 +848,7 @@ export function TheChiSoNam({ chiSo }: { chiSo: finance_chiSoNamRa }) {
           );
         })}
       </dl>
-      <p className="m-0 inline-flex items-start gap-1.5 text-xs text-ink-500">
+      <p className="m-0 mt-2 inline-flex items-start gap-1.5 text-[11.5px] text-ink-muted">
         <Glyph icon={Info} className="mt-0.5 size-3.5 shrink-0" />
         <span>
           {NHAN_CHENH_LECH}: {GHI_CHU_CHENH_LECH}
@@ -841,23 +881,19 @@ const FIGURE_TILES = "m-0 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4";
 const SENTENCE_TEXT = "block text-[13px] leading-snug font-medium text-ink-700";
 
 /**
- * One tile, in the prototype's order: label (small, muted) above the figure (bold). The figure's size
- * follows the TILE's width (`cqi` of the `@container` tile, never `vw`), so four tiles on a narrow
- * main column never clip a sum. Tiles of a row are equal in height (grid stretch). `exact` is the full
- * amount, on hover of the whole tile.
+ * One tile, the prototype's (`FiscalReportPanel.tsx:267-277`): a page-colour box with a hairline, the
+ * label (11px, muted) above the figure (18px bold navy). Tiles of a row are equal in height (grid
+ * stretch). `exact` is the full amount, on hover of the whole tile.
  *
- * `<dd>` CARRIES NO ATTRIBUTE: the tests read `<dd>…</dd>` back, and a "—" must stay a bare "—".
+ * `<dd>` CARRIES NO `title`: the tests read `<dd …>…</dd>` back, and a "—" must stay a bare "—".
  */
 function FigureTile({ label, exact, children }: { label: string; exact?: string; children: ReactNode }) {
   return (
-    <div
-      title={exact}
-      className="@container flex min-w-0 flex-col gap-1 rounded-control border border-line bg-surface-muted px-3 py-2"
-    >
-      <dt title={label} className="truncate text-xs text-ink-500">
+    <div title={exact} className="flex min-w-0 flex-col rounded-[8px] border border-solid border-line bg-canvas px-3 py-2">
+      <dt title={label} className="truncate text-[11px] text-ink-muted">
         {label}
       </dt>
-      <dd className="m-0 min-w-0 text-[clamp(15px,10cqi,18px)] leading-tight font-bold text-ink-900 tabular-nums">
+      <dd className="m-0 min-w-0 text-[18px] leading-tight font-bold break-words text-navy tabular-nums">
         {children}
       </dd>
     </div>
@@ -880,6 +916,9 @@ function isFigureOrDash(indicator: finance_chiSoRa): boolean {
   return indicator.basis_points !== null || nhanChiSo(indicator) === O_TRONG;
 }
 
+/** Header cell of the tree table — the prototype's `px-3 py-2 font-semibold` (`:347-363`). */
+const TH = "px-3 py-2 font-semibold";
+
 /** Thẻ báo cáo (§2) + thanh công cụ (§4.3) + bảng cây (§4.1), in the prototype's order. */
 export function BangDayDu({
   duLieu,
@@ -889,10 +928,8 @@ export function BangDayDu({
   coXacNhan,
   sheetLock,
   dangGui,
-  dangSuaDong,
-  moSua,
-  huySua,
-  luuSua,
+  saveLine,
+  openLineOrder,
   moThem,
   moGoDong,
   datTong,
@@ -911,10 +948,10 @@ export function BangDayDu({
    */
   sheetLock: string | null;
   dangGui: boolean;
-  dangSuaDong: string | null;
-  moSua: (id: string) => void;
-  huySua: () => void;
-  luuSua: (id: string, than: SuaDongVao) => void;
+  /** One in-cell save; resolves to the server's refusal or `null` — see `BangThuChi.saveLine`. */
+  saveLine: (id: string, body: SuaDongVao) => Promise<string | null>;
+  /** Opens the TT / display-order dialog of a line. */
+  openLineOrder: (dong: finance_dongRa) => void;
   moThem: (chaId: string, tenCha: string, thuTuGoiY: number) => void;
   moGoDong: (dong: finance_dongRa) => void;
   datTong: (dong: finance_dongRa) => void;
@@ -923,12 +960,11 @@ export function BangDayDu({
 }) {
   const cay = dungCay(duLieu.lines);
   const dongHien = phangCay(cay, thuGon);
-  const cot = cotSo(duLieu.columns);
   const donVi = donViCuaBang(duLieu.sheet);
   const locked = sheetLock !== null;
   const lockTitle = sheetLock ?? undefined;
   const headlineId = duLieu.summary.headline_line_id ?? "";
-  const headlineName = duLieu.lines.find((l) => l.id === headlineId)?.name;
+  const headline = duLieu.lines.find((l) => l.id === headlineId);
 
   return (
     <>
@@ -940,9 +976,10 @@ export function BangDayDu({
       <TheTomTat
         bang={duLieu.sheet}
         tomTat={duLieu.summary}
+        columns={duLieu.columns}
+        headline={headline}
         soKhoanMuc={duLieu.lines.length}
         donVi={donVi}
-        headlineName={headlineName}
       />
 
       {/* Toolbar of the tree (§4.3, prototype `:284-343`): the two view buttons and the count on
@@ -986,80 +1023,81 @@ export function BangDayDu({
         )}
       </div>
 
-      {/* The table scrolls sideways INSIDE its own box (`overflow-x: auto`); amounts stay whole,
-          right-aligned and tabular — never shortened here, this is where a figure is checked. */}
-      <TableScroll sticky aria-label={`Khoản mục của ${duLieu.sheet.title}`}>
-        <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
+      {/* The prototype's table frame (`:345-388`): a rounded hairline box that scrolls sideways
+          INSIDE itself. Its own markup, not the shared `.bang-danh-muc` / `data-table` look (14px,
+          `nowrap`, 48px rows), which is the shape of a register, not of the finance office's form.
+          `border-collapse` by hand: without preflight a table keeps `border-spacing: 2px`, and the
+          row hairlines would not join. */}
+      <div
+        role="region"
+        tabIndex={0}
+        aria-label={`Khoản mục của ${duLieu.sheet.title}`}
+        className="min-w-0 overflow-x-auto rounded-[10px] border border-solid border-line bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+      >
+        <table className="w-full border-collapse text-[12.5px]">
           <caption className="an-thi-giac">{duLieu.sheet.title}</caption>
-          <thead>
+          <thead className="border-b border-line text-ink-muted">
             <tr>
-              <th scope="col" className="w-px px-1">
+              <th scope="col" className="w-8">
                 <span className="an-thi-giac">Mở, thu gọn và dòng tổng</span>
               </th>
-              <th scope="col">TT</th>
-              <th scope="col">Nội dung</th>
+              <th scope="col" className={cn(TH, "w-16 text-left")}>
+                TT
+              </th>
+              <th scope="col" className={cn(TH, "min-w-[22rem] text-left")}>
+                Nội dung
+              </th>
               {duLieu.columns.map((c) => (
-                // Figure columns right-aligned so digits line up down the column (spec §6.7).
-                <th key={c.id} scope="col" className="text-right">
+                // Figure columns right-aligned so digits line up down the column; the label keeps the
+                // file's own line breaks (`whitespace-pre-line`).
+                <th key={c.id} scope="col" className={cn(TH, "w-32 text-right whitespace-pre-line")}>
                   {c.name}
                   {/* Chú thích công thức của cột `%` — chữ HIỆN RÕ chứ không chỉ `title`, vì màn
-                      cảm ứng không rê chuột được. Chỉ là chữ: tỷ lệ tính từ hai toán hạng, không
-                      từ chuỗi này. */}
+                      cảm ứng không rê chuột được; nhỏ hơn nhãn cột (spec 03 A12). Chỉ là chữ: tỷ lệ
+                      tính từ hai toán hạng, không từ chuỗi này. */}
                   {c.type === "phan_tram" && (c.formula ?? "").trim() !== "" && (
                     <>
                       <br />
-                      <span className="ghi-chu font-normal">{c.formula}</span>
+                      <span className="text-[10.5px] font-normal">{c.formula}</span>
                     </>
                   )}
                 </th>
               ))}
-              <th scope="col">Cách tính</th>
+              <th scope="col" className={cn(TH, "w-44 text-left")}>
+                Cách tính
+              </th>
             </tr>
           </thead>
           <tbody>
-            {dongHien.map((d) =>
-              dangSuaDong === d.dong.id ? (
-                <FormSuaDong
-                  key={d.dong.id}
-                  dong={d.dong}
-                  cot={cot}
-                  donVi={donVi}
-                  soCotBang={duLieu.columns.length + 4}
-                  dangGui={dangGui}
-                  huy={huySua}
-                  luu={luuSua}
-                />
-              ) : (
-                <DongKhoanMuc
-                  key={d.dong.id}
-                  hien={d}
-                  cot={duLieu.columns}
-                  donVi={donVi}
-                  dongTongId={headlineId}
-                  coGhi={coGhi}
-                  coXacNhan={coXacNhan}
-                  sheetLock={sheetLock}
-                  dangGui={dangGui}
-                  moRongDoi={() => {
-                    const moi = new Set(thuGon);
-                    if (moi.has(d.dong.id)) moi.delete(d.dong.id);
-                    else moi.add(d.dong.id);
-                    datThuGon(moi);
-                  }}
-                  moSua={() => moSua(d.dong.id)}
-                  them={() =>
-                    moThem(d.dong.id, d.dong.name, thuTuKeTiep(duLieu.lines, d.dong.id))
-                  }
-                  go={() => moGoDong(d.dong)}
-                  datTong={() => datTong(d.dong)}
-                  doiCachTinh={(den) => moCachTinh(d.dong, den)}
-                  moDot={() => moDot(d.dong)}
-                />
-              ),
-            )}
+            {dongHien.map((d) => (
+              <DongKhoanMuc
+                key={d.dong.id}
+                hien={d}
+                cot={duLieu.columns}
+                donVi={donVi}
+                dongTongId={headlineId}
+                coGhi={coGhi}
+                coXacNhan={coXacNhan}
+                sheetLock={sheetLock}
+                dangGui={dangGui}
+                moRongDoi={() => {
+                  const moi = new Set(thuGon);
+                  if (moi.has(d.dong.id)) moi.delete(d.dong.id);
+                  else moi.add(d.dong.id);
+                  datThuGon(moi);
+                }}
+                saveLine={(body) => saveLine(d.dong.id, body)}
+                openLineOrder={() => openLineOrder(d.dong)}
+                them={() => moThem(d.dong.id, d.dong.name, thuTuKeTiep(duLieu.lines, d.dong.id))}
+                go={() => moGoDong(d.dong)}
+                datTong={() => datTong(d.dong)}
+                doiCachTinh={(den) => moCachTinh(d.dong, den)}
+                moDot={() => moDot(d.dong)}
+              />
+            ))}
           </tbody>
         </table>
-      </TableScroll>
+      </div>
       <DanhSachKhongTinh tieuDe="Ô không tính được con số" o={oKhongTinhCuaCay(duLieu)} />
       <UnresolvedPercentColumns columns={duLieu.columns} />
     </>
@@ -1129,38 +1167,74 @@ function thuTuKeTiep(dong: readonly finance_dongRa[], chaId: string): number {
 }
 
 /**
+ * What one summary tile shows for one column (prototype `:266-278`: one tile per report column, the
+ * value read from the headline line).
+ *
+ * A MONEY column reads the server's summary cell — it carries the "không tính được" reason when the
+ * sum overflowed — and falls back to the headline line itself only when the server sent no cell for
+ * that column. A `%` column reads the headline line's server-computed ratio. Nothing is computed here.
+ */
+function summaryFigure(
+  column: finance_cotRa,
+  tomTat: finance_tomTatRa,
+  headline: finance_dongRa | undefined,
+  donVi: DonViHien,
+): { text: string; reason: string | null; exact?: string } {
+  if (column.type !== "so") {
+    return headline === undefined ? { text: O_TRONG, reason: null } : percentCellRounded(headline, column.id);
+  }
+  const cell = tomTat.cells.find((o) => o.column_id === column.id);
+  const value = cell !== undefined ? cell.value : (headline?.values[column.id] ?? null);
+  const reason = lyDoKhongTinh(
+    cell !== undefined ? cell.unavailable_reason : headline?.unavailable_reasons?.[column.id],
+  );
+  return {
+    text: formatSheetAmount(value, donVi.ma),
+    reason,
+    // The exact figure in the sheet's unit, on hover: the tile shows it rounded to one decimal.
+    exact:
+      reason === null && value !== null && Number.isSafeInteger(value)
+        ? `${nhanSoTien(value, donVi.ma)} ${donVi.nhan.toLowerCase()}`
+        : undefined,
+  };
+}
+
+/**
  * Thẻ báo cáo của §2 — the prototype's second card (`FiscalReportPanel.tsx:240-282`): title, the
- * sub-line (`Đơn vị tính` · `Luỹ kế đến` · `N khoản mục` · source file), the headline sentence naming
- * the starred line, then one tile per figure.
+ * sub-line (`Đơn vị tính` · `Luỹ kế đến` · `N khoản mục` · source file), the unit note, the headline
+ * sentence naming the starred line, then ONE TILE PER COLUMN of the sheet, the `%` column included.
  *
  * `unavailable_reason` CỦA THẺ TÓM TẮT LÀ MỘT CÂU, KHÔNG PHẢI MỘT Ô TRỐNG. Chưa ai đánh dấu dòng
  * tổng, hoặc hai dòng cùng nhận là dòng tổng, thì không có gì để đọc — và câu của máy chủ nói ra
  * việc phải làm. Điền đại bằng "dòng đầu tiên" là đúng cái đoán mà `is_headline` sinh ra để từ
  * chối: bảng thu có hai dòng cấp cao lồng nhau, bảng chi có `Tổng số` đứng ngang hàng A…E.
  *
- * SỐ TIỀN Ở Ô IN DẠNG GỌN (`compactDong`); con số đầy đủ theo đơn vị của bảng nằm ở `title` của ô và
- * ở bảng bên dưới.
+ * SỐ Ở Ô IN THEO ĐƠN VỊ CỦA BẢNG, như bảng bên dưới (quyết định 09/10/2026), làm tròn một chữ số lẻ;
+ * con số chính xác nằm ở `title` của ô.
  */
 export function TheTomTat({
   bang,
   tomTat,
+  columns,
+  headline,
   soKhoanMuc,
   donVi,
-  headlineName,
 }: {
   bang: finance_bangRa;
   tomTat: finance_tomTatRa;
+  /** Every column of the sheet, in order — one tile each. */
+  columns: readonly finance_cotRa[];
+  /** The starred line, when it is among the lines read. */
+  headline?: finance_dongRa;
   soKhoanMuc: number;
   donVi: DonViHien;
-  /** Name of the starred line, when it is among the lines read. */
-  headlineName?: string;
 }) {
   const sourceFile = (bang.source_file ?? "").trim();
   const reason = (tomTat.unavailable_reason ?? "").trim();
   return (
-    <Card className="flex min-w-0 flex-col gap-1 px-4 py-3">
-      <h3 className="m-0 min-w-0 text-[15px] leading-snug font-bold break-words text-ink-900">{bang.title}</h3>
-      <p className="m-0 flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-xs text-ink-500 tabular-nums">
+    <Card className="flex min-w-0 flex-col px-4 py-3">
+      <h3 className="m-0 min-w-0 text-[14px] leading-snug font-bold break-words text-navy">{bang.title}</h3>
+      <p className="m-0 mt-0.5 flex min-w-0 flex-wrap gap-x-3 gap-y-0.5 text-[11.5px] text-ink-muted tabular-nums">
         {subtitleParts(bang, soKhoanMuc).map((part) => (
           <span key={part}>{part}</span>
         ))}
@@ -1179,51 +1253,218 @@ export function TheTomTat({
           {donVi.nhanCu !== null && ` Đơn vị đang lưu: "${donVi.nhanCu}".`}
         </p>
       )}
-      <p className="m-0 text-xs text-ink-500">{cauQuyDoi(donVi)}</p>
+      <p className="m-0 mt-1 text-[11.5px] text-ink-muted">{cauQuyDoi(donVi)}</p>
 
       {reason !== "" ? (
         <EmptyState icon={Star} tone="neutral" title={reason} className="py-4" />
       ) : (
         <>
-          <p className="m-0 mt-2 text-xs text-ink-500">
-            {headlineName !== undefined ? (
+          <p className="m-0 mt-3 text-xs text-ink-500">
+            {headline !== undefined ? (
               <>
-                Con số tổng lấy từ dòng <span className="font-semibold text-ink-900">{headlineName}</span>. Bấm
+                Con số tổng lấy từ dòng <span className="font-semibold text-ink-900">{headline.name}</span>. Bấm
                 ngôi sao ở đầu một dòng khác để đổi.
               </>
             ) : (
               "Con số tổng lấy từ dòng được đánh sao. Bấm ngôi sao ở đầu một dòng khác để đổi."
             )}
           </p>
-          <dl className={FIGURE_TILES}>
-            {tomTat.cells.map((o) => {
-              const cellReason = lyDoKhongTinh(o.unavailable_reason);
-              const text = nhanSoTien(o.value, donVi.ma);
+          <dl className={cn(FIGURE_TILES, "mt-1.5")}>
+            {columns.map((c) => {
+              const figure = summaryFigure(c, tomTat, headline, donVi);
               return (
-                <FigureTile
-                  key={o.column_id}
-                  label={o.name}
-                  exact={
-                    cellReason === null && o.value !== null && Number.isSafeInteger(o.value)
-                      ? `${text} ${donVi.nhan.toLowerCase()}`
-                      : undefined
-                  }
-                >
-                  {cellReason === null ? (
-                    compactOrText(o.value, text)
+                <FigureTile key={c.id} label={c.name} exact={figure.exact}>
+                  {figure.reason === null ? (
+                    figure.text
                   ) : (
-                    <OTien chu={text} lyDo={cellReason} hienLyDo />
+                    <OTien chu={figure.text} lyDo={figure.reason} hienLyDo />
                   )}
                 </FigureTile>
               );
             })}
-            <OChiSo chi={tomTat.indicator} />
           </dl>
         </>
       )}
     </Card>
   );
 }
+
+/* ── in-cell edit ─────────────────────────────────────────────────────────────────────────── */
+
+/** The name box's field key; a figure box is `value:<column id>`. */
+const NAME_FIELD = "name";
+
+type OpenCell = { field: string; draft: string; error: string | null; saving: boolean };
+
+/**
+ * The one box a row may have open (prototype: `editing` / `renaming`). Enter or leaving the box saves,
+ * Esc cancels — the decision of WHAT is sent is the pure `cellNameEdit` / `cellValueEdit`.
+ *
+ * TWO REFS GUARD THE DOUBLE SAVE THE PROTOTYPE HAS: Enter saves, and the box then loses focus as it
+ * closes (or goes read-only), which would save a second time. `live` is false once the box is closed
+ * (Esc, or a save that succeeded); `inFlight` covers the time between Enter and the answer.
+ */
+function useCellEditor(save: (body: SuaDongVao) => Promise<string | null>) {
+  const [open, setOpen] = useState<OpenCell | null>(null);
+  const live = useRef(false);
+  const inFlight = useRef(false);
+
+  function start(field: string, draft: string): void {
+    live.current = true;
+    setOpen({ field, draft, error: null, saving: false });
+  }
+
+  function close(): void {
+    live.current = false;
+    setOpen(null);
+  }
+
+  function setDraft(draft: string): void {
+    // Typing clears the last refusal: the sentence was about the previous text.
+    setOpen((o) => (o === null ? o : { ...o, draft, error: null }));
+  }
+
+  async function commit(outcome: CellEditOutcome): Promise<void> {
+    if (!live.current || inFlight.current) return;
+    if (outcome.kind === "unchanged") {
+      close();
+      return;
+    }
+    if (outcome.kind === "invalid") {
+      setOpen((o) => (o === null ? o : { ...o, error: outcome.message }));
+      return;
+    }
+    inFlight.current = true;
+    setOpen((o) => (o === null ? o : { ...o, saving: true, error: null }));
+    const error = await save(outcome.body);
+    inFlight.current = false;
+    if (error === null) close();
+    else setOpen((o) => (o === null ? o : { ...o, saving: false, error }));
+  }
+
+  return { open, start, close, setDraft, commit };
+}
+
+/**
+ * The input of an open cell — the prototype's `Input h-7 text-[12.5px]`. A refusal (the client's or
+ * the server's, verbatim) is printed UNDER the box, in the cell, and the box stays open: Enter retries,
+ * Esc gives up. Leaving the box while a refusal is shown does not resend it.
+ */
+function CellInput({
+  label,
+  cell,
+  numeric,
+  onDraft,
+  onSave,
+  onCancel,
+}: {
+  label: string;
+  cell: OpenCell;
+  numeric?: boolean;
+  onDraft: (value: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) {
+  const errorId = useId();
+  return (
+    <>
+      <input
+        // Focus moves into the box: it exists only because the officer just clicked the value it replaces.
+        autoFocus
+        type="text"
+        aria-label={label}
+        aria-invalid={cell.error !== null || undefined}
+        aria-describedby={cell.error !== null ? errorId : undefined}
+        aria-busy={cell.saving || undefined}
+        readOnly={cell.saving}
+        inputMode={numeric ? "decimal" : undefined}
+        autoComplete="off"
+        value={cell.draft}
+        className={cn(
+          controlClass,
+          "h-7 text-[12.5px] md:text-[12.5px]",
+          numeric && "text-right tabular-nums",
+        )}
+        onChange={(e) => onDraft(e.target.value)}
+        onKeyDown={(e) => {
+          const intent = editKeyIntent(e.key);
+          if (intent === null) return;
+          e.preventDefault();
+          if (intent === "save") onSave();
+          else onCancel();
+        }}
+        onBlur={() => {
+          if (cell.error === null) onSave();
+        }}
+      />
+      {cell.error !== null && (
+        <p id={errorId} role="alert" className="m-0 mt-1 text-left text-[11.5px] font-normal whitespace-normal text-danger">
+          {cell.error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/** A bare icon action of the row (prototype `:645-705`): no frame, muted, darker on hover. */
+function RowIconButton({
+  icon,
+  label,
+  title,
+  disabled,
+  danger = false,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  title: string;
+  disabled: boolean;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={cn(
+        "inline-flex shrink-0 cursor-pointer items-center justify-center rounded-sm border-0 bg-transparent p-0 text-ink-muted",
+        "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+        "disabled:cursor-not-allowed disabled:opacity-50",
+        danger ? "hover:not-disabled:text-danger" : "hover:not-disabled:text-navy",
+      )}
+    >
+      <Glyph icon={icon} className="size-4" />
+    </button>
+  );
+}
+
+/** "Dòng đang là con số tổng" — the read-only star's tooltip and accessible name. */
+const HEADLINE_LINE_LABEL = "Dòng đang là con số tổng";
+
+/** The live star's tooltip, the prototype's (`:501`). Its accessible name stays `nhanDatDongTong`. */
+const HEADLINE_STAR_TITLE = "Đặt làm con số tổng của báo cáo";
+
+/** Tooltip of the row's TT / display-order button, and that dialog's title. */
+export const LINE_ORDER_TITLE = "Sửa số thứ tự và thứ tự hiển thị";
+
+/** The bare in-cell toggles (expand, star): no frame, no fixed box — the icon is the target. */
+const TREE_ICON =
+  "inline-flex shrink-0 cursor-pointer items-center justify-center border-0 bg-transparent p-0 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-50";
+
+/**
+ * A name or figure drawn as plain text that becomes a box on click (prototype `:544-554`, `:586-599`):
+ * no link colour, no underline — the hover tint is the only cue. Font and colour inherited by hand:
+ * without preflight a `<button>` draws in the browser's own font and `buttontext` black.
+ */
+const EDITABLE_TEXT =
+  "-mx-1 cursor-pointer rounded border-0 bg-transparent px-1 py-0 [font:inherit] text-inherit hover:not-disabled:bg-canvas focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500 disabled:cursor-not-allowed";
+
+/** The `Cách tính` select, the prototype's compact one (`:616`); `min-h-7` beats the legacy 36px floor. */
+const METHOD_SELECT =
+  "h-7 min-h-7 min-w-0 flex-1 rounded-md border border-solid border-line bg-surface bg-[position:right_0.25rem_center] py-0 pr-5 pl-1.5 text-[11.5px] disabled:bg-canvas disabled:text-ink-muted";
 
 /** Một dòng của cây khoản mục (§4.1), in the prototype's columns. */
 export function DongKhoanMuc({
@@ -1236,7 +1477,8 @@ export function DongKhoanMuc({
   sheetLock,
   dangGui,
   moRongDoi,
-  moSua,
+  saveLine,
+  openLineOrder,
   them,
   go,
   datTong,
@@ -1253,7 +1495,9 @@ export function DongKhoanMuc({
   sheetLock: string | null;
   dangGui: boolean;
   moRongDoi: () => void;
-  moSua: () => void;
+  /** Saves ONE field of this line; resolves to the server's refusal or `null`. */
+  saveLine: (body: SuaDongVao) => Promise<string | null>;
+  openLineOrder: () => void;
   them: () => void;
   go: () => void;
   datTong: () => void;
@@ -1262,9 +1506,10 @@ export function DongKhoanMuc({
 }) {
   const d = hien.dong;
   const laDongTong = d.id === dongTongId;
-  // Dòng LÁ: không có con trên cây đang vẽ và máy chủ không nói nó cộng con. Chỉ dòng lá có ô
-  // chọn cách tính và có hộp đợt — dòng có con thì cả hai là 409 (`routes.go:1081`, `:1204`).
-  const laLa = !hien.coCon && d.method !== "children";
+  // A PARENT always sums its children — on the tree drawn, or by the server's word. Its select is
+  // disabled on `Cộng khoản mục con`, and it has no entries: both would be a 409 (`routes.go:1081`,
+  // `:1204`).
+  const isParent = hien.coCon || d.method === "children";
   const editDisabled = dangGui || sheetLock !== null;
   const lockTitle = sheetLock ?? undefined;
   // The form's two top levels are its headings: tinted and bold, as on the paper form (prototype
@@ -1273,21 +1518,26 @@ export function DongKhoanMuc({
   // A figure the SERVER computes (sum of the children, or of the entries) is green, as the
   // prototype's `text-leaf` — the cue that typing into it is refused.
   const computed = d.method !== "manual";
+  const cell = useCellEditor(saveLine);
+  const open = cell.open;
 
   return (
-    <tr className={heading ? "bg-surface-muted" : undefined}>
-      <td className="px-1 align-top">
-        <span className="inline-flex items-center gap-0.5">
+    <tr className={cn("border-b border-line last:border-b-0", heading && "bg-surface-muted")}>
+      <td className="px-1 py-1.5 align-top">
+        <span className="flex items-center gap-0.5">
           {hien.coCon ? (
-            <button type="button" className={TREE_ICON_BUTTON} aria-expanded={hien.moRong} onClick={moRongDoi}>
-              <Glyph icon={hien.moRong ? ChevronDown : ChevronRight} className="size-4" />
-              <span className="an-thi-giac">
-                {hien.moRong ? `Thu gọn ${d.name}` : `Mở chi tiết ${d.name}`}
-              </span>
+            <button
+              type="button"
+              className={cn(TREE_ICON, "text-ink-muted hover:text-navy")}
+              aria-expanded={hien.moRong}
+              aria-label={hien.moRong ? `Thu gọn ${d.name}` : `Mở chi tiết ${d.name}`}
+              onClick={moRongDoi}
+            >
+              <Glyph icon={hien.moRong ? ChevronDown : ChevronRight} className="size-3.5" />
             </button>
           ) : (
             // Same width as the toggle, so the stars line up down the column.
-            <span aria-hidden="true" className="inline-block w-7 shrink-0" />
+            <span aria-hidden="true" className="inline-block size-3.5 shrink-0" />
           )}
           {/* The star sits on TOP-LEVEL lines only, as in the prototype: the headline is one of the
               form's top rows (`Tổng số`, `Tổng thu nội địa`). A nested line already starred still
@@ -1295,48 +1545,51 @@ export function DongKhoanMuc({
           {coXacNhan && hien.cap === 0 ? (
             <button
               type="button"
-              className={TREE_ICON_BUTTON}
+              className={cn(TREE_ICON, laDongTong ? "text-tangerine" : "text-ink-muted hover:not-disabled:text-tangerine")}
               aria-label={nhanDatDongTong(d.name)}
               aria-pressed={laDongTong}
               disabled={editDisabled}
-              title={lockTitle ?? nhanDatDongTong(d.name)}
+              title={lockTitle ?? HEADLINE_STAR_TITLE}
               onClick={datTong}
             >
-              <Glyph
-                icon={Star}
-                className={cn("size-4", laDongTong ? "fill-current text-warning-600" : "text-ink-400")}
-              />
+              <Glyph icon={Star} className={cn("size-3.5", laDongTong && "fill-current")} />
             </button>
           ) : (
             // Không có quyền đổi thì ngôi sao vẫn phải ĐỌC ĐƯỢC: dòng nào đang là con số tổng là
             // thông tin ai xem bảng cũng cần, kể cả người không đổi được nó.
             laDongTong && (
-              <span title={HEADLINE_LINE_LABEL} className="inline-flex w-7 shrink-0 justify-center">
-                <Glyph icon={Star} className="size-4 fill-current text-warning-600" />
+              <span title={HEADLINE_LINE_LABEL} className="inline-flex shrink-0 text-tangerine">
+                <Glyph icon={Star} className="size-3.5 fill-current" />
                 <span className="an-thi-giac">{HEADLINE_LINE_LABEL}</span>
               </span>
             )
           )}
         </span>
       </td>
-      <td className="ma-muc align-top text-[13px] text-ink-500">{d.no === "" ? O_TRONG : d.no}</td>
+      {/* TT in the body font, muted (prototype `:523`); an empty TT is an empty cell. */}
+      <td className="px-3 py-1.5 align-top text-ink-muted">{d.no}</td>
       {/* Thụt lề theo cấp NGAY TRONG cột Nội dung (§4.1, prototype `0.75 + depth × 1.25rem`).
           `paddingInlineStart` (không phải `paddingLeft`) để không hỏng nếu giao diện có ngày chạy ở
-          chiều ngược lại. The name wraps (min 22rem), so a long item never widens the table forever. */}
+          chiều ngược lại. */}
       <td
-        className={cn("min-w-[22rem] align-top whitespace-normal", heading && "font-semibold text-ink-900")}
+        className={cn("px-3 py-1.5 align-top", heading && "font-semibold text-navy")}
         style={{ paddingInlineStart: `${0.75 + hien.cap * 1.25}rem` }}
       >
-        {coGhi ? (
-          // The name IS the edit control (§4.1, `NHAN_SUA_TEN`): drawn as text with a link colour,
-          // not as a bordered button on every row.
+        {open !== null && open.field === NAME_FIELD ? (
+          <CellInput
+            label={`Tên khoản mục ${d.name}`}
+            cell={open}
+            onDraft={cell.setDraft}
+            onSave={() => void cell.commit(cellNameEdit(d, open.draft))}
+            onCancel={cell.close}
+          />
+        ) : coGhi ? (
           <button
             type="button"
-            className="cursor-pointer rounded-sm border-0 bg-transparent p-0 text-left [font-family:inherit] text-[length:inherit] [font-weight:inherit] text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:text-ink-700 disabled:no-underline"
-            aria-label={NHAN_SUA_TEN}
+            className={cn(EDITABLE_TEXT, "text-left")}
             disabled={editDisabled}
-            title={lockTitle}
-            onClick={moSua}
+            title={lockTitle ?? NHAN_SUA_TEN}
+            onClick={() => cell.start(NAME_FIELD, d.name)}
           >
             {d.name}
           </button>
@@ -1347,118 +1600,121 @@ export function DongKhoanMuc({
 
       {cot.map((c) => {
         if (c.type === "so") {
-          const chu = nhanSoTien(d.values[c.id] ?? null, donVi.ma);
+          const value = d.values[c.id] ?? null;
+          const shown = formatSheetAmount(value, donVi.ma);
           const lyDo = lyDoKhongTinh(d.unavailable_reasons?.[c.id]);
+          const field = `value:${c.id}`;
           return (
             <td
               key={c.id}
               className={cn(
-                "text-right align-top tabular-nums",
+                "px-3 py-1.5 text-right align-top tabular-nums",
                 heading && "font-semibold",
-                computed && lyDo === null && "text-success-600",
+                computed && lyDo === null && "text-leaf",
               )}
             >
-              {coGhi && suaDuocOSo(d.method) ? (
-                // §4.1 "Các ô số — button, bấm để sửa tại chỗ" (NS-01): opens the SAME in-place form as
-                // the name, where every figure of the row is a box. Only a `manual` row: the others'
-                // figures are sums the server computes, and it refuses a typed one (409).
+              {open !== null && open.field === field ? (
+                <CellInput
+                  label={`${c.name} của ${d.name}`}
+                  cell={open}
+                  numeric
+                  onDraft={cell.setDraft}
+                  onSave={() => void cell.commit(cellValueEdit(d, c, open.draft, donVi.ma))}
+                  onCancel={cell.close}
+                />
+              ) : coGhi && suaDuocOSo(d.method) ? (
+                // Only a `manual` row: the others' figures are sums the server computes, and it
+                // refuses a typed one (409). The box opens with the EXACT figure, not the rounded one.
                 <button
                   type="button"
-                  className="cursor-pointer rounded-sm border-0 bg-transparent p-0 text-right [font-family:inherit] text-[length:inherit] [font-weight:inherit] text-brand-700 tabular-nums hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:text-ink-700 disabled:no-underline"
-                  aria-label={nhanSuaO(c.name, d.name, lyDo === null ? chu : O_KHONG_TINH_DUOC)}
+                  className={cn(EDITABLE_TEXT, "w-full text-right tabular-nums")}
+                  aria-label={nhanSuaO(c.name, d.name, lyDo === null ? shown : O_KHONG_TINH_DUOC)}
                   disabled={editDisabled}
                   title={lockTitle}
-                  onClick={moSua}
+                  onClick={() => cell.start(field, cellValueDraft(d, c.id, donVi.ma))}
                 >
-                  <OTien chu={chu} lyDo={lyDo} />
+                  <OTien chu={shown} lyDo={lyDo} />
                 </button>
               ) : (
-                <OTien chu={chu} lyDo={lyDo} />
+                <OTien chu={shown} lyDo={lyDo} />
               )}
             </td>
           );
         }
         // Cột phần trăm: tỷ lệ MÁY CHỦ tính cho dòng này (`percent_basis_points`), không chia lại ở
         // đây. Không có tỷ lệ thì máy chủ gửi câu lý do, và ô vẽ đúng dấu "Không tính được".
-        const cell = percentCell(d, c.id);
+        const pc = percentCellRounded(d, c.id);
         return (
-          <td key={c.id} className={cn("text-right align-top tabular-nums", heading && "font-semibold")}>
-            <OTien chu={cell.text} lyDo={cell.reason} />
+          <td key={c.id} className={cn("px-3 py-1.5 text-right align-top tabular-nums", heading && "font-semibold")}>
+            <OTien chu={pc.text} lyDo={pc.reason} />
           </td>
         );
       })}
 
       {/* `Cách tính` holds the row's controls, as in the prototype: the mode, then the entries (⇄),
-          add a child, remove. Icon-only, each with its full name as `aria-label` and tooltip — or,
-          under a year close, the lock reason as the tooltip. */}
-      <td className="nhan-trong align-top">
+          add a child, remove — and, last, TT / display order. Icon-only, each with its full name as
+          `aria-label` and tooltip — or, under a year close, the lock reason as the tooltip. */}
+      <td className="px-3 py-1.5 align-top">
         <span className="flex items-center gap-1">
-          {coGhi && chonDuocCachTinh(d.method, hien.coCon) ? (
+          {coGhi ? (
             // CHỌN KHÔNG GỬI NGAY: đổi cách tính đổi con số đang hiện, nên lựa chọn mở một hộp cảnh
             // báo (`FormDoiCachTinh`) và chỉ gửi khi cán bộ xác nhận. Ô chọn vẫn hiện chế độ ĐANG LƯU
             // cho tới khi bảng được đọc lại.
-            //
-            // COMPACT 32px INSIDE THE CELL: the global select frame is 40px (`globals.css`), which
-            // made this one row taller than every other. Utilities win over the legacy layer.
             <select
               aria-label={`Cách tính của ${d.name}`}
-              value={d.method}
-              disabled={editDisabled}
-              title={lockTitle}
-              className="h-8 min-h-8 py-0 pr-8 pl-2.5 text-[13px] not-italic"
+              value={isParent ? "children" : d.method}
+              disabled={isParent || editDisabled}
+              title={isParent ? PARENT_SUMS_CHILDREN : lockTitle}
+              className={METHOD_SELECT}
               onChange={(e) => {
                 const den = e.target.value;
                 if ((den === "manual" || den === "entries") && den !== d.method) doiCachTinh(den);
               }}
             >
-              {CACH_TINH_CHON.map((c) => (
-                <option key={c.ma} value={c.ma}>
-                  {c.nhan}
+              {CACH_TINH_CHON.map((o) => (
+                // `children` is never sent (400): shown, not choosable, on a leaf.
+                <option key={o.ma} value={o.ma} disabled={o.ma === "children" && !isParent}>
+                  {o.nhan}
                 </option>
               ))}
             </select>
           ) : (
-            <span className="min-w-0">{nhanCachTinh(d.method)}</span>
+            <span className="min-w-0 flex-1 text-[11.5px] text-ink-muted">{nhanCachTinh(d.method)}</span>
           )}
-          {laLa && (
-            <Button
-              type="button"
-              variant="icon"
-              size="sm"
-              aria-label={nhanNutDot(d.name)}
-              title={nhanNutDot(d.name)}
-              disabled={dangGui}
-              onClick={moDot}
-            >
-              <Glyph icon={ListPlus} />
-            </Button>
-          )}
+          <RowIconButton
+            icon={ListPlus}
+            label={isParent ? PARENT_SUMS_CHILDREN : nhanNutDot(d.name)}
+            title={isParent ? PARENT_SUMS_CHILDREN : nhanNutDot(d.name)}
+            disabled={isParent || dangGui}
+            onClick={moDot}
+          />
           {coGhi && (
-            <Button
-              type="button"
-              variant="icon"
-              size="sm"
-              aria-label={nhanThemCon(d.name)}
-              disabled={editDisabled}
+            <RowIconButton
+              icon={Plus}
+              label={nhanThemCon(d.name)}
               title={lockTitle ?? nhanThemCon(d.name)}
+              disabled={editDisabled}
               onClick={them}
-            >
-              <Glyph icon={Plus} />
-            </Button>
+            />
           )}
           {coXacNhan && (
-            <Button
-              type="button"
-              variant="icon"
-              size="sm"
-              className="hover:not-disabled:bg-danger-50 hover:not-disabled:text-danger-600"
-              aria-label={nhanGoKhoanMuc(d.name)}
-              disabled={editDisabled}
+            <RowIconButton
+              icon={Trash2}
+              danger
+              label={nhanGoKhoanMuc(d.name)}
               title={lockTitle ?? nhanGoKhoanMuc(d.name)}
+              disabled={editDisabled}
               onClick={go}
-            >
-              <Glyph icon={Trash2} />
-            </Button>
+            />
+          )}
+          {coGhi && (
+            <RowIconButton
+              icon={Pencil}
+              label={`${LINE_ORDER_TITLE} của ${d.name}`}
+              title={lockTitle ?? LINE_ORDER_TITLE}
+              disabled={editDisabled}
+              onClick={openLineOrder}
+            />
           )}
         </span>
       </td>
@@ -1466,186 +1722,86 @@ export function DongKhoanMuc({
   );
 }
 
-/** "Dòng đang là con số tổng" — the read-only star's tooltip and accessible name. */
-const HEADLINE_LINE_LABEL = "Dòng đang là con số tổng";
-
-/** The two small in-cell toggles of the tree (expand, headline star): 28px, no frame. */
-const TREE_ICON_BUTTON = cn(
-  "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md border-0 bg-transparent p-0 text-ink-500",
-  "hover:not-disabled:bg-brand-50 hover:not-disabled:text-brand-700",
-  "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
-  "disabled:cursor-not-allowed disabled:opacity-60",
-);
-
 /**
- * Dòng đang sửa: TT, tên, thứ tự và các ô số của một dòng.
- *
- * MỘT BIỂU MẪU KHÔNG KIỂM SOÁT (`defaultValue` + `FormData`), không phải một `useState` cho mỗi ô.
- * Bảng này có tới hàng chục dòng và mỗi dòng có tới bốn ô số; dựng state cho từng ô là dựng lại
- * đúng thứ trình duyệt đã làm sẵn, và React Compiler đang bật thì mỗi lần gõ một ký tự sẽ dựng
- * lại cả bảng.
- *
- * Ô SỐ CHỈ MỞ VỚI DÒNG KHÔNG CÓ CON. Máy chủ trả 409 kèm quy tắc của khách; khoá ô ở đây chỉ để
- * cán bộ không gõ xong rồi mới bị từ chối.
+ * The TT / display-order dialog of one line — the two fields of the former row form that the in-cell
+ * edit does not cover, with the same `Field` + `o-nhap` inputs. Sends only what changed
+ * (`lineOrderBody`); the server's refusal is printed inside.
  */
-export function FormSuaDong({
+export function LineOrderDialog({
   dong,
-  cot,
-  donVi,
-  soCotBang,
   dangGui,
   huy,
   luu,
+  serverError = null,
 }: {
   dong: finance_dongRa;
-  /** CHỈ cột `so` — cột phần trăm không lưu giá trị nào (§9 quy tắc 3). */
-  cot: readonly finance_cotRa[];
-  donVi: DonViHien;
-  soCotBang: number;
   dangGui: boolean;
   huy: () => void;
-  luu: (id: string, than: SuaDongVao) => void;
+  luu: (body: SuaDongVao) => void;
+  serverError?: string | null;
 }) {
-  const [loiO, datLoiO] = useState<string | null>(null);
-  const moO = suaDuocOSo(dong.method);
-
+  const [error, setError] = useState<string | null>(null);
+  const shown = error ?? serverError;
   return (
-    <tr>
-      {/* The row under edit opens in place, as a tinted panel spanning the table (§4.1). */}
-      <td colSpan={soCotBang} className="bg-brand-50/40 whitespace-normal">
-        <form
-          aria-label={`Sửa khoản mục ${dong.name}`}
-          className="flex min-w-0 flex-col gap-4 py-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            const than: SuaDongVao = {
-              no: String(fd.get("no") ?? ""),
-              name: String(fd.get("name") ?? ""),
-              order: Number(fd.get("order") ?? dong.order),
-            };
-
-            if (moO) {
-              const tho: Record<string, string> = {};
-              for (const c of cot) tho[c.id] = String(fd.get(`gia:${c.id}`) ?? "");
-              const gia = dungGiaSuaDong(tho, cot, dong.unavailable_reasons, donVi.ma);
-              if (!gia.ok) {
-                datLoiO(gia.thongBao);
-                return;
-              }
-              than.values = gia.than;
-            }
-
-            datLoiO(null);
-            luu(dong.id, than);
-          }}
-        >
-          <div className="grid min-w-0 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Số thứ tự (TT)" htmlFor={`sua-no-${dong.id}`} grow="auto">
-              <input
-                id={`sua-no-${dong.id}`}
-                name="no"
-                className="o-nhap"
-                type="text"
-                defaultValue={dong.no}
-                maxLength={32}
-              />
-            </Field>
-            <Field label="Nội dung khoản mục" htmlFor={`sua-name-${dong.id}`} grow="auto">
-              <input
-                id={`sua-name-${dong.id}`}
-                name="name"
-                className="o-nhap"
-                type="text"
-                defaultValue={dong.name}
-                required
-              />
-            </Field>
-            <Field label="Thứ tự hiển thị" htmlFor={`sua-order-${dong.id}`} grow="auto">
-              <input
-                id={`sua-order-${dong.id}`}
-                name="order"
-                className="o-nhap"
-                type="number"
-                step={1}
-                defaultValue={dong.order}
-              />
-            </Field>
-
-            {moO ? (
-              cot.map((c) => {
-                const lyDo = lyDoKhongTinh(dong.unavailable_reasons?.[c.id]);
-                const idGoiY = `sua-gia-goi-y-${dong.id}-${c.id}`;
-                return (
-                  <Field
-                    key={c.id}
-                    label={`${c.name} (${donVi.nhan.toLowerCase()})`}
-                    htmlFor={`sua-gia-${dong.id}-${c.id}`}
-                    grow="auto"
-                    hint={
-                      lyDo !== null ? (
-                        <span id={idGoiY} className="inline-flex items-start gap-1 text-warning-600">
-                          <Glyph icon={TriangleAlert} className="mt-0.5 size-3.5 shrink-0" />
-                          <span>
-                            Ô này không tính được: {lyDo}. Để nguyên chữ “{O_KHONG_TINH_DUOC}” thì
-                            con số đang lưu được giữ nguyên; gõ số mới để thay; xoá trắng ô để xoá
-                            con số.
-                          </span>
-                        </span>
-                      ) : undefined
-                    }
-                  >
-                    {/* Ô CHỮ, không `type="number"`: ô số của trình duyệt không đọc được `3.463.459,2`.
-                        Điền sẵn ĐÚNG chuỗi màn hình in, và chuỗi ấy đọc ngược lại ra đúng số đồng cũ —
-                        nên "Lưu" mà không sửa gì không đổi con số nào. Ô KHÔNG TÍNH ĐƯỢC điền chữ
-                        `O_KHONG_TINH_DUOC`, không điền rỗng — xem `dungGiaSuaDong`. */}
-                    <input
-                      id={`sua-gia-${dong.id}-${c.id}`}
-                      name={`gia:${c.id}`}
-                      className="o-nhap"
-                      type="text"
-                      inputMode="decimal"
-                      autoComplete="off"
-                      aria-describedby={lyDo === null ? undefined : idGoiY}
-                      defaultValue={
-                        lyDo === null ? giaDienSan(dong.values[c.id] ?? null, donVi) : O_KHONG_TINH_DUOC
-                      }
-                    />
-                  </Field>
-                );
-              })
-            ) : dong.method === "entries" ? (
-              <p className="m-0 text-xs text-ink-500 sm:col-span-2 lg:col-span-3">
-                Khoản mục này đang Cộng theo đợt: con số của nó là tổng các đợt ghi ở hộp ⇄, không
-                gõ thẳng vào đây. Muốn gõ tay, đổi Cách tính về Nhập trực tiếp.
-              </p>
-            ) : (
-              <p className="m-0 text-xs text-ink-500 sm:col-span-2 lg:col-span-3">
-                Khoản mục này có khoản mục con nên con số của nó là tổng các con — máy chủ từ chối
-                số gõ thẳng vào đây. Sửa ở từng dòng con.
-              </p>
-            )}
-          </div>
-
-          {loiO !== null && (
-            <p className="thong-bao-loi m-0" role="alert">
-              {loiO}
-            </p>
-          )}
-
-          <p className="m-0 flex flex-wrap justify-end gap-2">
-            <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
-              Huỷ
-            </Button>
-            <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
-              <BusyLabel busy={dangGui} label="Lưu khoản mục" busyText={BUSY_SAVING} />
-            </Button>
+    <ModalDialog
+      titleId={LINE_ORDER_TITLE_ID}
+      closeDisabled={dangGui}
+      onDismiss={() => {
+        if (!dangGui) huy();
+      }}
+    >
+      <ModalDialogHeader titleId={LINE_ORDER_TITLE_ID} title={LINE_ORDER_TITLE} description={dong.name} />
+      <form
+        aria-labelledby={LINE_ORDER_TITLE_ID}
+        className="flex min-h-0 min-w-0 flex-col gap-4"
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
+          e.preventDefault();
+          const fd = new FormData(e.currentTarget);
+          const built = lineOrderBody(dong, String(fd.get("no") ?? ""), String(fd.get("order") ?? ""));
+          if (!built.ok) {
+            setError(built.thongBao);
+            return;
+          }
+          setError(null);
+          luu(built.than);
+        }}
+      >
+        <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+          <Field label="Số thứ tự (TT)" htmlFor="line-order-no" grow="auto">
+            <input id="line-order-no" name="no" className="o-nhap" type="text" maxLength={32} defaultValue={dong.no} />
+          </Field>
+          <Field label="Thứ tự hiển thị" htmlFor="line-order-order" grow="auto">
+            <input
+              id="line-order-order"
+              name="order"
+              className="o-nhap"
+              type="number"
+              step={1}
+              required
+              defaultValue={dong.order}
+            />
+          </Field>
+        </div>
+        {shown !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {shown}
           </p>
-        </form>
-      </td>
-    </tr>
+        )}
+        <div className="flex shrink-0 flex-wrap justify-end gap-2">
+          <Button type="button" variant="secondary" disabled={dangGui} onClick={huy}>
+            Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={dangGui} aria-busy={dangGui || undefined}>
+            <BusyLabel busy={dangGui} label="Lưu" busyText={BUSY_SAVING} />
+          </Button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }
+
+/** Heading id of the TT / display-order dialog. */
+const LINE_ORDER_TITLE_ID = "tieu-de-thu-tu-khoan-muc";
 
 /**
  * Biểu mẫu thêm một khoản mục — dùng cho cả `Thêm khoản mục cấp cao nhất` lẫn `＋` dòng con. A centred
@@ -1749,19 +1905,6 @@ export function FormThemKhoanMuc({
 
 /** Heading id of the add-line dialog. */
 const ADD_LINE_TITLE_ID = "tieu-de-them-khoan-muc";
-
-/**
- * Chuỗi điền sẵn vào ô tiền của biểu mẫu sửa dòng.
- *
- * Giá trị hỏng (không phải số nguyên an toàn) điền NGUYÊN chữ số thô, không điền rỗng: ô rỗng lúc
- * lưu là XOÁ TRẮNG ô ấy, nên điền rỗng cho một giá trị đọc hỏng là lặng lẽ xoá một con số ngân
- * sách. Chữ thô sẽ bị `docSoNhap` từ chối kèm một câu, và cán bộ thấy có chuyện.
- */
-function giaDienSan(gia: number | null, donVi: DonViHien): string {
-  if (gia === null) return "";
-  if (!Number.isSafeInteger(gia)) return String(gia);
-  return dongSangChuoi(gia, donVi.ma);
-}
 
 /**
  * Hộp xác nhận ĐỔI CÁCH TÍNH (§4.2) — nói đúng điều máy chủ sẽ làm với con số trước khi gửi.

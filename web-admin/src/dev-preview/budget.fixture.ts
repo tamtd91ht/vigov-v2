@@ -79,6 +79,9 @@ const CHI_COLUMNS: finance_cotRa[] = [
   },
 ];
 
+/** The fixture lines that have children (`A` → `A1`, `A2`). */
+const PARENT_LINES: ReadonlySet<string> = new Set(["A"]);
+
 function line(
   id: string,
   no: string,
@@ -94,7 +97,9 @@ function line(
     no,
     name,
     order,
-    method: parent === undefined && id !== "L0" ? "children" : "manual",
+    // Only a line WITH children sums them; every other line is typed (`manual`) — so the preview shows
+    // a parent (disabled select, no entries) beside leaves at the top level and below.
+    method: PARENT_LINES.has(id) ? "children" : "manual",
     level: parent === undefined ? 0 : 1,
     is_headline: id === "L0",
     values: { C1: c1, C2: c2 },

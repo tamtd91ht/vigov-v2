@@ -1,17 +1,17 @@
 "use client";
 
-import { CircleCheck, ListOrdered, LockKeyhole, PencilLine, Plus, Trash2 } from "lucide-react";
+import { LockKeyhole, PencilLine, Plus, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/field";
+import { DATA_TABLE_CLASS } from "@/components/ui/data-table";
+import { controlClass } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
 import { cn } from "@/lib/cn";
@@ -25,16 +25,16 @@ import { ghiDot, goDot, layDot } from "@/lib/api/thu-chi";
 
 import { FormGoKemLyDo } from "./form-go-ly-do";
 import {
-  cauDieuKienDot,
   DO_DAI_TOI_DA_DOT,
   DOT_TRONG,
   dungThanDot,
+  ENTRY_RECORDED,
+  ENTRY_REMOVED,
   khoaSauLanGhi,
   lyDoKhongTinh,
   MO_TA_HOP_DOT,
   nhanNgayLuyKe,
   nhanSoTien,
-  tieuDeHopDot,
   type DonViHien,
   type NhapDot,
 } from "./nhan-thu-chi";
@@ -61,7 +61,6 @@ import { closedMonthsHint, entryLockReason, sheetLockReason } from "./period-clo
 export function HopDotThuChi({
   khoanMucId,
   tenKhoanMuc,
-  method,
   cot,
   donVi,
   coGhi,
@@ -73,7 +72,6 @@ export function HopDotThuChi({
 }: {
   khoanMucId: string;
   tenKhoanMuc: string;
-  method: string;
   /** CHỈ cột số của bảng. */
   cot: readonly finance_cotRa[];
   donVi: DonViHien;
@@ -99,7 +97,6 @@ export function HopDotThuChi({
   const [khoa, datKhoa] = useState(khoaChongTrungMoi);
   const [dangGui, datDangGui] = useState(false);
   const [loi, datLoi] = useState<string | null>(null);
-  const [thongBao, datThongBao] = useState<string | null>(null);
   const [dangGo, datDangGo] = useState<finance_dotRa | null>(null);
 
   useEffect(() => {
@@ -119,15 +116,19 @@ export function HopDotThuChi({
         ? { pha: "xong", duLieu: daTai.kq.duLieu }
         : { pha: "loi", thongBao: daTai.kq.thongBao };
 
+  /**
+   * After a write: the server's refusal stays IN the dialog, verbatim; a success is the prototype's
+   * toast (`FiscalEntriesDialog.tsx:88,251`, sonner as every other screen — ADR 0068 lần 6), and the
+   * list and the sheet are read again.
+   */
   function sauLanGhi(kq: KetQua<unknown>, cauXong: string): boolean {
     datDangGui(false);
     if (!kq.ok) {
       datLoi(kq.thongBao);
-      datThongBao(null);
       return false;
     }
     datLoi(null);
-    datThongBao(cauXong);
+    toast.success(cauXong);
     datLanTai((n) => n + 1);
     daDoiSoLieu();
     return true;
@@ -139,18 +140,18 @@ export function HopDotThuChi({
   const sheetLock = sheetLockReason(closes, sheetYear);
   const monthsHint = closedMonthsHint(closes, sheetYear);
 
-  // The prototype's `FiscalEntriesDialog`: a centred modal 52rem wide, title = the line, the entry form
-  // on top and the list under it. Esc and the dialog's own ✕ (ModalDialog draws it, ADR 0068 lần 6)
-  // both close it; nothing is lost — every entry is saved by its own submit.
+  // The prototype's `FiscalEntriesDialog`: a centred modal 52rem wide, title = the line's name as it is,
+  // the description under it, the entry form on top and the list under it. Esc and the dialog's own ✕
+  // (ModalDialog draws it, ADR 0068 lần 6) both close it; nothing is lost — every entry is saved by its
+  // own submit.
   return (
     <ModalDialog titleId="tieu-de-hop-dot" size="lg" className="max-w-[52rem]" onDismiss={dong}>
       <div className="min-w-0 shrink-0">
-        <ModalDialogHeader titleId="tieu-de-hop-dot" title={tieuDeHopDot(tenKhoanMuc)} />
+        <ModalDialogHeader titleId="tieu-de-hop-dot" title={tenKhoanMuc} description={MO_TA_HOP_DOT} />
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
       <NoiDungHopDot
-        method={method}
         cot={cot}
         donVi={donVi}
         danhSach={danhSach}
@@ -161,18 +162,11 @@ export function HopDotThuChi({
         moGo={(d) => {
           datDangGo(d);
           datLoi(null);
-          datThongBao(null);
         }}
       >
         {loi !== null && (
           <p className="thong-bao-loi m-0" role="alert">
             {loi}
-          </p>
-        )}
-        {thongBao !== null && (
-          <p role="status" className="m-0 inline-flex items-center gap-1.5 text-sm text-success-600">
-            <CircleCheck aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0" />
-            {thongBao}
           </p>
         )}
 
@@ -190,7 +184,7 @@ export function HopDotThuChi({
             luu={(lyDo) => {
               datDangGui(true);
               goDot(dangGo.id, lyDo).then((kq) => {
-                if (sauLanGhi(kq, "Đã gỡ đợt.")) datDangGo(null);
+                if (sauLanGhi(kq, ENTRY_REMOVED)) datDangGo(null);
               });
             }}
           />
@@ -211,18 +205,16 @@ export function HopDotThuChi({
         {coGhi && sheetLock === null && (
           <FormGhiDot
             cot={cot}
-            donVi={donVi}
             dangGui={dangGui}
             gui={(nhap, bieuMau) => {
               const dung = dungThanDot(nhap, cot, donVi.ma);
               if (!dung.ok) {
                 datLoi(dung.thongBao);
-                datThongBao(null);
                 return;
               }
               datDangGui(true);
               ghiDot(khoanMucId, dung.than, khoa).then((kq) => {
-                const ok = sauLanGhi(kq, "Đã ghi đợt.");
+                const ok = sauLanGhi(kq, ENTRY_RECORDED);
                 datKhoa((k) => khoaSauLanGhi(k, ok, khoaChongTrungMoi));
                 if (ok) bieuMau.reset();
               });
@@ -241,13 +233,13 @@ export type TrangThaiDot =
   | { pha: "xong"; duLieu: finance_danhSachDotRa };
 
 /**
- * Phần hiển thị của hộp: mô tả, điều kiện cộng, danh sách đợt. Tách khỏi phần gọi mạng để bài
+ * Phần hiển thị của hộp: các thông báo, biểu mẫu, danh sách đợt. Tách khỏi phần gọi mạng để bài
  * kiểm vẽ được từng trạng thái — đặc biệt nhánh KHÔNG có `budget.confirm`.
  *
- * `children` là biểu mẫu và các thông báo, đặt giữa phần mô tả và danh sách.
+ * `children` là biểu mẫu và các thông báo, đặt trên danh sách. The description sits in the dialog's
+ * header, as the prototype's `DialogDescription`; the list has no heading of its own (prototype).
  */
 export function NoiDungHopDot({
-  method,
   cot,
   donVi,
   danhSach,
@@ -258,7 +250,6 @@ export function NoiDungHopDot({
   moGo,
   children,
 }: {
-  method: string;
   cot: readonly finance_cotRa[];
   donVi: DonViHien;
   danhSach: TrangThaiDot;
@@ -269,26 +260,18 @@ export function NoiDungHopDot({
   moGo: (d: finance_dotRa) => void;
   children?: ReactNode;
 }) {
-  // Cách tính theo DANH SÁCH vừa đọc nếu có — mới hơn bản của bảng lúc mở hộp.
-  const methodHien = danhSach.pha === "xong" ? danhSach.duLieu.method : method;
-
   return (
     <>
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="m-0 text-sm text-ink-700">{MO_TA_HOP_DOT}</p>
-        <p className="m-0 text-xs text-ink-500">{cauDieuKienDot(methodHien)}</p>
-        <p className="m-0 text-xs text-ink-500">Số tiền theo đơn vị của bảng: {donVi.nhan}.</p>
-      </div>
-
       {children}
 
-      <h4 className="m-0 text-sm font-semibold text-ink-900">Các đợt đã ghi</h4>
+      {/* The prototype's list box (`FiscalEntriesDialog.tsx:189`): capped at 24rem, scrolling inside. */}
+      <div role="region" aria-label="Các đợt đã ghi" tabIndex={0} className="max-h-[24rem] min-w-0 shrink-0 overflow-auto">
       {danhSach.pha === "dangTai" && (
         <>
           <p role="status" className="an-thi-giac">
             Đang tải các đợt…
           </p>
-          <SkeletonRows rows={3} className="-mx-4" />
+          <Skeleton className="h-32 w-full" />
         </>
       )}
       {danhSach.pha === "loi" && (
@@ -297,10 +280,9 @@ export function NoiDungHopDot({
         </p>
       )}
       {danhSach.pha === "xong" && danhSach.duLieu.entries.length === 0 && (
-        <EmptyState icon={ListOrdered} title={DOT_TRONG} className="py-6" />
+        <p className="m-0 py-8 text-center text-[12.5px] text-ink-muted">{DOT_TRONG}</p>
       )}
       {danhSach.pha === "xong" && danhSach.duLieu.entries.length > 0 && (
-        <TableScroll aria-label="Các đợt đã ghi" className="rounded-xl">
           <table className={cn("bang-danh-muc", DATA_TABLE_CLASS)}>
             <thead>
               <tr>
@@ -346,7 +328,7 @@ export function NoiDungHopDot({
                       </>
                     )}
                     {(counterparty !== "" || documentNo !== "") && (
-                      <span className="block text-xs text-ink-500">
+                      <span className="block text-[11px] text-ink-muted">
                         {[counterparty, documentNo].filter((s) => s !== "").join(" · ")}
                       </span>
                     )}
@@ -362,18 +344,18 @@ export function NoiDungHopDot({
                   {coXacNhan && (
                     <td className="text-right align-top">
                       {lock === null ? (
-                        // A removal keeps its WORDS (spec v2 §7) and the red outline.
-                        <Button
+                        // The prototype's bare red bin (`FiscalEntriesDialog.tsx:243-258`). It still
+                        // opens the reason form: the server requires a reason (rule 7).
+                        <button
                           type="button"
-                          variant="danger"
-                          size="sm"
-                          icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                          className="inline-flex cursor-pointer items-center border-0 bg-transparent p-0 text-danger focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
                           disabled={dangGui}
                           aria-label={`Gỡ đợt ngày ${nhanNgayLuyKe(d.date)}`}
+                          title="Gỡ đợt"
                           onClick={() => moGo(d)}
                         >
-                          Gỡ đợt
-                        </Button>
+                          <Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-3.5" />
+                        </button>
                       ) : (
                         // No remove button on a closed period: it could only answer 409. The
                         // reason is printed, not hidden in a tooltip — touch screens cannot hover.
@@ -389,8 +371,8 @@ export function NoiDungHopDot({
               })}
             </tbody>
           </table>
-        </TableScroll>
       )}
+      </div>
       {/* Số tiền của một đợt ghi TRƯỚC khi trần hạ xuống 2^53 − 1 có thể vượt trần: máy chủ gửi
           `null` kèm câu, và đợt ấy phải TÌM ĐƯỢC để gỡ — nên nói ra ngày và cột của nó. */}
       {danhSach.pha === "xong" && (
@@ -410,6 +392,12 @@ export function NoiDungHopDot({
   );
 }
 
+/** The prototype's `Label className="text-[11.5px]"` (shadcn Label: medium weight, tight line). */
+const ENTRY_LABEL = "block text-[11.5px] leading-none font-medium text-ink";
+
+/** The prototype's `Input className="mt-1 h-9 text-[12.5px]"` — the shared frame, at the dialog's size. */
+const ENTRY_INPUT = cn(controlClass, "mt-1 h-9 text-[12.5px] md:text-[12.5px]");
+
 /** Ngày hôm nay `YYYY-MM-DD` theo đồng hồ máy — giá trị điền sẵn của ô Ngày (§5). */
 function homNay(): string {
   const d = new Date();
@@ -426,12 +414,11 @@ function homNay(): string {
  */
 export function FormGhiDot({
   cot,
-  donVi,
   dangGui,
   gui,
 }: {
+  /** CHỈ cột số. Their boxes read the sheet's unit — said once in the summary card's sub-line. */
   cot: readonly finance_cotRa[];
-  donVi: DonViHien;
   dangGui: boolean;
   gui: (nhap: NhapDot, bieuMau: HTMLFormElement) => void;
 }) {
@@ -439,11 +426,12 @@ export function FormGhiDot({
   const [ngayMacDinh] = useState(homNay);
 
   return (
-    // The prototype's entry form: ONE tinted box, a 4-column grid from 640px — Ngày | Nội dung (3) ·
-    // Đơn vị, cá nhân (2) | Số chứng từ (2) · one box per money column · `Ghi đợt` in the last cell.
+    // The prototype's entry form (`FiscalEntriesDialog.tsx:106-186`): ONE tinted box, a 4-column grid
+    // from 640px — Ngày | Nội dung (3) · Đơn vị, cá nhân (2) | Số chứng từ (2) · one box per money
+    // column · `Ghi đợt` in the last cell. Plain label + input pairs, 11.5px labels and 36px boxes.
     <form
       aria-label="Ghi một đợt"
-      className="grid min-w-0 gap-3 rounded-xl border border-line bg-surface-muted p-3 sm:grid-cols-4"
+      className="grid min-w-0 gap-2 rounded-[10px] border border-solid border-line bg-canvas p-3 sm:grid-cols-4"
       onSubmit={(e) => {
         e.preventDefault();
         const bieuMau = e.currentTarget;
@@ -463,79 +451,87 @@ export function FormGhiDot({
         );
       }}
     >
-        <Field label="Ngày" htmlFor="dot-date" grow="auto">
-          <input
-            id="dot-date"
-            name="date"
-            className="o-nhap"
-            type="date"
-            required
-            defaultValue={ngayMacDinh}
-          />
-        </Field>
-        <Field label="Nội dung" htmlFor="dot-content" grow="auto" className="sm:col-span-3">
+        <div>
+          <label htmlFor="dot-date" className={ENTRY_LABEL}>
+            Ngày
+          </label>
+          <input id="dot-date" name="date" className={ENTRY_INPUT} type="date" required defaultValue={ngayMacDinh} />
+        </div>
+        {/* No `required` on Nội dung: the browser's own bubble would replace the prototype's sentence
+            ("Nhập nội dung đợt thu, chi.", `dungThanDot`). */}
+        <div className="sm:col-span-3">
+          <label htmlFor="dot-content" className={ENTRY_LABEL}>
+            Nội dung
+          </label>
           <input
             id="dot-content"
             name="content"
-            className="o-nhap"
+            className={ENTRY_INPUT}
             type="text"
-            required
             maxLength={DO_DAI_TOI_DA_DOT.content}
             placeholder="Thu tiền sử dụng đất đợt 2"
           />
-        </Field>
-        <Field label="Đơn vị, cá nhân" htmlFor="dot-counterparty" grow="auto" className="sm:col-span-2">
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="dot-counterparty" className={ENTRY_LABEL}>
+            Đơn vị, cá nhân
+          </label>
           <input
             id="dot-counterparty"
             name="counterparty"
-            className="o-nhap"
+            className={ENTRY_INPUT}
             type="text"
             maxLength={DO_DAI_TOI_DA_DOT.counterparty}
             autoComplete="off"
           />
-        </Field>
-        <Field label="Số chứng từ" htmlFor="dot-document-no" grow="auto" className="sm:col-span-2">
+        </div>
+        <div className="sm:col-span-2">
+          <label htmlFor="dot-document-no" className={ENTRY_LABEL}>
+            Số chứng từ
+          </label>
           <input
             id="dot-document-no"
             name="document_no"
-            className="o-nhap"
+            className={ENTRY_INPUT}
             type="text"
             maxLength={DO_DAI_TOI_DA_DOT.document_no}
           />
-        </Field>
-        {/* SAME FIELD ORDER AS BEFORE (keyboard order is behaviour): the reason, then the money. */}
-        <Field
-          label="Lý do điều chỉnh (chỉ điền khi đây là đợt điều chỉnh)"
-          htmlFor="dot-adjustment-reason"
-          grow="auto"
-          className="sm:col-span-4"
-          hint={
-            <span id="dot-adjustment-reason-hint">
-              Đợt điều chỉnh sửa sai sót của một kỳ đã chốt và được ghi ở kỳ còn mở. Để trống nếu là
-              đợt thu chi thông thường. Tối đa {DO_DAI_TOI_DA_DOT.adjustment_reason} ký tự.
-            </span>
-          }
-        >
+        </div>
+        {/* KEPT, not in the prototype: an adjustment entry corrects a closed period (rule 7 — a
+            closed period is never edited). SAME FIELD ORDER AS BEFORE (keyboard order is behaviour):
+            the reason, then the money. */}
+        <div className="sm:col-span-4">
+          <label htmlFor="dot-adjustment-reason" className={ENTRY_LABEL}>
+            Lý do điều chỉnh (chỉ điền khi đây là đợt điều chỉnh)
+          </label>
           <textarea
             id="dot-adjustment-reason"
             name="adjustment_reason"
-            className="o-nhap py-2"
+            className={cn(controlClass, "mt-1 h-auto py-2 text-[12.5px] md:text-[12.5px]")}
             rows={2}
             maxLength={DO_DAI_TOI_DA_DOT.adjustment_reason}
             aria-describedby="dot-adjustment-reason-hint"
           />
-        </Field>
+          <p id="dot-adjustment-reason-hint" className="m-0 mt-1 text-[11px] text-ink-muted">
+            Đợt điều chỉnh sửa sai sót của một kỳ đã chốt và được ghi ở kỳ còn mở. Để trống nếu là đợt
+            thu chi thông thường. Tối đa {DO_DAI_TOI_DA_DOT.adjustment_reason} ký tự.
+          </p>
+        </div>
         {cot.map((c) => (
-          <Field key={c.id} label={`${c.name} (${donVi.nhan.toLowerCase()})`} htmlFor={`dot-gia-${c.id}`} grow="auto">
+          // The column's own label, as the prototype (`:155-157`).
+          <div key={c.id}>
+            <label htmlFor={`dot-gia-${c.id}`} className={ENTRY_LABEL}>
+              {c.name}
+            </label>
             <input
               id={`dot-gia-${c.id}`}
               name={`dot-gia:${c.id}`}
-              className="o-nhap text-right tabular-nums"
+              className={cn(ENTRY_INPUT, "text-right tabular-nums")}
               type="text"
               inputMode="decimal"
               autoComplete="off"
             />
-          </Field>
+          </div>
         ))}
       <div className="flex min-w-0 items-end">
         <Button

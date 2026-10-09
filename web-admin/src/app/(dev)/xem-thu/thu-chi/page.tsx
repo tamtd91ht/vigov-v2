@@ -5,6 +5,7 @@ import { budgetPreviewModal } from "@/dev-preview/budget.fixture";
 import { devPreviewEnabled } from "@/dev-preview/preview-gate";
 import { previewFullMenu, type PreviewSearchParams } from "@/dev-preview/preview-params";
 import { PreviewShell } from "@/dev-preview/preview-shell";
+import { BudgetPageHeader } from "@/features/thu-chi/budget-page-header";
 
 /**
  * `/xem-thu/thu-chi` — DEV-ONLY screenshot preview of Thu - Chi ngân sách (ADR 0068 lần 6 #10): the real
@@ -20,8 +21,9 @@ export default async function BudgetPreviewPage({ searchParams }: { searchParams
   if (!devPreviewEnabled()) notFound();
   const q = await searchParams;
   return (
-    <PreviewShell fullMenu={previewFullMenu(q.menu)}>
-      <h1 className="an-thi-giac">Thu - Chi ngân sách xã</h1>
+    // The real page's `<main className="than-trang p-5">` and header, so the screenshot is the page.
+    <PreviewShell fullMenu={previewFullMenu(q.menu)} mainClassName="p-5">
+      <BudgetPageHeader />
       <BudgetPreview modal={budgetPreviewModal(q.modal)} />
     </PreviewShell>
   );

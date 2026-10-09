@@ -9,9 +9,11 @@ import type {
   finance_dongRa,
 } from "@/lib/api/schema.gen";
 
-import { BangDayDu, DongKhoanMuc, FormSuaDong, TheChiSoNam, TheTomTat } from "./bang-thu-chi";
+import { BangDayDu, DongKhoanMuc, TheChiSoNam, TheTomTat } from "./bang-thu-chi";
 import { NoiDungHopDot } from "./dot-thu-chi";
 import {
+  cellValueDraft,
+  cellValueEdit,
   donViCuaBang,
   dungGiaSuaDong,
   lyDoKhongTinh,
@@ -115,7 +117,8 @@ describe("cây khoản mục", () => {
             coXacNhan={false}
             dangGui={false}
             moRongDoi={() => {}}
-            moSua={() => {}}
+            saveLine={async () => null}
+            openLineOrder={() => {}}
             them={() => {}}
             go={() => {}}
             datTong={() => {}}
@@ -160,10 +163,8 @@ describe("cây khoản mục", () => {
         coGhi={false}
         coXacNhan={false}
         dangGui={false}
-        dangSuaDong={null}
-        moSua={() => {}}
-        huySua={() => {}}
-        luuSua={() => {}}
+        saveLine={async () => null}
+        openLineOrder={() => {}}
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}
@@ -186,10 +187,8 @@ describe("cây khoản mục", () => {
         coGhi={false}
         coXacNhan={false}
         dangGui={false}
-        dangSuaDong={null}
-        moSua={() => {}}
-        huySua={() => {}}
-        luuSua={() => {}}
+        saveLine={async () => null}
+        openLineOrder={() => {}}
         moThem={() => {}}
         moGoDong={() => {}}
         datTong={() => {}}
@@ -205,7 +204,7 @@ describe("thẻ tóm tắt", () => {
   it("ô tóm tắt không tính được hiện dấu KÈM câu; ô tóm tắt trống vẫn là `—`", () => {
     const b = bang([dongHaiTrangThai()]);
     const html = renderToStaticMarkup(
-      <TheTomTat bang={b.sheet} tomTat={b.summary} soKhoanMuc={1} donVi={donViCuaBang(b.sheet)} />,
+      <TheTomTat bang={b.sheet} tomTat={b.summary} columns={b.columns} soKhoanMuc={1} donVi={donViCuaBang(b.sheet)} />,
     );
     const dd = [...html.matchAll(/<dd[^>]*>(.*?)<\/dd>/g)].map((m) => m[1] ?? "");
     expect(dd[0]).toContain(O_KHONG_TINH_DUOC);
@@ -258,7 +257,6 @@ describe("danh sách đợt", () => {
       <NoiDungHopDot
         closes={[]}
         sheetYear={2026}
-        method="entries"
         cot={COT}
         donVi={donViCuaBang(bang([]).sheet)}
         danhSach={{ pha: "xong", duLieu: DOT }}
@@ -278,34 +276,20 @@ describe("danh sách đợt", () => {
 });
 
 describe("ô sửa KHÔNG lặng lẽ xoá một ô không tính được", () => {
-  function veForm(d: finance_dongRa): string {
-    return renderToStaticMarkup(
-      <table>
-        <tbody>
-          <FormSuaDong
-            dong={d}
-            cot={COT}
-            donVi={donViCuaBang(bang([d]).sheet)}
-            soCotBang={6}
-            dangGui={false}
-            huy={() => {}}
-            luu={() => {}}
-          />
-        </tbody>
-      </table>,
-    );
-  }
+  it("ô không tính được mở với chữ 'Không tính được', KHÔNG rỗng; ô trống thật mở rỗng", () => {
+    const d = dongHaiTrangThai();
+    expect(cellValueDraft(d, "C1", "trieu-dong")).toBe(O_KHONG_TINH_DUOC);
+    expect(cellValueDraft(d, "C2", "trieu-dong")).toBe("");
+  });
 
-  const giaTriO = (html: string, id: string) =>
-    new RegExp(`name="gia:${id}"[^>]*value="([^"]*)"`).exec(html)?.[1];
-
-  it("ô không tính được điền chữ 'Không tính được', KHÔNG điền rỗng; ô trống thật vẫn điền rỗng", () => {
-    const html = veForm(dongHaiTrangThai());
-    expect(giaTriO(html, "C1")).toBe(O_KHONG_TINH_DUOC);
-    expect(giaTriO(html, "C2")).toBe("");
-    // Câu lý do và cách giữ nguyên được NÓI RA, và gắn vào ô bằng `aria-describedby`.
-    expect(html).toContain('aria-describedby="sua-gia-goi-y-I-C1"');
-    expect(html).toContain(CAU_DA_LUU);
+  it("ô sửa tại chỗ: để nguyên chữ ấy thì KHÔNG gửi gì — máy chủ giữ nguyên con số", () => {
+    const d = dongHaiTrangThai();
+    expect(cellValueEdit(d, COT[0]!, O_KHONG_TINH_DUOC, "trieu-dong")).toEqual({ kind: "unchanged" });
+    // Typing a figure over it writes it; clearing it clears the cell — as any other cell.
+    expect(cellValueEdit(d, COT[0]!, "1,5", "trieu-dong")).toEqual({ kind: "save", body: { values: { C1: 1500000 } } });
+    expect(cellValueEdit(d, COT[0]!, "", "trieu-dong")).toEqual({ kind: "save", body: { values: { C1: null } } });
+    // The same words in a cell WITHOUT a reason are a typo, refused.
+    expect(cellValueEdit(d, COT[1]!, O_KHONG_TINH_DUOC, "trieu-dong").kind).toBe("invalid");
   });
 
   it("lưu mà KHÔNG chạm ô ấy: mã cột VẮNG MẶT trong `values` — máy chủ giữ nguyên con số", () => {

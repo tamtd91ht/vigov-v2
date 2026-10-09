@@ -43,12 +43,15 @@ export function PreviewShell({
   fullMenu,
   permissions = PREVIEW_PERMISSIONS,
   person = "ke-toan",
+  mainClassName,
   children,
 }: {
   fullMenu: boolean;
   /** The session's keys; `?menu=day-du` adds every menu key on top. Giải ngân's when left out. */
   permissions?: readonly string[];
   person?: PreviewPerson;
+  /** Extra classes on `<main>`, for a page whose real `<main>` carries them (Thu - Chi's `p-5`). */
+  mainClassName?: string;
   children: ReactNode;
 }) {
   const params = useSearchParams();
@@ -74,7 +77,7 @@ export function PreviewShell({
       <PhienProvider>
         <div className="khung-trang">
           <DauTrang menuPath={menuPath} />
-          <main className="than-trang">{children}</main>
+          <main className={mainClassName === undefined ? "than-trang" : `than-trang ${mainClassName}`}>{children}</main>
         </div>
       </PhienProvider>
     </CauHinhXaProvider>

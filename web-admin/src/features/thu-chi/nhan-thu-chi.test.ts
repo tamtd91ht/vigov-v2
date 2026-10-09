@@ -5,9 +5,13 @@ import type { finance_bangRa, finance_cotRa, finance_dongRa } from "@/lib/api/sc
 import {
   boCotKhoiDiem,
   canhBaoDoiCachTinh,
-  cauDieuKienDot,
   cauQuyDoi,
+  cellNameEdit,
   chonDuocCachTinh,
+  editKeyIntent,
+  formatPercentTenths,
+  formatSheetAmount,
+  lineOrderBody,
   docSoNhap,
   donViCuaBang,
   dongPhuTieuDe,
@@ -19,7 +23,6 @@ import {
   NHAN_CHENH_LECH,
   percentCell,
   PHAN_CHUA_DUNG,
-  tieuDeHopDot,
   dungCay,
   moiDongCoCon,
   nhanBoDem,
@@ -323,14 +326,73 @@ describe("hộp các đợt — dựng thân POST", () => {
     expect(khoaSauLanGhi("khoa-dau", true, sinh)).toBe("khoa-1");
   });
 
-  it("tiêu đề hộp là tên khoản mục VIẾT HOA, kể cả chữ Việt", () => {
-    expect(tieuDeHopDot("Thu tiền sử dụng đất")).toBe("THU TIỀN SỬ DỤNG ĐẤT");
+  it("hai câu kiểm của prototype, nguyên văn", () => {
+    expect(dungThanDot(nhap({ noiDung: "  " }), COT, "trieu-dong")).toEqual({
+      ok: false,
+      thongBao: "Nhập nội dung đợt thu, chi.",
+    });
+    expect(dungThanDot(nhap({ gia: {} }), COT, "trieu-dong")).toEqual({
+      ok: false,
+      thongBao: "Nhập ít nhất một con số.",
+    });
+  });
+});
+
+describe("làm tròn MỘT chữ số lẻ khi hiển thị (quyết định 09/10/2026) — trên chữ số, không qua số thực", () => {
+  it("theo đơn vị của bảng, như `toLocaleString('vi-VN', { maximumFractionDigits: 1 })`", () => {
+    expect(formatSheetAmount(3401673300000, "trieu-dong")).toBe("3.401.673,3");
+    expect(formatSheetAmount(1234567890000, "trieu-dong")).toBe("1.234.567,9");
+    expect(formatSheetAmount(5502660000000, "trieu-dong")).toBe("5.502.660");
+    expect(formatSheetAmount(1234567, "nghin-dong")).toBe("1.234,6");
+    expect(formatSheetAmount(3401673300000, "dong")).toBe("3.401.673.300.000");
+    // Half away from zero, exactly where a float would slip: 1,05 triệu → 1,1 (not 1).
+    expect(formatSheetAmount(1050000, "trieu-dong")).toBe("1,1");
+    expect(formatSheetAmount(-1050000, "trieu-dong")).toBe("-1,1");
+    expect(formatSheetAmount(1040000, "trieu-dong")).toBe("1");
+    // A value that rounds to zero is `0`, never `-0`.
+    expect(formatSheetAmount(-40000, "trieu-dong")).toBe("0");
   });
 
-  it("hộp nói ra rằng đợt chỉ được cộng khi Cách tính là Cộng theo đợt", () => {
-    expect(cauDieuKienDot("manual")).toContain("Cộng theo đợt");
-    expect(cauDieuKienDot("manual")).toContain("chưa được cộng");
-    expect(cauDieuKienDot("entries")).not.toContain("chưa được cộng");
+  it("trống vẫn là `—`, không phải 0; giá trị JS không giữ chính xác được nói ra, không làm tròn", () => {
+    expect(formatSheetAmount(null, "trieu-dong")).toBe(O_TRONG);
+    expect(formatSheetAmount(9007199254740994, "trieu-dong")).toBe("Không đọc được");
+  });
+
+  it("phần trăm: phần vạn → một chữ số lẻ", () => {
+    expect(formatPercentTenths(9127)).toBe("91,3%");
+    expect(formatPercentTenths(10811)).toBe("108,1%");
+    expect(formatPercentTenths(6182)).toBe("61,8%");
+    expect(formatPercentTenths(5000)).toBe("50%");
+    expect(formatPercentTenths(5)).toBe("0,1%");
+    expect(formatPercentTenths(null)).toBe(O_TRONG);
+  });
+
+  it("các hàm của màn khác (Tổng quan) GIỮ nguyên độ chính xác", () => {
+    expect(nhanSoTien(1234567890000, "trieu-dong")).toBe("1.234.567,89");
+    expect(nhanPhanVan(9127)).toBe("91,27%");
+  });
+});
+
+describe("sửa tại chỗ — chỉ gửi đúng trường vừa sửa", () => {
+  it("Enter lưu, Esc huỷ, phím khác không làm gì", () => {
+    expect(editKeyIntent("Enter")).toBe("save");
+    expect(editKeyIntent("Escape")).toBe("cancel");
+    expect(editKeyIntent("a")).toBeNull();
+  });
+
+  it("tên: gửi `{ name }` đã cắt khoảng trắng; rỗng hoặc không đổi thì không gửi gì", () => {
+    const d = dong({ name: "Chi thường xuyên" });
+    expect(cellNameEdit(d, "  Chi thường xuyên khác ")).toEqual({ kind: "save", body: { name: "Chi thường xuyên khác" } });
+    expect(cellNameEdit(d, "Chi thường xuyên")).toEqual({ kind: "unchanged" });
+    expect(cellNameEdit(d, "   ")).toEqual({ kind: "unchanged" });
+  });
+
+  it("TT / thứ tự hiển thị: chỉ trường đổi; thứ tự phải là số nguyên; không đổi gì thì nói ra", () => {
+    const d = dong({ no: "I", order: 3 });
+    expect(lineOrderBody(d, "II", "3")).toEqual({ ok: true, than: { no: "II" } });
+    expect(lineOrderBody(d, "I", "5")).toEqual({ ok: true, than: { order: 5 } });
+    expect(lineOrderBody(d, "I", "3")).toEqual({ ok: false, thongBao: "Chưa có gì thay đổi." });
+    expect(lineOrderBody(d, "I", "2,5").ok).toBe(false);
   });
 });
 

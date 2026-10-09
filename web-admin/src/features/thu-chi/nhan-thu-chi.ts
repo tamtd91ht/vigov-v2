@@ -18,7 +18,7 @@ import type {
   finance_ghiDotVao,
   finance_soTienRa,
 } from "@/lib/api/schema.gen";
-import type { LoaiBang, SuaBangVao } from "@/lib/api/thu-chi";
+import type { LoaiBang, SuaBangVao, SuaDongVao } from "@/lib/api/thu-chi";
 
 /** Hai chữ số thập phân, đúng đơn vị đặc tả in ra cho phần trăm: `108,11%`. */
 const DINH_DANG_PHAN_VAN = new Intl.NumberFormat("vi-VN", {
@@ -145,6 +145,75 @@ export function nhanSoTien(gia: number | null, donVi: MaDonVi): string {
   return dongSangChuoi(gia, donVi);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * DISPLAY ROUNDING OF THE SHEET AND ITS SUMMARY TILES — owner decision 09/10/2026
+ *
+ * The table and the summary tiles print figures as the prototype does
+ * (`FiscalReportPanel.tsx:52-62`): in the SHEET'S unit, rounded to ONE decimal
+ * (`toLocaleString("vi-VN", { maximumFractionDigits: 1 })`), and a ratio ×100 with one decimal + "%".
+ * The officer checks the screen against the finance office's printed report, which prints that way.
+ *
+ * THE EXACT VALUE IS NOT LOST: the in-cell edit box is pre-filled with the exact figure
+ * (`dongSangChuoi`), so pressing Enter without typing changes nothing; `nhanSoTien` / `nhanPhanVan`
+ * above stay exact for the other screens (Tổng quan) that print them.
+ *
+ * ROUNDED ON THE DIGITS, NEVER THROUGH A FLOAT: `BigInt` tenths of the unit, half away from zero —
+ * the same rounding `toLocaleString` applies (`halfExpand`), without `x / 1e6` turning 1,05 into
+ * 1,0499999.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Groups the integer part in threes with `.` — the `vi-VN` way. */
+function groupThousands(digits: string): string {
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+/**
+ * One money figure in the sheet's unit, one decimal at most: `3401673300000` (triệu) ⇒ `3.401.673,3`.
+ * `null` is the empty cell (`—`, never 0); a value that is not a safe integer is a broken contract and
+ * says so, as `nhanSoTien` does.
+ */
+export function formatSheetAmount(dong: number | null, unit: MaDonVi): string {
+  if (dong === null) return O_TRONG;
+  if (!Number.isSafeInteger(dong)) return "Không đọc được";
+  const factor = BigInt(10) ** BigInt(SO_CHU_SO_LE[unit]);
+  const abs = BigInt(Math.abs(dong));
+  // Tenths of one unit, rounded half away from zero: (abs × 10 / factor) + ½, floored.
+  const tenths = (abs * BigInt(20) + factor) / (BigInt(2) * factor);
+  const whole = groupThousands((tenths / BigInt(10)).toString());
+  const decimal = tenths % BigInt(10);
+  const text = decimal === BigInt(0) ? whole : `${whole},${decimal.toString()}`;
+  // A value that rounds to zero prints `0`, not `-0`.
+  return dong < 0 && tenths !== BigInt(0) ? `-${text}` : text;
+}
+
+/** A ratio in basis points (phần vạn) as a percentage with one decimal: `9127` ⇒ `91,3%`. */
+export function formatPercentTenths(basisPoints: number | null): string {
+  if (basisPoints === null) return O_TRONG;
+  if (!Number.isSafeInteger(basisPoints)) return "Không đọc được";
+  const abs = Math.abs(basisPoints);
+  // Tenths of a percent = basis points / 10, rounded half away from zero, in integers only.
+  const tenths = Math.floor((abs * 2 + 10) / 20);
+  const whole = groupThousands(String(Math.floor(tenths / 10)));
+  const decimal = tenths % 10;
+  const text = decimal === 0 ? whole : `${whole},${decimal}`;
+  return `${basisPoints < 0 && tenths !== 0 ? "-" : ""}${text}%`;
+}
+
+/**
+ * The `%` cell of one line as the table and the tiles print it — `percentCell`'s rules (the server's
+ * reason wins, an absent ratio is `—`), with the one-decimal display.
+ */
+export function percentCellRounded(
+  line: finance_dongRa,
+  columnId: string,
+): { text: string; reason: string | null } {
+  const reason = lyDoKhongTinh(line.unavailable_reasons?.[columnId]);
+  if (reason !== null) return { text: O_KHONG_TINH_DUOC, reason };
+  const basisPoints = line.percent_basis_points?.[columnId];
+  if (basisPoints === undefined || basisPoints === null) return { text: O_TRONG, reason: null };
+  return { text: formatPercentTenths(basisPoints), reason: null };
+}
+
 /**
  * Chữ của một ô KHÔNG TÍNH ĐƯỢC — khác hẳn ô trống `—`.
  *
@@ -265,11 +334,24 @@ export function nhanCachTinh(method: string): string {
   }
 }
 
-/** Hai lựa chọn của ô chọn `Cách tính` trên một dòng lá. */
-export const CACH_TINH_CHON: readonly { ma: "manual" | "entries"; nhan: string }[] = [
+/**
+ * The three options of the `Cách tính` select, as the prototype lists them (`VALUE_MODE_LABEL`).
+ *
+ * ONLY TWO ARE EVER SENT. `children` is decided by the TREE (a line with children sums them) and the
+ * server answers 400 to it: on a leaf the option is drawn DISABLED, on a parent the whole select is
+ * disabled showing it. It is listed so the select can SHOW a parent's mode, never so it can send it.
+ */
+export const CACH_TINH_CHON: readonly { ma: "manual" | "entries" | "children"; nhan: string }[] = [
   { ma: "manual", nhan: "Nhập trực tiếp" },
   { ma: "entries", nhan: "Cộng theo đợt" },
+  { ma: "children", nhan: "Cộng khoản mục con" },
 ];
+
+/**
+ * Why a parent line's select and its entries button are disabled — the prototype's sentence
+ * (`FiscalReportPanel.tsx:613`), as tooltip and accessible name.
+ */
+export const PARENT_SUMS_CHILDREN = "Khoản mục có khoản mục con luôn cộng từ các con.";
 
 /**
  * Dòng này có ĐƯỢC CHỌN cách tính không: dòng lá đang ở một trong hai chế độ chọn được.
@@ -305,6 +387,98 @@ export function canhBaoDoiCachTinh(den: "manual" | "entries"): string {
 /** Ô số có sửa được không: chỉ dòng `manual`. Dòng có con cộng con; dòng `entries` cộng đợt. */
 export function suaDuocOSo(method: string): boolean {
   return method === "manual";
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * IN-CELL EDIT (prototype `FiscalReportPanel.tsx:443-472`, owner decision 09/10/2026)
+ *
+ * Click the name or an editable figure → an input in the cell. Enter or leaving the box saves, Esc
+ * cancels. Each save is a PATCH of THAT field only: `{ name }`, or `{ values: { <column>: n } }` —
+ * the three-state `values` map leaves every other column untouched (`suaKhoanMuc`). Pure functions,
+ * so the decision of what is sent is tested without a browser.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type CellEditOutcome =
+  /** Nothing to send: the box is closed as if Esc had been pressed. */
+  | { kind: "unchanged" }
+  /** The box stays open with this sentence under it. */
+  | { kind: "invalid"; message: string }
+  | { kind: "save"; body: SuaDongVao };
+
+/** What a key press in the cell box means. */
+export function editKeyIntent(key: string): "save" | "cancel" | null {
+  if (key === "Enter") return "save";
+  if (key === "Escape") return "cancel";
+  return null;
+}
+
+/**
+ * The name box. An empty or unchanged name sends nothing and puts the old name back, as the
+ * prototype does — the server refuses a blank name anyway, and a refusal for an accidental clear is
+ * noise.
+ */
+export function cellNameEdit(line: finance_dongRa, draft: string): CellEditOutcome {
+  const name = draft.trim();
+  if (name === "" || name === line.name) return { kind: "unchanged" };
+  return { kind: "save", body: { name } };
+}
+
+/**
+ * The text a figure box opens with: the EXACT figure in the sheet's unit (never the rounded one on
+ * screen), or the words `O_KHONG_TINH_DUOC` for a cell the server could not compute — see
+ * `dungGiaSuaDong` for why that is not an empty box.
+ */
+export function cellValueDraft(line: finance_dongRa, columnId: string, unit: MaDonVi): string {
+  if (lyDoKhongTinh(line.unavailable_reasons?.[columnId]) !== null) return O_KHONG_TINH_DUOC;
+  const value = line.values[columnId] ?? null;
+  if (value === null) return "";
+  // A value JS cannot hold exactly is offered as its raw digits, which `docSoNhap` refuses —
+  // never as an empty box, whose save would CLEAR the stored figure.
+  return Number.isSafeInteger(value) ? dongSangChuoi(value, unit) : String(value);
+}
+
+/**
+ * A figure box. Same reading as the row form had (`dungGiaSuaDong`), for ONE column: an empty box
+ * clears the cell (`null`, never 0), the untouched `O_KHONG_TINH_DUOC` words keep the stored figure,
+ * a typo is refused with the reason, and the same figure sends nothing.
+ */
+export function cellValueEdit(
+  line: finance_dongRa,
+  column: finance_cotRa,
+  draft: string,
+  unit: MaDonVi,
+): CellEditOutcome {
+  const unreadable = lyDoKhongTinh(line.unavailable_reasons?.[column.id]) !== null;
+  if (unreadable && draft.trim() === O_KHONG_TINH_DUOC) return { kind: "unchanged" };
+  const read = docSoNhap(draft, unit);
+  if (read.loai === "loi") {
+    return { kind: "invalid", message: `${read.viSao} Để trống nếu muốn xoá con số trong ô.` };
+  }
+  const next = read.loai === "trong" ? null : read.gia;
+  if (!unreadable && next === (line.values[column.id] ?? null)) return { kind: "unchanged" };
+  return { kind: "save", body: { values: { [column.id]: next } } };
+}
+
+/**
+ * The TT / display-order dialog (the two fields the in-cell edit does not cover). Sends only what
+ * changed; nothing changed is said, not sent.
+ */
+export function lineOrderBody(
+  line: finance_dongRa,
+  no: string,
+  order: string,
+): KetQuaDung<SuaDongVao> {
+  const trimmedOrder = order.trim();
+  if (!/^-?\d+$/.test(trimmedOrder)) {
+    return { ok: false, thongBao: "Thứ tự hiển thị phải là một số nguyên." };
+  }
+  const body: SuaDongVao = {};
+  const trimmedNo = no.trim();
+  if (trimmedNo !== line.no) body.no = trimmedNo;
+  const nextOrder = Number(trimmedOrder);
+  if (nextOrder !== line.order) body.order = nextOrder;
+  if (Object.keys(body).length === 0) return { ok: false, thongBao: "Chưa có gì thay đổi." };
+  return { ok: true, than: body };
 }
 
 /**
@@ -383,11 +557,6 @@ export function nhanNutDot(ten: string): string {
   return `Các đợt thu, chi của ${ten}`;
 }
 
-/** Tiêu đề hộp: tên khoản mục VIẾT HOA (§5). `vi-VN` để `đ` thành `Đ`. */
-export function tieuDeHopDot(ten: string): string {
-  return ten.toLocaleUpperCase("vi-VN");
-}
-
 /** Câu mô tả của §5, nguyên văn. */
 export const MO_TA_HOP_DOT =
   "Ghi từng đợt thu, chi rồi hệ thống cộng lại. Con số của khoản mục này lấy từ tổng các đợt bên " +
@@ -395,18 +564,9 @@ export const MO_TA_HOP_DOT =
 
 export const DOT_TRONG = "Chưa ghi đợt nào.";
 
-/**
- * Câu nói ra ĐIỀU KIỆN để đợt được cộng. Ghi đợt KHÔNG tự chuyển dòng sang `entries`
- * (`routes.go:1204`), nên một cán bộ ghi đợt vào dòng đang `manual` sẽ không thấy con số đổi — và
- * phải được biết vì sao trước khi nghĩ rằng hệ thống hỏng.
- */
-export function cauDieuKienDot(method: string): string {
-  const dang = `Khoản mục đang tính theo: ${nhanCachTinh(method)}.`;
-  return method === "entries"
-    ? `Các đợt chỉ được cộng vào khoản mục khi Cách tính là "Cộng theo đợt". ${dang}`
-    : `Các đợt chỉ được cộng vào khoản mục khi Cách tính là "Cộng theo đợt". ${dang} ` +
-        "Các đợt ghi lúc này được lưu nhưng chưa được cộng.";
-}
+/** The prototype's two success toasts of the entries dialog (`FiscalEntriesDialog.tsx:88,251`). */
+export const ENTRY_RECORDED = "Đã ghi một đợt.";
+export const ENTRY_REMOVED = "Đã gỡ đợt.";
 
 /** Giới hạn độ dài máy chủ đặt cho ba trường chữ của một đợt. */
 export const DO_DAI_TOI_DA_DOT = {
@@ -457,7 +617,7 @@ export function dungThanDot(
     return { ok: false, thongBao: "Chọn ngày của đợt." };
   }
   const noiDung = nhap.noiDung.trim();
-  if (noiDung === "") return { ok: false, thongBao: "Nhập nội dung của đợt." };
+  if (noiDung === "") return { ok: false, thongBao: "Nhập nội dung đợt thu, chi." };
   if (doDai(noiDung) > DO_DAI_TOI_DA_DOT.content) {
     return { ok: false, thongBao: `Nội dung dài quá ${DO_DAI_TOI_DA_DOT.content} ký tự.` };
   }
@@ -496,7 +656,7 @@ export function dungThanDot(
       values[c.id] = null;
     }
   }
-  if (!coSo) return { ok: false, thongBao: "Nhập ít nhất một số tiền cho đợt." };
+  if (!coSo) return { ok: false, thongBao: "Nhập ít nhất một con số." };
 
   const than: finance_ghiDotVao = { date: ngay, content: noiDung, values };
   if (doiTac !== "") than.counterparty = doiTac;
@@ -824,13 +984,11 @@ export const CAU_THIEU_QUYEN_XEM =
   "Tài khoản của bạn không có quyền xem thu - chi ngân sách (budget.read), nên phần này không " +
   "hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này.";
 
-/** Trạng thái rỗng: xã chưa lập bảng cho năm và tab này. Bình thường, không phải lỗi. */
-export function nhanChuaCoBang(nam: number, loai: LoaiBang): string {
-  return (
-    `Chưa đọc được bảng ${nhanLoaiBang(loai).toLowerCase()} năm ${nam}. Nếu đơn vị chưa lập bảng ` +
-    "cho năm này, bấm Lập bảng ở thanh phía trên."
-  );
-}
+/**
+ * The empty state when the selected sheet cannot be read (usually: not loaded yet) — the prototype's
+ * sentence verbatim (`FiscalReportPanel.tsx:177-179`, owner decision 09/10/2026). Normal, not an error.
+ */
+export const NO_REPORT_YET = "Chưa có báo cáo nào. Nạp tệp Excel của Phòng Tài chính để bắt đầu.";
 
 export function nhanLoaiBang(loai: LoaiBang): string {
   return loai === "chi" ? "Chi ngân sách" : "Thu ngân sách";
