@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-10-02",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "bo-sinh-tien-do",
@@ -166,6 +166,14 @@
       "bang_chung": "02/10/2026 (TASK-3, chưa commit): tools/apidoc/operator_test.go TestRealContractCarriesNoOperatorRoute — tag platform chỉ được dưới /api/v1/commune-branding; tools/ingress/operator_test.go TestRealTablesRouteNothingToPlatform — hằng platformCommunePrefix, mọi tuyến platform khác vẫn đỏ, cổng TS chỉ một tiền tố platform, ingress ≤ 1 backend platform, kim operator-sessions / operator-enrollments / /api/v1/operator giữ. go test ./tools/... rc=0. Sau rà soát: tools/ingress/sinh.go servicesWithoutAPIHost = {platform}; TestRealTablesRouteNothingToPlatform đòi ingress.yaml có 0 backend platform (đã chứng minh cắn: chèn tạm luật host platform `/` → đỏ 'has 1 rule(s) whose backend is platform, want 0', rồi khôi phục tệp); TestNoAPIHostForPlatform, TestPlatformBackendsCountsRulesNotComments; TestMoiTuyenHopDongCoDungMotLuatIngress và TestBangTSKhopHostDichVuIngress đòi 0 host cho dịch vụ trong danh sách loại trừ.",
       "no_confirm": [],
       "tiep_theo": "Tài nguyên platform bề mặt xã thứ hai phải có ADR trước rồi mới nới hằng này."
+    },
+    {
+      "id": "commit-push-guard-09-10",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Hook Stop commit_push_guard: chặn kết thúc phiên khi tệp phiên này (transcript chính + subagent) viết còn chưa commit, hoặc nhánh đi trước upstream. Người dùng chốt 09/10/2026: code xong là commit + push mọi lúc. Ca thuần COMMIT_PUSH_CASES/REPO_PATH_CASES trong test_hooks; check_brain miễn ca payload như các hook Stop khác.",
+      "bang_chung": "4132c8fc. test_hooks 314/314 + ca thuần mới OK; check_brain 7/7; chạy thử trên phiên thật chặn đúng 4 tệp brain chưa commit.",
+      "tiep_theo": "Giới hạn đã biết: tệp phiên này đã viết và commit, rồi phiên khác làm bẩn lại, vẫn bị nêu tên (lời chặn bảo để nguyên và nói rõ). Đo độ ồn sau vài phiên; nếu ồn thì lọc theo thời điểm commit cuối của tệp so với lần ghi cuối trong transcript."
     }
   ]
 }
