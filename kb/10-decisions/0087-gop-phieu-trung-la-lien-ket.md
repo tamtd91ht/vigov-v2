@@ -3,22 +3,26 @@ id: 0087-gop-phieu-trung-la-lien-ket
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 8b06345e
+derived_from_commit: 7f8f3b8a
 expires: null
 owns_facts:
   - "gộp phiếu phản ánh trùng = LIÊN KẾT phiếu phụ vào phiếu chính (merged_into), không đóng phiếu phụ, không thêm trạng thái; mỗi người dân giữ mã tra cứu và hạn đã lưu của phiếu mình (chủ dự án, 09/10/2026)"
-  - "hạn của phiếu chính khi gộp lấy mốc SỚM HƠN của hai phiếu, chỉ dời sớm (chủ dự án, 09/10/2026)"
-  - "phiếu phụ theo phiếu chính khi phiếu chính vào cho-dan-xac-nhan hoặc da-dong: cùng câu kết quả, mỗi người dân nhận lời báo riêng, tự xác nhận và tự đánh giá (chủ dự án, 09/10/2026)"
+  - "hạn của phiếu chính khi gộp lấy mốc SỚM HƠN của hai phiếu, chỉ dời sớm; một phiếu chưa có hạn (NULL) thì lấy hạn của phiếu kia; hạn sớm hơn rơi trước gốc đếm hạn của phiếu chính thì từ chối 409 (chủ dự án, 09/10/2026)"
+  - "chỉ gộp khi CẢ HAI phiếu chưa xử lý xong (da-tiep-nhan, dang-phan-loai, da-chuyen-xu-ly, dang-xu-ly); không dây chuyền — luôn gộp vào phiếu gốc (chủ dự án, 09/10/2026)"
+  - "phiếu phụ ĐÓNG CÙNG phiếu chính, cùng câu kết quả, mỗi người dân nhận lời báo riêng; người dân phiếu phụ có thể không kịp đánh giá trước khi đóng (chủ dự án, 09/10/2026)"
   - "người dân của phiếu phụ không bao giờ thấy nội dung, ảnh hay người gửi của phiếu chính (chủ dự án, 09/10/2026)"
-  - "tách phiếu đã gộp: được, lý do bắt buộc, có vết; ai gộp: feedback.classify, cùng xã; phiếu lĩnh vực can-bo không bao giờ gộp (chủ dự án, 09/10/2026)"
+  - "tách phiếu đã gộp: được bất kỳ lúc nào trước khi phiếu phụ đóng, lý do bắt buộc, có vết; ai gộp: feedback.classify, cùng xã; phiếu lĩnh vực can-bo không bao giờ gộp (chủ dự án, 09/10/2026)"
+  - "gộp và tách ghi dòng nhật ký xử lý (gop-phieu / tach-phieu) trên cả hai phiếu, không chép lý do (chủ dự án, 09/10/2026)"
   - "ngưỡng nghi trùng (mặc định 50 m, 7 ngày) là cấu hình theo xã, không phải hằng số (chủ dự án, 09/10/2026)"
-  - "thống kê khi có phiếu gộp: 'Nhận vào' đếm mọi phiếu; đúng hạn, theo lĩnh vực, theo đơn vị chỉ đếm phiếu chính (vụ việc) (chủ dự án, 09/10/2026)"
+  - "thống kê khi có phiếu gộp: 'Nhận vào' đếm mọi phiếu; đúng hạn, theo lĩnh vực, theo đơn vị, theo thôn và tồn đang trễ hạn chỉ đếm phiếu chính (vụ việc); danh sách, ô đếm và điểm bản đồ giữ phiếu phụ (chủ dự án, 09/10/2026)"
 ---
 
 # 0087. Gộp phiếu trùng là LIÊN KẾT vào phiếu chính, không phải đóng phiếu
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-09 · **Người quyết:** chủ dự án, 09/10/2026, trong phiên
-chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`), trả lời qua phiếu hỏi · **Chưa dựng.**
+chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`), trả lời qua phiếu hỏi · Ghi ở `1945aef9` ·
+**Dựng:** lược đồ `ed97eafe` (migration 0037/0038), dòng nhật ký `d76f1acb` (0039/0040), nghiệp vụ và
+tuyến `b97a6379`, hợp đồng tin báo `904d95ab` · **Việc còn mở đã trả lời:** §Trả lời 09/10/2026, cuối tệp.
 **Đóng** việc *"C-R3 gộp phiếu trùng — CHƯA QUYẾT"* của sổ `kb/90-ephemeral/tien-do/service-petitions.json`
 (mục `vong-doi-phieu-phan-anh`) và câu D3 của `kb/50-doi-chieu/2026-10-02-feat-m8-multitenant-foundation-phan-anh.md:81`.
 **Sửa** bảng báo của ADR 0041 (§Sửa đổi 09/10/2026 ở đó).
@@ -59,7 +63,7 @@ bị kéo dài chỉ vì cán bộ gộp phiếu của họ vào một phiếu �
 |---|---|
 | Lúc phiếu chính vào `cho-dan-xac-nhan` hoặc `da-dong` | Các phiếu phụ **đi theo**, cùng **câu kết quả** |
 | Lời báo | **Mỗi người dân nhận lời báo riêng** của phiếu mình (bảng ADR 0041) |
-| Xác nhận, đánh giá | Mỗi người dân **tự xác nhận và tự đánh giá** phiếu của mình |
+| Xác nhận, đánh giá | Mỗi người dân **tự xác nhận và tự đánh giá** phiếu của mình — **đã bị thay**: phiếu phụ **đóng cùng** phiếu chính, xem §Trả lời 09/10/2026 #5 |
 
 ### 3. Lúc gộp — một lời báo
 
@@ -109,6 +113,8 @@ ADR 0053 §Sửa đổi 09/10/2026.
 
 ## Còn mở khi dựng — hỏi, không tự quyết
 
+**Cả bốn đã trả lời** — §Trả lời 09/10/2026, cuối tệp. Bảng giữ nguyên để thấy câu hỏi gốc.
+
 | # | Việc | Vì sao không tự chọn |
 |---|---|---|
 | 1 | Phiếu chưa phân loại (`han_xu_ly_xong` NULL) gộp với phiếu đã có hạn: mốc nào là "sớm hơn" | ADR 0028: NULL là "chưa có", không phải vô hạn hay 0 |
@@ -126,3 +132,24 @@ ADR 0053 §Sửa đổi 09/10/2026.
 
 → ADR 0027 (chín trạng thái, quyết định C) · 0028 (hạn đặt ở hành vi) · 0030 (`feedback.restricted`) ·
 0041 (bảng báo) · 0053 (số liệu) · luật 1 · 4 · 6 · 7 · 10
+
+## Trả lời 09/10/2026 — việc còn mở và điều chỉnh
+
+Mục này ghi thêm; **mục này thắng** khi nói khác phần trên. **Người quyết:** chủ dự án, 09/10/2026,
+trong phiên chính, qua phiếu hỏi.
+
+| # | Điểm | Quyết định | Ở mã |
+|---|---|---|---|
+| 1 | Trạng thái được gộp (còn mở #2) | Chỉ khi **CẢ HAI** phiếu chưa xử lý xong: `da-tiep-nhan`, `dang-phan-loai`, `da-chuyen-xu-ly`, `dang-xu-ly`. Từ `da-xu-ly` trở đi **không** gộp | Trigger của migration 0037 |
+| 2 | Dây chuyền (còn mở #3) | **Không dây chuyền.** Luôn gộp vào **phiếu gốc**; phiếu đang có phiếu phụ không bị gộp vào phiếu khác | Trigger 0037, cả hai chiều |
+| 3 | Hạn khi một phiếu chưa có (còn mở #1) | Một phiếu `han_xu_ly_xong` **NULL** thì phiếu chính lấy hạn của phiếu kia; cả hai có thì lấy mốc **sớm hơn** (§1) | Use case dời hạn trước, trigger 0037 kiểm lại |
+| 4 | Hạn sớm hơn rơi trước gốc đếm hạn của phiếu chính | Phiếu bị gộp gửi **trước** phiếu chính và hạn của nó rơi trước `goc_dem_han` của phiếu chính → **từ chối 409** `merge_deadline_before_origin`. Cán bộ chọn **phiếu gửi trước** làm phiếu chính. Không nới ràng buộc `phieu_phan_anh_han_sau_goc` của migration 0004 | `b97a6379` |
+| 5 | Phiếu phụ khi phiếu chính kết thúc | Phiếu phụ **ĐÓNG CÙNG** phiếu chính, cùng câu kết quả, mỗi người dân một lời báo riêng (ADR 0041). **Thay câu "mỗi người dân tự xác nhận và tự đánh giá" của §2**: chủ dự án chấp nhận người dân của phiếu phụ **có thể không kịp đánh giá** trước khi phiếu đóng | `b97a6379` |
+| 6 | Lúc nào được tách | **Bất kỳ lúc nào trước khi phiếu phụ đóng.** Phiếu phụ đã theo phiếu chính vào `cho-dan-xac-nhan` thì tách xong quay lại xử lý qua cạnh mở lại **đã có** `cho-dan-xac-nhan → dang-xu-ly` (`service-petitions/internal/domain/phieu_phan_anh.go:86`) — **không** thêm trạng thái, **không** thêm cạnh | **Đang dựng** |
+| 7 | Thống kê (còn mở #4, mở rộng §7) | "Nhận vào": **mọi phiếu**. Đúng hạn, theo lĩnh vực, theo đơn vị, theo thôn và **tồn đang trễ hạn**: **chỉ phiếu chính**. Danh sách, ô đếm và điểm bản đồ **giữ** phiếu phụ — mỗi phiếu là một lượt người dân phản ánh, có mã riêng | `b97a6379` |
+| 8 | Nhật ký xử lý | Gộp và tách ghi dòng nhật ký `hanh_vi` = `gop-phieu` / `tach-phieu` trên **cả hai** phiếu, **không** chép lý do vào dòng ấy. Lý do nằm ở lịch sử gộp (`petition_merge_event`, 0037) và vết (luật 6) | Migration 0039 (`d76f1acb`) |
+
+**Tin báo lúc gộp và lúc tách** — câu chữ đã duyệt, sự kiện mang tin: ADR 0041 §Sửa đổi 09/10/2026.
+
+**Hệ quả của #5.** Đóng cùng là đóng phiếu phụ **có** câu kết quả đọc được — không vi phạm luật 10 bất
+biến 6. Cái mất là lời đánh giá của người dân phiếu phụ; chủ dự án đã thấy và chấp nhận, không hỏi lại.

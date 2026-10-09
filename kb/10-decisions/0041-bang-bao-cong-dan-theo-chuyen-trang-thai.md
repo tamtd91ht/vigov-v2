@@ -3,13 +3,14 @@ id: 0041-bang-bao-cong-dan-theo-chuyen-trang-thai
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 43250a9
+derived_from_commit: 7f8f3b8a
 expires: null
 owns_facts:
   - "phiếu phản ánh chuyển VÀO trạng thái nào thì người dân được báo, trạng thái nào thì không — và vì sao"
   - "những gì không bao giờ được đi trong lời báo cho người dân về phiếu phản ánh"
   - "vì sao luật 10 bất biến 5 đọc là 'mọi chuyển trạng thái trong bảng báo', không phải 'mọi chuyển trạng thái'"
-  - "lời báo lúc gộp phiếu phụ vào phiếu chính (một tin, cho người dân của phiếu phụ) và lời báo riêng của từng phiếu phụ khi phiếu chính kết thúc (chủ dự án, 09/10/2026; mô hình gộp: ADR 0087)"
+  - "lời báo lúc gộp và lúc tách phiếu phụ (một tin mỗi lần, cho người dân của phiếu phụ, câu chữ đã duyệt) và lời báo riêng của từng phiếu phụ khi phiếu chính kết thúc (chủ dự án, 09/10/2026; mô hình gộp: ADR 0087)"
+  - "tin gộp/tách đi bằng petitions.merge_changed.v1, không bằng status_changed.v1, và vì sao (09/10/2026)"
   - "nhật ký xử lý của phiếu phản ánh luôn là nội bộ: không có cờ công khai, không dòng nào đi tới người dân (chủ dự án, 09/10/2026)"
 ---
 
@@ -110,19 +111,25 @@ ghi nhận.
 ## Sửa đổi 09/10/2026 — gộp phiếu trùng và nhật ký xử lý
 
 Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
-09/10/2026, trong phiên chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`), qua phiếu hỏi. **Chưa dựng.**
+09/10/2026, trong phiên chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`), qua phiếu hỏi. **Dựng một
+phần:** hợp đồng sự kiện `904d95ab`; phía `comms` gửi tin chưa dựng.
 Đây là **đổi bảng** — điều kiện dừng #3 của luật 10 — nên được ghi kèm người quyết.
 
 ### Lời báo khi gộp (mô hình: ADR 0087)
 
 | Sự kiện | Ai nhận | Lời báo mang |
 |---|---|---|
-| Phiếu bị gộp vào phiếu chính | Người dân của **phiếu phụ**, **một** tin | Ý: *"Phiếu của anh/chị đã được ghép với phản ánh cùng vụ việc, kết quả sẽ báo khi xử lý xong."* Mã tra cứu của **chính** phiếu ấy. **Không** mã, nội dung, ảnh hay người gửi của phiếu chính (luật 4) |
+| Phiếu bị gộp vào phiếu chính | Người dân của **phiếu phụ**, **một** tin | Mốc **"Ghép với phản ánh cùng vụ việc"**. Việc tiếp theo: *"Phản ánh của anh/chị đã được ghép với phản ánh cùng vụ việc. Kết quả sẽ được báo khi xử lý xong."* Mã tra cứu của **chính** phiếu ấy. **Không** mã, nội dung, ảnh hay người gửi của phiếu chính (luật 4) |
 | Phiếu chính vào `cho-dan-xac-nhan` / `da-dong` | Người dân của **từng** phiếu phụ, mỗi người một tin | Đúng dòng `cho-dan-xac-nhan` / `da-dong` của bảng trên, theo **phiếu của mình**, cùng câu kết quả |
-| Tách phiếu | — | **Chưa quyết** có báo hay không — hỏi khi dựng |
+| Tách phiếu | Người dân của **phiếu phụ**, **một** tin — **CÓ báo** (chủ dự án chốt 09/10/2026) | Mốc **"Xử lý riêng"**. Việc tiếp theo: *"Phản ánh của anh/chị sẽ được xử lý riêng. Kết quả sẽ được báo khi xử lý xong."* Cùng giới hạn luật 4 như dòng gộp |
 
-**Câu chữ cuối cùng** của tin lúc gộp **chưa chốt**: câu trên là ý chủ dự án duyệt, không phải mẫu ZNS.
-Mẫu theo xã (ADR 0018) khi dựng phải đưa chủ dự án duyệt câu và ghi lại ở đây.
+**Câu chữ đã chốt** (chủ dự án duyệt nguyên văn, 09/10/2026) là hai mốc và hai câu "việc tiếp theo"
+ở bảng trên. **Còn thiếu:** mẫu ZNS theo xã (ADR 0018) — mỗi xã phải đăng ký mẫu mang đúng câu ấy.
+
+**Sự kiện mang tin:** `petitions.merge_changed.v1` (`PetitionMergeChanged`, commit `904d95ab`), **không**
+`petitions.status_changed.v1`. Vì sao: gộp và tách **không đổi trạng thái** nào, còn `comms` khử trùng
+tin trạng thái theo mốc — một tin "trạng thái" không đổi trạng thái sẽ bị nuốt như bản lặp. Bên `comms`,
+mốc của tin = trường `kind` (`gop-phieu` / `tach-phieu`).
 
 Tin lúc gộp **không** gắn với trạng thái đích — cùng hình dạng việc còn mở #3 (mở lại, gia hạn): mở
 rộng cơ chế `loiNhanChoDan`, **không** thêm danh sách thứ hai. Phiếu `can-bo` không bao giờ bị gộp

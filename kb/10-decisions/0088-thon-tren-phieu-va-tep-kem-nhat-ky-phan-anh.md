@@ -3,18 +3,20 @@ id: 0088-thon-tren-phieu-va-tep-kem-nhat-ky-phan-anh
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 8b06345e
+derived_from_commit: 7f8f3b8a
 expires: null
 owns_facts:
   - "thôn trên phiếu phản ánh: dân tuỳ chọn ở Mini App; cán bộ chọn lúc nhập hộ, xác nhận/sửa lúc phân loại có vết; máy chủ kiểm thon_id với identity qua một gRPC MỚI; không suy từ toạ độ; phiếu giữ thôn lúc tiếp nhận (chủ dự án, 09/10/2026)"
-  - "tệp kèm trên nhật ký xử lý phản ánh: gỡ = xoá mềm, lý do bắt buộc, khoá feedback.resolve; tệp được đi kèm hành vi đổi trạng thái và gắn với dòng nhật ký của hành vi ấy trong cùng giao dịch (chủ dự án, 09/10/2026)"
+  - "tệp kèm trên nhật ký xử lý phản ánh: gỡ = xoá mềm, lý do bắt buộc; người gỡ được là người tải lên HOẶC người giữ feedback.resolve; tệp được đi kèm hành vi đổi trạng thái và gắn với dòng nhật ký của hành vi ấy trong cùng giao dịch (chủ dự án, 09/10/2026)"
+  - "Mini App lấy danh sách thôn qua một tuyến CÔNG DÂN của identity: xã lấy từ phiên công dân, CitizenOnly, chỉ thôn đang dùng (chủ dự án, 09/10/2026)"
   - "không dựng ảnh thu nhỏ trên thẻ danh sách phản ánh, và vì sao (chủ dự án, 09/10/2026)"
 ---
 
 # 0088. Thôn trên phiếu phản ánh, tệp kèm nhật ký, không ảnh thu nhỏ ở danh sách
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-10-09 · **Người quyết:** chủ dự án, 09/10/2026, trong phiên
-chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`), qua phiếu hỏi · **Chưa dựng.**
+chính (`/fix-web-admin --menu=phan-anh-nguoi-dan`), qua phiếu hỏi · **Dựng:** thôn trên phiếu `994a002a`
+(RPC: §Trả lời 09/10/2026) · việc còn mở đã trả lời, §Trả lời 09/10/2026.
 Nhật ký xử lý luôn nội bộ (không cờ công khai) thuộc **ADR 0041** §Sửa đổi 09/10/2026, không ghi lại ở đây.
 
 ## Bối cảnh
@@ -58,8 +60,8 @@ ghi lại thôn của phiếu cũ là sửa hồ sơ lưu trữ (luật 7 cấm 
 | Tiền lệ | Gỡ tệp nhiệm vụ, commit `9d4b2684` (ADR 0076 §4b): xoá mềm, lý do bắt buộc, dòng nhật ký không chép tên tệp, vết cùng giao dịch |
 | Đi kèm hành vi | Tệp **được** đi kèm một hành vi **đổi trạng thái**, và gắn với **dòng nhật ký của chính hành vi ấy**, **trong cùng giao dịch** (luật 6 bất biến 3) |
 
-**Khác tiền lệ, có chủ ý hoặc chưa hỏi:** ADR 0076 cho cả **người tải lên** gỡ tệp nhiệm vụ. Chủ dự án
-chỉ nêu `feedback.resolve` cho phản ánh; người tải lên không có khoá ấy có gỡ được không **chưa hỏi**.
+**Người gỡ được:** người **tải lên** HOẶC người giữ `feedback.resolve` — cùng tiền lệ ADR 0076 (chủ dự
+án trả lời 09/10/2026, §Trả lời 09/10/2026 #3).
 
 Vì sao cùng giao dịch: tệp gắn vào dòng nhật ký của hành vi là bằng chứng của **chính hành vi ấy**.
 Ghi tách thì hành vi có thể thành công mà tệp không gắn — một bước xử lý không có bằng chứng.
@@ -72,11 +74,23 @@ và sổ vết đầy lượt xem không ai rà được. Ảnh xem trong ngăn 
 
 ## Còn mở khi dựng — hỏi, không tự quyết
 
+**Cả ba đã trả lời** — §Trả lời 09/10/2026 ngay dưới. Bảng giữ nguyên để thấy câu hỏi gốc.
+
 | # | Việc | Vì sao không tự chọn |
 |---|---|---|
 | 1 | Hình dạng gRPC kiểm thôn (một mã hay một lô; trả tên hay chỉ đúng/sai) | Hợp đồng — contract-designer; luật 2 điều kiện dừng #2 |
 | 2 | Mini App lấy danh sách thôn ở đâu | Tuyến công dân mới — khai báo quyền (luật 5), trần tần suất (luật 13 #7) |
 | 3 | Người tải lên không có `feedback.resolve` có gỡ được tệp mình tải lên không | §2 |
+
+## Trả lời 09/10/2026
+
+Mục này ghi thêm; **mục này thắng** khi nói khác phần trên.
+
+| # | Trả lời | Ai, ở đâu |
+|---|---|---|
+| 1 | **Hai** RPC của `identity`, theo lô: `ResolveActiveResidentialUnits` (kiểm thôn **còn dùng** trước khi ghi phiếu) và `ResolveResidentialUnitNames` (tên thôn **kể cả đã ngưng**, cho hiển thị và báo cáo). Xã lấy từ metadata (luật 1) | Hợp đồng `eacc087e`, cài đặt `76b30e7b` |
+| 2 | Một tuyến **CÔNG DÂN** mới của `identity` liệt kê thôn **đang dùng** của xã. Xã lấy **từ phiên công dân**, không từ tham số; khai `CitizenOnly` (luật 5 bất biến 1) | Chủ dự án 09/10/2026 · **đang dựng, chưa commit**. **Trần tần suất chưa có số**: chọn số là điều kiện dừng của luật 13 — chủ dự án quyết |
+| 3 | Người **tải lên** HOẶC người giữ `feedback.resolve` gỡ được tệp (xoá mềm, lý do bắt buộc — §2 không đổi) | Chủ dự án 09/10/2026 |
 
 ## ĐIỀU KIỆN DỪNG
 
