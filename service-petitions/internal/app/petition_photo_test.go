@@ -881,8 +881,16 @@ func TestPhotoCompleteAlreadyStoredAndNotYetAndExpired(t *testing.T) {
 	t.Run("nothing uploaded yet", func(t *testing.T) {
 		h := buildPhotos(t)
 		h.seedPendingPhoto("jpg", nil, ppNow.Add(-time.Minute))
-		if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrUploadNotReceived) {
+		_, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		if !errors.Is(err, ErrUploadNotReceived) {
 			t.Fatalf("err = %v", err)
+		}
+		// The log names where the upload was expected — both buckets, the file's keys (09/10/2026).
+		// Object keys are lowercase (storage.Key), so the file id is looked for lowercased.
+		for _, want := range []string{"bucket temp", "bucket private", strings.ToLower(ppFileID)} {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("error lacks %q: %v", want, err)
+			}
 		}
 		if h.db.begun != 0 {
 			t.Error("a transaction for nothing")

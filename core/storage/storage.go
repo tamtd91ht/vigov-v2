@@ -928,7 +928,9 @@ func mapErr(op string, err error) error {
 	resp := s3Error(err)
 	switch {
 	case resp.Code == "NoSuchBucket":
-		return fmt.Errorf("storage: %s: bucket does not exist: %w", op, err)
+		// The NAME, so the log says which of `{prefix}-private|-public|-temp` is missing: the operator's
+		// fix is one `mc mb` of exactly that bucket, and "a bucket" sends them to read the ConfigMap.
+		return fmt.Errorf("storage: %s: bucket %q does not exist: %w", op, resp.BucketName, err)
 	case resp.Code == "NoSuchKey" || resp.Code == "NoSuchVersion" || resp.StatusCode == http.StatusNotFound:
 		return fmt.Errorf("storage: %s: %w: %w", op, ErrNotFound, err)
 	case resp.Code == "PreconditionFailed" || resp.StatusCode == http.StatusPreconditionFailed:

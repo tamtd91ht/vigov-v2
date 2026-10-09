@@ -1,10 +1,10 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -176,13 +176,15 @@ type photoServer struct {
 	h       http.Handler
 	photos  *citizenPhotosFake
 	counter *photoCounter
+	log     *bytes.Buffer
 }
 
 func buildPhotoServer(t *testing.T) *photoServer {
 	t.Helper()
 	f := newCitizenPhotosFake()
 	c := &photoCounter{}
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	logBuf := &bytes.Buffer{}
+	log := slog.New(slog.NewTextHandler(logBuf, nil))
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
 		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
@@ -194,7 +196,7 @@ func buildPhotoServer(t *testing.T) *photoServer {
 	h = httpx.CitizenEdge(&soPhienCongDanGia{})(h)
 	h = httpx.Recover(func(context.Context) string { return "test-trace" })(h)
 	h = httpx.StripTenantHeaders(h)
-	return &photoServer{h: h, photos: f, counter: c}
+	return &photoServer{h: h, photos: f, counter: c, log: logBuf}
 }
 
 func photosPath(code string) string              { return "/api/v1/my-citizen-reports/" + code + "/photos" }
@@ -425,6 +427,19 @@ func TestCitizenPhotoRefusalMapping(t *testing.T) {
 			}
 			if strings.Contains(w.Body.String(), string(xaA)) || strings.Contains(w.Body.String(), maCuaToi) {
 				t.Errorf("body echoes the commune id or the code: %s", w.Body.String())
+			}
+			// A 409/422 is LOGGED with its code, the file id and the cause (09/10/2026: a missing temp
+			// bucket answered 409 with nothing in the log). Never the lookup code (rule 3).
+			if c.status == http.StatusConflict || c.status == http.StatusUnprocessableEntity {
+				logged := s.log.String()
+				for _, want := range []string{"level=WARN", "ma=" + c.code, "tep_id=" + photoIDHTTP} {
+					if !strings.Contains(logged, want) {
+						t.Errorf("log lacks %q: %s", want, logged)
+					}
+				}
+				if strings.Contains(logged, maCuaToi) {
+					t.Errorf("log carries the lookup code: %s", logged)
+				}
 			}
 		})
 	}

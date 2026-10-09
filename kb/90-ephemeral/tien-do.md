@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: a08009c4
+derived_from_commit: 0a2a8476
 expires: 2027-01-07
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 154 |
 | chưa làm | 39 |
 | treo | 13 |
-| xong | 433 |
+| xong | 435 |
 
 ## Theo menu
 
@@ -283,6 +283,7 @@ PHẦN MẪU SỐ CỦA CHỈ SỐ CÒN LẠI CHO AI: lượt này chỉ LƯU `h
 | `core` | `identityclient-can-bo-giao-viec` — core/identityclient.CanBoGiaoViecDuoc — client của ResolveAssignableStaff | xong | — | — |
 | `core` | `adr-0080-lop-tuyen-tai-khoan-zalo` — httpx.CommuneFromSessionOrZaloAccount, authz.KindZaloAccount + CitizenChannelOwner, idem tách khoá theo Kind, audit đọc che mã/IP của zalo-account (ADR 0080) | xong | — | Web Admin audit-log-view.ts:36,43 chưa có nhãn cho Kind 'zalo-account' (hiện chữ thô). |
 | `core` | `core-accountless-va-so-xac-thuc-08-10` — Phần core cho hai việc 08/10/2026: (1) ADR 0083 phiếu không tài khoản — audit Kind anonymous + che IP như vết công dân (core/audit), idem nhớ theo (xã, khoá) 24 giờ (core/idem), ratelimit đếm theo (xã, IP), Redis hỏng thì từ chối (core/ratelimit); (2) core/identityclient.ResolveCitizenContactPhone cho petitions gắn số đã xác thực (ADR 0050 §Sửa đổi 08/10/2026). | xong | — | Không. |
+| `core` | `storage-ten-bucket-thieu-09-10` — core/storage mapErr: lỗi NoSuchBucket nêu TÊN bucket bị thiếu (09/10: log chỉ nói 'bucket does not exist', không biết bucket nào) | xong | — | — |
 | `deploy` | `gan-mini-app-thang-binh` — Việc một lần trong job vigov-deploy: ghi dòng mini_app App ID 3291993990104489440 → Xã Thăng Bình (tạm, tới khi platform-admin có màn ghi sổ) | xong | — | ĐÃ CHẠY TRÊN PROD — chủ dự án xác nhận 01/10/2026 (dòng mini_app 3291993990104489440 đã ghi). Cùng ngày Xã Thăng Bình đổi App ID: xem mục doi-app-id-thang-binh. Stage giữ ở dạng LỊCH SỬ (chạy lại sẽ DỪNG ở phép kiểm); gỡ khi platform-admin có màn ghi sổ mini_app. |
 | `deploy` | `go-viec-demo-mini-app` — Gỡ việc bat-demo-mini-app / tat-demo-mini-app khỏi job vigov-deploy và mọi hướng dẫn dựng --demo trong deploy/ (chủ dự án 05/10/2026, ADR 0066 §Sửa đổi) | xong | — | Gỡ doi-app-id-thang-binh / gan-mini-app-thang-binh / dat-secret-mini-app khi màn platform-admin đã kiểm trên prod (ADR 0048 §01/10 #6d). |
 | `proto` | `resolve-assignable-staff` — identity.ResolveAssignableStaff + chú thích events.proto khớp ADR 0041 | xong | — | Còn mở: cờ 'có công dân' trên phieuPhanAnhRa (REST, không phải proto) — xem service-petitions/duong-xu-ly-phan-anh-phia-can-bo. |
@@ -329,6 +330,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `service-petitions` | `adr-0080-phieu-chua-xac-thuc` — Phiếu từ phiên chưa xác thực số: migration 0032 (zalo_account_id, một chủ, chỉ Mini App, không đánh giá/mở lại, trigger ảnh), gửi qua lớp CommuneFromSessionOrZaloAccount, trần 10 phiếu/ngày/tài khoản Zalo (đếm cả xoá mềm, khoá advisory, 429 unverified_daily_limit), tra cứu theo mã + cùng tài khoản, ảnh hiện trường, contact_unverified trên bản đọc công dân + cán bộ, không ZNS (ADR 0080) | xong | — | (1) make check đầy đủ + go run ./tools/schema-smoke trên PG16. (2) Ngày dùng domain.AutomationZone (+07:00). (3) verification-photos vẫn chỉ cho phiên có số (phiếu chưa xác thực không có bước công dân xác nhận đóng). |
 | `service-petitions` | `phan-anh-khong-tai-khoan-adr-0083` — Phiếu phản ánh KHÔNG TÀI KHOẢN (ADR 0083, đường TẠM khi App ViHAT chưa được Zalo duyệt): 3 tuyến công khai — danh mục lĩnh vực, gửi, tra cứu theo mã | xong | — | CHƯA chạy trên cụm thật, chưa gọi từ máy thật. Ngưỡng AccountlessFieldRead 120/phút/(host,IP) là số TẠM của agent (chép PublicNewsRead) — chờ chủ dự án chốt (luật 13). apidoc chưa đọc idem.RequiredAccountless nên openapi không khai idempotency cho POST. rest_api_guard/audit_guard báo nhầm trên tuyến mới (hook tư vấn). Đếm 200/ngày không có chỉ mục riêng. GỠ khi App ViHAT được duyệt — ADR 0083 §Gỡ bỏ. |
 | `service-petitions` | `gan-so-da-xac-thuc-cua-phien` — Gửi phản ánh từ phiên ĐÃ xác thực số mà ô số điện thoại để trống: gắn số đã xác thực của phiên vào phiếu, che khi ra API và trong vết như số gõ tay (chủ dự án 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026) | xong | — | Triển khai identity TRƯỚC petitions (identity cũ trả UNIMPLEMENTED → 503 đúng ca này). Thử trên máy thật: gửi phiếu từ phiên đã xác thực, ô số ẩn → cán bộ thấy số (che) trên web-admin. |
+| `service-petitions` | `log-tu-choi-anh-hien-truong-09-10` — Ghi log mọi lần từ chối 409/422 của tuyến ảnh hiện trường công dân kèm nguyên nhân — 09/10 thiếu bucket temp trả 500 rồi 409 mà log không nói gì | xong | — | Chưa làm cùng việc cho tuyến ảnh sau xử lý của cán bộ (petition_staff_file.go), tệp nhật ký phiếu và tệp nhiệm vụ — cùng lỗi 409 ở đó vẫn không ghi log |
 | `service-platform` | `linh-vuc-tang-1` — Bộ mã lĩnh vực phản ánh tầng 1 (ADR 0026) ở platform + đường đọc gRPC ListPetitionFields (ADR 0060) | xong | — | Petitions (W4): tầng 2 enabled/nhãn/thứ tự trên nhan_linh_vuc, tuyến ghi cán bộ, tuyến danh mục công dân (XaTuPhienChiXem), POST nhận field + CheckForIntake + hai hạn lúc tạo. Chú thích lỗi thời: sla_gieo.go:69-71, nhan-phieu.ts:410-423 (bản chép tay web xoá khi có tuyến danh mục). |
 | `service-platform` | `petition-photo-bo-heic` — Chính sách tải lên petition-photo bỏ HEIC — chỉ JPEG/PNG/WebP, giữ 10 MB và 5 ảnh (G3, ADR 0047; chủ dự án chốt lại 02/10/2026, /develop-feature phan-anh-nguoi-dan TASK-01) | xong | — | Chưa có bên đọc petition-photo (service-petitions TASK-03 sẽ đọc). NỢ CŨ ngoài lượt này: TestPgUploadPolicySeedAndRead còn đòi 7 chính sách / 7 dòng seeded và TestPgUploadPolicySoftDeletedIsAbsent đòi 6 — sau 0013 (content-audio) phải là 8/8/7; sẽ đỏ lần đầu chạy với Postgres thật. |
 | `service-platform` | `chinh-sach-tai-len-anh-nghiem-thu-dinh-kem-nhat-ky` — Chính sách tải lên petition-verification-photo (ảnh nghiệm thu của cán bộ) và petition-log-attachment (đính kèm nhật ký phiếu) — migration 0015 + hai giá trị UploadPurpose trong platform.proto (phản ánh đợt 02/10/2026) | xong | — | Chưa chạy trên Postgres thật. |
@@ -678,7 +680,7 @@ Cập nhật 2026-10-08 · 72 mục
 
 ## `core`
 
-Cập nhật 2026-10-08 · 38 mục
+Cập nhật 2026-10-09 · 39 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -720,6 +722,7 @@ Cập nhật 2026-10-08 · 38 mục
 | `zalo-bot-niem-nen-tang` — Niêm cấp nền tảng, biến ZALO_BOT_WEBHOOK_HOST, giới hạn tần suất webhook Zalo (ADR 0074) | xong | 048eca0e grpcx miễn xã 6 RPC. 66f78014 crypto.PlatformEnvelope (phạm vi 'platform', không xã giả), config nhóm ZaloBotWebhook. a29a78eb ratelimit chính sách webhook + theo chat. | — | Ngưỡng webhook 600/phút là tạm (xem service-comms). |
 | `adr-0080-lop-tuyen-tai-khoan-zalo` — httpx.CommuneFromSessionOrZaloAccount, authz.KindZaloAccount + CitizenChannelOwner, idem tách khoá theo Kind, audit đọc che mã/IP của zalo-account (ADR 0080) | xong | 7c0e55c9 (CitizenSession.ZaloAccountID), 434e72a3. go test ./core/... xanh. | — | Web Admin audit-log-view.ts:36,43 chưa có nhãn cho Kind 'zalo-account' (hiện chữ thô). |
 | `core-accountless-va-so-xac-thuc-08-10` — Phần core cho hai việc 08/10/2026: (1) ADR 0083 phiếu không tài khoản — audit Kind anonymous + che IP như vết công dân (core/audit), idem nhớ theo (xã, khoá) 24 giờ (core/idem), ratelimit đếm theo (xã, IP), Redis hỏng thì từ chối (core/ratelimit); (2) core/identityclient.ResolveCitizenContactPhone cho petitions gắn số đã xác thực (ADR 0050 §Sửa đổi 08/10/2026). | xong | core/idem/accountless_test.go, core/ratelimit/accountless_test.go, core/audit/read_test.go, core/identityclient/citizen_contact_phone_test.go (lỗi/log không mang sid, mã công dân, số). go vet + go test ./core/... xanh 08/10/2026; make check toàn kho chưa xanh trọn (lượt bị dừng vì máy hết RAM). | — | Không. |
+| `storage-ten-bucket-thieu-09-10` — core/storage mapErr: lỗi NoSuchBucket nêu TÊN bucket bị thiếu (09/10: log chỉ nói 'bucket does not exist', không biết bucket nào) | xong | (commit này) — core/storage/storage.go mapErr dùng minio ErrorResponse.BucketName. go test ./storage xanh | — | — |
 
 ## `deploy`
 
@@ -1051,7 +1054,7 @@ Cập nhật 2026-10-09 · 67 mục
 
 ## `service-petitions`
 
-Cập nhật 2026-10-09 · 73 mục
+Cập nhật 2026-10-09 · 74 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1210,6 +1213,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `phan-anh-khong-tai-khoan-adr-0083` — Phiếu phản ánh KHÔNG TÀI KHOẢN (ADR 0083, đường TẠM khi App ViHAT chưa được Zalo duyệt): 3 tuyến công khai — danh mục lĩnh vực, gửi, tra cứu theo mã | xong | service-petitions: internal/http/{accountless.go,routes_accountless.go}, internal/app/gui_phan_anh.go (AccountlessSender, ErrAccountlessDailyLimit, trần trong tx), internal/domain/{accountless.go,commune_host.go}, internal/store/accountless.go (khoá + đếm 200/ngày/xã, AccountlessByCode chỉ đọc phiếu không tài khoản), cmd/server/main.go (chuỗi thứ ba: CORS · StripTenantHeaders · Recover · idem), staff DTO `accountless`. core: idem.RequiredAccountless (khoá theo (xã, khoá) 24h), audit.KindAnonymous + che IP khi đọc, ratelimit AccountlessSend 5/giờ/(host,IP) · AccountlessLookup 30/giờ/IP · AccountlessFieldRead. Không migration. `go build ./... && go vet ./... && go test ./...` service-petitions xanh; core idem/audit/ratelimit/httpx xanh; check_audit_actor/security/quyen PASS — 08/10/2026. openapi.json sinh lại (362 route). | — | CHƯA chạy trên cụm thật, chưa gọi từ máy thật. Ngưỡng AccountlessFieldRead 120/phút/(host,IP) là số TẠM của agent (chép PublicNewsRead) — chờ chủ dự án chốt (luật 13). apidoc chưa đọc idem.RequiredAccountless nên openapi không khai idempotency cho POST. rest_api_guard/audit_guard báo nhầm trên tuyến mới (hook tư vấn). Đếm 200/ngày không có chỉ mục riêng. GỠ khi App ViHAT được duyệt — ADR 0083 §Gỡ bỏ. |
 | `gan-so-da-xac-thuc-cua-phien` — Gửi phản ánh từ phiên ĐÃ xác thực số mà ô số điện thoại để trống: gắn số đã xác thực của phiên vào phiếu, che khi ra API và trong vết như số gõ tay (chủ dự án 08/10/2026, ADR 0050 §Sửa đổi 08/10/2026) | xong | Quyết định: kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md §Sửa đổi 08/10/2026 (:178). Mã 08/10/2026: internal/app/gui_phan_anh.go bước 1c verifiedContactPhone (chỉ khi ô số trống, không ẩn danh, Owner.Kind == OwnerCitizen) gọi identity ResolveCitizenContactPhone(sid của phiên, citizen_id) qua core/identityclient/citizen_contact_phone.go; trả rỗng → 401, identity hỏng → 503 contact_phone_unavailable, không ghi gì. Test internal/app/contact_phone_test.go + internal/http/contact_phone_test.go + core/identityclient/citizen_contact_phone_test.go: gắn khi trống; số gõ tay thắng; ẩn danh / ADR 0080 / ADR 0083 không gọi; vết chỉ mang tên cột nguoi_gui_dien_thoai. go vet + go test ./service-petitions/... ./core/identityclient/... xanh 08/10. make check toàn kho CHƯA xanh trọn (lượt chạy bị dừng vì máy hết RAM). | — | Triển khai identity TRƯỚC petitions (identity cũ trả UNIMPLEMENTED → 503 đúng ca này). Thử trên máy thật: gửi phiếu từ phiên đã xác thực, ô số ẩn → cán bộ thấy số (che) trên web-admin. |
 | `chuyen-don-thu-thanh-nhiem-vu-09-10` — POST /api/v1/citizen-letter-tasks — chuyển đơn thư thành nhiệm vụ (ADR 0085 A) | xong | bc00f039 (tuyến, migration 0034 nới CHECK nguồn giao don-thu, core/documentsclient) · e347b985 (nhóm biến DocumentsClient, Dial documents, netpol, Jenkins bo-sung-cau-hinh-petitions). go test petitions + core xanh. | — | TRƯỚC khi đổi ảnh petitions ở staging/prod: chạy Jenkins vận hành HANH_DONG=bo-sung-cau-hinh-petitions (đặt DOCUMENTS_GRPC_ADDR) và áp luật netpol petitions→documents:9090 nếu namespace có NetworkPolicy — thiếu biến thì pod crash-loop. Phát hiện sẵn có (không sửa): POST /api/v1/tasks không kiểm assignee qua ResolveAssignableStaff khi tạo. |
+| `log-tu-choi-anh-hien-truong-09-10` — Ghi log mọi lần từ chối 409/422 của tuyến ảnh hiện trường công dân kèm nguyên nhân — 09/10 thiếu bucket temp trả 500 rồi 409 mà log không nói gì | xong | (commit này) — http/petition_photo.go answerPhotoError: WARN 'ảnh hiện trường: từ chối' với xa, viec, tep_id, ma, err (không mã tra cứu); app/petition_photo.go: upload_not_received/upload_expired bọc chi tiết khoá đã tìm ở bucket temp + khoá bản sạch ở private + giờ xin chỗ tải. Ca kiểm: TestCitizenPhotoRefusalMapping (log có level=WARN, ma, tep_id, không có mã tra cứu), TestPhotoCompleteAlreadyStoredAndNotYetAndExpired. go test ./... service-petitions xanh | — | Chưa làm cùng việc cho tuyến ảnh sau xử lý của cán bộ (petition_staff_file.go), tệp nhật ký phiếu và tệp nhiệm vụ — cùng lỗi 409 ở đó vẫn không ghi log |
 
 ## `service-platform`
 

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-10-08",
+  "cap_nhat": "2026-10-09",
   "muc": [
     {
       "id": "ghim-go-toolchain-1-26-6",
@@ -307,6 +307,14 @@
       "bang_chung": "core/idem/accountless_test.go, core/ratelimit/accountless_test.go, core/audit/read_test.go, core/identityclient/citizen_contact_phone_test.go (lỗi/log không mang sid, mã công dân, số). go vet + go test ./core/... xanh 08/10/2026; make check toàn kho chưa xanh trọn (lượt bị dừng vì máy hết RAM).",
       "no_confirm": [],
       "tiep_theo": "Không."
+    },
+    {
+      "id": "storage-ten-bucket-thieu-09-10",
+      "trang_thai": "xong",
+      "viec": "core/storage mapErr: lỗi NoSuchBucket nêu TÊN bucket bị thiếu (09/10: log chỉ nói 'bucket does not exist', không biết bucket nào)",
+      "bang_chung": "(commit này) — core/storage/storage.go mapErr dùng minio ErrorResponse.BucketName. go test ./storage xanh",
+      "tiep_theo": "",
+      "menu": "phan-anh-nguoi-dan"
     }
   ]
 }

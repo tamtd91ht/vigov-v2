@@ -653,6 +653,14 @@
       "bang_chung": "bc00f039 (tuyến, migration 0034 nới CHECK nguồn giao don-thu, core/documentsclient) · e347b985 (nhóm biến DocumentsClient, Dial documents, netpol, Jenkins bo-sung-cau-hinh-petitions). go test petitions + core xanh.",
       "no_confirm": [],
       "tiep_theo": "TRƯỚC khi đổi ảnh petitions ở staging/prod: chạy Jenkins vận hành HANH_DONG=bo-sung-cau-hinh-petitions (đặt DOCUMENTS_GRPC_ADDR) và áp luật netpol petitions→documents:9090 nếu namespace có NetworkPolicy — thiếu biến thì pod crash-loop. Phát hiện sẵn có (không sửa): POST /api/v1/tasks không kiểm assignee qua ResolveAssignableStaff khi tạo."
+    },
+    {
+      "id": "log-tu-choi-anh-hien-truong-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Ghi log mọi lần từ chối 409/422 của tuyến ảnh hiện trường công dân kèm nguyên nhân — 09/10 thiếu bucket temp trả 500 rồi 409 mà log không nói gì",
+      "bang_chung": "(commit này) — http/petition_photo.go answerPhotoError: WARN 'ảnh hiện trường: từ chối' với xa, viec, tep_id, ma, err (không mã tra cứu); app/petition_photo.go: upload_not_received/upload_expired bọc chi tiết khoá đã tìm ở bucket temp + khoá bản sạch ở private + giờ xin chỗ tải. Ca kiểm: TestCitizenPhotoRefusalMapping (log có level=WARN, ma, tep_id, không có mã tra cứu), TestPhotoCompleteAlreadyStoredAndNotYetAndExpired. go test ./... service-petitions xanh",
+      "tiep_theo": "Chưa làm cùng việc cho tuyến ảnh sau xử lý của cán bộ (petition_staff_file.go), tệp nhật ký phiếu và tệp nhiệm vụ — cùng lỗi 409 ở đó vẫn không ghi log"
     }
   ]
 }

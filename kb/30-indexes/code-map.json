@@ -1776,7 +1776,7 @@
     },
     "app.NewStaffPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_photo.go:1001"
+      "at": "service-petitions/internal/app/petition_photo.go:1016"
     },
     "app.NewStaffVerificationPhotos": {
       "kind": "func",
@@ -2600,11 +2600,11 @@
     },
     "app.StaffPetitionPhotos": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:992"
+      "at": "service-petitions/internal/app/petition_photo.go:1007"
     },
     "app.StaffPhotoPetitions": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:986"
+      "at": "service-petitions/internal/app/petition_photo.go:1001"
     },
     "app.StaffVerificationPhotos": {
       "kind": "type",
@@ -9508,7 +9508,7 @@
     },
     "http.ListPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:352"
+      "at": "service-petitions/internal/http/petition_photo.go:367"
     },
     "http.ListPortalSyncRuns": {
       "kind": "func",

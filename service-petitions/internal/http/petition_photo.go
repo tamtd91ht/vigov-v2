@@ -276,6 +276,14 @@ var photoRejections = map[string]string{
 func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request, what string, err error) {
 	ctx := r.Context()
 	var rej *app.AttachmentRejection
+	// Every 409/422 is logged with its cause: the citizen reads a fixed sentence, so without this line
+	// an operator cannot tell "the phone never uploaded" from "the phone uploaded to a store this
+	// service does not read" (09/10/2026, a missing temp bucket). Commune, file id, code and the
+	// wrapped error only — that error names object keys, never the lookup code or the citizen (rule 3).
+	refused := func(code string) {
+		h.d.Log.WarnContext(ctx, "ảnh hiện trường: từ chối", "xa", string(tenant.MustFrom(ctx)), "viec", what,
+			"tep_id", r.PathValue("id"), "ma", code, "err", err)
+	}
 	switch {
 	case errors.Is(err, petstore.ErrPhieuKhongTonTai):
 		// Identical to an unknown code on GET /api/v1/my-citizen-reports/{code} — rule 4, forbidden #2.
@@ -293,23 +301,30 @@ func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request
 		if !ok {
 			sentence = "Ảnh bị từ chối và không được lưu."
 		}
+		refused("photo_rejected")
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "photo_rejected", sentence, "")
 	case errors.Is(err, app.ErrPhotoWindowClosed):
 		// 409, NOT 404: reached only after the read matched the citizen's OWN petition.
+		refused("petition_state")
 		httpx.WriteError(w, http.StatusConflict, "petition_state",
 			"Phản ánh đã được chuyển sang bước xử lý nên không đính thêm ảnh được nữa.", "")
 	case errors.Is(err, app.ErrPhotoCountReached):
+		refused("photo_limit")
 		httpx.WriteError(w, http.StatusConflict, "photo_limit", "Phản ánh đã có đủ số ảnh tối đa.", "")
 	case errors.Is(err, app.ErrAttachmentNotPending):
+		refused("photo_state")
 		httpx.WriteError(w, http.StatusConflict, "photo_state",
 			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Vui lòng chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadNotReceived):
+		refused("upload_not_received")
 		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
 			"Chưa nhận được ảnh. Vui lòng chờ tải lên xong rồi thử lại.", "")
 	case errors.Is(err, app.ErrUploadExpired):
+		refused("upload_expired")
 		httpx.WriteError(w, http.StatusConflict, "upload_expired",
 			"Lượt tải lên đã hết hạn mà chưa nhận được ảnh. Vui lòng chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
+		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
 			"Ảnh vừa bị thay đổi trong lúc kiểm tra. Vui lòng thử lại.", "")
 	case writePhotoUnavailable(ctx, w, h.d.Log, what, err):

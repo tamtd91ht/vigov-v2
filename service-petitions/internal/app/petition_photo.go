@@ -493,6 +493,10 @@ type photoInspection struct {
 	reason      string
 	signature   string
 	tempRemoved bool
+	// tempKeys are the temp keys looked at and found empty — set when nothing was received, so the
+	// 409 in the log names WHERE the upload was expected (a phone posting to another store or bucket
+	// looks exactly like a phone that never posted). Object keys only: commune and file id, no person.
+	tempKeys []string
 }
 
 // Complete runs step (c) for one upload of the citizen's own petition `ma`.
@@ -603,7 +607,7 @@ func (uc *CitizenPetitionPhotos) completePending(ctx context.Context, ma, id str
 		return domain.StoredFile{}, err
 	}
 	if insp.kind == outcomeNotReceived {
-		return domain.StoredFile{}, ErrUploadNotReceived
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadNotReceived, notReceivedDetail(f, insp))
 	}
 
 	// 3. One short transaction.
@@ -701,8 +705,15 @@ func (uc *CitizenPetitionPhotos) completePending(ctx context.Context, ma, id str
 	case insp.kind == outcomeRejected:
 		return domain.StoredFile{}, &AttachmentRejection{Reason: insp.reason}
 	default: // outcomeExpired
-		return domain.StoredFile{}, ErrUploadExpired
+		return domain.StoredFile{}, fmt.Errorf("%w: %s", ErrUploadExpired, notReceivedDetail(f, insp))
 	}
+}
+
+// notReceivedDetail says, for the log only, where an upload that never arrived was looked for. The
+// handler answers the citizen a fixed sentence and never this text.
+func notReceivedDetail(f domain.StoredFile, insp photoInspection) string {
+	return fmt.Sprintf("không có tệp tạm ở bucket temp (đã tìm %q), chưa có bản sạch ở bucket private (%q); "+
+		"xin chỗ tải lúc %s", insp.tempKeys, f.ObjectKey, f.CreatedAt.UTC().Format(time.RFC3339))
 }
 
 // photoUploadExts are the temp-key extensions an upload of this petition photo can have been issued
@@ -751,6 +762,7 @@ func (uc photoInspector) inspect(ctx context.Context, f domain.StoredFile, dst s
 	var (
 		uploadKey, upExt string
 		st               storage.ObjectInfo
+		tried            []string
 	)
 	for _, ext := range photoUploadExts(pol) {
 		k, err := uploadKeyFor(dst, ext)
@@ -759,6 +771,7 @@ func (uc photoInspector) inspect(ctx context.Context, f domain.StoredFile, dst s
 		}
 		info, err := uc.objects.Stat(ctx, storage.BucketTemp, k)
 		if errors.Is(err, storage.ErrNotFound) {
+			tried = append(tried, k)
 			continue
 		}
 		if err != nil {
@@ -768,7 +781,9 @@ func (uc photoInspector) inspect(ctx context.Context, f domain.StoredFile, dst s
 		break
 	}
 	if uploadKey == "" {
-		return uc.fromDestination(ctx, f)
+		insp, err := uc.fromDestination(ctx, f)
+		insp.tempKeys = tried
+		return insp, err
 	}
 
 	// The CURRENT policy decides (platform.proto (c)): a limit tightened since the request rejects here.
