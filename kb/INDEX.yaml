@@ -8,12 +8,12 @@
 # Tầng GENERATED (20-, 30-) do `make kb` tạo. KHÔNG sửa tay.
 
 version: 1
-generated_at: 2026-10-09T08:52:42Z   # `make kb` điền
-from_commit: 8525ba33   # `make kb` điền
+generated_at: 2026-10-09T09:25:17Z   # `make kb` điền
+from_commit: ed97eafe   # `make kb` điền
 
 budget:
   always_load_max: 28000  # token — trần do người dùng chốt (20000 -> 25000 -> 27000 ngày 21/09 -> 28000 ngày 28/09/2026, cho luật 13)
-  in_use: 27974   # `make kb` đo
+  in_use: 27941   # `make kb` đo
 
 always_load:                 # T0 — nạp mọi phiên, không hỏi
   - kb/00-foundation/domain-boundaries.md
@@ -118,8 +118,7 @@ faq_routes:       # định tuyến thẳng — tiết kiệm nhiều token nh�
   "vì sao làm thế này":       kb/10-decisions/
   "khách đã chốt chưa":       kb/00-foundation/open-questions.json
   "BA/PM đã đổi gì":          kb/50-doi-chieu/   # "bên kia có gì MỚI" thì phải chạy `/doi-chieu-require`
-  # "đang cháy, làm gì" → kb/40-runbooks/ CHƯA tồn tại: chưa có sự cố vận hành nào.
-  #   Tạo runbook đầu tiên khi có sự cố thật, đừng tạo thư mục rỗng cho đủ bộ.
+  "đang cháy, làm gì":        kb/40-runbooks/   # theo triệu chứng; không thêm "cho đủ bộ"
 
 not_here:           # nói rõ điều KHÔNG biết — chặn agent đi tìm vô ích,
   # và chặn agent 'bổ sung cho đủ' bằng cách viết thêm tài liệu (đó là cách lạm phát bắt đầu)

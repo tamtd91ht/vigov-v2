@@ -194,6 +194,23 @@ pipeline {
             PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080 \
             MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty
         '''
+        // NỀN TỰ HOST của bản đồ phản ánh (ADR 0072 §Trả lời 09/10/2026). Giá trị nằm ở ConfigMap
+        // `common-config`, key `BASEMAP-URL` (gạch ngang, luật 11 bất biến 4) — `envFrom` không mang được
+        // key có gạch ngang, nên ánh xạ tên ở đây: `--from` đổi `-` thành `_` → env `BASEMAP_URL`.
+        // CHƯA CÓ KEY thì KHÔNG dừng lượt triển khai: bản đồ phản ánh chỉ thiếu nền + một câu (ADR), còn
+        // dừng ở đây là chặn web-admin của mọi xã vì một tệp chưa tải lên. Cách có key:
+        // kb/40-runbooks/basemap-pmtiles.md.
+        sh '''
+          set -eu
+          # `with`, not a bare `index`: a missing key prints "<no value>", which `grep -q .` would take as set.
+          if kubectl -n "$NS" get configmap common-config \
+               -o go-template='{{with .data}}{{with index . "BASEMAP-URL"}}{{.}}{{end}}{{end}}' | grep -q .; then
+            kubectl -n "$NS" set env deploy/"$TEN_K8S" --from=configmap/common-config --keys=BASEMAP-URL
+          else
+            echo "CẢNH BÁO: common-config của $NS chưa có key BASEMAP-URL — bản đồ phản ánh sẽ không có nền."
+            echo "          Dựng và tải tệp nền rồi đặt key: kb/40-runbooks/basemap-pmtiles.md"
+          fi
+        '''
         // `*=` — mọi container: trên cụm, container của Deployment này tên `vigov-service-reporting`.
         sh 'kubectl -n "$NS" set image deploy/"$TEN_K8S" "*=$ANH"'
         sh 'kubectl -n "$NS" rollout status deploy/"$TEN_K8S" --timeout=6m'

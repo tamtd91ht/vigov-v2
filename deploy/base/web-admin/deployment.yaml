@@ -58,6 +58,15 @@ spec:
             # máy chủ (`src/lib/may-chu/map-style.ts`), không bao giờ NEXT_PUBLIC_*. Bỏ dòng này thì
             # trang `/ban-do` không có nền — không rơi về host nào khác.
             - { name: MAP_STYLE_URL, value: "https://tiles.openfreemap.org/styles/liberty" }
+            # Nền TỰ HOST của bản đồ phản ánh (ADR 0072 §Trả lời 09/10/2026): tiền tố trong MinIO chứa
+            # tệp .pmtiles + glyph + sprite, tuyến `/basemap/*` phát lại cùng gốc. Giá trị khác nhau theo
+            # môi trường (bucket, ngày làm mới) nên nằm ở ConfigMap, không viết ở đây. Key có GẠCH NGANG
+            # (luật 11 bất biến 4) nên KHÔNG tới được qua `envFrom` — phải ánh xạ tên ở đây.
+            # `optional: true` CÓ CHỦ Ý: thiếu key thì bản đồ phản ánh không có nền + một câu (ADR),
+            # không phải web-admin của mọi xã không khởi động. Cách dựng tệp: kb/40-runbooks/basemap-pmtiles.md
+            - name: BASEMAP_URL
+              valueFrom:
+                configMapKeyRef: { name: common-config, key: BASEMAP-URL, optional: true }
 
           # web-admin là CỔNG của `/api/v1/*` (quyết định 25/09/2026: k8s chỉ cấp Secret +
           # ConfigMap, định tuyến nằm trong ứng dụng). Nó đọc `*_HTTP_ADDR` — địa chỉ nội bộ

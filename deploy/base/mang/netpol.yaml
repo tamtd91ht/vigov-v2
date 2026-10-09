@@ -612,6 +612,27 @@ spec:
       ports:
         - { port: 8080, protocol: TCP }
 ---
+# 6b. Đường RA của RIÊNG web-admin tới MinIO: tuyến `/basemap/*` phát lại tệp nền PMTiles của bản đồ phản
+#     ánh từ `BASEMAP_URL` (ADR 0072 §Trả lời 09/10/2026, `web-admin/src/lib/may-chu/basemap.ts`). Cùng
+#     khuôn và cùng nợ với 7/7b/7d: đích tạm mở (`_chung/netpol-duong-ra-tam-mo`), GIỮ giới hạn CỔNG 9000
+#     — phải khớp cổng trong `BASEMAP-URL`; sai cổng thì pod xanh mà bản đồ phản ánh trả 502/504.
+#     CHỈ 9000: web-admin không cần clamd (3310) — nó không ghi gì vào kho, chỉ đọc tệp nền.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-admin-egress-storage
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: web-admin }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: {}
+        - ipBlock:
+            cidr: 0.0.0.0/0       # ← NỢ: thay bằng dải mạng thật của MinIO
+      ports:
+        - { port: 9000, protocol: TCP }
+---
 # 12. platform-admin (bàn điều khiển vận hành ViHAT, ADR 0048) → REST 8080 của platform, và CHỈ thế.
 #
 # Gateway của nó (`platform-admin/src/app/api/v1/[...path]/route.ts`) chuyển mọi `/api/v1/*` tới

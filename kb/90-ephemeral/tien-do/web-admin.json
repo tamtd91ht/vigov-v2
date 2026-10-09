@@ -1146,6 +1146,15 @@
       "bang_chung": "2474210c. make check xanh (web-admin 290 tệp/5393 ca; typecheck, lint, Go, brain, hook). Builder sửa 2 đoạn so-phan-anh.tsx bằng script python (vòng qua hook) — đã bù bằng make check toàn kho (check_security, quyen, vet-actor…) xanh và soát tay mẫu cấm (innerHTML/eval/console/Math.random/SĐT) sạch. ui-ux-reviewer chỉ viết baseline trên mã (UNVERIFIABLE), chưa chấm VALIDATE. CHƯA kiểm bằng ảnh render — chưa được báo là khớp prototype.",
       "tiep_theo": "(1) Người dùng kiểm ảnh: danh sách (thẻ, bộ lọc, 4 thẻ số, câu luồng riêng), ngăn chi tiết (thanh bước + khung Chuyển sang, cột trái, nhật ký), hộp nhập hộ (ẩn danh). (2) ui-ux-reviewer VALIDATE trên mã. (3) Câu mô tả hộp nhập hộ vẫn câu 30/09 vì câu prototype 'cùng thời hạn' trái ADR 0028 E/F — chủ dự án xem. (4) Đợt bản đồ PMTiles: chốt tệp vùng + nơi host (luật 11), tâm theo xã, thư viện pmtiles (make vuln), CSP, tuyến service-petitions trả toàn bộ điểm (BACKEND DEPENDENCY). (5) BACKEND DEPENDENCY khác: báo cáo theo lĩnh vực/bộ phận/thôn, phiếu trùng + gộp (C-R3 chưa quyết), thôn trên phiếu, ảnh trên thẻ, cờ Nội bộ của nhật ký, xoá mềm tệp nhật ký, tổng số phiếu, đính kèm khi chuyển bước, giao việc kèm chuyển bước.",
       "no_confirm": []
+    },
+    {
+      "id": "nen-ban-do-pmtiles-tu-host-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "viec": "Hạ tầng nền bản đồ tự host (ADR 0072 §Sửa đổi + Trả lời 09/10/2026): /basemap/* cùng gốc chuyển tiếp Range tới BASEMAP_URL; style Protomaps nhãn name:vi, ẩn ranh disputed/maritime; pmtiles; khai biến (.env.example, common-config BASEMAP-URL, Jenkinsfile), netpol MinIO 9000; script build-basemap.sh + runbook kb/40-runbooks/basemap-pmtiles.md.",
+      "bang_chung": "commit 'feat(web-admin): nền bản đồ tự host'. vitest 4 tệp/36 ca xanh. pmtiles 4.5.0, @protomaps/basemaps 5.7.2 — npm audit không lỗ mới. Script CHƯA chạy.",
+      "tiep_theo": "(1) Vận hành chạy build-basemap.sh + đặt BASEMAP-URL; pháp chế + UBND ký phiếu kiểm chủ quyền trước khi chạy thật. (2) Giao diện bản đồ nhiệt + bản đồ vị trí. (3) Chủ dự án: người ký sau mỗi lần làm mới, nhịp làm mới, câu K6. (4) security-reviewer xem /basemap/* và netpol 0.0.0.0/0:9000.",
+      "no_confirm": []
     }
   ]
 }

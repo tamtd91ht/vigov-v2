@@ -110,6 +110,19 @@ kubectl get pods -A -o wide | grep -E 'ingress|web-admin'
 ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes -o wide`). **Không bao giờ**
 `0.0.0.0/0` hay `::/0` — pod từ chối khởi động: tin mọi địa chỉ là tin `X-Forwarded-For` giả của bất kỳ ai.
 
+### Key trong `common-config` mà chỉ web-admin đọc
+
+Dịch vụ Go không đọc key này (`tools/check_env_map.py` không soát nó). Key viết **gạch ngang** (luật 11
+bất biến 4), nên không tới pod qua `envFrom`: `deploy/base/web-admin/deployment.yaml` và job `web-admin`
+(`web-admin/Jenkinsfile`, `kubectl set env --from … --keys=BASEMAP-URL`) ánh xạ nó thành env `BASEMAP_URL`.
+
+| Key | Bắt buộc | Là gì · lấy giá trị | Value |
+|---|---|---|---|
+| `BASEMAP-URL` | không — thiếu thì bản đồ phản ánh **không có nền** + một câu; web-admin vẫn chạy (ADR 0072 §Trả lời 09/10/2026) | Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến `/basemap/*` của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền: `kb/40-runbooks/basemap-pmtiles.md` | `https://<minio nội bộ>:<cổng>/<tiền tố>-public/basemap/<YYYYMMDD>` — https, không thông tin đăng nhập. **Không bao giờ** URL của OpenFreeMap hay host ngoài |
+
+Đổi key xong: chạy lại job `web-admin` (bước "Triển khai" ánh xạ key), hoặc
+`kubectl -n <namespace> rollout restart deploy/vigov-web-admin` nếu ánh xạ đã có.
+
 ## 3. Env viết thẳng trong Deployment (không qua ConfigMap)
 
 | Key | Bắt buộc | Deployment | Là gì · lấy giá trị | Value |

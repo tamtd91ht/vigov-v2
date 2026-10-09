@@ -33,7 +33,7 @@
       "file": "web-admin",
       "label": "missing-security-headers",
       "tcvn": "5.17.2.3",
-      "reason": "next.config.ts sets no CSP, HSTS, nosniff, Referrer-Policy or framing header, and neither does the ingress. Priority P0 in kb/90-ephemeral/tcvn-14423-danh-gia.md (K9).",
+      "reason": "next.config.ts sets no CSP, HSTS, nosniff, Referrer-Policy or framing header, and neither does the ingress. Priority P0 in kb/90-ephemeral/tcvn-14423-danh-gia.md (K9). When paid, the CSP must allow the maps or they go blank with no error: petition maps (ADR 0072 §Trả lời 09/10/2026) are SAME-ORIGIN only — connect-src 'self' (PMTiles ranges, glyphs, sprite JSON via /basemap/*), img-src 'self' data: blob: (sprite sheet), worker-src 'self' blob: (MapLibre worker at /maplibre/; blob: per ADR 0072 until checked in a browser); /ban-do additionally needs tiles.openfreemap.org in connect-src and img-src (ADR 0072 H4).",
       "expires": "2026-11-30"
     }
   ]
