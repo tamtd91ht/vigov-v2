@@ -8,10 +8,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
-import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
-import { congThaoTac, petitionPendingPart } from "./nhan-phieu";
-import { ChiTietPhieu, HangLoc } from "./so-phan-anh";
+import { petitionPendingPart } from "./nhan-phieu";
+import { HangLoc } from "./so-phan-anh";
 
 // No permission at all: no KPI row, no intake button — the placeholders are drawn for every account
 // (they grant nothing), and nothing else on the screen competes with them.
@@ -81,30 +80,6 @@ function pressAll(el: HTMLElement, ids: readonly string[]): void {
   expect(fetchSpy).not.toHaveBeenCalled();
 }
 
-const PETITION: petitions_phieuPhanAnhRa = {
-  code: "PA-2026-0021",
-  channel: "zalo-mini-app",
-  status: "dang-xu-ly",
-  field: "rac-thai",
-  field_label: "Rác thải – Vệ sinh môi trường",
-  content: "Rác tồn đọng ở đầu ngõ.",
-  address: "Đầu ngõ thôn Hà Lam",
-  lat: 15.5,
-  lng: 108.2,
-  reporter_name: "",
-  reporter_phone: "",
-  anonymous: true,
-  clock_from: "2026-09-09T07:20:00Z",
-  booked_at: "2026-09-09T07:21:00Z",
-  acknowledge_due: "2026-09-09T09:20:00Z",
-  resolve_due: "2026-09-10T09:20:00Z",
-  classify_due: "2026-09-09T11:20:00Z",
-  unit: "",
-  assignee: "",
-  result: "",
-  public: false,
-};
-
 describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
   it("scope: `Liên quan đến tôi` is disabled and never changes the filter", () => {
     const datLoc = vi.fn();
@@ -119,27 +94,8 @@ describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
     expect(datLoc).not.toHaveBeenCalled();
   });
 
-  it("drawer: the duplicates block keeps its '?' (merge UI not built), and it reaches no network", () => {
-    const el = mount(
-      <ChiTietPhieu
-        phieu={{ ...PETITION, status: "dang-xu-ly" }}
-        bayGio={new Date("2026-09-09T08:00:00Z")}
-        cong={congThaoTac(false, false, false)}
-        tenBoPhan={new Map()}
-        boPhan={[]}
-        danhBa={null}
-        dangGui={false}
-        loiGhi={null}
-        dong={() => {}}
-        phanLoai={() => {}}
-        chuyenXuLy={() => {}}
-        tienTrangThai={() => {}}
-        dongPhieuLai={() => {}}
-        khongTiepNhan={() => {}}
-        chuyenCapTren={() => {}}
-      />,
-    );
-    pressAll(el, ["duplicates"]);
+  it("drawer: the duplicates block is built (ADR 0087) — it has no '?' any more", () => {
+    expect(() => petitionPendingPart("duplicates")).toThrow();
   });
 
   it("the parts built on 09/10/2026 left the list: no '?' for the maps, the report, the composer files, the log", () => {

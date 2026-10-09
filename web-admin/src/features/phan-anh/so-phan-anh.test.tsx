@@ -168,6 +168,30 @@ function veChiTiet(
   );
 }
 
+/** `veChiTiet` with the session's permission keys — the blocks drawn behind a key need them. */
+function veChiTietWith(cong: ReturnType<typeof congThaoTac>, p: petitions_phieuPhanAnhRa, permissions: readonly string[]): string {
+  return renderToStaticMarkup(
+    <ChiTietPhieu
+      phieu={p}
+      bayGio={BAY_GIO}
+      cong={cong}
+      tenBoPhan={TEN_BO_PHAN}
+      boPhan={BO_PHAN}
+      danhBa={DANH_BA}
+      dangGui={false}
+      loiGhi={null}
+      permissions={permissions}
+      dong={() => {}}
+      phanLoai={() => {}}
+      chuyenXuLy={() => {}}
+      tienTrangThai={() => {}}
+      dongPhieuLai={() => {}}
+      khongTiepNhan={() => {}}
+      chuyenCapTren={() => {}}
+    />,
+  );
+}
+
 /** Chỉ dấu KHÔNG THỂ NHẦM của biểu mẫu đóng phiếu: id của ô kết quả. */
 const O_KET_QUA = 'id="ket-qua-xu-ly"';
 
@@ -1537,12 +1561,12 @@ describe("prototype composition — the drawer", () => {
     expect([...at].sort((a, b) => a - b)).toEqual(at);
   });
 
-  it("sections in the prototype's order: content → location → duplicates (?) → rating → hand-over → log", () => {
-    const html = veChiTiet(ALL, phieu({ lat: 21.028511, lng: 105.804817, rating: 4 }));
+  it("sections in the prototype's order: content → location → duplicates → rating → hand-over → log", () => {
+    const html = veChiTietWith(ALL, phieu({ lat: 21.028511, lng: 105.804817, rating: 4 }), ["feedback.read"]);
     const order = [
       "Nội dung phản ánh",
       ">Vị trí</h3>",
-      pendingMarkerLabel(petitionPendingPart("duplicates").ten),
+      ">Có thể trùng với phiếu khác</h3>",
       "Đánh giá của người dân",
       "Chuyển xử lý, không đổi trạng thái",
       TIEU_DE_NHAT_KY,
@@ -1554,9 +1578,11 @@ describe("prototype composition — the drawer", () => {
     expect(html).not.toContain("lucide-list-checks");
   });
 
-  it("the duplicates block offers NO merge button — only its '?'", () => {
-    const html = veChiTiet(ALL);
-    expect(html).not.toContain("Gộp phiếu");
+  it("the duplicates block: no '?' any more; drawn only behind `feedback.read`", () => {
+    expect(veChiTiet(ALL)).not.toContain("Có thể trùng với phiếu khác");
+    const html = veChiTietWith(ALL, phieu(), ["feedback.read"]);
+    expect(html).toContain("Có thể trùng với phiếu khác");
+    expect(html).not.toContain("data-pending-marker");
   });
 });
 

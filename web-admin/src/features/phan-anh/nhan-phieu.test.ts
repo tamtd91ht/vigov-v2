@@ -670,7 +670,7 @@ describe("`has_citizen` QUYẾT ĐỊNH khi có mặt; vắng thì quay về lu�
   });
 });
 
-describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
+describe("nhật ký xử lý — nhãn các mã thao tác", () => {
   /** Danh sách đóng của máy chủ, gõ lại từ hợp đồng — KHÔNG sinh từ bảng nhãn đang kiểm. */
   const LOG_ACTIONS = [
     "phan-loai",
@@ -687,6 +687,11 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
     "tao-nhiem-vu",
     // `domain.LogActionStaffIntake` — the staff intake (ADR 0028 Bổ sung 2026-10-02 row 6).
     "nhap-ho",
+    // `domain.LogActionMerge` / `LogActionUnmerge` (ADR 0087 §Trả lời 09/10/2026 #8), on both petitions.
+    "gop-phieu",
+    "tach-phieu",
+    // `domain.LogActionAttachmentRemoved` (ADR 0088 §2).
+    "go-tep",
   ] as const satisfies readonly MaThaoTacNhatKy[];
 
   // Mức KIỂU: hợp mọc thêm một mã mà danh sách trên không có → `tsc` đỏ tại đây.
@@ -694,7 +699,7 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
   const _duMa: DuMa = true;
   void _duMa;
 
-  it("bảng nhãn có ĐÚNG mười một khoá, không hơn", () => {
+  it("bảng nhãn có ĐÚNG mười bốn khoá, không hơn", () => {
     expect(Object.keys(NHAN_THAO_TAC_NHAT_KY).sort()).toEqual([...LOG_ACTIONS].sort());
   });
 
@@ -711,6 +716,9 @@ describe("nhật ký xử lý — nhãn mười mã thao tác", () => {
       "Mở lại do đánh giá thấp",
       "Tạo nhiệm vụ",
       "Nhập hộ phản ánh",
+      "Gộp phiếu",
+      "Tách phiếu",
+      "Gỡ tệp đính kèm",
     ]);
   });
 
@@ -777,8 +785,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // của prototype (ADR 0068 lần 5) có chỗ giữ riêng.
     // Thirteen from 09/10/2026 (prototype round, owner decisions D1–D5); SIX later the same day, when the
     // backends of the heat map, the report, the hamlet, the act files and the log-file removal landed and
-    // the log was decided always internal (ADR 0041 §Sửa đổi 09/10/2026, 0053 §C, 0072, 0088).
-    expect(PHAN_CHUA_DUNG.length).toBe(6);
+    // the log was decided always internal (ADR 0041 §Sửa đổi 09/10/2026, 0053 §C, 0072, 0088). FIVE once
+    // the duplicates block was built (ADR 0087, backend b97a6379 / 49b689a4).
+    expect(PHAN_CHUA_DUNG.length).toBe(5);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -811,9 +820,10 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(ten).not.toContain("Modal `Nhập hộ phản ánh` (§11)");
     expect(ten).not.toContain("Câu giải thích trạng thái, tám trong chín (§8.2)");
     expect(ten).not.toContain("Ảnh sau khi xử lý (§8.4)");
+    // The duplicates block left the list when the merge UI was built (ADR 0087).
+    expect(ten).not.toContain("Có thể trùng với phiếu khác");
+    expect(() => petitionPendingPart("duplicates")).toThrow();
     expect(ten).toEqual([
-      // 06/10/2026 (ADR 0068 lần 5): the prototype's duplicates block — merge UI not built yet.
-      "Có thể trùng với phiếu khác",
       "Liên quan đến tôi",
       "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",

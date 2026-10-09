@@ -179,6 +179,7 @@ import { NhatKyPhieu } from "./nhat-ky-phieu";
 import { usePetitionLogAttachments } from "./petition-log-attachments";
 import { PetitionHeatMap, PetitionMiniMap } from "./petition-map";
 import { PetitionReports } from "./petition-reports";
+import { DUPLICATES_TITLE, mergeSectionShown, PetitionMergeSection } from "./petition-merge";
 import { PetitionTaskBlock } from "./petition-task";
 import {
   buttonClass,
@@ -489,6 +490,17 @@ export function SoPhanAnh({
     setAssignRefusal(null);
     setClassifyRefusal(null);
   };
+  /**
+   * Opens a petition named by code (a duplicate, the main petition, a merged one) through the DETAIL
+   * route, exactly as the `?id=` deep link does. A refusal (404 for another commune's code) goes to the
+   * open drawer's error line, verbatim.
+   */
+  const openByCode = (code: string) => {
+    layPhieuPhanAnh(code).then((kq) => {
+      if (kq.ok) openPetition(kq.duLieu);
+      else datLoiGhi(kq.thongBao);
+    });
+  };
   const listCards = (items: readonly petitions_phieuPhanAnhRa[]) => (
     <DanhSachThe
       phieu={items}
@@ -718,6 +730,14 @@ export function SoPhanAnh({
           // A task booked from the petition wrote a `tao-nhiem-vu` row: bump the same counter so the
           // log re-reads it. The petition itself is unchanged by the act, so `dangMo` stays.
           onTaskCreated={() => datLanTai((n) => n + 1)}
+          // Merge / unmerge (ADR 0087): the 200 body replaces the open petition, the list and the log
+          // re-read (both petitions got a `gop-phieu` / `tach-phieu` row). The toast is the dialog's.
+          onMergeChanged={(p) => {
+            datLoiGhi(null);
+            datDangMo(p);
+            datLanTai((n) => n + 1);
+          }}
+          onOpenPetition={openByCode}
           dong={() => {
             datDangMo(null);
             datLoiGhi(null);
@@ -1097,8 +1117,8 @@ export function DanhSachThe({
  * list route always masks (rule 3, ADR 0030), and an anonymous petition says so and nothing more.
  *
  * THE PLACE LINE IS THE HAMLET, ELSE THE ADDRESS (prototype `FeedbackCard.tsx:98`, `cardPlaceLabel`): the
- * hamlet recorded on the petition (ADR 0088 §1). NO "N phiếu trùng": the list carries no count
- * (`PHAN_CHUA_DUNG` `duplicates`).
+ * hamlet recorded on the petition (ADR 0088 §1). NO "N phiếu trùng": the list item carries no
+ * duplicate count (`petitions_phieuPhanAnhRa`), and the screen does not invent one.
  *
  * NO `title` TOOLTIP ON THE CONTENT: it is a citizen's words (rule 3 keeps personal data out of
  * attributes); the full text is in the drawer.
@@ -1226,6 +1246,8 @@ export function ChiTietPhieu({
   basemapAvailable = false,
   thon = [],
   onTaskCreated,
+  onMergeChanged,
+  onOpenPetition,
   dong,
   phanLoai,
   chuyenXuLy,
@@ -1265,6 +1287,10 @@ export function ChiTietPhieu({
   thon?: readonly identity_thonToDanPhoRa[];
   /** Called after POST …/tasks answered 201. Absent = the block is not drawn (no write path). */
   onTaskCreated?: () => void;
+  /** The 200 body of a merge / unmerge (ADR 0087). Absent = no merge action is drawn (no write path). */
+  onMergeChanged?: (p: petitions_phieuPhanAnhRa) => void;
+  /** Opens another petition by lookup code, through the detail route. Absent = plain `?id=` links. */
+  onOpenPetition?: (code: string) => void;
   dong: () => void;
   /*
    * `ghiChu` ở cả sáu thao tác là `Nội dung cập nhật` TUỲ CHỌN, vào nhật ký, không gửi người dân. Trả
@@ -1636,7 +1662,7 @@ export function ChiTietPhieu({
     //   header   code · channel · booked at (the dialog's NAME), the field as the title, the sender
     //   strip    the lifecycle's steps, the branches, the current status's sentence, the composer
     //   facts    three cells: Hạn xử lý (both clocks) · Đang giao cho · Hiển thị với người dân
-    //   body     left: content (+ result / branch reason), photos, location, duplicates "?", rating,
+    //   body     left: content (+ result / branch reason), photos, location, duplicates, rating,
     //            hand-over, task; right (from 768px; under the left column below): the log
     //
     // THE DIALOG'S NAME IS THE CODE, CHANNEL AND TIME, NEVER THE CONTENT: a name goes into the
@@ -1817,14 +1843,23 @@ export function ChiTietPhieu({
               </section>
             )}
 
-            {/* `Có thể trùng với phiếu khác` (`FeedbackDetailDrawer.tsx:408-439`) — no route detects or
-                merges duplicates: the title with its "?", no button that would do nothing. */}
-            <section className={SECTION} data-pending="">
-              <h3 className={cn(SECTION_HEADING, "flex items-center gap-1.5 text-ink-muted")}>
-                {petitionPendingPart("duplicates").ten}
-                <PendingMarker info={petitionPendingPart("duplicates")} />
-              </h3>
-            </section>
+            {/* `Có thể trùng với phiếu khác` (`FeedbackDetailDrawer.tsx:408-439`, ADR 0087) — suspected
+                duplicates and the merge link. Behind `feedback.read` (the search route's key) and the
+                merge acts behind `feedback.classify` — UX only, the routes check both. A component of its
+                own: it reads the network (`useEffect`). */}
+            {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && mergeSectionShown(phieu) && (
+              <section aria-labelledby="tieu-de-phieu-trung" className={SECTION}>
+                <h3 id="tieu-de-phieu-trung" className={SECTION_HEADING}>
+                  {DUPLICATES_TITLE}
+                </h3>
+                <PetitionMergeSection
+                  petition={phieu}
+                  mayMerge={coQuyen(permissions, QUYEN_PHAN_LOAI_PHAN_ANH)}
+                  onChanged={onMergeChanged}
+                  onOpen={onOpenPetition}
+                />
+              </section>
+            )}
 
             {/* `Đánh giá của người dân` — ONLY WHEN RATED (`FeedbackDetailDrawer.tsx:441-482`). */}
             {rating.kind === "rated" && (

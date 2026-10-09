@@ -27,6 +27,9 @@ import {
   listCitizenReportPoints,
   readCitizenReportBreakdown,
   removeLogAttachment,
+  listDuplicateCandidates,
+  mergePetition,
+  unmergePetition,
 } from "./phieu-phan-anh";
 import type { petitions_phieuCuaToiRa, petitions_phieuPhanAnhRa } from "./schema.gen";
 import { UPLOAD_FORM_MISSING } from "./task-attachments";
@@ -1201,5 +1204,52 @@ describe("DELETE …/log-attachments/{id} — soft removal, reason required", ()
   it("409 `legal_hold` / 403: the server's sentence", async () => {
     answer(409, { code: "legal_hold", message: "Tệp đang bị phong toả." });
     expect(await removeLogAttachment("PA-1", "01JF", "x")).toEqual({ ok: false, thongBao: "Tệp đang bị phong toả." });
+  });
+});
+
+describe("duplicates and merging (ADR 0087)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("GET …/duplicate-candidates on the petition's own path", async () => {
+    const fake = answer(200, { items: [], radius_meters: 50, window_days: 7, truncated: false });
+    const r = await listDuplicateCandidates("PA 1");
+    const [path, init] = fake.mock.calls[0] as unknown as Call;
+    expectCommon(path, init);
+    expect(path).toBe("/api/v1/citizen-reports/PA%201/duplicate-candidates");
+    expect(init?.method).toBe("GET");
+    expect(r.ok && r.duLieu.radius_meters).toBe(50);
+  });
+
+  it("POST …/merge: the PATH petition goes into `main_code`; a blank reason is ABSENT; no Idempotency-Key", async () => {
+    const fake = answer(200, { code: "PA-2", merged_into: "PA-1" });
+    const r = await mergePetition("PA-2", "PA-1", "   ");
+    const [path, init] = fake.mock.calls[0] as unknown as Call;
+    expectCommon(path, init);
+    expect(path).toBe("/api/v1/citizen-reports/PA-2/merge");
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(String(init?.body))).toEqual({ main_code: "PA-1" });
+    expect(new Headers(init?.headers).has("Idempotency-Key")).toBe(false);
+    expect(r.ok && r.duLieu.merged_into).toBe("PA-1");
+  });
+
+  it("POST …/merge carries the trimmed reason when given", async () => {
+    const fake = answer(200, { code: "PA-2" });
+    await mergePetition("PA-2", "PA-1", "  Cùng một ổ gà  ");
+    expect(JSON.parse(String(fake.mock.calls[0]?.[1]?.body))).toEqual({ main_code: "PA-1", reason: "Cùng một ổ gà" });
+  });
+
+  it("409 `merge_deadline_before_origin`: the server's sentence, verbatim", async () => {
+    const cau = "Không gộp được: hạn xử lý của phiếu được gộp sớm hơn lúc phiếu chính được phản ánh.";
+    answer(409, { code: "merge_deadline_before_origin", message: cau });
+    expect(await mergePetition("PA-2", "PA-1")).toEqual({ ok: false, thongBao: cau });
+  });
+
+  it("POST …/unmerge: the trimmed reason in the BODY", async () => {
+    const fake = answer(200, { code: "PA-2" });
+    await unmergePetition("PA-2", "  Không cùng vụ việc  ");
+    const [path, init] = fake.mock.calls[0] as unknown as Call;
+    expectCommon(path, init);
+    expect(path).toBe("/api/v1/citizen-reports/PA-2/unmerge");
+    expect(JSON.parse(String(init?.body))).toEqual({ reason: "Không cùng vụ việc" });
   });
 });

@@ -1173,6 +1173,15 @@
       "viec": "/fix-web-admin thu-chi-ngan-sach theo tmp/web/thu-chi-ngan-sach/vigov-thu-chi-spec (bảng khác biệt ui-ux-reviewer 65 dòng + 23 dòng hộp đợt). Người dùng chốt 09/10: giữ budget.confirm + lý do khi gỡ; số và % tròn 1 chữ số như prototype; ô tổng theo đơn vị tính của bảng; sửa tên/số tại chỗ + nút bút chì sửa TT/thứ tự; giữ hộp xác nhận đổi cách tính; nút đợt ở dòng cha vô hiệu kèm lý do; câu trống nguyên prototype.",
       "bang_chung": "2418211d. vitest thu-chi+dashboard+dev-preview 17 tệp 402 ca xanh, lint sạch. CHƯA KIỂM BẰNG ẢNH RENDER — extension Chrome mất kết nối, dev server bị tắt vì máy thiếu bộ nhớ.",
       "tiep_theo": "(1) Kiểm trên máy build ở 1280/1534px: thanh cuộn ngang của bảng, ô Cách tính hẹp hơn prototype ~20px vì thêm nút bút chì (chữ có thể bị cắt). (2) Builder tự quyết, chờ người dùng: nền ô tổng/form đợt dùng bg-canvas (bg-surface của app là trắng); tài khoản chỉ xem vẫn thấy cột Cách tính dạng chữ (prototype ẩn). (3) Bỏ câu 'đợt chỉ cộng khi Cộng theo đợt' và dòng đơn vị trong hộp đợt (theo prototype). (4) BACKEND DEPENDENCY: badge số đợt cần entry_count trên dòng (service-finance)."
+    },
+    {
+      "id": "gop-tach-phieu-giao-dien-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Ngăn chi tiết /phan-anh: mục 'Có thể trùng với phiếu khác' (duplicate-candidates, theo bán kính/khung ngày của xã), 'Gộp phiếu này vào {mã}' (hộp xác nhận, lý do tuỳ chọn, câu 409/400 trong hộp), phiếu đã gộp: 'Đã gộp vào phiếu {mã}' + 'Tách khỏi phiếu chính' (lý do bắt buộc, tắt khi đã đóng/không tiếp nhận/chuyển cấp trên), phiếu chính liệt kê phiếu đã gộp; nhãn nhật ký Gộp phiếu, Tách phiếu, Gỡ tệp đính kèm; gỡ mục '?' duplicates.",
+      "bang_chung": "commit 'feat(web-admin): gộp/tách phiếu'. tsc + eslint sạch, vitest phan-anh + lib 75 tệp/1347 ca, check:api khớp. CHƯA kiểm bằng ảnh render.",
+      "tiep_theo": "(1) Danh sách không trả merged_into/merged_petitions — mở ngăn từ thẻ chỉ thấy 'đã gộp vào một phiếu chính' + nút xem phiếu chính; đề xuất backend thêm hai trường (chỉ mã) vào mục danh sách. (2) Chip '{n} phiếu trùng' trên thẻ chưa dựng (danh sách không có số). (3) Câu rỗng/không vị trí do builder đặt.",
+      "no_confirm": []
     }
   ]
 }

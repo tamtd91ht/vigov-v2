@@ -1297,7 +1297,7 @@ export const SCOPE_RELATED_LABEL = "Liên quan đến tôi";
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 /**
- * Mười mã thao tác của một dòng nhật ký — danh sách ĐÓNG của `service-petitions`.
+ * Mã thao tác của một dòng nhật ký — danh sách ĐÓNG của `service-petitions`.
  *
  * Hợp đồng khai `action` là `string` trơn (không `enum`), cùng lỗ hổng với `NHAN_TRANG_THAI` ở trên.
  * `Record<MaThaoTacNhatKy, string>` bên dưới vì thế là chỗ canh ở mức KIỂU: thêm một mã vào hợp này
@@ -1319,7 +1319,13 @@ export type MaThaoTacNhatKy =
   // register number only.
   | "tao-nhiem-vu"
   // The staff intake booked this petition (ADR 0028 Bổ sung 2026-10-02 row 6, "cán bộ X nhập hộ").
-  | "nhap-ho";
+  | "nhap-ho"
+  // Merge / unmerge (ADR 0087 §Trả lời 09/10/2026 #8, `domain.LogActionMerge` / `LogActionUnmerge`): on
+  // BOTH petitions, the note names the other code and never the reason.
+  | "gop-phieu"
+  | "tach-phieu"
+  // A log file soft-removed (ADR 0088 §2, `domain.LogActionAttachmentRemoved`).
+  | "go-tep";
 
 /** Nhãn nguyên văn do chuyên gia nghiệp vụ chốt. `phan-cong` hiện là "Chuyển xử lý", như nút §8.5. */
 export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = {
@@ -1336,6 +1342,9 @@ export const NHAN_THAO_TAC_NHAT_KY: Readonly<Record<MaThaoTacNhatKy, string>> = 
   "mo-lai-theo-danh-gia": "Mở lại do đánh giá thấp",
   "tao-nhiem-vu": "Tạo nhiệm vụ",
   "nhap-ho": "Nhập hộ phản ánh",
+  "gop-phieu": "Gộp phiếu",
+  "tach-phieu": "Tách phiếu",
+  "go-tep": "Gỡ tệp đính kèm",
 };
 
 export function nhanThaoTacNhatKy(ma: string): string {
@@ -1770,16 +1779,6 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  // The prototype's drawer section `Có thể trùng với phiếu khác` (FeedbackDetailDrawer.tsx:408-439)
-  // and the card's "N phiếu trùng". No petitions route detects or merges duplicates
-  // (service-petitions/internal/http/routes.go, re-read 06/10/2026), and the list carries no count.
-  {
-    id: "duplicates",
-    ten: "Có thể trùng với phiếu khác",
-    viSao:
-      "Hệ thống chưa dò được phiếu trùng (cùng nơi, cùng sự việc) và chưa gộp được phiếu, nên khối " +
-      "này chưa dùng được.",
-  },
   // §4 scope tab. The petition list answers 400 to `scope=related`
   // (service-petitions/internal/http/xu_ly_phan_anh.go, errPhamViLienQuanChuaCo): who counts as
   // "related" and what a related officer may do is undecided with the customer.

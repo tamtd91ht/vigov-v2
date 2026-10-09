@@ -33,6 +33,9 @@
  *   GET    /api/v1/citizen-report-points                     feedback.read (same filters; 422 over 5000)
  *   GET    /api/v1/citizen-report-breakdown                  feedback.read + report.read
  *   DELETE …/{maTraCuu}/log-attachments/{id}                 feedback.read gate; uploader OR feedback.resolve
+ *   GET    …/{maTraCuu}/duplicate-candidates                 feedback.read (ADR 0087 §6)
+ *   POST   …/{maTraCuu}/merge                                feedback.classify (ADR 0087)
+ *   POST   …/{maTraCuu}/unmerge                              feedback.classify, reason required
  *
  * The KPI cards read GET /api/v1/citizen-report-summary through `lib/api/dashboard.ts`
  * (`fetchCitizenReportSummary`) — one client for that route, not two.
@@ -85,7 +88,13 @@ import type {
   petitions_citizenReportBreakdownOut,
   petitions_citizenReportCountsOut,
   petitions_citizenReportLogAttachmentRemoveIn,
+  petitions_citizenReportMergeIn,
   petitions_citizenReportPointsOut,
+  petitions_citizenReportUnmergeIn,
+  petitions_duplicateCandidatesOut,
+  petitions_get_citizen_reports_by_maTraCuu_duplicate_candidates,
+  petitions_post_citizen_reports_by_maTraCuu_merge,
+  petitions_post_citizen_reports_by_maTraCuu_unmerge,
   petitions_delete_citizen_reports_by_maTraCuu_log_attachments_by_id,
   petitions_get_citizen_report_breakdown,
   petitions_get_citizen_report_counts,
@@ -710,6 +719,62 @@ export function setPetitionPublication(
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "PUT", than, 200),
   );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * DUPLICATES AND MERGING (ADR 0087) — GET …/duplicate-candidates · POST …/merge · POST …/unmerge
+ *
+ * Merging is a LINK, not a closing and not a status (ADR 0087 §1): the petition in the PATH is linked
+ * to `main_code`, both keep their own lookup code and stored deadlines. Every refusal — 409
+ * `merge_deadline_before_origin`, 409 `merge_state`, 400 — carries a fixed server sentence that is
+ * shown VERBATIM: re-deciding "which states may merge" here would be a second copy of migration 0037.
+ *
+ * NO Idempotency-Key on either write: both routes declare `idem.KhongCan` — the UPDATE carries its own
+ * guard, so a second identical request is a 409, never a second link.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * GET …/duplicate-candidates (`feedback.read`) — suspected duplicates, CLOSEST FIRST, reporters masked
+ * as on the list, plus the commune's radius and window. An EMPTY list is a true answer (no location,
+ * already merged, resolved, `can-bo`), not a refusal.
+ */
+export function listDuplicateCandidates(
+  maTraCuu: string,
+): Promise<KetQua<petitions_duplicateCandidatesOut>> {
+  const template: petitions_get_citizen_reports_by_maTraCuu_duplicate_candidates["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/duplicate-candidates";
+  return docJSON<petitions_duplicateCandidatesOut>(duongDanPhieu(template, maTraCuu));
+}
+
+/**
+ * POST …/{maTraCuu}/merge (`feedback.classify`) — merge THIS petition into `mainCode`. `reason` is
+ * optional and staff-internal (kept on the merge history row): absent from the body when blank, and it
+ * travels in the BODY only — it may name a citizen (rule 3).
+ */
+export function mergePetition(
+  maTraCuu: string,
+  mainCode: string,
+  reason?: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const template: petitions_post_citizen_reports_by_maTraCuu_merge["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/merge";
+  const trimmed = reason?.trim() ?? "";
+  const body: petitions_citizenReportMergeIn = {
+    main_code: mainCode,
+    ...(trimmed === "" ? {} : { reason: trimmed }),
+  };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(goiGhi(duongDanPhieu(template, maTraCuu), "POST", body, 200));
+}
+
+/**
+ * POST …/{maTraCuu}/unmerge (`feedback.classify`) — unlink THIS petition from its main one. The reason
+ * is MANDATORY (owner, 09/10/2026); the main petition's deadline is NOT lengthened back (ADR 0087).
+ */
+export function unmergePetition(maTraCuu: string, reason: string): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const template: petitions_post_citizen_reports_by_maTraCuu_unmerge["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/unmerge";
+  const body: petitions_citizenReportUnmergeIn = { reason: reason.trim() };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(goiGhi(duongDanPhieu(template, maTraCuu), "POST", body, 200));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
