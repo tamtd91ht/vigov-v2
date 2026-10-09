@@ -15,7 +15,6 @@ import {
   CAU_XAC_NHAN_KY,
   CREATE_MEETING_DESCRIPTION,
   CREATE_MEETING_TITLE,
-  cauDaTach,
   CHUA_TACH_NHIEM_VU,
   NHAN_NUT_BO_DAU,
   NHAN_NUT_BO_SUNG,
@@ -142,7 +141,6 @@ function phepTach(sua: Partial<PhepTach> = {}): PhepTach {
     dangGui: false,
     moOKetLuan: null,
     loi: null,
-    daXong: null,
     mo: () => {},
     dong: () => {},
     gui: () => {},
@@ -217,9 +215,25 @@ describe("thẻ biên bản §2", () => {
 
     expect(html).toContain("Giao ban Uỷ ban nhân dân xã tháng 8 năm 2026");
     expect(html).toContain("5/8/2026 · 31/BB-UBND · Phòng họp UBND xã");
-    // CON SỐ CHÍNH là kết luận hoàn thành, số nhiệm vụ là phụ — cả hai đọc từ máy chủ.
-    expect(html).toContain("<strong>0/1 kết luận hoàn thành</strong>");
-    expect(html).toContain("1/3 nhiệm vụ xong");
+    // Quyết định chủ dự án 09/10/2026: MỘT badge, không in đậm phần nào, kiểu shadcn
+    // `bg-canvas text-ink border-line`, không icon — cả bốn số đọc từ máy chủ.
+    expect(html).toMatch(
+      /<span class="[^"]*bg-canvas[^"]*">0\/1 kết luận xong · 1\/3 nhiệm vụ xong<\/span>/,
+    );
+    expect(html).not.toContain("<strong>");
+    const pill = html.slice(html.lastIndexOf("<span", html.indexOf("0/1 kết luận xong")));
+    const tag = pill.slice(0, pill.indexOf(">"));
+    expect(tag).toContain("text-ink ");
+    expect(tag).toContain("border-line");
+    expect(tag).not.toContain("font-bold");
+  });
+
+  it("prototype header: ô icon navy/8, tiêu đề là h2 navy 14.5px đậm, Dự thảo là badge cam", () => {
+    const html = veThe(bienBan());
+    expect(html).toContain("bg-navy/8 text-navy grid size-9 place-items-center rounded-[9px]");
+    expect(html).toMatch(/<h2 class="[^"]*text-\[14\.5px\][^"]*font-bold[^"]*">Giao ban Uỷ ban/);
+    expect(html).not.toContain("<h3");
+    expect(pillClassOf(html, "Dự thảo")).toContain("text-tangerine");
   });
 
   it("thiếu số hiệu và địa điểm thì dòng meta chỉ còn ngày — không có dấu chấm bơ vơ", () => {
@@ -234,9 +248,10 @@ describe("thẻ biên bản §2", () => {
       bienBan({ conclusions: [], task_count: 0, task_done_count: 0, conclusion_count: 0 }),
     );
 
-    expect(html).toContain("Biên bản này chưa ghi kết luận nào.");
-    expect(html).toContain("0/0 kết luận hoàn thành");
-    expect(html).toContain("0/0 nhiệm vụ xong");
+    // Prototype: không câu nào cho "chưa có kết luận" — thẻ chỉ còn hàng thêm kết luận.
+    expect(html).not.toContain("chưa ghi kết luận nào");
+    expect(html).not.toContain("<ol");
+    expect(html).toContain("0/0 kết luận xong · 0/0 nhiệm vụ xong");
     // Hàng thêm kết luận vẫn có: "nhập nháp trước, bổ sung sau" là cả điểm của trạng thái này.
     expect(html).toContain(PLACEHOLDER_KET_LUAN);
   });
@@ -469,13 +484,6 @@ describe("nút `Tách thành nhiệm vụ` §3", () => {
     );
   });
 
-  it("tách xong thì báo SỐ SỔ máy chủ vừa cấp, trên đúng dòng kết luận ấy", () => {
-    const tach = phepTach({ daXong: { ketLuanID: "k7", maNhiemVu: "NV12" } });
-
-    expect(veDong(ketLuan({ id: "k7" }), tach)).toContain(cauDaTach("NV12"));
-    expect(veDong(ketLuan({ id: "k9" }), tach)).not.toContain("NV12");
-  });
-
   it("đang gửi thì nút khoá — bấm đóng giữa chừng là huỷ khoá chống trùng đang bay", () => {
     expect(veDong(ketLuan(), phepTach({ dangGui: true }))).toContain("disabled");
   });
@@ -559,15 +567,14 @@ describe("prototype composition", () => {
     const at = (s: string) => html.indexOf(s);
     expect(at("Giao ban Uỷ ban nhân dân xã")).toBeLessThan(at("5/8/2026 · 31/BB-UBND"));
     expect(at("5/8/2026 · 31/BB-UBND")).toBeLessThan(at(">Dự thảo<"));
-    expect(at(">Dự thảo<")).toBeLessThan(at("<strong>0/1 kết luận hoàn thành</strong>"));
-    expect(at("<strong>0/1 kết luận hoàn thành</strong>")).toBeLessThan(at("1/3 nhiệm vụ xong"));
+    expect(at(">Dự thảo<")).toBeLessThan(at("0/1 kết luận xong · 1/3 nhiệm vụ xong"));
     expect(at("1/3 nhiệm vụ xong")).toBeLessThan(at("<ol"));
     expect(at("<ol")).toBeLessThan(at(nhuTrongHTML(PLACEHOLDER_KET_LUAN)));
   });
 
   it("conclusion row: a bordered box; ordinal · sentence · sub-line, `Tách thành nhiệm vụ` after them", () => {
     const html = veThe(bienBan());
-    expect(html).toContain('<li class="rounded-[10px] border border-line px-4 py-3">');
+    expect(html).toContain('<li class="mb-2.5 rounded-[10px] border border-line px-4 py-3">');
     const row = veDong(ketLuan());
     const at = (s: string) => row.indexOf(s);
     expect(at("conclusion-ordinal")).toBeLessThan(at("Giao bộ phận Địa chính"));
@@ -577,10 +584,23 @@ describe("prototype composition", () => {
   });
 
   it("add row: two-line box with the prototype placeholder, `Thêm kết luận` beside it, label for AT only", () => {
-    const html = renderToStaticMarkup(<HangThemKetLuan bienBanID="01JBB1" dangGui={false} gui={() => {}} />);
+    const html = renderToStaticMarkup(
+      <HangThemKetLuan bienBanID="01JBB1" dangGui={false} adding={false} gui={() => {}} />,
+    );
     expect(html).toContain('rows="2"');
     expect(html).toContain('class="an-thi-giac">Thêm một kết luận</label>');
     expect(html.indexOf("<textarea")).toBeLessThan(html.indexOf(nhuTrongHTML(NHAN_NUT_THEM_KET_LUAN)));
+    expect(html).toMatch(/^<form class="[^"]*mt-3[^"]*flex[^"]*gap-2/);
+    expect(html).not.toContain("animate-spin");
+  });
+
+  it("add row: while THIS card's add is in flight the Plus becomes a spinning loader (prototype)", () => {
+    const html = renderToStaticMarkup(
+      <HangThemKetLuan bienBanID="01JBB1" dangGui adding gui={() => {}} />,
+    );
+    const button = html.slice(html.indexOf('<button type="submit"'));
+    expect(button).toContain("animate-spin");
+    expect(button).not.toContain("lucide-plus");
   });
 
   it("`Nhập biên bản` is a 500px DIALOG with the prototype's title, line, placeholders and field order", () => {
@@ -608,10 +628,10 @@ describe("prototype composition", () => {
       'id="ngay-hop"',
       'id="so-hieu-bien-ban"',
       'id="dia-diem-hop"',
+      'id="noi-dung-bien-ban"',
       'id="chu-tri-bien-ban"',
       'id="thu-ky-bien-ban"',
       'id="chon-thanh-phan"',
-      'id="noi-dung-bien-ban"',
       'id="cac-ket-luan"',
       'id="tep-dinh-kem-bien-ban"',
       ">Huỷ</button>",
@@ -625,7 +645,7 @@ describe("prototype composition", () => {
 describe("hàng thêm kết luận", () => {
   it("nút gửi TẮT khi ô còn trống — một kết luận rỗng là một dòng không ai thi hành được", () => {
     const html = renderToStaticMarkup(
-      <HangThemKetLuan bienBanID="01JBB1" dangGui={false} gui={() => {}} />,
+      <HangThemKetLuan bienBanID="01JBB1" dangGui={false} adding={false} gui={() => {}} />,
     );
 
     expect(html).toContain("disabled");
@@ -634,7 +654,7 @@ describe("hàng thêm kết luận", () => {
 
   it("id của ô nhập mang id biên bản — hai thẻ trên một trang là hai `label` khác nhau", () => {
     const html = renderToStaticMarkup(
-      <HangThemKetLuan bienBanID="01JBB9" dangGui={false} gui={() => {}} />,
+      <HangThemKetLuan bienBanID="01JBB9" dangGui={false} adding={false} gui={() => {}} />,
     );
 
     expect(html).toContain("them-ket-luan-01JBB9");
@@ -668,8 +688,11 @@ describe("biểu mẫu nhập biên bản §4", () => {
   it("có đủ các ô dựng được, và chỉ hai ô là bắt buộc", () => {
     const html = veForm();
 
-    expect(html).toContain("Tên cuộc họp *");
-    expect(html).toContain("Ngày họp *");
+    // Labels are `Field`'s (spec 04: navy 13px semibold, the `*` a red span after the word).
+    const SAO = '<span class="ml-1 text-danger">*</span>';
+    expect(html).toContain(`Tên cuộc họp${SAO}`);
+    expect(html).toContain(`Ngày họp${SAO}`);
+    expect(html.split(SAO).length - 1).toBe(2);
     expect(html).toContain("Số hiệu biên bản");
     expect(html).toContain("Địa điểm");
     expect(html).toContain("Thành phần tham dự");
@@ -681,18 +704,25 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).not.toContain("Thư ký *");
   });
 
-  it("nói thẳng rằng số hiệu KHÔNG phải mã tra cứu", () => {
-    expect(veForm()).toContain("không phải mã tra cứu");
+  it("prototype: không còn hai dòng gợi ý dưới Số hiệu và dưới Nội dung biên bản", () => {
+    const html = veForm();
+    expect(html).not.toContain("không phải mã tra cứu");
+    expect(html).not.toContain("Toàn văn. Đọc lại");
   });
 
   it('ngày họp là ô `type="date"` — ngày lịch, không mốc thời gian', () => {
     expect(veForm()).toContain('type="date"');
   });
 
-  it("nút Lưu TẮT khi chưa gõ tên và ngày", () => {
+  // ĐỔI CHIỀU CÓ CHỦ Ý 09/10/2026 (ADR 0068 lần 6 #4): the create button no longer greys out for
+  // missing input — a press shows the error under the field (flow test `so-bien-ban.flow.test.tsx`).
+  it("nút Lưu BẤM ĐƯỢC khi chưa gõ tên và ngày — lỗi hiện dưới ô khi bấm", () => {
     const html = veForm();
-    expect(html).toContain(nhuTrongHTML(NHAN_NUT_LUU));
-    expect(html).toContain("disabled");
+    const form = html.slice(0, html.lastIndexOf("</form>"));
+    const nut = form.slice(form.lastIndexOf("<button"), form.lastIndexOf("</button>"));
+    expect(nut).toContain(NHAN_NUT_LUU);
+    // The ATTRIBUTE, not the word: the class list always carries Tailwind's `disabled:` variants.
+    expect(nut).not.toMatch(/\sdisabled(=|\s|>)/);
   });
 
   it("câu từ chối của máy chủ hiện nguyên văn", () => {
@@ -836,6 +866,21 @@ describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
     const nut = html.slice(dau, html.indexOf("</button>", dau));
     expect(nut).toContain("disabled");
     expect(nut).toContain(NHAN_NUT_XOA_BIEN_BAN);
+    // Spec 05 §B: the reason is ALSO the disabled button's `title`, and sits under the row.
+    expect(nut).toContain(`title="${VI_SAO_BIEN_BAN_CON_NHIEM_VU}"`);
+    expect(html).toContain(
+      `<p class="m-0 -mt-1 mb-3 text-[11.5px] text-ink-muted" id="ly-do-xoa-01JBB1">${VI_SAO_BIEN_BAN_CON_NHIEM_VU}</p>`,
+    );
+  });
+
+  it("nút Gỡ biên bản: viền (outline) chữ đỏ — không nền đỏ", () => {
+    const html = veThe(bienBan({ task_count: 0 }));
+    const dau = html.lastIndexOf("<button", html.indexOf(`${NHAN_NUT_XOA_BIEN_BAN}</button>`));
+    const tag = html.slice(dau, html.indexOf(">", dau));
+    expect(tag).toContain("text-danger");
+    expect(tag).toContain("border-border");
+    expect(tag).not.toContain("bg-destructive");
+    expect(tag).not.toContain("nut-xoa");
   });
 
   it("hộp Gỡ biên bản đòi lý do — nút tắt khi chưa gõ", () => {
@@ -845,6 +890,9 @@ describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
       vongDoi({ hop: { dich: "01JBB1", loai: "xoa" } }),
     );
     expect(html).toContain("Lý do gỡ biên bản *");
+    // Spec 05 §B: Gỡ opens a DIALOG; the reason field (rule 7) is inside it.
+    expect(html).toContain("<dialog");
+    expect(html.slice(html.indexOf("<dialog"))).toContain("Lý do gỡ biên bản *");
     // PRESENTATIONAL PIN re-pinned for ADR 0068 (was `<button type="submit" class="nut-xoa"
     // disabled="">`): the submit is still the red removal button, and still disabled.
     const submitStart = html.indexOf('<button type="submit"');
@@ -964,7 +1012,8 @@ describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nú
 
   it("đánh dấu “không phát sinh”: chip nói đúng lý do, nút Tách ẨN, còn Bỏ dấu", () => {
     const html = veDong(ketLuan({ no_task: true, status: "hoan-thanh" }));
-    expect(html).toContain(">Không phát sinh nhiệm vụ<");
+    expect(html).toContain(">Không phát sinh<");
+    expect(pillClassOf(html, "Không phát sinh")).toContain("bg-ink-muted/10");
     expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_TACH));
     expect(html).toContain(nhuTrongHTML(NHAN_NUT_BO_DAU));
     expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
@@ -987,6 +1036,65 @@ describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nú
     }
     expect(html).toContain(VI_SAO_KET_LUAN_KHOA);
     expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
+  });
+
+  it("câu khoá kết luận nằm MỘT lần trong DOM; Sửa và Gỡ cùng trỏ vào nó, và mang nó ở `title`", () => {
+    const html = veDong(ketLuan({ id: "k3", ordinal: 3, task_count: 2, status: "dang-thuc-hien" }));
+    expect(html.split(VI_SAO_KET_LUAN_KHOA).length - 1).toBe(3); // the <p> + two `title`s
+    expect(html.split(`>${VI_SAO_KET_LUAN_KHOA}</p>`).length - 1).toBe(1);
+    expect(html).toContain('<p class="m-0 mt-1 text-[11px] text-ink-muted" id="ly-do-kl-k3">');
+    expect(html.split('aria-describedby="ly-do-kl-k3"').length - 1).toBe(2);
+    expect(html).not.toContain("an-thi-giac");
+  });
+
+  it("hàng thao tác kết luận: ghost sm h-7 px-2 11.5px; Gỡ chữ đỏ không nền đỏ", () => {
+    const html = veDong(ketLuan({ ordinal: 3, task_count: 0 }));
+    expect(html).toContain('<div class="mt-2 flex flex-wrap items-center gap-1">');
+    const dau = html.lastIndexOf("<button", html.indexOf('aria-label="Gỡ kết luận số 3"'));
+    const tag = html.slice(dau, html.indexOf(">", dau));
+    expect(tag).toContain("h-7");
+    expect(tag).toContain("px-2 ");
+    expect(tag).toContain("text-[11.5px]");
+    expect(tag).toContain("text-danger");
+    expect(tag).toContain("hover:bg-danger/10");
+    expect(tag).not.toContain("bg-destructive");
+  });
+
+  it("dòng kết luận: nội dung là <p> 12.8px; tiến độ và chip cùng một dòng; chip h-5 10.5px", () => {
+    const html = veDong(ketLuan({ status: "chua-giao" }));
+    expect(html).toContain(`<p class="m-0 text-[12.8px] break-words">${ketLuan().content}</p>`);
+    expect(html).toContain('<div class="mt-1 flex flex-wrap items-center gap-2">');
+    const cls = pillClassOf(html, "Chưa giao");
+    expect(cls).toContain("h-5");
+    expect(cls).toContain("text-[10.5px]");
+    expect(cls).toContain("bg-canvas");
+    expect(cls).toContain("text-ink-muted");
+    expect(pillClassOf(veDong(ketLuan({ status: "dang-thuc-hien", task_count: 1 })), "Đang thực hiện")).toContain(
+      "text-brand",
+    );
+    expect(pillClassOf(veDong(ketLuan({ status: "hoan-thanh", task_count: 1 })), "Hoàn thành")).toContain(
+      "text-leaf",
+    );
+    expect(html).toMatch(/class="conclusion-ordinal [^"]*bg-brand\/12[^"]*"/);
+  });
+
+  it("Sửa kết luận: câu đổi thành ô nhập TẠI CHỖ, không còn <p> nội dung", () => {
+    const kl = ketLuan({ id: "k3", ordinal: 3 });
+    const html = veDong(kl, phepTach(), vongDoi({ hop: { dich: "k3", loai: "sua-kl" } }));
+    expect(html).toContain('id="sua-ket-luan-k3"');
+    expect(html).not.toContain(`<p class="m-0 text-[12.8px] break-words">${kl.content}</p>`);
+    expect(html.indexOf("conclusion-ordinal")).toBeLessThan(html.indexOf('id="sua-ket-luan-k3"'));
+    expect(html.indexOf('id="sua-ket-luan-k3"')).toBeLessThan(html.indexOf(CHUA_TACH_NHIEM_VU));
+  });
+
+  it("Gỡ kết luận mở DIALOG có ô lý do bắt buộc", () => {
+    const html = veDong(
+      ketLuan({ id: "k3", ordinal: 3 }),
+      phepTach(),
+      vongDoi({ hop: { dich: "k3", loai: "go-kl" } }),
+    );
+    expect(html).toContain("<dialog");
+    expect(html.slice(html.indexOf("<dialog"))).toContain("Lý do gỡ kết luận số 3 *");
   });
 
   it("biên bản ĐÃ KÝ: Sửa · Gỡ · Đánh dấu · Bỏ dấu ẨN, còn Tách", () => {
@@ -1012,10 +1120,18 @@ describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nú
       phepTach(),
       vongDoi({ nhiemVuKL: new Map([["k3", { pha: "xong", duLieu: [nv] }]]) }),
     );
-    expect(html).toContain("NV12");
-    expect(html).toContain("Đối chiếu số liệu giải ngân");
+    // The title IS the link to the task (spec 05 §B); the code no longer has a span of its own.
+    expect(html).toContain(
+      '<a href="/nhiem-vu?task=NV12" class="text-[12px] font-medium text-navy hover:underline">Đối chiếu số liệu giải ngân</a>',
+    );
+    expect(html).not.toContain(">NV12<");
     expect(html).toContain("Đang thực hiện");
-    expect(html).toContain("Hạn 20/8/2026");
+    expect(html).toContain(
+      '<span class="text-[11px] whitespace-nowrap text-ink-muted tabular-nums">Hạn 20/8/2026</span>',
+    );
+    expect(html).toContain(
+      'class="m-0 mt-2 list-none space-y-1.5 rounded-[8px] border border-line bg-canvas px-3 py-2"',
+    );
   });
 
   it("câu lỗi vòng đời của MỘT kết luận chỉ hiện trên dòng ấy", () => {

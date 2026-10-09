@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CircleCheck,
   ClipboardList,
   CircleMinus,
   CloudOff,
@@ -26,10 +25,13 @@ import {
 } from "lucide-react";
 import {
   useEffect,
+  useRef,
   useState,
   useSyncExternalStore,
   type FormEvent,
+  type KeyboardEvent,
 } from "react";
+import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { OChonCanBo } from "@/components/o-chon-can-bo";
@@ -39,6 +41,7 @@ import {
   LEGACY_BUTTON_CLASS,
   type ButtonVariant,
 } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -46,8 +49,10 @@ import { Field } from "@/components/ui/field";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
+import { Skeleton } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
-import { Glyph, LoadingBar, TaskStatusBadge } from "@/features/nhiem-vu/task-ui";
+import { taskDetailHref } from "@/features/nhiem-vu/task-link";
+import { Glyph, TaskStatusBadge } from "@/features/nhiem-vu/task-ui";
 import { cn } from "@/lib/cn";
 import {
   coTrangTruoc,
@@ -111,7 +116,6 @@ import {
   CAU_XAC_NHAN_KY,
   CREATE_MEETING_DESCRIPTION,
   CREATE_MEETING_TITLE,
-  cauDaTach,
   DANG_TAI_SO,
   DIA_DIEM_TOI_DA,
   dongMeta,
@@ -121,6 +125,9 @@ import {
   KHONG_GHI_CAN_BO,
   laDaKy,
   LY_DO_XOA_TOI_DA,
+  MEETING_DATE_REQUIRED,
+  MEETING_SAVED_TOAST,
+  MEETING_TITLE_REQUIRED,
   MO_TA_MAN,
   neoBienBan,
   NGUON_GIAO_KHOA,
@@ -162,6 +169,7 @@ import {
   SO_RONG,
   SO_THONG_BAO_TOI_DA,
   SPLIT_DIALOG_TITLE,
+  SPLIT_DONE_TOAST,
   SPLIT_SUBMIT_LABEL,
   soThuTuKetLuan,
   TEN_CUOC_HOP_TOI_DA,
@@ -173,12 +181,7 @@ import {
   type QuyTacNut,
 } from "./nhan-bien-ban";
 import { ScanAttachmentField, SuggestedDeadlineHint } from "./meeting-pending";
-import {
-  ConclusionOrdinal,
-  ConclusionStatusBadge,
-  MeetingCardsSkeleton,
-  MeetingStatusBadge,
-} from "./meeting-ui";
+import { ConclusionOrdinal, ConclusionStatusBadge, MeetingStatusBadge } from "./meeting-ui";
 
 /**
  * Sổ Biên bản và kết luận họp — `docs/ui-ux/04-bien-ban-hop.md` §2 (thẻ), §3 (tách), §4 (biểu
@@ -233,7 +236,6 @@ export type PhepTach = {
   /** Id của kết luận đang mở hộp, hoặc `null`. */
   readonly moOKetLuan: string | null;
   readonly loi: { readonly ketLuanID: string; readonly thongBao: string } | null;
-  readonly daXong: { readonly ketLuanID: string; readonly maNhiemVu: string } | null;
   readonly mo: (ketLuanID: string) => void;
   readonly dong: () => void;
   /**
@@ -341,6 +343,9 @@ export function SoBienBan() {
   const [loiKetLuan, datLoiKetLuan] = useState<{ bienBanID: string; thongBao: string } | null>(
     null,
   );
+  // The card whose `Thêm kết luận` is in flight — only THAT button spins (prototype `isPending`);
+  // `dangGui` still disables every write on the screen, as before.
+  const [addingTo, setAddingTo] = useState<string | null>(null);
 
   // Đếm số lần GHI THÀNH CÔNG. Nó đi vào `key` của hàng thêm kết luận và của biểu mẫu, nên một lần
   // ghi xong là một khoá chống trùng mới. Lần ghi HỎNG không tăng — giữ chữ đã gõ VÀ khoá cũ.
@@ -350,7 +355,6 @@ export function SoBienBan() {
   const [danhMuc, datDanhMuc] = useState<DanhMucNhiemVu>(KHONG_DANH_MUC);
   const [moTachO, datMoTachO] = useState<string | null>(null);
   const [loiTach, datLoiTach] = useState<{ ketLuanID: string; thongBao: string } | null>(null);
-  const [daTach, datDaTach] = useState<{ ketLuanID: string; maNhiemVu: string } | null>(null);
 
   // Vòng đời.
   const [kqDanhBa, datKqDanhBa] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
@@ -548,8 +552,10 @@ export function SoBienBan() {
 
   function guiKetLuan(bienBanID: string, noiDung: string, khoaChongTrung: string): void {
     datDangGui(true);
+    setAddingTo(bienBanID);
     themKetLuan(bienBanID, { content: noiDung }, khoaChongTrung).then((kq) => {
       datDangGui(false);
+      setAddingTo(null);
       if (!kq.ok) {
         // NGUYÊN VĂN câu máy chủ — kể cả câu 409 "biên bản họp đã ký — … lập biên bản bổ sung".
         datLoiKetLuan({ bienBanID, thongBao: kq.thongBao });
@@ -580,7 +586,8 @@ export function SoBienBan() {
         return;
       }
       datLoiTach(null);
-      datDaTach({ ketLuanID: ketLuan.id, maNhiemVu: kq.duLieu.code });
+      // The prototype's toast (owner 09/10/2026). The new task shows in the row's split-task list.
+      toast.success(SPLIT_DONE_TOAST);
       datMoTachO(null);
       datLanGhiXong((n) => n + 1);
       docLai();
@@ -595,11 +602,9 @@ export function SoBienBan() {
     dangGui,
     moOKetLuan: moTachO,
     loi: loiTach,
-    daXong: daTach,
     mo: (ketLuanID) => {
       datMoTachO((dang) => (dang === ketLuanID ? null : ketLuanID));
       datLoiTach(null);
-      datDaTach(null);
     },
     dong: () => {
       datMoTachO(null);
@@ -622,6 +627,7 @@ export function SoBienBan() {
         datLoiBieuMau(kq.thongBao);
         return;
       }
+      toast.success(MEETING_SAVED_TOAST);
       xongBieuMau();
       // Về TRANG ĐẦU: con trỏ của trang đang xem không còn nghĩa sau khi một bản ghi chen vào.
       datNganXep(TRANG_DAU);
@@ -637,6 +643,8 @@ export function SoBienBan() {
         datLoiBieuMau(kq.thongBao);
         return;
       }
+      // Same dialog, same act (save the record) — same sentence as the create path.
+      toast.success(MEETING_SAVED_TOAST);
       xongBieuMau();
       docLai();
     });
@@ -646,8 +654,9 @@ export function SoBienBan() {
   const chiTietNgoaiTrang =
     chiTiet !== null && so.pha === "xong" && !so.duLieu.items.some((bb) => bb.id === chiTiet.id);
   // The previous page, while a re-read is in flight (after every write `docLai` bumps the key): drawn
-  // dimmed and `inert` in its own subtree, never acted on. It is a DIFFERENT subtree from the fresh
-  // list, so the fresh list mounts anew exactly as it did when the old screen showed only a sentence.
+  // `inert` in its own subtree, never acted on — NOT dimmed: the prototype keeps the old cards on
+  // screen unchanged while it re-reads. It is a DIFFERENT subtree from the fresh list, so the fresh
+  // list mounts anew exactly as it did when the old screen showed only a sentence.
   const sanCu =
     so.pha === "dangTai" && daTai !== null && daTai.kq.ok && daTai.kq.duLieu.items.length > 0
       ? daTai.kq.duLieu.items
@@ -659,6 +668,7 @@ export function SoBienBan() {
           The button OPENS the dialog (prototype) — it no longer toggles an in-page form. */}
       <PageHeader
         icon={ClipboardList}
+        className="mb-5"
         title={TIEU_DE_MAN}
         subtitle={<span className="mo-ta-trang m-0 max-w-none text-[13px] text-ink-500">{MO_TA_MAN}</span>}
         actions={
@@ -677,18 +687,10 @@ export function SoBienBan() {
         }
       />
 
-    {/* `[&>*]:my-0`: the section's `gap` is the one spacing between blocks (the prototype's
-        `space-y-4`); legacy vertical margins on direct children would add to it unevenly. */}
-    <section
-      className="man-bien-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0"
-      aria-labelledby="tieu-de-so-bien-ban"
-    >
-      {/* The prototype has no visible list heading; this one stays for the outline (h1 → h2 → the
-          cards' h3), read by assistive technology only. */}
-      <h2 id="tieu-de-so-bien-ban" className="an-thi-giac">
-        Danh sách biên bản
-      </h2>
-
+    {/* `[&>*]:my-0`: the wrapper's `gap` is the one spacing between blocks (the prototype's
+        `space-y-4`); legacy vertical margins on direct children would add to it unevenly. No list
+        heading: the prototype has none, and each card's title is the page's `h2` (h1 → h2). */}
+    <div className="man-bien-ban mt-0 flex min-w-0 flex-col gap-4 [&>*]:my-0">
       {bieuMau !== null && (
         <FormNhapBienBan
           // Khoá dựng lại: mỗi lần GHI XONG, và mỗi lần đổi biểu mẫu, là một khoá chống trùng mới.
@@ -713,17 +715,16 @@ export function SoBienBan() {
         <ChiTietBienBan tai={chiTiet.tai} danhBa={bangDanhBa} dong={dongChiTiet} />
       )}
 
-      {/* LOADING (spec §8b). The sentence stays the live region, read out as before; the eye gets a
-          2px bar and either the previous page dimmed (a re-read) or card-shaped placeholders (the
-          first read). */}
+      {/* LOADING. The sentence stays the live region, read out as before; the eye gets the
+          prototype's single `Skeleton h-40 w-full` on the first read, or the previous page as it
+          was (inert, not dimmed) on a re-read. */}
       {so.pha === "dangTai" && (
         <div className="flex min-w-0 flex-col gap-4">
-          <LoadingBar />
           <p className="an-thi-giac" role="status">
             {DANG_TAI_SO}
           </p>
           {sanCu !== null ? (
-            <div inert className="pointer-events-none opacity-60 transition-opacity">
+            <div inert className="pointer-events-none">
               <DanhSachBienBan
                 bienBan={sanCu}
                 lanGhiXong={lanGhiXong}
@@ -732,10 +733,11 @@ export function SoBienBan() {
                 guiKetLuan={guiKetLuan}
                 tach={phepTach}
                 vongDoi={vongDoi}
+                addingTo={addingTo}
               />
             </div>
           ) : (
-            <MeetingCardsSkeleton />
+            <Skeleton className="h-40 w-full" />
           )}
         </div>
       )}
@@ -775,6 +777,7 @@ export function SoBienBan() {
             guiKetLuan={guiKetLuan}
             tach={phepTach}
             vongDoi={vongDoi}
+            addingTo={addingTo}
           />
           <nav className="dieu-huong-trang m-0" aria-label="Phân trang danh sách biên bản">
             <Button
@@ -800,7 +803,7 @@ export function SoBienBan() {
           </nav>
         </>
       )}
-    </section>
+    </div>
     </>
   );
 }
@@ -814,6 +817,7 @@ export function DanhSachBienBan({
   guiKetLuan,
   tach,
   vongDoi,
+  addingTo = null,
 }: {
   bienBan: readonly petitions_bienBanRa[];
   lanGhiXong: number;
@@ -822,6 +826,8 @@ export function DanhSachBienBan({
   guiKetLuan: (bienBanID: string, noiDung: string, khoaChongTrung: string) => void;
   tach: PhepTach;
   vongDoi: PhepVongDoi;
+  /** Id of the card whose `Thêm kết luận` is in flight, or `null`. */
+  addingTo?: string | null;
 }) {
   if (bienBan.length === 0) {
     // The screen has no filter, so "empty" here is only ever the empty register — never "empty under
@@ -846,6 +852,7 @@ export function DanhSachBienBan({
             guiKetLuan={guiKetLuan}
             tach={tach}
             vongDoi={vongDoi}
+            adding={addingTo === bb.id}
           />
         </li>
       ))}
@@ -865,6 +872,8 @@ function NutCoLyDo({
   icon,
   variant = "secondary",
   size = "md",
+  className,
+  describedBy,
 }: {
   quyTac: QuyTacNut;
   id: string;
@@ -877,6 +886,12 @@ function NutCoLyDo({
   icon?: LucideIcon;
   variant?: ButtonVariant;
   size?: "sm" | "md";
+  className?: string;
+  /**
+   * Id of the reason sentence, when several buttons share ONE (a conclusion's Sửa and Gỡ are locked
+   * for the same reason — spec 05 §A9: the sentence is in the DOM once). Default `ly-do-{id}`.
+   */
+  describedBy?: string;
 }) {
   if (!quyTac.hien) return null;
   return (
@@ -884,10 +899,14 @@ function NutCoLyDo({
       type="button"
       variant={variant}
       size={size}
+      className={className}
       icon={icon === undefined ? undefined : <Glyph icon={icon} />}
       aria-label={ariaLabel}
       aria-expanded={moRa}
-      aria-describedby={quyTac.viSaoTat === null ? undefined : `ly-do-${id}`}
+      aria-describedby={quyTac.viSaoTat === null ? undefined : (describedBy ?? `ly-do-${id}`)}
+      // Spec 05 §B: the reason is also the button's `title`. Mouse-only extra — the visible sentence
+      // under the row and `aria-describedby` stay the real carriers.
+      title={quyTac.viSaoTat ?? undefined}
       disabled={dangGui || quyTac.viSaoTat !== null}
       onClick={onClick}
     >
@@ -897,14 +916,17 @@ function NutCoLyDo({
 }
 
 /** Câu lý do của một nút đang tắt. */
-function LyDoTat({ quyTac, id }: { quyTac: QuyTacNut; id: string }) {
+function LyDoTat({ quyTac, id, className }: { quyTac: QuyTacNut; id: string; className: string }) {
   if (!quyTac.hien || quyTac.viSaoTat === null) return null;
   return (
-    <p className="ghi-chu m-0 text-xs text-ink-500" id={`ly-do-${id}`}>
+    <p className={className} id={`ly-do-${id}`}>
       {quyTac.viSaoTat}
     </p>
   );
 }
+
+/** Small ghost buttons of a conclusion row (spec 05 §B: `h-7 px-2 text-[11.5px]`, 14px icons). */
+const CONCLUSION_ACTION = "h-7 px-2 text-[11.5px]";
 
 /** Một thẻ biên bản §2: header · con số · hành động · các dòng kết luận · hàng thêm kết luận. */
 export function TheBienBan({
@@ -915,6 +937,7 @@ export function TheBienBan({
   guiKetLuan,
   tach,
   vongDoi,
+  adding = false,
 }: {
   bienBan: petitions_bienBanRa;
   lanGhiXong: number;
@@ -923,6 +946,8 @@ export function TheBienBan({
   guiKetLuan: (bienBanID: string, noiDung: string, khoaChongTrung: string) => void;
   tach: PhepTach;
   vongDoi: PhepVongDoi;
+  /** This card's `Thêm kết luận` is in flight — its button spins (prototype `isPending`). */
+  adding?: boolean;
 }) {
   const qt = quyTacBienBan(bienBan, vongDoi.coQuyenKy);
   const loi = vongDoi.loi?.dich === bienBan.id ? vongDoi.loi.thongBao : null;
@@ -931,41 +956,41 @@ export function TheBienBan({
 
   return (
     <Card as="article">
-      {/* THE PROTOTYPE'S CARD HEADER: icon tile · title over the meta line · the count pill on the
-          right. Ours carries two pills: the Dự thảo / Đã ký status (owner, 25/09) and the count —
-          whose MAIN figure is `x/y kết luận hoàn thành` (owner, 25/09), the task figure second. */}
+      {/* THE PROTOTYPE'S CARD HEADER (`MeetingMinutes.tsx:110-126`): icon tile · title over the meta
+          line · the count pill on the right. Ours carries two pills: the Dự thảo / Đã ký status
+          (owner, 25/09) and the count, `{a}/{n} kết luận xong · {x}/{y} nhiệm vụ xong` (owner, 09/10). */}
       <CardHeader className="px-5 py-4">
-        <span
-          aria-hidden="true"
-          className="grid size-9 shrink-0 place-items-center rounded-[9px] bg-brand-50 text-brand-600"
-        >
-          <ClipboardList className="size-4" strokeWidth={1.8} focusable="false" />
+        <span aria-hidden="true" className="bg-navy/8 text-navy grid size-9 place-items-center rounded-[9px] shrink-0">
+          <ClipboardList className="size-4" focusable="false" />
         </span>
         <div className="min-w-0 flex-1 basis-48">
-          <CardTitle as="h3" className="text-[14.5px] font-bold break-words">
+          <CardTitle as="h2" className="text-[14.5px] font-bold break-words">
             {bienBan.title}
           </CardTitle>
-          <p className="dong-phu m-0 text-[11.5px] tabular-nums">{dongMeta(bienBan)}</p>
+          <p className="m-0 text-[11.5px] text-ink-muted tabular-nums">{dongMeta(bienBan)}</p>
         </div>
         <MeetingStatusBadge meeting={bienBan}>{nhanTrangThaiBienBan(bienBan)}</MeetingStatusBadge>
-        {/* Cả bốn số do máy chủ đếm. The `<strong>` carries no class: the tests read it as
-            `<strong>0/1 kết luận…</strong>`, so its look comes from the parent. */}
-        <span className="inline-block rounded-xs border border-line bg-surface px-2 py-0.5 text-xs leading-snug font-medium text-ink-700 tabular-nums [&>strong]:font-semibold [&>strong]:text-ink-900">
-          <strong>{nhanTienDoBienBan(bienBan)}</strong>&nbsp;· {nhanBadge(bienBan)}
-        </span>
+        {/* Cả bốn số do máy chủ đếm. The prototype's shadcn Badge `bg-surface text-ink border-line`
+            (its `bg-surface` is our `bg-canvas`), text only, nothing bold. */}
+        <Badge icon={null} className="border-line bg-canvas text-ink tabular-nums">
+          {nhanTienDoBienBan(bienBan)} · {nhanBadge(bienBan)}
+        </Badge>
       </CardHeader>
 
-      <div className="flex flex-col gap-3 px-5 py-4">
+      {/* The body is the prototype's block flow (`px-5 py-4`, margins on the children), not a gap
+          column: spec 05 places the lock reason `-mt-1` under the button row, which only reads as
+          intended between margins. */}
+      <div className="px-5 py-4">
         {bienBan.supplements_id !== undefined && bienBan.supplements_id !== "" && (
-          <p className="ghi-chu m-0">
+          <p className="ghi-chu m-0 mb-3">
             Biên bản bổ sung — <a href={`#${neoBienBan(bienBan.supplements_id)}`}>xem biên bản gốc</a>
           </p>
         )}
 
-        {/* RECORD ACTIONS — not in the prototype, which has no lifecycle; they sit under the header,
-            before the conclusions, small like the prototype's row buttons. ONE solid button:
-            `Ký biên bản`, the act that fixes the record. */}
-        <div className="flex flex-wrap items-center gap-2">
+        {/* RECORD ACTIONS — not in the prototype, which has no lifecycle; spec 05 §B puts them at the
+            top of the body, `mb-3 flex flex-wrap gap-2`. ONE solid button: `Ký biên bản`, the act
+            that fixes the record. */}
+        <div className="mb-3 flex flex-wrap items-center gap-2">
           {chiTiet !== null ? (
             <Button
               type="button"
@@ -1029,38 +1054,44 @@ export function TheBienBan({
             id={`xoa-${bienBan.id}`}
             nhan={NHAN_NUT_XOA_BIEN_BAN}
             icon={Trash2}
-            variant="danger"
+            // Spec 05 §B: an OUTLINE button with a red word — no red fill.
+            className="text-danger hover:not-disabled:text-danger"
             size="sm"
             dangGui={vongDoi.dangGui}
             moRa={hop === "xoa"}
             onClick={() => vongDoi.moHop(bienBan.id, "xoa")}
           />
         </div>
-        <LyDoTat quyTac={qt.xoa} id={`xoa-${bienBan.id}`} />
+        <LyDoTat quyTac={qt.xoa} id={`xoa-${bienBan.id}`} className="m-0 -mt-1 mb-3 text-[11.5px] text-ink-muted" />
 
         {loi !== null && (
-          <p className="thong-bao-loi m-0" role="alert">
+          <p className="thong-bao-loi m-0 mb-3" role="alert">
             {loi}
           </p>
         )}
 
         {hop === "ky" && (
-          <FormKy
-            bienBanID={bienBan.id}
-            question={`Ký biên bản “${bienBan.title}”?`}
-            dangGui={vongDoi.dangGui}
-            huy={vongDoi.dongHop}
-            ky={(tb) => vongDoi.ky(bienBan, tb)}
-          />
+          <div className="mb-3">
+            <FormKy
+              bienBanID={bienBan.id}
+              question={`Ký biên bản “${bienBan.title}”?`}
+              dangGui={vongDoi.dangGui}
+              huy={vongDoi.dongHop}
+              ky={(tb) => vongDoi.ky(bienBan, tb)}
+            />
+          </div>
         )}
         {hop === "thong-bao" && (
-          <FormThongBao
-            bienBanID={bienBan.id}
-            dangGui={vongDoi.dangGui}
-            huy={vongDoi.dongHop}
-            ghi={(tb) => vongDoi.ghiThongBao(bienBan, tb)}
-          />
+          <div className="mb-3">
+            <FormThongBao
+              bienBanID={bienBan.id}
+              dangGui={vongDoi.dangGui}
+              huy={vongDoi.dongHop}
+              ghi={(tb) => vongDoi.ghiThongBao(bienBan, tb)}
+            />
+          </div>
         )}
+        {/* Spec 05 §B: `Gỡ biên bản` confirms in a DIALOG — with the reason field rule 7 requires. */}
         {hop === "xoa" && (
           <FormLyDo
             id={`ly-do-xoa-bien-ban-${bienBan.id}`}
@@ -1075,22 +1106,20 @@ export function TheBienBan({
         )}
 
         {chiTiet !== null && (
-          <ChiTietBienBan tai={chiTiet.tai} danhBa={vongDoi.danhBa} dong={vongDoi.dongChiTiet} />
+          <div className="mb-3">
+            <ChiTietBienBan tai={chiTiet.tai} danhBa={vongDoi.danhBa} dong={vongDoi.dongChiTiet} />
+          </div>
         )}
 
-        {/* THE PROTOTYPE'S CONCLUSION ROWS: one bordered box per conclusion, 10px apart. */}
-        {bienBan.conclusions.length === 0 ? (
-          // §7.3: biên bản không có kết luận nào VẪN LƯU ĐƯỢC (nhập nháp trước, bổ sung sau).
-          <p className="nhan-trong m-0 text-[13px]">Biên bản này chưa ghi kết luận nào.</p>
-        ) : (
-          <ol
-            aria-label={`Các kết luận của biên bản ${bienBan.title}`}
-            className="m-0 flex list-none flex-col gap-2.5 p-0"
-          >
+        {/* THE PROTOTYPE'S CONCLUSION ROWS: one bordered box per conclusion, `mb-2.5` each. A record
+            with none draws nothing here — §7.3 (saved first, conclusions later) still holds through
+            the add row below; the prototype has no sentence for it. */}
+        {bienBan.conclusions.length > 0 && (
+          <ol aria-label={`Các kết luận của biên bản ${bienBan.title}`} className="m-0 list-none p-0">
             {/* ⚠ KHÔNG LẤY CHỈ SỐ CỦA `map` RA DÙNG. Số trong ô tròn và `{stt}` trên đường dẫn đều
                 là `ordinal` MÁY CHỦ TRẢ — xem `DongKetLuan` và `soThuTuKetLuan`. */}
             {bienBan.conclusions.map((kl) => (
-              <li key={kl.id} className="rounded-[10px] border border-line px-4 py-3">
+              <li key={kl.id} className="mb-2.5 rounded-[10px] border border-line px-4 py-3">
                 <DongKetLuan bienBan={bienBan} ketLuan={kl} tach={tach} vongDoi={vongDoi} />
               </li>
             ))}
@@ -1109,6 +1138,7 @@ export function TheBienBan({
             key={`${bienBan.id}|${lanGhiXong}`}
             bienBanID={bienBan.id}
             dangGui={dangGui}
+            adding={adding}
             gui={guiKetLuan}
           />
         )}
@@ -1329,9 +1359,6 @@ function SubmitButton({
 /** One helper line under a control (spec §3 "Chú thích": 12px, `--ink-500`). */
 const HINT = "ghi-chu mt-1.5 mb-0 text-xs text-ink-500";
 
-/** Frame of a form opened INSIDE a card (edit one conclusion, add one): quieter than the card. */
-const INLINE_FORM = "m-0 flex flex-col gap-3 rounded-xl border border-line bg-surface-muted p-3";
-
 /** Busy words of a removal (gỡ = soft delete) — "Đang lưu…" would misname the act. */
 const BUSY_REMOVING = "Đang gỡ…";
 
@@ -1433,7 +1460,13 @@ export function FormThongBao({
   );
 }
 
-/** Ô lý do BẮT BUỘC của một lần gỡ (biên bản hay kết luận) — xoá mềm phải ghi vì sao. */
+/**
+ * Ô lý do BẮT BUỘC của một lần gỡ (biên bản hay kết luận) — xoá mềm phải ghi vì sao.
+ *
+ * A CENTRED DIALOG since 09/10/2026 (spec 05 §B: "Gỡ phải mở Dialog xác nhận"). The reason field
+ * stays inside it — rule 7 requires it, the prototype has no removal at all. Esc and ✕ are refused
+ * while the removal is in flight, as `Huỷ` is (the screen's one `dangGui`).
+ */
 export function FormLyDo({
   id,
   question,
@@ -1462,16 +1495,28 @@ export function FormLyDo({
     if (gon !== "") gui(gon);
   }
 
+  const titleId = `${id}-title`;
   return (
-    <ConfirmDialog
-      as="form"
-      titleAs="h4"
-      tone="danger"
-      icon={Trash2}
-      title={question}
-      onSubmit={guiNgay}
-      actions={
-        <>
+    <ModalDialog
+      titleId={titleId}
+      initialFocusId={id}
+      closeDisabled={dangGui}
+      onDismiss={() => (dangGui ? undefined : huy())}
+    >
+      <ModalDialogHeader titleId={titleId} title={question} />
+      <form className="m-0 flex min-h-0 flex-col gap-4" onSubmit={guiNgay}>
+        <div className="o-nhap mb-0">
+          <label htmlFor={id}>{nhan}</label>
+          <textarea
+            id={id}
+            rows={2}
+            value={lyDo}
+            maxLength={LY_DO_XOA_TOI_DA}
+            onChange={(e) => datLyDo(e.target.value)}
+          />
+          <p className="ghi-chu mt-1.5 mb-0">{ghiChu}</p>
+        </div>
+        <div className="flex shrink-0 justify-end gap-2">
           <CancelButton dangGui={dangGui} huy={huy} />
           <SubmitButton
             label={nhanNut}
@@ -1480,25 +1525,17 @@ export function FormLyDo({
             busyText={BUSY_REMOVING}
             disabled={dangGui || gon === ""}
           />
-        </>
-      }
-    >
-      <div className="o-nhap mb-0">
-        <label htmlFor={id}>{nhan}</label>
-        <textarea
-          id={id}
-          rows={2}
-          value={lyDo}
-          maxLength={LY_DO_XOA_TOI_DA}
-          onChange={(e) => datLyDo(e.target.value)}
-        />
-        <p className="ghi-chu mt-1.5 mb-0">{ghiChu}</p>
-      </div>
-    </ConfirmDialog>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }
 
-/** Sửa LỜI một kết luận của bản nháp. */
+/**
+ * Sửa LỜI một kết luận của bản nháp — IN PLACE (spec 05 §B): the sentence becomes a box where it
+ * stood. Enter saves, Shift+Enter breaks the line, Esc cancels; the two small buttons stay for a
+ * pointer or a touch screen, which have no Esc. Same PATCH, same inline refusal as before.
+ */
 export function FormSuaKetLuan({
   ketLuan,
   dangGui,
@@ -1513,29 +1550,61 @@ export function FormSuaKetLuan({
   const [noiDung, datNoiDung] = useState(ketLuan.content);
   const gon = noiDung.trim();
   const doiDuoc = gon !== "" && gon !== ketLuan.content;
+  const boxRef = useRef<HTMLTextAreaElement>(null);
+  const boxId = `sua-ket-luan-${ketLuan.id}`;
+
+  // Opening the editor puts the caret in the box — the point of pressing `Sửa`.
+  useEffect(() => {
+    boxRef.current?.focus();
+  }, []);
 
   function gui(e: FormEvent) {
     e.preventDefault();
-    if (doiDuoc) luu(gon);
+    if (doiDuoc && !dangGui) luu(gon);
+  }
+
+  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>) {
+    // An IME composing a Vietnamese syllable also sends Enter: that Enter is the IME's, not a save.
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (doiDuoc && !dangGui) luu(gon);
+    } else if (e.key === "Escape" && !dangGui) {
+      e.preventDefault();
+      huy();
+    }
   }
 
   return (
-    <form className={INLINE_FORM} onSubmit={gui}>
+    <form className="m-0" onSubmit={gui}>
+      {/* `.o-nhap` = the same textarea frame as the add row below the conclusions. */}
       <div className="o-nhap mb-0">
-        <label htmlFor={`sua-ket-luan-${ketLuan.id}`}>
+        <label htmlFor={boxId} className="an-thi-giac">
           Nội dung kết luận số {soThuTuKetLuan(ketLuan)}
         </label>
         <textarea
-          id={`sua-ket-luan-${ketLuan.id}`}
-          rows={3}
+          ref={boxRef}
+          id={boxId}
+          rows={2}
+          className="text-[12.8px]"
           value={noiDung}
           maxLength={NOI_DUNG_KET_LUAN_TOI_DA}
           onChange={(e) => datNoiDung(e.target.value)}
+          onKeyDown={onKeyDown}
         />
       </div>
-      <div className="cum-nut justify-end">
-        <CancelButton dangGui={dangGui} huy={huy} />
-        <SubmitButton label={NHAN_NUT_LUU_SUA} busy={dangGui} disabled={dangGui || !doiDuoc} />
+      <div className="mt-1.5 flex flex-wrap justify-end gap-1">
+        <Button type="button" variant="ghost" size="sm" className={CONCLUSION_ACTION} disabled={dangGui} onClick={huy}>
+          {NHAN_NUT_HUY}
+        </Button>
+        <button
+          type="submit"
+          className={cn(LEGACY_BUTTON_CLASS.primary, buttonVariants({ variant: "primary", size: "sm" }), CONCLUSION_ACTION)}
+          disabled={dangGui || !doiDuoc}
+          aria-busy={dangGui}
+        >
+          {NHAN_NUT_LUU_SUA}
+        </button>
       </div>
     </form>
   );
@@ -1551,7 +1620,7 @@ export function DanhSachNhiemVuKetLuan({
 }) {
   if (tai.pha === "dangTai") {
     return (
-      <p role="status" className="m-0 inline-flex items-center gap-2 text-[13px] text-ink-500">
+      <p role="status" className="m-0 mt-2 inline-flex items-center gap-2 text-[12px] text-ink-muted">
         <LoaderCircle aria-hidden="true" focusable="false" className="size-4 shrink-0 motion-safe:animate-spin" />
         Đang tải nhiệm vụ đã tách…
       </p>
@@ -1559,26 +1628,29 @@ export function DanhSachNhiemVuKetLuan({
   }
   if (tai.pha === "loi") {
     return (
-      <p className="thong-bao-loi m-0" role="alert">
+      <p className="thong-bao-loi m-0 mt-2" role="alert">
         {tai.thongBao}
       </p>
     );
   }
   if (tai.duLieu.length === 0) {
-    return <p className="ghi-chu m-0">Không còn nhiệm vụ nào đang hiệu lực tách từ kết luận này.</p>;
+    return <p className="ghi-chu m-0 mt-2">Không còn nhiệm vụ nào đang hiệu lực tách từ kết luận này.</p>;
   }
+  // Spec 05 §B: a quiet box on the page colour; each line = the task's title AS THE LINK to its
+  // drawer (`/nhiem-vu?task=<code>`, the pattern of `van-ban/letter-task.tsx`), its status, its due.
   return (
     <ul
       aria-label="Nhiệm vụ đã tách từ kết luận"
-      className="m-0 list-none divide-y divide-line rounded-xl border border-line bg-surface p-0"
+      className="m-0 mt-2 list-none space-y-1.5 rounded-[8px] border border-line bg-canvas px-3 py-2"
     >
       {tai.duLieu.map((nv) => (
-        <li key={nv.code} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2.5 text-sm">
-          <span className="ma-muc tabular-nums">{nv.code}</span>
-          <span className="min-w-0 flex-1 basis-48 text-ink-900">{nv.title}</span>
+        <li key={nv.code} className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <a href={taskDetailHref(nv.code)} className="text-[12px] font-medium text-navy hover:underline">
+            {nv.title}
+          </a>
           {/* Icon by the status CODE, word = the commune's label for it (`nhanTT`), verbatim. */}
           <TaskStatusBadge status={nv.status}>{nhanTrangThai(nhanTT, nv.status)}</TaskStatusBadge>
-          <span className="text-[13px] whitespace-nowrap text-ink-500 tabular-nums">
+          <span className="text-[11px] whitespace-nowrap text-ink-muted tabular-nums">
             {`Hạn ${nhanNgay(nv.due_at)}`}
           </span>
         </li>
@@ -1609,37 +1681,47 @@ export function DongKetLuan({
   const so = soThuTuKetLuan(ketLuan);
   const dangMo = tach.moOKetLuan === ketLuan.id;
   const loiTach = tach.loi?.ketLuanID === ketLuan.id ? tach.loi.thongBao : null;
-  const daXong = tach.daXong?.ketLuanID === ketLuan.id ? tach.daXong.maNhiemVu : null;
   const loi = vongDoi.loi?.dich === ketLuan.id ? vongDoi.loi.thongBao : null;
   const hop = vongDoi.hop?.dich === ketLuan.id ? vongDoi.hop.loai : null;
   const nhiemVu = vongDoi.nhiemVuKL.get(ketLuan.id);
 
   const moNhiemVu = nhiemVu !== undefined;
+  // Sửa and Gỡ are locked for ONE reason (`quyTacKetLuan`): ONE sentence in the DOM, both buttons
+  // point `aria-describedby` at it (spec 05 §A9 — it used to be drawn twice).
+  const lockReason = qt.sua.viSaoTat ?? qt.go.viSaoTat;
+  const lockId = `ly-do-kl-${ketLuan.id}`;
 
-  // THE PROTOTYPE'S ROW: ordinal circle · the sentence over its sub-line · `Tách thành nhiệm vụ`
-  // on the right. Ours adds, inside the middle column, what the prototype has no state for: the
-  // server-derived status pill beside the sub-line, the split-task list toggle, and the draft-only
-  // Sửa / Gỡ / Đánh dấu actions with their inline boxes.
+  // THE PROTOTYPE'S ROW (`MeetingMinutes.tsx:130-153`): ordinal circle · the sentence over its
+  // sub-line · `Tách thành nhiệm vụ` on the right. Ours adds, inside the middle column, what the
+  // prototype has no state for (spec 05 §B/§C): the server-derived status pill on the sub-line, the
+  // action row (split-task list toggle, draft-only Sửa / Gỡ / Đánh dấu), the lock sentence, the list.
   return (
     <div className="flex min-w-0 flex-wrap items-start gap-3 sm:flex-nowrap">
-      <ConclusionOrdinal n={so} className="mt-0.5 size-6 text-[11px] font-bold" />
-      <div className="flex min-w-0 flex-1 basis-48 flex-col gap-2">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-[12.8px] leading-relaxed break-words text-ink-900">{ketLuan.content}</span>{" "}
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <p className="dong-phu m-0 text-[11px] tabular-nums">{nhanTienDoKetLuan(ketLuan)}</p>
-            <ConclusionStatusBadge conclusion={ketLuan}>{nhanTrangThaiKetLuan(ketLuan)}</ConclusionStatusBadge>
-          </div>
+      <ConclusionOrdinal n={so} className="mt-0.5" />
+      <div className="min-w-0 flex-1 basis-48">
+        {hop === "sua-kl" ? (
+          <FormSuaKetLuan
+            ketLuan={ketLuan}
+            dangGui={vongDoi.dangGui}
+            huy={vongDoi.dongHop}
+            luu={(noiDung) => vongDoi.suaKL(bienBan, ketLuan, noiDung)}
+          />
+        ) : (
+          <p className="m-0 text-[12.8px] break-words">{ketLuan.content}</p>
+        )}
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] text-ink-muted tabular-nums">{nhanTienDoKetLuan(ketLuan)}</span>
+          <ConclusionStatusBadge conclusion={ketLuan}>{nhanTrangThaiKetLuan(ketLuan)}</ConclusionStatusBadge>
         </div>
 
         {(ketLuan.task_count > 0 || qt.sua.hien || qt.go.hien || qt.danhDau.hien || qt.boDau.hien) && (
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="mt-2 flex flex-wrap items-center gap-1">
             {ketLuan.task_count > 0 && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="-ml-3"
+                className={CONCLUSION_ACTION}
                 icon={<Glyph icon={ListChecks} />}
                 aria-expanded={moNhiemVu}
                 aria-label={`${nhanNutXemNhiemVu(ketLuan, moNhiemVu)} — kết luận số ${so}`}
@@ -1657,6 +1739,8 @@ export function DongKetLuan({
               icon={Pencil}
               variant="ghost"
               size="sm"
+              className={CONCLUSION_ACTION}
+              describedBy={lockId}
               dangGui={vongDoi.dangGui}
               moRa={hop === "sua-kl"}
               onClick={() => vongDoi.moHop(ketLuan.id, "sua-kl")}
@@ -1667,8 +1751,14 @@ export function DongKetLuan({
               nhan={NHAN_NUT_GO_KL}
               ariaLabel={`Gỡ kết luận số ${so}`}
               icon={Trash2}
-              variant="danger"
+              variant="ghost"
               size="sm"
+              // Spec 05 §B: a red word on a ghost button, a 10% red only on hover — no red fill.
+              className={cn(
+                CONCLUSION_ACTION,
+                "text-danger hover:bg-danger/10 hover:not-disabled:bg-danger/10 hover:not-disabled:text-danger",
+              )}
+              describedBy={lockId}
               dangGui={vongDoi.dangGui}
               moRa={hop === "go-kl"}
               onClick={() => vongDoi.moHop(ketLuan.id, "go-kl")}
@@ -1681,6 +1771,7 @@ export function DongKetLuan({
               icon={CircleMinus}
               variant="ghost"
               size="sm"
+              className={CONCLUSION_ACTION}
               dangGui={vongDoi.dangGui}
               onClick={() => vongDoi.danhDau(bienBan, ketLuan)}
             />
@@ -1692,35 +1783,26 @@ export function DongKetLuan({
               icon={Undo2}
               variant="ghost"
               size="sm"
+              className={CONCLUSION_ACTION}
               dangGui={vongDoi.dangGui}
               onClick={() => vongDoi.boDau(bienBan, ketLuan)}
             />
           </div>
         )}
-        {nhiemVu !== undefined && <DanhSachNhiemVuKetLuan tai={nhiemVu} nhanTT={vongDoi.nhanTT} />}
-        {/* Sửa và Gỡ tắt vì CÙNG một lý do — hiện MỘT câu; nút Gỡ trỏ `aria-describedby` vào câu
-            của chính nó nên câu ấy cũng phải có mặt, chỉ không lặp lại cho mắt nhìn. */}
-        <LyDoTat quyTac={qt.sua} id={`sua-kl-${ketLuan.id}`} />
-        {qt.go.viSaoTat !== null && (
-          <p className="an-thi-giac" id={`ly-do-go-kl-${ketLuan.id}`}>
-            {qt.go.viSaoTat}
+        {lockReason !== null && (
+          <p className="m-0 mt-1 text-[11px] text-ink-muted" id={lockId}>
+            {lockReason}
           </p>
         )}
+        {nhiemVu !== undefined && <DanhSachNhiemVuKetLuan tai={nhiemVu} nhanTT={vongDoi.nhanTT} />}
 
         {loi !== null && (
-          <p className="thong-bao-loi m-0" role="alert">
+          <p className="thong-bao-loi m-0 mt-2" role="alert">
             {loi}
           </p>
         )}
 
-        {hop === "sua-kl" && (
-          <FormSuaKetLuan
-            ketLuan={ketLuan}
-            dangGui={vongDoi.dangGui}
-            huy={vongDoi.dongHop}
-            luu={(noiDung) => vongDoi.suaKL(bienBan, ketLuan, noiDung)}
-          />
-        )}
+        {/* Spec 05 §B: `Gỡ` confirms in a DIALOG — with the reason field rule 7 requires. */}
         {hop === "go-kl" && (
           <FormLyDo
             id={`o-ly-do-go-kl-${ketLuan.id}`}
@@ -1732,13 +1814,6 @@ export function DongKetLuan({
             huy={vongDoi.dongHop}
             gui={(lyDo) => vongDoi.goKL(bienBan, ketLuan, lyDo)}
           />
-        )}
-
-        {daXong !== null && (
-          <p className="ghi-chu m-0 inline-flex items-center gap-1.5 text-success-600" role="status">
-            <CircleCheck aria-hidden="true" focusable="false" className="size-4 shrink-0" />
-            {cauDaTach(daXong)}
-          </p>
         )}
       </div>
 
@@ -1801,10 +1876,13 @@ export function DongKetLuan({
 export function HangThemKetLuan({
   bienBanID,
   dangGui,
+  adding,
   gui,
 }: {
   bienBanID: string;
   dangGui: boolean;
+  /** THIS card's add is in flight — the Plus becomes a spinning loader (prototype `isPending`). */
+  adding: boolean;
   gui: (bienBanID: string, noiDung: string, khoaChongTrung: string) => void;
 }) {
   const [noiDung, datNoiDung] = useState("");
@@ -1822,7 +1900,7 @@ export function HangThemKetLuan({
   // THE PROTOTYPE'S ROW: a two-line box and `+ Thêm kết luận` beside it, no visible label — the
   // placeholder says what to type; the label stays for assistive technology.
   return (
-    <form className="m-0 flex items-start gap-2" onSubmit={guiNgay}>
+    <form className="m-0 mt-3 flex items-start gap-2" onSubmit={guiNgay}>
       <div className="o-nhap mb-0 min-w-0 flex-1">
         <label htmlFor={`them-ket-luan-${bienBanID}`} className="an-thi-giac">
           Thêm một kết luận
@@ -1838,14 +1916,19 @@ export function HangThemKetLuan({
           onChange={(e) => datNoiDung(e.target.value)}
         />
       </div>
-      {/* No busy words here: `dangGui` is the whole screen's flag, so "Đang lưu…" would light up on
-          every card at once. Disabled while anything is sending, exactly as before. */}
+      {/* No busy words: the prototype only swaps the icon. Disabled while anything on the screen is
+          sending (`dangGui`), exactly as before; only THIS card's button spins (`adding`). */}
       <button
         type="submit"
         className={cn(LEGACY_BUTTON_CLASS.secondary, buttonVariants({ variant: "secondary" }), "shrink-0")}
         disabled={dangGui || canGon === ""}
+        aria-busy={adding}
       >
-        <Glyph icon={Plus} />
+        {adding ? (
+          <LoaderCircle aria-hidden="true" focusable="false" className="size-4 motion-safe:animate-spin" />
+        ) : (
+          <Glyph icon={Plus} />
+        )}
         {NHAN_NUT_THEM_KET_LUAN}
       </button>
     </form>
@@ -1894,14 +1977,20 @@ export function FormNhapBienBan({
     che.loai === "sua" ? giaTriTuBienBan(che.ban, bangDanhBa) : BIEU_MAU_TRONG,
   );
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
+  // Set by the first press of `Lưu`: from then on an empty required field says so under itself
+  // (ADR 0068 lần 6 #4) — the button is no longer greyed out for missing input.
+  const [triedSave, setTriedSave] = useState(false);
 
   const doi = (moi: Partial<GiaTriBieuMau>) => datGt((cu) => ({ ...cu, ...moi }));
 
   // HAI TRƯỜNG BẮT BUỘC, ĐÚNG HAI: "Tên cuộc họp" và "Ngày họp" (§4).
   const duTruongBatBuoc = gt.ten.trim() !== "" && gt.ngay !== "";
+  const titleError = triedSave && gt.ten.trim() === "" ? MEETING_TITLE_REQUIRED : undefined;
+  const dateError = triedSave && gt.ngay === "" ? MEETING_DATE_REQUIRED : undefined;
   const thanSua = che.loai === "sua" ? thanSuaTuBieuMau(gt, che.ban) : null;
-  // Bản sửa không đổi gì thì không có gì để lưu — một PATCH rỗng không ghi được gì.
-  const duDieuKien = duTruongBatBuoc && (che.loai === "tao" || thanSua !== null);
+  // Bản sửa không đổi gì thì không có gì để lưu — một PATCH rỗng không ghi được gì. That one stays a
+  // greyed-out button: there is no field to point an error at.
+  const nothingToSave = che.loai === "sua" && thanSua === null;
 
   const tieuDe =
     che.loai === "sua"
@@ -1922,7 +2011,8 @@ export function FormNhapBienBan({
 
   function luuNgay(e: FormEvent) {
     e.preventDefault();
-    if (!duDieuKien) return;
+    setTriedSave(true);
+    if (!duTruongBatBuoc || nothingToSave) return;
     if (che.loai === "sua") {
       if (thanSua !== null) sua(che.ban.id, thanSua);
       return;
@@ -1946,8 +2036,9 @@ export function FormNhapBienBan({
             {CANH_BAO_BI_MAT}
           </Notice>
 
-          <div className="o-nhap">
-            <label htmlFor="ten-cuoc-hop">Tên cuộc họp *</label>
+          {/* Labels are the prototype's `Field` (spec 04: navy 13px semibold, red `*`). The two
+              required fields carry their error under themselves once `Lưu` was pressed. */}
+          <Field label="Tên cuộc họp" htmlFor="ten-cuoc-hop" required grow="auto" className="min-w-0" error={titleError}>
             <input
               id="ten-cuoc-hop"
               name="ten-cuoc-hop"
@@ -1955,26 +2046,26 @@ export function FormNhapBienBan({
               maxLength={TEN_CUOC_HOP_TOI_DA}
               autoComplete="off"
               placeholder="Giao ban tuần 34 năm 2026"
+              aria-invalid={titleError === undefined ? undefined : true}
               onChange={(e) => doi({ ten: e.target.value })}
             />
-          </div>
+          </Field>
 
           {/* The prototype's two columns; one column under 640px so a date box never squeezes. */}
           <div className="grid items-start gap-3 sm:grid-cols-2">
-            <div className="o-nhap">
-              <label htmlFor="ngay-hop">Ngày họp *</label>
+            <Field label="Ngày họp" htmlFor="ngay-hop" required grow="auto" className="min-w-0" error={dateError}>
               {/* `type="date"` trả đúng `2026-08-05` — ngày lịch, không múi giờ. */}
               <input
                 id="ngay-hop"
                 name="ngay-hop"
                 type="date"
                 value={gt.ngay}
+                aria-invalid={dateError === undefined ? undefined : true}
                 onChange={(e) => doi({ ngay: e.target.value })}
               />
-            </div>
+            </Field>
 
-            <div className="o-nhap">
-              <label htmlFor="so-hieu-bien-ban">Số hiệu biên bản</label>
+            <Field label="Số hiệu biên bản" htmlFor="so-hieu-bien-ban" grow="auto" className="min-w-0">
               <input
                 id="so-hieu-bien-ban"
                 name="so-hieu-bien-ban"
@@ -1984,14 +2075,10 @@ export function FormNhapBienBan({
                 placeholder="12/BB-UBND"
                 onChange={(e) => doi({ soHieu: e.target.value })}
               />
-            </div>
+            </Field>
           </div>
-          <p className={cn(HINT, "-mt-2.5")}>
-            Số hiệu không bắt buộc, và không phải mã tra cứu — số hiệu lặp lại giữa các năm.
-          </p>
 
-          <div className="o-nhap">
-            <label htmlFor="dia-diem-hop">Địa điểm</label>
+          <Field label="Địa điểm" htmlFor="dia-diem-hop" grow="auto" className="min-w-0">
             <input
               id="dia-diem-hop"
               name="dia-diem-hop"
@@ -2000,7 +2087,20 @@ export function FormNhapBienBan({
               autoComplete="off"
               onChange={(e) => doi({ diaDiem: e.target.value })}
             />
-          </div>
+          </Field>
+
+          {/* Owner's field order (09/10/2026): the content right after the prototype's own fields. */}
+          <Field label="Nội dung biên bản" htmlFor="noi-dung-bien-ban" grow="auto" className="min-w-0">
+            <textarea
+              id="noi-dung-bien-ban"
+              name="noi-dung-bien-ban"
+              rows={5}
+              value={gt.noiDung}
+              maxLength={NOI_DUNG_BIEN_BAN_TOI_DA}
+              placeholder="Dán nội dung biên bản vào đây…"
+              onChange={(e) => doi({ noiDung: e.target.value })}
+            />
+          </Field>
 
           {/* Chủ trì and Thư ký side by side (owner, 02/10/2026). Their markup is `OChonCanBo`'s
               own — label above, full column width. */}
@@ -2096,23 +2196,20 @@ export function FormNhapBienBan({
             </div>
           </fieldset>
 
-          <div className="o-nhap">
-            <label htmlFor="noi-dung-bien-ban">Nội dung biên bản</label>
-            <textarea
-              id="noi-dung-bien-ban"
-              name="noi-dung-bien-ban"
-              rows={5}
-              value={gt.noiDung}
-              maxLength={NOI_DUNG_BIEN_BAN_TOI_DA}
-              placeholder="Dán nội dung biên bản vào đây…"
-              onChange={(e) => doi({ noiDung: e.target.value })}
-            />
-            <p className={HINT}>Toàn văn. Đọc lại bằng nút “{NHAN_NUT_XEM_BIEN_BAN}” trên thẻ.</p>
-          </div>
-
           {che.loai === "tao" && (
-            <div className="o-nhap">
-              <label htmlFor="cac-ket-luan">Các kết luận</label>
+            <Field
+              label="Các kết luận"
+              htmlFor="cac-ket-luan"
+              grow="auto"
+              className="min-w-0"
+              hint={
+                <>
+                  Mỗi dòng một kết luận, đánh số ① ② ③ theo thứ tự nhập. Tối đa{" "}
+                  {KET_LUAN_MOI_LAN_TOI_DA} kết luận một lần nhập; thêm tiếp bằng nút “
+                  {NHAN_NUT_THEM_KET_LUAN}” ở cuối thẻ. Để trống cũng lưu được.
+                </>
+              }
+            >
               <textarea
                 id="cac-ket-luan"
                 name="cac-ket-luan"
@@ -2120,12 +2217,7 @@ export function FormNhapBienBan({
                 value={gt.ketLuan}
                 onChange={(e) => doi({ ketLuan: e.target.value })}
               />
-              <p className={HINT}>
-                Mỗi dòng một kết luận, đánh số ① ② ③ theo thứ tự nhập. Tối đa{" "}
-                {KET_LUAN_MOI_LAN_TOI_DA} kết luận một lần nhập; thêm tiếp bằng nút “
-                {NHAN_NUT_THEM_KET_LUAN}” ở cuối thẻ. Để trống cũng lưu được.
-              </p>
-            </div>
+            </Field>
           )}
 
           {/* Last field of spec §4, a disabled placeholder — see the block comment above. */}
@@ -2141,10 +2233,12 @@ export function FormNhapBienBan({
         {/* The prototype's buttons: `Huỷ` then the save, right-aligned; the save stays LAST. */}
         <div className="flex shrink-0 justify-end gap-2">
           <CancelButton dangGui={dangGui} huy={huy} />
+          {/* The prototype keeps the save's own words while saving, with a spinner (MM:396-399). */}
           <SubmitButton
             label={che.loai === "sua" ? NHAN_NUT_LUU_SUA : NHAN_NUT_LUU}
+            busyText={che.loai === "sua" ? NHAN_NUT_LUU_SUA : NHAN_NUT_LUU}
             busy={dangGui}
-            disabled={dangGui || !duDieuKien}
+            disabled={dangGui || nothingToSave}
           />
         </div>
       </form>

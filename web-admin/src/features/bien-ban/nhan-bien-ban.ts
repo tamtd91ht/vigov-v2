@@ -114,10 +114,19 @@ export function nhanNutTach(kl: petitions_ketLuanRa): string {
  */
 export const NGUON_GIAO_KHOA = "Nguồn giao: Từ kết luận họp — khoá, không sửa được";
 
-/** Câu báo đã tách xong. Mang SỐ SỔ máy chủ vừa cấp — thứ cán bộ không thể biết trước. */
-export function cauDaTach(maNhiemVu: string): string {
-  return `Đã tách thành nhiệm vụ ${maNhiemVu}.`;
-}
+/**
+ * Success toasts — the prototype's sentences verbatim (`MeetingMinutes.tsx` `toast.success`), owner
+ * decision 09/10/2026: success is a toast, a refusal stays inline with the server's sentence.
+ */
+export const SPLIT_DONE_TOAST = "Đã tách thành nhiệm vụ";
+export const MEETING_SAVED_TOAST = "Đã lưu biên bản";
+
+/**
+ * Inline errors of the two required fields of `Nhập biên bản` — the prototype's one toast
+ * ("Cần tên cuộc họp và ngày họp.") split per field, shown under the field that is empty.
+ */
+export const MEETING_TITLE_REQUIRED = "Cần tên cuộc họp.";
+export const MEETING_DATE_REQUIRED = "Cần ngày họp.";
 
 /* ── Phép định dạng ────────────────────────────────────────────────────────────────────────── */
 
@@ -164,16 +173,16 @@ export function dongMeta(bb: petitions_bienBanRa): string {
 }
 
 /**
- * CON SỐ CHÍNH của thẻ: `{x}/{y} kết luận hoàn thành` (quyết định người dùng 25/09/2026 — đo tiến
+ * Con số kết luận của thẻ: `{x}/{y} kết luận xong` (quyết định người dùng 25/09/2026 — đo tiến
  * độ một cuộc họp bằng KẾT LUẬN, không bằng nhiệm vụ; một kết luận "không phát sinh nhiệm vụ" tính
- * là hoàn thành).
+ * là hoàn thành). Chữ "xong" và việc đứng chung một badge với `nhanBadge`: chủ dự án 09/10/2026.
  *
  * HAI CON SỐ DO MÁY CHỦ ĐẾM (`conclusion_done_count`, `conclusion_count`). Đếm lại ở đây từ mảng
  * `conclusions` là dựng con số thứ hai của cùng một sự thật — thứ lệch lặng lẽ vào ngày máy chủ đổi
  * cách suy trạng thái, và con số lệch ấy là con số lãnh đạo đọc (luật 9, cấm #2).
  */
 export function nhanTienDoBienBan(bb: petitions_bienBanRa): string {
-  return `${bb.conclusion_done_count}/${bb.conclusion_count} kết luận hoàn thành`;
+  return `${bb.conclusion_done_count}/${bb.conclusion_count} kết luận xong`;
 }
 
 /**
@@ -287,7 +296,8 @@ export function lopChipBienBan(bb: petitions_bienBanRa): string {
  * như một con số đếm sai.
  */
 export function nhanTrangThaiKetLuan(kl: petitions_ketLuanRa): string {
-  if (kl.no_task) return "Không phát sinh nhiệm vụ";
+  // Short label of the pill (owner 09/10/2026); the action buttons still say the full phrase.
+  if (kl.no_task) return "Không phát sinh";
   switch (kl.status) {
     case "chua-giao":
       return "Chưa giao";

@@ -127,10 +127,11 @@ describe("hai bộ đếm, và chúng đến từ MÁY CHỦ", () => {
     expect(nhanBadge(bienBan())).toBe("1/3 nhiệm vụ xong");
   });
 
-  it("con số CHÍNH là kết luận hoàn thành, đọc từ `conclusion_*` của máy chủ — không đếm mảng", () => {
-    // Mảng có MỘT kết luận "chua-giao", nhưng máy chủ nói 2/5: màn vẽ 2/5.
+  it("con số kết luận xong đọc từ `conclusion_*` của máy chủ — không đếm mảng", () => {
+    // Mảng có MỘT kết luận "chua-giao", nhưng máy chủ nói 2/5: màn vẽ 2/5. Chữ "kết luận xong" là
+    // quyết định chủ dự án 09/10/2026 (cùng kiểu với "nhiệm vụ xong" trong một badge).
     expect(nhanTienDoBienBan(bienBan({ conclusion_done_count: 2, conclusion_count: 5 }))).toBe(
-      "2/5 kết luận hoàn thành",
+      "2/5 kết luận xong",
     );
   });
 
@@ -262,7 +263,7 @@ describe("trạng thái biên bản và kết luận — chữ cho mã của MÁ
     expect(nhanTrangThaiKetLuan(ketLuan({ status: "qua-han" }))).toBe("Quá hạn");
     expect(nhanTrangThaiKetLuan(ketLuan({ status: "hoan-thanh" }))).toBe("Hoàn thành");
     expect(nhanTrangThaiKetLuan(ketLuan({ status: "hoan-thanh", no_task: true }))).toBe(
-      "Không phát sinh nhiệm vụ",
+      "Không phát sinh",
     );
   });
 

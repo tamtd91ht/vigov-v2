@@ -25,8 +25,9 @@ import { TRANG_THAI_DA_KY, TRANG_THAI_DU_THAO } from "./nhan-bien-ban";
  * ICON + WORD, never colour alone (spec §7) — every tone below also has its own icon shape.
  */
 
+// Dự thảo = tangerine, Đã ký = leaf (spec 05 §B: the record's two states, prototype chip colours).
 const MEETING_LOOK: Readonly<Record<string, { tone: BadgeTone; icon: LucideIcon }>> = {
-  [TRANG_THAI_DU_THAO]: { tone: "neutral", icon: FilePen },
+  [TRANG_THAI_DU_THAO]: { tone: "warning", icon: FilePen },
   [TRANG_THAI_DA_KY]: { tone: "success", icon: FileCheck2 },
 };
 
@@ -47,15 +48,24 @@ export function MeetingStatusBadge({ meeting, children }: { meeting: petitions_b
  *
  * Red (`danger`) only for `qua-han`: something actually late (spec §2, "màu mang ý nghĩa").
  */
-const CONCLUSION_LOOK: Readonly<Record<string, { tone: BadgeTone; icon: LucideIcon }>> = {
-  "chua-giao": { tone: "neutral", icon: CircleDashed },
+type ConclusionLook = { tone: BadgeTone; icon: LucideIcon; className?: string };
+
+// Spec 05 §B colours: Chưa giao on the page colour, Không phát sinh a 10% grey — both quieter than
+// the tone's own neutral fill. Đang thực hiện brand, Hoàn thành leaf, Quá hạn danger = the tones.
+const CONCLUSION_LOOK: Readonly<Record<string, ConclusionLook>> = {
+  "chua-giao": { tone: "neutral", icon: CircleDashed, className: "border-line bg-canvas text-ink-muted" },
   "dang-thuc-hien": { tone: "info", icon: Loader },
   "qua-han": { tone: "danger", icon: AlarmClock },
   "hoan-thanh": { tone: "success", icon: CircleCheck },
 };
 
-const NO_TASK_LOOK = { tone: "success", icon: CircleMinus } as const;
+const NO_TASK_LOOK: ConclusionLook = {
+  tone: "neutral",
+  icon: CircleMinus,
+  className: "border-line bg-ink-muted/10 text-ink-muted",
+};
 
+/** The pill sits on the progress line: 20px high, 10.5px word (spec 05 §B). */
 export function ConclusionStatusBadge({
   conclusion,
   children,
@@ -65,7 +75,7 @@ export function ConclusionStatusBadge({
 }) {
   const look = conclusion.no_task ? NO_TASK_LOOK : CONCLUSION_LOOK[conclusion.status];
   return (
-    <Badge tone={look?.tone ?? "neutral"} icon={look?.icon}>
+    <Badge tone={look?.tone ?? "neutral"} icon={look?.icon} className={cn("h-5 text-[10.5px]", look?.className)}>
       {children}
     </Badge>
   );
@@ -82,38 +92,12 @@ export function ConclusionOrdinal({ n, className }: { n: number; className?: str
   return (
     <span
       className={cn(
-        "conclusion-ordinal inline-grid size-7 shrink-0 place-items-center rounded-full bg-brand-50 text-xs font-semibold text-brand-700 tabular-nums",
+        // The prototype's tile (`MeetingMinutes.tsx:134`): brand at 12%, 24px, 11px bold.
+        "conclusion-ordinal grid size-6 shrink-0 place-items-center rounded-full bg-brand/12 text-[11px] font-bold text-brand tabular-nums",
         className,
       )}
     >
       {n}
     </span>
-  );
-}
-
-/**
- * First-load placeholder (spec §8b): grey blocks in the shape of meeting cards, so the layout does
- * not jump when the page arrives. LOCAL ON PURPOSE — a shared `Skeleton` is being built by another
- * work item; this one is replaced by it then. Decorative: the screen's own `role="status"` sentence
- * is what announces the load.
- */
-export function MeetingCardsSkeleton({ cards = 3 }: { cards?: number }) {
-  return (
-    <div aria-hidden="true" className="flex flex-col gap-4">
-      {Array.from({ length: cards }, (_, i) => (
-        <div key={i} className="rounded-card border border-line bg-surface shadow-sm">
-          <div className="flex items-center gap-3 border-b border-line px-4 py-3.5">
-            <span className="size-9 shrink-0 rounded-lg bg-line motion-safe:animate-pulse" />
-            <span className="h-3.5 min-w-0 flex-1 rounded bg-line motion-safe:animate-pulse" />
-            <span className="h-[22px] w-20 shrink-0 rounded-full bg-line motion-safe:animate-pulse" />
-          </div>
-          <div className="flex flex-col gap-3 p-4">
-            <span className="h-3 w-2/5 rounded bg-line motion-safe:animate-pulse" />
-            <span className="h-3 w-4/5 rounded bg-line motion-safe:animate-pulse" />
-            <span className="h-3 w-3/5 rounded bg-line motion-safe:animate-pulse" />
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
