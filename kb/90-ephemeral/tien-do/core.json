@@ -331,6 +331,14 @@
       "viec": "httpx.CORSCongDan ghi WARN mỗi request có Origin không thuộc CITIZEN_CORS_ALLOWED_ORIGINS (origin, phương thức, preflight — không đường dẫn). 09/10: Mini App bản phát hành không gọi được máy chủ, nghi origin webview khác bản thử (h5.zdn.vn), không dịch vụ nào ghi dòng log",
       "bang_chung": "(commit này) — core/httpx/cors.go CORSCongDan(nguon, log); petitions/identity/comms cmd/server truyền log. Ca kiểm TestCORSNguonLa_GhiLogOrigin_KhongGhiDuongDan. go test core/httpx, identity cmd, comms cmd xanh; petitions cmd xanh trên worktree sạch. Cùng việc ở vihat-miniapp b00861e (CORS_ALLOWED_ORIGINS)",
       "tiep_theo": "Người dùng mở app từ liên kết phát hành, đọc 'CORS: từ chối origin' trong log identity/petitions/vihat-miniapp, thêm origin ấy vào CITIZEN_CORS_ALLOWED_ORIGINS (common-config) và CORS_ALLOWED_ORIGINS (vihat-miniapp). Nếu không có dòng nào: nghi whitelist tên miền trên console Zalo"
+    },
+    {
+      "id": "storage-log-hai-cua-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Log để giám sát luồng tải tệp: dòng khởi động 'kho lưu tệp' (cửa nội bộ, cửa công khai, 3 bucket) ở petitions/comms/platform; petitions ghi 'ảnh hiện trường: cấp chỗ tải' (dich_tai_len, khoa_tai_len) và khoa_luu khi lưu xong. 09/10: điện thoại tải lên thành công qua OBJECT_STORAGE_PUBLIC_ENDPOINT nhưng petitions đọc qua OBJECT_STORAGE_ENDPOINT không thấy — hai cửa trỏ hai kho",
+      "bang_chung": "(commit này) — core/storage Client.LogAttrs, PresignedPost.Destination (không chữ ký, không policy); ca kiểm TestLogAttrsNamesBothEndpointsAndBuckets, TestPresignedPostDestinationDropsCredentials. go test core/storage, comms+platform cmd xanh; petitions cmd + internal/http xanh trên worktree sạch",
+      "tiep_theo": "Vận hành: sửa OBJECT_STORAGE_PUBLIC_ENDPOINT trỏ qua ingress tới đúng MinIO của OBJECT_STORAGE_ENDPOINT; dòng 'kho lưu tệp' lúc khởi động để đối chiếu"
     }
   ]
 }

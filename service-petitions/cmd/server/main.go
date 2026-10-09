@@ -306,6 +306,7 @@ func chay(log *slog.Logger) error {
 	case err == nil:
 		objects = c
 		photoObjects = c
+		log.Info("kho lưu tệp", append([]any{"service", "petitions"}, c.LogAttrs()...)...)
 	case errors.Is(err, storage.ErrNotConfigured):
 		log.Warn("CẢNH BÁO: chưa cấu hình kho lưu tệp — đính kèm nhiệm vụ bị từ chối", "service", "petitions", "err", err)
 	default:

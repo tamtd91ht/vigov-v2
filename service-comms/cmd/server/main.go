@@ -210,6 +210,7 @@ func main() {
 	switch c, err := storage.New(cfg.ObjectStorage()); {
 	case err == nil:
 		objects = c
+		log.Info("kho lưu tệp", append([]any{"service", "comms"}, c.LogAttrs()...)...)
 	case errors.Is(err, storage.ErrNotConfigured):
 		log.Warn("CẢNH BÁO: chưa cấu hình kho lưu tệp — ảnh bìa nội dung Mini App bị từ chối", "service", "comms", "err", err)
 	default:

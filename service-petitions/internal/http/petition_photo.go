@@ -202,6 +202,12 @@ func (h *HandlerCongDan) RequestPetitionPhotoUpload(w http.ResponseWriter, r *ht
 		h.answerPhotoError(w, r, "xin tải ảnh hiện trường", err)
 		return
 	}
+	// LOGGED: where the phone will post and under which key (storage.PresignedPost.Destination — never
+	// the policy or the signature). With the completion's line below, an upload that "succeeded" on the
+	// phone but never reached this service's store reads as two different places (09/10/2026).
+	target, key := up.Post.Destination()
+	h.d.Log.Info("ảnh hiện trường: cấp chỗ tải", "xa", string(tenant.MustFrom(r.Context())), "tep_id", up.File.ID,
+		"dich_tai_len", target, "khoa_tai_len", key)
 	// A replay with the same Idempotency-Key is told the FILE ID — never the form, which is a bearer
 	// credential and is not stored (core/idem). The phone then completes, or re-lists, by that id.
 	idem.RecordCode(r.Context(), up.File.ID)
@@ -223,8 +229,10 @@ func (h *HandlerCongDan) CompletePetitionPhoto(w http.ResponseWriter, r *http.Re
 		h.answerPhotoError(w, r, "hoàn tất ảnh hiện trường", err)
 		return
 	}
-	// LOGGED: the commune and the file id — NOT the lookup code, NOT the citizen (rule 3).
-	h.d.Log.Info("người dân đã đính ảnh hiện trường", "xa", string(tenant.MustFrom(r.Context())), "tep_id", f.ID)
+	// LOGGED: the commune, the file id and the private key it was read back into — NOT the lookup code,
+	// NOT the citizen (rule 3). The read side's endpoint and buckets are on the startup line "kho lưu tệp".
+	h.d.Log.Info("người dân đã đính ảnh hiện trường", "xa", string(tenant.MustFrom(r.Context())), "tep_id", f.ID,
+		"khoa_luu", f.ObjectKey)
 	vietJSON(w, http.StatusOK, photoFromFile(f))
 }
 

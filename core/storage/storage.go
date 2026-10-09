@@ -186,6 +186,23 @@ func newMinio(endpoint, region string, cfg Config) (*minio.Client, error) {
 	return c, nil
 }
 
+// LogAttrs says WHERE this client goes, for one startup line: the endpoint the service itself
+// reads and writes through, the endpoint uploads and downloads are SIGNED for (the phone's door),
+// and the three bucket names. The two endpoints must reach ONE MinIO; when they do not, every
+// upload "succeeds" on the phone and is "not received" by the service (09/10/2026) — this line is
+// where that shows. Scheme and host only: no key, no secret, no object.
+func (c *Client) LogAttrs() []any {
+	name := func(b Bucket) string {
+		n, _ := c.BucketName(b) // the three constants always have a suffix
+		return n
+	}
+	return []any{
+		"cua_noi_bo", c.api.EndpointURL().Scheme + "://" + c.api.EndpointURL().Host,
+		"cua_cong_khai", c.signer.EndpointURL().Scheme + "://" + c.signer.EndpointURL().Host,
+		"bucket_private", name(BucketPrivate), "bucket_temp", name(BucketTemp), "bucket_public", name(BucketPublic),
+	}
+}
+
 // BucketName returns `{prefix}-{private|public|temp}`.
 func (c *Client) BucketName(b Bucket) (string, error) {
 	s, ok := b.suffix()
@@ -232,9 +249,19 @@ type PresignedPost struct {
 
 const redactedPost = "storage.PresignedPost{***}"
 
-func (p PresignedPost) String() string                { return redactedPost }
-func (p PresignedPost) GoString() string              { return redactedPost }
-func (p PresignedPost) LogValue() slog.Value          { return slog.StringValue(redactedPost) }
+func (p PresignedPost) String() string       { return redactedPost }
+func (p PresignedPost) GoString() string     { return redactedPost }
+func (p PresignedPost) LogValue() slog.Value { return slog.StringValue(redactedPost) }
+
+// Destination is where the form posts — scheme, host and bucket path, never a query — and the object
+// key it is fixed to: the two facts an operator needs to find an upload in MinIO. Nothing in them
+// grants anything; the policy and the signature stay in Fields, which is never logged.
+func (p PresignedPost) Destination() (target, key string) {
+	if u, err := url.Parse(p.URL); err == nil {
+		target = u.Scheme + "://" + u.Host + u.Path
+	}
+	return target, p.Fields["key"]
+}
 func (p PresignedPost) Format(f fmt.State, verb rune) { _, _ = io.WriteString(f, redactedPost) }
 
 // PresignUpload issues a presigned POST into the temp bucket for one upload key.

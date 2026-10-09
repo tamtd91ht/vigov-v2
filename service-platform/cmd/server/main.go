@@ -195,6 +195,7 @@ func run(log *slog.Logger) error {
 	switch c, err := storage.New(cfg.ObjectStorage()); {
 	case err == nil:
 		objects = c
+		log.Info("kho lưu tệp", append([]any{"service", "platform"}, c.LogAttrs()...)...)
 	case errors.Is(err, storage.ErrNotConfigured):
 		log.Warn("CẢNH BÁO: chưa cấu hình kho lưu tệp — logo và banner của xã bị từ chối, URL ảnh trả rỗng",
 			"service", "platform", "err", err)

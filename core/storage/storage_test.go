@@ -302,3 +302,30 @@ func TestPromoteAndPurgeRefuseBeforeTouchingTheServer(t *testing.T) {
 		t.Errorf("purge a bare prefix: %v", err)
 	}
 }
+
+// The startup line names BOTH doors and the three buckets (09/10/2026: two endpoints reaching two
+// stores showed only as "not received"), and carries no secret.
+func TestLogAttrsNamesBothEndpointsAndBuckets(t *testing.T) {
+	got := fmt.Sprint(testClient(t).LogAttrs()...)
+	for _, want := range []string{"http://minio.internal.example:9000", "https://files.example.test",
+		"vigov-test-private", "vigov-test-temp", "vigov-test-public"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("LogAttrs lacks %q: %s", want, got)
+		}
+	}
+	if strings.Contains(got, "FAKE-ACCESS-KEY") || strings.Contains(got, "fake-secret-key") {
+		t.Errorf("LogAttrs leaks a credential: %s", got)
+	}
+}
+
+// Destination keeps where and which key, and drops the query and every other form field.
+func TestPresignedPostDestinationDropsCredentials(t *testing.T) {
+	p := PresignedPost{
+		URL:    "https://files.example.test/vigov-test-temp/?X-Amz-Signature=SIG",
+		Fields: map[string]string{"key": "upload/x/original.jpg", "policy": "POLICY", "x-amz-signature": "SIG"},
+	}
+	target, key := p.Destination()
+	if target != "https://files.example.test/vigov-test-temp/" || key != "upload/x/original.jpg" {
+		t.Fatalf("Destination = %q, %q", target, key)
+	}
+}
