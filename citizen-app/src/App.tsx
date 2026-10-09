@@ -406,8 +406,8 @@ const getCommuneSceneLocation: GetSceneLocation = async () => toSceneLocationRes
  * owner 06/10/2026, revoking "own app only" of 02/10/2026). The SDK picker is app-independent. The shell builds
  * it, the state half only declares its
  * type (`PickScenePhotos`), exactly like the location bridge above. What comes down is LOCAL temp paths: the
- * picker uploads nothing, and the bytes leave the phone only through the state half's presigned POST, after
- * the petition is recorded.
+ * picker uploads nothing, and the bytes leave the phone only through the state half's one multipart upload to
+ * petitions (`uploadScenePhoto`), after the petition is recorded.
  *
  * Table by WHAT THE CITIZEN DOES NEXT:
  *   xong                → the paths

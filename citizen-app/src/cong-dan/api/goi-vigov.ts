@@ -26,10 +26,10 @@
  *   behind the same DOMAIN gate — the field catalogue, the lookup, and the ONE public write (the send). Offered
  *   only when Zalo refuses the access token. See the block at the end of this file.
  *
- * ⚠ SCENE PHOTOS (02/10/2026, commune app only) add the ONLY two `fetch(` outside `goi`, each for a reason
- *   `goi` cannot serve: `readPickedPhoto` reads the picker's LOCAL temp file (no server at all), and
- *   `postPhotoToStorage` posts the bytes to the presigned object-store URL ViGov handed out — no bearer, no
- *   cookie, the form being the credential. Every ViGov route still goes through `goi`.
+ * ⚠ SCENE PHOTOS (02/10/2026, commune app only) add the ONLY `fetch(` outside `goi`: `readPickedPhoto` reads
+ *   the picker's LOCAL temp file (no server at all). The photo itself goes to petitions as ONE multipart
+ *   request through the same `callOnce` as every ViGov route (`uploadScenePhoto`, ADR 0052 §Sửa đổi
+ *   09/10/2026) — the presigned object-store POST that used to be the second exception is gone.
  *
  * ⚠ BEARER CHỈ ĐẾN TỪ `layPhienViGov()`. Không hàm nào ở đây nhận token qua tham số — một tham số
  * là một khe để ai đó nhét phiếu phiên của `vihat-miniapp` vào, và phiếu ấy KHÔNG phải phiên ViGov.
@@ -56,28 +56,24 @@ import {
   isPhoneNotVerified,
   myResidentialUnitsAddress,
   type PhieuCuaToi,
-  photoCompletionAddress,
   photosAddress,
-  type PhotoSlot,
+  type PhotoUploadReply,
+  photoUploadForm,
   publicReportAddress,
   publicReportFieldsAddress,
   publicReportsAddress,
   readAccountlessReceipt,
   readAccountlessReport,
-  type PhotoUploadForm,
   ratingAddress,
   readCitizenFields,
-  readPhotoSlot,
+  readPhotoUploadReply,
   readResidentialUnits,
-  readScenePhoto,
   RESIDENTIAL_UNIT_CHECK_UNAVAILABLE_CODE,
   RESIDENTIAL_UNIT_NOT_OFFERED_CODE,
   type ResidentialUnit,
   readScenePhotoList,
   type ScenePhotoLink,
-  type ScenePhotoOut,
   type ScenePhotoType,
-  STORAGE_FILE_FIELD,
   type TrangPhieuCuaToi,
   UNVERIFIED_DAILY_LIMIT_CODE,
   verificationPhotosAddress,
@@ -240,8 +236,8 @@ function moCong(dia_chi: string): { token: string; dia_chi: string } | NhanhKhon
 }
 
 /**
- * CHỖ DUY NHẤT GỌI `fetch` TỚI ViGov — mọi tuyến ViGov đi qua đây (the two photo-byte calls below are not
- * ViGov routes; see the file header). `doc` đọc thân 200/201; `null` là sai khuôn.
+ * CHỖ DUY NHẤT GỌI `fetch` TỚI ViGov — mọi tuyến ViGov đi qua đây (`readPickedPhoto` below reads a local
+ * file, not a ViGov route; see the file header). `doc` đọc thân 200/201; `null` là sai khuôn.
  */
 async function goi<T>(
   dia_chi: string,
@@ -270,7 +266,7 @@ async function goiWithLimitCode<T>(
 /** `goi` for the photo routes: the server's refusal `code` comes back (`Refused`) instead of being folded. */
 async function goiWithRefusals<T>(
   dia_chi: string,
-  tuy_chon: { method: "GET" | "POST"; token: string; khoa?: string; than?: string },
+  tuy_chon: { method: "GET" | "POST"; token: string; khoa?: string; than?: string; form?: FormData; waitMs?: number },
   doc: (than: unknown) => T | null,
 ): Promise<CallResult<T> | Refused> {
   return callOnce(dia_chi, { ...tuy_chon, refusals: true }, doc, { kieu: "khong-thay" });
@@ -284,6 +280,13 @@ async function callOnce<T>(
     token?: string;
     khoa?: string;
     than?: string;
+    /**
+     * A multipart body (the scene-photo upload). No Content-Type header is written for it: the runtime writes
+     * `multipart/form-data` WITH the boundary, and a hand-written one would have none.
+     */
+    form?: FormData;
+    /** How long to wait before calling it a dropped line; `HAN_CHO_MS` when absent. */
+    waitMs?: number;
     refusals?: boolean;
     /** Return the 429 body's `code` on `rate-limited` (`RateLimited.code`). */
     limitCode?: boolean;
@@ -292,7 +295,7 @@ async function callOnce<T>(
   khi_404: NhanhKhongThanh,
 ): Promise<CallResult<T> | Refused> {
   const bo_dieu_khien = new AbortController();
-  const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
+  const dong_ho = setTimeout(() => bo_dieu_khien.abort(), tuy_chon.waitMs ?? HAN_CHO_MS);
 
   const tieu_de: Record<string, string> = { Accept: "application/json" };
   if (tuy_chon.token !== undefined) tieu_de["Authorization"] = `Bearer ${tuy_chon.token}`;
@@ -303,7 +306,7 @@ async function callOnce<T>(
     const tra_loi = await fetch(dia_chi, {
       method: tuy_chon.method,
       headers: tieu_de,
-      body: tuy_chon.than,
+      body: tuy_chon.form ?? tuy_chon.than,
       signal: bo_dieu_khien.signal,
     });
     const s = tra_loi.status;
@@ -556,32 +559,43 @@ export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise
 export type PhotoCallResult<T> = { kieu: "xong"; gia_tri: T } | NhanhKhongThanh | RateLimited | Refused;
 
 /**
- * Ask for ONE upload slot. `key` is the `Idempotency-Key` of this attempt — a NEW one for every attempt: a
- * replay carries no form (`readPhotoSlot`), so reusing a key could only ever bring back nothing to upload.
+ * How long ONE photo upload may take before it is called a dropped line. The server gives a body 180 s to
+ * arrive (`upload_timeout`, ADR 0052 §Sửa đổi 09/10/2026), then scans, re-encodes and stores it before it
+ * answers — so the phone waits the server's 180 s plus 30 s for that work. Shorter, and a slow rural line
+ * that the server would still have accepted is abandoned by the phone; the citizen then retries a photo that
+ * may already be stored (harmless — same key, replayed — but a wasted upload of the same bytes).
  */
-export async function requestScenePhotoSlot(
+export const SCENE_PHOTO_UPLOAD_WAIT_MS = 210_000;
+
+/**
+ * Send ONE photo to the citizen's own petition `ma_tra_cuu` — one multipart POST to petitions
+ * (`photoUploadForm`: `size`, `content_type`, then the file under a fixed name), bearer and `Idempotency-Key`.
+ *
+ * `key` is the attempt's key. Sending again with the SAME key after a dropped line is safe: if the first one
+ * was stored, the server replays `{code, replayed: true}` instead of storing it twice (`PhotoUploadReply`).
+ * A NEW key belongs after a definite refusal (`scene-photos.tsx` `sendOutcome`).
+ */
+export async function uploadScenePhoto(
   ma_tra_cuu: string,
-  body: string,
+  photo: Blob,
+  content_type: ScenePhotoType,
   key: string,
-): Promise<PhotoCallResult<PhotoSlot>> {
+): Promise<PhotoCallResult<PhotoUploadReply>> {
   const ma = ma_tra_cuu.trim();
   const cong = moCong(photosAddress(ma === "" ? "x" : ma));
   if ("kieu" in cong) return cong;
   if (ma === "") return { kieu: "khong-thay" };
   return goiWithRefusals(
     cong.dia_chi,
-    { method: "POST", token: cong.token, khoa: key, than: body },
-    readPhotoSlot,
+    {
+      method: "POST",
+      token: cong.token,
+      khoa: key,
+      form: photoUploadForm(photo, content_type),
+      waitMs: SCENE_PHOTO_UPLOAD_WAIT_MS,
+    },
+    readPhotoUploadReply,
   );
-}
-
-/** Ask the server to check and keep the photo just posted to the store (scan, re-encode without EXIF). */
-export async function completeScenePhoto(ma_tra_cuu: string, id: string): Promise<PhotoCallResult<ScenePhotoOut>> {
-  const ma = ma_tra_cuu.trim();
-  const cong = moCong(photoCompletionAddress(ma === "" ? "x" : ma, id === "" ? "x" : id));
-  if ("kieu" in cong) return cong;
-  if (ma === "" || id === "") return { kieu: "khong-thay" };
-  return goiWithRefusals(cong.dia_chi, { method: "POST", token: cong.token }, readScenePhoto);
 }
 
 /** The citizen's own stored photos, each with a read link that lives ≤ 15 minutes. */
@@ -633,47 +647,6 @@ export async function readPickedPhoto(path: string): Promise<Blob | null> {
     return blob.size > 0 ? blob : null;
   } catch {
     return null;
-  }
-}
-
-/** One upload to the object store can take a while on a rural connection; the API calls keep `HAN_CHO_MS`. */
-const UPLOAD_WAIT_MS = 90_000;
-
-export type StorageUploadResult = { kieu: "xong" } | { kieu: "tu-choi"; status: number } | { kieu: "loi-mang" } | { kieu: "loi-may-chu" };
-
-/**
- * The presigned POST to the object store ViGov named in `form.url` — every `fields` entry first, the file LAST
- * as `file`, the type exactly as declared in the slot request. NO bearer and NO cookie: the form IS the
- * credential (ADR 0052), and the ViGov session must never reach the storage host. A non-https URL is refused
- * before a byte leaves (`readPhotoSlot` already checks; checked again because this is where bytes go).
- *
- * 4xx → `tu-choi` (the form expired, or the store refused the size/type): a NEW slot is the next step.
- */
-export async function postPhotoToStorage(
-  form: PhotoUploadForm,
-  photo: Blob,
-  content_type: ScenePhotoType,
-): Promise<StorageUploadResult> {
-  try {
-    if (new URL(form.url).protocol !== "https:") return { kieu: "loi-may-chu" };
-  } catch {
-    return { kieu: "loi-may-chu" };
-  }
-  const body = new FormData();
-  for (const [k, v] of Object.entries(form.fields)) body.append(k, v);
-  // The part's name is a fixed word, never anything of the citizen's (rule 3, forbidden #4).
-  body.append(STORAGE_FILE_FIELD, new Blob([photo], { type: content_type }), "photo");
-  const stop = new AbortController();
-  const timer = setTimeout(() => stop.abort(), UPLOAD_WAIT_MS);
-  try {
-    const answer = await fetch(form.url, { method: "POST", body, credentials: "omit", signal: stop.signal });
-    if (answer.status >= 200 && answer.status < 300) return { kieu: "xong" };
-    if (answer.status >= 400 && answer.status < 500) return { kieu: "tu-choi", status: answer.status };
-    return { kieu: "loi-may-chu" };
-  } catch {
-    return { kieu: "loi-mang" };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

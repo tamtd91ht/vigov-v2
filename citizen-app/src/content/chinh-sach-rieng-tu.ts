@@ -549,13 +549,18 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
      *
      *   Every claim is read from built code: optional, at most 5, JPEG/PNG/WebP, camera or picker only on the
      *   citizen's tap, explained before Zalo's dialog (`cong-dan/man/scene-photos.tsx`, `zalo-api.ts`); no
-     *   `serverUploadUrl`; upload after the petition exists (`cong-dan/api/goi-vigov.ts`); malware scan, re-encode
-     *   to JPEG, all EXIF dropped, private bucket, signed links ≤ 15 min, staff views audited (service-petitions,
-     *   ADR 0047 G3, ADR 0052 §12); not in the draft (`noi-dung.ts` `not_in_draft`).
+     *   `serverUploadUrl`; upload after the petition exists, ONE multipart request per photo to petitions, a
+     *   fixed file name, the same Idempotency-Key on a retry after a dropped line (`cong-dan/api/goi-vigov.ts`
+     *   `uploadScenePhoto`, `scene-photos.tsx` `sendOutcome`; ADR 0052 §Sửa đổi 09/10/2026); malware scan,
+     *   re-encode to JPEG, all EXIF dropped, private bucket, signed links ≤ 15 min, staff views audited
+     *   (service-petitions, ADR 0047 G3, ADR 0052 §12); not in the draft (`noi-dung.ts` `not_in_draft`).
      *
-     *   ⚠ THE THREE "KHI …" PARAGRAPHS CONTAIN, VERBATIM, every `trong_chinh_sach` of `SCENE_PHOTO_SLOT_FIELDS`,
-     *   `SCENE_PHOTO_STORAGE_FIELDS`, `SCENE_PHOTO_COMPLETION_FIELDS` (`ket-xuat-ho-so.ts`). `chinh-sach.test.ts`
-     *   locks it: change a declaration there without changing it here and the case is red.
+     *   09/10/2026: the slot / signed-upload-address / completion paragraphs were rewritten to the one-request
+     *   flow; the paragraph count (11) and every mark are unchanged — the wording still awaits the owner.
+     *
+     *   ⚠ THE "KHI GỬI MỘT ẢNH" PARAGRAPH CONTAINS, VERBATIM, every `trong_chinh_sach` of
+     *   `SCENE_PHOTO_UPLOAD_FIELDS` (`ket-xuat-ho-so.ts`). `chinh-sach.test.ts` locks it: change a declaration
+     *   there without changing it here and the case is red.
      *
      *   ⚠ RETENTION IS A PLACEHOLDER (ADR 0052 §6: 24 months after closing, still owed to the customer) and no
      *   purge job exists, so the text says "chưa chốt", names the value as provisional, and promises only what the
@@ -577,10 +582,10 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Mục này chỉ nói về trang của một xã — trong ứng dụng riêng của xã, và trong ứng dụng của Tập đoàn ViHAT Group khi bạn mở nó bằng mã QR của xã. Phần giới thiệu của Tập đoàn ViHAT Group không có nút gửi ảnh nào. Những câu ở các mục khác nói rằng ảnh không rời khỏi máy là nói về tính năng số hoá danh thiếp giấy, và vẫn đúng cho tính năng ấy.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Khi gửi một phản ánh, bạn CÓ THỂ đính kèm tối đa 5 ảnh hiện trường. Việc này KHÔNG BẮT BUỘC: không có ảnh, phản ánh vẫn gửi được như thường. Ứng dụng chỉ nhận ảnh JPEG, PNG hoặc WebP, không nhận video.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh chỉ đến từ hai nút, và chỉ khi chính bạn bấm: 'Chụp ảnh' mở máy ảnh của điện thoại, sau khi Zalo hỏi bạn có cho phép dùng máy ảnh hay không; 'Chọn ảnh có sẵn' mở cửa sổ chọn ảnh của Zalo. Ứng dụng nói rõ ảnh dùng để làm gì trước khi hộp thoại của Zalo hiện ra. Ứng dụng chỉ nhận những ảnh bạn đã chụp hoặc chọn, không xem các ảnh khác trong máy.",
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh chỉ được gửi đi SAU KHI phản ánh của bạn đã được ghi nhận, và đi thẳng vào kho lưu tệp riêng, không công khai, của hệ thống tiếp nhận phản ánh của xã (hệ thống ViGov). Bên vận hành máy chủ đặt kho ấy: [CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT: bản nháp 02/10/2026 ghi là Tập đoàn ViHAT Group; mã nguồn không xác nhận điều ấy]. Zalo không tải ảnh lên hộ: ứng dụng không giao cho Zalo một địa chỉ tải lên nào. Ảnh nào tải chưa được thì không làm hỏng phản ánh đã gửi; bạn tải lại ảnh ấy, hoặc chụp, chọn thêm ảnh, ở 'Phản ánh của tôi' trong lúc phản ánh còn ở bước 'Đã tiếp nhận'.",
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] KHI XIN CHỖ TẢI MỘT ẢNH, ứng dụng gửi đúng những thứ sau, và không gì khác: mã tra cứu của phản ánh bạn đã gửi, do chính hệ thống của xã cấp, nằm trên đường dẫn; nó chỉ mở được phản ánh của chính bạn · loại ảnh (JPEG, PNG hoặc WebP), đọc từ chính ảnh · dung lượng ảnh tính bằng byte.",
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] KHI TẢI ẢNH LÊN, ứng dụng gửi tới kho lưu tệp, qua một địa chỉ có chữ ký dùng được trong 15 phút, đúng những thứ sau, và không gì khác: các trường của biểu mẫu tải lên mà chính ViGov cấp ở bước xin chỗ tải (khoá, hạn, chữ ký), gửi lại nguyên văn; không có thông tin nào của bạn · ảnh bạn đã chụp hoặc chọn, đúng loại đã khai; hệ thống của xã bỏ toàn bộ thông tin kèm theo ảnh (như vị trí chụp, thiết bị) trước khi lưu.",
-      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] KHI BÁO ĐÃ TẢI XONG, ứng dụng gửi lại mã tra cứu ấy cùng mã của ảnh, do chính hệ thống của xã cấp ở bước xin chỗ tải. Khi bạn mở một phản ánh của mình để xem lại ảnh đã gửi, ứng dụng chỉ gửi mã tra cứu ấy.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh chỉ được gửi đi SAU KHI phản ánh của bạn đã được ghi nhận, và chỉ gửi tới hệ thống tiếp nhận phản ánh của xã (hệ thống ViGov), mỗi ảnh một lần gửi. Hệ thống ấy kiểm tra ảnh rồi lưu vào kho lưu tệp riêng, không công khai, của hệ thống tiếp nhận phản ánh của xã (hệ thống ViGov). Bên vận hành máy chủ đặt kho ấy: [CHỜ DUYỆT — CẦN CHỦ DỰ ÁN QUYẾT: bản nháp 02/10/2026 ghi là Tập đoàn ViHAT Group; mã nguồn không xác nhận điều ấy]. Zalo không tải ảnh lên hộ: ứng dụng không giao cho Zalo một địa chỉ tải lên nào. Ảnh nào tải chưa được thì không làm hỏng phản ánh đã gửi; bạn tải lại ảnh ấy, hoặc chụp, chọn thêm ảnh, ở 'Phản ánh của tôi' trong lúc phản ánh còn ở bước 'Đã tiếp nhận'.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] KHI GỬI MỘT ẢNH, ứng dụng gửi tới hệ thống tiếp nhận phản ánh của xã, kèm phiên làm việc của bạn với xã, đúng những thứ sau, và không gì khác: mã tra cứu của phản ánh bạn đã gửi, do chính hệ thống của xã cấp, nằm trên đường dẫn; nó chỉ mở được phản ánh của chính bạn · dung lượng ảnh tính bằng byte · loại ảnh (JPEG, PNG hoặc WebP), đọc từ chính ảnh · ảnh bạn đã chụp hoặc chọn, đúng loại đã khai, dưới một tên cố định là “photo”, không phải tên tệp trên máy bạn; hệ thống của xã bỏ toàn bộ thông tin kèm theo ảnh (như vị trí chụp, thiết bị) trước khi lưu.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Mỗi ảnh đi trong đúng một lần gửi ấy, không qua một địa chỉ tải lên riêng nào, và không có bước gửi nào khác cho ảnh. Tên tệp ảnh trên máy bạn không được gửi đi. Nếu mạng rớt giữa chừng và bạn bấm 'Tải lại', ứng dụng gửi lại đúng ảnh ấy kèm cùng một mã lần gửi, để hệ thống của xã không lưu một ảnh hai lần.",
+      "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Khi bạn mở một phản ánh của mình để xem lại ảnh đã gửi, ứng dụng chỉ gửi mã tra cứu ấy.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] TRƯỚC KHI LƯU, hệ thống quét mã độc trong ảnh, rồi giải mã và mã hoá lại ảnh thành JPEG. Việc mã hoá lại BỎ TOÀN BỘ thông tin kèm theo ảnh (EXIF), kể cả vị trí chụp và thông tin thiết bị. Chỉ bản đã làm sạch được giữ lại; bản bạn gửi lên không được giữ.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] AI XEM ĐƯỢC ẢNH: chính bạn, và cán bộ của đúng xã ấy có quyền xem phản ánh. Ảnh không bao giờ được công khai. Mỗi lần xem là qua một đường dẫn có chữ ký, dùng được tối đa 15 phút. Mỗi lần cán bộ xem ảnh đều được ghi lại trong nhật ký của hệ thống: ai xem, và xem lúc nào.",
       "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Ảnh không được giữ trên máy bạn: ảnh không nằm trong bản nháp phản ánh, và ứng dụng không lưu ảnh vào thư viện ảnh của máy. Nếu bạn đóng ứng dụng trước khi gửi, bạn chọn lại ảnh.",

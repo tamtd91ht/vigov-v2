@@ -19,7 +19,7 @@ import {
   TOKEN_KHONG_CHUA_GI,
 } from "../features/tinh-nang/noi-dung";
 import { TRUONG_THIEP_CUA_CHUNG_TOI } from "../features/tinh-nang/vcard";
-import { PHOTO_UPLOAD_FIELDS, photoUploadBody } from "../cong-dan/api/hop-dong-phan-anh";
+import { PHOTO_UPLOAD_PARTS, photoUploadForm } from "../cong-dan/api/hop-dong-phan-anh";
 
 import {
   CAU_DAU,
@@ -29,11 +29,7 @@ import {
   PHIEN_BAN_CHINH_SACH,
 } from "./chinh-sach-rieng-tu";
 import { COMPANY } from "./company-profile";
-import {
-  SCENE_PHOTO_COMPLETION_FIELDS,
-  SCENE_PHOTO_SLOT_FIELDS,
-  SCENE_PHOTO_STORAGE_FIELDS,
-} from "./ket-xuat-ho-so";
+import { SCENE_PHOTO_UPLOAD_FIELDS } from "./ket-xuat-ho-so";
 
 /**
  * CHÍNH SÁCH QUYỀN RIÊNG TƯ — PHÉP KIỂM CỦA MỘT VĂN BẢN PHÁP LÝ, KHÔNG PHẢI CỦA MỘT MÀN HÌNH.
@@ -270,11 +266,12 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
   /**
    * ẢNH HIỆN TRƯỜNG (02/10/2026, app riêng của xã) — THE GAP IS DRAFTED, NOT YET APPROVED.
    *
-   *   The commune app sends the citizen's scene photos to ViGov after a petition is recorded. The four routes
-   *   are declared in the Zalo submission (`ket-xuat-ho-so.ts` `SCENE_PHOTO_*`); since TASK-07a the policy has
-   *   a section for them (`anh-hien-truong`), every paragraph marked `PENDING_APPROVAL_MARK` until the owner
-   *   approves (ADR 0047). This case is now the two-way lock the old gap case promised:
-   *     · body ⇄ declared keys (the slot body sends exactly the declared keys, both ways);
+   *   The commune app sends the citizen's scene photos to ViGov after a petition is recorded — since ADR 0052
+   *   §Sửa đổi 09/10/2026 as ONE multipart request per photo to petitions. The route is declared in the Zalo
+   *   submission (`ket-xuat-ho-so.ts` `SCENE_PHOTO_*`); since TASK-07a the policy has a section for it
+   *   (`anh-hien-truong`), every paragraph marked `PENDING_APPROVAL_MARK` until the owner approves (ADR 0047).
+   *   This case is the two-way lock:
+   *     · body ⇄ declared keys (the multipart parts are exactly the declared keys, in order, both ways);
    *     · declared sentence ⇄ policy text (every `trong_chinh_sach` sits VERBATIM in that section).
    *   Reword a declaration in `ket-xuat-ho-so.ts` without rewording the policy — or the reverse — and it is red.
    */
@@ -286,14 +283,14 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     };
     const text = () => section().doan.join("\n");
 
-    it("thân xin chỗ tải gửi đúng những khoá đã khai, không thừa không thiếu", () => {
-      const keys = Object.keys(JSON.parse(photoUploadBody("image/jpeg", 1)) as Record<string, unknown>).sort();
-      expect(keys).toEqual([...PHOTO_UPLOAD_FIELDS].sort());
-      expect(SCENE_PHOTO_SLOT_FIELDS.map((t) => t.khoa).filter((k) => k !== "maTraCuu").sort()).toEqual(keys);
+    it("thân tải ảnh gửi đúng những phần đã khai, theo đúng thứ tự, không thừa không thiếu", () => {
+      const parts = [...photoUploadForm(new Blob([new Uint8Array([0xff, 0xd8, 0xff])]), "image/jpeg").keys()];
+      expect(parts).toEqual([...PHOTO_UPLOAD_PARTS]);
+      expect(SCENE_PHOTO_UPLOAD_FIELDS.map((t) => t.khoa).filter((k) => k !== "maTraCuu")).toEqual(parts);
     });
 
-    it("MỌI câu khai của bốn tuyến ảnh có mặt NGUYÊN VĂN trong mục ảnh hiện trường", () => {
-      const declared = [...SCENE_PHOTO_SLOT_FIELDS, ...SCENE_PHOTO_STORAGE_FIELDS, ...SCENE_PHOTO_COMPLETION_FIELDS];
+    it("MỌI câu khai của tuyến tải ảnh có mặt NGUYÊN VĂN trong mục ảnh hiện trường", () => {
+      const declared = SCENE_PHOTO_UPLOAD_FIELDS;
       expect(declared.length, "no declared scene-photo field — this case would pass on nothing").toBeGreaterThan(0);
       for (const t of declared) {
         expect(text(), `the scene-photo section no longer says: ${t.trong_chinh_sach.slice(0, 40)}…`).toContain(
@@ -322,6 +319,15 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
       expect(t, "does not say the upload waits for the petition").toMatch(/SAU KHI phản ánh của bạn đã được ghi nhận/);
       // No `serverUploadUrl` anywhere (`phase1-collects-nothing.test.ts`) — the text says Zalo uploads nothing.
       expect(t).toMatch(/Zalo không tải ảnh lên hộ/);
+      // ADR 0052 §Sửa đổi 09/10/2026: ONE request to the commune's system — no slot, no signed upload address,
+      // no "done" call. The old steps must not be described any more.
+      expect(t, "does not say the photo goes to the commune's ViGov system").toMatch(
+        /chỉ gửi tới hệ thống tiếp nhận phản ánh của xã \(hệ thống ViGov\)/,
+      );
+      expect(t, "still describes the gone slot step").not.toMatch(/XIN CHỖ TẢI|bước xin chỗ tải/);
+      expect(t, "still describes the gone completion step").not.toMatch(/BÁO ĐÃ TẢI XONG/);
+      expect(t, "still describes a signed UPLOAD address").not.toMatch(/gửi tới kho lưu tệp, qua một địa chỉ có chữ ký/);
+      expect(t, "does not say the phone's file name stays on the phone").toMatch(/Tên tệp ảnh trên máy bạn không được gửi đi/);
     });
 
     it("nói đủ cách hệ thống giữ ảnh: quét mã độc · mã hoá lại · bỏ EXIF · không công khai · 15 phút · ghi vết", () => {

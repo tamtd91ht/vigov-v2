@@ -17,29 +17,23 @@
  * The state half calls no `zmp-sdk` (`ranh-gioi-hai-nua.test.ts` §3a): the shell injects `PickScenePhotos`,
  * which asks Zalo and hands back LOCAL temp paths — nothing has left the phone when it returns.
  *
- * ⚠ NOTHING HERE LOGS, STORES OR PUTS IN A URL OR KEY a path, a photo, an upload form or a read link (rule 3;
- *   the form and the links are bearer credentials). They live in React state and refs, and die with the screen.
+ * ⚠ NOTHING HERE LOGS, STORES OR PUTS IN A URL OR KEY a path, a photo or a read link (rule 3; the links are
+ *   bearer credentials). They live in React state and refs, and die with the screen.
  */
 import { useEffect, useRef, useState } from "react";
 
 import {
-  completeScenePhoto,
   listScenePhotos,
   listVerificationPhotos,
   type PhotoCallResult,
-  postPhotoToStorage,
   readPickedPhoto,
-  requestScenePhotoSlot,
-  type StorageUploadResult,
+  uploadScenePhoto,
 } from "../api/goi-vigov";
 import {
   MAX_SCENE_PHOTOS,
   PHOTO_ERROR,
-  photoUploadBody,
-  type PhotoSlot,
-  type PhotoUploadForm,
+  type PhotoUploadReply,
   type ScenePhotoLink,
-  type ScenePhotoOut,
   type ScenePhotoType,
   sniffScenePhotoType,
 } from "../api/hop-dong-phan-anh";
@@ -289,15 +283,17 @@ export function ScenePhotoField(props: {
 export type PreparedPhoto = { readonly blob: Blob; readonly type: ScenePhotoType };
 
 /**
- * Where one photo stands. A failure keeps the step to RESUME from, so "Tải lại" never repeats what succeeded:
- * a granted slot is not asked for again (it counts against the five for 15 minutes, `petition_photo.go`), and
- * a received upload is not posted again.
+ * Where one photo stands: its local file still to be read, or its bytes ready to send (ADR 0052 §Sửa đổi
+ * 09/10/2026: ONE multipart request to petitions — no slot, no store, no completion).
+ *
+ * `key` is the send's `Idempotency-Key`. A failure keeps the step to RESUME from, so "Tải lại" never stores a
+ * photo twice: after a dropped line (or an answer that could not be read, or the same key still in flight) the
+ * SAME key goes again, and a photo the server already stored comes back as a replay. After a DEFINITE refusal
+ * the key is `null`, and a fresh one is drawn when the photo is sent again.
  */
 export type PhotoStep =
   | { readonly stage: "read"; readonly path: string }
-  | { readonly stage: "slot"; readonly file: PreparedPhoto }
-  | { readonly stage: "upload"; readonly file: PreparedPhoto; readonly id: string; readonly form: PhotoUploadForm }
-  | { readonly stage: "complete"; readonly file: PreparedPhoto; readonly id: string; readonly form: PhotoUploadForm };
+  | { readonly stage: "send"; readonly file: PreparedPhoto; readonly key: string | null };
 
 /** Why a photo did not go — each is ONE sentence in `SCENE_PHOTOS.failures` saying what to do next. */
 export type PhotoFailure = keyof typeof SCENE_PHOTOS.failures;
@@ -313,17 +309,27 @@ const FINAL: ReadonlySet<PhotoFailure> = new Set<PhotoFailure>([
   "not-readable",
   "not-a-photo",
   "not-accepted",
+  "too-large",
   "not-found",
   "petition-moved",
   "limit",
   "rejected",
 ]);
 
-/** A refusal `code` → its failure. An unknown code is a server fault, never "fix your photo". */
-export function refusalFailure(status: number, code: string | null): PhotoFailure | "not-received" {
+/**
+ * A refusal `code` → its failure. An unknown code is a server fault, never "fix your photo". A refusal with no
+ * ViGov body (a proxy in front of petitions answering 408 / 413 / 415 itself) is read by its status.
+ */
+export function refusalFailure(status: number, code: string | null): PhotoFailure {
   switch (code) {
     case PHOTO_ERROR.invalid:
+    case PHOTO_ERROR.invalidUpload:
+    case PHOTO_ERROR.unsupportedMedia:
       return "not-accepted";
+    case PHOTO_ERROR.tooLarge:
+      return "too-large";
+    case PHOTO_ERROR.timeout:
+      return "slow";
     case PHOTO_ERROR.notFound:
       return "not-found";
     case PHOTO_ERROR.petitionState:
@@ -331,24 +337,36 @@ export function refusalFailure(status: number, code: string | null): PhotoFailur
     case PHOTO_ERROR.limit:
       return "limit";
     case PHOTO_ERROR.photoState:
-    case PHOTO_ERROR.expired:
-      return "expired";
-    case PHOTO_ERROR.notReceived:
-      return "not-received";
+    case PHOTO_ERROR.changed:
+      return "not-stored";
+    case PHOTO_ERROR.inProgress:
+      return "in-progress";
     case PHOTO_ERROR.rejected:
       return "rejected";
     case PHOTO_ERROR.storageNotConfigured:
       return "not-configured";
+    case PHOTO_ERROR.busy:
     case PHOTO_ERROR.scanUnavailable:
     case PHOTO_ERROR.limitsUnavailable:
       return "busy";
+  }
+  if (code !== null) return "server";
+  switch (status) {
+    case 404:
+      return "not-found";
+    case 408:
+      return "slow";
+    case 413:
+      return "too-large";
+    case 415:
+      return "not-accepted";
     default:
-      return status === 404 ? "not-found" : "server";
+      return "server";
   }
 }
 
 /** Every non-`xong` branch of a photo route → its failure. PURE. */
-export function callFailure(kq: Exclude<PhotoCallResult<unknown>, { kieu: "xong" }>): PhotoFailure | "not-received" {
+export function callFailure(kq: Exclude<PhotoCallResult<unknown>, { kieu: "xong" }>): PhotoFailure {
   switch (kq.kieu) {
     case "chua-co-phien":
     case "het-phien":
@@ -369,60 +387,32 @@ export function callFailure(kq: Exclude<PhotoCallResult<unknown>, { kieu: "xong"
   }
 }
 
-/** A failure at `step`, with the step to resume from (`null` when retrying cannot help). */
-function failedAt(failure: PhotoFailure, step: PhotoStep): StepOutcome {
-  return { kind: "failed", failure, retry: FINAL.has(failure) ? null : step };
-}
-
-/** The slot request's answer → the next step. A failed slot is retried as a NEW slot (new key). PURE. */
-export function slotOutcome(kq: PhotoCallResult<PhotoSlot>, file: PreparedPhoto): StepOutcome {
-  if (kq.kieu === "xong") {
-    return { kind: "next", step: { stage: "upload", file, id: kq.gia_tri.photo.id, form: kq.gia_tri.upload } };
-  }
-  const f = callFailure(kq);
-  return failedAt(f === "not-received" ? "server" : f, { stage: "slot", file });
-}
-
 /**
- * The store's answer → the next step. A refusal (4xx) means the form is spent or the store refused it: a
- * NEW slot. A dropped line or a 5xx: post again with the same form while it lives. PURE.
+ * Whether the server's answer DEFINITELY did not store the photo — then a retry draws a new key. A dropped
+ * line, an unreadable answer (`loi-may-chu`: a 201 cut short is one of them), the same key still in flight, or
+ * nothing sent at all (session, host) are not: the same key goes again, so a stored photo is replayed, never
+ * stored twice.
  */
-export function storageOutcome(res: StorageUploadResult, step: Extract<PhotoStep, { stage: "upload" }>): StepOutcome {
-  switch (res.kieu) {
-    case "xong":
-      return { kind: "next", step: { stage: "complete", file: step.file, id: step.id, form: step.form } };
-    case "tu-choi":
-      return { kind: "failed", failure: "storage-refused", retry: { stage: "slot", file: step.file } };
-    case "loi-mang":
-      return { kind: "failed", failure: "network", retry: step };
-    default:
-      return { kind: "failed", failure: "server", retry: step };
-  }
+function definitelyRefused(kq: Exclude<PhotoCallResult<unknown>, { kieu: "xong" }>): boolean {
+  if (kq.kieu === "rate-limited") return true;
+  return kq.kieu === "refused" && kq.code !== PHOTO_ERROR.inProgress;
 }
 
-/**
- * The completion's answer → stored, or where to resume. `expired` (the form died, or the photo is no longer
- * pending) resumes at a NEW slot; `not-received` posts the bytes again; the rest retry the completion. PURE.
- */
-export function completionOutcome(
-  kq: PhotoCallResult<ScenePhotoOut>,
-  step: Extract<PhotoStep, { stage: "complete" }>,
+/** The upload's answer → stored, or the failure and the step to resume from. PURE. */
+export function sendOutcome(
+  kq: PhotoCallResult<PhotoUploadReply>,
+  step: Extract<PhotoStep, { stage: "send" }>,
 ): StepOutcome {
   if (kq.kieu === "xong") {
-    return kq.gia_tri.status === "stored" ? { kind: "stored" } : { kind: "failed", failure: "server", retry: step };
+    // A replay is only ever recorded after a 2xx (`core/idem`), and every 2xx here is a stored photo.
+    if (kq.gia_tri.kind === "replayed" || kq.gia_tri.photo.status === "stored") return { kind: "stored" };
+    // Not a status the contract's 201 carries: not reported as sent, and sent again as a new attempt.
+    return { kind: "failed", failure: "server", retry: { stage: "send", file: step.file, key: null } };
   }
-  const f = callFailure(kq);
-  if (f === "not-received") {
-    return { kind: "failed", failure: "server", retry: { stage: "upload", file: step.file, id: step.id, form: step.form } };
-  }
-  if (f === "expired") return { kind: "failed", failure: "expired", retry: { stage: "slot", file: step.file } };
-  return failedAt(f, step);
-}
-
-/** Whether the form is still alive at `now` (a margin, so a post does not start in its last seconds). */
-export function formAlive(form: PhotoUploadForm, now: number): boolean {
-  const ends = Date.parse(form.expires_at);
-  return Number.isFinite(ends) && ends - 10_000 > now;
+  const failure = callFailure(kq);
+  if (FINAL.has(failure)) return { kind: "failed", failure, retry: null };
+  const retry: PhotoStep = definitelyRefused(kq) ? { stage: "send", file: step.file, key: null } : step;
+  return { kind: "failed", failure, retry };
 }
 
 /** Read the picked file and learn its type from its bytes. */
@@ -440,43 +430,31 @@ export async function preparePhoto(path: string): Promise<PreparedPhoto | "not-r
 }
 
 /** ONE stage of one photo. */
-export async function runStep(code: string, step: PhotoStep, now: () => number = Date.now): Promise<StepOutcome> {
+export async function runStep(code: string, step: PhotoStep): Promise<StepOutcome> {
   switch (step.stage) {
     case "read": {
       const file = await preparePhoto(step.path);
       if (file === "not-readable" || file === "not-a-photo") return { kind: "failed", failure: file, retry: null };
-      return { kind: "next", step: { stage: "slot", file } };
+      return { kind: "next", step: { stage: "send", file, key: null } };
     }
-    case "slot": {
-      // A NEW key for every slot request — see `requestScenePhotoSlot`.
-      const key = taoLanGui("").khoa;
-      return slotOutcome(
-        await requestScenePhotoSlot(code, photoUploadBody(step.file.type, step.file.blob.size), key),
-        step.file,
-      );
+    case "send": {
+      // The key is drawn ONCE per attempt and kept on the step, so a retry after a dropped line reuses it.
+      const sending = { ...step, key: step.key ?? taoLanGui("").khoa };
+      return sendOutcome(await uploadScenePhoto(code, sending.file.blob, sending.file.type, sending.key), sending);
     }
-    case "upload":
-      if (!formAlive(step.form, now())) return { kind: "next", step: { stage: "slot", file: step.file } };
-      return storageOutcome(await postPhotoToStorage(step.form, step.file.blob, step.file.type), step);
-    case "complete":
-      return completionOutcome(await completeScenePhoto(code, step.id), step);
   }
 }
 
-/** The most stages one attempt may run: read · slot · upload · complete, plus one fresh slot for a dead form. */
-const MAX_STAGES = 6;
+/** The most stages one attempt may run: read · send. */
+const MAX_STAGES = 2;
 
 /** Run one photo from `step` until it is stored or a stage fails. Never throws. */
-export async function attachScenePhoto(
-  code: string,
-  step: PhotoStep,
-  now: () => number = Date.now,
-): Promise<Exclude<StepOutcome, { kind: "next" }>> {
+export async function attachScenePhoto(code: string, step: PhotoStep): Promise<Exclude<StepOutcome, { kind: "next" }>> {
   let current = step;
   for (let i = 0; i < MAX_STAGES; i++) {
     let out: StepOutcome;
     try {
-      out = await runStep(code, current, now);
+      out = await runStep(code, current);
     } catch {
       return { kind: "failed", failure: "server", retry: current };
     }
@@ -500,7 +478,7 @@ export type UploadJob = {
  * failed photo from where it stopped. A 401/403 hands the act to the gate (`onSessionLost`) and resumes after
  * it. `onStored` runs after each stored photo (the detail reloads its list).
  *
- * The step a job resumes from lives in `steps` (memory only — it holds the bytes and the upload form). An entry
+ * The step a job resumes from lives in `steps` (memory only — it holds the bytes and the attempt's key). An entry
  * is overwritten, never needed again once its job is stored or finally refused (`canRetry` false), and goes
  * with the screen.
  */

@@ -19,16 +19,16 @@ vi.mock("../api/dia-chi-vigov", () => ({
   diaChiViGov: (_service: string, path: string) => (state.host === "" ? "" : `${state.host}${path}`),
 }));
 
+import { SCENE_PHOTO_UPLOAD_WAIT_MS } from "../api/goi-vigov";
 import {
   MAX_SCENE_PHOTOS,
-  PHOTO_UPLOAD_FIELDS,
-  photoCompletionAddress,
+  PHOTO_FILE_NAME,
+  PHOTO_UPLOAD_PARTS,
   photosAddress,
-  photoUploadBody,
-  readPhotoSlot,
+  photoUploadForm,
+  readPhotoUploadReply,
   readScenePhotoList,
   sniffScenePhotoType,
-  STORAGE_FILE_FIELD,
 } from "../api/hop-dong-phan-anh";
 import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 
@@ -36,7 +36,6 @@ import { CONSENT_DIALOG, SCENE_PHOTOS, XA_PA, ZALO_FAILURE } from "./noi-dung";
 import { CommuneSendScreen, PetitionBody, SendDone } from "./PhanAnhAppXa";
 import {
   attachScenePhoto,
-  completionOutcome,
   msUntilRefresh,
   OwnScenePhotosView,
   type PhotoFailure,
@@ -51,8 +50,7 @@ import {
   ScenePhotoButtons,
   ScenePhotoField,
   ScenePhotoUploads,
-  slotOutcome,
-  storageOutcome,
+  sendOutcome,
   uploadSummary,
   type UploadJob,
 } from "./scene-photos";
@@ -67,8 +65,8 @@ const HEIC = new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 
 
 const CODE = "PA7K2QX9M4TD";
 const LOCAL = "zalo-temp://photo-1.jpg";
-const STORE = "https://store.example.vn/vigov-temp";
 const FUTURE = "2999-01-01T00:00:00Z";
+const PETITIONS_HOST = "https://petitions.example.vn";
 
 type Call = { url: string; init: RequestInit | undefined };
 let calls: Call[] = [];
@@ -96,15 +94,13 @@ function fakeFetch(...answers: Array<ReturnType<typeof answer> | Error>) {
   });
 }
 
-const slotReply = (id = "f-1") => ({
-  photo: { id, content_type: "", size_bytes: 0, status: "pending", created_at: "2026-10-02T01:00:00Z" },
-  upload: { url: STORE, fields: { key: "t_x/tmp/1", policy: "p", "x-amz-signature": "s" }, expires_at: FUTURE },
-});
 const storedReply = (id = "f-1") => ({ id, content_type: "image/jpeg", size_bytes: 10, status: "stored", created_at: "x" });
+const replayReply = (id = "f-1") => ({ code: id, replayed: true });
 const headers = (c: Call) => (c.init?.headers ?? {}) as Record<string, string>;
+const keyOf = (c: Call) => headers(c)["Idempotency-Key"];
 
 const FILE: PreparedPhoto = { blob: new Blob([JPEG], { type: "image/jpeg" }), type: "image/jpeg" };
-const FORM = { url: STORE, fields: { key: "k" }, expires_at: FUTURE };
+const SEND: PhotoStep = { stage: "send", file: FILE, key: null };
 
 beforeEach(() => {
   calls = [];
@@ -124,28 +120,34 @@ describe("contract — what the photo routes carry", () => {
     expect(sniffScenePhotoType(new Uint8Array([]))).toBeNull();
   });
 
-  it("the slot body is EXACTLY content_type and size — no file name, nothing of the citizen", () => {
-    const body = JSON.parse(photoUploadBody("image/png", 12345)) as Record<string, unknown>;
-    expect(Object.keys(body).sort()).toEqual([...PHOTO_UPLOAD_FIELDS].sort());
-    expect(body).toEqual({ content_type: "image/png", size: 12345 });
+  it("the multipart body is size, content_type, then the file — in that order, nothing else, a fixed file name", async () => {
+    const form = photoUploadForm(new Blob([PNG]), "image/png");
+    expect([...form.keys()]).toEqual([...PHOTO_UPLOAD_PARTS]);
+    expect(PHOTO_UPLOAD_PARTS).toEqual(["size", "content_type", "file"]);
+    expect(form.get("size")).toBe(String(PNG.length));
+    expect(form.get("content_type")).toBe("image/png");
+    const file = form.get("file") as File;
+    expect(file.type).toBe("image/png");
+    // The phone's own file name never travels (rule 3): the part carries a fixed word.
+    expect(file.name).toBe(PHOTO_FILE_NAME);
+    expect(PHOTO_FILE_NAME).toBe("photo");
+    expect(new Uint8Array(await file.arrayBuffer())).toEqual(PNG);
   });
 
-  it("addresses: under the lookup code, encoded once; empty host = empty address (no call)", () => {
-    expect(photosAddress(CODE)).toBe(`https://petitions.example.vn/api/v1/my-citizen-reports/${CODE}/photos`);
-    expect(photoCompletionAddress(CODE, "f/1")).toBe(
-      `https://petitions.example.vn/api/v1/my-citizen-reports/${CODE}/photos/f%2F1/completion`,
-    );
+  it("address: under the lookup code on the petitions host, encoded once; empty host = empty address (no call)", () => {
+    expect(photosAddress(CODE)).toBe(`${PETITIONS_HOST}/api/v1/my-citizen-reports/${CODE}/photos`);
+    expect(photosAddress("a/b")).toBe(`${PETITIONS_HOST}/api/v1/my-citizen-reports/a%2Fb/photos`);
     state.host = "";
     expect(photosAddress(CODE)).toBe("");
   });
 
-  it("a slot reply without a form (an idempotent replay), with an http store, or naming `file` is malformed", () => {
-    expect(readPhotoSlot(slotReply())).not.toBeNull();
-    expect(readPhotoSlot({ code: "f-1", replayed: true })).toBeNull();
-    expect(readPhotoSlot({ ...slotReply(), upload: { ...slotReply().upload, url: "http://store.example.vn" } })).toBeNull();
-    expect(
-      readPhotoSlot({ ...slotReply(), upload: { ...slotReply().upload, fields: { [STORAGE_FILE_FIELD]: "x" } } }),
-    ).toBeNull();
+  it("the 201: the stored photo, or the idempotent replay's file id; anything else is malformed", () => {
+    expect(readPhotoUploadReply(storedReply())).toEqual({ kind: "stored", photo: { id: "f-1", status: "stored" } });
+    expect(readPhotoUploadReply(replayReply("f-9"))).toEqual({ kind: "replayed", id: "f-9" });
+    expect(readPhotoUploadReply({ code: "", replayed: true })).toBeNull();
+    expect(readPhotoUploadReply({ code: "f-1", replayed: false })).toBeNull();
+    expect(readPhotoUploadReply({ id: "", status: "stored" })).toBeNull();
+    expect(readPhotoUploadReply(null)).toBeNull();
   });
 
   it("the list: https links only; one bad row is a bad page", () => {
@@ -154,42 +156,41 @@ describe("contract — what the photo routes carry", () => {
     expect(readScenePhotoList({ items: [ok, { ...ok, url: "http://s/a" }] })).toBeNull();
     expect(readScenePhotoList({ items: [] })).toEqual([]);
   });
+
+  it("the upload waits at least as long as the server's own 180 s bound before calling it a dropped line", () => {
+    expect(SCENE_PHOTO_UPLOAD_WAIT_MS).toBeGreaterThanOrEqual(180_000);
+  });
 });
 
 /* ─────────────────────────────── one photo, end to end ─────────────────────────────── */
 
-describe("one photo — read · slot · upload · complete", () => {
-  it("success: four calls in order; bearer + key on ViGov, NOTHING of the session on the store", async () => {
-    fakeFetch(
-      answer(200, undefined, new Blob([JPEG])),
-      answer(201, slotReply()),
-      answer(204),
-      answer(200, storedReply()),
-    );
+describe("one photo — read · send (ONE multipart request to petitions)", () => {
+  it("success: the local read, then ONE POST to the petitions host — bearer + key, multipart, no storage host", async () => {
+    fakeFetch(answer(200, undefined, new Blob([JPEG])), answer(201, storedReply()));
     const out = await attachScenePhoto(CODE, { stage: "read", path: LOCAL });
     expect(out).toEqual({ kind: "stored" });
-    expect(calls.map((c) => c.url)).toEqual([LOCAL, photosAddress(CODE), STORE, photoCompletionAddress(CODE, "f-1")]);
+    // Exactly two fetches: the phone's own temp file, and petitions. Nothing to any object store.
+    expect(calls.map((c) => c.url)).toEqual([LOCAL, photosAddress(CODE)]);
+    expect(calls.filter((c) => !c.url.startsWith("zalo-temp://")).every((c) => c.url.startsWith(`${PETITIONS_HOST}/`))).toBe(
+      true,
+    );
 
-    const [, slot, store, done] = calls as [Call, Call, Call, Call];
-    expect(slot.init?.method).toBe("POST");
-    expect(headers(slot)["Authorization"]).toBe("Bearer tok-test");
-    expect(headers(slot)["Idempotency-Key"]).toMatch(/^[0-9a-f]{32}$/);
-    expect(JSON.parse(String(slot.init?.body))).toEqual({ content_type: "image/jpeg", size: JPEG.length });
-
-    // The store: the form is the credential — no bearer, no cookie.
-    expect(store.init?.method).toBe("POST");
-    expect(store.init?.headers).toBeUndefined();
-    expect(store.init?.credentials).toBe("omit");
-    const form = store.init?.body as FormData;
-    const names = [...form.keys()];
-    expect(names).toEqual(["key", "policy", "x-amz-signature", STORAGE_FILE_FIELD]);
-    const file = form.get(STORAGE_FILE_FIELD) as Blob;
+    const send = calls[1]!;
+    expect(send.init?.method).toBe("POST");
+    expect(headers(send)["Authorization"]).toBe("Bearer tok-test");
+    expect(keyOf(send)).toMatch(/^[0-9a-f]{32}$/);
+    // The boundary is the runtime's to write: a hand-set Content-Type would have none.
+    expect(headers(send)["Content-Type"]).toBeUndefined();
+    const form = send.init?.body as FormData;
+    expect(form).toBeInstanceOf(FormData);
+    expect([...form.keys()]).toEqual(["size", "content_type", "file"]);
+    expect(form.get("size")).toBe(String(JPEG.length));
+    expect(form.get("content_type")).toBe("image/jpeg");
+    const file = form.get("file") as File;
     expect(file.type).toBe("image/jpeg");
-    expect((file as File).name).toBe("photo");
-
-    expect(headers(done)["Authorization"]).toBe("Bearer tok-test");
-    expect(done.init?.body).toBeUndefined();
-    // Nothing personal in any address: only the lookup code and the server's photo id.
+    expect(file.name).toBe("photo");
+    expect(file.name).not.toContain("photo-1");
+    // Nothing personal in any address: only the lookup code.
     for (const c of calls) expect(c.url).not.toMatch(/0900000000|Nguyễn/);
   });
 
@@ -210,35 +211,54 @@ describe("one photo — read · slot · upload · complete", () => {
     expect(calls).toHaveLength(1);
   });
 
-  it("a retried slot asks with a NEW key (a replay brings no form)", async () => {
-    fakeFetch(new Error("dropped"), answer(201, slotReply()), answer(204), answer(200, storedReply()));
-    const first = await attachScenePhoto(CODE, { stage: "slot", file: FILE });
-    expect(first.kind).toBe("failed");
+  it("a DROPPED LINE retries with the SAME Idempotency-Key — and the server's replay counts as stored", async () => {
+    fakeFetch(new Error("dropped"), answer(201, replayReply()));
+    const first = await attachScenePhoto(CODE, SEND);
     if (first.kind !== "failed" || first.retry === null) throw new Error("expected a retry step");
     expect(first.failure).toBe("network");
-    expect(first.retry.stage).toBe("slot");
     expect(await attachScenePhoto(CODE, first.retry)).toEqual({ kind: "stored" });
-    expect(headers(calls[0]!)["Idempotency-Key"]).not.toBe(headers(calls[1]!)["Idempotency-Key"]);
+    expect(calls).toHaveLength(2);
+    expect(keyOf(calls[0]!)).toMatch(/^[0-9a-f]{32}$/);
+    expect(keyOf(calls[1]!)).toBe(keyOf(calls[0]!));
   });
 
-  it("a dropped upload resumes AT THE UPLOAD with the same form — no second slot", async () => {
-    fakeFetch(new Error("dropped"));
-    const step: PhotoStep = { stage: "upload", file: FILE, id: "f-1", form: FORM };
-    const out = await attachScenePhoto(CODE, step);
-    expect(out).toEqual({ kind: "failed", failure: "network", retry: step });
+  it("a 201 whose body cannot be read retries with the SAME key too — the photo may already be stored", async () => {
+    fakeFetch(answer(201, { nonsense: true }), answer(201, replayReply()));
+    const first = await attachScenePhoto(CODE, SEND);
+    if (first.kind !== "failed" || first.retry === null) throw new Error("expected a retry step");
+    expect(first.failure).toBe("server");
+    expect(await attachScenePhoto(CODE, first.retry)).toEqual({ kind: "stored" });
+    expect(keyOf(calls[1]!)).toBe(keyOf(calls[0]!));
   });
 
-  it("an expired form is never posted: a fresh slot is asked first", async () => {
-    fakeFetch(answer(201, slotReply("f-2")), answer(204), answer(200, storedReply("f-2")));
-    const dead = { ...FORM, expires_at: "2000-01-01T00:00:00Z" };
-    expect(await attachScenePhoto(CODE, { stage: "upload", file: FILE, id: "f-1", form: dead })).toEqual({ kind: "stored" });
-    expect(calls[0]!.url).toBe(photosAddress(CODE));
+  it("the same key still in flight (409 request_in_progress) keeps the key", async () => {
+    fakeFetch(answer(409, { code: "request_in_progress" }), answer(201, replayReply()));
+    const first = await attachScenePhoto(CODE, SEND);
+    if (first.kind !== "failed" || first.retry === null) throw new Error("expected a retry step");
+    expect(first.failure).toBe("in-progress");
+    await attachScenePhoto(CODE, first.retry);
+    expect(keyOf(calls[1]!)).toBe(keyOf(calls[0]!));
+  });
+
+  it("a DEFINITE refusal that can be retried asks again with a NEW key", async () => {
+    fakeFetch(answer(503, { code: "upload_busy" }), answer(201, storedReply()));
+    const first = await attachScenePhoto(CODE, SEND);
+    if (first.kind !== "failed" || first.retry === null) throw new Error("expected a retry step");
+    expect(first.failure).toBe("busy");
+    expect(await attachScenePhoto(CODE, first.retry)).toEqual({ kind: "stored" });
+    expect(keyOf(calls[1]!)).toMatch(/^[0-9a-f]{32}$/);
+    expect(keyOf(calls[1]!)).not.toBe(keyOf(calls[0]!));
+  });
+
+  it("a 201 that is not `stored` is not reported as sent", async () => {
+    fakeFetch(answer(201, { ...storedReply(), status: "pending" }));
+    expect(await attachScenePhoto(CODE, SEND)).toMatchObject({ kind: "failed", failure: "server" });
   });
 
   it("no session: nothing goes out, and the photo waits for the gate", async () => {
     state.session = null;
-    fakeFetch(answer(201, slotReply()));
-    const out = await attachScenePhoto(CODE, { stage: "slot", file: FILE });
+    fakeFetch(answer(201, storedReply()));
+    const out = await attachScenePhoto(CODE, SEND);
     expect(out).toMatchObject({ kind: "failed", failure: "session" });
     expect(calls).toHaveLength(0);
   });
@@ -246,61 +266,93 @@ describe("one photo — read · slot · upload · complete", () => {
 
 /* ─────────────────────────────── refusals → next step ─────────────────────────────── */
 
-describe("each refusal code → one failure, and where 'Tải lại' resumes", () => {
-  const complete: Extract<PhotoStep, { stage: "complete" }> = { stage: "complete", file: FILE, id: "f-1", form: FORM };
+describe("each refusal code → one failure, its sentence, and whether 'Tải lại' is offered", () => {
   const refused = (status: number, code: string | null) => ({ kieu: "refused" as const, status, code });
+  const step = { stage: "send" as const, file: FILE, key: "k".repeat(32) };
 
   it("the server's codes", () => {
     expect(refusalFailure(400, "invalid_request")).toBe("not-accepted");
+    expect(refusalFailure(400, "invalid_upload")).toBe("not-accepted");
+    expect(refusalFailure(415, "unsupported_media_type")).toBe("not-accepted");
+    expect(refusalFailure(413, "file_too_large")).toBe("too-large");
+    expect(refusalFailure(408, "upload_timeout")).toBe("slow");
     expect(refusalFailure(404, "not_found")).toBe("not-found");
     expect(refusalFailure(409, "petition_state")).toBe("petition-moved");
     expect(refusalFailure(409, "photo_limit")).toBe("limit");
-    expect(refusalFailure(409, "photo_state")).toBe("expired");
-    expect(refusalFailure(409, "upload_expired")).toBe("expired");
-    expect(refusalFailure(409, "upload_not_received")).toBe("not-received");
+    expect(refusalFailure(409, "upload_changed")).toBe("not-stored");
+    expect(refusalFailure(409, "photo_state")).toBe("not-stored");
+    expect(refusalFailure(409, "request_in_progress")).toBe("in-progress");
     expect(refusalFailure(422, "photo_rejected")).toBe("rejected");
+    expect(refusalFailure(503, "upload_busy")).toBe("busy");
     expect(refusalFailure(503, "storage_not_configured")).toBe("not-configured");
     expect(refusalFailure(503, "malware_scan_unavailable")).toBe("busy");
     expect(refusalFailure(503, "upload_limits_unavailable")).toBe("busy");
+    // A proxy in front of petitions answers by status alone, with no ViGov body.
+    expect(refusalFailure(413, null)).toBe("too-large");
+    expect(refusalFailure(415, null)).toBe("not-accepted");
+    expect(refusalFailure(408, null)).toBe("slow");
     // Unknown: a server fault, never "fix your photo".
     expect(refusalFailure(500, "internal")).toBe("server");
     expect(refusalFailure(409, "something_new")).toBe("server");
     expect(refusalFailure(404, null)).toBe("not-found");
   });
 
-  it("final answers offer no retry; transient ones resume at the right step", () => {
-    expect(completionOutcome(refused(422, "photo_rejected"), complete)).toEqual({ kind: "failed", failure: "rejected", retry: null });
-    expect(completionOutcome(refused(409, "petition_state"), complete)).toEqual({
-      kind: "failed",
-      failure: "petition-moved",
-      retry: null,
-    });
-    expect(completionOutcome(refused(503, "malware_scan_unavailable"), complete)).toEqual({
-      kind: "failed",
-      failure: "busy",
-      retry: complete,
-    });
-    expect(completionOutcome(refused(409, "upload_expired"), complete)).toEqual({
-      kind: "failed",
-      failure: "expired",
-      retry: { stage: "slot", file: FILE },
-    });
-    expect(completionOutcome(refused(409, "upload_not_received"), complete)).toEqual({
-      kind: "failed",
-      failure: "server",
-      retry: { stage: "upload", file: FILE, id: "f-1", form: FORM },
-    });
-    expect(completionOutcome({ kieu: "rate-limited", retryAfterSeconds: 60 }, complete)).toMatchObject({
+  it("each new code reaches the citizen as the plain sentence the owner's table names", async () => {
+    const cases: Array<[number, string, RegExp]> = [
+      [413, "file_too_large", /lớn hơn dung lượng/],
+      [415, "unsupported_media_type", /Không gửi được ảnh này/],
+      [400, "invalid_upload", /Không gửi được ảnh này/],
+      [503, "upload_busy", /đang bận.*ít phút/],
+      [408, "upload_timeout", /Mạng chậm/],
+    ];
+    for (const [status, code, sentence] of cases) {
+      calls = [];
+      fakeFetch(answer(status, { code, message: "câu của máy chủ", trace_id: "t" }));
+      const out = await attachScenePhoto(CODE, SEND);
+      if (out.kind !== "failed") throw new Error(`${code}: expected a failure`);
+      const text = SCENE_PHOTOS.failures[out.failure];
+      expect(text, code).toMatch(sentence);
+      // The server's own sentence, a status or a code never reaches the screen.
+      expect(text, code).not.toContain("câu của máy chủ");
+      expect(text, code).not.toContain(String(status));
+      expect(text, code).not.toContain(code);
+    }
+  });
+
+  it("final answers offer no retry; transient ones do", () => {
+    for (const [status, code] of [
+      [422, "photo_rejected"],
+      [409, "petition_state"],
+      [409, "photo_limit"],
+      [413, "file_too_large"],
+      [415, "unsupported_media_type"],
+      [400, "invalid_upload"],
+      [404, "not_found"],
+    ] as const) {
+      expect(sendOutcome(refused(status, code), step), code).toMatchObject({ kind: "failed", retry: null });
+    }
+    // Definite but transient refusals: a NEW key (`key: null`).
+    for (const [status, code] of [
+      [503, "upload_busy"],
+      [503, "malware_scan_unavailable"],
+      [408, "upload_timeout"],
+      [409, "upload_changed"],
+      [500, "internal"],
+    ] as const) {
+      expect(sendOutcome(refused(status, code), step), code).toMatchObject({
+        kind: "failed",
+        retry: { stage: "send", file: FILE, key: null },
+      });
+    }
+    expect(sendOutcome({ kieu: "rate-limited", retryAfterSeconds: 60 }, step)).toMatchObject({
       failure: "rate-limited",
-      retry: complete,
+      retry: { stage: "send", key: null },
     });
-    expect(slotOutcome(refused(409, "photo_limit"), FILE)).toEqual({ kind: "failed", failure: "limit", retry: null });
-    expect(slotOutcome(refused(400, "invalid_request"), FILE)).toEqual({ kind: "failed", failure: "not-accepted", retry: null });
-    expect(storageOutcome({ kieu: "tu-choi", status: 403 }, { stage: "upload", file: FILE, id: "f-1", form: FORM })).toEqual({
-      kind: "failed",
-      failure: "storage-refused",
-      retry: { stage: "slot", file: FILE },
-    });
+    // Not a refusal: the same key, so a photo already stored is replayed, never stored twice.
+    expect(sendOutcome({ kieu: "loi-mang" }, step)).toEqual({ kind: "failed", failure: "network", retry: step });
+    expect(sendOutcome({ kieu: "loi-may-chu" }, step)).toEqual({ kind: "failed", failure: "server", retry: step });
+    expect(sendOutcome({ kieu: "het-phien" }, step)).toEqual({ kind: "failed", failure: "session", retry: step });
+    expect(sendOutcome({ kieu: "xong", gia_tri: { kind: "replayed", id: "f-1" } }, step)).toEqual({ kind: "stored" });
   });
 });
 

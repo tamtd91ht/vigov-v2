@@ -851,8 +851,8 @@ export function chonAnhTuMay(): Promise<KetQuaXin<readonly string[]>> {
    the two declaration rows are `ca-hai` and carry a `commune_app` view.
 
    ⚠ STILL NO `serverUploadUrl`, AND THIS IS NOT A LOOPHOLE: the picker hands back LOCAL temp paths and uploads
-     nothing (`index.d.ts:4721`). The bytes leave the phone only through the state half's presigned POST
-     (`cong-dan/api/goi-vigov.ts` `postPhotoToStorage`), after the citizen pressed "Gửi phản ánh" — a path the
+     nothing (`index.d.ts:4721`). The bytes leave the phone only through the state half's ONE multipart upload
+     to petitions (`cong-dan/api/goi-vigov.ts` `uploadScenePhoto`), after the citizen pressed "Gửi phản ánh" — a path the
      tripwires can see, declared in the dossier (`content/ket-xuat-ho-so.ts`). Only `App.tsx` `AppRieng`
      injects these two functions; the shared app never receives them (`ranh-gioi-hai-nua.test.ts`).
    ============================================================================================== */

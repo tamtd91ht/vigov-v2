@@ -21,14 +21,12 @@ import {
   accountlessReportBody,
   CITIZEN_FIELDS_PATH,
   citizenFieldsAddress,
-  PHOTO_UPLOAD_FIELDS,
-  photoCompletionAddress,
+  PHOTO_UPLOAD_PARTS,
   photosAddress,
-  photoUploadBody,
+  photoUploadForm,
   publicReportAddress,
   publicReportFieldsAddress,
   publicReportsAddress,
-  STORAGE_FILE_FIELD,
 } from "../cong-dan/api/hop-dong-phan-anh";
 import {
   ACCOUNTLESS,
@@ -89,13 +87,9 @@ import {
   DUONG_CONG_KHAI,
   DUONG_ROI_KHOI_MAY,
   PHONE_VERIFICATION_SCREENS,
-  SCENE_PHOTO_COMPLETION_FIELDS,
-  SCENE_PHOTO_COMPLETION_PATH,
   SCENE_PHOTO_LIST_FIELDS,
   SCENE_PHOTO_SCREENS,
-  SCENE_PHOTO_SLOT_FIELDS,
-  SCENE_PHOTO_STORAGE_FIELDS,
-  SCENE_PHOTO_STORAGE_TARGET,
+  SCENE_PHOTO_UPLOAD_FIELDS,
   SCENE_PHOTOS_PATH,
   SEND_SCREEN_NAME,
   TEN_MAN_CONG_KHAI,
@@ -510,7 +504,9 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // + 4 (02/10/2026): the commune app's scene photos — slot, upload to the store, completion, own list.
     // + 3 (08/10/2026, ADR 0083, temporary): the accountless field list, send and public lookup.
     // + 1 (08/10/2026, owner): the Zalo SDK failure report (`vihat-miniapp` `/api/v1/client-errors`).
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(22);
+    // − 2 (09/10/2026, ADR 0052 §Sửa đổi 09/10/2026): slot + store + completion became ONE multipart upload to
+    // petitions — the photo rows are now two: the upload and the own list.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(20);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -667,39 +663,40 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   });
 
   /**
-   * SCENE PHOTOS (02/10/2026) — the four commune-app rows are COPIES (boundary, as the public routes), locked
-   * here to the addresses and the body the state half really builds. A new key in `photoUploadBody`, a renamed
+   * SCENE PHOTOS — the two commune-app rows are COPIES (boundary, as the public routes), locked here to the
+   * address and the multipart body the state half really builds. A new part in `photoUploadForm`, a renamed
    * path, or a row moved into the shared app is red.
+   *
+   * Since ADR 0052 §Sửa đổi 09/10/2026 the photo is ONE multipart request to petitions: no slot, no signed
+   * object-store address, no completion. A row naming any of them again is red too.
    */
-  it("ảnh hiện trường: bốn đường của app riêng, đường dẫn và trường gửi đi khoá với hợp đồng thật", () => {
-    const rows = DUONG_ROI_KHOI_MAY.filter((d) =>
-      [SCENE_PHOTOS_PATH, SCENE_PHOTO_COMPLETION_PATH, SCENE_PHOTO_STORAGE_TARGET].includes(d.tuyen),
-    );
-    expect(rows).toHaveLength(4);
+  it("ảnh hiện trường: hai đường của app riêng, đường dẫn và phần gửi đi khoá với hợp đồng thật", () => {
+    const rows = DUONG_ROI_KHOI_MAY.filter((d) => d.tuyen.includes("/photos"));
+    expect(rows).toHaveLength(2);
+    expect(rows.map((r) => r.tuyen)).toEqual([SCENE_PHOTOS_PATH, SCENE_PHOTOS_PATH]);
     for (const r of rows) {
       expect(r.app, r.tuyen).toBe("commune");
       expect(r.nguoi_dung_bam, r.tuyen).toBe(true);
       expect(r.man).toBe(SCENE_PHOTO_SCREENS);
     }
+    // No row sends anything to a store address of its own, or names the gone steps.
+    for (const d of DUONG_ROI_KHOI_MAY) {
+      expect(d.tuyen, "a row still declares the signed object-store address").not.toMatch(/upload\.url|completion/);
+      expect(d.may_chu, d.tuyen).not.toMatch(/địa chỉ có chữ ký, dùng được trong 15 phút/);
+    }
     const CODE = "PA7K2QX9M4TD";
     expect(new URL(photosAddress(CODE)).pathname).toBe(SCENE_PHOTOS_PATH.replace("{maTraCuu}", CODE));
-    expect(new URL(photoCompletionAddress(CODE, "f-1")).pathname).toBe(
-      SCENE_PHOTO_COMPLETION_PATH.replace("{maTraCuu}", CODE).replace("{id}", "f-1"),
-    );
-    // Slot: the path's code plus EXACTLY the body's keys, both ways.
-    const body = Object.keys(JSON.parse(photoUploadBody("image/jpeg", 1)) as Record<string, unknown>).sort();
-    expect(body).toEqual([...PHOTO_UPLOAD_FIELDS].sort());
-    expect(SCENE_PHOTO_SLOT_FIELDS.map((t) => t.khoa).sort()).toEqual(["maTraCuu", ...body].sort());
-    // Upload: the issued form, then the file, under the field name the client writes.
-    expect(SCENE_PHOTO_STORAGE_FIELDS.map((t) => t.khoa)).toEqual(["fields", STORAGE_FILE_FIELD]);
-    // Completion and list: path parameters only, no body.
-    expect(SCENE_PHOTO_COMPLETION_FIELDS.map((t) => t.khoa)).toEqual(["maTraCuu", "id"]);
+    // Upload: the path's code, then EXACTLY the multipart parts, in the order they are sent — both ways.
+    const parts = [...photoUploadForm(new Blob([new Uint8Array([0xff, 0xd8, 0xff])]), "image/jpeg").keys()];
+    expect(parts).toEqual([...PHOTO_UPLOAD_PARTS]);
+    expect(SCENE_PHOTO_UPLOAD_FIELDS.map((t) => t.khoa)).toEqual(["maTraCuu", ...parts]);
+    // List: the path parameter only, no body.
     expect(SCENE_PHOTO_LIST_FIELDS.map((t) => t.khoa)).toEqual(["maTraCuu"]);
     // The copied screen names are the real ones.
     expect(SCENE_PHOTO_SCREENS).toBe(`Ứng dụng của xã: ${[GUI.tieu_de, CUA_TOI.tieu_de, TRA_CUU.tieu_de].join(" · ")}`);
     // And the commune app's dossier prints them; the shared one does not carry the commune rows' screens.
     const communeBlock = khoiRoiKhoiMay(communeAppRoutes(DUONG_ROI_KHOI_MAY), { communeApp: true });
-    for (const t of [...SCENE_PHOTO_SLOT_FIELDS, ...SCENE_PHOTO_STORAGE_FIELDS, ...SCENE_PHOTO_COMPLETION_FIELDS]) {
+    for (const t of SCENE_PHOTO_UPLOAD_FIELDS) {
       expect(communeBlock, t.khoa).toContain(t.trong_chinh_sach);
     }
   });
@@ -771,7 +768,9 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
   it("câu đầu khối KHÔNG còn nói 'không đường nào chạy lúc mở ứng dụng' — tra tên xã chạy lúc mở", () => {
     const khoi = khoiRoiKhoiMay(DUONG_ROI_KHOI_MAY);
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
-    expect(khoi).toContain("20 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    // 18, not 20, since 09/10/2026: the scene photo's three routes (slot, storage POST, completion) became
+    // ONE multipart send to petitions (ADR 0052 §Sửa đổi 09/10/2026).
+    expect(khoi).toContain("18 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

@@ -667,21 +667,25 @@ export function ratingAddress(ma_tra_cuu: string): string {
 }
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
- * SCENE PHOTOS ON THE CITIZEN'S OWN PETITION (ADR 0047, row "Ảnh hiện trường khi gửi phản ánh"; server
- * `service-petitions/internal/http/petition_photo.go`, contract `kb/20-contracts/openapi.json`):
+ * SCENE PHOTOS ON THE CITIZEN'S OWN PETITION (ADR 0047, row "Ảnh hiện trường khi gửi phản ánh"; ADR 0052
+ * §Sửa đổi 09/10/2026; server `service-petitions/internal/http/petition_photo.go` `UploadPetitionPhoto`,
+ * contract `kb/20-contracts/openapi.json`):
  *
- *   POST /api/v1/my-citizen-reports/{maTraCuu}/photos                  Bearer + Idempotency-Key
- *        {content_type, size} → 201 {photo: photoOut, upload: {url, fields, expires_at}}
- *   (the phone)  multipart POST to `upload.url`: every `fields` entry, then the file LAST as `file`
- *   POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion  Bearer → 200 photoOut
- *   GET  /api/v1/my-citizen-reports/{maTraCuu}/photos                  Bearer → 200 {items: photoLinkOut[]}
+ *   POST /api/v1/my-citizen-reports/{maTraCuu}/photos   Bearer + Idempotency-Key, multipart/form-data:
+ *        `size` · `content_type` · `file` (IN THAT ORDER) → 201 photoOut (stored)
+ *        a replay of the same key → 201 {code: <file id>, replayed: true}
+ *   GET  /api/v1/my-citizen-reports/{maTraCuu}/photos   Bearer → 200 {items: photoLinkOut[]}
+ *
+ * ONE request per photo, to the petitions host: there is no upload slot, no signed object-store address and
+ * no completion call any more (all three were removed on 09/10/2026). The server scans, re-encodes without
+ * EXIF and stores before it answers 201.
  *
  * Errors are `{code, message, trace_id}`; only `code` is read (`errorCode`), and the screen says its own
  * sentence. The petition is untouched by every photo failure (owner, 02/10/2026: a photo failure never
  * fails the send) — which is why photos go up AFTER the petition exists, by its lookup code.
  *
- * ⚠ BOTH REPLIES CARRY BEARER CREDENTIALS: the upload form (15 minutes) and each read URL (≤ 15 minutes).
- *   They live in the screen's memory and nowhere else — never logged, never put in a key, never stored.
+ * ⚠ THE LIST REPLY CARRIES BEARER CREDENTIALS: each read URL (≤ 15 minutes). They live in the screen's memory
+ *   and nowhere else — never logged, never put in a key, never stored.
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
 /**
@@ -695,23 +699,38 @@ export const MAX_SCENE_PHOTOS = 5;
 export const SCENE_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export type ScenePhotoType = (typeof SCENE_PHOTO_TYPES)[number];
 
-/** The two keys the slot request carries — no file name, no location, nothing about the citizen. */
-export const PHOTO_UPLOAD_FIELDS = ["content_type", "size"] as const;
+/**
+ * The multipart parts of one upload, IN THE ORDER THEY ARE SENT. `size` must come before the file: multipart
+ * carries no part length, and the server needs it before it reads the bytes (`core/httpx/upload.go`). Any part
+ * not declared there is refused — so nothing about the citizen can ride along.
+ */
+export const PHOTO_UPLOAD_PARTS = ["size", "content_type", "file"] as const;
 
-/** The multipart field the file goes in, LAST, after every `fields` entry (presigned POST). */
-export const STORAGE_FILE_FIELD = "file";
+/**
+ * The `file` part's file name — a FIXED word. The server ignores it, but it still crosses the network, and the
+ * name a phone gives a file is often a person's name or number (rule 3, forbidden #4).
+ */
+export const PHOTO_FILE_NAME = "photo";
 
-/** `code`s of the photo routes' refusals (`petition_photo.go:221-286`). Unlisted codes are a server fault. */
+/**
+ * `code`s of the upload and list routes' refusals (`petition_photo.go` `answerPhotoError`,
+ * `service-petitions/internal/http/upload.go` `writeUploadEnvelopeError`, `core/httpx/upload.go`, `core/idem`).
+ * Unlisted codes are a server fault.
+ */
 export const PHOTO_ERROR = {
   invalid: "invalid_request",
+  invalidUpload: "invalid_upload",
+  unsupportedMedia: "unsupported_media_type",
+  tooLarge: "file_too_large",
+  timeout: "upload_timeout",
   notFound: "not_found",
   petitionState: "petition_state",
   limit: "photo_limit",
   photoState: "photo_state",
-  notReceived: "upload_not_received",
-  expired: "upload_expired",
   changed: "upload_changed",
+  inProgress: "request_in_progress",
   rejected: "photo_rejected",
+  busy: "upload_busy",
   storageNotConfigured: "storage_not_configured",
   scanUnavailable: "malware_scan_unavailable",
   limitsUnavailable: "upload_limits_unavailable",
@@ -719,8 +738,8 @@ export const PHOTO_ERROR = {
 
 /**
  * The image type the BYTES say, from their first 12 bytes — or `null` for anything else (HEIC, video, junk).
- * The declared type must match the bytes: the server sniffs them at completion and refuses a mismatch
- * (`RejectTypeMismatch`), so trusting the picker's own label would be a refusal after the upload.
+ * The declared type must match the bytes: the server sniffs them and refuses a mismatch (`RejectTypeMismatch`),
+ * so trusting the picker's own label would be a refusal after the upload.
  */
 export function sniffScenePhotoType(head: Uint8Array): ScenePhotoType | null {
   const at = (i: number) => head[i] ?? -1;
@@ -731,9 +750,17 @@ export function sniffScenePhotoType(head: Uint8Array): ScenePhotoType | null {
   return null;
 }
 
-/** `{content_type, size}` — THE ONLY PLACE the two field names are written. */
-export function photoUploadBody(content_type: ScenePhotoType, size: number): string {
-  return JSON.stringify({ content_type, size });
+/**
+ * The multipart body of one upload — THE ONLY PLACE the part names are written. The file part carries the type
+ * the bytes say as its own Content-Type too, and the fixed `PHOTO_FILE_NAME`. No Content-Type header is set
+ * by the caller: the runtime writes it with the boundary.
+ */
+export function photoUploadForm(photo: Blob, content_type: ScenePhotoType): FormData {
+  const form = new FormData();
+  form.append("size", String(photo.size));
+  form.append("content_type", content_type);
+  form.append("file", new Blob([photo], { type: content_type }), PHOTO_FILE_NAME);
+  return form;
 }
 
 /** POST/GET …/{maTraCuu}/photos, or EMPTY. Built on `diaChiTraCuu`: the code is encoded once, the same way. */
@@ -752,25 +779,18 @@ export function verificationPhotosAddress(ma_tra_cuu: string): string {
   return one === "" ? "" : `${one}/verification-photos`;
 }
 
-/** POST …/{maTraCuu}/photos/{id}/completion, or EMPTY. The id is the server's own, encoded like the code. */
-export function photoCompletionAddress(ma_tra_cuu: string, id: string): string {
-  const photos = photosAddress(ma_tra_cuu);
-  return photos === "" ? "" : `${photos}/${encodeURIComponent(id)}/completion`;
-}
-
-/** One photo as the slot and completion replies describe it. `status` is `pending` until stored. */
+/** One photo as the upload's 201 describes it. `status` is `stored` on every 201 the server writes. */
 export type ScenePhotoOut = { readonly id: string; readonly status: string };
 
-/** The presigned POST form. A bearer credential for 15 minutes — memory only. */
-export type PhotoUploadForm = {
-  readonly url: string;
-  readonly fields: Readonly<Record<string, string>>;
-  readonly expires_at: string;
-};
+/**
+ * What a 201 of the upload says. `replayed`: the SAME Idempotency-Key already succeeded (`core/idem` records a
+ * key only after a 2xx) — so the photo IS stored; only its id comes back, never the first body.
+ */
+export type PhotoUploadReply =
+  | { readonly kind: "stored"; readonly photo: ScenePhotoOut }
+  | { readonly kind: "replayed"; readonly id: string };
 
-export type PhotoSlot = { readonly photo: ScenePhotoOut; readonly upload: PhotoUploadForm };
-
-/** An https URL, or `null`. A credential is never sent, and a picture never loaded, over plain http. */
+/** An https URL, or `null`. A picture is never loaded over plain http. */
 function httpsUrl(v: unknown): string | null {
   if (typeof v !== "string") return null;
   try {
@@ -788,28 +808,15 @@ export function readScenePhoto(body: unknown): ScenePhotoOut | null {
   return { id: t["id"], status: t["status"] };
 }
 
-/**
- * 201 of the slot request → the pending photo and its form, or `null` if malformed. An idempotent REPLAY
- * (`{code, replayed: true}`, `core/idem`) carries no form and is malformed here on purpose: the form is never
- * replayed, so the caller asks for a new slot with a new key.
- */
-export function readPhotoSlot(body: unknown): PhotoSlot | null {
+/** 201 of the upload → the stored photo, or the replay's file id; `null` if malformed. */
+export function readPhotoUploadReply(body: unknown): PhotoUploadReply | null {
   if (typeof body !== "object" || body === null) return null;
   const t = body as Record<string, unknown>;
-  const photo = readScenePhoto(t["photo"]);
-  const u = t["upload"];
-  if (photo === null || typeof u !== "object" || u === null) return null;
-  const up = u as Record<string, unknown>;
-  const url = httpsUrl(up["url"]);
-  const fields = up["fields"];
-  if (url === null || typeof up["expires_at"] !== "string" || typeof fields !== "object" || fields === null) return null;
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(fields as Record<string, unknown>)) {
-    // `file` is OURS to write, last; a form that names it would put the bytes in the wrong place.
-    if (typeof v !== "string" || k === STORAGE_FILE_FIELD) return null;
-    out[k] = v;
+  if (t["replayed"] === true) {
+    return typeof t["code"] === "string" && t["code"] !== "" ? { kind: "replayed", id: t["code"] } : null;
   }
-  return { photo, upload: { url, fields: out, expires_at: up["expires_at"] } };
+  const photo = readScenePhoto(body);
+  return photo === null ? null : { kind: "stored", photo };
 }
 
 /** One stored photo with its short-lived read link. Shown, never kept: refetch when `url_expires_at` passes. */

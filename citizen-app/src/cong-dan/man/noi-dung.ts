@@ -1267,16 +1267,18 @@ export const SCENE_PHOTOS = {
   failures: {
     "not-readable": "Không đọc được ảnh này trên máy. Bà con chụp lại hoặc chọn ảnh khác.",
     "not-a-photo": "Chỉ gửi được ảnh JPEG, PNG hoặc WebP. Bà con chọn ảnh khác, hoặc chụp lại bằng nút “Chụp ảnh”.",
-    "not-accepted": "Ảnh quá lớn hoặc không đúng loại ảnh xã nhận. Bà con chọn ảnh khác, hoặc chụp lại.",
+    "not-accepted": "Không gửi được ảnh này. Bà con chọn ảnh khác, hoặc chụp lại bằng nút “Chụp ảnh”.",
+    "too-large": "Ảnh lớn hơn dung lượng xã nhận. Bà con chụp lại, hoặc chọn một ảnh khác nhỏ hơn.",
     "not-found": "Không tìm thấy phản ánh này để đính ảnh. Bà con mở lại phản ánh trong “Phản ánh của tôi”.",
     "petition-moved":
       "Phản ánh đã được xã chuyển sang bước xử lý, nên không đính thêm ảnh được nữa. Phản ánh vẫn được xử lý bình thường.",
     limit: "Phản ánh đã có đủ số ảnh tối đa, nên ảnh này không được đính thêm.",
     rejected: "Ảnh bị từ chối vì không đọc được hoặc không an toàn, và không được lưu. Bà con chụp hoặc chọn ảnh khác.",
-    expired: "Lượt gửi ảnh này đã hết hạn. Bà con bấm “Tải lại” để gửi lại ảnh.",
-    "storage-refused": "Kho lưu ảnh của xã chưa nhận ảnh này. Bà con bấm “Tải lại”; nếu vẫn không được, hãy chọn ảnh khác.",
+    "not-stored": "Ảnh vừa gửi chưa được lưu. Bà con bấm “Tải lại” để gửi lại ảnh.",
+    "in-progress": "Hệ thống của xã đang xử lý ảnh này. Bà con chờ một lát rồi bấm “Tải lại” để biết ảnh đã lưu chưa.",
+    slow: "Mạng chậm nên ảnh chưa gửi xong. Bà con kiểm tra mạng, hoặc ra chỗ sóng tốt hơn, rồi bấm “Tải lại”.",
     "rate-limited": "Bà con đã gửi nhiều ảnh trong thời gian ngắn. Bà con chờ ít phút rồi bấm “Tải lại”.",
-    busy: "Hệ thống của xã tạm thời chưa kiểm tra được ảnh. Bà con chờ ít phút rồi bấm “Tải lại”.",
+    busy: "Hệ thống của xã đang bận nên chưa nhận được ảnh. Bà con chờ ít phút rồi bấm “Tải lại”.",
     "not-configured": "Hệ thống của xã chưa sẵn sàng nhận ảnh. Bà con thử lại sau trong “Phản ánh của tôi”.",
     session:
       "Phiên làm việc với xã đã hết hạn. Bà con xác nhận lại số điện thoại, ứng dụng sẽ gửi tiếp ảnh.",
