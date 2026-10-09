@@ -49,6 +49,10 @@
  * CHỈ ĐỂ TỪ CHỐI: `citizen_id`/`cong_dan_id` (người gửi — lấy từ phiên, luật 4), `linh_vuc`, `channel`,
  * `code`, `status`, `clock_from`, `acknowledge_due`, `resolve_due`. Xã thì không có trường nào cả — xã
  * lấy từ phiên (ADR 0022). `goi-vigov.test.tsx` khẳng định thân gửi đi đúng bằng năm khoá dưới.
+ *
+ * ⚠ Cộng MỘT TUỲ CHỌN `residential_unit_id` (09/10/2026, service-petitions 994a002a,
+ * `OPTIONAL_RESIDENTIAL_UNIT_KEY`): thôn / tổ dân phố dân chọn từ `GET /api/v1/my-residential-units` (identity).
+ * 400 `residential_unit_not_offered` · 503 `residential_unit_check_unavailable` — cả hai: phiếu CHƯA được ghi.
  */
 
 import { diaChiViGov } from "./dia-chi-vigov";
@@ -87,6 +91,63 @@ export const OPTIONAL_SCENE_FIELDS = ["lat", "lng"] as const;
 
 /** The optional field-code key (af3fff0). Sent only when the citizen picked a field from the catalogue. */
 export const OPTIONAL_FIELD_KEY = "field";
+
+/**
+ * The optional residential-unit key (service-petitions 994a002a, ADR 0088 §1): the `id` of the thôn / tổ dân
+ * phố the citizen picked from `GET /api/v1/my-residential-units`. Sent ONLY when one was picked — "Không chọn"
+ * sends no key at all. It names a place inside the session's commune and grants nothing: the server asks
+ * identity whether it is an active unit of THAT commune, and answers 400 `residential_unit_not_offered` for any
+ * other id (one answer for unknown, retired and another commune's). Never derived from lat/lng.
+ */
+export const OPTIONAL_RESIDENTIAL_UNIT_KEY = "residential_unit_id";
+
+/* ────────────────────────────────────────────────────────────────────────────────────────────
+ * THE COMMUNE'S THÔN / TỔ DÂN PHỐ FOR THE FORM — `GET /api/v1/my-residential-units` (service-identity
+ * 3996b279, ADR 0088 Trả lời 09/10/2026)
+ *
+ *   Bearer (citizen session; a verified phone is NOT needed), no parameter — the commune is the session's
+ *   200 { items: [{ id, name }] } — the commune's active units, in its rank order; `Cache-Control: private`
+ *   401 session · 500 · 503
+ *
+ * ON IDENTITY'S HOST, not petitions': the route belongs to `service-identity` (ADR 0046 — one host per owning
+ * service). OPTIONAL on the form: an empty list hides the field, a failed one is one sentence and never blocks
+ * the send (owner, 09/10/2026). There is no built-in list anywhere, as for the field catalogue.
+ * ──────────────────────────────────────────────────────────────────────────────────────────── */
+
+export const MY_RESIDENTIAL_UNITS_PATH = "/api/v1/my-residential-units";
+
+export function myResidentialUnitsAddress(): string {
+  return diaChiViGov("identity", MY_RESIDENTIAL_UNITS_PATH);
+}
+
+/** One thôn / tổ dân phố the citizen may pick. `id` is what the send carries; `name` is what they read. */
+export type ResidentialUnit = { readonly id: string; readonly name: string };
+
+/**
+ * 200 body → the units, in the commune's order, or `null` if malformed. Field by field, never cast; one malformed
+ * row is a malformed list (as `readCitizenFields`): a silently dropped unit is a place the citizen cannot pick.
+ */
+export function readResidentialUnits(body: unknown): readonly ResidentialUnit[] | null {
+  if (typeof body !== "object" || body === null) return null;
+  const items = (body as Record<string, unknown>)["items"];
+  if (!Array.isArray(items)) return null;
+  const out: ResidentialUnit[] = [];
+  for (const m of items) {
+    if (typeof m !== "object" || m === null) return null;
+    const r = m as Record<string, unknown>;
+    if (typeof r["id"] !== "string" || r["id"] === "" || typeof r["name"] !== "string" || r["name"].trim() === "") {
+      return null;
+    }
+    out.push({ id: r["id"], name: r["name"] });
+  }
+  return out;
+}
+
+/** 400 code: the unit sent is not an active unit of the session's commune (any reason — one answer). */
+export const RESIDENTIAL_UNIT_NOT_OFFERED_CODE = "residential_unit_not_offered";
+
+/** 503 code: identity could not be asked about the unit — nothing was written, no code issued; clears by itself. */
+export const RESIDENTIAL_UNIT_CHECK_UNAVAILABLE_CODE = "residential_unit_check_unavailable";
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * DANH MỤC LĨNH VỰC CỦA XÃ CHO BIỂU MẪU — `GET /api/v1/my-citizen-report-fields`
@@ -197,6 +258,11 @@ export type PhanAnhMoi = {
    * absent, `null` or "" = no `field` key at all. Never a label.
    */
   field?: string | null;
+  /**
+   * OPTIONAL: the `id` of the thôn / tổ dân phố the citizen picked (`ResidentialUnit.id`); absent, `null` or ""
+   * ("Không chọn") = no `residential_unit_id` key at all. Never a name.
+   */
+  residential_unit_id?: string | null;
 };
 
 /**
@@ -222,6 +288,7 @@ export function thanGuiPhanAnh(pa: PhanAnhMoi): string {
 function reportBodyFields(pa: PhanAnhMoi): Record<string, unknown> {
   const location = isSceneLocation(pa.scene_location) ? pa.scene_location : null;
   const field = typeof pa.field === "string" ? pa.field.trim() : "";
+  const unit = typeof pa.residential_unit_id === "string" ? pa.residential_unit_id.trim() : "";
   return {
     content: pa.noi_dung.trim(),
     address: pa.dia_chi.trim(),
@@ -230,6 +297,7 @@ function reportBodyFields(pa: PhanAnhMoi): Record<string, unknown> {
     anonymous: pa.an_danh,
     ...(location === null ? {} : { lat: location.lat, lng: location.lng }),
     ...(field === "" ? {} : { [OPTIONAL_FIELD_KEY]: field }),
+    ...(unit === "" ? {} : { [OPTIONAL_RESIDENTIAL_UNIT_KEY]: unit }),
   };
 }
 
@@ -825,9 +893,13 @@ export function publicReportAddress(code: string, host: string): string {
  * NO LOCATION (owner, 08/10/2026): the location exchange needs `getAccessToken`, the very call whose refusal opens
  * this path — so on it the "Lấy vị trí hiện tại" button could only ever fail, and the screen hides it. Dropped
  * here too, so no caller can send a pair this path never obtains.
+ *
+ * NO RESIDENTIAL UNIT either: the public route REFUSES `residential_unit_id` with 400
+ * (`service-petitions/internal/http/accountless.go` `ResidentialUnitID`), and the unit list needs the session
+ * this path does not have. Dropped here so no caller can turn an accountless send into that refusal.
  */
 export function accountlessReportBody(pa: PhanAnhMoi, host: string): string {
-  return JSON.stringify({ ...reportBodyFields({ ...pa, scene_location: null }), host });
+  return JSON.stringify({ ...reportBodyFields({ ...pa, scene_location: null, residential_unit_id: null }), host });
 }
 
 /** The `host` an accountless body carries, or `null` — read back so the caller's domain gate covers the body. */

@@ -54,6 +54,7 @@ import {
   FIELD_CATALOGUE_UNAVAILABLE_CODE,
   FIELD_NOT_OFFERED_CODE,
   isPhoneNotVerified,
+  myResidentialUnitsAddress,
   type PhieuCuaToi,
   photoCompletionAddress,
   photosAddress,
@@ -67,7 +68,11 @@ import {
   ratingAddress,
   readCitizenFields,
   readPhotoSlot,
+  readResidentialUnits,
   readScenePhoto,
+  RESIDENTIAL_UNIT_CHECK_UNAVAILABLE_CODE,
+  RESIDENTIAL_UNIT_NOT_OFFERED_CODE,
+  type ResidentialUnit,
   readScenePhotoList,
   type ScenePhotoLink,
   type ScenePhotoOut,
@@ -125,11 +130,17 @@ import { laTenMien } from "../../lib/launch-params";
  *   `loi-may-chu`                       500, mã lạ, hoặc thân sai khuôn
  *   `loi-mang`                          mất mạng, quá hạn chờ
  *   `unverified-daily-limit`            429 `unverified_daily_limit` (ADR 0080 #7) — phiếu CHƯA được ghi
+ *   `residential-unit-not-offered`      400 `residential_unit_not_offered` — thôn đã chọn không còn là thôn
+ *                                       đang dùng của xã; việc tiếp theo: chọn lại hoặc "Không chọn"
+ *   `residential-unit-check-unavailable` 503 `residential_unit_check_unavailable` — chưa kiểm được thôn;
+ *                                       phiếu CHƯA được ghi; thử lại sau ít phút
  *
  * KHÔNG MANG CÂU CỦA MÁY CHỦ: câu 400 của `petitions` nói bằng tên trường kỹ thuật (`content`), và
- * màn hình người dân có câu riêng cho từng nhánh (`man/noi-dung.ts`). ONE EXCEPTION, the owner's decision
- * (08/10/2026): `unverified-daily-limit` carries the server's Vietnamese sentence — it says the ceiling in the
- * commune's own words — trimmed and capped, `null` when absent; the screen falls back to its own sentence.
+ * màn hình người dân có câu riêng cho từng nhánh (`man/noi-dung.ts`). EXCEPTIONS, each an owner's decision:
+ * `unverified-daily-limit` (08/10/2026 — it says the ceiling in the commune's own words) and the two
+ * residential-unit branches (09/10/2026 — their sentences are written for the citizen, `residential_unit.go`)
+ * carry the server's Vietnamese sentence, trimmed and capped, `null` when absent; the screen then falls back to
+ * its own sentence.
  */
 export type KetQuaGoi =
   | { kieu: "chua-co-phien" }
@@ -145,7 +156,9 @@ export type KetQuaGoi =
   | { kieu: "kenh-chua-mo" }
   | { kieu: "loi-may-chu" }
   | { kieu: "loi-mang" }
-  | { kieu: "unverified-daily-limit"; message: string | null };
+  | { kieu: "unverified-daily-limit"; message: string | null }
+  | { kieu: "residential-unit-not-offered"; message: string | null }
+  | { kieu: "residential-unit-check-unavailable"; message: string | null };
 
 /** Mọi nhánh trừ `xong` — chung cho mọi tuyến. */
 type NhanhKhongThanh = Exclude<KetQuaGoi, { kieu: "xong" }>;
@@ -313,10 +326,15 @@ async function callOnce<T>(
         const gia_tri = doc(body);
         return gia_tri === null ? { kieu: "loi-may-chu" } : { kieu: "xong", gia_tri };
       }
-      case 400:
-        return (await readErrorCode(tra_loi)) === FIELD_NOT_OFFERED_CODE
-          ? { kieu: "field-not-offered" }
-          : { kieu: "khong-hop-le" };
+      case 400: {
+        const body = await readErrorBody(tra_loi);
+        const code = errorCode(body);
+        if (code === FIELD_NOT_OFFERED_CODE) return { kieu: "field-not-offered" };
+        if (code === RESIDENTIAL_UNIT_NOT_OFFERED_CODE) {
+          return { kieu: "residential-unit-not-offered", message: readServerSentence(body) };
+        }
+        return { kieu: "khong-hop-le" };
+      }
       case 401:
         return { kieu: "het-phien" };
       case 403: {
@@ -346,10 +364,15 @@ async function callOnce<T>(
         if (tuy_chon.limitCode === true && code !== null) return { kieu: "rate-limited", retryAfterSeconds, code };
         return { kieu: "rate-limited", retryAfterSeconds };
       }
-      case 503:
-        return (await readErrorCode(tra_loi)) === FIELD_CATALOGUE_UNAVAILABLE_CODE
-          ? { kieu: "field-catalogue-unavailable" }
-          : { kieu: "kenh-chua-mo" };
+      case 503: {
+        const body = await readErrorBody(tra_loi);
+        const code = errorCode(body);
+        if (code === FIELD_CATALOGUE_UNAVAILABLE_CODE) return { kieu: "field-catalogue-unavailable" };
+        if (code === RESIDENTIAL_UNIT_CHECK_UNAVAILABLE_CODE) {
+          return { kieu: "residential-unit-check-unavailable", message: readServerSentence(body) };
+        }
+        return { kieu: "kenh-chua-mo" };
+      }
       default:
         return { kieu: "loi-may-chu" };
     }
