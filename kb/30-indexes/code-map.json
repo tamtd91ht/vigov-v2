@@ -60,23 +60,19 @@
     },
     "app.AttachmentDownload": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:708"
+      "at": "service-petitions/internal/app/task_attachment.go:738"
     },
     "app.AttachmentRejection": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:120"
-    },
-    "app.AttachmentUpload": {
-      "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:251"
+      "at": "service-petitions/internal/app/task_attachment.go:125"
     },
     "app.AttachmentUploadRequest": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:244"
+      "at": "service-petitions/internal/app/task_attachment.go:249"
     },
     "app.AudioCompletion": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:346"
+      "at": "service-comms/internal/app/content_audio.go:426"
     },
     "app.AudioFileRetirer": {
       "kind": "type",
@@ -84,27 +80,23 @@
     },
     "app.AudioFiles": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:128"
+      "at": "service-comms/internal/app/content_audio.go:133"
     },
     "app.AudioObjectStore": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:113"
+      "at": "service-comms/internal/app/content_audio.go:118"
     },
     "app.AudioRejection": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:107"
-    },
-    "app.AudioUpload": {
-      "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:206"
+      "at": "service-comms/internal/app/content_audio.go:112"
     },
     "app.AudioUploadRequest": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:197"
+      "at": "service-comms/internal/app/content_audio.go:203"
     },
     "app.AudioView": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:733"
+      "at": "service-comms/internal/app/content_audio.go:801"
     },
     "app.Authenticate": {
       "kind": "func",
@@ -166,13 +158,17 @@
       "kind": "type",
       "at": "service-comms/internal/app/body_image_sweep.go:82"
     },
+    "app.BodyImageUploadLimit": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_cover.go:335"
+    },
     "app.BodyImageView": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:979"
+      "at": "service-comms/internal/app/content_cover.go:1076"
     },
     "app.BodyImageViews": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:987"
+      "at": "service-comms/internal/app/content_cover.go:1084"
     },
     "app.Book": {
       "kind": "func",
@@ -192,35 +188,31 @@
     },
     "app.Branding": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:238"
+      "at": "service-platform/internal/app/branding.go:243"
     },
     "app.BrandingFiles": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:214"
+      "at": "service-platform/internal/app/branding.go:219"
     },
     "app.BrandingObjectStore": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:187"
+      "at": "service-platform/internal/app/branding.go:192"
     },
     "app.BrandingProfiles": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:229"
+      "at": "service-platform/internal/app/branding.go:234"
     },
     "app.BrandingRejection": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:140"
+      "at": "service-platform/internal/app/branding.go:145"
     },
     "app.BrandingSettings": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:307"
-    },
-    "app.BrandingUpload": {
-      "kind": "type",
-      "at": "service-platform/internal/app/branding.go:354"
+      "at": "service-platform/internal/app/branding.go:312"
     },
     "app.BrandingUploadRequest": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:347"
+      "at": "service-platform/internal/app/branding.go:354"
     },
     "app.BudgetImportOutcome": {
       "kind": "type",
@@ -420,7 +412,7 @@
     },
     "app.CitizenPhotoPetitions": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:194"
+      "at": "service-petitions/internal/app/petition_photo.go:199"
     },
     "app.CitizenReportAutomationReader": {
       "kind": "type",
@@ -448,7 +440,7 @@
     },
     "app.CitizenVerificationPhotos": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_verification_photo.go:557"
+      "at": "service-petitions/internal/app/petition_verification_photo.go:590"
     },
     "app.ClaimDue": {
       "kind": "func",
@@ -482,25 +474,17 @@
       "kind": "type",
       "at": "service-comms/internal/app/zalo_commune_webhook.go:41"
     },
-    "app.Complete": {
-      "kind": "func",
-      "at": "service-platform/internal/app/branding.go:489"
-    },
-    "app.CompleteBodyImageUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:497"
-    },
     "app.CompleteEnrollment": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_enrollment.go:152"
     },
     "app.ContentAudio": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:146"
+      "at": "service-comms/internal/app/content_audio.go:151"
     },
     "app.ContentCovers": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:222"
+      "at": "service-comms/internal/app/content_cover.go:243"
     },
     "app.CorrectSender": {
       "kind": "func",
@@ -512,27 +496,27 @@
     },
     "app.CoverFiles": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:183"
+      "at": "service-comms/internal/app/content_cover.go:204"
     },
     "app.CoverObjectStore": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:154"
+      "at": "service-comms/internal/app/content_cover.go:175"
     },
     "app.CoverRejection": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:147"
+      "at": "service-comms/internal/app/content_cover.go:168"
     },
-    "app.CoverUpload": {
-      "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:299"
+    "app.CoverUploadLimit": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_cover.go:330"
     },
     "app.CoverUploadRequest": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:289"
+      "at": "service-comms/internal/app/content_cover.go:311"
     },
     "app.CoverView": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_cover.go:908"
+      "at": "service-comms/internal/app/content_cover.go:1005"
     },
     "app.Create": {
       "kind": "func",
@@ -716,7 +700,7 @@
     },
     "app.DownloadLink": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_attachment.go:721"
+      "at": "service-petitions/internal/app/task_attachment.go:751"
     },
     "app.DuAn": {
       "kind": "type",
@@ -764,7 +748,7 @@
     },
     "app.Error": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:142"
+      "at": "service-platform/internal/app/branding.go:147"
     },
     "app.Export": {
       "kind": "func",
@@ -972,7 +956,7 @@
     },
     "app.Is": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:143"
+      "at": "service-platform/internal/app/branding.go:148"
     },
     "app.IsAutomationInputError": {
       "kind": "func",
@@ -1276,7 +1260,7 @@
     },
     "app.ListPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_verification_photo.go:584"
+      "at": "service-petitions/internal/app/petition_verification_photo.go:617"
     },
     "app.ListZaloBotCommuneStats": {
       "kind": "func",
@@ -1344,7 +1328,7 @@
     },
     "app.MalwareScanner": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:204"
+      "at": "service-platform/internal/app/branding.go:209"
     },
     "app.MapAssetInput": {
       "kind": "type",
@@ -1430,6 +1414,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/staff_notification.go:208"
     },
+    "app.MaxUploadBytes": {
+      "kind": "func",
+      "at": "service-platform/internal/app/branding.go:371"
+    },
     "app.MentionNotifier": {
       "kind": "type",
       "at": "service-finance/internal/app/project_discussion.go:82"
@@ -1512,7 +1500,7 @@
     },
     "app.NewBranding": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:259"
+      "at": "service-platform/internal/app/branding.go:264"
     },
     "app.NewCapitalPlanCategoryImporter": {
       "kind": "func",
@@ -1560,7 +1548,7 @@
     },
     "app.NewCitizenVerificationPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_verification_photo.go:565"
+      "at": "service-petitions/internal/app/petition_verification_photo.go:598"
     },
     "app.NewColumn": {
       "kind": "type",
@@ -1576,11 +1564,11 @@
     },
     "app.NewContentAudio": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_audio.go:162"
+      "at": "service-comms/internal/app/content_audio.go:167"
     },
     "app.NewContentCovers": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:248"
+      "at": "service-comms/internal/app/content_cover.go:269"
     },
     "app.NewCustomMessage": {
       "kind": "type",
@@ -1828,11 +1816,11 @@
     },
     "app.NewStaffPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_photo.go:1016"
+      "at": "service-petitions/internal/app/petition_photo.go:1051"
     },
     "app.NewStaffVerificationPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_verification_photo.go:134"
+      "at": "service-petitions/internal/app/petition_verification_photo.go:135"
     },
     "app.NewSystemMessages": {
       "kind": "func",
@@ -1844,7 +1832,7 @@
     },
     "app.NewTaskAttachments": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_attachment.go:201"
+      "at": "service-petitions/internal/app/task_attachment.go:206"
     },
     "app.NewTaskBlocImporter": {
       "kind": "func",
@@ -1932,7 +1920,7 @@
     },
     "app.ObjectStore": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:127"
+      "at": "service-petitions/internal/app/task_attachment.go:132"
     },
     "app.OperatorAdmin": {
       "kind": "type",
@@ -2056,7 +2044,7 @@
     },
     "app.OwnedPhotoPetitions": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:185"
+      "at": "service-petitions/internal/app/petition_photo.go:190"
     },
     "app.PairingCodeView": {
       "kind": "type",
@@ -2096,7 +2084,7 @@
     },
     "app.PetitionPhotoFiles": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:167"
+      "at": "service-petitions/internal/app/petition_photo.go:172"
     },
     "app.PetitionRatingStore": {
       "kind": "type",
@@ -2136,15 +2124,11 @@
     },
     "app.PhotoObjectStore": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:148"
-    },
-    "app.PhotoUpload": {
-      "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:209"
+      "at": "service-petitions/internal/app/petition_photo.go:153"
     },
     "app.PhotoUploadRequest": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:203"
+      "at": "service-petitions/internal/app/petition_photo.go:209"
     },
     "app.PortalCallError": {
       "kind": "type",
@@ -2228,23 +2212,23 @@
     },
     "app.PublicAudio": {
       "kind": "type",
-      "at": "service-comms/internal/app/content_audio.go:772"
+      "at": "service-comms/internal/app/content_audio.go:840"
     },
     "app.PublicAudioURLs": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_audio.go:788"
+      "at": "service-comms/internal/app/content_audio.go:856"
     },
     "app.PublicBodyImageURLs": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:1046"
+      "at": "service-comms/internal/app/content_cover.go:1143"
     },
     "app.PublicImageURLs": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:957"
+      "at": "service-comms/internal/app/content_cover.go:1054"
     },
     "app.PublicURL": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:332"
+      "at": "service-platform/internal/app/branding.go:337"
     },
     "app.PublishMany": {
       "kind": "func",
@@ -2328,7 +2312,7 @@
     },
     "app.Remove": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:757"
+      "at": "service-platform/internal/app/branding.go:855"
     },
     "app.RemoveFieldRule": {
       "kind": "func",
@@ -2346,17 +2330,9 @@
       "kind": "func",
       "at": "service-documents/internal/app/citizen_letter.go:1082"
     },
-    "app.RequestBodyImageUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:316"
-    },
     "app.RequestRun": {
       "kind": "func",
       "at": "service-identity/internal/app/automation.go:307"
-    },
-    "app.RequestUpload": {
-      "kind": "func",
-      "at": "service-platform/internal/app/branding.go:362"
     },
     "app.Reset": {
       "kind": "func",
@@ -2596,7 +2572,7 @@
     },
     "app.Settings": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:316"
+      "at": "service-platform/internal/app/branding.go:321"
     },
     "app.SharedZaloBot": {
       "kind": "type",
@@ -2700,15 +2676,15 @@
     },
     "app.StaffPetitionPhotos": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:1007"
+      "at": "service-petitions/internal/app/petition_photo.go:1042"
     },
     "app.StaffPhotoPetitions": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:1001"
+      "at": "service-petitions/internal/app/petition_photo.go:1036"
     },
     "app.StaffVerificationPhotos": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_verification_photo.go:114"
+      "at": "service-petitions/internal/app/petition_verification_photo.go:115"
     },
     "app.StartManual": {
       "kind": "func",
@@ -2804,11 +2780,11 @@
     },
     "app.TaskAttachmentFiles": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:152"
+      "at": "service-petitions/internal/app/task_attachment.go:157"
     },
     "app.TaskAttachments": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:180"
+      "at": "service-petitions/internal/app/task_attachment.go:185"
     },
     "app.TaskAutomationReader": {
       "kind": "type",
@@ -2856,7 +2832,7 @@
     },
     "app.TaskRows": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_attachment.go:171"
+      "at": "service-petitions/internal/app/task_attachment.go:176"
     },
     "app.TaskTypeCatalogue": {
       "kind": "type",
@@ -2954,9 +2930,29 @@
       "kind": "type",
       "at": "service-identity/internal/app/residential_unit.go:237"
     },
+    "app.Upload": {
+      "kind": "func",
+      "at": "service-platform/internal/app/branding.go:404"
+    },
+    "app.UploadBody": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/upload_stream.go:37"
+    },
+    "app.UploadBodyImage": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_cover.go:364"
+    },
+    "app.UploadCover": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_cover.go:356"
+    },
+    "app.UploadLimit": {
+      "kind": "func",
+      "at": "service-comms/internal/app/content_audio.go:219"
+    },
     "app.UploadPolicies": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:209"
+      "at": "service-platform/internal/app/branding.go:214"
     },
     "app.UploadPolicyChoices": {
       "kind": "type",
@@ -2980,11 +2976,11 @@
     },
     "app.VerificationPhotoFiles": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_verification_photo.go:92"
+      "at": "service-petitions/internal/app/petition_verification_photo.go:93"
     },
     "app.VerificationPhotoPetitions": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_verification_photo.go:77"
+      "at": "service-petitions/internal/app/petition_verification_photo.go:78"
     },
     "app.VerificationPhotoSwitch": {
       "kind": "type",
@@ -2992,7 +2988,7 @@
     },
     "app.View": {
       "kind": "func",
-      "at": "service-comms/internal/app/content_cover.go:924"
+      "at": "service-comms/internal/app/content_cover.go:1021"
     },
     "app.VoucherImportRejected": {
       "kind": "type",
@@ -8936,7 +8932,7 @@
     },
     "http.BienBanDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:317"
+      "at": "service-petitions/internal/http/routes.go:318"
     },
     "http.BoDanhDauKhongPhatSinh": {
       "kind": "func",
@@ -8960,7 +8956,7 @@
     },
     "http.BrandingActs": {
       "kind": "type",
-      "at": "service-platform/internal/http/branding.go:26"
+      "at": "service-platform/internal/http/branding.go:29"
     },
     "http.CanBoDanhBa": {
       "kind": "type",
@@ -9064,7 +9060,7 @@
     },
     "http.CitizenPetitionPhotos": {
       "kind": "type",
-      "at": "service-petitions/internal/http/petition_photo.go:37"
+      "at": "service-petitions/internal/http/petition_photo.go:36"
     },
     "http.CitizenRating": {
       "kind": "type",
@@ -9134,41 +9130,13 @@
       "kind": "type",
       "at": "service-comms/internal/http/zalo_bot_updates.go:80"
     },
-    "http.CompleteAudioUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/http/content_audio.go:132"
-    },
-    "http.CompleteBodyImageUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/http/content_body_image.go:112"
-    },
-    "http.CompleteCoverUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/http/content_cover.go:152"
-    },
-    "http.CompletePetitionLogAttachment": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/petition_staff_file.go:238"
-    },
-    "http.CompletePetitionPhoto": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:222"
-    },
-    "http.CompleteTaskAttachment": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/task_attachment.go:123"
-    },
-    "http.CompleteVerificationPhoto": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/petition_staff_file.go:96"
-    },
     "http.ContentAudioActs": {
       "kind": "type",
-      "at": "service-comms/internal/http/content_audio.go:31"
+      "at": "service-comms/internal/http/content_audio.go:33"
     },
     "http.ContentCoverActs": {
       "kind": "type",
-      "at": "service-comms/internal/http/content_cover.go:40"
+      "at": "service-comms/internal/http/content_cover.go:41"
     },
     "http.CorrectCitizenLetterSender": {
       "kind": "func",
@@ -9260,7 +9228,7 @@
     },
     "http.DanhMucMiniAppDoc": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:150"
+      "at": "service-comms/internal/http/routes.go:151"
     },
     "http.DanhMucXa": {
       "kind": "func",
@@ -9392,7 +9360,7 @@
     },
     "http.DeNghiLuiHanChoDuyetDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:219"
+      "at": "service-petitions/internal/http/routes.go:220"
     },
     "http.DeNghiLuiHanNhiemVu": {
       "kind": "func",
@@ -9548,7 +9516,11 @@
     },
     "http.FetchBodyImageFromURL": {
       "kind": "func",
-      "at": "service-comms/internal/http/content_body_image.go:158"
+      "at": "service-comms/internal/http/content_body_image.go:117"
+    },
+    "http.Finish": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/upload.go:46"
     },
     "http.FundingSourceReading": {
       "kind": "type",
@@ -9592,7 +9564,7 @@
     },
     "http.GhiBienBanUseCase": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:340"
+      "at": "service-petitions/internal/http/routes.go:341"
     },
     "http.GhiChuPhieu": {
       "kind": "func",
@@ -9604,7 +9576,7 @@
     },
     "http.GhiDanhMucMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:156"
+      "at": "service-comms/internal/http/routes.go:157"
     },
     "http.GhiDotThuChi": {
       "kind": "func",
@@ -9620,11 +9592,11 @@
     },
     "http.GhiLoaiNhiemVu": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:464"
+      "at": "service-petitions/internal/http/routes.go:465"
     },
     "http.GhiLoaiTaiNguyen": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:66"
+      "at": "service-comms/internal/http/routes.go:67"
     },
     "http.GhiLoaiVanBan": {
       "kind": "type",
@@ -9632,7 +9604,7 @@
     },
     "http.GhiMucUuTien": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:470"
+      "at": "service-petitions/internal/http/routes.go:471"
     },
     "http.GhiNganSach": {
       "kind": "type",
@@ -9640,19 +9612,19 @@
     },
     "http.GhiNhiemVuUseCase": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:254"
+      "at": "service-petitions/internal/http/routes.go:255"
     },
     "http.GhiNoiDungMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:141"
+      "at": "service-comms/internal/http/routes.go:142"
     },
     "http.GhiThongBao": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:117"
+      "at": "service-comms/internal/http/routes.go:118"
     },
     "http.GhiTrangThaiNhiemVu": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:478"
+      "at": "service-petitions/internal/http/routes.go:479"
     },
     "http.GhiVanBanDen": {
       "kind": "type",
@@ -9716,7 +9688,7 @@
     },
     "http.HandlerCongDan": {
       "kind": "type",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:118"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:122"
     },
     "http.HandlerCongKhai": {
       "kind": "type",
@@ -9896,7 +9868,7 @@
     },
     "http.ListMyPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:240"
+      "at": "service-petitions/internal/http/petition_photo.go:210"
     },
     "http.ListMyResidentialUnits": {
       "kind": "func",
@@ -9904,7 +9876,7 @@
     },
     "http.ListMyVerificationPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:256"
+      "at": "service-petitions/internal/http/petition_photo.go:226"
     },
     "http.ListPetitionFields": {
       "kind": "func",
@@ -9912,7 +9884,7 @@
     },
     "http.ListPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:384"
+      "at": "service-petitions/internal/http/petition_photo.go:351"
     },
     "http.ListPortalSyncRuns": {
       "kind": "func",
@@ -9940,7 +9912,7 @@
     },
     "http.ListVerificationPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_staff_file.go:115"
+      "at": "service-petitions/internal/http/petition_staff_file.go:98"
     },
     "http.ListZaloLinks": {
       "kind": "func",
@@ -9956,11 +9928,11 @@
     },
     "http.LoaiNhiemVuDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:59"
+      "at": "service-petitions/internal/http/routes.go:60"
     },
     "http.LoaiTaiNguyenDanhMuc": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:53"
+      "at": "service-comms/internal/http/routes.go:54"
     },
     "http.LoaiVanBanDanhMuc": {
       "kind": "type",
@@ -9984,11 +9956,11 @@
     },
     "http.MailSettingsReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:185"
+      "at": "service-comms/internal/http/routes.go:186"
     },
     "http.MailSettingsWriter": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:190"
+      "at": "service-comms/internal/http/routes.go:191"
     },
     "http.MapAssetDeps": {
       "kind": "type",
@@ -10020,11 +9992,11 @@
     },
     "http.MapFieldSchemaReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:168"
+      "at": "service-comms/internal/http/routes.go:169"
     },
     "http.MapFieldSchemaWriter": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:173"
+      "at": "service-comms/internal/http/routes.go:174"
     },
     "http.MapFrameDefaultEditor": {
       "kind": "type",
@@ -10080,7 +10052,7 @@
     },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:72"
+      "at": "service-petitions/internal/http/routes.go:73"
     },
     "http.NewHandler": {
       "kind": "func",
@@ -10088,7 +10060,7 @@
     },
     "http.NewHandlerCongDan": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:122"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:126"
     },
     "http.NganSachDoc": {
       "kind": "type",
@@ -10116,11 +10088,11 @@
     },
     "http.NhanLinhVucDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:114"
+      "at": "service-petitions/internal/http/routes.go:115"
     },
     "http.NhatKyPhieuDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:428"
+      "at": "service-petitions/internal/http/routes.go:429"
     },
     "http.NhiemVuCuaKetLuan": {
       "kind": "func",
@@ -10128,11 +10100,11 @@
     },
     "http.NhiemVuDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:166"
+      "at": "service-petitions/internal/http/routes.go:167"
     },
     "http.NhiemVuDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:139"
+      "at": "service-petitions/internal/http/routes.go:140"
     },
     "http.NoiDungCongKhaiDoc": {
       "kind": "type",
@@ -10140,7 +10112,7 @@
     },
     "http.NoiDungMiniAppDoc": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:134"
+      "at": "service-comms/internal/http/routes.go:135"
     },
     "http.OperatorDeps": {
       "kind": "type",
@@ -10196,15 +10168,15 @@
     },
     "http.PetitionLogAttachmentActs": {
       "kind": "type",
-      "at": "service-petitions/internal/http/petition_staff_file.go:46"
+      "at": "service-petitions/internal/http/petition_staff_file.go:44"
     },
     "http.PetitionLogAttachmentDownload": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_staff_file.go:255"
+      "at": "service-petitions/internal/http/petition_staff_file.go:218"
     },
     "http.PetitionLogAttachmentReader": {
       "kind": "type",
-      "at": "service-petitions/internal/http/petition_staff_file.go:61"
+      "at": "service-petitions/internal/http/petition_staff_file.go:58"
     },
     "http.PetitionTaskCreator": {
       "kind": "type",
@@ -10244,15 +10216,15 @@
     },
     "http.PhieuCuaToi": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_cua_toi.go:354"
+      "at": "service-petitions/internal/http/phieu_cua_toi.go:358"
     },
     "http.PhieuPhanAnhDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:124"
+      "at": "service-petitions/internal/http/routes.go:125"
     },
     "http.PhieuPhanAnhDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:90"
+      "at": "service-petitions/internal/http/routes.go:91"
     },
     "http.PortalSyncReader": {
       "kind": "type",
@@ -10402,6 +10374,10 @@
       "kind": "func",
       "at": "service-petitions/internal/http/petition_rating.go:57"
     },
+    "http.Read": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/upload.go:45"
+    },
     "http.ReassignTask": {
       "kind": "func",
       "at": "service-petitions/internal/http/task_assignment.go:39"
@@ -10484,39 +10460,11 @@
     },
     "http.RemoveTaskAttachment": {
       "kind": "func",
-      "at": "service-petitions/internal/http/task_attachment.go:164"
-    },
-    "http.RequestAudioUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/http/content_audio.go:105"
+      "at": "service-petitions/internal/http/task_attachment.go:129"
     },
     "http.RequestAutomationRun": {
       "kind": "func",
       "at": "service-identity/internal/http/automation.go:212"
-    },
-    "http.RequestBodyImageUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/http/content_body_image.go:84"
-    },
-    "http.RequestCoverUpload": {
-      "kind": "func",
-      "at": "service-comms/internal/http/content_cover.go:124"
-    },
-    "http.RequestPetitionLogAttachmentUpload": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/petition_staff_file.go:211"
-    },
-    "http.RequestPetitionPhotoUpload": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:190"
-    },
-    "http.RequestTaskAttachmentUpload": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/task_attachment.go:98"
-    },
-    "http.RequestVerificationPhotoUpload": {
-      "kind": "func",
-      "at": "service-petitions/internal/http/petition_staff_file.go:69"
     },
     "http.ResetMapFrame": {
       "kind": "func",
@@ -10656,7 +10604,7 @@
     },
     "http.StaffVerificationPhotoActs": {
       "kind": "type",
-      "at": "service-petitions/internal/http/petition_staff_file.go:36"
+      "at": "service-petitions/internal/http/petition_staff_file.go:35"
     },
     "http.StartPortalSyncRun": {
       "kind": "func",
@@ -10788,11 +10736,11 @@
     },
     "http.TaskAttachmentActs": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:288"
+      "at": "service-petitions/internal/http/routes.go:290"
     },
     "http.TaskAttachmentDownload": {
       "kind": "func",
-      "at": "service-petitions/internal/http/task_attachment.go:139"
+      "at": "service-petitions/internal/http/task_attachment.go:104"
     },
     "http.TaskBlocImportTemplate": {
       "kind": "func",
@@ -10812,15 +10760,15 @@
     },
     "http.TaskFilterIdentity": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:192"
+      "at": "service-petitions/internal/http/routes.go:193"
     },
     "http.TaskImporter": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:209"
+      "at": "service-petitions/internal/http/routes.go:210"
     },
     "http.TaskLogAttachmentReader": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:299"
+      "at": "service-petitions/internal/http/routes.go:300"
     },
     "http.TaskPriorityImportTemplate": {
       "kind": "func",
@@ -10828,7 +10776,7 @@
     },
     "http.TaskRegisterExporter": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:201"
+      "at": "service-petitions/internal/http/routes.go:202"
     },
     "http.TaskSummary": {
       "kind": "func",
@@ -10932,7 +10880,7 @@
     },
     "http.ThongBaoDanhSach": {
       "kind": "type",
-      "at": "service-comms/internal/http/routes.go:109"
+      "at": "service-comms/internal/http/routes.go:110"
     },
     "http.ThongTinXa": {
       "kind": "func",
@@ -10952,7 +10900,7 @@
     },
     "http.TrangThaiNhiemVuDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:79"
+      "at": "service-petitions/internal/http/routes.go:80"
     },
     "http.UnlinkCurrentZalo": {
       "kind": "func",
@@ -10994,9 +10942,37 @@
       "kind": "func",
       "at": "service-identity/internal/http/residential_unit_write.go:141"
     },
+    "http.UploadAudio": {
+      "kind": "func",
+      "at": "service-comms/internal/http/content_audio.go:92"
+    },
+    "http.UploadBodyImage": {
+      "kind": "func",
+      "at": "service-comms/internal/http/content_body_image.go:63"
+    },
+    "http.UploadCover": {
+      "kind": "func",
+      "at": "service-comms/internal/http/content_cover.go:110"
+    },
+    "http.UploadPetitionLogAttachment": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_staff_file.go:191"
+    },
+    "http.UploadPetitionPhoto": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_photo.go:180"
+    },
     "http.UploadPolicyEditor": {
       "kind": "type",
       "at": "service-platform/internal/http/operator_platform.go:24"
+    },
+    "http.UploadTaskAttachment": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/task_attachment.go:76"
+    },
+    "http.UploadVerificationPhoto": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_staff_file.go:68"
     },
     "http.VaiTroDanhMuc": {
       "kind": "type",
@@ -11016,7 +10992,7 @@
     },
     "http.VetXemNguoiGui": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:105"
+      "at": "service-petitions/internal/http/routes.go:106"
     },
     "http.XacNhanChungTu": {
       "kind": "func",
@@ -11092,7 +11068,7 @@
     },
     "http.XuLyPhieuPhanAnh": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:380"
+      "at": "service-petitions/internal/http/routes.go:381"
     },
     "http.ZaloBotUpdateDeps": {
       "kind": "type",
@@ -11117,6 +11093,10 @@
     "http.ZaloLinkWriter": {
       "kind": "type",
       "at": "service-comms/internal/http/zalo_links.go:50"
+    },
+    "httpx.Acquire": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:119"
     },
     "httpx.CORSCongDan": {
       "kind": "func",
@@ -11146,6 +11126,10 @@
       "kind": "func",
       "at": "core/httpx/client_ip.go:38"
     },
+    "httpx.Close": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:421"
+    },
     "httpx.CommuneFromSessionOrZaloAccount": {
       "kind": "func",
       "at": "core/httpx/citizen.go:248"
@@ -11154,13 +11138,33 @@
       "kind": "type",
       "at": "core/httpx/edge.go:88"
     },
+    "httpx.Finish": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:176"
+    },
     "httpx.KhongThuocXa": {
       "kind": "func",
       "at": "core/httpx/citizen.go:330"
     },
+    "httpx.NewUploadSlots": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:106"
+    },
     "httpx.NguonCORS": {
       "kind": "type",
       "at": "core/httpx/cors.go:13"
+    },
+    "httpx.ParseUploadSize": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:296"
+    },
+    "httpx.Read": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:414"
+    },
+    "httpx.ReadUpload": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:202"
     },
     "httpx.Recover": {
       "kind": "func",
@@ -11174,6 +11178,22 @@
       "kind": "func",
       "at": "core/httpx/edge.go:21"
     },
+    "httpx.UploadErrorStatus": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:85"
+    },
+    "httpx.UploadOptions": {
+      "kind": "type",
+      "at": "core/httpx/upload.go:140"
+    },
+    "httpx.UploadRequest": {
+      "kind": "type",
+      "at": "core/httpx/upload.go:151"
+    },
+    "httpx.UploadSlots": {
+      "kind": "type",
+      "at": "core/httpx/upload.go:102"
+    },
     "httpx.Write": {
       "kind": "func",
       "at": "core/httpx/citizen.go:389"
@@ -11185,6 +11205,10 @@
     "httpx.WriteHeader": {
       "kind": "func",
       "at": "core/httpx/citizen.go:377"
+    },
+    "httpx.WriteUploadBusy": {
+      "kind": "func",
+      "at": "core/httpx/upload.go:133"
     },
     "httpx.XaTuPhien": {
       "kind": "func",
@@ -11552,7 +11576,7 @@
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:500"
+      "at": "service-platform/cmd/server/main.go:503"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -12776,11 +12800,11 @@
     },
     "storage.Bucket": {
       "kind": "type",
-      "at": "core/storage/storage.go:100"
+      "at": "core/storage/storage.go:113"
     },
     "storage.BucketName": {
       "kind": "func",
-      "at": "core/storage/storage.go:207"
+      "at": "core/storage/storage.go:220"
     },
     "storage.CheckAudioStream": {
       "kind": "func",
@@ -12792,15 +12816,15 @@
     },
     "storage.Client": {
       "kind": "type",
-      "at": "core/storage/storage.go:121"
+      "at": "core/storage/storage.go:134"
     },
     "storage.Close": {
       "kind": "func",
-      "at": "core/storage/storage.go:453"
+      "at": "core/storage/storage.go:541"
     },
     "storage.Config": {
       "kind": "type",
-      "at": "core/storage/storage.go:61"
+      "at": "core/storage/storage.go:67"
     },
     "storage.ContentDisposition": {
       "kind": "func",
@@ -12808,7 +12832,7 @@
     },
     "storage.Destination": {
       "kind": "func",
-      "at": "core/storage/storage.go:259"
+      "at": "core/storage/storage.go:272"
     },
     "storage.ExportPath": {
       "kind": "func",
@@ -12820,11 +12844,11 @@
     },
     "storage.Format": {
       "kind": "func",
-      "at": "core/storage/storage.go:761"
+      "at": "core/storage/storage.go:851"
     },
     "storage.GoString": {
       "kind": "func",
-      "at": "core/storage/storage.go:759"
+      "at": "core/storage/storage.go:849"
     },
     "storage.Key": {
       "kind": "type",
@@ -12832,15 +12856,15 @@
     },
     "storage.LogAttrs": {
       "kind": "func",
-      "at": "core/storage/storage.go:194"
+      "at": "core/storage/storage.go:207"
     },
     "storage.LogValue": {
       "kind": "func",
-      "at": "core/storage/storage.go:760"
+      "at": "core/storage/storage.go:850"
     },
     "storage.New": {
       "kind": "func",
-      "at": "core/storage/storage.go:131"
+      "at": "core/storage/storage.go:144"
     },
     "storage.NewObjectID": {
       "kind": "func",
@@ -12848,11 +12872,11 @@
     },
     "storage.ObjectInfo": {
       "kind": "type",
-      "at": "core/storage/storage.go:322"
+      "at": "core/storage/storage.go:410"
     },
     "storage.Open": {
       "kind": "func",
-      "at": "core/storage/storage.go:416"
+      "at": "core/storage/storage.go:504"
     },
     "storage.ParseExportKey": {
       "kind": "func",
@@ -12872,43 +12896,43 @@
     },
     "storage.PresignDownload": {
       "kind": "func",
-      "at": "core/storage/storage.go:770"
+      "at": "core/storage/storage.go:860"
     },
     "storage.PresignUpload": {
       "kind": "func",
-      "at": "core/storage/storage.go:276"
+      "at": "core/storage/storage.go:289"
     },
     "storage.PresignedPost": {
       "kind": "type",
-      "at": "core/storage/storage.go:244"
+      "at": "core/storage/storage.go:257"
     },
     "storage.PresignedURL": {
       "kind": "type",
-      "at": "core/storage/storage.go:753"
+      "at": "core/storage/storage.go:843"
     },
     "storage.Produced": {
       "kind": "type",
-      "at": "core/storage/storage.go:561"
+      "at": "core/storage/storage.go:649"
     },
     "storage.Promote": {
       "kind": "func",
-      "at": "core/storage/storage.go:483"
+      "at": "core/storage/storage.go:571"
     },
     "storage.Promoted": {
       "kind": "type",
-      "at": "core/storage/storage.go:456"
+      "at": "core/storage/storage.go:544"
     },
     "storage.PublicURL": {
       "kind": "func",
-      "at": "core/storage/storage.go:791"
+      "at": "core/storage/storage.go:881"
     },
     "storage.PublishDerivative": {
       "kind": "func",
-      "at": "core/storage/storage.go:843"
+      "at": "core/storage/storage.go:933"
     },
     "storage.PurgeAllVersions": {
       "kind": "func",
-      "at": "core/storage/storage.go:927"
+      "at": "core/storage/storage.go:1017"
     },
     "storage.Purpose": {
       "kind": "type",
@@ -12920,19 +12944,23 @@
     },
     "storage.PutServerProduced": {
       "kind": "func",
-      "at": "core/storage/storage.go:616"
+      "at": "core/storage/storage.go:704"
+    },
+    "storage.PutUpload": {
+      "kind": "func",
+      "at": "core/storage/storage.go:364"
     },
     "storage.Read": {
       "kind": "func",
-      "at": "core/storage/storage.go:708"
+      "at": "core/storage/storage.go:796"
     },
     "storage.ReadHead": {
       "kind": "func",
-      "at": "core/storage/storage.go:349"
+      "at": "core/storage/storage.go:437"
     },
     "storage.SHA256": {
       "kind": "func",
-      "at": "core/storage/storage.go:385"
+      "at": "core/storage/storage.go:473"
     },
     "storage.SanitizeFilename": {
       "kind": "func",
@@ -12948,19 +12976,19 @@
     },
     "storage.Stat": {
       "kind": "func",
-      "at": "core/storage/storage.go:332"
+      "at": "core/storage/storage.go:420"
     },
     "storage.String": {
       "kind": "func",
-      "at": "core/storage/storage.go:758"
+      "at": "core/storage/storage.go:848"
     },
     "storage.URL": {
       "kind": "func",
-      "at": "core/storage/storage.go:757"
+      "at": "core/storage/storage.go:847"
     },
     "storage.UnpublishDerivative": {
       "kind": "func",
-      "at": "core/storage/storage.go:909"
+      "at": "core/storage/storage.go:999"
     },
     "storage.UploadPath": {
       "kind": "func",

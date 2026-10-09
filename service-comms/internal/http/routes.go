@@ -803,6 +803,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Tải ảnh bìa cho mục nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); máy chủ dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF; bỏ trống content_item_id khi bài chưa lưu
 	// @screen   11-noi-dung-mini-app §7
+	// @multipart size file_name? content_type? content_item_id? file
 	// @reply    201 coverFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
@@ -840,6 +841,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Tải ảnh chèn trong thân bài nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); trả ảnh đã lưu, mã mục nội dung và liên kết xem trước khi đã sẵn sàng; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu
 	// @screen   11-noi-dung-mini-app §7
+	// @multipart size file_name? content_type? content_item_id? file
 	// @reply    201 bodyImageFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
@@ -941,6 +943,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — một lệnh multipart (size, content_item_id, audio_duration_seconds, file_name, content_type, rồi file); máy chủ dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập
 	// @screen   11-noi-dung-mini-app §7
+	// @multipart size file_name? content_type? content_item_id? audio_duration_seconds file
 	// @reply    201 audioFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error

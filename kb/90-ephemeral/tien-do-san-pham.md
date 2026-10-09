@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 1fc99dee
+derived_from_commit: 94619d16
 expires: 2027-01-07
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -30,22 +30,22 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 |---|---|---|---|
 | **00** ViGov — Tổng quan hệ thống | — | — | — |
 | **01** Tổng quan điều hành | 6 | 6/6 | ✓ |
-| **02** Quản lý nhiệm vụ | 22 | 22/22 | ✓ |
+| **02** Quản lý nhiệm vụ | 21 | 21/21 | ✓ |
 | **03** Sổ tay lãnh đạo | 1 | 1/1 | ✓ |
 | **04** Biên bản và kết luận họp | 13 | 13/13 | ✓ |
 | **05** Văn bản đến & Đơn thư | 25 | 25/25 | ✓ |
 | **06** Theo dõi giải ngân | 27 | 27/27 | ✓ |
 | **07** Thu – Chi ngân sách xã | 17 | 14/17 | ✓ |
 | **08** Thông báo | 2 | 2/2 | ✓ |
-| **09** Phản ánh của người dân | 40 | 27/28 +12 ngoài web | ✓ |
+| **09** Phản ánh của người dân | 37 | 25/26 +11 ngoài web | ✓ |
 | **10** Bản đồ phát triển kinh tế số | 13 | 13/13 | ✓ |
-| **11** Quản trị nội dung Mini App | 25 | 22/22 +3 ngoài web | ✓ |
+| **11** Quản trị nội dung Mini App | 22 | 19/19 +3 ngoài web | ✓ |
 | **12** Danh bạ cán bộ | 14 | 6/12 +2 ngoài web | ✓ |
 | **13** Báo cáo điều hành | 1 | 1/1 | ✓ |
 | **14** Cấu hình hệ thống | 135 | 135/135 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
 
-Tổng **381 tuyến** trong hợp đồng. **18** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **372 tuyến** trong hợp đồng. **16** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 
@@ -68,13 +68,13 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 11 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 5 |
 | 12 | Bản đồ kinh tế số | `/ban-do` | `ASSET_READ_PERMISSION` | ✓ | 7 |
 | 13 | Nội dung Mini App | `/mini-app` | `MINI_APP_MENU_KEYS` | ✓ | 11 |
-| 14 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 2 |
+| 14 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 1 |
 | 15 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 1 |
 | 16 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 1 |
 | 17 | Hướng dẫn sử dụng | — | — | ✗ | |
 | 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
 
-**15/18** mục menu có màn thật. **52** phần chưa dựng đang hiện trên các màn ấy.
+**15/18** mục menu có màn thật. **51** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -85,7 +85,7 @@ một lời trấn an không có gì đứng sau.
 
 | | |
 |---|---|
-| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 17 |
+| Tuyến ViGov của kênh công dân (`citizen-only`, hoặc công khai kèm `@consumer citizen-app`) | 16 |
 | Trong đó `citizen-app` đang gọi | 9 |
 | Thư mục tính năng trong `citizen-app/src/features/` | 6 |
 
@@ -102,7 +102,6 @@ một lời trấn an không có gì đứng sau.
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}` | ✗ |
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}/photos` | ✗ |
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/photos` | ✗ |
-| POST | `/api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion` | ✗ |
 | POST | `/api/v1/my-citizen-reports/{maTraCuu}/rating` | ✗ |
 | GET | `/api/v1/my-citizen-reports/{maTraCuu}/verification-photos` | ✗ |
 | GET | `/api/v1/public-citizen-report-fields` | ✓ |
@@ -122,17 +121,17 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
 | `citizen-app` | 46 | 23 | 4 | 0 |
-| `core` | 37 | 3 | 1 | 1 |
-| `deploy` | 19 | 12 | 1 | 0 |
+| `core` | 39 | 3 | 1 | 1 |
+| `deploy` | 20 | 12 | 1 | 0 |
 | `platform-admin` | 8 | 3 | 0 | 0 |
 | `proto` | 20 | 1 | 0 | 0 |
-| `service-comms` | 26 | 13 | 4 | 3 |
+| `service-comms` | 27 | 13 | 4 | 3 |
 | `service-documents` | 13 | 4 | 3 | 0 |
 | `service-finance` | 32 | 5 | 3 | 0 |
 | `service-identity` | 53 | 14 | 2 | 1 |
-| `service-petitions` | 55 | 20 | 5 | 0 |
-| `service-platform` | 16 | 17 | 5 | 1 |
+| `service-petitions` | 56 | 20 | 5 | 0 |
+| `service-platform` | 17 | 17 | 5 | 1 |
 | `service-reporting` | 5 | 0 | 1 | 0 |
 | `tools` | 21 | 0 | 0 | 0 |
-| `web-admin` | 88 | 39 | 3 | 1 |
+| `web-admin` | 89 | 39 | 3 | 1 |
 

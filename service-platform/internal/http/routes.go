@@ -103,6 +103,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Tải logo xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại
 	// @screen   *(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*
+	// @multipart size file_name? file
 	// @reply    201 brandingFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
@@ -144,6 +145,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Tải banner web-admin của xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại
 	// @screen   *(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*
+	// @multipart size file_name? file
 	// @reply    201 brandingFileOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error

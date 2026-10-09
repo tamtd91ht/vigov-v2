@@ -403,6 +403,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// petition. The rate-limit budget is the account's own (`zalo-account:` prefix before the digest).
 	// NOT on the accountless chain (ADR 0083): a sender with no session has no photo route at all.
 	//
+	// @multipart size content_type? file
 	// @reply    201 photoOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error

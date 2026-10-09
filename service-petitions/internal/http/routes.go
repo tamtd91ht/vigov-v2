@@ -1118,6 +1118,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 503 `upload_busy` (+ Retry-After) · `storage_not_configured` · `upload_limits_unavailable` ·
 	// `malware_scan_unavailable`: nothing stored, never stored unscanned.
 	//
+	// @multipart size content_type? file
 	// @reply    201 photoOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
@@ -1475,6 +1476,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `unsupported_media_type`. 422 `attachment_rejected`. 503 `upload_busy` (+ Retry-After) ·
 	// `storage_not_configured` · `upload_limits_unavailable` · `malware_scan_unavailable`.
 	//
+	// @multipart size content_type? file_name? file
 	// @reply    201 taskAttachmentOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
@@ -1891,6 +1893,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// @summary  Tải lên một tệp đính kèm cho nhật ký nhiệm vụ qua service (multipart) — dò kiểu, quét mã độc, lưu vào kho hồ sơ
 	// @screen   02-nhiem-vu §5.9
+	// @multipart size content_type? file_name? file
 	// @reply    201 taskAttachmentOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error

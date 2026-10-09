@@ -6,7 +6,7 @@
     "version": "v1",
     "description": "Bề mặt HTTP mà web quản trị gọi, trích từ khai báo route trong */internal/. Xã được suy ra từ Host ở rìa ngoài cùng, nên KHÔNG có tenant_id trong đường dẫn hay query (luật 1). Mỗi operation khai quyền ở x-vigov-permission; thiếu khai báo là từ chối, không phải cho qua (luật 5). Phiên đi bằng cookie httpOnly do máy chủ đặt; client không tự gắn Authorization."
   },
-  "x-vigov-source": "*/internal/ — chú thích @summary/@screen/@request/@reply/@consumer ngay trên câu lệnh đăng ký route",
+  "x-vigov-source": "*/internal/ — chú thích @summary/@screen/@request/@multipart/@reply/@consumer ngay trên câu lệnh đăng ký route",
   "paths": {
     "/api/v1/announcements": {
       "get": {
@@ -6653,7 +6653,7 @@
         }
       ],
       "post": {
-        "summary": "Xin tải một tệp đính kèm cho nhật ký xử lý phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "summary": "Tải lên một tệp đính kèm cho nhật ký xử lý phiếu phản ánh qua service (multipart) — dò kiểu, quét mã độc, lưu vào kho hồ sơ",
         "operationId": "petitions_post_citizen_reports_by_maTraCuu_log_attachments",
         "tags": [
           "petitions"
@@ -6683,9 +6683,30 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/petitions.taskAttachmentUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -6696,7 +6717,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/petitions.taskAttachmentUploadOut"
+                  "$ref": "#/components/schemas/petitions.taskAttachmentOut"
                 }
               }
             }
@@ -6741,8 +6762,48 @@
               }
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -6874,121 +6935,6 @@
           },
           "500": {
             "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion": {
-      "parameters": [
-        {
-          "name": "maTraCuu",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Hoàn tất tải lên tệp đính kèm nhật ký phiếu — dò kiểu, quét mã độc, lưu vào kho hồ sơ",
-        "operationId": "petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion",
-        "tags": [
-          "petitions"
-        ],
-        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.7",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "feedback.read"
-        },
-        "x-vigov-task": "fa420680988f",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/petitions.taskAttachmentOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -8280,7 +8226,7 @@
         }
       },
       "post": {
-        "summary": "Cán bộ xin tải MỘT ảnh sau xử lý cho phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "summary": "Cán bộ tải lên MỘT ảnh sau xử lý cho phiếu phản ánh qua service (multipart) — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ",
         "operationId": "petitions_post_citizen_reports_by_maTraCuu_verification_photos",
         "tags": [
           "petitions"
@@ -8310,9 +8256,27 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/petitions.photoUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -8323,7 +8287,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/petitions.photoUploadOut"
+                  "$ref": "#/components/schemas/petitions.photoOut"
                 }
               }
             }
@@ -8368,103 +8332,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion": {
-      "parameters": [
-        {
-          "name": "maTraCuu",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Cán bộ hoàn tất tải một ảnh sau xử lý — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ",
-        "operationId": "petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion",
-        "tags": [
-          "petitions"
-        ],
-        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.4",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "feedback.resolve"
-        },
-        "x-vigov-task": "fe28a3877f1f",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/petitions.photoOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
+          "408": {
+            "description": "Request Timeout",
             "content": {
               "application/json": {
                 "schema": {
@@ -8475,6 +8344,26 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -8885,7 +8774,7 @@
     },
     "/api/v1/commune-branding/banner-uploads": {
       "post": {
-        "summary": "Xin tải banner web-admin của xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "summary": "Tải banner web-admin của xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại",
         "operationId": "platform_post_commune_branding_banner_uploads",
         "tags": [
           "platform"
@@ -8915,9 +8804,27 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/platform.brandingUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -8928,7 +8835,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/platform.brandingUploadOut"
+                  "$ref": "#/components/schemas/platform.brandingFileOut"
                 }
               }
             }
@@ -8963,95 +8870,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/commune-branding/banner-uploads/{id}/completion": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Hoàn tất tải banner web-admin — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại",
-        "operationId": "platform_post_commune_branding_banner_uploads_by_id_completion",
-        "tags": [
-          "platform"
-        ],
-        "x-vigov-screen": "*(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.org"
-        },
-        "x-vigov-task": "f0bceae22063",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/platform.brandingFileOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
+          "408": {
+            "description": "Request Timeout",
             "content": {
               "application/json": {
                 "schema": {
@@ -9062,6 +8882,26 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -9165,7 +9005,7 @@
     },
     "/api/v1/commune-branding/logo-uploads": {
       "post": {
-        "summary": "Xin tải logo xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "summary": "Tải logo xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại",
         "operationId": "platform_post_commune_branding_logo_uploads",
         "tags": [
           "platform"
@@ -9195,9 +9035,27 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/platform.brandingUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -9208,7 +9066,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/platform.brandingUploadOut"
+                  "$ref": "#/components/schemas/platform.brandingFileOut"
                 }
               }
             }
@@ -9243,95 +9101,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/commune-branding/logo-uploads/{id}/completion": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Hoàn tất tải logo xã — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại",
-        "operationId": "platform_post_commune_branding_logo_uploads_by_id_completion",
-        "tags": [
-          "platform"
-        ],
-        "x-vigov-screen": "*(chưa có đặc tả — ADR 0069, Cấu hình › Nhận diện xã)*",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "admin.org"
-        },
-        "x-vigov-task": "73115489e659",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/platform.brandingFileOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
+          "408": {
+            "description": "Request Timeout",
             "content": {
               "application/json": {
                 "schema": {
@@ -9342,6 +9113,26 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -10659,7 +10450,7 @@
     },
     "/api/v1/content-items/audio-files": {
       "post": {
-        "summary": "Xin tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "summary": "Tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — một lệnh multipart (size, content_item_id, audio_duration_seconds, file_name, content_type, rồi file); máy chủ dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập",
         "operationId": "comms_post_content_items_audio_files",
         "tags": [
           "comms"
@@ -10689,9 +10480,37 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/comms.audioUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "content_item_id": {
+                    "type": "string"
+                  },
+                  "audio_duration_seconds": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "audio_duration_seconds",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -10699,133 +10518,6 @@
         "responses": {
           "201": {
             "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.audioUploadOut"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/content-items/audio-files/{id}/completion": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Hoàn tất tải âm thanh truyền thanh — dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập",
-        "operationId": "comms_post_content_items_audio_files_by_id_completion",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "11-noi-dung-mini-app §7",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "content.update"
-        },
-        "x-vigov-task": "71707e1f7567",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/comms.audioCompletionIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
@@ -10874,8 +10566,38 @@
               }
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -10919,7 +10641,7 @@
     },
     "/api/v1/content-items/body-images": {
       "post": {
-        "summary": "Xin tải ảnh chèn trong thân bài nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) và mã mục nội dung; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu",
+        "summary": "Tải ảnh chèn trong thân bài nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); trả ảnh đã lưu, mã mục nội dung và liên kết xem trước khi đã sẵn sàng; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu",
         "operationId": "comms_post_content_items_body_images",
         "tags": [
           "comms"
@@ -10949,9 +10671,33 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/comms.bodyImageUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "content_item_id": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -10962,7 +10708,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/comms.bodyImageUploadOut"
+                  "$ref": "#/components/schemas/comms.bodyImageFileOut"
                 }
               }
             }
@@ -11007,8 +10753,48 @@
               }
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -11193,116 +10979,9 @@
         }
       }
     },
-    "/api/v1/content-items/body-images/{id}/completion": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Hoàn tất tải ảnh thân bài — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF, trả liên kết xem trước khi đã sẵn sàng",
-        "operationId": "comms_post_content_items_body_images_by_id_completion",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "11-noi-dung-mini-app §7",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "content.update"
-        },
-        "x-vigov-task": "1a3fd1f7d874",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.bodyImageFileOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/content-items/cover-images": {
       "post": {
-        "summary": "Xin tải ảnh bìa cho mục nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút); bỏ trống content_item_id khi bài chưa lưu",
+        "summary": "Tải ảnh bìa cho mục nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); máy chủ dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF; bỏ trống content_item_id khi bài chưa lưu",
         "operationId": "comms_post_content_items_cover_images",
         "tags": [
           "comms"
@@ -11332,9 +11011,33 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/comms.coverUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "content_item_id": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -11345,7 +11048,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/comms.coverUploadOut"
+                  "$ref": "#/components/schemas/comms.coverFileOut"
                 }
               }
             }
@@ -11390,95 +11093,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/content-items/cover-images/{id}/completion": {
-      "parameters": [
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Hoàn tất tải ảnh bìa — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF",
-        "operationId": "comms_post_content_items_cover_images_by_id_completion",
-        "tags": [
-          "comms"
-        ],
-        "x-vigov-screen": "11-noi-dung-mini-app §7",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "content.update"
-        },
-        "x-vigov-task": "57dfe8cdc240",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/comms.coverFileOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
+          "408": {
+            "description": "Request Timeout",
             "content": {
               "application/json": {
                 "schema": {
@@ -11489,6 +11105,26 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -21385,7 +21021,7 @@
         }
       },
       "post": {
-        "summary": "Công dân xin tải MỘT ảnh hiện trường cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn \"Đã tiếp nhận\" — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "summary": "Công dân tải lên MỘT ảnh hiện trường qua service (multipart) cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn \"Đã tiếp nhận\" — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng",
         "operationId": "petitions_post_my_citizen_reports_by_maTraCuu_photos",
         "tags": [
           "petitions"
@@ -21422,9 +21058,27 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/petitions.photoUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -21435,7 +21089,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/petitions.photoUploadOut"
+                  "$ref": "#/components/schemas/petitions.photoOut"
                 }
               }
             }
@@ -21483,126 +21137,8 @@
               }
             }
           },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "rate_limited"
-            ]
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion": {
-      "parameters": [
-        {
-          "name": "maTraCuu",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Công dân hoàn tất tải một ảnh hiện trường — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng",
-        "operationId": "petitions_post_my_citizen_reports_by_maTraCuu_photos_by_id_completion",
-        "tags": [
-          "petitions"
-        ],
-        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.4",
-        "x-vigov-permission": {
-          "kind": "citizen-only"
-        },
-        "x-vigov-tenant-class": {
-          "kind": "tu-phien-hoac-tai-khoan-zalo",
-          "tenant_in_context": true,
-          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
-          "phone_verified_required": false,
-          "reason": "hoàn tất ảnh hiện trường của phiếu chưa xác thực: chỉ trên phiếu của chính tài khoản Zalo của phiên (ADR 0080 #8)",
-          "note": "Nhận phiên đã xác thực số (chủ là công dân) HOẶC phiên chưa xác thực số mang tài khoản Zalo (chủ là tài khoản Zalo — phiếu chưa xác thực). Phiên không có cả hai: 403 chua_xac_thuc_so (ADR 0080)."
-        },
-        "x-vigov-task": "2820049dca3b",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/petitions.photoOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            },
-            "x-vigov-error-codes": [
-              "chua_xac_thuc_so"
-            ]
-          },
-          "404": {
-            "description": "Not Found",
+          "408": {
+            "description": "Request Timeout",
             "content": {
               "application/json": {
                 "schema": {
@@ -21613,6 +21149,26 @@
           },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
             "content": {
               "application/json": {
                 "schema": {
@@ -33878,7 +33434,7 @@
         }
       ],
       "post": {
-        "summary": "Xin tải một tệp đính kèm cho nhật ký nhiệm vụ — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)",
+        "summary": "Tải lên một tệp đính kèm cho nhật ký nhiệm vụ qua service (multipart) — dò kiểu, quét mã độc, lưu vào kho hồ sơ",
         "operationId": "petitions_post_tasks_by_ma_attachments",
         "tags": [
           "petitions"
@@ -33908,9 +33464,30 @@
         "requestBody": {
           "required": true,
           "content": {
-            "application/json": {
+            "multipart/form-data": {
               "schema": {
-                "$ref": "#/components/schemas/petitions.taskAttachmentUploadIn"
+                "type": "object",
+                "description": "Gửi các phần THEO ĐÚNG THỨ TỰ trên: trường chữ trước, `file` cuối cùng; `size` là số byte của tệp (httpx.ReadUpload). Phần không khai bị từ chối.",
+                "properties": {
+                  "size": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "file_name": {
+                    "type": "string"
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "size",
+                  "file"
+                ],
+                "additionalProperties": false
               }
             }
           }
@@ -33921,7 +33498,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/petitions.taskAttachmentUploadOut"
+                  "$ref": "#/components/schemas/petitions.taskAttachmentOut"
                 }
               }
             }
@@ -33966,8 +33543,48 @@
               }
             }
           },
+          "408": {
+            "description": "Request Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
           "409": {
             "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
             "content": {
               "application/json": {
                 "schema": {
@@ -34096,121 +33713,6 @@
           },
           "500": {
             "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/tasks/{ma}/attachments/{id}/completion": {
-      "parameters": [
-        {
-          "name": "ma",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "id",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "post": {
-        "summary": "Hoàn tất tải lên tệp đính kèm — dò kiểu, quét mã độc, lưu vào kho hồ sơ",
-        "operationId": "petitions_post_tasks_by_ma_attachments_by_id_completion",
-        "tags": [
-          "petitions"
-        ],
-        "x-vigov-screen": "02-nhiem-vu §5.9",
-        "x-vigov-permission": {
-          "kind": "permission",
-          "key": "task.read"
-        },
-        "x-vigov-task": "cab16ece9b6a",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/petitions.taskAttachmentOut"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Internal Server Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/httpx.Error"
-                }
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
             "content": {
               "application/json": {
                 "schema": {
@@ -36444,18 +35946,6 @@
         ],
         "additionalProperties": false
       },
-      "comms.audioCompletionIn": {
-        "type": "object",
-        "properties": {
-          "audio_duration_seconds": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "audio_duration_seconds"
-        ],
-        "additionalProperties": false
-      },
       "comms.audioFileOut": {
         "type": "object",
         "properties": {
@@ -36522,47 +36012,6 @@
           "duration_seconds",
           "file_id",
           "status"
-        ],
-        "additionalProperties": false
-      },
-      "comms.audioUploadIn": {
-        "type": "object",
-        "properties": {
-          "content_item_id": {
-            "type": "string"
-          },
-          "file_name": {
-            "type": "string"
-          },
-          "content_type": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "required": [
-          "content_item_id",
-          "content_type",
-          "file_name",
-          "size"
-        ],
-        "additionalProperties": false
-      },
-      "comms.audioUploadOut": {
-        "type": "object",
-        "properties": {
-          "audio_file": {
-            "$ref": "#/components/schemas/comms.audioFileOut"
-          },
-          "upload": {
-            "$ref": "#/components/schemas/comms.presignedUploadOut"
-          }
-        },
-        "required": [
-          "audio_file",
-          "upload"
         ],
         "additionalProperties": false
       },
@@ -36692,50 +36141,6 @@
           "file_id",
           "public",
           "status"
-        ],
-        "additionalProperties": false
-      },
-      "comms.bodyImageUploadIn": {
-        "type": "object",
-        "properties": {
-          "file_name": {
-            "type": "string"
-          },
-          "content_type": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "content_item_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "content_type",
-          "file_name",
-          "size"
-        ],
-        "additionalProperties": false
-      },
-      "comms.bodyImageUploadOut": {
-        "type": "object",
-        "properties": {
-          "body_image": {
-            "$ref": "#/components/schemas/comms.coverFileOut"
-          },
-          "content_item_id": {
-            "type": "string"
-          },
-          "upload": {
-            "$ref": "#/components/schemas/comms.presignedUploadOut"
-          }
-        },
-        "required": [
-          "body_image",
-          "content_item_id",
-          "upload"
         ],
         "additionalProperties": false
       },
@@ -36955,50 +36360,6 @@
           "file_id",
           "public",
           "status"
-        ],
-        "additionalProperties": false
-      },
-      "comms.coverUploadIn": {
-        "type": "object",
-        "properties": {
-          "file_name": {
-            "type": "string"
-          },
-          "content_type": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          },
-          "content_item_id": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "content_type",
-          "file_name",
-          "size"
-        ],
-        "additionalProperties": false
-      },
-      "comms.coverUploadOut": {
-        "type": "object",
-        "properties": {
-          "cover_image": {
-            "$ref": "#/components/schemas/comms.coverFileOut"
-          },
-          "content_item_id": {
-            "type": "string"
-          },
-          "upload": {
-            "$ref": "#/components/schemas/comms.presignedUploadOut"
-          }
-        },
-        "required": [
-          "content_item_id",
-          "cover_image",
-          "upload"
         ],
         "additionalProperties": false
       },
@@ -38875,30 +38236,6 @@
           "publish_mode",
           "updated_by",
           "window_days"
-        ],
-        "additionalProperties": false
-      },
-      "comms.presignedUploadOut": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string"
-          },
-          "fields": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "expires_at",
-          "fields",
-          "url"
         ],
         "additionalProperties": false
       },
@@ -50916,63 +50253,6 @@
         ],
         "additionalProperties": false
       },
-      "petitions.photoUploadIn": {
-        "type": "object",
-        "properties": {
-          "content_type": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "required": [
-          "content_type",
-          "size"
-        ],
-        "additionalProperties": false
-      },
-      "petitions.photoUploadOut": {
-        "type": "object",
-        "properties": {
-          "photo": {
-            "$ref": "#/components/schemas/petitions.photoOut"
-          },
-          "upload": {
-            "$ref": "#/components/schemas/petitions.presignedUploadOut"
-          }
-        },
-        "required": [
-          "photo",
-          "upload"
-        ],
-        "additionalProperties": false
-      },
-      "petitions.presignedUploadOut": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string"
-          },
-          "fields": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "expires_at",
-          "fields",
-          "url"
-        ],
-        "additionalProperties": false
-      },
       "petitions.publicationIn": {
         "type": "object",
         "properties": {
@@ -51762,43 +51042,6 @@
         ],
         "additionalProperties": false
       },
-      "petitions.taskAttachmentUploadIn": {
-        "type": "object",
-        "properties": {
-          "file_name": {
-            "type": "string"
-          },
-          "content_type": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "required": [
-          "content_type",
-          "file_name",
-          "size"
-        ],
-        "additionalProperties": false
-      },
-      "petitions.taskAttachmentUploadOut": {
-        "type": "object",
-        "properties": {
-          "attachment": {
-            "$ref": "#/components/schemas/petitions.taskAttachmentOut"
-          },
-          "upload": {
-            "$ref": "#/components/schemas/petitions.presignedUploadOut"
-          }
-        },
-        "required": [
-          "attachment",
-          "upload"
-        ],
-        "additionalProperties": false
-      },
       "petitions.taskCountsOut": {
         "type": "object",
         "properties": {
@@ -52296,30 +51539,6 @@
         ],
         "additionalProperties": false
       },
-      "platform.brandingPresignedPost": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string"
-          },
-          "fields": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "expires_at",
-          "fields",
-          "url"
-        ],
-        "additionalProperties": false
-      },
       "platform.brandingSettingsOut": {
         "type": "object",
         "properties": {
@@ -52343,43 +51562,6 @@
         "required": [
           "logo_public_url",
           "web_admin_banner_public_url"
-        ],
-        "additionalProperties": false
-      },
-      "platform.brandingUploadIn": {
-        "type": "object",
-        "properties": {
-          "file_name": {
-            "type": "string"
-          },
-          "content_type": {
-            "type": "string"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int64"
-          }
-        },
-        "required": [
-          "content_type",
-          "file_name",
-          "size"
-        ],
-        "additionalProperties": false
-      },
-      "platform.brandingUploadOut": {
-        "type": "object",
-        "properties": {
-          "file": {
-            "$ref": "#/components/schemas/platform.brandingFileOut"
-          },
-          "upload": {
-            "$ref": "#/components/schemas/platform.brandingPresignedPost"
-          }
-        },
-        "required": [
-          "file",
-          "upload"
         ],
         "additionalProperties": false
       },
