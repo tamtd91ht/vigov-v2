@@ -678,6 +678,15 @@
       "bang_chung": "commit đợt này (xem git log 'feat(petitions): /phan-anh đợt A'). go build/vet/test service-petitions xanh; check_quyen 0 khoá lạ; make check: 2 ca dashboard/export quá giờ lúc tải + 2 gói -race thiếu bộ nhớ (chạy riêng xanh) — không thuộc đợt này. Chưa chạy PostgreSQL thật (VIGOV_TEST_DSN).",
       "tiep_theo": "(1) Đợt B: ghi thôn (Active RPC) ở nhập hộ/phân loại/tạo phiếu công dân; gộp phiếu theo ADR 0087 (migration merged_into, ngưỡng theo xã) và thêm mệnh đề loại phiếu phụ ở scopeFilter/registerFilter. (2) Dòng nhật ký khi gỡ tệp dùng hanh_vi 'ghi-chu' — mã riêng 'go-tep' cần mở CHECK bảng có dữ liệu (data-migration-builder). (3) attachments trên POST …/status chưa vào openapi (lỗ apidoc thân tuỳ chọn). (4) Điểm hài lòng theo lĩnh vực đang là số tồn, chưa theo kỳ — chủ dự án xem. (5) Chạy ca PG (CTE giờ xử lý, GROUPING SETS).",
       "no_confirm": []
+    },
+    {
+      "id": "gop-phieu-luoc-do-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "viec": "Lược đồ gộp phiếu trùng (ADR 0087): migration 0037 (merged_into/merged_at/merged_by + FK cùng xã, trigger chặn dây chuyền/trạng thái đã xong/lĩnh vực can-bo/hạn chỉ đi xuống, bảng petition_merge_event chỉ thêm) và 0038 (petition_settings.duplicate_radius_meters 50, duplicate_window_days 7).",
+      "bang_chung": "commit 'feat(petitions): lược đồ gộp phiếu'. go test service-petitions xanh (gồm TestMigration0037/0038 kiểm chữ SQL), check_khoa_duy_nhat + check_security PASS. CHƯA chạy trên PostgreSQL thật — máy này không có DSN/psql/Docker.",
+      "tiep_theo": "BẮT BUỘC trước khi triển khai: go run ./tools/schema-smoke trên PG16. Nghiệp vụ gộp/tách (app/http/thông báo) chưa dựng. Xung đột: ràng buộc 0004 han_xu_ly_xong >= goc_dem_han có thể từ chối 'phiếu chính lấy hạn sớm hơn' khi phiếu phụ gửi trước — hiện chặn (đóng an toàn), app sẽ gợi ý chọn phiếu gửi trước làm phiếu chính. Khoảng 1..1000 m / 1..90 ngày là trần do agent chọn, chưa phải số của khách.",
+      "no_confirm": []
     }
   ]
 }
