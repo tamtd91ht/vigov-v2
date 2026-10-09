@@ -10,7 +10,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { KetQua } from "@/lib/api/goi";
 import type { StaffIntakeInput } from "@/lib/api/phieu-phan-anh";
-import type { petitions_citizenFieldListOut } from "@/lib/api/schema.gen";
+import type { identity_danhSachThonToDanPhoRa, petitions_citizenFieldListOut } from "@/lib/api/schema.gen";
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
@@ -57,7 +57,32 @@ const EMPTY_VALUES = {
   reporterName: "",
   reporterPhone: "",
   anonymous: false,
+  residentialUnitId: "",
 };
+
+function unit(id: string, name: string, active: boolean) {
+  return {
+    id,
+    code: id.toLowerCase(),
+    name,
+    type_code: "thon",
+    type_label: "Thôn",
+    household_count: null,
+    population_count: null,
+    active,
+    head_staff_code: "",
+    head_staff_name: "",
+    order: 0,
+  };
+}
+
+/** Two units in use and one retired: only the two may be offered for a NEW petition (ADR 0088 §1). */
+const UNITS: KetQua<identity_danhSachThonToDanPhoRa> = {
+  ok: true,
+  duLieu: {
+    items: [unit("01JTHON1", "Thôn Hà Lam", true), unit("01JTHON2", "Thôn Bình An", true), unit("01JTHON9", "Thôn Cũ", false)],
+  },
+} as KetQua<identity_danhSachThonToDanPhoRa>;
 
 async function flush() {
   await act(async () => {
@@ -75,12 +100,26 @@ function type(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, va
   });
 }
 
-function mount(book: (i: StaffIntakeInput, k: string) => Promise<KetQua<{ code: string }>>, onBooked = vi.fn()) {
+function mount(
+  book: (i: StaffIntakeInput, k: string) => Promise<KetQua<{ code: string }>>,
+  onBooked = vi.fn(),
+  units: KetQua<identity_danhSachThonToDanPhoRa> = UNITS,
+) {
   host = document.createElement("div");
   document.body.append(host);
   const r = createRoot(host);
   root = r;
-  act(() => r.render(<StaffIntakeForm onClose={() => {}} onBooked={onBooked} loadFields={async () => FIELDS} book={book} />));
+  act(() =>
+    r.render(
+      <StaffIntakeForm
+        onClose={() => {}}
+        onBooked={onBooked}
+        loadFields={async () => FIELDS}
+        loadUnits={async () => units}
+        book={book}
+      />,
+    ),
+  );
   return host;
 }
 
@@ -97,7 +136,7 @@ function submit(h: HTMLElement) {
 }
 
 describe("the modal's shape (§11) — what is on it and what is NOT", () => {
-  const html = renderToStaticMarkup(<StaffIntakeFormView fields={FIELDS} values={EMPTY_VALUES} />);
+  const html = renderToStaticMarkup(<StaffIntakeFormView fields={FIELDS} units={UNITS} values={EMPTY_VALUES} />);
 
   it("title, the approved description, the fields of §11", () => {
     expect(html).toContain(INTAKE_TITLE);
@@ -125,24 +164,43 @@ describe("the modal's shape (§11) — what is on it and what is NOT", () => {
     expect(html).toContain('<option value="can-bo">Thái độ / tác phong cán bộ</option>');
   });
 
-  it("NO channel select; hamlet and photos are DISABLED placeholders only (ADR 0028 row 5, ADR 0068 §14; server refuses)", () => {
+  it("NO channel select; photos are a DISABLED placeholder (ADR 0028 row 5, ADR 0068 §14; server refuses)", () => {
     expect(html).not.toContain("Tiếp nhận qua kênh");
     // No file can be chosen: the photo picker is a disabled button, never a file input.
     expect(html).not.toContain('type="file"');
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Đính ảnh hiện trường<\/button>/s);
-    // Two selects: the live field list, and the hamlet placeholder — disabled.
-    expect(html.match(/<select/g)?.length).toBe(2);
-    expect(html).toMatch(/<select id="nhap-ho-thon" disabled=""/);
-    expect(html).toContain("Thôn, tổ dân phố");
-    expect(html).toContain(pendingMarkerLabel("Thôn, tổ dân phố"));
     expect(html).toContain(pendingMarkerLabel("Đính ảnh hiện trường"));
   });
 
-  it("pressing the two '?' opens their descriptions and reaches no network; the body gains no key", () => {
+  it("the hamlet select is LIVE (ADR 0088 §1): only units IN USE, the empty choice first, no '?'", () => {
+    expect(html.match(/<select/g)?.length).toBe(2);
+    expect(html).not.toMatch(/<select id="nhap-ho-thon"[^>]*disabled=""/);
+    expect(html).toContain("Thôn, tổ dân phố");
+    expect(html).not.toContain(pendingMarkerLabel("Thôn, tổ dân phố"));
+    const select = html.match(/<select id="nhap-ho-thon"[\s\S]*?<\/select>/)?.[0] ?? "";
+    expect(select).toContain('<option value="" selected="">— Chưa xác định —</option>');
+    expect(select).toContain('<option value="01JTHON1">Thôn Hà Lam</option>');
+    expect(select).toContain('<option value="01JTHON2">Thôn Bình An</option>');
+    // A retired unit is never offered for a new record — the server would refuse it.
+    expect(select).not.toContain("01JTHON9");
+    expect(select).not.toContain("Thôn Cũ");
+  });
+
+  it("the unit list failed: the server's sentence under the select; the petition can still be booked", () => {
+    const cau = "Không đọc được danh sách thôn. Vui lòng thử lại.";
+    const h = renderToStaticMarkup(
+      <StaffIntakeFormView fields={FIELDS} units={{ ok: false, thongBao: cau }} values={{ ...EMPTY_VALUES, field: "rac-thai", content: "Rác." }} />,
+    );
+    expect(h).toContain(cau);
+    const tag = (x: string) => (x.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? "").replace(/\sclass="[^"]*"/, "");
+    expect(tag(h)).not.toContain("disabled");
+  });
+
+  it("pressing the photos '?' opens its description and reaches no network; the body gains no key", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const h = mount(vi.fn());
-    for (const id of ["intakeHamlet", "intakePhotos"]) {
+    for (const id of ["intakePhotos"]) {
       const info = petitionPendingPart(id);
       const b = q<HTMLButtonElement>(h, `button[aria-label="${pendingMarkerLabel(info.ten)}"]`);
       act(() => b.click());
@@ -168,7 +226,7 @@ describe("the modal's shape (§11) — what is on it and what is NOT", () => {
     const tag = (h: string) => (h.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? "").replace(/\sclass="[^"]*"/, "");
     expect(tag(html)).toContain("disabled");
     const ok = renderToStaticMarkup(
-      <StaffIntakeFormView fields={FIELDS} values={{ ...EMPTY_VALUES, field: "rac-thai", content: "Rác." }} />,
+      <StaffIntakeFormView fields={FIELDS} units={UNITS} values={{ ...EMPTY_VALUES, field: "rac-thai", content: "Rác." }} />,
     );
     expect(tag(ok)).not.toContain("disabled");
   });
@@ -215,6 +273,8 @@ describe("booking — the flow", () => {
       reporterPhone: "0900000000",
       anonymous: false,
       clockFrom: "2026-10-02T08:30:00+07:00",
+      // No hamlet picked: `""`, which `staffIntakeBody` leaves out of the body.
+      residentialUnitId: "",
     });
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
     expect(onBooked).toHaveBeenCalledTimes(1);
@@ -274,6 +334,23 @@ describe("booking — the flow", () => {
     expect(input?.anonymous).toBe(true);
     expect(input?.reporterName).toBe("");
     expect(input?.reporterPhone).toBe("");
+  });
+
+  it("a picked hamlet is sent as its id; 400 `residential_unit_not_offered` is the server's sentence, inline", async () => {
+    const cau = "Thôn, tổ dân phố đã chọn không thuộc xã hoặc đã ngừng dùng. Hãy chọn lại.";
+    const book = vi
+      .fn<(i: StaffIntakeInput, k: string) => Promise<KetQua<{ code: string }>>>()
+      .mockResolvedValueOnce({ ok: false, thongBao: cau });
+    const h = mount(book);
+    await flush();
+    fill(h);
+    type(q<HTMLSelectElement>(h, "#nhap-ho-thon"), "01JTHON2");
+    submit(h);
+    await flush();
+    expect(book.mock.calls[0]?.[0].residentialUnitId).toBe("01JTHON2");
+    expect(q(h, '[role="alert"]').textContent).toBe(cau);
+    // The choice stays for a correction.
+    expect(q<HTMLSelectElement>(h, "#nhap-ho-thon").value).toBe("01JTHON2");
   });
 
   it("a blank clock sends NO `clock_from` — the server takes the booking instant", async () => {

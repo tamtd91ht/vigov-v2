@@ -158,13 +158,20 @@ describe("search as you type — 300ms after the last key (row 10)", () => {
       setter?.call(box, "ngõ 5");
       box.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const withQ = () => fetchSpy.mock.calls.filter(([u]) => String(u).includes("q="));
+    // The LIST read; the count route (`Danh sách (n)`) takes the same filters and is checked apart.
+    const withQ = () =>
+      fetchSpy.mock.calls.filter(([u]) => String(u).startsWith("/api/v1/citizen-reports?") && String(u).includes("q="));
+    const countWithQ = () =>
+      fetchSpy.mock.calls.filter(([u]) => String(u).startsWith("/api/v1/citizen-report-counts?") && String(u).includes("q="));
     act(() => vi.advanceTimersByTime(299));
     expect(withQ()).toEqual([]);
+    expect(countWithQ()).toEqual([]);
     act(() => vi.advanceTimersByTime(1));
     expect(withQ().length).toBe(1);
     expect(String(withQ()[0]?.[0])).toContain("q=ng%C3%B5+5");
+    expect(countWithQ().length).toBe(1);
     expect(window.location.search).not.toContain("ng");
+    expect(window.location.href).not.toContain("ng%C3%B5");
   });
 });
 

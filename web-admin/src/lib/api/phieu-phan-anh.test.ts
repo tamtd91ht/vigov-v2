@@ -23,6 +23,10 @@ import {
   phanLoaiPhieu,
   setPetitionPublication,
   tienTrangThaiPhieu,
+  countCitizenReports,
+  listCitizenReportPoints,
+  readCitizenReportBreakdown,
+  removeLogAttachment,
 } from "./phieu-phan-anh";
 import type { petitions_phieuCuaToiRa, petitions_phieuPhanAnhRa } from "./schema.gen";
 import { UPLOAD_FORM_MISSING } from "./task-attachments";
@@ -435,6 +439,17 @@ const KHOA_PHIEU_MONG_DOI = [
   // ADR 0083 (08/10/2026, temporary): an explicit marker that the petition came in with no account — derived in
   // one function of service-petitions, never a stored flag. Not personal data; staff see a label from it.
   "accountless",
+  // ADR 0088 §1 (09/10/2026): the thôn / tổ dân phố recorded ON the petition at intake or classification
+  // (id + name). Not personal data — a public administrative unit; never derived from the coordinates.
+  "residential_unit_id",
+  "residential_unit_name",
+  // ADR 0087 (09/10/2026): the duplicate link, staff responses only — `merged_into` is the main
+  // petition's code, `merged_petitions` the codes linked to this one, `merged_at` / `merged_by` who
+  // linked it (a staff business code, rule 6 inv 8). Codes, not content: no citizen response carries them.
+  "merged_into",
+  "merged_petitions",
+  "merged_at",
+  "merged_by",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */
@@ -1072,5 +1087,119 @@ describe("POST …/closure — the commune's verification-photo gate", () => {
     expect(new Headers(init?.headers).get("Content-Type")).toBe("application/json");
     expect(new Headers(init?.headers).has("Idempotency-Key")).toBe(false);
     expect(r.ok && r.duLieu.status).toBe("da-dong");
+  });
+});
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * 09/10/2026 — count, points, breakdown, act files, hamlet, log-file removal
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+describe("GET count / points / breakdown", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("count: the list's filters, the total verbatim", async () => {
+    const fake = answer(200, { total: 57 });
+    const r = await countCitizenReports({ trangThai: "dang-xu-ly", tim: "ngõ" });
+    const [path, init] = call(fake);
+    expectCommon(path, init);
+    expect(path).toBe("/api/v1/citizen-report-counts?status=dang-xu-ly&q=ng%C3%B5");
+    expect(r).toEqual({ ok: true, duLieu: { total: 57 } });
+  });
+
+  it("points: 422 `too_many_points` is flagged (narrow the filters); any other refusal is not", async () => {
+    answer(422, { code: "too_many_points", message: "Quá nhiều điểm. Hãy thu hẹp bộ lọc." });
+    expect(await listCitizenReportPoints({})).toEqual({
+      ok: false,
+      message: "Quá nhiều điểm. Hãy thu hẹp bộ lọc.",
+      tooManyPoints: true,
+    });
+    answer(422, { code: "something_else", message: "Khác." });
+    expect((await listCitizenReportPoints({})).ok === false).toBe(true);
+    expect(await listCitizenReportPoints({})).toMatchObject({ tooManyPoints: false });
+    const fake = answer(200, { items: [{ lat: 15.7, lng: 108.3, status: "dang-xu-ly" }] });
+    const ok = await listCitizenReportPoints({ thonID: "01JTHON1" });
+    expect(call(fake)[0]).toBe("/api/v1/citizen-report-points?hamlet=01JTHON1");
+    expectCommon(...call(fake));
+    expect(ok.ok).toBe(true);
+  });
+
+  it("breakdown: 503 / 409 come back as the server's sentence verbatim", async () => {
+    answer(503, { code: "working_hours_unavailable", message: "Chưa đo được giờ làm việc lúc này." });
+    expect(await readCitizenReportBreakdown({ from: "a", to: "b" })).toEqual({
+      ok: false,
+      thongBao: "Chưa đo được giờ làm việc lúc này.",
+    });
+  });
+});
+
+describe("act bodies — files and the hamlet (ADR 0088)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const body = (fake: ReturnType<typeof answer>) => JSON.parse(String(call(fake)[1]?.body ?? "null")) as unknown;
+
+  it("no file: the body is byte-for-byte what it was (no `attachments` key)", async () => {
+    let fake = answer(200, {});
+    await phanLoaiPhieu("PA-1", "rac-thai", "");
+    expect(body(fake)).toEqual({ field: "rac-thai" });
+    fake = answer(200, {});
+    await tienTrangThaiPhieu("PA-1", "", []);
+    expect(call(fake)[1]?.body).toBeUndefined();
+  });
+
+  it("every act carries the STORED ids it was given", async () => {
+    const ids = ["01JF1", "01JF2"];
+    let fake = answer(200, {});
+    await phanLoaiPhieu("PA-1", "rac-thai", "", { attachments: ids });
+    expect(body(fake)).toEqual({ field: "rac-thai", attachments: ids });
+    fake = answer(200, {});
+    await chuyenXuLyPhieu("PA-1", "01JBP", undefined, "", ids);
+    expect(body(fake)).toEqual({ unit: "01JBP", attachments: ids });
+    fake = answer(200, {});
+    await tienTrangThaiPhieu("PA-1", "Đã tới", ids);
+    expect(body(fake)).toEqual({ note: "Đã tới", attachments: ids });
+    fake = answer(200, {});
+    await dongPhieu("PA-1", "Đã dọn.", "", ids);
+    expect(body(fake)).toEqual({ result: "Đã dọn.", attachments: ids });
+    fake = answer(200, {});
+    await khongTiepNhanPhieu("PA-1", "Không thuộc thẩm quyền xã.", "", ids);
+    expect(body(fake)).toEqual({ reason: "Không thuộc thẩm quyền xã.", attachments: ids });
+    fake = answer(200, {});
+    await chuyenCapTrenPhieu("PA-1", "Thuộc thẩm quyền tỉnh.", "Sở GTVT", "", ids);
+    expect(body(fake)).toEqual({ reason: "Thuộc thẩm quyền tỉnh.", receiving_body: "Sở GTVT", attachments: ids });
+  });
+
+  it("classification: `residential_unit_id` only when picked (absent keeps the stored one)", async () => {
+    let fake = answer(200, {});
+    await phanLoaiPhieu("PA-1", "rac-thai", "", { residentialUnitId: "01JTHON1" });
+    expect(body(fake)).toEqual({ field: "rac-thai", residential_unit_id: "01JTHON1" });
+    fake = answer(200, {});
+    await phanLoaiPhieu("PA-1", "rac-thai", "", { residentialUnitId: "" });
+    expect(body(fake)).toEqual({ field: "rac-thai" });
+  });
+
+  it("staff intake: `residential_unit_id` only when picked", () => {
+    expect(staffIntakeBody({ ...INTAKE, residentialUnitId: "01JTHON1" }).residential_unit_id).toBe("01JTHON1");
+    expect("residential_unit_id" in staffIntakeBody({ ...INTAKE, residentialUnitId: "" })).toBe(false);
+    expect("residential_unit_id" in staffIntakeBody(INTAKE)).toBe(false);
+  });
+});
+
+describe("DELETE …/log-attachments/{id} — soft removal, reason required", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("path, DELETE, the trimmed reason in the BODY; 204 is success", async () => {
+    const fake = vi.fn(async (_p: string, _i?: RequestInit) => new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fake);
+    const r = await removeLogAttachment("PA 1", "01J/F", "  Tải nhầm tệp  ");
+    const [path, init] = fake.mock.calls[0] as unknown as Call;
+    expectCommon(path, init);
+    expect(path).toBe("/api/v1/citizen-reports/PA%201/log-attachments/01J%2FF");
+    expect(init?.method).toBe("DELETE");
+    expect(JSON.parse(String(init?.body))).toEqual({ reason: "Tải nhầm tệp" });
+    expect(r).toEqual({ ok: true, duLieu: undefined });
+  });
+
+  it("409 `legal_hold` / 403: the server's sentence", async () => {
+    answer(409, { code: "legal_hold", message: "Tệp đang bị phong toả." });
+    expect(await removeLogAttachment("PA-1", "01JF", "x")).toEqual({ ok: false, thongBao: "Tệp đang bị phong toả." });
   });
 });

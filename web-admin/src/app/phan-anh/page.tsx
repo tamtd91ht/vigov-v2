@@ -5,6 +5,7 @@ import { petitionDeepLinkCode } from "@/features/phan-anh/nhan-phieu";
 import { PetitionWorkspace } from "@/features/phan-anh/petition-workspace";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
+import { basemapConfigured } from "@/lib/may-chu/basemap";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -41,6 +42,10 @@ export default async function TrangPhanAnh({
   // is a business code, not personal data; the detail route still checks `feedback.read` and the
   // commune, and answers 404 for a code that is not this commune's.
   const openCode = petitionDeepLinkCode(params.id);
+  // The self-hosted basemap of the petition maps (ADR 0072 §Trả lời 09/10/2026): `BASEMAP_URL` is a
+  // SERVER variable, read here and passed down as a flag — never a `NEXT_PUBLIC_*`, never a URL in the
+  // bundle. Unset → the maps say one sentence and fetch no coordinates (no fallback host).
+  const basemapAvailable = basemapConfigured();
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -48,7 +53,7 @@ export default async function TrangPhanAnh({
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <PetitionWorkspace drillDown={drillDown} openCode={openCode} />
+            <PetitionWorkspace drillDown={drillDown} openCode={openCode} basemapAvailable={basemapAvailable} />
           </main>
         </div>
       </PhienProvider>

@@ -11,7 +11,7 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
 import { congThaoTac, petitionPendingPart } from "./nhan-phieu";
-import { ChiTietPhieu, HangLoc, SoPhanAnh } from "./so-phan-anh";
+import { ChiTietPhieu, HangLoc } from "./so-phan-anh";
 
 // No permission at all: no KPI row, no intake button — the placeholders are drawn for every account
 // (they grant nothing), and nothing else on the screen competes with them.
@@ -106,21 +106,6 @@ const PETITION: petitions_phieuPhanAnhRa = {
 };
 
 describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
-  it("main tabs: Danh sách selected; Bản đồ nhiệt and Báo cáo disabled, out of the tab order; no block", () => {
-    const el = mount(<SoPhanAnh />);
-    const tabs = [...el.querySelectorAll<HTMLButtonElement>('[role="tablist"] [role="tab"]')];
-    expect(tabs.map((t) => t.textContent)).toEqual(["Danh sách", "Bản đồ nhiệt", "Báo cáo"]);
-    expect(tabs[0]!.getAttribute("aria-selected")).toBe("true");
-    expect(document.getElementById(tabs[0]!.getAttribute("aria-controls")!)?.getAttribute("role")).toBe("tabpanel");
-    for (const t of tabs.slice(1)) {
-      expect(t.disabled).toBe(true);
-      expect(t.tabIndex).toBe(-1);
-    }
-    // The collapsed "N phần … chưa dựng được" block is gone.
-    expect(el.textContent).not.toContain("chưa dựng được");
-    pressAll(el, ["heatMapTab", "reportTab"]);
-  });
-
   it("scope: `Liên quan đến tôi` is disabled and never changes the filter", () => {
     const datLoc = vi.fn();
     const el = mount(<HangLoc loc={{}} tim="" datTim={() => {}} datLoc={datLoc} boPhan={[]} thon={[]} />);
@@ -134,60 +119,7 @@ describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
     expect(datLoc).not.toHaveBeenCalled();
   });
 
-  it("drawer `Vị trí` (D2): the mini-map is a disabled placeholder in its place, loading no tile", () => {
-    const el = mount(
-      <ChiTietPhieu
-        phieu={PETITION}
-        bayGio={new Date("2026-09-09T08:00:00Z")}
-        cong={congThaoTac(false, false, false)}
-        tenBoPhan={new Map()}
-        boPhan={[]}
-        danhBa={null}
-        dangGui={false}
-        loiGhi={null}
-        dong={() => {}}
-        phanLoai={() => {}}
-        chuyenXuLy={() => {}}
-        tienTrangThai={() => {}}
-        dongPhieuLai={() => {}}
-        khongTiepNhan={() => {}}
-        chuyenCapTren={() => {}}
-      />,
-    );
-    const section = marker(el, "sceneMap").closest("section");
-    expect(section?.querySelector("h3")?.textContent).toBe("Vị trí");
-    // The address stays under the map's place.
-    expect(section?.textContent).toContain("Đầu ngõ thôn Hà Lam");
-    // No map is drawn: no image, no frame, nothing that could fetch a tile.
-    expect(section?.querySelector("img, iframe")).toBeNull();
-    pressAll(el, ["sceneMap"]);
-  });
-
-  it("drawer `Vị trí` (D2): no coordinates → no section at all", () => {
-    const el = mount(
-      <ChiTietPhieu
-        phieu={{ ...PETITION, lat: null, lng: null }}
-        bayGio={new Date("2026-09-09T08:00:00Z")}
-        cong={congThaoTac(false, false, false)}
-        tenBoPhan={new Map()}
-        boPhan={[]}
-        danhBa={null}
-        dangGui={false}
-        loiGhi={null}
-        dong={() => {}}
-        phanLoai={() => {}}
-        chuyenXuLy={() => {}}
-        tienTrangThai={() => {}}
-        dongPhieuLai={() => {}}
-        khongTiepNhan={() => {}}
-        chuyenCapTren={() => {}}
-      />,
-    );
-    expect([...el.querySelectorAll("h3")].map((h) => h.textContent)).not.toContain("Vị trí");
-    expect(() => marker(el, "sceneMap")).toThrow();
-  });
-
-  it("composer: `Đính kèm ảnh, tệp` is a disabled placeholder; its '?' opens and reaches no network", () => {
+  it("drawer: the duplicates block keeps its '?' (merge UI not built), and it reaches no network", () => {
     const el = mount(
       <ChiTietPhieu
         phieu={{ ...PETITION, status: "dang-xu-ly" }}
@@ -205,13 +137,14 @@ describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
         dongPhieuLai={() => {}}
         khongTiepNhan={() => {}}
         chuyenCapTren={() => {}}
-        initialStep="da-xu-ly"
       />,
     );
-    const attach = [...el.querySelectorAll<HTMLButtonElement>("button")].find((b) =>
-      b.textContent?.includes("Đính kèm ảnh, tệp"),
-    );
-    expect(attach?.disabled).toBe(true);
-    pressAll(el, ["composerAttachment", "duplicates", "logVisibility"]);
+    pressAll(el, ["duplicates"]);
+  });
+
+  it("the parts built on 09/10/2026 left the list: no '?' for the maps, the report, the composer files, the log", () => {
+    for (const gone of ["sceneMap", "heatMapTab", "reportTab", "intakeHamlet", "composerAttachment", "logVisibility", "logFileRemoval"]) {
+      expect(() => petitionPendingPart(gone), gone).toThrow();
+    }
   });
 });

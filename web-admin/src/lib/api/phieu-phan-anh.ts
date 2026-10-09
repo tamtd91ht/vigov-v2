@@ -27,6 +27,13 @@
  *   POST …/{maTraCuu}/verification-photos                   feedback.resolve, Idempotency-Key
  *   POST …/{maTraCuu}/verification-photos/{id}/completion   feedback.resolve
  *
+ * Added 09/10/2026 (ADR 0053 §Sửa đổi 09/10/2026, 0072 §Trả lời 09/10/2026, 0088):
+ *
+ *   GET    /api/v1/citizen-report-counts                     feedback.read (same filters as the list)
+ *   GET    /api/v1/citizen-report-points                     feedback.read (same filters; 422 over 5000)
+ *   GET    /api/v1/citizen-report-breakdown                  feedback.read + report.read
+ *   DELETE …/{maTraCuu}/log-attachments/{id}                 feedback.read gate; uploader OR feedback.resolve
+ *
  * The KPI cards read GET /api/v1/citizen-report-summary through `lib/api/dashboard.ts`
  * (`fetchCitizenReportSummary`) — one client for that route, not two.
  *
@@ -75,7 +82,15 @@ import { UPLOAD_FORM_MISSING, type CallResult } from "./task-attachments";
 import type {
   httpx_Error,
   petitions_citizenFieldListOut,
+  petitions_citizenReportBreakdownOut,
+  petitions_citizenReportCountsOut,
+  petitions_citizenReportLogAttachmentRemoveIn,
+  petitions_citizenReportPointsOut,
+  petitions_delete_citizen_reports_by_maTraCuu_log_attachments_by_id,
+  petitions_get_citizen_report_breakdown,
+  petitions_get_citizen_report_counts,
   petitions_get_citizen_report_intake_fields,
+  petitions_get_citizen_report_points,
   petitions_get_citizen_reports_by_maTraCuu_log_attachments_by_id_download,
   petitions_get_citizen_reports_by_maTraCuu_verification_photos,
   petitions_photoOut,
@@ -146,6 +161,15 @@ function duongDanPhieu(mau: string, maTraCuu: string): string {
 function thanGhiChu(ghiChu: string | undefined): { note?: string } {
   const gon = ghiChu?.trim() ?? "";
   return gon === "" ? {} : { note: gon };
+}
+
+/**
+ * Files that go WITH an act (ADR 0088 §2): ids of completed log attachments, linked by the server to the
+ * act's own log row in the act's transaction. ABSENT when there is none — the act's body is then
+ * byte-for-byte what it was before files existed. Only STORED ids reach this list (`storedIds`).
+ */
+function actAttachments(attachments: readonly string[] | undefined): { attachments?: string[] } {
+  return attachments === undefined || attachments.length === 0 ? {} : { attachments: [...attachments] };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -226,6 +250,26 @@ export type LocPhanAnh = {
  * toàn bình thường — nên chúng đứng một chỗ và có bài kiểm đọc lại từng tên.
  */
 function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocPhanAnh): void {
+  addFilters(truyVan, loc);
+
+  if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
+  // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
+  // lệ" — đúng vào lần mở màn hình đầu tiên.
+  if (loc.cursor !== undefined && loc.cursor !== null && loc.cursor !== "") {
+    truyVan.set("cursor", loc.cursor);
+  }
+}
+
+/**
+ * The FILTER half of the list's query — everything but paging. ONE builder for the list, the count
+ * (`citizen-report-counts`) and the heat-map points (`citizen-report-points`): the three routes read the
+ * same filter parameters with the same parser on the server, so a second builder here would be the copy
+ * that forgets a filter and draws a heat map, or a total, of a different slice than the cards below it.
+ *
+ * The keyword (`q`) goes into the REQUEST only — never the address bar, storage or a log (rule 3,
+ * forbidden #4): the screen keeps it in component state and nothing here writes a location.
+ */
+function addFilters(truyVan: URLSearchParams, loc: LocPhanAnh): void {
   // `scope=all` là mặc định của máy chủ, nên tab "Toàn xã" gửi tham số VẮNG MẶT HẲN — cùng cách
   // sổ Nhiệm vụ làm (`lib/api/nhiem-vu.ts`).
   if (loc.phamVi === "mine") truyVan.set("scope", "mine");
@@ -250,13 +294,102 @@ function themLocVaoTruyVan(truyVan: URLSearchParams, loc: LocPhanAnh): void {
     dat("from", loc.from);
     dat("to", loc.to);
   }
+}
 
-  if (loc.limit !== undefined) truyVan.set("limit", String(loc.limit));
-  // Con trỏ rỗng nghĩa là trang đầu. Gửi `cursor=` rỗng thì máy chủ trả 400 "con trỏ không hợp
-  // lệ" — đúng vào lần mở màn hình đầu tiên.
-  if (loc.cursor !== undefined && loc.cursor !== null && loc.cursor !== "") {
-    truyVan.set("cursor", loc.cursor);
+/** A filter without paging: what the count and the heat-map points take. */
+export type CitizenReportFilter = Omit<LocPhanAnh, "limit" | "cursor">;
+
+function withFilters(path: string, loc: CitizenReportFilter): string {
+  const q = new URLSearchParams();
+  addFilters(q, loc);
+  const s = q.toString();
+  return s === "" ? path : `${path}?${s}`;
+}
+
+/** Path of GET /api/v1/citizen-report-counts for these filters. Split from the call so it can be tested. */
+export function citizenReportCountsPath(loc: CitizenReportFilter = {}): string {
+  const path: petitions_get_citizen_report_counts["duongDan"] = "/api/v1/citizen-report-counts";
+  return withFilters(path, loc);
+}
+
+/**
+ * GET /api/v1/citizen-report-counts — how many petitions the list's filters match, counted by the SAME
+ * predicate as the list (`feedback.restricted` included), so the tab's "(n)" and the pages agree. The
+ * register itself pages by cursor and returns no total; this is the only total the screen shows.
+ */
+export function countCitizenReports(
+  loc: CitizenReportFilter = {},
+): Promise<KetQua<petitions_citizenReportCountsOut>> {
+  return docJSON<petitions_citizenReportCountsOut>(citizenReportCountsPath(loc));
+}
+
+/** Path of GET /api/v1/citizen-report-points for these filters. */
+export function citizenReportPointsPath(loc: CitizenReportFilter = {}): string {
+  const path: petitions_get_citizen_report_points["duongDan"] = "/api/v1/citizen-report-points";
+  return withFilters(path, loc);
+}
+
+/**
+ * 422 of the points route: more located petitions than the cap (5000, ADR 0072 §Trả lời 09/10/2026).
+ * READ BY THE SCREEN for one reason: the answer is "narrow the filters", not "try again" — so the heat-map
+ * tab draws no map and offers no `Tải lại` (reloading the same filters gets the same refusal). The
+ * sentence stays the server's, verbatim.
+ */
+export const TOO_MANY_POINTS_CODE =
+  "too_many_points" satisfies petitions_get_citizen_report_points["errorCodes"][422];
+
+export type PointsResult =
+  | { readonly ok: true; readonly data: petitions_citizenReportPointsOut }
+  | { readonly ok: false; readonly message: string; readonly tooManyPoints: boolean };
+
+/**
+ * GET /api/v1/citizen-report-points — every located petition the filters match: latitude, longitude,
+ * status, NOTHING else (no code, no content, no sender — rule 3). All of them or a refusal: the server
+ * never cuts the set, because a heat map of part of the points looks like the commune's and is not.
+ *
+ * ⚠ The answer is citizens' coordinates: held in component state for the map and nowhere else — never
+ * logged, never cached, never put in a URL.
+ */
+export async function listCitizenReportPoints(loc: CitizenReportFilter = {}): Promise<PointsResult> {
+  let res: Response;
+  try {
+    res = await fetch(citizenReportPointsPath(loc), { ...CHUNG, method: "GET" });
+  } catch {
+    return { ok: false, message: LOI_KHONG_RO, tooManyPoints: false };
   }
+  if (res.status === 200) {
+    try {
+      return { ok: true, data: (await res.json()) as petitions_citizenReportPointsOut };
+    } catch {
+      return { ok: false, message: LOI_KHONG_RO, tooManyPoints: false };
+    }
+  }
+  const err = await readError(res);
+  return { ok: false, message: err.message, tooManyPoints: res.status === 422 && err.code === TOO_MANY_POINTS_CODE };
+}
+
+/** Path of GET /api/v1/citizen-report-breakdown for one period `[from, to)`. */
+export function citizenReportBreakdownPath(period: { from: string; to: string }): string {
+  const path: petitions_get_citizen_report_breakdown["duongDan"] = "/api/v1/citizen-report-breakdown";
+  const q = new URLSearchParams();
+  const set = thamSoTheoHopDong<petitions_get_citizen_report_breakdown["truyVan"]>(q);
+  set("from", period.from);
+  set("to", period.to);
+  const s = q.toString();
+  return s === "" ? path : `${path}?${s}`;
+}
+
+/**
+ * GET /api/v1/citizen-report-breakdown — the Báo cáo tab (ADR 0053 §Sửa đổi 09/10/2026, C1–C5): on time /
+ * late in the period and the current overdue stock, by field, by unit (working hours), by hamlet. 503
+ * `working_hours_unavailable` and 409 `working_calendar_not_configured` come back as the server's sentence,
+ * verbatim — nothing is counted on this side. `feedback.read` + `report.read`.
+ */
+export function readCitizenReportBreakdown(period: {
+  from: string;
+  to: string;
+}): Promise<KetQua<petitions_citizenReportBreakdownOut>> {
+  return docJSON<petitions_citizenReportBreakdownOut>(citizenReportBreakdownPath(period));
 }
 
 /** Dựng đường dẫn đọc sổ. Tách khỏi lời gọi mạng để kiểm được mà không cần thay `fetch`. */
@@ -305,14 +438,32 @@ export function phanLoaiPhieu(
   maTraCuu: string,
   linhVuc: string,
   ghiChu?: string,
+  extra: ClassifyExtras = {},
 ): Promise<KetQua<petitions_phieuPhanAnhRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_classification["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/classification";
-  const than: petitions_phanLoaiVao = { field: linhVuc, ...thanGhiChu(ghiChu) };
+  const than: petitions_phanLoaiVao = {
+    field: linhVuc,
+    ...thanGhiChu(ghiChu),
+    ...actAttachments(extra.attachments),
+    // ABSENT when nothing is picked: the server keeps what the petition holds (there is no "remove").
+    // The stored value sent back is a CONFIRMATION; a different one is checked with identity and
+    // audited (ADR 0088 §1) — its 400 / 503 come back verbatim.
+    ...(extra.residentialUnitId !== undefined && extra.residentialUnitId !== ""
+      ? { residential_unit_id: extra.residentialUnitId }
+      : {}),
+  };
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
   );
 }
+
+/** What the classification act may carry besides the field and the note (ADR 0088). */
+export type ClassifyExtras = {
+  /** ULID of the thôn / tổ dân phố the officer confirms or picks; `""` / absent = keep what is stored. */
+  readonly residentialUnitId?: string;
+  readonly attachments?: readonly string[];
+};
 
 /**
  * POST …/assignment — khối `Chuyển xử lý, không đổi trạng thái` của §8.5.
@@ -330,6 +481,7 @@ export function chuyenXuLyPhieu(
   boPhanID: string,
   maCanBo?: string,
   ghiChu?: string,
+  attachments?: readonly string[],
 ): Promise<KetQua<petitions_phieuPhanAnhRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_assignment["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/assignment";
@@ -338,6 +490,7 @@ export function chuyenXuLyPhieu(
       ? { unit: boPhanID, assignee: maCanBo }
       : { unit: boPhanID }),
     ...thanGhiChu(ghiChu),
+    ...actAttachments(attachments),
   };
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
@@ -370,11 +523,15 @@ export function chuyenXuLyPhieu(
 export function tienTrangThaiPhieu(
   maTraCuu: string,
   ghiChu?: string,
+  attachments?: readonly string[],
 ): Promise<KetQua<petitions_phieuPhanAnhRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_status["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/status";
-  const ghi = thanGhiChu(ghiChu);
-  const than: { note: string } | undefined = ghi.note === undefined ? undefined : { note: ghi.note };
+  // Hand-typed like `note` (the contract declares this route `than: never`): `attachments` is the
+  // server's `tienTrangThaiVao.Attachments` (`service-petitions/internal/http/xu_ly_phan_anh.go`).
+  const extra = { ...thanGhiChu(ghiChu), ...actAttachments(attachments) };
+  const than: { note?: string; attachments?: string[] } | undefined =
+    Object.keys(extra).length === 0 ? undefined : extra;
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
   );
@@ -398,10 +555,11 @@ export async function dongPhieu(
   maTraCuu: string,
   ketQua: string,
   ghiChu?: string,
+  attachments?: readonly string[],
 ): Promise<CloseResult> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_closure["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/closure";
-  const than: petitions_dongPhieuVao = { result: ketQua, ...thanGhiChu(ghiChu) };
+  const than: petitions_dongPhieuVao = { result: ketQua, ...thanGhiChu(ghiChu), ...actAttachments(attachments) };
   let res: Response;
   try {
     res = await fetch(duongDanPhieu(mau, maTraCuu), {
@@ -483,10 +641,15 @@ export function khongTiepNhanPhieu(
   maTraCuu: string,
   lyDo: string,
   ghiChu?: string,
+  attachments?: readonly string[],
 ): Promise<KetQua<petitions_phieuPhanAnhRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_rejection["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/rejection";
-  const than: petitions_khongTiepNhanVao = { reason: lyDo.trim(), ...thanGhiChu(ghiChu) };
+  const than: petitions_khongTiepNhanVao = {
+    reason: lyDo.trim(),
+    ...thanGhiChu(ghiChu),
+    ...actAttachments(attachments),
+  };
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
   );
@@ -501,6 +664,7 @@ export function chuyenCapTrenPhieu(
   lyDo: string,
   coQuanTiepNhan: string,
   ghiChu?: string,
+  attachments?: readonly string[],
 ): Promise<KetQua<petitions_phieuPhanAnhRa>> {
   const mau: petitions_post_citizen_reports_by_maTraCuu_referral["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/referral";
@@ -508,6 +672,7 @@ export function chuyenCapTrenPhieu(
     reason: lyDo.trim(),
     receiving_body: coQuanTiepNhan.trim(),
     ...thanGhiChu(ghiChu),
+    ...actAttachments(attachments),
   };
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "POST", than, 200),
@@ -744,13 +909,19 @@ export type StaffIntakeInput = {
   readonly reporterPhone: string;
   readonly anonymous: boolean;
   readonly clockFrom: string;
+  /**
+   * ULID of the thôn / tổ dân phố the officer picked, or `""` / absent for none. The server checks it is
+   * one of THIS commune's units in use (identity gRPC, ADR 0088 §1) and answers 400
+   * `residential_unit_not_offered` / 503 otherwise — verbatim on the form.
+   */
+  readonly residentialUnitId?: string;
 };
 
 /**
  * The body of POST /api/v1/citizen-reports, BUILT FIELD BY FIELD.
  *
  * `petitions_staffIntakeIn` also lists `citizen_id`, `channel`, `code`, `status`, the two deadlines,
- * `hamlet`, `lat`/`lng` and their Vietnamese spellings — and the server answers 400 to EVERY one of
+ * `lat`/`lng` and their Vietnamese spellings — and the server answers 400 to EVERY one of
  * them (`service-petitions/internal/http/staff_intake.go`, `notTheClients` / `notAcceptedYet`): the
  * channel is always `can-bo-nhap-ho` and the petition is linked to no citizen (ADR 0028 Bổ sung
  * 2026-10-02 rows 1, 5). None of them can be set from here, whatever the caller passes.
@@ -769,6 +940,9 @@ export function staffIntakeBody(input: StaffIntakeInput): petitions_staffIntakeI
   if (phone !== "") body.reporter_phone = phone;
   if (input.anonymous) body.anonymous = true;
   if (input.clockFrom !== "") body.clock_from = input.clockFrom;
+  if (input.residentialUnitId !== undefined && input.residentialUnitId !== "") {
+    body.residential_unit_id = input.residentialUnitId;
+  }
   return body;
 }
 
@@ -886,6 +1060,21 @@ export function completeLogAttachment(
   const template: petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion["duongDan"] =
     "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion";
   return callWithStatus<petitions_taskAttachmentOut>(filePath(template, maTraCuu, id), { method: "POST" }, 200);
+}
+
+/**
+ * DELETE …/log-attachments/{id} — soft-removes one file from the petition's log, reason REQUIRED (ADR
+ * 0088 §2, rule 7: the file stays, with who and why). 204, no body. Who may is decided on the server —
+ * the uploader, or `feedback.resolve` — and its refusal (403, 409 `legal_hold`) comes back verbatim.
+ * The reason travels in the BODY only.
+ */
+export function removeLogAttachment(maTraCuu: string, id: string, reason: string): Promise<KetQua<void>> {
+  const template: petitions_delete_citizen_reports_by_maTraCuu_log_attachments_by_id["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}";
+  const body: petitions_citizenReportLogAttachmentRemoveIn = { reason: reason.trim() };
+  return goiGhi(filePath(template, maTraCuu, id), "DELETE", body, 204).then((r) =>
+    r.ok ? ({ ok: true, duLieu: undefined } as KetQua<void>) : r,
+  );
 }
 
 /**

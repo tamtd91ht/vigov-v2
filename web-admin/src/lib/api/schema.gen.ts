@@ -3297,6 +3297,7 @@ export type petitions_accountlessReportIn = {
   "field"?: string | null;
   "lat": number | null;
   "lng": number | null;
+  "residential_unit_id": string | null;
   "citizen_id": string | null;
   "cong_dan_id": string | null;
   "linh_vuc": string | null;
@@ -3371,6 +3372,7 @@ export type petitions_chuyenCapTrenVao = {
   "reason": string;
   "receiving_body": string;
   "note"?: string;
+  "attachments"?: Array<string>;
 };
 
 export type petitions_citizenFieldListOut = {
@@ -3401,6 +3403,63 @@ export type petitions_citizenLetterTaskIn = {
   "documents"?: Array<petitions_vanBanNhiemVuVao>;
 };
 
+export type petitions_citizenReportBreakdownOut = {
+  "as_of": string;
+  "totals": petitions_citizenReportBreakdownTotalsOut;
+  "fields": Array<petitions_citizenReportFieldRowOut>;
+  "units": Array<petitions_citizenReportUnitRowOut>;
+  "residential_units": Array<petitions_citizenReportResidentialUnitRowOut>;
+};
+
+export type petitions_citizenReportBreakdownTotalsOut = {
+  "on_time_sample": number;
+  "on_time": number;
+  "late": number;
+  "overdue": number;
+};
+
+export type petitions_citizenReportCountsOut = {
+  "total": number;
+};
+
+export type petitions_citizenReportFieldRowOut = {
+  "field_code": string;
+  "received": number;
+  "finished": number;
+  "on_time_sample": number;
+  "on_time": number;
+  "late": number;
+  "rating_sample": number;
+  "rating_sum": number;
+  "overdue": number;
+};
+
+export type petitions_citizenReportLogAttachmentRemoveIn = {
+  "reason": string;
+};
+
+export type petitions_citizenReportMergeIn = {
+  "main_code": string;
+  "reason"?: string;
+};
+
+export type petitions_citizenReportPointOut = {
+  "lat": number;
+  "lng": number;
+  "status": string;
+};
+
+export type petitions_citizenReportPointsOut = {
+  "items": Array<petitions_citizenReportPointOut>;
+};
+
+export type petitions_citizenReportResidentialUnitRowOut = {
+  "residential_unit_id": string;
+  "residential_unit_name"?: string;
+  "received": number;
+  "overdue": number;
+};
+
 export type petitions_citizenReportSummaryOut = {
   "received": number;
   "in_progress": number;
@@ -3411,6 +3470,17 @@ export type petitions_citizenReportSummaryOut = {
   "rating_sum"?: number | null;
   "low_rating"?: number | null;
   "publication_pending"?: number | null;
+};
+
+export type petitions_citizenReportUnitRowOut = {
+  "org_unit_id": string;
+  "finished": number;
+  "handling_sample": number;
+  "handling_working_seconds": number;
+};
+
+export type petitions_citizenReportUnmergeIn = {
+  "reason": string;
 };
 
 export type petitions_createCustomMessageIn = {
@@ -3475,6 +3545,14 @@ export type petitions_doiTrangThaiVao = {
 export type petitions_dongPhieuVao = {
   "result": string;
   "note"?: string;
+  "attachments"?: Array<string>;
+};
+
+export type petitions_duplicateCandidatesOut = {
+  "items": Array<petitions_phieuPhanAnhRa>;
+  "radius_meters": number;
+  "window_days": number;
+  "truncated": boolean;
 };
 
 export type petitions_editCustomMessageIn = {
@@ -3497,6 +3575,7 @@ export type petitions_guiPhanAnhVao = {
   "lat": number | null;
   "lng": number | null;
   "field"?: string | null;
+  "residential_unit_id"?: string | null;
   "citizen_id": string | null;
   "cong_dan_id": string | null;
   "linh_vuc": string | null;
@@ -3522,6 +3601,7 @@ export type petitions_ketLuanRa = {
 export type petitions_khongTiepNhanVao = {
   "reason": string;
   "note"?: string;
+  "attachments"?: Array<string>;
 };
 
 export type petitions_kyBienBanVao = {
@@ -3683,11 +3763,14 @@ export type petitions_phanCongVao = {
   "unit": string;
   "assignee"?: string;
   "note"?: string;
+  "attachments"?: Array<string>;
 };
 
 export type petitions_phanLoaiVao = {
   "field": string;
   "note"?: string;
+  "attachments"?: Array<string>;
+  "residential_unit_id"?: string | null;
 };
 
 export type petitions_phieuCuaToiRa = {
@@ -3741,6 +3824,8 @@ export type petitions_phieuPhanAnhRa = {
   "address": string;
   "lat"?: number | null;
   "lng"?: number | null;
+  "residential_unit_id"?: string;
+  "residential_unit_name"?: string;
   "reporter_name": string;
   "reporter_phone": string;
   "anonymous": boolean;
@@ -3764,6 +3849,10 @@ export type petitions_phieuPhanAnhRa = {
   "rating_comment"?: string;
   "rated_at"?: string | null;
   "reopen_count"?: number | null;
+  "merged_into"?: string;
+  "merged_at"?: string | null;
+  "merged_by"?: string;
+  "merged_petitions"?: Array<string>;
 };
 
 export type petitions_photoLinkOut = {
@@ -3829,6 +3918,7 @@ export type petitions_staffIntakeIn = {
   "reporter_phone"?: string;
   "anonymous"?: boolean;
   "clock_from"?: string | null;
+  "residential_unit_id"?: string;
   "citizen_id"?: string | null;
   "cong_dan_id"?: string | null;
   "linh_vuc"?: string | null;
@@ -5252,6 +5342,62 @@ export type documents_post_citizen_letters_by_id_status = {
   };
 };
 
+/** GET /api/v1/citizen-report-breakdown — Thống kê phản ánh trong kỳ [from, to) — đúng hạn/trễ hạn và tồn quá hạn; theo lĩnh vực (kèm dòng chưa phân loại); theo bộ phận đang giữ phiếu lúc xử lý xong (thời gian xử lý theo giờ làm việc); theo thôn (kèm dòng chưa xác định địa bàn) */
+export type petitions_get_citizen_report_breakdown = {
+  duongDan: "/api/v1/citizen-report-breakdown";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "from"?: string;
+    "to"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_citizenReportBreakdownOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    409: "working_calendar_not_configured";
+    503: "working_hours_unavailable";
+  };
+};
+
+/** GET /api/v1/citizen-report-counts — Tổng số phiếu phản ánh theo đúng bộ lọc của danh sách (trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá · phạm vi · metric) */
+export type petitions_get_citizen_report_counts = {
+  duongDan: "/api/v1/citizen-report-counts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "channel"?: string;
+    "field"?: string;
+    "from"?: string;
+    "hamlet"?: string;
+    "late"?: string;
+    "metric"?: string;
+    "q"?: string;
+    "rating_max"?: string;
+    "scope"?: string;
+    "status"?: string;
+    "to"?: string;
+    "unit"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_citizenReportCountsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/citizen-report-fields — Danh mục lĩnh vực phản ánh của xã — đủ mọi mã nền tảng cấp, kèm nhãn, thứ tự, bật/tắt của xã (màn hình cấu hình) */
 export type petitions_get_citizen_report_fields = {
   duongDan: "/api/v1/citizen-report-fields";
@@ -5306,6 +5452,40 @@ export type petitions_get_citizen_report_intake_fields = {
     403: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-report-points — Điểm phản ánh trên bản đồ nhiệt theo bộ lọc của danh sách — chỉ vĩ độ, kinh độ, trạng thái */
+export type petitions_get_citizen_report_points = {
+  duongDan: "/api/v1/citizen-report-points";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "channel"?: string;
+    "field"?: string;
+    "from"?: string;
+    "hamlet"?: string;
+    "late"?: string;
+    "metric"?: string;
+    "q"?: string;
+    "rating_max"?: string;
+    "scope"?: string;
+    "status"?: string;
+    "to"?: string;
+    "unit"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_citizenReportPointsOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    422: "too_many_points";
   };
 };
 
@@ -5467,6 +5647,26 @@ export type petitions_post_citizen_reports_by_maTraCuu_closure = {
   };
 };
 
+/** GET /api/v1/citizen-reports/{maTraCuu}/duplicate-candidates — Phiếu phản ánh nghi trùng với một phiếu — cùng xã, trong bán kính và số ngày xã cấu hình, gần nhất trước */
+export type petitions_get_citizen_reports_by_maTraCuu_duplicate_candidates = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/duplicate-candidates";
+  phuongThuc: "GET";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: petitions_duplicateCandidatesOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
 /** POST /api/v1/citizen-reports/{maTraCuu}/log-attachments — Xin tải một tệp đính kèm cho nhật ký xử lý phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
 export type petitions_post_citizen_reports_by_maTraCuu_log_attachments = {
   duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-attachments";
@@ -5486,6 +5686,31 @@ export type petitions_post_citizen_reports_by_maTraCuu_log_attachments = {
     409: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id} — Gỡ một tệp đính kèm khỏi nhật ký xử lý phiếu phản ánh (xoá mềm, lý do bắt buộc, không xoá tệp gốc) — người đã tải lên hoặc cán bộ có quyền kết thúc xử lý phản ánh */
+export type petitions_delete_citizen_reports_by_maTraCuu_log_attachments_by_id = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "maTraCuu": string;
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: petitions_citizenReportLogAttachmentRemoveIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "legal_hold";
   };
 };
 
@@ -5569,6 +5794,27 @@ export type petitions_post_citizen_reports_by_maTraCuu_log_entries = {
   than: petitions_ghiChuPhieuVao;
   phanHoi: {
     201: petitions_nhatKyPhieuRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/merge — Gộp phiếu phản ánh trùng vào một phiếu chính cùng xã — liên kết, không đóng phiếu; hạn phiếu chính lấy mốc sớm hơn */
+export type petitions_post_citizen_reports_by_maTraCuu_merge = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/merge";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_citizenReportMergeIn;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
@@ -5703,6 +5949,27 @@ export type petitions_post_citizen_reports_by_maTraCuu_tasks = {
   };
   errorCodes: {
     409: "code_taken" | "petition_not_classified" | "petition_state" | "request_in_progress" | "restricted_field_no_task" | "task_document" | "task_tree";
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/unmerge — Tách một phiếu phản ánh đã gộp khỏi phiếu chính — lý do bắt buộc, có vết, hạn phiếu chính giữ nguyên */
+export type petitions_post_citizen_reports_by_maTraCuu_unmerge = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/unmerge";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_citizenReportUnmergeIn;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
   };
 };
 

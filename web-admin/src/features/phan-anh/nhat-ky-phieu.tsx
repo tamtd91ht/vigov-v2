@@ -5,7 +5,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
-import { PendingFeature } from "@/components/ui/pending-feature";
 import { AttachmentPicker } from "@/features/nhiem-vu/task-attachments-ui";
 import { ATTACH_WAIT_NOTE, anyInFlight, storedIds } from "@/features/nhiem-vu/task-attachments";
 import { cn } from "@/lib/cn";
@@ -15,6 +14,7 @@ import { ghiNhatKyPhieu, layNhatKyPhieu } from "@/lib/api/phieu-phan-anh";
 import type {
   page_Result_petitions_nhatKyPhieuRa,
   petitions_nhatKyPhieuRa,
+  petitions_taskAttachmentOut,
 } from "@/lib/api/schema.gen";
 
 import {
@@ -22,6 +22,7 @@ import {
   dateTimeLabel,
   GOI_Y_GHI_NHAT_KY,
   laDongPhanCong,
+  LOG_INTERNAL_NOTE,
   LOG_WRITTEN_TOAST,
   logActorLabel,
   loiGhiChuNhatKy,
@@ -34,12 +35,15 @@ import {
   nhanCanBoXuLy,
   nhanThaoTacNhatKy,
   nhanTrangThai,
-  petitionPendingPart,
   TIEU_DE_NHAT_KY,
   type DanhBaTheoMa,
 } from "./nhan-phieu";
 import { buttonClass, Glyph, TEXTAREA_CLASS } from "./petition-ui";
-import { PetitionLogAttachmentList, usePetitionLogAttachments } from "./petition-log-attachments";
+import {
+  LogAttachmentRemoveDialog,
+  PetitionLogAttachmentList,
+  usePetitionLogAttachments,
+} from "./petition-log-attachments";
 
 /**
  * Nhật ký xử lý của MỘT phiếu (§8.7) — dòng thời gian mới nhất trước, "Xem thêm" theo con trỏ, và
@@ -78,6 +82,8 @@ export function NhatKyPhieu({
   danhBa,
   coNutGhi,
   lanLamMoi = 0,
+  sessionStaffCode = "",
+  mayResolve = false,
 }: {
   maTraCuu: string;
   tenBoPhan: ReadonlyMap<string, string>;
@@ -91,6 +97,14 @@ export function NhatKyPhieu({
   coNutGhi: boolean;
   /** Tăng lên sau mỗi thao tác xử lý thành công — máy chủ vừa ghi thêm một dòng. */
   lanLamMoi?: number;
+  /**
+   * `phien.staff.code` (`CB-…`), `""` while the session is unread. A row's files may be removed by the
+   * officer who WROTE that row (its `actor_code` — the uploader: a file is attached by the one who
+   * uploaded it) or by a `feedback.resolve` holder (ADR 0088 §2; the server decides again).
+   */
+  sessionStaffCode?: string;
+  /** The session holds `feedback.resolve`. Default `false`: an unknown session holds no key. */
+  mayResolve?: boolean;
 }) {
   const [lanTaiLai, datLanTaiLai] = useState(0);
   const [doc, datDoc] = useState<TrangDoc | null>(null);
@@ -108,6 +122,7 @@ export function NhatKyPhieu({
   // `📎 Đính kèm` (§8.7). Only STORED files go with the entry; the entry waits while any still moves.
   const tep = usePetitionLogAttachments(maTraCuu);
   const choTep = anyInFlight(tep.items);
+  const [removing, setRemoving] = useState<petitions_taskAttachmentOut | null>(null);
 
   const khoaDoc = `${maTraCuu}|${lanLamMoi}|${lanTaiLai}`;
 
@@ -176,17 +191,12 @@ export function NhatKyPhieu({
           <h3 id={`tieu-de-nhat-ky-${maTraCuu}`} className="m-0 text-[12.5px] font-bold text-navy">
             {TIEU_DE_NHAT_KY}
           </h3>
-          {/* The prototype's per-row `Nội bộ` pill has no flag behind it (no "shown to the citizen" on a
-              log row): ONE disabled pill with its "?" here, not a guess on every row. */}
-          <PendingFeature info={petitionPendingPart("logVisibility")} className="ml-auto">
-            <span
-              aria-disabled="true"
-              className="rounded-full bg-ink-muted/12 px-2 py-0.5 text-[10.5px] font-semibold text-ink-muted opacity-60"
-            >
-              Nội bộ
-            </span>
-          </PendingFeature>
         </div>
+        {/* The log is ALWAYS internal (ADR 0041 §Sửa đổi 09/10/2026): one plain statement for the whole
+            panel replaces the prototype's per-row `Nội bộ` pill — no row could ever read otherwise. */}
+        <p className="m-0 mt-1 text-[11px] text-ink-muted" data-log-internal="">
+          {LOG_INTERNAL_NOTE}
+        </p>
         {coNutGhi && (
           <BieuMauGhiNhatKy
             id={`bieu-mau-nhat-ky-${maTraCuu}`}
@@ -223,7 +233,14 @@ export function NhatKyPhieu({
       )}
       {hienTai !== null && hienTai.ok && (
         <>
-          <DanhSachNhatKy dong={hienTai.dong} tenBoPhan={tenBoPhan} danhBa={danhBa} maTraCuu={maTraCuu} />
+          <DanhSachNhatKy
+            dong={hienTai.dong}
+            tenBoPhan={tenBoPhan}
+            danhBa={danhBa}
+            maTraCuu={maTraCuu}
+            mayRemoveFiles={(row) => mayRemoveRowFiles(row, sessionStaffCode, mayResolve)}
+            onRemoveFile={setRemoving}
+          />
           {loiThem !== null && (
             <p className="thong-bao-loi" role="alert">
               {loiThem}
@@ -246,8 +263,32 @@ export function NhatKyPhieu({
         </>
       )}
       </div>
+      {removing !== null && (
+        <LogAttachmentRemoveDialog
+          lookupCode={maTraCuu}
+          file={removing}
+          onClose={() => setRemoving(null)}
+          // The row's file list is the server's: read the log again.
+          onRemoved={() => datLanTaiLai((n) => n + 1)}
+        />
+      )}
     </section>
   );
+}
+
+/**
+ * Whether THIS account is offered the remove control on a row's files (ADR 0088 §2): a
+ * `feedback.resolve` holder, or the officer who wrote the row. FAIL CLOSED on the comparison: an empty
+ * session code matches nothing — `"" === ""` would hand every code-less row to every account. Both
+ * sides are business codes (`CB-…`). UX only; the server checks the uploader on the stored file.
+ */
+export function mayRemoveRowFiles(
+  row: Pick<petitions_nhatKyPhieuRa, "actor_code">,
+  sessionStaffCode: string,
+  mayResolve: boolean,
+): boolean {
+  if (mayResolve) return true;
+  return sessionStaffCode !== "" && row.actor_code === sessionStaffCode;
 }
 
 /**
@@ -263,12 +304,18 @@ export function DanhSachNhatKy({
   tenBoPhan,
   danhBa,
   maTraCuu,
+  mayRemoveFiles = () => false,
+  onRemoveFile,
 }: {
   dong: readonly petitions_nhatKyPhieuRa[];
   tenBoPhan: ReadonlyMap<string, string>;
   danhBa: DanhBaTheoMa | null;
   /** The petition's lookup code — the download route of a row's files needs it. Absent = no files drawn. */
   maTraCuu?: string;
+  /** Whether a row's files get a remove control. Default: none (fail closed). */
+  mayRemoveFiles?: (row: petitions_nhatKyPhieuRa) => boolean;
+  /** Opens the reason dialog for one file. Absent = no remove control anywhere. */
+  onRemoveFile?: (file: petitions_taskAttachmentOut) => void;
 }) {
   if (dong.length === 0) {
     return <p className="m-0 py-10 text-center text-[12px] text-ink-muted">{NHAT_KY_RONG}</p>;
@@ -335,7 +382,11 @@ export function DanhSachNhatKy({
               )}
               {/* The row's files (§8.7): a download link each, asked for at the click — never prefetched. */}
               {maTraCuu !== undefined && (
-                <PetitionLogAttachmentList lookupCode={maTraCuu} attachments={d.attachments ?? []} />
+                <PetitionLogAttachmentList
+                  lookupCode={maTraCuu}
+                  attachments={d.attachments ?? []}
+                  onRemove={onRemoveFile !== undefined && mayRemoveFiles(d) ? onRemoveFile : undefined}
+                />
               )}
             </div>
           </li>

@@ -1155,6 +1155,15 @@
       "bang_chung": "commit 'feat(web-admin): nền bản đồ tự host'. vitest 4 tệp/36 ca xanh. pmtiles 4.5.0, @protomaps/basemaps 5.7.2 — npm audit không lỗ mới. Script CHƯA chạy.",
       "tiep_theo": "(1) Vận hành chạy build-basemap.sh + đặt BASEMAP-URL; pháp chế + UBND ký phiếu kiểm chủ quyền trước khi chạy thật. (2) Giao diện bản đồ nhiệt + bản đồ vị trí. (3) Chủ dự án: người ký sau mỗi lần làm mới, nhịp làm mới, câu K6. (4) security-reviewer xem /basemap/* và netpol 0.0.0.0/0:9000.",
       "no_confirm": []
+    },
+    {
+      "id": "phan-anh-tinh-nang-that-09-10",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "/phan-anh: thay 7 ô '?' bằng tính năng thật — bản đồ nhiệt (citizen-report-points, nền PMTiles tự host, khoá khung xã từ map-frame, 422 quá 5000 điểm), bản đồ vị trí trong ngăn chi tiết, tab Báo cáo (citizen-report-breakdown, kỳ Tuần/Tháng/Quý/Năm như /bao-cao), 'Danh sách (n)' + 'a–b trên N mục' (citizen-report-counts), ô thôn ở nhập hộ và phân loại, xoá mềm tệp nhật ký có lý do, đính kèm khi chuyển bước; nhật ký ghi rõ là nội bộ.",
+      "bang_chung": "commit 'feat(web-admin): /phan-anh tính năng thật'. typecheck sạch, eslint sạch, vitest toàn web 298 tệp/5516 ca, check:api khớp. CHƯA kiểm bằng ảnh render; bản đồ chưa chạy với tệp nền thật (BASEMAP_URL chưa đặt).",
+      "tiep_theo": "(1) Giao diện gộp phiếu (tuyến đã có b97a6379) — ô 'Có thể trùng' vẫn '?'. (2) Kiểm ảnh trên bản build sau khi đặt tệp nền. (3) Lệch prototype có chủ ý: trọng số điểm nhiệt = 1 (tuyến không trả hạn), gợi ý rỗng bản đồ nhiệt sửa 'nhập hộ không mang toạ độ', cột báo cáo theo bộ phận chỉ 'Đã xử lý xong' + 'TB giờ xử lý', nhãn lĩnh vực lấy danh mục tĩnh. (4) CSP cho nền + worker (nợ missing-security-headers).",
+      "no_confirm": []
     }
   ]
 }

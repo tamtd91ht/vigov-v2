@@ -13,9 +13,9 @@ import type { petitions_nhatKyPhieuRa, petitions_taskAttachmentOut } from "@/lib
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
-import { petitionPendingPart } from "./nhan-phieu";
-import { BieuMauGhiNhatKy, DanhSachNhatKy } from "./nhat-ky-phieu";
+import { BieuMauGhiNhatKy, DanhSachNhatKy, mayRemoveRowFiles } from "./nhat-ky-phieu";
 import {
+  LogAttachmentRemoveDialog,
   PetitionLogAttachmentList,
   usePetitionLogAttachments,
   type LogAttachmentDeps,
@@ -143,12 +143,21 @@ describe("PetitionLogAttachmentList — the download link is asked for AT THE CL
     expect(tab.location.href).toBe("https://kho.example.test/f?sig=1");
   });
 
-  it("removing a file has no route: a DISABLED remove button with its '?', after the download (ADR 0068 §14)", () => {
+  it("DENIED (no `onRemove`): no remove control at all — and no '?' any more (ADR 0088 §2 built it)", () => {
     const html = renderToStaticMarkup(<PetitionLogAttachmentList lookupCode="PA-1" attachments={[FILE]} />);
-    const remove = html.match(/<button[^>]*aria-label="Gỡ tệp bien-ban-hien-truong.pdf"[^>]*>/)?.[0] ?? "";
-    expect(remove).toContain('disabled=""');
-    expect(html).toContain(pendingMarkerLabel(petitionPendingPart("logFileRemoval").ten));
-    expect(html.indexOf("Tải về")).toBeLessThan(html.indexOf("Gỡ tệp"));
+    expect(html).not.toContain("Gỡ tệp");
+    expect(html).not.toContain(pendingMarkerLabel("Gỡ tệp đính kèm"));
+  });
+
+  it("ALLOWED (`onRemove` given): a live remove button after the download; it opens the reason dialog for THAT file", () => {
+    const onRemove = vi.fn();
+    const h = render(<PetitionLogAttachmentList lookupCode="PA-1" attachments={[FILE]} onRemove={onRemove} />);
+    const remove = h.querySelector<HTMLButtonElement>('button[aria-label="Gỡ tệp bien-ban-hien-truong.pdf"]');
+    expect(remove?.disabled).toBe(false);
+    expect(remove?.getAttribute("aria-haspopup")).toBe("dialog");
+    expect(h.innerHTML.indexOf("Tải về")).toBeLessThan(h.innerHTML.indexOf("Gỡ tệp"));
+    act(() => remove?.click());
+    expect(onRemove).toHaveBeenCalledWith(FILE);
   });
 
   it("a refusal closes the blank tab and says the server's sentence", async () => {
@@ -204,5 +213,92 @@ describe("the log — files on a row, and the entry form waiting for uploads", (
     expect(waiting).toContain("Chờ các tệp tải lên và kiểm tra xong rồi mới ghi nhật ký.");
     expect(tag(waiting)).toContain("disabled");
     expect(tag(renderToStaticMarkup(<BieuMauGhiNhatKy {...props} />))).not.toContain("disabled");
+  });
+});
+
+describe("log file removal (ADR 0088 §2) — who is offered it, and the reason dialog", () => {
+  const ROW: petitions_nhatKyPhieuRa = {
+    id: "01JLOG1",
+    at: "2026-10-02T02:00:00Z",
+    actor_code: "CB-00123",
+    action: "ghi-chu",
+    status: "dang-xu-ly",
+    unit: "",
+    assignee: "",
+    note: "",
+    attachments: [FILE],
+  };
+
+  it("offered to the row's author (the uploader) or a `feedback.resolve` holder — and to nobody else", () => {
+    expect(mayRemoveRowFiles(ROW, "CB-00123", false)).toBe(true);
+    expect(mayRemoveRowFiles(ROW, "CB-00999", true)).toBe(true);
+    // DENIED: another officer without the key; an unread session (empty code) never matches.
+    expect(mayRemoveRowFiles(ROW, "CB-00999", false)).toBe(false);
+    expect(mayRemoveRowFiles(ROW, "", false)).toBe(false);
+    expect(mayRemoveRowFiles({ actor_code: "" }, "", false)).toBe(false);
+  });
+
+  it("the log draws the remove control only on rows the account may touch", () => {
+    const other = { ...ROW, id: "01JLOG2", actor_code: "CB-00200", attachments: [{ ...FILE, id: "01JFILE2", file_name: "khac.pdf" }] };
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy
+        dong={[ROW, other]}
+        tenBoPhan={new Map()}
+        danhBa={null}
+        maTraCuu="PA-1"
+        mayRemoveFiles={(r) => mayRemoveRowFiles(r, "CB-00123", false)}
+        onRemoveFile={() => {}}
+      />,
+    );
+    expect(html).toContain('aria-label="Gỡ tệp bien-ban-hien-truong.pdf"');
+    expect(html).not.toContain('aria-label="Gỡ tệp khac.pdf"');
+  });
+
+  it("the reason is REQUIRED; the DELETE carries it; success tells the caller to re-read the log", async () => {
+    const remove = vi.fn(async () => ({ ok: true as const, duLieu: undefined }));
+    const onRemoved = vi.fn();
+    const onClose = vi.fn();
+    const h = render(
+      <LogAttachmentRemoveDialog lookupCode="PA-1" file={FILE} onClose={onClose} onRemoved={onRemoved} remove={remove} />,
+    );
+    const submit = () => [...h.querySelectorAll<HTMLButtonElement>('button[type="submit"]')].find((b) => b.textContent?.includes("Gỡ tệp"))!;
+    expect(submit().disabled).toBe(true);
+    const input = h.querySelector<HTMLInputElement>("#ly-do-go-tep-phieu")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(input, "  Tải nhầm tệp  ");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(submit().disabled).toBe(false);
+    act(() => submit().click());
+    await flush();
+    expect(remove).toHaveBeenCalledWith("PA-1", "01JFILE1", "Tải nhầm tệp");
+    expect(onRemoved).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("a refusal (403 / 409 `legal_hold`) stays IN the dialog, verbatim, the reason kept", async () => {
+    const cau = "Tệp đang bị phong toả theo yêu cầu pháp lý, chưa gỡ được.";
+    const onRemoved = vi.fn();
+    const h = render(
+      <LogAttachmentRemoveDialog
+        lookupCode="PA-1"
+        file={FILE}
+        onClose={() => {}}
+        onRemoved={onRemoved}
+        remove={async () => ({ ok: false as const, thongBao: cau })}
+      />,
+    );
+    const input = h.querySelector<HTMLInputElement>("#ly-do-go-tep-phieu")!;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    act(() => {
+      setter?.call(input, "Tải nhầm tệp");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    act(() => h.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await flush();
+    expect(h.querySelector('[role="alert"]')?.textContent).toBe(cau);
+    expect(input.value).toBe("Tải nhầm tệp");
+    expect(onRemoved).not.toHaveBeenCalled();
   });
 });

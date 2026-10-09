@@ -4,6 +4,7 @@ import {
   CalendarClock,
   CircleCheck,
   CloudOff,
+  House,
   MapPin,
   Phone,
   Plus,
@@ -21,16 +22,23 @@ import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { Notice } from "@/components/ui/notice";
-import { PendingButton, PendingField } from "@/components/ui/pending-feature";
+import { PendingButton } from "@/components/ui/pending-feature";
+import { pickableResidentialUnits } from "@/features/cau-hinh/nhan-thon";
 import { khoaSauLanGhi } from "@/features/thu-chi/nhan-thu-chi";
 import type { KetQua } from "@/lib/api/goi";
 import { bookStaffIntake, listIntakeFields, type StaffIntakeInput } from "@/lib/api/phieu-phan-anh";
-import type { petitions_citizenFieldListOut, petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
+import type {
+  identity_danhSachThonToDanPhoRa,
+  petitions_citizenFieldListOut,
+  petitions_phieuPhanAnhRa,
+} from "@/lib/api/schema.gen";
+import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen } from "@/lib/quyen";
 
 import {
   clockFromBounds,
   clockFromRfc3339,
+  HAMLET_NONE,
   INTAKE_ADDRESS_LABEL,
   INTAKE_ADDRESS_PLACEHOLDER,
   INTAKE_ANONYMOUS_LABEL,
@@ -51,6 +59,7 @@ import {
   INTAKE_FIELD_PLACEHOLDER,
   INTAKE_FIELDS_EMPTY,
   INTAKE_FIELDS_LOADING,
+  INTAKE_HAMLET_LABEL,
   INTAKE_NAME_LABEL,
   INTAKE_PHONE_LABEL,
   INTAKE_SUBMIT,
@@ -66,9 +75,12 @@ import { BusyLabel, Glyph, LABEL_CLASS, TEXTAREA_CLASS } from "./petition-ui";
  * office or met the hamlet head. `POST /api/v1/citizen-reports` (`feedback.create`).
  *
  * WHAT IS NOT ON THE FORM, ON PURPOSE (ADR 0028 Bổ sung 2026-10-02): no channel select — the channel is
- * always `can-bo-nhap-ho` (row 5). The hamlet select and the scene-photo picker are DISABLED
- * placeholders with their "?" (ADR 0068 §14): the server does not accept either yet and answers 400
- * (`PHAN_CHUA_DUNG`), so neither has a value in this form's state nor a key in the body. The petition is linked to NO citizen account (row 1), so the success
+ * always `can-bo-nhap-ho` (row 5). The scene-photo picker is a DISABLED placeholder with its "?" (ADR
+ * 0068 §14): the server does not accept photos on this route (`PHAN_CHUA_DUNG`), so it has no value in
+ * this form's state nor a key in the body. The hamlet select is REAL since ADR 0088 §1: the officer picks
+ * one of the commune's units IN USE (`pickableResidentialUnits`, the server's own predicate), and the
+ * server checks the id with identity before booking (400 `residential_unit_not_offered` / 503 shown
+ * verbatim). The petition is linked to NO citizen account (row 1), so the success
  * screen shows the LOOKUP CODE large and tells the officer to hand it over (row 3).
  *
  * The button is UX only: the server checks `feedback.create` on both routes (rule 5, forbidden #1).
@@ -135,6 +147,8 @@ type FormValues = {
   reporterName: string;
   reporterPhone: string;
   anonymous: boolean;
+  /** ULID of the picked thôn / tổ dân phố, `""` = none. */
+  residentialUnitId: string;
 };
 
 const EMPTY: FormValues = {
@@ -145,6 +159,7 @@ const EMPTY: FormValues = {
   reporterName: "",
   reporterPhone: "",
   anonymous: false,
+  residentialUnitId: "",
 };
 
 export function StaffIntakeForm({
@@ -152,6 +167,7 @@ export function StaffIntakeForm({
   onBooked,
   onSendingChange,
   loadFields = listIntakeFields,
+  loadUnits = layDanhSachThonToDanPho,
   book = bookStaffIntake,
 }: {
   onClose: () => void;
@@ -159,6 +175,7 @@ export function StaffIntakeForm({
   onSendingChange?: (sending: boolean) => void;
   /** Injected only by tests; the screen always reads the contract routes. */
   loadFields?: () => Promise<KetQua<petitions_citizenFieldListOut>>;
+  loadUnits?: () => Promise<KetQua<identity_danhSachThonToDanPhoRa>>;
   book?: (input: StaffIntakeInput, key: string) => Promise<KetQua<Pick<petitions_phieuPhanAnhRa, "code">>>;
 }) {
   const [fieldsReloads, setFieldsReloads] = useState(0);
@@ -170,6 +187,19 @@ export function StaffIntakeForm({
   const [refusal, setRefusal] = useState<string | null>(null);
   const [bookedCode, setBookedCode] = useState<string | null>(null);
   const [bounds] = useState(() => clockFromBounds(new Date()));
+  const [units, setUnits] = useState<KetQua<identity_danhSachThonToDanPhoRa> | null>(null);
+
+  // The commune's units, read once per opening. A failure leaves the select with its empty choice only
+  // and says why under it — the petition can still be booked without a hamlet.
+  useEffect(() => {
+    let dropped = false;
+    loadUnits().then((r) => {
+      if (!dropped) setUnits(r);
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [loadUnits]);
 
   useEffect(() => {
     let dropped = false;
@@ -200,6 +230,7 @@ export function StaffIntakeForm({
         reporterPhone: values.anonymous ? "" : values.reporterPhone,
         anonymous: values.anonymous,
         clockFrom,
+        residentialUnitId: values.residentialUnitId,
       },
       key,
     ).then((r) => {
@@ -234,6 +265,7 @@ export function StaffIntakeForm({
   return (
     <StaffIntakeFormView
       fields={currentFields}
+      units={units}
       values={values}
       setValues={setValues}
       bounds={bounds}
@@ -249,6 +281,7 @@ export function StaffIntakeForm({
 /** Presentational — rendered to a string in tests. `fields === null` = loading. */
 export function StaffIntakeFormView({
   fields,
+  units = null,
   values,
   setValues = () => {},
   bounds,
@@ -259,6 +292,8 @@ export function StaffIntakeFormView({
   onReloadFields,
 }: {
   fields: KetQua<petitions_citizenFieldListOut> | null;
+  /** The commune's residential units; `null` = loading. Only units IN USE are offered. */
+  units?: KetQua<identity_danhSachThonToDanPhoRa> | null;
   values: FormValues;
   setValues?: (v: FormValues) => void;
   bounds?: { readonly min: string; readonly max: string };
@@ -273,6 +308,8 @@ export function StaffIntakeFormView({
   const clockBad = clockFromRfc3339(values.clockLocal) === null;
   const items = fields !== null && fields.ok ? fields.duLieu.items : [];
   const fieldsReady = fields !== null && fields.ok && items.length > 0;
+  // A NEW record: only units in use — the same predicate the server applies to the id it receives.
+  const unitChoices = units !== null && units.ok ? pickableResidentialUnits(units.duLieu.items) : [];
   const canSend = fieldsReady && values.field !== "" && contentError === null && !clockBad && !sending;
 
   return (
@@ -400,14 +437,31 @@ export function StaffIntakeFormView({
           />
         </Field>
 
-        {/* §11 `Thôn, tổ dân phố` — placeholder (ADR 0068 §14); `id` unique on the page. */}
-        <PendingField
-          info={petitionPendingPart("intakeHamlet")}
-          id="nhap-ho-thon"
+        {/* §11 `Thôn, tổ dân phố` (prototype `FeedbackEntryForm.tsx:186-199`); `id` unique on the page. */}
+        <Field
+          label={INTAKE_HAMLET_LABEL}
+          htmlFor="nhap-ho-thon"
+          icon={House}
           kind="select"
-          placeholder="— Chưa xác định —"
-          className="max-w-none flex-auto"
-        />
+          grow="auto"
+          className="max-w-none"
+          error={units !== null && !units.ok ? units.thongBao : undefined}
+        >
+          <select
+            id="nhap-ho-thon"
+            name="nhap-ho-thon"
+            value={values.residentialUnitId}
+            disabled={sending || units === null}
+            onChange={(e) => set("residentialUnitId", e.target.value)}
+          >
+            <option value="">{HAMLET_NONE}</option>
+            {unitChoices.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name}
+              </option>
+            ))}
+          </select>
+        </Field>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

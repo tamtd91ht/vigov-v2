@@ -77,6 +77,16 @@ import {
   ratingAverage,
   toLocalInputValue,
 } from "./nhan-phieu";
+import {
+  cardPlaceLabel,
+  listTabLabel,
+  LOG_INTERNAL_NOTE,
+  onTimeShare,
+  pageRangeLabel,
+  ratingWithSample,
+  sceneAddressLine,
+  workingHoursAverage,
+} from "./nhan-phieu";
 
 function phieu(sua: Partial<petitions_phieuPhanAnhRa> = {}): petitions_phieuPhanAnhRa {
   return {
@@ -765,9 +775,10 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // đúng một mô tả (tab Bản đồ nhiệt / tab Báo cáo; ô thôn / nút đính ảnh của modal nhập hộ). Bỏ
     // nhầm một mục khác cùng lúc là đỏ ở đây. Mười từ 06/10/2026: khối `Có thể trùng với phiếu khác`
     // của prototype (ADR 0068 lần 5) có chỗ giữ riêng.
-    // Thirteen from 09/10/2026 (prototype round, owner decisions D1–D5): the composer's attachment, the
-    // log row's `Nội bộ` pill and the log file's remove button have no route behind them.
-    expect(PHAN_CHUA_DUNG.length).toBe(13);
+    // Thirteen from 09/10/2026 (prototype round, owner decisions D1–D5); SIX later the same day, when the
+    // backends of the heat map, the report, the hamlet, the act files and the log-file removal landed and
+    // the log was decided always internal (ADR 0041 §Sửa đổi 09/10/2026, 0053 §C, 0072, 0088).
+    expect(PHAN_CHUA_DUNG.length).toBe(6);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -789,16 +800,10 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(muc?.viSao).toContain("cán bộ không ghi đánh giá thay người dân");
   });
 
-  it("the KPI cards left the list; only the heat-map (§9) and Báo cáo (§10) tabs remain, with why", () => {
+  it("the KPI cards, the heat-map (§9) and Báo cáo (§10) tabs all left the list — built 09/10/2026", () => {
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("KPI") || p.ten.includes("§3"))).toBe(false);
-    // One entry per tab — each "?" opens its own reason: the basemap and all-points read still being
-    // built, and no count by field / unit / hamlet for the whole commune.
-    expect(petitionPendingPart("heatMapTab").ten).toBe("Bản đồ nhiệt");
-    expect(petitionPendingPart("heatMapTab").viSao).toContain("lưu ngay trên máy chủ của hệ thống");
-    expect(petitionPendingPart("heatMapTab").viSao).toContain("toàn bộ điểm phản ánh");
-    expect(petitionPendingPart("reportTab").ten).toBe("Báo cáo");
-    expect(petitionPendingPart("reportTab").viSao).toContain("theo lĩnh vực, theo bộ phận hay theo thôn");
-    expect(petitionPendingPart("reportTab").viSao).toContain("Bốn thẻ số liệu");
+    expect(() => petitionPendingPart("heatMapTab")).toThrow();
+    expect(() => petitionPendingPart("reportTab")).toThrow();
   });
 
   it("02/10/2026: the three built entries are gone, the others kept, the one added is the intake's hamlet/photos", () => {
@@ -807,20 +812,12 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(ten).not.toContain("Câu giải thích trạng thái, tám trong chín (§8.2)");
     expect(ten).not.toContain("Ảnh sau khi xử lý (§8.4)");
     expect(ten).toEqual([
-      "Bản đồ hiện trường và tên thôn",
-      "Bản đồ nhiệt",
-      "Báo cáo",
-      // 06/10/2026 (ADR 0068 lần 5): the prototype's duplicates block.
+      // 06/10/2026 (ADR 0068 lần 5): the prototype's duplicates block — merge UI not built yet.
       "Có thể trùng với phiếu khác",
       "Liên quan đến tôi",
       "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
-      "Thôn, tổ dân phố",
       "Đính ảnh hiện trường",
-      // 09/10/2026: three prototype controls with no route behind them.
-      "Đính kèm ảnh, tệp khi chuyển trạng thái",
-      "Nội bộ",
-      "Gỡ tệp đính kèm",
       "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
     ]);
     // The overdue NUMBER stays unbuilt on purpose (ADR 0007 decision 10a): the entry still says why.
@@ -836,18 +833,9 @@ describe("vị trí hiện trường — toạ độ đã về, bản đồ chư
     expect(tatCa()).not.toContain("hợp đồng không trả `lat`/`lng`");
   });
 
-  it("the heatmap and the mini-map say the self-hosted basemap is chosen and still being built (ADR 0072 §Sửa đổi 09/10/2026)", () => {
-    // Staff-readable (ADR 0068 §14: the sentence opens behind a "?"); the ADR and the technical reason
-    // live in the code comment above each entry, never on screen.
-    for (const id of ["heatMapTab", "sceneMap"]) {
-      const viSao = petitionPendingPart(id).viSao;
-      expect(viSao, id).toContain("lưu ngay trên máy chủ của hệ thống");
-      expect(viSao, id).toContain("đang chờ dựng tệp nền");
-      // The provider question is decided: no entry may still say it is open.
-      expect(viSao, id).not.toContain("chưa được quyết");
-      expect(viSao, id).not.toMatch(/ADR|PMTiles/);
-    }
-    expect(petitionPendingPart("sceneMap").viSao).toContain("tên thôn");
+  it("the heat map and the mini-map are built (self-hosted basemap, ADR 0072 §Sửa đổi 09/10/2026): no '?' left", () => {
+    expect(() => petitionPendingPart("heatMapTab")).toThrow();
+    expect(() => petitionPendingPart("sceneMap")).toThrow();
     // Owner decision D2: the drawer's section is titled "Vị trí", as in the prototype; the lookup view
     // keeps its own row label.
     expect(LOCATION_SECTION_TITLE).toBe("Vị trí");
@@ -1046,5 +1034,58 @@ describe("verification photos — when, and which files (§8.4)", () => {
     expect(afterPhotoType({ name: "a.pdf", type: "application/pdf", size: 10 }).ok).toBe(false);
     expect(afterPhotoType({ name: "a.heic", type: "", size: 10 }).ok).toBe(false);
     expect(afterPhotoType({ name: "a.png", type: "image/png", size: 0 }).ok).toBe(false);
+  });
+});
+
+/**
+ * 09/10/2026 — the parts built on the new routes (ADR 0053 §C, 0072, 0088): the list total, the hamlet on
+ * a card and in the drawer, the report's presentation arithmetic.
+ */
+describe("built 09/10/2026 — labels and presentation arithmetic", () => {
+  it("`Danh sách (n)`: the count route's total; unknown → the bare word, never a page count", () => {
+    expect(listTabLabel(null)).toBe("Danh sách");
+    expect(listTabLabel(0)).toBe("Danh sách (0)");
+    expect(listTabLabel(1234)).toBe("Danh sách (1.234)");
+  });
+
+  it("pager `a–b trên N mục` from the cursor depth; nothing shown or no total → no line", () => {
+    expect(pageRangeLabel(0, 20, 20, 57)).toBe("1–20 trên 57 mục");
+    expect(pageRangeLabel(2, 20, 17, 57)).toBe("41–57 trên 57 mục");
+    expect(pageRangeLabel(0, 20, 0, 0)).toBeNull();
+    expect(pageRangeLabel(0, 20, 5, null)).toBeNull();
+  });
+
+  it("card place: hamlet ?? address ?? `Chưa rõ vị trí` (prototype `FeedbackCard.tsx:98`)", () => {
+    expect(cardPlaceLabel({ address: "Tổ 6", residential_unit_name: "Thôn Hà Lam" })).toBe("Thôn Hà Lam");
+    expect(cardPlaceLabel({ address: "Tổ 6", residential_unit_name: "" })).toBe("Tổ 6");
+    expect(cardPlaceLabel({ address: "" })).toBe("Chưa rõ vị trí");
+  });
+
+  it("drawer `Vị trí` line: address · hamlet (prototype `FeedbackDetailDrawer.tsx:400-404`)", () => {
+    expect(sceneAddressLine({ address: "Tổ 6", residential_unit_name: "Thôn Hà Lam" })).toBe("Tổ 6 · Thôn Hà Lam");
+    expect(sceneAddressLine({ address: "", residential_unit_name: "Thôn Hà Lam" })).toBe(
+      "Không có địa chỉ ghi kèm · Thôn Hà Lam",
+    );
+    expect(sceneAddressLine({ address: "Tổ 6" })).toBe("Tổ 6");
+  });
+
+  it("average handling in WORKING hours, one decimal; empty sample → null, never 0 (C4)", () => {
+    expect(workingHoursAverage(3 * 3600 + 2 * 5400, 2)).toBe("3,0 giờ làm việc");
+    expect(workingHoursAverage(5400, 1)).toBe("1,5 giờ làm việc");
+    expect(workingHoursAverage(0, 0)).toBeNull();
+  });
+
+  it("satisfaction WITH its sample (C3); nobody rated → `—`", () => {
+    expect(ratingWithSample(42, 10)).toBe("4,2/5 (10 phiếu)");
+    expect(ratingWithSample(0, 0)).toBe("—");
+  });
+
+  it("on-time bar share: 0–100, null on an empty sample", () => {
+    expect(onTimeShare(3, 4)).toBe(75);
+    expect(onTimeShare(0, 0)).toBeNull();
+  });
+
+  it("the log is always internal (ADR 0041 §Sửa đổi 09/10/2026): one plain statement, no '?'", () => {
+    expect(LOG_INTERNAL_NOTE).toContain("không hiện cho người dân");
   });
 });

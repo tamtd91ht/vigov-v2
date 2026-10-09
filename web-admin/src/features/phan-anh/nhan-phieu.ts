@@ -225,11 +225,12 @@ export const UNVERIFIED_CONTACT_NOTE =
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * SCENE LOCATION (§8.4) — requirement `FeedbackDetailDrawer.tsx:394-406`
  *
- * TEXT ONLY, NO MAP. The requirement draws a mini-map; drawing one means asking a tile service for
- * the tiles around the point, which sends a citizen's scene coordinates (personal data, rule 3) to an
- * outside party for the first time — a rule 3 stop condition the owner has not decided — and would
- * need a new CSP origin (rule 13). For the same reason there is no "open in maps" link: it would put
- * the coordinates into a third-party URL. The gap is listed in `PHAN_CHUA_DUNG`.
+ * THE MINI-MAP IS ON THE SELF-HOSTED BASEMAP ONLY (ADR 0072 §Sửa đổi + §Trả lời 09/10/2026): every
+ * tile, glyph and sprite comes from the page's own origin (`/basemap/*`), so the viewport around a
+ * citizen's scene never reaches an outside party (rule 3 stop #2 stays off). Never the economic map's
+ * OpenFreeMap style, not even as a fallback; basemap not configured → one sentence, no map
+ * (`features/phan-anh/petition-map.tsx`). There is still no "open in maps" link: it would put the
+ * coordinates into a third-party URL.
  *
  * SHOWN ON ANONYMOUS PETITIONS TOO, like `address`: the server returns both under `feedback.read`
  * regardless of the flag, because the officer cannot deal with a scene they cannot find. What the
@@ -240,6 +241,27 @@ export const UNVERIFIED_CONTACT_NOTE =
 export const SCENE_LOCATION_LABEL = "Vị trí hiện trường";
 /** The drawer's section title — prototype `FeedbackDetailDrawer.tsx:395`, owner decision D2. */
 export const LOCATION_SECTION_TITLE = "Vị trí";
+
+/**
+ * The place line of a card (prototype `FeedbackCard.tsx:98`: hamlet ?? address ?? "Chưa rõ vị trí"). The
+ * hamlet is the one recorded ON the petition at intake/classification (ADR 0088 §1), never derived from
+ * the coordinates.
+ */
+export function cardPlaceLabel(p: Pick<petitions_phieuPhanAnhRa, "address" | "residential_unit_name">): string {
+  const hamlet = p.residential_unit_name ?? "";
+  if (hamlet !== "") return hamlet;
+  return p.address === "" ? CARD_NO_LOCATION : p.address;
+}
+
+/** The drawer's `Vị trí` line (prototype `FeedbackDetailDrawer.tsx:400-404`): address, then ` · hamlet`. */
+export function sceneAddressLine(p: Pick<petitions_phieuPhanAnhRa, "address" | "residential_unit_name">): string {
+  const address = p.address === "" ? SCENE_NO_ADDRESS : p.address;
+  const hamlet = p.residential_unit_name ?? "";
+  return hamlet === "" ? address : `${address} · ${hamlet}`;
+}
+
+/** The petition's point lies outside the commune's map frame: the locked map cannot show it. */
+export const MINI_MAP_OUTSIDE_FRAME = "Vị trí phản ánh nằm ngoài khung bản đồ của xã, nên bản đồ không hiện điểm này.";
 /** Requirement `FeedbackDetailDrawer.tsx:402`, verbatim. */
 export const SCENE_NO_ADDRESS = "Không có địa chỉ ghi kèm";
 export const SCENE_NO_COORDINATES = "Người dân không gửi toạ độ";
@@ -1078,6 +1100,26 @@ export const HIDDEN_TOAST = "Đã ẩn khỏi trang công khai.";
 export const AFTER_PHOTO_TOAST = "Đã tải ảnh sau xử lý.";
 export const LOG_WRITTEN_TOAST = "Đã ghi vào nhật ký.";
 
+/**
+ * The log is ALWAYS internal (ADR 0041 §Sửa đổi 09/10/2026): no row is shown to the citizen, so there is
+ * no per-row flag and no toggle — one plain statement under the panel's title replaces the prototype's
+ * per-row `Nội bộ` pill.
+ */
+export const LOG_INTERNAL_NOTE = "Nội bộ — chỉ cán bộ trong xã xem được, không hiện cho người dân.";
+
+/** Log file removal (ADR 0088 §2): the dialog's words — the reason is required, the file is kept. */
+export const LOG_FILE_REMOVED_TOAST = "Đã gỡ tệp.";
+export const LOG_FILE_REMOVE_NOTE = "Tệp được gỡ khỏi nhật ký nhưng vẫn lưu lại cùng người gỡ và lý do.";
+export const LOG_FILE_REMOVE_REASON_LABEL = "Lý do gỡ (bắt buộc)";
+
+export function logFileRemoveLabel(fileName: string): string {
+  return `Gỡ tệp ${fileName}`;
+}
+
+export function logFileRemoveTitle(fileName: string): string {
+  return `Gỡ tệp “${fileName}”?`;
+}
+
 /** Prototype `HandoverFields` warning, verbatim (row 52-60). */
 export const UNIT_WITHOUT_STAFF = "Bộ phận này chưa có cán bộ nào đang hoạt động.";
 
@@ -1474,6 +1516,10 @@ export const INTAKE_CONTENT_LABEL = "Nội dung phản ánh";
 export const INTAKE_CONTENT_PLACEHOLDER = "Ghi lại lời người dân: sự việc gì, ở đâu, từ khi nào.";
 export const INTAKE_ADDRESS_LABEL = "Địa chỉ, vị trí";
 export const INTAKE_ADDRESS_PLACEHOLDER = "Đầu ngõ thôn Hà Lam";
+
+/** §11 `Thôn, tổ dân phố` (prototype `FeedbackEntryForm.tsx:186-199`) and its empty choice. */
+export const INTAKE_HAMLET_LABEL = "Thôn, tổ dân phố";
+export const HAMLET_NONE = "— Chưa xác định —";
 export const INTAKE_NAME_LABEL = "Người gửi";
 export const INTAKE_PHONE_LABEL = "Số điện thoại";
 export const INTAKE_ANONYMOUS_LABEL = "Người dân đề nghị gửi ẩn danh";
@@ -1575,6 +1621,98 @@ export function kpiCount(n: number): string {
   return COUNT.format(n);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * MAIN TABS — `Danh sách (n)` · `Bản đồ nhiệt` · `Báo cáo` (prototype `FeedbackWorkspace.tsx:134-138`)
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const LIST_TAB_LABEL = "Danh sách";
+export const HEAT_MAP_TAB_LABEL = "Bản đồ nhiệt";
+export const REPORT_TAB_LABEL = "Báo cáo";
+
+/**
+ * `Danh sách (n)` — `n` is the COUNT ROUTE's total for the same filters, never the page in view (owner
+ * decision D5 kept the count off while no route counted). Unknown (loading, refused) → the bare word.
+ */
+export function listTabLabel(total: number | null): string {
+  return total === null ? LIST_TAB_LABEL : `${LIST_TAB_LABEL} (${kpiCount(total)})`;
+}
+
+/**
+ * The pager's `a–b trên N mục`. `pageIndex` is 0-based (the cursor stack's depth), `shown` the rows on
+ * this page. Nothing on the page, or no total yet → `null` (no line rather than a wrong one).
+ */
+export function pageRangeLabel(pageIndex: number, pageSize: number, shown: number, total: number | null): string | null {
+  if (total === null || shown === 0) return null;
+  const first = pageIndex * pageSize + 1;
+  return `${kpiCount(first)}–${kpiCount(first + shown - 1)} trên ${kpiCount(total)} mục`;
+}
+
+/* ── Bản đồ nhiệt (§9; ADR 0072 §Sửa đổi + §Trả lời 09/10/2026) ───────────────────────────── */
+
+/** Prototype `FeedbackHeatmap.tsx:62`, verbatim. */
+export const HEAT_MAP_EMPTY_TITLE = "Chưa có phản ánh nào ghim vị trí trên bản đồ.";
+/**
+ * Prototype `FeedbackHeatmap.tsx:64-65` says intake petitions are "pinned by hand when created" — this
+ * system's intake form takes no coordinates (ADR 0088 §1: never derived, and no pin field on the form),
+ * so the second half says what is true here instead of promising a pin nobody can set.
+ */
+export const HEAT_MAP_EMPTY_HINT = "Phiếu gửi từ Mini App có toạ độ sẵn; phiếu cán bộ nhập hộ không mang toạ độ.";
+export const HEAT_MAP_LOADING = "Đang tải các điểm phản ánh…";
+export const HEAT_MAP_LOAD_FAILED = "Chưa tải được các điểm phản ánh";
+export const HEAT_MAP_REGION_LABEL = "Bản đồ nhiệt các phản ánh có vị trí";
+export const MAP_LOADING = "Đang tải bản đồ…";
+/** The style never loaded (the basemap route answered 503/404, or the map code did not load). */
+export const MAP_LOAD_FAILED = "Không tải được bản đồ nền. Vui lòng thử lại.";
+export const MINI_MAP_REGION_LABEL = "Bản đồ vị trí phản ánh";
+
+/** Accessible count under the heat map: the map itself is a canvas a screen reader cannot read. */
+export function heatMapPointsCaption(n: number): string {
+  return `${kpiCount(n)} phản ánh có vị trí theo bộ lọc đang chọn`;
+}
+
+/* ── Báo cáo (§10; ADR 0053 §Sửa đổi 09/10/2026, C1–C5) ─────────────────────────────────────── */
+
+export const REPORT_READ_DENIED =
+  "Tài khoản của bạn không có quyền xem báo cáo (report.read), nên phần này không hiển thị. " +
+  "Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này.";
+export const REPORT_LOADING = "Đang tải báo cáo phản ánh…";
+export const REPORT_LOAD_FAILED = "Chưa tải được báo cáo phản ánh";
+export const REPORT_ON_TIME_TITLE = "Đúng hạn và trễ hạn";
+export const REPORT_FIELD_TITLE = "Theo lĩnh vực bị phản ánh nhiều nhất";
+export const REPORT_UNIT_TITLE = "Theo bộ phận";
+export const REPORT_HAMLET_TITLE = "Mật độ theo thôn, tổ dân phố";
+/** Prototype `FeedbackReports.tsx:131-133`, verbatim. */
+export const REPORT_HAMLET_NOTE = "Điểm đen là nơi vừa nhiều phản ánh vừa xử lý không kịp.";
+/** C2: a STOCK figure read now, never a rate — so its label says "hiện tại". */
+export const REPORT_OVERDUE_NOW_LABEL = "đang trễ hạn (hiện tại)";
+export const REPORT_UNCLASSIFIED = "Chưa phân loại";
+export const REPORT_NO_UNIT = "Chưa chuyển bộ phận";
+export const REPORT_NO_HAMLET = "Chưa xác định địa bàn";
+export const REPORT_FIELD_EMPTY = "Chưa có phản ánh nào trong kỳ.";
+export const REPORT_UNIT_EMPTY = "Chưa có phiếu nào được xử lý xong trong kỳ.";
+export const REPORT_HAMLET_EMPTY = "Chưa có phản ánh nào gắn địa bàn.";
+
+/**
+ * Average handling time in WORKING hours (ADR 0007; C4: measured by identity, never wall clock), one
+ * decimal, or `null` on an empty sample — never 0.
+ */
+export function workingHoursAverage(workingSeconds: number, sample: number): string | null {
+  if (!(sample > 0)) return null;
+  return `${ONE_DECIMAL.format(workingSeconds / sample / 3600)} giờ làm việc`;
+}
+
+/** C3: the satisfaction score WITH its sample — `4,2/5 (12 phiếu)`; `—` when nobody rated. */
+export function ratingWithSample(sum: number, sample: number): string {
+  const avg = ratingAverage(sum, sample);
+  return avg === null ? "—" : `${avg} (${kpiCount(sample)} phiếu)`;
+}
+
+/** Share of the on-time sample, as a bar width in percent (0–100), or `null` on an empty sample. */
+export function onTimeShare(onTime: number, sample: number): number | null {
+  if (!(sample > 0)) return null;
+  return Math.min(100, Math.max(0, (onTime / sample) * 100));
+}
+
 /**
  * The average rating, `sum / sample`, one decimal (`4,3/5`), or `null` for NO VALUE.
  *
@@ -1632,39 +1770,6 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  // §8.4 mini map + hamlet beside the address. The basemap question (rule 3, stop condition 2: a
-  // citizen's coordinates must not go to an outside tile provider) is DECIDED — ADR 0072 §Sửa đổi
-  // 09/10/2026: self-hosted PMTiles, served by the system itself. Still missing: the basemap file being
-  // built and deployed. Until then no tile is loaded and no "open in map" link exists. The petition
-  // response carries no hamlet (`petitions_phieuPhanAnhRa`, re-read 02/10/2026).
-  {
-    id: "sceneMap",
-    ten: "Bản đồ hiện trường và tên thôn",
-    viSao:
-      "Đã chọn dùng nền bản đồ lưu ngay trên máy chủ của hệ thống, không gửi vị trí của người dân ra " +
-      "ngoài. Bản đồ nhỏ đang chờ dựng tệp nền bản đồ nên chưa hiện. Phiếu cũng chưa mang tên thôn.",
-  },
-  // §9 heat map tab: same self-hosted basemap (ADR 0072 §Sửa đổi 09/10/2026), plus a route returning
-  // EVERY located petition of the commune — the paged list holds one page only, and a heat map of one
-  // page would show leadership a false density.
-  {
-    id: "heatMapTab",
-    ten: "Bản đồ nhiệt",
-    viSao:
-      "Đã chọn dùng nền bản đồ lưu ngay trên máy chủ của hệ thống. Tab này đang chờ dựng tệp nền bản " +
-      "đồ và phần lấy toàn bộ điểm phản ánh của xã, nên chưa mở được.",
-  },
-  // §10 report tab. The only counting route is `GET /api/v1/citizen-report-summary` (the four KPI
-  // cards, §3); none counts by field, unit or hamlet (service-petitions routes, re-read 02/10/2026).
-  // Counting the page in view would be the figure of ONE PAGE, not of the commune — and it is the
-  // figure leadership reads and reports upward.
-  {
-    id: "reportTab",
-    ten: "Báo cáo",
-    viSao:
-      "Hệ thống chưa đếm được phản ánh theo lĩnh vực, theo bộ phận hay theo thôn cho cả xã. Bốn thẻ " +
-      "số liệu đầu màn là số của cả xã và đã dùng được.",
-  },
   // The prototype's drawer section `Có thể trùng với phiếu khác` (FeedbackDetailDrawer.tsx:408-439)
   // and the card's "N phiếu trùng". No petitions route detects or merges duplicates
   // (service-petitions/internal/http/routes.go, re-read 06/10/2026), and the list carries no count.
@@ -1701,17 +1806,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "phận — không email, không số điện thoại — để mọi cán bộ đăng nhập đọc được nó. Màn hình vì " +
       "thế hiện `Họ tên · Chức danh` thay cho `Họ tên — email · Chức danh`.",
   },
-  // §11 hamlet select of the intake modal. The intake route answers 400 to `hamlet` / `thon_id`
-  // (service-petitions/internal/http/staff_intake.go): no identity RPC checks that a hamlet an officer
-  // picks is one of this commune's. The channel select is NOT a missing part: an intake is always
-  // `can-bo-nhap-ho` (ADR 0028, Bổ sung 02/10/2026).
-  {
-    id: "intakeHamlet",
-    ten: "Thôn, tổ dân phố",
-    viSao:
-      "Phiếu nhập hộ chưa ghi được thôn do cán bộ chọn: hệ thống chưa kiểm được thôn ấy có đúng là " +
-      "thôn của xã hay không. Hãy ghi vị trí vào ô “Địa chỉ, vị trí”.",
-  },
   // §11 scene photos of the intake modal. The intake body has no attachment, and the scene-photo
   // upload is bound to the CITIZEN's session (Mini App), not to an officer's.
   {
@@ -1720,33 +1814,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Phiếu nhập hộ chưa đính được ảnh hiện trường: hiện chỉ người dân gửi ảnh được, từ Zalo Mini " +
       "App.",
-  },
-  // The composer's `Đính kèm ảnh, tệp` (FeedbackStatusPipeline.tsx:287-294). None of the six act routes
-  // (classification, assignment, status, closure, rejection, referral) takes a file; files go with a
-  // log entry only (`…/log-attachments`).
-  {
-    id: "composerAttachment",
-    ten: "Đính kèm ảnh, tệp khi chuyển trạng thái",
-    viSao:
-      "Lúc chuyển trạng thái chưa đính kèm được ảnh hay tệp. Hãy đính kèm khi ghi nhật ký ở cột bên " +
-      "phải, ngay sau khi chuyển.",
-  },
-  // The log row's `Nội bộ` pill (FeedbackActivityPanel.tsx:268-272). A log row carries no
-  // "shown to the citizen" flag (`petitions_nhatKyPhieuRa`); every staff log row is internal today.
-  {
-    id: "logVisibility",
-    ten: "Nội bộ",
-    viSao:
-      "Chưa đánh dấu được dòng nhật ký nào người dân xem được và dòng nào chỉ nội bộ. Hiện mọi dòng " +
-      "nhật ký chỉ cán bộ trong xã xem được.",
-  },
-  // The log file row's remove button (FeedbackActivityPanel.tsx:365-374). No route removes a log
-  // attachment: a file on a log entry is part of an archival record (rule 7).
-  {
-    id: "logFileRemoval",
-    ten: "Gỡ tệp đính kèm",
-    viSao:
-      "Chưa gỡ được tệp đã đính kèm vào nhật ký. Tệp đã ghi vào nhật ký là một phần hồ sơ của phiếu.",
   },
   {
     id: "overdueDays",

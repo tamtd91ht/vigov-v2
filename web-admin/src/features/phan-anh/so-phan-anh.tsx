@@ -8,9 +8,9 @@ import {
   ChevronRight,
   CircleAlert,
   CloudOff,
+  House,
   ImageOff,
   Landmark,
-  Map as MapIcon,
   MapPin,
   MessageSquare,
   Paperclip,
@@ -22,7 +22,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { LargeDialog } from "@/components/ui/large-dialog";
-import { PendingButton, PendingFeature, PendingMarker, PendingTab } from "@/components/ui/pending-feature";
+import { PendingMarker } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
 import {
@@ -40,13 +40,17 @@ import {
   veTrangTruoc,
   type NganXepConTro,
 } from "@/features/cau-hinh/ngan-xep-con-tro";
+import { ATTACH_ACCEPT, ATTACH_INPUT_LABEL, anyInFlight, storedIds } from "@/features/nhiem-vu/task-attachments";
+import { PickedFileChips } from "@/features/nhiem-vu/task-attachments-ui";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import type { KetQua } from "@/lib/api/goi";
 import {
   chuyenCapTrenPhieu,
   chuyenXuLyPhieu,
+  countCitizenReports,
   dongPhieu,
   khongTiepNhanPhieu,
   layPhieuPhanAnh,
@@ -54,6 +58,7 @@ import {
   phanLoaiPhieu,
   setPetitionPublication,
   tienTrangThaiPhieu,
+  type ClassifyExtras,
   type LocPhanAnh,
   type PublicationTarget,
 } from "@/lib/api/phieu-phan-anh";
@@ -68,7 +73,7 @@ import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen, REPORT_READ_PERMISSION } from "@/lib/quyen";
 import { DrillDownBanner } from "@/components/drill-down-banner";
 import { NO_DRILL_DOWN, drillDownQuery, type DrillDown } from "@/lib/drill-down";
-import { residentialUnitFilterLabel } from "@/features/cau-hinh/nhan-thon";
+import { pickableResidentialUnits, residentialUnitFilterLabel } from "@/features/cau-hinh/nhan-thon";
 
 import {
   AFTER_PHOTO_GO_TO,
@@ -76,8 +81,8 @@ import {
   ASSIGNED_TOAST,
   branchReasonLabel,
   CANH_BAO_RE_NHANH,
+  cardPlaceLabel,
   cardSenderLabel,
-  CARD_NO_LOCATION,
   cauGiaiThichTrangThai,
   CHI_TRE_HAN_NHAN,
   CO_QUAN_TOI_DA,
@@ -91,13 +96,17 @@ import {
   GHI_CHU_O_KET_QUA,
   GHI_CHU_TOI_DA,
   GOI_Y_CO_QUAN,
+  HAMLET_NONE,
+  HEAT_MAP_TAB_LABEL,
   HIDDEN_TOAST,
   initialClassifyField,
+  INTAKE_HAMLET_LABEL,
   isContactUnverified,
   LINH_VUC_PHAN_ANH,
   linhVucPhanAnh,
   LIST_EMPTY_HINT,
   LIST_EMPTY_TITLE,
+  listTabLabel,
   loiCoQuan,
   loiGhiChuNoiBo,
   loiLyDo,
@@ -130,6 +139,7 @@ import {
   nhanTrangThai,
   NO_ASSIGNEE_YET,
   NO_UNIT_YET,
+  pageRangeLabel,
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
   petitionPendingPart,
@@ -141,12 +151,14 @@ import {
   ratingView,
   RE_NHANH,
   reopenLine,
+  REPORT_READ_DENIED,
+  REPORT_TAB_LABEL,
   RESTRICTED_FEEDBACK_PERMISSION,
   RESTRICTED_FLOW_NOTE,
   RESULT_PLACEHOLDER,
   SCENE_COORDINATES_NOTE,
   LOCATION_SECTION_TITLE,
-  SCENE_NO_ADDRESS,
+  sceneAddressLine,
   sceneCoordinates,
   SCOPE_RELATED_LABEL,
   SO_RONG,
@@ -164,6 +176,9 @@ import {
 } from "./nhan-phieu";
 import { PublicationBox, starsLabel } from "./citizen-report-blocks";
 import { NhatKyPhieu } from "./nhat-ky-phieu";
+import { usePetitionLogAttachments } from "./petition-log-attachments";
+import { PetitionHeatMap, PetitionMiniMap } from "./petition-map";
+import { PetitionReports } from "./petition-reports";
 import { PetitionTaskBlock } from "./petition-task";
 import {
   buttonClass,
@@ -257,10 +272,14 @@ export const DRILL_DOWN_NOTE_CITIZEN_REPORTS =
   "Bộ lọc, ô tìm và phạm vi tạm tắt để danh sách khớp đúng con số ở trang Tổng quan. " +
   "Bấm “Bỏ lọc” để dùng lại.";
 
+/** The register's three main tabs (prototype `FeedbackWorkspace.tsx:133-138`). */
+type MainTab = "list" | "map" | "report";
+
 export function SoPhanAnh({
   drillDown = NO_DRILL_DOWN,
   reloadSignal = 0,
   openCode = null,
+  basemapAvailable = false,
 }: {
   /** Lọc mở từ trang Tổng quan, đọc ở máy chủ (`app/phan-anh/page.tsx`). */
   drillDown?: DrillDown<"citizen-reports">;
@@ -268,6 +287,11 @@ export function SoPhanAnh({
   reloadSignal?: number;
   /** `?id=<mã tra cứu>`: open that petition's drawer once, through the detail route. */
   openCode?: string | null;
+  /**
+   * `basemapConfigured()` of the SERVER page (`BASEMAP_URL` set). `false` by default — fail closed: no
+   * map is drawn and no coordinate is fetched until the server says the self-hosted basemap exists.
+   */
+  basemapAvailable?: boolean;
 } = {}) {
   // LỌC TỔNG QUAN ĐANG BẬT THÌ NÓ LÀ BỘ LỌC DUY NHẤT: hàng lọc §4 không vẽ, nên không lối nào ghép
   // thêm một ô vào lát cắt của con số. Màn được dựng lại khi lọc đổi (`key` ở trang), nên giá trị
@@ -303,6 +327,11 @@ export function SoPhanAnh({
   const [assignRefusal, setAssignRefusal] = useState<string | null>(null);
   // The `?id=` deep link's refusal (404 for a code that is not this commune's, 403), verbatim.
   const [deepLinkRefusal, setDeepLinkRefusal] = useState<string | null>(null);
+  // Any refusal of `Phân loại` — 400 `residential_unit_not_offered`, 503, 409 — shown IN the classify act.
+  const [classifyRefusal, setClassifyRefusal] = useState<string | null>(null);
+  const [tab, setTab] = useState<MainTab>("list");
+  // `citizen-report-counts` for the same filters; keyed like the list so a stale total is never shown.
+  const [counted, setCounted] = useState<{ key: string; total: number | null } | null>(null);
 
   const khoa = `${JSON.stringify(loc)}|${nganXep.hienTai ?? ""}|${lanTai}|${reloadSignal}`;
 
@@ -350,6 +379,21 @@ export function SoPhanAnh({
     };
   }, [loc, nganXep.hienTai, khoa]);
 
+  // THE TOTAL behind `Danh sách (n)` and the pager — the count route, same filters as the list, re-read
+  // after every write (a move can take a petition out of the filter). Not re-read when only the page
+  // changes. A refusal shows no number rather than a wrong one.
+  const countKey = `${JSON.stringify(loc)}|${lanTai}|${reloadSignal}`;
+  useEffect(() => {
+    let dropped = false;
+    countCitizenReports(loc).then((r) => {
+      if (!dropped) setCounted({ key: countKey, total: r.ok ? r.duLieu.total : null });
+    });
+    return () => {
+      dropped = true;
+    };
+  }, [loc, countKey]);
+  const total = counted !== null && counted.key === countKey ? counted.total : null;
+
   // BA DANH MỤC, ĐỌC MỘT LẦN CHO CẢ MÀN. Cả ba tuyến là `any-authenticated`, nên mọi tài khoản
   // xem được sổ đều đọc được. Danh mục hỏng thì ô tương ứng rỗng — KHÔNG làm hỏng quyển sổ: ba câu
   // trả lời rời nhau, mỗi cái nói chuyện của nó.
@@ -378,6 +422,9 @@ export function SoPhanAnh({
   // FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có quyền nào — "chưa rõ" không được
   // hành xử như "có" (luật 1, cấm #1).
   const dsQuyen: readonly string[] = phien !== null && phien.ok ? phien.duLieu.permissions : [];
+  // `CB-…` of the session, `""` while unread — the log's file-removal offer compares it (fail closed).
+  // `?.`: a session body without `staff` (an older server, a test double) is "unknown", never a crash.
+  const staffCode = phien !== null && phien.ok ? (phien.duLieu.staff?.code ?? "") : "";
   const cong = congThaoTac(
     coQuyen(dsQuyen, QUYEN_PHAN_LOAI_PHAN_ANH),
     coQuyen(dsQuyen, QUYEN_PHAN_CONG_PHAN_ANH),
@@ -397,8 +444,9 @@ export function SoPhanAnh({
   /** Một lần ghi xong: giữ phiếu máy chủ vừa trả, xoá lỗi cũ, và đọc lại quyển sổ. */
   function xongGhi(kq: KetQua<petitions_phieuPhanAnhRa>): void {
     datDangGui(false);
-    // Another act answered: an earlier assignment refusal no longer describes the petition on screen.
+    // Another act answered: an earlier refusal no longer describes the petition on screen.
     setAssignRefusal(null);
+    setClassifyRefusal(null);
     if (!kq.ok) {
       // NGUYÊN VĂN câu máy chủ. 409 của các tuyến này mang đúng quy tắc đã từ chối ("phiếu đã
       // chuyển trạng thái trong lúc bạn đang mở màn hình", "xã chưa cấu hình thời hạn xử lý cho
@@ -439,6 +487,7 @@ export function SoPhanAnh({
     datLoiGhi(null);
     setCloseRefusal(null);
     setAssignRefusal(null);
+    setClassifyRefusal(null);
   };
   const listCards = (items: readonly petitions_phieuPhanAnhRa[]) => (
     <DanhSachThe
@@ -484,18 +533,56 @@ export function SoPhanAnh({
       )}
 
       <div className="flex min-w-0 flex-col gap-4 [&>*]:my-0">
-        {/* §2 main tabs `[Danh sách] [Bản đồ nhiệt] [Báo cáo]`, no icons (`FeedbackWorkspace.tsx:134-138`).
-            Only the list exists; the other two are disabled placeholders with their "?" (ADR 0068 §14,
-            owner decision D2). NO COUNT on `Danh sách` (owner decision D5): the register is paged by the
-            server and returns no total, so a count would be one page passed off as the commune's. */}
+        {/* §2 main tabs `[Danh sách (n)] [Bản đồ nhiệt] [Báo cáo]`, no icons (`FeedbackWorkspace.tsx:134-138`).
+            `(n)` is the COUNT ROUTE's total for the list's filters — never the page in view. The state
+            lives here and never in the address bar: the keyword rides in the filters (rule 3). */}
         <TabList aria-label="Phần của sổ phản ánh">
-          <Tab selected id="petition-tab-list" aria-controls="petition-list-panel">
-            Danh sách
+          <Tab
+            selected={tab === "list"}
+            id="petition-tab-list"
+            aria-controls="petition-list-panel"
+            tabIndex={tab === "list" ? 0 : -1}
+            onClick={() => setTab("list")}
+          >
+            {listTabLabel(total)}
           </Tab>
-          <PendingTab info={petitionPendingPart("heatMapTab")} />
-          <PendingTab info={petitionPendingPart("reportTab")} />
+          <Tab
+            selected={tab === "map"}
+            id="petition-tab-map"
+            aria-controls="petition-map-panel"
+            tabIndex={tab === "map" ? 0 : -1}
+            onClick={() => setTab("map")}
+          >
+            {HEAT_MAP_TAB_LABEL}
+          </Tab>
+          <Tab
+            selected={tab === "report"}
+            id="petition-tab-report"
+            aria-controls="petition-report-panel"
+            tabIndex={tab === "report" ? 0 : -1}
+            onClick={() => setTab("report")}
+          >
+            {REPORT_TAB_LABEL}
+          </Tab>
         </TabList>
 
+        {/* `Bản đồ nhiệt` — EVERY located petition of the list's filters (prototype `FeedbackWorkspace.tsx:257-259`). */}
+        {tab === "map" && (
+          <div className="min-w-0" id="petition-map-panel" role="tabpanel" aria-labelledby="petition-tab-map">
+            <PetitionHeatMap filter={loc} basemapAvailable={basemapAvailable} />
+          </div>
+        )}
+
+        {/* `Báo cáo` — `feedback.read` (the page) AND `report.read` (here); the route checks both. */}
+        {tab === "report" && (
+          <div className="min-w-0" id="petition-report-panel" role="tabpanel" aria-labelledby="petition-tab-report">
+            <CongQuyen khoa={REPORT_READ_PERMISSION} cauThieuQuyen={REPORT_READ_DENIED}>
+              <PetitionReports unitNames={tenBoPhan} />
+            </CongQuyen>
+          </div>
+        )}
+
+        {tab === "list" && (
         <div
           className="flex min-w-0 flex-col gap-4 [&>*]:my-0"
           id="petition-list-panel"
@@ -568,8 +655,14 @@ export function SoPhanAnh({
         {so.pha === "xong" && (
           <>
             {listCards(so.duLieu.items)}
-            {/* Paging is ours, not the prototype's (it loads every row): the server pages by cursor. */}
-            <nav className="dieu-huong-trang m-0 flex justify-end" aria-label="Phân trang sổ phản ánh">
+            {/* Paging is ours, not the prototype's (it loads every row): the server pages by cursor. The
+                `a–b trên N mục` line counts with the count route's total, never a guess. */}
+            <nav className="dieu-huong-trang m-0 flex flex-wrap items-center justify-end gap-2" aria-label="Phân trang sổ phản ánh">
+              {pageRangeLabel(nganXep.daQua.length, SO_THE_MOI_TRANG, so.duLieu.items.length, total) !== null && (
+                <span className="mr-auto text-[12px] text-ink-muted tabular-nums" data-page-range="">
+                  {pageRangeLabel(nganXep.daQua.length, SO_THE_MOI_TRANG, so.duLieu.items.length, total)}
+                </span>
+              )}
               <Button
                 type="button"
                 variant="secondary"
@@ -596,6 +689,7 @@ export function SoPhanAnh({
           </>
         )}
         </div>
+        )}
       </div>
 
       {dangMo !== null && (
@@ -617,6 +711,10 @@ export function SoPhanAnh({
           // Mỗi thao tác thành công là một dòng máy chủ vừa ghi vào nhật ký: đọc lại.
           lanLamMoiNhatKy={lanTai}
           permissions={dsQuyen}
+          sessionStaffCode={staffCode}
+          basemapAvailable={basemapAvailable}
+          thon={daTaiThon}
+          classifyRefusal={classifyRefusal}
           // A task booked from the petition wrote a `tao-nhiem-vu` row: bump the same counter so the
           // log re-reads it. The petition itself is unchanged by the act, so `dangMo` stays.
           onTaskCreated={() => datLanTai((n) => n + 1)}
@@ -625,16 +723,30 @@ export function SoPhanAnh({
             datLoiGhi(null);
             setCloseRefusal(null);
             setAssignRefusal(null);
+            setClassifyRefusal(null);
           }}
-          phanLoai={(linhVuc, ghiChu) =>
-            chay(phanLoaiPhieu(dangMo.code, linhVuc, ghiChu), movedToast("dang-phan-loai"))
-          }
-          chuyenXuLy={(boPhanID, maCanBo, ghiChu) => {
+          phanLoai={(linhVuc, ghiChu, extra) => {
+            datDangGui(true);
+            return phanLoaiPhieu(dangMo.code, linhVuc, ghiChu, extra).then((kq) => {
+              if (!kq.ok) {
+                // The server's sentence VERBATIM, in the classify act — next to the field and hamlet
+                // selects it is about (400 `residential_unit_not_offered`, 503, 409).
+                datDangGui(false);
+                datLoiGhi(null);
+                setClassifyRefusal(kq.thongBao);
+                return false;
+              }
+              xongGhi(kq);
+              toast.success(movedToast("dang-phan-loai"));
+              return true;
+            });
+          }}
+          chuyenXuLy={(boPhanID, maCanBo, ghiChu, attachments) => {
             datDangGui(true);
             // From `dang-phan-loai` the assignment IS the move to `da-chuyen-xu-ly` (SauKhiPhanCong);
             // later it keeps the status. The toast says which, from the status that was open.
             const fromScreening = dangMo.status === "dang-phan-loai";
-            return chuyenXuLyPhieu(dangMo.code, boPhanID, maCanBo, ghiChu).then((kq) => {
+            return chuyenXuLyPhieu(dangMo.code, boPhanID, maCanBo, ghiChu, attachments).then((kq) => {
               if (!kq.ok) {
                 // The server's sentence VERBATIM, but drawn in the assign block, not the general line.
                 datDangGui(false);
@@ -648,19 +760,19 @@ export function SoPhanAnh({
             });
           }}
           assignRefusal={assignRefusal}
-          tienTrangThai={(ghiChu) => {
+          tienTrangThai={(ghiChu, attachments) => {
             // The server holds the map (`tienTrinhChinh`); the toast names the status it answered with.
             datDangGui(true);
-            return tienTrangThaiPhieu(dangMo.code, ghiChu).then((kq) => {
+            return tienTrangThaiPhieu(dangMo.code, ghiChu, attachments).then((kq) => {
               xongGhi(kq);
               if (kq.ok) toast.success(movedToast(kq.duLieu.status));
               return kq.ok;
             });
           }}
           closeRefusal={closeRefusal}
-          dongPhieuLai={(ketQua, ghiChu) => {
+          dongPhieuLai={(ketQua, ghiChu, attachments) => {
             datDangGui(true);
-            return dongPhieu(dangMo.code, ketQua, ghiChu).then((kq) => {
+            return dongPhieu(dangMo.code, ketQua, ghiChu, attachments).then((kq) => {
               if (!kq.ok && kq.afterPhotoRequired) {
                 // The commune requires a verification photo: say it in the close block, next to the
                 // way out, in the commune's own words. The petition did not change — nothing to re-read.
@@ -675,11 +787,11 @@ export function SoPhanAnh({
               return kq.ok;
             });
           }}
-          khongTiepNhan={(lyDo, ghiChu) =>
-            chay(khongTiepNhanPhieu(dangMo.code, lyDo, ghiChu), movedToast("khong-tiep-nhan"))
+          khongTiepNhan={(lyDo, ghiChu, attachments) =>
+            chay(khongTiepNhanPhieu(dangMo.code, lyDo, ghiChu, attachments), movedToast("khong-tiep-nhan"))
           }
-          chuyenCapTren={(lyDo, coQuan, ghiChu) =>
-            chay(chuyenCapTrenPhieu(dangMo.code, lyDo, coQuan, ghiChu), movedToast("chuyen-cap-tren"))
+          chuyenCapTren={(lyDo, coQuan, ghiChu, attachments) =>
+            chay(chuyenCapTrenPhieu(dangMo.code, lyDo, coQuan, ghiChu, attachments), movedToast("chuyen-cap-tren"))
           }
           // Same path as the six processing acts: the 200 body replaces the open petition, a refusal
           // (409 `never_public`, 403) goes verbatim to the drawer's error line.
@@ -984,8 +1096,9 @@ export function DanhSachThe({
  * THE SENDER IS THE SERVER'S MASKED PAIR (`cardSenderLabel`) — the prototype prints the phone in full; the
  * list route always masks (rule 3, ADR 0030), and an anonymous petition says so and nothing more.
  *
- * NO HAMLET AND NO "N phiếu trùng": the petition carries neither (`PHAN_CHUA_DUNG` `sceneMap`,
- * `duplicates`). The place line falls back to the address, as the prototype's own fallback does.
+ * THE PLACE LINE IS THE HAMLET, ELSE THE ADDRESS (prototype `FeedbackCard.tsx:98`, `cardPlaceLabel`): the
+ * hamlet recorded on the petition (ADR 0088 §1). NO "N phiếu trùng": the list carries no count
+ * (`PHAN_CHUA_DUNG` `duplicates`).
  *
  * NO `title` TOOLTIP ON THE CONTENT: it is a citizen's words (rule 3 keeps personal data out of
  * attributes); the full text is in the drawer.
@@ -1049,7 +1162,7 @@ export function ThePhieu({
 
         <span className="mt-1 flex min-w-0 items-center gap-1 text-[11px] text-ink-muted">
           <Glyph icon={MapPin} className="size-3 shrink-0" />
-          <span className="truncate">{phieu.address === "" ? CARD_NO_LOCATION : phieu.address}</span>
+          <span className="truncate">{cardPlaceLabel(phieu)}</span>
         </span>
 
         {/* WRAPS instead of squeezing the sender to nothing: at the narrowest width the badge alone is
@@ -1109,6 +1222,9 @@ export function ChiTietPhieu({
   coGhiNhatKy = false,
   lanLamMoiNhatKy = 0,
   permissions = [],
+  sessionStaffCode = "",
+  basemapAvailable = false,
+  thon = [],
   onTaskCreated,
   dong,
   phanLoai,
@@ -1120,6 +1236,7 @@ export function ChiTietPhieu({
   setPublication,
   closeRefusal = null,
   assignRefusal = null,
+  classifyRefusal = null,
   initialStep = null,
 }: {
   phieu: petitions_phieuPhanAnhRa;
@@ -1140,6 +1257,12 @@ export function ChiTietPhieu({
    * Empty by default: an unknown session holds no key (rule 1, forbidden #1).
    */
   permissions?: readonly string[];
+  /** `phien.staff.code` (`CB-…`), `""` while unread — the log offers file removal to a row's own author. */
+  sessionStaffCode?: string;
+  /** `basemapConfigured()` of the server page. `false` (default) → the `Vị trí` map is one sentence. */
+  basemapAvailable?: boolean;
+  /** The commune's residential units (ALL, in-use and retired) — the classify act offers the in-use ones. */
+  thon?: readonly identity_thonToDanPhoRa[];
   /** Called after POST …/tasks answered 201. Absent = the block is not drawn (no write path). */
   onTaskCreated?: () => void;
   dong: () => void;
@@ -1147,12 +1270,20 @@ export function ChiTietPhieu({
    * `ghiChu` ở cả sáu thao tác là `Nội dung cập nhật` TUỲ CHỌN, vào nhật ký, không gửi người dân. Trả
    * `Promise<boolean>` (máy chủ nhận hay không) để ô ấy chỉ được xoá SAU một lần thành công;
    * `void` vẫn được nhận — khi ấy ô giữ nguyên chữ.
+   *
+   * `attachments` (every act, ADR 0088 §2): ids of STORED log attachments picked in the composer, linked
+   * by the server to the act's own log row in the same transaction. Empty = none.
    */
-  phanLoai: (linhVuc: string, ghiChu: string) => KetQuaGui;
+  phanLoai: (linhVuc: string, ghiChu: string, extra: ClassifyExtras) => KetQuaGui;
   /** `maCanBo` là MÃ CÁN BỘ (`code` của danh bạ), vắng khi để bộ phận tự phân công. */
-  chuyenXuLy: (boPhanID: string, maCanBo: string | undefined, ghiChu: string) => KetQuaGui;
-  tienTrangThai: (ghiChu: string) => KetQuaGui;
-  dongPhieuLai: (ketQua: string, ghiChu: string) => KetQuaGui;
+  chuyenXuLy: (
+    boPhanID: string,
+    maCanBo: string | undefined,
+    ghiChu: string,
+    attachments: readonly string[],
+  ) => KetQuaGui;
+  tienTrangThai: (ghiChu: string, attachments: readonly string[]) => KetQuaGui;
+  dongPhieuLai: (ketQua: string, ghiChu: string, attachments: readonly string[]) => KetQuaGui;
   /**
    * The commune's refusal to close without a verification photo (409 `after_photo_required`), verbatim,
    * or `null`. Drawn inside the close act with the way to the `Sau khi xử lý` upload.
@@ -1160,8 +1291,15 @@ export function ChiTietPhieu({
   closeRefusal?: string | null;
   /** Any refusal of `Chuyển xử lý`, verbatim, or `null`. Drawn inside the assign form, by its button. */
   assignRefusal?: string | null;
-  khongTiepNhan: (lyDo: string, ghiChu: string) => KetQuaGui;
-  chuyenCapTren: (lyDo: string, coQuanTiepNhan: string, ghiChu: string) => KetQuaGui;
+  /** Any refusal of `Phân loại`, verbatim, or `null`. Drawn inside the classify act. */
+  classifyRefusal?: string | null;
+  khongTiepNhan: (lyDo: string, ghiChu: string, attachments: readonly string[]) => KetQuaGui;
+  chuyenCapTren: (
+    lyDo: string,
+    coQuanTiepNhan: string,
+    ghiChu: string,
+    attachments: readonly string[],
+  ) => KetQuaGui;
   /**
    * PUT …/publication. Optional so a caller without a write path renders the box read-only; the
    * buttons also need `cong.moderate`.
@@ -1186,6 +1324,9 @@ export function ChiTietPhieu({
   const [ghiChuPhanCong, datGhiChuPhanCong] = useState("");
   const [ghiChuTien, datGhiChuTien] = useState("");
   const [ghiChuDong, datGhiChuDong] = useState("");
+  // AFTER the eight above (the seeding order of `chon-can-bo.test.tsx`). Prefilled with the hamlet the
+  // petition holds: sending it back unchanged is a CONFIRMATION (ADR 0088 §1).
+  const [thonChon, datThonChon] = useState(() => phieu.residential_unit_id ?? "");
 
   const bangDanhBa = danhBa !== null && danhBa.ok ? danhBaTheoMa(danhBa.duLieu.items) : null;
   // Chỉ người thuộc ĐÚNG bộ phận đang chọn — cùng phép so khớp `?unit=` của máy chủ. Người chưa
@@ -1208,14 +1349,26 @@ export function ChiTietPhieu({
   // `da-chuyen-xu-ly`, and the composer holds it.
   const handOverHere = cong.phanCong && ASSIGN_KEEPS_STATUS.includes(phieu.status);
 
-  function submitAssign(after: () => void): void {
+  function submitAssign(after: () => void, attachments: readonly string[] = []): void {
     if (boPhanChon !== "" && loiGhiChuNoiBo(ghiChuPhanCong) === null) {
-      xoaKhiThanhCong(chuyenXuLy(boPhanChon, canBoChon === "" ? undefined : canBoChon, ghiChuPhanCong), () => {
-        datGhiChuPhanCong("");
-        after();
-      });
+      xoaKhiThanhCong(
+        chuyenXuLy(boPhanChon, canBoChon === "" ? undefined : canBoChon, ghiChuPhanCong, attachments),
+        () => {
+          datGhiChuPhanCong("");
+          after();
+        },
+      );
     }
   }
+
+  // The classify act's hamlet choices: units IN USE (the server's predicate for a new value), plus the
+  // one the petition already holds even if retired since — sending it back is only a confirmation.
+  const storedHamlet = phieu.residential_unit_id ?? "";
+  const hamletChoices = pickableResidentialUnits(thon);
+  const storedRetired =
+    storedHamlet !== "" && !hamletChoices.some((u) => u.id === storedHamlet)
+      ? (thon.find((u) => u.id === storedHamlet) ?? null)
+      : null;
 
   // The unit and officer pickers — the prototype's `HandoverFields`. ONE copy: the composer (first
   // routing, `dang-phan-loai`) and the hand-over section (later) are never drawn at the same time.
@@ -1281,8 +1434,12 @@ export function ChiTietPhieu({
       </div>
     ) : null;
 
-  /** The form of one move, in the composer. `close` folds the composer (Huỷ, or after a success). */
-  function renderAct(step: StripStep, close: () => void): ReactNode {
+  /**
+   * The form of one move, in the composer. `close` folds the composer (Huỷ, or after a success); `files`
+   * are the composer's attachments (owned by `StatusStrip`), sent with the act and cleared after it.
+   */
+  function renderAct(step: StripStep, close: () => void, files: ComposerFiles): ReactNode {
+    const waiting = anyInFlight(files.items);
     switch (step.act) {
       case "classify":
         return (
@@ -1290,8 +1447,17 @@ export function ChiTietPhieu({
             className={COMPOSER_FORM}
             onSubmit={(e) => {
               e.preventDefault();
-              if (linhVucChon !== "" && loiGhiChuNoiBo(ghiChuPhanLoai) === null) {
-                xoaKhiThanhCong(phanLoai(linhVucChon, ghiChuPhanLoai), () => datGhiChuPhanLoai(""));
+              if (linhVucChon !== "" && loiGhiChuNoiBo(ghiChuPhanLoai) === null && !waiting) {
+                xoaKhiThanhCong(
+                  phanLoai(linhVucChon, ghiChuPhanLoai, {
+                    residentialUnitId: thonChon,
+                    attachments: storedIds(files.items),
+                  }),
+                  () => {
+                    datGhiChuPhanLoai("");
+                    files.clear();
+                  },
+                );
               }
             }}
           >
@@ -1306,12 +1472,36 @@ export function ChiTietPhieu({
                   ))}
                 </select>
               </Field>
+              {/* ADR 0088 §1: confirm or correct the hamlet at classification; a change is audited. With a
+                  stored hamlet there is no empty choice — the act cannot remove one. */}
+              <Field label={INTAKE_HAMLET_LABEL} htmlFor="chon-thon-phan-loai" icon={House} kind="select" grow="auto">
+                <select id="chon-thon-phan-loai" value={thonChon} onChange={(e) => datThonChon(e.target.value)}>
+                  {storedHamlet === "" && <option value="">{HAMLET_NONE}</option>}
+                  {storedRetired !== null && (
+                    <option value={storedRetired.id}>{residentialUnitFilterLabel(storedRetired)}</option>
+                  )}
+                  {hamletChoices.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
             <ONhapGhiChuNoiBo id="ghi-chu-phan-loai" giaTri={ghiChuPhanLoai} datGiaTri={datGhiChuPhanLoai} />
+            {classifyRefusal !== null && (
+              <div className="flex items-start gap-2 rounded-xl border border-danger-200 bg-danger-50 px-3.5 py-3 [&>p]:m-0">
+                <Glyph icon={CircleAlert} className="mt-0.5 size-[18px] shrink-0 text-danger-600" />
+                <p className="thong-bao-loi" role="alert">
+                  {classifyRefusal}
+                </p>
+              </div>
+            )}
             <ComposerButtons
               cancel={close}
               busy={dangGui}
-              disabled={dangGui || linhVucChon === "" || loiGhiChuNoiBo(ghiChuPhanLoai) !== null}
+              files={files}
+              disabled={dangGui || waiting || linhVucChon === "" || loiGhiChuNoiBo(ghiChuPhanLoai) !== null}
             />
           </form>
         );
@@ -1321,7 +1511,10 @@ export function ChiTietPhieu({
             className={COMPOSER_FORM}
             onSubmit={(e) => {
               e.preventDefault();
-              submitAssign(close);
+              if (!waiting) submitAssign(() => {
+                files.clear();
+                close();
+              }, storedIds(files.items));
             }}
           >
             {assignFields}
@@ -1330,7 +1523,8 @@ export function ChiTietPhieu({
             <ComposerButtons
               cancel={close}
               busy={dangGui}
-              disabled={dangGui || boPhanChon === "" || loiGhiChuNoiBo(ghiChuPhanCong) !== null}
+              files={files}
+              disabled={dangGui || waiting || boPhanChon === "" || loiGhiChuNoiBo(ghiChuPhanCong) !== null}
             />
           </form>
         );
@@ -1342,8 +1536,11 @@ export function ChiTietPhieu({
             key={step.act}
             loai={step.act === "reject" ? "khong-tiep-nhan" : "chuyen-cap-tren"}
             dangGui={dangGui}
-            gui={(lyDo, coQuan, ghiChu) =>
-              step.act === "reject" ? khongTiepNhan(lyDo, ghiChu) : chuyenCapTren(lyDo, coQuan, ghiChu)
+            files={files}
+            gui={(lyDo, coQuan, ghiChu, attachments) =>
+              step.act === "reject"
+                ? khongTiepNhan(lyDo, ghiChu, attachments)
+                : chuyenCapTren(lyDo, coQuan, ghiChu, attachments)
             }
             huy={close}
           />
@@ -1355,13 +1552,21 @@ export function ChiTietPhieu({
             className={COMPOSER_FORM}
             onSubmit={(e) => {
               e.preventDefault();
-              if (loiGhiChuNoiBo(ghiChuTien) === null) {
-                xoaKhiThanhCong(tienTrangThai(ghiChuTien), () => datGhiChuTien(""));
+              if (loiGhiChuNoiBo(ghiChuTien) === null && !waiting) {
+                xoaKhiThanhCong(tienTrangThai(ghiChuTien, storedIds(files.items)), () => {
+                  datGhiChuTien("");
+                  files.clear();
+                });
               }
             }}
           >
             <ONhapGhiChuNoiBo id="ghi-chu-tien" giaTri={ghiChuTien} datGiaTri={datGhiChuTien} />
-            <ComposerButtons cancel={close} busy={dangGui} disabled={dangGui || loiGhiChuNoiBo(ghiChuTien) !== null} />
+            <ComposerButtons
+              cancel={close}
+              busy={dangGui}
+              files={files}
+              disabled={dangGui || waiting || loiGhiChuNoiBo(ghiChuTien) !== null}
+            />
           </form>
         );
       case "close":
@@ -1371,8 +1576,11 @@ export function ChiTietPhieu({
             className={COMPOSER_FORM}
             onSubmit={(e) => {
               e.preventDefault();
-              if (ketQua.trim() !== "" && loiGhiChuNoiBo(ghiChuDong) === null) {
-                xoaKhiThanhCong(dongPhieuLai(ketQua.trim(), ghiChuDong), () => datGhiChuDong(""));
+              if (ketQua.trim() !== "" && loiGhiChuNoiBo(ghiChuDong) === null && !waiting) {
+                xoaKhiThanhCong(dongPhieuLai(ketQua.trim(), ghiChuDong, storedIds(files.items)), () => {
+                  datGhiChuDong("");
+                  files.clear();
+                });
               }
             }}
           >
@@ -1411,7 +1619,8 @@ export function ChiTietPhieu({
             <ComposerButtons
               cancel={close}
               busy={dangGui}
-              disabled={dangGui || ketQua.trim() === "" || loiGhiChuNoiBo(ghiChuDong) !== null}
+              files={files}
+              disabled={dangGui || waiting || ketQua.trim() === "" || loiGhiChuNoiBo(ghiChuDong) !== null}
             />
           </form>
         );
@@ -1459,7 +1668,13 @@ export function ChiTietPhieu({
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-        <StatusStrip status={phieu.status} view={strip} initialStep={initialStep} renderAct={renderAct} />
+        <StatusStrip
+          lookupCode={phieu.code}
+          status={phieu.status}
+          view={strip}
+          initialStep={initialStep}
+          renderAct={renderAct}
+        />
 
         {/* THE THREE FACT CELLS (`FeedbackDetailDrawer.tsx:229-310`). The deadline cell holds BOTH
             clocks (ADR 0027/0028) and the classify deadline — each a comparison of a stored instant with
@@ -1583,25 +1798,18 @@ export function ChiTietPhieu({
             )}
 
             {/* `Vị trí` — ONLY WHEN THE CITIZEN SENT COORDINATES (`FeedbackDetailDrawer.tsx:394-406`,
-                owner decision D2). The mini-map is a disabled placeholder with its "?" in the map's place:
-                it loads NO tile until the self-hosted basemap is built. Under it, the address, and the
-                coordinates as text. */}
-            {coordinates !== null && (
+                owner decision D2): the mini-map on the SELF-HOSTED basemap, locked to the commune frame
+                (`PetitionMiniMap`; no basemap → one sentence). Under it, the address · hamlet, and the
+                coordinates as text. A component of its own: it reads the network (`useEffect`). */}
+            {coordinates !== null && typeof phieu.lat === "number" && typeof phieu.lng === "number" && (
               <section aria-labelledby="tieu-de-vi-tri-phieu" className={SECTION}>
                 <h3 id="tieu-de-vi-tri-phieu" className={SECTION_HEADING}>
                   {LOCATION_SECTION_TITLE}
                 </h3>
-                <PendingFeature info={petitionPendingPart("sceneMap")} className="flex w-full">
-                  <div
-                    aria-disabled="true"
-                    className="grid h-52 w-full place-items-center rounded-[10px] border border-solid border-line bg-white text-ink-400"
-                  >
-                    <MapIcon aria-hidden="true" className="size-7" strokeWidth={1.5} focusable="false" />
-                  </div>
-                </PendingFeature>
+                <PetitionMiniMap lat={phieu.lat} lng={phieu.lng} basemapAvailable={basemapAvailable} />
                 <p className="m-0 mt-1.5 flex items-center gap-1 text-[11.5px] text-ink-muted">
                   <Glyph icon={MapPin} className="size-3 shrink-0" />
-                  {phieu.address === "" ? SCENE_NO_ADDRESS : phieu.address}
+                  {sceneAddressLine(phieu)}
                 </p>
                 <p className="m-0 mt-0.5 text-[11px] text-ink-muted">
                   <span className="tabular-nums">{coordinates}</span> · {SCENE_COORDINATES_NOTE}
@@ -1666,7 +1874,7 @@ export function ChiTietPhieu({
                   className="m-0 flex flex-col gap-3 rounded-[10px] border border-solid border-line bg-white p-3"
                   onSubmit={(e) => {
                     e.preventDefault();
-                    submitAssign(() => {});
+                    submitAssign(() => {}, []);
                   }}
                 >
                   {assignFields}
@@ -1703,6 +1911,8 @@ export function ChiTietPhieu({
               danhBa={bangDanhBa}
               coNutGhi={coGhiNhatKy}
               lanLamMoi={lanLamMoiNhatKy}
+              sessionStaffCode={sessionStaffCode}
+              mayResolve={coQuyen(permissions, QUYEN_DONG_PHAN_ANH)}
             />
           </aside>
         </div>
@@ -1758,22 +1968,40 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
  * changes, the chip is no longer a `next` one, and the composer folds by itself.
  */
 function StatusStrip({
+  lookupCode,
   status,
   view,
   initialStep,
   renderAct,
 }: {
+  lookupCode: string;
   status: string;
   view: StatusStripView;
   initialStep: string | null;
-  renderAct: (step: StripStep, close: () => void) => ReactNode;
+  renderAct: (step: StripStep, close: () => void, files: ComposerFiles) => ReactNode;
 }) {
   const [openCode, setOpenCode] = useState<string | null>(initialStep);
+  // The composer's `Đính kèm ảnh, tệp` (ADR 0088 §2): the log-attachment upload (declare → store →
+  // complete) on this petition; the STORED ids go with the act. One list for whichever act is open —
+  // cleared when the composer folds or another chip opens, so a file never rides on an act it was not
+  // picked for.
+  const files = usePetitionLogAttachments(lookupCode);
   const open = [...view.main, ...view.branches].find((s) => s.code === openCode && s.role === "next") ?? null;
-  const close = () => setOpenCode(null);
+  const close = () => {
+    setOpenCode(null);
+    files.clear();
+  };
   const explanation = cauGiaiThichTrangThai(status);
   const chip = (s: StripStep) => (
-    <StepChip key={s.code} step={s} open={open?.code === s.code} pick={() => setOpenCode(s.code)} />
+    <StepChip
+      key={s.code}
+      step={s}
+      open={open?.code === s.code}
+      pick={() => {
+        if (s.code !== openCode) files.clear();
+        setOpenCode(s.code);
+      }}
+    />
   );
 
   return (
@@ -1802,7 +2030,7 @@ function StatusStrip({
           {cauGiaiThichTrangThai(open.code) !== null && (
             <p className="mt-0.5 text-[11.5px] text-ink-muted">{cauGiaiThichTrangThai(open.code)}</p>
           )}
-          <div className="mt-2">{renderAct(open, close)}</div>
+          <div className="mt-2">{renderAct(open, close, files)}</div>
         </div>
       )}
 
@@ -1854,27 +2082,73 @@ function StepChip({ step, open, pick }: { step: StripStep; open: boolean; pick: 
   );
 }
 
+/** The composer's file list — `usePetitionLogAttachments`, owned by `StatusStrip`. */
+type ComposerFiles = ReturnType<typeof usePetitionLogAttachments>;
+
+/** Id of the composer's hidden file input. One composer form is open at a time. */
+const COMPOSER_FILE_INPUT_ID = "petition-composer-files";
+
 /**
- * The composer's buttons (`FeedbackStatusPipeline.tsx:273-317`): `Đính kèm ảnh, tệp` (a disabled
- * placeholder — no act route takes a file), `Huỷ` on the right, `Xác nhận`.
+ * The composer's buttons (`FeedbackStatusPipeline.tsx:247-317`): the picked files as chips, then
+ * `Đính kèm ảnh, tệp`, `Huỷ` on the right, `Xác nhận`. Each file goes through the log-attachment upload
+ * (type pre-check, store, malware scan) and only STORED ones are sent; the submit waits while any still
+ * moves (the caller folds `anyInFlight` into `disabled`). Without `files` the attach control is not drawn.
  */
-function ComposerButtons({ cancel, busy, disabled }: { cancel: () => void; busy: boolean; disabled: boolean }) {
+function ComposerButtons({
+  cancel,
+  busy,
+  disabled,
+  files,
+}: {
+  cancel: () => void;
+  busy: boolean;
+  disabled: boolean;
+  files?: ComposerFiles;
+}) {
+  const input = useRef<HTMLInputElement>(null);
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <PendingButton
-        info={petitionPendingPart("composerAttachment")}
-        size="sm"
-        icon={<Glyph icon={Paperclip} className="size-3.5" />}
-      >
-        Đính kèm ảnh, tệp
-      </PendingButton>
-      <button type="button" className={buttonClass("secondary", "sm", "ml-auto")} onClick={cancel} disabled={busy}>
-        Huỷ
-      </button>
-      <button type="submit" className={buttonClass("primary", "sm")} disabled={disabled}>
-        Xác nhận
-      </button>
-    </div>
+    <>
+      {files !== undefined && (
+        <PickedFileChips items={files.items} disabled={busy} onRetry={files.retry} onRemove={files.remove} />
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {files !== undefined && (
+          <>
+            <input
+              ref={input}
+              id={COMPOSER_FILE_INPUT_ID}
+              name={COMPOSER_FILE_INPUT_ID}
+              type="file"
+              multiple
+              accept={ATTACH_ACCEPT}
+              className="hidden"
+              aria-label={ATTACH_INPUT_LABEL}
+              disabled={busy}
+              onChange={(e) => {
+                const picked = e.target.files === null ? [] : Array.from(e.target.files);
+                e.target.value = ""; // the same file can be chosen again after a removal
+                if (picked.length > 0) files.add(picked);
+              }}
+            />
+            <button
+              type="button"
+              className={buttonClass("secondary", "sm")}
+              disabled={busy}
+              onClick={() => input.current?.click()}
+            >
+              <Glyph icon={Paperclip} className="size-3.5" />
+              Đính kèm ảnh, tệp
+            </button>
+          </>
+        )}
+        <button type="button" className={buttonClass("secondary", "sm", "ml-auto")} onClick={cancel} disabled={busy}>
+          Huỷ
+        </button>
+        <button type="submit" className={buttonClass("primary", "sm")} disabled={disabled}>
+          Xác nhận
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -1936,6 +2210,7 @@ function nhanTruongNhanh(giaTri: string | undefined): string {
 export function BieuMauReNhanh({
   loai,
   dangGui,
+  files,
   gui,
   huy,
   lyDoBanDau = "",
@@ -1944,11 +2219,13 @@ export function BieuMauReNhanh({
 }: {
   loai: "khong-tiep-nhan" | "chuyen-cap-tren";
   dangGui: boolean;
+  /** The composer's attachments (owned by `StatusStrip`). Absent = no attach control (static tests). */
+  files?: ComposerFiles;
   /**
    * `coQuanTiepNhan` là chuỗi rỗng ở nhánh `khong-tiep-nhan` và bị bỏ qua. `ghiChu` là `Nội dung cập
-   * nhật` tuỳ chọn — vào nhật ký, KHÔNG phải lý do người dân đọc.
+   * nhật` tuỳ chọn — vào nhật ký, KHÔNG phải lý do người dân đọc. `attachments` = stored file ids.
    */
-  gui: (lyDo: string, coQuanTiepNhan: string, ghiChu: string) => void | Promise<boolean>;
+  gui: (lyDo: string, coQuanTiepNhan: string, ghiChu: string, attachments: readonly string[]) => void | Promise<boolean>;
   huy: () => void;
   /** Chỉ để kiểm: giá trị ban đầu của các ô. */
   lyDoBanDau?: string;
@@ -1962,7 +2239,8 @@ export function BieuMauReNhanh({
   const chuyenCap = loai === "chuyen-cap-tren";
   const loiO1 = loiLyDo(lyDo);
   const loiO2 = chuyenCap ? loiCoQuan(coQuan) : null;
-  const hopLe = loiO1 === null && loiO2 === null && loiGhiChuNoiBo(ghiChu) === null;
+  const waiting = files !== undefined && anyInFlight(files.items);
+  const hopLe = loiO1 === null && loiO2 === null && loiGhiChuNoiBo(ghiChu) === null && !waiting;
   const idLyDo = `ly-do-${loai}`;
   const idCoQuan = `co-quan-${loai}`;
 
@@ -1971,7 +2249,10 @@ export function BieuMauReNhanh({
       className={COMPOSER_FORM}
       onSubmit={(e: FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        if (hopLe) gui(lyDo, chuyenCap ? coQuan : "", ghiChu);
+        if (!hopLe) return;
+        const sent = gui(lyDo, chuyenCap ? coQuan : "", ghiChu, files === undefined ? [] : storedIds(files.items));
+        // The files went with this act: drop them from the list only after the server took it.
+        if (files !== undefined) xoaKhiThanhCong(sent, files.clear);
       }}
     >
       {/* The act ends the petition at the commune and cannot be undone — said before the reason box. */}
@@ -2025,7 +2306,7 @@ export function BieuMauReNhanh({
       )}
 
       <ONhapGhiChuNoiBo id={`ghi-chu-${loai}`} giaTri={ghiChu} datGiaTri={datGhiChu} />
-      <ComposerButtons cancel={huy} busy={dangGui} disabled={dangGui || !hopLe} />
+      <ComposerButtons cancel={huy} busy={dangGui} files={files} disabled={dangGui || !hopLe} />
     </form>
   );
 }

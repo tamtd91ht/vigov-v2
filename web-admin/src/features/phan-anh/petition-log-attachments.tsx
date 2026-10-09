@@ -1,9 +1,11 @@
 "use client";
 
-import { Paperclip, Trash2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { Loader2, Paperclip, Trash2 } from "lucide-react";
+import { useRef, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
-import { PendingFeature } from "@/components/ui/pending-feature";
+import { Button } from "@/components/ui/button";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import {
   afterCompletion,
   attachmentTypeLabel,
@@ -15,9 +17,11 @@ import {
   type AttachmentItem,
   type AttachmentState,
 } from "@/features/nhiem-vu/task-attachments";
+import type { KetQua } from "@/lib/api/goi";
 import {
   completeLogAttachment,
   logAttachmentDownloadLink,
+  removeLogAttachment,
   requestLogAttachmentUpload,
 } from "@/lib/api/phieu-phan-anh";
 import type {
@@ -28,8 +32,14 @@ import type {
 } from "@/lib/api/schema.gen";
 import { uploadToStorage, type CallResult } from "@/lib/api/task-attachments";
 
-import { petitionPendingPart } from "./nhan-phieu";
-import { buttonClass, Glyph } from "./petition-ui";
+import {
+  LOG_FILE_REMOVE_NOTE,
+  LOG_FILE_REMOVE_REASON_LABEL,
+  LOG_FILE_REMOVED_TOAST,
+  logFileRemoveLabel,
+  logFileRemoveTitle,
+} from "./nhan-phieu";
+import { buttonClass, Glyph, LABEL_CLASS } from "./petition-ui";
 
 /**
  * `📎 Đính kèm` on the PETITION log (§8.7) — the task log's attachment flow (ADR 0052), on the
@@ -141,11 +151,18 @@ export function PetitionLogAttachmentList({
   lookupCode,
   attachments,
   download = logAttachmentDownloadLink,
+  onRemove,
 }: {
   lookupCode: string;
   attachments: readonly petitions_taskAttachmentOut[];
   /** Injected only by tests. */
   download?: (lookupCode: string, id: string) => Promise<CallResult<petitions_taskAttachmentDownloadOut>>;
+  /**
+   * Given only for an account that may remove THIS row's files (the uploader, or `feedback.resolve` —
+   * the caller decides, `NhatKyPhieu`). Absent = no remove control at all. UX only: the server decides
+   * again on the row and its refusal is shown verbatim (rule 5).
+   */
+  onRemove?: (file: petitions_taskAttachmentOut) => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [refusal, setRefusal] = useState<{ id: string; message: string } | null>(null);
@@ -185,18 +202,20 @@ export function PetitionLogAttachmentList({
           >
             Tải về
           </button>
-          {/* The prototype's remove button (`FeedbackActivityPanel.tsx:365-374`). No route removes a
-              log file — it is part of the petition's record — so it is drawn disabled with its "?". */}
-          <PendingFeature info={petitionPendingPart("logFileRemoval")}>
+          {/* The prototype's remove button (`FeedbackActivityPanel.tsx:365-374`). It opens the reason
+              dialog (ADR 0088 §2: soft removal, reason required) — never the prototype's bare confirm. */}
+          {onRemove !== undefined && (
             <button
               type="button"
-              disabled
-              aria-label={`Gỡ tệp ${a.file_name}`}
-              className="grid size-7 cursor-not-allowed place-items-center rounded border-0 bg-transparent text-ink-muted opacity-60"
+              aria-label={logFileRemoveLabel(a.file_name)}
+              aria-haspopup="dialog"
+              title={logFileRemoveLabel(a.file_name)}
+              className="grid size-7 cursor-pointer place-items-center rounded border-0 bg-transparent text-ink-muted hover:text-danger focus-visible:outline-2 focus-visible:outline-brand-500"
+              onClick={() => onRemove(a)}
             >
               <Glyph icon={Trash2} className="size-3.5" />
             </button>
-          </PendingFeature>
+          )}
           {busy === a.id && <span role="status">{DOWNLOAD_OPENING}</span>}
           {refusal?.id === a.id && (
             <span className="thong-bao-loi" role="alert">
@@ -206,5 +225,103 @@ export function PetitionLogAttachmentList({
         </li>
       ))}
     </ul>
+  );
+}
+
+const REMOVE_TITLE_ID = "petition-attachment-remove-title";
+export const REMOVE_REASON_ID = "ly-do-go-tep-phieu";
+
+/**
+ * The reason box of a log-file removal (ADR 0088 §2, the task twin's ADR 0076 §4b shape): the reason is
+ * REQUIRED (rule 7 — the file stays, soft-removed, with who and why). A refusal (403, 409 `legal_hold`)
+ * stays IN the dialog, verbatim, the reason kept; success toasts and tells the caller to read the log
+ * again (a row's file list is the server's). The reason travels in the DELETE body only.
+ */
+export function LogAttachmentRemoveDialog({
+  lookupCode,
+  file,
+  onClose,
+  onRemoved,
+  remove = removeLogAttachment,
+}: {
+  lookupCode: string;
+  file: petitions_taskAttachmentOut;
+  onClose: () => void;
+  onRemoved: () => void;
+  /** Injected only by tests. */
+  remove?: (lookupCode: string, id: string, reason: string) => Promise<KetQua<void>>;
+}) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function submit(e: FormEvent<HTMLFormElement>): void {
+    e.preventDefault();
+    const text = reason.trim();
+    if (text === "" || busy) return;
+    setBusy(true);
+    setError(null);
+    remove(lookupCode, file.id, text).then((r) => {
+      setBusy(false);
+      if (!r.ok) {
+        setError(r.thongBao);
+        return;
+      }
+      toast.success(LOG_FILE_REMOVED_TOAST);
+      onRemoved();
+      onClose();
+    });
+  }
+
+  return (
+    <ModalDialog
+      titleId={REMOVE_TITLE_ID}
+      closeDisabled={busy}
+      initialFocusId={REMOVE_REASON_ID}
+      onDismiss={() => !busy && onClose()}
+    >
+      <ModalDialogHeader titleId={REMOVE_TITLE_ID} title={logFileRemoveTitle(file.file_name)} description={LOG_FILE_REMOVE_NOTE} />
+      <form className="m-0 flex flex-col gap-4" onSubmit={submit}>
+        <div>
+          <label htmlFor={REMOVE_REASON_ID} className={LABEL_CLASS}>
+            {LOG_FILE_REMOVE_REASON_LABEL}
+          </label>
+          <input
+            id={REMOVE_REASON_ID}
+            name={REMOVE_REASON_ID}
+            value={reason}
+            autoComplete="off"
+            required
+            className="block h-10 w-full min-w-0 rounded-control border border-line-strong bg-surface px-3 [font-family:inherit] text-base text-ink-900 md:text-sm"
+            onChange={(e) => setReason(e.target.value)}
+          />
+        </div>
+        {error !== null && (
+          <p className="thong-bao-loi m-0" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+            Huỷ
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            className="bg-danger text-white hover:not-disabled:bg-danger/90"
+            icon={
+              busy ? (
+                <Loader2 aria-hidden="true" focusable="false" className="size-4 animate-spin" />
+              ) : (
+                <Trash2 aria-hidden="true" focusable="false" className="size-4" />
+              )
+            }
+            disabled={busy || reason.trim() === ""}
+          >
+            Gỡ tệp
+          </Button>
+        </div>
+      </form>
+    </ModalDialog>
   );
 }

@@ -49,7 +49,9 @@ import {
   TIEU_DE_NHAT_KY,
   UNVERIFIED_CONTACT_LABEL,
   UNVERIFIED_CONTACT_NOTE,
+  LOG_INTERNAL_NOTE,
 } from "./nhan-phieu";
+import { BASEMAP_MISSING_SENTENCE } from "@/lib/basemap/assets";
 import {
   BieuMauReNhanh,
   ChiTietPhieu,
@@ -420,11 +422,16 @@ describe("dữ liệu cá nhân — màn hình hiện đúng thứ máy chủ g�
 describe("vị trí — khối chi tiết (D2: only with coordinates)", () => {
   const ALL_GATES = congThaoTac(true, true, true);
 
-  it("coordinates: the `Vị trí` section — map placeholder, the address, the coordinates as text", () => {
-    const html = veChiTiet(ALL_GATES, phieu({ lat: 21.028511, lng: 105.804817 }));
+  it("coordinates: the `Vị trí` section — the map's box, the address · hamlet, the coordinates as text", () => {
+    const html = veChiTiet(
+      ALL_GATES,
+      phieu({ lat: 21.028511, lng: 105.804817, residential_unit_id: "01JTHON1", residential_unit_name: "Thôn Hà Lam" }),
+    );
     expect(html).toContain(">Vị trí</h3>");
-    expect(html).toContain(nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("sceneMap").ten)));
-    expect(html).toContain("Tổ 6, thôn Hà Lam");
+    // No basemap flag passed (default false, fail closed): ONE sentence in the map's place, no map.
+    expect(html).toContain(BASEMAP_MISSING_SENTENCE);
+    expect(html).not.toContain('data-testid="petition-map"');
+    expect(html).toContain("Tổ 6, thôn Hà Lam · Thôn Hà Lam");
     expect(html).toContain("21.028511, 105.804817");
     expect(html).toContain("Toạ độ do người dân gửi kèm từ ứng dụng");
   });
@@ -432,7 +439,7 @@ describe("vị trí — khối chi tiết (D2: only with coordinates)", () => {
   it("no coordinates: no `Vị trí` section at all (prototype `FeedbackDetailDrawer.tsx:394`)", () => {
     const html = veChiTiet(ALL_GATES, phieu());
     expect(html).not.toContain(">Vị trí</h3>");
-    expect(html).not.toContain(nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("sceneMap").ten)));
+    expect(html).not.toContain(BASEMAP_MISSING_SENTENCE);
   });
 
   it("anonymous: location shown, reporter hidden", () => {
@@ -745,8 +752,9 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     expect(html).not.toContain("lucide-history");
     expect(html).toContain(NUT_GHI);
     expect(html).toContain(nhuTrongHTML(GOI_Y_GHI_NHAT_KY));
-    // `Nội bộ` has no flag behind it on a log row: a disabled pill with its "?" (ADR 0068 §14).
-    expect(html).toContain(nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("logVisibility").ten)));
+    // The log is ALWAYS internal (ADR 0041 §Sửa đổi 09/10/2026): a plain statement, no pill, no "?".
+    expect(html).toContain(LOG_INTERNAL_NOTE);
+    expect(html).not.toContain(nhuTrongHTML(pendingMarkerLabel("Nội bộ")));
   });
 
   it("CA BỊ TỪ CHỐI — không có quyền (hoặc phiên chưa rõ): KHÔNG có nút ghi, vẫn đọc được", () => {
@@ -1407,6 +1415,12 @@ describe("prototype composition — list cards", () => {
     const html = card(phieu({ address: "" }));
     expect(html).toContain("Chưa rõ vị trí");
     expect(html).not.toContain("phiếu trùng");
+  });
+
+  it("the hamlet recorded on the petition takes the place line (hamlet ?? address, ADR 0088 §1)", () => {
+    const html = card(phieu({ residential_unit_id: "01JTHON1", residential_unit_name: "Thôn Bình An" }));
+    expect(html).toContain("Thôn Bình An");
+    expect(html).not.toContain("Tổ 6, thôn Hà Lam");
   });
 
   it("past the resolve deadline: marked, with the clock icon and the words — never colour alone", () => {

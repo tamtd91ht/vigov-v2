@@ -39,11 +39,14 @@ export const PETITION_READ_DENIED =
 export function PetitionWorkspace({
   drillDown = NO_DRILL_DOWN,
   openCode = null,
+  basemapAvailable = false,
 }: {
   /** Overview filter, read on the SERVER (`app/phan-anh/page.tsx`). */
   drillDown?: DrillDown<"citizen-reports">;
   /** `?id=<lookup code>` deep link, read on the server: the register opens that petition's drawer. */
   openCode?: string | null;
+  /** `basemapConfigured()`, decided on the server page: the petition maps draw only when `true`. */
+  basemapAvailable?: boolean;
 }) {
   const phien = usePhien();
   // FAIL CLOSED: an unread or failed session holds no key (rule 1, forbidden #1).
@@ -71,6 +74,7 @@ export function PetitionWorkspace({
             drillDown={drillDown}
             reloadSignal={bookings}
             openCode={openCode}
+            basemapAvailable={basemapAvailable}
           />
           <TraCuuPhieu />
         </div>
