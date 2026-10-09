@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-import { BangLienHe, initialsOf } from "./bang-lien-he";
+import { BangLienHe } from "./bang-lien-he";
 import {
   CHIP_CHUA_HIEN,
   CHIP_DANG_HIEN,
@@ -13,7 +13,7 @@ import {
   NUT_THEM_MINI_APP,
 } from "./cong-khai";
 import { NHAN_XOA_DONG } from "./xoa-dong";
-import { CAU_THIEU_QUYEN, NUT_SUA_THONG_TIN } from "./nhan-danh-ba";
+import { CAU_THIEU_QUYEN, NUT_SUA_THONG_TIN, SELECT_PAGE_LABEL, selectRowLabel } from "./nhan-danh-ba";
 
 /**
  * KIỂM CÁI RA TỚI TRANG, KHÔNG CHỈ KIỂM QUYẾT ĐỊNH.
@@ -106,15 +106,87 @@ describe("bảng danh bạ — cái ra tới trang", () => {
     expect(html).toContain("Di động cá nhân");
   });
 
-  it("KHÔNG có ô chọn dòng, KHÔNG có thanh hàng loạt; nút xoá ẩn khi không truyền `onXoa`", () => {
-    // Công khai nhiều người (chốt 30/09/2026) chọn người trong khung riêng, cạnh ô "đã hỏi ý" của
-    // từng người — không trong bảng này. Nút xoá đứng sau khoá riêng — xem khối dưới.
+  it("không truyền `selection` (không `content.update`) → KHÔNG có cột chọn (ca bị từ chối)", () => {
     const html = dungCK([canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })]);
-
     expect(html).not.toContain('type="checkbox"');
-    expect(html).not.toMatch(/đã chọn|Chọn tất cả|hàng loạt/i);
-    expect(html).not.toContain("Xoá khỏi danh bạ");
     expect(html).not.toContain("Khoá tài khoản");
+  });
+
+  it("có `selection` → cột chọn w-10: ô đầu bảng chọn cả trang, mỗi dòng một ô gọi tên người", () => {
+    const html = renderToStaticMarkup(
+      <BangLienHe
+        danhSach={[canBo(), canBo({ id: "b", full_name: "Trần Thị B" })]}
+        traBoPhan={TRA_XONG}
+        onSua={() => undefined}
+        selection={{ selectedIds: new Set(["b"]), onToggle: () => undefined, onTogglePage: () => undefined }}
+      />,
+    );
+    expect(html).toContain('<th scope="col" class="w-10">');
+    expect(html).toContain(`aria-label="${SELECT_PAGE_LABEL}"`);
+    expect(html).toMatch(new RegExp(`<input type="checkbox"[^>]*aria-label="${selectRowLabel("Nguyễn Văn A")}"`));
+    const b = new RegExp(`<input[^>]*aria-label="${selectRowLabel("Trần Thị B")}"[^>]*>`).exec(html)?.[0] ?? "";
+    expect(b).toContain('checked=""');
+    // Not every row ticked → the page box is not ticked.
+    expect(new RegExp(`<input[^>]*aria-label="${SELECT_PAGE_LABEL}"[^>]*>`).exec(html)?.[0]).not.toContain("checked");
+  });
+
+  it("ô chọn chỉ gọi handler của màn — chọn KHÔNG công khai ai (#12)", () => {
+    const calls: string[] = [];
+    type El = { type: unknown; props: Record<string, unknown> };
+    const boxes: El[] = [];
+    const walk = (n: unknown) => {
+      if (Array.isArray(n)) return n.forEach(walk);
+      if (typeof n !== "object" || n === null || !("props" in n)) return;
+      const el = n as El;
+      if (el.props.type === "checkbox") boxes.push(el);
+      walk(el.props.children);
+    };
+    walk(
+      BangLienHe({
+        danhSach: [canBo()],
+        traBoPhan: TRA_XONG,
+        onSua: () => undefined,
+        congKhai: { onThem: () => calls.push("publish"), onRut: () => calls.push("withdraw") },
+        selection: {
+          selectedIds: new Set(),
+          onToggle: (cb, on) => calls.push(`row:${cb.id}:${on}`),
+          onTogglePage: (on) => calls.push(`page:${on}`),
+        },
+      }),
+    );
+    expect(boxes).toHaveLength(2);
+    (boxes[0]!.props.onChange as (e: unknown) => void)({ target: { checked: true } });
+    (boxes[1]!.props.onChange as (e: unknown) => void)({ target: { checked: true } });
+    expect(calls).toEqual(["page:true", `row:${canBo().id}:true`]);
+  });
+
+  it("không còn cột Ảnh đại diện (bản mẫu không có) và không còn thẻ dưới 768px — một bảng ở mọi bề rộng", () => {
+    const html = dung([canBo()]);
+    expect(html).not.toContain("Ảnh đại diện");
+    expect(html).not.toContain("data-pending");
+    expect(html).not.toContain("<ul");
+  });
+
+  it("tên là nút mở hộp sửa, thư điện tử nằm dưới tên", () => {
+    const calls: string[] = [];
+    type El = { type: unknown; props: Record<string, unknown> };
+    const found: El[] = [];
+    const walk = (n: unknown) => {
+      if (Array.isArray(n)) return n.forEach(walk);
+      if (typeof n !== "object" || n === null || !("props" in n)) return;
+      const el = n as El;
+      if (el.type === "button" && el.props.children === "Nguyễn Văn A") found.push(el);
+      walk(el.props.children);
+    };
+    walk(BangLienHe({ danhSach: [canBo()], traBoPhan: TRA_XONG, onSua: (cb) => calls.push(cb.id) }));
+    expect(found).toHaveLength(1);
+    (found[0]!.props.onClick as () => void)();
+    expect(calls).toEqual([canBo().id]);
+    expect(dung([canBo()])).toMatch(/Nguyễn Văn A<\/button><div class="text-ink-muted text-\[11px\] font-normal">nva@demo.invalid<\/div>/);
+  });
+
+  it("khối / đơn vị là chữ thường, không huy hiệu", () => {
+    expect(dung([canBo()])).toContain('<td class="text-ink-muted text-[12px]">THƯỜNG TRỰC ĐẢNG UỶ</td>');
   });
 
   it("nút sửa mang TÊN NGƯỜI trong aria-label, không chỉ một nhãn chung", () => {
@@ -143,25 +215,20 @@ describe("bảng danh bạ — cái ra tới trang", () => {
 describe("cột Trên Mini App, dòng phụ Có Zalo, và hai nút theo dòng", () => {
   it("cột 'Trên Mini App' với hai chip, nguyên văn đặc tả §4", () => {
     const html = dung([canBo(), canBo({ id: "b", full_name: "Trần Thị B", published: true })]);
-    expect(html).toContain(`<th scope="col">${COT_MINI_APP}</th>`);
+    expect(html).toContain(`<th scope="col" class="w-36 text-center">${COT_MINI_APP}</th>`);
     expect(html).toContain(CHIP_CHUA_HIEN);
     expect(html).toContain(CHIP_DANG_HIEN);
   });
 
-  it("người đang hiện có dòng 'Đồng ý ghi lúc dd/mm/yyyy hh:mm' — giờ Việt Nam", () => {
-    const html = dung([
-      canBo({ published: true, consent_recorded_at: "2026-09-24T07:05:00Z" }),
-    ]);
-    expect(html).toContain("Đồng ý ghi lúc 24/09/2026 14:05");
-  });
-
-  it("người chưa hiện KHÔNG có dòng đồng ý nào", () => {
-    expect(dung([canBo()])).not.toContain("Đồng ý ghi lúc");
+  it("người đang hiện KHÔNG còn dòng 'Đồng ý ghi lúc …' (bản mẫu không có); dòng nền bg-leaf/4", () => {
+    const html = dung([canBo({ published: true, consent_recorded_at: "2026-09-24T07:05:00Z" }), canBo({ id: "b" })]);
+    expect(html).not.toContain("Đồng ý ghi lúc");
+    expect(html.match(/<tr class="bg-leaf\/4">/g)).toHaveLength(1);
   });
 
   it("'Có Zalo' là dòng phụ dưới số di động, chỉ khi `has_zalo`", () => {
     expect(dung([canBo({ has_zalo: true })])).toMatch(
-      /0900000001<span class="dong-phu">Có Zalo<\/span>/,
+      /0900000001<div class="text-brand text-\[11px\]">Có Zalo<\/div>/,
     );
     expect(dung([canBo()])).not.toContain("Có Zalo");
   });
@@ -220,9 +287,9 @@ describe("nút 🗑 xoá dòng nhập trùng", () => {
 });
 
 /**
- * THE DESKTOP ROW BUTTONS — the prototype's three outline icon buttons (06/10/2026, ADR 0068 lần 5):
- * Mini App (add OR withdraw), edit, delete, each present only with its key. Read from the `<table>` only:
- * the phone cards below carry the same labels.
+ * THE ROW BUTTONS — the prototype's three outline icon buttons (06/10/2026, ADR 0068 lần 5): Mini App
+ * (add OR withdraw), edit, delete, each present only with its key. The name button carries no
+ * `aria-label` (its text is its name), so the label list below is the icon buttons alone.
  */
 describe("nút trên dòng của bảng — theo đúng khoá của phiên", () => {
   const tableOf = (html: string) => html.slice(html.indexOf("<table"), html.indexOf("</table>"));
@@ -278,16 +345,6 @@ describe("nút trên dòng của bảng — theo đúng khoá của phiên", () 
     expect(found).toHaveLength(1);
     (found[0]!.props.onClick as () => void)();
     expect(calls).toEqual([`them:${canBo().id}`]);
-  });
-});
-
-describe("chữ tắt ảnh đại diện", () => {
-  it("hai chữ: họ cuối + tên; một từ thì một chữ; dạng tách dấu vẫn ra một chữ", () => {
-    expect(initialsOf("Nguyễn Văn An")).toBe("VA");
-    expect(initialsOf("  Lê   Văn  Cường ")).toBe("VC");
-    expect(initialsOf("admin")).toBe("A");
-    expect(initialsOf("Nguyễn Thị Ấn".normalize("NFD"))).toBe("TẤ");
-    expect(initialsOf("")).toBe("");
   });
 });
 

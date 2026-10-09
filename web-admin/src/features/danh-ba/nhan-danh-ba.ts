@@ -1,36 +1,38 @@
 /**
- * Câu chữ và phép quyết định của màn **Danh bạ cán bộ** (`docs/ui-ux/12-danh-ba-can-bo.md`).
+ * Câu chữ và phép quyết định của màn **Danh bạ cán bộ** (`docs/ui-ux/12-danh-ba-can-bo.md`, bản mẫu
+ * `StaffDirectoryWorkspace.tsx`).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * TÁCH KHỎI COMPONENT VÌ MỘT LÝ DO ĐÃ ĐO ĐƯỢC, không phải vì gọn: một quyết định nằm trong
  * module thuần kiểm được bằng một phép so chuỗi, còn cùng quyết định ấy viết thẳng trong JSX thì
  * chỉ kiểm được bằng cách kết xuất cả cây. Cùng khuôn với `components/danh-ba/nhan-ghi-danh-ba.ts`.
  *
- * TỪNG PHẦN ĐẶC TẢ CHƯA DỰNG ĐỀU CÓ LÝ DO Ở ĐÂY — `PHAN_CHUA_DUNG` là mô tả sau dấu "?" của
- * phần ấy, đặt ngay trên màn hình chứ không giấu trong chú thích. Một cán bộ mở `/danh-ba` và
- * không thấy một nút mà đặc tả vẽ sẽ kết luận hệ thống hỏng, rồi gọi lên tỉnh; thứ thật sự thiếu
- * thường là một tuyến API hoặc một quyết định của khách.
+ * TỪNG PHẦN BẢN MẪU CHƯA DỰNG ĐỀU CÓ LÝ DO Ở ĐÂY — `PHAN_CHUA_DUNG` là mô tả sau dấu "?" của
+ * phần ấy, đặt ngay trên màn hình chứ không giấu trong chú thích.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
 import type { KetQua } from "@/lib/api/goi";
+import type { StaffTallies } from "@/lib/api/can-bo";
 
 /* ---- đầu trang ------------------------------------------------------------------------------ */
 
-/** Tiêu đề trang — nguyên văn `docs/ui-ux/12-danh-ba-can-bo.md:3`. */
+/** Tiêu đề trang — nguyên văn bản mẫu. */
 export const TIEU_DE_TRANG = "Danh bạ cán bộ";
 
 /**
- * Câu mô tả dưới tiêu đề — MỘT DÒNG (đặc tả giao diện 02/10/2026 §5: dòng phụ ≤ ~80 ký tự).
+ * Câu mô tả dưới tiêu đề — NGUYÊN VĂN bản mẫu (`StaffDirectoryWorkspace.tsx:149-152`).
  *
- * NỬA ĐẦU LÀ NGUYÊN VĂN ĐẶC TẢ, NỬA SAU THÌ KHÔNG — VÀ ĐÓ LÀ CHỦ Ý. Đặc tả (§1, §2) viết:
- * *"Toàn bộ cán bộ của xã. Chọn người cần công khai rồi bấm 'Thêm vào danh bạ Mini App' để bà con
- * gọi được."* Câu dưới nhấn vào điều #12 giữ nguyên kể cả ở khung "Công khai nhiều người" (chốt
- * 30/09/2026): sự đồng ý là của TỪNG người, sau khi hỏi ý — chọn nhiều người không thay được việc ấy.
- * Rút gọn khi làm mới giao diện (ADR 0068) nhưng giữ đủ ba ý ấy: hỏi ý, từng người, đồng ý.
+ * "Chọn người cần công khai rồi bấm …" nay đúng với màn hình: bảng có cột chọn và thanh hàng loạt.
+ * Sự đồng ý của TỪNG người (#12, Nghị định 13) vẫn được hỏi — nút ấy mở hộp xác nhận cho từng người
+ * đã chọn (`bulk-consent-form.tsx`), không công khai thẳng.
  */
 export const MO_TA_TRANG =
-  "Toàn bộ cán bộ của xã. Chỉ công khai số lên Mini App khi đã hỏi ý và từng người đồng ý.";
+  "Toàn bộ cán bộ của xã. Chọn người cần công khai rồi bấm “Thêm vào danh bạ Mini App” để bà con gọi được.";
+
+/** Hai nút bên phải đầu trang — nguyên văn bản mẫu. Mở hộp thoại ngay tại tab (chủ đầu tư chốt 09/10/2026). */
+export const IMPORT_BUTTON = "Nhập từ Excel";
+export const ADD_BUTTON = "Thêm cán bộ";
 
 /**
  * Câu hiện khi tài khoản thiếu `admin.user`.
@@ -44,26 +46,21 @@ export const CAU_THIEU_QUYEN =
 
 /* ---- thẻ KPI -------------------------------------------------------------------------------- */
 
-/** Nhãn thẻ KPI duy nhất dựng được — đặc tả §2 viết `SỐ KHỐI / ĐƠN VỊ`. */
+/** Nhãn ba thẻ — nguyên văn bản mẫu. */
+export const KPI_TOTAL = "Tổng số cán bộ";
+export const KPI_PUBLISHED = "Đang hiện trên Mini App";
 export const NHAN_SO_KHOI = "Số khối / đơn vị";
 
 /**
- * Trạng thái của con số "số khối / đơn vị". BA pha, không hai.
- *
- * "Chưa đọc xong" và "đọc xong, được 0" là hai sự thật khác nhau về một xã: cái sau nghĩa là sơ
- * đồ tổ chức còn trống và người quản trị phải làm gì đó.
+ * Trạng thái của một con số đếm. BA pha, không hai: "chưa đọc xong" và "đọc xong, được 0" là hai
+ * sự thật khác nhau về một xã.
  */
 export type SoKhoi =
   | { pha: "dangDoc" }
   | { pha: "loi"; thongBao: string }
   | { pha: "xong"; so: number };
 
-/**
- * Đếm số khối / đơn vị từ kết quả đọc `GET /api/v1/org-units`.
- *
- * ĐẾM ĐƯỢC VÌ TUYẾN ẤY TRẢ NGUYÊN DANH SÁCH, KHÔNG PHÂN TRANG (`lib/api/danh-muc.ts`). Hai thẻ KPI
- * kia thì KHÔNG đếm được như thế — xem `PHAN_CHUA_DUNG`.
- */
+/** Đếm số mục của `GET /api/v1/org-units` — tuyến ấy trả nguyên danh sách, không phân trang. */
 export function demSoKhoi(kq: KetQua<{ items: readonly unknown[] }> | null): SoKhoi {
   if (kq === null) return { pha: "dangDoc" };
   if (!kq.ok) return { pha: "loi", thongBao: kq.thongBao };
@@ -74,7 +71,7 @@ export function demSoKhoi(kq: KetQua<{ items: readonly unknown[] }> | null): SoK
  * Chữ hiện trong thẻ KPI.
  *
  * KHÔNG BAO GIỜ TRẢ CHUỖI RỖNG, và không bao giờ trả `0` cho ca chưa đọc xong: một thẻ hiện số 0
- * trong lúc còn đang đọc là một câu khẳng định sai về sơ đồ tổ chức của một cơ quan nhà nước.
+ * trong lúc còn đang đọc là một câu khẳng định sai về một cơ quan nhà nước.
  */
 export function nhanSoKhoi(so: SoKhoi): string {
   switch (so.pha) {
@@ -87,56 +84,83 @@ export function nhanSoKhoi(so: SoKhoi): string {
   }
 }
 
-/**
- * Chữ của huy hiệu đếm khối / đơn vị ở đầu trang (đặc tả giao diện §8.1: "N khối / đơn vị").
- *
- * CHỈ GHÉP CON SỐ KHI ĐÃ ĐẾM XONG. Khi còn đọc hay đọc hỏng, huy hiệu nói rõ nhãn và trạng thái
- * (`nhanSoKhoi`) — "đang đếm… khối / đơn vị" là một câu sai ngữ pháp, còn "0 khối / đơn vị" lúc chưa
- * đọc xong là một câu sai sự thật.
- */
+/** Huy hiệu "N khối / đơn vị" — chỉ ghép con số khi đã đếm xong. */
 export function unitCountText(so: SoKhoi): string {
   return so.pha === "xong" ? `${so.so} khối / đơn vị` : `${NHAN_SO_KHOI}: ${nhanSoKhoi(so)}`;
 }
 
-/* ---- nút đầu ngăn dẫn sang màn Người dùng (06/10/2026, bản mẫu) ----------------------------- */
-
 /**
- * The prototype's two header buttons, verbatim. Here they lead to `/nguoi-dung`, where the staff import
- * (ADR 0059 §1) and adding a staff record already live — see `danh-ba-lien-he.tsx`.
+ * The three cards' figures, from ONE read of `GET /api/v1/staff-counts` (`getStaffTallies`). `null` =
+ * not read yet. Each card goes through `nhanSoKhoi`, so a card never shows `0` while still counting.
+ *
+ * "SỐ KHỐI / ĐƠN VỊ" COUNTS THE DEPARTMENTS THAT HAVE STAFF — the entries of `departments`, which
+ * holds exactly the departments with somebody in them. That is the prototype's figure (the number of
+ * groups in its directory), not the size of the org chart.
  */
-export const IMPORT_LINK = "Nhập từ Excel";
-export const ADD_LINK = "Thêm cán bộ";
-export const STAFF_ADMIN_PATH = "/nguoi-dung";
-/** Tooltip of both: says where the press goes, so nobody expects a dialog here. */
-export const OPENS_STAFF_ADMIN = "Mở màn Người dùng — nơi thêm cán bộ và nhập từ Excel";
-
-/** Prototype's line under the table. Counts the rows ON THIS PAGE: the directory route returns no total. */
-export function shownCountText(n: number): string {
-  return `Hiển thị ${n} cán bộ trên trang này.`;
+export function tallyFigures(t: KetQua<StaffTallies> | null): {
+  readonly total: string;
+  readonly published: string;
+  readonly departments: string;
+} {
+  const pick = (f: (x: StaffTallies) => number): string =>
+    nhanSoKhoi(
+      t === null ? { pha: "dangDoc" } : t.ok ? { pha: "xong", so: f(t.duLieu) } : { pha: "loi", thongBao: t.thongBao },
+    );
+  return {
+    total: pick((x) => x.total),
+    published: pick((x) => x.published),
+    departments: pick((x) => x.departments.length),
+  };
 }
 
-/* ---- trạng thái của vùng danh sách (đặc tả giao diện v2 §8b) --------------------------------- */
+/**
+ * How many people the list shows under the filters in force, WITHOUT search words — derived from
+ * the tallies, never from the page length (the route is paginated). A department absent from
+ * `departments` has nobody in it: 0/0 (`staff_counts.go`). `congKhai` `false` = "Chưa hiện".
+ */
+export function filteredTotal(t: StaffTallies, unitId: string, published: boolean | null): number {
+  const scope =
+    unitId === ""
+      ? { total: t.total, published: t.published }
+      : (t.departments.find((d) => d.id === unitId) ?? { total: 0, published: 0 });
+  if (published === true) return scope.published;
+  if (published === false) return scope.total - scope.published;
+  return scope.total;
+}
+
+/**
+ * One option of the department filter: "Tên (đang hiện/tổng)", the prototype's wording. Without
+ * tallies (still reading, or unreadable) the name alone — never a guessed "(0/0)".
+ */
+export function departmentOptionText(name: string, id: string, t: StaffTallies | null): string {
+  if (t === null) return name;
+  const d = t.departments.find((x) => x.id === id);
+  return `${name} (${d?.published ?? 0}/${d?.total ?? 0})`;
+}
+
+/** The line under the table — nguyên văn bản mẫu. `n` is the total for the filter, not the page. */
+export function shownCountText(n: number): string {
+  return `Hiển thị ${n} cán bộ.`;
+}
+
+/* ---- trạng thái của vùng danh sách ---------------------------------------------------------- */
 
 /** Tiêu đề khi đọc danh sách hỏng; câu bên dưới là câu NGUYÊN VĂN của máy chủ. */
 export const LOAD_FAILED_TITLE = "Chưa tải được danh sách";
 /** Nút đọc lại đúng trang đang xem, cùng bộ lọc — cơ chế đọc lại sau mỗi lần ghi. */
 export const RELOAD = "Tải lại";
-/** Tiêu đề khi đang tìm / lọc mà không ai khớp; câu gợi ý bên dưới là `KHONG_KHOP_LOC`. */
-export const NO_MATCH_TITLE = "Không có cán bộ phù hợp";
 
-/** Hai nút phân trang (đặc tả giao diện §8.1: "‹ Trước / Sau ›"); vùng `nav` đã nói là phân trang. */
+/** Hai nút phân trang; vùng `nav` đã nói là phân trang. */
 export const PAGE_PREVIOUS = "Trước";
 export const PAGE_NEXT = "Sau";
 
 /* ---- bảng ----------------------------------------------------------------------------------- */
 
 /**
- * Nhãn cột — mỗi nhãn là đúng chữ của đặc tả §4, TRỪ cột điện thoại.
+ * Nhãn cột — chữ của bản mẫu, TRỪ cột điện thoại.
  *
- * ĐẶC TẢ CÓ MỘT CỘT `Di động`; Ở ĐÂY CÓ HAI, VÀ NHÃN NÓI RÕ LOẠI SỐ. Câu mở #16 (chốt 22/09/2026):
- * máy bàn cơ quan là THÔNG TIN CÔNG VỤ, di động cá nhân là DỮ LIỆU CÁ NHÂN theo Nghị định 13. Hai
- * địa vị pháp lý khác nhau nghĩa là hai luật che, hai luật xuất Excel, hai luật công khai ra Mini
- * App — và một nhãn trung tính là chỗ người sắp bấm nút xuất không biết mình đang đụng loại nào.
+ * BẢN MẪU CÓ MỘT CỘT `Di động`; Ở ĐÂY CÓ HAI, VÀ NHÃN NÓI RÕ LOẠI SỐ. Câu mở #16 (chốt 22/09/2026):
+ * máy bàn cơ quan là THÔNG TIN CÔNG VỤ, di động cá nhân là DỮ LIỆU CÁ NHÂN theo Nghị định 13.
  */
 export const COT_HO_TEN = "Họ và tên";
 export const COT_CHUC_VU = "Chức vụ";
@@ -145,11 +169,8 @@ export const COT_MAY_BAN = "Máy bàn cơ quan";
 export const COT_DI_DONG = "Di động cá nhân";
 
 /**
- * Nhãn nút sửa — chứa NGUYÊN VĂN chuỗi `15-phu-luc-giao-dien-chung.md §8` yêu cầu giữ.
- *
- * `ariaSua` GẮN THÊM TÊN NGƯỜI vào sau chuỗi ấy chứ không thay nó. Hai mươi dòng cho ra hai mươi
- * nút đọc lên giống hệt nhau là danh sách mà người dùng trình đọc màn hình không chọn đúng được
- * dòng nào — và ở đây chọn nhầm dòng nghĩa là sửa hồ sơ của một cán bộ khác.
+ * Nhãn nút sửa. `ariaSua` GẮN THÊM TÊN NGƯỜI: hai mươi nút đọc lên giống hệt nhau là danh sách mà
+ * người dùng trình đọc màn hình không chọn đúng được dòng nào.
  */
 export const NUT_SUA_THONG_TIN = "Sửa thông tin cán bộ";
 
@@ -157,98 +178,54 @@ export function ariaSua(hoTen: string): string {
   return `${NUT_SUA_THONG_TIN}: ${hoTen}`;
 }
 
-/**
- * Chữ HIỆN của nút sửa trên thẻ điện thoại. Nhãn trợ năng vẫn là `ariaSua` — và vì chữ hiện là
- * phần ĐẦU của nhãn ấy, người dùng điều khiển bằng giọng nói nói "Sửa" là trúng nút (WCAG 2.5.3).
- */
-export const EDIT_SHORT = "Sửa";
-
-/** Nhãn trợ năng (và `title`) của nút "⋯" trên một dòng — gọi tên người, cùng lý do với `ariaSua`. */
-export function ariaMoreActions(hoTen: string): string {
-  return `Thao tác khác: ${hoTen}`;
+/** The row's selection box, and the page's — each names what it selects, for the reason above. */
+export function selectRowLabel(fullName: string): string {
+  return `Chọn ${fullName}`;
 }
+export const SELECT_PAGE_LABEL = "Chọn tất cả cán bộ trên trang này";
 
 /**
- * Câu cho một danh bạ rỗng.
- *
- * TRẠNG THÁI RỖNG, KHÔNG PHẢI TRẠNG THÁI LỖI (`15-phu-luc §6`): một xã vừa onboard có danh bạ
- * rỗng thật, và máy chủ trả `items: []` chứ không bao giờ trả `null`.
+ * Câu cho một danh bạ rỗng — NGUYÊN VĂN bản mẫu (`StaffDirectoryWorkspace.tsx:283-284`). Nút "Nhập
+ * từ Excel" nó nhắc tới nằm ngay trên đầu tab.
  */
 export const DANH_BA_RONG =
-  "Đơn vị chưa có cán bộ nào trong danh bạ. Khi cán bộ được thêm vào, danh sách sẽ hiện ở đây.";
+  "Chưa có cán bộ nào. Tải mẫu Excel ở nút “Nhập từ Excel”, điền theo bảng danh bạ xã đang dùng rồi tải lên.";
 
 /**
  * Câu cho một danh sách rỗng KHI ĐANG TÌM HOẶC LỌC.
  *
- * KHÁC `DANH_BA_RONG`, VÀ PHẢI KHÁC: "đơn vị chưa có cán bộ nào" in ra dưới một ô tìm vừa gõ sai
- * chính tả là một câu khẳng định sai về cả cơ quan. Câu này nói đúng điều đã xảy ra — không ai khớp
- * điều kiện — và KHÔNG nhắc lại chữ đã tìm (thường là họ tên hoặc số điện thoại).
+ * KHÁC `DANH_BA_RONG`, VÀ PHẢI KHÁC: "chưa có cán bộ nào" in ra dưới một ô tìm vừa gõ sai chính tả là
+ * một câu khẳng định sai về cả cơ quan. Câu này KHÔNG nhắc lại chữ đã tìm.
  */
 export const KHONG_KHOP_LOC =
   "Không có cán bộ nào khớp điều kiện tìm kiếm hoặc bộ lọc đang chọn. Thử bỏ bớt điều kiện.";
 
-/**
- * Câu nói rõ số di động ở màn này KHÔNG bị che, và vì sao.
- *
- * ĐÂY LÀ QUYẾT ĐỊNH #11, CHỐT 22/09/2026: không che trong nội bộ xã — cán bộ cùng xã cần gọi nhau
- * để làm việc, che thì họ truyền số qua kênh riêng và hệ thống mất cả vết lẫn quyền kiểm soát.
- * Phạm vi vẫn đóng chặt vì kho buộc `tenant_id`. Quyết định ấy CHỈ nói về màn hình nội bộ: bản
- * xuất Excel và mọi đường ra ngoài cơ quan VẪN CHE (luật 3, bất biến 4).
- *
- * Câu này phải có mặt trên màn hình vì người đọc cần biết mình đang nhìn dữ liệu cá nhân chưa che
- * của đồng nghiệp — không phải một bản đã che sẵn mà họ được phép chụp lại và gửi đi.
- */
-export const GHI_CHU_SO_DIEN_THOAI =
-  "Số di động cá nhân hiện đầy đủ cho cán bộ trong cùng đơn vị để liên hệ công việc. Đây là dữ " +
-  "liệu cá nhân theo Nghị định 13/2023/NĐ-CP: không sao chép ra ngoài cơ quan và không công khai " +
-  "khi chưa có sự đồng ý của chính người đó.";
-
-/* ---- những phần đặc tả vẽ mà màn này KHÔNG dựng --------------------------------------------- */
+/* ---- những phần bản mẫu vẽ mà màn này KHÔNG dựng ------------------------------------------- */
 
 /**
- * Một mục của danh sách "đặc tả có, ở đây không". `viSao` phải nói cả CÁI GÌ MỞ KHOÁ nó.
+ * Một mục của danh sách "bản mẫu có, ở đây không". `viSao` phải nói cả CÁI GÌ MỞ KHOÁ nó.
  *
  * CÙNG TÊN HẰNG, CÙNG HAI KHOÁ `ten` / `viSao` như các màn khác, vì `tools/tien_do_san_pham.py` đếm
- * các dòng `ten: "` NẰM TRONG khối khai báo `PHAN_CHUA_DUNG` (tới dấu `];` đầu dòng). Đặt tên khác là
- * báo cáo tiến độ in "không khai" trong khi màn vẫn hiện đủ các dấu "?".
+ * các dòng `ten: "` NẰM TRONG khối khai báo `PHAN_CHUA_DUNG` (tới dấu `];` đầu dòng).
  */
 export type PhanChuaDung = { readonly ten: string; readonly viSao: string };
 
 /**
- * Những phần đặc tả vẽ mà hợp đồng chưa cho phép dựng.
+ * Những phần bản mẫu vẽ mà hợp đồng chưa cho phép dựng. Mỗi mục ra tới màn hình ở đúng chỗ bản mẫu
+ * đặt nó (ADR 0068 §14), là control nó sẽ là, bị vô hiệu, mang dấu "?". Dựng xong một phần thì XOÁ
+ * dòng của nó ở đây.
  *
- * MỖI MỤC RA TỚI MÀN HÌNH Ở ĐÚNG CHỖ ĐẶC TẢ ĐẶT NÓ (ADR 0068 §14): hai thẻ KPI ở đầu màn
- * (`pending-staff-kpis.tsx`), cột Ảnh đại diện trong bảng (`bang-lien-he.tsx`) — mỗi chỗ là control nó
- * sẽ là, bị vô hiệu, mang dấu "?"; bấm "?" đọc đúng mục ở đây. Khối gập "N phần chưa mở" cuối màn đã
- * bỏ. Dựng xong một phần thì XOÁ dòng của nó ở đây — một dòng "chưa mở" cho thứ đã mở là một câu sai
- * trên màn hình.
- *
- * KHÔNG DÒNG NÀO Ở ĐÂY LÀ "CHƯA LÀM TỚI": mỗi dòng thiếu một tuyến API hoặc một trường trong hợp đồng.
- * "Nhập từ Excel" đã ra khỏi danh sách: nhập cán bộ từ Excel đã dựng ở Cấu hình (ADR 0059).
+ * Ba mục cũ đã ra khỏi danh sách (09/10/2026): hai thẻ KPI nay đọc `GET /api/v1/staff-counts`, và
+ * cột / ô Ảnh đại diện bỏ hẳn vì bản mẫu không có.
  */
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  // The directory route is paginated and deliberately returns no total. Counting the rows of the open
-  // page and calling it the total would report a figure nobody computed.
+  // No bulk soft-delete route: the server deletes one staff row per call, each with its own reason
+  // (#10, rule 7). A loop of single deletes would record ONE reason for many archival records.
   {
-    ten: "Tổng số cán bộ",
+    ten: "Xoá đã chọn",
     viSao:
-      "Danh bạ được tải theo từng trang và hệ thống chưa đếm tổng số cán bộ, nên chưa có con số " +
-      "này. Lấy số dòng của trang đang mở làm tổng sẽ ra một con số sai.",
-  },
-  // No route returns how many staff are shown on the Mini App, commune-wide or per block — which is
-  // also why the block filter shows block names only.
-  {
-    ten: "Đang hiện trên Mini App",
-    viSao:
-      "Hệ thống chưa đếm số cán bộ đang hiện trên Mini App, của cả xã lẫn của từng khối. Muốn biết " +
-      "ai đang hiện, dùng bộ lọc “Đang hiện trên Mini App”.",
-  },
-  // The staff record has no photo field, and there is no upload purpose / route for a staff photo.
-  {
-    ten: "Ảnh đại diện",
-    viSao:
-      "Hồ sơ cán bộ chưa lưu được ảnh, nên bảng và biểu mẫu chưa có ảnh. Danh bạ hiện chữ cái đầu " +
-      "của họ tên thay cho ảnh.",
+      "Hệ thống chưa có cách xoá nhiều cán bộ trong một lần. Mỗi lần xoá cần một lý do riêng cho " +
+      "từng người, nên hãy xoá từng người bằng nút thùng rác trên dòng của người đó.",
   },
 ];
 

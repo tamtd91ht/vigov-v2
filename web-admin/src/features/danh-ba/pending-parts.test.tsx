@@ -7,16 +7,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
-import type { BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
-import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-import { BieuMauGhiCanBo } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
-import { banTuCanBo } from "@/components/danh-ba/nhan-ghi-danh-ba";
-
-import { BangLienHe } from "./bang-lien-he";
+import { BULK_ADD_BUTTON, BULK_DELETE_BUTTON, BULK_WITHDRAW_BUTTON } from "./bulk-publication";
+import { SelectionBar } from "./danh-ba-lien-he";
 import { pendingPart, PHAN_CHUA_DUNG } from "./nhan-danh-ba";
-import { PendingStaffKpis } from "./pending-staff-kpis";
-import { StaffAvatarField } from "./staff-avatar-field";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -55,118 +49,59 @@ function marker(el: ParentNode, ten: string): HTMLButtonElement {
   return b;
 }
 
-const STAFF: identity_canBoTomTat = {
-  id: "01J00000000000000000000001",
-  code: "CB-00123",
-  full_name: "Nguyễn Văn A",
-  email: "nva@demo.invalid",
-  position: "Chuyên viên",
-  department_id: "",
-  role_id: "",
-  phone: "",
-  mobile: "0900000000",
-  has_account: false,
-  active: true,
-  last_login_at: null,
-  created_at: "2026-09-01T02:00:00Z",
-  has_zalo: false,
-  published: false,
-  display_order: null,
-  consent_recorded_at: null,
-};
+function bar(showDelete: boolean, handlers: { onAdd?: () => void; onWithdraw?: () => void } = {}) {
+  return (
+    <SelectionBar
+      count={3}
+      busy={false}
+      onAdd={handlers.onAdd ?? (() => undefined)}
+      onWithdraw={handlers.onWithdraw ?? (() => undefined)}
+      showDelete={showDelete}
+    />
+  );
+}
 
-const TRA: BangTraDanhMuc = { pha: "xong", ten: new Map() };
-
-describe("Danh bạ — unbuilt parts at their spec position (ADR 0068 §14)", () => {
-  it("two KPI cards show '—', never a figure, each with its own '?'", () => {
-    const el = mount(<PendingStaffKpis />);
-    expect(el.textContent).toContain("Tổng số cán bộ");
-    expect(el.textContent).toContain("Đang hiện trên Mini App");
-    expect([...el.querySelectorAll("p")].filter((p) => p.textContent === "—")).toHaveLength(2);
-    expect(el.textContent).not.toMatch(/\d/);
-    marker(el, "Tổng số cán bộ");
-    marker(el, "Đang hiện trên Mini App");
+describe("Danh bạ — the selection bar's unbuilt part at its prototype position (ADR 0068 §14)", () => {
+  it("only one entry is left, and it is 'Xoá đã chọn' — the KPI and avatar entries are gone", () => {
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([BULK_DELETE_BUTTON]);
   });
 
-  it("the table has an 'Ảnh đại diện' column header with '?' and a '—' cell per row", () => {
-    const el = mount(<BangLienHe danhSach={[STAFF]} traBoPhan={TRA} onSua={() => undefined} />);
-    const th = [...el.querySelectorAll("th")].find((h) => h.textContent?.includes("Ảnh đại diện"));
-    expect(th?.getAttribute("scope")).toBe("col");
-    marker(th!, "Ảnh đại diện");
-    expect(el.querySelector("td[data-pending]")?.textContent).toContain("—");
+  it("the bar reads 'Đã chọn n người', then Thêm · Rút · the disabled 'Xoá đã chọn' with its '?'", () => {
+    const el = mount(bar(true));
+    expect(el.textContent).toContain("Đã chọn 3 người");
+    const labels = [...el.querySelectorAll("button")].map((b) => b.textContent?.trim()).filter((t) => t !== "?");
+    expect(labels).toEqual([BULK_ADD_BUTTON, BULK_WITHDRAW_BUTTON, BULK_DELETE_BUTTON]);
+    const del = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes(BULK_DELETE_BUTTON))!;
+    expect(del.disabled).toBe(true);
+    marker(el, BULK_DELETE_BUTTON);
   });
 
-  it("pressing '?' opens the entry's description and calls no server", () => {
+  it("pressing '?' opens the description and calls no server; the disabled button does nothing", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
-    const el = mount(<PendingStaffKpis />);
-    act(() => marker(el, "Tổng số cán bộ").click());
-    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(
-      pendingPart("Tổng số cán bộ").viSao,
-    );
+    const el = mount(bar(true));
+    const del = [...el.querySelectorAll("button")].find((b) => b.textContent?.includes(BULK_DELETE_BUTTON))!;
+    act(() => del.click());
+    act(() => marker(el, BULK_DELETE_BUTTON).click());
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(pendingPart(BULK_DELETE_BUTTON).viSao);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("the staff form has the 'Ảnh đại diện' file field after 'Có Zalo': disabled, no name, '?', no fetch", () => {
+  it("without `admin.user.delete` the pending delete is not drawn at all (denied case)", () => {
+    const el = mount(bar(false));
+    expect(el.textContent).not.toContain(BULK_DELETE_BUTTON);
+    expect(el.querySelector(`button[aria-label="${pendingMarkerLabel(BULK_DELETE_BUTTON)}"]`)).toBeNull();
+  });
+
+  it("'Thêm vào danh bạ Mini App' and 'Rút khỏi danh bạ' call the screen's handlers — no route from the bar", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
-    const el = mount(
-      <BieuMauGhiCanBo
-        dangMo={{ kieu: "sua", canBo: STAFF }}
-        ban={banTuCanBo(STAFF)}
-        datBan={() => undefined}
-        vaiTroID=""
-        datVaiTroID={() => undefined}
-        boPhan={[]}
-        vaiTro={[]}
-        loiMayChu=""
-        dangGui={false}
-        onGui={() => undefined}
-        onHuy={() => undefined}
-        avatarField={<StaffAvatarField />}
-      />,
-    );
-    const file = el.querySelector<HTMLInputElement>('input[type="file"]')!;
-    expect(file.id).toBe("o-anh-dai-dien-can-bo");
-    expect(file.disabled).toBe(true);
-    expect(file.name).toBe("");
-    // Spec §5 order: after the Có Zalo checkbox.
-    const zalo = el.querySelector("#o-co-zalo-can-bo")!;
-    expect(zalo.compareDocumentPosition(file) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    // Nothing of it goes into the submitted form.
-    expect([...new FormData(el.querySelector("form")!).keys()]).not.toContain("o-anh-dai-dien-can-bo");
-
-    act(() => marker(el, "Ảnh đại diện").click());
-    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(pendingPart("Ảnh đại diện").viSao);
+    const calls: string[] = [];
+    const el = mount(bar(true, { onAdd: () => calls.push("add"), onWithdraw: () => calls.push("withdraw") }));
+    const byText = (t: string) => [...el.querySelectorAll("button")].find((b) => b.textContent?.trim() === t)!;
+    act(() => byText(BULK_ADD_BUTTON).click());
+    act(() => byText(BULK_WITHDRAW_BUTTON).click());
+    expect(calls).toEqual(["add", "withdraw"]);
     expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it("without the slot (Cấu hình's staff dialog) the form has no file field", () => {
-    const el = mount(
-      <BieuMauGhiCanBo
-        dangMo={{ kieu: "sua", canBo: STAFF }}
-        ban={banTuCanBo(STAFF)}
-        datBan={() => undefined}
-        vaiTroID=""
-        datVaiTroID={() => undefined}
-        boPhan={[]}
-        vaiTro={[]}
-        loiMayChu=""
-        dangGui={false}
-        onGui={() => undefined}
-        onHuy={() => undefined}
-      />,
-    );
-    expect(el.querySelector('input[type="file"]')).toBeNull();
-  });
-
-  it("every entry is drawn somewhere — none is a description with no '?' behind it", () => {
-    const html = mount(
-      <>
-        <PendingStaffKpis />
-        <BangLienHe danhSach={[STAFF]} traBoPhan={TRA} onSua={() => undefined} />
-      </>,
-    ).innerHTML;
-    for (const p of PHAN_CHUA_DUNG) expect(html).toContain(pendingMarkerLabel(p.ten));
   });
 });

@@ -2,10 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   CAU_THIEU_QUYEN,
+  DANH_BA_RONG,
+  KHONG_KHOP_LOC,
   PHAN_CHUA_DUNG,
   MO_TA_TRANG,
   demSoKhoi,
+  departmentOptionText,
+  filteredTotal,
   nhanSoKhoi,
+  shownCountText,
+  tallyFigures,
   unitCountText,
 } from "./nhan-danh-ba";
 
@@ -54,15 +60,54 @@ describe("huy hiệu số khối / đơn vị ở đầu trang", () => {
   });
 });
 
-describe("câu mô tả trang không hứa thứ màn hình không có", () => {
-  it("KHÔNG hứa thao tác chọn nhiều người — nói công khai làm cho TỪNG người", () => {
-    // Đặc tả §2 viết nguyên văn "Chọn người cần công khai rồi bấm 'Thêm vào danh bạ Mini App'".
-    // Kể cả khi đã có khung công khai nhiều người, câu đầu trang nói về sự đồng ý của TỪNG người.
-    expect(MO_TA_TRANG).not.toContain("Chọn người");
-    expect(MO_TA_TRANG).toContain("từng người");
-    expect(MO_TA_TRANG).toContain("đồng ý");
-    // Nửa đầu của đặc tả thì giữ: màn này đúng là toàn bộ cán bộ của xã.
-    expect(MO_TA_TRANG).toContain("Toàn bộ cán bộ của xã");
+describe("câu chữ của bản mẫu (StaffDirectoryWorkspace.tsx), nguyên văn", () => {
+  it("mô tả trang: chọn người rồi bấm 'Thêm vào danh bạ Mini App' — nay đúng với màn có cột chọn", () => {
+    expect(MO_TA_TRANG).toBe(
+      "Toàn bộ cán bộ của xã. Chọn người cần công khai rồi bấm “Thêm vào danh bạ Mini App” để bà con gọi được.",
+    );
+  });
+
+  it("danh bạ rỗng và rỗng-theo-bộ-lọc là HAI câu khác nhau", () => {
+    expect(DANH_BA_RONG).toBe(
+      "Chưa có cán bộ nào. Tải mẫu Excel ở nút “Nhập từ Excel”, điền theo bảng danh bạ xã đang dùng rồi tải lên.",
+    );
+    expect(KHONG_KHOP_LOC).not.toBe(DANH_BA_RONG);
+  });
+
+  it("dòng dưới bảng: 'Hiển thị n cán bộ.'", () => {
+    expect(shownCountText(37)).toBe("Hiển thị 37 cán bộ.");
+  });
+});
+
+describe("số liệu từ GET /api/v1/staff-counts", () => {
+  const T = {
+    total: 12,
+    published: 5,
+    departments: [
+      { id: "BP-A", total: 7, published: 4 },
+      { id: "BP-B", total: 3, published: 1 },
+    ],
+  };
+
+  it("ba thẻ: tổng, đang hiện, số khối CÓ người — chưa đọc / đọc hỏng thì KHÔNG phải số", () => {
+    expect(tallyFigures({ ok: true, duLieu: T })).toEqual({ total: "12", published: "5", departments: "2" });
+    for (const v of Object.values(tallyFigures(null))) expect(v).toBe("đang đếm…");
+    for (const v of Object.values(tallyFigures({ ok: false, thongBao: "x" }))) expect(v).not.toMatch(/\d/);
+  });
+
+  it("tổng theo bộ lọc (không chữ tìm): cả xã, theo khối, theo trạng thái; khối vắng mặt là 0", () => {
+    expect(filteredTotal(T, "", null)).toBe(12);
+    expect(filteredTotal(T, "", true)).toBe(5);
+    expect(filteredTotal(T, "", false)).toBe(7);
+    expect(filteredTotal(T, "BP-A", null)).toBe(7);
+    expect(filteredTotal(T, "BP-A", false)).toBe(3);
+    expect(filteredTotal(T, "BP-NONE", null)).toBe(0);
+  });
+
+  it("mục ô khối: 'Tên (đang hiện/tổng)'; chưa có số liệu thì chỉ tên, không đoán '(0/0)'", () => {
+    expect(departmentOptionText("Văn phòng", "BP-A", T)).toBe("Văn phòng (4/7)");
+    expect(departmentOptionText("Trạm y tế", "BP-NONE", T)).toBe("Trạm y tế (0/0)");
+    expect(departmentOptionText("Văn phòng", "BP-A", null)).toBe("Văn phòng");
   });
 });
 
@@ -98,13 +143,13 @@ describe("danh sách phần chưa mở", () => {
     }
   });
 
-  it("nêu đủ những thứ đặc tả vẽ mà hợp đồng hoặc khách chưa cho phép", () => {
+  it("chỉ còn 'Xoá đã chọn' — hai thẻ KPI đã đọc được số, Ảnh đại diện bỏ vì bản mẫu không có", () => {
     const tatCa = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
-    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Tổng số cán bộ", "Đang hiện trên Mini App", "Ảnh đại diện"]);
-    expect(tatCa).toContain("Mini App");
-    // Nhập cán bộ từ Excel ĐÃ dựng ở Cấu hình (ADR 0059) — một dòng "chưa mở" cho nó là câu sai.
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Xoá đã chọn"]);
+    expect(tatCa).toContain("lý do");
+    // Nhập cán bộ từ Excel ĐÃ dựng — một dòng "chưa mở" cho nó là câu sai.
     expect(tatCa).not.toMatch(/Excel/);
-    // Nút xoá dòng trùng ĐÃ dựng (TASK-03) — không còn dòng "chưa mở" nào nói về nó.
+    // Nút xoá MỘT dòng ĐÃ dựng — mục này chỉ nói về xoá NHIỀU người.
     expect(tatCa).not.toContain("Xoá khỏi danh bạ");
   });
 

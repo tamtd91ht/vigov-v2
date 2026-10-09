@@ -1,35 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 
-import Link from "next/link";
-import {
-  Building2,
-  ChevronLeft,
-  ChevronRight,
-  CircleCheck,
-  CloudOff,
-  Eye,
-  EyeOff,
-  List,
-  RotateCw,
-  Search,
-  SearchX,
-  Plus,
-  Send,
-  Upload,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, CloudOff, Plus, RotateCw, Search, Smartphone, Trash2, Upload } from "lucide-react";
+import { toast } from "sonner";
 
-import { BieuMauGhiCanBo, type MucChon } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
-import {
-  BAN_TRONG,
-  banTuCanBo,
-  daLuuHoSo,
-  thanSua,
-  type BanNhapCanBo,
-} from "@/components/danh-ba/nhan-ghi-danh-ba";
+import type { MucChon } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
+import { BAN_TRONG, banTuCanBo, khoaChongTrungMoi, thanSua, thanThem } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import type { BanNhapCanBo } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Field } from "@/components/ui/field";
+import { PendingButton } from "@/components/ui/pending-feature";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ConfigDialog } from "@/features/cau-hinh/config-dialog";
 import {
   coTrangTruoc,
   sangTrangSau,
@@ -39,57 +23,65 @@ import {
 import { bangTraTuKetQua, type BangTraDanhMuc } from "@/features/cau-hinh/tra-danh-muc";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import {
+  countStaffMatches,
   datCongKhaiCanBo,
   docTrangDanhBa,
+  getStaffTallies,
   publishStaffBulk,
   suaCanBo,
+  themCanBo,
   xoaCanBo,
+  type StaffTallies,
 } from "@/lib/api/can-bo";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { Card, CardFooter } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
-import { Field } from "@/components/ui/field";
-import { Notice } from "@/components/ui/notice";
-import { StatCard } from "@/components/ui/stat-card";
-import { cn } from "@/lib/cn";
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
+import type { KetQua } from "@/lib/api/goi";
 import type {
   identity_canBoTomTat,
   identity_danhSachBoPhanRa,
   page_Result_identity_canBoTomTat,
 } from "@/lib/api/schema.gen";
-import type { KetQua } from "@/lib/api/goi";
 
 import { BangLienHe } from "./bang-lien-he";
+import { BulkConsentForm, type BulkOutcome } from "./bulk-consent-form";
 import {
-  BULK_OPEN_BUTTON,
-  addSelected,
+  BULK_ADD_BUTTON,
+  BULK_DELETE_BUTTON,
+  BULK_NOTHING_TO_WITHDRAW,
+  BULK_REPLAYED,
+  BULK_TITLE,
+  BULK_WITHDRAW_BUTTON,
+  bulkAddedToast,
   bulkRequest,
   bulkResultLines,
-  removeSelected,
+  bulkWithdrawFailedText,
+  bulkWithdrawnToast,
+  consentSelection,
+  publishedCount,
+  selectedCountText,
   setConsent,
+  togglePage,
+  toggleRow,
   type BulkSelection,
 } from "./bulk-publication";
-import { BulkPublicationPanel, type BulkOutcome } from "./bulk-publication-panel";
 import {
   banCongKhaiTu,
-  daCongKhai,
-  daRut,
   duocCongKhaiTheoPhien,
+  tieuDeCongKhai,
+  tieuDeRut,
   yeuCauCongKhai,
   yeuCauRut,
   type BanCongKhai,
 } from "./cong-khai";
+import { DirectoryHeading } from "./directory-heading";
 import { HopCongKhai, type DangMoCongKhai } from "./hop-cong-khai";
 import { HopXoa } from "./hop-xoa";
-import { daXoa, duocXoaTheoPhien, yeuCauXoa } from "./xoa-dong";
+import { daXoa, duocXoaTheoPhien, tieuDeXoa, yeuCauXoa } from "./xoa-dong";
 import {
   GOI_Y_O_TIM,
   LUA_CHON_HIEN_THI,
   NHAN_LOC_HIEN_THI,
   NHAN_LOC_KHOI,
   NHAN_O_TIM,
-  NUT_TIM,
   TAT_CA_KHOI,
   THU_TU_HIEN_THI,
   TRUY_VAN_DAU,
@@ -100,53 +92,68 @@ import {
   maHienThi,
   thamSoDoc,
   type LocDanhBa,
-  type MaHienThi,
   type TruyVanDanhBa,
 } from "./loc-danh-ba";
 import {
+  ADD_BUTTON,
   DANH_BA_RONG,
-  GHI_CHU_SO_DIEN_THOAI,
+  IMPORT_BUTTON,
   KHONG_KHOP_LOC,
+  KPI_PUBLISHED,
+  KPI_TOTAL,
   LOAD_FAILED_TITLE,
-  NO_MATCH_TITLE,
+  NHAN_SO_KHOI,
   PAGE_NEXT,
   PAGE_PREVIOUS,
-  ADD_LINK,
-  IMPORT_LINK,
-  NHAN_SO_KHOI,
-  OPENS_STAFF_ADMIN,
   RELOAD,
-  STAFF_ADMIN_PATH,
   demSoKhoi,
-  nhanSoKhoi,
+  departmentOptionText,
+  filteredTotal,
+  pendingPart,
   shownCountText,
+  tallyFigures,
 } from "./nhan-danh-ba";
-import { PendingStaffKpis } from "./pending-staff-kpis";
-import { StaffAvatarField } from "./staff-avatar-field";
+import { StaffContactForm } from "./staff-contact-form";
+import { StaffDirectoryImportDialog } from "./staff-directory-import-dialog";
+import {
+  ADDED_TOAST,
+  CONTACT_ADD_TITLE,
+  CONTACT_DESCRIPTION,
+  CONTACT_EDIT_TITLE,
+  SAVED_TOAST,
+  firstContactError,
+  publicationStep,
+  validateContact,
+  zaloAfterCreate,
+  zaloNotSavedText,
+  type ContactErrors,
+} from "./staff-contact";
 
 /**
- * Màn **Danh bạ cán bộ** — `docs/ui-ux/12-danh-ba-can-bo.md`, đường dẫn `/danh-ba`.
+ * Tab **Danh bạ cán bộ** — bản mẫu `StaffDirectoryWorkspace.tsx` (chủ đầu tư chốt 09/10/2026: thêm,
+ * sửa và nhập Excel mở HỘP THOẠI ngay tại tab; bảng có cột chọn và thanh chọn).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * KHÔNG TỆP NÀO Ở ĐÂY DỰNG LẠI MỘT LỜI GỌI ĐÃ CÓ. Các tuyến ghi và đọc của danh bạ đã có chủ ở
- * `lib/api/can-bo.ts`; biểu mẫu sửa, câu chữ và phép đổi hình dạng bản nháp đã có chủ ở
- * `components/danh-ba/`. Màn này chỉ thêm đúng thứ nó sở hữu: bố cục của một trang riêng, thẻ KPI
- * đếm được, hàng lọc (`loc-danh-ba.ts`), hộp công khai Mini App (`cong-khai.ts`), và chỗ giữ "?"
- * cho phần chưa mở (`PHAN_CHUA_DUNG`).
+ * CÁC TUYẾN GHI MÀN NÀY GỌI, mỗi tuyến một khoá ở máy chủ:
  *
- * BỐN THAO TÁC GHI THUỘC VỀ MÀN DANH BẠ: `PATCH /api/v1/staff/{id}` (sửa chức vụ, khối/đơn vị, số
- * liên hệ, Có Zalo), `PUT .../publication` (công khai / rút MỘT người trên Mini App, #12,
- * `content.update`), `POST /api/v1/staff/publications` (công khai NHIỀU người, xác nhận đồng ý TỪNG
- * dòng — người dùng chốt 30/09/2026, `bulk-publication.ts`, cùng khoá `content.update`) và
- * `DELETE /api/v1/staff/{id}` (xoá một dòng NHẬP TRÙNG, #10, `admin.user.delete`). Bốn tuyến còn
- * lại đổi THẨM QUYỀN hoặc đường đăng nhập của một người — thêm, đổi vai trò, khoá, mở khoá — và
- * chúng ở lại đúng chỗ đặc tả §1 đặt chúng: màn `/nguoi-dung` (trước 05/10/2026 là tab `Cấu hình → Người dùng`). Bày cùng một nút Khoá tài
- * khoản ở hai màn hình là hai chỗ để một thao tác có hậu quả nặng bị bấm nhầm.
+ *   POST  /api/v1/staff                     thêm (`admin.user`)
+ *   PATCH /api/v1/staff/{id}                sửa hồ sơ, cả "Gọi được qua Zalo" (`admin.user`)
+ *   /api/v1/staff/import-*                  nhập Excel — cùng luồng với `/nguoi-dung` (`admin.user`)
+ *   PUT   /api/v1/staff/{id}/publication    công khai / rút MỘT người (`content.update`, #12)
+ *   POST  /api/v1/staff/publications        công khai NHIỀU người, xác nhận từng dòng (`content.update`)
+ *   DELETE /api/v1/staff/{id}               xoá mềm một dòng nhập trùng, kèm lý do (`admin.user.delete`)
+ *
+ * CÔNG KHAI LUÔN QUA HỘP HỎI Ý (#12, Nghị định 13) — từ nút trên dòng, từ thanh chọn, và từ ô "Hiện
+ * trên danh bạ Mini App" của hộp sửa (ô ấy chỉ mở hộp hỏi ý SAU khi lưu, `publicationStep`).
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *
- * CỔNG CỦA CẢ MÀN nằm ở `app/danh-ba/page.tsx` (`CongQuyen` + `admin.user`). Hai nút Mini App cần
- * THÊM `content.update`, nút 🗑 cần THÊM `admin.user.delete`, và mỗi nút ẩn theo đúng khoá của nó.
- * Mọi lớp ẩn đều chỉ là tiện dụng: lớp chặn THẬT ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1).
+ * CỔNG CỦA CẢ MÀN nằm ở `staff-directory-tab.tsx` (`admin.user`). Nút Mini App và cột chọn cần THÊM
+ * `content.update`, nút 🗑 cần THÊM `admin.user.delete`. Mọi lớp ẩn chỉ là tiện dụng: lớp chặn THẬT
+ * ở máy chủ, trên TỪNG yêu cầu (luật 5, cấm #1).
+ *
+ * CHỈ DÙNG BỐN HOOK `useState` / `useEffect` / `useCallback` / `useMemo`: `danh-ba-lien-he.luong.test.tsx`
+ * gọi màn như một hàm dưới một React giả chỉ biết bốn hook ấy. Mọi phần cần hook khác (hộp thoại,
+ * dấu "?", bảng nhập Excel) là PHẦN TỬ CON, không bao giờ được gọi ở đó.
  */
 
 /** Trạng thái một lần đọc danh sách. Ba nhánh rời nhau. */
@@ -155,46 +162,50 @@ type TrangThaiTrang =
   | { pha: "loi"; thongBao: string }
   | { pha: "xong"; trang: page_Result_identity_canBoTomTat };
 
+/** The add / edit dialog: who (`null` = adding) and, when adding, the Idempotency-Key of THIS opening. */
+type ContactDialog = { readonly editing: identity_canBoTomTat | null; readonly key: string };
+
+const SELECT_CLASS =
+  "border-line focus-visible:ring-ring/50 h-9 rounded-md border border-solid bg-white px-3 text-[12.5px] outline-none focus-visible:ring-[3px]";
+
 export function DanhBaLienHe() {
   /** Bộ lọc đang áp + ngăn xếp con trỏ — MỘT state, để đổi lọc không thể quên về trang đầu. */
   const [truyVan, datTruyVan] = useState<TruyVanDanhBa>(TRUY_VAN_DAU);
   const [trangThai, datTrangThai] = useState<TrangThaiTrang>({ pha: "dangTai" });
   /** `null` là chưa đọc xong danh mục bộ phận — KHÔNG phải "xã không có bộ phận nào". */
   const [boPhan, datBoPhan] = useState<KetQua<identity_danhSachBoPhanRa> | null>(null);
-
-  const [dangSua, datDangSua] = useState<identity_canBoTomTat | null>(null);
-  const [ban, datBan] = useState<BanNhapCanBo>(BAN_TRONG);
-  const [loiMayChu, datLoiMayChu] = useState("");
-  const [dangGui, datDangGui] = useState(false);
-  const [cauDaXong, datCauDaXong] = useState("");
-  /** Tăng sau mỗi lần ghi thành công — buộc đọc lại trang đang xem. Xem `ghiXong`. */
+  /** `GET /api/v1/staff-counts`: the KPI cards, the filter's "(đang hiện/tổng)", the line under the table. */
+  const [tallies, setTallies] = useState<KetQua<StaffTallies> | null>(null);
+  /** How many rows the APPLIED search matches (`POST /api/v1/staff-count-queries`); `null` = not read. */
+  const [searchCount, setSearchCount] = useState<KetQua<number> | null>(null);
+  /** Tăng sau mỗi lần ghi thành công — buộc đọc lại trang đang xem VÀ các con số. */
   const [lanDoc, datLanDoc] = useState(0);
 
-  /** Hộp công khai / rút Mini App đang mở. Không bao giờ mở cùng lúc với biểu mẫu sửa. */
+  const [loiMayChu, datLoiMayChu] = useState("");
+  const [dangGui, datDangGui] = useState(false);
+
+  /** People ticked in the table (row snapshots, in ticking order). Survives a page or filter change. */
+  const [selected, setSelected] = useState<readonly identity_canBoTomTat[]>([]);
+
+  const [contact, setContact] = useState<ContactDialog | null>(null);
+  const [draft, setDraft] = useState<BanNhapCanBo>(BAN_TRONG);
+  const [showOnMiniApp, setShowOnMiniApp] = useState(false);
+  const [contactErrors, setContactErrors] = useState<ContactErrors>({});
+
+  const [importOpen, setImportOpen] = useState(false);
+
+  /** Hộp công khai / rút MỘT người đang mở. */
   const [dangMoCK, datDangMoCK] = useState<DangMoCongKhai | null>(null);
   const [banCK, datBanCK] = useState<BanCongKhai>({ daHoiY: false, thuTu: "" });
 
-  /**
-   * Phiên có `content.update` hay không — quyết định có vẽ hai nút Mini App. Phiên CHƯA ĐỌC XONG
-   * hay đọc hỏng thì coi như KHÔNG (fail closed, `quyetDinhTheoKhoa`).
-   */
-  const phien = usePhien();
-  const duocCongKhai = duocCongKhaiTheoPhien(phien);
-
-  /** Hộp xoá dòng nhập trùng đang mở, và lý do đang gõ. Ba hộp không bao giờ mở cùng lúc. */
+  /** Hộp xoá dòng nhập trùng đang mở, và lý do đang gõ. */
   const [dangXoa, datDangXoa] = useState<identity_canBoTomTat | null>(null);
   const [lyDoXoa, datLyDoXoa] = useState("");
-  /** Phiên có `admin.user.delete` — quyết định có vẽ nút 🗑. Chưa đọc xong / hỏng → không. */
-  const duocXoa = duocXoaTheoPhien(phien);
 
   /**
-   * "Công khai nhiều người". The selection SURVIVES a page or filter change — that is how people on
-   * several pages are gathered into one request — and is emptied only after a completed send.
-   *
-   * THE IDEMPOTENCY KEY BELONGS TO ONE BODY. It is re-minted whenever the selection or a tick
-   * changes, and after every completed send; a retry after a network failure keeps it, because
-   * that first send may already have published people. Reusing a key for a DIFFERENT body would
-   * get the first body's replay back and hide what the second one asked for.
+   * The bulk consent dialog. THE IDEMPOTENCY KEY BELONGS TO ONE BODY: re-minted whenever a tick
+   * changes and after every completed send; a retry after a network failure keeps it, because that
+   * first send may already have published people.
    */
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSelection, setBulkSelection] = useState<BulkSelection>([]);
@@ -202,22 +213,15 @@ export function DanhBaLienHe() {
   const [bulkOutcome, setBulkOutcome] = useState<BulkOutcome | null>(null);
   const [bulkError, setBulkError] = useState("");
 
+  /** Khoá của phiên. CHƯA ĐỌC XONG hay đọc hỏng → không (fail closed, `quyetDinhTheoKhoa`). */
+  const phien = usePhien();
+  const duocCongKhai = duocCongKhaiTheoPhien(phien);
+  const duocXoa = duocXoaTheoPhien(phien);
+
   /**
-   * MỘT DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — `[]` ở cuối effect là phần quan trọng nhất
-   * của khối này.
-   *
-   * Không đọc lại khi đổi trang hay khi mở biểu mẫu: danh mục bộ phận của một xã không đổi giữa
-   * hai lần bấm "Trang sau". Và tuyệt đối không đọc theo từng dòng — mỗi trang hai mươi dòng, nên
-   * một lời gọi mỗi dòng là hai mươi lời gọi thay vì một, và con số ấy đi lên theo dữ liệu chứ
-   * không đứng yên (`skills/load-data-once`, dạng 1).
-   *
-   * CHỈ ĐỌC BỘ PHẬN, KHÔNG ĐỌC VAI TRÒ. Màn này không có cột Vai trò và không có biểu mẫu đổi vai
-   * trò, nên `GET /api/v1/roles` là một lời gọi không ai dùng kết quả.
-   *
-   * VÌ SAO ĐỌC Ở TRÌNH DUYỆT CHỨ KHÔNG Ở MÁY CHỦ: tuyến này đòi đã đăng nhập, nên gọi phía máy chủ
-   * thì phải tự chuyển tiếp cookie phiên — thêm một chỗ cầm cookie, và là đúng chỗ dễ chuyển tiếp
-   * sang sai host. Ở đây đường dẫn tương đối trên chính host của xã, trình duyệt tự gửi cookie
-   * host-only (`lib/api/goi.ts`).
+   * MỘT DANH MỤC, ĐỌC ĐÚNG MỘT LƯỢT KHI MỞ MÀN HÌNH — không theo trang, không theo dòng
+   * (`skills/load-data-once`). Đọc ở trình duyệt: đường dẫn tương đối trên chính host của xã, trình
+   * duyệt tự gửi cookie host-only (`lib/api/goi.ts`).
    */
   useEffect(() => {
     let bo = false;
@@ -231,156 +235,214 @@ export function DanhBaLienHe() {
 
   const traBoPhan = useMemo<BangTraDanhMuc>(() => bangTraTuKetQua(boPhan), [boPhan]);
   const soKhoi = useMemo(() => demSoKhoi(boPhan), [boPhan]);
-
-  /** Mục cho ô chọn của biểu mẫu sửa — lấy từ CHÍNH danh mục đã đọc, không đọc lại. */
   const mucBoPhan = useMemo<readonly MucChon[]>(
     () => (boPhan !== null && boPhan.ok ? boPhan.duLieu.items : []),
     [boPhan],
   );
 
   useEffect(() => {
-    // `bo` chặn một phản hồi đến muộn của lần đọc trước ghi đè lên lần đọc sau. Không có nó thì
-    // bấm "Trang sau" hai lần nhanh có thể để lại trên màn hình đúng trang vừa rời khỏi.
+    // `bo` chặn một phản hồi đến muộn của lần đọc trước ghi đè lên lần đọc sau.
     let bo = false;
-
-    // KHÔNG TRUYỀN `limit`, `sort`, `order`: để máy chủ áp mặc định của chính nó (20 dòng, sắp
-    // theo mã, tăng dần). Giữ một bản sao của ba mặc định ấy ở client là giữ một bản sẽ trôi.
-    // Có chữ tìm thì `docTrangDanhBa` đi đường POST, chữ và con trỏ nằm trong thân.
+    // KHÔNG TRUYỀN `limit`, `sort`, `order`: máy chủ áp mặc định của chính nó. Có chữ tìm thì
+    // `docTrangDanhBa` đi đường POST, chữ và con trỏ nằm trong THÂN — không bao giờ trên URL.
     docTrangDanhBa(truyVan.loc.tuKhoa, thamSoDoc(truyVan)).then((ketQua) => {
       if (bo) return;
       datTrangThai(
         ketQua.ok ? { pha: "xong", trang: ketQua.duLieu } : { pha: "loi", thongBao: ketQua.thongBao },
       );
+      // A ticked person on this page is refreshed to the row just read, so the bar acts on what the
+      // server says now (published or not), not on what it said when the box was ticked.
+      if (ketQua.ok) {
+        const fresh = new Map(ketQua.duLieu.items.map((cb) => [cb.id, cb]));
+        setSelected((cu) => cu.map((s) => fresh.get(s.id) ?? s));
+      }
     });
-
     return () => {
       bo = true;
     };
   }, [truyVan, lanDoc]);
 
+  /** The commune's tallies: on opening, and again after every write. */
+  useEffect(() => {
+    let bo = false;
+    getStaffTallies().then((kq) => {
+      if (!bo) setTallies(kq);
+    });
+    return () => {
+      bo = true;
+    };
+  }, [lanDoc]);
+
   /**
-   * Đổi truy vấn — chuyển trang hoặc đổi bộ lọc. `dangTai` đặt Ở ĐÂY, trong sự kiện, chứ không
-   * trong thân effect: gọi setState thẳng trong thân effect kéo theo một lượt render phụ mỗi lần
-   * chạy, và lint của React chặn đúng mẫu ấy. Trạng thái khởi tạo đã là `dangTai` nên lần tải đầu
-   * không cần ai đặt gì.
-   *
-   * ĐÓNG BIỂU MẪU SỬA KHI ĐỔI TRUY VẤN. Biểu mẫu giữ bản nháp của một người ở trang vừa rời khỏi; để
-   * nó mở là để trên màn hình một ô Lưu thuộc về một dòng không còn nhìn thấy.
+   * The number of matches of the APPLIED search. POST, the words in the body (rule 3, forbidden #4) —
+   * the same `q`/`unit`/`published` as the page read, so both answers describe one set of rows.
    */
-  const doiTruyVan = useCallback((tinh: (cu: TruyVanDanhBa) => TruyVanDanhBa) => {
-    datTrangThai({ pha: "dangTai" });
-    datDangSua(null);
-    datBan(BAN_TRONG);
+  const loc = truyVan.loc;
+  useEffect(() => {
+    if (loc.tuKhoa === null) return;
+    let bo = false;
+    countStaffMatches(loc.tuKhoa, { boPhan: loc.boPhan, congKhai: LUA_CHON_HIEN_THI[loc.hienThi].congKhai }).then(
+      (kq) => {
+        if (!bo) setSearchCount(kq);
+      },
+    );
+    return () => {
+      bo = true;
+    };
+  }, [loc, lanDoc]);
+
+  /** "Hiển thị n cán bộ." — the total for the filter in force, never the length of the open page. */
+  const shownTotal = useMemo<number | null>(() => {
+    if (loc.tuKhoa !== null) return searchCount !== null && searchCount.ok ? searchCount.duLieu : null;
+    return tallies !== null && tallies.ok
+      ? filteredTotal(tallies.duLieu, loc.boPhan, LUA_CHON_HIEN_THI[loc.hienThi].congKhai)
+      : null;
+  }, [loc, searchCount, tallies]);
+
+  /** Close every dialog, say nothing — the shared first step of opening another one. */
+  const closeAll = useCallback(() => {
+    setContact(null);
+    setContactErrors({});
     datDangMoCK(null);
     datDangXoa(null);
+    datLyDoXoa("");
+    setBulkOpen(false);
+    setBulkOutcome(null);
+    setBulkError("");
+    setImportOpen(false);
     datLoiMayChu("");
-    datTruyVan(tinh);
   }, []);
+
+  /**
+   * Đổi truy vấn — chuyển trang hoặc đổi bộ lọc. `dangTai` đặt Ở ĐÂY, trong sự kiện, chứ không trong
+   * thân effect (lint của React chặn setState đồng bộ trong effect).
+   */
+  const doiTruyVan = useCallback(
+    (tinh: (cu: TruyVanDanhBa) => TruyVanDanhBa) => {
+      datTrangThai({ pha: "dangTai" });
+      closeAll();
+      datTruyVan(tinh);
+    },
+    [closeAll],
+  );
 
   const diToiTrang = useCallback(
     (toi: NganXepConTro) => doiTruyVan((cu) => ({ ...cu, nganXep: toi })),
     [doiTruyVan],
   );
 
-  /** Đổi bộ lọc — `apLoc` luôn đưa ngăn xếp về trang đầu. */
+  /** Đổi bộ lọc — `apLoc` luôn đưa ngăn xếp về trang đầu; con số của lần tìm cũ không còn đúng. */
   const doiLoc = useCallback(
-    (doi: Partial<LocDanhBa>) => doiTruyVan((cu) => apLoc(cu, doi)),
+    (doi: Partial<LocDanhBa>) => {
+      setSearchCount(null);
+      doiTruyVan((cu) => apLoc(cu, doi));
+    },
     [doiTruyVan],
   );
 
-  /** Mở biểu mẫu sửa: nạp giá trị đang có vào bản nháp, dọn mọi thông báo của lần trước. */
-  const moSua = useCallback((cb: identity_canBoTomTat) => {
-    setBulkOpen(false);
-    datDangMoCK(null);
-    datDangXoa(null);
-    datDangSua(cb);
-    datBan(banTuCanBo(cb));
+  /** After a completed write: close, say what was done, and READ AGAIN the page and the figures. */
+  const ghiXong = useCallback(
+    (cau: string) => {
+      closeAll();
+      toast.success(cau);
+      datLanDoc((n) => n + 1);
+    },
+    [closeAll],
+  );
+
+  /* ---- add / edit ---------------------------------------------------------------------------- */
+
+  const openAdd = useCallback(() => {
+    closeAll();
+    // The key is minted when the dialog OPENS: a retry after a network failure reuses it, because the
+    // first send may already have created the person (`themCanBo`).
+    setContact({ editing: null, key: khoaChongTrungMoi() });
+    setDraft(BAN_TRONG);
+    setShowOnMiniApp(false);
+  }, [closeAll]);
+
+  const moSua = useCallback(
+    (cb: identity_canBoTomTat) => {
+      closeAll();
+      setContact({ editing: cb, key: "" });
+      setDraft(banTuCanBo(cb));
+      setShowOnMiniApp(cb.published);
+    },
+    [closeAll],
+  );
+
+  const closeContact = useCallback(() => {
+    setContact(null);
+    setContactErrors({});
     datLoiMayChu("");
-    datCauDaXong("");
   }, []);
 
-  /** Mở hộp công khai hoặc rút cho MỘT người. Đóng biểu mẫu sửa nếu đang mở. */
-  const moCongKhai = useCallback((dm: DangMoCongKhai) => {
-    setBulkOpen(false);
-    datDangSua(null);
-    datBan(BAN_TRONG);
-    datDangXoa(null);
-    datDangMoCK(dm);
-    datBanCK(banCongKhaiTu(dm.canBo));
+  const sendContact = useCallback(() => {
+    if (contact === null || dangGui) return;
+    const errors = validateContact(draft);
+    setContactErrors(errors);
+    const first = firstContactError(errors);
+    if (first !== null) {
+      toast.error(first);
+      return;
+    }
+
     datLoiMayChu("");
-    datCauDaXong("");
-  }, []);
+    datDangGui(true);
+    const editing = contact.editing;
+    const wanted = showOnMiniApp;
+    const save: Promise<KetQua<identity_canBoTomTat>> =
+      editing === null
+        ? themCanBo(thanThem(draft), contact.key).then(async (created) => {
+            if (!created.ok) return created;
+            const zalo = zaloAfterCreate(draft);
+            if (zalo === null) return created;
+            const patched = await suaCanBo(created.duLieu.id, zalo);
+            if (patched.ok) return patched;
+            toast.error(zaloNotSavedText(patched.thongBao));
+            return created;
+          })
+        : suaCanBo(editing.id, thanSua(draft, editing));
+
+    void save
+      .then((kq) => {
+        if (!kq.ok) {
+          // The server's sentence verbatim, in the dialog, beside the button it refused.
+          datLoiMayChu(kq.thongBao);
+          return;
+        }
+        ghiXong(editing === null ? ADDED_TOAST : SAVED_TOAST);
+        // The Mini App box never publishes: it opens the consent (or withdrawal) box for this person.
+        const step = publicationStep(wanted, kq.duLieu, duocCongKhai);
+        if (step !== null) {
+          datDangMoCK(step);
+          datBanCK(banCongKhaiTu(step.canBo));
+        }
+      })
+      .finally(() => datDangGui(false));
+  }, [contact, dangGui, draft, duocCongKhai, ghiXong, showOnMiniApp]);
+
+  /* ---- publish / withdraw ONE person --------------------------------------------------------- */
+
+  /** Mở hộp công khai hoặc rút cho MỘT người. Ô tick luôn bắt đầu TRỐNG (`banCongKhaiTu`). */
+  const moCongKhai = useCallback(
+    (dm: DangMoCongKhai) => {
+      closeAll();
+      datDangMoCK(dm);
+      datBanCK(banCongKhaiTu(dm.canBo));
+    },
+    [closeAll],
+  );
 
   const dongCongKhai = useCallback(() => {
     datDangMoCK(null);
     datLoiMayChu("");
   }, []);
 
-  /** Mở hộp xoá cho MỘT dòng. Lý do luôn bắt đầu trống — mỗi lần xoá một lý do của riêng nó. */
-  const moXoa = useCallback((cb: identity_canBoTomTat) => {
-    setBulkOpen(false);
-    datDangSua(null);
-    datBan(BAN_TRONG);
-    datDangMoCK(null);
-    datDangXoa(cb);
-    datLyDoXoa("");
-    datLoiMayChu("");
-    datCauDaXong("");
-  }, []);
-
-  const dongXoa = useCallback(() => {
-    datDangXoa(null);
-    datLyDoXoa("");
-    datLoiMayChu("");
-  }, []);
-
-  const dongSua = useCallback(() => {
-    datDangSua(null);
-    datBan(BAN_TRONG);
-    datLoiMayChu("");
-  }, []);
-
-  /**
-   * Sau một lần ghi thành công: đóng biểu mẫu, nói ra đã làm gì, và ĐỌC LẠI trang đang xem.
-   *
-   * ĐỌC LẠI CẢ TRANG CHỨ KHÔNG VÁ MỘT DÒNG TẠI CHỖ. `PATCH` trả về đúng dòng vừa sửa nên vá tại
-   * chỗ là làm được — nhưng một dòng vá tại chỗ và một dòng đọc lại là hai đường cập nhật màn
-   * hình, và đường ít chạy hơn là đường sẽ sai mà không ai thấy.
-   */
-  const ghiXong = useCallback((cau: string) => {
-    datDangSua(null);
-    datBan(BAN_TRONG);
-    datDangMoCK(null);
-    datDangXoa(null);
-    datLyDoXoa("");
-    datLoiMayChu("");
-    datCauDaXong(cau);
-    datLanDoc((n) => n + 1);
-  }, []);
-
-  const guiSua = useCallback(() => {
-    if (dangSua === null || dangGui) return;
-
-    datLoiMayChu("");
-    datCauDaXong("");
-    datDangGui(true);
-
-    // KHÔNG KIỂM ĐỘ DÀI, KHUÔN THƯ ĐIỆN TỬ HAY KÝ TỰ SỐ ĐIỆN THOẠI Ở ĐÂY. Máy chủ kiểm cả ba, mỗi
-    // thứ kèm một câu tiếng Việt nói rõ phải sửa gì (`domain/danh_ba_ghi.go`); chép chúng xuống
-    // client là dựng bản sao thứ hai của một bộ quy tắc nghiệp vụ (luật 9, cấm #2).
-    void suaCanBo(dangSua.id, thanSua(ban, dangSua))
-      .then((kq) => {
-        if (kq.ok) ghiXong(daLuuHoSo(kq.duLieu.full_name));
-        else datLoiMayChu(kq.thongBao);
-      })
-      .finally(() => datDangGui(false));
-  }, [ban, dangGui, dangSua, ghiXong]);
-
   const guiCongKhai = useCallback(() => {
     if (dangMoCK === null || dangGui) return;
-
-    // Công khai: chưa tick hay thứ tự sai thì dừng TẠI ĐÂY, không gọi mạng. Rút: luôn gửi lại thứ
-    // tự đang có, vì PUT thiếu `display_order` là xoá nó (`yeuCauRut`).
+    // Công khai: chưa tick hay thứ tự sai thì dừng TẠI ĐÂY, không gọi mạng. Rút: luôn gửi lại thứ tự
+    // đang có, vì PUT thiếu `display_order` là xoá nó (`yeuCauRut`).
     let yc;
     if (dangMoCK.kieu === "congKhai") {
       const kq = yeuCauCongKhai(banCK);
@@ -394,23 +456,37 @@ export function DanhBaLienHe() {
     }
 
     datLoiMayChu("");
-    datCauDaXong("");
     datDangGui(true);
     const congKhai = dangMoCK.kieu === "congKhai";
     void datCongKhaiCanBo(dangMoCK.canBo.id, yc)
       .then((kq) => {
-        if (kq.ok) ghiXong(congKhai ? daCongKhai(kq.duLieu.full_name) : daRut(kq.duLieu.full_name));
+        // The prototype's one sentence for any count (`StaffDirectoryWorkspace.tsx:113-117`), n = 1.
+        if (kq.ok) ghiXong(congKhai ? bulkAddedToast(1) : bulkWithdrawnToast(1));
         else datLoiMayChu(kq.thongBao);
       })
       .finally(() => datDangGui(false));
   }, [banCK, dangGui, dangMoCK, ghiXong]);
 
+  /* ---- delete ONE row ------------------------------------------------------------------------ */
+
+  /** Mở hộp xoá cho MỘT dòng. Lý do luôn bắt đầu trống — mỗi lần xoá một lý do của riêng nó. */
+  const moXoa = useCallback(
+    (cb: identity_canBoTomTat) => {
+      closeAll();
+      datDangXoa(cb);
+    },
+    [closeAll],
+  );
+
+  const dongXoa = useCallback(() => {
+    datDangXoa(null);
+    datLyDoXoa("");
+    datLoiMayChu("");
+  }, []);
+
   /**
-   * Gửi xoá. Dòng có tài khoản, lý do rỗng hay quá dài dừng TẠI ĐÂY (`yeuCauXoa`), không gọi mạng.
-   *
-   * SAU 204: `ghiXong` đọc lại trang bằng cách tăng `lanDoc` và KHÔNG đụng `truyVan`, nên lần đọc
-   * lại mang đúng chữ tìm, bộ lọc và con trỏ đang áp — người đang xem kết quả tìm "Nguyễn Văn" vẫn
-   * thấy kết quả ấy, trừ đúng dòng vừa xoá.
+   * Gửi xoá. Dòng có tài khoản, lý do rỗng hay quá dài dừng TẠI ĐÂY (`yeuCauXoa`). Sau 204 đọc lại
+   * với ĐÚNG chữ tìm, bộ lọc và con trỏ đang áp (`lanDoc`, không đụng `truyVan`).
    */
   const guiXoa = useCallback(() => {
     if (dangXoa === null || dangGui) return;
@@ -419,38 +495,30 @@ export function DanhBaLienHe() {
       datLoiMayChu(kq.loi);
       return;
     }
-
     datLoiMayChu("");
-    datCauDaXong("");
     datDangGui(true);
-    const hoTen = dangXoa.full_name;
-    void xoaCanBo(dangXoa.id, kq.lyDo)
+    const person = dangXoa;
+    void xoaCanBo(person.id, kq.lyDo)
       .then((ketQua) => {
-        if (ketQua.ok) ghiXong(daXoa(hoTen));
-        else datLoiMayChu(ketQua.thongBao);
+        if (!ketQua.ok) {
+          datLoiMayChu(ketQua.thongBao);
+          return;
+        }
+        setSelected((cu) => cu.filter((s) => s.id !== person.id));
+        ghiXong(daXoa(person.full_name));
       })
       .finally(() => datDangGui(false));
   }, [dangGui, dangXoa, ghiXong, lyDoXoa]);
 
-  /** Changing WHAT would be sent: new body, new key, and the previous result no longer applies. */
-  const changeBulk = useCallback((next: (cu: BulkSelection) => BulkSelection) => {
-    setBulkSelection(next);
-    setBulkKey(crypto.randomUUID());
-    setBulkOutcome(null);
-    setBulkError("");
-  }, []);
+  /* ---- the selection bar --------------------------------------------------------------------- */
 
+  /** "Thêm vào danh bạ Mini App": opens the consent box for the selected people. Never publishes. */
   const openBulk = useCallback(() => {
-    datDangSua(null);
-    datBan(BAN_TRONG);
-    datDangMoCK(null);
-    datDangXoa(null);
-    datLoiMayChu("");
-    datCauDaXong("");
-    setBulkOutcome(null);
-    setBulkError("");
+    closeAll();
+    setBulkSelection(consentSelection(selected));
+    setBulkKey(crypto.randomUUID());
     setBulkOpen(true);
-  }, []);
+  }, [closeAll, selected]);
 
   const closeBulk = useCallback(() => {
     setBulkOpen(false);
@@ -458,10 +526,17 @@ export function DanhBaLienHe() {
     setBulkError("");
   }, []);
 
+  /** Changing WHAT would be sent: new body, new key. */
+  const changeConsent = useCallback((id: string, consentAsked: boolean) => {
+    setBulkSelection((cu) => setConsent(cu, id, consentAsked));
+    setBulkKey(crypto.randomUUID());
+    setBulkError("");
+  }, []);
+
   /**
-   * Send the bulk request. Refusals that need no server (nobody selected, nobody ticked, over the
-   * cap) stop HERE. On a 200 — per-row results or a replay — the selection is emptied, the key is
-   * re-minted and the register is re-read: the table, not this panel, says who is now on.
+   * Send the bulk request. Refusals that need no server (nobody ticked, over the cap) stop HERE. On a
+   * 200 the table selection is emptied and the register re-read; the dialog stays open only to name
+   * the people the server skipped.
    */
   const sendBulk = useCallback(() => {
     if (dangGui) return;
@@ -471,10 +546,8 @@ export function DanhBaLienHe() {
       return;
     }
     setBulkError("");
-    setBulkOutcome(null);
-    datCauDaXong("");
     datDangGui(true);
-    const sentSelection = bulkSelection;
+    const sent = bulkSelection;
     void publishStaffBulk(req.rows, bulkKey)
       .then((kq) => {
         if (!kq.ok) {
@@ -482,17 +555,63 @@ export function DanhBaLienHe() {
           setBulkError(kq.thongBao);
           return;
         }
-        setBulkOutcome(
-          kq.duLieu.kind === "replayed"
-            ? { kind: "replayed" }
-            : { kind: "lines", lines: bulkResultLines(kq.duLieu.items, sentSelection) },
-        );
+        setSelected([]);
         setBulkSelection([]);
         setBulkKey(crypto.randomUUID());
         datLanDoc((n) => n + 1);
+        if (kq.duLieu.kind === "replayed") {
+          toast.success(BULK_REPLAYED);
+          setBulkOpen(false);
+          return;
+        }
+        const results = kq.duLieu.items;
+        toast.success(bulkAddedToast(publishedCount(results)));
+        if (publishedCount(results) === results.length) setBulkOpen(false);
+        else setBulkOutcome({ kind: "lines", lines: bulkResultLines(results, sent) });
       })
       .finally(() => datDangGui(false));
   }, [bulkKey, bulkSelection, dangGui]);
+
+  /**
+   * "Rút khỏi danh bạ": there is no bulk route, so the single-person `PUT …/publication` is sent once
+   * per selected person ON the Mini App, each with the order it has (`yeuCauRut`). The toast counts
+   * what the server changed; refusals are counted and the first server sentence is shown verbatim.
+   */
+  const withdrawSelected = useCallback(() => {
+    if (dangGui) return;
+    const targets = selected.filter((cb) => cb.published);
+    if (targets.length === 0) {
+      toast.info(BULK_NOTHING_TO_WITHDRAW);
+      return;
+    }
+    datDangGui(true);
+    void (async () => {
+      let done = 0;
+      const refused: string[] = [];
+      for (const cb of targets) {
+        const kq = await datCongKhaiCanBo(cb.id, yeuCauRut(cb));
+        if (kq.ok) done += 1;
+        else refused.push(kq.thongBao);
+      }
+      if (done > 0) toast.success(bulkWithdrawnToast(done));
+      if (refused.length > 0) toast.error(bulkWithdrawFailedText(refused.length, refused[0] ?? ""));
+      setSelected([]);
+      datLanDoc((n) => n + 1);
+    })().finally(() => datDangGui(false));
+  }, [dangGui, selected]);
+
+  const selection = useMemo(
+    () =>
+      duocCongKhai
+        ? {
+            selectedIds: new Set(selected.map((s) => s.id)),
+            onToggle: (cb: identity_canBoTomTat, on: boolean) => setSelected((cu) => toggleRow(cu, cb, on)),
+            onTogglePage: (on: boolean) =>
+              setSelected((cu) => togglePage(cu, trangThai.pha === "xong" ? trangThai.trang.items : [], on)),
+          }
+        : undefined,
+    [duocCongKhai, selected, trangThai],
+  );
 
   const hanhDongCongKhai = useMemo(
     () =>
@@ -505,317 +624,357 @@ export function DanhBaLienHe() {
     [duocCongKhai, moCongKhai],
   );
 
-  /**
-   * "Tải lại" after a failed read — the SAME mechanism a completed write uses (`lanDoc`): the effect
-   * re-reads with the very query on screen. `dangTai` is set here, in the event, for the reason
-   * `doiTruyVan` gives.
-   */
+  /** "Tải lại" after a failed read — the SAME mechanism a completed write uses (`lanDoc`). */
   const docLai = useCallback(() => {
     datTrangThai({ pha: "dangTai" });
     datLanDoc((n) => n + 1);
   }, []);
 
+  const openImport = useCallback(() => {
+    closeAll();
+    setImportOpen(true);
+  }, [closeAll]);
+
+  const figures = tallyFigures(tallies);
+  const rows = trangThai.pha === "xong" ? trangThai.trang.items : [];
+  // An empty first page IS a count: nobody matches the filter in force.
+  const shownLine =
+    trangThai.pha === "xong" && rows.length === 0 && !coTrangTruoc(truyVan.nganXep) ? 0 : shownTotal;
+
   return (
-    <section className="man-danh-ba mt-0 flex min-w-0 flex-col gap-4" aria-labelledby="tieu-de-danh-ba-lien-he">
+    <section className="min-w-0" aria-labelledby="tieu-de-danh-ba-lien-he">
       <h2 id="tieu-de-danh-ba-lien-he" className="an-thi-giac">
         Danh sách cán bộ
       </h2>
 
-      {/*
-        THE RIGHT HALF OF THE PAGE HEADER — the prototype's `[Nhập từ Excel] [+ Thêm cán bộ]`, plus ours,
-        `Công khai nhiều người`. The `<h1>` stays in `staff-directory-tab.tsx`, OUTSIDE the permission
-        gate, so the tab keeps its title while the gate is still reading the session or when it refuses.
-        These need this screen's state, so they render here — and from `lg` up they are lifted into the
-        header row by `lg:absolute` against the `relative` wrapper around header + gate (the header
-        reserves the room with `lg:pr-*`). Below `lg` they simply flow as the first row.
-
-        `Nhập từ Excel` and `Thêm cán bộ` are LINKS to `/nguoi-dung`, where both already live (staff import,
-        ADR 0059 §1; adding a staff record). The prototype opens them in place; here the directory reads
-        the same `nguoi_dung` rows, and a second add form or importer on this tab would be a second copy
-        of each to drift. Same key as this tab (`admin.user`), so nobody is sent to a refusal.
-      */}
-      <div className="flex flex-wrap items-center gap-2 lg:absolute lg:top-0 lg:right-0 lg:h-12 lg:justify-end">
-        {duocCongKhai && !bulkOpen && (
-          // A native `<button>` whose ONLY child is the label: the flow test finds this button by
-          // `children === BULK_OPEN_BUTTON`. The `Send` icon is therefore drawn beside it, over the
-          // button's left padding, and lets clicks through.
-          <span className="relative inline-flex">
-            <button
+      {/* Both actions need only the tab's own key (`admin.user`): the create route and the three import
+          routes declare it (`service-identity/internal/http/routes.go`). */}
+      <DirectoryHeading
+        actions={
+          <>
+            <Button
               type="button"
-              className={cn("nut-phu", buttonVariants({ variant: "secondary" }), "pl-10 max-lg:h-11")}
-              onClick={openBulk}
+              variant="outline"
+              icon={<Upload aria-hidden="true" className="size-4" />}
+              onClick={openImport}
             >
-              {BULK_OPEN_BUTTON}
-            </button>
-            <Send
-              aria-hidden="true"
-              focusable="false"
-              className="pointer-events-none absolute top-1/2 left-4 size-4 -translate-y-1/2 text-ink-500"
-            />
-          </span>
-        )}
-        <Link
-          href={STAFF_ADMIN_PATH}
-          title={OPENS_STAFF_ADMIN}
-          className={cn(buttonVariants({ variant: "secondary" }), "no-underline max-lg:h-11")}
-        >
-          <Upload aria-hidden="true" focusable="false" />
-          {IMPORT_LINK}
-        </Link>
-        <Link
-          href={STAFF_ADMIN_PATH}
-          title={OPENS_STAFF_ADMIN}
-          className={cn(buttonVariants({ variant: "primary" }), "no-underline max-lg:h-11")}
-        >
-          <Plus aria-hidden="true" focusable="false" />
-          {ADD_LINK}
-        </Link>
+              {IMPORT_BUTTON}
+            </Button>
+            <Button type="button" variant="primary" icon={<Plus aria-hidden="true" className="size-4" />} onClick={openAdd}>
+              {ADD_BUTTON}
+            </Button>
+          </>
+        }
+      />
+
+      {/* The prototype's three cards, one row from `sm`, from ONE read of `GET /api/v1/staff-counts`. */}
+      <div className="mb-5 grid gap-3 sm:grid-cols-3">
+        <SummaryCard label={KPI_TOTAL} value={figures.total} />
+        <SummaryCard label={KPI_PUBLISHED} value={figures.published} leaf />
+        <SummaryCard label={NHAN_SO_KHOI} value={figures.departments} />
       </div>
 
-      {/* The prototype's three summary cards, one row from `sm`: TỔNG SỐ CÁN BỘ and ĐANG HIỆN TRÊN MINI APP
-          are disabled with "?" (ADR 0068 §14 — the contract returns no total), SỐ KHỐI / ĐƠN VỊ is counted
-          from the org-unit catalogue (`demSoKhoi`). The number only once counted (`nhanSoKhoi`). */}
-      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
-        <PendingStaffKpis />
-        <StatCard icon={Building2} label={NHAN_SO_KHOI} value={nhanSoKhoi(soKhoi)} />
-      </div>
-
-      {/* Danh mục bộ phận hỏng thì NÓI RA MỘT LẦN Ở ĐÂY, không để hai mươi ô cùng báo lỗi. Hiện
-          đúng `message` của máy chủ, không diễn giải và không rẽ nhánh theo `code`. */}
+      {/* Danh mục bộ phận hỏng thì NÓI RA MỘT LẦN Ở ĐÂY, đúng câu của máy chủ. */}
       {soKhoi.pha === "loi" && (
-        <p className="thong-bao-loi m-0" role="alert">
+        <p className="text-danger m-0 mb-3 text-[12px] font-medium" role="alert">
           Danh mục khối / đơn vị: {soKhoi.thongBao}
         </p>
       )}
 
-      {/* Câu xác nhận sau một lần ghi. `role="status"` chứ không `alert`: không có gì hỏng. */}
-      {cauDaXong !== "" && (
-        <Notice tone="info" icon={CircleCheck} role="status">
-          {cauDaXong}
-        </Notice>
+      <HangLoc
+        loc={loc}
+        boPhan={mucBoPhan}
+        tallies={tallies !== null && tallies.ok ? tallies.duLieu : null}
+        doiLoc={doiLoc}
+        end={
+          selection !== undefined && selected.length > 0 ? (
+            <SelectionBar
+              count={selected.length}
+              busy={dangGui}
+              onAdd={openBulk}
+              onWithdraw={withdrawSelected}
+              showDelete={duocXoa}
+            />
+          ) : undefined
+        }
+      />
+
+      {trangThai.pha === "dangTai" ? (
+        <div role="status">
+          <span className="an-thi-giac">Đang tải danh bạ…</span>
+          <Skeleton className="h-96 w-full" />
+        </div>
+      ) : (
+        <div className="border-line overflow-hidden rounded-[10px] border border-solid bg-white">
+          {trangThai.pha === "loi" ? (
+            // The server's `message` verbatim; no branching on `code`, no `trace_id` (`lib/api/goi.ts`).
+            <div role="alert">
+              <EmptyState
+                icon={CloudOff}
+                title={LOAD_FAILED_TITLE}
+                description={trangThai.thongBao}
+                action={
+                  <Button type="button" variant="secondary" icon={<RotateCw aria-hidden="true" />} onClick={docLai}>
+                    {RELOAD}
+                  </Button>
+                }
+              />
+            </div>
+          ) : rows.length === 0 ? (
+            // Two sentences, never one: "no staff yet" under a mistyped search is a false statement
+            // about the whole authority.
+            <p className="text-ink-muted m-0 py-12 text-center">{dangLoc(loc) ? KHONG_KHOP_LOC : DANH_BA_RONG}</p>
+          ) : (
+            <div role="region" tabIndex={0} aria-label="Danh bạ cán bộ của đơn vị" className="overflow-x-auto">
+              <BangLienHe
+                danhSach={rows}
+                traBoPhan={traBoPhan}
+                onSua={moSua}
+                congKhai={hanhDongCongKhai}
+                onXoa={duocXoa ? moXoa : undefined}
+                selection={selection}
+              />
+            </div>
+          )}
+        </div>
       )}
 
-      {/*
-        MỘT BIỂU MẪU, MỘT CHỖ TRÊN MÀN HÌNH, ĐẶT TRÊN BẢNG.
-
-        Không dựng biểu mẫu lồng trong dòng của bảng: ở bề rộng nhỏ nhất (320px) bảng cuộn NGANG,
-        nên một biểu mẫu nằm trong một ô của bảng có thể mở ra ngoài khung nhìn và người dùng không
-        thấy nó đã mở. Tiêu đề biểu mẫu luôn gọi tên người đang được sửa (`tieuDeSua`), nên không
-        có ca nào sửa nhầm hồ sơ vì không biết biểu mẫu thuộc về dòng nào.
-      */}
-      {/* Gated by `content.update` like the single-person buttons — convenience only: the server
-          checks the key on the request itself (rule 5, forbidden #1). */}
-      {duocCongKhai && bulkOpen && (
-        <BulkPublicationPanel
-          selection={bulkSelection}
-          pageRows={trangThai.pha === "xong" ? trangThai.trang.items : []}
-          onSelect={(cb) => changeBulk((cu) => addSelected(cu, cb))}
-          onUnselect={(id) => changeBulk((cu) => removeSelected(cu, id))}
-          onSetConsent={(id, v) => changeBulk((cu) => setConsent(cu, id, v))}
-          error={bulkError}
-          sending={dangGui}
-          outcome={bulkOutcome}
-          onSubmit={sendBulk}
-          onClose={closeBulk}
-        />
+      {trangThai.pha === "xong" && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          {/* The total for the filter in force (tallies, or the search's own count) — never the page
+              length. Empty while that figure is unknown: a page length here would be a false total.
+              An empty FIRST page is the one exception: the filter matches nobody, so 0 is the total
+              (the prototype says "Hiển thị 0 cán bộ.", `StaffDirectoryWorkspace.tsx:404-406`). */}
+          <p className="text-ink-muted m-0 text-[12px]">{shownLine === null ? "" : shownCountText(shownLine)}</p>
+          {(rows.length > 0 || coTrangTruoc(truyVan.nganXep)) && (
+            <DieuHuongTrang
+              nganXep={truyVan.nganXep}
+              conTroTiep={trangThai.trang.next_cursor}
+              conTrangSau={trangThai.trang.has_more}
+              diToiTrang={diToiTrang}
+            />
+          )}
+        </div>
       )}
 
-      {dangSua !== null && (
-        <BieuMauGhiCanBo
-          dangMo={{ kieu: "sua", canBo: dangSua }}
-          ban={ban}
-          datBan={datBan}
-          // Hai tham số của nhánh "đổi vai trò". Nhánh ấy không bao giờ chạy ở đây vì `dangMo.kieu`
-          // luôn là `"sua"`; truyền giá trị rỗng chứ không đọc `GET /api/v1/roles` cho một ô chọn
-          // không bao giờ dựng ra.
-          vaiTroID=""
-          datVaiTroID={() => undefined}
-          boPhan={mucBoPhan}
-          vaiTro={[]}
-          loiMayChu={loiMayChu}
-          dangGui={dangGui}
-          onGui={guiSua}
-          onHuy={dongSua}
-          avatarField={<StaffAvatarField />}
-        />
+      {contact !== null && (
+        <ConfigDialog
+          title={contact.editing === null ? CONTACT_ADD_TITLE : CONTACT_EDIT_TITLE}
+          description={CONTACT_DESCRIPTION}
+          onDismiss={() => {
+            if (!dangGui) closeContact();
+          }}
+        >
+          <StaffContactForm
+            editing={contact.editing}
+            draft={draft}
+            setDraft={setDraft}
+            showOnMiniApp={showOnMiniApp}
+            setShowOnMiniApp={setShowOnMiniApp}
+            canPublish={duocCongKhai}
+            units={mucBoPhan}
+            errors={contactErrors}
+            serverError={loiMayChu}
+            sending={dangGui}
+            onSubmit={sendContact}
+            onCancel={closeContact}
+          />
+        </ConfigDialog>
       )}
 
       {dangMoCK !== null && (
-        <HopCongKhai
-          dangMo={dangMoCK}
-          ban={banCK}
-          datBan={datBanCK}
-          loiMayChu={loiMayChu}
-          dangGui={dangGui}
-          onGui={guiCongKhai}
-          onHuy={dongCongKhai}
-        />
+        <ConfigDialog
+          title={dangMoCK.kieu === "congKhai" ? tieuDeCongKhai(dangMoCK.canBo.full_name) : tieuDeRut(dangMoCK.canBo.full_name)}
+          hideHeader
+          onDismiss={() => {
+            if (!dangGui) dongCongKhai();
+          }}
+        >
+          <HopCongKhai
+            dangMo={dangMoCK}
+            ban={banCK}
+            datBan={datBanCK}
+            loiMayChu={loiMayChu}
+            dangGui={dangGui}
+            onGui={guiCongKhai}
+            onHuy={dongCongKhai}
+          />
+        </ConfigDialog>
       )}
 
       {dangXoa !== null && (
-        <HopXoa
-          canBo={dangXoa}
-          lyDo={lyDoXoa}
-          datLyDo={datLyDoXoa}
-          loiMayChu={loiMayChu}
-          dangGui={dangGui}
-          onGui={guiXoa}
-          onHuy={dongXoa}
-        />
+        <ConfigDialog
+          title={tieuDeXoa(dangXoa.full_name)}
+          hideHeader
+          onDismiss={() => {
+            if (!dangGui) dongXoa();
+          }}
+        >
+          <HopXoa
+            canBo={dangXoa}
+            lyDo={lyDoXoa}
+            datLyDo={datLyDoXoa}
+            loiMayChu={loiMayChu}
+            dangGui={dangGui}
+            onGui={guiXoa}
+            onHuy={dongXoa}
+          />
+        </ConfigDialog>
       )}
 
-      {/* ONE card: filter row, then exactly one of loading · error · empty · table, then the pager.
-          Below 768px the card frame drops away and the rows are cards of their own (spec §9). */}
-      {/* The prototype's order: the filter row, then ONE bordered frame — the table (or its loading,
-          error or empty state) and the pager. */}
-      <HangLoc loc={truyVan.loc} boPhan={mucBoPhan} doiLoc={doiLoc} />
+      {/* Gated by `content.update` like the row buttons — convenience only: the server checks the key. */}
+      {duocCongKhai && bulkOpen && (
+        <ConfigDialog
+          title={BULK_TITLE}
+          onDismiss={() => {
+            if (!dangGui) closeBulk();
+          }}
+        >
+          <BulkConsentForm
+            selection={bulkSelection}
+            onSetConsent={changeConsent}
+            error={bulkError}
+            sending={dangGui}
+            outcome={bulkOutcome}
+            onSubmit={sendBulk}
+            onClose={closeBulk}
+          />
+        </ConfigDialog>
+      )}
 
-      <Card className="min-w-0 max-md:overflow-visible max-md:rounded-none max-md:border-0 max-md:bg-transparent max-md:shadow-none">
-
-        {trangThai.pha === "dangTai" && <LoadingRows />}
-
-        {/* LỖI: hiện đúng `message` của máy chủ, không diễn giải. Mọi mã lỗi — kể cả 401, 403, 404 —
-            đều trả cùng hình dạng `httpx.Error`, nên không có chỗ nào ở đây rẽ nhánh theo `code` để
-            đoán chuyện gì đã xảy ra, và `trace_id` không hiện ra: nó là mốc tra log, không phải mã
-            lỗi nghiệp vụ (`lib/api/goi.ts`). */}
-        {trangThai.pha === "loi" && (
-          <div role="alert">
-            <EmptyState
-              icon={CloudOff}
-              title={LOAD_FAILED_TITLE}
-              description={trangThai.thongBao}
-              className="[&>span:first-child]:bg-danger-50 [&>span:first-child]:text-danger-600"
-              action={
-                <Button type="button" variant="secondary" icon={<RotateCw aria-hidden="true" />} onClick={docLai}>
-                  {RELOAD}
-                </Button>
-              }
-            />
-          </div>
-        )}
-
-        {trangThai.pha === "xong" &&
-          trangThai.trang.items.length === 0 &&
-          (dangLoc(truyVan.loc) ? (
-            <EmptyState icon={SearchX} title={NO_MATCH_TITLE} description={KHONG_KHOP_LOC} />
-          ) : (
-            <EmptyState icon={Users} title={DANH_BA_RONG} />
-          ))}
-
-        {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
-          <>
-            <BangLienHe
-              danhSach={trangThai.trang.items}
-              traBoPhan={traBoPhan}
-              onSua={moSua}
-              congKhai={hanhDongCongKhai}
-              onXoa={duocXoa ? moXoa : undefined}
-            />
-            <CardFooter className="flex-wrap justify-between gap-3 max-md:mt-3 max-md:border-0 max-md:px-0">
-              {/* Prototype: "Hiển thị {n} cán bộ." — here, the rows of THIS page: the route returns no total. */}
-              <p className="m-0 text-xs text-ink-500">{shownCountText(trangThai.trang.items.length)}</p>
-              <DieuHuongTrang
-                nganXep={truyVan.nganXep}
-                conTroTiep={trangThai.trang.next_cursor}
-                conTrangSau={trangThai.trang.has_more}
-                diToiTrang={diToiTrang}
-              />
-            </CardFooter>
-          </>
-        )}
-      </Card>
-
-      {trangThai.pha === "xong" && trangThai.trang.items.length > 0 && (
-        <Notice tone="legal" className="m-0">
-          {GHI_CHU_SO_DIEN_THOAI}
-        </Notice>
+      {importOpen && (
+        <StaffDirectoryImportDialog onImported={() => datLanDoc((n) => n + 1)} onClose={() => setImportOpen(false)} />
       )}
     </section>
   );
 }
 
-/**
- * First-load placeholder in the shape of the table rows (spec v2 §8b) — static grey blocks, no
- * shimmer: a moving background is the motion the spec rules out. The words stay for a screen reader
- * (`role="status"`), the blocks are hidden from it.
- */
-function LoadingRows() {
+/** One KPI card — the prototype's markup (`StaffDirectoryWorkspace.tsx:479-500`): no icon, no hint. */
+function SummaryCard({ label, value, leaf = false }: { label: string; value: string; leaf?: boolean }) {
   return (
-    <div role="status" className="px-4 py-2 max-md:px-0">
-      <span className="an-thi-giac">Đang tải danh bạ…</span>
-      <ul aria-hidden="true" className="m-0 list-none p-0">
-        {[0, 1, 2, 3, 4].map((i) => (
-          <li key={i} className="flex items-center gap-3 border-b border-line py-2 last:border-b-0">
-            <span className="size-8 shrink-0 rounded-full bg-[#eef1f6]" />
-            <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <span className="h-3 w-2/5 max-w-48 rounded bg-[#eef1f6]" />
-              <span className="h-2.5 w-1/4 max-w-28 rounded bg-[#eef1f6]" />
-            </span>
-            <span className="hidden h-3 w-28 rounded bg-[#eef1f6] md:block" />
-            <span className="h-6 w-20 rounded-full bg-[#eef1f6]" />
-          </li>
-        ))}
-      </ul>
+    <div className="border-line shadow-card rounded-card border border-solid bg-white p-4">
+      <p className="text-ink-muted m-0 text-[11px] font-semibold tracking-wide uppercase">{label}</p>
+      <p className={leaf ? "text-leaf m-0 mt-1.5 text-[20px] font-bold" : "text-navy m-0 mt-1.5 text-[20px] font-bold"}>
+        {value}
+      </p>
     </div>
   );
 }
 
 /**
- * Hàng lọc — ô tìm, ô khối / đơn vị, ô trạng thái hiển thị (đặc tả §3). Ba bộ lọc kết hợp theo
- * AND; đổi bất kỳ bộ lọc nào là về trang đầu (`apLoc`).
+ * The prototype's selection bar (`StaffDirectoryWorkspace.tsx:224-255`), at the right end of the filter
+ * row. "Thêm vào danh bạ Mini App" OPENS the per-person consent box; "Xoá đã chọn" is the disabled "?"
+ * of ADR 0068 §14 — there is no bulk soft-delete route (`PHAN_CHUA_DUNG`). No hook of its own.
+ */
+export function SelectionBar({
+  count,
+  busy,
+  onAdd,
+  onWithdraw,
+  showDelete,
+}: {
+  count: number;
+  busy: boolean;
+  onAdd: () => void;
+  onWithdraw: () => void;
+  /** Session holds `admin.user.delete` — only then is the pending delete drawn. */
+  showDelete: boolean;
+}) {
+  return (
+    <div className="ml-auto flex flex-wrap items-center gap-2">
+      <span className="text-ink-muted text-[12px]">{selectedCountText(count)}</span>
+      <Button
+        type="button"
+        variant="primary"
+        size="sm"
+        disabled={busy}
+        icon={<Smartphone aria-hidden="true" className="size-3.5" />}
+        onClick={onAdd}
+      >
+        {BULK_ADD_BUTTON}
+      </Button>
+      <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onWithdraw}>
+        {BULK_WITHDRAW_BUTTON}
+      </Button>
+      {showDelete && (
+        <PendingButton
+          info={pendingPart(BULK_DELETE_BUTTON)}
+          variant="outline"
+          size="sm"
+          className="[&>button]:text-danger"
+          icon={<Trash2 aria-hidden="true" className="size-3.5" />}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Hàng lọc — ô tìm, ô khối / đơn vị, ô trạng thái (bản mẫu `StaffDirectoryWorkspace.tsx:186-257`), và
+ * ở cuối hàng là thanh chọn (`end`). Ba bộ lọc kết hợp theo AND; đổi bộ lọc nào cũng về trang đầu.
  *
- * Ô TÌM GỬI BẰNG SUBMIT (Enter hoặc nút Tìm), KHÔNG THEO TỪNG PHÍM: mỗi phím là một lời gọi mạng
- * mang chữ đang gõ dở, và một danh sách nhảy liên tục dưới tay người đang gõ.
+ * Ô TÌM ÁP THEO LÚC GÕ, SAU MỘT NHỊP NGỪNG (`SEARCH_DELAY_MS`), như bản mẫu — không có nút Tìm. Mỗi
+ * lần áp vẫn là `POST /api/v1/staff/searches`, chữ nằm trong THÂN; Enter áp ngay.
  *
- * Ô NHẬP KHÔNG CÓ THUỘC TÍNH `name`, VÀ ĐÓ LÀ LỚP CHẶN CHỨ KHÔNG PHẢI SƠ SÓT. Trước khi JavaScript
- * chạy xong (mạng chậm ở xã, hay một lỗi nạp bundle), bấm Enter trong một `<form>` là trình duyệt
- * tự gửi form theo kiểu GET — mọi ô CÓ `name` lên URL thành `?ten=chu-da-go`, vào thanh địa chỉ và
- * lịch sử trình duyệt (luật 3, cấm #4). Ô không có `name` thì không có gì để gửi. `method="post"`
- * là lớp thứ hai cho cùng ca ấy. Giá trị đọc từ state của React, không từ `FormData`.
+ * Ô NHẬP KHÔNG CÓ THUỘC TÍNH `name`, VÀ ĐÓ LÀ LỚP CHẶN: trước khi JavaScript chạy xong, Enter trong một
+ * `<form>` là trình duyệt tự gửi form — mọi ô CÓ `name` lên URL thành `?ten=chu-da-go`, vào lịch sử
+ * trình duyệt (luật 3, cấm #4). `method="post"` là lớp thứ hai. `autoComplete="off"`: trên máy dùng
+ * chung, trình duyệt không nhớ họ tên hay số người trước đã tìm.
  *
- * `autoComplete="off"`: trình duyệt nhớ những gì đã gõ vào ô nhập để gợi ý lại — trên một máy dùng
- * chung, đó là danh sách họ tên và số điện thoại người trước đã tìm.
- *
- * KHÔNG CÓ `maxLength`: thuộc tính ấy đếm đơn vị UTF-16, không phải ký tự, nên sẽ cắt sai. Giới hạn
- * được kiểm lúc gửi, bằng đúng phép đếm máy chủ dùng (`chuanHoaTuKhoaTim`).
+ * KHÔNG CÓ `maxLength`: thuộc tính ấy đếm đơn vị UTF-16, không phải ký tự. Giới hạn được kiểm lúc áp,
+ * bằng đúng phép đếm máy chủ dùng (`chuanHoaTuKhoaTim`).
  */
 export function HangLoc({
   loc,
   boPhan,
+  tallies = null,
   doiLoc,
+  end,
 }: {
   loc: LocDanhBa;
   boPhan: readonly MucChon[];
+  /** Per-department "(đang hiện/tổng)"; `null` = not read yet, the names alone are shown. */
+  tallies?: StaffTallies | null;
   doiLoc: (doi: Partial<LocDanhBa>) => void;
+  end?: ReactNode;
 }) {
   const [oTim, datOTim] = useState("");
   const [loiTim, datLoiTim] = useState("");
 
+  /**
+   * Apply what is typed: a refusal (too long — the list keeps the conditions it had), or a filter
+   * change. Words that normalise to the search ALREADY applied change nothing, so no second read goes
+   * out for a trailing space.
+   */
+  const apply = useCallback(
+    (typed: string) => {
+      const kq = ketQuaGuiTim(typed);
+      if ("loi" in kq) {
+        datLoiTim(kq.loi);
+        return;
+      }
+      datLoiTim("");
+      if ((kq.doi.tuKhoa?.tu ?? null) === (loc.tuKhoa?.tu ?? null)) return;
+      doiLoc(kq.doi);
+    },
+    [doiLoc, loc.tuKhoa],
+  );
+
+  useEffect(() => {
+    const timer = setTimeout(() => apply(oTim), SEARCH_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [apply, oTim]);
+
   function gui(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const kq = ketQuaGuiTim(oTim);
-    if ("loi" in kq) {
-      datLoiTim(kq.loi);
-      return;
-    }
-    datLoiTim("");
-    doiLoc(kq.doi);
+    apply(oTim);
   }
 
   return (
-    // The prototype's filter row (`flex flex-wrap items-center gap-2.5`): a 288px search box with its
-    // icon inside, the block select, the visibility select. Labels stay for screen readers.
-    <div className="hang-loc m-0 flex min-w-0 flex-row flex-wrap items-start gap-2.5">
+    <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2.5">
       <div className="flex min-w-0 max-w-full flex-col">
-        <form className="form-tra-cuu m-0 flex min-w-0 flex-[0_1_auto] flex-row items-center gap-2" role="search" method="post" onSubmit={gui}>
-          <Field
-            label={NHAN_O_TIM}
-            htmlFor="tim-danh-ba"
-            hideLabel
-            icon={Search}
-            grow="auto"
-            className={cn("w-72 max-w-full min-w-0 flex-[0_1_18rem]", TALL_ON_PHONE)}
-          >
+        <form className="m-0 min-w-0" role="search" method="post" onSubmit={gui}>
+          <Field label={NHAN_O_TIM} htmlFor="tim-danh-ba" hideLabel icon={Search} grow="auto" className="w-72 max-w-full">
             <input
               id="tim-danh-ba"
               type="search"
@@ -825,86 +984,63 @@ export function HangLoc({
               autoComplete="off"
               aria-describedby="loi-tim-danh-ba"
               aria-invalid={loiTim !== ""}
+              className="h-9! text-[12.5px]!"
             />
           </Field>
-          <Button type="submit" variant="secondary" size="sm" className="max-md:h-11">
-            {NUT_TIM}
-          </Button>
         </form>
         {/* Always in the DOM (a live region added later is not read by every screen reader), but
-            zero-height while empty so it does not push the row's bottom edge out of line. */}
-        <p
-          id="loi-tim-danh-ba"
-          className="thong-bao-loi m-0 min-h-0 [&:not(:empty)]:mt-1.5"
-          role="alert"
-        >
+            zero-height while empty. */}
+        <p id="loi-tim-danh-ba" className="text-danger m-0 min-h-0 text-[12px] font-medium [&:not(:empty)]:mt-1.5" role="alert">
           {loiTim}
         </p>
       </div>
 
-      <Field
-        label={NHAN_LOC_KHOI}
-        htmlFor="loc-khoi-danh-ba"
-        hideLabel
-        icon={Building2}
-        kind="select"
-        grow="auto"
-        className={cn("min-w-0 max-w-full", TALL_ON_PHONE)}
+      <label htmlFor="loc-khoi-danh-ba" className="an-thi-giac">
+        {NHAN_LOC_KHOI}
+      </label>
+      <select
+        id="loc-khoi-danh-ba"
+        className={SELECT_CLASS}
+        value={loc.boPhan}
+        onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
       >
-        <select
-          id="loc-khoi-danh-ba"
-          value={loc.boPhan}
-          onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
-        >
-          <option value="">{TAT_CA_KHOI}</option>
-          {boPhan.map((bp) => (
-            <option key={bp.id} value={bp.id}>
-              {bp.name}
-            </option>
-          ))}
-        </select>
-      </Field>
+        <option value="">{TAT_CA_KHOI}</option>
+        {boPhan.map((bp) => (
+          <option key={bp.id} value={bp.id}>
+            {departmentOptionText(bp.name, bp.id, tallies)}
+          </option>
+        ))}
+      </select>
 
-      {/* The prototype's select (it replaced a segmented control, 06/10/2026), emitting EXACTLY the three
-          codes ("", "1", "0") through the same `maHienThi` → `doiLoc`. Outside the search `<form>`, and it
-          holds a filter code, never what somebody typed. */}
-      <Field
-        label={NHAN_LOC_HIEN_THI}
-        htmlFor="loc-hien-thi-danh-ba"
-        hideLabel
-        icon={SEGMENT_ICON[loc.hienThi]}
-        kind="select"
-        grow="auto"
-        className={cn("min-w-0 max-w-full", TALL_ON_PHONE)}
+      {/* The prototype's status select, emitting EXACTLY the three codes ("", "1", "0") through
+          `maHienThi` → `doiLoc`. Outside the search `<form>`: a filter code, never typed text. */}
+      <label htmlFor="loc-hien-thi-danh-ba" className="an-thi-giac">
+        {NHAN_LOC_HIEN_THI}
+      </label>
+      <select
+        id="loc-hien-thi-danh-ba"
+        className={SELECT_CLASS}
+        value={loc.hienThi}
+        onChange={(e) => doiLoc({ hienThi: maHienThi(e.target.value) })}
       >
-        <select
-          id="loc-hien-thi-danh-ba"
-          value={loc.hienThi}
-          onChange={(e) => doiLoc({ hienThi: maHienThi(e.target.value) })}
-        >
-          {THU_TU_HIEN_THI.map((ma) => (
-            <option key={ma} value={ma}>
-              {LUA_CHON_HIEN_THI[ma].nhan}
-            </option>
-          ))}
-        </select>
-      </Field>
+        {THU_TU_HIEN_THI.map((ma) => (
+          <option key={ma} value={ma}>
+            {LUA_CHON_HIEN_THI[ma].nhan}
+          </option>
+        ))}
+      </select>
+
+      {end}
     </div>
   );
 }
 
-/** Field descendants at 44px below 768px — the same selectors Field uses for 40px, so they win there. */
-const TALL_ON_PHONE =
-  "max-md:[&_input:not([type=checkbox]):not([type=radio])]:h-11 max-md:[&_select]:h-11";
-
-const SEGMENT_ICON: Record<MaHienThi, LucideIcon> = { "": List, "1": Eye, "0": EyeOff };
+/** Pause after the last keystroke before a search is applied. */
+export const SEARCH_DELAY_MS = 300;
 
 /**
- * Phân trang theo con trỏ.
- *
- * KHÔNG CÓ SỐ TRANG VÀ KHÔNG CÓ TỔNG SỐ, và đó không phải thiếu sót: hợp đồng trả `next_cursor` +
- * `has_more` chứ không trả `total`, vì máy chủ đọc theo mốc và cố ý không chạy `COUNT(*)` trên bảng
- * đã phân mảnh. Hiện "Trang 3/12" ở đây là báo một con số không ai tính (`core/page`).
+ * Phân trang theo con trỏ. KHÔNG CÓ SỐ TRANG: hợp đồng trả `next_cursor` + `has_more`; tổng số của bộ
+ * lọc là dòng "Hiển thị n cán bộ." bên cạnh, đọc từ tuyến đếm.
  */
 function DieuHuongTrang({
   nganXep,
@@ -917,15 +1053,14 @@ function DieuHuongTrang({
   conTrangSau: boolean;
   diToiTrang: (toi: NganXepConTro) => void;
 }) {
-  // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi tới đó. Bấm
-  // khi con trỏ rỗng thì `sangTrangSau` ném lỗi — nút phải mờ đi trước khi tới đó.
+  // Hai điều kiện, không một: `has_more` nói còn trang sau, `next_cursor` là đường đi tới đó.
   const coSau = conTrangSau && conTroTiep !== "";
   return (
     <nav className="dieu-huong-trang m-0" aria-label="Phân trang danh bạ cán bộ">
       <Button
         type="button"
         variant="secondary"
-        className="max-md:h-11"
+        size="sm"
         icon={<ChevronLeft aria-hidden="true" />}
         disabled={!coTrangTruoc(nganXep)}
         onClick={() => diToiTrang(veTrangTruoc(nganXep))}
@@ -935,7 +1070,7 @@ function DieuHuongTrang({
       <Button
         type="button"
         variant="secondary"
-        className="max-md:h-11"
+        size="sm"
         disabled={!coSau}
         onClick={() => diToiTrang(sangTrangSau(nganXep, conTroTiep))}
       >

@@ -1,27 +1,30 @@
-import { ContactRound } from "lucide-react";
+"use client";
 
-import { PageHeader } from "@/components/ui/page-header";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
-import { QUYEN_QUAN_LY_NGUOI_DUNG } from "@/lib/quyen";
+import { usePhien } from "@/features/phien/phien-hien-tai";
+import { QUYEN_QUAN_LY_NGUOI_DUNG, quyetDinhTheoKhoa } from "@/lib/quyen";
 
 import { DanhBaLienHe } from "./danh-ba-lien-he";
-import { CAU_THIEU_QUYEN, MO_TA_TRANG, TIEU_DE_TRANG } from "./nhan-danh-ba";
+import { DirectoryHeading } from "./directory-heading";
+import { CAU_THIEU_QUYEN } from "./nhan-danh-ba";
 
 /**
- * The `Danh bạ cán bộ` tab of `/mini-app` — the prototype's `StaffDirectoryWorkspace` header (`<h1>Danh bạ
- * cán bộ</h1>` + one line, actions on the right), then the screen (`DanhBaLienHe`).
+ * The `Danh bạ cán bộ` tab of `/mini-app` — the prototype's `StaffDirectoryWorkspace`. The tab frame
+ * (`features/mini-app/`) supplies the `p-7`; nothing here adds padding of its own.
  *
- * THE `<h1>` STAYS OUTSIDE THE GATE, so the tab keeps its title while the gate reads the session or when it
- * refuses. The header's right-hand buttons need the screen's state (the bulk panel, the session), so
- * `DanhBaLienHe` draws them and lifts them into this row from `lg` up (`lg:absolute` against the
- * `relative` wrapper here; the header reserves the room with `lg:pr-*`).
+ * THE TITLE IS DRAWN IN EVERY STATE. Once the gate opens, the screen draws the header itself, with its
+ * two actions (they open dialogs the screen owns). While the session is being read, or when it
+ * refuses, the header is drawn here, without actions, above the gate's own sentence.
  *
- * Gate: `admin.user`, the key `GET /api/v1/staff` declares (see `app/mini-app/page.tsx`). Convenience only.
+ * Gate: `admin.user`, the key `GET /api/v1/staff` declares (see `app/mini-app/page.tsx`). Convenience
+ * only — the server checks the key on every request (rule 5, forbidden #1).
  */
 export function StaffDirectoryTab() {
+  const phien = usePhien();
+  const open = phien !== null && quyetDinhTheoKhoa(phien, QUYEN_QUAN_LY_NGUOI_DUNG).hien;
   return (
-    <div className="relative min-w-0">
-      <PageHeader icon={ContactRound} title={TIEU_DE_TRANG} subtitle={MO_TA_TRANG} className="lg:pr-[30rem]" />
+    <div className="min-w-0">
+      {!open && <DirectoryHeading />}
       <CongQuyen khoa={QUYEN_QUAN_LY_NGUOI_DUNG} cauThieuQuyen={CAU_THIEU_QUYEN}>
         <DanhBaLienHe />
       </CongQuyen>

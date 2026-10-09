@@ -7,16 +7,22 @@ import * as apiCanBo from "@/lib/api/can-bo";
 import * as apiDanhMuc from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-import { BieuMauGhiCanBo } from "@/components/danh-ba/bieu-mau-ghi-can-bo";
-import { banTuCanBo } from "@/components/danh-ba/nhan-ghi-danh-ba";
+import { toast } from "sonner";
+
+import { BAN_TRONG, banTuCanBo, thanThem } from "@/components/danh-ba/nhan-ghi-danh-ba";
 
 import { BangLienHe } from "./bang-lien-he";
-import { BULK_NONE_CONSENTED, BULK_OPEN_BUTTON } from "./bulk-publication";
-import { BulkPublicationPanel } from "./bulk-publication-panel";
+import { BulkConsentForm } from "./bulk-consent-form";
+import { BULK_NONE_CONSENTED, BULK_NOTHING_TO_WITHDRAW, bulkAddedToast, bulkWithdrawnToast } from "./bulk-publication";
 import { CAU_CHUA_XAC_NHAN } from "./cong-khai";
-import { DanhBaLienHe, HangLoc } from "./danh-ba-lien-he";
+import { DanhBaLienHe, HangLoc, SEARCH_DELAY_MS, SelectionBar } from "./danh-ba-lien-he";
+import { DirectoryHeading } from "./directory-heading";
 import { HopCongKhai } from "./hop-cong-khai";
 import { HopXoa } from "./hop-xoa";
+import { KPI_PUBLISHED, KPI_TOTAL, NHAN_SO_KHOI } from "./nhan-danh-ba";
+import { StaffContactForm } from "./staff-contact-form";
+import { StaffDirectoryImportDialog } from "./staff-directory-import-dialog";
+import { ADDED_TOAST, FULL_NAME_REQUIRED, SAVED_TOAST, UNIT_REQUIRED } from "./staff-contact";
 import { CAU_CO_TAI_KHOAN, CAU_THIEU_LY_DO } from "./xoa-dong";
 
 /**
@@ -108,6 +114,13 @@ vi.mock("@/lib/api/can-bo", async (goc) => ({
   publishStaffBulk: vi.fn(),
   xoaCanBo: vi.fn(),
   suaCanBo: vi.fn(),
+  themCanBo: vi.fn(),
+  getStaffTallies: vi.fn(),
+  countStaffMatches: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 
 vi.mock("@/lib/api/danh-muc", async (goc) => ({
@@ -120,6 +133,9 @@ const congKhai = vi.mocked(apiCanBo.datCongKhaiCanBo);
 const bulk = vi.mocked(apiCanBo.publishStaffBulk);
 const xoa = vi.mocked(apiCanBo.xoaCanBo);
 const sua = vi.mocked(apiCanBo.suaCanBo);
+const create = vi.mocked(apiCanBo.themCanBo);
+const tallies = vi.mocked(apiCanBo.getStaffTallies);
+const searchCount = vi.mocked(apiCanBo.countStaffMatches);
 
 /** Dựng một component bằng bộ chạy trên; mỗi `ve()` là một lượt render, rồi chạy effect đến hạn. */
 function may<P extends object>(Comp: (p: P) => unknown, props: P) {
@@ -232,6 +248,15 @@ beforeEach(() => {
   congKhai.mockImplementation(async (_id, yc) => ({ ok: true, duLieu: { ...A, published: yc.congKhai } }));
   xoa.mockResolvedValue({ ok: true, duLieu: null });
   sua.mockResolvedValue({ ok: true, duLieu: A });
+  create.mockImplementation(async (body) => ({
+    ok: true,
+    duLieu: canBo({ id: "01J0000000000000000000NEW1", code: "CB-00999", full_name: body.full_name }),
+  }));
+  tallies.mockResolvedValue({
+    ok: true,
+    duLieu: { total: 12, published: 5, departments: [{ id: "BP-LE", total: 7, published: 4 }] },
+  });
+  searchCount.mockResolvedValue({ ok: true, duLieu: 3 });
   vi.mocked(apiDanhMuc.layDanhMucBoPhan).mockResolvedValue({
     ok: true,
     duLieu: { items: [{ id: "BP-LE", code: "le", name: "VĂN PHÒNG", parent_id: "", order: 1, staff_count: 2 }] },
@@ -282,6 +307,17 @@ describe("công khai qua màn thật — không tick thì không có lời gọi
     expect(congKhai).toHaveBeenCalledWith(A.id, { congKhai: true, daXacNhanDongY: true, thuTu: 3 });
     expect(propsCua(m.cay(), HopCongKhai)).toBeNull();
     expect(docTrang).toHaveBeenCalledTimes(2);
+    // The prototype's wording (`StaffDirectoryWorkspace.tsx:113-117`), n = 1.
+    expect(toast.success).toHaveBeenCalledWith("Đã thêm 1 người vào danh bạ trên Mini App.");
+  });
+
+  it("rút MỘT người xong → toast 'Đã rút 1 người khỏi danh bạ trên Mini App.'", async () => {
+    const m = await moMan();
+    phaiCo(m.cay(), BangLienHe).congKhai?.onRut(B);
+    m.ve();
+    phaiCo(m.cay(), HopCongKhai).onGui();
+    await xongMang(m);
+    expect(toast.success).toHaveBeenCalledWith("Đã rút 1 người khỏi danh bạ trên Mini App.");
   });
 
   it("mở LẠI hộp — sau khi đã tick rồi huỷ, hay sau một lần công khai xong — ô tick lại TRỐNG", async () => {
@@ -459,27 +495,198 @@ describe("xoá qua màn thật", () => {
   });
 });
 
-/* ---- biểu mẫu sửa dùng chung ----------------------------------------------------------------- */
+/* ---- hộp thêm / sửa (bản mẫu StaffContactForm) --------------------------------------------- */
 
-describe("sửa qua màn Danh bạ — `has_zalo` chỉ đi khi đổi", () => {
-  it("lưu mà không đụng ô Có Zalo → PATCH KHÔNG mang `has_zalo`; đổi ô ấy → mang đúng giá trị mới", async () => {
+describe("sửa qua hộp thoại — `has_zalo` chỉ đi khi đổi", () => {
+  it("lưu mà không đụng ô Zalo → PATCH KHÔNG mang `has_zalo`; đổi ô ấy → mang đúng giá trị mới", async () => {
     const m = await moMan();
     phaiCo(m.cay(), BangLienHe).onSua(A);
     m.ve();
-    const bm = phaiCo(m.cay(), BieuMauGhiCanBo);
-    expect(bm.ban).toEqual(banTuCanBo(A));
-    bm.onGui();
+    const f = phaiCo(m.cay(), StaffContactForm);
+    expect(f.draft).toEqual(banTuCanBo(A));
+    expect(f.editing).toBe(A);
+    f.onSubmit();
     await xongMang(m);
     expect(sua.mock.calls[0]?.[1]).not.toHaveProperty("has_zalo");
+    expect(toast.success).toHaveBeenCalledWith(SAVED_TOAST);
+    expect(propsCua(m.cay(), StaffContactForm)).toBeNull();
 
     phaiCo(m.cay(), BangLienHe).onSua(A);
     m.ve();
-    const bm2 = phaiCo(m.cay(), BieuMauGhiCanBo);
-    bm2.datBan({ ...bm2.ban, coZalo: true });
+    const f2 = phaiCo(m.cay(), StaffContactForm);
+    f2.setDraft({ ...f2.draft, coZalo: true });
     m.ve();
-    phaiCo(m.cay(), BieuMauGhiCanBo).onGui();
+    phaiCo(m.cay(), StaffContactForm).onSubmit();
     await xongMang(m);
     expect(sua.mock.calls[1]?.[1]).toHaveProperty("has_zalo", true);
+  });
+});
+
+describe("thêm cán bộ qua hộp thoại ở đầu tab", () => {
+  /** The header's "Thêm cán bộ" button, pressed. */
+  function openAdd(m: { cay: () => unknown; ve: () => unknown }) {
+    const header = phaiCo(m.cay(), DirectoryHeading);
+    const add = tatCa(header.actions, (p) => p.props.children === "Thêm cán bộ")[0];
+    (add?.props.onClick as () => void)();
+    m.ve();
+    return phaiCo(m.cay(), StaffContactForm);
+  }
+
+  it("ô trống → KHÔNG gọi mạng; lỗi nằm dưới từng ô, và toast lỗi đầu tiên", async () => {
+    const m = await moMan();
+    const f = openAdd(m);
+    expect(f.editing).toBeNull();
+    expect(f.draft).toEqual(BAN_TRONG);
+    f.onSubmit();
+    m.ve();
+    expect(create).not.toHaveBeenCalled();
+    expect(phaiCo(m.cay(), StaffContactForm).errors).toEqual({ fullName: FULL_NAME_REQUIRED, unit: UNIT_REQUIRED });
+    expect(toast.error).toHaveBeenCalledWith(FULL_NAME_REQUIRED);
+  });
+
+  it("tick 'Hiện trên danh bạ Mini App' rồi lưu → POST /staff, KHÔNG công khai; mở hộp hỏi ý với ô tick TRỐNG", async () => {
+    const m = await moMan();
+    const f = openAdd(m);
+    const draft = { ...BAN_TRONG, hoTen: "Trần Văn Mới", boPhanID: "BP-LE", diDongCaNhan: "0900000005" };
+    f.setDraft(draft);
+    f.setShowOnMiniApp(true);
+    m.ve();
+    phaiCo(m.cay(), StaffContactForm).onSubmit();
+    await xongMang(m);
+
+    expect(create).toHaveBeenCalledTimes(1);
+    const [body, key] = create.mock.calls[0] ?? [];
+    expect(body).toEqual(thanThem(draft));
+    expect(typeof key === "string" && key.length > 0).toBe(true);
+    expect(toast.success).toHaveBeenCalledWith(ADDED_TOAST);
+    // Nothing published by the save itself — the consent box is open, unticked.
+    expect(congKhai).not.toHaveBeenCalled();
+    expect(bulk).not.toHaveBeenCalled();
+    const hop = phaiCo(m.cay(), HopCongKhai);
+    expect(hop.dangMo.kieu).toBe("congKhai");
+    expect(hop.dangMo.canBo.full_name).toBe("Trần Văn Mới");
+    expect(hop.ban.daHoiY).toBe(false);
+    hop.onGui();
+    m.ve();
+    expect(congKhai).not.toHaveBeenCalled();
+    expect(phaiCo(m.cay(), HopCongKhai).loiMayChu).toBe(CAU_CHUA_XAC_NHAN);
+  });
+
+  it("'Gọi được qua Zalo' khi thêm → PATCH thứ hai chỉ mang `has_zalo`; không tick Mini App → không hộp hỏi ý", async () => {
+    const m = await moMan();
+    const f = openAdd(m);
+    f.setDraft({ ...BAN_TRONG, hoTen: "Lê Thị Zalo", boPhanID: "BP-LE", coZalo: true });
+    m.ve();
+    phaiCo(m.cay(), StaffContactForm).onSubmit();
+    await xongMang(m);
+    await xongMang(m);
+    expect(sua).toHaveBeenCalledWith(
+      "01J0000000000000000000NEW1",
+      expect.objectContaining({ has_zalo: true, full_name: null, mobile: null }),
+    );
+    expect(propsCua(m.cay(), HopCongKhai)).toBeNull();
+  });
+
+  it("máy chủ từ chối → câu máy chủ NGUYÊN VĂN trong hộp, hộp còn mở, không đọc lại", async () => {
+    create.mockResolvedValueOnce({ ok: false, thongBao: "Khối này đã có người trùng tên." });
+    const m = await moMan();
+    const f = openAdd(m);
+    f.setDraft({ ...BAN_TRONG, hoTen: "Trần Văn Trùng", boPhanID: "BP-LE" });
+    m.ve();
+    phaiCo(m.cay(), StaffContactForm).onSubmit();
+    await xongMang(m);
+    expect(phaiCo(m.cay(), StaffContactForm).serverError).toBe("Khối này đã có người trùng tên.");
+    expect(docTrang).toHaveBeenCalledTimes(1);
+  });
+
+  it("bỏ tick Mini App khi sửa người đang hiện → sau khi lưu, mở hộp RÚT (không rút thẳng)", async () => {
+    sua.mockResolvedValueOnce({ ok: true, duLieu: B });
+    const m = await moMan();
+    phaiCo(m.cay(), BangLienHe).onSua(B);
+    m.ve();
+    expect(phaiCo(m.cay(), StaffContactForm).showOnMiniApp).toBe(true);
+    phaiCo(m.cay(), StaffContactForm).setShowOnMiniApp(false);
+    m.ve();
+    phaiCo(m.cay(), StaffContactForm).onSubmit();
+    await xongMang(m);
+    expect(congKhai).not.toHaveBeenCalled();
+    expect(phaiCo(m.cay(), HopCongKhai).dangMo).toEqual({ kieu: "rut", canBo: B });
+  });
+
+  it("không `content.update` → hộp không vẽ ô Mini App (ca bị từ chối)", async () => {
+    H.phien = phien(["admin.user"]);
+    const m = await moMan();
+    phaiCo(m.cay(), BangLienHe).onSua(B);
+    m.ve();
+    expect(phaiCo(m.cay(), StaffContactForm).canPublish).toBe(false);
+  });
+});
+
+/* ---- thẻ KPI và dòng "Hiển thị n cán bộ." --------------------------------------------------- */
+
+describe("số liệu từ GET /api/v1/staff-counts — không bao giờ là số dòng của trang", () => {
+  const kpi = (cay: unknown, label: string) => tatCa(cay, (p) => p.props.label === label)[0]?.props.value;
+  const shownLine = (cay: unknown) =>
+    tatCa(
+      cay,
+      (p) => p.type === "p" && typeof p.props.children === "string" && /^Hiển thị|^$/.test(p.props.children),
+    )[0]?.props.children;
+
+  it("ba thẻ đọc số máy chủ đếm; dòng dưới bảng là tổng của cả xã, không phải 3 dòng của trang", async () => {
+    const m = await moMan();
+    expect(tallies).toHaveBeenCalledTimes(1);
+    expect(kpi(m.cay(), KPI_TOTAL)).toBe("12");
+    expect(kpi(m.cay(), KPI_PUBLISHED)).toBe("5");
+    expect(kpi(m.cay(), NHAN_SO_KHOI)).toBe("1");
+    expect(shownLine(m.cay())).toBe("Hiển thị 12 cán bộ.");
+  });
+
+  it("lọc khối + 'Đang hiện' → tổng của đúng bộ lọc ấy; có chữ tìm → số của POST /staff-count-queries", async () => {
+    const m = await moMan();
+    phaiCo(m.cay(), HangLoc).doiLoc({ boPhan: "BP-LE", hienThi: "1" });
+    await xongMang(m);
+    expect(shownLine(m.cay())).toBe("Hiển thị 4 cán bộ.");
+
+    const tu = apiCanBo.chuanHoaTuKhoaTim("Nguyễn");
+    if (tu.loai !== "hopLe") throw new Error("chữ mẫu phải hợp lệ");
+    phaiCo(m.cay(), HangLoc).doiLoc({ tuKhoa: tu });
+    await xongMang(m);
+    expect(searchCount).toHaveBeenCalledWith(tu, { boPhan: "BP-LE", congKhai: true });
+    expect(shownLine(m.cay())).toBe("Hiển thị 3 cán bộ.");
+  });
+
+  it("đọc số hỏng → thẻ nói 'chưa đọc được', dòng dưới bảng KHÔNG in một tổng bịa", async () => {
+    tallies.mockResolvedValueOnce({ ok: false, thongBao: "Phiên hết hạn." });
+    const m = await moMan();
+    expect(kpi(m.cay(), KPI_TOTAL)).toBe("chưa đọc được");
+    expect(shownLine(m.cay())).toBe("");
+  });
+
+  it("kết quả rỗng → 'Hiển thị 0 cán bộ.' (bản mẫu :404-406); đang tải → không dòng nào", async () => {
+    docTrang.mockResolvedValue({ ok: true, duLieu: { items: [], next_cursor: "", has_more: false } });
+    searchCount.mockResolvedValue({ ok: false, thongBao: "chưa đọc" });
+    const m = may(DanhBaLienHe, {});
+    m.ve();
+    expect(shownLine(m.cay())).toBeUndefined();
+    await xongMang(m);
+    expect(shownLine(m.cay())).toBe("Hiển thị 0 cán bộ.");
+    // Same under a search whose own count could not be read: the empty first page is the count.
+    const tu = apiCanBo.chuanHoaTuKhoaTim("Không ai");
+    if (tu.loai !== "hopLe") throw new Error("chữ mẫu phải hợp lệ");
+    phaiCo(m.cay(), HangLoc).doiLoc({ tuKhoa: tu });
+    m.ve();
+    expect(shownLine(m.cay())).toBeUndefined();
+    await xongMang(m);
+    expect(shownLine(m.cay())).toBe("Hiển thị 0 cán bộ.");
+  });
+
+  it("sau một lần ghi, số liệu được đọc lại cùng trang", async () => {
+    const m = await moMan();
+    phaiCo(m.cay(), BangLienHe).onSua(A);
+    m.ve();
+    phaiCo(m.cay(), StaffContactForm).onSubmit();
+    await xongMang(m);
+    expect(tallies).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -518,6 +725,55 @@ describe("ô tìm — chữ tìm chỉ đi tới `doiLoc`, không tới log", ()
     expect(String(loi?.props.children)).not.toBe("");
   });
 
+  it("gõ rồi ngừng → áp sau một nhịp, KHÔNG có nút Tìm; chữ chỉ đi tới `doiLoc` (đường POST), ô không có `name`", () => {
+    vi.useFakeTimers();
+    try {
+      const doiLoc = vi.fn();
+      const m = may(HangLoc, { loc: { tuKhoa: null, boPhan: "", hienThi: "" }, boPhan: BO_PHAN, doiLoc });
+      m.ve();
+      const box = tatCa(m.cay(), (p) => p.props.id === "tim-danh-ba")[0];
+      expect(box?.props.name).toBeUndefined();
+      (box?.props.onChange as (e: unknown) => void)({ target: { value: "Nguyễn  Văn" } });
+      m.ve();
+      expect(doiLoc).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(SEARCH_DELAY_MS);
+      expect(doiLoc).toHaveBeenCalledWith({ tuKhoa: { loai: "hopLe", tu: "Nguyễn Văn" } });
+      expect(tatCa(m.cay(), (p) => p.type === "button")).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("chữ đã áp rồi thì gõ thêm khoảng trắng KHÔNG đọc lại", () => {
+    vi.useFakeTimers();
+    try {
+      const doiLoc = vi.fn();
+      const m = may(HangLoc, {
+        loc: { tuKhoa: { loai: "hopLe", tu: "Nguyễn" }, boPhan: "", hienThi: "" },
+        boPhan: BO_PHAN,
+        doiLoc,
+      });
+      m.ve();
+      const box = tatCa(m.cay(), (p) => p.props.id === "tim-danh-ba")[0];
+      (box?.props.onChange as (e: unknown) => void)({ target: { value: "Nguyễn " } });
+      m.ve();
+      vi.advanceTimersByTime(SEARCH_DELAY_MS);
+      expect(doiLoc).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("có chữ tìm → trang và con số đều đi qua hai đường mang chữ trong THÂN, cùng một chữ", async () => {
+    const m = await moMan();
+    const tu = apiCanBo.chuanHoaTuKhoaTim("0900000000");
+    if (tu.loai !== "hopLe") throw new Error("chữ mẫu phải hợp lệ");
+    phaiCo(m.cay(), HangLoc).doiLoc({ tuKhoa: tu });
+    await xongMang(m);
+    expect(docTrang.mock.calls.at(-1)?.[0]).toBe(tu);
+    expect(searchCount.mock.calls.at(-1)?.[0]).toBe(tu);
+  });
+
   it("cả luồng tìm → đọc → xoá không ghi gì ra console", async () => {
     const nghe = (["log", "info", "warn", "error", "debug"] as const).map((k) =>
       vi.spyOn(console, k).mockImplementation(() => undefined),
@@ -533,52 +789,69 @@ describe("ô tìm — chữ tìm chỉ đi tới `doiLoc`, không tới log", ()
   });
 });
 
-/* ---- công khai nhiều người ------------------------------------------------------------------- */
+/* ---- cột chọn và thanh chọn (bản mẫu, chủ đầu tư chốt 09/10/2026) ---------------------------- */
 
-describe("công khai nhiều người qua màn thật (chốt 30/09/2026)", () => {
-  /** The "Công khai nhiều người" button the screen renders, or `null`. */
-  function openButton(cay: unknown): PhanTu | null {
-    return tatCa(cay, (p) => p.type === "button" && p.props.children === BULK_OPEN_BUTTON)[0] ?? null;
+describe("thanh chọn qua màn thật — chọn KHÔNG công khai ai", () => {
+  /** The bar sits in the filter row's `end` slot — a prop, not a child, so it is read from there. */
+  const bar = (m: { cay: () => unknown }) => propsCua(phaiCo(m.cay(), HangLoc).end, SelectionBar);
+  const form = (m: { cay: () => unknown }) => phaiCo(m.cay(), BulkConsentForm);
+
+  async function pick(...people: identity_canBoTomTat[]) {
+    const m = await moMan();
+    for (const cb of people) {
+      phaiCo(m.cay(), BangLienHe).selection?.onToggle(cb, true);
+      m.ve();
+    }
+    return m;
   }
 
-  async function openPanel() {
-    const m = await moMan();
-    const btn = openButton(m.cay());
-    if (btn === null) throw new Error("no bulk button");
-    (btn.props.onClick as () => void)();
+  async function openConsent(...people: identity_canBoTomTat[]) {
+    const m = await pick(...people);
+    bar(m)?.onAdd();
     m.ve();
     return m;
   }
 
-  const panel = (m: { cay: () => unknown }) => phaiCo(m.cay(), BulkPublicationPanel);
-
-  it("KHÔNG có `content.update` → không nút, không khung (ca bị từ chối); phiên chưa đọc / hỏng cũng vậy", async () => {
+  it("KHÔNG có `content.update` → không cột chọn, không thanh chọn (ca bị từ chối); phiên chưa đọc / hỏng cũng vậy", async () => {
     for (const p of [phien(["admin.user", "admin.user.delete"]), null, { ok: false, thongBao: "x" } as PhienDaDoc]) {
       H.phien = p;
       const m = await moMan();
-      expect(openButton(m.cay())).toBeNull();
-      expect(propsCua(m.cay(), BulkPublicationPanel)).toBeNull();
+      expect(phaiCo(m.cay(), BangLienHe).selection).toBeUndefined();
+      expect(bar(m)).toBeNull();
     }
   });
 
-  it("có `content.update` → nút mở khung; khung nhận các dòng của trang đang xem", async () => {
-    const m = await openPanel();
-    expect(openButton(m.cay())).toBeNull();
-    expect(panel(m).pageRows).toEqual([A, B, C]);
-    expect(panel(m).selection).toEqual([]);
+  it("chưa chọn ai → không thanh; chọn A → 'Đã chọn 1 người'; chọn cả trang → 3", async () => {
+    const m = await moMan();
+    expect(bar(m)).toBeNull();
+    phaiCo(m.cay(), BangLienHe).selection?.onToggle(A, true);
+    m.ve();
+    expect(bar(m)?.count).toBe(1);
+    phaiCo(m.cay(), BangLienHe).selection?.onTogglePage(true);
+    m.ve();
+    expect(bar(m)?.count).toBe(3);
+    expect([...(phaiCo(m.cay(), BangLienHe).selection?.selectedIds ?? [])]).toEqual([A.id, B.id, C.id]);
   });
 
-  it("chưa tick ai → không gọi mạng, nói lý do", async () => {
-    const m = await openPanel();
-    panel(m).onSelect(A);
-    m.ve();
-    panel(m).onSubmit();
+  it("'Thêm vào danh bạ Mini App' chỉ MỞ hộp hỏi ý: mỗi người một ô, đều TRỐNG; người đang hiện không có mặt; KHÔNG gọi mạng", async () => {
+    const m = await openConsent(A, B, C);
+    expect(form(m).selection.map((s) => [s.id, s.consentAsked])).toEqual([
+      [A.id, false],
+      [C.id, false],
+    ]);
+    expect(bulk).not.toHaveBeenCalled();
+    expect(congKhai).not.toHaveBeenCalled();
+  });
+
+  it("chưa tick ô hỏi ý nào → không gọi mạng, nói lý do", async () => {
+    const m = await openConsent(A);
+    form(m).onSubmit();
     m.ve();
     expect(bulk).not.toHaveBeenCalled();
-    expect(panel(m).error).toBe(BULK_NONE_CONSENTED);
+    expect(form(m).error).toBe(BULK_NONE_CONSENTED);
   });
 
-  it("gửi: dòng tick → true, dòng chưa tick → false, kèm khoá chống trùng; kết quả từng dòng; đọc lại danh bạ", async () => {
+  it("gửi: dòng tick → true, dòng chưa tick → false, kèm khoá; toast đếm số MÁY CHỦ công khai; người bị bỏ qua được nêu tên", async () => {
     bulk.mockResolvedValue({
       ok: true,
       duLieu: {
@@ -589,14 +862,10 @@ describe("công khai nhiều người qua màn thật (chốt 30/09/2026)", () =
         ],
       },
     });
-    const m = await openPanel();
-    panel(m).onSelect(A);
+    const m = await openConsent(A, C);
+    form(m).onSetConsent(A.id, true);
     m.ve();
-    panel(m).onSelect(C);
-    m.ve();
-    panel(m).onSetConsent(A.id, true);
-    m.ve();
-    panel(m).onSubmit();
+    form(m).onSubmit();
     await xongMang(m);
 
     expect(bulk).toHaveBeenCalledTimes(1);
@@ -612,50 +881,91 @@ describe("công khai nhiều người qua màn thật (chốt 30/09/2026)", () =
         { id: C.id, consent_confirmed: false },
       ],
     });
-
-    const out = panel(m).outcome;
+    expect(toast.success).toHaveBeenCalledWith(bulkAddedToast(1));
+    const out = form(m).outcome;
     expect(out?.kind === "lines" && out.lines.map((l) => [l.who, l.text])).toEqual([
       ["Nguyễn Văn A (CB-00123)", "Đã công khai"],
       ["Lê Văn C (CB-00125)", "Bỏ qua — chưa hỏi ý"],
     ]);
-    expect(panel(m).selection).toEqual([]);
+    expect(bar(m)).toBeNull();
     expect(docTrang).toHaveBeenCalledTimes(2);
   });
 
-  it("máy chủ trả `replayed` → câu phát lại, đọc lại danh bạ", async () => {
-    bulk.mockResolvedValue({ ok: true, duLieu: { kind: "replayed" } });
-    const m = await openPanel();
-    panel(m).onSelect(A);
+  it("mọi người đều được công khai → hộp đóng, bỏ chọn", async () => {
+    bulk.mockResolvedValue({ ok: true, duLieu: { kind: "results", items: [{ id: A.id, result: "published" }] } });
+    const m = await openConsent(A);
+    form(m).onSetConsent(A.id, true);
     m.ve();
-    panel(m).onSetConsent(A.id, true);
-    m.ve();
-    panel(m).onSubmit();
+    form(m).onSubmit();
     await xongMang(m);
-
-    expect(panel(m).outcome).toEqual({ kind: "replayed" });
-    expect(docTrang).toHaveBeenCalledTimes(2);
+    expect(propsCua(m.cay(), BulkConsentForm)).toBeNull();
+    expect(bar(m)).toBeNull();
   });
 
-  it("lỗi mạng → GIỮ khoá cho lần gửi lại cùng thân; đổi lựa chọn → khoá MỚI", async () => {
+  it("lỗi mạng → GIỮ khoá cho lần gửi lại cùng thân; đổi một ô tick → khoá MỚI", async () => {
     bulk.mockResolvedValue({ ok: false, thongBao: "Không kết nối được máy chủ. Vui lòng thử lại." });
-    const m = await openPanel();
-    panel(m).onSelect(A);
+    const m = await openConsent(A, C);
+    form(m).onSetConsent(A.id, true);
     m.ve();
-    panel(m).onSetConsent(A.id, true);
-    m.ve();
-    panel(m).onSubmit();
+    form(m).onSubmit();
     await xongMang(m);
-    expect(panel(m).error).toBe("Không kết nối được máy chủ. Vui lòng thử lại.");
-    panel(m).onSubmit();
+    expect(form(m).error).toBe("Không kết nối được máy chủ. Vui lòng thử lại.");
+    form(m).onSubmit();
     await xongMang(m);
-    panel(m).onSelect(C);
+    form(m).onSetConsent(C.id, true);
     m.ve();
-    panel(m).onSubmit();
+    form(m).onSubmit();
     await xongMang(m);
 
     const keys = bulk.mock.calls.map((c) => c[1]);
     expect(keys[0]).toBe(keys[1]);
     expect(keys[2]).not.toBe(keys[0]);
     expect(docTrang).toHaveBeenCalledTimes(1);
+  });
+
+  it("'Rút khỏi danh bạ' → PUT …/publication MỘT lần cho MỖI người đang hiện, consent false, giữ thứ tự", async () => {
+    const m = await pick(A, B);
+    bar(m)?.onWithdraw();
+    await xongMang(m);
+    expect(congKhai).toHaveBeenCalledTimes(1);
+    expect(congKhai).toHaveBeenCalledWith(B.id, { congKhai: false, daXacNhanDongY: false, thuTu: 4 });
+    expect(toast.success).toHaveBeenCalledWith(bulkWithdrawnToast(1));
+    expect(bar(m)).toBeNull();
+  });
+
+  it("'Rút khỏi danh bạ' mà không ai đang hiện → không gọi mạng, nói ra", async () => {
+    const m = await pick(A, C);
+    bar(m)?.onWithdraw();
+    await xongMang(m);
+    expect(congKhai).not.toHaveBeenCalled();
+    expect(toast.info).toHaveBeenCalledWith(BULK_NOTHING_TO_WITHDRAW);
+  });
+
+  it("'Xoá đã chọn' chỉ vẽ (dạng '?' vô hiệu) khi có `admin.user.delete`; không có đường xoá nhiều người", async () => {
+    expect(bar(await pick(A))?.showDelete).toBe(true);
+    H.phien = phien(["admin.user", "content.update"]);
+    expect(bar(await pick(A))?.showDelete).toBe(false);
+    expect(xoa).not.toHaveBeenCalled();
+  });
+});
+
+/* ---- nhập Excel ------------------------------------------------------------------------------ */
+
+describe("'Nhập từ Excel' mở hộp nhập của tab Danh bạ", () => {
+  it("bấm → dựng `StaffDirectoryImportDialog`; nhập xong → đọc lại trang và số liệu; đóng → bỏ hộp", async () => {
+    const m = await moMan();
+    expect(propsCua(m.cay(), StaffDirectoryImportDialog)).toBeNull();
+    const header = phaiCo(m.cay(), DirectoryHeading);
+    const open = tatCa(header.actions, (p) => p.props.children === "Nhập từ Excel")[0];
+    (open?.props.onClick as () => void)();
+    m.ve();
+    const dialog = phaiCo(m.cay(), StaffDirectoryImportDialog);
+    dialog.onImported();
+    await xongMang(m);
+    expect(docTrang).toHaveBeenCalledTimes(2);
+    expect(tallies).toHaveBeenCalledTimes(2);
+    phaiCo(m.cay(), StaffDirectoryImportDialog).onClose();
+    m.ve();
+    expect(propsCua(m.cay(), StaffDirectoryImportDialog)).toBeNull();
   });
 });

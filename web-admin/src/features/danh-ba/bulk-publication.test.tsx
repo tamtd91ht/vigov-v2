@@ -3,23 +3,30 @@ import { describe, expect, it } from "vitest";
 
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
+import { BulkConsentForm, BulkOutcomeView } from "./bulk-consent-form";
 import {
   BULK_MAX,
+  BULK_NO_CANDIDATES,
   BULK_NONE_CONSENTED,
   BULK_NONE_SELECTED,
   BULK_REPLAYED,
   BULK_TOO_MANY,
   addSelected,
-  bulkListRows,
+  bulkAddedToast,
   bulkRequest,
   bulkResultLines,
   bulkResultText,
+  bulkWithdrawnToast,
+  consentSelection,
   eligibleForBulk,
+  publishedCount,
   removeSelected,
+  selectedCountText,
   setConsent,
+  togglePage,
+  toggleRow,
   type BulkSelection,
 } from "./bulk-publication";
-import { BulkOutcomeView, BulkPublicationPanel } from "./bulk-publication-panel";
 import { CANH_BAO_CONG_KHAI } from "./cong-khai";
 
 /** Fake numbers only (rule 3, invariant 5). */
@@ -51,33 +58,43 @@ const B = staff({ id: "01J00000000000000000000002", code: "CB-00124", full_name:
 const LOCKED = staff({ id: "01J00000000000000000000003", code: "CB-00125", full_name: "Lê Văn Khoá", active: false });
 const PUBLIC = staff({ id: "01J00000000000000000000004", code: "CB-00126", full_name: "Phạm Đã Hiện", published: true });
 
-describe("ai được đưa vào danh sách chọn", () => {
-  it("chỉ người CHƯA hiện và KHÔNG bị khoá — người khoá bị ẩn (máy chủ vẫn quyết định)", () => {
+describe("the table selection", () => {
+  it("ticking keeps the order of ticking; unticking drops the row; ticking twice is one row", () => {
+    let sel = toggleRow([], B, true);
+    sel = toggleRow(sel, A, true);
+    sel = toggleRow(sel, A, true);
+    expect(sel.map((s) => s.id)).toEqual([B.id, A.id]);
+    expect(toggleRow(sel, B, false).map((s) => s.id)).toEqual([A.id]);
+  });
+
+  it("the page box ticks every row of the page and keeps people ticked on other pages; unticking drops only the page", () => {
+    const other = staff({ id: "elsewhere", full_name: "Người trang khác" });
+    const on = togglePage([other], [A, B], true);
+    expect(on.map((s) => s.id)).toEqual(["elsewhere", A.id, B.id]);
+    expect(togglePage(on, [A, B], false).map((s) => s.id)).toEqual(["elsewhere"]);
+  });
+});
+
+describe("who the consent dialog asks about", () => {
+  it("only people NOT on the Mini App and NOT locked (the server still decides)", () => {
     expect(eligibleForBulk(A)).toBe(true);
     expect(eligibleForBulk(LOCKED)).toBe(false);
     expect(eligibleForBulk(PUBLIC)).toBe(false);
-    expect(bulkListRows([], [A, LOCKED, PUBLIC, B]).map((r) => r.candidate?.id)).toEqual([A.id, B.id]);
+    expect(consentSelection([A, LOCKED, PUBLIC, B]).map((s) => s.id)).toEqual([A.id, B.id]);
   });
 
-  it("người đã chọn ở TRANG KHÁC vẫn hiện (để còn đổi ô tick), và không hiện hai lần", () => {
-    const sel = addSelected([], B);
-    const rows = bulkListRows(sel, [A, B]);
-    expect(rows.map((r) => r.selected?.id ?? r.candidate?.id)).toEqual([B.id, A.id]);
-  });
-
-  it("chọn mới thì ô 'đã hỏi ý' TRỐNG; bỏ chọn là bỏ luôn dấu tick", () => {
+  it("EVERY consent box starts unticked — consent is asserted per person, never carried over", () => {
+    expect(consentSelection([A, B]).every((s) => !s.consentAsked)).toBe(true);
     let sel: BulkSelection = addSelected([], A);
-    expect(sel[0]?.consentAsked).toBe(false);
     sel = setConsent(sel, A.id, true);
-    expect(sel[0]?.consentAsked).toBe(true);
     sel = removeSelected(sel, A.id);
     sel = addSelected(sel, A);
     expect(sel[0]?.consentAsked).toBe(false);
   });
 });
 
-describe("bấm gửi — từ chối tại chỗ hoặc các dòng gửi đi", () => {
-  it("chưa chọn ai / chưa tick ai / quá trần → câu từ chối, không có dòng nào", () => {
+describe("pressing submit — refused on the spot, or the rows to send", () => {
+  it("nobody / nobody ticked / over the cap → a refusal sentence, no rows", () => {
     expect(bulkRequest([])).toEqual({ error: BULK_NONE_SELECTED });
     expect(bulkRequest(addSelected([], A))).toEqual({ error: BULK_NONE_CONSENTED });
     const many: BulkSelection = Array.from({ length: BULK_MAX + 1 }, (_, i) => ({
@@ -89,7 +106,7 @@ describe("bấm gửi — từ chối tại chỗ hoặc các dòng gửi đi", 
     expect(bulkRequest(many)).toEqual({ error: BULK_TOO_MANY });
   });
 
-  it("dòng chưa tick VẪN được gửi, với consentAsked false — danh sách kết quả mới đủ người", () => {
+  it("an unticked row IS sent, with consentAsked false — the result list then names everyone", () => {
     const sel = setConsent(addSelected(addSelected([], A), B), A.id, true);
     expect(bulkRequest(sel)).toEqual({
       rows: [
@@ -100,7 +117,24 @@ describe("bấm gửi — từ chối tại chỗ hoặc các dòng gửi đi", 
   });
 });
 
-describe("kết quả từng dòng — tiếng Việt, theo reason_code", () => {
+describe("the prototype's wording", () => {
+  it("bar count and the two toasts, verbatim", () => {
+    expect(selectedCountText(4)).toBe("Đã chọn 4 người");
+    expect(bulkAddedToast(2)).toBe("Đã thêm 2 người vào danh bạ trên Mini App.");
+    expect(bulkWithdrawnToast(3)).toBe("Đã rút 3 người khỏi danh bạ trên Mini App.");
+  });
+
+  it("the added toast counts what the SERVER published, not the selection", () => {
+    expect(
+      publishedCount([
+        { id: "a", result: "published" },
+        { id: "b", result: "skipped", reason_code: "consent_required" },
+      ]),
+    ).toBe(1);
+  });
+});
+
+describe("per-row results — Vietnamese, by reason_code", () => {
   it.each([
     [{ id: "x", result: "published" }, "Đã công khai"],
     [{ id: "x", result: "skipped", reason_code: "consent_required" }, "Bỏ qua — chưa hỏi ý"],
@@ -111,7 +145,7 @@ describe("kết quả từng dòng — tiếng Việt, theo reason_code", () => 
     expect(bulkResultText(item)).toBe(text);
   });
 
-  it("nối theo id với người đã chọn: họ tên + mã cán bộ, KHÔNG số điện thoại", () => {
+  it("joined on id with the selection: name + staff code, NEVER a phone number", () => {
     const sel = addSelected(addSelected([], A), B);
     const lines = bulkResultLines(
       [
@@ -132,21 +166,18 @@ describe("kết quả từng dòng — tiếng Việt, theo reason_code", () => 
     expect(html).not.toMatch(/09\d{8}|0235\d{7}/);
   });
 
-  it("phát lại → câu nói danh bạ đã tải lại, không có danh sách", () => {
+  it("replay → the sentence that the register was re-read, no list", () => {
     const html = renderToStaticMarkup(<BulkOutcomeView outcome={{ kind: "replayed" }} />);
     expect(html).toContain(BULK_REPLAYED);
     expect(html).not.toContain("<li");
   });
 });
 
-describe("khung công khai nhiều người — cái ra tới trang", () => {
+describe("the consent dialog — what reaches the page", () => {
   function render(selection: BulkSelection) {
     return renderToStaticMarkup(
-      <BulkPublicationPanel
+      <BulkConsentForm
         selection={selection}
-        pageRows={[A, B, LOCKED, PUBLIC]}
-        onSelect={() => {}}
-        onUnselect={() => {}}
         onSetConsent={() => {}}
         error=""
         sending={false}
@@ -157,20 +188,25 @@ describe("khung công khai nhiều người — cái ra tới trang", () => {
     );
   }
 
-  it("nêu cảnh báo dữ liệu cá nhân nguyên văn; không vẽ người bị khoá hay đã hiện; không số điện thoại", () => {
-    const html = render([]);
+  it("the personal-data warning verbatim; one consent box per person, UNTICKED; submit disabled; no phone number", () => {
+    const html = render(consentSelection([A, B]));
     expect(html).toContain(CANH_BAO_CONG_KHAI);
-    expect(html).toContain("Nguyễn Văn A");
-    expect(html).not.toContain("Lê Văn Khoá");
-    expect(html).not.toContain("Phạm Đã Hiện");
+    expect(html).toContain(`id="bulk-consent-${A.id}"`);
+    expect(html).toContain(`id="bulk-consent-${B.id}"`);
+    for (const box of html.match(/<input[^>]*id="bulk-consent-[^"]*"[^>]*>/g) ?? []) expect(box).not.toMatch(/checked/);
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
     expect(html).not.toMatch(/09\d{8}|0235\d{7}/);
   });
 
-  it("ô 'Đã hỏi ý người này' chỉ có ở dòng ĐÃ CHỌN, không tick sẵn; nút gửi mờ khi chưa ai được tick", () => {
-    const html = render(addSelected([], A));
-    expect(html).toContain(`id="bulk-consent-${A.id}"`);
-    expect(html).not.toContain(`id="bulk-consent-${B.id}"`);
-    expect(/<input[^>]*id="bulk-consent-[^"]*"[^>]*>/.exec(html)?.[0]).not.toMatch(/checked/);
-    expect(html).toMatch(/<button type="submit"[^>]*disabled/);
+  it("one ticked person → the submit button is enabled", () => {
+    const html = render(setConsent(consentSelection([A, B]), A.id, true));
+    expect(html).toMatch(/<button[^>]*type="submit"/);
+    expect(html).not.toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+  });
+
+  it("nobody eligible (all on the Mini App or locked) → says so, no submit button at all", () => {
+    const html = render(consentSelection([PUBLIC, LOCKED]));
+    expect(html).toContain(BULK_NO_CANDIDATES);
+    expect(html).not.toContain('type="submit"');
   });
 });

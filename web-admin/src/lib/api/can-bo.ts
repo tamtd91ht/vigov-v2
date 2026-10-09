@@ -42,6 +42,7 @@ import type {
   identity_datCongKhaiVao,
   identity_datVaiTroVao,
   identity_delete_staff_by_id,
+  identity_departmentCountOut,
   identity_delete_staff_by_id_lockout,
   identity_get_staff,
   identity_get_staff_by_id,
@@ -56,6 +57,7 @@ import type {
   identity_put_staff_by_id_role,
   identity_staffCountQueryIn,
   identity_staffCountQueryOut,
+  identity_staffCountsOut,
   identity_suaCanBoVao,
   identity_themCanBoVao,
   identity_timCanBoVao,
@@ -351,6 +353,61 @@ export function layChiTietCanBo(id: string): Promise<KetQua<identity_canBoTomTat
  */
 export async function getStaffCounts(): Promise<KetQua<number>> {
   return readTotal(await docJSON<identity_get_staff_counts["phanHoi"][200]>("/api/v1/staff-counts"));
+}
+
+/**
+ * The register's tallies as `GET /api/v1/staff-counts` returns them: commune-wide `total` and
+ * `published`, and one entry per department that has somebody in it. People in no department are the
+ * contract's `no_department` bucket — inside `total`, never a `departments` entry — and a department
+ * with nobody in it is ABSENT from `departments` (`service-identity/internal/http/staff_counts.go`):
+ * read it as 0/0.
+ */
+export type StaffTallies = {
+  readonly total: number;
+  readonly published: number;
+  readonly departments: readonly identity_departmentCountOut[];
+};
+
+/**
+ * GET /api/v1/staff-counts, all of it — the Danh bạ tab's three KPI cards and its department filter's
+ * "(đang hiện/tổng)" (`admin.user`, the same route and key as `getStaffCounts`, which `/nguoi-dung`
+ * keeps using for its total alone). Every figure is checked at run time, as `readTotal` does: a
+ * figure that is not a non-negative integer makes the whole answer "unreadable", never a guess.
+ */
+export async function getStaffTallies(): Promise<KetQua<StaffTallies>> {
+  return readTallies(await docJSON<identity_staffCountsOut>("/api/v1/staff-counts"));
+}
+
+function isCount(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0;
+}
+
+function readTallies(answer: KetQua<identity_staffCountsOut>): KetQua<StaffTallies> {
+  if (!answer.ok) return answer;
+  const body = answer.duLieu as Partial<identity_staffCountsOut> | null;
+  const departments = body?.departments;
+  const valid =
+    body !== null &&
+    body !== undefined &&
+    isCount(body.total) &&
+    isCount(body.published) &&
+    Array.isArray(departments) &&
+    departments.every(
+      (d) => typeof d === "object" && d !== null && typeof d.id === "string" && isCount(d.total) && isCount(d.published),
+    );
+  if (!valid) return { ok: false, thongBao: "Không đọc được số cán bộ của danh bạ." };
+  return {
+    ok: true,
+    duLieu: {
+      total: body.total as number,
+      published: body.published as number,
+      departments: (departments as identity_departmentCountOut[]).map((d) => ({
+        id: d.id,
+        total: d.total,
+        published: d.published,
+      })),
+    },
+  };
 }
 
 /**

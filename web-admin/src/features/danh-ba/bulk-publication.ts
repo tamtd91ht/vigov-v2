@@ -1,16 +1,17 @@
 /**
  * Publishing MANY people to the Zalo Mini App directory at once — wording and decisions
- * (`POST /api/v1/staff/publications`, user decision 30/09/2026, spec `12-danh-ba-can-bo §9.4`).
+ * (`POST /api/v1/staff/publications`, user decision 30/09/2026; the prototype's selection bar, owner
+ * decision 09/10/2026).
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
- * WHAT THE USER DECIDED, AND WHAT IT KEEPS OF #12: the administrator selects several people, and
- * EACH selected row carries its own "đã hỏi ý người này" tick. Only ticked rows are published. So
- * consent is still asked of EACH person — the bulk form saves clicks, not the question. There is
- * no "tick all consents" control on purpose: one click confirming twenty conversations is a
- * confirmation nobody had.
+ * WHAT THE USER DECIDED, AND WHAT IT KEEPS OF #12: the administrator ticks people in the table, then
+ * "Thêm vào danh bạ Mini App" opens a confirmation where EACH selected person carries their own
+ * "đã hỏi ý người này" tick. Only ticked rows are published. So consent is still asked of EACH
+ * person — the selection saves clicks, not the question. There is no "tick all consents" control on
+ * purpose: one click confirming twenty conversations is a confirmation nobody had.
  *
- * Taking people OFF stays per person (`PUT …/publication`, `hop-cong-khai.tsx`): the server has no
- * bulk unpublish, and the user decided none.
+ * Taking people OFF has no bulk route: "Rút khỏi danh bạ" sends the single-person
+ * `PUT …/publication` once per selected person (`danh-ba-lien-he.tsx`).
  *
  * PURE MODULE, NO JSX: every decision here is checked by comparing values.
  * ─────────────────────────────────────────────────────────────────────────────────────────
@@ -19,32 +20,46 @@
 import type { BulkPublicationRow } from "@/lib/api/can-bo";
 import type { identity_bulkPublicationItemOut, identity_canBoTomTat } from "@/lib/api/schema.gen";
 
-/* ---- wording -------------------------------------------------------------------------------- */
+/* ---- the selection bar (prototype `StaffDirectoryWorkspace.tsx:224-255`, verbatim) ----------- */
 
-export const BULK_OPEN_BUTTON = "Công khai nhiều người";
-export const BULK_TITLE = "Công khai nhiều người lên danh bạ Zalo Mini App";
+export function selectedCountText(n: number): string {
+  return `Đã chọn ${n} người`;
+}
+export const BULK_ADD_BUTTON = "Thêm vào danh bạ Mini App";
+export const BULK_WITHDRAW_BUTTON = "Rút khỏi danh bạ";
+export const BULK_DELETE_BUTTON = "Xoá đã chọn";
+
+/** The prototype's two toasts, verbatim. `n` is what the SERVER changed, never the selection size. */
+export function bulkAddedToast(n: number): string {
+  return `Đã thêm ${n} người vào danh bạ trên Mini App.`;
+}
+export function bulkWithdrawnToast(n: number): string {
+  return `Đã rút ${n} người khỏi danh bạ trên Mini App.`;
+}
+
+/** Withdrawing people none of whom is on the Mini App — said, not sent. */
+export const BULK_NOTHING_TO_WITHDRAW = "Trong những người đã chọn không có ai đang hiện trên Mini App.";
+
+/** Some single withdrawals refused: how many, then the first server sentence verbatim. */
+export function bulkWithdrawFailedText(failed: number, firstMessage: string): string {
+  return `Chưa rút được ${failed} người. ${firstMessage}`;
+}
+
+/* ---- the consent dialog --------------------------------------------------------------------- */
+
+export const BULK_TITLE = "Thêm những người đã chọn vào danh bạ Mini App";
 
 /** Said before the privacy note (`CANH_BAO_CONG_KHAI`, reused verbatim — one wording, one owner). */
 export const BULK_INTRO =
-  "Chọn những người cần công khai, rồi đánh dấu “Đã hỏi ý người này” cho TỪNG người đã được hỏi " +
-  "ý và đồng ý. Người đã chọn mà chưa đánh dấu sẽ được bỏ qua. Với mỗi người được công khai:";
+  "Đánh dấu “Đã hỏi ý người này” cho TỪNG người đã được hỏi ý và đồng ý. Người chưa được đánh " +
+  "dấu sẽ được bỏ qua. Với mỗi người được công khai:";
 
-/** Where candidates come from — the register page on screen, so the filters above still apply. */
-export const BULK_SOURCE_NOTE =
-  "Danh sách lấy từ trang danh bạ đang xem, chỉ gồm người chưa hiện trên Mini App và không bị " +
-  "khoá. Chuyển trang hoặc đổi bộ lọc để chọn thêm; người đã chọn vẫn được giữ.";
-
+/** Everyone selected is already on the Mini App, or locked: nobody to ask. */
 export const BULK_NO_CANDIDATES =
-  "Trang đang xem không có ai chưa hiện trên Mini App. Chuyển trang hoặc đổi bộ lọc (ví dụ " +
-  "“Chưa hiện”) để tìm người cần công khai.";
+  "Những người đã chọn đều đang hiện trên Mini App hoặc có tài khoản đang bị khoá, nên không có ai " +
+  "để thêm.";
 
-export const BULK_SELECT_LABEL = "Chọn";
 export const BULK_CONSENT_LABEL = "Đã hỏi ý người này";
-
-/** Screen-reader names carry the person's name: twenty identical "Chọn" boxes pick nobody. */
-export function bulkSelectAria(fullName: string): string {
-  return `${BULK_SELECT_LABEL}: ${fullName}`;
-}
 
 export function bulkConsentAria(fullName: string): string {
   return `${BULK_CONSENT_LABEL} và người này đồng ý công khai số di động: ${fullName}`;
@@ -104,20 +119,38 @@ export function removeSelected(sel: BulkSelection, id: string): BulkSelection {
 }
 
 /**
- * Rows the panel lists: everyone selected (from any page), then this page's eligible people not yet
- * selected. Selected people from another page stay visible so their tick can still be changed.
+ * What the consent dialog asks about, from the people ticked in the table: the eligible ones, in
+ * the order they were ticked, EVERY consent box unticked — consent is asserted per person, never
+ * carried over from an earlier opening.
  */
-export function bulkListRows(
-  sel: BulkSelection,
-  pageRows: readonly identity_canBoTomTat[],
-): readonly { readonly selected: BulkSelected | null; readonly candidate: identity_canBoTomTat | null }[] {
-  const chosen = new Set(sel.map((s) => s.id));
-  return [
-    ...sel.map((s) => ({ selected: s, candidate: null })),
-    ...pageRows
-      .filter((cb) => eligibleForBulk(cb) && !chosen.has(cb.id))
-      .map((cb) => ({ selected: null, candidate: cb })),
-  ];
+export function consentSelection(selected: readonly identity_canBoTomTat[]): BulkSelection {
+  return selected.filter(eligibleForBulk).reduce<BulkSelection>((sel, cb) => addSelected(sel, cb), []);
+}
+
+/** The table selection after ticking or unticking one row. Order of ticking is kept. */
+export function toggleRow(
+  selected: readonly identity_canBoTomTat[],
+  cb: identity_canBoTomTat,
+  on: boolean,
+): readonly identity_canBoTomTat[] {
+  const rest = selected.filter((s) => s.id !== cb.id);
+  return on ? [...rest, cb] : rest;
+}
+
+/** The header box: tick every row of the page (keeping people ticked on other pages), or untick them. */
+export function togglePage(
+  selected: readonly identity_canBoTomTat[],
+  page: readonly identity_canBoTomTat[],
+  on: boolean,
+): readonly identity_canBoTomTat[] {
+  const onPage = new Set(page.map((cb) => cb.id));
+  const rest = selected.filter((s) => !onPage.has(s.id));
+  return on ? [...rest, ...page] : rest;
+}
+
+/** Results of a bulk publish: how many the server published. */
+export function publishedCount(items: readonly identity_bulkPublicationItemOut[]): number {
+  return items.filter((i) => i.result === "published").length;
 }
 
 export function setConsent(sel: BulkSelection, id: string, consentAsked: boolean): BulkSelection {

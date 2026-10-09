@@ -1,7 +1,6 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { controlClass } from "@/components/ui/field";
@@ -98,22 +97,16 @@ export function BieuMauGhiCanBo({
   dangGui,
   onGui,
   onHuy,
-  avatarField,
   layout = "contact",
 }: {
   /**
-   * `contact` (default): the in-flow form of /danh-ba and /mini-app — UNCHANGED, and pinned by
-   * `user-list-prototype.test.tsx`. `account`: the prototype's `UserFormDialog` shape, used ONLY by
+   * `contact` (default): the former in-flow form of /mini-app's Danh bạ tab — UNCHANGED, and pinned by
+   * `user-list-prototype.test.tsx`. Since 09/10/2026 that tab edits in its own prototype dialog
+   * (`features/danh-ba/staff-contact-form.tsx`) and no screen renders this layout. `account`: the prototype's `UserFormDialog` shape, used ONLY by
    * `/nguoi-dung` (`danh-ba-can-bo.tsx`), which opens it inside a `ModalDialog` (owner, 08/10/2026).
    * Same fields, same handlers, same bodies sent — only the presentation differs.
    */
   layout?: "contact" | "account";
-  /**
-   * Spec §5 `Ảnh đại diện` placeholder (ADR 0068 §14), drawn on the profile forms only. A slot, not
-   * drawn here: the Danh bạ screen owns that entry, and the Cấu hình staff dialog (14-cau-hinh §3)
-   * has no such field.
-   */
-  avatarField?: ReactNode;
   dangMo: DangMoGhi;
   ban: BanNhapCanBo;
   datBan: (b: BanNhapCanBo) => void;
@@ -252,9 +245,6 @@ export function BieuMauGhiCanBo({
           </p>
         </div>
       )}
-
-      {/* Spec §5 order: after `Có Zalo`, before `Thứ tự hiển thị`. */}
-      {coOHoSo && avatarField}
 
       {dangMo.kieu === "vaiTro" && (
         <OChon

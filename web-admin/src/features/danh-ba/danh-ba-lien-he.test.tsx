@@ -3,27 +3,19 @@ import { describe, expect, it } from "vitest";
 
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 
-import { BULK_OPEN_BUTTON } from "./bulk-publication";
+import { BULK_DELETE_BUTTON } from "./bulk-publication";
 import { NUT_RUT_MINI_APP, NUT_THEM_MINI_APP } from "./cong-khai";
 import { DanhBaLienHe, HangLoc } from "./danh-ba-lien-he";
 import { NHAN_XOA_DONG } from "./xoa-dong";
 import { GOI_Y_O_TIM, TAT_CA_KHOI, TRUY_VAN_DAU } from "./loc-danh-ba";
-import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
-import { ADD_LINK, IMPORT_LINK, NHAN_SO_KHOI, OPENS_STAFF_ADMIN, PHAN_CHUA_DUNG } from "./nhan-danh-ba";
+import { ADD_BUTTON, IMPORT_BUTTON, KPI_PUBLISHED, KPI_TOTAL, MO_TA_TRANG, NHAN_SO_KHOI } from "./nhan-danh-ba";
 
 /**
- * `PHAN_CHUA_DUNG` CHỈ CÓ NGHĨA KHI NÓ RA TỚI TRANG. `tools/tien_do_san_pham.py` đếm mảng ấy với lời
- * hứa "số câu cán bộ THẬT SỰ đọc được trên màn" — nay mỗi mục là mô tả sau một dấu "?" ở đúng chỗ đặc
- * tả đặt nó (ADR 0068 §14). Hai thẻ KPI không phụ thuộc dữ liệu nên luôn có mặt; cột Ảnh đại diện chỉ
- * có khi bảng có dòng (`bang-lien-he.test.tsx`).
- *
  * Dựng tĩnh: effect không chạy khi dựng phía máy chủ, nên không có lời gọi API nào đi ra.
- */
-/**
- * Màn đọc phiên qua `usePhien` (để quyết định hai nút Mini App), nên phải có `PhienProvider` bao
- * ngoài. Dựng tĩnh thì effect của provider không chạy: phiên ở trạng thái CHƯA ĐỌC XONG, tức hai nút
- * Mini App ẩn — đúng nhánh fail closed.
+ *
+ * Màn đọc phiên qua `usePhien`, nên phải có `PhienProvider` bao ngoài. Dựng tĩnh thì phiên ở trạng
+ * thái CHƯA ĐỌC XONG — tức nút Mini App, cột chọn và nút 🗑 đều ẩn: đúng nhánh fail closed.
  */
 function veMan(): string {
   return renderToStaticMarkup(
@@ -33,59 +25,51 @@ function veMan(): string {
   );
 }
 
-describe("phần chưa mở — dấu '?' ở đúng chỗ, không còn khối gập cuối màn", () => {
-  it("hai thẻ KPI TỔNG SỐ CÁN BỘ / ĐANG HIỆN TRÊN MINI APP mang '?', không con số", () => {
+describe("đầu tab theo bản mẫu (StaffDirectoryWorkspace.tsx:146-171)", () => {
+  it("h1, câu mô tả nguyên văn, rồi hai NÚT (không còn liên kết sang /nguoi-dung)", () => {
     const html = veMan();
-    for (const ten of ["Tổng số cán bộ", "Đang hiện trên Mini App"]) {
-      expect(PHAN_CHUA_DUNG.some((p) => p.ten === ten)).toBe(true);
-      expect(html).toContain(`aria-label="${pendingMarkerLabel(ten)}"`);
-    }
-    // The description is behind the "?", not printed on the page; the old <details> block is gone.
-    for (const p of PHAN_CHUA_DUNG) expect(html).not.toContain(p.viSao);
-    expect(html).not.toContain("<details");
-    expect(html).not.toMatch(/phần chưa mở/);
+    expect(html).toContain(">Danh bạ cán bộ</h1>");
+    expect(html).toContain(MO_TA_TRANG);
+    const buttons = [...html.matchAll(/<button[^>]*>(.*?)<\/button>/g)].map((m) => m[1]?.replace(/<[^>]*>/g, ""));
+    expect(buttons).toContain(IMPORT_BUTTON);
+    expect(buttons).toContain(ADD_BUTTON);
+    expect(html).not.toContain('href="/nguoi-dung"');
+    expect(html.indexOf(IMPORT_BUTTON)).toBeLessThan(html.indexOf(ADD_BUTTON));
   });
 
-  it("KHÔNG còn dòng 'chưa mở' nào cho ô tìm hay bộ lọc — chúng đã có trên màn hình", () => {
+  it("không còn hộp ghi chú pháp lý dưới bảng, không icon đầu trang", () => {
     const html = veMan();
-    expect(html).toContain(GOI_Y_O_TIM);
-    for (const p of PHAN_CHUA_DUNG) {
-      expect(p.ten).not.toMatch(/Ô tìm|Bộ lọc theo khối/);
-    }
+    expect(html).not.toContain("Nghị định 13/2023/NĐ-CP: không sao chép");
+    expect(html).not.toContain("Công khai nhiều người");
   });
 });
 
-describe("màn danh bạ — nút Mini App (một người lẫn nhiều người) fail closed", () => {
-  it("không ô tick, không nút Mini App, không nút 'Công khai nhiều người' khi phiên chưa đọc xong", () => {
+describe("ba thẻ KPI — đọc từ GET /api/v1/staff-counts, không bao giờ số 0 khi chưa đếm", () => {
+  it("ba nhãn của bản mẫu, đều 'đang đếm…' trước khi đọc xong; không còn dấu '?' nào ở đây", () => {
+    const html = veMan();
+    for (const label of [KPI_TOTAL, KPI_PUBLISHED, NHAN_SO_KHOI]) expect(html).toContain(label);
+    expect(html.match(/đang đếm…/g)).toHaveLength(3);
+    expect(html).not.toContain("tính năng đang phát triển");
+  });
+});
+
+describe("màn danh bạ — nút Mini App, cột chọn và thanh chọn fail closed", () => {
+  it("phiên chưa đọc xong: không ô tick, không nút Mini App, không 🗑, không 'Xoá đã chọn'", () => {
     const html = veMan();
     expect(html).not.toContain('type="checkbox"');
-    expect(html).not.toMatch(/đã chọn|Chọn tất cả/);
-    expect(html).not.toContain(NUT_THEM_MINI_APP);
-    expect(html).not.toContain(NUT_RUT_MINI_APP);
+    expect(html).not.toMatch(/Đã chọn \d+ người/);
+    // The page description quotes the bar's button by name; the BUTTONS are what must be absent.
+    expect(html).not.toContain(`aria-label="${NUT_THEM_MINI_APP}:`);
+    expect(html).not.toContain(`aria-label="${NUT_RUT_MINI_APP}:`);
+    expect(html).not.toMatch(new RegExp(`<button[^>]*>(<svg.*?</svg>)?${NUT_THEM_MINI_APP}</button>`));
     expect(html).not.toContain(NHAN_XOA_DONG);
-    expect(html).not.toContain(BULK_OPEN_BUTTON);
-  });
-});
-
-describe("đầu ngăn theo bản mẫu (06/10/2026)", () => {
-  it("`Nhập từ Excel` and `Thêm cán bộ` lead to /nguoi-dung, where both live — never a second form here", () => {
-    const html = veMan();
-    const links = [...html.matchAll(/<a [^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/g)].map((m) => [m[1], m[2]?.replace(/<[^>]*>/g, "")]);
-    expect(links).toContainEqual(["/nguoi-dung", IMPORT_LINK]);
-    expect(links).toContainEqual(["/nguoi-dung", ADD_LINK]);
-    expect(html).toContain(`title="${OPENS_STAFF_ADMIN}"`);
+    expect(html).not.toContain(BULK_DELETE_BUTTON);
   });
 
-  it("three summary cards: two '?' (no total served) and the counted Số khối / đơn vị — no number before it is counted", () => {
+  it("đang tải: một khối Skeleton, chưa có câu 'Hiển thị … cán bộ.' nào", () => {
     const html = veMan();
-    expect(html).toContain(NHAN_SO_KHOI);
-    expect(html).toContain("đang đếm…");
-  });
-
-  it("no bulk delete and no row selection — publication stays one consent per person (Decree 13)", () => {
-    const html = veMan();
-    expect(html).not.toContain("Xoá đã chọn");
-    expect(html).not.toContain('type="checkbox"');
+    expect(html).toContain("Đang tải danh bạ…");
+    expect(html).not.toMatch(/Hiển thị \d+ cán bộ/);
   });
 });
 
@@ -95,13 +79,11 @@ describe("hàng lọc — chữ tìm không có đường lên URL", () => {
     { id: "BP-CHAN", name: "THƯỜNG TRỰC ĐẢNG UỶ" },
   ];
 
-  function dung(loc = TRUY_VAN_DAU.loc) {
-    return renderToStaticMarkup(<HangLoc loc={loc} boPhan={BO_PHAN} doiLoc={() => {}} />);
+  function dung(loc = TRUY_VAN_DAU.loc, tallies: Parameters<typeof HangLoc>[0]["tallies"] = null) {
+    return renderToStaticMarkup(<HangLoc loc={loc} boPhan={BO_PHAN} tallies={tallies} doiLoc={() => {}} />);
   }
 
   it("ô tìm KHÔNG có `name`, form là POST — trước khi JS chạy, Enter không đưa chữ lên URL", () => {
-    // Một ô có `name` trong một form GET là `?ten=chu-da-go` trên thanh địa chỉ ngay lần Enter đầu
-    // tiên khi bundle chưa nạp xong.
     const html = dung();
     const oTim = /<input[^>]*id="tim-danh-ba"[^>]*>/.exec(html)?.[0] ?? "";
     expect(oTim).not.toBe("");
@@ -111,26 +93,37 @@ describe("hàng lọc — chữ tìm không có đường lên URL", () => {
     expect(html).not.toMatch(/<form[^>]*action=/);
   });
 
-  it("ô tìm mang đúng gợi ý của đặc tả §3, không `maxLength` (đếm sai đơn vị)", () => {
+  it("không còn nút Tìm (áp theo lúc gõ); gợi ý nguyên văn bản mẫu; không `maxLength`", () => {
     const html = dung();
+    expect(html).not.toMatch(/<button[^>]*>Tìm<\/button>/);
     expect(html).toContain(`placeholder="${GOI_Y_O_TIM}"`);
     expect(html).not.toMatch(/maxlength/i);
   });
 
-  it("ô khối: 'Tất cả khối / đơn vị' đứng đầu, rồi từng khối của danh mục", () => {
+  it("ô khối: 'Tất cả khối / đơn vị' đứng đầu; chưa có số liệu thì chỉ tên khối", () => {
     const html = dung();
     expect(html).toMatch(new RegExp(`<option value="" selected="">${TAT_CA_KHOI}</option>`));
     for (const bp of BO_PHAN) expect(html).toContain(`<option value="${bp.id}">${bp.name}</option>`);
   });
 
-  it("ô trạng thái: đánh dấu đúng lựa chọn đang áp", () => {
+  it("ô khối có số liệu: 'Tên (đang hiện/tổng)'; khối vắng trong `departments` là 0/0", () => {
+    const html = dung(TRUY_VAN_DAU.loc, {
+      total: 9,
+      published: 3,
+      departments: [{ id: "BP-LE", total: 5, published: 2 }],
+    });
+    expect(html).toContain('<option value="BP-LE">VĂN PHÒNG ĐẢNG ỦY (2/5)</option>');
+    expect(html).toContain('<option value="BP-CHAN">THƯỜNG TRỰC ĐẢNG UỶ (0/0)</option>');
+  });
+
+  it("ô trạng thái: ba lựa chọn của bản mẫu, đánh dấu đúng lựa chọn đang áp, nằm ngoài form tìm", () => {
     const html = dung({ tuKhoa: null, boPhan: "BP-CHAN", hienThi: "0" });
-    // The prototype's select (06/10/2026, it replaced the segmented control): the three codes, "0" chosen.
     const select = /<select id="loc-hien-thi-danh-ba"[^>]*>(.*?)<\/select>/.exec(html)?.[1] ?? "";
     expect([...select.matchAll(/<option value="([^"]*)"/g)].map((m) => m[1])).toEqual(["", "1", "0"]);
     expect(select).toContain('<option value="0" selected="">Chưa hiện</option>');
+    expect(select).toContain(">Hiện và chưa hiện</option>");
+    expect(select).toContain(">Đang hiện trên Mini App</option>");
     expect(select.match(/selected=""/g)).toHaveLength(1);
-    // Outside the search form — a filter code, never typed text, so no native submit can carry it.
     expect(html.indexOf('id="loc-hien-thi-danh-ba"')).toBeGreaterThan(html.indexOf("</form>"));
     expect(html).toContain('<option value="BP-CHAN" selected="">');
   });
