@@ -29,6 +29,14 @@
       "menu": "phan-anh-nguoi-dan"
     },
     {
+      "id": "su-kien-gop-tach-phieu-bao-comms",
+      "viec": "Sự kiện `petitions.merge_changed.v1` → `comms` khi phiếu bị gộp/tách (ADR 0087, ADR 0041 sửa đổi 09/10/2026) — PHÍA NHẬN",
+      "trang_thai": "dang_lam",
+      "bang_chung": "service-comms/internal/event/petition_merge_changed.go — consumer RIÊNG, không phải nhánh của PhieuDoiTrangThai: gộp phiếu không đổi trạng thái, nên `moc` = `kind` (`gop-phieu`/`tach-phieu`) và khoá chống trùng không thể va với 9 mã trạng thái ADR 0027. Cùng hình dạng consumer trạng thái: lối vào duy nhất `Nhan` qua core/events.Dispatch; protojson + DiscardUnknown; lỗi giải mã KHÔNG bọc; từ chối không thử lại khi thiếu lookup_code/kind/citizen_id hoặc occurrence=0; `kind` ngoài hai giá trị bị từ chối (ErrUnknownMergeKind) — khác consumer trạng thái có chủ ý, vì kind trùng một mã trạng thái sẽ nuốt tin trạng thái thật; citizen_message vắng -> không ghi, không log; MauTinXa hỏi theo kind; ErrXaChuaCauHinhKenh xử lý y hệt; log chỉ mã tra cứu, kind, xã — không citizen_id. Migration 0004 KHÔNG có CHECK trên `moc` nên không cần migration; không có danh mục mẫu tin nào để thêm hai khoá (MauTinXa chưa có bản cài đặt). 13 hàm test ở petition_merge_changed_test.go, gồm bộ sổ giả chống trùng bằng domain.KhoaLanGui: phát lại dưới phong bì mới -> 1 dòng; occurrence 2 -> dòng mới; tách -> dòng mới; tin trạng thái cùng phiếu -> không va. `go vet ./...` sạch, `go test ./...` service-comms xanh — kiểm 09/10/2026. ĐỘT BIẾN 6/6 ĐỎ (khôi phục từ bản sao): Lan cứng 1; bỏ kiểm kind; Moc = mã trạng thái; bỏ Dispatch; bỏ nhánh citizen_message nil",
+      "no_confirm": [],
+      "tiep_theo": "Cùng HAI THỨ CHẶN như mục su-kien-petitions-bao-comms: client Kafka và bản cài đặt MauTinXa. Thêm một ràng buộc cho người dựng kho mẫu tin: mỗi xã phải có mẫu ZNS được duyệt cho CẢ `gop-phieu` và `tach-phieu`, không chỉ cho mã trạng thái (đã ghi ở cmd/server/main.go bước 5). Phía phát thuộc service-petitions"
+    },
+    {
       "id": "sql-0004-chua-chay",
       "viec": "Chạy 0004_thong_bao_gui_cong_dan.sql trên PostgreSQL thật",
       "trang_thai": "chua_lam",

@@ -95,6 +95,11 @@ func main() {
 	//                  template this commune sends for a transition is per-commune configuration
 	//                  (ADR 0018, consequence 1) with no store, no adapter and no customer answer
 	//                  yet. A constant here would be one commune's template id serving 200+.
+	//                  internal/event.PetitionMergeChangedConsumer (`petitions.merge_changed.v1`,
+	//                  ADR 0087) waits on the SAME two things and is wired beside it on that day.
+	//                  Its MauTinXa keys are `gop-phieu` / `tach-phieu`: whoever builds the template
+	//                  store must give each commune an approved template for both, not only for
+	//                  the status codes.
 	//
 	// A consumer is NOT covered by the edge chain below: a message carries its commune inside
 	// itself (rule 1, invariant 9), and a consumer that finds none refuses rather than guessing.
