@@ -289,11 +289,18 @@ func BaoChoDan(t TrangThai) bool {
 //	dang-phan-loai -> da-chuyen-xu-ly  names the department answerable for it       — feedback.assign
 //	cho-dan-xac-nhan -> da-dong        records a result the citizen can read        — feedback.resolve
 //	                                   (also da-xu-ly -> da-dong when nobody can confirm — DongDuoc)
-//	da-xu-ly / cho-dan-xac-nhan -> dang-xu-ly   REOPENING, done ONLY by the citizen's 1–2 star rating
-//	                                   (ADR 0050 point 2; app.RatePetition). A member of staff has no
-//	                                   route that reopens, and `da-xu-ly` here leads to
-//	                                   `cho-dan-xac-nhan` — so adding the reopen edge to the lifecycle
-//	                                   map widened nothing on this route
+//	da-xu-ly / cho-dan-xac-nhan -> dang-xu-ly   REOPENING by the citizen's 1–2 star rating (ADR 0050
+//	                                   point 2; app.RatePetition) — and ONE more act, on
+//	                                   `cho-dan-xac-nhan` only: UNMERGING a merged petition takes it back
+//	                                   to `dang-xu-ly` (ADR 0087, owner's answer of 09/10/2026 (c);
+//	                                   domain.CheckUnmerge, app.Unmerge). Once separated it is no longer
+//	                                   finished — its citizen would be asked to confirm the MAIN's work.
+//	                                   THAT MOVE IS NOT A REOPENING: it does not count in `so_lan_mo_lai`
+//	                                   (the rating's reopen count, which the close gate reads), writes no
+//	                                   `mo-lai-theo-danh-gia` row and sends no reopen sentence — its row is
+//	                                   `tach-phieu`, its message is the unmerge's. Neither act is on THIS
+//	                                   route: `da-xu-ly` here leads to `cho-dan-xac-nhan`, so the edge in
+//	                                   the lifecycle map widened nothing on the plain advance
 //	da-dong -> dang-xu-ly              in the map, reached by NO act today (a rating is refused on a
 //	                                   closed petition — domain.RatingOpen)
 //

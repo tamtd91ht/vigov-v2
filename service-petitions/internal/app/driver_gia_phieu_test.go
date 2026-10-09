@@ -101,6 +101,26 @@ type khoPhieuXuLyGia struct {
 	// children answers every read keyed on `merged_into = $2` (the follow-along batch and the no-chain
 	// check). Empty by default: a petition nobody merged into, which is every existing test's petition.
 	children []map[string]driver.Value
+
+	// mergeCountOverride, when set, is what every `count(*) FROM petition_merge_event` answers. Unset,
+	// the count is the history rows THIS fake has seen inserted for (petition, kind) — so a sequence of
+	// acts on one fake counts the way the append-only table does. (A rolled-back insert is still counted;
+	// no test here counts across a rollback.)
+	mergeCountOverride *int64
+}
+
+// mergeEventCount answers store.PetitionMergeEventStore.CountTx: args are (tenant, petition_id, kind).
+func (k *khoPhieuXuLyGia) mergeEventCount(args []driver.NamedValue) int64 {
+	if k.mergeCountOverride != nil {
+		return *k.mergeCountOverride
+	}
+	var n int64
+	for _, l := range k.cau("INSERT INTO petition_merge_event") {
+		if len(args) == 3 && l.args[2] == args[1].Value && l.args[4] == args[2].Value {
+			n++
+		}
+	}
+	return n
 }
 
 func khoPhieuMau() *khoPhieuXuLyGia {
@@ -259,6 +279,9 @@ func (c *connPhieuGia) QueryContext(_ context.Context, q string, args []driver.N
 	}
 	if strings.Contains(q, "SELECT max(thoi_diem) FROM nhat_ky_phan_anh") {
 		return &rowsPhieuGia{cot: []string{"max(thoi_diem)"}, hang: [][]driver.Value{{c.k.latestReopen}}}, nil
+	}
+	if strings.Contains(q, "SELECT count(*) FROM petition_merge_event") {
+		return &rowsPhieuGia{cot: []string{"count(*)"}, hang: [][]driver.Value{{c.k.mergeEventCount(args)}}}, nil
 	}
 	if !strings.Contains(q, "FROM phieu_phan_anh") {
 		return nil, fmt.Errorf("driver giả: không biết trả gì cho %q", q)

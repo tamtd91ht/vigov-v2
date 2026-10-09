@@ -54,7 +54,34 @@ const (
 	// widens the CHECK for it; the value follows ADR 0011 (an enum value, never translated). The staff
 	// screens label it "Nhập hộ phản ánh" (docs/ui-ux/09 §11).
 	LogActionStaffIntake HanhViNhatKy = "nhap-ho"
+
+	// The merge acts (ADR 0087) — one row on EACH petition, the merged one and the main one, in the act's
+	// transaction. The SAME strings as MergeKind, so one act has one name in both records. Neither moves a
+	// status by itself (an unmerge out of `cho-dan-xac-nhan` does, and the row then carries `dang-xu-ly`).
+	// The note is MergeLogText — the OTHER petition's code, never the staff reason (that stays on
+	// petition_merge_event). Migration 0039 widens the CHECK.
+	LogActionMerge   HanhViNhatKy = HanhViNhatKy(MergeKindMerge)
+	LogActionUnmerge HanhViNhatKy = HanhViNhatKy(MergeKindUnmerge)
+
+	// LogActionAttachmentRemoved is the row a log attachment's soft removal writes (app.PetitionLogAttachments
+	// .Remove), carrying AttachmentRemovalLogText. Before migration 0039 the same row was written as
+	// `ghi-chu`; those rows stay `ghi-chu` (append-only, rule 7 forbidden #5).
+	LogActionAttachmentRemoved HanhViNhatKy = "go-tep"
 )
+
+// MergeLogText is the timeline sentence of a merge act on ONE side, naming the OTHER petition by its
+// lookup code. `onMain` says which side the row is written on. Fixed text, nothing typed by staff.
+func MergeLogText(kind MergeKind, onMain bool, otherCode string) string {
+	switch {
+	case kind == MergeKindMerge && !onMain:
+		return "Gộp vào phiếu chính " + otherCode
+	case kind == MergeKindMerge:
+		return "Nhận phiếu " + otherCode + " gộp vào"
+	case !onMain:
+		return "Tách khỏi phiếu chính " + otherCode
+	}
+	return "Tách phiếu " + otherCode + " khỏi phiếu này"
+}
 
 // TaskCreatedLogText is the timeline sentence for LogActionTaskCreated. It carries the task's REGISTER
 // NUMBER (`NV12`) and nothing typed on the form: the title and description may quote the reporter, and

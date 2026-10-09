@@ -58,7 +58,7 @@ func TestChuyenTrangThaiChiTheoDungDuongDaChot(t *testing.T) {
 		{DaXuLy, DaDong},   // chỉ khi không có công dân để xác nhận — quyết định 2026-09-24, DongDuoc
 		{DaXuLy, DangXuLy}, // mở lại vì dân chấm 1–2 sao ở "đã xử lý" — ADR 0050 điểm 2, chốt 28/09/2026
 		{ChoDanXacNhan, DaDong},
-		{ChoDanXacNhan, DangXuLy}, // mở lại vì đánh giá thấp
+		{ChoDanXacNhan, DangXuLy}, // mở lại vì đánh giá thấp; và tách phiếu gộp (ADR 0087, trả lời 09/10/2026 (c))
 		{DaDong, DangXuLy},        // mở lại vì đánh giá thấp
 	}
 	for _, c := range duoc {

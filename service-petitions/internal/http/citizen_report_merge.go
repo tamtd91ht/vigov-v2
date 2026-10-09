@@ -182,7 +182,7 @@ var mergeRefusals = []struct {
 		"Phiếu về thái độ, tác phong cán bộ không bao giờ được gộp."},
 	{domain.ErrNotMerged, http.StatusConflict, "merge_state", "Phiếu này không được gộp vào phiếu nào."},
 	{domain.ErrUnmergeNotOpen, http.StatusConflict, "merge_state",
-		"Chỉ tách được phiếu chưa xử lý xong."},
+		"Chỉ tách được phiếu chưa đóng (phiếu đã đóng, không tiếp nhận hoặc chuyển cấp trên thì không tách)."},
 }
 
 // answerMergeError maps a merge / unmerge / search failure. 404 for every cause that would disclose a

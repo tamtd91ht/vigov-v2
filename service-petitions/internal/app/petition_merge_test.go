@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql/driver"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -104,11 +105,18 @@ func TestMergeWritesEverythingInOneTransactionInOrder(t *testing.T) {
 			order = append(order, "history")
 		case strings.Contains(l.sql, "INSERT INTO audit_log"):
 			order = append(order, "audit:"+l.args[5].(string))
+		case strings.Contains(l.sql, "INSERT INTO nhat_ky_phan_anh"):
+			order = append(order, "timeline:"+l.args[2].(string))
+		case strings.Contains(l.sql, "count(*) FROM petition_merge_event"):
+			order = append(order, "count")
+		case strings.Contains(l.sql, "INSERT INTO su_kien_di"):
+			order = append(order, "outbox")
 		default:
 			order = append(order, "?"+l.sql)
 		}
 	}
-	want := "lock:" + codeMain + ",lock:" + codeChild + ",chain,deadline,link,history,audit:" + codeChild + ",audit:" + codeMain
+	want := "lock:" + codeMain + ",lock:" + codeChild + ",chain,deadline,link,history,audit:" + codeChild +
+		",audit:" + codeMain + ",timeline:" + idChild + ",timeline:" + idMain + ",count,outbox"
 	if got := strings.Join(order, ","); got != want {
 		t.Errorf("order =\n %s\nwant\n %s", got, want)
 	}
@@ -140,10 +148,120 @@ func TestMergeWritesEverythingInOneTransactionInOrder(t *testing.T) {
 	if !strings.Contains(string(k.cau("INSERT INTO audit_log")[0].args[7].([]byte)), codeMain) {
 		t.Error("the merged petition's entry does not name the main petition")
 	}
-	// NO OUTBOX ROW: no contract can carry a merge notice yet (domain.mergeMessage). The obligation is
-	// the history row.
-	if k.coCau("INSERT INTO su_kien_di") {
-		t.Error("a status_changed event for an act that changed no status")
+	assertMergeTimelineRows(t, k, "gop-phieu", string(domain.DaTiepNhan), string(domain.DangXuLy),
+		"Gộp vào phiếu chính "+codeMain, "Nhận phiếu "+codeChild+" gộp vào", "ổ gà")
+	assertMergeChangedRow(t, k.cau("INSERT INTO su_kien_di")[0], "gop-phieu", 1,
+		"Ghép với phản ánh cùng vụ việc",
+		"Phản ánh của anh/chị đã được ghép với phản ánh cùng vụ việc. Kết quả sẽ được báo khi xử lý xong.", "ổ gà")
+	if n := len(k.cau("INSERT INTO su_kien_di")); n != 1 {
+		t.Errorf("%d outbox rows, want ONE — the merged petition's merge_changed, never a status_changed", n)
+	}
+}
+
+// assertMergeTimelineRows: one row on EACH petition, child first, each with its own status, no assignment
+// pair, a fixed sentence naming the OTHER petition — and never the staff reason.
+func assertMergeTimelineRows(t *testing.T, k *khoPhieuXuLyGia, action, childStatus, mainStatus,
+	childText, mainText, reasonFragment string) {
+	t.Helper()
+	rows := k.cau("INSERT INTO nhat_ky_phan_anh")
+	if len(rows) != 2 {
+		t.Fatalf("%d timeline rows, want 2 — one on each petition", len(rows))
+	}
+	for i, w := range []struct{ id, status, text string }{{idChild, childStatus, childText}, {idMain, mainStatus, mainText}} {
+		r := rows[i]
+		if !r.trongGiaoDich || r.args[2] != w.id || r.args[4] != maCanBoThu || r.args[5] != action ||
+			r.args[6] != w.status || r.args[7] != nil || r.args[8] != nil || r.args[9] != w.text {
+			t.Errorf("timeline row %d = %v", i, r.args)
+		}
+		if s, _ := r.args[9].(string); reasonFragment != "" && strings.Contains(s, reasonFragment) {
+			t.Error("the staff reason reached the timeline — it lives on petition_merge_event only")
+		}
+	}
+}
+
+// assertMergeChangedRow decodes one `petitions.merge_changed.v1` outbox row: the CHILD's code and citizen,
+// kind, occurrence, the owner's wording — and nothing of the main petition, nothing of the reason.
+func assertMergeChangedRow(t *testing.T, row lenhPhieu, kind string, occurrence float64, label, next, reasonFragment string) {
+	t.Helper()
+	if row.args[2] != "petitions.merge_changed.v1" || row.args[3] != codeChild || !row.trongGiaoDich {
+		t.Errorf("outbox row = %v %v (in tx %v)", row.args[2], row.args[3], row.trongGiaoDich)
+	}
+	body := thanSuKien(t, row.args)
+	msg, _ := body["citizen_message"].(map[string]any)
+	if body["lookup_code"] != codeChild || body["kind"] != kind || body["occurrence"] != occurrence ||
+		body["citizen_id"] != citizenChild || msg["status_label"] != label || msg["next_step"] != next || len(body) != 5 {
+		t.Errorf("merge_changed body = %v", body)
+	}
+	raw := string(row.args[4].([]byte))
+	if strings.Contains(raw, codeMain) || strings.Contains(raw, idMain) {
+		t.Error("the main petition reached the merged petition's citizen (ADR 0087 §4)")
+	}
+	if reasonFragment != "" && strings.Contains(raw, reasonFragment) {
+		t.Error("the staff reason reached the queue (rule 3)")
+	}
+}
+
+// A petition with no citizen account behind it has nobody to tell: no outbox row — the timeline and the
+// trail are still written.
+func TestMergeWithoutCitizenWritesNoOutboxRow(t *testing.T) {
+	k := mergeFixtures(nil, map[string]any{"cong_dan_id": nil})
+	if _, err := mergeNow(t, k, MergeRequest{MainCode: codeMain}, false); err != nil {
+		t.Fatal(err)
+	}
+	if k.coCau("INSERT INTO su_kien_di") || k.coCau("FROM petition_merge_event") {
+		t.Error("an outbox row (or its count) for a petition nobody can be told about")
+	}
+	if len(k.cau("INSERT INTO nhat_ky_phan_anh")) != 2 || k.daCommit != 1 {
+		t.Error("the act itself was not recorded")
+	}
+}
+
+// OCCURRENCE is per (petition, kind), counted from the append-only history INCLUDING the act's own row:
+// merge → unmerge → merge again is gop 1, tach 1, gop 2 — the second merge is a NEW notice, never a
+// duplicate of the first in comms.
+func TestMergeOccurrenceCountsPerKindAcrossActs(t *testing.T) {
+	k := mergeFixtures(nil, nil)
+	child := k.byKey[codeChild]
+	link := func(on bool) {
+		if on {
+			child["merged_into"], child["merged_at"], child["merged_by"] = idMain, mocThaoTac, maCanBoThu
+			return
+		}
+		child["merged_into"], child["merged_at"], child["merged_by"] = nil, nil, nil
+	}
+	if _, err := mergeNow(t, k, MergeRequest{MainCode: codeMain}, false); err != nil {
+		t.Fatal(err)
+	}
+	link(true)
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	if _, err := uc.Unmerge(ctx, codeChild, "Chọn nhầm", canBoThu(), false); err != nil {
+		t.Fatal(err)
+	}
+	link(false)
+	if _, err := mergeNow(t, k, MergeRequest{MainCode: codeMain}, false); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, r := range k.cau("INSERT INTO su_kien_di") {
+		b := thanSuKien(t, r.args)
+		got = append(got, b["kind"].(string)+":"+strconv.Itoa(int(b["occurrence"].(float64))))
+	}
+	if strings.Join(got, ",") != "gop-phieu:1,tach-phieu:1,gop-phieu:2" {
+		t.Errorf("occurrences = %v", got)
+	}
+}
+
+// A count of 0 right after the append is a wiring fault: refused, the whole act rolled back — never sent
+// as occurrence 0 or defaulted to 1.
+func TestMergeOccurrenceZeroRollsBack(t *testing.T) {
+	k := mergeFixtures(nil, nil)
+	zero := int64(0)
+	k.mergeCountOverride = &zero
+	if _, err := mergeNow(t, k, MergeRequest{MainCode: codeMain}, false); !errors.Is(err, errMergeOccurrenceZero) {
+		t.Fatalf("err = %v", err)
+	}
+	if k.daCommit != 0 || k.daRollback != 1 || k.coCau("INSERT INTO su_kien_di") {
+		t.Errorf("commit=%d rollback=%d", k.daCommit, k.daRollback)
 	}
 }
 
@@ -247,7 +365,8 @@ func TestMergeRefusals(t *testing.T) {
 
 // ATOMICITY: a failure on the history row or on the trail takes the deadline and the link down with it.
 func TestMergeFailureAnywhereCommitsNothing(t *testing.T) {
-	for _, fail := range []string{"INSERT INTO petition_merge_event", "INSERT INTO audit_log", "SET merged_into = $3"} {
+	for _, fail := range []string{"INSERT INTO petition_merge_event", "INSERT INTO audit_log", "SET merged_into = $3",
+		"INSERT INTO nhat_ky_phan_anh", "count(*) FROM petition_merge_event", "INSERT INTO su_kien_di"} {
 		t.Run(fail, func(t *testing.T) {
 			k := mergeFixtures(nil, nil)
 			k.loiSau = fail
@@ -306,19 +425,128 @@ func TestUnmergeClearsTheLinkKeepsTheDeadlineAndRecords(t *testing.T) {
 	if k.coCau("SET han_xu_ly_xong") {
 		t.Error("unmerge moved a deadline")
 	}
+	if strings.Contains(k.cau("SET merged_into = NULL")[0].sql, "trang_thai = '") {
+		t.Error("an open petition's status was rewritten by the unmerge")
+	}
+	assertMergeTimelineRows(t, k, "tach-phieu", string(domain.DaTiepNhan), string(domain.DangXuLy),
+		"Tách khỏi phiếu chính "+codeMain, "Tách phiếu "+codeChild+" khỏi phiếu này", "nhầm")
+	su := k.cau("INSERT INTO su_kien_di")
+	if len(su) != 1 {
+		t.Fatalf("%d outbox rows, want ONE merge_changed — no status moved", len(su))
+	}
+	assertMergeChangedRow(t, su[0], "tach-phieu", 1, "Xử lý riêng",
+		"Phản ánh của anh/chị sẽ được xử lý riêng. Kết quả sẽ được báo khi xử lý xong.", "nhầm")
 	if k.daCommit != 1 {
 		t.Errorf("commit=%d", k.daCommit)
 	}
 }
 
+// Owner, 09/10/2026 (c): a merged petition that followed its main into `cho-dan-xac-nhan` may still be
+// unmerged — and returns to `dang-xu-ly` along the lifecycle's EXISTING edge, in the unlink's own
+// statement. Not a reopening: the rating's counter is untouched and no reopen row is written. The deadline
+// stays as stored; the borrowed finishing instant is cleared. The citizen is still told.
+func TestUnmergeFromAwaitingConfirmationReturnsToProcessing(t *testing.T) {
+	linked := linkedChild()
+	linked["trang_thai"], linked["xu_ly_xong_luc"] = string(domain.ChoDanXacNhan), mocThaoTac
+	k := mergeFixtures(nil, linked)
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	after, err := uc.Unmerge(ctx, codeChild, "Không cùng vụ việc", canBoThu(), false)
+	if err != nil {
+		t.Fatalf("Unmerge: %v", err)
+	}
+	if after.TrangThai != domain.DangXuLy || !after.XuLyXongLuc.IsZero() || after.MergedInto != "" ||
+		!after.HanXuLyXong.Equal(mergeChildDue) {
+		t.Errorf("after = %s %v %q %v", after.TrangThai, after.XuLyXongLuc, after.MergedInto, after.HanXuLyXong)
+	}
+	un := k.cau("SET merged_into = NULL")
+	if len(un) != 1 || !strings.Contains(un[0].sql, "trang_thai = 'dang-xu-ly'") ||
+		!strings.Contains(un[0].sql, "xu_ly_xong_luc = NULL") || !strings.Contains(un[0].sql, "trang_thai = 'cho-dan-xac-nhan'") ||
+		strings.Contains(un[0].sql, "so_lan_mo_lai") || strings.Contains(un[0].sql, " han_") ||
+		len(un[0].args) != 3 || un[0].args[1] != idChild || un[0].args[2] != idMain {
+		t.Fatalf("unlink = %v", un)
+	}
+	audits := k.cau("INSERT INTO audit_log")
+	if d := string(audits[0].args[7].([]byte)); !strings.Contains(d, `"truoc":{"trang_thai":"cho-dan-xac-nhan"}`) ||
+		!strings.Contains(d, `"sau":{"trang_thai":"dang-xu-ly"}`) {
+		t.Errorf("the transition is not in the merged petition's trail: %s", d)
+	}
+	assertMergeTimelineRows(t, k, "tach-phieu", string(domain.DangXuLy), string(domain.DangXuLy),
+		"Tách khỏi phiếu chính "+codeMain, "Tách phiếu "+codeChild+" khỏi phiếu này", "vụ việc")
+	for _, r := range k.cau("INSERT INTO nhat_ky_phan_anh") {
+		if r.args[5] == string(domain.LogActionReopenByRating) {
+			t.Error("an unmerge was recorded as a reopening by rating")
+		}
+	}
+	su := k.cau("INSERT INTO su_kien_di")
+	if len(su) != 2 {
+		t.Fatalf("%d outbox rows, want 2 — the transition's status_changed and the unmerge's merge_changed", len(su))
+	}
+	sc := thanSuKien(t, su[0].args)
+	if su[0].args[2] != "petitions.status_changed.v1" || sc["status"] != string(domain.DangXuLy) || sc["citizen_message"] != nil {
+		t.Errorf("status_changed = %v — entering dang-xu-ly is silent (ADR 0041 §Không báo)", sc)
+	}
+	assertMergeChangedRow(t, su[1], "tach-phieu", 1, "Xử lý riêng",
+		"Phản ánh của anh/chị sẽ được xử lý riêng. Kết quả sẽ được báo khi xử lý xong.", "vụ việc")
+	if k.daCommit != 1 {
+		t.Errorf("commit=%d", k.daCommit)
+	}
+}
+
+// A merged petition at `da-xu-ly` is unmerged where it stands — nothing moves.
+func TestUnmergeAtResolvedKeepsTheStatus(t *testing.T) {
+	linked := linkedChild()
+	linked["trang_thai"], linked["xu_ly_xong_luc"] = string(domain.DaXuLy), mocThaoTac
+	k := mergeFixtures(nil, linked)
+	uc, ctx := dungXuLy(t, k, hanXuLyThu())
+	after, err := uc.Unmerge(ctx, codeChild, "Lý do", canBoThu(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.TrangThai != domain.DaXuLy || after.XuLyXongLuc.IsZero() {
+		t.Errorf("after = %s %v", after.TrangThai, after.XuLyXongLuc)
+	}
+	if un := k.cau("SET merged_into = NULL")[0]; strings.Contains(un.sql, "'dang-xu-ly'") || un.args[3] != string(domain.DaXuLy) {
+		t.Errorf("unlink = %v", un)
+	}
+	if n := len(k.cau("INSERT INTO su_kien_di")); n != 1 {
+		t.Errorf("%d outbox rows, want 1", n)
+	}
+}
+
+// The unmerge's rollback takes the unlink, the timeline rows and the outbox rows down together.
+func TestUnmergeFailureAnywhereCommitsNothing(t *testing.T) {
+	for _, fail := range []string{"INSERT INTO petition_merge_event", "INSERT INTO audit_log",
+		"INSERT INTO nhat_ky_phan_anh", "count(*) FROM petition_merge_event", "INSERT INTO su_kien_di"} {
+		t.Run(fail, func(t *testing.T) {
+			linked := linkedChild()
+			linked["trang_thai"] = string(domain.ChoDanXacNhan)
+			k := mergeFixtures(nil, linked)
+			k.loiSau = fail
+			uc, ctx := dungXuLy(t, k, hanXuLyThu())
+			if _, err := uc.Unmerge(ctx, codeChild, "Lý do", canBoThu(), false); err == nil {
+				t.Fatal("no error")
+			}
+			if k.daCommit != 0 || k.daRollback != 1 {
+				t.Errorf("commit=%d rollback=%d — a half-unmerged petition", k.daCommit, k.daRollback)
+			}
+		})
+	}
+}
+
 func TestUnmergeRefusals(t *testing.T) {
+	ended := func(s domain.TrangThai) map[string]any {
+		m := linkedChild()
+		m["trang_thai"] = string(s)
+		return m
+	}
 	for name, c := range map[string]struct {
 		child map[string]any
 		want  error
 	}{
-		"not merged": {nil, domain.ErrNotMerged},
-		"followed into close": {map[string]any{"merged_into": idMain, "merged_at": mocThaoTac, "merged_by": "CB-1",
-			"trang_thai": string(domain.DaDong)}, domain.ErrUnmergeNotOpen},
+		"not merged":          {nil, domain.ErrNotMerged},
+		"followed into close": {ended(domain.DaDong), domain.ErrUnmergeNotOpen},
+		"refused on its own":  {ended(domain.KhongTiepNhan), domain.ErrUnmergeNotOpen},
+		"referred on its own": {ended(domain.ChuyenCapTren), domain.ErrUnmergeNotOpen},
 	} {
 		t.Run(name, func(t *testing.T) {
 			k := mergeFixtures(nil, c.child)

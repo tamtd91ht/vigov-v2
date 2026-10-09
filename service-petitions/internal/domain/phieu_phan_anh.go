@@ -64,6 +64,11 @@ const (
 // 3, 28/09/2026) REPLACED ADR 0008's per-commune flags with a fixed rule — 1 or 2 stars reopens, no
 // cap, no recomputed deadline, no switch to turn it off — so no configuration is read for it.
 //
+// `cho-dan-xac-nhan -> dang-xu-ly` HAS A SECOND ACT since the owner's answer of 09/10/2026 (ADR 0087,
+// decision (c)): UNMERGING a merged petition that followed its main into `cho-dan-xac-nhan` returns it
+// to processing (domain.CheckUnmerge). It is NOT a reopening and is not counted in `so_lan_mo_lai` —
+// tienTrinhChinh's comment (xu_ly_phan_anh.go) says what that keeps apart. No new edge was added for it.
+//
 // `da-xu-ly -> dang-xu-ly` WAS ADDED BY THE OWNER'S DECISION OF 28/09/2026 (ADR 0050 §Cái giá names
 // its absence): a citizen may rate at `da-xu-ly` as well as at `cho-dan-xac-nhan`, so a low rating
 // there must be able to reopen. THE EDGE IS REACHABLE FROM EXACTLY ONE ACT — the citizen's rating

@@ -12,8 +12,10 @@ package app
 // EVERY ACT IS ONE TRANSACTION, and what it writes stands or falls together (rule 6, invariant 3; rule 2,
 // invariant 6 — an administrative file is never half-processed):
 //
-//	merge     main's deadline (when it moves) · the link · the history row · two audit entries
-//	unmerge   the link cleared · the history row · two audit entries
+//	merge     main's deadline (when it moves) · the link · the history row · two audit entries ·
+//	          a timeline row on EACH petition · the merged petition's `merge_changed` outbox row
+//	unmerge   the link cleared (and, from `cho-dan-xac-nhan`, the status back to `dang-xu-ly`) · the
+//	          history row · two audit entries · a timeline row on EACH petition · the outbox row(s)
 //	follow    per merged petition: its status · its audit entry · its timeline row · its own outbox row
 //
 // LOCK ORDER: THE MAIN PETITION FIRST, THEN THE MERGED ONE — the order TienTrangThai and Dong already take
@@ -21,16 +23,11 @@ package app
 // instead of deadlocking. Two officers merging A into B and B into A at once is a lock cycle PostgreSQL
 // detects and aborts (migration 0037's header); the loser answers 500 and nothing was written.
 //
-// ⚠ WHAT IS NOT WRITTEN, said where it would be:
-//
-//	the TIMELINE row of a merge / unmerge   `nhat_ky_phan_anh.hanh_vi` is a CLOSED list (0013, widened by
-//	                                        0018/0023/0030) with no `gop-phieu` / `tach-phieu`; writing one
-//	                                        would roll every merge back on PostgreSQL. Widening it is a
-//	                                        migration on a populated table — not this card's. The act's
-//	                                        record is petition_merge_event + audit_log, both in the same
-//	                                        transaction.
-//	the CITIZEN NOTIFICATION of a merge /   no contract can carry it (domain.mergeMessage says why); the
-//	unmerge                                 obligation is recorded by the petition_merge_event row itself.
+// THE CITIZEN OF THE MERGED PETITION IS TOLD, on a merge AND on an unmerge (owner, 09/10/2026 (a)), by
+// `petitions.merge_changed.v1` — never `status_changed`, which would collapse onto the notice already
+// sent for the current status (events.proto, PetitionMergeChanged). The main petition's citizen is owed
+// nothing by either act (ADR 0041 §Sửa đổi 09/10/2026), and the message never names the main petition
+// (ADR 0087 §4). Declared boundary: transaction-boundaries.json `thong_bao_cong_dan_khi_gop_tach_phieu`.
 
 import (
 	"context"
@@ -41,16 +38,21 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"github.com/vihat/vigov/core/audit"
+	petitionsv1 "github.com/vihat/vigov/core/gen/vigov/petitions/v1"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
 // PetitionMergeEvents is the append-only history (migration 0037). *petstore.PetitionMergeEventStore
-// satisfies it. ONE METHOD AND IT TAKES THE TRANSACTION — no history row can be written outside the act.
+// satisfies it. EVERY METHOD TAKES THE TRANSACTION — no history row can be written outside the act, and
+// the count is read on the connection that just appended, so it includes the act's own row.
 type PetitionMergeEvents interface {
 	Append(ctx context.Context, tx *store.ScopedTx, e domain.PetitionMergeEvent) error
+	CountTx(ctx context.Context, tx *store.ScopedTx, petitionID string, kind domain.MergeKind) (int, error)
 }
 
 // The business verbs written into the trail (rule 6). Vietnamese snake_case VALUES like every verb this
@@ -149,15 +151,16 @@ func (uc *XuLyPhanAnh) Merge(ctx context.Context, code string, req MergeRequest,
 			return err
 		}
 		if err := writeMergeAudit(ctx, tx, actor, child, main, main.HanXuLyXong, deadline, reason,
-			ActionMergePetition, ActionReceiveMergedPetition); err != nil {
+			ActionMergePetition, ActionReceiveMergedPetition, child.TrangThai); err != nil {
 			return err
 		}
 
 		after = child
 		after.MergedInto, after.MergedAt, after.MergedBy = main.ID, now, actor.ID
-		// The CITIZEN of `child` is owed MergeNextStep — recorded by the history row above, not sent: see
-		// domain.mergeMessage for the contract that does not exist yet.
-		return nil
+		if err := uc.writeMergeTimelineRows(ctx, tx, domain.MergeKindMerge, after, main, now, actor); err != nil {
+			return err
+		}
+		return uc.writeMergeChangedEvent(ctx, tx, after, domain.MergeKindMerge, now)
 	})
 	if err != nil {
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "gộp phiếu", err)
@@ -167,6 +170,11 @@ func (uc *XuLyPhanAnh) Merge(ctx context.Context, code string, req MergeRequest,
 
 // Unmerge takes petition `code` out of its main petition. Permission: `feedback.classify`. The reason is
 // MANDATORY (owner, 09/10/2026). The main petition's deadline is NOT lengthened back (ADR 0087 §Hệ quả).
+//
+// ANY TIME BEFORE THE MERGED PETITION IS CLOSED (owner, 09/10/2026 (c); domain.CheckUnmerge). From
+// `cho-dan-xac-nhan` it returns to `dang-xu-ly` in the same statement as the unlink — a TRANSITION, so
+// it also gets its `status_changed` outbox row (silent: entering `dang-xu-ly` owes no sentence, ADR 0041
+// §Không báo — the unmerge's own message is the citizen's word) and its before/after in the trail.
 func (uc *XuLyPhanAnh) Unmerge(ctx context.Context, code, rawReason string, actor audit.Actor,
 	restricted QuyenXemHanChe) (domain.PhieuPhanAnh, error) {
 
@@ -216,10 +224,11 @@ func (uc *XuLyPhanAnh) Unmerge(ctx context.Context, code, rawReason string, acto
 		if child.MergedInto != "" && child.MergedInto != main.ID {
 			return petstore.ErrPhieuDaChuyenTrang // re-linked between the two reads
 		}
-		if err := domain.CheckUnmerge(child); err != nil {
+		statusAfter, err := domain.CheckUnmerge(child)
+		if err != nil {
 			return err
 		}
-		if err := uc.kho.UnlinkMerge(ctx, tx, child.ID, main.ID, child.TrangThai); err != nil {
+		if err := uc.kho.UnlinkMerge(ctx, tx, child.ID, main.ID, child.TrangThai, statusAfter); err != nil {
 			return err
 		}
 		eventID, err := uc.sinhID()
@@ -235,13 +244,24 @@ func (uc *XuLyPhanAnh) Unmerge(ctx context.Context, code, rawReason string, acto
 			return err
 		}
 		if err := writeMergeAudit(ctx, tx, actor, child, main, main.HanXuLyXong, main.HanXuLyXong, reason,
-			ActionUnmergePetition, ActionUnmergeFromMain); err != nil {
+			ActionUnmergePetition, ActionUnmergeFromMain, statusAfter); err != nil {
 			return err
 		}
 		after = child
 		after.MergedInto, after.MergedAt, after.MergedBy = "", time.Time{}, ""
-		// The CITIZEN of `child` is owed UnmergeNextStep — recorded by the history row, not sent (see Merge).
-		return nil
+		if statusAfter != child.TrangThai {
+			// The store cleared xu_ly_xong_luc with the move (UnlinkMerge says why).
+			after.TrangThai, after.XuLyXongLuc = statusAfter, time.Time{}
+		}
+		if err := uc.writeMergeTimelineRows(ctx, tx, domain.MergeKindUnmerge, after, main, now, actor); err != nil {
+			return err
+		}
+		if statusAfter != child.TrangThai {
+			if err := uc.ghiSuKien(ctx, tx, after, statusAfter, now); err != nil {
+				return err
+			}
+		}
+		return uc.writeMergeChangedEvent(ctx, tx, after, domain.MergeKindUnmerge, now)
 	})
 	if err != nil {
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "tách phiếu", err)
@@ -255,14 +275,23 @@ func (uc *XuLyPhanAnh) Unmerge(ctx context.Context, code, rawReason string, acto
 // THE REASON IS NOT IN EITHER DELTA, ITS LENGTH IS: staff free text that may quote a report, and
 // audit_log is append-only and never deleted (rule 6, forbidden #4). It lives on petition_merge_event.
 // The actor is the staff BUSINESS code the handler put in audit.Actor.ID (rule 6, invariant 8).
+//
+// `childStatusAfter` differs from child.TrangThai only on an unmerge out of `cho-dan-xac-nhan`; the
+// merged petition's entry then carries its status before and after — the transition is audited with
+// the act that made it (rule 10, invariant 5).
 func writeMergeAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor, child, main domain.PhieuPhanAnh,
-	deadlineBefore, deadlineAfter time.Time, reason, childAction, mainAction string) error {
+	deadlineBefore, deadlineAfter time.Time, reason, childAction, mainAction string,
+	childStatusAfter domain.TrangThai) error {
 
 	deadline := map[string]any{
 		"truoc": map[string]any{"han_xu_ly_xong": lucRaVet(deadlineBefore)},
 		"sau":   map[string]any{"han_xu_ly_xong": lucRaVet(deadlineAfter)},
 	}
 	childDelta := map[string]any{"main_petition": main.MaTraCuu, "main_deadline": deadline}
+	if childStatusAfter != child.TrangThai {
+		childDelta["truoc"] = map[string]any{"trang_thai": string(child.TrangThai)}
+		childDelta["sau"] = map[string]any{"trang_thai": string(childStatusAfter)}
+	}
 	mainDelta := map[string]any{"merged_petition": child.MaTraCuu, "truoc": deadline["truoc"], "sau": deadline["sau"]}
 	if reason != "" {
 		childDelta["reason_length"] = utf8.RuneCountInString(reason)
@@ -284,6 +313,78 @@ func writeMergeAudit(ctx context.Context, tx *store.ScopedTx, actor audit.Actor,
 		}
 	}
 	return nil
+}
+
+// writeMergeTimelineRows writes the act's row on BOTH petitions' timelines (migration 0039): each row
+// carries that petition's own status after the act, no assignment pair, and a fixed sentence naming the
+// OTHER petition's lookup code (domain.MergeLogText). NOT THE REASON — staff free text that may quote a
+// report; it stays on petition_merge_event alone, one copy.
+func (uc *XuLyPhanAnh) writeMergeTimelineRows(ctx context.Context, tx *store.ScopedTx, kind domain.MergeKind,
+	child, main domain.PhieuPhanAnh, at time.Time, actor audit.Actor) error {
+
+	action := domain.LogActionMerge
+	if kind == domain.MergeKindUnmerge {
+		action = domain.LogActionUnmerge
+	}
+	if _, err := uc.writeTimelineRow(ctx, tx, child, action, at, actor,
+		domain.MergeLogText(kind, false, main.MaTraCuu), false); err != nil {
+		return err
+	}
+	_, err := uc.writeTimelineRow(ctx, tx, main, action, at, actor,
+		domain.MergeLogText(kind, true, child.MaTraCuu), false)
+	return err
+}
+
+// errMergeOccurrenceZero: the history count came back 0 right after the act appended its row — the
+// append and the count did not see the same transaction. A wiring fault (500): an occurrence of 0 is
+// malformed by contract, and defaulting it to 1 would collapse a second merge onto the first in comms.
+var errMergeOccurrenceZero = errors.New("xu_ly_phan_anh: đếm lịch sử gộp ra 0 ngay sau khi ghi — không phát được tin gộp/tách")
+
+// writeMergeChangedEvent records `petitions.merge_changed.v1` for the MERGED petition `child` (after the
+// act), in the act's transaction (events.proto, PetitionMergeChanged).
+//
+// NO RECIPIENT, NO ROW — writeStatusChangedEvent's rule, for its reason: a staff-booked petition has no
+// citizen account, and a message to nobody is guaranteed to dead-letter.
+//
+// THE PAYLOAD IS FIVE THINGS: the child's code, the kind, the occurrence, the opaque citizen id, and the
+// software-composed (label, sentence). NOT the main petition's code (ADR 0087 §4), NOT the reason (rule 3),
+// not the commune (the envelope's).
+func (uc *XuLyPhanAnh) writeMergeChangedEvent(ctx context.Context, tx *store.ScopedTx, child domain.PhieuPhanAnh,
+	kind domain.MergeKind, at time.Time) error {
+
+	if child.CongDanID == "" {
+		return nil
+	}
+	n, err := uc.mergeEvents.CountTx(ctx, tx, child.ID, kind)
+	if err != nil {
+		return err
+	}
+	if n <= 0 {
+		return errMergeOccurrenceZero
+	}
+	label, nextStep := domain.MergeCitizenMessage(child, kind)
+	if label == "" || nextStep == "" {
+		return fmt.Errorf("xu_ly_phan_anh: không có lời báo công dân cho %q", kind)
+	}
+	msg := &petitionsv1.PetitionMergeChanged{
+		LookupCode:     child.MaTraCuu,
+		Kind:           string(kind),
+		Occurrence:     uint32(n),
+		CitizenId:      child.CongDanID,
+		CitizenMessage: &petitionsv1.CitizenMessage{StatusLabel: label, NextStep: nextStep},
+	}
+	// UseProtoNames — the field names the .proto declares, as on status_changed.
+	body, err := (protojson.MarshalOptions{UseProtoNames: true}).Marshal(msg)
+	if err != nil {
+		return fmt.Errorf("xu_ly_phan_anh: mã hoá sự kiện gộp/tách: %w", err)
+	}
+	id, err := uc.sinhID()
+	if err != nil {
+		return fmt.Errorf("xu_ly_phan_anh: sinh mã sự kiện gộp/tách: %w", err)
+	}
+	return uc.suKien.Chen(ctx, tx, petstore.SuKienDi{
+		ID: id, Ten: eventMergeChanged, DoiTuong: child.MaTraCuu, Than: body, XayRaLuc: at,
+	})
 }
 
 // followMain moves the petitions merged into `main` along with it (ADR 0087 §2), inside the caller's

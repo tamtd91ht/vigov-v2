@@ -452,9 +452,10 @@ func (uc *PetitionLogAttachments) DownloadLink(ctx context.Context, ma, id strin
 // was written with this file" stays true. Every read path skips the deleted row (ByID, the timeline's
 // batched read, the attach candidates).
 //
-// ⚠ THE TIMELINE LINE IS A `ghi-chu` ROW written by the remover, carrying domain.AttachmentRemovalLogText —
-// the task twin's sentence, with no file name. A dedicated act code (`go-tep`) would need migration 0030's
-// CHECK `nhat_ky_phan_anh_hanh_vi_hop_le` widened — a migration on a populated table, not built here.
+// THE TIMELINE LINE IS A `go-tep` ROW (domain.LogActionAttachmentRemoved, migration 0039) written by the
+// remover, carrying domain.AttachmentRemovalLogText — the task twin's sentence, with no file name. Rows
+// written before 0039 are `ghi-chu` and stay so (append-only), so a count by `go-tep` undercounts history;
+// the authoritative count is the file's soft-delete columns / audit_log.
 //
 // THE TRAIL carries the file id, the entry it was on, the new line's id and the reason's LENGTH — never
 // the reason's text nor the file name (rule 6, forbidden #4; rule 3).
@@ -519,7 +520,7 @@ func (uc *PetitionLogAttachments) Remove(ctx context.Context, ma, id, reasonRaw 
 		}
 		if err := uc.petitions.GhiNhatKy(ctx, tx, domain.NhatKyPhanAnh{
 			ID: logID, PhieuPhanAnhID: p.ID, ThoiDiem: now, NguoiMa: actor.ID,
-			HanhVi: domain.NhatKyGhiChu, TrangThai: p.TrangThai, NoiDung: text,
+			HanhVi: domain.LogActionAttachmentRemoved, TrangThai: p.TrangThai, NoiDung: text,
 		}); err != nil {
 			return err
 		}

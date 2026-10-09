@@ -429,6 +429,8 @@ func TestLogActionsAreAllowedByTheSchema(t *testing.T) {
 		domain.LogActionCitizenRating, domain.LogActionReopenByRating,
 		domain.LogActionTaskCreated, // migration 0023 (task from a petition, 30/09/2026)
 		domain.LogActionStaffIntake, // migration 0030 (staff intake, ADR 0028 Bổ sung 2026-10-02 row 6)
+		// migration 0039 (merge / unmerge on both timelines, ADR 0087; attachment removal)
+		domain.LogActionMerge, domain.LogActionUnmerge, domain.LogActionAttachmentRemoved,
 	} {
 		if !allowed[string(a)] {
 			t.Errorf("mã hành vi %q không có trong CHECK nhat_ky_phan_anh_hanh_vi_hop_le mới nhất — "+

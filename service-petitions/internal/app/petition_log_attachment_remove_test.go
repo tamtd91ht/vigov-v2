@@ -94,7 +94,7 @@ func TestRemoveLogAttachment_SoftDeleteLineAndTrailInOneTransaction(t *testing.T
 	}
 	line := h.pets.logged[0]
 	if line.ID != "nkpa-go-1" || line.PhieuPhanAnhID != ppPetition || line.NguoiMa != maCanBoThu ||
-		line.HanhVi != domain.NhatKyGhiChu || line.TrangThai != domain.DaDong {
+		line.HanhVi != domain.LogActionAttachmentRemoved || line.TrangThai != domain.DaDong {
 		t.Errorf("line = %+v", line)
 	}
 	if !strings.Contains(line.NoiDung, removeReason) || strings.Contains(line.NoiDung, "bien-ban-nha-ong-hai") {

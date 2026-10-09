@@ -512,7 +512,9 @@ func NewSuKienDiStore(db *store.DB) *SuKienDiStore { return &SuKienDiStore{db: d
 type SuKienDi struct {
 	ID string
 
-	// Ten is the event name WITH ITS VERSION — `petitions.status_changed.v1` (rule 2, invariant 4).
+	// Ten is the event name WITH ITS VERSION (rule 2, invariant 4) — `petitions.status_changed.v1`, or
+	// `petitions.merge_changed.v1` for a merge / unmerge (app/petition_merge.go). Migration 0005's
+	// comments name only the first; they are an applied file and are not edited (core/migrate checksum).
 	Ten string
 
 	// DoiTuong is the BUSINESS code of the record, i.e. the lookup code. Never the internal ULID.

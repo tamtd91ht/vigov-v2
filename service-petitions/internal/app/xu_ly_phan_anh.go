@@ -112,7 +112,7 @@ type KhoPhieuXuLy interface {
 	MovePetitionDeadlineForMerge(ctx context.Context, tx *store.ScopedTx, id string, from, to time.Time) error
 	LinkMerge(ctx context.Context, tx *store.ScopedTx, id, mainID string, status domain.TrangThai,
 		at time.Time, by string) error
-	UnlinkMerge(ctx context.Context, tx *store.ScopedTx, id, mainID string, status domain.TrangThai) error
+	UnlinkMerge(ctx context.Context, tx *store.ScopedTx, id, mainID string, from, to domain.TrangThai) error
 	MergedPetitionsForUpdate(ctx context.Context, tx *store.ScopedTx, mainID string) ([]domain.PhieuPhanAnh, error)
 	FollowMain(ctx context.Context, tx *store.ScopedTx, id, mainID string, from, to domain.TrangThai,
 		workDoneAt time.Time, result string, closedAt time.Time) error
@@ -208,6 +208,7 @@ const (
 	// write to business data (rule 6, invariant 1).
 	HanhViGhiChuPhanAnh     = "ghi_chu_phan_anh"
 	tenSuKienDoiTrangThai   = "petitions.status_changed.v1"
+	eventMergeChanged       = "petitions.merge_changed.v1" // petition_merge.go — a merge is not a status
 	chuThePhaiLaCanBo       = "staff"
 	loiThieuChuThe          = "xu_ly_phan_anh: thiếu mã cán bộ thực hiện"
 	loiChuTheKhongPhaiCanBo = "xu_ly_phan_anh: chủ thể không phải cán bộ"

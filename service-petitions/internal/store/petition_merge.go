@@ -101,14 +101,38 @@ func (s *PhieuPhanAnhStore) LinkMerge(ctx context.Context, tx *store.ScopedTx,
 
 // UnlinkMerge clears the link — who and when go with it (CHECK `phieu_phan_anh_merge_link_complete`);
 // the history keeps them. The WHERE clause carries the main petition and the status read under the lock.
+//
+// `to` IS THE STATUS AFTER THE UNMERGE (domain.CheckUnmerge). TWO LITERAL STATEMENTS, the FollowMain
+// shape: `to == from` leaves the status alone; `cho-dan-xac-nhan -> dang-xu-ly` (owner, 09/10/2026 (c))
+// is the only move, and the status is never a parameter, so no caller can send a petition anywhere else.
+// That move also clears `xu_ly_xong_luc` — the precedent of ReopenByRating, for its reason: the instant was
+// most likely the MAIN's, copied by FollowMain, and left in place the separated petition would read "on
+// time" for ever on the strength of work done on another case (domain.QuaHan). The deadlines and
+// `so_lan_mo_lai` are not touched: the deadline is a stored commitment (rule 10, invariant 2), and the
+// counter counts reopenings BY RATING, which the close gate reads (app.checkVerificationPhotoGate).
 func (s *PhieuPhanAnhStore) UnlinkMerge(ctx context.Context, tx *store.ScopedTx,
-	id, mainID string, status domain.TrangThai) error {
+	id, mainID string, from, to domain.TrangThai) error {
 
-	const stmt = `UPDATE phieu_phan_anh
-		SET merged_into = NULL, merged_at = NULL, merged_by = NULL, cap_nhat_luc = now()
-		WHERE tenant_id = $1 AND id = $2 AND merged_into = $3 AND trang_thai = $4 AND deleted_at IS NULL`
-
-	res, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, mainID, string(status))
+	var (
+		res sql.Result
+		err error
+	)
+	switch {
+	case to == from:
+		const stmt = `UPDATE phieu_phan_anh
+			SET merged_into = NULL, merged_at = NULL, merged_by = NULL, cap_nhat_luc = now()
+			WHERE tenant_id = $1 AND id = $2 AND merged_into = $3 AND trang_thai = $4 AND deleted_at IS NULL`
+		res, err = tx.Exec(ctx, stmt, string(tx.TenantID()), id, mainID, string(from))
+	case from == domain.ChoDanXacNhan && to == domain.DangXuLy:
+		const stmt = `UPDATE phieu_phan_anh
+			SET merged_into = NULL, merged_at = NULL, merged_by = NULL,
+			    trang_thai = 'dang-xu-ly', xu_ly_xong_luc = NULL, cap_nhat_luc = now()
+			WHERE tenant_id = $1 AND id = $2 AND merged_into = $3 AND trang_thai = 'cho-dan-xac-nhan'
+			  AND deleted_at IS NULL`
+		res, err = tx.Exec(ctx, stmt, string(tx.TenantID()), id, mainID)
+	default:
+		return fmt.Errorf("phieu_phan_anh: tách phiếu không chuyển %q sang %q", from, to)
+	}
 	if err != nil {
 		return fmt.Errorf("phieu_phan_anh: tách phiếu: %w", err)
 	}
@@ -327,4 +351,30 @@ func (s *PetitionMergeEventStore) Append(ctx context.Context, tx *store.ScopedTx
 		return fmt.Errorf("petition_merge_event: ghi: %w", err)
 	}
 	return nil
+}
+
+// CountTx answers how many `kind` rows petition `petitionID` has, INSIDE the caller's transaction — so the
+// row the act just appended is counted. It is the `occurrence` of `petitions.merge_changed.v1`: the table
+// is append-only and the caller holds the petition's row lock, so the number is stable and a
+// republication of the same act yields the same one.
+func (s *PetitionMergeEventStore) CountTx(ctx context.Context, tx *store.ScopedTx, petitionID string,
+	kind domain.MergeKind) (int, error) {
+
+	// ScopedTx.Query prefixes `WHERE tenant_id = $1`, bound from the transaction's commune.
+	rows, err := tx.Query(ctx, "count(*)", "petition_merge_event", "AND petition_id = $2 AND kind = $3",
+		petitionID, string(kind))
+	if err != nil {
+		return 0, fmt.Errorf("petition_merge_event: đếm: %w", err)
+	}
+	defer rows.Close()
+	n := 0
+	if rows.Next() {
+		if err := rows.Scan(&n); err != nil {
+			return 0, fmt.Errorf("petition_merge_event: đếm: %w", err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("petition_merge_event: đếm: %w", err)
+	}
+	return n, nil
 }

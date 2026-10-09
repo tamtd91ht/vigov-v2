@@ -107,18 +107,42 @@ func TestCheckMergeDeadlineBeforeMainOriginRefused(t *testing.T) {
 
 func TestCheckUnmerge(t *testing.T) {
 	child, _ := mergePair()
-	if err := CheckUnmerge(child); !errors.Is(err, ErrNotMerged) {
+	if _, err := CheckUnmerge(child); !errors.Is(err, ErrNotMerged) {
 		t.Errorf("not merged: %v", err)
 	}
 	child.MergedInto = "m"
-	if err := CheckUnmerge(child); err != nil {
-		t.Errorf("merged, open: %v", err)
+	// Owner, 09/10/2026 (c): any time before the petition is closed. Only `cho-dan-xac-nhan` moves —
+	// back to `dang-xu-ly`, along the lifecycle's existing edge.
+	for from, want := range map[TrangThai]TrangThai{
+		DaTiepNhan: DaTiepNhan, DangPhanLoai: DangPhanLoai, DaChuyenXuLy: DaChuyenXuLy, DangXuLy: DangXuLy,
+		DaXuLy: DaXuLy, ChoDanXacNhan: DangXuLy,
+	} {
+		child.TrangThai = from
+		if got, err := CheckUnmerge(child); err != nil || got != want {
+			t.Errorf("%s: %s, %v — want %s", from, got, err, want)
+		}
 	}
-	for _, s := range []TrangThai{DaXuLy, ChoDanXacNhan, DaDong} {
+	for _, s := range []TrangThai{DaDong, KhongTiepNhan, ChuyenCapTren, "khong-co"} {
 		child.TrangThai = s
-		if err := CheckUnmerge(child); !errors.Is(err, ErrUnmergeNotOpen) {
+		if _, err := CheckUnmerge(child); !errors.Is(err, ErrUnmergeNotOpen) {
 			t.Errorf("%s: %v", s, err)
 		}
+	}
+}
+
+// The (label, sentence) pair is the owner's wording of 09/10/2026 (d), and an unknown kind sends nothing.
+func TestMergeCitizenMessage(t *testing.T) {
+	p := PhieuPhanAnh{MaTraCuu: "PA-CHILD", LinhVuc: "rac-thai"}
+	if l, s := MergeCitizenMessage(p, MergeKindMerge); l != "Ghép với phản ánh cùng vụ việc" ||
+		s != "Phản ánh của anh/chị đã được ghép với phản ánh cùng vụ việc. Kết quả sẽ được báo khi xử lý xong." {
+		t.Errorf("merge = %q / %q", l, s)
+	}
+	if l, s := MergeCitizenMessage(p, MergeKindUnmerge); l != "Xử lý riêng" ||
+		s != "Phản ánh của anh/chị sẽ được xử lý riêng. Kết quả sẽ được báo khi xử lý xong." {
+		t.Errorf("unmerge = %q / %q", l, s)
+	}
+	if l, s := MergeCitizenMessage(p, "khong-co"); l != "" || s != "" {
+		t.Errorf("unknown kind = %q / %q", l, s)
 	}
 }
 

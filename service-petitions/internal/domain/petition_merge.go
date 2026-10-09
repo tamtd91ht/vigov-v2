@@ -91,7 +91,7 @@ var (
 	ErrMergeHasChildren    = errors.New("phan_anh: phiếu này đang là phiếu chính của phiếu khác nên không gộp tiếp được")
 	ErrMergeStaffConduct   = errors.New("phan_anh: phiếu lĩnh vực cán bộ không bao giờ được gộp")
 	ErrNotMerged           = errors.New("phan_anh: phiếu này không được gộp vào phiếu nào")
-	ErrUnmergeNotOpen      = errors.New("phan_anh: chỉ tách được phiếu chưa xử lý xong")
+	ErrUnmergeNotOpen      = errors.New("phan_anh: chỉ tách được phiếu chưa đóng")
 
 	// ErrMergeDeadlineBeforeOrigin — "the main takes the earlier deadline" would put the main's
 	// `han_xu_ly_xong` BEFORE its own `goc_dem_han`, which migration 0004's CHECK
@@ -161,23 +161,41 @@ func CheckMerge(child, main PhieuPhanAnh, childHasChildren bool) (time.Time, err
 	return han, nil
 }
 
-// CheckUnmerge decides whether `child` may be taken out of its main petition.
+// CheckUnmerge decides whether `child` may be taken out of its main petition, and returns the status it
+// stands in AFTER the unmerge.
 //
-// ONLY WHILE IT IS STILL UNRESOLVED — the same four statuses a merge needs. Migration 0037's header says
-// plainly that unmerging a petition which already followed its main into `cho-dan-xac-nhan` / `da-dong`
-// is decided by nobody yet; refusing it is the fail-closed reading (taking a closed record out of the
-// incident it was closed with would edit an archival record, rule 7 forbidden #5). Reported, not buried.
+// ANY TIME BEFORE IT IS CLOSED (owner, 09/10/2026, decision (c)) — replacing the earlier "only while
+// unresolved". Per status:
+//
+//	the four open ones, `da-xu-ly`   allowed; the status does not move — the link is all that changes
+//	`cho-dan-xac-nhan`               allowed; the petition RETURNS TO `dang-xu-ly` along the lifecycle's
+//	                                 existing edge (chuyenDuocSang — the reopen edge). It most likely got
+//	                                 there by following its main (ADR 0087 §2), and once separated it is
+//	                                 no longer finished: asking its citizen to confirm the MAIN's work
+//	                                 would be a confirmation of somebody else's case. Its deadline stays
+//	                                 as stored (rule 10, invariant 2)
+//	`da-dong`                        refused — taking a closed record out of the incident it was closed
+//	                                 with would edit an archival record (rule 7, forbidden #5)
+//	`khong-tiep-nhan`,               refused, READ AS "closed" too: both are terminal (no way out of
+//	`chuyen-cap-tren`                chuyenDuocSang), and the unmerge message promises "sẽ được xử lý
+//	                                 riêng" — false for a petition the commune refused or passed on.
+//	                                 Fail closed; an assumption stated in the card's report
+//
+// THE EDGE IS ASKED OF THE LIFECYCLE, NOT ASSUMED: if `cho-dan-xac-nhan -> dang-xu-ly` ever leaves
+// chuyenDuocSang, this refuses rather than writing a move the lifecycle does not have (rule 10 stop #2).
 //
 // THE MAIN PETITION'S DEADLINE IS NOT LENGTHENED BACK (ADR 0087 §Hệ quả): the caller writes the event
 // with the same deadline before and after.
-func CheckUnmerge(child PhieuPhanAnh) error {
+func CheckUnmerge(child PhieuPhanAnh) (TrangThai, error) {
 	switch {
 	case child.MergedInto == "":
-		return ErrNotMerged
-	case !MergeOpen(child.TrangThai):
-		return ErrUnmergeNotOpen
+		return "", ErrNotMerged
+	case MergeOpen(child.TrangThai), child.TrangThai == DaXuLy:
+		return child.TrangThai, nil
+	case child.TrangThai == ChoDanXacNhan && ChoDanXacNhan.ChuyenSangDuoc(DangXuLy):
+		return DangXuLy, nil
 	}
-	return nil
+	return "", ErrUnmergeNotOpen
 }
 
 // FollowsMain reports whether a merged petition in status `child` moves along when its main petition
@@ -208,26 +226,36 @@ func IsMergeStateRefusal(err error) bool {
 
 // --- what the citizen of the merged petition is told -------------------------------------------------
 
-// mergeMessage and unmergeMessage are the sentences ADR 0041 §Sửa đổi 09/10/2026 owes the citizen of the
-// MERGED petition — beside loiNhanChoDan rather than in it, because that table is keyed by the TARGET
-// status and neither act changes a status (ADR 0041 open item #3: extend the mechanism, no second list).
+// The label and sentence ADR 0041 §Sửa đổi 09/10/2026 owes the citizen of the MERGED petition on a merge
+// and on an unmerge — the owner's wording of 09/10/2026, decisions (a) and (d). Beside loiNhanChoDan
+// rather than in it, because that table is keyed by the TARGET status and neither act is a status (ADR
+// 0041 open item #3: extend the mechanism, no second list).
 //
-// ⚠ NEITHER IS A ZNS TEMPLATE YET. The merge sentence is the meaning the owner approved in ADR 0041 (its
-// final wording is still open there); the unmerge sentence is the owner's answer of 09/10/2026 relayed by
-// the main session — ADR 0041 on disk still lists "Tách phiếu — chưa quyết". Neither names the main
-// petition's code, content, photos or reporter (ADR 0087 §4, rule 4).
+// CARRIED BY `petitions.merge_changed.v1` (PetitionMergeChanged.citizen_message), not by
+// `status_changed`: comms deduplicates on (code, moc, occurrence, recipient, channel), and a merge sent
+// under the petition's current status would collapse onto the notice already sent for that status.
 //
-// ⚠ NOTHING SENDS THEM TODAY. `petitions.status_changed.v1` cannot carry an act that changes no status:
-// service-comms deduplicates on (code, status, occurrence, recipient, channel), so a merge notice would
-// collapse onto the earlier notice of the same status and be dropped as a duplicate — silently. A new
-// event in proto/vigov/petitions/v1/events.proto and a comms consumer are needed first (contract-designer
-// + service-comms). Until then the obligation is RECORDED, in the same transaction, as the
-// petition_merge_event row itself.
+// THE LABEL IS THE ACT'S, not a status's (events.proto, CitizenMessage.status_label): a software string,
+// the same in every commune. NEITHER TEXT NAMES THE MAIN PETITION — its code, content, photos or reporter
+// (ADR 0087 §4, rule 4) — and neither is the staff-written reason (rule 3).
 const (
-	mergeMessage = "Phiếu của anh/chị đã được ghép với phản ánh cùng vụ việc, kết quả sẽ báo khi xử lý xong. " +
-		"Dùng mã tra cứu để xem tiến độ."
-	unmergeMessage = "Phản ánh của anh/chị sẽ được xử lý riêng. Dùng mã tra cứu để xem tiến độ."
+	mergeStatusLabel   = "Ghép với phản ánh cùng vụ việc"
+	mergeMessage       = "Phản ánh của anh/chị đã được ghép với phản ánh cùng vụ việc. Kết quả sẽ được báo khi xử lý xong."
+	unmergeStatusLabel = "Xử lý riêng"
+	unmergeMessage     = "Phản ánh của anh/chị sẽ được xử lý riêng. Kết quả sẽ được báo khi xử lý xong."
 )
+
+// MergeCitizenMessage is the (label, sentence) owed to the citizen of `p` for act `kind`. Both "" for a
+// kind this file does not know — the caller then has nothing to send and must refuse, not guess.
+func MergeCitizenMessage(p PhieuPhanAnh, kind MergeKind) (label, nextStep string) {
+	switch kind {
+	case MergeKindMerge:
+		return mergeStatusLabel, MergeNextStep(p)
+	case MergeKindUnmerge:
+		return unmergeStatusLabel, UnmergeNextStep(p)
+	}
+	return "", ""
+}
 
 // MergeNextStep is the sentence owed to the citizen of `p` when it is merged into a main petition.
 func MergeNextStep(p PhieuPhanAnh) string {
