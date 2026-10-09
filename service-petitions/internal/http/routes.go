@@ -603,6 +603,11 @@ type Deps struct {
 	// (app.CitizenReportBreakdown). routes_citizen_report_figures.go refuses it nil.
 	CitizenReportBreakdown CitizenReportBreakdownReader
 
+	// ResidentialUnitNames names the thôn / tổ dân phố a petition carries (ADR 0088) on the staff detail,
+	// list and write responses — *identityclient.Client in production. nil is NOT refused at construction
+	// (most routes never need it); a read that needs a name then answers 503, never a blank name.
+	ResidentialUnitNames app.ResidentialUnitNamer
+
 	// AuditLog reads this service's own `audit_log` for the "Xem nhật ký hệ thống" screen (ADR 0054),
 	// withholding `can-bo` petitions' entries from a reader without `feedback.restricted` (§4).
 	// *audit.Log in production. Refused at construction when missing.
@@ -945,10 +950,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// NHẬP HỘ PHẢN ÁNH — staff intake (docs/ui-ux/09 §11). The two decisions this comment used to wait
 	// for are taken: the modal wording was APPROVED by the user on 30/09/2026 (spec 09:248-249 — "Vì đã
 	// biết lĩnh vực ngay, hạn xử lý được ấn định luôn", replacing "cùng thời hạn với phiếu gửi từ
-	// Zalo", per ADR 0028 E/F), and the hamlet ships WITHOUT `thon_id` — no identity RPC validates a
-	// hamlet, so it would be written straight from the client (rule 1, forbidden #2 in spirit); a
-	// contract comes first (contract-designer). Scene photos are out too: that flow is bound to a
-	// citizen session. app.StaffIntake carries ADR 0028 E/F decision by decision.
+	// Zalo", per ADR 0028 E/F). The residential unit (`residential_unit_id`, ADR 0088) is optional and
+	// checked with identity's ResolveActiveResidentialUnits before anything is written. Scene photos are
+	// out: that flow is bound to a citizen session. app.StaffIntake carries ADR 0028 E/F decision by
+	// decision.
 	//
 	// `feedback.create` ("Tiếp nhận phản ánh"), seeded at service-identity/migrations/0001_init.sql:298
 	// and named by spec 09 §14.6. The petition is linked to NO citizen account (ADR 0028 §Bổ sung
@@ -965,12 +970,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// with a citizen on the telephone because a cache is down is worse than a rare visible duplicate.
 	// A replay is told the code (idem.RecordCode).
 	//
-	// 400 `invalid_request` (shape, missing field/content, lengths, a system-decided field, hamlet or
-	// coordinates sent) · `field_not_offered` · `clock_from_out_of_range` (ADR 0028 F3 — refused, never
-	// clamped). 401 no session AND a session of another commune (authz compares the commune before the
-	// key). 403 no `feedback.create`. 409 `request_in_progress` (idem). 503 `intake_not_configured` (identity could not fix the resolve
-	// deadline — no SLA table, calendar, or identity down) · `field_catalogue_unavailable`. Nothing is
-	// written and no code is issued on any refusal.
+	// 400 `invalid_request` (shape, missing field/content, lengths, a system-decided field, coordinates
+	// sent, the unit under `hamlet`/`thon_id`) · `field_not_offered` · `residential_unit_not_offered` ·
+	// `clock_from_out_of_range` (ADR 0028 F3 — refused, never clamped). 401 no session AND a session of
+	// another commune (authz compares the commune before the key). 403 no `feedback.create`. 409
+	// `request_in_progress` (idem). 503 `intake_not_configured` (identity could not fix the resolve
+	// deadline — no SLA table, calendar, or identity down) · `field_catalogue_unavailable` ·
+	// `residential_unit_check_unavailable`. Nothing is written and no code is issued on any refusal.
 	//
 	// @summary  Cán bộ nhập hộ một phản ánh của người dân (gọi điện, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu
 	// @screen   09-phan-anh-nguoi-dan §11

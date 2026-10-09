@@ -80,6 +80,13 @@ type guiPhanAnhVao struct {
 	// with ONE answer (400 `field_not_offered`); the use case checks it before identity is asked.
 	Field *string `json:"field,omitempty"`
 
+	// ResidentialUnitID is the thôn / tổ dân phố the citizen OPTIONALLY picked (ADR 0088 §1). Absent,
+	// null or "" = none. A description of where the problem is, like the location — but checked with
+	// identity against the SESSION's commune before anything is written, because an id the client names
+	// could be another commune's: 400 `residential_unit_not_offered` (one answer for every reason) · 503
+	// `residential_unit_check_unavailable` (nothing written, no code). Never derived from lat/lng.
+	ResidentialUnitID *string `json:"residential_unit_id,omitempty"`
+
 	// --- refused, every one of them ----------------------------------------------------------
 
 	// WHOSE PETITION IT IS. Rule 4, forbidden #1 — the top entry of that rule's list, because a
@@ -184,7 +191,7 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	p, err := h.d.GuiPhieu.Gui(ctx, app.YeuCauGuiPhanAnh{
+	yc := app.YeuCauGuiPhanAnh{
 		NoiDung:   vao.Content,
 		DiaChi:    vao.Address,
 		HoTen:     vao.Reporter,
@@ -193,7 +200,11 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 		Field:     field,
 		Lat:       vao.Lat,
 		Lng:       vao.Lng,
-	}, sender)
+	}
+	if vao.ResidentialUnitID != nil {
+		yc.ResidentialUnitID = *vao.ResidentialUnitID
+	}
+	p, err := h.d.GuiPhieu.Gui(ctx, yc, sender)
 	if err != nil {
 		h.traLoiLoiGui(w, r, err)
 		return
@@ -377,6 +388,16 @@ func writeIntakeError(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 		httpx.WriteError(w, http.StatusServiceUnavailable, "contact_phone_unavailable",
 			"Chưa lấy được số điện thoại đã xác thực của bạn nên phản ánh CHƯA được ghi nhận. "+
 				"Vui lòng thử lại sau ít phút.", "")
+
+	case errors.Is(err, app.ErrResidentialUnitNotActive):
+		writeResidentialUnitNotOffered(w)
+
+	case errors.Is(err, app.ErrResidentialUnitCheckUnavailable):
+		// identity unreachable for the unit check: nothing written, no code issued (ADR 0088). Clears by
+		// itself; a different code from the deadline outage so an operator can tell them apart.
+		log.Warn("CẢNH BÁO: từ chối tiếp nhận phản ánh vì chưa kiểm được thôn / tổ dân phố",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		writeResidentialUnitCheckUnavailable(w)
 
 	case domain.LaLoiGuiPhanAnh(err):
 		// The domain's own sentence is returned: it names the field and the rule, holds no personal

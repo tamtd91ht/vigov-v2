@@ -418,6 +418,13 @@
       "source": "service-petitions/migrations/0013_nhat_ky_phan_anh.sql:76"
     },
     {
+      "entity": "PetitionMergeEvent",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "petition_merge_event",
+      "source": "service-petitions/migrations/0037_petition_merge.sql:348"
+    },
+    {
       "entity": "PetitionSettings",
       "service": "petitions",
       "scope": "tenant",

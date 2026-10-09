@@ -284,6 +284,12 @@ type YeuCauGuiPhanAnh struct {
 	// actually work end to end; requiring it before then would refuse every petition.
 	Lat *float64
 	Lng *float64
+
+	// ResidentialUnitID is the thôn / tổ dân phố the citizen OPTIONALLY picked (ADR 0088 §1). "" = none.
+	// Client-supplied until identity confirms it is an active unit of the SESSION's commune — checked
+	// before the code is minted; identity down refuses the intake (503) rather than filing it without the
+	// unit the citizen chose. Never derived from Lat/Lng (ADR 0088 stop condition #2).
+	ResidentialUnitID string
 }
 
 // GuiPhanAnh owns the citizen intake.
@@ -306,6 +312,10 @@ type GuiPhanAnh struct {
 	// a wiring fault, never read as "no number".
 	phones CitizenContactPhones
 
+	// units checks a picked residential unit (ADR 0088). nil refuses a request naming one (wiring fault).
+	// Set by WithResidentialUnits.
+	units ActiveResidentialUnitChecker
+
 	// sinhID and sinhMa are injected so a test can pin both values. In production they are
 	// ulid.Moi and domain.SinhMaTraCuu. sinhID mints BOTH the petition id and the outbox row id.
 	sinhID func() (string, error)
@@ -324,6 +334,13 @@ func NewGuiPhanAnh(db *store.DB, kho CitizenIntakePetitions, suKien KhoSuKien, h
 		sinhMa: domain.SinhMaTraCuu,
 		luc:    func() time.Time { return time.Now().UTC() },
 	}
+}
+
+// WithResidentialUnits wires the residential-unit check (ADR 0088). A setter so the callers that never
+// send a unit — the accountless intake refuses the field at its edge — keep their constructor call.
+func (uc *GuiPhanAnh) WithResidentialUnits(units ActiveResidentialUnitChecker) *GuiPhanAnh {
+	uc.units = units
+	return uc
 }
 
 // Gui receives one petition from the citizen who filed it, and returns the record — including the
@@ -395,6 +412,15 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 			return domain.PhieuPhanAnh{}, errors.New("gui_phan_anh: thiếu bộ kiểm lĩnh vực — sai nối dây")
 		}
 		if field, err = uc.fields.CheckCitizenIntakeField(ctx, yc.Field); err != nil {
+			return domain.PhieuPhanAnh{}, err
+		}
+	}
+
+	// THE RESIDENTIAL UNIT, if the citizen picked one (ADR 0088) — checked with identity for the SESSION's
+	// commune before the deadlines are asked and before the code is minted.
+	unitID := normaliseResidentialUnitID(yc.ResidentialUnitID)
+	if unitID != "" {
+		if err := checkResidentialUnit(ctx, uc.units, unitID); err != nil {
 			return domain.PhieuPhanAnh{}, err
 		}
 	}
@@ -518,6 +544,7 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 		Kenh:     kenhCongDan,
 		NoiDung:  noiDung,
 		DiaChi:   diaChi,
+		ThonID:   unitID, // the ID identity confirmed — never the name (ADR 0088)
 		Lat:      lat,
 		Lng:      lng,
 
@@ -636,6 +663,8 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 			"do_dai_noi_dung":    len([]rune(moi.NoiDung)),
 			"publication_status": string(moi.PublicationStatus),
 			"has_scene_location": moi.Lat != nil,
+			// ADR 0088: the unit id identity confirmed, or null. An id, not personal data.
+			"residential_unit_id": nilIfEmpty(moi.ThonID),
 			// ADR 0080: whether the contact details are self-declared and unverified (a Zalo-account
 			// owner). A boolean — the owner id is the entry's actor already, and nothing else is needed.
 			"contact_unverified": moi.ContactUnverified(),

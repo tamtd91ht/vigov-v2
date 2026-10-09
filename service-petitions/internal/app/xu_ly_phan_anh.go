@@ -47,6 +47,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -77,6 +78,9 @@ type KhoPhieuXuLy interface {
 	ChotLinhVuc(ctx context.Context, tx *store.ScopedTx, id, linhVuc string,
 		tuTrangThai, sangTrangThai domain.TrangThai, phanLoaiLuc, hanXuLyXong time.Time,
 		publication domain.PublicationStatus) error
+	// SetResidentialUnit corrects `thon_id` at classification (ADR 0088), only when it changes, guarded
+	// by the value read under the lock.
+	SetResidentialUnit(ctx context.Context, tx *store.ScopedTx, id, from, to string) error
 	PhanCong(ctx context.Context, tx *store.ScopedTx, id, boPhanID, canBoID string,
 		tuTrangThai, sangTrangThai domain.TrangThai) error
 	DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id string,
@@ -376,6 +380,13 @@ type YeuCauChotLinhVuc struct {
 	// Attachments are OPTIONAL completed log attachments of the acting officer, linked to this act's
 	// timeline row in its transaction (act_attachments.go). On every struct-carried act.
 	Attachments []string
+
+	// ResidentialUnitID is the officer CONFIRMING OR CORRECTING the thôn / tổ dân phố (ADR 0088 §1).
+	// nil or "" = keep what the petition holds — there is no "remove the unit" here (not asked for; a
+	// form whose select is unset must not erase what the citizen picked). A value equal to the stored one
+	// is a confirmation: no identity call, no write. A DIFFERENT value is checked with identity before the
+	// transaction opens, written in it, and audited with before/after.
+	ResidentialUnitID *string
 }
 
 // YeuCauPhanCong is the "Chuyển xử lý" block of docs/ui-ux/09 §8.5.
@@ -425,6 +436,27 @@ type XuLyPhanAnh struct {
 	// id seam, so the ids tests pin through sinhID are not shifted.
 	notices  StaffNoticeOutbox
 	noticeID func() (string, error)
+
+	// units checks a residential unit the classifier CHANGES (ADR 0088). nil refuses a change (wiring
+	// fault); a confirmation of the stored value never needs it. Set by WithResidentialUnits.
+	units ActiveResidentialUnitChecker
+
+	// log notes a residential-unit change for operators (internal; ids and the code only — no personal
+	// data). nil = slog.Default(). The record of the change is the audit entry, not this line.
+	log *slog.Logger
+}
+
+// WithResidentialUnits wires the residential-unit check and the operator log (ADR 0088).
+func (uc *XuLyPhanAnh) WithResidentialUnits(units ActiveResidentialUnitChecker, log *slog.Logger) *XuLyPhanAnh {
+	uc.units, uc.log = units, log
+	return uc
+}
+
+func (uc *XuLyPhanAnh) logger() *slog.Logger {
+	if uc.log == nil {
+		return slog.Default()
+	}
+	return uc.log
 }
 
 func NewXuLyPhanAnh(db *store.DB, kho KhoPhieuXuLy, suKien KhoSuKien, han DocHanXuLyXong,
@@ -606,6 +638,19 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "phân loại", petstore.ErrPhieuDaChuyenTrang)
 	}
 
+	// THE RESIDENTIAL UNIT (ADR 0088): checked with identity ONLY when it differs from what the petition
+	// holds, and outside the transaction for the reason the deadline is. A confirmation asks nobody.
+	unitTo := truoc.ThonID
+	unitChecked := false
+	if yc.ResidentialUnitID != nil {
+		if id := normaliseResidentialUnitID(*yc.ResidentialUnitID); id != "" && id != truoc.ThonID {
+			if err := checkResidentialUnit(ctx, uc.units, id); err != nil {
+				return domain.PhieuPhanAnh{}, err
+			}
+			unitTo, unitChecked = id, true
+		}
+	}
+
 	han, err := uc.hanXuLyXong(ctx, linhVuc, truoc.GocDemHan)
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
@@ -649,31 +694,54 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 			return err
 		}
 
+		// THE UNIT CHANGE, on the locked row. The value compared is the one the database holds now: if it
+		// moved since the unlocked read, a target identity did NOT check could be written — refused as the
+		// state race it is (409, reload), never written unchecked.
+		unitChanged := unitTo != p.ThonID
+		if unitChanged {
+			if !unitChecked {
+				return petstore.ErrPhieuDaChuyenTrang
+			}
+			if err := uc.kho.SetResidentialUnit(ctx, tx, p.ID, p.ThonID, unitTo); err != nil {
+				return err
+			}
+		}
+
 		sau = p
 		sau.LinhVuc = linhVuc
 		sau.TrangThai = domain.DangPhanLoai
 		sau.PhanLoaiLuc = bayGio
 		sau.HanXuLyXong = hanChot
 		sau.PublicationStatus = publication
+		sau.ThonID = unitTo
 
 		// BEFORE AND AFTER, INCLUDING THE DEADLINE THIS ACT FIXED (rule 6, invariant 5). The deadline
 		// is the whole reason this entry matters: it is the moment the authority committed to a date,
 		// and an inspection asking "when was this promised and by whom" has no other place to look.
+		before := map[string]any{
+			"trang_thai":         string(p.TrangThai),
+			"linh_vuc":           p.LinhVuc,
+			"han_xu_ly_xong":     lucRaVet(p.HanXuLyXong),
+			"publication_status": string(p.PublicationStatus),
+		}
+		after := map[string]any{
+			"trang_thai":         string(domain.DangPhanLoai),
+			"linh_vuc":           linhVuc,
+			"han_xu_ly_xong":     lucRaVet(hanChot),
+			"publication_status": string(publication),
+		}
+		// THE UNIT, ON BOTH SIDES, ONLY WHEN THIS ACT CHANGED IT (ADR 0088 "mỗi lần sửa có vết, trước/sau";
+		// rule 6, invariant 5). Ids, never names — a name is today's wording and would date the trail.
+		// English key, rule 12. Null = no unit.
+		if unitChanged {
+			before["residential_unit_id"] = nilIfEmpty(p.ThonID)
+			after["residential_unit_id"] = nilIfEmpty(unitTo)
+		}
 		delta, err := json.Marshal(withAttachmentIDs(voiDoDaiGhiChu(map[string]any{
 			// `publication_status` ON BOTH SIDES, so a classification that hid a published petition
 			// (field `can-bo`) is visible in the trail as the change it is (rule 6, invariant 5).
-			"truoc": map[string]any{
-				"trang_thai":         string(p.TrangThai),
-				"linh_vuc":           p.LinhVuc,
-				"han_xu_ly_xong":     lucRaVet(p.HanXuLyXong),
-				"publication_status": string(p.PublicationStatus),
-			},
-			"sau": map[string]any{
-				"trang_thai":         string(domain.DangPhanLoai),
-				"linh_vuc":           linhVuc,
-				"han_xu_ly_xong":     lucRaVet(hanChot),
-				"publication_status": string(publication),
-			},
+			"truoc": before,
+			"sau":   after,
 			// The ceiling this act was measured against, and whether it was met. DERIVED at the
 			// instant of the act and RECORDED — which is not the stored flag rule 10, invariant 3
 			// forbids: that forbids a COLUMN that is written and then read as truth later. An audit
@@ -708,6 +776,13 @@ func (uc *XuLyPhanAnh) ChotLinhVuc(ctx context.Context, ma string, yc YeuCauChot
 	})
 	if err != nil {
 		return domain.PhieuPhanAnh{}, bocPhieu(ctx, "phân loại", err)
+	}
+	if sau.ThonID != truoc.ThonID {
+		// AFTER COMMIT, for operators only: the audit entry above is the record. The code and the two ids
+		// — none is personal data (rule 3, invariant 2).
+		uc.logger().InfoContext(ctx, "phân loại phản ánh: cán bộ đổi thôn / tổ dân phố",
+			"xa", string(tenant.MustFrom(ctx)), "ma_tra_cuu", sau.MaTraCuu,
+			"thon_truoc", truoc.ThonID, "thon_sau", sau.ThonID)
 	}
 	return sau, nil
 }

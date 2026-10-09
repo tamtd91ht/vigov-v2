@@ -32,12 +32,13 @@ package app
 // response. With no recipient there is also no `petitions.status_changed.v1` row (ghiSuKienDoiTrangThai,
 // "no recipient, no row") — the notification gap that ADR names as still open.
 //
-// # NO HAMLET, NO PHOTOS, THIS ROUND
+// # THE RESIDENTIAL UNIT IS ACCEPTED (ADR 0088); PHOTOS STILL ARE NOT
 //
-// §11 offers `Thôn, tổ dân phố` and `Đính ảnh hiện trường`. Neither is accepted: no identity RPC
-// validates a hamlet id, so `thon_id` would be written straight from the client (rule 1, forbidden #2 in
-// spirit); and the scene-photo flow is bound to a citizen session (migration 0026 refuses a petition with
-// no `cong_dan_id`). Both need a contract first.
+// §11's `Thôn, tổ dân phố` is optional and checked against identity (ResolveActiveResidentialUnits)
+// BEFORE the code is minted — residential_unit.go. Unknown/retired/another commune's = 400; identity down
+// = 503 and nothing written: never a petition without the unit the officer chose, never an unchecked id.
+// `Đính ảnh hiện trường` is still refused: the scene-photo flow is bound to a citizen session (migration
+// 0026 refuses a petition with no `cong_dan_id`).
 
 import (
 	"context"
@@ -101,6 +102,10 @@ type StaffIntakeRequest struct {
 
 	// ClockFrom is when the citizen ACTUALLY reported it (ADR 0028 F1). Zero = the booking instant (F2).
 	ClockFrom time.Time
+
+	// ResidentialUnitID is the `thon_to_dan_pho` id the officer picked (ADR 0088). "" = none. Checked
+	// against identity before anything is written; stored as the id, never the name.
+	ResidentialUnitID string
 }
 
 // StaffIntake owns the staff-booked intake.
@@ -109,6 +114,10 @@ type StaffIntake struct {
 	petitions StaffIntakePetitions
 	deadlines ResolveDeadlineReader
 	fields    StaffIntakeFields
+
+	// units checks a picked residential unit (ADR 0088). nil refuses any request naming one (wiring
+	// fault), never accepts it unchecked. Set by WithResidentialUnits.
+	units ActiveResidentialUnitChecker
 
 	// events is passed to the shared outbox builder, which writes nothing for a petition with no
 	// citizen. Kept so the "no recipient, no row" rule stays in ONE place (ghiSuKienDoiTrangThai).
@@ -129,6 +138,14 @@ func NewStaffIntake(db *store.DB, petitions StaffIntakePetitions, events KhoSuKi
 		newCode: domain.SinhMaTraCuu,
 		clock:   func() time.Time { return time.Now().UTC() },
 	}
+}
+
+// WithResidentialUnits wires the residential-unit check (ADR 0088). A setter rather than a constructor
+// argument so the existing callers that never send a unit keep compiling; a request that names one on an
+// unwired use case is refused (checkResidentialUnit).
+func (uc *StaffIntake) WithResidentialUnits(units ActiveResidentialUnitChecker) *StaffIntake {
+	uc.units = units
+	return uc
 }
 
 // Book records one petition an officer took by telephone or in person, and returns the record —
@@ -193,6 +210,15 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 		return domain.PhieuPhanAnh{}, err
 	}
 
+	// THE RESIDENTIAL UNIT, checked BEFORE the deadline is asked and before the code is minted (ADR 0088).
+	// A refusal here — 400 or 503 — leaves nothing behind: no row, no code, no trail.
+	unitID := normaliseResidentialUnitID(req.ResidentialUnitID)
+	if unitID != "" {
+		if err := checkResidentialUnit(ctx, uc.units, unitID); err != nil {
+			return domain.PhieuPhanAnh{}, err
+		}
+	}
+
 	// STEP 1 — the resolve commitment, from the field's own SLA row, counted in WORKING HOURS by identity
 	// from `goc_dem_han` (ADR 0007, ADR 0028 E). ONLY that clock: asking for the acknowledge clock would
 	// produce a value for a column that must stay NULL (F5).
@@ -231,6 +257,7 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 		NoiDung:           content,
 		LinhVuc:           field,
 		DiaChi:            address,
+		ThonID:            unitID, // the ID identity confirmed — never the name (ADR 0088)
 		NguoiGuiHoTen:     name,
 		NguoiGuiDienThoai: phone,
 		AnDanh:            req.Anonymous,
@@ -286,6 +313,8 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 			"do_dai_noi_dung":    len([]rune(p.NoiDung)),
 			"publication_status": string(p.PublicationStatus),
 			"nhat_ky_id":         logID,
+			// The unit id identity confirmed, or null. An id, not personal data; English key (rule 12).
+			"residential_unit_id": nilIfEmpty(p.ThonID),
 		}
 		// ADR 0028 F4: every origin the officer typed is recorded with BEFORE (the default the system
 		// would have used — the booking instant) and AFTER (what was typed). English key, rule 12.

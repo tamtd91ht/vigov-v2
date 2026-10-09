@@ -108,6 +108,12 @@ type accountlessReportIn struct {
 	Lat *float64 `json:"lat"`
 	Lng *float64 `json:"lng"`
 
+	// ResidentialUnitID is REFUSED ON THIS PATH (400), like the location: the session intake accepts it
+	// (ADR 0088), but this TEMPORARY path has no route a sender could have read the commune's list from
+	// (ADR 0088 open item 2) and no owner to answer for it. Refused rather than dropped, so a client
+	// sending one learns it was not stored.
+	ResidentialUnitID *string `json:"residential_unit_id"`
+
 	// --- refused, every one of them: the session body's list (guiPhanAnhVao), same JSON names -----
 	CitizenID       *string `json:"citizen_id"`
 	CitizenIDLegacy *string `json:"cong_dan_id"`
@@ -308,6 +314,11 @@ func (h *HandlerAccountless) withBodyCommune(next http.Handler) http.Handler {
 		if in.Lat != nil || in.Lng != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 				"Phản ánh gửi không qua tài khoản không nhận toạ độ hiện trường. Hãy ghi vị trí vào ô địa chỉ.", "")
+			return
+		}
+		if in.ResidentialUnitID != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+				"Phản ánh gửi không qua tài khoản không nhận thôn, tổ dân phố. Hãy ghi vị trí vào ô địa chỉ.", "")
 			return
 		}
 		if !domain.ValidCommuneHost(in.Host) {

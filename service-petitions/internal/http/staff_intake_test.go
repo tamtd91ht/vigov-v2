@@ -42,7 +42,7 @@ func (f *staffIntakeFake) Book(ctx context.Context, req app.StaffIntakeRequest, 
 	booked := time.Date(2026, 10, 2, 2, 0, 0, 0, time.UTC)
 	return domain.PhieuPhanAnh{
 		ID: "pa-new", MaTraCuu: staffIntakeCode, Kenh: domain.KenhCanBoNhapHo,
-		NoiDung: req.Content, LinhVuc: req.Field, DiaChi: req.Address,
+		NoiDung: req.Content, LinhVuc: req.Field, DiaChi: req.Address, ThonID: req.ResidentialUnitID,
 		NguoiGuiHoTen: req.ReporterName, NguoiGuiDienThoai: req.ReporterPhone, AnDanh: req.Anonymous,
 		TrangThai: domain.DaTiepNhan, GocDemHan: booked, VaoSoLuc: booked,
 		HanXuLyXong:       time.Date(2026, 10, 9, 3, 30, 0, 0, time.UTC),
@@ -186,9 +186,10 @@ func TestStaffIntake_SystemDecidedFieldsAre400(t *testing.T) {
 	}
 }
 
-// The hamlet and the coordinates are NOT ACCEPTED YET — refused so a client does not believe they were
-// recorded (no identity RPC validates a hamlet; routes.go).
-func TestStaffIntake_HamletAndCoordinatesAre400(t *testing.T) {
+// The coordinates are NOT ACCEPTED YET, and the residential unit under its OLD spellings (`hamlet`,
+// `thon_id`) is refused — it is accepted only as `residential_unit_id` (ADR 0088; residential_unit_test.go
+// covers that path). Refused rather than dropped, so a client does not believe either was recorded.
+func TestStaffIntake_OldUnitSpellingsAndCoordinatesAre400(t *testing.T) {
 	for k, v := range map[string]any{"hamlet": "thon-ha-lam", "thon_id": "thon-ha-lam", "lat": 15.5, "lng": 108.2} {
 		t.Run(k, func(t *testing.T) {
 			m := dungMayChu(t)
@@ -262,6 +263,8 @@ func TestStaffIntake_RefusalsMapToTheirAnswers(t *testing.T) {
 		"lĩnh vực sai dạng":         {domain.ErrLinhVucSaiDang, http.StatusBadRequest, "invalid_request"},
 		"số điện thoại quá dài":     {domain.ErrDienThoaiQuaDai, http.StatusBadRequest, "invalid_request"},
 		"chưa ấn định được hạn":     {wrapped(app.ErrChuaAnDinhDuocHan), http.StatusServiceUnavailable, "intake_not_configured"},
+		"thôn không thuộc xã":       {app.ErrResidentialUnitNotActive, http.StatusBadRequest, "residential_unit_not_offered"},
+		"chưa kiểm được thôn":       {wrapped(app.ErrResidentialUnitCheckUnavailable), http.StatusServiceUnavailable, "residential_unit_check_unavailable"},
 		"lỗi hệ thống":              {errors.New("kho hỏng"), http.StatusInternalServerError, "internal"},
 		"chủ thể không phải cán bộ": {errors.New("xu_ly_phan_anh: chủ thể không phải cán bộ"), http.StatusInternalServerError, "internal"},
 	} {

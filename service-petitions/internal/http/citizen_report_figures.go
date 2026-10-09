@@ -104,11 +104,15 @@ type citizenReportUnitRowOut struct {
 
 // citizenReportResidentialUnitRowOut is one thôn / tổ dân phố (section (d)): received in the period,
 // `khong-tiep-nhan` EXCLUDED, and the overdue stock. `residential_unit_id` "" is "Chưa xác định địa bàn".
-// Names come from GET /api/v1/residential-units (identity).
+//
+// `residential_unit_name` is identity's name for the unit TODAY, retired units included (ADR 0088) —
+// absent on the "" row (the client labels it) and on an id identity does not answer (render unknown).
+// omitempty also keeps the key optional for yesterday's fixtures.
 type citizenReportResidentialUnitRowOut struct {
-	ResidentialUnitID string `json:"residential_unit_id"`
-	Received          int    `json:"received"`
-	Overdue           int    `json:"overdue"`
+	ResidentialUnitID   string `json:"residential_unit_id"`
+	ResidentialUnitName string `json:"residential_unit_name,omitempty"`
+	Received            int    `json:"received"`
+	Overdue             int    `json:"overdue"`
 }
 
 // citizenReportBreakdownOut is GET /api/v1/citizen-report-breakdown. Every list is [] — never null —
@@ -237,6 +241,12 @@ func (h *Handler) CitizenReportBreakdown(w http.ResponseWriter, r *http.Request)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "working_hours_unavailable",
 			"Chưa tính được thời gian xử lý theo lịch làm việc của xã. Vui lòng thử lại sau ít phút.", "")
 		return
+	case errors.Is(err, app.ErrResidentialUnitNamesUnavailable):
+		// 503, NEVER a by-place table with blank names (ADR 0088; identityclient.ResidentialUnitNames).
+		h.d.Log.Warn("CẢNH BÁO: thống kê phản ánh từ chối vì chưa tra được tên thôn / tổ dân phố",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		writeResidentialUnitNamesUnavailable(w)
+		return
 	case err != nil:
 		h.d.Log.Error("thống kê phản ánh theo kỳ: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
@@ -261,7 +271,8 @@ func (h *Handler) CitizenReportBreakdown(w http.ResponseWriter, r *http.Request)
 	}
 	for _, ru := range b.ResidentialUnits {
 		out.ResidentialUnits = append(out.ResidentialUnits, citizenReportResidentialUnitRowOut{
-			ResidentialUnitID: ru.ResidentialUnitID, Received: ru.Received, Overdue: ru.Overdue})
+			ResidentialUnitID: ru.ResidentialUnitID, ResidentialUnitName: ru.Name,
+			Received: ru.Received, Overdue: ru.Overdue})
 	}
 	vietJSON(w, http.StatusOK, out)
 }

@@ -253,6 +253,9 @@ type mayChu struct {
 
 	// staffIntake is "Nhập hộ phản ánh" — staff_intake_test.go.
 	staffIntake *staffIntakeFake
+
+	// unitNames is identity's residential-unit name lookup — residential_unit_test.go.
+	unitNames *unitNamesFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -312,6 +315,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	petitionLogFiles := &petitionLogAttachmentsFake{}
 	// The field catalogue — petition_fields_test.go.
 	fields := newFieldCatalogueFake()
+	// The residential-unit names — residential_unit_test.go.
+	unitNames := newUnitNamesFake()
 
 	m := &mayChu{
 		d: Deps{
@@ -376,6 +381,8 @@ func dungMayChu(t *testing.T) *mayChu {
 			OverdueQueue:                 overdue,
 			// The /phan-anh statistics — citizen_report_figures_test.go.
 			CitizenReportBreakdown: breakdown,
+			// identity's residential-unit names — residential_unit_test.go.
+			ResidentialUnitNames: unitNames,
 			// The audit-log reader: present because Register refuses a nil one; its suite is
 			// audit_entries_test.go.
 			AuditLog: &auditLogFake{},
@@ -422,6 +429,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		fields: fields,
 
 		staffIntake: staffIntake,
+		unitNames:   unitNames,
 	}
 	m.dungLai(t, nil)
 	return m

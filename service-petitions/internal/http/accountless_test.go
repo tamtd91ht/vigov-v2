@@ -287,6 +287,8 @@ func TestAccountlessSendRefusals(t *testing.T) {
 		{"owner claimed", strings.Replace(acctBody(acctHostA), `{`, `{"cong_dan_id":"cd-1",`, 1), acctKey, "invalid_request", 400},
 		{"tenant id is not a field", strings.Replace(acctBody(acctHostA), `"host":"`+acctHostA+`"`, `"tenant_id":"`+string(acctXaA)+`"`, 1), acctKey, "invalid_host", 400},
 		{"scene location", strings.Replace(acctBody(acctHostA), `{`, `{"lat":15.7,"lng":108.3,`, 1), acctKey, "invalid_request", 400},
+		// ADR 0088: the session intake takes a residential unit; this path refuses it (accountless.go).
+		{"residential unit", strings.Replace(acctBody(acctHostA), `{`, `{"residential_unit_id":"01JUNITATEST",`, 1), acctKey, "invalid_request", 400},
 		{"missing key", acctBody(acctHostA), "", "missing_idempotency_key", 400},
 		{"short key", acctBody(acctHostA), "0123456789abcdef", "invalid_idempotency_key", 400},
 	}

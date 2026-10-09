@@ -37,8 +37,12 @@ type CitizenReportFieldFigures struct {
 // `ResidentialUnit`, never "hamlet"); ResidentialUnitID "" is the row of petitions with no `thon_id`
 // ("Chưa xác định địa bàn", labelled by the client). Received EXCLUDES `khong-tiep-nhan`: a report the
 // commune declined is not a problem located in that place.
+//
+// Name is the unit's name as identity answers it TODAY (ADR 0088: a retired unit still shows its name),
+// filled by the use case, never stored. "" on the no-unit row, and on an id identity does not answer.
 type CitizenReportResidentialUnitFigures struct {
 	ResidentialUnitID string
+	Name              string
 	Received          int
 	Overdue           int
 }

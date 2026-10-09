@@ -177,7 +177,11 @@ func (x *xuLyPhieuGia) ChotLinhVuc(ctx context.Context, ma string, yc app.YeuCau
 
 	x.ghi(ctx, "phan-loai", ma, nguoi, hanChe)
 	x.ycLinhVuc = yc
-	return x.tra()
+	p, err := x.tra()
+	if err == nil && yc.ResidentialUnitID != nil {
+		p.ThonID = *yc.ResidentialUnitID // as the real act answers a confirmed change
+	}
+	return p, err
 }
 
 func (x *xuLyPhieuGia) PhanCong(ctx context.Context, ma string, yc app.YeuCauPhanCong,

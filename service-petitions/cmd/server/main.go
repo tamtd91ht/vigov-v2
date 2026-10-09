@@ -380,11 +380,17 @@ func chay(log *slog.Logger) error {
 		DanhSachPhieu: phieu,
 		// The closing act's gate (ADR 0008 decision 3) reads the per-commune switch and counts the stored
 		// verification photos in its own transaction; `storedFiles` also links a note's attachments.
+		// `dinhDanh` once more as the residential-unit check (ADR 0088): a unit the classifier CHANGES is
+		// confirmed by identity's ResolveActiveResidentialUnits before the transaction opens.
 		XuLyPhieu: app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh,
-			petstore.NewPetitionSettingsStore(kho), storedFiles),
+			petstore.NewPetitionSettingsStore(kho), storedFiles).WithResidentialUnits(dinhDanh, log),
 		// "Nhập hộ phản ánh" (§11): the SAME petition store, outbox store and identity client as the
 		// citizen intake, and the SAME field catalogue — under the staff rule (CheckStaffIntakeField).
-		StaffIntake: app.NewStaffIntake(kho, phieu, suKien, dinhDanh, fieldCatalogue),
+		// The SAME client checks the officer's residential unit (ADR 0088).
+		StaffIntake: app.NewStaffIntake(kho, phieu, suKien, dinhDanh, fieldCatalogue).WithResidentialUnits(dinhDanh),
+		// The names of the residential units on the detail, list and write responses (ADR 0088) —
+		// identity's ResolveResidentialUnitNames over the SAME connection.
+		ResidentialUnitNames: dinhDanh,
 		// The processing logbook's read (migration 0013) — the SAME store the acts write it through.
 		NhatKyPhieu: phieu,
 		// The trail for a full-view read of a reporter's name and number. It takes the same
@@ -460,7 +466,8 @@ func chay(log *slog.Logger) error {
 		OverdueQueue:         app.NewOverdueQueue(nhiemVu, phieu, dinhDanh),
 		// The /phan-anh statistics: the register store, and the SAME identity client for the handling time
 		// in working hours (MeasureWorkingHours).
-		CitizenReportBreakdown: app.NewCitizenReportBreakdown(phieu, dinhDanh),
+		// And the SAME client for the by-place rows' names (ADR 0088), one batched lookup per read.
+		CitizenReportBreakdown: app.NewCitizenReportBreakdown(phieu, dinhDanh).WithResidentialUnitNames(dinhDanh),
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		// The restricted-field subquery withholds `can-bo` petitions' entries unless the handler
 		// found `feedback.restricted` on the reader (ADR 0054 §4, ADR 0030).
@@ -498,7 +505,10 @@ func chay(log *slog.Logger) error {
 		// `dinhDanh` a second time, as the verified-phone source (ADR 0050 §Sửa đổi 08/10/2026): a
 		// verified citizen who leaves the phone box empty gets the session's number attached, asked of
 		// identity over the SAME connection (ResolveCitizenContactPhone). identity must be deployed first.
-		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh, fieldCatalogue, dinhDanh),
+		//
+		// `dinhDanh` a third time, as the residential-unit check (ADR 0088): a unit the citizen picked is
+		// confirmed against the SESSION's commune before the code is minted.
+		GuiPhieu: app.NewGuiPhanAnh(kho, phieu, suKien, dinhDanh, fieldCatalogue, dinhDanh).WithResidentialUnits(dinhDanh),
 		// The citizen's star rating (ADR 0050 point 2). The SAME outbox store as the intake: a 1–2 star
 		// rating reopens the petition, and that transition's notification is written in its transaction.
 		Rating: app.NewRatePetition(kho, phieu, suKien),

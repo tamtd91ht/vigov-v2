@@ -107,6 +107,16 @@ type phieuPhanAnhRa struct {
 	Lat *float64 `json:"lat,omitempty"`
 	Lng *float64 `json:"lng,omitempty"`
 
+	// ResidentialUnitID is `thon_id` — the thôn / tổ dân phố the petition was received in (ADR 0088),
+	// checked with identity when it was written. ABSENT when none was picked. Never derived from Lat/Lng.
+	//
+	// ResidentialUnitName is identity's name for that unit TODAY, retired units included. On the detail
+	// and the list, a failed lookup refuses the read (503) rather than showing a blank place; after a
+	// committed write it is absent and logged. Absent too when identity does not know the id (render
+	// unknown). Never stored. Both omitempty: optional in the contract, yesterday's fixtures stay valid.
+	ResidentialUnitID   string `json:"residential_unit_id,omitempty"`
+	ResidentialUnitName string `json:"residential_unit_name,omitempty"`
+
 	// ReporterName and ReporterPhone are MASKED — "Nguyễn V. A." and "09****5678" — unless the
 	// caller holds `feedback.unmask`, in which case they carry the real values and the request
 	// has already written an audit entry for the disclosure (rule 6, invariant 7).
@@ -270,12 +280,15 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 		Lat:        p.Lat,
 		Lng:        p.Lng,
 		Anonymous:  p.AnDanh,
-		ClockFrom:  p.GocDemHan,
-		BookedAt:   p.VaoSoLuc,
-		Unit:       p.BoPhanID,
-		Assignee:   p.CanBoXuLyID,
-		Result:     p.KetQuaXuLy,
-		Public:     p.PublicationStatus == domain.PublicationPublic,
+
+		// The name is filled by the caller, which can ask identity; this function cannot.
+		ResidentialUnitID: p.ThonID,
+		ClockFrom:         p.GocDemHan,
+		BookedAt:          p.VaoSoLuc,
+		Unit:              p.BoPhanID,
+		Assignee:          p.CanBoXuLyID,
+		Result:            p.KetQuaXuLy,
+		Public:            p.PublicationStatus == domain.PublicationPublic,
 
 		PublicationStatus: string(p.PublicationStatus),
 	}
@@ -442,6 +455,17 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// THE RESIDENTIAL UNIT'S NAME (ADR 0088), BEFORE THE DISCLOSURE DECISION for the reason that decision
+	// is last: a 503 here must not follow an entry recording a disclosure that never reached anybody.
+	// identity down -> 503, never a blank place on the screen an officer acts from.
+	unitNames, err := h.residentialUnitNames(ctx, []string{p.ThonID})
+	if err != nil {
+		h.d.Log.Warn("CẢNH BÁO: đọc phiếu phản ánh từ chối vì chưa tra được tên thôn / tổ dân phố",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		writeResidentialUnitNamesUnavailable(w)
+		return
+	}
+
 	// THE DISCLOSURE DECISION, LAST, AND THE TRAIL BEFORE THE BODY.
 	//
 	// Last on purpose: everything above can still fail with a 500, and an entry recording a
@@ -483,7 +507,9 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	vietJSON(w, http.StatusOK, phieuRaNgoai(p, nhan, xemDayDu))
+	ra := phieuRaNgoai(p, nhan, xemDayDu)
+	ra.ResidentialUnitName = unitNames[p.ThonID].Name
+	vietJSON(w, http.StatusOK, ra)
 }
 
 // khongTimThay is the ONE answer for "no such code", "another commune's code", "soft deleted"

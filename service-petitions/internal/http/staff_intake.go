@@ -5,9 +5,13 @@ package http
 //
 // FACTS THE BODY DOES NOT DECIDE, and a body naming one is REFUSED rather than silently dropped (the
 // citizen intake's discipline, gui_phan_anh.go): whose petition it is (`citizen_id`, ADR 0028 §Bổ sung
-// 2026-10-02 — none), the channel, the code, the status, the two deadlines. The hamlet and the scene
-// location are refused too, as NOT ACCEPTED YET — a client sending `hamlet` would otherwise believe it
-// was recorded. The commune is not even declared (rule 1, forbidden #2 — the reason is on guiPhanAnhVao).
+// 2026-10-02 — none), the channel, the code, the status, the two deadlines. The scene location is
+// refused too, as NOT ACCEPTED YET. The commune is not even declared (rule 1, forbidden #2 — the reason
+// is on guiPhanAnhVao).
+//
+// THE RESIDENTIAL UNIT IS ACCEPTED as `residential_unit_id` (ADR 0088) and checked with identity before
+// anything is written. The old spellings `hamlet` / `thon_id` stay REFUSED, naming the right field — a
+// client sending them would otherwise believe they were recorded.
 
 import (
 	"context"
@@ -54,6 +58,12 @@ type staffIntakeIn struct {
 	// the response's `clock_from`, because it is the same column (`goc_dem_han`).
 	ClockFrom *string `json:"clock_from,omitempty"`
 
+	// ResidentialUnitID is §11's "Thôn, tổ dân phố" (ADR 0088): an id from GET /api/v1/residential-units.
+	// OPTIONAL. Checked with identity BEFORE anything is written — not an active unit of this commune =
+	// 400 `residential_unit_not_offered`; identity unreachable = 503 `residential_unit_check_unavailable`,
+	// nothing written, no code issued. Stored as the id, never the name; never derived from coordinates.
+	ResidentialUnitID string `json:"residential_unit_id,omitempty"`
+
 	// --- refused, every one of them. The Vietnamese spellings are caught too: a refusal that only
 	// catches the English one catches only the integrator who read the contract. ------------------
 
@@ -77,8 +87,14 @@ func (v staffIntakeIn) notTheClients() bool {
 		v.AcknowledgeDue != nil || v.ResolveDue != nil
 }
 
+// notAcceptedYet: the scene location, still not taken on this form.
 func (v staffIntakeIn) notAcceptedYet() bool {
-	return v.Hamlet != nil || v.HamletLegacy != nil || v.Lat != nil || v.Lng != nil
+	return v.Lat != nil || v.Lng != nil
+}
+
+// oldResidentialUnitSpelling: `hamlet` / `thon_id` — the unit under a name this route does not read.
+func (v staffIntakeIn) oldResidentialUnitSpelling() bool {
+	return v.Hamlet != nil || v.HamletLegacy != nil
 }
 
 // BookStaffIntake serves POST /api/v1/citizen-reports.
@@ -100,9 +116,14 @@ func (h *Handler) BookStaffIntake(w http.ResponseWriter, r *http.Request) {
 				"hoặc thời hạn), hoặc ghi lĩnh vực bằng `linh_vuc` thay vì `field`.", "")
 		return
 	}
+	if in.oldResidentialUnitSpelling() {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Thôn, tổ dân phố gửi bằng `residential_unit_id`, không phải `hamlet` hay `thon_id`.", "")
+		return
+	}
 	if in.notAcceptedYet() {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"Chưa nhận thôn, tổ dân phố và toạ độ ở biểu mẫu nhập hộ. Hãy ghi vị trí vào ô địa chỉ.", "")
+			"Chưa nhận toạ độ ở biểu mẫu nhập hộ. Hãy ghi vị trí vào ô địa chỉ.", "")
 		return
 	}
 
@@ -135,6 +156,8 @@ func (h *Handler) BookStaffIntake(w http.ResponseWriter, r *http.Request) {
 		Anonymous:     in.Anonymous,
 		Field:         strings.TrimSpace(in.Field),
 		ClockFrom:     clockFrom,
+
+		ResidentialUnitID: in.ResidentialUnitID,
 	}, officer)
 	if err != nil {
 		h.writeStaffIntakeError(w, r, err)
@@ -155,7 +178,10 @@ func (h *Handler) BookStaffIntake(w http.ResponseWriter, r *http.Request) {
 			"xa", string(tenant.MustFrom(ctx)), "ma_tra_cuu", p.MaTraCuu, "err", err)
 		label = ""
 	}
-	vietJSON(w, http.StatusCreated, phieuRaNgoai(p, label, false))
+	ra := phieuRaNgoai(p, label, false)
+	// After the commit: a failed name lookup must not hide the code from the officer either.
+	h.nameOneResidentialUnit(ctx, &ra)
+	vietJSON(w, http.StatusCreated, ra)
 }
 
 // writeStaffIntakeError maps one failure onto a status and a sentence an officer can act on. The
@@ -171,6 +197,13 @@ func (h *Handler) writeStaffIntakeError(w http.ResponseWriter, r *http.Request, 
 			"xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusServiceUnavailable, "field_catalogue_unavailable",
 			"Chưa kiểm tra được lĩnh vực nên phiếu CHƯA được vào sổ. Vui lòng thử lại sau ít phút.", "")
+	case errors.Is(err, app.ErrResidentialUnitNotActive):
+		writeResidentialUnitNotOffered(w)
+	case errors.Is(err, app.ErrResidentialUnitCheckUnavailable):
+		// identity unreachable: nothing written, no code issued — never booked without the officer's unit.
+		h.d.Log.Warn("CẢNH BÁO: từ chối nhập hộ phản ánh vì chưa kiểm được thôn / tổ dân phố",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		writeResidentialUnitCheckUnavailable(w)
 	case errors.Is(err, domain.ErrGocDemHanNgoaiKhoang):
 		httpx.WriteError(w, http.StatusBadRequest, "clock_from_out_of_range",
 			"Thời điểm người dân phản ánh không được sớm hơn 7 ngày trước lúc vào sổ, và không được muộn "+

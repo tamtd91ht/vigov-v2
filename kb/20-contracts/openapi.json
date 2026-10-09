@@ -48189,6 +48189,12 @@
               "null"
             ]
           },
+          "residential_unit_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "citizen_id": {
             "type": [
               "string",
@@ -48260,6 +48266,7 @@
           "lng",
           "reporter_name",
           "reporter_phone",
+          "residential_unit_id",
           "resolve_due",
           "status"
         ],
@@ -48799,6 +48806,9 @@
           "residential_unit_id": {
             "type": "string"
           },
+          "residential_unit_name": {
+            "type": "string"
+          },
           "received": {
             "type": "integer"
           },
@@ -49214,6 +49224,12 @@
             ]
           },
           "field": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "residential_unit_id": {
             "type": [
               "string",
               "null"
@@ -49990,6 +50006,12 @@
             "items": {
               "type": "string"
             }
+          },
+          "residential_unit_id": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -50208,6 +50230,12 @@
               "number",
               "null"
             ]
+          },
+          "residential_unit_id": {
+            "type": "string"
+          },
+          "residential_unit_name": {
+            "type": "string"
           },
           "reporter_name": {
             "type": "string"
@@ -50556,6 +50584,9 @@
               "string",
               "null"
             ]
+          },
+          "residential_unit_id": {
+            "type": "string"
           },
           "citizen_id": {
             "type": [

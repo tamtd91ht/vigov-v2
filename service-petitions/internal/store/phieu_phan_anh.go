@@ -493,6 +493,26 @@ func (s *PhieuPhanAnhStore) ChotLinhVuc(ctx context.Context, tx *store.ScopedTx,
 	return doiMotDongPhieu(kq, "chốt lĩnh vực")
 }
 
+// SetResidentialUnit changes `thon_id` at classification, when the officer corrects the unit the
+// petition arrived with (ADR 0088 §1 "Phân loại"). Called ONLY when the value changes, inside the
+// classification transaction, after the row was read FOR UPDATE.
+//
+// THE WHERE CLAUSE CARRIES THE VALUE THE CALLER SAW (`IS NOT DISTINCT FROM`, so NULL compares), so a
+// change made between the locking read and this statement matches no row and is refused rather than
+// overwritten — the same shape as ChotLinhVuc's expected status. `to` "" writes NULL ("no unit").
+//
+// The id only: the name is identity's, read on display (ADR 0088 "Theo thời gian").
+func (s *PhieuPhanAnhStore) SetResidentialUnit(ctx context.Context, tx *store.ScopedTx, id, from, to string) error {
+	const stmt = `UPDATE phieu_phan_anh SET thon_id = $4, cap_nhat_luc = now()
+		WHERE tenant_id = $1 AND id = $2 AND thon_id IS NOT DISTINCT FROM $3 AND deleted_at IS NULL`
+
+	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, rongThanhNull(from), rongThanhNull(to))
+	if err != nil {
+		return fmt.Errorf("phieu_phan_anh: đổi thôn / tổ dân phố: %w", err)
+	}
+	return doiMotDongPhieu(kq, "đổi thôn / tổ dân phố")
+}
+
 // rongThanhNull turns an empty Go string into SQL NULL.
 //
 // WHY NOT STORE THE EMPTY STRING: `linh_vuc = ”` would satisfy the

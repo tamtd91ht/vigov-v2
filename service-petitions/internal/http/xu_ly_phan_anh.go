@@ -141,6 +141,13 @@ type phanLoaiVao struct {
 	// (POST …/log-attachments, then …/completion), linked to this act's timeline row in the act's
 	// transaction (app/act_attachments.go). `omitempty` keeps it optional in the published contract.
 	Attachments []string `json:"attachments,omitempty"`
+
+	// ResidentialUnitID is the officer confirming or correcting the thôn / tổ dân phố (ADR 0088 §1).
+	// OPTIONAL: absent, null or "" keeps what the petition holds (there is no "remove" here). The same
+	// value as stored is a confirmation and asks nobody; a DIFFERENT value is checked with identity
+	// before anything is written (400 `residential_unit_not_offered` · 503
+	// `residential_unit_check_unavailable`) and audited with before/after ids.
+	ResidentialUnitID *string `json:"residential_unit_id,omitempty"`
 }
 
 // phanCongVao is the body of POST …/{maTraCuu}/assignment — the "Chuyển xử lý" block of §8.5.
@@ -304,10 +311,26 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 		NextCursor: kq.NextCursor,
 		HasMore:    kq.HasMore,
 	}
+	// THE RESIDENTIAL UNITS' NAMES, ONE BATCHED LOOKUP FOR THE PAGE (ADR 0088), never one per row. A
+	// failure refuses the page (503) as the field labels above do — a register whose place column is
+	// silently blank reads as "no place recorded", which is false.
+	unitIDs := make([]string, 0, len(kq.Items))
+	for _, p := range kq.Items {
+		unitIDs = append(unitIDs, p.ThonID)
+	}
+	unitNames, err := h.residentialUnitNames(ctx, unitIDs)
+	if err != nil {
+		h.d.Log.Warn("CẢNH BÁO: danh sách phiếu phản ánh từ chối vì chưa tra được tên thôn / tổ dân phố",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		writeResidentialUnitNamesUnavailable(w)
+		return
+	}
 	for _, p := range kq.Items {
 		// `false` IS THE MASKING DECISION AND IT IS A LITERAL. There is no branch here that could
 		// become `true` — see the note on this handler.
-		ra.Items = append(ra.Items, phieuRaNgoai(p, theoMa[p.LinhVuc], false))
+		item := phieuRaNgoai(p, theoMa[p.LinhVuc], false)
+		item.ResidentialUnitName = unitNames[p.ThonID].Name
+		ra.Items = append(ra.Items, item)
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -445,7 +468,8 @@ func (h *Handler) PhanLoaiPhieu(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx := r.Context()
 	sau, err := h.d.XuLyPhieu.ChotLinhVuc(ctx, r.PathValue("maTraCuu"),
-		app.YeuCauChotLinhVuc{LinhVuc: vao.Field, GhiChu: vao.Note, Attachments: vao.Attachments}, nguoi, h.coQuyenHanChe(ctx))
+		app.YeuCauChotLinhVuc{LinhVuc: vao.Field, GhiChu: vao.Note, Attachments: vao.Attachments,
+			ResidentialUnitID: vao.ResidentialUnitID}, nguoi, h.coQuyenHanChe(ctx))
 	if err != nil {
 		h.traLoiLoiXuLy(w, r, "phân loại", err)
 		return
@@ -639,7 +663,11 @@ func (h *Handler) traPhieu(w http.ResponseWriter, r *http.Request, p domain.Phie
 				"xa", string(tenant.MustFrom(ctx)), "err", err)
 		}
 	}
-	vietJSON(w, http.StatusOK, phieuRaNgoai(p, nhan, false))
+	ra := phieuRaNgoai(p, nhan, false)
+	// After the commit, so a failed name lookup is logged and the name omitted — never a 5xx for an act
+	// that happened (same reasoning as the label above).
+	h.nameOneResidentialUnit(ctx, &ra)
+	vietJSON(w, http.StatusOK, ra)
 }
 
 // traLoiLoiXuLy maps one use-case failure onto a status and a sentence.
@@ -719,6 +747,14 @@ func (h *Handler) traLoiLoiXuLy(w http.ResponseWriter, r *http.Request, viec str
 				// `""` chứ không `"field"` — tham số thứ năm là `traceID`, xem ghi chú ở nhánh
 				// `ErrPhanCongSaiLuc` bên trên.
 				"Vào Cấu hình → Thời hạn xử lý để đặt số giờ, rồi phân loại lại.", "")
+	case errors.Is(err, app.ErrResidentialUnitNotActive):
+		// 400, ONE ANSWER for unknown / retired / another commune's unit (rule 1) — residential_unit.go.
+		writeResidentialUnitNotOffered(w)
+	case errors.Is(err, app.ErrResidentialUnitCheckUnavailable):
+		// 503: the check did not happen, so NOTHING was written — never the unit unchecked (ADR 0088).
+		h.d.Log.Warn("CẢNH BÁO: từ chối "+viec+" vì chưa kiểm được thôn / tổ dân phố",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		writeResidentialUnitCheckUnavailable(w)
 	case errors.Is(err, app.ErrCanBoKhongNhanDuocViec):
 		// 400, ONE SENTENCE FOR FIVE REASONS — unknown, deleted, no account, locked, another commune.
 		// The contract collapses them (identity.proto, ResolveAssignableStaff) and this must not

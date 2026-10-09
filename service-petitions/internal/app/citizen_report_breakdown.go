@@ -49,6 +49,21 @@ var ErrWorkingCalendarMissing = errors.New("xã chưa cấu hình lịch làm vi
 type CitizenReportBreakdown struct {
 	reports CitizenReportBreakdownReader
 	hours   WorkingTimeMeasurer
+
+	// names resolves the residential-unit rows' names (ADR 0088), ONE batched lookup per read. nil with
+	// any named row refuses the read (ErrResidentialUnitNamesUnavailable), never a table of blank names.
+	names ResidentialUnitNamer
+}
+
+// ErrResidentialUnitNamesUnavailable — identity could not name the residential units on the read. The
+// whole read is refused (503), as for working hours: a table with blank place names is read as fact
+// (identityclient.ResidentialUnitNames).
+var ErrResidentialUnitNamesUnavailable = errors.New("chưa tra được tên thôn / tổ dân phố")
+
+// WithResidentialUnitNames wires the name lookup. A setter so the existing constructor callers compile.
+func (uc *CitizenReportBreakdown) WithResidentialUnitNames(names ResidentialUnitNamer) *CitizenReportBreakdown {
+	uc.names = names
+	return uc
 }
 
 // NewCitizenReportBreakdown builds the use case. A nil `hours` is refused at the first read
@@ -75,7 +90,38 @@ func (uc *CitizenReportBreakdown) Read(ctx context.Context, p domain.Period, res
 		return domain.CitizenReportBreakdown{}, err
 	}
 	out.Units = units
+	if err := uc.nameResidentialUnits(ctx, out.ResidentialUnits); err != nil {
+		return domain.CitizenReportBreakdown{}, err
+	}
 	return out, nil
+}
+
+// nameResidentialUnits fills Name in place, with ONE batched lookup for every row (skills/load-data-once).
+// The "" row (no unit) is not asked about and keeps Name "" — the client labels it "Chưa xác định địa
+// bàn". An id identity does not answer keeps "" too: rendered unknown, never guessed.
+func (uc *CitizenReportBreakdown) nameResidentialUnits(ctx context.Context,
+	rows []domain.CitizenReportResidentialUnitFigures) error {
+
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		if r.ResidentialUnitID != "" {
+			ids = append(ids, r.ResidentialUnitID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	if uc.names == nil {
+		return fmt.Errorf("%w: chưa nối dây tra tên thôn", ErrResidentialUnitNamesUnavailable)
+	}
+	names, err := uc.names.ResidentialUnitNamesInBatches(ctx, ids)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrResidentialUnitNamesUnavailable, err)
+	}
+	for i := range rows {
+		rows[i].Name = names[rows[i].ResidentialUnitID].Name
+	}
+	return nil
 }
 
 // unitFigures groups the finished petitions by the unit holding each, and sums the working time of

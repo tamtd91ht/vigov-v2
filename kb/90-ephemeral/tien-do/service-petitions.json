@@ -687,6 +687,15 @@
       "bang_chung": "commit 'feat(petitions): lược đồ gộp phiếu'. go test service-petitions xanh (gồm TestMigration0037/0038 kiểm chữ SQL), check_khoa_duy_nhat + check_security PASS. CHƯA chạy trên PostgreSQL thật — máy này không có DSN/psql/Docker.",
       "tiep_theo": "BẮT BUỘC trước khi triển khai: go run ./tools/schema-smoke trên PG16. Nghiệp vụ gộp/tách (app/http/thông báo) chưa dựng. Xung đột: ràng buộc 0004 han_xu_ly_xong >= goc_dem_han có thể từ chối 'phiếu chính lấy hạn sớm hơn' khi phiếu phụ gửi trước — hiện chặn (đóng an toàn), app sẽ gợi ý chọn phiếu gửi trước làm phiếu chính. Khoảng 1..1000 m / 1..90 ngày là trần do agent chọn, chưa phải số của khách.",
       "no_confirm": []
+    },
+    {
+      "id": "thon-tren-phieu-adr-0088",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Ghi thôn / tổ dân phố lên phiếu phản ánh theo ADR 0088 §1: `residential_unit_id` tuỳ chọn ở nhập hộ (POST citizen-reports), dân gửi (POST my-citizen-reports) và phân loại (…/classification); trả `residential_unit_id` + `residential_unit_name` ở chi tiết, danh sách, phản hồi các hành vi; tên thôn trên citizen-report-breakdown",
+      "bang_chung": "CHƯA COMMIT (chờ phiên chính). go build/vet/test ./... service-petitions xanh; make kb chạy. Kiểm thôn bằng identity ResolveActiveResidentialUnits (core/identityclient, 76b30e7b) NGOÀI và TRƯỚC giao dịch, trước khi cấp mã: không thuộc xã → 400 residential_unit_not_offered; identity xuống → 503 residential_unit_check_unavailable, không ghi, không cấp mã. Phân loại: chỉ kiểm khi khác giá trị đang lưu; đổi ghi trong cùng giao dịch (store SetResidentialUnit, WHERE thon_id IS NOT DISTINCT FROM giá trị đã thấy) + vết trước/sau là MÃ thôn. Tên qua ResidentialUnitNamesInBatches, một lần mỗi trang; chi tiết/danh sách/breakdown 503 residential_unit_names_unavailable khi không tra được; phản hồi sau khi ghi thì bỏ tên, ghi log. Ca kiểm: internal/app/residential_unit_test.go, internal/http/residential_unit_test.go.",
+      "tiep_theo": "(1) Chưa chạy PostgreSQL thật (VIGOV_TEST_DSN) cho câu UPDATE thon_id. (2) Tuyến công dân phiếu không tài khoản TỪ CHỐI residential_unit_id (400) — ADR 0088 còn mở #2 (Mini App lấy danh sách thôn ở đâu) chưa trả lời; phieuCuaToiRa (màn của dân) chưa trả thôn. (3) Phân loại không có thao tác BỎ thôn (gửi rỗng = giữ nguyên) — chưa ai hỏi. (4) Bộ lọc danh sách vẫn tên `hamlet` (đã công bố), khoá trả về theo bảng thuật ngữ là residential_unit_*. (5) web-admin chưa gửi/hiện trường mới.",
+      "no_confirm": []
     }
   ]
 }
