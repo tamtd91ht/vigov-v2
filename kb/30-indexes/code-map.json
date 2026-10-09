@@ -7148,15 +7148,15 @@
     },
     "domain.RoleTemplate": {
       "kind": "type",
-      "at": "service-identity/internal/domain/role_template.go:34"
+      "at": "service-identity/internal/domain/role_template.go:43"
     },
     "domain.RoleTemplatePermissions": {
       "kind": "func",
-      "at": "service-identity/internal/domain/role_template.go:157"
+      "at": "service-identity/internal/domain/role_template.go:174"
     },
     "domain.RoleTemplates": {
       "kind": "func",
-      "at": "service-identity/internal/domain/role_template.go:58"
+      "at": "service-identity/internal/domain/role_template.go:67"
     },
     "domain.Rule": {
       "kind": "func",

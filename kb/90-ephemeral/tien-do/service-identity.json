@@ -574,6 +574,14 @@
       "bang_chung": "c063f405 (migration 0027, không gieo) · 11c31dd6 (khoá đơn vị theo loại, đếm ngày theo Bộ luật Dân sự, gRPC deadline|not_configured, REST ghi vết, core/identityclient). go test service-identity + core xanh; make check (trừ web) xanh.",
       "no_confirm": [],
       "tiep_theo": "Chưa chạy PostgreSQL thật. Mỗi xã phải tự khai thời hạn ở Cấu hình → Thời hạn xử lý; chưa khai thì đơn 'Không đặt hạn'. Số luật định (10/30/7/30) chưa pháp chế đối chiếu, không gieo. Triển khai identity TRƯỚC documents (documents gọi RPC mới; identity cũ trả UNIMPLEMENTED → mọi lần vào sổ 503)."
+    },
+    {
+      "id": "seed-quyen-citizen-dossier-notice-09-10",
+      "trang_thai": "xong",
+      "viec": "Migration 0028: nạp citizen.read, citizen.update, dossier.import, dossier.read, dossier.update, notice.send (nhóm DANH BẠ NGƯỜI DÂN / HỒ SƠ CÔNG DÂN / GỬI THÔNG BÁO, thu_tu 38–43); gán mặc định cho chu-tich-ubnd, pho-chu-tich-ubnd, quan-tri-he-thong mọi xã, nhật ký system cùng câu lệnh; mẫu vai trò CT/PCT thêm 6 khoá. Người dùng chốt 09/10, ĐÃ được nêu xung đột: đè luật 5 #3c và câu #27 / ADR 0035 (chỉ nạp khoá có tuyến thật); xác nhận chưa có xã sáp nhập trên cụm thật.",
+      "bang_chung": "17b4aba9. go build, go test migrations/domain/store/app xanh; check_quyen PASS (43 khoá, 6 chưa có mã Go dùng — thông tin). CHƯA CHẠY TRÊN POSTGRESQL THẬT (máy không có DSN/Docker).",
+      "no_confirm": [],
+      "tiep_theo": "(1) Chạy 0028 trên PostgreSQL thật/Jenkins. (2) Sáu khoá chưa có tuyến nào kiểm — khi dựng module Danh bạ người dân / Hồ sơ công dân / Gửi thông báo thì dùng đúng các khoá này; notice.send chồng nghĩa với announcement.create, cần phân biệt khi dựng. (3) Ghi quyết định đè #27 vào ADR (knowledge-keeper)."
     }
   ]
 }
