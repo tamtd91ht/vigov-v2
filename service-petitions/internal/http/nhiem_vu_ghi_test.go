@@ -202,9 +202,16 @@ func (m *mayChu) goiGhiNV(t *testing.T, method, host, path string, p *authz.Prin
 	than any) *httptest.ResponseRecorder {
 	t.Helper()
 	var r *http.Request
-	if than == nil {
+	contentType := "application/json"
+	switch u := than.(type) {
+	case nil:
 		r = httptest.NewRequest(method, "https://"+host+path, nil)
-	} else {
+	case uploadThan:
+		// A file upload (upload.go): multipart, not JSON.
+		b, ct := u.encode(t)
+		r = httptest.NewRequest(method, "https://"+host+path, b)
+		contentType = ct
+	default:
 		b, err := json.Marshal(than)
 		if err != nil {
 			t.Fatalf("mã hoá thân: %v", err)
@@ -213,7 +220,7 @@ func (m *mayChu) goiGhiNV(t *testing.T, method, host, path string, p *authz.Prin
 	}
 	r.Host = host
 	r.RemoteAddr = "10.0.0.7:51000"
-	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Content-Type", contentType)
 	r.Header.Set(idem.Header, "01JIDEMPOTENCYKEYCUATEST")
 	if p != nil {
 		r = r.WithContext(authz.Into(r.Context(), *p))

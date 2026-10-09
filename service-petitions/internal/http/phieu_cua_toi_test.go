@@ -283,7 +283,7 @@ func dungMayChuCongDan(t *testing.T) *mayChuCongDan {
 		// surface. The write surface has its own suite, gui_phan_anh_test.go.
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 
@@ -379,7 +379,7 @@ func chuoiCongDanVoi(t *testing.T, m *mayChuCongDan, so httpx.CitizenSessions) h
 		Phieu:       m.phieu,
 		GuiPhieu:    soPhieuMoi(),
 		Rating:      newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	var h http.Handler = mux
@@ -615,6 +615,7 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"missing citizen field catalogue": func(d *DepsCongDan) { d.CitizenFields = nil },
 		"missing scene-photo use case":    func(d *DepsCongDan) { d.Photos = nil },
 		"missing photo rate limiter":      func(d *DepsCongDan) { d.PhotoLimiter = nil },
+		"missing upload slots":            func(d *DepsCongDan) { d.UploadSlots = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {
@@ -623,7 +624,7 @@ func TestRegisterCongDanThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 				}
 			}()
 			d := DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(),
-				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu()}
+				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu()}
 			bo(&d)
 			RegisterCongDan(http.NewServeMux(), d)
 		})
@@ -639,7 +640,7 @@ func TestRegisterCongDanDuPhuThuocThiKhongPanic(t *testing.T) {
 		}
 	}()
 	RegisterCongDan(http.NewServeMux(), DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(),
 	})
 }
 

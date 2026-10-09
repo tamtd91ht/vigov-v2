@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -19,11 +20,13 @@ import (
 // Tests for the three attachment acts (task_attachment.go) over the REAL stores on the fake driver,
 // with in-memory fakes for MinIO, clamd and platform's upload policy.
 //
-//	PROVED HERE   request: who may upload is who may write the log · platform's policy decides type,
-//	              size and count, and its absence or outage refuses BEFORE any row · the pending row
-//	              binds commune, task, uploader, records class and a key with no file name in it · the
-//	              form is signed for that key, the policy's byte limit and the declared type · the row
-//	              and its audit entry share ONE transaction, and the trail carries no file name.
+//	PROVED HERE   upload (ADR 0052 §Sửa đổi 09/10/2026): who may upload is who may write the log ·
+//	              platform's policy decides type, size and count, and its absence or outage refuses
+//	              BEFORE any row and before a byte of the body · the pending row binds commune, task,
+//	              uploader, records class and a key with no file name in it · the bytes are streamed to
+//	              that key's upload path under the policy's byte limit and the declared type · the row and
+//	              its audit entry share ONE transaction, and the trail carries no file name · one request
+//	              ends `stored` · a failed stream closes the row `failed`.
 //	              completion: only the uploader completes · the SNIFFED type decides, a mismatch with
 //	              the declaration or a type outside the policy is rejected · a size above the CURRENT
 //	              policy is rejected · infected is rejected with the temp object deleted and the
@@ -62,20 +65,20 @@ func uploadReq() AttachmentUploadRequest {
 		Size: 48_213}
 }
 
-// --- a. request ------------------------------------------------------------------------------------
+// --- the upload: reserve · receive · complete ------------------------------------------------------
 
-func TestRequestUpload_IssuesPendingRowFormAndTrailInOneTransaction(t *testing.T) {
+func TestReserve_IssuesPendingRowAndTrailInOneTransaction(t *testing.T) {
 	k := khoNVMau()
 	uc, obj, _, _, ctx := dungTaskAttachments(t, k)
 
-	up, err := uc.RequestUpload(ctx, maNVGoc, uploadReq(), staffActor(maNguoiThucHien), false)
+	up, err := uc.reserve(ctx, maNVGoc, uploadReq(), staffActor(maNguoiThucHien), false)
 	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
+		t.Fatalf("reserve: %v", err)
 	}
 
 	wantKey := "records/t_" + strings.ToLower(string(xaThu)) + "/2026/09/petitions/task-attachment/" +
 		strings.ToLower(fileIDThu) + "/original.pdf"
-	f := up.File
+	f := up.file
 	if f.ID != fileIDThu || f.ObjectKey != wantKey || f.SubjectID != idNVGoc || f.UploadedBy != maNguoiThucHien ||
 		f.OriginalName != "Biên bản nghiệm thu.pdf" || f.Status != domain.StoredFilePending ||
 		f.RetentionClass != "records" || f.Bucket != domain.StoredFileBucketPrivate {
@@ -92,15 +95,12 @@ func TestRequestUpload_IssuesPendingRowFormAndTrailInOneTransaction(t *testing.T
 	}
 	chiGhiTrongGiaoDich(t, k)
 
-	if len(obj.presigned) != 1 {
-		t.Fatalf("ký %d lượt tải lên, muốn 1", len(obj.presigned))
+	if up.uploadKey != "upload/"+wantKey || up.maxBytes != 10<<20 || up.contentType != storage.MIMEPDF ||
+		up.size != 48_213 || up.subject != maNVGoc {
+		t.Errorf("chỗ giữ = %+v — muốn khoá upload/<khoá đích>, giới hạn của chính sách, kiểu khai báo", up)
 	}
-	p := obj.presigned[0]
-	if p.key != "upload/"+wantKey || p.maxBytes != 10<<20 || p.contentType != storage.MIMEPDF || p.ttl != storage.UploadTTL {
-		t.Errorf("lượt ký = %+v — muốn khoá upload/<khoá đích>, giới hạn của chính sách, kiểu khai báo, TTL 15 phút", p)
-	}
-	if up.Post.URL == "" || up.Post.Fields["key"] != "upload/"+wantKey {
-		t.Errorf("biểu mẫu trả về = %v", up.Post.Fields)
+	if len(obj.uploads) != 0 {
+		t.Errorf("reserve đã ghi %d tệp vào kho", len(obj.uploads))
 	}
 
 	vet := vetKiemToan(t, k)
@@ -119,20 +119,20 @@ func TestRequestUpload_IssuesPendingRowFormAndTrailInOneTransaction(t *testing.T
 	}
 }
 
-func TestRequestUpload_RelatedPersonAndTaskUpdateHolderMayUpload(t *testing.T) {
+func TestReserve_RelatedPersonAndTaskUpdateHolderMayUpload(t *testing.T) {
 	for _, c := range []struct {
 		code   string
 		update TaskUpdateRight
 	}{{"CB-00123", false}, {maLanhDao, false}, {outsiderCode, true}} {
 		k := khoNVMau()
 		uc, _, _, _, ctx := dungTaskAttachments(t, k)
-		if _, err := uc.RequestUpload(ctx, maNVGoc, uploadReq(), staffActor(c.code), c.update); err != nil {
+		if _, err := uc.reserve(ctx, maNVGoc, uploadReq(), staffActor(c.code), c.update); err != nil {
 			t.Errorf("%s (update=%v): %v", c.code, c.update, err)
 		}
 	}
 }
 
-func TestRequestUpload_RefusalsWriteNothing(t *testing.T) {
+func TestUpload_RefusalsWriteNothingAndReadNoByte(t *testing.T) {
 	for _, c := range []struct {
 		name   string
 		mod    func(*TaskAttachments, *policyFake, *AttachmentUploadRequest)
@@ -170,13 +170,14 @@ func TestRequestUpload_RefusalsWriteNothing(t *testing.T) {
 			if c.mod != nil {
 				c.mod(uc, pol, &req)
 			}
-			_, err := uc.RequestUpload(ctx, maNVGoc, req, staffActor(c.actor), false)
+			body := uploadBodyOf(pdfBytes)
+			_, err := uc.Upload(ctx, maNVGoc, req, body, staffActor(c.actor), false)
 			if !errors.Is(err, c.want) {
 				t.Fatalf("lỗi = %v, muốn %v", err, c.want)
 			}
 			khongGhiGi(t, k)
-			if len(obj.presigned) != 0 {
-				t.Error("đã ký biểu mẫu tải lên dù bị từ chối")
+			if len(obj.uploads) != 0 || body.reads != 0 {
+				t.Error("đã đọc thân hoặc ghi tệp vào kho dù bị từ chối")
 			}
 			if !c.signed && k.batDau != 0 {
 				t.Errorf("mở %d giao dịch cho một yêu cầu bị từ chối trước khi chạm dữ liệu", k.batDau)
@@ -185,7 +186,7 @@ func TestRequestUpload_RefusalsWriteNothing(t *testing.T) {
 	}
 }
 
-func TestRequestUpload_CountLimitFromPolicy(t *testing.T) {
+func TestReserve_CountLimitFromPolicy(t *testing.T) {
 	k := khoNVMau()
 	uc, _, _, _, ctx := dungTaskAttachments(t, k)
 	// Three live files already: stored, ready, and a pending one whose form is still valid.
@@ -202,7 +203,7 @@ func TestRequestUpload_CountLimitFromPolicy(t *testing.T) {
 	k.addStoredFile(storedFileRow("01JB"+strings.Repeat("B", 22), "01JTEPCU00000000000000000H", idNVGoc, maNguoiThucHien,
 		domain.StoredFileStored, mocTaoNV))
 
-	_, err := uc.RequestUpload(ctx, maNVGoc, uploadReq(), staffActor(maNguoiThucHien), false)
+	_, err := uc.reserve(ctx, maNVGoc, uploadReq(), staffActor(maNguoiThucHien), false)
 	if !errors.Is(err, ErrAttachmentCountReached) {
 		t.Fatalf("lỗi = %v, muốn ErrAttachmentCountReached", err)
 	}
@@ -216,8 +217,64 @@ func TestRequestUpload_CountLimitFromPolicy(t *testing.T) {
 	for _, r := range k.storedFiles {
 		k2.addStoredFile(r)
 	}
-	if _, err := uc2.RequestUpload(ctx2, maNVGoc, uploadReq(), staffActor(maNguoiThucHien), false); err != nil {
+	if _, err := uc2.reserve(ctx2, maNVGoc, uploadReq(), staffActor(maNguoiThucHien), false); err != nil {
 		t.Errorf("ba tệp sống, giới hạn bốn: %v", err)
+	}
+}
+
+// One request from body to `stored`: the bytes go to the upload key, Finish runs, the completion scans
+// and promotes THOSE bytes, and the trail is the request and the stored entries.
+func TestUpload_OneRequestEndsStored(t *testing.T) {
+	k := khoNVMau()
+	uc, obj, sc, _, ctx := dungTaskAttachments(t, k)
+	body := uploadBodyOf(pdfBytes)
+	req := uploadReq()
+	req.Size = int64(len(pdfBytes))
+	f, err := uc.Upload(ctx, maNVGoc, req, body, staffActor(maNguoiThucHien), false)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if f.ID != fileIDThu || f.Status != domain.StoredFileStored || f.MIMEType != storage.MIMEPDF ||
+		f.OriginalName != "Biên bản nghiệm thu.pdf" {
+		t.Errorf("tệp = %+v", f)
+	}
+	if len(obj.uploads) != 1 || obj.uploads[0].key != "upload/"+f.ObjectKey || body.finished != 1 {
+		t.Errorf("ghi luồng = %+v, Finish = %d", obj.uploads, body.finished)
+	}
+	if !bytes.Equal(sc.scanned, pdfBytes) || len(obj.promoted) != 1 || obj.promoted[0] != f.ObjectKey {
+		t.Errorf("quét/chép không đúng các byte đã nhận: promoted %v", obj.promoted)
+	}
+	hanhVi := []string{}
+	for _, c := range k.cau("INSERT INTO audit_log") {
+		hanhVi = append(hanhVi, c.args[4].(string))
+	}
+	if strings.Join(hanhVi, ",") != ActionTaskAttachmentRequested+","+ActionTaskAttachmentStored {
+		t.Errorf("vết = %v", hanhVi)
+	}
+}
+
+// The store dies mid-stream: the reserved row ends `failed` with its trail, nothing is promoted.
+func TestUpload_StreamFailureClosesTheRow(t *testing.T) {
+	k := khoNVMau()
+	uc, obj, sc, _, ctx := dungTaskAttachments(t, k)
+	obj.uploadErr = errors.New("minio: connection reset")
+	req := uploadReq()
+	req.Size = int64(len(pdfBytes))
+	if _, err := uc.Upload(ctx, maNVGoc, req, uploadBodyOf(pdfBytes), staffActor(maNguoiThucHien), false); err == nil {
+		t.Fatal("không có lỗi")
+	}
+	if sc.calls != 0 || len(obj.promoted) != 0 {
+		t.Error("tệp tải hỏng vẫn được quét hoặc chép")
+	}
+	if got := k.storedFile(fileIDThu); got["status"] != string(domain.StoredFileFailed) {
+		t.Errorf("dòng chờ = %v, muốn failed", got["status"])
+	}
+	hanhVi := []string{}
+	for _, c := range k.cau("INSERT INTO audit_log") {
+		hanhVi = append(hanhVi, c.args[4].(string))
+	}
+	if strings.Join(hanhVi, ",") != ActionTaskAttachmentRequested+","+ActionTaskAttachmentExpired {
+		t.Errorf("vết = %v", hanhVi)
 	}
 }
 
@@ -239,7 +296,7 @@ func TestComplete_StoresScannedHashedPromotedInOneTransaction(t *testing.T) {
 	uc, obj, sc, _, ctx := dungTaskAttachments(t, k)
 	keys := seedPending(k, obj, mocThaoTacNV.Add(-2*time.Minute), pdfBytes)
 
-	f, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
+	f, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -307,7 +364,7 @@ func TestComplete_RejectionsDeleteTempAndAudit(t *testing.T) {
 			}
 			keys := seedPending(k, obj, mocThaoTacNV.Add(-2*time.Minute), c.data)
 
-			_, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
+			_, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
 			var rej *AttachmentRejection
 			if !errors.As(err, &rej) || rej.Reason != c.reason || !errors.Is(err, ErrAttachmentRejected) {
 				t.Fatalf("lỗi = %v, muốn từ chối %q", err, c.reason)
@@ -347,7 +404,7 @@ func TestComplete_FailedTempDeleteIsRecordedNotHidden(t *testing.T) {
 	obj.purgeErr = errors.New("minio: connection reset")
 	seedPending(k, obj, mocThaoTacNV.Add(-time.Minute), pdfBytes)
 
-	_, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
+	_, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
 	if !errors.Is(err, ErrAttachmentRejected) {
 		t.Fatalf("lỗi = %v", err)
 	}
@@ -386,7 +443,7 @@ func TestComplete_RetryableFailuresWriteNothing(t *testing.T) {
 			keys := seedPending(k, obj, mocThaoTacNV.Add(-2*time.Minute), pdfBytes)
 			c.mod(obj, sc, pol)
 
-			_, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
+			_, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
 			if err == nil || (c.want != nil && !errors.Is(err, c.want)) {
 				t.Fatalf("lỗi = %v, muốn %v", err, c.want)
 			}
@@ -407,7 +464,7 @@ func TestComplete_MissingObjectNotYetThenExpired(t *testing.T) {
 	k := khoNVMau()
 	uc, obj, _, _, ctx := dungTaskAttachments(t, k)
 	seedPending(k, obj, mocThaoTacNV.Add(-5*time.Minute), nil)
-	if _, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false); !errors.Is(err, ErrUploadNotReceived) {
+	if _, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false); !errors.Is(err, ErrUploadNotReceived) {
 		t.Fatalf("lỗi = %v, muốn ErrUploadNotReceived", err)
 	}
 	khongGhiGi(t, k)
@@ -416,7 +473,7 @@ func TestComplete_MissingObjectNotYetThenExpired(t *testing.T) {
 	k = khoNVMau()
 	uc, obj, _, _, ctx = dungTaskAttachments(t, k)
 	seedPending(k, obj, mocThaoTacNV.Add(-20*time.Minute), nil)
-	if _, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false); !errors.Is(err, ErrUploadExpired) {
+	if _, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false); !errors.Is(err, ErrUploadExpired) {
 		t.Fatalf("lỗi = %v, muốn ErrUploadExpired", err)
 	}
 	if got := k.storedFile(fileIDThu); got["status"] != "failed" {
@@ -436,7 +493,7 @@ func TestComplete_RecoversFromDestination(t *testing.T) {
 	keys := seedPending(k, obj, mocThaoTacNV.Add(-2*time.Minute), nil)
 	obj.put(storage.BucketPrivate, keys["key"].(string), pdfBytes)
 
-	f, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
+	f, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
 	if err != nil || f.Status != domain.StoredFileStored {
 		t.Fatalf("Complete = %+v, %v", f, err)
 	}
@@ -453,7 +510,7 @@ func TestComplete_AlreadyStoredAnswersTheSame(t *testing.T) {
 	uc, obj, sc, _, ctx := dungTaskAttachments(t, k)
 	k.addStoredFile(storedFileRow(string(xaThu), fileIDThu, idNVGoc, maNguoiThucHien, domain.StoredFileStored, mocTaoNV))
 
-	f, err := uc.Complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
+	f, err := uc.complete(ctx, maNVGoc, fileIDThu, staffActor(maNguoiThucHien), false)
 	if err != nil || f.Status != domain.StoredFileStored {
 		t.Fatalf("Complete = %+v, %v", f, err)
 	}
@@ -488,7 +545,7 @@ func TestComplete_OnlyTheUploaderOnThisTask(t *testing.T) {
 			k.addStoredFile(r)
 			obj.put(storage.BucketTemp, "upload/"+r["object_key"].(string), pdfBytes)
 
-			_, err := uc.Complete(ctx, c.ma, fileIDThu, staffActor(c.actor), true)
+			_, err := uc.complete(ctx, c.ma, fileIDThu, staffActor(c.actor), true)
 			if !errors.Is(err, c.want) {
 				t.Fatalf("lỗi = %v, muốn %v", err, c.want)
 			}

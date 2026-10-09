@@ -2,12 +2,12 @@ package app
 
 // `📎 Đính kèm` on the PETITION processing log — docs/ui-ux/09 §8.7 (:197, :312), owner decision B of
 // 02/10/2026, storage of migration 0027. The task attachment's three steps (task_attachment.go), for a
-// petition:
+// petition, inside ONE multipart request — POST …/citizen-reports/{ma}/log-attachments — through this
+// service (ADR 0052 §Sửa đổi 09/10/2026):
 //
-//	a. RequestUpload  POST …/citizen-reports/{ma}/log-attachments                  pending row + form
-//	b. the browser    POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT
-//	c. Complete       POST …/citizen-reports/{ma}/log-attachments/{id}/completion  sniff · scan · hash ·
-//	                  copy → stored, the trail in ONE transaction
+//	a. reserve   pending row + trail                    the petition locked, the note rule, the count
+//	b. receive   PutUpload streams the bytes into temp (upload_stream.go)
+//	c. complete  sniff · scan · hash · copy → stored, the trail in ONE transaction
 //
 // and then the file rides on the NEXT manual note the same officer writes (GhiChuNoiBo, linked in that
 // note's transaction — migration 0027's trigger refuses a link written later). DownloadLink hands out a
@@ -144,43 +144,78 @@ func ownPetitionLogUpload(f *domain.StoredFile, petitionID, officer string) bool
 	return f != nil && officer != "" && domain.IsPetitionLogAttachmentOf(*f, petitionID) && f.UploadedBy == officer
 }
 
-// RequestUpload issues one upload slot for one file on petition `ma`'s log (ADR 0052 §1a). ONE
-// TRANSACTION: the petition read FOR UPDATE (the two checks, and two requests serialise so both cannot
-// pass the count), the count, the pending row, the form (signed offline), the audit entry.
-func (uc *PetitionLogAttachments) RequestUpload(ctx context.Context, ma string, req AttachmentUploadRequest,
-	actor audit.Actor, noteRight QuyenGhiChuCaXa, restricted QuyenXemHanChe) (AttachmentUpload, error) {
-
-	if err := coCanBoThucHien(actor); err != nil {
-		return AttachmentUpload{}, err
-	}
-	name, err := domain.CleanAttachmentName(req.FileName)
-	if err != nil {
-		return AttachmentUpload{}, err
-	}
-	if req.Size <= 0 {
-		return AttachmentUpload{}, domain.ErrAttachmentSizeInvalid
-	}
+// MaxUploadBytes is the policy's cap on one petition log attachment, for the handler to bound the request
+// body before reading it. Not configured and unreachable are refusals, never a default.
+func (uc *PetitionLogAttachments) MaxUploadBytes(ctx context.Context) (int64, error) {
 	if !uc.uploadsConfigured() {
-		return AttachmentUpload{}, ErrUploadNotConfigured
+		return 0, ErrUploadNotConfigured
 	}
 	pol, err := attachmentPolicyFor(ctx, uc.policies, storage.PurposePetitionLogAttachment)
 	if err != nil {
-		return AttachmentUpload{}, err
+		return 0, err
+	}
+	return pol.MaxBytes, nil
+}
+
+// Upload stores one file on petition `ma`'s log: reserve (a), stream (b), complete (c) — one request,
+// answered with the STORED file or a refusal. A failure after (a) closes the reserved row.
+func (uc *PetitionLogAttachments) Upload(ctx context.Context, ma string, req AttachmentUploadRequest,
+	body UploadBody, actor audit.Actor, noteRight QuyenGhiChuCaXa, restricted QuyenXemHanChe) (
+	domain.StoredFile, error) {
+
+	res, err := uc.reserve(ctx, ma, req, actor, noteRight, restricted)
+	if err != nil {
+		return domain.StoredFile{}, err
+	}
+	closer := uploadCloser{db: uc.db, objects: uc.objects, files: uc.files, actor: actor,
+		failAction: ActionPetitionLogAttachmentExpired, clock: uc.clock}
+	if err := closer.receive(ctx, res, body); err != nil {
+		return domain.StoredFile{}, err
+	}
+	f, err := uc.complete(ctx, ma, res.file.ID, actor, noteRight, restricted)
+	if err != nil {
+		return domain.StoredFile{}, closer.afterComplete(ctx, res, err)
+	}
+	return f, nil
+}
+
+// reserve is step (a) for one file on petition `ma`'s log (ADR 0052 §1a). ONE TRANSACTION: the petition
+// read FOR UPDATE (the two checks, and two uploads serialise so both cannot pass the count), the count,
+// the pending row, the audit entry.
+func (uc *PetitionLogAttachments) reserve(ctx context.Context, ma string, req AttachmentUploadRequest,
+	actor audit.Actor, noteRight QuyenGhiChuCaXa, restricted QuyenXemHanChe) (uploadReservation, error) {
+
+	if err := coCanBoThucHien(actor); err != nil {
+		return uploadReservation{}, err
+	}
+	name, err := domain.CleanAttachmentName(req.FileName)
+	if err != nil {
+		return uploadReservation{}, err
+	}
+	if req.Size <= 0 {
+		return uploadReservation{}, domain.ErrAttachmentSizeInvalid
+	}
+	if !uc.uploadsConfigured() {
+		return uploadReservation{}, ErrUploadNotConfigured
+	}
+	pol, err := attachmentPolicyFor(ctx, uc.policies, storage.PurposePetitionLogAttachment)
+	if err != nil {
+		return uploadReservation{}, err
 	}
 	if !pol.AllowsMIME(req.ContentType) {
-		return AttachmentUpload{}, ErrAttachmentTypeNotAllowed
+		return uploadReservation{}, ErrAttachmentTypeNotAllowed
 	}
 	if req.Size > pol.MaxBytes {
-		return AttachmentUpload{}, ErrAttachmentTooLarge
+		return uploadReservation{}, ErrAttachmentTooLarge
 	}
 	ext, ok := storage.ExtForMIME(req.ContentType)
 	if !ok {
-		return AttachmentUpload{}, ErrAttachmentTypeNotAllowed
+		return uploadReservation{}, ErrAttachmentTypeNotAllowed
 	}
 
 	id, err := uc.newID()
 	if err != nil {
-		return AttachmentUpload{}, fmt.Errorf("tệp đính kèm: sinh mã tệp: %w", err)
+		return uploadReservation{}, fmt.Errorf("tệp đính kèm: sinh mã tệp: %w", err)
 	}
 	now := uc.clock()
 	key := storage.Key{
@@ -190,14 +225,15 @@ func (uc *PetitionLogAttachments) RequestUpload(ctx context.Context, ma string, 
 	}
 	objectKey, err := key.Path()
 	if err != nil {
-		return AttachmentUpload{}, fmt.Errorf("tệp đính kèm: dựng khoá đối tượng: %w", err)
+		return uploadReservation{}, fmt.Errorf("tệp đính kèm: dựng khoá đối tượng: %w", err)
 	}
 	uploadKey, err := key.UploadPath()
 	if err != nil {
-		return AttachmentUpload{}, fmt.Errorf("tệp đính kèm: dựng khoá tải lên: %w", err)
+		return uploadReservation{}, fmt.Errorf("tệp đính kèm: dựng khoá tải lên: %w", err)
 	}
 
-	var out AttachmentUpload
+	res := uploadReservation{uploadKey: uploadKey, contentType: req.ContentType, size: req.Size,
+		maxBytes: pol.MaxBytes}
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.petitions.TheoMaTraCuuDeSua(ctx, tx, ma)
 		if err != nil {
@@ -225,10 +261,6 @@ func (uc *PetitionLogAttachments) RequestUpload(ctx context.Context, ma string, 
 		if err := uc.files.InsertPending(ctx, tx, f); err != nil {
 			return err
 		}
-		post, err := uc.objects.PresignUpload(ctx, uploadKey, pol.MaxBytes, req.ContentType, storage.UploadTTL)
-		if err != nil {
-			return fmt.Errorf("tệp đính kèm: ký lượt tải lên: %w", err)
-		}
 		if err := writeAttachmentAudit(ctx, tx, actor, p.MaTraCuu, ActionPetitionLogAttachmentRequested, now,
 			map[string]any{
 				"tep_id":          id,
@@ -238,18 +270,19 @@ func (uc *PetitionLogAttachments) RequestUpload(ctx context.Context, ma string, 
 			}); err != nil {
 			return err
 		}
-		out = AttachmentUpload{File: f, Post: post}
+		res.file, res.subject = f, p.MaTraCuu
 		return nil
 	})
 	if err != nil {
-		return AttachmentUpload{}, bocPhieu(ctx, "xin tải tệp đính kèm nhật ký", err)
+		return uploadReservation{}, bocPhieu(ctx, "xin tải tệp đính kèm nhật ký", err)
 	}
-	return out, nil
+	return res, nil
 }
 
-// Complete is ADR 0052 §1c for one upload — the task attachment's flow, on the shared uploadInspector.
-// IDEMPOTENT: a file already `stored` is returned as it is (idem.KhongCan on the route).
-func (uc *PetitionLogAttachments) Complete(ctx context.Context, ma, id string, actor audit.Actor,
+// complete is ADR 0052 §1c for one upload — the task attachment's flow, on the shared uploadInspector.
+// Upload calls it on the bytes it has just streamed. IDEMPOTENT: a file already `stored` is returned as
+// it is.
+func (uc *PetitionLogAttachments) complete(ctx context.Context, ma, id string, actor audit.Actor,
 	noteRight QuyenGhiChuCaXa, restricted QuyenXemHanChe) (domain.StoredFile, error) {
 
 	if err := coCanBoThucHien(actor); err != nil {
@@ -443,7 +476,7 @@ func (uc *PetitionLogAttachments) DownloadLink(ctx context.Context, ma, id strin
 // `feedback.resolve` for is domain.ErrAttachmentRemovalNotAllowed (403: the file is visible to them, so
 // hiding its existence hides nothing). `can-bo` without `feedback.restricted` is the petition's 404.
 //
-// ONE TRANSACTION: the petition FOR UPDATE (petition then file — the order RequestUpload, Complete and
+// ONE TRANSACTION: the petition FOR UPDATE (petition then file — the order reserve, complete and
 // the note take), the file FOR UPDATE, the soft delete, the timeline line, the audit entry. A refusal
 // writes nothing.
 //

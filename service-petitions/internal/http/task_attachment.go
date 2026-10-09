@@ -3,50 +3,39 @@ package http
 // `📎 Đính kèm` on the task timeline (docs/ui-ux/02-nhiem-vu.md §5.9) — the HTTP half of
 // internal/app/task_attachment.go:
 //
-//	POST /api/v1/tasks/{ma}/attachments                  task.read gate; the log-entry right in the use case
-//	POST /api/v1/tasks/{ma}/attachments/{id}/completion  task.read gate; the uploader, with the log-entry right
+//	POST /api/v1/tasks/{ma}/attachments                  task.read gate; the log-entry right in the use case;
+//	                                                     ONE multipart upload, answered with the stored file
 //	GET  /api/v1/tasks/{ma}/attachments/{id}/download    task.read; domain.MayDownload in the use case
 //	DELETE /api/v1/tasks/{ma}/attachments/{id}           task.read gate; uploader or task.update in the use case
 //
 // THESE HANDLERS DECIDE NOTHING, the shape of AddTaskLogEntry: they read whether the caller holds
 // `task.update` (the one fact the log-entry rule takes) and translate the use case's answer.
 //
-// ⚠ THE REPLY OF THE FIRST ROUTE CARRIES A BEARER CREDENTIAL (the presigned POST form), and the third a
-// presigned GET URL. They go to the client and nowhere else: no handler here logs a reply, a URL, a
-// form field or a file name.
+// ⚠ THE DOWNLOAD REPLY CARRIES A BEARER CREDENTIAL (a presigned GET URL). It goes to the client and
+// nowhere else: no handler here logs a reply, a URL, a field of the upload or a file name.
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
 
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
-// taskAttachmentUploadIn is what the browser declares before it uploads. The declaration is CHECKED
-// against platform's limits here and the bytes are checked again at completion — the declared type and
-// size are claims, never facts (ADR 0052 §1c).
-//
-// ⚠ `file_name` IS PERSONAL DATA WHEN IT DESCRIBES A CASE (rule 3): stored, returned to readers of the
-// task, never logged, never in an object key.
-type taskAttachmentUploadIn struct {
-	FileName    string `json:"file_name"`
-	ContentType string `json:"content_type"`
-	Size        int64  `json:"size"`
-}
-
-// taskAttachmentOut is one file as a member of staff sees it — on the timeline, and in the replies of
-// the upload and completion routes. No object key and no uploader: the download is its own signed
+// taskAttachmentOut is one file as a member of staff sees it — on the timeline, and in the reply of the
+// upload route. No object key and no uploader: the download is its own signed
 // request, and who wrote the entry is the entry's `actor_code`.
 type taskAttachmentOut struct {
 	ID       string `json:"id"`
 	FileName string `json:"file_name"`
-	// MIMEType is the SNIFFED type; "" while the file is still `pending`.
+	// MIMEType is the SNIFFED type.
 	MIMEType string `json:"mime_type"`
-	// SizeBytes is the measured size; 0 while the file is still `pending`.
+	// SizeBytes is the measured size.
 	SizeBytes int64 `json:"size_bytes"`
 	// Status is ADR 0052 §5's: pending · stored · ready · rejected · failed · purged (a timeline shows
 	// only files that were attached, so stored / ready / purged in practice).
@@ -72,21 +61,6 @@ func taskAttachmentsOut(in []domain.TaskLogAttachment) []taskAttachmentOut {
 	return out
 }
 
-// presignedUploadOut is the form the browser POSTs the file with: every `fields` entry as a form field,
-// then the file as the LAST field, named `file`, to `url` (OBJECT_STORAGE_PUBLIC_ENDPOINT). The policy
-// fixes the key, the Content-Type and the byte range; it expires at `expires_at` (15 minutes).
-type presignedUploadOut struct {
-	URL       string            `json:"url"`
-	Fields    map[string]string `json:"fields"`
-	ExpiresAt time.Time         `json:"expires_at"`
-}
-
-// taskAttachmentUploadOut is the reply of POST …/attachments.
-type taskAttachmentUploadOut struct {
-	Attachment taskAttachmentOut  `json:"attachment"`
-	Upload     presignedUploadOut `json:"upload"`
-}
-
 // taskAttachmentDownloadOut is a presigned GET, valid until `expires_at` (at most 15 minutes). Open it
 // directly; it is served from the object store's domain, never the commune's (ADR 0052 §4).
 type taskAttachmentDownloadOut struct {
@@ -94,45 +68,36 @@ type taskAttachmentDownloadOut struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// RequestTaskAttachmentUpload issues one upload slot. POST /api/v1/tasks/{ma}/attachments
-func (h *Handler) RequestTaskAttachmentUpload(w http.ResponseWriter, r *http.Request) {
-	var in taskAttachmentUploadIn
-	if !docThan(w, r, &in) {
-		return
-	}
+// UploadTaskAttachment receives ONE file through this service and answers it STORED (ADR 0052 §Sửa đổi
+// 09/10/2026). POST /api/v1/tasks/{ma}/attachments
+//
+// ⚠ `file_name` (or the part's own name) IS PERSONAL DATA WHEN IT DESCRIBES A CASE (rule 3): stored,
+// returned to readers of the task, never logged, never in an object key.
+func (h *Handler) UploadTaskAttachment(w http.ResponseWriter, r *http.Request) {
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuTheNhiemVu(w, r)
 		return
 	}
-	up, err := h.d.TaskAttachments.RequestUpload(r.Context(), r.PathValue("ma"), app.AttachmentUploadRequest{
-		FileName: in.FileName, ContentType: in.ContentType, Size: in.Size,
-	}, actor, h.hasTaskUpdate(r))
-	if err != nil {
-		h.answerTaskAttachmentError(w, r, "xin tải tệp đính kèm", err)
-		return
-	}
-	vietJSON(w, http.StatusCreated, taskAttachmentUploadOut{
-		Attachment: taskAttachmentFromFile(up.File),
-		Upload:     presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
-}
-
-// CompleteTaskAttachment runs ADR 0052 §1c on one upload.
-// POST /api/v1/tasks/{ma}/attachments/{id}/completion
-func (h *Handler) CompleteTaskAttachment(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	answer := func(err error) { h.answerTaskAttachmentError(w, r, "tải tệp đính kèm", err) }
+	up, release, ok := receiveUpload(w, r, h.d.UploadSlots, h.d.Log, h.d.TaskAttachments,
+		[]string{uploadFieldFileName, uploadFieldContentType}, answer)
+	defer release()
 	if !ok {
-		h.thieuChuTheNhiemVu(w, r)
 		return
 	}
-	f, err := h.d.TaskAttachments.Complete(r.Context(), r.PathValue("ma"), r.PathValue("id"), actor,
-		h.hasTaskUpdate(r))
+	ctx, cancel := context.WithDeadline(r.Context(), up.Deadline)
+	defer cancel()
+	f, err := h.d.TaskAttachments.Upload(ctx, r.PathValue("ma"), app.AttachmentUploadRequest{
+		FileName: declaredFileName(up), ContentType: declaredType(up), Size: up.Size,
+	}, uploadBody{&up}, actor, h.hasTaskUpdate(r))
 	if err != nil {
-		h.answerTaskAttachmentError(w, r, "hoàn tất tệp đính kèm", err)
+		answer(err)
 		return
 	}
-	vietJSON(w, http.StatusOK, taskAttachmentFromFile(f))
+	// A replay with the same Idempotency-Key is told the FILE ID (core/idem) — never a second file.
+	idem.RecordCode(ctx, f.ID)
+	vietJSON(w, http.StatusCreated, taskAttachmentFromFile(f))
 }
 
 // TaskAttachmentDownload hands out a short-lived link. GET /api/v1/tasks/{ma}/attachments/{id}/download
@@ -198,6 +163,7 @@ func (h *Handler) answerTaskAttachmentError(w http.ResponseWriter, r *http.Reque
 	refused := fileRefusalLog(r, h.d.Log, "tệp đính kèm nhiệm vụ: từ chối", what, err)
 	var rej *app.AttachmentRejection
 	switch {
+	case writeUploadEnvelopeError(w, err, refused):
 	case errors.Is(err, app.ErrAttachmentNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy tệp đính kèm này trên nhiệm vụ.", "")
 
@@ -226,7 +192,8 @@ func (h *Handler) answerTaskAttachmentError(w http.ResponseWriter, r *http.Reque
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Loại tệp này không được phép đính kèm vào nhật ký nhiệm vụ.", "")
 	case errors.Is(err, app.ErrAttachmentTooLarge):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+		refused("file_too_large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large",
 			"Tệp lớn hơn dung lượng tối đa được phép đính kèm.", "")
 
 	case errors.As(err, &rej):
@@ -243,19 +210,11 @@ func (h *Handler) answerTaskAttachmentError(w http.ResponseWriter, r *http.Reque
 	case errors.Is(err, app.ErrAttachmentNotPending):
 		refused("attachment_state")
 		httpx.WriteError(w, http.StatusConflict, "attachment_state",
-			"Tệp này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn tệp và tải lên lại.", "")
-	case errors.Is(err, app.ErrUploadNotReceived):
-		refused("upload_not_received")
-		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
-			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
-	case errors.Is(err, app.ErrUploadExpired):
-		refused("upload_expired")
-		httpx.WriteError(w, http.StatusConflict, "upload_expired",
-			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn tệp và tải lên lại.", "")
+			"Tệp này đã bị từ chối. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
 		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
-			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
+			"Tệp vừa bị thay đổi trong lúc kiểm tra nên CHƯA được lưu. Hãy tải lên lại.", "")
 
 	case errors.Is(err, app.ErrUploadNotConfigured):
 		h.d.Log.Warn("CẢNH BÁO: từ chối tệp đính kèm vì chưa cấu hình kho lưu tệp / máy quét / giới hạn",

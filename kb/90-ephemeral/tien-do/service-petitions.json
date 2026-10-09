@@ -714,6 +714,14 @@
       "bang_chung": "CHƯA COMMIT (chờ phiên chính). go build/vet/test ./... service-petitions xanh. Mã: internal/app/xu_ly_phan_anh.go (statusOccurrence, countUnmerges, ghiSuKien), internal/app/petition_rating.go (mergeHistory). Ca kiểm: internal/app/status_occurrence_test.go — không tách: đúng so_lan_mo_lai+1 (0 và 2 lần mở lại); mở lại theo đánh giá: 3 khi chưa tách, 4 khi đã tách một lần; theo phiếu chính → tách → xử lý lại: cho-dan-xac-nhan:1, dang-xu-ly:2, da-xu-ly:2, cho-dan-xac-nhan:2; câu đếm trong giao dịch, lọc tenant_id = $1.",
       "tiep_theo": "(1) Chưa chạy PostgreSQL thật (VIGOV_TEST_DSN) cho câu đếm. (2) Chọn 'vòng' thay vì 'số lần vào trạng thái này': đếm lần vào lệch so_lan_mo_lai+1 khi một vòng trước BỎ QUA trạng thái (da-xu-ly → da-dong khi không ai xác nhận được, rồi mở lại) và có thể trùng khoá đã gửi với phiếu đang dở lúc triển khai; vòng thì bằng đúng giá trị cũ khi chưa tách. (3) Hai đường nhận phiếu (gui_phan_anh, staff_intake) truyền 0 lần tách — phiếu vừa tạo trong cùng giao dịch.",
       "no_confirm": []
+    },
+    {
+      "id": "tai-len-qua-service-4-luong",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ D: ảnh hiện trường (công dân), ảnh sau xử lý, tệp nhật ký phiếu, tệp nhiệm vụ tải lên bằng MỘT lệnh multipart qua service-petitions (size, content_type?, file_name? cho tệp đính kèm, file) → 201 tệp đã lưu; bỏ 4 tuyến …/completion; photoGate tính 1 lần/ảnh (30/15 phút); tuyến công dân bỏ qua tên tệp; 4 lượt/pod; mọi lỗi sau khi có dòng pending → failed + xoá tạm",
+      "bang_chung": "(commit này) — app/upload_stream.go, http/upload.go; go vet + go test ./... service-petitions xanh (phiên chính chạy lại); ca 401/403/401-sai-xã/201, 404 giống nhau cho phiếu người khác, TestAccountlessChainHasNoPhotoUpload",
+      "tiep_theo": "citizen-app (scene-photos, goi-vigov) và web-admin (task-attachments, phieu-phan-anh, verification-photos) CHƯA chuyển — không triển khai riêng petitions. Thêm @multipart khi make kb. 503 upload_busy vẫn tốn 1 lượt trong 30 của người dân (photoGate chạy trước slot). xu_ly_phan_anh.go:141 còn chú thích …/completion (tệp phiên khác)."
     }
   ]
 }

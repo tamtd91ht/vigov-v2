@@ -34,6 +34,7 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -281,15 +282,15 @@ type (
 			update app.TaskUpdateRight) (domain.NhatKyNhiemVu, []domain.TaskLogAttachment, error)
 	}
 
-	// TaskAttachmentActs is §5.9's `📎 Đính kèm` — request an upload, complete it, hand out a download
-	// link (ADR 0052 §1). *app.TaskAttachments satisfies it. ITS OWN INTERFACE and not three more
-	// methods on GhiNhiemVuUseCase: its dependencies are the object store, the scanner and platform's
-	// limits, any of which may be absent in a deployment while the six task acts keep working.
+	// TaskAttachmentActs is §5.9's `📎 Đính kèm` — upload a file through this service, hand out a
+	// download link, remove (ADR 0052 §Sửa đổi 09/10/2026). *app.TaskAttachments satisfies it. ITS OWN
+	// INTERFACE and not more methods on GhiNhiemVuUseCase: its dependencies are the object store, the
+	// scanner and platform's limits, any of which may be absent in a deployment while the six task acts
+	// keep working.
 	TaskAttachmentActs interface {
-		RequestUpload(ctx context.Context, ma string, req app.AttachmentUploadRequest, nguoi audit.Actor,
-			update app.TaskUpdateRight) (app.AttachmentUpload, error)
-		Complete(ctx context.Context, ma, id string, nguoi audit.Actor, update app.TaskUpdateRight) (
-			domain.StoredFile, error)
+		uploadLimiter
+		Upload(ctx context.Context, ma string, req app.AttachmentUploadRequest, body app.UploadBody,
+			nguoi audit.Actor, update app.TaskUpdateRight) (domain.StoredFile, error)
 		DownloadLink(ctx context.Context, ma, id string, reader audit.Actor) (app.AttachmentDownload, error)
 		Remove(ctx context.Context, ma, id, reason string, nguoi audit.Actor, update app.TaskUpdateRight) error
 	}
@@ -626,6 +627,12 @@ type Deps struct {
 	// missing — a nil one would panic inside a refusal, on the path meant to explain a mistake.
 	SystemMessages SystemMessageService
 
+	// UploadSlots is the PROCESS-WIDE cap on uploads in flight (httpx.UploadSlotsPerPod, ADR 0052
+	// §Sửa đổi 09/10/2026) — the SAME value DepsCongDan.UploadSlots holds, built once in cmd/server: a
+	// cap per mux would let the two surfaces hold twice the uploads the pod is sized for. Refused at
+	// construction when missing.
+	UploadSlots *httpx.UploadSlots
+
 	Log *slog.Logger
 }
 
@@ -706,13 +713,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	case d.CitizenLetterTasks == nil:
 		panic("petitions/http: thiếu use case chuyển đơn thư thành nhiệm vụ — POST /api/v1/citizen-letter-tasks sẽ panic khi có người gọi")
 	case d.TaskAttachments == nil:
-		panic("petitions/http: thiếu use case tệp đính kèm nhiệm vụ — ba tuyến /api/v1/tasks/{ma}/attachments sẽ panic khi có người gọi")
+		panic("petitions/http: thiếu use case tệp đính kèm nhiệm vụ — các tuyến /api/v1/tasks/{ma}/attachments sẽ panic khi có người gọi")
 	case d.PetitionPhotos == nil:
 		panic("petitions/http: thiếu đường đọc ảnh hiện trường — GET /api/v1/citizen-reports/{maTraCuu}/photos sẽ panic khi có người gọi")
 	case d.VerificationPhotos == nil:
-		panic("petitions/http: thiếu use case ảnh sau xử lý — ba tuyến /api/v1/citizen-reports/{maTraCuu}/verification-photos sẽ panic khi có người gọi")
+		panic("petitions/http: thiếu use case ảnh sau xử lý — hai tuyến /api/v1/citizen-reports/{maTraCuu}/verification-photos sẽ panic khi có người gọi")
 	case d.PetitionLogAttachments == nil:
-		panic("petitions/http: thiếu use case tệp đính kèm nhật ký phiếu — ba tuyến /api/v1/citizen-reports/{maTraCuu}/log-attachments sẽ panic khi có người gọi")
+		panic("petitions/http: thiếu use case tệp đính kèm nhật ký phiếu — các tuyến /api/v1/citizen-reports/{maTraCuu}/log-attachments sẽ panic khi có người gọi")
 	case d.PetitionLogAttachmentsReader == nil:
 		panic("petitions/http: thiếu đường đọc tệp đính kèm của nhật ký phiếu — GET /api/v1/citizen-reports/{maTraCuu}/log-entries sẽ panic khi có người gọi")
 	case d.TaskLogAttachments == nil:
@@ -744,6 +751,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	case d.SystemMessages == nil:
 		panic("petitions/http: thiếu use case lời hệ thống — các tuyến /api/v1/petitions-system-messages và " +
 			"mọi câu từ chối xã được sửa lời sẽ panic khi có người gọi")
+	case d.UploadSlots == nil:
+		panic("petitions/http: thiếu bộ giới hạn lượt tải lên cùng lúc (httpx.UploadSlots) — ba tuyến tải tệp " +
+			"của cán bộ không được phục vụ khi không có giới hạn (ADR 0052 §Sửa đổi 09/10/2026)")
 	}
 
 	h := NewHandler(d)
@@ -1068,73 +1078,62 @@ func Register(mux *http.ServeMux, d Deps) {
 			http.HandlerFunc(h.ListPetitionPhotos)))
 
 	// ẢNH SAU XỬ LÝ — "SAU KHI XỬ LÝ" on the petition detail (docs/ui-ux/09 §8.4), owner decisions of
-	// 02/10/2026 (ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"; ADR 0008 decision 3). The scene
-	// photo's three steps for a member of staff (internal/app/petition_verification_photo.go): at most 5
-	// per petition (platform's `petition-verification-photo` policy, migration 0027's floor), JPEG / PNG /
-	// WebP, RE-ENCODED WITHOUT EXIF (the citizen sees it), private, class records.
+	// 02/10/2026 (ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"; ADR 0008 decision 3). ONE
+	// multipart upload through this service (ADR 0052 §Sửa đổi 09/10/2026), the scene photo's steps for a
+	// member of staff (internal/app/petition_verification_photo.go): at most 5 per petition per round
+	// (platform's `petition-verification-photo` policy, migration 0027's floor), JPEG / PNG / WebP,
+	// RE-ENCODED WITHOUT EXIF (the citizen sees it), private, class records. Answered with the STORED
+	// photo; there is no completion route any more.
 	//
 	// `verification-photos`: "verification" is the glossary's English for nghiệm thu
 	// (kb/00-foundation/ubiquitous-language.md, core/storage PurposePetitionVerificationPhoto) — the act
 	// this photo evidences. A SIBLING of `photos`, not a `kind` on it: the two have different uploaders,
 	// different keys, different counts, and the citizen's list must never grow a staff file by default.
 	//
-	// `feedback.resolve` ON BOTH WRITES — the key that guards the closing (open question #7), because
-	// this photo IS the closing's evidence; `feedback.read` on the list, the detail's own key. Both seeded
+	// `feedback.resolve` ON THE WRITE — the key that guards the closing (open question #7), because this
+	// photo IS the closing's evidence; `feedback.read` on the list, the detail's own key. Both seeded
 	// (service-identity/migrations/0001_init.sql); NO KEY WAS INVENTED (rule 5, invariant 3c).
 	// `feedback.restricted` narrows inside: a `can-bo` petition without it is the detail's 404.
 	//
 	// WHEN: every status but the three endings (domain.VerificationPhotoUploadOpen).
 	//
-	// idem.Required(idem.MoKhiHong) on the request, the citizen photo's declaration and reason: a replay
-	// answers the FILE ID, never a second row and never the form.
+	// THE BODY IS multipart/form-data (core/httpx.ReadUpload): text fields FIRST — `size` (required, the
+	// byte count, ≤ the policy's cap) and `content_type` (optional; else the file part's Content-Type;
+	// image/jpeg · image/png · image/webp) — then exactly ONE part named `file`, then nothing. The part's
+	// file name is ignored. At most httpx.UploadSlotsPerPod uploads per pod at once, httpx.UploadReadTimeout
+	// per upload.
 	//
-	// @summary  Cán bộ xin tải MỘT ảnh sau xử lý cho phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// idem.Required(idem.MoKhiHong): a replay answers the FILE ID (`{"code": "<id>", "replayed": true}`),
+	// never a second file.
+	//
+	// @summary  Cán bộ tải lên MỘT ảnh sau xử lý cho phiếu phản ánh qua service (multipart) — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ
 	// @screen   09-phan-anh-nguoi-dan §8.4
-	// @request  photoUploadIn
 	// 401 is no session AND a session of another commune (authz compares the commune before the key).
 	// 403: no `feedback.resolve`. 404: unknown, another commune's, soft-deleted, or `can-bo` without
-	// `feedback.restricted` — one body. 409 `petition_state` (ended) · `photo_limit` · `request_in_progress`.
-	// 503 `storage_not_configured` · `upload_limits_unavailable`: nothing written.
+	// `feedback.restricted` — one body. 400 `invalid_upload` (broken envelope, file not the declared size)
+	// · `invalid_request` (type outside the policy). 408 `upload_timeout`. 409 `petition_state` (ended,
+	// also when it ended while the photo was processed — the clean copy then STAYS in the records bucket
+	// with a `rejected` row, never listed) · `photo_limit` · `photo_state` · `upload_changed` ·
+	// `request_in_progress`. 413 `file_too_large`. 415 `unsupported_media_type`. 422 `photo_rejected`.
+	// 503 `upload_busy` (+ Retry-After) · `storage_not_configured` · `upload_limits_unavailable` ·
+	// `malware_scan_unavailable`: nothing stored, never stored unscanned.
 	//
-	// @reply    201 photoUploadOut
+	// @reply    201 photoOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/verification-photos",
 		authz.RequirePermission(d.Checker, "feedback.resolve")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.RequestVerificationPhotoUpload))))
-
-	// HOÀN TẤT ẢNH SAU XỬ LÝ — the citizen photo's completion: stat · sniff · the CURRENT policy · ClamAV
-	// · decode · orient · re-encode JPEG (≤ 2560 px, NO EXIF) · write ONLY the clean copy · purge temp ·
-	// `stored` + trail in ONE transaction that re-checks the window and the count under the petition's
-	// lock. Only the officer the upload was issued to; anybody else's id answers 404.
-	//
-	// ⚠ A CLEAN COPY REFUSED UNDER THE LOCK (petition ended, or full, meanwhile) STAYS in the private
-	// bucket — a records object cannot be purged — with a `rejected` row; never listed.
-	//
-	// @summary  Cán bộ hoàn tất tải một ảnh sau xử lý — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ
-	// @screen   09-phan-anh-nguoi-dan §8.4
-	// 409 `petition_state` · `photo_state` · `upload_not_received` · `upload_expired` · `upload_changed`.
-	// 422 `photo_rejected`. 503 `storage_not_configured` · `upload_limits_unavailable` ·
-	// `malware_scan_unavailable`: nothing stored, retryable, never stored unscanned.
-	//
-	// @reply    200 photoOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion",
-		authz.RequirePermission(d.Checker, "feedback.resolve")(
-			idem.KhongCan("hoàn tất lần hai trên ảnh đã lưu trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng phiếu")(
-				http.HandlerFunc(h.CompleteVerificationPhoto))))
+				http.HandlerFunc(h.UploadVerificationPhoto))))
 
 	// DANH SÁCH ẢNH SAU XỬ LÝ — the `photos` list's twin: signed links of at most 15 minutes, AUDITED
 	// (`xem_anh_sau_xu_ly`, by the officer's business code, committed before the reply), `no-store`.
@@ -1445,62 +1444,53 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.GhiChuPhieu))))
 
-	// 📎 ĐÍNH KÈM (§8.7 :197) — the task attachment's three steps on the PETITION log, then the file
-	// rides on the next note (`attachments` on the POST above). internal/app/petition_log_attachment.go
-	// has the whole flow. STAFF-ONLY (owner decision B, 02/10/2026): no citizen route reads these files.
+	// 📎 ĐÍNH KÈM (§8.7 :197) — ONE multipart upload through this service (ADR 0052 §Sửa đổi 09/10/2026),
+	// answered with the STORED file; then the file rides on the next note (`attachments` on the POST
+	// above). internal/app/petition_log_attachment.go has the whole flow. STAFF-ONLY (owner decision B,
+	// 02/10/2026): no citizen route reads these files.
 	//
 	// `log-attachments` AND NOT `attachments`: a petition carries THREE kinds of file (the citizen's
 	// scene photos, staff's verification photos, these), and a bare `attachments` would not say which.
 	//
-	// `feedback.read` AT THE GATE ON ALL THREE, the note route's shape: whether this person may upload
-	// onto THIS petition is the note rule (app.duocGhiChu — the assignee, or a holder of feedback.resolve
-	// / feedback.assign / feedback.classify), decided on the locked row, because an upload exists only to
+	// `feedback.read` AT THE GATE, the note route's shape: whether this person may upload onto THIS
+	// petition is the note rule (app.duocGhiChu — the assignee, or a holder of feedback.resolve /
+	// feedback.assign / feedback.classify), decided on the locked row, because an upload exists only to
 	// be attached to a note. Seeded keys only (rule 5, invariant 3c). Every status, like the note.
 	//
 	// THE LIMITS ARE PLATFORM'S (`petition-log-attachment`, ADR 0052 §10): 50 MB, PDF / JPEG / PNG today.
+	// Sniffed, scanned, hashed and copied to the records key AS UPLOADED (not shown to a citizen, so no
+	// EXIF re-encode — a re-encoded record would no longer be the record).
 	//
-	// @summary  Xin tải một tệp đính kèm cho nhật ký xử lý phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// THE BODY IS multipart/form-data (core/httpx.ReadUpload): text fields FIRST — `size` (required, the
+	// byte count), `file_name` (optional; else the file part's own name — the name readers see, personal
+	// data when it describes a case: stored, never logged) and `content_type` (optional; else the file
+	// part's Content-Type) — then exactly ONE part named `file`, then nothing.
+	//
+	// @summary  Tải lên một tệp đính kèm cho nhật ký xử lý phiếu phản ánh qua service (multipart) — dò kiểu, quét mã độc, lưu vào kho hồ sơ
 	// @screen   09-phan-anh-nguoi-dan §8.7
-	// @request  taskAttachmentUploadIn
 	// 401 is no session AND a session of another commune. 403: no `feedback.read`, or — inside — not the
-	// assignee and none of the three commune-wide keys. 404: the petition's four causes. 409
-	// `attachment_limit` · `request_in_progress`. 503 `storage_not_configured` · `upload_limits_unavailable`.
+	// assignee and none of the three commune-wide keys. 404: the petition's four causes. 400
+	// `invalid_upload` · `invalid_request` (name, type). 408 `upload_timeout`. 409 `attachment_limit` ·
+	// `attachment_state` · `upload_changed` · `request_in_progress`. 413 `file_too_large`. 415
+	// `unsupported_media_type`. 422 `attachment_rejected`. 503 `upload_busy` (+ Retry-After) ·
+	// `storage_not_configured` · `upload_limits_unavailable` · `malware_scan_unavailable`.
 	//
-	// @reply    201 taskAttachmentUploadOut
+	// @reply    201 taskAttachmentOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/log-attachments",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.RequestPetitionLogAttachmentUpload))))
-
-	// HOÀN TẤT TẢI LÊN — the task attachment's completion: sniff · the CURRENT policy · ClamAV · sha256 ·
-	// copy to the private bucket at the records key, AS UPLOADED (not shown to a citizen, so no EXIF
-	// re-encode — a re-encoded record would no longer be the record). Only the uploader.
-	//
-	// @summary  Hoàn tất tải lên tệp đính kèm nhật ký phiếu — dò kiểu, quét mã độc, lưu vào kho hồ sơ
-	// @screen   09-phan-anh-nguoi-dan §8.7
-	// 409 `attachment_state` · `upload_not_received` · `upload_expired` · `upload_changed`. 422
-	// `attachment_rejected`. 503 `storage_not_configured` · `upload_limits_unavailable` ·
-	// `malware_scan_unavailable`.
-	//
-	// @reply    200 taskAttachmentOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion",
-		authz.RequirePermission(d.Checker, "feedback.read")(
-			idem.KhongCan("hoàn tất lần hai trên tệp đã lưu trả lại đúng tệp ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
-				http.HandlerFunc(h.CompletePetitionLogAttachment))))
+				http.HandlerFunc(h.UploadPetitionLogAttachment))))
 
 	// TẢI VỀ — `feedback.read`, the key of the timeline the file is shown on. A file on a log entry is
 	// part of the timeline every staff reader sees; a file not yet attached only its uploader may fetch.
@@ -1873,64 +1863,50 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.AddTaskLogEntry))))
 
-	// 📎 ĐÍNH KÈM (§5.9) — ADR 0052's three-step upload, then the file rides on the next log entry
-	// (`attachments` on the POST above). internal/app/task_attachment.go has the whole flow.
+	// 📎 ĐÍNH KÈM (§5.9) — ONE multipart upload through this service (ADR 0052 §Sửa đổi 09/10/2026),
+	// answered with the STORED file; then the file rides on the next log entry (`attachments` on the POST
+	// above). internal/app/task_attachment.go has the whole flow.
 	//
-	// `task.read` AT THE GATE ON ALL THREE, for the log-entry route's reason: whether this person may
-	// upload onto THIS task is the log-entry right (assignee / related person / `task.update`), decided
-	// on the row by the use case — an upload exists only to be attached to an entry. `task.read` is
-	// seeded (service-identity/migrations/0001_init.sql:304); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	// `task.read` AT THE GATE, for the log-entry route's reason: whether this person may upload onto
+	// THIS task is the log-entry right (assignee / related person / `task.update`), decided on the row by
+	// the use case — an upload exists only to be attached to an entry. `task.read` is seeded
+	// (service-identity/migrations/0001_init.sql:304); NO KEY WAS INVENTED (rule 5, invariant 3c).
 	//
 	// THE LIMITS ARE PLATFORM'S (ADR 0052 §10): size, types and the per-task count are read from
 	// ListUploadPolicies on every request. Not configured → 503 `storage_not_configured`, as is a missing
-	// object store or scanner — the rest of the service keeps serving.
+	// object store or scanner — the rest of the service keeps serving. Stat · sniff (the client's type is
+	// never trusted) · the CURRENT policy · ClamAV · sha256 · copy to the private bucket at the records
+	// key · `stored` and the trail in ONE transaction; infected, wrong type, too large, over the count →
+	// 422 and the temp object deleted; scanner or platform down → 503, NEVER stored unscanned (ADR 0052 §9).
 	//
-	// idem.Required(idem.MoKhiHong): a double submit issues a second pending row, which holds one slot of
-	// the per-task count for the form's 15 minutes and can never be deleted (rule 7). MoKhiHong for the
-	// log entry's reason — a cache outage must not stop an officer mid-work; the residue is one unused
-	// pending row, never a second stored file.
+	// THE BODY IS multipart/form-data (core/httpx.ReadUpload): text fields FIRST — `size` (required, the
+	// byte count), `file_name` (optional; else the file part's own name — personal data when it
+	// describes a case: stored, never logged) and `content_type` (optional; else the file part's
+	// Content-Type) — then exactly ONE part named `file`, then nothing.
 	//
-	// @summary  Xin tải một tệp đính kèm cho nhật ký nhiệm vụ — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
+	// idem.Required(idem.MoKhiHong): a replay answers the FILE ID (`{"code": "<id>", "replayed": true}`),
+	// never a second file. MoKhiHong for the log entry's reason — a cache outage must not stop an
+	// officer mid-work; the residue of a double submit is a second stored file the officer can remove
+	// (`Gỡ`), never a lost one.
+	//
+	// @summary  Tải lên một tệp đính kèm cho nhật ký nhiệm vụ qua service (multipart) — dò kiểu, quét mã độc, lưu vào kho hồ sơ
 	// @screen   02-nhiem-vu §5.9
-	// @request  taskAttachmentUploadIn
-	// @reply    201 taskAttachmentUploadOut
+	// @reply    201 taskAttachmentOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("POST /api/v1/tasks/{ma}/attachments",
 		authz.RequirePermission(d.Checker, "task.read")(
 			idem.Required(idem.MoKhiHong)(
-				http.HandlerFunc(h.RequestTaskAttachmentUpload))))
-
-	// HOÀN TẤT TẢI LÊN — `completion`, a nominalised sub-resource (skills/rest-api-design §3), not
-	// `complete`. Only the officer the upload was issued to; anybody else's id answers 404.
-	//
-	// Stat · sniff (the client's type is never trusted) · the CURRENT policy · ClamAV · sha256 · copy to
-	// the private bucket at the records key · `stored` and the trail in ONE transaction. Infected, wrong
-	// type, too large, over the count → 422 and the temp object deleted. Scanner or platform down → 503,
-	// nothing written, the file stays retryable and is NEVER stored unscanned (ADR 0052 §9).
-	//
-	// idem.KhongCan: a second completion of a stored file answers that same file and writes nothing;
-	// two in flight at once serialise on the row lock and the loser lands on the winner's row.
-	//
-	// @summary  Hoàn tất tải lên tệp đính kèm — dò kiểu, quét mã độc, lưu vào kho hồ sơ
-	// @screen   02-nhiem-vu §5.9
-	// @reply    200 taskAttachmentOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/tasks/{ma}/attachments/{id}/completion",
-		authz.RequirePermission(d.Checker, "task.read")(
-			idem.KhongCan("hoàn tất lần hai trên tệp đã lưu trả lại đúng tệp ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng")(
-				http.HandlerFunc(h.CompleteTaskAttachment))))
+				http.HandlerFunc(h.UploadTaskAttachment))))
 
 	// TẢI VỀ — `task.read`, the key of the timeline the file is shown on. A file on a log entry is part of
 	// the task every reader sees; a file not yet attached only its uploader may fetch (domain.MayDownload).

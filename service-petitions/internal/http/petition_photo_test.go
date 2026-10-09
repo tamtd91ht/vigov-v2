@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -25,16 +26,19 @@ import (
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
-// The four scene-photo routes at the HTTP boundary.
+// The three scene-photo routes at the HTTP boundary.
 //
 //	PROVED HERE   citizen routes over the REAL citizen chain (CitizenEdge → CitizenPrincipal →
 //	              XaTuPhien → idem): 401 with no usable session, use case not reached · another
 //	              citizen's code, another commune's and an unknown one answer BYTE FOR BYTE the GET's
-//	              404 · the citizen and the commune reach the use case FROM THE SESSION · the declared
-//	              body reaches it · replies carry the form / links with `no-store` · a replay of the
-//	              upload request answers the file id and does not reach the use case twice · the
-//	              per-citizen rate limit (429 + Retry-After, per citizen, 503 when its store is down) ·
-//	              the refusal mapping (409 / 422 / 503) never echoes the code.
+//	              404 · the citizen and the commune reach the use case FROM THE SESSION · the multipart
+//	              upload reaches it as a stream of the declared size and type, the part's file name
+//	              NEVER (rule 3) · the upload answers 201 with the STORED photo · the list carries links
+//	              with `no-store` · a replay of the upload answers the file id and does not reach the
+//	              use case twice · the per-citizen rate limit, charged ONCE per upload (429 +
+//	              Retry-After, per citizen, 503 when its store is down) · a busy pod is 503 upload_busy ·
+//	              the policy's cap is 413 before the file is read · the refusal mapping (408 / 409 /
+//	              413 / 422 / 503) never echoes the code · there is no completion route.
 //	              Staff route, rule 5 invariant 7: 401 no session · 403 without `feedback.read` · 401
 //	              right key WRONG COMMUNE (authz compares the commune first) · 200 · `can-bo` without
 //	              `feedback.restricted` is the detail's 404.
@@ -51,7 +55,11 @@ type citizenPhotosFake struct {
 	seenCitizen []audit.Actor
 	seenTenant  []tenant.ID
 	seenReq     []app.PhotoUploadRequest
+	seenBytes   []int
 	err         error
+	// maxBytes is the policy's cap MaxUploadBytes answers (10 MB when zero); limitErr its refusal.
+	maxBytes int64
+	limitErr error
 }
 
 func newCitizenPhotosFake() *citizenPhotosFake {
@@ -78,27 +86,33 @@ func (f *citizenPhotosFake) check(ctx context.Context, ma string, c audit.Actor)
 
 var photoAtHTTP = time.Date(2026, 10, 2, 3, 0, 0, 0, time.UTC)
 
-func (f *citizenPhotosFake) RequestUpload(ctx context.Context, ma string, req app.PhotoUploadRequest,
-	c audit.Actor) (app.PhotoUpload, error) {
-	if err := f.check(ctx, ma, c); err != nil {
-		return app.PhotoUpload{}, err
+func (f *citizenPhotosFake) MaxUploadBytes(context.Context) (int64, error) {
+	if f.limitErr != nil {
+		return 0, f.limitErr
 	}
-	f.mu.Lock()
-	f.seenReq = append(f.seenReq, req)
-	f.mu.Unlock()
-	return app.PhotoUpload{
-		File: domain.StoredFile{ID: photoIDHTTP, Status: domain.StoredFilePending, CreatedAt: photoAtHTTP},
-		Post: storage.PresignedPost{URL: "https://s3.example.gov.vn/vigov-test-temp",
-			Fields: map[string]string{"key": "upload/citizen-media/k/original.png", "policy": "p"}, ExpiresAt: photoAtHTTP.Add(15 * time.Minute)},
-	}, nil
+	if f.maxBytes == 0 {
+		return 10 << 20, nil
+	}
+	return f.maxBytes, nil
 }
 
-func (f *citizenPhotosFake) Complete(ctx context.Context, ma, id string, c audit.Actor) (domain.StoredFile, error) {
+// Upload applies the ownership rule, then reads the whole body and Finishes it, as the real use case's
+// stream does — so the envelope the handler built is exercised end to end.
+func (f *citizenPhotosFake) Upload(ctx context.Context, ma string, req app.PhotoUploadRequest, body app.UploadBody,
+	c audit.Actor) (domain.StoredFile, error) {
 	if err := f.check(ctx, ma, c); err != nil {
 		return domain.StoredFile{}, err
 	}
-	return domain.StoredFile{ID: id, MIMEType: storage.MIMEJPEG, SizeBytes: 481_000, Status: domain.StoredFileStored,
-		CreatedAt: photoAtHTTP}, nil
+	n, err := drainUpload(body)
+	f.mu.Lock()
+	f.seenReq = append(f.seenReq, req)
+	f.seenBytes = append(f.seenBytes, n)
+	f.mu.Unlock()
+	if err != nil {
+		return domain.StoredFile{}, err
+	}
+	return domain.StoredFile{ID: photoIDHTTP, MIMEType: storage.MIMEJPEG, SizeBytes: 481_000,
+		Status: domain.StoredFileStored, ObjectKey: "citizen-media/k/original.jpg", CreatedAt: photoAtHTTP}, nil
 }
 
 func (f *citizenPhotosFake) ListPhotos(ctx context.Context, ma string, c audit.Actor) ([]app.PhotoLink, error) {
@@ -181,6 +195,12 @@ type photoServer struct {
 
 func buildPhotoServer(t *testing.T) *photoServer {
 	t.Helper()
+	return buildPhotoServerWith(t, uploadSlotsThu())
+}
+
+// buildPhotoServerWith mounts the citizen surface with the given per-pod upload cap.
+func buildPhotoServerWith(t *testing.T, slots *httpx.UploadSlots) *photoServer {
+	t.Helper()
 	f := newCitizenPhotosFake()
 	c := &photoCounter{}
 	logBuf := &bytes.Buffer{}
@@ -188,7 +208,7 @@ func buildPhotoServer(t *testing.T) *photoServer {
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
 		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
-		CitizenFields: newFieldCatalogueFake(), Photos: f, VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterOn(c), Log: log,
+		CitizenFields: newFieldCatalogueFake(), Photos: f, VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterOn(c), UploadSlots: slots, Log: log,
 	})
 	var h http.Handler = mux
 	h = idem.Middleware(khoIdemMoi(), log)(h)
@@ -199,17 +219,27 @@ func buildPhotoServer(t *testing.T) *photoServer {
 	return &photoServer{h: h, photos: f, counter: c, log: logBuf}
 }
 
-func photosPath(code string) string              { return "/api/v1/my-citizen-reports/" + code + "/photos" }
-func photoCompletionPath(code, id string) string { return photosPath(code) + "/" + id + "/completion" }
+func photosPath(code string) string { return "/api/v1/my-citizen-reports/" + code + "/photos" }
 
-func (s *photoServer) do(t *testing.T, method, path, body, token, idemKey string) *httptest.ResponseRecorder {
+// do sends body as JSON when it is a non-empty string, as multipart when it is an uploadThan.
+func (s *photoServer) do(t *testing.T, method, path string, body any, token, idemKey string) *httptest.ResponseRecorder {
 	t.Helper()
-	r := httptest.NewRequest(method, "https://"+hostMiniApp+path, strings.NewReader(body))
+	var r *http.Request
+	switch b := body.(type) {
+	case uploadThan:
+		buf, ct := b.encode(t)
+		r = httptest.NewRequest(method, "https://"+hostMiniApp+path, buf)
+		r.Header.Set("Content-Type", ct)
+	case string:
+		r = httptest.NewRequest(method, "https://"+hostMiniApp+path, strings.NewReader(b))
+		if b != "" {
+			r.Header.Set("Content-Type", "application/json")
+		}
+	default:
+		t.Fatalf("unknown body %T", body)
+	}
 	r.Host = hostMiniApp
 	r.RemoteAddr = "10.0.0.9:51000"
-	if body != "" {
-		r.Header.Set("Content-Type", "application/json")
-	}
 	if idemKey != "" {
 		r.Header.Set(idem.Header, idemKey)
 	}
@@ -221,20 +251,18 @@ func (s *photoServer) do(t *testing.T, method, path, body, token, idemKey string
 	return w
 }
 
-const (
-	photoBody    = `{"content_type":"image/png","size":812000}`
-	photoIdemKey = "01JKHOAANHHIENTRUONGTHU001"
-)
+const photoIdemKey = "01JKHOAANHHIENTRUONGTHU001"
 
 type photoRoute struct {
-	name, method, path, body, key string
-	ok                            int
+	name, method, path string
+	body               any
+	key                string
+	ok                 int
 }
 
 func photoRoutes(code string) []photoRoute {
 	return []photoRoute{
-		{"upload slot", http.MethodPost, photosPath(code), photoBody, photoIdemKey, http.StatusCreated},
-		{"completion", http.MethodPost, photoCompletionPath(code, photoIDHTTP), "", "", http.StatusOK},
+		{"upload", http.MethodPost, photosPath(code), photoFile(), photoIdemKey, http.StatusCreated},
 		{"own list", http.MethodGet, photosPath(code), "", "", http.StatusOK},
 	}
 }
@@ -294,10 +322,8 @@ func TestCitizenPhotoRoutesPassIdentityAndCommuneFromTheSession(t *testing.T) {
 			if strings.Contains(w.Body.String(), maCuaToi) || strings.Contains(w.Body.String(), idToi) {
 				t.Errorf("reply carries the lookup code or the citizen id: %s", w.Body.String())
 			}
-			if c.method == http.MethodGet || c.ok == http.StatusCreated {
-				if w.Header().Get("Cache-Control") != "no-store" {
-					t.Error("a reply carrying a bearer credential is cacheable")
-				}
+			if c.method == http.MethodGet && w.Header().Get("Cache-Control") != "no-store" {
+				t.Error("a reply carrying a bearer credential is cacheable")
 			}
 		})
 	}
@@ -305,22 +331,28 @@ func TestCitizenPhotoRoutesPassIdentityAndCommuneFromTheSession(t *testing.T) {
 
 func TestCitizenPhotoUploadReplyAndReplay(t *testing.T) {
 	s := buildPhotoServer(t)
-	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoBody, tokenCuaToi, photoIdemKey)
+	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey)
 	doiMa(t, w, http.StatusCreated)
-	var out photoUploadOut
+	var out photoOut
 	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 		t.Fatal(err)
 	}
-	if out.Photo.ID != photoIDHTTP || out.Photo.Status != "pending" || out.Upload.URL == "" || out.Upload.Fields["key"] == "" {
+	if out.ID != photoIDHTTP || out.Status != "stored" || out.ContentType != storage.MIMEJPEG {
 		t.Errorf("reply = %+v", out)
 	}
-	if s.photos.seenReq[0] != (app.PhotoUploadRequest{ContentType: storage.MIMEPNG, Size: 812000}) {
-		t.Errorf("declared body reaching the use case = %+v", s.photos.seenReq[0])
+	// The declared type and size reach the use case, and exactly that many bytes were streamed to it.
+	if s.photos.seenReq[0] != (app.PhotoUploadRequest{ContentType: storage.MIMEPNG, Size: 2048}) ||
+		s.photos.seenBytes[0] != 2048 {
+		t.Errorf("declared %+v, streamed %d bytes", s.photos.seenReq[0], s.photos.seenBytes[0])
 	}
-	again := s.do(t, http.MethodPost, photosPath(maCuaToi), photoBody, tokenCuaToi, photoIdemKey)
+	for _, internal := range []string{"object_key", "uploaded_by", "file_name", "upload", "fields"} {
+		if strings.Contains(w.Body.String(), internal) {
+			t.Errorf("%q on the citizen's reply: %s", internal, w.Body.String())
+		}
+	}
+	again := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey)
 	doiMa(t, again, http.StatusCreated)
-	if again.Header().Get(idem.HeaderPhatLai) != "true" || !strings.Contains(again.Body.String(), photoIDHTTP) ||
-		strings.Contains(again.Body.String(), "policy") {
+	if again.Header().Get(idem.HeaderPhatLai) != "true" || !strings.Contains(again.Body.String(), photoIDHTTP) {
 		t.Errorf("replay = %s %v", again.Body.String(), again.Header())
 	}
 	if s.photos.calls != 1 {
@@ -328,7 +360,37 @@ func TestCitizenPhotoUploadReplyAndReplay(t *testing.T) {
 	}
 }
 
-func TestCitizenPhotoListAndCompletionReplies(t *testing.T) {
+// THE PART'S FILE NAME IS NEVER READ (domain.PetitionPhotoName; rule 3): not in the reply, not in a log
+// line — the success line included.
+func TestCitizenPhotoUploadIgnoresTheFileName(t *testing.T) {
+	s := buildPhotoServer(t)
+	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey)
+	doiMa(t, w, http.StatusCreated)
+	for _, leaked := range []string{"Nguyen Van A", "0900000000"} {
+		if strings.Contains(w.Body.String(), leaked) || strings.Contains(s.log.String(), leaked) {
+			t.Errorf("the part's file name reached the reply or the log (%q)", leaked)
+		}
+	}
+	// Without a `content_type` field the part's own header is the declared type.
+	u := photoFile()
+	u.fields = nil
+	u.partType = storage.MIMEJPEG
+	doiMa(t, s.do(t, http.MethodPost, photosPath(maCuaToi), u, tokenCuaToi, photoIdemKey+"B"), http.StatusCreated)
+	if got := s.photos.seenReq[1].ContentType; got != storage.MIMEJPEG {
+		t.Errorf("declared type from the part = %q", got)
+	}
+}
+
+// The completion route is GONE (ADR 0052 §Sửa đổi 09/10/2026): one request stores the photo.
+func TestCitizenPhotoCompletionRouteIsGone(t *testing.T) {
+	s := buildPhotoServer(t)
+	w := s.do(t, http.MethodPost, photosPath(maCuaToi)+"/"+photoIDHTTP+"/completion", "", tokenCuaToi, "")
+	if w.Code == http.StatusOK || w.Code == http.StatusCreated || s.photos.calls != 0 {
+		t.Errorf("completion answered %d (%d calls)", w.Code, s.photos.calls)
+	}
+}
+
+func TestCitizenPhotoListReply(t *testing.T) {
 	s := buildPhotoServer(t)
 	w := s.do(t, http.MethodGet, photosPath(maCuaToi), "", tokenCuaToi, "")
 	doiMa(t, w, http.StatusOK)
@@ -345,34 +407,32 @@ func TestCitizenPhotoListAndCompletionReplies(t *testing.T) {
 			t.Errorf("internal field %q on the citizen's reply", internal)
 		}
 	}
-	c := s.do(t, http.MethodPost, photoCompletionPath(maCuaToi, photoIDHTTP), "", tokenCuaToi, "")
-	doiMa(t, c, http.StatusOK)
-	var p photoOut
-	_ = json.Unmarshal(c.Body.Bytes(), &p)
-	if p.ID != photoIDHTTP || p.Status != "stored" || p.ContentType != storage.MIMEJPEG {
-		t.Errorf("completion = %+v", p)
-	}
 }
 
-// --- citizen: the per-citizen rate limit ------------------------------------------------------------
+// --- citizen: the per-citizen rate limit, ONE charge per upload ------------------------------------
 
-func TestCitizenPhotoWritesAreRateLimitedPerCitizen(t *testing.T) {
+func TestCitizenPhotoUploadsAreRateLimitedPerCitizenOneChargeEach(t *testing.T) {
 	s := buildPhotoServer(t)
 	for i := 0; i < ratelimit.CitizenPhotoUploadLimit; i++ {
-		if w := s.do(t, http.MethodPost, photoCompletionPath(maCuaToi, photoIDHTTP), "", tokenCuaToi, ""); w.Code != http.StatusOK {
-			t.Fatalf("write %d: %d", i+1, w.Code)
+		key := fmt.Sprintf("%s%03d", photoIdemKey, i)
+		if w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, key); w.Code != http.StatusCreated {
+			t.Fatalf("upload %d: %d %s", i+1, w.Code, w.Body.String())
 		}
 	}
-	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoBody, tokenCuaToi, photoIdemKey)
+	// ONE counter hit per upload (owner, ADR 0052 §Sửa đổi 09/10/2026: each call is one photo).
+	if len(s.counter.keys) != ratelimit.CitizenPhotoUploadLimit {
+		t.Errorf("%d charges for %d uploads, want one each", len(s.counter.keys), ratelimit.CitizenPhotoUploadLimit)
+	}
+	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey+"X")
 	doiMa(t, w, http.StatusTooManyRequests)
 	if w.Header().Get("Retry-After") == "" {
 		t.Error("429 without Retry-After")
 	}
 	if s.photos.calls != ratelimit.CitizenPhotoUploadLimit {
-		t.Errorf("the refused write reached the use case (%d calls)", s.photos.calls)
+		t.Errorf("the refused upload reached the use case (%d calls)", s.photos.calls)
 	}
 	// Another citizen of the same commune has a budget of their own.
-	if w := s.do(t, http.MethodPost, photoCompletionPath(maCuaNguoiKhac, photoIDHTTP), "", tokenNguoiKhac, ""); w.Code != http.StatusOK {
+	if w := s.do(t, http.MethodPost, photosPath(maCuaNguoiKhac), photoFile(), tokenNguoiKhac, photoIdemKey+"Y"); w.Code != http.StatusCreated {
 		t.Errorf("another citizen throttled on this one's budget: %d", w.Code)
 	}
 	// The list is not a write and is not counted.
@@ -389,10 +449,37 @@ func TestCitizenPhotoWritesAreRateLimitedPerCitizen(t *testing.T) {
 func TestCitizenPhotoRateLimitStoreDownFailsClosed(t *testing.T) {
 	s := buildPhotoServer(t)
 	s.counter.fail = errors.New("redis: connection refused")
-	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoBody, tokenCuaToi, photoIdemKey)
+	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey)
 	doiMa(t, w, http.StatusServiceUnavailable)
 	if loiTra(t, w).Code != "rate_limit_unavailable" || s.photos.calls != 0 {
 		t.Errorf("code %q, %d calls", loiTra(t, w).Code, s.photos.calls)
+	}
+}
+
+// --- citizen: the pod's upload cap and the policy's size cap ---------------------------------------
+
+func TestCitizenPhotoUploadBusyIs503(t *testing.T) {
+	slots := httpx.NewUploadSlots(1)
+	release, _ := slots.Acquire(context.Background())
+	defer release()
+	s := buildPhotoServerWith(t, slots)
+	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey)
+	doiMa(t, w, http.StatusServiceUnavailable)
+	if loiTra(t, w).Code != httpx.UploadBusyCode || w.Header().Get("Retry-After") == "" || s.photos.calls != 0 {
+		t.Errorf("code %q, Retry-After %q, %d calls", loiTra(t, w).Code, w.Header().Get("Retry-After"), s.photos.calls)
+	}
+}
+
+func TestCitizenPhotoOverThePolicyIs413BeforeTheFile(t *testing.T) {
+	s := buildPhotoServer(t)
+	s.photos.maxBytes = 1024 // the photo is 2048 bytes
+	w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey)
+	doiMa(t, w, http.StatusRequestEntityTooLarge)
+	if loiTra(t, w).Code != "file_too_large" || s.photos.calls != 0 {
+		t.Errorf("code %q, %d calls — the use case was reached", loiTra(t, w).Code, s.photos.calls)
+	}
+	if !strings.Contains(s.log.String(), "ma_loi=file_too_large") {
+		t.Errorf("413 not logged: %s", s.log.String())
 	}
 }
 
@@ -407,20 +494,24 @@ func TestCitizenPhotoRefusalMapping(t *testing.T) {
 		{app.ErrPhotoWindowClosed, http.StatusConflict, "petition_state"},
 		{app.ErrPhotoCountReached, http.StatusConflict, "photo_limit"},
 		{app.ErrPhotoTypeNotAllowed, http.StatusBadRequest, "invalid_request"},
-		{app.ErrPhotoTooLarge, http.StatusBadRequest, "invalid_request"},
+		{app.ErrPhotoTooLarge, http.StatusRequestEntityTooLarge, "file_too_large"},
 		{&app.AttachmentRejection{Reason: app.RejectMalware}, http.StatusUnprocessableEntity, "photo_rejected"},
 		{&app.AttachmentRejection{Reason: app.RejectUndecodable}, http.StatusUnprocessableEntity, "photo_rejected"},
-		{app.ErrUploadNotReceived, http.StatusConflict, "upload_not_received"},
+		{fmt.Errorf("tệp tải lên x: %w", httpx.ErrUploadTimeout), http.StatusRequestTimeout, "upload_timeout"},
+		{fmt.Errorf("tệp tải lên x: %w", httpx.ErrUploadMalformed), http.StatusBadRequest, "invalid_upload"},
+		{fmt.Errorf("tệp tải lên x: %w", storage.ErrTooLarge), http.StatusRequestEntityTooLarge, "file_too_large"},
 		{app.ErrPhotoNotFound, http.StatusNotFound, "not_found"},
 		{app.ErrUploadNotConfigured, http.StatusServiceUnavailable, "storage_not_configured"},
 		{app.ErrScanUnavailable, http.StatusServiceUnavailable, "malware_scan_unavailable"},
 		{app.ErrUploadLimitsUnavailable, http.StatusServiceUnavailable, "upload_limits_unavailable"},
+		// The completion found nothing right after this service's own write: the store's fault, never 409.
+		{app.ErrUploadNotReceived, http.StatusInternalServerError, "internal"},
 		{errors.New("xu_ly_phan_anh: x cho xã " + string(xaA) + ": db down"), http.StatusInternalServerError, "internal"},
 	} {
 		t.Run(c.code+"/"+c.err.Error(), func(t *testing.T) {
 			s := buildPhotoServer(t)
 			s.photos.err = c.err
-			w := s.do(t, http.MethodPost, photoCompletionPath(maCuaToi, photoIDHTTP), "", tokenCuaToi, "")
+			w := s.do(t, http.MethodPost, photosPath(maCuaToi), photoFile(), tokenCuaToi, photoIdemKey)
 			doiMa(t, w, c.status)
 			if loiTra(t, w).Code != c.code {
 				t.Errorf("code = %q, want %q", loiTra(t, w).Code, c.code)
@@ -428,11 +519,12 @@ func TestCitizenPhotoRefusalMapping(t *testing.T) {
 			if strings.Contains(w.Body.String(), string(xaA)) || strings.Contains(w.Body.String(), maCuaToi) {
 				t.Errorf("body echoes the commune id or the code: %s", w.Body.String())
 			}
-			// A 409/422 is LOGGED with its code, the file id and the cause (09/10/2026: a missing temp
-			// bucket answered 409 with nothing in the log). Never the lookup code (rule 3).
-			if c.status == http.StatusConflict || c.status == http.StatusUnprocessableEntity {
+			// A 4xx past the gate is LOGGED with its code and the cause (09/10/2026: a missing temp bucket
+			// answered 409 with nothing in the log). Never the lookup code (rule 3).
+			if c.status >= 400 && c.status < 500 && c.status != http.StatusNotFound &&
+				!errors.Is(c.err, app.ErrPhotoTypeNotAllowed) {
 				logged := s.log.String()
-				for _, want := range []string{"level=INFO", "ma_loi=" + c.code, "tep_id=" + photoIDHTTP} {
+				for _, want := range []string{"level=INFO", "ma_loi=" + c.code} {
 					if !strings.Contains(logged, want) {
 						t.Errorf("log lacks %q: %s", want, logged)
 					}

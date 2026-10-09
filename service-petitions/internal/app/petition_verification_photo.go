@@ -2,12 +2,13 @@ package app
 
 // STAFF VERIFICATION PHOTOS — "SAU KHI XỬ LÝ" on the petition detail (docs/ui-ux/09 §8.4), owner
 // decisions of 02/10/2026 (ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"; ADR 0008 decision 3),
-// storage of migration 0027. The scene photo's three steps (petition_photo.go), for a member of staff:
+// storage of migration 0027. The scene photo's three steps (petition_photo.go), for a member of staff,
+// inside ONE multipart request through this service (ADR 0052 §Sửa đổi 09/10/2026):
 //
-//	a. RequestUpload  pending row + presigned POST              the petition locked, ≤ 5 this round, not ended
-//	b. the browser    POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT
-//	c. Complete       stat · sniff · scan · DECODE · ORIENT · RE-ENCODE JPEG WITHOUT EXIF ·
-//	                  PutServerProduced into private (class records) · purge temp · `stored` + trail
+//	a. reserve   pending row + trail                  the petition locked, ≤ 5 this round, not ended
+//	b. receive   PutUpload streams the bytes into temp (upload_stream.go)
+//	c. complete  stat · sniff · scan · DECODE · ORIENT · RE-ENCODE JPEG WITHOUT EXIF ·
+//	             PutServerProduced into private (class records) · purge temp · `stored` + trail
 //
 // # WHY RE-ENCODED ALTHOUGH IT IS A RECORD (owner's choice, 02/10/2026)
 //
@@ -188,56 +189,91 @@ func ownVerificationPhoto(f *domain.StoredFile, petitionID, officer string) bool
 	return f != nil && officer != "" && domain.IsVerificationPhotoOf(*f, petitionID) && f.UploadedBy == officer
 }
 
-// --- a. request a slot ------------------------------------------------------------------------------
+// --- the upload: reserve · receive · complete ------------------------------------------------------
 
-// RequestUpload issues one upload slot for one verification photo on petition `ma`.
-//
-// ONE TRANSACTION: the petition read FOR UPDATE (the restricted field and the status are decided on the
-// locked row, and two requests on one petition serialise so both cannot pass at 4), the count with live
-// pending slots, the pending row, the form (signed offline) and the audit entry.
-func (uc *StaffVerificationPhotos) RequestUpload(ctx context.Context, ma string, req PhotoUploadRequest,
-	actor audit.Actor, restricted QuyenXemHanChe) (PhotoUpload, error) {
-
-	if err := coCanBoThucHien(actor); err != nil {
-		return PhotoUpload{}, err
-	}
-	if req.Size <= 0 {
-		return PhotoUpload{}, ErrPhotoSizeInvalid
-	}
+// MaxUploadBytes is the policy's cap on one verification photo, for the handler to bound the request
+// body before reading it. Not configured / unreachable / no count are refusals, never a default.
+func (uc *StaffVerificationPhotos) MaxUploadBytes(ctx context.Context) (int64, error) {
 	if !uc.uploadsConfigured() {
-		return PhotoUpload{}, ErrUploadNotConfigured
+		return 0, ErrUploadNotConfigured
 	}
 	pol, err := photoPolicyFor(ctx, uc.policies, storage.PurposePetitionVerificationPhoto)
 	if err != nil {
-		return PhotoUpload{}, err
+		return 0, err
+	}
+	return pol.MaxBytes, nil
+}
+
+// Upload stores one verification photo on petition `ma`: reserve (a), stream (b), complete (c) — one
+// request, answered with the STORED photo or a refusal. A failure after (a) closes the reserved row.
+func (uc *StaffVerificationPhotos) Upload(ctx context.Context, ma string, req PhotoUploadRequest, body UploadBody,
+	actor audit.Actor, restricted QuyenXemHanChe) (domain.StoredFile, error) {
+
+	res, err := uc.reserve(ctx, ma, req, actor, restricted)
+	if err != nil {
+		return domain.StoredFile{}, err
+	}
+	closer := uploadCloser{db: uc.db, objects: uc.objects, files: uc.files, actor: actor,
+		failAction: ActionVerificationPhotoExpired, clock: uc.clock}
+	if err := closer.receive(ctx, res, body); err != nil {
+		return domain.StoredFile{}, err
+	}
+	f, err := uc.complete(ctx, ma, res.file.ID, actor, restricted)
+	if err != nil {
+		return domain.StoredFile{}, closer.afterComplete(ctx, res, err)
+	}
+	return f, nil
+}
+
+// reserve is step (a): one pending row for one verification photo on petition `ma`.
+//
+// ONE TRANSACTION: the petition read FOR UPDATE (the restricted field and the status are decided on the
+// locked row, and two uploads on one petition serialise so both cannot pass at 4), the count with live
+// pending rows, the pending row and the audit entry.
+func (uc *StaffVerificationPhotos) reserve(ctx context.Context, ma string, req PhotoUploadRequest,
+	actor audit.Actor, restricted QuyenXemHanChe) (uploadReservation, error) {
+
+	if err := coCanBoThucHien(actor); err != nil {
+		return uploadReservation{}, err
+	}
+	if req.Size <= 0 {
+		return uploadReservation{}, ErrPhotoSizeInvalid
+	}
+	if !uc.uploadsConfigured() {
+		return uploadReservation{}, ErrUploadNotConfigured
+	}
+	pol, err := photoPolicyFor(ctx, uc.policies, storage.PurposePetitionVerificationPhoto)
+	if err != nil {
+		return uploadReservation{}, err
 	}
 	if !photoTypeAllowed(pol, req.ContentType) {
-		return PhotoUpload{}, ErrPhotoTypeNotAllowed
+		return uploadReservation{}, ErrPhotoTypeNotAllowed
 	}
 	if req.Size > pol.MaxBytes {
-		return PhotoUpload{}, ErrPhotoTooLarge
+		return uploadReservation{}, ErrPhotoTooLarge
 	}
 	upExt, ok := storage.ExtForMIME(req.ContentType)
 	if !ok {
-		return PhotoUpload{}, ErrPhotoTypeNotAllowed
+		return uploadReservation{}, ErrPhotoTypeNotAllowed
 	}
 
 	id, err := uc.newID()
 	if err != nil {
-		return PhotoUpload{}, fmt.Errorf("ảnh sau xử lý: sinh mã tệp: %w", err)
+		return uploadReservation{}, fmt.Errorf("ảnh sau xử lý: sinh mã tệp: %w", err)
 	}
 	now := uc.clock()
 	dst := verificationPhotoKey(ctx, id, now)
 	objectKey, err := dst.Path()
 	if err != nil {
-		return PhotoUpload{}, fmt.Errorf("ảnh sau xử lý: dựng khoá đối tượng: %w", err)
+		return uploadReservation{}, fmt.Errorf("ảnh sau xử lý: dựng khoá đối tượng: %w", err)
 	}
 	uploadKey, err := uploadKeyFor(dst, upExt)
 	if err != nil {
-		return PhotoUpload{}, fmt.Errorf("ảnh sau xử lý: dựng khoá tải lên: %w", err)
+		return uploadReservation{}, fmt.Errorf("ảnh sau xử lý: dựng khoá tải lên: %w", err)
 	}
 
-	var out PhotoUpload
+	res := uploadReservation{uploadKey: uploadKey, contentType: req.ContentType, size: req.Size,
+		maxBytes: pol.MaxBytes}
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.petitions.TheoMaTraCuuDeSua(ctx, tx, ma)
 		if err != nil {
@@ -250,7 +286,7 @@ func (uc *StaffVerificationPhotos) RequestUpload(ctx context.Context, ma string,
 		if !domain.VerificationPhotoUploadOpen(p.TrangThai) {
 			return ErrVerificationPhotoWindowClosed
 		}
-		// Live pending slots of THIS round still count, exactly as before the cap became per round.
+		// Live pending rows of THIS round still count, exactly as before the cap became per round.
 		live, err := uc.countThisRound(ctx, tx, p, now.Add(-storage.UploadTTL))
 		if err != nil {
 			return err
@@ -269,23 +305,19 @@ func (uc *StaffVerificationPhotos) RequestUpload(ctx context.Context, ma string,
 		if err := uc.files.InsertPending(ctx, tx, f); err != nil {
 			return err
 		}
-		post, err := uc.objects.PresignUpload(ctx, uploadKey, pol.MaxBytes, req.ContentType, storage.UploadTTL)
-		if err != nil {
-			return fmt.Errorf("ảnh sau xử lý: ký lượt tải lên: %w", err)
-		}
 		if err := writePhotoAudit(ctx, tx, actor, p.MaTraCuu, ActionVerificationPhotoRequested, now, map[string]any{
 			"tep_id": id, "muc_dich": domain.PurposePetitionVerificationPhoto,
 			"loai_khai_bao": req.ContentType, "kich_thuoc_khai": req.Size,
 		}); err != nil {
 			return err
 		}
-		out = PhotoUpload{File: f, Post: post}
+		res.file, res.subject = f, p.MaTraCuu
 		return nil
 	})
 	if err != nil {
-		return PhotoUpload{}, bocPhieu(ctx, "xin tải ảnh sau xử lý", err)
+		return uploadReservation{}, bocPhieu(ctx, "xin tải ảnh sau xử lý", err)
 	}
-	return out, nil
+	return res, nil
 }
 
 // countThisRound counts the verification photos of petition `p` that hold one of platform's
@@ -306,7 +338,7 @@ func (uc *StaffVerificationPhotos) RequestUpload(ctx context.Context, ma string,
 // the close gate: the count cannot tell old photos from new, and guessing either way is wrong.
 //
 // `pendingSince` zero counts STORED photos only (the completion re-check); non-zero adds the pending
-// slots issued at or after it (the upload request — an unexpired form is a place already promised).
+// rows reserved at or after it (the upload — a row still being received is a place already promised).
 func (uc *StaffVerificationPhotos) countThisRound(ctx context.Context, tx *store.ScopedTx,
 	p domain.PhieuPhanAnh, pendingSince time.Time) (int, error) {
 
@@ -331,12 +363,13 @@ func (uc *StaffVerificationPhotos) countThisRound(ctx context.Context, tx *store
 
 // --- c. complete ------------------------------------------------------------------------------------
 
-// Complete runs step (c) for one upload on petition `ma`. Lock-free inspection first (shared with the
-// citizen flow), then ONE short transaction that re-reads the petition and the row FOR UPDATE, re-checks
-// the restricted field, the window and the count under the lock, and records the outcome with its trail.
+// complete runs step (c) for one upload on petition `ma` — Upload calls it on the bytes it has just
+// streamed. Lock-free inspection first (shared with the citizen flow), then ONE short transaction that
+// re-reads the petition and the row FOR UPDATE, re-checks the restricted field, the window and the count
+// under the lock, and records the outcome with its trail.
 //
-// IDEMPOTENT: a photo already stored answers as stored (the route declares idem.KhongCan).
-func (uc *StaffVerificationPhotos) Complete(ctx context.Context, ma, id string, actor audit.Actor,
+// IDEMPOTENT: a photo already stored answers as stored.
+func (uc *StaffVerificationPhotos) complete(ctx context.Context, ma, id string, actor audit.Actor,
 	restricted QuyenXemHanChe) (domain.StoredFile, error) {
 
 	if err := coCanBoThucHien(actor); err != nil {
@@ -375,7 +408,7 @@ func (uc *StaffVerificationPhotos) Complete(ctx context.Context, ma, id string, 
 	})
 }
 
-// completePending is steps 2 and 3 of Complete for a file the caller owns and that was `pending`. `p` is
+// completePending is steps 2 and 3 of complete for a file the caller owns and that was `pending`. `p` is
 // the lock-free pre-read, used only by the pre-check's round count; every decision re-reads it locked.
 func (uc *StaffVerificationPhotos) completePending(ctx context.Context, ma, id string, actor audit.Actor,
 	restricted QuyenXemHanChe, p domain.PhieuPhanAnh, f domain.StoredFile) (domain.StoredFile, error) {

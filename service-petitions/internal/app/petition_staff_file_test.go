@@ -258,8 +258,8 @@ func TestVerificationPhoto_CitizenSeesThemOnlyFromAwaitingConfirmation(t *testin
 			if len(links) != c.want {
 				t.Errorf("links = %d, want %d", len(links), c.want)
 			}
-			if len(h.objects.presigned) != 0 {
-				t.Error("an upload form was signed on a read")
+			if len(h.objects.uploads) != 0 {
+				t.Error("an upload was written on a read")
 			}
 		})
 	}
@@ -711,23 +711,24 @@ func (h *vpHarness) seedPending(uploader string, ext string, data []byte, create
 	}
 }
 
-// --- verification photos: request ------------------------------------------------------------------------
+// --- verification photos: upload -------------------------------------------------------------------------
 
-func TestVerificationPhoto_RequestWritesARecordsRowByBusinessCode(t *testing.T) {
+func TestVerificationPhoto_ReserveWritesARecordsRowByBusinessCode(t *testing.T) {
 	h := buildVerification(t)
-	up, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEPNG, Size: 812_000},
+	up, err := h.uc.reserve(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEPNG, Size: 812_000},
 		canBoThu(), khongQuyenHanChe)
 	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
+		t.Fatalf("reserve: %v", err)
 	}
-	f := up.File
+	f := up.file
 	if f.RetentionClass != string(storage.ClassRecords) || f.Bucket != domain.StoredFileBucketPrivate ||
 		f.Purpose != domain.PurposePetitionVerificationPhoto || f.UploadedBy != maCanBoThu ||
 		f.OriginalName != domain.VerificationPhotoName || f.ObjectKey != vpDestKey() {
 		t.Errorf("pending row = %+v", f)
 	}
-	if h.objects.presigned[0].key != vpUploadKey("png") {
-		t.Errorf("form signed for %q, want the declared type's temp key", h.objects.presigned[0].key)
+	if up.uploadKey != vpUploadKey("png") || up.maxBytes != 10<<20 || up.subject != vpCode {
+		t.Errorf("reservation = key %q, cap %d, subject %q — want the declared type's temp key", up.uploadKey,
+			up.maxBytes, up.subject)
 	}
 	a := h.db.audits()
 	if len(a) != 1 || a[0][0] != maCanBoThu || a[0][2] != ActionVerificationPhotoRequested || a[0][3] != vpCode {
@@ -735,6 +736,51 @@ func TestVerificationPhoto_RequestWritesARecordsRowByBusinessCode(t *testing.T) 
 	}
 	if h.pets.locked != 1 {
 		t.Error("petition not read under the lock")
+	}
+}
+
+// One request: reserve, stream, re-encode, store — the trail is the request and the stored entries.
+func TestVerificationPhoto_UploadStoresTheReEncodeInOneRequest(t *testing.T) {
+	h := buildVerification(t)
+	raw := ppJPEG(t, 64, 32, 6)
+	body := uploadBodyOf(raw)
+	f, err := h.uc.Upload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: int64(len(raw))},
+		body, canBoThu(), khongQuyenHanChe)
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if f.Status != domain.StoredFileStored || f.ObjectKey != vpDestKey() || f.UploadedBy != maCanBoThu {
+		t.Errorf("stored = %+v", f)
+	}
+	if len(h.objects.uploads) != 1 || h.objects.uploads[0].key != vpUploadKey("jpg") || body.finished != 1 {
+		t.Errorf("uploads = %+v, finish = %d", h.objects.uploads, body.finished)
+	}
+	stored, err := h.objects.get(storage.BucketPrivate, vpDestKey(), "")
+	if err != nil || bytes.Contains(stored, []byte("GPS-16.05N")) {
+		t.Errorf("clean copy: %v", err)
+	}
+	a := h.db.audits()
+	if len(a) != 2 || a[0][2] != ActionVerificationPhotoRequested || a[1][2] != ActionVerificationPhotoStored ||
+		a[1][0] != maCanBoThu {
+		t.Errorf("trail = %v", a)
+	}
+}
+
+// A stream that fails closes the row with the staff verb and the officer's business code.
+func TestVerificationPhoto_UploadStreamFailureClosesTheRow(t *testing.T) {
+	h := buildVerification(t)
+	h.objects.uploadErr = errors.New("minio: connection reset")
+	raw := ppJPEG(t, 16, 16, 1)
+	if _, err := h.uc.Upload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: int64(len(raw))},
+		uploadBodyOf(raw), canBoThu(), khongQuyenHanChe); err == nil {
+		t.Fatal("no error")
+	}
+	if got := h.files.all(xaThu)[ppFileID].Status; got != domain.StoredFileFailed {
+		t.Errorf("row = %s, want failed", got)
+	}
+	a := h.db.audits()
+	if len(a) != 2 || a[1][2] != ActionVerificationPhotoExpired || a[1][0] != maCanBoThu || a[1][3] != vpCode {
+		t.Errorf("trail = %v", a)
 	}
 }
 
@@ -773,7 +819,7 @@ func TestVerificationPhoto_RequestRefusals(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := buildVerification(t)
 			code, restricted, actor := c.setup(h)
-			_, err := h.uc.RequestUpload(h.ctx, code, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+			_, err := h.uc.reserve(h.ctx, code, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
 				actor, restricted)
 			if err == nil || (c.want != nil && !errors.Is(err, c.want)) {
 				t.Fatalf("err = %v, want %v", err, c.want)
@@ -810,7 +856,7 @@ func TestVerificationPhoto_ReopenedWithFiveOldPhotosAcceptsANewSlot(t *testing.T
 	reopenedAt := ppNow.Add(-2 * time.Hour)
 	h.vpSeedPhotos("old", 5, domain.StoredFileStored, reopenedAt.Add(-time.Hour))
 	h.vpReopen(reopenedAt)
-	if _, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+	if _, err := h.uc.reserve(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
 		canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("five photos of the rejected round blocked the new round's first photo: %v", err)
 	}
@@ -836,7 +882,7 @@ func TestVerificationPhoto_FiveInTheCurrentRoundRefuse(t *testing.T) {
 			h.vpSeedPhotos("old", 5, domain.StoredFileStored, reopenedAt.Add(-time.Hour))
 			seed(h)
 			h.vpReopen(reopenedAt)
-			_, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+			_, err := h.uc.reserve(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
 				canBoThu(), khongQuyenHanChe)
 			if !errors.Is(err, ErrVerificationPhotoCountReached) {
 				t.Fatalf("err = %v, want ErrVerificationPhotoCountReached (409 photo_limit)", err)
@@ -855,7 +901,7 @@ func TestVerificationPhoto_ExpiredSlotOfTheRoundDoesNotCount(t *testing.T) {
 	h.vpSeedPhotos("new", 4, domain.StoredFileStored, reopenedAt.Add(time.Minute))
 	h.vpSeedPhotos("exp", 1, domain.StoredFilePending, reopenedAt.Add(2*time.Minute)) // long expired
 	h.vpReopen(reopenedAt)
-	if _, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+	if _, err := h.uc.reserve(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
 		canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("an abandoned form held a place: %v", err)
 	}
@@ -866,7 +912,7 @@ func TestVerificationPhoto_ReopenedWithoutTimelineRowRefuses(t *testing.T) {
 	p := h.pets.byCommune[xaThu][vpCode]
 	p.SoLanMoLai = 1 // the counter says reopened; the timeline has no reopen row
 	h.pets.byCommune[xaThu][vpCode] = p
-	_, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+	_, err := h.uc.reserve(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
 		canBoThu(), khongQuyenHanChe)
 	if !errors.Is(err, errReopenInstantMissing) {
 		t.Fatalf("err = %v, want errReopenInstantMissing — never a guess at the round", err)
@@ -892,7 +938,7 @@ func TestVerificationPhoto_CompletionRecheckCountsPerRound(t *testing.T) {
 			h.vpSeedPhotos("new", c.currentRound, domain.StoredFileStored, reopenedAt.Add(time.Minute))
 			h.vpReopen(reopenedAt)
 			h.seedPending(maCanBoThu, "jpg", ppJPEG(t, 16, 16, 1), ppNow)
-			f, err := h.uc.Complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
+			f, err := h.uc.complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
 			if c.wantStored {
 				if err != nil || f.Status != domain.StoredFileStored {
 					t.Fatalf("Complete = %+v, %v — want stored", f, err)
@@ -914,7 +960,7 @@ func TestVerificationPhoto_CompletionRecheckCountsPerRound(t *testing.T) {
 func TestVerificationPhoto_NeverReopenedCountsEveryPhoto(t *testing.T) {
 	h := buildVerification(t)
 	h.vpSeedPhotos("old", 5, domain.StoredFileStored, ppNow.Add(-48*time.Hour))
-	_, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+	_, err := h.uc.reserve(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
 		canBoThu(), khongQuyenHanChe)
 	if !errors.Is(err, ErrVerificationPhotoCountReached) {
 		t.Fatalf("err = %v, want ErrVerificationPhotoCountReached", err)
@@ -932,7 +978,7 @@ func TestVerificationPhoto_CountIsItsOwnPurpose(t *testing.T) {
 		h.files.all(xaThu)[id] = domain.StoredFile{ID: id, SubjectID: ppPetition, Purpose: domain.PurposePetitionPhoto,
 			Status: domain.StoredFileStored, UploadedBy: domain.CitizenLogActor}
 	}
-	if _, err := h.uc.RequestUpload(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
+	if _, err := h.uc.reserve(h.ctx, vpCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 1000},
 		canBoThu(), khongQuyenHanChe); err != nil {
 		t.Fatalf("five citizen photos blocked a staff photo: %v", err)
 	}
@@ -944,7 +990,7 @@ func TestVerificationPhoto_CompleteReencodesWithoutEXIFAndStoresOnlyTheCleanCopy
 	h := buildVerification(t)
 	raw := ppJPEG(t, 64, 32, 6)
 	h.seedPending(maCanBoThu, "jpg", raw, ppNow)
-	f, err := h.uc.Complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
+	f, err := h.uc.complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -971,7 +1017,7 @@ func TestVerificationPhoto_CompleteReencodesWithoutEXIFAndStoresOnlyTheCleanCopy
 func TestVerificationPhoto_AnotherOfficersUploadIs404(t *testing.T) {
 	h := buildVerification(t)
 	h.seedPending("CB-00999", "jpg", ppJPEG(t, 8, 8, 1), ppNow)
-	if _, err := h.uc.Complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe); !errors.Is(err, ErrVerificationPhotoNotFound) {
+	if _, err := h.uc.complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe); !errors.Is(err, ErrVerificationPhotoNotFound) {
 		t.Fatalf("err = %v", err)
 	}
 	if len(h.objects.produced) != 0 {
@@ -984,7 +1030,7 @@ func TestVerificationPhoto_LateRefusalUnderTheLockKeepsTheRecordsCopyAndSaysSo(t
 	h.seedPending(maCanBoThu, "jpg", ppJPEG(t, 16, 16, 1), ppNow)
 	closed := domain.DaDong
 	h.pets.statusAtLk = &closed // closed by another officer while the image was processed
-	_, err := h.uc.Complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
+	_, err := h.uc.complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
 	if !errors.Is(err, ErrVerificationPhotoWindowClosed) {
 		t.Fatalf("err = %v", err)
 	}
@@ -1006,7 +1052,7 @@ func TestVerificationPhoto_StoredAnswersAsStored(t *testing.T) {
 	row := h.files.all(xaThu)[ppFileID]
 	row.Status = domain.StoredFileStored
 	h.files.all(xaThu)[ppFileID] = row
-	f, err := h.uc.Complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
+	f, err := h.uc.complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenHanChe)
 	if err != nil || f.Status != domain.StoredFileStored || len(h.db.audits()) != 0 {
 		t.Fatalf("second completion: %+v %v (%d audits)", f, err, len(h.db.audits()))
 	}
@@ -1120,21 +1166,22 @@ func laDestKey() string {
 		strings.ToLower(ppFileID) + "/original.pdf"
 }
 
-func TestPetitionLogAttachment_RequestCompleteDownload(t *testing.T) {
+func TestPetitionLogAttachment_UploadThenDownload(t *testing.T) {
 	h := buildLogAttachments(t)
-	up, err := h.uc.RequestUpload(h.ctx, vpCode, AttachmentUploadRequest{FileName: "bien-ban.pdf",
-		ContentType: "application/pdf", Size: int64(len(pdfBytes))}, canBoThu(), khongQuyenGhiChu, khongQuyenHanChe)
-	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
-	}
-	if up.File.Purpose != domain.PurposePetitionLogAttachment || up.File.UploadedBy != maCanBoThu ||
-		up.File.RetentionClass != string(storage.ClassRecords) || up.File.ObjectKey != laDestKey() {
-		t.Errorf("pending row = %+v", up.File)
-	}
-	h.objects.put(storage.BucketTemp, "upload/"+laDestKey(), pdfBytes)
-	f, err := h.uc.Complete(h.ctx, vpCode, ppFileID, canBoThu(), khongQuyenGhiChu, khongQuyenHanChe)
+	body := uploadBodyOf(pdfBytes)
+	f, err := h.uc.Upload(h.ctx, vpCode, AttachmentUploadRequest{FileName: "bien-ban.pdf",
+		ContentType: "application/pdf", Size: int64(len(pdfBytes))}, body, canBoThu(), khongQuyenGhiChu,
+		khongQuyenHanChe)
 	if err != nil || f.Status != domain.StoredFileStored {
-		t.Fatalf("Complete: %+v %v", f, err)
+		t.Fatalf("Upload: %+v %v", f, err)
+	}
+	if f.Purpose != domain.PurposePetitionLogAttachment || f.UploadedBy != maCanBoThu || f.OriginalName != "bien-ban.pdf" ||
+		f.RetentionClass != string(storage.ClassRecords) || f.ObjectKey != laDestKey() {
+		t.Errorf("stored row = %+v", f)
+	}
+	if len(h.objects.uploads) != 1 || h.objects.uploads[0].key != "upload/"+laDestKey() ||
+		h.objects.uploads[0].maxBytes != 50<<20 || body.finished != 1 {
+		t.Errorf("uploads = %+v, finish = %d", h.objects.uploads, body.finished)
 	}
 	if got, _ := h.objects.get(storage.BucketPrivate, laDestKey(), ""); !bytes.Equal(got, pdfBytes) {
 		t.Error("the record was not promoted as uploaded")
@@ -1161,10 +1208,14 @@ func TestPetitionLogAttachment_TheNoteRuleDecides(t *testing.T) {
 	h := buildLogAttachments(t)
 	other := audit.Actor{ID: "CB-00999", Kind: "staff"}
 	req := AttachmentUploadRequest{FileName: "a.pdf", ContentType: "application/pdf", Size: 10}
-	if _, err := h.uc.RequestUpload(h.ctx, vpCode, req, other, khongQuyenGhiChu, khongQuyenHanChe); !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
+	body := uploadBodyOf(make([]byte, 10))
+	if _, err := h.uc.Upload(h.ctx, vpCode, req, body, other, khongQuyenGhiChu, khongQuyenHanChe); !errors.Is(err, ErrKhongPhaiNguoiDuocGiao) {
 		t.Fatalf("not the assignee, no commune-wide key: %v", err)
 	}
-	if _, err := h.uc.RequestUpload(h.ctx, vpCode, req, other, coQuyenGhiChu, khongQuyenHanChe); err != nil {
+	if body.reads != 0 || len(h.objects.uploads) != 0 {
+		t.Error("a refused upload read the body or wrote to the store")
+	}
+	if _, err := h.uc.reserve(h.ctx, vpCode, req, other, coQuyenGhiChu, khongQuyenHanChe); err != nil {
 		t.Fatalf("commune-wide key: %v", err)
 	}
 }

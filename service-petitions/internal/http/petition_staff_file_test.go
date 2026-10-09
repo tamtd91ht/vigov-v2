@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
@@ -25,10 +24,12 @@ import (
 
 // The staff files on a petition at the HTTP boundary (migration 0027).
 //
-//	PROVED HERE   every new staff route's four cases (rule 5, invariant 7): 401 no session · 403 a REAL
+//	PROVED HERE   every staff file route's four cases (rule 5, invariant 7): 401 no session · 403 a REAL
 //	              neighbouring key · 401 right key WRONG COMMUNE (this package's convention: authz compares
 //	              the commune before the key) · 2xx — the use case NOT reached in the first three · the
-//	              writes of verification photos need `feedback.resolve`, not `feedback.read` · the
+//	              uploads are ONE multipart request answered 201 with the stored file, the completion
+//	              routes are gone · the write of verification photos needs `feedback.resolve`, not
+//	              `feedback.read` · the
 //	              business code reaches the use case · `can-bo` without `feedback.restricted` is the
 //	              detail's 404 · a note carries its attachment ids down and its files back · the timeline
 //	              renders attachments as an array · the close gate is 409 `after_photo_required` with the
@@ -44,6 +45,7 @@ type verificationPhotosFake struct {
 	calls      int
 	seenTenant tenant.ID
 	actor      audit.Actor
+	req        app.PhotoUploadRequest
 	restricted bool
 	err        error
 }
@@ -63,27 +65,19 @@ func (f *verificationPhotosFake) admit(ctx context.Context, ma string, restricte
 	return nil
 }
 
-func (f *verificationPhotosFake) RequestUpload(ctx context.Context, ma string, _ app.PhotoUploadRequest,
-	actor audit.Actor, restricted app.QuyenXemHanChe) (app.PhotoUpload, error) {
-	f.actor = actor
-	if err := f.admit(ctx, ma, bool(restricted)); err != nil {
-		return app.PhotoUpload{}, err
-	}
-	return app.PhotoUpload{
-		File: domain.StoredFile{ID: staffFileIDHTTP, Status: domain.StoredFilePending, CreatedAt: photoAtHTTP},
-		Post: storage.PresignedPost{URL: "https://s3.example.gov.vn/vigov-test-temp",
-			Fields: map[string]string{"key": "upload/records/k/original.png"}, ExpiresAt: photoAtHTTP.Add(15 * time.Minute)},
-	}, nil
-}
+func (f *verificationPhotosFake) MaxUploadBytes(context.Context) (int64, error) { return 10 << 20, nil }
 
-func (f *verificationPhotosFake) Complete(ctx context.Context, ma, id string, actor audit.Actor,
-	restricted app.QuyenXemHanChe) (domain.StoredFile, error) {
-	f.actor = actor
+func (f *verificationPhotosFake) Upload(ctx context.Context, ma string, req app.PhotoUploadRequest,
+	body app.UploadBody, actor audit.Actor, restricted app.QuyenXemHanChe) (domain.StoredFile, error) {
+	f.actor, f.req = actor, req
 	if err := f.admit(ctx, ma, bool(restricted)); err != nil {
 		return domain.StoredFile{}, err
 	}
-	return domain.StoredFile{ID: id, MIMEType: storage.MIMEJPEG, SizeBytes: 400_000, Status: domain.StoredFileStored,
-		CreatedAt: photoAtHTTP}, nil
+	if _, err := drainUpload(body); err != nil {
+		return domain.StoredFile{}, err
+	}
+	return domain.StoredFile{ID: staffFileIDHTTP, MIMEType: storage.MIMEJPEG, SizeBytes: 400_000,
+		Status: domain.StoredFileStored, CreatedAt: photoAtHTTP}, nil
 }
 
 func (f *verificationPhotosFake) ListPhotos(ctx context.Context, ma string, mayReadRestricted bool,
@@ -103,6 +97,7 @@ type petitionLogAttachmentsFake struct {
 	actor      audit.Actor
 	noteRight  app.QuyenGhiChuCaXa
 	restricted bool
+	req        app.AttachmentUploadRequest
 	err        error
 	// removed records the (file id, reason) of the last Remove — citizen_report_figures_test.go.
 	removedID, removedReason string
@@ -129,27 +124,22 @@ func (f *petitionLogAttachmentsFake) admit(ctx context.Context, ma string, actor
 	return nil
 }
 
-func (f *petitionLogAttachmentsFake) RequestUpload(ctx context.Context, ma string, req app.AttachmentUploadRequest,
-	actor audit.Actor, noteRight app.QuyenGhiChuCaXa, restricted app.QuyenXemHanChe) (app.AttachmentUpload, error) {
-	f.noteRight = noteRight
-	if err := f.admit(ctx, ma, actor, restricted); err != nil {
-		return app.AttachmentUpload{}, err
-	}
-	return app.AttachmentUpload{
-		File: domain.StoredFile{ID: staffFileIDHTTP, OriginalName: req.FileName, Status: domain.StoredFilePending},
-		Post: storage.PresignedPost{URL: "https://s3.example.gov.vn/vigov-test-temp",
-			Fields: map[string]string{"key": "upload/records/k/original.pdf"}, ExpiresAt: photoAtHTTP},
-	}, nil
+func (f *petitionLogAttachmentsFake) MaxUploadBytes(context.Context) (int64, error) {
+	return 50 << 20, nil
 }
 
-func (f *petitionLogAttachmentsFake) Complete(ctx context.Context, ma, id string, actor audit.Actor,
-	noteRight app.QuyenGhiChuCaXa, restricted app.QuyenXemHanChe) (domain.StoredFile, error) {
-	f.noteRight = noteRight
+func (f *petitionLogAttachmentsFake) Upload(ctx context.Context, ma string, req app.AttachmentUploadRequest,
+	body app.UploadBody, actor audit.Actor, noteRight app.QuyenGhiChuCaXa, restricted app.QuyenXemHanChe) (
+	domain.StoredFile, error) {
+	f.noteRight, f.req = noteRight, req
 	if err := f.admit(ctx, ma, actor, restricted); err != nil {
 		return domain.StoredFile{}, err
 	}
-	return domain.StoredFile{ID: id, OriginalName: "bien-ban.pdf", MIMEType: "application/pdf", SizeBytes: 1024,
-		Status: domain.StoredFileStored}, nil
+	if _, err := drainUpload(body); err != nil {
+		return domain.StoredFile{}, err
+	}
+	return domain.StoredFile{ID: staffFileIDHTTP, OriginalName: req.FileName, MIMEType: "application/pdf",
+		SizeBytes: req.Size, Status: domain.StoredFileStored}, nil
 }
 
 func (f *petitionLogAttachmentsFake) DownloadLink(ctx context.Context, ma, id string, reader audit.Actor,
@@ -175,29 +165,21 @@ func (f *petitionLogAttachmentsFake) PetitionAttachmentsByLogEntries(_ context.C
 // citizen, per commune) and the same ListPhotos signature, as a SEPARATE instance per server.
 func newCitizenVerificationPhotosFake() *citizenPhotosFake { return newCitizenPhotosFake() }
 
-// --- rule 5, invariant 7: the six staff routes ---------------------------------------------------------
+// --- rule 5, invariant 7: the four staff file routes ---------------------------------------------------
 
 func verificationPhotosPath(code string) string { return duong(code) + "/verification-photos" }
 func logAttachmentsPath(code string) string     { return duong(code) + "/log-attachments" }
 
 func staffFileRoutes() []caTuyen {
-	upload := photoUploadIn{ContentType: storage.MIMEPNG, Size: 812_000}
-	file := taskAttachmentUploadIn{FileName: "bien-ban.pdf", ContentType: "application/pdf", Size: 1024}
 	return []caTuyen{
-		// The WRITES of the closing's evidence need the closing key; the register's read key must not do.
-		{"verification upload", http.MethodPost, verificationPhotosPath(maPhieuThuong), upload,
+		// The WRITE of the closing's evidence needs the closing key; the register's read key must not do.
+		{"verification upload", http.MethodPost, verificationPhotosPath(maPhieuThuong), photoFile(),
 			authz.Perm("feedback.resolve"), authz.Perm("feedback.read")},
-		{"verification completion", http.MethodPost,
-			verificationPhotosPath(maPhieuThuong) + "/" + staffFileIDHTTP + "/completion", nil,
-			authz.Perm("feedback.resolve"), authz.Perm("feedback.assign")},
 		{"verification list", http.MethodGet, verificationPhotosPath(maPhieuThuong), nil,
 			authz.Perm("feedback.read"), authz.Perm("feedback.resolve")},
 		// The note route's gate: `feedback.read`; a commune-wide working key alone does not open it.
-		{"log attachment upload", http.MethodPost, logAttachmentsPath(maPhieuThuong), file,
+		{"log attachment upload", http.MethodPost, logAttachmentsPath(maPhieuThuong), attachmentFile(),
 			authz.Perm("feedback.read"), authz.Perm("feedback.resolve")},
-		{"log attachment completion", http.MethodPost,
-			logAttachmentsPath(maPhieuThuong) + "/" + staffFileIDHTTP + "/completion", nil,
-			authz.Perm("feedback.read"), authz.Perm("feedback.classify")},
 		{"log attachment download", http.MethodGet,
 			logAttachmentsPath(maPhieuThuong) + "/" + staffFileIDHTTP + "/download", nil,
 			authz.Perm("feedback.read"), authz.Perm("feedback.assign")},
@@ -246,7 +228,7 @@ func TestStaffFileRoutes_RightPermissionWrongCommune401(t *testing.T) {
 }
 
 func TestStaffFileRoutes_RightPermissionRightCommune2xx(t *testing.T) {
-	want := []int{http.StatusCreated, http.StatusOK, http.StatusOK, http.StatusCreated, http.StatusOK, http.StatusOK}
+	want := []int{http.StatusCreated, http.StatusOK, http.StatusCreated, http.StatusOK}
 	for i, ca := range staffFileRoutes() {
 		t.Run(ca.ten, func(t *testing.T) {
 			m := dungMayChu(t)
@@ -261,10 +243,8 @@ func TestStaffFileRoutes_RightPermissionRightCommune2xx(t *testing.T) {
 					t.Errorf("actor = %+v, want the BUSINESS CODE %q (rule 6, invariant 8)", a, maCanBo)
 				}
 			}
-			if ca.method == http.MethodGet || want[i] == http.StatusCreated {
-				if w.Header().Get("Cache-Control") != "no-store" {
-					t.Error("a reply carrying a bearer credential is cacheable")
-				}
+			if ca.method == http.MethodGet && w.Header().Get("Cache-Control") != "no-store" {
+				t.Error("a reply carrying a bearer credential is cacheable")
 			}
 			if strings.Contains(w.Body.String(), maPhieuThuong) {
 				t.Errorf("reply echoes the lookup code: %s", w.Body.String())
@@ -312,12 +292,42 @@ func TestPetitionLogAttachment_NoteRightFact(t *testing.T) {
 			}
 			m.capQuyen(t, keys...)
 			w := m.goiGhiNV(t, http.MethodPost, hostA, logAttachmentsPath(maPhieuThuong), canBoCuaXa(xaA),
-				taskAttachmentUploadIn{FileName: "bien-ban.pdf", ContentType: "application/pdf", Size: 1024})
+				attachmentFile())
 			doiMa(t, w, http.StatusCreated)
 			if m.petitionLogFiles.noteRight != c.want {
 				t.Errorf("note right handed down = %v, want %v", m.petitionLogFiles.noteRight, c.want)
 			}
 		})
+	}
+}
+
+// The uploads answer the STORED file, take the declared fields, and the completion routes are gone.
+func TestStaffFileUploads_StoredReplyAndDeclaredFields(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"), authz.Perm("feedback.resolve"))
+	w := m.goiGhiNV(t, http.MethodPost, hostA, logAttachmentsPath(maPhieuThuong), canBoCuaXa(xaA), attachmentFile())
+	doiMa(t, w, http.StatusCreated)
+	var f taskAttachmentOut
+	if err := json.Unmarshal(w.Body.Bytes(), &f); err != nil || f.ID != staffFileIDHTTP || f.Status != "stored" ||
+		f.FileName != "Biên bản nghiệm thu.pdf" {
+		t.Errorf("reply = %s", w.Body.String())
+	}
+	if m.petitionLogFiles.req != (app.AttachmentUploadRequest{FileName: "Biên bản nghiệm thu.pdf",
+		ContentType: storage.MIMEPDF, Size: 4096}) {
+		t.Errorf("declared = %+v", m.petitionLogFiles.req)
+	}
+	w = m.goiGhiNV(t, http.MethodPost, hostA, verificationPhotosPath(maPhieuThuong), canBoCuaXa(xaA), photoFile())
+	doiMa(t, w, http.StatusCreated)
+	var p photoOut
+	if err := json.Unmarshal(w.Body.Bytes(), &p); err != nil || p.Status != "stored" ||
+		m.verificationPhotos.req != (app.PhotoUploadRequest{ContentType: storage.MIMEPNG, Size: 2048}) {
+		t.Errorf("reply = %s, declared = %+v", w.Body.String(), m.verificationPhotos.req)
+	}
+	for _, path := range []string{verificationPhotosPath(maPhieuThuong), logAttachmentsPath(maPhieuThuong)} {
+		w := m.goiGhiNV(t, http.MethodPost, hostA, path+"/"+staffFileIDHTTP+"/completion", canBoCuaXa(xaA), nil)
+		if w.Code < 400 {
+			t.Errorf("%s/…/completion answered %d — the route must be gone", path, w.Code)
+		}
 	}
 }
 
@@ -409,8 +419,10 @@ func TestVerificationPhotoRefusalMapping(t *testing.T) {
 		{app.ErrVerificationPhotoCountReached, http.StatusConflict, "photo_limit"},
 		{app.ErrVerificationPhotoNotFound, http.StatusNotFound, "not_found"},
 		{app.ErrPhotoTypeNotAllowed, http.StatusBadRequest, "invalid_request"},
+		{app.ErrPhotoTooLarge, http.StatusRequestEntityTooLarge, "file_too_large"},
 		{&app.AttachmentRejection{Reason: app.RejectMalware}, http.StatusUnprocessableEntity, "photo_rejected"},
-		{app.ErrUploadNotReceived, http.StatusConflict, "upload_not_received"},
+		{fmt.Errorf("tệp tải lên x: %w", httpx.ErrUploadTimeout), http.StatusRequestTimeout, "upload_timeout"},
+		{app.ErrUploadNotReceived, http.StatusInternalServerError, "internal"},
 		{app.ErrUploadNotConfigured, http.StatusServiceUnavailable, "storage_not_configured"},
 		{app.ErrScanUnavailable, http.StatusServiceUnavailable, "malware_scan_unavailable"},
 		{errors.New("ảnh sau xử lý: x cho xã " + string(xaA) + ": db down"), http.StatusInternalServerError, "internal"},
@@ -419,8 +431,8 @@ func TestVerificationPhotoRefusalMapping(t *testing.T) {
 			m := dungMayChu(t)
 			m.capQuyen(t, authz.Perm("feedback.resolve"))
 			m.verificationPhotos.err = c.err
-			w := m.goiGhiNV(t, http.MethodPost, hostA,
-				verificationPhotosPath(maPhieuThuong)+"/"+staffFileIDHTTP+"/completion", canBoCuaXa(xaA), nil)
+			w := m.goiGhiNV(t, http.MethodPost, hostA, verificationPhotosPath(maPhieuThuong), canBoCuaXa(xaA),
+				photoFile())
 			doiMa(t, w, c.status)
 			if loiTra(t, w).Code != c.code {
 				t.Errorf("code = %q, want %q", loiTra(t, w).Code, c.code)
@@ -442,14 +454,16 @@ func TestPetitionLogAttachmentRefusalMapping(t *testing.T) {
 		{app.ErrKhongPhaiNguoiDuocGiao, http.StatusForbidden, "forbidden"},
 		{app.ErrPetitionLogAttachmentCountReached, http.StatusConflict, "attachment_limit"},
 		{&app.AttachmentRejection{Reason: app.RejectTypeMismatch}, http.StatusUnprocessableEntity, "attachment_rejected"},
+		{app.ErrAttachmentTooLarge, http.StatusRequestEntityTooLarge, "file_too_large"},
+		{fmt.Errorf("tệp tải lên x: %w", httpx.ErrUploadMalformed), http.StatusBadRequest, "invalid_upload"},
 		{app.ErrUploadLimitsUnavailable, http.StatusServiceUnavailable, "upload_limits_unavailable"},
 		{errors.New("tệp: db down"), http.StatusInternalServerError, "internal"},
 	} {
 		t.Run(c.code, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.petitionLogFiles.err = c.err
-			w := m.goiGhiNV(t, http.MethodPost, hostA,
-				logAttachmentsPath(maPhieuThuong)+"/"+staffFileIDHTTP+"/completion", canBoCuaXa(xaA), nil)
+			w := m.goiGhiNV(t, http.MethodPost, hostA, logAttachmentsPath(maPhieuThuong), canBoCuaXa(xaA),
+				attachmentFile())
 			doiMa(t, w, c.status)
 			if loiTra(t, w).Code != c.code {
 				t.Errorf("code = %q, want %q", loiTra(t, w).Code, c.code)
@@ -473,7 +487,7 @@ func buildVerificationPhotoServer(t *testing.T) (*photoServer, *citizenPhotosFak
 	RegisterCongDan(mux, DepsCongDan{
 		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(),
 		CitizenFields: newFieldCatalogueFake(), Photos: scene, VerificationPhotos: after,
-		PhotoLimiter: photoLimiterThu(), Log: log,
+		PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(), Log: log,
 	})
 	var h http.Handler = mux
 	h = idem.Middleware(khoIdemMoi(), log)(h)

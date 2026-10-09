@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/malwarescan"
 	"github.com/vihat/vigov/core/platformclient/uploadpolicy"
 	"github.com/vihat/vigov/core/storage"
@@ -36,12 +37,14 @@ import (
 // stores, MinIO, clamd and the platform policy, and a recording SQL driver for the transaction and the
 // audit INSERT it carries.
 //
-//	PROVED HERE   request: only the petition's own citizen, only while `da-tiep-nhan`, at most the
-//	              policy's count INCLUDING live pending slots, under the petition lock · the pending row
-//	              is citizen-media / private / `cong-dan` / fixed name, its key `.jpg` whatever was
-//	              declared, the form signed for the declared type's temp key · row + trail in ONE
-//	              committed transaction · HEIC refused even when a policy lists it · no policy count is
-//	              not configured. completion: the raw upload is scanned, decoded, oriented, re-encoded as
+//	PROVED HERE   upload (one request, ADR 0052 §Sửa đổi 09/10/2026): only the petition's own citizen,
+//	              only while `da-tiep-nhan`, at most the policy's count INCLUDING live pending rows, under
+//	              the petition lock · the pending row is citizen-media / private / `cong-dan` / fixed name,
+//	              its key `.jpg` whatever was declared, the bytes streamed to the declared type's temp key
+//	              under the policy's cap · row + trail in ONE committed transaction · a refusal reads no
+//	              byte of the body · HEIC refused even when a policy lists it · no policy count is not
+//	              configured · a stream that fails, an envelope broken after the file, and a completion
+//	              that cannot decide all close the row `failed` with a trail. completion: the raw upload is scanned, decoded, oriented, re-encoded as
 //	              JPEG with NO EXIF, written to private, and the temp purged — the raw bytes never reach
 //	              private · PNG/WebP come out JPEG · malware, type mismatch, undecodable are rejected with
 //	              the trail · scanner down writes nothing · the petition moving on under the lock rejects
@@ -488,7 +491,7 @@ func ppJPEG(t *testing.T, w, h, orientation int) []byte {
 	return append(out, j[2:]...)
 }
 
-// seedPendingPhoto puts the row RequestUpload would have written, and the phone's upload in temp.
+// seedPendingPhoto puts the row reserve would have written, and the streamed upload in temp.
 func (h *ppHarness) seedPendingPhoto(ext string, data []byte, created time.Time) {
 	h.files.all(xaThu)[ppFileID] = domain.StoredFile{
 		ID: ppFileID, Bucket: domain.StoredFileBucketPrivate, ObjectKey: ppDestKey(),
@@ -510,49 +513,73 @@ func (h *ppHarness) addPhoto(id string, status domain.StoredFileStatus, created 
 	}
 }
 
-// --- a. request -------------------------------------------------------------------------------------
+// --- the upload: reserve · receive · complete ---------------------------------------------------------
 
-func TestPhotoRequestIssuesCitizenMediaRowFormAndTrailInOneTransaction(t *testing.T) {
+func TestPhotoUploadStoresTheCleanReEncodeInOneRequest(t *testing.T) {
 	h := buildPhotos(t)
-	up, err := h.uc.RequestUpload(h.ctx, ppCode, PhotoUploadRequest{ContentType: storage.MIMEPNG, Size: 812_000},
-		ppCitizenActor())
+	raw := ppJPEG(t, 400, 300, 6)
+	body := uploadBodyOf(raw)
+	f, err := h.uc.Upload(h.ctx, ppCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: int64(len(raw))},
+		body, ppCitizenActor())
 	if err != nil {
-		t.Fatalf("RequestUpload: %v", err)
+		t.Fatalf("Upload: %v", err)
 	}
-	f := up.File
-	if f.ObjectKey != ppDestKey() || f.RetentionClass != "citizen-media" || f.Bucket != domain.StoredFileBucketPrivate ||
-		f.Purpose != "petition-photo" || f.SubjectType != "petition" || f.SubjectID != ppPetition ||
-		f.UploadedBy != domain.CitizenLogActor || f.OriginalName != domain.PetitionPhotoName ||
-		f.Status != domain.StoredFilePending {
-		t.Errorf("pending row = %+v", f)
+	if f.ID != ppFileID || f.Status != domain.StoredFileStored || f.MIMEType != storage.MIMEJPEG ||
+		f.ObjectKey != ppDestKey() || f.RetentionClass != "citizen-media" || f.UploadedBy != domain.CitizenLogActor ||
+		f.OriginalName != domain.PetitionPhotoName {
+		t.Errorf("stored file = %+v", f)
 	}
-	if h.pets.locked != 1 {
-		t.Errorf("the petition was read with %d locking reads, want 1", h.pets.locked)
+	// The bytes went to the DECLARED type's temp key, under the policy's cap, and the envelope was
+	// confirmed to end after the file before anything was recorded as stored.
+	if len(h.objects.uploads) != 1 {
+		t.Fatalf("%d uploads written", len(h.objects.uploads))
 	}
-	// The form is for the DECLARED type's temp key; the destination is .jpg whatever was declared.
-	if len(h.objects.presigned) != 1 {
-		t.Fatalf("%d forms signed", len(h.objects.presigned))
+	if u := h.objects.uploads[0]; u.key != ppUploadKey("jpg") || u.size != int64(len(raw)) ||
+		u.maxBytes != 10<<20 || u.contentType != storage.MIMEJPEG {
+		t.Errorf("upload = %+v", u)
 	}
-	p := h.objects.presigned[0]
-	if p.key != ppUploadKey("png") || p.contentType != storage.MIMEPNG || p.maxBytes != 10<<20 || p.ttl != storage.UploadTTL {
-		t.Errorf("form = %+v", p)
+	if body.finished != 1 {
+		t.Errorf("Finish called %d times, want 1", body.finished)
 	}
-	if h.db.begun != 1 {
-		t.Fatalf("%d transactions, want 1", h.db.begun)
+	if !bytes.Equal(h.scanner.scanned, raw) {
+		t.Error("the scan did not cover the streamed bytes")
+	}
+	if h.objects.has(storage.BucketTemp, ppUploadKey("jpg")) {
+		t.Error("the raw upload is still in temp")
+	}
+	// Reserve and completion each lock the petition once.
+	if h.pets.locked != 2 {
+		t.Errorf("the petition was read with %d locking reads, want 2", h.pets.locked)
 	}
 	a := h.db.audits()
-	if len(a) != 1 || a[0][0] != ppCitizen || a[0][1] != "citizen" || a[0][2] != ActionPetitionPhotoRequested ||
-		a[0][3] != ppCode {
+	if len(a) != 2 || a[0][2] != ActionPetitionPhotoRequested || a[1][2] != ActionPetitionPhotoStored ||
+		a[0][0] != ppCitizen || a[0][1] != "citizen" || a[0][3] != ppCode {
 		t.Fatalf("committed trail = %v", a)
 	}
-	for _, want := range []string{`"tep_id":"` + ppFileID + `"`, `"loai_khai_bao":"image/png"`, `"kich_thuoc_khai":812000`} {
+	for _, want := range []string{`"tep_id":"` + ppFileID + `"`, `"loai_khai_bao":"image/jpeg"`,
+		`"kich_thuoc_khai":` + fmt.Sprint(len(raw))} {
 		if !strings.Contains(a[0][4], want) {
 			t.Errorf("delta lacks %s: %s", want, a[0][4])
 		}
 	}
 }
 
-func TestPhotoRequestRefusalsWriteNothing(t *testing.T) {
+// A PNG declared PNG is streamed to the `.png` temp key and stored as the `.jpg` re-encode.
+func TestPhotoUploadDeclaredTypeKeysTheTempObject(t *testing.T) {
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, image.NewNRGBA(image.Rect(0, 0, 40, 30)))
+	h := buildPhotos(t)
+	f, err := h.uc.Upload(h.ctx, ppCode, PhotoUploadRequest{ContentType: storage.MIMEPNG, Size: int64(buf.Len())},
+		uploadBodyOf(buf.Bytes()), ppCitizenActor())
+	if err != nil {
+		t.Fatalf("Upload: %v", err)
+	}
+	if h.objects.uploads[0].key != ppUploadKey("png") || f.ObjectKey != ppDestKey() || f.MIMEType != storage.MIMEJPEG {
+		t.Errorf("temp key %q, stored %+v", h.objects.uploads[0].key, f)
+	}
+}
+
+func TestPhotoUploadRefusalsWriteNothingAndReadNoByte(t *testing.T) {
 	moved := domain.DangPhanLoai
 	for _, c := range []struct {
 		name  string
@@ -590,6 +617,8 @@ func TestPhotoRequestRefusalsWriteNothing(t *testing.T) {
 			}},
 		{name: "video", want: ErrPhotoTypeNotAllowed,
 			mod: func(_ *ppHarness, r *PhotoUploadRequest, _ *string, _ *audit.Actor) { r.ContentType = storage.MIMEMP4 }},
+		{name: "no declared type", want: ErrPhotoTypeNotAllowed,
+			mod: func(_ *ppHarness, r *PhotoUploadRequest, _ *string, _ *audit.Actor) { r.ContentType = "" }},
 		{name: "over the policy size", want: ErrPhotoTooLarge,
 			mod: func(_ *ppHarness, r *PhotoUploadRequest, _ *string, _ *audit.Actor) { r.Size = 10<<20 + 1 }},
 		{name: "size zero", want: ErrPhotoSizeInvalid,
@@ -620,15 +649,19 @@ func TestPhotoRequestRefusalsWriteNothing(t *testing.T) {
 			h := buildPhotos(t)
 			req, code, actor := PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 400_000}, ppCode, ppCitizenActor()
 			c.mod(h, &req, &code, &actor)
-			_, err := h.uc.RequestUpload(h.ctx, code, req, actor)
+			body := uploadBodyOf(make([]byte, 400_000))
+			_, err := h.uc.Upload(h.ctx, code, req, body, actor)
 			if c.check != nil {
 				c.check(t, err)
 			} else if !errors.Is(err, c.want) {
 				t.Fatalf("err = %v, want %v", err, c.want)
 			}
-			if len(h.db.committed) != 0 || len(h.files.inserted) != 0 || len(h.objects.presigned) != 0 {
-				t.Errorf("a refusal wrote: %d committed, %d rows, %d forms", len(h.db.committed), len(h.files.inserted),
-					len(h.objects.presigned))
+			if len(h.db.committed) != 0 || len(h.files.inserted) != 0 || len(h.objects.uploads) != 0 {
+				t.Errorf("a refusal wrote: %d committed, %d rows, %d uploads", len(h.db.committed),
+					len(h.files.inserted), len(h.objects.uploads))
+			}
+			if body.reads != 0 || body.finished != 0 {
+				t.Errorf("a refusal read the body (%d reads, %d finish)", body.reads, body.finished)
 			}
 			if !c.inTx && h.db.begun != 0 {
 				t.Errorf("a refusal before any data opened %d transactions", h.db.begun)
@@ -640,6 +673,127 @@ func TestPhotoRequestRefusalsWriteNothing(t *testing.T) {
 	}
 }
 
+// The stream fails three ways — the store dies mid-write, the client's body breaks (a core/httpx
+// sentinel, kept findable through the wrapping), the envelope goes wrong AFTER the file — and each closes
+// the reserved row `failed` with a trail, so it stops holding one of the five at once.
+func TestPhotoUploadStreamFailureClosesTheRow(t *testing.T) {
+	raw := ppJPEG(t, 20, 10, 1)
+	for _, c := range []struct {
+		name     string
+		mod      func(*ppHarness, *uploadBodyFake)
+		is       error
+		tempGone bool // a temp object was written and must be purged
+	}{
+		{"store fails mid-write", func(h *ppHarness, _ *uploadBodyFake) {
+			h.objects.uploadErr = errors.New("minio: connection reset")
+		}, nil, false},
+		{"client times out", func(_ *ppHarness, b *uploadBodyFake) {
+			b.readErr = fmt.Errorf("%w: read deadline", httpx.ErrUploadTimeout)
+		}, httpx.ErrUploadTimeout, false},
+		{"a part after the file", func(_ *ppHarness, b *uploadBodyFake) {
+			b.finishErr = fmt.Errorf("%w: a part after the file", httpx.ErrUploadMalformed)
+		}, httpx.ErrUploadMalformed, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := buildPhotos(t)
+			body := uploadBodyOf(raw)
+			c.mod(h, body)
+			_, err := h.uc.Upload(h.ctx, ppCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG,
+				Size: int64(len(raw))}, body, ppCitizenActor())
+			if err == nil {
+				t.Fatal("no error")
+			}
+			if c.is != nil && !errors.Is(err, c.is) {
+				t.Errorf("err = %v, want it to match %v", err, c.is)
+			}
+			if !strings.Contains(err.Error(), ppFileID) {
+				t.Errorf("error does not name the file id for the log: %v", err)
+			}
+			if got := h.files.all(xaThu)[ppFileID].Status; got != domain.StoredFileFailed {
+				t.Errorf("row = %s, want failed", got)
+			}
+			if h.scanner.calls != 0 || len(h.objects.produced) != 0 {
+				t.Error("a failed upload was scanned or stored")
+			}
+			if h.objects.has(storage.BucketTemp, ppUploadKey("jpg")) {
+				t.Error("a temp object of a failed upload was left behind")
+			}
+			if c.tempGone && (len(h.objects.purged) != 1 || h.objects.purged[0] != ppUploadKey("jpg")) {
+				t.Errorf("purged = %v, want the temp key", h.objects.purged)
+			}
+			a := h.db.audits()
+			if len(a) != 2 || a[0][2] != ActionPetitionPhotoRequested || a[1][2] != ActionPetitionPhotoExpired ||
+				!strings.Contains(a[1][4], `"ly_do":"`+UploadFailedNotReceived+`"`) || a[1][3] != ppCode {
+				t.Errorf("trail = %v", a)
+			}
+			// The closed row no longer counts: a sixth photo after five stored + this one is not refused for it.
+			n, _ := h.files.CountForSubject(h.ctx, "", ppPetition, "", ppNow.Add(-storage.UploadTTL))
+			if n != 0 {
+				t.Errorf("the failed row still counts (%d)", n)
+			}
+		})
+	}
+}
+
+// A completion that cannot decide (scanner down) has no retry route any more: the row is closed and the
+// temp upload removed. A DECIDED refusal (malware) keeps its own outcome — `rejected`, never `failed`.
+func TestPhotoUploadCompletionOutcomes(t *testing.T) {
+	raw := ppJPEG(t, 20, 10, 1)
+	t.Run("scanner down: 503 class, row failed, temp purged", func(t *testing.T) {
+		h := buildPhotos(t)
+		h.scanner.err = errors.New("clamd timeout")
+		_, err := h.uc.Upload(h.ctx, ppCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: int64(len(raw))},
+			uploadBodyOf(raw), ppCitizenActor())
+		if !errors.Is(err, ErrScanUnavailable) {
+			t.Fatalf("err = %v, want ErrScanUnavailable", err)
+		}
+		if got := h.files.all(xaThu)[ppFileID].Status; got != domain.StoredFileFailed {
+			t.Errorf("row = %s, want failed", got)
+		}
+		if h.objects.has(storage.BucketTemp, ppUploadKey("jpg")) {
+			t.Error("temp upload left behind")
+		}
+		a := h.db.audits()
+		if len(a) != 2 || a[1][2] != ActionPetitionPhotoExpired ||
+			!strings.Contains(a[1][4], `"ly_do":"`+UploadFailedNotCompleted+`"`) {
+			t.Errorf("trail = %v", a)
+		}
+	})
+	t.Run("malware: rejected with its own trail", func(t *testing.T) {
+		h := buildPhotos(t)
+		h.scanner.res = malwarescan.Result{Clean: false, Signature: "Eicar-Test-Signature"}
+		_, err := h.uc.Upload(h.ctx, ppCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: int64(len(raw))},
+			uploadBodyOf(raw), ppCitizenActor())
+		var rej *AttachmentRejection
+		if !errors.As(err, &rej) || rej.Reason != RejectMalware {
+			t.Fatalf("err = %v", err)
+		}
+		if got := h.files.all(xaThu)[ppFileID].Status; got != domain.StoredFileRejected {
+			t.Errorf("row = %s, want rejected", got)
+		}
+		a := h.db.audits()
+		if len(a) != 2 || a[1][2] != ActionPetitionPhotoRejected {
+			t.Errorf("trail = %v", a)
+		}
+	})
+}
+
+func TestPhotoMaxUploadBytesIsThePolicys(t *testing.T) {
+	h := buildPhotos(t)
+	if n, err := h.uc.MaxUploadBytes(h.ctx); err != nil || n != 10<<20 {
+		t.Errorf("MaxUploadBytes = %d, %v", n, err)
+	}
+	h.policy.ok = false
+	if _, err := h.uc.MaxUploadBytes(h.ctx); !errors.Is(err, ErrUploadNotConfigured) {
+		t.Errorf("no policy: %v", err)
+	}
+	h = buildPhotos(t)
+	h.uc.scanner = nil
+	if _, err := h.uc.MaxUploadBytes(h.ctx); !errors.Is(err, ErrUploadNotConfigured) {
+		t.Errorf("no scanner: %v", err)
+	}
+}
+
 // --- c. complete ------------------------------------------------------------------------------------
 
 func TestPhotoCompleteStoresOnlyTheCleanReEncode(t *testing.T) {
@@ -647,7 +801,7 @@ func TestPhotoCompleteStoresOnlyTheCleanReEncode(t *testing.T) {
 	raw := ppJPEG(t, 4000, 3000, 6) // stored landscape, viewed portrait, carrying EXIF + GPS
 	h.seedPendingPhoto("jpg", raw, ppNow.Add(-2*time.Minute))
 
-	f, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+	f, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -706,7 +860,7 @@ func TestPhotoCompletePNGAndWebPComeOutJPEG(t *testing.T) {
 		t.Run(c.ext, func(t *testing.T) {
 			h := buildPhotos(t)
 			h.seedPendingPhoto(c.ext, c.data, ppNow.Add(-time.Minute))
-			f, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+			f, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 			if err != nil {
 				t.Fatalf("Complete: %v", err)
 			}
@@ -740,7 +894,7 @@ func TestPhotoCompleteRejectionsPurgeTempAndAudit(t *testing.T) {
 				h.scanner.res = malwarescan.Result{Clean: false, Signature: "Eicar-Test-Signature"}
 			}
 			h.seedPendingPhoto(c.ext, c.data(t), ppNow.Add(-time.Minute))
-			_, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+			_, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 			var rej *AttachmentRejection
 			if !errors.As(err, &rej) || rej.Reason != c.reason {
 				t.Fatalf("err = %v, want rejection %s", err, c.reason)
@@ -769,7 +923,7 @@ func TestPhotoCompleteRetryableFailuresWriteNothing(t *testing.T) {
 			h := buildPhotos(t)
 			h.seedPendingPhoto("jpg", ppJPEG(t, 20, 10, 1), ppNow.Add(-time.Minute))
 			mod(h)
-			if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); err == nil {
+			if _, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); err == nil {
 				t.Fatal("no error")
 			}
 			if len(h.db.committed) != 0 || h.files.all(xaThu)[ppFileID].Status != domain.StoredFilePending {
@@ -786,7 +940,7 @@ func TestPhotoCompleteScannerDownIs503Class(t *testing.T) {
 	h := buildPhotos(t)
 	h.seedPendingPhoto("jpg", ppJPEG(t, 20, 10, 1), ppNow.Add(-time.Minute))
 	h.scanner.err = errors.New("clamd timeout")
-	if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrScanUnavailable) {
+	if _, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrScanUnavailable) {
 		t.Fatalf("err = %v, want ErrScanUnavailable", err)
 	}
 }
@@ -796,7 +950,7 @@ func TestPhotoCompletePetitionMovedBeforeOrDuring(t *testing.T) {
 		h := buildPhotos(t)
 		h.pets.byCommune[xaThu][ppCode] = ppPetitionRow(domain.DangPhanLoai)
 		h.seedPendingPhoto("jpg", ppJPEG(t, 20, 10, 1), ppNow.Add(-time.Minute))
-		if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoWindowClosed) {
+		if _, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoWindowClosed) {
 			t.Fatalf("err = %v", err)
 		}
 		if h.scanner.calls != 0 || len(h.db.committed) != 0 {
@@ -808,7 +962,7 @@ func TestPhotoCompletePetitionMovedBeforeOrDuring(t *testing.T) {
 		moved := domain.DangPhanLoai
 		h.pets.statusAtLk = &moved
 		h.seedPendingPhoto("jpg", ppJPEG(t, 20, 10, 1), ppNow.Add(-time.Minute))
-		if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoWindowClosed) {
+		if _, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoWindowClosed) {
 			t.Fatalf("err = %v", err)
 		}
 		if h.objects.has(storage.BucketPrivate, ppDestKey()) {
@@ -830,7 +984,7 @@ func TestPhotoCompleteCountReachedIsRejected(t *testing.T) {
 		h.addPhoto(fmt.Sprintf("01JPHOTOOLD00000000000000%d", i), domain.StoredFileStored, ppNow.Add(-time.Hour))
 	}
 	h.seedPendingPhoto("jpg", ppJPEG(t, 20, 10, 1), ppNow.Add(-time.Minute))
-	_, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+	_, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 	var rej *AttachmentRejection
 	if !errors.As(err, &rej) || rej.Reason != RejectCountReached {
 		t.Fatalf("err = %v", err)
@@ -844,7 +998,7 @@ func TestPhotoCompleteOnlyOwnPetitionsPhoto(t *testing.T) {
 	t.Run("another citizen's code", func(t *testing.T) {
 		h := buildPhotos(t)
 		h.seedPendingPhoto("jpg", ppJPEG(t, 20, 10, 1), ppNow.Add(-time.Minute))
-		_, err := h.uc.Complete(h.ctx, ppCode, ppFileID, audit.Actor{ID: ppOther, Kind: "citizen"})
+		_, err := h.uc.complete(h.ctx, ppCode, ppFileID, audit.Actor{ID: ppOther, Kind: "citizen"})
 		if !errors.Is(err, petstore.ErrPhieuKhongTonTai) {
 			t.Fatalf("err = %v", err)
 		}
@@ -855,7 +1009,7 @@ func TestPhotoCompleteOnlyOwnPetitionsPhoto(t *testing.T) {
 		sf := h.files.all(xaThu)[ppFileID]
 		sf.SubjectID = "pa-other"
 		h.files.all(xaThu)[ppFileID] = sf
-		if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoNotFound) {
+		if _, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoNotFound) {
 			t.Fatalf("err = %v", err)
 		}
 	})
@@ -863,7 +1017,7 @@ func TestPhotoCompleteOnlyOwnPetitionsPhoto(t *testing.T) {
 		h := buildPhotos(t)
 		h.files.all(xaThu)[ppFileID] = domain.StoredFile{ID: ppFileID, SubjectType: "task", SubjectID: ppPetition,
 			Purpose: "task-attachment", UploadedBy: "CB-00123", Status: domain.StoredFilePending}
-		if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoNotFound) {
+		if _, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrPhotoNotFound) {
 			t.Fatalf("err = %v", err)
 		}
 	})
@@ -873,7 +1027,7 @@ func TestPhotoCompleteAlreadyStoredAndNotYetAndExpired(t *testing.T) {
 	t.Run("stored answers as stored", func(t *testing.T) {
 		h := buildPhotos(t)
 		h.addPhoto(ppFileID, domain.StoredFileStored, ppNow.Add(-time.Hour))
-		f, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		f, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 		if err != nil || f.Status != domain.StoredFileStored || h.db.begun != 0 {
 			t.Fatalf("f=%+v err=%v tx=%d", f, err, h.db.begun)
 		}
@@ -881,7 +1035,7 @@ func TestPhotoCompleteAlreadyStoredAndNotYetAndExpired(t *testing.T) {
 	t.Run("nothing uploaded yet", func(t *testing.T) {
 		h := buildPhotos(t)
 		h.seedPendingPhoto("jpg", nil, ppNow.Add(-time.Minute))
-		_, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		_, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 		if !errors.Is(err, ErrUploadNotReceived) {
 			t.Fatalf("err = %v", err)
 		}
@@ -899,7 +1053,7 @@ func TestPhotoCompleteAlreadyStoredAndNotYetAndExpired(t *testing.T) {
 	t.Run("form expired", func(t *testing.T) {
 		h := buildPhotos(t)
 		h.seedPendingPhoto("jpg", nil, ppNow.Add(-time.Hour))
-		if _, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrUploadExpired) {
+		if _, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, ErrUploadExpired) {
 			t.Fatalf("err = %v", err)
 		}
 		if h.files.all(xaThu)[ppFileID].Status != domain.StoredFileFailed {
@@ -914,7 +1068,7 @@ func TestPhotoCompleteAlreadyStoredAndNotYetAndExpired(t *testing.T) {
 		h.seedPendingPhoto("jpg", nil, ppNow.Add(-time.Minute))
 		clean := ppJPEG(t, 20, 10, 1)
 		h.objects.put(storage.BucketPrivate, ppDestKey(), clean)
-		f, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		f, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 		if err != nil || f.Status != domain.StoredFileStored {
 			t.Fatalf("f=%+v err=%v", f, err)
 		}
@@ -1083,7 +1237,7 @@ func TestPhotoConcurrentCompletionsOfOneFileReadTheBytesOnce(t *testing.T) {
 	const followers = 5
 	results := make(chan result, followers+1)
 	run := func() {
-		f, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		f, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 		results <- result{f, err}
 	}
 	go run()
@@ -1118,13 +1272,13 @@ func TestPhotoWaitingCompletionTakesOverWhenTheFirstGivesUp(t *testing.T) {
 	firstCtx, cancel := context.WithCancel(h.ctx)
 	firstErr := make(chan error, 1)
 	go func() {
-		_, err := h.uc.Complete(firstCtx, ppCode, ppFileID, ppCitizenActor())
+		_, err := h.uc.complete(firstCtx, ppCode, ppFileID, ppCitizenActor())
 		firstErr <- err
 	}()
 	<-h.objects.opened
 	second := make(chan error, 1)
 	go func() {
-		_, err := h.uc.Complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
+		_, err := h.uc.complete(h.ctx, ppCode, ppFileID, ppCitizenActor())
 		second <- err
 	}()
 	waitForWaiters(t, h.uc, 1)
@@ -1150,7 +1304,7 @@ func TestPhotoCompletionWaitsForAReadSlotBeforeReadingTheBytes(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(h.ctx, 50*time.Millisecond)
 	defer cancel()
-	if _, err := h.uc.Complete(ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := h.uc.complete(ctx, ppCode, ppFileID, ppCitizenActor()); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("err = %v, want the caller's deadline", err)
 	}
 	if n := h.objects.opens.Load(); n != 0 {

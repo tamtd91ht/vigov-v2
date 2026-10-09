@@ -392,7 +392,7 @@ func citizenFieldsCall(t *testing.T, f *fieldCatalogueFake, token string) *httpt
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
 		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(),
-		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: f, Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: f, Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	var h http.Handler = mux

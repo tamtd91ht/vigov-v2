@@ -347,6 +347,12 @@ func chay(log *slog.Logger) error {
 	petitionActs := app.NewXuLyPhanAnh(kho, phieu, suKien, dinhDanh, dinhDanh,
 		petstore.NewPetitionSettingsStore(kho), storedFiles).WithResidentialUnits(dinhDanh, log)
 
+	// THE PER-POD UPLOAD CAP (ADR 0052 §Sửa đổi 09/10/2026): uploads now stream through this pod, so ONE
+	// value bounds every upload route of the process — the citizen's scene photo AND the three staff
+	// uploads. Handed to both muxes below; a cap per mux would let the pod hold twice what its 384 MiB is
+	// sized for.
+	uploadSlots := httpx.NewUploadSlots(httpx.UploadSlotsPerPod)
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware
@@ -486,6 +492,7 @@ func chay(log *slog.Logger) error {
 		// transaction the override row and its audit entry share (rule 6, invariant 3), and is also
 		// what every configurable refusal reads its sentence through.
 		SystemMessages: app.NewSystemMessages(kho, petstore.NewSystemMessageOverrideStore(kho)),
+		UploadSlots:    uploadSlots,
 		Log:            log,
 	})
 
@@ -538,7 +545,9 @@ func chay(log *slog.Logger) error {
 		// idempotency store. FAILS CLOSED: with no REDIS_DSN (dev only — staging and prod refuse to start
 		// without it, config.Redis is declared) every photo write answers 503 `rate_limit_unavailable`.
 		PhotoLimiter: photoLimiter,
-		Log:          log,
+		// The SAME per-pod upload cap as the staff mux — see uploadSlots above.
+		UploadSlots: uploadSlots,
+		Log:         log,
 	})
 
 	// THE ACCOUNTLESS SURFACE — ADR 0083, TEMPORARY: a THIRD mux behind a THIRD chain (dungBien). The

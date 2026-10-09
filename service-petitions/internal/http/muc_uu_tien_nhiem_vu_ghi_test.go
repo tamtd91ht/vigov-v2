@@ -209,6 +209,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		TaskImport:          &taskImportFake{},
 		AuditLog:            &auditLogFake{},
 		SystemMessages:      &systemMessagesFake{},
+		UploadSlots:         uploadSlotsThu(),
 		Log:                 im,
 	})
 

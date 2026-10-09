@@ -165,8 +165,8 @@ func (h *Handler) DocNhatKyNhiemVu(w http.ResponseWriter, r *http.Request) {
 type taskLogEntryIn struct {
 	Note string `json:"note"`
 
-	// Attachments are ids returned by POST /api/v1/tasks/{ma}/attachments and COMPLETED through
-	// …/{id}/completion, by the same officer, for this task. Optional; each id at most once. They are
+	// Attachments are ids of files STORED by POST /api/v1/tasks/{ma}/attachments (one multipart upload),
+	// by the same officer, for this task. Optional; each id at most once. They are
 	// linked in the entry's own transaction and can never be added to the entry later (append-only log).
 	Attachments []string `json:"attachments,omitempty"`
 

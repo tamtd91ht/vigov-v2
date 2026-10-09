@@ -130,6 +130,28 @@ func TestAccountlessUnknownHostIs404FromTheAccountlessHandler(t *testing.T) {
 	}
 }
 
+// The accountless chain has NO photo upload (ADR 0083; ADR 0052 §Sửa đổi 09/10/2026 moved the upload
+// onto the citizen route, behind a session): a sender with no session cannot put a file on a petition.
+func TestAccountlessChainHasNoPhotoUpload(t *testing.T) {
+	m := dungMayChu(t, canBoXaA())
+	for _, path := range []string{
+		svchttp.AccountlessReportsPath + "/" + accountlessCode + "/photos",
+		svchttp.AccountlessReportsPath + "/" + accountlessCode + "/photos?host=" + hostA,
+	} {
+		r := httptest.NewRequest(http.MethodPost, "https://"+hostMiniApp+path,
+			strings.NewReader("--b\r\nContent-Disposition: form-data; name=\"size\"\r\n\r\n3\r\n--b--\r\n"))
+		r.Host = hostMiniApp
+		r.RemoteAddr = "10.0.0.9:51000"
+		r.Header.Set("Content-Type", "multipart/form-data; boundary=b")
+		r.Header.Set("Idempotency-Key", "9f86d081884c7d659a2feaa0c55ad015")
+		w := httptest.NewRecorder()
+		m.h.ServeHTTP(w, r)
+		if w.Code < 400 || w.Code == http.StatusServiceUnavailable {
+			t.Errorf("POST %s on the accountless chain = %d %s — no photo route may exist there", path, w.Code, w.Body.String())
+		}
+	}
+}
+
 // The limiters fail CLOSED (no REDIS_DSN in dev): never served unbounded.
 func TestAccountlessLimitersFailClosedWithoutRedis(t *testing.T) {
 	l, err := newAccountlessLimiters(unavailableCounter{})

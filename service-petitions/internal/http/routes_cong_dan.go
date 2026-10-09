@@ -65,7 +65,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 		panic("petitions/http: thiếu danh mục lĩnh vực cho công dân — " +
 			"GET /api/v1/my-citizen-report-fields sẽ panic khi có người dân mở bước chọn lĩnh vực")
 	case d.Photos == nil:
-		panic("petitions/http: thiếu use case ảnh hiện trường — ba tuyến " +
+		panic("petitions/http: thiếu use case ảnh hiện trường — hai tuyến " +
 			"/api/v1/my-citizen-reports/{maTraCuu}/photos sẽ panic khi có người dân đính ảnh")
 	case d.VerificationPhotos == nil:
 		panic("petitions/http: thiếu đường đọc ảnh sau xử lý của công dân — " +
@@ -73,6 +73,9 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	case d.PhotoLimiter == nil:
 		panic("petitions/http: thiếu bộ giới hạn tần suất ảnh hiện trường (ratelimit.CitizenPhotoUpload) — " +
 			"tuyến ghi ảnh của công dân không được phục vụ khi không có giới hạn (ADR 0052 §12)")
+	case d.UploadSlots == nil:
+		panic("petitions/http: thiếu bộ giới hạn lượt tải lên cùng lúc (httpx.UploadSlots) — tuyến tải ảnh " +
+			"của công dân không được phục vụ khi không có giới hạn (ADR 0052 §Sửa đổi 09/10/2026)")
 	}
 
 	h := NewHandlerCongDan(d)
@@ -333,55 +336,83 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 	// links issued only after the session identity and commune matched. A photo failure never fails the
 	// petition: none of these routes touches the petition row's content or status.
 	//
-	// RATE LIMIT ON THE TWO WRITES — ratelimit.CitizenPhotoUpload, keyed `t:<tenant>:…:citizen:<digest>`
-	// from the SESSION (ADR 0052 §12). Over it: 429 `rate_limited` + Retry-After. Redis down: 503
-	// `rate_limit_unavailable` (fail closed). ⚠ The threshold is a builder's PROPOSAL awaiting the owner
-	// (rule 13 stop condition) — see core/ratelimit.
+	// RATE LIMIT ON THE UPLOAD — ratelimit.CitizenPhotoUpload, keyed `t:<tenant>:…:citizen:<digest>` from
+	// the SESSION (ADR 0052 §12), charged ONCE per upload: 30 per 15 minutes, each upload now one photo
+	// (owner, ADR 0052 §Sửa đổi 09/10/2026). Over it: 429 `rate_limited` + Retry-After. Redis down: 503
+	// `rate_limit_unavailable` (fail closed).
 	//
 	// ⚠ NOT ENFORCED: "only the commune's OWN app". The citizen session carries no fact about which app
 	// opened it (httpx.CitizenSession carries the session, citizen, commune and Zalo ACCOUNT — not the app),
 	// so nothing here can refuse a shared-app session.
 	// Reported, not invented — internal/app/petition_photo.go.
 	//
-	// @summary  Công dân xin tải MỘT ảnh hiện trường cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn "Đã tiếp nhận" — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút)
-	// @screen   09-phan-anh-nguoi-dan §8.4
-	// @request  photoUploadIn
-	// 201 carries the pending photo and the presigned POST form (a bearer credential, never logged).
-	// The stored photo will be a JPEG whatever was declared.
+	// ONE MULTIPART UPLOAD THROUGH THIS SERVICE (ADR 0052 §Sửa đổi 09/10/2026 — the phone no longer posts
+	// to MinIO, and the `…/completion` route is gone): reserve the row under the petition's lock · stream
+	// the bytes into temp · stat · sniff (the declared type is never trusted) · the CURRENT policy ·
+	// ClamAV on the raw bytes · decode · orient by EXIF · re-encode JPEG (≤ 2560 px, NO EXIF, GPS gone) ·
+	// write ONLY the clean copy to the private bucket · purge temp · `stored` + trail in ONE transaction
+	// that re-checks `da-tiep-nhan` and the count under the lock.
 	//
-	// 400 is a body that is not JSON, a type outside JPEG/PNG/WebP or outside the commune's policy (HEIC
-	// and video included), or a size above the policy or not positive.
+	// THE BODY IS multipart/form-data (core/httpx.ReadUpload): text fields FIRST — `size` (required, the
+	// byte count, ≤ the policy's cap) and `content_type` (optional; else the file part's Content-Type;
+	// image/jpeg · image/png · image/webp within the commune's `petition-photo` policy) — then exactly
+	// ONE part named `file`, then nothing. THE PART'S FILE NAME IS IGNORED (domain.PetitionPhotoName;
+	// rule 3). At most httpx.UploadSlotsPerPod uploads per pod at once, httpx.UploadReadTimeout each.
+	//
+	// @summary  Công dân tải lên MỘT ảnh hiện trường qua service (multipart) cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn "Đã tiếp nhận" — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng
+	// @screen   09-phan-anh-nguoi-dan §8.4
+	// 201 is the STORED photo (`content_type` image/jpeg whatever was sent).
+	//
+	// 400 `invalid_upload` (a broken envelope, a file not of the declared size, an undeclared field) ·
+	// `invalid_request` (a type outside JPEG/PNG/WebP or the commune's policy — HEIC and video included —
+	// or a size not positive).
 	//
 	// 401 is the same three situations the other citizen routes fold together (ADR 0022).
 	//
-	// 403 `chua_xac_thuc_so` only — a session with no verified phone (httpx.XaTuPhien, ADR 0045).
+	// 403 `chua_xac_thuc_so` only — a session with neither a verified phone nor a Zalo account.
 	//
 	// 404 is the SAME FOUR CAUSES AND THE SAME BODY as GET /api/v1/my-citizen-reports/{maTraCuu}:
-	// no such code · another citizen's code · another commune's code · soft deleted (rule 4, forbidden #2).
+	// no such code · another owner's code · another commune's code · soft deleted (rule 4, forbidden #2).
 	//
-	// 409 `petition_state`: the petition is no longer `da-tiep-nhan`. `photo_limit`: it already holds the
-	// policy's maximum, unfinished uploads of the last 15 minutes included. `request_in_progress`: idem.
+	// 408 `upload_timeout`: the file did not arrive within the limit.
 	//
-	// 429 `rate_limited`: the citizen's photo budget is spent; Retry-After says when it refills.
+	// 409 `petition_state` (no longer `da-tiep-nhan`, also when it moved while the photo was processed —
+	// the clean copy is then removed) · `photo_limit` (the policy's maximum, uploads in flight included) ·
+	// `photo_state` · `upload_changed` · `request_in_progress` (idem).
 	//
-	// 503 `storage_not_configured` · `upload_limits_unavailable` · `rate_limit_unavailable`: nothing written.
+	// 413 `file_too_large`: the declared size is above the policy's cap — refused before the file is read.
+	//
+	// 415 `unsupported_media_type`: not multipart/form-data.
+	//
+	// 422 `photo_rejected`: infected, not an allowed image, not the declared type, undecodable, too many
+	// pixels, or the petition already full. The temp upload is deleted; the trail says why.
+	//
+	// 429 `rate_limited`: the photo budget is spent; Retry-After says when it refills.
+	//
+	// 503 `upload_busy` (+ Retry-After: the pod's uploads are all taken) · `storage_not_configured` ·
+	// `upload_limits_unavailable` · `malware_scan_unavailable` · `rate_limit_unavailable`: nothing stored,
+	// never stored unscanned. A failed upload closes its row (`failed`), so it does not hold one of the 5.
 	//
 	// idem.Required(idem.MoKhiHong): a replay after the first finished answers the FILE ID
-	// (`{"code": "<id>", "replayed": true}`), never a second row and never the form. MoKhiHong because
-	// the residue of a Redis outage is one unused pending row that stops counting after 15 minutes —
-	// and the rate limit, which fails closed, refuses during that outage anyway.
+	// (`{"code": "<id>", "replayed": true}`), never a second photo. MoKhiHong because a Redis outage
+	// fails the rate limit closed anyway.
 	//
 	// ADR 0080 decision 8: an UNVERIFIED petition has scene photos too, owned by its Zalo account — so
-	// all three photo routes take CommuneFromSessionOrZaloAccount, the petition read binding
+	// both photo routes take CommuneFromSessionOrZaloAccount, the petition read binding
 	// `zalo_account_id = <session account>` instead of `cong_dan_id`. Same 404 for another owner's
 	// petition. The rate-limit budget is the account's own (`zalo-account:` prefix before the digest).
+	// NOT on the accountless chain (ADR 0083): a sender with no session has no photo route at all.
 	//
-	// @reply    201 photoUploadOut
+	// @reply    201 photoOut
 	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error chua_xac_thuc_so
 	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
 	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
 	// @reply    429 httpx.Error rate_limited
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
@@ -389,49 +420,7 @@ func RegisterCongDan(mux *http.ServeMux, d DepsCongDan) {
 		authz.CitizenOnly()(
 			httpx.CommuneFromSessionOrZaloAccount("ảnh hiện trường của phiếu chưa xác thực: chủ ảnh là tài khoản Zalo của phiên, chỉ trên phiếu của chính tài khoản ấy (ADR 0080 #8)")(
 				idem.Required(idem.MoKhiHong)(
-					http.HandlerFunc(h.RequestPetitionPhotoUpload)))))
-
-	// HOÀN TẤT TẢI ẢNH — `completion`, the nominalised sub-resource the task attachments use
-	// (skills/rest-api-design §3). Stat · sniff (the declared type is never trusted) · the CURRENT policy
-	// · ClamAV on the raw bytes · decode · orient by EXIF · re-encode JPEG (≤ 2560 px, NO EXIF, GPS gone)
-	// · write ONLY the clean copy to the private bucket · purge the temp upload · `stored` + trail in ONE
-	// transaction that re-checks `da-tiep-nhan` and the count under the petition's lock.
-	//
-	// @summary  Công dân hoàn tất tải một ảnh hiện trường — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng
-	// @screen   09-phan-anh-nguoi-dan §8.4
-	// 200 is the stored photo (`content_type` image/jpeg). A second completion of a stored photo answers
-	// it again and writes nothing — hence idem.KhongCan.
-	//
-	// 401 / 403 `chua_xac_thuc_so`: as above.
-	//
-	// 404: the petition's four causes (same body as the GET), or `id` is not a photo of this petition.
-	//
-	// 409 `petition_state` (moved on — a photo processed meanwhile is recorded as refused and its clean
-	// copy removed) · `photo_state` (already refused or expired) · `upload_not_received` (not uploaded
-	// yet; call again) · `upload_expired` · `upload_changed`.
-	//
-	// 422 `photo_rejected`: infected, not an allowed image, not the declared type, too large, undecodable,
-	// too many pixels, or the petition already full. The temp upload is deleted; the trail says why.
-	//
-	// 429 `rate_limited`: as above.
-	//
-	// 503 `storage_not_configured` · `upload_limits_unavailable` · `malware_scan_unavailable` ·
-	// `rate_limit_unavailable`: nothing stored, the upload stays retryable, never stored unscanned.
-	//
-	// @reply    200 photoOut
-	// @reply    401 httpx.Error
-	// @reply    403 httpx.Error chua_xac_thuc_so
-	// @reply    404 httpx.Error
-	// @reply    409 httpx.Error
-	// @reply    422 httpx.Error
-	// @reply    429 httpx.Error rate_limited
-	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
-	mux.Handle("POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion",
-		authz.CitizenOnly()(
-			httpx.CommuneFromSessionOrZaloAccount("hoàn tất ảnh hiện trường của phiếu chưa xác thực: chỉ trên phiếu của chính tài khoản Zalo của phiên (ADR 0080 #8)")(
-				idem.KhongCan("hoàn tất lần hai trên ảnh đã lưu trả lại đúng ảnh ấy và không ghi gì; hai lượt cùng lúc tuần tự hoá trên khoá dòng phiếu")(
-					http.HandlerFunc(h.CompletePetitionPhoto)))))
+					http.HandlerFunc(h.UploadPetitionPhoto)))))
 
 	// ẢNH CỦA CHÍNH MÌNH — the stored photos with signed links (at most 15 minutes), for any status of the
 	// petition. Pending, refused and expired uploads are not listed. NO idem.* DECLARATION: a GET changes

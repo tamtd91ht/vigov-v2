@@ -87,7 +87,7 @@ func TestDanhSachCuaToiPrincipalCanBoBiTuChoi(t *testing.T) {
 	m := dungMayChuCongDan(t)
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: m.phieu, GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		Phieu: m.phieu, GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	canBo := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

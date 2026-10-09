@@ -18,14 +18,16 @@ import (
 	petstore "github.com/vihat/vigov/service-petitions/internal/store"
 )
 
-// Tests for §5.9's four attachment routes (request, completion, download, remove), and the attachment half of the two log-entry routes, at the
-// HTTP boundary.
+// Tests for §5.9's three attachment routes (upload, download, remove), and the attachment half of the two
+// log-entry routes, at the HTTP boundary.
 //
 //	PROVED HERE   each route's four cases (rule 5, invariant 7): 401 no session · 403 without
 //	              `task.read` · 401 right key WRONG COMMUNE (authz compares the commune first) · 2xx —
 //	              with the use case NOT REACHED in the first three · the commune the use case sees is the
 //	              Host's · the actor is the staff business code · `task.update` is read from that key ·
-//	              the declared body reaches the use case · the reply shapes (form, file, link) · every
+//	              the multipart upload reaches the use case as a stream of the declared name, type and
+//	              size, and answers 201 with the STORED file · the completion route is gone · a
+//	              replay answers the file id · the reply shapes (file, link) · every
 //	              refusal's status, code and sentence, none of them carrying the commune id · the
 //	              timeline reads a page's attachments in ONE call keyed by that page's entry ids.
 //	NOT PROVED    the flow itself — internal/app/task_attachment_test.go, over the real stores.
@@ -58,30 +60,20 @@ func (f *taskAttachmentsFake) record(ctx context.Context, code, fileID string, a
 	f.commune = tenant.MustFrom(ctx)
 }
 
-func (f *taskAttachmentsFake) RequestUpload(ctx context.Context, ma string, req app.AttachmentUploadRequest,
-	actor audit.Actor, update app.TaskUpdateRight) (app.AttachmentUpload, error) {
+func (f *taskAttachmentsFake) MaxUploadBytes(context.Context) (int64, error) { return 10 << 20, nil }
+
+func (f *taskAttachmentsFake) Upload(ctx context.Context, ma string, req app.AttachmentUploadRequest,
+	body app.UploadBody, actor audit.Actor, update app.TaskUpdateRight) (domain.StoredFile, error) {
 	f.record(ctx, ma, "", actor)
 	f.req, f.update = req, update
 	if f.err != nil {
-		return app.AttachmentUpload{}, f.err
-	}
-	return app.AttachmentUpload{
-		File: domain.StoredFile{ID: fileIDHTTP, OriginalName: req.FileName, Status: domain.StoredFilePending},
-		Post: storage.PresignedPost{URL: "https://s3.example.gov.vn/vigov-test-temp",
-			Fields:    map[string]string{"key": "upload/records/k/original.pdf", "policy": "p", "x-amz-signature": "s"},
-			ExpiresAt: time.Date(2026, 9, 29, 3, 15, 0, 0, time.UTC)},
-	}, nil
-}
-
-func (f *taskAttachmentsFake) Complete(ctx context.Context, ma, id string, actor audit.Actor,
-	update app.TaskUpdateRight) (domain.StoredFile, error) {
-	f.record(ctx, ma, id, actor)
-	f.update = update
-	if f.err != nil {
 		return domain.StoredFile{}, f.err
 	}
-	return domain.StoredFile{ID: id, OriginalName: "Biên bản.pdf", MIMEType: storage.MIMEPDF, SizeBytes: 48213,
-		Status: domain.StoredFileStored}, nil
+	if _, err := drainUpload(body); err != nil {
+		return domain.StoredFile{}, err
+	}
+	return domain.StoredFile{ID: fileIDHTTP, OriginalName: req.FileName, MIMEType: storage.MIMEPDF,
+		SizeBytes: req.Size, Status: domain.StoredFileStored}, nil
 }
 
 func (f *taskAttachmentsFake) DownloadLink(ctx context.Context, ma, id string, reader audit.Actor) (
@@ -119,14 +111,9 @@ func (l *logAttachmentsFake) AttachmentsByLogEntries(ctx context.Context, ids []
 	return out, nil
 }
 
-func attachmentsPath(ma string) string    { return duongNV(ma) + "/attachments" }
-func completionPath(ma, id string) string { return attachmentsPath(ma) + "/" + id + "/completion" }
+func attachmentsPath(ma string) string { return duongNV(ma) + "/attachments" }
 func attachmentDownloadPath(ma, id string) string {
 	return attachmentsPath(ma) + "/" + id + "/download"
-}
-
-func uploadIn() taskAttachmentUploadIn {
-	return taskAttachmentUploadIn{FileName: "Biên bản nghiệm thu.pdf", ContentType: storage.MIMEPDF, Size: 48213}
 }
 
 // --- rule 5, invariant 7 --------------------------------------------------------------------------
@@ -141,8 +128,7 @@ type attachmentRouteCase struct {
 
 func attachmentRouteCases() []attachmentRouteCase {
 	return []attachmentRouteCase{
-		{"request upload", http.MethodPost, attachmentsPath(maNVThu), uploadIn(), http.StatusCreated},
-		{"completion", http.MethodPost, completionPath(maNVThu, fileIDHTTP), nil, http.StatusOK},
+		{"upload", http.MethodPost, attachmentsPath(maNVThu), attachmentFile(), http.StatusCreated},
 		{"download", http.MethodGet, attachmentDownloadPath(maNVThu, fileIDHTTP), nil, http.StatusOK},
 		{"remove", http.MethodDelete, attachmentPath(maNVThu, fileIDHTTP), removeIn(), http.StatusNoContent},
 	}
@@ -217,7 +203,7 @@ func TestAttachmentRoutes_RightPermissionRightCommunePass(t *testing.T) {
 
 // --- behaviour ------------------------------------------------------------------------------------
 
-func TestRequestUpload_BodyAndFactsReachUseCaseReplyCarriesForm(t *testing.T) {
+func TestUpload_FieldsAndFactsReachUseCaseReplyIsTheStoredFile(t *testing.T) {
 	for _, c := range []struct {
 		perms []authz.Perm
 		want  bool
@@ -228,40 +214,43 @@ func TestRequestUpload_BodyAndFactsReachUseCaseReplyCarriesForm(t *testing.T) {
 	} {
 		m := dungMayChu(t)
 		m.capQuyen(t, c.perms...)
-		w := m.goiGhiNV(t, http.MethodPost, hostA, attachmentsPath(maNVThu), canBoCuaXa(xaA), uploadIn())
+		w := m.goiGhiNV(t, http.MethodPost, hostA, attachmentsPath(maNVThu), canBoCuaXa(xaA), attachmentFile())
 		doiMa(t, w, http.StatusCreated)
 		if bool(m.taskAttachments.update) != c.want {
 			t.Errorf("%v: task.update fact = %v, want %v", c.perms, m.taskAttachments.update, c.want)
 		}
 		if m.taskAttachments.req != (app.AttachmentUploadRequest{FileName: "Biên bản nghiệm thu.pdf",
-			ContentType: storage.MIMEPDF, Size: 48213}) {
-			t.Errorf("body reaching the use case = %+v", m.taskAttachments.req)
+			ContentType: storage.MIMEPDF, Size: 4096}) {
+			t.Errorf("declared fields reaching the use case = %+v", m.taskAttachments.req)
 		}
-		var out taskAttachmentUploadOut
+		var out taskAttachmentOut
 		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
 			t.Fatalf("body: %s", w.Body.String())
 		}
-		if out.Attachment.ID != fileIDHTTP || out.Attachment.Status != "pending" ||
-			out.Upload.URL == "" || out.Upload.Fields["policy"] == "" || out.Upload.ExpiresAt.IsZero() {
+		if out.ID != fileIDHTTP || out.Status != "stored" || out.MIMEType != storage.MIMEPDF || out.SizeBytes != 4096 ||
+			out.FileName != "Biên bản nghiệm thu.pdf" {
 			t.Errorf("reply = %+v", out)
+		}
+		if strings.Contains(w.Body.String(), "upload") || strings.Contains(w.Body.String(), "fields") {
+			t.Errorf("an upload form on the reply: %s", w.Body.String())
 		}
 	}
 }
 
-func TestCompleteAndDownloadReplies(t *testing.T) {
+// The completion route is GONE (ADR 0052 §Sửa đổi 09/10/2026).
+func TestUpload_CompletionRouteIsGone(t *testing.T) {
 	m := dungMayChu(t)
 	m.capQuyen(t, authz.Perm("task.read"))
-	w := m.goiGhiNV(t, http.MethodPost, hostA, completionPath(maNVThu, fileIDHTTP), canBoCuaXa(xaA), nil)
-	doiMa(t, w, http.StatusOK)
-	var f taskAttachmentOut
-	if err := json.Unmarshal(w.Body.Bytes(), &f); err != nil {
-		t.Fatalf("body: %s", w.Body.String())
+	w := m.goiGhiNV(t, http.MethodPost, hostA, attachmentsPath(maNVThu)+"/"+fileIDHTTP+"/completion", canBoCuaXa(xaA), nil)
+	if w.Code < 400 || m.taskAttachments.calls != 0 {
+		t.Errorf("completion answered %d (%d calls)", w.Code, m.taskAttachments.calls)
 	}
-	if f.ID != fileIDHTTP || f.Status != "stored" || f.MIMEType != storage.MIMEPDF || f.SizeBytes != 48213 {
-		t.Errorf("file = %+v", f)
-	}
+}
 
-	w = m.goiGhiNV(t, http.MethodGet, hostA, attachmentDownloadPath(maNVThu, fileIDHTTP), canBoCuaXa(xaA), nil)
+func TestDownloadReply(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.read"))
+	w := m.goiGhiNV(t, http.MethodGet, hostA, attachmentDownloadPath(maNVThu, fileIDHTTP), canBoCuaXa(xaA), nil)
 	doiMa(t, w, http.StatusOK)
 	var d taskAttachmentDownloadOut
 	if err := json.Unmarshal(w.Body.Bytes(), &d); err != nil {
@@ -285,14 +274,14 @@ func TestTaskAttachmentRefusalsMap(t *testing.T) {
 		{"storage not configured", app.ErrUploadNotConfigured, http.StatusServiceUnavailable, "storage_not_configured"},
 		{"platform unreachable", app.ErrUploadLimitsUnavailable, http.StatusServiceUnavailable, "upload_limits_unavailable"},
 		{"scanner unreachable", app.ErrScanUnavailable, http.StatusServiceUnavailable, "malware_scan_unavailable"},
-		{"declared too large", app.ErrAttachmentTooLarge, http.StatusBadRequest, "invalid_request"},
+		{"declared too large", app.ErrAttachmentTooLarge, http.StatusRequestEntityTooLarge, "file_too_large"},
 		{"declared type refused", app.ErrAttachmentTypeNotAllowed, http.StatusBadRequest, "invalid_request"},
 		{"file name", domain.ErrAttachmentNameInvalid, http.StatusBadRequest, "invalid_request"},
 		{"infected", &app.AttachmentRejection{Reason: app.RejectMalware}, http.StatusUnprocessableEntity, "attachment_rejected"},
 		{"sniff mismatch", &app.AttachmentRejection{Reason: app.RejectTypeMismatch}, http.StatusUnprocessableEntity, "attachment_rejected"},
 		{"count reached", app.ErrAttachmentCountReached, http.StatusConflict, "attachment_limit"},
-		{"not received", app.ErrUploadNotReceived, http.StatusConflict, "upload_not_received"},
-		{"expired", app.ErrUploadExpired, http.StatusConflict, "upload_expired"},
+		// Nothing found right after this service's own temp write: the store's fault, never a 409.
+		{"not received", app.ErrUploadNotReceived, http.StatusInternalServerError, "internal"},
 		{"replaced mid-inspection", app.ErrUploadChanged, http.StatusConflict, "upload_changed"},
 		{"no longer pending", app.ErrAttachmentNotPending, http.StatusConflict, "attachment_state"},
 		{"file not found", app.ErrAttachmentNotFound, http.StatusNotFound, "not_found"},
@@ -380,7 +369,7 @@ func TestRejectionSentenceNamesTheReason(t *testing.T) {
 	m := dungMayChu(t)
 	m.capQuyen(t, authz.Perm("task.read"))
 	m.taskAttachments.err = &app.AttachmentRejection{Reason: app.RejectMalware}
-	w := m.goiGhiNV(t, http.MethodPost, hostA, completionPath(maNVThu, fileIDHTTP), canBoCuaXa(xaA), nil)
+	w := m.goiGhiNV(t, http.MethodPost, hostA, attachmentsPath(maNVThu), canBoCuaXa(xaA), attachmentFile())
 	if e := loiTra(t, w); !strings.Contains(e.Message, "mã độc") {
 		t.Errorf("sentence = %q", e.Message)
 	}

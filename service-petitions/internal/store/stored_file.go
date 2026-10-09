@@ -398,10 +398,10 @@ func (s *StoredFileStore) linkedLogEntry(ctx context.Context, table, fileID stri
 // and counting it would bring a refused file back into the limit.
 //
 // A `pending` / `scanning` row counts ONLY WHILE IT CAN STILL RECEIVE BYTES — created at or after
-// `pendingSince`, which the caller sets to now minus the presigned POST's lifetime. A row whose form
-// expired unused would otherwise hold one slot of the limit for ever: nothing moves an abandoned
-// upload out of `pending` (no worker; a completion call that finds nothing marks it `failed`, but only
-// if somebody makes that call).
+// `pendingSince`, which the caller sets to now minus storage.UploadTTL. An upload through the service
+// (ADR 0052 §Sửa đổi 09/10/2026) closes its own row `failed` when it does not end stored, so the window
+// now bounds only what a crashed pod leaves `pending` — without it such a row would hold one slot of the
+// limit for ever (no worker moves it).
 const countForSubjectTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4
 	AND deleted_at IS NULL
 	AND (status IN ('stored', 'processing', 'ready')
@@ -479,7 +479,7 @@ var errPendingSinceZero = errors.New("stored_file: đếm lượt tải đang ch
 
 // CountLiveCreatedAfterTx is CountForSubjectTx (with a pending window) restricted to rows whose slot was
 // issued strictly after `after`, inside the caller's transaction — the upload request's count on a
-// REOPENED petition (app.StaffVerificationPhotos.RequestUpload, ADR 0047 (e): the cap counts per round).
+// REOPENED petition (app.StaffVerificationPhotos.reserve, ADR 0047 (e): the cap counts per round).
 // A zero `after` or a zero `pendingSince` is an error, never "no bound".
 func (s *StoredFileStore) CountLiveCreatedAfterTx(ctx context.Context, tx *store.ScopedTx,
 	subjectType, subjectID, purpose string, after, pendingSince time.Time) (int, error) {

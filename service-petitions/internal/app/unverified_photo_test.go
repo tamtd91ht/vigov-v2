@@ -36,13 +36,19 @@ func buildZaloPhotos(t *testing.T) *ppHarness {
 
 func TestUnverifiedPhotoOwnerGetsSlotAndTrailNamesAccount(t *testing.T) {
 	h := buildZaloPhotos(t)
-	if _, err := h.uc.RequestUpload(h.ctx, ppZaloCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 400_000},
-		zaloPhotoActor(ppZaloOwner)); err != nil {
-		t.Fatalf("RequestUpload của chủ phiếu là tài khoản Zalo: %v", err)
+	raw := ppJPEG(t, 20, 10, 1)
+	if _, err := h.uc.Upload(h.ctx, ppZaloCode, PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: int64(len(raw))},
+		uploadBodyOf(raw), zaloPhotoActor(ppZaloOwner)); err != nil {
+		t.Fatalf("Upload của chủ phiếu là tài khoản Zalo: %v", err)
 	}
 	a := h.db.audits()
-	if len(a) != 1 || a[0][0] != ppZaloOwner || a[0][1] != audit.KindZaloAccount || a[0][3] != ppZaloCode {
-		t.Fatalf("vết = %v, muốn chủ thể %q kind %q", a, ppZaloOwner, audit.KindZaloAccount)
+	if len(a) != 2 {
+		t.Fatalf("vết = %v, muốn xin tải + lưu", a)
+	}
+	for _, e := range a {
+		if e[0] != ppZaloOwner || e[1] != audit.KindZaloAccount || e[3] != ppZaloCode {
+			t.Fatalf("vết = %v, muốn chủ thể %q kind %q", a, ppZaloOwner, audit.KindZaloAccount)
+		}
 	}
 }
 
@@ -55,8 +61,8 @@ func TestUnverifiedPhotoRefusesAnyoneButTheOwningAccount(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			h := buildZaloPhotos(t)
-			_, err := h.uc.RequestUpload(h.ctx, ppZaloCode,
-				PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 400_000}, actor)
+			_, err := h.uc.Upload(h.ctx, ppZaloCode,
+				PhotoUploadRequest{ContentType: storage.MIMEJPEG, Size: 400_000}, uploadBodyOf(make([]byte, 400_000)), actor)
 			if !errors.Is(err, petstore.ErrPhieuKhongTonTai) {
 				t.Fatalf("err = %v, muốn ErrPhieuKhongTonTai (một câu 404 duy nhất)", err)
 			}

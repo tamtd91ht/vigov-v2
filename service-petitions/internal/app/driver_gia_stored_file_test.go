@@ -227,7 +227,7 @@ type fakeObject struct {
 
 // objectStoreFake is core/storage's contract in memory: ETag-bound reads fail with ErrChanged, a
 // missing object with ErrNotFound, Promote re-sniffs and refuses an existing destination. It records
-// what it was asked, so a test can say "the upload form was signed for exactly this key and limit".
+// what it was asked, so a test can say "the upload was written to exactly this key, with this limit".
 type objectStoreFake struct {
 	mu      sync.Mutex
 	temp    map[string]fakeObject
@@ -240,17 +240,20 @@ type objectStoreFake struct {
 	statErr          error // returned by every Stat when set
 	purgeErr         error
 
-	presigned []presignCall
+	// uploads records every PutUpload; uploadErr fails the next ones (after reading the body, as a store
+	// that dies mid-stream would) and writes nothing.
+	uploads   []uploadCall
+	uploadErr error
 	downloads []downloadCall
 	promoted  []string
 	purged    []string
 }
 
-type presignCall struct {
+type uploadCall struct {
 	key         string
+	size        int64
 	maxBytes    int64
 	contentType string
-	ttl         time.Duration
 }
 
 type downloadCall struct {
@@ -289,16 +292,35 @@ func (o *objectStoreFake) has(b storage.Bucket, key string) bool {
 	return ok
 }
 
-func (o *objectStoreFake) PresignUpload(_ context.Context, uploadKey string, maxBytes int64,
-	contentType string, ttl time.Duration) (storage.PresignedPost, error) {
+// PutUpload is core/storage's contract in memory: only `upload/…` keys, size ≤ maxBytes before a byte is
+// read, the reader must yield exactly size bytes. A reader's error is returned wrapped, as the real
+// exactReader does, so a test can find core/httpx's sentinels through it.
+func (o *objectStoreFake) PutUpload(_ context.Context, uploadKey string, r io.Reader, size, maxBytes int64,
+	contentType string) (storage.ObjectInfo, error) {
+	o.mu.Lock()
+	o.uploads = append(o.uploads, uploadCall{uploadKey, size, maxBytes, contentType})
+	failWith := o.uploadErr
+	o.mu.Unlock()
+	if !strings.HasPrefix(uploadKey, storage.TempUploadPrefix) {
+		return storage.ObjectInfo{}, storage.ErrInvalidArgument
+	}
+	if size > maxBytes {
+		return storage.ObjectInfo{}, storage.ErrTooLarge
+	}
+	d, err := io.ReadAll(io.LimitReader(r, size+1))
+	if err != nil {
+		return storage.ObjectInfo{}, fmt.Errorf("storage: read: %w", err)
+	}
+	if int64(len(d)) != size {
+		return storage.ObjectInfo{}, fmt.Errorf("%w: %w", storage.ErrInvalidArgument, storage.ErrSizeMismatch)
+	}
+	if failWith != nil {
+		return storage.ObjectInfo{}, failWith
+	}
+	o.put(storage.BucketTemp, uploadKey, d)
 	o.mu.Lock()
 	defer o.mu.Unlock()
-	o.presigned = append(o.presigned, presignCall{uploadKey, maxBytes, contentType, ttl})
-	return storage.PresignedPost{
-		URL:       "https://s3.example.gov.vn/vigov-test-temp",
-		Fields:    map[string]string{"key": uploadKey, "policy": "chinh-sach-gia", "x-amz-signature": "chu-ky-gia"},
-		ExpiresAt: time.Date(2026, 9, 23, 8, 20, 0, 0, time.UTC),
-	}, nil
+	return storage.ObjectInfo{Key: uploadKey, Size: size, ETag: o.temp[uploadKey].etag, ContentType: contentType}, nil
 }
 
 func (o *objectStoreFake) Stat(_ context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error) {

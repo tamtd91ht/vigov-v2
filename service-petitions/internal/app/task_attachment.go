@@ -1,11 +1,12 @@
 package app
 
-// `📎 Đính kèm` on the manual task log entry — docs/ui-ux/02-nhiem-vu.md §5.9 — built on ADR 0052's
-// three-step upload (kb/10-decisions/0052-object-storage-minio.md §1):
+// `📎 Đính kèm` on the manual task log entry — docs/ui-ux/02-nhiem-vu.md §5.9 — ONE multipart request,
+// POST /api/v1/tasks/{ma}/attachments, through this service (ADR 0052 §Sửa đổi 09/10/2026; the browser no
+// longer posts to MinIO). Upload runs three steps (upload_stream.go):
 //
-//	a. RequestUpload  POST /api/v1/tasks/{ma}/attachments                  pending row + presigned POST
-//	b. the browser    POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT       bytes never cross this service
-//	c. Complete       POST /api/v1/tasks/{ma}/attachments/{id}/completion   sniff · scan · hash · copy → stored
+//	a. reserve   pending row + trail                      the task locked, who may write, the count
+//	b. receive   PutUpload streams the bytes into temp     never buffered whole in this pod
+//	c. complete  sniff · scan · hash · copy → stored, the trail in ONE transaction
 //
 // and then the file rides on the NEXT log entry the same officer writes (AddLogEntry, task_log_entry.go),
 // linked in THAT entry's transaction. DownloadLink hands out a short-lived presigned GET. Remove
@@ -17,7 +18,7 @@ package app
 // The same people who may write the log (domain.TaskWorkRightFor / CheckMayWriteLogEntry): an upload
 // exists only to be attached to an entry, so a right to upload that exceeded the right to write the
 // entry would be a way to put files on a task nobody could attach. Completing is the UPLOADER's alone —
-// the row is bound to one officer at issue time (migration 0021 freezes `uploaded_by`), and another
+// the row is bound to one officer when it is reserved (migration 0021 freezes `uploaded_by`), and another
 // officer's id answers exactly like an unknown one (rule 4, forbidden #2, applied to staff).
 //
 // # THE LIMITS ARE PLATFORM'S, NEVER THIS FILE'S (ADR 0052 §10, stop condition #4)
@@ -30,7 +31,7 @@ package app
 //
 // Sniffing, scanning and hashing a file is network I/O of unbounded length (clamd streams the whole
 // object). Holding the task row or the file row locked across it would stall every other write on the
-// task for as long as the scanner takes. So Complete inspects first, lock-free, and then writes the
+// task for as long as the scanner takes. So complete inspects first, lock-free, and then writes the
 // outcome in ONE short transaction that re-reads the row FOR UPDATE and re-checks everything the
 // outcome depends on. Two completions racing on one upload: both inspect, one promotes, the other finds
 // the destination taken — and the recovery path (measure the destination) makes it land on the same
@@ -39,7 +40,7 @@ package app
 // # WHAT IS NEVER LOGGED OR PUT IN AN ERROR
 //
 // The original file name (personal data when it describes a case — rule 3, ADR 0052 §3), any presigned
-// URL or form field (bearer credentials, core/storage), and file content. The trail carries the file id,
+// URL (a bearer credential, core/storage), and file content. The trail carries the file id,
 // the SNIFFED type, the size, the hash and the reason for a refusal; never the name.
 
 import (
@@ -89,12 +90,12 @@ var (
 	// held (uploadpolicy.ErrUnavailable). Retryable, 503. Never "allowed".
 	ErrUploadLimitsUnavailable = errors.New("tệp đính kèm: chưa đọc được giới hạn tải tệp")
 	// ErrScanUnavailable: clamd could not scan the file (unreachable, timed out, over its size limit,
-	// an unknown reply). The row stays `pending` and the completion can be retried; the file is NEVER
-	// stored unscanned (ADR 0052 §9). 503.
+	// an unknown reply). Nothing is stored, the upload's row is closed `failed` (upload_stream.go) and
+	// the client uploads again; the file is NEVER stored unscanned (ADR 0052 §9). 503.
 	ErrScanUnavailable = errors.New("tệp đính kèm: chưa quét được mã độc")
 	// ErrAttachmentTypeNotAllowed: the DECLARED type is outside platform's list. 400, before any row.
 	ErrAttachmentTypeNotAllowed = errors.New("tệp đính kèm: loại tệp không được phép")
-	// ErrAttachmentTooLarge: the DECLARED size is above platform's limit. 400, before any row.
+	// ErrAttachmentTooLarge: the DECLARED size is above platform's limit. 413, before any row.
 	ErrAttachmentTooLarge = errors.New("tệp đính kèm: tệp vượt dung lượng cho phép")
 	// ErrAttachmentCountReached: the task already carries platform's `max_files_per_subject`. 409.
 	ErrAttachmentCountReached = errors.New("tệp đính kèm: nhiệm vụ đã đủ số tệp tối đa")
@@ -103,13 +104,17 @@ var (
 	ErrAttachmentNotFound = errors.New("tệp đính kèm: không tìm thấy")
 	// ErrAttachmentNotPending: completion of a file that was already refused or expired. 409.
 	ErrAttachmentNotPending = errors.New("tệp đính kèm: tệp không còn chờ hoàn tất")
-	// ErrUploadNotReceived: completion before the bytes arrived, while the form is still valid. Nothing
-	// is written; the browser finishes the upload and calls again. 409.
+	// ErrUploadNotReceived: the completion found nothing in temp and nothing at the destination. Since
+	// the upload streams through this service (ADR 0052 §Sửa đổi 09/10/2026) the completion runs right
+	// after this service's own temp write, so this means that write is not visible — a fault of the
+	// store, answered 500, never a client's 409.
 	ErrUploadNotReceived = errors.New("tệp đính kèm: chưa nhận được tệp")
-	// ErrUploadExpired: the form expired and nothing arrived. The row moves to `failed`. 409.
+	// ErrUploadExpired: the row is older than storage.UploadTTL and nothing arrived. Unreachable from an
+	// upload, which completes within core/httpx.UploadReadTimeout of reserving its row; kept because the
+	// completion step is unchanged. 500 if ever reached.
 	ErrUploadExpired = errors.New("tệp đính kèm: lượt tải lên đã hết hạn")
-	// ErrUploadChanged: the object was replaced through the still-valid form while it was being
-	// inspected (storage.ErrChanged). Nothing is written; calling again inspects the new bytes. 409.
+	// ErrUploadChanged: the temp object changed while it was being inspected (storage.ErrChanged).
+	// Nothing is stored. 409.
 	ErrUploadChanged = errors.New("tệp đính kèm: tệp vừa bị thay đổi trong lúc kiểm tra")
 	// ErrAttachmentRejected is what every *AttachmentRejection matches.
 	ErrAttachmentRejected = errors.New("tệp đính kèm: tệp bị từ chối")
@@ -125,8 +130,8 @@ func (e *AttachmentRejection) Is(t error) bool { return t == ErrAttachmentReject
 // ObjectStore is the part of *storage.Client this use case calls — an interface so the tests run with
 // no MinIO. The semantics are core/storage's; read storage.go before implementing another.
 type ObjectStore interface {
-	PresignUpload(ctx context.Context, uploadKey string, maxBytes int64, contentType string,
-		ttl time.Duration) (storage.PresignedPost, error)
+	PutUpload(ctx context.Context, uploadKey string, r io.Reader, size, maxBytes int64,
+		contentType string) (storage.ObjectInfo, error)
 	Stat(ctx context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error)
 	ReadHead(ctx context.Context, b storage.Bucket, key, ifMatchETag string, n int) ([]byte, error)
 	Open(ctx context.Context, b storage.Bucket, key, ifMatchETag string) (io.ReadCloser, int64, error)
@@ -237,62 +242,90 @@ func attachmentPolicyFor(ctx context.Context, policies UploadPolicies, purpose s
 	return p, nil
 }
 
-// --- a. request an upload ---------------------------------------------------------------------------
+// --- the upload: reserve · receive · complete ------------------------------------------------------
 
-// AttachmentUploadRequest is what the browser declares before it uploads. The declaration is checked
-// here and the bytes again at completion: a claim is never trusted as the fact (ADR 0052 §1c).
+// AttachmentUploadRequest is what the multipart upload declares beside the file. Checked here; the bytes
+// are checked again at completion — the declared type and size are claims, never facts (ADR 0052 §1c).
 type AttachmentUploadRequest struct {
 	FileName    string
 	ContentType string // the DECLARED type; the key's extension follows it, completion sniffs the truth
 	Size        int64
 }
 
-// AttachmentUpload is the pending row and the form the browser posts the file with.
-type AttachmentUpload struct {
-	File domain.StoredFile
-	Post storage.PresignedPost // bearer credential for its TTL — never logged
-}
-
-// RequestUpload issues one upload slot for one file on one task (ADR 0052 §1a).
-//
-// ONE TRANSACTION: the task row read FOR UPDATE (who may write, and it serialises two requests for one
-// task so both cannot pass the count), the count, the pending row, the audit entry. The presigned POST
-// is signed INSIDE it — offline signing, no network — so a signing failure leaves no row behind.
-func (uc *TaskAttachments) RequestUpload(ctx context.Context, ma string, req AttachmentUploadRequest,
-	actor audit.Actor, update TaskUpdateRight) (AttachmentUpload, error) {
-
-	if err := coCanBoThucHien(actor); err != nil {
-		return AttachmentUpload{}, err
-	}
-	name, err := domain.CleanAttachmentName(req.FileName)
-	if err != nil {
-		return AttachmentUpload{}, err
-	}
-	if req.Size <= 0 {
-		return AttachmentUpload{}, domain.ErrAttachmentSizeInvalid
-	}
+// MaxUploadBytes is the policy's cap on one task attachment, for the handler to bound the request body
+// before reading it. Not configured and unreachable are refusals, never a default.
+func (uc *TaskAttachments) MaxUploadBytes(ctx context.Context) (int64, error) {
 	if !uc.uploadsConfigured() {
-		return AttachmentUpload{}, ErrUploadNotConfigured
+		return 0, ErrUploadNotConfigured
 	}
 	pol, err := uc.policy(ctx)
 	if err != nil {
-		return AttachmentUpload{}, err
+		return 0, err
+	}
+	return pol.MaxBytes, nil
+}
+
+// Upload stores one file on task `ma`: reserve (a), stream (b), complete (c) — one request, answered
+// with the STORED file or a refusal. The file then rides on the next log entry the same officer writes.
+// A failure after (a) closes the reserved row (`failed`, with its trail).
+func (uc *TaskAttachments) Upload(ctx context.Context, ma string, req AttachmentUploadRequest, body UploadBody,
+	actor audit.Actor, update TaskUpdateRight) (domain.StoredFile, error) {
+
+	res, err := uc.reserve(ctx, ma, req, actor, update)
+	if err != nil {
+		return domain.StoredFile{}, err
+	}
+	closer := uploadCloser{db: uc.db, objects: uc.objects, files: uc.files, actor: actor,
+		failAction: ActionTaskAttachmentExpired, clock: uc.clock}
+	if err := closer.receive(ctx, res, body); err != nil {
+		return domain.StoredFile{}, err
+	}
+	f, err := uc.complete(ctx, ma, res.file.ID, actor, update)
+	if err != nil {
+		return domain.StoredFile{}, closer.afterComplete(ctx, res, err)
+	}
+	return f, nil
+}
+
+// reserve is step (a) for one file on one task.
+//
+// ONE TRANSACTION: the task row read FOR UPDATE (who may write, and it serialises two uploads for one
+// task so both cannot pass the count), the count, the pending row, the audit entry.
+func (uc *TaskAttachments) reserve(ctx context.Context, ma string, req AttachmentUploadRequest,
+	actor audit.Actor, update TaskUpdateRight) (uploadReservation, error) {
+
+	if err := coCanBoThucHien(actor); err != nil {
+		return uploadReservation{}, err
+	}
+	name, err := domain.CleanAttachmentName(req.FileName)
+	if err != nil {
+		return uploadReservation{}, err
+	}
+	if req.Size <= 0 {
+		return uploadReservation{}, domain.ErrAttachmentSizeInvalid
+	}
+	if !uc.uploadsConfigured() {
+		return uploadReservation{}, ErrUploadNotConfigured
+	}
+	pol, err := uc.policy(ctx)
+	if err != nil {
+		return uploadReservation{}, err
 	}
 	if !pol.AllowsMIME(req.ContentType) {
-		return AttachmentUpload{}, ErrAttachmentTypeNotAllowed
+		return uploadReservation{}, ErrAttachmentTypeNotAllowed
 	}
 	if req.Size > pol.MaxBytes {
-		return AttachmentUpload{}, ErrAttachmentTooLarge
+		return uploadReservation{}, ErrAttachmentTooLarge
 	}
 	ext, ok := storage.ExtForMIME(req.ContentType)
 	if !ok {
 		// Unreachable while uploadpolicy narrows to the storage allow-list; refused rather than trusted.
-		return AttachmentUpload{}, ErrAttachmentTypeNotAllowed
+		return uploadReservation{}, ErrAttachmentTypeNotAllowed
 	}
 
 	id, err := uc.newID()
 	if err != nil {
-		return AttachmentUpload{}, fmt.Errorf("tệp đính kèm: sinh mã tệp: %w", err)
+		return uploadReservation{}, fmt.Errorf("tệp đính kèm: sinh mã tệp: %w", err)
 	}
 	now := uc.clock()
 	key := storage.Key{
@@ -302,14 +335,15 @@ func (uc *TaskAttachments) RequestUpload(ctx context.Context, ma string, req Att
 	}
 	objectKey, err := key.Path()
 	if err != nil {
-		return AttachmentUpload{}, fmt.Errorf("tệp đính kèm: dựng khoá đối tượng: %w", err)
+		return uploadReservation{}, fmt.Errorf("tệp đính kèm: dựng khoá đối tượng: %w", err)
 	}
 	uploadKey, err := key.UploadPath()
 	if err != nil {
-		return AttachmentUpload{}, fmt.Errorf("tệp đính kèm: dựng khoá tải lên: %w", err)
+		return uploadReservation{}, fmt.Errorf("tệp đính kèm: dựng khoá tải lên: %w", err)
 	}
 
-	var out AttachmentUpload
+	res := uploadReservation{uploadKey: uploadKey, contentType: req.ContentType, size: req.Size,
+		maxBytes: pol.MaxBytes}
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		n, err := uc.tasks.TheoMaDeSua(ctx, tx, ma)
 		if err != nil {
@@ -338,10 +372,6 @@ func (uc *TaskAttachments) RequestUpload(ctx context.Context, ma string, req Att
 		if err := uc.files.InsertPending(ctx, tx, f); err != nil {
 			return err
 		}
-		post, err := uc.objects.PresignUpload(ctx, uploadKey, pol.MaxBytes, req.ContentType, storage.UploadTTL)
-		if err != nil {
-			return fmt.Errorf("tệp đính kèm: ký lượt tải lên: %w", err)
-		}
 		if err := writeAttachmentAudit(ctx, tx, actor, n.Ma, ActionTaskAttachmentRequested, now,
 			map[string]any{
 				"tep_id":          id,
@@ -351,13 +381,13 @@ func (uc *TaskAttachments) RequestUpload(ctx context.Context, ma string, req Att
 			}); err != nil {
 			return err
 		}
-		out = AttachmentUpload{File: f, Post: post}
+		res.file, res.subject = f, n.Ma
 		return nil
 	})
 	if err != nil {
-		return AttachmentUpload{}, bocNhiemVu(ctx, "xin tải tệp đính kèm", err)
+		return uploadReservation{}, bocNhiemVu(ctx, "xin tải tệp đính kèm", err)
 	}
-	return out, nil
+	return res, nil
 }
 
 // --- c. complete an upload --------------------------------------------------------------------------
@@ -371,7 +401,7 @@ const (
 	outcomeExpired
 )
 
-// inspection is what the lock-free half of Complete found.
+// inspection is what the lock-free half of complete found.
 type inspection struct {
 	kind        outcomeKind
 	facts       domain.StoredFileFacts
@@ -381,12 +411,12 @@ type inspection struct {
 	tempRemoved bool   // outcomeRejected: the temp object is gone now
 }
 
-// Complete is ADR 0052 §1c for one upload: Stat, sniff, check against the CURRENT policy, scan, hash,
-// promote to the private bucket at the records key, then `stored` and the trail in ONE transaction.
+// complete is ADR 0052 §1c for one upload — Upload calls it on the bytes it has just streamed: Stat,
+// sniff, check against the CURRENT policy, scan, hash, promote to the private bucket at the records key,
+// then `stored` and the trail in ONE transaction.
 //
-// IDEMPOTENT: a file already `stored` is returned as it is, so a retried request (a dropped reply, a
-// double click) answers the same outcome. That is why the route declares idem.KhongCan.
-func (uc *TaskAttachments) Complete(ctx context.Context, ma, id string, actor audit.Actor,
+// IDEMPOTENT: a file already `stored` is returned as it is.
+func (uc *TaskAttachments) complete(ctx context.Context, ma, id string, actor audit.Actor,
 	update TaskUpdateRight) (domain.StoredFile, error) {
 
 	if err := coCanBoThucHien(actor); err != nil {
@@ -560,9 +590,9 @@ func (uc *TaskAttachments) inspector() uploadInspector {
 	return uploadInspector{objects: uc.objects, scanner: uc.scanner, files: uc.files, clock: uc.clock}
 }
 
-// inspect is the lock-free half of Complete. It returns an outcome, or an error when nothing may be
+// inspect is the lock-free half of complete. It returns an outcome, or an error when nothing may be
 // decided yet (scanner down, object replaced mid-inspection, store failure) — in which case nothing is
-// written and the row stays `pending`, retryable.
+// written here, and Upload closes the row `failed` (upload_stream.go).
 func (uc uploadInspector) inspect(ctx context.Context, f domain.StoredFile, key storage.Key,
 	pol uploadpolicy.Policy) (inspection, error) {
 
@@ -760,7 +790,7 @@ func (uc *TaskAttachments) DownloadLink(ctx context.Context, ma, id string, read
 // stays, because task_log_attachment is append-only and "this entry was written with this file" stays
 // true.
 //
-// ONE TRANSACTION, FOUR STATEMENTS AND TWO LOCKS: the task row FOR UPDATE (the same order Complete and
+// ONE TRANSACTION, FOUR STATEMENTS AND TWO LOCKS: the task row FOR UPDATE (the same order complete and
 // AddLogEntry take, task then file, so the three cannot deadlock on each other), the file row FOR
 // UPDATE, the soft delete, the timeline line, the audit entry. A refusal writes nothing.
 //

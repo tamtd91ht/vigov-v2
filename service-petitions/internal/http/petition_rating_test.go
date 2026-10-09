@@ -118,7 +118,7 @@ func buildRatingServer(t *testing.T) *ratingServer {
 
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: f, NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), Log: log,
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: f, NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(), Log: log,
 	})
 	// THE REAL CHAIN, in the order cmd/server builds it — idem innermost, as the intake suite does.
 	var h http.Handler = mux

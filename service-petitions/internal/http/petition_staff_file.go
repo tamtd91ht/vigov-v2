@@ -3,19 +3,18 @@ package http
 // The STAFF files on a petition — the HTTP half of internal/app/petition_verification_photo.go and
 // internal/app/petition_log_attachment.go (migration 0027, owner decisions of 02/10/2026):
 //
-//	POST /api/v1/citizen-reports/{maTraCuu}/verification-photos                    feedback.resolve
-//	POST /api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion    feedback.resolve
-//	GET  /api/v1/citizen-reports/{maTraCuu}/verification-photos                    feedback.read (audited)
-//	POST /api/v1/citizen-reports/{maTraCuu}/log-attachments                        feedback.read + app.duocGhiChu
-//	POST /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion        feedback.read + app.duocGhiChu
-//	GET  /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/download          feedback.read (audited)
+//	POST /api/v1/citizen-reports/{maTraCuu}/verification-photos             feedback.resolve (multipart upload)
+//	GET  /api/v1/citizen-reports/{maTraCuu}/verification-photos             feedback.read (audited)
+//	POST /api/v1/citizen-reports/{maTraCuu}/log-attachments                 feedback.read + app.duocGhiChu (multipart upload)
+//	GET  /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/download   feedback.read (audited)
 //
 // THESE HANDLERS DECIDE NOTHING: they read the permission FACTS the use cases take (feedback.restricted;
 // the three commune-wide petition keys for the note rule) and translate the answer. The citizen's read
 // of verification photos is on HandlerCongDan (ListMyVerificationPhotos), never here.
 //
-// ⚠ REPLIES CARRY BEARER CREDENTIALS (presigned POST forms, presigned GET URLs): `Cache-Control:
-// no-store`, never logged — nor the lookup code, nor a file name.
+// ⚠ THE READ REPLIES CARRY BEARER CREDENTIALS (presigned GET URLs): `Cache-Control: no-store`, never
+// logged — nor the lookup code, nor a file name. The uploads go THROUGH this service (ADR 0052 §Sửa đổi
+// 09/10/2026, upload.go) and answer the stored file.
 
 import (
 	"context"
@@ -34,20 +33,18 @@ import (
 
 // StaffVerificationPhotoActs is app.StaffVerificationPhotos.
 type StaffVerificationPhotoActs interface {
-	RequestUpload(ctx context.Context, ma string, req app.PhotoUploadRequest, actor audit.Actor,
-		restricted app.QuyenXemHanChe) (app.PhotoUpload, error)
-	Complete(ctx context.Context, ma, id string, actor audit.Actor, restricted app.QuyenXemHanChe) (
-		domain.StoredFile, error)
+	uploadLimiter
+	Upload(ctx context.Context, ma string, req app.PhotoUploadRequest, body app.UploadBody, actor audit.Actor,
+		restricted app.QuyenXemHanChe) (domain.StoredFile, error)
 	// reader is the staff member, ID = their business code (principal.Ma): the use case audits the read.
 	ListPhotos(ctx context.Context, ma string, mayReadRestricted bool, reader audit.Actor) ([]app.PhotoLink, error)
 }
 
 // PetitionLogAttachmentActs is app.PetitionLogAttachments.
 type PetitionLogAttachmentActs interface {
-	RequestUpload(ctx context.Context, ma string, req app.AttachmentUploadRequest, actor audit.Actor,
-		noteRight app.QuyenGhiChuCaXa, restricted app.QuyenXemHanChe) (app.AttachmentUpload, error)
-	Complete(ctx context.Context, ma, id string, actor audit.Actor, noteRight app.QuyenGhiChuCaXa,
-		restricted app.QuyenXemHanChe) (domain.StoredFile, error)
+	uploadLimiter
+	Upload(ctx context.Context, ma string, req app.AttachmentUploadRequest, body app.UploadBody,
+		actor audit.Actor, noteRight app.QuyenGhiChuCaXa, restricted app.QuyenXemHanChe) (domain.StoredFile, error)
 	DownloadLink(ctx context.Context, ma, id string, reader audit.Actor, restricted app.QuyenXemHanChe) (
 		app.AttachmentDownload, error)
 	// Remove is the soft delete (DELETE …/log-attachments/{id}, 09/10/2026) — citizen_report_figures.go.
@@ -65,48 +62,34 @@ type PetitionLogAttachmentReader interface {
 
 // --- verification photos ------------------------------------------------------------------------------
 
-// RequestVerificationPhotoUpload serves POST /api/v1/citizen-reports/{maTraCuu}/verification-photos.
-func (h *Handler) RequestVerificationPhotoUpload(w http.ResponseWriter, r *http.Request) {
-	var in photoUploadIn
-	if !docThan(w, r, &in) {
-		return
-	}
+// UploadVerificationPhoto serves POST /api/v1/citizen-reports/{maTraCuu}/verification-photos — ONE
+// multipart upload of ONE photo, answered with the STORED photo. The part's file name is ignored (the
+// photo is stored under domain.VerificationPhotoName).
+func (h *Handler) UploadVerificationPhoto(w http.ResponseWriter, r *http.Request) {
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	ctx := r.Context()
-	up, err := h.d.VerificationPhotos.RequestUpload(ctx, r.PathValue("maTraCuu"),
-		app.PhotoUploadRequest{ContentType: in.ContentType, Size: in.Size}, actor, h.coQuyenHanChe(ctx))
-	if err != nil {
-		h.answerVerificationPhotoError(w, r, "xin tải ảnh sau xử lý", err)
-		return
-	}
-	// A replay with the same Idempotency-Key is told the FILE ID — never the form (a bearer credential).
-	idem.RecordCode(ctx, up.File.ID)
-	noStore(w)
-	vietJSON(w, http.StatusCreated, photoUploadOut{
-		Photo:  photoFromFile(up.File),
-		Upload: presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
-}
-
-// CompleteVerificationPhoto serves POST …/verification-photos/{id}/completion.
-func (h *Handler) CompleteVerificationPhoto(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	answer := func(err error) { h.answerVerificationPhotoError(w, r, "tải ảnh sau xử lý", err) }
+	up, release, ok := receiveUpload(w, r, h.d.UploadSlots, h.d.Log, h.d.VerificationPhotos,
+		[]string{uploadFieldContentType}, answer)
+	defer release()
 	if !ok {
-		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	ctx := r.Context()
-	f, err := h.d.VerificationPhotos.Complete(ctx, r.PathValue("maTraCuu"), r.PathValue("id"), actor,
+	ctx, cancel := context.WithDeadline(r.Context(), up.Deadline)
+	defer cancel()
+	f, err := h.d.VerificationPhotos.Upload(ctx, r.PathValue("maTraCuu"),
+		app.PhotoUploadRequest{ContentType: declaredType(up), Size: up.Size}, uploadBody{&up}, actor,
 		h.coQuyenHanChe(ctx))
 	if err != nil {
-		h.answerVerificationPhotoError(w, r, "hoàn tất ảnh sau xử lý", err)
+		answer(err)
 		return
 	}
-	vietJSON(w, http.StatusOK, photoFromFile(f))
+	// A replay with the same Idempotency-Key is told the FILE ID — never a second file.
+	idem.RecordCode(ctx, f.ID)
+	vietJSON(w, http.StatusCreated, photoFromFile(f))
 }
 
 // ListVerificationPhotos serves GET /api/v1/citizen-reports/{maTraCuu}/verification-photos — the
@@ -157,6 +140,7 @@ func (h *Handler) answerVerificationPhotoError(w http.ResponseWriter, r *http.Re
 	ctx := r.Context()
 	var rej *app.AttachmentRejection
 	switch {
+	case writeUploadEnvelopeError(w, err, refused):
 	case errors.Is(err, petstore.ErrPhieuKhongTonTai), errors.Is(err, app.ErrPhieuHanChe):
 		// One answer for no such code, another commune's, soft-deleted, and `can-bo` without the key.
 		h.khongTimThay(w)
@@ -165,7 +149,9 @@ func (h *Handler) answerVerificationPhotoError(w http.ResponseWriter, r *http.Re
 	case errors.Is(err, app.ErrPhotoTypeNotAllowed):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Chỉ nhận ảnh JPEG, PNG hoặc WebP.", "")
 	case errors.Is(err, app.ErrPhotoTooLarge):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Ảnh lớn hơn dung lượng tối đa cho phép.", "")
+		refused("file_too_large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large",
+			"Ảnh lớn hơn dung lượng tối đa cho phép.", "")
 	case errors.Is(err, app.ErrPhotoSizeInvalid):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Kích thước ảnh khai báo không hợp lệ.", "")
 	case errors.As(err, &rej):
@@ -185,19 +171,11 @@ func (h *Handler) answerVerificationPhotoError(w http.ResponseWriter, r *http.Re
 	case errors.Is(err, app.ErrAttachmentNotPending):
 		refused("photo_state")
 		httpx.WriteError(w, http.StatusConflict, "photo_state",
-			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn ảnh và tải lên lại.", "")
-	case errors.Is(err, app.ErrUploadNotReceived):
-		refused("upload_not_received")
-		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
-			"Chưa nhận được ảnh. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
-	case errors.Is(err, app.ErrUploadExpired):
-		refused("upload_expired")
-		httpx.WriteError(w, http.StatusConflict, "upload_expired",
-			"Lượt tải lên đã hết hạn mà chưa nhận được ảnh. Hãy chọn ảnh và tải lên lại.", "")
+			"Ảnh này đã bị từ chối. Hãy chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
 		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
-			"Ảnh vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
+			"Ảnh vừa bị thay đổi trong lúc kiểm tra nên CHƯA được lưu. Hãy tải lên lại.", "")
 	case writePhotoUnavailable(ctx, w, h.d.Log, what, err):
 	default:
 		h.d.Log.Error("ảnh sau xử lý: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "viec", what, "err", err)
@@ -207,48 +185,33 @@ func (h *Handler) answerVerificationPhotoError(w http.ResponseWriter, r *http.Re
 
 // --- log attachments ----------------------------------------------------------------------------------
 
-// RequestPetitionLogAttachmentUpload serves POST /api/v1/citizen-reports/{maTraCuu}/log-attachments.
-func (h *Handler) RequestPetitionLogAttachmentUpload(w http.ResponseWriter, r *http.Request) {
-	var in taskAttachmentUploadIn
-	if !docThan(w, r, &in) {
-		return
-	}
+// UploadPetitionLogAttachment serves POST /api/v1/citizen-reports/{maTraCuu}/log-attachments — ONE
+// multipart upload of ONE file, answered with the STORED file. `file_name` (or the part's own name) is
+// the name it is shown under: personal data when it describes a case — stored, never logged.
+func (h *Handler) UploadPetitionLogAttachment(w http.ResponseWriter, r *http.Request) {
 	actor, ok := nguoiThucHien(r)
 	if !ok {
 		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	ctx := r.Context()
-	up, err := h.d.PetitionLogAttachments.RequestUpload(ctx, r.PathValue("maTraCuu"), app.AttachmentUploadRequest{
-		FileName: in.FileName, ContentType: in.ContentType, Size: in.Size,
-	}, actor, h.coQuyenGhiChuCaXa(ctx), h.coQuyenHanChe(ctx))
-	if err != nil {
-		h.answerPetitionLogAttachmentError(w, r, "xin tải tệp đính kèm nhật ký", err)
-		return
-	}
-	idem.RecordCode(ctx, up.File.ID)
-	noStore(w)
-	vietJSON(w, http.StatusCreated, taskAttachmentUploadOut{
-		Attachment: taskAttachmentFromFile(up.File),
-		Upload:     presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
-}
-
-// CompletePetitionLogAttachment serves POST …/log-attachments/{id}/completion.
-func (h *Handler) CompletePetitionLogAttachment(w http.ResponseWriter, r *http.Request) {
-	actor, ok := nguoiThucHien(r)
+	answer := func(err error) { h.answerPetitionLogAttachmentError(w, r, "tải tệp đính kèm nhật ký", err) }
+	up, release, ok := receiveUpload(w, r, h.d.UploadSlots, h.d.Log, h.d.PetitionLogAttachments,
+		[]string{uploadFieldFileName, uploadFieldContentType}, answer)
+	defer release()
 	if !ok {
-		h.thieuChuTheXuLy(w, r)
 		return
 	}
-	ctx := r.Context()
-	f, err := h.d.PetitionLogAttachments.Complete(ctx, r.PathValue("maTraCuu"), r.PathValue("id"), actor,
-		h.coQuyenGhiChuCaXa(ctx), h.coQuyenHanChe(ctx))
+	ctx, cancel := context.WithDeadline(r.Context(), up.Deadline)
+	defer cancel()
+	f, err := h.d.PetitionLogAttachments.Upload(ctx, r.PathValue("maTraCuu"), app.AttachmentUploadRequest{
+		FileName: declaredFileName(up), ContentType: declaredType(up), Size: up.Size,
+	}, uploadBody{&up}, actor, h.coQuyenGhiChuCaXa(ctx), h.coQuyenHanChe(ctx))
 	if err != nil {
-		h.answerPetitionLogAttachmentError(w, r, "hoàn tất tệp đính kèm nhật ký", err)
+		answer(err)
 		return
 	}
-	vietJSON(w, http.StatusOK, taskAttachmentFromFile(f))
+	idem.RecordCode(ctx, f.ID)
+	vietJSON(w, http.StatusCreated, taskAttachmentFromFile(f))
 }
 
 // PetitionLogAttachmentDownload serves GET …/log-attachments/{id}/download.
@@ -286,6 +249,7 @@ func (h *Handler) answerPetitionLogAttachmentError(w http.ResponseWriter, r *htt
 	ctx := r.Context()
 	var rej *app.AttachmentRejection
 	switch {
+	case writeUploadEnvelopeError(w, err, refused):
 	case errors.Is(err, app.ErrAttachmentNotFound):
 		httpx.WriteError(w, http.StatusNotFound, "not_found", "Không tìm thấy tệp đính kèm này trên phiếu.", "")
 	case errors.Is(err, domain.ErrAttachmentNameInvalid), errors.Is(err, domain.ErrAttachmentSizeInvalid),
@@ -299,7 +263,8 @@ func (h *Handler) answerPetitionLogAttachmentError(w http.ResponseWriter, r *htt
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Loại tệp này không được phép đính kèm vào nhật ký xử lý phiếu.", "")
 	case errors.Is(err, app.ErrAttachmentTooLarge):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+		refused("file_too_large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large",
 			"Tệp lớn hơn dung lượng tối đa được phép đính kèm.", "")
 	case errors.As(err, &rej):
 		sentence, ok := petitionLogRejectionSentences[rej.Reason]
@@ -315,19 +280,11 @@ func (h *Handler) answerPetitionLogAttachmentError(w http.ResponseWriter, r *htt
 	case errors.Is(err, app.ErrAttachmentNotPending):
 		refused("attachment_state")
 		httpx.WriteError(w, http.StatusConflict, "attachment_state",
-			"Tệp này đã bị từ chối hoặc lượt tải đã hết hạn. Hãy chọn tệp và tải lên lại.", "")
-	case errors.Is(err, app.ErrUploadNotReceived):
-		refused("upload_not_received")
-		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
-			"Chưa nhận được tệp. Hãy chờ tải lên xong rồi bấm hoàn tất lại.", "")
-	case errors.Is(err, app.ErrUploadExpired):
-		refused("upload_expired")
-		httpx.WriteError(w, http.StatusConflict, "upload_expired",
-			"Lượt tải lên đã hết hạn mà chưa nhận được tệp. Hãy chọn tệp và tải lên lại.", "")
+			"Tệp này đã bị từ chối. Hãy chọn tệp và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
 		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
-			"Tệp vừa bị thay đổi trong lúc kiểm tra. Hãy bấm hoàn tất lại.", "")
+			"Tệp vừa bị thay đổi trong lúc kiểm tra nên CHƯA được lưu. Hãy tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadNotConfigured), errors.Is(err, app.ErrUploadLimitsUnavailable),
 		errors.Is(err, app.ErrScanUnavailable):
 		h.d.Log.Warn("CẢNH BÁO: tệp đính kèm nhật ký phiếu chưa xử lý được (kho / máy quét / giới hạn)",

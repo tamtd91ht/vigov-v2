@@ -2,12 +2,13 @@ package app
 
 // A CITIZEN'S SCENE PHOTOS ON THEIR OWN PETITION — menu phan-anh-nguoi-dan (docs/ui-ux/09 §8.4,
 // "TRƯỚC KHI XỬ LÝ"), owner decisions of 02/10/2026 (ADR 0047 row "Ảnh hiện trường khi gửi phản ánh",
-// and G3), storage of migration 0026. ADR 0052's three-step upload, with the one change G3 makes:
+// and G3), storage of migration 0026. ONE multipart request through this service (ADR 0052 §Sửa đổi
+// 09/10/2026 — the phone no longer posts to MinIO), in three steps inside Upload (upload_stream.go):
 //
-//	a. RequestUpload  pending row + presigned POST into temp            the petition locked, ≤ 5, open
-//	b. the phone      POST straight to OBJECT_STORAGE_PUBLIC_ENDPOINT   bytes never cross this service
-//	c. Complete       stat · sniff · scan · DECODE · ORIENT · RE-ENCODE JPEG WITHOUT EXIF ·
-//	                  PutServerProduced into private · purge temp · `stored` + trail in ONE transaction
+//	a. reserve   pending row + trail                                  the petition locked, ≤ 5, open
+//	b. receive   PutUpload streams the bytes into temp                never buffered whole in this pod
+//	c. complete  stat · sniff · scan · DECODE · ORIENT · RE-ENCODE JPEG WITHOUT EXIF ·
+//	             PutServerProduced into private · purge temp · `stored` + trail in ONE transaction
 //
 // THE RAW UPLOAD NEVER REACHES THE PRIVATE BUCKET. It carries EXIF — the GPS of the citizen's home,
 // device identifiers, the capture time (rule 3) — so step (c) does not Promote it, as the task path
@@ -25,13 +26,13 @@ package app
 //
 // # WHEN — ONLY WHILE THE PETITION IS `da-tiep-nhan` (domain.PhotoUploadOpen)
 //
-// Checked when the slot is issued and again, under the petition's row lock, when the photo is stored.
+// Checked when the row is reserved and again, under the petition's row lock, when the photo is stored.
 // A photo whose petition moved on while it was being processed is RECORDED as refused, and the clean
 // copy already written is removed, so the set staff are reading never grows behind them.
 //
 // # HOW MANY — platform's `max_files_per_subject` for `petition-photo`, counted under the lock
 //
-// The slot count includes pending uploads whose form is still alive, inside the transaction that holds
+// The count includes pending uploads younger than storage.UploadTTL, inside the transaction that holds
 // the petition FOR UPDATE, so concurrent requests cannot pass at 4 (the task path's CountForSubjectTx).
 // Migration 0026's trigger is the floor under it for stored photos. A policy with NO count limit is
 // treated as NOT CONFIGURED (503): the owner's ceiling is 5, and an unlimited policy is a misconfigured
@@ -39,7 +40,7 @@ package app
 //
 // # WHAT IS NEVER LOGGED OR PUT IN AN ERROR
 //
-// The lookup code, the citizen id, any presigned URL or form field, image bytes. Errors carry the
+// The lookup code, the citizen id, any presigned URL, image bytes. Errors carry the
 // commune (bocPhieu) and the act. The trail carries the file id, the sniffed types, size and hash.
 //
 // # NOT CHECKED, BY DECISION — THE APP THE SESSION CAME FROM
@@ -105,8 +106,12 @@ const (
 	photoDecodeBudget = 160 << 20
 	// photoReadSlots is how many completions in this process may hold an upload's bytes in memory at
 	// once — from the read of the temp object until inspect returns. Each holds at most pol.MaxBytes
-	// (10 MB today). Before 2026-10-02 the bytes were read BEFORE waiting on decodeSlot, and the route
-	// is idem.KhongCan, so 25 parallel completions buffered 250 MB in a 384 MiB pod.
+	// (10 MB today). Before 2026-10-02 the bytes were read BEFORE waiting on decodeSlot, and the then
+	// completion route was idem.KhongCan, so 25 parallel completions buffered 250 MB in a 384 MiB pod.
+	//
+	// THE UPLOAD ITSELF (ADR 0052 §Sửa đổi 09/10/2026) adds little: at most httpx.UploadSlotsPerPod (4)
+	// uploads stream through the pod at once, each holding core/storage's 64 KiB copy buffer and the
+	// multipart reader's — never the file. The file is held whole only here, under this slot.
 	//
 	// THE WORST CASE THIS PROCESS NOW REACHES, all of it bounded:
 	//
@@ -132,12 +137,12 @@ var (
 	ErrPhotoNotFound = errors.New("ảnh hiện trường: không tìm thấy")
 	// ErrPhotoWindowClosed: the petition is no longer `da-tiep-nhan`. 409.
 	ErrPhotoWindowClosed = errors.New("ảnh hiện trường: phiếu đã chuyển bước, không đính thêm ảnh được")
-	// ErrPhotoCountReached: the petition already holds platform's maximum (live slots included). 409.
+	// ErrPhotoCountReached: the petition already holds platform's maximum (uploads in flight included). 409.
 	ErrPhotoCountReached = errors.New("ảnh hiện trường: phiếu đã đủ số ảnh tối đa")
 	// ErrPhotoTypeNotAllowed: the DECLARED type is not an image type the policy and the re-encoder
 	// both accept. 400, before any row.
 	ErrPhotoTypeNotAllowed = errors.New("ảnh hiện trường: loại tệp không được phép")
-	// ErrPhotoTooLarge: the DECLARED size is above platform's limit. 400, before any row.
+	// ErrPhotoTooLarge: the DECLARED size is above platform's limit. 413, before any row.
 	ErrPhotoTooLarge = errors.New("ảnh hiện trường: ảnh vượt dung lượng cho phép")
 	// ErrPhotoSizeInvalid: the declared size is not a positive number of bytes. 400.
 	ErrPhotoSizeInvalid = errors.New("ảnh hiện trường: kích thước khai báo không hợp lệ")
@@ -146,8 +151,8 @@ var (
 // PhotoObjectStore is the part of *storage.Client this flow calls — the task path's ObjectStore minus
 // Promote (the raw upload is never promoted) plus PutServerProduced.
 type PhotoObjectStore interface {
-	PresignUpload(ctx context.Context, uploadKey string, maxBytes int64, contentType string,
-		ttl time.Duration) (storage.PresignedPost, error)
+	PutUpload(ctx context.Context, uploadKey string, r io.Reader, size, maxBytes int64,
+		contentType string) (storage.ObjectInfo, error)
 	Stat(ctx context.Context, b storage.Bucket, key string) (storage.ObjectInfo, error)
 	ReadHead(ctx context.Context, b storage.Bucket, key, ifMatchETag string, n int) ([]byte, error)
 	Open(ctx context.Context, b storage.Bucket, key, ifMatchETag string) (io.ReadCloser, int64, error)
@@ -198,17 +203,12 @@ type CitizenPhotoPetitions interface {
 		domain.PhieuPhanAnh, error)
 }
 
-// PhotoUploadRequest is what the phone declares before it uploads. NO FILE NAME (domain.PetitionPhotoName
-// says why). Both values are claims, checked again on the bytes at completion (ADR 0052 §1c).
+// PhotoUploadRequest is what the multipart upload declares beside the file. NO FILE NAME
+// (domain.PetitionPhotoName says why — the part's file name is ignored). Both values are claims: the
+// size is held to exactly by the stream, the type is checked again on the bytes at completion.
 type PhotoUploadRequest struct {
 	ContentType string
 	Size        int64
-}
-
-// PhotoUpload is the pending row and the form the phone posts the image with.
-type PhotoUpload struct {
-	File domain.StoredFile
-	Post storage.PresignedPost // bearer credential for its TTL — never logged
 }
 
 // PhotoLink is one stored photo with a presigned GET — a bearer credential until ExpiresAt.
@@ -368,8 +368,8 @@ func photoKey(ctx context.Context, id string, at time.Time) storage.Key {
 	}
 }
 
-// uploadKeyFor is the temp key the phone writes: the destination key with the DECLARED type's
-// extension (core/storage.PresignUpload requires the two to match).
+// uploadKeyFor is the temp key the upload is streamed to: the destination key with the DECLARED type's
+// extension (core/storage.PutUpload requires the two to match).
 func uploadKeyFor(dst storage.Key, ext string) (string, error) {
 	k := dst
 	k.Ext = ext
@@ -387,57 +387,95 @@ func writePhotoAudit(ctx context.Context, tx *store.ScopedTx, citizen audit.Acto
 	return audit.Write(ctx, tx, audit.Entry{Actor: citizen, Action: action, Subject: code, At: at, Delta: delta})
 }
 
-// --- a. request a slot ------------------------------------------------------------------------------
+// --- the upload: reserve · receive · complete ------------------------------------------------------
 
-// RequestUpload issues one upload slot for one photo on the citizen's own petition `ma`.
-//
-// ONE TRANSACTION: the petition read FOR UPDATE with both isolation axes (it also serialises two
-// requests on one petition), the status, the count with live pending slots, the pending row, the form
-// (signed offline, so a signing failure leaves no row) and the audit entry.
-func (uc *CitizenPetitionPhotos) RequestUpload(ctx context.Context, ma string, req PhotoUploadRequest,
-	citizen audit.Actor) (PhotoUpload, error) {
-
-	owner, err := photoOwner(citizen)
-	if err != nil {
-		return PhotoUpload{}, err
-	}
-	if req.Size <= 0 {
-		return PhotoUpload{}, ErrPhotoSizeInvalid
-	}
+// MaxUploadBytes is the policy's cap on one photo, for the handler to bound the request body BEFORE it
+// reads it (core/httpx.UploadOptions.MaxFileBytes). The same refusals as Upload: not configured,
+// platform unreachable, no per-petition count — there is no default (ADR 0052 stop #4).
+func (uc *CitizenPetitionPhotos) MaxUploadBytes(ctx context.Context) (int64, error) {
 	if !uc.uploadsConfigured() {
-		return PhotoUpload{}, ErrUploadNotConfigured
+		return 0, ErrUploadNotConfigured
 	}
 	pol, err := uc.photoPolicy(ctx)
 	if err != nil {
-		return PhotoUpload{}, err
+		return 0, err
+	}
+	return pol.MaxBytes, nil
+}
+
+// Upload stores one photo on the citizen's own petition `ma`: the row is reserved (a), the bytes are
+// streamed into temp (b), and the completion (c) runs on them — one request, one answer: the STORED
+// photo, or a refusal. A failure after (a) closes the reserved row (`failed`, with its trail), so it
+// stops counting against the 5 at once.
+func (uc *CitizenPetitionPhotos) Upload(ctx context.Context, ma string, req PhotoUploadRequest, body UploadBody,
+	citizen audit.Actor) (domain.StoredFile, error) {
+
+	res, err := uc.reserve(ctx, ma, req, citizen)
+	if err != nil {
+		return domain.StoredFile{}, err
+	}
+	closer := uploadCloser{db: uc.db, objects: uc.objects, files: uc.files, actor: citizen,
+		failAction: ActionPetitionPhotoExpired, clock: uc.clock}
+	if err := closer.receive(ctx, res, body); err != nil {
+		return domain.StoredFile{}, err
+	}
+	f, err := uc.complete(ctx, ma, res.file.ID, citizen)
+	if err != nil {
+		return domain.StoredFile{}, closer.afterComplete(ctx, res, err)
+	}
+	return f, nil
+}
+
+// reserve is step (a): one pending row for one photo on the citizen's own petition `ma`.
+//
+// ONE TRANSACTION: the petition read FOR UPDATE with both isolation axes (it also serialises two
+// uploads on one petition), the status, the count with live pending rows, the pending row and the
+// audit entry.
+func (uc *CitizenPetitionPhotos) reserve(ctx context.Context, ma string, req PhotoUploadRequest,
+	citizen audit.Actor) (uploadReservation, error) {
+
+	owner, err := photoOwner(citizen)
+	if err != nil {
+		return uploadReservation{}, err
+	}
+	if req.Size <= 0 {
+		return uploadReservation{}, ErrPhotoSizeInvalid
+	}
+	if !uc.uploadsConfigured() {
+		return uploadReservation{}, ErrUploadNotConfigured
+	}
+	pol, err := uc.photoPolicy(ctx)
+	if err != nil {
+		return uploadReservation{}, err
 	}
 	if !photoTypeAllowed(pol, req.ContentType) {
-		return PhotoUpload{}, ErrPhotoTypeNotAllowed
+		return uploadReservation{}, ErrPhotoTypeNotAllowed
 	}
 	if req.Size > pol.MaxBytes {
-		return PhotoUpload{}, ErrPhotoTooLarge
+		return uploadReservation{}, ErrPhotoTooLarge
 	}
 	upExt, ok := storage.ExtForMIME(req.ContentType)
 	if !ok {
-		return PhotoUpload{}, ErrPhotoTypeNotAllowed
+		return uploadReservation{}, ErrPhotoTypeNotAllowed
 	}
 
 	id, err := uc.newID()
 	if err != nil {
-		return PhotoUpload{}, fmt.Errorf("ảnh hiện trường: sinh mã tệp: %w", err)
+		return uploadReservation{}, fmt.Errorf("ảnh hiện trường: sinh mã tệp: %w", err)
 	}
 	now := uc.clock()
 	dst := photoKey(ctx, id, now)
 	objectKey, err := dst.Path()
 	if err != nil {
-		return PhotoUpload{}, fmt.Errorf("ảnh hiện trường: dựng khoá đối tượng: %w", err)
+		return uploadReservation{}, fmt.Errorf("ảnh hiện trường: dựng khoá đối tượng: %w", err)
 	}
 	uploadKey, err := uploadKeyFor(dst, upExt)
 	if err != nil {
-		return PhotoUpload{}, fmt.Errorf("ảnh hiện trường: dựng khoá tải lên: %w", err)
+		return uploadReservation{}, fmt.Errorf("ảnh hiện trường: dựng khoá tải lên: %w", err)
 	}
 
-	var out PhotoUpload
+	res := uploadReservation{uploadKey: uploadKey, contentType: req.ContentType, size: req.Size,
+		maxBytes: pol.MaxBytes}
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		p, err := uc.petitions.OwnedForUpdate(ctx, tx, owner, ma)
 		if err != nil {
@@ -463,28 +501,24 @@ func (uc *CitizenPetitionPhotos) RequestUpload(ctx context.Context, ma string, r
 		if err := uc.files.InsertPending(ctx, tx, f); err != nil {
 			return err
 		}
-		post, err := uc.objects.PresignUpload(ctx, uploadKey, pol.MaxBytes, req.ContentType, storage.UploadTTL)
-		if err != nil {
-			return fmt.Errorf("ảnh hiện trường: ký lượt tải lên: %w", err)
-		}
 		if err := writePhotoAudit(ctx, tx, citizen, p.MaTraCuu, ActionPetitionPhotoRequested, now, map[string]any{
 			"tep_id": id, "muc_dich": domain.PurposePetitionPhoto,
 			"loai_khai_bao": req.ContentType, "kich_thuoc_khai": req.Size,
 		}); err != nil {
 			return err
 		}
-		out = PhotoUpload{File: f, Post: post}
+		res.file, res.subject = f, p.MaTraCuu
 		return nil
 	})
 	if err != nil {
-		return PhotoUpload{}, bocPhieu(ctx, "xin tải ảnh hiện trường", err)
+		return uploadReservation{}, bocPhieu(ctx, "xin tải ảnh hiện trường", err)
 	}
-	return out, nil
+	return res, nil
 }
 
 // --- c. complete ------------------------------------------------------------------------------------
 
-// photoInspection is what the lock-free half of Complete found.
+// photoInspection is what the lock-free half of complete found.
 type photoInspection struct {
 	kind        outcomeKind
 	facts       domain.StoredFileFacts // of the STORED (re-encoded) object
@@ -494,20 +528,20 @@ type photoInspection struct {
 	signature   string
 	tempRemoved bool
 	// tempKeys are the temp keys looked at and found empty — set when nothing was received, so the
-	// 409 in the log names WHERE the upload was expected (a phone posting to another store or bucket
-	// looks exactly like a phone that never posted). Object keys only: commune and file id, no person.
+	// error in the log names WHERE the upload was expected (this service's own temp write not being
+	// visible there is a store fault). Object keys only: commune and file id, no person.
 	tempKeys []string
 }
 
-// Complete runs step (c) for one upload of the citizen's own petition `ma`.
+// complete runs step (c) for one upload of the citizen's own petition `ma` — Upload calls it on the
+// bytes it has just streamed; there is no completion route any more (ADR 0052 §Sửa đổi 09/10/2026).
 //
 // The object-store and pixel work happens lock-free first (task_attachment.go says why); then ONE short
 // transaction re-reads the petition and the row FOR UPDATE, re-checks the status and the count under the
 // lock, and records the outcome with its trail.
 //
-// IDEMPOTENT: a photo already stored answers as stored, so a retried request answers the same outcome
-// (the route declares idem.KhongCan).
-func (uc *CitizenPetitionPhotos) Complete(ctx context.Context, ma, id string, citizen audit.Actor) (
+// IDEMPOTENT: a photo already stored answers as stored.
+func (uc *CitizenPetitionPhotos) complete(ctx context.Context, ma, id string, citizen audit.Actor) (
 	domain.StoredFile, error) {
 
 	owner, err := photoOwner(citizen)
@@ -588,7 +622,7 @@ func (uc *photoSlots) completeOnce(ctx context.Context, id string,
 	return c.file, c.err
 }
 
-// completePending is steps 2 and 3 of Complete for a file the caller owns and that was `pending`.
+// completePending is steps 2 and 3 of complete for a file the caller owns and that was `pending`.
 func (uc *CitizenPetitionPhotos) completePending(ctx context.Context, ma, id string, citizen audit.Actor,
 	owner domain.PetitionOwner, f domain.StoredFile) (domain.StoredFile, error) {
 
@@ -718,8 +752,8 @@ func notReceivedDetail(f domain.StoredFile, insp photoInspection) string {
 
 // photoUploadExts are the temp-key extensions an upload of this petition photo can have been issued
 // with — one per type photoTypeAllowed admits. The row stores only the DESTINATION key (`.jpg`), so the
-// declared type is found again by looking: the object id is fresh and the form fixed one key, so at most
-// one of these exists.
+// declared type is found again by looking: the object id is fresh and the upload wrote one key, so at
+// most one of these exists.
 func photoUploadExts(pol uploadpolicy.Policy) []string {
 	var out []string
 	for _, m := range []string{imaging.MIMEJPEG, imaging.MIMEPNG, imaging.MIMEWebP} {
@@ -754,8 +788,9 @@ func (uc *CitizenPetitionPhotos) inspector() photoInspector {
 		clock: uc.clock}
 }
 
-// inspect is the lock-free half of Complete. An error means nothing may be decided yet (scanner down,
-// object replaced, store failure): nothing is written and the row stays `pending`, retryable.
+// inspect is the lock-free half of complete. An error means nothing may be decided yet (scanner down,
+// object replaced, store failure): nothing is written here, and Upload then closes the row (`failed`,
+// upload_stream.go) because no completion route is left to retry it from.
 func (uc photoInspector) inspect(ctx context.Context, f domain.StoredFile, dst storage.Key,
 	pol uploadpolicy.Policy) (photoInspection, error) {
 

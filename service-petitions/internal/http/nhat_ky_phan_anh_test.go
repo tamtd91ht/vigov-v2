@@ -493,7 +493,7 @@ func TestTruongNoteTuyChonTrenSauThan(t *testing.T) {
 func TestTuyenCongDanKhongCoNhatKy(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterCongDan(mux, DepsCongDan{
-		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(),
+		Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(), NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(), VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu(),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
 	})
 	for _, p := range []string{

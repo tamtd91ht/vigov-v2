@@ -401,6 +401,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			// every refusal case in this package reads the sentence a commune that never touched the
 			// screen reads. Its suite is system_messages_test.go.
 			SystemMessages: &systemMessagesFake{},
+			UploadSlots:    uploadSlotsThu(),
 			Log:            slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		thuMuc:     thuMucMau(),
@@ -562,6 +563,7 @@ func depsDay() Deps {
 		CitizenReportBreakdown: citizenReportBreakdownSample(),
 		AuditLog:               &auditLogFake{},
 		SystemMessages:         &systemMessagesFake{},
+		UploadSlots:            uploadSlotsThu(),
 		// Merging duplicate petitions.
 		CitizenReportMerge:  &mergeActsFake{},
 		MergeLinks:          &mergeLinksFake{},
@@ -635,6 +637,9 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		"thiếu bộ đọc nhật ký hệ thống": func(d *Deps) { d.AuditLog = nil },
 		// "Lời hệ thống": a nil here panics inside a REFUSAL — the answer meant to explain a mistake.
 		"thiếu use case lời hệ thống": func(d *Deps) { d.SystemMessages = nil },
+		// The per-pod upload cap (ADR 0052 §Sửa đổi 09/10/2026): without it a burst of uploads is how a
+		// 384 MiB pod is OOM-killed, taking every route with it.
+		"missing upload slots": func(d *Deps) { d.UploadSlots = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

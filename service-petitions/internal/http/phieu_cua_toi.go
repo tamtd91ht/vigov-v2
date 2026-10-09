@@ -111,6 +111,10 @@ type DepsCongDan struct {
 	// served at all.
 	PhotoLimiter *ratelimit.Limiter
 
+	// UploadSlots is the PROCESS-WIDE cap on uploads in flight — the SAME value Deps.UploadSlots holds
+	// (ADR 0052 §Sửa đổi 09/10/2026). Required.
+	UploadSlots *httpx.UploadSlots
+
 	Log *slog.Logger
 }
 

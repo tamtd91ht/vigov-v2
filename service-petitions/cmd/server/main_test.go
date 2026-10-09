@@ -489,6 +489,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// Never invoked here; Register refuses a nil. Own suites: internal/http/system_messages_test.go
 		// and internal/app/system_message_test.go.
 		SystemMessages: app.NewSystemMessages(nil, nil),
+		UploadSlots:    httpx.NewUploadSlots(httpx.UploadSlotsPerPod),
 		Log:            log,
 	})
 
@@ -506,8 +507,8 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		VerificationPhotos: app.NewCitizenVerificationPhotos(nil, nil, nil),
 		// The dev wiring with no Redis: the always-failing counter under the fail-CLOSED citizen photo
 		// policy — what main builds when REDIS_DSN is unset.
-		PhotoLimiter: testPhotoLimiter(t),
-		Log:          log,
+		PhotoLimiter: testPhotoLimiter(t), UploadSlots: httpx.NewUploadSlots(httpx.UploadSlotsPerPod),
+		Log: log,
 	})
 
 	danhBa := thuMucGia{

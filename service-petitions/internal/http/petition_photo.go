@@ -2,17 +2,16 @@ package http
 
 // A citizen's scene photos on their own petition — the HTTP half of internal/app/petition_photo.go:
 //
-//	POST /api/v1/my-citizen-reports/{maTraCuu}/photos                     citizen: upload slot + form
-//	POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion     citizen: scan, re-encode, store
-//	GET  /api/v1/my-citizen-reports/{maTraCuu}/photos                     citizen: own photos + signed links
+//	POST /api/v1/my-citizen-reports/{maTraCuu}/photos   citizen: ONE multipart upload → scan, re-encode, store
+//	GET  /api/v1/my-citizen-reports/{maTraCuu}/photos   citizen: own photos + signed links
 //	GET  /api/v1/citizen-reports/{maTraCuu}/photos                        staff, `feedback.read`
 //
 // THE CITIZEN HANDLERS SIT ON HandlerCongDan AND THE STAFF ONE ON Handler — two muxes, two Deps
 // types, never a shared handler (rule 4, invariant 5).
 //
-// ⚠ REPLIES CARRY BEARER CREDENTIALS (the presigned POST form, the presigned GET URLs). They go to the
-// client and nowhere else: nothing here logs a reply, a URL, a form field, the lookup code or the
-// citizen id. Every such reply carries `Cache-Control: no-store`.
+// ⚠ THE LIST REPLIES CARRY BEARER CREDENTIALS (presigned GET URLs). They go to the client and nowhere
+// else: nothing here logs a reply, a URL, a field of the upload, the lookup code or the citizen id. Every
+// such reply carries `Cache-Control: no-store`.
 
 import (
 	"context"
@@ -35,8 +34,9 @@ import (
 // CitizenPetitionPhotos is the citizen's three acts (app.CitizenPetitionPhotos). It takes the actor and
 // no citizen identifier: the actor IS the owner, from the session.
 type CitizenPetitionPhotos interface {
-	RequestUpload(ctx context.Context, ma string, req app.PhotoUploadRequest, citizen audit.Actor) (app.PhotoUpload, error)
-	Complete(ctx context.Context, ma, id string, citizen audit.Actor) (domain.StoredFile, error)
+	uploadLimiter
+	Upload(ctx context.Context, ma string, req app.PhotoUploadRequest, body app.UploadBody, citizen audit.Actor) (
+		domain.StoredFile, error)
 	ListPhotos(ctx context.Context, ma string, citizen audit.Actor) ([]app.PhotoLink, error)
 }
 
@@ -52,26 +52,15 @@ type StaffPetitionPhotos interface {
 	ListPhotos(ctx context.Context, ma string, mayReadRestricted bool, reader audit.Actor) ([]app.PhotoLink, error)
 }
 
-// photoUploadIn is what the phone declares before it uploads. TWO FIELDS AND NO FILE NAME
-// (domain.PetitionPhotoName says why). Both are claims; completion checks the bytes.
-type photoUploadIn struct {
-	// ContentType is the DECLARED type: image/jpeg, image/png or image/webp, and only those the
-	// commune's `petition-photo` policy lists. HEIC and video are refused.
-	ContentType string `json:"content_type"`
-	// Size is the declared size in bytes, at most the policy's limit (10 MB today).
-	Size int64 `json:"size"`
-}
-
-// photoOut is one photo as its sender sees it on the upload and completion replies. No object key, no
-// uploader, no file name: nothing in them a reader needs, and the uploader is always the petition's
-// own citizen.
+// photoOut is one photo as its sender sees it on the upload reply. No object key, no uploader, no file
+// name: nothing in them a reader needs, and the uploader is always the petition's own citizen.
 type photoOut struct {
 	ID string `json:"id"`
-	// ContentType is the STORED type — always image/jpeg once stored (the re-encode); "" while pending.
+	// ContentType is the STORED type — always image/jpeg (the re-encode).
 	ContentType string `json:"content_type"`
-	// SizeBytes is the stored (re-encoded) size; 0 while pending.
+	// SizeBytes is the stored (re-encoded) size.
 	SizeBytes int64 `json:"size_bytes"`
-	// Status is ADR 0052 §5's: `pending` until completion, then `stored`.
+	// Status is ADR 0052 §5's: `stored` on the upload reply.
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -79,13 +68,6 @@ type photoOut struct {
 func photoFromFile(f domain.StoredFile) photoOut {
 	return photoOut{ID: f.ID, ContentType: f.MIMEType, SizeBytes: f.SizeBytes, Status: string(f.Status),
 		CreatedAt: f.CreatedAt}
-}
-
-// photoUploadOut is the reply of POST …/photos: the pending photo and the form to post the image with
-// (every `fields` entry as a form field, then the file LAST, named `file`, to `url`; 15 minutes).
-type photoUploadOut struct {
-	Photo  photoOut           `json:"photo"`
-	Upload presignedUploadOut `json:"upload"`
 }
 
 // photoLinkOut is one stored photo with a presigned GET valid until `url_expires_at` (at most 15
@@ -186,54 +168,42 @@ func (h *HandlerCongDan) ownerPhotoActor(w http.ResponseWriter, r *http.Request)
 	return actor, ma, true
 }
 
-// RequestPetitionPhotoUpload serves POST /api/v1/my-citizen-reports/{maTraCuu}/photos.
-func (h *HandlerCongDan) RequestPetitionPhotoUpload(w http.ResponseWriter, r *http.Request) {
+// UploadPetitionPhoto serves POST /api/v1/my-citizen-reports/{maTraCuu}/photos — ONE multipart upload
+// of ONE photo (ADR 0052 §Sửa đổi 09/10/2026), answered with the STORED photo.
+//
+// ORDER: the owner from the session · the citizen's photo budget, charged ONCE per upload · a slot of
+// the pod's upload cap · the policy's cap · the envelope · the use case. Everything before the use case
+// refuses without reading the file.
+//
+// THE PART'S FILE NAME IS IGNORED, never read: a photo is stored under domain.PetitionPhotoName, and the
+// name a phone gives a file is often a person's name or number (rule 3).
+func (h *HandlerCongDan) UploadPetitionPhoto(w http.ResponseWriter, r *http.Request) {
 	citizen, ma, ok := h.ownerPhotoActor(w, r)
 	if !ok || !h.photoGate(w, r, citizen) {
 		return
 	}
-	var in photoUploadIn
-	if !docThan(w, r, &in) {
+	answer := func(err error) { h.answerPhotoError(w, r, "tải ảnh hiện trường", err) }
+	up, release, ok := receiveUpload(w, r, h.d.UploadSlots, h.d.Log, h.d.Photos,
+		[]string{uploadFieldContentType}, answer)
+	defer release()
+	if !ok {
 		return
 	}
-	up, err := h.d.Photos.RequestUpload(r.Context(), ma, app.PhotoUploadRequest{ContentType: in.ContentType,
-		Size: in.Size}, citizen)
+	ctx, cancel := context.WithDeadline(r.Context(), up.Deadline)
+	defer cancel()
+	f, err := h.d.Photos.Upload(ctx, ma, app.PhotoUploadRequest{ContentType: declaredType(up), Size: up.Size},
+		uploadBody{&up}, citizen)
 	if err != nil {
-		h.answerPhotoError(w, r, "xin tải ảnh hiện trường", err)
+		answer(err)
 		return
 	}
-	// LOGGED: where the phone will post and under which key (storage.PresignedPost.Destination — never
-	// the policy or the signature). With the completion's line below, an upload that "succeeded" on the
-	// phone but never reached this service's store reads as two different places (09/10/2026).
-	target, key := up.Post.Destination()
-	h.d.Log.Info("ảnh hiện trường: cấp chỗ tải", "xa", string(tenant.MustFrom(r.Context())), "tep_id", up.File.ID,
-		"dich_tai_len", target, "khoa_tai_len", key)
-	// A replay with the same Idempotency-Key is told the FILE ID — never the form, which is a bearer
-	// credential and is not stored (core/idem). The phone then completes, or re-lists, by that id.
-	idem.RecordCode(r.Context(), up.File.ID)
-	noStore(w)
-	vietJSON(w, http.StatusCreated, photoUploadOut{
-		Photo:  photoFromFile(up.File),
-		Upload: presignedUploadOut{URL: up.Post.URL, Fields: up.Post.Fields, ExpiresAt: up.Post.ExpiresAt},
-	})
-}
-
-// CompletePetitionPhoto serves POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion.
-func (h *HandlerCongDan) CompletePetitionPhoto(w http.ResponseWriter, r *http.Request) {
-	citizen, ma, ok := h.ownerPhotoActor(w, r)
-	if !ok || !h.photoGate(w, r, citizen) {
-		return
-	}
-	f, err := h.d.Photos.Complete(r.Context(), ma, r.PathValue("id"), citizen)
-	if err != nil {
-		h.answerPhotoError(w, r, "hoàn tất ảnh hiện trường", err)
-		return
-	}
-	// LOGGED: the commune, the file id and the private key it was read back into — NOT the lookup code,
-	// NOT the citizen (rule 3). The read side's endpoint and buckets are on the startup line "kho lưu tệp".
-	h.d.Log.Info("người dân đã đính ảnh hiện trường", "xa", string(tenant.MustFrom(r.Context())), "tep_id", f.ID,
+	// LOGGED: the commune, the file id and the private key it was stored under — NOT the lookup code,
+	// NOT the citizen (rule 3). The store's endpoint and buckets are on the startup line "kho lưu tệp".
+	h.d.Log.Info("người dân đã đính ảnh hiện trường", "xa", string(tenant.MustFrom(ctx)), "tep_id", f.ID,
 		"khoa_luu", f.ObjectKey)
-	vietJSON(w, http.StatusOK, photoFromFile(f))
+	// A replay with the same Idempotency-Key is told the FILE ID (core/idem) — never a second file.
+	idem.RecordCode(ctx, f.ID)
+	vietJSON(w, http.StatusCreated, photoFromFile(f))
 }
 
 // ListMyPetitionPhotos serves GET /api/v1/my-citizen-reports/{maTraCuu}/photos.
@@ -286,6 +256,7 @@ func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request
 	var rej *app.AttachmentRejection
 	refused := fileRefusalLog(r, h.d.Log, "ảnh hiện trường: từ chối", what, err)
 	switch {
+	case writeUploadEnvelopeError(w, err, refused):
 	case errors.Is(err, petstore.ErrPhieuKhongTonTai):
 		// Identical to an unknown code on GET /api/v1/my-citizen-reports/{code} — rule 4, forbidden #2.
 		h.khongTimThay(w)
@@ -294,7 +265,9 @@ func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request
 	case errors.Is(err, app.ErrPhotoTypeNotAllowed):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Chỉ nhận ảnh JPEG, PNG hoặc WebP.", "")
 	case errors.Is(err, app.ErrPhotoTooLarge):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Ảnh lớn hơn dung lượng tối đa cho phép.", "")
+		refused("file_too_large")
+		httpx.WriteError(w, http.StatusRequestEntityTooLarge, "file_too_large",
+			"Ảnh lớn hơn dung lượng tối đa cho phép.", "")
 	case errors.Is(err, app.ErrPhotoSizeInvalid):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", "Kích thước ảnh khai báo không hợp lệ.", "")
 	case errors.As(err, &rej):
@@ -315,19 +288,11 @@ func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request
 	case errors.Is(err, app.ErrAttachmentNotPending):
 		refused("photo_state")
 		httpx.WriteError(w, http.StatusConflict, "photo_state",
-			"Ảnh này đã bị từ chối hoặc lượt tải đã hết hạn. Vui lòng chọn ảnh và tải lên lại.", "")
-	case errors.Is(err, app.ErrUploadNotReceived):
-		refused("upload_not_received")
-		httpx.WriteError(w, http.StatusConflict, "upload_not_received",
-			"Chưa nhận được ảnh. Vui lòng chờ tải lên xong rồi thử lại.", "")
-	case errors.Is(err, app.ErrUploadExpired):
-		refused("upload_expired")
-		httpx.WriteError(w, http.StatusConflict, "upload_expired",
-			"Lượt tải lên đã hết hạn mà chưa nhận được ảnh. Vui lòng chọn ảnh và tải lên lại.", "")
+			"Ảnh này đã bị từ chối. Vui lòng chọn ảnh và tải lên lại.", "")
 	case errors.Is(err, app.ErrUploadChanged):
 		refused("upload_changed")
 		httpx.WriteError(w, http.StatusConflict, "upload_changed",
-			"Ảnh vừa bị thay đổi trong lúc kiểm tra. Vui lòng thử lại.", "")
+			"Ảnh vừa bị thay đổi trong lúc kiểm tra nên CHƯA được lưu. Vui lòng tải lên lại.", "")
 	case writePhotoUnavailable(ctx, w, h.d.Log, what, err):
 	default:
 		h.d.Log.Error("ảnh hiện trường: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "viec", what, "err", err)
@@ -335,10 +300,12 @@ func (h *HandlerCongDan) answerPhotoError(w http.ResponseWriter, r *http.Request
 	}
 }
 
-// fileRefusalLog returns the line every 409/422 of a FILE route writes — the citizen's scene photo,
-// staff's verification photo, the petition log and task attachments. The client reads a fixed sentence,
-// so without it an operator cannot tell "the upload never arrived" from "it arrived in a store this
-// service does not read" (09/10/2026, a missing temp bucket answered 409 with nothing in the log).
+// fileRefusalLog returns the line every 4xx refusal of a FILE route writes past the permission gate —
+// the citizen's scene photo, staff's verification photo, the petition log and task attachments: the
+// upload's own failures (408 / 413 / 415 / 400, upload.go) and the 409 / 422 of the flow. The client
+// reads a fixed sentence, so without it an operator cannot tell a dropped upload from a refused file
+// (09/10/2026, a missing temp bucket answered 409 with nothing in the log). `tep_id` is the path's file
+// id where the route has one; an upload's id is inside `err` (app wraps it) once a row was reserved.
 //
 // INFO and `ma_loi`, as tuChoiXuLy (xu_ly_phan_anh.go): a refusal is the rule doing its job, and `ma`
 // in this service is a petition's lookup code. Commune, file id, code and the wrapped error only: the

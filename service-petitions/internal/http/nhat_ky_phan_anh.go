@@ -47,8 +47,8 @@ const (
 // ⚠ PERSONAL DATA MAY BE IN IT (rule 3). At most domain.GhiChuToiDa characters.
 type ghiChuPhieuVao struct {
 	Note string `json:"note"`
-	// Attachments are ids returned by POST /api/v1/citizen-reports/{maTraCuu}/log-attachments and
-	// COMPLETED through …/{id}/completion, by the SAME officer. OPTIONAL and additive: omitted, the note
+	// Attachments are ids of files STORED by POST /api/v1/citizen-reports/{maTraCuu}/log-attachments (one
+	// multipart upload), by the SAME officer. OPTIONAL and additive: omitted, the note
 	// is written alone as before. Each id once; linked in the note's transaction.
 	Attachments []string `json:"attachments,omitempty"`
 }

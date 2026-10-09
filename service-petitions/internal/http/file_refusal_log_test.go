@@ -3,18 +3,21 @@ package http
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 )
 
-// Every 409/422 of a staff FILE route is logged with its code, the file id and the cause (09/10/2026: a
-// missing temp bucket answered 409 with nothing in the log). INFO and `ma_loi`, as tuChoiXuLy.
+// Every 4xx refusal of a staff FILE route past the gate is logged with its code, the path's file id and
+// the cause (09/10/2026: a missing temp bucket answered 409 with nothing in the log). INFO and `ma_loi`,
+// as tuChoiXuLy.
 func TestStaffFileRefusalsAreLogged(t *testing.T) {
 	const fileID = "01JFILE0000000000000000001"
 	mappers := map[string]func(h *Handler, w http.ResponseWriter, r *http.Request, err error){
@@ -34,9 +37,12 @@ func TestStaffFileRefusalsAreLogged(t *testing.T) {
 			status int
 			code   string
 		}{
-			{app.ErrUploadNotReceived, http.StatusConflict, "upload_not_received"},
-			{app.ErrUploadExpired, http.StatusConflict, "upload_expired"},
 			{app.ErrUploadChanged, http.StatusConflict, "upload_changed"},
+			// The upload's own failures (ADR 0052 §Sửa đổi 09/10/2026): what was invisible when the
+			// bytes went straight to MinIO is now a logged 4xx of this service.
+			{fmt.Errorf("tệp tải lên x: %w", httpx.ErrUploadTimeout), http.StatusRequestTimeout, "upload_timeout"},
+			{fmt.Errorf("tệp tải lên x: %w", httpx.ErrUploadTooLarge), http.StatusRequestEntityTooLarge, "file_too_large"},
+			{fmt.Errorf("tệp tải lên x: %w", httpx.ErrUploadMalformed), http.StatusBadRequest, "invalid_upload"},
 		} {
 			t.Run(name+"/"+c.code, func(t *testing.T) {
 				var buf bytes.Buffer

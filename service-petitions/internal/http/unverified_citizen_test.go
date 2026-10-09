@@ -176,7 +176,7 @@ func TestUnverifiedSessionStillRefusedOnVerifiedOnlyRoutes(t *testing.T) {
 			petitions, rating, verif := phieuCuaToiMau(), newRatingFake(), newCitizenVerificationPhotosFake()
 			h := unverifiedChain(t, DepsCongDan{Phieu: petitions, GuiPhieu: soPhieuMoi(), Rating: rating,
 				NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: newCitizenPhotosFake(),
-				VerificationPhotos: verif, PhotoLimiter: photoLimiterThu()})
+				VerificationPhotos: verif, PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu()})
 			w := serveCitizen(h, rt.method, rt.path, rt.body, tokenZaloA)
 			doiMa(t, w, http.StatusForbidden)
 			if !strings.Contains(w.Body.String(), `"chua_xac_thuc_so"`) {
@@ -198,13 +198,13 @@ func TestUnverifiedSessionReachesScenePhotosAsAccount(t *testing.T) {
 	photos.owner[xaA][maZalo] = idZaloA
 	h := unverifiedChain(t, DepsCongDan{Phieu: phieuCuaToiMau(), GuiPhieu: soPhieuMoi(), Rating: newRatingFake(),
 		NhanLinhVuc: nhanLinhVucMau(), CitizenFields: newFieldCatalogueFake(), Photos: photos,
-		VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu()})
+		VerificationPhotos: newCitizenVerificationPhotosFake(), PhotoLimiter: photoLimiterThu(), UploadSlots: uploadSlotsThu()})
 
-	doiMa(t, serveCitizen(h, http.MethodPost, photosPath(maZalo), `{"content_type":"image/jpeg","size":400000}`, tokenZaloA),
-		http.StatusCreated)
-	doiMa(t, serveCitizen(h, http.MethodPost, photosPath(maZalo)+"/"+photoIDHTTP+"/completion", "", tokenZaloA),
-		http.StatusOK)
+	doiMa(t, serveCitizenUpload(t, h, photosPath(maZalo), photoFile(), tokenZaloA), http.StatusCreated)
 	doiMa(t, serveCitizen(h, http.MethodGet, photosPath(maZalo), "", tokenZaloA), http.StatusOK)
+	if len(photos.seenCitizen) != 2 {
+		t.Fatalf("use case calls = %d, want the upload and the list", len(photos.seenCitizen))
+	}
 	for i, c := range photos.seenCitizen {
 		if c.ID != idZaloA || c.Kind != audit.KindZaloAccount || photos.seenTenant[i] != xaA {
 			t.Errorf("call %d actor = %+v in %q, want the account %q kind %q in commune A", i, c, photos.seenTenant[i],
@@ -293,6 +293,21 @@ func serveCitizen(h http.Handler, method, path, body, token string) *httptest.Re
 		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set(idem.Header, "01JKEYUNVERIFIED"+strings.NewReplacer("/", "", "{", "", "}", "").Replace(path))
 	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+	return w
+}
+
+// serveCitizenUpload is serveCitizen for a multipart file upload (upload.go).
+func serveCitizenUpload(t *testing.T, h http.Handler, path string, u uploadThan, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	b, ct := u.encode(t)
+	r := httptest.NewRequest(http.MethodPost, "https://"+hostMiniApp+path, b)
+	r.Host = hostMiniApp
+	r.RemoteAddr = "10.0.0.9:51000"
+	r.Header.Set("Authorization", "Bearer "+token)
+	r.Header.Set("Content-Type", ct)
+	r.Header.Set(idem.Header, "01JKEYUNVERIFIED"+strings.NewReplacer("/", "", "{", "", "}", "").Replace(path))
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
 	return w
