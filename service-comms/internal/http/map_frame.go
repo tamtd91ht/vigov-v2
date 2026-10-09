@@ -4,7 +4,8 @@ package http
 // §"Sửa đổi 04/10/2026 (lần 2)" K2–K6; migrations/0016_map_frame.sql, 0017).
 //
 //	GET  /api/v1/map-frame         asset.read     the EFFECTIVE frame — the commune's own, else the
-//	                                              platform default — and its bounds, or {configured:false}
+//	                               OR             platform default — and its bounds, or {configured:false}
+//	                               feedback.read
 //	PUT  /api/v1/map-frame         admin.lookup   set or move the commune's own frame (legal notice required)
 //	POST /api/v1/map-frame/reset   admin.lookup   "Về mặc định": stop applying the own frame (notice required)
 //
@@ -17,8 +18,9 @@ package http
 // some proxy, cache or client library will one day act on as written.
 //
 // THE KEYS EXIST AND NONE WAS INVENTED (rule 5, invariant 3c): `asset.read` is the key of every read of
-// the economic map (map_assets.go), seeded at service-identity/migrations/0001_init.sql:287; `admin.lookup`
-// is the key H3 and K4 name ("Ai đặt", "Ai đổi"), seeded at :281.
+// the economic map (map_assets.go), seeded at service-identity/migrations/0001_init.sql:287; `feedback.read`
+// is the key of every staff read of petitions, seeded at :299; `admin.lookup` is the key H3 and K4 name
+// ("Ai đặt", "Ai đổi"), seeded at :281.
 //
 // NOT SET IS 200 {"configured": false, …hints}, NOT 404 — the repository's convention for a singleton not
 // yet saved (GET /api/v1/mail-settings). "No frame" is a designed state of the page (H3 "Chưa đặt").
@@ -179,6 +181,14 @@ func RegisterMapFrame(mux *http.ServeMux, d MapFrameDeps) {
 	// THE EFFECTIVE FRAME, READ BY THE MAP PAGE ON EVERY OPEN. `asset.read`, the key of every other read
 	// of the map: whoever may see the map must learn its frame, or that there is none.
 	//
+	// OR `feedback.read` (owner decision, ADR 0072 §"Trả lời 09/10/2026" under §"Sửa đổi 09/10/2026"): the petition heat
+	// map and the petition mini-map are centred and bounded by this same frame, and a petition officer
+	// typically holds `feedback.read` without `asset.read`. Requiring `asset.read` alone answers that
+	// officer 403 and the petition maps open on no frame; granting `asset.read` instead would open the
+	// whole economic map (every asset) to them, which nobody decided. The reply carries no asset and no
+	// personal data — a centre, a radius, a box and who last set it (`CB-…`) — so the second key widens
+	// nothing beyond the frame itself. READ ONLY: the PUT and the reset below keep `admin.lookup` alone.
+	//
 	// NO idem.* DECLARATION: a GET changes no state. No audit entry: no personal data, and the read is
 	// inside the commune the request arrived in.
 	//
@@ -193,7 +203,7 @@ func RegisterMapFrame(mux *http.ServeMux, d MapFrameDeps) {
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error map_frame_default_unavailable
 	mux.Handle("GET /api/v1/map-frame",
-		authz.RequirePermission(d.Checker, "asset.read")(
+		authz.RequireAnyPermission(d.Checker, "asset.read", "feedback.read")(
 			http.HandlerFunc(h.GetMapFrame)))
 
 	// SET OR MOVE THE COMMUNE'S OWN FRAME. PUT AND NOT PATCH: the form is saved whole and the values only

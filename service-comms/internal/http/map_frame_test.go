@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -184,9 +185,12 @@ func putBody(lat, lng, r string) string {
 
 // mapFrameRoutes — the wrong keys are real and adjacent: a content reader must not read the map's
 // frame; a map READER must not set it or reset it, and neither must a map WRITER (H3/K4: admin.lookup).
+// The GET is listed twice, once per key it accepts (ADR 0072 §Trả lời 09/10/2026): each of 401 · 403
+// neither key · 403 other commune · 200 then holds for a petition officer exactly as for a map reader.
 func mapFrameRoutes() []mapAssetRoute {
 	return []mapAssetRoute{
 		{"get", http.MethodGet, "", "", "asset.read", "content.read", http.StatusOK},
+		{"get by petition reader", http.MethodGet, "", "", "feedback.read", "content.read", http.StatusOK},
 		{"put", http.MethodPut, "", putMapFrameBody, "admin.lookup", "asset.read", http.StatusOK},
 		{"put by asset writer", http.MethodPut, "", putMapFrameBody, "admin.lookup", "asset.update", http.StatusOK},
 		{"reset", http.MethodPost, mapFrameResetPath, resetMapFrameBody, "admin.lookup", "asset.read", http.StatusOK},
@@ -201,10 +205,36 @@ func TestMapFrameRoutesAskForSeededKeys(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFrameServer(t)
 			s.callPath(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body)
-			if len(s.checker.hoiGi) == 0 || s.checker.hoiGi[0] != tc.perm {
-				t.Fatalf("route asked for %v, want %q first", s.checker.hoiGi, tc.perm)
+			if !slices.Contains(s.checker.hoiGi, tc.perm) {
+				t.Fatalf("route asked for %v, want it to ask for %q", s.checker.hoiGi, tc.perm)
 			}
 		})
+	}
+}
+
+// TestMapFrameGetAsksForExactlyTheTwoKeys pins the OR: the GET asks for asset.read and feedback.read
+// and nothing else — a third key slipping in would widen the read, a missing one would lock the
+// petition maps out. The writes still ask for admin.lookup alone (the decision opened the READ only).
+// feedback.read is seeded at service-identity/migrations/0001_init.sql:299.
+func TestMapFrameGetAsksForExactlyTheTwoKeys(t *testing.T) {
+	s := newMapFrameServer(t)
+	doiMa(t, s.call(t, http.MethodGet, hostA, canBoGhi(xaA), ""), http.StatusForbidden)
+	if !slices.Equal(s.checker.hoiGi, []authz.Perm{"asset.read", "feedback.read"}) {
+		t.Fatalf("GET asked for %v, want [asset.read feedback.read]", s.checker.hoiGi)
+	}
+	for _, tc := range []struct{ method, path, body string }{
+		{http.MethodPut, mapFramePath, putMapFrameBody},
+		{http.MethodPost, mapFrameResetPath, resetMapFrameBody},
+	} {
+		s := newMapFrameServer(t)
+		s.grant(xaA, "feedback.read")
+		doiMa(t, s.callPath(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body), http.StatusForbidden)
+		if !slices.Equal(s.checker.hoiGi, []authz.Perm{"admin.lookup"}) {
+			t.Errorf("%s %s asked for %v, want [admin.lookup] alone", tc.method, tc.path, s.checker.hoiGi)
+		}
+		if s.fake.calls != 0 {
+			t.Errorf("%s %s ran for a petition reader", tc.method, tc.path)
+		}
 	}
 }
 
