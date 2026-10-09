@@ -347,6 +347,14 @@
       "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ A: core/storage PutUpload — service ghi luồng tệp vào bucket tạm (khoá upload/…, cỡ biết trước, DisableMultipart, không đệm cả tệp); ErrTooLarge (413) tách khỏi ErrInvalidArgument, ErrSizeMismatch",
       "bang_chung": "(commit này) — TestPutUploadRefusals (12 ca), TestPutUploadStoresExactBytes, TestPutUploadRefusesWrongLength; go vet + go test core/storage xanh. TestIntegrationPutUploadThenPromote CHƯA CHẠY (không có MinIO thật)",
       "tiep_theo": "PresignUpload còn — gỡ ở thẻ dọn sau khi mọi service chuyển. Chạy integration với MinIO thật (VIGOV_TEST_MINIO_ENDPOINT)."
+    },
+    {
+      "id": "tai-len-qua-service-httpx-upload",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ B: core/httpx ReadUpload (multipart chảy luồng: 415/413/400/408, trường chữ trước 'file', 'size' bắt buộc, đúng một phần file) + UploadSlots (4 lượt/pod, 503 upload_busy, Retry-After 5 s) + hạn 180 s",
+      "bang_chung": "(commit này) — core/httpx/upload.go + upload_test.go (kể cả ca TCP thật treo giữa tệp → 408). go vet + go test (-race) core/httpx xanh",
+      "tiep_theo": "Retry-After 5 s là giá trị nhà cung cấp tự chọn. Dịch vụ phải ánh xạ lỗi đọc thân qua UploadErrorStatus kể cả khi lỗi đi qua PutUpload."
     }
   ]
 }
