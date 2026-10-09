@@ -535,7 +535,7 @@ func main() {
 		Limiter:  publicLimiter,
 		Log:      log,
 	})
-	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
+	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins(), log)
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
@@ -802,11 +802,11 @@ func (unavailableCounter) Incr(context.Context, string, time.Duration) (int64, t
 	return 0, 0, errors.New("REDIS_DSN chưa đặt")
 }
 
-func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.Handler {
+func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS, log *slog.Logger) http.Handler {
 	c := muxCongKhai
 	c = httpx.Recover(traceID)(c)
 	c = httpx.StripTenantHeaders(c)
-	c = httpx.CORSCongDan(nguonCORS)(c)
+	c = httpx.CORSCongDan(nguonCORS, log)(c)
 	return c
 }
 

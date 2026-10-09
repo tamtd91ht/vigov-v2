@@ -839,14 +839,14 @@ func dungBien(mux, muxCongDan, muxAccountless http.Handler, soPhien httpx.Citize
 	c = httpx.CitizenEdge(soPhien)(c)
 	c = httpx.Recover(traceID)(c)
 	c = httpx.StripTenantHeaders(c)
-	c = httpx.CORSCongDan(nguonCORS)(c)
+	c = httpx.CORSCongDan(nguonCORS, log)(c)
 
 	// The accountless chain (ADR 0083). Outermost-last, as above.
 	var a http.Handler = muxAccountless
 	a = idem.Middleware(idemStore, log)(a)
 	a = httpx.Recover(traceID)(a)
 	a = httpx.StripTenantHeaders(a)
-	a = httpx.CORSCongDan(nguonCORS)(a)
+	a = httpx.CORSCongDan(nguonCORS, log)(a)
 
 	ngoai := http.NewServeMux()
 	ngoai.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {

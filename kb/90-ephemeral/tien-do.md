@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 2474210c
+derived_from_commit: 4eb660f9
 expires: 2027-01-07
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 154 |
 | chưa làm | 39 |
 | treo | 13 |
-| xong | 448 |
+| xong | 449 |
 
 ## Theo menu
 
@@ -285,6 +285,7 @@ PHẦN MẪU SỐ CỦA CHỈ SỐ CÒN LẠI CHO AI: lượt này chỉ LƯU `h
 | `core` | `adr-0080-lop-tuyen-tai-khoan-zalo` — httpx.CommuneFromSessionOrZaloAccount, authz.KindZaloAccount + CitizenChannelOwner, idem tách khoá theo Kind, audit đọc che mã/IP của zalo-account (ADR 0080) | xong | — | Web Admin audit-log-view.ts:36,43 chưa có nhãn cho Kind 'zalo-account' (hiện chữ thô). |
 | `core` | `core-accountless-va-so-xac-thuc-08-10` — Phần core cho hai việc 08/10/2026: (1) ADR 0083 phiếu không tài khoản — audit Kind anonymous + che IP như vết công dân (core/audit), idem nhớ theo (xã, khoá) 24 giờ (core/idem), ratelimit đếm theo (xã, IP), Redis hỏng thì từ chối (core/ratelimit); (2) core/identityclient.ResolveCitizenContactPhone cho petitions gắn số đã xác thực (ADR 0050 §Sửa đổi 08/10/2026). | xong | — | Không. |
 | `core` | `storage-ten-bucket-thieu-09-10` — core/storage mapErr: lỗi NoSuchBucket nêu TÊN bucket bị thiếu (09/10: log chỉ nói 'bucket does not exist', không biết bucket nào) | xong | — | — |
+| `core` | `cors-ghi-log-origin-la-09-10` — httpx.CORSCongDan ghi WARN mỗi request có Origin không thuộc CITIZEN_CORS_ALLOWED_ORIGINS (origin, phương thức, preflight — không đường dẫn). 09/10: Mini App bản phát hành không gọi được máy chủ, nghi origin webview khác bản thử (h5.zdn.vn), không dịch vụ nào ghi dòng log | xong | — | Người dùng mở app từ liên kết phát hành, đọc 'CORS: từ chối origin' trong log identity/petitions/vihat-miniapp, thêm origin ấy vào CITIZEN_CORS_ALLOWED_ORIGINS (common-config) và CORS_ALLOWED_ORIGINS (vihat-miniapp). Nếu không có dòng nào: nghi whitelist tên miền trên console Zalo |
 | `deploy` | `gan-mini-app-thang-binh` — Việc một lần trong job vigov-deploy: ghi dòng mini_app App ID 3291993990104489440 → Xã Thăng Bình (tạm, tới khi platform-admin có màn ghi sổ) | xong | — | ĐÃ CHẠY TRÊN PROD — chủ dự án xác nhận 01/10/2026 (dòng mini_app 3291993990104489440 đã ghi). Cùng ngày Xã Thăng Bình đổi App ID: xem mục doi-app-id-thang-binh. Stage giữ ở dạng LỊCH SỬ (chạy lại sẽ DỪNG ở phép kiểm); gỡ khi platform-admin có màn ghi sổ mini_app. |
 | `deploy` | `go-viec-demo-mini-app` — Gỡ việc bat-demo-mini-app / tat-demo-mini-app khỏi job vigov-deploy và mọi hướng dẫn dựng --demo trong deploy/ (chủ dự án 05/10/2026, ADR 0066 §Sửa đổi) | xong | — | Gỡ doi-app-id-thang-binh / gan-mini-app-thang-binh / dat-secret-mini-app khi màn platform-admin đã kiểm trên prod (ADR 0048 §01/10 #6d). |
 | `proto` | `resolve-assignable-staff` — identity.ResolveAssignableStaff + chú thích events.proto khớp ADR 0041 | xong | — | Còn mở: cờ 'có công dân' trên phieuPhanAnhRa (REST, không phải proto) — xem service-petitions/duong-xu-ly-phan-anh-phia-can-bo. |
@@ -684,7 +685,7 @@ Cập nhật 2026-10-08 · 72 mục
 
 ## `core`
 
-Cập nhật 2026-10-09 · 40 mục
+Cập nhật 2026-10-09 · 41 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -728,6 +729,7 @@ Cập nhật 2026-10-09 · 40 mục
 | `core-accountless-va-so-xac-thuc-08-10` — Phần core cho hai việc 08/10/2026: (1) ADR 0083 phiếu không tài khoản — audit Kind anonymous + che IP như vết công dân (core/audit), idem nhớ theo (xã, khoá) 24 giờ (core/idem), ratelimit đếm theo (xã, IP), Redis hỏng thì từ chối (core/ratelimit); (2) core/identityclient.ResolveCitizenContactPhone cho petitions gắn số đã xác thực (ADR 0050 §Sửa đổi 08/10/2026). | xong | core/idem/accountless_test.go, core/ratelimit/accountless_test.go, core/audit/read_test.go, core/identityclient/citizen_contact_phone_test.go (lỗi/log không mang sid, mã công dân, số). go vet + go test ./core/... xanh 08/10/2026; make check toàn kho chưa xanh trọn (lượt bị dừng vì máy hết RAM). | — | Không. |
 | `storage-ten-bucket-thieu-09-10` — core/storage mapErr: lỗi NoSuchBucket nêu TÊN bucket bị thiếu (09/10: log chỉ nói 'bucket does not exist', không biết bucket nào) | xong | (commit này) — core/storage/storage.go mapErr dùng minio ErrorResponse.BucketName. go test ./storage xanh | — | — |
 | `identityclient-scheduled-report-period-09-10` — core/identityclient: AutomationRun.ScheduledReportPeriod. | xong | 626cb700. go test core/identityclient xanh. | — | Chạy migration trên PostgreSQL thật. |
+| `cors-ghi-log-origin-la-09-10` — httpx.CORSCongDan ghi WARN mỗi request có Origin không thuộc CITIZEN_CORS_ALLOWED_ORIGINS (origin, phương thức, preflight — không đường dẫn). 09/10: Mini App bản phát hành không gọi được máy chủ, nghi origin webview khác bản thử (h5.zdn.vn), không dịch vụ nào ghi dòng log | xong | (commit này) — core/httpx/cors.go CORSCongDan(nguon, log); petitions/identity/comms cmd/server truyền log. Ca kiểm TestCORSNguonLa_GhiLogOrigin_KhongGhiDuongDan. go test core/httpx, identity cmd, comms cmd xanh; petitions cmd xanh trên worktree sạch. Cùng việc ở vihat-miniapp b00861e (CORS_ALLOWED_ORIGINS) | — | Người dùng mở app từ liên kết phát hành, đọc 'CORS: từ chối origin' trong log identity/petitions/vihat-miniapp, thêm origin ấy vào CITIZEN_CORS_ALLOWED_ORIGINS (common-config) và CORS_ALLOWED_ORIGINS (vihat-miniapp). Nếu không có dòng nào: nghi whitelist tên miền trên console Zalo |
 
 ## `deploy`
 

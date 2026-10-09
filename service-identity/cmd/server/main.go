@@ -603,7 +603,7 @@ func run(log *slog.Logger) error {
 	muxCongKhai := http.NewServeMux()
 	svchttp.RegisterCongKhai(muxCongKhai, svchttp.DepsCongKhai{Xa: nenTang, DanhBa: canBo, Profile: nenTang,
 		CitizenSessions: ownAppSignIn, Log: log})
-	ck := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins())
+	ck := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins(), log)
 
 	ngoai := dungNgoai(h, ck)
 
@@ -1019,11 +1019,11 @@ func dungCongCau(khoaCau []secret.Secret, cau *svcgrpc.CauServer, log *slog.Logg
 // not idempotent by contract (routes_cong_dan.go).
 //
 // A NAMED FUNCTION so bien_cong_dan_test.go can drive the real chain.
-func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS) http.Handler {
+func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS, log *slog.Logger) http.Handler {
 	c := muxCongKhai
 	c = httpx.Recover(traceID)(c)
 	c = httpx.StripTenantHeaders(c)
-	c = httpx.CORSCongDan(nguonCORS)(c)
+	c = httpx.CORSCongDan(nguonCORS, log)(c)
 	return c
 }
 

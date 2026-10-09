@@ -14,6 +14,7 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -78,7 +79,7 @@ func dungNgoaiThu(t *testing.T) (http.Handler, *canBoDanhDau) {
 	svchttp.RegisterCongKhai(mux, svchttp.DepsCongKhai{Xa: xaTheoHostThu{}, DanhBa: danhBaThu{}, Profile: profileStub{},
 		CitizenSessions: signInStub{}})
 	cb := &canBoDanhDau{}
-	return dungNgoai(cb, dungBienCongKhai(mux, nguon)), cb
+	return dungNgoai(cb, dungBienCongKhai(mux, nguon, slog.New(slog.DiscardHandler))), cb
 }
 
 func goiThu(h http.Handler, method, path, origin string) *httptest.ResponseRecorder {

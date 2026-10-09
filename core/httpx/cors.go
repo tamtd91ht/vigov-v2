@@ -1,6 +1,9 @@
 package httpx
 
-import "net/http"
+import (
+	"log/slog"
+	"net/http"
+)
 
 // NguonCORS answers whether a browser Origin may read citizen-edge responses.
 //
@@ -54,7 +57,14 @@ const (
 // hands one origin's answer to another.
 //
 // Nothing is exposed via Access-Control-Expose-Headers: citizen-app reads no response header.
-func CORSCongDan(nguon NguonCORS) func(http.Handler) http.Handler {
+//
+// AN UNKNOWN ORIGIN IS LOGGED (WARN), once per request that carries one. Refusing it is silent by
+// design — nothing in the ANSWER may tell a probe which origins exist — but a silent refusal in the
+// LOG is how the released Mini App failed on 09/10/2026: its webview origin was not on the list, every
+// call died in the browser as a "network error", and no service logged a line. The origin and the
+// method only: never the path, which on the citizen edge can carry a lookup code (rule 3). log nil
+// logs nothing.
+func CORSCongDan(nguon NguonCORS, log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		if nguon == nil || nguon.Rong() {
 			return next
@@ -64,9 +74,15 @@ func CORSCongDan(nguon NguonCORS) func(http.Handler) http.Handler {
 			h := w.Header()
 			h.Add("Vary", "Origin")
 			duoc := origin != "" && nguon.ChoPhep(origin)
+			preflight := r.Method == http.MethodOptions && origin != "" &&
+				r.Header.Get("Access-Control-Request-Method") != ""
+			if origin != "" && !duoc && log != nil {
+				log.WarnContext(r.Context(), "CORS: từ chối origin không có trong CITIZEN_CORS_ALLOWED_ORIGINS — "+
+					"trình duyệt sẽ chặn, Mini App thấy lỗi mạng", "origin", origin, "phuong_thuc", r.Method,
+					"preflight", preflight)
+			}
 
-			if r.Method == http.MethodOptions && origin != "" &&
-				r.Header.Get("Access-Control-Request-Method") != "" {
+			if preflight {
 				h.Add("Vary", "Access-Control-Request-Method")
 				h.Add("Vary", "Access-Control-Request-Headers")
 				if duoc {

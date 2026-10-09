@@ -4,8 +4,11 @@ package httpx_test
 // core/config/cors_test.go; this file proves what the middleware does with the answer.
 
 import (
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/core/config"
@@ -29,7 +32,7 @@ func dungCORS(t *testing.T, raw string) (http.Handler, *dichVuSau) {
 		t.Fatalf("PhanTichNguonCORS: %v", err)
 	}
 	sau := &dichVuSau{}
-	return httpx.CORSCongDan(n)(sau), sau
+	return httpx.CORSCongDan(n, nil)(sau), sau
 }
 
 func goiCORS(h http.Handler, method, origin, acrm string) *httptest.ResponseRecorder {
@@ -148,7 +151,7 @@ func TestCORSOptionsKhongPhaiPreflightThiDiTiep(t *testing.T) {
 func TestCORSKhongCauHinhThiKhongCoHeaderNaoCa(t *testing.T) {
 	for _, n := range []httpx.NguonCORS{nil, config.NguonCORS(nil)} {
 		sau := &dichVuSau{}
-		h := httpx.CORSCongDan(n)(sau)
+		h := httpx.CORSCongDan(n, nil)(sau)
 
 		for _, method := range []string{http.MethodOptions, http.MethodGet} {
 			acrm := ""
@@ -165,5 +168,39 @@ func TestCORSKhongCauHinhThiKhongCoHeaderNaoCa(t *testing.T) {
 		if sau.goi != 2 {
 			t.Errorf("không cấu hình thì mọi yêu cầu đi tiếp nguyên trạng; lớp sau chạy %d lần, muốn 2", sau.goi)
 		}
+	}
+}
+
+// An unknown origin is LOGGED with the origin and the method — never the path (it can carry a lookup
+// code) — and an allowed one is not. 09/10/2026: the released Mini App's origin was refused and no
+// service said so.
+func TestCORSNguonLa_GhiLogOrigin_KhongGhiDuongDan(t *testing.T) {
+	n, err := config.PhanTichNguonCORS("https://h5.zdn.vn")
+	if err != nil {
+		t.Fatalf("PhanTichNguonCORS: %v", err)
+	}
+	var buf bytes.Buffer
+	h := httpx.CORSCongDan(n, slog.New(slog.NewTextHandler(&buf, nil)))(&dichVuSau{})
+
+	goiCORS(h, http.MethodOptions, "https://h5.zadn.vn", http.MethodPost)
+	goiCORS(h, http.MethodGet, "https://h5.zadn.vn", "")
+	logged := buf.String()
+	if strings.Count(logged, "level=WARN") != 2 {
+		t.Fatalf("want 2 WARN lines (preflight + simple GET), got: %s", logged)
+	}
+	for _, want := range []string{"origin=https://h5.zadn.vn", "preflight=true", "preflight=false", "phuong_thuc=GET"} {
+		if !strings.Contains(logged, want) {
+			t.Errorf("log lacks %q: %s", want, logged)
+		}
+	}
+	if strings.Contains(logged, "my-citizen-reports") {
+		t.Errorf("log carries the path: %s", logged)
+	}
+
+	buf.Reset()
+	goiCORS(h, http.MethodOptions, "https://h5.zdn.vn", http.MethodPost)
+	goiCORS(h, http.MethodGet, "", "")
+	if buf.Len() != 0 {
+		t.Errorf("allowed or absent origin must not log: %s", buf.String())
 	}
 }

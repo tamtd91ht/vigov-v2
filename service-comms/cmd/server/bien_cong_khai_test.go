@@ -94,7 +94,7 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 	svchttp.RegisterPublicExternalContacts(mux, svchttp.PublicExternalContactDeps{
 		Xa: xaTheoHostThu{}, Contacts: fakeContactList{}, Limiter: lim,
 	})
-	return dungBienCongKhai(mux, nguon)
+	return dungBienCongKhai(mux, nguon, slog.New(slog.DiscardHandler))
 }
 
 // fakeContactList is the external-contact read, asserting it is asked inside a commune.
