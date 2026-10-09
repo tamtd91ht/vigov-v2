@@ -28,7 +28,7 @@
  */
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import { citizenReportFields, guiPhanAnh, type KetQuaGoi } from "../api/goi-vigov";
+import { citizenReportFields, guiPhanAnh, type KetQuaGoi, myResidentialUnits } from "../api/goi-vigov";
 import {
   DO_DAI_TOI_DA,
   type PhanAnhMoi,
@@ -50,10 +50,17 @@ import {
   nhanTrangThai,
   QUAY_LAI,
   SEND_LOCATION_WORDS,
+  SEND_RESIDENTIAL_UNIT_WORDS,
   TYPED_CONTACT,
 } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
+import {
+  ResidentialUnitField,
+  type ResidentialUnitList,
+  residentialUnitName,
+  useResidentialUnits,
+} from "./residential-unit-picker";
 import { isPlausiblePhone } from "./trai-nghiem";
 import {
   formatCoordinates,
@@ -244,6 +251,13 @@ export type InputStepLocation = {
   onLocate: () => void;
 } | null;
 
+/** The thôn picker's state on the input step: the commune's list and the last 400's sentence, if any. */
+export type InputStepResidentialUnit = {
+  list: ResidentialUnitList;
+  refusal: string | null;
+  onPick: (id: string) => void;
+};
+
 export function BuocNhap(props: {
   pa: PhanAnhMoi;
   loi: string | null;
@@ -253,6 +267,8 @@ export function BuocNhap(props: {
   location?: InputStepLocation;
   /** The typed-contact path (ADR 0080): name + number required, anonymous off with its reason. */
   typedContact?: boolean;
+  /** The optional thôn picker (ADR 0088). Absent = no field (tests of other parts of the step). */
+  residentialUnit?: InputStepResidentialUnit;
 }) {
   const { pa, onDoi } = props;
   const location = props.location ?? null;
@@ -307,6 +323,19 @@ export function BuocNhap(props: {
           failure={location.failure}
           zalo={location.zalo ?? null}
           onLocate={location.onLocate}
+        />
+      )}
+      {/* OPTIONAL thôn / tổ dân phố (ADR 0088), right after the address block. The prototype's send form has no
+          such field (PROTOTYPE.md §6.2 AddressBlock), so it sits where the location information already is. */}
+      {props.residentialUnit !== undefined && (
+        <ResidentialUnitField
+          id="cd-thon"
+          list={props.residentialUnit.list}
+          picked={pa.residential_unit_id ?? ""}
+          refusal={props.residentialUnit.refusal}
+          words={SEND_RESIDENTIAL_UNIT_WORDS}
+          look="shared"
+          onPick={props.residentialUnit.onPick}
         />
       )}
 
@@ -376,8 +405,11 @@ export function BuocXacNhan(props: {
   onSua: () => void;
   /** The location that goes with the petition, if any — said here, at the last step, before sending. */
   location?: SceneLocation | null;
+  /** The picked thôn's name, read again here with the commune; "" or absent = none picked, no line. */
+  residentialUnitName?: string;
 }) {
   const location = props.location ?? null;
+  const unitName = props.residentialUnitName ?? "";
   return (
     <div className="cd-buoc" aria-labelledby={ID_DAU_BUOC["xac-nhan"]}>
       <h2 className="cd-tieu-de-phu" id={ID_DAU_BUOC["xac-nhan"]} tabIndex={-1}>
@@ -389,6 +421,11 @@ export function BuocXacNhan(props: {
       <p className="cd-cau">
         {GUI.field_label}: <strong>{props.fieldLabel}</strong>
       </p>
+      {unitName !== "" && (
+        <p className="cd-cau">
+          {SEND_RESIDENTIAL_UNIT_WORDS.summary_label}: <strong>{unitName}</strong>
+        </p>
+      )}
       {location !== null && <p className="cd-cau">{GUI.confirm_location(formatCoordinates(location))}</p>}
       <button type="button" className="cd-nut" onClick={props.onGui}>
         {GUI.nut_gui(props.ten_xa)}
@@ -470,7 +507,8 @@ export function LoiGui(props: { nhanh: NhanhLoi; message?: string; onGuiLai: () 
 type Buoc =
   /** Step 1. `changed`: the server refused the picked field (`field_not_offered`) — say so above the list. */
   | { kieu: "field"; changed: boolean }
-  | { kieu: "nhap"; loi: string | null }
+  /** `unitRefusal`: a 400 `residential_unit_not_offered` sent the citizen back here — its sentence, for the field. */
+  | { kieu: "nhap"; loi: string | null; unitRefusal?: string }
   | { kieu: "xac-nhan" }
   | { kieu: "dang-gui" }
   | { kieu: "xong"; phieu: PhieuCuaToi }
@@ -500,6 +538,12 @@ export function buocSauKhiGui(kq: KetQuaGoi): Buoc | "kenh-chua-mo" {
     case "can-xac-thuc-so":
       return { kieu: "can-so" };
     case "unverified-daily-limit":
+      return kq.message === null ? { kieu: "loi", nhanh: kq.kieu } : { kieu: "loi", nhanh: kq.kieu, message: kq.message };
+    case "residential-unit-not-offered":
+      // Back to the writing step, the sentence AT the thôn field (the server's, or ours), the list reloaded by the
+      // screen. Nothing was written; the next send has a different body.
+      return { kieu: "nhap", loi: null, unitRefusal: kq.message ?? LOI_GUI[kq.kieu].cau };
+    case "residential-unit-check-unavailable":
       return kq.message === null ? { kieu: "loi", nhanh: kq.kieu } : { kieu: "loi", nhanh: kq.kieu, message: kq.message };
     case "field-not-offered":
       // The commune changed its list since it was loaded: back to step 1 to pick again (the screen reloads
@@ -548,6 +592,12 @@ export function GuiPhanAnhScreen({
    * not be overwritten by a copy of the form taken before the tap. A new location is a new body, so the
    * pending send (and its Idempotency-Key) is dropped, exactly as `onDoi` does for a typed change.
    */
+  /**
+   * The commune's thôn list — loaded with the catalogue, only with a session (no session = no call, as above).
+   * `unitRefusal`: the last 400 `residential_unit_not_offered`'s sentence, shown at the field until a new pick.
+   */
+  const units = useResidentialUnits(myResidentialUnits, phien !== null);
+  const [unitRefusal, setUnitRefusal] = useState<string | null>(null);
   const sceneLocation = useSceneLocation(getSceneLocation, (location) => {
     datPa((t) => ({ ...t, scene_location: location }));
     datLan(null);
@@ -631,6 +681,14 @@ export function GuiPhanAnhScreen({
       // gì, nên đây vẫn là lần gửi ấy, không phải một phiếu mới.
       datBuoc(tiep);
       phone.onPhoneRequired(() => void gui(lan_gui));
+    } else if (tiep.kieu === "nhap") {
+      // `residential_unit_not_offered`: the attempt goes (a new pick is a new body), the pick is cleared — the
+      // unit is not offered any more — and the list reloaded. What the citizen wrote stays.
+      datLan(null);
+      datPa((t) => ({ ...t, residential_unit_id: null }));
+      setUnitRefusal(tiep.unitRefusal ?? null);
+      datBuoc({ kieu: "nhap", loi: null });
+      units.reload();
     } else if (tiep.kieu === "field") {
       // `field_not_offered`: the attempt is dropped — the next send has a different body, so it is a
       // different act (`lan-gui.ts`). The picked code goes; what the citizen wrote stays.
@@ -707,6 +765,16 @@ export function GuiPhanAnhScreen({
             datLan(null);
           }}
           typedContact={typedContact}
+          residentialUnit={{
+            list: units.list,
+            refusal: unitRefusal,
+            onPick: (id) => {
+              // A different unit is a different body: the pending attempt (and its key) goes.
+              if (id !== (pa.residential_unit_id ?? "")) datLan(null);
+              datPa((t) => ({ ...t, residential_unit_id: id === "" ? null : id }));
+              setUnitRefusal(null);
+            },
+          }}
           onTiep={() => {
             const loi = kiemPhanAnh(pa, typedContact);
             // No field (or one the loaded catalogue no longer names): step 1 is where that is fixed.
@@ -734,6 +802,7 @@ export function GuiPhanAnhScreen({
           onGui={guiLanDau}
           onSua={suaLai}
           location={pa.scene_location ?? null}
+          residentialUnitName={residentialUnitName(units.list, pa.residential_unit_id ?? "")}
         />
       );
       break;
@@ -746,6 +815,7 @@ export function GuiPhanAnhScreen({
           phieu={buoc.phieu}
           onGuiKhac={() => {
             datPa(PHAN_ANH_TRONG);
+            setUnitRefusal(null);
             sceneLocation.reset();
             // A new petition starts at step 1: the field of the last one is not this one's.
             datBuoc({ kieu: "field", changed: false });

@@ -6,6 +6,7 @@
  */
 import type { ZaloFailure } from "../api/mo-phien-vigov";
 
+import type { ResidentialUnitWords } from "./residential-unit-picker";
 import type { SceneLocationWords } from "./scene-location";
 import { groupOf, STATUS_GROUP_LABEL } from "./status-groups";
 
@@ -170,6 +171,33 @@ export const SEND_LOCATION_WORDS: SceneLocationWords = {
   },
 };
 
+/** The words both voices share on the optional thôn picker (`residential-unit-picker.tsx`). */
+const RESIDENTIAL_UNIT_COMMON = {
+  label: "Thôn, tổ dân phố (không bắt buộc)",
+  summary_label: "Thôn, tổ dân phố",
+  none: "Không chọn",
+  open: "Chọn",
+  change: "Đổi",
+  open_name: "Chọn thôn, tổ dân phố",
+  change_name: "Đổi thôn, tổ dân phố",
+  picked: "Đã chọn",
+  loading: "Đang tải danh sách thôn, tổ dân phố…",
+} as const;
+
+/** The thôn picker on the shared app's form — "bạn". A failed list never stops the send, and says so. */
+export const SEND_RESIDENTIAL_UNIT_WORDS: ResidentialUnitWords = {
+  ...RESIDENTIAL_UNIT_COMMON,
+  prompt: "Nếu bạn biết, hãy chọn thôn, tổ dân phố nơi xảy ra sự việc. Không rõ thì chọn “Không chọn”.",
+  failed: "Chưa tải được danh sách thôn, tổ dân phố. Bạn vẫn gửi được phản ánh mà không cần chọn.",
+};
+
+/** The same picker on the commune's own app — "bà con" (ADR 0050 #6). */
+export const COMMUNE_RESIDENTIAL_UNIT_WORDS: ResidentialUnitWords = {
+  ...RESIDENTIAL_UNIT_COMMON,
+  prompt: "Nếu bà con biết, hãy chọn thôn, tổ dân phố nơi xảy ra sự việc. Không rõ thì chọn “Không chọn”.",
+  failed: "Chưa tải được danh sách thôn, tổ dân phố. Bà con vẫn gửi được phản ánh mà không cần chọn.",
+};
+
 /**
  * Câu cho từng nhánh không thành của lần gửi. `co_the_gui_lai` quyết định nút "Gửi lại" (CÙNG khoá
  * chống trùng — xem `api/lan-gui.ts`) có hiện hay không.
@@ -187,10 +215,25 @@ export const LOI_GUI: Readonly<
     | "khong-tao-duoc-khoa"
     | "unverified-daily-limit"
     | "rate-limited"
-    | "commune-daily-limit",
+    | "commune-daily-limit"
+    | "residential-unit-not-offered"
+    | "residential-unit-check-unavailable",
     { cau: string; co_the_gui_lai: boolean }
   >
 > = {
+  // The two residential-unit refusals (ADR 0088, 09/10/2026). The screens show the SERVER's sentence when it sent
+  // one (owner); these are the sentences when it did not. Neither recorded anything.
+  // 400: said AT the thôn field, which reopens with the list reloaded — sending the same body again would only
+  // meet the same answer, so no "Gửi lại".
+  "residential-unit-not-offered": {
+    cau: "Thôn, tổ dân phố đã chọn hiện không có trong danh sách của xã, nên phản ánh chưa được gửi. Hãy chọn lại thôn, tổ dân phố, hoặc chọn “Không chọn”. Nội dung đã viết vẫn còn nguyên.",
+    co_the_gui_lai: false,
+  },
+  // 503: clears by itself; the same attempt (same key) is safe to send again, as for `field-catalogue-unavailable`.
+  "residential-unit-check-unavailable": {
+    cau: "Chưa kiểm tra được thôn, tổ dân phố đã chọn nên phản ánh CHƯA được ghi nhận. Hãy chờ vài phút rồi bấm Gửi lại. Phản ánh sẽ không bị gửi hai lần.",
+    co_the_gui_lai: true,
+  },
   // 429 `unverified_daily_limit` (ADR 0080 #7): the screen shows the SERVER's sentence when it sent one (owner
   // decision for this code only); this is the sentence when it did not. Nothing was recorded, so no "Gửi lại"
   // with the same key — the draft stays, and a later send is a new act.

@@ -354,12 +354,12 @@ async function callOnce<T>(
         return { kieu: "dang-xu-ly-truoc" };
       case 429: {
         // The body is read for its `code` only — and, for `unverified_daily_limit` alone, its sentence
-        // (`readLimitMessage`). Nothing is logged.
+        // (`readServerSentence`). Nothing is logged.
         const retryAfterSeconds = readRetryAfter(tra_loi);
         const body = await readErrorBody(tra_loi);
         const code = errorCode(body);
         if (code === UNVERIFIED_DAILY_LIMIT_CODE) {
-          return { kieu: "unverified-daily-limit", message: readLimitMessage(body) };
+          return { kieu: "unverified-daily-limit", message: readServerSentence(body) };
         }
         if (tuy_chon.limitCode === true && code !== null) return { kieu: "rate-limited", retryAfterSeconds, code };
         return { kieu: "rate-limited", retryAfterSeconds };
@@ -405,11 +405,11 @@ async function readErrorBody(response: Response): Promise<unknown> {
 const LIMIT_MESSAGE_MAX = 400;
 
 /**
- * The `message` of a 429 `unverified_daily_limit` body — the ONE server sentence the citizen screens show
- * (see `KetQuaGoi`). Text only (React renders it as text, never as HTML), trimmed, and `null` when absent,
- * empty or too long, so the screen says its own sentence instead.
+ * The `message` of an error body whose code the owner decided the citizen screens show in the server's words
+ * (`unverified_daily_limit`, the two residential-unit codes — see `KetQuaGoi`). Text only (React renders it as
+ * text, never as HTML), trimmed, and `null` when absent, empty or too long, so the screen says its own sentence.
  */
-function readLimitMessage(body: unknown): string | null {
+function readServerSentence(body: unknown): string | null {
   if (typeof body !== "object" || body === null) return null;
   const m = (body as Record<string, unknown>)["message"];
   if (typeof m !== "string") return null;
@@ -432,6 +432,23 @@ export async function citizenReportFields(): Promise<
     await goi(cong.dia_chi, { method: "GET", token: cong.token }, readCitizenFields, { kieu: "loi-may-chu" }),
   );
   return kq.kieu === "xong" ? { kieu: "xong", fields: kq.gia_tri } : kq;
+}
+
+/**
+ * THE COMMUNE'S THÔN / TỔ DÂN PHỐ for the optional picker — `GET /api/v1/my-residential-units` on IDENTITY's
+ * host. Same two gates as every session route: no session or no host → nothing leaves the phone. No parameter:
+ * the commune is the session's (rule 1, forbidden #2). The route has no 429 in its contract; a stray one is
+ * `loi-may-chu`. Every branch but `xong` means the same thing to the form: send without a unit.
+ */
+export async function myResidentialUnits(): Promise<
+  { kieu: "xong"; units: readonly ResidentialUnit[] } | NhanhKhongThanh
+> {
+  const cong = moCong(myResidentialUnitsAddress());
+  if ("kieu" in cong) return cong;
+  const kq = withoutRateLimit(
+    await goi(cong.dia_chi, { method: "GET", token: cong.token }, readResidentialUnits, { kieu: "loi-may-chu" }),
+  );
+  return kq.kieu === "xong" ? { kieu: "xong", units: kq.gia_tri } : kq;
 }
 
 /**

@@ -33,6 +33,7 @@ import {
   type KetQuaDanhSach, // vi-name-ok: existing export, not renamed (rule 12 #3)
   type KetQuaGoi, // vi-name-ok: existing export, not renamed (rule 12 #3)
   lookupAccountlessReport,
+  myResidentialUnits,
   phanAnhCuaToi, // vi-name-ok: existing export, not renamed (rule 12 #3)
   publicReportFields,
   sendAccountlessReport,
@@ -66,6 +67,7 @@ import { DauManCon, KhoiTrangThai, type Tone, TrangCon } from "./khung-xa";
 import {
   ACCOUNTLESS,
   COMMUNE_APP_SESSION,
+  COMMUNE_RESIDENTIAL_UNIT_WORDS,
   CUA_TOI,
   GUI,
   giaiThichTrangThai,
@@ -81,6 +83,7 @@ import {
 } from "./noi-dung";
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import { PetitionRating } from "./PetitionRating";
+import { ResidentialUnitField, residentialUnitName, useResidentialUnits } from "./residential-unit-picker";
 import {
   type GetSceneLocation,
   SceneLocationControl,
@@ -1007,8 +1010,16 @@ export function blankForm(nameFromEntry: string | null): NhapPhieu {
  * `typedContact` (ADR 0080, a phone-less session): `anonymous` is sent `false` whatever a restored draft held —
  * the typed name and number are the commune's only way back to the citizen, and an anonymous body would send
  * them empty (`thanGuiPhanAnh`).
+ *
+ * `residentialUnitId`: the thôn picked on the optional picker (ADR 0088); "" = "Không chọn", no key. Kept OUT of
+ * `NhapPhieu`, so the draft store's six fields stay what was decided (ADR 0050 #7).
  */
-export function sendBody(form: NhapPhieu, location: SceneLocation | null, typedContact = false): string {
+export function sendBody(
+  form: NhapPhieu,
+  location: SceneLocation | null,
+  typedContact = false,
+  residentialUnitId = "",
+): string {
   return thanGuiPhanAnh({
     noi_dung: form.noi_dung,
     dia_chi: form.dia_chi,
@@ -1017,6 +1028,7 @@ export function sendBody(form: NhapPhieu, location: SceneLocation | null, typedC
     an_danh: typedContact ? false : form.an_danh,
     scene_location: location,
     field: form.linh_vuc,
+    residential_unit_id: residentialUnitId,
   });
 }
 
@@ -1071,7 +1083,10 @@ type SendFailure = keyof typeof LOI_GUI;
 export type SendOutcome =
   | { readonly kind: "sent"; readonly petition: PhieuCuaToi }
   | { readonly kind: "session" }
-  /** `message`: the server's own sentence — only for `unverified-daily-limit` (`api/goi-vigov.ts`). */
+  /**
+   * `message`: the server's own sentence — only for `unverified-daily-limit` and the two residential-unit
+   * refusals (`api/goi-vigov.ts`).
+   */
   | { readonly kind: "failed"; readonly failure: SendFailure; readonly message?: string };
 
 export function sendOutcome(kq: KetQuaGoi): SendOutcome {
@@ -1079,6 +1094,8 @@ export function sendOutcome(kq: KetQuaGoi): SendOutcome {
     case "xong":
       return { kind: "sent", petition: kq.phieu };
     case "unverified-daily-limit":
+    case "residential-unit-not-offered":
+    case "residential-unit-check-unavailable":
       return kq.message === null
         ? { kind: "failed", failure: kq.kieu }
         : { kind: "failed", failure: kq.kieu, message: kq.message };
@@ -1246,6 +1263,14 @@ export function CommuneSendScreen(props: {
    */
   const [focusDescribe, setFocusDescribe] = useState(false);
   const { catalogue, reload } = useFieldCatalogue(props.onSessionLost, accountless?.domain);
+  /**
+   * The optional thôn (ADR 0088): the commune's list, read with the session — never on the accountless path, whose
+   * route refuses the key and which has no session to read the list with. The pick is the unit's `id`, "" = none;
+   * `unitRefusal` is the last 400 `residential_unit_not_offered`'s sentence, said at the field until a new pick.
+   */
+  const units = useResidentialUnits(myResidentialUnits, accountless === undefined);
+  const [unitId, setUnitId] = useState("");
+  const [unitRefusal, setUnitRefusal] = useState<string | null>(null);
   const sceneLocation = useSceneLocation(getSceneLocation, (l) => {
     setLocation(l);
     setAttempt(null);
@@ -1391,6 +1416,15 @@ export function CommuneSendScreen(props: {
       reload();
       return;
     }
+    if (out.kind === "failed" && out.failure === "residential-unit-not-offered") {
+      // The picked unit is not offered any more: said AT the field, the pick cleared, the list reloaded. The attempt
+      // goes — the next send has a different body. What was written stays.
+      setAttempt(null);
+      setUnitId("");
+      setUnitRefusal(out.message ?? LOI_GUI[out.failure].cau);
+      units.reload();
+      return;
+    }
     if (out.kind === "failed") {
       // The daily ceiling of unverified petitions (ADR 0080 #7): nothing was recorded, so the attempt goes — a
       // later send is a new act with a new key. The form (the draft) stays exactly as written.
@@ -1433,7 +1467,7 @@ export function CommuneSendScreen(props: {
       try {
         a = taoLanGui(
           accountless === undefined
-            ? sendBody(out, location, typedContact)
+            ? sendBody(out, location, typedContact, unitId)
             : accountlessSendBody(out, accountless.domain),
         );
       } catch {
@@ -1566,6 +1600,23 @@ export function CommuneSendScreen(props: {
                 onLocate={() => void sceneLocation.locate()}
               />
             )}
+            {/* OPTIONAL thôn / tổ dân phố (ADR 0088), right after the address block — the prototype's form has no
+                such field (PROTOTYPE.md §6.2). Hidden on the accountless path (`units` is never loaded there). */}
+            <ResidentialUnitField
+              id="xa-thon"
+              list={units.list}
+              picked={unitId}
+              refusal={unitRefusal}
+              words={COMMUNE_RESIDENTIAL_UNIT_WORDS}
+              look="commune"
+              onPick={(id) => {
+                if (id !== unitId) setAttempt(null);
+                setUnitId(id);
+                setUnitRefusal(null);
+                setFailure(null);
+                setFailureMessage(null);
+              }}
+            />
             {/* The typed-contact path (ADR 0080): the switch stays where the citizen expects it, OFF and disabled,
                 and the line under it says why in words — never a control that silently does nothing. */}
             {typedContact && (
@@ -1681,6 +1732,11 @@ export function CommuneSendScreen(props: {
       {step === 2 && (
         <div className="xa-chan-gui xa-send-footer">
           <p className="xa-xa-nhan">{XA_PA.gui_toi(props.ten_xa)}</p>
+          {residentialUnitName(units.list, unitId) !== "" && (
+            <p className="xa-phu">
+              {COMMUNE_RESIDENTIAL_UNIT_WORDS.summary_label}: <strong>{residentialUnitName(units.list, unitId)}</strong>
+            </p>
+          )}
           {photos.length > 0 && <p className="xa-phu">{SCENE_PHOTOS.footer_with(photos.length)}</p>}
           {failed !== null && (
             <p className="xa-error-box" role="alert">

@@ -46,10 +46,18 @@ vi.mock("../api/goi-vigov", async (importOriginal) => {
     phanAnhCuaToi: vi.fn(goc.phanAnhCuaToi),
     citizenReportFields: vi.fn(goc.citizenReportFields),
     traXaTheoTenMien: vi.fn(goc.traXaTheoTenMien),
+    myResidentialUnits: vi.fn(goc.myResidentialUnits),
   };
 });
 
-import { citizenReportFields, guiPhanAnh, phanAnhCuaToi, traCuuPhieu, traXaTheoTenMien } from "../api/goi-vigov";
+import {
+  citizenReportFields,
+  guiPhanAnh,
+  myResidentialUnits,
+  phanAnhCuaToi,
+  traCuuPhieu,
+  traXaTheoTenMien,
+} from "../api/goi-vigov";
 import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import type { OpenCommuneAppSession } from "../api/mo-phien-vigov";
 import { datPhienViGov, layPhienViGov } from "../api/phien-vigov";
@@ -58,6 +66,7 @@ import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
 import {
   ACCOUNTLESS,
   COMMUNE_APP_SESSION,
+  COMMUNE_RESIDENTIAL_UNIT_WORDS,
   CONSENT_DIALOG,
   CUA_TOI,
   GUI,
@@ -66,6 +75,7 @@ import {
   PHONE_VERIFICATION,
   QUAY_LAI,
   SCENE_PHOTOS,
+  SEND_RESIDENTIAL_UNIT_WORDS,
   TYPED_CONTACT,
   XA_GIAO_DIEN,
   XA_PA,
@@ -347,6 +357,10 @@ beforeEach(() => {
   vi.mocked(traCuuPhieu).mockClear();
   vi.mocked(phanAnhCuaToi).mockClear();
   vi.mocked(citizenReportFields).mockClear();
+  // The thôn list (ADR 0088) answers EMPTY unless a case says otherwise: the field is then hidden, and every case
+  // written before it sees the form it was written against. The "no session" cases assert it is never called.
+  vi.mocked(myResidentialUnits).mockReset();
+  vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: [] });
   fetch_gia = vi.fn();
   vi.stubGlobal("fetch", fetch_gia);
   loi_react = [];
@@ -435,6 +449,7 @@ describe("nguồn phiên THẬT (null) — màn gắn thật, hiệu ứng chạ
     expect(guiPhanAnh).not.toHaveBeenCalled();
     // The catalogue hook runs on every mount (hooks before the early return); its effect must stop itself.
     expect(citizenReportFields).not.toHaveBeenCalled();
+    expect(myResidentialUnits).not.toHaveBeenCalled();
     expect(fetch_gia).not.toHaveBeenCalled();
     await go();
   });
@@ -507,6 +522,8 @@ describe("đối chứng: có phiên thì chính khung gắn này thấy hiệu 
     vi.mocked(citizenReportFields).mockResolvedValueOnce({ kieu: "xong", fields: FIELDS });
     const { khung, go } = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
     expect(vi.mocked(citizenReportFields).mock.calls).toEqual([[]]);
+    // The thôn list too: once, with no argument — nothing about the commune leaves the phone.
+    expect(vi.mocked(myResidentialUnits).mock.calls).toEqual([[]]);
     expect(khung.textContent).toContain(GUI.field_title);
     expect(khung.textContent).toContain("Rác thải – Vệ sinh môi trường");
     expect(guiPhanAnh).not.toHaveBeenCalled();
@@ -1575,6 +1592,313 @@ describe("app xã — gửi không tài khoản (ADR 0083): cùng biểu mẫu, 
     expect(khung.textContent).toContain(LOI_GUI["commune-daily-limit"].cau);
     expect(LOI_GUI["commune-daily-limit"].cau).toContain("Bộ phận tiếp nhận của Ủy ban nhân dân xã");
     expect(boxText("xa-ho-ten")).toBe("Nguyễn Văn An");
+    await go();
+  });
+});
+
+/* ═════════════════ 09/10/2026 (owner, ADR 0088 §Trả lời) — the OPTIONAL "Thôn, tổ dân phố" picker ═════════════════ */
+
+const UNITS = [
+  { id: "01J9ZQ4V6W8X0Y2Z4A6B8C0D2A", name: "Thôn Bình An" },
+  { id: "01J9ZQ4V6W8X0Y2Z4A6B8C0D2B", name: "Tổ dân phố 3" },
+] as const;
+
+/** Keys that would let the client name a commune — none may ever leave the phone (rule 1, forbidden #2). */
+const COMMUNE_KEYS = ["tenant_id", "tenantId", "commune", "commune_id", "xa", "ma_xa", "host"];
+
+const SERVER_400 = "Thôn, tổ dân phố đã chọn hiện không có trong danh sách của xã. Vui lòng chọn lại thôn, tổ dân phố.";
+const SERVER_503 = "Chưa kiểm tra được thôn, tổ dân phố đã chọn nên phiếu CHƯA được ghi. Vui lòng thử lại sau ít phút.";
+
+const unitRadios = (root: PhanTuGia) => tatCaPhanTu(root).filter((p) => p.getAttribute("role") === "radio");
+/** The picker's own "Chọn" / "Đổi" — found by its accessible name: the field line above it has a "Đổi" too. */
+const unitToggle = (root: PhanTuGia, name: string) =>
+  tatCaPhanTu(root).find((p) => p.tagName === "BUTTON" && p.getAttribute("aria-label") === name)!;
+const sentBodies = () =>
+  vi.mocked(guiPhanAnh).mock.calls.map((c) => JSON.parse(c[0].than) as Record<string, unknown>);
+
+describe("app chung — ô 'Thôn, tổ dân phố': tuỳ chọn, ẩn khi rỗng, không chặn gửi, 400 tại ô, 503 giữ biểu mẫu", () => {
+  const W = SEND_RESIDENTIAL_UNIT_WORDS;
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+  const next = (root: PhanTuGia) => buttonsNamed(root, GUI.nut_tiep)[0]!;
+  const sendButton = (root: PhanTuGia) => buttonsNamed(root, GUI.nut_gui("Xã Thử Nghiệm"))[0]!;
+
+  beforeEach(() => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm", phone_verified: true };
+    vi.mocked(guiPhanAnh).mockReset();
+    vi.mocked(citizenReportFields).mockReset();
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+  });
+
+  /** Mount, pick the first field, go on, write the content — the screen is then on the writing step. */
+  async function upToWriting() {
+    const mounted = await gan(createElement(GuiPhanAnhScreen, { onQuayLai: () => {} }));
+    await press(unitRadios(mounted.khung)[0]!);
+    await press(next(mounted.khung));
+    await typeInto(doc().getElementById("cd-noi-dung")!, "Đèn đường hỏng");
+    return mounted;
+  }
+
+  it("empty list → no field at all, and the body carries no `residential_unit_id`", async () => {
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    const { khung, go } = await upToWriting();
+    expect(khung.textContent).not.toContain(W.label);
+    expect(unitToggle(khung, W.open_name)).toBeUndefined();
+    await press(next(khung));
+    await press(sendButton(khung));
+    expect(sentBodies()[0]).not.toHaveProperty("residential_unit_id");
+    await go();
+  });
+
+  it("loaded → collapsed on 'Không chọn'; picked → its id is sent, its name read on the confirmation step; no commune key", async () => {
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: UNITS });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    const { khung, go } = await upToWriting();
+    expect(khung.textContent).toContain(W.label);
+    expect(khung.textContent).toContain(`${W.summary_label}: ${W.none}`);
+    // Collapsed: no unit tile until "Chọn".
+    expect(unitRadios(khung)).toEqual([]);
+    const open = unitToggle(khung, W.open_name);
+    expect(open.getAttribute("aria-label")).toBe(W.open_name);
+    expect(open.getAttribute("aria-expanded")).toBe("false");
+    await press(open);
+    // "Không chọn" first and picked; the units in the commune's order; the choice said in words.
+    expect(unitRadios(khung).map((r) => r.getAttribute("aria-checked"))).toEqual(["true", "false", "false"]);
+    expect(unitRadios(khung)[0]!.textContent).toBe(`${W.none}${W.picked}`);
+    expect(unitRadios(khung).map((r) => r.textContent.replace(W.picked, ""))).toEqual([
+      W.none,
+      UNITS[0].name,
+      UNITS[1].name,
+    ]);
+    // The id never reaches the screen.
+    expect(khung.textContent).not.toContain(UNITS[1].id);
+
+    await press(unitRadios(khung)[2]!);
+    expect(unitRadios(khung)).toEqual([]);
+    expect(khung.textContent).toContain(`${W.summary_label}: ${UNITS[1].name}`);
+    expect(unitToggle(khung, W.change_name).textContent).toBe(W.change);
+
+    await press(next(khung));
+    expect(khung.textContent).toContain(GUI.xac_nhan_tieu_de);
+    expect(khung.textContent).toContain(`${W.summary_label}: ${UNITS[1].name}`);
+    await press(sendButton(khung));
+    const body = sentBodies()[0]!;
+    expect(body["residential_unit_id"]).toBe(UNITS[1].id);
+    for (const k of COMMUNE_KEYS) expect(body).not.toHaveProperty(k);
+    expect(khung.textContent).toContain(SENT.ma_tra_cuu);
+    expect(myResidentialUnits).toHaveBeenCalledTimes(1);
+    await go();
+  });
+
+  it("picked, then 'Không chọn' → no key; the change dropped the old attempt", async () => {
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: UNITS });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    const { khung, go } = await upToWriting();
+    await press(unitToggle(khung, W.open_name));
+    await press(unitRadios(khung)[1]!);
+    await press(unitToggle(khung, W.change_name));
+    await press(unitRadios(khung)[0]!);
+    expect(khung.textContent).toContain(`${W.summary_label}: ${W.none}`);
+    await press(next(khung));
+    expect(khung.textContent).not.toContain(`${W.summary_label}:`);
+    await press(sendButton(khung));
+    expect(sentBodies()[0]).not.toHaveProperty("residential_unit_id");
+    await go();
+  });
+
+  it("list failed to load → one sentence, no picker, and the petition still goes", async () => {
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "loi-mang" });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    const { khung, go } = await upToWriting();
+    expect(khung.textContent).toContain(W.failed);
+    expect(unitToggle(khung, W.open_name)).toBeUndefined();
+    expect(buttonsNamed(khung, CUA_TOI.nut_thu_lai)).toEqual([]);
+    await press(next(khung));
+    await press(sendButton(khung));
+    expect(guiPhanAnh).toHaveBeenCalledTimes(1);
+    expect(sentBodies()[0]).not.toHaveProperty("residential_unit_id");
+    expect(khung.textContent).toContain(SENT.ma_tra_cuu);
+    await go();
+  });
+
+  it("400 residential_unit_not_offered → back to writing, the SERVER sentence at the field, list reloaded and open, re-pick → new attempt", async () => {
+    vi.mocked(myResidentialUnits)
+      .mockResolvedValueOnce({ kieu: "xong", units: UNITS })
+      .mockResolvedValueOnce({ kieu: "xong", units: [UNITS[0]] });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "residential-unit-not-offered", message: SERVER_400 });
+    const { khung, go } = await upToWriting();
+    await press(unitToggle(khung, W.open_name));
+    await press(unitRadios(khung)[2]!);
+    await press(next(khung));
+    await press(sendButton(khung));
+
+    expect(doc().getElementById("cd-noi-dung")).not.toBeNull();
+    expect(boxText("cd-noi-dung")).toBe("Đèn đường hỏng");
+    expect(khung.textContent).toContain(SERVER_400);
+    expect(myResidentialUnits).toHaveBeenCalledTimes(2);
+    // The pick is cleared and the reloaded list is open: re-pick or leave "Không chọn".
+    expect(unitRadios(khung).map((r) => r.textContent.replace(W.picked, ""))).toEqual([W.none, UNITS[0].name]);
+    expect(unitRadios(khung)[0]!.getAttribute("aria-checked")).toBe("true");
+    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    // The sentence stands AT the field, before its choices.
+    expect(khung.textContent.indexOf(SERVER_400)).toBeLessThan(khung.textContent.indexOf(UNITS[0].name));
+
+    await press(unitRadios(khung)[1]!);
+    expect(khung.textContent).not.toContain(SERVER_400);
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(next(khung));
+    await press(sendButton(khung));
+    const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
+    expect(sentBodies()[1]!["residential_unit_id"]).toBe(UNITS[0].id);
+    expect(second!.khoa).not.toBe(first!.khoa);
+    await go();
+  });
+
+  it("400 with no server sentence → this app's own sentence, which says what to do next", async () => {
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: UNITS });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "residential-unit-not-offered", message: null });
+    const { khung, go } = await upToWriting();
+    await press(unitToggle(khung, W.open_name));
+    await press(unitRadios(khung)[1]!);
+    await press(next(khung));
+    await press(sendButton(khung));
+    expect(khung.textContent).toContain(LOI_GUI["residential-unit-not-offered"].cau);
+    expect(LOI_GUI["residential-unit-not-offered"].cau).not.toMatch(/residential|_|\d{3}/);
+    await go();
+  });
+
+  it("503 residential_unit_check_unavailable → the SERVER sentence, 'Gửi lại' re-sends the SAME key and body; 'Sửa lại' keeps the form", async () => {
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: UNITS });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "residential-unit-check-unavailable", message: SERVER_503 });
+    const { khung, go } = await upToWriting();
+    await press(unitToggle(khung, W.open_name));
+    await press(unitRadios(khung)[1]!);
+    await press(next(khung));
+    await press(sendButton(khung));
+    expect(khung.textContent).toContain(SERVER_503);
+    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toHaveLength(1);
+
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "residential-unit-check-unavailable", message: SERVER_503 });
+    await press(buttonsNamed(khung, GUI.nut_gui_lai)[0]!);
+    const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
+    expect(second!.khoa).toBe(first!.khoa);
+    expect(second!.than).toBe(first!.than);
+
+    await press(buttonsNamed(khung, GUI.nut_sua)[0]!);
+    expect(boxText("cd-noi-dung")).toBe("Đèn đường hỏng");
+    expect(khung.textContent).toContain(`${W.summary_label}: ${UNITS[0].name}`);
+    await go();
+  });
+});
+
+describe("app xã — ô 'Thôn, tổ dân phố': sau ô địa chỉ, dòng ở chân gửi, 400 tại ô, 503 ở chân với 'Gửi lại'", () => {
+  const W = COMMUNE_RESIDENTIAL_UNIT_WORDS;
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+
+  beforeEach(() => {
+    trang.phien = { token: "tok-thu-nghiem", ten_xa: "Xã Thử Nghiệm", phone_verified: false };
+    vi.mocked(guiPhanAnh).mockReset();
+    vi.mocked(citizenReportFields).mockReset();
+    vi.mocked(citizenReportFields).mockResolvedValue({ kieu: "xong", fields: FIELDS });
+  });
+
+  async function mountAndFill() {
+    const mounted = await gan(
+      createElement(CommuneSendScreen, {
+        ten_xa: "Xã Thử Nghiệm",
+        ho_ten: null,
+        typedContact: true,
+        onBack: () => {},
+        onSessionLost: () => {},
+        onSent: () => {},
+        onOpenPetition: () => {},
+      }),
+    );
+    await press(unitRadios(mounted.khung)[0]!);
+    await typeInto(doc().getElementById("xa-noi-dung")!, "Rác tồn đọng");
+    await typeInto(doc().getElementById("xa-ho-ten")!, "Nguyễn Văn An");
+    await typeInto(doc().getElementById("xa-dien-thoai")!, "0900000000");
+    return mounted;
+  }
+
+  it("empty list → no field; loaded → right after the address box, picked → footer line + id in the body", async () => {
+    const empty = await mountAndFill();
+    expect(empty.khung.textContent).not.toContain(W.label);
+    await empty.go();
+
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: UNITS });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    const { khung, go } = await mountAndFill();
+    const text = khung.textContent;
+    expect(text.indexOf(W.label)).toBeGreaterThan(text.indexOf(XA_PA.dia_chi));
+    expect(text.indexOf(W.label)).toBeLessThan(text.indexOf(XA_PA.an_danh));
+    await press(unitToggle(khung, W.open_name));
+    await press(unitRadios(khung)[1]!);
+    // Read again in the send footer, under the commune.
+    expect(khung.textContent).toContain(`${W.summary_label}: ${UNITS[0].name}`);
+    expect(khung.textContent).toContain(XA_PA.gui_toi("Xã Thử Nghiệm"));
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    const body = sentBodies()[0]!;
+    expect(body["residential_unit_id"]).toBe(UNITS[0].id);
+    for (const k of COMMUNE_KEYS) expect(body).not.toHaveProperty(k);
+    await go();
+  });
+
+  it("400 → the server sentence at the field, pick cleared, list reloaded; no 'Gửi lại'; words kept", async () => {
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: UNITS });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "residential-unit-not-offered", message: SERVER_400 });
+    const { khung, go } = await mountAndFill();
+    await press(unitToggle(khung, W.open_name));
+    await press(unitRadios(khung)[1]!);
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(khung.textContent).toContain(SERVER_400);
+    expect(myResidentialUnits).toHaveBeenCalledTimes(2);
+    expect(unitRadios(khung)[0]!.getAttribute("aria-checked")).toBe("true");
+    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng");
+    // Leaving it on "Không chọn" sends without the key, as a NEW attempt.
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(unitRadios(khung)[0]!);
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(sentBodies()[1]).not.toHaveProperty("residential_unit_id");
+    const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
+    expect(second!.khoa).not.toBe(first!.khoa);
+    await go();
+  });
+
+  it("503 → the server sentence in the footer, the form kept, 'Gửi lại' with the SAME key", async () => {
+    vi.mocked(myResidentialUnits).mockResolvedValue({ kieu: "xong", units: UNITS });
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "residential-unit-check-unavailable", message: SERVER_503 });
+    const { khung, go } = await mountAndFill();
+    await press(unitToggle(khung, W.open_name));
+    await press(unitRadios(khung)[2]!);
+    await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
+    expect(khung.textContent).toContain(SERVER_503);
+    expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng");
+    expect(khung.textContent).toContain(`${W.summary_label}: ${UNITS[1].name}`);
+    vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
+    await press(buttonsNamed(khung, GUI.nut_gui_lai)[0]!);
+    const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
+    expect(second!.khoa).toBe(first!.khoa);
+    expect(JSON.parse(second!.than)["residential_unit_id"]).toBe(UNITS[1].id);
+    await go();
+  });
+
+  it("the accountless path never asks for the list (no session; its route refuses the key)", async () => {
+    fetch_gia.mockImplementation(async () => ({ status: 200, ok: true, json: async () => ({ items: FIELDS }) }));
+    const { khung, go } = await gan(
+      createElement(CommuneSendScreen, {
+        ten_xa: "Xã Thử Nghiệm",
+        ho_ten: null,
+        accountless: { domain: "xa-thu-nghiem.vigov.example" },
+        onBack: () => {},
+        onSessionLost: () => {},
+        onSent: () => {},
+        onOpenPetition: () => {},
+      }),
+    );
+    await press(unitRadios(khung)[0]!);
+    expect(myResidentialUnits).not.toHaveBeenCalled();
+    expect(khung.textContent).not.toContain(W.label);
     await go();
   });
 });
