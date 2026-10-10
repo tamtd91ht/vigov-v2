@@ -1,0 +1,1177 @@
+// Job VẬN HÀNH `vigov-van-hanh` — bấm tay, chạy SONG SONG job cũ `vigov-deploy` (deploy/Jenkinsfile,
+// không đổi). Vì sao có job này và các ràng buộc nó giữ: ADR 0089. Hướng dẫn người vận hành:
+// deploy/van-hanh/README.md.
+//
+// HÌNH DẠNG: một lượt bấm = MỘT việc. Form bốn vùng dựng bằng plugin Active Choices:
+//   1. Ngữ cảnh — MT, và bảng đọc SỐNG từ cụm (dịch vụ, ảnh, khoá common-config thiếu/thừa)
+//   2. Việc     — NHOM → VIEC
+//   3. Tham số  — THONG_SO hiện theo việc, điền sẵn giá trị đọc từ cụm (Secret: chỉ có/không)
+//   4. An toàn  — CHAY_THU (BẬT mặc định) · KHOI_DONG_LAI · XAC_NHAN · TICKET
+//
+// LOGIC KHÔNG NẰM Ở ĐÂY. Quyết định dễ sai lặng lẽ (khoá nào được ghi, dịch vụ nào phải khởi động lại,
+// request có vượt limit không, DSN trông thế nào) ở deploy/van-hanh/ops.py, có unit test
+// (deploy/van-hanh/test_ops.py, `make buildfiles`). Groovy ở đây chỉ chuyển tệp và gọi kubectl.
+//
+// CHÉP TỪ JOB CŨ, ĐÃ CHỨNG MINH TRÊN CỤM THẬT:
+//   · KUBECONFIG = rancher-vigov.yaml — KHÔNG rancher-omi.yaml nằm cạnh (khác bốn ký tự, cụm khác)
+//   · lượt đầu sau khi đổi tham số: mọi params là null → DỪNG một câu, trước mọi lệnh kubectl
+//   · pod một lượt bằng `kubectl create -f` + hỏi pha + đọc log — KHÔNG `kubectl run -i` (treo, lượt #17/#18)
+//   · ghi phải gõ đúng namespace; ghi prod phải có TICKET
+//   · bí mật chỉ qua tệp 0600 → Secret k8s tạm / --patch-file; không bao giờ ở argv, không echo, `set +x`
+//
+// KHÔNG LÀM (và vì sao): đặt ảnh mới (`set image` — lịch sử "ai đưa bản nào lên" là của job dịch vụ,
+// deploy/README.md mục 1); áp Ingress (ADR 0046 #4, dựng tay trong Rancher); việc của xã (platform-admin,
+// ADR 0048, 0070); xoá bất cứ thứ gì ngoài pod/Secret TẠM do chính lượt này tạo (luật 7).
+//
+// FORM CHẠY TRÊN CONTROLLER: các script Active Choices gọi `kubectl` của máy controller với kubeconfig
+// ViGov, CHỈ ĐỌC, hạn 6 giây; hỏng thì hiện một câu, form vẫn dùng được. Script không sandbox nên mỗi lần
+// nội dung đổi phải được duyệt ở "In-process Script Approval" (README mục 1).
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Form. Chạy MỖI lượt: `properties` ghi lại định nghĩa tham số từ chính tệp này.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+try {
+  properties([
+    disableConcurrentBuilds(),
+    buildDiscarder(logRotator(numToKeepStr: '200')),   // như job cũ — vết trong log KHÔNG bền (ADR 0089)
+    parameters([
+      // ── Vùng 1 ─────────────────────────────────────────────────────────────────────────────
+      choice(name: 'MT', choices: ['prod', 'staging'], description: 'Vùng 1 — môi trường (namespace vigov-prod / vigov-staging).'),
+      [$class: 'DynamicReferenceParameter', name: 'NGU_CANH', choiceType: 'ET_FORMATTED_HTML',
+       omitValueField: true, referencedParameters: 'MT',
+       description: 'Đọc sống từ cụm, chỉ đọc.', script: gs(formScript(formContext()), true)],
+      // ── Vùng 2 ─────────────────────────────────────────────────────────────────────────────
+      choice(name: 'NHOM', choices: ['Kiểm tra', 'Cấu hình', 'Bí mật', 'CSDL', 'Tài nguyên', 'Triển khai', 'Xã/tenant', 'Bảo trì'],
+             description: 'Vùng 2 — nhóm việc.'),
+      [$class: 'CascadeChoiceParameter', name: 'VIEC', choiceType: 'PT_SINGLE_SELECT', referencedParameters: 'NHOM',
+       filterable: false, filterLength: 1, description: 'Việc trong nhóm. Mục mờ là chưa dựng — lý do ở Vùng 3.',
+       script: gs(formScript(formTasks()), false)],
+      // ── Vùng 3 ─────────────────────────────────────────────────────────────────────────────
+      [$class: 'CascadeChoiceParameter', name: 'DICH_VU', choiceType: 'PT_SINGLE_SELECT', referencedParameters: 'MT,VIEC',
+       filterable: false, filterLength: 1, description: 'Một dịch vụ — cho xem-log, sua-secret, khoi-phuc-secret.',
+       script: gs(formScript(formOneService()), false)],
+      [$class: 'CascadeChoiceParameter', name: 'DICH_VU_CHON', choiceType: 'PT_CHECKBOX', referencedParameters: 'MT,VIEC',
+       filterable: false, filterLength: 1, description: 'Nhiều Deployment — cho khoi-dong-lai, lui-ban-truoc, chay-migration.',
+       script: gs(formScript(formManyServices()), false)],
+      [$class: 'DynamicReferenceParameter', name: 'THONG_SO', choiceType: 'ET_FORMATTED_HTML',
+       omitValueField: true, referencedParameters: 'MT,VIEC,DICH_VU',
+       description: 'Vùng 3 — tham số của việc, điền sẵn từ cụm.', script: gs(formScript(formParameters()), true)],
+      [$class: 'CascadeChoiceParameter', name: 'BUOC_CSDL', choiceType: 'PT_CHECKBOX', referencedParameters: 'VIEC',
+       filterable: false, filterLength: 1, description: 'Các bước của csdl-moi, theo thứ tự chạy.',
+       script: gs(formScript(formDbSteps()), false)],
+      string(name: 'CSDL_MAY_CHU', defaultValue: '', trim: true,
+             description: 'csdl-moi: máy chủ PostgreSQL MỚI — host hoặc host:port, nhiều máy cách nhau bởi dấu phẩy.'),
+      string(name: 'CSDL_CONG', defaultValue: '5432', trim: true, description: 'csdl-moi: cổng mặc định.'),
+      string(name: 'CSDL_QUAN_TRI', defaultValue: '', trim: true,
+             description: 'csdl-moi: tài khoản quản trị có quyền CREATEROLE + CREATEDB (chỉ dùng trong lượt này, không lưu).'),
+      password(name: 'MAT_KHAU_QUAN_TRI_CSDL', defaultValue: '',
+               description: 'csdl-moi: mật khẩu tài khoản quản trị. Không in ra log; vào pod qua Secret k8s tạm, xoá ngay khi xong.'),
+      choice(name: 'CSDL_SSLMODE', choices: ['require', 'verify-full', 'verify-ca'],
+             description: 'csdl-moi: không bao giờ tắt TLS (luật 13). verify-* cần CA trong ảnh — README mục CSDL mới.'),
+      password(name: 'BI_MAT_1', defaultValue: '', description: 'sua-secret: giá trị cho chế độ o1. Không in, không lên dòng lệnh.'),
+      password(name: 'BI_MAT_2', defaultValue: '', description: 'sua-secret: giá trị cho chế độ o2.'),
+      password(name: 'BI_MAT_3', defaultValue: '', description: 'sua-secret: giá trị cho chế độ o3.'),
+      string(name: 'SO_DONG', defaultValue: '300', trim: true, description: 'xem-log: số dòng log cuối (1–5000).'),
+      string(name: 'EMAIL_VAN_HANH', defaultValue: '', trim: true,
+             description: 'tao-tai-khoan-van-hanh: email đăng nhập platform-admin (dữ liệu cá nhân — không in ra log; Jenkins lưu tham số).'),
+      string(name: 'TEN_VAN_HANH', defaultValue: '', trim: true, description: 'tao-tai-khoan-van-hanh: tên hiển thị.'),
+      // ── Vùng 4 ─────────────────────────────────────────────────────────────────────────────
+      booleanParam(name: 'CHAY_THU', defaultValue: true,
+                   description: 'Vùng 4 — CHẠY THỬ: in kế hoạch cũ → mới và dịch vụ sẽ khởi động lại, KHÔNG ghi gì. Bỏ tick để làm thật.'),
+      booleanParam(name: 'KHOI_DONG_LAI', defaultValue: true,
+                   description: 'Sau khi ghi: khởi động lại CHỈ dịch vụ đọc khoá vừa đổi, đợi sẵn sàng; hỏng thì in log và DỪNG.'),
+      string(name: 'XAC_NHAN', defaultValue: '', trim: true, description: 'Mọi lần ghi: gõ đúng namespace (vigov-prod / vigov-staging).'),
+      string(name: 'XAC_NHAN_CSDL_MOI', defaultValue: '', trim: true,
+             description: 'csdl-moi trên prod, chạy thật: gõ đúng TAO-CSDL-MOI-TRONG — đã đọc hệ quả (CSDL mới rỗng).'),
+      string(name: 'TICKET', defaultValue: '', trim: true,
+             description: 'Số phiếu — BẮT BUỘC cho mọi lần ghi prod. Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.'),
+    ])
+  ])
+} catch (Throwable e) {
+  // Thiếu plugin là lớp lỗi khó đọc nhất ("No such DSL method" / ClassNotFound), nên gọi đúng tên nó.
+  error("Không dựng được form của job (${e.getClass().getSimpleName()}).\n" +
+        'Nguyên nhân thường gặp: plugin "Active Choices" (uno-choice) CHƯA CÀI trên Jenkins controller. ' +
+        'Job không lùi về form tĩnh. Cài plugin rồi bấm lại — deploy/van-hanh/README.md mục 1.')
+}
+
+node {
+  timestamps {
+    timeout(time: 60, unit: 'MINUTES') {
+      // Kubeconfig của ViGov — KHÔNG phải `rancher-omi.yaml` nằm cạnh nó.
+      withEnv(['KUBECONFIG=/u01/rancher/rancher-vigov.yaml']) {
+        try {
+          stage('Kiểm tham số') { checkParameters() }
+          stage('Chuẩn bị') { prepare() }
+          stage(env.VIEC) { runTask(env.VIEC) }
+        } finally {
+          printSummary()
+        }
+      }
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Bảng việc — MỘT nguồn cho form (VIEC) và cho phép kiểm ở checkParameters(). Cột:
+//   nhóm | việc | on (đã dựng) / off (chưa dựng, hiện mờ) | doc / ghi | mô tả
+// `tools/check_build.py` đỏ khi một việc `on` không có `case` trong runTask(), hoặc ngược lại.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+String tasksTable() {
+  return '''
+Kiểm tra|tong-quan|on|doc|Tổng quan: Deployment, ảnh, pod, khoá Secret (chỉ tên), khoá common-config thiếu/thừa so với sổ đăng ký, bản sao lưu
+Kiểm tra|xem-log|on|doc|Log + sự kiện của một Deployment (DICH_VU, SO_DONG)
+Kiểm tra|trang-thai-migration|on|doc|Migration trong ảnh đang chạy so với bảng schema_migration của CSDL từng dịch vụ
+Kiểm tra|kiem-ket-noi|on|doc|Từ trong cụm: CSDL từng dịch vụ, Redis, MinIO, ClamAV. RabbitMQ / Kafka / Elasticsearch: chưa dịch vụ nào dùng
+Cấu hình|sua-configmap|on|ghi|Sửa common-config: chỉ khoá có trong .env.example + README mục 2; khởi động lại đúng dịch vụ đọc khoá
+Bí mật|sua-secret|on|ghi|Sửa <dịch vụ>-secrets: chỉ thấy có/không; giá trị qua ô BI_MAT_1..3 hoặc sinh ngẫu nhiên; giá trị cũ sao lưu sang Secret riêng
+Bí mật|khoi-phuc-secret|on|ghi|Chép lại khoá từ một bản sao lưu <dịch vụ>-secrets-backup-… (quay lui DSN hay khoá)
+CSDL|csdl-moi|on|ghi|CSDL PostgreSQL MỚI cho từng dịch vụ, bảng rỗng do migration tạo; CSDL cũ không bị đụng
+CSDL|chay-migration|on|ghi|Áp migration còn thiếu: khởi động lại dịch vụ (migration chạy lúc khởi động — core/migrate)
+Tài nguyên|sua-tai-nguyen|on|ghi|replicas + cpu/memory request/limit, điền sẵn từ cụm; mẫu nho/vua/lon chỉ là đề xuất
+Triển khai|khoi-dong-lai|on|ghi|rollout restart các Deployment đã chọn, đợi sẵn sàng
+Triển khai|lui-ban-truoc|on|ghi|rollout undo về bản liền trước. Đặt ảnh MỚI là việc của job dịch vụ — nó giữ lịch sử ai đưa bản nào lên
+Xã/tenant|tao-xa|off|ghi|Làm ở platform-admin (ADR 0048, 0070) — job này không dựng lại việc của xã
+Xã/tenant|gan-ten-mien|off|ghi|Làm ở platform-admin, chi tiết xã → tên miền (ADR 0046, 0048)
+Xã/tenant|gan-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Mini App (ADR 0066, 0070)
+Xã/tenant|dat-secret-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Đặt/đổi khoá bí mật (job cũ còn dat-secret-mini-app)
+Bảo trì|tao-tai-khoan-van-hanh|on|ghi|operatorctl create + 7 quyền ops.* — MẬT KHẨU TẠM IN VÀO LOG (giá chủ dự án chấp nhận 02/10/2026, như job cũ)
+Bảo trì|dung-clamav|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy, việc dung-clamav
+Bảo trì|mo-netpol-identity-zalo|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy
+Bảo trì|sua-env-deployment|off|ghi|Sửa env đặt thẳng trong Deployment (README mục 3) — chưa dựng; job cũ có bo-sung-cau-hinh-*
+'''
+}
+
+List taskRow(String viec) {
+  for (String line : tasksTable().readLines()) {
+    if (!line.trim()) { continue }
+    List c = line.tokenize('|')
+    if (c.size() == 5 && c[1] == viec) { return c }
+  }
+  return null
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Vùng 4 — chốt chặn, TRƯỚC mọi lệnh kubectl
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void checkParameters() {
+  // LƯỢT ĐẦU SAU KHI ĐỔI THAM SỐ: Jenkins chỉ học danh sách tham số ở lượt ấy, mọi params là null.
+  if (params.MT == null || params.VIEC == null || params.CHAY_THU == null) {
+    error('Jenkins vừa học tham số mới của job — lượt này không có tham số nào.\n' +
+          'Bấm lại bằng "Build with Parameters". Cụm không bị đụng tới.')
+  }
+  if (!(params.MT in ['prod', 'staging'])) { error("MT '${params.MT}' không hợp lệ.") }
+  List task = taskRow(params.VIEC)
+  // Một việc không còn trong bảng vẫn tới được đây qua "Rebuild" một lượt cũ. Xanh-mà-không-làm-gì là
+  // dạng hỏng tệ nhất: người bấm tin là đã xong.
+  if (task == null) {
+    error("VIEC '${params.VIEC}' không có trong job này. Bấm \"Build with Parameters\" và chọn lại — đừng \"Rebuild\" một lượt cũ.")
+  }
+  if (task[2] != 'on') { error("VIEC '${params.VIEC}' chưa dựng: ${task[4]}") }
+
+  env.VIEC = params.VIEC
+  env.MT = params.MT
+  env.NS = "vigov-${params.MT}"
+  env.NGUOI_BAM = nguoiBam()
+  if (!env.NGUOI_BAM) {
+    error('KHÔNG XÁC ĐỊNH ĐƯỢC AI BẤM LƯỢT NÀY — dừng. Lịch sử build của job này là nhật ký thay đổi hạ tầng.')
+  }
+  if (params.TICKET && !(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+    error("TICKET chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không ghi gì cả.")
+  }
+  env.TICKET = params.TICKET ?: '-'
+  env.GHI = (task[3] == 'ghi' && !params.CHAY_THU) ? '1' : '0'
+  if (env.GHI == '1') {
+    if ((params.XAC_NHAN ?: '').trim() != env.NS) {
+      error("XAC_NHAN phải là đúng '${env.NS}'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+    }
+    if (params.MT == 'prod' && !params.TICKET) {
+      error('TICKET bắt buộc cho mọi lần ghi prod. Không ghi gì cả.')
+    }
+    if (params.VIEC == 'csdl-moi' && params.MT == 'prod' && params.XAC_NHAN_CSDL_MOI != 'TAO-CSDL-MOI-TRONG') {
+      error('csdl-moi trên prod: gõ đúng TAO-CSDL-MOI-TRONG vào XAC_NHAN_CSDL_MOI — chạy thử trước và đọc khối HỆ QUẢ. Không ghi gì cả.')
+    }
+  }
+  currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.VIEC} · ${env.NS} · ${env.GHI == '1' ? 'GHI' : 'chạy thử/đọc'} · ${env.NGUOI_BAM}"
+}
+
+void prepare() {
+  checkout scm
+  sh 'rm -f .ops-summary .ops-input'
+  // Python 3.8+: máy build là CentOS 7, `python3` là 3.6 — cùng vòng dò với Jenkinsfile gốc.
+  env.PYTHON = sh(returnStdout: true, script: '''
+    for py in python3.14 python3.13 python3.12 python3.11 python3.10 python3.9 python3.8 python3; do
+      command -v "$py" >/dev/null 2>&1 || continue
+      if "$py" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)'; then command -v "$py"; exit 0; fi
+    done
+    echo "MÁY CHỦ BUILD KHÔNG CÓ PYTHON 3.8+ TRONG PATH" >&2; exit 1
+  ''').trim()
+  sh '''
+    set -eu
+    command -v kubectl >/dev/null 2>&1 || { echo "MÁY CHỦ BUILD THIẾU: kubectl"; exit 1; }
+    [ -r "$KUBECONFIG" ] || { echo "KHÔNG ĐỌC ĐƯỢC KUBECONFIG: $KUBECONFIG"; exit 1; }
+    echo "cụm: $(kubectl config current-context) · namespace: $NS · việc: $VIEC · ghi: $GHI · bấm bởi: $NGUOI_BAM · ticket: $TICKET"
+    echo "commit của kho: $(git rev-parse --short=12 HEAD) · python: $PYTHON"
+    [ "$(git rev-parse --is-shallow-repository 2>/dev/null)" != "true" ] || \
+      echo "⚠ bản sao NÔNG — đối chiếu migration theo commit của ảnh sẽ không đọc được (README mục 1: bỏ Shallow clone)"
+  '''
+  // Tham số dạng văn bản đi qua TỆP, không qua dòng lệnh. Không bí mật (bí mật là tham số password).
+  writeFile file: '.ops-input', text: (params.THONG_SO ?: ''), encoding: 'UTF-8'
+}
+
+void runTask(String viec) {
+  switch (viec) {
+    case 'tong-quan': taskOverview(); break
+    case 'xem-log': taskLogs(); break
+    case 'trang-thai-migration': taskMigrationStatus(); break
+    case 'kiem-ket-noi': taskConnectivity(); break
+    case 'sua-configmap': taskConfigMap(); break
+    case 'sua-secret': taskSecret(); break
+    case 'khoi-phuc-secret': taskSecretRestore(); break
+    case 'csdl-moi': taskNewDatabase(); break
+    case 'chay-migration': taskRunMigrations(); break
+    case 'sua-tai-nguyen': taskResources(); break
+    case 'khoi-dong-lai': taskRestart(); break
+    case 'lui-ban-truoc': taskUndo(); break
+    case 'tao-tai-khoan-van-hanh': taskOperatorAccount(); break
+    default: error("VIEC '${viec}' không có bước nào trong job — không làm gì.")
+  }
+}
+
+// Một dòng tóm tắt mỗi lần ghi (ai · gì · lúc nào · namespace · phiếu) — in ở cuối lượt. KHÔNG bền:
+// bị cắt theo buildDiscarder như log (ADR 0089).
+void printSummary() {
+  String body = fileExists('.ops-summary') ? readFile('.ops-summary').trim() : ''
+  echo("════ TÓM TẮT · việc ${env.VIEC ?: '?'} · ${env.NS ?: '?'} · người bấm ${env.NGUOI_BAM ?: '?'} · ticket ${env.TICKET ?: '-'} · " +
+       "${env.GHI == '1' ? 'GHI THẬT' : 'chạy thử / chỉ đọc — không ghi gì'}\n" + (body ?: '(không có lần ghi nào)'))
+  sh 'rm -f .ops-input'
+}
+
+// Danh sách đánh dấu (PT_CHECKBOX) tới dưới dạng "a,b,c". Chỉ nhận tên Deployment hợp lệ.
+String chosenDeployments() {
+  List out = []
+  for (String d : (params.DICH_VU_CHON ?: '').tokenize(',')) {
+    String t = d.trim()
+    if (!(t ==~ /^vigov-[a-z-]{1,50}$/)) { error("DICH_VU_CHON có '${t}' — không phải tên Deployment.") }
+    out << t
+  }
+  if (out.isEmpty()) { error('Chưa chọn Deployment nào ở DICH_VU_CHON.') }
+  return out.join(' ')
+}
+
+String oneService() {
+  String s = (params.DICH_VU ?: '').trim()
+  if (!(s ==~ /^[a-z]{2,30}$/)) { error("DICH_VU '${s}' không phải tên dịch vụ (vd platform).") }
+  return s
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Thư viện shell dán vào ĐẦU mỗi khối sh. `set +x`: Jenkins chạy `sh -xe` — lượt 08/10/2026 của job cũ
+// đã in nguyên một DSN có mật khẩu vì trace.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+String shLib() {
+  return '''
+set +x
+set -eu
+umask 077
+TMP_DIR=$(mktemp -d)
+PODS=""
+TEMP_SECRETS=""
+cleanup() {
+  for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done
+  for s in $TEMP_SECRETS; do kubectl -n "$NS" delete secret "$s" --ignore-not-found >/dev/null 2>&1 || true; done
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+OPS() { "$PYTHON" deploy/van-hanh/ops.py "$@"; }
+STAMP=$(date -u +%Y%m%d-%H%M%S)
+SVCS=$(OPS services)
+note() {
+  echo "GHI · $NGUOI_BAM · $(date -u +%Y-%m-%dT%H:%M:%SZ) · $NS · ticket $TICKET · $*"
+  printf '%s · %s\\n' "$(date -u +%H:%M:%SZ)" "$*" >> "$WORKSPACE/.ops-summary"
+}
+dry_stop() {
+  if [ "$GHI" != "1" ]; then
+    echo ""
+    echo "CHẠY THỬ — kế hoạch ở trên, KHÔNG ghi gì. Làm thật: bỏ tick CHAY_THU, gõ XAC_NHAN=$NS (+ TICKET nếu prod)."
+    exit 0
+  fi
+}
+need_patch_file() {
+  kubectl patch --help 2>/dev/null | grep -q -- '--patch-file' || {
+    echo "DỪNG: kubectl của máy chủ build không có 'patch --patch-file' — giá trị sẽ phải đi qua dòng lệnh. Không đổi gì."
+    exit 1; }
+}
+backup_labels() {
+  # Printed as words for the caller to splice into argv: no value here may hold a space.
+  by=$(printf '%s' "$NGUOI_BAM" | tr -c 'A-Za-z0-9._@-' '_')
+  echo "--labels vigov.vn/backup-of=$1 --note vigov.vn/by=$by --note vigov.vn/ticket=$TICKET --note vigov.vn/build=$BUILD_TAG"
+}
+# run_pod <tên pod> <manifest> <giây tối đa> — 0 khi Succeeded. Log ở $TMP_DIR/<tên>.log.
+run_pod() {
+  PODS="$PODS $1"
+  kubectl -n "$NS" create -f "$2" >/dev/null || return 1
+  rm -f "$2"
+  n=0; phase=""
+  while [ "$n" -lt "$3" ]; do
+    phase=$(kubectl -n "$NS" get pod "$1" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+    case "$phase" in Succeeded|Failed) break ;; esac
+    sleep 5; n=$((n + 5))
+  done
+  kubectl -n "$NS" logs "$1" > "$TMP_DIR/$1.log" 2>&1 || true
+  if [ "$phase" != "Succeeded" ]; then
+    sed 's/^/   /' "$TMP_DIR/$1.log"
+    echo "── pod $1 kết thúc ở pha '$phase' — sự kiện:"
+    kubectl -n "$NS" describe pod "$1" 2>/dev/null | sed -n '/^Events:/,$p' || true
+    return 1
+  fi
+}
+show_failure() {
+  echo "── deploy/$1 — sự kiện"
+  kubectl -n "$NS" describe deploy "$1" 2>/dev/null | sed -n '/^Events:/,$p' || true
+  for p in $(kubectl -n "$NS" get pod -o name 2>/dev/null | grep "^pod/$1-" || true); do
+    echo "════ $p — 80 dòng log cuối"
+    kubectl -n "$NS" logs "$p" --tail=80 2>&1 || true
+    echo "════ $p — lần chạy trước"
+    kubectl -n "$NS" logs "$p" --tail=40 --previous 2>/dev/null || echo "   (không có)"
+  done
+}
+wait_ready() {
+  if ! kubectl -n "$NS" rollout status deploy/"$1" --timeout=6m; then
+    echo "✗ deploy/$1 chưa sẵn sàng sau 6 phút — DỪNG, không đụng Deployment nào nữa."
+    show_failure "$1"
+    return 1
+  fi
+}
+restart_and_wait() {
+  for dep in "$@"; do
+    if ! kubectl -n "$NS" get deploy "$dep" >/dev/null 2>&1; then echo "⚠ không có deploy/$dep trong $NS — bỏ qua"; continue; fi
+    kubectl -n "$NS" rollout restart deploy/"$dep"
+    note "rollout restart deploy/$dep"
+    wait_ready "$dep"
+  done
+}
+# migration_status <đuôi Secret chứa DSN: secrets | dsn-pending> <dịch vụ…> — in bảng; rc≠0 khi --strict lệch
+migration_status() {
+  suffix=$1; shift
+  : > "$TMP_DIR/image.tsv"
+  envs=""
+  for svc in "$@"; do
+    img=$(kubectl -n "$NS" get deploy "vigov-service-$svc" -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || true)
+    tag=${img##*:}
+    OPS image-migrations --service "$svc" --commit "$tag" >> "$TMP_DIR/image.tsv" 2>/dev/null || \
+      echo "   ($svc: không đọc được migration của ảnh '$tag' từ git — bản sao nông, hay ảnh không dựng từ main?)"
+    envs="$envs --secret-env DSN_$svc=$svc-$suffix/DATABASE_DSN"
+  done
+  cat > "$TMP_DIR/mig.sh" <<'EOF'
+TAB=$(printf '\\t')
+for svc in $SVCS_ASKED; do
+  dsn=$(printenv "DSN_$svc" || true)
+  if [ -z "$dsn" ]; then echo "# $svc: Secret không có DATABASE_DSN"; continue; fi
+  psql "$dsn" -XAtq -F "$TAB" -c "SELECT '$svc', ten, checksum FROM schema_migration ORDER BY ten" 2>&1 \
+    | sed "/^$svc$TAB/!s/^/# $svc: /" || true
+done
+EOF
+  pod="vigov-ops-mig-$BUILD_NUMBER-$(date +%s)"
+  OPS pod --name "$pod" --script "$TMP_DIR/mig.sh" --env "SVCS_ASKED=$*" $envs --pull-secret dockerhub-omicrm --out "$TMP_DIR/pod.json"
+  run_pod "$pod" "$TMP_DIR/pod.json" 180 || return 1
+  grep '^# ' "$TMP_DIR/$pod.log" | sed 's/^# /   /' || true
+  OPS migration-report --image "$TMP_DIR/image.tsv" --applied "$TMP_DIR/$pod.log" ${STRICT:-}
+}
+'''
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Kiểm tra — chỉ đọc
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void taskOverview() {
+  sh(shLib() + '''
+    echo "── Deployment + ảnh"
+    kubectl -n "$NS" get deploy -o wide || true
+    echo "── Pod"
+    kubectl -n "$NS" get pod -o wide || true
+    echo "── Secret (CHỈ TÊN KEY — không giá trị)"
+    kubectl -n "$NS" get secret -o go-template='{{range .items}}   {{.metadata.name}}:{{range $k, $v := .data}} {{$k}}{{end}}{{"\\n"}}{{end}}' 2>/dev/null || true
+    if kubectl -n "$NS" get configmap common-config -o json > "$TMP_DIR/cm.json" 2>/dev/null; then
+      OPS config-audit --current "$TMP_DIR/cm.json"
+    else
+      echo "⚠ không đọc được configmap/common-config trong $NS"
+    fi
+    echo "── Secret do job này tạo (sao lưu · dsn-pending)"
+    kubectl -n "$NS" get secret -l app.kubernetes.io/managed-by=vigov-van-hanh -o custom-columns=TEN:.metadata.name,TAO:.metadata.creationTimestamp 2>/dev/null || true
+    echo "── Sự kiện gần nhất"
+    kubectl -n "$NS" get events --sort-by=.lastTimestamp 2>/dev/null | tail -25 || true
+  ''')
+}
+
+void taskLogs() {
+  String dep = (params.DICH_VU ?: '').trim()
+  if (!(dep ==~ /^vigov-[a-z-]{1,50}$/)) { error("DICH_VU '${dep}' không phải tên Deployment.") }
+  String lines = (params.SO_DONG ?: '300').trim()
+  if (!(lines ==~ /^[0-9]{1,4}$/) || lines.toInteger() < 1 || lines.toInteger() > 5000) { error('SO_DONG phải 1–5000.') }
+  withEnv(["DEP=${dep}", "LINES=${lines}"]) {
+    sh(shLib() + '''
+      echo "── mô tả deploy/$DEP"
+      kubectl -n "$NS" describe deploy/"$DEP" | tail -40 || true
+      for p in $(kubectl -n "$NS" get pod -o name 2>/dev/null | grep "^pod/$DEP-" || true); do
+        echo ""; echo "════ $p — sự kiện"
+        kubectl -n "$NS" describe "$p" | sed -n '/^Events:/,$p' || true
+        echo "════ $p — log ($LINES dòng cuối)"
+        kubectl -n "$NS" logs "$p" --all-containers --tail="$LINES" || true
+        echo "════ $p — lần chạy TRƯỚC"
+        kubectl -n "$NS" logs "$p" --all-containers --tail=100 --previous 2>/dev/null || echo "   (không có)"
+      done
+    ''')
+  }
+}
+
+void taskMigrationStatus() {
+  sh(shLib() + '''
+    # shellcheck disable=SC2086
+    migration_status secrets $SVCS
+  ''')
+}
+
+void taskConnectivity() {
+  sh(shLib() + '''
+    envs=""
+    for svc in $SVCS; do envs="$envs --secret-env DSN_$svc=$svc-secrets/DATABASE_DSN"; done
+    cat > "$TMP_DIR/probe.sh" <<'EOF'
+bad=0
+probe() {
+  host=${2%:*}; port=${2##*:}
+  if nc -z -w 5 "$host" "$port" 2>/dev/null; then echo "   $1 $2: mở"; else echo "   $1 $2: KHÔNG tới được"; bad=1; fi
+}
+echo "── CSDL (pg_isready — chỉ in máy chủ, không in DSN)"
+for svc in $SVCS_ASKED; do
+  dsn=$(printenv "DSN_$svc" || true)
+  if [ -z "$dsn" ]; then echo "   $svc: Secret không có DATABASE_DSN"; bad=1; continue; fi
+  if pg_isready -q -t 5 -d "$dsn"; then echo "   $svc: nhận kết nối"; else echo "   $svc: KHÔNG nhận kết nối"; bad=1; fi
+done
+echo "── Redis (REDIS_DSN của identity-secrets)"
+if [ -n "${REDIS_DSN:-}" ]; then
+  for hp in $(printf '%s' "$REDIS_DSN" | sed -e 's#^[a-z]*://##' -e 's#.*@##' -e 's#/.*##' | tr ',' ' '); do probe redis "$hp"; done
+else echo "   (không có REDIS_DSN)"; fi
+echo "── MinIO (OBJECT_STORAGE_ENDPOINT)"
+if [ -n "${OBJECT_STORAGE_ENDPOINT:-}" ]; then
+  hp=$(printf '%s' "$OBJECT_STORAGE_ENDPOINT" | sed -e 's#^[a-z]*://##' -e 's#/.*##')
+  case "$hp" in *:*) ;; *) hp="$hp:443" ;; esac
+  probe minio "$hp"
+else echo "   (common-config không có OBJECT_STORAGE_ENDPOINT)"; fi
+echo "── ClamAV (MALWARE_SCANNER_ADDRESS)"
+if [ -n "${MALWARE_SCANNER_ADDRESS:-}" ]; then
+  for hp in $(printf '%s' "$MALWARE_SCANNER_ADDRESS" | tr ',' ' '); do probe clamd "$hp"; done
+else echo "   (common-config không có MALWARE_SCANNER_ADDRESS)"; fi
+echo "── RabbitMQ / Kafka / Elasticsearch: chưa dịch vụ nào khai nhóm biến (core/config) — không kiểm"
+exit $bad
+EOF
+    pod="vigov-ops-probe-$BUILD_NUMBER"
+    # shellcheck disable=SC2086
+    OPS pod --name "$pod" --script "$TMP_DIR/probe.sh" --env "SVCS_ASKED=$SVCS" $envs \
+      --secret-env REDIS_DSN=identity-secrets/REDIS_DSN --envfrom-configmap common-config \
+      --pull-secret dockerhub-omicrm --out "$TMP_DIR/pod.json"
+    if run_pod "$pod" "$TMP_DIR/pod.json" 120; then cat "$TMP_DIR/$pod.log"; else echo "✗ có đích không tới được — xem trên"; exit 1; fi
+  ''')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Cấu hình — common-config
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void taskConfigMap() {
+  withEnv(["DO_RESTART=${params.KHOI_DONG_LAI ? '1' : '0'}"]) {
+    sh(shLib() + '''
+      kubectl -n "$NS" get configmap common-config -o json > "$TMP_DIR/cm.json" || {
+        echo "DỪNG: không đọc được configmap/common-config trong $NS — job không tạo nó. Không đổi gì."; exit 1; }
+      env_expected=$MT
+      rc=0
+      OPS config-plan --current "$TMP_DIR/cm.json" --edits .ops-input --env "$env_expected" \
+        --patch-out "$TMP_DIR/patch.json" --restart-out "$TMP_DIR/restart.txt" || rc=$?
+      [ "$rc" -eq 3 ] && exit 0
+      [ "$rc" -eq 0 ] || exit 1
+      dry_stop
+      kubectl -n "$NS" patch configmap common-config --type=merge -p "$(cat "$TMP_DIR/patch.json")" >/dev/null
+      note "configmap/common-config: $("$PYTHON" -c 'import json,sys; print(", ".join(sorted(json.load(open(sys.argv[1]))["data"])))' "$TMP_DIR/patch.json")"
+      kubectl -n "$NS" get configmap common-config -o json > "$TMP_DIR/cm2.json"
+      rc=0
+      OPS config-plan --current "$TMP_DIR/cm2.json" --edits .ops-input --env "$env_expected" \
+        --patch-out "$TMP_DIR/p2.json" --restart-out "$TMP_DIR/r2.txt" >/dev/null || rc=$?
+      [ "$rc" -eq 3 ] || { echo "✗ đọc lại từ cụm KHÔNG khớp giá trị vừa ghi — kiểm tay, không khởi động lại gì."; exit 1; }
+      echo "✓ đọc lại từ cụm khớp"
+      if [ "$DO_RESTART" = "1" ]; then
+        # shellcheck disable=SC2046
+        restart_and_wait $(cat "$TMP_DIR/restart.txt")
+      else
+        echo "KHOI_DONG_LAI tắt — dịch vụ đọc khoá mới ở lần khởi động kế: $(tr '\\n' ' ' < "$TMP_DIR/restart.txt")"
+      fi
+    ''')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Bí mật — <dịch vụ>-secrets. Giá trị: tham số password → tệp 0600 → ops.py → --patch-file. Không echo.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void taskSecret() {
+  String svc = oneService()
+  withEnv(["SVC=${svc}", "DO_RESTART=${params.KHOI_DONG_LAI ? '1' : '0'}"]) {
+    sh(shLib() + '''
+      SEC="$SVC-secrets"
+      kubectl -n "$NS" get secret "$SEC" >/dev/null 2>&1 || { echo "DỪNG: không thấy secret/$SEC trong $NS. Không đổi gì."; exit 1; }
+      kubectl -n "$NS" get secret "$SEC" -o go-template='{{range $k, $v := .data}}{{$k}}{{"\\n"}}{{end}}' > "$TMP_DIR/present.txt"
+      slots=""
+      [ -z "${BI_MAT_1:-}" ] || slots="$slots,1"
+      [ -z "${BI_MAT_2:-}" ] || slots="$slots,2"
+      [ -z "${BI_MAT_3:-}" ] || slots="$slots,3"
+      rc=0
+      OPS secret-plan --service "$SVC" --present "$TMP_DIR/present.txt" --edits .ops-input --slots "${slots#,}" \
+        --actions-out "$TMP_DIR/actions.tsv" || rc=$?
+      [ "$rc" -eq 3 ] && exit 0
+      [ "$rc" -eq 0 ] || exit 1
+      echo "Sẽ sao lưu giá trị CŨ của các khoá trên vào secret/$SEC-backup-$STAMP (không gắn vào Deployment nào)."
+      echo "Khởi động lại: vigov-service-$SVC"
+      dry_stop
+      need_patch_file
+      mkdir -p "$TMP_DIR/slots"
+      [ -z "${BI_MAT_1:-}" ] || printf '%s' "$BI_MAT_1" > "$TMP_DIR/slots/slot1"
+      [ -z "${BI_MAT_2:-}" ] || printf '%s' "$BI_MAT_2" > "$TMP_DIR/slots/slot2"
+      [ -z "${BI_MAT_3:-}" ] || printf '%s' "$BI_MAT_3" > "$TMP_DIR/slots/slot3"
+      kubectl -n "$NS" get secret "$SEC" -o json > "$TMP_DIR/cur.json"
+      # shellcheck disable=SC2046
+      OPS secret-apply --current "$TMP_DIR/cur.json" --actions "$TMP_DIR/actions.tsv" --slot-dir "$TMP_DIR/slots" \
+        --patch-out "$TMP_DIR/patch.json" --backup-out "$TMP_DIR/backup.json" --backup-name "$SEC-backup-$STAMP" \
+        $(backup_labels "$SEC")
+      rm -rf "$TMP_DIR/slots"
+      if [ -f "$TMP_DIR/backup.json" ]; then
+        kubectl -n "$NS" create -f "$TMP_DIR/backup.json" >/dev/null
+        note "secret/$SEC-backup-$STAMP tạo (giá trị cũ của khoá sắp đổi)"
+      fi
+      kubectl -n "$NS" patch secret "$SEC" --type=merge --patch-file "$TMP_DIR/patch.json" >/dev/null
+      note "secret/$SEC: $(cut -f1,2 "$TMP_DIR/actions.tsv" | tr '\\t\\n' '= ')"
+      kubectl -n "$NS" get secret "$SEC" -o json > "$TMP_DIR/after.json"
+      OPS secret-verify --current "$TMP_DIR/after.json" --patch "$TMP_DIR/patch.json"
+      if [ "$DO_RESTART" = "1" ]; then restart_and_wait "vigov-service-$SVC"; else echo "KHOI_DONG_LAI tắt — vigov-service-$SVC đọc khoá mới ở lần khởi động kế."; fi
+    ''')
+  }
+}
+
+void taskSecretRestore() {
+  String svc = oneService()
+  String backup = (params.THONG_SO ?: '').readLines().collect { it.trim() }.find { it } ?: ''
+  if (!(backup ==~ /^[a-z]{2,30}-secrets-backup-[0-9]{8}-[0-9]{6}$/) || !backup.startsWith("${svc}-secrets-backup-")) {
+    error("Bản sao lưu '${backup}' không đúng dạng ${svc}-secrets-backup-YYYYMMDD-HHMMSS.")
+  }
+  withEnv(["SVC=${svc}", "FROM=${backup}", "DO_RESTART=${params.KHOI_DONG_LAI ? '1' : '0'}"]) {
+    sh(shLib() + '''
+      SEC="$SVC-secrets"
+      kubectl -n "$NS" get secret "$FROM" -o json > "$TMP_DIR/from.json" || { echo "DỪNG: không thấy secret/$FROM. Không đổi gì."; exit 1; }
+      kubectl -n "$NS" get secret "$SEC" -o json > "$TMP_DIR/cur.json"
+      echo "Sẽ chép lại vào secret/$SEC các khoá: $(kubectl -n "$NS" get secret "$FROM" -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}')"
+      echo "Giá trị hiện tại của các khoá ấy sao lưu vào secret/$SEC-backup-$STAMP. Khởi động lại: vigov-service-$SVC"
+      dry_stop
+      need_patch_file
+      # shellcheck disable=SC2046
+      OPS secret-copy --from "$TMP_DIR/from.json" --current "$TMP_DIR/cur.json" --patch-out "$TMP_DIR/patch.json" \
+        --backup-out "$TMP_DIR/backup.json" --backup-name "$SEC-backup-$STAMP" $(backup_labels "$SEC")
+      if [ -f "$TMP_DIR/backup.json" ]; then kubectl -n "$NS" create -f "$TMP_DIR/backup.json" >/dev/null; note "secret/$SEC-backup-$STAMP tạo"; fi
+      kubectl -n "$NS" patch secret "$SEC" --type=merge --patch-file "$TMP_DIR/patch.json" >/dev/null
+      note "secret/$SEC: khôi phục từ $FROM"
+      kubectl -n "$NS" get secret "$SEC" -o json > "$TMP_DIR/after.json"
+      OPS secret-verify --current "$TMP_DIR/after.json" --patch "$TMP_DIR/patch.json"
+      if [ "$DO_RESTART" = "1" ]; then restart_and_wait "vigov-service-$SVC"; fi
+    ''')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// CSDL mới — ADR 0089 §Lần dùng đầu. Thứ tự bước cố định (ops.py DB_STEPS); bước nào không tick thì bỏ.
+//   tao-csdl        tài khoản + CSDL trên máy chủ MỚI; mật khẩu CSPRNG; DSN mới vào <svc>-dsn-pending
+//                   (Secret KHÔNG gắn Deployment nào) TRƯỚC khi chạy SQL — hỏng giữa chừng không mất mật khẩu
+//   chay-migration  pod một lượt bằng ẢNH CỦA DỊCH VỤ, DATABASE_DSN = dsn-pending, đợi "migration xong"
+//   kiem-luoc-do    schema_migration của CSDL mới = migration trong ảnh (thay schema-smoke: công cụ ấy tạo
+//                   schema tạm cho dev/CI, không chạy trên prod)
+//   dat-dsn         sao lưu DATABASE_DSN cũ → <svc>-secrets-backup-…, rồi đặt DSN mới (tự kiểm lược đồ trước)
+//   khoi-dong-lai   platform → identity → còn lại, đợi sẵn sàng; hỏng thì in log và DỪNG
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void taskNewDatabase() {
+  List steps = (params.BUOC_CSDL ?: '').tokenize(',').collect { it.trim() }
+  for (String s : steps) {
+    if (!(s in ['tao-csdl', 'chay-migration', 'kiem-luoc-do', 'dat-dsn', 'khoi-dong-lai'])) { error("BUOC_CSDL có bước lạ '${s}'.") }
+  }
+  if (steps.isEmpty()) { error('Chưa tick bước nào ở BUOC_CSDL.') }
+  if (steps.contains('tao-csdl') && !((params.CSDL_QUAN_TRI ?: '') ==~ /^[A-Za-z0-9_.-]{1,63}$/)) {
+    error('CSDL_QUAN_TRI: tên tài khoản quản trị (A-Z a-z 0-9 _ . -).')
+  }
+  withEnv(["STEPS=,${steps.join(',')},"]) {
+    sh(shLib() + '''
+      has_step() { case "$STEPS" in *",$1,"*) return 0 ;; esac; return 1; }
+      [ "$MT" != "prod" ] || { OPS consequences; echo ""; }
+      : > "$TMP_DIR/cur-dbs.tsv"
+      for svc in $SVCS; do
+        # CHỈ tên CSDL: DSN đi qua ống, không vào biến, không in.
+        n=$(kubectl -n "$NS" get secret "$svc-secrets" -o go-template='{{index .data "DATABASE_DSN"}}' 2>/dev/null | base64 -d 2>/dev/null | OPS db-name || true)
+        printf '%s\\t%s\\n' "$svc" "$n" >> "$TMP_DIR/cur-dbs.tsv"
+      done
+      OPS db-plan --mt "$MT" --edits .ops-input --current-dbs "$TMP_DIR/cur-dbs.tsv" --hosts "${CSDL_MAY_CHU:-}" \
+        --port "${CSDL_CONG:-5432}" --sslmode "$CSDL_SSLMODE" --rows-out "$TMP_DIR/rows.tsv" --sql-out "$TMP_DIR/create.sql"
+      ROWS=$(cut -f1 "$TMP_DIR/rows.tsv" | tr '\\n' ' ')
+      ORDERED=""
+      for s in $SVCS; do case " $ROWS " in *" $s "*) ORDERED="$ORDERED $s" ;; esac; done
+      echo ""
+      echo "Bước sẽ chạy:$(printf '%s' "$STEPS" | tr ',' ' ')"
+      echo "Secret dsn-pending đang có:"
+      for s in $ORDERED; do
+        if kubectl -n "$NS" get secret "$s-dsn-pending" >/dev/null 2>&1; then echo "   $s-dsn-pending: CÓ"; else echo "   $s-dsn-pending: chưa"; fi
+      done
+      dry_stop
+      need_patch_file
+
+      if has_step tao-csdl; then
+        echo ""; echo "════ tao-csdl"
+        [ -n "${MAT_KHAU_QUAN_TRI_CSDL:-}" ] || { echo "DỪNG: MAT_KHAU_QUAN_TRI_CSDL trống. Không tạo gì."; exit 1; }
+        for s in $ORDERED; do
+          if kubectl -n "$NS" get secret "$s-dsn-pending" >/dev/null 2>&1; then
+            echo "DỪNG: secret/$s-dsn-pending đã có — lượt trước đã tạo tài khoản. Bỏ tick tao-csdl (không sinh lại mật khẩu). Không tạo gì."
+            exit 1
+          fi
+        done
+        mkdir -p "$TMP_DIR/pw"
+        while IFS="$(printf '\\t')" read -r s db user; do
+          [ -n "$s" ] || continue
+          up=$(printf '%s' "$s" | tr 'a-z' 'A-Z')
+          # 24 byte CSPRNG → 48 ký tự hex: an toàn trong URI, không cần thoát (luật 13 bất biến 2).
+          od -An -tx1 -N24 /dev/urandom | tr -d ' \\n' > "$TMP_DIR/pw/PW_$up"
+          OPS dsn --hosts "$CSDL_MAY_CHU" --port "${CSDL_CONG:-5432}" --db "$db" --user "$user" --sslmode "$CSDL_SSLMODE" \
+            --password-file "$TMP_DIR/pw/PW_$up" --out "$TMP_DIR/dsn-$s"
+        done < "$TMP_DIR/rows.tsv"
+        printf '%s' "$MAT_KHAU_QUAN_TRI_CSDL" > "$TMP_DIR/pw/PGPASSWORD"
+        ADMIN_SEC="vigov-ops-dbadmin-$BUILD_NUMBER"
+        TEMP_SECRETS="$TEMP_SECRETS $ADMIN_SEC"
+        kubectl -n "$NS" create secret generic "$ADMIN_SEC" --from-file="$TMP_DIR/pw" >/dev/null
+        rm -rf "$TMP_DIR/pw"
+        for s in $ORDERED; do
+          kubectl -n "$NS" create secret generic "$s-dsn-pending" --from-file=DATABASE_DSN="$TMP_DIR/dsn-$s" >/dev/null
+          rm -f "$TMP_DIR/dsn-$s"
+          kubectl -n "$NS" label secret "$s-dsn-pending" app.kubernetes.io/managed-by=vigov-van-hanh >/dev/null
+          note "secret/$s-dsn-pending tạo (DSN CSDL mới; chưa gắn Deployment nào)"
+        done
+        eval "$(OPS pg-env --hosts "$CSDL_MAY_CHU" --port "${CSDL_CONG:-5432}")"
+        pwenvs=""
+        for s in $ORDERED; do up=$(printf '%s' "$s" | tr 'a-z' 'A-Z'); pwenvs="$pwenvs --secret-env PW_$up=$ADMIN_SEC/PW_$up"; done
+        printf '%s\\n' 'echo "$SQL_B64" | base64 -d > /tmp/c.sql && psql -X -q -f /tmp/c.sql' > "$TMP_DIR/run.sh"
+        pod="vigov-ops-createdb-$BUILD_NUMBER"
+        # shellcheck disable=SC2086
+        OPS pod --name "$pod" --script "$TMP_DIR/run.sh" --env "SQL_B64=$(base64 -w0 < "$TMP_DIR/create.sql")" \
+          --env "PGHOST=$PGHOST" --env "PGPORT=$PGPORT" --env "PGUSER=$CSDL_QUAN_TRI" --env PGDATABASE=postgres \
+          --env "PGSSLMODE=$CSDL_SSLMODE" --secret-env "PGPASSWORD=$ADMIN_SEC/PGPASSWORD" $pwenvs \
+          --pull-secret dockerhub-omicrm --out "$TMP_DIR/pod.json"
+        if ! run_pod "$pod" "$TMP_DIR/pod.json" 300; then
+          echo "✗ tạo CSDL hỏng. Secret *-dsn-pending GIỮ mật khẩu đã dùng; có thể đã tạo MỘT PHẦN tài khoản/CSDL."
+          echo "  Người quản trị PostgreSQL xem tay; chạy lại tao-csdl sẽ DỪNG vì dsn-pending đã có (cố ý)."
+          exit 1
+        fi
+        sed 's/^/   /' "$TMP_DIR/$pod.log"
+        note "máy chủ $PGHOST: tạo tài khoản + CSDL cho$ORDERED"
+      fi
+
+      if has_step chay-migration; then
+        echo ""; echo "════ chay-migration (ảnh của từng dịch vụ, DATABASE_DSN = dsn-pending)"
+        for s in $ORDERED; do
+          kubectl -n "$NS" get secret "$s-dsn-pending" >/dev/null 2>&1 || { echo "DỪNG: thiếu secret/$s-dsn-pending — chạy tao-csdl trước."; exit 1; }
+          kubectl -n "$NS" get deploy "vigov-service-$s" -o json > "$TMP_DIR/dep.json"
+          pod="vigov-ops-migrate-$s-$BUILD_NUMBER"
+          OPS pod --name "$pod" --from-deploy "$TMP_DIR/dep.json" --secret-env "DATABASE_DSN=$s-dsn-pending/DATABASE_DSN" --out "$TMP_DIR/pod.json"
+          PODS="$PODS $pod"
+          kubectl -n "$NS" create -f "$TMP_DIR/pod.json" >/dev/null
+          ok=""; n=0
+          while [ "$n" -lt 360 ]; do
+            if kubectl -n "$NS" logs "$pod" 2>/dev/null | grep -q '"msg":"migration xong"'; then ok=1; break; fi
+            phase=$(kubectl -n "$NS" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            case "$phase" in Succeeded|Failed) break ;; esac
+            sleep 5; n=$((n + 5))
+          done
+          if [ -z "$ok" ]; then
+            echo "✗ $s: không thấy \\"migration xong\\" — log:"; kubectl -n "$NS" logs "$pod" --tail=60 2>&1 || true
+            kubectl -n "$NS" describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+            exit 1
+          fi
+          kubectl -n "$NS" logs "$pod" 2>/dev/null | grep '"msg":"migration xong"' | tail -1 | sed 's/^/   /'
+          # Dừng ngay: pod chỉ để chạy migration, không phục vụ (không mang nhãn của Deployment).
+          kubectl -n "$NS" delete pod "$pod" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+          note "migration CSDL mới của $s (pod $pod)"
+        done
+      fi
+
+      if has_step kiem-luoc-do || has_step dat-dsn; then
+        echo ""; echo "════ kiem-luoc-do (CSDL mới so với ảnh)"
+        # shellcheck disable=SC2086
+        STRICT=--strict migration_status dsn-pending $ORDERED || { echo "✗ lược đồ CSDL mới chưa khớp ảnh — KHÔNG đặt DSN."; exit 1; }
+      fi
+
+      if has_step dat-dsn; then
+        echo ""; echo "════ dat-dsn (giá trị cũ sao lưu sang Secret riêng trước khi đổi)"
+        for s in $ORDERED; do
+          kubectl -n "$NS" get secret "$s-secrets" -o json > "$TMP_DIR/cur.json"
+          kubectl -n "$NS" get secret "$s-dsn-pending" -o json > "$TMP_DIR/pend.json"
+          rm -f "$TMP_DIR/backup.json"
+          # shellcheck disable=SC2046
+          OPS secret-copy --from "$TMP_DIR/pend.json" --current "$TMP_DIR/cur.json" --patch-out "$TMP_DIR/patch.json" \
+            --backup-out "$TMP_DIR/backup.json" --backup-name "$s-secrets-backup-$STAMP" $(backup_labels "$s-secrets")
+          if [ -f "$TMP_DIR/backup.json" ]; then
+            kubectl -n "$NS" create -f "$TMP_DIR/backup.json" >/dev/null
+            note "secret/$s-secrets-backup-$STAMP tạo (DATABASE_DSN cũ — quay lui: khoi-phuc-secret)"
+          fi
+          kubectl -n "$NS" patch secret "$s-secrets" --type=merge --patch-file "$TMP_DIR/patch.json" >/dev/null
+          kubectl -n "$NS" get secret "$s-secrets" -o json > "$TMP_DIR/after.json"
+          OPS secret-verify --current "$TMP_DIR/after.json" --patch "$TMP_DIR/patch.json"
+          note "secret/$s-secrets: DATABASE_DSN → CSDL mới"
+        done
+      fi
+
+      if has_step khoi-dong-lai; then
+        echo ""; echo "════ khoi-dong-lai"
+        deps=""
+        for s in $ORDERED; do deps="$deps vigov-service-$s"; done
+        # shellcheck disable=SC2086
+        restart_and_wait $deps || {
+          echo "Quay lui một dịch vụ: việc khoi-phuc-secret, DICH_VU=<dịch vụ>, THONG_SO=<dịch vụ>-secrets-backup-$STAMP."
+          exit 1; }
+        [ "$MT" != "prod" ] || echo "Tiếp theo: tạo lại xã (platform-admin) và tài khoản vận hành (việc tao-tai-khoan-van-hanh) — CSDL mới rỗng."
+      fi
+    ''')
+  }
+}
+
+void taskRunMigrations() {
+  String deps = chosenDeployments()
+  withEnv(["DEPS=${deps}"]) {
+    sh(shLib() + '''
+      svcs=""
+      for d in $DEPS; do case "$d" in vigov-service-*) svcs="$svcs ${d#vigov-service-}" ;; *) echo "⚠ $d không phải dịch vụ Go — bỏ qua" ;; esac; done
+      [ -n "$svcs" ] || { echo "DỪNG: không có dịch vụ Go nào được chọn."; exit 1; }
+      # shellcheck disable=SC2086
+      migration_status secrets $svcs || true
+      echo ""
+      echo "Migration chạy TRONG tiến trình lúc khởi động (core/migrate, advisory lock). Sẽ khởi động lại:$svcs"
+      echo "Ảnh quyết định áp tới đâu — muốn migration mới hơn thì chạy job của dịch vụ để đưa ảnh mới lên."
+      dry_stop
+      deps=""
+      for s in $svcs; do deps="$deps vigov-service-$s"; done
+      # shellcheck disable=SC2086
+      restart_and_wait $deps
+      # shellcheck disable=SC2086
+      migration_status secrets $svcs
+    ''')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Tài nguyên
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void taskResources() {
+  sh(shLib() + '''
+    kubectl -n "$NS" get deploy -o json > "$TMP_DIR/deploys.json"
+    rc=0
+    OPS resources-plan --current "$TMP_DIR/deploys.json" --edits .ops-input --out-dir "$TMP_DIR/patches" || rc=$?
+    [ "$rc" -eq 3 ] && exit 0
+    [ "$rc" -eq 0 ] || exit 1
+    echo ""
+    echo "Đổi cpu/memory = đổi pod template = Deployment ấy tự rollout. Đổi riêng replicas thì không khởi động lại pod."
+    dry_stop
+    for f in "$TMP_DIR"/patches/*.json; do
+      dep=$(basename "$f" .json)
+      kubectl -n "$NS" patch deploy "$dep" --type=strategic -p "$(cat "$f")" >/dev/null
+      note "deploy/$dep: tài nguyên $(tr -d ' ' < "$f" | cut -c1-160)"
+      wait_ready "$dep" || { echo "Lùi: việc lui-ban-truoc cho $dep (hoặc chạy lại việc này với số cũ in ở trên)."; exit 1; }
+    done
+  ''')
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Triển khai — chỉ khởi động lại và rollout undo. Đặt ảnh mới KHÔNG ở đây: job của dịch vụ giữ lịch sử
+// "ai đưa bản nào lên" (deploy/README.md mục 1–2); hai job cùng đặt ảnh là hai nơi ghi một sự kiện.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void taskRestart() {
+  withEnv(["DEPS=${chosenDeployments()}"]) {
+    sh(shLib() + '''
+      for d in $DEPS; do echo "   $d — $(kubectl -n "$NS" get deploy "$d" -o jsonpath='{.status.readyReplicas}/{.spec.replicas} · {.spec.template.spec.containers[0].image}' 2>/dev/null || echo 'KHÔNG CÓ')"; done
+      dry_stop
+      # shellcheck disable=SC2086
+      restart_and_wait $DEPS
+    ''')
+  }
+}
+
+void taskUndo() {
+  withEnv(["DEPS=${chosenDeployments()}"]) {
+    sh(shLib() + '''
+      for d in $DEPS; do
+        echo "── $d — ảnh đang chạy: $(kubectl -n "$NS" get deploy "$d" -o jsonpath='{.spec.template.spec.containers[0].image}')"
+        kubectl -n "$NS" rollout history deploy/"$d" 2>/dev/null | tail -6 || true
+      done
+      echo "rollout undo = về revision liền trước (cả ảnh lẫn env/tài nguyên của revision ấy)."
+      dry_stop
+      for d in $DEPS; do
+        before=$(kubectl -n "$NS" get deploy "$d" -o jsonpath='{.spec.template.spec.containers[0].image}')
+        kubectl -n "$NS" rollout undo deploy/"$d"
+        wait_ready "$d"
+        note "deploy/$d: rollout undo ($before → $(kubectl -n "$NS" get deploy "$d" -o jsonpath='{.spec.template.spec.containers[0].image}'))"
+      done
+    ''')
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Bảo trì — tài khoản vận hành platform-admin. Cùng chốt chặn với job cũ (deploy/Jenkinsfile, stage
+// 'Tạo tài khoản vận hành'): TICKET bắt buộc ở MỌI môi trường, email/tên kiểm dạng trước mọi kubectl,
+// email không in. Mật khẩu tạm in vào log — giá chủ dự án chấp nhận 02/10/2026 (ADR 0048).
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+void taskOperatorAccount() {
+  if (!(params.EMAIL_VAN_HANH ==~ /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}$/)) {
+    error('EMAIL_VAN_HANH không đúng dạng email. Không ghi gì cả.')   // không in lại giá trị (luật 3)
+  }
+  if (!(params.TEN_VAN_HANH ==~ /^\p{L}[\p{L} .'-]{0,99}$/)) {
+    error("TEN_VAN_HANH chỉ nhận chữ cái, khoảng trắng, . ' - (tối đa 100 ký tự). Không ghi gì cả.")
+  }
+  if (env.GHI == '1' && !params.TICKET) { error('TICKET bắt buộc cho tao-tai-khoan-van-hanh. Không ghi gì cả.') }
+  withEnv(["OP_EMAIL=${params.EMAIL_VAN_HANH}", "OP_NAME=${params.TEN_VAN_HANH}"]) {
+    sh(shLib() + '''
+      DEP=vigov-service-identity
+      echo "Sẽ chạy: operatorctl create --email *** --name <TEN_VAN_HANH> --ticket $TICKET, rồi grant 7 quyền ops.*"
+      dry_stop
+      kubectl -n "$NS" get deploy "$DEP" -o json > "$TMP_DIR/dep.json"
+      run_op() {
+        pod="vigov-ops-operatorctl-$BUILD_NUMBER-$1"
+        OPS pod --name "$pod" --from-deploy "$TMP_DIR/dep.json" --command-json "$2" --out "$TMP_DIR/pod-$1.json"
+        run_pod "$pod" "$TMP_DIR/pod-$1.json" 300
+      }
+      cmd=$(printf '["/operatorctl","create","--email","%s","--name","%s","--ticket","%s"]' "$OP_EMAIL" "$OP_NAME" "$TICKET")
+      if ! run_op create "$cmd"; then
+        echo "Gợi ý: email đã có tài khoản = operatorctl list / reset-mfa, KHÔNG tạo lại. Không cấp quyền nào."; exit 1
+      fi
+      log="$TMP_DIR/vigov-ops-operatorctl-$BUILD_NUMBER-create.log"
+      CODE=$(grep -o 'created VH-[0-9]\\{5\\}' "$log" | head -1 | cut -d' ' -f2)
+      [ -n "$CODE" ] || { cat "$log"; echo "DỪNG: không đọc được mã VH- trong kết quả create."; exit 1; }
+      note "tài khoản vận hành $CODE tạo"
+      failed=""
+      for perm in ops.tenant.manage ops.domain.manage ops.profile.manage ops.mini_app.manage ops.upload_policy.manage ops.qr.issue ops.petition_field.manage; do
+        suffix="grant-$(printf '%s' "$perm" | tr '._' '--')"
+        if run_op "$suffix" "$(printf '["/operatorctl","grant","--code","%s","--permission","%s","--ticket","%s"]' "$CODE" "$perm" "$TICKET")"; then
+          echo "   ✓ $perm"; note "$CODE: cấp $perm"
+        else failed="$failed $perm"; fi
+      done
+      echo "════════════════════════════════════════════════════════════════════════════"
+      grep -A1 '^temporary password' "$log" || true
+      echo "════════════════════════════════════════════════════════════════════════════"
+      echo "Đăng nhập platform-admin, đổi mật khẩu và đăng ký TOTP NGAY — mật khẩu tạm hết hạn sau 24 giờ."
+      [ -z "$failed" ] || { echo "CHƯA CẤP ĐƯỢC:$failed"; exit 1; }
+    ''')
+  }
+}
+
+// AI BẤM LƯỢT NÀY — cùng hàm với deploy/Jenkinsfile và service-*/Jenkinsfile. Rỗng khi không biết.
+String nguoiBam() {
+  List nn
+  try {
+    nn = currentBuild.getBuildCauses('hudson.model.Cause$UserIdCause')
+  } catch (Throwable e) {
+    echo "Không đọc được nguyên nhân lượt build (${e.getClass().getSimpleName()})."
+    return ''
+  }
+  if (nn == null || nn.isEmpty()) { return '' }
+  def id = nn[0].userId
+  return id == null ? '' : id.toString().trim()
+}
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+// SCRIPT CỦA FORM — chạy trên CONTROLLER (Active Choices, không sandbox), CHỈ ĐỌC cụm, hạn 6 giây.
+// Mỗi script = dữ liệu sinh (opsCatalog…) + phần chung formPrelude() + thân riêng. Đổi một chữ ở đây là
+// một lần duyệt lại ở "In-process Script Approval".
+// Lưu ý khi sửa: thân script là chuỗi ''' — mọi dấu gạch ngược bị Groovy xử lý MỘT LẦN ở đây; script
+// không dùng gạch ngược nào (xuống dòng = String.fromCharCode(10) trong JS, readLines() trong Groovy).
+// ═════════════════════════════════════════════════════════════════════════════════════════════
+Map gs(String script, boolean html) {
+  String fallback = html ? "return '<p>Form lỗi — quản trị Jenkins duyệt script ở In-process Script Approval (deploy/van-hanh/README.md mục 1).</p>'"
+                         : "return ['(form lỗi — duyệt script ở In-process Script Approval)']"
+  return [$class: 'GroovyScript',
+          fallbackScript: [classpath: [], sandbox: false, script: fallback],
+          script: [classpath: [], sandbox: false, script: script]]
+}
+
+String formScript(String body) {
+  return "def CATALOG = '''" + opsCatalog() + "'''\n" +
+         "def TASKS = '''" + tasksTable() + "'''\n" +
+         "def PRESETS = '''" + opsPresets() + "'''\n" +
+         "def DB_LINES_PROD = '''" + opsDbLinesProd() + "'''\n" +
+         "def DB_LINES_STAGING = '''" + opsDbLinesStaging() + "'''\n" +
+         formPrelude() + body
+}
+
+String formPrelude() {
+  return '''
+import groovy.json.JsonSlurper
+import java.util.concurrent.TimeUnit
+def KCFG = '/u01/rancher/rancher-vigov.yaml'
+def esc = { Object s -> (s == null ? '' : s.toString()).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;').replace("'", '&#39;') }
+def kc = { List args ->
+  def out = File.createTempFile('vigov-ops-form', '.txt')
+  try {
+    def p = new ProcessBuilder(['kubectl', '--kubeconfig=' + KCFG, '--request-timeout=5s'] + args).redirectErrorStream(true).redirectOutput(out).start()
+    if (!p.waitFor(6, TimeUnit.SECONDS)) { p.destroyForcibly(); throw new RuntimeException('cụm không trả lời trong 6 giây') }
+    def text = out.getText('UTF-8')
+    if (p.exitValue() != 0) { throw new RuntimeException(text.readLines().find { it.trim() } ?: ('kubectl thoát ' + p.exitValue())) }
+    return text
+  } finally { out.delete() }
+}
+def json = { List args -> new JsonSlurper().parseText(kc(args)) }
+def NS = (binding.hasVariable('MT') && MT in ['prod', 'staging']) ? 'vigov-' + MT : null
+def viec = binding.hasVariable('VIEC') ? (VIEC ?: '') : ''
+def CAT = CATALOG.readLines().findAll { it.trim() }.collect { l ->
+  def c = l.split(String.valueOf((char) 9), -1)
+  [key: c[0], placement: c[1], level: c[2], users: (c[3] == '-' ? [] : c[3].tokenize(',')), shared: c[4] == '1', registered: c[5] == '1', meaning: c[6]]
+}
+def warn = { String what, Throwable e -> '<p style="color:#b45309">⚠ ' + esc(what) + ': ' + esc(e.message) + ' — form vẫn dùng được; job tự đọc lại cụm khi chạy.</p>' }
+def tbl = { List headers, List rows ->
+  def sb = new StringBuilder('<table style="border-collapse:collapse;font-size:12px;margin:4px 0">')
+  sb << '<tr>' << headers.collect { '<th style="text-align:left;border-bottom:1px solid #999;padding:2px 8px">' + esc(it) + '</th>' }.join('') << '</tr>'
+  rows.each { r ->
+    def style = r.size() > headers.size() ? r[-1] : ''
+    sb << '<tr style="' + style + '">' << (0..<headers.size()).collect { i -> '<td style="padding:2px 8px;vertical-align:top">' + r[i] + '</td>' }.join('') << '</tr>'
+  }
+  return sb.append('</table>').toString()
+}
+def SYNC = "var b=this.closest('.vigov-ops');var t=b.querySelector('textarea[name=value]');var o=[];b.querySelectorAll('[data-key]').forEach(function(e){var v=e.value.trim();if(v!==''&&v!=='giu'){o.push(e.getAttribute('data-key')+'='+v);}});t.value=o.join(String.fromCharCode(10));"
+def NOENTER = "if(event.key==='Enter'){event.preventDefault();}"
+def editor = { String prefill, int rows, String hint ->
+  '<div style="font-size:12px;margin-top:6px">' + esc(hint) + '</div><textarea name="value" rows="' + rows + '" style="width:100%;font-family:monospace;font-size:12px">' + esc(prefill) + '</textarea>'
+}
+def taskOf = { String v -> TASKS.readLines().findAll { it.trim() }.collect { it.tokenize('|') }.find { it.size() == 5 && it[1] == v } }
+'''
+}
+
+String formContext() {
+  return '''
+if (NS == null) { return '<p>Chọn MT.</p>' }
+def sb = new StringBuilder('<div style="font-size:12px">')
+try {
+  sb << '<p><b>Cụm:</b> ' + esc(kc(['config', 'current-context']).trim()) + ' · <b>namespace:</b> ' + esc(NS) + '</p>'
+} catch (Throwable e) { return sb.append(warn('không đọc được cụm', e)).append('</div>').toString() }
+try {
+  def rows = json(['-n', NS, 'get', 'deploy', '-o', 'json']).items.sort { it.metadata.name }.collect { d ->
+    def ready = (d.status?.readyReplicas ?: 0) as int
+    def want = (d.spec?.replicas ?: 0) as int
+    def img = d.spec.template.spec.containers[0].image.toString()
+    [esc(d.metadata.name), esc(ready + '/' + want), esc(img.substring(img.lastIndexOf(':') + 1)), ready < want ? 'background:#fee2e2' : '']
+  }
+  sb << tbl(['Deployment', 'sẵn sàng', 'thẻ ảnh'], rows)
+} catch (Throwable e) { sb << warn('không đọc được Deployment', e) }
+try {
+  def cm = json(['-n', NS, 'get', 'configmap', 'common-config', '-o', 'json']).data ?: [:]
+  def missing = CAT.findAll { it.placement == 'configmap' && !cm.containsKey(it.key) }
+  def extra = cm.keySet().findAll { k -> !CAT.find { it.key == k && it.registered } }.sort()
+  sb << '<p><b>common-config</b> — khoá trong sổ (.env.example + README mục 2) mà cụm THIẾU: '
+  sb << (missing ? missing.collect { (it.level in ['all', 'prod'] ? '<b style="color:#b91c1c">' + esc(it.key) + '</b>' : esc(it.key)) }.join(', ') : 'không') + '<br>'
+  sb << 'khoá trên cụm KHÔNG có trong sổ: ' + (extra ? esc(extra.join(', ')) : 'không') + '</p>'
+} catch (Throwable e) { sb << warn('không đọc được common-config', e) }
+return sb.append('</div>').toString()
+'''
+}
+
+String formTasks() {
+  return '''
+if (!binding.hasVariable('NHOM') || !NHOM) { return ['(chọn NHOM)'] }
+return TASKS.readLines().findAll { it.trim() }.collect { it.tokenize('|') }.findAll { it.size() == 5 && it[0] == NHOM }.collect { it[2] == 'on' ? it[1] : it[1] + ':disabled' }
+'''
+}
+
+String formOneService() {
+  return '''
+if (NS == null) { return ['—'] }
+try {
+  if (viec == 'xem-log') { return json(['-n', NS, 'get', 'deploy', '-o', 'json']).items.collect { it.metadata.name.toString() }.sort() }
+  if (viec in ['sua-secret', 'khoi-phuc-secret']) {
+    return kc(['-n', NS, 'get', 'secret', '-o', 'name']).readLines().collect { it.trim().replace('secret/', '') }.findAll { it ==~ /[a-z]+-secrets/ }.collect { it - '-secrets' }.sort()
+  }
+} catch (Throwable e) { return ['(không đọc được cụm: ' + e.message.take(80) + ')'] }
+return ['—']
+'''
+}
+
+String formManyServices() {
+  return '''
+if (NS == null || !(viec in ['khoi-dong-lai', 'lui-ban-truoc', 'chay-migration'])) { return [] }
+try {
+  def names = json(['-n', NS, 'get', 'deploy', '-o', 'json']).items.collect { it.metadata.name.toString() }.sort()
+  return viec == 'chay-migration' ? names.findAll { it.startsWith('vigov-service-') } : names.findAll { it.startsWith('vigov-') }
+} catch (Throwable e) { return ['(không đọc được cụm: ' + e.message.take(80) + ')'] }
+'''
+}
+
+String formDbSteps() {
+  return '''
+if (!binding.hasVariable('VIEC') || VIEC != 'csdl-moi') { return [] }
+return ['tao-csdl:selected', 'chay-migration:selected', 'kiem-luoc-do:selected', 'dat-dsn:selected', 'khoi-dong-lai:selected']
+'''
+}
+
+String formParameters() {
+  return '''
+def t = taskOf(viec)
+if (t == null) { return '<p>Chọn VIEC.</p>' }
+def sb = new StringBuilder('<div class="vigov-ops" style="font-size:12px;max-width:1100px">')
+sb << '<p><b>' + esc(t[1]) + '</b> — ' + esc(t[4]) + '</p>'
+if (t[2] != 'on') { return sb.append('<p style="color:#b45309">Chưa dựng ở job này — không chạy được.</p></div>').toString() }
+if (t[3] == 'ghi') { sb << '<p>Vùng 4: CHAY_THU đang BẬT thì chỉ in kế hoạch. Ghi thật: bỏ tick, XAC_NHAN = namespace, TICKET (prod).</p>' }
+if (NS == null) { return sb.append('<p>Chọn MT.</p></div>').toString() }
+def svc = binding.hasVariable('DICH_VU') ? (DICH_VU ?: '') : ''
+try {
+  if (viec == 'sua-configmap') {
+    def cm = json(['-n', NS, 'get', 'configmap', 'common-config', '-o', 'json']).data ?: [:]
+    def rows = CAT.findAll { it.placement == 'configmap' }.collect { e ->
+      def has = cm.containsKey(e.key)
+      [esc(e.key), has ? '<code>' + esc(cm[e.key]) + '</code>' : '<i>(chưa có)</i>',
+       '<input type="text" data-key="' + esc(e.key) + '" placeholder="trống = giữ" oninput="' + esc(SYNC) + '" onkeydown="' + esc(NOENTER) + '" style="width:260px">',
+       esc(e.users.join(', ')), esc(e.meaning),
+       has ? '' : (e.level in ['all', 'prod'] ? 'background:#fecaca' : 'background:#fef3c7')]
+    }
+    sb << tbl(['Khoá', 'Hiện tại', 'Giá trị mới', 'Dịch vụ đọc', 'Ý nghĩa'], rows)
+    def extra = cm.keySet().findAll { k -> !CAT.find { it.key == k && it.registered } }.sort()
+    if (extra) { sb << '<p>Khoá trên cụm ngoài sổ — job không sửa/thêm (luật 11 cấm #4): ' + esc(extra.join(', ')) + '</p>' }
+    sb << '<p>Địa chỉ giữ dạng danh sách host:port (luật 11 bất biến 5). Không đặt giá trị riêng của một xã ở đây (luật 1 bất biến 10).</p>'
+    sb << editor('', 6, 'Khung gửi đi (ô bên trên tự ghi vào đây; có thể gõ thẳng): KHOÁ=giá trị mới, mỗi dòng một khoá.')
+  } else if (viec == 'sua-secret') {
+    if (!(svc ==~ /[a-z]{2,30}/)) { return sb.append('<p>Chọn DICH_VU.</p></div>').toString() }
+    def present = kc(['-n', NS, 'get', 'secret', svc + '-secrets', '-o', 'go-template={{range $k, $v := .data}}{{$k}} {{end}}']).tokenize(' ') as Set
+    def rows = CAT.findAll { it.placement == 'secret' && it.users.contains(svc) }.collect { e ->
+      def has = present.contains(e.key)
+      def opts = ['giu', 'o1', 'o2', 'o3']
+      def isKey = e.key.endsWith('_KEY') || e.key.endsWith('_KEYS')
+      if (isKey && !e.shared && !has) { opts << 'sinh' }
+      if (e.key.endsWith('_KEYS') && !e.shared && has) { opts << 'xoay' }
+      def sel = '<select data-key="' + esc(e.key) + '" onchange="' + esc(SYNC) + '">' + opts.collect { '<option value="' + it + '">' + it + '</option>' }.join('') + '</select>'
+      [esc(e.key), has ? 'có' : '<b>KHÔNG</b>', sel, esc(e.users.join(', ')) + (e.shared ? ' <i>(cùng giá trị)</i>' : ''), esc(e.meaning),
+       has ? '' : (e.level in ['all', 'prod'] ? 'background:#fecaca' : 'background:#fef3c7')]
+    }
+    sb << tbl(['Khoá', 'Có?', 'Chế độ', 'Dịch vụ', 'Ý nghĩa'], rows)
+    def extra = present.findAll { k -> !CAT.find { it.key == k && it.placement == 'secret' && it.users.contains(svc) } }.sort()
+    if (extra) { sb << '<p>Khoá trong Secret ngoài sổ của ' + esc(svc) + ' — job không sửa: ' + esc(extra.join(', ')) + '</p>' }
+    sb << '<p>Giá trị KHÔNG BAO GIỜ hiện ở đây. giu = giữ · o1/o2/o3 = lấy từ ô password BI_MAT_1/2/3 · sinh = khoá ngẫu nhiên (chỉ khi chưa có) · xoay = thêm khoá mới lên đầu danh sách, giữ khoá cũ. Giá trị cũ sao lưu sang Secret riêng trước khi ghi.</p>'
+    sb << editor('', 4, 'Khung gửi đi: KHOÁ=chế độ, mỗi dòng một khoá.')
+  } else if (viec == 'khoi-phuc-secret') {
+    if (!(svc ==~ /[a-z]{2,30}/)) { return sb.append('<p>Chọn DICH_VU.</p></div>').toString() }
+    def backups = kc(['-n', NS, 'get', 'secret', '-o', 'name']).readLines().collect { it.trim().replace('secret/', '') }.findAll { it.startsWith(svc + '-secrets-backup-') }.sort().reverse()
+    if (!backups) { return sb.append('<p>Chưa có bản sao lưu nào của ' + esc(svc) + '-secrets.</p>' + editor('', 1, '')).append('</div>').toString() }
+    def rows = backups.take(10).collect { b -> [esc(b), esc(kc(['-n', NS, 'get', 'secret', b, '-o', 'go-template={{range $k, $v := .data}}{{$k}} {{end}}']).trim())] }
+    sb << tbl(['Bản sao lưu (mới nhất trước)', 'Khoá trong đó'], rows)
+    sb << editor(backups[0], 1, 'Tên bản sao lưu sẽ chép lại vào ' + svc + '-secrets:')
+  } else if (viec == 'sua-tai-nguyen') {
+    def lines = json(['-n', NS, 'get', 'deploy', '-o', 'json']).items.findAll { it.spec.template.spec.containers.size() == 1 }.sort { it.metadata.name }.collect { d ->
+      def r = d.spec.template.spec.containers[0].resources ?: [:]
+      def q = { m, k -> (m ?: [:])[k] ?: '-' }
+      d.metadata.name + ' replicas=' + (d.spec.replicas ?: 1) + ' cpu=' + q(r.requests, 'cpu') + '/' + q(r.limits, 'cpu') + ' mem=' + q(r.requests, 'memory') + '/' + q(r.limits, 'memory')
+    }
+    def prows = PRESETS.readLines().findAll { it.trim() }.collect { it.split(String.valueOf((char) 9), -1) as List }
+    sb << tbl(['Mẫu (ĐỀ XUẤT — chủ dự án chốt số)', 'replicas', 'cpu req/lim', 'mem req/lim'], prows.collect { it.collect { x -> esc(x) } })
+    prows.each { p ->
+      def js = "var t=this.closest('.vigov-ops').querySelector('textarea[name=value]');var n=String.fromCharCode(10);t.value=t.value.split(n).map(function(l){var d=l.trim().split(' ')[0];return d?d+' preset=" + p[0] + "':'';}).join(n);"
+      sb << '<button type="button" onclick="' + esc(js) + '">Áp mẫu ' + esc(p[0]) + ' cho mọi dòng</button> '
+    }
+    sb << editor(lines.join(String.valueOf((char) 10)), Math.max(lines.size() + 1, 4), 'Mỗi dòng một Deployment — sửa số; dòng không đổi được bỏ qua. Dạng: <deploy> [preset=nho|vua|lon] replicas=N cpu=req/lim mem=req/lim')
+  } else if (viec == 'csdl-moi') {
+    if (MT == 'prod') {
+      sb << '<div style="border:2px solid #b91c1c;padding:6px;margin:6px 0"><b>HỆ QUẢ (ADR 0089):</b> CSDL mới RỖNG — không có xã nào (mọi tên miền xã 404), không có tài khoản vận hành (platform-admin không đăng nhập được), mini_app + App Secret của xã ở lại CSDL cũ, mọi hồ sơ đã ghi ở lại CSDL cũ (không hiện trên prod), staging Ở LẠI CSDL cũ, vihat-miniapp không đổi. CSDL cũ không bị ghi, không bị xoá. Chạy thật trên prod: gõ TAO-CSDL-MOI-TRONG vào XAC_NHAN_CSDL_MOI.</div>'
+    }
+    def pending = kc(['-n', NS, 'get', 'secret', '-o', 'name']).readLines().collect { it.trim().replace('secret/', '') }.findAll { it.endsWith('-dsn-pending') }
+    sb << '<p>Máy chủ, cổng, tài khoản quản trị, mật khẩu, sslmode: các ô CSDL_* bên dưới. Mật khẩu tài khoản mới do job sinh (CSPRNG), không ai gõ. dsn-pending đang có: ' + (pending ? esc(pending.join(', ')) : 'không') + '</p>'
+    sb << editor((MT == 'prod' ? DB_LINES_PROD : DB_LINES_STAGING).trim(), 8, 'Mỗi dòng: <dịch vụ> <tên CSDL mới> <tài khoản mới> — tên là ĐỀ XUẤT, sửa được; trùng CSDL đang dùng thì job từ chối.')
+  } else if (viec == 'chay-migration') {
+    sb << '<p>Tick dịch vụ ở DICH_VU_CHON. Chạy thử in bảng migration trong ảnh so với CSDL; chạy thật khởi động lại (migration chạy lúc khởi động). Xem trước: Kiểm tra → trang-thai-migration.</p>'
+  } else if (viec in ['khoi-dong-lai', 'lui-ban-truoc']) {
+    sb << '<p>Tick Deployment ở DICH_VU_CHON.</p>'
+  } else if (viec == 'xem-log') {
+    sb << '<p>Chọn DICH_VU (Deployment) và SO_DONG.</p>'
+  } else if (viec == 'tao-tai-khoan-van-hanh') {
+    sb << '<p>Điền EMAIL_VAN_HANH, TEN_VAN_HANH, TICKET (bắt buộc ở mọi môi trường). Mật khẩu tạm in vào log lượt build — đổi ngay.</p>'
+  }
+} catch (Throwable e) { sb << warn('không đọc được cụm', e) }
+return sb.append('</div>').toString()
+'''
+}
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// SINH RA — đừng sửa tay. `python deploy/van-hanh/ops.py catalog --write`; `make buildfiles` đỏ khi cũ.
+// Nguồn: core/config (r.read × config.Uses) · deploy/cau-hinh/README.md mục 1–4 · .env.example · ops.py.
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// BEGIN GENERATED ops-data — python deploy/van-hanh/ops.py catalog --write
+String opsCatalog() {
+  return '''
+DATABASE_DSN	secret	all	comms,documents,finance,identity,petitions,platform,reporting	0	1	Kết nối PostgreSQL tới CSDL riêng của dịch vụ. Người quản trị PostgreSQL cấp user + mật khẩu
+GRPC_CALLER_KEY	secret	all	comms,documents,finance,identity,petitions,platform,reporting	1	1	Khoá xác thực lời gọi gRPC giữa các dịch vụ (ADR 0025). Sinh một lần, dùng lại ở cả 7
+REDIS_DSN	secret	prod	comms,documents,finance,identity,petitions,platform	0	1	Redis chống gửi trùng + giới hạn tần suất. platform dùng nó cho giới hạn đăng nhập vận hành 20 lần / 15 phút / IP (ADR 0048 §01/10 #3) — thiếu thì mọi bước đăng nhập vận hành…
+SESSION_SIGNING_KEYS	secret	prod	identity	0	1	Khoá ký phiên đăng nhập cán bộ. Tự sinh
+CITIZEN_SESSION_BRIDGE_KEYS	secret	prod	identity	0	1	Khoá backend vihat-miniapp gửi khi đổi phiên công dân (ADR 0045). Tự sinh, đặt cùng giá trị ở hai bên
+IDENTITY_ADMIN_SEED_PASSWORD	secret	opt	identity	0	1	Công tắc một lần tạo admin cho xã mới
+OPERATOR_SESSION_SIGNING_KEYS	secret	prod	identity,platform	1	1	Khoá ký phiên nhà vận hành: identity ký, platform kiểm chữ ký (ADR 0048 §01/10 #2). Tự sinh
+OPERATOR_TOTP_ENCRYPTION_KEY	secret	prod	identity	0	1	Khoá mã hoá bí mật TOTP nhà vận hành. Tự sinh
+SECRET_ENCRYPTION_KEYS	secret	prod	comms,identity	0	1	Khoá mã hoá bí mật riêng của từng xã trong CSDL (ADR 0009): comms niêm mật khẩu máy chủ thư, identity niêm secret Zalo của app riêng từng xã (ADR 0066). Tự sinh
+OBJECT_STORAGE_ACCESS_KEY	secret	prod	comms,petitions,platform	0	1	Cặp khoá MinIO riêng của dịch vụ (ADR 0052 §3). Tạo user trong MinIO (mc admin user add), policy chỉ …/<dịch vụ>/* của môi trường; comms và platform còn cần ghi bucket public…
+OBJECT_STORAGE_SECRET_KEY	secret	prod	comms,petitions,platform	0	1	Nửa kia của cặp trên
+ENV	configmap	all	comms,documents,finance,identity,petitions,platform,reporting	0	1	Môi trường chạy
+TRUSTED_PROXY_CIDRS	configmap	prod	comms,documents,finance,identity,petitions,platform,reporting	0	1	Dải IP Pod của ingress-nginx và web-admin — trạm được tin khi báo IP người dùng qua X-Forwarded-For; thiếu thì vết kiểm toán ghi IP pod thay vì IP người thao tác. Cách lấy:…
+CITIZEN_CORS_ALLOWED_ORIGINS	configmap	prod	comms,identity,petitions	0	1	Miền Zalo Mini App được gọi API công dân (CORS). Chép đúng giá trị bên phải
+CITIZEN_SESSION_TTL	configmap	opt	identity	0	1	Thời hạn phiên công dân
+OBJECT_STORAGE_ENDPOINT	configmap	prod	comms,petitions,platform	0	1	MinIO nội bộ lưu tệp đính kèm, ảnh bìa tin, logo/banner xã (ADR 0052, ADR 0069). Người vận hành MinIO
+OBJECT_STORAGE_PUBLIC_ENDPOINT	configmap	prod	comms,petitions,platform	0	1	Cổng S3 API của CÙNG MinIO với OBJECT_STORAGE_ENDPOINT mà điện thoại thấy. Từ 09/10/2026 chỉ dùng để ký đường dẫn xem/tải về (presigned GET) — thiết bị không còn tải lên vào…
+OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL	configmap	prod	comms,platform	0	1	URL gốc bucket media công khai — image_url của tin Mini App và logo_public_url / web_admin_banner_public_url của xã dựng từ đây. Thiếu thì comms và platform không khởi động ở…
+OBJECT_STORAGE_REGION	configmap	opt	comms,petitions,platform	0	1	Region của MinIO
+OBJECT_STORAGE_BUCKET_PREFIX	configmap	prod	comms,petitions,platform	0	1	Tiền tố bucket: <tiền tố>-private · -public · -temp
+MALWARE_SCANNER_ADDRESS	configmap	prod	comms,petitions,platform	0	1	clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + 3310, không tcp://. Dựng clamd và đặt key: mục 6, việc dung-clamav
+BASEMAP-URL	configmap	opt	web-admin	0	1	Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến /basemap/* của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền:…
+LISTEN_ADDR	env	opt	comms,documents,finance,identity,petitions,platform,reporting	0	1	Cổng REST
+PLATFORM_GRPC_ADDR	env	prod	comms,documents,finance,identity,petitions,reporting	0	1	gRPC của platform — phân giải tên miền ra xã. Tên Service + 9090
+IDENTITY_GRPC_ADDR	env	prod	comms,documents,finance,petitions,platform,reporting	0	1	gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + 9090. Platform dùng lại biến này từ 02/10/2026 cho tuyến logo + banner web-admin của xã (ADR 0069, quyền…
+IDENTITY_OPERATOR_GRPC_ADDR	env	prod	platform	0	1	gRPC OperatorService của identity — tra / mở phiên vận hành (ADR 0048 §01/10 #2; cổng riêng chốt 01/10/2026). Cổng 9093, không phải 9090: 9090 nhận năm dịch vụ cán bộ, 9093 chỉ…
+PETITIONS_GRPC_ADDR	env	prod	identity	0	1	gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + 9090
+DOCUMENTS_GRPC_ADDR	env	prod	identity,petitions	0	1	gRPC của documents. identity: như trên. petitions: hỏi đơn thư trước khi chuyển thành nhiệm vụ (ResolveCitizenLetterForTask, ADR 0085) — thiếu ở dev thì POST…
+COMMS_GRPC_ADDR	env	prod	documents,finance,petitions	0	1	gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058); finance: thông báo nhắc tên trong trao đổi dự án (ADR 0081 #5). Tên Service + 9090
+OPERATOR_HOST	env	opt	platform	0	1	Host duy nhất của khu vận hành ViHAT. Chỉ đặt khi host đã có DNS + TLS + Ingress, và sau khi xong còn mở #12 của ADR 0048
+ZALO_BOT_WEBHOOK_HOST	env	prod	comms	0	1	Host mà Zalo gửi tin của bot dùng chung tới; comms tự dựng https://<host>/api/v1/zalo-bot-updates khi trỏ webhook (ADR 0074 #5). Chỉ đặt khi host đã có DNS + TLS + Ingress vào…
+CITIZEN_SESSION_BRIDGE_LISTEN_ADDR	env	prod	identity	0	1	Cổng cầu phiên công dân, chỉ vihat-miniapp gọi (ADR 0045). Chốt 9091 ngày 30/09/2026; manifest deploy/base/identity đã đặt sẵn
+GRPC_LISTEN_ADDR	unset	opt	comms,documents,identity,petitions,platform	0	1	mặc định :9090
+OPERATOR_GRPC_LISTEN_ADDR	unset	opt	identity	0	1	mặc định :9093 — cổng OperatorService của identity, khớp cổng grpc-operator và quy tắc 11 của netpol
+TENANT_CACHE_TTL	unset	opt	comms,documents,finance,identity,petitions,platform,reporting	0	1	mặc định 30s
+RABBITMQ_DSN	unset	unused	-	0	1	chưa dùng
+RABBITMQ_EXCHANGE	unset	unused	-	0	1	chưa dùng
+ELASTICSEARCH_ADDRS	unset	unused	-	0	1	chưa dùng
+ELASTICSEARCH_API_KEY	unset	unused	-	0	1	chưa dùng
+ELASTICSEARCH_INDEX_PREFIX	unset	unused	-	0	1	chưa dùng
+DANGEROUS_AUTH_BYPASS	unset	opt	comms,documents,finance,identity,petitions,platform,reporting	0	1	không bao giờ đặt — ENV=prod từ chối khởi động
+'''
+}
+String opsPresets() {
+  return '''
+nho	1	50m/500m	128Mi/256Mi
+vua	2	100m/1000m	256Mi/512Mi
+lon	3	250m/2000m	512Mi/1Gi
+'''
+}
+String opsDbLinesProd() {
+  return '''
+comms vigov_comms_prod vigov_comms_prod
+documents vigov_documents_prod vigov_documents_prod
+finance vigov_finance_prod vigov_finance_prod
+identity vigov_identity_prod vigov_identity_prod
+petitions vigov_petitions_prod vigov_petitions_prod
+platform vigov_platform_prod vigov_platform_prod
+reporting vigov_reporting_prod vigov_reporting_prod
+'''
+}
+String opsDbLinesStaging() {
+  return '''
+comms vigov_comms_stg vigov_comms_stg
+documents vigov_documents_stg vigov_documents_stg
+finance vigov_finance_stg vigov_finance_stg
+identity vigov_identity_stg vigov_identity_stg
+petitions vigov_petitions_stg vigov_petitions_stg
+platform vigov_platform_stg vigov_platform_stg
+reporting vigov_reporting_stg vigov_reporting_stg
+'''
+}
+// END GENERATED ops-data

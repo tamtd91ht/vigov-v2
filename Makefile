@@ -92,8 +92,12 @@ buildfiles:                     ## Dockerfile + Jenkinsfile của từng dịch 
 	@# ngay: chạy bằng root, thiếu zoneinfo, hoặc đánh rơi `core/**` khỏi đường kích hoạt để
 	@# rồi một bản vá trong mã dùng chung không kích hoạt dịch vụ nào cả.
 	$(PYTHON) tools/check_build.py
+	@# Job vận hành (ADR 0089): logic quyết định nằm ở deploy/van-hanh/ops.py để có test; danh mục khoá
+	@# mà form đọc là vùng SINH trong Jenkinsfile — cũ so với core/config + README + .env.example là đỏ.
+	$(PYTHON) -m unittest discover -s deploy/van-hanh -p "test_*.py"
+	$(PYTHON) deploy/van-hanh/ops.py catalog --check
 
-security:                       ## Luật 13 — mức nền an ninh mạng trên TOÀN kho (không cần mạng)
+security:                      ## Luật 13 — mức nền an ninh mạng trên TOÀN kho (không cần mạng)
 	@# `.claude/hooks/security_guard.py` chặn lúc GHI nhưng chỉ thấy một lần sửa. Đây là câu hỏi
 	@# còn lại: hôm nay cả kho còn giữ mức nền không — và mọi vi phạm đã có trên đĩa phải nằm
 	@# trong `tools/security_debt.json` với lý do và hạn. Sổ nợ là bánh cóc: nợ hết hạn thì đỏ,

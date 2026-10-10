@@ -310,6 +310,10 @@ ALLOWED = (
     # was buried. It OWNS the environment-variable table (tools/check_env_map.py reads it); deploy/README.md
     # links to it and keeps only the reasons — so it competes with no owning file (rule 9 #2).
     re.compile(r"^deploy[/\\]cau-hinh[/\\]README\.md$"),
+    # Named exception, owner's request 2026-10-10 (ADR 0089): the operator guide of the operations job
+    # deploy/van-hanh/Jenkinsfile — how to set the job up and run each task. It owns no fact elsewhere
+    # owned: the "why" stays in ADR 0089, the variable table in deploy/cau-hinh/README.md.
+    re.compile(r"^deploy[/\\]van-hanh[/\\]README\.md$"),
     re.compile(r"^(README|CLAUDE)\.md$"),
 )
 stray = []

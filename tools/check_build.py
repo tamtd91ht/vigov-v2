@@ -454,6 +454,104 @@ def self_test_deploy_actions() -> list[str]:
     return bad
 
 
+# deploy/van-hanh/Jenkinsfile — the operations job (ADR 0089). Same lesson as check_deploy_actions: the
+# form's task table and the dispatcher are two lists in one file, and a task offered by the form with no
+# `case` would be refused at run time — or, worse, a `case` left for a task the table marks `off` would
+# still run on a "Rebuild". Plus the invariants copied from the old job that nothing else guards here.
+VAN_HANH_JENKINSFILE = os.path.join(GOC, "deploy", "van-hanh", "Jenkinsfile")
+
+
+def check_van_hanh(text: str) -> list[str]:
+    """PURE: Jenkinsfile text in, violations out — graded by `self_test_van_hanh()`."""
+    code = bo_chu_thich_groovy(text)
+    out: list[str] = []
+    table = re.search(r"String\s+tasksTable\(\)\s*\{\s*return\s*'''(.*?)'''", code, re.S)
+    if table is None:
+        return ["không tìm thấy `tasksTable()`"]
+    rows = [ln.split("|") for ln in table.group(1).splitlines() if ln.strip()]
+    on = {r[1] for r in rows if len(r) == 5 and r[2] == "on"}
+    off = {r[1] for r in rows if len(r) == 5 and r[2] == "off"}
+    bad_rows = [r for r in rows if len(r) != 5 or r[2] not in ("on", "off") or r[3] not in ("doc", "ghi")]
+    for r in bad_rows:
+        out.append(f"dòng bảng việc sai dạng (nhóm|việc|on/off|doc/ghi|mô tả): {'|'.join(r)[:80]}")
+    dispatch = re.search(r"void\s+runTask\(String\s+\w+\)\s*\{(.*?)\n\}", code, re.S)
+    cases = set(re.findall(r"case\s+'([a-z-]+)'\s*:", dispatch.group(1))) if dispatch else set()
+    if dispatch is None:
+        out.append("không tìm thấy `runTask(...)`")
+    for t in sorted(on - cases):
+        out.append(f"việc '{t}' bật (on) trong bảng nhưng runTask() không có `case` — form cho chọn, job từ chối")
+    for t in sorted(cases - on):
+        out.append(f"runTask() có `case '{t}'` nhưng bảng không bật việc ấy"
+                   + (" (đang `off` — một lượt Rebuild cũ vẫn chạy được nó)" if t in off else ""))
+    if "KUBECONFIG=/u01/rancher/rancher-vigov.yaml" not in code:
+        out.append("không đặt KUBECONFIG=/u01/rancher/rancher-vigov.yaml — kubectl rơi về ~/.kube/config")
+    if "rancher-omi" in code:
+        out.append("nhắc `rancher-omi` trong mã — kubeconfig của dự án KHÁC")
+    if re.search(r"kubectl\s+(?:-n\s+\S+\s+)?run\b", code):
+        out.append("dùng `kubectl run` — pod một lượt phải `kubectl create -f` + hỏi pha (`run -i` đã treo)")
+    if re.search(r"\bset\s+image\b", code):
+        out.append("`set image` — đặt ảnh là việc của job dịch vụ (ADR 0089 · deploy/README.md mục 1)")
+    if re.search(r"kubectl\s+(?:-n\s+\S+\s+)?apply\b", code):
+        out.append("`kubectl apply` — job vận hành không áp manifest/Ingress (ADR 0046 #4)")
+    if re.search(r"sslmode=dis" + r"able", code):
+        out.append("sslmode tắt TLS (luật 13 cấm #1)")
+    if not re.search(r"params\.MT\s*==\s*null\s*\|\|\s*params\.VIEC\s*==\s*null", code):
+        out.append("thiếu chốt lượt-đầu-tham-số-null (`params.MT == null || params.VIEC == null`)")
+    if not re.search(r"\bnguoiBam\s*\(\s*\)", code):
+        out.append("không xác định người bấm (`nguoiBam()`)")
+    if not re.search(r"params\.TICKET\s*==~", code):
+        out.append("TICKET không được kiểm dạng")
+    if not re.search(r"params\.XAC_NHAN[^\n]*!=\s*env\.NS", code):
+        out.append("ghi không đòi XAC_NHAN = namespace")
+    if "Active Choices" not in code:
+        out.append("thiếu câu báo tên plugin \"Active Choices\" khi form không dựng được")
+    if re.search(r"^\s*set\s+-x", code, re.M):
+        out.append("`set -x` — bí mật lọt vào log qua trace")
+    return out
+
+
+_VAN_HANH_GOOD = """
+withEnv(['KUBECONFIG=/u01/rancher/rancher-vigov.yaml']) {}
+error('plugin Active Choices')
+String tasksTable() {
+  return '''
+A|tong-quan|on|doc|x
+A|tao-xa|off|ghi|x
+'''
+}
+if (params.MT == null || params.VIEC == null || params.CHAY_THU == null) { error('x') }
+env.NGUOI_BAM = nguoiBam()
+if (params.TICKET && !(params.TICKET ==~ /^[A-Z]$/)) { error('x') }
+if ((params.XAC_NHAN ?: '').trim() != env.NS) { error('x') }
+void runTask(String viec) {
+  switch (viec) {
+    case 'tong-quan': taskOverview(); break
+  }
+}
+"""
+
+
+def self_test_van_hanh() -> list[str]:
+    bad: list[str] = []
+    if check_van_hanh(_VAN_HANH_GOOD):
+        bad.append(f"ca PHẢI XANH bị đỏ oan: {check_van_hanh(_VAN_HANH_GOOD)[0]}")
+    for name, (old, new, frag) in {
+        "việc bật không có case": ("A|tao-xa|off|", "A|tao-xa|on|", "không có `case`"),
+        "case cho việc off": ("case 'tong-quan'", "case 'tao-xa': x(); break\n    case 'tong-quan'", "đang `off`"),
+        "kubeconfig dự án khác": ("rancher-vigov.yaml']", "rancher-omi.yaml']", "rancher-omi"),
+        "kubectl run": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\nsh 'kubectl -n x run p'", "kubectl run"),
+        "set image": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\nsh 'kubectl set image deploy/x *=y'", "set image"),
+        "apply": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\nsh 'kubectl -n x apply -f i.yaml'", "kubectl apply"),
+        "bỏ chốt null": ("params.MT == null || params.VIEC == null", "params.MT == null", "tham-số-null"),
+        "bỏ XAC_NHAN": ("!= env.NS", "!= ''", "XAC_NHAN"),
+        "set -x": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\n  set -x", "set -x"),
+    }.items():
+        broken = _VAN_HANH_GOOD.replace(old, new, 1)
+        if broken == _VAN_HANH_GOOD or not any(frag in v for v in check_van_hanh(broken)):
+            bad.append(f"ca PHẢI ĐỎ lọt qua: {name}")
+    return bad
+
+
 def kiem_dong_em(svcs: list[str], loi: list[str]) -> int:
     """Hạn `Shutdown` trong mã phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest.
 
@@ -686,6 +784,14 @@ def main() -> int:
     else:
         loi.append("deploy/Jenkinsfile KHÔNG TỒN TẠI")
 
+    # deploy/van-hanh/Jenkinsfile: task table vs dispatcher + copied invariants. Self-test first.
+    for s in self_test_van_hanh():
+        loi.append(f"tools/check_build.py — phép kiểm deploy/van-hanh/Jenkinsfile: {s}")
+    if os.path.isfile(VAN_HANH_JENKINSFILE):
+        with open(VAN_HANH_JENKINSFILE, encoding="utf-8") as f:
+            for l in check_van_hanh(f.read()):
+                loi.append(f"deploy/van-hanh/Jenkinsfile {l}")
+
     if loi:
         print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web-admin + platform-admin")
         for l in loi:
@@ -699,7 +805,8 @@ def main() -> int:
           f"{len(svcs) + 2} Dockerfile · {len(svcs) + 2} Jenkinsfile · "
           f"{len(BAT_BIEN)} bất biến an toàn · ngữ cảnh build kín · "
           f"{so_dong_em} cặp hạn đóng-êm đối chiếu · "
-          f"citizen-app/Jenkinsfile + {so_ca_citizen} ca tự chấm · 0 vi phạm")
+          f"citizen-app/Jenkinsfile + {so_ca_citizen} ca tự chấm · "
+          f"deploy/van-hanh/Jenkinsfile {'có' if os.path.isfile(VAN_HANH_JENKINSFILE) else 'KHÔNG CÓ'} + 10 ca tự chấm · 0 vi phạm")
     return 0
 
 

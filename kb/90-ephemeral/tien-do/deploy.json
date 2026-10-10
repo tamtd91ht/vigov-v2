@@ -269,6 +269,14 @@
       "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ C: ingress tách hai đối tượng — 'vigov' (web, comms, petitions, platform) proxy-body-size 55m + proxy-request-buffering off; 'vigov-no-upload' (documents, finance, identity, reporting) 25m; vá overlay prod/staging cho đối tượng mới; GOMEMLIMIT=300MiB cho petitions + comms; tools/apidoc khai @multipart",
       "bang_chung": "(commit này) — tools/ingress (uploadHosts, body_cap_test.go kể cả TestOverlayKustomizationPatchesEveryIngress), tools/apidoc (@multipart, multipart_test.go); go vet + go test tools/ingress, tools/apidoc xanh; kubectl kustomize deploy/overlays/prod tách đúng host 55m/25m. CHƯA áp lên cụm thật",
       "tiep_theo": "proxy-read-timeout của ingress-nginx mặc định 60 s chưa đổi — quét mã độc/mã hoá lại lâu hơn 60 s sau khi nhận thân sẽ 504. web-admin gen-api-types.mjs chưa hiểu multipart (ra 'than: never'). Ingress MinIO storage-api.vigov.vn chỉ GET/HEAD/OPTIONS: việc vận hành ngoài kho."
+    },
+    {
+      "id": "job-van-hanh-active-choices-10-10",
+      "trang_thai": "dang_lam",
+      "viec": "Job vận hành mới deploy/van-hanh/Jenkinsfile (ADR 0089, chủ dự án 10/10/2026): form Active Choices 4 vùng (ngữ cảnh đọc cụm · nhóm→việc · thông số đọc từ cụm · an toàn), các việc: tổng quan, xem log, trạng thái migration, kiểm kết nối, sửa ConfigMap, sửa/khôi phục Secret (sao lưu Secret riêng), CSDL mới (tạo DB+user, migration bằng pod một lần, kiểm lược đồ, đặt DSN, khởi động lại), chạy migration, sửa tài nguyên, khởi động lại, lùi bản trước, tạo tài khoản vận hành; Xã/tenant để chỗ (thuộc platform-admin). Logic ở ops.py + 35 ca test; check_build kiểm job; job cũ deploy/Jenkinsfile giữ nguyên.",
+      "bang_chung": "commit 'feat(deploy): job vận hành mới'. make check thoát 0 (builder); unittest ops 35/35; check_build PASS (10 ca tự chấm); ops.py catalog --check PASS (41 khoá). CHƯA chạy trên Jenkins thật và cụm thật.",
+      "tiep_theo": "(1) Cài plugin Active Choices (uno-choice) trên Jenkins dùng chung, tạo job vigov-van-hanh (Script Path deploy/van-hanh/Jenkinsfile, không lightweight checkout, không shallow clone), bấm Build 1 lần để học tham số, duyệt 6+2 script ở In-process Script Approval. (2) Chạy theo README: tong-quan, kiem-ket-noi, trang-thai-migration, rồi chạy thử csdl-moi. (3) Chủ dự án: mẫu tài nguyên nho/vua/lon, tên DB vigov_<svc>_prod, sslmode chỉ require dùng được (chưa có CA trong ảnh), quyền kubeconfig thật rộng hơn deploy/cluster/rbac-jenkins.yaml. (4) Mâu thuẫn luật 11 về cách viết khoá (envFrom cần gạch dưới) — chưa quyết. (5) Bảng job ở deploy/README.md §2 thêm dòng sau khi job chạy thật.",
+      "no_confirm": []
     }
   ]
 }
