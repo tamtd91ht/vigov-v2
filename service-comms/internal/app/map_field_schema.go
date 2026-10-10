@@ -272,11 +272,14 @@ func (uc *MapFieldSchemas) Update(ctx context.Context, id string, req UpdateMapF
 
 // Delete soft deletes one field. The row stays with deleted_at · deleted_by · delete_reason, its
 // key stays taken forever, and values assets stored under it stay where they are.
+//
+// The reason is OPTIONAL (owner decision 10/10/2026): blank becomes
+// domain.MapFieldDeleteDefaultReason, so `delete_reason` and the entry's `ly_do` are never empty.
 func (uc *MapFieldSchemas) Delete(ctx context.Context, id, rawReason string, actor audit.Actor) error {
 	if id == "" {
 		return commsstore.ErrMapFieldSchemaNotFound
 	}
-	reason, err := domain.ChuanHoaLyDoXoa(rawReason)
+	reason, err := domain.NormalizeMapFieldDeleteReason(rawReason)
 	if err != nil {
 		return err
 	}

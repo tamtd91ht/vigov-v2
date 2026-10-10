@@ -61,6 +61,10 @@ type khoNDGia struct {
 	dem     int64 // DemDangSong
 	demSlug int64 // SlugDaDung
 
+	// slugsTaken, when set, answers SlugDaDung PER SLUG ($2) instead of demSlug — the server-issued slug
+	// walks a series, and one constant answer cannot tell `nong-nghiep` from `nong-nghiep-2`.
+	slugsTaken map[string]bool
+
 	// loiSau fails the FIRST statement containing this substring, and only that one.
 	//
 	// WHY NOT A BLANKET ERROR: failing everything cannot tell "rolled back" from "never started". The
@@ -146,6 +150,13 @@ func (c *connNDGia) QueryContext(_ context.Context, q string, args []driver.Name
 		return &rowsNDGia{cot: cot, hang: [][]driver.Value{{dm.ID, dm.Ten, dm.Slug, cha,
 			int64(dm.ThuTu), lucNDPinned, dm.Hidden}}}, nil
 	case strings.Contains(q, "count(*)") && strings.Contains(q, "slug = $2"):
+		if c.k.slugsTaken != nil {
+			n := int64(0)
+			if s, ok := gt[1].(string); ok && c.k.slugsTaken[s] {
+				n = 1
+			}
+			return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{n}}}, nil
+		}
 		return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.demSlug}}}, nil
 	case strings.Contains(q, "count(*)"):
 		return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.dem}}}, nil
@@ -967,6 +978,76 @@ func TestThemDanhMucSlugTrungBiTuChoi(t *testing.T) {
 	}
 	if k.coCau("INSERT INTO danh_muc_mini_app") {
 		t.Error("slug trùng mà vẫn chèn")
+	}
+}
+
+// Bug sheet row 21 (owner decision 10/10/2026): no `slug` → the server issues one from the name and
+// steps over every slug ever issued in this commune, SOFT-DELETED ONES INCLUDED (SlugDaDung's predicate
+// has no deleted_at — the fake's slugsTaken stands for both kinds of row). Under the tree lock.
+func TestCreateCategoryWithoutSlugDerivesItFromName(t *testing.T) {
+	k := &khoNDGia{slugsTaken: map[string]bool{"nong-nghiep-dat-dai": true, "nong-nghiep-dat-dai-2": true}}
+	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
+
+	created, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Nông nghiệp – Đất đai"}, nguoiSoanND())
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if created.Slug != "nong-nghiep-dat-dai-3" {
+		t.Errorf("slug = %q, want nong-nghiep-dat-dai-3", created.Slug)
+	}
+	ins := k.cau("INSERT INTO danh_muc_mini_app")
+	if len(ins) != 1 || ins[0].args[3] != "nong-nghiep-dat-dai-3" {
+		t.Fatalf("insert = %+v", ins)
+	}
+	// The lock comes BEFORE the first probe, or two racing creates both find the same slug free.
+	lock, probe := -1, -1
+	for i, l := range k.lenh {
+		if lock < 0 && strings.Contains(l.sql, "pg_advisory_xact_lock") {
+			lock = i
+		}
+		if probe < 0 && strings.Contains(l.sql, "slug = $2") {
+			probe = i
+		}
+	}
+	if lock < 0 || probe < 0 || lock > probe {
+		t.Errorf("tree lock at %d, first slug probe at %d — the lock must come first", lock, probe)
+	}
+	if l := k.cau("INSERT INTO audit_log"); len(l) != 1 || l[0].args[5] != "nong-nghiep-dat-dai-3" {
+		t.Fatalf("entries = %+v", l)
+	}
+	if !strings.Contains(auditDelta(t, k), `"auto_slug":true`) {
+		t.Errorf("the entry does not record auto_slug: %s", auditDelta(t, k))
+	}
+	if k.daCommit != 1 || k.daRollback != 0 {
+		t.Errorf("commit=%d rollback=%d, want 1/0", k.daCommit, k.daRollback)
+	}
+}
+
+// Every slug of the series taken → refused, nothing written (never a random suffix).
+func TestCreateCategorySlugSeriesExhaustedIsRefused(t *testing.T) {
+	taken := map[string]bool{}
+	for n := 1; n <= domain.CategorySlugSuffixLimit; n++ {
+		taken[domain.CategorySlugCandidate("tin-tuc", n)] = true
+	}
+	k := &khoNDGia{slugsTaken: taken}
+	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
+
+	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Tin tức"}, nguoiSoanND())
+	if !errors.Is(err, domain.ErrCategorySlugSeriesBlocked) {
+		t.Fatalf("err = %v, want ErrCategorySlugSeriesBlocked", err)
+	}
+	if k.coCau("INSERT INTO danh_muc_mini_app") || k.coCau("INSERT INTO audit_log") {
+		t.Error("an exhausted series still wrote")
+	}
+}
+
+// A slug the client DOES send is still taken as typed: a taken one is 409, never silently suffixed.
+func TestCreateCategorySentSlugStillRefusedWhenTaken(t *testing.T) {
+	k := &khoNDGia{slugsTaken: map[string]bool{"tin-tuc": true}}
+	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
+	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Tin tức", Slug: "tin-tuc"}, nguoiSoanND())
+	if !errors.Is(err, commsstore.ErrSlugDanhMucDaTonTai) {
+		t.Fatalf("err = %v, want ErrSlugDanhMucDaTonTai", err)
 	}
 }
 

@@ -53,6 +53,11 @@ type fakeCovers struct {
 	// FetchBodyImage (content_body_image_url_test.go).
 	fetches   int
 	lastFetch app.BodyImageFromURLRequest
+
+	// CoverViews (the list's thumbnails, bug sheet row 22).
+	listViewCalls int
+	askedListIDs  []string
+	listViews     map[string]app.CoverView
 }
 
 func (f *fakeCovers) FetchBodyImage(ctx context.Context, req app.BodyImageFromURLRequest, actor audit.Actor) (
@@ -118,6 +123,21 @@ func (f *fakeCovers) View(ctx context.Context, fileID string) (app.CoverView, er
 	f.views++
 	f.tenantID = tenant.MustFrom(ctx)
 	return f.view, nil
+}
+
+// CoverViews answers every id from listViews (absent → a bare view), counting calls and keeping the ids.
+func (f *fakeCovers) CoverViews(ctx context.Context, fileIDs []string) (map[string]app.CoverView, error) {
+	f.listViewCalls++
+	f.tenantID, f.askedListIDs = tenant.MustFrom(ctx), fileIDs
+	out := make(map[string]app.CoverView, len(fileIDs))
+	for _, id := range fileIDs {
+		v, ok := f.listViews[id]
+		if !ok {
+			v = app.CoverView{FileID: id}
+		}
+		out[id] = v
+	}
+	return out, nil
 }
 
 // The body-image half (content_body_image.go) — counted apart, so the permission table can tell which
@@ -456,21 +476,71 @@ func TestContentDetailCarriesCoverPreview(t *testing.T) {
 	}
 }
 
-func TestContentListCarriesCoverIDButNoPreview(t *testing.T) {
+// Bug sheet row 22 (owner decision 10/10/2026 — REVERSES the earlier "no preview on the list"): every row
+// with an uploaded cover carries the detail's `cover_image` block, built from ONE use-case call for the
+// page (never View per row), in the request's commune, and the reply is no-store.
+func TestContentListCarriesCoverPreviewPerRow(t *testing.T) {
 	m := dungMayChuND(t)
 	m.capQuyen(xaA, QuyenDocNoiDung)
-	n := noiDungMau()
-	n.AnhDaiDienURL, n.CoverImageFileID = "", "01JCOVERFILE00000000000000"
-	m.so.ra.Items = append(m.so.ra.Items, n)
+	const coverA, coverB = "01JCOVERFILE00000000000000", "01JCOVERFILEPENDING0000000"
+	a, b, shared, none := noiDungMau(), noiDungMau(), noiDungMau(), noiDungMau()
+	a.ID, a.AnhDaiDienURL, a.CoverImageFileID = "nd-a", "", coverA
+	b.ID, b.CoverImageFileID = "nd-b", coverB
+	shared.ID, shared.CoverImageFileID = "nd-c", coverA // the same file twice is asked for once
+	none.ID, none.AnhDaiDienURL, none.CoverImageFileID = "nd-d", "", ""
+	m.so.ra.Items = []domain.NoiDungMiniApp{a, b, shared, none}
+	exp := time.Date(2026, 10, 10, 9, 15, 0, 0, time.UTC)
+	m.covers.listViews = map[string]app.CoverView{
+		coverA: {FileID: coverA, Status: domain.StoredFileReady, Public: true,
+			PreviewURL: storage.PresignedURL("https://minio.example/signed-a"), PreviewExpiresAt: exp},
+		coverB: {FileID: coverB, Status: domain.StoredFilePending},
+	}
+
 	w := m.goi(t, http.MethodGet, hostA, duongNoiDung, "", canBo(xaA))
 	doiMa(t, w, http.StatusOK)
-	body := w.Body.String()
-	if !strings.Contains(body, `"cover_image_file_id":"01JCOVERFILE00000000000000"`) ||
-		!strings.Contains(body, `"has_image":true`) || strings.Contains(body, `"cover_image":`) {
-		t.Errorf("list: %s", body)
+	var got struct {
+		Items []noiDungRa `json:"items"`
 	}
-	if m.covers.views != 0 {
-		t.Error("the list must not sign a preview per row")
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("body is not JSON: %v", err)
+	}
+	if len(got.Items) != 4 {
+		t.Fatalf("items = %d", len(got.Items))
+	}
+	for _, i := range []int{0, 2} {
+		c := got.Items[i].CoverImage
+		if c == nil || c.PreviewURL != "https://minio.example/signed-a" || c.PreviewExpiresAt == nil ||
+			!c.PreviewExpiresAt.Equal(exp) || c.Status != "ready" || !c.Public {
+			t.Errorf("row %d cover = %+v", i, c)
+		}
+	}
+	if c := got.Items[1].CoverImage; c == nil || c.PreviewURL != "" || c.Status != "pending" {
+		t.Errorf("pending row cover = %+v", c)
+	}
+	if got.Items[3].CoverImage != nil {
+		t.Errorf("a row without a cover got a block: %+v", got.Items[3].CoverImage)
+	}
+	if m.covers.listViewCalls != 1 || len(m.covers.askedListIDs) != 2 || m.covers.views != 0 {
+		t.Errorf("CoverViews calls %d with %v, View calls %d — want one batched call for two distinct ids",
+			m.covers.listViewCalls, m.covers.askedListIDs, m.covers.views)
+	}
+	if m.covers.tenantID != xaA {
+		t.Errorf("previews read in commune %q, want %q", m.covers.tenantID, xaA)
+	}
+	if w.Header().Get("Cache-Control") != "no-store" {
+		t.Error("a list carrying presigned previews must be no-store")
+	}
+}
+
+// A page with no uploaded cover asks for nothing and stays cacheable as before.
+func TestContentListWithoutCoversSignsNothing(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenDocNoiDung)
+	w := m.goi(t, http.MethodGet, hostA, duongNoiDung, "", canBo(xaA))
+	doiMa(t, w, http.StatusOK)
+	if m.covers.listViewCalls != 0 || strings.Contains(w.Body.String(), `"cover_image":`) ||
+		w.Header().Get("Cache-Control") == "no-store" {
+		t.Errorf("calls %d, body %s, cache %q", m.covers.listViewCalls, w.Body.String(), w.Header().Get("Cache-Control"))
 	}
 }
 

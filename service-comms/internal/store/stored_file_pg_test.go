@@ -283,3 +283,60 @@ func TestPgStoredFileBodyImageReads(t *testing.T) {
 		t.Errorf("xã 2 sees %v (err %v), want only its own file", got2, err)
 	}
 }
+
+// LiveByIDs (bug sheet row 22: the staff list's cover previews) against a REAL PostgreSQL. Skipped without
+// VIGOV_TEST_DSN. EACH ROW MAKES ONE DEFECT VISIBLE:
+//
+//	live      xã 1, ready                must appear, with its status
+//	pending   xã 1, never made ready     must appear too — the list shows its status, View does the same
+//	deleted   xã 1, soft-deleted         drop `deleted_at IS NULL` → appears
+//	xa-2      xã 2, asked for from xã 1  drop the commune → appears in xã 1
+func TestPgLiveByIDsIsOneCommunesLiveRows(t *testing.T) {
+	xa1, xa2 := xaRieng(t)
+	db := pkgstore.New(moKetNoi(t))
+	s := NewStoredFileStore(db)
+	const item = "01JITEMLISTAAAAAAAAAAAAAAA"
+	const live, pending, deleted, other = "01JLIVEAAAAAAAAAAAAAAAAAAA", "01JPENDAAAAAAAAAAAAAAAAAAA",
+		"01JDELAAAAAAAAAAAAAAAAAAAA", "01JXA2LISTAAAAAAAAAAAAAAAA"
+	now := time.Now().UTC()
+	seed := func(xa, id string, ready bool) {
+		t.Helper()
+		f := domain.StoredFile{ID: id, Bucket: domain.StoredFileBucketPrivate,
+			ObjectKey:      "content-source/t_" + strings.ToLower(xa) + "/2026/10/comms/content-image/" + strings.ToLower(id) + "/original.jpg",
+			RetentionClass: "content-source", Purpose: "content-image", SubjectType: domain.StoredFileSubjectContentItem,
+			SubjectID: item, OriginalName: "anh.jpg", UploadedBy: "CB-A", CreatedAt: now, UpdatedAt: now}
+		ctx := ctxXa(tenant.ID(xa))
+		if err := db.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+			if err := s.InsertPending(ctx, tx, f); err != nil {
+				return err
+			}
+			if ready {
+				return walkToReady(t, ctx, tx, s, id, now)
+			}
+			return nil
+		}); err != nil {
+			t.Fatalf("seed %s: %v", id, err)
+		}
+	}
+	seed(xa1, live, true)
+	seed(xa1, pending, false)
+	seed(xa1, deleted, true)
+	seed(xa2, other, true)
+	ctx1 := ctxXa(tenant.ID(xa1))
+	if err := db.For(ctx1).Tx(ctx1, func(tx *pkgstore.ScopedTx) error {
+		return s.SoftDelete(ctx1, tx, deleted, "CB-A", "thay ảnh bìa", now)
+	}); err != nil {
+		t.Fatalf("soft delete: %v", err)
+	}
+
+	got, err := s.LiveByIDs(ctx1, []string{live, pending, deleted, other})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[live].Status != domain.StoredFileReady || got[pending].Status != domain.StoredFilePending {
+		t.Errorf("LiveByIDs = %+v, want exactly the live and the pending row of xã 1", got)
+	}
+	if _, err := s.LiveByIDs(ctx1, []string{live, live}); !errors.Is(err, ErrStoredFileList) {
+		t.Errorf("a duplicate id must be refused: %v", err)
+	}
+}

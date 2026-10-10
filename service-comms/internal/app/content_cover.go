@@ -211,6 +211,8 @@ type CoverFiles interface {
 	InsertPending(ctx context.Context, tx *store.ScopedTx, f domain.StoredFile) error
 	ForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (*domain.StoredFile, error)
 	ByID(ctx context.Context, id string) (*domain.StoredFile, error)
+	// LiveByIDs is ByID for a page: one statement, absent = no live row in this commune.
+	LiveByIDs(ctx context.Context, ids []string) (map[string]domain.StoredFile, error)
 	Transition(ctx context.Context, tx *store.ScopedTx, id string, from, to domain.StoredFileStatus,
 		at time.Time) error
 	MarkStored(ctx context.Context, tx *store.ScopedTx, id string, facts domain.StoredFileFacts,
@@ -1046,6 +1048,56 @@ func (uc *ContentCovers) View(ctx context.Context, fileID string) (CoverView, er
 	}
 	v.PreviewURL, v.PreviewExpiresAt = u, uc.clock().Add(storage.MaxDownloadTTL)
 	return v, nil
+}
+
+// CoverViews is View for a PAGE of the staff list (owner decision 10/10/2026, bug sheet row 22: the list
+// shows each article's cover thumbnail). Keyed by file id; every requested id is present, built exactly as
+// View builds it — same derivative, same signer, same TTL (storage.MaxDownloadTTL) — except that no file
+// name is signed into the link (below).
+//
+// WHAT IT COSTS, and why that is the cheapest correct shape:
+//
+//	one SQL read    LiveByIDs — the whole page's rows in one statement, never one ByID per row
+//	N signatures    PresignDownload signs OFFLINE (HMAC over the URL, no round trip to the object store)
+//	no audit entry  same footing as View: staff of THIS commune looking at pictures their commune
+//	                publishes. Rule 6 invariant 7 audits full personal data and cross-commune reads; a
+//	                news cover is neither (the derivative is the EXIF-free JPEG residents get on publish),
+//	                so N previews cost N HMACs and zero ledger rows
+//
+// A signing failure leaves that row without its URL and is returned beside the views (the first one), so
+// the handler can log it and still show the list.
+func (uc *ContentCovers) CoverViews(ctx context.Context, fileIDs []string) (map[string]CoverView, error) {
+	out := make(map[string]CoverView, len(fileIDs))
+	if len(fileIDs) == 0 {
+		return out, nil
+	}
+	rows, err := uc.files.LiveByIDs(ctx, fileIDs)
+	if err != nil {
+		return out, fmt.Errorf("ảnh bìa: đọc tệp theo trang: %w", err)
+	}
+	var firstErr error
+	for _, id := range fileIDs {
+		v := CoverView{FileID: id}
+		f, ok := rows[id]
+		if ok {
+			v.Status, v.Public = f.Status, f.PublicObjectKey != ""
+		}
+		if ok && f.Status == domain.StoredFileReady && uc.objects != nil {
+			// THE ONE DIFFERENCE FROM View: no file name in the signed disposition. `original_name` CAN
+			// NAME A PERSON (rule 3) and rides in the presigned query string; a thumbnail is shown, never
+			// saved, so a hundred of them need no name — the store answers `download.jpg`.
+			f.OriginalName = ""
+			u, err := uc.presignDerivative(ctx, f)
+			if err != nil && firstErr == nil {
+				firstErr = err
+			}
+			if err == nil {
+				v.PreviewURL, v.PreviewExpiresAt = u, uc.clock().Add(storage.MaxDownloadTTL)
+			}
+		}
+		out[id] = v
+	}
+	return out, firstErr
 }
 
 // PublicImageURLs maps cover file ids to the anonymous URL of their published derivative, for the

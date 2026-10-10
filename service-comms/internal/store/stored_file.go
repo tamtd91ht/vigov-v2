@@ -379,6 +379,43 @@ func (s *StoredFileStore) RetireAbandonedBodyImages(ctx context.Context, tx *sto
 	return out, nil
 }
 
+// LiveByIDs reads the live rows of a page's cover files in ONE statement, keyed by file id; an id with
+// no live row in THIS commune is absent (the commune is $1 — another authority's id simply is not
+// there). ByID for a whole page: the staff list's cover previews (bug sheet row 22), so a page of a
+// hundred articles is one query, never a hundred.
+func (s *StoredFileStore) LiveByIDs(ctx context.Context, ids []string) (map[string]domain.StoredFile, error) {
+	out := make(map[string]domain.StoredFile, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	if len(ids) > MaxStoredFileBatch || !distinctNonEmpty(ids) {
+		return nil, ErrStoredFileList
+	}
+	marks := make([]string, 0, len(ids))
+	args := make([]any, 0, len(ids))
+	for i, id := range ids {
+		marks = append(marks, "$"+strconv.Itoa(i+2)) // $1 is the commune (Scoped.Query)
+		args = append(args, id)
+	}
+	rows, err := s.db.For(ctx).Query(ctx, storedFileCols, "stored_file",
+		"AND deleted_at IS NULL AND id IN ("+strings.Join(marks, ", ")+")", args...)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc tệp theo lô: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		f, err := scanStoredFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		out[f.ID] = f
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt tệp theo lô: %w", err)
+	}
+	return out, nil
+}
+
 // ReadyObjectKeys reads the PRIVATE object key of each `ready`, live file of ONE purpose among ids, in
 // one statement, keyed by file id; anything else is absent. For the public news routes' audio link
 // (ADR 0067 §4.2): the key is presigned, never published, and never leaves this service.

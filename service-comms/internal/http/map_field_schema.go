@@ -15,8 +15,10 @@ package http
 // (rule 1, invariants 4 and 5).
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
@@ -120,10 +122,11 @@ type updateMapFieldSchemaIn struct {
 	ValueType     *string `json:"value_type,omitempty"`
 }
 
-// deleteMapFieldSchemaIn — the reason is mandatory (rule 7, invariant 1) and travels in the body,
-// never the query string, where free text would land in every access log.
+// deleteMapFieldSchemaIn — the reason is OPTIONAL (owner decision 10/10/2026, bug sheet row 34): absent,
+// blank, or no body at all → `delete_reason` is domain.MapFieldDeleteDefaultReason. A reason that is
+// given travels in the body, never the query string, where free text would land in every access log.
 type deleteMapFieldSchemaIn struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // ListMapFieldSchemas — GET /api/v1/map-field-schemas[?asset_type_code=<code>]
@@ -250,8 +253,14 @@ func (h *Handler) UpdateMapFieldSchema(w http.ResponseWriter, r *http.Request) {
 
 // DeleteMapFieldSchema — DELETE /api/v1/map-field-schemas/{id}. Soft delete; 204, no body.
 func (h *Handler) DeleteMapFieldSchema(w http.ResponseWriter, r *http.Request) {
+	// THE BODY ITSELF IS OPTIONAL: the dialog has no reason box, so a client may send none. io.EOF is
+	// "no body"; anything that IS sent must still be valid JSON within thanToiDa (docThan's rule) — the
+	// shape service-finance's capital-plan category delete uses for the same decision.
 	var in deleteMapFieldSchemaIn
-	if !docThan(w, r, &in) {
+	r.Body = http.MaxBytesReader(w, r.Body, thanToiDa)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
 		return
 	}
 	actor, ok := nguoiThucHien(r)

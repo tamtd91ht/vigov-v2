@@ -493,3 +493,27 @@ func TestDeleteMapFieldPassesReasonAndAnswers204(t *testing.T) {
 		t.Errorf("id/reason/body = %q / %q / %q", s.fake.lastID, s.fake.lastReason, w.Body.String())
 	}
 }
+
+// Bug sheet row 34 (owner decision 10/10/2026): the dialog has no reason box, so the body — or the
+// `reason` in it — may be absent. The handler passes "" on and the use case writes the fixed sentence;
+// a body that IS sent must still be JSON.
+func TestDeleteMapFieldWithoutReasonIs204(t *testing.T) {
+	for name, body := range map[string]string{"no body": "", "empty object": `{}`, "blank reason": `{"reason":"  "}`} {
+		t.Run(name, func(t *testing.T) {
+			s := newMapFieldServer(t)
+			s.grant(xaA, "admin.lookup")
+			w := s.call(t, http.MethodDelete, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), body)
+			doiMa(t, w, http.StatusNoContent)
+			if s.fake.lastID != "mf-001" || strings.TrimSpace(s.fake.lastReason) != "" {
+				t.Errorf("id/reason = %q / %q", s.fake.lastID, s.fake.lastReason)
+			}
+		})
+	}
+	s := newMapFieldServer(t)
+	s.grant(xaA, "admin.lookup")
+	w := s.call(t, http.MethodDelete, hostA, mapFieldPath+"/mf-001", canBoGhi(xaA), `{"reason":`)
+	doiMa(t, w, http.StatusBadRequest)
+	if s.fake.lastID != "" {
+		t.Error("a malformed body reached the use case")
+	}
+}

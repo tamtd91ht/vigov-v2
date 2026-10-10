@@ -42,6 +42,8 @@ type ContentCoverActs interface {
 	CoverUploadLimit(ctx context.Context) (int64, error)
 	UploadCover(ctx context.Context, req app.CoverUploadRequest, actor audit.Actor) (domain.StoredFile, error)
 	View(ctx context.Context, fileID string) (app.CoverView, error)
+	// CoverViews is View for a page of the staff list — one read, keyed by file id.
+	CoverViews(ctx context.Context, fileIDs []string) (map[string]app.CoverView, error)
 
 	// The body images (content_body_image.go): the same acts under `content-body-image`, and the staff
 	// previews of the images one article's body references.
@@ -144,12 +146,55 @@ func (h *Handler) coverView(r *http.Request, fileID string) *coverImageOut {
 		h.d.Log.Warn("ảnh bìa: không dựng được thông tin xem trước",
 			"xa", string(tenant.MustFrom(r.Context())), "err", err)
 	}
-	out := &coverImageOut{FileID: fileID, Status: string(v.Status), Public: v.Public}
+	v.FileID = fileID
+	return coverOut(v)
+}
+
+// coverOut turns one use-case view into the wire block — the detail's shape, shared by the list.
+func coverOut(v app.CoverView) *coverImageOut {
+	out := &coverImageOut{FileID: v.FileID, Status: string(v.Status), Public: v.Public}
 	if v.PreviewURL != "" {
 		exp := v.PreviewExpiresAt
 		out.PreviewURL, out.PreviewExpiresAt = v.PreviewURL.URL(), &exp
 	}
 	return out
+}
+
+// listCoverViews fills `cover_image` on every row of a list page that has an uploaded cover (owner
+// decision 10/10/2026, bug sheet row 22) — ONE use-case call for the page, never one per row. A failure
+// is logged and the rows still go out (without their links): the list is worth showing without its
+// thumbnails. Reports whether any row now carries a signed link, so the caller can mark the reply no-store.
+func (h *Handler) listCoverViews(r *http.Request, items []noiDungRa) bool {
+	ids := make([]string, 0, len(items))
+	seen := make(map[string]bool, len(items))
+	for _, it := range items {
+		if it.CoverImageFileID != "" && !seen[it.CoverImageFileID] {
+			seen[it.CoverImageFileID] = true
+			ids = append(ids, it.CoverImageFileID)
+		}
+	}
+	if len(ids) == 0 {
+		return false
+	}
+	views, err := h.d.ContentCovers.CoverViews(r.Context(), ids)
+	if err != nil {
+		h.d.Log.Warn("ảnh bìa: không dựng được ảnh xem trước cho trang danh sách",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+	}
+	signed := false
+	for i := range items {
+		id := items[i].CoverImageFileID
+		if id == "" {
+			continue
+		}
+		v, ok := views[id]
+		if !ok {
+			v = app.CoverView{FileID: id}
+		}
+		items[i].CoverImage = coverOut(v)
+		signed = signed || v.PreviewURL != ""
+	}
+	return signed
 }
 
 // coverRejectionSentences is the officer-facing sentence per app.CoverReject* reason.

@@ -158,9 +158,11 @@ type noiDungRa struct {
 	// On the list and the detail.
 	CoverImageFileID string `json:"cover_image_file_id,omitempty"`
 
-	// CoverImage is the cover's status and a short-lived preview link — on the DETAIL only (GET
-	// /api/v1/content-items/{id}), absent from the list (one signature per row is a bearer credential
-	// per row nobody asked for) and from the write replies.
+	// CoverImage is the cover's status and a short-lived preview link (≤ 15 minutes) — on the DETAIL and,
+	// since the owner's decision of 10/10/2026 (bug sheet row 22: §6's table shows a thumbnail), on every
+	// LIST row that has an uploaded cover; absent from the write replies. Present whenever
+	// CoverImageFileID is; `preview_url` only when the file is ready and storage is configured. A list
+	// carrying one is answered `Cache-Control: no-store`, as the detail is.
 	CoverImage *coverImageOut `json:"cover_image,omitempty"`
 
 	// BodyImages are the images the body references (`<img data-file-id>`, ADR 0067 §Sửa đổi 03/10/2026),
@@ -452,6 +454,12 @@ func (h *Handler) DanhSachNoiDung(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, n := range kq.Items {
 		ra.Items = append(ra.Items, noiDungRaNgoai(n, false))
+	}
+	// The thumbnail column (owner decision 10/10/2026, bug sheet row 22): one batched read and one offline
+	// signature per ready cover, not audited — app.ContentCovers.CoverViews says why that is the cheap shape.
+	if h.listCoverViews(r, ra.Items) {
+		// A presigned preview is a bearer credential: no shared cache keeps this reply.
+		w.Header().Set("Cache-Control", "no-store")
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -823,7 +831,12 @@ func (h *Handler) contentItemDeleteError(w http.ResponseWriter, r *http.Request,
 // themDanhMucVao is the body of POST /api/v1/content-categories — §6's `⊞ Danh mục tin`.
 type themDanhMucVao struct {
 	Name string `json:"name"`
-	Slug string `json:"slug"`
+
+	// Slug is OPTIONAL (owner decision 10/10/2026, bug sheet row 21 — the prototype's dialog has no slug
+	// box). Absent or blank → the server issues one from `name` (domain.CategorySlugFromName, then -2, -3 …
+	// past every slug this commune ever issued, soft-deleted categories included). Sent → taken as typed,
+	// 409 `code_taken` when already used. Either way the reply's `slug` is the one stored.
+	Slug string `json:"slug,omitempty"`
 
 	// ParentID is "" or absent for a root category.
 	ParentID string `json:"parent_id,omitempty"`
@@ -985,6 +998,12 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusConflict, "code_taken",
 			"Slug này đã được dùng trong xã — kể cả khi danh mục mang slug đó đã bị xoá. "+
 				"Mã đã cấp thì không cấp lại. Hãy chọn một slug khác.", "")
+	case errors.Is(err, domain.ErrCategorySlugSeriesBlocked):
+		// The server-issued path found every slug of this name's series already used (soft-deleted
+		// categories included). A state of the data, so 409; the sentence says what the person can do —
+		// and names the NAME, because the dialog that sent it has no slug box.
+		httpx.WriteError(w, http.StatusConflict, "code_series_blocked",
+			"Đã dùng hết mã tự sinh cho tên danh mục này (kể cả các danh mục đã xoá). Hãy đặt tên khác.", "")
 	case errors.Is(err, commsstore.ErrQuaNhieuDanhMucMiniApp):
 		httpx.WriteError(w, http.StatusConflict, "catalogue_full",
 			"Danh mục tin của xã đã đạt số mục tối đa.", "")

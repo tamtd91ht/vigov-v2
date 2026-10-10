@@ -157,6 +157,35 @@ func normalizeText(s string, maxLen int, errEmpty, errTooLong error) (string, er
 	return s, nil
 }
 
+// MapFieldDeleteDefaultReason is `delete_reason` when the person deleting a map field gives none.
+//
+// THE REASON IS OPTIONAL ON THE WAY IN (owner decision 10/10/2026, customer bug sheet row 34: the
+// Cấu hình › Trường bản đồ dialog no longer has a reason box) AND STILL NEVER EMPTY IN THE ROW: rule 7,
+// invariant 1 names `delete_reason`, and 0007's CHECK wants it set beside `deleted_at` (a NULL is
+// refused; an empty string would pass the CHECK and say nothing). So a blank is replaced by
+// this fixed sentence rather than stored as nothing — the shape ADR 0075 #4a gave project removal and
+// ADR 0077 #3 gave the capital-plan catalogue (service-finance domain.CategoryRemovalDefaultReason).
+// Who deleted it and when are in `deleted_by`, `deleted_at` and the audit entry exactly as before.
+//
+// THE SENTENCE NAMES THE SCREEN on purpose: years later, the row is read by someone asking "why did
+// this field disappear", and "deleted from this screen, no reason typed" is the honest answer — a
+// generic "deleted" would read as if a reason had been lost.
+const MapFieldDeleteDefaultReason = "Xoá từ màn Cấu hình › Trường bản đồ (không nhập lý do)"
+
+// NormalizeMapFieldDeleteReason validates the reason recorded beside a map field's soft delete; a
+// blank one becomes MapFieldDeleteDefaultReason. A reason that IS given keeps ChuanHoaLyDoXoa's
+// rules (trimmed, bounded at LyDoXoaToiDa).
+//
+// A FUNCTION OF ITS OWN rather than a change to ChuanHoaLyDoXoa: the decision is about THIS screen.
+// The asset-type catalogue, the map assets, the external contacts and the content items still
+// require a reason, and they share that function.
+func NormalizeMapFieldDeleteReason(reason string) (string, error) {
+	if strings.TrimSpace(reason) == "" {
+		return MapFieldDeleteDefaultReason, nil
+	}
+	return ChuanHoaLyDoXoa(reason)
+}
+
 // NormalizeFieldLabel trims and validates the label staff see, 1–255 characters.
 func NormalizeFieldLabel(label string) (string, error) {
 	return normalizeText(label, FieldLabelMaxLen, ErrFieldLabelEmpty, ErrFieldLabelTooLong)

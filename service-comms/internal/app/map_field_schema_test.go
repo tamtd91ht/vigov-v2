@@ -481,6 +481,39 @@ func TestDeleteMapFieldSoftDeletesWithBusinessCode(t *testing.T) {
 	}
 }
 
+// Bug sheet row 34 (owner decision 10/10/2026): a blank reason is no longer a refusal. The row still
+// gets deleted_at · deleted_by · a NON-EMPTY delete_reason, and the audit entry is in the same commit.
+func TestDeleteMapFieldBlankReasonWritesTheFixedSentence(t *testing.T) {
+	d := &fieldDB{row: choiceRow()}
+	uc, ctx := newFieldUseCase(t, d)
+	if err := uc.Delete(ctx, "mf-001", "  ", staffActor); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	del := d.with("SET deleted_at = now()")
+	if len(del) != 1 || del[0].args[2] != "CB-00123" || del[0].args[3] != domain.MapFieldDeleteDefaultReason {
+		t.Fatalf("soft delete = %+v", del)
+	}
+	entries := d.with("INSERT INTO audit_log")
+	if len(entries) != 1 || entries[0].args[4] != ActionDeleteMapField {
+		t.Fatalf("entries = %+v", entries)
+	}
+	var argText strings.Builder
+	for _, a := range entries[0].args {
+		switch v := a.(type) {
+		case []byte:
+			argText.Write(v)
+		case string:
+			argText.WriteString(v)
+		}
+	}
+	if !strings.Contains(argText.String(), domain.MapFieldDeleteDefaultReason) {
+		t.Errorf("the entry's ly_do does not carry the fixed sentence: %v", entries[0].args)
+	}
+	if d.committed != 1 {
+		t.Errorf("committed = %d, want 1 — the soft delete and its entry share one transaction", d.committed)
+	}
+}
+
 func TestDeleteMapFieldRefusals(t *testing.T) {
 	for name, tc := range map[string]struct {
 		row    *fieldRow
@@ -488,9 +521,9 @@ func TestDeleteMapFieldRefusals(t *testing.T) {
 		actor  audit.Actor
 		err    error
 	}{
-		"no reason": {choiceRow(), "  ", staffActor, domain.ErrThieuLyDoXoa},
-		"no actor":  {choiceRow(), "lý do", audit.Actor{}, ErrMissingDeleter},
-		"not found": {nil, "lý do", staffActor, commsstore.ErrMapFieldSchemaNotFound},
+		"reason too long": {choiceRow(), strings.Repeat("a", domain.LyDoXoaToiDa+1), staffActor, domain.ErrLyDoXoaQuaDai},
+		"no actor":        {choiceRow(), "lý do", audit.Actor{}, ErrMissingDeleter},
+		"not found":       {nil, "lý do", staffActor, commsstore.ErrMapFieldSchemaNotFound},
 	} {
 		t.Run(name, func(t *testing.T) {
 			d := &fieldDB{row: tc.row}

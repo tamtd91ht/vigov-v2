@@ -889,12 +889,25 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 			return commsstore.ErrQuaNhieuDanhMucMiniApp
 		}
 
-		daDung, err := uc.kho.SlugDaDung(ctx, tx, moi.Slug)
-		if err != nil {
-			return err
-		}
-		if daDung {
-			return commsstore.ErrSlugDanhMucDaTonTai
+		if sach.AutoSlug {
+			// THE TREE LOCK FIRST: two officers adding "Nông nghiệp" at the same moment would both
+			// find `nong-nghiep` free, and the second INSERT would hit `UNIQUE (tenant_id, slug)` and
+			// answer a 409 about a slug that person never typed. Serialised per commune, the second
+			// one sees the first's row and takes `nong-nghiep-2`. The same advisory lock Update takes.
+			if err := uc.kho.LockTree(ctx, tx); err != nil {
+				return err
+			}
+			if moi.Slug, err = uc.firstFreeSlug(ctx, tx, sach.Slug); err != nil {
+				return err
+			}
+		} else {
+			daDung, err := uc.kho.SlugDaDung(ctx, tx, moi.Slug)
+			if err != nil {
+				return err
+			}
+			if daDung {
+				return commsstore.ErrSlugDanhMucDaTonTai
+			}
 		}
 
 		if moi.ChaID != "" {
@@ -914,7 +927,9 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 			return err
 		}
 
-		delta, err := json.Marshal(map[string]any{"sau": tomTatDanhMucMiniApp(moi)})
+		// `auto_slug` says whether a person typed this slug or the server issued it — the one fact about
+		// the code an inspection cannot recover from the row (service-finance's `auto_code`).
+		delta, err := json.Marshal(map[string]any{"sau": tomTatDanhMucMiniApp(moi), "auto_slug": sach.AutoSlug})
 		if err != nil {
 			return fmt.Errorf("danh_muc_mini_app: mã hoá delta: %w", err)
 		}
@@ -934,6 +949,24 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 		return domain.DanhMucMiniApp{}, bocNoiDung(ctx, "thêm danh mục Mini App", err)
 	}
 	return moi, nil
+}
+
+// firstFreeSlug walks the series base, base-2 … base-99 and returns the first slug never used in this
+// commune — soft-deleted rows included, because SlugDaDung counts them (rule 7, invariant 3: an issued
+// code is never reissued). Past the last suffix it refuses rather than inventing a slug nobody can read
+// back to the name. Called under LockTree, so the answer still holds at the INSERT.
+func (uc *DanhMucNoiDungMiniApp) firstFreeSlug(ctx context.Context, tx *store.ScopedTx, base string) (string, error) {
+	for n := 1; n <= domain.CategorySlugSuffixLimit; n++ {
+		candidate := domain.CategorySlugCandidate(base, n)
+		used, err := uc.kho.SlugDaDung(ctx, tx, candidate)
+		if err != nil {
+			return "", err
+		}
+		if !used {
+			return candidate, nil
+		}
+	}
+	return "", domain.ErrCategorySlugSeriesBlocked
 }
 
 // Update edits one category: name, parent, order, hidden (ADR 0067 §3). The slug is not editable — the

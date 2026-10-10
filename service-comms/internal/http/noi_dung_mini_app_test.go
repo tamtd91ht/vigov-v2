@@ -705,6 +705,34 @@ func TestThemDanhMucSlugTrungTra409VaNoiRoViSao(t *testing.T) {
 	}
 }
 
+// Bug sheet row 21 (owner decision 10/10/2026): the prototype's dialog sends no slug. The handler passes
+// "" on (the use case issues it) and answers 201 with the slug that was stored.
+func TestCreateCategoryWithoutSlugIs201WithTheIssuedSlug(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	m.ghiDM.ra = domain.DanhMucMiniApp{ID: "dm-009", Ten: "Nông nghiệp", Slug: "nong-nghiep-2"}
+
+	w := m.goi(t, http.MethodPost, hostA, duongDanhMucND, `{"name":"Nông nghiệp"}`, canBo(xaA))
+	doiMa(t, w, http.StatusCreated)
+	if m.ghiDM.ycCuoi.Slug != "" || m.ghiDM.ycCuoi.Ten != "Nông nghiệp" {
+		t.Errorf("use case got %+v", m.ghiDM.ycCuoi)
+	}
+	if !strings.Contains(w.Body.String(), `"slug":"nong-nghiep-2"`) {
+		t.Errorf("reply: %s", w.Body.String())
+	}
+}
+
+func TestCreateCategorySlugSeriesBlockedIs409(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	m.ghiDM.loi = domain.ErrCategorySlugSeriesBlocked
+	w := m.goi(t, http.MethodPost, hostA, duongDanhMucND, `{"name":"Tin tức"}`, canBo(xaA))
+	doiMa(t, w, http.StatusConflict)
+	if loiTra(t, w).Code != "code_series_blocked" {
+		t.Errorf("code = %q, want code_series_blocked", loiTra(t, w).Code)
+	}
+}
+
 func TestThemDanhMucChaKhongConTra409(t *testing.T) {
 	m := dungMayChuND(t)
 	m.capQuyen(xaA, QuyenSuaNoiDung)

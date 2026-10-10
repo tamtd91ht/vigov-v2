@@ -999,7 +999,18 @@ func Register(mux *http.ServeMux, d Deps) {
 	// duplicate category, so refusing a member of staff mid-configuration would be paying with an
 	// outage for a risk that is already covered.
 	//
-	// @summary  Thêm một danh mục tin của riêng xã vào cây danh mục Mini App
+	// `slug` IS OPTIONAL (owner decision 10/10/2026, bug sheet row 21): absent → the server issues one from
+	// `name` (diacritics stripped, kebab-case, -2, -3 … past every slug ever issued here, soft-deleted
+	// included — rule 7, invariant 3), under the commune's tree lock so two racing creates of one name get
+	// two slugs rather than one 409. 409 `code_series_blocked` past -99. A sent slug is taken as typed.
+	//
+	// ⚠ WHAT THAT COSTS THE MoKhiHong ARGUMENT ABOVE: on the server-issued path the unique key no longer
+	// turns a double submit into a 409 — the second request simply gets `-2`. So during a Redis outage
+	// (MoKhiHong lets the request through) a double-submitted dialog can leave TWO categories of one
+	// name. Visible, soft-deletable, no record lost; kept open rather than switched to DongKhiHong because
+	// that call — refusing configuration during a cache outage — is the owner's, not this change's.
+	//
+	// @summary  Thêm một danh mục tin của riêng xã vào cây danh mục Mini App — slug không gửi thì máy chủ tự cấp từ tên
 	// @screen   11-noi-dung-mini-app §6
 	// @request  themDanhMucVao
 	// @reply    201 danhMucRa
@@ -1138,11 +1149,16 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("options là cả danh sách chứ không phải phần thêm, và app.MapFieldSchemas.Update không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một trạng thái và đúng một vết")(
 				http.HandlerFunc(h.UpdateMapFieldSchema))))
 
-	// `Xoá` — a SOFT DELETE with a mandatory reason. The row leaves every read path, its key stays
-	// taken forever, and values already stored under it stay in the records (docs/ui-ux/14-cau-hinh.md
-	// :202). Different from `Tắt`, which is PATCH is_active=false and stays listed.
+	// `Xoá` — a SOFT DELETE. The row leaves every read path, its key stays taken forever, and values
+	// already stored under it stay in the records (docs/ui-ux/14-cau-hinh.md:202). Different from
+	// `Tắt`, which is PATCH is_active=false and stays listed.
 	//
-	// @summary  Xoá mềm một trường bản đồ, kèm lý do bắt buộc — mã trường không được cấp lại
+	// THE REASON IS OPTIONAL (owner decision 10/10/2026, bug sheet row 34 — the dialog has no reason
+	// box): `reason` omitted, blank, or no body → `delete_reason` is the fixed
+	// domain.MapFieldDeleteDefaultReason, so rule 7 invariant 1's column is never empty — the shape ADR
+	// 0075 #4a / 0077 #3 gave project and category removal. A reason that is given is kept.
+	//
+	// @summary  Xoá mềm một trường bản đồ, lý do không bắt buộc — mã trường không được cấp lại
 	// @screen   14-cau-hinh §6
 	// @request  deleteMapFieldSchemaIn
 	// @reply    204 -

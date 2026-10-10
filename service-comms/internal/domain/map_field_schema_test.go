@@ -6,6 +6,30 @@ import (
 	"testing"
 )
 
+// Bug sheet row 34 (owner decision 10/10/2026): blank → the fixed sentence; given → kept, trimmed and
+// still bounded. The shared ChuanHoaLyDoXoa is unchanged — the other deletes still require a reason.
+func TestNormalizeMapFieldDeleteReason(t *testing.T) {
+	for name, tc := range map[string]struct {
+		in, want string
+		err      error
+	}{
+		"empty":    {"", MapFieldDeleteDefaultReason, nil},
+		"blank":    {" \t ", MapFieldDeleteDefaultReason, nil},
+		"given":    {"  trùng trường khác ", "trùng trường khác", nil},
+		"too long": {strings.Repeat("a", LyDoXoaToiDa+1), "", ErrLyDoXoaQuaDai},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := NormalizeMapFieldDeleteReason(tc.in)
+			if !errors.Is(err, tc.err) || got != tc.want {
+				t.Errorf("got %q, %v; want %q, %v", got, err, tc.want, tc.err)
+			}
+		})
+	}
+	if _, err := ChuanHoaLyDoXoa(" "); !errors.Is(err, ErrThieuLyDoXoa) {
+		t.Error("the shared reason rule must still refuse a blank reason")
+	}
+}
+
 func TestNormalizeFieldCode(t *testing.T) {
 	for name, tc := range map[string]struct {
 		in   string

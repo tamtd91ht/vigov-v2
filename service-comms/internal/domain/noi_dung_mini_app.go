@@ -527,6 +527,70 @@ func ChuanHoaSlugDanhMuc(slug string) (string, error) {
 	return slug, nil
 }
 
+// --- the server-issued slug (owner decision 10/10/2026, customer bug sheet row 21) -----------------
+//
+// The prototype's `⊞ Danh mục tin` dialog sends `name` (and a parent) and has NO slug box, so a create
+// with no `slug` gets one from the server: the prototype's own `_free_category_code`
+// (../vigov-require apps/api/app/modules/content/service.py:704-715) — `slugify(name)`, `danh-muc`
+// when nothing usable remains, then `-2`, `-3` … until free, SOFT-DELETED ROWS COUNTED (rule 7,
+// invariant 3). The same shape service-finance gave its catalogue codes (CategoryCodeCandidate,
+// user decision 07/10/2026). A slug the client DOES send is taken as typed, exactly as before.
+
+// ErrCategorySlugSeriesBlocked — every candidate of one name's series is already taken.
+var ErrCategorySlugSeriesBlocked = errors.New(
+	"danh_muc_mini_app: đã dùng hết slug tự sinh cho tên này — hãy đặt tên khác hoặc gửi `slug` riêng")
+
+const (
+	// CategorySlugSuffixLimit is the last suffix tried — the prototype's `range(1, 100)`. The prototype
+	// then falls back to a random hex suffix; this service refuses instead (ErrCategorySlugSeriesBlocked),
+	// as service-finance does: a random code is one nobody can read back to the name, and a hundred
+	// categories of one name in one commune is a mistake to surface.
+	CategorySlugSuffixLimit = 99
+
+	// categorySlugFallback is the prototype's `or "danh-muc"` for a name with no letter or digit left.
+	categorySlugFallback = "danh-muc"
+)
+
+// CategorySlugFromName is the base of a server-issued slug: the name lower-cased, Vietnamese diacritics
+// stripped (đ → d), every run of anything else one '-' — "Nông nghiệp – Đất đai" → "nong-nghiep-dat-dai".
+//
+// IT IS SlugMapAssetTypeCode, THE MAP-ASSET-TYPE IMPORT'S DERIVATION, and not a second slug function:
+// same alphabet, same bound (MaToiDa == SlugDanhMucToiDa == 64, cut on a word boundary). Combining marks
+// are dropped first so a name typed in DECOMPOSED form ("e" + U+0301) folds the same way as the
+// precomposed one instead of splitting the word at the mark.
+//
+// NOT GUARANTEED FREE — the use case steps over taken slugs with CategorySlugCandidate.
+func CategorySlugFromName(name string) string {
+	composed := strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Mn, r) {
+			return -1
+		}
+		return r
+	}, name)
+	slug := SlugMapAssetTypeCode(composed)
+	if len(slug) > SlugDanhMucToiDa {
+		slug = strings.TrimRight(slug[:SlugDanhMucToiDa], "-")
+	}
+	if slug == "" {
+		return categorySlugFallback
+	}
+	return slug
+}
+
+// CategorySlugCandidate is the n-th slug of one base's series: base, base-2, base-3 … The base is
+// shortened (and any trailing '-' dropped) when base plus suffix would pass SlugDanhMucToiDa, so every
+// candidate is a slug ChuanHoaSlugDanhMuc accepts.
+func CategorySlugCandidate(base string, n int) string {
+	if n <= 1 {
+		return base
+	}
+	suffix := fmt.Sprintf("-%d", n)
+	if len(base)+len(suffix) > SlugDanhMucToiDa {
+		base = strings.TrimRight(base[:SlugDanhMucToiDa-len(suffix)], "-")
+	}
+	return base + suffix
+}
+
 // KiemTraThuTuDanhMuc bounds a category's display order. NEGATIVE IS REFUSED, not clamped — see
 // KiemTraThuTu next door for the argument.
 func KiemTraThuTuDanhMuc(thuTu int) error {
@@ -1013,10 +1077,15 @@ func (y YeuCauSuaNoiDung) KiemTra() (YeuCauSuaNoiDung, error) {
 
 // YeuCauThemDanhMuc is one new category — §6's `⊞ Danh mục tin`.
 type YeuCauThemDanhMuc struct {
-	Ten   string
+	Ten string
+	// Slug is OPTIONAL (owner decision 10/10/2026): blank → the server issues one from Ten.
 	Slug  string
 	ChaID string
 	ThuTu int
+
+	// AutoSlug is SET BY KiemTra, never by a caller: true when Slug was blank and KiemTra replaced it
+	// with CategorySlugFromName(Ten) — the BASE of a series the use case still has to step through.
+	AutoSlug bool
 }
 
 // KiemTra normalises and validates the request.
@@ -1027,7 +1096,9 @@ func (y YeuCauThemDanhMuc) KiemTra() (YeuCauThemDanhMuc, error) {
 	if ra.Ten, err = ChuanHoaTenDanhMuc(y.Ten); err != nil {
 		return YeuCauThemDanhMuc{}, err
 	}
-	if ra.Slug, err = ChuanHoaSlugDanhMuc(y.Slug); err != nil {
+	if strings.TrimSpace(y.Slug) == "" {
+		ra.Slug, ra.AutoSlug = CategorySlugFromName(ra.Ten), true
+	} else if ra.Slug, err = ChuanHoaSlugDanhMuc(y.Slug); err != nil {
 		return YeuCauThemDanhMuc{}, err
 	}
 	if err := KiemTraThuTuDanhMuc(y.ThuTu); err != nil {

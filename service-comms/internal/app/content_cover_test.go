@@ -56,6 +56,9 @@ type fakeCoverFiles struct {
 	// issuedArticles are article ids a noi_dung_mini_app row carries, SOFT-DELETED ones included — the
 	// store's NOT EXISTS in SubjectReservedBy. A live article is the content fake's (khoNDGia.dongHienCo).
 	issuedArticles map[string]bool
+
+	// batchReads counts LiveByIDs calls — the list's previews must be ONE read per page.
+	batchReads int
 }
 
 // newFakeDB is the real core/store over the fake driver, one connection so statements stay ordered.
@@ -146,6 +149,18 @@ func (f *fakeCoverFiles) ForUpdate(_ context.Context, _ *store.ScopedTx, id stri
 func (f *fakeCoverFiles) ByID(_ context.Context, id string) (*domain.StoredFile, error) {
 	return f.get(id), nil
 }
+
+// LiveByIDs mirrors the store: one call per page, live rows only. batchReads counts the calls.
+func (f *fakeCoverFiles) LiveByIDs(_ context.Context, ids []string) (map[string]domain.StoredFile, error) {
+	f.batchReads++
+	out := map[string]domain.StoredFile{}
+	for _, id := range ids {
+		if r := f.get(id); r != nil {
+			out[id] = *r
+		}
+	}
+	return out, nil
+}
 func (f *fakeCoverFiles) Transition(_ context.Context, _ *store.ScopedTx, id string, from, to domain.StoredFileStatus,
 	_ time.Time) error {
 	r := f.rows[id]
@@ -225,6 +240,9 @@ type fakeCoverObjects struct {
 	unpublished  []string
 	publishErr   error
 	unpublishErr error
+	// presignNames / presignTTLs are the file name and TTL each PresignDownload was given.
+	presignNames []string
+	presignTTLs  []time.Duration
 }
 
 func newFakeCoverObjects() *fakeCoverObjects {
@@ -308,8 +326,9 @@ func (o *fakeCoverObjects) PutServerProduced(_ context.Context, dst storage.Key,
 	o.produced[p], o.private[p] = d, d
 	return storage.Produced{Key: p, Size: size}, nil
 }
-func (o *fakeCoverObjects) PresignDownload(_ context.Context, _ storage.Bucket, key string, _ time.Duration,
-	_ string) (storage.PresignedURL, error) {
+func (o *fakeCoverObjects) PresignDownload(_ context.Context, _ storage.Bucket, key string, ttl time.Duration,
+	filename string) (storage.PresignedURL, error) {
+	o.presignNames, o.presignTTLs = append(o.presignNames, filename), append(o.presignTTLs, ttl)
 	return storage.PresignedURL("https://signed.example/" + key), nil
 }
 func (o *fakeCoverObjects) PurgeAllVersions(_ context.Context, b storage.Bucket, key string) error {
@@ -1003,5 +1022,50 @@ func TestPublicImageURLsOnlyForRecordedCopies(t *testing.T) {
 	r.uc.objects = nil
 	if got, _ := r.uc.PublicImageURLs(r.ctx, []string{coverFileID}); len(got) != 0 {
 		t.Error("without object storage no URL may be built")
+	}
+}
+
+// Bug sheet row 22 (owner decision 10/10/2026): the staff LIST carries each row's cover preview. One
+// batched read for the page, one offline signature per READY cover, the detail's TTL, no file name in the
+// link, nothing audited — and a pending, unknown or storage-less cover answers without a URL.
+func TestCoverViewsSignAPageInOneReadWithoutAudit(t *testing.T) {
+	r := newCoverRig(t, nil)
+	ready := readyCover(r.files, coverFileID, coverItemID)
+	ready.OriginalName = "anh-ong-nguyen-van-a.png"
+	ready.PublicObjectKey = publicKeyOf(ready)
+	readyCover(r.files, coverOtherID, coverItemID).Status = domain.StoredFilePending
+	const unknown = "01JZZZZZZZZZZZZZZZZZZZZZZZ"
+
+	views, err := r.uc.CoverViews(r.ctx, []string{coverFileID, coverOtherID, unknown})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.files.batchReads != 1 {
+		t.Errorf("batch reads = %d, want 1 for the whole page", r.files.batchReads)
+	}
+	v := views[coverFileID]
+	if !strings.HasPrefix(v.PreviewURL.URL(), "https://signed.example/") ||
+		!strings.HasSuffix(v.PreviewURL.URL(), "/thumb-1280.jpg") || v.Status != domain.StoredFileReady || !v.Public ||
+		!v.PreviewExpiresAt.Equal(coverClock.Add(storage.MaxDownloadTTL)) {
+		t.Errorf("ready cover: %+v", v)
+	}
+	if len(r.objects.presignNames) != 1 || r.objects.presignNames[0] != "" ||
+		r.objects.presignTTLs[0] != storage.MaxDownloadTTL {
+		t.Errorf("signed %d links, names %q, ttls %v — one link, no file name, the detail's TTL",
+			len(r.objects.presignNames), r.objects.presignNames, r.objects.presignTTLs)
+	}
+	if p := views[coverOtherID]; p.PreviewURL != "" || p.Status != domain.StoredFilePending {
+		t.Errorf("pending cover: %+v", p)
+	}
+	if u, ok := views[unknown]; !ok || u.PreviewURL != "" || u.Status != "" {
+		t.Errorf("unknown cover: %+v (present %v)", u, ok)
+	}
+	if r.k.coCau("INSERT INTO audit_log") {
+		t.Error("a preview was audited — View is not, and a page of them must not be")
+	}
+	r.uc.objects = nil
+	views, _ = r.uc.CoverViews(r.ctx, []string{coverFileID})
+	if views[coverFileID].PreviewURL != "" {
+		t.Error("without object storage no link may be signed")
 	}
 }

@@ -237,6 +237,64 @@ func TestKiemTraThemDanhMucChanThuTuAmVaTenRong(t *testing.T) {
 	if sach.Ten != "Chuyển đổi số" || sach.Slug != "chuyen-doi-so" || sach.ThuTu != 3 {
 		t.Errorf("danh mục sau chuẩn hoá = %+v", sach)
 	}
+	if sach.AutoSlug {
+		t.Error("a slug the client sent must not be marked server-issued")
+	}
+}
+
+// Bug sheet row 21 (owner decision 10/10/2026): the server-issued slug.
+func TestCategorySlugFromName(t *testing.T) {
+	decomposed := "Việt Nam" // "Việt Nam" typed as base letters + combining marks
+	long := strings.Repeat("chuyen doi so ", 10)
+	for name, tc := range map[string]struct{ in, want string }{
+		"diacritics and đ":    {"Nông nghiệp – Đất đai", "nong-nghiep-dat-dai"},
+		"upper case, digits":  {"  TIN TỨC 2026!! ", "tin-tuc-2026"},
+		"decomposed marks":    {decomposed, "viet-nam"},
+		"nothing usable":      {"«»—", "danh-muc"},
+		"long, word boundary": {long, strings.Repeat("chuyen-doi-so-", 4) + "chuyen"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got := CategorySlugFromName(tc.in)
+			if got != tc.want {
+				t.Errorf("CategorySlugFromName(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+			if _, err := ChuanHoaSlugDanhMuc(got); err != nil {
+				t.Errorf("derived slug %q is not one ChuanHoaSlugDanhMuc accepts: %v", got, err)
+			}
+		})
+	}
+}
+
+func TestCategorySlugCandidateStaysWithinTheBound(t *testing.T) {
+	if got := CategorySlugCandidate("tin-tuc", 1); got != "tin-tuc" {
+		t.Errorf("n=1 → %q", got)
+	}
+	if got := CategorySlugCandidate("tin-tuc", 3); got != "tin-tuc-3" {
+		t.Errorf("n=3 → %q", got)
+	}
+	base := strings.Repeat("a", SlugDanhMucToiDa-3) + "-bb" // 64 bytes; "-2" cuts at 62, which ends on the '-'
+	for _, n := range []int{2, 10, CategorySlugSuffixLimit} {
+		got := CategorySlugCandidate(base, n)
+		if _, err := ChuanHoaSlugDanhMuc(got); err != nil || len(got) > SlugDanhMucToiDa {
+			t.Errorf("n=%d → %q (%d), %v", n, got, len(got), err)
+		}
+	}
+}
+
+func TestCreateCategoryRequestWithoutSlugIsServerIssued(t *testing.T) {
+	for _, slug := range []string{"", "   "} {
+		got, err := (YeuCauThemDanhMuc{Ten: " Chuyển đổi số ", Slug: slug}).KiemTra()
+		if err != nil {
+			t.Fatalf("slug %q: %v", slug, err)
+		}
+		if !got.AutoSlug || got.Slug != "chuyen-doi-so" {
+			t.Errorf("slug %q → %+v", slug, got)
+		}
+	}
+	// A slug that IS sent keeps the old rule: refused, never lower-cased.
+	if _, err := (YeuCauThemDanhMuc{Ten: "Tin", Slug: "Tin-Tuc"}).KiemTra(); !errors.Is(err, ErrSlugDanhMucSaiDinhDang) {
+		t.Errorf("a malformed sent slug passed: %v", err)
+	}
 }
 
 // --- migration 0011: event and video fields ------------------------------------------------------
