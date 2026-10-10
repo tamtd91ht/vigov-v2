@@ -1,36 +1,23 @@
 "use client";
 
 import { Loader2, Paperclip, Trash2 } from "lucide-react";
-import { useRef, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import {
-  afterCompletion,
   attachmentTypeLabel,
-  declaredType,
   DOWNLOAD_OPENING,
   DOWNLOAD_REFUSED,
   downloadLabel,
   formatBytes,
-  type AttachmentItem,
-  type AttachmentState,
 } from "@/features/nhiem-vu/task-attachments";
+import { useAttachmentUploadList, type SendAttachment } from "@/features/nhiem-vu/task-attachments-ui";
 import type { KetQua } from "@/lib/api/goi";
-import {
-  completeLogAttachment,
-  logAttachmentDownloadLink,
-  removeLogAttachment,
-  requestLogAttachmentUpload,
-} from "@/lib/api/phieu-phan-anh";
-import type {
-  petitions_taskAttachmentDownloadOut,
-  petitions_taskAttachmentOut,
-  petitions_taskAttachmentUploadIn,
-  petitions_taskAttachmentUploadOut,
-} from "@/lib/api/schema.gen";
-import { uploadToStorage, type CallResult } from "@/lib/api/task-attachments";
+import { logAttachmentDownloadLink, removeLogAttachment, uploadLogAttachment } from "@/lib/api/phieu-phan-anh";
+import type { petitions_taskAttachmentDownloadOut, petitions_taskAttachmentOut } from "@/lib/api/schema.gen";
+import type { CallResult } from "@/lib/api/task-attachments";
 
 import {
   LOG_FILE_REMOVE_NOTE,
@@ -46,100 +33,33 @@ import { buttonClass, Glyph, LABEL_CLASS } from "./petition-ui";
  * petition's own routes (`…/citizen-reports/{maTraCuu}/log-attachments…`).
  *
  * REUSED, NOT COPIED: the pure half — the pre-check (`declaredType`, PDF / JPG / PNG, the platform's
- * `petition-log-attachment` policy), the per-file state, `afterCompletion`, `storedIds`, the words —
- * and the presentational picker (`AttachmentPicker`) come from `features/nhiem-vu/task-attachments*`;
- * the upload to the store is `uploadToStorage`. What is HERE is only what is bound to a route: the
- * hook's three calls and the download button's one call. The task versions take a task code and call
- * the task routes, so they cannot be pointed at a petition without changing that feature.
+ * `petition-log-attachment` policy), the per-file state, `afterUpload`, `storedIds`, the words — the
+ * per-file hook (`useAttachmentUploadList`) and the presentational picker (`AttachmentPicker`) come from
+ * `features/nhiem-vu/task-attachments*`. What is HERE is only what is bound to a route: the upload
+ * call (one multipart request, ADR 0052 §Sửa đổi 09/10/2026) and the download button's one call.
  *
  * THE DOWNLOAD IS AUDITED on the server (a file on a petition's log is evidence about one citizen's
  * case): the link is asked for AT THE CLICK, never prefetched, used at once, never kept.
  */
 
+/** Injected only by tests; the screen always calls the contract route. */
 export type LogAttachmentDeps = {
-  request: (
-    lookupCode: string,
-    body: petitions_taskAttachmentUploadIn,
-    key: string,
-  ) => Promise<CallResult<petitions_taskAttachmentUploadOut>>;
-  upload: typeof uploadToStorage;
-  complete: (lookupCode: string, id: string) => Promise<CallResult<petitions_taskAttachmentOut>>;
+  upload: (lookupCode: string, ...rest: Parameters<SendAttachment>) => ReturnType<SendAttachment>;
 };
 
-const DEFAULT_DEPS: LogAttachmentDeps = {
-  request: requestLogAttachmentUpload,
-  upload: uploadToStorage,
-  complete: completeLogAttachment,
-};
+const DEFAULT_DEPS: LogAttachmentDeps = { upload: uploadLogAttachment };
 
 /**
  * The files of ONE log entry being written. The entry form owns the list: it sends `storedIds(items)`
  * with the entry and clears the list after a 201. Each file on its own — one refusal does not stop the
- * others; removing an unsent file only drops it (its id is simply never sent).
+ * others; removing an unsent file only drops it (its id is simply never sent). Whether THIS officer may
+ * attach is the server's note rule; its 403 comes back verbatim.
  */
 export function usePetitionLogAttachments(lookupCode: string, deps: LogAttachmentDeps = DEFAULT_DEPS) {
-  const [items, setItems] = useState<readonly AttachmentItem[]>([]);
-  const seq = useRef(0);
-
-  const set = (key: string, state: AttachmentState) =>
-    setItems((list) => list.map((i) => (i.key === key ? { ...i, state } : i)));
-
-  async function complete(key: string, id: string): Promise<void> {
-    set(key, { kind: "checking", id });
-    set(key, afterCompletion(id, await deps.complete(lookupCode, id)));
-  }
-
-  async function start(key: string, file: File): Promise<void> {
-    const t = declaredType(file);
-    if (!t.ok) {
-      set(key, { kind: "refused", message: t.message });
-      return;
-    }
-    // a. declare — ONE key per attempt (a replay cannot carry the form again).
-    const req = await deps.request(
-      lookupCode,
-      { file_name: file.name, content_type: t.contentType, size: file.size },
-      crypto.randomUUID(),
-    );
-    if (!req.ok) {
-      // The note rule's 403, the limits, 503 "chưa cấu hình kho lưu tệp" — the server's sentence.
-      set(key, { kind: "refused", message: req.message });
-      return;
-    }
-    const id = req.data.attachment.id;
-    // b. the bytes, straight to the store. The form is used here and dropped.
-    set(key, { kind: "uploading", id, percent: 0 });
-    const up = await deps.upload(req.data.upload, file, file.name, (percent) =>
-      set(key, { kind: "uploading", id, percent }),
-    );
-    if (!up.ok) {
-      set(key, { kind: "refused", message: up.message });
-      return;
-    }
-    // c. complete.
-    await complete(key, id);
-  }
-
-  function add(files: readonly File[]): void {
-    for (const f of files) {
-      seq.current += 1;
-      const key = `tep-phieu-${seq.current}`;
-      setItems((list) => [...list, { key, name: f.name, size: f.size, state: { kind: "requesting" } }]);
-      void start(key, f);
-    }
-  }
-
-  return {
-    items,
-    add,
-    /** 503 / 409 at completion: ask again — the bytes are already in the store. */
-    retry: (key: string) => {
-      const it = items.find((i) => i.key === key);
-      if (it !== undefined && it.state.kind === "retry") void complete(key, it.state.id);
-    },
-    remove: (key: string) => setItems((list) => list.filter((i) => i.key !== key)),
-    clear: () => setItems([]),
-  };
+  return useAttachmentUploadList(
+    (file, contentType, key, progress) => deps.upload(lookupCode, file, contentType, key, progress),
+    "tep-phieu",
+  );
 }
 
 /**

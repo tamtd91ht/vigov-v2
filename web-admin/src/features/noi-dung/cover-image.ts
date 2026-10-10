@@ -10,12 +10,12 @@
  * larger reading is chosen so this check can never refuse a file the server's policy would accept —
  * if the policy counts 50 000 000, the server's own sentence refuses the gap.
  *
- * The flow (`runCoverUpload`) reuses the task attachments' storage step (`uploadToStorage`).
+ * The flow (`runCoverUpload`) is ONE multipart request (ADR 0052 §Sửa đổi 09/10/2026,
+ * `uploadCoverImage` → `lib/api/upload.ts`).
  */
 
-import { completeCoverUpload, requestCoverUpload } from "@/lib/api/noi-dung";
-import type { CallResult } from "@/lib/api/task-attachments";
-import { uploadToStorage } from "@/lib/api/task-attachments";
+import { uploadCoverImage } from "@/lib/api/noi-dung";
+import { isTransientUpload, type UploadResult } from "@/lib/api/upload";
 import type { comms_coverFileOut, comms_coverImageOut } from "@/lib/api/schema.gen";
 
 /** §7 and the prototype's `FilePicker` (`ContentItemForm.tsx:338-350`, `:421-425`), verbatim. */
@@ -32,7 +32,7 @@ export function coverSizeLabel(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
 }
 export const COVER_REMOVE_BUTTON = "Gỡ ảnh";
-export const COVER_RETRY_BUTTON = "Kiểm tra lại";
+export const COVER_RETRY_BUTTON = "Gửi lại";
 
 export const COVER_MAX_BYTES = 50 * 1024 * 1024;
 
@@ -54,13 +54,12 @@ const BY_EXTENSION: Readonly<Record<string, string>> = {
 export const COVER_TYPE_REFUSED = "Chỉ nhận ảnh JPG, PNG hoặc WebP (không nhận HEIC).";
 export const COVER_TOO_LARGE = "Ảnh lớn hơn 50MB — hãy chọn ảnh nhỏ hơn.";
 export const COVER_EMPTY = "Tệp rỗng — không có ảnh nào để tải lên.";
-export const COVER_STORAGE_FAILED = "Chưa tải được ảnh lên kho lưu tệp. Hãy chọn lại ảnh.";
 export const COVER_NOT_READY = "Ảnh chưa sẵn sàng để gắn vào bài. Hãy chọn lại ảnh.";
 export const COVER_WAIT_NOTE = "Chờ ảnh tải lên và kiểm tra xong rồi mới lưu.";
 
 /**
  * The content type to DECLARE, or a refusal. The browser's `type` first; empty (some systems report
- * none) → the extension. The declaration is a claim: the server sniffs the bytes at completion.
+ * none) → the extension. The declaration is a claim: the server sniffs the bytes in the same request.
  */
 export function declaredCoverType(file: { readonly name: string; readonly type: string; readonly size: number }):
   | { readonly ok: true; readonly contentType: string }
@@ -80,28 +79,24 @@ export function declaredCoverType(file: { readonly name: string; readonly type: 
 /** Where the one upload of the form stands. `idle` = nothing moving, nothing to report. */
 export type CoverUploadState =
   | { readonly kind: "idle" }
-  | { readonly kind: "requesting" }
-  | { readonly kind: "uploading"; readonly id: string; readonly percent: number }
-  | { readonly kind: "checking"; readonly id: string }
+  | { readonly kind: "uploading"; readonly percent: number }
+  /** Every byte sent: the server is sniffing, scanning, deriving the 1280 px copy. */
+  | { readonly kind: "checking" }
   /** `ready` — its id is now the form's `cover_image_file_id`. */
   | { readonly kind: "ready"; readonly id: string }
-  /** 503 / 409 / no answer at completion: the bytes are there — retry the COMPLETION, not the upload. */
-  | { readonly kind: "retry"; readonly id: string; readonly message: string }
-  /** For good: the pre-check, the declaration, the store, or the scan (422). */
+  /** A refusal of the moment (`isTransientUpload`): nothing stored — `Gửi lại` sends `file` again. */
+  | { readonly kind: "retry"; readonly file: File; readonly message: string }
+  /** For good: the pre-check, the limits, the type, or the scan (422). */
   | { readonly kind: "refused"; readonly message: string };
 
 export function coverInFlight(s: CoverUploadState): boolean {
-  return s.kind === "requesting" || s.kind === "uploading" || s.kind === "checking";
+  return s.kind === "uploading" || s.kind === "checking";
 }
 
-/**
- * A completion answer → state. 422 is final. 503 / 409 / no answer: retry the completion — some 409s
- * are final too (`upload_expired`, `cover_state`), and their sentence says "chọn ảnh và tải lên lại";
- * the screen offers both, and retrying a final one only repeats the same sentence.
- */
-export function afterCoverCompletion(id: string, r: CallResult<comms_coverFileOut>): CoverUploadState {
-  if (r.ok) return r.data.status === "ready" ? { kind: "ready", id } : { kind: "refused", message: COVER_NOT_READY };
-  if (r.status === 503 || r.status === 409 || r.status === 0) return { kind: "retry", id, message: r.message };
+/** An upload's answer → state. A refusal of the moment may be sent again; every other one is final. */
+export function afterCoverUpload(file: File, r: UploadResult<comms_coverFileOut>): CoverUploadState {
+  if (r.ok) return r.data.status === "ready" ? { kind: "ready", id: r.data.id } : { kind: "refused", message: COVER_NOT_READY };
+  if (isTransientUpload(r)) return { kind: "retry", file, message: r.message };
   return { kind: "refused", message: r.message };
 }
 
@@ -110,8 +105,6 @@ export function coverStateText(s: CoverUploadState): string {
   switch (s.kind) {
     case "idle":
       return "";
-    case "requesting":
-      return "Đang xin tải ảnh lên…";
     case "uploading":
       return `Đang tải lên ${s.percent}%`;
     case "checking":
@@ -119,22 +112,24 @@ export function coverStateText(s: CoverUploadState): string {
     case "ready":
       return "Ảnh đã tải lên và kiểm tra xong — sẽ gắn vào bài khi bấm Lưu.";
     case "retry":
-      return `Chưa kiểm tra xong: ${s.message}`;
+      return `Chưa gửi được: ${s.message}`;
     case "refused":
       return `Bị từ chối: ${s.message}`;
   }
 }
 
 /**
- * The flow a → b → c for ONE file, reporting each state. Returns the last state.
+ * ONE file, one request, reporting each state. Returns the last state. `Gửi lại` calls this again with
+ * the `retry` state's file.
  *
  * `contentItemId`: the form's article id — the saved article's on the EDIT form, the one a body image
  * already reserved on a new article, `undefined` before any file (the server reserves one). One
- * Idempotency-Key per attempt (see `requestCoverUpload`).
+ * Idempotency-Key per attempt.
  *
- * `onArticle` hears the article id the declaration answered with AS SOON AS it is known — the same
- * contract as `runBodyImageUpload` — so a body image inserted after a cover uploaded first on a new
- * article names the SAME reserved article, and a later failure of this cover still leaves the form on it.
+ * `onArticle` hears the article id the reply names — the same contract as `runBodyImageUpload` — so a
+ * body image inserted after a cover uploaded first on a new article names the SAME reserved article.
+ * The reply is the only place it is known now: the whole upload is in flight until then, which is why
+ * the form holds the body image back for the cover's WHOLE flight on a new article (`coverInFlight`).
  */
 export async function runCoverUpload(
   file: File,
@@ -149,42 +144,14 @@ export async function runCoverUpload(
   const t = declaredCoverType(file);
   if (!t.ok) return report({ kind: "refused", message: t.message });
 
-  report({ kind: "requesting" });
-  const req = await requestCoverUpload(
-    { file_name: file.name, content_type: t.contentType, size: file.size, content_item_id: contentItemId },
-    crypto.randomUUID(),
-  );
-  // The policy refusal, 503 "not configured", 403, 404 — the server's sentence verbatim.
-  if (!req.ok) return report({ kind: "refused", message: req.message });
-  if (req.data.content_item_id) onArticle(req.data.content_item_id);
-
-  const id = req.data.cover_image.id;
-  report({ kind: "uploading", id, percent: 0 });
-  // The form (`req.data.upload`) is used here and dropped.
-  const up = await uploadToStorage(req.data.upload, file, file.name, (percent) =>
-    onState({ kind: "uploading", id, percent }),
-  );
-  // The store's refusal is its XML, not a sentence for an officer: one sentence of our own.
-  if (!up.ok) return report({ kind: "refused", message: COVER_STORAGE_FAILED });
-
-  return retryCoverCompletion(id, onState, onArticle);
-}
-
-/**
- * c. alone — the `Kiểm tra lại` button: the bytes are already in the store, never re-upload. The
- * completion names the cover's article too; `onArticle` hears it (the form keeps the first id it learns).
- */
-export async function retryCoverCompletion(
-  id: string,
-  onState: (s: CoverUploadState) => void,
-  onArticle: (id: string) => void = () => {},
-): Promise<CoverUploadState> {
-  onState({ kind: "checking", id });
-  const r = await completeCoverUpload(id);
+  report({ kind: "uploading", percent: 0 });
+  const r = await uploadCoverImage({ file, contentType: t.contentType, contentItemId }, crypto.randomUUID(), {
+    onProgress: (percent) => onState({ kind: "uploading", percent }),
+    onSent: () => onState({ kind: "checking" }),
+  });
+  // The policy refusal, 503, 403, 404, 422 — the server's sentence verbatim.
   if (r.ok && r.data.content_item_id) onArticle(r.data.content_item_id);
-  const s = afterCoverCompletion(id, r);
-  onState(s);
-  return s;
+  return report(afterCoverUpload(file, r));
 }
 
 /**

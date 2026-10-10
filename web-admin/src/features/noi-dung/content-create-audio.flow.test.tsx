@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 //
 // jsdom for this file: the officer PICKS an audio file on the create form and presses Lưu — the order of the
-// requests that one press sends (the item first, then the existing three audio steps with the new id) is
+// requests that one press sends (the item first, then the ONE audio upload with the new id) is
 // the whole point (prototype `ContentItemForm.tsx:150-180`).
 
 import { act } from "react";
@@ -9,6 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing export (rule 12 inv 3)
+import { installFakeUploadXHR, type FakeAnswer } from "@/lib/api/upload-test-support";
 
 import { AUDIO_SAVED_NOT_UPLOADED } from "./broadcast-audio";
 import { CREATED_DRAFT_TOAST, UPLOADING_FILES_LABEL } from "./nhan-noi-dung";
@@ -56,8 +57,20 @@ function json(status: number, body: unknown): Response {
 
 type Call = { path: string; method: string; body: Record<string, unknown> | undefined };
 
-/** `completion`: the audio completion's answer — `ready` by default. */
-function fakeServer(completion: Response = json(200, { id: AUDIO_ID, status: "ready", mime_type: "audio/mpeg", size_bytes: 3, duration_seconds: 750 })) {
+/** The upload's text parts as the server reads them — `size` is the file's byte count, a string. */
+function recordUploads(calls: Call[], answer: () => FakeAnswer | Promise<FakeAnswer>): void {
+  installFakeUploadXHR((req) => {
+    calls.push({
+      path: req.url,
+      method: req.method,
+      body: Object.fromEntries(req.parts.filter(([, v]) => typeof v === "string")) as Record<string, unknown>,
+    });
+    return answer();
+  });
+}
+
+/** `upload`: the audio upload's answer — `ready` by default. */
+function fakeServer(upload: () => FakeAnswer | Promise<FakeAnswer> = () => ({ status: 201, body: { id: AUDIO_ID, content_item_id: NEW_ID, status: "ready", mime_type: "audio/mpeg", size_bytes: 3, duration_seconds: 750 } })) {
   const calls: Call[] = [];
   vi.stubGlobal(
     "fetch",
@@ -66,34 +79,13 @@ function fakeServer(completion: Response = json(200, { id: AUDIO_ID, status: "re
       calls.push({ path, method, body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined });
       if (path === "/api/v1/sessions/current") return json(200, { permissions: ["content.read", "content.update"], must_change_password: false });
       if (method === "POST" && path === "/api/v1/content-items") return json(201, CREATED);
-      if (method === "POST" && path === "/api/v1/content-items/audio-files") {
-        return json(201, {
-          audio_file: { id: AUDIO_ID, status: "pending" },
-          upload: { url: "https://files.example.test/vigov-stg-temp", fields: { key: "upload/x" }, expires_at: "2026-10-09T03:00:00Z" },
-        });
-      }
-      if (method === "POST" && path === `/api/v1/content-items/audio-files/${AUDIO_ID}/completion`) return completion.clone();
       if (method === "GET" && path === `/api/v1/content-items/${NEW_ID}`) return json(200, CREATED);
       if (method === "GET" && path.startsWith("/api/v1/content-items")) return json(200, { items: [], has_more: false, next_cursor: "" });
       if (path.startsWith("/api/v1/content-categories") || path.startsWith("/api/v1/commune-staff")) return json(200, { items: [] });
       return json(404, { code: "not_found", message: "Không có." });
     }),
   );
-  class FakeXHR {
-    status = 0;
-    withCredentials = false;
-    upload = { onprogress: null as null | ((e: unknown) => void) };
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    open() {}
-    send() {
-      queueMicrotask(() => {
-        this.status = 204;
-        this.onload?.();
-      });
-    }
-  }
-  vi.stubGlobal("XMLHttpRequest", FakeXHR);
+  recordUploads(calls, upload);
   return calls;
 }
 
@@ -172,55 +164,44 @@ describe("Truyền thanh — the audio picked at create time, uploaded after the
     expect(calls.filter((c) => c.path.includes("audio-files"))).toHaveLength(0);
   });
 
-  it("one Lưu: POST the item, then declare → store → complete with the NEW id and the typed duration", async () => {
+  it("one Lưu: POST the item, then ONE upload with the NEW id and the typed duration — no completion call", async () => {
     const calls = fakeServer();
     await fillBroadcast("750");
     await pressSave();
     await settle();
     const writes = calls.filter((c) => c.method === "POST" && c.path !== "/api/v1/sessions/current");
-    expect(writes.map((c) => c.path)).toEqual([
-      "/api/v1/content-items",
-      "/api/v1/content-items/audio-files",
-      `/api/v1/content-items/audio-files/${AUDIO_ID}/completion`,
-    ]);
+    expect(writes.map((c) => c.path)).toEqual(["/api/v1/content-items", "/api/v1/content-items/audio-files"]);
     expect(writes[0]!.body).toMatchObject({ type: "truyen-thanh", title: "Bản tin sáng" });
     expect(writes[1]!.body).toEqual({
-      content_item_id: NEW_ID,
+      size: "3",
       file_name: "ban-tin-sang.mp3",
       content_type: "audio/mpeg",
-      size: 3,
+      content_item_id: NEW_ID,
+      audio_duration_seconds: "750",
     });
-    expect(writes[2]!.body).toEqual({ audio_duration_seconds: 750 });
     expect(T.success).toHaveBeenCalledWith(CREATED_DRAFT_TOAST);
     expect(T.error).not.toHaveBeenCalled();
     expect(host!.querySelector("dialog")).toBeNull();
   });
 
   it("while the file moves, Lưu says `Đang tải tệp…`", async () => {
-    let release: (r: Response) => void = () => {};
-    const gate = new Promise<Response>((r) => {
+    let release: (a: FakeAnswer) => void = () => {};
+    const gate = new Promise<FakeAnswer>((r) => {
       release = r;
     });
-    fakeServer();
-    const real = globalThis.fetch;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn((path: string, init?: RequestInit) =>
-        path.endsWith("/completion") ? gate : (real as (p: string, i?: RequestInit) => Promise<Response>)(path, init),
-      ),
-    );
+    fakeServer(() => gate);
     await fillBroadcast();
     await pressSave();
     await settle();
     const submit = host!.querySelector<HTMLButtonElement>('dialog button[type="submit"]')!;
     expect(submit.textContent).toBe(UPLOADING_FILES_LABEL);
     expect(submit.disabled).toBe(true);
-    await act(async () => release(json(200, { id: AUDIO_ID, status: "ready" })));
+    await act(async () => release({ status: 201, body: { id: AUDIO_ID, content_item_id: NEW_ID, status: "ready", mime_type: "audio/mpeg", size_bytes: 3, duration_seconds: 750 } }));
     await settle();
   });
 
   it("a failed upload after the save: the item stays saved, a dialog stays open with the prototype's sentence", async () => {
-    const calls = fakeServer(json(422, { code: "audio_rejected", message: "Tệp không phải âm thanh hợp lệ." }));
+    const calls = fakeServer(() => ({ status: 422, body: { code: "audio_rejected", message: "Tệp không phải âm thanh hợp lệ." } }));
     await fillBroadcast();
     await pressSave();
     await settle();
@@ -271,36 +252,16 @@ function editServer(row: Record<string, unknown>): Call[] {
       calls.push({ path, method, body: init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : undefined });
       if (path === "/api/v1/sessions/current") return json(200, { permissions: ["content.read", "content.update"], must_change_password: false });
       if (method === "PATCH" && path === `/api/v1/content-items/${SAVED_ID}`) return json(200, row);
-      if (method === "POST" && path === "/api/v1/content-items/audio-files") {
-        return json(201, {
-          audio_file: { id: AUDIO_ID, status: "pending" },
-          upload: { url: "https://files.example.test/vigov-stg-temp", fields: { key: "upload/x" }, expires_at: "2026-10-09T03:00:00Z" },
-        });
-      }
-      if (method === "POST" && path === `/api/v1/content-items/audio-files/${AUDIO_ID}/completion`) {
-        return json(200, { id: AUDIO_ID, status: "ready", mime_type: "audio/mpeg", size_bytes: 3, duration_seconds: 3900 });
-      }
       if (method === "GET" && path === `/api/v1/content-items/${SAVED_ID}`) return json(200, row);
       if (method === "GET" && path.startsWith("/api/v1/content-items")) return json(200, { items: [row], has_more: false, next_cursor: "" });
       if (path.startsWith("/api/v1/content-categories") || path.startsWith("/api/v1/commune-staff")) return json(200, { items: [] });
       return json(404, { code: "not_found", message: "Không có." });
     }),
   );
-  class FakeXHR {
-    status = 0;
-    withCredentials = false;
-    upload = { onprogress: null as null | ((e: unknown) => void) };
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    open() {}
-    send() {
-      queueMicrotask(() => {
-        this.status = 204;
-        this.onload?.();
-      });
-    }
-  }
-  vi.stubGlobal("XMLHttpRequest", FakeXHR);
+  recordUploads(calls, () => ({
+    status: 201,
+    body: { id: AUDIO_ID, content_item_id: SAVED_ID, status: "ready", mime_type: "audio/mpeg", size_bytes: 3, duration_seconds: 3900 },
+  }));
   return calls;
 }
 
@@ -337,7 +298,7 @@ describe("Truyền thanh — editing a saved broadcast", () => {
     expect(dialog.textContent).not.toContain("Gỡ âm thanh");
   });
 
-  it("a new file: ONE PATCH removing the old file, then declare → store → complete with the duration", async () => {
+  it("a new file: ONE PATCH removing the old file, then ONE upload with the duration", async () => {
     const calls = editServer(SAVED_ROW);
     await openEdit("Bản tin chiều");
     await pickFile(host!.querySelector<HTMLInputElement>("#tep-am-thanh")!, mp3());
@@ -349,9 +310,14 @@ describe("Truyền thanh — editing a saved broadcast", () => {
       {
         method: "POST",
         path: "/api/v1/content-items/audio-files",
-        body: { content_item_id: SAVED_ID, file_name: "ban-tin-sang.mp3", content_type: "audio/mpeg", size: 3 },
+        body: {
+          size: "3",
+          file_name: "ban-tin-sang.mp3",
+          content_type: "audio/mpeg",
+          content_item_id: SAVED_ID,
+          audio_duration_seconds: "3900",
+        },
       },
-      { method: "POST", path: `/api/v1/content-items/audio-files/${AUDIO_ID}/completion`, body: { audio_duration_seconds: 3900 } },
     ]);
     expect(T.error).not.toHaveBeenCalled();
     expect(host!.querySelector("dialog")).toBeNull();
@@ -376,9 +342,6 @@ describe("Truyền thanh — editing a saved broadcast", () => {
     await pickFile(host!.querySelector<HTMLInputElement>("#tep-am-thanh")!, mp3());
     await pressSave();
     await settle();
-    expect(writesOf(calls).map((c) => `${c.method} ${c.path}`)).toEqual([
-      "POST /api/v1/content-items/audio-files",
-      `POST /api/v1/content-items/audio-files/${AUDIO_ID}/completion`,
-    ]);
+    expect(writesOf(calls).map((c) => `${c.method} ${c.path}`)).toEqual(["POST /api/v1/content-items/audio-files"]);
   });
 });

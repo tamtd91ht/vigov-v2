@@ -14,12 +14,8 @@
 
 import { formatDateTime } from "@/features/dashboard/period";
 import type { platform_brandingFileOut } from "@/lib/api/schema.gen";
-import {
-  completeBrandingUpload,
-  requestBrandingUpload,
-  type BrandingImageKind,
-} from "@/lib/api/commune-branding";
-import { uploadToStorage, type CallResult } from "@/lib/api/task-attachments";
+import { uploadBrandingImage, type BrandingImageKind } from "@/lib/api/commune-branding";
+import { isTransientUpload, type UploadResult } from "@/lib/api/upload";
 
 export const BRANDING_MAX_BYTES = 2 * 1024 * 1024;
 
@@ -85,17 +81,16 @@ export const BRANDING_TEXT: Readonly<
 
 export const BRANDING_PICK_BUTTON = "Tải ảnh lên";
 export const BRANDING_REPLACE_BUTTON = "Tải ảnh khác";
-export const BRANDING_RETRY_BUTTON = "Hoàn tất lại";
+export const BRANDING_RETRY_BUTTON = "Gửi lại";
 export const BRANDING_CANCEL_BUTTON = "Huỷ";
 export const BRANDING_EMPTY_FILE = "Tệp rỗng — không có ảnh nào để tải lên.";
 export const BRANDING_TYPE_REFUSED = "Chỉ nhận ảnh PNG, WebP hoặc JPEG (không nhận HEIC).";
 export const BRANDING_TOO_LARGE = "Ảnh lớn hơn 2 MB — hãy chọn ảnh nhỏ hơn.";
-export const BRANDING_STORAGE_FAILED = "Chưa tải được ảnh lên kho lưu tệp. Hãy chọn lại ảnh.";
 export const BRANDING_NOT_READY = "Ảnh chưa được đặt. Hãy chọn lại ảnh và tải lên lại.";
 
 /**
  * The content type to DECLARE, or a refusal. The browser's `type` first; empty (some systems report
- * none) → the extension. The declaration is a claim: the server sniffs the bytes at completion.
+ * none) → the extension. A claim only: the server sniffs the bytes in the same request.
  */
 export function declaredBrandingType(file: { readonly name: string; readonly type: string; readonly size: number }):
   | { readonly ok: true; readonly contentType: string }
@@ -115,30 +110,28 @@ export function declaredBrandingType(file: { readonly name: string; readonly typ
 /** Where one card's upload stands. `idle` = nothing moving, nothing to report. */
 export type BrandingUploadState =
   | { readonly kind: "idle" }
-  | { readonly kind: "requesting" }
-  | { readonly kind: "uploading"; readonly id: string; readonly percent: number }
-  | { readonly kind: "checking"; readonly id: string }
+  | { readonly kind: "uploading"; readonly percent: number }
+  /** Every byte sent: the server is sniffing, scanning, normalising. */
+  | { readonly kind: "checking" }
   /** Published and set as current: the screen re-reads the settings and refreshes the shell. */
   | { readonly kind: "done" }
-  /** 503 / 409 / no answer at completion: the bytes are stored — retry the COMPLETION, never re-upload. */
-  | { readonly kind: "retry"; readonly id: string; readonly message: string }
-  /** For good: the pre-check, the declaration, the store, or the scan / decode (422). */
+  /** A refusal of the moment (`isTransientUpload`): nothing stored — `Gửi lại` sends `file` again. */
+  | { readonly kind: "retry"; readonly file: File; readonly message: string }
+  /** For good: the pre-check, the limits, or the scan / decode (422). */
   | { readonly kind: "refused"; readonly message: string };
 
 export function brandingInFlight(s: BrandingUploadState): boolean {
-  return s.kind === "requesting" || s.kind === "uploading" || s.kind === "checking";
+  return s.kind === "uploading" || s.kind === "checking";
 }
 
 /**
- * A completion answer → state. 422 is final. 503 (`image_processing_busy`, scanner or store not
- * reachable), 409 (not received yet / changed) and no answer: retry the completion — the server's
- * own sentence says "bấm hoàn tất lại" for the busy case. Some 409s are final (`upload_expired`) and
- * their sentence says "chọn ảnh và tải lên lại"; the screen offers both buttons, and retrying a final
- * one only repeats the same sentence. NEVER branched on `code` (`lib/api/goi.ts`).
+ * An upload's answer → state. A refusal of the moment (503 `image_processing_busy` / `upload_busy`, the
+ * scanner or store not reachable, 408, no answer) may be sent again; every other one is final. Decided
+ * by STATUS, never by `code` (`lib/api/goi.ts`); the sentence is the server's.
  */
-export function afterBrandingCompletion(id: string, r: CallResult<platform_brandingFileOut>): BrandingUploadState {
+export function afterBrandingUpload(file: File, r: UploadResult<platform_brandingFileOut>): BrandingUploadState {
   if (r.ok) return r.data.status === "ready" ? { kind: "done" } : { kind: "refused", message: BRANDING_NOT_READY };
-  if (r.status === 503 || r.status === 409 || r.status === 0) return { kind: "retry", id, message: r.message };
+  if (isTransientUpload(r)) return { kind: "retry", file, message: r.message };
   return { kind: "refused", message: r.message };
 }
 
@@ -148,8 +141,6 @@ export function brandingStateText(s: BrandingUploadState): string {
     case "idle":
     case "done":
       return "";
-    case "requesting":
-      return "Đang tải lên…";
     case "uploading":
       return `Đang tải lên… ${s.percent}%`;
     case "checking":
@@ -162,8 +153,9 @@ export function brandingStateText(s: BrandingUploadState): string {
 }
 
 /**
- * The flow a → b → c for ONE file, reporting each state. Returns the last state. `newKey` mints the
- * Idempotency-Key — `crypto.randomUUID()` at the call site, never `Math.random` (rule 13).
+ * ONE file, one request, reporting each state. Returns the last state. `newKey` mints the
+ * Idempotency-Key — `crypto.randomUUID()` at the call site, never `Math.random` (rule 13). `Gửi lại`
+ * calls this again with the `retry` state's file.
  */
 export async function runBrandingUpload(
   kind: BrandingImageKind,
@@ -178,33 +170,13 @@ export async function runBrandingUpload(
   const t = declaredBrandingType(file);
   if (!t.ok) return report({ kind: "refused", message: t.message });
 
-  report({ kind: "requesting" });
-  const req = await requestBrandingUpload(kind, { file_name: file.name, content_type: t.contentType, size: file.size }, newKey());
-  // Policy refusal, 503 "not configured", 403, 409 profile deleted — the server's sentence verbatim.
-  if (!req.ok) return report({ kind: "refused", message: req.message });
-
-  const id = req.data.file.id;
-  report({ kind: "uploading", id, percent: 0 });
-  // The form (`req.data.upload`) is used here and dropped.
-  const up = await uploadToStorage(req.data.upload, file, file.name, (percent) =>
-    onState({ kind: "uploading", id, percent }),
-  );
-  // The store's refusal is its XML, not a sentence for an officer: one sentence of our own.
-  if (!up.ok) return report({ kind: "refused", message: BRANDING_STORAGE_FAILED });
-
-  return retryBrandingCompletion(kind, id, onState);
-}
-
-/** c. alone — the `Hoàn tất lại` button: the bytes are already in the store, never re-upload. */
-export async function retryBrandingCompletion(
-  kind: BrandingImageKind,
-  id: string,
-  onState: (s: BrandingUploadState) => void,
-): Promise<BrandingUploadState> {
-  onState({ kind: "checking", id });
-  const s = afterBrandingCompletion(id, await completeBrandingUpload(kind, id));
-  onState(s);
-  return s;
+  report({ kind: "uploading", percent: 0 });
+  const r = await uploadBrandingImage(kind, file, newKey(), {
+    onProgress: (percent) => onState({ kind: "uploading", percent }),
+    onSent: () => onState({ kind: "checking" }),
+  });
+  // Policy refusal, 503 "not configured", 403, 409 profile deleted, 422 — the server's sentence verbatim.
+  return report(afterBrandingUpload(file, r));
 }
 
 /**

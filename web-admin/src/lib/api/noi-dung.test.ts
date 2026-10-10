@@ -5,11 +5,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { stripTechnicalPrefix } from "./goi";
 
 import {
-  completeCoverUpload,
   contentCategoryPath,
   countPublishedStaff,
   publishedStaffPath,
-  COVER_FORM_MISSING,
   contentItemDeletePath,
   deleteContentCategory,
   deleteContentItem,
@@ -19,7 +17,9 @@ import {
   layMotNoiDung,
   laySoNoiDung,
   portalCategoryName,
-  requestCoverUpload,
+  uploadBodyImage,
+  uploadBroadcastAudio,
+  uploadCoverImage,
   suaNoiDung,
   themDanhMucNoiDung,
   themNoiDung,
@@ -28,6 +28,7 @@ import {
   type ThemDanhMucVao,
   type ThemNoiDungVao,
 } from "./noi-dung";
+import { installFakeUploadXHR, partNames, partValue } from "./upload-test-support";
 
 /**
  * Sáu tuyến của màn Nội dung Mini App.
@@ -407,64 +408,65 @@ describe("PATCH /api/v1/content-items/{id} — sửa", () => {
 
 /* ── Ảnh bìa §7 ─────────────────────────────────────────────────────────────────────────────── */
 
-const COVER_UPLOAD = {
-  cover_image: { id: "01JCOVER1", mime_type: "", size_bytes: 0, status: "pending" },
-  upload: {
-    url: "https://files.example.test/vigov-stg-temp",
-    fields: { key: "upload/x", policy: "P", "x-amz-signature": "S", "Content-Type": "image/jpeg" },
-    expires_at: "2026-10-01T03:15:00Z",
-  },
-};
+const COVER_READY = { id: "01JCOVER1", content_item_id: "01JND1", mime_type: "image/jpeg", size_bytes: 3, status: "ready" };
+const jpg = () => new File([new Uint8Array([0xff, 0xd8, 0xff])], "anh.jpg", { type: "image/jpeg" });
 
-describe("cover upload — a. declare, c. complete", () => {
-  it("POST …/cover-images, the caller's Idempotency-Key, field by field, no `content_item_id` for a new article", async () => {
-    const gia = batFetch(traJSON(201, COVER_UPLOAD));
-    const r = await requestCoverUpload(
-      { file_name: "anh.jpg", content_type: "image/jpeg", size: 1234, extra: 1 } as never,
-      "khoa-anh",
-    );
-    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/content-items/cover-images");
-    expect(loiGoi(gia, 0).tuyChon.method).toBe("POST");
-    expect(loiGoi(gia, 0).header.get("Idempotency-Key")).toBe("khoa-anh");
-    expect(thanDaGui(gia, 0)).toEqual({ file_name: "anh.jpg", content_type: "image/jpeg", size: 1234 });
-    expect(r).toEqual({ ok: true, data: COVER_UPLOAD });
+describe("cover upload — ONE multipart request", () => {
+  it("POST …/cover-images on this origin, the caller's key, parts in contract order, no `content_item_id` for a new article", async () => {
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: COVER_READY }));
+    const gia = batFetch(traJSON(500, {}));
+    const r = await uploadCoverImage({ file: jpg(), contentType: "image/jpeg", contentItemId: undefined }, "khoa-anh");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.url).toBe("/api/v1/content-items/cover-images");
+    expect(sent[0]?.method).toBe("POST");
+    expect(sent[0]?.headers["Idempotency-Key"]).toBe("khoa-anh");
+    expect(partNames(sent[0])).toEqual(["size", "file_name", "content_type", "file"]);
+    expect(partValue(sent[0], "size")).toBe("3");
+    expect(gia).not.toHaveBeenCalled();
+    expect(r).toEqual({ ok: true, data: COVER_READY });
   });
 
   it("the edit form names its article; an empty id is left out, not sent as `\"\"`", async () => {
-    const gia = batFetch(traJSON(201, COVER_UPLOAD));
-    await requestCoverUpload({ file_name: "a.png", content_type: "image/png", size: 1, content_item_id: "01JND1" }, "k");
-    await requestCoverUpload({ file_name: "a.png", content_type: "image/png", size: 1, content_item_id: "" }, "k");
-    expect(thanDaGui(gia, 0).content_item_id).toBe("01JND1");
-    expect(thanDaGui(gia, 1)).not.toHaveProperty("content_item_id");
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: COVER_READY }));
+    await uploadCoverImage({ file: jpg(), contentType: "image/jpeg", contentItemId: "01JND1" }, "k");
+    await uploadCoverImage({ file: jpg(), contentType: "image/jpeg", contentItemId: "" }, "k");
+    expect(partValue(sent[0], "content_item_id")).toBe("01JND1");
+    expect(partNames(sent[0])).toEqual(["size", "file_name", "content_type", "content_item_id", "file"]);
+    expect(partNames(sent[1])).not.toContain("content_item_id");
   });
 
-  it("a refusal comes back VERBATIM with its status", async () => {
-    const cau = "Ảnh lớn hơn dung lượng tối đa được phép.";
-    batFetch(traJSON(400, { code: "invalid_request", message: cau }));
-    expect(await requestCoverUpload({ file_name: "a.jpg", content_type: "image/jpeg", size: 1 }, "k")).toEqual({
+  it("a refusal comes back VERBATIM with its status and code", async () => {
+    const cau = "Ảnh bị từ chối: nội dung tệp không phải JPG, PNG hoặc WebP được phép.";
+    installFakeUploadXHR(() => ({ status: 422, body: { code: "cover_rejected", message: cau } }));
+    expect(await uploadCoverImage({ file: jpg(), contentType: "image/jpeg", contentItemId: undefined }, "k")).toEqual({
       ok: false,
-      status: 400,
+      status: 422,
+      code: "cover_rejected",
       message: cau,
     });
   });
+});
 
-  it("a replayed 201 without the signed form is NOT an upload slot", async () => {
-    batFetch(traJSON(201, { code: "", replayed: true }));
-    expect(await requestCoverUpload({ file_name: "a.jpg", content_type: "image/jpeg", size: 1 }, "k")).toEqual({
-      ok: false,
-      status: 201,
-      message: COVER_FORM_MISSING,
-    });
+describe("broadcast audio — ONE multipart request, the typed duration BEFORE the file", () => {
+  it("parts: size · file_name · content_type · content_item_id · audio_duration_seconds · file", async () => {
+    const READY = { id: "01JA", content_item_id: "01JND1", mime_type: "audio/mpeg", size_bytes: 3, status: "ready", duration_seconds: 750 };
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: READY }));
+    const mp3 = new File([new Uint8Array([0x49, 0x44, 0x33])], "ban-tin.mp3", { type: "audio/mpeg" });
+    const r = await uploadBroadcastAudio({ file: mp3, contentType: "audio/mpeg", contentItemId: "01JND1", durationSeconds: 750 }, "k");
+    expect(sent[0]?.url).toBe("/api/v1/content-items/audio-files");
+    expect(partNames(sent[0])).toEqual(["size", "file_name", "content_type", "content_item_id", "audio_duration_seconds", "file"]);
+    expect(partValue(sent[0], "audio_duration_seconds")).toBe("750");
+    expect(r).toEqual({ ok: true, data: READY });
   });
+});
 
-  it("completion: POST …/{id}/completion, id encoded, no body; 422 sentence verbatim", async () => {
-    const cau = "Ảnh bị từ chối: nội dung tệp không phải JPG, PNG hoặc WebP được phép.";
-    const gia = batFetch(traJSON(422, { code: "cover_rejected", message: cau }));
-    const r = await completeCoverUpload("01J/X");
-    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/content-items/cover-images/01J%2FX/completion");
-    expect(loiGoi(gia, 0).tuyChon.method).toBe("POST");
-    expect(loiGoi(gia, 0).tuyChon.body).toBeUndefined();
-    expect(r).toEqual({ ok: false, status: 422, message: cau });
+describe("body image — ONE multipart request", () => {
+  it("POST …/body-images, parts in contract order", async () => {
+    const READY = { id: "01JB", content_item_id: "01JND1", mime_type: "image/jpeg", size_bytes: 3, status: "ready" };
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: READY }));
+    await uploadBodyImage({ file: jpg(), contentType: "image/jpeg", contentItemId: "01JND1" }, "k");
+    expect(sent[0]?.url).toBe("/api/v1/content-items/body-images");
+    expect(partNames(sent[0])).toEqual(["size", "file_name", "content_type", "content_item_id", "file"]);
   });
 });
 
@@ -682,7 +684,16 @@ type LuocDo = {
 };
 
 type HopDong = {
-  paths: Record<string, Record<string, { "x-vigov-permission"?: { key?: string } }>>;
+  paths: Record<
+    string,
+    Record<
+      string,
+      {
+        "x-vigov-permission"?: { key?: string };
+        requestBody?: { content?: Record<string, { schema?: LuocDo }> };
+      }
+    >
+  >;
   components: { schemas: Record<string, LuocDo> };
 };
 
@@ -797,19 +808,20 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(khoa("/api/v1/content-items/{id}", "delete")).toBe("content.update");
     expect(khoa("/api/v1/content-categories", "post")).toBe("content.update");
     expect(khoa("/api/v1/content-items/cover-images", "post")).toBe("content.update");
-    expect(khoa("/api/v1/content-items/cover-images/{id}/completion", "post")).toBe("content.update");
+    // The completion route is GONE (ADR 0052 §Sửa đổi 09/10/2026): nothing here may still call it.
+    expect(p["/api/v1/content-items/cover-images/{id}/completion"]).toBeUndefined();
     expect(khoa("/api/v1/content-categories/{id}", "patch")).toBe("content.update");
     expect(khoa("/api/v1/content-categories/{id}", "delete")).toBe("content.update");
   });
 
-  it("`requestCoverUpload` sends EXACTLY the keys of `comms.coverUploadIn`", async () => {
-    const cuaHopDong = khoaCuaLuocDo("comms.coverUploadIn");
-    const gia = batFetch(traJSON(201, COVER_UPLOAD));
-    await requestCoverUpload(
-      { file_name: "anh.jpg", content_type: "image/jpeg", size: 10, content_item_id: "01JND1" },
-      "k",
-    );
-    expect(Object.keys(thanDaGui(gia, 0)).sort()).toEqual(cuaHopDong.slice().sort());
+  it("the cover upload sends the parts the contract's multipart schema lists, in ITS order", async () => {
+    const schema = hopDong().paths["/api/v1/content-items/cover-images"]?.post?.requestBody?.content?.["multipart/form-data"]
+      ?.schema as { properties?: Record<string, unknown> } | undefined;
+    const cuaHopDong = Object.keys(schema?.properties ?? {});
+    expect(cuaHopDong.length).toBeGreaterThan(0);
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: COVER_READY }));
+    await uploadCoverImage({ file: jpg(), contentType: "image/jpeg", contentItemId: "01JND1" }, "k");
+    expect(partNames(sent[0])).toEqual(cuaHopDong);
   });
 });
 

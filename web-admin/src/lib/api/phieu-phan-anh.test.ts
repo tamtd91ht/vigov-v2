@@ -4,14 +4,12 @@ import {
   bookStaffIntake,
   chuyenCapTrenPhieu,
   chuyenXuLyPhieu,
-  completeLogAttachment,
-  completeVerificationPhoto,
   dongPhieu,
   listIntakeFields,
   listVerificationPhotos,
   logAttachmentDownloadLink,
-  requestLogAttachmentUpload,
-  requestVerificationPhotoUpload,
+  uploadLogAttachment,
+  uploadVerificationPhoto,
   staffIntakeBody,
   type StaffIntakeInput,
   duongDanNhatKyPhieu,
@@ -32,7 +30,7 @@ import {
   unmergePetition,
 } from "./phieu-phan-anh";
 import type { petitions_phieuCuaToiRa, petitions_phieuPhanAnhRa } from "./schema.gen";
-import { UPLOAD_FORM_MISSING } from "./task-attachments";
+import { installFakeUploadXHR, partNames, partValue } from "./upload-test-support";
 
 function batFetch(tra: Response) {
   // Tham số được khai rõ để `mock.calls[0][0]` có kiểu — một `vi.fn(async () => …)`
@@ -951,40 +949,36 @@ describe("POST …/log-entries — files ride on the note", () => {
   });
 });
 
-describe("log attachments — declare · complete · download", () => {
-  const FORM = { url: "https://kho.example.test/tmp", fields: { key: "t_01J/x", policy: "p" }, expires_at: "2026-10-02T03:15:00Z" };
-  const FILE = { id: "01JFILE1", file_name: "bien-ban.pdf", mime_type: "application/pdf", size_bytes: 1200, status: "pending" };
+describe("log attachments — one multipart upload · download", () => {
+  const FILE = { id: "01JFILE1", file_name: "bien-ban.pdf", mime_type: "application/pdf", size_bytes: 4, status: "stored" };
+  const pdf = () => new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "bien-ban.pdf", { type: "application/pdf" });
 
-  it("declare: path (code encoded), POST, Idempotency-Key, field-by-field body, 201 kept with its status", async () => {
-    const fake = answer(201, { attachment: FILE, upload: FORM });
-    const r = await requestLogAttachmentUpload(
-      "PA/1",
-      { file_name: "bien-ban.pdf", content_type: "application/pdf", size: 1200, extra: "x" } as never,
-      "k-1",
-    );
-    const [path, init] = call(fake);
-    expect(path).toBe("/api/v1/citizen-reports/PA%2F1/log-attachments");
-    expect(init?.method).toBe("POST");
-    expectCommon(path, init);
-    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("k-1");
-    expect(JSON.parse(String(init?.body))).toEqual({ file_name: "bien-ban.pdf", content_type: "application/pdf", size: 1200 });
-    expect(r.ok).toBe(true);
+  it("upload: ONE POST to the petition's route (code encoded), parts in contract order, Idempotency-Key", async () => {
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: FILE }));
+    const fetchSpy = answer(500, {});
+    const r = await uploadLogAttachment("PA/1", pdf(), "application/pdf", "k-1");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.method).toBe("POST");
+    expect(sent[0]?.url).toBe("/api/v1/citizen-reports/PA%2F1/log-attachments");
+    expect(sent[0]?.headers["Idempotency-Key"]).toBe("k-1");
+    expect(sent[0]?.url).not.toContain("tenant");
+    expect(partNames(sent[0])).toEqual(["size", "content_type", "file_name", "file"]);
+    expect(partValue(sent[0], "size")).toBe("4");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(r).toEqual({ ok: true, data: FILE });
   });
 
-  it("a replayed 201 without the form is a refusal, said in one sentence", async () => {
-    answer(201, { code: "01JFILE1", replayed: true });
-    const r = await requestLogAttachmentUpload("PA-1", { file_name: "a.pdf", content_type: "application/pdf", size: 1 }, "k");
-    expect(r).toEqual({ ok: false, status: 201, message: UPLOAD_FORM_MISSING });
-  });
-
-  it("completion: path, POST, status kept (422 / 503)", async () => {
-    const fake = answer(422, { code: "attachment_rejected", message: "Tệp bị từ chối vì phát hiện mã độc.", trace_id: "t" });
-    const r = await completeLogAttachment("PA-1", "01J/FILE");
-    const [path, init] = call(fake);
-    expect(path).toBe("/api/v1/citizen-reports/PA-1/log-attachments/01J%2FFILE/completion");
-    expect(init?.method).toBe("POST");
-    expectCommon(path, init);
-    expect(r).toEqual({ ok: false, status: 422, message: "Tệp bị từ chối vì phát hiện mã độc." });
+  it("a refusal keeps status, code and the server's sentence (422 scan)", async () => {
+    installFakeUploadXHR(() => ({
+      status: 422,
+      body: { code: "attachment_rejected", message: "Tệp bị từ chối vì phát hiện mã độc.", trace_id: "t" },
+    }));
+    expect(await uploadLogAttachment("PA-1", pdf(), "application/pdf", "k")).toEqual({
+      ok: false,
+      status: 422,
+      code: "attachment_rejected",
+      message: "Tệp bị từ chối vì phát hiện mã độc.",
+    });
   });
 
   it("download: path, GET, no-store; the signed link returned as is", async () => {
@@ -1004,7 +998,9 @@ describe("log attachments — declare · complete · download", () => {
   });
 });
 
-describe("verification photos — list · declare · complete", () => {
+describe("verification photos — list · one multipart upload", () => {
+  const jpg = () => new File([new Uint8Array([0xff, 0xd8, 0xff])], "Nguyen Van A - nha.jpg", { type: "image/jpeg" });
+
   it("list: path, GET, no-store, no tenant", async () => {
     const fake = answer(200, { items: [] });
     const r = await listVerificationPhotos("PA 1");
@@ -1021,40 +1017,24 @@ describe("verification photos — list · declare · complete", () => {
     expect(r.ok === false && r.status).toBe(503);
   });
 
-  it("declare: POST, Idempotency-Key, body {content_type, size} only", async () => {
-    const fake = answer(201, {
-      photo: { id: "01JP", content_type: "image/jpeg", size_bytes: 10, status: "pending", created_at: "x" },
-      upload: { url: "https://kho.example.test/tmp", fields: { key: "k" }, expires_at: "x" },
-    });
-    await requestVerificationPhotoUpload("PA-1", { content_type: "image/jpeg", size: 10, kind: "sau" } as never, "k-9");
-    const [path, init] = call(fake);
-    expect(path).toBe("/api/v1/citizen-reports/PA-1/verification-photos");
-    expect(init?.method).toBe("POST");
-    expectCommon(path, init);
-    expect(new Headers(init?.headers).get("Idempotency-Key")).toBe("k-9");
-    expect(JSON.parse(String(init?.body))).toEqual({ content_type: "image/jpeg", size: 10 });
+  it("upload: POST, Idempotency-Key, parts size · content_type · file — and the file's own name NOT sent", async () => {
+    const PHOTO = { id: "01JP", content_type: "image/jpeg", size_bytes: 3, status: "stored", created_at: "x" };
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: PHOTO }));
+    const r = await uploadVerificationPhoto("PA-1", jpg(), "image/jpeg", "k-9");
+    expect(sent[0]?.url).toBe("/api/v1/citizen-reports/PA-1/verification-photos");
+    expect(sent[0]?.headers["Idempotency-Key"]).toBe("k-9");
+    expect(partNames(sent[0])).toEqual(["size", "content_type", "file"]);
+    // The route never reads a name; a phone's file name can carry a person's name (rule 3).
+    expect(JSON.stringify(sent[0]?.parts)).not.toContain("Nguyen");
+    expect(r).toEqual({ ok: true, data: PHOTO });
   });
 
   it.each([
     ["photo_limit", "Phiếu đã có đủ số ảnh sau xử lý tối đa."],
     ["petition_state", "Phiếu đã kết thúc nên không thêm ảnh sau xử lý được nữa."],
-  ])("declare 409 `%s`: status and the server's sentence", async (code, message) => {
-    answer(409, { code, message, trace_id: "t" });
-    expect(await requestVerificationPhotoUpload("PA-1", { content_type: "image/png", size: 1 }, "k")).toEqual({
-      ok: false,
-      status: 409,
-      message,
-    });
-  });
-
-  it("completion: path, POST", async () => {
-    const fake = answer(200, { id: "01JP", content_type: "image/jpeg", size_bytes: 10, status: "stored", created_at: "x" });
-    const r = await completeVerificationPhoto("PA-1", "01JP");
-    const [path, init] = call(fake);
-    expect(path).toBe("/api/v1/citizen-reports/PA-1/verification-photos/01JP/completion");
-    expect(init?.method).toBe("POST");
-    expectCommon(path, init);
-    expect(r.ok && r.data.status).toBe("stored");
+  ])("upload 409 `%s`: status and the server's sentence", async (code, message) => {
+    installFakeUploadXHR(() => ({ status: 409, body: { code, message, trace_id: "t" } }));
+    expect(await uploadVerificationPhoto("PA-1", jpg(), "image/png", "k")).toEqual({ ok: false, status: 409, code, message });
   });
 });
 

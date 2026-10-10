@@ -968,7 +968,7 @@ describe("cover block of §7", () => {
   });
 
   it("uploading: progress as `role=status`, Lưu held and saying `Đang tải tệp…`, the picker frozen", () => {
-    const html = veForm(READY_FORM, undefined, { kind: "uploading", id: "01JC", percent: 40 });
+    const html = veForm(READY_FORM, undefined, { kind: "uploading", percent: 40 });
     expect(html).toMatch(/<p role="status"[^>]*>Đang tải lên 40%<\/p>/);
     expect(html).toMatch(new RegExp(`<button type="submit"[^>]*disabled=""[^>]*>[^]*?${UPLOADING_FILES_LABEL}</button>`));
     expect(html).toMatch(/<input[^>]*id="anh-noi-dung"[^>]*disabled=""/);
@@ -981,10 +981,11 @@ describe("cover block of §7", () => {
     expect(html).not.toMatch(/<button type="submit"[^>]*disabled=""/);
   });
 
-  it("retry state offers `Kiểm tra lại` (re-complete, never re-upload)", () => {
-    const html = veForm(READY_FORM, undefined, { kind: "retry", id: "01JC", message: "Chưa quét được mã độc." });
-    expect(html).toContain(">Kiểm tra lại</button>");
-    expect(html).toContain("Chưa kiểm tra xong: Chưa quét được mã độc.");
+  it("retry state (a refusal of the moment) offers `Gửi lại` — the same file sent again", () => {
+    const file = new File([new Uint8Array([1])], "anh.jpg", { type: "image/jpeg" });
+    const html = veForm(READY_FORM, undefined, { kind: "retry", file, message: "Chưa quét được mã độc." });
+    expect(html).toContain(">Gửi lại</button>");
+    expect(html).toContain("Chưa gửi được: Chưa quét được mã độc.");
   });
 
   it("edit form: the slot says a file is there — no preview, no saved-cover line, no `Gỡ ảnh`", () => {

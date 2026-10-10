@@ -6,7 +6,7 @@ import type { ReadableStream as ReadableStreamNode } from "node:stream/web";
 
 import { DINH_TUYEN_API, type DichVuAPI } from "@/lib/api/dinh-tuyen.gen";
 
-import { goiNoiBo, LoiGoiNoiBo } from "./goi-noi-bo";
+import { goiNoiBo, LoiGoiNoiBo, UPLOAD_IDLE_TIMEOUT_MS } from "./goi-noi-bo";
 
 /**
  * web-admin AS THE GATEWAY for `/api/v1/*`: every call the browser makes lands here and is
@@ -129,6 +129,10 @@ export async function chuyenTiep(yeuCau: Request): Promise<Response> {
   }
 
   const coThan = yeuCau.method !== "GET" && yeuCau.method !== "HEAD" && yeuCau.body !== null;
+  // An upload (one multipart POST, ADR 0052 §Sửa đổi 09/10/2026) goes quiet while the service scans
+  // the file — see `UPLOAD_IDLE_TIMEOUT_MS` for why 30 s would cut a valid upload.
+  const isUpload =
+    yeuCau.method === "POST" && (yeuCau.headers.get("content-type") ?? "").toLowerCase().startsWith("multipart/form-data");
 
   let phanHoi: IncomingMessage;
   try {
@@ -139,6 +143,7 @@ export async function chuyenTiep(yeuCau: Request): Promise<Response> {
       headers: headerGuiDi(yeuCau),
       body: coThan ? Readable.fromWeb(yeuCau.body as unknown as ReadableStreamNode<Uint8Array>) : null,
       signal: yeuCau.signal,
+      idleTimeoutMs: isUpload ? UPLOAD_IDLE_TIMEOUT_MS : undefined,
     });
   } catch (loi) {
     // Only a failed CALL becomes 502/504. A misconfigured origin (`gocDichVu` throwing, naming

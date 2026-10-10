@@ -29,6 +29,19 @@ import { gocDichVu } from "./goc-dich-vu";
  */
 export const THOI_GIAN_CHO_MS = 30_000;
 
+/**
+ * The idle timer for a MULTIPART upload (ADR 0052 §Sửa đổi 09/10/2026: every file now crosses this
+ * gateway in ONE request). After the LAST byte the service sniffs, scans (ClamAV) and stores BEFORE it
+ * answers — for a 50 MB file that silence can outlast 30 s, and the gateway would answer 504 for a file
+ * the service then stores (a duplicate on the officer's retry). The service bounds the WHOLE upload,
+ * scan included, at 180 s (`core/httpx/upload.go` `UploadReadTimeout`; the use case runs under that
+ * deadline, `service-petitions/internal/http/upload.go:10`), so no legitimate silence is longer:
+ * 180 s + 30 s for the service's own answer to reach us. Applied only to `multipart/form-data` POSTs
+ * (`chuyen-tiep.ts`); every other call keeps 30 s. A client that opens a multipart POST and goes quiet
+ * holds a socket 210 s instead of 30 s — the service's own 180 s read deadline ends it first.
+ */
+export const UPLOAD_IDLE_TIMEOUT_MS = 210_000;
+
 /** Why an internal call produced no response — the two cases map to 502 and 504. */
 export class LoiGoiNoiBo extends Error {
   constructor(readonly loai: "khong-ket-noi" | "het-gio") {
@@ -45,6 +58,8 @@ export type LoiGoi = {
   headers?: OutgoingHttpHeaders;
   body?: Readable | null;
   signal?: AbortSignal;
+  /** Socket idle timer. Absent = `THOI_GIAN_CHO_MS`; uploads pass `UPLOAD_IDLE_TIMEOUT_MS`. */
+  idleTimeoutMs?: number;
 };
 
 /**
@@ -75,7 +90,7 @@ export function goiNoiBo(dichVu: DichVuAPI, loi: LoiGoi): Promise<IncomingMessag
       method: loi.method,
       path: loi.duongDan,
       headers: { ...loi.headers, host: loi.host },
-      timeout: THOI_GIAN_CHO_MS,
+      timeout: loi.idleTimeoutMs ?? THOI_GIAN_CHO_MS,
     });
 
     yc.on("response", (phanHoi) => {

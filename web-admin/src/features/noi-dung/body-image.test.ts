@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { installFakeUploadXHR, partNames, partValue } from "@/lib/api/upload-test-support";
+
 import {
   BODY_IMAGE_NOT_READY,
   BODY_IMAGE_URL_INVALID,
@@ -7,32 +9,21 @@ import {
   bodyImageInFlight,
   bodyImagePreviewSrc,
   previewsFromItem,
-  retryBodyImageCompletion,
   runBodyImageFromUrl,
   runBodyImageUpload,
   type BodyImageState,
 } from "./body-image";
-import { COVER_STORAGE_FAILED, COVER_TYPE_REFUSED } from "./cover-image";
+import { COVER_TYPE_REFUSED } from "./cover-image";
 
 /**
- * Body images (ADR 0067 §Sửa đổi 03/10/2026): the upload a → b → c and the server fetch over a fake
- * `fetch` and a fake `XMLHttpRequest`, the article id the first image reserves, and one Vietnamese
- * sentence per refusal code — never a raw code.
+ * Body images (ADR 0067 §Sửa đổi 03/10/2026): the upload as ONE multipart request (ADR 0052 §Sửa đổi
+ * 09/10/2026) and the server fetch, the article id the first image reserves, and one Vietnamese sentence
+ * per refusal code — never a raw code.
  */
 
 const FILE_ID = "01JBDYXMG00000000000000001";
 const RESERVED = "01JRESERVEDITEM00000000000";
 const PREVIEW = "https://files.example.test/vigov-stg-private/thumb-1280.jpg?X-Amz-Signature=s";
-
-const UPLOAD = {
-  body_image: { id: FILE_ID, mime_type: "", size_bytes: 0, status: "pending" },
-  content_item_id: RESERVED,
-  upload: {
-    url: "https://files.example.test/vigov-stg-temp",
-    fields: { key: "upload/t_01JXA/x", policy: "P", "x-amz-signature": "S", "Content-Type": "image/jpeg" },
-    expires_at: "2026-10-03T03:15:00Z",
-  },
-};
 
 const READY = {
   id: FILE_ID,
@@ -47,42 +38,13 @@ const READY = {
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-function fakeXHR(status: number) {
-  const sent: { url: string; withCredentials: boolean; keys: string[] }[] = [];
-  class FakeXHR {
-    status = 0;
-    withCredentials = false;
-    upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = {
-      onprogress: null,
-    };
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    private u = "";
-    open(_method: string, url: string) {
-      this.u = url;
-    }
-    send(form: FormData) {
-      sent.push({ url: this.u, withCredentials: this.withCredentials, keys: [...form.keys()] });
-      queueMicrotask(() => {
-        this.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 });
-        this.status = status;
-        this.onload?.();
-      });
-    }
-  }
-  vi.stubGlobal("XMLHttpRequest", FakeXHR);
-  return sent;
-}
-
-function fakeFetch(answers: { request?: Response; completion?: Response; fromUrl?: Response }) {
+function fakeFetch(answers: { fromUrl?: Response }) {
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
-      if (url === "/api/v1/content-items/body-images") return (answers.request ?? json(UPLOAD, 201)).clone();
       if (url === "/api/v1/content-items/body-images/from-url") return (answers.fromUrl ?? json(READY, 201)).clone();
-      if (url.endsWith("/completion")) return (answers.completion ?? json(READY, 200)).clone();
       return json({ code: "not_found", message: "?" }, 404);
     }),
   );
@@ -97,37 +59,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("Tải ảnh từ máy — declare → store → completion", () => {
+describe("Tải ảnh từ máy — ONE multipart request", () => {
   it("first image of a new article: no content_item_id sent, the reserved id heard, ready with its preview", async () => {
-    const xhr = fakeXHR(204);
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
     const calls = fakeFetch({});
     const states: BodyImageState[] = [];
     const articles: string[] = [];
 
     const last = await runBodyImageUpload(photo(), undefined, (s) => states.push(s), (id) => articles.push(id));
 
-    expect(calls[0]?.url).toBe("/api/v1/content-items/body-images");
-    expect(body(calls[0])).toEqual({ file_name: "anh-le-hoi.jpg", content_type: "image/jpeg", size: 3 });
-    expect(new Headers(calls[0]?.init?.headers).get("Idempotency-Key")).toMatch(/.+/);
-    // The bytes go to the STORE, without credentials, the file last.
-    expect(xhr).toEqual([
-      { url: UPLOAD.upload.url, withCredentials: false, keys: ["key", "policy", "x-amz-signature", "Content-Type", "file"] },
-    ]);
-    expect(calls[1]?.url).toBe(`/api/v1/content-items/body-images/${FILE_ID}/completion`);
+    expect(xhr).toHaveLength(1);
+    expect(xhr[0]?.url).toBe("/api/v1/content-items/body-images");
+    expect(xhr[0]?.headers["Idempotency-Key"]).toMatch(/.+/);
+    expect(partNames(xhr[0])).toEqual(["size", "file_name", "content_type", "file"]);
+    // No declaration, no store host, no completion.
+    expect(calls).toHaveLength(0);
     expect(articles).toEqual([RESERVED]);
-    expect(states.map((s) => s.kind)).toEqual(["requesting", "uploading", "uploading", "checking", "ready"]);
+    expect(states.map((s) => s.kind)).toEqual(["uploading", "uploading", "uploading", "checking", "ready"]);
     expect(last).toEqual({ kind: "ready", image: { fileId: FILE_ID, contentItemId: RESERVED, previewUrl: PREVIEW } });
   });
 
   it("a later image of the same article sends the id back", async () => {
-    fakeXHR(204);
-    const calls = fakeFetch({});
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
     await runBodyImageUpload(photo(), RESERVED, () => {}, () => {});
-    expect(body(calls[0]).content_item_id).toBe(RESERVED);
+    expect(partValue(xhr[0], "content_item_id")).toBe(RESERVED);
   });
 
   it("HEIC never reaches the network (the cover's pre-check)", async () => {
-    const xhr = fakeXHR(204);
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
     const calls = fakeFetch({});
     const heic = new File([new Uint8Array([1])], "IMG_0001.HEIC", { type: "image/heic" });
     expect(await runBodyImageUpload(heic, undefined, () => {}, () => {})).toEqual({ kind: "refused", message: COVER_TYPE_REFUSED });
@@ -135,47 +94,42 @@ describe("Tải ảnh từ máy — declare → store → completion", () => {
     expect(xhr).toHaveLength(0);
   });
 
-  it("409 body_image_limit at the declaration: our sentence, no upload", async () => {
-    const xhr = fakeXHR(204);
-    fakeFetch({ request: json({ code: "body_image_limit", message: "server words" }, 409) });
+  it("409 body_image_limit: our sentence, final", async () => {
+    installFakeUploadXHR(() => ({ status: 409, body: { code: "body_image_limit", message: "server words" } }));
     const s = await runBodyImageUpload(photo(), RESERVED, () => {}, () => {});
-    expect(s).toEqual({ kind: "refused", message: bodyImageErrorText("request", { code: "body_image_limit", message: "" }) });
+    expect(s).toEqual({ kind: "refused", message: bodyImageErrorText({ code: "body_image_limit", message: "" }) });
     expect(s.kind === "refused" && s.message).not.toContain("body_image_limit");
-    expect(xhr).toHaveLength(0);
   });
 
-  it("the store refuses the form: one sentence of our own, no completion", async () => {
-    fakeXHR(403);
-    const calls = fakeFetch({});
-    expect(await runBodyImageUpload(photo(), undefined, () => {}, () => {})).toEqual({
-      kind: "refused",
-      message: COVER_STORAGE_FAILED,
-    });
-    expect(calls.some((c) => c.url.endsWith("/completion"))).toBe(false);
-  });
-
-  it("422 body_image_rejected at completion: final, worded", async () => {
-    fakeXHR(204);
-    fakeFetch({ completion: json({ code: "body_image_rejected", message: "x" }, 422) });
+  it("422 body_image_rejected: final, worded", async () => {
+    installFakeUploadXHR(() => ({ status: 422, body: { code: "body_image_rejected", message: "x" } }));
     const s = await runBodyImageUpload(photo(), undefined, () => {}, () => {});
     expect(s.kind).toBe("refused");
     expect(s.kind === "refused" && s.message).toMatch(/từ chối/);
   });
 
-  it("503 at completion: retry the COMPLETION only", async () => {
-    const xhr = fakeXHR(204);
-    const calls = fakeFetch({ completion: json({ code: "malware_scan_unavailable", message: "x" }, 503) });
-    const first = await runBodyImageUpload(photo(), undefined, () => {}, () => {});
-    expect(first.kind).toBe("retry");
-    await retryBodyImageCompletion(FILE_ID, () => {});
-    expect(calls.filter((c) => c.url === "/api/v1/content-items/body-images")).toHaveLength(1);
-    expect(calls.filter((c) => c.url.endsWith("/completion"))).toHaveLength(2);
-    expect(xhr).toHaveLength(1);
+  it("503: `retry` carries the same file — sending it again is a NEW request", async () => {
+    let n = 0;
+    const xhr = installFakeUploadXHR(() =>
+      ++n === 1 ? { status: 503, body: { code: "malware_scan_unavailable", message: "x" } } : { status: 201, body: READY },
+    );
+    const f = photo();
+    const first = await runBodyImageUpload(f, undefined, () => {}, () => {});
+    expect(first).toEqual({ kind: "retry", file: f, message: bodyImageErrorText({ code: "malware_scan_unavailable", message: "x" }) });
+    if (first.kind !== "retry") throw new Error("not retry");
+    expect((await runBodyImageUpload(first.file, undefined, () => {}, () => {})).kind).toBe("ready");
+    expect(xhr).toHaveLength(2);
   });
 
-  it("a 200 that is not ready is not inserted", async () => {
-    fakeXHR(204);
-    fakeFetch({ completion: json({ ...READY, status: "failed" }, 200) });
+  it("an upload envelope refusal (408) keeps the server's sentence and may be sent again", async () => {
+    const cau = "Tải tệp lên quá thời gian cho phép nên tệp CHƯA được nhận. Vui lòng thử lại.";
+    installFakeUploadXHR(() => ({ status: 408, body: { code: "upload_timeout", message: cau } }));
+    const s = await runBodyImageUpload(photo(), undefined, () => {}, () => {});
+    expect(s.kind === "retry" && s.message).toBe(cau);
+  });
+
+  it("a 201 that is not ready is not inserted", async () => {
+    installFakeUploadXHR(() => ({ status: 201, body: { ...READY, status: "failed" } }));
     expect(await runBodyImageUpload(photo(), undefined, () => {}, () => {})).toEqual({
       kind: "refused",
       message: BODY_IMAGE_NOT_READY,
@@ -221,7 +175,7 @@ describe("Dán liên kết ảnh — the server downloads it", () => {
       const s = await runBodyImageFromUrl("https://bao.vn/anh.jpg", undefined, () => {});
       expect(s.kind, code).toBe("refused");
       const msg = s.kind === "refused" ? s.message : "";
-      expect(msg, code).toBe(bodyImageErrorText("from-url", { code, message: "" }));
+      expect(msg, code).toBe(bodyImageErrorText({ code, message: "" }));
       expect(msg, code).not.toBe("");
       expect(msg, code).not.toContain(code);
     }
@@ -234,10 +188,6 @@ describe("words for every code", () => {
     "invalid_image_url",
     "not_found",
     "body_image_limit",
-    "body_image_state",
-    "upload_not_received",
-    "upload_expired",
-    "upload_changed",
     "body_image_rejected",
     "image_fetch_failed",
     "storage_not_configured",
@@ -245,24 +195,21 @@ describe("words for every code", () => {
     "malware_scan_unavailable",
   ];
 
-  it("every code of the three routes has a sentence of its own, never the code itself", () => {
-    for (const step of ["request", "complete", "from-url"] as const) {
-      for (const code of CODES) {
-        const t = bodyImageErrorText(step, { code, message: "MÁY CHỦ" });
-        expect(t, `${step} ${code}`).not.toBe("MÁY CHỦ");
-        expect(t, `${step} ${code}`).not.toContain(code);
-        expect(t, `${step} ${code}`).toMatch(/[ảàáạãăâđêôơư]/i);
-      }
+  it("every code of the two routes has a sentence of its own, never the code itself", () => {
+    for (const code of CODES) {
+      const t = bodyImageErrorText({ code, message: "MÁY CHỦ" });
+      expect(t, code).not.toBe("MÁY CHỦ");
+      expect(t, code).not.toContain(code);
+      expect(t, code).toMatch(/[ảàáạãăâđêôơư]/i);
     }
   });
 
-  it("not_found names the article on a declaration, the upload at completion", () => {
-    expect(bodyImageErrorText("request", { code: "not_found", message: "" })).toMatch(/bài/);
-    expect(bodyImageErrorText("complete", { code: "not_found", message: "" })).toMatch(/lượt tải/);
+  it("not_found names the article", () => {
+    expect(bodyImageErrorText({ code: "not_found", message: "" })).toMatch(/bài/);
   });
 
   it("an unknown code (a 403) keeps the server's own sentence", () => {
-    expect(bodyImageErrorText("request", { code: "forbidden", message: "Bạn không có quyền." })).toBe("Bạn không có quyền.");
+    expect(bodyImageErrorText({ code: "forbidden", message: "Bạn không có quyền." })).toBe("Bạn không có quyền.");
   });
 });
 
@@ -283,10 +230,11 @@ describe("preview", () => {
     expect(previewsFromItem(undefined).size).toBe(0);
   });
 
-  it("in flight: requesting, uploading, checking, fetching — not retry or refused", () => {
+  it("in flight: uploading, checking, fetching — not retry or refused", () => {
     expect(bodyImageInFlight({ kind: "fetching" })).toBe(true);
-    expect(bodyImageInFlight({ kind: "checking", id: FILE_ID })).toBe(true);
-    expect(bodyImageInFlight({ kind: "retry", id: FILE_ID, message: "" })).toBe(false);
+    expect(bodyImageInFlight({ kind: "checking" })).toBe(true);
+    expect(bodyImageInFlight({ kind: "uploading", percent: 1 })).toBe(true);
+    expect(bodyImageInFlight({ kind: "retry", file: photo(), message: "" })).toBe(false);
     expect(bodyImageInFlight({ kind: "refused", message: "" })).toBe(false);
   });
 });

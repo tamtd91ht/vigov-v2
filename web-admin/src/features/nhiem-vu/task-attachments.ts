@@ -8,6 +8,7 @@
  */
 
 import type { petitions_taskAttachmentOut } from "@/lib/api/schema.gen";
+import { isTransientUpload, type UploadResult } from "@/lib/api/upload";
 
 /** The spec's `📎` is drawn as a lucide `Paperclip` beside the word (ADR 0068). */
 export const ATTACH_BUTTON = "Đính kèm";
@@ -36,8 +37,8 @@ export const ATTACH_EMPTY_REFUSED = "Tệp rỗng — không có gì để đín
 
 /**
  * The content type to DECLARE, or a refusal. The browser's `type` first; when it is empty (some
- * systems report none) the extension. The declaration is a claim: the server sniffs the bytes at
- * completion and refuses a mismatch (ADR 0052 §1c).
+ * systems report none) the extension. The declaration is a claim: the server sniffs the bytes in the
+ * same request and refuses a mismatch (ADR 0052 §1c).
  */
 export function declaredType(file: { readonly name: string; readonly type: string; readonly size: number }):
   | { readonly ok: true; readonly contentType: string }
@@ -53,15 +54,17 @@ export function declaredType(file: { readonly name: string; readonly type: strin
   return t === undefined ? { ok: false, message: ATTACH_TYPE_REFUSED } : { ok: true, contentType: t };
 }
 
-/** One file in the form's list, and where it stands. */
+/**
+ * One file in the form's list, and where it stands. ONE request per file (ADR 0052 §Sửa đổi 09/10/2026):
+ * the bytes leave (`uploading`), the server sniffs and scans (`checking`), then it answers.
+ */
 export type AttachmentState =
-  | { readonly kind: "requesting" }
-  | { readonly kind: "uploading"; readonly id: string; readonly percent: number }
-  | { readonly kind: "checking"; readonly id: string }
+  | { readonly kind: "uploading"; readonly percent: number }
+  | { readonly kind: "checking" }
   | { readonly kind: "stored"; readonly id: string }
-  /** 503 / 409 at completion: the bytes are there — retry the COMPLETION, never re-upload. */
-  | { readonly kind: "retry"; readonly id: string; readonly message: string }
-  /** For good: refused by the pre-check, the declaration, the store, or the scan (422). */
+  /** A refusal of the MOMENT (`isTransientUpload`): nothing was stored — send the same file again. */
+  | { readonly kind: "retry"; readonly message: string }
+  /** For good: refused by the pre-check, the limits, the type, or the scan (422). */
   | { readonly kind: "refused"; readonly message: string };
 
 export type AttachmentItem = {
@@ -79,32 +82,31 @@ export function storedIds(items: readonly AttachmentItem[]): string[] {
 
 /** Something still moving: the entry waits for it (sending now would drop a file the clerk chose). */
 export function anyInFlight(items: readonly AttachmentItem[]): boolean {
-  return items.some((i) => i.state.kind === "requesting" || i.state.kind === "uploading" || i.state.kind === "checking");
+  return items.some((i) => i.state.kind === "uploading" || i.state.kind === "checking");
 }
 
-/** What a completion answer turns into: 422 refused for good; 503 / 409 retry the completion. */
-export function afterCompletion(
-  id: string,
-  r: { readonly ok: true; readonly data: petitions_taskAttachmentOut } | { readonly ok: false; readonly status: number; readonly message: string },
+/**
+ * What an upload's answer turns into: the stored file; a refusal of the moment → `retry` (send the same
+ * file again); anything else refused for good. The sentence is the server's.
+ */
+export function afterUpload(
+  r: UploadResult<petitions_taskAttachmentOut>,
 ): AttachmentState {
   if (r.ok) return r.data.status === "stored" || r.data.status === "ready"
-    ? { kind: "stored", id }
+    ? { kind: "stored", id: r.data.id }
     : { kind: "refused", message: ATTACH_NOT_STORED };
-  if (r.status === 422) return { kind: "refused", message: r.message };
-  if (r.status === 503 || r.status === 409 || r.status === 0) return { kind: "retry", id, message: r.message };
+  if (isTransientUpload(r)) return { kind: "retry", message: r.message };
   return { kind: "refused", message: r.message };
 }
 
 export const ATTACH_NOT_STORED = "Tệp chưa được lưu. Hãy bỏ tệp khỏi danh sách rồi chọn lại.";
-export const ATTACH_RETRY_BUTTON = "Kiểm tra lại";
+export const ATTACH_RETRY_BUTTON = "Gửi lại";
 export const ATTACH_REMOVE_BUTTON = "Bỏ";
 export const ATTACH_WAIT_NOTE = "Chờ các tệp tải lên và kiểm tra xong rồi mới ghi nhật ký.";
 
 /** The line under a file — `role="status"` while it moves, `role="alert"` when refused. */
 export function attachmentStateText(s: AttachmentState): string {
   switch (s.kind) {
-    case "requesting":
-      return "Đang xin tải lên…";
     case "uploading":
       return `Đang tải ${s.percent}%`;
     case "checking":
@@ -112,7 +114,7 @@ export function attachmentStateText(s: AttachmentState): string {
     case "stored":
       return "Đã lưu — sẽ gửi kèm dòng nhật ký.";
     case "retry":
-      return `Chưa kiểm tra xong: ${s.message}`;
+      return `Chưa gửi được: ${s.message}`;
     case "refused":
       return `Bị từ chối: ${s.message}`;
   }

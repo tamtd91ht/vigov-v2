@@ -220,6 +220,65 @@ function dichDoiTuong(schema, duong) {
   return dong.length === 0 ? "Record<string, never>" : `{\n${dong.join("\n")}\n}`;
 }
 
+// REQUEST BODIES: `application/json` OR `multipart/form-data`, and nothing else — loudly.
+//
+// Until 09/10/2026 this read `content["application/json"]` and nothing more, so a multipart route
+// (every upload, ADR 0052 §Sửa đổi 09/10/2026) came out as `than: never` WITHOUT A WORD: the screen
+// then typed its form parts by hand, which is exactly the copy this file exists to prevent. Any other
+// content type (`application/x-www-form-urlencoded`, `application/octet-stream`, two types on one
+// route) is refused here, so the day one appears somebody decides how it is typed.
+const REQUEST_CONTENT_TYPES = new Set(["application/json", "multipart/form-data"]);
+
+function requestBodyOf(op, where) {
+  const content = op.requestBody?.content;
+  if (content === undefined) return { jsonSchema: undefined, multipart: undefined };
+  const kinds = Object.keys(content);
+  for (const k of kinds) {
+    if (!REQUEST_CONTENT_TYPES.has(k)) tuChoi(`${where}.requestBody`, `content type '${k}' chưa hỗ trợ`);
+  }
+  if (kinds.length !== 1) {
+    tuChoi(`${where}.requestBody`, `cần đúng MỘT content type, hợp đồng khai ${kinds.length}: ${kinds.join(", ")}`);
+  }
+  if (kinds[0] === "application/json") return { jsonSchema: content["application/json"].schema, multipart: undefined };
+  return { jsonSchema: undefined, multipart: dichMultipart(content["multipart/form-data"].schema, `${where}.multipart`) };
+}
+
+// A MULTIPART UPLOAD (`core/httpx` ReadUpload): text parts, then ONE binary part named `file`, LAST.
+//
+// Two things come out, because the wire shape has two facts:
+//   `multipart`       the parts and their types — text parts are `string` (a form part has no number),
+//                     the file is `Blob`; `?` follows the contract's `required`.
+//   `multipartParts`  the parts IN THE CONTRACT'S ORDER, as a tuple type. Order is part of the contract
+//                     here: the server reads `size` before the file (multipart carries no part length)
+//                     and refuses a field after it. A client constant typed with this tuple fails tsc
+//                     the day the order or a name changes — the hand-copied order cannot drift silently.
+//
+// Refused: anything but string / binary-string parts, a binary part other than `file`, `file` not last
+// or not required, `additionalProperties` other than false.
+function dichMultipart(schema, duong) {
+  if (!schema || schema.type !== "object") tuChoi(duong, "multipart schema không phải object");
+  if (schema.additionalProperties !== false) tuChoi(duong, "multipart cần additionalProperties: false");
+  const props = Object.entries(schema.properties ?? {});
+  const required = new Set(schema.required ?? []);
+  if (props.length === 0) tuChoi(duong, "multipart không khai phần nào");
+  const lines = [];
+  const names = [];
+  props.forEach(([name, part], i) => {
+    const binary = part?.type === "string" && part.format === "binary";
+    const text = part?.type === "string" && part.format === undefined;
+    if (!binary && !text) tuChoi(`${duong}.${name}`, "phần multipart chỉ nhận string hoặc string/binary");
+    if (binary && name !== "file") tuChoi(`${duong}.${name}`, "phần nhị phân phải tên 'file'");
+    if (name === "file" && (!binary || i !== props.length - 1 || !required.has("file"))) {
+      tuChoi(`${duong}.file`, "'file' phải là string/binary, bắt buộc, và là phần CUỐI");
+    }
+    if (part.description) lines.push(`    /** ${part.description} */`);
+    lines.push(`    ${JSON.stringify(name)}${required.has(name) ? "" : "?"}: ${binary ? "Blob" : "string"};`);
+    names.push(JSON.stringify(name));
+  });
+  if (!names.includes('"file"')) tuChoi(duong, "multipart không có phần 'file'");
+  return { type: `{\n${lines.join("\n")}\n  }`, order: `readonly [${names.join(", ")}]` };
+}
+
 function sinh(hopDong) {
   const ra = [];
   ra.push("// TỆP SINH RA. ĐỪNG SỬA TAY — sửa tay mất sạch ở lần sinh sau (luật 9, bất biến 8).");
@@ -265,7 +324,7 @@ function sinh(hopDong) {
           `${dichKieu(p.schema, `${duongDan}.?${p.name}`)};`,
       );
 
-      const noiDung = op.requestBody?.content?.["application/json"]?.schema;
+      const { jsonSchema: noiDung, multipart } = requestBodyOf(op, `${phuongThuc.toUpperCase()} ${duongDan}`);
       const kieuThan = noiDung ? dichKieu(noiDung, `${duongDan}.requestBody`) : "never";
 
       const dongPhanHoi = [];
@@ -293,6 +352,10 @@ function sinh(hopDong) {
       ra.push(`  thamSo: {\n${dongThamSo.join("\n")}${dongThamSo.length ? "\n" : ""}  };`);
       ra.push(`  truyVan: {\n${dongTruyVan.join("\n")}${dongTruyVan.length ? "\n" : ""}  };`);
       ra.push(`  than: ${kieuThan};`);
+      if (multipart) {
+        ra.push(`  multipart: ${multipart.type};`);
+        ra.push(`  multipartParts: ${multipart.order};`);
+      }
       ra.push(`  phanHoi: {\n${dongPhanHoi.join("\n")}\n  };`);
       if (errorCodeLines.length > 0) ra.push(`  errorCodes: {\n${errorCodeLines.join("\n")}\n  };`);
       ra.push("};");

@@ -7,13 +7,13 @@
  *   POST  /api/v1/content-items                                   content.update  + Idempotency-Key BẮT BUỘC
  *   PATCH /api/v1/content-items/{id}                              content.update  (không cần khoá chống trùng)
  *   DELETE /api/v1/content-items/{id}  {reason}                   content.update  → 204 (soft delete)
- *   POST  /api/v1/content-items/cover-images                      content.update  + Idempotency-Key BẮT BUỘC
- *   POST  /api/v1/content-items/cover-images/{id}/completion      content.update
- *   POST  /api/v1/content-items/body-images                       content.update  + Idempotency-Key BẮT BUỘC (ảnh thân bài)
- *   POST  /api/v1/content-items/body-images/{id}/completion       content.update
+ *   POST  /api/v1/content-items/cover-images                      content.update  + Idempotency-Key BẮT BUỘC (multipart)
+ *   POST  /api/v1/content-items/body-images                       content.update  + Idempotency-Key BẮT BUỘC (multipart, ảnh thân bài)
  *   POST  /api/v1/content-items/body-images/from-url              content.update  + Idempotency-Key BẮT BUỘC
- *   POST  /api/v1/content-items/audio-files                       content.update  + Idempotency-Key BẮT BUỘC (ADR 0067 §4)
- *   POST  /api/v1/content-items/audio-files/{id}/completion       content.update  {audio_duration_seconds}
+ *   POST  /api/v1/content-items/audio-files                       content.update  + Idempotency-Key BẮT BUỘC (multipart, ADR 0067 §4)
+ *
+ * The three `…/{id}/completion` routes are GONE (ADR 0052 §Sửa đổi 09/10/2026): each upload is ONE
+ * multipart POST through `lib/api/upload.ts`.
  *   GET   /api/v1/content-categories                              content.read
  *   POST  /api/v1/content-categories                              content.update  + Idempotency-Key BẮT BUỘC
  *   PATCH /api/v1/content-categories/{id}                         content.update  (ADR 0067 §3)
@@ -85,17 +85,12 @@ import {
   type KetQua,
 } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
 import type { CallResult } from "./task-attachments";
+import { sendUpload, type UploadProgress, type UploadResult } from "./upload";
 import type {
   comms_audioFileOut,
-  comms_audioUploadIn,
-  comms_audioUploadOut,
   comms_bodyImageFileOut,
   comms_bodyImageFromURLIn,
-  comms_bodyImageUploadIn,
-  comms_bodyImageUploadOut,
   comms_coverFileOut,
-  comms_coverUploadIn,
-  comms_coverUploadOut,
   comms_danhMucRa,
   comms_deleteCategoryIn,
   comms_deleteContentItemIn,
@@ -107,12 +102,9 @@ import type {
   comms_noiDungRa,
   comms_patch_content_categories_by_id,
   comms_post_content_items_audio_files,
-  comms_post_content_items_audio_files_by_id_completion,
   comms_post_content_items_body_images,
-  comms_post_content_items_body_images_by_id_completion,
   comms_post_content_items_body_images_from_url,
   comms_post_content_items_cover_images,
-  comms_post_content_items_cover_images_by_id_completion,
   comms_suaNoiDungVao,
   comms_themDanhMucVao,
   comms_themNoiDungVao,
@@ -417,109 +409,23 @@ export async function deleteContentItem(id: string, reason: string): Promise<Cal
   }
 }
 
-/* ── Ảnh bìa §7 — ADR 0052 §1, backend 606bf515 ───────────────────────────────────────────────
+/* ── Uploads: cover §7, broadcast audio §7, body images — ADR 0052 §Sửa đổi 09/10/2026 ───────────
  *
- * Same three steps as the task attachments (`./task-attachments.ts`), and the middle step IS that
- * module's `uploadToStorage` — the bytes go STRAIGHT to the object store, never through this app (so
- * `proxy.ts`'s 10 MB body cap never applies: `/api/` is outside its matcher anyway, and the upload's
- * URL is the store's own origin).
+ * Each is ONE multipart POST on this origin (`lib/api/upload.ts`): text parts in the contract's order,
+ * the file last. The service streams, sniffs and scans the file inside that request and answers 201
+ * with it — `ready` — or a refusal. No presigned form, no store host, no `/completion`.
  *
- *   a. `requestCoverUpload`   declare {file_name, content_type, size[, content_item_id]} → 201 form
- *   b. `uploadToStorage`      the presigned POST form, fields first, file last, no cookie
- *   c. `completeCoverUpload`  sniff, scan, derive the 1280 px copy → 200 `ready` | 422 | 409 | 503
+ * `content_item_id`:
+ *   - cover, body image: ONLY for an article that already has one (the edit form, or one a first file
+ *     reserved). Absent for a new article: the server reserves the id and returns it in the reply. An
+ *     empty one is left out — `""` would be a third spelling of "none".
+ *   - audio: REQUIRED — a SAVED `truyen-thanh` item (400 otherwise, 422 `audio_only_for_truyen_thanh`);
+ *     the file is ATTACHED to it in the same request, with the duration THE OFFICER TYPED
+ *     (`audio_duration_seconds`, 1 .. 21600 — the server never measures it, ADR 0067 §4.1).
  *
- * then the article carries `cover_image_file_id` on POST / PATCH.
- *
- * ⚠ `upload.url` + `upload.fields` ARE A BEARER CREDENTIAL: used in the one request they sign and
- * nowhere else — never logged, never kept in state past that request. `file_name` can name a person
- * (rule 3): it goes in the declaration body and nowhere else.
- */
-
-export const COVER_FORM_MISSING =
-  "Máy chủ không gửi kèm biểu mẫu tải lên cho ảnh này. Hãy chọn lại ảnh.";
-
-async function readCallJSON<T>(res: Response, want: number): Promise<CallResult<T>> {
-  if (res.status !== want) return { ok: false, status: res.status, message: await thongBaoLoi(res) };
-  try {
-    return { ok: true, data: (await res.json()) as T };
-  } catch {
-    return { ok: false, status: res.status, message: LOI_KHONG_RO };
-  }
-}
-
-/**
- * a. Declare the cover. The server checks it against the platform's `content-image` policy (type,
- * size) and answers a refusal in one sentence, shown verbatim.
- *
- * `content_item_id` ONLY FOR AN ARTICLE ALREADY SAVED (the edit form). Absent for a new one: the
- * server reserves the article's id, and the POST that carries this upload's id creates it under that
- * id. Sending `""` would be a third spelling of "none", so an empty one is left out.
- *
- * `idempotencyKey`: ONE KEY PER ATTEMPT, minted by the caller — a replayed answer cannot carry the
- * signed form again (`core/idem` stores a code, not a body), so a retry is a new declaration.
- */
-export async function requestCoverUpload(
-  body: comms_coverUploadIn,
-  idempotencyKey: string,
-): Promise<CallResult<comms_coverUploadOut>> {
-  const path: comms_post_content_items_cover_images["duongDan"] = "/api/v1/content-items/cover-images";
-  // Field by field — never `...body`.
-  const sent: comms_coverUploadIn = {
-    file_name: body.file_name,
-    content_type: body.content_type,
-    size: body.size,
-  };
-  if (body.content_item_id) sent.content_item_id = body.content_item_id;
-  try {
-    const res = await fetch(path, {
-      ...CHUNG,
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify(sent),
-    });
-    const r = await readCallJSON<comms_coverUploadOut>(res, 201);
-    if (r.ok && (r.data?.upload?.url === undefined || r.data.upload.fields === undefined || r.data.cover_image?.id === undefined)) {
-      return { ok: false, status: 201, message: COVER_FORM_MISSING };
-    }
-    return r;
-  } catch {
-    return { ok: false, status: 0, message: LOI_KHONG_RO };
-  }
-}
-
-/** c. Complete. Safe to repeat — a cover already `ready` answers itself again. */
-export async function completeCoverUpload(id: string): Promise<CallResult<comms_coverFileOut>> {
-  const template: comms_post_content_items_cover_images_by_id_completion["duongDan"] =
-    "/api/v1/content-items/cover-images/{id}/completion";
-  try {
-    const res = await fetch(template.replace("{id}", encodeURIComponent(id)), { ...CHUNG, method: "POST" });
-    return await readCallJSON<comms_coverFileOut>(res, 200);
-  } catch {
-    return { ok: false, status: 0, message: LOI_KHONG_RO };
-  }
-}
-
-/* ── Truyền thanh §7 — ADR 0067 §4, backend 026ae398 ──────────────────────────────────────────
- *
- * The cover's three steps, for a broadcast's ONE audio file (MP3 / M4A, ≤ 30 MB, platform's
- * `content-audio` policy). Two differences, both the server's:
- *
- *   1. `content_item_id` is REQUIRED: the audio is uploaded for a SAVED `truyen-thanh` item (400
- *      otherwise, 422 `audio_only_for_truyen_thanh` when the saved type is another one).
- *   2. The completion carries the duration THE OFFICER TYPED (`audio_duration_seconds`, 1 .. 21600) —
- *      the server never measures it (ADR 0067 §4.1) — and ATTACHES the file to the item at once. There
- *      is no `audio_file_id` to send on Lưu.
- *
- * Removing is `PATCH … {audio_file_id: ""}` (`removeContentAudio`). Replacing = remove, then upload:
- * the item holds one file and a second declaration answers 409 `audio_limit`.
- *
- * The errors carry the server's `code` as well as its sentence: a 422 at completion is final for
- * `audio_rejected` (the bytes were refused) but NOT for `invalid_audio_duration` (the file is still
- * pending; correcting the duration and completing again is the way out). Both sentences are shown
- * verbatim; the code only decides which button the screen offers.
- *
- * ⚠ Same bearer-credential rule as the cover: `upload.url` + `upload.fields` are used in the one
- * request they sign and never logged; `file_name` can name a person (rule 3).
+ * The answers carry the server's `code` as well as its sentence: the body image words each refusal
+ * itself (`bodyImageErrorText`), and the audio's 422 `invalid_audio_duration` is a refusal of the TYPED
+ * number, not of the file. `file_name` can name a person (rule 3): sent as a part, never logged.
  */
 
 /** A call's answer with the server's error `code` (`httpx.Error.code`), `""` when there is none. */
@@ -527,8 +433,8 @@ export type AudioCallResult<T> =
   | { readonly ok: true; readonly data: T }
   | { readonly ok: false; readonly status: number; readonly code: string; readonly message: string };
 
-export const AUDIO_FORM_MISSING =
-  "Máy chủ không gửi kèm biểu mẫu tải lên cho tệp âm thanh này. Hãy chọn lại tệp.";
+/** A call's answer with the server's error `code` — the audio's shape, shared. */
+export type CodedCallResult<T> = AudioCallResult<T>;
 
 async function readAudioJSON<T>(res: Response, want: number): Promise<AudioCallResult<T>> {
   if (res.status !== want) {
@@ -550,132 +456,96 @@ async function readAudioJSON<T>(res: Response, want: number): Promise<AudioCallR
   }
 }
 
-/** a. Declare the audio for a SAVED broadcast. One Idempotency-Key per attempt (see the cover's). */
-export async function requestAudioUpload(
-  body: comms_audioUploadIn,
+type CoverUpload = comms_post_content_items_cover_images;
+type BodyImageUpload = comms_post_content_items_body_images;
+type AudioUpload = comms_post_content_items_audio_files;
+
+/** The contracts' orders — `tsc` turns red here the day one changes. */
+const COVER_PARTS: CoverUpload["multipartParts"] = ["size", "file_name", "content_type", "content_item_id", "file"];
+const BODY_IMAGE_PARTS: BodyImageUpload["multipartParts"] = [
+  "size",
+  "file_name",
+  "content_type",
+  "content_item_id",
+  "file",
+];
+const AUDIO_PARTS: AudioUpload["multipartParts"] = [
+  "size",
+  "file_name",
+  "content_type",
+  "content_item_id",
+  "audio_duration_seconds",
+  "file",
+];
+
+/** What a screen passes for one image upload. */
+export type ImageUploadInput = {
+  readonly file: File;
+  readonly contentType: string;
+  /** The form's article id, or `undefined` before the first file of a new article. */
+  readonly contentItemId: string | undefined;
+};
+
+/** Upload the cover. 201: the cover `ready`, with the article it belongs to (`content_item_id`). */
+export function uploadCoverImage(
+  input: ImageUploadInput,
   idempotencyKey: string,
-): Promise<AudioCallResult<comms_audioUploadOut>> {
-  const path: comms_post_content_items_audio_files["duongDan"] = "/api/v1/content-items/audio-files";
-  // Field by field — never `...body`.
-  const sent: comms_audioUploadIn = {
-    content_item_id: body.content_item_id,
-    file_name: body.file_name,
-    content_type: body.content_type,
-    size: body.size,
-  };
-  try {
-    const res = await fetch(path, {
-      ...CHUNG,
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify(sent),
-    });
-    const r = await readAudioJSON<comms_audioUploadOut>(res, 201);
-    if (
-      r.ok &&
-      (r.data?.upload?.url === undefined || r.data.upload.fields === undefined || r.data.audio_file?.id === undefined)
-    ) {
-      return { ok: false, status: 201, code: "", message: AUDIO_FORM_MISSING };
-    }
-    return r;
-  } catch {
-    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
-  }
+  progress: UploadProgress = {},
+): Promise<UploadResult<comms_coverFileOut>> {
+  const path: CoverUpload["duongDan"] = "/api/v1/content-items/cover-images";
+  return sendUpload<CoverUpload, comms_coverFileOut>({
+    path,
+    parts: COVER_PARTS,
+    fields: { file_name: input.file.name, content_type: input.contentType, content_item_id: input.contentItemId },
+    file: input.file,
+    fileName: input.file.name,
+    idempotencyKey,
+    ...progress,
+  });
+}
+
+/** Upload one body image. 201: the image `ready`, its article id and a signed preview. */
+export function uploadBodyImage(
+  input: ImageUploadInput,
+  idempotencyKey: string,
+  progress: UploadProgress = {},
+): Promise<UploadResult<comms_bodyImageFileOut>> {
+  const path: BodyImageUpload["duongDan"] = "/api/v1/content-items/body-images";
+  return sendUpload<BodyImageUpload, comms_bodyImageFileOut>({
+    path,
+    parts: BODY_IMAGE_PARTS,
+    fields: { file_name: input.file.name, content_type: input.contentType, content_item_id: input.contentItemId },
+    file: input.file,
+    fileName: input.file.name,
+    idempotencyKey,
+    ...progress,
+  });
 }
 
 /**
- * c. Complete AND attach, with the typed duration. Safe to repeat: a file already `ready` answers itself
- * again — and then the duration sent is NOT applied (the server's rule; correcting it is a PATCH).
+ * Upload AND attach the audio of a SAVED broadcast, with the typed duration (whole seconds). 201: the
+ * file `ready`, attached, `duration_seconds` as sent.
  */
-export async function completeAudioUpload(
-  id: string,
-  durationSeconds: number,
-): Promise<AudioCallResult<comms_audioFileOut>> {
-  const template: comms_post_content_items_audio_files_by_id_completion["duongDan"] =
-    "/api/v1/content-items/audio-files/{id}/completion";
-  try {
-    const res = await fetch(template.replace("{id}", encodeURIComponent(id)), {
-      ...CHUNG,
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ audio_duration_seconds: durationSeconds }),
-    });
-    return await readAudioJSON<comms_audioFileOut>(res, 200);
-  } catch {
-    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
-  }
-}
-
-/* ── Ảnh thân bài — ADR 0067 §Sửa đổi 03/10/2026 (H1–H10, K1–K8), backend a8fbd9e3 / 2e5b993d ─────────
- *
- * The cover's three steps for an image INSIDE the body, plus a fourth route where the SERVER downloads a
- * pasted https link. The file then rides in `body` as `<figure><img data-file-id="…">…</figure>` — never a
- * URL (K2); the save checks every id (422 `invalid_body_image`).
- *
- * `content_item_id`: absent on the FIRST image of an unsaved article — the server reserves the article's
- * id and returns it — then sent back on every later body image AND the cover of that article
- * (`features/noi-dung/body-image.ts` threads it).
- *
- * The answers carry the server's `code` (same reader as the audio): the screen words each refusal itself
- * (`bodyImageErrorText`), so it needs to know which one it got.
- *
- * ⚠ Same bearer-credential rule as the cover: `upload.url` + `upload.fields` and every `preview_url` are
- * used where they are meant and never logged. A pasted URL can carry a token (rule 3): it goes in the
- * request body only.
- */
-
-/** A call's answer with the server's error `code` — the audio's shape, shared. */
-export type CodedCallResult<T> = AudioCallResult<T>;
-
-export const BODY_IMAGE_FORM_MISSING =
-  "Máy chủ không gửi kèm biểu mẫu tải lên cho ảnh này. Hãy chọn lại ảnh.";
-
-/** a. Declare one body image. One Idempotency-Key per attempt (see the cover's). */
-export async function requestBodyImageUpload(
-  body: comms_bodyImageUploadIn,
+export function uploadBroadcastAudio(
+  input: { readonly file: File; readonly contentType: string; readonly contentItemId: string; readonly durationSeconds: number },
   idempotencyKey: string,
-): Promise<CodedCallResult<comms_bodyImageUploadOut>> {
-  const path: comms_post_content_items_body_images["duongDan"] = "/api/v1/content-items/body-images";
-  // Field by field — never `...body`. An empty id is left out: "" would be a third spelling of "none".
-  const sent: comms_bodyImageUploadIn = {
-    file_name: body.file_name,
-    content_type: body.content_type,
-    size: body.size,
-  };
-  if (body.content_item_id) sent.content_item_id = body.content_item_id;
-  try {
-    const res = await fetch(path, {
-      ...CHUNG,
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify(sent),
-    });
-    const r = await readAudioJSON<comms_bodyImageUploadOut>(res, 201);
-    if (
-      r.ok &&
-      (r.data?.upload?.url === undefined ||
-        r.data.upload.fields === undefined ||
-        r.data.body_image?.id === undefined ||
-        !r.data.content_item_id)
-    ) {
-      return { ok: false, status: 201, code: "", message: BODY_IMAGE_FORM_MISSING };
-    }
-    return r;
-  } catch {
-    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
-  }
-}
-
-/** c. Complete one body image. Safe to repeat — a file already `ready` answers itself again. */
-export async function completeBodyImageUpload(id: string): Promise<CodedCallResult<comms_bodyImageFileOut>> {
-  const template: comms_post_content_items_body_images_by_id_completion["duongDan"] =
-    "/api/v1/content-items/body-images/{id}/completion";
-  try {
-    const res = await fetch(template.replace("{id}", encodeURIComponent(id)), { ...CHUNG, method: "POST" });
-    return await readAudioJSON<comms_bodyImageFileOut>(res, 200);
-  } catch {
-    return { ok: false, status: 0, code: "", message: LOI_KHONG_RO };
-  }
+  progress: UploadProgress = {},
+): Promise<UploadResult<comms_audioFileOut>> {
+  const path: AudioUpload["duongDan"] = "/api/v1/content-items/audio-files";
+  return sendUpload<AudioUpload, comms_audioFileOut>({
+    path,
+    parts: AUDIO_PARTS,
+    fields: {
+      file_name: input.file.name,
+      content_type: input.contentType,
+      content_item_id: input.contentItemId,
+      audio_duration_seconds: String(input.durationSeconds),
+    },
+    file: input.file,
+    fileName: input.file.name,
+    idempotencyKey,
+    ...progress,
+  });
 }
 
 /**

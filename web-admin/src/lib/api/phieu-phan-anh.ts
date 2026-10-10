@@ -20,12 +20,13 @@
  *
  *   GET  /api/v1/citizen-report-intake-fields               feedback.create
  *   POST /api/v1/citizen-reports                            feedback.create, Idempotency-Key
- *   POST …/{maTraCuu}/log-attachments                       feedback.read + note rule, Idempotency-Key
- *   POST …/{maTraCuu}/log-attachments/{id}/completion       feedback.read
+ *   POST …/{maTraCuu}/log-attachments                       feedback.read + note rule, Idempotency-Key (multipart)
  *   GET  …/{maTraCuu}/log-attachments/{id}/download         feedback.read (audited)
  *   GET  …/{maTraCuu}/verification-photos                   feedback.read (audited, ≤ 15 min)
- *   POST …/{maTraCuu}/verification-photos                   feedback.resolve, Idempotency-Key
- *   POST …/{maTraCuu}/verification-photos/{id}/completion   feedback.resolve
+ *   POST …/{maTraCuu}/verification-photos                   feedback.resolve, Idempotency-Key (multipart)
+ *
+ * The two `…/{id}/completion` routes are GONE (ADR 0052 §Sửa đổi 09/10/2026): each upload is ONE
+ * multipart POST through `lib/api/upload.ts`.
  *
  * Added 09/10/2026 (ADR 0053 §Sửa đổi 09/10/2026, 0072 §Trả lời 09/10/2026, 0088):
  *
@@ -81,7 +82,8 @@ import {
   thongBaoLoi,
   type KetQua,
 } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
-import { UPLOAD_FORM_MISSING, type CallResult } from "./task-attachments";
+import type { CallResult } from "./task-attachments";
+import { sendUpload, type UploadProgress, type UploadResult } from "./upload";
 import type {
   httpx_Error,
   petitions_citizenFieldListOut,
@@ -103,18 +105,12 @@ import type {
   petitions_get_citizen_reports_by_maTraCuu_log_attachments_by_id_download,
   petitions_get_citizen_reports_by_maTraCuu_verification_photos,
   petitions_photoOut,
-  petitions_photoUploadIn,
-  petitions_photoUploadOut,
   petitions_post_citizen_reports,
   petitions_post_citizen_reports_by_maTraCuu_log_attachments,
-  petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion,
   petitions_post_citizen_reports_by_maTraCuu_verification_photos,
-  petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion,
   petitions_staffIntakeIn,
   petitions_taskAttachmentDownloadOut,
   petitions_taskAttachmentOut,
-  petitions_taskAttachmentUploadIn,
-  petitions_taskAttachmentUploadOut,
   petitions_chuyenCapTrenVao,
   petitions_dongPhieuVao,
   petitions_get_citizen_reports,
@@ -1040,13 +1036,13 @@ export function bookStaffIntake(
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * FILES OF A PETITION — log attachments (§8.7) and verification photos (§8.4 `Sau khi xử lý`)
  *
- * The task attachment's flow (ADR 0052, `lib/api/task-attachments.ts`): declare → POST the bytes
- * straight to the object store (`uploadToStorage`, reused) → completion. Every call returns its HTTP
- * STATUS, because the status picks what the screen offers next (422 refused for good; 503 / 409 retry
- * the completion). The sentence is always the server's.
+ * Each upload is ONE multipart POST on this origin (`lib/api/upload.ts`, ADR 0052 §Sửa đổi 09/10/2026):
+ * the service streams, sniffs and scans the file inside that request and answers 201 with it stored.
+ * Every call returns its HTTP STATUS, because the status picks what the screen offers next (a refusal
+ * of the file is final; `isTransientUpload` may be sent again). The sentence is the server's.
  *
- * ⚠ The upload form and every signed `url` are BEARER CREDENTIALS: used at once, never logged, never
- * stored beyond component state, `no-store`. A file on a petition is evidence about one citizen's case.
+ * ⚠ Every signed `url` is a BEARER CREDENTIAL: used at once, never logged, never stored beyond
+ * component state, `no-store`. A file on a petition is evidence about one citizen's case.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
 const NO_ANSWER = 0;
@@ -1061,7 +1057,7 @@ async function callWithStatus<T>(path: string, init: RequestInit, want: number):
   try {
     res = await fetch(path, { ...CHUNG, ...init });
   } catch {
-    // Nothing logged: the answer would have held a signed link or an upload form.
+    // Nothing logged: the answer would have held a signed link.
     return { ok: false, status: NO_ANSWER, message: LOI_KHONG_RO };
   }
   if (res.status !== want) return { ok: false, status: res.status, message: await thongBaoLoi(res) };
@@ -1072,59 +1068,33 @@ async function callWithStatus<T>(path: string, init: RequestInit, want: number):
   }
 }
 
-/** A declaration's 201 without its form is a replay (`core/idem` stores a code, never a body). */
-function withForm<T extends { upload: { url: string; fields: Record<string, string> } }>(
-  r: CallResult<T>,
-): CallResult<T> {
-  if (r.ok && (r.data?.upload?.url === undefined || r.data.upload.fields === undefined)) {
-    return { ok: false, status: 201, message: UPLOAD_FORM_MISSING };
-  }
-  return r;
-}
-
-function jsonPost(body: unknown, idempotencyKey: string): RequestInit {
-  return {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-    body: JSON.stringify(body),
-  };
-}
+type LogAttachmentUpload = petitions_post_citizen_reports_by_maTraCuu_log_attachments;
+/** The contract's order — `tsc` turns red here the day it changes. */
+const LOG_ATTACHMENT_PARTS: LogAttachmentUpload["multipartParts"] = ["size", "content_type", "file_name", "file"];
 
 /**
- * POST …/log-attachments — declare one file for the next log entry. ONE KEY PER ATTEMPT (minted by the
- * caller): a replay cannot carry the form again. Whether THIS officer may attach to THIS petition is the
- * note rule, decided by the server (the assignee, or feedback.resolve / .assign / .classify); its 403
- * comes back verbatim. Field by field — never `...body`.
+ * POST …/log-attachments — upload one file for the next log entry, ONE multipart request; 201 is the
+ * stored file whose id rides on the entry. ONE KEY PER ATTEMPT (minted by the caller). Whether THIS
+ * officer may attach to THIS petition is the note rule, decided by the server (the assignee, or
+ * feedback.resolve / .assign / .classify); its 403 comes back verbatim.
  */
-export async function requestLogAttachmentUpload(
+export function uploadLogAttachment(
   maTraCuu: string,
-  body: petitions_taskAttachmentUploadIn,
+  file: File,
+  contentType: string,
   idempotencyKey: string,
-): Promise<CallResult<petitions_taskAttachmentUploadOut>> {
-  const template: petitions_post_citizen_reports_by_maTraCuu_log_attachments["duongDan"] =
-    "/api/v1/citizen-reports/{maTraCuu}/log-attachments";
-  const sent: petitions_taskAttachmentUploadIn = {
-    file_name: body.file_name,
-    content_type: body.content_type,
-    size: body.size,
-  };
-  return withForm(
-    await callWithStatus<petitions_taskAttachmentUploadOut>(
-      filePath(template, maTraCuu),
-      jsonPost(sent, idempotencyKey),
-      201,
-    ),
-  );
-}
-
-/** POST …/log-attachments/{id}/completion — sniff, scan, store. Safe to repeat. */
-export function completeLogAttachment(
-  maTraCuu: string,
-  id: string,
-): Promise<CallResult<petitions_taskAttachmentOut>> {
-  const template: petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion["duongDan"] =
-    "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion";
-  return callWithStatus<petitions_taskAttachmentOut>(filePath(template, maTraCuu, id), { method: "POST" }, 200);
+  progress: UploadProgress = {},
+): Promise<UploadResult<petitions_taskAttachmentOut>> {
+  const template: LogAttachmentUpload["duongDan"] = "/api/v1/citizen-reports/{maTraCuu}/log-attachments";
+  return sendUpload<LogAttachmentUpload, petitions_taskAttachmentOut>({
+    path: filePath(template, maTraCuu),
+    parts: LOG_ATTACHMENT_PARTS,
+    fields: { content_type: contentType, file_name: file.name },
+    file,
+    fileName: file.name,
+    idempotencyKey,
+    ...progress,
+  });
 }
 
 /**
@@ -1171,34 +1141,33 @@ export function listVerificationPhotos(maTraCuu: string): Promise<CallResult<pet
   return callWithStatus<petitions_photoListOut>(filePath(template, maTraCuu), { method: "GET" }, 200);
 }
 
-/**
- * POST …/verification-photos — declare ONE photo (`feedback.resolve`). ONE KEY PER ATTEMPT. 409
- * `petition_state` (the petition ended) and `photo_limit` (five per processing round) are the server's
- * sentences verbatim; the screen counts nothing.
- */
-export async function requestVerificationPhotoUpload(
-  maTraCuu: string,
-  body: petitions_photoUploadIn,
-  idempotencyKey: string,
-): Promise<CallResult<petitions_photoUploadOut>> {
-  const template: petitions_post_citizen_reports_by_maTraCuu_verification_photos["duongDan"] =
-    "/api/v1/citizen-reports/{maTraCuu}/verification-photos";
-  const sent: petitions_photoUploadIn = { content_type: body.content_type, size: body.size };
-  return withForm(
-    await callWithStatus<petitions_photoUploadOut>(
-      filePath(template, maTraCuu),
-      jsonPost(sent, idempotencyKey),
-      201,
-    ),
-  );
-}
+type VerificationPhotoUpload = petitions_post_citizen_reports_by_maTraCuu_verification_photos;
+/** The contract's order — `tsc` turns red here the day it changes. */
+const VERIFICATION_PHOTO_PARTS: VerificationPhotoUpload["multipartParts"] = ["size", "content_type", "file"];
 
-/** POST …/verification-photos/{id}/completion — scan, re-encode without EXIF, store. Safe to repeat. */
-export function completeVerificationPhoto(
+/**
+ * POST …/verification-photos — upload ONE photo (`feedback.resolve`), ONE multipart request; 201 is the
+ * photo scanned, re-encoded without EXIF and stored. ONE KEY PER ATTEMPT. 409 `petition_state` (the
+ * petition ended) and `photo_limit` (five per processing round) are the server's sentences verbatim; the
+ * screen counts nothing.
+ */
+export function uploadVerificationPhoto(
   maTraCuu: string,
-  id: string,
-): Promise<CallResult<petitions_photoOut>> {
-  const template: petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion["duongDan"] =
-    "/api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion";
-  return callWithStatus<petitions_photoOut>(filePath(template, maTraCuu, id), { method: "POST" }, 200);
+  file: File,
+  contentType: string,
+  idempotencyKey: string,
+  progress: UploadProgress = {},
+): Promise<UploadResult<petitions_photoOut>> {
+  const template: VerificationPhotoUpload["duongDan"] = "/api/v1/citizen-reports/{maTraCuu}/verification-photos";
+  return sendUpload<VerificationPhotoUpload, petitions_photoOut>({
+    path: filePath(template, maTraCuu),
+    parts: VERIFICATION_PHOTO_PARTS,
+    fields: { content_type: contentType },
+    file,
+    // The route has no use for a name (it never reads one), and a phone's file name can carry a person's
+    // name: a neutral one goes in the part header instead (rule 3, only the fields actually needed).
+    fileName: "photo",
+    idempotencyKey,
+    ...progress,
+  });
 }

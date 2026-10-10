@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// jsdom for this file: a file is CHOSEN, then three calls run; a download link is asked for only on a
+// jsdom for this file: a file is CHOSEN, then ONE upload runs; a download link is asked for only on a
 // CLICK. Both are behaviour, not markup.
 
 import { act } from "react";
@@ -9,6 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { storedIds } from "@/features/nhiem-vu/task-attachments";
+import { installFakeUploadXHR, partNames, partValue } from "@/lib/api/upload-test-support";
 import type { petitions_nhatKyPhieuRa, petitions_taskAttachmentOut } from "@/lib/api/schema.gen";
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
@@ -61,67 +62,94 @@ const FILE: petitions_taskAttachmentOut = {
   status: "stored",
 };
 
-describe("usePetitionLogAttachments — the three calls on the PETITION's routes", () => {
+describe("usePetitionLogAttachments — ONE upload per file on the PETITION's route", () => {
   let api: ReturnType<typeof usePetitionLogAttachments> | null = null;
-  function Harness({ deps }: { deps: LogAttachmentDeps }) {
+  function Harness({ deps }: { deps?: LogAttachmentDeps }) {
     api = usePetitionLogAttachments("PA-1", deps);
     return <p>{api.items.map((i) => i.state.kind).join(",")}</p>;
   }
 
-  function deps(change: Partial<LogAttachmentDeps> = {}): LogAttachmentDeps {
-    return {
-      request: vi.fn(async () => ({
-        ok: true as const,
-        data: {
-          attachment: { ...FILE, status: "pending" },
-          upload: { url: "https://kho.example.test/tmp", fields: { key: "t_01J/x" }, expires_at: "x" },
-        },
-      })),
-      upload: vi.fn(async () => ({ ok: true as const, data: null })),
-      complete: vi.fn(async () => ({ ok: true as const, data: FILE })),
-      ...change,
-    };
-  }
-
-  it("declare (name, type, size, one key) → upload → complete; only STORED ids are sent", async () => {
-    const d = deps();
-    render(<Harness deps={d} />);
+  it("the real route: one multipart POST on this origin, size before file; no store host, no completion", async () => {
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: FILE }));
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    render(<Harness />);
     act(() => api?.add([new File(["%PDF-1.7"], "bien-ban-hien-truong.pdf", { type: "application/pdf" })]));
     await flush();
-    const [code, body, key] = (d.request as ReturnType<typeof vi.fn>).mock.calls[0] as [string, unknown, string];
-    expect(code).toBe("PA-1");
-    expect(body).toEqual({ file_name: "bien-ban-hien-truong.pdf", content_type: "application/pdf", size: 8 });
-    expect(key).toMatch(/^[0-9a-f-]{36}$/);
-    expect(d.upload).toHaveBeenCalledTimes(1);
-    expect(d.complete).toHaveBeenCalledWith("PA-1", "01JFILE1");
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.url).toBe("/api/v1/citizen-reports/PA-1/log-attachments");
+    expect(partNames(sent[0])).toEqual(["size", "content_type", "file_name", "file"]);
+    expect(partValue(sent[0], "size")).toBe("8");
+    expect(sent[0]?.headers["Idempotency-Key"]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(fetchSpy).not.toHaveBeenCalled();
     expect(storedIds(api!.items)).toEqual(["01JFILE1"]);
   });
 
+  it("progress, then `checking` once every byte is sent, while the request is still open", async () => {
+    let answer: (r: Awaited<ReturnType<LogAttachmentDeps["upload"]>>) => void = () => {};
+    let hooks: Parameters<LogAttachmentDeps["upload"]>[4] = {};
+    const upload = vi.fn<LogAttachmentDeps["upload"]>(
+      (_code, _file, _type, _key, progress) =>
+        new Promise((ok) => {
+          hooks = progress;
+          answer = ok;
+        }),
+    );
+    render(<Harness deps={{ upload }} />);
+    act(() => api?.add([new File(["%PDF"], "a.pdf", { type: "application/pdf" })]));
+    await flush();
+    act(() => hooks.onProgress?.(40));
+    expect(api!.items[0]?.state).toEqual({ kind: "uploading", percent: 40 });
+    act(() => hooks.onSent?.());
+    expect(api!.items[0]?.state).toEqual({ kind: "checking" });
+    await act(async () => answer({ ok: true, data: FILE }));
+    expect(api!.items[0]?.state.kind).toBe("stored");
+  });
+
   it("a type outside PDF / JPG / PNG is refused before any call", async () => {
-    const d = deps();
-    render(<Harness deps={d} />);
+    const upload = vi.fn<LogAttachmentDeps["upload"]>();
+    render(<Harness deps={{ upload }} />);
     act(() => api?.add([new File(["x"], "so-lieu.xlsx", { type: "application/vnd.ms-excel" })]));
     await flush();
-    expect(d.request).not.toHaveBeenCalled();
+    expect(upload).not.toHaveBeenCalled();
     expect(storedIds(api!.items)).toEqual([]);
   });
 
-  it("503 at completion: retry the COMPLETION (never a new upload); its id is not sent until stored", async () => {
-    const complete = vi
-      .fn<LogAttachmentDeps["complete"]>()
-      .mockResolvedValueOnce({ ok: false, status: 503, message: "Chưa quét được mã độc. Vui lòng thử lại." })
+  it("503 upload_busy: `retry` sends the SAME file again with a NEW key; its id is not sent until stored", async () => {
+    const upload = vi
+      .fn<LogAttachmentDeps["upload"]>()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        code: "upload_busy",
+        message: "Hệ thống đang nhận nhiều tệp cùng lúc. Vui lòng thử lại sau ít giây.",
+      })
       .mockResolvedValueOnce({ ok: true, data: FILE });
-    const d = deps({ complete });
-    render(<Harness deps={d} />);
-    act(() => api?.add([new File(["%PDF"], "a.pdf", { type: "application/pdf" })]));
+    render(<Harness deps={{ upload }} />);
+    const f = new File(["%PDF"], "a.pdf", { type: "application/pdf" });
+    act(() => api?.add([f]));
     await flush();
     expect(api!.items[0]?.state.kind).toBe("retry");
     expect(storedIds(api!.items)).toEqual([]);
     act(() => api?.retry(api!.items[0]!.key));
     await flush();
-    expect(d.upload).toHaveBeenCalledTimes(1);
-    expect(complete).toHaveBeenCalledTimes(2);
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(upload.mock.calls[1]?.[1]).toBe(f);
+    expect(upload.mock.calls[1]?.[3]).not.toBe(upload.mock.calls[0]?.[3]);
     expect(storedIds(api!.items)).toEqual(["01JFILE1"]);
+  });
+
+  it("422 is final: no retry offered, the server's sentence kept", async () => {
+    const upload = vi.fn<LogAttachmentDeps["upload"]>(async () => ({
+      ok: false,
+      status: 422,
+      code: "attachment_rejected",
+      message: "Tệp bị từ chối vì phát hiện mã độc.",
+    }));
+    render(<Harness deps={{ upload }} />);
+    act(() => api?.add([new File(["%PDF"], "a.pdf", { type: "application/pdf" })]));
+    await flush();
+    expect(api!.items[0]?.state).toEqual({ kind: "refused", message: "Tệp bị từ chối vì phát hiện mã độc." });
   });
 });
 

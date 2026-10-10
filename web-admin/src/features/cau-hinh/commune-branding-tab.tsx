@@ -27,7 +27,6 @@ import {
   brandingInFlight,
   brandingStateText,
   brandingUpdatedText,
-  retryBrandingCompletion,
   runBrandingUpload,
   type BrandingUploadState,
 } from "./commune-branding";
@@ -102,11 +101,6 @@ export function CommuneBrandingTab() {
     if (last.kind === "done") await afterChange(kind, BRANDING_TEXT[kind].saved);
   }
 
-  async function retry(kind: BrandingImageKind, id: string) {
-    const last = await retryBrandingCompletion(kind, id, (s) => patch(kind, { upload: s }));
-    if (last.kind === "done") await afterChange(kind, BRANDING_TEXT[kind].saved);
-  }
-
   async function remove(kind: BrandingImageKind) {
     patch(kind, { removing: true, removeError: "", notice: "" });
     const r = await removeBrandingImage(kind);
@@ -129,7 +123,7 @@ export function CommuneBrandingTab() {
           updatedText={updated}
           card={cards[kind]}
           onPick={(f) => void pick(kind, f)}
-          onRetry={(id) => void retry(kind, id)}
+          onRetry={(f) => void pick(kind, f)}
           onAskRemove={() => patch(kind, { confirming: true, removeError: "", notice: "" })}
           onCancelRemove={() => patch(kind, { confirming: false })}
           onConfirmRemove={() => void remove(kind)}
@@ -174,7 +168,8 @@ export function BrandingCardView({
   updatedText: string;
   card: CardState;
   onPick: (f: File) => void;
-  onRetry: (id: string) => void;
+  /** `Gửi lại` after a refusal of the moment: the same file, sent again. */
+  onRetry: (f: File) => void;
   onAskRemove: () => void;
   onCancelRemove: () => void;
   onConfirmRemove: () => void;
@@ -277,7 +272,7 @@ export function BrandingCardView({
               type="button"
               variant="secondary"
               icon={<RotateCcw aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-              onClick={() => card.upload.kind === "retry" && onRetry(card.upload.id)}
+              onClick={() => card.upload.kind === "retry" && onRetry(card.upload.file)}
             >
               {BRANDING_RETRY_BUTTON}
             </Button>

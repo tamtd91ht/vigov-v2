@@ -178,7 +178,6 @@ import {
   coverInFlight,
   coverSizeLabel,
   coverStateText,
-  retryCoverCompletion,
   runCoverUpload,
   type CoverUploadState,
 } from "./cover-image";
@@ -189,7 +188,6 @@ import {
   audioInFlight,
   audioStateText,
   heldAudioProblem,
-  retryAudioCompletion,
   runAudioUpload,
   savedAudioPatch,
   type AudioPatch,
@@ -198,8 +196,8 @@ import {
 } from "./broadcast-audio";
 import {
   BODY_IMAGE_WAIT_COVER,
+  bodyImageInFlight,
   previewsFromItem,
-  retryBodyImageCompletion,
   runBodyImageFromUrl,
   runBodyImageUpload,
   type BodyImageState,
@@ -471,7 +469,7 @@ export function SoNoiDung() {
   /**
    * After a save that returned the item: upload the audio file held for it, then `done()` — one press for
    * the officer, the file after the item (prototype `ContentItemForm.tsx:150-180`), with the existing
-   * three-step flow (`runAudioUpload`). Nothing held → `done()` at once.
+   * one-request upload (`runAudioUpload`). Nothing held → `done()` at once.
    *
    * A FAILED UPLOAD LEAVES THE ITEM SAVED, AND A DIALOG OPEN: the EDIT dialog of that item — never the
    * create form again, whose second Lưu would be a second item — with the prototype's sentence and the
@@ -1558,7 +1556,7 @@ export function FormNoiDung({
    * Functional updates: the reply lands after renders the officer may have made meanwhile.
    */
   function onBodyImageState(s: BodyImageState): void {
-    setBodyImageBusy(s.kind === "requesting" || s.kind === "uploading" || s.kind === "checking" || s.kind === "fetching");
+    setBodyImageBusy(bodyImageInFlight(s));
     if (s.kind !== "ready") return;
     const { fileId, contentItemId, previewUrl } = s.image;
     setArticleId((a) => a ?? contentItemId);
@@ -1567,9 +1565,10 @@ export function FormNoiDung({
     }
   }
 
-  // A cover's FIRST declaration on a new article is in flight: its reply will name the reserved id, and
-  // a body image declared now, with no id, would reserve a second draft. Held for that one round trip.
-  const coverReserving = articleId === undefined && cover.kind === "requesting";
+  // A cover's FIRST upload on a new article is in flight: its reply will name the reserved id, and a body
+  // image sent now, with no id, would reserve a second draft. Held for the cover's WHOLE flight — the id
+  // arrives only with the reply of the one request (ADR 0052 §Sửa đổi 09/10/2026).
+  const coverReserving = articleId === undefined && coverInFlight(cover);
 
   const bodyImages: BodyImageSource = {
     blocked: coverReserving ? BODY_IMAGE_WAIT_COVER : null,
@@ -1585,11 +1584,6 @@ export function FormNoiDung({
       ),
     fromUrl: (url, onState) =>
       runBodyImageFromUrl(url, articleId, (s) => {
-        onBodyImageState(s);
-        onState(s);
-      }),
-    retry: (id, onState) =>
-      retryBodyImageCompletion(id, (s) => {
         onBodyImageState(s);
         onState(s);
       }),
@@ -1843,7 +1837,9 @@ export function FormNoiDung({
                   type="button"
                   className="nut-phu"
                   disabled={dangGui || audioBusy}
-                  onClick={() => void retryAudioCompletion(audioState.id, heldDuration, onAudioState)}
+                  onClick={() =>
+                    void runAudioUpload(audioState.again.file, audioState.again.contentItemId, heldDuration, onAudioState)
+                  }
                 >
                   {AUDIO_RETRY_BUTTON}
                 </button>
@@ -1862,7 +1858,7 @@ export function FormNoiDung({
           // The article id a body image reserved, when there is one — one draft for every file. A
           // cover uploaded first reserves it instead, and the body images then use the cover's.
           onPick={(file) => void runCoverUpload(file, articleId, onCoverState, keepArticleId)}
-          onRetry={(id) => void retryCoverCompletion(id, onCoverState, keepArticleId)}
+          onRetry={(file) => void runCoverUpload(file, articleId, onCoverState, keepArticleId)}
         />
 
         {/* The prototype's plain checkbox and words — no box around it. */}
@@ -1921,7 +1917,7 @@ export function FormNoiDung({
  * §7 `Ảnh đại diện` — `Ảnh banner` for a banner — drawn as the prototype's `FilePicker` (`ContentItemForm.tsx:
  * 392-444`): the label, then ONE dashed slot that IS the picker (upload icon · `Chọn tệp từ máy` or `Đã có
  * tệp — chọn tệp mới để thay` · the hint · the chosen file's size). Presentational: the form owns the id and
- * the upload state (`cover-image.ts` runs the three-step flow); progress, refusal and retry stay under the
+ * the upload state (`cover-image.ts` runs the one-request upload); progress, refusal and retry stay under the
  * slot. NO PREVIEW AND NO `Gỡ ảnh` — the prototype's slot has neither: an existing cover is said by the
  * slot's own words, and replaced by choosing another file.
  *
@@ -1943,7 +1939,8 @@ export function CoverImageField({
   state: CoverUploadState;
   disabled: boolean;
   onPick: (file: File) => void;
-  onRetry: (id: string) => void;
+  /** `Gửi lại` after a refusal of the moment: the same file, sent again. */
+  onRetry: (file: File) => void;
 }) {
   // The file picked in this form — its name and size are shown in the slot, as in the prototype. Never
   // sent anywhere from here, never logged.
@@ -2013,7 +2010,7 @@ export function CoverImageField({
             size="sm"
             icon={<RefreshCw aria-hidden="true" focusable="false" />}
             disabled={disabled}
-            onClick={() => onRetry(state.id)}
+            onClick={() => onRetry(state.file)}
           >
             {COVER_RETRY_BUTTON}
           </Button>

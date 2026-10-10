@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// jsdom for this file: the upload is three calls in order after a file is CHOSEN, and the expired-link
+// jsdom for this file: the upload is ONE request after a file is CHOSEN, and the expired-link
 // refetch happens after a thumbnail is CLICKED — neither is visible in static markup.
 
 import { act } from "react";
@@ -9,7 +9,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { petitions_photoLinkOut } from "@/lib/api/schema.gen";
-import type { CallResult } from "@/lib/api/task-attachments";
+import type { UploadResult } from "@/lib/api/upload";
+import { installFakeUploadXHR, partNames } from "@/lib/api/upload-test-support";
 
 import {
   AFTER_PHOTO_CLOSED,
@@ -20,7 +21,8 @@ import {
 } from "./nhan-phieu";
 import { scenePhotosState } from "./scene-photos";
 import {
-  afterPhotoCompletion,
+  AFTER_PHOTO_RETRY_BUTTON,
+  afterPhotoUpload,
   VerificationPhotos,
   VerificationPhotosView,
   type VerificationDeps,
@@ -64,15 +66,7 @@ async function flush(times = 6) {
 function deps(change: Partial<VerificationDeps> = {}): VerificationDeps {
   return {
     load: vi.fn(async () => ({ ok: true as const, data: { items: [] } })),
-    request: vi.fn(async () => ({
-      ok: true as const,
-      data: {
-        photo: { id: "01JNEW", content_type: "image/jpeg", size_bytes: 3, status: "pending", created_at: "x" },
-        upload: { url: "https://kho.example.test/tmp", fields: { key: "t_01J/x" }, expires_at: "x" },
-      },
-    })),
-    upload: vi.fn(async () => ({ ok: true as const, data: null })),
-    complete: vi.fn(async () => ({
+    upload: vi.fn<VerificationDeps["upload"]>(async () => ({
       ok: true as const,
       data: { id: "01JNEW", content_type: "image/jpeg", size_bytes: 3, status: "stored", created_at: "x" },
     })),
@@ -148,16 +142,17 @@ describe("VerificationPhotosView — what the column says", () => {
   });
 });
 
-describe("afterPhotoCompletion — what a completion answer turns into", () => {
-  const r = (x: CallResult<{ id: string; content_type: string; size_bytes: number; status: string; created_at: string }>) =>
-    afterPhotoCompletion("01J", x);
-  it("stored → stored; 422 → refused for good; 503 / 409 / no answer → retry the completion", () => {
+describe("afterPhotoUpload — what an upload's answer turns into", () => {
+  const r = (x: UploadResult<{ id: string; content_type: string; size_bytes: number; status: string; created_at: string }>) =>
+    afterPhotoUpload(x);
+  it("stored → stored; 422 / 409 → refused for good; 503 / 408 / no answer → send again", () => {
     expect(r({ ok: true, data: { id: "01J", content_type: "image/jpeg", size_bytes: 1, status: "stored", created_at: "" } }).kind).toBe("stored");
-    expect(r({ ok: false, status: 422, message: "Ảnh bị từ chối vì phát hiện mã độc." })).toEqual({
+    expect(r({ ok: false, status: 422, code: "photo_rejected", message: "Ảnh bị từ chối vì phát hiện mã độc." })).toEqual({
       kind: "refused",
       message: "Ảnh bị từ chối vì phát hiện mã độc.",
     });
-    for (const status of [503, 409, 0]) expect(r({ ok: false, status, message: "m" }).kind).toBe("retry");
+    expect(r({ ok: false, status: 409, code: "photo_limit", message: "m" }).kind).toBe("refused");
+    for (const status of [503, 408, 0]) expect(r({ ok: false, status, code: "", message: "m" }).kind).toBe("retry");
   });
 });
 
@@ -173,34 +168,73 @@ describe("VerificationPhotos — the flow", () => {
     expect(d.load).toHaveBeenCalledTimes(1);
   });
 
-  it("choose a photo: declare (type + size, a key) → upload → complete → the list read ONE more time", async () => {
+  it("choose a photo: ONE upload (type, a key) → the list read ONE more time", async () => {
     const d = deps();
     const h = mount(d);
     await flush();
     choose(h, new File([new Uint8Array([1, 2, 3])], "sau.jpg", { type: "image/jpeg" }));
     await flush();
 
-    expect(d.request).toHaveBeenCalledTimes(1);
-    const [code, body, key] = (d.request as ReturnType<typeof vi.fn>).mock.calls[0] as [string, unknown, string];
+    const upload = d.upload as ReturnType<typeof vi.fn>;
+    expect(upload).toHaveBeenCalledTimes(1);
+    const [code, file, type, key] = upload.mock.calls[0] as [string, File, string, string];
     expect(code).toBe("PA-1");
-    expect(body).toEqual({ content_type: "image/jpeg", size: 3 });
+    expect(file.size).toBe(3);
+    expect(type).toBe("image/jpeg");
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
-    expect(d.upload).toHaveBeenCalledTimes(1);
-    expect(d.complete).toHaveBeenCalledWith("PA-1", "01JNEW");
     expect(d.load).toHaveBeenCalledTimes(2);
     expect(h.textContent).toContain("Đã lưu vào phiếu.");
   });
 
-  it("409 `photo_limit` at the declaration: the server's sentence, nothing uploaded", async () => {
+  it("the real route: one multipart POST on this origin, no completion call", async () => {
+    const sent = installFakeUploadXHR(() => ({
+      status: 201,
+      body: { id: "01JNEW", content_type: "image/jpeg", size_bytes: 3, status: "stored", created_at: "x" },
+    }));
+    const d = deps();
+    const h = mount({ load: d.load, upload: (await import("@/lib/api/phieu-phan-anh")).uploadVerificationPhoto });
+    await flush();
+    choose(h, new File([new Uint8Array([1, 2, 3])], "sau.jpg", { type: "image/jpeg" }));
+    await flush(10);
+    expect(sent.map((x) => x.url)).toEqual(["/api/v1/citizen-reports/PA-1/verification-photos"]);
+    expect(partNames(sent[0])).toEqual(["size", "content_type", "file"]);
+    expect(h.textContent).toContain("Đã lưu vào phiếu.");
+    vi.unstubAllGlobals();
+  });
+
+  it("409 `photo_limit`: the server's sentence, final — no retry button", async () => {
     const cau = "Phiếu đã có đủ số ảnh sau xử lý tối đa.";
-    const d = deps({ request: vi.fn(async () => ({ ok: false as const, status: 409, message: cau })) });
+    const d = deps({ upload: vi.fn(async () => ({ ok: false as const, status: 409, code: "photo_limit", message: cau })) });
     const h = mount(d);
     await flush();
     choose(h, new File([new Uint8Array([1])], "sau.png", { type: "image/png" }));
     await flush();
     expect(h.querySelector('[role="alert"]')?.textContent).toBe(`Bị từ chối: ${cau}`);
-    expect(d.upload).not.toHaveBeenCalled();
+    expect(h.textContent).not.toContain(AFTER_PHOTO_RETRY_BUTTON);
     expect(d.load).toHaveBeenCalledTimes(1);
+  });
+
+  it("503 upload_busy: `Gửi lại` sends the SAME photo again", async () => {
+    const busy = "Hệ thống đang nhận nhiều tệp cùng lúc. Vui lòng thử lại sau ít giây.";
+    const upload = vi
+      .fn<VerificationDeps["upload"]>()
+      .mockResolvedValueOnce({ ok: false, status: 503, code: "upload_busy", message: busy })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: { id: "01JNEW", content_type: "image/jpeg", size_bytes: 1, status: "stored", created_at: "x" },
+      });
+    const h = mount(deps({ upload }));
+    await flush();
+    const f = new File([new Uint8Array([1])], "sau.png", { type: "image/png" });
+    choose(h, f);
+    await flush();
+    expect(h.textContent).toContain(busy);
+    const again = [...h.querySelectorAll("button")].find((b) => b.textContent === AFTER_PHOTO_RETRY_BUTTON);
+    act(() => again?.click());
+    await flush();
+    expect(upload).toHaveBeenCalledTimes(2);
+    expect(upload.mock.calls[1]?.[1]).toBe(f);
+    expect(h.textContent).toContain("Đã lưu vào phiếu.");
   });
 
   it("a PDF is refused before any call", async () => {
@@ -209,7 +243,7 @@ describe("VerificationPhotos — the flow", () => {
     await flush();
     choose(h, new File(["%PDF"], "bien-ban.pdf", { type: "application/pdf" }));
     await flush();
-    expect(d.request).not.toHaveBeenCalled();
+    expect(d.upload).not.toHaveBeenCalled();
     expect(h.textContent).toContain("Chỉ tải được ảnh JPG, PNG hoặc WebP.");
   });
 

@@ -9,13 +9,9 @@ import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { cn } from "@/lib/cn";
 import { removeTaskAttachment } from "@/lib/api/nhiem-vu";
 
-import {
-  attachmentDownloadLink,
-  completeAttachment,
-  requestAttachmentUpload,
-  uploadToStorage,
-} from "@/lib/api/task-attachments";
+import { attachmentDownloadLink, uploadTaskAttachment } from "@/lib/api/task-attachments";
 import type { petitions_taskAttachmentOut } from "@/lib/api/schema.gen";
+import type { UploadProgress, UploadResult } from "@/lib/api/upload";
 
 import {
   ATTACH_ACCEPT,
@@ -26,7 +22,7 @@ import {
   ATTACH_RETRY_BUTTON,
   DOWNLOAD_OPENING,
   DOWNLOAD_REFUSED,
-  afterCompletion,
+  afterUpload,
   attachmentStateText,
   attachmentTypeLabel,
   declaredType,
@@ -38,25 +34,33 @@ import {
 import { INPUT_CLASS, LABEL_CLASS } from "./task-spec";
 import { Glyph } from "./task-ui";
 
+/** One file's upload to one record's route: one multipart request (`lib/api/upload.ts`). */
+export type SendAttachment = (
+  file: File,
+  contentType: string,
+  idempotencyKey: string,
+  progress: UploadProgress,
+) => Promise<UploadResult<petitions_taskAttachmentOut>>;
+
 /**
- * The files of ONE log entry being written, and the ADR 0052 flow for each (a → b → c). The entry
- * form owns the list; it sends `storedIds(items)` with the entry and clears the list after a 201.
+ * The files of ONE log entry being written, each sent as ONE request (ADR 0052 §Sửa đổi 09/10/2026).
+ * The entry form owns the list; it sends `storedIds(items)` with the entry and clears the list after a
+ * 201. Used by the task log (`useAttachmentUploads`) and the petition log (`usePetitionLogAttachments`)
+ * — only the route differs.
  *
  * EACH FILE ON ITS OWN: one refused file does not stop the others, and the list says per file where it
  * stands. Removing a file that is not sent yet only drops it from the list — its id is simply never
- * sent (a stored-but-unsent upload is never attached to anything).
+ * sent (a stored-but-unsent upload is never attached to anything). The chosen `File` stays in `picked`
+ * (browser memory, this form only) so `retry` can send the same bytes again after a refusal of the
+ * moment; `retry` acts only on a key still in the list, and `clear` starts a fresh map.
  */
-export function useAttachmentUploads(taskCode: string) {
+export function useAttachmentUploadList(send: SendAttachment, keyPrefix: string) {
   const [items, setItems] = useState<readonly AttachmentItem[]>([]);
   const seq = useRef(0);
+  const picked = useRef(new Map<string, File>());
 
   const set = (key: string, state: AttachmentState) =>
     setItems((list) => list.map((i) => (i.key === key ? { ...i, state } : i)));
-
-  async function complete(key: string, id: string): Promise<void> {
-    set(key, { kind: "checking", id });
-    set(key, afterCompletion(id, await completeAttachment(taskCode, id)));
-  }
 
   async function start(key: string, file: File): Promise<void> {
     const t = declaredType(file);
@@ -64,36 +68,22 @@ export function useAttachmentUploads(taskCode: string) {
       set(key, { kind: "refused", message: t.message });
       return;
     }
-    // a. declare — one key per attempt (see `requestAttachmentUpload`).
-    const req = await requestAttachmentUpload(
-      taskCode,
-      { file_name: file.name, content_type: t.contentType, size: file.size },
-      crypto.randomUUID(),
-    );
-    if (!req.ok) {
-      // The limits refusal, 503 "chưa cấu hình kho lưu tệp", 403 — the server's sentence verbatim.
-      set(key, { kind: "refused", message: req.message });
-      return;
-    }
-    const id = req.data.attachment.id;
-    // b. the bytes, straight to the store. The form (`req.data.upload`) is used here and dropped.
-    set(key, { kind: "uploading", id, percent: 0 });
-    const up = await uploadToStorage(req.data.upload, file, file.name, (percent) =>
-      set(key, { kind: "uploading", id, percent }),
-    );
-    if (!up.ok) {
-      set(key, { kind: "refused", message: up.message });
-      return;
-    }
-    // c. complete.
-    await complete(key, id);
+    set(key, { kind: "uploading", percent: 0 });
+    // One Idempotency-Key per attempt: a retry is a new attempt.
+    const r = await send(file, t.contentType, crypto.randomUUID(), {
+      onProgress: (percent) => set(key, { kind: "uploading", percent }),
+      onSent: () => set(key, { kind: "checking" }),
+    });
+    // The limits refusal, 422, 403, 503 "chưa cấu hình kho lưu tệp" — the server's sentence verbatim.
+    set(key, afterUpload(r));
   }
 
-  function add(files: readonly File[]): void {
-    for (const f of files) {
+  function add(chosen: readonly File[]): void {
+    for (const f of chosen) {
       seq.current += 1;
-      const key = `tep-${seq.current}`;
-      setItems((list) => [...list, { key, name: f.name, size: f.size, state: { kind: "requesting" } }]);
+      const key = `${keyPrefix}-${seq.current}`;
+      picked.current.set(key, f);
+      setItems((list) => [...list, { key, name: f.name, size: f.size, state: { kind: "uploading", percent: 0 } }]);
       void start(key, f);
     }
   }
@@ -101,14 +91,26 @@ export function useAttachmentUploads(taskCode: string) {
   return {
     items,
     add,
-    /** 503 / 409 at completion: ask again — the bytes are already in the store. */
+    /** A refusal of the moment: send the same file again — nothing was stored the first time. */
     retry: (key: string) => {
       const it = items.find((i) => i.key === key);
-      if (it !== undefined && it.state.kind === "retry") void complete(key, it.state.id);
+      const f = picked.current.get(key);
+      if (it !== undefined && it.state.kind === "retry" && f !== undefined) void start(key, f);
     },
     remove: (key: string) => setItems((list) => list.filter((i) => i.key !== key)),
-    clear: () => setItems([]),
+    clear: () => {
+      picked.current = new Map();
+      setItems([]);
+    },
   };
+}
+
+/** The task log's files: `POST /api/v1/tasks/{ma}/attachments`. */
+export function useAttachmentUploads(taskCode: string) {
+  return useAttachmentUploadList(
+    (file, contentType, key, progress) => uploadTaskAttachment(taskCode, file, contentType, key, progress),
+    "tep",
+  );
 }
 
 /** The picker and the per-file list under the entry's text field. Presentational. */

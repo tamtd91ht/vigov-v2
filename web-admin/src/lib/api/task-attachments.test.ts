@@ -1,19 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { LOI_KHONG_RO } from "./goi";
 import { addTaskLogEntry } from "./nhiem-vu";
-import {
-  UPLOAD_FORM_MISSING,
-  attachmentDownloadLink,
-  completeAttachment,
-  requestAttachmentUpload,
-  uploadForm,
-} from "./task-attachments";
+import { attachmentDownloadLink, uploadTaskAttachment } from "./task-attachments";
+import { installFakeUploadXHR, partNames, partValue } from "./upload-test-support";
 
 /**
- * ADR 0052 §1 on the task timeline (A4, b37ec2d). Pinned: each route and body, the key, the multipart
- * ORDER (fields first, file last), and that every refusal comes back with its status and the server's
- * sentence. The upload to the store itself (XHR) is not run here: no DOM.
+ * ADR 0052 §Sửa đổi 09/10/2026 on the task timeline: ONE multipart POST to the task's own route, on this
+ * origin — no declaration, no store host, no `/completion`. Pinned: the route, the parts in the contract's
+ * order with `size` before `file`, the key, and the refusal coming back with its status and sentence.
  */
 
 function stub(res: Response) {
@@ -24,91 +18,65 @@ function stub(res: Response) {
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-const ATT = { id: "01JFILE", file_name: "bien-ban.pdf", mime_type: "", size_bytes: 0, status: "pending" };
-const UPLOAD = {
-  attachment: ATT,
-  upload: {
-    url: "https://files.example.test/vigov-stg-temp",
-    fields: { key: "upload/x", policy: "P", "x-amz-signature": "S", "Content-Type": "application/pdf" },
-    expires_at: "2026-09-29T03:15:00Z",
-  },
-};
+const STORED = { id: "01JFILE", file_name: "bien-ban.pdf", mime_type: "application/pdf", size_bytes: 4, status: "stored" };
+const pdf = () => new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "bien-ban.pdf", { type: "application/pdf" });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
-describe("a. declare the file", () => {
-  it("POST …/attachments with exactly {file_name, content_type, size} and the caller's Idempotency-Key", async () => {
-    const fake = stub(json(UPLOAD, 201));
-    const r = await requestAttachmentUpload(
-      "NV 19",
-      { file_name: "bien-ban.pdf", content_type: "application/pdf", size: 1234, extra: 1 } as never,
-      "khoa-gia",
-    );
-    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV%2019/attachments");
-    const init = fake.mock.calls[0]?.[1];
-    expect(init?.method).toBe("POST");
-    expect((init?.headers as Record<string, string>)["Idempotency-Key"]).toBe("khoa-gia");
-    expect(JSON.parse(String(init?.body))).toEqual({ file_name: "bien-ban.pdf", content_type: "application/pdf", size: 1234 });
-    expect(r).toEqual({ ok: true, data: UPLOAD });
+describe("uploadTaskAttachment — one request", () => {
+  it("POST /api/v1/tasks/{ma}/attachments: size, content_type, file_name, then the file; the caller's key", async () => {
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: STORED }));
+    const fetchSpy = stub(json({}, 500));
+    const progress: number[] = [];
+
+    const r = await uploadTaskAttachment("NV 19", pdf(), "application/pdf", "khoa-gia", { onProgress: (p) => progress.push(p) });
+
+    expect(r).toEqual({ ok: true, data: STORED });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.method).toBe("POST");
+    expect(sent[0]?.url).toBe("/api/v1/tasks/NV%2019/attachments");
+    expect(sent[0]?.headers["Idempotency-Key"]).toBe("khoa-gia");
+    expect(partNames(sent[0])).toEqual(["size", "content_type", "file_name", "file"]);
+    expect(partValue(sent[0], "size")).toBe("4");
+    expect(partValue(sent[0], "content_type")).toBe("application/pdf");
+    expect(partValue(sent[0], "file_name")).toBe("bien-ban.pdf");
+    expect(progress).toEqual([50, 100]);
+    // No second call of any kind: no declaration, no completion.
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("the limits refusal and 503 \"chưa cấu hình kho lưu tệp\" come back VERBATIM, with the status", async () => {
+  it("the limits refusal and 503 \"chưa cấu hình kho lưu tệp\" come back VERBATIM, with status and code", async () => {
     const cau = "Chưa cấu hình kho lưu tệp nên chưa đính kèm được tệp. Hãy báo quản trị hệ thống.";
-    stub(json({ code: "storage_not_configured", message: cau, trace_id: "t" }, 503));
-    expect(await requestAttachmentUpload("NV19", { file_name: "a.pdf", content_type: "application/pdf", size: 1 }, "k")).toEqual({
+    installFakeUploadXHR(() => ({ status: 503, body: { code: "storage_not_configured", message: cau, trace_id: "t" } }));
+    expect(await uploadTaskAttachment("NV19", pdf(), "application/pdf", "k")).toEqual({
       ok: false,
       status: 503,
+      code: "storage_not_configured",
       message: cau,
     });
   });
 
-  it("a replayed 201 without the signed form is NOT an upload slot", async () => {
-    stub(json({ code: "", replayed: true }, 201));
-    const r = await requestAttachmentUpload("NV19", { file_name: "a.pdf", content_type: "application/pdf", size: 1 }, "k");
-    expect(r).toEqual({ ok: false, status: 201, message: UPLOAD_FORM_MISSING });
-  });
-});
-
-describe("b. the form sent to the store", () => {
-  it("every policy field FIRST, in order, then the file LAST, named `file`", () => {
-    const f = uploadForm(UPLOAD.upload, new Blob(["%PDF"]), "bien-ban.pdf");
-    const keys = [...f.keys()];
-    expect(keys).toEqual(["key", "policy", "x-amz-signature", "Content-Type", "file"]);
-    expect(f.get("policy")).toBe("P");
-    expect(f.get("file")).toBeInstanceOf(Blob);
-  });
-});
-
-describe("c. completion — the status picks the button, the sentence is the server's", () => {
-  it("200 ⇒ the stored file", async () => {
-    const fake = stub(json({ ...ATT, status: "stored", mime_type: "application/pdf", size_bytes: 1234 }, 200));
-    const r = await completeAttachment("NV19", "01JFILE");
-    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/tasks/NV19/attachments/01JFILE/completion");
-    expect(fake.mock.calls[0]?.[1]?.method).toBe("POST");
-    expect(r.ok && r.data.status).toBe("stored");
-  });
-
   for (const [status, code] of [
     [422, "attachment_rejected"],
-    [503, "malware_scan_unavailable"],
-    [409, "upload_changed"],
+    [413, "file_too_large"],
+    [409, "attachment_limit"],
   ] as const) {
     it(`${status} ${code} ⇒ status + sentence`, async () => {
-      stub(json({ code, message: `Câu giả ${code}.`, trace_id: "t" }, status));
-      expect(await completeAttachment("NV19", "01JFILE")).toEqual({ ok: false, status, message: `Câu giả ${code}.` });
+      installFakeUploadXHR(() => ({ status, body: { code, message: `Câu giả ${code}.`, trace_id: "t" } }));
+      expect(await uploadTaskAttachment("NV19", pdf(), "application/pdf", "k")).toEqual({
+        ok: false,
+        status,
+        code,
+        message: `Câu giả ${code}.`,
+      });
     });
   }
-
-  it("no answer ⇒ status 0, the generic sentence", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("x"))));
-    expect(await completeAttachment("NV19", "x")).toEqual({ ok: false, status: 0, message: LOI_KHONG_RO });
-  });
 });
 
-describe("d. download link", () => {
+describe("download link", () => {
   it("GET …/download ⇒ {url, expires_at}", async () => {
     const fake = stub(json({ url: "https://files.example.test/signed", expires_at: "2026-09-29T03:15:00Z" }, 200));
     const r = await attachmentDownloadLink("NV19", "01JFILE");

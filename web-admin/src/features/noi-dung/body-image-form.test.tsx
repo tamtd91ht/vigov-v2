@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 //
 // jsdom for this file: the form mounts the real Tiptap editor and runs the real upload calls over a fake
-// `fetch` / `XMLHttpRequest`.
+// `fetch` / `XMLHttpRequest` (the shared upload fake).
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { comms_noiDungRa } from "@/lib/api/schema.gen";
+import { installFakeUploadXHR } from "@/lib/api/upload-test-support";
 
 import { BODY_IMAGE_WAIT_COVER } from "./body-image";
 import { BODY_IMAGE_URL_BUTTON } from "./body-image-panel";
@@ -46,80 +47,47 @@ beforeAll(() => {
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-const PRESIGNED = {
-  url: "https://files.example.test/vigov-stg-temp",
-  fields: { key: "upload/x", policy: "P" },
-  expires_at: "2026-10-03T03:15:00Z",
-};
-
 /**
- * `coverGate`: when given, the cover's DECLARATION answers only once it resolves — the window in which the
- * reserved id is not known yet. The server ECHOES a named article and reserves one otherwise, as it does.
+ * `coverGate`: when given, the cover's UPLOAD answers only once it resolves — the window in which the
+ * reserved id is not known yet (the whole flight of the one request). The server ECHOES a named article
+ * and reserves one otherwise, as it does. Uploads are recorded with their text parts as `body`.
  */
 function stubNetwork(coverGate?: Promise<void>) {
   const calls: { url: string; body: Record<string, unknown> | null }[] = [];
-  let coverArticle = COVER_RESERVED;
-  let bodyArticle = "01JND1";
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null;
       calls.push({ url, body });
-      switch (url) {
-        case "/api/v1/content-items/body-images/from-url":
-          return json(
-            { id: FILE_A, content_item_id: RESERVED, mime_type: "image/jpeg", size_bytes: 3, status: "ready", preview_url: PREVIEW_A },
-            201,
-          );
-        case "/api/v1/content-items/body-images":
-          bodyArticle = typeof body?.content_item_id === "string" ? body.content_item_id : "01JND1";
-          return json(
-            {
-              body_image: { id: FILE_B, content_item_id: bodyArticle, mime_type: "", size_bytes: 0, status: "pending" },
-              content_item_id: bodyArticle,
-              upload: PRESIGNED,
-            },
-            201,
-          );
-        case `/api/v1/content-items/body-images/${FILE_B}/completion`:
-          return json(
-            { id: FILE_B, content_item_id: bodyArticle, mime_type: "image/png", size_bytes: 3, status: "ready", preview_url: PREVIEW_B },
-            200,
-          );
-        case "/api/v1/content-items/cover-images":
-          if (coverGate !== undefined) await coverGate;
-          coverArticle = typeof body?.content_item_id === "string" ? body.content_item_id : COVER_RESERVED;
-          return json(
-            {
-              cover_image: { id: COVER_ID, content_item_id: coverArticle, mime_type: "", size_bytes: 0, status: "pending" },
-              content_item_id: coverArticle,
-              upload: PRESIGNED,
-            },
-            201,
-          );
-        default:
-          if (url.startsWith("/api/v1/content-items/cover-images/")) {
-            return json({ id: COVER_ID, content_item_id: coverArticle, mime_type: "image/jpeg", size_bytes: 3, status: "ready" }, 200);
-          }
-          return json({ code: "not_found", message: "?" }, 404);
+      if (url === "/api/v1/content-items/body-images/from-url") {
+        return json(
+          { id: FILE_A, content_item_id: RESERVED, mime_type: "image/jpeg", size_bytes: 3, status: "ready", preview_url: PREVIEW_A },
+          201,
+        );
       }
+      return json({ code: "not_found", message: "?" }, 404);
     }),
   );
-  class FakeXHR {
-    status = 0;
-    withCredentials = false;
-    upload = { onprogress: null as null | ((e: unknown) => void) };
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    open() {}
-    send() {
-      queueMicrotask(() => {
-        this.status = 204;
-        this.onload?.();
-      });
+  installFakeUploadXHR(async (req) => {
+    const body: Record<string, unknown> = Object.fromEntries(req.parts.filter(([, v]) => typeof v === "string"));
+    calls.push({ url: req.url, body });
+    const named = typeof body.content_item_id === "string" ? body.content_item_id : undefined;
+    switch (req.url) {
+      case "/api/v1/content-items/body-images":
+        return {
+          status: 201,
+          body: { id: FILE_B, content_item_id: named ?? "01JND1", mime_type: "image/png", size_bytes: 3, status: "ready", preview_url: PREVIEW_B },
+        };
+      case "/api/v1/content-items/cover-images":
+        if (coverGate !== undefined) await coverGate;
+        return {
+          status: 201,
+          body: { id: COVER_ID, content_item_id: named ?? COVER_RESERVED, mime_type: "image/jpeg", size_bytes: 3, status: "ready" },
+        };
+      default:
+        return { status: 404, body: { code: "not_found", message: "?" } };
     }
-  }
-  vi.stubGlobal("XMLHttpRequest", FakeXHR);
+  });
   return calls;
 }
 
@@ -261,7 +229,7 @@ describe("new article: one reserved id for every file", () => {
     expect(sent.body).toContain(`data-file-id="${FILE_B}"`);
   });
 
-  it("only while the cover's FIRST declaration is unanswered is `Chèn ảnh` held, with the sentence", async () => {
+  it("only while the cover's FIRST upload is unanswered is `Chèn ảnh` held, with the sentence", async () => {
     let open!: () => void;
     const calls = stubNetwork(new Promise<void>((r) => (open = r)));
     await mountForm({ ...FORM_TRONG, title: "Lễ hội" });

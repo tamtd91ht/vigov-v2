@@ -1200,6 +1200,20 @@
       "viec": "/fix-web-admin so-tay-lanh-dao theo tmp/web/so-tay-lanh-dao/vigov-so-tay-spec. Người dùng chốt 09/10: giữ dữ liệu ADR 0071; bấm việc mở ngăn chi tiết NGAY trên Sổ tay, một ngăn mỗi lúc (TaskDetailHost tách từ SoNhiemVu, dùng chung; Sổ nhiệm vụ giữ tab + ?task=); badge Tạm dừng chỉ chữ màu cam (ADR 0082 #7). Cột Chờ tôi duyệt tím, khung trắng, ô đếm, items-start, dòng là nút, 'đã gia hạn n lần', 'việc con của <mã>' mã navy; đóng ngăn/ghi trong ngăn thì đọc lại 4 phần + số đếm.",
       "bang_chung": "133a6e0e. vitest leader-notebook + so-nhiem-vu + child-tasks + dev-preview 7 tệp 284 ca xanh; lint sạch; tsc sạch các tệp này (đỏ còn lại thuộc việc tải tệp của phiên khác). CHƯA KIỂM BẰNG ẢNH RENDER — trình duyệt treo khi chụp.",
       "tiep_theo": "(1) Kiểm ảnh: /xem-thu/nhiem-vu/so-tay và ?mo=NV105 cạnh prototype; /xem-thu/nhiem-vu?task=NV105 để kiểm Sổ nhiệm vụ không đổi. (2) Builder tự chọn, chờ người dùng: dòng Sổ tay dùng chữ trạng thái cố định như ngăn chi tiết (không theo nhãn xã); dòng lùi hạn đọc chi tiết hai lần. (3) Menu chưa sáng đồng thời 'Nhiệm vụ' + 'Sổ tay lãnh đạo' như spec 02."
+    },
+    {
+      "id": "tai-len-qua-service-web-admin",
+      "menu": [
+        "nhiem-vu",
+        "phan-anh-nguoi-dan",
+        "noi-dung-mini-app",
+        "cau-hinh"
+      ],
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026, đợt 3 (web-admin): mọi luồng tải tệp gửi MỘT lệnh multipart cùng origin tới đúng tuyến cũ (tệp nhiệm vụ, tệp nhật ký phiếu, ảnh sau xử lý, ảnh bìa, ảnh thân bài, âm thanh truyền thanh, logo/banner xã); bỏ hẳn POST thẳng MinIO và mọi lệnh …/completion. Một hàm dùng chung lib/api/upload.ts (XHR để giữ tiến độ, phần chữ theo thứ tự hợp đồng, size = file.size trước file, Idempotency-Key, lỗi máy chủ giữ nguyên câu; lỗi không có thân httpx.Error dùng câu cố định theo mã trạng thái). scripts/gen-api-types.mjs sinh kiểu multipart + multipartParts (tuple thứ tự) và TỪ CHỐI mọi content type khác. Cổng web: lệnh POST multipart có bộ đếm nhàn rỗi 210 s (service tự cắt ở 180 s gồm cả quét), lệnh khác giữ 30 s. Trạng thái 'retry' nay là GỬI LẠI cùng tệp (chỉ với lỗi nhất thời 0/408/502/503/504, và invalid_audio_duration); nút đổi chữ thành 'Gửi lại'. Ảnh sau xử lý không gửi tên tệp gốc (tuyến không đọc). CSP connect-src: web-admin chưa có CSP nên không có gì để gỡ.",
+      "bang_chung": "Commit này. web-admin: tsc sạch; eslint sạch; npm run check:api khớp; npx vitest run toàn bộ 304 tệp / 5617 ca xanh (mới: lib/api/upload.test.ts, lib/may-chu/gateway-upload-timeout.test.ts; viết lại các bài ghim luồng presigned).",
+      "tiep_theo": "(1) Chưa kiểm trên trình duyệt thật/ảnh render, chưa thử tải 50 MB qua ingress + cổng web trên cụm. (2) Mỗi lần thử là một Idempotency-Key mới: mất kết nối sau khi máy chủ đã lưu thì 'Gửi lại' có thể tạo tệp thứ hai (ảnh sau xử lý tính vào giới hạn 5; âm thanh gặp 409 audio_limit) — cần người dùng quyết có dùng lại khoá và xử lý trả lời phát lại hay không. (3) Bộ đếm 210 s của cổng áp cho MỌI POST multipart (theo Content-Type), không theo danh sách tuyến."
     }
   ]
 }

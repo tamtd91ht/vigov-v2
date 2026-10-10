@@ -6,19 +6,10 @@ import { toast } from "sonner";
 
 import { Notice } from "@/components/ui/notice";
 import { cn } from "@/lib/cn";
-import {
-  completeVerificationPhoto,
-  listVerificationPhotos,
-  requestVerificationPhotoUpload,
-} from "@/lib/api/phieu-phan-anh";
-import type {
-  petitions_photoLinkOut,
-  petitions_photoListOut,
-  petitions_photoOut,
-  petitions_photoUploadIn,
-  petitions_photoUploadOut,
-} from "@/lib/api/schema.gen";
-import { uploadToStorage, type CallResult } from "@/lib/api/task-attachments";
+import { listVerificationPhotos, uploadVerificationPhoto } from "@/lib/api/phieu-phan-anh";
+import type { petitions_photoLinkOut, petitions_photoListOut, petitions_photoOut } from "@/lib/api/schema.gen";
+import type { CallResult } from "@/lib/api/task-attachments";
+import { isTransientUpload, type UploadResult } from "@/lib/api/upload";
 import { formatBytes } from "@/features/nhiem-vu/task-attachments";
 
 import {
@@ -51,18 +42,18 @@ import { EmptyPhotoBox, freshLinksFor, scenePhotosState, THUMB_GRID, type SceneP
  * 'sau xử lý' của cán bộ — THAY G8"; ADR 0008 decision 3).
  *
  *   list    GET  …/verification-photos                 feedback.read, AUDITED, links ≤ 15 min
- *   upload  POST …/verification-photos (+ /completion) feedback.resolve, every status but the 3 endings
+ *   upload  POST …/verification-photos (multipart)     feedback.resolve, every status but the 3 endings
  *
  * THE SAME DISCIPLINE AS THE "BEFORE" COLUMN (`scene-photos.tsx`, whose helpers are reused): one list
  * call when the column is shown, one after a stored upload, one when a link has expired or a full-size
  * image failed — NEVER on a timer (each call signs fresh links over a photograph and writes an audit
  * entry). The URL goes into `<img src>` only, `referrerPolicy="no-referrer"`, never `loading="lazy"`.
  *
- * THE UPLOAD IS THE TASK ATTACHMENT'S THREE STEPS (ADR 0052): declare (one Idempotency-Key per attempt)
- * → the bytes straight to the object store (`uploadToStorage`, reused) → completion. 422 is refused for
- * good; 503 / 409 / no answer at completion means "ask the completion again" — the bytes are already in
- * the store. Every refusal is the server's sentence verbatim (409 `photo_limit`: five per processing
- * round; 409 `petition_state`: the petition ended).
+ * THE UPLOAD IS ONE MULTIPART REQUEST (ADR 0052 §Sửa đổi 09/10/2026, `lib/api/upload.ts`), one
+ * Idempotency-Key per attempt; the server scans, re-encodes without EXIF and stores in that request. A
+ * refusal of the moment (`isTransientUpload`) offers "Gửi lại" — the same file again, nothing was stored;
+ * every other refusal is final. Every refusal is the server's sentence verbatim (409 `photo_limit`: five
+ * per processing round; 409 `petition_state`: the petition ended).
  *
  * THE BUTTON IS UX ONLY (rule 5, forbidden #1): it is drawn with `feedback.resolve` on a status the
  * server accepts; the server checks both on every call.
@@ -70,32 +61,32 @@ import { EmptyPhotoBox, freshLinksFor, scenePhotosState, THUMB_GRID, type SceneP
 
 type PhotoList = CallResult<petitions_photoListOut>;
 
-/** One chosen file and where it stands. Local key; the server id once declared. */
+/** One chosen file and where it stands. Local key. */
 type UploadState =
-  | { readonly kind: "requesting" }
-  | { readonly kind: "uploading"; readonly id: string; readonly percent: number }
-  | { readonly kind: "checking"; readonly id: string }
+  | { readonly kind: "uploading"; readonly percent: number }
+  | { readonly kind: "checking" }
   | { readonly kind: "stored" }
-  | { readonly kind: "retry"; readonly id: string; readonly message: string }
+  /** A refusal of the moment: nothing was stored — "Gửi lại" sends the same file again. */
+  | { readonly kind: "retry"; readonly message: string }
   | { readonly kind: "refused"; readonly message: string };
 
 type UploadItem = { readonly key: string; readonly name: string; readonly size: number; readonly state: UploadState };
 
-/** A completion's answer → the file's state. `stored` is the only success (`domain.StoredFileStored`). */
-export function afterPhotoCompletion(id: string, r: CallResult<petitions_photoOut>): UploadState {
+export const AFTER_PHOTO_RETRY_BUTTON = "Gửi lại";
+
+/** An upload's answer → the file's state. `stored` is the only success (`domain.StoredFileStored`). */
+export function afterPhotoUpload(r: UploadResult<petitions_photoOut>): UploadState {
   if (r.ok) {
     return r.data.status === "stored"
       ? { kind: "stored" }
       : { kind: "refused", message: "Ảnh chưa được lưu. Hãy chọn ảnh và tải lên lại." };
   }
-  if (r.status === 503 || r.status === 409 || r.status === 0) return { kind: "retry", id, message: r.message };
+  if (isTransientUpload(r)) return { kind: "retry", message: r.message };
   return { kind: "refused", message: r.message };
 }
 
 function uploadStateText(s: UploadState): string {
   switch (s.kind) {
-    case "requesting":
-      return "Đang xin tải lên…";
     case "uploading":
       return `Đang tải ${s.percent}%`;
     case "checking":
@@ -103,7 +94,7 @@ function uploadStateText(s: UploadState): string {
     case "stored":
       return "Đã lưu vào phiếu.";
     case "retry":
-      return `Chưa kiểm tra xong: ${s.message}`;
+      return `Chưa gửi được: ${s.message}`;
     case "refused":
       return `Bị từ chối: ${s.message}`;
   }
@@ -111,16 +102,12 @@ function uploadStateText(s: UploadState): string {
 
 export type VerificationDeps = {
   load: (lookupCode: string) => Promise<PhotoList>;
-  request: (lookupCode: string, body: petitions_photoUploadIn, key: string) => Promise<CallResult<petitions_photoUploadOut>>;
-  upload: typeof uploadToStorage;
-  complete: (lookupCode: string, id: string) => Promise<CallResult<petitions_photoOut>>;
+  upload: typeof uploadVerificationPhoto;
 };
 
 const DEFAULT_DEPS: VerificationDeps = {
   load: listVerificationPhotos,
-  request: requestVerificationPhotoUpload,
-  upload: uploadToStorage,
-  complete: completeVerificationPhoto,
+  upload: uploadVerificationPhoto,
 };
 
 export function VerificationPhotos({
@@ -146,6 +133,8 @@ export function VerificationPhotos({
   const [brokenFor, setBrokenFor] = useState<string | null>(null);
   const [uploads, setUploads] = useState<readonly UploadItem[]>([]);
   const seq = useRef(0);
+  // The chosen files, kept (browser memory, this column only) so "Gửi lại" can send the same bytes.
+  const picked = useRef(new Map<string, File>());
 
   useEffect(() => {
     let dropped = false;
@@ -192,9 +181,19 @@ export function VerificationPhotos({
   const set = (key: string, s: UploadState) =>
     setUploads((list) => list.map((i) => (i.key === key ? { ...i, state: s } : i)));
 
-  async function complete(key: string, id: string): Promise<void> {
-    set(key, { kind: "checking", id });
-    const next = afterPhotoCompletion(id, await deps.complete(lookupCode, id));
+  async function start(key: string, file: File): Promise<void> {
+    const t = afterPhotoType(file);
+    if (!t.ok) {
+      set(key, { kind: "refused", message: t.message });
+      return;
+    }
+    set(key, { kind: "uploading", percent: 0 });
+    const next = afterPhotoUpload(
+      await deps.upload(lookupCode, file, t.contentType, crypto.randomUUID(), {
+        onProgress: (percent) => set(key, { kind: "uploading", percent }),
+        onSent: () => set(key, { kind: "checking" }),
+      }),
+    );
     set(key, next);
     // A stored photo is on the petition now: read the list ONCE more to show it.
     if (next.kind === "stored") {
@@ -203,34 +202,12 @@ export function VerificationPhotos({
     }
   }
 
-  async function start(key: string, file: File): Promise<void> {
-    const t = afterPhotoType(file);
-    if (!t.ok) {
-      set(key, { kind: "refused", message: t.message });
-      return;
-    }
-    const req = await deps.request(lookupCode, { content_type: t.contentType, size: file.size }, crypto.randomUUID());
-    if (!req.ok) {
-      set(key, { kind: "refused", message: req.message });
-      return;
-    }
-    const id = req.data.photo.id;
-    set(key, { kind: "uploading", id, percent: 0 });
-    const up = await deps.upload(req.data.upload, file, file.name, (percent) =>
-      set(key, { kind: "uploading", id, percent }),
-    );
-    if (!up.ok) {
-      set(key, { kind: "refused", message: up.message });
-      return;
-    }
-    await complete(key, id);
-  }
-
   function add(files: readonly File[]): void {
     for (const f of files) {
       seq.current += 1;
       const key = `anh-sau-${seq.current}`;
-      setUploads((list) => [...list, { key, name: f.name, size: f.size, state: { kind: "requesting" } }]);
+      picked.current.set(key, f);
+      setUploads((list) => [...list, { key, name: f.name, size: f.size, state: { kind: "uploading", percent: 0 } }]);
       void start(key, f);
     }
   }
@@ -271,7 +248,8 @@ export function VerificationPhotos({
       onAdd={add}
       onRetryUpload={(key) => {
         const it = uploads.find((i) => i.key === key);
-        if (it !== undefined && it.state.kind === "retry") void complete(key, it.state.id);
+        const f = picked.current.get(key);
+        if (it !== undefined && it.state.kind === "retry" && f !== undefined) void start(key, f);
       }}
       onRemoveUpload={(key) => setUploads((list) => list.filter((i) => i.key !== key))}
     />
@@ -316,7 +294,7 @@ export function VerificationPhotosView({
   const items = state.kind === "list" ? state.items : [];
   const opened: petitions_photoLinkOut | undefined = openIndex >= 0 ? items[openIndex] : undefined;
   const inputId = `anh-sau-xu-ly-${lookupCode}`;
-  const busy = uploads.some((u) => u.state.kind === "requesting" || u.state.kind === "uploading" || u.state.kind === "checking");
+  const busy = uploads.some((u) => u.state.kind === "uploading" || u.state.kind === "checking");
 
   return (
     <div className="verification-photos flex flex-col gap-3 [&>p]:m-0">
@@ -462,7 +440,7 @@ export function VerificationPhotosView({
                     </span>
                     {u.state.kind === "retry" && (
                       <button type="button" className={buttonClass("secondary", "sm")} onClick={() => onRetryUpload(u.key)}>
-                        Kiểm tra lại
+                        {AFTER_PHOTO_RETRY_BUTTON}
                       </button>
                     )}
                     {(refused || u.state.kind === "stored") && (

@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { removeBrandingImage } from "@/lib/api/commune-branding";
+import { installFakeUploadXHR, partNames, partValue } from "@/lib/api/upload-test-support";
 
 import {
   BRANDING_ACCEPT,
@@ -11,15 +12,13 @@ import {
   BRANDING_PICK_BUTTON,
   BRANDING_REPLACE_BUTTON,
   BRANDING_RETRY_BUTTON,
-  BRANDING_STORAGE_FAILED,
   BRANDING_TEXT,
   BRANDING_TOO_LARGE,
   BRANDING_TYPE_REFUSED,
-  afterBrandingCompletion,
+  afterBrandingUpload,
   brandingInFlight,
   brandingUpdatedText,
   declaredBrandingType,
-  retryBrandingCompletion,
   runBrandingUpload,
   type BrandingUploadState,
 } from "./commune-branding";
@@ -27,8 +26,8 @@ import { BrandingCardView, IDLE_CARD, type CardState } from "./commune-branding-
 
 /**
  * Cấu hình › Nhận diện xã (ADR 0069). The pre-check (2 MB, PNG/WebP/JPEG, no HEIC — the server's own
- * `upload_policy` values), the completion answers, the whole a → b → c flow over a fake `fetch` and a
- * fake `XMLHttpRequest`, removal, and the card's markup in each state.
+ * `upload_policy` values), the upload answers, the ONE-request flow over the shared fake
+ * `XMLHttpRequest`, removal, and the card's markup in each state.
  */
 
 const MB = 1024 * 1024;
@@ -65,24 +64,28 @@ describe("pre-check — convenience; the server's policy still decides", () => {
   });
 });
 
-describe("completion answers → state", () => {
+const logoFile = () => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "logo-xa.png", { type: "image/png" });
+
+describe("upload answers → state", () => {
   const ready = { id: "F", mime_type: "image/png", size_bytes: 9, status: "ready", public_url: "https://m.example.test/l.png" };
-  it("200 ready ⇒ done; 200 anything else ⇒ refused; 422 ⇒ refused VERBATIM; 503 / 409 / no answer ⇒ retry", () => {
-    expect(afterBrandingCompletion("F", { ok: true, data: ready })).toEqual({ kind: "done" });
-    expect(afterBrandingCompletion("F", { ok: true, data: { ...ready, status: "rejected" } })).toEqual({
+  const f = logoFile();
+  it("201 ready ⇒ done; 201 anything else ⇒ refused; 4xx ⇒ refused VERBATIM; 503 / 408 / no answer ⇒ send again", () => {
+    expect(afterBrandingUpload(f, { ok: true, data: ready })).toEqual({ kind: "done" });
+    expect(afterBrandingUpload(f, { ok: true, data: { ...ready, status: "rejected" } })).toEqual({
       kind: "refused",
       message: BRANDING_NOT_READY,
     });
-    expect(afterBrandingCompletion("F", { ok: false, status: 422, message: "mã độc" })).toEqual({ kind: "refused", message: "mã độc" });
-    for (const status of [503, 409, 0]) {
-      expect(afterBrandingCompletion("F", { ok: false, status, message: "x" })).toEqual({ kind: "retry", id: "F", message: "x" });
+    for (const status of [422, 409, 413]) {
+      expect(afterBrandingUpload(f, { ok: false, status, code: "c", message: "mã độc" })).toEqual({ kind: "refused", message: "mã độc" });
+    }
+    for (const status of [503, 408, 0]) {
+      expect(afterBrandingUpload(f, { ok: false, status, code: "", message: "x" })).toEqual({ kind: "retry", file: f, message: "x" });
     }
   });
 
-  it("only requesting / uploading / checking are in flight", () => {
-    expect(brandingInFlight({ kind: "requesting" })).toBe(true);
-    expect(brandingInFlight({ kind: "uploading", id: "F", percent: 1 })).toBe(true);
-    expect(brandingInFlight({ kind: "checking", id: "F" })).toBe(true);
+  it("only uploading / checking are in flight", () => {
+    expect(brandingInFlight({ kind: "uploading", percent: 1 })).toBe(true);
+    expect(brandingInFlight({ kind: "checking" })).toBe(true);
     for (const s of [{ kind: "idle" }, { kind: "done" }, { kind: "refused", message: "x" }] as const) {
       expect(brandingInFlight(s)).toBe(false);
     }
@@ -96,68 +99,13 @@ describe("completion answers → state", () => {
   });
 });
 
-/* ── The flow over a fake fetch and a fake XMLHttpRequest ─────────────────────────────────────── */
+/* ── The flow over the shared fake XMLHttpRequest ──────────────────────────────────────────────── */
 
-const UPLOAD = {
-  file: { id: "01JLOGO1", mime_type: "", size_bytes: 0, status: "pending", public_url: "" },
-  upload: {
-    url: "https://files.example.test/vigov-stg-temp",
-    fields: { key: "upload/t_01JXA/x", policy: "P", "x-amz-signature": "S", "Content-Type": "image/png" },
-    expires_at: "2026-10-02T03:15:00Z",
-  },
-};
+const READY = { id: "01JLOGO1", mime_type: "image/png", size_bytes: 4, status: "ready", public_url: "https://m.example.test/l.png" };
 
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-type Sent = { method: string; url: string; withCredentials: boolean; keys: string[] };
-
-function fakeXHR(status: number) {
-  const sent: Sent[] = [];
-  class FakeXHR {
-    status = 0;
-    withCredentials = false;
-    upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = {
-      onprogress: null,
-    };
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    private m = "";
-    private u = "";
-    open(method: string, url: string) {
-      this.m = method;
-      this.u = url;
-    }
-    send(form: FormData) {
-      sent.push({ method: this.m, url: this.u, withCredentials: this.withCredentials, keys: [...form.keys()] });
-      queueMicrotask(() => {
-        this.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 });
-        this.status = status;
-        this.onload?.();
-      });
-    }
-  }
-  vi.stubGlobal("XMLHttpRequest", FakeXHR);
-  return sent;
-}
-
-function fakeFetch(completion: () => Response) {
-  const calls: { url: string; init?: RequestInit }[] = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(async (url: string, init?: RequestInit) => {
-      calls.push({ url, init });
-      if (url === "/api/v1/commune-branding/logo-uploads" || url === "/api/v1/commune-branding/banner-uploads") {
-        return json(UPLOAD, 201);
-      }
-      if (url.endsWith("/completion")) return completion();
-      return json({ code: "not_found", message: "?" }, 404);
-    }),
-  );
-  return calls;
-}
-
-const logoFile = () => new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47])], "logo-xa.png", { type: "image/png" });
 const key = () => "11111111-2222-4333-8444-555555555555";
 
 afterEach(() => {
@@ -165,85 +113,68 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("runBrandingUpload — a → b → c", () => {
-  it("happy path: declare (Idempotency-Key) → POST form straight to the store (no cookie, file last) → complete", async () => {
-    const xhr = fakeXHR(204);
-    const calls = fakeFetch(() => json({ ...UPLOAD.file, mime_type: "image/png", size_bytes: 4, status: "ready" }, 200));
+describe("runBrandingUpload — ONE request", () => {
+  it("happy path: one multipart POST on this origin (Idempotency-Key, size before file) → done", async () => {
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
     const states: BrandingUploadState[] = [];
 
     const last = await runBrandingUpload("logo", logoFile(), key, (s) => states.push(s));
 
-    expect(calls[0]?.url).toBe("/api/v1/commune-branding/logo-uploads");
-    expect(calls[0]?.init?.method).toBe("POST");
-    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ file_name: "logo-xa.png", content_type: "image/png", size: 4 });
-    expect(new Headers(calls[0]?.init?.headers).get("Idempotency-Key")).toBe(key());
-    expect(xhr).toEqual([
-      { method: "POST", url: UPLOAD.upload.url, withCredentials: false, keys: ["key", "policy", "x-amz-signature", "Content-Type", "file"] },
-    ]);
-    expect(calls[1]?.url).toBe("/api/v1/commune-branding/logo-uploads/01JLOGO1/completion");
-    expect(states.map((s) => s.kind)).toEqual(["requesting", "uploading", "uploading", "checking", "done"]);
+    expect(xhr).toHaveLength(1);
+    expect(xhr[0]?.method).toBe("POST");
+    expect(xhr[0]?.url).toBe("/api/v1/commune-branding/logo-uploads");
+    expect(xhr[0]?.headers["Idempotency-Key"]).toBe(key());
+    expect(partNames(xhr[0])).toEqual(["size", "file_name", "file"]);
+    expect(partValue(xhr[0], "size")).toBe("4");
+    // No declaration, no store host, no completion.
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(states.map((s) => s.kind)).toEqual(["uploading", "uploading", "uploading", "checking", "done"]);
     expect(last).toEqual({ kind: "done" });
   });
 
-  it("the banner goes to the banner routes, never the logo's", async () => {
-    fakeXHR(204);
-    const calls = fakeFetch(() => json({ ...UPLOAD.file, status: "ready" }, 200));
+  it("the banner goes to the banner route, never the logo's", async () => {
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
     await runBrandingUpload("banner", logoFile(), key, () => {});
-    expect(calls.map((c) => c.url)).toEqual([
-      "/api/v1/commune-branding/banner-uploads",
-      "/api/v1/commune-branding/banner-uploads/01JLOGO1/completion",
-    ]);
+    expect(xhr.map((x) => x.url)).toEqual(["/api/v1/commune-branding/banner-uploads"]);
   });
 
   it("a too-large or wrong-type file never reaches the network", async () => {
-    const xhr = fakeXHR(204);
-    const calls = fakeFetch(() => json({}, 200));
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
     const heic = new File([new Uint8Array([1])], "IMG.HEIC", { type: "image/heic" });
     expect(await runBrandingUpload("logo", heic, key, () => {})).toEqual({ kind: "refused", message: BRANDING_TYPE_REFUSED });
     const big = { name: "a.png", type: "image/png", size: 2 * MB + 1 } as unknown as File;
     expect(await runBrandingUpload("logo", big, key, () => {})).toEqual({ kind: "refused", message: BRANDING_TOO_LARGE });
-    expect(calls).toHaveLength(0);
     expect(xhr).toHaveLength(0);
   });
 
-  it("503 image_processing_busy: the server's sentence, then 'Hoàn tất lại' retries the COMPLETION only", async () => {
-    const xhr = fakeXHR(204);
-    const busy = "Hệ thống đang xử lý ảnh khác nên ảnh CHƯA được nhận. Vui lòng bấm hoàn tất lại sau ít giây.";
-    let answer = () => json({ code: "image_processing_busy", message: busy }, 503);
-    const calls = fakeFetch(() => answer());
-
-    const first = await runBrandingUpload("logo", logoFile(), key, () => {});
-    expect(first).toEqual({ kind: "retry", id: "01JLOGO1", message: busy });
-
-    answer = () => json({ ...UPLOAD.file, status: "ready" }, 200);
-    expect(await retryBrandingCompletion("logo", "01JLOGO1", () => {})).toEqual({ kind: "done" });
-    expect(calls.filter((c) => c.url === "/api/v1/commune-branding/logo-uploads")).toHaveLength(1);
-    expect(calls.filter((c) => c.url.endsWith("/completion"))).toHaveLength(2);
-    expect(xhr).toHaveLength(1);
+  it("503 image_processing_busy: the server's sentence; `Gửi lại` sends the SAME file again", async () => {
+    const busy = "Hệ thống đang xử lý ảnh khác nên ảnh CHƯA được nhận. Vui lòng thử lại sau ít giây.";
+    let n = 0;
+    const xhr = installFakeUploadXHR(() =>
+      ++n === 1 ? { status: 503, body: { code: "image_processing_busy", message: busy } } : { status: 201, body: READY },
+    );
+    const f = logoFile();
+    const first = await runBrandingUpload("logo", f, key, () => {});
+    expect(first).toEqual({ kind: "retry", file: f, message: busy });
+    if (first.kind !== "retry") throw new Error("not retry");
+    expect(await runBrandingUpload("logo", first.file, key, () => {})).toEqual({ kind: "done" });
+    expect(xhr).toHaveLength(2);
   });
 
-  it("422 at completion: refused with the server's sentence, verbatim", async () => {
-    fakeXHR(204);
+  it("422: refused with the server's sentence, verbatim", async () => {
     const cau = "Ảnh bị từ chối vì phát hiện mã độc và không được lưu.";
-    fakeFetch(() => json({ code: "image_rejected", message: cau }, 422));
+    installFakeUploadXHR(() => ({ status: 422, body: { code: "image_rejected", message: cau } }));
     expect(await runBrandingUpload("logo", logoFile(), key, () => {})).toEqual({ kind: "refused", message: cau });
   });
 
-  it("the store refuses the form: one sentence of our own, no completion asked", async () => {
-    fakeXHR(403);
-    const calls = fakeFetch(() => json({}, 200));
-    expect(await runBrandingUpload("logo", logoFile(), key, () => {})).toEqual({ kind: "refused", message: BRANDING_STORAGE_FAILED });
-    expect(calls.some((c) => c.url.endsWith("/completion"))).toBe(false);
-  });
-
-  it("the declaration refused (403 without admin.org): the server's sentence, no upload", async () => {
-    const xhr = fakeXHR(204);
-    vi.stubGlobal("fetch", vi.fn(async () => json({ code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." }, 403)));
+  it("DENIED — 403 without admin.org: the server's sentence, final", async () => {
+    installFakeUploadXHR(() => ({ status: 403, body: { code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." } }));
     expect(await runBrandingUpload("logo", logoFile(), key, () => {})).toEqual({
       kind: "refused",
       message: "Bạn không có quyền thực hiện thao tác này.",
     });
-    expect(xhr).toHaveLength(0);
   });
 });
 
@@ -334,15 +265,15 @@ describe("BrandingCardView", () => {
   });
 
   it("in flight: the busy sentence as a status, the picker disabled", () => {
-    const html = card("logo", "", { upload: { kind: "requesting" } });
+    const html = card("logo", "", { upload: { kind: "uploading", percent: 0 } });
     expect(html).toContain('role="status"');
-    expect(html).toContain("Đang tải lên…");
+    expect(html).toContain("Đang tải lên… 0%");
     expect(html).toMatch(/<input [^>]*disabled=""/);
   });
 
-  it("503 busy: the server's sentence as an alert, and 'Hoàn tất lại'", () => {
-    const busy = "Hệ thống đang xử lý ảnh khác nên ảnh CHƯA được nhận. Vui lòng bấm hoàn tất lại sau ít giây.";
-    const html = card("banner", "", { upload: { kind: "retry", id: "01JLOGO1", message: busy } });
+  it("503 busy: the server's sentence as an alert, and 'Gửi lại'", () => {
+    const busy = "Hệ thống đang xử lý ảnh khác nên ảnh CHƯA được nhận. Vui lòng thử lại sau ít giây.";
+    const html = card("banner", "", { upload: { kind: "retry", file: logoFile(), message: busy } });
     expect(html).toContain('role="alert"');
     expect(html).toContain(busy);
     expect(html).toContain(BRANDING_RETRY_BUTTON);

@@ -2,64 +2,49 @@
  * Cấu hình › Nhận diện xã (ADR 0069) — the commune's logo and web-admin banner, on platform's
  * `/api/v1/commune-branding` routes (all `admin.org`; the server checks the key on every call).
  *
- * The upload is the same three steps as a task attachment or a content cover (ADR 0052):
+ * The upload is ONE multipart request (ADR 0052 §Sửa đổi 09/10/2026, `lib/api/upload.ts`):
  *
- *   a. POST …/{logo|banner}-uploads                   declare {file_name, content_type, size}
- *                                                      + Idempotency-Key → 201 {file, upload}
- *   b. POST <upload.url>                               the bytes, straight to the object store
- *                                                      (`uploadToStorage`, reused)
- *   c. POST …/{logo|banner}-uploads/{id}/completion    sniff, scan, normalise, publish, set as
- *                                                      current → 200 | 409 | 422 | 503
+ *   POST …/{logo|banner}-uploads   size, file_name, then the file + Idempotency-Key
+ *                                  → 201 the file: sniffed, scanned, normalised, published and SET AS
+ *                                  CURRENT | 4xx | 503
  *
- * Removing is `DELETE …/logo` / `…/banner` → 204.
+ * The presigned POST to the object store and `…/{id}/completion` are gone. Removing is
+ * `DELETE …/logo` / `…/banner` → 204.
  *
- * ⚠ `upload.url` + `upload.fields` ARE A BEARER CREDENTIAL (the server's own warning,
- * `service-platform/internal/http/branding.go:6`): used in the one request they sign, never logged,
- * never stored. `file_name` can name a person (rule 3): sent, never logged.
- *
- * Every refusal is the server's sentence verbatim (`thongBaoLoi`); the status is kept only so the
- * screen can offer "Hoàn tất lại" for a 503 / 409 at completion (the bytes are already stored).
+ * `file_name` can name a person (rule 3): sent as a part, never logged. Every refusal is the server's
+ * sentence verbatim; the status is kept so the screen can offer "Gửi lại" for a refusal of the moment
+ * (`isTransientUpload`).
  */
 
 import { CHUNG, LOI_KHONG_RO, thongBaoLoi } from "./goi"; // vi-name-ok: existing exports of goi.ts (rule 12 inv 3)
 import type {
   platform_brandingFileOut,
   platform_brandingSettingsOut,
-  platform_brandingUploadIn,
-  platform_brandingUploadOut,
   platform_delete_commune_branding_banner,
   platform_delete_commune_branding_logo,
   platform_get_commune_branding,
   platform_post_commune_branding_banner_uploads,
-  platform_post_commune_branding_banner_uploads_by_id_completion,
   platform_post_commune_branding_logo_uploads,
-  platform_post_commune_branding_logo_uploads_by_id_completion,
 } from "./schema.gen";
-import { readJSON, UPLOAD_FORM_MISSING, type CallResult } from "./task-attachments";
+import { readJSON, type CallResult } from "./task-attachments";
+import { sendUpload, type UploadProgress, type UploadResult } from "./upload";
 
 /** Which of the two identity images a call is about. */
 export type BrandingImageKind = "logo" | "banner";
 
 const NO_ANSWER = 0;
 
+type LogoUpload = platform_post_commune_branding_logo_uploads;
+type BannerUpload = platform_post_commune_branding_banner_uploads;
+
 /** The route paths, typed from the contract so a renamed route turns `tsc` red here. */
-const UPLOAD_PATH: Record<
-  BrandingImageKind,
-  | platform_post_commune_branding_logo_uploads["duongDan"]
-  | platform_post_commune_branding_banner_uploads["duongDan"]
-> = {
+const UPLOAD_PATH: Record<BrandingImageKind, LogoUpload["duongDan"] | BannerUpload["duongDan"]> = {
   logo: "/api/v1/commune-branding/logo-uploads",
   banner: "/api/v1/commune-branding/banner-uploads",
 };
 
-const COMPLETION_PATH: Record<
-  BrandingImageKind,
-  | platform_post_commune_branding_logo_uploads_by_id_completion["duongDan"]
-  | platform_post_commune_branding_banner_uploads_by_id_completion["duongDan"]
-> = {
-  logo: "/api/v1/commune-branding/logo-uploads/{id}/completion",
-  banner: "/api/v1/commune-branding/banner-uploads/{id}/completion",
-};
+/** The contract's order, identical for both routes — `tsc` turns red here the day either changes. */
+const BRANDING_PARTS: LogoUpload["multipartParts"] & BannerUpload["multipartParts"] = ["size", "file_name", "file"];
 
 const REMOVE_PATH: Record<
   BrandingImageKind,
@@ -81,52 +66,24 @@ export async function getCommuneBranding(): Promise<CallResult<platform_branding
 }
 
 /**
- * a. Declare the file. `idempotencyKey`: the route requires one, ONE KEY PER ATTEMPT (the caller mints
- * it with `crypto.randomUUID()`): a replayed answer cannot carry the signed form again
- * (`core/idem` stores a code, never a body), so a retry is a new declaration.
+ * Upload one image of `kind`. `idempotencyKey`: the route requires one, ONE KEY PER ATTEMPT (the caller
+ * mints it with `crypto.randomUUID()`).
  */
-export async function requestBrandingUpload(
+export function uploadBrandingImage(
   kind: BrandingImageKind,
-  body: platform_brandingUploadIn,
+  file: File,
   idempotencyKey: string,
-): Promise<CallResult<platform_brandingUploadOut>> {
-  // Field by field — never `...body`.
-  const sent: platform_brandingUploadIn = {
-    file_name: body.file_name,
-    content_type: body.content_type,
-    size: body.size,
-  };
-  try {
-    const res = await fetch(UPLOAD_PATH[kind], {
-      ...CHUNG,
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify(sent),
-    });
-    const r = await readJSON<platform_brandingUploadOut>(res, 201);
-    if (r.ok && (r.data?.upload?.url === undefined || r.data.upload.fields === undefined || r.data.file?.id === undefined)) {
-      return { ok: false, status: 201, message: UPLOAD_FORM_MISSING };
-    }
-    return r;
-  } catch {
-    return { ok: false, status: NO_ANSWER, message: LOI_KHONG_RO };
-  }
-}
-
-/** c. Complete. Safe to repeat — the server re-reads the stored bytes; a file already ready answers itself. */
-export async function completeBrandingUpload(
-  kind: BrandingImageKind,
-  id: string,
-): Promise<CallResult<platform_brandingFileOut>> {
-  try {
-    const res = await fetch(COMPLETION_PATH[kind].replace("{id}", encodeURIComponent(id)), {
-      ...CHUNG,
-      method: "POST",
-    });
-    return await readJSON<platform_brandingFileOut>(res, 200);
-  } catch {
-    return { ok: false, status: NO_ANSWER, message: LOI_KHONG_RO };
-  }
+  progress: UploadProgress = {},
+): Promise<UploadResult<platform_brandingFileOut>> {
+  return sendUpload<LogoUpload, platform_brandingFileOut>({
+    path: UPLOAD_PATH[kind],
+    parts: BRANDING_PARTS,
+    fields: { file_name: file.name },
+    file,
+    fileName: file.name,
+    idempotencyKey,
+    ...progress,
+  });
 }
 
 /** Remove the current image → 204. The sidebar falls back to the building icon / the strip disappears. */

@@ -1,20 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { themNoiDung } from "@/lib/api/noi-dung";
+import { installFakeUploadXHR, partNames, partValue } from "@/lib/api/upload-test-support";
 
 import {
   COVER_ACCEPT,
   COVER_EMPTY,
   COVER_MAX_BYTES,
   COVER_NOT_READY,
-  COVER_STORAGE_FAILED,
   COVER_TOO_LARGE,
   COVER_TYPE_REFUSED,
-  afterCoverCompletion,
+  afterCoverUpload,
   coverInFlight,
   coverPreviewSrc,
   declaredCoverType,
-  retryCoverCompletion,
   runCoverUpload,
   type CoverUploadState,
 } from "./cover-image";
@@ -22,8 +21,8 @@ import { FORM_TRONG, thanThem } from "./nhan-noi-dung";
 
 /**
  * §7 `Ảnh đại diện` — the cover upload. The pre-check (the user's 01/10/2026 decision: JPG/PNG/WebP,
- * 50 MB, NO HEIC), the completion answers, the preview `src`, and the whole flow a → b → c over a fake
- * `fetch` and a fake `XMLHttpRequest` (no DOM), ending with the id on the create body.
+ * 50 MB, NO HEIC), the upload answers, the preview `src`, and the one-request flow over the shared fake
+ * `XMLHttpRequest` (no DOM), ending with the id on the create body.
  */
 
 const MB = 1024 * 1024;
@@ -60,24 +59,26 @@ describe("pre-check — convenience; the server's policy still decides", () => {
   });
 });
 
-describe("completion answers → state", () => {
+describe("upload answers → state", () => {
   const ready = { id: "C", content_item_id: "01JND9", mime_type: "image/jpeg", size_bytes: 9, status: "ready" };
-  it("200 ready ⇒ ready; 200 anything else ⇒ refused; 422 ⇒ refused VERBATIM; 503 / 409 / no answer ⇒ retry", () => {
-    expect(afterCoverCompletion("C", { ok: true, data: ready })).toEqual({ kind: "ready", id: "C" });
-    expect(afterCoverCompletion("C", { ok: true, data: { ...ready, status: "rejected" } })).toEqual({
+  const f = new File([new Uint8Array([1])], "a.jpg", { type: "image/jpeg" });
+  it("201 ready ⇒ ready; 201 anything else ⇒ refused; 4xx ⇒ refused VERBATIM; 503 / 408 / no answer ⇒ send again", () => {
+    expect(afterCoverUpload(f, { ok: true, data: ready })).toEqual({ kind: "ready", id: "C" });
+    expect(afterCoverUpload(f, { ok: true, data: { ...ready, status: "rejected" } })).toEqual({
       kind: "refused",
       message: COVER_NOT_READY,
     });
-    expect(afterCoverCompletion("C", { ok: false, status: 422, message: "mã độc" })).toEqual({ kind: "refused", message: "mã độc" });
-    for (const status of [503, 409, 0]) {
-      expect(afterCoverCompletion("C", { ok: false, status, message: "x" })).toEqual({ kind: "retry", id: "C", message: "x" });
+    for (const status of [422, 409, 413]) {
+      expect(afterCoverUpload(f, { ok: false, status, code: "c", message: "mã độc" })).toEqual({ kind: "refused", message: "mã độc" });
+    }
+    for (const status of [503, 408, 0]) {
+      expect(afterCoverUpload(f, { ok: false, status, code: "", message: "x" })).toEqual({ kind: "retry", file: f, message: "x" });
     }
   });
 
-  it("only requesting / uploading / checking hold Lưu", () => {
-    expect(coverInFlight({ kind: "requesting" })).toBe(true);
-    expect(coverInFlight({ kind: "uploading", id: "C", percent: 1 })).toBe(true);
-    expect(coverInFlight({ kind: "checking", id: "C" })).toBe(true);
+  it("only uploading / checking hold Lưu", () => {
+    expect(coverInFlight({ kind: "uploading", percent: 1 })).toBe(true);
+    expect(coverInFlight({ kind: "checking" })).toBe(true);
     for (const s of [{ kind: "idle" }, { kind: "ready", id: "C" }, { kind: "refused", message: "x" }] as const) {
       expect(coverInFlight(s)).toBe(false);
     }
@@ -99,64 +100,22 @@ describe("preview `src` — only the server's signed `preview_url`, only http(s)
   });
 });
 
-/* ── The flow over a fake fetch and a fake XMLHttpRequest ─────────────────────────────────────── */
+/* ── The flow over the shared fake XMLHttpRequest ──────────────────────────────────────────────── */
 
 /** The article id the server reserved for a new article's first file (a ULID-shaped stand-in). */
 const RESERVED = "01JRESERVEDITEM00000000000";
-
-const UPLOAD = {
-  cover_image: { id: "01JCOVER1", content_item_id: RESERVED, mime_type: "", size_bytes: 0, status: "pending" },
-  content_item_id: RESERVED,
-  upload: {
-    url: "https://files.example.test/vigov-stg-temp",
-    fields: { key: "upload/t_01JXA/x", policy: "P", "x-amz-signature": "S", "Content-Type": "image/jpeg" },
-    expires_at: "2026-10-01T03:15:00Z",
-  },
-};
+const READY = { id: "01JCOVER1", content_item_id: RESERVED, mime_type: "image/jpeg", size_bytes: 3, status: "ready" };
 
 const json = (body: unknown, status: number) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
-type Sent = { method: string; url: string; withCredentials: boolean; keys: string[] };
-
-/** Records each upload and answers `status` after one progress tick. */
-function fakeXHR(status: number) {
-  const sent: Sent[] = [];
-  class FakeXHR {
-    status = 0;
-    withCredentials = false;
-    upload: { onprogress: ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) | null } = {
-      onprogress: null,
-    };
-    onload: (() => void) | null = null;
-    onerror: (() => void) | null = null;
-    private m = "";
-    private u = "";
-    open(method: string, url: string) {
-      this.m = method;
-      this.u = url;
-    }
-    send(form: FormData) {
-      sent.push({ method: this.m, url: this.u, withCredentials: this.withCredentials, keys: [...form.keys()] });
-      queueMicrotask(() => {
-        this.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 });
-        this.status = status;
-        this.onload?.();
-      });
-    }
-  }
-  vi.stubGlobal("XMLHttpRequest", FakeXHR);
-  return sent;
-}
-
-function fakeFetch(completion: Response) {
+/** Every fetch is recorded: the cover flow must not make any (only the Lưu create does). */
+function fakeFetch() {
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
-      if (url === "/api/v1/content-items/cover-images") return json(UPLOAD, 201);
-      if (url.endsWith("/completion")) return completion.clone();
       if (url === "/api/v1/content-items") return json({ id: "01JND9" }, 201);
       return json({ code: "not_found", message: "?" }, 404);
     }),
@@ -171,118 +130,77 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("runCoverUpload — a → b → c, then the id on the create", () => {
-  it("happy path: declare → POST form straight to the store (no cookie, file last) → complete → id sent on Lưu", async () => {
-    const xhr = fakeXHR(204);
-    const calls = fakeFetch(json({ ...UPLOAD.cover_image, mime_type: "image/jpeg", size_bytes: 3, status: "ready" }, 200));
+describe("runCoverUpload — ONE request, then the id on the create", () => {
+  it("happy path: one multipart POST on this origin (size before file) → ready → id sent on Lưu", async () => {
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
+    const calls = fakeFetch();
     const states: CoverUploadState[] = [];
 
     const last = await runCoverUpload(photo(), undefined, (s) => states.push(s));
 
-    // a. the declaration: no content_item_id on the create form, an Idempotency-Key.
-    expect(calls[0]?.url).toBe("/api/v1/content-items/cover-images");
-    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
-      file_name: "anh-hoi-nghi.jpg",
-      content_type: "image/jpeg",
-      size: 3,
-    });
-    expect(new Headers(calls[0]?.init?.headers).get("Idempotency-Key")).toMatch(/.+/);
-    // b. the bytes went to the STORE's url, not through this app, without credentials, file last.
-    expect(xhr).toEqual([
-      {
-        method: "POST",
-        url: UPLOAD.upload.url,
-        withCredentials: false,
-        keys: ["key", "policy", "x-amz-signature", "Content-Type", "file"],
-      },
-    ]);
-    expect(calls.some((c) => c.url === UPLOAD.upload.url)).toBe(false);
-    // c. completion of THAT id.
-    expect(calls[1]?.url).toBe("/api/v1/content-items/cover-images/01JCOVER1/completion");
-    expect(states.map((s) => s.kind)).toEqual(["requesting", "uploading", "uploading", "checking", "ready"]);
-    expect(states).toContainEqual({ kind: "uploading", id: "01JCOVER1", percent: 50 });
+    expect(xhr).toHaveLength(1);
+    expect(xhr[0]?.url).toBe("/api/v1/content-items/cover-images");
+    expect(xhr[0]?.headers["Idempotency-Key"]).toMatch(/.+/);
+    expect(partNames(xhr[0])).toEqual(["size", "file_name", "content_type", "file"]);
+    expect(partValue(xhr[0], "size")).toBe("3");
+    // No declaration, no store host, no completion: nothing else went out.
+    expect(calls).toHaveLength(0);
+    expect(states.map((s) => s.kind)).toEqual(["uploading", "uploading", "uploading", "checking", "ready"]);
+    expect(states).toContainEqual({ kind: "uploading", percent: 50 });
     expect(last).toEqual({ kind: "ready", id: "01JCOVER1" });
 
     // Lưu: the form now holds the id, and the create carries it.
     if (last.kind !== "ready") throw new Error("not ready");
     await themNoiDung(thanThem({ ...FORM_TRONG, title: "Hội nghị", cover_image_file_id: last.id }), "k");
-    const create = calls[2];
-    expect(create?.url).toBe("/api/v1/content-items");
-    expect(JSON.parse(String(create?.init?.body)).cover_image_file_id).toBe("01JCOVER1");
+    expect(calls[0]?.url).toBe("/api/v1/content-items");
+    expect(JSON.parse(String(calls[0]?.init?.body)).cover_image_file_id).toBe("01JCOVER1");
   });
 
-  it("new article: the reserved article id is heard right after the declaration, and again at completion", async () => {
-    fakeXHR(204);
-    fakeFetch(json({ ...UPLOAD.cover_image, status: "ready" }, 200));
+  it("new article: the reserved article id is heard from the reply", async () => {
+    installFakeUploadXHR(() => ({ status: 201, body: READY }));
     const heard: string[] = [];
-    const seenAt: string[] = [];
-    await runCoverUpload(
-      photo(),
-      undefined,
-      (s) => seenAt.push(s.kind),
-      (id) => {
-        heard.push(id);
-        seenAt.push(`article:${id}`);
-      },
-    );
-    expect(heard).toEqual([RESERVED, RESERVED]);
-    // Before any byte moves: a body image inserted while this cover uploads already names the article.
-    expect(seenAt.indexOf(`article:${RESERVED}`)).toBeLessThan(seenAt.indexOf("uploading"));
-  });
-
-  it("`Kiểm tra lại` hears the article id from the completion too", async () => {
-    fakeFetch(json({ ...UPLOAD.cover_image, status: "ready" }, 200));
-    const heard: string[] = [];
-    await retryCoverCompletion("01JCOVER1", () => {}, (id) => heard.push(id));
+    await runCoverUpload(photo(), undefined, () => {}, (id) => heard.push(id));
     expect(heard).toEqual([RESERVED]);
   });
 
-  it("a refused declaration names no article", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => json({ code: "invalid_request", message: "Ảnh quá lớn." }, 400)),
-    );
+  it("a refused upload names no article", async () => {
+    installFakeUploadXHR(() => ({ status: 413, body: { code: "file_too_large", message: "Ảnh quá lớn." } }));
     const heard: string[] = [];
     await runCoverUpload(photo(), undefined, () => {}, (id) => heard.push(id));
     expect(heard).toEqual([]);
   });
 
-  it("edit form: the declaration names the article", async () => {
-    fakeXHR(204);
-    const calls = fakeFetch(json({ ...UPLOAD.cover_image, status: "ready" }, 200));
+  it("edit form: the upload names the article", async () => {
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
     await runCoverUpload(photo(), "01JND1", () => {});
-    expect(JSON.parse(String(calls[0]?.init?.body)).content_item_id).toBe("01JND1");
+    expect(partValue(xhr[0], "content_item_id")).toBe("01JND1");
   });
 
-  it("422 at completion: refused with the server's sentence, verbatim", async () => {
-    fakeXHR(204);
+  it("422: refused with the server's sentence, verbatim", async () => {
     const cau = "Ảnh bị từ chối vì phát hiện mã độc và không được lưu.";
-    fakeFetch(json({ code: "cover_rejected", message: cau }, 422));
+    installFakeUploadXHR(() => ({ status: 422, body: { code: "cover_rejected", message: cau } }));
     expect(await runCoverUpload(photo(), undefined, () => {})).toEqual({ kind: "refused", message: cau });
   });
 
-  it("503 at completion: retry the COMPLETION only — no second declaration, no second upload", async () => {
-    const xhr = fakeXHR(204);
-    const calls = fakeFetch(json({ code: "malware_scan_unavailable", message: "Chưa quét được mã độc." }, 503));
-    const first = await runCoverUpload(photo(), undefined, () => {});
-    expect(first).toEqual({ kind: "retry", id: "01JCOVER1", message: "Chưa quét được mã độc." });
-
-    await retryCoverCompletion("01JCOVER1", () => {});
-    expect(calls.filter((c) => c.url === "/api/v1/content-items/cover-images")).toHaveLength(1);
-    expect(calls.filter((c) => c.url.endsWith("/completion"))).toHaveLength(2);
-    expect(xhr).toHaveLength(1);
-  });
-
-  it("the store refuses the form: one sentence of our own, no completion asked", async () => {
-    fakeXHR(403);
-    const calls = fakeFetch(json({}, 200));
-    expect(await runCoverUpload(photo(), undefined, () => {})).toEqual({ kind: "refused", message: COVER_STORAGE_FAILED });
-    expect(calls.some((c) => c.url.endsWith("/completion"))).toBe(false);
+  it("503: `retry` carries the SAME file; sending it again is a second request with a new key", async () => {
+    let n = 0;
+    const xhr = installFakeUploadXHR(() =>
+      ++n === 1
+        ? { status: 503, body: { code: "malware_scan_unavailable", message: "Chưa quét được mã độc." } }
+        : { status: 201, body: READY },
+    );
+    const f = photo();
+    const first = await runCoverUpload(f, undefined, () => {});
+    expect(first).toEqual({ kind: "retry", file: f, message: "Chưa quét được mã độc." });
+    if (first.kind !== "retry") throw new Error("not retry");
+    expect(await runCoverUpload(first.file, undefined, () => {})).toEqual({ kind: "ready", id: "01JCOVER1" });
+    expect(xhr).toHaveLength(2);
+    expect(xhr[1]?.headers["Idempotency-Key"]).not.toBe(xhr[0]?.headers["Idempotency-Key"]);
   });
 
   it("a HEIC or a 51 MB file never reaches the network", async () => {
-    const xhr = fakeXHR(204);
-    const calls = fakeFetch(json({}, 200));
+    const xhr = installFakeUploadXHR(() => ({ status: 201, body: READY }));
+    const calls = fakeFetch();
     const heic = new File([new Uint8Array([1])], "IMG_0001.HEIC", { type: "image/heic" });
     expect(await runCoverUpload(heic, undefined, () => {})).toEqual({ kind: "refused", message: COVER_TYPE_REFUSED });
     const big = { name: "a.jpg", type: "image/jpeg", size: 51 * MB } as unknown as File;

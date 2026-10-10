@@ -11,14 +11,15 @@
  * THE DURATION IS TYPED, NEVER MEASURED (ADR 0067 §4.1, ADR 0047 G7): the server stores what the officer
  * says. The check here mirrors `domain.CheckAudioDuration` (1 .. 21 600 s, i.e. 6 hours).
  *
- * THE DECLARATION NAMES A SAVED ITEM: `content_item_id` of a saved `truyen-thanh` item, and the completion
- * attaches the file to it at once. The form therefore HOLDS the chosen file (`HeldAudio`) — on create and
- * on edit alike — and runs the three steps with the item's id once the save returns (prototype
- * `ContentItemForm.tsx:150-180`: one press for the officer, the file after the item).
+ * THE UPLOAD NAMES A SAVED ITEM: `content_item_id` of a saved `truyen-thanh` item, and the server attaches
+ * the file to it in the same request (ONE multipart POST, ADR 0052 §Sửa đổi 09/10/2026). The form
+ * therefore HOLDS the chosen file (`HeldAudio`) — on create and on edit alike — and uploads it with the
+ * item's id once the save returns (prototype `ContentItemForm.tsx:150-180`: one press for the officer,
+ * the file after the item).
  */
 
-import { completeAudioUpload, requestAudioUpload, type AudioCallResult } from "@/lib/api/noi-dung";
-import { uploadToStorage } from "@/lib/api/task-attachments";
+import { uploadBroadcastAudio, type AudioCallResult } from "@/lib/api/noi-dung";
+import { isTransientUpload } from "@/lib/api/upload";
 import type { comms_audioFileOut, comms_suaNoiDungVao } from "@/lib/api/schema.gen";
 
 /* ── Words ──────────────────────────────────────────────────────────────────────────────────── */
@@ -30,7 +31,7 @@ export const AUDIO_PICK_BUTTON = "Chọn tệp từ máy";
 export const AUDIO_HAS_FILE = "Đã có tệp — chọn tệp mới để thay";
 /** The policy's limits (ADR 0067 §4.1: MP3/M4A, 30MB) in the prototype's shape (`ContentItemForm.tsx:328`). */
 export const AUDIO_HINT = "MP3 hoặc M4A — tối đa 30MB";
-export const AUDIO_RETRY_BUTTON = "Hoàn tất lại";
+export const AUDIO_RETRY_BUTTON = "Gửi lại";
 
 /**
  * The item was saved but its held file did not get attached — the prototype's sentence, verbatim
@@ -46,7 +47,8 @@ export const AUDIO_DURATION_RANGE = "Thời lượng phải từ 1 đến 21600 
 export const AUDIO_TYPE_REFUSED = "Chỉ nhận tệp âm thanh MP3 hoặc M4A.";
 export const AUDIO_TOO_LARGE = "Tệp lớn hơn 30MB — hãy chọn tệp nhỏ hơn.";
 export const AUDIO_EMPTY = "Tệp rỗng — không có âm thanh nào để tải lên.";
-export const AUDIO_STORAGE_FAILED = "Chưa tải được tệp lên kho lưu tệp. Hãy chọn lại tệp.";
+/** The upload threw instead of answering — not expected (`sendUpload` resolves), kept as the screen's floor. */
+export const AUDIO_STORAGE_FAILED = "Chưa tải được tệp âm thanh lên. Hãy chọn lại tệp.";
 export const AUDIO_NOT_READY = "Tệp âm thanh chưa sẵn sàng để gắn vào mục. Hãy chọn lại tệp.";
 export const AUDIO_WAIT_NOTE = "Chờ tệp âm thanh tải lên và kiểm tra xong rồi mới lưu.";
 
@@ -76,7 +78,7 @@ const BY_EXTENSION: Readonly<Record<string, string>> = {
 
 /**
  * The content type to declare, or a refusal. The browser's `type` first; empty → the extension. The
- * declaration is a claim: the server sniffs the bytes at completion (a renamed video is refused there).
+ * declaration is a claim: the server sniffs the bytes in the same request (a renamed video is refused).
  */
 export function declaredAudioType(file: { readonly name: string; readonly type: string; readonly size: number }):
   | { readonly ok: true; readonly contentType: string }
@@ -173,34 +175,37 @@ export function savedAudioPatch(
 
 /* ── The upload state and flow ──────────────────────────────────────────────────────────────── */
 
+/** What `Gửi lại` sends again: the same held file, to the same saved item. */
+export type AudioRetry = { readonly file: File; readonly contentItemId: string };
+
 export type AudioUploadState =
   | { readonly kind: "idle" }
-  | { readonly kind: "requesting" }
-  | { readonly kind: "uploading"; readonly id: string; readonly percent: number }
-  | { readonly kind: "checking"; readonly id: string }
+  | { readonly kind: "uploading"; readonly percent: number }
+  /** Every byte sent: the server is sniffing, checking it is audio, scanning, attaching. */
+  | { readonly kind: "checking" }
   /** Attached to the item — the server already wrote it. */
   | { readonly kind: "ready"; readonly id: string; readonly file: comms_audioFileOut }
-  /** The bytes are in the store: complete AGAIN (503 / 409 / no answer / a duration the server refused). */
-  | { readonly kind: "retry"; readonly id: string; readonly message: string }
-  /** For good: the pre-check, the declaration, the store, or the bytes (422 `audio_rejected`). */
+  /**
+   * Nothing stored, and sending again can work: a refusal of the moment (`isTransientUpload`), or a
+   * duration the server refused (fix the number, then `Gửi lại` — with the duration as typed THEN).
+   */
+  | { readonly kind: "retry"; readonly again: AudioRetry; readonly message: string }
+  /** For good: the pre-check, the limits, the item, or the bytes (422 `audio_rejected`). */
   | { readonly kind: "refused"; readonly message: string };
 
 export function audioInFlight(s: AudioUploadState): boolean {
-  return s.kind === "requesting" || s.kind === "uploading" || s.kind === "checking";
+  return s.kind === "uploading" || s.kind === "checking";
 }
 
 /**
- * A completion answer → state. 422 `invalid_audio_duration` is NOT final: the duration is checked before
- * the file is touched, so it is still pending and completing again with a corrected duration works — and
- * a new upload would meet 409 `audio_limit` while that pending file holds the item's one slot.
+ * An upload's answer → state. 422 `invalid_audio_duration` is NOT final: it refuses the typed number, not
+ * the file — the officer corrects it and sends the same file again.
  */
-export function afterAudioCompletion(id: string, r: AudioCallResult<comms_audioFileOut>): AudioUploadState {
+export function afterAudioUpload(again: AudioRetry, r: AudioCallResult<comms_audioFileOut>): AudioUploadState {
   if (r.ok) {
-    return r.data.status === "ready" ? { kind: "ready", id, file: r.data } : { kind: "refused", message: AUDIO_NOT_READY };
+    return r.data.status === "ready" ? { kind: "ready", id: r.data.id, file: r.data } : { kind: "refused", message: AUDIO_NOT_READY };
   }
-  if (r.status === 503 || r.status === 409 || r.status === 0 || r.code === "invalid_audio_duration") {
-    return { kind: "retry", id, message: r.message };
-  }
+  if (isTransientUpload(r) || r.code === "invalid_audio_duration") return { kind: "retry", again, message: r.message };
   return { kind: "refused", message: r.message };
 }
 
@@ -208,8 +213,6 @@ export function audioStateText(s: AudioUploadState): string {
   switch (s.kind) {
     case "idle":
       return "";
-    case "requesting":
-      return "Đang xin tải tệp âm thanh lên…";
     case "uploading":
       return `Đang tải lên ${s.percent}%`;
     case "checking":
@@ -217,15 +220,16 @@ export function audioStateText(s: AudioUploadState): string {
     case "ready":
       return "Tệp âm thanh đã tải lên, kiểm tra xong và đã gắn vào mục.";
     case "retry":
-      return `Chưa hoàn tất: ${s.message}`;
+      return `Chưa gửi được: ${s.message}`;
     case "refused":
       return `Bị từ chối: ${s.message}`;
   }
 }
 
 /**
- * a → b → c for ONE file of a SAVED broadcast, reporting each state. The duration is parsed first: a file
- * is never declared without a duration the server will accept.
+ * ONE file of a SAVED broadcast, ONE request, reporting each state. The duration is parsed first: a file
+ * is never sent without a duration the server will accept — a bad one stays a `retry` on the same file
+ * (nothing was sent), so correcting the box and pressing `Gửi lại` is enough.
  */
 export async function runAudioUpload(
   file: File,
@@ -237,52 +241,21 @@ export async function runAudioUpload(
     onState(s);
     return s;
   };
-  const d = parseAudioDuration(durationRaw);
-  if (!d.ok) return report({ kind: "refused", message: d.message });
+  const again: AudioRetry = { file, contentItemId };
   const t = declaredAudioType(file);
   if (!t.ok) return report({ kind: "refused", message: t.message });
+  const d = parseAudioDuration(durationRaw);
+  if (!d.ok) return report({ kind: "retry", again, message: d.message });
 
-  report({ kind: "requesting" });
-  const req = await requestAudioUpload(
-    { content_item_id: contentItemId, file_name: file.name, content_type: t.contentType, size: file.size },
+  report({ kind: "uploading", percent: 0 });
+  const r = await uploadBroadcastAudio(
+    { file, contentType: t.contentType, contentItemId, durationSeconds: d.seconds },
     crypto.randomUUID(),
+    {
+      onProgress: (percent) => onState({ kind: "uploading", percent }),
+      onSent: () => onState({ kind: "checking" }),
+    },
   );
   // 400 / 404 / 409 `audio_limit` / 422 `audio_only_for_truyen_thanh` / 503 — the server's sentence verbatim.
-  if (!req.ok) return report({ kind: "refused", message: req.message });
-
-  const id = req.data.audio_file.id;
-  report({ kind: "uploading", id, percent: 0 });
-  // The form (`req.data.upload`) is used here and dropped.
-  const up = await uploadToStorage(req.data.upload, file, file.name, (percent) =>
-    onState({ kind: "uploading", id, percent }),
-  );
-  if (!up.ok) return report({ kind: "refused", message: AUDIO_STORAGE_FAILED });
-
-  return completeAudio(id, d.seconds, onState);
-}
-
-/** c. alone — `Hoàn tất lại`: the bytes are already in the store, never re-upload. */
-export async function retryAudioCompletion(
-  id: string,
-  durationRaw: string,
-  onState: (s: AudioUploadState) => void,
-): Promise<AudioUploadState> {
-  const d = parseAudioDuration(durationRaw);
-  if (!d.ok) {
-    const s: AudioUploadState = { kind: "retry", id, message: d.message };
-    onState(s);
-    return s;
-  }
-  return completeAudio(id, d.seconds, onState);
-}
-
-async function completeAudio(
-  id: string,
-  seconds: number,
-  onState: (s: AudioUploadState) => void,
-): Promise<AudioUploadState> {
-  onState({ kind: "checking", id });
-  const s = afterAudioCompletion(id, await completeAudioUpload(id, seconds));
-  onState(s);
-  return s;
+  return report(afterAudioUpload(again, r));
 }

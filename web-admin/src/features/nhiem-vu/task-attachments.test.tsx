@@ -8,7 +8,8 @@ import {
   ATTACH_ACCEPT,
   ATTACH_EMPTY_REFUSED,
   ATTACH_TYPE_REFUSED,
-  afterCompletion,
+  ATTACH_RETRY_BUTTON,
+  afterUpload,
   anyInFlight,
   attachmentStateText,
   declaredType,
@@ -45,13 +46,15 @@ describe("pre-check — convenience only; NO size limit is written here", () => 
   });
 });
 
-describe("completion answers → state", () => {
+describe("upload answers → state", () => {
   const stored = { id: "f", file_name: "a.pdf", mime_type: "application/pdf", size_bytes: 1, status: "stored" };
-  it("200 stored ⇒ stored; 422 ⇒ refused for good; 503 / 409 / no answer ⇒ retry the completion", () => {
-    expect(afterCompletion("f", { ok: true, data: stored })).toEqual({ kind: "stored", id: "f" });
-    expect(afterCompletion("f", { ok: false, status: 422, message: "mã độc" })).toEqual({ kind: "refused", message: "mã độc" });
-    for (const status of [503, 409, 0]) {
-      expect(afterCompletion("f", { ok: false, status, message: "x" })).toEqual({ kind: "retry", id: "f", message: "x" });
+  it("201 stored ⇒ stored with the reply's id; 4xx ⇒ refused for good; a refusal of the moment ⇒ send again", () => {
+    expect(afterUpload({ ok: true, data: stored })).toEqual({ kind: "stored", id: "f" });
+    for (const status of [422, 409, 413, 400, 403]) {
+      expect(afterUpload({ ok: false, status, code: "c", message: "mã độc" })).toEqual({ kind: "refused", message: "mã độc" });
+    }
+    for (const status of [503, 408, 504, 0]) {
+      expect(afterUpload({ ok: false, status, code: "", message: "x" })).toEqual({ kind: "retry", message: "x" });
     }
   });
 
@@ -59,16 +62,17 @@ describe("completion answers → state", () => {
     const items = [
       item("a", { kind: "stored", id: "A" }),
       item("b", { kind: "refused", message: "x" }),
-      item("c", { kind: "retry", id: "C", message: "x" }),
+      item("c", { kind: "retry", message: "x" }),
       item("d", { kind: "stored", id: "D" }),
     ];
     expect(storedIds(items)).toEqual(["A", "D"]);
     expect(anyInFlight(items)).toBe(false);
-    expect(anyInFlight([...items, item("e", { kind: "uploading", id: "E", percent: 40 })])).toBe(true);
+    expect(anyInFlight([...items, item("e", { kind: "uploading", percent: 40 })])).toBe(true);
   });
 
   it("words per state, and sizes with a Vietnamese decimal comma", () => {
-    expect(attachmentStateText({ kind: "uploading", id: "x", percent: 42 })).toBe("Đang tải 42%");
+    expect(attachmentStateText({ kind: "uploading", percent: 42 })).toBe("Đang tải 42%");
+    expect(anyInFlight([item("x", { kind: "checking" })])).toBe(true);
     expect(attachmentStateText({ kind: "refused", message: "Tệp bị từ chối vì phát hiện mã độc." })).toContain("Bị từ chối: Tệp bị từ chối vì phát hiện mã độc.");
     expect(formatBytes(512)).toBe("512 B");
     expect(formatBytes(1536)).toBe("1,5 KB");
@@ -81,9 +85,9 @@ describe("the picker — per-file state, progress as status, refusals as alert",
     <AttachmentPicker
       fieldId="ghi-nhat-ky-NV19"
       items={[
-        item("a", { kind: "uploading", id: "A", percent: 30 }),
+        item("a", { kind: "uploading", percent: 30 }),
         item("b", { kind: "refused", message: "Tệp lớn hơn dung lượng tối đa được phép đính kèm." }),
-        item("c", { kind: "retry", id: "C", message: "Chưa quét được mã độc…" }),
+        item("c", { kind: "retry", message: "Hệ thống đang nhận nhiều tệp cùng lúc." }),
         item("d", { kind: "stored", id: "D" }),
       ]}
       disabled={false}
@@ -102,7 +106,7 @@ describe("the picker — per-file state, progress as status, refusals as alert",
   it("progress `role=status`, refusals `role=alert` with the server's sentence; retry only on the retry state", () => {
     expect(html).toContain('<span role="status">Đang tải 30%</span>');
     expect(html).toContain('<span role="alert">Bị từ chối: Tệp lớn hơn dung lượng tối đa được phép đính kèm.</span>');
-    expect(html.split(">Kiểm tra lại<").length - 1).toBe(1);
+    expect(html.split(`>${ATTACH_RETRY_BUTTON}<`).length - 1).toBe(1);
     // Every file can be removed before the entry is sent.
     expect(html.split(">Bỏ<").length - 1).toBe(4);
     expect(html).toContain('aria-label="Bỏ d.pdf"');
@@ -130,15 +134,12 @@ describe("wiring (source)", () => {
   const API = readFileSync(fileURLToPath(new URL("../../lib/api/task-attachments.ts", import.meta.url)), "utf8");
   const LOG = readFileSync(fileURLToPath(new URL("./nhat-ky-nhiem-vu.tsx", import.meta.url)), "utf8");
 
-  it("flow a → b → c in order; the upload never sends a cookie; the retry re-completes, never re-uploads", () => {
-    const a = UI.indexOf("await requestAttachmentUpload(");
-    const b = UI.indexOf("await uploadToStorage(");
-    const c = UI.indexOf("await complete(key, id);");
-    expect(a).toBeGreaterThan(-1);
-    expect(a).toBeLessThan(b);
-    expect(b).toBeLessThan(c);
-    expect(API).toContain("xhr.withCredentials = false;");
-    expect(UI).toContain('if (it !== undefined && it.state.kind === "retry") void complete(key, it.state.id);');
+  it("ONE request per file through the shared helper; no store host, no completion; retry re-sends the same file", () => {
+    expect(API).toContain("sendUpload<TaskUpload, petitions_taskAttachmentOut>(");
+    // No route literal ending in /completion, no hand-made XHR or store upload outside `lib/api/upload.ts`.
+    expect(API).not.toMatch(/["'`][^"'`\n]*\/completion["'`]|uploadToStorage|new XMLHttpRequest/);
+    expect(UI).not.toMatch(/["'`][^"'`\n]*\/completion["'`]|uploadToStorage|new XMLHttpRequest/);
+    expect(UI).toContain('if (it !== undefined && it.state.kind === "retry" && f !== undefined) void start(key, f);');
   });
 
   it("the download link is asked for at the click and opened detached — never stored in state", () => {

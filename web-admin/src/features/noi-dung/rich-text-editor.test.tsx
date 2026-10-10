@@ -93,10 +93,6 @@ function source(answer?: BodyImageState, blocked: string | null = null) {
       onState(ready);
       return ready;
     },
-    retry: async (_id, onState) => {
-      onState(ready);
-      return ready;
-    },
   };
   return { src, got };
 }

@@ -16,7 +16,7 @@ import {
 import { COVER_ACCEPT, COVER_HINT, COVER_RETRY_BUTTON } from "./cover-image";
 
 /**
- * What the form gives the editor to insert body images: the three calls, each already threading the
+ * What the form gives the editor to insert body images: the two calls, each already threading the
  * article id and filling the preview map (`so-noi-dung.tsx`). The editor only inserts the figure.
  */
 export type BodyImageSource = {
@@ -24,7 +24,6 @@ export type BodyImageSource = {
   readonly blocked: string | null;
   readonly upload: (file: File, onState: (s: BodyImageState) => void) => Promise<BodyImageState>;
   readonly fromUrl: (url: string, onState: (s: BodyImageState) => void) => Promise<BodyImageState>;
-  readonly retry: (id: string, onState: (s: BodyImageState) => void) => Promise<BodyImageState>;
 };
 
 export const BODY_IMAGE_PANEL_TITLE = "Chèn ảnh vào thân bài";
@@ -203,7 +202,7 @@ export function BodyImagePanel({
             size="sm"
             icon={<RefreshCw aria-hidden="true" focusable="false" />}
             disabled={disabled}
-            onClick={() => void finish(source.retry(state.id, setState))}
+            onClick={() => void finish(source.upload(state.file, setState))}
           >
             {COVER_RETRY_BUTTON}
           </Button>

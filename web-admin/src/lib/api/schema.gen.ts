@@ -23,10 +23,6 @@ export type audit_EntryView = {
   "delta": JsonValue;
 };
 
-export type comms_audioCompletionIn = {
-  "audio_duration_seconds": number;
-};
-
 export type comms_audioFileOut = {
   "id": string;
   "content_item_id": string;
@@ -44,18 +40,6 @@ export type comms_audioOut = {
   "duration_seconds": number;
   "preview_url"?: string;
   "preview_expires_at"?: string | null;
-};
-
-export type comms_audioUploadIn = {
-  "content_item_id": string;
-  "file_name": string;
-  "content_type": string;
-  "size": number;
-};
-
-export type comms_audioUploadOut = {
-  "audio_file": comms_audioFileOut;
-  "upload": comms_presignedUploadOut;
 };
 
 export type comms_bodyBlockOut = {
@@ -90,19 +74,6 @@ export type comms_bodyImageOut = {
   "public": boolean;
   "preview_url"?: string;
   "preview_expires_at"?: string | null;
-};
-
-export type comms_bodyImageUploadIn = {
-  "file_name": string;
-  "content_type": string;
-  "size": number;
-  "content_item_id"?: string;
-};
-
-export type comms_bodyImageUploadOut = {
-  "body_image": comms_coverFileOut;
-  "content_item_id": string;
-  "upload": comms_presignedUploadOut;
 };
 
 export type comms_communeZaloBotCurrentOut = {
@@ -160,19 +131,6 @@ export type comms_coverImageOut = {
   "public": boolean;
   "preview_url"?: string;
   "preview_expires_at"?: string | null;
-};
-
-export type comms_coverUploadIn = {
-  "file_name": string;
-  "content_type": string;
-  "size": number;
-  "content_item_id"?: string;
-};
-
-export type comms_coverUploadOut = {
-  "cover_image": comms_coverFileOut;
-  "content_item_id": string;
-  "upload": comms_presignedUploadOut;
 };
 
 export type comms_createExternalContactIn = {
@@ -676,12 +634,6 @@ export type comms_portalSyncSettingsOut = {
   "is_enabled": boolean;
   "last_run_at": string | null;
   "updated_by": string;
-};
-
-export type comms_presignedUploadOut = {
-  "url": string;
-  "fields": Record<string, string>;
-  "expires_at": string;
 };
 
 export type comms_publicCategoriesOut = {
@@ -3887,22 +3839,6 @@ export type petitions_photoOut = {
   "created_at": string;
 };
 
-export type petitions_photoUploadIn = {
-  "content_type": string;
-  "size": number;
-};
-
-export type petitions_photoUploadOut = {
-  "photo": petitions_photoOut;
-  "upload": petitions_presignedUploadOut;
-};
-
-export type petitions_presignedUploadOut = {
-  "url": string;
-  "fields": Record<string, string>;
-  "expires_at": string;
-};
-
 export type petitions_publicationIn = {
   "status": string;
 };
@@ -4098,17 +4034,6 @@ export type petitions_taskAttachmentRemoveIn = {
   "reason": string;
 };
 
-export type petitions_taskAttachmentUploadIn = {
-  "file_name": string;
-  "content_type": string;
-  "size": number;
-};
-
-export type petitions_taskAttachmentUploadOut = {
-  "attachment": petitions_taskAttachmentOut;
-  "upload": petitions_presignedUploadOut;
-};
-
 export type petitions_taskCountsOut = {
   "by_status": Array<petitions_taskStatusCountOut>;
 };
@@ -4248,28 +4173,11 @@ export type platform_brandingFileOut = {
   "public_url": string;
 };
 
-export type platform_brandingPresignedPost = {
-  "url": string;
-  "fields": Record<string, string>;
-  "expires_at": string;
-};
-
 export type platform_brandingSettingsOut = {
   "logo_public_url": string;
   "web_admin_banner_public_url": string;
   "updated_at"?: string | null;
   "updated_by"?: string;
-};
-
-export type platform_brandingUploadIn = {
-  "file_name": string;
-  "content_type": string;
-  "size": number;
-};
-
-export type platform_brandingUploadOut = {
-  "file": platform_brandingFileOut;
-  "upload": platform_brandingPresignedPost;
 };
 
 export type platform_miniAppIDOut = {
@@ -5678,7 +5586,7 @@ export type petitions_get_citizen_reports_by_maTraCuu_duplicate_candidates = {
   };
 };
 
-/** POST /api/v1/citizen-reports/{maTraCuu}/log-attachments — Xin tải một tệp đính kèm cho nhật ký xử lý phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+/** POST /api/v1/citizen-reports/{maTraCuu}/log-attachments — Tải lên một tệp đính kèm cho nhật ký xử lý phiếu phản ánh qua service (multipart) — dò kiểu, quét mã độc, lưu vào kho hồ sơ */
 export type petitions_post_citizen_reports_by_maTraCuu_log_attachments = {
   duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-attachments";
   phuongThuc: "POST";
@@ -5687,14 +5595,25 @@ export type petitions_post_citizen_reports_by_maTraCuu_log_attachments = {
   };
   truyVan: {
   };
-  than: petitions_taskAttachmentUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "content_type"?: string;
+    "file_name"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "content_type", "file_name", "file"];
   phanHoi: {
-    201: petitions_taskAttachmentUploadOut;
+    201: petitions_taskAttachmentOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
@@ -5722,29 +5641,6 @@ export type petitions_delete_citizen_reports_by_maTraCuu_log_attachments_by_id =
   };
   errorCodes: {
     409: "legal_hold";
-  };
-};
-
-/** POST /api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion — Hoàn tất tải lên tệp đính kèm nhật ký phiếu — dò kiểu, quét mã độc, lưu vào kho hồ sơ */
-export type petitions_post_citizen_reports_by_maTraCuu_log_attachments_by_id_completion = {
-  duongDan: "/api/v1/citizen-reports/{maTraCuu}/log-attachments/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "maTraCuu": string;
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: petitions_taskAttachmentOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
-    422: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
   };
 };
 
@@ -6004,7 +5900,7 @@ export type petitions_get_citizen_reports_by_maTraCuu_verification_photos = {
   };
 };
 
-/** POST /api/v1/citizen-reports/{maTraCuu}/verification-photos — Cán bộ xin tải MỘT ảnh sau xử lý cho phiếu phản ánh — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+/** POST /api/v1/citizen-reports/{maTraCuu}/verification-photos — Cán bộ tải lên MỘT ảnh sau xử lý cho phiếu phản ánh qua service (multipart) — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ */
 export type petitions_post_citizen_reports_by_maTraCuu_verification_photos = {
   duongDan: "/api/v1/citizen-reports/{maTraCuu}/verification-photos";
   phuongThuc: "POST";
@@ -6013,36 +5909,23 @@ export type petitions_post_citizen_reports_by_maTraCuu_verification_photos = {
   };
   truyVan: {
   };
-  than: petitions_photoUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "content_type"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "content_type", "file"];
   phanHoi: {
-    201: petitions_photoUploadOut;
+    201: petitions_photoOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-};
-
-/** POST /api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion — Cán bộ hoàn tất tải một ảnh sau xử lý — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho hồ sơ */
-export type petitions_post_citizen_reports_by_maTraCuu_verification_photos_by_id_completion = {
-  duongDan: "/api/v1/citizen-reports/{maTraCuu}/verification-photos/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "maTraCuu": string;
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: petitions_photoOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
@@ -6138,7 +6021,7 @@ export type platform_delete_commune_branding_banner = {
   };
 };
 
-/** POST /api/v1/commune-branding/banner-uploads — Xin tải banner web-admin của xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+/** POST /api/v1/commune-branding/banner-uploads — Tải banner web-admin của xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại */
 export type platform_post_commune_branding_banner_uploads = {
   duongDan: "/api/v1/commune-branding/banner-uploads";
   phuongThuc: "POST";
@@ -6146,34 +6029,22 @@ export type platform_post_commune_branding_banner_uploads = {
   };
   truyVan: {
   };
-  than: platform_brandingUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "file_name"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "file_name", "file"];
   phanHoi: {
-    201: platform_brandingUploadOut;
+    201: platform_brandingFileOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-};
-
-/** POST /api/v1/commune-branding/banner-uploads/{id}/completion — Hoàn tất tải banner web-admin — quét mã độc, chuẩn hoá rộng 1600px, đăng và đặt làm banner hiện tại */
-export type platform_post_commune_branding_banner_uploads_by_id_completion = {
-  duongDan: "/api/v1/commune-branding/banner-uploads/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: platform_brandingFileOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
@@ -6198,7 +6069,7 @@ export type platform_delete_commune_branding_logo = {
   };
 };
 
-/** POST /api/v1/commune-branding/logo-uploads — Xin tải logo xã — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+/** POST /api/v1/commune-branding/logo-uploads — Tải logo xã (multipart: size, file_name?, file) — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại */
 export type platform_post_commune_branding_logo_uploads = {
   duongDan: "/api/v1/commune-branding/logo-uploads";
   phuongThuc: "POST";
@@ -6206,34 +6077,22 @@ export type platform_post_commune_branding_logo_uploads = {
   };
   truyVan: {
   };
-  than: platform_brandingUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "file_name"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "file_name", "file"];
   phanHoi: {
-    201: platform_brandingUploadOut;
+    201: platform_brandingFileOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-};
-
-/** POST /api/v1/commune-branding/logo-uploads/{id}/completion — Hoàn tất tải logo xã — quét mã độc, chuẩn hoá PNG vuông 512px giữ nền trong, đăng và đặt làm logo hiện tại */
-export type platform_post_commune_branding_logo_uploads_by_id_completion = {
-  duongDan: "/api/v1/commune-branding/logo-uploads/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: platform_brandingFileOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
@@ -6531,7 +6390,7 @@ export type comms_post_content_items = {
   };
 };
 
-/** POST /api/v1/content-items/audio-files — Xin tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+/** POST /api/v1/content-items/audio-files — Tải tệp âm thanh (MP3/M4A) cho mục truyền thanh đã lưu — một lệnh multipart (size, content_item_id, audio_duration_seconds, file_name, content_type, rồi file); máy chủ dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập */
 export type comms_post_content_items_audio_files = {
   duongDan: "/api/v1/content-items/audio-files";
   phuongThuc: "POST";
@@ -6539,44 +6398,33 @@ export type comms_post_content_items_audio_files = {
   };
   truyVan: {
   };
-  than: comms_audioUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "file_name"?: string;
+    "content_type"?: string;
+    "content_item_id"?: string;
+    "audio_duration_seconds": string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "file_name", "content_type", "content_item_id", "audio_duration_seconds", "file"];
   phanHoi: {
-    201: comms_audioUploadOut;
+    201: comms_audioFileOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
 };
 
-/** POST /api/v1/content-items/audio-files/{id}/completion — Hoàn tất tải âm thanh truyền thanh — dò kiểu, kiểm tra đúng là âm thanh, quét mã độc, lưu bản gốc riêng tư và gắn vào mục cùng thời lượng cán bộ nhập */
-export type comms_post_content_items_audio_files_by_id_completion = {
-  duongDan: "/api/v1/content-items/audio-files/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: comms_audioCompletionIn;
-  phanHoi: {
-    200: comms_audioFileOut;
-    400: httpx_Error;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
-    422: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-};
-
-/** POST /api/v1/content-items/body-images — Xin tải ảnh chèn trong thân bài nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) và mã mục nội dung; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu */
+/** POST /api/v1/content-items/body-images — Tải ảnh chèn trong thân bài nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); trả ảnh đã lưu, mã mục nội dung và liên kết xem trước khi đã sẵn sàng; bỏ trống content_item_id cho ảnh đầu tiên của bài chưa lưu */
 export type comms_post_content_items_body_images = {
   duongDan: "/api/v1/content-items/body-images";
   phuongThuc: "POST";
@@ -6584,14 +6432,26 @@ export type comms_post_content_items_body_images = {
   };
   truyVan: {
   };
-  than: comms_bodyImageUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "file_name"?: string;
+    "content_type"?: string;
+    "content_item_id"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "file_name", "content_type", "content_item_id", "file"];
   phanHoi: {
-    201: comms_bodyImageUploadOut;
+    201: comms_bodyImageFileOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
@@ -6621,29 +6481,7 @@ export type comms_post_content_items_body_images_from_url = {
   };
 };
 
-/** POST /api/v1/content-items/body-images/{id}/completion — Hoàn tất tải ảnh thân bài — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF, trả liên kết xem trước khi đã sẵn sàng */
-export type comms_post_content_items_body_images_by_id_completion = {
-  duongDan: "/api/v1/content-items/body-images/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: comms_bodyImageFileOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
-    422: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-};
-
-/** POST /api/v1/content-items/cover-images — Xin tải ảnh bìa cho mục nội dung Mini App — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút); bỏ trống content_item_id khi bài chưa lưu */
+/** POST /api/v1/content-items/cover-images — Tải ảnh bìa cho mục nội dung Mini App — một lệnh multipart (size, file_name, content_type, content_item_id, rồi file); máy chủ dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF; bỏ trống content_item_id khi bài chưa lưu */
 export type comms_post_content_items_cover_images = {
   duongDan: "/api/v1/content-items/cover-images";
   phuongThuc: "POST";
@@ -6651,35 +6489,25 @@ export type comms_post_content_items_cover_images = {
   };
   truyVan: {
   };
-  than: comms_coverUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "file_name"?: string;
+    "content_type"?: string;
+    "content_item_id"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "file_name", "content_type", "content_item_id", "file"];
   phanHoi: {
-    201: comms_coverUploadOut;
+    201: comms_coverFileOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-};
-
-/** POST /api/v1/content-items/cover-images/{id}/completion — Hoàn tất tải ảnh bìa — dò kiểu, quét mã độc, lưu bản gốc riêng tư, tạo bản 1280px không EXIF */
-export type comms_post_content_items_cover_images_by_id_completion = {
-  duongDan: "/api/v1/content-items/cover-images/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: comms_coverFileOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
@@ -8884,7 +8712,7 @@ export type petitions_get_my_citizen_reports_by_maTraCuu_photos = {
   };
 };
 
-/** POST /api/v1/my-citizen-reports/{maTraCuu}/photos — Công dân xin tải MỘT ảnh hiện trường cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn "Đã tiếp nhận" — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+/** POST /api/v1/my-citizen-reports/{maTraCuu}/photos — Công dân tải lên MỘT ảnh hiện trường qua service (multipart) cho phiếu phản ánh của CHÍNH MÌNH khi phiếu còn "Đã tiếp nhận" — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng */
 export type petitions_post_my_citizen_reports_by_maTraCuu_photos = {
   duongDan: "/api/v1/my-citizen-reports/{maTraCuu}/photos";
   phuongThuc: "POST";
@@ -8893,41 +8721,23 @@ export type petitions_post_my_citizen_reports_by_maTraCuu_photos = {
   };
   truyVan: {
   };
-  than: petitions_photoUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "content_type"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "content_type", "file"];
   phanHoi: {
-    201: petitions_photoUploadOut;
+    201: petitions_photoOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
-    429: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
-  };
-  errorCodes: {
-    403: "chua_xac_thuc_so";
-    429: "rate_limited";
-  };
-};
-
-/** POST /api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion — Công dân hoàn tất tải một ảnh hiện trường — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu vào kho riêng */
-export type petitions_post_my_citizen_reports_by_maTraCuu_photos_by_id_completion = {
-  duongDan: "/api/v1/my-citizen-reports/{maTraCuu}/photos/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "maTraCuu": string;
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: petitions_photoOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
     422: httpx_Error;
     429: httpx_Error;
     500: httpx_Error;
@@ -11680,7 +11490,7 @@ export type petitions_post_tasks_by_ma_assignment = {
   };
 };
 
-/** POST /api/v1/tasks/{ma}/attachments — Xin tải một tệp đính kèm cho nhật ký nhiệm vụ — trả biểu mẫu tải thẳng lên kho lưu tệp (15 phút) */
+/** POST /api/v1/tasks/{ma}/attachments — Tải lên một tệp đính kèm cho nhật ký nhiệm vụ qua service (multipart) — dò kiểu, quét mã độc, lưu vào kho hồ sơ */
 export type petitions_post_tasks_by_ma_attachments = {
   duongDan: "/api/v1/tasks/{ma}/attachments";
   phuongThuc: "POST";
@@ -11689,14 +11499,25 @@ export type petitions_post_tasks_by_ma_attachments = {
   };
   truyVan: {
   };
-  than: petitions_taskAttachmentUploadIn;
+  than: never;
+  multipart: {
+    "size": string;
+    "content_type"?: string;
+    "file_name"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "content_type", "file_name", "file"];
   phanHoi: {
-    201: petitions_taskAttachmentUploadOut;
+    201: petitions_taskAttachmentOut;
     400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    408: httpx_Error;
     409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
@@ -11721,29 +11542,6 @@ export type petitions_delete_tasks_by_ma_attachments_by_id = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
-  };
-};
-
-/** POST /api/v1/tasks/{ma}/attachments/{id}/completion — Hoàn tất tải lên tệp đính kèm — dò kiểu, quét mã độc, lưu vào kho hồ sơ */
-export type petitions_post_tasks_by_ma_attachments_by_id_completion = {
-  duongDan: "/api/v1/tasks/{ma}/attachments/{id}/completion";
-  phuongThuc: "POST";
-  thamSo: {
-    "ma": string;
-    "id": string;
-  };
-  truyVan: {
-  };
-  than: never;
-  phanHoi: {
-    200: petitions_taskAttachmentOut;
-    401: httpx_Error;
-    403: httpx_Error;
-    404: httpx_Error;
-    409: httpx_Error;
-    422: httpx_Error;
-    500: httpx_Error;
-    503: httpx_Error;
   };
 };
 
