@@ -1,7 +1,6 @@
 "use client";
 
 import { CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,6 @@ import { cn } from "@/lib/cn";
 import { fetchCitizenReportSummary, type SummaryPeriod } from "@/lib/api/dashboard";
 import type { KetQua } from "@/lib/api/goi";
 import type { petitions_citizenReportSummaryOut } from "@/lib/api/schema.gen";
-import { isPeriodMetric, type CitizenReportMetric } from "@/lib/drill-down";
 
 import {
   inProgressCaption,
@@ -23,7 +21,6 @@ import {
   KPI_TOTAL_LABEL,
   KPI_WINDOW_DAYS,
   kpiCount,
-  kpiLinkLabel,
   lowRatingCaption,
   onTimePercent,
   ratingAverage,
@@ -35,9 +32,9 @@ import { Glyph } from "./petition-ui";
  * client the leadership overview reads (`lib/api/dashboard.ts`), so a figure here and the same figure
  * there cannot disagree.
  *
- * EVERY FIGURE IS A LINK TO THE LIST BEHIND IT (`/phan-anh?metric=…`, received by `lib/drill-down.ts`
- * on this very page): the number and the rows it opens are counted by one predicate on the server. A
- * period figure carries the card's own [from, to); a stock figure carries none.
+ * PLAIN FIGURES, NOT LINKS (customer bug sheet row 56, as the prototype `FeedbackWorkspace.tsx:94-120`):
+ * the cards no longer filter the list below. The drill-down RECEIVER stays — the leadership overview
+ * still links into `/phan-anh?metric=…` (`lib/drill-down.ts`), it just no longer starts here.
  *
  * NOTHING IS COUNTED HERE. Two divisions only, both the server's documented ones (sum / sample for the
  * average; on_time / on_time_sample for the rate), each `—` on an empty sample — never 0.
@@ -54,28 +51,13 @@ export function kpiPeriod(now: Date): SummaryPeriod {
   return { from: from.toISOString(), to: now.toISOString() };
 }
 
-/**
- * The list behind one figure. `URLSearchParams` encodes the RFC 3339 instants (a raw `+` would arrive
- * as a space and the receiver would call the link invalid). The period goes ONLY with a period metric:
- * the receiver refuses a period on a stock metric.
- */
-export function kpiHref(metric: CitizenReportMetric, period: SummaryPeriod): string {
-  const q = new URLSearchParams();
-  q.set("metric", metric);
-  if (isPeriodMetric("citizen-reports", metric)) {
-    q.set("from", period.from);
-    q.set("to", period.to);
-  }
-  return `/phan-anh?${q.toString()}`;
-}
-
 export function PetitionKpis({
   load = fetchCitizenReportSummary,
 }: {
   /** Injected only by tests; the screen always reads the contract route. */
   load?: (period: SummaryPeriod) => Promise<Summary>;
 }) {
-  // The window is fixed when the cards mount: a re-render must not move the period the links carry.
+  // The window is fixed when the cards mount: a re-render must not move the period being counted.
   const [period] = useState(() => kpiPeriod(new Date()));
   const [reloads, setReloads] = useState(0);
   const [loaded, setLoaded] = useState<{ key: number; result: Summary } | null>(null);
@@ -91,17 +73,15 @@ export function PetitionKpis({
   }, [load, period, reloads]);
 
   const current = loaded !== null && loaded.key === reloads ? loaded.result : null;
-  return <PetitionKpisView summary={current} period={period} onReload={() => setReloads((n) => n + 1)} />;
+  return <PetitionKpisView summary={current} onReload={() => setReloads((n) => n + 1)} />;
 }
 
 /** Presentational half — rendered to a string in tests. `summary === null` = loading. */
 export function PetitionKpisView({
   summary,
-  period,
   onReload,
 }: {
   summary: Summary | null;
-  period: SummaryPeriod;
   onReload?: () => void;
 }) {
   if (summary !== null && !summary.ok) {
@@ -145,68 +125,31 @@ export function PetitionKpisView({
     <section aria-label="Số liệu phản ánh" aria-busy={false} className="m-0">
       {/* The prototype's grid (`FeedbackWorkspace.tsx:94`): 1 / 2 / 4 columns, 12px apart. */}
       <ul className="m-0 grid list-none grid-cols-1 gap-3 p-0 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard
-          label={KPI_TOTAL_LABEL}
-          value={
-            <FigureLink href={kpiHref("received", period)} label={KPI_TOTAL_LABEL}>
-              {kpiCount(s.received)}
-            </FigureLink>
-          }
-          hint={
-            <FigureLink href={kpiHref("in_progress", period)} label={inProgressCaption(s.in_progress)}>
-              {inProgressCaption(s.in_progress)}
-            </FigureLink>
-          }
-        />
+        <KpiCard label={KPI_TOTAL_LABEL} value={kpiCount(s.received)} hint={inProgressCaption(s.in_progress)} />
         {/* `FeedbackWorkspace.tsx:100-107`: the WHOLE value is danger when anything is late, leaf
-            otherwise; danger also puts the warning icon before the hint — never colour alone. */}
+            otherwise; danger also puts the warning icon before the hint — never colour alone. The two
+            figures keep a hidden word each: "1 / 2" alone does not say which is which. */}
         <KpiCard
           label={KPI_ON_TIME_LABEL}
           accent={late ? "danger" : "leaf"}
           value={
             <>
-              <FigureLink href={kpiHref("on_time", period)} label="Đúng hạn">
-                {kpiCount(s.on_time)}
-              </FigureLink>{" "}
-              /{" "}
-              <FigureLink href={kpiHref("late", period)} label="Trễ hạn trong kỳ">
-                {kpiCount(s.late)}
-              </FigureLink>
+              <span className="an-thi-giac">Đúng hạn: </span>
+              {kpiCount(s.on_time)} / <span className="an-thi-giac">Trễ hạn trong kỳ: </span>
+              {kpiCount(s.late)}
             </>
           }
           hint={pct === null ? KPI_NO_DEADLINE_SAMPLE : `${pct} đúng hạn`}
         />
         <KpiCard
           label={KPI_RATING_LABEL}
-          value={
-            // `—` when nobody has rated (sample 0) or the server predates the fields — NEVER 0,0/5.
-            average === null || !ratingKnown ? (
-              "—"
-            ) : (
-              <FigureLink href={kpiHref("rating_sample", period)} label={KPI_RATING_LABEL}>
-                {average}
-              </FigureLink>
-            )
-          }
-          hint={
-            ratingKnown && typeof lowRating === "number" ? (
-              <FigureLink href={kpiHref("low_rating", period)} label={lowRatingCaption(lowRating)}>
-                {lowRatingCaption(lowRating)}
-              </FigureLink>
-            ) : undefined
-          }
+          // `—` when nobody has rated (sample 0) or the server predates the fields — NEVER 0,0/5.
+          value={average === null || !ratingKnown ? "—" : average}
+          hint={ratingKnown && typeof lowRating === "number" ? lowRatingCaption(lowRating) : undefined}
         />
         <KpiCard
           label={KPI_PENDING_LABEL}
-          value={
-            typeof pending === "number" ? (
-              <FigureLink href={kpiHref("publication_pending", period)} label={KPI_PENDING_LABEL}>
-                {kpiCount(pending)}
-              </FigureLink>
-            ) : (
-              "—"
-            )
-          }
+          value={typeof pending === "number" ? kpiCount(pending) : "—"}
           hint={KPI_PENDING_CAPTION}
         />
       </ul>
@@ -254,30 +197,3 @@ function KpiCard({
   );
 }
 
-/**
- * A figure as a link. The accessible name says where it goes AND keeps the figure (`aria-describedby`
- * would need an id per figure; the visible text is short enough to stay part of the name).
- */
-function FigureLink({
-  href,
-  label,
-  children,
-}: {
-  href: string;
-  label: string;
-  children: ReactNode;
-}) {
-  return (
-    <Link
-      href={href}
-      title={kpiLinkLabel(label)}
-      className={cn(
-        "rounded text-inherit underline-offset-4 hover:underline",
-        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500",
-      )}
-    >
-      <span className="an-thi-giac">{kpiLinkLabel(label)}: </span>
-      {children}
-    </Link>
-  );
-}

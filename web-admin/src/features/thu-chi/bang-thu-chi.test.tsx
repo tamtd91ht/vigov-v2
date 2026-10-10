@@ -457,8 +457,8 @@ describe("con số ra tới trang", () => {
     expect(html).not.toContain("Ô không tính được con số");
   });
 
-  it("tiêu đề cột `%` hiện chú thích công thức máy chủ gửi", () => {
-    expect(veBang(false, false)).toContain("Chi ngân sách / Dự toán năm × 100");
+  it("tiêu đề cột `%` chỉ hiện NHÃN, không hiện chuỗi công thức (bảng lỗi khách hàng dòng 52)", () => {
+    expect(veBang(false, false)).not.toContain("Chi ngân sách / Dự toán năm × 100");
   });
 
   it("dòng không mang `percent_basis_points` (bản đồ vắng): ô `%` là DẤU GẠCH, không phải 0%", () => {

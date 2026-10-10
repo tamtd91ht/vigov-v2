@@ -302,6 +302,54 @@ export function BangThuChi() {
     });
   }
 
+  /**
+   * The headline star, IN PLACE (customer bug sheet row 51: the full reload of `xong` blanked the whole
+   * sheet to a skeleton and back — the screen "flickered" for a one-icon change).
+   *
+   * OPTIMISTIC, THEN RECONCILED: the star moves at once by patching `headline_line_id` into the sheet
+   * already held; when the server answers — yes or no — the sheet and the indicators are re-read
+   * SILENTLY under the SAME keys, so no skeleton is drawn and the summary figures that follow the
+   * headline come from the server, never from a client guess (the reason `lanTai` exists). A refusal
+   * prints the server's sentence above the table and the re-read puts the star back where it truly is.
+   *
+   * `headlineSeq`: two quick clicks race; only the LAST click's re-read may land, or an older answer
+   * could put the star back on the line the officer just left.
+   */
+  const headlineSeq = useRef(0);
+  function setHeadline(dong: finance_dongRa): void {
+    const seq = ++headlineSeq.current;
+    const sheetKey = khoaBang;
+    const indicatorsKey = khoaChiSo;
+    datLoiGhi(null);
+    datDaTaiBang((prev) =>
+      prev !== null && prev.khoa === sheetKey && prev.kq.ok
+        ? {
+            khoa: sheetKey,
+            kq: {
+              ok: true,
+              duLieu: { ...prev.kq.duLieu, summary: { ...prev.kq.duLieu.summary, headline_line_id: dong.id } },
+            },
+          }
+        : prev,
+    );
+    datDongTong(dong.id).then((kq) => {
+      if (seq !== headlineSeq.current) return;
+      if (!kq.ok) datLoiGhi(kq.thongBao);
+      // A failed re-read keeps what is drawn: replacing a readable sheet with an error panel for a
+      // reconcile nobody asked for would be the flicker again, worse.
+      layBang({ nam, loai }).then((sheet) => {
+        if (seq !== headlineSeq.current || !sheet.ok) return;
+        datDaTaiBang((prev) => (prev !== null && prev.khoa === sheetKey ? { khoa: sheetKey, kq: sheet } : prev));
+      });
+      layChiSoNganSach(nam).then((indicators) => {
+        if (seq !== headlineSeq.current || !indicators.ok) return;
+        datDaTaiChiSo((prev) =>
+          prev !== null && prev.khoa === indicatorsKey ? { khoa: indicatorsKey, kq: indicators } : prev,
+        );
+      });
+    });
+  }
+
   /** Closes the open dialog — never while its request is in flight (the outcome would be hidden). */
   function closeDialog(): void {
     if (dangGui) return;
@@ -423,10 +471,7 @@ export function BangThuChi() {
               resetEdits();
               datDangMo({ kieu: "goDong", dong });
             }}
-            datTong={(dong) => {
-              datDangGui(true);
-              datDongTong(dong.id).then(xong);
-            }}
+            datTong={setHeadline}
             moCachTinh={(dong, den) => {
               resetEdits();
               datDangMo({ kieu: "cachTinh", dong, den });
@@ -1051,16 +1096,10 @@ export function BangDayDu({
                 // Figure columns right-aligned so digits line up down the column; the label keeps the
                 // file's own line breaks (`whitespace-pre-line`).
                 <th key={c.id} scope="col" className={cn(TH, "w-32 text-right whitespace-pre-line")}>
+                  {/* LABEL ONLY, as the prototype (customer bug sheet row 52 removed the formula line
+                      "Chi ngân sách / Dự toán năm × 100" under `%` headers). `c.formula` stays in the
+                      data and is still named where it explains a figure that cannot be computed. */}
                   {c.name}
-                  {/* Chú thích công thức của cột `%` — chữ HIỆN RÕ chứ không chỉ `title`, vì màn
-                      cảm ứng không rê chuột được; nhỏ hơn nhãn cột (spec 03 A12). Chỉ là chữ: tỷ lệ
-                      tính từ hai toán hạng, không từ chuỗi này. */}
-                  {c.type === "phan_tram" && (c.formula ?? "").trim() !== "" && (
-                    <>
-                      <br />
-                      <span className="text-[10.5px] font-normal">{c.formula}</span>
-                    </>
-                  )}
                 </th>
               ))}
               <th scope="col" className={cn(TH, "w-44 text-left")}>

@@ -1207,8 +1207,6 @@ export const PETITION_PAGE_SUBTITLE =
 export const MOI_TRANG_THAI_NHAN = "Tất cả trạng thái";
 export const MOI_LINH_VUC_NHAN = "Tất cả lĩnh vực";
 export const MOI_DIA_BAN_NHAN = "Tất cả địa bàn";
-export const MOI_BO_PHAN_NHAN = "Tất cả bộ phận";
-export const MOI_KENH_NHAN = "Tất cả kênh tiếp nhận";
 export const CHI_TRE_HAN_NHAN = "Chỉ phiếu trễ hạn";
 export const TIM_PLACEHOLDER = "Tìm theo nội dung, mã phiếu, địa chỉ…";
 
@@ -1747,11 +1745,6 @@ export function lowRatingCaption(n: number): string {
 
 export function inProgressCaption(n: number): string {
   return `${kpiCount(n)} phiếu đang xử lý`;
-}
-
-/** Accessible name of a KPI link — the dashboard's wording (`drillLabel`, spec 01 §4/§9). */
-export function kpiLinkLabel(label: string): string {
-  return `Xem danh sách đằng sau: ${label}`;
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

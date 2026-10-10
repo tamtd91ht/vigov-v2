@@ -12,7 +12,7 @@ import type { KhoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
 import { MenuIcon } from "./menu-icons";
 import {
   activeChildRoute,
-  dangChon,
+  activeMenuRoute,
   isMenuParent,
   parentRoute,
   type MucMenu,
@@ -128,6 +128,8 @@ export function NavSheetContent({
   search,
   onNavigate,
 }: NavSheetProps & { onNavigate: () => void }) {
+  // One lit row for the whole menu, as the sidebar (`activeMenuRoute`).
+  const active = activeMenuRoute(groups, pathname);
   return (
     <div className="nav-sheet-body">
       {/* The sidebar's own brand row, navy like it (ADR 0068 lần 6 #2): the sheet IS the sidebar below
@@ -150,11 +152,12 @@ export function NavSheetContent({
               <ul aria-label={g.ten === "" ? undefined : g.ten}>
                 {g.muc.map((m) => {
                   if (!isMenuParent(m)) {
-                    return <NavSheetItem key={m.nhan} item={m} active={dangChon(m.duong, pathname)} onNavigate={onNavigate} />;
+                    return <NavSheetItem key={m.nhan} item={m} active={m.duong !== null && m.duong === active} onNavigate={onNavigate} />;
                   }
                   // Same shape as the expanded sidebar: the parent row, its children indented under it.
                   // Never `aria-current` on the row — the current page is the child.
-                  const current = activeChildRoute(m, pathname);
+                  const matched = activeChildRoute(m, pathname);
+                  const current = matched !== null && matched === active ? matched : null;
                   const href = parentRoute(m);
                   const rowClass = current === null ? "nav-sheet-link nav-sheet-parent" : "nav-sheet-link nav-sheet-parent is-open";
                   const row = (

@@ -385,7 +385,6 @@ describe("hai tab phạm vi (§4)", () => {
         tim=""
         datTim={() => {}}
         datLoc={() => {}}
-        boPhan={BO_PHAN}
         thon={[]}
       />,
     );
@@ -1225,7 +1224,7 @@ describe("filter `Bị đánh giá thấp` (§4) → `ratingMax: 2`", () => {
   function hang(loc: Parameters<typeof HangLoc>[0]["loc"], datLoc = vi.fn()) {
     return {
       datLoc,
-      tree: HangLoc({ loc, tim: "", datTim: () => {}, datLoc, boPhan: BO_PHAN, thon: [] }),
+      tree: HangLoc({ loc, tim: "", datTim: () => {}, datLoc, thon: [] }),
     };
   }
 
@@ -1495,7 +1494,7 @@ describe("prototype composition — list cards", () => {
 
 describe("the filter row (rows 9-14)", () => {
   const html = renderToStaticMarkup(
-    <HangLoc loc={{}} tim="" datTim={() => {}} datLoc={() => {}} boPhan={BO_PHAN} thon={[]} />,
+    <HangLoc loc={{}} tim="" datTim={() => {}} datLoc={() => {}} thon={[]} />,
   );
 
   it("scope: the prototype's bordered group, active = navy, each choice's hint as its title", () => {
@@ -1508,7 +1507,13 @@ describe("the filter row (rows 9-14)", () => {
   it("search: 256px box, the prototype's placeholder; selects and box are 36px / 12.5px", () => {
     expect(html).toContain('placeholder="Tìm theo nội dung, mã phiếu, địa chỉ…"');
     expect(html).toContain("w-64");
-    expect(html.match(/\[&amp;_select\]:h-9!/g)?.length).toBe(6);
+    expect(html.match(/\[&amp;_select\]:h-9!/g)?.length).toBe(4);
+  });
+
+  it("the prototype's row only: NO unit and NO intake-channel filter (customer bug sheet row 56)", () => {
+    expect(html).not.toContain('id="loc-bo-phan"');
+    expect(html).not.toContain('id="loc-kenh"');
+    expect(html.match(/<select /g)?.length).toBe(3);
   });
 
   it("checkboxes: 12.5px words, a 14px brand box", () => {

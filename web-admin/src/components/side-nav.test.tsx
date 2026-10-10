@@ -151,10 +151,24 @@ describe("sidebar — the current page", () => {
     expect(a).toContain('class="side-nav-link is-active"');
   });
 
-  it("a parent route stays lit on its child route — the rule of `dangChon`, unchanged", () => {
+  it("on /giai-ngan/thu-chi ONLY Thu - Chi is lit, not Giải ngân too (customer bug sheet row 46)", () => {
     const html = sidebar(ALL_PERMISSIONS, { pathname: "/giai-ngan/thu-chi" });
-    expect(linkTo(html, "/giai-ngan")).toContain('aria-current="page"');
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(linkTo(html, "/giai-ngan")).not.toContain("aria-current");
     expect(linkTo(html, "/giai-ngan/thu-chi")).toContain('aria-current="page"');
+  });
+
+  it("on /nhiem-vu/so-tay ONLY Sổ tay is lit, not Nhiệm vụ too", () => {
+    const html = sidebar(ALL_PERMISSIONS, { pathname: "/nhiem-vu/so-tay" });
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(linkTo(html, "/nhiem-vu")).not.toContain("aria-current");
+    expect(linkTo(html, "/nhiem-vu/so-tay")).toContain('aria-current="page"');
+  });
+
+  it("a page with no item of its own still lights its section by segment", () => {
+    const html = sidebar(ALL_PERMISSIONS, { pathname: "/giai-ngan/du-an/abc" });
+    expect(html.match(/aria-current="page"/g)).toHaveLength(1);
+    expect(linkTo(html, "/giai-ngan")).toContain('aria-current="page"');
   });
 
   it("on a child: ONLY that child is current (most specific match); the parent row is marked open, not current", () => {

@@ -99,17 +99,22 @@ describe("the picker — per-file state, progress as status, refusals as alert",
 
   it("the control is a keyboard-reachable label of a multi-file input, pdf/jpg/png", () => {
     // ADR 0068: the `📎` glyph is a decorative lucide icon (aria-hidden) before the word now.
-    expect(html).toMatch(/<label for="ghi-nhat-ky-NV19-dinh-kem" class="nut-phu"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Đính kèm/);
+    expect(html).toMatch(/<label for="ghi-nhat-ky-NV19-dinh-kem" class="nut-phu [^"]*"><svg[^>]*aria-hidden="true"[^>]*>.*?<\/svg>Đính kèm/);
+    // The system's small button (bug sheet row 61a) — never the 44px / 16px `.task-attachments` block.
+    expect(html).toMatch(/<label for="ghi-nhat-ky-NV19-dinh-kem" class="[^"]*\bh-7\b[^"]*text-\[0\.8rem\]/);
+    expect(html).not.toContain("task-attachments");
     expect(html).toMatch(/type="file"[^>]*multiple=""[^>]*accept="\.pdf,\.jpg,\.jpeg,\.png/);
   });
 
   it("progress `role=status`, refusals `role=alert` with the server's sentence; retry only on the retry state", () => {
-    expect(html).toContain('<span role="status">Đang tải 30%</span>');
-    expect(html).toContain('<span role="alert">Bị từ chối: Tệp lớn hơn dung lượng tối đa được phép đính kèm.</span>');
+    expect(html).toMatch(/<span role="status"[^>]*>Đang tải 30%<\/span>/);
+    expect(html).toMatch(/<span role="alert"[^>]*>Bị từ chối: Tệp lớn hơn dung lượng tối đa được phép đính kèm.<\/span>/);
     expect(html.split(`>${ATTACH_RETRY_BUTTON}<`).length - 1).toBe(1);
-    // Every file can be removed before the entry is sent.
-    expect(html.split(">Bỏ<").length - 1).toBe(4);
-    expect(html).toContain('aria-label="Bỏ d.pdf"');
+    // Every file can be removed before the entry is sent — the prototype's compact chip (bug sheet row
+    // 61b): one line per file, its name cut with an ellipsis, a Trash2 named by the file.
+    expect(html.split('aria-label="Bỏ tệp ').length - 1).toBe(4);
+    expect(html).toContain('aria-label="Bỏ tệp d.pdf"');
+    expect(html.match(/class="min-w-0 flex-1 truncate"/g)?.length).toBe(4);
   });
 });
 

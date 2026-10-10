@@ -115,10 +115,7 @@ import {
   LOW_RATING_MAX,
   LOW_RATING_REOPENED,
   LY_DO_TOI_DA,
-  MOI_BO_PHAN_NHAN,
   MOI_DIA_BAN_NHAN,
-  MOI_KENH,
-  MOI_KENH_NHAN,
   MOI_LINH_VUC_NHAN,
   MOI_TRANG_THAI,
   MOI_TRANG_THAI_NHAN,
@@ -614,7 +611,6 @@ export function SoPhanAnh({
               tim={tim}
               datTim={datTim}
               datLoc={datLocMoi}
-              boPhan={daTaiBoPhan}
               thon={daTaiThon}
             />
           )}
@@ -828,8 +824,8 @@ export function SoPhanAnh({
 }
 
 /**
- * Bộ lọc §4: hai tab phạm vi và tám ô (thêm `Bị đánh giá thấp` → `rating_max=2`), đúng những tham số máy chủ nhận — không vẽ ô nào không có
- * tuyến đứng sau. Phạm vi nằm CHUNG `BoLoc` với bảy ô, nên đổi tab giữ nguyên các ô đang chọn và
+ * Bộ lọc §4: hai tab phạm vi và sáu ô (thêm `Bị đánh giá thấp` → `rating_max=2`), đúng những tham số máy chủ nhận — không vẽ ô nào không có
+ * tuyến đứng sau. Phạm vi nằm CHUNG `BoLoc` với các ô, nên đổi tab giữ nguyên các ô đang chọn và
  * về trang đầu như mọi bộ lọc khác; cùng cách giữ trạng thái (state của trang, không lên URL).
  */
 export function HangLoc({
@@ -837,14 +833,12 @@ export function HangLoc({
   tim,
   datTim,
   datLoc,
-  boPhan,
   thon,
 }: {
   loc: BoLoc;
   tim: string;
   datTim: (s: string) => void;
   datLoc: (moi: BoLoc) => void;
-  boPhan: readonly identity_boPhanRa[];
   thon: readonly identity_thonToDanPhoRa[];
 }) {
   function timNgay(e: FormEvent) {
@@ -854,8 +848,9 @@ export function HangLoc({
   }
 
   // THE PROTOTYPE'S ONE FILTER ROW (`FeedbackWorkspace.tsx:141-226`), in its order — scope · search ·
-  // status · field · hamlet — then the two filters the prototype does not have and our route offers
-  // (unit holding the petition, intake channel), then its two checkboxes. No "Bộ lọc" panel (ADR 0068
+  // status · field · hamlet · its two checkboxes — and NOTHING more. The unit and intake-channel selects
+  // were removed (customer bug sheet row 56): the route still takes `unit` / `channel` (`BoLoc`), but no
+  // link into this page sets them (`drillDownQuery` carries metric + period only), so nothing is lost. No "Bộ lọc" panel (ADR 0068
   // §12 replaced for this screen, lần 5 #3). Labels are visually hidden — each select's first option
   // names it, as in the prototype — but every control keeps a real `<label>`.
   return (
@@ -966,36 +961,6 @@ export function HangLoc({
           {thon.map((t) => (
             <option key={t.id} value={t.id}>
               {residentialUnitFilterLabel(t)}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Bộ phận đang giữ" htmlFor="loc-bo-phan" kind="select" hideLabel grow="auto" className={FILTER_CONTROL}>
-        <select
-          id="loc-bo-phan"
-          value={loc.boPhanID ?? ""}
-          onChange={(e) => datLoc({ ...loc, boPhanID: e.target.value || undefined })}
-        >
-          <option value="">{MOI_BO_PHAN_NHAN}</option>
-          {boPhan.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </select>
-      </Field>
-
-      <Field label="Kênh tiếp nhận" htmlFor="loc-kenh" kind="select" hideLabel grow="auto" className={FILTER_CONTROL}>
-        <select
-          id="loc-kenh"
-          value={loc.kenh ?? ""}
-          onChange={(e) => datLoc({ ...loc, kenh: e.target.value || undefined })}
-        >
-          <option value="">{MOI_KENH_NHAN}</option>
-          {MOI_KENH.map((ma) => (
-            <option key={ma} value={ma}>
-              {nhanKenh(ma)}
             </option>
           ))}
         </select>

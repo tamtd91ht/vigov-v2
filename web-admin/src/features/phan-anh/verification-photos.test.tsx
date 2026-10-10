@@ -28,8 +28,16 @@ import {
   type VerificationDeps,
 } from "./verification-photos";
 
+const revoked: string[] = [];
+let previews = 0;
+
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+  // jsdom's `File` is not the Blob vitest's own `createObjectURL` expects: a local stand-in.
+  URL.createObjectURL = () => `blob:preview-${++previews}`;
+  URL.revokeObjectURL = (u: string) => {
+    revoked.push(u);
+  };
 });
 
 let root: Root | null = null;
@@ -142,6 +150,43 @@ describe("VerificationPhotosView — what the column says", () => {
   });
 });
 
+describe("VerificationPhotosView — the staged photos (bug sheet row 58)", () => {
+  const staged = (kind: "uploading" | "checking" | "stored" | "retry" | "refused") => {
+    const state =
+      kind === "uploading"
+        ? { kind, percent: 40 }
+        : kind === "retry" || kind === "refused"
+          ? { kind, message: "Lý do máy chủ." }
+          : { kind };
+    return renderToStaticMarkup(
+      <VerificationPhotosView
+        lookupCode="PA-1"
+        state={{ kind: "empty" }}
+        upload="open"
+        uploads={[{ key: "k1", preview: "blob:local-1", state }]}
+      />,
+    );
+  };
+
+  it("a thumbnail, no file name, no size, no 'Bỏ' text button", () => {
+    for (const k of ["uploading", "checking", "stored", "retry", "refused"] as const) {
+      const html = staged(k);
+      expect(html, k).toContain('src="blob:local-1"');
+      expect(html, k).not.toMatch(/>Bỏ</);
+      expect(html, k).not.toMatch(/\d+(,\d+)? ?(B|KB|MB)(?![a-zA-Z])/);
+    }
+  });
+
+  it("× ONLY where nothing was stored and nothing is in flight; never on a saved photo", () => {
+    for (const k of ["retry", "refused"] as const) expect(staged(k), k).toContain('aria-label="Bỏ ảnh đang chọn 1/1 khỏi danh sách"');
+    for (const k of ["uploading", "checking", "stored"] as const) expect(staged(k), k).not.toContain("Bỏ ảnh đang chọn");
+    const saved = renderToStaticMarkup(
+      <VerificationPhotosView lookupCode="PA-1" state={{ kind: "list", items: [photo(1)] }} upload="open" />,
+    );
+    expect(saved).not.toContain("Bỏ ảnh");
+  });
+});
+
 describe("afterPhotoUpload — what an upload's answer turns into", () => {
   const r = (x: UploadResult<{ id: string; content_type: string; size_bytes: number; status: string; created_at: string }>) =>
     afterPhotoUpload(x);
@@ -183,7 +228,8 @@ describe("VerificationPhotos — the flow", () => {
     expect(type).toBe("image/jpeg");
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
     expect(d.load).toHaveBeenCalledTimes(2);
-    expect(h.textContent).toContain("Đã lưu vào phiếu.");
+    // Stored, and the re-read holds it: it leaves the staging row (it is in the saved grid now).
+    expect(h.querySelector('[aria-label="Ảnh sau xử lý đang tải lên"]')).toBeNull();
   });
 
   it("the real route: one multipart POST on this origin, no completion call", async () => {
@@ -198,7 +244,8 @@ describe("VerificationPhotos — the flow", () => {
     await flush(10);
     expect(sent.map((x) => x.url)).toEqual(["/api/v1/citizen-reports/PA-1/verification-photos"]);
     expect(partNames(sent[0])).toEqual(["size", "content_type", "file"]);
-    expect(h.textContent).toContain("Đã lưu vào phiếu.");
+    // Stored, and the re-read holds it: it leaves the staging row (it is in the saved grid now).
+    expect(h.querySelector('[aria-label="Ảnh sau xử lý đang tải lên"]')).toBeNull();
     vi.unstubAllGlobals();
   });
 
@@ -234,7 +281,26 @@ describe("VerificationPhotos — the flow", () => {
     await flush();
     expect(upload).toHaveBeenCalledTimes(2);
     expect(upload.mock.calls[1]?.[1]).toBe(f);
-    expect(h.textContent).toContain("Đã lưu vào phiếu.");
+    // Stored, and the re-read holds it: it leaves the staging row (it is in the saved grid now).
+    expect(h.querySelector('[aria-label="Ảnh sau xử lý đang tải lên"]')).toBeNull();
+  });
+
+  it("a refused photo: × in its corner removes it from the selection, with no call", async () => {
+    const d = deps({ upload: vi.fn(async () => ({ ok: false as const, status: 409, code: "photo_limit", message: "m" })) });
+    const h = mount(d);
+    await flush();
+    choose(h, new File([new Uint8Array([1])], "sau.png", { type: "image/png" }));
+    await flush();
+    const preview = h.querySelector('[aria-label="Ảnh sau xử lý đang tải lên"] img')?.getAttribute("src") ?? "";
+    expect(preview).toMatch(/^blob:preview-/);
+    const x = h.querySelector<HTMLButtonElement>('button[aria-label^="Bỏ ảnh đang chọn"]');
+    expect(x).not.toBeNull();
+    act(() => x?.click());
+    // The local preview is released with the photo.
+    expect(revoked).toContain(preview);
+    expect(h.querySelector('[aria-label="Ảnh sau xử lý đang tải lên"]')).toBeNull();
+    expect(d.upload).toHaveBeenCalledTimes(1);
+    expect(d.load).toHaveBeenCalledTimes(1);
   });
 
   it("a PDF is refused before any call", async () => {

@@ -266,7 +266,28 @@ export function parentRoute(parent: MenuParent): string | null {
   return parent.children.find((c) => c.duong !== null)?.duong ?? null;
 }
 
-/** Mục đang chọn: khớp CHÍNH XÁC hoặc là tiền tố theo đoạn đường dẫn. */
+/**
+ * THE one item the current page belongs to, across the whole menu (children included): the LONGEST
+ * matching route, or `null`. A per-item match alone lit two rows at once — `/giai-ngan` and
+ * `/giai-ngan/thu-chi` on the Thu - Chi screen, `/nhiem-vu` and `/nhiem-vu/so-tay` on Sổ tay — and a
+ * person seeing two lit rows cannot tell which screen they are on (customer bug sheet row 46).
+ * Segment matching is still needed for pages with no item of their own (`/giai-ngan/du-an/<id>` lights
+ * Giải ngân); "longest wins" only decides between several candidates.
+ */
+export function activeMenuRoute(groups: readonly NhomMenu[], pathname: string): string | null {
+  let best: string | null = null;
+  for (const m of flattenMenu(groups)) {
+    if (m.duong !== null && dangChon(m.duong, pathname) && (best === null || m.duong.length > best.length)) {
+      best = m.duong;
+    }
+  }
+  return best;
+}
+
+/**
+ * Candidate test: khớp CHÍNH XÁC hoặc là tiền tố theo đoạn đường dẫn. Not the answer to "which row is
+ * lit" on its own — several items can match one path; `activeMenuRoute` picks the longest.
+ */
 export function dangChon(duongMuc: string | null, duongHienTai: string): boolean {
   if (duongMuc === null) return false;
   if (duongMuc === duongHienTai) return true;

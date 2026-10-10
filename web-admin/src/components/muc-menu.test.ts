@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   activeChildRoute,
+  activeMenuRoute,
   dangChon,
   flattenMenu,
   isMenuParent,
@@ -415,8 +416,30 @@ describe("dangChon", () => {
     expect(dangChon("/giai-ngan", "/giai-ngan")).toBe(true);
   });
 
-  it("khớp theo ĐOẠN: /giai-ngan sáng khi đang ở /giai-ngan/thu-chi", () => {
+  it("khớp theo ĐOẠN là ỨNG VIÊN, không phải mục sáng: /giai-ngan/thu-chi có hai ứng viên, chỉ mục dài nhất sáng", () => {
+    // `dangChon` vẫn khớp theo đoạn (trang không có mục riêng như /giai-ngan/du-an/<id> cần nó), nhưng
+    // mục SÁNG là do `activeMenuRoute` chọn — bảng lỗi khách hàng dòng 46: Thu - Chi làm sáng cả Giải ngân.
     expect(dangChon("/giai-ngan", "/giai-ngan/thu-chi")).toBe(true);
+    expect(activeMenuRoute(NHOM_MENU, "/giai-ngan/thu-chi")).toBe("/giai-ngan/thu-chi");
+  });
+});
+
+describe("activeMenuRoute", () => {
+  it("chỉ MỘT mục sáng: mục khớp dài nhất trên toàn menu", () => {
+    expect(activeMenuRoute(NHOM_MENU, "/giai-ngan")).toBe("/giai-ngan");
+    expect(activeMenuRoute(NHOM_MENU, "/nhiem-vu/so-tay")).toBe("/nhiem-vu/so-tay");
+    expect(activeMenuRoute(NHOM_MENU, "/nhiem-vu/bien-ban")).toBe("/nhiem-vu/bien-ban");
+    expect(activeMenuRoute(NHOM_MENU, "/nhiem-vu")).toBe("/nhiem-vu");
+    expect(activeMenuRoute(NHOM_MENU, "/nguoi-dung/phan-quyen")).toBe("/nguoi-dung/phan-quyen");
+  });
+
+  it("trang không có mục riêng sáng mục cha theo đoạn", () => {
+    expect(activeMenuRoute(NHOM_MENU, "/giai-ngan/du-an/abc")).toBe("/giai-ngan");
+  });
+
+  it("không mục nào khớp → null", () => {
+    expect(activeMenuRoute(NHOM_MENU, "/doi-mat-khau")).toBeNull();
+    expect(activeMenuRoute(NHOM_MENU, "/van-ban-khac")).toBeNull();
   });
 
   it("KHÔNG khớp tiền tố chuỗi trần: /van-ban không sáng ở /van-ban-khac", () => {

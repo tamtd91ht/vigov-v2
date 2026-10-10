@@ -83,7 +83,7 @@ function pressAll(el: HTMLElement, ids: readonly string[]): void {
 describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
   it("scope: `Liên quan đến tôi` is disabled and never changes the filter", () => {
     const datLoc = vi.fn();
-    const el = mount(<HangLoc loc={{}} tim="" datTim={() => {}} datLoc={datLoc} boPhan={[]} thon={[]} />);
+    const el = mount(<HangLoc loc={{}} tim="" datTim={() => {}} datLoc={datLoc} thon={[]} />);
     const related = [...el.querySelectorAll<HTMLButtonElement>('[role="group"] button')].find(
       (b) => b.textContent === "Liên quan đến tôi",
     );

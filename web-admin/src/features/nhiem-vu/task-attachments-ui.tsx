@@ -4,7 +4,7 @@ import { Download, Loader2, Paperclip, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants, LEGACY_BUTTON_CLASS } from "@/components/ui/button";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { cn } from "@/lib/cn";
 import { removeTaskAttachment } from "@/lib/api/nhiem-vu";
@@ -18,7 +18,6 @@ import {
   ATTACH_BUTTON,
   ATTACH_INPUT_LABEL,
   ATTACH_NOTE,
-  ATTACH_REMOVE_BUTTON,
   ATTACH_RETRY_BUTTON,
   DOWNLOAD_OPENING,
   DOWNLOAD_REFUSED,
@@ -113,7 +112,18 @@ export function useAttachmentUploads(taskCode: string) {
   );
 }
 
-/** The picker and the per-file list under the entry's text field. Presentational. */
+/**
+ * The picker and the per-file list under the entry's text field. Presentational. Used by the PETITION
+ * log (`phan-anh/nhat-ky-phieu.tsx`); the task log draws its own button and uses `PickedFileChips`.
+ *
+ * THE SYSTEM'S SMALL SECONDARY BUTTON (`Button` `secondary` / `sm`, 28px, 12.8px), the same size as the
+ * `Ghi nhật ký` button beside it — as the prototype (`FeedbackActivityPanel.tsx:209-216`). It used to
+ * sit under `.task-attachments` (globals.css), whose 44px / 16px rules made it the largest control of
+ * the panel (customer bug sheet row 61a); that class stays for its other users and is not used here.
+ *
+ * The chosen files are the prototype's compact chips (`PickedFileChips`, `:169-193`): one truncated line
+ * per file, so a long photo name no longer breaks the narrow log column (row 61b).
+ */
 export function AttachmentPicker({
   fieldId,
   items,
@@ -132,9 +142,9 @@ export function AttachmentPicker({
 }) {
   const inputId = `${fieldId}-dinh-kem`;
   return (
-    <div className="task-attachments">
+    <div className="flex min-w-0 flex-col items-start gap-1">
       {/* The input comes FIRST, visually hidden but in the tab order; its label right after it is the
-          visible `📎 Đính kèm` control, ringed while the input has focus (`input:focus-visible + label`).
+          visible `📎 Đính kèm` control, ringed while the input has focus (`peer-focus-visible`).
           Enter/Space on the focused input open the picker. */}
       <input
         id={inputId}
@@ -142,7 +152,7 @@ export function AttachmentPicker({
         type="file"
         multiple
         accept={ATTACH_ACCEPT}
-        className="an-thi-giac"
+        className="an-thi-giac peer"
         disabled={disabled}
         onChange={(e) => {
           const files = e.target.files === null ? [] : Array.from(e.target.files);
@@ -150,41 +160,22 @@ export function AttachmentPicker({
           if (files.length > 0) onAdd(files);
         }}
       />
-      <label htmlFor={inputId} className="nut-phu">
-        <Glyph icon={Paperclip} className="size-[18px]" />
+      <label
+        htmlFor={inputId}
+        className={cn(
+          LEGACY_BUTTON_CLASS.secondary,
+          buttonVariants({ variant: "secondary", size: "sm" }),
+          "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500",
+        )}
+      >
+        <Glyph icon={Paperclip} className="size-3.5" />
         {ATTACH_BUTTON}
         <span className="an-thi-giac"> — {ATTACH_INPUT_LABEL}</span>
       </label>
-      <p className="ghi-chu">{ATTACH_NOTE}</p>
-      {items.length > 0 && (
-        <ul aria-label="Tệp đính kèm của dòng nhật ký này">
-          {items.map((i) => {
-            const refused = i.state.kind === "refused" || i.state.kind === "retry";
-            return (
-              <li key={i.key}>
-                <span>
-                  {i.name} · {formatBytes(i.size)}
-                </span>
-                <span role={refused ? "alert" : "status"}>{attachmentStateText(i.state)}</span>
-                {i.state.kind === "retry" && (
-                  <button type="button" className="nut-phu" disabled={disabled} onClick={() => onRetry(i.key)}>
-                    {ATTACH_RETRY_BUTTON}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  className="nut-phu"
-                  disabled={disabled}
-                  aria-label={`${ATTACH_REMOVE_BUTTON} ${i.name}`}
-                  onClick={() => onRemove(i.key)}
-                >
-                  {ATTACH_REMOVE_BUTTON}
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+      <p className="ghi-chu m-0 text-[11px]">{ATTACH_NOTE}</p>
+      <div className="w-full min-w-0">
+        <PickedFileChips items={items} disabled={disabled} onRetry={onRetry} onRemove={onRemove} />
+      </div>
     </div>
   );
 }
@@ -195,8 +186,8 @@ export function AttachmentPicker({
  * Trash2 that takes it out of the list. The ADR 0052 states (uploading, scanning, refused, retry) stay
  * as words on the chip — a file must never look attached while it is still being checked.
  *
- * Presentational, like `AttachmentPicker` (which Phản ánh keeps using unchanged): the entry form owns
- * the list and the hidden file input.
+ * Presentational: the entry form owns the list and the hidden file input. `AttachmentPicker` (the
+ * petition log) draws its chosen files with it too.
  */
 export function PickedFileChips({
   items,

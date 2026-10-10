@@ -1,16 +1,15 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { parseDrillDown } from "@/lib/drill-down";
 import type { petitions_citizenReportSummaryOut } from "@/lib/api/schema.gen";
 
 import { KPI_NO_RATING, KPI_PENDING_CAPTION } from "./nhan-phieu";
-import { kpiHref, kpiPeriod, PetitionKpisView } from "./petition-kpis";
+import { kpiPeriod, PetitionKpisView } from "./petition-kpis";
 
 /**
  * §3 — the four KPI cards. What matters: the AVERAGE is the server's sum / sample with one decimal and
- * never "0" for an empty sample, and every figure opens EXACTLY the list the server counted it from —
- * read back through the receiving side's parser, so a link the list would call invalid is red here.
+ * never "0" for an empty sample, and the figures are PLAIN (customer bug sheet row 56: they no longer
+ * filter the list, as in the prototype).
  */
 
 const PERIOD = { from: "2026-07-04T03:00:00.000Z", to: "2026-10-02T03:00:00.000Z" };
@@ -31,11 +30,8 @@ function summary(change: Partial<petitions_citizenReportSummaryOut> = {}): petit
 }
 
 function view(s: petitions_citizenReportSummaryOut) {
-  return renderToStaticMarkup(<PetitionKpisView summary={{ ok: true, duLieu: s }} period={PERIOD} />);
+  return renderToStaticMarkup(<PetitionKpisView summary={{ ok: true, duLieu: s }} />);
 }
-
-/** `&` in an href is written `&amp;` by React. */
-const href = (h: string) => h.replace(/&/g, "&amp;");
 
 /** The visible text of one card's value line (screen-reader-only prefixes stripped). */
 function cardValue(html: string, label: string): string {
@@ -47,61 +43,40 @@ function cardValue(html: string, label: string): string {
     .trim();
 }
 
-describe("kpiPeriod / kpiHref — the window and the list behind each figure", () => {
+describe("kpiPeriod — the window counted", () => {
   it("the window is the 90 days before now, half-open", () => {
     const now = new Date("2026-10-02T03:00:00Z");
     expect(kpiPeriod(now)).toEqual(PERIOD);
   });
-
-  it("period metrics carry the window; stock metrics carry NONE — and the receiver accepts every link", () => {
-    for (const m of ["received", "on_time", "late"] as const) {
-      const q = new URLSearchParams(kpiHref(m, PERIOD).split("?")[1]);
-      expect(q.get("from"), m).toBe(PERIOD.from);
-      expect(q.get("to"), m).toBe(PERIOD.to);
-    }
-    for (const m of ["in_progress", "rating_sample", "low_rating", "publication_pending"] as const) {
-      const q = new URLSearchParams(kpiHref(m, PERIOD).split("?")[1]);
-      expect(q.has("from"), m).toBe(false);
-      expect(q.has("to"), m).toBe(false);
-    }
-    for (const m of ["received", "in_progress", "on_time", "late", "rating_sample", "low_rating", "publication_pending"] as const) {
-      const h = kpiHref(m, PERIOD);
-      expect(h.startsWith("/phan-anh?metric="), m).toBe(true);
-      const parsed = parseDrillDown("citizen-reports", Object.fromEntries(new URLSearchParams(h.split("?")[1])));
-      expect(parsed.kind, m).toBe("active");
-      expect(h, m).not.toMatch(/tenant/i);
-    }
-  });
 });
 
 describe("PetitionKpisView — the four cards", () => {
-  it("figures and captions; each figure is a link to its list", () => {
+  it("figures and captions, PLAIN — no figure is a link (bug sheet row 56)", () => {
     const html = view(summary());
     expect(html).toContain("Tổng phản ánh 90 ngày");
-    expect(html).toContain(">21</a>");
+    expect(cardValue(html, "Tổng phản ánh 90 ngày")).toBe("21");
     expect(html).toContain("20 phiếu đang xử lý");
     expect(html).toContain("33,3% đúng hạn");
     expect(html).toContain("4,3/5");
     expect(html).toContain("1 phiếu bị đánh giá thấp");
-    expect(html).toContain(">16</a>");
+    expect(cardValue(html, "Chờ kiểm duyệt")).toBe("16");
+    expect(cardValue(html, "Đúng hạn / trễ hạn")).toBe("1 / 2");
     expect(html).toContain(KPI_PENDING_CAPTION);
-    for (const m of ["received", "in_progress", "on_time", "late", "rating_sample", "low_rating", "publication_pending"] as const) {
-      expect(html, m).toContain(`href="${href(kpiHref(m, PERIOD))}"`);
-    }
+    expect(html).not.toContain("<a ");
+    expect(html).not.toContain("href=");
   });
 
   it("the average is computed sum / sample with one decimal (8 / 2 → 4,0/5)", () => {
     expect(view(summary({ rating_sum: 8, rating_sample: 2 }))).toContain("4,0/5");
   });
 
-  it("sample 0: the average is —, never 0, and no rating_sample link; the prototype's one hint line only", () => {
+  it("sample 0: the average is —, never 0; the prototype's one hint line only", () => {
     const html = view(summary({ rating_sum: 0, rating_sample: 0, low_rating: 0 }));
     expect(html).not.toContain("0,0/5");
     expect(cardValue(html, "Điểm hài lòng trung bình")).toBe("—");
     // Prototype `FeedbackWorkspace.tsx:108-116`: one hint, no second sentence under it.
     expect(html).not.toContain(KPI_NO_RATING);
-    expect(html).not.toContain(`href="${href(kpiHref("rating_sample", PERIOD))}"`);
-    // The low-rating list still opens (0 of them is a true count).
+    // 0 low ratings is a true count, shown.
     expect(html).toContain("0 phiếu bị đánh giá thấp");
   });
 
@@ -112,7 +87,7 @@ describe("PetitionKpisView — the four cards", () => {
     expect(cardValue(html, "Điểm hài lòng trung bình")).toBe("—");
     expect(cardValue(html, "Chờ kiểm duyệt")).toBe("—");
     expect(html).not.toContain("phiếu bị đánh giá thấp");
-    expect(html).not.toMatch(/>0<\/a>/);
+    expect(cardValue(html, "Chờ kiểm duyệt")).not.toBe("0");
   });
 
   it("late > 0: the WHOLE value is danger, with the warning icon before the hint — never colour alone", () => {
@@ -142,7 +117,7 @@ describe("PetitionKpisView — the four cards", () => {
   });
 
   it("loading: a status sentence and ONE h-24 skeleton (prototype `FeedbackWorkspace.tsx:92`), no figure", () => {
-    const html = renderToStaticMarkup(<PetitionKpisView summary={null} period={PERIOD} />);
+    const html = renderToStaticMarkup(<PetitionKpisView summary={null} />);
     expect(html).toContain("Đang tải số liệu phản ánh…");
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain("<a ");
@@ -152,7 +127,7 @@ describe("PetitionKpisView — the four cards", () => {
   it("refused: the server's sentence verbatim, with Tải lại", () => {
     const cau = "Tài khoản của bạn không có quyền xem báo cáo.";
     const html = renderToStaticMarkup(
-      <PetitionKpisView summary={{ ok: false, thongBao: cau }} period={PERIOD} onReload={() => {}} />,
+      <PetitionKpisView summary={{ ok: false, thongBao: cau }} onReload={() => {}} />,
     );
     expect(html).toContain(cau);
     expect(html).toContain('role="alert"');

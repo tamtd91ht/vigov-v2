@@ -10,7 +10,6 @@ import { listVerificationPhotos, uploadVerificationPhoto } from "@/lib/api/phieu
 import type { petitions_photoLinkOut, petitions_photoListOut, petitions_photoOut } from "@/lib/api/schema.gen";
 import type { CallResult } from "@/lib/api/task-attachments";
 import { isTransientUpload, type UploadResult } from "@/lib/api/upload";
-import { formatBytes } from "@/features/nhiem-vu/task-attachments";
 
 import {
   AFTER_PHOTO_ACCEPT,
@@ -70,7 +69,27 @@ type UploadState =
   | { readonly kind: "retry"; readonly message: string }
   | { readonly kind: "refused"; readonly message: string };
 
-type UploadItem = { readonly key: string; readonly name: string; readonly size: number; readonly state: UploadState };
+/**
+ * `preview`: a browser-local `blob:` URL of the chosen file (never sent anywhere), so the staged photo
+ * shows as a thumbnail instead of a file name and size (customer bug sheet row 58). `null` where the
+ * browser cannot make one. Revoked when the item leaves the list or the column unmounts.
+ */
+type UploadItem = { readonly key: string; readonly preview: string | null; readonly state: UploadState };
+
+/** A local preview of a chosen file, or `null`. Cosmetic: a browser that cannot make one must never stop the upload. */
+function previewUrl(file: File): string | null {
+  try {
+    return typeof URL.createObjectURL === "function" ? URL.createObjectURL(file) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Drops a staged item's kept bytes and frees its preview URL. Idempotent. */
+function release(picked: Map<string, File>, previews: Set<string>, item: UploadItem): void {
+  picked.delete(item.key);
+  if (item.preview !== null && previews.delete(item.preview)) URL.revokeObjectURL(item.preview);
+}
 
 export const AFTER_PHOTO_RETRY_BUTTON = "Gửi lại";
 
@@ -135,11 +154,29 @@ export function VerificationPhotos({
   const seq = useRef(0);
   // The chosen files, kept (browser memory, this column only) so "Gửi lại" can send the same bytes.
   const picked = useRef(new Map<string, File>());
+  // Every preview URL still alive, so an unmount releases them all.
+  const previews = useRef(new Set<string>());
+
+  useEffect(() => {
+    const alive = previews.current;
+    return () => {
+      for (const url of alive) URL.revokeObjectURL(url);
+      alive.clear();
+    };
+  }, []);
 
   useEffect(() => {
     let dropped = false;
     deps.load(lookupCode).then((result) => {
-      if (!dropped) setLoaded({ key: reads, result });
+      if (dropped) return;
+      setLoaded({ key: reads, result });
+      // A STORED photo leaves the staging row only once the list that holds it has arrived — dropping it
+      // at the upload's answer would leave a gap where the photo is in neither place.
+      setUploads((list) => {
+        const kept = list.filter((i) => i.state.kind !== "stored");
+        for (const i of list) if (i.state.kind === "stored") release(picked.current, previews.current, i);
+        return kept.length === list.length ? list : kept;
+      });
     });
     return () => {
       dropped = true;
@@ -207,7 +244,9 @@ export function VerificationPhotos({
       seq.current += 1;
       const key = `anh-sau-${seq.current}`;
       picked.current.set(key, f);
-      setUploads((list) => [...list, { key, name: f.name, size: f.size, state: { kind: "uploading", percent: 0 } }]);
+      const preview = previewUrl(f);
+      if (preview !== null) previews.current.add(preview);
+      setUploads((list) => [...list, { key, preview, state: { kind: "uploading", percent: 0 } }]);
       void start(key, f);
     }
   }
@@ -251,9 +290,28 @@ export function VerificationPhotos({
         const f = picked.current.get(key);
         if (it !== undefined && it.state.kind === "retry" && f !== undefined) void start(key, f);
       }}
-      onRemoveUpload={(key) => setUploads((list) => list.filter((i) => i.key !== key))}
+      onRemoveUpload={(key) => {
+        const it = uploads.find((i) => i.key === key);
+        // Only a photo the server did NOT keep can be removed — the view offers × on nothing else.
+        if (it === undefined || !stagedRemovable(it.state)) return;
+        release(picked.current, previews.current, it);
+        setUploads((list) => list.filter((i) => i.key !== key));
+      }}
     />
   );
+}
+
+/**
+ * Whether a staged photo shows the × that drops it from the selection: ONLY when nothing was stored and
+ * nothing is in flight. An upload in flight cannot be aborted (`lib/api/upload.ts` takes no signal), so a
+ * × there would hide a photo the server may still store a second later.
+ *
+ * A photo ALREADY SAVED on the petition has no × anywhere: there is no delete route for verification
+ * photos, and removing one must be a soft delete with an audit entry (rules 6 and 7) — evidence a
+ * petition was handled is not something a click may make disappear. That needs a server route first.
+ */
+export function stagedRemovable(s: UploadState): boolean {
+  return s.kind === "retry" || s.kind === "refused";
 }
 
 /** Presentational half — no network. Rendered to a string in tests. */
@@ -427,30 +485,42 @@ export function VerificationPhotosView({
           </div>
           <p className="ghi-chu m-0">{AFTER_PHOTO_NOTE}</p>
           {uploads.length > 0 && (
-            <ul aria-label="Ảnh sau xử lý đang tải lên" className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
-              {uploads.map((u) => {
+            // Thumbnails of the chosen photos, the saved grid's shape — no file name, no size (bug sheet
+            // row 58). The state line under each stays: a refusal must be read where the photo is.
+            <ul aria-label="Ảnh sau xử lý đang tải lên" className={cn(THUMB_GRID, "m-0 list-none p-0")}>
+              {uploads.map((u, i) => {
                 const refused = u.state.kind === "refused" || u.state.kind === "retry";
+                const label = `Ảnh đang chọn ${i + 1}/${uploads.length}`;
                 return (
-                  <li key={u.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                    <span className="min-w-0 break-all">
-                      {u.name} · {formatBytes(u.size)}
-                    </span>
-                    <span role={refused ? "alert" : "status"} className={refused ? "text-danger-600" : "text-ink-500"}>
+                  <li key={u.key} className="flex min-w-0 flex-col gap-1">
+                    <div className="relative h-32 w-full overflow-hidden rounded-[10px] border border-line bg-surface-muted">
+                      {u.preview !== null ? (
+                        // eslint-disable-next-line @next/next/no-img-element -- a local blob: preview, never a remote URL
+                        <img src={u.preview} alt={label} decoding="async" className="block size-full object-cover" />
+                      ) : (
+                        <span className="grid size-full place-items-center px-2 text-center text-xs text-ink-500">{label}</span>
+                      )}
+                      {stagedRemovable(u.state) && (
+                        <button
+                          type="button"
+                          aria-label={`Bỏ ${label.toLowerCase()} khỏi danh sách`}
+                          title="Bỏ ảnh"
+                          onClick={() => onRemoveUpload(u.key)}
+                          className={cn(
+                            "absolute top-1 right-1 grid size-6 cursor-pointer place-items-center rounded-full border-0 bg-ink-900/70 p-0 text-white",
+                            "hover:bg-ink-900 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+                          )}
+                        >
+                          <Glyph icon={X} className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                    <span role={refused ? "alert" : "status"} className={cn("text-xs", refused ? "text-danger-600" : "text-ink-500")}>
                       {uploadStateText(u.state)}
                     </span>
                     {u.state.kind === "retry" && (
-                      <button type="button" className={buttonClass("secondary", "sm")} onClick={() => onRetryUpload(u.key)}>
+                      <button type="button" className={cn(buttonClass("secondary", "sm"), "self-start")} onClick={() => onRetryUpload(u.key)}>
                         {AFTER_PHOTO_RETRY_BUTTON}
-                      </button>
-                    )}
-                    {(refused || u.state.kind === "stored") && (
-                      <button
-                        type="button"
-                        className={buttonClass("secondary", "sm")}
-                        aria-label={`Bỏ ${u.name} khỏi danh sách`}
-                        onClick={() => onRemoveUpload(u.key)}
-                      >
-                        Bỏ
                       </button>
                     )}
                   </li>

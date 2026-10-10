@@ -16,9 +16,11 @@ import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
 import { BieuMauGhiNhatKy, DanhSachNhatKy, mayRemoveRowFiles } from "./nhat-ky-phieu";
 import {
+  isViewableImage,
   LogAttachmentRemoveDialog,
   PetitionLogAttachmentList,
   usePetitionLogAttachments,
+  viewImageLabel,
   type LogAttachmentDeps,
 } from "./petition-log-attachments";
 
@@ -169,6 +171,38 @@ describe("PetitionLogAttachmentList — the download link is asked for AT THE CL
     expect(download).toHaveBeenCalledWith("PA-1", "01JFILE1");
     expect(tab.opener).toBeNull();
     expect(tab.location.href).toBe("https://kho.example.test/f?sig=1");
+  });
+
+  it("a PHOTO's name opens it IN THE PAGE: link asked for at the click only, no new tab (bug sheet row 61c)", async () => {
+    const PHOTO: petitions_taskAttachmentOut = { ...FILE, id: "01JPHOTO", file_name: "hien-truong.jpg", mime_type: "image/jpeg" };
+    const download = vi.fn(async () => ({
+      ok: true as const,
+      data: { url: "https://kho.example.test/p?sig=1", expires_at: "x" },
+    }));
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+    const h = render(<PetitionLogAttachmentList lookupCode="PA-1" attachments={[PHOTO]} download={download} />);
+    expect(download).not.toHaveBeenCalled();
+    expect(h.querySelector("img")).toBeNull();
+    act(() => h.querySelector<HTMLButtonElement>(`button[aria-label="${viewImageLabel("hien-truong.jpg")}"]`)?.click());
+    await flush();
+    expect(download).toHaveBeenCalledTimes(1);
+    expect(download).toHaveBeenCalledWith("PA-1", "01JPHOTO");
+    expect(openSpy).not.toHaveBeenCalled();
+    const img = h.querySelector("dialog img");
+    expect(img?.getAttribute("src")).toBe("https://kho.example.test/p?sig=1");
+    expect(img?.getAttribute("referrerpolicy")).toBe("no-referrer");
+    expect(img?.getAttribute("loading")).toBeNull();
+    // Closing drops the link: no image, no dialog.
+    act(() => h.querySelector<HTMLButtonElement>('dialog button[aria-label="Đóng"]')?.click());
+    expect(h.querySelector("dialog")).toBeNull();
+  });
+
+  it("a PDF keeps the plain name and `Tải về` — no viewer button", () => {
+    const html = renderToStaticMarkup(<PetitionLogAttachmentList lookupCode="PA-1" attachments={[FILE]} />);
+    expect(html).not.toContain(viewImageLabel(FILE.file_name));
+    expect(isViewableImage("application/pdf")).toBe(false);
+    expect(isViewableImage("image/png")).toBe(true);
   });
 
   it("DENIED (no `onRemove`): no remove control at all — and no '?' any more (ADR 0088 §2 built it)", () => {

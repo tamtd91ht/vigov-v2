@@ -20,7 +20,7 @@ import { suaKhoanMuc, type SuaDongVao } from "@/lib/api/thu-chi"; // vi-name-ok:
 
 import { BangThuChi, DongKhoanMuc, LINE_ORDER_TITLE, LineOrderDialog } from "./bang-thu-chi"; // vi-name-ok: existing components under test
 import { HopDotThuChi } from "./dot-thu-chi"; // vi-name-ok: existing component under test
-import { donViCuaBang, nhanSuaO, NHAN_SUA_TEN, NO_REPORT_YET } from "./nhan-thu-chi"; // vi-name-ok: existing helpers
+import { donViCuaBang, nhanDatDongTong, nhanSuaO, NHAN_SUA_TEN, NO_REPORT_YET } from "./nhan-thu-chi"; // vi-name-ok: existing helpers
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -442,5 +442,108 @@ describe("trạng thái rỗng của bảng", () => {
     );
     await settle();
     expect(host!.textContent).toContain(NO_REPORT_YET);
+  });
+});
+
+describe("ngôi sao dòng tổng — đổi TẠI CHỖ, không nháy màn (bảng lỗi khách hàng dòng 51)", () => {
+  const SESSION: identity_phienHienTaiRa = {
+    sid: "s",
+    expires_at: "2099-01-01T00:00:00Z",
+    staff: { code: "CB-00001", full_name: "Cán bộ A", position: "Kế toán" },
+    role: null,
+    permissions: ["budget.read", "budget.confirm"],
+    must_change_password: false,
+  };
+  const top = (id: string, name: string, order: number): finance_dongRa => ({
+    id,
+    no: id,
+    name,
+    order,
+    method: "manual",
+    level: 0,
+    is_headline: false,
+    values: { C1: 1_000_000, C2: 500_000 },
+  });
+
+  function stubSheet(headline: () => Promise<Response>) {
+    let serverHeadline = "A";
+    const calls = { sheet: 0, indicators: 0, headline: 0 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.startsWith("/api/v1/budget-sheets")) {
+          calls.sheet += 1;
+          return json({
+            sheet: { id: "01JBANG", code: "NS-2026-CHI-01", year: 2026, kind: "chi", revision: 1, title: "BÁO CÁO CHI", unit: "trieu-dong", unit_label: "Triệu đồng" },
+            columns: COT,
+            lines: [top("A", "Tổng chi", 1), top("B", "Chi thường xuyên", 2)],
+            summary: { headline_line_id: serverHeadline, cells: [], indicator: { name: "Chi đạt dự toán", basis_points: null } },
+          });
+        }
+        if (url.startsWith("/api/v1/budget-indicators")) {
+          calls.indicators += 1;
+          return json({
+            year: 2026,
+            revenue_achievement: { name: "Thu đạt dự toán", basis_points: null },
+            expenditure_achievement: { name: "Chi đạt dự toán", basis_points: null },
+            balance: { amount: null },
+            revenue_totals: [],
+          });
+        }
+        if (url.startsWith("/api/v1/budget-period-closes")) return json({ year: 2026, closes: [] });
+        if (url.includes("/headline")) {
+          calls.headline += 1;
+          const r = await headline();
+          if (r.ok) serverHeadline = "B";
+          return r;
+        }
+        return json(SESSION);
+      }),
+    );
+    return calls;
+  }
+
+  const star = (name: string) => byLabel<HTMLButtonElement>(nhanDatDongTong(name));
+
+  it("bấm sao: sao chuyển NGAY, không hiện trạng thái tải; máy chủ trả lời xong thì đọc lại LẶNG LẼ", async () => {
+    let answer: (r: Response) => void = () => {};
+    const calls = stubSheet(() => new Promise<Response>((ok) => (answer = ok)));
+    mount(
+      <PhienProvider>
+        <BangThuChi />
+      </PhienProvider>,
+    );
+    await settle();
+    expect(star("Tổng chi").getAttribute("aria-pressed")).toBe("true");
+    expect(calls.sheet).toBe(1);
+
+    act(() => star("Chi thường xuyên").click());
+    // Optimistic: moved before the server answers; the table never fell back to its skeleton.
+    expect(star("Chi thường xuyên").getAttribute("aria-pressed")).toBe("true");
+    expect(star("Tổng chi").getAttribute("aria-pressed")).toBe("false");
+    expect(host!.textContent).not.toContain("Đang tải bảng ngân sách");
+
+    await act(async () => answer(json({ ...top("B", "Chi thường xuyên", 2), is_headline: true })));
+    await settle();
+    expect(calls.headline).toBe(1);
+    expect(calls.sheet).toBe(2);
+    expect(host!.textContent).not.toContain("Đang tải bảng ngân sách");
+    expect(star("Chi thường xuyên").getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("máy chủ từ chối: câu của máy chủ nguyên văn, sao về đúng chỗ máy chủ giữ", async () => {
+    const cau = "Kỳ ngân sách đã khoá, không đổi được dòng tổng.";
+    stubSheet(async () => json({ code: "period_closed", message: cau, trace_id: "" }, 409));
+    mount(
+      <PhienProvider>
+        <BangThuChi />
+      </PhienProvider>,
+    );
+    await settle();
+    act(() => star("Chi thường xuyên").click());
+    await settle();
+    expect(host!.textContent).toContain(cau);
+    expect(star("Tổng chi").getAttribute("aria-pressed")).toBe("true");
+    expect(star("Chi thường xuyên").getAttribute("aria-pressed")).toBe("false");
   });
 });

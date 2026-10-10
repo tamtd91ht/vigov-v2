@@ -9,7 +9,7 @@ import { Tooltip } from "@/components/ui/tooltip";
 import { MenuIcon } from "./menu-icons";
 import {
   activeChildRoute,
-  dangChon,
+  activeMenuRoute,
   isMenuParent,
   parentRoute,
   type MenuParent,
@@ -82,6 +82,8 @@ const ICON_STROKE = 1.8;
 export function SideNav({ groups, pathname, collapsed, onToggle }: SideNavProps) {
   const toggleLabel = collapsed ? SIDEBAR_EXPAND_LABEL : SIDEBAR_COLLAPSE_LABEL;
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
+  // One lit row for the whole menu, never one per matching item (`activeMenuRoute`).
+  const active = activeMenuRoute(groups, pathname);
   const toggle = (
     <Tooltip content={toggleLabel} side={TOOLTIP_SIDE} enabled={collapsed}>
       <button
@@ -115,11 +117,11 @@ export function SideNav({ groups, pathname, collapsed, onToggle }: SideNavProps)
                 {g.muc.map((m) =>
                   isMenuParent(m) ? (
                     <li key={m.nhan} className="side-nav-item has-children">
-                      {collapsed ? <SideNavParentFlyout parent={m} pathname={pathname} /> : <SideNavParent parent={m} pathname={pathname} />}
+                      {collapsed ? <SideNavParentFlyout parent={m} pathname={pathname} active={active} /> : <SideNavParent parent={m} pathname={pathname} active={active} />}
                     </li>
                   ) : (
                     <li key={m.nhan} className={m.duong === null ? "side-nav-item is-pending" : "side-nav-item"}>
-                      <SideNavItem item={m} collapsed={collapsed} active={dangChon(m.duong, pathname)} />
+                      <SideNavItem item={m} collapsed={collapsed} active={m.duong !== null && m.duong === active} />
                     </li>
                   ),
                 )}
@@ -163,8 +165,15 @@ export function SidebarBrand({ collapsed = false, children }: { collapsed?: bool
  * `aria-current`: the current page is the child, and announcing two current pages is announcing none.
  * When a child is current the row is marked `is-open`, so the eye finds the branch.
  */
-function SideNavParent({ parent, pathname }: { parent: MenuParent; pathname: string }) {
+/** The child of `parent` that is the menu-wide active route, or `null` — a branch is lit only when its
+ *  child IS the one lit row, not merely when a child matches by prefix. */
+function currentChild(parent: MenuParent, pathname: string, active: string | null): string | null {
   const current = activeChildRoute(parent, pathname);
+  return current !== null && current === active ? current : null;
+}
+
+function SideNavParent({ parent, pathname, active }: { parent: MenuParent; pathname: string; active: string | null }) {
+  const current = currentChild(parent, pathname, active);
   const href = parentRoute(parent);
   const rowClass = current === null ? "side-nav-link side-nav-parent" : "side-nav-link side-nav-parent is-open";
   const row = (
@@ -199,8 +208,8 @@ function SideNavParent({ parent, pathname }: { parent: MenuParent; pathname: str
  * to carry that mark. A popover, not a hover menu: hover does not exist on touch, and a keyboard must
  * reach every child. `modal` stays false (ADR 0068 §4, as `user-menu.tsx`).
  */
-function SideNavParentFlyout({ parent, pathname }: { parent: MenuParent; pathname: string }) {
-  const current = activeChildRoute(parent, pathname);
+function SideNavParentFlyout({ parent, pathname, active }: { parent: MenuParent; pathname: string; active: string | null }) {
+  const current = currentChild(parent, pathname, active);
   return (
     <PopoverPrimitive.Root>
       <Tooltip content={parent.nhan} side={TOOLTIP_SIDE}>
