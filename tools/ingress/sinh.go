@@ -187,6 +187,12 @@ const (
 
 	bodyCapUpload  = "55m"
 	bodyCapDefault = "25m"
+
+	// uploadProxyTimeout is the read/send timeout, in seconds, of the upload object only: the
+	// owner-approved 180 s bound of one upload (ADR 0052 §Sửa đổi 09/10/2026). nginx's default is
+	// 60 s, so a malware scan or image re-encode that answers after 60 s would reach the client as
+	// a 504 while the service goes on to store the file — the client retries and uploads it twice.
+	uploadProxyTimeout = "180"
 )
 
 // uploadHosts are the services whose PUBLIC host takes the upload cap, each with the reason. The
@@ -354,6 +360,11 @@ func writeIngress(b *strings.Builder, o ingressObject, web luatIngress, apiSuffi
 		b.WriteString("    # 180 s mỗi lượt ở service chặn việc ấy; (2) nginx KHÔNG thử lại sang pod khác khi pod lỗi giữa\n")
 		b.WriteString("    # chừng (proxy_next_upstream cần thân đã đệm) — client nhận lỗi và gửi lại.\n")
 		b.WriteString("    nginx.ingress.kubernetes.io/proxy-request-buffering: \"off\"\n")
+		b.WriteString(fmt.Sprintf("    # %s s: cận mỗi lượt tải lên chủ dự án duyệt (ADR 0052 §Sửa đổi 09/10/2026). Mặc định\n", uploadProxyTimeout))
+		b.WriteString("    # 60 s của nginx trả 504 cho lượt quét mã độc / mã hoá lại ảnh xong sau 60 s, trong khi service\n")
+		b.WriteString("    # vẫn lưu tệp — client gửi lại và tệp vào hai lần.\n")
+		b.WriteString(fmt.Sprintf("    nginx.ingress.kubernetes.io/proxy-read-timeout: %q\n", uploadProxyTimeout))
+		b.WriteString(fmt.Sprintf("    nginx.ingress.kubernetes.io/proxy-send-timeout: %q\n", uploadProxyTimeout))
 	}
 	b.WriteString("spec:\n")
 	b.WriteString("  ingressClassName: nginx\n")

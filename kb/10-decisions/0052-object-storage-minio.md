@@ -328,7 +328,7 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 | Trần thân yêu cầu ở ingress | **55 MB** cho host petitions · comms · platform · web (đủ tệp 50 MB + phần bao multipart); host khác giữ 25 MB. Giới hạn từng loại tệp vẫn do platform kiểm |
 | Giới hạn tải ảnh của người dân | Giữ con số **30 lượt / 15 phút**, mỗi lượt nay là một ảnh (trước ≈ 15 ảnh vì đếm cả xin chỗ lẫn hoàn tất) — chủ dự án chọn nới |
 | Ngưỡng nhà cung cấp (chủ dự án duyệt cả gói) | Mỗi pod **tối đa 4 lượt tải cùng lúc** (thừa → 503, thử lại); mỗi lượt tải **tối đa 180 giây**; `GOMEMLIMIT=300MiB` cho petitions + comms; **bỏ hẳn** các tuyến `…/completion` cũ |
-| Trạng thái | Quyết định đã chốt, **CHƯA dựng** |
+| Trạng thái | **Đã dựng** (10/10/2026): `core/storage` PutUpload `b155e73d` · `core/httpx` ReadUpload `abc4da43` · tách Ingress 55 MB / 25 MB `85466506` · petitions `94619d16` · comms `983d32db` · platform `0abca329` · citizen-app `e652004b` · thẻ dọn: bỏ `PresignUpload`/`PresignedPost` khỏi `core/storage`, Ingress tải lên `proxy-read-timeout`/`proxy-send-timeout` 180 s, platform đóng dòng `failed` cả khi hoàn tất "chưa được" (máy quét, suất giải mã, đăng công khai). **Còn lại:** phía client của web-admin đang làm ở một thẻ song song; chặn Ingress MinIO S3 API chỉ cho GET/HEAD/OPTIONS là việc của người vận hành, **ngoài kho mã** |
 
 **Lý do — sự cố 09/10/2026.** `OBJECT_STORAGE_PUBLIC_ENDPOINT` trỏ nhầm MinIO Console; Console trả 200
 cho lệnh tải lên nên điện thoại tưởng xong mà không có tệp. Sửa endpoint rồi, lệnh POST từ webview

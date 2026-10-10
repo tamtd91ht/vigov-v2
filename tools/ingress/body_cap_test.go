@@ -11,7 +11,8 @@ import (
 )
 
 // What these tests defend: the owner's body caps of 09/10/2026 (ADR 0052 §Sửa đổi 09/10/2026) —
-// 55 MB on the web, comms, petitions and platform hosts, 25 MB everywhere else — and that each
+// 55 MB on the web, comms, petitions and platform hosts, 25 MB everywhere else, a 180 s proxy
+// read/send timeout on the upload hosts only — and that each
 // overlay actually patches BOTH Ingress objects.
 
 // Literal copies of the decision, deliberately not read from uploadHosts: a test that took its
@@ -19,8 +20,10 @@ import (
 var pinnedUploadHosts = []string{webProd, "comms." + apiProd, "petitions." + apiProd, "platform." + apiProd}
 
 const (
-	annBodySize  = "nginx.ingress.kubernetes.io/proxy-body-size"
-	annBuffering = "nginx.ingress.kubernetes.io/proxy-request-buffering"
+	annBodySize    = "nginx.ingress.kubernetes.io/proxy-body-size"
+	annBuffering   = "nginx.ingress.kubernetes.io/proxy-request-buffering"
+	annReadTimeout = "nginx.ingress.kubernetes.io/proxy-read-timeout"
+	annSendTimeout = "nginx.ingress.kubernetes.io/proxy-send-timeout"
 )
 
 func TestBodyCapsMatchOwnerDecision(t *testing.T) {
@@ -32,6 +35,16 @@ func TestBodyCapsMatchOwnerDecision(t *testing.T) {
 	}
 	if got := up.Metadata.Annotations[annBuffering]; got != "off" {
 		t.Errorf("%s: %s = %q, owner chose streaming (off)", up.Metadata.Name, annBuffering, got)
+	}
+	// The owner-approved 180 s upload bound: nginx's 60 s default would 504 a scan/re-encode that
+	// finishes later, while the service still stores the file. Literal, not uploadProxyTimeout.
+	for _, ann := range []string{annReadTimeout, annSendTimeout} {
+		if got := up.Metadata.Annotations[ann]; got != "180" {
+			t.Errorf("%s: %s = %q, owner approved 180", up.Metadata.Name, ann, got)
+		}
+		if _, set := rest.Metadata.Annotations[ann]; set {
+			t.Errorf("%s sets %s — only the upload object carries the long bound", rest.Metadata.Name, ann)
+		}
 	}
 	if got := rest.Metadata.Annotations[annBodySize]; got != "25m" {
 		t.Errorf("%s: %s = %q, every non-upload host keeps 25m", rest.Metadata.Name, annBodySize, got)

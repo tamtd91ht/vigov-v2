@@ -366,9 +366,15 @@ func (o *fakeObjects) PublicURL(key string) (string, error) {
 	return "https://media.example/" + key, nil
 }
 
-type fakeScanner struct{ infected bool }
+type fakeScanner struct {
+	infected bool
+	err      error // clamd unreachable / timed out: no verdict
+}
 
 func (s fakeScanner) Scan(context.Context, io.Reader, int64) (malwarescan.Result, error) {
+	if s.err != nil {
+		return malwarescan.Result{}, s.err
+	}
 	if s.infected {
 		return malwarescan.Result{Signature: "Eicar-Test-Signature"}, nil
 	}
@@ -643,6 +649,121 @@ func TestUploadTransportNotConfirmedPurgesTempAndFailsTheRow(t *testing.T) {
 	if len(r.objects.temp) != 0 || len(r.objects.purged) != 1 || len(r.objects.published) != 0 {
 		t.Errorf("temp=%d purged=%v published=%v — the unconfirmed bytes must be purged, never completed",
 			len(r.objects.temp), r.objects.purged, r.objects.published)
+	}
+}
+
+// A completion that cannot DECIDE ("not now": scanner down, decode slot busy, …) has no
+// route left to be retried from, so Upload closes the row: pending → failed with ActionBrandingUploadFailed
+// (ly_do khong-hoan-tat-duoc) in ONE transaction, on a context the client's hang-up cannot cancel, the temp
+// object purged — and the cause still reaches the handler (503 by its sentinel), naming the file id.
+func TestUploadCompletionNotNowMovesTheRowToFailed(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(r *rig)
+		want  error
+		// hangUp: the client disconnects once its bytes are in. Only where the failing step ignores the
+		// context — elsewhere the cancellation itself would become the cause.
+		hangUp bool
+	}{
+		{"scanner down", func(r *rig) {
+			r.uc.scanner = fakeScanner{err: errors.New("clamd: dial tcp: connection refused")}
+		}, ErrBrandingScanUnavailable, true},
+		{"decode slot busy", func(r *rig) {
+			r.uc.decodeWait = 20 * time.Millisecond
+			r.uc.decodeSlot <- struct{}{} // another commune's decode holds the slot for the whole test
+		}, ErrBrandingDecodeBusy, false},
+		// "publication failed" takes the same branch of Upload (any non-rejection error), but it fails
+		// INSIDE complete's transaction after walkToEnd moved the row: only a real rollback returns the
+		// row to `pending`, and the fake file store has no transactions — so it would read `ready` here
+		// and prove nothing. TestPublishFailureWritesNothing pins complete's rollback; the store's pg
+		// suite the transition guard.
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newRig(t)
+			tc.setup(r)
+			ctx, cancel := context.WithCancel(tenant.Into(context.Background(), communeA))
+			defer cancel()
+			png := transparentPNG(t, 32, 32)
+			req := pngUpload(bytes.NewReader(png), len(png))
+			// The bookkeeping must not depend on the request's context.
+			if tc.hangUp {
+				req.Received = func() error { cancel(); return nil }
+			}
+
+			_, err := r.uc.Upload(ctx, domain.BrandingLogo, req, staffA)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("err = %v, want %v kept for the handler's 503", err, tc.want)
+			}
+			rows := r.files.of(communeA)
+			if len(rows) != 1 {
+				t.Fatalf("rows = %d, want 1", len(rows))
+			}
+			for id, f := range rows {
+				if f.Status != domain.StoredFileFailed {
+					t.Errorf("row status = %s, want failed — nothing can finish a pending row any more", f.Status)
+				}
+				if !strings.Contains(err.Error(), id) {
+					t.Errorf("error %q does not name the file id", err)
+				}
+			}
+			// open + abandon committed, each with its entry; the abandon entry is the failed verb with
+			// the not-completed reason. The completion itself committed nothing.
+			if r.db.commits != 2 || r.db.count("INSERT INTO audit_log") != 2 {
+				t.Errorf("commits=%d audits=%d, want open + failed, each audited in its tx",
+					r.db.commits, r.db.count("INSERT INTO audit_log"))
+			}
+			if len(r.objects.temp) != 0 || r.profiles.rows[communeA] != nil {
+				t.Errorf("temp=%d profile=%+v — the temp object must be purged and nothing pointed at",
+					len(r.objects.temp), r.profiles.rows[communeA])
+			}
+			if len(r.objects.public) != 0 {
+				t.Errorf("public = %v — an abandoned upload left a public copy", r.objects.public)
+			}
+		})
+	}
+}
+
+// A decided refusal is complete's own: the row is `rejected` with ActionBrandingRejected, and abandon
+// must not touch it (it is no longer pending) nor write a second entry.
+func TestUploadRejectionKeepsItsRejectedPath(t *testing.T) {
+	r := newRig(t)
+	r.uc.scanner = fakeScanner{infected: true}
+	ctx := tenant.Into(context.Background(), communeA)
+	png := transparentPNG(t, 32, 32)
+	_, err := r.uc.Upload(ctx, domain.BrandingLogo, pngUpload(bytes.NewReader(png), len(png)), staffA)
+	var rej *BrandingRejection
+	if !errors.As(err, &rej) || rej.Reason != BrandingRejectMalware {
+		t.Fatalf("err = %v, want the malware rejection", err)
+	}
+	for _, f := range r.files.of(communeA) {
+		if f.Status != domain.StoredFileRejected {
+			t.Errorf("row status = %s, want rejected", f.Status)
+		}
+	}
+	if r.db.count("INSERT INTO audit_log") != 2 || r.db.commits != 2 {
+		t.Errorf("audits=%d commits=%d, want open + rejected only", r.db.count("INSERT INTO audit_log"), r.db.commits)
+	}
+}
+
+// When the bookkeeping itself fails (its audit INSERT refused → the transaction rolls back), BOTH errors
+// reach the caller: the cause for the status code, the bookkeeping failure for the log. The row's state
+// after a rollback is PostgreSQL's to prove (the fake file store has no transactions), so it is not
+// asserted here.
+func TestUploadAbandonFailureJoinsBothErrors(t *testing.T) {
+	r := newRig(t)
+	r.uc.scanner = fakeScanner{err: errors.New("clamd timeout")}
+	ctx := tenant.Into(context.Background(), communeA)
+	png := transparentPNG(t, 32, 32)
+	req := pngUpload(bytes.NewReader(png), len(png))
+	// Armed after open's audit INSERT has gone through: the next one is the abandon's.
+	req.Received = func() error { r.db.failOn = "INSERT INTO audit_log"; return nil }
+
+	_, err := r.uc.Upload(ctx, domain.BrandingLogo, req, staffA)
+	if !errors.Is(err, ErrBrandingScanUnavailable) || !strings.Contains(err.Error(), "đóng dòng chờ") {
+		t.Fatalf("err = %v, want the scan cause joined with the bookkeeping failure", err)
+	}
+	if r.db.rolls != 1 {
+		t.Errorf("rollbacks = %d, want 1 — the failed entry and the transition share one transaction", r.db.rolls)
 	}
 }
 

@@ -78,8 +78,10 @@ const (
 	ActionBrandingUploadRequested = "yeu_cau_tai_anh_nhan_dien_xa"
 	ActionBrandingSet             = "dat_anh_nhan_dien_xa"
 	ActionBrandingRejected        = "tu_choi_anh_nhan_dien_xa"
-	// ActionBrandingUploadFailed: the file never reached the temp bucket whole (the client stopped, sent
-	// a malformed body, or the store refused the write). The row is `failed`; nothing was inspected.
+	// ActionBrandingUploadFailed: the upload ended with nothing stored and nothing decided about the
+	// FILE — either it never reached the temp bucket whole (the client stopped, sent a malformed body,
+	// the store refused the write) or the completion could not decide (scanner down, decode slot busy,
+	// publication failed). The row is `failed`; `ly_do` says which (BrandingFailed…).
 	ActionBrandingUploadFailed = "tai_anh_nhan_dien_xa_khong_thanh"
 	// ActionBrandingExpired is NO LONGER WRITTEN (since 09/10/2026 nothing can expire between the
 	// request and the bytes: they are one request). Kept because audit entries carrying it exist.
@@ -98,6 +100,13 @@ const (
 	BrandingRejectTooManyPixels  = "qua-nhieu-diem-anh"
 )
 
+// Why an upload ended `failed` with nothing decided — the `ly_do` of an ActionBrandingUploadFailed entry.
+// The same two values service-petitions writes (app/upload_stream.go), so one query reads both services.
+const (
+	BrandingFailedNotReceived  = "khong-nhan-du-tep"
+	BrandingFailedNotCompleted = "khong-hoan-tat-duoc"
+)
+
 // Soft-delete reasons of a withdrawn image (stored_file.delete_reason; 0017 refuses an empty one).
 const (
 	deleteReasonReplaced = "da-thay-bang-anh-moi"
@@ -114,8 +123,8 @@ var (
 	ErrBrandingUploadNotConfigured = errors.New("nhận diện xã: chưa cấu hình kho lưu tệp")
 	// ErrBrandingLimitsUnavailable: the limits could not be read and no fresh answer is cached. 503.
 	ErrBrandingLimitsUnavailable = errors.New("nhận diện xã: chưa đọc được giới hạn tải tệp")
-	// ErrBrandingScanUnavailable: clamd could not scan. The row stays `pending`; the file is NEVER
-	// stored unscanned (ADR 0052 §9). 503.
+	// ErrBrandingScanUnavailable: clamd could not scan. Upload moves the row to `failed` (abandon); the
+	// file is NEVER stored unscanned (ADR 0052 §9). 503.
 	ErrBrandingScanUnavailable = errors.New("nhận diện xã: chưa quét được mã độc")
 	// ErrBrandingTypeNotAllowed / ErrBrandingTooLarge: the DECLARATION is outside the policy. 400.
 	ErrBrandingTypeNotAllowed = errors.New("nhận diện xã: loại tệp không được phép")
@@ -133,8 +142,8 @@ var (
 	// ErrBrandingPublishUnavailable: the object store refused or could not be reached while publishing.
 	// NOTHING was written; the profile is as it was. 503.
 	ErrBrandingPublishUnavailable = errors.New("nhận diện xã: chưa đăng được ảnh lên kho công khai")
-	// ErrBrandingDecodeBusy: the decode slot stayed taken for brandingDecodeWait. Nothing written past
-	// the pending row; the officer uploads again. 503.
+	// ErrBrandingDecodeBusy: the decode slot stayed taken for brandingDecodeWait. The completion writes
+	// nothing; Upload moves the row to `failed` and the officer uploads again. 503.
 	ErrBrandingDecodeBusy = errors.New("nhận diện xã: máy chủ đang bận xử lý ảnh khác")
 	// ErrBrandingRejected is what every *BrandingRejection matches.
 	ErrBrandingRejected = errors.New("nhận diện xã: tệp bị từ chối")
@@ -390,16 +399,26 @@ func (uc *Branding) MaxUploadBytes(ctx context.Context, img domain.BrandingImage
 //
 //	a. open      one transaction: profile row locked, count, pending row, audit entry — nothing read yet
 //	b. receive   Body streamed into the temp bucket under the row's upload key, bounded by Deadline;
-//	             then Received. Either fails → the row moves to `failed` (audited) and the error returns
+//	             then Received
 //	c. complete  the completion that used to be its own route, unchanged
+//
+// WHAT EACH OUTCOME LEAVES (the same table as service-comms' content_cover.go and service-petitions'
+// upload_stream.go — one upload discipline, ADR 0052):
+//
+//	refused at open            nothing — no row, no trail, the body never read
+//	b fails                    row `failed` + ActionBrandingUploadFailed (BrandingFailedNotReceived)
+//	file refused (rejection)   row `rejected` (or `failed`: undecodable) + ActionBrandingRejected — complete's own
+//	c could not decide         row `failed` + ActionBrandingUploadFailed (BrandingFailedNotCompleted); the
+//	                           cause (scanner down, decode slot busy, publication failed…) is returned, 503
+//	stored                     row `ready`, published, profile pointed + ActionBrandingSet
 //
 // THE DEADLINE BOUNDS STEP b ONLY. A client may use most of its 180 s sending the file; putting the scan
 // and the publication under what is left would turn a slow connection into a half-done completion.
 // Step c is bounded by its own waits (decode slot, scanner, store) and the request's context.
 //
-// A step-c failure that is "not now" (scanner, decode slot, store) leaves the row `pending`, as it always
-// did; there is no completion route left to retry it, so the officer uploads again and the abandoned row
-// stops counting against the file limit after storage.UploadTTL. Every error after step a names the file
+// WHY A "NOT NOW" FAILURE STILL CLOSES THE ROW: there is no completion route left to retry it from, so a
+// `pending` row could only ever be finished by nothing — and until storage.UploadTTL passed it would hold
+// one of the purpose's file slots against the officer's retry. Every error after step a names the file
 // id, so the refusal log line can be matched to the row.
 func (uc *Branding) Upload(ctx context.Context, img domain.BrandingImage, req BrandingUploadRequest,
 	actor audit.Actor) (domain.StoredFile, error) {
@@ -409,12 +428,16 @@ func (uc *Branding) Upload(ctx context.Context, img domain.BrandingImage, req Br
 		return domain.StoredFile{}, err
 	}
 	if err := uc.receive(ctx, req, uploadKey, pol.MaxBytes); err != nil {
-		uc.failUnreceived(ctx, img, f.ID, uploadKey, actor)
-		return domain.StoredFile{}, fmt.Errorf("nhận diện xã: tệp %s: %w", f.ID, err)
+		return domain.StoredFile{}, uc.abandon(ctx, img, f.ID, uploadKey, actor, BrandingFailedNotReceived,
+			fmt.Errorf("nhận diện xã: tệp %s: %w", f.ID, err))
 	}
 	done, err := uc.complete(ctx, img, f.ID, actor)
 	if err != nil {
-		return domain.StoredFile{}, fmt.Errorf("nhận diện xã: tệp %s: %w", f.ID, err)
+		cause := fmt.Errorf("nhận diện xã: tệp %s: %w", f.ID, err)
+		if errors.Is(err, ErrBrandingRejected) {
+			return domain.StoredFile{}, cause // decided: complete moved the row and audited it
+		}
+		return domain.StoredFile{}, uc.abandon(ctx, img, f.ID, uploadKey, actor, BrandingFailedNotCompleted, cause)
 	}
 	return done, nil
 }
@@ -544,31 +567,47 @@ func (uc *Branding) receive(ctx context.Context, req BrandingUploadRequest, uplo
 	return nil
 }
 
-// failUnreceived closes a row whose file never arrived whole: the temp object (if a write left one) is
-// purged, and the row moves pending → failed with its audit entry, in one transaction (rule 6 inv 3).
+// abandon closes a row this upload left `pending`: the temp object (if one is there) is purged, and the
+// row moves pending → failed with its ActionBrandingUploadFailed entry, in ONE transaction (rule 6 inv 3).
+// It returns cause — joined with the bookkeeping error when that failed too, so the handler still finds
+// cause's sentinels with errors.Is and the log names both.
 //
-// ON A DETACHED CONTEXT: the usual cause is the client hanging up, which has already cancelled the
-// request's. Best effort — a failure is logged and the row stays `pending`, which stops counting against
-// the file limit after storage.UploadTTL; the temp lifecycle removes any object within a day.
-func (uc *Branding) failUnreceived(ctx context.Context, img domain.BrandingImage, id, uploadKey string,
-	actor audit.Actor) {
+// ON A DETACHED, BOUNDED CONTEXT: the commonest reason to be here is the client hanging up, which has
+// already cancelled the request's context; a cancelled context must not leave the row pending.
+//
+// A row no longer `pending` (a decided completion, a racing writer) is left alone. Best effort beyond
+// that: a failed bookkeeping transaction leaves the row `pending`, which stops counting against the file
+// limit after storage.UploadTTL — the residue a crash leaves as well; the temp lifecycle removes any
+// object within a day. An original the inspection had ALREADY promoted (the decode slot was busy after
+// the copy) stays in the private bucket, referenced by no ready row — as in service-comms.
+func (uc *Branding) abandon(ctx context.Context, img domain.BrandingImage, id, uploadKey string,
+	actor audit.Actor, reason string, cause error) error {
 
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), detachedTimeout)
 	defer cancel()
 	removed := uc.objects.PurgeAllVersions(ctx, storage.BucketTemp, uploadKey) == nil
 	now := uc.clock()
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		cur, err := uc.files.ForUpdate(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if cur == nil || cur.Status != domain.StoredFilePending {
+			return nil
+		}
 		if err := uc.files.Transition(ctx, tx, id, domain.StoredFilePending, domain.StoredFileFailed, now); err != nil {
 			return err
 		}
 		return writeBrandingAudit(ctx, tx, actor, ActionBrandingUploadFailed, img, now, map[string]any{
-			"tep_id": id, "da_xoa_tep_tam": removed,
+			"tep_id": id, "ly_do": reason, "da_xoa_tep_tam": removed,
 		})
 	})
 	if err != nil {
 		uc.log.Warn("nhận diện xã: tải tệp không thành, chưa chuyển được dòng sang failed — dòng giữ pending",
-			"xa", string(tenant.MustFrom(ctx)), "tep_id", id, "err", err)
+			"xa", string(tenant.MustFrom(ctx)), "tep_id", id, "ly_do", reason, "err", err)
+		return errors.Join(cause, fmt.Errorf("nhận diện xã: tệp %s: đóng dòng chờ: %w", id, err))
 	}
+	return cause
 }
 
 // --- c. complete an upload: inspect, derive, publish, point -------------------------------------------
@@ -988,7 +1027,8 @@ func (uc *Branding) withdrawAfterCommit(ctx context.Context, img domain.Branding
 // --- inspection (lock-free) ---------------------------------------------------------------------------
 
 // inspect is the lock-free half of complete. An error means nothing may be decided yet (scanner down,
-// object replaced mid-inspection, store failure): nothing is written and the row stays `pending`.
+// object replaced mid-inspection, store failure): complete writes nothing, and Upload then abandons the
+// row (`failed`, audited).
 func (uc *Branding) inspect(ctx context.Context, img domain.BrandingImage, f domain.StoredFile,
 	key storage.Key, pol uploadpolicy.Policy) (brandingInspection, error) {
 

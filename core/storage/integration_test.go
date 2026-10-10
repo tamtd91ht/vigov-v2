@@ -15,7 +15,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"os"
 	"strings"
@@ -44,7 +43,7 @@ func integrationClient(t *testing.T) (*Client, func()) {
 	}
 	cfg := Config{
 		Endpoint:       endpoint,
-		PublicEndpoint: endpoint, // the test process is the "browser"
+		PublicEndpoint: endpoint, // the test process opens the signed GET links
 		AccessKey:      secret.Secret(access),
 		SecretKey:      secret.Secret(secretKey),
 		BucketPrefix:   "vigov-it-" + hex.EncodeToString(rnd[:]),
@@ -78,35 +77,6 @@ func integrationClient(t *testing.T) (*Client, func()) {
 	return c, cleanup
 }
 
-// postForm performs the browser half: a multipart POST with every policy field, file last.
-func postForm(t *testing.T, p PresignedPost, contentType string, body []byte) int {
-	t.Helper()
-	var buf bytes.Buffer
-	w := multipart.NewWriter(&buf)
-	for k, v := range p.Fields {
-		if err := w.WriteField(k, v); err != nil {
-			t.Fatal(err)
-		}
-	}
-	fw, err := w.CreateFormFile("file", "upload.bin")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := fw.Write(body); err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-	resp, err := http.Post(p.URL, w.FormDataContentType(), &buf)
-	if err != nil {
-		t.Fatalf("POST: %v", err)
-	}
-	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, resp.Body)
-	return resp.StatusCode
-}
-
 func TestIntegrationUploadPromoteDownloadPurge(t *testing.T) {
 	c, cleanup := integrationClient(t)
 	defer cleanup()
@@ -128,20 +98,15 @@ func TestIntegrationUploadPromoteDownloadPurge(t *testing.T) {
 	}
 	png := append([]byte{0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A}, bytes.Repeat([]byte{7}, 1000)...)
 
-	// a. presign, with a size limit smaller than a second, oversized attempt.
-	post, err := c.PresignUpload(ctx, up, 2000, MIMEPNG, 0)
-	if err != nil {
-		t.Fatalf("PresignUpload: %v", err)
+	// a. the service writes the upload; a body above the limit is refused before any byte moves.
+	if _, err := c.PutUpload(ctx, up, bytes.NewReader(bytes.Repeat([]byte{1}, 3000)), 3000, 2000, MIMEPNG); !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("oversized upload: %v, want ErrTooLarge", err)
 	}
-	if code := postForm(t, post, MIMEPNG, bytes.Repeat([]byte{1}, 3000)); code < 400 {
-		t.Fatalf("oversized upload accepted (%d) — MinIO did not enforce content-length-range", code)
-	}
-	// b. the real upload.
-	if code := postForm(t, post, MIMEPNG, png); code != http.StatusNoContent && code != http.StatusOK && code != http.StatusCreated {
-		t.Fatalf("upload status %d", code)
+	if _, err := c.PutUpload(ctx, up, bytes.NewReader(png), int64(len(png)), 2000, MIMEPNG); err != nil {
+		t.Fatalf("PutUpload: %v", err)
 	}
 
-	// c. complete: stat → sniff → sha256 → promote, all bound to the ETag.
+	// b. complete: stat → sniff → sha256 → promote, all bound to the ETag.
 	st, err := c.Stat(ctx, BucketTemp, up)
 	if err != nil {
 		t.Fatalf("Stat: %v", err)
@@ -302,12 +267,8 @@ func TestIntegrationPutServerProduced(t *testing.T) {
 		t.Fatal(err)
 	}
 	raw := append([]byte{0xFF, 0xD8, 0xFF, 0xE1}, bytes.Repeat([]byte("exif"), 300)...)
-	post, err := c.PresignUpload(ctx, up, 10_000, MIMEJPEG, 0)
-	if err != nil {
-		t.Fatalf("PresignUpload: %v", err)
-	}
-	if code := postForm(t, post, MIMEJPEG, raw); code >= 300 {
-		t.Fatalf("upload status %d", code)
+	if _, err := c.PutUpload(ctx, up, bytes.NewReader(raw), int64(len(raw)), 10_000, MIMEJPEG); err != nil {
+		t.Fatalf("PutUpload: %v", err)
 	}
 
 	clean := append([]byte{0xFF, 0xD8, 0xFF, 0xE0}, bytes.Repeat([]byte{9}, 700)...)

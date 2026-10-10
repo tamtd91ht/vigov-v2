@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-10",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -325,6 +325,13 @@
       "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ F: logo/banner xã tải lên bằng MỘT lệnh multipart qua service-platform (size, file_name?, file) → 201 tệp đã lưu; bỏ …/completion; 4 lượt/pod; ghi luồng hỏng → dòng failed + xoá tạm (động từ trail mới tai_anh_nhan_dien_xa_khong_thanh); 413 file_too_large, 408, 415, 503 upload_busy",
       "bang_chung": "(commit này) — go vet + go test ./... service-platform xanh (phiên chính chạy lại); ca 401/403/403-sai-xã/201 cho 5 tuyến",
       "tiep_theo": "web-admin (commune-branding.ts) CHƯA chuyển — tải logo/banner hỏng nếu triển khai platform trước web-admin (đợt 3). openapi.json/schema.gen.ts chưa sinh lại. Dòng pending khi bước hoàn tất trả 503 (máy quét/xử lý ảnh bận) không còn tuyến thử lại: cán bộ tải lại, dòng cũ hết tính sau UploadTTL."
+    },
+    {
+      "id": "tai-len-qua-service-branding-failed",
+      "trang_thai": "xong",
+      "viec": "Thống nhất với petitions/comms: sau khi có dòng pending, mọi lỗi (kể cả 503 máy quét bận/giải mã bận/công bố hỏng) → failed + trail + xoá tạm trên ngữ cảnh tách rời; bị từ chối giữ nhánh rejected",
+      "bang_chung": "(commit này) — TestUploadCompletionNotNowMovesTheRowToFailed, TestUploadRejectionKeepsItsRejectedPath, TestUploadAbandonFailureJoinsBothErrors; go vet + go test ./... service-platform xanh",
+      "tiep_theo": "Tệp gốc đã chép sang private trước khi bước sau hỏng nằm lại không ai trỏ tới (như comms) — dọn sau."
     }
   ]
 }

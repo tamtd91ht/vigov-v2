@@ -188,31 +188,31 @@
     },
     "app.Branding": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:243"
+      "at": "service-platform/internal/app/branding.go:252"
     },
     "app.BrandingFiles": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:219"
+      "at": "service-platform/internal/app/branding.go:228"
     },
     "app.BrandingObjectStore": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:192"
+      "at": "service-platform/internal/app/branding.go:201"
     },
     "app.BrandingProfiles": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:234"
+      "at": "service-platform/internal/app/branding.go:243"
     },
     "app.BrandingRejection": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:145"
+      "at": "service-platform/internal/app/branding.go:154"
     },
     "app.BrandingSettings": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:312"
+      "at": "service-platform/internal/app/branding.go:321"
     },
     "app.BrandingUploadRequest": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:354"
+      "at": "service-platform/internal/app/branding.go:363"
     },
     "app.BudgetImportOutcome": {
       "kind": "type",
@@ -748,7 +748,7 @@
     },
     "app.Error": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:147"
+      "at": "service-platform/internal/app/branding.go:156"
     },
     "app.Export": {
       "kind": "func",
@@ -956,7 +956,7 @@
     },
     "app.Is": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:148"
+      "at": "service-platform/internal/app/branding.go:157"
     },
     "app.IsAutomationInputError": {
       "kind": "func",
@@ -1328,7 +1328,7 @@
     },
     "app.MalwareScanner": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:209"
+      "at": "service-platform/internal/app/branding.go:218"
     },
     "app.MapAssetInput": {
       "kind": "type",
@@ -1416,7 +1416,7 @@
     },
     "app.MaxUploadBytes": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:371"
+      "at": "service-platform/internal/app/branding.go:380"
     },
     "app.MentionNotifier": {
       "kind": "type",
@@ -1500,7 +1500,7 @@
     },
     "app.NewBranding": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:264"
+      "at": "service-platform/internal/app/branding.go:273"
     },
     "app.NewCapitalPlanCategoryImporter": {
       "kind": "func",
@@ -2228,7 +2228,7 @@
     },
     "app.PublicURL": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:337"
+      "at": "service-platform/internal/app/branding.go:346"
     },
     "app.PublishMany": {
       "kind": "func",
@@ -2312,7 +2312,7 @@
     },
     "app.Remove": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:855"
+      "at": "service-platform/internal/app/branding.go:894"
     },
     "app.RemoveFieldRule": {
       "kind": "func",
@@ -2572,7 +2572,7 @@
     },
     "app.Settings": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:321"
+      "at": "service-platform/internal/app/branding.go:330"
     },
     "app.SharedZaloBot": {
       "kind": "type",
@@ -2932,7 +2932,7 @@
     },
     "app.Upload": {
       "kind": "func",
-      "at": "service-platform/internal/app/branding.go:404"
+      "at": "service-platform/internal/app/branding.go:423"
     },
     "app.UploadBody": {
       "kind": "type",
@@ -2952,7 +2952,7 @@
     },
     "app.UploadPolicies": {
       "kind": "type",
-      "at": "service-platform/internal/app/branding.go:214"
+      "at": "service-platform/internal/app/branding.go:223"
     },
     "app.UploadPolicyChoices": {
       "kind": "type",
@@ -12800,11 +12800,11 @@
     },
     "storage.Bucket": {
       "kind": "type",
-      "at": "core/storage/storage.go:113"
+      "at": "core/storage/storage.go:115"
     },
     "storage.BucketName": {
       "kind": "func",
-      "at": "core/storage/storage.go:220"
+      "at": "core/storage/storage.go:223"
     },
     "storage.CheckAudioStream": {
       "kind": "func",
@@ -12816,23 +12816,19 @@
     },
     "storage.Client": {
       "kind": "type",
-      "at": "core/storage/storage.go:134"
+      "at": "core/storage/storage.go:136"
     },
     "storage.Close": {
       "kind": "func",
-      "at": "core/storage/storage.go:541"
+      "at": "core/storage/storage.go:461"
     },
     "storage.Config": {
       "kind": "type",
-      "at": "core/storage/storage.go:67"
+      "at": "core/storage/storage.go:68"
     },
     "storage.ContentDisposition": {
       "kind": "func",
       "at": "core/storage/disposition.go:22"
-    },
-    "storage.Destination": {
-      "kind": "func",
-      "at": "core/storage/storage.go:272"
     },
     "storage.ExportPath": {
       "kind": "func",
@@ -12844,11 +12840,11 @@
     },
     "storage.Format": {
       "kind": "func",
-      "at": "core/storage/storage.go:851"
+      "at": "core/storage/storage.go:771"
     },
     "storage.GoString": {
       "kind": "func",
-      "at": "core/storage/storage.go:849"
+      "at": "core/storage/storage.go:769"
     },
     "storage.Key": {
       "kind": "type",
@@ -12856,15 +12852,15 @@
     },
     "storage.LogAttrs": {
       "kind": "func",
-      "at": "core/storage/storage.go:207"
+      "at": "core/storage/storage.go:210"
     },
     "storage.LogValue": {
       "kind": "func",
-      "at": "core/storage/storage.go:850"
+      "at": "core/storage/storage.go:770"
     },
     "storage.New": {
       "kind": "func",
-      "at": "core/storage/storage.go:144"
+      "at": "core/storage/storage.go:146"
     },
     "storage.NewObjectID": {
       "kind": "func",
@@ -12872,11 +12868,11 @@
     },
     "storage.ObjectInfo": {
       "kind": "type",
-      "at": "core/storage/storage.go:410"
+      "at": "core/storage/storage.go:330"
     },
     "storage.Open": {
       "kind": "func",
-      "at": "core/storage/storage.go:504"
+      "at": "core/storage/storage.go:424"
     },
     "storage.ParseExportKey": {
       "kind": "func",
@@ -12896,43 +12892,35 @@
     },
     "storage.PresignDownload": {
       "kind": "func",
-      "at": "core/storage/storage.go:860"
-    },
-    "storage.PresignUpload": {
-      "kind": "func",
-      "at": "core/storage/storage.go:289"
-    },
-    "storage.PresignedPost": {
-      "kind": "type",
-      "at": "core/storage/storage.go:257"
+      "at": "core/storage/storage.go:780"
     },
     "storage.PresignedURL": {
       "kind": "type",
-      "at": "core/storage/storage.go:843"
+      "at": "core/storage/storage.go:763"
     },
     "storage.Produced": {
       "kind": "type",
-      "at": "core/storage/storage.go:649"
+      "at": "core/storage/storage.go:569"
     },
     "storage.Promote": {
       "kind": "func",
-      "at": "core/storage/storage.go:571"
+      "at": "core/storage/storage.go:491"
     },
     "storage.Promoted": {
       "kind": "type",
-      "at": "core/storage/storage.go:544"
+      "at": "core/storage/storage.go:464"
     },
     "storage.PublicURL": {
       "kind": "func",
-      "at": "core/storage/storage.go:881"
+      "at": "core/storage/storage.go:801"
     },
     "storage.PublishDerivative": {
       "kind": "func",
-      "at": "core/storage/storage.go:933"
+      "at": "core/storage/storage.go:853"
     },
     "storage.PurgeAllVersions": {
       "kind": "func",
-      "at": "core/storage/storage.go:1017"
+      "at": "core/storage/storage.go:937"
     },
     "storage.Purpose": {
       "kind": "type",
@@ -12944,23 +12932,23 @@
     },
     "storage.PutServerProduced": {
       "kind": "func",
-      "at": "core/storage/storage.go:704"
+      "at": "core/storage/storage.go:624"
     },
     "storage.PutUpload": {
       "kind": "func",
-      "at": "core/storage/storage.go:364"
+      "at": "core/storage/storage.go:284"
     },
     "storage.Read": {
       "kind": "func",
-      "at": "core/storage/storage.go:796"
+      "at": "core/storage/storage.go:716"
     },
     "storage.ReadHead": {
       "kind": "func",
-      "at": "core/storage/storage.go:437"
+      "at": "core/storage/storage.go:357"
     },
     "storage.SHA256": {
       "kind": "func",
-      "at": "core/storage/storage.go:473"
+      "at": "core/storage/storage.go:393"
     },
     "storage.SanitizeFilename": {
       "kind": "func",
@@ -12976,19 +12964,19 @@
     },
     "storage.Stat": {
       "kind": "func",
-      "at": "core/storage/storage.go:420"
+      "at": "core/storage/storage.go:340"
     },
     "storage.String": {
       "kind": "func",
-      "at": "core/storage/storage.go:848"
+      "at": "core/storage/storage.go:768"
     },
     "storage.URL": {
       "kind": "func",
-      "at": "core/storage/storage.go:847"
+      "at": "core/storage/storage.go:767"
     },
     "storage.UnpublishDerivative": {
       "kind": "func",
-      "at": "core/storage/storage.go:999"
+      "at": "core/storage/storage.go:919"
     },
     "storage.UploadPath": {
       "kind": "func",

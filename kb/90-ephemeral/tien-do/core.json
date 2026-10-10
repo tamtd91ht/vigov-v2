@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-10",
   "muc": [
     {
       "id": "ghim-go-toolchain-1-26-6",
@@ -355,6 +355,14 @@
       "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ B: core/httpx ReadUpload (multipart chảy luồng: 415/413/400/408, trường chữ trước 'file', 'size' bắt buộc, đúng một phần file) + UploadSlots (4 lượt/pod, 503 upload_busy, Retry-After 5 s) + hạn 180 s",
       "bang_chung": "(commit này) — core/httpx/upload.go + upload_test.go (kể cả ca TCP thật treo giữa tệp → 408). go vet + go test (-race) core/httpx xanh",
       "tiep_theo": "Retry-After 5 s là giá trị nhà cung cấp tự chọn. Dịch vụ phải ánh xạ lỗi đọc thân qua UploadErrorStatus kể cả khi lỗi đi qua PutUpload."
+    },
+    {
+      "id": "tai-len-qua-service-don-presign",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "ADR 0052 §Sửa đổi 09/10/2026 đợt 4: gỡ PresignUpload/PresignedPost khỏi core/storage (không còn bên gọi); UploadTTL giữ (đếm dòng pending bỏ dở); OBJECT_STORAGE_PUBLIC_ENDPOINT nay chỉ ký link GET (hints.go, .env.example, deploy/cau-hinh/README.md); ingress 'vigov' thêm proxy-read/send-timeout 180",
+      "bang_chung": "(commit này) — go vet + go test core/storage, config, malwarescan, tools/ingress xanh; go build petitions + comms. Integration MinIO thật CHƯA CHẠY",
+      "tiep_theo": "Vận hành: ingress storage-api.vigov.vn chỉ GET/HEAD/OPTIONS (ngoài kho)."
     }
   ]
 }

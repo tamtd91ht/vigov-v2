@@ -3,7 +3,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -73,103 +72,6 @@ func TestBucketNames(t *testing.T) {
 	}
 }
 
-// decodePolicy returns the policy conditions as their JSON text, one per entry.
-func decodePolicy(t *testing.T, b64 string) []string {
-	t.Helper()
-	raw, err := base64.StdEncoding.DecodeString(b64)
-	if err != nil {
-		t.Fatalf("policy not base64: %v", err)
-	}
-	var p struct {
-		Conditions []json.RawMessage `json:"conditions"`
-	}
-	if err := json.Unmarshal(raw, &p); err != nil {
-		t.Fatalf("policy not JSON: %v\n%s", err, raw)
-	}
-	out := make([]string, 0, len(p.Conditions))
-	for _, c := range p.Conditions {
-		var v []any
-		if err := json.Unmarshal(c, &v); err != nil {
-			t.Fatalf("condition: %v", err)
-		}
-		out = append(out, fmt.Sprint(v...))
-	}
-	return out
-}
-
-func TestPresignUploadIsSignedForThePublicHostOffline(t *testing.T) {
-	c := testClient(t)
-	up, err := validKey().UploadPath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	// No server exists at either endpoint: this only passes if presigning is offline.
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	post, err := c.PresignUpload(ctx, up, 2<<30, MIMEMP4, 0)
-	if err != nil {
-		t.Fatalf("PresignUpload: %v", err)
-	}
-	u, err := url.Parse(post.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if u.Host != "files.example.test" || u.Scheme != "https" {
-		t.Fatalf("signed for %s://%s, want the PUBLIC endpoint", u.Scheme, u.Host)
-	}
-	if u.Path != "/vigov-test-temp/" {
-		t.Errorf("path = %q, want path-style temp bucket", u.Path)
-	}
-	if post.Fields["key"] != up || post.Fields["Content-Type"] != MIMEMP4 {
-		t.Errorf("fields = key %q, type %q", post.Fields["key"], post.Fields["Content-Type"])
-	}
-	if !strings.Contains(post.Fields["x-amz-credential"], "/us-east-1/s3/") {
-		t.Errorf("credential scope = %q", post.Fields["x-amz-credential"])
-	}
-	conds := strings.Join(decodePolicy(t, post.Fields["policy"]), "\n")
-	for _, want := range []string{
-		"eq$bucketvigov-test-temp",
-		"eq$key" + up,
-		"eq$Content-Type" + MIMEMP4,
-		"content-length-range1 2.147483648e+09",
-	} {
-		if !strings.Contains(conds, want) {
-			t.Errorf("policy lacks %q:\n%s", want, conds)
-		}
-	}
-	if d := time.Until(post.ExpiresAt); d > UploadTTL || d < UploadTTL-time.Minute {
-		t.Errorf("expiry in %s, want ~%s", d, UploadTTL)
-	}
-}
-
-func TestPresignUploadRefusals(t *testing.T) {
-	c := testClient(t)
-	up, _ := validKey().UploadPath()
-	dst, _ := validKey().Path()
-	ctx := context.Background()
-	cases := map[string]struct {
-		key, mime string
-		max       int64
-		ttl       time.Duration
-		want      error
-	}{
-		"destination key":     {dst, MIMEMP4, 10, 0, ErrInvalidKey},
-		"html type":           {up, "text/html", 10, 0, ErrTypeNotAllowed},
-		"svg type":            {up, "image/svg+xml", 10, 0, ErrTypeNotAllowed},
-		"type mismatches ext": {up, MIMEJPEG, 10, 0, ErrInvalidArgument},
-		"zero max":            {up, MIMEMP4, 0, 0, ErrInvalidArgument},
-		"ttl above 15m":       {up, MIMEMP4, 10, 16 * time.Minute, ErrInvalidArgument},
-		"negative ttl":        {up, MIMEMP4, 10, -time.Second, ErrInvalidArgument},
-	}
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			if _, err := c.PresignUpload(ctx, tc.key, tc.max, tc.mime, tc.ttl); !errors.Is(err, tc.want) {
-				t.Fatalf("err = %v, want %v", err, tc.want)
-			}
-		})
-	}
-}
-
 func TestPresignDownloadOffline(t *testing.T) {
 	c := testClient(t)
 	k := validKey()
@@ -224,14 +126,12 @@ func TestPresignDownloadRefusals(t *testing.T) {
 	}
 }
 
-// Presigned URLs and POST forms are bearer credentials: no fmt or slog path may render them.
+// Presigned URLs are bearer credentials: no fmt or slog path may render them.
 func TestPresignedValuesDoNotRender(t *testing.T) {
-	post := PresignedPost{URL: "https://files.example.test/b/", Fields: map[string]string{"x-amz-signature": "SIG"}}
 	u := PresignedURL("https://files.example.test/b/k?X-Amz-Signature=SIG")
 	for _, s := range []string{
-		fmt.Sprint(post), fmt.Sprintf("%+v", post), fmt.Sprintf("%#v", post), fmt.Sprintf("%v", []any{post}),
 		fmt.Sprint(u), fmt.Sprintf("%s", u), fmt.Sprintf("%q", u), fmt.Sprintf("%#v", u),
-		post.LogValue().String(), u.LogValue().String(),
+		fmt.Sprintf("%v", []any{u}), u.LogValue().String(),
 	} {
 		if strings.Contains(s, "SIG") || strings.Contains(s, "files.example.test") {
 			t.Fatalf("rendered: %s", s)
@@ -318,18 +218,6 @@ func TestLogAttrsNamesBothEndpointsAndBuckets(t *testing.T) {
 	}
 	if strings.Contains(got, "FAKE-ACCESS-KEY") || strings.Contains(got, "fake-secret-key") {
 		t.Errorf("LogAttrs leaks a credential: %s", got)
-	}
-}
-
-// Destination keeps where and which key, and drops the query and every other form field.
-func TestPresignedPostDestinationDropsCredentials(t *testing.T) {
-	p := PresignedPost{
-		URL:    "https://files.example.test/vigov-test-temp/?X-Amz-Signature=SIG",
-		Fields: map[string]string{"key": "upload/x/original.jpg", "policy": "POLICY", "x-amz-signature": "SIG"},
-	}
-	target, key := p.Destination()
-	if target != "https://files.example.test/vigov-test-temp/" || key != "upload/x/original.jpg" {
-		t.Fatalf("Destination = %q, %q", target, key)
 	}
 }
 

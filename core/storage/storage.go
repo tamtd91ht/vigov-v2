@@ -1,6 +1,6 @@
 // Package storage is the object-storage library of ADR 0052: a thin wrapper over MinIO/S3 that
-// does five things — presigned POST, stat, server-side copy, presigned GET, delete every
-// version — plus the key scheme and the type sniffing those need.
+// does five things — write an upload into temp (PutUpload), stat, server-side copy, presigned
+// GET, delete every version — plus the key scheme and the type sniffing those need.
 //
 // PLUS PUBLISH / UNPUBLISH (added 2026-09-30, recorded in ADR 0052 §1). ADR 0052 §11 says
 // "publishing copies the derivative to the public bucket; unpublishing deletes the public copy".
@@ -16,29 +16,30 @@
 //
 // PLUS PutUpload (added 2026-10-09, ADR 0052 §Sửa đổi 09/10/2026 — the ninth operation): uploads
 // now travel THROUGH the owning service as one multipart request, and the service streams the file
-// into the temp bucket under the same `upload/…` key the presigned POST used. Step (c) below then
-// runs unchanged on what it wrote. Steps (a) and (b) are superseded; PresignUpload stays until the
-// services have moved off it.
+// into the temp bucket under an `upload/…` key. PutUpload is the ONLY upload path: the presigned
+// POST (PresignUpload / PresignedPost) was removed on 2026-10-10 once no service called it, so no
+// device writes to MinIO directly any more. The public endpoint now signs GET links only.
 //
 // IT IS A LIBRARY, NOT A SERVICE (ADR 0001:96). Metadata lives in each owning service's own
 // `stored_file` table (rule 2 invariant 1); this package knows nothing about it, nothing about
 // permissions and nothing about the audit trail. The caller checks permission / citizen session
-// and commune BEFORE asking for a presigned URL — the binding of a URL to a person happens at
-// issue time, because a presigned URL is a bearer credential for its whole TTL (ADR 0052 §Cái giá).
+// and commune BEFORE PutUpload and before asking for a presigned GET — the binding of a GET URL to
+// a person happens at issue time, because it is a bearer credential for its whole TTL (ADR 0052
+// §Cái giá).
 //
-// THE UPLOAD FLOW IT SERVES (ADR 0052 §1):
+// THE UPLOAD FLOW IT SERVES (ADR 0052 §1, as amended 09/10/2026):
 //
-//	a. service: Key{…}.UploadPath() → PresignUpload            (declared type + size limit)
-//	b. browser: POST straight to the temp bucket
-//	c. service: Stat → ReadHead + SniffMIME → Open + malwarescan.Scan → SHA256 → Promote(etag)
+//	a. service: receives the multipart request, Key{…}.UploadPath() → PutUpload
+//	           (declared type + size limit checked before a byte is read)
+//	b. service: Stat → ReadHead + SniffMIME → Open + malwarescan.Scan → SHA256 → Promote(etag)
 //
-// Every step of (c) is bound to the ETag returned by Stat. The presigned POST stays usable for its
-// whole TTL, so without that binding a client could replace the object AFTER it was scanned and
-// before it was copied — Promote would then store bytes nobody scanned.
+// Every step of (b) is bound to the ETag PutUpload returned. Only the service writes the temp key
+// now, but the binding stays: it is what guarantees Promote copies exactly the bytes that were
+// scanned, whatever else might reach the temp bucket.
 //
 // WHAT IT NEVER LOGS: this package does not log at all. Callers may log an object key (keys
-// carry no personal data by construction — ADR 0052 §3) but never a presigned URL or form field
-// (bearer credentials) and never an original file name (personal data, rule 3).
+// carry no personal data by construction — ADR 0052 §3) but never a presigned URL
+// (a bearer credential) and never an original file name (personal data, rule 3).
 package storage
 
 import (
@@ -66,13 +67,14 @@ import (
 // service hands cfg.ObjectStorage straight to New.
 type Config = config.ObjectStorage
 
-// UploadTTL is how long a presigned upload stays valid — 15 minutes, fixed by ADR 0052 §1a.
-// Also the ceiling: PresignUpload refuses a longer one, because a longer window is a longer
-// time in which a leaked form can write into the commune's tree.
+// UploadTTL is how long a `pending` stored_file row counts against a purpose's file limit — 15
+// minutes, the figure ADR 0052 §1a fixed for the old presigned form. The services still use it:
+// a row a crash left `pending` stops holding a slot after UploadTTL, so a retry is not refused
+// for ever (service-petitions app/upload_stream.go, service-comms, service-platform branding.go).
 const UploadTTL = 15 * time.Minute
 
 // MaxDownloadTTL caps a presigned GET. ADR 0052 says "short-lived" without a number; the cap
-// reuses the upload figure so there is one number to reason about. A presigned GET is checked
+// reuses the UploadTTL figure so there is one number to reason about. A presigned GET is checked
 // when the request starts, so a long video download does not need a longer TTL.
 const MaxDownloadTTL = 15 * time.Minute
 
@@ -200,10 +202,11 @@ func newMinio(endpoint, region string, cfg Config) (*minio.Client, error) {
 }
 
 // LogAttrs says WHERE this client goes, for one startup line: the endpoint the service itself
-// reads and writes through, the endpoint uploads and downloads are SIGNED for (the phone's door),
-// and the three bucket names. The two endpoints must reach ONE MinIO; when they do not, every
-// upload "succeeds" on the phone and is "not received" by the service (09/10/2026) — this line is
-// where that shows. Scheme and host only: no key, no secret, no object.
+// reads and writes through, the endpoint view/download (GET) links are SIGNED for — "cua_cong_khai",
+// the door a phone or browser opens a link through; uploads no longer use it (ADR 0052 §Sửa đổi
+// 09/10/2026) — and the three bucket names. The two endpoints must reach ONE MinIO; when they do
+// not, a file the service stored answers 404 to every signed link — this line is where that shows.
+// Scheme and host only: no key, no secret, no object.
 func (c *Client) LogAttrs() []any {
 	name := func(b Bucket) string {
 		n, _ := c.BucketName(b) // the three constants always have a suffix
@@ -248,94 +251,11 @@ func (c *Client) checkKey(b Bucket, key string) (string, Key, error) {
 	return name, k, nil
 }
 
-// PresignedPost is the form a browser POSTs to upload: every Fields entry as a form field, then
-// the file as the last field named "file".
-//
-// URL AND FIELDS ARE A BEARER CREDENTIAL for their TTL: anybody holding them can write that one
-// key. Every fmt and slog path renders "***"; encoding/json does NOT, on purpose — the handler has
-// to send them to the client. Never log the struct, the URL or a field.
-type PresignedPost struct {
-	URL       string
-	Fields    map[string]string
-	ExpiresAt time.Time
-}
-
-const redactedPost = "storage.PresignedPost{***}"
-
-func (p PresignedPost) String() string       { return redactedPost }
-func (p PresignedPost) GoString() string     { return redactedPost }
-func (p PresignedPost) LogValue() slog.Value { return slog.StringValue(redactedPost) }
-
-// Destination is where the form posts — scheme, host and bucket path, never a query — and the object
-// key it is fixed to: the two facts an operator needs to find an upload in MinIO. Nothing in them
-// grants anything; the policy and the signature stay in Fields, which is never logged.
-func (p PresignedPost) Destination() (target, key string) {
-	if u, err := url.Parse(p.URL); err == nil {
-		target = u.Scheme + "://" + u.Host + u.Path
-	}
-	return target, p.Fields["key"]
-}
-func (p PresignedPost) Format(f fmt.State, verb rune) { _, _ = io.WriteString(f, redactedPost) }
-
-// PresignUpload issues a presigned POST into the temp bucket for one upload key.
-//
-// The policy fixes the bucket, the exact key, the exact Content-Type (which must be an allowed
-// type whose extension matches the key) and content-length-range [1, maxBytes] — so the size
-// limit is enforced by MinIO, not by trust in the client (ADR 0052 §1a). maxBytes comes from the
-// platform-owned limit for the purpose (ADR 0052 §10); this package has no default for it.
-// ttl 0 means UploadTTL; anything above UploadTTL is refused.
-//
-// Signed against the PUBLIC endpoint, offline.
-func (c *Client) PresignUpload(ctx context.Context, uploadKey string, maxBytes int64, contentType string, ttl time.Duration) (PresignedPost, error) {
-	k, err := ParseUploadKey(uploadKey)
-	if err != nil {
-		return PresignedPost{}, err
-	}
-	ext, ok := ExtForMIME(contentType)
-	if !ok {
-		return PresignedPost{}, fmt.Errorf("%w: declared type %q", ErrTypeNotAllowed, contentType)
-	}
-	if ext != k.Ext {
-		return PresignedPost{}, fmt.Errorf("%w: declared type %q does not match key extension %q", ErrInvalidArgument, contentType, k.Ext)
-	}
-	if maxBytes <= 0 {
-		return PresignedPost{}, fmt.Errorf("%w: maxBytes must be positive", ErrInvalidArgument)
-	}
-	if ttl == 0 {
-		ttl = UploadTTL
-	}
-	if ttl < time.Second || ttl > UploadTTL {
-		return PresignedPost{}, fmt.Errorf("%w: upload ttl must be between 1s and %s", ErrInvalidArgument, UploadTTL)
-	}
-	bucket, err := c.BucketName(BucketTemp)
-	if err != nil {
-		return PresignedPost{}, err
-	}
-	expires := time.Now().UTC().Add(ttl)
-	p := minio.NewPostPolicy()
-	for _, set := range []error{
-		p.SetBucket(bucket),
-		p.SetKey(uploadKey),
-		p.SetContentType(contentType),
-		p.SetContentLengthRange(1, maxBytes),
-		p.SetExpires(expires),
-	} {
-		if set != nil {
-			return PresignedPost{}, fmt.Errorf("storage: post policy: %w", set)
-		}
-	}
-	u, fields, err := c.signer.PresignedPostPolicy(ctx, p)
-	if err != nil {
-		return PresignedPost{}, fmt.Errorf("storage: presign upload: %w", err)
-	}
-	return PresignedPost{URL: u.String(), Fields: fields, ExpiresAt: expires}, nil
-}
-
 // PutUpload streams a client's file, received by the owning service, into the TEMP bucket under
 // uploadKey — the ninth operation, added by ADR 0052 §Sửa đổi 09/10/2026 (owner decision): uploads
-// go through the service, never straight from a device to MinIO. It writes exactly what the
-// presigned POST used to write, so the completion step (c) — Stat, sniff, malware scan, SHA256,
-// Promote bound to the ETag — runs on it unchanged. The returned ETag is the one to bind (c) to.
+// go through the service, never straight from a device to MinIO. The completion step (b) of the
+// package doc — Stat, sniff, malware scan, SHA256, Promote bound to the ETag — runs on what it
+// wrote. The returned ETag is the one to bind (b) to.
 //
 // THE CALLER HAS ALREADY decided, before reading a byte of the body: session / permission (rules 4
 // and 5), commune (rule 1), the per-purpose type and size policy (ADR 0052 §10), the per-pod
@@ -343,7 +263,7 @@ func (c *Client) PresignUpload(ctx context.Context, uploadKey string, maxBytes i
 //   - uploadKey not an `upload/…` key (an `export/…` key, a destination key, a free-form string)
 //     → ErrInvalidArgument together with ErrInvalidKey.
 //   - contentType off the allow-list → ErrTypeNotAllowed; its extension not the key's →
-//     ErrInvalidArgument. The same two refusals as PresignUpload. contentType is the DECLARED type:
+//     ErrInvalidArgument. contentType is the DECLARED type:
 //     it is never trusted downstream, because Promote stores the sniffed one.
 //   - maxBytes <= 0 → ErrInvalidArgument. There is no default: the limit is platform policy.
 //   - size <= 0 → ErrInvalidArgument (an empty file is not an upload); size > maxBytes →
@@ -458,8 +378,8 @@ func (c *Client) ReadHead(ctx context.Context, b Bucket, key, ifMatchETag string
 	defer obj.Close()
 	head, err := io.ReadAll(io.LimitReader(obj, int64(n)))
 	if err != nil {
-		// A zero-length object has no byte 0 to range over. The presigned policy's minimum of 1
-		// byte makes this unreachable for uploads; answer "empty" rather than an error elsewhere.
+		// A zero-length object has no byte 0 to range over. PutUpload's refusal of size <= 0
+		// makes this unreachable for uploads; answer "empty" rather than an error elsewhere.
 		if s3Error(err).Code == "InvalidRange" {
 			return []byte{}, nil
 		}
@@ -820,7 +740,7 @@ func (e *exactReader) Read(p []byte) (int, error) {
 		p = p[:limit] // never step into the final window without the peek above
 	}
 	n, err := e.br.Read(p)
-	if e.h != nil { // PutUpload does not hash: step (c) hashes what the store holds
+	if e.h != nil { // PutUpload does not hash: step (b) hashes what the store holds
 		e.h.Write(p[:n])
 	}
 	e.remaining -= int64(n)

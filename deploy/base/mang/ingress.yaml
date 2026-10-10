@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     281 tuyến của 7 dịch vụ — petitions 84 · identity 67 · comms 51 · finance 40 · documents 29 · platform 8 · reporting 2
+#     272 tuyến của 7 dịch vụ — petitions 80 · identity 67 · comms 48 · finance 40 · documents 29 · platform 6 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -43,6 +43,11 @@ metadata:
     # 180 s mỗi lượt ở service chặn việc ấy; (2) nginx KHÔNG thử lại sang pod khác khi pod lỗi giữa
     # chừng (proxy_next_upstream cần thân đã đệm) — client nhận lỗi và gửi lại.
     nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    # 180 s: cận mỗi lượt tải lên chủ dự án duyệt (ADR 0052 §Sửa đổi 09/10/2026). Mặc định
+    # 60 s của nginx trả 504 cho lượt quét mã độc / mã hoá lại ảnh xong sau 60 s, trong khi service
+    # vẫn lưu tệp — client gửi lại và tệp vào hai lần.
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
 spec:
   ingressClassName: nginx
   # `tls:` do overlay THÊM VÀO — tên secret khác nhau từng môi trường.
