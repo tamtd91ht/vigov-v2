@@ -117,14 +117,16 @@ func (s *BoPhanStore) MaCungGoc(ctx context.Context, tx *store.ScopedTx, goc str
 }
 
 // LiveSiblings lists the LIVE units of this commune directly under parentID ("" = the root), for
-// the same-name check of create and rename (domain.CheckSiblingNameFree).
+// the same-name check of create and rename (domain.CheckSiblingNameFree) and the default rank of a
+// unit created without one (domain.NextSiblingOrder).
 //
 // Read inside the caller's transaction. It LOCKS nothing — an absent name cannot be locked — so two
 // concurrent creations of one name under the root (no parent row to serialise on) can both pass;
 // there is no unique index on the folded name to catch the loser. A creation under a parent is
-// serialised by the parent's FOR UPDATE in SoDoToChuc.Them.
+// serialised by the parent's FOR UPDATE in SoDoToChuc.Them. Two concurrent rootless creations may
+// also take the same default rank; a tie sorts by name, so that costs nothing.
 func (s *BoPhanStore) LiveSiblings(ctx context.Context, tx *store.ScopedTx, parentID string) ([]domain.ExistingOrgUnit, error) {
-	const stmt = `SELECT id, ten FROM bo_phan WHERE tenant_id = $1 ` +
+	const stmt = `SELECT id, ten, thu_tu FROM bo_phan WHERE tenant_id = $1 ` +
 		`AND cha_id IS NOT DISTINCT FROM nullif($2,'') AND deleted_at IS NULL LIMIT $3`
 
 	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()), parentID, TranDanhMucBoPhan+1)
@@ -135,7 +137,7 @@ func (s *BoPhanStore) LiveSiblings(ctx context.Context, tx *store.ScopedTx, pare
 	var out []domain.ExistingOrgUnit
 	for rows.Next() {
 		u := domain.ExistingOrgUnit{ParentID: parentID}
-		if err := rows.Scan(&u.ID, &u.Name); err != nil {
+		if err := rows.Scan(&u.ID, &u.Name, &u.Order); err != nil {
 			return nil, fmt.Errorf("bo_phan: đọc bộ phận cùng cấp: %w", err)
 		}
 		out = append(out, u)

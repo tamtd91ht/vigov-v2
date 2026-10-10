@@ -94,6 +94,9 @@ type ExistingOrgUnit struct {
 	Name     string
 	ParentID string
 	Deleted  bool
+	// Order is the unit's rank (`thu_tu`). Filled by the sibling read (store.LiveSiblings) for
+	// NextSiblingOrder; the import snapshot does not read it and leaves it 0.
+	Order int
 }
 
 // OrgUnitImportCeiling is the chart's ceiling (store.TranDanhMucBoPhan), passed in because this

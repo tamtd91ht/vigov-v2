@@ -103,15 +103,27 @@ func TestXoaCanBo_204VaChuyenDungTruong(t *testing.T) {
 	}
 }
 
-// NO BODY OR A BODY THAT IS NOT JSON — refused before the use case runs.
+// A BODY THAT IS NOT JSON — refused before the use case runs.
 func TestXoaCanBoThieuThanBiTuChoi(t *testing.T) {
-	for _, than := range []string{"", "khong-phai-json"} {
+	m := dungMayChu(t)
+	coAdminUserDelete(t, m)
+
+	doiMa(t, m.goiGhi(t, tuyenXoa("khong-phai-json"), hostA, m.tokenCho(t, xaA, sidA)), http.StatusBadRequest)
+	if n := m.ghiDanhBa.soLanGoi(); n != 0 {
+		t.Errorf("use case vẫn chạy %d lần", n)
+	}
+}
+
+// NO BODY, `{}` OR A BLANK REASON IS A DELETE WITHOUT A REASON (owner decision 10/10/2026): 204, and
+// the use case receives "" — it, not the handler, owns turning that into the fixed sentence.
+func TestStaffDeleteWithoutReasonReachesUseCase(t *testing.T) {
+	for _, than := range []string{"", "{}", `{"reason":""}`} {
 		m := dungMayChu(t)
 		coAdminUserDelete(t, m)
 
-		doiMa(t, m.goiGhi(t, tuyenXoa(than), hostA, m.tokenCho(t, xaA, sidA)), http.StatusBadRequest)
-		if n := m.ghiDanhBa.soLanGoi(); n != 0 {
-			t.Errorf("thân %q: use case vẫn chạy %d lần", than, n)
+		doiMa(t, m.goiGhi(t, tuyenXoa(than), hostA, m.tokenCho(t, xaA, sidA)), http.StatusNoContent)
+		if n := m.ghiDanhBa.soLanGoi(); n != 1 || m.ghiDanhBa.lyDoXoa != "" {
+			t.Errorf("thân %q: use case chạy %d lần, lý do %q", than, n, m.ghiDanhBa.lyDoXoa)
 		}
 	}
 }
@@ -119,7 +131,7 @@ func TestXoaCanBoThieuThanBiTuChoi(t *testing.T) {
 // EACH REFUSAL REACHES THE CLIENT AS ITS OWN STATUS AND CODE.
 //
 //	409 staff_has_account   NOT 403: the caller holds the key; what is refused is the row's state.
-//	400 invalid_request     a blank or over-long reason, with the domain's own sentence.
+//	400 invalid_request     an over-long reason, with the domain's own sentence.
 //	404 staff_not_found     already deleted, another commune's, or invented — one answer.
 func TestXoaCanBoAnhXaTungLoiVeDungMaTrangThai(t *testing.T) {
 	cases := []struct {
@@ -129,7 +141,6 @@ func TestXoaCanBoAnhXaTungLoiVeDungMaTrangThai(t *testing.T) {
 		ma     string
 	}{
 		{"dòng có tài khoản", app.ErrCanBoCoTaiKhoan, http.StatusConflict, "staff_has_account"},
-		{"thiếu lý do", domain.ErrThieuLyDoXoa, http.StatusBadRequest, "invalid_request"},
 		{"lý do quá dài", domain.ErrLyDoXoaQuaDai, http.StatusBadRequest, "invalid_request"},
 		{"không tìm thấy", idstore.ErrCanBoKhongTonTai, http.StatusNotFound, "staff_not_found"},
 		{"quản trị viên cuối cùng", app.ErrQuanTriCuoiCung, http.StatusConflict, "last_admin"},

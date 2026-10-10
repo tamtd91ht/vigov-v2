@@ -230,6 +230,23 @@ func KiemTraThuTuBoPhan(n int) error {
 	return nil
 }
 
+// NextSiblingOrder is the rank of a unit created WITHOUT one: right after the last live sibling under
+// the same parent (owner decision 10/10/2026 — the add-child popup drops the "Thứ tự" box). No sibling
+// = 0, the column's own default. Capped at TranThuTuBoPhan rather than refused: past the ceiling the
+// new unit ties with the last one, and a tie sorts by name — an order, never an error the person
+// cannot act on. `siblings` must be the LIVE units under the parent; a deleted unit's rank holds no
+// place on the chart.
+func NextSiblingOrder(siblings []ExistingOrgUnit) int {
+	if len(siblings) == 0 {
+		return 0
+	}
+	last := siblings[0].Order
+	for _, s := range siblings[1:] {
+		last = max(last, s.Order)
+	}
+	return min(last+1, TranThuTuBoPhan)
+}
+
 // KiemTraIDCha bounds a parent reference before it reaches SQL. "" is legitimate: the root.
 func KiemTraIDCha(id string) error {
 	if len(id) > 64 {

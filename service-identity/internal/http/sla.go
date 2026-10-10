@@ -420,10 +420,11 @@ type addSLAFieldRowIn struct {
 	UnassignedHoldHours *int `json:"unassigned_hold_hours,omitempty"`
 }
 
-// removeSLAFieldRowIn is the body of DELETE /api/v1/sla/{id}. A DELETE WITH A BODY: the reason is
-// mandatory (rule 7, invariant 1), and a query string would put free text into every access log.
+// removeSLAFieldRowIn is the body of DELETE /api/v1/sla/{id}. A DELETE WITH A BODY: a query string
+// would put free text into every access log. OPTIONAL since 10/10/2026 (owner decision — the screen
+// drops the reason box): absent, "" or no body = the fixed sentence domain.SLAFieldRowDeleteDefaultReason.
 type removeSLAFieldRowIn struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // AddSLAFieldRow adds a field's own deadline row. POST /api/v1/sla
@@ -478,10 +479,7 @@ func (h *Handler) RemoveSLAFieldRow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in removeSLAFieldRowIn
-	r.Body = http.MaxBytesReader(w, r.Body, thanSLAToiDa)
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+	if !readOptionalDeleteBody(w, r, thanSLAToiDa, &in) {
 		return
 	}
 	if err := h.d.GhiSLA.RemoveFieldRule(r.Context(), r.PathValue("id"), in.Reason, nguoi); err != nil {

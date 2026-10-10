@@ -266,9 +266,10 @@ func NewDanhBaCanBo(db *store.DB, kho KhoDanhBaCanBo, log *slog.Logger) *DanhBaC
 // could fill, and a client-chosen code is a code somebody can point at an existing person's
 // records.
 //
-// THERE IS NO `VaiTroID` FIELD EITHER, and that is the larger decision: assigning a role is the
-// operation carrying #14's two guards, so a role on the create request would be the way around
-// both of them. A new person holds nothing until somebody with the authority grants it.
+// RoleIDs IS OPTIONAL, AND IT DOES NOT GO AROUND #14 (owner decision 10/10/2026, bug sheet row 41:
+// the add form picks the role). Them assigns it in the SAME transaction as the insert and runs the
+// guards of DoiVaiTro that can apply to a person who did not exist a moment ago — see Them. At most
+// one distinct role (domain.NewStaffRole). Empty = the person holds nothing until somebody grants it.
 //
 // THERE IS NO ACCOUNT, NO PASSWORD AND NO `CoTaiKhoan` — #9/#17/#18, a different flow.
 type YeuCauThemCanBo struct {
@@ -278,6 +279,7 @@ type YeuCauThemCanBo struct {
 	BoPhanID        string
 	DienThoaiCoQuan string
 	DiDongCaNhan    string
+	RoleIDs         []string
 }
 
 // Them adds one directory entry and mints its staff code.
@@ -294,6 +296,10 @@ func (uc *DanhBaCanBo) Them(ctx context.Context, yc YeuCauThemCanBo,
 	if err != nil {
 		return domain.CanBoTomTat{}, err
 	}
+	roleID, err := domain.NewStaffRole(yc.RoleIDs)
+	if err != nil {
+		return domain.CanBoTomTat{}, err
+	}
 	if moi.ID, err = uc.sinhID(); err != nil {
 		return domain.CanBoTomTat{}, fmt.Errorf("danh_ba_can_bo: sinh id: %w", err)
 	}
@@ -302,8 +308,38 @@ func (uc *DanhBaCanBo) Them(ctx context.Context, yc YeuCauThemCanBo,
 		if moi.Ma, err = uc.sinhMa(uc.bayGio()); err != nil {
 			return domain.CanBoTomTat{}, fmt.Errorf("danh_ba_can_bo: sinh mã: %w", err)
 		}
+		moi.VaiTroID = ""
 
 		err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+			// THE ROLE IS CHECKED BEFORE ANYTHING IS WRITTEN, with DoiVaiTro's own reads, inside this
+			// transaction (see DoiVaiTro for why both halves must come from one moment):
+			//
+			//	the role      QuyenCuaVaiTro is scoped by the transaction's commune and skips
+			//	              soft-deleted roles — another commune's id, an invented one and a
+			//	              deleted one are all ErrVaiTroKhongTonTai (rule 1)
+			//	#14 second    the role may not carry a key the actor does not hold
+			//	#14 first     not reachable: the target is created right here, never the actor
+			//	#13           not reachable: adding a person can only grow the administrator set
+			//
+			// The route's permission stays `admin.user`, the key PUT /api/v1/staff/{id}/role requires.
+			// No key is added (rule 5, invariant 3c).
+			if roleID != "" {
+				keys, exists, err := uc.kho.QuyenCuaVaiTro(ctx, tx, roleID)
+				if err != nil {
+					return err
+				}
+				if !exists {
+					return ErrVaiTroKhongTonTai
+				}
+				held, err := uc.kho.QuyenDangGiu(ctx, tx, nguoi.ID)
+				if err != nil {
+					return err
+				}
+				if missing := khongCam(keys, held); len(missing) > 0 {
+					return &LoiTraoQuyenKhongCam{Thieu: missing}
+				}
+			}
+
 			if err := uc.kho.Chen(ctx, tx, moi); err != nil {
 				return err
 			}
@@ -311,11 +347,33 @@ func (uc *DanhBaCanBo) Them(ctx context.Context, yc YeuCauThemCanBo,
 			// purpose: audit.Write fills it from the transaction, which took it from the context
 			// (rule 1, invariant 4). Passing it here would be a second source for the one fact
 			// that decides which commune the entry belongs to.
-			return audit.Write(ctx, tx, audit.Entry{
+			if err := audit.Write(ctx, tx, audit.Entry{
 				Actor:   nguoi.Vet,
 				Action:  HanhViThemCanBo,
 				Subject: moi.Ma, // the business code of the person created, never the internal id
 				Delta:   deltaCanBo(map[string]any{"sau": tomTatCanBo(moi)}),
+			}); err != nil {
+				return err
+			}
+			if roleID == "" {
+				return nil
+			}
+
+			if err := uc.kho.DatVaiTro(ctx, tx, moi.ID, roleID); err != nil {
+				return err
+			}
+			moi.VaiTroID = roleID
+			// A PRIVILEGE CHANGE, AUDITED AS ITS OWN ACT (rule 5, invariant 5) — the verb and the delta
+			// of PUT /api/v1/staff/{id}/role, so "who gave this person this role" is one query on the
+			// trail whichever form did it. The staff import writes the same pair.
+			return audit.Write(ctx, tx, audit.Entry{
+				Actor:   nguoi.Vet,
+				Action:  HanhViDoiVaiTro,
+				Subject: moi.Ma,
+				Delta: deltaCanBo(map[string]any{
+					"truoc": map[string]any{"vai_tro_id": ""},
+					"sau":   map[string]any{"vai_tro_id": roleID},
+				}),
 			})
 		})
 		// A COLLISION IS RETRIED WITH A NEW CODE — never by hunting for a free one. Nothing was
@@ -354,7 +412,7 @@ func (uc *DanhBaCanBo) chuanHoa(yc YeuCauThemCanBo) (domain.CanBoTomTat, error) 
 	if cb.DienThoaiCoQuan, err = domain.ChuanHoaSoDienThoai(yc.DienThoaiCoQuan); err != nil {
 		return cb, err
 	}
-	if cb.DiDongCaNhan, err = domain.ChuanHoaSoDienThoai(yc.DiDongCaNhan); err != nil {
+	if cb.DiDongCaNhan, err = domain.NormalizeMobile(yc.DiDongCaNhan); err != nil {
 		return cb, err
 	}
 	return cb, nil
@@ -519,7 +577,7 @@ func chuanHoaSua(yc YeuCauSuaCanBo) (func(*domain.CanBoTomTat), error) {
 		dat = append(dat, func(cb *domain.CanBoTomTat) { cb.DienThoaiCoQuan = v })
 	}
 	if yc.DiDongCaNhan != nil {
-		v, err := domain.ChuanHoaSoDienThoai(*yc.DiDongCaNhan)
+		v, err := domain.NormalizeMobile(*yc.DiDongCaNhan)
 		if err != nil {
 			return nil, err
 		}
@@ -1208,7 +1266,9 @@ func saoChepSo(p *int) *int {
 //	                          issued a second earlier cannot slip between the check and the write.
 //	NOT ONESELF (#14)         refused before anything is read, like every other write here.
 //	NEVER THE LAST ADMIN (#13) see below — defensive, and stated as such.
-//	REASON REQUIRED           rule 7 invariant 1; shape-checked before the transaction opens.
+//	REASON OPTIONAL           blank = domain.StaffDeleteDefaultReason (owner decision 10/10/2026),
+//	                          never an empty `delete_reason` (rule 7 invariant 1). Shape-checked
+//	                          before the transaction opens.
 //	UNPUBLISHED WITH IT       the store's UPDATE clears the Mini App flag and both consent marks
 //	                          as literals (store.xoaMemCanBo), so a deleted row can never stay public.
 //	TRAIL                     one entry, same transaction, actor = the staff code.

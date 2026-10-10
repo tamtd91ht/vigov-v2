@@ -10,10 +10,14 @@ func TestNormalizeOrgUnitDeleteReason(t *testing.T) {
 	if got, err := NormalizeOrgUnitDeleteReason("  sáp nhập vào Văn phòng  "); err != nil || got != "sáp nhập vào Văn phòng" {
 		t.Errorf("= %q, %v", got, err)
 	}
+	// OPTIONAL ON THE WAY IN, NEVER EMPTY IN THE ROW (owner decision 10/10/2026; rule 7, invariant 1).
 	for _, raw := range []string{"", "  \t "} {
-		if _, err := NormalizeOrgUnitDeleteReason(raw); !errors.Is(err, ErrOrgUnitDeleteReasonMissing) {
-			t.Errorf("%q: lỗi = %v, muốn ErrOrgUnitDeleteReasonMissing", raw, err)
+		if got, err := NormalizeOrgUnitDeleteReason(raw); err != nil || got != OrgUnitDeleteDefaultReason {
+			t.Errorf("%q: = %q, %v — muốn câu cố định OrgUnitDeleteDefaultReason", raw, got, err)
 		}
+	}
+	if n := len([]rune(OrgUnitDeleteDefaultReason)); n == 0 || n > MaxOrgUnitDeleteReason {
+		t.Errorf("câu cố định dài %d ký tự — phải khác rỗng và trong trần", n)
 	}
 	// Counted in runes: 500 accented letters are 1500 bytes and must pass.
 	if _, err := NormalizeOrgUnitDeleteReason(strings.Repeat("ệ", MaxOrgUnitDeleteReason)); err != nil {

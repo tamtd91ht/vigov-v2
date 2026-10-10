@@ -49,8 +49,14 @@ func TestNormalizeSLADeleteReason(t *testing.T) {
 	if got, err := NormalizeSLADeleteReason("  gộp "); err != nil || got != "gộp" {
 		t.Errorf("= %q, %v", got, err)
 	}
-	if _, err := NormalizeSLADeleteReason(" "); !errors.Is(err, ErrSLADeleteReasonMissing) {
-		t.Errorf("rỗng: %v", err)
+	// OPTIONAL ON THE WAY IN, NEVER EMPTY IN THE ROW (owner decision 10/10/2026; rule 7, invariant 1).
+	for _, blank := range []string{"", " ", "\t\n"} {
+		if got, err := NormalizeSLADeleteReason(blank); err != nil || got != SLAFieldRowDeleteDefaultReason {
+			t.Errorf("rỗng %q: = %q, %v — muốn câu cố định", blank, got, err)
+		}
+	}
+	if n := len([]rune(SLAFieldRowDeleteDefaultReason)); n == 0 || n > SLADeleteReasonMaxLen {
+		t.Errorf("câu cố định dài %d ký tự", n)
 	}
 	long := make([]rune, SLADeleteReasonMaxLen+1)
 	for i := range long {

@@ -249,7 +249,9 @@ func (uc *SLA) checkPetitionField(ctx context.Context, field string) error {
 	return nil
 }
 
-// RemoveFieldRule soft deletes one field's own row, with a reason. The default row is refused.
+// RemoveFieldRule soft deletes one field's own row, with a reason — the one typed, or
+// domain.SLAFieldRowDeleteDefaultReason when none is (owner decision 10/10/2026). The default row is
+// refused.
 //
 // A ROW ALREADY REMOVED, AN INVENTED ID AND ANOTHER COMMUNE'S ROW ARE ONE ANSWER — not found — because
 // every statement is scoped to the commune in the context (rule 1, invariant 5; rule 4, forbidden #2).
@@ -300,7 +302,7 @@ func IsSLAFieldRuleInputError(err error) bool {
 	for _, e := range []error{
 		domain.ErrSLAFieldMissing, domain.ErrSLAFieldMalformed,
 		domain.ErrSLAKindHasNoFieldRows, domain.ErrSLAKindUnknown,
-		domain.ErrSLADeleteReasonMissing, domain.ErrSLADeleteReasonTooLong,
+		domain.ErrSLADeleteReasonTooLong,
 	} {
 		if errors.Is(err, e) {
 			return true

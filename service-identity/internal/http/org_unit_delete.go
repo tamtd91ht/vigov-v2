@@ -9,10 +9,12 @@ import (
 	"github.com/vihat/vigov/service-identity/internal/app"
 )
 
-// orgUnitDeleteIn is the body of DELETE /api/v1/org-units/{id}. Trimmed, required and bounded by
-// the use case (domain.NormalizeOrgUnitDeleteReason), so the rule has one owner.
+// orgUnitDeleteIn is the body of DELETE /api/v1/org-units/{id}. OPTIONAL since 10/10/2026 (owner
+// decision — the screen drops the reason box): absent, "" or no body = the fixed sentence
+// domain.OrgUnitDeleteDefaultReason. Trimmed and bounded by the use case
+// (domain.NormalizeOrgUnitDeleteReason), so the rule has one owner.
 type orgUnitDeleteIn struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // orgUnitHoldingsOut counts what the unit still holds, by kind. EVERY FIELD IS PRINTED, zeros
@@ -45,7 +47,7 @@ func (h *Handler) DeleteOrgUnit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in orgUnitDeleteIn
-	if !docThanBoPhan(w, r, &in) {
+	if !readOptionalDeleteBody(w, r, thanBoPhanToiDa, &in) {
 		return
 	}
 	// Scoped by the request context: the use case reads the commune from it (rule 1, invariant 4).

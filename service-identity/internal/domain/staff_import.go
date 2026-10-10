@@ -308,8 +308,10 @@ func PlanStaffImport(rows []StaffImportRow, snap StaffImportSnapshot, ceil Staff
 		} else {
 			p.Staff.DienThoaiCoQuan = tel
 		}
-		if tel, err := ChuanHoaSoDienThoai(r.Mobile); err != nil {
-			// The domain sentence names the rule and never the character (ChuanHoaSoDienThoai).
+		if tel, err := NormalizeMobile(r.Mobile); err != nil {
+			// The domain sentence names the rule and never the character (ChuanHoaSoDienThoai), and
+			// the ten-digit ceiling is the create form's (NormalizeMobile), so a file cannot store what
+			// the form refuses.
 			rowErr(r, StaffImportColMobile, staffImportSentence(err))
 		} else {
 			p.Staff.DiDongCaNhan = tel

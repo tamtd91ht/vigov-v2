@@ -151,7 +151,8 @@ func TestKiemTraThuTuDanhBa(t *testing.T) {
 	}
 }
 
-// THE REASON OF A SOFT DELETE IS REQUIRED, TRIMMED, AND BOUNDED IN RUNES (rule 7, invariant 1).
+// THE REASON OF A SOFT DELETE IS OPTIONAL ON THE WAY IN, NEVER EMPTY IN THE ROW, TRIMMED, AND BOUNDED
+// IN RUNES (rule 7, invariant 1; owner decision 10/10/2026).
 //
 // THE BOUND IS COUNTED IN RUNES: 500 accented Vietnamese characters are ~1500 bytes, and a byte
 // bound would refuse an honest Vietnamese sentence at a third of the length of an English one.
@@ -164,10 +165,15 @@ func TestChuanHoaLyDoXoaBatBuocCatKhoangTrangVaDemTheoKyTu(t *testing.T) {
 		t.Errorf("= %q, muốn bản đã cắt khoảng trắng hai đầu", got)
 	}
 
+	// MUTATION THAT MUST TURN THIS RED: return "" for a blank — the row would carry an empty
+	// `delete_reason`, which rule 7 invariant 1 does not permit.
 	for _, tho := range []string{"", "   ", "\t\n"} {
-		if _, err := ChuanHoaLyDoXoa(tho); !errors.Is(err, ErrThieuLyDoXoa) {
-			t.Errorf("%q: lỗi = %v, muốn ErrThieuLyDoXoa", tho, err)
+		if got, err := ChuanHoaLyDoXoa(tho); err != nil || got != StaffDeleteDefaultReason {
+			t.Errorf("%q: = %q, %v — muốn câu cố định StaffDeleteDefaultReason", tho, got, err)
 		}
+	}
+	if strings.TrimSpace(StaffDeleteDefaultReason) == "" || len([]rune(StaffDeleteDefaultReason)) > tranLyDoXoa {
+		t.Error("câu cố định phải khác rỗng và nằm trong trần lý do")
 	}
 
 	// Exactly at the ceiling, in multi-byte runes: accepted.
@@ -176,5 +182,67 @@ func TestChuanHoaLyDoXoaBatBuocCatKhoangTrangVaDemTheoKyTu(t *testing.T) {
 	}
 	if _, err := ChuanHoaLyDoXoa(strings.Repeat("ệ", tranLyDoXoa+1)); !errors.Is(err, ErrLyDoXoaQuaDai) {
 		t.Errorf("lý do quá dài không bị từ chối: %v", err)
+	}
+}
+
+// THE PERSONAL MOBILE IS AT MOST TEN DIGITS ONCE NORMALISED (owner decision 10/10/2026), with the
+// country code folded back to the domestic 0. The stored value stays the trimmed text as typed.
+//
+// MUTATION THAT MUST TURN THIS RED: count "+84 900 000 000" as eleven digits (no fold), or drop the
+// ceiling — the first refuses an honest number, the second lets "09000000001" through.
+func TestNormalizeMobileTenDigitCeiling(t *testing.T) {
+	for _, ok := range []string{"0900000000", "090 000 0000", "+84 900 000 000", "+84-900-000-000",
+		"0084900000000", "84900000000", "(090) 000-0000", ""} {
+		got, err := NormalizeMobile(" " + ok + " ")
+		if err != nil {
+			t.Errorf("%q bị từ chối: %v", ok, err)
+		}
+		if got != ok {
+			t.Errorf("%q bị sửa thành %q — chỉ được cắt khoảng trắng hai đầu", ok, got)
+		}
+	}
+	for _, bad := range []string{"09000000001", "090 000 00001", "+84 900 000 0001", "0900000000, 101"} {
+		if _, err := NormalizeMobile(bad); !errors.Is(err, ErrMobileTooManyDigits) {
+			t.Errorf("%q: lỗi = %v, muốn ErrMobileTooManyDigits", bad, err)
+		}
+	}
+	// The character rule still applies first, and the sentence never quotes the number (rule 3).
+	if _, err := NormalizeMobile("0900000000x"); !errors.Is(err, ErrSoDienThoaiSai) {
+		t.Errorf("ký tự lạ: lỗi = %v, muốn ErrSoDienThoaiSai", err)
+	}
+	if _, err := NormalizeMobile("09000000001"); err == nil || strings.Contains(err.Error(), "0900000000") {
+		t.Errorf("thông báo lỗi nhắc lại số điện thoại: %v", err)
+	}
+	// THE OFFICE PHONE IS NOT CAPPED: a Vietnamese landline is eleven digits.
+	if _, err := ChuanHoaSoDienThoai("(0236) 3123 4567"); err != nil {
+		t.Errorf("số máy bàn 11 chữ số bị từ chối: %v", err)
+	}
+}
+
+// role_ids CARRIES AT MOST ONE DISTINCT ROLE — `nguoi_dung.vai_tro_id` is one column, and keeping the
+// first of two picked roles would be a privilege decision made silently.
+func TestNewStaffRoleAtMostOne(t *testing.T) {
+	cases := map[string]struct {
+		in   []string
+		want string
+	}{
+		"absent":        {nil, ""},
+		"empty":         {[]string{}, ""},
+		"blank entries": {[]string{"", "  "}, ""},
+		"one":           {[]string{"vt-1"}, "vt-1"},
+		"trimmed":       {[]string{" vt-1 "}, "vt-1"},
+		"repeated":      {[]string{"vt-1", "vt-1", ""}, "vt-1"},
+	}
+	for name, c := range cases {
+		got, err := NewStaffRole(c.in)
+		if err != nil || got != c.want {
+			t.Errorf("%s: = %q, %v — muốn %q", name, got, err, c.want)
+		}
+	}
+	if _, err := NewStaffRole([]string{"vt-1", "vt-2"}); !errors.Is(err, ErrOneRolePerStaff) {
+		t.Errorf("hai vai trò: lỗi = %v, muốn ErrOneRolePerStaff", err)
+	}
+	if _, err := NewStaffRole([]string{strings.Repeat("a", tranIDThamChieu+1)}); !errors.Is(err, ErrIDThamChieuQuaDai) {
+		t.Errorf("id quá dài: lỗi = %v, muốn ErrIDThamChieuQuaDai", err)
 	}
 }

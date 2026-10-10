@@ -210,6 +210,11 @@ func moiTuyenGhi() []tuyenGhi {
 		{"mở khoá", "DELETE", "/api/v1/staff/" + idNoiBo + "/lockout", "", http.StatusOK},
 		{"đổi vai trò", "PUT", "/api/v1/staff/" + idNoiBo + "/role",
 			`{"role_id":"vt-002"}`, http.StatusOK},
+		// The create form with a role (owner decision 10/10/2026): the SAME route and key as the row
+		// above it, so 401 · 403 wrong key · 403 wrong commune · 201 are re-asserted for this body.
+		{"thêm cán bộ kèm vai trò", "POST", "/api/v1/staff",
+			`{"full_name":"Trần Thị B","position":"Công chức","mobile":"0900000000","role_ids":["vt-002"]}`,
+			http.StatusCreated},
 	}
 }
 

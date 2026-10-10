@@ -122,6 +122,21 @@ func TestRemoveSLAFieldRowPassesIDAndReason(t *testing.T) {
 	}
 }
 
+// NO BODY, `{}` OR A BLANK REASON IS A DELETE WITHOUT A REASON (owner decision 10/10/2026): 204, and
+// the use case receives "" — the domain turns it into the fixed sentence.
+func TestRemoveSLAFieldRowWithoutReasonReachesUseCase(t *testing.T) {
+	for _, body := range []string{"", "{}", `{"reason":""}`} {
+		m := dungMayChuSLA(t)
+		w := m.goi(t, "DELETE", hostA, "/api/v1/sla/"+idDongSLAThu, body, m.tokenCho(t, xaA, sidA))
+		if w.Code != http.StatusNoContent {
+			t.Errorf("thân %q: mã = %d — %s", body, w.Code, w.Body.String())
+		}
+		if m.ghiSLA.idCuoi != idDongSLAThu || m.ghiSLA.reasonLast != "" {
+			t.Errorf("thân %q: use case nhận id %q lý do %q", body, m.ghiSLA.idCuoi, m.ghiSLA.reasonLast)
+		}
+	}
+}
+
 func TestRemoveSLAFieldRowRefusalsMapToStatus(t *testing.T) {
 	cases := []struct {
 		err    error
@@ -130,7 +145,7 @@ func TestRemoveSLAFieldRowRefusalsMapToStatus(t *testing.T) {
 	}{
 		{idstore.ErrDongSLAKhongTonTai, http.StatusNotFound, "sla_row_not_found"},
 		{domain.ErrSLADefaultRowNotRemovable, http.StatusConflict, "default_sla_rule"},
-		{domain.ErrSLADeleteReasonMissing, http.StatusBadRequest, "invalid_request"},
+		{domain.ErrSLADeleteReasonTooLong, http.StatusBadRequest, "invalid_request"},
 	}
 	for _, c := range cases {
 		m := dungMayChuSLA(t)

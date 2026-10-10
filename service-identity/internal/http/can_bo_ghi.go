@@ -35,6 +35,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -61,8 +62,6 @@ const thanCanBoToiDa = 16 << 10
 //	code         #15 — the system mints it (domain.SinhMaCanBo). Neither form in the
 //	             specification draws the box, and a client-chosen code is a code somebody can point
 //	             at an existing person's archival records.
-//	role_id      assigning a role is PUT /api/v1/staff/{id}/role, the route that carries #14's two
-//	             guards. A role here would be the way around both of them.
 //	password,    #9/#17/#18 — issuing an account is a different flow. The INSERT writes
 //	has_account  `co_tai_khoan = false` as a literal, so there is no value any layer could pass.
 //	active       a row that has just been created is not locked. Locking is its own route, and it
@@ -76,7 +75,14 @@ type themCanBoVao struct {
 	Email       string `json:"email,omitempty"`
 	OrgUnitID   string `json:"org_unit_id"`
 	OfficePhone string `json:"office_phone"`
-	Mobile      string `json:"mobile"`
+	// Mobile — at most 10 digits once normalised, "+84" folded to "0" (domain.NormalizeMobile).
+	Mobile string `json:"mobile"`
+
+	// RoleIDs — OPTIONAL (owner decision 10/10/2026, bug sheet row 41): the role the new person is
+	// given, assigned in the same transaction behind PUT /api/v1/staff/{id}/role's #14 guard
+	// (app.DanhBaCanBo.Them). AT MOST ONE distinct id — a person holds one role (domain.NewStaffRole);
+	// absent or [] = no role. `omitempty` marks it optional in the contract (tools/apidoc).
+	RoleIDs []string `json:"role_ids,omitempty"`
 }
 
 // suaCanBoVao is a PARTIAL edit: an ABSENT field means "leave this alone", and that is why every
@@ -136,12 +142,27 @@ type datVaiTroVao struct {
 
 // xoaCanBoVao is the body of DELETE /api/v1/staff/{id}.
 //
-// A BODY ON A DELETE, the convention DELETE /api/v1/tasks/{ma} set in service-petitions: the reason
-// is mandatory (rule 7, invariant 1), and a query string would put free text about a government
-// record into every access log and proxy cache. Trimmed, required and bounded by the use case
+// A BODY ON A DELETE, the convention DELETE /api/v1/tasks/{ma} set in service-petitions: a query
+// string would put free text about a government record into every access log and proxy cache.
+// OPTIONAL since 10/10/2026 (owner decision — the screen drops the reason box): absent, "" or no body
+// at all = the fixed sentence domain.StaffDeleteDefaultReason. Trimmed and bounded by the use case
 // (domain.ChuanHoaLyDoXoa), so the rule has one owner.
 type xoaCanBoVao struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// readOptionalDeleteBody decodes the optional body of a DELETE whose reason may be left out. AN EMPTY
+// BODY IS AN EMPTY REASON, not a 400: a client that drops the reason box may well drop the body with
+// it, and the use case turns "" into its fixed sentence. Anything else that fails to decode — bad
+// JSON, too large — is still 400, with the decoder's own message withheld (docThanCanBo's reasoning).
+func readOptionalDeleteBody(w http.ResponseWriter, r *http.Request, limit int64, in any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	if err := json.NewDecoder(r.Body).Decode(in); err != nil && !errors.Is(err, io.EOF) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
+		return false
+	}
+	return true
 }
 
 // docThanCanBo decodes a JSON body, answering 400 itself on failure.
@@ -214,6 +235,7 @@ func (h *Handler) ThemCanBo(w http.ResponseWriter, r *http.Request) {
 		BoPhanID:        than.OrgUnitID,
 		DienThoaiCoQuan: than.OfficePhone,
 		DiDongCaNhan:    than.Mobile,
+		RoleIDs:         than.RoleIDs,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiGhiCanBo(w, r, "thêm cán bộ", err)
@@ -357,7 +379,7 @@ func (h *Handler) XoaCanBo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var than xoaCanBoVao
-	if !docThanCanBo(w, r, &than) {
+	if !readOptionalDeleteBody(w, r, thanCanBoToiDa, &than) {
 		return
 	}
 
@@ -502,10 +524,10 @@ func laLoiDauVaoCanBo(err error) bool {
 	for _, mot := range []error{
 		domain.ErrThieuHoTen, domain.ErrHoTenQuaDai, domain.ErrChucVuQuaDai,
 		domain.ErrEmailSaiDinhDang, domain.ErrEmailQuaDai,
-		domain.ErrSoDienThoaiSai, domain.ErrSoDienThoaiQuaDai,
-		domain.ErrIDThamChieuQuaDai,
+		domain.ErrSoDienThoaiSai, domain.ErrSoDienThoaiQuaDai, domain.ErrMobileTooManyDigits,
+		domain.ErrIDThamChieuQuaDai, domain.ErrOneRolePerStaff,
 		domain.ErrThuTuDanhBaAm, domain.ErrThuTuDanhBaQuaLon,
-		domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
+		domain.ErrLyDoXoaQuaDai,
 		domain.ErrRevokeReasonMissing, domain.ErrRevokeReasonTooLong,
 		domain.ErrBulkPublicationEmpty, domain.ErrBulkPublicationTooLarge,
 		domain.ErrBulkPublicationMissingID, domain.ErrBulkPublicationDuplicateID,

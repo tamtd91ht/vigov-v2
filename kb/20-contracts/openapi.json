@@ -9883,7 +9883,7 @@
         }
       },
       "post": {
-        "summary": "Thêm một danh mục tin của riêng xã vào cây danh mục Mini App",
+        "summary": "Thêm một danh mục tin của riêng xã vào cây danh mục Mini App — slug không gửi thì máy chủ tự cấp từ tên",
         "operationId": "comms_post_content_categories",
         "tags": [
           "comms"
@@ -18615,7 +18615,7 @@
         }
       ],
       "delete": {
-        "summary": "Xoá mềm một trường bản đồ, kèm lý do bắt buộc — mã trường không được cấp lại",
+        "summary": "Xoá mềm một trường bản đồ, lý do không bắt buộc — mã trường không được cấp lại",
         "operationId": "comms_delete_map_field_schemas_by_id",
         "tags": [
           "comms"
@@ -36624,9 +36624,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "comms.externalContactListOut": {
@@ -38483,8 +38480,7 @@
           }
         },
         "required": [
-          "name",
-          "slug"
+          "name"
         ],
         "additionalProperties": false
       },
@@ -45704,9 +45700,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "identity.orgUnitHoldingsOut": {
@@ -45995,9 +45988,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "identity.residentialUnitImportCreatedOut": {
@@ -46854,6 +46844,12 @@
           },
           "mobile": {
             "type": "string"
+          },
+          "role_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -47327,9 +47323,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "identity.xoaDanhMucVao": {

@@ -207,22 +207,39 @@ func TestXoaChinhMinhBiTuChoiTruocMoiLuotDoc(t *testing.T) {
 	}
 }
 
-// A MISSING, BLANK OR OVER-LONG REASON OPENS NO TRANSACTION.
+// AN OVER-LONG REASON OPENS NO TRANSACTION.
 func TestXoaLyDoThieuHoacQuaDaiThiKhongMoGiaoDich(t *testing.T) {
-	for ten, c := range map[string]struct {
-		lyDo string
-		muon error
-	}{
-		"rỗng":       {"", domain.ErrThieuLyDoXoa},
-		"toàn trắng": {"   \t ", domain.ErrThieuLyDoXoa},
-		"quá dài":    {strings.Repeat("ệ", 501), domain.ErrLyDoXoaQuaDai},
-	} {
+	b := banThuXoa(t)
+	if err := b.uc.Xoa(ctxXa(xaThu), idNguoiKhac, strings.Repeat("ệ", 501), nguoiThucHienGia()); !errors.Is(err, domain.ErrLyDoXoaQuaDai) {
+		t.Errorf("lỗi = %v, muốn ErrLyDoXoaQuaDai", err)
+	}
+	if n := b.ghi.soGiaoDich(); n != 0 {
+		t.Errorf("mở %d giao dịch cho một lý do không hợp lệ", n)
+	}
+}
+
+// A BLANK REASON IS NOT REFUSED (owner decision 10/10/2026): the row is soft-deleted with the fixed
+// sentence, deleted_by is still the staff code, and the entry shares the transaction.
+//
+// MUTATION THAT MUST TURN THIS RED: pass the raw "" through to XoaMem — the row would carry an empty
+// `delete_reason` (rule 7, invariant 1).
+func TestStaffDeleteWithoutReasonWritesFixedSentence(t *testing.T) {
+	for _, blank := range []string{"", "   \t "} {
 		b := banThuXoa(t)
-		if err := b.uc.Xoa(ctxXa(xaThu), idNguoiKhac, c.lyDo, nguoiThucHienGia()); !errors.Is(err, c.muon) {
-			t.Errorf("%s: lỗi = %v, muốn %v", ten, err, c.muon)
+		if err := b.uc.Xoa(ctxXa(xaThu), idNguoiKhac, blank, nguoiThucHienGia()); err != nil {
+			t.Fatalf("%q: Xoa: %v", blank, err)
 		}
-		if n := b.ghi.soGiaoDich(); n != 0 {
-			t.Errorf("%s: mở %d giao dịch cho một lý do không hợp lệ", ten, n)
+		x := b.kho.xoa
+		if x == nil || x.lyDo != domain.StaffDeleteDefaultReason {
+			t.Fatalf("%q: delete_reason = %+v, muốn câu cố định", blank, x)
+		}
+		if x.xoaBoi != maCanBo {
+			t.Errorf("deleted_by = %q, muốn %q", x.xoaBoi, maCanBo)
+		}
+		ghi := b.ghi.tim("SET xoa-mem")
+		vet := motVet(t, b.ghi)
+		if ghi == nil || vet.tx != ghi.tx || b.ghi.ketThucCua(vet.tx) != "commit" {
+			t.Fatal("vết và câu xoá mềm không cùng một giao dịch đã commit (luật 6 bất biến 3)")
 		}
 	}
 }

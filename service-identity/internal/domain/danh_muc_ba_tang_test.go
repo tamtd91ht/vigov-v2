@@ -139,8 +139,9 @@ func TestChuanHoaLyDoXoaDanhMucBatBuoc(t *testing.T) {
 	if _, err := ChuanHoaLyDoXoaDanhMuc(strings.Repeat("a", LyDoXoaDanhMucToiDa+1)); !errors.Is(err, ErrLyDoXoaDanhMucQuaDai) {
 		t.Error("lý do quá dài phải bị từ chối")
 	}
-	// NOT the staff directory's sentinel — that one's message names the directory.
-	if _, err := ChuanHoaLyDoXoaDanhMuc(""); errors.Is(err, ErrThieuLyDoXoa) {
-		t.Error("danh mục dùng nhầm lỗi của danh bạ cán bộ")
+	// NOT the staff directory's rule — that one turns a blank into a sentence naming the directory
+	// (StaffDeleteDefaultReason); a catalogue row's reason is still mandatory.
+	if got, err := ChuanHoaLyDoXoaDanhMuc(""); err == nil || got == StaffDeleteDefaultReason {
+		t.Error("danh mục dùng nhầm quy tắc lý do xoá của danh bạ cán bộ")
 	}
 }

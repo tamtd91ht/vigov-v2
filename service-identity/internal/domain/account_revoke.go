@@ -10,9 +10,10 @@ import (
 // The reason an administrator gives for revoking somebody's sign-in account (user decision
 // 2026-10-03: the reason is MANDATORY).
 //
-// ITS OWN TWO SENTINELS AND NOT ErrThieuLyDoXoa / ErrLyDoXoaQuaDai, although the rule is the same
-// shape: those sentences say "lý do xoá", and an administrator revoking an account would be told
-// they are deleting somebody — the one confusion #10 exists to prevent.
+// ITS OWN TWO SENTINELS AND NOT the directory delete's ErrLyDoXoaQuaDai: that sentence says "lý do
+// xoá", and an administrator revoking an account would be told they are deleting somebody — the one
+// confusion #10 exists to prevent. (The directory delete's reason became optional on 10/10/2026;
+// this one stays MANDATORY — a different decision about a different act.)
 var (
 	ErrRevokeReasonMissing = errors.New("can_bo: thiếu lý do thu hồi tài khoản — thu hồi quyền đăng nhập của một người phải ghi vì sao")
 	ErrRevokeReasonTooLong = errors.New("can_bo: lý do thu hồi tài khoản quá dài")

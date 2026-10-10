@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/core/documentsclient"
@@ -226,17 +227,42 @@ func TestRemoveOrgUnitNotFoundAnswersAlike(t *testing.T) {
 	}
 }
 
-func TestRemoveOrgUnitReasonRequiredBeforeAnything(t *testing.T) {
+// A BLANK REASON IS NOT REFUSED (owner decision 10/10/2026): the unit is soft-deleted with the fixed
+// sentence, deleted_by is the staff code, and the entry shares the committed transaction.
+//
+// MUTATION THAT MUST TURN THIS RED: pass the raw "" to SoftDelete — an empty `delete_reason` (rule 7).
+func TestRemoveOrgUnitWithoutReasonWritesFixedSentence(t *testing.T) {
+	k := &khoBoPhanGia{hang: cayBaTang()}
+	uc, ctx, _, _ := removeSetup(t, k)
+	if err := uc.Remove(ctx, "bp-c", "   ", nguoiBoPhan()); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	upd := k.cau("UPDATE bo_phan SET deleted_at")
+	if len(upd) != 1 {
+		t.Fatalf("có %d câu xoá mềm, muốn 1", len(upd))
+	}
+	if a := upd[0].args; a[2] != maCanBoBoPhan || a[3] != domain.OrgUnitDeleteDefaultReason {
+		t.Errorf("tham số xoá mềm = %v — muốn MÃ CÁN BỘ và câu cố định", a)
+	}
+	motVetBoPhan(t, k, ActionDeleteOrgUnit, "to-mot-cua")
+	if k.daCommit != 1 {
+		t.Errorf("commit %d lần, muốn 1", k.daCommit)
+	}
+}
+
+// A REASON PAST ITS CEILING IS STILL REFUSED, before anything is read or asked.
+func TestRemoveOrgUnitReasonTooLongBeforeAnything(t *testing.T) {
 	k := &khoBoPhanGia{hang: cayBaTang()}
 	uc, ctx, p, _ := removeSetup(t, k)
-	if err := uc.Remove(ctx, "bp-c", "   ", nguoiBoPhan()); !errors.Is(err, domain.ErrOrgUnitDeleteReasonMissing) {
-		t.Fatalf("lỗi = %v, muốn ErrOrgUnitDeleteReasonMissing", err)
+	long := strings.Repeat("ệ", domain.MaxOrgUnitDeleteReason+1)
+	if err := uc.Remove(ctx, "bp-c", long, nguoiBoPhan()); !errors.Is(err, domain.ErrOrgUnitDeleteReasonTooLong) {
+		t.Fatalf("lỗi = %v, muốn ErrOrgUnitDeleteReasonTooLong", err)
 	}
-	if !LaLoiDauVaoBoPhan(domain.ErrOrgUnitDeleteReasonMissing) {
-		t.Error("thiếu lý do phải là lỗi đầu vào (400)")
+	if !LaLoiDauVaoBoPhan(domain.ErrOrgUnitDeleteReasonTooLong) {
+		t.Error("lý do quá dài phải là lỗi đầu vào (400)")
 	}
 	if len(k.lenh) != 0 || p.calls != 0 {
-		t.Error("thiếu lý do mà vẫn đọc hoặc hỏi chủ sở hữu")
+		t.Error("lý do quá dài mà vẫn đọc hoặc hỏi chủ sở hữu")
 	}
 }
 

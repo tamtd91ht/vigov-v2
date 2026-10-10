@@ -80,7 +80,8 @@ func NewSoDoToChuc(db *store.DB, kho KhoBoPhan) *SoDoToChuc {
 //
 //	Ten    required; trimmed; case kept as typed (domain.ChuanHoaTenBoPhan)
 //	ChaID  "" = the root
-//	ThuTu  nil = 0, the column's own default
+//	ThuTu  nil = right after the last live sibling under the same parent, 0 when there is none
+//	       (owner decision 10/10/2026: the add-child popup no longer asks) — domain.NextSiblingOrder
 //	Ma     "" = derived from Ten, with `-2`, `-3`… on collision. NON-EMPTY = the code the person
 //	       typed, used EXACTLY or refused with 409 — never silently suffixed, because a person who
 //	       typed a code and got a different one has a code they did not choose, permanently.
@@ -115,8 +116,17 @@ func (uc *SoDoToChuc) Them(ctx context.Context, yc YeuCauThemBoPhan, nguoi Nguoi
 				return err
 			}
 		}
-		if err := uc.siblingNameFree(ctx, tx, moi.Ten, "", moi.ChaID); err != nil {
+		siblings, err := uc.kho.LiveSiblings(ctx, tx, moi.ChaID)
+		if err != nil {
 			return err
+		}
+		if err := domain.CheckSiblingNameFree(moi.Ten, "", siblings); err != nil {
+			return err
+		}
+		// NO RANK SENT = AFTER THE LAST LIVE SIBLING (owner decision 10/10/2026), from the same read
+		// as the name check, under the parent's lock when there is a parent.
+		if yc.ThuTu == nil {
+			moi.ThuTu = domain.NextSiblingOrder(siblings)
 		}
 
 		dangCo, err := uc.kho.MaCungGoc(ctx, tx, moi.Ma)
@@ -380,7 +390,7 @@ func LaLoiDauVaoBoPhan(err error) bool {
 		domain.ErrThieuTenBoPhan, domain.ErrTenBoPhanQuaDai, domain.ErrTenBoPhanKyTuLa,
 		domain.ErrMaBoPhanSaiDinhDang, domain.ErrMaBoPhanQuaDai, domain.ErrTenKhongSinhDuocMa,
 		domain.ErrThuTuBoPhanAm, domain.ErrThuTuBoPhanQuaLon, domain.ErrIDChaQuaDai,
-		domain.ErrOrgUnitDeleteReasonMissing, domain.ErrOrgUnitDeleteReasonTooLong,
+		domain.ErrOrgUnitDeleteReasonTooLong,
 	} {
 		if errors.Is(err, e) {
 			return true

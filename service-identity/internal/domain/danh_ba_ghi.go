@@ -40,10 +40,24 @@ var (
 	ErrThuTuDanhBaAm     = errors.New("can_bo: thứ tự hiển thị trong danh bạ không được âm")
 	ErrThuTuDanhBaQuaLon = errors.New("can_bo: thứ tự hiển thị trong danh bạ quá lớn")
 
-	// The reason of a soft delete (#10) — rule 7, invariant 1 makes `delete_reason` mandatory.
-	ErrThieuLyDoXoa  = errors.New("can_bo: thiếu lý do xoá — danh bạ là hồ sơ lưu trữ, xoá mềm phải ghi vì sao")
+	// ErrMobileTooManyDigits — a mobile number longer than ten digits once normalised (owner
+	// decision 10/10/2026). See NormalizeMobile.
+	ErrMobileTooManyDigits = errors.New("can_bo: số di động Việt Nam có tối đa 10 chữ số (dạng 0xx xxx xxxx) — hãy kiểm tra lại số đã nhập")
+
+	// The reason of a soft delete (#10) that IS given, past its ceiling. A blank reason is no longer
+	// refused — see StaffDeleteDefaultReason.
 	ErrLyDoXoaQuaDai = errors.New("can_bo: lý do xoá quá dài")
 )
+
+// StaffDeleteDefaultReason is `delete_reason` when the person deleting a duplicated directory row
+// types none.
+//
+// THE REASON IS OPTIONAL ON THE WAY IN (owner decision 10/10/2026: the screen drops the reason box)
+// AND STILL NEVER EMPTY IN THE ROW: rule 7, invariant 1 names `delete_reason`, so a blank becomes
+// this fixed sentence — the shape ADR 0075 #4a and ADR 0077 #3 gave finance. The sentence states
+// the only situation the delete exists for (#10) and that nobody typed a reason, so a reader years
+// later does not mistake it for one. Who and when stay in `deleted_by`, `deleted_at` and the entry.
+const StaffDeleteDefaultReason = "Xoá dòng danh bạ cán bộ nhập trùng (người xoá không nhập lý do)"
 
 const (
 	tranHoTen       = 150
@@ -59,16 +73,16 @@ const (
 
 // ChuanHoaLyDoXoa trims and bounds the reason for soft-deleting a duplicated directory row (#10).
 //
-// REQUIRED, because rule 7 invariant 1 makes `delete_reason` part of what a soft delete IS: a row
-// removed from every screen with no recorded reason is a record that vanished, and the next person
-// who asks why has nobody to ask. Counted in RUNES, not bytes — Vietnamese is up to three bytes per
-// accented character, so a byte bound would cut a Vietnamese sentence at a third of the length.
+// A BLANK REASON BECOMES StaffDeleteDefaultReason, never an empty column: rule 7 invariant 1 makes
+// `delete_reason` part of what a soft delete IS. A reason that IS typed is kept and bounded, counted
+// in RUNES, not bytes — Vietnamese is up to three bytes per accented character, so a byte bound
+// would cut a Vietnamese sentence at a third of the length.
 //
 // Internal whitespace is kept as typed: this is prose, not a key anything sorts or matches on.
 func ChuanHoaLyDoXoa(tho string) (string, error) {
 	lyDo := strings.TrimSpace(tho)
 	if lyDo == "" {
-		return "", ErrThieuLyDoXoa
+		return StaffDeleteDefaultReason, nil
 	}
 	if utf8.RuneCountInString(lyDo) > tranLyDoXoa {
 		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrLyDoXoaQuaDai, tranLyDoXoa)
@@ -188,6 +202,44 @@ func ChuanHoaSoDienThoai(tho string) (string, error) {
 	return so, nil
 }
 
+// MaxMobileDigits — a Vietnamese mobile number is ten digits, `0` + nine (owner decision 10/10/2026;
+// the screen displays it as xxx xxx xxxx).
+const MaxMobileDigits = 10
+
+// NormalizeMobile is ChuanHoaSoDienThoai plus the owner's 10/10/2026 rule for the PERSONAL MOBILE
+// (`di_dong_ca_nhan`): at most MaxMobileDigits digits once normalised.
+//
+// ONLY THE MOBILE, NEVER THE OFFICE PHONE. `dien_thoai_co_quan` is a landline (migration 0009 §2),
+// and a Vietnamese landline is ELEVEN digits — `0` + a two-digit area code + eight. The same cap on
+// that column would refuse every real office number in the country.
+//
+// "NORMALISED" COUNTS DIGITS ONLY, with the country code folded back to the domestic `0`: "+84 900
+// 000 000", "0084900000000" and "84900000000" are all the ten-digit "0900000000". A domestic number
+// always starts with `0`, so a leading `84` cannot be anything but the country code. The STORED value
+// is still the trimmed text as typed — this is a ceiling, not a reformat; the display format is the
+// screen's job.
+func NormalizeMobile(raw string) (string, error) {
+	so, err := ChuanHoaSoDienThoai(raw)
+	if err != nil || so == "" {
+		return so, err
+	}
+	digits := make([]rune, 0, len(so))
+	for _, r := range so {
+		if r >= '0' && r <= '9' {
+			digits = append(digits, r)
+		}
+	}
+	d := strings.TrimPrefix(string(digits), "00")
+	if strings.HasPrefix(d, "84") {
+		d = "0" + d[2:]
+	}
+	if len(d) > MaxMobileDigits {
+		// The value is NOT quoted back (rule 3, forbidden #3) — see the file comment.
+		return "", ErrMobileTooManyDigits
+	}
+	return so, nil
+}
+
 // KiemTraIDThamChieu bounds an id the client supplies for a department or a role.
 //
 // IT DOES NOT CHECK THAT THE ROW EXISTS, and must not: that is the foreign key's job, inside the
@@ -201,6 +253,35 @@ func KiemTraIDThamChieu(id string) error {
 		return fmt.Errorf("%w (tối đa %d ký tự)", ErrIDThamChieuQuaDai, tranIDThamChieu)
 	}
 	return nil
+}
+
+// ErrOneRolePerStaff — `role_ids` on the create form names more than one distinct role.
+var ErrOneRolePerStaff = errors.New("can_bo: mỗi cán bộ chỉ giữ một vai trò — hãy chọn đúng một vai trò")
+
+// NewStaffRole reduces the create form's `role_ids` to the one role the row may hold, "" = none.
+//
+// AN ARRAY ON THE WIRE, ONE ROLE IN THE ROW. `nguoi_dung.vai_tro_id` is a single column and "một vai
+// trò" is the owner's standing choice (08/10/2026, kept when the Người dùng screen followed the
+// prototype). The array is the shape the screen asked for (10/10/2026); more than one DISTINCT role is
+// REFUSED rather than trimmed to the first, because keeping one of two roles somebody picked is a
+// privilege decision made silently. Blank entries and repeats collapse; each id is bounded like every
+// other reference the client sends (KiemTraIDThamChieu).
+func NewStaffRole(ids []string) (string, error) {
+	role := ""
+	for _, raw := range ids {
+		id := strings.TrimSpace(raw)
+		if id == "" || id == role {
+			continue
+		}
+		if err := KiemTraIDThamChieu(id); err != nil {
+			return "", err
+		}
+		if role != "" {
+			return "", ErrOneRolePerStaff
+		}
+		role = id
+	}
+	return role, nil
 }
 
 // thuTuDanhBaToiDa is the ceiling of `thu_tu_danh_ba`, which is a PostgreSQL INTEGER. It is the

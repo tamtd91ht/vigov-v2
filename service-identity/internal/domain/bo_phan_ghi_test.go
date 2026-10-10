@@ -144,3 +144,25 @@ func TestCheckSiblingNameFree(t *testing.T) {
 		})
 	}
 }
+
+// A UNIT CREATED WITHOUT A RANK GOES RIGHT AFTER THE LAST LIVE SIBLING (owner decision 10/10/2026);
+// with no sibling it is 0; past the ceiling it ties with the last rather than refusing.
+func TestNextSiblingOrder(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		siblings []ExistingOrgUnit
+		want     int
+	}{
+		{"none", nil, 0},
+		{"one at 0", []ExistingOrgUnit{{Order: 0}}, 1},
+		{"unsorted, max wins", []ExistingOrgUnit{{Order: 7}, {Order: 2}, {Order: 4}}, 8},
+		{"at the ceiling", []ExistingOrgUnit{{Order: TranThuTuBoPhan}}, TranThuTuBoPhan},
+	} {
+		if got := NextSiblingOrder(c.siblings); got != c.want {
+			t.Errorf("%s: = %d, muốn %d", c.name, got, c.want)
+		}
+		if err := KiemTraThuTuBoPhan(NextSiblingOrder(c.siblings)); err != nil {
+			t.Errorf("%s: thứ tự sinh ra nằm ngoài biên: %v", c.name, err)
+		}
+	}
+}

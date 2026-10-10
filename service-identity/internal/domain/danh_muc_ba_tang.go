@@ -20,8 +20,8 @@ package domain
 // would be core/, and this package imports nothing but the standard library (doc.go).
 //
 // THE NAMES CARRY A `DanhMuc` SUFFIX HERE, WHERE THE OTHER FOUR COPIES DO NOT, and that is forced
-// rather than chosen: this package already owns ChuanHoaLyDoXoa / ErrThieuLyDoXoa for the staff
-// directory's soft delete (danh_ba_ghi.go), whose sentence names the directory. Reusing them would
+// rather than chosen: this package already owns ChuanHoaLyDoXoa / ErrLyDoXoaQuaDai for the staff
+// directory's soft delete (danh_ba_ghi.go), whose sentences name the directory. Reusing them would
 // tell an administrator deleting a task bloc that "danh bạ là hồ sơ lưu trữ". The RULES and the
 // wire messages are identical to the siblings'; only the Go identifiers differ.
 

@@ -367,14 +367,35 @@ func TestRemoveFieldRuleUnknownIDIsNotFound(t *testing.T) {
 	}
 }
 
-func TestRemoveFieldRuleNeedsReason(t *testing.T) {
+// A BLANK REASON IS NOT REFUSED (owner decision 10/10/2026): the row is soft-deleted with the fixed
+// sentence, deleted_by is the staff code, and the entry shares the committed transaction.
+//
+// MUTATION THAT MUST TURN THIS RED: pass the raw "" to SoftDelete — an empty `delete_reason` (rule 7).
+func TestRemoveFieldRuleWithoutReasonWritesFixedSentence(t *testing.T) {
 	k := &khoSLAGia{hang: dongDeSua()}
 	uc, ctx := dungUseCaseSLA(t, k)
-	if err := uc.RemoveFieldRule(ctx, idDongSLA, "   ", nguoiSLA()); !errors.Is(err, domain.ErrSLADeleteReasonMissing) {
-		t.Fatalf("lỗi = %v, muốn ErrSLADeleteReasonMissing", err)
+	if err := uc.RemoveFieldRule(ctx, idDongSLA, "   ", nguoiSLA()); err != nil {
+		t.Fatalf("RemoveFieldRule: %v", err)
+	}
+	upd := k.cau("UPDATE sla")
+	if len(upd) != 1 || upd[0].args[2] != maCanBoSLA || upd[0].args[3] != domain.SLAFieldRowDeleteDefaultReason {
+		t.Fatalf("câu xoá mềm = %v — muốn MÃ CÁN BỘ và câu cố định", upd)
+	}
+	if len(k.cau("audit_log")) != 1 || k.daCommit != 1 || k.daRollback != 0 {
+		t.Errorf("vết %d, commit %d, rollback %d — muốn 1, 1, 0", len(k.cau("audit_log")), k.daCommit, k.daRollback)
+	}
+}
+
+// A REASON PAST ITS CEILING IS STILL REFUSED, before any transaction.
+func TestRemoveFieldRuleReasonTooLong(t *testing.T) {
+	k := &khoSLAGia{hang: dongDeSua()}
+	uc, ctx := dungUseCaseSLA(t, k)
+	long := strings.Repeat("ệ", domain.SLADeleteReasonMaxLen+1)
+	if err := uc.RemoveFieldRule(ctx, idDongSLA, long, nguoiSLA()); !errors.Is(err, domain.ErrSLADeleteReasonTooLong) {
+		t.Fatalf("lỗi = %v, muốn ErrSLADeleteReasonTooLong", err)
 	}
 	if k.batDau != 0 {
-		t.Error("thiếu lý do mà vẫn mở giao dịch")
+		t.Error("lý do quá dài mà vẫn mở giao dịch")
 	}
 }
 

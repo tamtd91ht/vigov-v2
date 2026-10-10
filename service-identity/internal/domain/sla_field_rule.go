@@ -39,11 +39,19 @@ var (
 	// (DongTheoLinhVuc); removing it would leave the commune unable to compute any deadline of that kind.
 	ErrSLADefaultRowNotRemovable = errors.New("sla: không xoá được dòng thời hạn mặc định")
 
-	// ErrSLADeleteReasonMissing / ErrSLADeleteReasonTooLong — rule 7, invariant 1 names
-	// `delete_reason` beside `deleted_at` and `deleted_by`.
-	ErrSLADeleteReasonMissing = errors.New("sla: phải nêu lý do xoá dòng thời hạn riêng")
+	// ErrSLADeleteReasonTooLong — a reason that IS typed, past SLADeleteReasonMaxLen. A blank one is
+	// no longer refused — see SLAFieldRowDeleteDefaultReason.
 	ErrSLADeleteReasonTooLong = errors.New("sla: lý do xoá quá dài")
 )
+
+// SLAFieldRowDeleteDefaultReason is `delete_reason` when the person removing a field's own deadline
+// row types none.
+//
+// OPTIONAL ON THE WAY IN (owner decision 10/10/2026: the screen drops the reason box), NEVER EMPTY IN
+// THE ROW — rule 7, invariant 1 names `delete_reason` beside `deleted_at` and `deleted_by`; the shape
+// of ADR 0075 #4a and ADR 0077 #3. The sentence says what removing the row DOES: that field falls
+// back to the default row (DongTheoLinhVuc), which is what a reader of the record needs to know.
+const SLAFieldRowDeleteDefaultReason = "Xoá dòng thời hạn riêng của lĩnh vực, lĩnh vực quay về dùng dòng thời hạn mặc định (người xoá không nhập lý do)"
 
 // SLAFieldMaxLen and SLADeleteReasonMaxLen bound what a person types. The field bound is the catalogue
 // code bound (MaDanhMucToiDa); the reason bound is the one every soft delete in this service uses.
@@ -89,12 +97,13 @@ func CheckSLARowRemovable(d DongSLA) error {
 	return nil
 }
 
-// NormalizeSLADeleteReason trims and bounds the reason recorded beside a soft delete. MANDATORY.
+// NormalizeSLADeleteReason trims and bounds the reason recorded beside a soft delete; a blank one
+// becomes SLAFieldRowDeleteDefaultReason.
 func NormalizeSLADeleteReason(reason string) (string, error) {
 	reason = strings.TrimSpace(reason)
 	switch {
 	case reason == "":
-		return "", ErrSLADeleteReasonMissing
+		return SLAFieldRowDeleteDefaultReason, nil
 	case len([]rune(reason)) > SLADeleteReasonMaxLen:
 		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrSLADeleteReasonTooLong, SLADeleteReasonMaxLen)
 	}

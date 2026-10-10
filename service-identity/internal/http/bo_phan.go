@@ -133,7 +133,8 @@ const thanBoPhanToiDa = 8 << 10
 //	name       required. Case kept as typed — upper case is the commune's convention (§1), not a
 //	           rule this service rewrites into an archival record.
 //	parent_id  absent or "" = the root; otherwise a live unit of THIS commune, else 400.
-//	order      absent = 0.
+//	order      absent = right after the last live sibling under the same parent (0 when none) —
+//	           computed by the server (owner decision 10/10/2026). Present = used as sent.
 //	code       absent = derived from the name ("VĂN PHÒNG ĐẢNG ỦY" → "van-phong-dang-uy"), with
 //	           `-2`, `-3`… when taken. PRESENT = used exactly, or 409 when taken — never suffixed
 //	           behind the person's back. Either way a code taken by a SOFT-DELETED unit is taken

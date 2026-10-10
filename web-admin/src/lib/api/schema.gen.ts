@@ -206,7 +206,7 @@ export type comms_deleteMapAssetIn = {
 };
 
 export type comms_deleteMapFieldSchemaIn = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type comms_externalContactListOut = {
@@ -689,7 +689,7 @@ export type comms_suaNoiDungVao = {
 
 export type comms_themDanhMucVao = {
   "name": string;
-  "slug": string;
+  "slug"?: string;
   "parent_id"?: string;
   "order"?: number;
 };
@@ -2652,7 +2652,7 @@ export type identity_optionalCountIn = Record<string, never>;
 export type identity_optionalHoursIn = Record<string, never>;
 
 export type identity_orgUnitDeleteIn = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type identity_orgUnitHoldingsOut = {
@@ -2735,7 +2735,7 @@ export type identity_removeCitizenLetterDeadlineRuleIn = {
 };
 
 export type identity_removeSLAFieldRowIn = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type identity_residentialUnitImportCreatedOut = {
@@ -2960,6 +2960,7 @@ export type identity_themCanBoVao = {
   "org_unit_id": string;
   "office_phone": string;
   "mobile": string;
+  "role_ids"?: Array<string>;
 };
 
 export type identity_themDanhMucVao = {
@@ -3090,7 +3091,7 @@ export type identity_xaCongKhai = {
 };
 
 export type identity_xoaCanBoVao = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type identity_xoaDanhMucVao = {
@@ -6282,7 +6283,7 @@ export type comms_get_content_categories = {
   };
 };
 
-/** POST /api/v1/content-categories — Thêm một danh mục tin của riêng xã vào cây danh mục Mini App */
+/** POST /api/v1/content-categories — Thêm một danh mục tin của riêng xã vào cây danh mục Mini App — slug không gửi thì máy chủ tự cấp từ tên */
 export type comms_post_content_categories = {
   duongDan: "/api/v1/content-categories";
   phuongThuc: "POST";
@@ -8204,7 +8205,7 @@ export type comms_patch_map_field_schemas_by_id = {
   };
 };
 
-/** DELETE /api/v1/map-field-schemas/{id} — Xoá mềm một trường bản đồ, kèm lý do bắt buộc — mã trường không được cấp lại */
+/** DELETE /api/v1/map-field-schemas/{id} — Xoá mềm một trường bản đồ, lý do không bắt buộc — mã trường không được cấp lại */
 export type comms_delete_map_field_schemas_by_id = {
   duongDan: "/api/v1/map-field-schemas/{id}";
   phuongThuc: "DELETE";

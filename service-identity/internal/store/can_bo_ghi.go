@@ -119,9 +119,10 @@ func quetMotDong(quet func(...any) error) (domain.CanBoTomTat, error) {
 //	                       CHECK constraint `nguoi_dung_co_tai_khoan_co_mat_khau` (migration 0009
 //	                       §3) is satisfied by construction rather than by remembering.
 //	dang_hoat_dong         left to its DEFAULT true. It says nothing on a row with no account.
-//	vai_tro_id = NULL      A NEW PERSON HOLDS NOTHING. Assigning a role is its own route, because
-//	                       it is the route carrying the two guards of open question #14 — and a
-//	                       role parameter here would be the way around both of them.
+//	vai_tro_id = NULL      THE INSERT NEVER GRANTS ANYTHING. A role picked on the create form
+//	                       (10/10/2026) is DatVaiTro, run AFTER this insert in the same
+//	                       transaction behind #14's guard (app.DanhBaCanBo.Them) — a role
+//	                       parameter here would be the way around that guard.
 //
 // `nullif($n,”)` ON THE TWO NULLABLE FOREIGN KEYS: the Go side has one spelling of "none" (the
 // empty string) and the schema has another (NULL). Writing ” into `bo_phan_id` would not be

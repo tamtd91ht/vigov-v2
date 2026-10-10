@@ -220,10 +220,10 @@ func (c *connBoPhanGia) QueryContext(_ context.Context, q string, args []driver.
 		var ra [][]driver.Value
 		for _, h := range c.k.hang {
 			if h.xa == xa && h.cha == cha && !h.daXoa {
-				ra = append(ra, []driver.Value{h.id, h.ten})
+				ra = append(ra, []driver.Value{h.id, h.ten, int64(h.thuTu)})
 			}
 		}
-		return &rowsGia{cot: []string{"id", "ten"}, hang: ra}, nil
+		return &rowsGia{cot: []string{"id", "ten", "thu_tu"}, hang: ra}, nil
 
 	case strings.Contains(q, "SELECT ma FROM bo_phan"):
 		xa, goc := tenant.ID(chuoiThu(args, 0)), chuoiThu(args, 1)

@@ -40,6 +40,20 @@ func TestDeleteOrgUnitForwardsIDReasonAndCommune(t *testing.T) {
 	}
 }
 
+// NO BODY, `{}` OR A BLANK REASON IS A DELETE WITHOUT A REASON (owner decision 10/10/2026): 204, and
+// the use case receives "" — the domain turns it into the fixed sentence.
+func TestDeleteOrgUnitWithoutReasonReachesUseCase(t *testing.T) {
+	for _, body := range []string{"", "{}", `{"reason":""}`} {
+		m := dungMayChuSoDo(t)
+		if code, out := callDeleteOrgUnit(t, m, body); code != http.StatusNoContent {
+			t.Errorf("thân %q: mã = %d — %s", body, code, out)
+		}
+		if m.ghiBoPhan.goi != 1 || m.ghiBoPhan.lastReason != "" {
+			t.Errorf("thân %q: use case chạy %d lần, lý do %q", body, m.ghiBoPhan.goi, m.ghiBoPhan.lastReason)
+		}
+	}
+}
+
 // 409 CARRIES EVERY KIND, zeros included, and the sentence §12.4 asks for.
 func TestDeleteOrgUnitInUseBodyShape(t *testing.T) {
 	m := dungMayChuSoDo(t)
@@ -83,7 +97,6 @@ func TestDeleteOrgUnitErrorMapping(t *testing.T) {
 		{"owner down", fmt.Errorf("%w: petitions: rpc unavailable", app.ErrOrgUnitHoldingsUnavailable), http.StatusServiceUnavailable, "org_unit_delete_unavailable"},
 		{"not configured", app.ErrOrgUnitDeleteNotConfigured, http.StatusServiceUnavailable, "org_unit_delete_not_configured"},
 		{"not found", idstore.ErrKhongTimThayBoPhan, http.StatusNotFound, "org_unit_not_found"},
-		{"no reason", domain.ErrOrgUnitDeleteReasonMissing, http.StatusBadRequest, "invalid_request"},
 		{"reason too long", domain.ErrOrgUnitDeleteReasonTooLong, http.StatusBadRequest, "invalid_request"},
 		{"store failure", fmt.Errorf("bo_phan: xoá mềm bộ phận: boom"), http.StatusInternalServerError, "internal"},
 	} {

@@ -18,24 +18,28 @@ import (
 	"unicode/utf8"
 )
 
-var (
-	// ErrOrgUnitDeleteReasonMissing — rule 7, invariant 1 names `delete_reason` as part of what a
-	// soft delete IS; a removal with no reason is a record nobody can later explain.
-	ErrOrgUnitDeleteReasonMissing = errors.New("bo_phan: thiếu lý do xoá bộ phận")
-	// ErrOrgUnitDeleteReasonTooLong — see MaxOrgUnitDeleteReason.
-	ErrOrgUnitDeleteReasonTooLong = errors.New("bo_phan: lý do xoá bộ phận quá dài")
-)
+// ErrOrgUnitDeleteReasonTooLong — a reason that IS typed, past MaxOrgUnitDeleteReason.
+var ErrOrgUnitDeleteReasonTooLong = errors.New("bo_phan: lý do xoá bộ phận quá dài")
 
 // MaxOrgUnitDeleteReason bounds the reason, counted in runes — the same 500 every other soft delete
 // in this service uses (ChuanHoaLyDoXoa, ChuanHoaLyDoXoaDanhMuc).
 const MaxOrgUnitDeleteReason = 500
 
-// NormalizeOrgUnitDeleteReason trims and bounds the mandatory reason.
+// OrgUnitDeleteDefaultReason is `delete_reason` when the person removing a unit types none.
+//
+// OPTIONAL ON THE WAY IN (owner decision 10/10/2026: the "Xoá bộ phận" confirmation drops the reason
+// box), NEVER EMPTY IN THE ROW — rule 7, invariant 1 names `delete_reason`; the shape of ADR 0075 #4a
+// and ADR 0077 #3. The unit could only be removed once it held nothing (§12.4), and the zero counts
+// that decision rested on are in the audit delta, so the sentence need only say where it came from.
+const OrgUnitDeleteDefaultReason = "Xoá bộ phận khỏi sơ đồ tổ chức khi không còn cán bộ, bộ phận con hay hồ sơ đang xử lý (người xoá không nhập lý do)"
+
+// NormalizeOrgUnitDeleteReason trims and bounds the reason; a blank one becomes
+// OrgUnitDeleteDefaultReason.
 func NormalizeOrgUnitDeleteReason(raw string) (string, error) {
 	reason := strings.TrimSpace(raw)
 	switch {
 	case reason == "":
-		return "", ErrOrgUnitDeleteReasonMissing
+		return OrgUnitDeleteDefaultReason, nil
 	case utf8.RuneCountInString(reason) > MaxOrgUnitDeleteReason:
 		return "", fmt.Errorf("%w (tối đa %d ký tự)", ErrOrgUnitDeleteReasonTooLong, MaxOrgUnitDeleteReason)
 	}
