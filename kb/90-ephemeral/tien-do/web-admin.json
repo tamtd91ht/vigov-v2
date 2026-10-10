@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-10",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -1191,6 +1191,15 @@
       "bang_chung": "commit 'fix(web-admin): bao-cao'. tsc không lỗi ở phần báo cáo/dashboard, eslint sạch, vitest report+dashboard+compact-dong 15 tệp/264 ca. Toàn web: 2 ca noi-dung.test.ts + lỗi tsc ở noi-dung/phieu-phan-anh/commune-branding/task-attachments do phiên song song đổi hợp đồng tải tệp (ADR 0052 sửa đổi 09/10) — không thuộc lượt này. CHƯA kiểm bằng ảnh render.",
       "tiep_theo": "(1) Kiểm ảnh trên bản build; cỡ số theo cửa sổ có thể làm tràn số tiền ở ô hẹp (lý do của 412409a1). (2) Cột biểu đồ trung tính màu xám cho 'Đến trong kỳ'/'Tiếp nhận trong kỳ' (prototype tô xanh khi tăng) — chủ dự án xem. (3) Bỏ khỏi biểu đồ chỉ số có kỳ trước = 0. (4) Màu leaf trên chữ nhỏ không đạt tương phản AA. (5) Nợ ghi vết khi xuất (chung với Tổng quan). (6) Nút kỳ dùng chung vẫn h-7 (prototype h-8).",
       "no_confirm": []
+    },
+    {
+      "id": "so-tay-theo-spec-09-10",
+      "menu": "so-tay-lanh-dao",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "/fix-web-admin so-tay-lanh-dao theo tmp/web/so-tay-lanh-dao/vigov-so-tay-spec. Người dùng chốt 09/10: giữ dữ liệu ADR 0071; bấm việc mở ngăn chi tiết NGAY trên Sổ tay, một ngăn mỗi lúc (TaskDetailHost tách từ SoNhiemVu, dùng chung; Sổ nhiệm vụ giữ tab + ?task=); badge Tạm dừng chỉ chữ màu cam (ADR 0082 #7). Cột Chờ tôi duyệt tím, khung trắng, ô đếm, items-start, dòng là nút, 'đã gia hạn n lần', 'việc con của <mã>' mã navy; đóng ngăn/ghi trong ngăn thì đọc lại 4 phần + số đếm.",
+      "bang_chung": "133a6e0e. vitest leader-notebook + so-nhiem-vu + child-tasks + dev-preview 7 tệp 284 ca xanh; lint sạch; tsc sạch các tệp này (đỏ còn lại thuộc việc tải tệp của phiên khác). CHƯA KIỂM BẰNG ẢNH RENDER — trình duyệt treo khi chụp.",
+      "tiep_theo": "(1) Kiểm ảnh: /xem-thu/nhiem-vu/so-tay và ?mo=NV105 cạnh prototype; /xem-thu/nhiem-vu?task=NV105 để kiểm Sổ nhiệm vụ không đổi. (2) Builder tự chọn, chờ người dùng: dòng Sổ tay dùng chữ trạng thái cố định như ngăn chi tiết (không theo nhãn xã); dòng lùi hạn đọc chi tiết hai lần. (3) Menu chưa sáng đồng thời 'Nhiệm vụ' + 'Sổ tay lãnh đạo' như spec 02."
     }
   ]
 }
