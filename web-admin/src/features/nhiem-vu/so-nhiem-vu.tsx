@@ -300,6 +300,7 @@ import { KanbanMoveMenu } from "./kanban-move-menu";
 import { NhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 import { ASSIGNMENT_TITLE, canShowAssignment } from "./task-assignment";
 import { TaskAssignmentBlock } from "./task-assignment-block";
+import { DueDateInput } from "./due-date-input";
 import { TaskDetailHost, useTaskDetailRead, useTaskDetailState } from "./task-detail-host";
 import { readTaskParam, searchWithTask, useTaskDialogUrl } from "./task-dialog-url";
 import { TaskExtensionHistory, TaskExtensionSection } from "./task-extension-block";
@@ -419,6 +420,31 @@ function taiCot(
 ): TrangThaiTai<page_Result_petitions_nhiemVuRa> {
   const c = daTai !== null && daTai.khoa === khoa ? daTai.cot.find((x) => x.ma === ma) : undefined;
   return taiTu(c === undefined ? null : { khoa, kq: c.kq }, khoa);
+}
+
+/**
+ * The key to DRAW by: `key`, or — while the same question is being asked again after a write — the key
+ * of the answer already on screen.
+ *
+ * A write in the drawer (a status move, `Lãnh đạo đã phê duyệt`, `Cấp trên đã công nhận`…) bumps the
+ * re-read counter, which is the LAST segment of every key. Drawing that as "loading" swapped the board
+ * for five grey blocks and the list for a dimmed copy, so the page behind the drawer shrank, scrolled
+ * and grew back (customer sheet row 17). Same filters, only a newer counter → the previous answer stays
+ * exactly as it was until the new one replaces it in place. A FAILED previous answer is never kept:
+ * `Tải lại` must show that it is reading.
+ */
+export function softRefresh(
+  stored:
+    | { readonly khoa: string; readonly kq: KetQua<unknown> }
+    | { readonly khoa: string; readonly cot: readonly { readonly kq: KetQua<unknown> }[] }
+    | null,
+  key: string,
+): string {
+  if (stored === null || stored.khoa === key) return key;
+  const withoutCounter = (k: string) => k.slice(0, k.lastIndexOf("|"));
+  if (withoutCounter(stored.khoa) !== withoutCounter(key)) return key;
+  const ok = "kq" in stored ? stored.kq.ok : stored.cot.length > 0 && stored.cot.every((c) => c.kq.ok);
+  return ok ? stored.khoa : key;
 }
 
 /** Bộ lọc đang chọn trên màn hình. Cùng hình dạng với `LocNhiemVu`, trừ phân trang. */
@@ -932,7 +958,10 @@ export function SoNhiemVu({
 
   // The register view reads with `include=documents`: a different answer, so a different key —
   // switching view must not show a page read without the documents.
-  const khoa = `${JSON.stringify(viewLoc)}|${lanTai}|${viewMode === "so-theo-doi" ? "docs" : ""}`;
+  //
+  // `lanTai` IS THE LAST SEGMENT of every key, on purpose: `softRefresh` (below) compares the rest to
+  // tell "the same question asked again after a write" from "another question".
+  const khoa = `${JSON.stringify(viewLoc)}|${viewMode === "so-theo-doi" ? "docs" : ""}|${lanTai}`;
   // Kanban KHÔNG mang con trỏ: nó không phân trang, nên bộ lọc và lần ghi gần nhất là tất cả những
   // gì làm câu trả lời cũ hết hiệu lực.
   const khoaKanban = `${JSON.stringify(loc)}|${lanTai}`;
@@ -1181,11 +1210,16 @@ export function SoNhiemVu({
 
   // A held register is "loading" while the catalogue is read — never another view's rows.
   const held: TrangThaiTai<never> | null = registerHeld ? { pha: "dangTai" } : null;
-  const so = held ?? taiTu(daTai, khoa);
-  const counts = held ?? taiTu(countsLoaded, khoaCounts);
+  // After a write (`lanTai` bumped, same filters), the previous answer STAYS on screen as it was until
+  // the new one replaces it — see `softRefresh`. The key of what is drawn follows it, so the `Xem thêm`
+  // pages of that answer stay too until the re-read lands.
+  const shownKey = softRefresh(daTai, khoa);
+  const so = held ?? taiTu(daTai, shownKey);
+  const counts = held ?? taiTu(countsLoaded, softRefresh(countsLoaded, khoaCounts));
+  const boardKey = softRefresh(daTaiKanban, khoaKanban);
   const cotKanban: readonly CotKanban[] = cotPhaiDoc(loc.trangThai).map((ma) => ({
     ma,
-    tai: taiCot(daTaiKanban, khoaKanban, ma),
+    tai: taiCot(daTaiKanban, boardKey, ma),
   }));
   const tenBoPhan = new Map(danhMuc.boPhan.map((b) => [b.id, b.name]));
   // THE SPEC'S FIXED WORDS over the commune's ORDER (owner 07/10/2026, `withSpecLabels`). The
@@ -1195,16 +1229,17 @@ export function SoNhiemVu({
 
   // `Xem thêm`: the first page of this key plus the pages appended to it. An answer for another key
   // (filters, sort or view changed meanwhile) is never drawn as this one's.
-  const extra = more !== null && more.khoa === khoa ? more : null;
+  const extra = more !== null && more.khoa === shownKey ? more : null;
   const firstPage = so.pha === "xong" ? so.duLieu : null;
   const listItems = firstPage === null ? [] : mergeChildPages(firstPage.items, extra?.items ?? []);
   const nextCursor = extra !== null ? extra.cursor : (firstPage?.next_cursor ?? "");
   const hasMore = (extra !== null ? extra.hasMore : (firstPage?.has_more ?? false)) && nextCursor !== "";
-  const moreErrorShown = moreError !== null && moreError.khoa === khoa ? moreError.message : null;
+  const moreErrorShown = moreError !== null && moreError.khoa === shownKey ? moreError.message : null;
 
   function loadMore(): void {
     if (loadingMore || !hasMore) return;
-    const key = khoa;
+    // The cursor belongs to the answer ON SCREEN, which may be the one `softRefresh` kept.
+    const key = shownKey;
     const cursor = nextCursor;
     const sx = sapXepDayDu(viewLoc);
     setLoadingMore(true);
@@ -2062,7 +2097,7 @@ export function HangLoc({
         </FilterSelect>
 
         {!hideType && (
-          <FilterSelect id="loc-loai" label="Lọc theo loại nhiệm vụ" value={loc.loai ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, loai: v || undefined })}>
+          <FilterSelect id="loc-loai" label="Lọc theo loại nhiệm vụ" value={loc.loai ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, loai: v || undefined })} className={COMPACT_FILTER_TYPE}>
             <option value="">{MOI_LOAI_NHAN}</option>
             {activeChoices(danhMuc.loai, loc.loai).map((l) => (
               <option key={l.code} value={l.code}>
@@ -2072,7 +2107,7 @@ export function HangLoc({
           </FilterSelect>
         )}
 
-        <FilterSelect id="loc-khoi" label="Lọc theo khối nhiệm vụ" value={loc.khoi ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, khoi: v || undefined })}>
+        <FilterSelect id="loc-khoi" label="Lọc theo khối nhiệm vụ" value={loc.khoi ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, khoi: v || undefined })} className={COMPACT_FILTER_BLOC}>
           <option value="">{MOI_KHOI_NHAN}</option>
           {activeChoices(danhMuc.khoi, loc.khoi).map((k) => (
             <option key={k.code} value={k.code}>
@@ -2081,7 +2116,7 @@ export function HangLoc({
           ))}
         </FilterSelect>
 
-        <FilterSelect id="loc-nguon-giao" label="Lọc theo nguồn giao" value={loc.nguonGiao ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, nguonGiao: v || undefined })}>
+        <FilterSelect id="loc-nguon-giao" label="Lọc theo nguồn giao" value={loc.nguonGiao ?? ""} disabled={disabled} onChange={(v) => datLoc({ ...loc, nguonGiao: v || undefined })} className={COMPACT_FILTER_SOURCE}>
           <option value="">{MOI_NGUON_GIAO_NHAN}</option>
           {MOI_NGUON_GIAO.map((ma) => (
             <option key={ma} value={ma}>
@@ -2144,6 +2179,17 @@ export function activeChoices<T extends { readonly code: string; readonly active
   return rows.filter((r) => r.active || (keep !== undefined && keep !== "" && r.code === keep));
 }
 
+/**
+ * FIXED, NARROW widths for `Mọi loại nhiệm vụ` · `Mọi khối` · `Mọi nguồn giao` (customer sheet row 11).
+ * Without them every select took the global 12rem floor, or the width of its longest option, so the
+ * row sat at the edge of wrapping: ticking a card (the `Đã chọn N nhiệm vụ · Xoá đã chọn` cluster) or
+ * choosing a longer value pushed the view switch onto a second line and the row jumped. Each width fits
+ * its first option at 12.5px plus the chevron's `pr-9`; a longer chosen value ends in "…" (row 2).
+ */
+const COMPACT_FILTER_TYPE = "w-40 min-w-0";
+const COMPACT_FILTER_BLOC = "w-28 min-w-0";
+const COMPACT_FILTER_SOURCE = "w-36 min-w-0";
+
 /** One native select of the filter row (spec 02 §2), its label visually hidden. */
 function FilterSelect({
   id,
@@ -2151,6 +2197,7 @@ function FilterSelect({
   value,
   disabled,
   onChange,
+  className,
   children,
 }: {
   id: string;
@@ -2158,6 +2205,8 @@ function FilterSelect({
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
+  /** A fixed width (`COMPACT_FILTER_*`) — see there. */
+  className?: string;
   children: ReactNode;
 }) {
   // `aria-label` on the select, NO sibling `<label>` (prototype `TaskWorkspace.tsx:191-195`): a
@@ -2169,7 +2218,7 @@ function FilterSelect({
       aria-label={label}
       value={value}
       disabled={disabled}
-      className={FILTER_SELECT_CLASS}
+      className={cn(FILTER_SELECT_CLASS, className)}
       onChange={(e) => onChange(e.target.value)}
     >
       {children}
@@ -2736,6 +2785,50 @@ function RowCheckbox({ selection, task }: { selection: TaskSelection; task: peti
   );
 }
 
+/**
+ * The Kanban card's tick in the prototype's look (`TaskCard.tsx:54`, shadcn `Checkbox`): a 16px box,
+ * 4px radius, `input` hairline; ticked = navy fill with a white check (customer sheet row 10).
+ *
+ * STILL THE NATIVE `<input type="checkbox">` — only its drawing is replaced (`appearance-none`, the
+ * check icon over it): Space, the label click, `checked`, the accessible name and every test that
+ * finds the box by role are unchanged. Radix's Checkbox is not a dependency of this app.
+ */
+function CardCheckbox({
+  label,
+  checked,
+  disabled,
+  onToggle,
+}: {
+  label: string;
+  checked: boolean;
+  disabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <span className="relative inline-grid size-4 shrink-0 place-items-center">
+      <input
+        type="checkbox"
+        className={cn(
+          "peer m-0 size-4 cursor-pointer appearance-none rounded-[4px] border border-solid border-input bg-white transition-colors",
+          "checked:border-primary checked:bg-primary",
+          "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none",
+          "disabled:cursor-not-allowed disabled:opacity-50",
+        )}
+        aria-label={label}
+        checked={checked}
+        disabled={disabled}
+        onChange={onToggle}
+      />
+      <Check
+        aria-hidden="true"
+        focusable="false"
+        strokeWidth={2.5}
+        className="text-primary-foreground pointer-events-none absolute size-3.5 opacity-0 peer-checked:opacity-100"
+      />
+    </span>
+  );
+}
+
 /** The header box of a table (prototype `SelectAllBox`): ticks or unticks every row shown. */
 function SelectAllBox({
   selection,
@@ -2894,65 +2987,69 @@ export function TheNhiemVu({
       aria-describedby={canDrag ? drag.attributes["aria-describedby"] : undefined}
       {...(canDrag ? drag.listeners : {})}
     >
-      <div
-        className={cn("h-[3px] rounded-t-[9px]", strip.className)}
-        style={strip.style}
-        aria-hidden="true"
-      />
-      {selection !== null && !overlay && (
-        // OUTSIDE the open button, never inside it: a checkbox in a button is a nested control.
-        <label className="hover:bg-canvas text-ink-muted m-0 flex cursor-pointer items-center gap-2 px-3 pt-2.5 text-[11px]">
-          <input
-            type="checkbox"
-            className={CHECKBOX_CLASS}
-            aria-label={selectLabel(nhiemVu.code)}
-            checked={selection.selected.has(nhiemVu.code)}
-            disabled={selection.disabled}
-            onChange={() => selection.toggle(nhiemVu)}
-          />
-          Chọn
-        </label>
-      )}
-      {/* The keyboard path to moving the card — drag-and-drop alone has none (a11y). An icon button
-          at the corner, its menu floating over the card. */}
-      {hasMenu && (
-        <div className="absolute top-2 right-2 z-[1]">
-          <KanbanMoveMenu
-            compact
-            code={nhiemVu.code}
-            targets={targets}
-            labels={nhanTT}
-            disabled={busy}
-            showReturnNote={canReturn}
-            onMove={(t) => move.move(nhiemVu, t, "menu")}
-          />
-        </div>
-      )}
-      <button
-        type="button"
-        className={cn(
-          "text-ink block w-full cursor-pointer border-0 bg-transparent px-3 pt-3 pb-0 text-left [font-family:inherit]",
-          "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500",
-          hasMenu && selection === null && "pr-11",
+      {/* THE CARD HEADER — strip, `Chọn`, the move button, code and title — is ONE hover area
+          (customer sheet row 12): the fill used to cover only the thin `Chọn` row, so pointing at the
+          title lit a band above it and nothing under it. The menu sits inside, so pointing at it keeps
+          the fill. `bg-canvas` = the prototype's `hover:bg-surface` (token trap: our `surface` is white). */}
+      <div className={cn("relative rounded-t-[9px] transition-colors", !overlay && "hover:bg-canvas")}>
+        <div
+          className={cn("h-[3px] rounded-t-[9px]", strip.className)}
+          style={strip.style}
+          aria-hidden="true"
+        />
+        {selection !== null && !overlay && (
+          // OUTSIDE the open button, never inside it: a checkbox in a button is a nested control.
+          <label className="text-ink-muted m-0 flex cursor-pointer items-center gap-2 px-3 pt-2.5 text-[11px]">
+            <CardCheckbox
+              label={selectLabel(nhiemVu.code)}
+              checked={selection.selected.has(nhiemVu.code)}
+              disabled={selection.disabled}
+              onToggle={() => selection.toggle(nhiemVu)}
+            />
+            Chọn
+          </label>
         )}
-        onClick={() => moNhiemVu(nhiemVu)}
-        aria-expanded={nhiemVu.code === maDangMo}
-      >
-        {nhiemVu.code !== "" && (
-          <span className="text-ink-muted mb-0.5 block text-[10.5px] font-semibold">{nhiemVu.code}</span>
+        {/* The keyboard path to moving the card — drag-and-drop alone has none (a11y). An icon button
+            at the corner, its menu floating over the card. */}
+        {hasMenu && (
+          <div className="absolute top-2 right-2 z-[1]">
+            <KanbanMoveMenu
+              compact
+              code={nhiemVu.code}
+              targets={targets}
+              labels={nhanTT}
+              disabled={busy}
+              showReturnNote={canReturn}
+              onMove={(t) => move.move(nhiemVu, t, "menu")}
+            />
+          </div>
         )}
-        {/* At most three lines, always THREE LINES TALL (`.tieu-de-the`): a title's length must not set
-            the card's height, or the cards of two columns stop lining up row by row. The full title is
-            the hover text, so the clamp hides nothing a mouse user cannot read. */}
-        <span
-          id={overlay ? undefined : titleId}
-          className="tieu-de-the text-navy text-[12.8px] leading-snug font-semibold"
-          title={nhiemVu.title}
+        <button
+          type="button"
+          className={cn(
+            "text-ink block w-full cursor-pointer border-0 bg-transparent px-3 pt-3 pb-0 text-left [font-family:inherit]",
+            "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500",
+            hasMenu && selection === null && "pr-11",
+          )}
+          onClick={() => moNhiemVu(nhiemVu)}
+          aria-expanded={nhiemVu.code === maDangMo}
         >
-          {nhiemVu.title}
-        </span>
-        {priorityLabel !== "" && <span className="an-thi-giac"> · Mức ưu tiên {priorityLabel}</span>}
-      </button>
+          {nhiemVu.code !== "" && (
+            <span className="text-ink-muted mb-0.5 block text-[10.5px] font-semibold">{nhiemVu.code}</span>
+          )}
+          {/* At most three lines, always THREE LINES TALL (`.tieu-de-the`): a title's length must not set
+              the card's height, or the cards of two columns stop lining up row by row. The full title is
+              the hover text, so the clamp hides nothing a mouse user cannot read. */}
+          <span
+            id={overlay ? undefined : titleId}
+            className="tieu-de-the text-navy text-[12.8px] leading-snug font-semibold"
+            title={nhiemVu.title}
+          >
+            {nhiemVu.title}
+          </span>
+          {priorityLabel !== "" && <span className="an-thi-giac"> · Mức ưu tiên {priorityLabel}</span>}
+        </button>
+      </div>
       {/* The rest of the card sits outside the open button, as it did when the meta row carried a
           "?" button. A pointer press anywhere here opens the task too; the keyboard path is the
           button above. */}
@@ -4651,7 +4748,11 @@ export function FormGiaoViec({
       go={goVanBan}
       sua={suaVanBan}
       rowErrors={shown?.documentRows}
-      pending={group === "cap-tren-giao"}
+      // ONE full-width box per document, as the prototype (`TaskReferenceEditor.tsx:101-105`, customer
+      // sheet row 16): no `Số, ký hiệu`, no `Ngày`. Both are optional on the wire
+      // (`petitions_vanBanNhiemVuVao`) and absent when blank (`thanGiaoViec`), so nothing is sent for
+      // them. No "?" either: its sentence says "three boxes", which this form no longer draws.
+      summaryOnly
     />
   );
   const leaderEmpty = taskScreen ? LEADER_EMPTY_LABEL : CHUA_XAC_DINH;
@@ -4887,16 +4988,16 @@ export function FormGiaoViec({
             <label htmlFor={CREATE_TASK_FIELD_IDS.due} className={LABEL_CLASS}>
               Hạn hoàn thành
             </label>
-            <input
+            {/* `dd/mm/yyyy hh:mm` in every browser language, the native calendar one click away
+                (customer sheet row 16) — `DueDateInput`. Same value in and out as the native box. */}
+            <DueDateInput
               id={CREATE_TASK_FIELD_IDS.due}
               name="giao-han"
-              type="datetime-local"
               value={dueInput}
-              className={INPUT_CLASS}
-              {...fieldErrorProps(CREATE_TASK_FIELD_IDS.due, shown?.due)}
-              onChange={(e) => {
-                setDueInput(e.target.value);
-                setDueIncomplete(e.target.validity.badInput);
+              invalidProps={fieldErrorProps(CREATE_TASK_FIELD_IDS.due, shown?.due)}
+              onChange={(value, incomplete) => {
+                setDueInput(value);
+                setDueIncomplete(incomplete);
               }}
             />
             <FieldError forId={CREATE_TASK_FIELD_IDS.due} message={shown?.due} />
@@ -5167,7 +5268,10 @@ function NhomVanBanNhap({
   sua,
   rowErrors,
   pending = false,
+  summaryOnly = false,
 }: {
+  /** The summary box alone, full width — the create form (see its `documentGroup`). */
+  summaryOnly?: boolean;
   /**
    * Errors to draw under a row, by row key — the create form after a refused press
    * (`createTaskErrors`). Absent on the `Sửa` form, which keeps its own sentence (`canhBaoSua`).
@@ -5204,7 +5308,12 @@ function NhomVanBanNhap({
               aria-label={`${nhanNhomVanBan(nhom)} — văn bản thứ ${i + 1}`}
               className="flex items-start gap-1.5"
             >
-              <div className="grid min-w-0 flex-1 grid-cols-1 gap-1.5 sm:grid-cols-[1fr_9rem_9rem]">
+              <div
+                className={cn(
+                  "grid min-w-0 flex-1 grid-cols-1 gap-1.5",
+                  !summaryOnly && "sm:grid-cols-[1fr_9rem_9rem]",
+                )}
+              >
                 <div className="min-w-0">
                   <label htmlFor={id} className="an-thi-giac">
                     Trích yếu (văn bản thứ {i + 1})
@@ -5225,6 +5334,7 @@ function NhomVanBanNhap({
                   />
                   <FieldError forId={id} message={rowError} />
                 </div>
+                {!summaryOnly && (
                 <div className="min-w-0">
                   <label htmlFor={`${id}-so`} className="an-thi-giac">
                     Số, ký hiệu (không bắt buộc)
@@ -5240,6 +5350,8 @@ function NhomVanBanNhap({
                     onChange={(e) => sua(d.khoa, { soKyHieu: e.target.value })}
                   />
                 </div>
+                )}
+                {!summaryOnly && (
                 <div className="min-w-0">
                   <label htmlFor={`${id}-ngay`} className="an-thi-giac">
                     Ngày văn bản (không bắt buộc)
@@ -5253,6 +5365,7 @@ function NhomVanBanNhap({
                     onChange={(e) => sua(d.khoa, { ngay: e.target.value })}
                   />
                 </div>
+                )}
               </div>
               <Button
                 type="button"

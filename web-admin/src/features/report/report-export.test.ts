@@ -51,6 +51,7 @@ function figures(): BlocksData {
     citizenReports: { current: ok(REPORTS), previous: ok({ ...REPORTS, received: 20 }) },
     fiscal: ok(FISCAL),
     fiscalYear: 2026,
+    budget: null,
     queue: null,
     taskTypeLabels: null,
   };

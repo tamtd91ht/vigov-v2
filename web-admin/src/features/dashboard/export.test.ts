@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   documents_incomingSummaryOut,
   finance_chiSoNamRa,
+  finance_projectSummaryOut,
   petitions_citizenReportSummaryOut,
   petitions_taskSummaryOut,
 } from "@/lib/api/schema.gen";
@@ -63,6 +64,26 @@ const FISCAL: finance_chiSoNamRa = {
   revenue_totals: [{ column_id: "c1", name: "Thu xã hưởng", value: 690_000_000 }],
 };
 
+// `investment-project-summary` of 2026 — only the five fields Khối Giải ngân draws matter here.
+const BUDGET = {
+  year: 2026,
+  planned_total: 33_230_000_000,
+  project_count: 12,
+  disbursed_total: 12_500_000_000,
+  disbursed_ratio: 3762,
+  time_elapsed_ratio: 7096,
+  remaining_total: 20_730_000_000,
+  delay_threshold: 1000,
+  delay_threshold_source: "mac_dinh",
+  delayed_project_count: 3,
+  open_issue_count: 4,
+  at_risk_count: 1,
+  monthly: [],
+  disbursed_after_year: 0,
+  by_category: [],
+  total: {} as finance_projectSummaryOut["total"],
+} satisfies finance_projectSummaryOut;
+
 // Two overdue rows whose CODES must never reach a file (rule 3 — aggregates only).
 const QUEUE: MergedQueue = {
   rows: [
@@ -79,6 +100,7 @@ function data(): DashboardData {
     windows: periodWindows("month", new Date(AT)),
     fetchedAt: AT,
     fiscalYear: 2026,
+    budget: ok(BUDGET),
     tasks: { current: ok(TASKS), previous: ok({ ...TASKS, completed: 8 }) },
     incomingDocuments: { current: ok(DOCS), previous: ok(DOCS) },
     citizenReports: { current: ok(REPORTS), previous: ok(REPORTS) },
@@ -151,8 +173,32 @@ describe("export model — the figures on screen, nothing else", () => {
     expect(fiscal.notes.some((n) => n.includes("đang chờ khách hàng xác nhận"))).toBe(true);
   });
 
+  it("Khối Giải ngân (sheet row 6): the five figures of the year summary, labelled with the YEAR", () => {
+    const b = DOC.blocks[2]!;
+    expect(b.title).toBe("Giải ngân ngân sách");
+    expect(b.pending).toBeUndefined();
+    expect(b.figures.map((f) => [f.label, f.value])).toEqual([
+      ["Tỷ lệ giải ngân", "37,62%"],
+      ["Thời gian đã trôi qua", "70,96%"],
+      ["Dự án chậm", "3"],
+      ["Vướng mắc chưa gỡ", "4"],
+      ["Đã giải ngân", "12,5 tỷ đồng"],
+    ]);
+    expect(b.figures[2]).toMatchObject({ number: 3, alert: true });
+    expect(b.figures[4]).toMatchObject({ number: 12_500_000_000, unit: "dong" });
+    expect(b.notes).toEqual(["Luỹ kế năm ngân sách 2026, không theo kỳ đang xem."]);
+    // An absent issue count is "—", never 0; a year with no plan is said in words, never 0%.
+    const blank = exportBlocks({ ...data(), budget: ok({ ...BUDGET, open_issue_count: null, disbursed_ratio: null }) }, ALL)[2]!;
+    expect(blank.figures[3]).toMatchObject({ value: "—" });
+    expect(blank.figures[3]!.number).toBeUndefined();
+    expect(blank.figures[0]).toMatchObject({ value: "Chưa bố trí vốn" });
+    const failed = exportBlocks({ ...data(), budget: { ok: false, thongBao: "Máy chủ bận." } }, ALL)[2]!;
+    expect(failed.figures.every((f) => f.value === "—")).toBe(true);
+    expect(failed.errors).toEqual(["Chưa tải được số liệu giải ngân: Máy chủ bận."]);
+  });
+
   it("'?' parts carry NO number: unbuilt blocks and the letters tile say 'Chưa có số liệu'", () => {
-    for (const title of ["Giải ngân ngân sách", "Kinh tế & Tài nguyên"]) {
+    for (const title of ["Kinh tế & Tài nguyên"]) {
       const b = DOC.blocks.find((x) => x.title === title)!;
       expect(b.pending).toBeTruthy();
       expect(b.figures.length).toBeGreaterThan(0);
@@ -212,6 +258,7 @@ describe("export model — the figures on screen, nothing else", () => {
     expect(figuresSettled(data(), ALL)).toBe(true);
     expect(figuresSettled({ ...data(), queue: null }, ALL)).toBe(false);
     expect(figuresSettled({ ...data(), fiscal: null }, ALL)).toBe(false);
+    expect(figuresSettled({ ...data(), budget: null }, ALL)).toBe(false);
     expect(figuresSettled({ ...data(), tasks: { current: ok(TASKS), previous: null } }, ALL)).toBe(false);
     expect(figuresSettled({ ...data(), fiscal: { ok: false, thongBao: "x" } }, ALL)).toBe(true);
     // report.read alone: no figure block, nothing to export
@@ -256,8 +303,8 @@ describe("PPTX", () => {
     expect(blob.size).toBeGreaterThan(1000);
     const { all, parts } = await ooxmlText(blob);
     const slides = Object.keys(parts).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
-    // cover + 4 built blocks + Cần xử lý ngay + Ghi chú
-    expect(slides).toHaveLength(7);
+    // cover + 5 built blocks (Giải ngân built 10/10/2026) + Cần xử lý ngay + Ghi chú
+    expect(slides).toHaveLength(8);
     for (const s of [
       "Tổng quan điều hành",
       COMMUNE.displayName,
@@ -268,7 +315,8 @@ describe("PPTX", () => {
       "75,0%",
       "9,64 tỷ đồng",
       "Cần xử lý ngay",
-      "Giải ngân ngân sách — chưa có số liệu",
+      "Kinh tế & Tài nguyên — chưa có số liệu",
+      "Tỷ lệ giải ngân",
     ]) {
       expect(all).toContain(s.replaceAll("&", "&amp;"));
     }

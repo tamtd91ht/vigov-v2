@@ -313,6 +313,28 @@ describe("checkboxes — allowed and DENIED", () => {
   it("frozen while a batch runs", () => {
     expect(list({ ...SELECTION, disabled: true })).toMatch(/aria-label="Chọn NV19"[^>]*disabled=""/);
   });
+
+  it("sheet row 10: the card's tick is the prototype's box — 16px, 4px radius, navy when ticked, a check icon", () => {
+    const html = board(SELECTION);
+    const box = /<input type="checkbox" class="([^"]*)" aria-label="Chọn NV19" checked=""/.exec(html)?.[1] ?? "";
+    for (const c of ["appearance-none", "size-4", "rounded-[4px]", "border-input", "checked:bg-primary", "peer"]) {
+      expect(box).toContain(c);
+    }
+    // The check is drawn over the box and shown only when ticked.
+    expect(html).toMatch(/aria-label="Chọn NV19" checked=""[^>]*\/><svg[^>]*peer-checked:opacity-100/);
+  });
+
+  it("sheet row 12: ONE hover fill over the whole card header (strip, `Chọn`, code, title)", () => {
+    const html = board(SELECTION);
+    const card = /<article[^>]*data-task-card=""[^>]*>(.*?)<\/article>/s.exec(html)?.[1] ?? "";
+    const header = /^<div class="([^"]*)">/.exec(card)?.[1] ?? "";
+    expect(header).toContain("hover:bg-canvas");
+    // The `Chọn` row no longer carries a fill of its own, and the title sits inside the same header.
+    expect(card).not.toMatch(/<label class="[^"]*hover:bg-canvas/);
+    const headerEnd = card.indexOf("</button></div>");
+    expect(card.indexOf("Chọn")).toBeLessThan(headerEnd);
+    expect(card.indexOf('id="the-nhiem-vu-NV19"')).toBeLessThan(headerEnd);
+  });
 });
 
 describe("page wiring (source) and PHAN_CHUA_DUNG", () => {

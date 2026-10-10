@@ -285,8 +285,10 @@ describe("page wiring (source)", () => {
     expect(SRC).toContain("if (exporting || registerHeld) return;");
     expect(SRC).not.toContain("REGISTER_NO_DIRECTIVE_TYPE");
     expect(SRC).toContain('const held: TrangThaiTai<never> | null = registerHeld ? { pha: "dangTai" } : null;');
-    expect(SRC).toContain("const so = held ?? taiTu(daTai, khoa);");
-    expect(SRC).toContain("const counts = held ?? taiTu(countsLoaded, khoaCounts);");
+    // The key drawn is `softRefresh`'s: a re-read after a write keeps the previous answer (sheet row 17).
+    expect(SRC).toContain("const shownKey = softRefresh(daTai, khoa);");
+    expect(SRC).toContain("const so = held ?? taiTu(daTai, shownKey);");
+    expect(SRC).toContain("const counts = held ?? taiTu(countsLoaded, softRefresh(countsLoaded, khoaCounts));");
   });
 
   it("an empty book says the prototype's sentence", () => {

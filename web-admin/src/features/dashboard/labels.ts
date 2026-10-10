@@ -23,14 +23,8 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
     viSao:
       "Số đơn thư công dân vào sổ trong kỳ. Hệ thống chưa có sổ đơn thư, nên chưa có gì để đếm.",
   },
-  // No finance route returns the commune-wide disbursement aggregates (rate, elapsed share of the
-  // budget year, delayed projects, open issues, amount disbursed); issues are not recorded at all.
-  {
-    ten: "Giải ngân ngân sách",
-    viSao:
-      "Năm chỉ số của cả xã: tỷ lệ giải ngân, thời gian đã trôi qua của năm ngân sách, số dự án " +
-      "chậm, vướng mắc chưa gỡ và số tiền đã giải ngân. Hệ thống chưa tính các số tổng hợp ấy.",
-  },
+  // "Giải ngân ngân sách" was built on 10/10/2026 from `investment-project-summary` (`view.tsx`
+  // `BudgetBlock`, customer sheet row 6) and left this list.
   {
     ten: "Kinh tế & Tài nguyên",
     viSao:
@@ -50,13 +44,6 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
  * `viSao` above lists in words. Keyed by the entry's `ten`: build the block → delete both together.
  */
 export const PENDING_BLOCK_METRICS = {
-  "Giải ngân ngân sách": [
-    "Tỷ lệ giải ngân",
-    "Thời gian đã trôi qua",
-    "Dự án chậm",
-    "Vướng mắc chưa gỡ",
-    "Đã giải ngân",
-  ],
   "Kinh tế & Tài nguyên": ["Doanh nghiệp", "Hộ kinh doanh", "Thành lập mới", "Tổng tài nguyên"],
 } as const satisfies Readonly<Record<string, readonly string[]>>;
 

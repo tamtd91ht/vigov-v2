@@ -213,7 +213,7 @@ function NotebookColumns() {
   );
 }
 
-type DetailCatalogues = {
+export type DetailCatalogues = {
   readonly catalogues: DanhMucNhiemVu;
   readonly unitNames: ReadonlyMap<string, string>;
   readonly leaders: KetQua<identity_danhBaChonNguoiRa> | null;
@@ -223,8 +223,11 @@ type DetailCatalogues = {
  * The catalogues the drawer draws with (types, priorities, blocs, units, the `task.extend` holders) —
  * read ONCE, the first time a drawer opens: a leader who only glances at the columns costs no extra
  * read. A failed catalogue is an empty one, as on the register; the drawer still opens.
+ *
+ * Exported for Tổng quan's in-place drawer (`features/dashboard/task-drill.tsx`): one reader of these
+ * five catalogues for every screen that hosts the drawer without the register.
  */
-function useDetailCatalogues(wanted: boolean): DetailCatalogues {
+export function useDetailCatalogues(wanted: boolean): DetailCatalogues {
   const [loaded, setLoaded] = useState<{ catalogues: DanhMucNhiemVu; leaders: KetQua<identity_danhBaChonNguoiRa> } | null>(null);
   const start = wanted || loaded !== null;
   useEffect(() => {

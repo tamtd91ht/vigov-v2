@@ -64,6 +64,7 @@ function figures(loaded = true): BlocksData {
     citizenReports: none,
     fiscal: null,
     fiscalYear: 2026,
+    budget: null,
     queue: null,
     taskTypeLabels: null,
   };

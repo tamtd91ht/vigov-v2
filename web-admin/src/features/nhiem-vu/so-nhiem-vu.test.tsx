@@ -87,6 +87,7 @@ import {
   TaskExtensionView,
   taskExtensionsQuery,
 } from "./task-extension-block";
+import { DUE_PLACEHOLDER } from "./due-date-input";
 import { PERSON_PICKER_PLACEHOLDER } from "./task-person-picker";
 import { INPUT_CLASS, LABEL_CLASS } from "./task-spec";
 import {
@@ -884,7 +885,7 @@ describe("form Giao việc mới §7", () => {
     expect(html).not.toContain(TASK_TYPE_MISSING);
   });
 
-  it("hạn ĐIỀN SẴN +7 ngày lúc 17:00 (ADR 0065 NV6) trong MỘT ô datetime-local, không ô `Giờ` riêng", () => {
+  it("hạn ĐIỀN SẴN +7 ngày lúc 17:00 (ADR 0065 NV6) trong MỘT ô `dd/mm/yyyy hh:mm` (sheet row 16), không ô `Giờ` riêng", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-09-30T03:00:00Z")); // Wed 30/09/2026 10:00 ICT
     try {
@@ -899,13 +900,16 @@ describe("form Giao việc mới §7", () => {
           giaoViec={() => {}}
         />,
       );
-      expect(html).toMatch(/<input id="giao-han"[^>]*type="datetime-local"[^>]*value="2026-10-07T17:00"/);
+      // The visible box is text in the commune's order; the browser's calendar is lent by a hidden
+      // `datetime-local` with no id (`DueDateInput`).
+      expect(html).toMatch(/<input id="giao-han"[^>]*type="text"[^>]*value="07\/10\/2026 17:00"/);
       expect(html).not.toContain('id="giao-han-gio"');
       expect(html).not.toContain('type="time"');
       expect(html).not.toContain(">Giờ</label>");
       expect(html).not.toContain("23:59");
       // Prototype row: [Hạn hoàn thành | Mức ưu tiên] in two halves.
       expect(html).toMatch(/<div class="grid grid-cols-1 gap-3 sm:grid-cols-2"><div><label for="giao-han"[^>]*>Hạn hoàn thành<\/label>/);
+      expect(html).toContain(`placeholder="${DUE_PLACEHOLDER}"`);
     } finally {
       vi.useRealTimers();
     }

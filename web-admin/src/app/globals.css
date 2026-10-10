@@ -509,6 +509,23 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* The WINDOW scrolls (`.khung-trang` sets no overflow, so the sticky header and sidebar stick). On the
+ * Nhiệm vụ register the list's height changes with every filter — `Toàn xã` ↔ `Giao cho tôi` is a long
+ * list ↔ a short one — so the scrollbar came and went and the whole page shifted sideways by its width
+ * (customer sheet row 7). The gutter is reserved there whether or not the bar is drawn. */
+html:has(.man-nhiem-vu),
+html:has(dialog:modal) {
+  scrollbar-gutter: stable;
+}
+
+/* While a native modal dialog is open (`ModalDialog`, `LargeDialog`: `showModal()`), the PAGE behind it
+ * does not scroll — only the box's own `overflow-y-auto` body does (customer sheet row 16, `Giao việc
+ * mới`). `showModal()` makes the page inert but leaves it scrollable, so the wheel over the backdrop
+ * scrolled the list away under the form. With the gutter above, hiding the bar shifts nothing. */
+html:has(dialog:modal) {
+  overflow: hidden;
+}
+
 :focus-visible {
   outline: 2px solid var(--brand-500);
   outline-offset: 2px;
@@ -3300,6 +3317,17 @@ aside.khoi-chua-khai h3 {
 
 .menu-noi .menu-chuyen-cot {
   margin: 0;
+}
+
+/* The card's floating move menu at the app's ONE menu size — `components/ui/action-menu.tsx` `ITEM`:
+ * 36px rows, 14px text (customer sheet row 13: the 44px / 16px rows of the old full-width menu read as
+ * oversized over a 12.8px card). Only the compact menu: the full-size `nut-phu` variant keeps its rule. */
+.menu-noi .menu-chuyen-cot button {
+  min-height: 2.25rem;
+  padding: 0.375rem 0.625rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .menu-noi .ghi-chu {

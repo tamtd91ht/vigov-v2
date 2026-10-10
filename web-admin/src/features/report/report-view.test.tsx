@@ -8,6 +8,7 @@ import { NHAN_CHENH_LECH } from "@/features/thu-chi/nhan-thu-chi";
 import type {
   documents_incomingSummaryOut,
   finance_chiSoNamRa,
+  finance_projectSummaryOut,
   petitions_citizenReportSummaryOut,
   petitions_taskSummaryOut,
 } from "@/lib/api/schema.gen";
@@ -66,6 +67,25 @@ const FISCAL: finance_chiSoNamRa = {
   revenue_totals: [{ column_id: "c1", name: "Thu ngân sách xã hưởng", value: 690_000_000 }],
 };
 
+/** `investment-project-summary` — Khối Giải ngân, built 10/10/2026 (customer sheet row 6). */
+const BUDGET: finance_projectSummaryOut = {
+  year: 2026,
+  planned_total: 33_230_000_000,
+  project_count: 12,
+  disbursed_total: 12_500_000_000,
+  disbursed_ratio: 3762,
+  time_elapsed_ratio: 7096,
+  remaining_total: 20_730_000_000,
+  delay_threshold: 1000,
+  delay_threshold_source: "mac_dinh",
+  delayed_project_count: 3,
+  open_issue_count: 4,
+  monthly: [],
+  disbursed_after_year: 0,
+  by_category: [],
+  total: {} as finance_projectSummaryOut["total"],
+};
+
 /** Nothing answered yet — every block loading. */
 function loading(windows: ReportWindows): BlocksData {
   const none = { current: null, previous: null };
@@ -76,6 +96,7 @@ function loading(windows: ReportWindows): BlocksData {
     citizenReports: none,
     fiscal: null,
     fiscalYear: 2026,
+    budget: null,
     queue: null,
     taskTypeLabels: null,
   };
@@ -89,6 +110,7 @@ function loaded(windows: ReportWindows = MONTH): BlocksData {
     incomingDocuments: { current: ok(DOCS), previous: ok({ ...DOCS, arrived: 0 }) },
     citizenReports: { current: ok(REPORTS), previous: ok({ ...REPORTS, received: 20, late: 2 }) },
     fiscal: ok(FISCAL),
+    budget: ok(BUDGET),
   };
 }
 
@@ -418,9 +440,9 @@ describe("ReportView — the report tile (D4)", () => {
   });
 
   it("the '?' beside a block title is the small muted ring, right after the title (gap-1)", () => {
-    const budget = /<section[^>]*data-block="budget".*?<\/section>/s.exec(grid)?.[0] ?? "";
-    expect(budget).toMatch(/<div class="flex shrink-0 items-center gap-1 mb-3">/);
-    expect(budget).toMatch(/data-pending-marker=""[^>]*class="[^"]*size-3\.5[^"]*text-ink-muted\/70/);
+    const economy = /<section[^>]*data-block="economy".*?<\/section>/s.exec(grid)?.[0] ?? "";
+    expect(economy).toMatch(/<div class="flex shrink-0 items-center gap-1 mb-3">/);
+    expect(economy).toMatch(/data-pending-marker=""[^>]*class="[^"]*size-3\.5[^"]*text-ink-muted\/70/);
   });
 });
 

@@ -22,6 +22,7 @@ import { PENDING_HOVER_TEXT, PendingMarker } from "@/components/ui/pending-featu
 import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { NO_DATA_CAPTION } from "@/components/ui/stat-card";
 import { taskDetailHref } from "@/features/nhiem-vu/task-link";
+import { nhanTien, nhanTyLeGiaiNgan, percentLabel } from "@/features/giai-ngan/nhan-du-an"; // vi-name-ok: existing formatters of the Giải ngân screen, imported not declared
 import { KPI_NO_RATING, ratingAverage } from "@/features/phan-anh/nhan-phieu";
 import { reportPendingPart } from "@/features/report/labels";
 import { OTien } from "@/features/thu-chi/o-tien";
@@ -39,11 +40,13 @@ import type {
   documents_incomingSummaryOut,
   finance_chiSoNamRa,
   finance_chiSoRa,
+  finance_projectSummaryOut,
   petitions_citizenReportSummaryOut,
   petitions_taskSummaryOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 import { compactDong, compactDongReport } from "@/lib/compact-dong";
+import type { TaskMetric } from "@/lib/drill-down";
 import {
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
@@ -170,6 +173,11 @@ type Figure = {
   readonly exact?: string;
   /** the server's own count behind `display` — for the exported workbook only, never drawn */
   readonly raw?: number;
+  /**
+   * The list behind the figure, as the drill-down link encodes it — kept so a TASK figure can open its
+   * rows in a dialog on this page instead (`DashboardDrill`, customer sheet row 3).
+   */
+  readonly drill?: { readonly target: DrillTarget; readonly period: { readonly from: string; readonly to: string } };
   /** stock (the register now) or period (counted in the window) — what `/bao-cao`'s chart may plot */
   readonly kind?: FigureKind;
   /** which way is good — colours `/bao-cao`'s delta line and chart bar */
@@ -222,6 +230,7 @@ function countFigure<T>(
     label: drillTargetLabel(spec.target, period) ?? spec.target.metric,
     display: display(current, formatCount),
     href: drillHref(spec.target, period),
+    drill: { target: spec.target, period },
     comparison:
       current === undefined || previous === undefined
         ? null
@@ -264,6 +273,7 @@ function ratioFigure<T>(
     label: spec.label,
     display: display(current, formatPercent),
     href: drillHref(spec.target, period),
+    drill: { target: spec.target, period },
     note:
       c === null || !c.ok
         ? undefined
@@ -399,6 +409,31 @@ export type BlockKey = "tasks" | "documents" | "budget" | "fiscal" | "citizen-re
 export type BlockLayout = "dashboard" | "report";
 
 const BlockLayoutContext = createContext<BlockLayout>("dashboard");
+
+/** A task figure's rows, asked for by its tile — the list route's own `metric` filter (ADR 0053 §7). */
+export type TaskDrillRequest = {
+  readonly metric: TaskMetric;
+  readonly period: { readonly from: string; readonly to: string };
+  /** The tile's label — the dialog's title. */
+  readonly label: string;
+};
+
+/**
+ * What Tổng quan does IN PLACE instead of navigating (customer sheet rows 3 and 5): a task figure opens
+ * its rows in a dialog, a task row of "Cần xử lý ngay" opens the task's drawer. Owned by the hook half
+ * (`task-drill.tsx`) and handed down by context, so this file stays props-only.
+ *
+ * ABSENT (`/bao-cao`, every test that passes none) = the links as before. Only TASK figures and rows
+ * use it: Phản ánh and Văn bản đến have no in-place detail on this page, so theirs stay links.
+ * Gates unchanged: the tiles and rows exist only behind the keys they had; the list and detail routes
+ * check `task.read` again (rule 5).
+ */
+export type DashboardDrill = {
+  readonly openTaskList?: (request: TaskDrillRequest) => void;
+  readonly openTask?: (code: string) => void;
+};
+
+const DrillContext = createContext<DashboardDrill>({});
 
 const NOT_PRESENTING: PresentationState = { on: false, current: null };
 
@@ -686,8 +721,10 @@ function tileText(presenting: boolean): { value: string; label: string; note: st
 
 /**
  * One figure, in the order of the prototype's `MetricTile`: VALUE (large, bold) · label · note ·
- * delta line. A LINK named `Xem danh sách đằng sau: {nhãn}` (spec §4, §9) to the pre-filtered list
- * behind it (`?metric=…`) — never a dialog (ADR 0053 §7); the prototype's tile opened a dialog.
+ * delta line. Named `Xem danh sách đằng sau: {nhãn}` (spec §4, §9). A TASK figure, when the page hands
+ * a `DashboardDrill`, is a BUTTON opening its rows in a dialog on this page — the prototype's
+ * `DrillDialog`, asked for by the customer (sheet row 3, 10/10/2026; this departs from ADR 0053 §7's
+ * link). Every other figure is a LINK to the pre-filtered list behind it (`?metric=…`).
  *
  * THE ACCESSIBLE NAME REPLACES THE VISIBLE TEXT, so the value is wired back with
  * `aria-describedby` — otherwise a screen-reader user hears where the link goes and never the
@@ -701,49 +738,75 @@ function tileText(presenting: boolean): { value: string; label: string; note: st
  */
 function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   const layout = useContext(BlockLayoutContext);
+  const { openTaskList } = useContext(DrillContext);
   const valueId = `${figure.id}-value`;
   const alert = figure.alert === true;
   const sentence = figure.sentence === true;
   const text = tileText(usePresenting().on);
   if (layout === "report") return <ReportFigureTile figure={figure} value={value} />;
-  return (
-    <li className={cn("@container min-w-0", sentence && "col-span-full")}>
-      <Link
-        href={figure.href}
-        title={figure.exact}
-        aria-label={drillLabel(figure.label)}
-        aria-describedby={valueId}
+  const tileClass = cn(
+    TILE_BODY,
+    "text-inherit no-underline transition-colors",
+    alert ? "hover:bg-danger-50" : "hover:bg-accent-50",
+    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+  );
+  // A TASK figure opens its rows in a dialog on this page (customer sheet row 3, the prototype's
+  // `DrillDialog`); every other figure keeps its link — no in-place list exists for it here.
+  const drill = figure.drill;
+  const metric: TaskMetric | null =
+    openTaskList !== undefined && drill !== undefined && drill.target.list === "tasks" ? drill.target.metric : null;
+  const body = (
+    <>
+      <span
         className={cn(
-          TILE_BODY,
-          "text-inherit no-underline transition-colors",
-          alert ? "hover:bg-danger-50" : "hover:bg-accent-50",
-          "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+          "block",
+          sentence ? "text-[13px] leading-snug font-medium" : text.value,
+          // A figure never wraps — a sum is shortened (`compactDong`) so it fits instead. Only a
+          // server SENTENCE wraps.
+          !sentence && "whitespace-nowrap",
+          alert ? "text-danger-600" : "text-ink-900",
         )}
       >
-        <span
-          className={cn(
-            "block",
-            sentence ? "text-[13px] leading-snug font-medium" : text.value,
-            // A figure never wraps — a sum is shortened (`compactDong`) so it fits instead. Only a
-            // server SENTENCE wraps.
-            !sentence && "whitespace-nowrap",
-            alert ? "text-danger-600" : "text-ink-900",
-          )}
-        >
-          {value !== undefined ? (
-            <span id={valueId} className="[overflow-wrap:anywhere]">
-              {value}
-            </span>
-          ) : (
-            <FigureValue id={valueId} text={figure.display} sentence={sentence} />
-          )}
-        </span>
-        <span className={text.label}>{figure.label}</span>
-        {figure.note !== undefined && (
-          <span className={cn("mt-1 block leading-snug text-ink-500", text.note)}>{figure.note}</span>
+        {value !== undefined ? (
+          <span id={valueId} className="[overflow-wrap:anywhere]">
+            {value}
+          </span>
+        ) : (
+          <FigureValue id={valueId} text={figure.display} sentence={sentence} />
         )}
-        <ComparisonCaption figure={figure} />
-      </Link>
+      </span>
+      <span className={text.label}>{figure.label}</span>
+      {figure.note !== undefined && (
+        <span className={cn("mt-1 block leading-snug text-ink-500", text.note)}>{figure.note}</span>
+      )}
+      <ComparisonCaption figure={figure} />
+    </>
+  );
+  return (
+    <li className={cn("@container min-w-0", sentence && "col-span-full")}>
+      {metric !== null && drill !== undefined ? (
+        <button
+          type="button"
+          title={figure.exact}
+          aria-label={drillLabel(figure.label)}
+          aria-describedby={valueId}
+          aria-haspopup="dialog"
+          className={cn(tileClass, "w-full cursor-pointer border-0 bg-transparent [font-family:inherit]")}
+          onClick={() => openTaskList?.({ metric, period: drill.period, label: figure.label })}
+        >
+          {body}
+        </button>
+      ) : (
+        <Link
+          href={figure.href}
+          title={figure.exact}
+          aria-label={drillLabel(figure.label)}
+          aria-describedby={valueId}
+          className={tileClass}
+        >
+          {body}
+        </Link>
+      )}
     </li>
   );
 }
@@ -1029,6 +1092,121 @@ function PendingBlock({
           <PendingTile key={label} label={label} />
         ))}
       </TileGrid>
+    </Panel>
+  );
+}
+
+/** The prototype's five budget metrics, in its order (`report-display.ts` METRIC_LABELS `budget.*`). */
+const BUDGET_LABELS = {
+  ratio: "Tỷ lệ giải ngân",
+  elapsed: "Thời gian đã trôi qua",
+  delayed: "Dự án chậm",
+  issues: "Vướng mắc chưa gỡ",
+  disbursed: "Đã giải ngân",
+} as const;
+
+/** The Giải ngân screen — the year's figures are its own; it has no per-metric filter. */
+export const BUDGET_SCREEN_PATH = "/giai-ngan";
+
+export const BUDGET_TITLE = "Giải ngân ngân sách";
+
+/**
+ * Whose year the block counts, ON THE BLOCK (customer sheet row 6): `investment-project-summary` counts
+ * the BUDGET YEAR, not the period chosen above — "Tuần này" must not be read into these five figures.
+ */
+export function budgetScope(year: number): string {
+  return `Luỹ kế năm ngân sách ${year}, không theo kỳ đang xem.`;
+}
+
+/**
+ * Khối GIẢI NGÂN NGÂN SÁCH's five figures — EXACTLY what `/giai-ngan`'s cards print, from the same
+ * `GET /api/v1/investment-project-summary` and the same words (`features/giai-ngan/nhan-du-an.ts`):
+ * a year with no plan says "Chưa bố trí vốn", never 0%; an absent issue count is "—", never 0 (the
+ * field is optional on the wire). Shared by the block and the export.
+ */
+function budgetFigures(result: Loaded<finance_projectSummaryOut>, layout: BlockLayout): Figure[] {
+  const s = result !== null && result.ok ? result.duLieu : null;
+  const none = result === null ? LOADING : NO_VALUE;
+  const fig = (id: string, label: string, rest: Partial<Figure>): Figure => ({
+    id: `budget-${id}`,
+    label,
+    display: none,
+    href: BUDGET_SCREEN_PATH,
+    comparison: null,
+    ...rest,
+  });
+  if (s === null) {
+    return [
+      fig("ratio", BUDGET_LABELS.ratio, {}),
+      fig("elapsed", BUDGET_LABELS.elapsed, {}),
+      fig("delayed", BUDGET_LABELS.delayed, {}),
+      fig("issues", BUDGET_LABELS.issues, {}),
+      fig("disbursed", BUDGET_LABELS.disbursed, {}),
+    ];
+  }
+  const issues = s.open_issue_count;
+  const issuesKnown = typeof issues === "number" && Number.isFinite(issues);
+  return [
+    fig("ratio", BUDGET_LABELS.ratio, {
+      display: nhanTyLeGiaiNgan(s.disbursed_ratio),
+      // "Chưa bố trí vốn" is a sentence, not a percentage.
+      sentence: s.disbursed_ratio === null,
+    }),
+    fig("elapsed", BUDGET_LABELS.elapsed, { display: percentLabel(s.time_elapsed_ratio) }),
+    fig("delayed", BUDGET_LABELS.delayed, {
+      display: formatCount(s.delayed_project_count),
+      raw: s.delayed_project_count,
+      // The prototype's `ALARMING` (`budget.behind`): red when the SERVER counts a late project.
+      alert: s.delayed_project_count > 0,
+    }),
+    fig("issues", BUDGET_LABELS.issues, {
+      display: issuesKnown ? formatCount(issues) : NO_VALUE,
+      raw: issuesKnown ? issues : undefined,
+    }),
+    fig("disbursed", BUDGET_LABELS.disbursed, {
+      display: safeAmount(s.disbursed_total) ? shortDong(s.disbursed_total, layout) : nhanTien(s.disbursed_total),
+      exact: nhanTien(s.disbursed_total),
+      raw: safeAmount(s.disbursed_total) ? s.disbursed_total : undefined,
+    }),
+  ];
+}
+
+/**
+ * Khối GIẢI NGÂN NGÂN SÁCH — the prototype's five metrics (`DashboardWorkspace`, `budget.*`), filled from
+ * the year summary `/giai-ngan` reads (customer sheet row 6). Each tile leads to `/giai-ngan`.
+ *
+ * LABELLED WITH ITS YEAR, at the top and under the tiles: the route counts the budget year, the blocks
+ * around it count the chosen period. Gate unchanged: drawn under `budget.read` (`DashboardBlocks`).
+ */
+export function BudgetBlock({
+  result,
+  year,
+  onReload,
+}: {
+  result: Loaded<finance_projectSummaryOut>;
+  year: number;
+  onReload?: () => void;
+}) {
+  const layout = useContext(BlockLayoutContext);
+  const figures = budgetFigures(result, layout).map((f) => figureFor(layout, f));
+  const scope = budgetScope(year);
+  return (
+    <Panel
+      blockKey="budget"
+      title={BUDGET_TITLE}
+      aside={<span className="ml-auto shrink-0 text-[11px] font-semibold text-ink-500 tabular-nums">Năm {year}</span>}
+    >
+      {result !== null && !result.ok && (
+        <LoadError title="Chưa tải được số liệu giải ngân" onReload={onReload}>
+          {result.thongBao}
+        </LoadError>
+      )}
+      <TileGrid count={figures.length}>
+        {figures.map((f) => (
+          <FigureTile key={f.id} figure={f} />
+        ))}
+      </TileGrid>
+      {layout === "report" ? <ReportFootnotes notes={[scope]} /> : <SmallNote>{scope}</SmallNote>}
     </Panel>
   );
 }
@@ -1449,6 +1627,7 @@ const URGENT_ROW_FRAME = "block rounded-[9px] border border-line px-2.5 py-1.5";
 function UrgentRowView({ row, category }: { row: UrgentRow; category: string | null }) {
   // Trình chiếu: the prototype's 15px / 13px rows (`DashboardWorkspace.tsx:301`).
   const presenting = usePresenting().on;
+  const { openTask } = useContext(DrillContext);
   const body = (
     <span className="flex items-start gap-2">
       <AlertTriangle
@@ -1487,6 +1666,24 @@ function UrgentRowView({ row, category }: { row: UrgentRow; category: string | n
     </span>
   );
   if (row.module !== "task") return <div className={URGENT_ROW_FRAME}>{body}</div>;
+  // The task's drawer IN PLACE when the page hands one (customer sheet row 5): the row stays on Tổng
+  // quan instead of navigating to the register. The row's fields are unchanged (owner decision above).
+  if (openTask !== undefined) {
+    return (
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        className={cn(
+          URGENT_ROW_FRAME,
+          "w-full cursor-pointer bg-transparent text-left text-inherit [font-family:inherit] transition-colors hover:border-danger-200 hover:bg-danger-50",
+          "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+        )}
+        onClick={() => openTask(row.code)}
+      >
+        {body}
+      </button>
+    );
+  }
   return (
     <Link
       href={taskDetailHref(row.code)}
@@ -1566,6 +1763,8 @@ export type BlocksData = {
   readonly citizenReports: SummaryPair<petitions_citizenReportSummaryOut>;
   readonly fiscal: Loaded<finance_chiSoNamRa>;
   readonly fiscalYear: number;
+  /** `GET /api/v1/investment-project-summary` of `fiscalYear` — Khối Giải ngân (`BudgetBlock`). */
+  readonly budget: Loaded<finance_projectSummaryOut>;
   /** `null` while loading; `{ok:false}` only if the merge itself could not run. */
   readonly queue: Loaded<MergedQueue>;
   readonly taskTypeLabels: TaskTypeLabels;
@@ -1686,16 +1885,26 @@ export function DashboardView({
   onPeriodChange,
   exportAccess,
   presentation,
+  drill,
+  overlay,
 }: {
   data: DashboardData;
   visible: BlockVisibility;
   onPeriodChange: (k: PeriodKind) => void;
   exportAccess?: ExportAccess;
   presentation?: PresentationControl;
+  /** In-place task list and drawer (`task-drill.tsx`); absent = every figure and row is a link. */
+  drill?: DashboardDrill;
+  /**
+   * The dialogs `drill` opens, drawn INSIDE the presentation frame: Trình chiếu makes everything outside
+   * it inert, and a modal dialog inside an inert subtree cannot be used.
+   */
+  overlay?: ReactNode;
 }) {
   const reload = () => onPeriodChange(data.windows.kind);
   const compared = visible.tasks || visible.incomingDocuments || visible.citizenReports;
   return (
+    <DrillContext.Provider value={drill ?? NO_DRILL}>
     <PresentationFrame control={presentation}>
       <DashboardHeader
         context={{
@@ -1713,9 +1922,13 @@ export function DashboardView({
           <span className="min-w-0">{comparisonNote(data.windows)}</span>
         </p>
       )}
+      {overlay}
     </PresentationFrame>
+    </DrillContext.Provider>
   );
 }
+
+const NO_DRILL: DashboardDrill = {};
 
 /**
  * The grid — ONE grid, 1 column, 2 from 1024px, 3 from 1536px (the prototype's `lg` / `2xl`), the six
@@ -1732,7 +1945,7 @@ export function DashboardView({
  *
  * `Kinh tế & Tài nguyên` has no source data and no read key of its own in wave 1; it opens nothing,
  * so it shows under the page gate (`report.read`) alone. `Giải ngân ngân sách` stays under
- * `budget.read`: a placeholder must not reveal a block the account would not see once it is built.
+ * `budget.read`, the key of the summary route it reads.
  */
 export function DashboardBlocks({
   data,
@@ -1759,7 +1972,7 @@ export function DashboardBlocks({
         {visible.incomingDocuments && (
           <DocumentBlock pair={data.incomingDocuments} windows={data.windows} onReload={onReload} />
         )}
-        {visible.budget && <PendingBlock blockKey="budget" name="Giải ngân ngân sách" />}
+        {visible.budget && <BudgetBlock result={data.budget} year={data.fiscalYear} onReload={onReload} />}
         {visible.budget && <FiscalBlock result={data.fiscal} year={data.fiscalYear} onReload={onReload} />}
         {visible.citizenReports && (
           <CitizenReportBlock pair={data.citizenReports} windows={data.windows} onReload={onReload} />
@@ -1788,7 +2001,7 @@ export function figuresSettled(data: BlocksData, visible: BlockVisibility, withQ
   if (visible.tasks && !settled(data.tasks)) return false;
   if (visible.incomingDocuments && !settled(data.incomingDocuments)) return false;
   if (visible.citizenReports && !settled(data.citizenReports)) return false;
-  if (visible.budget && data.fiscal === null) return false;
+  if (visible.budget && (data.fiscal === null || data.budget === null)) return false;
   // `/bao-cao` never reads the queues (no "Cần xử lý ngay"), so it passes `withQueue = false`.
   const anyQueue = visible.tasks || visible.incomingDocuments || visible.citizenReports;
   if (withQueue && anyQueue && data.queue === null) return false;
@@ -1820,6 +2033,20 @@ function pairErrors<T>(pair: SummaryPair<T>, noun: string): string[] {
     return [`Không tải được số liệu kỳ trước: ${pair.previous.thongBao}`];
   }
   return [];
+}
+
+/** Khối Giải ngân as the files carry it: the five tiles, the year line, the failed call's sentence. */
+function budgetExportBlock(
+  result: Loaded<finance_projectSummaryOut>,
+  year: number,
+  layout: BlockLayout = "dashboard",
+): ExportBlock {
+  return {
+    title: BUDGET_TITLE,
+    figures: budgetFigures(result, layout).map((f) => toExportFigure(f, f.id === "budget-disbursed" ? "dong" : "count", layout)),
+    notes: [budgetScope(year)],
+    errors: result !== null && !result.ok ? [`Chưa tải được số liệu giải ngân: ${result.thongBao}`] : [],
+  };
 }
 
 function pendingExportBlock(name: keyof typeof PENDING_BLOCK_METRICS): ExportBlock {
@@ -1919,7 +2146,7 @@ export function exportBlocks(
     });
   }
   if (visible.budget) {
-    blocks.push(pendingExportBlock("Giải ngân ngân sách"));
+    blocks.push(budgetExportBlock(data.budget, data.fiscalYear, layout));
     blocks.push(fiscalExportBlock(data.fiscal, data.fiscalYear, layout));
   }
   if (visible.citizenReports) {

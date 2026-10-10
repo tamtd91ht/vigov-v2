@@ -53,6 +53,7 @@ const DATA: DashboardData = {
   citizenReports: none,
   fiscal: null,
   fiscalYear: 2026,
+  budget: null,
   queue: { ok: true, duLieu: { rows: [], failures: [] } },
   taskTypeLabels: null,
 };

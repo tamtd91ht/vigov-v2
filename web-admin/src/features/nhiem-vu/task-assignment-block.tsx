@@ -47,7 +47,7 @@ import { INPUT_CLASS } from "./task-spec";
 
 /** The prototype's `HandoverFields` select (`HandoverFields.tsx:6-7`). */
 const HANDOVER_SELECT_CLASS =
-  "border-line focus-visible:ring-ring/50 mt-1 h-9 w-full rounded-md border bg-white px-2.5 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
+  "border-line focus-visible:ring-ring/50 mt-1 h-9 w-full rounded-md border bg-white pr-9 pl-2.5 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
 const HANDOVER_LABEL_CLASS = "text-ink block text-[11.5px] font-medium";
 
 /**

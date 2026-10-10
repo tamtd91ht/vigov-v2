@@ -571,7 +571,7 @@ export function TaskStatusPipeline({
 }
 
 const COMPOSE_SELECT_CLASS =
-  "border-line focus-visible:ring-ring/50 mt-1 h-9 w-full rounded-md border bg-white px-2.5 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
+  "border-line focus-visible:ring-ring/50 mt-1 h-9 w-full rounded-md border bg-white pr-9 pl-2.5 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
 
 /**
  * The compose box's hand-over (prototype `HandoverFields`): the unit, then the person filtered by

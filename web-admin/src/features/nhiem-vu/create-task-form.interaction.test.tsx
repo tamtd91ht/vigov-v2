@@ -232,10 +232,9 @@ describe("Giao việc mới — bấm khi thiếu: lỗi dưới ô, tiêu đi�
     const sent: Sent[] = [];
     draw(BASIC_DEFAULT, { sent });
     typeInto("giao-tieu-de", "Rà soát hộ nghèo");
-    const due = byId<HTMLInputElement>("giao-han");
-    // A half-typed `datetime-local` reads "" with `validity.badInput` — what the browser reports.
-    Object.defineProperty(due, "validity", { configurable: true, value: { badInput: true } });
-    typeInto("giao-han", "");
+    // The box is text in `dd/mm/yyyy hh:mm` (`DueDateInput`, customer sheet row 16): a date with no
+    // time yet is half typed — never a guessed midnight.
+    typeInto("giao-han", "07/10/2026");
     press();
     expect(sent).toHaveLength(0);
     expect(errorOf("giao-han")).toBe(NEW_TASK_DUE_INCOMPLETE);
@@ -303,20 +302,37 @@ describe("Giao việc mới trên màn Nhiệm vụ — như prototype `TaskAssi
     expect(sent[0]!.body.documents ?? []).toEqual([]);
   });
 
-  it("F4: dòng đã gõ thì gửi; dòng gõ dở (có số, thiếu trích yếu) vẫn bị chặn dưới đúng dòng", () => {
+  it("F4 + sheet row 16: ONE full-width box per document — no `Số, ký hiệu`, no `Ngày`, neither sent", () => {
     const sent: Sent[] = [];
     draw(DOCUMENT_DEFAULT, { sent, documents: true, taskScreen: true });
     typeInto("giao-tieu-de", "Báo cáo sơ kết");
     const [upper, party] = summaries();
+    expect(document.getElementById(`${upper!.id}-so`)).toBeNull();
+    expect(document.getElementById(`${upper!.id}-ngay`)).toBeNull();
     typeInto(upper!.id, "Thông báo giả về ý kiến chỉ đạo");
-    typeInto(`${party!.id}-so`, "416-CV/ĐU");
-    press();
-    expect(sent).toHaveLength(0);
-    expect(errorOf(party!.id)).toBe(DOCUMENT_SUMMARY_MISSING);
     typeInto(party!.id, "Công văn giả");
     press();
     expect(sent).toHaveLength(1);
     expect(sent[0]!.body.documents?.map((d) => d.summary)).toEqual(["Thông báo giả về ý kiến chỉ đạo", "Công văn giả"]);
+    for (const d of sent[0]!.body.documents ?? []) {
+      expect(d.reference).toBeUndefined();
+      expect(d.date).toBeUndefined();
+    }
+  });
+
+  it("sheet row 16: the deadline reads `dd/mm/yyyy hh:mm` and still sends the same instant", () => {
+    const sent: Sent[] = [];
+    draw(BASIC_DEFAULT, { sent, taskScreen: true });
+    typeInto("giao-tieu-de", "Rà soát hộ nghèo");
+    const due = byId<HTMLInputElement>("giao-han");
+    expect(due.type).toBe("text");
+    const shown = /^(\d{2})\/(\d{2})\/(\d{4}) 17:00$/.exec(due.value);
+    expect(shown).not.toBeNull();
+    const [, dd, mm, yyyy] = shown!;
+    typeInto("giao-han", `${dd}/${mm}/${yyyy} 16:30`);
+    press();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.body.due_at).toMatch(new RegExp(`^${yyyy}-${mm}-${dd}T16:30`));
   });
 
   it("F4: `Bỏ dòng này` trên dòng CUỐI của nhóm xoá chữ, không bỏ dòng", () => {

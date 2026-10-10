@@ -118,9 +118,13 @@ export function DisbursementWorkspace() {
         <BangDuAn
           nam={year}
           danhMuc={categories}
-          // Both counters only grow, so their sum changes on every add AND every `Hạng mục` write: the
-          // list and the year summary re-read (the summary's category labels come from the catalogue).
-          reloadSignal={saves + categoryReads}
+          // An add (or an import) changes the projects: the list and the year summary re-read.
+          reloadSignal={saves}
+          // A `Hạng mục` write changes NO project and no amount — only the catalogue's labels, which the
+          // rows already take from `categories` above. The year summary alone re-reads (its `by_category`
+          // labels), IN PLACE: the register no longer turns to skeletons on every category added
+          // (customer sheet row 19).
+          categorySignal={categoryReads}
           emptyAction={addProject}
           // §6, under the same `budget.read` gate as the register; its writes need `budget.update`.
           // Keyed by `imports`: imported vouchers carry a `Nguồn vốn`, so each source's disbursed amount

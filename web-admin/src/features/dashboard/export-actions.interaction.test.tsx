@@ -70,6 +70,7 @@ function loaded(): DashboardData {
     windows: periodWindows("month", new Date(AT)),
     fetchedAt: AT,
     fiscalYear: 2026,
+    budget: null,
     tasks: { current: ok(TASKS), previous: ok(TASKS) },
     incomingDocuments: { current: null, previous: null },
     citizenReports: { current: null, previous: null },

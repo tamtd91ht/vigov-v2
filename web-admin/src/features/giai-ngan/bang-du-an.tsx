@@ -96,6 +96,7 @@ export function BangDuAn({
   nam,
   danhMuc,
   reloadSignal,
+  categorySignal = 0,
   emptyAction,
   fundingProgress,
   canDelete = false,
@@ -105,6 +106,12 @@ export function BangDuAn({
   danhMuc: readonly finance_hangMucRa[];
   /** Bumped by the page after a project is added: the list re-reads. */
   reloadSignal: number;
+  /**
+   * Bumped by the page after a `Hạng mục` write: ONLY the year summary re-reads (its `by_category`
+   * labels), and the summary already on screen stays until the new one replaces it — no skeleton, no
+   * list re-read (customer sheet row 19).
+   */
+  categorySignal?: number;
   /** `+ Thêm dự án` repeated inside the empty state; `null` for an account without the key. */
   emptyAction?: ReactNode;
   /** §6 block (`FundingSourceProgress`), drawn after the category table as the prototype orders it. */
@@ -170,7 +177,10 @@ export function BangDuAn({
    * delete.
    */
   const [summaryReads, setSummaryReads] = useState(0);
-  const summaryKey = `${nam}|${reloadSignal}|${summaryReads}`;
+  // `categorySignal` is the LAST segment: a summary that differs from this key only there is the same
+  // year's figures with older labels, and stays drawn while the new one is read.
+  const summaryBase = `${nam}|${reloadSignal}|${summaryReads}`;
+  const summaryKey = `${summaryBase}|${categorySignal}`;
   const [summaryLoaded, setSummaryLoaded] = useState<{
     key: string;
     kq: KetQua<finance_projectSummaryOut>;
@@ -184,8 +194,12 @@ export function BangDuAn({
       dropped = true;
     };
   }, [nam, summaryKey]);
+  const labelsOnlyBehind =
+    summaryLoaded !== null &&
+    summaryLoaded.kq.ok &&
+    summaryLoaded.key.slice(0, summaryLoaded.key.lastIndexOf("|")) === summaryBase;
   const summaryState: SummaryState =
-    summaryLoaded === null || summaryLoaded.key !== summaryKey
+    summaryLoaded === null || (summaryLoaded.key !== summaryKey && !labelsOnlyBehind)
       ? { phase: "loading" }
       : summaryLoaded.kq.ok
         ? { phase: "ready", summary: summaryLoaded.kq.duLieu }

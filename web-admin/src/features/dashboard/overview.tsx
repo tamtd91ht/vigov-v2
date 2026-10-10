@@ -15,6 +15,7 @@ import {
 } from "@/lib/api/dashboard";
 import type { SummaryPeriod } from "@/lib/api/dashboard";
 import { layLoaiNhiemVu } from "@/lib/api/danh-muc-nghiep-vu";
+import { getProjectSummary } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
 import { layChiSoNganSach } from "@/lib/api/thu-chi";
 import { coQuyen, quyetDinhTheoKhoa, REPORT_EXPORT_PERMISSION, REPORT_READ_PERMISSION } from "@/lib/quyen";
@@ -23,6 +24,7 @@ import { mergeQueues } from "./figures";
 import type { QueueSource } from "./figures";
 import { DEFAULT_PERIOD_KIND, periodWindows, toQueryPeriod, zoneYear } from "./period";
 import type { PeriodKind } from "./period";
+import { useDashboardTaskDrill } from "./task-drill";
 import { blockVisibility, DashboardHeader, DashboardView } from "./view";
 import type {
   BlocksData,
@@ -95,6 +97,7 @@ function emptyResults(token: string): Results {
     incomingDocuments: { current: null, previous: null },
     citizenReports: { current: null, previous: null },
     fiscal: null,
+    budget: null,
     queue: null,
     taskTypeLabels: null,
   };
@@ -126,6 +129,11 @@ function DashboardOverview() {
   // Trình chiếu: page state, never the URL — a drill-down navigates away and the page comes back
   // normal (`presentation.tsx`).
   const [presenting, setPresenting] = useState(false);
+  // Task figures and "Cần xử lý ngay" task rows open IN PLACE (customer sheet rows 3 and 5). A write in
+  // the drawer reads the figures again once it closes — the same act as pressing the period again.
+  const { drill, overlay } = useDashboardTaskDrill(() =>
+    setRequest((r) => ({ kind: r.kind, at: new Date().getTime() })),
+  );
 
   return (
     <DashboardView
@@ -137,6 +145,8 @@ function DashboardOverview() {
         canExport: coQuyen(permissions, REPORT_EXPORT_PERMISSION),
       }}
       presentation={{ on: presenting, onChange: setPresenting }}
+      drill={visible.tasks ? drill : undefined}
+      overlay={overlay}
     />
   );
 }
@@ -188,6 +198,8 @@ export function useDashboardFigures(
       );
     }
     if (showBudget) layChiSoNganSach(fiscalYear).then((kq) => put({ fiscal: kq }));
+    // Khối Giải ngân: the SAME summary `/giai-ngan` reads, of the same year as Thu – Chi (`budget.read`).
+    if (showBudget) getProjectSummary(fiscalYear).then((kq) => put({ budget: kq }));
 
     const queues: Promise<QueueSource>[] = [];
     if (withQueues && showTasks) {
@@ -229,6 +241,7 @@ export function useDashboardFigures(
     incomingDocuments: shown.incomingDocuments,
     citizenReports: shown.citizenReports,
     fiscal: shown.fiscal,
+    budget: shown.budget,
     queue: shown.queue,
     taskTypeLabels: shown.taskTypeLabels,
   };

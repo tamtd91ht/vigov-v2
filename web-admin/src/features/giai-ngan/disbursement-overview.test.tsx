@@ -483,6 +483,23 @@ describe("register with the year summary", () => {
     expect(el.querySelector("[data-kpi-cards]")).not.toBeNull();
   });
 
+  it("a `Hạng mục` write (`categorySignal`): ONLY the summary re-reads, and nothing turns to a skeleton (sheet row 19)", async () => {
+    const seen = stubFinance();
+    const el = mount(<BangDuAn nam={2026} danhMuc={[]} reloadSignal={0} categorySignal={0} />);
+    await settle();
+    const table = el.querySelector("[data-category-table]");
+    const firstRow = el.querySelector("td.ma-muc");
+    act(() => root!.render(<BangDuAn nam={2026} danhMuc={[]} reloadSignal={0} categorySignal={1} />));
+    // Before the answer: the same cards, table and rows — the SAME nodes, not a remount.
+    expect(el.querySelector("[data-kpi-cards]")).not.toBeNull();
+    expect(el.querySelector("[data-category-table]")).toBe(table);
+    expect(el.querySelector("td.ma-muc")).toBe(firstRow);
+    await settle();
+    expect(summaryReads(seen)).toHaveLength(2);
+    expect(listReads(seen)).toHaveLength(1);
+    expect(el.querySelector("td.ma-muc")).toBe(firstRow);
+  });
+
   it("asks the summary of the year on screen, and nothing about the commune", async () => {
     const seen = stubFinance();
     mount(<BangDuAn nam={2025} danhMuc={[]} reloadSignal={0} />);

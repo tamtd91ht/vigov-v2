@@ -342,6 +342,7 @@ function emptyData(): DashboardData {
     citizenReports: none,
     fiscal: null,
     fiscalYear: 2026,
+    budget: null,
     queue: ok({ rows: [], failures: [] }),
     taskTypeLabels: null,
   };
@@ -523,10 +524,7 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
 
   it("unbuilt blocks stay in place with their '?' in the header, tiles '—', no link", () => {
     const html = all();
-    for (const [key, name] of [
-      ["budget", "Giải ngân ngân sách"],
-      ["economy", "Kinh tế & Tài nguyên"],
-    ] as const) {
+    for (const [key, name] of [["economy", "Kinh tế & Tài nguyên"]] as const) {
       const block = new RegExp(`<section[^>]*data-block="${key}".*?</section>`, "s").exec(html)?.[0] ?? "";
       expect(block).toContain(`aria-label="${pendingMarkerLabel(name).replaceAll("&", "&amp;")}"`);
       expect(block).not.toContain("href=");
@@ -756,11 +754,139 @@ describe("/tong-quan is untouched by /bao-cao's tile (owner 09/10/2026: D4 and D
 
   it("Tổng quan's '?' keeps PendingMarker's default look; Báo cáo restyles it", () => {
     const marker = (html: string) =>
-      /<button[^>]*aria-label="Giải ngân ngân sách — [^"]*"[^>]*class="([^"]*)"/.exec(html)?.[1] ??
-      /<button[^>]*class="([^"]*)"[^>]*aria-label="Giải ngân ngân sách — /.exec(html)?.[1] ??
+      /<button[^>]*aria-label="Kinh tế &amp; Tài nguyên — [^"]*"[^>]*class="([^"]*)"/.exec(html)?.[1] ??
+      /<button[^>]*class="([^"]*)"[^>]*aria-label="Kinh tế &amp; Tài nguyên — /.exec(html)?.[1] ??
       "";
     expect(marker(dashboard)).toContain("size-[18px]");
     expect(marker(dashboard)).not.toContain("size-3.5");
     expect(marker(report)).toContain("size-3.5");
+  });
+});
+
+/* ── Customer sheet rows 3, 5, 6 (10/10/2026): in-place task views, the Giải ngân block ──────────── */
+
+const DRILL = { openTaskList: () => {}, openTask: () => {} };
+const URGENT_TASK: UrgentRow = {
+  module: "task",
+  code: "NV-0042",
+  kind: "han-xu-ly",
+  categoryCode: "",
+  missedAt: "2026-09-21T08:00:00+07:00",
+  critical: false,
+};
+const URGENT_REPORT: UrgentRow = { ...URGENT_TASK, module: "citizen-report", code: "PA-7F3K-9QXR-MNPT" };
+
+function drillPage(patch: Partial<DashboardData>, visible = TASK_KEYS, withDrill = true): string {
+  return renderToStaticMarkup(
+    <DashboardView
+      data={{ ...emptyData(), ...patch }}
+      visible={visible}
+      onPeriodChange={() => {}}
+      drill={withDrill ? DRILL : undefined}
+    />,
+  );
+}
+
+/** The grid of blocks alone — the header has dialogs of its own (export). */
+const gridOf = (html: string) => /<div data-dashboard-grid="".*$/s.exec(html)?.[0] ?? "";
+
+describe("row 3 — a task figure opens its rows in a dialog on Tổng quan", () => {
+  const task: petitions_taskSummaryOut = { ...TASKS_ZERO, in_progress: 3, overdue: 1 };
+
+  it("with the page's drill: every task tile is a BUTTON opening a dialog, no link to /nhiem-vu", () => {
+    const html = drillPage({ tasks: { current: ok(task), previous: ok(task) } });
+    const tile = /<button[^>]*aria-describedby="tasks-overdue-value"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(tile).toContain('aria-haspopup="dialog"');
+    expect(tile).toContain('aria-label="Xem danh sách đằng sau: Quá hạn"');
+    expect(html).not.toContain('href="/nhiem-vu');
+  });
+
+  it("other modules keep their LINK even with the drill (no in-place list exists for them)", () => {
+    const visible = blockVisibility(["report.read", "task.read", "feedback.read"]);
+    const reports: petitions_citizenReportSummaryOut = {
+      received: 2,
+      in_progress: 1,
+      on_time_sample: 0,
+      on_time: 0,
+      late: 0,
+      rating_sample: 0,
+      rating_sum: 0,
+    };
+    const html = drillPage({ citizenReports: { current: ok(reports), previous: ok(reports) } }, visible);
+    expect(html).toMatch(/<a[^>]*href="\/phan-anh\?metric=in_progress"/);
+  });
+
+  it("DENIED: without task.read the task block, and so every task button, is absent", () => {
+    const html = drillPage({ tasks: { current: ok(task), previous: ok(task) } }, DOCUMENT_KEYS);
+    expect(html).not.toContain("tasks-overdue-value");
+    // The document tiles stay links; no figure is a dialog button.
+    expect(gridOf(html)).not.toMatch(/<button[^>]*aria-label="Xem danh sách đằng sau:/);
+    expect(gridOf(html)).toMatch(/<a[^>]*href="\/van-ban\?metric=/);
+  });
+
+  it("without a drill (Báo cáo, any other host): the link as before", () => {
+    const html = drillPage({ tasks: { current: ok(task), previous: ok(task) } }, TASK_KEYS, false);
+    expect(html).toMatch(/<a[^>]*href="\/nhiem-vu\?metric=overdue"/);
+  });
+});
+
+describe("row 5 — a task row of 'Cần xử lý ngay' opens the drawer in place", () => {
+  it("task row = a button; the citizen-report row stays plain; the row's fields are unchanged", () => {
+    const html = drillPage({ queue: ok({ rows: [URGENT_TASK, URGENT_REPORT], failures: [] }) }, blockVisibility(["report.read", "task.read", "feedback.read"]));
+    const urgent = /<section[^>]*data-block="urgent".*?<\/section>/s.exec(html)?.[0] ?? "";
+    expect(urgent).toMatch(/<button type="button" aria-haspopup="dialog"[^>]*>.*?NV-0042/s);
+    expect(urgent).not.toContain("href=");
+    expect(urgent).toContain("PA-7F3K-9QXR-MNPT");
+    // Same fields as before: module, code, the deadline pill and its kind (owner decision; rule 3).
+    expect(urgent).toContain("quá hạn từ 08:00 21/09/2026");
+    expect(urgent).toContain("Hạn xử lý");
+  });
+
+  it("without a drill the task row is still the register link", () => {
+    const html = drillPage({ queue: ok({ rows: [URGENT_TASK], failures: [] }) }, TASK_KEYS, false);
+    expect(html).toContain('href="/nhiem-vu?task=NV-0042"');
+  });
+});
+
+describe("row 6 — Khối Giải ngân ngân sách filled from the year summary", () => {
+  const BUDGET_KEYS = blockVisibility(["report.read", "budget.read"]);
+  const summary = {
+    year: 2026,
+    planned_total: 33_230_000_000,
+    project_count: 12,
+    disbursed_total: 12_500_000_000,
+    disbursed_ratio: 3762,
+    time_elapsed_ratio: 7096,
+    remaining_total: 20_730_000_000,
+    delay_threshold: 1000,
+    delay_threshold_source: "mac_dinh",
+    delayed_project_count: 0,
+    open_issue_count: null,
+    monthly: [],
+    disbursed_after_year: 0,
+    by_category: [],
+    total: {} as never,
+  };
+  const block = (html: string) => /<section[^>]*data-block="budget".*?<\/section>/s.exec(html)?.[0] ?? "";
+
+  it("five figures, the year on the block, links to /giai-ngan, no '?'", () => {
+    const html = block(page({ budget: ok(summary) }, BUDGET_KEYS));
+    expect(valuesOf(html)).toEqual(["37,62%", "70,96%", "0", "—", "12,5 tỷ đồng"]);
+    expect(html).toContain(">Năm 2026<");
+    expect(html).toContain("Luỹ kế năm ngân sách 2026, không theo kỳ đang xem.");
+    expect(html).toContain('href="/giai-ngan"');
+    expect(html).not.toContain("data-pending-marker");
+  });
+
+  it("a failed read: the server's sentence and '—', never 0", () => {
+    const html = block(page({ budget: failed("Máy chủ bận.") }, BUDGET_KEYS));
+    expect(html).toContain("Máy chủ bận.");
+    expect(valuesOf(html)).toEqual(["—", "—", "—", "—", "—"]);
+  });
+
+  it("DENIED: without budget.read the block is not drawn", () => {
+    const html = page({ budget: ok(summary) }, TASK_KEYS);
+    expect(block(html)).toBe("");
+    expect(html).not.toContain("Tỷ lệ giải ngân");
   });
 });

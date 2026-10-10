@@ -167,11 +167,11 @@ export function staffInitials(fullName: string): string {
 
 /** Native select of the filter row (spec 02 §2). */
 export const FILTER_SELECT_CLASS =
-  "border-line focus-visible:ring-ring/50 h-9 rounded-md border bg-white px-3 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
+  "border-line focus-visible:ring-ring/50 h-9 rounded-md border bg-white pr-9 pl-3 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
 
 /** Native select of the create form (spec 06 — page-grey fill, unlike the filter row). */
 export const FORM_SELECT_CLASS =
-  "border-line bg-canvas focus-visible:ring-ring/50 h-9 w-full rounded-md border px-3 text-[13px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
+  "border-line bg-canvas focus-visible:ring-ring/50 h-9 w-full rounded-md border pr-9 pl-3 text-[13px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
 
 /** shadcn `Input` / `Textarea` (spec 00 §5) — 36px, 14px from 768px, 16px below (iOS zoom). */
 export const INPUT_CLASS =

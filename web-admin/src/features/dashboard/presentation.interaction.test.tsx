@@ -242,6 +242,7 @@ function data(tasks: SummaryPair<petitions_taskSummaryOut>): DashboardData {
     citizenReports: none,
     fiscal: null,
     fiscalYear: 2026,
+    budget: null,
     queue: ok({ rows: [], failures: [] }),
     taskTypeLabels: null,
   };

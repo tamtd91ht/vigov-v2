@@ -18,7 +18,7 @@ export const PANEL_TITLE_CLASS = "text-navy m-0 mb-3 text-[13px] font-bold";
 
 /** Native select of the page (spec 00 §4 "Select native", prototype `SELECT_CLASS`). */
 export const SELECT_CLASS =
-  "border-line focus-visible:ring-ring/50 h-9 rounded-md border border-solid bg-white px-3 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
+  "border-line focus-visible:ring-ring/50 h-9 rounded-md border border-solid bg-white pr-9 pl-3 text-[12.5px] text-ink [font-family:inherit] outline-none focus-visible:ring-[3px]";
 
 /** Native checkbox + its label (spec 00 §4 "Checkbox native"). */
 export const CHECKBOX_CLASS = "accent-brand m-0 size-3.5";
