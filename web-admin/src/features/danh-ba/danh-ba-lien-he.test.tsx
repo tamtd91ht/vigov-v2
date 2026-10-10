@@ -93,6 +93,15 @@ describe("hàng lọc — chữ tìm không có đường lên URL", () => {
     expect(html).not.toMatch(/<form[^>]*action=/);
   });
 
+  it("MỘT HÀNG (bảng lỗi dòng 25): mỗi cặp label + select nằm trong span `contents`, không là con trực tiếp của hàng", () => {
+    // As direct children of the row `<div>`, the pair matched the legacy `:where(p, div):has(> label + select)`
+    // rule, which turns the whole row into a column — search and both selects stacked.
+    const html = dung();
+    expect(html).toMatch(/<span class="contents"><label for="loc-khoi-danh-ba"[^>]*>[^<]*<\/label><select id="loc-khoi-danh-ba"/);
+    expect(html).toMatch(/<span class="contents"><label for="loc-hien-thi-danh-ba"[^>]*>[^<]*<\/label><select id="loc-hien-thi-danh-ba"/);
+    expect(html.match(/<\/label><select/g)?.length).toBe(html.match(/<span class="contents"><label/g)?.length);
+  });
+
   it("không còn nút Tìm (áp theo lúc gõ); gợi ý nguyên văn bản mẫu; không `maxLength`", () => {
     const html = dung();
     expect(html).not.toMatch(/<button[^>]*>Tìm<\/button>/);

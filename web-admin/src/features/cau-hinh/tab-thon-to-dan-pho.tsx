@@ -1,12 +1,13 @@
 "use client";
 
 import { Pencil, Plus, PowerOff, RotateCcw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
+import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
@@ -25,7 +26,6 @@ import { ConfigDialog } from "./config-dialog";
 import { ConfigImportButton } from "./config-import-button";
 import {
   ConfigField,
-  ConfigFormRow,
   ConfigLoading,
   ConfigTable,
   EmptyRow,
@@ -36,6 +36,7 @@ import {
   formSelectCls,
 } from "./config-ui";
 import { RESIDENTIAL_UNIT_IMPORT_TARGET } from "./excel-import-targets";
+import { DIALOG_FOOTER_CLASS } from "./org-unit-dialog-classes";
 import { NUT_HUY, NUT_LUU } from "./nhan-so-do";
 import { THON_RONG, loaiDonVi, nhanLoaiDonVi } from "./nhan-thon";
 import {
@@ -76,12 +77,13 @@ import {
 
 /**
  * Tab "Thôn / Tổ dân phố" — spec `04-thon-to-dan-pho.md` in the shared table pattern of spec 02
- * (`config-ui.tsx`, ADR 0079), prototype `HamletTable.tsx`: import button, add button, the grey
- * add/edit row above the table, the framed table.
+ * (`config-ui.tsx`, ADR 0079), prototype `HamletTable.tsx`: import and add buttons on one row, the
+ * framed table. Add / edit open a DIALOG like every other Cấu hình add/edit (bug sheet row 32 — it
+ * replaced spec 02's grey row above the table).
  *
  * WHAT THE SPEC DROPS AND THIS TAB KEEPS (ADR 0079 decision 3, "Giữ, trình bày theo spec"): the
  * `Trưởng thôn / Tổ trưởng` picker and column, the `Thứ tự` box, and `Loại` editable after create —
- * the server serves all three. They sit as a second line of the same grey row.
+ * the server serves all three. They are fields of the same dialog.
  *
  * TAB RIÊNG, KHÔNG NHẬP VÀO TAB DANH MỤC, dù cả hai cùng đọc một tuyến kiểu danh sách: một thôn
  * không phải một mục danh mục. Hợp đồng nói ra điều đó bằng chính tên trường (`name` chứ không
@@ -141,8 +143,6 @@ export function TabThonToDanPho() {
   const [types, setTypes] = useState<KetQua<identity_danhSachLoaiDonViDanCuRa> | null>(null);
   const [directory, setDirectory] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
 
-  const openedBy = useRef<string | null>(null);
-
   const phien = usePhien();
   /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào. */
   const decision = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_QUAN_LY_SO_DO);
@@ -179,17 +179,7 @@ export function TabThonToDanPho() {
     };
   }, [canWrite]);
 
-  // Focus: into the name box when the form opens (or switches row); back to the opener when it closes.
-  useEffect(() => {
-    if (open !== null) {
-      document.getElementById(NAME_INPUT_ID)?.focus();
-      return;
-    }
-    if (openedBy.current !== null) {
-      document.getElementById(openedBy.current)?.focus();
-      openedBy.current = null;
-    }
-  }, [open]);
+  // Focus is the dialog's: `Tên` when it opens (`initialFocusId`), the opener when it closes (`ModalDialog`).
 
   const clearMessages = useCallback(() => {
     setLocalError("");
@@ -204,7 +194,8 @@ export function TabThonToDanPho() {
   }, []);
 
   const actions: ResidentialUnitActions = {
-    // The add button TOGGLES the create row (spec 02); on an open edit row it switches to create.
+    // Opens the create dialog. (The toggle branch is kept from the grey row; with the modal open the
+    // button sits behind the backdrop, so it no longer fires.)
     add: () => {
       clearMessages();
       setRetiring(null);
@@ -212,12 +203,10 @@ export function TabThonToDanPho() {
         setOpen(null);
         return;
       }
-      openedBy.current = ADD_BUTTON_ID;
       setOpen(openCreate(() => crypto.randomUUID()));
       setDraft(draftForCreate());
     },
     edit: (u) => {
-      openedBy.current = editButtonId(u.id);
       clearMessages();
       setRetiring(null);
       setOpen({ kind: "edit", unit: u });
@@ -281,8 +270,8 @@ export function TabThonToDanPho() {
   const form =
     open === null ? null : (
       <ResidentialUnitForm
-        // A new key per row: switching from one row's edit to another's remounts the form, so
-        // `autoFocus` and the draft both belong to the row now open.
+        // A new key per row: a different row remounts the dialog, so its opening focus and the draft
+        // both belong to the row now open.
         key={open.kind === "edit" ? open.unit.id : "create"}
         open={open}
         draft={draft}
@@ -368,21 +357,25 @@ export function ResidentialUnitsView({
   canWrite: boolean;
   actions: ResidentialUnitActions;
   sending: boolean;
-  /** The open add/edit row, or `null`. It opens ABOVE the table — never a dialog (spec 02). */
+  /**
+   * The open add/edit dialog, or `null`. A DIALOG, like every other Cấu hình add/edit (bug sheet row 32,
+   * the customer's call over spec 02's "grey row above the table, never a modal").
+   */
   form: ReactNode;
   retiring: identity_thonToDanPhoRa | null;
   rowError: { id: string; message: string } | null;
 }) {
   return (
     <>
-      {/* Spec 02: "Nhập từ Excel" heads the tab, right-aligned (`mb-3 flex justify-end`). */}
-      {canWrite && <ConfigImportButton target={RESIDENTIAL_UNIT_IMPORT_TARGET} onImported={actions.reload} />}
-
-      <div className="flex min-w-0 flex-col gap-3">
-        {/* Not while loading: the prototype draws the add button only once the list has arrived
-            (`ConfigWorkspace.tsx:99`). The import row above stays. */}
-        {canWrite && load.phase !== "loading" && (
-          <div className="flex justify-end">
+      {/* ONE right-aligned row: "Nhập từ Excel" then the add button (bug sheet row 28 — the prototype stacks
+          them; the customer wants one line). The import draws its own `mb-3 flex justify-end` row;
+          `[&>div]:mb-0` makes it an item of this one, which keeps the `mb-3` to the table. */}
+      {canWrite && (
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2 [&>div]:mb-0">
+          <ConfigImportButton target={RESIDENTIAL_UNIT_IMPORT_TARGET} onImported={actions.reload} />
+          {/* Not while loading: the prototype draws the add button only once the list has arrived
+              (`ConfigWorkspace.tsx:99`). The import stays. */}
+          {load.phase !== "loading" && (
             <Button
               type="button"
               variant="primary"
@@ -394,9 +387,12 @@ export function ResidentialUnitsView({
             >
               {ADD_BUTTON}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
+      )}
 
+      <div className="flex min-w-0 flex-col gap-3">
+        {/* The add / edit DIALOG (bug sheet row 32), mounted while open. */}
         {canWrite && form}
 
         {load.phase === "loading" && <ConfigLoading label="Đang tải danh sách địa bàn…" />}
@@ -595,16 +591,21 @@ function UnitRows({ children }: { children: ReactNode }) {
 }
 
 /**
- * The add / edit row — spec 04's grey row: Tên · Loại · Số hộ · Nhân khẩu · buttons, then (ADR 0079
- * decision 3) Trưởng thôn / Tổ trưởng and Thứ tự on a second line of the same box. PURE PRESENTATION —
- * every value in through `draft`, every change out through `setDraft`; bodies are built in
- * `residential-unit-form.ts`. EXPORTED so the server's refusal is rendered in a test.
+ * The add / edit DIALOG (bug sheet row 32: "Đổi UI thêm/sửa thành dạng Popup đồng nhất với các chức năng
+ * khác") — the same box as the org chart's `BieuMauBoPhan`: `ModalDialog` + header, a scrolling field
+ * column, shadcn's muted footer with `Huỷ` · `Thêm`/`Lưu`. PURE PRESENTATION — every value in through
+ * `draft`, every change out through `setDraft`; bodies are built in `residential-unit-form.ts`. EXPORTED
+ * so the server's refusal is rendered in a test.
+ *
+ * THE FIELDS AND RULES ARE THE GREY ROW'S, UNCHANGED: Tên · Loại · Số hộ · Nhân khẩu, then (ADR 0079
+ * decision 3) Trưởng thôn / Tổ trưởng and Thứ tự. Only the frame moved.
  *
  * NO CODE BOX: on create the server derives the code from the name (`residential_unit_write.go:32`);
  * on edit it refuses one with 400 `code_not_editable` (rule 7, invariant 3). The code is in the table.
  *
- * The second-line fields come BEFORE the buttons in the DOM — so Tab reaches them before `Thêm`, and
- * below `sm` they stack above the buttons — and are placed on row 2 by the grid from `sm` up.
+ * Opening focus goes to `Tên` (`initialFocusId`); closing returns it to the button that opened the box
+ * (`ModalDialog`). Esc and ✕ ask `onCancel`, refused while a send is in flight — a send in flight must
+ * not lose its form from view.
  */
 export function ResidentialUnitForm({
   open,
@@ -633,138 +634,135 @@ export function ResidentialUnitForm({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
+  const titleId = useId();
   const editing = open.kind === "edit";
+  const title = editing ? editTitle(open.unit.name) : CREATE_TITLE;
   return (
-    <ConfigFormRow
-      columns="sm:grid-cols-[1fr_12rem_8rem_8rem_auto]"
-      aria-label={editing ? editTitle(open.unit.name) : CREATE_TITLE}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit();
+    <ModalDialog
+      titleId={titleId}
+      onDismiss={() => {
+        if (!sending) onCancel();
       }}
-      onKeyDown={(e) => {
-        // Esc closes like `Huỷ` — except while sending, so a send in flight is not lost from view.
-        if (e.key === "Escape" && !sending) onCancel();
-      }}
+      closeDisabled={sending}
+      initialFocusId={NAME_INPUT_ID}
+      className="sm:max-w-lg"
     >
-      <ConfigField label={FIELD_NAME} htmlFor={NAME_INPUT_ID}>
-        <input
-          id={NAME_INPUT_ID}
-          name="name"
-          autoFocus
-          className={formInputCls}
-          placeholder={NAME_PLACEHOLDER}
-          value={draft.name}
-          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          aria-invalid={localError !== ""}
-        />
-      </ConfigField>
+      <ModalDialogHeader titleId={titleId} title={title} />
+      <form
+        className="m-0 flex min-h-0 min-w-0 flex-col gap-4"
+        aria-label={title}
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <div className="min-h-0 space-y-4 overflow-y-auto">
+          <ConfigField label={FIELD_NAME} htmlFor={NAME_INPUT_ID}>
+            <input
+              id={NAME_INPUT_ID}
+              name="name"
+              className={formInputCls}
+              placeholder={NAME_PLACEHOLDER}
+              value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              aria-invalid={localError !== ""}
+            />
+          </ConfigField>
 
-      <ConfigField label={FIELD_TYPE} htmlFor="o-loai-thon">
-        <select
-          id="o-loai-thon"
-          name="type"
-          className={formSelectCls}
-          value={draft.typeCode}
-          onChange={(e) => setDraft({ ...draft, typeCode: e.target.value })}
-        >
-          <option value="">{TYPE_NONE}</option>
-          {typeChoices.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </ConfigField>
+          <ConfigField label={FIELD_TYPE} htmlFor="o-loai-thon">
+            <select
+              id="o-loai-thon"
+              name="type"
+              className={formSelectCls}
+              value={draft.typeCode}
+              onChange={(e) => setDraft({ ...draft, typeCode: e.target.value })}
+            >
+              <option value="">{TYPE_NONE}</option>
+              {typeChoices.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </ConfigField>
 
-      {/* `type="number" min=0` (spec 04): a blank box stays blank ("chưa nhập"), never 0; whatever
-          is not a whole number ≥ 0 is sent as null (`residential-unit-form.ts`). */}
-      <ConfigField label={FIELD_HOUSEHOLDS} htmlFor="o-so-ho">
-        <input
-          id="o-so-ho"
-          name="households"
-          type="number"
-          min={0}
-          step={1}
-          className={formInputCls}
-          value={draft.households}
-          onChange={(e) => setDraft({ ...draft, households: e.target.value })}
-        />
-      </ConfigField>
+          {/* `type="number" min=0` (spec 04): a blank box stays blank ("chưa nhập"), never 0; whatever
+              is not a whole number ≥ 0 is sent as null (`residential-unit-form.ts`). Two columns from
+              `sm`, one at 320px. */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <ConfigField label={FIELD_HOUSEHOLDS} htmlFor="o-so-ho">
+              <input
+                id="o-so-ho"
+                name="households"
+                type="number"
+                min={0}
+                step={1}
+                className={formInputCls}
+                value={draft.households}
+                onChange={(e) => setDraft({ ...draft, households: e.target.value })}
+              />
+            </ConfigField>
 
-      <ConfigField label={FIELD_POPULATION} htmlFor="o-nhan-khau">
-        <input
-          id="o-nhan-khau"
-          name="population"
-          type="number"
-          min={0}
-          step={1}
-          className={formInputCls}
-          value={draft.population}
-          onChange={(e) => setDraft({ ...draft, population: e.target.value })}
-        />
-      </ConfigField>
+            <ConfigField label={FIELD_POPULATION} htmlFor="o-nhan-khau">
+              <input
+                id="o-nhan-khau"
+                name="population"
+                type="number"
+                min={0}
+                step={1}
+                className={formInputCls}
+                value={draft.population}
+                onChange={(e) => setDraft({ ...draft, population: e.target.value })}
+              />
+            </ConfigField>
+          </div>
 
-      <ConfigField label={FIELD_HEAD} htmlFor="o-truong-thon" className="sm:col-start-1 sm:row-start-2">
-        <select
-          id="o-truong-thon"
-          name="head"
-          className={formSelectCls}
-          value={draft.headStaffCode}
-          onChange={(e) => setDraft({ ...draft, headStaffCode: e.target.value })}
-        >
-          <option value="">{HEAD_NONE}</option>
-          {headChoices.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </ConfigField>
+          <ConfigField label={FIELD_HEAD} htmlFor="o-truong-thon">
+            <select
+              id="o-truong-thon"
+              name="head"
+              className={formSelectCls}
+              value={draft.headStaffCode}
+              onChange={(e) => setDraft({ ...draft, headStaffCode: e.target.value })}
+            >
+              <option value="">{HEAD_NONE}</option>
+              {headChoices.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </ConfigField>
 
-      <ConfigField label={FIELD_ORDER} htmlFor="o-thu-tu-thon" className="sm:col-start-2 sm:row-start-2">
-        <input
-          id="o-thu-tu-thon"
-          name="order"
-          type="number"
-          step={1}
-          className={formInputCls}
-          value={draft.order}
-          onChange={(e) => setDraft({ ...draft, order: e.target.value })}
-        />
-      </ConfigField>
+          <ConfigField label={FIELD_ORDER} htmlFor="o-thu-tu-thon">
+            <input
+              id="o-thu-tu-thon"
+              name="order"
+              type="number"
+              step={1}
+              className={formInputCls}
+              value={draft.order}
+              onChange={(e) => setDraft({ ...draft, order: e.target.value })}
+            />
+          </ConfigField>
 
-      <div className="flex gap-2 sm:col-start-5 sm:row-start-1">
-        <Button type="submit" variant="primary" disabled={sending} aria-busy={sending}>
-          <BusyLabel busy={sending} label={editing ? NUT_LUU : "Thêm"} busyText={BUSY_SAVING} />
-        </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={sending}>
-          {NUT_HUY}
-        </Button>
-      </div>
-
-      {/* The pickers' own read failures, then TWO error regions: the local one (nothing was sent) and
-          the server's refusal, after the spec's sentence. Merged, one overwrites the other. */}
-      {typesError !== "" && (
-        <div className="col-span-full">
-          <InlineError>{typesError}</InlineError>
+          {/* The pickers' own read failures, then TWO error regions: the local one (nothing was sent) and
+              the server's refusal, after the spec's sentence. Merged, one overwrites the other. */}
+          {typesError !== "" && <InlineError>{typesError}</InlineError>}
+          {directoryError !== "" && <InlineError>{directoryError}</InlineError>}
+          {localError !== "" && <InlineError>{localError}</InlineError>}
+          {serverError !== "" && <InlineError>{`${SAVE_FAILED} ${serverError}`}</InlineError>}
         </div>
-      )}
-      {directoryError !== "" && (
-        <div className="col-span-full">
-          <InlineError>{directoryError}</InlineError>
+
+        <div className={DIALOG_FOOTER_CLASS}>
+          <Button type="button" variant="outline" onClick={onCancel} disabled={sending}>
+            {NUT_HUY}
+          </Button>
+          <Button type="submit" variant="primary" disabled={sending} aria-busy={sending}>
+            <BusyLabel busy={sending} label={editing ? NUT_LUU : "Thêm"} busyText={BUSY_SAVING} />
+          </Button>
         </div>
-      )}
-      {localError !== "" && (
-        <div className="col-span-full">
-          <InlineError>{localError}</InlineError>
-        </div>
-      )}
-      {serverError !== "" && (
-        <div className="col-span-full">
-          <InlineError>{`${SAVE_FAILED} ${serverError}`}</InlineError>
-        </div>
-      )}
-    </ConfigFormRow>
+      </form>
+    </ModalDialog>
   );
 }

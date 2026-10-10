@@ -340,28 +340,28 @@ export function KhungSoDo({
   return (
     <>
       {coQuyenGhi && (
-        <>
-          {/* Draws its own `mb-3 flex justify-end` row (spec 02); the dialog title is the target's,
-              "Nhập sơ đồ tổ chức từ Excel". */}
+        // ONE right-aligned row: "Nhập từ Excel" then "Thêm bộ phận" (bug sheet row 28 — the prototype
+        // stacks them; the customer wants one line). The import draws its own `mb-3 flex justify-end` row;
+        // `[&>div]:mb-0` makes it an item of this one, which keeps the `mb-3` to the tree. The dialog
+        // title is the target's, "Nhập sơ đồ tổ chức từ Excel".
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2 [&>div]:mb-0">
           <ConfigImportButton target={ORG_UNIT_IMPORT_TARGET} onImported={onImported} />
-          {/* While loading the prototype draws only the import row and the skeletons
+          {/* While loading the prototype draws only the import and the skeletons
               (ConfigWorkspace.tsx:86, :173-180): the add button belongs to the loaded tree. */}
           {tai.pha !== "dangDoc" && (
-            <div className="flex justify-end">
-              <Button
-                type="button"
-                variant="primary"
-                size="sm"
-                className={SMALL_BUTTON_CLASS}
-                id={idNutMo("themGoc")}
-                icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
-                onClick={thaoTac.themGoc}
-              >
-                {NUT_THEM_BO_PHAN}
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              className={SMALL_BUTTON_CLASS}
+              id={idNutMo("themGoc")}
+              icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
+              onClick={thaoTac.themGoc}
+            >
+              {NUT_THEM_BO_PHAN}
+            </Button>
           )}
-        </>
+        </div>
       )}
 
       {tai.pha === "dangDoc" && <ConfigLoading label={DANG_TAI} />}

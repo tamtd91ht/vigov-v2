@@ -650,6 +650,22 @@ export function CatalogueView({
     readErrors.push(`${PETITION_FIELD_GROUP_LABEL}: ${petitionFields.thongBao}`);
   }
 
+  // Not while loading, as before: the add button belongs to the loaded workspace.
+  const addButton =
+    !loading && canWrite && writable.length > 0 ? (
+      <Button
+        type="button"
+        variant="primary"
+        size="sm"
+        className={SMALL_BUTTON_CLASS}
+        icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
+        aria-expanded={open !== null && open.kind === "add"}
+        onClick={actions.toggleAdd}
+      >
+        {NUT_THEM}
+      </Button>
+    ) : null;
+
   return (
     <section className="space-y-4" aria-labelledby="tieu-de-danh-muc">
       {/* No card, no visible title: the tab IS the section (prototype). */}
@@ -657,7 +673,16 @@ export function CatalogueView({
         Danh mục
       </h2>
 
-      {importButton}
+      {/* ONE right-aligned row: "Nhập từ Excel" then "Thêm mục" (bug sheet row 28 — the prototype stacks
+          the import above the filter row, with Thêm mục at that row's end; the customer wants both on one
+          line). `[&>div]:mb-0` drops the import row's own `mb-3`: it is now an item of this row, and the
+          section's `space-y-4` spaces the rows. */}
+      {(importButton !== null || addButton !== null) && (
+        <div className="flex flex-wrap items-center justify-end gap-2 [&>div]:mb-0">
+          {importButton}
+          {addButton}
+        </div>
+      )}
 
       {/* While loading the placeholder replaces the whole workspace, filter row included (prototype
           `ConfigWorkspace.tsx:112` wraps `LookupTable` in `Panel loading`). */}
@@ -681,19 +706,6 @@ export function CatalogueView({
           <FilterButton pressed={shownGroup === PETITION_FIELD_GROUP} onClick={() => onShowGroup(PETITION_FIELD_GROUP)}>
             {PETITION_FIELD_GROUP_LABEL}
           </FilterButton>
-        )}
-        {canWrite && writable.length > 0 && (
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            className={cn(SMALL_BUTTON_CLASS, "ml-auto")}
-            icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
-            aria-expanded={open !== null && open.kind === "add"}
-            onClick={actions.toggleAdd}
-          >
-            {NUT_THEM}
-          </Button>
         )}
       </div>
       )}

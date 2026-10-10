@@ -24,7 +24,6 @@ import {
   COT_DI_DONG,
   COT_HO_TEN,
   COT_KHOI,
-  COT_MAY_BAN,
   SELECT_PAGE_LABEL,
   selectRowLabel,
 } from "./nhan-danh-ba";
@@ -112,11 +111,10 @@ export function BangLienHe({
           <th scope="col" className="min-w-56">
             {COT_KHOI}
           </th>
-          {/* HAI CỘT SỐ, KHÔNG MỘT (#16): bản mẫu vẽ một cột `Di động`; gộp lại là đặt số công vụ và
-              dữ liệu cá nhân dưới cùng một cái tên. */}
-          <th scope="col" className="w-32">
-            {COT_MAY_BAN}
-          </th>
+          {/* ONE NUMBER COLUMN, `Di động`, as the prototype. `Máy bàn cơ quan` is NOT DRAWN (bug sheet row 26)
+              — display only: `phone` stays in the data, the API and the edit form (open question #16 keeps the
+              field). Never fold it into this column: that would put the office line and personal data under
+              one name. */}
           <th scope="col" className="w-32">
             {COT_DI_DONG}
           </th>
@@ -159,7 +157,6 @@ export function BangLienHe({
             <td className="text-ink-muted text-[12px]">{nhanBoPhan(traTen(traBoPhan, cb.department_id))}</td>
             {/* SHOWN AS THE SERVER SENT IT, UNMASKED (#11, 22/09/2026: no masking inside the commune) and
                 not reformatted — a reformatted number cannot be copied into a phone. */}
-            <td className="tabular-nums">{cb.phone || "—"}</td>
             <td className="tabular-nums">
               {cb.mobile || "—"}
               {cb.has_zalo && <div className="text-brand text-[11px]">{DONG_PHU_CO_ZALO}</div>}

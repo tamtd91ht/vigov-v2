@@ -4,7 +4,10 @@ import { describe, expect, it } from "vitest";
 import { KhungQuyen } from "@/features/quyen/cong-quyen";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
+import { banTuCanBo, thanSua } from "@/components/danh-ba/nhan-ghi-danh-ba";
+
 import { BangLienHe } from "./bang-lien-he";
+import { StaffContactForm } from "./staff-contact-form";
 import {
   CHIP_CHUA_HIEN,
   CHIP_DANG_HIEN,
@@ -74,14 +77,14 @@ function dungCK(danhSach: readonly identity_canBoTomTat[]): string {
 }
 
 describe("bảng danh bạ — cái ra tới trang", () => {
-  it("dựng đủ năm cột dữ liệu của một dòng", () => {
+  it("dựng đủ bốn cột dữ liệu của một dòng", () => {
     const html = dung([canBo()]);
 
     expect(html).toContain("Nguyễn Văn A");
     expect(html).toContain("nva@demo.invalid");
     expect(html).toContain("Bí thư Đảng ủy");
     expect(html).toContain("THƯỜNG TRỰC ĐẢNG UỶ");
-    expect(html).toContain("02350000001");
+    expect(html).toContain("0900000001");
   });
 
   it("số di động cá nhân hiện ĐẦY ĐỦ ở màn nội bộ — câu mở #11", () => {
@@ -96,13 +99,14 @@ describe("bảng danh bạ — cái ra tới trang", () => {
     expect(html).not.toContain("•••");
   });
 
-  it("hai cột số, hai nhãn nói rõ loại — câu mở #16", () => {
-    // Máy bàn cơ quan là thông tin công vụ; di động cá nhân là dữ liệu cá nhân theo Nghị định 13.
-    // Gộp về một cột `Di động` như đặc tả §4 là đặt hai địa vị pháp lý dưới một cái tên, và mọi
-    // luật che / xuất / công khai về sau áp sai mức cho một trong hai.
+  it("cột `Máy bàn cơ quan` KHÔNG vẽ (bảng lỗi dòng 26) — và số máy bàn không bị gộp vào cột di động (#16)", () => {
+    // Chỉ là hiển thị: trường vẫn ở dữ liệu và API (câu mở #16 giữ trường). Máy bàn là thông tin công
+    // vụ, di động là dữ liệu cá nhân theo Nghị định 13 — ẩn cột không được biến thành gộp hai số
+    // dưới một cái tên.
     const html = dung([canBo()]);
 
-    expect(html).toContain("Máy bàn cơ quan");
+    expect(html).not.toContain("Máy bàn cơ quan");
+    expect(html).not.toContain("02350000001");
     expect(html).toContain("Di động cá nhân");
   });
 
@@ -183,6 +187,32 @@ describe("bảng danh bạ — cái ra tới trang", () => {
     (found[0]!.props.onClick as () => void)();
     expect(calls).toEqual([canBo().id]);
     expect(dung([canBo()])).toMatch(/Nguyễn Văn A<\/button><div class="text-ink-muted text-\[11px\] font-normal">nva@demo.invalid<\/div>/);
+  });
+
+  it("hộp sửa không vẽ ô Máy bàn cơ quan (dòng 26), nhưng số máy bàn đang lưu vẫn đi nguyên lên máy chủ", () => {
+    const goc = canBo();
+    const draft = banTuCanBo(goc);
+    const html = renderToStaticMarkup(
+      <StaffContactForm
+        editing={goc}
+        draft={draft}
+        setDraft={() => undefined}
+        showOnMiniApp={false}
+        setShowOnMiniApp={() => undefined}
+        canPublish={false}
+        units={[]}
+        errors={{}}
+        serverError=""
+        sending={false}
+        onSubmit={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+    expect(html).not.toContain("Máy bàn cơ quan");
+    expect(html).not.toContain('id="staff-office-phone"');
+    expect(html).toContain('id="staff-mobile"');
+    // Display only: the stored landline is sent back unchanged — hiding the box never blanks the field.
+    expect(thanSua(draft, goc).office_phone).toBe("02350000001");
   });
 
   it("khối / đơn vị là chữ thường, không huy hiệu", () => {

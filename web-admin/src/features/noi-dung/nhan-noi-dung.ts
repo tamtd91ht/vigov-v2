@@ -119,6 +119,13 @@ export const CHUA_XEP_DANH_MUC = "— Chưa xếp danh mục —";
 /** §6 — nhãn mặc định của ô lọc danh mục, nguyên văn. */
 export const MOI_DANH_MUC = "Tất cả danh mục";
 
+/**
+ * The category filter's hint while the commune has no visible category. The select stays in the row
+ * (bug sheet row 20: the customer reads a missing select as a missing feature), disabled, saying why.
+ */
+export const NO_CATEGORY_FILTER_HINT = "Chưa có danh mục";
+export const NO_CATEGORY_FILTER_TITLE = "Xã chưa có danh mục tin nào đang hiện. Thêm ở nút “Danh mục tin”.";
+
 /** §6 — placeholder ô tìm, nguyên văn kể cả dấu ba chấm. */
 export const TIM_PLACEHOLDER = "Tìm theo tiêu đề…";
 

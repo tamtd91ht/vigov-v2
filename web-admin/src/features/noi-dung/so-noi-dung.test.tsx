@@ -26,6 +26,7 @@ import {
   MO_TA_FORM_THEM,
   MO_TA_THE_DANH_BA,
   MOI_DANH_MUC,
+  NO_CATEGORY_FILTER_HINT,
   NHAN_NUT_DANH_MUC,
   NHAN_NUT_SUA,
   NHAN_NUT_THEM,
@@ -771,9 +772,11 @@ describe("hàng lọc §6", () => {
     expect(html).toContain("w-72");
   });
 
-  it("the category select: only once the commune has a visible category; `Tất cả danh mục` first; `Cha › Con`; hidden ones left out", () => {
-    expect(filterRow()).not.toContain('id="loc-danh-muc"');
-    expect(filterRow({ danhMuc: [danhMuc({ hidden: true })] })).not.toContain('id="loc-danh-muc"');
+  it("the category select: always in the row, disabled with a hint when no category is visible; `Tất cả danh mục` first; `Cha › Con`; hidden ones left out", () => {
+    for (const html of [filterRow(), filterRow({ danhMuc: [danhMuc({ hidden: true })] })]) {
+      expect(html).toMatch(/<select id="loc-danh-muc"[^>]*disabled/);
+      expect(html).toContain(`>${NO_CATEGORY_FILTER_HINT}</option>`);
+    }
     const ds = [
       danhMuc({ id: "P", name: "Tin hoạt động" }),
       danhMuc({ id: "C", name: "Chuyển đổi số", parent_id: "P" }),
@@ -784,6 +787,15 @@ describe("hàng lọc §6", () => {
       (m) => m[1],
     );
     expect(options).toEqual([MOI_DANH_MUC, "Tin hoạt động", "Tin hoạt động › Chuyển đổi số"]);
+  });
+
+  it("ONE row (bug sheet row 20): each label + select pair sits in a `contents` span, never a direct child of the row", () => {
+    // As direct children of the row `<div>`, a pair matched the legacy `:where(p, div):has(> label + select)`
+    // rule, which turns the whole row into a column — search, category and status stacked.
+    for (const html of [filterRow(), filterRow({ danhMuc: [danhMuc({ id: "P", name: "Tin" })] })]) {
+      expect(html).toMatch(/<span class="contents"><label for="loc-danh-muc"[^>]*>[^<]*<\/label><select id="loc-danh-muc"/);
+      expect(html).toMatch(/<span class="contents"><label for="loc-trang-thai"[^>]*>[^<]*<\/label><select id="loc-trang-thai"/);
+    }
   });
 
   it("a category still the active filter keeps its select, even if hidden since", () => {

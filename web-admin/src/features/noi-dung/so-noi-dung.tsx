@@ -114,6 +114,8 @@ import {
   MO_TA_FORM_THEM,
   MO_TA_MAN,
   MOI_DANH_MUC,
+  NO_CATEGORY_FILTER_HINT,
+  NO_CATEGORY_FILTER_TITLE,
   MOI_LOAI,
   NHAN_NUT_DANH_MUC,
   NHAN_NUT_HUY,
@@ -293,7 +295,7 @@ const CATEGORY_DIALOG_CLASS = "w-[min(44rem,calc(100vw-1rem))] p-5";
 const TABLE_SCROLL_CLASS = "bang-cuon m-0 overflow-x-auto rounded-none border-0 shadow-none [&_tbody_td]:h-12";
 
 /** The filter row's native selects — the prototype's `h-9 rounded-md border bg-white px-3 text-[12.5px]`. */
-const FILTER_SELECT_CLASS = cn(controlClass, "h-9 w-auto max-w-full bg-white px-3 text-[12.5px] md:text-[12.5px]");
+const FILTER_SELECT_CLASS = cn(controlClass, "h-9 w-auto max-w-full bg-white pr-9 pl-3 text-[12.5px] md:text-[12.5px]");
 
 /**
  * A label without the symbol it starts with (`⊞ Danh mục tin` → `Danh mục tin`, `+ Thêm nội dung` →
@@ -1030,7 +1032,7 @@ function typeTabIcon(type: string): LucideIcon {
 
 /**
  * Hàng lọc §6 — the prototype's row (`ContentWorkspace.tsx:231-283`): the search box, the category select
- * (only once the commune has a visible category), then (owner D1) the status select, and what closes the row
+ * (always present — disabled with a hint while the commune has no visible category), then (owner D1) the status select, and what closes the row
  * pushed right.
  *
  * THE SEARCH FILTERS AS YOU TYPE — no `Tìm` button. The parent waits for a pause (`SEARCH_DEBOUNCE_MS`) before
@@ -1093,13 +1095,18 @@ export function HangLocNoiDung({
         />
       </form>
 
-      {/* Prototype: the category select only once the commune has categories — a select holding only
-          "Tất cả danh mục" takes room and does nothing. Kept while a category is the active filter. */}
-      {(visible.length > 0 || danhMucID !== "") && (
-        <>
-          <label htmlFor="loc-danh-muc" className="an-thi-giac">
-            Lọc theo danh mục
-          </label>
+      {/* The category select is ALWAYS in the row (bug sheet row 20 overrides the prototype's hide-when-empty:
+          the customer read the missing select as a missing filter). With no visible category and none active
+          it is disabled and says why, rather than offering a choice that does nothing.
+          EACH `label + select` PAIR SITS IN A `contents` SPAN: as direct children of this row `<div>`, the pair
+          matched the legacy `globals.css` rule `:where(p, div):has(> label + select)` (unlayered, so it beats
+          Tailwind), which turned the whole row into a COLUMN — the search, the category and the status
+          stacked one under another (bug sheet row 20). `contents` keeps the select a flex item of the row. */}
+      <span className="contents">
+        <label htmlFor="loc-danh-muc" className="an-thi-giac">
+          Lọc theo danh mục
+        </label>
+        {visible.length > 0 || danhMucID !== "" ? (
           <select
             id="loc-danh-muc"
             className={FILTER_SELECT_CLASS}
@@ -1113,19 +1120,25 @@ export function HangLocNoiDung({
               </option>
             ))}
           </select>
-        </>
-      )}
+        ) : (
+          <select id="loc-danh-muc" className={FILTER_SELECT_CLASS} value="" disabled title={NO_CATEGORY_FILTER_TITLE}>
+            <option value="">{NO_CATEGORY_FILTER_HINT}</option>
+          </select>
+        )}
+      </span>
 
-      <label htmlFor="loc-trang-thai" className="an-thi-giac">
-        Trạng thái
-      </label>
-      <select id="loc-trang-thai" className={FILTER_SELECT_CLASS} value={status} onChange={(e) => setStatus(e.target.value)}>
-        {STATUS_FILTER_OPTIONS.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
+      <span className="contents">
+        <label htmlFor="loc-trang-thai" className="an-thi-giac">
+          Trạng thái
+        </label>
+        <select id="loc-trang-thai" className={FILTER_SELECT_CLASS} value={status} onChange={(e) => setStatus(e.target.value)}>
+          {STATUS_FILTER_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </span>
 
       {extra}
     </div>
@@ -1630,8 +1643,15 @@ export function FormNoiDung({
         </IconButton>
       </div>
 
-      {/* ONE scrolling column, as the prototype's `max-h-[70vh] space-y-4 overflow-y-auto`. */}
-      <div className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto px-5 pb-5">
+      {/* ONE scrolling column, as the prototype's `max-h-[70vh] space-y-4 overflow-y-auto`.
+          `relative`: the visually hidden inputs (`.an-thi-giac`, absolute) must take THIS column as their
+          containing block. Without it they resolved against the `<dialog>` itself, sat at their static
+          position below the column's fold, and stretched the dialog's own scroll area — the blank band at the
+          bottom once focus returned to the cover's file input after an upload (bug sheet row 23).
+          `[&>*]:shrink-0`: under a max-height a flex column SHRINKS its children before it scrolls, so an
+          alert was squeezed to its `min-height` and its sentence spilt out of its frame (row 24) — the same
+          defect `CREATE_TASK_BODY_CLASS` fixed in nhiem-vu. Children keep their height; the column scrolls. */}
+      <div className="relative flex max-h-[70vh] min-h-0 flex-col gap-4 overflow-y-auto px-5 pb-5 [&>*]:shrink-0">
         {/* Row 1: the type, then the category — or, for a banner, its running order. One column at 320px. */}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field
@@ -1875,13 +1895,13 @@ export function FormNoiDung({
         </label>
 
         {typeFieldError !== null && (
-          <p className="thong-bao-loi m-0" role="alert">
+          <p className="thong-bao-loi m-0 break-words" role="alert">
             {typeFieldError}
           </p>
         )}
 
         {loi !== null && (
-          <p className="thong-bao-loi m-0" role="alert">
+          <p className="thong-bao-loi m-0 break-words" role="alert">
             {loi}
           </p>
         )}

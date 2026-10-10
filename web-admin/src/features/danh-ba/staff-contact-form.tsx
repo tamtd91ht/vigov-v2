@@ -2,7 +2,6 @@ import {
   CANH_BAO_DOI_DI_DONG_CONG_KHAI,
   NUT_HUY,
   O_DI_DONG,
-  O_MAY_BAN,
   coCanhBaoDoiDiDong,
 } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import type { BanNhapCanBo } from "@/components/danh-ba/nhan-ghi-danh-ba";
@@ -29,7 +28,7 @@ import {
 import type { ContactErrors } from "./staff-contact";
 
 const SELECT_CLASS =
-  "border-line focus-visible:ring-ring/50 h-9 w-full rounded-md border border-solid bg-white px-3 text-[12.5px] outline-none focus-visible:ring-[3px]";
+  "border-line focus-visible:ring-ring/50 h-9 w-full rounded-md border border-solid bg-white pr-9 pl-3 text-[12.5px] outline-none focus-visible:ring-[3px]";
 
 /**
  * The body of the add / edit dialog — the prototype's `StaffContactForm` (`space-y-4`: name, unit,
@@ -39,8 +38,11 @@ const SELECT_CLASS =
  * the call site (`danh-ba-lien-he.tsx`). So the screen's flow test reads exactly what the screen hands
  * it, and the dialog frame around it (`ConfigDialog`) is the only part that needs React proper.
  *
- * TWO NUMBER FIELDS where the prototype has one "Di động" (#16): the office landline is duty
- * information, the personal mobile is Decree 13 personal data — two legal statuses, two labels.
+ * ONE NUMBER FIELD, `Di động`, as the prototype. `Máy bàn cơ quan` is NOT DRAWN here (bug sheet row 26),
+ * display only: the draft still carries the stored landline (`banTuCanBo`) and the save sends it back
+ * unchanged, so nothing is lost; open question #16 keeps the field, and `/nguoi-dung`'s account form still
+ * edits it. Never relabel the mobile box to hold both — the landline is duty information, the mobile is
+ * Decree 13 personal data.
  *
  * "Gọi được qua Zalo" is offered when adding too: the create route has no such field, so the screen
  * writes it with a second call (`zaloAfterCreate`). "Hiện trên danh bạ Mini App" is drawn only for a
@@ -129,16 +131,8 @@ export function StaffContactForm({
         />
       </Field>
 
+      {/* The prototype's row: `Di động` · e-mail. */}
       <div className="grid grid-cols-2 gap-3">
-        <Field label={O_MAY_BAN} htmlFor="staff-office-phone" grow="auto" className="min-w-0">
-          <input
-            id="staff-office-phone"
-            name="staff-office-phone"
-            inputMode="tel"
-            value={draft.mayBanCoQuan}
-            onChange={(e) => setDraft({ ...draft, mayBanCoQuan: e.target.value })}
-          />
-        </Field>
         <Field label={O_DI_DONG} htmlFor="staff-mobile" grow="auto" className="min-w-0">
           <input
             id="staff-mobile"
@@ -148,7 +142,7 @@ export function StaffContactForm({
             onChange={(e) => setDraft({ ...draft, diDongCaNhan: e.target.value })}
           />
         </Field>
-        <Field label={FIELD_EMAIL} htmlFor="staff-email" grow="auto" className="col-span-2 min-w-0">
+        <Field label={FIELD_EMAIL} htmlFor="staff-email" grow="auto" className="min-w-0">
           <input
             id="staff-email"
             name="staff-email"

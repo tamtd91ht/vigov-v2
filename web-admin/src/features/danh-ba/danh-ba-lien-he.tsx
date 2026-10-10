@@ -166,7 +166,7 @@ type TrangThaiTrang =
 type ContactDialog = { readonly editing: identity_canBoTomTat | null; readonly key: string };
 
 const SELECT_CLASS =
-  "border-line focus-visible:ring-ring/50 h-9 rounded-md border border-solid bg-white px-3 text-[12.5px] outline-none focus-visible:ring-[3px]";
+  "border-line focus-visible:ring-ring/50 h-9 rounded-md border border-solid bg-white pr-9 pl-3 text-[12.5px] outline-none focus-visible:ring-[3px]";
 
 export function DanhBaLienHe() {
   /** Bộ lọc đang áp + ngăn xếp con trỏ — MỘT state, để đổi lọc không thể quên về trang đầu. */
@@ -995,40 +995,48 @@ export function HangLoc({
         </p>
       </div>
 
-      <label htmlFor="loc-khoi-danh-ba" className="an-thi-giac">
-        {NHAN_LOC_KHOI}
-      </label>
-      <select
-        id="loc-khoi-danh-ba"
-        className={SELECT_CLASS}
-        value={loc.boPhan}
-        onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
-      >
-        <option value="">{TAT_CA_KHOI}</option>
-        {boPhan.map((bp) => (
-          <option key={bp.id} value={bp.id}>
-            {departmentOptionText(bp.name, bp.id, tallies)}
-          </option>
-        ))}
-      </select>
+      {/* EACH `label + select` PAIR SITS IN A `contents` SPAN: as direct children of this row `<div>` the pair
+          matched the legacy `globals.css` rule `:where(p, div):has(> label + select)` (unlayered, so it beats
+          Tailwind) and turned the whole row into a COLUMN — search, Khối / đơn vị and Hiện / chưa hiện stacked
+          (bug sheet row 25). `contents` keeps each select a flex item of the row, as the prototype draws it. */}
+      <span className="contents">
+        <label htmlFor="loc-khoi-danh-ba" className="an-thi-giac">
+          {NHAN_LOC_KHOI}
+        </label>
+        <select
+          id="loc-khoi-danh-ba"
+          className={SELECT_CLASS}
+          value={loc.boPhan}
+          onChange={(e) => doiLoc({ boPhan: maBoPhanLoc(e.target.value, boPhan) })}
+        >
+          <option value="">{TAT_CA_KHOI}</option>
+          {boPhan.map((bp) => (
+            <option key={bp.id} value={bp.id}>
+              {departmentOptionText(bp.name, bp.id, tallies)}
+            </option>
+          ))}
+        </select>
+      </span>
 
       {/* The prototype's status select, emitting EXACTLY the three codes ("", "1", "0") through
           `maHienThi` → `doiLoc`. Outside the search `<form>`: a filter code, never typed text. */}
-      <label htmlFor="loc-hien-thi-danh-ba" className="an-thi-giac">
-        {NHAN_LOC_HIEN_THI}
-      </label>
-      <select
-        id="loc-hien-thi-danh-ba"
-        className={SELECT_CLASS}
-        value={loc.hienThi}
-        onChange={(e) => doiLoc({ hienThi: maHienThi(e.target.value) })}
-      >
-        {THU_TU_HIEN_THI.map((ma) => (
-          <option key={ma} value={ma}>
-            {LUA_CHON_HIEN_THI[ma].nhan}
-          </option>
-        ))}
-      </select>
+      <span className="contents">
+        <label htmlFor="loc-hien-thi-danh-ba" className="an-thi-giac">
+          {NHAN_LOC_HIEN_THI}
+        </label>
+        <select
+          id="loc-hien-thi-danh-ba"
+          className={SELECT_CLASS}
+          value={loc.hienThi}
+          onChange={(e) => doiLoc({ hienThi: maHienThi(e.target.value) })}
+        >
+          {THU_TU_HIEN_THI.map((ma) => (
+            <option key={ma} value={ma}>
+              {LUA_CHON_HIEN_THI[ma].nhan}
+            </option>
+          ))}
+        </select>
+      </span>
 
       {end}
     </div>

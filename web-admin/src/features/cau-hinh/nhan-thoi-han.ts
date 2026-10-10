@@ -72,11 +72,13 @@ export const GHI_CHU_SAU_KHI_GIEO =
  * Every clause was checked against the code before it was kept (08/10/2026):
  *
  * - `SLA_BANNER_UNIT` / `_HOLIDAYS`: `identity.AdvanceWorkingHours` counts working hours only (ADR 0007).
- * - `SLA_BANNER_APPLIES`: the spec's "Thay đổi chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu" is
- *   NOT true here and was reworded. A deadline is fixed at the act that fixes it and stored (rule 10
- *   invariant 2), and for a citizen's petition `han_xu_ly_xong` is fixed when staff settle the field,
- *   not on receipt (ADR 0028 decision E) — so a petition received BEFORE the save but classified after
- *   it takes the new figure. What is true for every record: a deadline already set never moves.
+ * - `SLA_BANNER_APPLIES`: the prototype's sentence with ONE word group changed (bug sheet row 36 asked
+ *   for the prototype's wording): "hồ sơ tiếp nhận" → "hồ sơ được đặt hạn". Read literally, "tiếp nhận"
+ *   is false here: a deadline is fixed at the act that fixes it and stored (rule 10 invariant 2), and
+ *   for a citizen's petition `han_xu_ly_xong` is fixed when staff settle the field, not on receipt (ADR
+ *   0028 decision E, §(c)) — so a petition received BEFORE the save but classified after it takes the
+ *   new figure. ADR 0028 §(c) stretches "tiếp nhận" to mean that act, but staff reading the banner do
+ *   not know that; the words they read must be true as they read them.
  * - `SLA_BANNER_DUE_SOON_*`: the three uses are real — the reminder digest (`slaReminders` →
  *   `ResolveDueSoonCutoff`, `service-petitions/internal/app/automation_jobs.go`), the task register's
  *   `soon=true` filter (`service-petitions/internal/http/nhiem_vu.go`), and the bell's "Sắp đến hạn"
@@ -87,8 +89,7 @@ export const GHI_CHU_SAU_KHI_GIEO =
 export const SLA_BANNER_LEAD = "Thời hạn tính theo ";
 export const SLA_BANNER_UNIT = "giờ làm việc";
 export const SLA_BANNER_HOLIDAYS = ", không tính ngày nghỉ và ngày lễ. ";
-export const SLA_BANNER_APPLIES =
-  "Thay đổi chỉ áp dụng cho hạn đặt sau thời điểm lưu; hạn đã đặt cho hồ sơ giữ nguyên.";
+export const SLA_BANNER_APPLIES = "Thay đổi chỉ áp dụng cho hồ sơ được đặt hạn sau thời điểm lưu.";
 export const SLA_BANNER_DUE_SOON_LEAD = "Cột ";
 export const SLA_BANNER_DUE_SOON_COLUMN = "Sắp đến hạn khi còn";
 export const SLA_BANNER_DUE_SOON_REST =

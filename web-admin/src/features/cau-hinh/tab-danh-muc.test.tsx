@@ -135,11 +135,22 @@ describe("one table across groups (spec 05 §3)", () => {
     expect(html).not.toContain("nhom-danh-muc");
   });
 
-  it("filter row: 'Tất cả (n)' pressed by default, one button per group, 'Thêm mục' at the end", () => {
-    const html = view({ loaiVanBan: [entry(TANG_DON_VI), entry(TANG_HE_THONG, { id: "b" })] });
+  it("filter row: 'Tất cả (n)' pressed by default, one button per group; 'Thêm mục' sits ABOVE it, beside the import (bug sheet row 28)", () => {
+    const html = view(
+      { loaiVanBan: [entry(TANG_DON_VI), entry(TANG_HE_THONG, { id: "b" })] },
+      { importButton: <div className="mb-3 flex justify-end">IMPORT</div> },
+    );
     expect(html).toMatch(/aria-pressed="true"[^>]*>Tất cả \(2\)<\/button>/);
     expect(html).toContain(">Loại văn bản</button>");
-    expect(html).toMatch(/ml-auto[^>]*>.*Thêm mục<\/button>/);
+    // One right-aligned row holds the import then the add button, before the filter group.
+    expect(html).toMatch(/<div class="flex flex-wrap items-center justify-end gap-2 \[&amp;&gt;div\]:mb-0"><div[^>]*>IMPORT<\/div><button[^>]*>.*?Thêm mục<\/button><\/div>/);
+    expect(html.indexOf("Thêm mục")).toBeLessThan(html.indexOf('aria-label="Lọc theo nhóm danh mục"'));
+  });
+
+  it("DENIED (no admin.lookup): neither the import nor 'Thêm mục' — no top row at all", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] }, { canWrite: false });
+    expect(html).not.toContain("Thêm mục");
+    expect(html).not.toContain("justify-end gap-2 [&amp;&gt;div]:mb-0");
   });
 
   it("D22 — a group with no row gets NO filter button (prototype derives them from the data)", () => {

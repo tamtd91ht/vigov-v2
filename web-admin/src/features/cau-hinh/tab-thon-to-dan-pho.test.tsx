@@ -89,6 +89,13 @@ describe("list and write buttons", () => {
     expect(html.indexOf("Nhập từ Excel")).toBeLessThan(html.indexOf(ADD_BUTTON));
   });
 
+  it("import and add sit in ONE right-aligned row (bug sheet row 28)", () => {
+    const html = view(true);
+    const row = /<div class="mb-3 flex flex-wrap items-center justify-end gap-2 \[&amp;&gt;div\]:mb-0">([^]*?)<\/div><div class="flex min-w-0 flex-col gap-3">/.exec(html)?.[1] ?? "";
+    expect(row).toContain("Nhập từ Excel");
+    expect(row).toContain(ADD_BUTTON);
+  });
+
   it("DENIED (no admin.org): the list is still there, NO button at all, and no read-only notice", () => {
     const html = view(false);
     expect(html).toContain("Thôn Bình An");
@@ -211,10 +218,31 @@ function form(open: Parameters<typeof ResidentialUnitForm>[0]["open"], serverErr
   );
 }
 
-describe("the add / edit form — the spec's grey row", () => {
+describe("the add / edit form — a dialog, like every Cấu hình add/edit (bug sheet row 32)", () => {
+  it("create: a modal dialog titled by the action, NOT the grey row inserted above the table", () => {
+    const html = form(openCreate(() => "k"));
+    expect(html).toMatch(/^<dialog[^>]*aria-labelledby="[^"]+"[^>]*aria-modal="true"/);
+    expect(html).toMatch(/<h2 id="[^"]+"[^>]*>Thêm thôn \/ tổ dân phố<\/h2>/);
+    // Not the grey row's frame any more.
+    expect(html).not.toMatch(/^<form/);
+    expect(html).not.toContain("sm:grid-cols-[1fr_12rem_8rem_8rem_auto]");
+    // Footer order of the other Cấu hình dialogs: Huỷ, then the primary action.
+    expect(html.indexOf(">Huỷ</button>")).toBeLessThan(html.indexOf(">Thêm</button>"));
+  });
+
+  it("edit: the dialog is titled with the unit's name", () => {
+    expect(form({ kind: "edit", unit: unit() })).toMatch(/<h2 id="[^"]+"[^>]*>Sửa Thôn Bình An<\/h2>/);
+  });
+
+  it("every field of the grey row is kept: Tên, Loại, Số hộ, Nhân khẩu, Trưởng thôn / Tổ trưởng, Thứ tự", () => {
+    const html = form(openCreate(() => "k"));
+    for (const id of ["o-ten-thon", "o-loai-thon", "o-so-ho", "o-nhan-khau", "o-truong-thon", "o-thu-tu-thon"]) {
+      expect(html).toContain(`id="${id}"`);
+    }
+  });
+
   it("create: no code box (the server derives it), the spec's fields, 'Thêm' and 'Huỷ'", () => {
     const html = form(openCreate(() => "k"));
-    expect(html).toMatch(/^<form[^>]*class="[^"]*bg-background[^"]*sm:grid-cols-\[1fr_12rem_8rem_8rem_auto\]/);
     expect(html).not.toContain('id="o-ma-thon"');
     expect(html).toContain('placeholder="Ví dụ: Tổ dân phố 5"');
     expect(html).toContain('<option value="" selected="">— Chọn loại —</option><option value="thon">Thôn</option>');

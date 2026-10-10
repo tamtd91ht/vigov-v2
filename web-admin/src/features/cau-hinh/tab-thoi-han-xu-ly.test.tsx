@@ -266,11 +266,14 @@ describe("hộp giải thích (spec 08)", () => {
     expect(html).not.toMatch(/Mặc định \d+ giờ/);
   });
 
-  it("câu áp dụng nói đúng điều hệ thống làm: hạn đã đặt giữ nguyên (luật 10 bất biến 2, ADR 0028)", () => {
-    // The spec's "chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu" is false here: a citizen's petition
-    // received before the save gets `han_xu_ly_xong` when its field is settled — possibly after.
+  it("câu chung theo bản mẫu, đúng điều hệ thống làm: 'được đặt hạn', không 'tiếp nhận' (luật 10 bất biến 2, ADR 0028)", () => {
+    // The prototype's "chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu" is false read literally: a
+    // citizen's petition received before the save gets `han_xu_ly_xong` when its field is settled — possibly after.
     const html = ve();
-    expect(html).toContain("Thay đổi chỉ áp dụng cho hạn đặt sau thời điểm lưu; hạn đã đặt cho hồ sơ giữ nguyên.");
+    expect(html).toContain(
+      "Thời hạn tính theo <b>giờ làm việc</b>, không tính ngày nghỉ và ngày lễ. " +
+        "Thay đổi chỉ áp dụng cho hồ sơ được đặt hạn sau thời điểm lưu.<br/>",
+    );
     expect(html).not.toContain("hồ sơ tiếp nhận sau thời điểm lưu");
   });
 

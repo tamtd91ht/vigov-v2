@@ -46,21 +46,24 @@ export function hasWeekday(scheduleKind: string): boolean {
  * tasks, incoming documents, citizens' petitions and đơn thư; escalation covers tasks, petitions
  * (against their RESOLVE deadline, not the acknowledge one) and incoming documents — NOT đơn thư.
  */
+// Bug sheet row 40: the sentences follow the prototype's (`automation.py:51-74`) word for word wherever
+// they are true here. Kept against it, on purpose: "văn bản đến" and "đơn thư" (the scope ADR 0058 §4
+// decided), "giờ làm việc" for "ngày" (rule 10 / ADR 0007 — the thresholds are working hours), and a
+// SECOND threshold of its own instead of "trễ gấp đôi" (the Báo Chủ tịch column is set separately, ADR
+// 0029), sent to "lãnh đạo trực tiếp" as that column is named.
 const JOBS: Readonly<Record<string, JobWords>> = {
   sla_reminders: {
     title: "Nhắc việc sắp đến hạn và đã quá hạn",
     description:
-      "Quét nhiệm vụ, văn bản đến, phản ánh của người dân và đơn thư; nhắc người phụ trách trước khi " +
-      "đến hạn và báo khi đã quá hạn. Cả việc bộ phận giữ mà chưa phân công ai. Mốc \"sắp đến hạn\" " +
-      "lấy từ tab Thời hạn xử lý.",
+      "Quét nhiệm vụ, văn bản đến, phản ánh và đơn thư; nhắc người phụ trách trước khi đến hạn và báo " +
+      "khi đã quá hạn. Cả việc bộ phận giữ mà chưa phân công ai. Mốc sắp đến hạn lấy từ Thời hạn xử lý.",
   },
   escalation: {
     title: "Leo thang việc trễ hạn",
     description:
-      "Áp cho nhiệm vụ, văn bản đến và phản ánh của người dân (tính theo hạn xử lý xong). " +
-      "Việc trễ quá ngưỡng thứ nhất thì báo lên lãnh đạo trực tiếp, trễ quá ngưỡng thứ hai thì báo " +
-      "lên Chủ tịch. Hai ngưỡng tính bằng giờ làm việc, lấy từ cột Báo lãnh đạo trực tiếp và Báo Chủ " +
-      "tịch của tab Thời hạn xử lý.",
+      "Việc trễ quá số giờ làm việc đã đặt thì báo lên lãnh đạo trực tiếp, trễ quá mốc thứ hai thì báo " +
+      "lên Chủ tịch. Số giờ lấy từ Thời hạn xử lý. Áp cho nhiệm vụ, văn bản đến và phản ánh (tính theo " +
+      "hạn xử lý xong).",
   },
   weekly_digest: {
     title: "Bản tin đầu tuần cho lãnh đạo",
