@@ -3,10 +3,11 @@ id: 0053-tong-quan-dem-truc-tiep-o-service-so-huu
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 85466506
+derived_from_commit: 2208b988
 expires: null
 owns_facts:
   - "/bao-cao theo prototype (chốt 09/10/2026 lần 2): bảng 'Xếp hạng bộ phận' có thanh ở Tổng việc và Quá hạn, Đúng hạn là % làm tròn tô màu theo ngưỡng 80/50, thứ tự cột và câu rỗng của prototype; biểu đồ So sánh với kỳ trước bằng SVG tự vẽ; xuất PDF/XLSX/PPTX dùng lại Tổng quan; các điểm nhỏ (nhãn, chú thích số tồn, ô không bấm, cỡ số, không đỏ, tiêu đề Thu - Chi); /tong-quan chỉ đổi tiêu đề Thu - Chi"
+  - "/bao-cao: năm điểm còn mở của sửa đổi 09/10/2026 lần 2 đã dựng thế nào ở bc041001 (hàng bảng bộ phận, Đúng hạn mẫu rỗng, màu biểu đồ theo hướng tốt, nội dung và tên tệp xuất, câu số tồn) — lựa chọn khi dựng, chủ dự án có thể đổi"
   - "/tong-quan đếm trực tiếp ở service sở hữu từng sổ, web-admin ghép, không bảng snapshot, không qua service-reporting — và cái giá"
   - "/bao-cao đếm trực tiếp ở service sở hữu như /tong-quan, không dùng service-reporting cho các con số ấy (chốt 04/10/2026)"
   - "kỳ so sánh của /bao-cao: Tuần/Tháng/Quý/Năm như /tong-quan; kỳ Tuỳ chọn so với cùng số ngày liền trước; đặc tả 13 §3/§9.1 bị thay cho kỳ có tên (chốt 04/10/2026)"
@@ -398,7 +399,7 @@ một con số sẽ hiện hai giá trị ở hai trang.
 ## Sửa đổi 09/10/2026 (lần 2) — trang `/bao-cao` theo prototype
 
 **Người quyết:** chủ dự án, 09/10/2026, trong phiên chính (`/fix-web-admin --menu=bao-cao`), qua phiếu
-hỏi. **Chưa dựng.** Mục này ghi thêm, không xoá phần trên; khi nói khác thì mục này thắng **cho riêng
+hỏi. Chưa dựng khi ghi; **đã dựng ở `bc041001`** (cách chọn năm điểm còn mở: cuối mục). Mục này ghi thêm, không xoá phần trên; khi nói khác thì mục này thắng **cho riêng
 `/bao-cao`**. Nguồn đối chiếu: prototype `../vigov-require/apps/admin/src/components/reports/`
 (`ReportWorkspace.tsx`, `MetricTile.tsx`, `RankingTable.tsx`) và đặc tả `docs/ui-ux/13-bao-cao.md`.
 
@@ -489,5 +490,24 @@ Phiên ghi tệp này thấy các điểm dưới đây khi đối chiếu proto
 | 3 | Màu thanh biểu đồ: prototype tô theo **hướng tốt** (`higher_is_better`, `ReportWorkspace.tsx:187-189`); đặc tả: âm đỏ, dương xanh (`13-bao-cao.md:83`) | Hai nguồn ngược nhau |
 | 4 | Tệp XLSX/PPTX có thêm bảng "Xếp hạng bộ phận" và biểu đồ so sánh không (`13-bao-cao.md:92-93`) | D4 chỉ nói dùng lại xuất của Tổng quan |
 | 5 | Câu *"chưa có kỳ trước để so"* trên số tồn: số tồn không có kỳ nào, câu này có thể đọc như "kỳ trước chưa có dữ liệu" | Câu chữ do chủ dự án chọn theo prototype; ghi lại để khách duyệt |
+
+### Đã dựng như sau (`bc041001`) — chủ dự án có thể đổi
+
+Năm điểm trên **chưa** được chủ dự án trả lời riêng; ngày 09/10 chủ dự án chỉ chọn chung "theo
+prototype". Lần dựng `bc041001` đã chọn như dưới. Đây là **lựa chọn khi dựng**, không phải quyết định của
+chủ dự án hay của khách — đổi được, chỉ cần nói.
+
+| # | Đã dựng | Chỗ trong mã |
+|---|---|---|
+| 1 | **Giữ hàng của B3**: mọi đơn vị (đơn vị không có việc hiện số 0) + dòng "Chưa xác định bộ phận" + mỗi đơn vị đã xoá mềm còn giữ việc là một dòng riêng (B5d), sắp theo Tổng việc giảm dần. Câu rỗng của prototype chỉ hiện khi **không có dòng nào** | `web-admin/src/features/report/unit-table.ts:87-110`; `report-view.tsx:331-337` |
+| 2 | Đúng hạn có mẫu rỗng hiện `—` màu **mờ**, không đỏ | `unit-table.ts:133-139` (trả `null`); `report-view.tsx:390,393` |
+| 3 | Màu thanh biểu đồ theo **hướng tốt** của từng chỉ số: tốt lên khi tăng — Hoàn thành, cả hai "Đúng hạn trong kỳ" (nhiệm vụ, phản ánh); tốt lên khi giảm — Trễ hạn; **trung tính, màu xám** — "Đến trong kỳ" (văn bản), "Tiếp nhận trong kỳ" (phản ánh). Prototype tô hai chỉ số trung tính xanh khi tăng — chủ dự án có thể đổi lại. Chỉ số có giá trị kỳ trước bằng 0 hoặc thiếu **không vào** biểu đồ | `comparison-chart.tsx:18-25,48-57`; hướng: `features/dashboard/view.tsx:279,309,346,1087,1114`; loại bỏ: `view.tsx:1983` |
+| 4 | Tệp xuất gồm các khối số liệu + bảng "Xếp hạng bộ phận" + phần so sánh **dưới dạng bảng** (Chỉ số · Kỳ này · Kỳ trước · Thay đổi · Đánh giá). Chỉ số tổng hợp. Bảng nào tài khoản không thấy trên màn thì không có trong tệp. Tên tệp `bao-cao-<kỳ>-YYYYMMDD` / `bao-cao-tuy-chon-<ngày đầu>-<ngày cuối>` | `report-export.ts:55-58,61-107,135-140` |
+| 5 | Số tồn hiện *"chưa có kỳ trước để so"* như prototype — **giữ** câu chữ | `features/dashboard/view.tsx:763,811` |
+
+**Điểm phụ, cùng tính chất.** Màu `leaf` dùng làm chữ nhỏ (ô Đúng hạn ≥ 80 `report-view.tsx:315`, dòng
+so sánh tốt lên `features/dashboard/view.tsx:805`) **không đạt** WCAG AA — khoảng 2,3:1 trên nền trắng
+(`web-admin/src/app/globals.css:185-189`). Lấy theo prototype, nằm trong nợ tương phản chủ dự án đã nhận
+ngày 07/10/2026 (ADR 0068 lần 6).
 
 → ADR 0068 §4, lần 6 #11 · ADR 0058 · luật 3 bất biến 4 · luật 5 bất biến 3c · luật 6

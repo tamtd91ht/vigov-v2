@@ -128,7 +128,8 @@ export function unitRowsFrom(
  * ≥ 50 warning, else bad. `null` when the unit completed no task with an original deadline: an empty
  * sample has no rate, and printing 0% would call the unit late for doing nothing wrong
  * (`ratioPercent`, the same rule as `/tong-quan`'s on-time figure). The prototype painted that "—"
- * red; the spec (04 A) and the owner (D1) make it muted.
+ * red; the spec (04 A) asks for it muted, and that is a build choice the owner may change (ADR 0053
+ * §Sửa đổi 09/10/2026 lần 2, "Đã dựng như sau" point 2) — not part of the owner's decision D1.
  */
 export function onTimeCell(
   row: Pick<UnitRow, "onTime" | "onTimeSample">,
