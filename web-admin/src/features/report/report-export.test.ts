@@ -164,7 +164,9 @@ describe("report export model — this page's figures, nothing recomputed", () =
   });
 });
 
-describe("report files — the shared builders carry the tables", () => {
+// Building real XLSX/PPTX/PDF files takes seconds; under a loaded full run the 5 s default timed out
+// with nothing wrong (the dashboard export tests hit the same). 30 s keeps a hang visible.
+describe("report files — the shared builders carry the tables", { timeout: 30_000 }, () => {
   it("XLSX: the unit table and the comparison, counts as NUMBER cells, Vietnamese intact", async () => {
     const blob = await buildXlsx(doc());
     expect(blob.type).toBe(EXPORT_MIME.xlsx);
