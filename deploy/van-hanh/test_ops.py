@@ -366,5 +366,73 @@ class Pods(unittest.TestCase):
             ops._secret_env("X=Bad_Secret/key")
 
 
+class Basemap(unittest.TestCase):
+    CM = {"OBJECT_STORAGE_BUCKET_PREFIX": "vigov-prod",
+          "OBJECT_STORAGE_PUBLIC_ENDPOINT": "https://s3.example.vn/",
+          "OBJECT_STORAGE_ENDPOINT": "https://minio.vigov-infra.svc:9000"}
+
+    def refuses(self, fn, fragment):
+        with self.assertRaises(ops.PlanError) as cm:
+            fn()
+        self.assertIn(fragment, str(cm.exception))
+
+    def test_plan_derives_bucket_endpoint_and_url(self):
+        p = ops.plan_basemap(self.CM, "20261008")
+        self.assertEqual(p["bucket"], "vigov-prod-public")
+        self.assertEqual(p["upload_endpoint"], "https://s3.example.vn")
+        self.assertEqual(p["dest"], "vigov-prod-public/basemap/20261008/")
+        # Read by the pod through the INTERNAL endpoint, never the public one the upload used.
+        self.assertEqual(p["basemap_url"], "https://minio.vigov-infra.svc:9000/vigov-prod-public/basemap/20261008")
+
+    def test_date_validation(self):
+        for bad, frag in [("2026-10-08", "YYYYMMDD"), ("19991231", "YYYYMMDD"), ("20261399", "có thật"),
+                          ("", "YYYYMMDD"), ("20261008; rm -rf /", "YYYYMMDD")]:
+            self.refuses(lambda b=bad: ops.check_basemap_date(b), frag)
+        self.assertEqual(ops.check_basemap_date(" 20261008 "), "20261008")
+
+    def test_http_is_refused_not_warned(self):
+        for key in ("OBJECT_STORAGE_PUBLIC_ENDPOINT", "OBJECT_STORAGE_ENDPOINT"):
+            cm = dict(self.CM, **{key: "http://minio:9000"})
+            self.refuses(lambda c=cm: ops.plan_basemap(c, "20261008"), "luật 13")
+
+    def test_endpoint_shape(self):
+        for bad in ("https://u:p@s3.example.vn", "https://s3.example.vn/bucket", "s3.example.vn", "https://"):
+            self.refuses(lambda b=bad: ops.https_origin("K", b), "không đường dẫn")
+
+    def test_missing_key_and_bad_prefix(self):
+        for k in self.CM:
+            cm = dict(self.CM)
+            del cm[k]
+            self.refuses(lambda c=cm: ops.plan_basemap(c, "20261008"), f"thiếu {k}")
+        self.refuses(lambda: ops.plan_basemap(dict(self.CM, OBJECT_STORAGE_BUCKET_PREFIX="Vigov_Prod"), "20261008"),
+                     "tên bucket")
+
+    def test_placeholder_checksum_refuses(self):
+        tools = [dict(ops.BASEMAP_TOOLS[0], sha256=ops.UNPINNED), dict(ops.BASEMAP_TOOLS[1], sha256="a" * 64)]
+        with self.assertRaises(ops.PlanError) as cm:
+            ops.basemap_tools(tools)
+        self.assertIn("chưa ghim SHA-256 cho pmtiles", str(cm.exception))
+        self.assertNotIn("mc,", str(cm.exception))
+        self.assertIn("checksums.txt", str(cm.exception))
+        for t in tools:
+            t["sha256"] = "b" * 64
+        self.assertEqual([r[0] for r in ops.basemap_tools(tools)], ["pmtiles", "mc"])
+        self.refuses(lambda: ops.basemap_tools([dict(tools[0], sha256="B" * 64)]), "chưa ghim")
+
+    def test_real_pins_are_whole_or_untouched(self):
+        # A half-pasted value must not pass as "pinned"; untouched placeholders are the only other state.
+        for t in ops.BASEMAP_TOOLS:
+            self.assertTrue(t["sha256"] == ops.UNPINNED or len(t["sha256"]) == 64, t["name"])
+            self.assertTrue(t["url"].startswith("https://"), t["name"])
+        self.assertIn(ops.PMTILES_VERSION, ops.BASEMAP_TOOLS[0]["url"])
+        self.assertIn(ops.MC_RELEASE, ops.BASEMAP_TOOLS[1]["url"])
+
+    def test_mc_host_percent_encodes_keys(self):
+        url = ops.mc_host_url("https://s3.example.vn", "AK", "s/k+e@y:1")
+        self.assertEqual(url, "https://AK:s%2Fk%2Be%40y%3A1@s3.example.vn")
+        self.refuses(lambda: ops.mc_host_url("https://s3.example.vn", "", "x"), "rỗng")
+        self.refuses(lambda: ops.mc_host_url("http://s3.example.vn", "a", "b"), "luật 13")
+
+
 if __name__ == "__main__":
     unittest.main()

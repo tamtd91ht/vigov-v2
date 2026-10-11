@@ -3,7 +3,7 @@ id: basemap-pmtiles
 tier: T4
 source: CURATED
 owner: web-admin
-derived_from_commit: 76b30e7b
+derived_from_commit: 31f96fbc
 expires: null
 owns_facts:
   - "quy trình dựng, tải lên, kiểm chủ quyền có ký và đưa vào dùng tệp nền PMTiles của bản đồ phản ánh và Bản đồ kinh tế số (/ban-do)"
@@ -43,8 +43,14 @@ curl -sI -H 'Range: bytes=0-126' "<giá trị BASEMAP-URL>/vn-mainland.pmtiles" 
 
 ## Dựng lần đầu hoặc làm mới
 
-Người vận hành chạy, trên máy có Internet, `pmtiles` (go-pmtiles v1.31.2), `curl`, `mc` có alias tới
-MinIO của ViGov. **Không** chạy trong CI hay trong pod.
+Bước 2–3 (dựng + tải lên) chạy theo **một trong hai** cách — **không bao giờ** trong pod:
+
+- **Job Jenkins `vigov-van-hanh`, việc `nen-ban-do`** (nhóm Bảo trì; chủ dự án chốt 11/10/2026): chạy
+  trên máy build, tự tải `pmtiles` + `mc` đã ghim SHA-256, lấy bucket và địa chỉ từ `common-config` của
+  `MT`, in dòng SHA-256, `BUILD-INFO.txt` và giá trị `BASEMAP-URL` để ghi vào danh mục ký. Job **không**
+  đổi `BASEMAP-URL`. Dựng job lần đầu (credential, mã băm): `deploy/van-hanh/README.md` §Nền bản đồ.
+- **Bằng tay** trên máy người vận hành có Internet, `pmtiles` (go-pmtiles v1.31.2), `curl`, `mc` có alias
+  tới MinIO của ViGov — các lệnh ở bước 2–3 dưới.
 
 1. **Chọn bản dựng:** một ngày `YYYYMMDD` có ở `https://build.protomaps.com/<YYYYMMDD>.pmtiles`
    (Protomaps chỉ giữ các ngày gần đây). Script tự từ chối bản dựng có lược đồ tile khác v4.
@@ -88,8 +94,9 @@ khung để "cho qua" — đó là điểm dừng của ADR 0072.
 ## Đưa vào dùng và quay lui
 
 1. Staging: đặt key `BASEMAP-URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/basemap/<YYYYMMDD>` trong
-   `common-config` của `vigov-staging` (`kubectl -n vigov-staging edit configmap common-config`), chạy
-   lại job `web-admin` (bước "Triển khai" ánh xạ key thành env `BASEMAP_URL`). Kiểm, ký.
+   `common-config` của `vigov-staging` — việc `sua-configmap` của job `vigov-van-hanh` (tự khởi động lại
+   `vigov-web-admin`), hoặc `kubectl -n vigov-staging edit configmap common-config` rồi chạy lại job
+   `web-admin` (bước "Triển khai" ánh xạ key thành env `BASEMAP_URL`). Kiểm, ký.
 2. Prod: cùng giá trị ở `vigov-prod`, chạy lại job `web-admin`.
 3. **Quay lui:** đặt lại giá trị cũ, chạy lại job. Vì vậy **không xoá** tiền tố cũ ngay — giữ ít nhất tới
    lần làm mới sau.

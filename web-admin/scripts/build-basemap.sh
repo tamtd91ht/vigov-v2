@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Builds and uploads the self-hosted Vietnam basemap of the PETITION maps (ADR 0072 §Sửa đổi 09/10/2026,
-# §Trả lời 09/10/2026). An OPERATOR runs this, on a machine with Internet access and an `mc` alias to
-# ViGov's MinIO — never CI, never a pod. The whole procedure, the mandatory sovereignty check and the
-# signed checklist: kb/40-runbooks/basemap-pmtiles.md. Read it first.
+# §Trả lời 09/10/2026). Runs on a machine with Internet access and an `mc` alias to ViGov's MinIO: the
+# Jenkins operations job `vigov-van-hanh`, task `nen-ban-do` (owner 11/10/2026), or an operator by hand
+# — never a pod. The whole procedure, the mandatory sovereignty check and the signed checklist:
+# kb/40-runbooks/basemap-pmtiles.md. Read it first.
 #
 #   build   web-admin/scripts/build-basemap.sh build  --date 20261008 --out /data/basemap
 #   upload  web-admin/scripts/build-basemap.sh upload --date 20261008 --out /data/basemap \
@@ -37,7 +38,7 @@ readonly SPRITE="light"
 die() { echo "DỪNG: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,12p' "$0" >&2
+  sed -n '2,13p' "$0" >&2
   exit 2
 }
 
@@ -105,7 +106,8 @@ build() {
 
   echo
   echo "XONG: $dir"
-  pmtiles show "$dir/$ARCHIVE" | head -30
+  # `|| true`: under pipefail, `head` closing the pipe early (SIGPIPE) must not fail a finished build.
+  pmtiles show "$dir/$ARCHIVE" | head -30 || true
   echo
   echo "Bước tiếp: upload, rồi KIỂM CHỦ QUYỀN có ký (kb/40-runbooks/basemap-pmtiles.md) TRƯỚC khi đổi BASEMAP-URL."
 }
