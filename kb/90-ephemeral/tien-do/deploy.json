@@ -289,11 +289,19 @@
     {
       "id": "viec-nen-ban-do-11-10",
       "menu": "ban-do-kinh-te-so",
-      "viec": "Job vigov-van-hanh có việc nen-ban-do (nhóm Bảo trì): dựng nền PMTiles bằng web-admin/scripts/build-basemap.sh trên máy build rồi tải lên <tiền tố>-public/config/map/<ngày> bằng khoá MinIO có sẵn của comms-secrets (dự phòng platform-secrets) đọc qua kubeconfig của job — không user MinIO mới, không credential/plugin Jenkins mới (chủ dự án 11/10/2026). Không tự đổi BASEMAP-URL.",
+      "viec": "Job vigov-van-hanh có việc nen-ban-do (nhóm Bảo trì): dựng nền PMTiles bằng web-admin/scripts/build-basemap.sh trên máy build rồi tải lên <tiền tố>-public/config/map/<ngày> bằng khoá MinIO có sẵn của comms-secrets (dự phòng platform-secrets) đọc qua kubeconfig của job — không user MinIO mới, không credential/plugin Jenkins mới (chủ dự án 11/10/2026). Không tự đổi BASEMAP_URL.",
       "trang_thai": "dang_lam",
       "bang_chung": "bf6f44c1 + commit này: unittest deploy/van-hanh 44 OK, make buildfiles PASS, ops.py basemap-tools nhận 2 checksum đã ghim (pmtiles digest GitHub, mc .sha256sum GitHub). Chưa chạy trên Jenkins thật.",
       "no_confirm": [],
-      "tiep_theo": "Người vận hành: (1) duyệt lại script form (In-process Script Approval); (2) chạy nen-ban-do MT=staging, bật chạy thử, rồi chạy thật; (3) sua-configmap BASEMAP-URL staging theo giá trị job in ra → kiểm chủ quyền có ký → prod. Rủi ro chưa kiểm: máy build ra được github.com và các host Protomaps; endpoint MinIO công khai nhận tải lên vài GB; policy khoá comms phủ config/map/* (nếu bị từ chối, job in dòng policy cần thêm). Đổi sang xong sau lượt chạy thật đầu tiên. web-admin/src/lib/may-chu/basemap.ts:53 còn ví dụ /basemap/<ngày> trong câu báo lỗi vận hành."
+      "tiep_theo": "Người vận hành: (1) duyệt lại script form (In-process Script Approval); (2) chạy nen-ban-do MT=staging, bật chạy thử, rồi chạy thật; (3) sua-configmap BASEMAP_URL staging theo giá trị job in ra → kiểm chủ quyền có ký → prod. Rủi ro chưa kiểm: máy build ra được github.com và các host Protomaps; endpoint MinIO công khai nhận tải lên vài GB; policy khoá comms phủ config/map/* (nếu bị từ chối, job in dòng policy cần thêm). Đổi sang xong sau lượt chạy thật đầu tiên. web-admin/src/lib/may-chu/basemap.ts:53 còn ví dụ /basemap/<ngày> trong câu báo lỗi vận hành."
+    },
+    {
+      "id": "ten-key-upper-snake-case-11-10",
+      "viec": "Chuẩn tên key ConfigMap/Secret = UPPER_SNAKE_CASE, trùng tên biến, nạp bằng envFrom (chủ dự án 11/10/2026; luật 11 bất biến 4, skill infra-config §1, ADR 0093 — đóng câu hỏi mở #3 của ADR 0089). Kiểm kê: 22 key, chỉ BASEMAP-URL gạch ngang → đổi BASEMAP_URL, bỏ ánh xạ riêng (Jenkinsfile web-admin, manifest).",
+      "trang_thai": "dang_lam",
+      "bang_chung": "427970b1 (luật + skill), 89d70fed (đổi tên + ADR 0093): unittest deploy/van-hanh 47 OK, make buildfiles PASS, check_env_map PASS, go test core/config OK, vitest basemap.test.ts 16/16.",
+      "no_confirm": [],
+      "tiep_theo": "Người vận hành, từng namespace (staging rồi prod): kiểm common-config có BASEMAP_URL → chạy job vigov-web-admin (gỡ env tường minh cũ) → kubectl exec … printenv BASEMAP_URL → CHỈ SAU ĐÓ xoá key cũ BASEMAP-URL. Đổi sang xong khi cả hai namespace đã xoá key cũ. Phiên vigov-v2-66 (comms đọc BASEMAP_URL, chưa commit): khi commit phải bỏ BASEMAP_URL khỏi CHI_WEB_ADMIN trong tools/check_env_map.py nếu comms đọc nó, sinh lại danh mục cho đủ comms + web-admin. vihat-miniapp: deploy/Jenkinsfile ~:2076-2128 còn set env --from --keys (key đã gạch dưới) — ngoài phạm vi."
     }
   ]
 }
