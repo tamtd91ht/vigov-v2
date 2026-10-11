@@ -421,6 +421,12 @@ message PetitionField {
   // false = RETIRED platform-wide: refuse for new intake and classification, keep labelling on read.
   // Plain bool on purpose: an entry missing it reads as retired, which refuses — the safe direction.
   bool active = 6;
+
+  // Hint text the citizen app shows in the empty description box once this field is picked (ADR 0091
+  // §6), at most 500 characters. "" = not declared: the client shows its generic hint, never one
+  // invented per field. Plain string like icon/tone: an older server that never sets it reads as "",
+  // which is the safe direction.
+  string description_placeholder = 7;
 }
 
 // Empty on purpose: the commune is "x-tenant-id" in metadata, and the answer is always the whole
