@@ -700,8 +700,9 @@ export function suaNhiemVu(
  * tiếp" nào để máy chủ tự chọn. Cái máy chủ vẫn giữ là TẤM BẢN ĐỒ: một bước sơ đồ không vẽ thì trả
  * 409.
  *
- * `chuyen-tiep` KHÔNG CÒN LÀ ĐÍCH CỦA TUYẾN NÀY (764bb92): máy chủ trả 400 và chỉ sang
- * `giaoLaiNhiemVu`. Chuyển tiếp nay là giao CÙNG nhiệm vụ cho nơi khác, không phải một trạng thái.
+ * `chuyen-tiep` LẠI LÀ ĐÍCH THƯỜNG CỦA TUYẾN NÀY từ 11/10/2026 (bảng lỗi dòng 17, máy chủ f33dd452 bỏ
+ * lỗi 400 của 764bb92): đi được từ `moi-giao` / `da-tiep-nhan` / `dang-thuc-hien`, kèm `handover` tuỳ
+ * chọn như prototype. Giao việc có Lý do chuyển (`giaoLaiNhiemVu`) cũng đưa nhiệm vụ vào đó.
  *
  * ⚠ BƯỚC `hoan-thanh` ĐI QUA HAI PHÉP KIỂM NỮA Ở MÁY CHỦ, và cả hai đều trả câu chữ mang thông
  * tin: `task.approve` (khoá hẹp hơn khoá cổng của tuyến), và **mọi việc con phải xong** — câu từ

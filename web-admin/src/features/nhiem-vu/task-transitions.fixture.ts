@@ -4,7 +4,7 @@ import type { KetQua } from "@/lib/api/goi";
  * TEST DATA ONLY — imported by `*.test.ts(x)` files, never by the screen.
  *
  * What `allowed_transitions` holds on a row in each status, as the server returns it (3b2330b,
- * `service-petitions/internal/domain/nhiem_vu.go:97-105`). The screen has NO copy of this table: it
+ * `service-petitions/internal/domain/nhiem_vu.go:104-112`). The screen has NO copy of this table: it
  * reads the list from each row (`hasTransition`). Tests need rows that look like server replies, and
  * one fixture keeps three test files from carrying three copies that drift apart.
  *
@@ -12,9 +12,10 @@ import type { KetQua } from "@/lib/api/goi";
  * only makes the sample rows old.
  */
 export const SERVER_TRANSITIONS: Readonly<Record<string, readonly string[]>> = {
-  "moi-giao": ["da-tiep-nhan", "dang-thuc-hien", "tam-dung"],
-  "da-tiep-nhan": ["dang-thuc-hien", "tam-dung"],
-  "dang-thuc-hien": ["cho-duyet", "hoan-thanh", "tam-dung"],
+  // `chuyen-tiep` as a target again since f33dd452 (owner rule 11/10/2026, bug sheet row 17).
+  "moi-giao": ["da-tiep-nhan", "dang-thuc-hien", "tam-dung", "chuyen-tiep"],
+  "da-tiep-nhan": ["dang-thuc-hien", "tam-dung", "chuyen-tiep"],
+  "dang-thuc-hien": ["cho-duyet", "hoan-thanh", "tam-dung", "chuyen-tiep"],
   "cho-duyet": ["hoan-thanh", "dang-thuc-hien"],
   "tam-dung": ["moi-giao", "da-tiep-nhan", "dang-thuc-hien"],
   "chuyen-tiep": ["da-tiep-nhan", "dang-thuc-hien"],

@@ -683,7 +683,6 @@ describe("compose box hand-over and files (prototype `TaskStatusPipeline.tsx:261
         labels={BANG_NHAN_MAC_DINH}
         permissions={quyenNhiemVu([QUYEN_CAP_NHAT_NHIEM_VU])}
         staffCode={staffCode}
-        showAssignment={false}
         sending={false}
         move={move}
         now={new Date("2026-09-15T03:00:00Z")}

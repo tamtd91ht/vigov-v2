@@ -189,6 +189,7 @@ import {
   UnverifiedContactBadge,
 } from "./petition-ui";
 import { PetitionKpis } from "./petition-kpis";
+import { StaffRecordedRatingSection } from "./staff-recorded-rating";
 import { afterPhotosHeadingId, ScenePhotos } from "./scene-photos";
 import { VerificationPhotos } from "./verification-photos";
 import {
@@ -731,6 +732,12 @@ export function SoPhanAnh({
             datDangMo(p);
             datLanTai((n) => n + 1);
           }}
+          // Staff-recorded rating: the 200 body replaces the open petition. The server writes no log row
+          // for it (only the audit entry), so the log is not re-read.
+          onStaffRatingRecorded={(p) => {
+            datLoiGhi(null);
+            datDangMo(p);
+          }}
           onOpenPetition={openByCode}
           dong={() => {
             datDangMo(null);
@@ -1206,6 +1213,7 @@ export function ChiTietPhieu({
   thon = [],
   onTaskCreated,
   onMergeChanged,
+  onStaffRatingRecorded,
   onOpenPetition,
   dong,
   phanLoai,
@@ -1248,6 +1256,11 @@ export function ChiTietPhieu({
   onTaskCreated?: () => void;
   /** The 200 body of a merge / unmerge (ADR 0087). Absent = no merge action is drawn (no write path). */
   onMergeChanged?: (p: petitions_phieuPhanAnhRa) => void;
+  /**
+   * The 200 body of a staff-recorded rating (bug sheet row 60). Absent = the block is not drawn (no write
+   * path). Also needs `feedback.resolve` in `permissions`.
+   */
+  onStaffRatingRecorded?: (p: petitions_phieuPhanAnhRa) => void;
   /** Opens another petition by lookup code, through the detail route. Absent = plain `?id=` links. */
   onOpenPetition?: (code: string) => void;
   dong: () => void;
@@ -1885,6 +1898,13 @@ export function ChiTietPhieu({
                   </div>
                 </form>
               </section>
+            )}
+
+            {/* `Ghi nhận đánh giá của người dân` (`FeedbackDetailDrawer.tsx:516-540`, bug sheet row 60) —
+                behind `feedback.resolve` (UX; the route checks the same key). A component of its own: it
+                holds state. Absent write path = not drawn. */}
+            {onStaffRatingRecorded !== undefined && coQuyen(permissions, QUYEN_DONG_PHAN_ANH) && (
+              <StaffRecordedRatingSection petition={phieu} onRecorded={onStaffRatingRecorded} />
             )}
 
             {/* `Tạo nhiệm vụ` (§13, owner decision D5) — `task.create` AND `feedback.read`; UX only. */}

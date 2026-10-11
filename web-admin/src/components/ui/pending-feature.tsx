@@ -28,7 +28,7 @@ import { Tooltip } from "./tooltip";
  * the one focusable thing, and its `aria-label` alone already says the whole sentence; the tooltip
  * only repeats it for a mouse.
  *
- * WHAT IS NOT A PLACEHOLDER: something the owner decided NOT to build (ADR 0062, ADR 0068 §14) gets
+ * WHAT IS NOT A PLACEHOLDER: something the owner decided NOT to build (ADR 0068 §14) gets
  * no spot at all — a placeholder for it announces a feature the authority refused.
  *
  * USES HOOKS (Radix, `useId`): never render it from a component that a mocked-React test runner

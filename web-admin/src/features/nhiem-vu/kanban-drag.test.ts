@@ -68,7 +68,9 @@ function gate(patch: Partial<KanbanDragGate> = {}): KanbanDragGate {
 
 describe("dragTargets — the drawer's list, nothing more", () => {
   it("`task.update`: the server's moves for the status", () => {
-    expect(dragTargets(at("dang-thuc-hien"), gate())).toEqual(["cho-duyet", "hoan-thanh", "tam-dung"]);
+    // `chuyen-tiep` is listed since f33dd452 (bug sheet row 17); it has no Kanban column, so no drop
+    // target is drawn for it — the list itself stays the drawer's.
+    expect(dragTargets(at("dang-thuc-hien"), gate())).toEqual(["cho-duyet", "hoan-thanh", "tam-dung", "chuyen-tiep"]);
   });
 
   it("the assignee without `task.update` may drag their own card", () => {
@@ -76,6 +78,7 @@ describe("dragTargets — the drawer's list, nothing more", () => {
       "cho-duyet",
       "hoan-thanh",
       "tam-dung",
+      "chuyen-tiep",
     ]);
   });
 

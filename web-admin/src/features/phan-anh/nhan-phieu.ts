@@ -1754,9 +1754,9 @@ export function inProgressCaption(n: number): string {
  * `id` là khoá để màn lấy đúng mục (`petitionPendingPart`), không lấy theo vị trí trong mảng.
  *
  * Mục KHÔNG có chỗ giữ trên màn nhưng vẫn ở đây, vì `tools/tien_do_san_pham.py` đếm mảng này cho
- * báo cáo tiến độ: ghi nhận đánh giá thay người dân (ĐÃ QUYẾT KHÔNG LÀM, ADR 0062 — câu của mục nói
- * rõ điều ấy, nên báo cáo không đọc nó thành việc còn nợ), email cán bộ và số ngày quá hạn (chưa nằm
- * trong bảng vị trí đã duyệt, ADR 0068 §14).
+ * báo cáo tiến độ: email cán bộ và số ngày quá hạn (chưa nằm trong bảng vị trí đã duyệt, ADR 0068 §14).
+ * `Ghi nhận đánh giá của người dân` (§8.6) đã rời mảng: dựng xong theo bảng lỗi dòng 60
+ * (`staff-recorded-rating.tsx`).
  *
  * MỖI MỤC PHẢI ĐÚNG VÀO NGÀY NÓ CÒN Ở ĐÂY. Dựng xong phần nào thì xoá mục ấy trong cùng lượt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
@@ -1769,14 +1769,6 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  {
-    id: "staffRecordedRating",
-    ten: "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
-    viSao:
-      "Không dựng theo quyết định của chủ dự án: cán bộ không ghi đánh giá thay người dân. Điểm " +
-      "đánh giá chỉ đến từ chính người dân trên Mini App (ADR 0050 điểm 2), và màn này hiện điểm ấy " +
-      "ở khối `Đánh giá của người dân`.",
-  },
   {
     id: "staffEmail",
     ten: "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",

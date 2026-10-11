@@ -3515,7 +3515,6 @@ export function ChiTietNhiemVu({
           labels={nhanTT}
           permissions={quyen}
           staffCode={maNguoiDangNhap}
-          showAssignment={showAssignment}
           sending={dangGui}
           move={doiTrangThai}
           history={history !== null && history.code === nhiemVu.code ? history : null}

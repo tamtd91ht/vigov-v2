@@ -156,15 +156,18 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
 
   it("`task.update`, not the assignee: the listed moves minus those needing approval", () => {
     // ADR 0065 NV1: the direct completion needs no `task.approve`.
+    // `chuyen-tiep` listed again since f33dd452 (bug sheet row 17).
     expect(clickableTransitions(at("dang-thuc-hien"), UPDATE_ONLY, OTHER)).toEqual([
       "cho-duyet",
       "hoan-thanh",
       "tam-dung",
+      "chuyen-tiep",
     ]);
     expect(clickableTransitions(at("moi-giao"), UPDATE_ONLY, OTHER)).toEqual([
       "da-tiep-nhan",
       "dang-thuc-hien",
       "tam-dung",
+      "chuyen-tiep",
     ]);
     // `cho-duyet` can no longer be paused — the server stopped listing it.
     expect(clickableTransitions(at("cho-duyet"), UPDATE_ONLY, OTHER)).toEqual([]);
@@ -175,6 +178,7 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
       "cho-duyet",
       "hoan-thanh",
       "tam-dung",
+      "chuyen-tiep",
     ]);
     // Return (cho-duyet → dang-thuc-hien) and reopen (hoan-thanh → dang-thuc-hien) need a reason.
     expect(clickableTransitions(at("cho-duyet"), UPDATE_AND_APPROVE, OTHER)).toEqual(["hoan-thanh"]);
@@ -195,6 +199,7 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
       "cho-duyet",
       "hoan-thanh",
       "tam-dung",
+      "chuyen-tiep",
     ]);
     // ...but work already sent up for review waits for a reviewer: no sign-off without the key.
     expect(clickableTransitions(at("cho-duyet"), NO_KEYS, ASSIGNEE)).toEqual([]);
@@ -225,15 +230,16 @@ describe("which moves a card offers — the SERVER's list, one source", () => {
     ).toEqual(["tam-dung"]);
   });
 
-  it("`chuyen-tiep` is offered from NO status, with every key — the server lists it nowhere", () => {
+  it("`chuyen-tiep` is offered exactly where the server lists it (target again since 11/10/2026)", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: this pinned "offered from NO status" (28/09 rule). The server
+    // (f33dd452, bug sheet row 17) lists it again from the three working statuses, as the prototype.
     const allKeys = quyenNhiemVu([
       QUYEN_CAP_NHAT_NHIEM_VU,
       QUYEN_DUYET_HOAN_THANH_NHIEM_VU,
       TASK_ASSIGN_PERMISSION,
     ]);
-    for (const from of MOI_TRANG_THAI) {
-      expect(clickableTransitions(at(from), allKeys, OTHER)).not.toContain("chuyen-tiep");
-    }
+    const from = MOI_TRANG_THAI.filter((s) => clickableTransitions(at(s), allKeys, OTHER).includes("chuyen-tiep"));
+    expect(from).toEqual(["moi-giao", "da-tiep-nhan", "dang-thuc-hien"]);
   });
 
   it("menu, drop target and drawer buttons all read that ONE list (source wiring)", () => {

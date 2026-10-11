@@ -48,8 +48,8 @@ import { TaskAssignmentForm } from "./task-assignment-block";
 import { NOT_SENT } from "./task-transitions.fixture";
 
 /**
- * §5.7 "Giao việc, chuyển việc" (owner decision 28/09/2026, 764bb92) and the removal of
- * `chuyen-tiep` from the status moves.
+ * §5.7 "Giao việc, chuyển việc" (owner decision 28/09/2026, 764bb92), and `chuyen-tiep` back among the
+ * status moves (owner rule 11/10/2026, bug sheet row 17, f33dd452).
  *
  * THE LIMIT, STATED: no DOM in vitest (`vitest.config.mts`). No case here clicks a button, changes
  * a select or checks where focus lands; what IS tested is the body the block would send, the gate,
@@ -294,22 +294,26 @@ describe("the drawer — block present / absent, and the stepper's `Chuyển ti�
     expect(html).not.toContain("không có lối ra khỏi trạng thái này");
   });
 
-  it("stepper: with the block shown, `Chuyển tiếp` is a button pointing at the block — not a move", () => {
-    // The server's list for `dang-thuc-hien` (3b2330b) — the drawer draws only what the row carries.
+  it("stepper: `Chuyển tiếp` is an ORDINARY move chip where the row lists it — never a jump to the block", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 (bug sheet row 17, f33dd452): this pinned the chip as a focus button
+    // aimed at the block (28/09 rule). The server lists `chuyen-tiep` again from the working statuses.
+    const html = drawer(
+      task({ allowed_transitions: ["cho-duyet", "hoan-thanh", "tam-dung", "chuyen-tiep"] }),
+      quyenNhiemVu([...ALL_WRITE_KEYS, TASK_ASSIGN_PERMISSION]),
+    );
+    expect(html).toContain('aria-label="Chuyển sang Chuyển tiếp"');
+    expect(html).toContain('id="task-status-chip-chuyen-tiep"');
+    expect(html).not.toContain(`aria-controls="${ASSIGNMENT_UNIT_FIELD_ID}"`);
+    expect(html).toContain("Chuyển sang Tạm dừng");
+  });
+
+  it("stepper: a row that does NOT list `chuyen-tiep` draws no `Chuyển tiếp` chip, even with `task.assign`", () => {
     const html = drawer(
       task({ allowed_transitions: ["cho-duyet", "hoan-thanh", "tam-dung"] }),
       quyenNhiemVu([...ALL_WRITE_KEYS, TASK_ASSIGN_PERMISSION]),
     );
-    expect(html).toMatch(
-      new RegExp(
-        `<button type="button" class="[^"]*" aria-controls="${ASSIGNMENT_UNIT_FIELD_ID}"[^>]*>` +
-          // The chip's second line (time in status, a dash) follows the label inside the button.
-        '<span class="[^"]*" data-step="branch">Chuyển tiếp</span><span[^>]*>—</span></button>',
-      ),
-    );
-    // And the status block no longer offers it as a move.
     expect(html).not.toContain("Chuyển sang Chuyển tiếp");
-    expect(html).toContain("Chuyển sang Tạm dừng");
+    expect(html).not.toMatch(/data-step="branch">Chuyển tiếp</);
   });
 
   it("the §5.4 edit form's read-only line now points at this block", () => {
@@ -400,26 +404,29 @@ describe("the block — what each state says", () => {
     }
   });
 
-  it("the effect sentence is always there and uses the COMMUNE's label of `moi-giao`", () => {
+  it("the effect sentence states the 11/10 rule, under the button, with the COMMUNE's label of `chuyen-tiep`", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 (bug sheet row 17): the sentence said the task went back to
+    // `moi-giao`, and was not drawn. The server now moves a forwarding (holder change + reason) to
+    // `chuyen-tiep` and leaves the status alone without a reason — the form says exactly that.
     const items = BANG_NHAN_MAC_DINH.thuTu.map((code, i) => ({
       code,
-      label: code === "moi-giao" ? "Việc mới về xã" : BANG_NHAN_MAC_DINH.nhan[code],
+      label: code === "chuyen-tiep" ? "Đã chuyển nơi khác" : BANG_NHAN_MAC_DINH.nhan[code],
       order: i + 1,
-      role: "chinh",
+      role: code === "tam-dung" || code === "chuyen-tiep" ? "re-nhanh" : "chinh",
       default_label: BANG_NHAN_MAC_DINH.nhan[code],
       default_order: i + 1,
-      customised: code === "moi-giao",
+      customised: code === "chuyen-tiep",
     }));
     const { bang, canhBao } = docBangNhanTrangThai({ ok: true, duLieu: { items } });
     expect(canhBao).toBeNull();
     const note = assignmentEffectNote(bang);
-    expect(note).toContain("“Việc mới về xã”");
-    expect(note).not.toContain("Mới giao");
+    expect(note).toContain("Lý do chuyển");
+    expect(note).toContain("“Đã chuyển nơi khác”");
+    expect(note).toContain("không ghi lý do thì trạng thái giữ nguyên");
     expect(note).toContain("Hạn xử lý giữ nguyên");
-    expect(assignmentEffectNote(BANG_NHAN_MAC_DINH)).not.toContain("cơ quan chủ trì");
-    expect(assignmentEffectNote(BANG_NHAN_MAC_DINH)).not.toContain("theo dõi");
-    // The form no longer draws the note: the prototype box has none (review r2 F-1, 07/10/2026).
-    expect(renderForm(task())).not.toContain(asInHtml(assignmentEffectNote(BANG_NHAN_MAC_DINH)));
+    expect(note).not.toContain(BANG_NHAN_MAC_DINH.nhan["moi-giao"]);
+    expect(assignmentEffectNote(BANG_NHAN_MAC_DINH)).toContain("“Chuyển tiếp”");
+    expect(renderForm(task())).toContain(asInHtml(assignmentEffectNote(BANG_NHAN_MAC_DINH)));
   });
 
   it("a unit no longer in the catalogue still shows as the current value, not as `Chưa xác định`", () => {

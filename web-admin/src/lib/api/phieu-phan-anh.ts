@@ -131,6 +131,8 @@ import type {
   petitions_post_citizen_reports_by_maTraCuu_closure,
   petitions_post_citizen_reports_by_maTraCuu_log_entries,
   petitions_post_citizen_reports_by_maTraCuu_referral,
+  petitions_post_citizen_reports_by_maTraCuu_staff_recorded_rating,
+  petitions_staffRecordedRatingIn,
   petitions_post_citizen_reports_by_maTraCuu_rejection,
   petitions_post_citizen_reports_by_maTraCuu_status,
   petitions_post_citizen_reports_by_maTraCuu_tasks,
@@ -717,6 +719,39 @@ export function setPetitionPublication(
   return docThanLoiGoi<petitions_phieuPhanAnhRa>(
     goiGhi(duongDanPhieu(mau, maTraCuu), "PUT", than, 200),
   );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * STAFF-RECORDED RATING (bug sheet row 60, owner rule 11/10/2026) — POST …/staff-recorded-rating,
+ * `feedback.resolve`
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** How the citizen gave the rating the officer records — the server accepts exactly these two. */
+export type StaffRatingChannel = "dien-thoai" | "tai-quay";
+
+/**
+ * POST …/staff-recorded-rating — record the rating a citizen gave by phone or at the counter.
+ *
+ * Kept APART from the citizen's own `rating` by the server (source `staff_recorded`): it counts in no
+ * satisfaction figure, moves no status, reopens nothing and notifies nobody. The 200 body is the petition
+ * carrying the new `staff_recorded_rating`.
+ *
+ * The two 409s (`citizen_rated`, `staff_rating_exists`) carry fixed server sentences that reach the
+ * screen VERBATIM through `thongBao` — re-deciding "may staff still record" here would be a second copy.
+ * The note is staff free text about a citizen's case: BODY only, absent when blank (rule 3, forbidden #4).
+ *
+ * NO Idempotency-Key: the route declares `idem.KhongCan` (UNIQUE per petition, a second send is a 409).
+ */
+export function recordStaffRating(
+  maTraCuu: string,
+  stars: number,
+  channel: StaffRatingChannel,
+  note: string,
+): Promise<KetQua<petitions_phieuPhanAnhRa>> {
+  const template: petitions_post_citizen_reports_by_maTraCuu_staff_recorded_rating["duongDan"] =
+    "/api/v1/citizen-reports/{maTraCuu}/staff-recorded-rating";
+  const body: petitions_staffRecordedRatingIn = { stars, channel, ...thanGhiChu(note) };
+  return docThanLoiGoi<petitions_phieuPhanAnhRa>(goiGhi(duongDanPhieu(template, maTraCuu), "POST", body, 200));
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

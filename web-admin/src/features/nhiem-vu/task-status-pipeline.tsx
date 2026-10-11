@@ -42,7 +42,7 @@ import {
   type ReasonMove,
 } from "./nhan-nhiem-vu";
 import type { BangNhanTrangThai, QuyenNhiemVu } from "./nhan-nhiem-vu"; // vi-name-ok: existing types, imported not declared (rule 12 inv 3)
-import { ASSIGNMENT_STEPPER_HINT, ASSIGNMENT_UNIT_FIELD_ID, staffInUnit, unitOptions } from "./task-assignment";
+import { staffInUnit, unitOptions } from "./task-assignment";
 import { ATTACH_ACCEPT, ATTACH_INPUT_LABEL, anyInFlight, storedIds } from "./task-attachments";
 import { PickedFileChips, useAttachmentUploads } from "./task-attachments-ui";
 import { TEXTAREA_CLASS, statusActiveClass, taskStatusHint } from "./task-spec";
@@ -260,7 +260,6 @@ export function TaskStatusPipeline({
   labels,
   permissions,
   staffCode,
-  showAssignment,
   sending,
   move,
   history = null,
@@ -274,8 +273,6 @@ export function TaskStatusPipeline({
   permissions: QuyenNhiemVu;
   /** `phien.staff.code` — `""` while the session is unread: then no row is this account's. */
   staffCode: string;
-  /** §5.7 block shown: the `Chuyển tiếp` chip moves focus to it (no status call). */
-  showAssignment: boolean;
   /** A write of the drawer is in flight. */
   sending: boolean;
   /** `POST /api/v1/tasks/{code}/status`. The caller refreshes the drawer and the register on success. */
@@ -307,10 +304,9 @@ export function TaskStatusPipeline({
   // Spec 07 §2: `Chờ duyệt` is on the main flow ONLY while the task is in it (prototype
   // `TaskStatusPipeline.tsx:222-225`). A move into it stays on the Kanban's menu and drop.
   const flow = TRANG_THAI_CHINH.filter((code) => code !== "cho-duyet" || task.status === code);
-  const branches = TRANG_THAI_RE_NHANH.filter(
-    (code) =>
-      task.status === code || (code === "chuyen-tiep" ? showAssignment : moveOf(code) !== null),
-  );
+  // Prototype `TaskStatusPipeline.tsx:25-27`: a branch is drawn only when it is the current status or
+  // pressable.
+  const branches = TRANG_THAI_RE_NHANH.filter((code) => task.status === code || moveOf(code) !== null);
   const disabled = sending || busy;
   const here =
     history === null ? null : elapsedText(statusEnteredAt(task, history.rows, history.complete), now);
@@ -423,22 +419,8 @@ export function TaskStatusPipeline({
           {branches.map((code) => {
             const label = nhanTrangThai(labels, code);
             const step: StepLook = code === task.status ? "current" : "branch";
-            // `Chuyển tiếp` IS NO LONGER A STATUS MOVE (owner decision 28/09/2026; `…/status` answers
-            // 400): with the §5.7 block shown, its chip moves FOCUS to that block — no call is made.
-            if (code === "chuyen-tiep" && showAssignment && step !== "current") {
-              return (
-                <button
-                  key={code}
-                  type="button"
-                  className={cn(CHIP_FRAME, CHIP_CLICKABLE)}
-                  aria-controls={ASSIGNMENT_UNIT_FIELD_ID}
-                  aria-label={`${label} — ${ASSIGNMENT_STEPPER_HINT}`}
-                  onClick={() => document.getElementById(ASSIGNMENT_UNIT_FIELD_ID)?.focus()}
-                >
-                  <ChipBody label={label} step={step} />
-                </button>
-              );
-            }
+            // `Chuyển tiếp` is an ORDINARY target again (owner rule 11/10/2026, bug sheet row 17): its chip
+            // opens the compose box like any move, with the optional hand-over, as the prototype does.
             const m = moveOf(code);
             return (
               <StatusChip

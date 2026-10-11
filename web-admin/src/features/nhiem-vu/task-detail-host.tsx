@@ -256,7 +256,9 @@ function TaskDetailBody({
         deNghiLuiHan(task.code, newDue, reason).then((kq) => {
           if (kq.ok) {
             // `pending_extension` of the task row changed: the drawer's strip and the list read it
-            // from the task, so both are read again — never set by hand here.
+            // from the task, so both are read again — never set by hand here. `docLai` bumps
+            // `luotDoc` = `lanLamMoiNhatKy`, so the timeline re-reads too and shows the server's new
+            // "Gửi đề nghị lùi hạn: … (chờ duyệt)" row (bug sheet row 17, f33dd452). Same on a decision.
             dispatch({ loai: "docLai", ma: task.code });
             onRegisterChanged();
             state.bumpExtensionQueue();

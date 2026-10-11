@@ -526,7 +526,7 @@ describe("ADR 0038 — lớp hai chạy TRÊN MÀN, không chỉ trong hàm thu�
 });
 
 describe("vòng đời — chỉ vẽ bước máy chủ liệt kê", () => {
-  it("`dang-thuc-hien`: Chờ duyệt, Hoàn thành (thẳng, không cần `task.approve` — ADR 0065 NV1), Tạm dừng", () => {
+  it("`dang-thuc-hien`: Chờ duyệt, Hoàn thành (thẳng, không cần `task.approve` — ADR 0065 NV1), Tạm dừng, Chuyển tiếp", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (lần hai): bài này ghim "KHÔNG có lối nhảy cóc sang
     // `hoan-thanh`" theo chuỗi chặt §6. Chủ đầu tư chọn bảng require: `dang-thuc-hien` → `hoan-thanh`
     // có thật (`nhiem_vu.go:100`), và danh sách nay đến từ máy chủ trên chính dòng (3b2330b).
@@ -534,12 +534,14 @@ describe("vòng đời — chỉ vẽ bước máy chủ liệt kê", () => {
     // Chủ đầu tư quyết định Chuyển tiếp là giao CÙNG nhiệm vụ cho nơi khác (khối §5.7,
     // `POST …/assignment`), và `…/status` nay trả 400 cho đích ấy (764bb92) — một nút ở đây là một
     // nút chắc chắn hỏng.
+    // ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 (bảng lỗi dòng 17, f33dd452): máy chủ bỏ lỗi 400 ấy và liệt kê lại
+    // `chuyen-tiep` từ ba trạng thái đang làm, như prototype — nên chip `Chuyển tiếp` là một bước thường.
     const html = veChiTiet({ status: "dang-thuc-hien" });
     // ĐỔI CHIỀU CÓ CHỦ Ý 07/10/2026 (spec 07 §2): `Chờ duyệt` is drawn only while current; the move
     // into it stays on the Kanban (menu and drop) — `kanban-move.test.tsx`.
     expect(html).not.toContain("Chuyển sang Chờ duyệt");
     expect(html).toContain("Chuyển sang Tạm dừng");
-    expect(html).not.toContain("Chuyển sang Chuyển tiếp");
+    expect(html).toContain("Chuyển sang Chuyển tiếp");
     expect(html).toContain("Chuyển sang Hoàn thành");
   });
 
@@ -1973,6 +1975,31 @@ describe("§5.9 Nhật ký & Trao đổi — khối trong drawer", () => {
     expect(html).toContain("Xem thêm</button>");
   });
 
+  it("extension rows (bug sheet row 17, f33dd452): multi-line text keeps its line breaks, verbatim", () => {
+    const row = (id: string, note: string) => ({
+      id,
+      at: "2026-10-11T03:00:00Z",
+      actor_code: CB,
+      status: "dang-thuc-hien",
+      unit: "",
+      assignee: "",
+      note,
+      attachments: [],
+    });
+    const request = "Gửi đề nghị lùi hạn: 17:00 ngày 20/10/2026 → 17:00 ngày 25/10/2026 (chờ duyệt)\nLý do: Chờ hồ sơ bổ sung.";
+    const approved = "Duyệt lùi hạn: 17:00 ngày 20/10/2026 → 17:00 ngày 25/10/2026\nĐồng ý.";
+    const refused = "Từ chối đề nghị lùi hạn: 17:00 ngày 20/10/2026 → 17:00 ngày 25/10/2026";
+    const html = veNhatKy({
+      pha: "xong",
+      dong: [row("nknv-3", refused), row("nknv-2", approved), row("nknv-1", request)],
+      conNua: false,
+    });
+    // The newline reaches the markup untouched, inside a paragraph that renders it (`white-space: pre-line`).
+    for (const note of [request, approved, refused]) {
+      expect(html).toMatch(new RegExp(`<p class="[^"]*whitespace-pre-line[^"]*">${note.replace(/[()]/g, "\\$&")}</p>`));
+    }
+  });
+
   it("đọc hỏng: câu máy chủ NGUYÊN VĂN, role=alert — và KHÔNG nói `Chưa có ghi chép nào.`", () => {
     const html = veNhatKy({ pha: "loi", thongBao: "Không tìm thấy nhiệm vụ." });
     expect(html).toContain('role="alert">Không tìm thấy nhiệm vụ.');
@@ -2182,8 +2209,10 @@ describe("`Trả lại để làm tiếp` — chỉ ở `cho-duyet`, chỉ với
     expect(chipMove(t, Q_CAP_NHAT, NGUOI_KHAC, "cho-duyet")).toEqual({ target: "cho-duyet", kind: "plain" });
     expect(chipMove(t, Q_CAP_NHAT, NGUOI_KHAC, "dang-thuc-hien")).toBeNull();
     expect(chipMove(t, Q_CAP_NHAT, NGUOI_KHAC, "moi-giao")).toBeNull();
-    // `chuyen-tiep` is never a status move (`…/status` answers 400 for it).
-    expect(chipMove(t, Q_DUYET, NGUOI_KHAC, "chuyen-tiep")).toBeNull();
+    // ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 (bug sheet row 17, f33dd452): `chuyen-tiep` is an ordinary status
+    // move again where the server lists it — it used to be pinned `null` (`…/status` answered 400).
+    expect(chipMove(t, Q_DUYET, NGUOI_KHAC, "chuyen-tiep")).toEqual({ target: "chuyen-tiep", kind: "plain" });
+    expect(chipMove(nhiemVu({ status: "cho-duyet" }), Q_DUYET, NGUOI_KHAC, "chuyen-tiep")).toBeNull();
     // DENIED: no `task.update` and not the assignee ⇒ no chip is a move, listed or not.
     for (const code of ["cho-duyet", "hoan-thanh", "tam-dung"]) {
       expect(chipMove(t, quyenNhiemVu([]), NGUOI_KHAC, code)).toBeNull();

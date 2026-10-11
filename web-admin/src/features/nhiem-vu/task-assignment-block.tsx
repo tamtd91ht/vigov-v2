@@ -33,6 +33,7 @@ import {
   ASSIGNMENT_UNIT_REQUIRED,
   assignmentBody,
   assignmentDirectoryError,
+  assignmentEffectNote,
   assignmentFormFromTask,
   assignmentOutcomeText,
   assignmentSubmitLabel,
@@ -54,8 +55,9 @@ const HANDOVER_LABEL_CLASS = "text-ink block text-[11.5px] font-medium";
  * §5.7 "Giao việc, chuyển việc" in the drawer — spec 07 §6e: a page-grey box holding the two
  * `HandoverFields` selects (unit, then the person — filtered by that unit), the reason, and
  * `[UserPlus] Giao việc` (`Chuyển việc` once a reason is typed). `POST /api/v1/tasks/{ma}/assignment`,
- * `task.assign` — ONE route for both words (ADR 0076 #4c keeps the 28/09 rule on this route: the task
- * goes back to "Chưa thực hiện" for the new holder, which the hint line under the button says).
+ * `task.assign` — ONE route for both words. The status follows the server's rule of 11/10/2026 (bug sheet
+ * row 17): a unit/assignee change WITH a `Lý do chuyển` moves the task to "Chuyển tiếp"; without one the
+ * status is unchanged. The line under the button says exactly that (`assignmentEffectNote`).
  *
  * THE CALLER DECIDES WHETHER IT IS DRAWN (`canShowAssignment`) and draws its heading (the drawer's
  * `Section`, id `tieu-de-giao-viec-chuyen-viec`). No second gate here.
@@ -125,8 +127,7 @@ export function TaskAssignmentForm({
   task,
   units,
   directory,
-  // Kept on the props: callers and tests pass it; the status note it fed is gone (review r2 F-1).
-  labels: _labels,
+  labels,
   form,
   change,
   sending,
@@ -246,9 +247,11 @@ export function TaskAssignmentForm({
       >
         {assignmentSubmitLabel(form)}
       </Button>
-      {/* No line about what the act does to the status: the prototype's box has none
-          (TaskDetailDrawer.tsx:498-536), and the owner's 07/10 rule is "follow the prototype" (review
-          r2 F-1). The 28/09 status reset still happens on the server (ADR 0076 #4c). */}
+      {/* What the act does to the status, before it is pressed (bug sheet row 17, 11/10/2026): a holder
+          change WITH a reason lands in `Chuyển tiếp`, without one the status stays — the server's rule
+          (`domain.HandoverStatus`). The prototype's box has no such line; an officer forwarding a task
+          must not find its status changed without having been told. */}
+      <p className="text-ink-muted m-0 text-[11px]">{assignmentEffectNote(labels)}</p>
     </form>
   );
 }

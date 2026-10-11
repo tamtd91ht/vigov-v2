@@ -788,8 +788,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // backends of the heat map, the report, the hamlet, the act files and the log-file removal landed and
     // the log was decided always internal (ADR 0041 §Sửa đổi 09/10/2026, 0053 §C, 0072, 0088). FIVE once
     // the duplicates block was built (ADR 0087, backend b97a6379 / 49b689a4). FOUR once `scope=related`
-    // was served (bug sheet row 57, a06a12ab).
-    expect(PHAN_CHUA_DUNG.length).toBe(4);
+    // was served (bug sheet row 57, a06a12ab). THREE once the staff-recorded rating was built (bug sheet
+    // row 60, backend f33dd452).
+    expect(PHAN_CHUA_DUNG.length).toBe(3);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -806,9 +807,9 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(tatCa()).not.toMatch(/không có tuyến ghi nó/);
   });
 
-  it("§8.6 stays listed, with the reason — a decision, not a missing route", () => {
-    const muc = PHAN_CHUA_DUNG.find((p) => p.ten.includes("§8.6"));
-    expect(muc?.viSao).toContain("cán bộ không ghi đánh giá thay người dân");
+  it("§8.6 left the list — the staff-recorded rating is built (bug sheet row 60, 11/10/2026)", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("§8.6"))).toBe(false);
+    expect(() => petitionPendingPart("staffRecordedRating")).toThrow();
   });
 
   it("the KPI cards, the heat-map (§9) and Báo cáo (§10) tabs all left the list — built 09/10/2026", () => {
@@ -826,7 +827,6 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(ten).not.toContain("Có thể trùng với phiếu khác");
     expect(() => petitionPendingPart("duplicates")).toThrow();
     expect(ten).toEqual([
-      "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
       "Đính ảnh hiện trường",
       "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",

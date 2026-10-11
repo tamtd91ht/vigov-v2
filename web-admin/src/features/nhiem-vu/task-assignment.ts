@@ -1,15 +1,18 @@
 /**
  * §5.7 "Giao việc, chuyển việc" — the pure half of the drawer block (`task-assignment-block.tsx`).
  *
- * ONE ACT, ONE CALL (owner decision 28/09/2026): "Chuyển tiếp" is the SAME task handed to another
- * unit or person, `POST /api/v1/tasks/{ma}/assignment`, behind `task.assign`.
+ * ONE ACT, ONE CALL (owner decision 28/09/2026): "Chuyển việc" is the SAME task handed to another
+ * unit or person, `POST /api/v1/tasks/{ma}/assignment`, behind `task.assign`. Since 11/10/2026
+ * `chuyen-tiep` is ALSO an ordinary target of `…/status` again (the pipeline's branch chip).
  *
  * ONE ROLE, NOT THREE (ADR 0065 NV5, user decision 30/09/2026): "cơ quan chủ trì" IS `unit` and
  * "chuyên viên theo dõi" IS `assignee`. `lead_unit` / `monitor` are gone from the contract and the
  * server answers 400 to either — so changing the officer who follows a task is changing `assignee`
  * here. What the server does (`service-petitions/internal/domain/task_assignment.go`):
  *
- *   unit or assignee changed      status back to `moi-giao` — the new holder acknowledges again
+ *   holder changed WITH a note    a forwarding ("Chuyển việc"): status → `chuyen-tiep` (owner rule
+ *                                 11/10/2026, bug sheet row 17, `domain.HandoverStatus`)
+ *   holder changed, NO note       status UNCHANGED
  *   the deadline                  NEVER changes (ADR 0038: only an approved extension moves it)
  *   terminal task                 409 `task_state` — hence no block on a terminal task
  *
@@ -104,9 +107,9 @@ export function canShowAssignment(permissions: QuyenNhiemVu, status: string): bo
 /** Server bound: the note IS a timeline line (`domain.NoiDungNhatKyToiDa`, `nhiem_vu_ghi.go:43`). */
 export const ASSIGNMENT_NOTE_MAX = 5000;
 
-/** Anchor of the block — the stepper's `Chuyển tiếp` branch leads here (user decision 2). */
+/** Anchor of the block. */
 export const ASSIGNMENT_BLOCK_ID = "giao-viec-chuyen-viec";
-/** First field of the block: where focus lands from the stepper. */
+/** First field of the block. */
 export const ASSIGNMENT_UNIT_FIELD_ID = "giao-lai-bo-phan";
 
 export const ASSIGNMENT_TITLE = "Giao việc, chuyển việc";
@@ -149,9 +152,6 @@ export function staffInUnit<T extends { readonly department_id: string }>(staff:
   return unit === "" ? [...staff] : staff.filter((c) => c.department_id === unit);
 }
 
-/** The stepper's `Chuyển tiếp` branch, as a control: its accessible name says where it leads. */
-export const ASSIGNMENT_STEPPER_HINT = "đến khối Giao việc, chuyển việc";
-
 /**
  * The staff directory could not be read. SAYS THE CONSEQUENCE: the staff box keeps only the
  * person already recorded (and "nobody"), while handing the task to a unit still works — the same
@@ -172,15 +172,17 @@ export function assignmentDoneText(code: string): string {
 }
 
 /**
- * The sentence ALWAYS visible above the button: what the act does to the status and the deadline,
- * BEFORE the officer presses it. The status name comes from the COMMUNE'S label table (decision
- * #21) — a commune that renamed `moi-giao` must read its own word here, not "Mới giao".
+ * The line under the button: what the act does to the status and the deadline, BEFORE the officer
+ * presses it — the server's rule (`domain.HandoverStatus`, owner rule 11/10/2026): a holder change WITH
+ * a `Lý do chuyển` is a forwarding and lands in `chuyen-tiep`; without one the status stays. The status
+ * name comes from the COMMUNE'S label table (decision #21) — a commune that renamed `chuyen-tiep` must
+ * read its own word here.
  */
 export function assignmentEffectNote(labels: BangNhanTrangThai): string {
   return (
-    "Đổi bộ phận hoặc người thực hiện thì nhiệm vụ trở về trạng thái " +
-    `“${nhanTrangThai(labels, "moi-giao")}” để bên nhận tiếp nhận lại. Hạn xử lý giữ nguyên — ` +
-    "hạn chỉ dịch qua đề nghị lùi hạn có người duyệt."
+    "Đổi bộ phận hoặc người thực hiện kèm Lý do chuyển thì nhiệm vụ sang trạng thái " +
+    `“${nhanTrangThai(labels, "chuyen-tiep")}”; không ghi lý do thì trạng thái giữ nguyên. Hạn xử lý ` +
+    "giữ nguyên — hạn chỉ dịch qua đề nghị lùi hạn có người duyệt."
   );
 }
 
