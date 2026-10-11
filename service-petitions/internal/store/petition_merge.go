@@ -189,8 +189,12 @@ func (s *PhieuPhanAnhStore) MergedPetitionsForUpdate(ctx context.Context, tx *st
 //
 // THE WHERE CLAUSE CARRIES THE LINK AND THE STATUS read under the lock: a petition unmerged or moved
 // meanwhile is a refusal, never moved by an act on a main petition it no longer belongs to.
+//
+// `at` IS THE INSTANT OF THE MAIN PETITION'S ACT: `dong_luc` on the way into `da-dong`, and the
+// merged petition's OWN `awaiting_confirmation_at` on the way into `cho-dan-xac-nhan` (migration 0043,
+// ADR 0047 G4) — its citizen is asked to confirm from that instant, like the main's.
 func (s *PhieuPhanAnhStore) FollowMain(ctx context.Context, tx *store.ScopedTx, id, mainID string,
-	from, to domain.TrangThai, workDoneAt time.Time, result string, closedAt time.Time) error {
+	from, to domain.TrangThai, workDoneAt time.Time, result string, at time.Time) error {
 
 	var (
 		res sql.Result
@@ -198,17 +202,21 @@ func (s *PhieuPhanAnhStore) FollowMain(ctx context.Context, tx *store.ScopedTx, 
 	)
 	switch to {
 	case domain.ChoDanXacNhan:
+		// COALESCE as on every other path: domain.StatusEntryTimes answers NULL when `from` already is
+		// the target, which domain.FollowsMain keeps from reaching here.
+		_, awaitingAt := domain.StatusEntryTimes(from, to, at)
 		const stmt = `UPDATE phieu_phan_anh
 			SET trang_thai = 'cho-dan-xac-nhan', xu_ly_xong_luc = COALESCE(xu_ly_xong_luc, $3),
-			    cap_nhat_luc = now()
+			    awaiting_confirmation_at = COALESCE($6, awaiting_confirmation_at), cap_nhat_luc = now()
 			WHERE tenant_id = $1 AND id = $2 AND merged_into = $4 AND trang_thai = $5 AND deleted_at IS NULL`
-		res, err = tx.Exec(ctx, stmt, string(tx.TenantID()), id, khongThanhNull(workDoneAt), mainID, string(from))
+		res, err = tx.Exec(ctx, stmt, string(tx.TenantID()), id, khongThanhNull(workDoneAt), mainID, string(from),
+			khongThanhNull(awaitingAt))
 	case domain.DaDong:
 		const stmt = `UPDATE phieu_phan_anh
 			SET trang_thai = 'da-dong', ket_qua_xu_ly = $3, dong_luc = $4,
 			    xu_ly_xong_luc = COALESCE(xu_ly_xong_luc, $5), cap_nhat_luc = now()
 			WHERE tenant_id = $1 AND id = $2 AND merged_into = $6 AND trang_thai = $7 AND deleted_at IS NULL`
-		res, err = tx.Exec(ctx, stmt, string(tx.TenantID()), id, result, closedAt, khongThanhNull(workDoneAt),
+		res, err = tx.Exec(ctx, stmt, string(tx.TenantID()), id, result, at, khongThanhNull(workDoneAt),
 			mainID, string(from))
 	default:
 		return fmt.Errorf("phieu_phan_anh: phiếu gộp không đi theo phiếu chính vào %q", to)

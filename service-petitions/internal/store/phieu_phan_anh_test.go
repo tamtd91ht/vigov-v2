@@ -94,6 +94,9 @@ func dongPhieu(sua map[string]driver.Value) map[string]driver.Value {
 		"merged_into": nil,
 		"merged_at":   nil,
 		"merged_by":   nil,
+		// The status-entry times (migration 0043, ADR 0047 G4) — NULL = not recorded.
+		"forwarded_for_processing_at": nil,
+		"awaiting_confirmation_at":    nil,
 		// Only cotPhieuCoTaoLuc asks for it; the map is shared by both shapes, and a value the SELECT
 		// did not ask for is simply not read.
 		"tao_luc": mocVaoSo,

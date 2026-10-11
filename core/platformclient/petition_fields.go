@@ -56,6 +56,9 @@ type PetitionField struct {
 	Icon         string // "" = not declared: render a neutral icon
 	Tone         string // "" = not declared, or a tone this build does not know
 	Active       bool
+	// DescriptionPlaceholder is the example sentence for the citizen's "Mô tả" box, "" = none
+	// (ADR 0091 §6). An older platform never sets it, so "" must stay a valid answer.
+	DescriptionPlaceholder string
 }
 
 // PetitionFieldSet is one answer: every usable code, retired ones included, in platform order.
@@ -207,7 +210,8 @@ func (r *PetitionFields) usable(ctx context.Context, in []*platformv1.PetitionFi
 			tone = "" // unknown or undeclared: the client renders neutral, never guesses
 		}
 		pf := PetitionField{Code: code, DefaultLabel: f.GetDefaultLabel(), SortOrder: int(f.GetSortOrder()),
-			Icon: f.GetIcon(), Tone: tone, Active: f.GetActive()}
+			Icon: f.GetIcon(), Tone: tone, Active: f.GetActive(),
+			DescriptionPlaceholder: f.GetDescriptionPlaceholder()}
 		set.list = append(set.list, pf)
 		set.byCode[code] = pf
 	}

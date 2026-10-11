@@ -177,7 +177,10 @@ func dongPhieuMau(sua map[string]any) map[string]driver.Value {
 		"merged_into": nil,
 		"merged_at":   nil,
 		"merged_by":   nil,
-		"tao_luc":     mocGocThu,
+		// The status-entry times (migration 0043) — NULL: never entered, or not recorded.
+		"forwarded_for_processing_at": nil,
+		"awaiting_confirmation_at":    nil,
+		"tao_luc":                     mocGocThu,
 	}
 	for k, v := range sua {
 		d[k] = v

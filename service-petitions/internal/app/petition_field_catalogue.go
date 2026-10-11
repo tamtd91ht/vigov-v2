@@ -64,7 +64,8 @@ func (p platformTier1) Fields(ctx context.Context) ([]domain.FieldDefault, error
 	out := make([]domain.FieldDefault, 0, len(all))
 	for _, f := range all {
 		out = append(out, domain.FieldDefault{Code: f.Code, DefaultLabel: f.DefaultLabel,
-			SortOrder: f.SortOrder, Icon: f.Icon, Tone: f.Tone, Active: f.Active})
+			SortOrder: f.SortOrder, Icon: f.Icon, Tone: f.Tone, Active: f.Active,
+			DescriptionPlaceholder: f.DescriptionPlaceholder})
 	}
 	return out, nil
 }

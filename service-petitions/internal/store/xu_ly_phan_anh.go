@@ -449,15 +449,23 @@ func (s *PhieuPhanAnhStore) TheoMaTraCuuDeSua(ctx context.Context, tx *store.Sco
 // worked on must NOT drag it backwards to `da-chuyen-xu-ly` — docs/ui-ux/09 §8.5 titles that block
 // "Chuyển xử lý, KHÔNG đổi trạng thái" — and deciding which of the two cases this is belongs in the
 // use case, where the audit entry records the before and after.
+//
+// `at` IS THE INSTANT OF THE ACT. When the status really moves into `da-chuyen-xu-ly` it becomes
+// `forwarded_for_processing_at` in this same statement (domain.StatusEntryTimes, ADR 0047 G4); a
+// re-assignment that keeps the status writes NULL there and COALESCE keeps the handed-over instant.
 func (s *PhieuPhanAnhStore) PhanCong(ctx context.Context, tx *store.ScopedTx,
-	id, boPhanID, canBoID string, tuTrangThai, sangTrangThai domain.TrangThai) error {
+	id, boPhanID, canBoID string, tuTrangThai, sangTrangThai domain.TrangThai, at time.Time) error {
 
+	forwardedAt, awaitingAt := domain.StatusEntryTimes(tuTrangThai, sangTrangThai, at)
 	const stmt = `UPDATE phieu_phan_anh
-		SET bo_phan_id = $3, can_bo_xu_ly_id = $4, trang_thai = $5, cap_nhat_luc = now()
+		SET bo_phan_id = $3, can_bo_xu_ly_id = $4, trang_thai = $5,
+		    forwarded_for_processing_at = COALESCE($7, forwarded_for_processing_at),
+		    awaiting_confirmation_at = COALESCE($8, awaiting_confirmation_at), cap_nhat_luc = now()
 		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $6 AND deleted_at IS NULL`
 
 	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id,
-		boPhanID, rongThanhNull(canBoID), string(sangTrangThai), string(tuTrangThai))
+		boPhanID, rongThanhNull(canBoID), string(sangTrangThai), string(tuTrangThai),
+		khongThanhNull(forwardedAt), khongThanhNull(awaitingAt))
 	if err != nil {
 		return fmt.Errorf("phieu_phan_anh: phân công: %w", err)
 	}
@@ -471,18 +479,28 @@ func (s *PhieuPhanAnhStore) PhanCong(ctx context.Context, tx *store.ScopedTx,
 // step. It is the instant domain.QuaHan compares against once the work is done — the reason a
 // petition finished late STAYS late — so writing it at the wrong transition would freeze the
 // comparison at the wrong moment and change an already-published figure.
+//
+// `at` IS THE INSTANT OF THE ACT, and becomes the status-entry time of migration 0043 when the step
+// enters `da-chuyen-xu-ly` or `cho-dan-xac-nhan` (domain.StatusEntryTimes, ADR 0047 G4) — in this
+// statement, so the move and its time cannot be split.
 func (s *PhieuPhanAnhStore) DoiTrangThai(ctx context.Context, tx *store.ScopedTx,
-	id string, tuTrangThai, sangTrangThai domain.TrangThai, xuLyXongLuc time.Time) error {
+	id string, tuTrangThai, sangTrangThai domain.TrangThai, xuLyXongLuc, at time.Time) error {
 
 	// COALESCE, NOT A PLAIN ASSIGNMENT. A zero time arrives as NULL, and `COALESCE($4, column)`
 	// leaves an instant already recorded untouched — so a step that is not the finishing step cannot
-	// blank out the finishing instant of a petition that was reopened and finished again.
+	// blank out the finishing instant of a petition that was reopened and finished again. The two
+	// status-entry columns take the same shape for the same reason; a re-entry carries a non-NULL
+	// instant and so overwrites (G4: "mở lại lấy giờ mới nhất").
+	forwardedAt, awaitingAt := domain.StatusEntryTimes(tuTrangThai, sangTrangThai, at)
 	const stmt = `UPDATE phieu_phan_anh
-		SET trang_thai = $3, xu_ly_xong_luc = COALESCE($4, xu_ly_xong_luc), cap_nhat_luc = now()
+		SET trang_thai = $3, xu_ly_xong_luc = COALESCE($4, xu_ly_xong_luc),
+		    forwarded_for_processing_at = COALESCE($6, forwarded_for_processing_at),
+		    awaiting_confirmation_at = COALESCE($7, awaiting_confirmation_at), cap_nhat_luc = now()
 		WHERE tenant_id = $1 AND id = $2 AND trang_thai = $5 AND deleted_at IS NULL`
 
 	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id,
-		string(sangTrangThai), khongThanhNull(xuLyXongLuc), string(tuTrangThai))
+		string(sangTrangThai), khongThanhNull(xuLyXongLuc), string(tuTrangThai),
+		khongThanhNull(forwardedAt), khongThanhNull(awaitingAt))
 	if err != nil {
 		return fmt.Errorf("phieu_phan_anh: đổi trạng thái: %w", err)
 	}

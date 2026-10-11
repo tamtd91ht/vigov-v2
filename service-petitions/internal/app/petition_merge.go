@@ -423,12 +423,13 @@ func (uc *XuLyPhanAnh) followMain(ctx context.Context, tx *store.ScopedTx, main 
 		if !domain.FollowsMain(c.TrangThai, target) {
 			continue
 		}
-		result, closedAt := "", time.Time{}
+		result := ""
 		if target == domain.DaDong {
-			result, closedAt = main.KetQuaXuLy, at
+			result = main.KetQuaXuLy
 		}
+		// `at` on both roads: dong_luc into `da-dong`, awaiting_confirmation_at into `cho-dan-xac-nhan` (G4).
 		if err := uc.kho.FollowMain(ctx, tx, c.ID, main.ID, c.TrangThai, target, main.XuLyXongLuc,
-			result, closedAt); err != nil {
+			result, at); err != nil {
 			return err
 		}
 		after := c
@@ -436,6 +437,7 @@ func (uc *XuLyPhanAnh) followMain(ctx context.Context, tx *store.ScopedTx, main 
 		if after.XuLyXongLuc.IsZero() {
 			after.XuLyXongLuc = main.XuLyXongLuc
 		}
+		applyStatusEntryTimes(&after, c.TrangThai, at)
 		if target == domain.DaDong {
 			after.KetQuaXuLy, after.DongLuc = result, at
 		}

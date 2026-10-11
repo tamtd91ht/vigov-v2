@@ -277,8 +277,7 @@ func (h *HandlerAccountless) ListAccountlessFields(w http.ResponseWriter, r *htt
 	}
 	out := citizenFieldListOut{Items: make([]citizenFieldOut, 0, len(offered))}
 	for _, v := range offered {
-		out.Items = append(out.Items, citizenFieldOut{Code: v.Code, Label: v.Label,
-			Icon: nullIfEmpty(v.Icon), Tone: nullIfEmpty(v.Tone)})
+		out.Items = append(out.Items, citizenFieldOutOf(v))
 	}
 	vietJSON(w, http.StatusOK, out)
 }

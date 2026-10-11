@@ -22,6 +22,10 @@ type FieldDefault struct {
 	// Active false: retired platform-wide. Still a real code — labelled on every read path — but
 	// refused for new intake and classification (ADR 0060 §4).
 	Active bool
+	// DescriptionPlaceholder is the platform's example sentence for the citizen's "Mô tả" box (platform
+	// migration 0022, ADR 0091 §6). "" = none: the client shows its generic hint. Tier 1 only — no
+	// commune override exists (ADR 0091 "Còn mở" #3).
+	DescriptionPlaceholder string
 }
 
 // PetitionFieldView is one code with the commune's overrides applied.
@@ -35,6 +39,8 @@ type PetitionFieldView struct {
 	Tone         string
 	Active       bool // tier 1
 	Enabled      bool // tier 2 — offered on the citizen's new-submission form
+	// DescriptionPlaceholder is tier 1's example sentence, "" = none (FieldDefault).
+	DescriptionPlaceholder string
 	// Customised is DERIVED: some override differs from the inherit value. Not "a row exists".
 	Customised bool
 }
@@ -102,6 +108,7 @@ func viewOf(d FieldDefault, o *NhanLinhVuc) PetitionFieldView {
 		Code: d.Code, Label: d.DefaultLabel, DefaultLabel: d.DefaultLabel,
 		Order: d.SortOrder, DefaultOrder: d.SortOrder,
 		Icon: d.Icon, Tone: d.Tone, Active: d.Active, Enabled: true,
+		DescriptionPlaceholder: d.DescriptionPlaceholder,
 	}
 	if o == nil {
 		return v

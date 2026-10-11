@@ -146,7 +146,9 @@ func NewHandlerCongDan(d DepsCongDan) *HandlerCongDan {
 //	                               this citizen's petition.
 //	vao_so_luc                     the internal register instant. On the staff-booked channel it
 //	                               differs from ClockFrom by up to a week, and explaining that gap
-//	                               is an internal matter (ADR 0028).
+//	                               is an internal matter (ADR 0028). The timeline's first step
+//	                               ("Đã tiếp nhận") is timed by ClockFrom, never by this — which is
+//	                               why the step times below start at the classification.
 //	so_lan_mo_lai                  a counter against a per-commune cap (ADR 0008). Nobody has
 //	                               decided what a citizen is told about their remaining reopens.
 //	id                             the internal ULID means nothing outside this service.
@@ -235,10 +237,31 @@ type phieuCuaToiRa struct {
 	// citizen (migration 0011), so they are not staff notes (rule 4, forbidden #5).
 	//
 	// OMITEMPTY so they are absent — not `""` — on the seven statuses that never carry them, and so
-	// tools/apidoc does not declare them required. The instant of the act is NOT here: nobody decided
-	// the citizen screen shows it, and ClockFrom plus the status already explain the petition.
+	// tools/apidoc does not declare them required. The instant of the branch act (`ket_thuc_nhanh_luc`)
+	// is NOT here: the step times below are those of the main-path steps the citizen timeline draws
+	// (ADR 0047 G4, ADR 0091 §5), and a branch is not one of them — the status alone ends that timeline.
 	Reason        string `json:"reason,omitempty"`
 	ReceivingBody string `json:"receiving_body,omitempty"`
+
+	// THE STEP TIMES of the citizen timeline (ADR 0047 G4, confirmed by ADR 0091 §5): when the petition
+	// entered each main-path step that has a recorded instant, read from the PETITION ROW only —
+	// `phan_loai_luc`, migration 0043's two status-entry columns, `xu_ly_xong_luc`, `dong_luc`. NEVER from
+	// `nhat_ky_phan_anh`: the processing logbook is routing history and stays internal (rule 4,
+	// forbidden #5; rule 10, invariant 7), and G4 says so by name.
+	//
+	// ABSENT = "NOT RECORDED", never "did not happen". Petitions that passed `da-chuyen-xu-ly` or
+	// `cho-dan-xac-nhan` before migration 0043 have no time there and never will (no backfill). Whether a
+	// step was REACHED is `status`'s to say; a time is shown beside a reached step only. After a
+	// reopening the two status-entry times keep the previous entry until the petition enters the status
+	// again, and then take the new one (G4: "mở lại lấy giờ mới nhất").
+	//
+	// `dang-xu-ly` has no column and so no time; "Đã tiếp nhận" is ClockFrom (see the list above).
+	// OMITEMPTY POINTERS, the RatedAt shape: tools/apidoc marks them optional, yesterday's fixtures hold.
+	ClassifiedAt             *time.Time `json:"classified_at,omitempty"`
+	ForwardedForProcessingAt *time.Time `json:"forwarded_for_processing_at,omitempty"`
+	ResolvedAt               *time.Time `json:"resolved_at,omitempty"`
+	AwaitingConfirmationAt   *time.Time `json:"awaiting_confirmation_at,omitempty"`
+	ClosedAt                 *time.Time `json:"closed_at,omitempty"`
 
 	// Rating and RatedAt are the citizen's OWN verdict (ADR 0050 point 2), so the Mini App can say
 	// "bạn đã đánh giá n sao". Absent until they rate; a later rating replaces an earlier one.
@@ -314,9 +337,22 @@ func phieuCuaToiRaNgoai(p domain.PhieuPhanAnh, nhan string) phieuCuaToiRa {
 		stars, at := p.Rating, p.RatedAt
 		ra.Rating, ra.RatedAt = &stars, &at
 	}
+	ra.ClassifiedAt = timeIfRecorded(p.PhanLoaiLuc)
+	ra.ForwardedForProcessingAt = timeIfRecorded(p.ForwardedForProcessingAt)
+	ra.ResolvedAt = timeIfRecorded(p.XuLyXongLuc)
+	ra.AwaitingConfirmationAt = timeIfRecorded(p.AwaitingConfirmationAt)
+	ra.ClosedAt = timeIfRecorded(p.DongLuc)
 	unverified := p.ContactUnverified()
 	ra.ContactUnverified = &unverified
 	return ra
+}
+
+// timeIfRecorded is a step time for the citizen: nil (absent) when the column is NULL — "not recorded".
+func timeIfRecorded(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 
 // PhieuCuaToi serves ONE petition to the citizen who filed it.

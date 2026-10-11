@@ -81,10 +81,12 @@ type KhoPhieuXuLy interface {
 	// SetResidentialUnit corrects `thon_id` at classification (ADR 0088), only when it changes, guarded
 	// by the value read under the lock.
 	SetResidentialUnit(ctx context.Context, tx *store.ScopedTx, id, from, to string) error
+	// PhanCong and DoiTrangThai take the act's instant: entering `da-chuyen-xu-ly` or
+	// `cho-dan-xac-nhan` records it in the same statement (migration 0043, ADR 0047 G4).
 	PhanCong(ctx context.Context, tx *store.ScopedTx, id, boPhanID, canBoID string,
-		tuTrangThai, sangTrangThai domain.TrangThai) error
+		tuTrangThai, sangTrangThai domain.TrangThai, at time.Time) error
 	DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id string,
-		tuTrangThai, sangTrangThai domain.TrangThai, xuLyXongLuc time.Time) error
+		tuTrangThai, sangTrangThai domain.TrangThai, xuLyXongLuc, at time.Time) error
 	Dong(ctx context.Context, tx *store.ScopedTx, id string, tuTrangThai domain.TrangThai,
 		ketQua string, dongLuc time.Time) error
 	KhongTiepNhan(ctx context.Context, tx *store.ScopedTx, id string, tuTrangThai domain.TrangThai,
@@ -115,7 +117,7 @@ type KhoPhieuXuLy interface {
 	UnlinkMerge(ctx context.Context, tx *store.ScopedTx, id, mainID string, from, to domain.TrangThai) error
 	MergedPetitionsForUpdate(ctx context.Context, tx *store.ScopedTx, mainID string) ([]domain.PhieuPhanAnh, error)
 	FollowMain(ctx context.Context, tx *store.ScopedTx, id, mainID string, from, to domain.TrangThai,
-		workDoneAt time.Time, result string, closedAt time.Time) error
+		workDoneAt time.Time, result string, at time.Time) error
 }
 
 // KhoSuKien records the obligation to tell the citizen, in the SAME transaction as the change.
@@ -878,7 +880,7 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 		if err := uc.readActAttachments(ctx, tx, p.ID, nguoi.ID, yc.Attachments); err != nil {
 			return err
 		}
-		if err := uc.kho.PhanCong(ctx, tx, p.ID, boPhan, canBo, p.TrangThai, sangTrangThai); err != nil {
+		if err := uc.kho.PhanCong(ctx, tx, p.ID, boPhan, canBo, p.TrangThai, sangTrangThai, bayGio); err != nil {
 			return err
 		}
 
@@ -886,6 +888,7 @@ func (uc *XuLyPhanAnh) PhanCong(ctx context.Context, ma string, yc YeuCauPhanCon
 		sau.BoPhanID = boPhan
 		sau.CanBoXuLyID = canBo
 		sau.TrangThai = sangTrangThai
+		applyStatusEntryTimes(&sau, p.TrangThai, bayGio)
 
 		// THE DELTA NAMES A DEPARTMENT AND A STAFF BUSINESS CODE, WHICH ARE NOT CITIZEN PERSONAL DATA
 		// (rule 3 is about the people a commune serves, and rule 6, invariant 2 requires the entry to
@@ -1077,7 +1080,7 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma, ghiChuTho string, 
 			xongLuc = bayGio
 		}
 
-		if err := uc.kho.DoiTrangThai(ctx, tx, p.ID, p.TrangThai, sangTrangThai, xongLuc); err != nil {
+		if err := uc.kho.DoiTrangThai(ctx, tx, p.ID, p.TrangThai, sangTrangThai, xongLuc, bayGio); err != nil {
 			return err
 		}
 
@@ -1086,6 +1089,7 @@ func (uc *XuLyPhanAnh) TienTrangThai(ctx context.Context, ma, ghiChuTho string, 
 		if !xongLuc.IsZero() {
 			sau.XuLyXongLuc = xongLuc
 		}
+		applyStatusEntryTimes(&sau, p.TrangThai, bayGio)
 
 		delta, err := json.Marshal(withAttachmentIDs(voiDoDaiGhiChu(map[string]any{
 			"truoc": map[string]any{"trang_thai": string(p.TrangThai)},
@@ -1660,4 +1664,17 @@ func lucRaVet(t time.Time) string {
 // %v here would collapse "this petition has already moved" and "the database is down" into one 500.
 func bocPhieu(ctx context.Context, viec string, err error) error {
 	return fmt.Errorf("xu_ly_phan_anh: %s cho xã %s: %w", viec, tenant.MustFrom(ctx), err)
+}
+
+// applyStatusEntryTimes mirrors onto the in-memory petition `after` what the store's statement wrote to
+// migration 0043's columns for a move from `from` (domain.StatusEntryTimes), so the response and the
+// events built from `after` agree with the row.
+func applyStatusEntryTimes(after *domain.PhieuPhanAnh, from domain.TrangThai, at time.Time) {
+	forwardedAt, awaitingAt := domain.StatusEntryTimes(from, after.TrangThai, at)
+	if !forwardedAt.IsZero() {
+		after.ForwardedForProcessingAt = forwardedAt
+	}
+	if !awaitingAt.IsZero() {
+		after.AwaitingConfirmationAt = awaitingAt
+	}
 }

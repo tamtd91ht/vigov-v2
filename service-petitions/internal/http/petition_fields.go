@@ -128,14 +128,26 @@ func (h *Handler) UpdatePetitionField(w http.ResponseWriter, r *http.Request) {
 // citizenFieldOut is one field on the citizen's form — the shape of the requirement's Mini App
 // (`../vigov-require@0053854` apps/miniapp/src/services/feedback-adapter.ts, ApiFieldOption) where
 // this service has the data. `icon` / `tone` are null when the platform declares none, as there:
-// the Mini App substitutes its own neutral icon and tone for null. No `placeholder`, `color` or
-// `resolve_hours`: tier 1 carries no placeholder (ADR 0060 §4), `color` duplicates `tone`, and a
-// deadline is only ever counted by identity at intake (rule 10, forbidden #2).
+// the Mini App substitutes its own neutral icon and tone for null. No `color` or `resolve_hours`:
+// `color` duplicates `tone`, and a deadline is only ever counted by identity at intake (rule 10,
+// forbidden #2).
+//
+// `placeholder` is tier 1's example sentence for the "Mô tả" box (platform migration 0022, ADR 0091
+// §6 — which reversed ADR 0060 §4's "no placeholder"). OMITEMPTY, not null: absent means "no sentence,
+// show the generic hint", and tools/apidoc then marks it optional so yesterday's clients stay valid.
 type citizenFieldOut struct {
-	Code  string  `json:"code"`
-	Label string  `json:"label"`
-	Icon  *string `json:"icon"`
-	Tone  *string `json:"tone"`
+	Code        string  `json:"code"`
+	Label       string  `json:"label"`
+	Icon        *string `json:"icon"`
+	Tone        *string `json:"tone"`
+	Placeholder string  `json:"placeholder,omitempty"`
+}
+
+// citizenFieldOutOf is one entry of the citizen list and of the staff intake list (one shape, see
+// ListStaffIntakeFields).
+func citizenFieldOutOf(v domain.PetitionFieldView) citizenFieldOut {
+	return citizenFieldOut{Code: v.Code, Label: v.Label, Icon: nullIfEmpty(v.Icon), Tone: nullIfEmpty(v.Tone),
+		Placeholder: v.DescriptionPlaceholder}
 }
 
 type citizenFieldListOut struct {
@@ -162,8 +174,7 @@ func (h *HandlerCongDan) ListCitizenReportFields(w http.ResponseWriter, r *http.
 	}
 	out := citizenFieldListOut{Items: make([]citizenFieldOut, 0, len(offered))}
 	for _, v := range offered {
-		out.Items = append(out.Items, citizenFieldOut{Code: v.Code, Label: v.Label,
-			Icon: nullIfEmpty(v.Icon), Tone: nullIfEmpty(v.Tone)})
+		out.Items = append(out.Items, citizenFieldOutOf(v))
 	}
 	vietJSON(w, http.StatusOK, out)
 }
@@ -171,7 +182,7 @@ func (h *HandlerCongDan) ListCitizenReportFields(w http.ResponseWriter, r *http.
 // ListStaffIntakeFields serves the fields the commune offers to STAFF INTAKE ("Nhập hộ phản ánh",
 // docs/ui-ux/09 §11), in the commune's order. GET /api/v1/citizen-report-intake-fields
 //
-// THE CITIZEN LIST'S SHAPE ({items:[{code,label,icon,tone}]}, icon/tone null when undeclared) and the
+// THE CITIZEN LIST'S SHAPE ({items:[{code,label,icon,tone,placeholder?}]}, icon/tone null when undeclared) and the
 // citizen list's type, on purpose: the modal renders the same picker, and a second type for the same
 // four fields is a second place to drift. What differs is the PREDICATE (`can-bo` is offered here,
 // domain.PetitionFieldView.OfferedToStaffIntake says why) and the surface (staff chain, `feedback.create`).
@@ -185,8 +196,7 @@ func (h *Handler) ListStaffIntakeFields(w http.ResponseWriter, r *http.Request) 
 	}
 	out := citizenFieldListOut{Items: make([]citizenFieldOut, 0, len(offered))}
 	for _, v := range offered {
-		out.Items = append(out.Items, citizenFieldOut{Code: v.Code, Label: v.Label,
-			Icon: nullIfEmpty(v.Icon), Tone: nullIfEmpty(v.Tone)})
+		out.Items = append(out.Items, citizenFieldOutOf(v))
 	}
 	vietJSON(w, http.StatusOK, out)
 }

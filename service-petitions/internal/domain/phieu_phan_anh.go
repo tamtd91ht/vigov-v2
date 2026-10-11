@@ -271,6 +271,16 @@ type PhieuPhanAnh struct {
 	XuLyXongLuc time.Time
 	DongLuc     time.Time
 
+	// THE TWO STATUS-ENTRY TIMES of migration 0043 (ADR 0047 G4, confirmed by ADR 0091 §5): when the
+	// petition LAST entered `da-chuyen-xu-ly` and `cho-dan-xac-nhan`. Written by the store in the same
+	// statement as the transition (StatusEntryTimes), overwritten on re-entry after a reopening — the
+	// column holds the latest entry, the history is `nhat_ky_phan_anh`'s.
+	//
+	// ZERO (SQL NULL) MEANS "NOT RECORDED", never "never entered": petitions that passed these statuses
+	// before 0043 keep NULL (no backfill). Whether the status was reached is TrangThai's to say.
+	ForwardedForProcessingAt time.Time
+	AwaitingConfirmationAt   time.Time
+
 	// KetQuaXuLy is the result a CITIZEN reads, written when the petition is closed (rule 10,
 	// invariant 6). It is NOT a staff note: staff notes and routing history stay internal (rule 4,
 	// forbidden #5), and this one string is deliberately the only free text that crosses to the
