@@ -55,6 +55,8 @@ Nguồn prototype: `../vigov-require/apps/miniapp`, nhánh `feat/m8-multitenant-
 | Khoảng cách tới điểm sơ tán | **Bỏ.** Cần vị trí nhà dân |
 | Điểm sơ tán, số khẩn cấp | Nhập **theo từng cảnh báo** |
 | Đẩy ZNS khi đăng | **Chưa** |
+| Họ tên + số khẩn cấp | **Công khai** trên tuyến không xác thực, như prototype. Form web-admin ghi cạnh ô: "Số này hiện công khai cho mọi người dân — nên dùng số trực, đường dây nóng hoặc số cơ quan." Chủ dự án chốt 11/10/2026 (luật 3 điều kiện dừng #1) |
+| Giới hạn tần suất | **Ngân sách riêng 1.200 lượt/phút** mỗi (tên miền, mạng máy gọi), tách khỏi tin công khai, kèm **cache 30 giây mỗi xã** phía máy chủ. Cảnh báo mới tới dân chậm tối đa 30 giây. Chủ dự án chốt 11/10/2026 (luật 13, ngưỡng) — thay dòng "như tin công khai" ở trên |
 
 ### 3. Tra cứu hồ sơ một cửa — mở trang của Cổng Dịch vụ công
 
