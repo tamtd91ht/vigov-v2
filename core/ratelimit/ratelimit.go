@@ -13,7 +13,8 @@
 // for why that is a per-policy field and never the package default. The public disaster-alert read
 // (PublicDisasterAlertsRead, owner decision 11/10/2026) is the only other policy that fails open.
 //
-// The others — CitizenPhotoUpload, StaffImageFetch (ADR 0067 K10) — fail closed, the default.
+// The others — CitizenPhotoUpload, StaffImageFetch (ADR 0067 K10), PublicBasemapRead (ADR 0072 M1:
+// a decided number, no decided outage behaviour) — fail closed, the default.
 //
 // WHY A FIXED WINDOW, NOT A SLIDING ONE: the owner chose it (§01/10 #3), and it is one atomic
 // INCR per attempt with no per-attempt memory. Its known cost — up to 2× the limit across a window
@@ -67,6 +68,18 @@ const (
 const (
 	PublicDisasterAlertsReadLimit  = 1200
 	PublicDisasterAlertsReadWindow = time.Minute
+)
+
+// The public Mini App basemap read threshold — CHOSEN BY THE OWNER on 11/10/2026 (ADR 0072 §"Sửa đổi
+// 11/10/2026 (Mini App)" M1, rule 13 stop condition decided there) for service-comms' public basemap
+// route: 6000 per minute per (host, client network). FIFTY TIMES the news
+// figure and on its own budget because the traffic is byte ranges, not page reads: one pan or zoom of the
+// map is dozens of PMTiles range requests plus glyphs, so at 120 the map goes blank after a few drags,
+// and on a shared budget the map would also eat the news reads of the same network. Constants for the
+// operator pair's reason: changing either is a rule 13 stop condition.
+const (
+	PublicBasemapReadLimit  = 6000
+	PublicBasemapReadWindow = time.Minute
 )
 
 // The citizen scene-photo upload threshold — ADR 0052 §12 requires "giới hạn tần suất theo công dân"
@@ -162,7 +175,8 @@ type Policy struct {
 	// outage turning every commune's board into a 503 is the worse failure. The public disaster-alert
 	// read is the second, by the owner's decision of 11/10/2026 ("same fail-open behaviour as the news
 	// read"): a 503 on a storm warning is worse still. No other policy may copy it without the same
-	// decision.
+	// decision — the public basemap read included: ADR 0072 M1 decided its NUMBER, not its outage
+	// behaviour, so it fails closed until the owner says otherwise (see PublicBasemapRead).
 	failOpen bool
 	// refusedCode / refusedMessage are the 429's machine code and its ONE Vietnamese sentence. Empty =
 	// the generic `rate_limited` answer. A field of the policy because a staff screen must be able to tell
@@ -190,6 +204,17 @@ var PublicNewsRead = Policy{name: "public-news", limit: PublicNewsReadLimit, win
 // Policy.failOpen.
 var PublicDisasterAlertsRead = Policy{name: "public-disaster-alerts", limit: PublicDisasterAlertsReadLimit,
 	window: PublicDisasterAlertsReadWindow, event: "public_disaster_alerts.rate_limited", failOpen: true}
+
+// PublicBasemapRead is the policy of service-comms' public basemap route (owner, 11/10/2026, ADR 0072
+// M1; path proposed, ADR open item 2). Keys from PublicHostIPKey. Its OWN name, so the map's byte ranges
+// never spend the news or alert budget, and its OWN event, so a refusal is told apart in the security
+// log.
+//
+// FAILS CLOSED, the package default. The ADR fixes the threshold and says nothing about a Redis outage;
+// fail-open is an owner exception (Policy.failOpen), never inherited from the neighbouring public reads.
+// AccountlessFieldRead set that precedent. If the owner decides fail-open, set it here with the date.
+var PublicBasemapRead = Policy{name: "public-basemap", limit: PublicBasemapReadLimit,
+	window: PublicBasemapReadWindow, event: "public_basemap.rate_limited"}
 
 // CitizenPhotoUpload is the policy of the citizen scene-photo upload and completion routes
 // (service-petitions, ADR 0052 §12). Keys from CitizenKey. FAILS CLOSED, the package default: what it

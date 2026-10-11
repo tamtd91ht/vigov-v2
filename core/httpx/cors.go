@@ -33,7 +33,39 @@ const (
 	// Ten minutes of cached preflight: short enough that removing an origin takes effect the same
 	// morning, long enough that the Mini App does not pay a preflight per tap.
 	corsMaxAge = "600"
+
+	// What a BYTE-RANGE reader sends beyond corsTieuDe — the PMTiles client of the Mini App map (ADR 0072
+	// §"Sửa đổi 11/10/2026 (Mini App)" M1): the range itself, and the validators it pins an archive with
+	// (If-Match / If-Range — a range of a NEWER archive mixed into an old one is a corrupted tile, so the
+	// client asks storage to refuse with 412 instead) and revalidates with (If-None-Match). None of them is
+	// CORS-safelisted in every browser, so without them the preflight fails and the map is blank while
+	// every server-side test stays green.
+	corsRangeTieuDe = "Range, If-Range, If-Match, If-None-Match"
+	// What that reader must READ: the range actually served and the archive's size (Content-Range), that
+	// ranges are honoured (Accept-Ranges) and the validator it pins (ETag). Content-Length is safelisted,
+	// listed anyway so the contract is read in one place.
+	corsRangeExpose = "Content-Range, Content-Length, Accept-Ranges, ETag"
 )
+
+// CORSOption widens what CORSCongDan grants, for ONE chain. Options only ADD headers; the origin rule,
+// the absent Allow-Credentials and the preflight short-circuit are not options.
+type CORSOption func(*corsSettings)
+
+type corsSettings struct {
+	allowHeaders  string // Access-Control-Allow-Headers
+	exposeHeaders string // Access-Control-Expose-Headers, "" = none
+}
+
+// CORSRangeReads lets the matched origin send byte-range and validator headers and read the range
+// response headers (corsRangeTieuDe, corsRangeExpose). For the PUBLIC chain that serves the basemap
+// (service-comms) — not for a citizen chain: nothing there reads a range, and an exposed header is a
+// header some page script can read.
+func CORSRangeReads() CORSOption {
+	return func(c *corsSettings) {
+		c.allowHeaders = corsTieuDe + ", " + corsRangeTieuDe
+		c.exposeHeaders = corsRangeExpose
+	}
+}
 
 // CORSCongDan lets the Zalo Mini App webview call the CITIZEN edge from its own origin.
 //
@@ -61,7 +93,8 @@ const (
 // exactly. `Vary: Origin` is on every response of the chain, matched or not, so a shared cache never
 // hands one origin's answer to another.
 //
-// Nothing is exposed via Access-Control-Expose-Headers: citizen-app reads no response header.
+// Nothing is exposed via Access-Control-Expose-Headers by default: citizen-app reads no response header
+// — except the basemap's range reader, which a chain opts into with CORSRangeReads.
 //
 // AN UNKNOWN ORIGIN IS LOGGED (WARN), once per request that carries one. Refusing it is silent by
 // design — nothing in the ANSWER may tell a probe which origins exist — but a silent refusal in the
@@ -69,7 +102,11 @@ const (
 // call died in the browser as a "network error", and no service logged a line. The origin and the
 // method only: never the path, which on the citizen edge can carry a lookup code (rule 3). log nil
 // logs nothing.
-func CORSCongDan(nguon NguonCORS, log *slog.Logger) func(http.Handler) http.Handler {
+func CORSCongDan(nguon NguonCORS, log *slog.Logger, opts ...CORSOption) func(http.Handler) http.Handler {
+	cfg := corsSettings{allowHeaders: corsTieuDe}
+	for _, o := range opts {
+		o(&cfg)
+	}
 	return func(next http.Handler) http.Handler {
 		if nguon == nil || nguon.Rong() {
 			return next
@@ -93,7 +130,7 @@ func CORSCongDan(nguon NguonCORS, log *slog.Logger) func(http.Handler) http.Hand
 				if duoc {
 					h.Set("Access-Control-Allow-Origin", origin)
 					h.Set("Access-Control-Allow-Methods", corsPhuongThuc)
-					h.Set("Access-Control-Allow-Headers", corsTieuDe)
+					h.Set("Access-Control-Allow-Headers", cfg.allowHeaders)
 					h.Set("Access-Control-Max-Age", corsMaxAge)
 				}
 				w.WriteHeader(http.StatusNoContent)
@@ -102,6 +139,9 @@ func CORSCongDan(nguon NguonCORS, log *slog.Logger) func(http.Handler) http.Hand
 
 			if duoc {
 				h.Set("Access-Control-Allow-Origin", origin)
+				if cfg.exposeHeaders != "" {
+					h.Set("Access-Control-Expose-Headers", cfg.exposeHeaders)
+				}
 			}
 			next.ServeHTTP(w, r)
 		})

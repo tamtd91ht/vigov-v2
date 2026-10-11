@@ -442,6 +442,64 @@ func TestPublicDisasterAlertsReadServesWhenStoreDown(t *testing.T) {
 	}
 }
 
+// ---- the public basemap read (owner, 11/10/2026, ADR 0072 M1) -------------------------------
+
+// The decided threshold pinned: a change must turn something red (rule 13 forbidden #4).
+func TestPublicBasemapReadIs6000PerMinuteAndFailsClosed(t *testing.T) {
+	if PublicBasemapReadLimit != 6000 || PublicBasemapReadWindow != time.Minute {
+		t.Fatalf("owner decided 6000 / minute, got %d / %v", PublicBasemapReadLimit, PublicBasemapReadWindow)
+	}
+	p := PublicBasemapRead
+	if p.limit != PublicBasemapReadLimit || p.window != PublicBasemapReadWindow {
+		t.Fatal("PublicBasemapRead does not use the named constants")
+	}
+	// ADR 0072 M1 decides the number, not the outage behaviour: fail-open is an owner exception and is
+	// not inherited from the news / alert reads. Turning this red needs an owner decision first.
+	if p.FailsOpen() {
+		t.Fatal("the basemap read fails OPEN with no owner decision recorded for it")
+	}
+	for _, other := range []Policy{PublicNewsRead, PublicDisasterAlertsRead} {
+		if p.name == other.name || p.event == other.event {
+			t.Fatalf("the basemap read shares %s's counters or label — the owner gave it its OWN budget", other.name)
+		}
+	}
+	if p.event != "public_basemap.rate_limited" {
+		t.Fatalf("event = %q", p.event)
+	}
+	if _, err := New(newFake(), p); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Its own budget, commune-prefixed key, and request 6001 refused with its own event.
+func TestPublicBasemapReadOwnBudgetAndLabel(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, nil))
+	f := newFake()
+	news, _ := New(f, PublicNewsRead)
+	basemap, _ := New(f, PublicBasemapRead)
+	ctx := tenant.Into(context.Background(), tenant.ID(testCommune))
+	k, _ := PublicHostIPKey(ctx, true, "xa.vigov.vn", "203.0.113.7")
+	for i := 0; i <= PublicNewsReadLimit; i++ {
+		Gate(httptest.NewRecorder(), gateReq(), news, k, nil)
+	}
+	for i := 0; i < PublicBasemapReadLimit; i++ {
+		if !Gate(httptest.NewRecorder(), gateReq(), basemap, k, log) {
+			t.Fatalf("basemap request %d refused — the news budget leaked into the basemap one", i+1)
+		}
+	}
+	rec := httptest.NewRecorder()
+	if Gate(rec, gateReq(), basemap, k, log, "xa", testCommune) || rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d served (code %d)", PublicBasemapReadLimit+1, rec.Code)
+	}
+	if !strings.Contains(buf.String(), `"event":"public_basemap.rate_limited"`) {
+		t.Fatalf("security event: %s", buf.String())
+	}
+	if !slices.Contains(f.keys, "t:"+testCommune+":rl:public-basemap:host:xa.vigov.vn:ip:203.0.113.7") {
+		t.Fatalf("no commune-prefixed basemap counter among %d keys", len(f.keys))
+	}
+}
+
 func gateReq() *http.Request {
 	r := httptest.NewRequest(http.MethodGet, "/api/v1/commune-news?host=xa.vigov.vn", nil)
 	r.RemoteAddr = "203.0.113.7:51000"

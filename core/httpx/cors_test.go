@@ -204,3 +204,42 @@ func TestCORSNguonLa_GhiLogOrigin_KhongGhiDuongDan(t *testing.T) {
 		t.Errorf("allowed or absent origin must not log: %s", buf.String())
 	}
 }
+
+// CORSRangeReads (ADR 0072 M1): the preflight grants the range and validator headers on top of the
+// citizen set, and a matched answer exposes the range headers. The default chain grants neither — a
+// citizen chain that suddenly exposed headers would be a widening nobody decided.
+func TestCORSRangeReadsGrantsRangeHeadersAndExposesRangeResponse(t *testing.T) {
+	n, err := config.PhanTichNguonCORS("https://h5.zdn.vn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ranged := httpx.CORSCongDan(n, nil, httpx.CORSRangeReads())(&dichVuSau{})
+	plain := httpx.CORSCongDan(n, nil)(&dichVuSau{})
+
+	w := goiCORS(ranged, http.MethodOptions, "https://h5.zdn.vn", "GET")
+	allow := w.Header().Get("Access-Control-Allow-Headers")
+	for _, want := range []string{"Range", "If-Range", "If-Match", "If-None-Match", "Authorization"} {
+		if !strings.Contains(", "+allow+",", ", "+want+",") {
+			t.Errorf("preflight Allow-Headers %q lacks %s", allow, want)
+		}
+	}
+	if w.Header().Get("Access-Control-Expose-Headers") != "" {
+		t.Error("a preflight carries no Expose-Headers — it is read on the actual response")
+	}
+
+	w = goiCORS(ranged, http.MethodGet, "https://h5.zdn.vn", "")
+	if got := w.Header().Get("Access-Control-Expose-Headers"); got != "Content-Range, Content-Length, Accept-Ranges, ETag" {
+		t.Fatalf("Expose-Headers = %q", got)
+	}
+	if w := goiCORS(ranged, http.MethodGet, "https://evil.example", ""); w.Header().Get("Access-Control-Expose-Headers") != "" {
+		t.Fatal("an unmatched origin was told which headers it may read")
+	}
+
+	w = goiCORS(plain, http.MethodOptions, "https://h5.zdn.vn", "GET")
+	if strings.Contains(w.Header().Get("Access-Control-Allow-Headers"), "Range") {
+		t.Fatalf("the default chain grants Range: %q", w.Header().Get("Access-Control-Allow-Headers"))
+	}
+	if w := goiCORS(plain, http.MethodGet, "https://h5.zdn.vn", ""); w.Header().Get("Access-Control-Expose-Headers") != "" {
+		t.Fatal("the default chain exposes headers")
+	}
+}
