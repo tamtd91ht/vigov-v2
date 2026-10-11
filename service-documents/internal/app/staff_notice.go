@@ -37,6 +37,18 @@ func actNoticeWireKind(k domain.ActNoticeKind) (commsv1.StaffNotificationKind, b
 	return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED, false
 }
 
+// wireGroupPosting maps the domain's decision onto comms' enum (ADR 0092). Anything the domain did not
+// decide is UNSPECIFIED — comms posts that to no group, so an unknown value fails closed.
+func wireGroupPosting(g domain.GroupPosting) commsv1.GroupPosting {
+	switch g {
+	case domain.GroupPostingAllowed:
+		return commsv1.GroupPosting_GROUP_POSTING_ALLOWED
+	case domain.GroupPostingRestricted:
+		return commsv1.GroupPosting_GROUP_POSTING_RESTRICTED
+	}
+	return commsv1.GroupPosting_GROUP_POSTING_UNSPECIFIED
+}
+
 // staffNoticeMarshal is the payload encoding — proto field names, so the stored JSON reads like the
 // contract. The relay decodes with protojson, which accepts either spelling.
 var staffNoticeMarshal = protojson.MarshalOptions{UseProtoNames: true}
@@ -73,6 +85,7 @@ func writeStaffNotice(ctx context.Context, tx *store.ScopedTx, out StaffNoticeOu
 	}
 	payload, err := staffNoticeMarshal.Marshal(&commsv1.StaffNotification{
 		IdempotencyKey: key, Kind: kind, RecipientMa: to, Title: n.Title, Body: n.Body, Link: n.Link,
+		HoldingOrgUnitId: n.HoldingOrgUnitID, GroupPosting: wireGroupPosting(n.GroupPosting),
 	})
 	if err != nil {
 		return fmt.Errorf("thông báo cán bộ: mã hoá: %w", err)

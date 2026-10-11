@@ -549,17 +549,19 @@ func (uc *VanBanDen) Chuyen(ctx context.Context, id string, yc YeuCauChuyenVanBa
 		// key is the timeline row just written, so routing the same document back to the same officer
 		// after it went round notifies again (A3 #2). No officer named ("để bộ phận tự phân công"), or
 		// the clerk routing to themselves: no row. A failure here rolls the routing back with it.
-		if canBoMa != "" {
-			if err := writeStaffNotice(ctx, tx, uc.notices, uc.sinhID,
-				domain.IncomingAssignedNotice(truoc, idLichSu, canBoMa), nguoi.ID, luc); err != nil {
-				return err
-			}
-		}
-
 		sau = truoc
 		sau.BoPhanDangGiu = denBoPhan
 		sau.CanBoXuLyMa = canBoMa
 		sau.TrangThai = trangThai
+
+		// Built from `sau`: the notice's group scope is the unit the document now sits in (ADR 0092 #7),
+		// not the one it left. Number, year and deadline — what the sentences read — the move leaves alone.
+		if canBoMa != "" {
+			if err := writeStaffNotice(ctx, tx, uc.notices, uc.sinhID,
+				domain.IncomingAssignedNotice(sau, idLichSu, canBoMa), nguoi.ID, luc); err != nil {
+				return err
+			}
+		}
 
 		delta, err := json.Marshal(map[string]any{
 			"van_ban_id": truoc.ID,

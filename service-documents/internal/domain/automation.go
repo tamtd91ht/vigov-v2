@@ -61,6 +61,10 @@ type AutomationRecord struct {
 	// HoldStartedAt is when the unit began holding the document with nobody named — zero unless
 	// OrgUnitID is set and AssigneeMa is empty. Derived by the store from the routing timeline.
 	HoldStartedAt time.Time
+	// Restricted is a letter whose type protects the sender's identity (`to-cao`,
+	// LetterType.ProtectsIdentity): a notice about it never enters a Zalo group (group_posting.go).
+	// Always false for an incoming document.
+	Restricted bool
 }
 
 // PastDeadlineAt is the DERIVED overdue test of THIS register: now strictly after the deadline — the
@@ -122,6 +126,11 @@ type StaffNotice struct {
 	// commune's Zalo lead to the Zalo copy. Built from the very records Body is built from — never a
 	// second selection.
 	DueSoonItems []DueSoonItem
+	// HoldingOrgUnitID is the record's own unit (AutomationRecord.OrgUnitID: `bo_phan_dang_giu_id`,
+	// `holding_unit_id`), "" for a digest or a record with no unit (ADR 0092 #7). GroupPosting is
+	// whether it may enter a Zalo group; the zero value posts to none (group_posting.go).
+	HoldingOrgUnitID string
+	GroupPosting     GroupPosting
 }
 
 // DueSoonItem is one document of a due-soon digest: its register code and its deadline as stored.
@@ -339,6 +348,9 @@ func (g NoticeRegister) Overdue(r AutomationRecord, day string, recipients []str
 		Title:      clip(g.nounTitle+" "+r.Code+" đã quá hạn xử lý", noticeTitleMax),
 		Body:       "Hạn xử lý: " + FormatLocalInstant(r.Deadline) + ".",
 		Link:       g.overdueLink,
+
+		HoldingOrgUnitID: GroupUnit(r.OrgUnitID),
+		GroupPosting:     recordGroupPosting(r.Restricted),
 	}
 }
 
@@ -359,6 +371,9 @@ func (g NoticeRegister) Unassigned(r AutomationRecord, recipients []string) Staf
 		Body: "Bộ phận nhận từ " + FormatLocalInstant(r.HoldStartedAt) +
 			" nhưng chưa phân công người xử lý, đã quá thời gian xã quy định.",
 		Link: g.registerLink,
+
+		HoldingOrgUnitID: GroupUnit(r.OrgUnitID),
+		GroupPosting:     recordGroupPosting(r.Restricted),
 	}
 }
 
@@ -381,6 +396,9 @@ func (g NoticeRegister) Escalation(r AutomationRecord, level EscalationLevel, re
 		Body: "Quá hạn xử lý từ " + FormatLocalInstant(r.Deadline) +
 			", đã vượt ngưỡng báo " + who + " theo quy định của xã.",
 		Link: g.overdueLink,
+
+		HoldingOrgUnitID: GroupUnit(r.OrgUnitID),
+		GroupPosting:     recordGroupPosting(r.Restricted),
 	}
 }
 

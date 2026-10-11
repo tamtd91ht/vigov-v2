@@ -531,7 +531,8 @@ func automationPages(notices []domain.StaffNotice) ([][]commsclient.Notice, erro
 			// A due-soon notice has one recipient, so it is never split; were it split, every part
 			// speaks for the same documents and carries the same items.
 			parts = append(parts, commsclient.Notice{IdempotencyKey: n.Key, Kind: kind,
-				RecipientMa: to[start:end], Title: n.Title, Body: n.Body, Link: n.Link, DueSoonItems: items})
+				RecipientMa: to[start:end], Title: n.Title, Body: n.Body, Link: n.Link, DueSoonItems: items,
+				HoldingOrgUnitID: n.HoldingOrgUnitID, GroupPosting: wireGroupPosting(n.GroupPosting)})
 		}
 	}
 

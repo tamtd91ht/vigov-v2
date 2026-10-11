@@ -61,10 +61,16 @@ func TestAutomationLetterQueryIsScopedLiveClocklessAndNamesNobody(t *testing.T) 
 	if !strings.Contains(q, "processing_due_at IS NOT NULL OR c.resolution_due_at IS NOT NULL") {
 		t.Error("đọc cả đơn không có hạn — không bao giờ nhắc từ một hạn mặc định")
 	}
-	for _, col := range []string{"sender_name", "sender_phone", "sender_address", "summary", "letter_type", "content", "result_"} {
+	for _, col := range []string{"sender_name", "sender_phone", "sender_address", "summary", "content", "result_"} {
 		if strings.Contains(q, col) {
 			t.Errorf("câu đọc cho việc nền chọn cột %s", col)
 		}
+	}
+	// `letter_type` IS read since ADR 0092 — and only to derive AutomationRecord.Restricted (a denunciation
+	// never enters a Zalo group). The record carries no type field, so the type itself still reaches no
+	// notice text (ADR 0078 #4). Read exactly once, as the last column the scan expects.
+	if strings.Count(q, "letter_type") != 1 || !strings.Contains(q, ", c.letter_type\n") {
+		t.Errorf("letter_type phải được đọc đúng một lần, ở cột cuối: %s", q)
 	}
 	if len(args) == 0 || args[0] != string(domain.LetterLogRouting) {
 		t.Fatalf("$2 phải là loại dòng luân chuyển, được %v", args)

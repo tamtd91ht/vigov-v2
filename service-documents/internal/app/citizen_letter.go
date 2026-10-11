@@ -458,8 +458,11 @@ func (uc *CitizenLetters) handOverInTx(ctx context.Context, tx *store.ScopedTx, 
 	// summary, no sender, no type — a denunciation must not announce itself, ADR 0078 #4). Booking
 	// with a unit and no officer never reaches here, and owes no notice.
 	if assignee != "" {
+		// The letter as the act leaves it: the group scope is the unit it now sits in (ADR 0092 #7).
+		held := before
+		held.HoldingUnitID, held.AssigneeCode = unit, assignee
 		if err := writeStaffNotice(ctx, tx, uc.notices, uc.newID,
-			domain.LetterAssignedNotice(before, logID, assignee), caller.Actor.ID, now); err != nil {
+			domain.LetterAssignedNotice(held, logID, assignee), caller.Actor.ID, now); err != nil {
 			return err
 		}
 	}

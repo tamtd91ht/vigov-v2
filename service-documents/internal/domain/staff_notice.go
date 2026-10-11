@@ -56,6 +56,11 @@ type ActNotice struct {
 	Title      string
 	Body       string
 	Link       string
+	// HoldingOrgUnitID is the record's own unit column AFTER the act (`van_ban_den.bo_phan_dang_giu_id`,
+	// `citizen_letter.holding_unit_id`) — never the officer's unit (ADR 0092 #7); "" when it has none.
+	// GroupPosting is whether the notice may enter a Zalo group; zero posts to none (group_posting.go).
+	HoldingOrgUnitID string
+	GroupPosting     GroupPosting
 }
 
 // Key is `<stored value>:<act row id>` (comms.proto, "THE KEY IS THE ACT, NOT THE RECORD").
@@ -82,7 +87,8 @@ func registerNumber(number, year int) string {
 }
 
 // IncomingAssignedNotice — kind 22 for an incoming document routed with a named officer. `routingRowID`
-// is the `lich_su_chuyen_van_ban` row the act wrote. The body is the STORED processing deadline —
+// is the `lich_su_chuyen_van_ban` row the act wrote; `v` is the document AFTER the routing (its unit is
+// the group scope, ADR 0092 #7). The body is the STORED processing deadline —
 // business data the overdue notice already carries — never the summary (file header).
 func IncomingAssignedNotice(v VanBanDen, routingRowID, officer string) ActNotice {
 	body := ""
@@ -95,18 +101,26 @@ func IncomingAssignedNotice(v VanBanDen, routingRowID, officer string) ActNotice
 		Title:      clip("Bạn được giao xử lý văn bản đến số "+registerNumber(v.SoVaoSo, v.Nam), noticeTitleMax),
 		Link:       incomingRegisterLink,
 		Body:       body,
+
+		HoldingOrgUnitID: GroupUnit(v.BoPhanDangGiu),
+		GroupPosting:     GroupPostingAllowed,
 	}
 }
 
 // LetterAssignedNotice — kind 22 for a citizen letter routed with a named officer. `logRowID` is the
-// `citizen_letter_log` row the act wrote. BODY EMPTY, ALWAYS: no summary, no sender, not even the
-// letter's type — a denunciation must not announce itself (ADR 0078 #4; rule 3).
+// `citizen_letter_log` row the act wrote; `l` is the letter AFTER the routing (its unit is the group
+// scope, ADR 0092 #7). BODY EMPTY, ALWAYS: no summary, no sender, not even the
+// letter's type — a denunciation must not announce itself (ADR 0078 #4; rule 3). A denunciation's notice
+// is RESTRICTED: never posted to a Zalo group (group_posting.go).
 func LetterAssignedNotice(l CitizenLetter, logRowID, officer string) ActNotice {
 	return ActNotice{
 		Kind: ActNoticeDocumentAssigned, Event: EventCitizenLetterAssigned, ActRowID: logRowID,
 		Recipients: []string{officer},
 		Title:      clip("Bạn được giao xử lý đơn thư số "+registerNumber(l.Number, l.Year), noticeTitleMax),
 		Link:       letterRegisterLink,
+
+		HoldingOrgUnitID: GroupUnit(l.HoldingUnitID),
+		GroupPosting:     recordGroupPosting(l.Type.ProtectsIdentity()),
 	}
 }
 

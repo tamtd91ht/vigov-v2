@@ -134,7 +134,7 @@ func automationLetterQuery() (string, []any) {
 		}
 	}
 	return `SELECT c.id, c.year, c.number, c.status, c.processing_due_at, c.resolution_due_at,
-	COALESCE(c.holding_unit_id, ''), COALESCE(c.assignee_code, ''), ` + letterHoldStartColumn + `
+	COALESCE(c.holding_unit_id, ''), COALESCE(c.assignee_code, ''), ` + letterHoldStartColumn + `, c.letter_type
 	FROM citizen_letter c
 	WHERE c.tenant_id = $1 AND c.deleted_at IS NULL AND c.status IN (` + strings.Join(open, ", ") + `)
 	  AND (c.processing_due_at IS NOT NULL OR c.resolution_due_at IS NOT NULL)
@@ -157,10 +157,11 @@ func (s *CitizenLetterStore) OpenLettersForAutomation(ctx context.Context) ([]do
 		var (
 			r                     domain.AutomationRecord
 			year, number          int
-			status                string
+			status, letterType    string
 			procDue, resDue, hold sql.NullTime
 		)
-		if err := rows.Scan(&r.ID, &year, &number, &status, &procDue, &resDue, &r.OrgUnitID, &r.AssigneeMa, &hold); err != nil {
+		if err := rows.Scan(&r.ID, &year, &number, &status, &procDue, &resDue, &r.OrgUnitID, &r.AssigneeMa, &hold,
+			&letterType); err != nil {
 			return nil, fmt.Errorf("citizen_letter: đọc cho việc nền: đọc dòng: %w", err)
 		}
 		l := domain.CitizenLetter{Status: domain.LetterStatus(status),
@@ -171,6 +172,8 @@ func (s *CitizenLetterStore) OpenLettersForAutomation(ctx context.Context) ([]do
 		}
 		r.Code = domain.LetterAuditSubject(year, number)
 		r.Deadline = due.UTC()
+		// A denunciation's notices never enter a Zalo group (domain/group_posting.go).
+		r.Restricted = domain.LetterType(letterType).ProtectsIdentity()
 		if hold.Valid {
 			r.HoldStartedAt = hold.Time.UTC()
 		}

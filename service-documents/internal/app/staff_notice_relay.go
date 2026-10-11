@@ -294,7 +294,9 @@ func decodeStaffNotice(payload []byte) (commsclient.Notice, bool) {
 		return commsclient.Notice{}, false
 	}
 	return commsclient.Notice{IdempotencyKey: m.GetIdempotencyKey(), Kind: m.GetKind(), RecipientMa: m.GetRecipientMa(),
-		Title: m.GetTitle(), Body: m.GetBody(), Link: m.GetLink()}, true
+		Title: m.GetTitle(), Body: m.GetBody(), Link: m.GetLink(),
+		// A row written before ADR 0092 has neither: UNSPECIFIED and "" — no group, as it was.
+		HoldingOrgUnitID: m.GetHoldingOrgUnitId(), GroupPosting: m.GetGroupPosting()}, true
 }
 
 // relayPages cuts a page into calls comms accepts: <= 100 notices, <= 1 000 recipients, a key once.
