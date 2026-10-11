@@ -192,9 +192,12 @@ pipeline {
             COMMS_HTTP_ADDR=http://vigov-service-comms:8080 \
             REPORTING_HTTP_ADDR=http://vigov-service-reporting:8080 \
             PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080 \
-            MAP_STYLE_URL=https://tiles.openfreemap.org/styles/liberty
+            MAP_STYLE_URL-
         '''
-        // NỀN TỰ HOST của bản đồ phản ánh (ADR 0072 §Trả lời 09/10/2026). Giá trị nằm ở ConfigMap
+        // `MAP_STYLE_URL-` GỠ biến URL style OpenFreeMap mà các lượt trước đã đặt: từ 11/10/2026 `/ban-do`
+        // dùng nền tự host `BASEMAP_URL` (bước dưới), không mã nào đọc biến cũ nữa. Biến không ai đọc mà còn
+        // trên pod là trôi lệch (luật 11). Gỡ một biến chưa có thì kubectl bỏ qua.
+        // NỀN TỰ HOST của bản đồ phản ánh (ADR 0072 §Trả lời 09/10/2026) và của `/ban-do` (từ 11/10/2026). Giá trị nằm ở ConfigMap
         // `common-config`, key `BASEMAP-URL` (gạch ngang, luật 11 bất biến 4) — `envFrom` không mang được
         // key có gạch ngang, nên ánh xạ tên ở đây: `--from` đổi `-` thành `_` → env `BASEMAP_URL`.
         // CHƯA CÓ KEY thì KHÔNG dừng lượt triển khai: bản đồ phản ánh chỉ thiếu nền + một câu (ADR), còn

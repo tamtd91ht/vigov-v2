@@ -38,8 +38,8 @@ import { Glyph } from "./petition-ui";
  * THE BASEMAP IS THE PERSONAL-DATA BOUNDARY (ADR 0072 §Sửa đổi + §Trả lời 09/10/2026). These maps draw
  * CITIZENS' coordinates, so the viewport around a citizen's home must never reach a third-party tile
  * server (rule 3 stop #2). The style is built in code by `buildBasemapStyle(window.location.origin)`:
- * every URL in it is `<this origin>/basemap/…`. NEVER `MAP_STYLE_URL` / OpenFreeMap (that is `/ban-do`,
- * H1), not even "until the file exists": basemap not configured (`BASEMAP_URL` unset, decided on the
+ * every URL in it is `<this origin>/basemap/…`. NEVER a third-party style (the economic map `/ban-do`
+ * moved to this same basemap on 11/10/2026), not even "until the file exists": basemap not configured (`BASEMAP_URL` unset, decided on the
  * SERVER page and passed down as a flag) → one sentence, no map, and no coordinates are even fetched.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  *

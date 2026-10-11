@@ -227,8 +227,8 @@ export const UNVERIFIED_CONTACT_NOTE =
  *
  * THE MINI-MAP IS ON THE SELF-HOSTED BASEMAP ONLY (ADR 0072 §Sửa đổi + §Trả lời 09/10/2026): every
  * tile, glyph and sprite comes from the page's own origin (`/basemap/*`), so the viewport around a
- * citizen's scene never reaches an outside party (rule 3 stop #2 stays off). Never the economic map's
- * OpenFreeMap style, not even as a fallback; basemap not configured → one sentence, no map
+ * citizen's scene never reaches an outside party (rule 3 stop #2 stays off). Never a third-party style
+ * (`/ban-do` uses this same basemap since 11/10/2026), not even as a fallback; basemap not configured → one sentence, no map
  * (`features/phan-anh/petition-map.tsx`). There is still no "open in maps" link: it would put the
  * coordinates into a third-party URL.
  *

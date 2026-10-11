@@ -4,6 +4,8 @@
 // What is held here is what a working screen never shows breaking: no map before / without a frame,
 // the frame passed IN THE CONSTRUCTOR, a toggle that filters without a request, a filter that does
 // request, no camera move outside the frame, and the denied cases of every permission-gated control.
+// The basemap is the SELF-HOSTED one (`buildBasemapStyle`, same origin, `/basemap/*` — owner 11/10/2026);
+// the heat layer reads the real petition points and only with `feedback.read`.
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +16,9 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
+import { HEAT_MAP_LOAD_FAILED } from "@/features/phan-anh/nhan-phieu";
 import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing export (rule 12 inv 3)
+import { BASEMAP_FONTS, BASEMAP_MISSING_SENTENCE } from "@/lib/basemap/assets";
 
 import { EconomicMapScreen } from "./economic-map-screen";
 import { RADIUS_ERROR } from "./frame-form";
@@ -34,6 +38,8 @@ import {
   FRAME_SAVED,
   FRAME_SOURCE_COMMUNE,
   FRAME_SOURCE_DEFAULT,
+  HEAT_NEEDS_FEEDBACK_READ,
+  HEAT_NEEDS_MAP,
   MAP_COLLAPSE,
   MAP_EXPAND,
   MAP_FRAME_NOTICE_ACK,
@@ -42,13 +48,22 @@ import {
   MAP_FRAME_NOTICE_VERSION,
   NOTICE_CONFIRM_BUTTON,
   NOTICE_RELOADED,
-  NO_BASEMAP,
   NO_GROUPS,
   OUTSIDE_FRAME,
   SEED_DEFAULTS_BUTTON,
   noticeOutdated,
 } from "./labels";
-import { CENTRE_SOURCE_ID, LAYER_CENTRE, LAYER_CENTRE_LABEL, LAYER_LABELS, LAYER_POINTS, SOURCE_ID } from "./map-logic";
+import {
+  CENTRE_SOURCE_ID,
+  HEAT_SOURCE_ID,
+  LAYER_CENTRE,
+  LAYER_CENTRE_LABEL,
+  LAYER_CLUSTERS,
+  LAYER_HEAT,
+  LAYER_LABELS,
+  LAYER_POINTS,
+  SOURCE_ID,
+} from "./map-logic";
 
 /* ---- fake MapLibre ------------------------------------------------------------------------------ */
 
@@ -170,11 +185,18 @@ const ml = vi.hoisted(() => {
 
 vi.mock("maplibre-gl", () => ({
   setWorkerUrl: () => {},
+  addProtocol: () => {},
   Map: ml.FakeMap,
   AttributionControl: ml.FakeControl,
   NavigationControl: ml.FakeControl,
   ScaleControl: ml.FakeControl,
   Marker: ml.FakeMarker,
+}));
+
+vi.mock("pmtiles", () => ({
+  Protocol: class {
+    tile = () => {};
+  },
 }));
 
 /* ---- fake server ------------------------------------------------------------------------------- */
@@ -236,7 +258,11 @@ type Setup = {
   puts?: Reply[];
   /** Reply of POST map-frame/reset. */
   reset?: Reply;
+  /** Reply of GET citizen-report-points (the heat layer). Default: 200 with two points. */
+  heatPoints?: Reply;
 };
+
+const HEAT_POINTS = { items: [{ lat: 15.7, lng: 108.3, status: "dang-xu-ly" }, { lat: 15.75, lng: 108.32, status: "da-dong" }] };
 
 let calls: { path: string; method: string; body: unknown }[] = [];
 
@@ -244,7 +270,7 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPES, laterFrames = [], puts = [], reset }: Setup) {
+function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPES, laterFrames = [], puts = [], reset, heatPoints }: Setup) {
   calls = [];
   let frameGets = 0;
   let putCount = 0;
@@ -273,6 +299,10 @@ function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPE
       if (path === "/api/v1/map-asset-summary")
         return json(200, { total: 2, verified: 1, verified_ratio: 0.5, by_type: [{ asset_type_code: "cho", count: 1, verified: 0 }] });
       if (path === "/api/v1/residential-units") return json(200, { items: [] });
+      if (path.startsWith("/api/v1/citizen-report-points")) {
+        const r = heatPoints ?? { status: 200, body: HEAT_POINTS };
+        return json(r.status, r.body);
+      }
       if (path.startsWith("/api/v1/map-asset-points")) return json(200, POINTS);
       if (path.startsWith("/api/v1/map-field-schemas")) return json(200, { items: [] });
       if (path === "/api/v1/map-assets/a1" && method === "GET") return json(200, DETAIL_MASKED);
@@ -314,7 +344,7 @@ async function settle(): Promise<void> {
   }
 }
 
-async function mount(setup: Setup, styleUrl: string | null = "https://tiles.openfreemap.org/styles/liberty") {
+async function mount(setup: Setup, basemapAvailable = true) {
   serve(setup);
   host = document.createElement("div");
   document.body.append(host);
@@ -323,7 +353,7 @@ async function mount(setup: Setup, styleUrl: string | null = "https://tiles.open
     root!.render(
       <CauHinhXaProvider giaTri={{ displayName: "Xã Thăng Bình", parentAuthority: "", logoUrl: "", webAdminBannerUrl: "" }}>
         <PhienProvider>
-          <EconomicMapScreen styleUrl={styleUrl} />
+          <EconomicMapScreen basemapAvailable={basemapAvailable} />
         </PhienProvider>
       </CauHinhXaProvider>,
     ),
@@ -377,10 +407,10 @@ describe("no frame → NO map (ADR 0072 H3)", () => {
     expect(text()).toContain("Máy chủ lỗi.");
   });
 
-  it("no basemap configured: no map, the sentence; the register still loads", async () => {
-    await mount({ permissions: ["asset.read"] }, null);
+  it("no basemap configured (BASEMAP_URL unset): no map, /phan-anh's sentence, no fallback; the register still loads", async () => {
+    await mount({ permissions: ["asset.read"] }, false);
     expect(ml.FakeMap.instances).toHaveLength(0);
-    expect(text()).toContain(NO_BASEMAP);
+    expect(text()).toContain(BASEMAP_MISSING_SENTENCE);
     await act(async () => button("Sổ địa điểm")!.click());
     await settle();
     expect(calls.some((c) => c.path.startsWith("/api/v1/map-assets?"))).toBe(true);
@@ -456,7 +486,6 @@ describe("the map — created once, bounded in the constructor, removed on unmou
     expect(map.opts.maxBounds).toEqual(BOUNDS);
     expect(map.opts.bounds).toEqual(BOUNDS);
     expect(map.opts.renderWorldCopies).toBe(false);
-    expect(map.opts.style).toBe("https://tiles.openfreemap.org/styles/liberty");
     await load();
     expect(ml.FakeMap.instances).toHaveLength(1); // re-renders after load did not build a second map
     expect(map.minZoom).toBe(12);
@@ -476,6 +505,7 @@ describe("the map — created once, bounded in the constructor, removed on unmou
       [108.4, 15.8],
     ]);
     expect(map.layers.map((l) => l.id)).toEqual([
+      "feedback-heat",
       "commune-centre-halo",
       "commune-centre-point",
       "commune-centre-label",
@@ -487,20 +517,120 @@ describe("the map — created once, bounded in the constructor, removed on unmou
     ]);
   });
 
-  it("basemap NAME labels rewritten to name:vi then name; shields left alone", async () => {
+  it("labels: no runtime text-field rewrite (the self-hosted style already reads name:vi), and every font is one /basemap serves", async () => {
     await mount({ permissions: ["asset.read"] });
     const map = await load();
-    expect(map.layout).toEqual([["label_city", "text-field", ["coalesce", ["get", "name:vi"], ["get", "name"]]]]);
+    expect(map.layout.filter(([, p]) => p === "text-field")).toEqual([]);
+    const fonts = map.layers.flatMap((l) => ((l.layout as Record<string, unknown> | undefined)?.["text-font"] as string[] | undefined) ?? []);
+    expect(fonts.length).toBeGreaterThan(0);
+    for (const f of fonts) expect(BASEMAP_FONTS as readonly string[]).toContain(f);
   });
 
-  it("attribution control carries the OpenFreeMap attribution", async () => {
+  it("the style is the SELF-HOSTED basemap: built in code, every URL this origin + /basemap, no OpenFreeMap", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const style = theMap().opts.style as Record<string, unknown>;
+    expect(typeof style).toBe("object");
+    const urls = JSON.stringify(style).match(/(?:https?|pmtiles):\/\/[^"]+/g) ?? [];
+    expect(urls.length).toBeGreaterThan(0);
+    for (const u of urls) expect(u.replace(/^pmtiles:\/\//, "").startsWith(`${window.location.origin}/basemap/`), u).toBe(true);
+    expect(JSON.stringify(style)).not.toMatch(/openfreemap|openmaptiles/i);
+  });
+
+  it("attribution: the style source's compact OpenStreetMap credit only — no OpenFreeMap string", async () => {
     await mount({ permissions: ["asset.read"] });
     const map = theMap();
-    const attribution = map.controls.find((c) => (c as { opts?: Record<string, unknown> }).opts?.customAttribution !== undefined) as {
-      opts: { customAttribution: string };
-    };
-    expect(attribution.opts.customAttribution).toContain("OpenFreeMap");
-    expect(attribution.opts.customAttribution).toContain("OpenStreetMap");
+    expect(map.opts.attributionControl).toEqual({ compact: true });
+    expect(JSON.stringify(map.opts.style)).toContain("OpenStreetMap");
+    const custom = map.controls.filter((c) => (c as { opts?: Record<string, unknown> }).opts?.customAttribution !== undefined);
+    expect(custom).toEqual([]);
+  });
+});
+
+/* ---- "Bản đồ nhiệt phản ánh" — real petition points, gated by feedback.read ------------------------- */
+
+describe("heat layer switch", () => {
+  const heatSwitch = () => host!.querySelector<HTMLButtonElement>('[data-heat-switch] [role="switch"]')!;
+  const pointCalls = () => calls.filter((c) => c.path.startsWith("/api/v1/citizen-report-points"));
+  const visibility = (map: InstanceType<typeof ml.FakeMap>) =>
+    map.layout.filter(([id, p]) => id === LAYER_HEAT && p === "visibility").at(-1)?.[2];
+
+  it("DENIED: without feedback.read the switch is disabled, says why in title, and NO point is fetched", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await load();
+    const sw = heatSwitch();
+    expect(sw.disabled).toBe(true);
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(sw.title).toBe(HEAT_NEEDS_FEEDBACK_READ);
+    await act(async () => sw.click());
+    await settle();
+    expect(pointCalls()).toEqual([]);
+    // No "?" pending marker on this row any more.
+    expect(host!.querySelector(`[data-heat-switch] [aria-label="${pendingMarkerLabel("Bản đồ nhiệt phản ánh")}"]`)).toBeNull();
+  });
+
+  it("feedback.read: enabled, off by default (nothing fetched); on → GET citizen-report-points, drawn beneath the pins", async () => {
+    await mount({ permissions: ["asset.read", "feedback.read"] });
+    const map = await load();
+    const sw = heatSwitch();
+    expect(sw.disabled).toBe(false);
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    expect(pointCalls()).toEqual([]);
+    const heat = map.layers.find((l) => l.id === LAYER_HEAT)!;
+    expect(heat).toMatchObject({ type: "heatmap", source: HEAT_SOURCE_ID, layout: { visibility: "none" } });
+    expect(heat.paint).toMatchObject({ "heatmap-radius": 28, "heatmap-opacity": 0.45 });
+    const ids = map.layers.map((l) => l.id);
+    expect(ids.indexOf(LAYER_HEAT)).toBeLessThan(ids.indexOf(LAYER_CLUSTERS));
+    expect(ids.indexOf(LAYER_HEAT)).toBeLessThan(ids.indexOf(LAYER_POINTS));
+
+    await act(async () => sw.click());
+    await settle();
+    expect(pointCalls().map((c) => c.path)).toEqual(["/api/v1/citizen-report-points"]);
+    expect(heatSwitch().getAttribute("aria-checked")).toBe("true");
+    const data = map.getSource(HEAT_SOURCE_ID)!.data as { features: { geometry: { coordinates: number[] }; properties: object }[] };
+    expect(data.features.map((f) => f.geometry.coordinates)).toEqual([
+      [108.3, 15.7],
+      [108.32, 15.75],
+    ]);
+    // Position only — not even the status travels into the map.
+    expect(data.features.every((f) => Object.keys(f.properties).length === 0)).toBe(true);
+    expect(visibility(map)).toBe("visible");
+
+    await act(async () => heatSwitch().click());
+    await settle();
+    expect(heatSwitch().getAttribute("aria-checked")).toBe("false");
+    expect(visibility(map)).toBe("none");
+  });
+
+  it("422 too_many_points: the server's sentence, and nothing drawn", async () => {
+    await mount({
+      permissions: ["asset.read", "feedback.read"],
+      heatPoints: { status: 422, body: { code: "too_many_points", message: "Quá nhiều điểm, hãy thu hẹp bộ lọc." } },
+    });
+    const map = await load();
+    await act(async () => heatSwitch().click());
+    await settle();
+    expect(text()).toContain("Quá nhiều điểm, hãy thu hẹp bộ lọc.");
+    expect((map.getSource(HEAT_SOURCE_ID)!.data as { features: unknown[] }).features).toEqual([]);
+    expect(visibility(map) ?? "none").toBe("none");
+  });
+
+  it("server error: a visible sentence, nothing drawn", async () => {
+    await mount({ permissions: ["asset.read", "feedback.read"], heatPoints: { status: 500, body: { code: "x", message: "Máy chủ lỗi." } } });
+    const map = await load();
+    await act(async () => heatSwitch().click());
+    await settle();
+    const alert = host!.querySelector('[data-heat-switch-note][role="alert"]')!;
+    expect(alert.textContent).toContain(HEAT_MAP_LOAD_FAILED);
+    expect(alert.textContent).toContain("Máy chủ lỗi.");
+    expect((map.getSource(HEAT_SOURCE_ID)!.data as { features: unknown[] }).features).toEqual([]);
+  });
+
+  it("no basemap: the switch is disabled even with feedback.read — no map, so no citizen coordinate is fetched", async () => {
+    await mount({ permissions: ["asset.read", "feedback.read"] }, false);
+    const sw = heatSwitch();
+    expect(sw.disabled).toBe(true);
+    expect(sw.title).toBe(HEAT_NEEDS_MAP);
+    expect(pointCalls()).toEqual([]);
   });
 });
 
@@ -667,6 +797,13 @@ describe("add button follows asset.update", () => {
     expect(host!.querySelector<HTMLInputElement>("#asset-lat")!.value).toBe("15.700000");
     // The prototype's place search sits above the pin map, disabled with its "?" (no geocoder).
     expect(host!.querySelector<HTMLInputElement>("#asset-place-search")!.disabled).toBe(true);
+    // The pin map of the form is on the same self-hosted basemap.
+    await settle();
+    expect(ml.FakeMap.instances).toHaveLength(2);
+    const picker = ml.FakeMap.instances.at(-1)!;
+    expect(JSON.stringify(picker.opts.style)).toContain(`${window.location.origin}/basemap/`);
+    expect(JSON.stringify(picker.opts.style)).not.toMatch(/openfreemap/i);
+    expect(picker.opts.attributionControl).toEqual({ compact: true });
   });
 
   it("header, in the prototype's order: Mẫu Excel · Nhập Excel · Thêm đối tượng · Bản đồ / Sổ địa điểm · Trình chiếu", async () => {

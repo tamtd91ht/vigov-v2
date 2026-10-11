@@ -33,6 +33,26 @@ describe("economic map — source boundaries", () => {
     }
   });
 
+  it("the basemap is the self-hosted one only: no OpenFreeMap, no MAP_STYLE_URL, no fetched style URL (owner 11/10/2026)", () => {
+    // Hosts and the old variable, not the word: the K6 legal notice (labels.ts) still names the provider
+    // until a new notice version is issued (backend + legal), and that text is not this test's to change.
+    for (const f of FILES) {
+      expect(/openfreemap\.org|openmaptiles\.org|MAP_STYLE_URL|mapStyleUrl|styleUrl/i.test(f.src), f.name).toBe(false);
+    }
+    const creators = FILES.filter((f) => /new\s+ml\.Map\(/.test(f.src));
+    for (const f of creators) {
+      expect(f.src.includes("buildBasemapStyle(window.location.origin)"), f.name).toBe(true);
+      // `pmtiles://` must be known before the map reads the style, or the source fails silently.
+      const reg = f.src.indexOf("await registerPmtilesProtocol(ml)");
+      expect(reg, f.name).toBeGreaterThan(-1);
+      expect(reg, f.name).toBeLessThan(f.src.search(/new\s+ml\.Map\(/));
+    }
+  });
+
+  it("no glyph stack the /basemap route does not serve ('Noto Sans Bold' draws nothing, silently)", () => {
+    for (const f of FILES) expect(f.src.includes("Noto Sans Bold"), f.name).toBe(false);
+  });
+
   it("maxBounds is only ever a CONSTRUCTOR option — never set after the map exists", () => {
     for (const f of FILES) expect(/setMaxBounds\s*\(/.test(f.src), f.name).toBe(false);
   });

@@ -5,13 +5,13 @@ import type { comms_mapAssetPointsOut, comms_mapFrameOut } from "@/lib/api/schem
 import {
   GROUP_COLOURS,
   GROUP_SWATCH_CLASS,
-  VIETNAMESE_TEXT_FIELD,
+  HEAT_PAINT,
   frameDefaultFromApi,
   frameFromApi,
   frameHintsFromApi,
+  heatCollection,
   insideFrame,
   meanCentre,
-  nameLabelLayers,
   pointsFilter,
   radiusUnusual,
   summaryLine,
@@ -138,17 +138,36 @@ describe("layers", () => {
   });
 });
 
-describe("Vietnamese basemap labels (ADR 0072 H1)", () => {
-  it("rewrites name labels only — not shields, not non-symbol layers", () => {
-    const ids = nameLabelLayers([
-      { id: "place", type: "symbol", layout: { "text-field": ["coalesce", ["get", "name_en"], ["get", "name"]] } },
-      { id: "poi", type: "symbol", layout: { "text-field": "{name}" } },
-      { id: "shield", type: "symbol", layout: { "text-field": "{ref}" } },
-      { id: "icon-only", type: "symbol", layout: { "icon-image": "x" } },
-      { id: "water", type: "fill" },
-    ]);
-    expect(ids).toEqual(["place", "poi"]);
-    expect(VIETNAMESE_TEXT_FIELD).toEqual(["coalesce", ["get", "name:vi"], ["get", "name"]]);
+describe("heat layer of petition points (spec 02, owner 11/10/2026)", () => {
+  it("paint is the spec's: radius 28, opacity 0.45, the four-stop ramp", () => {
+    expect(HEAT_PAINT).toEqual({
+      "heatmap-radius": 28,
+      "heatmap-opacity": 0.45,
+      "heatmap-color": [
+        "interpolate",
+        ["linear"],
+        ["heatmap-density"],
+        0,
+        "rgba(47,177,249,0)",
+        0.4,
+        "rgba(47,177,249,0.5)",
+        0.7,
+        "rgba(255,122,26,0.6)",
+        1,
+        "rgba(229,72,77,0.8)",
+      ],
+    });
+  });
+
+  it("points become [lng, lat] features carrying NOTHING else (status dropped, rule 3)", () => {
+    // The route's own shape (`petitions_citizenReportPointOut`), status included.
+    const fromRoute = [{ lat: 15.7, lng: 108.3, status: "dang-xu-ly" }];
+    const c = heatCollection(fromRoute);
+    expect(c).toEqual({
+      type: "FeatureCollection",
+      features: [{ type: "Feature", properties: {}, geometry: { type: "Point", coordinates: [108.3, 15.7] } }],
+    });
+    expect(heatCollection([]).features).toEqual([]);
   });
 });
 

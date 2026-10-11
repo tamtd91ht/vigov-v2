@@ -13,6 +13,8 @@ import { PendingButton } from "@/components/ui/pending-feature";
 import { Segmented } from "@/components/ui/segmented";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { OverlayDialog } from "@/features/noi-dung/overlay-dialog";
+// vi-name-ok: existing module and exports (rule 12 inv 3) — /phan-anh's own sentences, one copy (rule 9)
+import { HEAT_MAP_EMPTY_TITLE, HEAT_MAP_LOAD_FAILED, HEAT_MAP_LOADING } from "@/features/phan-anh/nhan-phieu";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { layLoaiTaiNguyenBanDo } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
@@ -28,6 +30,7 @@ import {
 } from "@/lib/api/map-assets";
 import { listMapFields } from "@/lib/api/map-field-schemas";
 import { getMapFrame } from "@/lib/api/map-frame";
+import { listCitizenReportPoints, type PointsResult } from "@/lib/api/phieu-phan-anh"; // vi-name-ok: existing module (rule 12 inv 3)
 import type {
   comms_danhSachLoaiTaiNguyenRa,
   comms_mapAssetOut,
@@ -38,7 +41,8 @@ import type {
   identity_thonToDanPhoRa,
 } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
-import { coQuyen, QUYEN_QUAN_LY_DANH_MUC } from "@/lib/quyen";
+import { BASEMAP_MISSING_SENTENCE } from "@/lib/basemap/assets";
+import { coQuyen, QUYEN_QUAN_LY_DANH_MUC, QUYEN_XEM_PHAN_ANH } from "@/lib/quyen"; // vi-name-ok: existing exports (rule 12 inv 3)
 
 import { AssetDialog, type AssetDialogMode } from "./asset-dialog";
 import { DeleteAssetDialog, DetailPanel } from "./detail-panel";
@@ -56,8 +60,9 @@ import {
   FRAME_RESET_DONE,
   FRAME_RESET_DONE_NO_DEFAULT,
   FRAME_SAVED,
+  HEAT_NEEDS_FEEDBACK_READ,
+  HEAT_NEEDS_MAP,
   MAP_LOAD_FAILED,
-  NO_BASEMAP,
   NO_BASEMAP_DETAIL,
   NO_GROUPS,
   NO_GROUPS_ASK_ADMIN,
@@ -82,7 +87,7 @@ import {
   type EconomicCollection,
 } from "./map-logic";
 import { RegisterTable } from "./register-table";
-import { DensityPending, FilterPanel, LayerPanel } from "./side-panel";
+import { DensityPending, FilterPanel, LayerPanel, type HeatSwitchState } from "./side-panel";
 
 type View = "map" | "register";
 
@@ -105,22 +110,29 @@ const SEARCH_DEBOUNCE_MS = 300;
  *
  * WHAT DECIDES WHETHER A MAP IS DRAWN, in order — each "no" draws NO MAP, never a fallback view:
  *   1. the frame has loaded and is configured (`GET /api/v1/map-frame`) — ADR 0072 H3;
- *   2. a basemap style URL is configured (server-side `MAP_STYLE_URL`, passed in as `styleUrl`) — H1;
+ *   2. the SELF-HOSTED basemap is configured (`BASEMAP_URL`, decided on the server page and passed in as
+ *      `basemapAvailable`) — the same basemap and the same sentence as `/phan-anh` (owner 11/10/2026);
  *   3. the style loaded.
  * The register ("Sổ địa điểm") works in every one of those cases.
  *
  * PERMISSIONS ARE CONVENIENCE HERE (rule 5, #1): `asset.read` gates the whole screen (`page.tsx`),
  * `asset.update` shows the write controls, `admin.lookup` the frame form, "Về mặc định" and the
- * default-groups button. The server checks each on every request.
+ * default-groups button, `feedback.read` the heat-layer switch. The server checks each on every request.
+ *
+ * THE HEAT LAYER reads citizens' petition coordinates (`GET /api/v1/citizen-report-points`, the route
+ * `/phan-anh` draws from). They are asked for only while the switch is on AND a map is on screen, held in
+ * state for the map and nowhere else — never logged, never in a URL (rule 3). A refusal (422: more than
+ * the cap) or an error draws NOTHING: a heat map of part of the points looks like the commune's and is not.
  */
 /** The region "Mở rộng bản đồ" grows into the page overlay (`aria-controls` of the toggle). */
 const MAP_REGION_ID = "economic-map-region";
 
-export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
+export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: boolean }) {
   const phien = usePhien();
   const permissions = phien !== null && phien.ok ? phien.duLieu.permissions : [];
   const canUpdate = coQuyen(permissions, ASSET_UPDATE_PERMISSION);
   const canAdminLookup = coQuyen(permissions, QUYEN_QUAN_LY_DANH_MUC);
+  const canReadFeedback = coQuyen(permissions, QUYEN_XEM_PHAN_ANH);
 
   const [types, setTypes] = useState<KetQua<comms_danhSachLoaiTaiNguyenRa> | null>(null);
   const [typesReload, setTypesReload] = useState(0);
@@ -151,6 +163,10 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [mapFailed, setMapFailed] = useState(false);
   const [chosenGroup, setChosenGroup] = useState("");
+  const [heatOn, setHeatOn] = useState(false);
+  /** Tagged with the activation it answers, so a reply from an earlier "on" is never shown as the current one. */
+  const [heatResult, setHeatResult] = useState<{ readonly seq: number; readonly result: PointsResult } | null>(null);
+  const [heatSeq, setHeatSeq] = useState(0);
   const detailSeq = useRef(0);
   const skipLogged = useRef(false);
 
@@ -266,10 +282,45 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
   const unitName = useCallback((id: string) => units.find((u) => u.id === id)?.name ?? "—", [units]);
   const activeTypes = typeItems.filter((t) => t.active);
   const currentGroup = activeTypes.some((t) => t.code === chosenGroup) ? chosenGroup : (activeTypes[0]?.code ?? "");
-  const mapAvailable = frame !== null && styleUrl !== null && !mapFailed;
+  const mapAvailable = frame !== null && basemapAvailable && !mapFailed;
   // Expanded only while a map is actually on screen: switching to Sổ địa điểm, or losing the map,
   // returns to the normal layout by itself — derived, so it cannot get stuck open.
   const mapExpanded = mapExpandedState && view === "map" && mapAvailable;
+
+  // The heat layer is LIVE only while it can be drawn: no map → no citizen coordinate is asked for.
+  const heatLive = heatOn && canReadFeedback && mapAvailable && view === "map";
+  useEffect(() => {
+    if (!heatLive) return;
+    let gone = false;
+    listCitizenReportPoints().then((result) => !gone && setHeatResult({ seq: heatSeq, result }));
+    return () => {
+      gone = true;
+    };
+  }, [heatLive, heatSeq]);
+  const heatCurrent = heatLive && heatResult !== null && heatResult.seq === heatSeq ? heatResult.result : null;
+  const heatPoints = heatCurrent !== null && heatCurrent.ok ? heatCurrent.data.items : null;
+  const heatDisabledReason = !canReadFeedback ? HEAT_NEEDS_FEEDBACK_READ : !mapAvailable ? HEAT_NEEDS_MAP : null;
+  const heat: HeatSwitchState = {
+    checked: heatOn && heatDisabledReason === null,
+    disabledReason: heatDisabledReason,
+    note: !heatLive
+      ? null
+      : heatCurrent === null
+        ? { tone: "info", text: HEAT_MAP_LOADING }
+        : !heatCurrent.ok
+          ? heatCurrent.tooManyPoints
+            ? // The server's sentence verbatim: the way out is narrowing, not retrying.
+              { tone: "info", text: heatCurrent.message }
+            : { tone: "error", text: `${HEAT_MAP_LOAD_FAILED}: ${heatCurrent.message}` }
+          : heatCurrent.data.items.length === 0
+            ? { tone: "info", text: HEAT_MAP_EMPTY_TITLE }
+            : null,
+    onChange: (on) => {
+      setHeatOn(on);
+      // Each "on" is a fresh read: turning it off and on again is the retry after an error.
+      if (on) setHeatSeq((n) => n + 1);
+    },
+  };
 
   useEffect(() => {
     if (!mapExpanded) return;
@@ -500,13 +551,13 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
         )}
       </div>
     );
-    if (styleUrl === null || mapFailed) {
+    if (!basemapAvailable || mapFailed) {
       return (
         <>
           {canAdminLookup && toolbar}
           <div className="p-4">
-            {styleUrl === null ? (
-              <Notice tone="neutral" title={NO_BASEMAP}>
+            {!basemapAvailable ? (
+              <Notice tone="neutral" title={BASEMAP_MISSING_SENTENCE}>
                 {NO_BASEMAP_DETAIL}
               </Notice>
             ) : (
@@ -521,7 +572,6 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
         {toolbar}
         <EconomicMap
           key={frame.bounds.join(",")}
-          styleUrl={styleUrl}
           frame={frame}
           centreLabel={centreLabel}
           expanded={mapExpanded}
@@ -529,6 +579,7 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
           visible={visible}
           selectedId={selectedId}
           flyTo={flyTo}
+          heatPoints={heatPoints}
           onPointClick={(id) => void openAsset(id, false)}
           onLoadError={() => setMapFailed(true)}
         />
@@ -648,6 +699,7 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
             onHideAll={() => setHidden(new Set(typeItems.map((t) => t.code)))}
             onShowAll={() => setHidden(new Set())}
             centreIsDefault={frame?.source === "default"}
+            heat={heat}
           />
           <div className="border-t border-line pt-4">
             <FilterPanel
@@ -702,7 +754,7 @@ export function EconomicMapScreen({ styleUrl }: { styleUrl: string | null }) {
           types={typeItems}
           units={units}
           frame={frame}
-          styleUrl={mapAvailable ? styleUrl : null}
+          mapAvailable={mapAvailable}
           onCancel={() => setDialog(null)}
           onSaved={(saved, created) => {
             setDialog(null);

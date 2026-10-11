@@ -321,23 +321,50 @@ export function selectedFilter(id: string | null): unknown[] {
   return ["all", ["!", ["has", "point_count"]], ["==", ["get", "id"], id ?? ""]];
 }
 
-/* ---- Vietnamese basemap labels (ADR 0072 H1) ------------------------------------------------- */
+/* ---- "Bản đồ nhiệt phản ánh" (spec 02, owner 11/10/2026) ------------------------------------- */
 
-/** `name:vi` first, then the local `name` — the `liberty` style prefers `name_en`. */
-export const VIETNAMESE_TEXT_FIELD: readonly unknown[] = ["coalesce", ["get", "name:vi"], ["get", "name"]];
-
-type StyleLayerLike = { readonly id: string; readonly type: string; readonly layout?: Record<string, unknown> };
+/** GeoJSON source of the petition points. Separate from the asset source: never clustered, never clicked. */
+export const HEAT_SOURCE_ID = "feedback-heat-points";
+export const LAYER_HEAT = "feedback-heat";
 
 /**
- * Ids of the basemap symbol layers whose `text-field` shows a place NAME (references `name…`). Road
- * shields (`{ref}`) and house numbers keep their own field: rewriting those to a name would print a
- * street name on a highway shield.
+ * Spec `02-cong-nghe-ban-do.md`, "Bản đồ nhiệt phản ánh" — verbatim. The prototype fed this paint from
+ * the ASSET tiles; the spec says to keep the paint and use real petition data when the backend has it,
+ * which it does (`citizen-report-points`, the route `/phan-anh` draws from).
  */
-export function nameLabelLayers(layers: readonly StyleLayerLike[]): string[] {
-  return layers
-    .filter((l) => l.type === "symbol" && l.layout !== undefined && l.layout["text-field"] !== undefined)
-    .filter((l) => /"name|\{name/.test(JSON.stringify(l.layout!["text-field"])))
-    .map((l) => l.id);
+export const HEAT_PAINT = {
+  "heatmap-radius": 28,
+  "heatmap-opacity": 0.45,
+  "heatmap-color": [
+    "interpolate",
+    ["linear"],
+    ["heatmap-density"],
+    0,
+    "rgba(47,177,249,0)",
+    0.4,
+    "rgba(47,177,249,0.5)",
+    0.7,
+    "rgba(255,122,26,0.6)",
+    1,
+    "rgba(229,72,77,0.8)",
+  ],
+} as const;
+
+export type HeatPoint = { readonly lat: number; readonly lng: number };
+
+/**
+ * Petition points as GeoJSON — POSITION ONLY. The route also sends a status; it is dropped here so no
+ * attribute of a citizen's petition reaches the map's worker or a feature query (rule 3).
+ */
+export function heatCollection(points: readonly HeatPoint[]) {
+  return {
+    type: "FeatureCollection" as const,
+    features: points.map((p) => ({
+      type: "Feature" as const,
+      properties: {},
+      geometry: { type: "Point" as const, coordinates: [p.lng, p.lat] },
+    })),
+  };
 }
 
 /* ---- formatting ------------------------------------------------------------------------------ */

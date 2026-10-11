@@ -5,6 +5,7 @@ import { Eye, EyeOff, Flame, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { PendingField, PendingMarker } from "@/components/ui/pending-feature";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/cn";
 import type { comms_loaiTaiNguyenRa, comms_mapAssetRowOut, identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 
@@ -12,6 +13,7 @@ import {
   CLEAR_FILTERS,
   DENSITY_TITLE,
   FILTERS_TITLE,
+  HEAT_SWITCH_LABEL,
   HIDE_ALL,
   INDUSTRIES,
   LAYERS_TITLE,
@@ -26,6 +28,15 @@ import {
   pendingPart,
 } from "./labels";
 import { groupSwatchClass } from "./map-logic";
+
+export type HeatSwitchState = {
+  readonly checked: boolean;
+  /** `null` = usable; otherwise the sentence shown as `title` on the disabled switch. */
+  readonly disabledReason: string | null;
+  /** One visible sentence under the switch (loading, refusal, error, nothing to draw), or `null`. */
+  readonly note: { readonly tone: "info" | "error"; readonly text: string } | null;
+  readonly onChange: (on: boolean) => void;
+};
 
 /** Section heading of the left column — the prototype's small uppercase label (`LayerPanel.tsx`). */
 const SECTION_TITLE = "m-0 text-xs font-semibold tracking-wide text-ink-500";
@@ -45,6 +56,7 @@ export function LayerPanel({
   onHideAll,
   onShowAll,
   centreIsDefault = false,
+  heat,
 }: {
   types: readonly comms_loaiTaiNguyenRa[];
   counts: ReadonlyMap<string, number>;
@@ -56,6 +68,8 @@ export function LayerPanel({
   onShowAll: () => void;
   /** The frame in effect is the platform default (ADR 0072 K3): the legend says the centre is the default one. */
   centreIsDefault?: boolean;
+  /** "Bản đồ nhiệt phản ánh" — state owned by the screen (it fetches the points). */
+  heat: HeatSwitchState;
 }) {
   // Prototype: "Ẩn hết" only while EVERY layer is on; any layer off offers "Hiện hết".
   const allOn = types.every((t) => !hidden.has(t.code));
@@ -109,15 +123,38 @@ export function LayerPanel({
           );
         })}
       </ul>
-      {/* Prototype: a bordered row with a flame and a switch. Disabled with "?" — ADR 0072 §4, H2. */}
-      <div className="flex min-w-0 items-center gap-2 rounded-lg border border-line p-2.5" data-pending="">
-        <Flame aria-hidden="true" className="size-4 shrink-0 text-ink-400" />
-        <label htmlFor="heatmap-toggle" className="min-w-0 flex-1 text-[13px] text-ink-500">
-          Bản đồ nhiệt phản ánh
-        </label>
-        <PendingMarker info={pendingPart("Bản đồ nhiệt phản ánh")} />
-        <input id="heatmap-toggle" type="checkbox" role="switch" disabled className="size-4 shrink-0 cursor-not-allowed" />
-      </div>
+      {/* Prototype `LayerPanel.tsx` / spec 04: a bordered row, flame, label, Switch on the right. The whole
+          row is the label, so it toggles from anywhere on it. Disabled (reason in `title`) without
+          `feedback.read` or without a map — hiding it would leave staff guessing; the server checks
+          `feedback.read` on the points route regardless (rule 5, #1). */}
+      <label
+        htmlFor="heatmap-toggle"
+        data-heat-switch=""
+        title={heat.disabledReason ?? undefined}
+        className={cn(
+          "flex min-w-0 items-center gap-2 rounded-[9px] border border-line p-2.5",
+          heat.disabledReason === null ? "cursor-pointer" : "cursor-not-allowed",
+        )}
+      >
+        <Flame aria-hidden="true" className="size-4 shrink-0 text-tangerine" />
+        <span className="min-w-0 flex-1 text-[12.5px] text-navy">{HEAT_SWITCH_LABEL}</span>
+        <Switch
+          id="heatmap-toggle"
+          checked={heat.checked}
+          disabled={heat.disabledReason !== null}
+          title={heat.disabledReason ?? undefined}
+          onCheckedChange={heat.onChange}
+        />
+      </label>
+      {heat.note !== null && (
+        <p
+          className={cn("m-0 text-xs", heat.note.tone === "error" ? "text-danger-600" : "text-ink-500")}
+          role={heat.note.tone === "error" ? "alert" : "status"}
+          data-heat-switch-note=""
+        >
+          {heat.note.text}
+        </p>
+      )}
       <p className="m-0 text-xs text-ink-500">{UNVERIFIED_LEGEND}</p>
       <p className="m-0 flex items-center gap-2 text-xs text-ink-500">
         <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-full border-2 border-white bg-[#dc2626] ring-2 ring-[#dc2626]/30" />

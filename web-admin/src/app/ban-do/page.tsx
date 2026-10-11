@@ -9,7 +9,7 @@ import { NO_ASSET_READ, PAGE_TITLE } from "@/features/map-assets/labels";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
-import { mapStyleUrl } from "@/lib/may-chu/map-style";
+import { basemapConfigured } from "@/lib/may-chu/basemap";
 import { ASSET_READ_PERMISSION } from "@/lib/quyen";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
@@ -20,22 +20,20 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * `asset.read` is checked by service-comms on EVERY call; `CongQuyen` only spares an officer without it
  * a screen of 403s (rule 5, #1). Same shape as `/giai-ngan`.
  *
- * THE COMMUNE comes from `Host` (`layCauHinhXa`, 404 when it matches none). THE BASEMAP URL is a
- * platform constant read HERE, on the server, at request time (`MAP_STYLE_URL`, `lib/may-chu/map-style.ts`)
- * and passed down as a prop — never `NEXT_PUBLIC_*`, never baked into the bundle (ADR 0072 H1).
+ * THE COMMUNE comes from `Host` (`layCauHinhXa`, 404 when it matches none). THE BASEMAP is the
+ * self-hosted one `/phan-anh` uses (owner 11/10/2026): whether it is configured (`BASEMAP_URL`,
+ * `lib/may-chu/basemap.ts`) is decided HERE, on the server, at request time, and passed down as a flag —
+ * never `NEXT_PUBLIC_*`, never baked into the bundle. Unset → one sentence, no map, no fallback provider.
  */
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata() {
-  const base = await communePageMetadata(PAGE_TITLE);
-  // Tile, glyph and sprite requests go to the basemap host. Send it the ORIGIN at most, never this
-  // page's path (security review 04/10/2026, #3). Scoped to this page; other pages keep the default.
-  return { ...base, referrer: "strict-origin-when-cross-origin" as const };
+  return communePageMetadata(PAGE_TITLE);
 }
 
 export default async function EconomicMapPage() {
   const commune = await layCauHinhXa();
-  const styleUrl = mapStyleUrl();
+  const basemapAvailable = basemapConfigured();
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(commune)}>
@@ -44,7 +42,7 @@ export default async function EconomicMapPage() {
           <DauTrang />
           <main className="than-trang">
             <CongQuyen khoa={ASSET_READ_PERMISSION} cauThieuQuyen={NO_ASSET_READ}>
-              <EconomicMapScreen styleUrl={styleUrl} />
+              <EconomicMapScreen basemapAvailable={basemapAvailable} />
             </CongQuyen>
           </main>
         </div>

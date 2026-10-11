@@ -67,7 +67,7 @@ export function AssetDialog({
   types,
   units,
   frame,
-  styleUrl,
+  mapAvailable,
   onSaved,
   onCancel,
 }: {
@@ -75,7 +75,8 @@ export function AssetDialog({
   types: readonly comms_loaiTaiNguyenRa[];
   units: readonly identity_thonToDanPhoRa[];
   frame: MapFrame | null;
-  styleUrl: string | null;
+  /** The page draws its map (self-hosted basemap configured, frame known, style loaded): show the pin map. */
+  mapAvailable: boolean;
   onSaved: (saved: comms_mapAssetOut, created: boolean) => void;
   onCancel: () => void;
 }) {
@@ -219,7 +220,7 @@ export function AssetDialog({
 
         <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0 sm:col-span-2 [&>*]:my-0">
           <legend className="mb-2 p-0 text-xs font-semibold text-ink-700">Vị trí trên bản đồ</legend>
-          {styleUrl !== null && frame !== null && (
+          {mapAvailable && frame !== null && (
             <>
               <PendingField
                 info={pendingPart("Tìm địa điểm theo tên")}
@@ -236,7 +237,6 @@ export function AssetDialog({
                 />
               </div>
               <PositionPicker
-                styleUrl={styleUrl}
                 frame={frame}
                 expanded={pickerExpanded}
                 lat={pLat}

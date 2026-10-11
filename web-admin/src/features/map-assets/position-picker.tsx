@@ -3,11 +3,17 @@
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 import { useEffect, useRef } from "react";
 
-import { OPENFREEMAP_ATTRIBUTION } from "./labels";
+import { registerPmtilesProtocol } from "@/lib/basemap/protocol";
+import { buildBasemapStyle } from "@/lib/basemap/style";
+
 import { MAPLIBRE_WORKER_URL, insideFrame, round6, type MapFrame } from "./map-logic";
 
 /**
  * The small map of the add / edit form (spec §8.1): click to place the pin, drag it to adjust.
+ *
+ * SAME SELF-HOSTED BASEMAP as `EconomicMap` (style built in code, same origin, `/basemap/*`). The dialog
+ * renders this only while the page's map is available, so an unconfigured basemap shows no picker; the
+ * coordinates can still be typed.
  *
  * SAME FRAME, SAME CONSTRUCTOR RULE as `EconomicMap`: `bounds` + `maxBounds` are constructor options,
  * so the picker can never show — or place a pin — outside the commune. A click or a drag ending
@@ -16,7 +22,6 @@ import { MAPLIBRE_WORKER_URL, insideFrame, round6, type MapFrame } from "./map-l
  * ONE marker, the form's own pin — not a marker per asset.
  */
 export function PositionPicker({
-  styleUrl,
   frame,
   lat,
   lng,
@@ -24,7 +29,6 @@ export function PositionPicker({
   onOutside,
   expanded = false,
 }: {
-  styleUrl: string;
   frame: MapFrame;
   /** "Mở rộng bản đồ" inside the form's dialog: a taller map to place the pin precisely. */
   expanded?: boolean;
@@ -52,24 +56,28 @@ export function PositionPicker({
     let cancelled = false;
     let created: MapLibreMap | null = null;
     const bounds: [number, number, number, number] = [minLng, minLat, maxLng, maxLat];
-    void import("maplibre-gl").then((ml) => {
+    void (async () => {
+      const ml = await import("maplibre-gl");
       if (cancelled || containerRef.current === null) return;
       // Before ANY map exists — see MAPLIBRE_WORKER_URL for why the default URL is empty under Turbopack.
       ml.setWorkerUrl(MAPLIBRE_WORKER_URL);
+      // `pmtiles://` must be known BEFORE the map reads the style, or the source fails silently.
+      await registerPmtilesProtocol(ml);
+      if (cancelled || containerRef.current === null) return;
       const map = new ml.Map({
         container: containerRef.current,
-        style: styleUrl,
+        style: buildBasemapStyle(window.location.origin),
         bounds,
         maxBounds: bounds,
         renderWorldCopies: false,
-        attributionControl: false,
+        // The style source's OpenStreetMap credit, compact on this small map.
+        attributionControl: { compact: true },
         dragRotate: false,
         pitchWithRotate: false,
         touchPitch: false,
       });
       created = map;
       mapRef.current = map;
-      map.addControl(new ml.AttributionControl({ compact: true, customAttribution: OPENFREEMAP_ATTRIBUTION }));
       map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
 
       const marker = new ml.Marker({ draggable: true });
@@ -96,6 +104,8 @@ export function PositionPicker({
         }
         onPickRef.current(round6(p.lat), round6(p.lng));
       });
+    })().catch(() => {
+      // The MapLibre or PMTiles chunk did not load: no picker map; the lat / lng inputs still work.
     });
     return () => {
       cancelled = true;
@@ -104,7 +114,7 @@ export function PositionPicker({
       created?.remove();
       mapRef.current = null;
     };
-  }, [styleUrl, minLng, minLat, maxLng, maxLat]);
+  }, [minLng, minLat, maxLng, maxLat]);
 
   // Typed coordinates move the pin — only inside the frame; the form shows why otherwise.
   useEffect(() => {

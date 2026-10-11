@@ -15,7 +15,7 @@ export const NO_ASSET_READ =
 
 /* ---- frame + basemap -------------------------------------------------------------------------- */
 
-export const NO_BASEMAP = "Chưa cấu hình bản đồ nền.";
+/** Under `BASEMAP_MISSING_SENTENCE` (the one sentence `/phan-anh` shows too), what still works here. */
 export const NO_BASEMAP_DETAIL = "Sổ địa điểm vẫn dùng được. Người vận hành hệ thống cần đặt địa chỉ bản đồ nền.";
 export const FRAME_NOT_SET = "Xã chưa đặt khung bản đồ.";
 export const FRAME_ASK_ADMIN = "Liên hệ quản trị viên của xã để đặt khung.";
@@ -75,14 +75,6 @@ export const MY_LOCATION_OUTSIDE = "Vị trí của bạn nằm ngoài khung b�
 export const MY_LOCATION_FAILED = "Không lấy được vị trí của bạn. Hãy cho phép trình duyệt dùng vị trí, hoặc bấm vào bản đồ.";
 export const MAP_LOAD_FAILED = "Không thể tải bản đồ. Vui lòng thử lại.";
 
-/**
- * Required attribution (ADR 0072 H1). EXACTLY the string the OpenFreeMap TileJSON
- * (`https://tiles.openfreemap.org/planet`, read 04/10/2026) returns, so MapLibre's attribution control
- * treats the source's entry and this one as the same and draws it once — and still draws it if a
- * changed style stops carrying it. Rendered by MapLibre's own sanitiser; no user data in it.
- */
-export const OPENFREEMAP_ATTRIBUTION =
-  '<a href="https://openfreemap.org" target="_blank">OpenFreeMap</a> <a href="https://www.openmaptiles.org/" target="_blank">&copy; OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a>';
 
 /* ---- catalogue -------------------------------------------------------------------------------- */
 
@@ -185,6 +177,13 @@ export const CENTRE_LEGEND = "Chấm đỏ có quầng: tâm xã đã lưu trong
 export const CENTRE_LEGEND_DEFAULT = "Chấm đỏ có quầng: tâm xã (mặc định) trong khung bản đồ.";
 /** Label of the centre dot when the commune's name is not available. */
 export const CENTRE_FALLBACK_LABEL = "Tâm xã";
+/** Prototype `LayerPanel.tsx`, verbatim. */
+export const HEAT_SWITCH_LABEL = "Bản đồ nhiệt phản ánh";
+/** `title` of the disabled switch: the points route is `feedback.read` (service-petitions), checked there too. */
+export const HEAT_NEEDS_FEEDBACK_READ =
+  "Cần quyền xem phản ánh (feedback.read) để bật bản đồ nhiệt phản ánh. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này.";
+/** `title` of the disabled switch when no map is drawn (no basemap, no frame, or the map failed). */
+export const HEAT_NEEDS_MAP = "Bản đồ chưa hiển thị nên chưa bật được bản đồ nhiệt phản ánh.";
 export const MAP_EXPAND = "Mở rộng bản đồ";
 export const MAP_COLLAPSE = "Thu gọn";
 
@@ -214,11 +213,6 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
     ten: "Quy mô lao động",
     viSao:
       "Lọc theo số lao động của cơ sở. Máy chủ chưa có bộ lọc này, nên ô lọc chưa dùng được.",
-  },
-  {
-    ten: "Bản đồ nhiệt phản ánh",
-    viSao:
-      "Phủ mật độ phiếu phản ánh của người dân lên bản đồ. Chưa làm: cần hợp đồng đọc từ phân hệ phản ánh, và việc vẽ toạ độ phản ánh của công dân lên nền bản đồ bên ngoài chưa được quyết (ADR 0072 §4, H2).",
   },
   {
     ten: "Tìm địa điểm theo tên",

@@ -4,13 +4,16 @@ import type {
   ExpressionSpecification,
   FilterSpecification,
   GeoJSONSource,
+  HeatmapLayerSpecification,
   Map as MapLibreMap,
   MapGeoJSONFeature,
   MapLayerMouseEvent,
 } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
 
-import { OPENFREEMAP_ATTRIBUTION } from "./labels";
+import { registerPmtilesProtocol } from "@/lib/basemap/protocol";
+import { buildBasemapStyle } from "@/lib/basemap/style";
+
 import {
   CENTRE_COLOUR,
   CENTRE_SOURCE_ID,
@@ -20,32 +23,42 @@ import {
   centreCollection,
   CLUSTER_MAX_ZOOM,
   CLUSTER_RADIUS,
+  HEAT_PAINT,
+  HEAT_SOURCE_ID,
   LABEL_MIN_ZOOM,
   LAYER_CLUSTER_COUNT,
   LAYER_CLUSTERS,
+  LAYER_HEAT,
   LAYER_LABELS,
   LAYER_POINTS,
   LAYER_SELECTED,
   MAPLIBRE_WORKER_URL,
   SOURCE_ID,
-  VIETNAMESE_TEXT_FIELD,
   colourExpression,
+  heatCollection,
   insideFrame,
-  nameLabelLayers,
   pointsFilter,
   selectedFilter,
   visibleCollection,
   type EconomicCollection,
+  type HeatPoint,
   type MapFrame,
 } from "./map-logic";
 
 /**
  * The MapLibre map of `/ban-do` — the ONLY component that touches the map instance.
  *
+ * THE BASEMAP IS THE SELF-HOSTED ONE (owner 11/10/2026, the same as `/phan-anh`): the style is built in
+ * code by `buildBasemapStyle(window.location.origin)`, every URL in it is `<this origin>/basemap/…`, and
+ * nothing is fetched from a third-party host. The parent draws this component only when the server page
+ * found `BASEMAP_URL` set; unset → one sentence and no map, never a fallback provider. The map also
+ * carries citizens' petition points (the heat layer), which is exactly why no viewport may leave the
+ * origin (rule 3 stop #2). Vietnamese place names come from the style (`name:vi`, then `name`).
+ *
  * LIFECYCLE (ADR 0072; the user's engineering guide §17–18):
- *   - MapLibre is loaded with a DYNAMIC import inside the effect: it needs `window` and WebGL, and the
- *     page is server-rendered. It is never imported at module level.
- *   - The map is created ONCE per (style, frame) and kept in a `useRef` — never React state: a map in
+ *   - MapLibre and PMTiles are loaded with a DYNAMIC import inside the effect: they need `window` and
+ *     WebGL, and the page is server-rendered. Neither is imported at module level.
+ *   - The map is created ONCE per frame and kept in a `useRef` — never React state: a map in
  *     state re-renders the tree on every camera move, and a re-render must never rebuild the map.
  *   - `map.remove()` on unmount releases the WebGL context; browsers cap live contexts, so a leaked one
  *     per visit ends in a blank map.
@@ -62,7 +75,6 @@ import {
 export type FlyRequest = { readonly lng: number; readonly lat: number; readonly seq: number };
 
 export type EconomicMapProps = {
-  styleUrl: string;
   frame: MapFrame;
   /** Name drawn beside the saved frame centre (the commune's display name). */
   centreLabel: string;
@@ -73,6 +85,11 @@ export type EconomicMapProps = {
   selectedId: string | null;
   /** Fly to a point — honoured ONLY inside the frame (the parent checks too). `seq` makes a repeat fly again. */
   flyTo: FlyRequest | null;
+  /**
+   * Petition points of the heat layer, or `null` = layer hidden. The parent passes points only while the
+   * switch is on AND the points route answered; any refusal or error is `null` — never part of a set.
+   */
+  heatPoints?: readonly HeatPoint[] | null;
   onPointClick: (id: string) => void;
   /** The style could not be loaded (before the first `load`). */
   onLoadError: () => void;
@@ -81,7 +98,6 @@ export type EconomicMapProps = {
 const POINT_COLOUR = colourExpression() as unknown as ExpressionSpecification;
 
 export function EconomicMap({
-  styleUrl,
   frame,
   centreLabel,
   expanded = false,
@@ -89,6 +105,7 @@ export function EconomicMap({
   visible,
   selectedId,
   flyTo,
+  heatPoints = null,
   onPointClick,
   onLoadError,
 }: EconomicMapProps) {
@@ -99,14 +116,14 @@ export function EconomicMap({
   // Latest callbacks and data for handlers registered once at creation.
   const onPointClickRef = useRef(onPointClick);
   const onLoadErrorRef = useRef(onLoadError);
-  const dataRef = useRef({ collection, visible, selectedId });
+  const dataRef = useRef({ collection, visible, selectedId, heatPoints });
   // The saved centre, read when the map loads; a changed frame remounts this component (`key`), so a
   // stale centre cannot survive. The label may change (name corrected) and is pushed by an effect below.
   const centreRef = useRef(centreCollection(frame, centreLabel));
   useEffect(() => {
     onPointClickRef.current = onPointClick;
     onLoadErrorRef.current = onLoadError;
-    dataRef.current = { collection, visible, selectedId };
+    dataRef.current = { collection, visible, selectedId, heatPoints };
     centreRef.current = centreCollection(frame, centreLabel);
   });
 
@@ -117,17 +134,24 @@ export function EconomicMap({
     let created: MapLibreMap | null = null;
     const bounds: [number, number, number, number] = [minLng, minLat, maxLng, maxLat];
 
-    void import("maplibre-gl").then((ml) => {
+    void (async () => {
+      const ml = await import("maplibre-gl");
       if (cancelled || containerRef.current === null) return;
       // Before ANY map exists — see MAPLIBRE_WORKER_URL for why the default URL is empty under Turbopack.
       ml.setWorkerUrl(MAPLIBRE_WORKER_URL);
+      // `pmtiles://` must be known BEFORE the map reads the style, or the source fails silently.
+      await registerPmtilesProtocol(ml);
+      if (cancelled || containerRef.current === null) return;
       const map = new ml.Map({
         container: containerRef.current,
-        style: styleUrl,
+        // Same origin, built in code — never a fetched or configured style URL.
+        style: buildBasemapStyle(window.location.origin),
         bounds,
         maxBounds: bounds,
         renderWorldCopies: false,
-        attributionControl: false,
+        // The ODbL credit the style's source carries (OpenStreetMap), compact — the "i" button — as on
+        // the `/phan-anh` maps. No provider string of our own.
+        attributionControl: { compact: true },
         // No rotation: a rotated view of a bounded box exposes corners outside it, and staff read a
         // north-up map.
         dragRotate: false,
@@ -137,8 +161,6 @@ export function EconomicMap({
       created = map;
       mapRef.current = map;
       map.touchZoomRotate.disableRotation();
-      // Default responsive behaviour: expanded on a wide map, compact (the "i" button) under 640px.
-      map.addControl(new ml.AttributionControl({ customAttribution: OPENFREEMAP_ATTRIBUTION }));
       map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
       map.addControl(new ml.ScaleControl({ unit: "metric" }), "bottom-right");
 
@@ -153,12 +175,24 @@ export function EconomicMap({
         // The fitted frame is the furthest anyone may zoom out (maxBounds already holds the edges).
         map.setMinZoom(map.getZoom());
 
-        // Vietnamese names on the basemap (ADR 0072 H1) — BEFORE our layers exist, so ours keep theirs.
-        for (const id of nameLabelLayers(map.getStyle().layers ?? [])) {
-          map.setLayoutProperty(id, "text-field", VIETNAMESE_TEXT_FIELD as unknown as ExpressionSpecification);
-        }
+        const d = dataRef.current;
 
-        // The saved commune centre — added FIRST so every asset layer draws above it and keeps its clicks.
+        // "Bản đồ nhiệt phản ánh" — the LOWEST of our layers: a density wash beneath the centre and every
+        // asset pin, so it never covers a pin nor takes its click. Created hidden and empty; the effect
+        // below fills and shows it only while the parent passes points.
+        map.addSource(HEAT_SOURCE_ID, {
+          type: "geojson",
+          data: heatCollection(d.heatPoints ?? []) as unknown as GeoJSON.FeatureCollection,
+        });
+        map.addLayer({
+          id: LAYER_HEAT,
+          type: "heatmap",
+          source: HEAT_SOURCE_ID,
+          layout: { visibility: d.heatPoints === null ? "none" : "visible" },
+          paint: HEAT_PAINT as unknown as HeatmapLayerSpecification["paint"],
+        });
+
+        // The saved commune centre — added before the asset layers so every one draws above it and keeps its clicks.
         map.addSource(CENTRE_SOURCE_ID, {
           type: "geojson",
           data: centreRef.current as unknown as GeoJSON.FeatureCollection,
@@ -186,7 +220,8 @@ export function EconomicMap({
           source: CENTRE_SOURCE_ID,
           layout: {
             "text-field": ["get", "label"],
-            "text-font": ["Noto Sans Bold"],
+            // A stack `/basemap/fonts/` serves (`BASEMAP_FONTS`); any other draws no text, with no error.
+            "text-font": ["Noto Sans Medium"],
             "text-size": 14,
             "text-offset": [0, 1.4],
             "text-anchor": "top",
@@ -197,7 +232,6 @@ export function EconomicMap({
           paint: { "text-color": "#991b1b", "text-halo-color": "#ffffff", "text-halo-width": 2 },
         });
 
-        const d = dataRef.current;
         map.addSource(SOURCE_ID, {
           type: "geojson",
           data: visibleCollection(d.collection, d.visible) as unknown as GeoJSON.FeatureCollection,
@@ -224,8 +258,8 @@ export function EconomicMap({
           filter: ["has", "point_count"],
           layout: {
             "text-field": ["get", "point_count_abbreviated"],
-            // A font the `liberty` style's glyph server carries.
-            "text-font": ["Noto Sans Bold"],
+            // A stack `/basemap/fonts/` serves (`BASEMAP_FONTS`).
+            "text-font": ["Noto Sans Medium"],
             "text-size": 13,
             "text-allow-overlap": true,
           },
@@ -300,6 +334,9 @@ export function EconomicMap({
         }
         setReady(true);
       });
+    })().catch(() => {
+      // The MapLibre or PMTiles chunk did not load (network): the same state as a style that never loads.
+      if (!cancelled) onLoadErrorRef.current();
     });
 
     return () => {
@@ -308,7 +345,17 @@ export function EconomicMap({
       mapRef.current = null;
       setReady(false);
     };
-  }, [styleUrl, minLng, minLat, maxLng, maxLat]);
+  }, [minLng, minLat, maxLng, maxLat]);
+
+  // Heat layer: points → fill and show; `null` → empty and hide. Emptied as well as hidden, so a refused
+  // or failed read never leaves the previous set on the GPU looking like the current one.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || map === null) return;
+    const source = map.getSource(HEAT_SOURCE_ID) as GeoJSONSource | undefined;
+    source?.setData(heatCollection(heatPoints ?? []) as unknown as GeoJSON.FeatureCollection);
+    map.setLayoutProperty(LAYER_HEAT, "visibility", heatPoints === null ? "none" : "visible");
+  }, [ready, heatPoints]);
 
   // Data or visible groups changed: new source data (clusters must count only what is shown) and the
   // layer filter — NO network call here; a refetch happens only when a server filter changes.

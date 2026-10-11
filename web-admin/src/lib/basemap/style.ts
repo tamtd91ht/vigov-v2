@@ -4,13 +4,13 @@ import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 import { BASEMAP_FILE, BASEMAP_ROUTE, BASEMAP_SPRITE } from "./assets";
 
 /**
- * The MapLibre style of the petition maps (heat-map tab, scene map in the ticket drawer) — built HERE,
- * in code, never fetched: ADR 0072 §Sửa đổi 09/10/2026 forbids any host outside ViGov for style, tiles,
+ * The MapLibre style of every web-admin map: the petition maps (heat-map tab, scene map in the ticket
+ * drawer) and, since 11/10/2026 (owner), the economic map `/ban-do` and its pin picker — built HERE, in
+ * code, never fetched: ADR 0072 §Sửa đổi 09/10/2026 forbids any host outside ViGov for style, tiles,
  * glyphs or sprites, and §Trả lời 09/10/2026 fixes what the style must do. Every URL it contains is
  * `<page origin>/basemap/...`; `style.test.ts` walks the whole object and fails on any other.
  *
- * This is NOT the economic map's style. `/ban-do` stays on OpenFreeMap (`MAP_STYLE_URL`, H1), and the
- * petition maps must never fall back to it — not even "until the file exists" (§Sửa đổi 09/10/2026).
+ * No map falls back to a third-party style — not even "until the file exists" (§Sửa đổi 09/10/2026).
  *
  * Three rewrites of the stock Protomaps `light` layers, each one an owner decision:
  *   1. Labels read `name:vi`, then `name` — nothing else (§Trả lời: "name:vi trước, không có thì name").
