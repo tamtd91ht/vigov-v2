@@ -253,7 +253,7 @@ func TestCountsTakeTheListFilterAndRestrictedFact(t *testing.T) {
 
 func TestCountsAndPointsRefuseWhatTheListRefuses(t *testing.T) {
 	for _, path := range []string{countsPath, pointsPath} {
-		for _, q := range []string{"?status=khong-co", "?channel=fax", "?late=1", "?rating_max=6", "?scope=related",
+		for _, q := range []string{"?status=khong-co", "?channel=fax", "?late=1", "?rating_max=6", "?scope=involved",
 			"?metric=received", "?q=" + strings.Repeat("x", petstore.TimPhieuToiDa+1)} {
 			t.Run(path+q, func(t *testing.T) {
 				m := dungMayChu(t)

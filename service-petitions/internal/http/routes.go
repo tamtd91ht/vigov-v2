@@ -1168,7 +1168,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// is filed and no event is recorded. The decision is app.duocChamPhieuHanChe's, inside the
 	// transaction; the route permissions below are unchanged and no key was added.
 
-	// @summary  Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)
+	// @summary  Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi; `scope=related`: giao cho tôi · tôi có dòng nhật ký xử lý · bộ phận tôi đang giữ — mã lấy từ phiên, bộ phận hỏi identity, identity lỗi → 503 `citizen_report_filter_unavailable`) · tìm `q` không phân biệt dấu trên nội dung và địa chỉ
 	// @screen   09-phan-anh-nguoi-dan §2, §4
 	// `feedback.read` and NOT AnyAuthenticated, unlike the two catalogue reads above: this is a
 	// commune's register of what its citizens have reported — names, numbers, addresses and the free
@@ -2396,7 +2396,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 503 when identity cannot answer the working-hours question behind `critical` — refused rather than
 	// answered with `critical: false` for every row.
 	//
-	// @summary  Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, hạn đã lỡ, có nghiêm trọng không
+	// @summary  Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, tiêu đề, bộ phận (id + tên theo identity, vắng tên khi chưa tra được), hạn đã lỡ, có nghiêm trọng không
 	// @screen   01-tong-quan-dieu-hanh §5
 	// @reply    200 overdueQueueOut
 	// @reply    400 httpx.Error

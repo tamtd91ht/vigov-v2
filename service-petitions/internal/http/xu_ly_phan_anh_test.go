@@ -14,6 +14,7 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-petitions/internal/app"
@@ -1309,10 +1310,10 @@ func TestDanhSachMaCanBoTuTruyVanBiBoQua(t *testing.T) {
 	}
 }
 
-// TestDanhSachScopeKhongHopLeThi400 — `related` is undecided with the customer and refused with its
-// reason; anything else is refused as unknown. Neither reaches the store.
+// TestDanhSachScopeKhongHopLeThi400 — an unknown scope is refused and never reaches the store.
+// (`related` is served since 10/10/2026 — the TestCitizenReportRelated* cases below.)
 func TestDanhSachScopeKhongHopLeThi400(t *testing.T) {
-	for _, truyVan := range []string{"?scope=related", "?scope=assigned", "?scope=MINE", "?scope=CB-00123"} {
+	for _, truyVan := range []string{"?scope=assigned", "?scope=involved", "?scope=MINE", "?scope=CB-00123"} {
 		t.Run(truyVan, func(t *testing.T) {
 			m := dungMayChu(t)
 			m.capQuyen(t, authz.Perm("feedback.read"))
@@ -1340,6 +1341,75 @@ func TestDanhSachGiaoChoToiKhongCoMaCanBoThiTuChoi(t *testing.T) {
 	doiMa(t, w, http.StatusInternalServerError)
 	if m.danhSach.goi != 0 {
 		t.Error("đã đọc sổ dù phiên không có mã cán bộ — tab Giao cho tôi sẽ hiện cả sổ của xã")
+	}
+}
+
+// --- scope=related ("Liên quan đến tôi", bug sheet row 57) ---------------------------------------------
+
+// TestCitizenReportRelatedUsesSessionCodeAndUnits — "me" is the SESSION's code (never a query value),
+// identity is asked for that code's units in the request's commune, and both reach the store; the
+// restricted-field fact is still applied; no `mine` filter is set.
+func TestCitizenReportRelatedUsesSessionCodeAndUnits(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"))
+
+	w := m.goiThan(t, http.MethodGet, hostA, duongDanhSach+"?scope=related&assignee=CB-00999&can_bo_xu_ly_id=CB-00999",
+		canBoCuaXa(xaA), nil)
+	doiMa(t, w, http.StatusOK)
+
+	f := m.filterIdentity
+	if f.unitCalls != 1 || f.lastStaffCode != maCanBo || f.lastTenant != xaA {
+		t.Fatalf("hỏi bộ phận %d lần cho %q ở xã %q — muốn 1 lần, mã của CHÍNH phiên, xã của Host",
+			f.unitCalls, f.lastStaffCode, f.lastTenant)
+	}
+	loc := m.danhSach.loc
+	if loc.Related == nil || loc.Related.StaffCode != maCanBo ||
+		strings.Join(loc.Related.OrgUnits, ",") != "bp-vpdu,bp-tu-phap" {
+		t.Errorf("phạm vi liên quan xuống kho = %+v", loc.Related)
+	}
+	if loc.CanBoXuLyID != "" || loc.ChoPhepHanChe {
+		t.Errorf("related đặt thêm bộ lọc Giao cho tôi hoặc mở lĩnh vực hạn chế: %+v", loc)
+	}
+}
+
+// An officer in no unit is an ordinary answer: served, with no unit clause.
+func TestCitizenReportRelatedWithNoUnitIsServed(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"))
+	m.filterIdentity.units = nil
+
+	doiMa(t, m.goiThan(t, http.MethodGet, hostA, duongDanhSach+"?scope=related", canBoCuaXa(xaA), nil), http.StatusOK)
+	if r := m.danhSach.loc.Related; r == nil || r.StaffCode != maCanBo || len(r.OrgUnits) != 0 {
+		t.Errorf("phạm vi liên quan = %+v", r)
+	}
+}
+
+// Identity cannot answer: 503, store untouched — never the list without the unit clause. Same for the
+// count and the map, which share the filter.
+func TestCitizenReportRelatedIdentityFailureIs503(t *testing.T) {
+	for _, path := range []string{duongDanhSach, countsPath, pointsPath} {
+		m := dungMayChu(t)
+		m.capQuyen(t, authz.Perm("feedback.read"))
+		m.filterIdentity.unitsErr = fmt.Errorf("x: %w", identityclient.ErrIdentityUnavailable)
+
+		w := m.goiThan(t, http.MethodGet, hostA, path+"?scope=related", canBoCuaXa(xaA), nil)
+		doiMa(t, w, http.StatusServiceUnavailable)
+		if loiTra(t, w).Code != "citizen_report_filter_unavailable" || m.danhSach.goi != 0 {
+			t.Errorf("%s: %s, đọc kho %d lần", path, w.Body.String(), m.danhSach.goi)
+		}
+	}
+}
+
+// FAIL CLOSED: no staff code → 500, no identity call, no store read.
+func TestCitizenReportRelatedWithoutStaffCodeIsRefused(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("feedback.read"))
+	p := canBoCuaXa(xaA)
+	p.Ma = ""
+
+	doiMa(t, m.goiThan(t, http.MethodGet, hostA, duongDanhSach+"?scope=related", p, nil), http.StatusInternalServerError)
+	if m.filterIdentity.unitCalls != 0 || m.danhSach.goi != 0 {
+		t.Errorf("hỏi identity %d lần, đọc kho %d lần với chủ thể không mã", m.filterIdentity.unitCalls, m.danhSach.goi)
 	}
 }
 

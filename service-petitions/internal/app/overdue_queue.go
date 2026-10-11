@@ -48,6 +48,12 @@ type WorkingHoursCalculator interface {
 		map[identityclient.WorkingSpan]uint64, error)
 }
 
+// OrgUnitNameResolver is identity's ResolveOrgUnitNames, as core/identityclient exposes it.
+// *identityclient.Client satisfies it — the client the task register export already names units with.
+type OrgUnitNameResolver interface {
+	OrgUnitNames(ctx context.Context, ids []string) (map[string]identityclient.OrgUnitName, error)
+}
+
 // ErrWorkingHoursUnavailable means identity could not say when an item becomes critical.
 //
 // THE REQUEST FAILS; NO ITEM IS SILENTLY MARKED NOT CRITICAL. A panel that answered `critical: false`
@@ -60,6 +66,7 @@ type OverdueQueue struct {
 	tasks   TaskOverdueReader
 	reports CitizenReportOverdueReader
 	hours   WorkingHoursCalculator
+	units   OrgUnitNameResolver
 
 	// clock is the seam critical compares identity's instant with. Tests replace it; nothing else does.
 	clock func() time.Time
@@ -70,17 +77,64 @@ type OverdueQueue struct {
 }
 
 func NewOverdueQueue(tasks TaskOverdueReader, reports CitizenReportOverdueReader,
-	hours WorkingHoursCalculator) *OverdueQueue {
-	return &OverdueQueue{tasks: tasks, reports: reports, hours: hours, clock: time.Now, log: slog.Default()}
+	hours WorkingHoursCalculator, units OrgUnitNameResolver) *OverdueQueue {
+	return &OverdueQueue{tasks: tasks, reports: reports, hours: hours, units: units, clock: time.Now,
+		log: slog.Default()}
 }
 
-// Tasks returns at most `limit` overdue tasks, oldest missed deadline first, each with Critical set.
+// Tasks returns at most `limit` overdue tasks, oldest missed deadline first, each with Critical set
+// and its unit named.
 func (q *OverdueQueue) Tasks(ctx context.Context, limit int) ([]domain.OverdueItem, error) {
 	items, err := q.tasks.OverdueTasks(ctx, limit)
 	if err != nil {
 		return nil, fmt.Errorf("hàng đợi quá hạn nhiệm vụ: %w", err)
 	}
-	return q.markCritical(ctx, items)
+	items, err = q.markCritical(ctx, items)
+	if err != nil {
+		return nil, err
+	}
+	return q.nameUnits(ctx, items), nil
+}
+
+// nameUnits fills OrgUnitName from identity, in ONE ResolveOrgUnitNames call: the page is at most
+// OverdueQueueMax (ten) rows, far under identityclient.MaxLookupKeysPerCall.
+//
+// A NAME THAT CANNOT BE RESOLVED IS LEFT EMPTY, AND THE PAGE IS STILL RETURNED — unlike `critical`, whose
+// absence would have to be a guess (ErrWorkingHoursUnavailable). The row keeps OrgUnitID, so the screen
+// can still name the unit from GET /api/v1/org-units, and an empty name never reads as a fact: the wire
+// field is ABSENT, not "". Identity failing is logged here, with the commune, because the field
+// degrades silently on the wire by design. A REMOVED unit is named too (its name as it stands): the
+// task still sits with it, and "—" would hide where the late work is.
+func (q *OverdueQueue) nameUnits(ctx context.Context, items []domain.OverdueItem) []domain.OverdueItem {
+	seen := map[string]struct{}{}
+	var ids []string
+	for _, it := range items {
+		if it.OrgUnitID == "" {
+			continue
+		}
+		if _, ok := seen[it.OrgUnitID]; !ok {
+			seen[it.OrgUnitID] = struct{}{}
+			ids = append(ids, it.OrgUnitID)
+		}
+	}
+	if len(ids) == 0 {
+		return items
+	}
+	names, err := q.units.OrgUnitNames(ctx, ids)
+	if err != nil {
+		// identityclient already logged the gRPC code; the commune says whose panel lost its names.
+		q.log.WarnContext(ctx, "CẢNH BÁO: không tra được tên bộ phận — trả hàng đợi quá hạn không kèm tên",
+			"xa", string(tenant.MustFrom(ctx)), "err", err)
+		return items
+	}
+	out := make([]domain.OverdueItem, len(items))
+	for i, it := range items {
+		if n, ok := names[it.OrgUnitID]; ok {
+			it.OrgUnitName = n.Name
+		}
+		out[i] = it
+	}
+	return out
 }
 
 // CitizenReports returns at most `limit` overdue petitions. `restricted` is the caller's

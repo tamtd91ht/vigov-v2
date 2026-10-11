@@ -138,8 +138,9 @@ type citizenReportSummaryOut struct {
 	PublicationPending *int `json:"publication_pending,omitempty"`
 }
 
-// overdueItemOut is one row of a "Cần xử lý ngay" panel. NO PERSONAL DATA and no free text — code,
-// category key and deadline only (domain.OverdueItem).
+// overdueItemOut is one row of a "Cần xử lý ngay" panel. A PETITION ROW carries no personal data and
+// no free text — code, field and deadline only. A TASK ROW also carries its title and its unit (bug
+// sheet row 5); domain.OverdueItem says why that discloses nothing `task.read` does not already list.
 type overdueItemOut struct {
 	// Kind is WHICH deadline was missed: `han-xu-ly` (task), `han-phan-loai` (petition still
 	// unclassified past its ceiling) or `han-xu-ly-xong` (petition past its resolve deadline).
@@ -149,6 +150,16 @@ type overdueItemOut struct {
 	// CategoryCode is the task-type code or the petition field code, for the client to resolve against
 	// the commune's catalogue. EMPTY for a petition that is still unclassified.
 	CategoryCode string `json:"category_code"`
+	// Title is the task's title. TASK PANEL ONLY: ABSENT on every petition row, which never carries its
+	// content (rule 3).
+	Title string `json:"title,omitempty"`
+	// OrgUnitID is the identity `bo_phan` id holding the task. TASK PANEL ONLY; ABSENT when the task has
+	// no unit.
+	OrgUnitID string `json:"org_unit_id,omitempty"`
+	// OrgUnitName is that unit's name as identity answers it today (a removed unit keeps its name). TASK
+	// PANEL ONLY; ABSENT when there is no unit OR the name could not be resolved — the row still carries
+	// `org_unit_id`, which the client can resolve against GET /api/v1/org-units.
+	OrgUnitName string `json:"org_unit_name,omitempty"`
 	// MissedDeadline is the stored deadline that passed. The list is ordered by it, oldest first.
 	MissedDeadline time.Time `json:"missed_deadline"`
 	// Critical is true once CriticalWorkingHours WORKING hours have passed since MissedDeadline, as
@@ -425,6 +436,13 @@ func (h *Handler) writeOverdueQueue(w http.ResponseWriter, r *http.Request, item
 
 			LateWorkingSeconds: it.LateWorkingSeconds,
 		})
+		// TASK ROWS ONLY, decided here by the kind and not trusted to the store: a petition row with a
+		// title would be the petition's content on a dashboard (rule 3), so no petition row can carry
+		// one whatever a reader below fills in.
+		if it.Kind == domain.DeadlineTask {
+			o := &out.Items[len(out.Items)-1]
+			o.Title, o.OrgUnitID, o.OrgUnitName = it.Title, it.OrgUnitID, it.OrgUnitName
+		}
 	}
 	vietJSON(w, http.StatusOK, out)
 }

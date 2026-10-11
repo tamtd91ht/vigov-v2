@@ -233,11 +233,17 @@ const (
 
 // OverdueItem is one row of the "Cần xử lý ngay" panel.
 //
-// NO PERSONAL DATA, AND THE ABSENCES ARE THE DESIGN (rule 3): no petition content, no reporter name
-// or phone, no location, no task title (a task title quotes a citizen's complaint often enough that
-// the task register's own sort allowlist refuses it). The panel identifies the record by its code and
-// its category; everything else is one click away, behind the record's own read route and its own
-// masking rules.
+// A PETITION ROW CARRIES NO PERSONAL DATA, AND THE ABSENCES ARE THE DESIGN (rule 3): no content, no
+// reporter name or phone, no location. It is identified by its lookup code and its field; everything
+// else is one click away, behind the petition's own read route and its own masking rules.
+//
+// A TASK ROW CARRIES ITS TITLE AND ITS UNIT since 10/10/2026 (customer bug sheet row 5; the prototype's
+// row, vigov-require apps/admin/src/components/reports/DashboardWorkspace.tsx:304-318, shows title,
+// lateness and unit). A title can quote a citizen's complaint, which is why it once stayed off this
+// panel. It is shown now because it discloses NOTHING NEW: GET /api/v1/overdue-tasks requires
+// `task.read` AND `report.read`, and `task.read` alone already lists every title of this commune's
+// register (GET /api/v1/tasks). The register's sort allowlist still refuses the title as a URL key —
+// a different surface (URLs, access logs), unchanged.
 type OverdueItem struct {
 	Kind DeadlineKind
 
@@ -250,6 +256,18 @@ type OverdueItem struct {
 	// the field-label catalogue). EMPTY for a petition that is still unclassified — which is exactly
 	// the case DeadlineClassification describes, so the empty value is the true answer.
 	CategoryCode string
+
+	// Title is the task's `tieu_de`. TASK ITEMS ONLY — always "" on a petition item (see the type).
+	Title string
+
+	// OrgUnitID is the task's `bo_phan_id`, identity's `bo_phan` id; "" when the task has no unit. TASK
+	// ITEMS ONLY.
+	OrgUnitID string
+
+	// OrgUnitName is identity's name for OrgUnitID as it stands TODAY (ResolveOrgUnitNames — removed
+	// units included). "" = NOT RESOLVED: no unit, an id identity did not answer, or identity
+	// unavailable (app.OverdueQueue.nameUnits). TASK ITEMS ONLY.
+	OrgUnitName string
 
 	// MissedDeadline is the stored deadline that has passed. The queue is ordered by it, oldest
 	// first.

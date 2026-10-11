@@ -347,14 +347,15 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 // (ADR 0026 stop condition #2; rule 2, forbidden #2). A code that matches nothing returns an empty
 // page, which is a true answer.
 //
-// `scope` IS A SWITCH AND CARRIES NO IDENTITY. `mine` returns chiGiaoChoToi=true and the HANDLER
-// fills the code from the session; this function never sets LocPhieu.CanBoXuLyID and reads no key
-// that could name an officer, so `?assignee=CB-…` or any other invented parameter never reaches the
-// store. UNLIKE THE TASK LIST, which accepts `assignee` as a plain filter: this route exposes no
-// "pick an officer" filter, and adding one is a product decision, not a spelling. Absent or `all`
-// means the whole commune ("Toàn xã"). Any other value is refused: silently widening a tab labelled
-// "Giao cho tôi" to the whole register is the dropped-filter failure described above.
-func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoToi bool, err error) {
+// `scope` IS A SWITCH AND CARRIES NO IDENTITY. `mine` and `related` are returned as a citizenReportScope
+// and the HANDLER fills "me" from the session (citizenReportFilter); this function never sets
+// LocPhieu.CanBoXuLyID or LocPhieu.Related and reads no key that could name an officer, so
+// `?assignee=CB-…` or any other invented parameter never reaches the store. UNLIKE THE TASK LIST, which
+// accepts `assignee` as a plain filter: this route exposes no "pick an officer" filter, and adding one
+// is a product decision, not a spelling. Absent or `all` means the whole commune ("Toàn xã"). Any other
+// value is refused: silently widening a tab labelled "Giao cho tôi" to the whole register is the
+// dropped-filter failure described above.
+func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, scope citizenReportScope, err error) {
 	lay := func(k string) string {
 		if v, ok := q[k]; ok && len(v) > 0 {
 			return v[0]
@@ -364,13 +365,13 @@ func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoTo
 
 	if s := lay("status"); s != "" {
 		if !domain.TrangThai(s).HopLe() {
-			return loc, false, errTrangThaiPhieuKhongHopLe
+			return loc, scopeAll, errTrangThaiPhieuKhongHopLe
 		}
 		loc.TrangThai = s
 	}
 	if s := lay("channel"); s != "" {
 		if !domain.KenhTiepNhan(s).HopLe() {
-			return loc, false, errKenhKhongHopLe
+			return loc, scopeAll, errKenhKhongHopLe
 		}
 		loc.Kenh = s
 	}
@@ -379,7 +380,7 @@ func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoTo
 	loc.BoPhanID = lay("unit")
 	loc.Tim = lay("q")
 	if len(loc.Tim) > petstore.TimPhieuToiDa {
-		return loc, false, petstore.ErrTimPhieuQuaDai
+		return loc, scopeAll, petstore.ErrTimPhieuQuaDai
 	}
 
 	// `late=true` IS THE ONLY ACCEPTED SPELLING, and anything else is refused rather than read as
@@ -387,7 +388,7 @@ func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoTo
 	// the whole register while the box on their screen is ticked.
 	if s := lay("late"); s != "" {
 		if s != "true" {
-			return loc, false, errLocTreHanKhongHopLe
+			return loc, scopeAll, errLocTreHanKhongHopLe
 		}
 		loc.ChiTreHan = true
 	}
@@ -401,7 +402,7 @@ func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoTo
 	// show the whole register under a box that says "đánh giá thấp".
 	if s, co := q["rating_max"]; co {
 		if len(s) == 0 || len(s[0]) != 1 || s[0][0] < '1' || s[0][0] > '5' {
-			return loc, false, errRatingMaxInvalid
+			return loc, scopeAll, errRatingMaxInvalid
 		}
 		loc.RatingMax = int(s[0][0] - '0')
 	}
@@ -412,24 +413,33 @@ func locPhieuTuQuery(q map[string][]string) (loc petstore.LocPhieu, chiGiaoChoTo
 	switch s := lay("scope"); s {
 	case "", "all":
 	case "mine":
-		chiGiaoChoToi = true
+		scope = scopeMine
 	case "related":
-		// REFUSED, WITH THE REASON. Who counts as "related" to a petition — and whether a related
-		// person may only log and not act — is undecided with the customer. Answering with a guess
-		// would put petitions on an officer's screen under a rule nobody made.
-		return loc, false, errPhamViLienQuanChuaCo
+		// "Liên quan đến tôi" — the prototype's definition, store.citizenReportRelatedCondition. Enabled
+		// 10/10/2026 (customer bug sheet row 57), replacing the 400 this branch answered before.
+		scope = scopeRelated
 	default:
-		return loc, false, errPhamViKhongHopLe
+		return loc, scopeAll, errCitizenReportScopeInvalid
 	}
 
 	// The overview drill-down (`metric`, plus `from`/`to` for a period figure) — summary.go. The
 	// restricted-field exclusion the handler sets afterwards applies to it too, exactly as it does to
 	// the figure.
 	if err := parseCitizenReportMetric(q, &loc); err != nil {
-		return loc, false, err
+		return loc, scopeAll, err
 	}
-	return loc, chiGiaoChoToi, nil
+	return loc, scope, nil
 }
+
+// citizenReportScope is which of §4's three tabs the request asked for. It names no officer: "me" is
+// filled from the session by citizenReportFilter.
+type citizenReportScope int
+
+const (
+	scopeAll     citizenReportScope = iota // "Toàn xã"
+	scopeMine                              // "Giao cho tôi"
+	scopeRelated                           // "Liên quan đến tôi"
+)
 
 var (
 	errTrangThaiPhieuKhongHopLe = errors.New(
@@ -440,12 +450,8 @@ var (
 		"`late` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc theo trễ hạn")
 	errRatingMaxInvalid = errors.New(
 		"`rating_max` chỉ nhận một số từ 1 đến 5; bỏ hẳn tham số nếu không lọc theo đánh giá")
-	// errPhamViKhongHopLe (the unknown-`scope` refusal) is declared in nhiem_vu.go. The task list has
-	// accepted `related` since 28/09/2026 and refuses with its own errTaskScopeInvalid; this list still
-	// takes the two words that sentence names.
-	errPhamViLienQuanChuaCo = errors.New(
-		"`scope=related` chưa dùng được với phiếu phản ánh: thế nào là \"liên quan\" và người liên quan " +
-			"được làm gì chưa được chốt")
+	errCitizenReportScopeInvalid = errors.New(
+		"`scope` chỉ nhận `all`, `mine` hoặc `related`")
 )
 
 // --- the four acts ---------------------------------------------------------------------------------

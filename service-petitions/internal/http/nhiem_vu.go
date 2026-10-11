@@ -854,10 +854,7 @@ var (
 		"`source` không phải một trong năm nguồn giao việc")
 	errLocTreHanNhiemVuKhongHopLe = errors.New(
 		"`late` chỉ nhận giá trị `true`; bỏ hẳn tham số nếu không lọc theo trễ hạn")
-	// errPhamViKhongHopLe is now the PETITION list's unknown-scope refusal only (xu_ly_phan_anh.go):
-	// that list still takes `all` and `mine`. The task list accepts `related` too — errTaskScopeInvalid.
-	errPhamViKhongHopLe = errors.New(
-		"`scope` chỉ nhận `all` hoặc `mine`")
+	// The petition list's unknown-scope refusal is errCitizenReportScopeInvalid (xu_ly_phan_anh.go).
 	errTaskScopeInvalid = errors.New(
 		"`scope` chỉ nhận `all`, `mine`, `related` hoặc `assigned-by-me`")
 	errTaskIncompleteInvalid = errors.New(

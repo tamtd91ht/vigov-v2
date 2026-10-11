@@ -34,6 +34,7 @@ func registerCitizenReportFigureRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error citizen_report_filter_unavailable
 	mux.Handle("GET /api/v1/citizen-report-counts",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.CitizenReportCounts)))
@@ -54,6 +55,7 @@ func registerCitizenReportFigureRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 	// @reply    403 httpx.Error
 	// @reply    422 httpx.Error too_many_points
 	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error citizen_report_filter_unavailable
 	mux.Handle("GET /api/v1/citizen-report-points",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.CitizenReportPoints)))

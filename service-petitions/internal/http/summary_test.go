@@ -552,6 +552,58 @@ func TestOverdueQueueCarriesNoPersonalData(t *testing.T) {
 	}
 }
 
+// TestOverdueTasksCarryTitleAndUnit — bug sheet row 5: a TASK row carries its title, unit id and unit
+// name; the name is ABSENT when unresolved, and both unit keys are absent for a task with no unit.
+func TestOverdueTasksCarryTitleAndUnit(t *testing.T) {
+	m := dungMayChu(t)
+	m.overdue.tasks[xaA] = []domain.OverdueItem{
+		{Kind: domain.DeadlineTask, Code: "NV07", CategoryCode: "theo-van-ban", Title: "Sửa nhà văn hoá thôn 3",
+			OrgUnitID: "bp-vpdu", OrgUnitName: "Văn phòng HĐND-UBND", MissedDeadline: missedAt, Critical: true},
+		{Kind: domain.DeadlineTask, Code: "NV08", Title: "Dọn kênh", OrgUnitID: "bp-da-go", MissedDeadline: missedAt},
+		{Kind: domain.DeadlineTask, Code: "NV09", Title: "Rà soát hộ nghèo", MissedDeadline: missedAt},
+	}
+	grantBoth(m, t, "task.read", "report.read")
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/overdue-tasks", canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	var out struct {
+		Items []map[string]any `json:"items"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	first := out.Items[0]
+	if first["title"] != "Sửa nhà văn hoá thôn 3" || first["org_unit_id"] != "bp-vpdu" ||
+		first["org_unit_name"] != "Văn phòng HĐND-UBND" {
+		t.Errorf("dòng đầu = %v", first)
+	}
+	if _, ok := out.Items[1]["org_unit_name"]; ok || out.Items[1]["org_unit_id"] != "bp-da-go" {
+		t.Errorf("tên chưa tra được phải VẮNG, id giữ nguyên: %v", out.Items[1])
+	}
+	_, hasID := out.Items[2]["org_unit_id"]
+	_, hasName := out.Items[2]["org_unit_name"]
+	if hasID || hasName || out.Items[2]["title"] != "Rà soát hộ nghèo" {
+		t.Errorf("việc không bộ phận: %v", out.Items[2])
+	}
+}
+
+// TestOverduePetitionRowsNeverCarryTitle — even if a reader below filled Title/unit on a PETITION item,
+// the wire carries none of it: a petition's text is personal data (rule 3).
+func TestOverduePetitionRowsNeverCarryTitle(t *testing.T) {
+	m := dungMayChu(t)
+	m.overdue.reports[xaA] = []domain.OverdueItem{
+		{Kind: domain.DeadlineResolution, Code: "PA-AAAA-AAAA-AAAA", Title: "Nội dung của dân",
+			OrgUnitID: "bp-1", OrgUnitName: "Địa chính", MissedDeadline: missedAt},
+	}
+	grantBoth(m, t, "feedback.read", "report.read")
+	w := m.goi(t, http.MethodGet, hostA, "/api/v1/overdue-citizen-reports", canBoCuaXa(xaA))
+	doiMa(t, w, http.StatusOK)
+	for _, leak := range []string{"title", "org_unit", "Nội dung của dân"} {
+		if strings.Contains(w.Body.String(), leak) {
+			t.Errorf("dòng phản ánh mang %q: %s", leak, w.Body.String())
+		}
+	}
+}
+
 // TestOverdueQueueLateWorkingSecondsOptional — present as a number when the use case measured it,
 // ABSENT (never 0, never null) when it did not, and the page is 200 either way.
 func TestOverdueQueueLateWorkingSecondsOptional(t *testing.T) {

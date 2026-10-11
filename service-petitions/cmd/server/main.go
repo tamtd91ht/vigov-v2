@@ -479,7 +479,8 @@ func chay(log *slog.Logger) error {
 		// uses, so they never disagree about identity's health.
 		TaskSummary:          nhiemVu,
 		CitizenReportSummary: phieu,
-		OverdueQueue:         app.NewOverdueQueue(nhiemVu, phieu, dinhDanh),
+		// The same client names the task rows' units (ResolveOrgUnitNames, bug sheet row 5).
+		OverdueQueue: app.NewOverdueQueue(nhiemVu, phieu, dinhDanh, dinhDanh),
 		// The /phan-anh statistics: the register store, and the SAME identity client for the handling time
 		// in working hours (MeasureWorkingHours).
 		// And the SAME client for the by-place rows' names (ADR 0088), one batched lookup per read.

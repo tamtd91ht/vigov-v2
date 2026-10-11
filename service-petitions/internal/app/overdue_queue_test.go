@@ -91,9 +91,96 @@ var (
 )
 
 func newQueueForTest(s *overdueStoreFake, h *hoursFake) *OverdueQueue {
-	q := NewOverdueQueue(s, s, h)
+	return newQueueWithUnits(s, h, &orgUnitNamesFake{})
+}
+
+func newQueueWithUnits(s *overdueStoreFake, h *hoursFake, u *orgUnitNamesFake) *OverdueQueue {
+	q := NewOverdueQueue(s, s, h, u)
 	q.clock = func() time.Time { return queueNow }
 	return q
+}
+
+// orgUnitNamesFake stands in for identity's ResolveOrgUnitNames.
+type orgUnitNamesFake struct {
+	names map[string]identityclient.OrgUnitName
+	err   error
+	calls int
+	asked []string
+}
+
+func (u *orgUnitNamesFake) OrgUnitNames(_ context.Context, ids []string) (map[string]identityclient.OrgUnitName, error) {
+	u.calls++
+	u.asked = append(u.asked, ids...)
+	if u.err != nil {
+		return nil, u.err
+	}
+	out := map[string]identityclient.OrgUnitName{}
+	for _, id := range ids {
+		if n, ok := u.names[id]; ok {
+			out[id] = n
+		}
+	}
+	return out, nil
+}
+
+func overdueTasksWithUnits() *overdueStoreFake {
+	return &overdueStoreFake{items: []domain.OverdueItem{
+		{Kind: domain.DeadlineTask, Code: "NV01", Title: "Sửa nhà văn hoá", OrgUnitID: "bp-vpdu", MissedDeadline: dueFriday},
+		{Kind: domain.DeadlineTask, Code: "NV02", Title: "Rà soát hộ nghèo", OrgUnitID: "", MissedDeadline: dueThursday},
+		{Kind: domain.DeadlineTask, Code: "NV03", Title: "Dọn kênh", OrgUnitID: "bp-vpdu", MissedDeadline: dueThursday},
+		{Kind: domain.DeadlineTask, Code: "NV04", Title: "Cấp nước", OrgUnitID: "bp-da-go", MissedDeadline: dueThursday},
+	}}
+}
+
+func hoursForTasks() *hoursFake {
+	return &hoursFake{answer: map[time.Time]time.Time{dueFriday: queueNow, dueThursday: queueNow.Add(time.Hour)}}
+}
+
+// Bug sheet row 5: a task row is named with its unit, in ONE identity call for the DISTINCT ids, and a
+// task with no unit asks nothing. A removed unit is named as identity answers it; an id identity does
+// not answer stays unnamed.
+func TestOverdueQueueTasksNameTheirUnitOnce(t *testing.T) {
+	u := &orgUnitNamesFake{names: map[string]identityclient.OrgUnitName{
+		"bp-vpdu": {Name: "Văn phòng HĐND-UBND"},
+	}}
+	got, err := newQueueWithUnits(overdueTasksWithUnits(), hoursForTasks(), u).Tasks(ctxXa(xaThu), 10)
+	if err != nil {
+		t.Fatalf("Tasks: %v", err)
+	}
+	if u.calls != 1 || len(u.asked) != 2 || u.asked[0] != "bp-vpdu" || u.asked[1] != "bp-da-go" {
+		t.Errorf("hỏi tên %d lần cho %v — muốn 1 lần, mỗi id một lần, không hỏi id rỗng", u.calls, u.asked)
+	}
+	for i, want := range []string{"Văn phòng HĐND-UBND", "", "Văn phòng HĐND-UBND", ""} {
+		if got[i].OrgUnitName != want {
+			t.Errorf("%s: tên bộ phận = %q, muốn %q", got[i].Code, got[i].OrgUnitName, want)
+		}
+	}
+	if got[0].Title != "Sửa nhà văn hoá" || got[0].OrgUnitID != "bp-vpdu" || !got[0].Critical {
+		t.Errorf("dòng đầu bị đổi: %+v", got[0])
+	}
+}
+
+// Identity cannot name units: the page is still served, ids kept, names empty — never a 503 for a label.
+func TestOverdueQueueTasksUnitNamesFailureKeepsPage(t *testing.T) {
+	u := &orgUnitNamesFake{err: identityclient.ErrIdentityUnavailable}
+	got, err := newQueueWithUnits(overdueTasksWithUnits(), hoursForTasks(), u).Tasks(ctxXa(xaThu), 10)
+	if err != nil {
+		t.Fatalf("lỗi tra tên làm hỏng cả hàng đợi: %v", err)
+	}
+	if len(got) != 4 || got[0].OrgUnitID != "bp-vpdu" || got[0].OrgUnitName != "" || !got[0].Critical {
+		t.Errorf("dòng = %+v", got)
+	}
+}
+
+// Petition rows carry no unit id, so nothing is asked and nothing is named.
+func TestOverdueQueueCitizenReportsNameNothing(t *testing.T) {
+	u := &orgUnitNamesFake{}
+	if _, err := newQueueWithUnits(overdueReportsWithAsOf(), hoursWithMeasure(), u).CitizenReports(ctxXa(xaThu), 10, false); err != nil {
+		t.Fatal(err)
+	}
+	if u.calls != 0 {
+		t.Error("hàng đợi phản ánh hỏi tên bộ phận")
+	}
 }
 
 func TestOverdueQueueCriticalFromWorkingHours(t *testing.T) {

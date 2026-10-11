@@ -140,7 +140,7 @@ type citizenReportLogAttachmentRemoveIn struct {
 // the restricted-field fact. It writes the refusal itself and answers false.
 func (h *Handler) citizenReportFilter(w http.ResponseWriter, r *http.Request) (petstore.LocPhieu, bool) {
 	ctx := r.Context()
-	loc, onlyMine, err := locPhieuTuQuery(r.URL.Query())
+	loc, scope, err := locPhieuTuQuery(r.URL.Query())
 	if err != nil {
 		message := err.Error()
 		if errors.Is(err, petstore.ErrTimPhieuQuaDai) {
@@ -151,15 +151,34 @@ func (h *Handler) citizenReportFilter(w http.ResponseWriter, r *http.Request) (p
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", message, "")
 		return petstore.LocPhieu{}, false
 	}
-	if onlyMine {
-		// FAIL CLOSED ON AN EMPTY CODE: dropping the filter would answer "Giao cho tôi" with the whole
-		// register (DanhSachPhieu says why).
+	if scope != scopeAll {
+		// FAIL CLOSED ON AN EMPTY CODE: dropping the filter would answer "Giao cho tôi" / "Liên quan đến
+		// tôi" with the whole register (DanhSachPhieu says why).
 		p, ok := authz.From(ctx)
 		if !ok || p.Ma == "" {
 			h.thieuChuTheXuLy(w, r)
 			return petstore.LocPhieu{}, false
 		}
-		loc.CanBoXuLyID = p.Ma
+		switch scope {
+		case scopeMine:
+			loc.CanBoXuLyID = p.Ma
+		case scopeRelated:
+			// THE CALLER'S OWN CODE, FROM THE SESSION, and the units identity says that code belongs to
+			// TODAY — the task list's `related` path (taskFilterFromRequest), one dependency for both.
+			// NO UNIT ANSWER, NO PAGE: identity failing is a 503, never the list without the unit clause —
+			// that would be a tab missing exactly the petitions its name promises.
+			units, err := h.d.TaskFilterIdentity.StaffOrgUnits(ctx, p.Ma)
+			if err != nil {
+				// WARN: this process is healthy; the chain carries only the gRPC status identityclient
+				// already logged (no staff code, no personal data).
+				h.d.Log.Warn("CẢNH BÁO: từ chối lọc phiếu phản ánh `liên quan đến tôi` — không lấy được bộ phận của người đăng nhập",
+					"xa", string(tenant.MustFrom(ctx)), "duong", r.URL.Path, "err", err)
+				httpx.WriteError(w, http.StatusServiceUnavailable, "citizen_report_filter_unavailable",
+					"Chưa áp dụng được bộ lọc này nên chưa hiện danh sách. Vui lòng thử lại sau ít phút.", "")
+				return petstore.LocPhieu{}, false
+			}
+			loc.Related = &petstore.CitizenReportRelatedScope{StaffCode: p.Ma, OrgUnits: units}
+		}
 	}
 	loc.ChoPhepHanChe = bool(h.coQuyenHanChe(ctx))
 	return loc, true

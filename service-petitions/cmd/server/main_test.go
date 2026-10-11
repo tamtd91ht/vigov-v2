@@ -473,7 +473,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// dependency. Own suite: internal/http/summary_test.go.
 		TaskSummary:          petstore.NewNhiemVuStore(nil),
 		CitizenReportSummary: petstore.NewPhieuPhanAnhStore(nil),
-		OverdueQueue:         app.NewOverdueQueue(nil, nil, nil),
+		OverdueQueue:         app.NewOverdueQueue(nil, nil, nil, nil),
 		// Never invoked here; the route file refuses a nil. Own suites: internal/app and internal/http
 		// citizen_report_breakdown_test.go / citizen_report_figures_test.go.
 		CitizenReportBreakdown: app.NewCitizenReportBreakdown(nil, nil),

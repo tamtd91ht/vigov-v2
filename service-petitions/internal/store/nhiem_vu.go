@@ -27,6 +27,7 @@ import (
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/core/textfold"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -481,9 +482,14 @@ func validateTaskListScope(loc LocNhiemVu) error {
 // equivalent is: `hooks/pii_guard` blocks a formatting call near a personal-data column name and is
 // right to, so the honest move is to stop using the shape the guard watches rather than argue with
 // it. §3 says the box searches "trong mã + tiêu đề" — those two columns and no others.
+//
+// THE TITLE IS SEARCHED ACCENT-INSENSITIVELY (bug sheet 10/10 row 8): `title_folded` is the stored fold
+// of `tieu_de` (migration 0041), and the term is folded HERE, IN SQL, by the same textfold.SQL — never in
+// Go, whose lower-casing can disagree with the cluster's (core/textfold package comment). "nha van hoa"
+// and "Nhà văn hoá" therefore both find "Nhà văn hoá". The register number stays ILIKE: it is ASCII.
 func dieuKienTimNhiemVu(n int) string {
 	p := "$" + strconv.Itoa(n)
-	return " AND (ma ILIKE " + p + " OR tieu_de ILIKE " + p + ")"
+	return " AND (ma ILIKE " + p + " OR title_folded LIKE " + textfold.SQL(p) + ")"
 }
 
 // locNhiemVuThanhSQL turns the validated filter struct into a predicate and its bound values.
@@ -536,9 +542,9 @@ func locNhiemVuThanhSQL(loc LocNhiemVu) (string, []any) {
 		dieuKien += " AND nhiem_vu_cha_id IS NULL"
 	}
 	if loc.Tim != "" {
-		// ILIKE ON TWO COLUMNS — the register number a clerk remembers and the title. A leading
-		// wildcard cannot use an index, which is affordable because the scan is already bound to one
-		// commune.
+		// TWO COLUMNS — the register number a clerk remembers and the title (folded: dieuKienTimNhiemVu).
+		// A leading wildcard cannot use an index, which is affordable because the scan is already bound
+		// to one commune.
 		args = append(args, "%"+loc.Tim+"%")
 		dieuKien += dieuKienTimNhiemVu(len(args) + 1)
 	}

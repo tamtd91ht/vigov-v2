@@ -34,6 +34,9 @@ func registerFilter(loc LocPhieu) (string, []any, error) {
 	if err := validateCitizenReportMetric(loc); err != nil {
 		return "", nil, err
 	}
+	if loc.Related != nil && loc.Related.StaffCode == "" {
+		return "", nil, ErrCitizenReportRelatedNoStaff
+	}
 	predicate, args := locPhieuThanhSQL(loc)
 	// `deleted_at IS NULL` FIRST AND ALWAYS (rule 7, invariant 2).
 	return `AND deleted_at IS NULL` + predicate, args, nil

@@ -316,14 +316,15 @@ var ErrOverdueQueueLimit = errors.New("hàng đợi quá hạn: giới hạn s�
 // oldest missed deadline first.
 //
 // THE SAME PREDICATE AS THE `overdue` FIGURE (taskMetricCondition), so every task the panel shows is
-// one the tile counted. THREE COLUMNS AND NO TITLE: see domain.OverdueItem for why a task title does
-// not travel on this surface. Critical is NOT decided here — it needs identity's working-hours
-// calendar, which the use case asks.
+// one the tile counted. THE TITLE AND THE UNIT id TRAVEL (bug sheet row 5): domain.OverdueItem says why
+// the title discloses nothing `task.read` does not already list. `mo_ta` does NOT — the prototype's row
+// has no description. Critical and the unit NAME are NOT decided here — both need identity, which the
+// use case asks.
 func (s *NhiemVuStore) OverdueTasks(ctx context.Context, limit int) ([]domain.OverdueItem, error) {
 	if limit < 1 || limit > OverdueQueueMax {
 		return nil, ErrOverdueQueueLimit
 	}
-	rows, err := s.db.For(ctx).Query(ctx, "ma, loai, han_xu_ly", "nhiem_vu",
+	rows, err := s.db.For(ctx).Query(ctx, "ma, loai, han_xu_ly, tieu_de, bo_phan_id", "nhiem_vu",
 		`AND deleted_at IS NULL AND `+taskMetricCondition(domain.TaskOverdue, "", "")+
 			` ORDER BY han_xu_ly ASC, ma ASC LIMIT $2`, limit)
 	if err != nil {
@@ -334,9 +335,11 @@ func (s *NhiemVuStore) OverdueTasks(ctx context.Context, limit int) ([]domain.Ov
 	items := make([]domain.OverdueItem, 0, limit)
 	for rows.Next() {
 		it := domain.OverdueItem{Kind: domain.DeadlineTask}
-		if err := rows.Scan(&it.Code, &it.CategoryCode, &it.MissedDeadline); err != nil {
+		var unit sql.NullString // NULL = no unit, read as ""
+		if err := rows.Scan(&it.Code, &it.CategoryCode, &it.MissedDeadline, &it.Title, &unit); err != nil {
 			return nil, fmt.Errorf("nhiem_vu: hàng đợi quá hạn: đọc dòng: %w", err)
 		}
+		it.OrgUnitID = unit.String
 		items = append(items, it)
 	}
 	if err := rows.Err(); err != nil {

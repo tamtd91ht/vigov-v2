@@ -2,12 +2,15 @@ package store
 
 import (
 	"database/sql/driver"
+	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/core/textfold"
 )
 
 // The REGISTER LIST — what actually reaches the WHERE clause.
@@ -180,6 +183,90 @@ func TestDanhSachLocGiaoChoToiLaThamSoRangBuoc(t *testing.T) {
 	// The PREDICATE, not the column name: `can_bo_xu_ly_id` is also in the SELECT list.
 	if l := chayDanhSach(t, LocPhieu{}); strings.Contains(l.sql, "can_bo_xu_ly_id = $") {
 		t.Errorf("không yêu cầu mà vẫn lọc theo người được giao: %q", l.sql)
+	}
+}
+
+// placeholderOf is the `$n` a value is bound to. args[0] is the commune, $1.
+func placeholderOf(t *testing.T, args []driver.Value, v string) string {
+	t.Helper()
+	for i, a := range args {
+		if a == v {
+			return "$" + strconv.Itoa(i+1)
+		}
+	}
+	t.Fatalf("%q không có trong tham số: %v", v, args)
+	return ""
+}
+
+// TestSearchIsAccentInsensitive — bug sheet 10/10 row 8. The text and the location are matched FOLDED
+// ON BOTH SIDES: the stored folds of migration 0041 against the term folded by the SAME textfold.SQL.
+// The lookup code stays ILIKE. A raw `noi_dung ILIKE` here is a search where "nha van hoa" finds nothing.
+func TestSearchIsAccentInsensitive(t *testing.T) {
+	l := chayDanhSach(t, LocPhieu{Tim: "nha van hoa"})
+	p := placeholderOf(t, l.args, "%nha van hoa%")
+	for _, want := range []string{
+		"ma_tra_cuu ILIKE " + p,
+		"content_folded LIKE " + textfold.SQL(p),
+		"address_folded LIKE " + textfold.SQL(p),
+	} {
+		if !strings.Contains(l.sql, want) {
+			t.Errorf("thiếu %q trong %q", want, l.sql)
+		}
+	}
+	for _, raw := range []string{"noi_dung ILIKE", "dia_chi,'') ILIKE", "noi_dung LIKE"} {
+		if strings.Contains(l.sql, raw) {
+			t.Errorf("còn so thô %q — không gập dấu: %q", raw, l.sql)
+		}
+	}
+}
+
+// TestRelatedScopePredicate — `scope=related`, the prototype's INVOLVED clause read against this schema
+// (citizenReportRelatedCondition): I hold it · I wrote on its timeline (commune bound INSIDE the
+// subquery) · one of my units holds it. Every value bound; ANDed after the restricted-field exclusion.
+func TestRelatedScopePredicate(t *testing.T) {
+	const me = "CB-00123"
+	l := chayDanhSach(t, LocPhieu{Related: &CitizenReportRelatedScope{StaffCode: me, OrgUnits: []string{"bp-1", "bp-2"}}})
+
+	p := placeholderOf(t, l.args, me)
+	u1, u2 := placeholderOf(t, l.args, "bp-1"), placeholderOf(t, l.args, "bp-2")
+	want := " AND (can_bo_xu_ly_id = " + p +
+		" OR id IN (SELECT nk.phieu_phan_anh_id FROM nhat_ky_phan_anh nk WHERE nk.tenant_id = $1 AND nk.nguoi_ma = " + p + ")" +
+		" OR bo_phan_id IN (" + u1 + ", " + u2 + "))"
+	if !strings.Contains(l.sql, want) {
+		t.Fatalf("vị từ liên quan sai:\n%q\nmuốn chứa\n%q", l.sql, want)
+	}
+	for _, v := range []string{me, "bp-1", "bp-2"} {
+		if strings.Contains(l.sql, v) {
+			t.Errorf("%q nằm TRONG câu lệnh thay vì là tham số", v)
+		}
+	}
+	if !strings.Contains(l.sql, dieuKienHanChe) || strings.Index(l.sql, dieuKienHanChe) > strings.Index(l.sql, want) {
+		t.Errorf("phạm vi liên quan làm mất (hoặc đứng trước) điều kiện loại lĩnh vực hạn chế: %q", l.sql)
+	}
+}
+
+// No unit: the unit clause is ABSENT — never "every unit".
+func TestRelatedScopeWithoutUnitHasNoUnitClause(t *testing.T) {
+	l := chayDanhSach(t, LocPhieu{Related: &CitizenReportRelatedScope{StaffCode: "CB-00123"}})
+	if strings.Contains(l.sql, "bo_phan_id IN") || !strings.Contains(l.sql, "can_bo_xu_ly_id = $") {
+		t.Errorf("không bộ phận mà vị từ = %q", l.sql)
+	}
+}
+
+// No code: refused before any statement — the tab would otherwise show only the unit's petitions.
+func TestRelatedScopeWithoutCodeIsRefused(t *testing.T) {
+	k := &khoGia{}
+	s := NewPhieuPhanAnhStore(store.New(moKhoGia(k)))
+	yc, _ := page.Parse(url.Values{}, SapXepPhieu)
+	loc := LocPhieu{Related: &CitizenReportRelatedScope{OrgUnits: []string{"bp-1"}}}
+	if _, err := s.DanhSach(ctxXa(xaThu), loc, yc); !errors.Is(err, ErrCitizenReportRelatedNoStaff) {
+		t.Errorf("DanhSach: err = %v", err)
+	}
+	if _, err := s.CountCitizenReports(ctxXa(xaThu), loc); !errors.Is(err, ErrCitizenReportRelatedNoStaff) {
+		t.Errorf("CountCitizenReports: err = %v", err)
+	}
+	if len(k.lenh) != 0 {
+		t.Errorf("vẫn chạy %d câu lệnh", len(k.lenh))
 	}
 }
 

@@ -317,11 +317,14 @@ func TestTaskSummaryWrapsDriverError(t *testing.T) {
 	}
 }
 
-// TestOverdueTasksStatement — the overdue FIGURE's predicate, oldest missed deadline first, bounded,
-// and no title on the wire.
+// TestOverdueTasksStatement — the overdue FIGURE's predicate, oldest missed deadline first, bounded;
+// the title and the unit id read (bug sheet row 5), the description not; a NULL unit is "".
 func TestOverdueTasksStatement(t *testing.T) {
 	k := &khoGia{hangTheoCot: []map[string]driver.Value{
-		{"ma": "NV07", "loai": "theo-van-ban", "han_xu_ly": time.Date(2026, 9, 1, 3, 0, 0, 0, time.UTC)},
+		{"ma": "NV07", "loai": "theo-van-ban", "han_xu_ly": time.Date(2026, 9, 1, 3, 0, 0, 0, time.UTC),
+			"tieu_de": "Sửa nhà văn hoá thôn 3", "bo_phan_id": "bp-vpdu"},
+		{"ma": "NV08", "loai": "theo-van-ban", "han_xu_ly": time.Date(2026, 9, 2, 3, 0, 0, 0, time.UTC),
+			"tieu_de": "Rà soát hộ nghèo", "bo_phan_id": nil},
 	}}
 	s := NewNhiemVuStore(store.New(moKhoGia(k)))
 
@@ -329,9 +332,13 @@ func TestOverdueTasksStatement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OverdueTasks: %v", err)
 	}
-	if len(items) != 1 || items[0].Code != "NV07" || items[0].CategoryCode != "theo-van-ban" ||
-		items[0].Kind != domain.DeadlineTask || !items[0].MissedDeadline.Equal(time.Date(2026, 9, 1, 3, 0, 0, 0, time.UTC)) {
+	if len(items) != 2 || items[0].Code != "NV07" || items[0].CategoryCode != "theo-van-ban" ||
+		items[0].Kind != domain.DeadlineTask || !items[0].MissedDeadline.Equal(time.Date(2026, 9, 1, 3, 0, 0, 0, time.UTC)) ||
+		items[0].Title != "Sửa nhà văn hoá thôn 3" || items[0].OrgUnitID != "bp-vpdu" || items[0].OrgUnitName != "" {
 		t.Errorf("dòng đọc sai: %+v", items)
+	}
+	if len(items) == 2 && (items[1].OrgUnitID != "" || items[1].Title != "Rà soát hộ nghèo") {
+		t.Errorf("việc không bộ phận đọc sai: %+v", items[1])
 	}
 	l := k.lenh[0]
 	if !strings.Contains(l.sql, "AND deleted_at IS NULL AND "+taskMetricCondition(domain.TaskOverdue, "", "")+" ORDER BY han_xu_ly ASC, ma ASC LIMIT $2") {
@@ -340,8 +347,11 @@ func TestOverdueTasksStatement(t *testing.T) {
 	if l.args[0] != string(xaThu) || l.args[1] != int64(7) {
 		t.Errorf("tham số = %v", l.args)
 	}
-	if strings.Contains(l.sql, "tieu_de") || strings.Contains(l.sql, "mo_ta") {
-		t.Error("hàng đợi đọc tiêu đề/mô tả — những chữ ấy hay trích lời người dân")
+	if !strings.HasPrefix(l.sql, "SELECT ma, loai, han_xu_ly, tieu_de, bo_phan_id FROM nhiem_vu") {
+		t.Errorf("cột đọc = %q", l.sql)
+	}
+	if strings.Contains(l.sql, "mo_ta") {
+		t.Error("hàng đợi đọc mô tả — dòng prototype không có mô tả, và mô tả hay trích lời người dân")
 	}
 }
 

@@ -27,10 +27,12 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/core/textfold"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -97,6 +99,11 @@ type LocPhieu struct {
 	// same kind of value app.duocTienTrangThai compares against — an internal id here matches nothing.
 	CanBoXuLyID string
 
+	// Related is §4's "Liên quan đến tôi" (`scope=related`). nil = no filter. A POINTER so the struct
+	// stays comparable (the handler tests compare it whole) while carrying a list — LocNhiemVu.Related's
+	// shape. Its definition: citizenReportRelatedCondition.
+	Related *CitizenReportRelatedScope
+
 	// ChiTreHan restricts the page to petitions whose RESOLVE commitment was missed.
 	//
 	// DERIVED IN SQL, NEVER READ FROM A COLUMN (rule 10, invariant 3). See the predicate in
@@ -133,6 +140,76 @@ type LocPhieu struct {
 	Period domain.Period
 }
 
+// CitizenReportRelatedScope is who "tôi" is for `scope=related`, resolved by the handler from the
+// SESSION — never from the request (rule 4, invariant 2 in its staff form).
+//
+// StaffCode is authz.Principal.Ma. OrgUnits is identity's StaffOrgUnits answer for that code: EMPTY IS
+// AN ORDINARY ANSWER and means the unit clause matches nothing — never "every unit".
+type CitizenReportRelatedScope struct {
+	StaffCode string
+	OrgUnits  []string
+}
+
+// ErrCitizenReportRelatedNoStaff — `scope=related` with no staff code. Refused rather than run: with no
+// code the personal clauses match nothing and the tab would show only the unit's petitions, silently.
+var ErrCitizenReportRelatedNoStaff = errors.New("phieu_phan_anh: `scope=related` không có mã cán bộ")
+
+// citizenReportRelatedCondition is §4's "Liên quan đến tôi" — "Tôi giao, tôi theo dõi, tôi đã xử lý,
+// hoặc bộ phận tôi đang giữ" — as ONE OR over bound values, appended to args.
+//
+// THE DEFINITION IS THE PROTOTYPE'S, read against this schema (vigov-require
+// apps/api/app/modules/feedback/repository.py:85-111 `_mine_clause`, INVOLVED arm; the tab's hint text
+// apps/admin/src/components/common/ScopeFilter.tsx:19-22; the unit from app/core/scope.py:44-72):
+//
+//	can_bo_xu_ly_id          `Feedback.assignee_id == me` — I hold it. The `related` tab is therefore a
+//	                         SUPERSET of `mine`, never a different list. The column holds a staff
+//	                         BUSINESS code (LocPhieu.CanBoXuLyID says why).
+//	nhat_ky_phan_anh         `FeedbackEvent.actor_id == me` — I wrote an entry on its timeline: every act
+//	                         on a petition (classify, assign, status, close, note, staff intake…) writes
+//	                         one there with the officer's code as `nguoi_ma` (0013). Append-only, so
+//	                         the prototype's `deleted_at IS NULL` on the event has nothing to filter.
+//	(created_by)             `Feedback.created_by == me` has NO COLUMN here, and needs none: the only
+//	                         staff-created petitions are staff intake, which writes a `nhap-ho` timeline
+//	                         row with the officer as `nguoi_ma` in the same transaction (0030,
+//	                         app/staff_intake.go) — so the timeline clause already covers it. A citizen
+//	                         creator is never a member of staff.
+//	bo_phan_id               `Feedback.org_unit_id == my unit` — held by one of my live units, as identity
+//	                         answers TODAY (the prototype reads the unit from the table on every filter
+//	                         for the same reason). NO units → the clause is ABSENT, which matches
+//	                         nothing, never every unit.
+//
+// IT NARROWS A LIST AND GRANTS NOTHING (rule 5): every row it admits is one `feedback.read` already
+// lists, and the restricted-field exclusion is ANDed in front of it like every other filter.
+//
+// ALL VALUES ARE STAFF BUSINESS CODES OR UNIT ids — no personal data (rule 3). The timeline clause is
+// `id IN (…)` with the commune bound INSIDE it ($1): the subquery is a second relation that the
+// outer `tenant_id = $1` does not reach.
+//
+// ⚠ NO INDEX SERVES `nhat_ky_phan_anh.nguoi_ma`; the subquery scans this commune's timeline rows —
+// bounded by one commune, the same standing as the task register's relatedCondition.
+func citizenReportRelatedCondition(r *CitizenReportRelatedScope, args *[]any) string {
+	*args = append(*args, r.StaffCode)
+	me := "$" + strconv.Itoa(len(*args)+1) // $1 is the commune
+	clauses := []string{
+		"can_bo_xu_ly_id = " + me,
+		"id IN (SELECT nk.phieu_phan_anh_id FROM nhat_ky_phan_anh nk WHERE nk.tenant_id = $1 AND nk.nguoi_ma = " + me + ")",
+	}
+	if len(r.OrgUnits) > 0 {
+		var b strings.Builder
+		b.WriteString("(")
+		for i, u := range r.OrgUnits {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			*args = append(*args, u)
+			b.WriteString("$" + strconv.Itoa(len(*args)+1))
+		}
+		b.WriteString(")")
+		clauses = append(clauses, "bo_phan_id IN "+b.String())
+	}
+	return " AND (" + strings.Join(clauses, " OR ") + ")"
+}
+
 // dieuKienTim is the free-text predicate, built with the placeholder already chosen.
 //
 // WRITTEN BY CONCATENATION RATHER THAN fmt.Sprintf, AND THAT IS NOT A STYLE CHOICE: `hooks/pii_guard`
@@ -142,11 +219,18 @@ type LocPhieu struct {
 // to argue with it. The clause searches the petition text and the incident location, which are
 // citizen personal data (rule 3); nothing in this file logs either, and the pattern is bounded by
 // the handler before it arrives.
+//
+// THE TEXT AND THE LOCATION ARE SEARCHED ACCENT-INSENSITIVELY (bug sheet 10/10 row 8): `content_folded`
+// and `address_folded` are the stored folds of the two columns (migration 0041), and the term is folded
+// HERE, IN SQL, by the same textfold.SQL — never in Go (core/textfold package comment). A NULL
+// `address_folded` matches nothing, as `COALESCE(dia_chi,”)` did for a non-empty term. The lookup code
+// stays ILIKE: it is ASCII.
 func dieuKienTim(n int) string {
 	p := "$" + strconv.Itoa(n)
+	folded := textfold.SQL(p)
 	return " AND (ma_tra_cuu ILIKE " + p +
-		" OR noi_dung ILIKE " + p +
-		" OR COALESCE(dia_chi,'') ILIKE " + p + ")"
+		" OR content_folded LIKE " + folded +
+		" OR address_folded LIKE " + folded + ")"
 }
 
 // restrictedFieldExclusion keeps petitions in the restricted field `can-bo` out of a read. THE ONE
@@ -200,9 +284,12 @@ func locPhieuThanhSQL(loc LocPhieu) (string, []any) {
 		// never "assigned to me" — the same guard app.duocTienTrangThai states explicitly.
 		them(" AND can_bo_xu_ly_id = $%d", loc.CanBoXuLyID)
 	}
+	if loc.Related != nil {
+		dieuKien += citizenReportRelatedCondition(loc.Related, &args)
+	}
 	if loc.Tim != "" {
-		// ILIKE ON THREE COLUMNS — the lookup code a citizen reads down the telephone, the report a
-		// clerk remembers, and where it happened: the three boxes docs/ui-ux/09 §4 names. A leading
+		// THREE COLUMNS — the lookup code a citizen reads down the telephone, the report a clerk
+		// remembers, and where it happened (the last two folded: dieuKienTim). A leading
 		// wildcard cannot use an index, which is affordable because the scan is already bound to one
 		// commune.
 		args = append(args, "%"+loc.Tim+"%")

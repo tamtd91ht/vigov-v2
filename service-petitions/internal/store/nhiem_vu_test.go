@@ -4,6 +4,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +12,7 @@ import (
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/core/textfold"
 )
 
 // The TASK REGISTER — what actually reaches the WHERE clause, and what actually comes back.
@@ -354,10 +356,23 @@ func TestDanhSachNhiemVuMoiBoLocLaThamSoRangBuoc(t *testing.T) {
 	}
 	// §3: the search box looks "trong mã + tiêu đề" — those two columns and no others. A search that
 	// also reached `mo_ta` would return rows the officer cannot see why they matched.
-	if !strings.Contains(l.sql, "ma ILIKE") || !strings.Contains(l.sql, "tieu_de ILIKE") {
-		t.Errorf("ô tìm kiếm không quét mã + tiêu đề: %q", l.sql)
+	//
+	// THE TITLE IS MATCHED FOLDED ON BOTH SIDES (bug sheet row 8): the stored fold against the term folded
+	// by the SAME SQL expression — a term folded in Go, or a raw `tieu_de ILIKE`, is not accent-insensitive.
+	n := ""
+	for i, a := range l.args { // l.args[0] is the commune, bound as $1
+		if a == "%"+loc.Tim+"%" {
+			n = strconv.Itoa(i + 1)
+		}
 	}
-	if strings.Contains(l.sql, "mo_ta ILIKE") {
+	if !strings.Contains(l.sql, "ma ILIKE $"+n) ||
+		!strings.Contains(l.sql, "title_folded LIKE "+textfold.SQL("$"+n)) {
+		t.Errorf("ô tìm kiếm không quét mã + tiêu đề đã gập dấu: %q", l.sql)
+	}
+	if strings.Contains(l.sql, "tieu_de ILIKE") {
+		t.Errorf("tiêu đề còn so ILIKE thô — \"nha van hoa\" sẽ không thấy \"Nhà văn hoá\": %q", l.sql)
+	}
+	if strings.Contains(l.sql, "mo_ta ILIKE") || strings.Contains(l.sql, "mo_ta LIKE") {
 		t.Errorf("ô tìm kiếm quét cả mô tả — §3 nói `tìm trong mã + tiêu đề`: %q", l.sql)
 	}
 }
