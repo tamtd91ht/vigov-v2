@@ -8162,6 +8162,117 @@
         }
       }
     },
+    "/api/v1/citizen-reports/{maTraCuu}/staff-recorded-rating": {
+      "parameters": [
+        {
+          "name": "maTraCuu",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Cán bộ ghi nhận đánh giá người dân nói qua điện thoại hoặc tại quầy — lưu riêng (nguồn staff_recorded), không tính vào điểm hài lòng; người dân đã tự đánh giá thì từ chối",
+        "operationId": "petitions_post_citizen_reports_by_maTraCuu_staff_recorded_rating",
+        "tags": [
+          "petitions"
+        ],
+        "x-vigov-screen": "09-phan-anh-nguoi-dan §8.6",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "feedback.resolve"
+        },
+        "x-vigov-task": "663ce7c9f9b1",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/petitions.staffRecordedRatingIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/petitions.phieuPhanAnhRa"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "citizen_rated",
+              "staff_rating_exists"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/citizen-reports/{maTraCuu}/status": {
       "parameters": [
         {
@@ -33676,7 +33787,7 @@
         }
       ],
       "post": {
-        "summary": "Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện",
+        "summary": "Giao việc / chuyển việc một nhiệm vụ cho bộ phận/người khác — có lý do (`note`) là chuyển việc, nhiệm vụ sang nhánh `chuyen-tiep`; không lý do thì giữ trạng thái; hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện",
         "operationId": "petitions_post_tasks_by_ma_assignment",
         "tags": [
           "petitions"
@@ -34783,7 +34894,7 @@
         }
       ],
       "post": {
-        "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, không về `moi-giao`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch",
+        "summary": "Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, kể cả nhánh `chuyen-tiep`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch",
         "operationId": "petitions_post_tasks_by_ma_status",
         "tags": [
           "petitions"
@@ -50696,6 +50807,16 @@
             "items": {
               "type": "string"
             }
+          },
+          "staff_recorded_rating": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/petitions.staffRecordedRatingOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -50961,6 +51082,57 @@
         "required": [
           "content",
           "field"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.staffRecordedRatingIn": {
+        "type": "object",
+        "properties": {
+          "stars": {
+            "type": "integer"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel",
+          "stars"
+        ],
+        "additionalProperties": false
+      },
+      "petitions.staffRecordedRatingOut": {
+        "type": "object",
+        "properties": {
+          "stars": {
+            "type": "integer"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "recorded_by": {
+            "type": "string"
+          },
+          "recorded_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "channel",
+          "recorded_at",
+          "recorded_by",
+          "source",
+          "stars"
         ],
         "additionalProperties": false
       },

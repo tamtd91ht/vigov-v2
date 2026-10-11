@@ -1168,6 +1168,59 @@ func TestDeNghiLuiHan_GhiDeNghiVaVetTrongMotGiaoDich(t *testing.T) {
 	}
 }
 
+// TestExtensionRequestWritesTimelineRowInSameTransaction — bug sheet row 17 ("hiển thị log đề nghị lùi
+// hạn", owner rule 11/10/2026): the request writes ONE task-timeline row in its own transaction, authored
+// by the STAFF BUSINESS CODE, carrying the status the task is still in, the two dates and the reason.
+func TestExtensionRequestWritesTimelineRowInSameTransaction(t *testing.T) {
+	k := khoNVMau() // dang-thuc-hien
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	if _, err := uc.DeNghiLuiHan(ctx, maNVGoc,
+		YeuCauDeNghiLuiHan{HanMoi: mocHanMoiNV, LyDo: "Chờ số liệu từ ba chi bộ."}, canBoThu()); err != nil {
+		t.Fatalf("đề nghị lùi hạn: %v", err)
+	}
+	logs := k.cau("INSERT INTO nhat_ky_nhiem_vu")
+	if len(logs) != 1 {
+		t.Fatalf("ghi %d dòng nhật ký, muốn 1", len(logs))
+	}
+	if logs[0].args[4] != maCanBoThu || logs[0].args[5] != string(domain.DangThucHien) {
+		t.Errorf("dòng nhật ký: người=%v trạng thái=%v", logs[0].args[4], logs[0].args[5])
+	}
+	text, _ := logs[0].args[8].(string)
+	want := domain.ExtensionRequestLogText(mocHanNV, mocHanMoiNV, "Chờ số liệu từ ba chi bộ.")
+	if text != want || !strings.Contains(text, "Gửi đề nghị lùi hạn") || !strings.Contains(text, "(chờ duyệt)") {
+		t.Errorf("nội dung nhật ký = %q, muốn %q", text, want)
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
+// TestExtensionDecisionTimelineAlwaysNamesVerdict — a decision WITH a note used to write the note alone,
+// so the timeline could not tell an approval from a refusal. The verdict and dates now lead the row.
+func TestExtensionDecisionTimelineAlwaysNamesVerdict(t *testing.T) {
+	for _, c := range []struct {
+		approve bool
+		verb    string
+	}{{true, "Duyệt lùi hạn: "}, {false, "Từ chối đề nghị lùi hạn: "}} {
+		k := khoNVMau()
+		k.deNghi[idDeNghi] = dongDeNghiGia(nil)
+		uc, ctx := dungGhiNhiemVu(t, k)
+		leader := audit.Actor{ID: maLanhDao, Kind: "staff", IP: "10.0.0.8"}
+		if _, err := uc.QuyetDinhLuiHan(ctx, maNVGoc, idDeNghi,
+			YeuCauQuyetDinhLuiHan{Duyet: c.approve, GhiChu: "Đồng ý theo báo cáo."}, leader); err != nil {
+			t.Fatalf("quyết định: %v", err)
+		}
+		logs := k.cau("INSERT INTO nhat_ky_nhiem_vu")
+		if len(logs) != 1 {
+			t.Fatalf("ghi %d dòng nhật ký, muốn 1", len(logs))
+		}
+		text, _ := logs[0].args[8].(string)
+		if !strings.HasPrefix(text, c.verb) || !strings.HasSuffix(text, "\nĐồng ý theo báo cáo.") || logs[0].args[4] != maLanhDao {
+			t.Errorf("duyệt=%v: nhật ký = %q (người %v)", c.approve, text, logs[0].args[4])
+		}
+		chiGhiTrongGiaoDich(t, k)
+	}
+}
+
 func TestDeNghiLuiHan_DaCoDeNghiChoDuyetThiTuChoi(t *testing.T) {
 	k := khoNVMau()
 	k.deNghi[idDeNghi] = dongDeNghiGia(nil) // one already pending

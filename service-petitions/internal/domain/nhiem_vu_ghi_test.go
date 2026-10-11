@@ -169,9 +169,9 @@ func TestChuyenTrangThaiTheoDungVongDoi(t *testing.T) {
 		{ChoDuyet, DangThucHien, true},
 		{ChoDuyet, DaTiepNhanNV, false},
 		{DangThucHien, TamDung, true},
-		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: was `true`. Forwarding is now the assignment act, and the
-		// status move is refused with ErrForwardingIsAssignment (TestForwardingIsNoLongerAStatusMove).
-		{DangThucHien, ChuyenTiep, false},
+		// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: `true` again (it was `false` from 28/09). Owner rule "chuẩn là
+		// prototype", bug sheet row 17: `chuyen-tiep` is the prototype's branch (TestForwardingIsAStatusMove).
+		{DangThucHien, ChuyenTiep, true},
 		// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: the next four were `false` under §6's strict chain; require
 		// 52ec9b5's table has them (user decision).
 		{MoiGiao, DangThucHien, true},
@@ -196,19 +196,23 @@ func TestChuyenTrangThaiTheoDungVongDoi(t *testing.T) {
 	}
 }
 
-// TestForwardingIsNoLongerAStatusMove — owner decision 28/09/2026. From EVERY state, including a paused
-// one and a legacy `chuyen-tiep` row, `chuyen-tiep` as a target answers the sentinel that names the
-// assignment act — not the generic "no such move", which would send the caller looking for an
-// intermediate status.
-func TestForwardingIsNoLongerAStatusMove(t *testing.T) {
-	for _, from := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien, ChoDuyet, TamDung, HoanThanh, ChuyenTiep} {
-		err := ChuyenTrangThaiDuoc(from, ChuyenTiep)
-		if !errors.Is(err, ErrForwardingIsAssignment) {
-			t.Errorf("%s → chuyen-tiep: lỗi = %v, muốn ErrForwardingIsAssignment", from, err)
+// TestForwardingIsAStatusMove — ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 (was TestForwardingIsNoLongerAStatusMove,
+// which pinned the 28/09 refusal ErrForwardingIsAssignment from every state). Owner rule "chuẩn là
+// prototype": `chuyen-tiep` is reachable exactly where require's ALLOWED_TRANSITIONS has TRANSFERRED —
+// from moi-giao, da-tiep-nhan, dang-thuc-hien — and refused as an ordinary missing move elsewhere.
+func TestForwardingIsAStatusMove(t *testing.T) {
+	for _, from := range []TrangThaiNhiemVu{MoiGiao, DaTiepNhanNV, DangThucHien} {
+		if err := ChuyenTrangThaiDuoc(from, ChuyenTiep); err != nil {
+			t.Errorf("%s → chuyen-tiep bị từ chối: %v", from, err)
 		}
 	}
-	if !LaLoiDauVaoNhiemVu(ErrForwardingIsAssignment) {
-		t.Error("ErrForwardingIsAssignment phải là lỗi đầu vào (400), không phải 500")
+	for _, from := range []TrangThaiNhiemVu{ChoDuyet, TamDung, HoanThanh, ChuyenTiep} {
+		if err := ChuyenTrangThaiDuoc(from, ChuyenTiep); !errors.Is(err, ErrChuyenTrangThaiNhiemVuSaiLuc) {
+			t.Errorf("%s → chuyen-tiep: lỗi = %v, muốn ErrChuyenTrangThaiNhiemVuSaiLuc", from, err)
+		}
+	}
+	if err := CheckStatusTarget(ChuyenTiep); err != nil {
+		t.Errorf("chuyen-tiep là mã hợp lệ làm đích: %v", err)
 	}
 	if err := CheckStatusTarget("moi-nghi-ra"); !errors.Is(err, ErrTrangThaiNhiemVuKhongBiet) {
 		t.Errorf("mã lạ: lỗi = %v, muốn ErrTrangThaiNhiemVuKhongBiet", err)

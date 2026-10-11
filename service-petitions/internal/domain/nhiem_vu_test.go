@@ -9,8 +9,8 @@ import (
 // The task lifecycle and the two derived deadline questions.
 //
 // WHAT THESE PROVE, AND IT IS THE HALF THAT NEVER REACHES A DATABASE: the seven codes are the seven
-// of §6 and nothing else · the map admits exactly the moves of vigov-require 52ec9b5's table minus
-// `chuyen-tiep` as a target (user decision 28/09/2026) · no status is terminal · late is DERIVED and a task finished late STAYS late · and the ONE
+// of §6 and nothing else · the map admits exactly the moves of vigov-require 52ec9b5's table (with
+// `chuyen-tiep` as a target again since the owner rule of 11/10/2026) · no status is terminal · late is DERIVED and a task finished late STAYS late · and the ONE
 // distinction most likely to produce a plausible wrong figure — `han_xu_ly` for "is it late now"
 // against `han_ban_dau` for the on-time ratio.
 
@@ -69,17 +69,20 @@ func TestChoDuyetLuiHanKhongPhaiTrangThai(t *testing.T) {
 // requireTable is vigov-require's ALLOWED_TRANSITIONS at anchor 0053854
 // (apps/api/app/modules/tasks/service.py:63-102, commit 52ec9b5), TRANSCRIBED BY HAND with the
 // mapping NEW=moi-giao, ACCEPTED=da-tiep-nhan, IN_PROGRESS=dang-thuc-hien, PENDING_APPROVAL=cho-duyet,
-// DONE=hoan-thanh, PAUSED=tam-dung, TRANSFERRED=chuyen-tiep — and with the ONE departure the user
-// decided on 28/09/2026: `chuyen-tiep` removed as a TARGET (forwarding is the assignment act). A
-// second copy of the table on purpose: an edit to the map that nobody meant fails here.
+// DONE=hoan-thanh, PAUSED=tam-dung, TRANSFERRED=chuyen-tiep. A second copy of the table on purpose: an
+// edit to the map that nobody meant fails here.
+//
+// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: the 28/09 departure (`chuyen-tiep` removed as a TARGET) is undone by the
+// owner rule "chuẩn là prototype" (bug sheet row 17) — TRANSFERRED is back in the three rows require has
+// it in. The table is now require's, edge for edge.
 var requireTable = map[TrangThaiNhiemVu][]TrangThaiNhiemVu{
-	MoiGiao:      {DaTiepNhanNV, DangThucHien, TamDung}, // require also: TRANSFERRED
-	DaTiepNhanNV: {DangThucHien, TamDung},               // require also: TRANSFERRED
-	DangThucHien: {HoanThanh, ChoDuyet, TamDung},        // require also: TRANSFERRED
-	ChoDuyet:     {HoanThanh, DangThucHien},             //
-	TamDung:      {DangThucHien, DaTiepNhanNV, MoiGiao}, //
-	ChuyenTiep:   {DaTiepNhanNV, DangThucHien},          //
-	HoanThanh:    {DangThucHien},                        // the reopen
+	MoiGiao:      {DaTiepNhanNV, DangThucHien, TamDung, ChuyenTiep},
+	DaTiepNhanNV: {DangThucHien, TamDung, ChuyenTiep},
+	DangThucHien: {HoanThanh, ChoDuyet, TamDung, ChuyenTiep},
+	ChoDuyet:     {HoanThanh, DangThucHien},
+	TamDung:      {DangThucHien, DaTiepNhanNV, MoiGiao},
+	ChuyenTiep:   {DaTiepNhanNV, DangThucHien},
+	HoanThanh:    {DangThucHien}, // the reopen
 }
 
 // TestLifecycleIsRequireTable pins EVERY pair of the 7×7 grid against requireTable.
@@ -100,7 +103,7 @@ func TestLifecycleIsRequireTable(t *testing.T) {
 				}
 			}
 			if got := from.ChuyenSangDuoc(to); got != want {
-				t.Errorf("%s -> %s: ChuyenSangDuoc = %v, bảng require (đã bỏ đích chuyen-tiep) = %v",
+				t.Errorf("%s -> %s: ChuyenSangDuoc = %v, bảng require = %v",
 					from, to, got, want)
 			}
 		}
@@ -143,13 +146,16 @@ func TestNoStatusIsTerminal(t *testing.T) {
 			t.Errorf("%s không có bước ra — ngõ cụt", m)
 		}
 	}
-	// The code itself stays VALID and is never a target (rule 7 for the rows that hold it).
+	// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: this used to assert that NO status could move into `chuyen-tiep`
+	// (28/09 decision). The owner rule "chuẩn là prototype" makes it a branch again: reachable from exactly
+	// the three working states require lists, and from nowhere else.
 	if !ChuyenTiep.HopLe() {
-		t.Error("chuyen-tiep phải còn là mã hợp lệ cho các dòng cũ")
+		t.Error("chuyen-tiep phải là mã hợp lệ")
 	}
 	for m := range chuyenDuocSangNhiemVu {
-		if m.ChuyenSangDuoc(ChuyenTiep) {
-			t.Errorf("%s vẫn chuyển sang chuyen-tiep được — chuyển tiếp nay là thao tác giao lại", m)
+		want := m == MoiGiao || m == DaTiepNhanNV || m == DangThucHien
+		if got := m.ChuyenSangDuoc(ChuyenTiep); got != want {
+			t.Errorf("%s -> chuyen-tiep = %v, muốn %v (bảng require)", m, got, want)
 		}
 	}
 }

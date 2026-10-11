@@ -125,7 +125,9 @@ func citizenReportMetricCondition(m domain.CitizenReportMetric, from, to string)
 }
 
 // citizenReportRatedCondition is "the citizen has rated this petition". `diem_hai_long` has ONE writer,
-// the citizen route (ADR 0062), so every rated row is a citizen's own verdict.
+// the citizen route (ADR 0062 decision 2), so every rated row is a citizen's own verdict. The staff-
+// recorded rating of the owner rule of 11/10/2026 (ADR 0062 decisions 1/3 reversed) is written to
+// `petition_staff_recorded_rating` (migration 0042) and is deliberately NOT reachable from this column.
 const citizenReportRatedCondition = "diem_hai_long IS NOT NULL"
 
 // ratingAtMostCondition is "rated, and at most `bound` stars" — THE ONE SPELLING shared by the register's

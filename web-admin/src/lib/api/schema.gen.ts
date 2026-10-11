@@ -3875,6 +3875,7 @@ export type petitions_phieuPhanAnhRa = {
   "merged_at"?: string | null;
   "merged_by"?: string;
   "merged_petitions"?: Array<string>;
+  "staff_recorded_rating"?: petitions_staffRecordedRatingOut | null;
 };
 
 export type petitions_photoLinkOut = {
@@ -3937,6 +3938,21 @@ export type petitions_staffIntakeIn = {
   "thon_id"?: string | null;
   "lat"?: number | null;
   "lng"?: number | null;
+};
+
+export type petitions_staffRecordedRatingIn = {
+  "stars": number;
+  "channel": string;
+  "note"?: string;
+};
+
+export type petitions_staffRecordedRatingOut = {
+  "stars": number;
+  "channel": string;
+  "note"?: string;
+  "source": string;
+  "recorded_by": string;
+  "recorded_at": string;
 };
 
 export type petitions_suaBienBanVao = {
@@ -5952,6 +5968,30 @@ export type petitions_post_citizen_reports_by_maTraCuu_rejection = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/staff-recorded-rating — Cán bộ ghi nhận đánh giá người dân nói qua điện thoại hoặc tại quầy — lưu riêng (nguồn staff_recorded), không tính vào điểm hài lòng; người dân đã tự đánh giá thì từ chối */
+export type petitions_post_citizen_reports_by_maTraCuu_staff_recorded_rating = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/staff-recorded-rating";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: petitions_staffRecordedRatingIn;
+  phanHoi: {
+    200: petitions_phieuPhanAnhRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "citizen_rated" | "staff_rating_exists";
   };
 };
 
@@ -11609,7 +11649,7 @@ export type petitions_delete_tasks_by_ma = {
   };
 };
 
-/** POST /api/v1/tasks/{ma}/assignment — Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện */
+/** POST /api/v1/tasks/{ma}/assignment — Giao việc / chuyển việc một nhiệm vụ cho bộ phận/người khác — có lý do (`note`) là chuyển việc, nhiệm vụ sang nhánh `chuyen-tiep`; không lý do thì giữ trạng thái; hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện */
 export type petitions_post_tasks_by_ma_assignment = {
   duongDan: "/api/v1/tasks/{ma}/assignment";
   phuongThuc: "POST";
@@ -11819,7 +11859,7 @@ export type petitions_post_tasks_by_ma_log_entries = {
   };
 };
 
-/** POST /api/v1/tasks/{ma}/status — Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, không về `moi-giao`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch */
+/** POST /api/v1/tasks/{ma}/status — Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, kể cả nhánh `chuyen-tiep`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch */
 export type petitions_post_tasks_by_ma_status = {
   duongDan: "/api/v1/tasks/{ma}/status";
   phuongThuc: "POST";

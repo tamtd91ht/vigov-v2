@@ -12,7 +12,8 @@ import (
 // Tests for the assignment act (owner decision 28/09/2026), over the REAL store on the fake driver.
 //
 //	PROVED HERE   the UPDATE, the timeline row and the audit entry share ONE transaction and commit
-//	              once · unit/assignee changed -> `moi-giao` · the retired lead-unit / monitor columns
+//	              once · unit/assignee changed with a reason -> `chuyen-tiep`, without -> unchanged (owner
+//	              rule 11/10/2026) · the retired lead-unit / monitor columns
 //	              are neither written nor put in the delta (ADR 0065 NV5) · the
 //	              UPDATE names no `han_*` column and the reply's deadlines are the row's · the timeline
 //	              row carries the NEW holder and a from→to sentence · the audit actor is the STAFF
@@ -20,7 +21,7 @@ import (
 //	              no-op refused with nothing written · a staff code identity does not accept (unknown,
 //	              another commune, locked) is ONE refusal before any transaction · identity down and
 //	              missing wiring refuse as "unchecked" · a race answers the store's sentinel · a status
-//	              move into `chuyen-tiep` is refused before any transaction.
+//	              move into `chuyen-tiep` is accepted, with or without a handover (since 11/10/2026).
 //
 //	NOT PROVED    whether a unit id exists in the commune — there is no RPC for it (see the header of
 //	              task_assignment.go). Anything PostgreSQL does with the statement.
@@ -54,15 +55,22 @@ func TestReassign_HolderChangeThreeWritesOneTransaction(t *testing.T) {
 	}
 	chiGhiTrongGiaoDich(t, k)
 
+	// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: this hand-over carries a reason (`Note`), so it is a FORWARDING and
+	// lands in `chuyen-tiep` (owner rule "chuẩn là prototype", bug sheet row 17). It used to land in
+	// `moi-giao` (28/09 decision).
 	upd := k.cau("UPDATE nhiem_vu")[0]
 	if upd.args[2] != "bp-dia-chinh" || upd.args[3] != newAssignee {
 		t.Errorf("UPDATE ghi bộ phận/người = %v/%v", upd.args[2], upd.args[3])
 	}
-	if upd.args[4] != string(domain.MoiGiao) || upd.args[5] != string(domain.DangThucHien) {
-		t.Errorf("UPDATE trạng thái sau/đang chờ = %v/%v, muốn moi-giao/dang-thuc-hien", upd.args[4], upd.args[5])
+	if upd.args[4] != string(domain.ChuyenTiep) || upd.args[5] != string(domain.DangThucHien) {
+		t.Errorf("UPDATE trạng thái sau/đang chờ = %v/%v, muốn chuyen-tiep/dang-thuc-hien", upd.args[4], upd.args[5])
 	}
-	if after.TrangThai != domain.MoiGiao {
-		t.Errorf("phản hồi trạng thái = %q, muốn moi-giao", after.TrangThai)
+	if after.TrangThai != domain.ChuyenTiep {
+		t.Errorf("phản hồi trạng thái = %q, muốn chuyen-tiep", after.TrangThai)
+	}
+	// The new holder is still told (kind 18), in the same transaction.
+	if n := len(k.cau(outboxInsert)); n != 1 {
+		t.Errorf("thông báo cho người nhận việc: %d dòng outbox, muốn 1", n)
 	}
 
 	// Identity was asked about the code being WRITTEN, in the context's commune, before the tx.
@@ -74,11 +82,12 @@ func TestReassign_HolderChangeThreeWritesOneTransaction(t *testing.T) {
 	if log.args[4] != maCanBoThu {
 		t.Errorf("người ghi nhật ký = %v, muốn mã cán bộ %q", log.args[4], maCanBoThu)
 	}
-	if log.args[5] != string(domain.MoiGiao) || log.args[6] != "bp-dia-chinh" || log.args[7] != newAssignee {
+	if log.args[5] != string(domain.ChuyenTiep) || log.args[6] != "bp-dia-chinh" || log.args[7] != newAssignee {
 		t.Errorf("dòng nhật ký không mang người giữ việc MỚI: %v", log.args)
 	}
 	text, _ := log.args[8].(string)
-	for _, want := range []string{"CB-00311 → " + newAssignee, "bp-vpdu → bp-dia-chinh", "giao ban"} {
+	for _, want := range []string{"Chuyển việc: ", "CB-00311 → " + newAssignee, "bp-vpdu → bp-dia-chinh",
+		"dang-thuc-hien → chuyen-tiep", "giao ban"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("nội dung nhật ký %q thiếu %q", text, want)
 		}
@@ -90,7 +99,8 @@ func TestReassign_HolderChangeThreeWritesOneTransaction(t *testing.T) {
 	}
 	delta := auditDeltaText(t, k)
 	for _, want := range []string{`"nguoi_thuc_hien_ma":"CB-00311"`, `"nguoi_thuc_hien_ma":"` + newAssignee + `"`,
-		`"trang_thai":"dang-thuc-hien"`, `"trang_thai":"moi-giao"`, `"dat_lai_trang_thai":true`} {
+		`"trang_thai":"dang-thuc-hien"`, `"trang_thai":"chuyen-tiep"`, `"dat_lai_trang_thai":true`,
+		`"chuyen_tiep":true`} {
 		if !strings.Contains(delta, want) {
 			t.Errorf("delta thiếu %s: %s", want, delta)
 		}
@@ -99,6 +109,38 @@ func TestReassign_HolderChangeThreeWritesOneTransaction(t *testing.T) {
 	if strings.Contains(delta, "giao ban") {
 		t.Errorf("ghi chú tự do lọt vào vết kiểm toán: %s", delta)
 	}
+}
+
+// TestReassign_WithoutReasonKeepsStatus — ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026. A hand-over with no reason is
+// the prototype's ASSIGN (service.py:438-483): the holder moves, the status does NOT. Until 11/10 it went
+// back to `moi-giao`. The timeline row, the audit entry and the new holder's notice are all still written.
+func TestReassign_WithoutReasonKeepsStatus(t *testing.T) {
+	k := khoNVMau() // dang-thuc-hien
+	uc, ctx := dungGhiNhiemVu(t, k)
+	uc.giaoViec = &giaoViecGia{duocTatCa: true}
+
+	after, err := uc.Reassign(ctx, maNVGoc,
+		reassignReq(domain.TaskAssignmentChange{Assignee: unitPtr(newAssignee)}), canBoThu())
+	if err != nil {
+		t.Fatalf("giao lại: %v", err)
+	}
+	if after.TrangThai != domain.DangThucHien {
+		t.Errorf("trạng thái sau = %q, muốn giữ dang-thuc-hien", after.TrangThai)
+	}
+	upd := k.cau("UPDATE nhiem_vu")[0]
+	if upd.args[4] != string(domain.DangThucHien) {
+		t.Errorf("UPDATE ghi trạng thái %v, muốn giữ dang-thuc-hien", upd.args[4])
+	}
+	for _, stmt := range []string{"INSERT INTO nhat_ky_nhiem_vu", "INSERT INTO audit_log", outboxInsert} {
+		if n := len(k.cau(stmt)); n != 1 {
+			t.Errorf("câu %q chạy %d lần, muốn 1", stmt, n)
+		}
+	}
+	delta := auditDeltaText(t, k)
+	if !strings.Contains(delta, `"dat_lai_trang_thai":false`) || !strings.Contains(delta, `"chuyen_tiep":false`) {
+		t.Errorf("delta = %s", delta)
+	}
+	chiGhiTrongGiaoDich(t, k)
 }
 
 // TestReassign_RetiredRolesNeitherWrittenNorAudited — ADR 0065 NV5: changing the monitoring officer IS
@@ -166,8 +208,9 @@ func TestReassign_TerminalRefusedWritesNothing(t *testing.T) {
 	khongGhiGi(t, k)
 }
 
-// TestReassign_LegacyForwardedRowCanBeHandedOver: a row already in `chuyen-tiep` is handed to its new
-// holder and lands in `moi-giao` — forwarding IS this act now, and the row is not a dead end.
+// TestReassign_LegacyForwardedRowCanBeHandedOver: a row already in `chuyen-tiep` is handed to another
+// holder. ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: with no reason the status now STAYS `chuyen-tiep` (prototype
+// assign); it used to land in `moi-giao`.
 func TestReassign_LegacyForwardedRowCanBeHandedOver(t *testing.T) {
 	k := khoNVMau()
 	k.nhiemVu[idNVGoc]["trang_thai"] = string(domain.ChuyenTiep)
@@ -177,10 +220,10 @@ func TestReassign_LegacyForwardedRowCanBeHandedOver(t *testing.T) {
 	after, err := uc.Reassign(ctx, maNVGoc,
 		reassignReq(domain.TaskAssignmentChange{Unit: unitPtr("bp-dia-chinh")}), canBoThu())
 	if err != nil {
-		t.Fatalf("giao lại dòng chuyen-tiep cũ: %v", err)
+		t.Fatalf("giao lại dòng chuyen-tiep: %v", err)
 	}
-	if after.TrangThai != domain.MoiGiao {
-		t.Errorf("trạng thái sau = %q, muốn moi-giao", after.TrangThai)
+	if after.TrangThai != domain.ChuyenTiep {
+		t.Errorf("trạng thái sau = %q, muốn giữ chuyen-tiep", after.TrangThai)
 	}
 	upd := k.cau("UPDATE nhiem_vu")
 	if len(upd) != 1 || upd[0].args[5] != string(domain.ChuyenTiep) {
@@ -255,15 +298,50 @@ func TestReassign_RaceAnswersStoreSentinel(t *testing.T) {
 	}
 }
 
-// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: a status move into `chuyen-tiep` used to be accepted from every
-// working state. It is now refused with the sentence naming the assignment act, BEFORE any transaction.
-func TestStatusMoveIntoForwardingRefused(t *testing.T) {
+// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: was TestStatusMoveIntoForwardingRefused (28/09: refused before any
+// transaction with ErrForwardingIsAssignment). Owner rule "chuẩn là prototype", bug sheet row 17: the
+// move into `chuyen-tiep` is the prototype's branch chip, and it carries the handover in ONE transaction —
+// the holder UPDATE, its timeline row and `phan_cong_nhiem_vu` entry, the status UPDATE, its timeline row
+// and `chuyen_trang_thai_nhiem_vu` entry, and the new holder's notice.
+func TestStatusMoveIntoForwardingWithHandover(t *testing.T) {
+	k := khoNVMau() // dang-thuc-hien, CB-00311
+	uc, ctx := dungGhiNhiemVu(t, k)
+	uc.giaoViec = &giaoViecGia{duocTatCa: true}
+
+	after, err := uc.DoiTrangThai(ctx, maNVGoc, YeuCauDoiTrangThai{
+		TrangThai:   string(domain.ChuyenTiep),
+		Handover:    &TaskAssignmentRequest{Change: domain.TaskAssignmentChange{Assignee: unitPtr(newAssignee)}},
+		AssignRight: true,
+	}, canBoThu(), true, true)
+	if err != nil {
+		t.Fatalf("chuyển sang chuyen-tiep kèm giao việc: %v", err)
+	}
+	if after.TrangThai != domain.ChuyenTiep || after.NguoiThucHienMa != newAssignee {
+		t.Errorf("sau = %q / %q, muốn chuyen-tiep / %s", after.TrangThai, after.NguoiThucHienMa, newAssignee)
+	}
+	if n := len(k.cau("UPDATE nhiem_vu")); n != 2 {
+		t.Errorf("UPDATE nhiem_vu chạy %d lần, muốn 2 (người giữ, rồi trạng thái)", n)
+	}
+	for stmt, want := range map[string]int{"INSERT INTO nhat_ky_nhiem_vu": 2, "INSERT INTO audit_log": 2, outboxInsert: 1} {
+		if n := len(k.cau(stmt)); n != want {
+			t.Errorf("câu %q chạy %d lần, muốn %d", stmt, n, want)
+		}
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
+// TestStatusMoveIntoForwardingWithoutHandover — the prototype's chip needs no handover fields filled
+// (TaskStatusPipeline.tsx sends hand_over only when a holder changed), so neither does the server.
+func TestStatusMoveIntoForwardingWithoutHandover(t *testing.T) {
 	k := khoNVMau()
 	uc, ctx := dungGhiNhiemVu(t, k)
-	_, err := uc.DoiTrangThai(ctx, maNVGoc,
+	after, err := uc.DoiTrangThai(ctx, maNVGoc,
 		YeuCauDoiTrangThai{TrangThai: string(domain.ChuyenTiep)}, canBoThu(), true, true)
-	if !errors.Is(err, domain.ErrForwardingIsAssignment) {
-		t.Fatalf("lỗi = %v, muốn ErrForwardingIsAssignment", err)
+	if err != nil {
+		t.Fatalf("chuyển sang chuyen-tiep: %v", err)
 	}
-	khongMoGiaoDich(t, k)
+	if after.TrangThai != domain.ChuyenTiep {
+		t.Errorf("sau = %q, muốn chuyen-tiep", after.TrangThai)
+	}
+	chiGhiTrongGiaoDich(t, k)
 }

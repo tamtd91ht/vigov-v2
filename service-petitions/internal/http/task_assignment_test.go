@@ -18,8 +18,8 @@ import (
 //	PROVED HERE   the four cases of rule 5 invariant 7 — in the shared table caCacTuyenGhiNhiemVu
 //	              (401 · 403 with `task.update` · 401 right key wrong commune · 200) · the body reaches
 //	              the use case with "absent" and "" kept apart · every refusal maps to its status and
-//	              code with no commune id or wrapped chain on the wire · the status route answers 400
-//	              for `chuyen-tiep`, naming the assignment act.
+//	              code with no commune id or wrapped chain on the wire · the status route passes
+//	              `chuyen-tiep` with a handover through to the use case (since 11/10/2026).
 //
 //	NOT PROVED    the transaction, the status reset and the identity check — internal/app.
 
@@ -94,18 +94,20 @@ func TestReassignTask_ErrorsMapToStatusAndCode(t *testing.T) {
 	}
 }
 
-// ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: `chuyen-tiep` on the status route was a legal move; it is now a 400
-// whose sentence names the assignment act, so the web knows where to send the user.
-func TestStatusRouteForwardingAnswers400NamingAssignment(t *testing.T) {
+// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: was TestStatusRouteForwardingAnswers400NamingAssignment (28/09: a 400
+// naming the assignment act). Owner rule "chuẩn là prototype", bug sheet row 17: `chuyen-tiep` with a
+// handover reaches the use case like any other target, and the reply is 200.
+func TestStatusRouteForwardingWithHandoverReachesUseCase(t *testing.T) {
 	m := dungMayChu(t)
 	m.capQuyen(t, authz.Perm("task.read"), authz.Perm("task.update"))
-	m.ghiNhiemVu.loi = fmt.Errorf("nhiem_vu: chuyển trạng thái cho xã x: %w", domain.ErrForwardingIsAssignment)
 
 	w := m.goiGhiNV(t, http.MethodPost, hostA, duongTrangThaiNV(maNVThu), canBoCuaXa(xaA),
-		doiTrangThaiVao{Status: string(domain.ChuyenTiep)})
+		doiTrangThaiVao{Status: string(domain.ChuyenTiep), Handover: &taskAssignmentIn{Assignee: strPtr("CB-00999")}})
 
-	doiMa(t, w, http.StatusBadRequest)
-	if e := loiTra(t, w); !strings.Contains(e.Message, "/assignment") {
-		t.Errorf("câu từ chối không chỉ tới thao tác giao lại: %q", e.Message)
+	doiMa(t, w, http.StatusOK)
+	got := m.ghiNhiemVu.ycTrangT
+	if got.TrangThai != string(domain.ChuyenTiep) || got.Handover == nil ||
+		got.Handover.Change.Assignee == nil || *got.Handover.Change.Assignee != "CB-00999" {
+		t.Errorf("use case nhận %+v", got)
 	}
 }

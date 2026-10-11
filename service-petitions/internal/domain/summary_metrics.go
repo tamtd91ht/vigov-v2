@@ -149,8 +149,11 @@ const (
 	//
 	// CitizenReportRatingSample counts petitions that carry a citizen rating; the AVERAGE is
 	// CitizenReportSummary.RatingSum / RatingSample, divided by the client like every ratio here.
-	// ADR 0062 decision 2 ("only the citizen's own ratings") holds BY CONSTRUCTION: the only writer of
-	// `diem_hai_long` is the citizen route (POST …/my-citizen-reports/{code}/rating, ADR 0062 decision 1).
+	// ADR 0062 decision 2 ("only the citizen's own ratings") STILL holds BY CONSTRUCTION: the only writer of
+	// `diem_hai_long` is the citizen route (POST …/my-citizen-reports/{code}/rating). ADR 0062 decisions 1
+	// and 3 were reversed by the owner rule of 11/10/2026 (bug sheet row 60): staff may now record what a
+	// citizen said by phone or at the counter — but into `petition_staff_recorded_rating` (migration 0042,
+	// source `staff_recorded`), never into `diem_hai_long`, so no figure here can count one.
 	CitizenReportRatingSample CitizenReportMetric = "rating_sample"
 	// CitizenReportLowRating counts petitions rated at most LowRatingMaxStars — the SAME predicate as
 	// GET /api/v1/citizen-reports?rating_max=2, which is what web-admin's "Bị đánh giá thấp" sends.

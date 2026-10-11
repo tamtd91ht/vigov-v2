@@ -56,9 +56,16 @@ func TestDecisionWritesNoteInTheDecidingUpdate(t *testing.T) {
 			if u.args[5] != decisionNoteText {
 				t.Errorf("$6 = %#v, muốn ghi chú đã cắt khoảng trắng", u.args[5])
 			}
-			// The timeline entry keeps receiving the note exactly as before 0031.
-			if logs := k.cau("INSERT INTO nhat_ky_nhiem_vu"); len(logs) != 1 || !containsArg(logs[0].args, decisionNoteText) {
-				t.Error("nhật ký nhiệm vụ không còn mang ghi chú quyết định")
+			// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 (bug sheet row 17): the timeline entry used to BE the note; it
+			// now leads with the verdict and the two dates, and the note follows on its own line — so a
+			// note can no longer hide whether the request was approved or refused.
+			logs := k.cau("INSERT INTO nhat_ky_nhiem_vu")
+			if len(logs) != 1 {
+				t.Fatalf("ghi %d dòng nhật ký, muốn 1", len(logs))
+			}
+			text, _ := logs[0].args[8].(string)
+			if !strings.HasSuffix(text, "\n"+decisionNoteText) {
+				t.Errorf("nhật ký nhiệm vụ không mang ghi chú quyết định sau dòng kết quả: %q", text)
 			}
 		})
 	}

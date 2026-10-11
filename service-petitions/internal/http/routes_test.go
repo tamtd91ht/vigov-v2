@@ -261,6 +261,9 @@ type mayChu struct {
 	merge *mergeActsFake
 	links *mergeLinksFake
 	dups  *duplicateCandidatesFake
+
+	// The staff-recorded rating — petition_staff_recorded_rating_test.go.
+	staffRatings *staffRatingsFake
 }
 
 func dungMayChu(t *testing.T) *mayChu {
@@ -324,6 +327,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	unitNames := newUnitNamesFake()
 	// Merging duplicate petitions — citizen_report_merge_test.go.
 	merge, links, dups := &mergeActsFake{}, &mergeLinksFake{}, &duplicateCandidatesFake{}
+	// The staff-recorded rating — petition_staff_recorded_rating_test.go.
+	staffRatings := &staffRatingsFake{}
 
 	m := &mayChu{
 		d: Deps{
@@ -394,6 +399,8 @@ func dungMayChu(t *testing.T) *mayChu {
 			CitizenReportMerge:  merge,
 			MergeLinks:          links,
 			DuplicateCandidates: dups,
+			// The staff-recorded rating — petition_staff_recorded_rating_test.go.
+			StaffRecordedRatings: staffRatings,
 			// The audit-log reader: present because Register refuses a nil one; its suite is
 			// audit_entries_test.go.
 			AuditLog: &auditLogFake{},
@@ -446,6 +453,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		merge: merge,
 		links: links,
 		dups:  dups,
+
+		staffRatings: staffRatings,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -568,6 +577,8 @@ func depsDay() Deps {
 		CitizenReportMerge:  &mergeActsFake{},
 		MergeLinks:          &mergeLinksFake{},
 		DuplicateCandidates: &duplicateCandidatesFake{},
+		// The staff-recorded rating.
+		StaffRecordedRatings: &staffRatingsFake{},
 	}
 }
 
@@ -640,6 +651,8 @@ func TestRegisterThieuPhuThuocThiPanicNgayLucDung(t *testing.T) {
 		// The per-pod upload cap (ADR 0052 §Sửa đổi 09/10/2026): without it a burst of uploads is how a
 		// 384 MiB pod is OOM-killed, taking every route with it.
 		"missing upload slots": func(d *Deps) { d.UploadSlots = nil },
+		// The staff-recorded rating: the petition DETAIL reads it, so a nil here is every drawer.
+		"missing staff-recorded rating": func(d *Deps) { d.StaffRecordedRatings = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			defer func() {

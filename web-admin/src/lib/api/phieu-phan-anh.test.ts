@@ -462,6 +462,11 @@ const KHOA_PHIEU_MONG_DOI = [
   "merged_petitions",
   "merged_at",
   "merged_by",
+  // Owner rule 11/10/2026 (bug sheet row 60, migration 0042 of service-petitions): the rating a citizen gave by
+  // phone or at the counter, RECORDED BY STAFF — `source` always `staff_recorded`, kept BESIDE `rating` (the
+  // citizen's own verdict, the only one any figure counts). Staff responses only; detail and the recording
+  // act's reply. Its `note` may name people (rule 3), shown under `feedback.read` like `rating_comment`.
+  "staff_recorded_rating",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */

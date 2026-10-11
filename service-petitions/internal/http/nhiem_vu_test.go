@@ -349,7 +349,9 @@ func TestAllowedTransitionsOnDetailAndList(t *testing.T) {
 
 	w := m.goi(t, http.MethodGet, hostA, duongNhiemVu(maNhiemVuA), canBoCuaXa(xaA))
 	doiMa(t, w, http.StatusOK)
-	if got := strings.Join(docNhiemVu(t, w.Body.Bytes()).AllowedTransitions, ","); got != "cho-duyet,hoan-thanh,tam-dung" {
+	// ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026: `chuyen-tiep` is listed again from dang-thuc-hien (owner rule "chuẩn
+	// là prototype", bug sheet row 17); from 28/09 this test asserted it was never listed.
+	if got := strings.Join(docNhiemVu(t, w.Body.Bytes()).AllowedTransitions, ","); got != "cho-duyet,hoan-thanh,tam-dung,chuyen-tiep" {
 		t.Errorf("chi tiết dang-thuc-hien: allowed_transitions = %q", got)
 	}
 
@@ -358,15 +360,10 @@ func TestAllowedTransitionsOnDetailAndList(t *testing.T) {
 	if !strings.Contains(w.Body.String(), `"allowed_transitions":[`) {
 		t.Errorf("sổ không mang allowed_transitions dạng mảng: %s", w.Body.String())
 	}
-	muon := map[string]string{maNhiemVuA: "cho-duyet,hoan-thanh,tam-dung", maNhiemVuXo: "dang-thuc-hien"}
+	muon := map[string]string{maNhiemVuA: "cho-duyet,hoan-thanh,tam-dung,chuyen-tiep", maNhiemVuXo: "dang-thuc-hien"}
 	for _, it := range docTrangNhiemVu(t, w.Body.Bytes()).Items {
 		if got := strings.Join(it.AllowedTransitions, ","); got != muon[it.Code] {
 			t.Errorf("sổ %s: allowed_transitions = %q, muốn %q", it.Code, got, muon[it.Code])
-		}
-		for _, s := range it.AllowedTransitions {
-			if s == string(domain.ChuyenTiep) {
-				t.Errorf("sổ %s liệt kê chuyen-tiep — chuyển tiếp là thao tác giao lại", it.Code)
-			}
 		}
 	}
 }

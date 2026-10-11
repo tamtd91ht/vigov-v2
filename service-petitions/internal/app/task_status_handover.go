@@ -4,8 +4,10 @@ package app
 // `attachments` — the prototype's "Cập nhật và giao việc" (vigov-require TaskStatusPipeline.tsx,
 // service.py report_progress_with_files). USER DECISION 07/10/2026, for THIS combined path only:
 //
-//	the status   lands in the status the officer CHOSE, never `moi-giao` (domain.ResetStatus is NOT
-//	             called here; the standalone assignment act still calls it)
+//	the status   lands in the status the officer CHOSE — `chuyen-tiep` included since the owner rule of
+//	             11/10/2026 (bug sheet row 17; the prototype's branch chip "Chuyển tiếp" with handover
+//	             fields, TaskStatusPipeline.tsx). domain.HandoverStatus is NOT called here; the
+//	             standalone assignment act calls it
 //	who          a holder of `task.assign` OR the current assignee (domain.CheckMayHandOver)
 //
 // # ONE TRANSACTION (rule 6, invariant 3; rule 2, invariant 6)

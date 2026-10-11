@@ -62,14 +62,20 @@ const (
 // those still have them — but they are not on the way any more." So `da-tiep-nhan` and `cho-duyet`
 // are OPTIONAL steps, not gates.
 //
-// # THE DEPARTURES FROM REQUIRE, EACH A DECISION OF THE USER ON 28/09/2026
+// # `chuyen-tiep` IS A BRANCH TARGET AGAIN — OWNER RULE 11/10/2026 ("chuẩn là prototype")
 //
-//	chuyen-tiep AS A TARGET   dropped from every list. Forwarding is the assignment act on the SAME row
-//	                          (POST /api/v1/tasks/{ma}/assignment, commit 764bb92), and CheckStatusTarget
-//	                          refuses the code with a sentence naming that act. Require lists it from
-//	                          moi-giao, da-tiep-nhan and dang-thuc-hien.
-//	chuyen-tiep AS A SOURCE   kept as require has it: legacy rows already there move on to
-//	                          da-tiep-nhan / dang-thuc-hien, so they are no longer dead ends.
+// The 28/09/2026 decision dropped `chuyen-tiep` as a target and made forwarding the assignment act
+// alone. The customer bug sheet (row 17, "Khi giao việc, chuyển việc sẽ update thành trạng thái rẽ
+// nhánh") and the owner's rule of 11/10/2026 restore require's table here: `chuyen-tiep` is reachable
+// from moi-giao, da-tiep-nhan and dang-thuc-hien (require ALLOWED_TRANSITIONS, service.py:63-102), and
+// the status route may carry a handover with it (task_status_handover.go). The assignment act lands in
+// `chuyen-tiep` on a FORWARDING (domain.HandoverStatus). ADR to amend: the 28/09 decision note
+// (PHAN_CHUA_DUNG #1) and ADR 0076 #4c.
+//
+// # THE DEPARTURES FROM REQUIRE THAT REMAIN, EACH A DECISION OF THE USER ON 28/09/2026
+//
+//	chuyen-tiep AS A SOURCE   as require has it: a forwarded row moves on to da-tiep-nhan /
+//	                          dang-thuc-hien when the new holder takes it up.
 //	approval                  the map says only which moves EXIST. Both moves OUT of `cho-duyet`
 //	                          (sign-off and the return, owner decisions 27/09 and 30/09/2026) and the
 //	                          reopen OUT of `hoan-thanh` additionally need `task.approve` — NeedsApproval,
@@ -96,9 +102,9 @@ const (
 // THE ORDER OF EACH LIST IS THE ORDER A SCREEN SHOWS THE CHOICES IN (allowed_transitions): forward
 // steps first, then the side steps. Go map iteration is random; these slices are not.
 var chuyenDuocSangNhiemVu = map[TrangThaiNhiemVu][]TrangThaiNhiemVu{
-	MoiGiao:      {DaTiepNhanNV, DangThucHien, TamDung},
-	DaTiepNhanNV: {DangThucHien, TamDung},
-	DangThucHien: {ChoDuyet, HoanThanh, TamDung},
+	MoiGiao:      {DaTiepNhanNV, DangThucHien, TamDung, ChuyenTiep},
+	DaTiepNhanNV: {DangThucHien, TamDung, ChuyenTiep},
+	DangThucHien: {ChoDuyet, HoanThanh, TamDung, ChuyenTiep},
 	ChoDuyet:     {HoanThanh, DangThucHien},
 	TamDung:      {MoiGiao, DaTiepNhanNV, DangThucHien},
 	ChuyenTiep:   {DaTiepNhanNV, DangThucHien},

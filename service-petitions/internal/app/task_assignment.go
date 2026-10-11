@@ -2,12 +2,19 @@ package app
 
 // The assignment act on a task — POST /api/v1/tasks/{ma}/assignment, `task.assign`.
 //
-// OWNER DECISIONS 28/09/2026, and this file implements them rather than restating them (the rules
-// themselves are in domain/task_assignment.go):
+// OWNER DECISIONS 28/09/2026 AND THE RULE OF 11/10/2026, and this file implements them rather than
+// restating them (the rules themselves are in domain/task_assignment.go):
 //
 //	"Chuyển tiếp" = the SAME row handed to another unit or person — one act with "đổi bộ phận /
 //	người thực hiện" (PHAN_CHUA_DUNG #1).
-//	Unit or assignee changed -> `moi-giao`. The deadline is never touched.
+//	ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 ("chuẩn là prototype", bug sheet row 17): holder changed WITH a
+//	reason (`note`) -> `chuyen-tiep`; without one -> status unchanged. Until 11/10 every holder change
+//	went back to `moi-giao` (28/09 decision, ADR 0076 #4c — both to be amended). The deadline is never
+//	touched.
+//
+// NOTIFYING ON A FORWARDING: kind 18 below, the same as any hand-over — prototype transfer_task tells the
+// new assignee "Nhiệm vụ được chuyển tới bạn"; the move into `chuyen-tiep` owes nobody else a notice (no
+// row of ADR 0086 names it).
 //
 // ONE ROLE SINCE ADR 0065 NV5 (user decision 30/09/2026): the lead unit IS the unit and the monitoring
 // officer IS the assignee. Changing "chuyên viên theo dõi" is changing the assignee, through this act;
@@ -123,7 +130,9 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 			// idem.KhongCan declaration rests on.
 			return domain.ErrAssignmentNoChange
 		}
-		after.TrangThai = domain.ResetStatus(before, after)
+		// A non-empty note IS the prototype's "Lý do chuyển": with it the act is a forwarding and lands in
+		// `chuyen-tiep`; without it the status stays (owner rule 11/10/2026, domain.HandoverStatus).
+		after.TrangThai = domain.HandoverStatus(before, after, note != "")
 
 		if err := uc.kho.Reassign(ctx, tx, before.ID, before.TrangThai, after); err != nil {
 			return err
@@ -156,8 +165,11 @@ func (uc *GhiNhiemVu) Reassign(ctx context.Context, ma string, req TaskAssignmen
 			"truoc":              assignmentAuditFields(before),
 			"sau":                assignmentAuditFields(after),
 			"dat_lai_trang_thai": after.TrangThai != before.TrangThai,
-			"han_xu_ly":          lucRaVet(after.HanXuLy),
-			"do_dai_ghi_chu":     len([]rune(note)),
+			// THE FORWARDING, named: an inspection asks "which hand-overs were transfers with a reason".
+			// The reason's TEXT stays out (do_dai_ghi_chu below), as before.
+			"chuyen_tiep":    after.TrangThai == domain.ChuyenTiep && before.TrangThai != domain.ChuyenTiep,
+			"han_xu_ly":      lucRaVet(after.HanXuLy),
+			"do_dai_ghi_chu": len([]rune(note)),
 		})
 		if err != nil {
 			return fmt.Errorf("nhiem_vu: mã hoá delta: %w", err)

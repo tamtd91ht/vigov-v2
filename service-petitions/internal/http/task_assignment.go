@@ -30,8 +30,11 @@ import (
 type taskAssignmentIn struct {
 	Unit     *string `json:"unit,omitempty"`
 	Assignee *string `json:"assignee,omitempty"`
-	// Note is the officer's optional line; it goes on the timeline under the generated from→to
-	// sentence, and only its LENGTH reaches the audit entry (it may name a citizen's case).
+	// Note is the officer's optional line — the prototype's "Lý do chuyển". It goes on the timeline under
+	// the generated from→to sentence, and only its LENGTH reaches the audit entry (it may name a citizen's
+	// case). ON THIS ROUTE A NON-EMPTY NOTE MAKES THE ACT A FORWARDING (owner rule 11/10/2026): a holder
+	// change lands the task in `chuyen-tiep`; with no note the status is unchanged. Inside the status
+	// route's `handover` it is only the line — the status there is the one chosen.
 	Note string `json:"note,omitempty"`
 }
 

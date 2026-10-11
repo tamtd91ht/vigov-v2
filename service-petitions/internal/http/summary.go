@@ -125,8 +125,9 @@ type citizenReportSummaryOut struct {
 	OnTime       int `json:"on_time"`
 	Late         int `json:"late"`
 
-	// RatingSample is the number of petitions carrying a CITIZEN's rating (ADR 0062 decision 2 — staff
-	// cannot record one). Drill-down: `metric=rating_sample`.
+	// RatingSample is the number of petitions carrying a CITIZEN's rating (ADR 0062 decision 2). A rating
+	// STAFF recorded on the citizen's behalf (owner rule 11/10/2026, migration 0042) is never counted: it
+	// lives in its own table and this figure reads `diem_hai_long` only. Drill-down: `metric=rating_sample`.
 	RatingSample *int `json:"rating_sample,omitempty"`
 	// RatingSum is the sum of their stars, 1–5 each.
 	RatingSum *int `json:"rating_sum,omitempty"`

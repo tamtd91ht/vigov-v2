@@ -204,13 +204,15 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		CitizenReportMerge:  &mergeActsFake{},
 		MergeLinks:          &mergeLinksFake{},
 		DuplicateCandidates: &duplicateCandidatesFake{},
-		TaskFilterIdentity:  taskFilterIdentitySample(),
-		TaskRegisterExport:  &registerExportFake{},
-		TaskImport:          &taskImportFake{},
-		AuditLog:            &auditLogFake{},
-		SystemMessages:      &systemMessagesFake{},
-		UploadSlots:         uploadSlotsThu(),
-		Log:                 im,
+		// The staff-recorded rating — present because Register refuses a nil.
+		StaffRecordedRatings: &staffRatingsFake{},
+		TaskFilterIdentity:   taskFilterIdentitySample(),
+		TaskRegisterExport:   &registerExportFake{},
+		TaskImport:           &taskImportFake{},
+		AuditLog:             &auditLogFake{},
+		SystemMessages:       &systemMessagesFake{},
+		UploadSlots:          uploadSlotsThu(),
+		Log:                  im,
 	})
 
 	var h http.Handler = mux

@@ -1396,8 +1396,8 @@ func chuanHoaSuaNhiemVu(sua *petstore.SuaNhiemVu) error {
 // unambiguously and a target on the wire would let a client skip steps. The task lifecycle (require
 // 52ec9b5's table since 28/09/2026) BRANCHES at every state — optional steps, pause, return, reopen
 // — so there is no single "next", and the server's job is to refuse the moves the map does not
-// have rather than to choose among them. (`chuyen-tiep` was the second branch until 28/09/2026; it
-// is now the assignment act, task_assignment.go.)
+// have rather than to choose among them. (`chuyen-tiep` was refused as a target from 28/09 to
+// 11/10/2026; the owner rule of 11/10/2026 made it the second branch again, as the prototype has it.)
 type YeuCauDoiTrangThai struct {
 	TrangThai string
 
@@ -1413,8 +1413,8 @@ type YeuCauDoiTrangThai struct {
 
 	// Handover is the OPTIONAL "Cập nhật và giao việc" (user decision 07/10/2026): the same unit /
 	// assignee change the assignment act takes, applied in THIS transaction, landing the task in the
-	// status chosen above rather than `moi-giao`. nil = no handover, and the move is exactly what it was
-	// before the field existed. Rules: task_status_handover.go.
+	// status chosen above (`chuyen-tiep` included since 11/10/2026). nil = no handover, and the move is
+	// exactly what it was before the field existed. Rules: task_status_handover.go.
 	Handover *TaskAssignmentRequest
 
 	// AssignRight is the caller's answer to "does this account hold `task.assign`" — a FACT the handler
@@ -1471,8 +1471,8 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 	nguoi audit.Actor, duyet QuyenDuyetHoanThanh, update TaskUpdateRight) (domain.NhiemVu, error) {
 
 	moiTT := domain.TrangThaiNhiemVu(yc.TrangThai)
-	// BEFORE THE TRANSACTION: an unknown code and the retired `chuyen-tiep` target (owner decision
-	// 28/09/2026 — forwarding is now the assignment act) are refused without taking a row lock.
+	// BEFORE THE TRANSACTION: an unknown code is refused without taking a row lock. (`chuyen-tiep` is a
+	// valid target again since the owner rule of 11/10/2026.)
 	if err := domain.CheckStatusTarget(moiTT); err != nil {
 		return domain.NhiemVu{}, err
 	}
@@ -1839,6 +1839,15 @@ func (uc *GhiNhiemVu) DeNghiLuiHan(ctx context.Context, ma string, yc YeuCauDeNg
 			return err
 		}
 
+		// THE TIMELINE ROW (bug sheet row 17, owner rule 11/10/2026) — in this transaction, so the request,
+		// its row, its audit entry and the leader's notice commit together or not at all. The author is the
+		// acting STAFF BUSINESS CODE (rule 6, invariant 8); the status chip is the status the task is still
+		// in — a request moves no status.
+		if err := uc.ghiNhatKy(ctx, tx, n, bayGio, nguoi.ID,
+			domain.ExtensionRequestLogText(n.HanXuLy, yc.HanMoi, lyDo)); err != nil {
+			return err
+		}
+
 		// THE REASON TEXT IS NOT IN THE DELTA, ITS LENGTH IS — see Xoa. What the entry does carry is
 		// the pair of dates, because "what was asked for, against what stood" is the question an
 		// inspection asks when a deadline has slipped.
@@ -1969,13 +1978,11 @@ func (uc *GhiNhiemVu) QuyetDinhLuiHan(ctx context.Context, ma, deNghiID string,
 		// THE TIMELINE RECORDS IT TOO, because §5.9's drawer is where an officer finds out their
 		// request was answered. The task's status did not move, so the entry carries the status it
 		// is still in.
-		noiDung := ghiChu
-		if noiDung == "" {
-			noiDung = "Từ chối đề nghị lùi hạn."
-			if yc.Duyet {
-				noiDung = "Duyệt đề nghị lùi hạn."
-			}
-		}
+		//
+		// THE VERDICT AND THE TWO DATES ARE ALWAYS IN THE ROW, the leader's note after them (bug sheet row
+		// 17, 11/10/2026). Until then a decision WITH a note wrote the note alone, and the timeline could
+		// not say whether that note approved or refused.
+		noiDung := domain.ExtensionDecisionLogText(yc.Duyet, n.HanXuLy, dn.HanMoi, ghiChu)
 		if err := uc.ghiNhatKy(ctx, tx, n, bayGio, nguoi.ID, noiDung); err != nil {
 			return err
 		}

@@ -107,8 +107,9 @@ type nhiemVuRa struct {
 	// answer 403 without `task.approve`; the direct `dang-thuc-hien` → `hoan-thanh` needs no key since
 	// ADR 0065 NV1, so the assignee's `hoan-thanh` choice is a real one. Completing a parent with
 	// unfinished sub-tasks, or reopening a child under a finished parent, is listed and answers 409.
-	// All are decided on the row under the lock, never from this list. `chuyen-tiep` is never listed —
-	// forwarding is POST …/assignment.
+	// All are decided on the row under the lock, never from this list. `chuyen-tiep` IS listed from
+	// moi-giao, da-tiep-nhan and dang-thuc-hien since the owner rule of 11/10/2026 (the prototype's branch
+	// chip; from 28/09 to 11/10 it was never listed).
 	//
 	// ALWAYS AN ARRAY, never null: `[]` is "no move from here" (a status no map knows).
 	AllowedTransitions []string `json:"allowed_transitions"`

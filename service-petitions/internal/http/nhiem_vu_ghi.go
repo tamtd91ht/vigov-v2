@@ -270,8 +270,8 @@ type suaNhiemVuVao struct {
 // THE TARGET IS ON THE WIRE HERE AND IS NOT ON THE PETITION PATH, and the difference is the shape of
 // the two lifecycles: §6's task lifecycle BRANCHES — `tam-dung` leaves all four working states — so
 // there is no single "next" for the server to choose. What the server still owns is the MAP: a move
-// the diagram does not draw is refused. `chuyen-tiep` is refused with 400 since 28/09/2026: forwarding
-// is the assignment act (POST …/assignment), and the refusal says so.
+// the diagram does not draw is refused. `chuyen-tiep` is an ordinary target again since the owner rule
+// of 11/10/2026 (it answered 400 from 28/09 to 11/10/2026), usually sent WITH `handover`.
 type doiTrangThaiVao struct {
 	Status string `json:"status"`
 	// Note becomes the timeline entry (§5.9). Optional: when it is empty the entry carries a
@@ -287,7 +287,7 @@ type doiTrangThaiVao struct {
 	// Handover is the OPTIONAL "Cập nhật và giao việc" (user decision 07/10/2026): THE SAME SHAPE as the
 	// body of POST …/assignment (`unit`, `assignee`, `note`; absent = leave, "" = clear, `unit` may not be
 	// cleared; `lead_unit` / `monitor` refused 400 inside it too). Applied in the same transaction, and
-	// the task lands in `status`, NOT `moi-giao`. Allowed to a holder of `task.assign` or the task's
+	// the task lands in `status` (which may be `chuyen-tiep`). Allowed to a holder of `task.assign` or the task's
 	// current assignee; anybody else 403. Absent = no handover, the move as before (rule 2, invariant 4).
 	Handover *taskAssignmentIn `json:"handover,omitempty"`
 

@@ -611,6 +611,10 @@ type Deps struct {
 	MergeLinks          CitizenReportMergeLinks
 	DuplicateCandidates CitizenReportDuplicateCandidates
 
+	// THE STAFF-RECORDED RATING (owner rule 11/10/2026, bug sheet row 60; migration 0042) — the act and the
+	// detail's read. routes_staff_recorded_rating.go refuses it nil, because GET …/{maTraCuu} reads it too.
+	StaffRecordedRatings StaffRecordedRatingActs
+
 	// ResidentialUnitNames names the thôn / tổ dân phố a petition carries (ADR 0088) on the staff detail,
 	// list and write responses — *identityclient.Client in production. nil is NOT refused at construction
 	// (most routes never need it); a read that needs a name then answers 503, never a blank name.
@@ -764,6 +768,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	registerCitizenReportFigureRoutes(mux, d, h)
 	// Merging duplicate petitions (ADR 0087) — three routes (routes_citizen_report_merge.go).
 	registerCitizenReportMergeRoutes(mux, d, h)
+	// The staff-recorded rating (owner rule 11/10/2026) — one route (routes_staff_recorded_rating.go).
+	registerStaffRecordedRatingRoutes(mux, d, h)
 
 	// --- the commune's task catalogues. TWO READ ROUTES, AND DELIBERATELY NO WRITE ROUTE --------
 	//
@@ -2078,7 +2084,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// "CẬP NHẬT VÀ GIAO VIỆC" (user decision 07/10/2026): the body may carry an OPTIONAL `handover` —
 	// the shape of POST …/assignment's body — and OPTIONAL `attachments` (completed uploads of the same
 	// officer for this task). Both ride in the move's ONE transaction (app/task_status_handover.go). The
-	// handover lands the task in `status`, NOT `moi-giao` (the standalone assignment act is unchanged);
+	// handover lands the task in `status` — `chuyen-tiep` included since the owner rule of 11/10/2026;
 	// it is allowed to a holder of `task.assign` — asked here with Checker.Allows, a seeded key — OR the
 	// task's current assignee, 403 otherwise; a finished task is refused 409 `task_state` as the
 	// assignment act refuses it; identity refusing the unit/assignee is 400, identity down 503. The files
@@ -2089,7 +2095,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// refused (409, or 403 once the holder moved) before anything is written, and a file can be linked
 	// only once.
 	//
-	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, không về `moi-giao`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch
+	// @summary  Chuyển trạng thái một nhiệm vụ theo vòng đời, kèm ghi nhật ký — hoàn thành cần mọi việc con đã xong, và cần quyền duyệt nếu việc đang chờ duyệt; trả lại để làm tiếp cần quyền duyệt và lý do; mở lại việc đã hoàn thành cần quyền duyệt, lý do, và việc cha chưa hoàn thành; tuỳ chọn kèm giao việc (`handover`, cho người có quyền giao nhiệm vụ hoặc người đang thực hiện — nhiệm vụ sang đúng trạng thái đã chọn, kể cả nhánh `chuyen-tiep`) và tệp đính kèm (`attachments`) gắn vào dòng nhật ký của lần chuyển này, tất cả trong một giao dịch
 	// @screen   02-nhiem-vu §6
 	// @request  doiTrangThaiVao
 	// @reply    200 nhiemVuRa
@@ -2108,8 +2114,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// GIAO LẠI / CHUYỂN TIẾP (§5.4, §10) — `task.assign`, seeded at service-identity/migrations/0001_init.sql:307 ("Giao nhiệm vụ").
 	//
 	// OWNER DECISION 28/09/2026: "Chuyển tiếp" is the SAME task handed to another unit or person, and
-	// it is one act with "đổi bộ phận / người thực hiện". A change of unit or assignee sends the task
-	// back to `moi-giao` so the new holder acknowledges it.
+	// it is one act with "đổi bộ phận / người thực hiện". ĐỔI CHIỀU CÓ CHỦ Ý 11/10/2026 (owner rule
+	// "chuẩn là prototype", bug sheet row 17): a holder change WITH a `note` (the prototype's "Lý do
+	// chuyển") is a forwarding and lands the task in the branch status `chuyen-tiep`; WITHOUT one the
+	// status is unchanged — the prototype's transfer / assign pair (domain.HandoverStatus). Until 11/10
+	// every holder change went back to `moi-giao`.
 	//
 	// ONE ROLE SINCE ADR 0065 NV5 (user decision 30/09/2026): "Cơ quan chủ trì tham mưu" IS `unit` and
 	// "Chuyên viên theo dõi" IS `assignee`, so changing the monitoring officer is changing `assignee`
@@ -2129,7 +2138,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// every field already applied — the use case writes nothing and answers 409 `no_change`. One row,
 	// one timeline entry, one audit entry.
 	//
-	// @summary  Giao lại một nhiệm vụ (chuyển tiếp) cho bộ phận/người khác — đổi bộ phận/người thực hiện thì về `moi-giao`, hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện
+	// @summary  Giao việc / chuyển việc một nhiệm vụ cho bộ phận/người khác — có lý do (`note`) là chuyển việc, nhiệm vụ sang nhánh `chuyen-tiep`; không lý do thì giữ trạng thái; hạn giữ nguyên; chủ trì và theo dõi đã gộp vào bộ phận/người thực hiện
 	// @screen   02-nhiem-vu §5.4
 	// @request  taskAssignmentIn
 	// @reply    200 nhiemVuRa

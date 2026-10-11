@@ -400,6 +400,9 @@ func chay(log *slog.Logger) error {
 		CitizenReportMerge:  petitionActs,
 		MergeLinks:          phieu,
 		DuplicateCandidates: app.NewDuplicateCandidates(phieu, petstore.NewPetitionSettingsStore(kho)),
+		// The staff-recorded rating (owner rule 11/10/2026, migration 0042): the SAME register store locks the
+		// petition the citizen's own rating locks; the record lives in its own table.
+		StaffRecordedRatings: app.NewStaffRecordedRatings(kho, phieu, petstore.NewPetitionStaffRatingStore(kho)),
 		// "Nhập hộ phản ánh" (§11): the SAME petition store, outbox store and identity client as the
 		// citizen intake, and the SAME field catalogue — under the staff rule (CheckStaffIntakeField).
 		// The SAME client checks the officer's residential unit (ADR 0088).

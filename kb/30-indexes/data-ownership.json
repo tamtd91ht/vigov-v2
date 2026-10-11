@@ -138,6 +138,13 @@
       "source": "service-documents/migrations/0006_citizen_letter.sql:403"
     },
     {
+      "entity": "CitizenLetterType",
+      "service": "documents",
+      "scope": "tenant",
+      "table": "citizen_letter_type",
+      "source": "service-documents/migrations/0010_citizen_letter_type.sql:25"
+    },
+    {
       "entity": "CitizenNotification",
       "service": "comms",
       "scope": "tenant",
@@ -430,6 +437,13 @@
       "scope": "tenant",
       "table": "petition_settings",
       "source": "service-petitions/migrations/0028_petition_settings.sql:85"
+    },
+    {
+      "entity": "PetitionStaffRecordedRating",
+      "service": "petitions",
+      "scope": "tenant",
+      "table": "petition_staff_recorded_rating",
+      "source": "service-petitions/migrations/0042_petition_staff_recorded_rating.sql:54"
     },
     {
       "entity": "PetitionsCustomSystemMessage",

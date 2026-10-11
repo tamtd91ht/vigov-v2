@@ -170,7 +170,7 @@ func LoiDauVaoNhiemVuGoc(err error) error {
 		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai, ErrThieuLyDoTraLai, ErrReopenReasonMissing,
 		ErrTomTatKetQuaQuaDai, ErrGhiChuNhiemVuQuaDai,
 		ErrTrangThaiNhiemVuKhongBiet, ErrThieuLyDoLuiHan, ErrHanMoiKhongLui,
-		ErrForwardingIsAssignment, ErrDueAtEmpty,
+		ErrDueAtEmpty,
 		ErrAssignmentEmpty, ErrAssignmentUnitEmpty, ErrAssignmentFieldTooLong,
 	} {
 		if errors.Is(err, mot) {
@@ -481,31 +481,16 @@ var ErrTrangThaiNhiemVuKhongBiet = errors.New(
 var ErrChuyenTrangThaiNhiemVuSaiLuc = errors.New(
 	"nhiệm vụ: vòng đời không có bước chuyển này từ trạng thái hiện tại")
 
-// ErrForwardingIsAssignment refuses `chuyen-tiep` as the target of a status move.
-//
-// OWNER DECISION 28/09/2026: "Chuyển tiếp" is the SAME task handed to another unit or person, which is
-// the assignment act (POST /api/v1/tasks/{ma}/assignment, `task.assign`). A status move into
-// `chuyen-tiep` would park the row in a terminal state with nobody holding the work, while the
-// deadline kept running — so the move is refused with a sentence naming the act that does it.
-//
-// A SENTINEL OF ITS OWN, NOT ErrChuyenTrangThaiNhiemVuSaiLuc: "the lifecycle has no such move" would
-// send the caller looking for a status to pass through first, and there is none.
-var ErrForwardingIsAssignment = errors.New(
-	"nhiệm vụ: chuyển tiếp nay là thao tác giao lại cho bộ phận/người khác " +
-		"(POST /api/v1/tasks/{ma}/assignment, quyền task.assign), không còn là một trạng thái để chuyển sang")
-
 // CheckStatusTarget is the part of a move's check that depends on the TARGET alone: one of the seven
-// codes, and not the retired `chuyen-tiep`.
+// codes. Called BEFORE THE TRANSACTION (app.DoiTrangThai) AND INSIDE ChuyenTrangThaiDuoc.
 //
-// ONE FUNCTION, CALLED BEFORE THE TRANSACTION (app.DoiTrangThai) AND INSIDE ChuyenTrangThaiDuoc, so the
-// refusal of `chuyen-tiep` is written once. `chuyen-tiep` STAYS a valid code (HopLe) — rows that hold
-// it are records (rule 7) and every read path still renders them.
+// `chuyen-tiep` IS AN ORDINARY TARGET AGAIN — owner rule 11/10/2026 ("chuẩn là prototype", bug sheet
+// row 17). From 28/09 to 11/10/2026 it was refused here with ErrForwardingIsAssignment (forwarding was
+// the assignment act only); that sentinel is gone. Whether the move exists from the CURRENT status is
+// the lifecycle map's question (chuyenDuocSangNhiemVu), as for every other target.
 func CheckStatusTarget(moi TrangThaiNhiemVu) error {
 	if !moi.HopLe() {
 		return ErrTrangThaiNhiemVuKhongBiet
-	}
-	if moi == ChuyenTiep {
-		return ErrForwardingIsAssignment
 	}
 	return nil
 }
@@ -626,8 +611,8 @@ func ReopenLogText(completedAt time.Time, note string) string {
 	return line
 }
 
-// ChuyenTrangThaiDuoc is the whole shape check for ONE move: a known target that is not the retired
-// `chuyen-tiep`, and a move the lifecycle map has from the current status.
+// ChuyenTrangThaiDuoc is the whole shape check for ONE move: a known target, and a move the lifecycle
+// map has from the current status.
 //
 // A PLAIN LOOKUP FROM EVERY STATUS, `tam-dung` INCLUDED, since 28/09/2026 (see chuyenDuocSangNhiemVu):
 // the resume-to-previous-state rule and its timeline read were dropped to follow require.
@@ -792,6 +777,50 @@ func KiemLyDoLuiHan(s string) (string, error) {
 		return "", ErrLyDoNhiemVuQuaDai
 	}
 	return s, nil
+}
+
+// ExtensionRequestLogText is the task-timeline row of an extension REQUEST (bug sheet row 17, "hiển thị
+// log đề nghị lùi hạn"; owner rule 11/10/2026). ExtensionDecisionLogText is the row of its decision.
+//
+// THE WORDING IS THE PROTOTYPE'S. vigov-require writes no progress row for either act, but names them on
+// the same drawer: the request box "Gửi đề nghị lùi hạn", the history line "{hạn cũ} → {hạn mới}" with
+// "chờ duyệt" / "đã duyệt" / "từ chối" (TaskDetailDrawer.tsx:538-642), the buttons "Duyệt lùi hạn" /
+// "Từ chối". The row repeats those words so the timeline reads like that box.
+//
+// THE REASON GOES ON THE TIMELINE, NOT IN THE AUDIT ENTRY. The timeline is the commune's business record
+// the drawer already shows (the request's reason is on the same drawer); `audit_log` keeps only its
+// length (DeNghiLuiHan). Bounded: a reason is ≤ LyDoNhiemVuToiDa, so the request row always fits
+// NoiDungNhatKyToiDa. A decision note may itself be up to NoiDungNhatKyToiDa — the decision row is then
+// refused (400) rather than truncated, ReopenLogText's precedent: a cut sentence in an append-only table
+// can never be completed.
+//
+// LOCAL TIME, NOT RFC 3339 — unlike ReopenLogText. These dates are what the officer typed and the leader
+// decides on, and they are read on the timeline as the drawer shows them; AutomationZone is a fixed +07:00
+// with no daylight saving, so "17:00 ngày 26/09/2026" names one instant for ever.
+func ExtensionRequestLogText(current, requested time.Time, reason string) string {
+	return fmt.Sprintf("Gửi đề nghị lùi hạn: %s → %s (chờ duyệt)\nLý do: %s",
+		extensionLogInstant(current), extensionLogInstant(requested), reason)
+}
+
+// ExtensionDecisionLogText — see ExtensionRequestLogText. `current` is the deadline the request was filed
+// against as it stands at the decision; the leader's optional note follows on its own line.
+func ExtensionDecisionLogText(approved bool, current, requested time.Time, note string) string {
+	verb := "Từ chối đề nghị lùi hạn"
+	if approved {
+		verb = "Duyệt lùi hạn"
+	}
+	line := fmt.Sprintf("%s: %s → %s", verb, extensionLogInstant(current), extensionLogInstant(requested))
+	if note != "" {
+		line += "\n" + note
+	}
+	return line
+}
+
+func extensionLogInstant(t time.Time) string {
+	if t.IsZero() {
+		return "chưa đặt"
+	}
+	return FormatLocalInstant(t)
 }
 
 // DuocDeNghiLuiHan decides whether THIS task can carry an extension request at all.

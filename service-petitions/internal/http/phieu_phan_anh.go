@@ -239,7 +239,8 @@ type phieuPhanAnhRa struct {
 
 	// Rating, RatingComment and RatedAt are the CITIZEN'S verdict (ADR 0050 point 2) — `diem_hai_long`,
 	// `rating_comment`, `danh_gia_luc`. ABSENT until the citizen rates; a later rating replaces an
-	// earlier one (the earlier one is in the audit trail).
+	// earlier one (the earlier one is in the audit trail). NEVER a staff-recorded rating: that is
+	// StaffRecordedRating below (owner rule 11/10/2026, ADR 0062 decisions 1/3 reversed, decision 2 kept).
 	//
 	// RatingComment IS CITIZEN FREE TEXT AND FOLLOWS `content` EXACTLY: not masked (an officer who
 	// cannot read "rác vẫn còn ở cuối ngõ" cannot act on it), shown to whoever may read the petition —
@@ -273,6 +274,13 @@ type phieuPhanAnhRa struct {
 	MergedAt        *time.Time `json:"merged_at,omitempty"`
 	MergedBy        string     `json:"merged_by,omitempty"`
 	MergedPetitions []string   `json:"merged_petitions,omitempty"`
+
+	// StaffRecordedRating is the rating a citizen gave by phone or at the counter, RECORDED BY STAFF (owner
+	// rule 11/10/2026, migration 0042) — `source` always `staff_recorded`. BESIDE `rating`, never merged into
+	// it: `rating` stays the citizen's own verdict and the only one any figure counts. Both may be present
+	// (staff recorded, then the citizen rated: the citizen's wins, this stays as history). On the DETAIL and
+	// on the recording act's reply only; absent elsewhere. STAFF SURFACE ONLY.
+	StaffRecordedRating *staffRecordedRatingOut `json:"staff_recorded_rating,omitempty"`
 }
 
 // phieuRaNgoai builds the response. `xemDayDu` is the ONLY switch between masked and full, and it
@@ -494,6 +502,16 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// THE STAFF-RECORDED RATING (owner rule 11/10/2026), before the disclosure decision for the same reason.
+	// Refused (500) rather than answered without it: a drawer that shows no record would offer the officer
+	// the recording block again, and the second click would answer 409 with nothing on screen to explain it.
+	staffRating, hasStaffRating, err := h.d.StaffRecordedRatings.ForPetition(ctx, p.ID)
+	if err != nil {
+		h.d.Log.Error("đọc đánh giá do cán bộ ghi nhận: lỗi hệ thống", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
 	// THE DISCLOSURE DECISION, LAST, AND THE TRAIL BEFORE THE BODY.
 	//
 	// Last on purpose: everything above can still fail with a 500, and an entry recording a
@@ -538,6 +556,9 @@ func (h *Handler) DocPhieuPhanAnh(w http.ResponseWriter, r *http.Request) {
 	ra := phieuRaNgoai(p, nhan, xemDayDu)
 	ra.ResidentialUnitName = unitNames[p.ThonID].Name
 	ra.MergedInto, ra.MergedPetitions = links.MainCode, links.ChildCodes
+	if hasStaffRating {
+		ra.StaffRecordedRating = staffRecordedRatingOutOf(staffRating)
+	}
 	vietJSON(w, http.StatusOK, ra)
 }
 

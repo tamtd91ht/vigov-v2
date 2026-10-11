@@ -606,7 +606,8 @@ func (s *NhiemVuStore) DoiTrangThai(ctx context.Context, tx *store.ScopedTx, id 
 // refuses `hoan-thanh` tasks (domain.CheckAssignable), so the column is NULL on every row this reaches.
 //
 // THE WHERE CLAUSE CARRIES THE EXPECTED STATUS, like DoiTrangThai: this act can move the lifecycle
-// (back to `moi-giao`), so two officers acting at once cannot both succeed.
+// (into `chuyen-tiep` on a forwarding, owner rule 11/10/2026), so two officers acting at once cannot
+// both succeed.
 func (s *NhiemVuStore) Reassign(ctx context.Context, tx *store.ScopedTx, id string,
 	expected domain.TrangThaiNhiemVu, n domain.NhiemVu) error {
 
