@@ -1,5 +1,5 @@
 /**
- * MỌI CHỮ NGƯỜI DÙNG ĐỌC TRÊN SÁU TÍNH NĂNG — một tệp, giống `content/company-profile.ts`.
+ * MỌI CHỮ NGƯỜI DÙNG ĐỌC TRÊN CÁC TÍNH NĂNG CỦA PHẦN GIỚI THIỆU VIHAT — một tệp, giống `content/company-profile.ts`.
  *
  * VÌ SAO TÁCH RA KHỎI COMPONENT:
  *
@@ -9,13 +9,11 @@
  *   giải thích nằm rải trong JSX là một câu không ai đọc lại trước khi nộp.
  *
  *   Tách ra còn để `bundle-for-zalo.test.ts` **dùng lại đúng danh sách này** khi khẳng định bản
- *   dựng nộp CÓ chứa đủ chữ của sáu tính năng. Một danh sách chép tay ở phía test sẽ lệch, và khi
+ *   dựng nộp CÓ chứa đủ chữ của các tính năng. Một danh sách chép tay ở phía test sẽ lệch, và khi
  *   nó lệch thì phép kiểm xanh vì không tìm thấy gì — chứ không vì bản dựng đúng.
  *
- * ⚠ KHÔNG CÂU NÀO Ở ĐÂY ĐƯỢC HỨA MỘT VIỆC BẢN DỰNG NÀY KHÔNG LÀM. Không có máy chủ nào nhận dữ
- * liệu, nên không câu nào được viết "chúng tôi sẽ lưu để…" hay "yêu cầu của bạn đã được gửi".
- * Mô tả sai cho người duyệt là thứ không sửa lại được sau đó — và mô tả sai cho một người đang
- * chờ được gọi lại thì tệ hơn thế.
+ * ⚠ KHÔNG CÂU NÀO Ở ĐÂY ĐƯỢC HỨA MỘT VIỆC ỨNG DỤNG KHÔNG LÀM. Mô tả sai cho người duyệt là thứ
+ * không sửa lại được sau đó — và mô tả sai cho một người đang chờ được gọi lại thì tệ hơn thế.
  *
  * ⚠ NGỮ CẢNH LÀ MỘT DOANH NGHIỆP CÔNG NGHỆ, KHÔNG PHẢI MỘT DỊCH VỤ CÔNG. ViHAT Group bán giải
  * pháp tổng đài đám mây, CRM và ứng dụng AI cho doanh nghiệp. Mọi câu ở đây nói với một khách
@@ -29,7 +27,8 @@
  * khai. Xem `content/chinh-sach-rieng-tu.ts`, khối "CHUYỂN QUYỀN SỞ HỮU APP".
  */
 /**
- * SÁU TÍNH NĂNG, CHÍN QUYỀN NỀN TẢNG. Thứ tự này là thứ tự hiện ra.
+ * BA TÍNH NĂNG (11/10/2026: "Số hoá thiếp giấy", "Kiểm tra đường truyền" and the office location request were
+ * removed by the owner). Thứ tự này là thứ tự hiện ra.
  *
  * MỘT TÍNH NĂNG CÓ THỂ CẦN HAI QUYỀN, VÀ ĐÓ LÀ LÝ DO HAI CON SỐ KHÔNG BẰNG NHAU: giữ màn hình
  * sáng và ghi tệp xuống máy là hai quyền, nhưng chúng phục vụ ĐÚNG MỘT việc người dùng làm —
@@ -105,7 +104,7 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
     ma: "thiep-cua-chung-toi",
     nhan_ngan: "Danh thiếp của chúng tôi",
     // TÊN CÔNG TY VIẾT THẲNG, KHÔNG GHÉP BẰNG `${COMPANY.name}`: một chuỗi ghép lúc chạy không có
-    // trong bundle, và ca "bản nộp có đủ chữ của sáu tính năng" trong `bundle-for-zalo.test.ts` bắt
+    // trong bundle, và ca "bản nộp có đủ chữ của các tính năng" trong `bundle-for-zalo.test.ts` bắt
     // đúng điều đó.
     tieu_de: "Danh thiếp số của ViHAT Group",
     vi_sao:
@@ -194,57 +193,23 @@ export const THIEP_CUA_CHUNG_TOI = {
  * có người chủ — chính mảng trên. Chép sang chính sách là tạo bản thứ hai của một sự thật, và
  * khi hai bản lệch nhau thì bản sai là bản nằm trong văn bản pháp lý (luật 9).
  *
- * ĐOẠN CUỐI NÓI CẢ HAI VẾ, CÓ CHỦ ĐÍCH. Người duyệt cần biết mục đích để cấp quyền; người dùng
- * cần biết bản họ đang cầm thật sự làm gì. Viết mỗi mục đích mà giấu việc bản này chưa truyền gì
- * là mô tả sai; viết mỗi "chưa làm gì" mà giấu mục đích là không đủ để xét duyệt. Nói cả hai.
+ * 11/10/2026 (owner): this is the ViHAT Group app's policy only — no commune, petition or ViGov sentence
+ * (`content/commune-privacy.ts` holds the commune interface's), and no sentence about the features removed that
+ * day (paper-card photo, network type, location for offices). Every paragraph that is not joined at run time is a
+ * literal, so `bundle-for-zalo.test.ts` can find it in the bundle.
  */
 export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
-  // 06/10/2026 DRAFT (`PENDING_APPROVAL_MARK`, `content/chinh-sach-rieng-tu.ts`): "đúng sáu tính năng" became
-  // false when the shared app opened from a commune QR began asking phone, location, camera, picker and Zalo
-  // name for petitions (`App.tsx` `QrCommuneApp`). The six features stay the intro's; the commune page is said.
-  // 07/10/2026: "Chat với chuyên viên" and "Nhận ưu đãi qua SMS" ask the phone (through the one-tap login) and,
-  // for the chat, the Zalo name — in the intro, so the intro is no longer "six features" only.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Trong phần giới thiệu, ứng dụng xin các quyền của nền tảng Zalo cho sáu tính năng dưới đây, và cho hai nút một chạm: 'Chat với chuyên viên' ở màn Liên hệ xin số điện thoại và tên Zalo của bạn để chuyên viên biết ai đang nhắn; 'Đăng ký nhận' ưu đãi SMS ở Trang chủ xin số điện thoại để gửi tin nhắn ưu đãi tới đúng số ấy. Trên trang của một xã, ứng dụng dùng thêm một số quyền ấy cho việc gửi phản ánh — số điện thoại, vị trí, máy ảnh và chọn ảnh — và xin thêm quyền đọc tên Zalo của bạn; mục 'Phản ánh gửi tới xã' và mục 'Danh sách từng quyền' nói rõ. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
+  "Ứng dụng xin các quyền của nền tảng Zalo cho các tính năng dưới đây, và cho hai nút một chạm: 'Chat với chuyên viên' ở màn Liên hệ xin số điện thoại và tên Zalo của bạn để chuyên viên biết ai đang nhắn; 'Đăng ký nhận' ưu đãi SMS ở Trang chủ xin số điện thoại để gửi tin nhắn ưu đãi tới đúng số ấy. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
-  "Với số điện thoại và vị trí, Zalo không trả giá trị thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại và toạ độ của bạn không nằm trong mã đó.",
-  // 06/10/2026 DRAFT: the sentence above is still true of what ZALO returns; this one says what the commune
-  // page's location exchange (`vihat-miniapp` `/api/v1/location`) brings back. The verified number never does.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Riêng khi bạn bấm 'Lấy vị trí hiện tại' lúc gửi phản ánh trên trang của một xã, máy chủ của Tập đoàn ViHAT Group đổi mã vị trí thành toạ độ và trả toạ độ về máy bạn, để hiện lên màn hình và gửi kèm phản ánh nếu bạn bấm gửi. Số điện thoại Zalo của bạn thì không bao giờ được trả về máy.",
+  "Với số điện thoại, Zalo không trả số thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại của bạn không nằm trong mã đó.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",
-  // VẾ TRONG NGOẶC LÀ BẮT BUỘC, KHÔNG PHẢI TRANG TRÍ. Câu này nói "ứng dụng không nhận địa
-  // chỉ IP" — đúng, vì `getNetworkType` chỉ trả về kiểu kết nối. Nhưng mục Đăng nhập
-  // khai rằng MÁY CHỦ ghi lại địa chỉ IP của mỗi lần đăng nhập. Hai câu ấy khác chủ ngữ và đều
-  // đúng, nhưng đọc liền nhau thì người ta kết luận "địa chỉ IP không bao giờ bị chạm tới" — một
-  // kết luận SAI mà chính văn bản này vừa mời gọi. Nói ra ngay tại chỗ, đừng bắt người đọc tự
-  // đối chiếu hai mục cách nhau nửa trang.
-  "Với thông tin mạng, ứng dụng chỉ nhận về KIỂU kết nối: Wi-Fi, mạng di động, không có mạng, hoặc không xác định. Ứng dụng không nhận địa chỉ IP, không nhận tên mạng Wi-Fi, không đo tốc độ và không biết bạn đang ở đâu. (Riêng khi bạn bấm đăng nhập, máy chủ nhìn thấy địa chỉ IP của lời gọi ấy và ghi vào nhật ký đăng nhập — xem mục Đăng nhập.)",
-  // DRAFT 02/10/2026 (`PENDING_APPROVAL_MARK`, `content/chinh-sach-rieng-tu.ts`): "KHÔNG RỜI KHỎI MÁY" is true of
-  // the business-card feature only; the commune app's scene photos are uploaded. The feature is now named and the
-  // exception pointed to — the approved promise itself is unchanged.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Với máy ảnh và cửa sổ chọn ảnh ở tính năng số hoá danh thiếp giấy, tấm ảnh bạn chọn KHÔNG RỜI KHỎI MÁY: ứng dụng nhận một đường dẫn tạm trên chính thiết bị của bạn, hiện ảnh lên màn hình, và không tải ảnh lên bất kỳ máy chủ nào. Ứng dụng không tự đọc thư viện ảnh — nó chỉ nhận đúng tấm ảnh bạn tự chọn trong cửa sổ của Zalo. Riêng ảnh hiện trường bạn tự gửi kèm một phản ánh trên trang của một xã thì được tải lên: mục 'Ảnh hiện trường gửi kèm phản ánh' nói rõ.",
+  "Với máy ảnh, ứng dụng chỉ dùng nó để quét mã QR khi chính bạn bấm 'Quét mã QR': không chụp ảnh, không lưu ảnh, và không đọc thư viện ảnh của bạn.",
   "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
   // LIỆT KÊ ĐÚNG NHỮNG TRƯỜNG TẤM THIẾP THẬT SỰ CHỨA. Câu này và câu `ghi-tep` trong chính sách
-  // phải khớp nhau VÀ khớp với `vcard.ts`.
-  //
-  // "trang web" ĐÃ RỜI KHỎI CÂU NÀY RỒI QUAY LẠI TRONG CÙNG MỘT NGÀY, và lần quay lại suýt không
-  // xảy ra — đó mới là phần đáng ghi. Sáng 21/09/2026 nó bị bỏ vì `COMPANY.website` đang trống
-  // nên `vcard.ts` không sinh dòng `URL`. Chiều cùng ngày website được điền, dòng `URL` sinh trở
-  // lại — nhưng CÂU NÀY thì không, vì tiền đề của nó nằm trong một chú thích chứ không nằm trong
-  // một phép kiểm. Hệ quả: văn bản khai THIẾU một trường mà tệp người dùng tải về CÓ, tức mô tả
-  // sai đúng thứ vừa gửi xuống máy họ.
-  //
-  // Câu tương ứng trong chính sách thì thoát, vì nó CÓ ca canh "khi và chỉ khi". Nay ca ấy phủ
-  // cả hai câu — xem `chinh-sach.test.ts`, khối "khai của tệp danh thiếp khớp với tấm thiếp thật".
-  //
-  // 06/10/2026 DRAFT: "hành vi duy nhất ứng dụng viết lên thiết bị" is false since the commune page keeps a
-  // petition draft in the app's storage (`commune-app/feedback-draft-store.ts`). The card is still the only FILE.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là tệp duy nhất ứng dụng ghi vào thư mục của máy. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
-  // CÂU CUỐI ĐÃ PHẢI ĐỔI, VÀ VIỆC ĐỔI NÓ LÀ BẮT BUỘC. Bản trước viết "chưa gửi bất kỳ
-  // dữ liệu nào của bạn đi đâu" — một câu ĐÚNG với bản nộp và SAI với bản dựng có bước đăng
-  // nhập. Một câu chỉ đúng ở một nửa số bản dựng là một câu sai ở nửa kia, và không có gì đỏ
-  // lên. Nên nó trỏ sang mục "Đăng nhập", nơi từng biến thể tự nói ra điều nó thật sự làm.
-  // 06/10/2026 DRAFT: "Ngoài đúng một tệp danh thiếp…, ứng dụng không lưu gì xuống máy bạn" — the draft again.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Các mục đích nêu trên là mục đích ứng dụng sẽ dùng các quyền này khi có đầy đủ chức năng. Ngoài tệp danh thiếp của chúng tôi nói ở trên và bản nháp phản ánh trên trang của một xã — mục 'Bản nháp phản ánh trên máy bạn' nói rõ —, ứng dụng không lưu gì xuống máy bạn; việc gửi gì đi thì mục Đăng nhập và mục 'Phản ánh gửi tới xã' nói rõ.",
+  // phải khớp nhau VÀ khớp với `vcard.ts` — `chinh-sach.test.ts`, khối "khai của tệp danh thiếp khớp
+  // với tấm thiếp thật", hỏi cả hai câu cùng một câu hỏi.
+  "Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là tệp duy nhất ứng dụng ghi xuống máy. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
+  "Ngoài tệp danh thiếp của chúng tôi, ứng dụng không lưu gì xuống máy bạn; những gì được gửi đi, và gửi tới đâu, được nói ở mục Đăng nhập, mục 'Yêu cầu tư vấn và đề nghị gọi lại' và mục 'Chat với chuyên viên và nhận ưu đãi qua SMS'.",
 ];
 
 /**
@@ -258,34 +223,18 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
  * `getAccessToken` CÓ MẶT Ở ĐÂY DÙ KHÔNG PHẢI MỘT QUYỀN PHẢI CẤP: `zmp-sdk/index.d.ts` dòng
  * 3009 ghi rằng từ SDK 2.35.0 ứng dụng mặc định truy xuất được access token mà không cần người
  * dùng xác nhận. Nhưng nó vẫn là một thứ ứng dụng NHẬN VỀ và GỬI ĐI ở bước đăng nhập, nên
- * Nghị định 13 buộc nói ra. Số quyền phải xin ở Developer Console vẫn là CHÍN.
+ * Nghị định 13 buộc nói ra.
+ *
+ * 11/10/2026: exactly the calls the ViHAT intro's "Quản lý quyền" shows that need a Console permission
+ * (`chinh-sach.test.ts` checks the list against `introPermissionRows`). `getLocation`, the camera, the picker and
+ * `chooseImage` are the commune interface's — `content/commune-privacy.ts` lists them.
  */
 export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
-  // ⚠ HAI CÂU NÀY RỘNG RA 22/09/2026, CÙNG LÚC VỚI `KHAI_BAO_LOI_GOI`. Phiên đăng nhập nay còn là
-  // CỬA VÀO màn "Tư vấn và báo giá" và màn "Yêu cầu của tôi". Người đã đồng ý cho "đăng nhập +
-  // ZNS" chưa đồng ý cho "gửi yêu cầu tư vấn", và câu khai từng quyền là chỗ họ đọc điều đó.
-  // 06/10/2026 DRAFT (`PENDING_APPROVAL_MARK`): the three lines below gained the commune page's purposes
-  // (`KHAI_BAO_LOI_GOI` rows `getPhoneNumber`, `getAccessToken`, `getLocation`, `nua: "ca-hai"`), and "Ứng dụng
-  // chỉ nhận một mã, không nhận toạ độ" was false there — the exchanged coordinates come back to the phone.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá; để chuyên viên biết ai đang nhắn khi bạn bấm 'Chat với chuyên viên'; để gửi tin nhắn SMS ưu đãi tới đúng số ấy nếu bạn bấm 'Đăng ký nhận', cho tới khi bạn bấm 'Huỷ nhận ưu đãi SMS'; và, trên trang của một xã, để xã biết phản ánh là của ai và chỉ bạn xem được phản ánh của bạn. Ứng dụng chỉ nhận một mã, không nhận số.",
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn. Phiên mở ra từ hai mã ấy là thứ cho bạn gửi yêu cầu tư vấn — kể cả yêu cầu trò chuyện với chuyên viên và việc đăng ký hay huỷ nhận ưu đãi SMS — và chỉ xem được yêu cầu của chính mình. Trên trang của một xã, mã này còn đi cùng mã số điện thoại để mở phiên làm việc với xã, và đi cùng mã vị trí khi bạn bấm 'Lấy vị trí hiện tại'.",
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Vị trí (getLocation) — để chỉ ra văn phòng gần bạn; và, trên trang của một xã, để lấy vị trí nơi xảy ra sự việc khi bạn gửi phản ánh. Ứng dụng chỉ nhận một mã. Ở màn Liên hệ, mã ở lại trên máy; khi gửi phản ánh, máy chủ của Tập đoàn ViHAT Group đổi mã thành toạ độ và trả toạ độ về máy.",
+  "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá; để chuyên viên biết ai đang nhắn khi bạn bấm 'Chat với chuyên viên'; và để gửi tin nhắn SMS ưu đãi tới đúng số ấy nếu bạn bấm 'Đăng ký nhận', cho tới khi bạn bấm 'Huỷ nhận ưu đãi SMS'. Ứng dụng chỉ nhận một mã, không nhận số.",
+  "Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn. Phiên mở ra từ hai mã ấy là thứ cho bạn gửi yêu cầu tư vấn — kể cả yêu cầu trò chuyện với chuyên viên và việc đăng ký hay huỷ nhận ưu đãi SMS — và chỉ xem được yêu cầu của chính mình.",
+  "Tên Zalo (getUserInfo) — khi bạn bấm 'Chat với chuyên viên' ở màn Liên hệ: để gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group, cho chuyên viên biết ai đang nhắn. Ứng dụng chỉ dùng tên hiển thị Zalo của bạn, sau khi bạn đồng ý; từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên.",
   "Quét mã QR (scanQRCode) — để đọc danh thiếp số của đối tác.",
-  "Kiểu kết nối mạng (getNetworkType) — để cho bạn biết cuộc gọi sắp tới đi qua Wi-Fi hay mạng di động.",
-  "Rung (vibrate) — để báo bằng một nhịp rung khi một việc bạn vừa bấm đã xong, cho người không nhìn màn hình liên tục.",
+  "Rung (vibrate) — để báo bằng một nhịp rung khi danh thiếp của chúng tôi đã được tải xuống máy bạn.",
   "Giữ màn hình sáng (keepScreen) — để màn hình không tối đi trong lúc người khác quét mã danh thiếp của chúng tôi.",
-  // DRAFT 02/10/2026 (`PENDING_APPROVAL_MARK`): both permissions gained a second purpose in the commune app
-  // (`zalo-api.ts` rows `camera` / `photos`, `nua: "ca-hai"`). "Ảnh không rời khỏi máy" now names its feature.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Máy ảnh (requestCameraPermission) — để chụp lại một tấm danh thiếp giấy; và, trên trang của một xã, để bạn chụp ảnh hiện trường gửi kèm một phản ánh.",
-  // 08/10/2026: "Chụp ảnh" left this call for `chooseImage` (the phone's own camera, line below) — this one now
-  // only picks existing photos on a commune page.
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chọn ảnh (openMediaPicker) — để bạn chọn ảnh tấm danh thiếp từ máy, và ảnh danh thiếp không rời khỏi máy; trên trang của một xã, còn để bạn chọn tối đa 5 ảnh hiện trường có sẵn gửi kèm một phản ánh, và những ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Chụp ảnh bằng máy ảnh của điện thoại (chooseImage) — trên trang của một xã, để bạn chụp ảnh hiện trường gửi kèm một phản ánh khi chính bạn bấm 'Chụp ảnh'; ảnh ấy được tải lên hệ thống của xã sau khi phản ánh đã được ghi nhận.",
   "Tải tệp (downloadFile) — để ghi tệp danh thiếp của chúng tôi xuống máy bạn.",
-  // 06/10/2026 DRAFT: `getUserInfo` was `nua: "nha-nuoc"` (commune app only) when this list was written; the
-  // shared App ID calls it too since 3fe60cd0 (`App.tsx` `QrCommuneApp` passes `layTenChoXa`). Only the name is
-  // read (`zalo-api.ts` `layTenZalo`).
-  // 07/10/2026: "chỉ trên trang của một xã" became false — "Chat với chuyên viên" asks it in the intro and SENDS
-  // it to ViHAT's server with the chat request (`api/hop-dong-yeu-cau.ts` `displayName`).
-  "[CHỜ DUYỆT — bản nháp 02/10/2026, chủ dự án chưa duyệt] Tên Zalo (getUserInfo) — ở màn Liên hệ, khi bạn bấm 'Chat với chuyên viên': để gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group, cho chuyên viên biết ai đang nhắn; và trên trang của một xã: để điền sẵn ô họ tên khi bạn gửi phản ánh, tên chỉ đi tới xã khi bạn tự bấm gửi phản ánh. Ứng dụng chỉ dùng tên hiển thị Zalo của bạn, sau khi bạn đồng ý; từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên.",
 ];

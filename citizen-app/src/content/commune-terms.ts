@@ -14,7 +14,8 @@
  *   | Half | This file |
  *   |---|---|
  *   | WHO PROVIDES THE APP / WHO ANSWERS FOR IT | the commune's People's Committee, and nobody else |
- *   | WHERE DATA GOES | NOT stated here — the privacy policy owns it (open question #28) and stays shared |
+ *   | WHERE DATA GOES | NOT stated here — the commune's own privacy policy owns it (`commune-privacy.ts`, since |
+ *   |                 | 11/10/2026; before that one policy was shared with the ViHAT app)                         |
  *
  *   Writing a data recipient here would either copy the privacy policy (two copies drift) or contradict it. The
  *   "Quyền riêng tư" section points to it instead. `ket-xuat-ho-so.test.ts` pins that no "máy chủ của …" sentence
@@ -115,7 +116,8 @@ export function communeAuthority(displayName: string): string {
   return `Ủy ban nhân dân ${lowerFirst(displayName)}`;
 }
 
-function lowerFirst(displayName: string): string {
+/** "Xã Thăng Bình" → "xã Thăng Bình": the name mid-sentence. Shared with `commune-privacy.ts`. */
+export function lowerFirst(displayName: string): string {
   return `${displayName.charAt(0).toLocaleLowerCase("vi-VN")}${displayName.slice(1)}`;
 }
 
@@ -284,9 +286,9 @@ export function communeTerms(values: CommuneTermsValues): CommuneTerms {
       ma: "quyen-rieng-tu",
       tieu_de: "Quyền riêng tư",
       doan: [
-        // The policy is shared by every app and owns every data statement (#28). Not "đọc được trong Mini App": no
-        // commune screen opens it yet (tmp/xin-quyen-zalo/README.md, "Việc còn phải làm"). When one does, say so here.
-        "Ứng dụng xử lý thông tin nào của bạn, gửi tới đâu, lưu trong bao lâu và bạn có những quyền gì: tất cả nằm trong Chính sách quyền riêng tư của ứng dụng, công bố cùng Điều khoản này.",
+        // 11/10/2026: the commune's OWN policy (`commune-privacy.ts`), in the same People's Committee's name, owns every
+        // data statement. Not "đọc được trong Mini App": no commune screen opens it yet. When one does, say so here.
+        `Ứng dụng xử lý thông tin nào của bạn, gửi tới đâu, lưu trong bao lâu và bạn có những quyền gì: tất cả nằm trong Chính sách quyền riêng tư của ứng dụng, do ${authority} công bố cùng Điều khoản này.`,
         "Nội dung ấy không chép lại vào đây, để hai văn bản không bao giờ nói hai điều khác nhau về cùng một việc.",
       ],
     },

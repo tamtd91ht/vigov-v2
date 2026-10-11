@@ -7,13 +7,15 @@
  * | Tệp kết quả | Sinh từ |
  * |---|---|
  * | `tmp/xin-quyen-zalo/README.md`, hai khối giữa các mốc | `communeAppCalls` / `communeAppRoutes` (`src/content/ket-xuat-ho-so.ts`) |
- * | `tmp/xin-quyen-zalo/chinh-sach-quyen-rieng-tu.txt` | `src/content/chinh-sach-rieng-tu.ts` |
+ * | `tmp/xin-quyen-zalo/chinh-sach-quyen-rieng-tu.txt` | `src/content/commune-privacy.ts` + `COMMUNE_TERMS_BY_DOMAIN[DOSSIER_COMMUNE_DOMAIN]` |
  * | `tmp/xin-quyen-zalo/dieu-khoan-su-dung.txt` | `src/content/commune-terms.ts` + `COMMUNE_TERMS_BY_DOMAIN[DOSSIER_COMMUNE_DOMAIN]` (`ung-dung-theo-ten-mien.mjs`) |
+ * | `tmp/xin-quyen-zalo/app-chung-vihat/chinh-sach-quyen-rieng-tu.txt` | `src/content/chinh-sach-rieng-tu.ts` |
  * | `tmp/xin-quyen-zalo/app-chung-vihat/dieu-khoan-su-dung.txt` | `src/content/dieu-khoan.ts` |
  * | `tmp/xin-quyen-zalo/app-chung-vihat/README.md`, hai khối giữa các mốc | `KHAI_BAO_LOI_GOI` trong `src/features/tinh-nang/zalo-api.ts` |
  *
- * The PRIVACY POLICY sits at the folder root, ONE copy for both dossiers: every app shares one privacy policy
- * (ADR 0044 §Hệ quả, open question #28 DECIDED). A copy per dossier would be two copies of one legal text.
+ * The PRIVACY POLICIES are two different texts since 11/10/2026 (owner: two apps to the user): the commune app's
+ * stands in the name of "Ủy ban nhân dân <xã>" and names no company; the shared app keeps ViHAT Group's, which names
+ * no commune. Each dossier carries its own. (Until that day one policy was shared, ADR 0044 §Hệ quả.)
  *
  * The TERMS OF USE are two different texts since 02/10/2026 (owner; ADR 0044 §"Đã quyết 02/10/2026"): the
  * commune app's terms stand in the name of "Ủy ban nhân dân <xã>" only, filled per commune; the shared app keeps
@@ -125,11 +127,14 @@ async function main() {
     } catch (error) {
       throw new Error(`citizen-app/scripts/ung-dung-theo-ten-mien.mjs: ${error instanceof Error ? error.message : error}`);
     }
-    const commune_source = `citizen-app/src/content/commune-terms.ts + COMMUNE_TERMS_BY_DOMAIN["${DOSSIER_COMMUNE_DOMAIN}"] (citizen-app/scripts/ung-dung-theo-ten-mien.mjs)`;
+    const commune_values_from = `COMMUNE_TERMS_BY_DOMAIN["${DOSSIER_COMMUNE_DOMAIN}"] (citizen-app/scripts/ung-dung-theo-ten-mien.mjs)`;
+    const commune_source = `citizen-app/src/content/commune-terms.ts + ${commune_values_from}`;
+    const commune_privacy_source = `citizen-app/src/content/commune-privacy.ts + ${commune_values_from}`;
 
     for (const [dir, ten_tep, van_ban] of [
-      [COMMUNE_APP_DIR, "chinh-sach-quyen-rieng-tu.txt", ket_xuat.VAN_BAN_CHINH_SACH],
+      [COMMUNE_APP_DIR, "chinh-sach-quyen-rieng-tu.txt", ket_xuat.communePrivacyDocument(commune_values, commune_privacy_source)],
       [COMMUNE_APP_DIR, "dieu-khoan-su-dung.txt", ket_xuat.communeTermsDocument(commune_values, commune_source)],
+      [SHARED_APP_DIR, "chinh-sach-quyen-rieng-tu.txt", ket_xuat.VAN_BAN_CHINH_SACH],
       [SHARED_APP_DIR, "dieu-khoan-su-dung.txt", ket_xuat.VAN_BAN_DIEU_KHOAN],
     ]) {
       const duong_dan = resolve(dir, ten_tep);

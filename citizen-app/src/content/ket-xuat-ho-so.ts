@@ -44,6 +44,12 @@ import {
 } from "./chinh-sach-rieng-tu";
 import { COMPANY } from "./company-profile";
 import {
+  COMMUNE_PRIVACY_EFFECTIVE_DATE,
+  COMMUNE_PRIVACY_TITLE,
+  COMMUNE_PRIVACY_VERSION,
+  communePrivacy,
+} from "./commune-privacy";
+import {
   COMMUNE_TERMS_EFFECTIVE_DATE,
   COMMUNE_TERMS_TITLE,
   COMMUNE_TERMS_VERSION,
@@ -149,6 +155,23 @@ export function communeTermsDocument(values: CommuneTermsValues, source: string)
     cau_dau: terms.opening,
     muc: terms.sections,
     appLine: terms.appLine,
+    nguon: source,
+  };
+}
+
+/**
+ * The privacy policy of ONE commune's app (owner 11/10/2026: two apps, two policies), from the template and that
+ * commune's row of `COMMUNE_TERMS_BY_DOMAIN` — the same values and the same refusal as the terms above.
+ */
+export function communePrivacyDocument(values: CommuneTermsValues, source: string): VanBanPhapLy {
+  const policy = communePrivacy(values);
+  return {
+    tieu_de: COMMUNE_PRIVACY_TITLE,
+    phien_ban: COMMUNE_PRIVACY_VERSION,
+    ngay_hieu_luc: COMMUNE_PRIVACY_EFFECTIVE_DATE,
+    cau_dau: policy.opening,
+    muc: policy.sections,
+    appLine: policy.appLine,
     nguon: source,
   };
 }
@@ -300,7 +323,7 @@ export type DuongRoiKhoiMay = {
    * sentences say "sau khi đã xác nhận xã"; the commune app has no confirmation step, and it loads some of
    * these routes at open, without a tap.
    */
-  commune_app?: { man: string; khi_nao: string; nguoi_dung_bam: boolean };
+  commune_app?: { man: string; khi_nao: string; nguoi_dung_bam: boolean; may_chu?: string };
 };
 
 /**
@@ -453,9 +476,8 @@ export const COMMUNE_APP_ROUTES_OWED =
    completion call became ONE multipart request to petitions. The phone no longer sends anything to a storage
    address, so the declaration no longer names one.
 
-   The privacy-policy section for these routes is a DRAFT marked "chờ duyệt" (`chinh-sach-rieng-tu.ts`, section
-   `anh-hien-truong`; ADR 0047 row "Ảnh hiện trường khi gửi phản ánh": Claude drafts, the owner approves before
-   Zalo). `chinh-sach.test.ts` locks every declared sentence below into that section, verbatim. */
+   The privacy-policy section for these routes is the COMMUNE policy's `anh-hien-truong` (`commune-privacy.ts`,
+   approved 11/10/2026). `commune-privacy.test.ts` locks every declared sentence below into that section, verbatim. */
 
 /** POST (one photo) and GET (the citizen's own photos) — copied from `photosAddress`; the test pins it. */
 export const SCENE_PHOTOS_PATH = "/api/v1/my-citizen-reports/{maTraCuu}/photos";
@@ -516,8 +538,8 @@ const SCENE_PHOTO_ROUTES: readonly DuongRoiKhoiMay[] = [
    is named by its domain. Same boundary as the public routes above — the paths and the body live in
    `cong-dan/api/hop-dong-phan-anh.ts` (`publicReportFieldsAddress`, `accountlessReportBody`,
    `publicReportAddress`), which this file may not import; `ket-xuat-ho-so.test.ts` locks each copy to the real
-   address and body, both ways. The privacy-policy paragraph is a DRAFT marked "chờ duyệt" (`chinh-sach-rieng-tu.ts`,
-   section `phan-anh`). REMOVE these rows with the path (ADR 0083 §"Gỡ bỏ"). */
+   address and body, both ways. The privacy-policy paragraph is in the commune policy, section `phan-anh`
+   (`commune-privacy.ts`). REMOVE these rows with the path (ADR 0083 §"Gỡ bỏ"). */
 
 export const ACCOUNTLESS_FIELDS_PATH = "/api/v1/public-citizen-report-fields";
 export const ACCOUNTLESS_SEND_PATH = "/api/v1/public-citizen-reports";
@@ -933,12 +955,12 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     // ⚠ OWN ROUTE SINCE ADR 0066 (01/10/2026): ViGov identity `POST /api/v1/citizen-sessions`, DIRECTLY — no
     //   longer through `vihat-miniapp`. Same body, so the same field table.
     //
-    // ⚠ THE PRIVACY-POLICY SENTENCE FOR `appId` IS STILL OWED — legal wording is the project owner's, same
-    //   stance as `bridgeBodyWithPhone`. `chinh-sach.test.ts` pins the gap. So is the policy's statement of
-    //   WHERE this login goes now (ViGov, not ViHAT's server): also the owner's wording.
+    // The policy sentences (every field, and that it goes straight to the commune's system) are in the COMMUNE
+    // policy since 11/10/2026 (`commune-privacy.ts`, section `phien-lam-viec`), locked by `commune-privacy.test.ts`.
     tuyen: COMMUNE_APP_SESSION_PATH,
+    // 11/10/2026 (owner): a commune-side row names no company — "không qua máy chủ trung gian nào" says the same fact.
     may_chu:
-      "ViGov — dịch vụ `identity`, trực tiếp, không qua máy chủ của Tập đoàn ViHAT Group; dịch vụ ấy đổi hai mã Zalo bằng khoá bí mật của ứng dụng xã để mở phiên với xã của ứng dụng",
+      "ViGov — dịch vụ `identity`, trực tiếp, không qua máy chủ trung gian nào; dịch vụ ấy đổi hai mã Zalo bằng khoá bí mật của ứng dụng xã để mở phiên với xã của ứng dụng",
     khi_nao:
       "trong ứng dụng riêng của một xã, người dùng làm việc cá nhân đầu tiên (gửi, xem, tra cứu hoặc đánh giá phản ánh), đọc lời giải thích, tự bấm “Đồng ý chia sẻ số điện thoại” và đồng ý trên hộp thoại của Zalo",
     nguoi_dung_bam: true,
@@ -952,8 +974,8 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     // name is copied from `cong-dan/man/noi-dung.ts` `GUI.tieu_de` (this file may not import the state
     // half — same reason as `TEN_MAN_CONG_KHAI`); the test pins it word for word.
     //
-    // ⚠ THE PRIVACY-POLICY SECTION THIS ROW NEEDS IS STILL OWED — legal wording is the project owner's,
-    //   not written here (same stance as `bridgeBodyWithPhone`). `chinh-sach.test.ts` pins the gap.
+    // Its policy paragraph is the COMMUNE policy's (`commune-privacy.ts`, section `phan-anh`): the shared App ID
+    // runs it only on the commune page a QR opens.
     tuyen: LOCATION_PATH,
     may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu mã vị trí lẫn toạ độ",
     khi_nao:
@@ -966,11 +988,12 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   {
     // SAME ROUTE, the commune's OWN app (29/09/2026, `vihat-miniapp` 4114f00): the body adds `appId` so
     // the server exchanges the token with that app's secret. Same tap, same screen, one more key.
-    // ⚠ Policy sentence still owed (same stance as the row above); `chinh-sach.test.ts` pins it.
+    // Policy: `commune-privacy.ts`, section `phan-anh` (the `appId` sentence included).
     // ⚠ Still `vihat-miniapp` on 01/10/2026 although the commune app's LOGIN moved to identity: ADR 0066
     //   decision 5 moves this exchange too, in a later card. Change this row in that card, not before.
     tuyen: LOCATION_PATH,
-    may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu mã vị trí lẫn toạ độ",
+    // 11/10/2026 (owner decision 1): commune-side text names the technical platform, never a brand.
+    may_chu: "máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng, không lưu mã vị trí lẫn toạ độ",
     khi_nao:
       "trong ứng dụng riêng của một xã, người dùng tự bấm “Lấy vị trí hiện tại” khi gửi phản ánh và đồng ý chia sẻ vị trí trên hộp thoại của Zalo",
     nguoi_dung_bam: true,
@@ -984,7 +1007,8 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     // the failing call — the two calls made without a tap (the commune app's silent name check at open, the
     // keep-screen switch-off on leaving "Danh thiếp") do not report (`zalo-api.ts` `layTenZalo`,
     // `giuManHinhSang`). Carries the SDK's error, never a token, a name or a number.
-    // ⚠ Policy sentence owed, same stance as the location rows above.
+    // Policy: both texts since 11/10/2026 — `chinh-sach-rieng-tu.ts` `cach-thuc` (four fields; the intro sends no
+    // `host`) and `commune-privacy.ts` `noi-nhan` (all five).
     tuyen: CLIENT_ERROR_PATH,
     may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, chỉ ghi một dòng nhật ký kỹ thuật, không lưu",
     khi_nao: "một chức năng của Zalo mà người dùng vừa dùng (đăng nhập, chia sẻ số điện thoại, vị trí, tên…) báo lỗi có mã",
@@ -997,6 +1021,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
       khi_nao:
         "trong ứng dụng riêng của một xã, một chức năng của Zalo mà người dùng vừa dùng (chia sẻ số điện thoại, vị trí, tên…) báo lỗi có mã",
       nguoi_dung_bam: true,
+      may_chu: "máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng, chỉ ghi một dòng nhật ký kỹ thuật, không lưu",
     },
   },
   {
