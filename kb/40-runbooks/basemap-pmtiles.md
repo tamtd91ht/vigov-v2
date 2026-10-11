@@ -6,10 +6,14 @@ owner: web-admin
 derived_from_commit: 76b30e7b
 expires: null
 owns_facts:
-  - "quy trình dựng, tải lên, kiểm chủ quyền có ký và đưa vào dùng tệp nền PMTiles của bản đồ phản ánh"
+  - "quy trình dựng, tải lên, kiểm chủ quyền có ký và đưa vào dùng tệp nền PMTiles của bản đồ phản ánh và Bản đồ kinh tế số (/ban-do)"
 ---
 
-# Nền bản đồ phản ánh (PMTiles tự host) — dựng, làm mới, xử lý sự cố
+# Nền bản đồ tự host (PMTiles) — dựng, làm mới, xử lý sự cố
+
+Dùng chung cho bản đồ phản ánh (`/phan-anh`) và, từ 11/10/2026, Bản đồ kinh tế số (`/ban-do`) — ADR 0072
+§Sửa đổi 11/10/2026. Thiếu nền thì cả hai cùng hiện câu "Chưa cấu hình bản đồ nền"; Sổ địa điểm của
+`/ban-do` vẫn dùng được.
 
 **Vì sao có nền tự host, phạm vi tệp, ai quyết:** ADR 0072 §Sửa đổi 09/10/2026 và §Trả lời 09/10/2026
 (`kb/10-decisions/0072-ban-do-kinh-te-so-nen-tu-host.md`). Tệp này chỉ nói **làm thế nào**. Khung
@@ -24,7 +28,7 @@ Danh sách tệp được phát: `web-admin/src/lib/basemap/assets.ts`.
 
 | Thấy gì | Nguyên nhân thường gặp | Làm gì |
 |---|---|---|
-| Bản đồ phản ánh hiện **"Chưa cấu hình bản đồ nền."**; `/basemap/...` trả 503 | Key `BASEMAP-URL` chưa có trong `common-config`, hoặc sai dạng (không https, có thông tin đăng nhập, có truy vấn). Log pod web-admin có **một** dòng gọi tên biến | Mục "Đưa vào dùng" |
+| Bản đồ phản ánh hoặc `/ban-do` hiện **"Chưa cấu hình bản đồ nền."**; `/basemap/...` trả 503 | Key `BASEMAP-URL` chưa có trong `common-config`, hoặc sai dạng (không https, có thông tin đăng nhập, có truy vấn). Log pod web-admin có **một** dòng gọi tên biến | Mục "Đưa vào dùng" |
 | `/basemap/vn-mainland.pmtiles` trả **404** "Không tìm thấy tệp bản đồ nền." | Tiền tố trong `BASEMAP-URL` sai ngày, hoặc chưa tải lên | `mc ls <alias>/<bucket>/basemap/` — đối chiếu tên thư mục ngày với giá trị key |
 | Trả **502** | MinIO trả 403 (bucket không cho đọc ẩn danh), chứng chỉ MinIO do CA nội bộ ký mà pod không tin, hoặc NetworkPolicy chặn | Lần lượt: `mc anonymous get <alias>/<bucket>` phải in `download`; CA nội bộ → mount CA và đặt `NODE_EXTRA_CA_CERTS` cho web-admin (**không bao giờ** tắt kiểm chứng chỉ); `kubectl get networkpolicy allow-web-admin-egress-storage` phải có, và cổng trong key phải là 9000 |
 | Trả **504** | MinIO không phản hồi trong 30 giây | Kiểm MinIO; không phải lỗi web-admin |
