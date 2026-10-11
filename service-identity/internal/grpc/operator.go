@@ -51,7 +51,8 @@ import (
 //
 // Every write these RPCs cause is audited by the use case, in the transaction of the write (rule 6,
 // invariant 3), with the operator's VH- code as actor: the seven realm RPCs in operator_audit_log,
-// the two Mini App secret RPCs in the TARGET commune's audit_log with actor_kind operator. A second
+// the two Mini App secret RPCs in the TARGET commune's audit_log with actor_kind operator, and
+// ListActiveStaffCounts' cross-commune READ in operator_audit_log (app.ActiveStaffCounts). A second
 // entry written here could not even name a "who" (ADR 0025: the caller key proves the deployment,
 // not the service).
 
@@ -87,9 +88,10 @@ type MiniAppSecretOperator interface {
 type OperatorServer struct {
 	identityv1.UnimplementedOperatorServiceServer
 
-	uc       OperatorAuthenticator
-	miniApps MiniAppSecretOperator // nil until WithMiniAppSecrets: the three RPCs answer Unimplemented
-	log      *slog.Logger
+	uc          OperatorAuthenticator
+	miniApps    MiniAppSecretOperator // nil until WithMiniAppSecrets: the three RPCs answer Unimplemented
+	staffCounts ActiveStaffCounter    // nil until WithActiveStaffCounts: ListActiveStaffCounts answers Unimplemented
+	log         *slog.Logger
 }
 
 // WithMiniAppSecrets wires the three Mini App secret RPCs. Without it they answer Unimplemented — the
@@ -431,6 +433,62 @@ func (s *OperatorServer) ListMiniAppSecretStatuses(ctx context.Context, req *ide
 }
 
 var errMiniAppsNotWired = status.Error(codes.Unimplemented, "chưa nối thao tác khoá Mini App")
+
+// ActiveStaffCounter is the use case behind ListActiveStaffCounts. *app.ActiveStaffCounts satisfies it.
+type ActiveStaffCounter interface {
+	ReadAsOperator(ctx context.Context, op app.MiniAppOperator) ([]app.CommuneActiveStaffCount, error)
+}
+
+// WithActiveStaffCounts wires ListActiveStaffCounts. Without it the RPC answers Unimplemented. A nil
+// use case is refused here, where a process start is watched.
+func (s *OperatorServer) WithActiveStaffCounts(c ActiveStaffCounter) *OperatorServer {
+	if c == nil {
+		panic("identity/grpc: WithActiveStaffCounts without a use case")
+	}
+	s.staffCounts = c
+	return s
+}
+
+var errStaffCountsNotWired = status.Error(codes.Unimplemented, "chưa nối đếm cán bộ đang hoạt động")
+
+// ListActiveStaffCounts — ACCEPTED (possibly with an empty list), SESSION_NOT_LIVE or
+// PERMISSION_DENIED; UNAVAILABLE when the read's trail entry cannot be written (no counts then).
+//
+// NO COMMUNE IS READ FROM ctx: the RPC answers about every commune and is on
+// core/grpcx.methodsWithoutTenant by full name (owner, 11/10/2026). What still guards it is the
+// live `op1.` session resolved HERE and an ops.* key on THAT principal — never a code the caller names.
+func (s *OperatorServer) ListActiveStaffCounts(ctx context.Context, req *identityv1.ListActiveStaffCountsRequest) (
+	*identityv1.ListActiveStaffCountsResponse, error) {
+
+	// NEVER LOG req: it carries a bearer token.
+	if s.staffCounts == nil {
+		return nil, errStaffCountsNotWired
+	}
+	if req.GetSessionToken() == "" {
+		return nil, errEmptyToken
+	}
+	op, out, err := s.miniAppOperator(ctx, "ListActiveStaffCounts", req.GetSessionToken(), req.GetClientIp(), canReadCommuneDetail)
+	if err != nil {
+		return nil, err
+	}
+	if out != outAccepted {
+		return &identityv1.ListActiveStaffCountsResponse{Outcome: out}, nil
+	}
+	rows, err := s.staffCounts.ReadAsOperator(ctx, op)
+	if errors.Is(err, app.ErrActiveStaffCountsUnaudited) {
+		// The cause is a store error on operator_audit_log; it holds no field of the request.
+		s.log.ErrorContext(ctx, "identity/grpc: không ghi được vết đọc số cán bộ — không trả số", "rpc", "ListActiveStaffCounts", "err", err)
+		return nil, status.Error(codes.Unavailable, "không ghi được nhật ký vận hành, vui lòng thử lại")
+	}
+	if err != nil {
+		return nil, s.fault(ctx, "ListActiveStaffCounts", err)
+	}
+	counts := make([]*identityv1.CommuneActiveStaffCount, 0, len(rows))
+	for _, r := range rows {
+		counts = append(counts, &identityv1.CommuneActiveStaffCount{TenantId: r.TenantID, ActiveStaffCount: r.Count})
+	}
+	return &identityv1.ListActiveStaffCountsResponse{Outcome: outAccepted, Counts: counts}, nil
+}
 
 // canManageMiniApps is the two writes' key: ops.mini_app.manage, checked on THE principal identity
 // resolved (ADR 0070 #5) — never on a check made in service-platform alone.

@@ -620,6 +620,14 @@
       "viec": "Bảng lỗi khách 10/10/2026 (ADR 0090): xoá dòng danh bạ cán bộ, bộ phận, dòng thời hạn riêng của lĩnh vực không bắt nhập lý do — trống thì ghi câu cố định, vẫn xoá mềm + vết cùng giao dịch; bộ phận con không cần Thứ tự (máy chủ xếp sau anh em cuối); thêm cán bộ nhận role_ids và gán vai trò cùng giao dịch (một vai trò/người, hai vai trò khác nhau thì từ chối, qua chốt chống leo quyền của PUT /staff/{id}/role, không thêm khoá quyền); SĐT di động tối đa 10 số sau chuẩn hoá (máy bàn không giới hạn — số cố định 11 số).",
       "bang_chung": "a8f30265 — domain/danh_ba_ghi.go (StaffDeleteDefaultReason, MaxMobileDigits, NewStaffRole + ErrOneRolePerStaff), domain/org_unit_delete.go (OrgUnitDeleteDefaultReason), domain/sla_field_rule.go (SLAFieldRowDeleteDefaultReason), app/staff_create_role_test.go, app/org_unit_default_order_test.go; hợp đồng sinh lại (openapi.json, schema.gen.ts). Không migration.",
       "tiep_theo": "Web đã nối: xoá không ô lý do (61545b3b); cụm Vai trò + SĐT 10 số ở popup thêm người dùng (2dff300e). Ô mật khẩu tự đặt TỪ CHỐI — mật khẩu tạm do hệ thống cấp (ADR 0090, ADR 0059 §1)."
+    },
+    {
+      "id": "zalo-bot-communes-table-11-10",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "OperatorService.ListActiveStaffCounts (hợp đồng a35273a3, chủ dự án chốt 11/10/2026): đếm tài khoản cán bộ đang hoạt động theo xã — mẫu số cột \"Đã ghép nối\" ở bảng xã màn Zalo Bot của platform-admin. Phân giải phiên op1. như ListMiniAppSecretStatuses; SESSION_NOT_LIVE / PERMISSION_DENIED (khoá ops.* bất kỳ) / ACCEPTED; chỉ số đếm, xã 0 người thì vắng, xếp theo tenant_id; mỗi lần ACCEPTED ghi MỘT dòng operator_audit_log (actor = mã VH-, actor_ip = client_ip, after = số xã trả lời), không ghi được thì UNAVAILABLE và không trả số.",
+      "bang_chung": "service-identity/internal/store/crosstenant/active_staff_counts.go (dạng 4 mới trong doc.go, `// @cross-tenant:`; vị từ ActiveStaffAccountFilter được ghim bằng store/active_staff_filter_pin_test.go cho bằng locChonNguoi); app/active_staff_counts.go (đọc rồi ghi vết, lỗi vết → ErrActiveStaffCountsUnaudited); grpc/operator.go ListActiveStaffCounts + WithActiveStaffCounts; domain.OperatorAuditActiveStaffCountsRead = operator.active_staff_counts_read (subject = mã VH- của chính người đọc — cột subject chỉ nhận mã VH-); nối ở cmd/server/main.go. go vet ./... và go test ./internal/... ./cmd/... service-identity xanh 11/10/2026; ca PG active_staff_counts_pg_test.go BỎ QUA (không VIGOV_TEST_DSN). Chưa commit.",
+      "tiep_theo": "Chạy ca PG với DSN thật. platform ghép số này với số liên kết của comms theo tenant_id (vắng = 0). ADR 0074 chưa ghi quyết định 11/10/2026 cho RPC này — hiện chỉ nằm trong chú thích operator.proto và core/grpcx."
     }
   ]
 }

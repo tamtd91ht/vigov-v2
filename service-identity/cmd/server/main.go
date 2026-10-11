@@ -762,8 +762,13 @@ func run(log *slog.Logger) error {
 	// A nil envelope (dev without SECRET_ENCRYPTION_KEYS) makes Set answer Internal, by name in the
 	// log (crypto.ErrNotConfigured); Retire seals nothing and keeps working.
 	miniAppSecrets := app.NewMiniAppSecretAdmin(kho, idstore.NewMiniAppSecretStore(kho), envelope, nenTang, time.Now)
+	// ListActiveStaffCounts (owner, 11/10/2026): the count is a crosstenant read on the raw handle (no
+	// commune to scope it to); its trail entry goes to operator_audit_log through the operator store.
+	activeStaffCounts := app.NewActiveStaffCounts(app.NewOperatorStore(operatorstore.New(db)),
+		crosstenant.NewActiveStaffCountStore(db), time.Now)
 	opSrv := buildOperatorGRPCServer(cfg.GRPCCallerKey(),
-		svcgrpc.NewOperatorServer(operatorAuth, log).WithMiniAppSecrets(miniAppSecrets), log)
+		svcgrpc.NewOperatorServer(operatorAuth, log).WithMiniAppSecrets(miniAppSecrets).
+			WithActiveStaffCounts(activeStaffCounts), log)
 	opLis, err := net.Listen("tcp", cfg.OperatorGRPCListenAddr())
 	if err != nil {
 		return fmt.Errorf("identity: không mở được cổng gRPC vận hành %q: %w", cfg.OperatorGRPCListenAddr(), err)

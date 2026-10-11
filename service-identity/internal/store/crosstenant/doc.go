@@ -15,7 +15,7 @@
 //
 // # WHAT MAY BE ADDED HERE
 //
-// Exactly three shapes, and every one of them needs a decision already written down in an ADR
+// Exactly four shapes, and every one of them needs a decision already written down in an ADR
 // before the code is written:
 //
 //  1. A table that has NO tenant_id at all because a decision put it above the commune —
@@ -23,14 +23,23 @@
 //     → dinh_danh_cong_dan.go; and since 2026-09-25 tai_khoan_zalo (ADR 0045: the Zalo account
 //     behind a Mini App session, which answers "which commune" for the main app, so it cannot
 //     belong to one) → tai_khoan_zalo.go. Every statement there is keyed on ONE account.
+//
 //  2. A lookup that must find a row BEFORE the commune is known, where the commune is then
 //     compared rather than assumed — ADR 0019, invariant 8: redeeming a pairing code has to
 //     find the code first so that a code belonging to another commune produces 401 AND AN
 //     ALERT, not a quiet "not found". → ghep_phien.go
+//
 //  3. A read of a table that DOES have tenant_id, keyed on ONE CITIZEN IDENTITY taken from the
 //     session, returning that citizen's own rows across the communes they deal with — ADR 0002
 //     makes a citizen many-to-many with communes and the Mini App has to show them the list.
 //     → quan_he_cong_dan_xa.go
+//
+//  4. ONE count across every commune, for the Vihat OPERATOR, that the owner answered BY NAME —
+//     OperatorService.ListActiveStaffCounts (owner's decision 11/10/2026, operator.proto: the
+//     service comment and the RPC) → active_staff_counts.go. Counts per tenant_id only, no row of
+//     any person; it answers only to a live `op1.` session holding an ops.* key, and every answer
+//     is audited in operator_audit_log or not returned. The yes was for THIS read and carries over
+//     to no other: a second count needs its own decision, written down first.
 //
 // SHAPE 3 WAS ADDED ON 2026-09-20, AND THE PARAGRAPH BELOW IS WHY IT IS NOT A LOOSENING. This
 // file used to say "exactly two shapes" while migration 0004 already named this exact query as
@@ -52,6 +61,8 @@
 //   - Any read of a commune's business data that returns rows of more than one commune —
 //     district or province rollups. Open question #4 is still open: nobody has decided how far
 //     up the administrative ladder aggregate reading goes. Writing it now decides it silently.
+//     Shape 4 is not such a rollup: it is read by the platform's own operator, not by a district or
+//     a province, and it exists only because the owner said yes to that one read.
 //   - Any query whose commune comes from something the client sent (a header, a query
 //     parameter, a body field). That is rule 1, forbidden #2, and this package is exactly where
 //     it would look reasonable.

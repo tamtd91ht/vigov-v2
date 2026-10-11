@@ -295,6 +295,11 @@ const (
 	// enrolment (a pending secret stored — a write to credential state, audited like the rest).
 	OperatorAuditUnlocked              OperatorAuditAction = "operator.unlocked"
 	OperatorAuditTOTPEnrollmentStarted OperatorAuditAction = "operator.totp_enrollment_started"
+	// ActiveStaffCountsRead is a READ, audited because it reads ACROSS COMMUNES (rule 6, invariant 7):
+	// OperatorService.ListActiveStaffCounts, owner's decision 11/10/2026 (operator.proto). Subject is
+	// the reader's own code — the act is about no single operator, the column only admits a VH- code,
+	// and "what did this operator read" is the question an inspection asks of it.
+	OperatorAuditActiveStaffCountsRead OperatorAuditAction = "operator.active_staff_counts_read"
 )
 
 // Valid reports whether a is one of the declared actions. The database only checks the SHAPE of
@@ -305,7 +310,8 @@ func (a OperatorAuditAction) Valid() bool {
 		OperatorAuditLoggedOut, OperatorAuditTOTPEnrolled, OperatorAuditRecoveryCodeUsed,
 		OperatorAuditPermissionGranted, OperatorAuditPermissionRevoked, OperatorAuditAccountDisabled,
 		OperatorAuditAccountEnabled, OperatorAuditMFAReset, OperatorAuditPasswordChanged,
-		OperatorAuditRecoveryCodesRegenerated, OperatorAuditUnlocked, OperatorAuditTOTPEnrollmentStarted:
+		OperatorAuditRecoveryCodesRegenerated, OperatorAuditUnlocked, OperatorAuditTOTPEnrollmentStarted,
+		OperatorAuditActiveStaffCountsRead:
 		return true
 	}
 	return false

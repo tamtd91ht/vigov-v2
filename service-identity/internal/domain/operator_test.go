@@ -186,7 +186,8 @@ func TestOperatorCredentialExpiryHelpers(t *testing.T) {
 	if !(OperatorAccount{TOTPPending: true}).PendingTOTPExpiredAt(now) || !(OperatorAccount{}).PendingTOTPExpiredAt(now) {
 		t.Error("an undated or absent pending secret must count as expired")
 	}
-	for _, a := range []OperatorAuditAction{OperatorAuditUnlocked, OperatorAuditTOTPEnrollmentStarted} {
+	for _, a := range []OperatorAuditAction{OperatorAuditUnlocked, OperatorAuditTOTPEnrollmentStarted,
+		OperatorAuditActiveStaffCountsRead} {
 		if !a.Valid() {
 			t.Errorf("%s is not on the closed list", a)
 		}
