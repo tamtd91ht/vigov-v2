@@ -24,7 +24,8 @@ package app
 //	                         are more error-prone than a picker (user decision)
 //	bloc codes               identity TaskBlocLabels, LIVE only — create does not check the bloc; a
 //	                         typed code that names nothing would otherwise be stored as-is
-//	type / priority codes    this service's catalogues, IN-USE rows only; a blank type takes the
+//	type / priority codes    this service's catalogues, IN-USE rows only, by code or by a label that
+//	                         names exactly one row (resolveImportCatalogue); a blank type takes the
 //	                         commune's default type, and no default refuses the row
 //
 // An identity failure refuses the whole import as UNCHECKED (503), never rows as "unknown".
@@ -68,6 +69,16 @@ var ErrTaskImportRetiredColumns = errors.New(
 // ErrTaskImportLayout — the heading row is not the template's, or the sheet holds no task. Refused
 // whole (400): reading another layout by position would put values into the wrong fields.
 var ErrTaskImportLayout = errors.New("nhiem_vu: tệp không đúng mẫu nhập nhiệm vụ")
+
+// TaskImportLayoutError is ErrTaskImportLayout carrying the sentence that says WHERE the file differs
+// from the template ("ô F2 phải là tiêu đề …") — a bare "wrong layout" sends the clerk to compare
+// fourteen headings by eye (bug sheet row 19). The sentence quotes only the template, never a cell.
+type TaskImportLayoutError struct{ Sentence string }
+
+func (e *TaskImportLayoutError) Error() string {
+	return ErrTaskImportLayout.Error() + ": " + e.Sentence
+}
+func (e *TaskImportLayoutError) Unwrap() error { return ErrTaskImportLayout }
 
 // TaskImportLookups is what the import asks identity. *identityclient.Client satisfies it.
 type TaskImportLookups interface {
@@ -127,11 +138,16 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 	if err := coCanBoThucHien(actor); err != nil {
 		return TaskImportResult{}, err
 	}
-	if len(sheet) > 0 && domain.TaskImportCarriesRetiredColumns(sheet[0]) {
-		return TaskImportResult{}, ErrTaskImportRetiredColumns
+	// The heading row may sit below title rows (domain.TaskImportHeadingSearchRows); the retired columns
+	// are looked for over the same rows, so an old-template file is named as such wherever its heading is.
+	for i := 0; i < len(sheet) && i < domain.TaskImportHeadingSearchRows; i++ {
+		if domain.TaskImportCarriesRetiredColumns(sheet[i]) {
+			return TaskImportResult{}, ErrTaskImportRetiredColumns
+		}
 	}
-	if len(sheet) == 0 || !domain.CheckTaskImportHeadings(sheet[0]) {
-		return TaskImportResult{}, ErrTaskImportLayout
+	head, ok := domain.LocateTaskImportHeadings(sheet)
+	if !ok {
+		return TaskImportResult{}, &TaskImportLayoutError{Sentence: domain.DiagnoseTaskImportHeadings(sheet).Sentence()}
 	}
 
 	// 1. THE ROW RULES.
@@ -139,19 +155,21 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 		rows []domain.TaskImportRow
 		errs []domain.TaskImportError
 	)
-	for i, cells := range sheet[1:] {
+	for i, cells := range sheet[head+1:] {
 		if domain.TaskImportRowBlank(cells) {
 			continue
 		}
 		if len(rows) == domain.TaskImportRowCap {
 			return TaskImportResult{}, ErrTaskImportTooManyRows
 		}
-		r, rowErrs := domain.ParseTaskImportRow(i+2, cells) // spreadsheet row numbers: the heading is 1
+		// The SPREADSHEET row number the clerk sees: sheet[0] is row 1, the first data row is head+2.
+		r, rowErrs := domain.ParseTaskImportRow(head+i+2, cells)
 		errs = append(errs, rowErrs...)
 		rows = append(rows, r)
 	}
 	if len(rows) == 0 {
-		return TaskImportResult{}, ErrTaskImportLayout
+		return TaskImportResult{}, &TaskImportLayoutError{Sentence: fmt.Sprintf(
+			"không có dòng nhiệm vụ nào dưới hàng tiêu đề (dòng %d).", head+1)}
 	}
 	res := TaskImportResult{TotalRows: len(rows)}
 
@@ -182,20 +200,16 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 	if err != nil {
 		return TaskImportResult{}, fmt.Errorf("nhiem_vu: đọc danh mục mức ưu tiên cho tệp nhập: %w", err)
 	}
-	typeInUse, defaultType := map[string]bool{}, ""
+	typeEntries, defaultType := make([]importCatalogueEntry, 0, len(types)), ""
 	for _, t := range types {
-		if t.DangDung {
-			typeInUse[t.Ma] = true
-			if t.LaMacDinh {
-				defaultType = t.Ma
-			}
+		typeEntries = append(typeEntries, importCatalogueEntry{code: t.Ma, label: t.Nhan, inUse: t.DangDung})
+		if t.DangDung && t.LaMacDinh {
+			defaultType = t.Ma
 		}
 	}
-	priorityInUse := map[string]bool{}
+	priorityEntries := make([]importCatalogueEntry, 0, len(priorities))
 	for _, p := range priorities {
-		if p.DangDung {
-			priorityInUse[p.Ma] = true
-		}
+		priorityEntries = append(priorityEntries, importCatalogueEntry{code: p.Ma, label: p.Nhan, inUse: p.DangDung})
 	}
 
 	// 3. EACH ROW AGAINST THE ANSWERS, then the create path's own normalisation. Every row's refusals
@@ -223,11 +237,20 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 			fail(6, "xã chưa đặt loại nhiệm vụ mặc định — hãy ghi mã loại nhiệm vụ")
 		case typeCode == "":
 			typeCode = defaultType
-		case !typeInUse[typeCode]:
-			fail(6, "không có loại nhiệm vụ đang dùng mang mã này trong danh mục của xã")
+		default:
+			code, problem := resolveImportCatalogue(typeCode, typeEntries, "loại nhiệm vụ")
+			if problem != "" {
+				fail(6, problem)
+			}
+			typeCode = code
 		}
-		if r.PriorityCode != "" && !priorityInUse[r.PriorityCode] {
-			fail(4, "không có mức ưu tiên đang dùng mang mã này trong danh mục của xã")
+		priorityCode := r.PriorityCode
+		if priorityCode != "" {
+			code, problem := resolveImportCatalogue(priorityCode, priorityEntries, "mức ưu tiên")
+			if problem != "" {
+				fail(4, problem)
+			}
+			priorityCode = code
 		}
 		if len(errs) > 0 {
 			continue
@@ -235,7 +258,7 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 
 		moi, err := chuanHoaTaoNhiemVu(YeuCauTaoNhiemVu{
 			TuSinhMa: true, Loai: typeCode, Khoi: r.BlocCode, TieuDe: r.Title, MoTa: r.Description,
-			MucUuTien: r.PriorityCode, GhiChu: r.Note, NguonGiao: string(domain.NguonTrucTiep),
+			MucUuTien: priorityCode, GhiChu: r.Note, NguonGiao: string(domain.NguonTrucTiep),
 			BoPhanID: unitID, NguoiThucHienMa: r.AssigneeCode,
 			HanXuLy: r.Due,
 		})
@@ -320,6 +343,54 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 	res.Created = len(codes)
 	res.Committed = true
 	return res, nil
+}
+
+// importCatalogueEntry is one row of a task catalogue as the import matches a typed cell against it.
+type importCatalogueEntry struct {
+	code, label string
+	inUse       bool
+}
+
+// resolveImportCatalogue turns a typed type/priority cell into an IN-USE catalogue CODE, or a refusal
+// sentence for the row report.
+//
+// THE CODE FIRST, THEN THE LABEL (bug sheet row 19): the Nhiệm vụ screen shows "Khẩn" and "Theo văn
+// bản", never `khan`, and a clerk types what they see. A label is accepted only when it names EXACTLY
+// ONE in-use row, and what is stored is that row's code — the label is a commune's to rename, the code
+// never changes. A label two rows share is refused with a request for the code: picking one would file
+// the task under a level the clerk may not have meant. `typed` arrives lower-cased by the row rules.
+// Sentences never quote the cell (rule 3).
+func resolveImportCatalogue(typed string, entries []importCatalogueEntry, what string) (string, string) {
+	for _, e := range entries {
+		if e.code == typed {
+			if !e.inUse {
+				return "", what + " mang mã này đã tắt trong danh mục của xã"
+			}
+			return e.code, ""
+		}
+	}
+	want := domain.NormaliseImportText(typed)
+	found, off := "", false
+	for _, e := range entries {
+		if domain.NormaliseImportText(e.label) != want {
+			continue
+		}
+		if !e.inUse {
+			off = true
+			continue
+		}
+		if found != "" {
+			return "", "tên này trùng nhiều " + what + " đang dùng — hãy ghi mã thay cho tên (xem mã ở Cấu hình › Danh mục)"
+		}
+		found = e.code
+	}
+	switch {
+	case found != "":
+		return found, ""
+	case off:
+		return "", what + " mang tên này đã tắt trong danh mục của xã"
+	}
+	return "", "không có " + what + " đang dùng mang mã hoặc tên này trong danh mục của xã"
 }
 
 // lookupChunkedAt is lookupChunked with an explicit ceiling — ResolveAssignableStaff's is 50, not the

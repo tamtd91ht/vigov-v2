@@ -108,8 +108,14 @@ func (h *Handler) ImportTasks(w http.ResponseWriter, r *http.Request) {
 			"Tệp theo mẫu cũ: còn cột \"Cơ quan chủ trì tham mưu\" hoặc \"Chuyên viên theo dõi\". Hai vai này đã gộp vào \"Đơn vị thực hiện\" và \"Người thực hiện\" — hãy tải mẫu mới, điền lại rồi gửi.", "")
 		return
 	case errors.Is(err, app.ErrTaskImportLayout):
-		httpx.WriteError(w, http.StatusBadRequest, "import_layout",
-			"Tệp không đúng mẫu nhập nhiệm vụ (hàng tiêu đề khác mẫu, hoặc không có dòng nhiệm vụ nào). Hãy tải mẫu và điền lại.", "")
+		// The use case's sentence names the cell that differs ("ô F2 phải là tiêu đề …"); it quotes the
+		// template only, never the file (app.TaskImportLayoutError).
+		msg := "Tệp không đúng mẫu nhập nhiệm vụ (hàng tiêu đề khác mẫu, hoặc không có dòng nhiệm vụ nào). Hãy tải mẫu và điền lại."
+		var le *app.TaskImportLayoutError
+		if errors.As(err, &le) && le.Sentence != "" {
+			msg = "Tệp không đúng mẫu nhập nhiệm vụ: " + le.Sentence + " Hãy tải mẫu và điền lại."
+		}
+		httpx.WriteError(w, http.StatusBadRequest, "import_layout", msg, "")
 		return
 	case errors.Is(err, app.ErrTaskImportTooManyRows):
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "import_too_many_rows",
@@ -225,14 +231,24 @@ func readImportSheet(b []byte) ([][]string, error) {
 	}
 	defer rows.Close()
 
+	// A workbook saved in the 1904 date system (Excel for Mac's old default) counts serials from another
+	// day: read as 1900, every deadline would land four years and a day early — silently.
+	date1904 := false
+	if props, err := f.GetWorkbookProps(); err == nil && props.Date1904 != nil {
+		date1904 = *props.Date1904
+	}
+
 	var (
 		out      [][]string
+		headAt   = -1 // index in out of the heading row, once seen
 		dataRows int
-		scanned  int
+		// wholeDue are the data rows whose deadline is a WHOLE serial: a date alone, or a date-time at
+		// exactly 00:00. Only the cell's number format tells them apart, and it is read after the
+		// iterator is closed (dueCellShowsClock).
+		wholeDue []int
 	)
 	for rows.Next() {
-		scanned++
-		if scanned > taskImportMaxScannedRows {
+		if len(out) >= taskImportMaxScannedRows {
 			return nil, errImportUnreadable
 		}
 		cells, err := rows.Columns(excelize.Options{RawCellValue: true})
@@ -242,19 +258,35 @@ func readImportSheet(b []byte) ([][]string, error) {
 		if len(cells) > len(domain.TaskImportHeadings)+8 {
 			cells = cells[:len(domain.TaskImportHeadings)+8] // beyond the template: never read
 		}
-		if len(out) > 0 { // a data row
-			if domain.TaskImportRowBlank(cells) {
-				out = append(out, cells)
-				continue
-			}
-			dataRows++
-			if dataRows > domain.TaskImportRowCap {
-				// One past the cap is enough for the use case to refuse; the rest is never parsed.
-				out = append(out, cells)
+		if headAt < 0 {
+			// Title rows above the heading pass through untouched and are NOT counted against the cap: a
+			// title row counted there would let the cap stop the read before the 500th task, and the
+			// use case would never see the rows past it. Past the search window there is no heading to
+			// find; the use case refuses the file from the rows read so far.
+			if domain.CheckTaskImportHeadings(cells) || domain.TaskImportCarriesRetiredColumns(cells) {
+				headAt = len(out)
+			} else if len(out) >= domain.TaskImportHeadingSearchRows {
 				break
 			}
-			if len(cells) > taskImportDueColumn {
-				cells[taskImportDueColumn] = importDueCellText(cells[taskImportDueColumn])
+			out = append(out, cells)
+			continue
+		}
+		if domain.TaskImportRowBlank(cells) {
+			out = append(out, cells)
+			continue
+		}
+		dataRows++
+		if dataRows > domain.TaskImportRowCap {
+			// One past the cap is enough for the use case to refuse; the rest is never parsed.
+			out = append(out, cells)
+			break
+		}
+		if len(cells) > taskImportDueColumn {
+			raw := cells[taskImportDueColumn]
+			if serial, err := strconv.ParseFloat(raw, 64); err == nil && serial == math.Trunc(serial) {
+				wholeDue = append(wholeDue, len(out))
+			} else {
+				cells[taskImportDueColumn] = importDueCellText(raw, false, date1904)
 			}
 		}
 		out = append(out, cells)
@@ -262,25 +294,84 @@ func readImportSheet(b []byte) ([][]string, error) {
 	if err := rows.Error(); err != nil {
 		return nil, errImportUnreadable
 	}
+	_ = rows.Close() // done with the stream before the styles are read from the same file
+	for _, i := range wholeDue {
+		// out[i] is sheet row i+1: excelize yields every row from the first, gaps included.
+		out[i][taskImportDueColumn] = importDueCellText(out[i][taskImportDueColumn],
+			dueCellShowsClock(f, sheets[0], i+1), date1904)
+	}
 	return out, nil
+}
+
+// dueCellShowsClock reports whether the deadline cell of sheet row `row` is FORMATTED with a time —
+// what tells "30/09/2026 00:00" typed as a date-time from "30/09/2026" typed as a date, both stored as
+// the same whole serial. Unreadable style = no clock, which leaves the cell date-only and refused: the
+// safe side, never an invented hour.
+func dueCellShowsClock(f *excelize.File, sheet string, row int) bool {
+	cell, err := excelize.CoordinatesToCellName(taskImportDueColumn+1, row)
+	if err != nil {
+		return false
+	}
+	id, err := f.GetCellStyle(sheet, cell)
+	if err != nil {
+		return false
+	}
+	st, err := f.GetStyle(id)
+	if err != nil || st == nil {
+		return false
+	}
+	if st.CustomNumFmt != nil {
+		return numFmtShowsClock(*st.CustomNumFmt)
+	}
+	switch st.NumFmt {
+	case 18, 19, 20, 21, 22, 45, 46, 47: // ECMA-376 §18.8.30's built-in formats that show hours
+		return true
+	}
+	return false
+}
+
+// numFmtShowsClock reports whether a custom number format displays hours: an `h` outside quoted
+// literals, `[...]` locale/colour sections and backslash escapes ("[$-vi-VN]dd/mm/yyyy\ h:mm;@").
+func numFmtShowsClock(code string) bool {
+	quoted, bracket := false, false
+	for i := 0; i < len(code); i++ {
+		switch c := code[i]; {
+		case quoted:
+			quoted = c != '"'
+		case bracket:
+			bracket = c != ']'
+		case c == '"':
+			quoted = true
+		case c == '[':
+			bracket = true
+		case c == '\\':
+			i++
+		case c == 'h' || c == 'H':
+			return true
+		}
+	}
+	return false
 }
 
 // taskImportDueColumn is the template's "Hạn hoàn thành (ngày giờ)" column (domain.TaskImportHeadings).
 const taskImportDueColumn = 5
 
 // importDueCellText turns a spreadsheet DATE cell — which arrives raw as a serial number such as
-// 46295.708333 — into the text the domain parses. A whole serial is a date WITHOUT a time and is
-// rendered date-only, so the domain refuses it as the user decided; a text cell passes through.
-func importDueCellText(raw string) string {
+// 46295.708333 — into the text the domain parses. A whole serial is a date WITHOUT a time unless the
+// cell's format shows a clock (`clock`, from dueCellShowsClock): date-only is rendered date-only, so
+// the domain refuses it as the user decided. A serial below 1 is a time with no date and passes
+// through raw, which the domain refuses as unreadable — never "1899-12-30 17:00". A text cell passes
+// through.
+func importDueCellText(raw string, clock, date1904 bool) string {
 	serial, err := strconv.ParseFloat(raw, 64)
-	if err != nil || serial <= 0 || serial > 2958465 { // 2958465 = 9999-12-31, Excel's own ceiling
+	if err != nil || serial < 1 || serial > 2958465 { // 2958465 = 9999-12-31, Excel's own ceiling
 		return raw
 	}
-	t, err := excelize.ExcelDateToTime(serial, false)
+	t, err := excelize.ExcelDateToTime(serial, date1904)
 	if err != nil {
 		return raw
 	}
-	if serial == math.Trunc(serial) {
+	if serial == math.Trunc(serial) && !clock {
 		return t.Format("2006-01-02")
 	}
 	// The serial is WALL-CLOCK time with no zone; the domain reads it in Vietnam time. Rounded to the

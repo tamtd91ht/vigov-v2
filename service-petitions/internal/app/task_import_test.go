@@ -308,3 +308,105 @@ func TestTaskImportRefusedWhole(t *testing.T) {
 	}
 	khongGhiGi(t, k)
 }
+
+// --- Bug sheet row 19: "báo lỗi mặc dù các dữ liệu là hợp lệ" -----------------------------------------
+
+func newTaskImportLabelled(t *testing.T, k *khoNhiemVuGia) (*TaskImport, context.Context) {
+	uc, ctx := dungGhiNhiemVu(t, k)
+	types := importTypesFake{rows: []domain.LoaiNhiemVu{
+		{Ma: "theo-van-ban", Nhan: "Theo văn bản", DangDung: true, LaMacDinh: true},
+		{Ma: "co-ban", Nhan: "Cơ bản", DangDung: true},
+		{Ma: "da-tat", Nhan: "Đã tắt", DangDung: false},
+	}}
+	pr := importPrioritiesFake{rows: []domain.MucUuTienNhiemVu{
+		{Ma: "khan", Nhan: "Khẩn", DangDung: true},
+		{Ma: "cao", Nhan: "Cao", DangDung: true},
+		{Ma: "thuong", Nhan: "Thường", DangDung: true},
+		{Ma: "thuong-2", Nhan: "Thường", DangDung: true},
+	}}
+	return NewTaskImport(uc, importLookupsSample(), types, pr), ctx
+}
+
+// TestTaskImportCatalogueByDisplayName — the Nhiệm vụ screen shows "Khẩn" / "Theo văn bản", never the
+// code, and a clerk types what they see. A label naming exactly ONE in-use row is that row's code; the
+// task still stores the CODE (the label may be renamed later, the code never). A label two rows share is
+// refused with a sentence asking for the code, never resolved by guessing.
+func TestTaskImportCatalogueByDisplayName(t *testing.T) {
+	k := khoNVMau()
+	ti, ctx := newTaskImportLabelled(t, k)
+	res, err := ti.Import(ctx, importSheet(
+		importLine("Việc khẩn", "dia-chinh", "", map[int]string{4: "Khẩn", 6: "Cơ bản"}),
+		importLine("Việc theo văn bản", "dia-chinh", "", map[int]string{4: "CAO", 6: "theo văn bản"}),
+	), false, canBoThu())
+	if err != nil || !res.Committed || len(res.Errors) != 0 {
+		t.Fatalf("kết quả = %+v, %v", res, err)
+	}
+	// INSERT INTO nhiem_vu: $4 loai, $9 muc_uu_tien (store/nhiem_vu_ghi.go).
+	inserts := k.cau("INSERT INTO nhiem_vu (")
+	if len(inserts) != 2 {
+		t.Fatalf("%d câu INSERT nhiệm vụ, muốn 2", len(inserts))
+	}
+	for i, want := range [][2]string{{"co-ban", "khan"}, {"theo-van-ban", "cao"}} {
+		a := inserts[i].args
+		if fmt.Sprint(a[3]) != want[0] || fmt.Sprint(a[8]) != want[1] {
+			t.Errorf("dòng %d ghi loại %v, mức %v — muốn MÃ %v", i+1, a[3], a[8], want)
+		}
+	}
+
+	k = khoNVMau()
+	ti, ctx = newTaskImportLabelled(t, k)
+	res, err = ti.Import(ctx, importSheet(
+		importLine("Việc", "dia-chinh", "", map[int]string{4: "Thường", 6: "Đã tắt"}),
+	), false, canBoThu())
+	if err != nil || res.Committed || len(res.Errors) != 2 {
+		t.Fatalf("kết quả = %+v, %v", res, err)
+	}
+	for _, e := range res.Errors {
+		switch e.Column {
+		case domain.TaskImportHeadings[4]:
+			if !strings.Contains(e.Message, "ghi mã") {
+				t.Errorf("tên trùng: %q — phải bảo ghi mã", e.Message)
+			}
+		case domain.TaskImportHeadings[6]:
+		default:
+			t.Errorf("lỗi ở cột lạ %q", e.Column)
+		}
+	}
+	khongGhiGi(t, k)
+}
+
+// TestTaskImportHeadingBelowTitleRowsKeepsSheetRowNumbers — title rows above the heading are not
+// tasks, and every refusal still names the row number the clerk sees in Excel.
+func TestTaskImportHeadingBelowTitleRowsKeepsSheetRowNumbers(t *testing.T) {
+	k := khoNVMau()
+	ti, ctx := newTaskImport(t, k, importLookupsSample(), true)
+	sheet := append([][]string{{"UBND XÃ MẪU"}, {"DANH SÁCH NHIỆM VỤ"}}, importSheet(
+		importLine("Việc hợp lệ", "dia-chinh", "", nil),
+		importLine("Bộ phận lạ", "khong-co", "", nil),
+	)...)
+	res, err := ti.Import(ctx, sheet, true, canBoThu())
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if res.TotalRows != 2 || len(res.Errors) != 1 || res.Errors[0].Row != 5 {
+		t.Errorf("kết quả = %+v — dòng sai là dòng 5 của trang tính", res)
+	}
+}
+
+// TestTaskImportLayoutRefusalNamesTheCell — the whole-file refusal carries the sentence naming the
+// heading cell that differs, and is still ErrTaskImportLayout.
+func TestTaskImportLayoutRefusalNamesTheCell(t *testing.T) {
+	k := khoNVMau()
+	ti, ctx := newTaskImport(t, k, importLookupsSample(), true)
+	wrong := importSheet(importLine("Việc", "dia-chinh", "", nil))
+	wrong[0][3] = "Người thực hiện (email)"
+	_, err := ti.Import(ctx, wrong, false, canBoThu())
+	var le *TaskImportLayoutError
+	if !errors.Is(err, ErrTaskImportLayout) || !errors.As(err, &le) || !strings.Contains(le.Sentence, "D1") {
+		t.Fatalf("lỗi = %v", err)
+	}
+	_, err = ti.Import(ctx, importSheet(), false, canBoThu())
+	if !errors.As(err, &le) || !strings.Contains(le.Sentence, "dòng nhiệm vụ") {
+		t.Errorf("không có dòng: %v", err)
+	}
+}
