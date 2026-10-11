@@ -92,7 +92,7 @@ pipeline {
                                   'bo-sung-cau-hinh-petitions',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
-                                  'dung-clamav', 'tao-tai-khoan-van-hanh',
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh',
                                   'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp'],
            description:'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
                         'di-tru-vihat-miniapp: chạy migration của kho vihat-miniapp (main) vào CSDL trong ' +
@@ -133,7 +133,10 @@ pipeline {
                         'tao-tai-khoan-van-hanh: operatorctl create cho EMAIL_VAN_HANH + TEN_VAN_HANH rồi cấp đủ 8 quyền ops.* ' +
                         '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc). ⚠ MẬT KHẨU TẠM IN VÀO LOG LƯỢT BUILD NÀY ' +
                         '(chủ dự án chấp nhận 02/10/2026): đăng nhập platform-admin, đổi mật khẩu + đăng ký TOTP NGAY; ' +
-                        'mật khẩu tạm tự hết hạn sau 24 giờ')
+                        'mật khẩu tạm tự hết hạn sau 24 giờ · ' +
+                        'cap-quyen-van-hanh: cấp QUYEN_VAN_HANH cho tài khoản ĐÃ CÓ (TAI_KHOAN_VAN_HANH = mã VH-xxxxx ' +
+                        'hoặc email đăng nhập) — quyền đã có thì bỏ qua; xong thì người ấy đăng xuất rồi đăng nhập lại ' +
+                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc)')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
@@ -151,7 +154,7 @@ pipeline {
            description: 'Cho dat-secret-mini-app: App ID Zalo (chỉ chữ số) đã gắn cho xã ấy ' +
                         '(doi-app-id-thang-binh). Mặc định: app riêng của Xã Thăng Bình (App ID từ 01/10/2026).')
     string(name: 'TICKET', defaultValue: '',
-           description: 'Cho dat-secret-mini-app / tao-tai-khoan-van-hanh: BẮT BUỘC — số phiếu yêu cầu, ' +
+           description: 'Cho dat-secret-mini-app / tao-tai-khoan-van-hanh / cap-quyen-van-hanh: BẮT BUỘC — số phiếu yêu cầu, ' +
                         'ghi vào vết kiểm toán (ticket:<số>). Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.')
     // A PLACEHOLDER, not a secret (rule 8): the stage refuses to run while the field still holds it,
     // so a press that forgot to paste the real value never seals a fake secret into prod.
@@ -164,6 +167,16 @@ pipeline {
                         'tên đăng nhập LÀ email). Là dữ liệu cá nhân: job không in nó ra log, nhưng Jenkins lưu tham số của lượt build.')
     string(name: 'TEN_VAN_HANH', defaultValue: '',
            description: 'Cho tao-tai-khoan-van-hanh: tên hiển thị (chữ cái, khoảng trắng, . \' -; tối đa 100 ký tự).')
+    string(name: 'TAI_KHOAN_VAN_HANH', defaultValue: '',
+           description: 'Cho cap-quyen-van-hanh: mã tài khoản vận hành (VH-00001) HOẶC email đăng nhập platform-admin. ' +
+                        'Email chỉ dùng để khớp với danh sách đã che (t***@vihat.vn) — không gửi vào pod, không in ra log; ' +
+                        'khớp nhiều tài khoản thì job DỪNG và in danh sách mã để chọn.')
+    choice(name: 'QUYEN_VAN_HANH',
+           choices: ['ops.zalo_bot.manage', 'tat-ca-8-quyen', 'ops.tenant.manage', 'ops.domain.manage',
+                     'ops.profile.manage', 'ops.mini_app.manage', 'ops.upload_policy.manage', 'ops.qr.issue',
+                     'ops.petition_field.manage'],
+           description: 'Cho cap-quyen-van-hanh: quyền cần cấp. Mặc định ops.zalo_bot.manage (màn Zalo Bot, ADR 0074 #3); ' +
+                        'tat-ca-8-quyen = đủ 8 quyền như lúc tạo tài khoản.')
   }
 
   environment {
@@ -196,7 +209,7 @@ pipeline {
                                   'bo-sung-cau-hinh-petitions',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
-                                  'dung-clamav', 'tao-tai-khoan-van-hanh',
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh',
                                   'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
@@ -1630,6 +1643,149 @@ EOF
             echo "CHƯA CẤP ĐƯỢC:$failed — tài khoản ĐÃ tạo; cấp nốt bằng operatorctl grant --code $CODE ..."
             exit 1
           fi
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // CẤP QUYỀN CHO TÀI KHOẢN VẬN HÀNH ĐÃ CÓ. 'tao-tai-khoan-van-hanh' chỉ cấp quyền LÚC TẠO, nên
+    // một khoá ra đời sau (ops.zalo_bot.manage, ADR 0074 #3) không bao giờ tới các tài khoản cũ —
+    // màn Zalo Bot ẩn với họ mãi. Việc này là lối cấp bổ sung, cùng pod operatorctl một lượt.
+    //
+    // EMAIL KHÔNG VÀO POD: `operatorctl grant` chỉ nhận --code. Nhận email thì job che nó theo đúng
+    // core/privacy.MaskEmail (ký tự đầu + "***@" + tên miền) rồi so với cột EMAIL đã che của
+    // `operatorctl list` — không cần ảnh identity mới, và email không bao giờ in ra log. Hai tài
+    // khoản cùng dạng che (t***@vihat.vn) = DỪNG, in danh sách mã để chạy lại bằng VH-: đoán một
+    // trong hai là cấp quyền vận hành cho nhầm người.
+    //
+    // QUYỀN ĐÃ CÓ = bỏ qua, không phải lỗi (operatorstore.ErrAlreadyGranted): chạy lại 'tat-ca-8-quyen'
+    // trên một tài khoản đủ quyền không được đỏ.
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Cấp quyền tài khoản vận hành') {
+      when { expression { params.HANH_DONG == 'cap-quyen-van-hanh' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error("cap-quyen-van-hanh chỉ chạy với MT=prod (staging dùng chung CSDL).") }
+          if (params.XAC_NHAN != 'vigov-prod') {
+            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+          if (!(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+            error("TICKET bắt buộc, chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không ghi gì cả.")
+          }
+          String acc = (params.TAI_KHOAN_VAN_HANH ?: '').trim()
+          if (acc ==~ /^VH-[0-9]{5}$/) {
+            env.OP_CODE = acc
+            env.OP_MASKED = ''
+          } else if (acc ==~ /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}$/) {
+            env.OP_CODE = ''
+            // Đúng core/privacy.MaskEmail — đổi một bên thì đổi cả hai.
+            env.OP_MASKED = acc.substring(0, 1) + '***@' + acc.substring(acc.indexOf('@') + 1)
+          } else {
+            error("TAI_KHOAN_VAN_HANH phải là mã VH-00001 hoặc email đăng nhập. Không ghi gì cả.")   // không in lại (luật 3)
+          }
+          List allKeys = ['ops.tenant.manage', 'ops.domain.manage', 'ops.profile.manage', 'ops.mini_app.manage',
+                          'ops.upload_policy.manage', 'ops.qr.issue', 'ops.petition_field.manage', 'ops.zalo_bot.manage']
+          if (params.QUYEN_VAN_HANH == 'tat-ca-8-quyen') {
+            env.OP_PERMS = allKeys.join(' ')
+          } else if (allKeys.contains(params.QUYEN_VAN_HANH)) {
+            env.OP_PERMS = params.QUYEN_VAN_HANH
+          } else {
+            error("QUYEN_VAN_HANH '${params.QUYEN_VAN_HANH}' không phải một trong 8 quyền ops.*. Không ghi gì cả.")
+          }
+          env.TICKET = params.TICKET
+          env.RUN_DETAIL = "cấp ${params.QUYEN_VAN_HANH} · ticket ${params.TICKET}"
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NGUOI_BAM}"
+        }
+        sh '''
+          set -eu
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          DEP=vigov-service-identity
+          PODS=""
+          trap 'for p in $PODS; do kubectl -n vigov-prod delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+
+          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
+          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          IMG=$(get_field '{.spec.template.spec.containers[0].image}')
+          get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
+          get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
+          get_field '{.spec.template.spec.imagePullSecrets}' > "$TMP_DIR/pull"
+          for f in envfrom env pull; do [ -s "$TMP_DIR/$f" ] || printf '[]' > "$TMP_DIR/$f"; done
+          echo "── ảnh: $IMG"
+
+          # run_op <hậu tố pod> <mảng lệnh JSON> — như stage 'Tạo tài khoản vận hành'. Trả 0 khi pod Succeeded;
+          # log luôn ở $TMP_DIR/<hậu tố>.log (cả khi hỏng — để đọc ra "already granted").
+          run_op() {
+            pod="vigov-operatorctl-$BUILD_NUMBER-$1"
+            PODS="$PODS $pod"
+            {
+              printf '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"%s","labels":{"app.kubernetes.io/name":"identity-operatorctl"}},' "$pod"
+              printf '"spec":{"restartPolicy":"Never","imagePullSecrets":'; cat "$TMP_DIR/pull"
+              printf ',"containers":[{"name":"operatorctl","image":"%s","envFrom":' "$IMG"; cat "$TMP_DIR/envfrom"
+              printf ',"env":'; cat "$TMP_DIR/env"
+              printf ',"command":%s}]}}' "$2"
+            } > "$TMP_DIR/pod-$1.json"
+            kubectl -n vigov-prod create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            rm -f "$TMP_DIR/pod-$1.json"
+            phase=""; i=0
+            while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
+              phase=$(kubectl -n vigov-prod get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$phase" in Succeeded|Failed) break ;; esac
+              sleep 5; i=$((i+1))
+            done
+            kubectl -n vigov-prod logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            [ "$phase" = "Succeeded" ]
+          }
+
+          # Danh sách luôn đọc trước: xác nhận tài khoản có thật, đang ở trạng thái nào, đang có quyền gì.
+          if ! run_op list "[\\"/operatorctl\\",\\"list\\"]"; then
+            cat "$TMP_DIR/list.log"
+            echo "DỪNG: operatorctl list không chạy được ('no such file' /operatorctl = ảnh identity cũ). Không ghi gì."
+            exit 1
+          fi
+
+          if [ -n "$OP_MASKED" ]; then
+            matches=$(awk -v m="$OP_MASKED" 'NR>1 && tolower($2)==tolower(m) {print $1}' "$TMP_DIR/list.log")
+            count=$(printf '%s\\n' "$matches" | grep -c '^VH-' || true)
+            if [ "$count" != "1" ]; then
+              echo "DỪNG: $count tài khoản khớp $OP_MASKED — chạy lại với TAI_KHOAN_VAN_HANH = mã VH- trong danh sách:"
+              cat "$TMP_DIR/list.log"
+              exit 1
+            fi
+            CODE=$matches
+          else
+            CODE=$OP_CODE
+            if ! awk -v c="$CODE" 'NR>1 && $1==c {f=1} END {exit !f}' "$TMP_DIR/list.log"; then
+              echo "DỪNG: không có tài khoản $CODE. Danh sách:"
+              cat "$TMP_DIR/list.log"
+              exit 1
+            fi
+          fi
+          echo "── tài khoản:"
+          head -1 "$TMP_DIR/list.log"
+          awk -v c="$CODE" 'NR>1 && $1==c' "$TMP_DIR/list.log"
+
+          failed=""
+          for perm in $OP_PERMS; do
+            suffix="grant-$(printf '%s' "$perm" | tr '._' '--')"
+            if run_op "$suffix" "[\\"/operatorctl\\",\\"grant\\",\\"--code\\",\\"$CODE\\",\\"--permission\\",\\"$perm\\",\\"--ticket\\",\\"$TICKET\\"]"; then
+              echo "   ✓ $perm"
+            elif grep -q 'already granted' "$TMP_DIR/$suffix.log"; then
+              echo "   • $perm (đã có, bỏ qua)"
+            else
+              cat "$TMP_DIR/$suffix.log"
+              failed="$failed $perm"
+            fi
+          done
+
+          echo ""
+          if [ -n "$failed" ]; then
+            echo "CHƯA CẤP ĐƯỢC:$failed cho $CODE."
+            exit 1
+          fi
+          echo "Xong. Người dùng $CODE đăng XUẤT rồi đăng nhập lại platform-admin để thấy quyền mới"
+          echo "(ops.zalo_bot.manage → mục 'Zalo Bot' trên thanh bên, cần service-platform từ commit 4526ff8d)."
         '''
       }
     }
