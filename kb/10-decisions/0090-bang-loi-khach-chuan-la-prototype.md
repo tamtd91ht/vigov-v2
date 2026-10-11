@@ -3,7 +3,7 @@ id: 0090-bang-loi-khach-chuan-la-prototype
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 8cb12506
+derived_from_commit: 3421992a
 expires: null
 owns_facts:
   - "luật xử lý bảng lỗi của khách 10–11/10/2026: chuẩn là prototype — mọi tính năng prototype có thì web-admin phải có; tính năng prototype không có mà bảng lỗi đòi gỡ thì GIỮ khi nó là đường duy nhất tới một khả năng; luật cứng thắng cả bảng lỗi lẫn prototype (chủ dự án 10–11/10/2026)"
@@ -84,9 +84,9 @@ có mục này (`web-admin/src/features/phan-anh/petition-merge.tsx:24`, ADR 008
 - **`delete_reason` không còn phân biệt được lý do.** Mọi lần xoá không nhập lý do mang cùng một câu
   (ADR 0077 §*Cái giá* đã nêu cho hạng mục). Người tra vết biết *ai* xoá, *khi nào*, không biết *vì sao*.
 - **Một luật cứng bị thu hẹp.** ADR 0068 lần 5 #4 ghi "cán bộ **không** nhập đánh giá thay công dân
-  (ADR 0062)". Dòng 60 đòi khối "Ghi nhận đánh giá của người dân" của prototype, nên ADR 0062 đang
-  được đổi (**ĐANG LÀM**, xem §*Sửa đổi* của ADR 0062). Phần giữ: điểm cán bộ ghi **không** cộng vào
-  điểm hài lòng.
+  (ADR 0062)". Dòng 60 đòi khối "Ghi nhận đánh giá của người dân" của prototype, nên ADR 0062 đã
+  được đổi (**ĐÃ LÀM** ở `f33dd452` + `3421992a`, xem §*Sửa đổi* của ADR 0062). Phần giữ: điểm cán bộ
+  ghi **không** cộng vào điểm hài lòng. Còn treo ở đó: 1–2 sao cán bộ ghi chưa tự mở lại phiếu.
 - **Bảng lỗi va quyết định cũ.** Thứ tự xử lý vẫn như lần 5: luật cứng trước, rồi prototype, rồi quyết
   định trình bày cũ. Mỗi ADR bị đảo ghi riêng điểm bị đảo trong mục *Sửa đổi 10–11/10/2026* của nó.
 

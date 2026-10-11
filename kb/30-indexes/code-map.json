@@ -810,6 +810,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/petition_field_catalogue.go:55"
     },
+    "app.ForPetition": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:173"
+    },
     "app.Format": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_redact.go:92"
@@ -1850,6 +1854,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/petition_photo.go:1051"
     },
+    "app.NewStaffRecordedRatings": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:69"
+    },
     "app.NewStaffVerificationPhotos": {
       "kind": "func",
       "at": "service-petitions/internal/app/petition_verification_photo.go:135"
@@ -2310,6 +2318,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/task_assignment.go:85"
     },
+    "app.Record": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:83"
+    },
     "app.RecordFullView": {
       "kind": "func",
       "at": "service-comms/internal/app/map_asset.go:362"
@@ -2721,6 +2733,22 @@
     "app.StaffPhotoPetitions": {
       "kind": "type",
       "at": "service-petitions/internal/app/petition_photo.go:1036"
+    },
+    "app.StaffRatingPetitions": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:40"
+    },
+    "app.StaffRatingRecords": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:46"
+    },
+    "app.StaffRatingRequest": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:53"
+    },
+    "app.StaffRecordedRatings": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:60"
     },
     "app.StaffVerificationPhotos": {
       "kind": "type",
@@ -9580,7 +9608,7 @@
     },
     "http.DocPhieuPhanAnh": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_phan_anh.go:423"
+      "at": "service-petitions/internal/http/phieu_phan_anh.go:431"
     },
     "http.DocumentTypeImportTemplate": {
       "kind": "func",
@@ -10522,6 +10550,10 @@
       "kind": "func",
       "at": "service-finance/internal/http/project_discussion.go:200"
     },
+    "http.RecordStaffRating": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/petition_staff_recorded_rating.go:61"
+    },
     "http.Register": {
       "kind": "func",
       "at": "service-reporting/internal/http/routes.go:41"
@@ -10733,6 +10765,10 @@
     "http.StaffPetitionPhotos": {
       "kind": "type",
       "at": "service-petitions/internal/http/petition_photo.go:50"
+    },
+    "http.StaffRecordedRatingActs": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/petition_staff_recorded_rating.go:23"
     },
     "http.StaffVerificationPhotoActs": {
       "kind": "type",

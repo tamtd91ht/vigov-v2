@@ -734,7 +734,7 @@
       "no_confirm": [],
       "viec": "Bảng lỗi khách 10/10/2026, đợt 1: tìm không dấu cho nhiệm vụ và phản ánh (core/textfold + migration 0041, cột sinh title_folded/content_folded/address_folded, không dùng extension — dòng 8); dòng nhiệm vụ của 'Cần xử lý ngay' có title + org_unit_id + org_unit_name, dòng phản ánh vẫn chỉ mã (dòng 5, ADR 0053 §Sửa đổi E2); lọc phản ánh 'Liên quan đến tôi' (scope=related): được giao, có trong nhật ký xử lý, hoặc thuộc bộ phận của tôi — danh tính lấy từ phiên, không từ tham số (dòng 57).",
       "bang_chung": "a06a12ab — core/textfold/textfold.go + test; migrations/0041_search_folded_columns.sql + search_folded_columns_test.go; app/overdue_queue.go (nameUnits, một lần ResolveOrgUnitNames); http/summary.go (tên chỉ gắn cho dòng loại nhiệm vụ); http/xu_ly_phan_anh.go (locPhieuTuQuery); store/search_folded_pg_test.go.",
-      "tiep_theo": "CHƯA CHẠY TRÊN PostgreSQL: migration 0041 và store/search_folded_pg_test.go (thiếu VIGOV_TEST_DSN). Web: đọc title/org_unit_name ở Tổng quan và nối scope=related ĐANG LÀM (sổ web-admin, mục `tong-quan-10-11`, `phan-anh-10-11`)."
+      "tiep_theo": "Chạy migration 0041 trên PostgreSQL: mục `pg-migration-10-11`. Web đã đọc title/org_unit_name và nối scope=related ở 2e7b8128 (sổ web-admin, mục `tong-quan-10-11`, `phan-anh-10-11`)."
     },
     {
       "id": "petitions-bang-loi-dot-2-10-11",
@@ -742,11 +742,23 @@
         "nhiem-vu",
         "phan-anh-nguoi-dan"
       ],
-      "trang_thai": "dang_lam",
+      "trang_thai": "xong",
       "no_confirm": [],
       "viec": "Bảng lỗi khách 10/10/2026, đợt 2: (a) chuyen-tiep trở lại làm trạng thái rẽ nhánh khi giao/chuyển việc — đảo quyết định 28/09/2026 ở mục `giao-lai-nhiem-vu` (ADR 0076 §Sửa đổi G2, dòng 17); (b) nhật ký đề nghị lùi hạn hiện trên nhiệm vụ (dòng 17); (c) cán bộ ghi nhận đánh giá của người dân, nguồn staff_recorded, không cộng vào điểm hài lòng (ADR 0062 §Sửa đổi, dòng 60).",
-      "bang_chung": "Chưa commit lúc ghi (11/10/2026): (a) đang sửa trong domain/nhiem_vu.go, domain/task_assignment.go, app/task_status_handover.go và các tệp cùng lượt; (c) tệp chưa theo dõi migrations/0042_petition_staff_recorded_rating.sql (+ _test.go), domain/ và store/petition_staff_recorded_rating.go.",
-      "tiep_theo": "Builder đang chạy. Khi commit: cập nhật ADR 0076 G2 và ADR 0062 §Sửa đổi (bỏ chữ ĐANG LÀM, ghi commit), chốt câu 1–2 sao do cán bộ ghi có mở lại phiếu không (ADR 0062 §Sửa đổi)."
+      "bang_chung": "f33dd452 — (a) domain/nhiem_vu.go (chuyen-tiep là đích từ moi-giao/da-tiep-nhan/dang-thuc-hien), domain/task_assignment.go (HandoverStatus: đổi người giữ CÓ note → chuyen-tiep, KHÔNG note → giữ trạng thái; bỏ ResetStatus), domain/nhiem_vu_ghi.go (bỏ ErrForwardingIsAssignment), app/task_status_handover.go; (b) app/nhiem_vu.go: gửi/duyệt/từ chối đề nghị lùi hạn ghi nhật ký nhiệm vụ cùng giao dịch (ExtensionRequestLogText, ExtensionDecisionLogText); (c) migrations/0042_petition_staff_recorded_rating.sql, domain/app/store/http petition_staff_recorded_rating*.go, http/routes_staff_recorded_rating.go: POST /api/v1/citizen-reports/{maTraCuu}/staff-recorded-rating, feedback.resolve, 409 citizen_rated / staff_rating_exists, không vào số liệu hài lòng (summary_metrics.go, store/citizen_report_summary.go). Thân commit: make check exit 0, golangci-lint chưa cài nên không chạy. Web: 3421992a.",
+      "tiep_theo": "XONG; ADR 0076 G2 và ADR 0062 §Sửa đổi đã ghi commit. Đảo quyết định 28/09/2026 ở mục `giao-lai-nhiem-vu`: đổi người giữ không còn về moi-giao. CÒN TREO chờ chủ dự án: 1–2 sao cán bộ ghi KHÔNG tự mở lại phiếu (luật 10 điều kiện dừng, ADR 0062 §Còn treo); Kanban 'Chuyển tiếp' không có cột; giao việc không lý do giữ trạng thái (ADR 0076 G2 §Còn treo). Migration 0042 chưa chạy trên PostgreSQL: mục `pg-migration-10-11`."
+    },
+    {
+      "id": "pg-migration-10-11",
+      "menu": [
+        "nhiem-vu",
+        "phan-anh-nguoi-dan"
+      ],
+      "trang_thai": "chua_lam",
+      "no_confirm": [],
+      "viec": "Chạy trên PostgreSQL thật các migration của bảng lỗi 10–11/10/2026: petitions 0041 (cột tìm không dấu) và 0042 (bảng petition_staff_recorded_rating), cùng các ca kiểm PG đi kèm. Migration documents 0010 cùng tình trạng, ghi ở sổ service-documents (mục `don-thu-bang-loi-10-11`).",
+      "bang_chung": "a06a12ab và f33dd452 đều ghi trong thân commit: ca PG bỏ qua (thiếu VIGOV_TEST_DSN).",
+      "tiep_theo": "Cần máy có VIGOV_TEST_DSN tới PostgreSQL 16 (cụm thật là PG16)."
     },
     {
       "id": "trien-khai-tep-nhiem-vu-10-11",

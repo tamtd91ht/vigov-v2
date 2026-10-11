@@ -3,12 +3,12 @@ id: 0062-can-bo-khong-ghi-danh-gia-thay-dan
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: b3cc9582
+derived_from_commit: 3421992a
 expires: null
 owns_facts:
   - "cán bộ không ghi nhận đánh giá sao thay người dân — không có tuyến cán bộ ghi điểm hài lòng, qua điện thoại hay tại quầy"
   - "điểm hài lòng trong KPI và báo cáo chỉ đếm lời đánh giá do chính người dân gửi qua tuyến công dân"
-  - "vì sao ViGov lệch có chủ ý khỏi tuyến POST /{id}/rating (feedback.resolve) của kho yêu cầu và khỏi §8.6 của đặc tả phản ánh — ĐANG ĐỔI từ 11/10/2026: cán bộ ghi nhận đánh giá với nguồn staff_recorded, không cộng vào điểm hài lòng (§Sửa đổi 10–11/10/2026, ĐANG LÀM)"
+  - "vì sao ViGov lệch có chủ ý khỏi tuyến POST /{id}/rating (feedback.resolve) của kho yêu cầu và khỏi §8.6 của đặc tả phản ánh — ĐÃ ĐỔI 11/10/2026: cán bộ ghi nhận đánh giá vào bảng riêng nguồn staff_recorded, quyền feedback.resolve, không cộng vào điểm hài lòng, không tự mở lại phiếu (§Sửa đổi 10–11/10/2026, xong ở f33dd452 + 3421992a)"
 ---
 
 # 0062. Cán bộ không ghi nhận đánh giá sao thay người dân
@@ -66,15 +66,14 @@ Hiện trạng lúc ghi: chỉ có tuyến công dân `POST /api/v1/my-citizen-r
    nếu xã cần, đó là một chỉ số **khác**, tên khác, và là câu hỏi mới cho người dùng
 3. Dựng khối §8.6 của đặc tả
 
-## Sửa đổi 10–11/10/2026 — ĐANG LÀM: cán bộ ghi nhận đánh giá, không cộng vào điểm hài lòng
+## Sửa đổi 10–11/10/2026 — ĐÃ LÀM: cán bộ ghi nhận đánh giá, không cộng vào điểm hài lòng
 
-Mục này ghi thêm, không sửa phần trên. **Trạng thái: ĐANG LÀM.** Builder của service-petitions đang
-chạy. Lúc ghi mục này (11/10/2026) lượt ấy **chưa commit**. Trên đĩa đã có tệp chưa theo dõi
-`service-petitions/migrations/0042_petition_staff_recorded_rating.sql` (bảng riêng
-`petition_staff_recorded_rating`) và tệp domain/store cùng tên. Kiểm lại mục này khi lượt ấy commit.
+Mục này ghi thêm, không sửa phần trên. **Trạng thái: ĐÃ LÀM** — máy chủ `f33dd452`, web-admin
+`3421992a`. **Chưa chạy trên PostgreSQL thật:** migration `service-petitions/migrations/0042_petition_staff_recorded_rating.sql`
+và test PG bị bỏ qua lúc commit (thân commit `f33dd452` nói vậy).
 
 Dòng 60 của bảng lỗi khách đòi khối "Ghi nhận đánh giá của người dân" của prototype. Luật 11/10/2026
-(ADR 0090 #1) là tính năng trên prototype phải có. Hướng đang dựng, do phiên chính chuyển lại:
+(ADR 0090 #1) là tính năng trên prototype phải có. Hướng đã dựng, do phiên chính chuyển lại:
 
 | Quyết định cũ | Hướng mới |
 |---|---|
@@ -86,10 +85,23 @@ Dòng 60 của bảng lỗi khách đòi khối "Ghi nhận đánh giá của ng
 điểm, và điểm 5 sao nhập hộ không phân biệt được với điểm thật. Tách nguồn là cách duy nhất để vừa có
 khối của prototype, vừa không cho con số báo lên lãnh đạo đo chính người ghi nó.
 
-**Còn phải chốt khi lượt dựng commit — đừng tự chọn:**
+**Đã dựng như thế nào** (chi tiết ở mã, không chép lại):
 
-- Điểm 1–2 sao do cán bộ ghi có tự mở lại phiếu không (ADR 0050 điểm 2). Ghi hộ mà né được việc mở lại
-  là lý do thứ hai của §*Vì sao*.
+| Điểm | Nơi |
+|---|---|
+| Một tuyến, khoá `feedback.resolve` đã có trong `quyen`; cán bộ chọn kênh điện thoại hoặc tại quầy, 1–5 sao, ghi chú tuỳ chọn | `service-petitions/internal/http/routes_staff_recorded_rating.go` |
+| Bảng riêng `petition_staff_recorded_rating`, một bản ghi mỗi phiếu; người dân đã tự chấm thì 409 | migration 0042 · `service-petitions/internal/domain/petition_staff_recorded_rating.go` |
+| Không vào số liệu hài lòng nào: mọi số đọc `diem_hai_long`, cột ấy chỉ tuyến công dân ghi | `service-petitions/internal/domain/summary_metrics.go` · `internal/store/citizen_report_summary.go` |
+| Không đổi trạng thái, không mở lại phiếu, không báo người dân | đầu tệp domain ở trên |
+| Khối trên màn chi tiết phiếu: chỉ đọc khi dân đã chấm hoặc đã có bản ghi, câu gợi ý không hứa tự mở lại | `web-admin/src/features/phan-anh/staff-recorded-rating.tsx` |
+
+**Còn treo, chờ chủ dự án — đừng tự chọn:**
+
+- **1–2 sao do cán bộ ghi KHÔNG tự mở lại phiếu.** Prototype nói "Một đến hai sao sẽ tự mở lại phiếu".
+  Mở lại là một bước trong vòng đời phiếu kèm tin báo người dân, nên chạm luật 10 điều kiện dừng #2–#3;
+  chưa ai chốt nên không dựng. Hệ quả: ghi hộ vẫn né được việc mở lại, đúng lý do thứ hai của §*Vì sao*.
+- **Câu chữ kênh "qua quầy tiếp nhận"** (nhãn kênh `tai-quay` trên màn) do phiên dựng tự đặt, cần khách
+  xác nhận.
 - ĐIỀU KIỆN DỪNG #1, #3 ở trên đã bắn. Lời chủ dự án ngày 11/10 trả lời hai điều kiện này. Điều kiện #2
   (cộng vào cùng KPI) **chưa** bắn và vẫn đứng.
 - ADR 0068 lần 5 #4 có dòng "cán bộ không nhập đánh giá thay công dân (ADR 0062)". Dòng ấy nay chỉ còn

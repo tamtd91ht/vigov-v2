@@ -3,14 +3,14 @@ id: 0076-ngan-chi-tiet-nhiem-vu-theo-prototype
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: cca90b98
+derived_from_commit: 3421992a
 expires: null
 owns_facts:
   - "ngăn chi tiết nhiệm vụ KHÔNG còn 3 tab thao tác Xem chi tiết · Chỉnh sửa · Xoá: sửa tại chỗ bằng '✎ Sửa' trong khối thông tin, Xoá (xoá mềm, có lý do) ở cột thao tác; ngăn phải + tab bản ghi giữ (chốt 07/10/2026) — vế 'Xoá ở cột thao tác' THAY bởi §Sửa đổi 07/10/2026 (lần 2) #15: không còn cột thao tác, Xoá ở đầu ngăn"
   - "ô tick + trọng số việc con vẽ như prototype nhưng là control vô hiệu dấu '?' tới khi máy chủ có trọng số (chốt 07/10/2026)"
   - "hai ô phê duyệt nhiệm vụ (lãnh đạo xã phê duyệt hoàn thành · cấp trên công nhận) khoá bằng task.update ở cả máy chủ và giao diện, tick thẳng ở chế độ xem, mỗi lần đổi có vết trước/sau + một dòng nhật ký (chốt 07/10/2026)"
   - "gỡ tệp đính kèm nhiệm vụ: người tải lên hoặc task.update; gỡ được cả tệp đã gắn nhật ký; lý do bắt buộc; xoá mềm; tệp giữ pháp lý → 409; dòng nhật ký 'đã gỡ' KHÔNG chép tên tệp (chốt 07/10/2026)"
-  - "'Cập nhật và giao việc' trong một lần chuyển trạng thái: nhiệm vụ về ĐÚNG trạng thái đã chọn, không về moi-giao; người có task.assign HOẶC người đang thực hiện được giao — đảo quyết định 28/09/2026 CHỈ cho đường gộp; POST /tasks/{ma}/assignment giữ luật cũ (chốt 07/10/2026)"
+  - "'Cập nhật và giao việc' trong một lần chuyển trạng thái: nhiệm vụ về ĐÚNG trạng thái đã chọn, không về moi-giao; người có task.assign HOẶC người đang thực hiện được giao — đảo quyết định 28/09/2026 CHỈ cho đường gộp; POST /tasks/{ma}/assignment giữ luật cũ (chốt 07/10/2026) — vế 'giữ luật cũ' THAY bởi §Sửa đổi 10–11/10/2026 G2; đường gộp nay chọn được cả chuyen-tiep"
   - "luật prototype 'phải có ≥1 tệp trước khi sang Chờ duyệt' KHÔNG áp dụng — chưa ai chốt (07/10/2026)"
   - "từ 07/10/2026 (lần 2) menu Nhiệm vụ web-admin theo spec Nhiệm vụ 02–10 của chủ dự án (tmp/web/nhiem-vu/vigov-nhiem-vu-spec/vigov-nhiem-vu-spec/, ngoài git); ngăn chi tiết theo spec 07 TRỪ thanh tab nhiều hồ sơ + 'Đóng tất cả' (giữ); cột icon dọc bên phải bỏ"
   - "menu Nhiệm vụ theo chữ spec ở bốn chỗ (chốt 07/10/2026 lần 2 #2): nguồn 'Giao trực tiếp' (đảo NV-11), nhãn trạng thái CỐ ĐỊNH của spec (nhãn riêng của xã không hiện ở menu này — đảo câu #21 trên web, cần xác nhận với khách hàng), ô trống Lãnh đạo giao việc '— Người đang tạo nhiệm vụ —' (máy chủ vẫn không lưu người giao), loại mặc định = is_default hoặc dòng đầu (đảo a1e5e64f)"
@@ -22,7 +22,7 @@ owns_facts:
   - "ngăn chi tiết nhiệm vụ không có cột thao tác bên phải; Xoá (xoá mềm, có lý do) ở đầu ngăn; dòng 'Tạo bởi …' bỏ nếu prototype không có (chốt 07/10/2026 lần 2 #15)"
   - "Sổ theo dõi nhiệm vụ vẽ đủ 13 cột prototype, ngăn chi tiết có ô 'Cơ quan chủ trì tham mưu' và 'Chuyên viên VP tham mưu/theo dõi' — hiện CÙNG dữ liệu với Đơn vị thực hiện / Người thực hiện; chỉ trình bày, mô hình dữ liệu ADR 0065 NV5 giữ (chốt 07/10/2026 lần 2 #16)"
   - "hộp 'Giao việc mới' rộng 500px, 800px khi loại 'Theo văn bản' (spec 06) — thay chốt 07/10/2026 'luôn 800px' vốn chỉ nằm ở sổ tiến độ và mã (chốt 07/10/2026 lần 2 #17)"
-  - "bảng lỗi khách 10–11/10/2026: #13 (Xuất Excel) và #14 (+ Thêm việc con) giữ; ĐANG LÀM — chuyen-tiep trở lại làm trạng thái rẽ nhánh, đảo quyết định 28/09/2026 (§Sửa đổi 10–11/10/2026)"
+  - "bảng lỗi khách 10–11/10/2026: #13 (Xuất Excel) và #14 (+ Thêm việc con) giữ; ĐÃ LÀM (f33dd452 + 3421992a) — chuyen-tiep trở lại làm đích rẽ nhánh từ moi-giao/da-tiep-nhan/dang-thuc-hien; giao việc đổi người giữ CÓ lý do chuyển thì vào chuyen-tiep, KHÔNG lý do thì giữ trạng thái — đảo quyết định 28/09/2026 'đổi người giữ thì về moi-giao' cho cả POST /assignment (§Sửa đổi 10–11/10/2026)"
   - "menu Nhiệm vụ: trạng thái trống/lỗi của danh sách giữ cách xử lý hiện có; số liệu chỉ đọc cần máy chủ (vd 'đã gia hạn n lần') = control vô hiệu '?' đúng vị trí prototype (mặc định phiên 07/10/2026 lần 2 #18–#19)"
 ---
 
@@ -214,19 +214,27 @@ Dòng 15 đòi bỏ nút "Xuất Excel" của Sổ theo dõi. Dòng 17 đòi "B�
 **giữ**: #13 ("Xuất Excel") và #14 ("+ Thêm việc con" trong ngăn của việc cha) không đổi. Mỗi thứ là
 đường duy nhất tới một khả năng (ADR 0090 §*Giữ*).
 
-### G2. ĐANG LÀM — `chuyen-tiep` trở lại làm trạng thái rẽ nhánh
+### G2. ĐÃ LÀM — `chuyen-tiep` trở lại làm trạng thái rẽ nhánh
 
-**Trạng thái: ĐANG LÀM.** Lúc ghi mục này (11/10/2026), thay đổi đang nằm chưa commit trong
-`service-petitions/internal/domain/nhiem_vu.go` và các tệp cùng lượt. Kiểm lại mục này khi lượt ấy
-commit.
+**Trạng thái: ĐÃ LÀM** — máy chủ `f33dd452`, web-admin `3421992a`.
 
-| Quyết định cũ | Hướng đang dựng |
+| Quyết định cũ | Hướng đã dựng |
 |---|---|
-| Chủ dự án 28/09/2026 (sổ `service-petitions`, mục `giao-lai-nhiem-vu`): chuyển tiếp là **cùng dòng giao cho bộ phận/người khác** qua `POST /api/v1/tasks/{ma}/assignment`; `chuyen-tiep` bị gỡ khỏi mọi danh sách đích, gửi lên thì 400 | Theo dòng 17 ("Khi giao việc, chuyển việc sẽ update thành trạng thái rẽ nhánh") và luật 11/10: `chuyen-tiep` lại là **đích** từ `moi-giao`, `da-tiep-nhan`, `dang-thuc-hien`, như bảng chuyển của prototype. Giao việc mang tính chuyển tiếp thì nhiệm vụ vào `chuyen-tiep`. Từ `chuyen-tiep`, người nhận mới đưa sang `da-tiep-nhan` / `dang-thuc-hien` |
+| Chủ dự án 28/09/2026 (sổ `service-petitions`, mục `giao-lai-nhiem-vu`): chuyển tiếp là **cùng dòng giao cho bộ phận/người khác** qua `POST /api/v1/tasks/{ma}/assignment`; `chuyen-tiep` bị gỡ khỏi mọi danh sách đích, gửi lên thì 400 | Theo dòng 17 ("Khi giao việc, chuyển việc sẽ update thành trạng thái rẽ nhánh") và luật 11/10: `chuyen-tiep` lại là **đích** từ `moi-giao`, `da-tiep-nhan`, `dang-thuc-hien`, như bảng chuyển của prototype. Lỗi từ chối cũ đã gỡ. Từ `chuyen-tiep`, người nhận mới đưa sang `da-tiep-nhan` / `dang-thuc-hien` |
+| Chủ dự án 28/09/2026: đổi bộ phận/người thực hiện qua `/assignment` thì **luôn về `moi-giao`** | Đổi người giữ **có** "Lý do chuyển" = chuyển việc → `chuyen-tiep`. **Không** lý do = giao việc → **giữ nguyên** trạng thái. Ranh giới lấy từ prototype: có lý do thì gọi `/transfer`, trống thì `/assign` (dẫn chứng ở đầu `service-petitions/internal/domain/task_assignment.go`) |
+| #4c: đường gộp "Cập nhật và giao việc" về đúng trạng thái đã chọn | Giữ, và nay chọn được cả `chuyen-tiep` |
 
-- #4c (đường gộp "Cập nhật và giao việc" về đúng trạng thái đã chọn) cũng bị chạm. Ghi lại khi lượt dựng
-  commit.
+Cũng trong lượt này: gửi, duyệt, từ chối đề nghị lùi hạn đều ghi một dòng nhật ký nhiệm vụ trong cùng
+giao dịch; dòng quyết định luôn nói duyệt hay từ chối và hai mốc hạn, ghi chú của lãnh đạo đứng sau.
+
 - Đây là đổi bảng chuyển trạng thái **nhiệm vụ**, không phải phản ánh. Luật 10 điều kiện dừng #2 chỉ
   áp cho phản ánh.
+
+**Còn treo, chờ chủ dự án — đừng tự chọn:**
+
+| # | Điểm | Vì sao phải hỏi |
+|---|---|---|
+| 1 | Kanban nay cho "Chuyển tiếp" từ ba trạng thái, nhưng bảng **không có cột** `chuyen-tiep`: chọn xong, thẻ rời khỏi bảng | Màn có câu báo điều này (`web-admin/src/features/nhiem-vu/nhan-nhiem-vu.ts`), nhưng thêm cột hay chặn lựa chọn trên Kanban là việc chủ dự án quyết |
+| 2 | Giao việc **không** lý do giữ nguyên trạng thái (theo `/assign` của prototype). Câu của khách "Khi giao việc, chuyển việc sẽ update thành trạng thái rẽ nhánh" có thể hiểu là **mọi** lần đổi người giữ | Hai cách đọc cho hai bảng chuyển khác nhau; đã chọn cách của prototype, cần khách xác nhận |
 - Commit liên quan đã có: `b4b45840` (web) — đổi bộ phận mà để trống người xử lý nay gửi `assignee` rỗng.
   Trước đó trường bị bỏ, nên máy chủ giữ cán bộ cũ của bộ phận trước.

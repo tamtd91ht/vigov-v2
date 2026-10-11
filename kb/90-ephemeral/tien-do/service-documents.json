@@ -187,7 +187,7 @@
       "no_confirm": [],
       "viec": "Bảng lỗi khách 10/10/2026 (ADR 0084 §Sửa đổi 10–11/10/2026): danh mục Loại đơn thư — REST /api/v1/citizen-letter-types, admin.lookup cả đọc lẫn ghi, chỉ bốn mã luật định, xoá mềm có câu cố định (dòng 33); đổi trạng thái đơn thư nhận status_group (máy chủ suy bước; chỉ 'Lưu, không thụ lý' từ dang-xu-ly-don còn đòi chọn bước) kèm Bộ phận xử lý + Cán bộ phụ trách cùng giao dịch, chuyển giao cần petition.create (dòng 44); xuất báo cáo đơn thư theo mẫu prototype (dòng 45).",
       "bang_chung": "8cb12506 — migrations/0010_citizen_letter_type.sql; domain/citizen_letter_type.go, domain/citizen_letter.go (NextStatusInGroup, ErrLetterGroupAmbiguous, ErrLetterHandoverNotPermitted); app/citizen_letter.go (handOverInTx dùng chung cho Route và Move); http/citizen_letter_report_export.go; ca kiểm citizen_letter_status_handover_test.go, citizen_letter_type_test.go. Thông điệp commit: go build/vet/test xanh; check_quyen/audit_actor/khoa_duy_nhat/security xanh.",
-      "tiep_theo": "CHƯA CHẠY TRÊN PostgreSQL: migration 0010 và các ca PG (thiếu VIGOV_TEST_DSN). Sổ đơn thư chưa đọc nhãn Loại đơn thư của xã (vẫn nhãn cố định). Web: nhóm Danh mục Loại đơn thư + khung đổi trạng thái mới ĐANG LÀM (sổ web-admin, mục `cau-hinh-10-11`, `van-ban-10-11`)."
+      "tiep_theo": "CHƯA CHẠY TRÊN PostgreSQL: migration 0010 và các ca PG (thiếu VIGOV_TEST_DSN). Sổ đơn thư chưa đọc nhãn Loại đơn thư của xã (vẫn nhãn cố định). Web: nhóm Danh mục Loại đơn thư + khung đổi trạng thái mới XONG ở 2e7b8128 (sổ web-admin, mục `cau-hinh-10-11`, `van-ban-10-11`)."
     }
   ]
 }
