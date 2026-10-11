@@ -1,5 +1,5 @@
 /**
- * BỀ MẶT CỦA BA TÍNH NĂNG THẬT — quét danh thiếp · tìm văn phòng · đăng nhập bằng số Zalo.
+ * BỀ MẶT CỦA CÁC TÍNH NĂNG — danh thiếp · văn phòng · đăng nhập bằng số Zalo.
  *
  * VÌ SAO Ở ĐÂY KHÔNG CÒN MỘT CỬA `bien-the/…` NÀO:
  *
@@ -16,7 +16,6 @@ import type { ComponentType } from "react";
 import { ManDanhThiep } from "./ManDanhThiep";
 
 export { KhoiDangNhap, TimVanPhong } from "./LienHeTinhNang";
-export { KiemTraDuongTruyen } from "./KiemTraDuongTruyen";
 
 /**
  * Màn "Danh thiếp" — KHÔNG CÒN LÀ MỘT TAB từ 21/09/2026 (khuya).

@@ -322,7 +322,7 @@ export const PHONE_VERIFICATION = {
   // Zalo account only).
   why: "Với số điện thoại Zalo của bạn, xã biết chắc phản ánh là của ai, và bạn xem lại được mọi phản ánh của mình trong “Phản ánh của tôi”. Dù bạn có chia sẻ số hay không, chỉ bạn xem được phản ánh bạn đã gửi.",
   zalo_asks:
-    "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không. Số được gửi qua máy chủ của Tập đoàn ViHAT Group tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
+    "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không. Số được gửi tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
   allow: "Đồng ý chia sẻ số điện thoại",
   decline: "Không chia sẻ",
   working: "Đang xác nhận số điện thoại…",
@@ -639,7 +639,7 @@ export const TRA_CUU = {
   goi_y_ma: "Mã được đưa cho bạn ngay khi gửi phản ánh.",
   nut_tra: "Tra cứu",
   dang_tra: "Đang tìm phiếu…",
-  tim_thay: "Đã tìm thấy phiếu. Thông tin phiếu ở ngay bên dưới.",
+  tim_thay: "Đã tìm thấy phiếu.",
   thieu_ma: "Bạn chưa nhập mã tra cứu. Hãy nhập mã được đưa khi gửi phản ánh.",
   /**
    * MỘT CÂU cho "không có mã này", "phiếu của người khác", "phiếu của xã khác" — máy chủ trả cùng

@@ -11,8 +11,8 @@ import {
 import { SmsOffers } from "../yeu-cau/SmsOffers";
 
 import { DaiChienDich } from "./DaiChienDich";
-import { MOC_CHANG_DUONG, MOC_QUAN_LY_QUYEN, type ThamSoMan } from "./dieu-huong";
-import { HandshakeGlyph, NetworkBackdrop, ShieldGlyph } from "./icons";
+import { MOC_CHANG_DUONG, type ThamSoMan } from "./dieu-huong";
+import { HandshakeGlyph, NetworkBackdrop } from "./icons";
 import { KhoiTin } from "./KhoiTin";
 import { MenuNhanh } from "./MenuNhanh";
 
@@ -186,24 +186,7 @@ export function HomeScreen({ onDi }: ThamSoMan) {
           One tap, a consent sentence that names the number, the content and the way to stop. */}
       <SmsOffers />
 
-      {/*
-        QUẢN LÝ QUYỀN — MỘT KHỐI TÓM TẮT TRÊN MÀN CHỦ, MÀN CHI TIẾT VẪN LÀ MÀN CON.
-
-        Bản mẫu đặt "Quản lý quyền" thành một khối trên màn chủ. Khối ấy ở đây; màn chi tiết thì
-        KHÔNG được kéo lên thành tab thứ sáu, vì quyết định ấy dựa trên một phép đo chứ không trên
-        khẩu vị: ở 320px, sáu tab chỉ còn ~4 ký tự cho từ dài nhất của một nhãn, mà "Trang",
-        "thiếp", "ViHAT", "Quyền" đều 5 (`accessibility.test.ts`).
-
-      */}
-      <button type="button" className="action action--mo" onClick={() => di({ man: "contact", moc: MOC_QUAN_LY_QUYEN })}>
-        <span className="tile tile--soft" aria-hidden="true">
-          <ShieldGlyph className="tile__glyph" />
-        </span>
-        <span>
-          <span className="action__label">Quản lý quyền</span>
-          <span className="action__value">Quyền truy cập và mục đích sử dụng</span>
-        </span>
-      </button>
+      {/* "Quản lý quyền" is no longer a block on this screen (owner 11/10/2026); it stays reachable from Liên hệ. */}
 
       {/* HAI ĐƯỜNG SANG MÀN VỀ ViHAT. Một dẫn tới đầu màn, một dẫn thẳng tới dải lịch sử — đó là
           hai việc khác nhau, nên là hai nút chứ không phải một. */}

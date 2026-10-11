@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { OFFICES } from "../../content/company-profile";
+import { MOC_TIM_VAN_PHONG } from "../company-intro/dieu-huong";
 
 import { docMaQR, thiepCoNoiDung } from "./danh-thiep";
 import { KhungTinhNang } from "./khung";
@@ -235,7 +236,7 @@ describe("mỗi tính năng tự giải thích được cho người duyệt", (
     }
   });
 
-  for (const ma of ["danh-thiep", "van-phong", "dang-nhap"] as const) {
+  for (const ma of ["danh-thiep", "dang-nhap"] as const) {
     it(`${ma}: nói VÌ SAO cần quyền, có nút, và trạng thái đọc được`, () => {
       const nd = noiDung(ma);
       const markup = ve(
@@ -345,10 +346,8 @@ describe("giọng văn của một ứng dụng đã phát hành", () => {
     });
   }
 
-  it("sau khi chia sẻ vị trí, câu không khẳng định đã xếp theo khoảng cách", () => {
-    // `getLocation` chỉ trả token và màn này chưa đổi nó thành toạ độ: nói "gần nhất" hay "đã xếp"
-    // ở đây là nói dối bằng giao diện.
-    expect(VAN_PHONG.da_nhan_vi_tri).not.toMatch(/gần nhất|đã xếp|khoảng cách/);
+  it("khối văn phòng không hứa 'gần bạn' — nó không biết người dùng đứng ở đâu", () => {
+    expect(VAN_PHONG.tieu_de).not.toMatch(/gần/);
   });
 });
 
@@ -420,7 +419,7 @@ describe("mã không phải danh thiếp vẫn dùng được", () => {
   });
 });
 
-describe("tìm văn phòng: từ chối quyền KHÔNG được làm mất tính năng", () => {
+describe("văn phòng: ba địa chỉ và nút chỉ đường, không xin quyền vị trí", () => {
   it("ba văn phòng và nút chỉ đường hiện ngay, trước khi bấm gì", () => {
     const chu = textOf(ve(<TimVanPhong />));
     for (const van_phong of OFFICES) {
@@ -432,21 +431,12 @@ describe("tìm văn phòng: từ chối quyền KHÔNG được làm mất tính
     );
   });
 
-  it("người từ chối vẫn thấy đủ ba văn phòng và nút chỉ đường", () => {
-    const chu = textOf(
-      ve(
-        <KhungTinhNang
-          ma="van-phong"
-          trang_thai={{ kieu: "tu-choi" }}
-          onBam={() => {}}
-          veKetQua={() => null}
-          duoi_cung={<DanhSachVanPhong onChiDuong={() => {}} />}
-        />,
-      ),
-    );
-    expect(chu).toContain(noiDung("van-phong").tu_choi);
-    for (const van_phong of OFFICES) expect(chu).toContain(van_phong.address);
-    expect(chu).toContain(VAN_PHONG.nut_chi_duong);
+  it("không có nút xin vị trí nào, và tiêu đề là mỏ neo của menu nhanh", () => {
+    const markup = ve(<TimVanPhong />);
+    // Mỗi `<button>` là một nút "Chỉ đường" — không có nút thứ tư xin quyền.
+    expect((markup.match(/<button/g) ?? []).length).toBe(OFFICES.length);
+    expect(textOf(markup)).toContain(VAN_PHONG.tieu_de);
+    expect(markup).toContain(`id="${MOC_TIM_VAN_PHONG}"`);
   });
 
   it("đường chỉ đường chỉ mang ĐỊA CHỈ VĂN PHÒNG, không mang gì của người dùng", () => {

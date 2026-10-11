@@ -44,12 +44,20 @@ export type MaDichRaNgoai =
 
 export type DichRaNgoai = {
   ma: MaDichRaNgoai;
+  /**
+   * WHICH APP, TO THE USER, opens it — and so which privacy policy counts it (owner 11/10/2026: the ViHAT intro and
+   * the commune interface are two separate apps). `intro` = a ViHAT intro button (`chinh-sach-rieng-tu.ts`);
+   * `commune` = a commune-interface button, injected by the shell (`commune-privacy.ts`).
+   * `dich-ra-ngoai.test.ts` pins each destination's callers to that side.
+   */
+  app: "intro" | "commune";
   /** Cụm từ in NGUYÊN VĂN vào câu khai của chính sách. Viết cho người dùng đọc. */
   trong_chinh_sach: string;
 };
 
 /**
- * TÁM ĐÍCH ĐẾN (từ 11/10/2026). Thứ tự này là thứ tự đọc ra trong câu khai của chính sách.
+ * TÁM ĐÍCH ĐẾN (từ 11/10/2026): năm của phần giới thiệu ViHAT, ba của giao diện xã. Thứ tự này là thứ tự
+ * đọc ra trong câu khai của mỗi chính sách.
  *
  * Thêm một dòng ở đây là một thay đổi HÀNH VI XỬ LÝ DỮ LIỆU: bề mặt "dữ liệu của bạn có thể tới
  * những nơi nào" rộng ra thật sự. Xem bảng lên số phiên bản trong `chinh-sach-rieng-tu.ts`.
@@ -57,22 +65,27 @@ export type DichRaNgoai = {
 export const DICH_MO_RA_NGOAI: readonly DichRaNgoai[] = [
   {
     ma: "ban-do",
+    app: "intro",
     trong_chinh_sach: "trang bản đồ để chỉ đường tới một văn phòng",
   },
   {
     ma: "ma-qr",
+    app: "intro",
     trong_chinh_sach: "trang web ghi trên mã QR bạn vừa quét",
   },
   {
     ma: "trang-chu",
+    app: "intro",
     trong_chinh_sach: "trang web chính thức của chúng tôi",
   },
   {
     ma: "tin-tuc",
+    app: "intro",
     trong_chinh_sach: "bài viết trên trang tin của chúng tôi",
   },
   {
     ma: "chat-oa",
+    app: "intro",
     trong_chinh_sach: "cửa sổ trò chuyện với Official Account của chúng tôi trên Zalo",
   },
   {
@@ -84,8 +97,10 @@ export const DICH_MO_RA_NGOAI: readonly DichRaNgoai[] = [
     // `readVideoUrl`). What leaves the app is that address and nothing else — no session, no name, no phone
     // (the closing clause of `cauKhaiDichRaNgoai` says so for every row) — and only on the citizen's own tap.
     // So the phrase names WHO chose the destination (the commune) rather than a site this app cannot vouch for.
+    // 11/10/2026: printed in the COMMUNE policy only, so the phrase no longer says "trong ứng dụng của xã".
     ma: "video",
-    trong_chinh_sach: "trang video mà xã đăng kèm một tin trong ứng dụng của xã, đúng địa chỉ xã đã đăng",
+    app: "commune",
+    trong_chinh_sach: "trang video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng",
   },
   {
     // ADDED 01/10/2026 (ADR 0067 §1, §5; owner's answer the same day): a link inside an article's body, and a
@@ -96,8 +111,9 @@ export const DICH_MO_RA_NGOAI: readonly DichRaNgoai[] = [
     // commune itself chose to link — reached from two kinds of button. Like `video`, no fixed host: the
     // phrase names who chose it, and says the app asks first.
     ma: "lien-ket-xa",
+    app: "commune",
     trong_chinh_sach:
-      "trang web mà xã gắn vào một bài viết hoặc một ảnh trên trang chủ của ứng dụng của xã, chỉ sau khi bạn xác nhận rời ứng dụng",
+      "trang web mà xã gắn vào một bài viết hoặc một ảnh trên trang chủ, chỉ sau khi bạn xác nhận rời ứng dụng",
   },
   {
     // ADDED 11/10/2026 (owner): "Tra cứu hồ sơ" of the commune's interface — the one-stop-shop data is NOT in ViGov,
@@ -105,10 +121,17 @@ export const DICH_MO_RA_NGOAI: readonly DichRaNgoai[] = [
     // host (`features/tinh-nang/mo-ra-ngoai.ts` refuses any other), and the phone number and the four digits the
     // citizen typed are NOT sent — not in the address, not anywhere (`cong-dan/man/TienIchAppXa.tsx`).
     ma: "dich-vu-cong",
+    app: "commune",
     trong_chinh_sach:
-      "trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia, mở từ màn Tra cứu hồ sơ của ứng dụng của xã, chỉ sau khi bạn xác nhận rời ứng dụng",
+      "trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia, mở từ màn Tra cứu hồ sơ, chỉ sau khi bạn xác nhận rời ứng dụng",
   },
 ];
+
+/** The ViHAT intro's destinations — counted by the ViHAT privacy policy (`chinh-sach-rieng-tu.ts`). */
+export const INTRO_DESTINATIONS: readonly DichRaNgoai[] = DICH_MO_RA_NGOAI.filter((d) => d.app === "intro");
+
+/** The commune interface's destinations — counted by the commune privacy policy (`commune-privacy.ts`). */
+export const COMMUNE_DESTINATIONS: readonly DichRaNgoai[] = DICH_MO_RA_NGOAI.filter((d) => d.app === "commune");
 
 /**
  * ĐỊA CHỈ CỬA SỔ TRÒ CHUYỆN VỚI OFFICIAL ACCOUNT.
@@ -159,8 +182,11 @@ export function soChu(n: number): string {
  *
  * Con số và danh sách vì thế KHÔNG THỂ lệch nhau: chúng là cùng một mảng đọc ra hai lần. Đó là
  * toàn bộ lý do câu này không nằm thẳng trong `chinh-sach-rieng-tu.ts` như mọi câu khác.
+ *
+ * No default list since 11/10/2026: each policy passes ITS app's list (`INTRO_DESTINATIONS` /
+ * `COMMUNE_DESTINATIONS`); a default of "all" would print the commune's destinations into the ViHAT text.
  */
-export function cauKhaiDichRaNgoai(danh_sach: readonly DichRaNgoai[] = DICH_MO_RA_NGOAI): string {
+export function cauKhaiDichRaNgoai(danh_sach: readonly DichRaNgoai[]): string {
   const so = soChu(danh_sach.length);
   const ke = danh_sach.map((d) => d.trong_chinh_sach);
   const cuoi = ke[ke.length - 1] ?? "";

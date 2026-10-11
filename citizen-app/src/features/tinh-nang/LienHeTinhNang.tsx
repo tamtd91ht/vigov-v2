@@ -1,10 +1,10 @@
 /**
- * HAI TÍNH NĂNG CỦA MÀN LIÊN HỆ — `getLocation` và `getPhoneNumber`.
+ * KHỐI ĐĂNG NHẬP (`getPhoneNumber`) VÀ DANH SÁCH VĂN PHÒNG CỦA MÀN LIÊN HỆ.
  *
- * Cả hai đứng trên màn Liên hệ chứ không thành tab riêng, và đó là chủ đích: người mở màn Liên
- * hệ đang muốn nói chuyện với công ty. "Tìm văn phòng gần tôi" và "Đăng nhập bằng số Zalo" là
- * đúng hai việc họ định làm ở đó — một tab riêng tên "Quyền" thì nói với người duyệt rằng đây
- * là một app đi xin quyền, còn hai tính năng đặt đúng chỗ thì nói rằng đây là app có việc làm.
+ * ⚠ VĂN PHÒNG KHÔNG XIN VỊ TRÍ NỮA (11/10/2026, chủ dự án: "xử lý luôn"). `getLocation` chỉ trả một
+ * mã, và màn này chưa bao giờ đổi được nó thành toạ độ — nút "Tìm văn phòng gần tôi" xin quyền vị
+ * trí mà không xếp được gì. Nay ba văn phòng hiện thẳng, mỗi văn phòng một nút "Chỉ đường": bản đồ
+ * tự dùng vị trí của người dùng ở bước chỉ đường, và ứng dụng không cần biết họ đứng ở đâu.
  *
  * ⚠ KHỐI `getPhoneNumber` LÀ KHỐI ĐĂNG NHẬP, KHÔNG PHẢI "ĐĂNG KÝ NHẬN TƯ VẤN" NỮA (ADR 0020):
  *
@@ -17,15 +17,7 @@
  *   chủ" (điều 3.3.4). Máy chủ là `vihat-miniapp`, backend riêng của Tập đoàn ViHAT Group
  *   (bên vận hành, câu mở #28 — 25/09/2026).
  *
- * ⚠ RANH GIỚI THẬT, VÀ MÃ NÀY KHÔNG GIẢ VỜ VƯỢT QUA NÓ:
- *
- *   `getLocation` chỉ trả **token**; `latitude`/`longitude` đã `@deprecated` và tệp này không
- *   đọc chúng. `navigator.geolocation` thì bị cấm bởi dây bẫy trong
- *   `phase1-collects-nothing.test.ts` và cũng là một quyền khác hẳn. Nghĩa là **không thể xếp
- *   văn phòng theo khoảng cách trên máy** — nên ở đây không có một dòng nào tính khoảng cách, và
- *   câu sau khi chia sẻ vị trí chỉ mời chọn văn phòng, không nói "đã xếp" (`VAN_PHONG.da_nhan_vi_tri`).
- *
- *   `getPhoneNumber` cũng chỉ trả token. Đổi token cần khoá bí mật của Mini App, và khoá ấy chỉ
+ * ⚠ `getPhoneNumber` chỉ trả token. Đổi token cần khoá bí mật của Mini App, và khoá ấy chỉ
  *   được nằm ở máy chủ (ADR 0020, bất biến 2) — nên không có bước đổi mã nào ở client, ở bất kỳ
  *   biến thể nào.
  *
@@ -34,12 +26,13 @@
  */
 import { CONTACT, OFFICES } from "../../content/company-profile";
 import { CompassGlyph, HandshakeGlyph, MailGlyph, PhoneGlyph, PinGlyph } from "../company-intro/icons";
+import { MOC_TIM_VAN_PHONG } from "../company-intro/dieu-huong";
 import { PhatHanhPhien } from "../dang-nhap/PhatHanhPhien";
 
 import { TinhNangCoTrangThai } from "./khung";
 import { moRaNgoai } from "./mo-ra-ngoai";
 import { DANG_NHAP, LOI_MO_NGOAI, MA_RONG, VAN_PHONG } from "./noi-dung";
-import { type MaDangNhap, xinMaDangNhap, xinTokenViTri } from "./zalo-api";
+import { type MaDangNhap, xinMaDangNhap } from "./zalo-api";
 import { useState } from "react";
 
 /**
@@ -53,7 +46,7 @@ export function duongDanBanDo(dia_chi: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dia_chi)}`;
 }
 
-/** Ba văn phòng, THUẦN — luôn hiện, kể cả khi người dùng từ chối chia sẻ vị trí. */
+/** Ba văn phòng, THUẦN. */
 export function DanhSachVanPhong({ onChiDuong }: { onChiDuong: (dia_chi: string) => void }) {
   return (
     <ul className="van-phong">
@@ -86,22 +79,21 @@ export function TimVanPhong() {
     datKhongMoDuoc(!(await moRaNgoai("ban-do", duongDanBanDo(dia_chi))));
   }
 
+  // Cùng khung chữ với các khối tính năng (`tn`), nhưng không có nút xin quyền nào. `id` của tiêu đề là
+  // mỏ neo mục "Văn phòng" của menu nhanh (`MOC_TIM_VAN_PHONG`).
   return (
-    <TinhNangCoTrangThai
-      ma="van-phong"
-      xin={xinTokenViTri}
-      cap_tieu_de="h2"
-      glyph={<CompassGlyph className="tn__glyph" />}
-      veKetQua={(token) =>
-        token === "" ? <p className="tn__loi">{MA_RONG}</p> : <p className="tn__xong">{VAN_PHONG.da_nhan_vi_tri}</p>
-      }
-      duoi_cung={
-        <>
-          <DanhSachVanPhong onChiDuong={(dia_chi) => void chiDuong(dia_chi)} />
-          {khong_mo_duoc && <p className="tn__loi">{LOI_MO_NGOAI}</p>}
-        </>
-      }
-    />
+    <section className="tn hien-len" aria-labelledby={MOC_TIM_VAN_PHONG}>
+      <div className="tn__dau">
+        <span className="tn__huy-hieu" aria-hidden="true">
+          <CompassGlyph className="tn__glyph" />
+        </span>
+        <h2 className="tn__tieu-de" id={MOC_TIM_VAN_PHONG}>
+          {VAN_PHONG.tieu_de}
+        </h2>
+      </div>
+      <DanhSachVanPhong onChiDuong={(dia_chi) => void chiDuong(dia_chi)} />
+      {khong_mo_duoc && <p className="tn__loi">{LOI_MO_NGOAI}</p>}
+    </section>
   );
 }
 

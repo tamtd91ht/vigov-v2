@@ -26,7 +26,6 @@ import { KhungTinhNang, type TrangThai } from "./khung";
 import { ManThiepCuaChungToi } from "./ManThiepCuaChungToi";
 import { moRaNgoai } from "./mo-ra-ngoai";
 import { DANH_THIEP, LOI_MO_NGOAI } from "./noi-dung";
-import { SoHoaThiepGiay } from "./SoHoaThiepGiay";
 import { moCuocGoi, quetMaQR } from "./zalo-api";
 
 /** Một dòng thông tin của tấm thiếp: nhãn, giá trị, và (có thể) một nút hành động. */
@@ -238,7 +237,7 @@ export function QuetDanhThiep() {
 }
 
 /**
- * Màn "Danh thiếp" — ba việc quanh MỘT tấm danh thiếp.
+ * Màn "Danh thiếp" — hai việc quanh MỘT tấm danh thiếp.
  *
  * ⚠ THỨ TỰ ĐỔI 22/09/2026, VÀ NÓ ĐI THEO VIỆC NGƯỜI TA TỚI ĐÂY ĐỂ LÀM:
  *
@@ -246,12 +245,14 @@ export function QuetDanhThiep() {
  *      nó là dòng sản phẩm đã công bố (`SOLUTIONS` mục `namecard`) mà ô menu "Danh thiếp" mang
  *      tên. Mở màn bằng nó là mở màn bằng thứ chạy được ngay. Nó giữ `<h1>`.
  *   2. **Quét thiếp số của đối tác** — việc thứ hai, và là việc cần một lời xin quyền máy ảnh.
- *   3. **Chụp ảnh thiếp giấy** — cuối: nó chỉ hiện ảnh, không đọc được chữ trên ảnh.
  *
  *   Trước lượt này khối quét đứng đầu, vì màn có tên "Quét danh thiếp" và vào bằng một ô menu tên
  *   "Quét QR Lead". Cả hai cái tên ấy đã đổi (`index.ts`, `MenuNhanh.tsx`), nên thứ tự đi theo.
  *
- * BA KHỐI, KHÔNG PHẢI BA TAB. Thanh tab có bốn ô, và trên máy 320px mỗi ô chỉ còn khoảng 72px chữ
+ * "Chụp ảnh thiếp giấy" ĐÃ GỠ (11/10/2026, chủ dự án: app thương mại, không gây khó hiểu): nó xin quyền
+ * máy ảnh rồi chỉ hiện lại tấm ảnh — không đọc được chữ, không lưu, không làm gì tiếp.
+ *
+ * HAI KHỐI, KHÔNG PHẢI HAI TAB. Thanh tab có bốn ô, và trên máy 320px mỗi ô chỉ còn khoảng 72px chữ
  * — `accessibility.test.ts` đo điều đó. Thêm tab là làm vỡ thanh tab để nói một điều mà một màn
  * tên "Danh thiếp" đã nói đủ.
  */
@@ -260,7 +261,6 @@ export function ManDanhThiep() {
     <>
       <ManThiepCuaChungToi />
       <QuetDanhThiep />
-      <SoHoaThiepGiay />
     </>
   );
 }

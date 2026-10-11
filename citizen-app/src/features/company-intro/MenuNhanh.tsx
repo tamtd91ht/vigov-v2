@@ -80,10 +80,9 @@ import {
  *
  * ⚠ KHÔNG CÒN Ô "QUYỀN ỨNG DỤNG" Ở ĐÂY — và đường tới màn ấy KHÔNG mất.
  *
- *   `HomeScreen` đã có sẵn một nút khối "Quản lý quyền" ở gần cuối màn, dẫn tới đúng cùng một chỗ.
- *   Hai đường tới một màn, đứng trên cùng một màn chủ, là hai chỗ người dùng phải đoán xem chúng
- *   khác gì nhau — và ô menu là bản trùng, không phải bản gốc. Màn `QuanLyQuyenScreen` giữ nguyên:
- *   nó là thứ vòng duyệt của Zalo đọc.
+ *   The screen is reached from Liên hệ (the "Quản lý quyền" row there). 11/10/2026 (owner): the home block that
+ *   also led to it was removed too — one way in, on the screen whose subject is how to reach us. Màn
+ *   `QuanLyQuyenScreen` giữ nguyên: nó là thứ vòng duyệt của Zalo đọc.
  *
  *   Chỗ trống ấy, cộng chỗ trống của hai ô danh thiếp gộp lại, thành hai ô mới: "Gợi ý" (bộ chọn
  *   ba bước, chạy hoàn toàn trên máy) và "Đăng nhập" (dẫn thẳng tới khối đăng nhập một chạm trên
@@ -141,12 +140,8 @@ export const MUC_MENU_NHANH: readonly MucMenu[] = [
     so: CONTACT.hotlineDialable,
   },
   {
-    // ⚠ NHÃN BẢN MẪU LÀ "Văn phòng gần tôi", VÀ Ở ĐÂY NÓ KHÔNG ĐƯỢC DÙNG.
-    //
-    //   Khối ấy xin được mã vị trí của Zalo rồi nói thẳng rằng nó CHƯA xếp được ba văn phòng theo
-    //   khoảng cách (`VAN_PHONG.chua_xep_duoc`) — vì toạ độ thật phải đổi ở máy chủ, thứ chưa có.
-    //   Một nhãn hứa "gần tôi" đứng trên một tính năng liệt kê đủ ba địa chỉ theo thứ tự cố định
-    //   là một lời hứa app không giữ, và nó hứa đúng vào lúc đang xin quyền vị trí.
+    // ⚠ NHÃN BẢN MẪU LÀ "Văn phòng gần tôi", VÀ Ở ĐÂY NÓ KHÔNG ĐƯỢC DÙNG: khối đích liệt kê ba văn
+    //   phòng theo thứ tự cố định và không xin vị trí — "gần tôi" là một lời hứa nó không giữ.
     ma: "van-phong",
     nhan: "Văn phòng",
     phu: "Ba địa chỉ",

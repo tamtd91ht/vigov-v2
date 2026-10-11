@@ -9,7 +9,8 @@ owns_facts:
   - "hai chế độ Mini App — app chính mở xã bằng QR, app riêng gắn cứng một xã theo App ID — dùng chung một bản build citizen-app"
   - "xã của app riêng do máy chủ suy ra từ App ID mà app secret xác minh được, qua bảng app_id → tenant_id của platform"
   - "mở app chính không kèm QR thì không vào được nội dung của xã nào"
-  - "điều khoản sử dụng của app riêng của xã đứng tên riêng Ủy ban nhân dân xã ấy, một khuôn cho mọi xã; chính sách riêng tư vẫn một bản dùng chung (chốt 02/10/2026)"
+  - "điều khoản sử dụng của app riêng của xã đứng tên riêng Ủy ban nhân dân xã ấy, một khuôn cho mọi xã (chốt 02/10/2026)"
+  - "app ViHAT và giao diện xã là hai app riêng với người dùng: hai chính sách riêng tư, bản của xã đứng tên UBND xã, không bên nào nhắc bên kia (chốt 11/10/2026)"
 ---
 
 # 0044. Hai chế độ Mini App, một bản build `citizen-app`
@@ -113,7 +114,8 @@ cho mọi app, tách khỏi OA gửi thông báo của từng xã.
 - **Nhớ xã ở app chính cần danh tính:** máy chủ chỉ biết "công dân này đã xác nhận xã A" sau khi
   biết công dân là ai. Thiết kế cầu phiên phải trả lời mở lại không QR thì nhận danh tính bằng
   cách nào trước khi quyết định hiện giới thiệu hay vào xã A.
-- Chính sách riêng tư dùng chung mọi app, vì cùng một pháp nhân đứng tên và vận hành.
+- ~~Chính sách riêng tư dùng chung mọi app, vì cùng một pháp nhân đứng tên và vận hành.~~ Thay ngày
+  11/10/2026: hai bản riêng — xem §*Đã quyết 11/10/2026*.
 
 ## Đã quyết 02/10/2026 — điều khoản sử dụng của app riêng đứng tên UBND xã
 
@@ -142,6 +144,33 @@ trách nhiệm. Bên vận hành hạ tầng kỹ thuật chỉ được khai tr
 liệu của mình đi đâu, người dân phải mở văn bản thứ hai.
 
 **Chưa quyết — không tự chọn hộ:** chính sách riêng tư có cần thêm một bản riêng cho app xã không.
+→ **Đã quyết 11/10/2026**, xem mục ngay dưới.
+
+## Đã quyết 11/10/2026 — app ViHAT và app xã là hai app riêng trong mắt người dùng
+
+Nguyên văn chủ dự án: *"ở phần giao diện vihat mini app là app của vihat, citizen ứng dụng xã là app
+của xã. Nguyên tắc cơ bản ở góc độ người dùng thì vihat không biết app xã là gì và ngược lại app xã
+không biết vihat là gì. Việc app xã mượn cầu qua vihat chỉ là cách làm ngầm phía dưới."*
+
+| Văn bản | App | Nội dung / đứng tên |
+|---|---|---|
+| **Chính sách riêng tư** | **App ViHAT** (phần giới thiệu) | Chỉ nói về app ViHAT: đăng nhập, yêu cầu tư vấn, chat/SMS ưu đãi, danh thiếp. **Không nhắc xã, phản ánh, ViGov** |
+| **Chính sách riêng tư** | **Giao diện xã** (app riêng của xã, và app chung mở bằng QR của xã) | **Bản riêng, đứng tên Ủy ban nhân dân xã** (bên kiểm soát, bên trả lời yêu cầu xem/sửa/xoá). **Không nhắc ViHAT Group**. Cầu qua `vihat-miniapp` khai là "đơn vị cung cấp nền tảng kỹ thuật của ứng dụng" |
+| Màn Quản lý quyền | App ViHAT | Chỉ những lời gọi phần giới thiệu dùng |
+
+- **Thay** dòng "Chính sách riêng tư · Mọi app · Giữ một bản dùng chung" ở bảng 02/10 và câu
+  *"Chính sách riêng tư dùng chung mọi app"* ở §Hệ quả.
+- **Là ĐIỀU KIỆN DỪNG #3 và chủ dự án đã đi qua nó**: bên chịu trách nhiệm dữ liệu phản ánh là UBND xã.
+  Cách đọc *"app xã là app của xã"* thành "UBND xã là bên kiểm soát" là suy ra từ câu trên, ghi ra
+  để chủ dự án sửa nếu sai.
+- **Đường QR trên App ID ViHAT giữ nguyên** (ADR 0047 §06/10, ADR 0083): nó hiện giao diện xã, nên
+  chính sách của giao diện xã áp cho nó. Hồ sơ nộp Zalo vẫn khai đủ mọi lời gọi của từng App ID.
+- **Bản nháp chính sách được duyệt cùng ngày** — gỡ hết dấu "[CHỜ DUYỆT …]". Giá trị chủ dự án chốt
+  cho các chỗ trống: thời hạn lưu phản ánh theo thời hạn lưu trữ hồ sơ do pháp luật về lưu trữ quy
+  định; dữ liệu phiên làm việc với xã, tên Zalo đi kèm yêu cầu chat, yêu cầu đăng ký/huỷ SMS ưu đãi
+  lưu cho tới khi người dùng yêu cầu xoá; máy chủ ViHAT không chuyển tiếp yêu cầu sang hệ thống nào khác.
+- Cùng ngày, phần giới thiệu ViHAT bỏ ba thứ gây khó hiểu: "Chụp ảnh danh thiếp giấy" (xin máy ảnh
+  rồi chỉ hiện lại ảnh), "Kiểm tra đường truyền", bước xin vị trí của "Tìm văn phòng gần tôi".
 
 ## ĐIỀU KIỆN DỪNG
 

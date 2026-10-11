@@ -24,7 +24,7 @@ vi.mock("zmp-sdk", () => sdk);
 // Coded failures here would POST a real report on a machine whose `.env.local` sets the API host.
 vi.mock("../dang-nhap/goi-may-chu", () => ({ reportClientError: async () => {} }));
 
-import { layTenZalo, requestLocationCodes, xinMaDangNhap, xinTokenSoDienThoai, xinTokenViTri } from "./zalo-api";
+import { layTenZalo, requestLocationCodes, xinMaDangNhap, xinTokenSoDienThoai } from "./zalo-api";
 
 const zaloError = (code: number) => Object.assign(new Error("platform text that must not travel"), { code });
 
@@ -46,7 +46,7 @@ describe("a code other than -201 carries the capability and Zalo's code", () => 
 
   it("location", async () => {
     sdk.getLocation.mockRejectedValue(zaloError(-1403));
-    expect(await xinTokenViTri()).toEqual({
+    expect(await requestLocationCodes()).toEqual({
       kieu: "khong-lay-duoc",
       failure: { capability: "location", code: -1403, transient: false },
     });
@@ -69,7 +69,7 @@ describe("a code other than -201 carries the capability and Zalo's code", () => 
 describe("-201 is still the citizen's refusal", () => {
   it.each([
     ["phone", () => sdk.getPhoneNumber, xinTokenSoDienThoai],
-    ["location", () => sdk.getLocation, xinTokenViTri],
+    ["location", () => sdk.getLocation, requestLocationCodes],
     ["name", () => sdk.getUserInfo, () => layTenZalo(true)],
   ] as const)("%s", async (_, fn, call) => {
     fn().mockRejectedValue(zaloError(-201));
@@ -115,7 +115,7 @@ describe("transient is only what the SDK itself calls 'try again later'", () => 
 
   it.each([-1401, -1403, -1404, -2002, -1])("%i is not", async (code) => {
     sdk.getLocation.mockRejectedValue(zaloError(code));
-    const result = await xinTokenViTri();
+    const result = await requestLocationCodes();
     expect(result.kieu === "khong-lay-duoc" && result.failure?.transient).toBe(false);
   });
 });

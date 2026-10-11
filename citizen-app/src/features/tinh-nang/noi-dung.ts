@@ -38,14 +38,11 @@
  */
 export type MaTinhNang =
   | "danh-thiep"
-  | "van-phong"
   // ĐỔI TÊN TỪ `tu-van`, KHÔNG PHẢI THÊM MỘT TÍNH NĂNG: khối `getPhoneNumber` trên màn Liên hệ
   // nay là KHỐI ĐĂNG NHẬP (ADR 0020), không còn là "đăng ký nhận tư vấn". Tên mã đi theo việc
   // nó làm — một cái tên cũ còn lại là một cái tên sẽ được người sau đọc thành lời hứa cũ.
   | "dang-nhap"
-  | "duong-truyen"
-  | "thiep-cua-chung-toi"
-  | "so-hoa-thiep";
+  | "thiep-cua-chung-toi";
 
 export type NoiDungTinhNang = {
   ma: MaTinhNang;
@@ -86,17 +83,6 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
     khong_lay_duoc: "Không quét được mã. Vui lòng thử lại.",
   },
   {
-    ma: "van-phong",
-    nhan_ngan: "Tìm văn phòng",
-    tieu_de: "Tìm văn phòng gần bạn",
-    vi_sao: "Dùng vị trí của bạn để gợi ý văn phòng ViHAT Group thuận tiện nhất khi bạn muốn đến gặp trực tiếp.",
-    nut: "Tìm văn phòng gần tôi",
-    dang_cho: "Đang xác định vị trí…",
-    tu_choi: "Bạn có thể chọn một văn phòng trong danh sách để xem chỉ đường.",
-    ngoai_zalo: CHI_TRONG_ZALO,
-    khong_lay_duoc: "Không xác định được vị trí. Vui lòng thử lại.",
-  },
-  {
     /**
      * KHỐI ĐĂNG NHẬP — `getPhoneNumber` là đường đăng nhập MỘT CHẠM, không phải một biểu mẫu
      * đăng ký. Mục đích phải nói thẳng (điều 3.3.4): số điện thoại dùng để ĐĂNG NHẬP và để NHẬN
@@ -116,18 +102,6 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
     khong_lay_duoc: "Đăng nhập không thành công. Vui lòng thử lại.",
   },
   {
-    ma: "duong-truyen",
-    nhan_ngan: "Kiểm tra đường truyền",
-    tieu_de: "Kiểm tra đường truyền trước cuộc gọi",
-    vi_sao:
-      "Xem thiết bị đang kết nối qua Wi-Fi hay mạng di động — yếu tố ảnh hưởng trực tiếp tới chất lượng cuộc gọi tổng đài.",
-    nut: "Kiểm tra đường truyền",
-    dang_cho: "Đang kiểm tra…",
-    tu_choi: "Đã huỷ kiểm tra.",
-    ngoai_zalo: CHI_TRONG_ZALO,
-    khong_lay_duoc: "Không kiểm tra được kết nối. Vui lòng thử lại.",
-  },
-  {
     ma: "thiep-cua-chung-toi",
     nhan_ngan: "Danh thiếp của chúng tôi",
     // TÊN CÔNG TY VIẾT THẲNG, KHÔNG GHÉP BẰNG `${COMPANY.name}`: một chuỗi ghép lúc chạy không có
@@ -141,23 +115,6 @@ export const NOI_DUNG_TINH_NANG: readonly NoiDungTinhNang[] = [
     tu_choi: "Đã huỷ tải danh thiếp.",
     ngoai_zalo: CHI_TRONG_ZALO,
     khong_lay_duoc: "Không tải được danh thiếp. Vui lòng thử lại.",
-  },
-  {
-    ma: "so-hoa-thiep",
-    nhan_ngan: "Số hoá thiếp giấy",
-    // "Chụp ảnh", không "Số hoá": tính năng hiện ảnh lên màn hình, không bóc chữ khỏi ảnh. Tiêu đề
-    // không được hứa một việc ứng dụng không làm (`phase1-collects-nothing.test.ts` cấm bước OCR).
-    tieu_de: "Chụp ảnh danh thiếp giấy",
-    vi_sao: "Dùng máy ảnh hoặc chọn ảnh có sẵn để lưu lại danh thiếp giấy ngay trên điện thoại.",
-    nut: "Bật máy ảnh",
-    dang_cho: "Đang yêu cầu quyền máy ảnh…",
-    tu_choi:
-      // Nguồn của câu về iOS: bảng Quản lý quyền trong Zalo Developer Console, ô ghi chú của quyền
-      // "Yêu cầu thiết bị cấp quyền truy cập camera". Trên iOS người dùng không được hỏi lại, nên
-      // đây là lúc duy nhất để nói.
-      "Chưa có quyền dùng máy ảnh. Bạn vẫn có thể chọn ảnh có sẵn. Trên iPhone, hãy bật lại quyền trong phần Cài đặt.",
-    ngoai_zalo: CHI_TRONG_ZALO,
-    khong_lay_duoc: "Không yêu cầu được quyền máy ảnh. Vui lòng thử lại.",
   },
 ];
 
@@ -209,64 +166,14 @@ export const LOI_MO_NGOAI = CHI_TRONG_ZALO;
 /** ---------- Tìm văn phòng ---------- */
 
 export const VAN_PHONG = {
+  tieu_de: "Văn phòng ViHAT Group",
   nut_chi_duong: "Chỉ đường",
-  /**
-   * Sau khi người dùng chia sẻ vị trí. `getLocation` chỉ trả token, và màn này chưa đổi token thành
-   * toạ độ — nên câu KHÔNG nói "đã xếp theo khoảng cách". Nó mời chọn, không khẳng định.
-   */
-  da_nhan_vi_tri: "Chọn văn phòng thuận tiện nhất để xem chỉ đường.",
 } as const;
 
 /** ---------- Đăng nhập bằng số Zalo ---------- */
 
 export const DANG_NHAP = {
   nhac_lien_he: "Hoặc liên hệ trực tiếp",
-} as const;
-
-/** ---------- Kiểm tra đường truyền ---------- */
-
-/**
- * NHÃN VÀ Ý NGHĨA CỦA TỪNG KIỂU KẾT NỐI.
- *
- * ⚠ KHÔNG MỘT CON SỐ NÀO Ở ĐÂY, VÀ ĐÓ LÀ MỘT QUYẾT ĐỊNH: `getNetworkType` trả về đúng một chuỗi —
- * kiểu kết nối. Không đo độ trễ, không đo băng thông. Bịa một con số trong ứng dụng của một nhà cung
- * cấp hạ tầng thoại là bịa đúng chỗ khách hàng sẽ đem đối chiếu với máy đo thật.
- */
-export const KIEU_KET_NOI = {
-  wifi: {
-    nhan: "Wi-Fi",
-    y_nghia: "Cuộc gọi có thể bị gián đoạn khi bạn ra khỏi vùng phủ sóng Wi-Fi.",
-  },
-  cellular: {
-    nhan: "Mạng di động",
-    y_nghia: "Chất lượng cuộc gọi phụ thuộc vào vùng phủ sóng tại vị trí của bạn.",
-  },
-  none: {
-    nhan: "Không có mạng",
-    y_nghia: "Vui lòng bật Wi-Fi hoặc dữ liệu di động để thực hiện cuộc gọi.",
-  },
-  "khong-xac-dinh": {
-    nhan: "Không xác định",
-    y_nghia: "Thiết bị không cung cấp thông tin về loại kết nối.",
-  },
-} as const;
-
-export type KieuKetNoi = keyof typeof KIEU_KET_NOI;
-
-/**
- * Quy một giá trị `networkType` của nền tảng về một nhãn ứng dụng có.
- *
- * ⚠ GIÁ TRỊ LẠ RƠI VỀ "KHÔNG XÁC ĐỊNH", KHÔNG NÉM LỖI VÀ KHÔNG HIỆN CHUỖI THÔ: nền tảng được phép
- * thêm giá trị ở một bản SDK sau, khi ứng dụng này đã nằm trên máy người dùng.
- */
-export function kieuKetNoi(tu_nen_tang: string): KieuKetNoi {
-  return tu_nen_tang === "wifi" || tu_nen_tang === "cellular" || tu_nen_tang === "none"
-    ? tu_nen_tang
-    : "khong-xac-dinh";
-}
-
-export const DUONG_TRUYEN = {
-  nhan_ket_qua: "Kết nối hiện tại",
 } as const;
 
 /** ---------- Danh thiếp số của chúng tôi ---------- */
@@ -278,23 +185,6 @@ export const THIEP_CUA_CHUNG_TOI = {
   nut_thoi_giu_sang: "Tắt giữ màn hình sáng",
   dang_giu_sang: "Màn hình luôn sáng cho tới khi bạn rời trang này.",
   da_tai_xong: "Đã tải danh thiếp. Mở tệp để thêm vào danh bạ.",
-} as const;
-
-/** ---------- Số hoá danh thiếp giấy ---------- */
-
-export const SO_HOA_THIEP = {
-  nut_chon_anh: "Chọn ảnh danh thiếp",
-  dang_chon_anh: "Đang mở thư viện ảnh…",
-  cho_phep: "Máy ảnh đã sẵn sàng. Chọn ảnh danh thiếp để tiếp tục.",
-  /**
-   * Zalo ghi nhớ câu trả lời (`authorize` trong `zmp-sdk/index.d.ts`), và `openPermissionSetting` mở
-   * phần Quản lý quyền. Câu dưới nói đúng hai điều ấy.
-   */
-  tu_choi_quyen:
-    "Chưa có quyền dùng máy ảnh. Bạn có thể bật lại trong phần Quản lý quyền của ứng dụng trên Zalo, hoặc chọn ảnh có sẵn.",
-  nhan_anh: "Ảnh danh thiếp",
-  khong_hien_duoc_anh: "Không hiển thị được ảnh. Vui lòng chọn ảnh khác.",
-  khong_chon_anh: "Chưa có ảnh nào được chọn.",
 } as const;
 
 /**

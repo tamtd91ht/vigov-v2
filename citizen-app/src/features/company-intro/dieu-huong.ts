@@ -63,17 +63,15 @@ export const MOC_CHANG_DUONG = "chang-duong";
 export const MOC_QUAN_LY_QUYEN = "quan-ly-quyen";
 
 /**
- * Mỏ neo của hai khối tính năng mà menu nhanh dẫn tới — ĐỌC TỪ CHÍNH HÀM SINH RA `id` ẤY.
- *
- * Gõ tay `"tn-van-phong"` ở đây thì ngày quy ước `id` trong `khung.tsx` đổi, hai mục menu im lặng
- * không cuộn đi đâu: người bấm thấy đúng đầu màn và tự kết luận là nút hỏng. Không có gì đỏ lên,
- * vì cả hai bên đều "đúng" khi đọc riêng.
+ * Mỏ neo khối "Văn phòng ViHAT Group" trên màn Liên hệ. Khối ấy không còn là một tính năng xin quyền
+ * (11/10/2026), nên `id` không do `mocTinhNang` sinh ra nữa: `LienHeTinhNang.tsx` đọc CHÍNH hằng này
+ * làm `id` của tiêu đề, và menu nhanh đọc nó làm đích cuộn — một chuỗi, hai bên cùng đọc.
  *
  * ⚠ `MOC_QUET_MA_QR` VÀ `MOC_SO_HOA_THIEP` ĐÃ ĐƯỢC GỠ (22/09/2026). Hai mục menu "Quét QR Lead" và
  * "Chụp danh thiếp" gộp lại thành MỘT mục "Danh thiếp" dẫn tới ĐẦU màn ấy, nên không còn ai đọc
  * hai hằng kia. Một hằng không ai đọc là một hằng người sau tưởng là đang được dùng.
  */
-export const MOC_TIM_VAN_PHONG = mocTinhNang("van-phong");
+export const MOC_TIM_VAN_PHONG = "tn-van-phong";
 
 /**
  * Mỏ neo khối đăng nhập trên màn Liên hệ — mục "Đăng nhập" của menu nhanh dẫn thẳng tới đây.

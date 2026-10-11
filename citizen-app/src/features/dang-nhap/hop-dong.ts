@@ -546,7 +546,9 @@ export const CLIENT_ERROR_FIELDS: readonly TruongGuiDi[] = [
   { khoa: "code", trong_chinh_sach: "mã lỗi do Zalo trả về" },
   { khoa: "message", trong_chinh_sach: "câu báo lỗi kỹ thuật do Zalo trả về — không chứa tên hay số điện thoại của bạn" },
   { khoa: "appId", trong_chinh_sach: "mã của ứng dụng đang chạy" },
-  { khoa: "host", trong_chinh_sach: "tên miền của xã in trên mã QR bạn đã quét" },
+  // 11/10/2026: was "in trên mã QR bạn đã quét" — false in a commune's own app, whose domain is the build's. Sent
+  // only from the commune interface (`zalo-api.ts` `reportSdkFailure`: null in the ViHAT intro, so left out).
+  { khoa: "host", trong_chinh_sach: "tên miền của xã bạn đang làm việc — không kèm thông tin nào của bạn" },
 ];
 
 /** The report → the request body. THE ONLY PLACE its wire names are written. */

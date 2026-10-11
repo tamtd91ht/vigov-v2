@@ -2,8 +2,8 @@
  * LỚP DUY NHẤT CHẠM VÀO `zmp-sdk` — và nó cố tình nhỏ đúng bằng những lời gọi ba tính năng cần.
  *
  * Tệp này là chỗ duy nhất trong cả kho được phép nhắc tên mô-đun `zmp-sdk` và tên các lời gọi
- * nền tảng — `getPhoneNumber` · `getLocation` · `scanQRCode` · `getAccessToken` và sáu tên còn
- * lại. `phase1-collects-nothing.test.ts` cấm chúng ở MỌI tệp khác — lệnh cấm không bị xoá, nó được thu hẹp phạm vi, và có một ca chứng minh rằng
+ * nền tảng — `getPhoneNumber` · `getLocation` · `scanQRCode` · `getAccessToken` và các tên còn
+ * lại trong `KHAI_BAO_LOI_GOI`. `phase1-collects-nothing.test.ts` cấm chúng ở MỌI tệp khác — lệnh cấm không bị xoá, nó được thu hẹp phạm vi, và có một ca chứng minh rằng
  * ngoài `src/features/tinh-nang/` thì nó vẫn bắt.
  *
  * ⚠ NHẬP ĐỘNG, TRONG HÀM, BỌC TRY/CATCH — BA ĐIỀU KIỆN, KHÔNG PHẢI KHẨU VỊ:
@@ -29,10 +29,9 @@
  *   rước dữ liệu cá nhân về máy đúng lúc nó đã hết cần thiết — và dữ liệu cá nhân nằm trên thiết
  *   bị là thứ luật 3 nói tới, không phải một chi tiết kỹ thuật.
  *
- *   HỆ QUẢ THẲNG THẮN, VÀ MÃ NÀY KHÔNG GIẢ VỜ VƯỢT QUA NÓ: chỉ có token nghĩa là **không thể xếp
- *   văn phòng theo khoảng cách ngay trên máy**. Đổi token thành toạ độ là một bước ở máy chủ, có
- *   app secret. Nên ở đây không có một dòng nào tính khoảng cách, và màn hình nói ra điều đó
- *   bằng tiếng Việt thay vì vẽ một danh sách đã "sắp xếp" mà thật ra không sắp xếp gì.
+ *   HỆ QUẢ: đổi token thành toạ độ là một bước ở máy chủ, có app secret (`requestLocationCodes` + the
+ *   location exchange of the commune interface). Nothing here computes a distance; the intro's office list asks
+ *   no location at all since 11/10/2026 (owner).
  *
  * ⚠ KHÔNG `console.log`, KHÔNG `fetch`, KHÔNG CHỖ LƯU NÀO. Nội dung mã QR có thể là bất cứ thứ
  * gì, kể cả dữ liệu cá nhân của NGƯỜI KHÁC (một tấm danh thiếp là dữ liệu cá nhân của chủ nhân
@@ -109,28 +108,33 @@ export type KhaiBaoLoiGoi = {
    * server for the login, ADR 0066); a reviewer who reads them looks for a button that is not there.
    */
   commune_app?: { man: string; tinh_nang: string; de_lam_gi: string; roi_khoi_may: string };
+  /**
+   * What the ViHAT intro's "Quản lý quyền" screen shows for this call (owner 11/10/2026: to the user the ViHAT
+   * intro and the commune interface are two separate apps, so the intro's screen never names a commune, a petition
+   * or ViGov). `null` = the intro does not make this call, and the screen hides the row. Absent on a "thuong-mai"
+   * row = the main fields already are the intro's words. On a "ca-hai" row it is REQUIRED, object or `null`
+   * (`ranh-gioi-hai-nua.test.ts` §3c): the main fields there describe the shared App ID as a whole — the intro AND
+   * the commune page a QR opens — which is the dossier's truth, not the intro screen's.
+   */
+  intro_app?: { man: string; tinh_nang: string; de_lam_gi: string; roi_khoi_may: string } | null;
 };
 
 /**
- * MƯỜI BẢY LỜI GỌI (08/10/2026: `chooseImage`, `configAppView`; 11/10/2026: `minimizeApp`, `openShareSheet`), MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản lý quyền" đọc xuôi.
+ * MƯỜI SÁU LỜI GỌI (08/10/2026: `chooseImage`, `configAppView`; 11/10/2026: `minimizeApp`, `openShareSheet` added,
+ * `getNetworkType` removed with the intro's "Kiểm tra đường truyền"), MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản
+ * lý quyền" đọc xuôi.
  *
- * Chín quyền phải xin ở Developer Console; `getAccessToken` là lời gọi thứ mười cần quyền nhưng
- * không hỏi người dùng; `openPhone` và `openWebview` là `@zaloOnly` và không nằm trong số quyền
- * phải xin — chúng vẫn ở đây, vì màn "Quản lý quyền" trả lời câu "app này gọi những gì của nền
+ * 11/10/2026 (owner): the intro no longer photographs paper cards nor asks a location for offices, so
+ * `requestCameraPermission`, `openMediaPicker`, `chooseImage` and `getLocation` are the commune interface's alone
+ * (`nha-nuoc`). They are still called under the SHARED App ID — on the commune page a QR opens (`App.tsx`
+ * `QrCommuneApp`) — so the shared dossier keeps every one of them: it prints the whole table.
+ *
+ * `getAccessToken` cần quyền nhưng không hỏi người dùng; `openPhone` và `openWebview` là `@zaloOnly` và không nằm
+ * trong số quyền phải xin — chúng vẫn ở đây, vì màn "Quản lý quyền" trả lời câu "app này gọi những gì của nền
  * tảng", và một lời gọi bị bỏ khỏi bảng vì "nó không phải quyền" là đúng cái lỗ hổng khai báo mà
  * bảng này tồn tại để đóng.
  */
 export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
-  {
-    api: "getNetworkType",
-    nua: "thuong-mai",
-    man: "Giải pháp",
-    tinh_nang: "Kiểm tra đường truyền",
-    de_lam_gi:
-      "Đọc kiểu kết nối hiện tại (Wi-Fi hay di động) để nói trước chất lượng một cuộc gọi tổng đài trên đường mạng bạn đang dùng.",
-    hoi_nguoi_dung: false,
-    roi_khoi_may: "",
-  },
   {
     api: "scanQRCode",
     nua: "thuong-mai",
@@ -166,13 +170,20 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // https page — commune app only, each after the "Bạn sắp rời ứng dụng để mở <host>" question (`leave-app.tsx`).
     api: "openWebview",
     nua: "ca-hai",
-    man: "Mọi màn · Tin tức của xã và Trang chủ (ứng dụng của xã)",
+    man: "Mọi màn · Tin tức của xã, Trang chủ và Tra cứu hồ sơ (giao diện của xã)",
     tinh_nang:
-      "Chat với Official Account · Quét danh thiếp · Tìm văn phòng · Tin ViHAT · Website · Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã",
+      "Chat với Official Account · Quét danh thiếp · Chỉ đường tới văn phòng · Tin ViHAT · Website · Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã · Tra cứu hồ sơ",
     de_lam_gi:
-      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trong ứng dụng của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng, và trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ, sau khi bạn xác nhận rời ứng dụng.",
+      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trên giao diện của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng, trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ, và trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia, sau khi bạn xác nhận rời ứng dụng.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
+    intro_app: {
+      man: "Mọi màn",
+      tinh_nang: "Chat với Official Account · Chỉ đường tới văn phòng · Quét danh thiếp · Tin ViHAT · Website",
+      de_lam_gi:
+        "Mở một trang bên ngoài ngay trong Zalo, chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của ViHAT Group, bản đồ chỉ đường tới một văn phòng của chúng tôi, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, hoặc trang web chính thức của chúng tôi.",
+      roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
+    },
     // 11/10/2026 (owner): "Tra cứu hồ sơ" opens the national public-service portal's dossier lookup the same way,
     // after the same question — and the question now says "Bà con" (ADR 0050 #6).
     commune_app: {
@@ -204,79 +215,57 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may: "",
   },
   {
-    // `nua` BECAME "ca-hai" ON 02/10/2026: "Chụp ảnh" on "Gửi phản ánh" of the commune's own app asks this
-    // same permission (`takeScenePhoto`). SINCE 06/10/2026 the shared App ID asks it there too — the shared app
-    // opened from a commune QR renders the commune's interface (`App.tsx` `QrCommuneApp`). The sentences below
-    // still describe only the business-card feature: updating them for the shared app's reviewer is OWED.
+    // 02/10/2026 → 11/10/2026: was "ca-hai" (the intro's paper-card photo + the commune's scene photo). The intro's
+    // paper-card block was REMOVED 11/10/2026 (owner), so only the commune interface asks it (`takeScenePhoto`) —
+    // in the commune's own app, and under the shared App ID on the commune page a QR opens (`App.tsx`
+    // `QrCommuneApp`). `nha-nuoc` = the state half calls it, whichever App ID runs that half.
+    // 09/10/2026 (owner): the long explanation card became ONE question, "Cho phép ứng dụng dùng camera để chụp ảnh
+    // hiện trường?" (`cong-dan/man/consent-dialog.tsx`); Zalo is asked only after its "Cho phép".
     api: "requestCameraPermission",
-    nua: "ca-hai",
-    man: "Danh thiếp",
-    tinh_nang: "Số hoá thiếp giấy",
-    de_lam_gi: "Hỏi bạn có cho phép dùng máy ảnh hay không, trước khi mở cửa sổ chọn ảnh.",
+    nua: "nha-nuoc",
+    man: "Gửi phản ánh · Phản ánh của tôi",
+    tinh_nang: "Ảnh hiện trường",
+    de_lam_gi:
+      "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?”. Bấm “Không” thì Zalo không được hỏi.",
     hoi_nguoi_dung: true,
+    // The question itself sends nothing; the photo's way out is the `chooseImage` row below.
     roi_khoi_may: "",
-    commune_app: {
-      man: "Gửi phản ánh · Phản ánh của tôi",
-      tinh_nang: "Ảnh hiện trường",
-      // 09/10/2026 (owner): the long explanation card became ONE question, "Cho phép ứng dụng dùng camera để chụp
-      // ảnh hiện trường?" (`cong-dan/man/consent-dialog.tsx`); Zalo is asked only after its "Cho phép".
-      de_lam_gi:
-        "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?”. Bấm “Không” thì Zalo không được hỏi.",
-      // The question itself sends nothing; the photo's way out is the `chooseImage` row below.
-      roi_khoi_may: "",
-    },
   },
   {
-    // `nua` BECAME "ca-hai" ON 02/10/2026 — the scene photos of the commune's own app. SINCE 08/10/2026 (owner)
-    // "Chụp ảnh" no longer goes through this call (it opened Zalo's full-screen camera, `zcamera_photo`): it is
-    // the `chooseImage` row below. This call keeps "Chọn ảnh có sẵn" only (`chooseScenePhotos`). In the shared
-    // app's business-card feature nothing leaves the phone, as before.
+    // Same history as the row above: the intro's paper-card picker is gone (11/10/2026), the commune interface keeps
+    // "Chọn ảnh có sẵn" (`chooseScenePhotos`). Since 08/10/2026 "Chụp ảnh" is the `chooseImage` row below.
+    // 09/10/2026 (owner): opened only after "Cho phép" on the app's own one-line question.
     api: "openMediaPicker",
-    nua: "ca-hai",
-    man: "Danh thiếp",
-    tinh_nang: "Số hoá thiếp giấy",
+    nua: "nha-nuoc",
+    man: "Gửi phản ánh · Phản ánh của tôi",
+    tinh_nang: "Ảnh hiện trường",
     de_lam_gi:
-      "Mở cửa sổ chọn ảnh để bạn chụp hoặc chọn một tấm thiếp giấy. Ảnh chỉ hiện lên màn hình này.",
+      "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
     hoi_nguoi_dung: true,
-    roi_khoi_may: "",
-    commune_app: {
-      man: "Gửi phản ánh · Phản ánh của tôi",
-      tinh_nang: "Ảnh hiện trường",
-      // 09/10/2026 (owner): opened only after "Cho phép" on the app's own one-line question.
-      de_lam_gi:
-        "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
-      roi_khoi_may:
-        "Ảnh bà con đã chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
-    },
+    roi_khoi_may:
+      "Ảnh bà con đã chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
   },
   {
     // ADDED 08/10/2026 (owner): "Chụp ảnh" opens the phone's own camera instead of Zalo's full-screen one
     // (`takeScenePhoto`). Same feature, same way out as the `openMediaPicker` row above — so the same sentences.
     // `hoi_nguoi_dung` false: the question is the `requestCameraPermission` row, which runs right before it;
-    // this call opens the camera, it asks nothing.
+    // this call opens the camera, it asks nothing. `nha-nuoc` since 11/10/2026, as the two rows above.
     api: "chooseImage",
-    nua: "ca-hai",
-    man: "Trang của một xã mở bằng mã QR · Gửi phản ánh · Phản ánh của tôi",
+    nua: "nha-nuoc",
+    man: "Gửi phản ánh · Phản ánh của tôi",
     tinh_nang: "Ảnh hiện trường",
-    // 09/10/2026 (owner): and only after "Cho phép" on the app's one-line camera question (`consent-dialog.tsx`).
     de_lam_gi:
-      "Mở máy ảnh của điện thoại để bạn chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bạn bấm “Chụp ảnh” lúc gửi phản ánh tới xã rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
+      "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
     hoi_nguoi_dung: false,
     roi_khoi_may:
-      "Ảnh bạn đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy.",
-    commune_app: {
-      man: "Gửi phản ánh · Phản ánh của tôi",
-      tinh_nang: "Ảnh hiện trường",
-      de_lam_gi:
-        "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
-      roi_khoi_may:
-        "Ảnh bà con đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
-    },
+      "Ảnh bà con đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
   },
   {
     // ADDED 08/10/2026 (owner): the shared App ID opened by a commune QR shows THAT commune's name on Zalo's own
     // top bar instead of "ViHAT Group" (`setCommuneActionBar`, called from `App.tsx` `QrCommuneApp`). The commune
     // app is not concerned: its own App ID carries its own title. Nothing is read, nothing leaves the phone.
+    // `thuong-mai` because the SHELL of the shared App ID makes it, not the state half; `intro_app: null` because
+    // the intro never does — its "Quản lý quyền" names no commune (owner 11/10/2026).
     api: "configAppView",
     nua: "thuong-mai",
     man: "Trang của một xã mở bằng mã QR",
@@ -285,6 +274,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       "Đổi dòng chữ trên thanh tiêu đề của Zalo thành tên xã bạn đang xem, cùng màu với phần đầu trang của xã, để bạn luôn biết mình đang làm việc với xã nào.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "",
+    intro_app: null,
   },
   {
     // ADDED 11/10/2026 (owner: the customer prototype's `MinimiseBubble`) — the state half's FIRST call of its own
@@ -313,9 +303,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
   {
     api: "vibrate",
     nua: "thuong-mai",
-    man: "Giải pháp · Danh thiếp",
+    // "Giải pháp" left 11/10/2026 with "Kiểm tra đường truyền"; the one caller is `ManThiepCuaChungToi`.
+    man: "Danh thiếp",
     tinh_nang: "Phản hồi khi một việc chạy xong",
-    de_lam_gi: "Rung một nhịp ngắn để báo việc bạn vừa bấm đã xong.",
+    de_lam_gi: "Rung một nhịp ngắn để báo danh thiếp của chúng tôi đã được tải xuống máy bạn.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "",
   },
@@ -364,8 +355,17 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       tinh_nang: "Xác nhận số điện thoại với xã · Vị trí nơi xảy ra sự việc",
       de_lam_gi:
         "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại. Lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh, mã này đi cùng mã số điện thoại bạn đồng ý chia sẻ tới hệ thống của xã, để mở phiên làm việc với xã. Khi ứng dụng lấy vị trí lúc gửi phản ánh (khi bạn chọn lĩnh vực, hoặc bấm “Lấy vị trí hiện tại”), mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
+      // 11/10/2026 (owner): commune text names no company — the location exchange's server is the technical platform's.
       roi_khoi_may:
-        "Mã phiên được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — tới máy chủ của Tập đoàn ViHAT Group để đổi mã vị trí thành toạ độ.",
+        "Mã phiên được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — tới máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng để đổi mã vị trí thành toạ độ.",
+    },
+    intro_app: {
+      man: "Liên hệ · Trang chủ",
+      tinh_nang: "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS",
+      de_lam_gi:
+        "Lấy mã phiên Zalo của bạn khi bạn đăng nhập. Mã này không chứa tên hay số điện thoại; chỉ máy chủ của chúng tôi đổi được nó thành định danh người dùng. Phiên mở ra từ mã này cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ hoặc “Đăng ký nhận” ưu đãi SMS ở Trang chủ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm.",
+      roi_khoi_may:
+        "Mã phiên được gửi tới máy chủ của Tập đoàn ViHAT Group để mở phiên đăng nhập, kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS.",
     },
   },
   {
@@ -392,6 +392,14 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       de_lam_gi:
         "Lấy mã số điện thoại ở lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh — sau khi ứng dụng nói rõ vì sao và bạn bấm đồng ý. Số điện thoại KHÔNG nằm trong mã; chỉ hệ thống của xã đổi được mã thành số. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
       roi_khoi_may: "Mã số điện thoại được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã.",
+    },
+    intro_app: {
+      man: "Liên hệ · Trang chủ",
+      tinh_nang: "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS",
+      de_lam_gi:
+        "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ của chúng tôi đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ, số ấy giúp chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Khi bạn bấm “Đăng ký nhận” ưu đãi SMS ở Trang chủ, số ấy là nơi nhận tin nhắn SMS giới thiệu ưu đãi của chúng tôi, cho tới khi bạn bấm “Huỷ nhận ưu đãi SMS”.",
+      roi_khoi_may:
+        "Mã số điện thoại được gửi tới máy chủ của Tập đoàn ViHAT Group để mở phiên đăng nhập, kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS.",
     },
   },
   {
@@ -435,33 +443,35 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
         "Lấy tên hiển thị Zalo của bạn nhiều nhất một lần mỗi lần mở — khi bạn mở ứng dụng của xã và đồng ý; hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh (ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại); hoặc, nếu số điện thoại đã được xác nhận trước đó, khi bạn bấm gửi phản ánh và chọn “Cho phép” ở câu hỏi “Dùng tên Zalo của bà con làm tên người gửi?” — để hiện sẵn ở dòng người gửi khi gửi phản ánh tới xã; bạn từ chối thì tự nhập họ tên. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh. Cùng lần lấy tên ấy, ảnh đại diện Zalo của bạn hiện ở màn Cá nhân; ảnh không được gửi đi đâu.",
       roi_khoi_may: "",
     },
+    intro_app: {
+      man: "Liên hệ",
+      tinh_nang: "Chat với chuyên viên",
+      de_lam_gi:
+        "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý, khi bạn bấm “Chat với chuyên viên”. Tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên.",
+      roi_khoi_may:
+        "Tên hiển thị Zalo được gửi tới máy chủ của Tập đoàn ViHAT Group cùng yêu cầu trò chuyện, khi bạn bấm “Chat với chuyên viên”.",
+    },
   },
   {
     api: "getLocation",
-    nua: "ca-hai",
     // "Gửi phản ánh" THÊM 28/09/2026: ứng dụng riêng của một xã (`--vao-thang`) có nút "Lấy vị trí hiện
     // tại" để cán bộ tìm đúng nơi xảy ra sự việc. Cùng một lời gọi, cùng ranh giới: chỉ nhận MÃ.
-    // 29/09/2026: "Gửi phản ánh" (both apps) now EXCHANGES the code — `vihat-miniapp` `POST
-    // /api/v1/location` (0dada0f) turns it into coordinates, which come back to the phone, are shown to
-    // the citizen, and go to the commune only inside a petition the citizen sends. "Tìm văn phòng" is
-    // unchanged: it still only takes the code and exchanges nothing.
-    man: "Liên hệ · Gửi phản ánh",
-    tinh_nang: "Tìm văn phòng gần bạn · Vị trí nơi xảy ra sự việc",
+    // 29/09/2026: "Gửi phản ánh" now EXCHANGES the code — `vihat-miniapp` `POST /api/v1/location` (0dada0f)
+    // turns it into coordinates, which come back to the phone, are shown to the citizen, and go to the commune
+    // only inside a petition the citizen sends.
+    // `nha-nuoc` SINCE 11/10/2026: the intro's "Tìm văn phòng gần tôi" no longer asks a location (owner) — the
+    // commune interface is the only caller, in the commune's own app and on the commune page a QR opens. The
+    // exchange server is named neutrally (owner decision 1): to the citizen it is the technical platform's.
+    // 11/10/2026 (owner: theo prototype): the form also asks as soon as a field is chosen, and when a draft is
+    // resumed without an address — the prototype's `NewFeedbackPage.tsx:227,239`.
+    nua: "nha-nuoc",
+    man: "Gửi phản ánh",
+    tinh_nang: "Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ. Ở màn Liên hệ, mã chỉ ở lại trên máy. Ở màn Gửi phản ánh, khi bạn bấm “Lấy vị trí hiện tại”, mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
+      "Lấy mã vị trí khi bạn chọn lĩnh vực phản ánh (hoặc tiếp tục một phản ánh đang soạn chưa ghi địa chỉ), hoặc khi bạn bấm “Lấy vị trí hiện tại”, và chỉ khi bạn đồng ý chia sẻ. Mã được gửi tới máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
-      "Ở màn Gửi phản ánh: mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi. Ở màn Liên hệ: không có gì rời khỏi máy.",
-    commune_app: {
-      man: "Gửi phản ánh",
-      tinh_nang: "Vị trí nơi xảy ra sự việc",
-      // 11/10/2026 (owner: theo prototype): the form also asks as soon as a field is chosen, and when a draft is
-      // resumed without an address — the prototype's `NewFeedbackPage.tsx:227,239`.
-      de_lam_gi:
-        "Lấy mã vị trí khi bạn chọn lĩnh vực phản ánh (hoặc tiếp tục một phản ánh đang soạn chưa ghi địa chỉ), hoặc khi bạn bấm “Lấy vị trí hiện tại”, và chỉ khi bạn đồng ý chia sẻ. Mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
-      roi_khoi_may:
-        "Mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi.",
-    },
+      "Mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi.",
   },
 ];
 
@@ -697,11 +707,6 @@ export function readZaloProfile(ask: boolean): Promise<KetQuaXin<{ name: string;
   );
 }
 
-/** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */
-export function xinTokenViTri(): Promise<KetQuaXin<string>> {
-  return xin("location", async (sdk) => (await sdk.getLocation()).token ?? "");
-}
-
 /**
  * The two codes the location exchange needs (`vihat-miniapp` `POST /api/v1/location`): the Zalo
  * access token and the one-use `getLocation` token. Both are CODES, not data — the coordinates are
@@ -804,10 +809,10 @@ export function setCommuneActionBar(title: string, headerColor: string): Promise
 }
 
 /* ==============================================================================================
-   SÁU QUYỀN XIN THÊM — mỗi lời gọi đã đối chiếu chữ ký trong `node_modules/zmp-sdk/index.d.ts`,
-   không lấy từ tài liệu web và không lấy từ trí nhớ.
+   QUYỀN XIN THÊM — mỗi lời gọi đã đối chiếu chữ ký trong `node_modules/zmp-sdk/index.d.ts`,
+   không lấy từ tài liệu web và không lấy từ trí nhớ. (`getNetworkType` left 11/10/2026 with the intro's
+   "Kiểm tra đường truyền".)
 
-     getNetworkType()              -> { networkType: "none"|"wifi"|"cellular"|"unknown" }  :1226, :3232
      vibrate({ type?, milliseconds? }) -> Promise<void>                                    :4400–4433
      keepScreen({ keepScreenOn })  -> Promise<void>                                        :4201–4231
      requestCameraPermission()     -> { userAllow: boolean; message: string }               :1293, :4002
@@ -815,25 +820,12 @@ export function setCommuneActionBar(title: string, headerColor: string): Promise
      downloadFile({ url?, fileBase64Data? }) -> Promise<void>                               :6060–6116
      chooseImage({ count?, sourceType?, cameraType? }) -> { filePaths: string[]; … }        :1517, :4912–4956
      configAppView({ actionBar?, headerColor?, headerTextColor?, … }) -> Promise<void>      :5192–5283
-   (the last two were added 08/10/2026 and are not among the six; `configAppView` is `@zaloOnly`.)
+   (the last two were added 08/10/2026; `configAppView` is `@zaloOnly`.)
 
-   Cả sáu đều `@requirePermission` và `@zaloOnly` trong chính `index.d.ts`: chúng cần được cấp
+   Các lời gọi trên đều `@requirePermission` và `@zaloOnly` trong chính `index.d.ts`: chúng cần được cấp
    quyền cho App ID ở trang Quản lý ứng dụng, và ngoài Zalo thì không chạy. Nhánh `ngoai-zalo`
    của `xin` là thứ nói ra điều thứ hai bằng tiếng Việt thay vì để một nút im lặng.
    ============================================================================================ */
-
-/**
- * Kiểu kết nối mạng hiện tại, dưới dạng chuỗi thô của nền tảng.
- *
- * TRẢ VỀ CHUỖI THÔ, KHÔNG PHẢI NHÃN: việc quy chuỗi ấy về một nhãn tiếng Việt thuộc về
- * `noi-dung.ts` (`kieuKetNoi`), nơi kiểm được mà không cần Zalo — kể cả với một giá trị thứ năm
- * mà bản SDK hôm nay chưa có. Ép kiểu về `string` ở đây là có chủ đích: `NetworkType` là một
- * `enum` của SDK, và tin rằng nền tảng sẽ mãi trả đúng bốn giá trị ấy là tin vào một lời hứa
- * không ai viết ra.
- */
-export function docKieuKetNoi(): Promise<KetQuaXin<string>> {
-  return xin("other", async (sdk) => String((await sdk.getNetworkType()).networkType));
-}
 
 /**
  * Rung một nhịp để báo "xong".
@@ -876,50 +868,10 @@ export function giuManHinhSang(bat: boolean): Promise<KetQuaXin<boolean>> {
   );
 }
 
-/**
- * Hỏi quyền dùng máy ảnh.
- *
- * ⚠ `userAllow === false` LÀ MỘT KẾT QUẢ THÀNH CÔNG, KHÔNG PHẢI MỘT LỖI — và khác biệt ấy nằm
- * ở chỗ API này trả về trạng thái chứ không ném: người dùng bấm "Không cho phép" thì lời gọi
- * vẫn thành công và mang về `false`. Quy nó vào nhánh `tu-choi` sẽ hiện một câu chung chung;
- * giữ nguyên `false` thì màn hình nói được đúng việc cần làm tiếp (`SO_HOA_THIEP.tu_choi_quyen`).
- *
- * `message` của nền tảng bị bỏ hẳn: đó là chữ kỹ thuật, và README §Error message shape cấm đưa
- * nó ra cho người dùng.
- */
-export function xinQuyenMayAnh(): Promise<KetQuaXin<boolean>> {
-  return xin("other", async (sdk) => (await sdk.requestCameraPermission()).userAllow);
-}
-
-/**
- * Mở cửa sổ chọn ảnh và nhận về đường dẫn tệp TẠM TRÊN MÁY.
- *
- * ⚠ KHÔNG TRUYỀN `serverUploadUrl`, VÀ ĐÓ LÀ TOÀN BỘ VẤN ĐỀ:
- *
- *   `index.d.ts` dòng 4721 ghi rõ *"Tham số serverUploadUrl không còn bắt buộc. Mặc định nếu
- *   không truyền, SDK sẽ trả về đường dẫn tạm thời (local cache path) của media mà không tự
- *   động upload lên server"*. Truyền nó vào là ảnh của người dùng — rất có thể là danh thiếp
- *   của một người thứ ba — được tải lên một máy chủ. Ứng dụng này không có máy chủ nào, và dây
- *   bẫy trong `phase1-collects-nothing.test.ts` cấm mọi đường gửi ra.
- *
- *   Bỏ nó đi thì câu "ảnh không rời khỏi máy" trong chính sách quyền riêng tư là một sự thật về
- *   cấu trúc, không phải một lời hứa. Có một phép kiểm quét toàn bộ mã nguồn để giữ điều đó.
- *
- * Chuẩn hoá `string | string[]` về mảng: kiểu trả về khai cả hai vì khi CÓ `serverUploadUrl` thì
- * `data` là nguyên văn phản hồi của máy chủ. Ta không đi đường ấy, nhưng một `typeof` ở đây rẻ
- * hơn một `.map` chạy trên một chuỗi rồi hiện ra từng ký tự một.
- */
-export function chonAnhTuMay(): Promise<KetQuaXin<readonly string[]>> {
-  return xin("other", async (sdk) => {
-    const { data } = await sdk.openMediaPicker({ type: "photo" });
-    return typeof data === "string" ? [data] : data;
-  });
-}
-
 /* ==============================================================================================
    SCENE PHOTOS — "Gửi phản ánh" of the COMMUNE'S OWN APP only (owner, 02/10/2026; ADR 0047 row "Ảnh hiện
-   trường khi gửi phản ánh"). The SAME two calls as "Số hoá thiếp giấy" above, for a different purpose — so
-   the two declaration rows are `ca-hai` and carry a `commune_app` view.
+   trường khi gửi phản ánh"). The ViHAT intro no longer calls either (its paper-card photo block was removed
+   11/10/2026).
 
    ⚠ STILL NO `serverUploadUrl`, AND THIS IS NOT A LOOPHOLE: the picker hands back LOCAL temp paths and uploads
      nothing (`index.d.ts:4721`). The bytes leave the phone only through the state half's ONE multipart upload

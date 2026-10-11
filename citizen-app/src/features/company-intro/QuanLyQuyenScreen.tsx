@@ -1,5 +1,5 @@
 import { COMPANY } from "../../content/company-profile";
-import { KHAI_BAO_LOI_GOI, type NuaUngDung } from "../tinh-nang/zalo-api";
+import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../tinh-nang/zalo-api";
 
 import { ShieldGlyph } from "./icons";
 
@@ -23,12 +23,23 @@ import { ShieldGlyph } from "./icons";
  * một câu hướng dẫn.
  */
 
-/** Nhãn tiếng Việt của cột `nua`. Một bản đồ, để không có câu nào viết rải trong JSX. */
-const NHAN_NUA: Record<NuaUngDung, string> = {
-  "thuong-mai": "Phần giới thiệu doanh nghiệp",
-  "nha-nuoc": "Phần dịch vụ công",
-  "ca-hai": "Cả hai phần",
-};
+/**
+ * THE ROWS THIS SCREEN SHOWS — the ViHAT intro's calls only, in the intro's own words (owner 11/10/2026: to the user
+ * the intro and the commune interface are two separate apps, so this screen never names a commune, a petition or
+ * ViGov). Derived from the one table, never a second list:
+ *
+ *   `intro_app` object             → that view
+ *   `intro_app: null`              → hidden (the intro does not make the call)
+ *   no `intro_app`, `thuong-mai`   → the main fields, which are the intro's words
+ *   anything else (`nha-nuoc`, a `ca-hai` row without a view) → hidden; §3c refuses the second shape
+ */
+export function introPermissionRows(table: readonly KhaiBaoLoiGoi[]): KhaiBaoLoiGoi[] {
+  return table.flatMap((row) => {
+    if (row.intro_app === null) return [];
+    if (row.intro_app !== undefined) return [{ ...row, ...row.intro_app }];
+    return row.nua === "thuong-mai" ? [row] : [];
+  });
+}
 
 export function QuanLyQuyenScreen(props: { onQuayLai: () => void }) {
   return (
@@ -57,14 +68,14 @@ export function QuanLyQuyenScreen(props: { onQuayLai: () => void }) {
       </section>
 
       <ul className="quyen-ds">
-        {KHAI_BAO_LOI_GOI.map((quyen) => (
+        {introPermissionRows(KHAI_BAO_LOI_GOI).map((quyen) => (
           <li className="quyen" key={quyen.api}>
             <h2 className="quyen__ten">{quyen.tinh_nang}</h2>
             {/* "Dùng ở:" thay cho "Màn " — 21/09/2026. `openWebview` nay khai `man` là "Mọi màn"
                 (nút Chat nổi có mặt trên mọi màn), và "Màn Mọi màn" là một câu không ai viết ra
                 được. Tiền tố mới đọc xuôi với mọi giá trị, kể cả một danh sách nhiều màn. */}
             <p className="quyen__vi-tri">
-              Dùng ở: {quyen.man} · {NHAN_NUA[quyen.nua]}
+              Dùng ở: {quyen.man}
             </p>
             <p className="quyen__de-lam-gi">{quyen.de_lam_gi}</p>
             <p className="quyen__hoi">
