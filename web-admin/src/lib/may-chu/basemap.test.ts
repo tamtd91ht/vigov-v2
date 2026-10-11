@@ -222,7 +222,9 @@ describe("proxyBasemap — no BASEMAP_URL: no map, one sentence, no fallback hos
     expect(log).toHaveBeenCalledTimes(1);
     const line = String(log.mock.calls[0]![0]);
     expect(line).toContain("BASEMAP_URL");
-    expect(line).toContain("BASEMAP-URL");
+    // Where to set it: the key IS the variable name, loaded with envFrom (ADR 0093) — never a dashed key.
+    expect(line).toContain("ConfigMap common-config, key BASEMAP_URL");
+    expect(line).not.toContain("BASEMAP-URL");
     expect(line).toContain("kb/40-runbooks/basemap-pmtiles.md");
     expect(line).not.toContain("pa55");
   });

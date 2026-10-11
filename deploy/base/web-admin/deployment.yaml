@@ -54,21 +54,15 @@ spec:
           env:
             - { name: PORT,      value: "3000" }
             - { name: HOSTNAME,  value: "0.0.0.0" }   # mặc định của Next là 127.0.0.1 → probe không tới được
-            # Nền TỰ HOST của bản đồ phản ánh (ADR 0072 §Trả lời 09/10/2026) và, từ 11/10/2026 (chủ dự án
-            # chốt), của Bản đồ kinh tế số `/ban-do` — thay URL style OpenFreeMap cũ: tiền tố trong MinIO chứa
-            # tệp .pmtiles + glyph + sprite, tuyến `/basemap/*` phát lại cùng gốc. Giá trị khác nhau theo
-            # môi trường (bucket, ngày làm mới) nên nằm ở ConfigMap, không viết ở đây. Key có GẠCH NGANG
-            # (luật 11 bất biến 4) nên KHÔNG tới được qua `envFrom` — phải ánh xạ tên ở đây.
-            # `optional: true` CÓ CHỦ Ý: thiếu key thì hai bản đồ ấy không có nền + một câu (ADR),
-            # không phải web-admin của mọi xã không khởi động. Cách dựng tệp: kb/40-runbooks/basemap-pmtiles.md
-            - name: BASEMAP_URL
-              valueFrom:
-                configMapKeyRef: { name: common-config, key: BASEMAP-URL, optional: true }
 
           # web-admin là CỔNG của `/api/v1/*` (quyết định 25/09/2026: k8s chỉ cấp Secret +
           # ConfigMap, định tuyến nằm trong ứng dụng). Nó đọc `*_HTTP_ADDR` — địa chỉ nội bộ
           # của sáu dịch vụ Go có REST (`goc-dich-vu.ts`) — và `ENV` từ ConfigMap chung. Không đặt thì mặc định
           # `http://<dịch vụ>:8080`, tức đúng tên Service trong cùng namespace.
+          # `BASEMAP_URL` (nền TỰ HOST của bản đồ phản ánh và `/ban-do`, ADR 0072) cũng tới từ `common-config`
+          # qua `envFrom` — key trùng tên biến (luật 11 bất biến 4, ADR 0093), không ánh xạ từng key. Thiếu
+          # key thì hai bản đồ ấy không có nền + một câu, web-admin vẫn chạy: kb/40-runbooks/basemap-pmtiles.md.
+          # KHÔNG thêm env tường minh `BASEMAP_URL` ở `env:` — nó đè `envFrom`.
           # KHÔNG có `secretRef`: web-admin không giữ bí mật nào.
           envFrom:
             - configMapRef: { name: common-config }

@@ -52,7 +52,7 @@ const HINT =
   `${BASEMAP_URL_VAR}: địa chỉ thư mục chứa tệp nền PMTiles, glyph và sprite của bản đồ phản ánh và Bản đồ kinh tế số (/ban-do), trong MinIO của ViGov ` +
   `(ADR 0072 §Trả lời 09/10/2026). Giá trị: https://<MinIO nội bộ>:<cổng>/<bucket>/basemap/<YYYYMMDD> — https, không ` +
   `thông tin đăng nhập, không truy vấn. Lấy giá trị và tải tệp lên: kb/40-runbooks/basemap-pmtiles.md. ` +
-  `Đặt ở: ConfigMap common-config, key BASEMAP-URL (web-admin đọc qua configMapKeyRef). Thiếu thì hai bản đồ ấy không có nền.`;
+  `Đặt ở: ConfigMap common-config, key BASEMAP_URL (web-admin đọc qua envFrom). Thiếu thì hai bản đồ ấy không có nền.`;
 
 let hintLogged = false;
 

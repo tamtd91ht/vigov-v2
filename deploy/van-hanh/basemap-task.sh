@@ -20,7 +20,7 @@
 # Guarantees: tools pinned by SHA-256 (refuses while UNPINNED) · MinIO keys = the EXISTING pair of
 # comms-secrets (fallback platform-secrets), read with the job's kubeconfig into 0600 files → MC_HOST_*,
 # never argv, never echoed · prefix <bucket>/config/map/<date>/, never overwritten · NEVER writes
-# BASEMAP-URL · $WORKSPACE/basemap, .tools, .mc removed on every exit.
+# BASEMAP_URL · $WORKSPACE/basemap, .tools, .mc removed on every exit.
 
 # Jenkins runs `sh -xe`: without this, trace would print the keys.
 set +x
@@ -73,7 +73,7 @@ echo "Khoá MinIO: cặp OBJECT_STORAGE_ACCESS_KEY / OBJECT_STORAGE_SECRET_KEY c
 free_kb=$(df -Pk "$WORKSPACE" | awk 'NR==2 {print $4}')
 [ "${free_kb:-0}" -ge 8388608 ] || {
   echo "DỪNG: $WORKSPACE còn $((${free_kb:-0} / 1048576)) GB trống — cần ít nhất 8 GB. Không làm gì."; exit 1; }
-echo "Sẽ: tải pmtiles + mc (kiểm SHA-256 đã ghim) → dựng → tải lên $BM_BUCKET/config/map/$NGAY_NEN/. BASEMAP-URL KHÔNG đổi."
+echo "Sẽ: tải pmtiles + mc (kiểm SHA-256 đã ghim) → dựng → tải lên $BM_BUCKET/config/map/$NGAY_NEN/. BASEMAP_URL KHÔNG đổi."
 if [ "${GHI:-0}" != "1" ]; then
   echo ""
   echo "CHẠY THỬ — kế hoạch ở trên, KHÔNG làm gì. Làm thật: bỏ tick CHAY_THU, gõ XAC_NHAN=$NS (+ TICKET nếu prod)."
@@ -132,12 +132,12 @@ fi
 bash web-admin/scripts/build-basemap.sh build --date "$NGAY_NEN" --out "$WORKSPACE/basemap"
 bash web-admin/scripts/build-basemap.sh upload --date "$NGAY_NEN" --out "$WORKSPACE/basemap" \
   --alias vgbasemap --bucket "$BM_BUCKET"
-note "MinIO $BM_BUCKET/config/map/$NGAY_NEN/: tải nền bản đồ lên (CHƯA đưa vào dùng — BASEMAP-URL không đổi)"
+note "MinIO $BM_BUCKET/config/map/$NGAY_NEN/: tải nền bản đồ lên (CHƯA đưa vào dùng — BASEMAP_URL không đổi)"
 DIR="$WORKSPACE/basemap/$NGAY_NEN"
 if mc cat "vgbasemap/$BM_BUCKET/config/map/$NGAY_NEN/SHA256SUMS" 2>/dev/null | cmp -s - "$DIR/SHA256SUMS"; then
   echo "✓ SHA256SUMS trên MinIO khớp bản vừa dựng"
 else
-  echo "✗ SHA256SUMS trên MinIO KHÁC bản vừa dựng — KHÔNG đặt BASEMAP-URL; kiểm tay (runbook dòng 7)."; exit 1
+  echo "✗ SHA256SUMS trên MinIO KHÁC bản vừa dựng — KHÔNG đặt BASEMAP_URL; kiểm tay (runbook dòng 7)."; exit 1
 fi
 echo ""
 echo "════ GHI VÀO DANH MỤC KÝ ════════════════════════════════════════════════════"
@@ -145,10 +145,10 @@ echo "── SHA-256 vn-mainland.pmtiles"
 grep 'vn-mainland[.]pmtiles$' "$DIR/SHA256SUMS"
 echo "── BUILD-INFO.txt"
 cat "$DIR/BUILD-INFO.txt"
-echo "── Giá trị BASEMAP-URL (job KHÔNG đặt):"
+echo "── Giá trị BASEMAP_URL (job KHÔNG đặt):"
 echo "   $BM_URL"
 echo "════ BƯỚC TIẾP ═══════════════════════════════════════════════════════════════"
-echo "1. STAGING: đặt BASEMAP-URL=$BM_URL trong common-config của vigov-staging (việc sua-configmap của"
+echo "1. STAGING: đặt BASEMAP_URL=$BM_URL trong common-config của vigov-staging (việc sua-configmap của"
 echo "   vigov-van-hanh, hoặc theo runbook), khởi động lại vigov-web-admin."
 echo "   (Nếu bucket/endpoint của staging khác prod: tải lên lại bằng việc này với MT=staging.)"
 echo "2. Kiểm chủ quyền có ký trên staging — kb/40-runbooks/basemap-pmtiles.md. Một dòng không đạt: DỪNG."

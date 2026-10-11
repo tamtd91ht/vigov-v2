@@ -87,7 +87,7 @@ manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy tr
 
 | Việc | Tham số | Làm gì |
 |---|---|---|
-| `nen-ban-do` | `MT`, `NGAY_NEN` (YYYYMMDD), `CHAY_THU` (bật = chỉ in kế hoạch); làm thật: bỏ `CHAY_THU`, `XAC_NHAN` = namespace của `MT`, `TICKET` nếu prod | Dựng nền bản đồ PMTiles trên máy build, tải lên MinIO `<tiền tố>-public/config/map/<ngày>/` bằng khoá có sẵn của `comms-secrets`; **không** đổi `BASEMAP-URL`. Hạn 180 phút (việc khác giữ 20) |
+| `nen-ban-do` | `MT`, `NGAY_NEN` (YYYYMMDD), `CHAY_THU` (bật = chỉ in kế hoạch); làm thật: bỏ `CHAY_THU`, `XAC_NHAN` = namespace của `MT`, `TICKET` nếu prod | Dựng nền bản đồ PMTiles trên máy build, tải lên MinIO `<tiền tố>-public/config/map/<ngày>/` bằng khoá có sẵn của `comms-secrets`; **không** đổi `BASEMAP_URL`. Hạn 180 phút (việc khác giữ 20) |
 
 `nen-ban-do` cũng có ở job vận hành `vigov-van-hanh` (chủ dự án 11/10/2026: ở đây cho tới khi controller
 cài Active Choices). Hai job gọi **cùng** `deploy/van-hanh/basemap-task.sh` nên không trôi nhau. Dựng lần
@@ -231,15 +231,16 @@ Ba câu hỏi, ba nguồn. Đừng trả lời câu này bằng nguồn của c�
 | **Ai đọc nó** | `core/config` — gói **DUY NHẤT** gọi `os.Getenv`. Mọi nơi khác nhận `config.Config` đã kiểu hoá |
 | **k8s cấp bằng gì** | bảng dưới đây — fact tệp này sở hữu, không suy ra được từ hai nguồn kia |
 
-**Một tên, hai cách viết.** Dấu gạch ngang hợp lệ trong **key** của ConfigMap/Secret nhưng
-**không** hợp lệ trong tên biến môi trường của container — shell chỉ cho `A-Z`, `0-9`, `_`:
+**Một tên, MỘT cách viết — `UPPER_SNAKE_CASE`** (chủ dự án chốt 11/10/2026, ADR 0093). Key
+ConfigMap/Secret viết **đúng như** tên biến môi trường mã đọc: key = env var = dòng `.env.example` =
+tên trong `core/config` = dòng trong danh mục khoá của job vận hành. Mỗi Deployment nạp cả đối tượng
+bằng `envFrom` — không `configMapKeyRef`/`secretKeyRef` để đổi tên, không `kubectl set env --from … --keys`.
 
 | Ở đâu | Cách viết | Ví dụ |
 |---|---|---|
-| Key ConfigMap / Secret | `CHỮ-HOA-GẠCH-NGANG` | `ELASTICSEARCH-INDEX-PREFIX` |
-| Env var của container, và Go | `CHỮ_HOA_GẠCH_DƯỚI` | `ELASTICSEARCH_INDEX_PREFIX` |
+| Key ConfigMap / Secret, env var của container, Go | `CHỮ_HOA_GẠCH_DƯỚI` | `ELASTICSEARCH_INDEX_PREFIX` |
 
-`-` → `_`, **không gì khác**. Lệch nhau ở bất cứ đâu ngoài dấu phân cách là **hai tên**.
+Quy tắc đầy đủ và lý do: `.claude/skills/infra-config/SKILL.md` §1.
 
 ### Quy tắc quyết định — ba câu, theo đúng thứ tự
 
@@ -315,13 +316,14 @@ là Ingress lên bình thường và **chỉ HTTPS đứt**. Host cũng khác: `
 `*.api-stg.vigov.vn` với `*.vigov.vn` + `*.api.vigov.vn`.
 
 ⚠ **KEY PHẢI VIẾT GẠCH DƯỚI, KHÔNG PHẢI GẠCH NGANG — vì manifest dùng `envFrom`.**
-Bảng "một tên, hai cách viết" ở đầu mục này nói key ConfigMap/Secret viết `CÓ-GẠCH-NGANG`, và
-điều đó chỉ đúng khi env var được ánh xạ **tường minh** bằng `valueFrom.secretKeyRef` — nơi
-tên biến được khai riêng. Ở đây cả 7 Deployment dùng `envFrom`, mà `envFrom` lấy **chính key
-làm tên biến**. Một key `DATABASE-DSN` không phải định danh shell hợp lệ, nên k8s **bỏ qua nó
-trong im lặng** (chỉ còn một Event `InvalidVariableNames` mà không ai đọc) — rồi pod chết với
-`thiếu biến môi trường bắt buộc: DATABASE_DSN`, đúng cái tên người vận hành đang nhìn thấy
-trong Secret. Ngày nào đổi sang `secretKeyRef` thì key mới được viết gạch ngang.
+`envFrom` lấy **chính key làm tên biến**. Một key `DATABASE-DSN` không phải định danh shell hợp
+lệ, nên k8s **bỏ qua nó trong im lặng** (chỉ còn một Event `InvalidVariableNames` mà không ai
+đọc) — rồi pod chết với `thiếu biến môi trường bắt buộc: DATABASE_DSN`, đúng cái tên người vận
+hành đang nhìn thấy trong Secret; key không bắt buộc thì tệ hơn, pod chạy xanh mà tính năng tắt.
+Đây là chuẩn **vĩnh viễn**, không phải tạm chờ đổi sang `secretKeyRef` (chủ dự án 11/10/2026,
+ADR 0093): ánh xạ từng key là một chỗ nữa để quên, và hai cách viết của một tên là trôi lệch —
+`BASEMAP-URL` từng cần riêng một bước `kubectl set env --keys` trong Jenkinsfile, còn người vận
+hành gõ `BASEMAP_URL`. Key có gạch ngang nay là **lỗi**.
 
 ### Mẫu giá trị — hình dạng, không phải giá trị thật
 
@@ -397,15 +399,12 @@ trường nào trong `config.Config`. Đặt tên cho nó là **STOP CONDITION c
 tên phải nói **VAI TRÒ** (`KAFKA_EVENT_ADDRESS`), không nói cụm (`KAFKA_02_ADDRESS`), và **ai
 cấp là quyết định của chủ cụm**. `hooks/env_contract_guard.py` chặn lần ghi `os.Getenv("KAFKA_…")`.
 
-Mã chỉ biết vai trò; manifest mới chọn cụm vật lý:
+Mã chỉ biết vai trò; người vận hành chọn cụm vật lý bằng **giá trị** của key vai trò, không bằng
+đổi tên key (ADR 0093 — key = tên biến, nạp bằng `envFrom`):
 
 ```yaml
-env:
-  - name: KAFKA_EVENT_ADDRESS        # VAI TRÒ — tên duy nhất mã biết
-    valueFrom:
-      configMapKeyRef:
-        name: vigov-ha-tang
-        key: KAFKA-02-ADDRESS        # CỤM — chọn ở đây, đổi ở đây
+# ConfigMap common-config — nạp cả đối tượng bằng envFrom
+KAFKA_EVENT_ADDRESS: kafka-02-a:9092,kafka-02-b:9092   # VAI TRÒ là key; CỤM là giá trị
 ```
 
 ### Ba điều cấm

@@ -86,7 +86,7 @@ Mỗi lần ghi in một dòng `GHI · <người bấm> · <giờ UTC> · <names
 | Triển khai | `khoi-dong-lai` | `DICH_VU_CHON` | `rollout restart` + đợi |
 | | `lui-ban-truoc` | `DICH_VU_CHON` | `rollout undo` về revision liền trước |
 | Bảo trì | `tao-tai-khoan-van-hanh` | `EMAIL_VAN_HANH`, `TEN_VAN_HANH`, `TICKET` (mọi môi trường) | `operatorctl create` + 8 quyền `ops.*`. **Mật khẩu tạm in vào log** — đổi + đăng ký TOTP ngay |
-| | `nen-ban-do` | `NGAY_NEN` (YYYYMMDD); `XAC_NHAN`, `TICKET` (prod) | Tệp nền bản đồ vào MinIO, tiền tố **mới** `<tiền tố>-public/config/map/<ngày>/`. **Không** đổi `BASEMAP-URL` — mục "Nền bản đồ" |
+| | `nen-ban-do` | `NGAY_NEN` (YYYYMMDD); `XAC_NHAN`, `TICKET` (prod) | Tệp nền bản đồ vào MinIO, tiền tố **mới** `<tiền tố>-public/config/map/<ngày>/`. **Không** đổi `BASEMAP_URL` — mục "Nền bản đồ" |
 
 ### Quy tắc job tự giữ
 
@@ -100,9 +100,10 @@ Mỗi lần ghi in một dòng `GHI · <người bấm> · <giờ UTC> · <names
 | Bản sao lưu là Secret **không gắn Deployment nào** — không bao giờ một khoá thêm trong Secret nạp bằng `envFrom` | ADR 0089 câu mở #4, luật 11 cấm #4 |
 | Không đặt ảnh mới, không áp Ingress, không việc của xã | ADR 0089, ADR 0046 #4, ADR 0048/0070 |
 
-**Cách viết khoá:** job ghi đúng như Deployment đang đọc — `envFrom` nên khoá **gạch dưới**
-(`MALWARE_SCANNER_ADDRESS`); `BASEMAP-URL` giữ gạch ngang vì web-admin ánh xạ nó tường minh. Lệch với luật 11
-bất biến 4 là câu mở #3 của ADR 0089 — job **không** quyết.
+**Cách viết khoá:** một cách viết duy nhất, `UPPER_SNAKE_CASE`, trùng tên biến (`MALWARE_SCANNER_ADDRESS`,
+`BASEMAP_URL`) — mọi Deployment nạp cả đối tượng bằng `envFrom` (luật 11 bất biến 4, ADR 0093; đóng câu mở
+#3 của ADR 0089). Job **từ chối** tên khoá có gạch ngang: `envFrom` bỏ qua im lặng key ấy, pod chỉ đơn giản
+là thiếu biến.
 
 ### Mẫu tài nguyên — ĐỀ XUẤT, chủ dự án chốt số
 
@@ -196,9 +197,9 @@ thêm vào policy — người quản trị MinIO nới bằng `mc admin policy 
 
 | # | Lượt bấm | Kết quả |
 |---|---|---|
-| 1 | `nen-ban-do`, `MT=staging`, `NGAY_NEN`, chạy thử | Bảng: bucket · địa chỉ tải lên · đích · giá trị `BASEMAP-URL` sẽ là; Secret lấy khoá (chỉ tên); kiểm công cụ, chỗ trống |
-| 2 | Như #1, bỏ `CHAY_THU`, `XAC_NHAN=vigov-staging` | Tải công cụ (kiểm SHA-256) → kiểm `mc ls` trước khi dựng → dựng → tải lên `<tiền tố>-public/config/map/<ngày>/` → so `SHA256SUMS` trên MinIO. In dòng SHA-256 của `vn-mainland.pmtiles`, `BUILD-INFO.txt`, giá trị `BASEMAP-URL` |
-| 3 | `sua-configmap`, `MT=staging`, `BASEMAP-URL=<giá trị in ở #2>` — chưa có Active Choices thì theo runbook mục "Đưa vào dùng" (`kubectl edit` + job `web-admin`) | Khởi động lại `vigov-web-admin` |
+| 1 | `nen-ban-do`, `MT=staging`, `NGAY_NEN`, chạy thử | Bảng: bucket · địa chỉ tải lên · đích · giá trị `BASEMAP_URL` sẽ là; Secret lấy khoá (chỉ tên); kiểm công cụ, chỗ trống |
+| 2 | Như #1, bỏ `CHAY_THU`, `XAC_NHAN=vigov-staging` | Tải công cụ (kiểm SHA-256) → kiểm `mc ls` trước khi dựng → dựng → tải lên `<tiền tố>-public/config/map/<ngày>/` → so `SHA256SUMS` trên MinIO. In dòng SHA-256 của `vn-mainland.pmtiles`, `BUILD-INFO.txt`, giá trị `BASEMAP_URL` |
+| 3 | `sua-configmap`, `MT=staging`, `BASEMAP_URL=<giá trị in ở #2>` — chưa có Active Choices thì theo runbook mục "Đưa vào dùng" (`kubectl edit` + `rollout restart deploy/vigov-web-admin`) | Khởi động lại `vigov-web-admin` |
 | 4 | Kiểm chủ quyền có ký trên staging — runbook | Không đạt: dừng, giữ giá trị cũ |
 | 5 | Như #3 với `MT=prod`, cùng giá trị, `TICKET` | Chỉ sau khi đã ký. Prod khác bucket với staging thì chạy #2 với `MT=prod` trước |
 

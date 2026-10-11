@@ -138,7 +138,7 @@ Xã/tenant|gan-ten-mien|off|ghi|Làm ở platform-admin, chi tiết xã → tên
 Xã/tenant|gan-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Mini App (ADR 0066, 0070)
 Xã/tenant|dat-secret-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Đặt/đổi khoá bí mật (job cũ còn dat-secret-mini-app)
 Bảo trì|tao-tai-khoan-van-hanh|on|ghi|operatorctl create + 8 quyền ops.* — MẬT KHẨU TẠM IN VÀO LOG (giá chủ dự án chấp nhận 02/10/2026, như job cũ)
-Bảo trì|nen-ban-do|on|ghi|Dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO ở tiền tố MỚI config/map/<ngày>/ — KHÔNG đổi BASEMAP-URL; kiểm chủ quyền có ký trước (kb/40-runbooks/basemap-pmtiles.md)
+Bảo trì|nen-ban-do|on|ghi|Dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO ở tiền tố MỚI config/map/<ngày>/ — KHÔNG đổi BASEMAP_URL; kiểm chủ quyền có ký trước (kb/40-runbooks/basemap-pmtiles.md)
 Bảo trì|dung-clamav|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy, việc dung-clamav
 Bảo trì|mo-netpol-identity-zalo|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy
 Bảo trì|sua-env-deployment|off|ghi|Sửa env đặt thẳng trong Deployment (README mục 3) — chưa dựng; job cũ có bo-sung-cau-hinh-*
@@ -873,7 +873,7 @@ void taskOperatorAccount() {
 
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 // Bảo trì — nền bản đồ tự host (ADR 0072; quy trình kb/40-runbooks/basemap-pmtiles.md). Chủ dự án
-// 11/10/2026: dựng + tải lên chạy trên MÁY BUILD, không trong pod; job KHÔNG BAO GIỜ đổi BASEMAP-URL.
+// 11/10/2026: dựng + tải lên chạy trên MÁY BUILD, không trong pod; job KHÔNG BAO GIỜ đổi BASEMAP_URL.
 // Thân việc ở deploy/van-hanh/basemap-task.sh — CÙNG tệp job cũ vigov-deploy gọi (deploy/Jenkinsfile),
 // để hai job không trôi. Ở đây chỉ chuyển tham số; chốt XAC_NHAN/TICKET đã qua ở checkParameters().
 // ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -1113,11 +1113,11 @@ try {
     sb << '<p>Điền EMAIL_VAN_HANH, TEN_VAN_HANH, TICKET (bắt buộc ở mọi môi trường). Mật khẩu tạm in vào log lượt build — đổi ngay.</p>'
   } else if (viec == 'nen-ban-do') {
     def cm = json(['-n', NS, 'get', 'configmap', 'common-config', '-o', 'json']).data ?: [:]
-    def rows = ['OBJECT_STORAGE_BUCKET_PREFIX', 'OBJECT_STORAGE_PUBLIC_ENDPOINT', 'OBJECT_STORAGE_ENDPOINT', 'BASEMAP-URL'].collect { k ->
+    def rows = ['OBJECT_STORAGE_BUCKET_PREFIX', 'OBJECT_STORAGE_PUBLIC_ENDPOINT', 'OBJECT_STORAGE_ENDPOINT', 'BASEMAP_URL'].collect { k ->
       [esc(k), cm.containsKey(k) ? '<code>' + esc(cm[k]) + '</code>' : '<i>(chưa có)</i>']
     }
     sb << tbl(['Khoá common-config', 'Hiện tại'], rows)
-    sb << '<p>Điền NGAY_NEN (YYYYMMDD). Job tải lên bucket &lt;tiền tố&gt;-public qua OBJECT_STORAGE_PUBLIC_ENDPOINT, in giá trị BASEMAP-URL mới (gốc OBJECT_STORAGE_ENDPOINT) — KHÔNG đặt nó. Khoá MinIO: cặp có sẵn của comms-secrets (thiếu thì platform-secrets). Cần SHA-256 đã ghim trong ops.py (README §Nền bản đồ).</p>'
+    sb << '<p>Điền NGAY_NEN (YYYYMMDD). Job tải lên bucket &lt;tiền tố&gt;-public qua OBJECT_STORAGE_PUBLIC_ENDPOINT, in giá trị BASEMAP_URL mới (gốc OBJECT_STORAGE_ENDPOINT) — KHÔNG đặt nó. Khoá MinIO: cặp có sẵn của comms-secrets (thiếu thì platform-secrets). Cần SHA-256 đã ghim trong ops.py (README §Nền bản đồ).</p>'
   }
 } catch (Throwable e) { sb << warn('không đọc được cụm', e) }
 return sb.append('</div>').toString()
@@ -1152,7 +1152,7 @@ OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL	configmap	prod	comms,platform	0	1	URL gốc
 OBJECT_STORAGE_REGION	configmap	opt	comms,petitions,platform	0	1	Region của MinIO
 OBJECT_STORAGE_BUCKET_PREFIX	configmap	prod	comms,petitions,platform	0	1	Tiền tố bucket: <tiền tố>-private · -public · -temp
 MALWARE_SCANNER_ADDRESS	configmap	prod	comms,petitions,platform	0	1	clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + 3310, không tcp://. Dựng clamd và đặt key: mục 6, việc dung-clamav
-BASEMAP-URL	configmap	opt	web-admin	0	1	Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến /basemap/* của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền:…
+BASEMAP_URL	configmap	opt	web-admin	0	1	Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến /basemap/* của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền:…
 LISTEN_ADDR	env	opt	comms,documents,finance,identity,petitions,platform,reporting	0	1	Cổng REST
 PLATFORM_GRPC_ADDR	env	prod	comms,documents,finance,identity,petitions,reporting	0	1	gRPC của platform — phân giải tên miền ra xã. Tên Service + 9090
 IDENTITY_GRPC_ADDR	env	prod	comms,documents,finance,petitions,platform,reporting	0	1	gRPC của identity — đổi phiên cán bộ thành người dùng. Tên Service + 9090. Platform dùng lại biến này từ 02/10/2026 cho tuyến logo + banner web-admin của xã (ADR 0069, quyền…

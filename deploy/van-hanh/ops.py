@@ -40,7 +40,8 @@ JENKINSFILE = os.path.join(ROOT, "deploy", "van-hanh", "Jenkinsfile")
 #               That table is itself checked against the code by tools/check_env_map.py.
 #   level/users: core/config `r.read("KEY", …, <level>, <groups>)` × `config.Uses(...)` of every
 #               service-*/cmd/server/main.go — the same derivation tools/check_env_map.py makes.
-#   registered: the key (dashes read as underscores, rule 11 invariant 4) has a line in .env.example.
+#   registered: the key, spelled exactly, has a line in .env.example (rule 11 invariant 4, ADR 0093:
+#               key = env name — a dashed key can never be registered).
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
 READ_CALL = re.compile(
@@ -51,6 +52,9 @@ USES = re.compile(r"config\.Uses\(([^)]*)\)", re.S)
 GROUP_NAME = re.compile(r"config\.(\w+)")
 ENV_LINE = re.compile(r"^([A-Z][A-Z0-9_]*)=")
 SECTION = re.compile(r"^##\s+(\d)\.")
+# Accepts a dash ON PURPOSE: a dashed README row must be catalogued — and then fail `registered`
+# (no `.env.example` line can carry a dash) — rather than be skipped without a word. Rule 11
+# invariant 4, ADR 0093: `envFrom` drops a dashed key silently, so a dashed key is a defect.
 ROW_KEY = re.compile(r"^`([A-Z][A-Z0-9_-]*)`$")
 
 PLACEMENT_BY_SECTION = {"1": "secret", "2": "configmap", "3": "env", "4": "unset"}
@@ -141,7 +145,7 @@ def build_catalog(root: str = ROOT) -> list:
             "level": level if users else "unused",
             "users": users,
             "shared": "cùng một giá trị" in row,
-            "registered": key.replace("-", "_") in env_keys,
+            "registered": key in env_keys,  # exact: key = env name, no `-`→`_` mapping (ADR 0093)
             "meaning": meaning,
         })
     return out
@@ -210,8 +214,9 @@ def parse_assignments(text: str) -> list:
             raise PlanError(f"dòng {n}: thiếu dấu '=' — viết KHOÁ=giá trị")
         k, v = s.split("=", 1)
         k, v = k.strip(), v.strip()
-        if not re.fullmatch(r"[A-Z][A-Z0-9_-]*", k):
-            raise PlanError(f"dòng {n}: '{k[:40]}' không phải tên khoá (chữ hoa, số, _ hoặc -)")
+        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", k):
+            raise PlanError(f"dòng {n}: '{k[:40]}' không phải tên khoá (chữ hoa, số, _ — không gạch ngang: "
+                            f"envFrom bỏ qua im lặng key có gạch ngang, ADR 0093)")
         if k in seen:
             raise PlanError(f"dòng {n}: khoá {k} xuất hiện hai lần")
         seen.add(k)
@@ -761,7 +766,7 @@ def ordered_services(services: list) -> list:
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 # Self-hosted basemap (task nen-ban-do) — procedure: kb/40-runbooks/basemap-pmtiles.md, why: ADR 0072.
 # The job builds on the BUILD MACHINE and uploads to the environment's MinIO; it never changes
-# BASEMAP-URL — that waits for the signed sovereignty check.
+# BASEMAP_URL — that waits for the signed sovereignty check.
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
 BASEMAP_DATE = re.compile(r"^20[0-9]{6}$")
@@ -829,7 +834,7 @@ def https_origin(key: str, value: str) -> str:
 
 
 def plan_basemap(cm: dict, date: str) -> dict:
-    """common-config data + date → where the files go and the BASEMAP-URL they will be read at."""
+    """common-config data + date → where the files go and the BASEMAP_URL they will be read at."""
     d = check_basemap_date(date)
     for k in ("OBJECT_STORAGE_BUCKET_PREFIX", "OBJECT_STORAGE_PUBLIC_ENDPOINT", "OBJECT_STORAGE_ENDPOINT"):
         if not (cm.get(k) or "").strip():
@@ -1233,7 +1238,7 @@ def _run(a) -> int:
         p = plan_basemap(_json(a.current).get("data", {}) or {}, a.date)
         print(table(["", ""], [["Bản dựng Protomaps", p["date"]], ["Bucket", p["bucket"]],
                                ["Tải lên qua (máy build)", p["upload_endpoint"]],
-                               ["Đích", p["dest"]], ["BASEMAP-URL sẽ là", p["basemap_url"]]]))
+                               ["Đích", p["dest"]], ["BASEMAP_URL sẽ là", p["basemap_url"]]]))
         _write_private(a.out, f"BUCKET={p['bucket']}\nUPLOAD_ENDPOINT={p['upload_endpoint']}\n"
                               f"BASEMAP_URL={p['basemap_url']}\n")
         return 0

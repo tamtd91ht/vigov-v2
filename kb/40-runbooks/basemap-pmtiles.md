@@ -28,8 +28,8 @@ Danh sách tệp được phát: `web-admin/src/lib/basemap/assets.ts`.
 
 | Thấy gì | Nguyên nhân thường gặp | Làm gì |
 |---|---|---|
-| Bản đồ phản ánh hoặc `/ban-do` hiện **"Chưa cấu hình bản đồ nền."**; `/basemap/...` trả 503 | Key `BASEMAP-URL` chưa có trong `common-config`, hoặc sai dạng (không https, có thông tin đăng nhập, có truy vấn). Log pod web-admin có **một** dòng gọi tên biến | Mục "Đưa vào dùng" |
-| `/basemap/vn-mainland.pmtiles` trả **404** "Không tìm thấy tệp bản đồ nền." | Tiền tố trong `BASEMAP-URL` sai ngày, hoặc chưa tải lên | `mc ls <alias>/<bucket>/config/map/` — đối chiếu tên thư mục ngày với giá trị key |
+| Bản đồ phản ánh hoặc `/ban-do` hiện **"Chưa cấu hình bản đồ nền."**; `/basemap/...` trả 503 | Key `BASEMAP_URL` chưa có trong `common-config`, hoặc sai dạng (không https, có thông tin đăng nhập, có truy vấn). Log pod web-admin có **một** dòng gọi tên biến | Mục "Đưa vào dùng" |
+| `/basemap/vn-mainland.pmtiles` trả **404** "Không tìm thấy tệp bản đồ nền." | Tiền tố trong `BASEMAP_URL` sai ngày, hoặc chưa tải lên | `mc ls <alias>/<bucket>/config/map/` — đối chiếu tên thư mục ngày với giá trị key |
 | Trả **502** | MinIO trả 403 (bucket không cho đọc ẩn danh), chứng chỉ MinIO do CA nội bộ ký mà pod không tin, hoặc NetworkPolicy chặn | Lần lượt: `mc anonymous get <alias>/<bucket>` phải in `download`; CA nội bộ → mount CA và đặt `NODE_EXTRA_CA_CERTS` cho web-admin (**không bao giờ** tắt kiểm chứng chỉ); `kubectl get networkpolicy allow-web-admin-egress-storage` phải có, và cổng trong key phải là 9000 |
 | Trả **504** | MinIO không phản hồi trong 30 giây | Kiểm MinIO; không phải lỗi web-admin |
 | Bản đồ trắng, không câu nào, tab Network không có `/basemap/` | Trang gọi `new Map` trước `registerPmtilesProtocol` (`web-admin/src/lib/basemap/protocol.ts`) | Lỗi mã — báo người dựng màn |
@@ -38,7 +38,7 @@ Danh sách tệp được phát: `web-admin/src/lib/basemap/assets.ts`.
 **Kiểm từ trong cụm** (pod gỡ lỗi cùng namespace, không từ máy cá nhân):
 
 ```sh
-curl -sI -H 'Range: bytes=0-126' "<giá trị BASEMAP-URL>/vn-mainland.pmtiles"   # phải: 206, Content-Range: bytes 0-126/<cỡ tệp>
+curl -sI -H 'Range: bytes=0-126' "<giá trị BASEMAP_URL>/vn-mainland.pmtiles"   # phải: 206, Content-Range: bytes 0-126/<cỡ tệp>
 ```
 
 ## Dựng lần đầu hoặc làm mới
@@ -50,8 +50,8 @@ Bước 2–3 (dựng + tải lên) chạy theo **một trong hai** cách — **
   trì); hai job chạy cùng `deploy/van-hanh/basemap-task.sh`. Việc chạy
   trên máy build, tự tải `pmtiles` + `mc` đã ghim SHA-256, lấy bucket và địa chỉ từ `common-config` của
   `MT`, dùng cặp khoá MinIO **có sẵn** của `comms-secrets` (thiếu thì `platform-secrets`), in dòng
-  SHA-256, `BUILD-INFO.txt` và giá trị `BASEMAP-URL` để ghi vào danh mục ký. Job **không** đổi
-  `BASEMAP-URL`. Dựng job lần đầu (mã băm công cụ): `deploy/van-hanh/README.md` §Nền bản đồ.
+  SHA-256, `BUILD-INFO.txt` và giá trị `BASEMAP_URL` để ghi vào danh mục ký. Job **không** đổi
+  `BASEMAP_URL`. Dựng job lần đầu (mã băm công cụ): `deploy/van-hanh/README.md` §Nền bản đồ.
 - **Bằng tay** trên máy người vận hành có Internet, `pmtiles` (go-pmtiles v1.31.2), `curl`, `mc` có alias
   tới MinIO của ViGov — các lệnh ở bước 2–3 dưới.
 
@@ -74,7 +74,7 @@ thông). Muốn bucket riêng có khoá thì web-admin phải giữ khoá MinIO 
 ## Kiểm chủ quyền — BẮT BUỘC sau MỖI lần làm mới
 
 ADR 0072 §Trả lời 09/10/2026: kiểm tay + danh mục kiểm **có ký**, mọi lần, không ngoại lệ. Kiểm trên
-**staging** đã trỏ `BASEMAP-URL` vào tiền tố mới (mục "Đưa vào dùng", bước 1), bằng màn bản đồ phản ánh
+**staging** đã trỏ `BASEMAP_URL` vào tiền tố mới (mục "Đưa vào dùng", bước 1), bằng màn bản đồ phản ánh
 thật, ở các xã có khung chạm biển và biên giới.
 
 | # | Kiểm | Đạt khi |
@@ -87,22 +87,23 @@ thật, ở các xã có khung chạm biển và biên giới.
 | 6 | Góc bản đồ | Có dòng ghi nguồn `Protomaps © OpenStreetMap contributors` |
 | 7 | `SHA256SUMS` trên MinIO | Khớp tệp đã dựng (`mc cat …/SHA256SUMS`) |
 
-**Danh mục ký:** ghi ngày bản dựng, giá trị `BASEMAP-URL`, dòng SHA-256 của `vn-mainland.pmtiles`, kết
+**Danh mục ký:** ghi ngày bản dựng, giá trị `BASEMAP_URL`, dòng SHA-256 của `vn-mainland.pmtiles`, kết
 quả từng dòng 1–7, người kiểm, người duyệt, ngày ký. Bản ký lưu ở **hồ sơ vận hành ngoài kho mã** — không
 commit (tên người ký không thuộc kho). **Ai ký** sau lần chạy thật đầu tiên: chủ dự án chưa nêu tên —
 trước lần chạy thật đầu tiên là pháp chế ViHAT + đầu mối UBND (ADR).
 
-Một dòng không đạt: **không** đưa vào dùng; giữ `BASEMAP-URL` cũ; báo chủ dự án. Không sửa style hay
+Một dòng không đạt: **không** đưa vào dùng; giữ `BASEMAP_URL` cũ; báo chủ dự án. Không sửa style hay
 khung để "cho qua" — đó là điểm dừng của ADR 0072.
 
 ## Đưa vào dùng và quay lui
 
-1. Staging: đặt key `BASEMAP-URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/config/map/<YYYYMMDD>` trong
-   `common-config` của `vigov-staging` — việc `sua-configmap` của job `vigov-van-hanh` (tự khởi động lại
-   `vigov-web-admin`), hoặc `kubectl -n vigov-staging edit configmap common-config` rồi chạy lại job
-   `web-admin` (bước "Triển khai" ánh xạ key thành env `BASEMAP_URL`). Kiểm, ký.
-2. Prod: cùng giá trị ở `vigov-prod`, chạy lại job `web-admin`.
-3. **Quay lui:** đặt lại giá trị cũ, chạy lại job. Vì vậy **không xoá** tiền tố cũ ngay — giữ ít nhất tới
+1. Staging: đặt key `BASEMAP_URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/config/map/<YYYYMMDD>` trong
+   `common-config` của `vigov-staging` — việc `sua-configmap` của job `vigov-van-hanh`, hoặc
+   `kubectl -n vigov-staging edit configmap common-config` — rồi
+   `kubectl -n vigov-staging rollout restart deploy/vigov-web-admin`: key trùng tên biến, tới pod qua
+   `envFrom`, mà `envFrom` chỉ đọc lúc pod khởi động (ADR 0093). Kiểm, ký.
+2. Prod: cùng giá trị ở `vigov-prod`, rồi `rollout restart` như bước 1.
+3. **Quay lui:** đặt lại giá trị cũ, `rollout restart` lại. Vì vậy **không xoá** tiền tố cũ ngay — giữ ít nhất tới
    lần làm mới sau.
 
 Nhịp làm mới: **chưa chốt** (ADR 0072, việc còn mở #3 sau trả lời). Đề xuất của ADR: khi xã báo sai đường

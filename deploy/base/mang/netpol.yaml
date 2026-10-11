@@ -638,7 +638,7 @@ spec:
 # 6b. Đường RA của RIÊNG web-admin tới MinIO: tuyến `/basemap/*` phát lại tệp nền PMTiles của bản đồ phản
 #     ánh từ `BASEMAP_URL` (ADR 0072 §Trả lời 09/10/2026, `web-admin/src/lib/may-chu/basemap.ts`). Cùng
 #     khuôn và cùng nợ với 7/7b/7d: đích tạm mở (`_chung/netpol-duong-ra-tam-mo`), GIỮ giới hạn CỔNG 9000
-#     — phải khớp cổng trong `BASEMAP-URL`; sai cổng thì pod xanh mà bản đồ phản ánh trả 502/504.
+#     — phải khớp cổng trong `BASEMAP_URL`; sai cổng thì pod xanh mà bản đồ phản ánh trả 502/504.
 #     CHỈ 9000: web-admin không cần clamd (3310) — nó không ghi gì vào kho, chỉ đọc tệp nền.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy

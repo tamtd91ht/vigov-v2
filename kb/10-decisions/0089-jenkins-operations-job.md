@@ -91,7 +91,7 @@ tới khi chủ dự án cho nghỉ — không gỡ, không chuyển việc cũ 
 |---|---|---|
 | 1 | Active Choices **đã cài** trên controller chưa? | Chưa cài thì job **từ chối rõ ràng**, nêu tên plugin — không lùi về form tĩnh |
 | 2 | Ai duyệt script (*In-process Script Approval*) trên controller dùng chung? | Duyệt có hiệu lực toàn controller |
-| 3 | **Cách viết khoá.** Luật 11 bất biến 4 nói khoá ConfigMap/Secret viết **gạch ngang**; nhưng cụm thật nạp bằng `envFrom`, nên khoá **phải gạch dưới** — khoá gạch ngang bị bỏ qua im lặng | `deploy/README.md:308-315`; `deploy/cau-hinh/README.md:4-5`. Job ghi theo dạng Deployment đang đọc; hai nguồn này phải được chủ dự án hoà giải, không phải job |
+| 3 | **Cách viết khoá.** Luật 11 bất biến 4 nói khoá ConfigMap/Secret viết **gạch ngang**; nhưng cụm thật nạp bằng `envFrom`, nên khoá **phải gạch dưới** — khoá gạch ngang bị bỏ qua im lặng | `deploy/README.md:308-315`; `deploy/cau-hinh/README.md:4-5`. Job ghi theo dạng Deployment đang đọc; hai nguồn này phải được chủ dự án hoà giải, không phải job. **Đã giải quyết: ADR 0093** (11/10/2026) |
 | 4 | DSN cũ **giữ ở đâu** để quay lui? | Không được là một khoá thêm trong Secret nạp bằng `envFrom`: nó thành một biến môi trường không có dòng `.env.example` (luật 11 cấm #4). Một Secret riêng không gắn vào Deployment là một cách |
 | 5 | Staging sau khi tách: ở lại CSDL cũ, hay cũng chuyển? | Hệ quả #1 |
 | 6 | `vihat-miniapp` theo prod sang CSDL mới, hay ở lại? | Hệ quả #4 |

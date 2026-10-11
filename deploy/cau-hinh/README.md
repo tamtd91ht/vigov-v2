@@ -112,16 +112,15 @@ ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes 
 
 ### Key trong `common-config` mà chỉ web-admin đọc
 
-Dịch vụ Go không đọc key này (`tools/check_env_map.py` không soát nó). Key viết **gạch ngang** (luật 11
-bất biến 4), nên không tới pod qua `envFrom`: `deploy/base/web-admin/deployment.yaml` và job `web-admin`
-(`web-admin/Jenkinsfile`, `kubectl set env --from … --keys=BASEMAP-URL`) ánh xạ nó thành env `BASEMAP_URL`.
+Dịch vụ Go không đọc key này (`tools/check_env_map.py` không soát nó). Key viết `UPPER_SNAKE_CASE` như mọi
+key khác (luật 11 bất biến 4, ADR 0093): tới pod web-admin qua `envFrom` của `common-config`, không ánh xạ riêng.
 
 | Key | Bắt buộc | Là gì · lấy giá trị | Value |
 |---|---|---|---|
-| `BASEMAP-URL` | không — thiếu thì bản đồ phản ánh **không có nền** + một câu; web-admin vẫn chạy (ADR 0072 §Trả lời 09/10/2026) | Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến `/basemap/*` của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền: `kb/40-runbooks/basemap-pmtiles.md` | `https://<minio nội bộ>:<cổng>/<tiền tố>-public/config/map/<YYYYMMDD>` — https, không thông tin đăng nhập. **Không bao giờ** URL của OpenFreeMap hay host ngoài |
+| `BASEMAP_URL` | không — thiếu thì bản đồ phản ánh **không có nền** + một câu; web-admin vẫn chạy (ADR 0072 §Trả lời 09/10/2026) | Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến `/basemap/*` của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền: `kb/40-runbooks/basemap-pmtiles.md` | `https://<minio nội bộ>:<cổng>/<tiền tố>-public/config/map/<YYYYMMDD>` — https, không thông tin đăng nhập. **Không bao giờ** URL của OpenFreeMap hay host ngoài |
 
-Đổi key xong: chạy lại job `web-admin` (bước "Triển khai" ánh xạ key), hoặc
-`kubectl -n <namespace> rollout restart deploy/vigov-web-admin` nếu ánh xạ đã có.
+Đổi key xong: `kubectl -n <namespace> rollout restart deploy/vigov-web-admin` (pod đọc env lúc khởi động),
+hoặc chạy lại job `web-admin` — job cũng gỡ dòng env `BASEMAP_URL` ánh xạ riêng mà các lượt cũ để lại.
 
 ## 3. Env viết thẳng trong Deployment (không qua ConfigMap)
 

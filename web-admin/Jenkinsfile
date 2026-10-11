@@ -197,20 +197,26 @@ pipeline {
         // `MAP_STYLE_URL-` GỠ biến URL style OpenFreeMap mà các lượt trước đã đặt: từ 11/10/2026 `/ban-do`
         // dùng nền tự host `BASEMAP_URL` (bước dưới), không mã nào đọc biến cũ nữa. Biến không ai đọc mà còn
         // trên pod là trôi lệch (luật 11). Gỡ một biến chưa có thì kubectl bỏ qua.
-        // NỀN TỰ HOST của bản đồ phản ánh (ADR 0072 §Trả lời 09/10/2026) và của `/ban-do` (từ 11/10/2026). Giá trị nằm ở ConfigMap
-        // `common-config`, key `BASEMAP-URL` (gạch ngang, luật 11 bất biến 4) — `envFrom` không mang được
-        // key có gạch ngang, nên ánh xạ tên ở đây: `--from` đổi `-` thành `_` → env `BASEMAP_URL`.
-        // CHƯA CÓ KEY thì KHÔNG dừng lượt triển khai: bản đồ phản ánh chỉ thiếu nền + một câu (ADR), còn
-        // dừng ở đây là chặn web-admin của mọi xã vì một tệp chưa tải lên. Cách có key:
-        // kb/40-runbooks/basemap-pmtiles.md.
+        // NỀN TỰ HOST của bản đồ phản ánh (ADR 0072 §Trả lời 09/10/2026) và của `/ban-do` (từ 11/10/2026): key
+        // `BASEMAP_URL` của ConfigMap `common-config`, tới pod qua `envFrom` như mọi key khác (luật 11 bất biến 4,
+        // ADR 0093) — job KHÔNG ánh xạ từng key nữa.
+        // (a) Các lượt trước đặt env TƯỜNG MINH `BASEMAP_URL` (valueFrom key cũ `BASEMAP-URL`). Env tường minh
+        //     THẮNG `envFrom`, và nó trỏ vào key sắp bị xoá → pod mới kẹt CreateContainerConfigError. Gỡ nó,
+        //     chỉ khi có — kiểm trước để log nói rõ đã gỡ hay không.
+        // (b) CHƯA CÓ KEY thì KHÔNG dừng lượt triển khai: bản đồ phản ánh chỉ thiếu nền + một câu (ADR), còn
+        //     dừng ở đây là chặn web-admin của mọi xã vì một tệp chưa tải lên. Cách có key:
+        //     kb/40-runbooks/basemap-pmtiles.md.
         sh '''
           set -eu
+          if kubectl -n "$NS" get deploy/"$TEN_K8S" \
+               -o jsonpath='{.spec.template.spec.containers[*].env[?(@.name=="BASEMAP_URL")].name}' | grep -q .; then
+            echo "Gỡ env tường minh BASEMAP_URL của lượt trước — từ nay lấy qua envFrom common-config."
+            kubectl -n "$NS" set env deploy/"$TEN_K8S" BASEMAP_URL-
+          fi
           # `with`, not a bare `index`: a missing key prints "<no value>", which `grep -q .` would take as set.
-          if kubectl -n "$NS" get configmap common-config \
-               -o go-template='{{with .data}}{{with index . "BASEMAP-URL"}}{{.}}{{end}}{{end}}' | grep -q .; then
-            kubectl -n "$NS" set env deploy/"$TEN_K8S" --from=configmap/common-config --keys=BASEMAP-URL
-          else
-            echo "CẢNH BÁO: common-config của $NS chưa có key BASEMAP-URL — bản đồ phản ánh sẽ không có nền."
+          if ! kubectl -n "$NS" get configmap common-config \
+               -o go-template='{{with .data}}{{with index . "BASEMAP_URL"}}{{.}}{{end}}{{end}}' | grep -q .; then
+            echo "CẢNH BÁO: common-config của $NS chưa có key BASEMAP_URL — bản đồ phản ánh sẽ không có nền."
             echo "          Dựng và tải tệp nền rồi đặt key: kb/40-runbooks/basemap-pmtiles.md"
           fi
         '''

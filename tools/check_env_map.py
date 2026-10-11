@@ -73,6 +73,11 @@ DONG_ENV = re.compile(r"^([A-Z0-9_]+)=")
 # một cách chính đáng, nhưng nó KHÔNG thuộc bảng map: không pod nào cần nó.
 CHI_DE_KIEM = {"VIGOV_TEST_DSN"}
 
+# Key `common-config` mà CHỈ web-admin (Next.js) đọc, không dịch vụ Go nào: có dòng trong bảng map (mục
+# "chỉ web-admin đọc") nhưng `core/config` không đọc nó — đúng thiết kế, không phải dòng chết. Trước
+# 11/10/2026 nó viết gạch ngang nên `DONG_BANG` không bắt được; từ ADR 0093 mọi key là UPPER_SNAKE_CASE.
+CHI_WEB_ADMIN = {"BASEMAP_URL"}
+
 
 def _doc(duong_dan: str) -> str:
     with io.open(duong_dan, encoding="utf-8") as f:
@@ -142,7 +147,7 @@ def main() -> int:
             f"Người vận hành không biết phải khai nó ở ConfigMap hay Secret."
         )
 
-    for ten in sorted(set(bang) - ma_doc - CHI_DE_KIEM):
+    for ten in sorted(set(bang) - ma_doc - CHI_DE_KIEM - CHI_WEB_ADMIN):
         vi_pham.append(
             f"bảng map có {ten} nhưng `core/config` không đọc biến nào tên ấy — "
             f"đổi tên trong mã mà quên bảng, hoặc một dòng đã chết."

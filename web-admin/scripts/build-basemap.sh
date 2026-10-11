@@ -11,7 +11,7 @@
 #
 # Uploading is NOT going live: the files land under a NEW dated prefix `config/map/<date>/` of the bucket
 # (prefix chosen by the owner 11/10/2026; the web-admin route /basemap/* is unrelated) that nothing reads until the
-# ConfigMap key BASEMAP-URL is changed to point at it — and that change comes only after the signed check.
+# ConfigMap key BASEMAP_URL is changed to point at it — and that change comes only after the signed check.
 #
 # WHAT IS FIXED HERE AND WHY (changing any of it is a stop condition of ADR 0072, not a flag):
 #   BBOX     mainland + near-shore islands, decided by the owner 09/10/2026.
@@ -110,7 +110,7 @@ build() {
   # `|| true`: under pipefail, `head` closing the pipe early (SIGPIPE) must not fail a finished build.
   pmtiles show "$dir/$ARCHIVE" | head -30 || true
   echo
-  echo "Bước tiếp: upload, rồi KIỂM CHỦ QUYỀN có ký (kb/40-runbooks/basemap-pmtiles.md) TRƯỚC khi đổi BASEMAP-URL."
+  echo "Bước tiếp: upload, rồi KIỂM CHỦ QUYỀN có ký (kb/40-runbooks/basemap-pmtiles.md) TRƯỚC khi đổi BASEMAP_URL."
 }
 
 upload() {
@@ -128,7 +128,7 @@ upload() {
   mc cp --recursive "$dir/" "$dest"
   echo
   echo "ĐÃ TẢI LÊN: $dest — CHƯA ai đọc tiền tố này."
-  echo "Giá trị BASEMAP-URL tương ứng: https://<MinIO nội bộ>:<cổng>/${bucket}/config/map/${date}"
+  echo "Giá trị BASEMAP_URL tương ứng: https://<MinIO nội bộ>:<cổng>/${bucket}/config/map/${date}"
   echo "Bước tiếp: đặt giá trị ấy ở STAGING, kiểm chủ quyền + ký danh mục, rồi mới đặt ở prod."
 }
 

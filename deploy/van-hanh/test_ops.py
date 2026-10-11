@@ -32,7 +32,7 @@ CAT = [
     entry("MALWARE_SCANNER_ADDRESS", "configmap", ["comms", "petitions", "platform"]),
     entry("OBJECT_STORAGE_ENDPOINT", "configmap", ["comms", "petitions", "platform"]),
     entry("TRUSTED_PROXY_CIDRS", "configmap", SERVICES),
-    entry("BASEMAP-URL", "configmap", ["web-admin"], "opt"),
+    entry("BASEMAP_URL", "configmap", ["web-admin"], "opt"),
     entry("CITIZEN_SESSION_TTL", "configmap", ["identity"], "opt"),
     entry("PLATFORM_GRPC_ADDR", "env", ["identity"]),
     entry("RABBITMQ_DSN", "unset", [], "unused"),
@@ -67,9 +67,15 @@ class RealRepoCatalog(unittest.TestCase):
         self.assertEqual(self.cat["PLATFORM_GRPC_ADDR"]["placement"], "env")
         self.assertEqual(self.cat["RABBITMQ_DSN"]["placement"], "unset")
 
-    def test_web_admin_key_keeps_its_dashed_spelling_and_is_registered(self):
-        e = self.cat["BASEMAP-URL"]
-        self.assertEqual((e["placement"], e["users"], e["registered"]), ("configmap", ["web-admin"], True))
+    def test_web_admin_key_is_underscored_and_registered(self):
+        # ADR 0093: key = env name. The dashed spelling must be gone from the catalogue, not kept beside it.
+        e = self.cat["BASEMAP_URL"]
+        self.assertEqual((e["placement"], e["registered"]), ("configmap", True))
+        self.assertNotIn("BASEMAP-URL", self.cat)
+
+    def test_no_catalogued_key_has_a_dash(self):
+        # envFrom drops a dashed key silently — the pod just lacks the variable (rule 11 invariant 4).
+        self.assertEqual([k for k in self.cat if "-" in k], [])
 
     def test_every_catalogued_key_is_registered_in_env_template(self):
         self.assertEqual([k for k, e in self.cat.items() if not e["registered"]], [])
@@ -125,8 +131,15 @@ class ConfigPlan(unittest.TestCase):
         self.assertEqual(rows[0][1], "vigov-clamav:3310")
 
     def test_web_admin_key_restarts_web_admin(self):
-        _, _, restart = self.plan("BASEMAP-URL=https://minio.example.vn/p-public/config/map/20261010")
+        _, _, restart = self.plan("BASEMAP_URL=https://minio.example.vn/p-public/config/map/20261010")
         self.assertEqual(restart, ["vigov-web-admin"])
+
+    def test_web_admin_key_goes_through_https_check(self):
+        # The dashed spelling escaped the `_URL` suffix check; the underscored one must not.
+        self.refuses("BASEMAP_URL=http://minio.example.vn/p-public/config/map/20261010", "https://")
+
+    def test_dashed_key_refused_with_reason(self):
+        self.refuses("BASEMAP-URL=https://minio.example.vn/x", "không gạch ngang")
 
     def test_empty_value_keeps_and_unchanged_is_no_change(self):
         rows, patch, restart = self.plan("MALWARE_SCANNER_ADDRESS=\nENV=prod\n# note")

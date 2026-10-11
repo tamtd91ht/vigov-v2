@@ -139,7 +139,7 @@ pipeline {
                         'hoặc email đăng nhập) — quyền đã có thì bỏ qua; xong thì người ấy đăng xuất rồi đăng nhập lại ' +
                         '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc) · ' +
                         'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
-                        'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP-URL (kb/40-runbooks/basemap-pmtiles.md). ' +
+                        'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP_URL (kb/40-runbooks/basemap-pmtiles.md). ' +
                         'CHAY_THU bật = chỉ in kế hoạch; làm thật: bỏ tick, XAC_NHAN = namespace của MT, TICKET nếu prod. ' +
                         'Cùng việc với vigov-van-hanh (deploy/van-hanh/basemap-task.sh)')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
@@ -185,7 +185,7 @@ pipeline {
     string(name: 'NGAY_NEN', defaultValue: '',
            description: 'Cho nen-ban-do: ngày bản dựng hằng ngày Protomaps, YYYYMMDD (có ở https://build.protomaps.com/<ngày>.pmtiles).')
     booleanParam(name: 'CHAY_THU', defaultValue: true,
-                 description: 'Cho nen-ban-do: CHẠY THỬ — in bucket, đích, giá trị BASEMAP-URL sẽ là; không tải, không ghi gì. Bỏ tick để làm thật.')
+                 description: 'Cho nen-ban-do: CHẠY THỬ — in bucket, đích, giá trị BASEMAP_URL sẽ là; không tải, không ghi gì. Bỏ tick để làm thật.')
   }
 
   environment {
@@ -2154,7 +2154,7 @@ EOF
 
     // Nền bản đồ tự host — CÙNG thân với việc nen-ban-do của vigov-van-hanh: deploy/van-hanh/basemap-task.sh
     // (chủ dự án 11/10/2026: chạy ở job này cho tới khi controller có Active Choices). Logic có test ở
-    // deploy/van-hanh/ops.py. Ở đây chỉ chốt tham số; job KHÔNG BAO GIỜ đổi BASEMAP-URL.
+    // deploy/van-hanh/ops.py. Ở đây chỉ chốt tham số; job KHÔNG BAO GIỜ đổi BASEMAP_URL.
     stage('Nền bản đồ') {
       when { expression { params.HANH_DONG == 'nen-ban-do' } }
       steps {
