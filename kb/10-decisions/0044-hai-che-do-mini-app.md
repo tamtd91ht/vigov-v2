@@ -168,7 +168,12 @@ không biết vihat là gì. Việc app xã mượn cầu qua vihat chỉ là c�
 - **Bản nháp chính sách được duyệt cùng ngày** — gỡ hết dấu "[CHỜ DUYỆT …]". Giá trị chủ dự án chốt
   cho các chỗ trống: thời hạn lưu phản ánh theo thời hạn lưu trữ hồ sơ do pháp luật về lưu trữ quy
   định; dữ liệu phiên làm việc với xã, tên Zalo đi kèm yêu cầu chat, yêu cầu đăng ký/huỷ SMS ưu đãi
-  lưu cho tới khi người dùng yêu cầu xoá; máy chủ ViHAT không chuyển tiếp yêu cầu sang hệ thống nào khác.
+  lưu cho tới khi người dùng yêu cầu xoá.
+- **Hai chỗ mã nguồn khác câu đã ghi, văn bản theo mã**: (1) `vihat-miniapp` CÓ đường chuyển tiếp yêu cầu
+  (`internal/webhook/client.go`, ký HMAC, chỉ bật khi đặt `REQUEST_WEBHOOK_URL`) — chính sách chỉ nói yêu cầu
+  lưu ở máy chủ ViHAT và nhân viên ViHAT đọc, không khẳng định "không chuyển đi đâu"; cần chủ dự án cho
+  biết production có bật không và ai nhận. (2) Tên Zalo đi kèm yêu cầu chat bị xoá ở mốc 24 tháng
+  (`migrations/0004_yeu_cau_chat_sms.sql` §4) — văn bản ghi "cho tới khi bạn yêu cầu xoá, nhưng không quá 24 tháng".
 - Cùng ngày, phần giới thiệu ViHAT bỏ ba thứ gây khó hiểu: "Chụp ảnh danh thiếp giấy" (xin máy ảnh
   rồi chỉ hiện lại ảnh), "Kiểm tra đường truyền", bước xin vị trí của "Tìm văn phòng gần tôi".
 

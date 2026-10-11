@@ -3,13 +3,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   cauKhaiDichRaNgoai,
+  COMMUNE_DESTINATIONS,
   DICH_MO_RA_NGOAI,
+  INTRO_DESTINATIONS,
   DUONG_DAN_CHAT_OA,
   OA_NEN_TANG_ID,
   OA_NEN_TANG_NGUON,
   soChu,
 } from "./dich-ra-ngoai";
 import { MUC_CHINH_SACH } from "./chinh-sach-rieng-tu";
+import { communePrivacy } from "./commune-privacy";
 
 /**
  * SỐ CHỖ ỨNG DỤNG MỞ MỘT TRANG BÊN NGOÀI — KHAI TRONG VĂN BẢN PHÁP LÝ, ĐẾM TỪ MÃ NGUỒN.
@@ -171,7 +174,7 @@ describe("mọi lối ra ngoài đều đi qua đúng một cửa, và cửa ấ
       { path: "./features/tinh-nang/zalo-api.ts", code: "export function moTrangWeb(d: string) {}" },
       { path: "./App.tsx", code: '<a href="tel:0287…">Gọi</a>' },
       { path: "./App.tsx", code: "const o = document.getElementById(moc);" },
-      { path: "./features/tinh-nang/SoHoaThiepGiay.tsx", code: "await chonAnhTuMay();" },
+      { path: "./features/tinh-nang/ManDanhThiep.tsx", code: "datTrangThai(await quetMaQR());" },
     ]) {
       for (const loi_ra of LOI_RA) {
         expect(viPham(loi_ra, [tep]), `kêu oan ở: ${tep.code}`).toEqual([]);
@@ -191,7 +194,49 @@ describe("mọi lối ra ngoài đều đi qua đúng một cửa, và cửa ấ
 });
 
 /**
- * CÂU KHAI TRONG CHÍNH SÁCH — dựng từ danh sách, và ca dưới đối chiếu CẢ HAI CHIỀU.
+ * EACH DESTINATION BELONGS TO ONE APP, AND ITS BUTTONS LIVE ON THAT SIDE (owner 11/10/2026: two apps, two policies).
+ * An intro destination is opened from the ViHAT intro's files; a commune destination only through the shell's
+ * injected openers (`App.tsx`), which the commune interface receives. A destination opened from the wrong side
+ * would be counted by the wrong policy.
+ */
+describe("mỗi đích thuộc đúng một ứng dụng, và nút mở nó nằm đúng bên ấy", () => {
+  /** Files that name a destination in a `moRaNgoai("…"` call, per destination. */
+  function callers(tep: readonly TepNguon[]): Map<string, string[]> {
+    const out = new Map<string, string[]>();
+    for (const f of tep) {
+      for (const m of f.code.matchAll(/\bmoRaNgoai\s*\(\s*["'`]([^"'`]+)["'`]/g)) {
+        out.set(m[1]!, [...(out.get(m[1]!) ?? []), f.path]);
+      }
+    }
+    return out;
+  }
+
+  it("every destination is tagged, and the two lists split the whole table", () => {
+    expect(INTRO_DESTINATIONS.length + COMMUNE_DESTINATIONS.length).toBe(DICH_MO_RA_NGOAI.length);
+    expect(INTRO_DESTINATIONS.map((d) => d.ma).sort()).toEqual(["ban-do", "chat-oa", "ma-qr", "tin-tuc", "trang-chu"]);
+    expect(COMMUNE_DESTINATIONS.map((d) => d.ma).sort()).toEqual(["dich-vu-cong", "lien-ket-xa", "video"]);
+  });
+
+  it("intro destinations are opened from the ViHAT side; commune destinations only from the shell (`App.tsx`)", () => {
+    const by = callers(TEP_SAN_XUAT);
+    for (const d of INTRO_DESTINATIONS) {
+      expect(by.get(d.ma)?.length ?? 0, `intro destination "${d.ma}" has no caller`).toBeGreaterThan(0);
+      for (const path of by.get(d.ma) ?? []) {
+        expect(path, `intro destination "${d.ma}" opened outside the ViHAT side`).toMatch(/^\.\/(features|content|api)\//);
+      }
+    }
+    for (const d of COMMUNE_DESTINATIONS) {
+      expect(by.get(d.ma), `commune destination "${d.ma}" opened from somewhere else`).toEqual(["./App.tsx"]);
+    }
+    // Must-still-catch: a commune destination opened from the intro is seen.
+    const wrong = callers([{ path: "./features/company-intro/HomeScreen.tsx", code: 'moRaNgoai("video", u);' }]);
+    expect(wrong.get("video")).toEqual(["./features/company-intro/HomeScreen.tsx"]);
+  });
+});
+
+/**
+ * CÂU KHAI TRONG CHÍNH SÁCH — dựng từ danh sách, và ca dưới đối chiếu CẢ HAI CHIỀU, cho MỖI chính sách với danh sách
+ * của chính nó: ViHAT ⇄ `INTRO_DESTINATIONS`, xã ⇄ `COMMUNE_DESTINATIONS`.
  */
 describe("câu khai của chính sách khớp với danh sách đích", () => {
   const benThuBa = () => {
@@ -199,82 +244,70 @@ describe("câu khai của chính sách khớp với danh sách đích", () => {
     expect(muc, "chính sách không còn mục nào về chuyển dữ liệu cho bên thứ ba").toBeDefined();
     return muc!.doan;
   };
+  const communeReceivers = () =>
+    communePrivacy({ displayName: "Xã Thử", province: "Tỉnh Thử", introductionUrl: "https://xa-thu.example.gov.vn/gioi-thieu" })
+      .sections.find((m) => m.ma === "noi-nhan")!.doan.join("\n");
 
-  it("nói ĐÚNG số chỗ, bằng chữ, và số ấy bằng số dòng đã khai", () => {
-    const chu = benThuBa().join("\n");
-    expect(chu, "văn bản không còn câu đếm số chỗ mở trang ngoài").toContain(
-      `Có ${soChu(DICH_MO_RA_NGOAI.length)} chỗ ứng dụng mở một trang bên ngoài`,
-    );
+  it("nói ĐÚNG số chỗ, bằng chữ, và số ấy bằng số dòng đã khai — ở cả hai chính sách", () => {
+    expect(benThuBa().join("\n")).toContain(`Có ${soChu(INTRO_DESTINATIONS.length)} chỗ ứng dụng mở một trang bên ngoài`);
+    expect(communeReceivers()).toContain(`Có ${soChu(COMMUNE_DESTINATIONS.length)} chỗ ứng dụng mở một trang bên ngoài`);
   });
 
-  it("liệt kê ĐỦ từng đích, nguyên văn cụm từ đã khai", () => {
-    const chu = benThuBa().join("\n");
-    for (const dich of DICH_MO_RA_NGOAI) {
-      expect(chu, `văn bản không kể tới đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
-    }
+  it("liệt kê ĐỦ từng đích của chính ứng dụng ấy, nguyên văn cụm từ đã khai", () => {
+    const vihat = benThuBa().join("\n");
+    for (const dich of INTRO_DESTINATIONS) expect(vihat, `văn bản ViHAT không kể tới đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
+    const commune = communeReceivers();
+    for (const dich of COMMUNE_DESTINATIONS) expect(commune, `văn bản xã không kể tới đích "${dich.ma}"`).toContain(dich.trong_chinh_sach);
   });
 
-  it("câu ấy xuất hiện ĐÚNG MỘT LẦN trong cả văn bản", () => {
+  it("câu ấy xuất hiện ĐÚNG MỘT LẦN trong mỗi văn bản", () => {
     // Hai câu đếm trong một văn bản là hai câu sẽ nói hai con số khác nhau.
     const toan_van = MUC_CHINH_SACH.flatMap((m) => m.doan).join("\n");
-    const so_lan = toan_van.split("chỗ ứng dụng mở một trang bên ngoài").length - 1;
-    expect(so_lan, `câu đếm xuất hiện ${so_lan} lần`).toBe(1);
+    expect(toan_van.split("chỗ ứng dụng mở một trang bên ngoài").length - 1).toBe(1);
+    expect(communeReceivers().split("chỗ ứng dụng mở một trang bên ngoài").length - 1).toBe(1);
   });
 
   it("đổi danh sách thì câu đổi theo — con số không thể đứng yên", () => {
-    // ĐÂY LÀ CA CHỨNG MINH CƠ CHẾ CÒN SỐNG, không phải một ca về nội dung. Nếu ai đó gỡ
-    // `cauKhaiDichRaNgoai()` khỏi chính sách và gõ lại một câu tay, ba ca trên vẫn xanh chừng nào
-    // câu gõ tay còn khớp hôm nay — và nó sẽ đứng yên vào lần thêm đích tiếp theo.
+    // ĐÂY LÀ CA CHỨNG MINH CƠ CHẾ CÒN SỐNG, không phải một ca về nội dung.
     const bot_mot = DICH_MO_RA_NGOAI.slice(0, DICH_MO_RA_NGOAI.length - 1);
     const cau_bot = cauKhaiDichRaNgoai(bot_mot);
     expect(cau_bot).toContain(`Có ${soChu(bot_mot.length)} chỗ`);
     expect(cau_bot, "câu vẫn kể một đích đã bị gỡ khỏi danh sách").not.toContain(
       DICH_MO_RA_NGOAI[DICH_MO_RA_NGOAI.length - 1]!.trong_chinh_sach,
     );
-
-    // Danh sách một dòng: phần liệt kê phải là ĐÚNG cụm từ ấy rồi hết câu — không còn một "và"
-    // treo lủng lẳng, thứ một hàm ghép chuỗi hay để lại ở trường hợp biên.
+    // Danh sách một dòng: không còn một "và" treo lủng lẳng.
     const mot_minh = cauKhaiDichRaNgoai([DICH_MO_RA_NGOAI[0]!]);
     expect(mot_minh, "danh sách một dòng để lại một liên từ treo").toContain(
       `bấm: ${DICH_MO_RA_NGOAI[0]!.trong_chinh_sach}. Ứng dụng`,
     );
   });
 
-  it("TÁM đích từ 11/10/2026 — đích thứ bảy là liên kết xã gắn trong bài hay trên ảnh trang chủ, đích thứ tám là trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia", () => {
-    // Ghim con số HÔM NAY để lần thêm/bớt đích tiếp theo là một ca đỏ có người đọc, không phải một câu
-    // pháp lý lặng lẽ đổi. Sáu → bảy cùng ngày: chủ dự án trả lời ADR 0067 Còn mở #6 (liên kết trong thân bài
-    // mở ra ngoài SAU một câu xác nhận, và chính sách thêm một câu), §5 thêm ảnh trang chủ trỏ ra ngoài.
-    // Bảy → tám 11/10/2026: "Tra cứu hồ sơ" mở Cổng Dịch vụ công quốc gia (chủ dự án: dữ liệu một cửa không ở ViGov).
+  it("TÁM đích từ 11/10/2026 — năm của ViHAT, ba của xã; ba đích của xã nói đúng ai chọn và hỏi trước", () => {
+    // Ghim con số HÔM NAY để lần thêm/bớt đích tiếp theo là một ca đỏ có người đọc, không phải một câu pháp lý lặng
+    // lẽ đổi. Bảy → tám 11/10/2026: "Tra cứu hồ sơ" mở Cổng Dịch vụ công quốc gia.
     expect(DICH_MO_RA_NGOAI).toHaveLength(8);
-    expect(cauKhaiDichRaNgoai()).toMatch(/^Có tám chỗ ứng dụng mở một trang bên ngoài, và cả tám đều chỉ mở khi chính bạn bấm: /);
+    expect(cauKhaiDichRaNgoai(INTRO_DESTINATIONS)).toMatch(/^Có năm chỗ ứng dụng mở một trang bên ngoài, và cả năm đều chỉ mở khi chính bạn bấm: /);
+    expect(cauKhaiDichRaNgoai(COMMUNE_DESTINATIONS)).toMatch(/^Có ba chỗ ứng dụng mở một trang bên ngoài, và cả ba đều chỉ mở khi chính bạn bấm: /);
     const portal = DICH_MO_RA_NGOAI.find((d) => d.ma === "dich-vu-cong");
-    expect(portal, "Tra cứu hồ sơ mở một nơi mà chính sách không khai").toBeDefined();
     expect(portal!.trong_chinh_sach).toMatch(/Cổng Dịch vụ công quốc gia/);
     expect(portal!.trong_chinh_sach).toMatch(/sau khi bạn xác nhận rời ứng dụng/);
     const link = DICH_MO_RA_NGOAI.find((d) => d.ma === "lien-ket-xa");
-    expect(link, "liên kết trong bài / ảnh trang chủ mở một nơi mà chính sách không khai").toBeDefined();
     expect(link!.trong_chinh_sach).toMatch(/xã gắn vào một bài viết hoặc một ảnh trên trang chủ/);
     expect(link!.trong_chinh_sach).toMatch(/sau khi bạn xác nhận rời ứng dụng/);
-    // The sentence the owner asked for: where the link opens, and that nothing follows the citizen there.
-    const thirdParty = MUC_CHINH_SACH.find((m) => m.ma === "ben-thu-ba")!.doan.join("\n");
-    expect(thirdParty).toContain(
-      "Liên kết trong bài viết của xã mở ra ngoài ứng dụng, trong trình duyệt của Zalo, sau khi bạn xác nhận; ứng dụng không theo dõi việc bạn bấm liên kết nào hay xem gì ở trang ấy.",
-    );
     const video = DICH_MO_RA_NGOAI.find((d) => d.ma === "video");
-    expect(video, "nút Xem video mở một nơi mà chính sách không khai").toBeDefined();
-    // Không phải một host cố định: đó là đường dẫn XÃ đăng — câu phải nói đúng như vậy, không gọi tên một trang
-    // nào mà app không bảo đảm được.
+    // Không phải một host cố định: đó là đường dẫn XÃ đăng — câu phải nói đúng như vậy.
     expect(video!.trong_chinh_sach).toMatch(/xã đăng/);
     expect(video!.trong_chinh_sach).toMatch(/đúng địa chỉ xã đã đăng/);
-    // Và vế "không gửi kèm thông tin nào của bạn" vẫn phủ lên nó.
-    expect(cauKhaiDichRaNgoai()).toContain("Ứng dụng không gửi kèm thông tin nào của bạn khi mở chúng");
+    // Và vế "không gửi kèm thông tin nào của bạn" vẫn phủ lên mọi đích.
+    expect(cauKhaiDichRaNgoai(COMMUNE_DESTINATIONS)).toContain("Ứng dụng không gửi kèm thông tin nào của bạn khi mở chúng");
+    // No commune word in an intro phrase, no company in a commune phrase (owner 11/10/2026).
+    for (const d of INTRO_DESTINATIONS) expect(d.trong_chinh_sach, d.ma).not.toMatch(/xã|phản ánh|dịch vụ công/i);
+    for (const d of COMMUNE_DESTINATIONS) expect(d.trong_chinh_sach, d.ma).not.toMatch(/ViHAT|chúng tôi|Official Account/);
   });
 
   it("đọc số thành chữ, và không im lặng khi vượt bảng", () => {
     expect(soChu(5)).toBe("năm");
     expect(soChu(10)).toBe("mười");
-    // Vượt bảng thì in chữ số: một câu đọc hơi cứng vẫn ĐÚNG, còn một ngoại lệ ném ra lúc dựng
-    // văn bản là hồ sơ không sinh được.
     expect(soChu(11)).toBe("11");
   });
 });

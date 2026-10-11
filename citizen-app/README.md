@@ -95,13 +95,13 @@ them and stores the phone number as the login name. The session ticket it return
 tư". **It no longer claims the app sends nothing, because that claim became false**, and the
 sentence was removed in the same commit that made it false.
 
-Sáu tính năng ở `src/features/tinh-nang/` **lấy dữ liệu rồi hiện lên màn hình, hết**: không
+Các tính năng ở `src/features/tinh-nang/` **lấy dữ liệu rồi hiện lên màn hình, hết**: không
 `localStorage`, không `console.log`, không một lời gọi mạng nào — lời gọi duy nhất của cả kho
 nằm ở `features/dang-nhap/goi-may-chu.ts`. Lệnh cấm lưu trữ trong `phase1-collects-nothing.test.ts`
 **không được nới một dòng nào**; lệnh cấm `fetch` thì được **thu hẹp về đúng MỘT tệp**, và có
 một ca cho nó ăn một `fetch` đặt ở tệp NGAY CẠNH để chứng minh ngoại lệ ấy hẹp đúng bằng một
-tệp. §"Sáu tính năng thật" nói rõ vì sao hai trong các màn ấy **không có dữ liệu cá nhân ngay từ
-đầu**, và vì sao màn quét mã thì có — của người khác.
+tệp. §"Các tính năng của phần giới thiệu ViHAT" nói rõ vì sao màn đăng nhập **không có dữ liệu cá
+nhân ngay từ đầu**, và vì sao màn quét mã thì có — của người khác.
 
 **The discovery layer changes none of that**, in any build. It reads a parameter the platform
 already put in the URL before our code ran, it holds the confirmed commune in `useState` — lost
@@ -345,28 +345,32 @@ fetch(: 15 = 14 của `zmp-sdk` + đúng 1 của ta   (bản dựng duy nhất n
 | `src/content/chinh-sach.test.ts` | 22 ca về chính văn bản pháp lý: câu "không gửi đi đâu" đã biến mất · mục Đăng nhập nói đủ **gửi gì · ai nhận · lưu gì · vì sao** · thời gian lưu nói đủ **không có hạn tự động · cửa yêu cầu xoá · phạm vi xoá** · nhật ký khai đủ **IP · thời điểm · kết quả · mã lý do · chỉ-ghi-thêm** · **lượt THẤT BẠI cũng bị ghi** · danh sách **KHÔNG lưu** · **90 ngày là TRẦN (dọn theo lô tuần, 83–90), áp cả dòng của lượt thất bại**, kèm ca canh chiều ngược nếu ai viết lại thành "đúng 90 ngày" · **dòng bằng chứng của một lần xoá** khai đủ bốn vế · và MỘT số phiên bản, vì chưa bản nào tới tay ai |
 | `src/bundle-for-zalo.test.ts` | Dựng thật **bản duy nhất** rồi đọc bundle — bằng chứng cuối cùng: có đủ chữ của mọi màn · không bộ chọn xã / đổi xã / danh mục mẫu / chữ "demo" / bảng chẩn đoán · không App ID, token hay tên miền nào của tệp ánh xạ (dựng khi `APP_ID` và `ZMP_TOKEN` CÓ trong môi trường) · đúng MỘT đường gọi cho mỗi tuyến |
 
-## Sáu tính năng thật — và chín quyền chúng cần
+## Các tính năng của phần giới thiệu ViHAT — và các quyền chúng cần
 
 Zalo **chỉ cấp** một quyền khi bản nộp **có chỗ dùng nó nhìn thấy được**, và chính sách
 Mini App điều 3.3.4 (trích ngay trên `getPhoneNumber` trong
 `node_modules/zmp-sdk/index.d.ts`) nói thẳng: *"chúng tôi sẽ từ chối xét duyệt cho những Mini App
 có luồng xin cấp quyền chưa rõ ràng, không nêu được mục đích xin quyền đến người dùng"*.
 
-**TÍNH NĂNG, không phải MÀN QUYỀN, và khác biệt ấy là cả vấn đề.** Một tab tên "Quyền" nói
-với người duyệt rằng đây là app đi xin quyền; sáu tính năng đặt đúng chỗ người ta cần
-chúng nói rằng đây là app có việc để làm. **Sáu tính năng, chín quyền** — hai con số không
-bằng nhau vì một việc người dùng làm có thể cần hai quyền: chìa danh thiếp ra cho người
-khác quét cần cả `keepScreen` lẫn `downloadFile`. Tách chúng thành hai "tính năng" để con số
-đẹp lên là dựng hai cái nút không ai hiểu để làm gì — đúng thứ điều 3.3.4 từ chối.
+**TÍNH NĂNG, không phải MÀN QUYỀN.** Một tab tên "Quyền" nói với người duyệt rằng đây là app đi
+xin quyền; tính năng đặt đúng chỗ người ta cần chúng nói rằng đây là app có việc để làm. Một việc
+người dùng làm có thể cần hai quyền: chìa danh thiếp ra cho người khác quét cần cả `keepScreen`
+lẫn `downloadFile`.
+
+11/10/2026 (chủ dự án): với người dùng, phần giới thiệu ViHAT và giao diện của xã là **hai ứng
+dụng riêng** — hai chính sách quyền riêng tư (`src/content/chinh-sach-rieng-tu.ts` của ViHAT,
+`src/content/commune-privacy.ts` của xã, đứng tên Ủy ban nhân dân xã), và màn "Quản lý quyền" của
+phần giới thiệu chỉ hiện lời gọi của phần giới thiệu (`introPermissionRows`, cột `intro_app` của
+`KHAI_BAO_LOI_GOI`). Cùng ngày đã gỡ "Số hoá danh thiếp giấy", "Kiểm tra đường truyền" và việc xin
+vị trí ở "Tìm văn phòng".
 
 | Tính năng | Ở đâu | API | Chạy được tới đâu |
 |---|---|---|---|
 | **Quét danh thiếp số** | Tab "Danh thiếp" | `scanQRCode` | **Trọn vẹn.** Quét → bóc tách vCard → thẻ có cấu trúc → nút Gọi (`openPhone`) · Gửi email (`mailto:`) · Mở liên kết (`openWebview`) · Quét mã khác |
-| **Tìm văn phòng gần bạn** | Tab "Liên hệ" | `getLocation` | **Một nửa.** Nhận được token; ba văn phòng thật và nút "Chỉ đường" (`openWebview` → bản đồ) chạy ngay. **Không xếp được theo khoảng cách** — xem ranh giới dưới |
-| **Đăng nhập bằng số Zalo** | Tab "Liên hệ" | `getPhoneNumber` + `getAccessToken` | **Trọn vẹn, ở CẢ HAI bản.** Một chạm, **không OTP, không ô nhập sáu số** (ADR 0020) → hai mã → máy chủ `vihat-miniapp` đổi mã và phát hành phiên → phiên giữ trong `useState`, không ghi xuống máy. ⚠ **Chưa gọi thử trên máy chủ thật** — backend đang dựng song song. Hotline và email nằm ngay dưới nút: đường lui cho người từ chối quyền |
-| **Kiểm tra đường truyền** | Tab "Giải pháp" | `getNetworkType` + `vibrate` | **Trọn vẹn.** Tổng đài đám mây chạy trên chính đường mạng của máy, nên một nhà cung cấp VoIP có lý do thật để hỏi. Bốn kiểu kết nối → nhãn tiếng Việt + một câu đúng sự thật. **Không một con số nào** — xem ranh giới dưới |
-| **Danh thiếp số của chúng tôi** | Tab "Danh thiếp" | `keepScreen` + `downloadFile` | **Trọn vẹn.** Mã QR chứa vCard dựng từ `COMPANY`/`CONTACT` → giữ màn sáng khi người khác quét (**tắt lại khi rời màn**) → tải `.vcf` bằng `fileBase64Data`, **không máy chủ nào** |
-| **Số hoá danh thiếp giấy** | Tab "Danh thiếp" | `requestCameraPermission` + `openMediaPicker` | **Một nửa.** Xin quyền → chọn ảnh → hiện ảnh. **Chưa đọc được chữ trên ảnh** (cần OCR ở máy chủ) — màn hình nói thẳng. Ảnh **không rời khỏi máy** |
+| **Văn phòng ViHAT Group** | Tab "Liên hệ" | `openWebview` | **Trọn vẹn.** Ba văn phòng thật và nút "Chỉ đường" (bản đồ). **Không xin vị trí** |
+| **Đăng nhập bằng số Zalo** | Tab "Liên hệ" | `getPhoneNumber` + `getAccessToken` | **Trọn vẹn.** Một chạm, **không OTP, không ô nhập sáu số** (ADR 0020) → hai mã → máy chủ `vihat-miniapp` đổi mã và phát hành phiên → phiên giữ trong `useState`, không ghi xuống máy. Hotline và email nằm ngay dưới nút: đường lui cho người từ chối quyền |
+| **Chat với chuyên viên** · **Nhận ưu đãi qua SMS** | Liên hệ · Trang chủ | đăng nhập một chạm + `getUserInfo` (chỉ chat) | Một chạm; tên Zalo chỉ gửi kèm yêu cầu trò chuyện khi người dùng đồng ý |
+| **Danh thiếp số của chúng tôi** | Tab "Danh thiếp" | `keepScreen` + `downloadFile` + `vibrate` | **Trọn vẹn.** Mã QR chứa vCard dựng từ `COMPANY`/`CONTACT` → giữ màn sáng khi người khác quét (**tắt lại khi rời màn**) → tải `.vcf` bằng `fileBase64Data`, **không máy chủ nào** → rung một nhịp khi tải xong |
 
 ### SỰ THẬT ĐÃ ĐO TỪ `zmp-sdk` 2.53.0 — đừng tra lại tài liệu web
 
@@ -377,7 +381,6 @@ ScanQRCodeReturns     = { content: string }
 openPhone(args: { phoneNumber: string }): Promise<void>            // index.d.ts:4141, @zaloOnly
 openWebview(args: { url: string; config?: {…} }): Promise<void>    // index.d.ts:4491, @zaloOnly
 
-getNetworkType()               -> { networkType: "none"|"wifi"|"cellular"|"unknown" }  // :1226 · :3232
 vibrate({ type?, milliseconds? })        -> Promise<void>   // :4400–4433  (milliseconds CHỈ Android)
 keepScreen({ keepScreenOn: boolean })    -> Promise<void>   // :4201–4231  (khai void — KHÔNG đọc .success)
 requestCameraPermission()      -> { userAllow: boolean; message: string }              // :1293 · :4002
@@ -406,16 +409,13 @@ dây bẫy còn lại đều không thấy gì**. Nên nó có một dây bẫy 
 
 | Ranh giới | Vì sao không vượt được | Màn hình làm gì thay thế |
 |---|---|---|
-| **Không xếp được văn phòng theo khoảng cách** | `getLocation` chỉ trả token; đổi token cần một bước máy chủ có app secret. `navigator.geolocation` thì dây bẫy cấm, và là một quyền khác | Hiện đủ ba văn phòng thật kèm nút "Chỉ đường", và **một câu tiếng Việt nói rõ danh sách chưa sắp theo khoảng cách** |
 | **Không đổi được mã Zalo ngay trên máy** | Đổi mã cần **khoá bí mật của Mini App**, và khoá ấy chỉ nằm ở máy chủ (ADR 0020, bất biến 2 · luật 8 cấm #5). Đưa nó xuống thiết bị là điều kiện dừng #1 của chính ADR ấy | Gửi hai mã tới máy chủ `vihat-miniapp` và để nó đổi. Ứng dụng không bao giờ thấy số điện thoại — chỉ thấy mã, và một phiếu phiên trả về |
 | **Phiếu phiên là TẠM, không phải "đã đăng nhập vĩnh viễn"** | ADR 0005: sau khi công dân chọn xã thì máy chủ **phát hành lại** phiên | Phiên sống trong `useState` và mất khi đóng app. Không một dòng mã nào dựng trên giả định giữ mãi — xem khối chú thích đầu `PhatHanhPhien.tsx` |
 | **`openPhone` / `openWebview` chỉ chạy trong Zalo** | `@zaloOnly` trong chính `index.d.ts` | Một câu tiếng Việt nói mở lại trong Zalo, không mã lỗi |
-| **Không đọc được chữ trên ảnh danh thiếp giấy** | Bóc tách cần OCR, OCR cần một bước máy chủ, và dây bẫy cấm mọi đường gửi ra | Hiện ảnh lên màn hình và **nói thẳng bằng một câu** rằng bản này chưa đọc được chữ. **Không một dòng mã nào giả vờ đang nhận dạng** |
-| **Không đo được tốc độ hay độ trễ đường truyền** | `getNetworkType` trả đúng MỘT chuỗi: kiểu kết nối. SDK không có phép đo nào khác | Nói kiểu kết nối và một câu đúng về bản chất của nó. **Cấm mọi con số ms / Mbps / điểm chất lượng** — có một ca test quét chính những câu ấy |
 | **Không chọn được chỗ lưu và tên tệp `.vcf`** | `downloadFile` không có tham số tên tệp, và `fileBase64Data` **không có một dòng tài liệu nào** trong `index.d.ts` | Một câu nói rằng Zalo là bên quyết định tệp nằm ở đâu. ⚠ **CHƯA THỬ TRÊN MÁY THẬT** — xem §"Còn thiếu" |
 
-Không có một dòng mã nào tính khoảng cách, và không một câu chữ nào hứa một việc bản dựng này
-không làm. Đó là điều kiện để chính sách quyền riêng tư **mô tả đúng bản dựng nó nằm trong**.
+Không một câu chữ nào hứa một việc ứng dụng không làm. Đó là điều kiện để chính sách quyền riêng
+tư **mô tả đúng ứng dụng nó nằm trong**.
 
 `scanQRCode` là API **duy nhất** ở đây trả về dữ liệu thật. Nội dung một tấm danh thiếp là **dữ
 liệu cá nhân của NGƯỜI KHÁC** (luật 3). **Hiện lên màn hình được; `console.log` thì không**, và
@@ -438,10 +438,10 @@ không tác dụng phụ — nên nó không có chỗ nào để rò rỉ, và 
 | `src/features/tinh-nang/MaQR.tsx` | Vẽ mã QR bằng SVG nội tuyến từ ma trận `uqr`. Một `<path>`, không phải nghìn `<rect>` |
 | `src/features/tinh-nang/giu-man-sang.ts` | Hợp đồng bật/tắt `keepScreen`, tách ra để kiểm được "**luôn tắt khi rời màn**" mà không cần DOM |
 | `src/features/tinh-nang/danh-thiep.ts` | Bộ bóc tách vCard / liên kết / văn bản. **Thuần**, không tác dụng phụ |
-| `src/features/tinh-nang/noi-dung.ts` | Mọi chữ người dùng đọc trên sáu tính năng, và ánh xạ `networkType` sang nhãn tiếng Việt — `bundle-for-zalo.test.ts` dùng lại đúng danh sách này |
+| `src/features/tinh-nang/noi-dung.ts` | Mọi chữ người dùng đọc trên các tính năng của phần giới thiệu — `bundle-for-zalo.test.ts` dùng lại đúng danh sách này |
 | `src/features/tinh-nang/khung.tsx` | Khung chung: tiêu đề · lý do · nút · chỗ hiện kết quả. `KhungTinhNang` là bản **thuần** để bốn nhánh kết quả kiểm được mà không cần Zalo |
-| `src/features/tinh-nang/ManDanhThiep.tsx` · `LienHeTinhNang.tsx` · `KiemTraDuongTruyen.tsx` · `ManThiepCuaChungToi.tsx` · `SoHoaThiepGiay.tsx` | Tab Danh thiếp (ba khối), hai khối trên màn Liên hệ, một khối trên màn Giải pháp |
-| `src/features/tinh-nang/vcard.test.ts` · `tinh-nang-them.test.tsx` | 52 ca: bộ **sinh** vCard (đủ trường · thiếu trường · ký tự thoát · tiếng Việt · base64 giải ngược đúng nguyên văn · đọc ngược bằng chính bộ bóc tách), bốn kiểu mạng + một giá trị lạ, `keepScreen` **tắt lại khi rời màn**, ba ranh giới được nói ra |
+| `src/features/tinh-nang/ManDanhThiep.tsx` · `LienHeTinhNang.tsx` · `ManThiepCuaChungToi.tsx` | Tab Danh thiếp (hai khối), hai khối trên màn Liên hệ |
+| `src/features/tinh-nang/vcard.test.ts` · `tinh-nang-them.test.tsx` | 52 ca: bộ **sinh** vCard (đủ trường · thiếu trường · ký tự thoát · tiếng Việt · base64 giải ngược đúng nguyên văn · đọc ngược bằng chính bộ bóc tách), `keepScreen` **tắt lại khi rời màn**, mã QR danh thiếp |
 | `src/features/tinh-nang/tinh-nang.test.tsx` | 51 ca: **bộ bóc tách vCard trước hết** (đủ trường · thiếu trường · tham số · dòng gập · ký tự thoát · URL · văn bản · rỗng · rác), rồi từ chối · ngoài Zalo · token không hiện trọn · ranh giới được nói ra · từ chối không làm mất tính năng |
 
 ## Phần nhìn — "sống động" làm bằng gì
@@ -478,15 +478,19 @@ trượt 4,5:1 thì **đổi màu, không nới ngưỡng**.
 
 ## Chính sách quyền riêng tư
 
-Xin chín quyền mà không có văn bản này thì vòng duyệt trả về. Nội dung nằm ở
-`src/content/chinh-sach-rieng-tu.ts`, vẽ ở **cuối màn Liên hệ** (không phải một tab riêng — năm
-tab đang nói năm việc, và người tìm thông tin pháp lý đã đứng sẵn ở màn ấy).
+Xin quyền mà không có văn bản này thì vòng duyệt trả về. HAI văn bản từ 11/10/2026 (chủ dự án: hai
+ứng dụng với người dùng):
 
-**Quy tắc chi phối toàn bộ tệp ấy: chính sách phải mô tả ĐÚNG bản dựng nó nằm trong.** Văn bản
-này công bố dưới tên một pháp nhân có thật — một câu mô tả hành vi mà mã không có là tuyên bố
-sai dưới tên ấy; giấu một hành vi mà mã CÓ là vi phạm chính Nghị định 13/2023/NĐ-CP.
+| Văn bản | Đứng tên | Ở đâu |
+|---|---|---|
+| `src/content/chinh-sach-rieng-tu.ts` | Tập đoàn ViHAT Group — phần giới thiệu, không một chữ nào về xã | vẽ ở **cuối màn Liên hệ**; hồ sơ app chung `tmp/xin-quyen-zalo/app-chung-vihat/` |
+| `src/content/commune-privacy.ts` | Ủy ban nhân dân xã — giao diện của xã, không tên doanh nghiệp nào | hồ sơ app xã `tmp/xin-quyen-zalo/`, điền theo `COMMUNE_TERMS_BY_DOMAIN`; **chưa có màn nào trong giao diện xã vẽ nó** |
 
-**Phiên bản `1.0`, hiệu lực 20/09/2026.**
+**Quy tắc chi phối cả hai: chính sách phải mô tả ĐÚNG ứng dụng nó nằm trong.** Văn bản công bố
+dưới tên một bên có thật — một câu mô tả hành vi mà mã không có là tuyên bố sai dưới tên ấy; giấu
+một hành vi mà mã CÓ là vi phạm chính Nghị định 13/2023/NĐ-CP.
+
+**Phiên bản `1.0`, hiệu lực 11/10/2026** (cả hai; chủ dự án duyệt lời văn ngày ấy, không còn dấu "CHỜ DUYỆT").
 
 ⚠ **MỘT SỐ PHIÊN BẢN, KHÔNG PHẢI SÁU — và đây là quyết định dựa trên bằng chứng, không phải dọn
 cho gọn.** Trong một ngày soạn thảo, văn bản này đã đi `1.0 → 1.1 → 1.2 → 1.3 → 1.4 → 1.5`, mỗi
@@ -630,7 +634,7 @@ lần thêm hoặc bớt một mục — lệch trong một văn bản pháp lý
 | ⚠ **KHÁCH XÁC NHẬN CÂU ĐỊNH VỊ TIẾNG VIỆT** | Ba chuỗi thương hiệu đã điền từ `vihatgroup.com` ngày 21/09/2026 và `company-profile.test.ts` ghim cả ba **nguyên văn**. Nhưng một trong ba là một quyết định **thay khách**: trường `positioning` từng là tiếng Anh (câu của công ty con), tập đoàn **không công bố câu định vị tiếng Anh nào**, nên chỗ ấy nay là câu hero tiếng Việt của trang "Về ViHAT". Đánh dấu tại chỗ trong `company-profile.ts`. Khách bác thì sửa đúng một hằng |
 | **Bản mẫu PM vs nguồn thật — bốn chỗ đã làm theo NGUỒN** | (1) "15 giải pháp, 3 nhóm nghiệp vụ" **không tồn tại** trên cả hai trang — số 15 là số **dự án** của công ty con; app dựng theo cấu trúc thật (4 dòng hệ sinh thái + 6 đơn vị thành viên). (2) Dải lịch sử bắt đầu **2013**, không phải 2012 — ngày thành lập là 06/12/2013, và một mốc trước ngày ấy là khẳng định sai về một pháp nhân. (3) **Không có mục AI nào**: toàn bộ nguồn về AI là MỘT câu gắn OMICall + một ô logo + một bài blog 2023; muốn hơn thì phải mở `omicall.com` và đó là quyết định của chủ dự án. (4) "12 năm" **không ghi cứng** — tính từ ngày thành lập. ⚠ Câu mô tả nguyên văn của khách vẫn mở đầu bằng "Hơn 12 năm", nên **từ 06/12/2026 con số tính ra (13) sẽ lệch với con số trong câu trích (12)**: chỗ sửa là khách công bố lại đoạn ấy, không phải mã sửa lời khách |
 | **Ô tìm kiếm trên màn Giải pháp** | Bản mẫu yêu cầu, **chưa làm**, và không nên làm bằng cách hiện tại: một ô tìm kiếm là một `<input>`, mà `phase1-collects-nothing.test.ts` cấm `<form\|input\|textarea\|select>` ở **mọi tệp**. Nới lệnh cấm ấy cho một ô lọc trên **bốn** mục là trả một giá không tương xứng. Cần ô tìm kiếm thật thì phải đi kèm quyết định: thu hẹp lệnh cấm ấy thế nào, và ca kiểm nào chứng minh nó còn bắt ở ngoài phạm vi mới |
-| **Màn "Quản lý quyền" không phải tab thứ sáu** | Đã đo, không đoán: `accessibility.test.ts` đo thanh tab trên máy 320px; với sáu tab mỗi nhãn chỉ còn ~4 ký tự cho từ dài nhất, mà "Trang", "thiếp", "ViHAT", "Quyền" đều 5. Nên nó là **màn con của tab Liên hệ**, ngay trên chính sách quyền riêng tư |
+| **Màn "Quản lý quyền" không phải tab thứ sáu** | Đã đo, không đoán: `accessibility.test.ts` đo thanh tab trên máy 320px; với sáu tab mỗi nhãn chỉ còn ~4 ký tự cho từ dài nhất, mà "Trang", "thiếp", "ViHAT", "Quyền" đều 5. Nên nó là **màn con của tab Liên hệ**, ngay trên chính sách quyền riêng tư — và từ 11/10/2026 đó là đường vào DUY NHẤT (khối trên màn chủ đã gỡ, chủ dự án). Màn chỉ hiện lời gọi của phần giới thiệu ViHAT (`introPermissionRows`) |
 | **AI VẬN HÀNH `vihat-miniapp` SAU KHI APP ĐỔI CHỦ — ĐÃ TRẢ LỜI 25/09/2026** | Tập đoàn ViHAT Group — cùng pháp nhân với bên phát hành (câu mở #28, ADR 0044 câu 2). Văn bản nay khai nơi nhận là "máy chủ của Tập đoàn ViHAT Group". Vì bên vận hành và bên phát hành là một, văn bản không còn nợ mục khai chuyển dữ liệu cho bên thứ ba vì lý do này |
 | **URL trang chính sách** | Developer Console còn một ô URL ngoài bản trong app. Chưa biết đăng ở đâu, nên chưa dựng bộ sinh trang tĩnh — dựng cho một đích chưa biết là đoán. Khi chốt, trang ấy phải sinh ra TỪ `chinh-sach-rieng-tu.ts`, không chép tay, để trang đăng và app không lệch nhau |
 | ⚠ **ID CỦA OFFICIAL ACCOUNT TRONG NÚT CHAT — CHƯA ĐỐI CHIẾU CONSOLE** | Nút Chat nổi mở `https://zalo.me/<OA id>`, và con số ấy lấy **từ bản mẫu giao diện của PM** (`content/dich-ra-ngoai.ts`, `OA_NEN_TANG_ID`, kèm `OA_NEN_TANG_NGUON` nói rõ điều này). ADR 0018 §Hệ quả điểm 3: **mọi bề mặt OA bên trong Mini App phải trỏ về OA NỀN TẢNG** (`Vihat` sau ADR 0031), không trỏ về OA của xã nào. Nếu ID ấy không phải OA xác thực của Mini App thì người dùng bấm "quan tâm" và tưởng đã theo dõi đúng nơi. **Phải mở Developer Console đối chiếu một lần trước khi nộp** |

@@ -5,33 +5,21 @@ import { COMPANY, CONTACT } from "../../content/company-profile";
 
 import { hieuUngGiuManSang } from "./giu-man-sang";
 import { KhungTinhNang } from "./khung";
-import { KetQuaDuongTruyen, KiemTraDuongTruyen } from "./KiemTraDuongTruyen";
 import { ManDanhThiep } from "./ManDanhThiep";
 import { ManThiepCuaChungToi, TheQrCuaChungToi, ThongTinTrongMa } from "./ManThiepCuaChungToi";
 import { duongDanMaQR, MaQR } from "./MaQR";
-import {
-  DUONG_TRUYEN,
-  KIEU_KET_NOI,
-  kieuKetNoi,
-  noiDung,
-  SO_HOA_THIEP,
-  THIEP_CUA_CHUNG_TOI,
-} from "./noi-dung";
-import { AnhDanhThiep, SoHoaThiepGiay, TraLoiQuyenMayAnh } from "./SoHoaThiepGiay";
+import { noiDung, THIEP_CUA_CHUNG_TOI } from "./noi-dung";
 import { vCardCuaChungToi } from "./vcard";
 
 /**
- * BA TÍNH NĂNG THÊM VÀO, SÁU QUYỀN THÊM VÀO — và bốn điều ở đây không có phép kiểm nào khác nói hộ:
+ * DANH THIẾP SỐ CỦA CHÚNG TÔI — và hai điều ở đây không có phép kiểm nào khác nói hộ:
  *
- *   1. **Nhãn kiểu kết nối phải đủ bốn giá trị nền tảng khai HÔM NAY, cộng một giá trị lạ.** Giá
- *      trị lạ là trường hợp đáng kiểm nhất: nó xảy ra khi Zalo thêm một kiểu mạng mới, tức là
- *      SAU khi ứng dụng này đã nằm trên máy người dùng.
- *   2. **`keepScreen` phải được TẮT LẠI khi rời màn.** Bật rồi bỏ đó là lấy pin của người dùng
+ *   1. **`keepScreen` phải được TẮT LẠI khi rời màn.** Bật rồi bỏ đó là lấy pin của người dùng
  *      cho một tính năng họ đã rời khỏi, và không có gì báo lỗi.
- *   3. **Ranh giới phải được nói ra**: chưa đọc được chữ trên ảnh, chưa đo được tốc độ mạng.
- *      Một màn hình im lặng về thứ nó không làm là một màn hình hứa suông.
- *   4. **Ảnh và mã QR không kéo theo một lời hứa nào sai**: ảnh không rời khỏi máy, tệp tải về
- *      là tệp của CHÚNG TÔI.
+ *   2. **Mã QR không kéo theo một lời hứa nào sai**: tệp tải về là tệp của CHÚNG TÔI.
+ *
+ * (11/10/2026, owner: "Kiểm tra đường truyền" and "Số hoá thiếp giấy" were removed with their code; their cases
+ * left with them.)
  *
  * Bộ test dựng bằng `react-dom/server` — không có DOM để bấm — nên mọi nhánh trạng thái đi vào
  * qua các component THUẦN, và hợp đồng của hiệu ứng `keepScreen` được kiểm bằng hàm tách rời.
@@ -53,60 +41,6 @@ const textOf = (markup: string) =>
     .replace(/\s+/g, " ");
 
 const ve = (phan_tu: Parameters<typeof renderToStaticMarkup>[0]) => renderToStaticMarkup(phan_tu);
-
-/* ============================================================================================
-   1. KIỂM TRA ĐƯỜNG TRUYỀN — ánh xạ `networkType` sang nhãn tiếng Việt
-   ============================================================================================ */
-
-describe("kiểu kết nối: bốn giá trị nền tảng khai, cộng mọi giá trị nó chưa khai", () => {
-  it("ánh xạ đủ BỐN giá trị của `NetworkType` hôm nay", () => {
-    // Bốn giá trị đọc từ `node_modules/zmp-sdk/index.d.ts` dòng 7–16, không từ tài liệu web.
-    expect(kieuKetNoi("wifi")).toBe("wifi");
-    expect(kieuKetNoi("cellular")).toBe("cellular");
-    expect(kieuKetNoi("none")).toBe("none");
-    expect(kieuKetNoi("unknown")).toBe("khong-xac-dinh");
-  });
-
-  it("một giá trị LẠ rơi về nhãn an toàn thay vì làm vỡ tính năng", () => {
-    // Nền tảng được phép thêm giá trị thứ năm ở một bản SDK sau. Lúc ấy app đã nằm trên máy
-    // người dùng: ném lỗi là làm vỡ một tính năng vì nền tảng vừa tốt lên, còn hiện chuỗi thô là
-    // hiện chữ kỹ thuật tiếng Anh giữa một màn hình tiếng Việt.
-    for (const la of ["5g", "ethernet", "WIFI", "", "  ", "null"]) {
-      expect(kieuKetNoi(la), `giá trị lạ "${la}" không rơi về nhãn an toàn`).toBe("khong-xac-dinh");
-    }
-  });
-
-  it("mỗi nhãn có một câu giải thích, và không câu nào chứa một con số đo được", () => {
-    // ⚠ KHÔNG BỊA SỐ LIỆU. Nền tảng trả về đúng một chuỗi — kiểu kết nối. Một con số ms, Mbps
-    // hay một điểm chất lượng ở đây là một phép đo không hề chạy, in ra trong ứng dụng của một
-    // nhà cung cấp hạ tầng thoại — đúng chỗ khách hàng sẽ đem đối chiếu với máy đo thật.
-    for (const [ma, mot] of Object.entries(KIEU_KET_NOI)) {
-      expect(mot.nhan.length, `${ma} không có nhãn`).toBeGreaterThan(0);
-      expect(mot.y_nghia.length, `${ma} không có câu giải thích`).toBeGreaterThan(30);
-      expect(mot.y_nghia, `${ma} hứa một con số`).not.toMatch(/\d+\s*(ms|Mbps|kbps|%|điểm)/i);
-    }
-  });
-
-  it("mọi kết quả nói ra kiểu kết nối bằng chữ, cạnh nhãn", () => {
-    for (const kieu of ["wifi", "cellular", "none", "unknown", "5g"]) {
-      const chu = textOf(ve(<KetQuaDuongTruyen tu_nen_tang={kieu} />));
-      expect(chu, `${kieu}: thiếu nhãn kết quả`).toContain(DUONG_TRUYEN.nhan_ket_qua);
-    }
-  });
-
-  it("hiện nhãn bằng CHỮ, không bằng riêng một màu hay một vạch sóng", () => {
-    const chu = textOf(ve(<KetQuaDuongTruyen tu_nen_tang="cellular" />));
-    expect(chu).toContain(DUONG_TRUYEN.nhan_ket_qua);
-    expect(chu).toContain(KIEU_KET_NOI.cellular.nhan);
-    expect(chu).toContain(KIEU_KET_NOI.cellular.y_nghia);
-  });
-
-  it("nói vì sao nó cần quyền, ngay trên nút — điều 3.3.4 của chính sách Mini App", () => {
-    const chu = textOf(ve(<KiemTraDuongTruyen />));
-    expect(chu).toContain(noiDung("duong-truyen").vi_sao);
-    expect(chu).toContain(noiDung("duong-truyen").nut);
-  });
-});
 
 /* ============================================================================================
    2. DANH THIẾP SỐ CỦA CHÚNG TÔI — mã QR, giữ màn sáng, tải tệp
@@ -224,64 +158,24 @@ describe("giữ màn hình sáng: bật khi vào, LUÔN tắt khi ra", () => {
 });
 
 /* ============================================================================================
-   3. SỐ HOÁ DANH THIẾP GIẤY — quyền máy ảnh, chọn ảnh, và ranh giới OCR
-   ============================================================================================ */
-
-describe("số hoá danh thiếp giấy", () => {
-  it("TỪ CHỐI QUYỀN là đường đi bình thường: không mã lỗi, và nói việc còn làm được", () => {
-    const chu = textOf(ve(<TraLoiQuyenMayAnh cho_phep={false} />));
-    expect(chu).toContain(SO_HOA_THIEP.tu_choi_quyen);
-    expect(chu).not.toMatch(/\b(error|Error|lỗi|mã lỗi|-\d{3})\b/);
-    // Và nó nói ra điều `index.d.ts` đã ghi: câu trả lời được ghi nhớ cho những lần sau, muốn
-    // đổi ý thì vào phần Quản lý quyền của Zalo.
-    expect(chu).toContain("Quản lý quyền");
-  });
-
-  it("CHO PHÉP thì nói việc cần làm tiếp, không dừng ở một dấu tích", () => {
-    expect(textOf(ve(<TraLoiQuyenMayAnh cho_phep />))).toContain(SO_HOA_THIEP.cho_phep);
-  });
-
-  it("tiêu đề không hứa bóc chữ khỏi ảnh — ứng dụng không có bước OCR", () => {
-    // Một tiêu đề "Số hoá" trên một màn chỉ hiện ảnh là hứa một việc mã không làm.
-    const chu = textOf(ve(<SoHoaThiepGiay />));
-    expect(noiDung("so-hoa-thiep").tieu_de).not.toMatch(/[Ss]ố hoá|nhận dạng|đọc chữ/);
-    expect(chu).not.toMatch(/đang phân tích|đang nhận dạng/);
-    expect(chu).toContain(SO_HOA_THIEP.nut_chon_anh);
-  });
-
-  it("hiện ảnh bằng một `alt` mô tả VAI TRÒ, không bịa nội dung tấm thiếp", () => {
-    const markup = ve(
-      <AnhDanhThiep duong_dan="/tam/anh-vua-chon.jpg" hong={false} onHong={() => {}} />,
-    );
-    expect(markup).toContain('src="/tam/anh-vua-chon.jpg"');
-    expect(markup).toContain(`alt="${SO_HOA_THIEP.nhan_anh}"`);
-  });
-
-  it("ảnh không nạp được thì nói việc cần làm, không để một khung vỡ", () => {
-    const chu = textOf(ve(<AnhDanhThiep duong_dan="/tam/hong.jpg" hong onHong={() => {}} />));
-    expect(chu).toContain(SO_HOA_THIEP.khong_hien_duoc_anh);
-  });
-});
-
-/* ============================================================================================
    TAB DANH THIẾP — ba khối, một `<h1>`
    ============================================================================================ */
 
-describe("tab Danh thiếp giữ ba việc quanh một tấm thiếp", () => {
+describe("tab Danh thiếp giữ hai việc quanh một tấm thiếp", () => {
   const markup = ve(<ManDanhThiep />);
 
-  it("có ĐÚNG MỘT `<h1>` dù có ba khối", () => {
-    // `screens.test.tsx` đo điều này trên mọi màn; ghi lại ở đây vì đây là màn duy nhất có ba
-    // khối, tức màn duy nhất dễ mọc ra cái `<h1>` thứ hai.
+  it("có ĐÚNG MỘT `<h1>` dù có hai khối", () => {
+    // `screens.test.tsx` đo điều này trên mọi màn; ghi lại ở đây vì đây là màn có nhiều khối, tức
+    // màn dễ mọc ra cái `<h1>` thứ hai.
     expect((markup.match(/<h1\b/g) ?? []).length).toBe(1);
-    expect((markup.match(/<h2\b/g) ?? []).length).toBe(2);
+    expect((markup.match(/<h2\b/g) ?? []).length).toBe(1);
   });
 
-  it("chứa cả ba tính năng danh thiếp", () => {
+  it("chứa cả hai tính năng danh thiếp — và không còn khối thiếp giấy", () => {
     const chu = textOf(markup);
     expect(chu).toContain(noiDung("danh-thiep").tieu_de);
     expect(chu).toContain(noiDung("thiep-cua-chung-toi").tieu_de);
-    expect(chu).toContain(noiDung("so-hoa-thiep").tieu_de);
+    expect(chu).not.toMatch(/thiếp giấy/i);
   });
 
   it("không có ô nhập nào — dây bẫy giai đoạn 1 vẫn đúng ở đây", () => {
@@ -290,11 +184,11 @@ describe("tab Danh thiếp giữ ba việc quanh một tấm thiếp", () => {
 });
 
 /* ============================================================================================
-   BỐN NHÁNH KẾT QUẢ, CHO CẢ BA TÍNH NĂNG MỚI
+   BỐN NHÁNH KẾT QUẢ, CHO DANH THIẾP CỦA CHÚNG TÔI
    ============================================================================================ */
 
-describe("ba tính năng mới cũng nói đủ bốn nhánh, bằng tiếng Việt", () => {
-  for (const ma of ["duong-truyen", "thiep-cua-chung-toi", "so-hoa-thiep"] as const) {
+describe("danh thiếp của chúng tôi cũng nói đủ bốn nhánh, bằng tiếng Việt", () => {
+  for (const ma of ["thiep-cua-chung-toi"] as const) {
     const nd = noiDung(ma);
     for (const [nhanh, cau] of [
       ["tu-choi", nd.tu_choi],

@@ -42,7 +42,7 @@ import { TuVanBaoGiaScreen } from "../yeu-cau/TuVanBaoGiaScreen";
 import { YeuCauCuaToiScreen } from "../yeu-cau/YeuCauCuaToiScreen";
 import { AboutScreen } from "./AboutScreen";
 import { ChiTietGiaiPhap } from "./ChiTietGiaiPhap";
-import { QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
+import { introPermissionRows, QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
 import { ContactScreen } from "./ContactScreen";
 import { MOC_CHANG_DUONG, MOC_QUAN_LY_QUYEN } from "./dieu-huong";
 import { HomeScreen } from "./HomeScreen";
@@ -355,12 +355,27 @@ describe("màn Quản lý quyền vẽ từ bảng khai, không từ một danh 
    * không nói được gì: một bảng khai đúng mà màn hình vẽ từ chỗ khác là đúng thứ bảng khai sinh ra
    * để chặn.
    */
-  it("in đủ mọi lời gọi có trong bảng, không thiếu một dòng nào", () => {
-    expect(KHAI_BAO_LOI_GOI.length).toBeGreaterThanOrEqual(10);
-    for (const quyen of KHAI_BAO_LOI_GOI) {
+  it("in đủ mọi lời gọi của phần giới thiệu ViHAT, không thiếu một dòng nào — và không một dòng của giao diện xã", () => {
+    // 11/10/2026 (owner): to the user the ViHAT intro and the commune interface are two apps. This screen shows
+    // the intro's calls in the intro's words (`introPermissionRows`); the commune interface's are hidden here.
+    const shown = introPermissionRows(KHAI_BAO_LOI_GOI);
+    expect(shown.length).toBeGreaterThanOrEqual(8);
+    for (const quyen of shown) {
       expect(text, `màn quyền thiếu câu "để làm gì" của ${quyen.api}`).toContain(quyen.de_lam_gi);
       expect(text, `màn quyền thiếu tính năng của ${quyen.api}`).toContain(quyen.tinh_nang);
+      expect(text, `màn quyền thiếu nơi dùng của ${quyen.api}`).toContain(`Dùng ở: ${quyen.man}`);
     }
+    const shownApis = new Set(shown.map((q) => q.api));
+    for (const hidden of KHAI_BAO_LOI_GOI.filter((q) => !shownApis.has(q.api))) {
+      expect(text, `màn quyền hiện lời gọi của giao diện xã: ${hidden.api}`).not.toContain(hidden.de_lam_gi);
+    }
+    for (const api of ["getLocation", "requestCameraPermission", "openMediaPicker", "chooseImage", "configAppView", "minimizeApp", "openShareSheet"]) {
+      expect(shownApis.has(api), `${api} is not the intro's`).toBe(false);
+    }
+  });
+
+  it("không một chữ nào về xã, phản ánh hay ViGov, và không nhãn 'Phần dịch vụ công'", () => {
+    expect(text).not.toMatch(/(?<!\p{L})(xã|phường)(?!\p{L})|phản ánh|ViGov|dịch vụ công|Phần giới thiệu doanh nghiệp|Cả hai phần/iu);
   });
 
   it("nói trạng thái bằng CHỮ, không bằng màu", () => {
@@ -378,7 +393,7 @@ describe("màn Quản lý quyền vẽ từ bảng khai, không từ một danh 
     // Một ô để trống trông giống "chưa ai điền". Câu "Dữ liệu không rời khỏi thiết bị" là một KHẲNG
     // ĐỊNH, và nó là câu người đọc chính sách đang tìm.
     expect(text).toContain("Dữ liệu không rời khỏi thiết bị.");
-    for (const quyen of KHAI_BAO_LOI_GOI.filter((q) => q.roi_khoi_may !== "")) {
+    for (const quyen of introPermissionRows(KHAI_BAO_LOI_GOI).filter((q) => q.roi_khoi_may !== "")) {
       expect(text, `màn quyền không nói ${quyen.api} gửi gì đi`).toContain(quyen.roi_khoi_may);
     }
   });
@@ -487,7 +502,7 @@ describe("màn chủ dẫn đi đâu, và có dẫn tới nơi thật không", (
       if (muc.di.moc === MOC_QUAN_LY_QUYEN) {
         // Mốc dạng thứ hai: tên một màn CON, không phải một `id`. Nó phải MỞ được màn ấy.
         expect(textOf(ve_ra), "mốc quản lý quyền không mở ra màn quyền").toContain("Quản lý quyền");
-        expect(textOf(ve_ra)).toContain(KHAI_BAO_LOI_GOI[0]!.api);
+        expect(textOf(ve_ra)).toContain(introPermissionRows(KHAI_BAO_LOI_GOI)[0]!.de_lam_gi);
       } else {
         expect(ve_ra, `mốc "${muc.di.moc}" không có trên màn ${muc.di.man}`).toContain(
           `id="${muc.di.moc}"`,
@@ -517,9 +532,12 @@ describe("màn chủ dẫn đi đâu, và có dẫn tới nơi thật không", (
     expect(home, "mục đặt lịch tư vấn — một biểu mẫu — đã được dựng").not.toMatch(/Đặt lịch/i);
   });
 
-  it("khối Quản lý quyền có mặt trên màn chủ, không gõ một con số nào", () => {
-    expect(home).toContain("Quản lý quyền");
+  it("khối Quản lý quyền KHÔNG còn trên màn chủ (owner 11/10/2026) — màn ấy vẫn mở được từ Liên hệ", () => {
+    expect(home, "the home screen still carries the Quản lý quyền block").not.toContain("Quản lý quyền");
     expect(home, "một con số chức năng gõ tay trên màn chủ").not.toMatch(/\d+ chức năng/);
+    const contact = textOf(render(<ContactScreen />));
+    expect(contact, "Liên hệ lost its way to Quản lý quyền").toContain("Quản lý quyền");
+    expect(textOf(render(<ContactScreen moc={MOC_QUAN_LY_QUYEN} />))).toContain("Quay lại Liên hệ");
   });
 
   it("hero mang HAI câu bản mẫu, câu định vị đã công bố, và năm THÀNH LẬP", () => {

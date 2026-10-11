@@ -29,12 +29,9 @@ import { MAN_DANH_THIEP } from "./features/tinh-nang/index";
 import {
   DANG_NHAP,
   DANH_THIEP,
-  DUONG_TRUYEN,
-  KIEU_KET_NOI,
   LOI_MO_NGOAI,
   MA_RONG,
   NOI_DUNG_TINH_NANG,
-  SO_HOA_THIEP,
   THIEP_CUA_CHUNG_TOI,
   VAN_PHONG,
 } from "./features/tinh-nang/noi-dung";
@@ -205,7 +202,9 @@ describe("the bundle that gets uploaded to Zalo", () => {
     found.length = 0;
     walk(parseAst("const x = 2n;"));
     expect(found).toEqual(["2"]);
-  });
+    // Parsing and walking the whole emitted bundle (maplibre included) takes seconds when the full suite runs in
+    // parallel; the default 5 s timed out on 11/10/2026 with the assertion never reached. Time, not the check.
+  }, 30_000);
 
   it("emits stable file names — a content hash makes the committed config wrong", () => {
     // app-config.json được COMMIT và liệt kê đường dẫn bundle. Nếu tên tệp mang mã băm thì tệp
@@ -246,12 +245,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     ...Object.values(DANH_THIEP),
     ...Object.values(VAN_PHONG),
     ...Object.values(DANG_NHAP),
-    // `KIEU_KET_NOI` là một bản đồ lồng nhau, nên trải phẳng ra tường minh: `Object.values` trên
-    // nó sẽ cho ra những đối tượng, và `toContain` trên một đối tượng là xanh vì lý do sai.
-    ...Object.values(DUONG_TRUYEN),
     ...Object.values(THIEP_CUA_CHUNG_TOI),
-    ...Object.values(SO_HOA_THIEP),
-    ...Object.values(KIEU_KET_NOI).flatMap((mot) => [mot.nhan, mot.y_nghia]),
     ...NOI_DUNG_TINH_NANG.flatMap((nd) => [
       nd.nhan_ngan,
       nd.tieu_de,
@@ -266,7 +260,7 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
 
   const dem = (chuoi: string) => ban.split(chuoi).length - 1;
 
-  it("mang đủ chữ của sáu tính năng", () => {
+  it("mang đủ chữ của các tính năng giới thiệu", () => {
     const chuoi = CHUOI_SAU_TINH_NANG();
     expect(chuoi.length).toBeGreaterThan(20);
     for (const mot of chuoi) {
@@ -464,14 +458,15 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     }
   });
 
-  it("MANG `zmp-sdk` và đủ mười lời gọi nền tảng — nếu không thì các tính năng không gọi được", () => {
+  it("MANG `zmp-sdk` và đủ chín lời gọi nền tảng — nếu không thì các tính năng không gọi được", () => {
     expect(ban, "bundle không mang zmp-sdk").toContain("zmp-sdk");
+    // `getNetworkType` left 11/10/2026 with "Kiểm tra đường truyền"; `getLocation`, the camera and the picker
+    // stay — the commune page a QR opens still calls them under this same bundle.
     for (const ten of [
       "getPhoneNumber",
       "getAccessToken",
       "getLocation",
       "scanQRCode",
-      "getNetworkType",
       "keepScreen",
       "vibrate",
       "requestCameraPermission",

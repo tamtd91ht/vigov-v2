@@ -811,32 +811,51 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
         `${ten} gửi một mã tới máy chủ nhưng bảng khai nói không có gì rời khỏi máy`,
       ).toBeGreaterThan(0);
     }
-    // The Contact screen still sends nothing for it — the row must keep saying so, not only the new half.
+    // 11/10/2026: the intro's office list asks no location any more (owner) — the row is the commune interface's
+    // only, and must not still describe a Liên hệ use that no longer exists.
     const location = KHAI_BAO_LOI_GOI.find((k) => k.api === "getLocation")!;
-    expect(location.roi_khoi_may).toMatch(/Gửi phản ánh/);
-    expect(location.roi_khoi_may).toMatch(/Liên hệ: không có gì rời khỏi máy/);
+    expect(location.nua).toBe("nha-nuoc");
+    expect(`${location.man} ${location.de_lam_gi} ${location.roi_khoi_may}`).not.toMatch(/Liên hệ|văn phòng/);
   });
 
-  it("nửa nhà nước khai đúng HAI lời gọi riêng (11/10/2026: minimizeApp, openShareSheet) — và bảng nói ra nó thừa hưởng những gì", () => {
-    // Quyền cấp theo App ID: ngày `src/cong-dan/` có tệp đầu tiên, nó thừa hưởng NGUYÊN VẸN mọi
-    // quyền mà nửa thương mại đã xin được, không ai cấp lại. Ca này ghim tình trạng hôm nay để
-    // lần khai đầu tiên của nửa ấy là một thay đổi có người đọc, chứ không phải một dòng lặng lẽ.
+  it("nửa nhà nước khai đúng SÁU lời gọi riêng — và bảng nói ra nó thừa hưởng những gì", () => {
+    // Quyền cấp theo App ID: nửa nhà nước thừa hưởng NGUYÊN VẸN mọi quyền mà nửa thương mại đã xin được, không ai
+    // cấp lại. Ca này ghim tình trạng hôm nay để lần khai tiếp theo của nửa ấy là một thay đổi có người đọc.
     expect(
-      KHAI_BAO_LOI_GOI.filter((k) => k.nua === "nha-nuoc").map((k) => k.api),
-      "nửa nhà nước vừa khai một lời gọi riêng — cập nhật ca này cùng lúc, và kiểm lại xem màn " +
-        "Quản lý quyền có còn nói đúng việc nửa ấy dùng quyền vào đâu không",
-      // 28/09/2026: lời khai đầu tiên của nửa nhà nước — lấy họ tên qua hộp xin quyền của Zalo cho ứng
-      // dụng riêng của xã (chủ dự án: "chỉ cần xin quyền để lấy được name"). Tên không rời máy.
-      // 07/10/2026 (owner decision): "Chat với chuyên viên" on the commercial half's Liên hệ asks the same name
-      // and sends it with the chat request — the row became `ca-hai`, with the commune app's own wording in
-      // `commune_app`.
-      // 11/10/2026 (owner: "làm hết theo prototype"): the commune interface's minimise bubble (`minimizeApp`) and
-      // "Chia sẻ qua Zalo" under an article (`openShareSheet`, ADR 0047 G6) — the state half's own two calls.
-    ).toEqual(["minimizeApp", "openShareSheet"]);
+      KHAI_BAO_LOI_GOI.filter((k) => k.nua === "nha-nuoc").map((k) => k.api).sort(),
+      "nửa nhà nước vừa khai thêm hoặc bớt một lời gọi riêng — cập nhật ca này cùng lúc, và kiểm lại màn Quản lý " +
+        "quyền của phần giới thiệu ViHAT không hiện lời gọi ấy",
+      // 11/10/2026 (owner: "làm hết theo prototype"): the minimise bubble (`minimizeApp`) and "Chia sẻ qua Zalo"
+      // (`openShareSheet`, ADR 0047 G6). Same day: the intro's paper-card photo and office location were removed,
+      // so the camera, the picker, `chooseImage` and `getLocation` are the commune interface's alone.
+    ).toEqual(["chooseImage", "getLocation", "minimizeApp", "openMediaPicker", "openShareSheet", "requestCameraPermission"]);
     expect(KHAI_BAO_LOI_GOI.find((k) => k.api === "getUserInfo")?.nua, "getUserInfo is used by both halves").toBe("ca-hai");
     expect(
       KHAI_BAO_LOI_GOI.filter((k) => k.nua === "ca-hai").length,
       "không lời gọi nào được khai là dùng chung — nhưng quyền cấp theo App ID thì luôn dùng chung",
     ).toBeGreaterThan(0);
+  });
+
+  /**
+   * THE VIHAT INTRO'S "QUẢN LÝ QUYỀN" (owner 11/10/2026: two apps to the user). A `ca-hai` row's main fields describe the
+   * shared App ID as a whole — intro AND the commune page a QR opens — so the intro's screen reads `intro_app`. A
+   * `ca-hai` row without it would be hidden there SILENTLY; so it must declare one: the intro's words, or `null`.
+   */
+  it("every call both halves use declares what the ViHAT intro shows — words or `null`, never silence", () => {
+    for (const k of KHAI_BAO_LOI_GOI.filter((r) => r.nua === "ca-hai")) {
+      expect(k.intro_app, `${k.api}: no intro_app`).not.toBeUndefined();
+    }
+    expect(KHAI_BAO_LOI_GOI.filter((r) => r.nua === "nha-nuoc" && r.intro_app != null).map((r) => r.api)).toEqual([]);
+    // What the intro's screen shows names no commune, petition or public service.
+    const COMMUNE_WORD = /(?<!\p{L})(xã|phường)(?!\p{L})|phản ánh|ViGov|dịch vụ công/iu;
+    for (const k of KHAI_BAO_LOI_GOI) {
+      const view = k.intro_app === undefined ? (k.nua === "thuong-mai" ? k : null) : k.intro_app;
+      if (view === null) continue;
+      for (const text of [view.man, view.tinh_nang, view.de_lam_gi, view.roi_khoi_may]) {
+        expect(text, `${k.api}: the intro's view names the commune side`).not.toMatch(COMMUNE_WORD);
+      }
+    }
+    // Must-still-catch.
+    expect("Gửi tới xã").toMatch(COMMUNE_WORD);
   });
 });

@@ -659,7 +659,7 @@
       "trang_thai": "xong",
       "viec": "Phần giới thiệu ViHAT của app chung (features/company-intro, tinh-nang, dang-nhap, yeu-cau, goi-y-giai-phap, content/chien-dich): đổi văn phong sang app đã phát hành (chủ dự án 11/10/2026 'bỏ từ hướng dẫn và các dạng như đây là bản dựng'). Bỏ câu 'Bản dựng này…/Bản hiện tại chưa…', 'Người dựng bản cần đặt VIGOV_API_HOST' (thay 'Hệ thống đang gián đoạn'), 'nút bên trên/ngay bên dưới', 'Không sao cả'; bỏ hiển thị độ dài/vài ký tự đầu của mã Zalo, giờ hết hạn phiên, đoạn 'phiên không ghi xuống máy', các đoạn ranh giới/riêng tư dưới mỗi tính năng (chi tiết ở chính sách + màn Quản lý quyền); câu mục đích quyền (vi_sao) rút còn một câu; màn Quản lý quyền bỏ tên API; 'Số hoá danh thiếp giấy' đổi tiêu đề 'Chụp ảnh danh thiếp giấy' (không có OCR). Thêm ca kiểm 'giọng văn' chặn các mẫu câu ấy quay lại.",
       "bang_chung": "tsc sạch; vitest 71 tệp/1935 ca xanh. Chưa xem ảnh render thật trên Zalo.",
-      "tiep_theo": "(1) 'Tìm văn phòng gần tôi' vẫn KHÔNG xếp văn phòng theo khoảng cách — câu sau khi chia sẻ vị trí chỉ mời chọn; muốn đúng tên nút cần toạ độ văn phòng + đổi mã vị trí qua vihat-miniapp /api/v1/location (chủ dự án quyết). (2) Chính sách quyền riêng tư vẫn hiện nhãn '[CHỜ DUYỆT — bản nháp 02/10/2026…]' cho người dùng — chờ chủ dự án duyệt văn bản. (3) Phần app xã (src/cong-dan) chưa rà giọng văn.",
+      "tiep_theo": "(1)(2)(3) đã xử lý trong mục 'tach-app-vihat-app-xa-11-10'.",
       "no_confirm": []
     },
     {
@@ -678,6 +678,15 @@
       "no_confirm": [],
       "bang_chung": "093edd1f — citizen-app/src/cong-dan/map/commune-basemap-style.ts (buildCommuneBasemapStyle(base, domain)), scene-map-logic.ts (ready mang domain; thiếu tên miền = không bản đồ), scene-map.tsx; content/ket-xuat-ho-so.ts COMMUNE_BASEMAP_FIELDS = file, host, Range. vitest src/cong-dan/map + ket-xuat-ho-so: ca của thay đổi xanh.",
       "tiep_theo": "Chưa thử trên điện thoại thật với MinIO thật. Câu chính sách riêng tư cho tuyến nền (viewport qua Range) vẫn chờ chủ dự án (ADR 0072 mở #1)."
+    },
+    {
+      "id": "tach-app-vihat-app-xa-11-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "App ViHAT và giao diện xã tách hẳn trong mắt người dùng (ADR 0044 §Đã quyết 11/10/2026). Phần giới thiệu ViHAT: Liên hệ hiện thẳng ba văn phòng + 'Chỉ đường', không xin vị trí; gỡ 'Chụp ảnh danh thiếp giấy' và 'Kiểm tra đường truyền'; bỏ ô 'Quản lý quyền' ở Trang chủ (vẫn ở Liên hệ); màn Quản lý quyền chỉ hiện lời gọi phần giới thiệu dùng (KHAI_BAO_LOI_GOI.intro_app). Chính sách ViHAT bỏ hết phần xã, gỡ mọi dấu CHỜ DUYỆT, NGAY_HIEU_LUC 11/10/2026. Chính sách mới của giao diện xã content/commune-privacy.ts đứng tên UBND xã, không nhắc ViHAT (cầu gọi 'đơn vị cung cấp nền tảng kỹ thuật'), khoá trung thực thân yêu cầu ⇄ bảng ⇄ văn bản dời sang commune-privacy.test.ts; hồ sơ nộp Zalo ghi hai bản riêng. App xã: câu xác nhận số không nhắc ViHAT.",
+      "bang_chung": "656d4cee, 847a464c + commit này. tsc sạch, vitest 73 tệp/1947 ca xanh. Chưa chạy npm run ho-so, make check, chưa xem ảnh render.",
+      "tiep_theo": "(1) Chưa có màn nào trong giao diện xã hiện chính sách của xã. (2) Hồ sơ app chung chỉ mang chính sách ViHAT nhưng App ID ấy vẫn chạy trang xã qua QR (máy ảnh, vị trí, phản ánh) — cần quyết có kèm chính sách xã không. (3) Chủ dự án xác nhận webhook chuyển tiếp yêu cầu (REQUEST_WEBHOOK_URL) có bật ở production không, ai nhận. (4) Nhật ký mở phiên là nhật ký kiểm tra chỉ ghi thêm — 'xoá khi yêu cầu' thực tế là ẩn danh hoá; có thể cần sửa câu. (5) Ảnh chụp màn cũ trong tmp/xin-quyen-zalo/app-chung-vihat/anh/ (đường truyền, số hoá thiếp, tìm văn phòng) phải chụp lại.",
+      "no_confirm": []
     }
   ]
 }

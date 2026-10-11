@@ -555,7 +555,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     expect(communeAppRow!.tuyen).toBe(COMMUNE_APP_SESSION_PATH);
     expect(communeAppRow!.tuyen).toBe("/api/v1/citizen-sessions");
     expect(communeAppRow!.may_chu).toMatch(/^ViGov — dịch vụ `identity`/);
-    expect(communeAppRow!.may_chu).toContain("không qua máy chủ của Tập đoàn ViHAT Group");
+    // 11/10/2026 (owner): a commune-side row names no company — "no intermediary server" states the same fact.
+    expect(communeAppRow!.may_chu).toContain("không qua máy chủ trung gian nào");
     // The declared path is the one the real call reaches, on the host the state half's map gives.
     expect(new URL(communeAppSessionAddress(diaChiViGov("identity", ""))).pathname).toBe(communeAppRow!.tuyen);
     expect(tuyen.filter((t) => t === COMMUNE_APP_SESSION_PATH)).toHaveLength(1);
@@ -905,7 +906,7 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
   it("the commune app's login is declared as going straight to ViGov, never through ViHAT's server (ADR 0066)", () => {
     const login = routes.find((r) => r.tuyen === COMMUNE_APP_SESSION_PATH)!;
     expect(login.truong.map((t) => t.khoa)).toEqual(COMMUNE_APP_SESSION_FIELDS.map((t) => t.khoa));
-    expect(login.may_chu).toContain("không qua máy chủ của Tập đoàn ViHAT Group");
+    expect(login.may_chu).toContain("không qua máy chủ trung gian nào");
     for (const api of ["getPhoneNumber", "getAccessToken"]) {
       expect(calls.find((c) => c.api === api)!.roi_khoi_may, api).toContain("thẳng tới hệ thống của xã");
     }
@@ -918,6 +919,8 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
         expect(t, sharedScreen).not.toContain(sharedScreen);
       }
       expect(t).not.toContain("| Nửa |");
+      // Owner 11/10/2026: commune-facing text never names ViHAT — the platform's servers are named neutrally.
+      expect(t, "the commune dossier names ViHAT").not.toMatch(/ViHAT|vihat-miniapp|Tập đoàn/);
     }
   });
 

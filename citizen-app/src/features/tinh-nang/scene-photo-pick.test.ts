@@ -175,14 +175,20 @@ describe("App.tsx — the bridge table", () => {
  */
 describe("the commune app's declarations name the short questions, word for word", () => {
   const row = (api: string) => KHAI_BAO_LOI_GOI.find((r) => r.api === api)!;
+  /** The commune app's words for a call: the row itself when only the commune interface makes it (`nha-nuoc`). */
+  const communeView = (api: string) => {
+    const r = row(api);
+    return r.nua === "nha-nuoc" ? r : r.commune_app!;
+  };
 
   it("camera and photo picker: the question's exact words, and 'Cho phép' before Zalo", () => {
-    expect(row("requestCameraPermission").commune_app!.de_lam_gi).toContain(`“${SCENE_PHOTOS.camera_question}”`);
-    expect(row("openMediaPicker").commune_app!.de_lam_gi).toContain(`“${SCENE_PHOTOS.library_question}”`);
+    // 11/10/2026: the three calls are the commune interface's alone (the intro's paper-card photo was removed).
     for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
-      expect(row(api).commune_app!.de_lam_gi, api).toContain(`“${CONSENT_DIALOG.allow}”`);
+      expect(row(api).nua, api).toBe("nha-nuoc");
+      expect(communeView(api).de_lam_gi, api).toContain(`“${CONSENT_DIALOG.allow}”`);
     }
-    expect(row("chooseImage").de_lam_gi).toContain(`“${CONSENT_DIALOG.allow}”`);
+    expect(communeView("requestCameraPermission").de_lam_gi).toContain(`“${SCENE_PHOTOS.camera_question}”`);
+    expect(communeView("openMediaPicker").de_lam_gi).toContain(`“${SCENE_PHOTOS.library_question}”`);
   });
 
   it("getUserInfo: the third moment — a number already confirmed, then the name question", () => {

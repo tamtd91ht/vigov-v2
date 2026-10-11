@@ -11,14 +11,11 @@ import { KetQuaQuet, ManDanhThiep, TheDanhThiep } from "./ManDanhThiep";
 import { MAN_DANH_THIEP } from "./index";
 import {
   DANH_THIEP,
-  DUONG_TRUYEN,
-  KIEU_KET_NOI,
   MA_RONG,
   type MaTinhNang,
   noiDung,
   NOI_DUNG_TINH_NANG,
   DANG_NHAP,
-  SO_HOA_THIEP,
   THIEP_CUA_CHUNG_TOI,
   VAN_PHONG,
 } from "./noi-dung";
@@ -206,14 +203,14 @@ describe("bóc tách mã QR: một chuỗi vào, một đối tượng ra, khôn
    ============================================================================================ */
 
 describe("mỗi tính năng tự giải thích được cho người duyệt", () => {
-  it("có đúng sáu tính năng, và không cái nào thiếu một câu nào", () => {
+  it("có đúng ba tính năng (11/10/2026: số hoá thiếp giấy và kiểm tra đường truyền đã gỡ), không cái nào thiếu một câu nào", () => {
     // Một trường rỗng ở đây là một màn hình có nút mà không có lý do — đúng thứ chính sách Mini
     // App (điều 3.3.4) từ chối xét duyệt.
     //
     // Con số ghim cứng có chủ đích: thêm một tính năng là thêm một quyền phải xin ở Developer
     // Console và thêm một đoạn phải khai trong chính sách quyền riêng tư. Ca này đỏ lên để cả
     // hai việc ấy được nhớ tới, chứ không phải để đếm cho vui.
-    expect(NOI_DUNG_TINH_NANG).toHaveLength(6);
+    expect(NOI_DUNG_TINH_NANG.map((nd) => nd.ma)).toEqual(["danh-thiep", "dang-nhap", "thiep-cua-chung-toi"]);
     for (const nd of NOI_DUNG_TINH_NANG) {
       for (const [khoa, gia_tri] of Object.entries(nd)) {
         expect(gia_tri.trim().length, `${nd.ma}: trường "${khoa}" rỗng`).toBeGreaterThan(0);
@@ -328,10 +325,7 @@ describe("giọng văn của một ứng dụng đã phát hành", () => {
     ...Object.values(DANH_THIEP),
     ...Object.values(VAN_PHONG),
     ...Object.values(DANG_NHAP),
-    ...Object.values(DUONG_TRUYEN),
-    ...Object.values(KIEU_KET_NOI).flatMap((kieu) => Object.values(kieu)),
     ...Object.values(THIEP_CUA_CHUNG_TOI),
-    ...Object.values(SO_HOA_THIEP),
     MA_RONG,
   ];
 
