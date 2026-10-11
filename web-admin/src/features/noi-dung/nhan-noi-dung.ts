@@ -60,7 +60,6 @@ export const URL_TOI_DA = 2000;
  */
 export const SUMMARY_SAPO_HINT = "Đoạn mở đầu (sapo) — Mini App in đậm ngay dưới tiêu đề bài.";
 export const TEN_DANH_MUC_TOI_DA = 200;
-export const SLUG_DANH_MUC_TOI_DA = 64;
 /**
  * `domain.EventPlaceMaxRunes`: in CHARACTERS (Go counts runes, the CHECK uses `char_length`), so it
  * is counted in code points below, not in UTF-16 units — `.length` would disagree with the server on
@@ -1202,8 +1201,8 @@ export function groupCategoriesByParent(
  * Thông báo, màn Biên bản họp và màn Nhiệm vụ.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** Name of the table's thumbnail column part — the prototype's first column. */
-export const THUMBNAIL_PART = "Ảnh thu nhỏ trong bảng";
+/** Screen-reader name of the table's thumbnail column — the prototype draws no header text there. */
+export const THUMBNAIL_COLUMN_LABEL = "Ảnh bìa";
 
 export type PhanChuaDung = {
   readonly ten: string;
@@ -1253,21 +1252,10 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Chưa đánh dấu được danh mục nào lấy từ Cổng thông tin: máy chủ chưa ghi nguồn của từng danh mục, " +
       "và danh mục tin hiện do xã tự thêm.",
   },
-  // The prototype's first table column (06/10/2026): a thumbnail of each item. The LIST route serves only
-  // `has_image`; the signed preview link is on the DETAIL route alone, so the column holds a "?" header
-  // and "—" cells (`so-noi-dung.tsx`, `BangNoiDung`).
-  // A literal, not `THUMBNAIL_PART`: `tools/tien_do_san_pham.py` counts `ten: "` lines in this block, and
-  // a constant here drops the entry from the product progress table. `pendingContentPart(THUMBNAIL_PART)`
-  // throws on any mismatch, so the two cannot drift silently (the table test renders it).
-  {
-    ten: "Ảnh thu nhỏ trong bảng",
-    viSao:
-      "Bảng chưa hiện ảnh thu nhỏ của từng bài: danh sách máy chủ trả chỉ cho biết bài có ảnh hay không, " +
-      "chưa kèm đường xem ảnh.",
-  },
   // The prototype's pager (09/10/2026): `a–b trên N mục` and `Trang x/y`. The list route pages by cursor
   // and never counts (`core/page`), so N and y are unknown: the known part is drawn, each unknown number
-  // is a "?" (`so-noi-dung.tsx`, `ContentPager`). Literals, same reason as above.
+  // is a "?" (`so-noi-dung.tsx`, `ContentPager`). Literals, not constants: `tools/tien_do_san_pham.py`
+  // counts `ten: "` lines in this block, and a constant here drops the entry from the progress table.
   {
     ten: "Tổng số mục của danh sách",
     viSao:

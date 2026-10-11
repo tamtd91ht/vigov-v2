@@ -265,6 +265,17 @@ export const ROLE_LABEL = "Vai trò";
 export const NO_ROLE_OPTION = "Không giữ vai trò nào";
 export const MISSING_ROLE_OPTION = "Giá trị đang lưu — không còn trong danh mục";
 export const NO_ROLES_YET = "Chưa có vai trò nào để gán.";
+/**
+ * Under the role choice (bug sheet row 41): the prototype draws checkboxes, but the server holds ONE role
+ * per person (`nguoi_dung.vai_tro_id`) and refuses two on create (`ErrOneRolePerStaff`) — so radios, and
+ * this sentence says why the look allows only one.
+ */
+export const ONE_ROLE_HINT = "Mỗi cán bộ giữ một vai trò.";
+/**
+ * Where the prototype draws `Mật khẩu` on the add form (open question #9): no password is typed here —
+ * the server issues a one-time password, changed at first sign-in.
+ */
+export const TEMP_PASSWORD_NOTE = "Hệ thống tự cấp mật khẩu tạm; cán bộ đổi ở lần đăng nhập đầu.";
 
 /** Under the disabled email of a row that holds an account: the email is the login name. */
 export const EMAIL_LOCKED_HINT = "Không đổi được thư điện tử đăng nhập.";

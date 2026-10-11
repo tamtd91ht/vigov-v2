@@ -859,3 +859,79 @@ describe("add dialog — email filled chains the grant-account route", () => {
     expect(tatCa(m.cay(), (p) => p.type === OMatKhauTam || p.type === XacNhanTaiKhoan)).toHaveLength(0);
   });
 });
+
+/* ---- 12. add: the role rides the create body (bug sheet row 41, owner 10/10/2026) ---------------- */
+
+describe("add dialog — one role in `role_ids`, refusals in the dialog", () => {
+  async function openAdd() {
+    const m = await moMan();
+    const add = tatCa(m.cay(), (p) => p.props.children === NUT_THEM_CAN_BO)[0];
+    (add?.props.onClick as () => void)();
+    m.ve();
+    return m;
+  }
+
+  it("a role chosen → POST /staff carries `role_ids: [id]`, ONE id; no role route is called", async () => {
+    writeAnswers["POST /api/v1/staff"] = { status: 201, body: { ...B, email: "", role_id: "VT-2" } };
+    const m = await openAdd();
+    expect(form(m).roleId).toBe("");
+    expect(form(m).roleChoice).toBe("editable");
+    form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B" });
+    form(m).setRoleId("VT-1");
+    form(m).setRoleId("VT-2"); // radios: the second choice replaces the first
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+    const w = writes();
+    expect(w.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /api/v1/staff"]);
+    expect(w[0]?.than?.role_ids).toEqual(["VT-2"]);
+  });
+
+  it("no role → the body has NO `role_ids` key", async () => {
+    writeAnswers["POST /api/v1/staff"] = { status: 201, body: { ...B, email: "" } };
+    const m = await openAdd();
+    form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B" });
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+    expect(writes()[0]?.than).not.toHaveProperty("role_ids");
+  });
+
+  // The server's own sentences (`can_bo_ghi.go`, `domain/danh_ba_ghi.go`), as it writes them.
+  const REFUSALS: [string, number, string, string][] = [
+    [
+      "role_not_found",
+      400,
+      "Vai trò được chọn không còn trong xã. Hãy tải lại danh sách vai trò.",
+      "Vai trò được chọn không còn trong xã. Hãy tải lại danh sách vai trò.",
+    ],
+    [
+      "permission_escalation",
+      403,
+      "Vai trò này mang quyền mà tài khoản của bạn không có, nên bạn không gán được: admin.user. Hãy nhờ người có đủ quyền thực hiện.",
+      "Vai trò này mang quyền mà tài khoản của bạn không có, nên bạn không gán được: admin.user. Hãy nhờ người có đủ quyền thực hiện.",
+    ],
+    [
+      "invalid_input",
+      400,
+      "can_bo: số di động Việt Nam có tối đa 10 chữ số (dạng 0xx xxx xxxx) — hãy kiểm tra lại số đã nhập",
+      // The package tag is stripped and the sentence capitalised (`goi.ts`, `stripTechnicalPrefix`).
+      "Số di động Việt Nam có tối đa 10 chữ số (dạng 0xx xxx xxxx) — hãy kiểm tra lại số đã nhập",
+    ],
+  ];
+
+  for (const [code, status, message, shown] of REFUSALS) {
+    it(`${status} ${code} → a readable sentence in the dialog, which stays open; no grant call`, async () => {
+      writeAnswers["POST /api/v1/staff"] = { status, body: { code, message } };
+      const m = await openAdd();
+      form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B", email: "ttb@demo.invalid" });
+      form(m).setRoleId("VT-2");
+      m.ve();
+      form(m).onSubmit();
+      await settle(m);
+      expect(form(m).serverError).toBe(shown);
+      expect(form(m).serverError).not.toContain(code);
+      expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual(["POST /api/v1/staff"]);
+    });
+  }
+});

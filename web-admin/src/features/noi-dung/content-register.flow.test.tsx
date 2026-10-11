@@ -21,7 +21,7 @@ import {
   TITLE_REQUIRED,
   UNPUBLISHED_TOAST,
 } from "./nhan-noi-dung";
-import { SoNoiDung } from "./so-noi-dung"; // vi-name-ok: existing export (rule 12 inv 3)
+import { ContentThumbnail, SoNoiDung } from "./so-noi-dung"; // vi-name-ok: existing export (rule 12 inv 3)
 
 const T = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }));
 vi.mock("sonner", () => ({ toast: T }));
@@ -340,22 +340,52 @@ describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
     expect(at("Thêm danh mục")).toBeLessThan(at("Chưa có danh mục nào. Thêm ở trên."));
   });
 
-  it("`Thêm`: POST name/slug/parent — no order — the toast, and the dialog STAYS open", async () => {
+  it("`Thêm`: POST name/parent — no slug (the server issues it), no order — the toast, and the dialog STAYS open", async () => {
     const calls = fakeServer(["content.read", "content.update"]);
     await mountScreen();
     await openCategories();
+    expect(host!.querySelector("#slug-danh-muc")).toBeNull();
     typeInto(host!.querySelector<HTMLInputElement>("#ten-danh-muc")!, "Nông nghiệp");
-    typeInto(host!.querySelector<HTMLInputElement>("#slug-danh-muc")!, "nong-nghiep");
     await act(async () => {
       host!.querySelector<HTMLInputElement>("#ten-danh-muc")!.form!.requestSubmit();
     });
     await settle();
     const post = calls().filter((c) => c.method === "POST" && c.path === "/api/v1/content-categories");
     expect(post).toHaveLength(1);
-    expect(post[0]!.body).toEqual({ name: "Nông nghiệp", slug: "nong-nghiep", parent_id: "" });
+    expect(post[0]!.body).toEqual({ name: "Nông nghiệp", parent_id: "" });
     expect(T.success).toHaveBeenCalledWith(CATEGORY_ADDED_TOAST);
     expect(CATEGORY_ADDED_TOAST).toBe("Đã thêm danh mục.");
     expect(host!.querySelector("dialog")).not.toBeNull();
     expect(host!.querySelector<HTMLInputElement>("#ten-danh-muc")!.value).toBe("");
+  });
+});
+
+describe("table thumbnail — a signed link that fails to load (expired) falls back to the placeholder", () => {
+  it("the <img> is replaced by the prototype's placeholder on `error`", async () => {
+    const box = document.createElement("div");
+    document.body.appendChild(box);
+    const root = createRoot(box);
+    await act(async () => {
+      root.render(
+        <ContentThumbnail
+          cover={{
+            file_id: "01JCOVER0",
+            status: "ready",
+            public: true,
+            preview_url: "https://files.example.test/vigov-pub/t_01JXA/cover.jpg?X-Amz-Signature=S",
+            preview_expires_at: "2099-01-01T00:00:00Z",
+          }}
+        />,
+      );
+    });
+    const img = box.querySelector("img");
+    expect(img).not.toBeNull();
+    await act(async () => {
+      img!.dispatchEvent(new Event("error"));
+    });
+    expect(box.querySelector("img")).toBeNull();
+    expect(box.querySelector('[data-thumbnail="placeholder"]')).not.toBeNull();
+    await act(async () => root.unmount());
+    box.remove();
   });
 });

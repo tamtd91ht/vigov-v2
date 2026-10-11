@@ -519,10 +519,12 @@ function duongDanMotCanBo(mau: string, id: string): string {
  * trữ của người khác. `identity_themCanBoVao` sinh từ hợp đồng không có trường ấy, nên form
  * không vẽ ô Mã được kể cả khi ai đó muốn: `tsc` đỏ ngay.
  *
- * KHÔNG CÓ `role_id` VÀ KHÔNG CÓ MẬT KHẨU. Gán vai trò là `PUT .../role` — tuyến mang hai ràng
- * buộc của #14; một `role_id` ở đây là đường vòng qua cả hai. Cấp tài khoản đăng nhập là luồng
- * khác (#9 — mật khẩu tạm, bắt đổi lần đầu), và máy chủ ghi `co_tai_khoan = false` làm hằng, nên
- * dòng vừa thêm là một dòng DANH BẠ chứ chưa phải một tài khoản.
+ * `role_ids` IS OPTIONAL, AT MOST ONE ID (owner decision 10/10/2026, bug sheet row 41). The server
+ * holds one role per person and checks the #14 escalation rule on create, in the same transaction
+ * (`app/danh_ba_can_bo.go`); its 400 `role_not_found` / 403 `permission_escalation` sentences reach
+ * the form verbatim. Copied only when the caller set it, like `email`. Changing a role later is still
+ * `PUT .../role`. NO PASSWORD: issuing a login is a separate flow (#9 — temporary password, changed
+ * at first sign-in), so the new row is a DIRECTORY entry, not yet an account.
  *
  * `khoaChongTrung` LÀ THAM SỐ, KHÔNG SINH TẠI CHỖ. Hợp đồng đòi `Idempotency-Key` bắt buộc trên
  * tuyến này. Sinh khoá bên trong hàm thì mỗi lần bấm lại sau một lỗi mạng là một khoá mới — tức
@@ -547,6 +549,7 @@ export function themCanBo(
   // `email` is optional in the contract (4cf87b6): copied only when the caller set it, so a staff
   // row created without an email carries no `email` key at all.
   if (than.email !== undefined) thanGui.email = than.email;
+  if (than.role_ids !== undefined) thanGui.role_ids = [...than.role_ids];
 
   return goiGhiCanBo(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung });
 }

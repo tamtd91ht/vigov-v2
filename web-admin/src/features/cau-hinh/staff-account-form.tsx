@@ -37,8 +37,10 @@ import {
   NO_ROLE_OPTION,
   NO_ROLES_YET,
   OFFICE_PHONE_LABEL,
+  ONE_ROLE_HINT,
   OWN_ROLE_HINT,
   ROLE_LABEL,
+  TEMP_PASSWORD_NOTE,
 } from "./nhan-can-bo";
 import { DIALOG_FOOTER_CLASS, DIALOG_LABEL_CLASS } from "./org-unit-dialog-classes";
 
@@ -51,13 +53,17 @@ import { DIALOG_FOOTER_CLASS, DIALOG_LABEL_CLASS } from "./org-unit-dialog-class
  *
  *   · NO PASSWORD FIELD, on add or on edit. The password stays the one-time value the server generates
  *     (open question #9): adding with an email chains `POST /staff/{id}/account` and shows that value
- *     once; a forgotten password is `Đặt lại mật khẩu` in the row's `⋯` menu.
- *   · ONE ROLE, a radio group laid out like the prototype's checkbox grid. The server holds one role
- *     per person (`nguoi_dung.vai_tro_id`), and the choice is saved through `PUT /staff/{id}/role`
- *     AFTER the profile PATCH — the route that carries #13/#14 — never as a field of the PATCH.
- *     Edit only: the add form has no role, as decided.
+ *     once; a forgotten password is `Đặt lại mật khẩu` in the row's `⋯` menu. On ADD, the prototype's
+ *     password cell holds `TEMP_PASSWORD_NOTE` instead (bug sheet row 41).
+ *   · ONE ROLE, a radio group laid out like the prototype's checkbox grid, with `ONE_ROLE_HINT`. The
+ *     server holds one role per person (`nguoi_dung.vai_tro_id`). On EDIT the choice is saved through
+ *     `PUT /staff/{id}/role` AFTER the profile PATCH — the route that carries #13/#14 — never as a field
+ *     of the PATCH. On ADD (owner 10/10/2026, bug sheet row 41) it rides the create body as
+ *     `role_ids: [id]`, checked server-side against the same #14 escalation rule in the same transaction.
  *   · TWO PHONE FIELDS (#16), each label saying which kind: the mobile beside Chức danh, the office
- *     line under Bộ phận.
+ *     line under Bộ phận. The MOBILE is grouped as typed (`xxx xxx xxxx`) and capped at ten digits; the
+ *     draft keeps digits only, so nothing with a space is ever sent. The office line is not: a landline
+ *     has eleven digits and its own grouping.
  *   · `Có Zalo` on edit only: the add body (`identity_themCanBoVao`) has no such field.
  *
  * PURELY PRESENTATIONAL: every value in through props, every change out through callbacks, every
@@ -66,7 +72,26 @@ import { DIALOG_FOOTER_CLASS, DIALOG_LABEL_CLASS } from "./org-unit-dialog-class
  *
  * NO FORMAT CHECK HERE (email shape, phone characters, lengths): the server normalises and refuses each
  * with a Vietnamese sentence (`domain/danh_ba_ghi.go`); a copy here would drift (rule 9, forbidden #2).
+ * The mobile's ten-digit cap is input shaping, not a check: the server still refuses eleven
+ * (`ErrMobileTooManyDigits`), and its sentence — like `role_not_found` and `permission_escalation` —
+ * reaches `serverError` verbatim, prefix stripped (`goi.ts`, `stripTechnicalPrefix`).
  */
+/** Ten digits, the length of a Vietnamese mobile once normalised (`domain.ErrMobileTooManyDigits`). */
+export const MOBILE_MAX_DIGITS = 10;
+
+/** What the mobile box SHOWS for a draft value: digits grouped `xxx xxx xxxx`. */
+export function formatMobile(value: string): string {
+  // A stored value with other characters (a `+84…` typed before this form) is shown as it is, so
+  // opening the edit form never rewrites a number nobody touched.
+  if (!/^\d*$/.test(value)) return value;
+  return [value.slice(0, 3), value.slice(3, 6), value.slice(6)].filter((g) => g !== "").join(" ");
+}
+
+/** What the DRAFT keeps for a typed mobile: digits only, at most `MOBILE_MAX_DIGITS`. */
+export function mobileDigits(typed: string): string {
+  return typed.replace(/\D/g, "").slice(0, MOBILE_MAX_DIGITS);
+}
+
 export type RoleChoice =
   /** The role radios are drawn and can be changed. */
   | "editable"
@@ -91,7 +116,7 @@ export function StaffAccountForm({
   open: Extract<DangMoGhi, { kieu: "them" } | { kieu: "sua" }>;
   draft: BanNhapCanBo;
   setDraft: (d: BanNhapCanBo) => void;
-  /** The role chosen in the edit form; `""` = no role. Ignored on add. */
+  /** The role chosen; `""` = no role. Add: sent as `role_ids`; edit: through `PUT .../role`. */
   roleId: string;
   setRoleId: (id: string) => void;
   roleChoice: RoleChoice;
@@ -138,7 +163,8 @@ export function StaffAccountForm({
           </div>
 
           {/* The prototype's row is (Thư điện tử, Mật khẩu); with no password field the email keeps its
-              half of the row, so every field sits where the prototype draws it. */}
+              half of the row, so every field sits where the prototype draws it. On add the other half
+              says who issues the password (open question #9). */}
           <div className="block min-w-0">
             <label htmlFor="o-email-can-bo" className={DIALOG_LABEL_CLASS}>
               {ACCOUNT_EMAIL_LABEL}
@@ -160,7 +186,18 @@ export function StaffAccountForm({
               </p>
             )}
           </div>
-          <div aria-hidden="true" />
+          {editing ? (
+            <div aria-hidden="true" />
+          ) : (
+            <div className="block min-w-0">
+              <span className={DIALOG_LABEL_CLASS} aria-hidden="true">
+                &nbsp;
+              </span>
+              <p className="text-ink-muted m-0 mt-1.5 text-[12px] leading-snug">
+                {TEMP_PASSWORD_NOTE}
+              </p>
+            </div>
+          )}
 
           <div className="block min-w-0">
             <label htmlFor="o-chuc-danh-can-bo" className={DIALOG_LABEL_CLASS}>
@@ -182,9 +219,12 @@ export function StaffAccountForm({
             <input
               id="o-di-dong-can-bo"
               name="o-di-dong-can-bo"
-              value={draft.diDongCaNhan}
+              type="tel"
+              inputMode="numeric"
+              autoComplete="off"
+              value={formatMobile(draft.diDongCaNhan)}
               placeholder={PHONE_PLACEHOLDER}
-              onChange={(e) => setDraft({ ...draft, diDongCaNhan: e.target.value })}
+              onChange={(e) => setDraft({ ...draft, diDongCaNhan: mobileDigits(e.target.value) })}
               className={cn(controlClass, "mt-1.5")}
             />
           </div>
@@ -229,16 +269,14 @@ export function StaffAccountForm({
           </div>
           <div aria-hidden="true" />
 
-          {editing && (
-            <RoleRadios
-              roleId={roleId}
-              setRoleId={setRoleId}
-              roles={roles}
-              roleMissing={roleMissing}
-              disabled={roleChoice === "own" || busy}
-              own={roleChoice === "own"}
-            />
-          )}
+          <RoleRadios
+            roleId={roleId}
+            setRoleId={setRoleId}
+            roles={roles}
+            roleMissing={roleMissing}
+            disabled={roleChoice === "own" || busy}
+            own={roleChoice === "own"}
+          />
 
           {editing && (
             <div className="col-span-2 block">
@@ -323,7 +361,7 @@ function RoleRadios({
       <div
         role="radiogroup"
         aria-labelledby="o-vai-tro-can-bo-nhan"
-        aria-describedby={own ? "o-vai-tro-can-bo-mo-ta" : undefined}
+        aria-describedby="o-vai-tro-can-bo-mo-ta"
         className="border-line mt-1.5 grid grid-cols-2 gap-2 rounded-[10px] border border-solid p-3"
       >
         {roles.length === 0 && !roleMissing && (
@@ -350,11 +388,9 @@ function RoleRadios({
           </label>
         ))}
       </div>
-      {own && (
-        <p id="o-vai-tro-can-bo-mo-ta" className="text-ink-muted m-0 mt-1 text-[11.5px]">
-          {OWN_ROLE_HINT}
-        </p>
-      )}
+      <p id="o-vai-tro-can-bo-mo-ta" className="text-ink-muted m-0 mt-1 text-[11.5px]">
+        {own ? OWN_ROLE_HINT : ONE_ROLE_HINT}
+      </p>
     </div>
   );
 }

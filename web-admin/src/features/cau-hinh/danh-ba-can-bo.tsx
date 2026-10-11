@@ -417,7 +417,11 @@ export function DanhBaCanBo({
   const addStaff = useCallback(
     async (idempotencyKey: string) => {
       const draft = ban;
-      const kq = await themCanBo(thanThem(draft), idempotencyKey);
+      // The role rides the create body (bug sheet row 41): one id, or no key at all for "no role".
+      const kq = await themCanBo(
+        vaiTroID === "" ? thanThem(draft) : { ...thanThem(draft), role_ids: [vaiTroID] },
+        idempotencyKey,
+      );
       if (!kq.ok) {
         datLoiMayChu(kq.thongBao);
         return;
@@ -444,7 +448,7 @@ export function DanhBaCanBo({
       datMoTaiKhoan({ kieu: "cap", canBo: created });
       datLoiTaiKhoan(grant.ok ? CAU_PHAT_LAI_KHONG_CO_MAT_KHAU : grant.thongBao);
     },
-    [ban, ghiXong],
+    [ban, ghiXong, vaiTroID],
   );
 
   /**

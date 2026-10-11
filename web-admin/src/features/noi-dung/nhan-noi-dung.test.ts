@@ -738,7 +738,8 @@ describe("phần chưa dựng được", () => {
     // prototype: the §4 count, the §2 layout and the `content.update` gate left it — and then the
     // per-item delete (soft, with a reason, DELETE /api/v1/content-items/{id}). The `Lượt xem` column
     // left it the same day: the owner decided to show the server's count (ADR 0047, row 02/10/2026).
-    // 06/10/2026: the prototype's thumbnail column joined it — the list route serves no image link.
+    // 06/10/2026: the prototype's thumbnail column joined it — the list route served no image link; it
+    // left on 11/10/2026 (bug sheet row 22) once each list row carried `cover_image.preview_url`.
     // 09/10/2026: the prototype's pager — its total and its page count; the list route never counts.
     // 09/10/2026 (owner D4): the config dialog's image download box, and the `Danh mục tin` dialog's
     // portal import, item count and `Từ Cổng` mark — no route behind any of the four.
@@ -750,7 +751,6 @@ describe("phần chưa dựng được", () => {
       "Lấy danh mục từ Cổng",
       "Số bài của mỗi danh mục",
       "Dấu danh mục lấy từ Cổng",
-      "Ảnh thu nhỏ trong bảng",
       "Tổng số mục của danh sách",
       "Tổng số trang của danh sách",
       "Đồng bộ mỗi 15 phút",
@@ -758,10 +758,10 @@ describe("phần chưa dựng được", () => {
     ]);
   });
 
-  it("the thumbnail's reason no longer points to a cover preview in the edit form (there is none)", () => {
-    const thumb = PHAN_CHUA_DUNG.find((p) => p.ten === "Ảnh thu nhỏ trong bảng")!;
-    expect(thumb.viSao).not.toContain("biểu mẫu sửa");
-    expect(thumb.viSao).not.toContain("xem ở");
+  it("the table thumbnail is built (bug sheet row 22): no item still claims it is not", () => {
+    const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" | ");
+    expect(all).not.toContain("ảnh thu nhỏ");
+    expect(all).not.toContain("Ảnh thu nhỏ");
   });
 
   it("no item still claims the view count is not shown", () => {

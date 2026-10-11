@@ -38,7 +38,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { controlClass, Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
-import { PendingCell, PendingMarker } from "@/components/ui/pending-feature";
+import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
 import {
@@ -139,13 +139,12 @@ import {
   SAVE_FAILED_TOAST,
   SAVED_TOAST,
   saveToast,
-  SLUG_DANH_MUC_TOI_DA,
   SO_RONG,
   SOURCE_PORTAL_SYNC,
   STATUS_FILTER_OPTIONS,
   STATUS_PENDING_REVIEW,
   TEN_DANH_MUC_TOI_DA,
-  THUMBNAIL_PART,
+  THUMBNAIL_COLUMN_LABEL,
   TIEU_DE_FORM_THEM,
   TIEU_DE_MAN,
   TIEU_DE_THE_DANH_BA,
@@ -178,6 +177,7 @@ import {
   COVER_REPLACE_BUTTON,
   COVER_RETRY_BUTTON,
   coverInFlight,
+  coverPreviewSrc,
   coverSizeLabel,
   coverStateText,
   runCoverUpload,
@@ -594,12 +594,13 @@ export function SoNoiDung() {
 
   /**
    * The add row of `Danh mục tin`. NO `order`: the prototype's row has no such box, and the server's
-   * `order` is optional (0 when absent — what this form used to send by default). The dialog STAYS OPEN
+   * `order` is optional (0 when absent — what this form used to send by default). NO `slug` either: the
+   * server issues it from the name (bug sheet row 21). The dialog STAYS OPEN
    * (prototype `CategoryManagerDialog.tsx:73-86`): the new row appears in the list below, the box empties.
    */
-  function themDanhMuc(ten: string, slug: string, chaID: string, khoa: string): void {
+  function themDanhMuc(ten: string, chaID: string, khoa: string): void {
     datDangGui(true);
-    themDanhMucNoiDung({ name: ten, slug, parent_id: chaID }, khoa).then((kq) => {
+    themDanhMucNoiDung({ name: ten, parent_id: chaID }, khoa).then((kq) => {
       datDangGui(false);
       if (!kq.ok) {
         datLoiForm(kq.thongBao);
@@ -1146,8 +1147,8 @@ export function HangLocNoiDung({
 }
 
 /**
- * Bảng §6 — the prototype's columns (`ContentWorkspace.tsx:290-300`): a thumbnail (a "?" — the list route
- * serves no image link), Tiêu đề, Chuyên mục, Tệp đính kèm, Ngày đăng, Lượt xem, Trạng thái, and the
+ * Bảng §6 — the prototype's columns (`ContentWorkspace.tsx:290-300`): a thumbnail (`ContentThumbnail`, from the
+ * row's signed `cover_image.preview_url`), Tiêu đề, Chuyên mục, Tệp đính kèm, Ngày đăng, Lượt xem, Trạng thái, and the
  * actions with no header text.
  *
  * THE ACTION COLUMN HOLDS `✎`, `Đăng`/`Gỡ` AND `🗑`. `🗑` only OPENS the dialog that asks for the reason —
@@ -1189,9 +1190,10 @@ export function BangNoiDung({
         <caption className="an-thi-giac">Sổ nội dung Mini App của xã</caption>
         <thead>
           <tr>
-            {/* The prototype's thumbnail column, no header text: the list route serves no image link (only
-                the detail does), so it holds the "?" of a part not built (`PHAN_CHUA_DUNG`). */}
-            <ThumbnailHeader />
+            {/* The prototype's thumbnail column, no visible header text (`ContentWorkspace.tsx:292`). */}
+            <th scope="col" className="w-16">
+              <span className="an-thi-giac">{THUMBNAIL_COLUMN_LABEL}</span>
+            </th>
             <th scope="col">Tiêu đề</th>
             <th scope="col" className="w-48">
               Chuyên mục
@@ -1232,7 +1234,9 @@ export function BangNoiDung({
             const showing = nd.status === "dang-hien";
             return (
               <tr key={nd.id}>
-                <PendingCell className="align-top" />
+                <td className="align-top">
+                  <ContentThumbnail cover={nd.cover_image} />
+                </td>
                 <td className="max-w-[34rem] align-top">
                   <div className="max-w-[34rem] min-w-0">
                     {canEdit ? (
@@ -1335,13 +1339,49 @@ export function BangNoiDung({
   );
 }
 
-/** The thumbnail column's header: no words (the prototype draws none), only the "?" and its reason. */
-function ThumbnailHeader() {
+/**
+ * One row's thumbnail — the prototype's 48 px square (`ContentWorkspace.tsx:321-333`), drawn from the
+ * `cover_image.preview_url` the LIST row already carries (bug sheet row 22). Nothing is fetched beyond it.
+ *
+ * THE LINK IS SIGNED AND SHORT-LIVED (about 15 minutes). A page left open past it would draw a broken
+ * image, so the placeholder is drawn instead when: there is no cover, the server gave no usable link, the
+ * link's `preview_expires_at` has passed, or the browser fails to load it (expired between render and load).
+ * The list re-read on the next page or save issues fresh links.
+ *
+ * `alt=""`: decorative — the title in the next cell names the row. `border-solid` because preflight is off.
+ */
+export function ContentThumbnail({ cover }: { cover: comms_noiDungRa["cover_image"] }) {
+  // The link that failed to load, not a flag: a re-read list brings a fresh link for the same row, and
+  // that one must be tried.
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // Read once, when the cell is first drawn (a render must stay pure); a later expiry is caught by `onError`.
+  const [drawnAt] = useState(() => Date.now());
+  const expiresAt = cover?.preview_expires_at ? Date.parse(cover.preview_expires_at) : Number.NaN;
+  const expired = !Number.isNaN(expiresAt) && expiresAt <= drawnAt;
+  const thumbnailSrc = coverPreviewSrc(cover);
+  if (thumbnailSrc === null || expired || failedSrc === thumbnailSrc) {
+    // The prototype's `bg-surface` is this app's `bg-canvas`.
+    return (
+      <div
+        data-thumbnail="placeholder"
+        className="flex size-12 items-center justify-center rounded-[6px] border border-solid border-line bg-canvas text-ink-muted"
+      >
+        <Images aria-hidden="true" focusable="false" className="size-4" />
+      </div>
+    );
+  }
+  // No `loading="lazy"` (a lazy request can fire after the link expired) and no referrer (the admin
+  // page's address stays out of the object store's access log) — the convention of `scene-photos.tsx`.
   return (
-    <th scope="col" className="w-16" data-pending="">
-      <span className="an-thi-giac">{THUMBNAIL_PART}</span>
-      <PendingMarker info={pendingContentPart(THUMBNAIL_PART)} side="bottom" />
-    </th>
+    // eslint-disable-next-line @next/next/no-img-element -- signed, expiring link, see scene-photos.tsx
+    <img
+      src={thumbnailSrc}
+      alt=""
+      referrerPolicy="no-referrer"
+      decoding="async"
+      onError={() => setFailedSrc(thumbnailSrc)}
+      className="size-12 rounded-[6px] border border-solid border-line object-cover"
+    />
   );
 }
 
@@ -2045,9 +2085,10 @@ export function CoverImageField({
  * `Thêm danh mục` · `Thuộc mục (nếu có)` · `Thêm`, Enter submits. Rename, `Tắt`/`Bật` and delete live in
  * `CategoryAdmin` (`category-admin.tsx`, ADR 0067 §3), drawn below this row.
  *
- * ONE BOX MORE THAN THE PROTOTYPE, ON PURPOSE: `Slug`. The server requires it, and inventing it from the name
- * would be the screen issuing a code (an issued slug is never reissued — rule 7). `Thuộc mục` is the tree's
- * select, not free text: the server takes a `parent_id`.
+ * NO `Slug` BOX, as in the prototype (`CategoryManagerDialog.tsx:77-79`, bug sheet row 21): the SERVER issues
+ * the slug from the name, and never reissues one already used, even by a deleted category (rule 7). The screen
+ * only sends the name, so it can never be the one issuing a code. `Thuộc mục` is the tree's select, not free
+ * text: the server takes a `parent_id`.
  */
 export function FormDanhMuc({
   danhMuc,
@@ -2058,21 +2099,19 @@ export function FormDanhMuc({
   danhMuc: readonly comms_danhMucRa[];
   dangGui: boolean;
   loi: string | null;
-  luu: (ten: string, slug: string, chaID: string, khoa: string) => void;
+  luu: (ten: string, chaID: string, khoa: string) => void;
 }) {
   const [ten, datTen] = useState("");
-  const [slug, datSlug] = useState("");
   const [chaID, datChaID] = useState("");
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
 
   const tenGon = ten.trim();
-  const slugGon = slug.trim();
-  const duDieuKien = tenGon !== "" && slugGon !== "";
+  const duDieuKien = tenGon !== "";
 
   function guiNgay(e: FormEvent) {
     e.preventDefault();
     if (!duDieuKien || dangGui) return;
-    luu(tenGon, slugGon, chaID, khoaChongTrung);
+    luu(tenGon, chaID, khoaChongTrung);
   }
 
   const cay = dungCayDanhMuc(danhMuc);
@@ -2103,19 +2142,6 @@ export function FormDanhMuc({
           </select>
         </Field>
 
-        <Field label="Slug" htmlFor="slug-danh-muc" required grow="auto" className="w-40">
-          <input
-            id="slug-danh-muc"
-            name="slug-danh-muc"
-            value={slug}
-            maxLength={SLUG_DANH_MUC_TOI_DA}
-            autoComplete="off"
-            placeholder="nong-nghiep"
-            aria-describedby="slug-danh-muc-goi-y"
-            onChange={(e) => datSlug(e.target.value)}
-          />
-        </Field>
-
         <Button
           type="submit"
           variant="primary"
@@ -2132,14 +2158,6 @@ export function FormDanhMuc({
           {CATEGORY_ADD_BUTTON}
         </Button>
       </div>
-
-      {/* MÁY CHỦ TỪ CHỐI CHỨ KHÔNG TỰ HẠ CHỮ HOA: `Chuyen-Doi-So` bị trả 400 thay vì lặng lẽ thành
-          `chuyen-doi-so`, vì mã lưu xuống phải đúng mã người ta thấy lúc gõ. Nói trước điều đó thay vì để
-          họ gõ xong mới biết. */}
-      <p className="m-0 text-[11px] text-ink-muted" id="slug-danh-muc-goi-y">
-        Slug chỉ gồm chữ thường a-z, số và dấu gạch ngang, ví dụ <code>chuyen-doi-so</code>. Slug đã cấp thì
-        KHÔNG cấp lại, kể cả khi danh mục mang slug đó đã bị xoá.
-      </p>
 
       {loi !== null && (
         <p className="m-0 text-[12px] font-medium text-danger" role="alert">

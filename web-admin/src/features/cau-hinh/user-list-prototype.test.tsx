@@ -15,10 +15,12 @@ import {
   EMAIL_LOCKED_HINT,
   EMPTY_STAFF_LIST,
   NO_EMAIL_SUBLINE,
+  ONE_ROLE_HINT,
   OWN_ROLE_HINT,
   staffCountLine,
+  TEMP_PASSWORD_NOTE,
 } from "./nhan-can-bo";
-import { StaffAccountForm } from "./staff-account-form";
+import { formatMobile, MOBILE_MAX_DIGITS, mobileDigits, StaffAccountForm } from "./staff-account-form";
 import type { RoleChoice } from "./staff-account-form";
 import type { BangTraDanhMuc } from "./tra-danh-muc";
 
@@ -335,13 +337,38 @@ function input(html: string, id: string): string {
 describe("StaffAccountForm — add (user 09/10/2026)", () => {
   const ADD = { kieu: "them", khoaChongTrung: "k" } as const;
 
-  it("NO password field; primary 'Thêm tài khoản' after Huỷ; no role choice on add", () => {
+  it("NO password field — the temporary-password note in its place, beside the email; primary 'Thêm tài khoản' after Huỷ", () => {
     const html = accountForm(ADD);
     expect(html).not.toContain('type="password"');
     expect(html).not.toMatch(/Mật khẩu/);
+    expect(TEMP_PASSWORD_NOTE).toBe("Hệ thống tự cấp mật khẩu tạm; cán bộ đổi ở lần đăng nhập đầu.");
+    const note = html.indexOf(TEMP_PASSWORD_NOTE);
+    expect(note).toBeGreaterThan(html.indexOf('for="o-email-can-bo"'));
+    expect(note).toBeLessThan(html.indexOf('for="o-chuc-danh-can-bo"'));
     expect(html.indexOf(">Huỷ<")).toBeLessThan(html.indexOf("Thêm tài khoản</button>"));
-    expect(html).not.toContain('type="radio"');
     expect(html).not.toContain("o-co-zalo-can-bo");
+  });
+
+  it("Vai trò on add (bug sheet row 41): the prototype's bordered grid, RADIOS (one role), 'no role' checked, the hint", () => {
+    const html = accountForm(ADD);
+    expect(html).toContain('role="radiogroup"');
+    expect(html).toContain("border-line mt-1.5 grid grid-cols-2 gap-2 rounded-[10px] border border-solid p-3");
+    const radios = [...html.matchAll(/<input[^>]*type="radio"[^>]*>/g)].map((m) => m[0]);
+    expect(radios).toHaveLength(3);
+    for (const r of radios) expect(r).toContain('name="o-vai-tro-can-bo"');
+    expect(radios.filter((r) => r.includes('checked=""'))).toEqual([radios[0]]);
+    expect(html).not.toContain('type="checkbox"');
+    expect(ONE_ROLE_HINT).toBe("Mỗi cán bộ giữ một vai trò.");
+    expect(html).toContain(`id="o-vai-tro-can-bo-mo-ta" class="text-ink-muted m-0 mt-1 text-[11.5px]">${ONE_ROLE_HINT}<`);
+    // Below Bộ phận, as the prototype draws it.
+    expect(html.indexOf('role="radiogroup"')).toBeGreaterThan(html.indexOf('for="o-bo-phan-can-bo"'));
+  });
+
+  it("mobile: shown grouped `xxx xxx xxxx`, numeric keypad; the draft keeps digits only", () => {
+    const html = accountForm(ADD, { draft: { ...BAN_TRONG, diDongCaNhan: "0900000000" } });
+    const mobile = input(html, "o-di-dong-can-bo");
+    expect(mobile).toContain('value="090 000 0000"');
+    expect(mobile).toContain('inputMode="numeric"');
   });
 
   it("field order: Họ và tên · Thư điện tử · (Chức danh, Điện thoại (di động)) · Bộ phận · Máy bàn cơ quan", () => {
@@ -353,6 +380,25 @@ describe("StaffAccountForm — add (user 09/10/2026)", () => {
     expect(html).toContain(">Điện thoại (di động)</label>");
     expect(html).toContain(">Máy bàn cơ quan</label>");
     expect(input(html, "o-email-can-bo")).not.toContain('disabled=""');
+  });
+});
+
+describe("mobile shaping — `formatMobile` / `mobileDigits`", () => {
+  it("typing groups as 3-3-4 and caps at ten digits; spaces never reach the draft", () => {
+    expect(mobileDigits("090 000 0000")).toBe("0900000000");
+    expect(mobileDigits("09000000001234")).toBe("0900000000");
+    expect(mobileDigits("090-000.0000")).toBe("0900000000");
+    expect(MOBILE_MAX_DIGITS).toBe(10);
+    expect(formatMobile("")).toBe("");
+    expect(formatMobile("09")).toBe("09");
+    expect(formatMobile("0900")).toBe("090 0");
+    expect(formatMobile("090000")).toBe("090 000");
+    expect(formatMobile("0900000")).toBe("090 000 0");
+    expect(formatMobile("0900000000")).toBe("090 000 0000");
+  });
+
+  it("a stored value with other characters is shown untouched (opening the edit form rewrites nothing)", () => {
+    expect(formatMobile("+84900000000")).toBe("+84900000000");
   });
 });
 

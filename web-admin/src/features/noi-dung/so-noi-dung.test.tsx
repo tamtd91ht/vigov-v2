@@ -34,7 +34,7 @@ import {
   PENDING_REVIEW_HINT,
   PHAN_CHUA_DUNG,
   THAN_BAI_RONG,
-  THUMBNAIL_PART,
+  THUMBNAIL_COLUMN_LABEL,
   TITLE_REQUIRED,
   TOTAL_ITEMS_PART,
   TOTAL_PAGES_PART,
@@ -247,15 +247,13 @@ describe("bảng nội dung §6", () => {
     expect(html).not.toContain(">Loại</th>");
   });
 
-  it("header: the thumbnail '?' with no words, then the prototype's six titles, then an unnamed actions column", () => {
+  it("header: the thumbnail with no visible words, then the prototype's six titles, then an unnamed actions column", () => {
     const html = veBang([hang({ view_count: 42 })]);
     const headers = [...html.matchAll(/<th scope="col"[^>]*>([^<]*)<\/th>/g)].map((m) => m[1]);
     expect(headers).toEqual(["Tiêu đề", "Chuyên mục", "Tệp đính kèm", "Ngày đăng", "Lượt xem", "Trạng thái"]);
-    // The thumbnail header: a "?" and its name for screen readers only, no visible "Ảnh".
+    // The thumbnail header: named for screen readers only, and no longer a "?" (bug sheet row 22).
     const thumb = /<th scope="col" class="w-16"[^>]*>[^]*?<\/th>/.exec(html)?.[0] ?? "";
-    expect(thumb).toContain(`aria-label="${pendingMarkerLabel(THUMBNAIL_PART)}"`);
-    expect(thumb).toContain(`<span class="an-thi-giac">${THUMBNAIL_PART}</span>`);
-    expect(thumb).not.toContain(">Ảnh<");
+    expect(thumb).toBe(`<th scope="col" class="w-16"><span class="an-thi-giac">${THUMBNAIL_COLUMN_LABEL}</span></th>`);
     // The actions column is named for screen readers only.
     expect(html).toContain(`<th scope="col" class="w-32"><span class="an-thi-giac">${ACTIONS_COLUMN_LABEL}</span></th>`);
     // Widths and alignments of the prototype.
@@ -265,6 +263,49 @@ describe("bảng nội dung §6", () => {
     expect(html).toContain('<th scope="col" class="w-28 text-center">Trạng thái</th>');
     expect(html).toContain("lucide-eye");
     expect(html).toContain(">42</span>");
+  });
+
+  describe("thumbnail cell — the row's own signed `cover_image.preview_url` (bug sheet row 22)", () => {
+    const SIGNED = "https://files.example.test/vigov-pub/t_01JXA/cover.jpg?X-Amz-Signature=S";
+    const cover = (sua: Partial<NonNullable<comms_noiDungRa["cover_image"]>> = {}) => ({
+      file_id: "01JCOVER0",
+      status: "ready",
+      public: true,
+      preview_url: SIGNED,
+      preview_expires_at: "2099-01-01T00:00:00Z",
+      ...sua,
+    });
+
+    it("a live link → the prototype's 48 px image, no lazy load, no referrer", () => {
+      const html = veBang([hang({ cover_image: cover() })]);
+      const img = /<img [^>]*>/.exec(html)?.[0] ?? "";
+      expect(img).toContain(`src="${nhuTrongHTML(SIGNED)}"`);
+      expect(img).toContain('alt=""');
+      expect(img).toContain('referrerPolicy="no-referrer"');
+      expect(img).not.toContain("lazy");
+      expect(img).toContain("size-12");
+      expect(html).not.toContain('data-thumbnail="placeholder"');
+    });
+
+    it("no cover, an expired link, or a non-http link → the placeholder, never an <img>", () => {
+      for (const c of [
+        null,
+        undefined,
+        cover({ preview_url: undefined }),
+        cover({ preview_expires_at: "2020-01-01T00:00:00Z" }),
+        cover({ preview_url: "javascript:alert(1)" }),
+      ]) {
+        const html = veBang([hang({ cover_image: c })]);
+        expect(html, JSON.stringify(c)).not.toContain("<img");
+        expect(html, JSON.stringify(c)).toContain('data-thumbnail="placeholder"');
+        expect(html, JSON.stringify(c)).toContain("lucide-images");
+      }
+    });
+
+    it("never draws the editor-typed `image_url` — only the signed preview", () => {
+      const html = veBang([hang({ cover_image: null, image_url: "https://cdn.example.vn/anh/hoi-nghi.jpg" })]);
+      expect(html).not.toContain("<img");
+    });
   });
 
   it("lượt xem in theo vi-VN: 1234 → `1.234`, và 0 hiện `0` (không phải dấu gạch)", () => {
@@ -386,9 +427,10 @@ describe("bảng nội dung §6", () => {
     expect(html).not.toContain("…");
   });
 
-  it("the prototype's thumbnail column is '—' cells: the list route serves no image link", () => {
+  it("a row without `cover_image` gets the prototype's placeholder, not a '?' and never `image_url`", () => {
     const html = veBang([hang()]);
-    expect(bodyOf(html)).toContain("data-pending");
+    expect(bodyOf(html)).not.toContain("data-pending");
+    expect(bodyOf(html)).toContain('data-thumbnail="placeholder"');
     expect(html).not.toContain("<img");
   });
 });
@@ -865,14 +907,14 @@ describe("biểu mẫu danh mục tin — the prototype's add row (`CategoryMana
   const ve = (ds: readonly comms_danhMucRa[], loi: string | null = null) =>
     renderToStaticMarkup(<FormDanhMuc danhMuc={ds} dangGui={false} loi={loi} luu={() => {}} />);
 
-  it("one row: `Thêm danh mục` (placeholder Nông nghiệp) · `Thuộc mục (nếu có)` · `Slug` · `+ Thêm` — no Huỷ/Lưu, no order", () => {
+  it("one row: `Thêm danh mục` (placeholder Nông nghiệp) · `Thuộc mục (nếu có)` · `+ Thêm` — no Slug, no Huỷ/Lưu, no order", () => {
     const html = ve([danhMuc()]);
     const labels = [...html.matchAll(/<label for="([^"]+)"[^>]*>([^<]*)/g)].map((m) => [m[1], m[2]]);
     expect(labels).toEqual([
       ["ten-danh-muc", "Thêm danh mục"],
       ["cha-danh-muc", "Thuộc mục (nếu có)"],
-      ["slug-danh-muc", "Slug"],
     ]);
+    expect(html).not.toContain("Slug");
     expect(html).toContain('placeholder="Nông nghiệp"');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>[^]*?lucide-plus[^]*?Thêm<\/button>/);
     expect(html).not.toContain(">Huỷ<");
@@ -882,14 +924,13 @@ describe("biểu mẫu danh mục tin — the prototype's add row (`CategoryMana
     expect(html).toMatch(/<div class="flex flex-wrap items-end gap-2">/);
   });
 
-  it("nói trước hai điều máy chủ sẽ từ chối: khuôn slug, và slug đã cấp không cấp lại", () => {
-    const html = ve([]);
-    expect(html).toContain("chữ thường a-z");
-    expect(html).toContain("KHÔNG cấp lại");
+  // The name alone enabling it is driven in `content-register.flow.test.tsx` (type a name, POST, no slug).
+  it("`Thêm` is held while the name is empty", () => {
+    expect(ve([])).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
 
   it("the server's sentence is shown verbatim under the row", () => {
-    expect(ve([], "Slug đã có trong xã.")).toContain('role="alert">Slug đã có trong xã.</p>');
+    expect(ve([], "Tên danh mục đã có trong xã.")).toContain('role="alert">Tên danh mục đã có trong xã.</p>');
   });
 });
 
