@@ -419,3 +419,22 @@ func TestReplyInvalidRepeatRefused(t *testing.T) {
 		}
 	}
 }
+
+// A ServeMux trailing wildcard must not leak into the contract: "file..." is no valid parameter
+// name and an operationId ending in "..." breaks every generated client.
+func TestTrailingWildcardBecomesPlainPathParam(t *testing.T) {
+	p := openAPIPath("/api/v1/commune-basemap/{file...}")
+	if p != "/api/v1/commune-basemap/{file}" {
+		t.Fatalf("path = %q", p)
+	}
+	if got := maOperation(tuyen{Service: "comms", Method: "GET", Path: p}); got != "comms_get_commune_basemap_by_file" {
+		t.Fatalf("operationId = %q", got)
+	}
+	ps := thamSoDuongDan(p)
+	if len(ps) != 1 || ps[0].(*om).gt["name"] != "file" {
+		t.Fatalf("path params = %#v", ps)
+	}
+	if openAPIPath("/api/v1/sessions/{sid}") != "/api/v1/sessions/{sid}" {
+		t.Fatal("a plain parameter must stay untouched")
+	}
+}

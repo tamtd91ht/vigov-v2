@@ -407,6 +407,7 @@ func quetFile(fset *token.FileSet, duongDan, service, root string) ([]tuyen, []e
 		}
 
 		dong := fset.Position(st.Pos()).Line
+		p = openAPIPath(p)
 		t := tuyen{Service: tenNghiepVu(service), Method: method, Path: p, File: rel, pkgDir: pkgDir}
 
 		if err := phanTichChuThich(chuThichTren(f, fset, dong), &t); err != nil {
@@ -429,6 +430,13 @@ func quetFile(fset *token.FileSet, duongDan, service, root string) ([]tuyen, []e
 		return true
 	})
 	return out, loi
+}
+
+// openAPIPath turns a ServeMux trailing wildcard `{file...}` into the OpenAPI template `{file}`.
+// Left as is, the contract names a path parameter "file..." and an operationId ending in "...",
+// which no client generator accepts — and the operationId is what consumers bind to.
+func openAPIPath(p string) string {
+	return strings.ReplaceAll(p, "...}", "}")
 }
 
 // tachMauRoute splits the Go 1.22 ServeMux pattern "METHOD /path".
