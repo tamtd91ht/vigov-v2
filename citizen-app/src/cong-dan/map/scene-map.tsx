@@ -60,7 +60,7 @@ export function useSceneMapState(domain: string | undefined, wanted: boolean): {
       setState(next);
     };
     communeMapFrame(domain).then(
-      (result) => settle(frameOutcome(result, communeBasemapBase())),
+      (result) => settle(frameOutcome(result, communeBasemapBase(), domain)),
       () => settle({ kind: "unavailable" }),
     );
     return () => {
@@ -136,7 +136,7 @@ function SceneMap(props: {
   onPlace: (location: SceneLocation) => void;
   onFail: () => void;
 }) {
-  const { frame, base } = props.state;
+  const { frame, base, domain } = props.state;
   const container = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
@@ -168,7 +168,7 @@ function SceneMap(props: {
         try {
           map = new ml.Map({
             container: container.current,
-            style: buildCommuneBasemapStyle(base),
+            style: buildCommuneBasemapStyle(base, domain),
             maxBounds: [...frame.bounds] as [number, number, number, number],
             ...camera,
             maxZoom: 19,
@@ -221,7 +221,7 @@ function SceneMap(props: {
       map?.remove();
       mapRef.current = null;
     };
-  }, [frame, base]);
+  }, [frame, base, domain]);
 
   // The pin follows the location the screen holds — Zalo's, or the citizen's last placement.
   useEffect(() => {

@@ -88,8 +88,13 @@ function rewrite(layer: LayerSpecification): LayerSpecification | null {
 /**
  * The complete style over `base` (from `communeBasemapBase`). HTTPS only: a base that is not one is refused, so a
  * mis-generated host table can never point the map at a plain-text channel. Register `pmtiles://` first.
+ *
+ * `domain` is the build's commune domain, sent as `?host=` on EVERY file — the same lookup key as the frame read.
+ * comms answers 400 without it: the 6,000/min ceiling is counted per (commune domain, client network) (M1 row
+ * "Trần tần suất"), and an unknown domain gets nothing. MapLibre (`normalizeSpriteURL`) and pmtiles keep the query
+ * when they append `.json`/`.png` or `/{z}/{x}/{y}`.
  */
-export function buildCommuneBasemapStyle(base: string): StyleSpecification {
+export function buildCommuneBasemapStyle(base: string, domain: string): StyleSpecification {
   let u: URL;
   try {
     u = new URL(base);
@@ -99,7 +104,9 @@ export function buildCommuneBasemapStyle(base: string): StyleSpecification {
   if (u.protocol !== "https:" || u.search !== "" || u.hash !== "" || u.username !== "" || u.password !== "") {
     throw new Error("commune basemap: base must be https with no query, fragment or credentials");
   }
+  if (domain === "") throw new Error("commune basemap: no commune domain");
   const root = `${u.origin}${u.pathname.replace(/\/+$/, "")}`;
+  const query = `?${new URLSearchParams({ host: domain }).toString()}`;
   const out: LayerSpecification[] = [];
   for (const l of layers(BASEMAP_SOURCE_ID, namedFlavor("light"), { lang: "vi" }) as LayerSpecification[]) {
     const r = rewrite(l);
@@ -107,12 +114,12 @@ export function buildCommuneBasemapStyle(base: string): StyleSpecification {
   }
   return {
     version: 8,
-    glyphs: `${root}/fonts/{fontstack}/{range}.pbf`,
-    sprite: `${root}/sprites/${BASEMAP_SPRITE}`,
+    glyphs: `${root}/fonts/{fontstack}/{range}.pbf${query}`,
+    sprite: `${root}/sprites/${BASEMAP_SPRITE}${query}`,
     sources: {
       [BASEMAP_SOURCE_ID]: {
         type: "vector",
-        url: `pmtiles://${root}/${BASEMAP_FILE}`,
+        url: `pmtiles://${root}/${BASEMAP_FILE}${query}`,
         attribution: BASEMAP_ATTRIBUTION,
       },
     },

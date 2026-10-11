@@ -976,24 +976,25 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
     const frame = new URL(communeMapFrameAddress(DOMAIN));
     expect(frame.pathname).toBe(COMMUNE_MAP_FRAME_PATH);
     expect(row(COMMUNE_MAP_FRAME_PATH).truong.map((t) => t.khoa)).toEqual([...frame.searchParams.keys()]);
-    // Basemap: the same one constant the style is built from; every URL of the style is a file under it, no query.
+    // Basemap: the same one constant the style is built from; every URL of the style is a file under it, and its
+    // query is `host` and nothing else — the same key the row declares.
     expect(COMMUNE_BASEMAP_PATH).toBe(REAL_COMMUNE_BASEMAP_PATH);
     expect(COMMUNE_BASEMAP_ROUTE).toBe(`${COMMUNE_BASEMAP_PATH}/{file}`);
     const base = communeBasemapBase();
     expect(new URL(base).pathname).toBe(COMMUNE_BASEMAP_PATH);
-    const style = buildCommuneBasemapStyle(base);
+    const style = buildCommuneBasemapStyle(base, DOMAIN);
     const source = style.sources["protomaps"] as { url: string };
     for (const url of [style.glyphs!, String(style.sprite), source.url.replace(/^pmtiles:\/\//, "")]) {
       const u = new URL(url.replace("{fontstack}", "f").replace("{range}", "0-255"));
       expect(u.origin, url).toBe(new URL(base).origin);
       expect(u.pathname.startsWith(`${COMMUNE_BASEMAP_PATH}/`), url).toBe(true);
-      expect(u.search, url).toBe("");
+      expect([...u.searchParams.entries()], url).toEqual([["host", DOMAIN]]);
     }
     // What the row declares: the file on the path and the byte range — and the range is SAID to reveal the viewport.
-    expect(COMMUNE_BASEMAP_FIELDS.map((t) => t.khoa)).toEqual(["file", "Range"]);
+    expect(COMMUNE_BASEMAP_FIELDS.map((t) => t.khoa)).toEqual(["file", "host", "Range"]);
     expect(row(COMMUNE_BASEMAP_ROUTE).truong).toBe(COMMUNE_BASEMAP_FIELDS);
-    expect(COMMUNE_BASEMAP_FIELDS[1]!.trong_chinh_sach).toMatch(/gần đúng khu vực/);
-    expect(COMMUNE_BASEMAP_FIELDS[1]!.trong_chinh_sach).toMatch(/không tới bên thứ ba/);
+    expect(COMMUNE_BASEMAP_FIELDS[2]!.trong_chinh_sach).toMatch(/gần đúng khu vực/);
+    expect(COMMUNE_BASEMAP_FIELDS[2]!.trong_chinh_sach).toMatch(/không tới bên thứ ba/);
     for (const t of [COMMUNE_MAP_FRAME_PATH, COMMUNE_BASEMAP_ROUTE]) {
       expect(row(t).app, t).toBe("commune");
       expect(row(t).nguoi_dung_bam, t).toBe(true);

@@ -11,6 +11,7 @@ import { COMMUNE_LOCATION_WORDS, sendBody } from "../man/PhanAnhAppXa";
 
 import {
   BASEMAP_ATTRIBUTION,
+  BASEMAP_SOURCE_ID,
   BASEMAP_TEXT_FIELD,
   buildCommuneBasemapStyle,
   communeBasemapBase,
@@ -37,7 +38,13 @@ import {
 const FRAME: CommuneMapFrame = { bounds: [108.3, 15.6, 108.5, 15.8], center: { lat: 15.7, lng: 108.4 } };
 const INSIDE = { lat: 15.71234, lng: 108.41234 };
 const OUTSIDE = { lat: 16.2, lng: 108.4 };
-const READY: SceneMapState = { kind: "ready", frame: FRAME, base: "https://comms.api.vigov.vn/api/v1/commune-basemap" };
+const DOMAIN = "xa-vi-du.vigov.example";
+const READY: SceneMapState = {
+  kind: "ready",
+  frame: FRAME,
+  base: "https://comms.api.vigov.vn/api/v1/commune-basemap",
+  domain: DOMAIN,
+};
 
 const FORM = { linh_vuc: "moi-truong", noi_dung: "Rác ứ đọng", dia_chi: "", ho_ten: "Nguyễn Văn Thử", dien_thoai: "0900000000", an_danh: false };
 
@@ -83,13 +90,14 @@ describe("the commune's frame — read field by field", () => {
 
 describe("fallbacks — every failure is 'no map, send anyway'", () => {
   it("a frame AND a basemap address → ready; anything else → unavailable", () => {
-    expect(frameOutcome(ok(FRAME), READY.base)).toEqual(READY);
-    expect(frameOutcome(ok(null), READY.base)).toEqual({ kind: "unavailable" }); // frame not configured
-    expect(frameOutcome(ok(FRAME), "")).toEqual({ kind: "unavailable" }); // no `comms` host: no basemap
+    expect(frameOutcome(ok(FRAME), READY.base, DOMAIN)).toEqual(READY);
+    expect(frameOutcome(ok(null), READY.base, DOMAIN)).toEqual({ kind: "unavailable" }); // frame not configured
+    expect(frameOutcome(ok(FRAME), "", DOMAIN)).toEqual({ kind: "unavailable" }); // no `comms` host: no basemap
+    expect(frameOutcome(ok(FRAME), READY.base, "")).toEqual({ kind: "unavailable" }); // no domain: comms would 400
     for (const kieu of ["khong-hop-le", "khong-thay", "tam-ngung", "loi-may-chu", "loi-mang", "chua-cau-hinh"] as const) {
-      expect(frameOutcome({ kieu }, READY.base), kieu).toEqual({ kind: "unavailable" });
+      expect(frameOutcome({ kieu }, READY.base, DOMAIN), kieu).toEqual({ kind: "unavailable" });
     }
-    expect(frameOutcome({ kieu: "rate-limited", retryAfterSeconds: 3 }, READY.base)).toEqual({ kind: "unavailable" });
+    expect(frameOutcome({ kieu: "rate-limited", retryAfterSeconds: 3 }, READY.base, DOMAIN)).toEqual({ kind: "unavailable" });
   });
 
   it("each state says ONE sentence in words — no code, no grey box", () => {
@@ -216,7 +224,7 @@ describe("the address block with the map", () => {
 
 describe("the basemap style — ViGov's comms only, the owner's three rewrites", () => {
   const base = communeBasemapBase();
-  const style = buildCommuneBasemapStyle(base);
+  const style = buildCommuneBasemapStyle(base, DOMAIN);
 
   it("the base is comms' public basemap route", () => {
     const u = new URL(base);
@@ -240,9 +248,18 @@ describe("the basemap style — ViGov's comms only, the owner's three rewrites",
     }
   });
 
+  it("EVERY file asks with `?host=<domain>` — comms refuses a basemap request that names no commune (400)", () => {
+    const source = style.sources[BASEMAP_SOURCE_ID] as { url: string };
+    for (const url of [style.glyphs!, String(style.sprite), source.url.replace(/^pmtiles:\/\//, "")]) {
+      const u = new URL(url.replace("{fontstack}", "Noto Sans Regular").replace("{range}", "0-255"));
+      expect([...u.searchParams.entries()], url).toEqual([["host", DOMAIN]]);
+    }
+    expect(() => buildCommuneBasemapStyle(base, "")).toThrow();
+  });
+
   it("refuses a base that is not plain https", () => {
     for (const bad of ["", "http://comms.api.vigov.vn/x", "https://u:p@comms.api.vigov.vn/x", "https://comms.api.vigov.vn/x?k=1"]) {
-      expect(() => buildCommuneBasemapStyle(bad), bad).toThrow();
+      expect(() => buildCommuneBasemapStyle(bad, DOMAIN), bad).toThrow();
     }
   });
 

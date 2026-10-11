@@ -16,22 +16,26 @@ import { isSceneLocation, type SceneLocation } from "../api/hop-dong-phan-anh";
  *   `loading`      the frame is being read
  *   `unavailable`  frame not set, frame read failed, basemap route missing, or the map itself failed —
  *                  no map, ONE sentence, and the petition still goes with whatever Zalo gave (M2 last row)
- *   `ready`        draw it, locked to `frame`, tiles from `base`
+ *   `ready`        draw it, locked to `frame`, tiles from `base`, every file asked `?host=<domain>`
  */
 export type SceneMapState =
   | { readonly kind: "off" }
   | { readonly kind: "loading" }
   | { readonly kind: "unavailable" }
-  | { readonly kind: "ready"; readonly frame: CommuneMapFrame; readonly base: string };
+  | { readonly kind: "ready"; readonly frame: CommuneMapFrame; readonly base: string; readonly domain: string };
 
 /**
  * One frame read → the map's state. PURE. Every branch but "a frame AND a basemap address" is `unavailable`: a 429, a
  * 503, a malformed body, `configured: false` and a host table with no `comms` line all mean the same thing to the
  * citizen — no map, send anyway. Never a guessed frame (ADR 0072 K3).
  */
-export function frameOutcome(result: NewsReadResult<{ readonly frame: CommuneMapFrameRead }>, base: string): SceneMapState {
-  if (result.kieu === "xong" && result.gia_tri.frame !== null && base !== "") {
-    return { kind: "ready", frame: result.gia_tri.frame, base };
+export function frameOutcome(
+  result: NewsReadResult<{ readonly frame: CommuneMapFrameRead }>,
+  base: string,
+  domain: string,
+): SceneMapState {
+  if (result.kieu === "xong" && result.gia_tri.frame !== null && base !== "" && domain !== "") {
+    return { kind: "ready", frame: result.gia_tri.frame, base, domain };
   }
   return { kind: "unavailable" };
 }

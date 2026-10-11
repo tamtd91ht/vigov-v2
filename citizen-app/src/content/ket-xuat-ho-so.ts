@@ -680,7 +680,7 @@ const COMMUNE_ALERT_AND_PREFERENCE_ROUTES: readonly DuongRoiKhoiMay[] = [
 
 export const COMMUNE_MAP_FRAME_PATH = "/api/v1/commune-map-frame";
 export const COMMUNE_BASEMAP_PATH = "/api/v1/commune-basemap";
-/** The basemap row as declared: one route, the requested file on the path. */
+/** The basemap row as declared: one route, the requested file on the path, the commune domain as `?host=`. */
 export const COMMUNE_BASEMAP_ROUTE = `${COMMUNE_BASEMAP_PATH}/{file}`;
 
 export const COMMUNE_BASEMAP_FIELDS: readonly TruongGuiDi[] = [
@@ -689,6 +689,9 @@ export const COMMUNE_BASEMAP_FIELDS: readonly TruongGuiDi[] = [
     trong_chinh_sach:
       "tên tệp của bản đồ nền cần tải — tệp nền, phông chữ hoặc biểu tượng của bản đồ — nằm trên đường dẫn; như nhau với mọi người dùng, không mang thông tin nào của bạn",
   },
+  // comms counts its ceiling per commune domain and refuses an unknown one (ADR 0072 M1 "Trần tần suất"). Commune
+  // app only, so the build's domain sentence — never "lấy từ mã QR".
+  COMMUNE_APP_HOST,
   {
     khoa: "Range",
     trong_chinh_sach:
