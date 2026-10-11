@@ -25,19 +25,32 @@ This skill is the convention. The machine-decidable half is **rule 11**, enforce
 
 ---
 
-## 1. TWO SPELLINGS, ONE NAME
+## 1. ONE SPELLING EVERYWHERE — `UPPER_SNAKE_CASE` (owner, 11/10/2026)
 
-A dash is legal in a ConfigMap or Secret **key**. It is illegal in a container **environment
-variable name** — the shell grammar allows only `A-Z`, `0-9` and `_`. So one name is written
-two ways, and they must be the same token:
+**A ConfigMap/Secret key is spelled EXACTLY like the environment variable the code reads.** One
+token from the cluster to the binary: ConfigMap key = Secret key = env var = `.env.example` line =
+the name in `core/config` = the row in the operations job's key catalogue.
 
-| Where | Spelling | Example |
+| # | Rule | Example |
 |---|---|---|
-| ConfigMap / Secret key | `UPPER-WITH-DASHES` | `POSTGRESQL-HOST-AND-PORT` |
-| Container env var, and Go | `UPPER_WITH_UNDERSCORES` | `POSTGRESQL_HOST_AND_PORT` |
+| 1 | Only `A–Z`, `0–9`, `_`; starts with a letter. **No dash, no lower case** | `OBJECT_STORAGE_BUCKET_PREFIX` |
+| 2 | The key IS the env var name — no renaming, no `-`→`_` mapping anywhere on the way | key `BASEMAP_URL` → env `BASEMAP_URL` |
+| 3 | A pod loads its objects WHOLE with `envFrom` (`common-config` + `<service>-secrets`). No per-key `configMapKeyRef`/`secretKeyRef` for renaming, no `kubectl set env --from … --keys=…` | — |
+| 4 | Group prefix by dependency, suffix by value shape: `DB_` `REDIS_` `OBJECT_STORAGE_` `KAFKA_` `RABBITMQ_` `ELASTIC_` … / `_URL` `_ADDRESS` `_ADDRS` `_DSN` `_KEY` `_SECRET` | `REDIS_ADDRESS`, `OBJECT_STORAGE_SECRET_KEY` |
+| 5 | A name lives in ONE object — Secret if it would hurt in a log, ConfigMap otherwise (§5) | — |
+| 6 | Every key has a `.env.example` placeholder line and a row in `deploy/van-hanh/ops.py`'s catalogue | — |
 
-`-` → `_` and nothing else. Not an abbreviation, not a reordering, not a prefix added by one
-team. If the two differ by anything but the separator, they are two names.
+**Why not dashes** (the convention before 11/10/2026, which the cluster never actually followed):
+
+- **`envFrom` silently drops any key that is not a valid env var name.** A dashed key that nobody
+  remembered to map one by one is a variable the pod simply does not have — no error at apply, no
+  error at start unless the service happens to require it. That is how `BASEMAP-URL` needed a
+  dedicated `kubectl set env --keys` step in a Jenkinsfile and a hand-written `configMapKeyRef`.
+- Two spellings of one name is the drift itself: the operator types `BASEMAP_URL`, the job looks for
+  `BASEMAP-URL`, and the map has no basemap. One spelling cannot be mistyped into the other.
+- Nearly every key on the cluster was already `UPPER_SNAKE_CASE`, loaded with `envFrom`. The rule
+  follows the system that runs, not the other way round.
+- Adding a variable is adding a key. No Deployment changes, no wiring to forget.
 
 ---
 
@@ -54,20 +67,18 @@ KAFKA_EVENT_ADDRESS      the Kafka that carries business events
 ELASTICSEARCH_ADDRS      the search cluster
 ```
 
-**In the cluster**, the operator decides WHICH physical cluster each role lands on:
+**In the cluster**, the operator decides WHICH physical cluster each role lands on — by the VALUE
+of the role's key, never by renaming it:
 
 ```yaml
-env:
-  - name: KAFKA_LOG_ADDRESS                 # the ROLE — the only name the code knows
-    valueFrom:
-      configMapKeyRef:
-        name: vigov-infra
-        key: KAFKA-02-ADDRESS               # the CLUSTER — chosen here, changed here
+# ConfigMap common-config — loaded whole by envFrom
+KAFKA_LOG_ADDRESS:   kafka-02-a:9092,kafka-02-b:9092   # the CLUSTER is the value
+KAFKA_EVENT_ADDRESS: kafka-01-a:9092,kafka-01-b:9092
 ```
 
-Moving the log workload from kafka-02 to kafka-05 is then one line in one manifest. No code
-change, no rebuild, no release, and no service left pointing at the old cluster because
-somebody missed a file.
+Moving the log workload from kafka-02 to kafka-05 is then one value in one ConfigMap and a restart.
+No code change, no rebuild, no release, no Deployment edit, and no service left pointing at the old
+cluster because somebody missed a file.
 
 **A cluster ordinal must never appear in a name the code reads.** `KAFKA_02_ADDRESS` inside
 Go is the whole mechanism thrown away: the binding has moved from the manifest into the
@@ -146,7 +157,9 @@ variable the next person discovers from a stack trace.
 4. Decide required vs optional, and write the reason beside it.
 5. Add the placeholder line to `.env.example`. **Never a real value** — a template that looks
    like a working config is a template somebody ships (rule 8).
-6. Tell whoever owns the cluster which object supplies it, using the dashed key spelling.
+6. Add its row to the operations job's catalogue (`python deploy/van-hanh/ops.py catalog --write`).
+7. Tell whoever owns the cluster which object supplies it — the key is the SAME `UPPER_SNAKE_CASE`
+   name, added to `common-config` or `<service>-secrets`; `envFrom` picks it up on the next restart.
 
 **Never** write a k8s manifest as part of this: the cluster belongs to the project owner.
 Name the variable and say which object should hold it.

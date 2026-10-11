@@ -14,7 +14,7 @@ worked examples and the k8s snippets live there; what cannot drift silently live
 | 1 | `core/config` is the **only** package that reads the environment. Everything else takes a typed `config.Config` |
 | 2 | One canonical name per role, **identical in every service**. A second spelling for an existing meaning is a second name |
 | 3 | The name says the **ROLE**, never the cluster: `KAFKA_LOG_ADDRESS`, never `KAFKA_02_ADDRESS`. Binding a role to a physical cluster happens in the k8s manifest, never in source |
-| 4 | Two spellings of one name: **ConfigMap/Secret key `WITH-DASHES`**, **env var and Go `WITH_UNDERSCORES`**. `-` → `_` and nothing else |
+| 4 | **One spelling everywhere: `UPPER_SNAKE_CASE`.** The ConfigMap/Secret key IS the env var name the code reads — same token, no `-`→`_` mapping, loaded whole with `envFrom` (owner, 11/10/2026; `skills/infra-config` §1) |
 | 5 | Address values are **cluster-shaped from the first line written** — a comma-separated `host:port` list, or a DSN whose host part may carry several hosts — even when the deployment has one node |
 | 6 | Every variable has a line in `.env.example`, with a **placeholder**. Never a real value, never a plausible-looking one (rule 8) |
 | 7 | Anything that would hurt in a log line is `secret.Secret` and comes from a **Secret**; everything else comes from a **ConfigMap** |
@@ -26,7 +26,7 @@ worked examples and the k8s snippets live there; what cannot drift silently live
 |---|---|---|
 | 1 | `os.Getenv` outside `core/config` | A variable in no struct, no template and no review. It is discovered from a stack trace |
 | 2 | A **cluster ordinal** in a name the code reads (`KAFKA_02_ADDRESS`, `REDIS_1_DSN`) | Welds a workload to one cluster. Moving it becomes a code change and a release of every service that reads it |
-| 3 | A dash inside a name read from Go | Dashes are the ConfigMap key spelling. A dash in an env var name is not a valid shell identifier and will never be set |
+| 3 | A dash in any ConfigMap/Secret key or env var name | `envFrom` silently drops a dashed key — the pod just does not have the variable — and a second spelling of one name is where the drift starts |
 | 4 | Reading a variable that has no `.env.example` line | The template is the registry. A variable outside it is one nobody can discover |
 | 5 | Splitting an address list or a DSN to keep **one host** | Correct-looking for as long as there is one node, silently wrong on the day of the second |
 | 6 | A commune-specific value in the environment | Rule 1, invariant 10: the environment carries PLATFORM-wide constants only. Per-commune values are read at runtime |
