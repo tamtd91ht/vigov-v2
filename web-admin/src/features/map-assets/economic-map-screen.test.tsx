@@ -21,6 +21,7 @@ import { HEAT_MAP_LOAD_FAILED } from "@/features/phan-anh/nhan-phieu";
 import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing export (rule 12 inv 3)
 import { BASEMAP_FONTS, BASEMAP_MISSING_SENTENCE } from "@/lib/basemap/assets";
 
+import { DetailPanel } from "./detail-panel";
 import { EconomicMapScreen } from "./economic-map-screen";
 import { RADIUS_ERROR } from "./frame-form";
 import {
@@ -29,7 +30,6 @@ import {
   CENTRE_LEGEND_DEFAULT,
   CLEAR_FILTERS,
   DELETE_BUTTON,
-  DELETE_REASON_REQUIRED,
   FRAME_ASK_ADMIN,
   FRAME_CHANGE_BUTTON,
   FRAME_NOT_SET,
@@ -173,8 +173,11 @@ const ml = vi.hoisted(() => {
     constructor(public opts?: Record<string, unknown>) {}
   }
   class FakeMarker {
+    static instances: FakeMarker[] = [];
     el = { parentElement: null as unknown };
-    constructor(public opts?: unknown) {}
+    constructor(public opts?: Record<string, unknown>) {
+      FakeMarker.instances.push(this);
+    }
     setLngLat() {
       return this;
     }
@@ -251,12 +254,28 @@ const DETAIL_MASKED = {
   tax_code: "01******00",
   status: "dang-hoat-dong",
   verified: true,
+  industry_code: "10",
+  established_on: "2020-03-05",
+  description: "Dòng một\nDòng hai",
   custom_values: {},
   masked: true,
   created_at: "2026-10-04T00:00:00Z",
   updated_at: "2026-10-04T00:00:00Z",
 };
 const FAR_AWAY = { ...DETAIL_MASKED, id: "far", name: "Ngoài khung", lat: 16.5, lng: 112.3 };
+const DETAIL_UNVERIFIED = {
+  id: "a2",
+  asset_type_code: "cho",
+  name: "Chợ B",
+  lat: 15.8,
+  lng: 108.4,
+  status: "dang-hoat-dong",
+  verified: false,
+  custom_values: {},
+  masked: false,
+  created_at: "2026-10-04T00:00:00Z",
+  updated_at: "2026-10-04T00:00:00Z",
+};
 
 type Reply = { readonly status: number; readonly body: unknown };
 
@@ -273,6 +292,14 @@ type Setup = {
   reset?: Reply;
   /** Reply of GET citizen-report-points (the heat layer). Default: 200 with two points. */
   heatPoints?: Reply;
+  /** Status of DELETE map-assets/{id}. Default 204. */
+  deleteStatus?: number;
+  /** Items of the register (GET map-assets?…, not the search). Default: one row, "Ngoài khung". */
+  register?: unknown[];
+  /** The register request never answers (its loading state). */
+  registerHold?: boolean;
+  /** Items of GET map-field-schemas. Default: none. */
+  fields?: unknown[];
 };
 
 const HEAT_POINTS = { items: [{ lat: 15.7, lng: 108.3, status: "dang-xu-ly" }, { lat: 15.75, lng: 108.32, status: "da-dong" }] };
@@ -283,7 +310,20 @@ function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
-function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPES, laterFrames = [], puts = [], reset, heatPoints }: Setup) {
+function serve({
+  permissions,
+  frame = FRAME_SET,
+  frameStatus = 200,
+  types = TYPES,
+  laterFrames = [],
+  puts = [],
+  reset,
+  heatPoints,
+  deleteStatus = 204,
+  register,
+  registerHold = false,
+  fields = [],
+}: Setup) {
   calls = [];
   let frameGets = 0;
   let putCount = 0;
@@ -321,13 +361,35 @@ function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPE
         return json(r.status, r.body);
       }
       if (path.startsWith("/api/v1/map-asset-points")) return json(200, POINTS);
-      if (path.startsWith("/api/v1/map-field-schemas")) return json(200, { items: [] });
+      if (path.startsWith("/api/v1/map-field-schemas")) return json(200, { items: fields });
+      if (path.startsWith("/api/v1/map-assets/") && method === "DELETE") {
+        return deleteStatus === 204
+          ? new Response(null, { status: 204 })
+          : json(deleteStatus, { code: "locked", message: "Bản ghi đang được người khác sửa." });
+      }
+      if (path === "/api/v1/map-assets/a2/confirmation" && method === "POST") {
+        const b = JSON.parse(String(init!.body)) as { verified: boolean };
+        return json(200, { ...DETAIL_UNVERIFIED, verified: b.verified });
+      }
+      if (path === "/api/v1/map-assets" && method === "POST") {
+        const b = JSON.parse(String(init!.body)) as Record<string, unknown>;
+        return json(201, { ...DETAIL_UNVERIFIED, ...b, id: "new" });
+      }
       if (path === "/api/v1/map-assets/a1" && method === "GET") return json(200, DETAIL_MASKED);
+      if (path === "/api/v1/map-assets/a2" && method === "GET") return json(200, DETAIL_UNVERIFIED);
       if (path === "/api/v1/map-assets/far" && method === "GET") return json(200, FAR_AWAY);
       if (path.startsWith("/api/v1/map-assets?q=C"))
         return json(200, { items: [{ id: "a1", asset_type_code: "doanh-nghiep", name: "Công ty A", status: "dang-hoat-dong", verified: true }], next_cursor: "", has_more: false });
-      if (path.startsWith("/api/v1/map-assets?"))
-        return json(200, { items: [{ id: "far", asset_type_code: "cho", name: "Ngoài khung", status: "dang-hoat-dong", verified: false }], next_cursor: "", has_more: false });
+      if (path.startsWith("/api/v1/map-assets?")) {
+        // The register asks for a page of 100; the search box asks for 10.
+        const isRegister = path.includes("limit=100");
+        if (isRegister && registerHold) return new Promise<Response>(() => {});
+        const items =
+          isRegister && register !== undefined
+            ? register
+            : [{ id: "far", asset_type_code: "cho", name: "Ngoài khung", status: "dang-hoat-dong", verified: false }];
+        return json(200, { items, next_cursor: "", has_more: false });
+      }
       return json(404, { code: "not_found", message: "Không có." });
     }),
   );
@@ -342,8 +404,10 @@ beforeAll(() => {
 
 beforeEach(() => {
   ml.FakeMap.instances = [];
+  ml.FakeMarker.instances = [];
   vi.mocked(toast.success).mockClear();
   vi.mocked(toast.info).mockClear();
+  vi.mocked(toast.error).mockClear();
 });
 
 afterEach(() => {
@@ -732,19 +796,187 @@ describe("detail panel", () => {
     expect(button("Bỏ xác minh")).toBeUndefined();
   });
 
-  it("with asset.update: Sửa, Bỏ xác minh, Xoá khỏi bản đồ — and deleting requires a reason", async () => {
+  it("with asset.update: Sửa and Bỏ xác minh side by side, Xoá khỏi bản đồ below", async () => {
     await mount({ permissions: ["asset.read", "asset.update"] });
-    const map = await load();
-    await act(async () => map.fire(`click:${LAYER_POINTS}`, { features: [{ properties: { id: "a1" } }] }));
-    await settle();
+    await openPoint("a1");
     expect(button("Sửa")).toBeDefined();
     expect(button("Bỏ xác minh")).toBeDefined();
+    expect(button(DELETE_BUTTON)).toBeDefined();
+  });
+});
+
+/* ---- detail panel: prototype `AssetCard.tsx` / spec 05 ------------------------------------------------ */
+
+async function openPoint(id: string): Promise<void> {
+  const map = await load();
+  await act(async () => map.fire(`click:${LAYER_POINTS}`, { features: [{ properties: { id } }] }));
+  await settle();
+}
+
+function panel(): HTMLElement {
+  return host!.querySelector<HTMLElement>("aside.detail-panel")!;
+}
+
+function classes(el: Element | null | undefined): string[] {
+  return (el?.getAttribute("class") ?? "").split(/\s+/);
+}
+
+async function typeInto(el: HTMLInputElement | HTMLTextAreaElement, value: string): Promise<void> {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+describe("detail panel — prototype AssetCard (spec 05)", () => {
+  it("header: 15px bold navy title, ghost h-7 px-2 close button with an accessible name", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await openPoint("a1");
+    const h2 = panel().querySelector("h2")!;
+    for (const c of ["text-[15px]", "font-bold", "text-navy", "leading-snug"]) expect(classes(h2)).toContain(c);
+    const close = button("Đóng thông tin đối tượng")!;
+    for (const c of ["h-7", "px-2"]) expect(classes(close)).toContain(c);
+    expect(classes(close.querySelector("svg"))).toContain("size-4");
+    expect(classes(panel())).toContain("bg-white");
+  });
+
+  it("badges: verified leaf, status navy/8 — prototype classes, no invented third state", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await openPoint("a1");
+    const badges = Array.from(panel().querySelectorAll("[data-badge]"));
+    const verified = badges.find((b) => b.textContent === "Đã xác minh")!;
+    for (const c of ["bg-leaf/12", "text-leaf", "border-leaf/25"]) expect(classes(verified)).toContain(c);
+    const status = badges.find((b) => b.textContent === "Đang hoạt động")!;
+    for (const c of ["bg-navy/8", "text-navy", "border-line"]) expect(classes(status)).toContain(c);
+    expect(text()).not.toContain("Cần cập nhật");
+  });
+
+  it("unverified badge: ink-muted on the line border", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await openPoint("a2");
+    const badge = Array.from(panel().querySelectorAll("[data-badge]")).find((b) => b.textContent === "Chưa xác minh")!;
+    for (const c of ["bg-ink-muted/12", "text-ink-muted", "border-line"]) expect(classes(badge)).toContain(c);
+  });
+
+  it("facts: dl 12.5px, dt 11.5px muted; address '—' when empty; phone plain text; tax code in code 11.5px; VSIC 'code — label'; d/M/yyyy; pre-line description; 5-decimal coordinates", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await openPoint("a1");
+    const dl = panel().querySelector("dl")!;
+    expect(classes(dl)).toContain("text-[12.5px]");
+    for (const dt of Array.from(dl.querySelectorAll("dt"))) {
+      expect(classes(dt)).toContain("text-[11.5px]");
+      expect(classes(dt)).toContain("text-ink-muted");
+    }
+    const row = (label: string) =>
+      Array.from(dl.querySelectorAll("dt")).find((d) => d.textContent === label)!.parentElement!.querySelector("dd")!;
+    expect(row("Địa chỉ").textContent).toBe("—");
+    // Rule 3: the number as the server sent it, and never in a URL.
+    expect(row("Điện thoại").textContent).toBe("090****000");
+    expect(panel().querySelector('a[href^="tel:"]')).toBeNull();
+    const code = row("Mã số thuế").querySelector("code")!;
+    expect(code.textContent).toBe("01******00");
+    expect(classes(code)).toContain("text-[11.5px]");
+    expect(row("Ngành nghề").textContent).toBe("10 — Chế biến thực phẩm");
+    for (const c of ["text-navy", "text-right", "font-medium"]) expect(classes(row("Ngành nghề"))).toContain(c);
+    expect(row("Thành lập").textContent).toBe("5/3/2020");
+    expect(classes(row("Mô tả"))).toContain("whitespace-pre-line");
+    expect(row("Toạ độ").textContent).toBe("15.70000, 108.30000");
+    expect(classes(row("Toạ độ").querySelector("code"))).toContain("text-[11px]");
+  });
+
+  it("footer: Sửa outline · Xác minh primary (flex-1 each); Xác minh → POST confirmation and the prototype's toast", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    await openPoint("a2");
+    const edit = button("Sửa")!;
+    const verify = button("Xác minh")!;
+    expect(classes(edit)).toContain("flex-1");
+    expect(classes(verify)).toContain("flex-1");
+    expect(classes(verify)).toContain("nut-chinh");
+    await act(async () => verify.click());
+    await settle();
+    expect(calls.some((c) => c.path === "/api/v1/map-assets/a2/confirmation" && c.method === "POST")).toBe(true);
+    expect(toast.success).toHaveBeenCalledWith("Đã đánh dấu đã xác minh.");
+    // Kept against the prototype: the only way to undo a confirmation, in the same slot.
+    expect(button("Bỏ xác minh")).toBeDefined();
+  });
+
+  it("delete is the INLINE box in the footer, with the prototype's sentence and a REQUIRED reason (rule 7) — no dialog", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    await openPoint("a1");
     await act(async () => button(DELETE_BUTTON)!.click());
+    const box = panel().querySelector<HTMLElement>("[data-delete-confirm]")!;
+    expect(box).not.toBeNull();
+    expect(host!.querySelector("dialog")).toBeNull();
+    for (const c of ["space-y-2", "rounded-[9px]", "border", "border-danger/30", "bg-danger/6", "p-2.5"]) expect(classes(box)).toContain(c);
+    expect(box.textContent).toContain("Xoá khỏi bản đồ? Bản ghi vẫn được lưu vết, chỉ không hiện nữa.");
+    const del = Array.from(box.querySelectorAll("button")).find((b) => b.textContent === "Xoá")!;
+    const reason = box.querySelector<HTMLTextAreaElement>("textarea")!;
+    expect(reason.required).toBe(true);
+    expect(box.querySelector(`label[for="${reason.id}"]`)).not.toBeNull();
+    // Blank or whitespace: Xoá stays disabled and nothing is sent.
+    expect(del.disabled).toBe(true);
+    await typeInto(reason, "   ");
+    expect(del.disabled).toBe(true);
+    await typeInto(reason, "Cơ sở đã chuyển đi");
+    expect(del.disabled).toBe(false);
+    await act(async () => del.click());
     await settle();
-    await act(async () => button("Xác nhận xoá")!.form!.requestSubmit());
-    await settle();
-    expect(text()).toContain(DELETE_REASON_REQUIRED);
+    const sent = calls.find((c) => c.method === "DELETE")!;
+    expect(sent.path).toBe("/api/v1/map-assets/a1");
+    expect(sent.body).toEqual({ reason: "Cơ sở đã chuyển đi" });
+    expect(toast.success).toHaveBeenCalledWith("Đã xoá khỏi bản đồ.");
+    expect(host!.querySelector("aside.detail-panel")).toBeNull();
+  });
+
+  it("Huỷ closes the box and sends nothing", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    await openPoint("a1");
+    await act(async () => button(DELETE_BUTTON)!.click());
+    await act(async () => button("Huỷ")!.click());
+    expect(panel().querySelector("[data-delete-confirm]")).toBeNull();
+    expect(button(DELETE_BUTTON)).toBeDefined();
     expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+  });
+
+  it("refused: 'Không xoá được.' with the server's sentence; the panel stays open", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"], deleteStatus: 409 });
+    await openPoint("a1");
+    await act(async () => button(DELETE_BUTTON)!.click());
+    await typeInto(panel().querySelector("textarea")!, "Trùng");
+    await act(async () => button("Xoá")!.click());
+    await settle();
+    expect(toast.error).toHaveBeenCalledWith("Không xoá được.", { description: "Bản ghi đang được người khác sửa." });
+    expect(host!.querySelector("aside.detail-panel")).not.toBeNull();
+  });
+});
+
+describe("detail panel — loading state (spec 05)", () => {
+  it("aside w-80 border-l bg-white p-4 with a spinner, and a status for screen readers", async () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() =>
+      root!.render(
+        <DetailPanel
+          detail="loading"
+          groupLabel={(c) => c}
+          unitName={(c) => c}
+          fields={[]}
+          canUpdate
+          busy={false}
+          onClose={() => {}}
+          onEdit={() => {}}
+          onToggleVerified={() => {}}
+          onDelete={async () => false}
+        />,
+      ),
+    );
+    const aside = host.querySelector("aside")!;
+    // Beside the map from xl (the prototype's column); a bottom sheet below that, as the loaded panel.
+    for (const c of ["xl:w-80", "xl:border-l", "bg-white", "p-4"]) expect(classes(aside)).toContain(c);
+    expect(classes(aside.querySelector("svg"))).toContain("animate-spin");
+    expect(aside.querySelector('[role="status"]')!.className).toContain("an-thi-giac");
   });
 });
 
@@ -1059,8 +1291,7 @@ describe("points, halo and labels — prototype paint (AssetMap.tsx:200-251)", (
 describe("Sổ địa điểm", () => {
   it("a group header folds and unfolds its rows", async () => {
     await mount({ permissions: ["asset.read"] });
-    await act(async () => button("Sổ địa điểm")!.click());
-    await settle();
+    await openRegister();
     const toggle = host!.querySelector<HTMLButtonElement>('[data-group-toggle="cho"]')!;
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(text()).toContain("Ngoài khung");
@@ -1069,6 +1300,332 @@ describe("Sổ địa điểm", () => {
     expect(text()).not.toContain("Ngoài khung");
     await act(async () => toggle.click());
     expect(text()).toContain("Ngoài khung");
+  });
+
+  it("the whole group row is clickable (bg-canvas, 12px bold navy), and the count stays muted", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await openRegister();
+    const toggle = host!.querySelector<HTMLButtonElement>('[data-group-toggle="cho"]')!;
+    const tr = toggle.closest("tr")!;
+    expect(classes(tr)).toContain("bg-canvas");
+    expect(classes(tr)).toContain("cursor-pointer");
+    for (const c of ["text-[12px]", "font-bold", "text-navy"]) expect(classes(toggle)).toContain(c);
+    expect(toggle.textContent).toContain("1 địa điểm");
+    // A click on the row, not on the label, folds the group too.
+    await act(async () => tr.querySelector("th")!.click());
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("frame: wrapper h-full overflow-auto p-5; the card rounded-card border bg-white shadow-card; no sticky inner scroll", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await openRegister();
+    const table = host!.querySelector("table")!;
+    const card = table.parentElement!;
+    for (const c of ["overflow-x-auto", "rounded-card", "border", "border-line", "bg-white", "shadow-card"]) expect(classes(card)).toContain(c);
+    expect(classes(card)).not.toContain("table-scroll--sticky");
+    const wrapper = card.parentElement!;
+    for (const c of ["h-full", "overflow-auto", "p-5"]) expect(classes(wrapper)).toContain(c);
+  });
+
+  it("columns at the prototype's widths; cells py-2; name 12.5px semibold navy, address 11px muted block; badge 10.5px", async () => {
+    await mount({
+      permissions: ["asset.read"],
+      register: [
+        { id: "far", asset_type_code: "cho", name: "Ngoài khung", address: "Thôn 3", representative: "N*** V***", phone: "090****000", status: "tam-ngung", verified: false },
+      ],
+    });
+    await openRegister();
+    const widths = Array.from(host!.querySelectorAll("thead th")).map((th) => th.className);
+    expect(widths[0]).toContain("min-w-72");
+    expect(widths[1]).toContain("w-44");
+    expect(widths[2]).toContain("w-40");
+    expect(widths[3]).toContain("w-28");
+    expect(widths[4]).toContain("w-32");
+    expect(widths[5]).toContain("w-24");
+    const cells = Array.from(host!.querySelectorAll<HTMLTableCellElement>("tbody tr:not(:first-child) td"));
+    for (const td of cells) expect(classes(td)).toContain("py-2");
+    expect(classes(cells[0])).toContain("whitespace-normal");
+    const name = Array.from(cells[0]!.querySelectorAll("span")).find((s) => s.textContent === "Ngoài khung")!;
+    for (const c of ["text-[12.5px]", "font-semibold", "text-navy"]) expect(classes(name)).toContain(c);
+    const addr = Array.from(cells[0]!.querySelectorAll("span")).find((s) => s.textContent === "Thôn 3")!;
+    for (const c of ["block", "text-[11px]", "text-ink-muted"]) expect(classes(addr)).toContain(c);
+    for (const c of ["text-[11.5px]", "text-ink-muted"]) expect(classes(cells[1])).toContain(c);
+    for (const c of ["text-[11.5px]", "text-ink-muted"]) expect(classes(cells[2])).toContain(c);
+    const phone = Array.from(cells[2]!.querySelectorAll("span")).find((s) => s.textContent === "090****000")!;
+    for (const c of ["block", "tabular-nums"]) expect(classes(phone)).toContain(c);
+    expect(classes(cells[3])).toContain("text-[11.5px]");
+    expect(cells[3]!.textContent).toBe("Tạm ngừng");
+    const badge = cells[4]!.querySelector("[data-badge]")!;
+    expect(classes(badge)).toContain("text-[10.5px]");
+    expect(badge.textContent).toBe("Chưa xác minh");
+  });
+
+  it("row actions: outline sm h-8 px-2 with the prototype's titles and names that say which place", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    await openRegister();
+    const locate = button("Xem Ngoài khung trên bản đồ")!;
+    const edit = button("Sửa Ngoài khung")!;
+    const remove = button("Gỡ Ngoài khung khỏi bản đồ")!;
+    expect(locate.title).toBe("Xem trên bản đồ");
+    expect(edit.title).toBe("Sửa");
+    expect(remove.title).toBe("Gỡ khỏi bản đồ");
+    for (const b of [locate, edit, remove]) {
+      for (const c of ["h-8", "px-2"]) expect(classes(b)).toContain(c);
+      expect(classes(b.querySelector("svg"))).toContain("size-3.5");
+    }
+    expect(classes(remove)).toContain("text-danger");
+  });
+
+  it("DENIED: asset.read only — locate only, no Sửa and no Gỡ on the row", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await openRegister();
+    expect(button("Xem Ngoài khung trên bản đồ")).toBeDefined();
+    expect(button("Sửa Ngoài khung")).toBeUndefined();
+    expect(button("Gỡ Ngoài khung khỏi bản đồ")).toBeUndefined();
+  });
+
+  it("Gỡ asks ON THE ROW: Gỡ hẳn / Thôi and a REQUIRED reason; DELETE carries it; the prototype's toast", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    await openRegister();
+    await act(async () => button("Gỡ Ngoài khung khỏi bản đồ")!.click());
+    expect(host!.querySelector("dialog")).toBeNull();
+    const confirm = button("Gỡ hẳn")!;
+    for (const c of ["bg-danger", "text-white", "h-8", "px-2", "text-[11px]"]) expect(classes(confirm)).toContain(c);
+    expect(button("Thôi")).toBeDefined();
+    expect(button("Sửa Ngoài khung")).toBeUndefined();
+    const reason = host!.querySelector<HTMLInputElement>("[data-row-delete-reason]")!;
+    expect(reason.required).toBe(true);
+    expect(host!.querySelector(`label[for="${reason.id}"]`)).not.toBeNull();
+    expect(confirm.disabled).toBe(true);
+    await typeInto(reason, "Đã giải thể từ năm trước");
+    expect(button("Gỡ hẳn")!.disabled).toBe(false);
+    await act(async () => button("Gỡ hẳn")!.click());
+    await settle();
+    const sent = calls.find((c) => c.method === "DELETE")!;
+    expect(sent.path).toBe("/api/v1/map-assets/far");
+    expect(sent.body).toEqual({ reason: "Đã giải thể từ năm trước" });
+    expect(toast.success).toHaveBeenCalledWith("Đã gỡ Ngoài khung khỏi bản đồ.");
+  });
+
+  it("Thôi puts the buttons back and sends nothing; a refusal says 'Không gỡ được địa điểm này.'", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"], deleteStatus: 409 });
+    await openRegister();
+    await act(async () => button("Gỡ Ngoài khung khỏi bản đồ")!.click());
+    await act(async () => button("Thôi")!.click());
+    expect(button("Gỡ hẳn")).toBeUndefined();
+    expect(button("Sửa Ngoài khung")).toBeDefined();
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+    await act(async () => button("Gỡ Ngoài khung khỏi bản đồ")!.click());
+    await typeInto(host!.querySelector<HTMLInputElement>("[data-row-delete-reason]")!, "Trùng");
+    await act(async () => button("Gỡ hẳn")!.click());
+    await settle();
+    expect(toast.error).toHaveBeenCalledWith("Không gỡ được địa điểm này.", { description: "Bản ghi đang được người khác sửa." });
+  });
+
+  it("empty, no filter: the prototype's card and sentences", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"], register: [] });
+    await openRegister();
+    const card = host!.querySelector<HTMLElement>("[data-register-empty]")!;
+    for (const c of ["p-12", "text-center", "rounded-card", "border", "border-line", "bg-white", "shadow-card"]) expect(classes(card)).toContain(c);
+    const [title, line] = Array.from(card.querySelectorAll("p"));
+    expect(title!.textContent).toBe("Chưa có địa điểm nào");
+    for (const c of ["text-[14px]", "font-semibold", "text-navy"]) expect(classes(title)).toContain(c);
+    expect(line!.textContent).toBe("Thêm từng địa điểm bằng nút “Thêm đối tượng”, hoặc nhập cả danh sách từ Excel.");
+    expect(classes(line)).toContain("text-[12.5px]");
+  });
+
+  it("empty BECAUSE OF A FILTER: says so, not 'Chưa có địa điểm nào'", async () => {
+    await mount({ permissions: ["asset.read"], register: [] });
+    await openRegister();
+    const status = host!.querySelector<HTMLSelectElement>("#map-status")!;
+    await act(async () => {
+      status.value = "tam-ngung";
+      status.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle();
+    const card = host!.querySelector<HTMLElement>("[data-register-empty]")!;
+    expect(card.textContent).toContain("Không có địa điểm nào khớp bộ lọc.");
+    expect(card.textContent).not.toContain("Chưa có địa điểm nào");
+  });
+
+  it("loading: one Skeleton h-96 w-full, and a status for screen readers", async () => {
+    await mount({ permissions: ["asset.read"], registerHold: true });
+    await openRegister();
+    const sk = host!.querySelector("[data-register-loading] span[aria-hidden]")!;
+    for (const c of ["h-96", "w-full"]) expect(classes(sk)).toContain(c);
+    expect(host!.querySelector("[data-register-loading] [role=status]")).not.toBeNull();
+  });
+});
+
+async function openRegister(): Promise<void> {
+  await act(async () => button("Sổ địa điểm")!.click());
+  await settle();
+}
+
+/* ---- add / edit dialog: prototype `AssetFormDialog.tsx` + `LocationPicker.tsx` / spec 07 --------------- */
+
+function dialog(): HTMLDialogElement {
+  return host!.querySelector<HTMLDialogElement>("dialog")!;
+}
+
+function inDialog(label: string): HTMLButtonElement | undefined {
+  return Array.from(dialog().querySelectorAll("button")).find((b) => b.textContent === label || b.getAttribute("aria-label") === label);
+}
+
+async function openAdd(setup: Partial<Setup> = {}): Promise<void> {
+  await mount({ permissions: ["asset.read", "asset.update"], ...setup });
+  await act(async () => button(ADD_BUTTON)!.click());
+  await settle();
+}
+
+describe("add / edit dialog (spec 07)", () => {
+  it("the app's dialog at sm:max-w-2xl, 86vh, scrolling; an ✕ top-right closes it", async () => {
+    await openAdd();
+    for (const c of ["max-w-2xl", "max-h-[86vh]", "overflow-auto"]) expect(classes(dialog())).toContain(c);
+    const x = inDialog("Đóng")!;
+    expect(x).toBeDefined();
+    await act(async () => x.click());
+    expect(host!.querySelector("dialog")).toBeNull();
+  });
+
+  it("Nhóm: no empty option, the header's group by default, enabled on create; selects and labels at the prototype's size", async () => {
+    await openAdd();
+    const group = host!.querySelector<HTMLSelectElement>("#asset-group")!;
+    expect(Array.from(group.options).map((o) => o.value)).toEqual(["doanh-nghiep", "cho"]);
+    expect(group.value).toBe("doanh-nghiep");
+    expect(group.disabled).toBe(false);
+    for (const c of ["mt-1.5", "h-9", "w-full", "rounded-md", "border-line", "bg-white", "px-3", "text-[13px]"]) expect(classes(group)).toContain(c);
+    const label = host!.querySelector('label[for="asset-name"]')!;
+    for (const c of ["text-sm", "font-medium"]) expect(classes(label)).toContain(c);
+    expect(classes(host!.querySelector("#asset-name"))).toContain("mt-1.5");
+  });
+
+  it("Ngành nghề '01 — …' with '— Chưa phân ngành —'; Thôn '— Chưa xác định —'; no tax-code placeholder, no Bỏ toạ độ", async () => {
+    await openAdd();
+    const industry = host!.querySelector<HTMLSelectElement>("#asset-industry")!;
+    expect(industry.options[0]!.textContent).toBe("— Chưa phân ngành —");
+    expect(industry.options[1]!.textContent).toBe("01 — Nông nghiệp, trồng trọt, chăn nuôi");
+    expect(host!.querySelector<HTMLSelectElement>("#asset-unit")!.options[0]!.textContent).toBe("— Chưa xác định —");
+    expect(host!.querySelector<HTMLInputElement>("#asset-tax-code")!.placeholder).toBe("");
+    expect(inDialog("Bỏ toạ độ")).toBeUndefined();
+  });
+
+  it("place search: disabled, generic placeholder, a help hint with the reason — no '?' marker", async () => {
+    await openAdd();
+    const search = host!.querySelector<HTMLInputElement>("#asset-place-search")!;
+    expect(search.disabled).toBe(true);
+    expect(search.placeholder).toBe("Tìm theo tên: chợ, trường học, thôn…");
+    expect(dialog().querySelector("[data-help-hint]")!.getAttribute("aria-label")).toContain(pendingPart("Tìm địa điểm theo tên").viSao);
+    expect(dialog().querySelector(`[aria-label="${pendingMarkerLabel("Tìm địa điểm theo tên")}"]`)).toBeNull();
+  });
+
+  it("edit: Nhóm is LOCKED", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    await openPoint("a2");
+    await act(async () => button("Sửa")!.click());
+    await settle();
+    const group = host!.querySelector<HTMLSelectElement>("#asset-group")!;
+    expect(group.value).toBe("cho");
+    expect(group.disabled).toBe(true);
+    expect(inDialog("Lưu")).toBeDefined();
+  });
+
+  it("empty name: 'Vui lòng nhập tên.' in the form, nothing sent; then POST and 'Đã thêm vào bản đồ.'", async () => {
+    await openAdd();
+    await act(async () => inDialog("Thêm vào bản đồ")!.click());
+    await settle();
+    expect(dialog().textContent).toContain("Vui lòng nhập tên.");
+    expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/map-assets")).toBe(false);
+    await typeInto(host!.querySelector<HTMLInputElement>("#asset-name")!, "Hợp tác xã C");
+    await act(async () => inDialog("Thêm vào bản đồ")!.click());
+    await settle();
+    expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/map-assets")).toBe(true);
+    expect(toast.success).toHaveBeenCalledWith("Đã thêm vào bản đồ.");
+    expect(host!.querySelector("dialog")).toBeNull();
+  });
+
+  it("a required custom field carries the red ' *', and an empty one stops the save with the prototype's sentence", async () => {
+    const field = { id: "f1", field_code: "loai_hinh", label: "Loại hình", value_type: "van-ban", is_required: true, is_active: true, sort_order: 1, options: [] };
+    await openAdd({ fields: [field] });
+    const label = host!.querySelector('label[for="asset-custom-loai_hinh"]')!;
+    const star = label.querySelector("span.text-danger")!;
+    expect(star.textContent).toBe(" *");
+    await typeInto(host!.querySelector<HTMLInputElement>("#asset-name")!, "Hợp tác xã C");
+    await act(async () => inDialog("Thêm vào bản đồ")!.click());
+    await settle();
+    expect(dialog().textContent).toContain("Còn trường bắt buộc chưa nhập.");
+    expect(calls.some((c) => c.method === "POST" && c.path === "/api/v1/map-assets")).toBe(false);
+  });
+
+  it("picker: h-64 rounded-[10px] frame, crosshair, red MapPin marker anchored at the bottom, no compass, NO expand toggle", async () => {
+    await openAdd();
+    await settle();
+    const frame = dialog().querySelector<HTMLElement>("[data-picker-frame]")!;
+    for (const c of ["relative", "h-64", "overflow-hidden", "rounded-[10px]", "border", "border-line"]) expect(classes(frame)).toContain(c);
+    expect(inDialog(MAP_EXPAND)).toBeUndefined();
+    expect(inDialog(MAP_COLLAPSE)).toBeUndefined();
+    const marker = ml.FakeMarker.instances.at(-1)!;
+    expect(marker.opts).toMatchObject({ anchor: "bottom", draggable: true });
+    const el = marker.opts!.element as HTMLElement;
+    const svg = el.querySelector("svg")!;
+    expect(svg.getAttribute("fill")).toBe("#E5484D");
+    for (const c of ["size-7", "text-danger", "drop-shadow"]) expect(classes(svg)).toContain(c);
+    const picker = ml.FakeMap.instances.at(-1)!;
+    expect(picker.controls.some((c) => (c as { opts?: { showCompass?: boolean } }).opts?.showCompass === false)).toBe(true);
+  });
+
+  it("picker: no valid position → the hint inside the map; a typed valid position → flyTo in 400ms", async () => {
+    await openAdd();
+    await settle();
+    expect(dialog().querySelector("[data-picker-hint]")).toBeNull();
+    await typeInto(host!.querySelector<HTMLInputElement>("#asset-lat")!, "");
+    const hint = dialog().querySelector<HTMLElement>("[data-picker-hint]")!;
+    expect(hint.textContent).toBe("Bấm vào bản đồ để đặt ghim, rồi kéo ghim để chỉnh cho đúng.");
+    for (const c of ["pointer-events-none", "absolute", "inset-x-0", "bottom-0", "bg-white/90", "text-[11.5px]"]) expect(classes(hint)).toContain(c);
+    const picker = ml.FakeMap.instances.at(-1)!;
+    await typeInto(host!.querySelector<HTMLInputElement>("#asset-lat")!, "15.75");
+    expect(picker.flights.at(-1)).toMatchObject({ center: [108.35, 15.75], duration: 400 });
+  });
+
+  it("coordinates row: 11px labels, h-8 12px inputs, 'Vị trí của tôi' outline sm with its title", async () => {
+    await openAdd();
+    const row = host!.querySelector("#asset-lat")!.closest("[data-coordinates]")!;
+    for (const c of ["grid", "sm:grid-cols-[1fr_1fr_auto]", "items-end", "gap-2"]) expect(classes(row)).toContain(c);
+    expect(classes(row.querySelector('label[for="asset-lat"]'))).toContain("text-[11px]");
+    for (const c of ["mt-1", "h-8", "text-[12px]"]) expect(classes(row.querySelector("#asset-lat"))).toContain(c);
+    const me = inDialog("Vị trí của tôi")!;
+    expect(me.title).toBe("Lấy toạ độ nơi đang đứng");
+  });
+
+  it("Vị trí của tôi: the prototype's three toasts", async () => {
+    await openAdd();
+    const original = Object.getOwnPropertyDescriptor(navigator, "geolocation");
+    try {
+      Object.defineProperty(navigator, "geolocation", { value: undefined, configurable: true });
+      await act(async () => inDialog("Vị trí của tôi")!.click());
+      expect(toast.error).toHaveBeenCalledWith("Trình duyệt này không cho lấy vị trí.");
+
+      Object.defineProperty(navigator, "geolocation", {
+        value: { getCurrentPosition: (_ok: unknown, fail: () => void) => fail() },
+        configurable: true,
+      });
+      await act(async () => inDialog("Vị trí của tôi")!.click());
+      expect(toast.error).toHaveBeenCalledWith("Không lấy được vị trí. Kiểm tra quyền định vị.");
+
+      Object.defineProperty(navigator, "geolocation", {
+        value: {
+          getCurrentPosition: (ok: (p: { coords: { latitude: number; longitude: number } }) => void) =>
+            ok({ coords: { latitude: 15.7512345678, longitude: 108.3512345678 } }),
+        },
+        configurable: true,
+      });
+      await act(async () => inDialog("Vị trí của tôi")!.click());
+      expect(toast.success).toHaveBeenCalledWith("Đã lấy toạ độ hiện tại.");
+      expect(host!.querySelector<HTMLInputElement>("#asset-lat")!.value).toBe("15.751235");
+    } finally {
+      if (original) Object.defineProperty(navigator, "geolocation", original);
+      else delete (navigator as unknown as Record<string, unknown>).geolocation;
+    }
   });
 });
 

@@ -54,7 +54,7 @@ const FILTER_SELECT =
  * tooltip. A BUTTON, so a keyboard reaches it (the disabled control next to it takes no focus), and its
  * `aria-label` holds the whole reason — touch and screen readers get no tooltip (`tooltip.tsx`).
  */
-function HelpHint({ info }: { info: PendingFeatureInfo }) {
+export function HelpHint({ info }: { info: PendingFeatureInfo }) {
   return (
     <Tooltip content={info.viSao}>
       <button

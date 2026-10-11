@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { comms_mapAssetOut, comms_mapFieldSchemaOut } from "@/lib/api/schema.gen";
 
 import { checkPosition, createBody, draftFromAsset, newAssetDraft, updateBody } from "./asset-form";
-import { PIN_OUTSIDE_FRAME, REQUIRED_GROUP, REQUIRED_NAME, REQUIRED_POSITION } from "./labels";
+import { PIN_OUTSIDE_FRAME, REQUIRED_CUSTOM, REQUIRED_GROUP, REQUIRED_NAME, REQUIRED_POSITION } from "./labels";
 
 const BOUNDS = [108.1, 15.5, 108.6, 15.9] as const;
 const CENTRE = { lat: 15.7, lng: 108.35 };
@@ -78,7 +78,7 @@ describe("create — required group, name, position; the pin stays in the frame"
 
   it("a required custom field left empty stops the send", () => {
     const r = createBody(ok, [field("legal_form", "chon", { is_required: true, label: "Loại hình" })], BOUNDS);
-    expect(r).toEqual({ kind: "error", message: "Hãy nhập Loại hình." });
+    expect(r).toEqual({ kind: "error", message: REQUIRED_CUSTOM });
   });
 
   it("a disabled field is not on the form and not demanded", () => {

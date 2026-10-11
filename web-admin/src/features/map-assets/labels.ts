@@ -94,7 +94,11 @@ export const MAP_FRAME_NOTICE_ACK = "Tôi đã đọc, hiểu các lưu ý trên
 export const OUTSIDE_FRAME = "Đối tượng nằm ngoài khung bản đồ của xã";
 export const PIN_OUTSIDE_FRAME = "Vị trí nằm ngoài khung bản đồ của xã. Hãy chọn một điểm trong khung.";
 export const MY_LOCATION_OUTSIDE = "Vị trí của bạn nằm ngoài khung bản đồ của xã, nên không đặt ghim theo vị trí này.";
-export const MY_LOCATION_FAILED = "Không lấy được vị trí của bạn. Hãy cho phép trình duyệt dùng vị trí, hoặc bấm vào bản đồ.";
+/** "Vị trí của tôi" — prototype `LocationPicker.tsx`, verbatim. */
+export const MY_LOCATION_DONE = "Đã lấy toạ độ hiện tại.";
+export const MY_LOCATION_FAILED = "Không lấy được vị trí. Kiểm tra quyền định vị.";
+export const MY_LOCATION_UNSUPPORTED = "Trình duyệt này không cho lấy vị trí.";
+export const MY_LOCATION_TITLE = "Lấy toạ độ nơi đang đứng";
 export const MAP_LOAD_FAILED = "Không thể tải bản đồ. Vui lòng thử lại.";
 
 
@@ -147,6 +151,12 @@ export function industryLabel(code: string): string {
   return INDUSTRIES.find((i) => i.code === code)?.label ?? code;
 }
 
+/** "{code} — {label}" — how the card and the form's options name an industry (prototype `industryLabel`). */
+export function industryText(code: string): string {
+  const label = industryLabel(code);
+  return label === code ? code : `${code} — ${label}`;
+}
+
 /* ---- the add / edit form (spec §8) ------------------------------------------------------------ */
 
 export const ADD_BUTTON = "Thêm đối tượng";
@@ -157,8 +167,15 @@ export const EDIT_SUBMIT = "Lưu";
 export const EDIT_TITLE = "Sửa đối tượng trên bản đồ";
 export const PIN_HINT = "Bấm vào bản đồ để đặt ghim, rồi kéo ghim để chỉnh cho đúng.";
 export const MY_LOCATION_BUTTON = "Vị trí của tôi";
+/** Generic on purpose: the prototype's "chợ Hà Lam, … thôn Bình An" names one commune's places (rule 1). */
+export const PLACE_SEARCH_PLACEHOLDER = "Tìm theo tên: chợ, trường học, thôn…";
 export const REQUIRED_GROUP = "Hãy chọn nhóm.";
-export const REQUIRED_NAME = "Hãy nhập tên.";
+/** Prototype `AssetFormDialog.tsx`, verbatim (and its `attrs_required` sentence below). */
+export const REQUIRED_NAME = "Vui lòng nhập tên.";
+export const REQUIRED_CUSTOM = "Còn trường bắt buộc chưa nhập.";
+export const ADD_DONE = "Đã thêm vào bản đồ.";
+export const EDIT_DONE = "Đã lưu.";
+export const SAVE_FAILED = "Không lưu được.";
 export const REQUIRED_POSITION = "Hãy đặt vị trí trên bản đồ hoặc nhập vĩ độ và kinh độ.";
 export const BAD_COORDINATE = "Vĩ độ phải từ -90 đến 90 và kinh độ từ -180 đến 180, tối đa 6 chữ số thập phân.";
 export const MASKED_NOTE =
@@ -171,14 +188,32 @@ export const VERIFY_BUTTON = "Xác minh";
 export const UNVERIFY_BUTTON = "Bỏ xác minh";
 export const EDIT_BUTTON = "Sửa";
 export const DELETE_BUTTON = "Xoá khỏi bản đồ";
-export const DELETE_EXPLANATION =
-  "Đối tượng sẽ rời khỏi bản đồ, sổ địa điểm và số liệu. Hồ sơ vẫn được lưu giữ kèm lý do xoá.";
-export const DELETE_REASON_REQUIRED = "Vui lòng nhập lý do xoá. Lý do được lưu cùng hồ sơ đã xoá.";
+/** The inline confirmation of the card (prototype `AssetCard.tsx`, verbatim). */
+export const DELETE_CONFIRM = "Xoá khỏi bản đồ? Bản ghi vẫn được lưu vết, chỉ không hiện nữa.";
+export const DELETE_CONFIRM_BUTTON = "Xoá";
+/** Rule 7: a soft delete records why. Not in the prototype — the owner added the field (11/10/2026). */
+export const DELETE_REASON_LABEL = "Lý do xoá (bắt buộc)";
+export const DELETE_DONE = "Đã xoá khỏi bản đồ.";
+export const DELETE_FAILED = "Không xoá được.";
+export const VERIFY_DONE = "Đã đánh dấu đã xác minh.";
 export const VERIFIED_CHIP = "Đã xác minh";
 export const UNVERIFIED_CHIP = "Chưa xác minh";
 
-export function deleteTitle(name: string): string {
-  return `Xoá ${name} khỏi bản đồ`;
+/* ---- Sổ địa điểm (prototype `AssetRegisterTable.tsx`, spec 06) ---------------------------------- */
+
+export const REGISTER_EMPTY_TITLE = "Chưa có địa điểm nào";
+export const REGISTER_EMPTY_HINT = "Thêm từng địa điểm bằng nút “Thêm đối tượng”, hoặc nhập cả danh sách từ Excel.";
+export const REGISTER_EMPTY_FILTERED = "Không có địa điểm nào khớp bộ lọc.";
+export const ROW_LOCATE_TITLE = "Xem trên bản đồ";
+export const ROW_EDIT_TITLE = "Sửa";
+export const ROW_DELETE_TITLE = "Gỡ khỏi bản đồ";
+export const ROW_DELETE_CONFIRM = "Gỡ hẳn";
+export const ROW_DELETE_CANCEL = "Thôi";
+export const ROW_DELETE_REASON_LABEL = "Lý do gỡ (bắt buộc)";
+export const ROW_DELETE_FAILED = "Không gỡ được địa điểm này.";
+
+export function rowDeleted(name: string): string {
+  return `Đã gỡ ${name} khỏi bản đồ.`;
 }
 
 /* ---- views ------------------------------------------------------------------------------------ */

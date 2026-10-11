@@ -1,15 +1,25 @@
 "use client";
 
+import { MapPin } from "lucide-react";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { registerPmtilesProtocol } from "@/lib/basemap/protocol";
 import { buildBasemapStyle } from "@/lib/basemap/style";
 
+import { PIN_HINT } from "./labels";
 import { MAPLIBRE_WORKER_URL, insideFrame, round6, type MapFrame } from "./map-logic";
 
+/** Prototype `LocationPicker.tsx`: typed coordinates fly to zoom 16 in 400ms. */
+const PICK_ZOOM = 16;
+const TYPED_FLY_MS = 400;
+
 /**
- * The small map of the add / edit form (spec §8.1): click to place the pin, drag it to adjust.
+ * The small map of the add / edit form (prototype `LocationPicker.tsx`, spec 07): click to place the
+ * pin, drag it to adjust; a typed position flies there. The pin is the prototype's red lucide `MapPin`
+ * (anchored at its tip), rendered by React into the marker's own element through a portal — no HTML
+ * string anywhere (rule 13).
  *
  * SAME SELF-HOSTED BASEMAP as `EconomicMap` (style built in code, same origin, `/basemap/*`). The dialog
  * renders this only while the page's map is available, so an unconfigured basemap shows no picker; the
@@ -27,11 +37,8 @@ export function PositionPicker({
   lng,
   onPick,
   onOutside,
-  expanded = false,
 }: {
   frame: MapFrame;
-  /** "Mở rộng bản đồ" inside the form's dialog: a taller map to place the pin precisely. */
-  expanded?: boolean;
   /** Current position from the inputs; `null` when empty or invalid. */
   lat: number | null;
   lng: number | null;
@@ -44,6 +51,10 @@ export function PositionPicker({
   const onPickRef = useRef(onPick);
   const onOutsideRef = useRef(onOutside);
   const posRef = useRef<{ lat: number | null; lng: number | null }>({ lat, lng });
+  /** The last position the MAP produced (click / drag): echoed back through the inputs, it must not fly. */
+  const pickedRef = useRef<{ lat: number; lng: number } | null>(null);
+  // The marker's element, made once; the pin icon is portalled into it.
+  const [pinEl] = useState<HTMLDivElement | null>(() => (typeof document === "undefined" ? null : document.createElement("div")));
   useEffect(() => {
     onPickRef.current = onPick;
     onOutsideRef.current = onOutside;
@@ -78,22 +89,31 @@ export function PositionPicker({
       });
       created = map;
       mapRef.current = map;
+      map.getCanvas().style.cursor = "crosshair";
       map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
 
-      const marker = new ml.Marker({ draggable: true });
+      const marker = new ml.Marker({ element: pinEl ?? undefined, anchor: "bottom", draggable: true });
       markerRef.current = marker;
       const place = (pLng: number, pLat: number) => {
         marker.setLngLat([pLng, pLat]);
         if (marker.getElement().parentElement === null) marker.addTo(map);
       };
       const start = posRef.current;
-      if (start.lat !== null && start.lng !== null && insideFrame(bounds, start.lng, start.lat)) place(start.lng, start.lat);
+      if (start.lat !== null && start.lng !== null && insideFrame(bounds, start.lng, start.lat)) {
+        pickedRef.current = { lat: start.lat, lng: start.lng };
+        place(start.lng, start.lat);
+      }
 
+      const pick = (pLat: number, pLng: number) => {
+        const p = { lat: round6(pLat), lng: round6(pLng) };
+        pickedRef.current = p;
+        onPickRef.current(p.lat, p.lng);
+      };
       map.on("click", (e) => {
         const { lng: cLng, lat: cLat } = e.lngLat;
         if (!insideFrame(bounds, cLng, cLat)) return onOutsideRef.current();
         place(cLng, cLat);
-        onPickRef.current(round6(cLat), round6(cLng));
+        pick(cLat, cLng);
       });
       marker.on("dragend", () => {
         const p = marker.getLngLat();
@@ -102,7 +122,7 @@ export function PositionPicker({
           if (back.lat !== null && back.lng !== null) marker.setLngLat([back.lng, back.lat]);
           return onOutsideRef.current();
         }
-        onPickRef.current(round6(p.lat), round6(p.lng));
+        pick(p.lat, p.lng);
       });
     })().catch(() => {
       // The MapLibre or PMTiles chunk did not load: no picker map; the lat / lng inputs still work.
@@ -114,9 +134,9 @@ export function PositionPicker({
       created?.remove();
       mapRef.current = null;
     };
-  }, [minLng, minLat, maxLng, maxLat]);
+  }, [minLng, minLat, maxLng, maxLat, pinEl]);
 
-  // Typed coordinates move the pin — only inside the frame; the form shows why otherwise.
+  // Typed coordinates move the pin and fly there — only inside the frame; the form shows why otherwise.
   useEffect(() => {
     const map = mapRef.current;
     const marker = markerRef.current;
@@ -124,25 +144,34 @@ export function PositionPicker({
     if (!insideFrame([minLng, minLat, maxLng, maxLat], lng, lat)) return;
     marker.setLngLat([lng, lat]);
     if (marker.getElement().parentElement === null) marker.addTo(map);
+    const picked = pickedRef.current;
+    if (picked !== null && round6(picked.lat) === round6(lat) && round6(picked.lng) === round6(lng)) return;
+    pickedRef.current = { lat, lng };
+    map.flyTo({ center: [lng, lat], zoom: PICK_ZOOM, duration: TYPED_FLY_MS });
   }, [lat, lng, minLng, minLat, maxLng, maxLat]);
 
-  // A new height needs a resize, or MapLibre keeps drawing at the old canvas size.
-  useEffect(() => {
-    const map = mapRef.current;
-    if (map === null) return;
-    const id = requestAnimationFrame(() => map.resize());
-    return () => cancelAnimationFrame(id);
-  }, [expanded]);
-
   return (
-    <div
-      ref={containerRef}
-      id="position-picker-map"
-      className={`${expanded ? "h-[70vh]" : "h-64"} w-full overflow-hidden rounded-xl border border-line`}
-      data-expanded={expanded ? "" : undefined}
-      role="region"
-      aria-label="Bản đồ chọn vị trí"
-      data-testid="position-picker"
-    />
+    <div data-picker-frame="" className="relative h-64 overflow-hidden rounded-[10px] border border-line">
+      <div
+        ref={containerRef}
+        className="size-full cursor-crosshair"
+        role="region"
+        aria-label="Bản đồ chọn vị trí"
+        data-testid="position-picker"
+      />
+      {(lat === null || lng === null) && (
+        <p
+          data-picker-hint=""
+          className="pointer-events-none absolute inset-x-0 bottom-0 m-0 bg-white/90 px-3 py-1.5 text-center text-[11.5px] text-ink-muted"
+        >
+          {PIN_HINT}
+        </p>
+      )}
+      {pinEl !== null &&
+        createPortal(
+          <MapPin aria-hidden="true" focusable="false" className="size-7 text-danger drop-shadow" fill="#E5484D" />,
+          pinEl,
+        )}
+    </div>
   );
 }

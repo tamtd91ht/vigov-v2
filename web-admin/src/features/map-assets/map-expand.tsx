@@ -8,13 +8,13 @@ import { cn } from "@/lib/cn";
 import { MAP_COLLAPSE, MAP_EXPAND } from "./labels";
 
 /**
- * "Mở rộng bản đồ" / "Thu gọn" — one toggle for both maps of `/ban-do` (owner, 04/10/2026: the map
- * window was too small to work in).
+ * "Mở rộng bản đồ" / "Thu gọn" — the main map of `/ban-do` (owner, 04/10/2026: the map window was too
+ * small to work in). The form's pin map no longer has it (owner, 11/10/2026: prototype `LocationPicker`).
  *
  * NOT the browser's Fullscreen API: a fullscreen MAP element would hide the React detail panel and
  * the dialogs that open from it, i.e. exactly what staff work with. The main map instead grows its
- * whole region (map + detail panel) into a page overlay; the form's picker grows inside its dialog.
- * Both collapse back with this button or Esc; the map keeps its frame (maxBounds) either way.
+ * whole region (map + detail panel) into a page overlay. It collapses back with this button or Esc;
+ * the map keeps its frame (maxBounds) either way.
  *
  * `floating`: the main map's form (spec 08 B) — icon only, in the group of buttons floating on the map's
  * top-left corner; the word moves to `aria-label` + `title`, so it is still named for everyone.

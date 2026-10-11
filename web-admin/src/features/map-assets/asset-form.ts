@@ -18,6 +18,7 @@ import {
   BAD_COORDINATE,
   DEFAULT_STATUS,
   PIN_OUTSIDE_FRAME,
+  REQUIRED_CUSTOM,
   REQUIRED_GROUP,
   REQUIRED_NAME,
   REQUIRED_POSITION,
@@ -179,7 +180,7 @@ export function createBody(
     const r = typedCustom(f, d.custom[f.field_code] ?? "");
     if (!r.ok) return { kind: "error", message: r.message };
     if (r.value === null) {
-      if (f.is_required) return { kind: "error", message: `Hãy nhập ${f.label}.` };
+      if (f.is_required) return { kind: "error", message: REQUIRED_CUSTOM };
       continue;
     }
     custom[f.field_code] = r.value;
@@ -255,7 +256,7 @@ export function updateBody(
     const was = customToText(original.custom_values?.[f.field_code]).trim();
     const r = typedCustom(f, now);
     if (!r.ok) return { kind: "error", message: r.message };
-    if (r.value === null && f.is_required) return { kind: "error", message: `Hãy nhập ${f.label}.` };
+    if (r.value === null && f.is_required) return { kind: "error", message: REQUIRED_CUSTOM };
     if (now === was) continue;
     custom[f.field_code] = r.value;
   }

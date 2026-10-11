@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
-import { SkeletonRows } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonRows } from "@/components/ui/skeleton";
 import { inertOutside } from "@/features/dashboard/presentation";
 import { OverlayDialog } from "@/features/noi-dung/overlay-dialog";
 import { cn } from "@/lib/cn";
@@ -20,6 +20,7 @@ import { layLoaiTaiNguyenBanDo } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import {
   NO_FILTER,
+  deleteMapAsset,
   getMapAsset,
   getMapAssetSummary,
   listMapAssetPoints,
@@ -45,7 +46,7 @@ import { BASEMAP_MISSING_SENTENCE } from "@/lib/basemap/assets";
 import { coQuyen, QUYEN_QUAN_LY_DANH_MUC, QUYEN_XEM_PHAN_ANH } from "@/lib/quyen"; // vi-name-ok: existing exports (rule 12 inv 3)
 
 import { AssetDialog, type AssetDialogMode } from "./asset-dialog";
-import { DeleteAssetDialog, DetailPanel } from "./detail-panel";
+import { DetailPanel } from "./detail-panel";
 import { EconomicMap, type FlyRequest } from "./economic-map";
 import { FLOATING_BUTTON, MapExpandToggle } from "./map-expand";
 import { FrameForm, ResetFrameDialog } from "./frame-form";
@@ -77,7 +78,15 @@ import {
   VIEW_MAP,
   VIEW_REGISTER,
   CENTRE_FALLBACK_LABEL,
+  ADD_DONE,
+  DELETE_DONE,
+  DELETE_FAILED,
+  EDIT_DONE,
+  ROW_DELETE_FAILED,
+  SAVE_FAILED,
+  VERIFY_DONE,
   pendingPart,
+  rowDeleted,
 } from "./labels";
 import {
   EMPTY_COLLECTION,
@@ -90,14 +99,13 @@ import {
   toEconomicCollection,
   type EconomicCollection,
 } from "./map-logic";
-import { RegisterTable } from "./register-table";
+import { RegisterEmpty, RegisterTable } from "./register-table";
 import { DensityPending, FilterPanel, LayerPanel, type HeatSwitchState } from "./side-panel";
 
 type View = "map" | "register";
 
 type Dialog =
   | { readonly kind: "asset"; readonly mode: AssetDialogMode }
-  | { readonly kind: "delete"; readonly asset: { readonly id: string; readonly name: string } }
   | { readonly kind: "frame" }
   | { readonly kind: "reset" };
 
@@ -419,10 +427,24 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
     setActionError("");
     const r = await setMapAssetConfirmation(a.id, !a.verified);
     setBusy(false);
-    if (!r.ok) return setActionError(r.thongBao);
+    // The prototype's sentence, with the server's own reason under it (a toast is gone in seconds).
+    if (!r.ok) return void toast.error(SAVE_FAILED, { description: r.thongBao });
     setDetail(r);
-    toast.success(r.duLieu.verified ? `Đã xác minh ${r.duLieu.name}.` : `Đã bỏ xác minh ${r.duLieu.name}.`);
+    toast.success(r.duLieu.verified ? VERIFY_DONE : `Đã bỏ xác minh ${r.duLieu.name}.`);
     setReload((n) => n + 1);
+  }
+
+  /** Soft delete with the officer's reason (rule 7) — from the panel's inline box or the register row. */
+  async function removeAsset(id: string, reason: string, done: string, failed: string): Promise<boolean> {
+    const r = await deleteMapAsset(id, reason);
+    if (!r.ok) {
+      toast.error(failed, { description: r.thongBao });
+      return false;
+    }
+    if (selectedId === id) closeDetail();
+    toast.success(done);
+    setReload((n) => n + 1);
+    return true;
   }
 
   async function seedDefaults() {
@@ -602,6 +624,8 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
   const detailNode =
     detail === null ? null : (
       <DetailPanel
+        // A different asset is a fresh card: a half-typed delete reason never carries over.
+        key={selectedId ?? ""}
         detail={detail}
         groupLabel={groupLabel}
         unitName={unitName}
@@ -612,8 +636,10 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
         onClose={closeDetail}
         onEdit={() => detail !== "loading" && detail.ok && setDialog({ kind: "asset", mode: { kind: "edit", asset: detail.duLieu } })}
         onToggleVerified={() => detail !== "loading" && detail.ok && void toggleVerified(detail.duLieu)}
-        onDelete={() =>
-          detail !== "loading" && detail.ok && setDialog({ kind: "delete", asset: { id: detail.duLieu.id, name: detail.duLieu.name } })
+        onDelete={(reason) =>
+          detail !== "loading" && detail.ok
+            ? removeAsset(detail.duLieu.id, reason, DELETE_DONE, DELETE_FAILED)
+            : Promise.resolve(false)
         }
       />
     );
@@ -730,26 +756,37 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
     );
   }
 
+  // Prototype `AssetRegisterTable.tsx` (spec 06): the register scrolls in ONE box, `h-full overflow-auto p-5`.
+  const REGISTER_WRAPPER = "h-full min-h-0 min-w-0 flex-1 overflow-auto p-5";
+  const filtered = filter.q.trim() !== "" || filter.industryCode !== "" || filter.residentialUnitId !== "" || filter.status !== "";
+
   function registerArea() {
     if (register === null) {
       return (
-        <div className="p-4">
+        <div className={REGISTER_WRAPPER} data-register-loading="">
           <p role="status" className="an-thi-giac">
             Đang tải sổ địa điểm…
           </p>
-          <SkeletonRows rows={5} className="rounded-xl border border-line" />
+          <Skeleton className="h-96 w-full" />
         </div>
       );
     }
     if (!register.ok) {
       return (
-        <div className="p-4">
+        <div className={REGISTER_WRAPPER}>
           <ErrorState role="alert" title="Chưa tải được sổ địa điểm" message={register.thongBao} />
         </div>
       );
     }
+    if (register.duLieu.rows.length === 0) {
+      return (
+        <div className={REGISTER_WRAPPER}>
+          <RegisterEmpty filtered={filtered} canUpdate={canUpdate} />
+        </div>
+      );
+    }
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-auto p-4">
+      <div className={REGISTER_WRAPPER}>
         <RegisterTable
           rows={register.duLieu.rows}
           hasMore={register.duLieu.hasMore}
@@ -762,10 +799,10 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
             void openAsset(row.id, true);
           }}
           onEdit={(row) => void editAsset(row.id)}
-          onDelete={(row) => setDialog({ kind: "delete", asset: { id: row.id, name: row.name } })}
+          onDelete={(row, reason) => removeAsset(row.id, reason, rowDeleted(row.name), ROW_DELETE_FAILED)}
         />
         {register.duLieu.hasMore && (
-          <p className="m-0">
+          <p className="m-0 mt-3">
             <Button type="button" variant="secondary" onClick={() => void loadMore()}>
               Tải thêm
             </Button>
@@ -907,24 +944,11 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
           onCancel={() => setDialog(null)}
           onSaved={(saved, created) => {
             setDialog(null);
-            toast.success(created ? `Đã thêm ${saved.name} lên bản đồ.` : `Đã lưu ${saved.name}.`);
+            toast.success(created ? ADD_DONE : EDIT_DONE);
             setReload((n) => n + 1);
             detailSeq.current += 1;
             setSelectedId(saved.id);
             setDetail({ ok: true, duLieu: saved });
-          }}
-        />
-      )}
-      {dialog !== null && dialog.kind === "delete" && (
-        <DeleteAssetDialog
-          asset={dialog.asset}
-          onCancel={() => setDialog(null)}
-          onDeleted={() => {
-            const name = dialog.asset.name;
-            if (selectedId === dialog.asset.id) closeDetail();
-            setDialog(null);
-            toast.success(`Đã xoá ${name} khỏi bản đồ.`);
-            setReload((n) => n + 1);
           }}
         />
       )}
