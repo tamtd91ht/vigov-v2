@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-11",
   "muc": [
     {
       "id": "bo-sinh-tien-do",
@@ -174,6 +174,14 @@
       "viec": "Hook Stop commit_push_guard: chặn kết thúc phiên khi tệp phiên này (transcript chính + subagent) viết còn chưa commit, hoặc nhánh đi trước upstream. Người dùng chốt 09/10/2026: code xong là commit + push mọi lúc. Ca thuần COMMIT_PUSH_CASES/REPO_PATH_CASES trong test_hooks; check_brain miễn ca payload như các hook Stop khác.",
       "bang_chung": "4132c8fc. test_hooks 314/314 + ca thuần mới OK; check_brain 7/7; chạy thử trên phiên thật chặn đúng 4 tệp brain chưa commit.",
       "tiep_theo": "Giới hạn đã biết: tệp phiên này đã viết và commit, rồi phiên khác làm bẩn lại, vẫn bị nêu tên (lời chặn bảo để nguyên và nói rõ). Đo độ ồn sau vài phiên; nếu ồn thì lọc theo thời điểm commit cuối của tệp so với lần ghi cuối trong transcript."
+    },
+    {
+      "id": "apidoc-wildcard-11-10",
+      "viec": "tools/apidoc: wildcard cuối của ServeMux {name...} sinh thành {name} trong openapi.json (tham số đường dẫn và operationId) — tuyến commune-basemap là tuyến wildcard đầu tiên.",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "bang_chung": "b5cd41c6 — tools/apidoc/route.go openAPIPath + TestTrailingWildcardBecomesPlainPathParam; go test tools/apidoc tools/ingress xanh; 5e8aceb1 openapi có /api/v1/commune-basemap/{file}, operationId comms_get_commune_basemap_by_file.",
+      "tiep_theo": ""
     }
   ]
 }
