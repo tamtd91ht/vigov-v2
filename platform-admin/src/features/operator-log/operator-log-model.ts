@@ -6,7 +6,8 @@
 /**
  * The verbs the operator log can hold today: audit_log `actor_kind = 'operator'` rows
  * (service-platform/internal/store/operator_writes.go `Action…`) and platform_audit_log rows
- * (upload_policy.go, shared_mini_app.go, petition_field.go, migration seeds). An UNKNOWN verb is
+ * (upload_policy.go, shared_mini_app.go, petition_field.go, migration seeds), and the `zalo_bot.*`
+ * display verbs for the shared Zalo Bot (ADR 0074). An UNKNOWN verb is
  * shown raw, never guessed: a new verb reaching this screen before this table is a gap someone can
  * see, not a sentence that misdescribes an act.
  */
@@ -31,6 +32,10 @@ const ACTION_LABELS: Record<string, string> = {
   "petition_field.changed": "Sửa lĩnh vực phản ánh",
   "petition_field.deactivated": "Ngừng dùng lĩnh vực phản ánh",
   "petition_field.reactivated": "Dùng lại lĩnh vực phản ánh",
+  // The shared Zalo Bot's writes (ADR 0074), as service-platform names them for this log.
+  "zalo_bot.token_set": "Đặt token Zalo Bot",
+  "zalo_bot.checked": "Kiểm tra Zalo Bot",
+  "zalo_bot.webhook_set": "Trỏ webhook Zalo Bot",
 };
 
 export function actionLabel(action: string): string {

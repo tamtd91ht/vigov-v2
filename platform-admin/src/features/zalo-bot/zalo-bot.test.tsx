@@ -20,9 +20,12 @@ import {
   type ZaloBotWebhook,
 } from "@/lib/api";
 import { canManageZaloBot, canReadConsole } from "@/lib/permissions";
+import { actionLabel } from "@/features/operator-log/operator-log-model";
 
 import {
+  botLabel,
   buildBotChange,
+  linkedLabel,
   endedLinksText,
   outcomeText,
   RELINK_COUNT_MISSING,
@@ -38,11 +41,13 @@ import {
   DENIED_TEXT,
   NO_COMMUNE_ROWS,
   NOT_CONFIGURED_TITLE,
+  readOnMount,
   RelinkConfirmBody,
   SharedBotView,
   TokenFormFields,
   WEBHOOK_ELSEWHERE,
   WEBHOOK_NEEDS_TOKEN,
+  WEBHOOK_NOT_CHECKED,
   WebhookView,
   ZaloBotGate,
 } from "./zalo-bot-screen";
@@ -144,7 +149,19 @@ describe("client — paths, methods, exact bodies", () => {
     await getSharedZaloBot();
     expect(last()).toEqual({ url: "/api/v1/zalo-bots/shared", method: "GET", body: undefined });
 
-    answer = () => json(200, { items: [{ tenant_id: "01J0000000000000000000000A", channel_enabled: true, linked_staff_count: 3 }] });
+    answer = () =>
+      json(200, {
+        items: [
+          {
+            tenant_id: "01J0000000000000000000000A",
+            commune_name: "Xã Kiểm Thử",
+            channel_enabled: true,
+            uses_own_bot: false,
+            linked_staff_count: 3,
+            total_staff_count: 9,
+          },
+        ],
+      });
     expect(await listZaloBotCommunes()).toHaveLength(1);
     expect(last().url).toBe("/api/v1/zalo-bots/shared/communes");
 
@@ -202,6 +219,17 @@ describe("client — paths, methods, exact bodies", () => {
     )) as ApiError;
     expect(err.zaloOutcome).toBe("token-bi-tu-choi");
     expect(zaloBotError(err)).toEqual({ field: "token", text: `Chưa lưu token. ${outcomeText("token-bi-tu-choi")}` });
+  });
+
+  it("422 field codes land under their own input; an unknown code is left to the generic sentence", () => {
+    expect(zaloBotError(new ApiError(422, "invalid_token", "", ""))?.field).toBe("token");
+    expect(zaloBotError(new ApiError(422, "invalid_bot_name", "", ""))).toEqual({
+      field: "botName",
+      text: "Hãy nhập tên bot, tối đa 100 ký tự.",
+    });
+    expect(zaloBotError(new ApiError(422, "invalid_chat_url", "", ""))?.field).toBe("chatUrl");
+    expect(zaloBotError(new ApiError(422, "something_new", "", ""))).toBeNull();
+    expect(zaloBotError(new ApiError(422, "toString", "", ""))).toBeNull();
   });
 
   it("success with ended links says how many; none says nothing", () => {
@@ -342,21 +370,105 @@ describe("views", () => {
     expect(failed).toContain(outcomeText("gioi-han-tan-suat"));
   });
 
-  it("communes: counts only, name or ULID, totals; empty list is a sentence", () => {
+  it("webhook before the press: the button, and no Zalo state — not a fake one", () => {
+    const html = renderToString(
+      <WebhookView configured state={{ status: "idle" }} onRefresh={noop} onPoint={noop} pointing={false} pointResult={null} />,
+    );
+    expect(html).toContain(WEBHOOK_NOT_CHECKED);
+    expect(html).toContain("Kiểm tra webhook");
+    expect(html).toContain("Trỏ webhook về hệ thống");
+    expect(html).not.toContain("Đúng địa chỉ của hệ thống");
+    expect(html).not.toContain("Không khớp địa chỉ của hệ thống");
+    expect(html).not.toContain("Đang hỏi Zalo");
+    // The check button is pressable before any read.
+    const checkButton = html.split("<button").find((b) => b.includes("Kiểm tra webhook</button>"));
+    expect(checkButton).toBeDefined();
+    expect(checkButton).not.toContain('disabled=""');
+  });
+
+  it("communes, per prototype: Xã, phường · Kênh · Bot · Đã ghép nối; own bot named; linked/total; empty list is a sentence", () => {
     const html = renderToString(
       <CommuneUptakeView
         state={{
           status: "ready",
           data: [
-            { tenant_id: "01J0000000000000000000000A", commune_name: "Xã Kiểm Thử", channel_enabled: true, linked_staff_count: 4 },
-            { tenant_id: "01J0000000000000000000000B", channel_enabled: false, linked_staff_count: 0 },
+            {
+              tenant_id: "01J0000000000000000000000A",
+              commune_name: "Xã Kiểm Thử",
+              channel_enabled: true,
+              uses_own_bot: true,
+              own_bot_name: "Bot Xã Kiểm Thử",
+              linked_staff_count: 4,
+              total_staff_count: 12,
+            },
+            {
+              tenant_id: "01J0000000000000000000000B",
+              channel_enabled: false,
+              uses_own_bot: false,
+              linked_staff_count: 0,
+              total_staff_count: 5,
+            },
           ],
         }}
       />,
     );
+    const headers = [...html.matchAll(/<th scope="col">([^<]*)<\/th>/g)].map((m) => m[1]);
+    expect(headers).toEqual(["Xã, phường", "Kênh", "Bot", "Đã ghép nối"]);
+    expect(html).toContain("Kênh Zalo theo xã");
     expect(html).toContain("Xã Kiểm Thử");
-    expect(html).toContain("01J0000000000000000000000B");
+    expect(html).toContain("01J0000000000000000000000B"); // no name from an older server: the ULID, never blank
+    expect(html).toContain("Bot riêng · Bot Xã Kiểm Thử");
+    expect(html).toContain("Bot chung");
+    expect(html).toContain("4/12 cán bộ");
+    expect(html).toContain("0/5 cán bộ");
     expect(html).toContain("1 xã bật kênh · 4 cán bộ đã ghép nối");
     expect(renderToString(<CommuneUptakeView state={{ status: "ready", data: [] }} />)).toContain(NO_COMMUNE_ROWS);
+  });
+
+  it("own bot without a name is still `Bot riêng`; the linked count is the server's, never summed", () => {
+    const row = {
+      tenant_id: "01J0000000000000000000000C",
+      channel_enabled: true,
+      uses_own_bot: true,
+      own_bot_name: "  ",
+      linked_staff_count: 2,
+      total_staff_count: 3,
+    };
+    expect(botLabel(row)).toBe("Bot riêng");
+    expect(botLabel({ ...row, uses_own_bot: false, own_bot_name: "ignored" })).toBe("Bot chung");
+    expect(linkedLabel(row)).toBe("2/3 cán bộ");
+  });
+});
+
+describe("operator log names the Zalo Bot verbs", () => {
+  it("token set, check, webhook set each have a Vietnamese label", () => {
+    expect(actionLabel("zalo_bot.token_set")).toBe("Đặt token Zalo Bot");
+    expect(actionLabel("zalo_bot.checked")).toBe("Kiểm tra Zalo Bot");
+    expect(actionLabel("zalo_bot.webhook_set")).toBe("Trỏ webhook Zalo Bot");
+  });
+});
+
+// --- mount: config and communes only, never the webhook --------------------------------------------
+
+describe("opening the page asks Zalo nothing (owner 11/10/2026)", () => {
+  it("the mount reads GET zalo-bots/shared and GET …/communes — no webhook request", async () => {
+    answer = () => json(200, { configured: true, items: [] });
+    const reads = readOnMount();
+    await Promise.allSettled([reads.bot, reads.communes]);
+    const urls = calls.map((c) => `${String(c.init.method)} ${c.url}`).sort();
+    expect(urls).toEqual(["GET /api/v1/zalo-bots/shared", "GET /api/v1/zalo-bots/shared/communes"]);
+    expect(calls.some((c) => c.url.endsWith("/webhook"))).toBe(false);
+  });
+
+  it("the webhook is read only by the “Kiểm tra webhook” handler — the workspace has no other caller", async () => {
+    // A rendered DOM is not available here (node environment), so the guarantee is checked at its
+    // source: one call site of the webhook read in the screen, inside the press handler.
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("./zalo-bot-screen.tsx", import.meta.url), "utf8");
+    const callSites = [...src.matchAll(/getSharedZaloBotWebhook\(\)/g)];
+    expect(callSites).toHaveLength(1);
+    const handler = src.slice(src.indexOf("function checkWebhook()"), src.indexOf("function checkWebhook()") + 400);
+    expect(handler).toContain("getSharedZaloBotWebhook()");
+    expect(src).toContain("onRefresh={checkWebhook}");
   });
 });

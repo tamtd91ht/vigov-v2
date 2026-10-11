@@ -35,12 +35,14 @@ import { canManageZaloBot } from "@/lib/permissions";
 
 import {
   BOT_NAME_HINT,
+  botLabel,
   buildBotChange,
   CHAT_URL_HINT,
   communeLabel,
   communeTotals,
   endedLinksText,
   isOk,
+  linkedLabel,
   outcomeText,
   RELINK_COUNT_MISSING,
   relinkQuestion,
@@ -62,6 +64,9 @@ import {
  * THE TOKEN IS WRITE-ONLY (ADR 0074 #4): never prefilled, the input emptied the moment it is sent,
  * and the only trace on screen is "Đã đặt lúc … bởi VH-…". During the relink confirmation the token is
  * held in component memory only, and dropped on confirm, cancel or close.
+ *
+ * ZALO IS ASKED ABOUT THE WEBHOOK ONLY ON A PRESS (owner 11/10/2026): opening the page reads the
+ * configuration and the communes table (`readOnMount`), nothing that reaches Zalo.
  */
 
 export type Load<T> = { status: "loading" } | { status: "ready"; data: T } | { status: "error"; message: string };
@@ -78,7 +83,30 @@ export const WEBHOOK_NEEDS_TOKEN = "Đặt token cho bot trước, rồi mới k
 export const WEBHOOK_ELSEWHERE =
   "Bot đang gửi tin nhắn tới một địa chỉ khác hệ thống, nên cán bộ gửi mã ghép nối sẽ không được nhận. Bấm “Trỏ webhook về hệ thống” để sửa.";
 
+/**
+ * The webhook block before the operator asks. Every webhook read is a call to Zalo, so the page
+ * makes none on its own (owner 11/10/2026) — and says it has not asked, rather than showing a state
+ * it does not know.
+ */
+export const WEBHOOK_NOT_CHECKED =
+  "Chưa hỏi Zalo về webhook của bot. Bấm “Kiểm tra webhook” để xem Zalo đang gửi tin nhắn của bot tới địa chỉ nào.";
+
 export const NO_COMMUNE_ROWS = "Chưa xã nào bật kênh Zalo hoặc có cán bộ ghép nối.";
+
+/** The prototype's sentence under “Kênh Zalo theo xã”. */
+export const COMMUNES_HINT =
+  "Xã tắt kênh thì không tin nào đi, dù cán bộ đã ghép nối — đây là chỗ đầu tiên phải nhìn khi một xã báo “giao việc mà không thấy tin”.";
+
+/** The webhook block's state: `idle` until the operator presses “Kiểm tra webhook”. */
+export type WebhookLoad = Load<ZaloBotWebhook> | { status: "idle" };
+
+/**
+ * What opening the page reads: the bot's configuration and the communes table — NEVER the webhook,
+ * which asks Zalo and runs only from its button. Exported so a test can see the mount's requests.
+ */
+export function readOnMount(): { bot: Promise<SharedZaloBot>; communes: Promise<ZaloBotCommuneStats[]> } {
+  return { bot: getSharedZaloBot(), communes: listZaloBotCommunes() };
+}
 
 // --- pure views (rendered to strings in tests) ---------------------------------------------------
 
@@ -213,7 +241,7 @@ export function WebhookView({
   pointResult,
 }: {
   configured: boolean;
-  state: Load<ZaloBotWebhook>;
+  state: WebhookLoad;
   onRefresh: () => void;
   onPoint: () => void;
   pointing: boolean;
@@ -228,6 +256,8 @@ export function WebhookView({
       <CardContent className="flex flex-col gap-4">
         {!configured ? (
           <p className="m-0 text-sm text-ink-500">{WEBHOOK_NEEDS_TOKEN}</p>
+        ) : state.status === "idle" ? (
+          <p className="m-0 text-sm text-ink-500">{WEBHOOK_NOT_CHECKED}</p>
         ) : state.status === "loading" ? (
           <>
             <p role="status" className="sr-only">
@@ -257,9 +287,10 @@ export function WebhookView({
               variant="secondary"
               onClick={onRefresh}
               disabled={pointing || state.status === "loading"}
+              aria-busy={state.status === "loading"}
               icon={<RefreshCw aria-hidden="true" focusable="false" strokeWidth={1.8} />}
             >
-              Kiểm tra webhook
+              {state.status === "loading" ? "Đang kiểm tra webhook…" : "Kiểm tra webhook"}
             </Button>
           </div>
         ) : null}
@@ -316,33 +347,35 @@ export function CommuneUptakeView({ state }: { state: Load<ZaloBotCommuneStats[]
     <Card as="section" aria-labelledby="zalo-communes-title">
       <CardHeader>
         <Landmark aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
-        <CardTitle id="zalo-communes-title">Xã dùng bot</CardTitle>
+        <CardTitle id="zalo-communes-title">Kênh Zalo theo xã</CardTitle>
         {state.status === "ready" && state.data.length > 0 ? (
           <span className="text-[13px] text-ink-500">
             {`${communeTotals(state.data).enabled} xã bật kênh · ${communeTotals(state.data).linked} cán bộ đã ghép nối`}
           </span>
         ) : null}
+        <p className="m-0 w-full text-[13px] text-ink-500">{COMMUNES_HINT}</p>
       </CardHeader>
       {state.status === "loading" ? (
         <>
           <p role="status" className="sr-only">
             Đang tải số liệu các xã…
           </p>
-          <SkeletonRows rows={3} columns={3} />
+          <SkeletonRows rows={3} columns={4} />
         </>
       ) : state.status === "error" ? (
         <ErrorState role="alert" title="Chưa tải được số liệu các xã" message={state.message} />
       ) : state.data.length === 0 ? (
         <EmptyState icon={Landmark} tone="neutral" title={NO_COMMUNE_ROWS} className="py-6" />
       ) : (
-        <TableScroll sticky aria-label="Xã dùng bot">
+        <TableScroll sticky aria-label="Kênh Zalo theo xã">
           <table className={DATA_TABLE_CLASS}>
-            <caption className="sr-only">Kênh Zalo và số cán bộ đã ghép nối, theo xã</caption>
+            <caption className="sr-only">Kênh Zalo, bot đang dùng và số cán bộ đã ghép nối, theo xã</caption>
             <thead>
               <tr>
-                <th scope="col">Xã</th>
-                <th scope="col">Kênh Zalo</th>
-                <th scope="col">Cán bộ đã ghép nối</th>
+                <th scope="col">Xã, phường</th>
+                <th scope="col">Kênh</th>
+                <th scope="col">Bot</th>
+                <th scope="col">Đã ghép nối</th>
               </tr>
             </thead>
             <tbody>
@@ -352,7 +385,8 @@ export function CommuneUptakeView({ state }: { state: Load<ZaloBotCommuneStats[]
                   <td>
                     {row.channel_enabled ? <Badge tone="success">Đang bật</Badge> : <Badge tone="neutral">Đang tắt</Badge>}
                   </td>
-                  <td className="tabular-nums">{row.linked_staff_count}</td>
+                  <td>{botLabel(row)}</td>
+                  <td className="tabular-nums">{linkedLabel(row)}</td>
                 </tr>
               ))}
             </tbody>
@@ -540,7 +574,7 @@ function TokenDialog({
 function ZaloBotWorkspace() {
   const guarded = useGuardedError();
   const [bot, setBot] = useState<Load<SharedZaloBot>>({ status: "loading" });
-  const [webhook, setWebhook] = useState<Load<ZaloBotWebhook>>({ status: "loading" });
+  const [webhook, setWebhook] = useState<WebhookLoad>({ status: "idle" });
   const [communes, setCommunes] = useState<Load<ZaloBotCommuneStats[]>>({ status: "loading" });
   const [editing, setEditing] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -555,26 +589,22 @@ function ZaloBotWorkspace() {
     [guarded],
   );
 
-  // The read alone, state set only in its callbacks — so the effect below may call it.
-  const fetchWebhook = useCallback(() => {
+  /** “Kiểm tra webhook” — the ONLY caller of the webhook read, so Zalo is asked only on a press. */
+  function checkWebhook() {
+    setWebhook({ status: "loading" });
     getSharedZaloBotWebhook().then(
       (data) => setWebhook({ status: "ready", data }),
       (err: unknown) => {
         const message = fail(err, "xem webhook của Zalo Bot");
-        if (message !== null) setWebhook({ status: "error", message });
+        setWebhook(message !== null ? { status: "error", message } : { status: "idle" });
       },
     );
-  }, [fail]);
-
-  /** From a click: show loading again, then read. */
-  const loadWebhook = useCallback(() => {
-    setWebhook({ status: "loading" });
-    fetchWebhook();
-  }, [fetchWebhook]);
+  }
 
   useEffect(() => {
     let alive = true;
-    getSharedZaloBot().then(
+    const reads = readOnMount();
+    reads.bot.then(
       (data) => alive && setBot({ status: "ready", data }),
       (err: unknown) => {
         if (!alive) return;
@@ -582,7 +612,7 @@ function ZaloBotWorkspace() {
         if (message !== null) setBot({ status: "error", message });
       },
     );
-    listZaloBotCommunes().then(
+    reads.communes.then(
       (data) => alive && setCommunes({ status: "ready", data }),
       (err: unknown) => {
         if (!alive) return;
@@ -594,12 +624,6 @@ function ZaloBotWorkspace() {
       alive = false;
     };
   }, [fail]);
-
-  // The webhook read calls Zalo, so it runs only once a token exists — and again after a new one.
-  useEffect(() => {
-    // `webhook` starts as loading, so the first read needs no state change here.
-    if (configured) fetchWebhook();
-  }, [configured, fetchWebhook]);
 
   async function check() {
     setChecking(true);
@@ -627,7 +651,8 @@ function ZaloBotWorkspace() {
     try {
       const r = await setSharedZaloBotWebhook();
       setPointResult({ ok: isOk(r.outcome), text: webhookSetText(r.outcome) });
-      loadWebhook();
+      // What was shown is now stale; asking Zalo again waits for the operator's press.
+      setWebhook({ status: "idle" });
     } catch (err) {
       const message = fail(err, "trỏ webhook của Zalo Bot");
       if (message !== null) setPointResult({ ok: false, text: message });
@@ -648,7 +673,7 @@ function ZaloBotWorkspace() {
       <WebhookView
         configured={configured}
         state={webhook}
-        onRefresh={loadWebhook}
+        onRefresh={checkWebhook}
         onPoint={() => void point()}
         pointing={pointing}
         pointResult={pointResult}
@@ -666,7 +691,8 @@ function ZaloBotWorkspace() {
               ok: true,
               text: `Đã lưu token mới.${ended !== null ? ` ${ended}` : ""} Nếu đây là tài khoản bot khác, bấm “Trỏ webhook về hệ thống”.`,
             });
-            if (data.configured) loadWebhook();
+            // A new token may be another bot: the facts shown belonged to the old one.
+            setWebhook({ status: "idle" });
           }}
         />
       ) : null}

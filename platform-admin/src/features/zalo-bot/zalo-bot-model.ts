@@ -126,10 +126,8 @@ function isHttpsUrl(v: string): boolean {
 }
 
 /**
- * Field refusals of the `zalo-bots/shared…` routes, by `code`. ASSUMED CODES — the platform routes
- * were built in parallel with this screen and only `can-xac-nhan-ghep-lai` / `token-khong-dung-duoc`
- * were confirmed; an unknown code falls back to the generic sentence (`handleGuardedError`), never to
- * the server's text.
+ * Field refusals (422) of PUT /zalo-bots/shared, by `code`, each under the input it names. A code not
+ * listed here falls back to the generic sentence (`handleGuardedError`), never to the server's text.
  */
 const ZALO_BOT_ERRORS: Record<string, { field: BotField; text: string }> = {
   invalid_token: {
@@ -149,7 +147,8 @@ export function zaloBotError(err: ApiError): { field: BotField; text: string } |
   if (err.code === "token-khong-dung-duoc") {
     return { field: "token", text: `Chưa lưu token. ${outcomeText(err.zaloOutcome ?? "")}` };
   }
-  return ZALO_BOT_ERRORS[err.code] ?? null;
+  // Own keys only, as in `outcomeText`: a code `toString` would otherwise find Object.prototype's.
+  return Object.prototype.hasOwnProperty.call(ZALO_BOT_ERRORS, err.code) ? (ZALO_BOT_ERRORS[err.code] ?? null) : null;
 }
 
 // --- the communes table ---------------------------------------------------------------------------
@@ -157,6 +156,18 @@ export function zaloBotError(err: ApiError): { field: BotField; text: string } |
 /** Name the platform joined, else the ULID — a commune the operator can still look up, never blank. */
 export function communeLabel(row: ZaloBotCommuneStats): string {
   return row.commune_name !== undefined && row.commune_name.trim() !== "" ? row.commune_name : row.tenant_id;
+}
+
+/** The prototype's “Bot” cell: which bot the commune's messages go out through. */
+export function botLabel(row: ZaloBotCommuneStats): string {
+  if (!row.uses_own_bot) return "Bot chung";
+  const name = row.own_bot_name?.trim() ?? "";
+  return name !== "" ? `Bot riêng · ${name}` : "Bot riêng";
+}
+
+/** The prototype's “Đã ghép nối” cell: staff paired with the bot in use, out of the commune's active staff. */
+export function linkedLabel(row: ZaloBotCommuneStats): string {
+  return `${row.linked_staff_count}/${row.total_staff_count} cán bộ`;
 }
 
 export function communeTotals(rows: readonly ZaloBotCommuneStats[]): { enabled: number; linked: number } {

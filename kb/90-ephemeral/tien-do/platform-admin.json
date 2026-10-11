@@ -88,8 +88,8 @@
       "id": "zalo-bot-man-van-hanh",
       "viec": "Màn Zalo Bot ở khu vận hành (ADR 0074)",
       "trang_thai": "dang_lam",
-      "bang_chung": "e6484436 mục 'Zalo Bot' dưới ops.zalo_bot.manage: token chỉ ghi, xác nhận ghép lại khi đổi tài khoản bot (409 can-xac-nhan-ghep-lai), webhook, số đếm theo xã. vitest 240/240.",
-      "tiep_theo": "Chờ thẻ 05: tuyến REST zalo-bots/shared ở service-platform + khoá thứ tám ở opauth.go:70. Hỏi chủ dự án: kiểm webhook chỉ khi bấm nút (thay vì mỗi lần mở màn)? thêm ô Lý do vào hộp đặt token? Mã lỗi invalid_token/invalid_bot_name/invalid_chat_url đang giả định."
+      "bang_chung": "e6484436 mục 'Zalo Bot' dưới ops.zalo_bot.manage: token chỉ ghi, xác nhận ghép lại khi đổi tài khoản bot (409 can-xac-nhan-ghep-lai), webhook, số đếm theo xã. Theo chủ dự án 11/10/2026: mở màn chỉ đọc cấu hình + bảng xã, webhook chỉ hỏi Zalo khi bấm 'Kiểm tra webhook' (trước đó khối webhook nói chưa hỏi, không hiện trạng thái giả); bảng 'Kênh Zalo theo xã' theo prototype (Xã, phường · Kênh · Bot · Đã ghép nối = 'Bot riêng · <tên>'/'Bot chung', '<đã ghép>/<tổng> cán bộ'); không ô Lý do; invalid_token/invalid_bot_name/invalid_chat_url là mã thật; nhật ký vận hành có nhãn zalo_bot.token_set/checked/webhook_set. tsc + eslint + vitest 249/249 xanh (chưa commit).",
+      "tiep_theo": "Kiểm ảnh render thật cạnh prototype; chạy đầu-cuối với tuyến zalo-bots/shared của service-platform (thẻ 04). 503 khi comms chưa cấu hình đang hiện câu chung AUTH_UNAVAILABLE ('Hệ thống xác thực tạm không phản hồi') — câu này nói sai nguyên nhân, cần một câu riêng nếu máy chủ trả mã riêng."
     }
   ]
 }

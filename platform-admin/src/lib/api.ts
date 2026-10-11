@@ -308,12 +308,22 @@ export type ZaloBotWebhook = {
 /** PUT /zalo-bots/shared/webhook. `set_at` / `set_by` only with `ok`; `url` whenever Zalo was called. */
 export type ZaloBotWebhookSet = { outcome: ZaloBotOutcome; url: string; set_at?: string; set_by?: string };
 
-/** One commune's uptake of the shared bot — counts and a switch, nothing about a person. */
+/**
+ * One commune's uptake of a Zalo bot — counts and a switch, nothing about a person.
+ * `linked_staff_count` is already the count for the bot the commune USES (its own bot when
+ * `uses_own_bot`, else the shared one): never add the two. `total_staff_count` is the commune's active
+ * staff (identity `ListActiveStaffCounts`). `commune_name` is sent by the server; the type keeps it
+ * optional so an older server shows the ULID rather than a blank cell.
+ */
 export type ZaloBotCommuneStats = {
   tenant_id: string;
   commune_name?: string;
   channel_enabled: boolean;
+  uses_own_bot: boolean;
+  /** Present only with `uses_own_bot`, and only when the commune named its bot. */
+  own_bot_name?: string;
   linked_staff_count: number;
+  total_staff_count: number;
 };
 
 /** passwordRejectionView.problem (operator_sessions.go). */
@@ -693,7 +703,10 @@ export function checkSharedZaloBot(): Promise<ZaloBotCheck> {
   return call("POST", "/zalo-bots/shared/check");
 }
 
-/** Asks Zalo `getWebhookInfo`. A read: nothing is written. */
+/**
+ * Asks Zalo `getWebhookInfo`. Nothing is written on the bot. Called ONLY when the operator presses
+ * “Kiểm tra webhook” (owner 11/10/2026): every call is a call to Zalo, so opening the page makes none.
+ */
 export function getSharedZaloBotWebhook(): Promise<ZaloBotWebhook> {
   return call("GET", "/zalo-bots/shared/webhook");
 }
@@ -703,7 +716,7 @@ export function setSharedZaloBotWebhook(): Promise<ZaloBotWebhookSet> {
   return call("PUT", "/zalo-bots/shared/webhook");
 }
 
-/** Every commune's uptake of the shared bot, counts only. The server trails each read. */
+/** Every commune's uptake of a Zalo bot (shared or its own), counts only. The server trails each read. */
 export async function listZaloBotCommunes(): Promise<ZaloBotCommuneStats[]> {
   const res = await call<{ items: ZaloBotCommuneStats[] }>("GET", "/zalo-bots/shared/communes");
   return res.items;
