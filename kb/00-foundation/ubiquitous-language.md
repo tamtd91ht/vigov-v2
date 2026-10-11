@@ -23,6 +23,7 @@ owns_facts:
   - "vì sao giữ public-holidays dù closure-days đúng nghĩa hơn"
   - "vì sao hợp đồng danh mục trả trường label còn thực thể có tên riêng trả name"
   - "quy tắc: tên theo khái niệm, quyền sở hữu theo nhịp đổi"
+  - "tên tiếng Anh của Cảnh báo thiên tai (DisasterAlert) và Lựa chọn nhận thông báo (CitizenNotificationPreference)"
 ---
 
 # Ngôn ngữ chung
@@ -241,7 +242,8 @@ một **bộ chọn** trên loại ấy, đúng hình dạng `sessions/current` 
 
 ### Kênh công dân — ADR 0023
 
-Sáu khái niệm, chốt cùng một lượt. **Lý do đầy đủ nằm ở ADR 0023**, không chép lại ở đây.
+Sáu khái niệm, chốt cùng một lượt. **Lý do đầy đủ nằm ở ADR 0023**, không chép lại ở đây. Hai
+dòng cuối thêm ngày 11/10/2026, lý do ở ADR 0091.
 
 | Khái niệm | Thực thể (`@entity`) | Bảng | Tài nguyên URL | Vì sao không phải từ dễ đoán |
 |---|---|---|---|---|
@@ -251,6 +253,8 @@ Sáu khái niệm, chốt cùng một lượt. **Lý do đầy đủ nằm ở A
 | Quan hệ công dân ↔ xã | `CitizenCommune` | `quan_he_cong_dan_xa` | *(không có tài nguyên riêng)* | Giá trị: `thuong_tru` · `tam_tru` · **`chua_khai`**. Không dùng `vang_lai`: người gửi phản ánh có thể đang ngồi ở tỉnh khác, hệ thống không biết họ ở đâu. Hai sự thật tách riêng — **công dân khai gì** và **xã đã xác thực chưa** |
 | Đơn vị cũ → đơn vị kế thừa | `TenantSuccession` | `tenant_succession` | *(không bao giờ là tài nguyên)* | **Không** gọi `alias`: hai xã là hai pháp nhân, và một cái tên nói chúng là một sẽ mời người sau viết `UPDATE tenant_id` trên hồ sơ lưu trữ — `admin-unit-merge` bất biến 2 cấm |
 | Định danh công dân | `CitizenIdentity` | `dinh_danh_cong_dan` | *(không bao giờ có danh sách)* | **Không** gọi `cong_dan`: bảng này nằm ở vùng xuyên xã, không có `tenant_id` che chắn. Một cái tên rộng là lời mời thêm `so_cccd`, `ho_ten` vào đúng chỗ Nghị định 13/2023 nặng nhất |
+| **Cảnh báo thiên tai** *(thêm 11/10/2026)* | `DisasterAlert` | *(chưa tạo)* | `disaster-alerts` (ADR 0047 G2) | Service `comms`, ADR 0091 §2. Tên đã có từ ADR 0047 G2 (30/09/2026), trùng tên kiểu của prototype (`../vigov-require/apps/miniapp/src/types/index.ts:139`). Sáu loại gồm cả dịch bệnh và cháy — vẫn một thực thể, không tách theo loại |
+| **Lựa chọn nhận thông báo** *(thêm 11/10/2026)* | `CitizenNotificationPreference` | *(chưa tạo)* | *(chưa chốt)* | Service `comms`, theo xã + công dân, ADR 0091 §4. Tiền tố `Citizen` vì `notifications` đã là hộp chuông của cán bộ (§Tên tài nguyên trên URL, dòng *Thông báo*) |
 
 **Bảng này còn thiếu.** Nó mới phủ các khái niệm đã xuất hiện trong mã, trong một ADR đã chốt,
 hoặc trong `.claude/skills/rest-api-design/SKILL.md`. Gặp khái niệm chưa có dòng ở đây: **dừng

@@ -22,7 +22,7 @@ owns_facts:
   - "/tong-quan từ 10/10/2026: ô số nhiệm vụ mở popup danh sách và ngăn chi tiết tại chỗ; dòng nhiệm vụ của Cần xử lý ngay có tên + bộ phận, dòng phản ánh vẫn chỉ mã; khối Giải ngân là luỹ kế năm ngân sách (§Sửa đổi 10–11/10/2026)"
   - "phạm vi /tong-quan đợt 1 và câu 'Chưa có dữ liệu nguồn' cho ô không có nguồn"
   - "drill-down ?metric= (+from/to) tới /nhiem-vu, /phan-anh, /van-ban và vì sao ca kiểm không-trạng-thái-URL của sổ văn bản đến được nới"
-  - "ảnh trước/sau bị chặn, cảnh báo thiên tai để đợt sau, trên /tong-quan"
+  - "ảnh trước/sau bị chặn, cảnh báo thiên tai để đợt sau, trên /tong-quan (11/10/2026: các chỗ chặn của cảnh báo thiên tai đã gỡ ở ADR 0091; khối trên /tong-quan chưa quyết — §Sửa đổi 11/10/2026)"
   - "danh sách chỗ /tong-quan của v2 cố ý khác kho yêu cầu, người dùng chốt giữ hướng v2"
   - "tab Báo cáo của /phan-anh: kỳ như §3, đúng hạn/trễ dùng đúng vị từ của /tong-quan, ô 'Đang trễ hạn (hiện tại)' là số tồn, bảng theo lĩnh vực, theo đơn vị (giờ làm việc từ lúc giao tới xu_ly_xong_luc), theo thôn — định nghĩa từng bảng (chủ dự án, 09/10/2026)"
 ---
@@ -36,7 +36,8 @@ owns_facts:
 **Sửa đổi 04/10/2026:** mở `/bao-cao` (cuối tệp). **Sửa đổi 09/10/2026:** tab Báo cáo của `/phan-anh`
 (cuối tệp). **Sửa đổi 09/10/2026 (lần 2):** `/bao-cao` theo prototype — thay một phần §3, §4, §7, B3,
 B4, B5b **cho riêng `/bao-cao`** (cuối tệp). **Sửa đổi 10–11/10/2026:** bảng lỗi của khách — thay một
-phần §5, §6, §7 **cho `/tong-quan`** (cuối tệp).
+phần §5, §6, §7 **cho `/tong-quan`** (cuối tệp). **Sửa đổi 11/10/2026:** cảnh báo thiên tai của §8 —
+ADR 0091 (cuối tệp).
 
 ## Bối cảnh
 
@@ -558,3 +559,14 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
   đang xem." Nếu không ghi, người xem chọn "Tuần này" sẽ đọc năm con số cả năm như số của tuần.
 
 → ADR 0090 · ADR 0076 (ngăn chi tiết nhiệm vụ) · luật 3 · luật 10 cấm #2
+
+## Sửa đổi 11/10/2026 — cảnh báo thiên tai (§8)
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+11/10/2026. Nội dung quyết định: **ADR 0091 §2** — không chép ở đây.
+
+| Chỗ ở tệp này | Nay |
+|---|---|
+| §8 dòng *Cảnh báo thiên tai* — "ĐỂ ĐỢT SAU" và bốn chỗ chặn (service sở hữu, khoá quyền, loại, ZNS) | Cả bốn đã có câu trả lời ở ADR 0091 §2. Cảnh báo được dựng ở `service-comms`, web-admin (tab của "Nội dung Mini App") và Mini App |
+| Bảng *Chỗ cố ý khác kho yêu cầu* dòng 6 — loại cảnh báo "Chưa chốt" | Đã chốt: ADR 0091 §2 |
+| *Còn mở* #4 — "Cảnh báo thiên tai (§8)", của khách | Đổi thành: **có khối cảnh báo trên `/tong-quan` hay không** — chưa ai quyết. ADR 0091 chỉ nói Mini App và tab cán bộ |

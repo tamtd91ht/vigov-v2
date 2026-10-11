@@ -21,6 +21,8 @@ owns_facts:
 commit `43250a9`
 **Sửa đổi 09/10/2026:** thêm lời báo của gộp phiếu trùng (ADR 0087) và chốt nhật ký xử lý luôn nội bộ
 (§Sửa đổi 09/10/2026, cuối tệp).
+**Sửa đổi 11/10/2026:** dân tắt nhận thông báo thì chỉ hai nhánh kết thúc còn gửi — ADR 0091 §4
+(§Sửa đổi 11/10/2026, cuối tệp).
 
 ## Bối cảnh
 
@@ -143,3 +145,16 @@ Nhật ký **không có cờ công khai** — không có đường nào bật m�
 Vì sao: nhật ký mang tên cán bộ, ghi chú nội bộ và luân chuyển — ba thứ đã nằm trong danh sách trên
 (luật 4 cấm #5). Một cờ công khai theo dòng là một quyết định luật 3/4 **mỗi lần cán bộ bấm**, không ai
 rà được. Điều người dân được đọc là **câu kết quả** (luật 10 bất biến 6), không phải nhật ký.
+
+## Sửa đổi 11/10/2026 — dân tắt nhận thông báo
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+11/10/2026, trong phiên chính. Đây là **đổi cách áp bảng** — luật 10 điều kiện dừng #3 — nên ghi kèm
+người quyết và ngày. Nội dung quyết định (công tắc, thực thể, trạng thái sổ mới): **ADR 0091 §4** —
+không chép ở đây.
+
+| Chỗ ở tệp này | Nay |
+|---|---|
+| §*Báo khi phiếu chuyển VÀO* | Bảng **không** thêm hay bớt dòng. Dân đã tắt nhận thì chỉ dòng `khong-tiep-nhan` và `chuyen-cap-tren` còn gửi qua Zalo; các dòng khác vẫn sinh nghĩa vụ báo và vẫn ghi sổ, nhưng không gửi |
+| §*Hệ quả* — "chuyển vào một trạng thái trong bảng mà không có lời báo vẫn bị cấm" | Vẫn đứng: lời báo vẫn được **ghi nhận** (dòng sổ có trạng thái "dân đã tắt nhận"). Không có dòng sổ mới là vi phạm |
+| *Còn mở* #4 | Không đổi. Công tắc chỉ có tác dụng từ khi đường ZNS chạy thật |

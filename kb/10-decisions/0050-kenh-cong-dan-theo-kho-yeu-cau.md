@@ -13,7 +13,7 @@ owns_facts:
   - "trường bắt buộc khi dân gửi phản ánh: lĩnh vực, mô tả, ảnh/video, vị trí, người gửi trừ khi ẩn danh"
   - "điểm 1 và 9 áp cả app chung: lĩnh vực là bước đầu, bắt buộc phía client, nhắc lại ở bước xác nhận; máy chủ còn tuỳ chọn (01/10/2026)"
   - "phản ánh 'Thái độ / tác phong cán bộ': luồng riêng, mặc định chỉ Bí thư/Chủ tịch xem, không công khai, xã tắt được"
-  - "tra cứu hồ sơ phía dân: số điện thoại đầy đủ + 4 số cuối số hồ sơ"
+  - "tra cứu hồ sơ phía dân: số điện thoại đầy đủ + 4 số cuối số hồ sơ (THAY 11/10/2026 — ADR 0091 §3 sở hữu cách tra cứu mới)"
   - "chatbot OA mức P1; hỏi đáp TTHC, lịch tiếp công dân, khảo sát (P1) và thanh toán (P2) thuộc phạm vi"
   - "người dân thấy bốn nhóm trạng thái, ở cả app chung lẫn app riêng (vòng 4, 28/09/2026); chỉ app riêng xưng 'bà con'"
   - "nháp phản ánh giữ trên máy CHỈ trong app riêng của xã: một khoá, sáu trường, họ tên và số điện thoại lưu cả khi ẩn danh (vòng 4–5, 28/09/2026; sửa 06/10/2026 — có cả ở app chung mở từ QR của xã)"
@@ -53,6 +53,9 @@ phần ADR 0028** (quyết định E cho kênh Mini App), **ADR 0041** (thêm m�
 >
 > 09/10/2026 — chủ dự án: **người gửi đã xác thực số là một dòng chỉ đọc, bỏ nút "Sửa"; tên Zalo hỏi
 > cùng bước xác nhận số** — §*Sửa đổi 09/10/2026* (thay điểm 1 của §*Sửa đổi 08/10/2026*).
+>
+> 11/10/2026 — chủ dự án: **tra cứu hồ sơ mở trang của Cổng Dịch vụ công** (thay điểm 11) —
+> §*Sửa đổi 11/10/2026*.
 
 ## Bối cảnh
 
@@ -224,6 +227,16 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 **Thay gì:** điểm 1 của §*Sửa đổi 08/10/2026* (nút "Sửa") và vế *"'Sửa' vẫn còn"* ở đoạn *Thay gì* của
 mục ấy. Điểm 2–4 của §*Sửa đổi 08/10/2026* vẫn đứng. Điểm 9 vẫn đứng: ở (a) người gửi là tên Zalo, ở (c)
 là tên người dân gõ.
+
+## Sửa đổi 11/10/2026 — tra cứu hồ sơ một cửa (điểm 11)
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+11/10/2026. Nội dung quyết định: **ADR 0091 §3** — không chép ở đây.
+
+**Thay gì:** toàn bộ điểm 11 (số điện thoại đầy đủ + 4 số cuối, giới hạn 20 lần / 10 phút, danh sách hồ
+sơ) và vế *"hồ sơ một cửa … chưa có service sở hữu"* của §*Cái giá* điểm 11, 13. ViGov không giữ hồ sơ
+một cửa, nên không có tuyến tra cứu, không có service sở hữu, và điều kiện dừng luật 4 #2 không còn
+phát sinh cho việc này. Điểm 13 (hỏi đáp, lịch tiếp dân, khảo sát, thanh toán) **không đổi**.
 
 ## ĐIỀU KIỆN DỪNG
 

@@ -31,7 +31,9 @@ giữ nguyên từng chữ, chỉ thêm một dòng trỏ có ngày) · ADR 0018
 **Sửa đổi 06/10/2026** (app chung hiện trọn giao diện của xã, bỏ màn xác nhận xã riêng; lệnh đẩy
 chỉ chọn app nào, QR mang xã sinh ở platform-admin — §*Sửa đổi 06/10/2026*) ·
 **Sửa đổi 08/10/2026** (thanh tiêu đề gốc của Zalo mang tên xã ở app chung; chụp ảnh hiện trường bằng
-máy ảnh mặc định — §*Sửa đổi 08/10/2026*)
+máy ảnh mặc định — §*Sửa đổi 08/10/2026*) ·
+**Sửa đổi 11/10/2026** (app xã theo prototype; thay mục (4), (7), (11), (12) và G2 của dòng *"Theo
+PROTOTYPE.md"* — ADR 0091, §*Sửa đổi 11/10/2026*)
 
 ## Bối cảnh
 
@@ -407,7 +409,22 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 - `configAppView` chỉ chạy trong Zalo bản từ 23.02.01 (`index.d.ts:5247-5250`); máy cũ hơn giữ tiêu đề
   *"ViHAT Group"* của `app-config.json`.
 
-## ĐIỀU KIỆN DỪNG
+### Sửa đổi 11/10/2026 — app xã theo prototype
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+11/10/2026. Nội dung quyết định: **ADR 0091** — không chép ở đây. Bảng dưới chỉ trỏ chỗ bị thay trong
+dòng *"Theo `citizen-app/ui-design/prototpye-spec/PROTOTYPE.md`"* (30/09/2026) và dòng *"Chi tiết nối
+API"* của mục 6.
+
+| Chỗ ở tệp này | Nay |
+|---|---|
+| Vế *"Chỉ lấy giao diện §4–§7"* | App xã làm **hết** theo prototype; luật cứng thắng prototype — ADR 0091 §1 |
+| (4) Cảnh báo thiên tai · G2 | ADR 0091 §2. Khác G2: **sáu** loại (thêm dịch bệnh, cháy); có vùng nguy hiểm vẽ trên lưới 0..100. Giữ của G2: quyền `content.read`/`content.update`, điểm sơ tán và số khẩn cấp theo từng cảnh báo, chưa gửi ZNS. Cấp độ cán bộ gõ: ADR 0091 không nói, G2 đứng |
+| (7) Tra cứu hồ sơ một cửa "để sau" | ADR 0091 §3: mở trang tra cứu của Cổng Dịch vụ công bằng `openWebview` |
+| (11) Giữ 3 mức cỡ chữ | Một công tắc **"Cỡ chữ lớn"**; sàn 16px giữ — ADR 0091 §1 |
+| (12) Không công tắc "Nhận thông báo" | **Đảo:** công tắc thật — ADR 0091 §4 |
+| G4 (giờ từng bước) · G7 (thời lượng âm thanh cán bộ gõ) | Đứng nguyên. ADR 0091 §5 xác nhận G4; §7 áp cách của G7 cho video |
+
 
 1. Đề xuất lưu **tên miền** làm tham chiếu xã ở bất kỳ đâu (phiên, xã đã nhớ, vết, bản ghi nghiệp vụ)
 2. Đề xuất tệp dựng hay bundle mang **giá trị theo xã** ngoài việc chọn App ID đích — trừ tên miền
