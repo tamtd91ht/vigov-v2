@@ -232,6 +232,15 @@ describe("client — paths, methods, exact bodies", () => {
     expect(zaloBotError(new ApiError(422, "toString", "", ""))).toBeNull();
   });
 
+  it("the 503s service-platform names say what is down — never 'the auth service'", () => {
+    for (const code of ["zalo_bot_key_not_configured", "zalo_bot_unavailable", "staff_counts_unavailable"]) {
+      const known = zaloBotError(new ApiError(503, code, "", ""));
+      expect(known?.field).toBe("form");
+      expect(known?.text).not.toContain("xác thực");
+    }
+    expect(zaloBotError(new ApiError(503, "zalo_bot_key_not_configured", "", ""))?.text).toContain("Báo bộ phận kỹ thuật");
+  });
+
   it("success with ended links says how many; none says nothing", () => {
     expect(endedLinksText(3)).toBe("Đã gỡ 3 liên kết của cán bộ với tài khoản bot cũ.");
     expect(endedLinksText(0)).toBeNull();

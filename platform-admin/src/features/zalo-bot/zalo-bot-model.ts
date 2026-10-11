@@ -126,8 +126,11 @@ function isHttpsUrl(v: string): boolean {
 }
 
 /**
- * Field refusals (422) of PUT /zalo-bots/shared, by `code`, each under the input it names. A code not
- * listed here falls back to the generic sentence (`handleGuardedError`), never to the server's text.
+ * Field refusals (422) of PUT /zalo-bots/shared, by `code`, each under the input it names; and the
+ * 503s service-platform names (`operator_zalo_bot.go`), on the form. Without the 503 rows a comms or
+ * identity outage would fall to `AUTH_UNAVAILABLE` — "the auth service is down", the wrong cause, and
+ * the operator would chase sign-in instead of telling the technical team. A code not listed here falls
+ * back to the generic sentence (`handleGuardedError`), never to the server's text.
  */
 const ZALO_BOT_ERRORS: Record<string, { field: BotField; text: string }> = {
   invalid_token: {
@@ -138,6 +141,15 @@ const ZALO_BOT_ERRORS: Record<string, { field: BotField; text: string }> = {
   invalid_chat_url: {
     field: "chatUrl",
     text: "Liên kết trò chuyện phải là địa chỉ đầy đủ bắt đầu bằng https://, tối đa 300 ký tự.",
+  },
+  zalo_bot_key_not_configured: {
+    field: "form",
+    text: "Hệ thống chưa cấu hình khoá dữ liệu cấp nền tảng cho bot Zalo. Báo bộ phận kỹ thuật.",
+  },
+  zalo_bot_unavailable: { field: "form", text: "Hệ thống tạm thời không thao tác được với bot Zalo. Vui lòng thử lại sau." },
+  staff_counts_unavailable: {
+    field: "form",
+    text: "Hệ thống tạm thời không đếm được cán bộ của các xã. Vui lòng thử lại sau.",
   },
 };
 
