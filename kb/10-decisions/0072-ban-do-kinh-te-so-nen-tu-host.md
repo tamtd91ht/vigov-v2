@@ -3,22 +3,22 @@ id: 0072-ban-do-kinh-te-so-nen-tu-host
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 55eef86a
+derived_from_commit: f783c749
 expires: null
 owns_facts:
   - "Bản đồ kinh tế số — khung MẶC ĐỊNH theo xã (tâm + bán kính) do quản trị nền tảng đặt ở khu vận hành, lưu ở service-platform, là siêu dữ liệu xã trong ranh giới ADR 0003; giá trị riêng của xã thắng, mặc định chỉ áp khi xã chưa có giá trị riêng; 'Về mặc định' ngừng dùng giá trị riêng, có vết, không xoá cứng (chốt 04/10/2026, lần 2)"
   - "Bản đồ kinh tế số — bán kính khung: > 0 và trần CỨNG 50 km, không cận chính sách nào khác; người đặt chịu trách nhiệm; khu vận hành cảnh báo và đòi xác nhận khi lệch xa mức khuyến nghị (đề xuất 10 km, lệch xa = dưới 3 km hoặc trên 20 km); phép kiểm chủ quyền với trần 50 km (chốt 04/10/2026, lần 2)"
-  - "Bản đồ kinh tế số — văn bản lưu ý pháp lý khi xã đổi khung bản đồ, phiên bản 2026-10-04.1: mỗi lần đổi tâm hoặc bán kính ở web-admin phải tích xác nhận, máy chủ từ chối lưu khi thiếu xác nhận, vết ghi xác nhận + phiên bản văn bản (chốt 04/10/2026, lần 2)"
-  - "Bản đồ kinh tế số — nền bản đồ = bản công cộng OpenFreeMap (tiles.openfreemap.org; không khoá API, không giới hạn lượt, cho dùng thương mại, không SLA; ghi nguồn bắt buộc 'OpenFreeMap © OpenMapTiles Data from OpenStreetMap'); URL style là biến phía máy chủ toàn nền tảng của web-admin đọc lúc chạy, không NEXT_PUBLIC_*, thiếu thì không có nền và một câu trên màn hình, không bao giờ rơi về host khác (chủ dự án chốt 04/10/2026, thay PMTiles tự phục vụ)"
-  - "Bản đồ kinh tế số — luật 3 điểm dừng #2 ĐÃ QUYẾT chỉ cho bản đồ tài nguyên của xã phía cán bộ (viewport ra host nước ngoài được chấp nhận); vẽ toạ độ phản ánh của công dân (bản đồ nhiệt, bản đồ hiện trường) trên nền ngoài VẪN CHƯA QUYẾT (chốt 04/10/2026) — nền cho toạ độ phản ánh ở /phan-anh đã chốt 09/10/2026 là PMTiles tự host, xem §Sửa đổi 09/10/2026; nền OpenFreeMap vẫn không được vẽ toạ độ công dân"
+  - "Bản đồ kinh tế số — văn bản lưu ý pháp lý khi xã đổi khung bản đồ, phiên bản 2026-10-04.1: mỗi lần đổi tâm hoặc bán kính ở web-admin phải tích xác nhận, máy chủ từ chối lưu khi thiếu xác nhận, vết ghi xác nhận + phiên bản văn bản (chốt 04/10/2026, lần 2); câu 1 và 4 thành sai sau khi /ban-do sang nền tự host — bản nháp 2026-10-11.1-nhap chưa có hiệu lực, chờ pháp chế ViHAT + UBND, ban hành cần đổi phiên bản phía service-comms (chủ dự án, 11/10/2026, §Sửa đổi 11/10/2026 S3)"
+  - "Bản đồ kinh tế số — nền bản đồ = PMTiles TỰ HOST dùng chung với /phan-anh (tuyến cùng gốc /basemap/*, BASEMAP_URL, không NEXT_PUBLIC_*, không tệp danang.pmtiles của prototype); thiếu thì 'chưa cấu hình bản đồ nền', không bao giờ rơi về host khác; MAP_STYLE_URL bỏ; ghi nguồn OSM thu gọn giữ, ghi nguồn OpenFreeMap bỏ (chủ dự án, 11/10/2026, thay OpenFreeMap của H1 chốt 04/10/2026)"
+  - "Bản đồ kinh tế số — lớp nhiệt phản ánh trên /ban-do dựng từ GET /api/v1/citizen-report-points (service-petitions, feedback.read), chỉ hiện cho tài khoản giữ feedback.read, không dựng từ điểm tài nguyên; chặn của H2 hết áp vì nền cùng gốc; vẽ toạ độ công dân trên bất kỳ nền ngoài nào vẫn là điểm dừng (chủ dự án, 11/10/2026)"
   - "nền bản đồ cho toạ độ phản ánh của công dân (tab Bản đồ nhiệt và bản đồ nhỏ trong ngăn chi tiết phiếu ở /phan-anh) = PMTiles TỰ HOST, cùng gốc, không host tile/style/glyph/sprite bên ngoài; đóng việc còn mở #3 của §Sửa đổi 04/10/2026; tệp vùng, nơi đặt, khung theo xã, trần tuyến điểm đã chốt cùng ngày (§Trả lời 09/10/2026); gói npm, CSP, tuyến điểm phía petitions, xác nhận pháp lý và câu K6 cho nền tự host còn mở; chưa dựng thì hai bản đồ giữ control vô hiệu dấu '?' (chủ dự án, 09/10/2026)"
   - "Bản đồ kinh tế số — khung xã CỨNG: giá trị riêng của xã (tâm lat/lng + bán kính km) lưu ở service-comms, áp làm maxBounds của MapLibre; người giữ admin.lookup đặt, có vết; xã không có giá trị riêng lẫn mặc định thì trang không vẽ bản đồ; tâm phải nằm trong khung đất liền Việt Nam; chủ quyền chưa có xác nhận pháp lý (chốt 04/10/2026; cận bán kính thay ở lần 2)"
   - "Bản đồ kinh tế số — danh mục loại tài nguyên = đúng 11 nhóm của đặc tả §3, mã tiếng Việt không dấu theo ADR 0011 (doanh-nghiep … cong-trinh-dau-tu-cong), vào từng xã bằng hành động 'nạp 11 nhóm mặc định' có vết, không bằng migration (chốt 04/10/2026)"
-  - "Bản đồ kinh tế số — phạm vi MVP và những phần hoãn: lớp nhiệt phản ánh, mật độ theo thôn, nhập Excel, Mini App, PostGIS/vector tile, geocoding ngoài"
-  - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất"
-  - "Bản đồ kinh tế số — CSP khi trả nợ missing-security-headers: connect-src/img-src gồm tiles.openfreemap.org, worker-src blob:"
-  - "Bản đồ kinh tế số — phương án dự phòng nếu bỏ OpenFreeMap: cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng tự phục vụ"
-  - "nền PMTiles tự host của /phan-anh: tệp đất liền + đảo gần bờ (≈101,6–110,0°E, 7,9–23,9°N), luôn khoá khung xã, style lọc disputed và ranh giới biển, nhãn name:vi; đặt ở MinIO, phát qua tuyến cùng gốc /basemap/* có HTTP Range từ biến máy chủ BASEMAP_URL (ConfigMap, không fallback); tuyến map-frame mở thêm feedback.read; tuyến điểm nhiệt trần 5000, vượt thì 422; ký duyệt pháp lý và danh mục kiểm có ký sau mỗi lần làm mới (chủ dự án, 09/10/2026)"
+  - "Bản đồ kinh tế số — phạm vi MVP và những phần hoãn: mật độ theo thôn, nhập Excel, Mini App, PostGIS/vector tile, geocoding ngoài (lớp nhiệt phản ánh hết hoãn 11/10/2026); phần đặc tả chờ backend: mẫu/nhập Excel, lọc quy mô lao động, tổng hợp theo bộ lọc, feedback_count theo thôn, tìm địa điểm, trạng thái 'Đang triển khai' và xác minh 'Cần cập nhật' (§Sửa đổi 11/10/2026 S4)"
+  - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất; xoá = hộp xác nhận trong khung kèm lý do bắt buộc (11/10/2026)"
+  - "Bản đồ kinh tế số — CSP khi trả nợ missing-security-headers: chỉ nguồn cùng gốc của nền tự host + worker-src blob:, không còn tiles.openfreemap.org (11/10/2026)"
+  - "Bản đồ kinh tế số — cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng tự phục vụ (từ 11/10/2026 là phương án đang dùng, không còn dự phòng)"
+  - "nền PMTiles tự host của /phan-anh (và của /ban-do từ 11/10/2026): tệp đất liền + đảo gần bờ (≈101,6–110,0°E, 7,9–23,9°N), luôn khoá khung xã, style lọc disputed và ranh giới biển, nhãn name:vi; đặt ở MinIO, phát qua tuyến cùng gốc /basemap/* có HTTP Range từ biến máy chủ BASEMAP_URL (ConfigMap, không fallback); tuyến map-frame mở thêm feedback.read; tuyến điểm nhiệt trần 5000, vượt thì 422; ký duyệt pháp lý và danh mục kiểm có ký sau mỗi lần làm mới (chủ dự án, 09/10/2026)"
   - "geocoding ngược cho ô 'Nơi xảy ra' của phản ánh: Nominatim TỰ HOST trong cụm, dữ liệu OSM Việt Nam, không host ngoài; địa chỉ điền sẵn và sửa được, toạ độ giữ riêng; đóng việc còn mở #3 của bảng gốc (chủ dự án, 08/10/2026)"
 ---
 
@@ -36,6 +36,9 @@ bảng gốc (§Sửa đổi 08/10/2026, cuối tệp).
 **Sửa đổi 09/10/2026:** nền cho toạ độ phản ánh ở `/phan-anh` (bản đồ nhiệt, bản đồ hiện trường) —
 PMTiles tự host; đóng việc còn mở #3 của §Sửa đổi 04/10/2026 (§Sửa đổi 09/10/2026, cuối tệp). Cùng ngày,
 chủ dự án trả lời các việc còn mở của mục ấy (§Trả lời 09/10/2026, cuối tệp).
+**Sửa đổi 11/10/2026:** `/ban-do` bỏ OpenFreeMap, sang nền PMTiles tự host của `/phan-anh` — thay H1; lớp
+nhiệt phản ánh trên `/ban-do` được dựng từ điểm phản ánh thật; bản nháp K6 `2026-10-11.1-nhap` chờ pháp
+lý; xoá có lý do bắt buộc (§Sửa đổi 11/10/2026, cuối tệp).
 
 ## Bối cảnh
 
@@ -519,3 +522,107 @@ tài nguyên.
 | 2 | Văn bản K6 cho nền **tự host**: câu 1 và 4 của `2026-10-04.1` nói nhà cung cấp nước ngoài — sai với nền này. Bản đồ phản ánh dùng văn bản nào, hay không cần văn bản | Chủ dự án + pháp chế |
 | 3 | Nhịp làm mới tệp nền (con số) | Chủ dự án |
 | 4 | Gói npm (#4 bảng trên) và CSP (#5) — cổng khi dựng, không phải câu hỏi | Người dựng |
+
+## Sửa đổi 11/10/2026 — `/ban-do` sang nền tự host, lớp nhiệt phản ánh, bản nháp K6
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+11/10/2026, trong phiên chính (`/fix-web-admin`, menu `ban-do`, đặc tả `tmp/web/ban-do/vigov-ban-do-spec`,
+chỉ đạo *"ưu tiên chuẩn prototype"*). **Chưa dựng** khi ghi mục này.
+
+### S1. Nền của `/ban-do` — PMTiles tự host, cùng nền với `/phan-anh`
+
+| Điểm | Nội dung |
+|---|---|
+| Chốt | `/ban-do` bỏ OpenFreeMap, dùng **đúng nền tự host đã dựng cho `/phan-anh`**: tuyến cùng gốc `/basemap/*`, biến máy chủ `BASEMAP_URL` (key `BASEMAP-URL` trong `common-config`, `deploy/base/web-admin/deployment.yaml:67-69`), style Protomaps `light` nhãn `name:vi` dựng trong mã (`web-admin/src/lib/basemap/style.ts:6-21`), tệp `vn-mainland.pmtiles` dựng bằng `web-admin/scripts/build-basemap.sh`, danh mục kiểm chủ quyền có ký của `kb/40-runbooks/basemap-pmtiles.md` |
+| Không dùng | Tệp `danang.pmtiles` của prototype — không có lần cắt nào được ký duyệt chủ quyền, chỉ phủ Đà Nẵng, trong khi hệ thống phục vụ nhiều xã. Không đặt tệp trong `public/`, không `NEXT_PUBLIC_*` (luật 8 bất biến 4; bảng phương án ở đầu tệp) |
+| Chưa có tệp | Tới khi vận hành chạy script và đặt `BASEMAP-URL`, `/ban-do` hiện **"chưa cấu hình bản đồ nền"** như `/phan-anh` — chủ dự án **chấp nhận**. Không bao giờ rơi về OpenFreeMap hay host khác (cùng lý lẽ §5 gốc, H1 "Thiếu biến") |
+| `MAP_STYLE_URL` | **Bỏ.** Hiện còn ở `deploy/base/web-admin/deployment.yaml:60`, `.env.example:484` và `web-admin/src/lib/may-chu/map-style.ts:18` — phần mã gỡ cùng lần dựng, không thuộc mục này |
+| Ghi nguồn | Dòng ghi nguồn OpenStreetMap **thu gọn** ở góc bản đồ **giữ** (ODbL) — chuỗi của nền tự host, `web-admin/src/lib/basemap/style.ts:33`. Dòng `OpenFreeMap © OpenMapTiles …` của H1 **bỏ** |
+| Chủ quyền | Lý lẽ của §Trả lời 09/10/2026 (lọc `disputed` và ranh giới trên biển, luôn khoá khung xã) nay áp cho cả `/ban-do`. Ký duyệt pháp lý trước khi chạy thật vẫn mở |
+| CSP | Không còn host ngoài nào: khi nợ `missing-security-headers` được trả, `/ban-do` cần đúng các nguồn `'self'` / `blob:` mà runbook ghi (`kb/40-runbooks/basemap-pmtiles.md:32`); `tiles.openfreemap.org` không còn trong CSP |
+
+### S2. Lớp "Bản đồ nhiệt phản ánh" trên `/ban-do` — dựng từ điểm phản ánh thật
+
+| Điểm | Nội dung |
+|---|---|
+| Chốt | Lớp nhiệt trên `/ban-do` (hoãn ở §4, việc còn mở #2 bảng gốc) **được dựng**, từ tuyến điểm phản ánh thật `GET /api/v1/citizen-report-points` của `service-petitions` (`service-petitions/internal/http/routes_citizen_report_figures.go:59-61`, khoá `feedback.read`) |
+| Ai thấy | **Chỉ** tài khoản giữ `feedback.read`. Quyền kiểm ở tuyến phía máy chủ; giao diện ẩn lớp chỉ là hệ quả (luật 5 điều cấm #1) |
+| Vì sao chặn của H2 không còn | H2 cấm vẽ toạ độ công dân vì nền gửi viewport ra host nước ngoài. Nay nền cùng gốc (S1) — luật 3 điều kiện dừng #2 không bật, cùng lý lẽ §Sửa đổi 09/10/2026 |
+| Không làm | Lớp nhiệt từ **điểm tài nguyên** như prototype — đó là giả số liệu phản ánh |
+| Trần | Trần 5000 điểm, vượt thì 422, không vẽ một phần tập điểm (§Trả lời 09/10/2026) — giữ nguyên |
+| Còn hoãn | "Mật độ theo thôn" — xem S4, dòng `feedback_count` |
+
+### S3. Văn bản K6 — chuyển nền làm câu 1 và 4 thành SAI; bản nháp chờ pháp lý
+
+Sau S1, câu 1 (nêu OpenFreeMap) và câu 4 (nêu máy chủ ở nước ngoài) của `2026-10-04.1` **không còn
+đúng**. Chủ dự án chọn: **chuyển nền ngay**, viết **bản nháp** phiên bản mới ngay, chờ pháp chế ViHAT +
+UBND duyệt.
+
+| Điểm | Nội dung |
+|---|---|
+| Tới khi duyệt | Hộp thoại vẫn hiện **`2026-10-04.1`** — cán bộ được cho đọc hai câu đã sai về nền. Chủ dự án chấp nhận trong thời gian chờ pháp lý |
+| Vì sao không đổi ngay ở web-admin | Phiên bản do **máy chủ cưỡng chế**: `service-comms/internal/domain/map_frame.go:60` (`MapFrameNoticeVersion`); lưu khung mang phiên bản khác bị từ chối. Ban hành bản mới = đổi hằng số ấy **và** `web-admin/src/features/map-assets/labels.ts:60-69` cùng một lần — **phụ thuộc backend, ghi lại, không làm ở đây** |
+| Mã phiên bản nháp | `2026-10-11.1-nhap` — chỉ là tên trong ADR, **không bao giờ** gửi lên máy chủ. Khi được duyệt, ban hành dưới một phiên bản mới không có hậu tố `-nhap`, ghi ở đây trước (điểm dừng 3 của lần 2) |
+| Nơi đặt máy chủ | Không ADR nào ghi MinIO / cụm đặt ở Việt Nam, nên câu 4 chỉ nói **"máy chủ của hệ thống"**, không nói "trong nước" |
+
+#### K6 — phiên bản `2026-10-11.1-nhap` — **BẢN NHÁP — chưa có hiệu lực, chờ pháp lý duyệt**
+
+Chỉ câu 1 và 4 viết lại. Câu 2, 3, 5, 6, tiêu đề và câu xác nhận giữ **nguyên văn** `2026-10-04.1`
+(K6 ở trên; `labels.ts:61-70`).
+
+> Lưu ý trước khi thay đổi khung bản đồ của xã
+>
+> 1. Bản đồ nền do đơn vị vận hành hệ thống dựng từ dữ liệu OpenStreetMap và được phát từ máy chủ của hệ thống. Không bảo đảm độ chính xác hay tính đầy đủ của bản đồ nền; bản đồ có thể tạm thời không hiển thị.
+> 2. Ranh giới, địa danh, đường sá và vị trí trên bản đồ nền có thể chưa khớp với thực tế hoặc với bản đồ hành chính, bản đồ địa chính do cơ quan có thẩm quyền ban hành.
+> 3. Bản đồ chỉ dùng để tham khảo và hỗ trợ quản lý. Không dùng làm căn cứ pháp lý để xác định ranh giới hành chính, diện tích, quyền sử dụng đất hay giải quyết tranh chấp.
+> 4. Khi xem bản đồ, trình duyệt tải bản đồ nền từ máy chủ của hệ thống; không có yêu cầu tải bản đồ nền nào được gửi tới nhà cung cấp bản đồ ở nước ngoài.
+> 5. Việc thể hiện chủ quyền quốc gia, gồm hai quần đảo Hoàng Sa và Trường Sa, phải tuân thủ quy định pháp luật. Hệ thống giới hạn khung bản đồ trong địa bàn xã; nếu phát hiện thông tin sai lệch, báo ngay cho quản trị viên hệ thống.
+> 6. Thay đổi này được ghi vào nhật ký hệ thống: người thực hiện, thời điểm, giá trị trước và sau.
+>
+> ☐ Tôi đã đọc, hiểu các lưu ý trên và chịu trách nhiệm về thay đổi khung bản đồ của xã.
+
+### S4. Phần đặc tả KHÔNG dựng vì backend chưa có
+
+Mỗi dòng **cần `/develop-backend-api`**; giao diện giữ control vô hiệu dấu "?" (ADR 0068 §14), không giả
+số liệu.
+
+| # | Phần đặc tả | Backend thiếu gì |
+|---|---|---|
+| 1 | Mẫu Excel và nhập tài nguyên | Không có tuyến mẫu / nhập (§4 gốc vẫn hoãn) |
+| 2 | Lọc theo quy mô lao động | Tham số `min_employees` / `max_employees` trên tuyến danh sách. Cột `employee_count` có sẵn (`service-comms/migrations/0015_map_asset.sql:157`), chỉ thiếu bộ lọc |
+| 3 | Thẻ tổng hợp theo bộ lọc | Tổng hợp nhận bộ lọc, kèm tổng `employee_count`, `new_this_year`, `by_hamlet` |
+| 4 | Mật độ theo thôn có `feedback_count` | Hợp đồng đọc từ `petitions` sang `comms` chưa có — **luật 2 điểm dừng #2**, chủ dự án + kiến trúc chốt hợp đồng trước |
+| 5 | Tìm địa điểm cho ô chọn vị trí | Không có tuyến tìm địa điểm. Dùng Nominatim cho `/ban-do` **vẫn chưa quyết** (§Sửa đổi 08/10/2026, "Phạm vi"); §4 gốc đứng tới khi có lời chủ dự án |
+| 6 | Trạng thái "Đang triển khai" và xác minh 3 trạng thái ("Cần cập nhật") | Enum trạng thái hiện chỉ 3 giá trị (`0015_map_asset.sql:206`); xác minh là cờ (§5 dòng 2). Cần **migration mới** (không sửa 0015) — và dòng 2 của §5 bị đảo, ghi lại khi dựng |
+
+### S5. Xoá trên `/ban-do`
+
+Theo prototype: hộp **xác nhận ngay trong khung** — ở ngăn chi tiết và ở hàng của Sổ địa điểm — kèm ô
+**lý do bắt buộc** trong chính hộp ấy (luật 7: xoá mềm có `delete_reason`). Tuyến đã đòi lý do
+(`service-comms/internal/http/map_assets.go:13`); giao diện không được gửi xoá khi ô trống.
+
+### Chỗ ở tệp này | Nay
+
+| Chỗ ở tệp này | Nay |
+|---|---|
+| H1 — nền OpenFreeMap, ghi nguồn OpenFreeMap, URL style là biến máy chủ | Nền tự host `/basemap/*` + `BASEMAP_URL` (S1); `MAP_STYLE_URL` bỏ; ghi nguồn OSM thu gọn của nền tự host |
+| H2 — toạ độ công dân không được vẽ trên nền của `/ban-do` | Nền đã cùng gốc → lớp nhiệt phản ánh được dựng, chỉ cho `feedback.read` (S2). Vẽ toạ độ công dân trên **bất kỳ nền ngoài nào** vẫn là điểm dừng |
+| H4 — CSP gồm `tiles.openfreemap.org`; điểm dừng 1 "khác OpenFreeMap"; điểm dừng 4 chỉ áp cho dự phòng | CSP chỉ cùng gốc (S1). Điểm dừng 1 gốc (**bất kỳ** host ngoài cho tile, style, glyph, sprite, geocoding) và điểm dừng 4 gốc (host tệp nền phải của ViGov) **áp lại cho `/ban-do`** |
+| §4 và việc còn mở #2 bảng gốc — lớp nhiệt phản ánh hoãn | Dựng (S2). "Mật độ theo thôn" vẫn hoãn (S4 #4) |
+| Việc còn mở #2 sau sửa đổi 04/10 — OpenFreeMap không SLA | Không còn áp: nền không phụ thuộc OpenFreeMap |
+| §Dựng và cập nhật tệp nền — "phương án dự phòng nếu bỏ OpenFreeMap" | Phương án đang dùng cho **cả** `/ban-do`; quy trình ở `kb/40-runbooks/basemap-pmtiles.md` |
+| §Sửa đổi 09/10/2026, "Những gì KHÔNG đổi", dòng H1 — "không chuyển `/ban-do` sang PMTiles" | Bị thay: `/ban-do` chuyển (S1) |
+| §Sửa đổi 09/10/2026, "Những gì KHÔNG đổi", dòng #2 bảng gốc — lớp nhiệt trên `/ban-do` vẫn hoãn | Bị thay (S2) |
+| §Sửa đổi 09/10/2026, "Những gì KHÔNG đổi", dòng K6 — `2026-10-04.1` vẫn đúng ở `/ban-do` | Câu 1 và 4 nay sai ở `/ban-do`; bản nháp `2026-10-11.1-nhap` (S3), chưa có hiệu lực |
+| §Trả lời 09/10/2026, còn mở #2 — văn bản K6 cho nền tự host | Có bản nháp (S3); vẫn mở tới khi pháp chế + UBND duyệt |
+| `web-admin/src/lib/basemap/style.ts:12` — chú thích "`/ban-do` stays on OpenFreeMap" | Sai sau S1; mã sửa cùng lần dựng |
+
+### Còn mở sau sửa đổi 11/10/2026
+
+| # | Việc | Ai |
+|---|---|---|
+| 1 | Pháp chế ViHAT + UBND duyệt bản nháp K6 `2026-10-11.1-nhap` | Chủ dự án + pháp chế |
+| 2 | Ban hành phiên bản K6 mới ở máy chủ (`map_frame.go:60`) cùng `labels.ts` — sau mục 1 | Người dựng backend (`/develop-backend-api`) |
+| 3 | Vận hành chạy `build-basemap.sh`, ký danh mục kiểm, đặt `BASEMAP-URL` — trước đó `/ban-do` không có nền | Vận hành |
+| 4 | Sáu phần ở S4 | `/develop-backend-api`; S4 #4 cần chủ dự án + kiến trúc chốt hợp đồng trước |
+| 5 | Ký duyệt pháp lý chủ quyền trước khi chạy thật — vẫn mở, nay áp cho cả `/ban-do` | Chủ dự án |
