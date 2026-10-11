@@ -33,6 +33,7 @@
 import { type ReactNode, type Ref, useEffect, useMemo, useRef, useState } from "react";
 
 import { communeProfiles, type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
+import { myNotificationPreference, setMyNotificationPreference } from "../api/goi-vigov";
 import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
 import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type CommuneBannerItem, readHttpsLink } from "../api/hop-dong-cong-khai";
@@ -51,6 +52,12 @@ import {
 } from "./commune-session";
 import { ConsentDialog } from "./consent-dialog";
 import { dichGoi } from "./DanhBaCanBoScreen";
+import { DisasterAlertScreen, HomeAlertBanner, useDisasterAlerts } from "./disaster-alerts";
+import {
+  createNotificationPreference,
+  type NotificationPreferenceControl,
+  type NotificationPreferenceState,
+} from "./notification-preference";
 import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, RootTabHeader, SectionHeader, type SectionAccent, type Tone, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
@@ -139,7 +146,9 @@ type ManXa =
   | { readonly kieu: "video" }
   | { readonly kieu: "ban-do" }
   | { readonly kieu: "thong-bao" }
-  | { readonly kieu: "su-kien" };
+  | { readonly kieu: "su-kien" }
+  /** ADR 0091 §2: the alerts in force — from the home banner. */
+  | { readonly kieu: "canh-bao" };
 
 /**
  * One string per screen a citizen can be on — what the entry motion compares to tell "moved to another screen" from
@@ -563,6 +572,8 @@ export function CommuneOffice({ profile }: { profile: CommuneProfile | null }) {
 }
 
 function TrangChuXa(props: {
+  /** The build's commune domain — the lookup key of the public alert read (never drawn, never logged). */
+  domain: string;
   xa: XaCuaApp;
   ho_ten: string | null;
   /** The entry card, when the name still needs the citizen's consent; otherwise `null`. */
@@ -584,6 +595,9 @@ function TrangChuXa(props: {
   // Hai phiếu, hai tin — đúng bố cục trang chủ của prototype (`HomePage.tsx`).
   const tin_moi = tin.ds.muc.slice(0, 2);
   const phieu_moi = petitions.kind === "ready" ? petitions.items.slice(0, 2) : [];
+  // Read on EVERY home open (this component mounts with the home tab), never polled, never shown from a previous
+  // read: a banner for an alert that has ended is a false warning under the commune's name (ADR 0091 §2).
+  const alerts = useDisasterAlerts(props.domain);
 
   return (
     <>
@@ -598,6 +612,9 @@ function TrangChuXa(props: {
         logoUrl={profileLogoUrl(props.profile)}
       />
       <div className="xa-trang">
+        {/* Above everything else, as the prototype's home (`HomePage.tsx:50-58`): on a storm day it is the one thing
+            to see. Nothing while loading or after a failure. */}
+        <HomeAlertBanner state={alerts.state} onOpen={() => di({ kieu: "canh-bao" })} />
         <HomeBanner
           items={props.banners}
           canOpenWeb={props.askLeave !== undefined}
@@ -834,6 +851,35 @@ function useSessionGate(open: OpenCommuneAppSession | undefined, communeName: st
   return { gate: gate.current, state };
 }
 
+/**
+ * The "Nhận thông báo" switch, held for the whole open (a tab change keeps it). `createNotificationPreference`
+ * once; the state is mirrored in a ref so the controller reads the CURRENT value, not a render's copy. The session
+ * loss handler is read through a ref too: it closes over the gate of the latest render.
+ */
+function useNotificationPreference(onSessionLost: (retry: () => void) => void): {
+  state: NotificationPreferenceState;
+  control: NotificationPreferenceControl;
+} {
+  const [state, setState] = useState<NotificationPreferenceState>({ kind: "unknown" });
+  const current = useRef(state);
+  const lost = useRef(onSessionLost);
+  lost.current = onSessionLost;
+  const control = useRef<NotificationPreferenceControl | null>(null);
+  if (control.current === null) {
+    control.current = createNotificationPreference({
+      read: myNotificationPreference,
+      write: setMyNotificationPreference,
+      onSessionLost: (retry) => lost.current(retry),
+      getState: () => current.current,
+      setState: (s) => {
+        current.current = s;
+        setState(s);
+      },
+    });
+  }
+  return { state, control: control.current };
+}
+
 function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () => void }) {
   const { trang, taiLai } = useDanhBaXa(ten_mien);
   return (
@@ -981,6 +1027,30 @@ function AppCuaXa(props: {
   const petitions = useMyPetitions(sessionLost("mine"));
   const openPetitions = () => requireSession("mine", () => void petitions.load());
 
+  /*
+   * "NHẬN THÔNG BÁO" (ADR 0091 §4). Opening Cá nhân with a VERIFIED session already in this open reads the switch
+   * at once — the citizen's own data, no dialog. Without one nothing is read: the row says a tap shows the state,
+   * and that tap goes through the gate like every personal act.
+   */
+  const notification = useNotificationPreference(sessionLost("notify"));
+  const onProfile = man.kieu === "tab" && man.tab === "ca-nhan";
+  useEffect(() => {
+    if (onProfile && notification.state.kind === "unknown" && layPhienViGov()?.phone_verified === true) {
+      void notification.control.load();
+    }
+  }, [onProfile, notification.state.kind, notification.control]);
+
+  /** A tap on the row: change it when its value is known, otherwise (gate first) read it. */
+  function pressNotification() {
+    const s = notification.state;
+    if (s.kind === "loading") return;
+    if (s.kind === "ready") {
+      void notification.control.toggle();
+      return;
+    }
+    requireSession("notify", () => void notification.control.load());
+  }
+
   /** Navigation from a tap. The two personal screens pass the gate; everything else is public. */
   function go(m: ManXa) {
     if (m.kieu === "gui") requireSession("submit", () => datMan(m), true);
@@ -1111,6 +1181,10 @@ function AppCuaXa(props: {
         </>
       );
       break;
+    case "canh-bao":
+      // ADR 0091 §2: a FRESH read of the alerts in force (not the home banner's), every one of them, newest first.
+      man_con = <DisasterAlertScreen domain={ten_mien} communeName={xa.ten} onBack={ve} />;
+      break;
     case "thong-bao":
       // Reached from Cá nhân › Của tôi (decision 10: no bell on the home header), so "Quay lại" goes back there.
       // The hint is the sentence that stood in Cá nhân's old "Thông báo" section: where messages will come from.
@@ -1198,6 +1272,7 @@ function AppCuaXa(props: {
       ) : null;
     than = (
       <TrangChuXa
+        domain={ten_mien}
         xa={xa}
         ho_ten={shownName}
         name_card={name_card}
@@ -1251,6 +1326,7 @@ function AppCuaXa(props: {
           onMoPhanAnh={() => veTab("phan-anh")}
           onMoTraCuu={() => datMan({ kieu: "tra-cuu" })}
           onOpenNotifications={() => datMan({ kieu: "thong-bao" })}
+          notification={{ state: notification.state, onPress: pressNotification }}
         />
       </>
     );

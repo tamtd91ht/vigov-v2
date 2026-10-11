@@ -605,6 +605,64 @@ const ACCOUNTLESS_ROUTES: readonly DuongRoiKhoiMay[] = [
   },
 ];
 
+/* ---------------------------------------------------------------------------------------------
+   CẢNH BÁO THIÊN TAI · "NHẬN THÔNG BÁO" (ADR 0091 §2, §4; 11/10/2026) — two routes of the COMMUNE'S OWN APP,
+   copied, not imported
+   ---------------------------------------------------------------------------------------------
+
+   Same boundary as the public routes above: the paths and the body live in the state half's contracts
+   (`cong-dan/api/hop-dong-cong-khai.ts` `disasterAlertsAddress`, `cong-dan/api/notification-preference.ts`
+   `notificationPreferenceAddress` / `notificationPreferenceBody`), which this file may not import.
+   `ket-xuat-ho-so.test.ts` locks each copy to the real address and body, both ways.
+
+   ⚠ THE PRIVACY-POLICY WORDING FOR THESE TWO ROWS IS STILL OWED — legal wording is the project owner's (same
+   stance as the location rows). No version bump: the policy has never been published (`chinh-sach-rieng-tu.ts`,
+   version block — "bản này chưa từng tới tay một người dùng nào"). */
+
+export const DISASTER_ALERTS_PATH = "/api/v1/commune-disaster-alerts";
+export const MY_NOTIFICATION_PREFERENCES_PATH = "/api/v1/my-notification-preferences";
+
+/** The alert screens — the home tab and the alert screen's title, copied from `cong-dan/man/noi-dung.ts`; the test pins them. */
+export const COMMUNE_ALERT_SCREENS = "Ứng dụng của xã: Trang chủ · Cảnh báo thiên tai";
+/** The commune app's "Cá nhân" tab (`XA_TN.ca_nhan_tieu_de`), copied the same way. */
+export const COMMUNE_PROFILE_SCREEN = "Ứng dụng của xã: Cá nhân";
+
+/** The PUT body's one key — `notificationPreferenceBody`. The GET sends nothing but the session header. */
+export const NOTIFICATION_PREFERENCE_FIELDS: readonly TruongGuiDi[] = [
+  {
+    khoa: "zalo_enabled",
+    trong_chinh_sach:
+      "chỉ khi bạn tự bấm công tắc “Nhận thông báo”: bạn bật hay tắt nhận tin Zalo về phản ánh của chính mình (có hoặc không); lần đọc lựa chọn không gửi trường nào — hệ thống của xã lấy bạn là ai và xã nào từ phiên làm việc với xã",
+  },
+];
+
+const COMMUNE_ALERT_AND_PREFERENCE_ROUTES: readonly DuongRoiKhoiMay[] = [
+  {
+    // Public, by the build's domain (ADR 0091 §2): no session, no Zalo code, nothing of the citizen.
+    tuyen: DISASTER_ALERTS_PATH,
+    may_chu: "ViGov — dịch vụ `comms`, không mang phiên làm việc nào",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, MỖI LẦN trang chủ được mở — trước khi người dùng bấm gì — để hiện băng đỏ khi xã có cảnh báo thiên tai đang hiệu lực; và khi người dùng tự bấm băng ấy, hoặc bấm “Thử lại” trên màn “Cảnh báo thiên tai”",
+    nguoi_dung_bam: false,
+    man: COMMUNE_ALERT_SCREENS,
+    truong: [HOST_CONG_KHAI],
+    app: "commune",
+  },
+  {
+    // GET and PUT, one row: the same route, tied to the citizen session (rule 4 — whose and which commune come
+    // from the session); the PUT adds one boolean. The GET runs when the citizen opens the tab, as other tab rows.
+    tuyen: MY_NOTIFICATION_PREFERENCES_PATH,
+    may_chu:
+      "ViGov — dịch vụ `comms`, với phiên làm việc với xã của người dùng (đã xác nhận số điện thoại); dịch vụ ấy ghi vết mỗi lần lựa chọn được đổi",
+    khi_nao:
+      "trong ứng dụng riêng của một xã: ĐỌC lựa chọn khi người dùng tự mở tab “Cá nhân” mà phiên làm việc với xã đã có, hoặc khi người dùng bấm dòng “Nhận thông báo”; GHI lựa chọn mới chỉ khi người dùng tự bấm công tắc “Nhận thông báo”",
+    nguoi_dung_bam: true,
+    man: COMMUNE_PROFILE_SCREEN,
+    truong: NOTIFICATION_PREFERENCE_FIELDS,
+    app: "commune",
+  },
+];
+
 export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
   {
     tuyen: "/api/v1/communes",
@@ -907,6 +965,8 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   // 08/10/2026 (ADR 0083, temporary): the accountless send, its field list and its public lookup.
   ...ACCOUNTLESS_ROUTES,
   ...DUONG_CONG_KHAI.slice(1),
+  // 11/10/2026 (ADR 0091 §2, §4): the disaster alerts at every home open, and the "Nhận thông báo" switch.
+  ...COMMUNE_ALERT_AND_PREFERENCE_ROUTES,
 ];
 
 /* =============================================================================================

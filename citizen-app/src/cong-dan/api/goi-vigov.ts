@@ -85,6 +85,8 @@ import {
   type CommuneBannerItem,
   type CommuneProfile,
   communeProfilesAddress,
+  type DisasterAlert,
+  disasterAlertsAddress,
   diaChiBaiTin,
   diaChiDanhBa,
   diaChiTinXa,
@@ -98,11 +100,17 @@ import {
   type NewsType,
   readBanners,
   readCommuneProfiles,
+  readDisasterAlerts,
   readNewsCategories,
   type TrangTinXa,
   type XaTraDuoc,
 } from "./hop-dong-cong-khai";
 import type { LanGui } from "./lan-gui";
+import {
+  notificationPreferenceAddress,
+  notificationPreferenceBody,
+  readNotificationPreference,
+} from "./notification-preference";
 import { layPhienViGov } from "./phien-vigov";
 import { laTenMien } from "../../lib/launch-params";
 
@@ -242,7 +250,7 @@ function moCong(dia_chi: string): { token: string; dia_chi: string } | NhanhKhon
 async function goi<T>(
   dia_chi: string,
   /** `token` VẮNG MẶT chỉ ở ba tuyến công khai — xem khối đầu tệp. */
-  tuy_chon: { method: "GET" | "POST"; token?: string; khoa?: string; than?: string },
+  tuy_chon: { method: "GET" | "POST" | "PUT"; token?: string; khoa?: string; than?: string },
   doc: (than: unknown) => T | null,
   khi_404: NhanhKhongThanh,
 ): Promise<CallResult<T>> {
@@ -276,7 +284,8 @@ async function goiWithRefusals<T>(
 async function callOnce<T>(
   dia_chi: string,
   tuy_chon: {
-    method: "GET" | "POST";
+    /** `PUT` only for the citizen's notification switch (`setMyNotificationPreference`). */
+    method: "GET" | "POST" | "PUT";
     token?: string;
     khoa?: string;
     than?: string;
@@ -551,6 +560,53 @@ export async function ratePetition(ma_tra_cuu: string, attempt: LanGui): Promise
   return kq.kieu === "kenh-chua-mo" ? { kieu: "loi-may-chu" } : kq;
 }
 
+/**
+ * The citizen's "Nhận thông báo" switch (ADR 0091 §4) — `true` = receives Zalo messages about their own petitions.
+ * Same branches as every session route; the contract has no 404 / 409 / 429 / 503 here, so one arriving is a stray
+ * and becomes `loi-may-chu`, as on the list route.
+ */
+export type NotificationPreferenceResult = { kieu: "xong"; zaloEnabled: boolean } | NhanhKhongThanh;
+
+function preferenceOutcome(kq: { kieu: "xong"; gia_tri: boolean } | NhanhKhongThanh): NotificationPreferenceResult {
+  if (kq.kieu === "xong") return { kieu: "xong", zaloEnabled: kq.gia_tri };
+  if (kq.kieu === "dang-xu-ly-truoc" || kq.kieu === "kenh-chua-mo" || kq.kieu === "khong-thay") return { kieu: "loi-may-chu" };
+  return kq;
+}
+
+/**
+ * READ the switch — `GET /api/v1/my-notification-preferences` on comms. NO "WHOSE" OR "WHICH COMMUNE" PARAMETER:
+ * both come from the session on the server. No session → `chua-co-phien`, nothing leaves the phone.
+ */
+export async function myNotificationPreference(): Promise<NotificationPreferenceResult> {
+  const cong = moCong(notificationPreferenceAddress());
+  if ("kieu" in cong) return cong;
+  return preferenceOutcome(
+    withoutRateLimit(
+      await goi(cong.dia_chi, { method: "GET", token: cong.token }, readNotificationPreference, { kieu: "loi-may-chu" }),
+    ),
+  );
+}
+
+/**
+ * SET the switch — `PUT`, the whole value. No `Idempotency-Key`: the server writes and audits nothing when the
+ * value sent equals the stored one (`idem.KhongCan`), so a second identical PUT is harmless. `xong` carries the value
+ * the SERVER now holds — the screen shows that one, never the value it asked for.
+ */
+export async function setMyNotificationPreference(zaloEnabled: boolean): Promise<NotificationPreferenceResult> {
+  const cong = moCong(notificationPreferenceAddress());
+  if ("kieu" in cong) return cong;
+  return preferenceOutcome(
+    withoutRateLimit(
+      await goi(
+        cong.dia_chi,
+        { method: "PUT", token: cong.token, than: notificationPreferenceBody(zaloEnabled) },
+        readNotificationPreference,
+        { kieu: "loi-may-chu" },
+      ),
+    ),
+  );
+}
+
 /* ════════════════════════════════════════════════════════════════════════════════════════════
  * SCENE PHOTOS — the citizen's own petition, by its lookup code (`hop-dong-phan-anh.ts` §SCENE PHOTOS)
  * ════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -765,6 +821,14 @@ export function newsCategories(
  */
 export function communeBanners(ten_mien: string): Promise<NewsReadResult<readonly CommuneBannerItem[]>> {
   return goiCongKhai(ten_mien, bannersAddress, readBanners);
+}
+
+/**
+ * The commune's disaster alerts IN FORCE (ADR 0091 §2) — public by domain, like the news list, with the same 429.
+ * `{"items":[]}` is "no alert" for a commune with none AND for a domain no commune holds (identical bytes).
+ */
+export function communeDisasterAlerts(ten_mien: string): Promise<NewsReadResult<readonly DisasterAlert[]>> {
+  return goiCongKhai(ten_mien, disasterAlertsAddress, readDisasterAlerts);
 }
 
 /**

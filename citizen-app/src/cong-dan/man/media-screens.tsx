@@ -4,7 +4,7 @@
  * (`/commune-news?type=video|truyen-thanh`, and `/commune-news/categories?type=` for the chips) — no new API.
  *
  *   Video        a two-column grid: 16:10 cover with a Play mark, the title, "x lượt xem" when the server counted.
- *                No duration badge: the list carries no video length (a backend card if the commune wants one).
+ *                The length badge (mm:ss) only when the commune typed `video_duration_seconds` (ADR 0091 §7).
  *                A tap opens the item, whose "Xem video" opens the commune's link (`TinTucAppXa.tsx` `WatchVideo`).
  *   Truyền thanh items grouped by day ("Hôm nay", "Hôm qua", "Thứ Ba, 22/8/2026"); each row's round button
  *                PLAYS IN PLACE through one real `<audio>` and the fixed bar under the list: a seek slider, ±15 s,
@@ -110,12 +110,19 @@ function MoreButton(props: { ds: ReturnType<typeof useTinXa>["ds"]; onMore: () =
 
 /* ═══════════════════════════════ VIDEO ═══════════════════════════════ */
 
-/** One video tile (`VideoPage.tsx:275-310`): cover with a Play mark, title on two lines, the view count. PURE. */
+/**
+ * One video tile (`VideoPage.tsx:47-84`): cover with a Play mark, the length badge in its corner when the commune
+ * typed one (mm:ss — ADR 0091 §7; no badge otherwise, never a measured or guessed length), title on two lines, the
+ * view count. The badge is inside the decorative cover; the length reaches a screen reader in WORDS through the
+ * tile's name. PURE.
+ */
 export function VideoTile(props: { tin: TinXaTomTat; onMo: (id: string) => void }) {
   const { tin } = props;
   const [coverFailed, setCoverFailed] = useState(false);
+  const length = tin.videoDurationSeconds;
+  const name = length === undefined ? XA_TN.video_open(tin.tieu_de) : XA_TN.video_open_with_length(tin.tieu_de, durationWords(length));
   return (
-    <button type="button" className="xa-video-tile" aria-label={XA_TN.video_open(tin.tieu_de)} onClick={() => props.onMo(tin.id)}>
+    <button type="button" className="xa-video-tile" aria-label={name} onClick={() => props.onMo(tin.id)}>
       <span className="xa-video-tile__cover" aria-hidden="true">
         {tin.imageUrl !== undefined && !coverFailed ? (
           <img className="xa-video-tile__image" src={tin.imageUrl} alt="" loading="lazy" decoding="async" onError={() => setCoverFailed(true)} />
@@ -125,6 +132,7 @@ export function VideoTile(props: { tin: TinXaTomTat; onMo: (id: string) => void 
         <span className="xa-video-tile__play">
           <BieuTuong ten="play-triangle" co={22} fill="currentColor" />
         </span>
+        {length !== undefined && <span className="xa-video-tile__length">{formatClock(length)}</span>}
       </span>
       <span className="xa-video-tile__title xa-cat-2">{tin.tieu_de}</span>
       {tin.viewCount !== undefined && <span className="xa-phu">{TIN_XA.view_count(tin.viewCount)}</span>}

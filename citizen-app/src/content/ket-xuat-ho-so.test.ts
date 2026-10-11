@@ -10,6 +10,8 @@ import {
   diaChiDanhBa,
   diaChiTinXa,
   diaChiTraXa,
+  DISASTER_ALERTS_PATH as REAL_DISASTER_ALERTS_PATH,
+  disasterAlertsAddress,
   DUONG_DAN_DANH_BA,
   DUONG_DAN_TIN_XA,
   DUONG_DAN_XA,
@@ -17,6 +19,11 @@ import {
   newsCategoriesAddress,
 } from "../cong-dan/api/hop-dong-cong-khai";
 import { diaChiViGov } from "../cong-dan/api/dia-chi-vigov";
+import {
+  MY_NOTIFICATION_PREFERENCES_PATH as REAL_MY_NOTIFICATION_PREFERENCES_PATH,
+  notificationPreferenceAddress,
+  notificationPreferenceBody,
+} from "../cong-dan/api/notification-preference";
 import {
   accountlessReportBody,
   CITIZEN_FIELDS_PATH,
@@ -80,8 +87,13 @@ import {
   ACCOUNTLESS_SEND_PATH,
   canhBaoVanXuoi,
   communeTermsDocument,
+  COMMUNE_ALERT_SCREENS,
   COMMUNE_APP_ROUTES_OWED,
   COMMUNE_APP_SESSION_SCREENS,
+  COMMUNE_PROFILE_SCREEN,
+  DISASTER_ALERTS_PATH,
+  MY_NOTIFICATION_PREFERENCES_PATH,
+  NOTIFICATION_PREFERENCE_FIELDS,
   communeAppCalls,
   communeAppRoutes,
   DUONG_CONG_KHAI,
@@ -506,7 +518,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // + 1 (08/10/2026, owner): the Zalo SDK failure report (`vihat-miniapp` `/api/v1/client-errors`).
     // − 2 (09/10/2026, ADR 0052 §Sửa đổi 09/10/2026): slot + store + completion became ONE multipart upload to
     // petitions — the photo rows are now two: the upload and the own list.
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(20);
+    // + 2 (11/10/2026, ADR 0091 §2, §4): the commune app's disaster alerts and its "Nhận thông báo" switch.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(22);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -770,7 +783,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     expect(khoi).not.toContain("không đường nào chạy lúc mở ứng dụng");
     // 18, not 20, since 09/10/2026: the scene photo's three routes (slot, storage POST, completion) became
     // ONE multipart send to petitions (ADR 0052 §Sửa đổi 09/10/2026).
-    expect(khoi).toContain("18 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    // 11/10/2026 (ADR 0091): + the switch (a tap) and the disaster alerts (every home open, no tap).
+    expect(khoi).toContain("19 đường chạy khi chính người dùng bấm; 3 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");
@@ -896,9 +910,46 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
     }
   });
 
-  it("what runs at open, the commune app says so: the lookup, the office profile and the home-screen news", () => {
+  it("what runs at open, the commune app says so: the lookup, the office profile, the home-screen news and alerts", () => {
     const atOpen = routes.filter((r) => !r.nguoi_dung_bam).map((r) => r.tuyen).sort();
-    expect(atOpen).toEqual([COMMUNE_PROFILES_PATH, DUONG_DAN_TIN_XA, DUONG_DAN_XA].sort());
+    expect(atOpen).toEqual([COMMUNE_PROFILES_PATH, DUONG_DAN_TIN_XA, DUONG_DAN_XA, DISASTER_ALERTS_PATH].sort());
+  });
+
+  /**
+   * ADR 0091 §2, §4 (11/10/2026) — the two rows are COPIES (boundary), locked here to the addresses and the body the
+   * state half really builds: path word for word, sent keys ⇄ declared keys, both ways.
+   */
+  it("disaster alerts and the notification switch: paths, keys and screens locked to the real contract", () => {
+    const DOMAIN = "xa-vi-du.vigov.example";
+    const row = (t: string) => DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === t)!;
+    // Alerts: the path and `host` only — no session, nothing of the citizen; runs at every home open.
+    expect(DISASTER_ALERTS_PATH).toBe(REAL_DISASTER_ALERTS_PATH);
+    const alerts = new URL(disasterAlertsAddress(DOMAIN));
+    expect(alerts.pathname).toBe(DISASTER_ALERTS_PATH);
+    expect(row(DISASTER_ALERTS_PATH).truong.map((t) => t.khoa)).toEqual([...alerts.searchParams.keys()]);
+    expect(row(DISASTER_ALERTS_PATH).app).toBe("commune");
+    expect(row(DISASTER_ALERTS_PATH).nguoi_dung_bam).toBe(false);
+    // The switch: no query; the PUT body's keys ⇄ the declared keys; a tap (opening the tab, or the switch).
+    expect(MY_NOTIFICATION_PREFERENCES_PATH).toBe(REAL_MY_NOTIFICATION_PREFERENCES_PATH);
+    const pref = new URL(notificationPreferenceAddress());
+    expect(pref.pathname).toBe(MY_NOTIFICATION_PREFERENCES_PATH);
+    expect(pref.search).toBe("");
+    for (const value of [true, false]) {
+      const keys = Object.keys(JSON.parse(notificationPreferenceBody(value)) as Record<string, unknown>);
+      expect(NOTIFICATION_PREFERENCE_FIELDS.map((t) => t.khoa)).toEqual(keys);
+    }
+    expect(row(MY_NOTIFICATION_PREFERENCES_PATH).truong).toBe(NOTIFICATION_PREFERENCE_FIELDS);
+    expect(row(MY_NOTIFICATION_PREFERENCES_PATH).app).toBe("commune");
+    expect(row(MY_NOTIFICATION_PREFERENCES_PATH).nguoi_dung_bam).toBe(true);
+    expect(row(MY_NOTIFICATION_PREFERENCES_PATH).khi_nao).toContain(XA_TN.notify_label);
+    // The copied screen names are the real ones.
+    expect(COMMUNE_ALERT_SCREENS).toBe(`Ứng dụng của xã: ${XA_GIAO_DIEN.tab_trang_chu} · ${XA_TN.alert_title}`);
+    expect(COMMUNE_PROFILE_SCREEN).toBe(`Ứng dụng của xã: ${XA_TN.ca_nhan_tieu_de}`);
+    // The commune dossier prints both, with the build's domain sentence for `host`.
+    const block = khoiRoiKhoiMay(routes, { communeApp: true });
+    expect(block).toContain(DISASTER_ALERTS_PATH);
+    expect(block).toContain(MY_NOTIFICATION_PREFERENCES_PATH);
+    expect(block).toContain(NOTIFICATION_PREFERENCE_FIELDS[0]!.trong_chinh_sach);
   });
 
   it("the gap is printed inside the block until the petition routes are declared", () => {

@@ -174,6 +174,11 @@ export type CitizenField = {
   readonly label: string;
   readonly icon: string | null;
   readonly tone: string | null;
+  /**
+   * The description box's example for this field (`placeholder`, platform `petition_field` default column — ADR
+   * 0091 §6), or ABSENT when the server sent none: the form then shows its own default sentence.
+   */
+  readonly placeholder?: string;
 };
 
 /**
@@ -193,11 +198,14 @@ export function readCitizenFields(body: unknown): readonly CitizenField[] | null
     const r = m as Record<string, unknown>;
     const icon = optional(r["icon"]);
     const tone = optional(r["tone"]);
+    const placeholder = optional(r["placeholder"]);
     if (typeof r["code"] !== "string" || r["code"] === "" || typeof r["label"] !== "string" || r["label"].trim() === "") {
       return null;
     }
-    if (icon === undefined || tone === undefined) return null;
-    out.push({ code: r["code"], label: r["label"], icon, tone });
+    if (icon === undefined || tone === undefined || placeholder === undefined) return null;
+    // A blank example is no example: the form's default stands, rather than an empty grey box.
+    const example = placeholder === null ? "" : placeholder.trim();
+    out.push({ code: r["code"], label: r["label"], icon, tone, ...(example === "" ? {} : { placeholder: example }) });
   }
   return out;
 }
@@ -344,7 +352,48 @@ export type PhieuCuaToi = {
    * Read from the server's explicit field, never inferred. Absent here means the server did not say `true`.
    */
   readonly contact_unverified?: true;
+  /**
+   * THE STEP TIMES of the timeline (ADR 0047 G4, ADR 0091 §5; `phieu_cua_toi.go` `ClassifiedAt`…`ClosedAt`) — when the
+   * petition last ENTERED that main-path step, read from the petition row only. ABSENT = "not recorded" (petitions
+   * from before the column, or a step with no column — `dang-xu-ly` has none), never "did not happen": whether a
+   * step was reached is `trang_thai`'s to say, and the screen shows a time only beside a reached step.
+   */
+  readonly step_times?: PetitionStepTimes;
 };
+
+/** The recorded step instants (RFC 3339), each present only when the server sent a readable one. */
+export type PetitionStepTimes = {
+  readonly classified_at?: string;
+  readonly forwarded_for_processing_at?: string;
+  readonly resolved_at?: string;
+  readonly awaiting_confirmation_at?: string;
+  readonly closed_at?: string;
+};
+
+/** The five keys, in lifecycle order — the wire names, which are also `PetitionStepTimes`' keys. */
+export const PETITION_STEP_TIME_KEYS = [
+  "classified_at",
+  "forwarded_for_processing_at",
+  "resolved_at",
+  "awaiting_confirmation_at",
+  "closed_at",
+] as const;
+
+/**
+ * The optional step times of a body → the times, `undefined` when none, or `null` when MALFORMED (a key present as
+ * something other than a string or `null`). A string no `Date` can read is ABSENT — a time the app cannot read is a
+ * time it must not print.
+ */
+function readStepTimes(t: Record<string, unknown>): PetitionStepTimes | undefined | null {
+  const out: Record<string, string> = {};
+  for (const k of PETITION_STEP_TIME_KEYS) {
+    const v = t[k];
+    if (v === undefined || v === null) continue;
+    if (typeof v !== "string") return null;
+    if (!Number.isNaN(new Date(v).getTime())) out[k] = v;
+  }
+  return Object.keys(out).length === 0 ? undefined : (out as PetitionStepTimes);
+}
 
 /** Stars bounds and comment limit — COPIED from `service-petitions/internal/domain/petition_rating.go`. */
 export const RATING_MIN_STARS = 1;
@@ -452,9 +501,11 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
   // OPTIONAL (`boolean | null`, omitted for an identified petition); anything else is a body out of shape.
   const unverified = t["contact_unverified"];
   const unverifiedOk = unverified === undefined || unverified === null || typeof unverified === "boolean";
+  const step_times = readStepTimes(t);
 
   if (
     !unverifiedOk ||
+    step_times === null ||
     rating === null ||
     ma === null ||
     ma === "" ||
@@ -498,6 +549,7 @@ export function docPhieu(than: unknown): PhieuCuaToi | null {
     rating: rating.rating,
     rated_at: rating.rated_at,
     ...(unverified === true ? { contact_unverified: true as const } : {}),
+    ...(step_times === undefined ? {} : { step_times }),
   };
 }
 

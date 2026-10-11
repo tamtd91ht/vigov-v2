@@ -18,7 +18,9 @@
  *   `petitions` — `/api/v1/my-citizen-reports…` (cần phiên ViGov)
  *   `identity`  — `/api/v1/communes?host=` (màn xác nhận xã) · `/api/v1/commune-staff?host=` (danh bạ) ·
  *                 `/api/v1/my-residential-units` (ô chọn thôn ở form gửi — cần phiên ViGov, 09/10/2026)
- *   `comms`     — `/api/v1/commune-news?host=` · `/api/v1/commune-news/{id}?host=` (tin của xã)
+ *   `comms`     — `/api/v1/commune-news?host=` · `/api/v1/commune-news/{id}?host=` (tin của xã) ·
+ *                 `/api/v1/commune-disaster-alerts?host=` (cảnh báo thiên tai, công khai) ·
+ *                 `/api/v1/my-notification-preferences` (công tắc "Nhận thông báo" — cần phiên ViGov, ADR 0091 §4)
  *
  *   Ba tuyến của `identity`/`comms` là CÔNG KHAI (không bearer). `?host=` mang tên miền xã trên QR
  *   làm KHOÁ TRA cho máy chủ phân giải; nó không phải "client chọn xã" — không phiên nào, không bản

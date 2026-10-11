@@ -297,7 +297,8 @@ describe("Cá nhân (§6.6)", () => {
 
   it("ONE 'Cỡ chữ lớn' switch (the prototype's); language is a statement; 'Của tôi' has Phản ánh · Hồ sơ đã tra cứu · Thông báo — no count", () => {
     const page = personal(null);
-    // owner 11/10/2026: the three levels became the prototype's one switch, with its hint; still no notification switch.
+    // owner 11/10/2026: the three levels became the prototype's one switch, with its hint. No `notification` prop
+    // here, so no "Nhận thông báo" row (its states: `commune-new-apis.test.tsx`).
     expect(page.match(/role="switch"/g)).toHaveLength(1);
     expect(page).toContain('role="switch" aria-checked="false"');
     expect(page).toContain(XA_TN.co_chu_lon);

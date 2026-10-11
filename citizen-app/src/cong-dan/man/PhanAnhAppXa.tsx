@@ -43,6 +43,7 @@ import {
   type AccountlessReceipt,
   type AccountlessReport,
   accountlessReportBody,
+  type CitizenField,
   DO_DAI_TOI_DA,
   type PhieuCuaToi, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type PhieuCuaToiTomTat, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
@@ -432,10 +433,42 @@ export function stepsAhead(tt: string): string[] {
 }
 
 /**
+ * The instant a REACHED step was entered, as the server recorded it (ADR 0047 G4, ADR 0091 §5), or `null`. PURE.
+ *
+ *   da-tiep-nhan       `clock_from` (the instant the citizen sent it — `phieu_cua_toi.go` says why not the register's)
+ *   dang-phan-loai     `classified_at` · da-chuyen-xu-ly `forwarded_for_processing_at` · da-xu-ly `resolved_at`
+ *   cho-dan-xac-nhan   `awaiting_confirmation_at` · da-dong `closed_at`
+ *   anything else      `null` — `dang-xu-ly` has no column, and the two terminal branches' instant is not exposed
+ *
+ * The caller asks only for steps `buocDaQua` says were reached: after a reopening the row may still hold a LATER
+ * step's old time (a petition back in `dang-xu-ly` keeps its earlier `resolved_at`), and that step is not drawn as
+ * reached, so its time is never shown. Missing = no time; nothing is ever estimated.
+ */
+export function stepTime(petition: PhieuCuaToi, step: string): string | null {
+  const t = petition.step_times;
+  switch (step) {
+    case "da-tiep-nhan":
+      return petition.goc_dem_han;
+    case "dang-phan-loai":
+      return t?.classified_at ?? null;
+    case "da-chuyen-xu-ly":
+      return t?.forwarded_for_processing_at ?? null;
+    case "da-xu-ly":
+      return t?.resolved_at ?? null;
+    case "cho-dan-xac-nhan":
+      return t?.awaiting_confirmation_at ?? null;
+    case "da-dong":
+      return t?.closed_at ?? null;
+    default:
+      return null;
+  }
+}
+
+/**
  * The timeline (§6.4): a 32px dot per step. Reached steps — the current one included — are green-ink with a
  * ✓; the current step also carries `aria-current` and its explanation. Steps ahead are greyed with the words
- * "chưa tới bước này", so the state is said in words and not by the grey alone. The only time shown is the
- * one the API has (sent at, on the first step); none is invented for the others.
+ * "chưa tới bước này", so the state is said in words and not by the grey alone. Beside each REACHED step, the time
+ * the server recorded for it (`stepTime`, "14:30 ngày 22/8/2026"); none is invented for a step without one.
  */
 export function DongThoiGian({ petition }: { petition: PhieuCuaToi }) {
   const steps = buocDaQua(petition.trang_thai);
@@ -444,6 +477,10 @@ export function DongThoiGian({ petition }: { petition: PhieuCuaToi }) {
     <ol className="xa-dong-tg">
       {steps.map((tt, i) => {
         const last = i === steps.length - 1;
+        const time = stepTime(petition, tt);
+        // "Đã tiếp nhận" keeps its fallback words for an unreadable `clock_from` (a required field); a later step
+        // with an unreadable time simply has none (`readStepTimes` already dropped it).
+        const shown = time === null ? null : tt === "da-tiep-nhan" ? at(time) : formatDateTime(time);
         return (
           <li key={tt} className="xa-dong-tg__buoc xa-dong-tg__buoc--qua" aria-current={last ? "step" : undefined}>
             <span className="xa-dong-tg__dot" aria-hidden="true">
@@ -452,8 +489,7 @@ export function DongThoiGian({ petition }: { petition: PhieuCuaToi }) {
             <span className="xa-dong-tg__text">
               <strong>{stepLabel(tt)}</strong>
               <span className="xa-phu">{XA_PA.don_vi_xu_ly}</span>
-              {/* The one step time the API has (sent at); per-step times need server data — a backend card. */}
-              {i === 0 && <span className="xa-phu">{at(petition.goc_dem_han)}</span>}
+              {shown !== null && <span className="xa-phu">{shown}</span>}
               {last && giaiThichTrangThai(tt) && <span className="xa-dong-tg__note">{giaiThichTrangThai(tt)}</span>}
             </span>
           </li>
@@ -1157,6 +1193,14 @@ export function FieldStep(props: {
 }
 
 /**
+ * The description box's example: the picked field's `placeholder` when the catalogue carried one (ADR 0091 §6),
+ * otherwise the prototype's default sentence (`feedback-adapter.ts:124`). PURE, exported for tests.
+ */
+export function describeExample(field: CitizenField | undefined): string {
+  return field?.placeholder ?? XA_PA.goi_y_su_viec;
+}
+
+/**
  * THE ONE SWITCH for the number box on a verified session. `true` since `service-petitions` attaches the session's
  * verified number to a petition sent with an empty `reporter_phone` (`gui_phan_anh.go`, identity
  * `ResolveCitizenContactPhone`, ADR 0050 §Sửa đổi 08/10/2026). While `true`, a verified session has NO number box
@@ -1292,8 +1336,10 @@ export function CommuneSendScreen(props: {
     setStep((s) => (s === 2 ? 1 : s));
   }, [catalogue, form.linh_vuc]);
 
-  const pickedLabel =
-    catalogue.kind === "ready" ? (catalogue.fields.find((f) => f.code === form.linh_vuc)?.label ?? "") : "";
+  const pickedField = catalogue.kind === "ready" ? catalogue.fields.find((f) => f.code === form.linh_vuc) : undefined;
+  const pickedLabel = pickedField?.label ?? "";
+  // The picked field's own example (ADR 0091 §6), else the prototype's default — never an empty box.
+  const describePlaceholder = describeExample(pickedField);
 
   const edit = (k: "noi_dung" | "dia_chi" | "ho_ten" | "dien_thoai") => (v: string) => {
     setForm((t) => ({ ...t, [k]: v }));
@@ -1543,7 +1589,7 @@ export function CommuneSendScreen(props: {
               <ONhapDoan
                 id="xa-noi-dung"
                 nhan={XA_PA.su_viec}
-                placeholder={XA_PA.goi_y_su_viec}
+                placeholder={describePlaceholder}
                 gia_tri={form.noi_dung}
                 toi_da={DO_DAI_TOI_DA.noi_dung}
                 bat_buoc

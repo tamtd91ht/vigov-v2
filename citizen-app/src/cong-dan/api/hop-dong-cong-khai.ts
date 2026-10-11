@@ -25,6 +25,11 @@
  *   GET comms     /api/v1/commune-news/categories?host=…[&type=…]
  *                                                         → { items: [{ id, name, parent_id?, order }] }
  *                                                             (58abea4c; list route gained `&category=`)
+ *   GET comms     /api/v1/commune-disaster-alerts?host=…  → { items: [{ id, kind, title, headline, level?,
+ *                                                             detail, effective_from, effective_to?,
+ *                                                             danger_zone, evacuation_points,
+ *                                                             emergency_contacts }] }  (ADR 0091 §2,
+ *                                                             `service-comms/internal/http/disaster_alerts.go`)
  *
  *   Nguồn: `kb/20-contracts/openapi.json` (sinh từ mã, commit 48d99fe); ba phần thêm 29/09/2026 đọc từ
  *   `service-identity/internal/http/commune_profile.go`, `danh_ba_cong_khai.go:39-60` và
@@ -349,6 +354,12 @@ export type TinXaTomTat = {
    * which would tell a commune nobody read an article the server simply did not count.
    */
   readonly viewCount?: number;
+  /**
+   * A video's length in whole seconds as the commune's officer TYPED it (`video_duration_seconds`, comms migration
+   * 0028, ADR 0091 §7) — only on a `video` item, or ABSENT (not typed, an older server, or a value
+   * `readVideoDuration` refused). Absent shows no badge: nothing here measures a video.
+   */
+  readonly videoDurationSeconds?: number;
 };
 
 /**
@@ -592,6 +603,14 @@ export function readViewCount(v: unknown): number | undefined {
   return typeof v === "number" && Number.isSafeInteger(v) && v >= 0 ? v : undefined;
 }
 
+/**
+ * Optional `video_duration_seconds` → a whole number > 0, or `undefined`. PURE. LENIENT like `readViewCount`: a
+ * length the app cannot read costs the citizen only the badge; refusing the page over it would cost them the list.
+ */
+export function readVideoDuration(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isSafeInteger(v) && v > 0 ? v : undefined;
+}
+
 function docTin(m: unknown): TinXaTomTat | null {
   if (typeof m !== "object" || m === null) return null;
   const r = m as Record<string, unknown>;
@@ -631,6 +650,9 @@ function docTin(m: unknown): TinXaTomTat | null {
   // play something the commune never published as one.
   const audio = type === "truyen-thanh" ? readBroadcastAudio(r.audio_url, r.audio_url_expires_at, r.audio_duration_seconds) : undefined;
   const viewCount = readViewCount(r.view_count);
+  // Gated by type, as on the server (`tin_xa_cong_khai.go:235-238`): a length on an item that is not a video
+  // would be a badge on something nobody can play.
+  const videoDurationSeconds = type === "video" ? readVideoDuration(r.video_duration_seconds) : undefined;
   return {
     id: r.id,
     tieu_de: r.title,
@@ -649,6 +671,7 @@ function docTin(m: unknown): TinXaTomTat | null {
     ...(type === "video" && videoUrl !== undefined ? { videoUrl } : {}),
     ...(audio === undefined ? {} : { audio }),
     ...(viewCount === undefined ? {} : { viewCount }),
+    ...(videoDurationSeconds === undefined ? {} : { videoDurationSeconds }),
   };
 }
 
@@ -783,4 +806,142 @@ export function chiaDoan(noi_dung: string): string[] {
     .split(/\n\s*\n/)
     .map((d) => d.trim())
     .filter((d) => d !== "");
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * CẢNH BÁO THIÊN TAI — `GET /api/v1/commune-disaster-alerts?host=` (ADR 0091 §2, comms `disaster_alerts.go`)
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const DISASTER_ALERTS_PATH = "/api/v1/commune-disaster-alerts";
+
+/** The public alerts route: host and nothing else — the same `?host=` lookup key as the news reads. */
+export function disasterAlertsAddress(ten_mien: string): string {
+  return voiHost(diaChiViGov("comms", DISASTER_ALERTS_PATH), ten_mien);
+}
+
+/** One corner of the danger zone, on the 0..100 picture grid — NOT map coordinates (ADR 0091 §2). */
+export type DangerZonePoint = { readonly x: number; readonly y: number };
+
+/** One place residents go. `address` / `phone` are `""` when the commune typed none; `capacity` `null` likewise. */
+export type EvacuationPoint = {
+  readonly name: string;
+  readonly address: string;
+  readonly phone: string;
+  readonly capacity: number | null;
+};
+
+/** One number to call, with the role it answers for ("Trực ban PCTT xã"). All three are required on the server. */
+export type EmergencyContact = { readonly role: string; readonly name: string; readonly phone: string };
+
+/**
+ * One alert IN FORCE, as the commune posted it. Every text is plain text (the server's `VanBanThuanChoDan`) and is
+ * drawn as React text, never HTML. The phones may be an officer's own (comms 0026): shown and dialled, never logged.
+ */
+export type DisasterAlert = {
+  readonly id: string;
+  /** `bao` · `lu` · `sat-lo` · `mua-lon` · `dich-benh` · `chay` — kept as received; an unknown one is not refused. */
+  readonly kind: string;
+  readonly title: string;
+  /** The one-line red banner — the server already falls back to the title when staff wrote none. */
+  readonly headline: string;
+  /** `""` when the commune stated no level. */
+  readonly level: string;
+  readonly detail: string;
+  readonly effectiveFrom: string;
+  /** ABSENT = in force until staff end it — the screen then prints no "Đến:" line rather than a guessed end. */
+  readonly effectiveTo?: string;
+  /** `[]` when no zone was drawn, or fewer than three points — a polygon needs three. */
+  readonly dangerZone: readonly DangerZonePoint[];
+  readonly evacuationPoints: readonly EvacuationPoint[];
+  readonly emergencyContacts: readonly EmergencyContact[];
+};
+
+const isGridValue = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 100;
+
+function readZone(v: unknown): readonly DangerZonePoint[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: DangerZonePoint[] = [];
+  for (const p of v) {
+    if (typeof p !== "object" || p === null) return null;
+    const { x, y } = p as Record<string, unknown>;
+    if (!isGridValue(x) || !isGridValue(y)) return null;
+    out.push({ x, y });
+  }
+  return out.length >= 3 ? out : [];
+}
+
+function readEvacuationPoints(v: unknown): readonly EvacuationPoint[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: EvacuationPoint[] = [];
+  for (const p of v) {
+    if (typeof p !== "object" || p === null) return null;
+    const r = p as Record<string, unknown>;
+    if (!laChuoi(r.name) || r.name.trim() === "") return null;
+    const address = r.address === undefined ? "" : r.address;
+    const phone = r.phone === undefined ? "" : r.phone;
+    if (!laChuoi(address) || !laChuoi(phone)) return null;
+    const capacity = r.capacity === undefined || r.capacity === null ? null : r.capacity;
+    if (capacity !== null && !(typeof capacity === "number" && Number.isSafeInteger(capacity) && capacity >= 0)) return null;
+    out.push({ name: r.name.trim(), address: address.trim(), phone: phone.trim(), capacity });
+  }
+  return out;
+}
+
+function readEmergencyContacts(v: unknown): readonly EmergencyContact[] | null {
+  if (!Array.isArray(v)) return null;
+  const out: EmergencyContact[] = [];
+  for (const c of v) {
+    if (typeof c !== "object" || c === null) return null;
+    const r = c as Record<string, unknown>;
+    if (!laChuoi(r.role) || !laChuoi(r.name) || !laChuoi(r.phone)) return null;
+    out.push({ role: r.role.trim(), name: r.name.trim(), phone: r.phone.trim() });
+  }
+  return out;
+}
+
+/**
+ * 200 body → the alerts in force, in the server's order (newest start first), or `null` when malformed. STRICT, the
+ * stance of this whole file: a field of the wrong type anywhere makes the answer malformed — the banner then stays
+ * hidden and the screen says it could not load, rather than drawing half an alert under the commune's name. Two
+ * LENIENT points, each because the item is still worth showing: an unreadable `effective_to` is absent (no end is
+ * printed, never a wrong one), and a zone of fewer than three points is no zone (nothing to draw).
+ */
+export function readDisasterAlerts(body: unknown): readonly DisasterAlert[] | null {
+  const items = docMang(body);
+  if (items === null) return null;
+  const out: DisasterAlert[] = [];
+  const seen = new Set<string>();
+  for (const m of items) {
+    if (typeof m !== "object" || m === null) return null;
+    const r = m as Record<string, unknown>;
+    if (!laChuoi(r.id) || r.id === "" || seen.has(r.id)) return null;
+    if (!laChuoi(r.kind) || !laChuoi(r.title) || r.title.trim() === "" || !laChuoi(r.detail)) return null;
+    if (r.headline !== undefined && !laChuoi(r.headline)) return null;
+    if (r.level !== undefined && !laChuoi(r.level)) return null;
+    const from = readInstant(r.effective_from);
+    const to = readInstant(r.effective_to);
+    // The start is required: an alert with no readable start is not one the screen can date.
+    if (from === null || from === undefined || to === null) return null;
+    const dangerZone = readZone(r.danger_zone ?? []);
+    const evacuationPoints = readEvacuationPoints(r.evacuation_points ?? []);
+    const emergencyContacts = readEmergencyContacts(r.emergency_contacts ?? []);
+    if (dangerZone === null || evacuationPoints === null || emergencyContacts === null) return null;
+    seen.add(r.id);
+    const title = r.title.trim();
+    const headline = laChuoi(r.headline) && r.headline.trim() !== "" ? r.headline.trim() : title;
+    out.push({
+      id: r.id,
+      kind: r.kind,
+      title,
+      headline,
+      level: laChuoi(r.level) ? r.level.trim() : "",
+      detail: r.detail.trim(),
+      effectiveFrom: from,
+      ...(to === undefined ? {} : { effectiveTo: to }),
+      dangerZone,
+      evacuationPoints,
+      emergencyContacts,
+    });
+  }
+  return out;
 }

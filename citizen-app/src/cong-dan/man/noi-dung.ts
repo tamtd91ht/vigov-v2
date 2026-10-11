@@ -307,6 +307,9 @@ export const PHONE_VERIFICATION_TASK = {
   lookup: "chưa tra cứu được phiếu",
   mine: "chưa xem được phản ánh của bạn",
   rate: "đánh giá chưa được gửi",
+  // The "Nhận thông báo" switch (ADR 0091 §4). Only the commune app has it; the key exists here because both tables
+  // share one task type.
+  notify: "chưa xem hay đổi được lựa chọn nhận thông báo của bạn",
 } as const;
 
 export type PhoneVerificationTask = keyof typeof PHONE_VERIFICATION_TASK;
@@ -511,6 +514,7 @@ export const COMMUNE_PHONE_WORDS: PhoneVerificationWords = {
     lookup: "chưa tra cứu được phiếu",
     mine: "chưa xem được phản ánh của bà con",
     rate: "đánh giá chưa được gửi",
+    notify: "chưa xem hay đổi được lựa chọn nhận thông báo của bà con",
   },
   title: "Cần xác nhận số điện thoại của bà con",
   why: "Với số điện thoại Zalo của bà con, xã biết chắc phản ánh là của ai, và bà con xem lại được mọi phản ánh của mình trong “Phản ánh của tôi”. Dù bà con có chia sẻ số hay không, chỉ bà con xem được phản ánh mình đã gửi.",
@@ -1152,6 +1156,8 @@ export const XA_TN = {
   video_topics: "Chủ đề",
   /** "Xem video <tên>" — the accessible name of one video tile. */
   video_open: (title: string) => `Xem video ${title}`,
+  /** The same, when the commune typed the length (`VideoPage.tsx:53`): the length in words, not "3:20". */
+  video_open_with_length: (title: string, length: string) => `Xem video ${title}, dài ${length}`,
   /*
    * TRUYỀN THANH — the prototype's library (`BroadcastPage.tsx`, owner 11/10/2026).
    */
@@ -1309,6 +1315,53 @@ export const XA_TN = {
   language_value: "Tiếng Việt",
   /** `label`: the build's short commit and date, injected at build time (`lib/build-label.ts`). */
   app_version: (label: string) => `ViGov phiên bản ${label}`,
+  /*
+   * "NHẬN THÔNG BÁO" (ADR 0091 §4) — label and hint are the prototype's, verbatim (`ProfilePage.tsx:89-90`). The
+   * rest is new wording: the prototype's switch was wired to nothing, this one reads and writes the citizen's own
+   * choice through the session.
+   */
+  notify_label: "Nhận thông báo",
+  notify_hint: "Báo qua Zalo khi phiếu phản ánh hoặc hồ sơ có kết quả",
+  /** Under the switch when it is OFF: the two messages that still go (ADR 0091 §4) — said, so "off" is not misread. */
+  notify_off_note: "Khi tắt, xã vẫn báo qua Zalo nếu phiếu không được tiếp nhận hoặc được chuyển lên cấp trên.",
+  /** Not read in this open (no session yet): no state is shown, because none is known. */
+  notify_unknown: "Bấm để xem bà con đang bật hay tắt.",
+  notify_loading: "Đang tải lựa chọn của bà con…",
+  notify_saving: "Đang lưu lựa chọn…",
+  notify_read_network: "Chưa tải được lựa chọn vì mạng yếu hoặc mất kết nối. Bà con kiểm tra mạng rồi bấm lại.",
+  notify_read_failed: "Hệ thống của xã đang bận nên chưa tải được lựa chọn. Bà con chờ vài phút rồi bấm lại.",
+  notify_save_network:
+    "Chưa lưu được vì mạng yếu hoặc mất kết nối, lựa chọn vẫn như cũ. Bà con kiểm tra mạng rồi bấm lại.",
+  notify_save_failed: "Hệ thống của xã đang bận nên chưa lưu được, lựa chọn vẫn như cũ. Bà con chờ vài phút rồi bấm lại.",
+  /*
+   * CẢNH BÁO THIÊN TAI (ADR 0091 §2) — the prototype's words (`AlertPage.tsx`, `AlertBanner.tsx`), verbatim where it
+   * has them. Two departures, each stated where it is used: no distance to an evacuation point (ADR 0091: it needs
+   * the resident's location), and no promise of a Zalo message in the empty state (ADR 0091 §2: no ZNS push yet).
+   */
+  alert_title: "Cảnh báo thiên tai",
+  /** The banner's accessible name: the words say it is a warning, not the red alone. */
+  alert_banner_label: (headline: string) => `Cảnh báo thiên tai: ${headline}`,
+  alert_loading: "Đang tải cảnh báo…",
+  alert_from: "Có hiệu lực từ:",
+  alert_to: "Đến:",
+  /** Flood-type alerts (bão, lũ, mưa lớn) — the prototype's heading and caption, verbatim. */
+  alert_zone_flood: "Vùng có nguy cơ ngập",
+  alert_zone_flood_caption: "Vùng tô đỏ là khu vực có nguy cơ ngập cao. Bản đồ chỉ mang tính minh hoạ vị trí tương đối.",
+  alert_zone_flood_map: (commune: string) => `Bản đồ minh hoạ vùng có nguy cơ ngập trong địa bàn ${commune}`,
+  /**
+   * NEW — sạt lở, dịch bệnh, cháy: "nguy cơ ngập" over a fire would be a false statement by the commune. ADR 0091 §2
+   * names the polygon "vùng nguy hiểm"; the caption keeps the prototype's second sentence.
+   */
+  alert_zone_other: "Vùng nguy hiểm",
+  alert_zone_other_caption: "Vùng tô đỏ là khu vực nguy hiểm. Bản đồ chỉ mang tính minh hoạ vị trí tương đối.",
+  alert_zone_other_map: (commune: string) => `Bản đồ minh hoạ vùng nguy hiểm trong địa bàn ${commune}`,
+  alert_evacuation: "Điểm sơ tán gần bà con",
+  alert_capacity: (n: number) => `Sức chứa khoảng ${n} người`,
+  alert_contacts: "Số điện thoại khẩn cấp",
+  alert_call: (phone: string) => `GỌI ${phone}`,
+  alert_call_label: (who: string, phone: string) => `Gọi ${who}, số ${phone}`,
+  alert_empty: "Hiện không có cảnh báo nào",
+  alert_empty_hint: (commune: string) => `Khi có bão, lũ, ngập lụt hay sạt lở, ${commune} sẽ gửi cảnh báo tới đây.`,
 } as const;
 
 /**
@@ -1399,8 +1452,8 @@ export const XA_PA = {
   thieu_mo_ta: "Bà con mô tả sự việc trước khi gửi.",
   hoi_huy_cau: "Nội dung bà con đang nhập sẽ mất.",
   chon_linh_vuc: "Bà con chọn lĩnh vực gần đúng nhất với sự việc.",
-  // The prototype's writing step (`NewFeedbackPage.tsx:332`). The placeholder is the default one; a per-field
-  // placeholder needs the server's catalogue to carry it (a backend card).
+  // The prototype's writing step (`NewFeedbackPage.tsx:332`). `goi_y_su_viec` is the prototype's DEFAULT example
+  // (`feedback-adapter.ts:124`), shown when the picked field carries no `placeholder` of its own (ADR 0091 §6).
   su_viec: "Sự việc gì đang xảy ra?",
   goi_y_su_viec: "Bà con mô tả giúp sự việc, ở đâu, xảy ra khi nào.",
   // The prototype's photo block (`PhotoPicker.tsx:203-208`): at most THREE on the form.

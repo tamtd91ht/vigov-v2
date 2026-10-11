@@ -10,7 +10,7 @@
  *
  * KHÔNG LẤY TỪ BẢN MẪU: quét căn cước (dữ liệu định danh — luật 3, điều kiện dừng), đăng nhập, đăng xuất, lưu
  * cài đặt xuống máy (`localStorage` cấm ở nửa này — `ranh-gioi-hai-nua.test.ts` §3b; cỡ chữ sống trong
- * bộ nhớ của lần mở; công tắc thông báo bỏ tới khi có thông báo thật).
+ * bộ nhớ của lần mở; công tắc "Nhận thông báo" đọc/ghi lựa chọn ở máy chủ qua phiên — ADR 0091 §4).
  */
 import { useState } from "react";
 
@@ -20,6 +20,7 @@ import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
 import { CUA_TOI, XA_TN } from "./noi-dung";
+import type { NotificationPreferenceState } from "./notification-preference";
 import { ONhapDong } from "./o-nhap";
 
 /* ═══════════════════════════════ TRA CỨU HỒ SƠ ═══════════════════════════════ */
@@ -151,6 +152,72 @@ function SettingText(props: { icon: TenBieuTuong; label: string; hint?: string }
 }
 
 /**
+ * "NHẬN THÔNG BÁO" (ADR 0091 §4; the prototype's row, `ProfilePage.tsx:87-93`). Its look follows what is KNOWN:
+ *
+ *   ready         a real switch (`role="switch"`, `aria-checked`, the knob's position — never colour alone); while a
+ *                 save runs it is disabled and says so; OFF adds the line naming the two messages that still go
+ *   unknown       no session read it yet: a plain button that says a tap shows the state — no knob, no guess
+ *   loading       the same row, disabled, with the words
+ *   read-failed   the sentence (`role="alert"`); a tap reads again
+ *
+ * A failed save keeps the server's value and puts its sentence under the row (`role="alert"`). PURE.
+ */
+export function NotificationSwitchRow(props: { state: NotificationPreferenceState; onPress: () => void }) {
+  const { state } = props;
+  const text = <SettingText icon="bell" label={XA_TN.notify_label} hint={XA_TN.notify_hint} />;
+  if (state.kind !== "ready") {
+    return (
+      <>
+        <button type="button" className="xa-hang xa-setting-switch" disabled={state.kind === "loading"} onClick={props.onPress}>
+          {text}
+          <BieuTuong ten="chevron-right" co={22} />
+        </button>
+        {state.kind === "unknown" && <p className="xa-phu xa-setting-note">{XA_TN.notify_unknown}</p>}
+        {state.kind === "loading" && (
+          <p className="xa-phu xa-setting-note" role="status">
+            {XA_TN.notify_loading}
+          </p>
+        )}
+        {state.kind === "read-failed" && (
+          <p className="xa-error-box xa-setting-note" role="alert">
+            {state.message}
+          </p>
+        )}
+      </>
+    );
+  }
+  return (
+    <>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={state.enabled}
+        aria-busy={state.saving || undefined}
+        className="xa-hang xa-setting-switch"
+        disabled={state.saving}
+        onClick={props.onPress}
+      >
+        {text}
+        <span className={`xa-cong-tac${state.enabled ? " xa-cong-tac--bat" : ""}`} aria-hidden="true">
+          <span className="xa-cong-tac__nut" />
+        </span>
+      </button>
+      {state.saving && (
+        <p className="xa-phu xa-setting-note" role="status">
+          {XA_TN.notify_saving}
+        </p>
+      )}
+      {!state.enabled && <p className="xa-phu xa-setting-note">{XA_TN.notify_off_note}</p>}
+      {state.error !== null && (
+        <p className="xa-error-box xa-setting-note" role="alert">
+          {state.error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
  * The avatar: the Zalo profile picture when the name request brought one (`NameAtEntry.avatarUrl`, https only) and
  * it loaded; otherwise the initials, otherwise the person icon. Decoration (`alt=""`): the name stands beside it.
  * The picture comes from Zalo's own servers, and its address is shown here and nowhere else.
@@ -186,6 +253,11 @@ export function CaNhanXa(props: {
   onMoTraCuu: () => void;
   /** "Thông báo" — the screen the home bell used to open (decision 10: the bell is gone from the header). */
   onOpenNotifications: () => void;
+  /**
+   * The "Nhận thông báo" switch (ADR 0091 §4), held by `AppCuaXa` so it survives tab changes. Absent = no row
+   * (tests that pin the rest of the screen).
+   */
+  notification?: { state: NotificationPreferenceState; onPress: () => void };
 }) {
   return (
     <div className="xa-trang xa-trang--tab">
@@ -205,8 +277,7 @@ export function CaNhanXa(props: {
       <h2 className="xa-dau-khoi xa-dau-khoi__tieu-de">{XA_TN.hien_thi}</h2>
       <div className="xa-the">
         {/* The whole row is the switch (≥ 48px), its state said by `aria-checked` and by the knob's position —
-            never by colour alone. No "Nhận thông báo" switch: a switch wired to nothing lets a citizen believe
-            they opted out of messages the commune will later send; it waits for the server's opt-out (backend). */}
+            never by colour alone. */}
         <button
           type="button"
           role="switch"
@@ -220,6 +291,12 @@ export function CaNhanXa(props: {
           </span>
         </button>
         <div className="xa-ke xa-ke--sat" />
+        {props.notification !== undefined && (
+          <>
+            <NotificationSwitchRow state={props.notification.state} onPress={props.notification.onPress} />
+            <div className="xa-ke xa-ke--sat" />
+          </>
+        )}
         {/* A statement, not a control: Vietnamese is the only language the app has. */}
         <div className="xa-hang xa-hang--tinh">
           <SettingText icon="globe" label={XA_TN.language} hint={XA_TN.language_value} />
