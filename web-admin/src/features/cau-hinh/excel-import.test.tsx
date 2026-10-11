@@ -148,7 +148,7 @@ function session(permissions: readonly string[]): KetQua<identity_phienHienTaiRa
 }
 
 describe("Danh mục — which group offers the import, to whom", () => {
-  it("all seven groups have an import (one route per owning service, ADR 0059 §3), each on admin.lookup", () => {
+  it("all seven lookup groups have an import (one route per owning service, ADR 0059 §3), each on admin.lookup — Loại đơn thư has none", () => {
     expect(Object.keys(CATALOGUE_IMPORTS)).toEqual([
       "loaiTaiNguyenBanDo",
       "loaiVanBan",
@@ -158,8 +158,11 @@ describe("Danh mục — which group offers the import, to whom", () => {
       "mucUuTienNhiemVu",
       "hangMucKeHoachVon",
     ]);
-    expect([...Object.keys(CATALOGUE_IMPORTS)].sort()).toEqual(BAY_DANH_MUC_GHI.map((m) => m.khoa).sort());
-    for (const g of BAY_DANH_MUC_GHI.map((m) => m.khoa)) {
+    // Four statutory codes, added one by one: no import route exists for "Loại đơn thư".
+    const importable = BAY_DANH_MUC_GHI.map((m) => m.khoa).filter((k) => k !== "citizenLetterType");
+    expect([...Object.keys(CATALOGUE_IMPORTS)].sort()).toEqual([...importable].sort());
+    expect(catalogueImportFor("citizenLetterType", session(["admin.lookup"]))).toBeNull();
+    for (const g of importable) {
       expect(CATALOGUE_IMPORTS[g]?.permission).toBe("admin.lookup");
       expect(catalogueImportFor(g, session(["admin.lookup"]))).not.toBeNull();
       expect(catalogueImportFor(g, session(["admin.org", "admin.lookups"]))).toBeNull();
@@ -186,6 +189,7 @@ describe("Danh mục — which group offers the import, to whom", () => {
     khoiNhiemVu: { ok: true, duLieu: { items: [] } },
     loaiNhiemVu: { ok: true, duLieu: { items: [] } },
     mucUuTienNhiemVu: { ok: true, duLieu: { items: [] } },
+    citizenLetterType: { ok: true, duLieu: { items: [] } },
   });
 
   it("the tab's import button: the filtered group with `admin.lookup` only — never 'Tất cả' or the eighth group", () => {

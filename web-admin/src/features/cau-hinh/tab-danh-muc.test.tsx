@@ -21,10 +21,17 @@ import {
   CatalogueView,
   catalogueImportButton,
   checkAddLabel,
+  checkLetterTypeAdd,
   DELETE_ENTRY,
   EDIT_LABEL,
   EMPTY_DRAFT,
+  LETTER_TYPE_DELETE_WARNING,
+  LETTER_TYPE_IMPORT_REASON,
+  LETTER_TYPE_REQUIRED,
+  LETTER_TYPES_ALL_PRESENT,
+  letterCodesTaken,
   NO_COLOR,
+  withGroup,
   SET_DEFAULT,
   SET_DEFAULT_TITLE,
   type CatalogueActions,
@@ -86,6 +93,7 @@ function groupsOf(items: Items) {
     khoiNhiemVu: read("khoiNhiemVu"),
     loaiNhiemVu: read("loaiNhiemVu"),
     mucUuTienNhiemVu: read("mucUuTienNhiemVu"),
+    citizenLetterType: read("citizenLetterType"),
   } as BayDanhMuc;
   return nhomDanhMuc(bay);
 }
@@ -168,8 +176,9 @@ describe("one table across groups (spec 05 §3)", () => {
       { loaiVanBan: [entry(TANG_DON_VI)] },
       { open: { kind: "add", idempotencyKey: "k" }, draft: { ...EMPTY_DRAFT, group: "loaiVanBan" } },
     );
-    expect(count(html, "<option ")).toBe(7);
+    expect(count(html, "<option ")).toBe(8);
     expect(html).toContain(">Mức ưu tiên nhiệm vụ</option>");
+    expect(html).toContain(">Loại đơn thư</option>");
   });
 
   it("D22 — a chosen group that has become empty falls back to 'Tất cả'", () => {
@@ -321,6 +330,86 @@ describe("in-place edit and delete", () => {
   });
 });
 
+describe("row 33 — Loại đơn thư: four statutory codes, delete is final for the code", () => {
+  const letter = entry(TANG_DON_VI, { id: "01JLT1", code: "khieu-nai", label: "Khiếu nại" });
+  const key = `citizenLetterType:${letter.id}`;
+
+  it("sits after Loại văn bản in the group filter (prototype LookupTable.tsx:37)", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)], citizenLetterType: [letter] });
+    expect(html.indexOf(">Loại văn bản</button>")).toBeLessThan(html.indexOf(">Loại đơn thư</button>"));
+  });
+
+  it("add row: a 'Loại đơn theo luật' select of the four codes minus those already held", () => {
+    const html = view(
+      { citizenLetterType: [letter] },
+      {
+        open: { kind: "add", idempotencyKey: "k" },
+        draft: { ...EMPTY_DRAFT, group: "citizenLetterType", code: "to-cao", label: "Tố cáo" },
+      },
+    );
+    const select = /<select id="catalogue-add-letter-code".*?<\/select>/s.exec(html)?.[0] ?? "";
+    expect(select).toContain('value="to-cao"');
+    expect(select).toContain('value="kien-nghi-phan-anh"');
+    expect(select).toContain('value="de-nghi"');
+    expect(select).not.toContain('value="khieu-nai"');
+    expect(html).toContain(">Loại đơn theo luật</label>");
+  });
+
+  it("add row: all four held → no code to pick, Thêm disabled, the sentence says so", () => {
+    const all = ["kien-nghi-phan-anh", "khieu-nai", "to-cao", "de-nghi"].map((code) =>
+      entry(TANG_DON_VI, { id: code, code, label: code }),
+    );
+    const html = view(
+      { citizenLetterType: all },
+      { open: { kind: "add", idempotencyKey: "k" }, draft: { ...EMPTY_DRAFT, group: "citizenLetterType" } },
+    );
+    expect(html).toContain(LETTER_TYPES_ALL_PRESENT);
+    const submitTag = /<button[^>]*type="submit"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(submitTag).toContain('disabled=""');
+  });
+
+  it("checkLetterTypeAdd: a code outside the four is refused before sending; the label is required", () => {
+    expect(checkLetterTypeAdd({ code: "", label: "X" })).toEqual({ ok: false, error: LETTER_TYPE_REQUIRED });
+    expect(checkLetterTypeAdd({ code: "kien-nghi", label: "X" })).toEqual({ ok: false, error: LETTER_TYPE_REQUIRED });
+    expect(checkLetterTypeAdd({ code: "de-nghi", label: "  " }).ok).toBe(false);
+    expect(checkLetterTypeAdd({ code: "de-nghi", label: " Đề nghị " })).toEqual({ ok: true, code: "de-nghi", label: "Đề nghị" });
+  });
+
+  it("withGroup: moving to the group pre-picks the first free code and its wording; moving away clears it", () => {
+    const taken = letterCodesTaken(groupsOf({ citizenLetterType: [letter] }));
+    expect([...taken]).toEqual(["khieu-nai"]);
+    const to = withGroup(EMPTY_DRAFT, "citizenLetterType", taken);
+    expect(to).toMatchObject({ group: "citizenLetterType", code: "to-cao", label: "Tố cáo" });
+    expect(withGroup(to, "loaiVanBan", taken)).toMatchObject({ group: "loaiVanBan", code: "" });
+  });
+
+  it("delete: NO reason box — the warning that the code is gone for good, and 'Tắt' suggested", () => {
+    const html = view({ citizenLetterType: [letter] }, { open: { kind: "delete", rowKey: key } });
+    expect(html).not.toContain('placeholder="Lý do xoá"');
+    expect(html).toContain(LETTER_TYPE_DELETE_WARNING.replace("“", "&quot;").slice(0, 40));
+    expect(html).toContain("“Tắt”");
+    expect(html).toContain(">Xoá</button>");
+    expect(html).toContain(">Huỷ</button>");
+  });
+
+  it("edit: no 'Mặc định' checkbox — the group has no default (the server refuses `true`)", () => {
+    const html = view(
+      { citizenLetterType: [letter] },
+      { open: { kind: "edit", rowKey: key }, draft: { ...EMPTY_DRAFT, label: "Khiếu nại" } },
+    );
+    expect(html).not.toContain('type="checkbox"');
+  });
+
+  it("import: no route for this group — a disabled button with its reason, no '?'", () => {
+    const html = renderToStaticMarkup(<>{catalogueImportButton(true, null, () => {}, false, true)}</>);
+    expect(html).toContain("disabled");
+    expect(html).toContain(LETTER_TYPE_IMPORT_REASON);
+    expect(html).not.toContain("data-pending");
+    // DENIED: without admin.lookup nothing at all.
+    expect(renderToStaticMarkup(<>{catalogueImportButton(false, null, () => {}, false, true)}</>)).toBe("");
+  });
+});
+
 describe("the add row (spec 05 §2)", () => {
   function addRow(p: Partial<Props> = {}) {
     return view(
@@ -333,7 +422,7 @@ describe("the add row (spec 05 §2)", () => {
     const html = addRow({ draft: { ...EMPTY_DRAFT, group: "loaiVanBan", color: "#2fb1f9" } });
     expect(html).toContain("sm:grid-cols-[16rem_1fr_6rem_auto]");
     expect(html).toContain(">Nhóm danh mục</label>");
-    expect(count(html, "<option ")).toBe(7);
+    expect(count(html, "<option ")).toBe(8);
     expect(html).toContain('placeholder="Ví dụ: Chợ và thương mại"');
     // Failed before: the colour was a disabled box with a "?" and no `name`.
     const color = html.match(/<input[^>]*type="color"[^>]*>/)?.[0] ?? "";

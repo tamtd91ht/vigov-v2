@@ -547,3 +547,78 @@ describe("ngôi sao dòng tổng — đổi TẠI CHỖ, không nháy màn (bả
     expect(star("Chi thường xuyên").getAttribute("aria-pressed")).toBe("false");
   });
 });
+
+describe("đợt thu chi — số trên biểu tượng tăng TẠI CHỖ sau khi ghi (bảng lỗi khách hàng dòng 53)", () => {
+  const SESSION: identity_phienHienTaiRa = {
+    sid: "s",
+    expires_at: "2099-01-01T00:00:00Z",
+    staff: { code: "CB-00001", full_name: "Cán bộ A", position: "Kế toán" },
+    role: null,
+    permissions: ["budget.read", "budget.update"],
+    must_change_password: false,
+  };
+
+  it("ghi một đợt: bảng đọc lại LẶNG LẼ (không skeleton), badge 0 → 1, hộp vẫn mở", async () => {
+    let entryCount = 0;
+    const calls = { sheet: 0, indicators: 0 };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string, init: RequestInit = {}) => {
+        if (url.startsWith("/api/v1/budget-sheets")) {
+          calls.sheet += 1;
+          return json({
+            sheet: { id: "01JBANG", code: "NS-2026-CHI-01", year: 2026, kind: "chi", revision: 1, title: "BÁO CÁO CHI", unit: "trieu-dong", unit_label: "Triệu đồng" },
+            columns: COT,
+            lines: [
+              { id: "B", no: "1", name: "Chi thường xuyên", order: 1, method: "entries", level: 0, is_headline: true, values: { C1: 1_000_000, C2: null }, entry_count: entryCount },
+            ],
+            summary: { headline_line_id: "B", cells: [], indicator: { name: "Chi đạt dự toán", basis_points: null } },
+          });
+        }
+        if (url.startsWith("/api/v1/budget-indicators")) {
+          calls.indicators += 1;
+          return json({
+            year: 2026,
+            revenue_achievement: { name: "Thu đạt dự toán", basis_points: null },
+            expenditure_achievement: { name: "Chi đạt dự toán", basis_points: null },
+            balance: { amount: null },
+            revenue_totals: [],
+          });
+        }
+        if (url.startsWith("/api/v1/budget-period-closes")) return json({ year: 2026, closes: [] });
+        if (url.startsWith("/api/v1/budget-lines/B/entries")) {
+          if (init.method === "POST") {
+            entryCount += 1;
+            return json({ id: "D2", line_id: "B", date: "2026-10-09", content: "Thu đợt 2", values: {} }, 201);
+          }
+          return json({ line_id: "B", method: "entries", entries: [] });
+        }
+        return json(SESSION);
+      }),
+    );
+    mount(
+      <PhienProvider>
+        <BangThuChi />
+      </PhienProvider>,
+    );
+    await settle();
+    const button = () => byLabel<HTMLButtonElement>("Các đợt thu, chi của Chi thường xuyên");
+    expect(button().title).toBe("Các đợt thu, chi (0)");
+    expect(button().querySelector("span.absolute")).toBeNull();
+
+    act(() => button().click());
+    await settle();
+    typeInto(document.querySelector<HTMLInputElement>("#dot-content")!, "Thu đợt 2");
+    typeInto(document.querySelector<HTMLInputElement>("#dot-gia-C2")!, "1,5");
+    submit(document.querySelector<HTMLFormElement>('form[aria-label="Ghi một đợt"]')!);
+    await settle();
+
+    expect(calls.sheet).toBe(2);
+    expect(calls.indicators).toBe(2);
+    expect(host!.textContent).not.toContain("Đang tải bảng ngân sách");
+    expect(button().title).toBe("Các đợt thu, chi (1)");
+    expect(button().querySelector("span.absolute")?.textContent).toBe("1");
+    // The dialog is still open on the same line.
+    expect(document.querySelector('form[aria-label="Ghi một đợt"]')).not.toBeNull();
+  });
+});

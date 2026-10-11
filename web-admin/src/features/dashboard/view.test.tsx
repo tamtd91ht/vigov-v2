@@ -316,6 +316,8 @@ describe("UrgentPanel", () => {
               categoryCode: "rac-thai",
               missedAt: "2026-09-01T01:00:00Z",
               critical: true,
+              title: null,
+              unitName: null,
             },
           ],
           failures: [],
@@ -595,6 +597,8 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
               categoryCode: null,
               missedAt: "2026-09-01T01:00:00Z",
               critical: false,
+              title: null,
+              unitName: null,
             },
           ],
           failures: [],
@@ -615,6 +619,8 @@ describe("composition — the prototype's Panel / MetricTile / alert row (ADR 00
     categoryCode: null,
     missedAt: "2026-09-01T01:00:00Z",
     critical: false,
+    title: null,
+    unitName: null,
     ...patch,
   });
   const urgent = (rows: UrgentRow[]) =>
@@ -773,6 +779,8 @@ const URGENT_TASK: UrgentRow = {
   categoryCode: "",
   missedAt: "2026-09-21T08:00:00+07:00",
   critical: false,
+  title: null,
+  unitName: null,
 };
 const URGENT_REPORT: UrgentRow = { ...URGENT_TASK, module: "citizen-report", code: "PA-7F3K-9QXR-MNPT" };
 
@@ -840,6 +848,16 @@ describe("row 5 — a task row of 'Cần xử lý ngay' opens the drawer in plac
     // Same fields as before: module, code, the deadline pill and its kind (owner decision; rule 3).
     expect(urgent).toContain("quá hạn từ 08:00 21/09/2026");
     expect(urgent).toContain("Hạn xử lý");
+  });
+
+  it("a task row WITH a title shows the name, the overdue pill, then the unit (prototype :304-318)", () => {
+    const titled: UrgentRow = { ...URGENT_TASK, title: "Sửa cống thôn 3", unitName: "Văn phòng UBND" };
+    const html = drillPage({ queue: ok({ rows: [titled, URGENT_REPORT], failures: [] }) }, blockVisibility(["report.read", "task.read", "feedback.read"]));
+    const urgent = /<section[^>]*data-block="urgent".*?<\/section>/s.exec(html)?.[0] ?? "";
+    expect(urgent).toMatch(/Sửa cống thôn 3.*quá hạn từ 08:00 21\/09\/2026.*Văn phòng UBND/s);
+    // The petition row stays code-only (rule 3).
+    expect(urgent).toContain("Phản ánh <span");
+    expect(urgent).toContain("PA-7F3K-9QXR-MNPT");
   });
 
   it("without a drill the task row is still the register link", () => {

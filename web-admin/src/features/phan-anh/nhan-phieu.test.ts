@@ -555,9 +555,10 @@ describe("phần chưa dựng được — không còn liệt kê những gì Đ
     expect(tatCa).not.toContain("admin.user");
   });
 
-  it("`Liên quan đến tôi` VẪN nằm trong danh sách — máy chủ trả 400 cho `scope=related`", () => {
-    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Liên quan đến tôi"))).toBe(true);
+  it("`Liên quan đến tôi` đã RỜI danh sách — máy chủ nhận `scope=related` (a06a12ab)", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Liên quan đến tôi"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Giao cho tôi"))).toBe(false);
+    expect(() => petitionPendingPart("scopeRelated")).toThrow();
   });
 });
 
@@ -786,8 +787,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // Thirteen from 09/10/2026 (prototype round, owner decisions D1–D5); SIX later the same day, when the
     // backends of the heat map, the report, the hamlet, the act files and the log-file removal landed and
     // the log was decided always internal (ADR 0041 §Sửa đổi 09/10/2026, 0053 §C, 0072, 0088). FIVE once
-    // the duplicates block was built (ADR 0087, backend b97a6379 / 49b689a4).
-    expect(PHAN_CHUA_DUNG.length).toBe(5);
+    // the duplicates block was built (ADR 0087, backend b97a6379 / 49b689a4). FOUR once `scope=related`
+    // was served (bug sheet row 57, a06a12ab).
+    expect(PHAN_CHUA_DUNG.length).toBe(4);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -824,7 +826,6 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(ten).not.toContain("Có thể trùng với phiếu khác");
     expect(() => petitionPendingPart("duplicates")).toThrow();
     expect(ten).toEqual([
-      "Liên quan đến tôi",
       "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
       "Đính ảnh hiện trường",

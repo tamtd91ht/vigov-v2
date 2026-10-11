@@ -194,7 +194,64 @@ describe("letter drawer — status strip (ADR 0084 #2, prototype :385-484)", () 
     expect(dialog().querySelector("#don-thu-buoc-cu-the")).toBeNull();
     await act(async () => button("Xác nhận")!.click());
     const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
-    expect(JSON.parse(String(init.body))).toEqual({ status: "chuyen-don" });
+    expect(JSON.parse(String(init.body))).toEqual({ status_group: "chuyen-cap-tren" });
+  });
+
+  it("the current “Đang xử lý” chip from Đang xử lý đơn ADMITS the letter — said in the composer; posts the chip", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["thu-ly", "chuyen-don"] }), { canBook: false }));
+    act(() => chips().find((b) => first(b) === "Đang xử lý")!.click());
+    expect(dialog().textContent).toContain("Thụ lý đơn — bắt đầu tính hạn giải quyết");
+    expect(dialog().querySelector("#don-thu-buoc-cu-the")).toBeNull();
+    await act(async () => button("Xác nhận")!.click());
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ status_group: "dang-xu-ly" });
+  });
+
+  it("petition.create: the composer offers “Bộ phận xử lý” + “Cán bộ phụ trách” and sends both (business code)", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["thu-ly", "chuyen-don"] })));
+    act(() => chips().find((b) => first(b) === "Chuyển cấp trên")!.click());
+    expect(dialog().textContent).toContain("Bộ phận xử lý");
+    expect(dialog().textContent).toContain("Cán bộ phụ trách");
+    const unit = dialog().querySelector<HTMLSelectElement>("#don-thu-buoc-bo-phan")!;
+    expect([...unit.options].map((o) => o.textContent)).toEqual(["— Giữ nguyên bộ phận đang giữ —", "Văn phòng"]);
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(unit, "U1");
+      unit.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const officer = dialog().querySelector<HTMLInputElement>("#don-thu-buoc-can-bo")!;
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(officer, "CB-00002");
+      officer.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Xác nhận")!.click());
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ status_group: "chuyen-cap-tren", org_unit_id: "U1", assignee_code: "CB-00002" });
+  });
+
+  it("DENIED: without petition.create the composer has no hand-over fields and sends none", async () => {
+    const fetchSpy = vi.fn(async () => new Response(JSON.stringify(letter()), { status: 200 }));
+    vi.stubGlobal("fetch", fetchSpy);
+    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["thu-ly", "chuyen-don"] }), { canBook: false }));
+    act(() => chips().find((b) => first(b) === "Chuyển cấp trên")!.click());
+    expect(dialog().querySelector("#don-thu-buoc-bo-phan")).toBeNull();
+    expect(dialog().querySelector("#don-thu-buoc-can-bo")).toBeNull();
+    await act(async () => button("Xác nhận")!.click());
+    const [, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({ status_group: "chuyen-cap-tren" });
+  });
+
+  it("a hand-over refused with 403 shows the server's sentence in the composer", async () => {
+    const sentence = "Chỉ người có quyền Tiếp nhận đơn thư mới chuyển đơn cho bộ phận hoặc cán bộ khác. Bỏ chọn bộ phận và cán bộ để chỉ đổi trạng thái.";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ code: "forbidden", message: sentence, trace_id: "" }), { status: 403 })));
+    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["thu-ly", "chuyen-don"] })));
+    act(() => chips().find((b) => first(b) === "Chuyển cấp trên")!.click());
+    await act(async () => button("Xác nhận")!.click());
+    await act(async () => {});
+    expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(sentence);
   });
 
   it("Đã giải quyết without a result: the composer posts the status and shows the SERVER's 409 sentence", async () => {
@@ -208,7 +265,7 @@ describe("letter drawer — status strip (ADR 0084 #2, prototype :385-484)", () 
     await act(async () => {});
     const [url, init] = fetchSpy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("/api/v1/citizen-letters/L1/status");
-    expect(JSON.parse(String(init.body))).toEqual({ status: "da-giai-quyet" });
+    expect(JSON.parse(String(init.body))).toEqual({ status_group: "da-giai-quyet" });
     expect(dialog().querySelector('[role="alert"]')!.textContent).toBe(sentence);
   });
 

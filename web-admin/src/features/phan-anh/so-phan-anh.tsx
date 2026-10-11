@@ -30,7 +30,6 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Field } from "@/components/ui/field";
 import { IconButton } from "@/components/ui/icon-button";
 import { LargeDialog } from "@/components/ui/large-dialog";
-import { PendingMarker } from "@/components/ui/pending-feature";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { cn } from "@/lib/cn";
 import {
@@ -139,7 +138,6 @@ import {
   pageRangeLabel,
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
-  petitionPendingPart,
   petitionTaskOffered,
   PUBLISHED_TOAST,
   RATING_MAX_STARS,
@@ -855,14 +853,11 @@ export function HangLoc({
   // names it, as in the prototype — but every control keeps a real `<label>`.
   return (
     <div id="petition-filters" className="flex min-w-0 flex-wrap items-center gap-2.5 [&>*]:my-0">
-      {/* HAI TAB PHẠM VI, CÙNG KHUÔN SỔ NHIỆM VỤ. `mine` KHÔNG mang danh tính nào — máy chủ lấy mã cán
-          bộ từ PHIÊN. Tab thứ ba `Liên quan đến tôi` là CHỖ GIỮ vô hiệu có dấu "?" (ADR 0068 §14): máy
-          chủ trả 400 cho `scope=related`, nên nó không có `onClick` và không bao giờ đặt `phamVi`.
-          The buttons stay native `aria-pressed` toggles, their text the only child (tests read it). */}
       {/* THE PROTOTYPE'S `ScopeFilter` (`components/common/ScopeFilter.tsx:41-67`), local: one bordered
-          group, 36px, active = navy. Each choice's hint is its `title`. The third choice is a disabled
-          placeholder with its "?" (ADR 0068 §14): the server answers 400 to `scope=related`, so it has no
-          `onClick`. Buttons stay native `aria-pressed` toggles, their text the only child (tests read it). */}
+          group, 36px, active = navy. Each choice's hint is its `title`. `mine` and `related` carry NO
+          identity — the server takes the staff code (and, for `related`, the unit) from the SESSION; the
+          same scope goes to the list, the counts and the heat-map points (`addFilters`). Buttons stay
+          native `aria-pressed` toggles, their text the only child (tests read it). */}
       <span className="inline-flex items-center gap-1.5">
         <div
           className="inline-flex overflow-hidden rounded-md border border-solid border-line bg-white"
@@ -872,8 +867,8 @@ export function HangLoc({
           <button
             type="button"
             title={SCOPE_HINT_ALL}
-            className={scopeButtonClass(loc.phamVi !== "mine")}
-            aria-pressed={loc.phamVi !== "mine"}
+            className={scopeButtonClass(loc.phamVi !== "mine" && loc.phamVi !== "related")}
+            aria-pressed={loc.phamVi !== "mine" && loc.phamVi !== "related"}
             onClick={() => datLoc({ ...loc, phamVi: undefined })}
           >
             {PHAM_VI_TOAN_XA}
@@ -889,15 +884,14 @@ export function HangLoc({
           </button>
           <button
             type="button"
-            disabled
             title={SCOPE_HINT_RELATED}
-            aria-pressed={false}
-            className={cn(scopeButtonClass(false), "cursor-not-allowed opacity-60 hover:bg-white")}
+            className={scopeButtonClass(loc.phamVi === "related")}
+            aria-pressed={loc.phamVi === "related"}
+            onClick={() => datLoc({ ...loc, phamVi: "related" })}
           >
             {SCOPE_RELATED_LABEL}
           </button>
         </div>
-        <PendingMarker info={petitionPendingPart("scopeRelated")} side="bottom" />
       </span>
 
       {/* Search as you type (300ms after the last key, in `SoPhanAnh`); Enter sends at once. The

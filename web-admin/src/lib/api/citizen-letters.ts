@@ -221,16 +221,22 @@ export function routeCitizenLetter(
 }
 
 /**
- * POST /api/v1/citizen-letters/{id}/status — one C3 arrow. A refused arrow and "Đã giải quyết without a
- * result" come back as 409 with the server's own sentence, shown verbatim.
+ * POST /api/v1/citizen-letters/{id}/status — one C3 arrow, named EITHER as the real `status` OR as the
+ * prototype's chip (`status_group`; the server derives the one step). `org_unit_id` / `assignee_code`
+ * (a staff BUSINESS code) also hand the letter over in the same transaction — `petition.create` only, 403
+ * otherwise. Only the keys the caller set are sent: the server refuses both / neither of the two status keys.
  */
 export function moveCitizenLetter(
   id: string,
   input: documents_letterStatusIn,
 ): Promise<KetQua<documents_citizenLetterOut>> {
   const template: documents_post_citizen_letters_by_id_status["duongDan"] = "/api/v1/citizen-letters/{id}/status";
-  const body: documents_letterStatusIn = { status: input.status };
+  const body: documents_letterStatusIn = {};
+  if (input.status) body.status = input.status;
+  if (input.status_group) body.status_group = input.status_group;
   if (input.note) body.note = input.note;
+  if (input.org_unit_id) body.org_unit_id = input.org_unit_id;
+  if (input.assignee_code) body.assignee_code = input.assignee_code;
   return docThanLoiGoi<documents_citizenLetterOut>(goiGhi(onePath(template, id), "POST", body, 200));
 }
 

@@ -42,6 +42,7 @@ const CATALOGUES = {
   khoiNhiemVu: empty,
   loaiNhiemVu: empty,
   mucUuTienNhiemVu: empty,
+  citizenLetterType: empty,
 } as unknown as BayDanhMuc;
 
 const FIELD: petitions_petitionFieldOut = {

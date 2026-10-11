@@ -66,6 +66,7 @@ const CATALOGUES = {
   khoiNhiemVu: empty,
   loaiNhiemVu: empty,
   mucUuTienNhiemVu: empty,
+  citizenLetterType: empty,
 } as unknown as BayDanhMuc;
 
 function sessionWith(permissions: string[]): PhienDaDoc {

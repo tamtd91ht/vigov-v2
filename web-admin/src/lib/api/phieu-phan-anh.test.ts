@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   bookStaffIntake,
+  citizenReportCountsPath,
+  citizenReportPointsPath,
   chuyenCapTrenPhieu,
   chuyenXuLyPhieu,
   dongPhieu,
@@ -214,9 +216,18 @@ describe("đường dẫn đọc sổ phản ánh", () => {
     expect(duongDanSoPhanAnh({ phamVi: "all" })).toBe("/api/v1/citizen-reports");
   });
 
-  it("`scope=related` không bao giờ được gửi — máy chủ trả 400 cho nó", () => {
-    // Kiểu `phamVi` không cho viết `"related"` (`tsc` đỏ). Bài chạy này canh chiều còn lại: không
-    // bộ lọc nào khác lọt ra thành `related`.
+  it("tab `Liên quan đến tôi` gửi `scope=related` tới CẢ danh sách, số đếm và điểm bản đồ — không kèm danh tính", () => {
+    for (const path of [
+      duongDanSoPhanAnh({ phamVi: "related", chiTreHan: true }),
+      citizenReportCountsPath({ phamVi: "related" }),
+      citizenReportPointsPath({ phamVi: "related" }),
+    ]) {
+      const truyVan = new URLSearchParams(path.slice(path.indexOf("?") + 1));
+      expect(truyVan.get("scope"), path).toBe("related");
+      expect(truyVan.has("assignee"), path).toBe(false);
+      expect(truyVan.has("unit"), path).toBe(false);
+    }
+    // The other tabs never turn into `related`.
     for (const phamVi of [undefined, "all", "mine"] as const) {
       expect(duongDanSoPhanAnh({ phamVi, chiTreHan: true })).not.toContain("related");
     }

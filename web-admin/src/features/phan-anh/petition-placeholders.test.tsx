@@ -7,8 +7,6 @@ import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { pendingMarkerLabel } from "@/components/ui/pending-feature";
-
 import { petitionPendingPart } from "./nhan-phieu";
 import { HangLoc } from "./so-phan-anh";
 
@@ -58,40 +56,18 @@ function mount(node: ReactNode): HTMLDivElement {
   return host;
 }
 
-function marker(el: ParentNode, id: string): HTMLButtonElement {
-  const label = pendingMarkerLabel(petitionPendingPart(id).ten);
-  const b = [...el.querySelectorAll<HTMLButtonElement>("button[data-pending-marker]")].find(
-    (x) => x.getAttribute("aria-label") === label,
-  );
-  if (b === undefined) throw new Error(`no '?' for ${id}`);
-  return b;
-}
-
-/** Press every "?" of `ids` in turn: each opens its own description, and the network is never called. */
-function pressAll(el: HTMLElement, ids: readonly string[]): void {
-  fetchSpy.mockClear();
-  for (const id of ids) {
-    const b = marker(el, id);
-    expect(b.disabled).toBe(false);
-    act(() => b.click());
-    expect(document.body.querySelector('[role="dialog"]')?.textContent, id).toContain(petitionPendingPart(id).viSao);
-    act(() => b.click());
-  }
-  expect(fetchSpy).not.toHaveBeenCalled();
-}
-
 describe("Phản ánh — placeholders (ADR 0068 §14)", () => {
-  it("scope: `Liên quan đến tôi` is disabled and never changes the filter", () => {
+  it("scope: `Liên quan đến tôi` is LIVE now (row 57) — it sets `related`, and has no '?'", () => {
     const datLoc = vi.fn();
     const el = mount(<HangLoc loc={{}} tim="" datTim={() => {}} datLoc={datLoc} thon={[]} />);
     const related = [...el.querySelectorAll<HTMLButtonElement>('[role="group"] button')].find(
       (b) => b.textContent === "Liên quan đến tôi",
     );
-    expect(related?.disabled).toBe(true);
+    expect(related?.disabled).toBe(false);
     act(() => related?.click());
-    expect(datLoc).not.toHaveBeenCalled();
-    pressAll(el, ["scopeRelated"]);
-    expect(datLoc).not.toHaveBeenCalled();
+    expect(datLoc).toHaveBeenCalledWith({ phamVi: "related" });
+    expect(() => petitionPendingPart("scopeRelated")).toThrow();
+    expect(el.querySelector("button[data-pending-marker]")).toBeNull();
   });
 
   it("drawer: the duplicates block is built (ADR 0087) — it has no '?' any more", () => {

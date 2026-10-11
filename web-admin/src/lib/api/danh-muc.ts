@@ -41,6 +41,7 @@ import {
   layLoaiTaiNguyenBanDo,
   layLoaiVanBan,
   layMucUuTienNhiemVu,
+  readCitizenLetterTypes,
 } from "./danh-muc-nghiep-vu";
 import { docJSON, docThanKetQua, goiGhi, type KetQua } from "./goi";
 import type {
@@ -51,6 +52,13 @@ import type {
   comms_suaLoaiTaiNguyenVao,
   comms_themLoaiTaiNguyenVao,
   comms_xoaLoaiTaiNguyenVao,
+  documents_addCitizenLetterTypeIn,
+  documents_citizenLetterTypeOut,
+  documents_delete_citizen_letter_types_by_id,
+  documents_editCitizenLetterTypeIn,
+  documents_patch_citizen_letter_types_by_id,
+  documents_post_citizen_letter_types,
+  documents_removeCitizenLetterTypeIn,
   documents_delete_document_types_by_id,
   documents_loaiVanBanRa,
   documents_patch_document_types_by_id,
@@ -188,6 +196,7 @@ export function docDanhMucDanhBa(): Promise<DanhMucDanhBa> {
 export type MucDanhMucGhi =
   | comms_loaiTaiNguyenRa
   | documents_loaiVanBanRa
+  | documents_citizenLetterTypeOut
   | finance_hangMucRa
   | identity_loaiDonViDanCuRa
   | identity_khoiNhiemVuRa
@@ -199,6 +208,7 @@ export type KhoaDanhMucGhi =
   | "loaiTaiNguyenBanDo"
   | "hangMucKeHoachVon"
   | "loaiVanBan"
+  | "citizenLetterType"
   | "loaiDonViDanCu"
   | "khoiNhiemVu"
   | "loaiNhiemVu"
@@ -256,6 +266,22 @@ export const CAPITAL_PLAN_CATEGORY_WRITES: MoTaDanhMucGhi = {
   doc: layHangMucKeHoachVon,
 };
 
+/**
+ * "Loại đơn thư" (bug sheet row 33, prototype `LookupTable.tsx:37`). Same three writes on `admin.lookup`,
+ * with two differences the screen must honour: POST accepts only the four statutory codes (C4), and a
+ * deleted row keeps its code FOREVER — the unique key counts deleted rows, so that letter type can never
+ * be added back. Its DELETE takes no reason (`removeCitizenLetterTypeIn.reason` is optional; the server
+ * records a fixed sentence).
+ */
+export const CITIZEN_LETTER_TYPE_WRITES: MoTaDanhMucGhi = {
+  khoa: "citizenLetterType",
+  gocThem: "/api/v1/citizen-letter-types" satisfies documents_post_citizen_letter_types["duongDan"],
+  mauMuc:
+    "/api/v1/citizen-letter-types/{id}" satisfies documents_patch_citizen_letter_types_by_id["duongDan"] &
+      documents_delete_citizen_letter_types_by_id["duongDan"],
+  doc: readCitizenLetterTypes,
+};
+
 export const BAY_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
   {
     khoa: "loaiTaiNguyenBanDo",
@@ -273,6 +299,7 @@ export const BAY_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
         documents_delete_document_types_by_id["duongDan"],
     doc: layLoaiVanBan,
   },
+  CITIZEN_LETTER_TYPE_WRITES,
   {
     khoa: "loaiDonViDanCu",
     gocThem:
@@ -316,6 +343,7 @@ export const BAY_DANH_MUC_GHI: readonly MoTaDanhMucGhi[] = [
  */
 export type ThemMucVao = Omit<comms_themLoaiTaiNguyenVao, "source" | "tier"> &
   Omit<documents_themLoaiVanBanVao, "source" | "tier"> &
+  Omit<documents_addCitizenLetterTypeIn, "source" | "tier"> &
   Omit<finance_themHangMucVao, "source" | "tier"> &
   Omit<identity_themDanhMucVao, "source" | "tier"> &
   Omit<petitions_themLoaiNhiemVuVao, "source" | "tier"> &
@@ -330,6 +358,7 @@ export type ThemMucVao = Omit<comms_themLoaiTaiNguyenVao, "source" | "tier"> &
  */
 export type SuaMucVao = Omit<comms_suaLoaiTaiNguyenVao, "source" | "tier" | "code" | "color"> &
   Omit<documents_suaLoaiVanBanVao, "source" | "tier" | "code" | "color"> &
+  Omit<documents_editCitizenLetterTypeIn, "source" | "tier" | "code" | "color"> &
   Omit<finance_suaHangMucVao, "source" | "tier" | "code" | "color"> &
   Omit<identity_suaDanhMucVao, "source" | "tier" | "code" | "color"> &
   Omit<petitions_suaLoaiNhiemVuVao, "source" | "tier" | "code" | "color"> &
@@ -430,6 +459,16 @@ export async function xoaMuc(mo: MoTaDanhMucGhi, id: string, lyDo: string): Prom
   const thanGui: XoaMucVao = { reason: lyDo };
 
   const kq = await goiGhi(duongDanMuc(mo.mauMuc, id), "DELETE", thanGui, 204);
+  return kq.ok ? { ok: true, duLieu: null } : kq;
+}
+
+/**
+ * DELETE of one "Loại đơn thư" row — NO reason (owner decision 10/10/2026: the server records a fixed
+ * sentence). An empty body object, not a reason box nobody is asked to fill.
+ */
+export async function removeCitizenLetterType(id: string): Promise<KetQua<null>> {
+  const body: documents_removeCitizenLetterTypeIn = {};
+  const kq = await goiGhi(duongDanMuc(CITIZEN_LETTER_TYPE_WRITES.mauMuc, id), "DELETE", body, 204);
   return kq.ok ? { ok: true, duLieu: null } : kq;
 }
 

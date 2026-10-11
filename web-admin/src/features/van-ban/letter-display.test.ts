@@ -34,6 +34,11 @@ import {
   senderView,
   stageDueAt,
   statusStrip,
+  ADMIT_LETTER_TITLE,
+  buildLetterMove,
+  LETTER_MOVE_MALFORMED,
+  letterMoveRefusal,
+  letterMoveTitle,
 } from "./letter-display";
 
 const NOW = new Date("2026-10-08T03:00:00Z");
@@ -75,13 +80,42 @@ describe("status strip (ADR 0084 #2) — the prototype's four steps + two branch
     ]);
   });
 
-  it("the step select appears only for a group of several TT 05 statuses", () => {
+  it("the step select appears only where the SERVER's arrows leave several steps in one group", () => {
+    // From Đang giải quyết every reachable group holds one step: the chip alone is sent.
     const s = strip({ group: "dang-xu-ly", held: true, nextStatuses: ["da-giai-quyet", "dinh-chi"] });
-    expect(s.main[3]!.pickStep).toBe(false);
-    expect(s.main[2]!.pickStep).toBe(true);
-    expect(s.branches[0]!.pickStep).toBe(false);
-    expect(s.branches[1]!.pickStep).toBe(true);
+    expect([...s.main, ...s.branches].some((c) => c.pickStep)).toBe(false);
     expect(s.branches[1]!.steps).toEqual(["dinh-chi"]);
+    // The one ambiguous case: "Lưu, không thụ lý" from Đang xử lý đơn (Không thụ lý · Hướng dẫn · Lưu đơn).
+    const d = strip({ group: "dang-xu-ly", held: true, nextStatuses: ["thu-ly", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don"] });
+    expect(d.branches[1]!.pickStep).toBe(true);
+    expect(d.main[2]!.pickStep).toBe(false);
+    expect(d.branches[0]!.pickStep).toBe(false);
+  });
+
+  it("buildLetterMove: the chip as `status_group`, the explicit `status` only when ambiguous; hand-over keys only when chosen", () => {
+    expect(buildLetterMove({ chip: { group: "dang-xu-ly", pickStep: false }, step: "thu-ly", note: "  ", unitId: "", assigneeCode: "" })).toEqual({
+      status_group: "dang-xu-ly",
+    });
+    expect(buildLetterMove({ chip: { group: "luu-khong-thu-ly", pickStep: true }, step: "huong-dan", note: " x ", unitId: "U1", assigneeCode: " CB-00001 " })).toEqual({
+      status: "huong-dan",
+      note: "x",
+      org_unit_id: "U1",
+      assignee_code: "CB-00001",
+    });
+  });
+
+  it("letterMoveTitle: admission says it starts the deadline; a step inside the current group names the step", () => {
+    expect(letterMoveTitle({ label: "Đang xử lý", current: true, steps: ["thu-ly"] })).toBe(ADMIT_LETTER_TITLE);
+    expect(ADMIT_LETTER_TITLE).toBe("Thụ lý đơn — bắt đầu tính hạn giải quyết");
+    expect(letterMoveTitle({ label: "Đang xử lý", current: true, steps: ["dang-giai-quyet"] })).toBe("Chuyển sang bước “Đang giải quyết”");
+    expect(letterMoveTitle({ label: "Đã giải quyết", current: false, steps: ["da-giai-quyet"] })).toBe("Chuyển sang “Đã giải quyết”");
+  });
+
+  it("letterMoveRefusal: staff sentences verbatim; a developer sentence naming wire keys is replaced", () => {
+    expect(letterMoveRefusal("Không chuyển được đơn từ trạng thái hiện tại sang nhóm trạng thái đã chọn.")).toBe(
+      "Không chuyển được đơn từ trạng thái hiện tại sang nhóm trạng thái đã chọn.",
+    );
+    expect(letterMoveRefusal("Đổi trạng thái: gửi đúng MỘT trong `status` (trạng thái thật) hoặc `status_group` (…).")).toBe(LETTER_MOVE_MALFORMED);
   });
 
   it("a viewer who may not work on the letter: nothing clickable, whatever the server lists", () => {

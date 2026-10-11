@@ -202,9 +202,9 @@ export function layPhieuPhanAnh(maTraCuu: string): Promise<KetQua<petitions_phie
 /**
  * Bộ lọc của sổ phản ánh — bảy bộ lọc `locPhieuTuQuery` đọc, phạm vi, cộng phân trang.
  *
- * `LIÊN QUAN ĐẾN TÔI` KHÔNG CÓ Ở ĐÂY VÀ KIỂU `phamVi` KHÔNG CHO GỬI NÓ: máy chủ trả **400** cho
- * `scope=related` (thế nào là "liên quan" chưa được chốt — `xu_ly_phan_anh.go`, `errPhamVi…`), nên
- * một tab gửi nó là một tab biến quyển sổ thành trang lỗi — ra tới màn hình qua `PHAN_CHUA_DUNG`.
+ * `Liên quan đến tôi` → `scope=related` (commit a06a12ab): giao cho tôi · tôi có dòng nhật ký xử lý ·
+ * bộ phận tôi đang giữ — máy chủ lấy mã từ PHIÊN và hỏi identity bộ phận của tôi; identity lỗi thì
+ * **503** `citizen_report_filter_unavailable` kèm câu của máy chủ, hiện nguyên văn.
  * Lọc `Bị đánh giá thấp` thì NAY ĐÃ CÓ: `ratingMax` → `rating_max` (ADR 0050 điểm 2).
  */
 export type LocPhanAnh = {
@@ -213,7 +213,7 @@ export type LocPhanAnh = {
    * CHỦ tự lấy mã cán bộ từ PHIÊN — `?scope=mine` **không** mang danh tính nào. Một tab gửi
    * `?assignee=CB-…` của chính mình là client tự khai mình là ai (luật 1, cấm #2).
    */
-  phamVi?: "all" | "mine";
+  phamVi?: "all" | "mine" | "related";
   /** Một trong chín mã trạng thái. Sai mã là **400**, không phải bị bỏ qua. */
   trangThai?: string;
   /** Một trong bốn mã kênh tiếp nhận. Sai mã là **400**. */
@@ -278,6 +278,8 @@ function addFilters(truyVan: URLSearchParams, loc: LocPhanAnh): void {
   // `scope=all` là mặc định của máy chủ, nên tab "Toàn xã" gửi tham số VẮNG MẶT HẲN — cùng cách
   // sổ Nhiệm vụ làm (`lib/api/nhiem-vu.ts`).
   if (loc.phamVi === "mine") truyVan.set("scope", "mine");
+  // `related` carries no identity either: the server derives "me" and "my unit" from the session.
+  if (loc.phamVi === "related") truyVan.set("scope", "related");
 
   if (loc.trangThai !== undefined && loc.trangThai !== "") truyVan.set("status", loc.trangThai);
   if (loc.kenh !== undefined && loc.kenh !== "") truyVan.set("channel", loc.kenh);

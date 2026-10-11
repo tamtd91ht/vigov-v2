@@ -378,7 +378,7 @@ describe("ô chọn cán bộ xử lý (§8.5) và ô `Đang giao cho` (§8.3)",
 });
 
 describe("hai tab phạm vi (§4)", () => {
-  function veHangLoc(phamVi?: "all" | "mine"): string {
+  function veHangLoc(phamVi?: "all" | "mine" | "related"): string {
     return renderToStaticMarkup(
       <HangLoc
         loc={phamVi === undefined ? {} : { phamVi }}
@@ -390,23 +390,25 @@ describe("hai tab phạm vi (§4)", () => {
     );
   }
 
-  it("có `Toàn xã` và `Giao cho tôi`; `Liên quan đến tôi` chỉ là CHỖ GIỮ vô hiệu có dấu '?'", () => {
+  it("ba tab của prototype `ScopeFilter`, chữ và gợi ý nguyên văn; `Liên quan đến tôi` dùng được (row 57)", () => {
     const html = veHangLoc();
     expect(html).toContain(PHAM_VI_TOAN_XA);
     expect(html).toContain(PHAM_VI_GIAO_CHO_TOI);
-    // The server answers 400 to `scope=related`: the third tab is a disabled native button, never live.
     const related = html.match(new RegExp(`<button[^>]*>${SCOPE_RELATED_LABEL}</button>`))?.[0] ?? "";
-    expect(related).toContain('disabled=""');
-    expect(related).toContain('aria-pressed="false"');
-    expect(html).toContain(`aria-label="${nhuTrongHTML(pendingMarkerLabel(petitionPendingPart("scopeRelated").ten))}"`);
+    expect(related).not.toContain("disabled");
+    expect(related).toContain('title="Tôi giao, tôi theo dõi, tôi đã xử lý, hoặc bộ phận tôi đang giữ"');
+    expect(html).toContain('title="Tất cả hồ sơ trong xã"');
+    expect(html).toContain('title="Đích danh tôi là người xử lý"');
+    expect(html).not.toContain("data-pending-marker");
   });
 
   it("đúng MỘT tab được đánh dấu, theo bộ lọc đang chọn", () => {
-    for (const phamVi of [undefined, "mine"] as const) {
+    const expected = { mine: PHAM_VI_GIAO_CHO_TOI, related: SCOPE_RELATED_LABEL } as const;
+    for (const phamVi of [undefined, "mine", "related"] as const) {
       const html = veHangLoc(phamVi);
       expect(html.match(/aria-pressed="true"/g)?.length).toBe(1);
       const nutDangChon = html.match(/aria-pressed="true"[^>]*>([^<]*)</)?.[1];
-      expect(nutDangChon).toBe(phamVi === "mine" ? PHAM_VI_GIAO_CHO_TOI : PHAM_VI_TOAN_XA);
+      expect(nutDangChon).toBe(phamVi === undefined ? PHAM_VI_TOAN_XA : expected[phamVi]);
     }
   });
 });

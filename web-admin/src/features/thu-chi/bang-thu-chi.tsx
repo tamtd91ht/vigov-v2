@@ -349,6 +349,29 @@ export function BangThuChi() {
     });
   }
 
+  /**
+   * An entry was recorded or removed in the open "đợt thu chi" dialog: the line's figures and its
+   * `entry_count` badge change (customer bug sheet row 53). Re-read the sheet and the indicators
+   * SILENTLY under the SAME keys, as `setHeadline` does — `lanTai` would blank the sheet to a skeleton
+   * behind the dialog. A failed re-read keeps what is drawn. `quietSeq`: only the latest re-read lands.
+   */
+  const quietSeq = useRef(0);
+  function reloadQuietly(): void {
+    const seq = ++quietSeq.current;
+    const sheetKey = khoaBang;
+    const indicatorsKey = khoaChiSo;
+    layBang({ nam, loai }).then((sheet) => {
+      if (seq !== quietSeq.current || !sheet.ok) return;
+      datDaTaiBang((prev) => (prev !== null && prev.khoa === sheetKey ? { khoa: sheetKey, kq: sheet } : prev));
+    });
+    layChiSoNganSach(nam).then((indicators) => {
+      if (seq !== quietSeq.current || !indicators.ok) return;
+      datDaTaiChiSo((prev) =>
+        prev !== null && prev.khoa === indicatorsKey ? { khoa: indicatorsKey, kq: indicators } : prev,
+      );
+    });
+  }
+
   /** Closes the open dialog — never while its request is in flight (the outcome would be hidden). */
   function closeDialog(): void {
     if (dangGui) return;
@@ -660,7 +683,7 @@ export function BangThuChi() {
           closes={closes}
           sheetYear={nam}
           dong={() => datDangMo(null)}
-          daDoiSoLieu={() => datLanTai((n) => n + 1)}
+          daDoiSoLieu={reloadQuietly}
         />
       )}
     </section>
@@ -1450,6 +1473,7 @@ function RowIconButton({
   title,
   disabled,
   danger = false,
+  badge = 0,
   onClick,
 }: {
   icon: LucideIcon;
@@ -1457,6 +1481,8 @@ function RowIconButton({
   title: string;
   disabled: boolean;
   danger?: boolean;
+  /** A count drawn on the icon's corner when above 0 (prototype `FiscalReportPanel.tsx:653-657`). */
+  badge?: number;
   onClick: () => void;
 }) {
   return (
@@ -1471,11 +1497,26 @@ function RowIconButton({
         "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
         "disabled:cursor-not-allowed disabled:opacity-50",
         danger ? "hover:not-disabled:text-danger" : "hover:not-disabled:text-navy",
+        badge > 0 && "relative",
       )}
     >
       <Glyph icon={icon} className="size-4" />
+      {badge > 0 && (
+        // Decoration: the count is also in the button's title; `aria-hidden` keeps the name unchanged.
+        <span
+          aria-hidden="true"
+          className="absolute -top-1 -right-1 rounded-full bg-navy px-1 text-[9px] leading-[13px] text-white tabular-nums"
+        >
+          {badge}
+        </span>
+      )}
     </button>
   );
+}
+
+/** The entries button's tooltip, the prototype's (`FiscalReportPanel.tsx:647`). */
+export function entriesTitle(count: number): string {
+  return `Các đợt thu, chi (${count})`;
 }
 
 /** "Dòng đang là con số tổng" — the read-only star's tooltip and accessible name. */
@@ -1721,7 +1762,8 @@ export function DongKhoanMuc({
           <RowIconButton
             icon={ListPlus}
             label={isParent ? PARENT_SUMS_CHILDREN : nhanNutDot(d.name)}
-            title={isParent ? PARENT_SUMS_CHILDREN : nhanNutDot(d.name)}
+            title={isParent ? PARENT_SUMS_CHILDREN : entriesTitle(d.entry_count ?? 0)}
+            badge={d.entry_count ?? 0}
             disabled={isParent || dangGui}
             onClick={moDot}
           />

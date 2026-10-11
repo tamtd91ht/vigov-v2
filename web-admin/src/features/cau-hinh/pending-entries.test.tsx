@@ -53,8 +53,9 @@ describe("phần chưa dựng của màn Cấu hình — mục còn đúng", () 
     expect(RESIDENTIAL_UNIT_IMPORT_TARGET.routes.imports).toBe("/api/v1/residential-units/imports");
     expect(ORG_UNIT_IMPORT_TARGET.routes.imports).toBe("/api/v1/org-units/imports");
     expect(STAFF_IMPORT_TARGET.routes.imports).toBe("/api/v1/staff/imports");
+    // "Loại đơn thư" has four statutory codes and no import route — never an Excel "?".
     expect(Object.keys(CATALOGUE_IMPORTS).sort()).toEqual(
-      [...BAY_DANH_MUC_GHI.map((m) => m.khoa)].sort(),
+      [...BAY_DANH_MUC_GHI.map((m) => m.khoa).filter((k) => k !== "citizenLetterType")].sort(),
     );
     // The ONE Excel entry allowed is the tab-wide import of Danh mục ("Tất cả"): each group imports on
     // its own route, a single file for every group has no route (ADR 0079; owner 08/10/2026).

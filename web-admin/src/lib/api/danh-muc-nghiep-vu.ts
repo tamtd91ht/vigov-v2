@@ -31,7 +31,9 @@ import { docJSON, type KetQua } from "./goi";
 import type {
   comms_danhSachLoaiTaiNguyenRa,
   comms_get_map_asset_types,
+  documents_citizenLetterTypeListOut,
   documents_danhSachLoaiVanBanRa,
+  documents_get_citizen_letter_types,
   documents_get_document_types,
   finance_danhSachHangMucRa,
   finance_get_capital_plan_categories,
@@ -59,6 +61,7 @@ import type {
 export type MucDanhMuc =
   | comms_danhSachLoaiTaiNguyenRa["items"][number]
   | documents_danhSachLoaiVanBanRa["items"][number]
+  | documents_citizenLetterTypeListOut["items"][number]
   | finance_danhSachHangMucRa["items"][number]
   | identity_danhSachKhoiNhiemVuRa["items"][number]
   | identity_danhSachLoaiDonViDanCuRa["items"][number]
@@ -92,6 +95,15 @@ export function layHangMucKeHoachVon(): Promise<KetQua<finance_danhSachHangMucRa
 export function layLoaiVanBan(): Promise<KetQua<documents_danhSachLoaiVanBanRa>> {
   const duongDan: documents_get_document_types["duongDan"] = "/api/v1/document-types";
   return docJSON<documents_danhSachLoaiVanBanRa>(duongDan);
+}
+
+/**
+ * GET /api/v1/citizen-letter-types — the commune's labels for the four statutory letter types (bug sheet
+ * row 33). Same row shape as document types; read for every account (`admin.lookup` gates the writes).
+ */
+export function readCitizenLetterTypes(): Promise<KetQua<documents_citizenLetterTypeListOut>> {
+  const path: documents_get_citizen_letter_types["duongDan"] = "/api/v1/citizen-letter-types";
+  return docJSON<documents_citizenLetterTypeListOut>(path);
 }
 
 /** GET /api/v1/residential-unit-types — loại đơn vị dân cư (thôn / tổ dân phố). */
@@ -132,6 +144,7 @@ export type BayDanhMuc = {
   loaiTaiNguyenBanDo: KetQua<comms_danhSachLoaiTaiNguyenRa>;
   hangMucKeHoachVon: KetQua<finance_danhSachHangMucRa>;
   loaiVanBan: KetQua<documents_danhSachLoaiVanBanRa>;
+  citizenLetterType: KetQua<documents_citizenLetterTypeListOut>;
   loaiDonViDanCu: KetQua<identity_danhSachLoaiDonViDanCuRa>;
   khoiNhiemVu: KetQua<identity_danhSachKhoiNhiemVuRa>;
   loaiNhiemVu: KetQua<petitions_danhSachLoaiNhiemVuRa>;
@@ -154,6 +167,7 @@ export function docDanhMucNghiepVu(): Promise<BayDanhMuc> {
     layLoaiTaiNguyenBanDo(),
     layHangMucKeHoachVon(),
     layLoaiVanBan(),
+    readCitizenLetterTypes(),
     layLoaiDonViDanCu(),
     layKhoiNhiemVu(),
     layLoaiNhiemVu(),
@@ -163,6 +177,7 @@ export function docDanhMucNghiepVu(): Promise<BayDanhMuc> {
       loaiTaiNguyenBanDo,
       hangMucKeHoachVon,
       loaiVanBan,
+      citizenLetterType,
       loaiDonViDanCu,
       khoiNhiemVu,
       loaiNhiemVu,
@@ -171,6 +186,7 @@ export function docDanhMucNghiepVu(): Promise<BayDanhMuc> {
       loaiTaiNguyenBanDo,
       hangMucKeHoachVon,
       loaiVanBan,
+      citizenLetterType,
       loaiDonViDanCu,
       khoiNhiemVu,
       loaiNhiemVu,

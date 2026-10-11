@@ -75,9 +75,11 @@ export type NhomDanhMuc = {
 /**
  * Bảy nhóm, THEO ĐÚNG THỨ TỰ BẢNG §5 CỦA ĐẶC TẢ — không theo vần chữ cái, không theo tên dịch vụ.
  *
- * BA NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY. `Loại đơn thư` has no REST route in the contract yet. The two
- * others DO have routes but not this table's add · edit · soft-delete shape, so they are rows of their
- * own kind in the same table (`catalogueRows`):
+ * `Loại đơn thư` sits after `Loại văn bản`, as in the prototype (`LookupTable.tsx:37`); its four codes are
+ * statutory (C4), so its add row picks a code instead of deriving one from the label.
+ *
+ * HAI NHÓM CỦA ĐẶC TẢ KHÔNG CÓ Ở ĐÂY. Both have routes but not this table's add · edit · soft-delete
+ * shape, so they are rows of their own kind in the same table (`catalogueRows`):
  *   · `Trạng thái nhiệm vụ` — decision #21: label and order of seven fixed codes
  *     (`PATCH /api/v1/task-statuses/{code}`).
  *   · `Lĩnh vực phản ánh` — the vendor's tier-1 codes (ADR 0026/0060): the commune edits label and
@@ -95,6 +97,7 @@ const BANG_NHOM: readonly { khoa: KhoaNhom; nhan: string; thuTuLaThangBac: boole
   { khoa: "loaiTaiNguyenBanDo", nhan: "Loại tài nguyên bản đồ", thuTuLaThangBac: false },
   { khoa: "hangMucKeHoachVon", nhan: "Hạng mục kế hoạch vốn", thuTuLaThangBac: false },
   { khoa: "loaiVanBan", nhan: "Loại văn bản", thuTuLaThangBac: false },
+  { khoa: "citizenLetterType", nhan: "Loại đơn thư", thuTuLaThangBac: false },
   { khoa: "loaiDonViDanCu", nhan: "Loại đơn vị dân cư", thuTuLaThangBac: false },
   { khoa: "khoiNhiemVu", nhan: "Khối nhiệm vụ", thuTuLaThangBac: false },
   { khoa: "loaiNhiemVu", nhan: "Loại nhiệm vụ", thuTuLaThangBac: false },

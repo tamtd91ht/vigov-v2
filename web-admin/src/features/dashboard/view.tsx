@@ -1540,8 +1540,10 @@ const URGENT_TITLE = "Cần xử lý ngay";
 
 /**
  * "CẦN XỬ LÝ NGAY" — spec §5, cut down by the user's decision to what may be shown on the most
- * widely seen screen of the product: module, code, which deadline, field/category, the deadline
- * itself, and the server's "critical" judgement. No title, content, unit or person (rule 3).
+ * widely seen screen of the product. A TASK row shows its name, the deadline and its unit, as the
+ * prototype does (owner bug sheet 10/10 row 5: a task is staff work). A PETITION or DOCUMENT row stays
+ * module + code, which deadline, field/category — never a title, content or person (rule 3: a petition
+ * title can name a citizen). Every row keeps the server's "critical" judgement.
  *
  * A FAILED QUEUE IS AN ERROR LINE IN THE LIST, and the "nothing urgent" sentence appears ONLY when
  * every queue answered and none had a row. A 503 from the working calendar must never read as calm.
@@ -1616,9 +1618,11 @@ const URGENT_ROW_FRAME = "block rounded-[9px] border border-line px-2.5 py-1.5";
  * One row in the prototype's shape: a bordered row, a warning triangle (red when the server judged it
  * critical, amber otherwise), a first line and a second line led by the deadline pill.
  *
- * THE FIRST LINE IS MODULE + CODE, NOT THE PROTOTYPE'S TITLE: a row may not show title, content, unit
- * or person on the most widely seen screen (user decision; rule 3). "Nghiêm trọng" is written out on
- * a critical row so the red is never the only sign (ADR 0068 lần 2 #8b).
+ * TASK ROWS: the first line is the task's name, the second the overdue pill then the unit
+ * (`DashboardWorkspace.tsx:304-318`; owner rule, bug sheet 10/10 row 5). PETITION / DOCUMENT ROWS: the
+ * first line stays MODULE + CODE — a petition's title may name a citizen and is never shown on the most
+ * widely seen screen (rule 3); the server does not even send it. "Nghiêm trọng" is written out on a
+ * critical row so the red is never the only sign (ADR 0068 lần 2 #8b).
  *
  * Only a TASK row is a link (`/nhiem-vu?task=<code>` opens its detail, `task-link.ts`): the citizen-
  * report and document registers have no "open one record" link to land on, and a row that links to a
@@ -1628,6 +1632,8 @@ function UrgentRowView({ row, category }: { row: UrgentRow; category: string | n
   // Trình chiếu: the prototype's 15px / 13px rows (`DashboardWorkspace.tsx:301`).
   const presenting = usePresenting().on;
   const { openTask } = useContext(DrillContext);
+  // A task row whose server sent no title keeps the code line: an empty first line names nothing.
+  const taskRow = row.module === "task" && row.title !== null;
   const body = (
     <span className="flex items-start gap-2">
       <AlertTriangle
@@ -1640,7 +1646,13 @@ function UrgentRowView({ row, category }: { row: UrgentRow; category: string | n
         <span
           className={cn("line-clamp-1 font-medium text-ink-900", presenting ? "text-[15px]" : "text-[12.5px]")}
         >
-          {MODULE_LABEL[row.module]} <span className="tabular-nums">{row.code}</span>
+          {taskRow ? (
+            row.title
+          ) : (
+            <>
+              {MODULE_LABEL[row.module]} <span className="tabular-nums">{row.code}</span>
+            </>
+          )}
         </span>
         <span
           className={cn(
@@ -1658,8 +1670,14 @@ function UrgentRowView({ row, category }: { row: UrgentRow; category: string | n
           >
             {missedSinceText(row.missedAt)}
           </span>
-          <span>{kindLabel(row.kind)}</span>
-          {category !== null && <span className="min-w-0 truncate">{category}</span>}
+          {taskRow ? (
+            row.unitName !== null && <span className="min-w-0 truncate">{row.unitName}</span>
+          ) : (
+            <>
+              <span>{kindLabel(row.kind)}</span>
+              {category !== null && <span className="min-w-0 truncate">{category}</span>}
+            </>
+          )}
           {row.critical && <span className="font-semibold text-danger-600">Nghiêm trọng</span>}
         </span>
       </span>

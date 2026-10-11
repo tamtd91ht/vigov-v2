@@ -41,6 +41,7 @@ import {
   activeDue,
   buildResult,
   buildRouting,
+  buildLetterMove,
   buildSenderCorrection,
   DUE_NOT_SET,
   drawerDueAt,
@@ -53,6 +54,8 @@ import {
   letterDate,
   letterGroupActiveTone,
   letterGroupHint,
+  letterMoveRefusal,
+  letterMoveTitle,
   letterNumber,
   letterSourceChip,
   letterSourceLabel,
@@ -231,6 +234,8 @@ export function LetterDrawer({
               key={`${doc.id}:${doc.status}:${doc.holding_unit_id ?? ""}`}
               letter={doc}
               canRoute={canBook}
+              units={units}
+              directory={directory}
               onMoved={() => done("Đã cập nhật.")}
               onAssign={focusRouting}
             />
@@ -385,20 +390,30 @@ function Figure({ label, children }: { label: string; children: ReactNode }) {
 
 /**
  * The prototype's strip (`PetitionDetailDrawer.tsx:385-484`) on ADR 0084's display groups. Clicking a
- * reachable chip opens the composer — the concrete TT 05 step when the group holds several (ADR 0084
- * §2: "ô chọn bước cụ thể"), a note, then Huỷ / Xác nhận — and posts that step. The server's refusal
+ * reachable chip opens the composer — the concrete TT 05 step only when the server's arrows leave
+ * several in the group (ADR 0084 §2), the hand-over fields for `petition.create`, a note, then Huỷ /
+ * Xác nhận — and posts the CHIP (`status_group`; the explicit step only in that one case). The server's refusal
  * (e.g. "Đã giải quyết" before a result is recorded) is shown verbatim in the composer. The "Phân công"
  * chip posts nothing: it calls `onAssign`, which takes the clerk to the routing box.
  */
 export function StatusStrip({
   letter,
   canRoute,
+  units = null,
+  directory = null,
   onMoved,
   onAssign,
 }: {
   letter: documents_citizenLetterOut;
-  /** `petition.create` — the "Phân công" chip. UX only; the server checks the routing. */
+  /**
+   * `petition.create` — the "Phân công" chip AND the composer's hand-over fields ("Bộ phận xử lý",
+   * "Cán bộ phụ trách"). UX only: the server answers 403 to a hand-over from anyone else.
+   */
   canRoute: boolean;
+  /** The commune's units — the "Bộ phận xử lý" select. */
+  units?: BangTraDanhMuc | null;
+  /** The staff directory by business code — the "Cán bộ phụ trách" select. */
+  directory?: DanhBaTheoMa | null;
   onMoved: () => void;
   onAssign: () => void;
 }) {
@@ -413,6 +428,8 @@ export function StatusStrip({
   const [pending, setPending] = useState<StatusChipModel | null>(null);
   const [step, setStep] = useState("");
   const [note, setNote] = useState("");
+  const [unitId, setUnitId] = useState("");
+  const [assigneeCode, setAssigneeCode] = useState("");
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -425,17 +442,27 @@ export function StatusStrip({
     setPending(chip);
     setStep(chip.steps[0] ?? "");
     setNote("");
+    setUnitId("");
+    setAssigneeCode("");
     setError("");
   };
 
   const confirm = () => {
-    if (pending === null || step === "" || sending) return;
+    if (pending === null || (pending.pickStep && step === "") || sending) return;
     setError("");
     setSending(true);
-    void moveCitizenLetter(letter.id, { status: step, note: note.trim() }).then((k) => {
+    const body = buildLetterMove({
+      chip: pending,
+      step,
+      note,
+      // Never sent without `petition.create`: the fields are not drawn, and a stale value is not kept.
+      unitId: canRoute ? unitId : "",
+      assigneeCode: canRoute ? assigneeCode : "",
+    });
+    void moveCitizenLetter(letter.id, body).then((k) => {
       setSending(false);
       if (!k.ok) {
-        setError(k.thongBao);
+        setError(letterMoveRefusal(k.thongBao));
         return;
       }
       setPending(null);
@@ -463,7 +490,7 @@ export function StatusStrip({
 
       {pending !== null && (
         <div className="mt-2.5 rounded-[10px] border border-l-4 border-solid border-brand/35 border-l-brand bg-white p-3">
-          <p className="m-0 text-[12.5px] font-semibold text-navy">Chuyển sang “{pending.label}”</p>
+          <p className="m-0 text-[12.5px] font-semibold text-navy">{letterMoveTitle(pending)}</p>
           {pending.pickStep && (
             <div className="mt-2 flex flex-col sm:max-w-[20rem]">
               <label htmlFor="don-thu-buoc-cu-the" className="text-[11.5px] font-medium text-ink">
@@ -482,6 +509,22 @@ export function StatusStrip({
                 ))}
               </select>
             </div>
+          )}
+          {canRoute && (
+            <HandoverFields
+              units={units}
+              directory={directory}
+              unitId={unitId}
+              assigneeCode={assigneeCode}
+              onUnitChange={(next) => {
+                setUnitId(next);
+                // An officer outside the newly chosen unit is dropped, never left as a name the list no
+                // longer shows (prototype `HandoverFields.tsx:62-68`).
+                const person = directory?.get(assigneeCode);
+                if (next !== "" && person !== undefined && person.department_id !== next) setAssigneeCode("");
+              }}
+              onAssigneeChange={setAssigneeCode}
+            />
           )}
           <div className="mt-2 flex flex-col">
             <label htmlFor="don-thu-ghi-chu-buoc" className="text-[11.5px] font-medium text-ink">
@@ -512,6 +555,84 @@ export function StatusStrip({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * The composer's "Bộ phận xử lý" + "Cán bộ phụ trách" (prototype `HandoverFields.tsx`, placed as in
+ * `PetitionDetailDrawer.tsx:443-456`). Empty unit = keep the unit holding the letter; empty officer = the
+ * unit assigns. The officer list narrows to the chosen unit. The value sent is the staff BUSINESS code.
+ */
+function HandoverFields({
+  units,
+  directory,
+  unitId,
+  assigneeCode,
+  onUnitChange,
+  onAssigneeChange,
+}: {
+  units: BangTraDanhMuc | null;
+  directory: DanhBaTheoMa | null;
+  unitId: string;
+  assigneeCode: string;
+  onUnitChange: (id: string) => void;
+  onAssigneeChange: (code: string) => void;
+}) {
+  const people = directory === null ? [] : [...directory.values()].filter((p) => unitId === "" || p.department_id === unitId);
+  return (
+    <div className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <div className="min-w-0">
+        <label htmlFor="don-thu-buoc-bo-phan" className="text-[11.5px] font-medium text-ink">
+          Bộ phận xử lý
+        </label>
+        <select
+          id="don-thu-buoc-bo-phan"
+          className={ROUTING_SELECT}
+          value={unitId}
+          onChange={(e) => onUnitChange(e.target.value)}
+        >
+          <option value="">— Giữ nguyên bộ phận đang giữ —</option>
+          {units !== null &&
+            units.pha === "xong" &&
+            [...units.ten].map(([id, name]) => (
+              <option key={id} value={id}>
+                {name}
+              </option>
+            ))}
+        </select>
+      </div>
+      <div className="min-w-0">
+        <label htmlFor="don-thu-buoc-can-bo" className="text-[11.5px] font-medium text-ink">
+          Cán bộ phụ trách
+        </label>
+        {directory !== null ? (
+          <select
+            id="don-thu-buoc-can-bo"
+            className={ROUTING_SELECT}
+            value={assigneeCode}
+            onChange={(e) => onAssigneeChange(e.target.value)}
+          >
+            <option value="">— Để bộ phận tự phân công —</option>
+            {people.map((person) => (
+              <option key={person.code} value={person.code}>
+                {person.full_name}
+                {person.position ? ` — ${person.position}` : ""}
+              </option>
+            ))}
+          </select>
+        ) : (
+          // Directory not loaded: the staff CODE is typed — the only thing `assignee_code` accepts.
+          <input
+            id="don-thu-buoc-can-bo"
+            autoComplete="off"
+            className={SMALL_INPUT}
+            placeholder="Mã cán bộ — để trống nếu để bộ phận tự phân công"
+            value={assigneeCode}
+            onChange={(e) => onAssigneeChange(e.target.value)}
+          />
+        )}
+      </div>
     </div>
   );
 }

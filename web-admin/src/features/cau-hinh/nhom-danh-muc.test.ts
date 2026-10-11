@@ -54,6 +54,7 @@ describe("catalogueRows — one table, group order then server order", () => {
     loaiTaiNguyenBanDo: ok([row("a", 1)]),
     hangMucKeHoachVon: ok([]),
     loaiVanBan: ok([]),
+    citizenLetterType: ok([]),
     loaiDonViDanCu: ok([]),
     khoiNhiemVu: ok([]),
     loaiNhiemVu: ok([]),
@@ -102,6 +103,7 @@ const TUYEN = {
   loaiTaiNguyen: "/api/v1/map-asset-types",
   hangMuc: "/api/v1/capital-plan-categories",
   loaiVanBan: "/api/v1/document-types",
+  loaiDonThu: "/api/v1/citizen-letter-types",
   loaiDonViDanCu: "/api/v1/residential-unit-types",
   khoiNhiemVu: "/api/v1/task-blocs",
   loaiNhiemVu: "/api/v1/task-types",
@@ -164,6 +166,7 @@ describe("bảy nhóm danh mục", () => {
       "Loại tài nguyên bản đồ",
       "Hạng mục kế hoạch vốn",
       "Loại văn bản",
+      "Loại đơn thư",
       "Loại đơn vị dân cư",
       "Khối nhiệm vụ",
       "Loại nhiệm vụ",
@@ -191,7 +194,7 @@ describe("danh mục rỗng là ĐƯỜNG THÔNG THƯỜNG, không phải lỗi"
     batFetchTheoTuyen(bayTuyenRong());
     const nhom = nhomDanhMuc(await docDanhMucNghiepVu());
 
-    expect(nhom).toHaveLength(7);
+    expect(nhom).toHaveLength(8);
     expect(nhom.every((n) => n.trangThai.pha === "chuaCoMuc")).toBe(true);
   });
 
@@ -343,7 +346,7 @@ describe("catalogue colour", () => {
     }
     batFetchTheoTuyen(bang);
     const rows = catalogueRows(nhomDanhMuc(await docDanhMucNghiepVu()), [], null);
-    expect(rows).toHaveLength(14);
+    expect(rows).toHaveLength(16);
     for (const r of rows) {
       if (r.kind !== "lookup") throw new Error("only catalogue rows here");
       expect(r.item.color).toBe(r.item.code === "mau-xanh" ? "#2fb1f9" : null);

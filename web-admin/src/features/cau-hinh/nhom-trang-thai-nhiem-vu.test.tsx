@@ -58,6 +58,7 @@ const NO_CATALOGUES = nhomDanhMuc({
   khoiNhiemVu: EMPTY,
   loaiNhiemVu: EMPTY,
   mucUuTienNhiemVu: EMPTY,
+  citizenLetterType: EMPTY,
 } as BayDanhMuc);
 
 const NO_ACTIONS: CatalogueActions = {

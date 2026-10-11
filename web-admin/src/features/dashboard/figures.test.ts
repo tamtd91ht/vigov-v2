@@ -236,10 +236,32 @@ describe("mergeQueues — three queues, two row shapes", () => {
   it("drops the document row's id and holding unit — they cannot be rendered by a later edit", () => {
     const row = mergeQueues([docs]).rows[0] as UrgentRow;
     expect(Object.keys(row).sort()).toEqual(
-      ["categoryCode", "code", "critical", "kind", "missedAt", "module"].sort(),
+      ["categoryCode", "code", "critical", "kind", "missedAt", "module", "title", "unitName"].sort(),
     );
+    expect(row.title).toBeNull();
+    expect(row.unitName).toBeNull();
     expect(JSON.stringify(row)).not.toContain("01JUNIT");
     expect(JSON.stringify(row)).not.toContain("01JDOC");
+  });
+
+  it("row 5: a TASK row carries its title and unit name; a PETITION row never does, even if sent", () => {
+    const withTitle: QueueSource = {
+      module: "task",
+      result: petitionsOk([
+        { kind: "han-xu-ly", code: "NV09", category_code: "", title: " Sửa cống thôn 3 ", org_unit_id: "01JU", org_unit_name: "Văn phòng", missed_deadline: "2026-09-01T01:00:00Z", critical: false },
+      ]),
+    };
+    const report: QueueSource = {
+      module: "citizen-report",
+      result: petitionsOk([
+        { kind: "han-xu-ly", code: "PA-1", category_code: "", title: "không được hiện", org_unit_name: "X", missed_deadline: "2026-09-02T01:00:00Z", critical: false },
+      ]),
+    };
+    const [task, petition] = mergeQueues([withTitle, report]).rows;
+    expect(task?.title).toBe("Sửa cống thôn 3");
+    expect(task?.unitName).toBe("Văn phòng");
+    expect(petition?.title).toBeNull();
+    expect(petition?.unitName).toBeNull();
   });
 
   it("keeps at most 10 rows", () => {
@@ -290,7 +312,7 @@ describe("mergeQueues — three queues, two row shapes", () => {
 });
 
 describe("row labels", () => {
-  const base = { code: "X", kind: "han-xu-ly", missedAt: "", critical: false } as const;
+  const base = { code: "X", kind: "han-xu-ly", missedAt: "", critical: false, title: null, unitName: null } as const;
 
   it("petition field: '' is 'Chưa phân loại', a platform code resolves, an unknown code shows", () => {
     expect(categoryLabel({ ...base, module: "citizen-report", categoryCode: "" }, null)).toBe(

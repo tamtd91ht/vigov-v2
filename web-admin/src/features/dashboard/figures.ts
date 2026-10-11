@@ -214,8 +214,11 @@ export function canSeeBlock(permissions: readonly string[], moduleKey: string): 
 export type QueueModule = "task" | "citizen-report" | "incoming-document";
 
 /**
- * One merged row. EXACTLY what a row may show (user decision; rule 3): no title, no content, no
- * holding unit, no person. The document queue's `id` and `holding_unit` are dropped at the merge —
+ * One merged row. EXACTLY what a row may show (user decision; rule 3, owner bug sheet 10/10 row 5):
+ * a TASK row carries its title and its unit's name, as the prototype shows them
+ * (`DashboardWorkspace.tsx:304-318`) — a task is staff work, not citizen data. A petition row stays
+ * CODE-ONLY: its title/content can name a citizen, and the server does not send them. No person on any
+ * row. The document queue's `id` and `holding_unit` are dropped at the merge —
  * a field that is not carried cannot be rendered by a later edit.
  */
 export type UrgentRow = {
@@ -227,6 +230,10 @@ export type UrgentRow = {
   /** RFC 3339 — the stored deadline that passed. */
   readonly missedAt: string;
   readonly critical: boolean;
+  /** Task rows only: the task's name; `null` on every other module, or when the server sent none. */
+  readonly title: string | null;
+  /** Task rows only: the unit's name as the server resolved it; `null` otherwise. */
+  readonly unitName: string | null;
 };
 
 export type QueueSource =
@@ -279,6 +286,8 @@ export function mergeQueues(sources: readonly QueueSource[]): MergedQueue {
           categoryCode: null,
           missedAt: it.due_at,
           critical: it.critical,
+          title: null,
+          unitName: null,
         });
       }
     } else {
@@ -290,6 +299,9 @@ export function mergeQueues(sources: readonly QueueSource[]): MergedQueue {
           categoryCode: it.category_code,
           missedAt: it.missed_deadline,
           critical: it.critical,
+          // Petition rows never carry a title or a unit, even if a future server sent one (rule 3).
+          title: s.module === "task" ? nonEmpty(it.title) : null,
+          unitName: s.module === "task" ? nonEmpty(it.org_unit_name) : null,
         });
       }
     }
@@ -303,6 +315,11 @@ export function mergeQueues(sources: readonly QueueSource[]): MergedQueue {
   );
 
   return { rows: rows.slice(0, URGENT_ROW_CAP), failures };
+}
+
+function nonEmpty(v: string | undefined): string | null {
+  const t = (v ?? "").trim();
+  return t === "" ? null : t;
 }
 
 export const MODULE_LABEL: Readonly<Record<QueueModule, string>> = {

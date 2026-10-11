@@ -27,6 +27,7 @@ import type {
   documents_duplicateCheckIn,
   documents_letterResultIn,
   documents_letterRoutingIn,
+  documents_letterStatusIn,
   documents_senderCorrectionIn,
 } from "@/lib/api/schema.gen";
 import { PETITION_CREATE_PERMISSION, PETITION_READ_PERMISSION, QUYEN_TAO_NHIEM_VU } from "@/lib/quyen";
@@ -239,10 +240,60 @@ export function statusStrip(input: {
       clickable,
       action: clickable ? "move" : "none",
       steps,
-      pickStep: (look?.steps.length ?? 0) > 1,
+      // Only when the SERVER's arrows leave more than one step in the group — today exactly one case,
+      // "Lưu, không thụ lý" from Đang xử lý đơn (Không thụ lý · Hướng dẫn · Lưu đơn); everywhere else
+      // the chip alone is sent and the server derives the step (`status_group`).
+      pickStep: steps.length > 1,
     };
   };
   return { main: LETTER_GROUP_MAIN_FLOW.map(chip), branches: LETTER_GROUP_BRANCHES.map(chip) };
+}
+
+/** The composer's heading when the chip admits the letter: Thụ lý starts the KN/TC resolution deadline. */
+export const ADMIT_LETTER_TITLE = "Thụ lý đơn — bắt đầu tính hạn giải quyết";
+
+/**
+ * The composer's heading. Admission says what it starts; a move inside the CURRENT group names the step
+ * (the chip's own label would read "move to where I already am"); any other move names the chip.
+ */
+export function letterMoveTitle(chip: Pick<StatusChipModel, "label" | "current" | "steps">): string {
+  if (chip.steps.length === 1 && chip.steps[0] === "thu-ly") return ADMIT_LETTER_TITLE;
+  if (chip.current && chip.steps.length === 1) return `Chuyển sang bước “${letterStatusLabel(chip.steps[0] ?? "")}”`;
+  return `Chuyển sang “${chip.label}”`;
+}
+
+/**
+ * The body of one status move. The CHIP is sent (`status_group`) and the server takes C3's one arrow into
+ * it; the explicit `status` only where the chip is ambiguous (`pickStep`). The hand-over keys go up only
+ * when chosen — and the composer only offers them to `petition.create` (the server answers 403 otherwise).
+ */
+export function buildLetterMove(input: {
+  chip: Pick<StatusChipModel, "group" | "pickStep">;
+  step: string;
+  note: string;
+  unitId: string;
+  assigneeCode: string;
+}): documents_letterStatusIn {
+  const body: documents_letterStatusIn = input.chip.pickStep ? { status: input.step } : { status_group: input.chip.group };
+  const note = input.note.trim();
+  if (note !== "") body.note = note;
+  if (input.unitId !== "") body.org_unit_id = input.unitId;
+  if (input.assigneeCode.trim() !== "") body.assignee_code = input.assigneeCode.trim();
+  return body;
+}
+
+/** A refusal written for the API caller (it names wire keys in backticks) — never shown as such. */
+export const LETTER_MOVE_MALFORMED =
+  "Không đổi được trạng thái: yêu cầu gửi lên không đúng dạng. Hãy đóng đơn, mở lại rồi thử lại.";
+
+/**
+ * The sentence a refused move shows. The server's refusals are Vietnamese sentences meant for staff
+ * (transition refused, result missing, hand-over without `petition.create`, unit / officer not live) and
+ * are shown as written; the one family written for a developer — naming `status` / `status_group` — is
+ * replaced by a sentence staff can act on.
+ */
+export function letterMoveRefusal(message: string): string {
+  return message.includes("`") ? LETTER_MOVE_MALFORMED : message;
 }
 
 /* ---- source (ADR 0084 #7) — the prototype's `SOURCE_META` (`document-display.ts:194-206`) ---- */

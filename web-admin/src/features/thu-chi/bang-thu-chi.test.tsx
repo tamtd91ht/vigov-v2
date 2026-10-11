@@ -435,6 +435,21 @@ describe("con số ra tới trang", () => {
     expect(html).not.toContain("0,00%");
   });
 
+  it("row 53: the đợt thu chi icon carries the line's `entry_count` badge (prototype :647-657); none at 0", () => {
+    const three = renderLine(dong({ id: "L3", name: "Chi thường xuyên", method: "entries", entry_count: 3 }));
+    expect(three).toContain('title="Các đợt thu, chi (3)"');
+    expect(three).toMatch(/<span aria-hidden="true" class="absolute -top-1 -right-1[^"]*bg-navy[^"]*">3<\/span>/);
+    // The accessible name stays the action's, not the number.
+    expect(three).toContain(`aria-label="${nhuTrongHTML(nhanNutDot("Chi thường xuyên"))}"`);
+    const none = renderLine(dong({ id: "L0", name: "Chi khác", method: "entries", entry_count: 0 }));
+    expect(none).toContain('title="Các đợt thu, chi (0)"');
+    expect(none).not.toContain("absolute -top-1 -right-1");
+    // An older server without the field: no badge, no "undefined".
+    const absent = renderLine(dong({ id: "LX", name: "Chi cũ", method: "entries" }));
+    expect(absent).not.toContain("absolute -top-1 -right-1");
+    expect(absent).not.toContain("undefined");
+  });
+
   it("cột `%` cũ chưa rõ tử số / mẫu số: ô nói câu của máy chủ, và dưới bảng có MỘT khối ở mức cột", () => {
     const cau =
       "ngan_sach: cột phần trăm này tạo trước khi hệ thống lưu rõ cột tử số và mẫu số, và công thức cũ không đọc được chắc chắn — không tính được; không đoán từ công thức";

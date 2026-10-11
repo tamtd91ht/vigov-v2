@@ -1282,10 +1282,7 @@ export function nhanLuaChonCanBo(cb: identity_canBoChonNguoiRa): string {
 export const NHAN_CHON_CAN_BO = "Cán bộ xử lý";
 export const DE_BO_PHAN_PHAN_CONG = "— Để bộ phận phân công —";
 
-/**
- * Ba tab phạm vi của §4. Tab thứ ba — `Liên quan đến tôi` — là chỗ giữ vô hiệu có dấu "?" (ADR 0068
- * §14), xem `PHAN_CHUA_DUNG` mục `scopeRelated`.
- */
+/** Ba tab phạm vi của §4 — chữ của prototype `ScopeFilter.tsx:13-23`. */
 export const PHAM_VI_TOAN_XA = "Toàn xã";
 export const PHAM_VI_GIAO_CHO_TOI = "Giao cho tôi";
 export const SCOPE_RELATED_LABEL = "Liên quan đến tôi";
@@ -1772,16 +1769,6 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  // §4 scope tab. The petition list answers 400 to `scope=related`
-  // (service-petitions/internal/http/xu_ly_phan_anh.go, errPhamViLienQuanChuaCo): who counts as
-  // "related" and what a related officer may do is undecided with the customer.
-  {
-    id: "scopeRelated",
-    ten: "Liên quan đến tôi",
-    viSao:
-      "Chưa chốt thế nào là phiếu “liên quan đến tôi” và người liên quan được làm gì với phiếu, nên " +
-      "bộ lọc này chưa dùng được. “Toàn xã” và “Giao cho tôi” đã dùng được.",
-  },
   {
     id: "staffRecordedRating",
     ten: "Biểu mẫu `Ghi nhận đánh giá của người dân` (§8.6)",

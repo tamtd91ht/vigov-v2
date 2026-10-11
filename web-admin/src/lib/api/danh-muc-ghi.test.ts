@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   BAY_DANH_MUC_GHI,
+  removeCitizenLetterType,
   suaMuc,
   themMuc,
   xoaMuc,
@@ -128,7 +129,7 @@ describe("POST thêm mục", () => {
     expect(loiGoi(gia, 1).header.get("Idempotency-Key")).toBe("k-co-dinh");
   });
 
-  it("bảy nhóm gửi tới bảy đường dẫn của hợp đồng, không nhóm nào gửi nhầm chỗ", async () => {
+  it("tám nhóm gửi tới tám đường dẫn của hợp đồng, không nhóm nào gửi nhầm chỗ", async () => {
     const gia = batFetchGhi(() => taoRa(dongMayChuTraVe()));
 
     for (const mo of BAY_DANH_MUC_GHI) {
@@ -139,11 +140,21 @@ describe("POST thêm mục", () => {
       "/api/v1/map-asset-types",
       "/api/v1/capital-plan-categories",
       "/api/v1/document-types",
+      "/api/v1/citizen-letter-types",
       "/api/v1/residential-unit-types",
       "/api/v1/task-blocs",
       "/api/v1/task-types",
       "/api/v1/task-priorities",
     ]);
+  });
+
+  it("Loại đơn thư: DELETE carries NO reason — an empty body object (owner decision 10/10/2026)", async () => {
+    const gia = batFetchGhi(() => new Response(null, { status: 204 }));
+    const kq = await removeCitizenLetterType("01JLT1");
+    expect(kq.ok).toBe(true);
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/citizen-letter-types/01JLT1");
+    expect(loiGoi(gia, 0).phuongThuc).toBe("DELETE");
+    expect(loiGoi(gia, 0).than).toEqual({});
   });
 
   it("không có host nào bị nung vào bundle, và không có `tenant_id` ở bất kỳ đâu", async () => {

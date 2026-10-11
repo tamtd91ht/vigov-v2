@@ -9,8 +9,9 @@ import { controlClass } from "@/components/ui/field";
 import { PendingButton } from "@/components/ui/pending-feature";
 import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { LETTER_TYPES } from "@/features/van-ban/letter-display";
 import { cn } from "@/lib/cn";
-import { suaMuc, themMuc, xoaMuc, type KhoaDanhMucGhi } from "@/lib/api/danh-muc"; // vi-name-ok: existing exports of danh-muc.ts, imported not declared (rule 12 inv 3)
+import { removeCitizenLetterType, suaMuc, themMuc, xoaMuc, type KhoaDanhMucGhi } from "@/lib/api/danh-muc"; // vi-name-ok: existing exports of danh-muc.ts, imported not declared (rule 12 inv 3)
 import { docDanhMucNghiepVu, type BayDanhMuc } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import type { petitions_danhSachTrangThaiNhiemVuRa, petitions_petitionFieldListOut } from "@/lib/api/schema.gen";
@@ -217,7 +218,13 @@ export function TabDanhMuc() {
       }
       const initial = writable.find((g) => g.khoa === shownGroup) ?? writable[0];
       setOpen({ kind: "add", idempotencyKey: newIdempotencyKey() });
-      setDraft({ ...EMPTY_DRAFT, group: initial === undefined ? "" : initial.khoa, color: DEFAULT_ENTRY_COLOR });
+      setDraft(
+        withGroup(
+          { ...EMPTY_DRAFT, color: DEFAULT_ENTRY_COLOR },
+          initial === undefined ? "" : initial.khoa,
+          letterCodesTaken(groups),
+        ),
+      );
       setLocalError("");
       setServerError("");
     },
@@ -265,14 +272,16 @@ export function TabDanhMuc() {
       if (open === null || busy) return;
 
       if (open.kind === "add") {
-        const checked = checkAddLabel(draft.label);
+        const group = writable.find((g) => g.khoa === draft.group);
+        if (group === undefined || group.ghi === null) return;
+        // "Loại đơn thư": the code is CHOSEN among the four statutory ones (C4), never derived from the label.
+        const checked =
+          group.khoa === LETTER_TYPE_GROUP ? checkLetterTypeAdd(draft) : checkAddLabel(draft.label);
         if (!checked.ok) {
           setLocalError(checked.error);
           return;
         }
         const { label, code } = checked;
-        const group = writable.find((g) => g.khoa === draft.group);
-        if (group === undefined || group.ghi === null) return;
         run(
           themMuc(group.ghi, { code, label, is_default: false, color: draft.color ?? undefined }, open.idempotencyKey),
           ADDED,
@@ -285,6 +294,11 @@ export function TabDanhMuc() {
 
       if (open.kind === "delete") {
         if (row.kind !== "lookup" || row.group.ghi === null) return;
+        // "Loại đơn thư" takes no reason (the server records a fixed sentence); the step only warns.
+        if (row.group.khoa === LETTER_TYPE_GROUP) {
+          run(removeCitizenLetterType(row.item.id), DELETED);
+          return;
+        }
         // THE ONE CHECK THIS SCREEN MAKES ITSELF (`tang-danh-muc.ts`): an empty reason is never sent.
         const reason = kiemLyDoXoa(draft.reason);
         if (!reason.ok) {
@@ -323,7 +337,8 @@ export function TabDanhMuc() {
         suaMuc(row.group.ghi, row.item.id, {
           label,
           order: order.value,
-          is_default: draft.isDefault,
+          // Letter types have no default: the server refuses `true`, so the field is not sent at all.
+          is_default: row.group.khoa === LETTER_TYPE_GROUP ? undefined : draft.isDefault,
           // Q1 #9: the colour is editable at every tier, "Hệ thống" included. Sent only when it changed.
           ...colorChange(row.item.color, draft.color),
         }),
@@ -341,7 +356,10 @@ export function TabDanhMuc() {
     if (
       open !== null &&
       open.kind === "add" &&
-      (next.label !== draft.label || next.group !== draft.group || next.color !== draft.color)
+      (next.label !== draft.label ||
+        next.group !== draft.group ||
+        next.color !== draft.color ||
+        next.code !== draft.code)
     ) {
       setOpen({ kind: "add", idempotencyKey: newIdempotencyKey() });
     }
@@ -364,6 +382,7 @@ export function TabDanhMuc() {
         importGroup,
         () => setReads((n) => n + 1),
         shownGroup === PETITION_FIELD_GROUP,
+        shownGroup === LETTER_TYPE_GROUP,
       )}
       open={open}
       draft={draft}
@@ -418,6 +437,51 @@ export function checkAddLabel(
   return { ok: true, label, code };
 }
 
+/** The group whose codes are the four statutory letter types (C4) rather than derived from a label. */
+export const LETTER_TYPE_GROUP = "citizenLetterType";
+export const LETTER_TYPE_FIELD = "Loại đơn theo luật";
+export const LETTER_TYPE_REQUIRED = "Vui lòng chọn một trong bốn loại đơn theo luật.";
+/** All four statutory codes already have a row (or had one: a deleted code is never issued again). */
+export const LETTER_TYPES_ALL_PRESENT = "Đã có đủ bốn loại đơn theo luật — sửa nhãn hoặc bật lại dòng đang có.";
+/** The delete step of a letter type — no reason box, a warning that the deletion is final for that code. */
+export const LETTER_TYPE_DELETE_WARNING =
+  "Xoá là xoá hẳn loại đơn này khỏi danh mục của xã: mã đã cấp không cấp lại, nên sau này không thêm " +
+  "lại được loại đơn này. Nếu chỉ muốn ngừng dùng, hãy bấm “Tắt”.";
+/** Letter types: four fixed codes, entered one at a time — there is no import route for this group. */
+export const LETTER_TYPE_IMPORT_REASON =
+  "Loại đơn thư chỉ có bốn loại theo luật, thêm từng dòng — nhóm này không nhập từ tệp Excel.";
+
+/** The statutory codes a new row may still take: the four (C4) minus those this commune already has. */
+export function letterCodesLeft(taken: ReadonlySet<string>): readonly { code: string; label: string }[] {
+  return LETTER_TYPES.filter((t) => !taken.has(t.code));
+}
+
+/** The letter-type codes this commune's rows already hold (as read; a deleted code is the server's to refuse). */
+export function letterCodesTaken(groups: readonly NhomDanhMuc[] | null): ReadonlySet<string> {
+  const group = groups?.find((g) => g.khoa === LETTER_TYPE_GROUP);
+  return new Set(group !== undefined && group.trangThai.pha === "coMuc" ? group.trangThai.muc.map((m) => m.code) : []);
+}
+
+/**
+ * The add draft moved to `group`. Moving TO "Loại đơn thư" pre-picks the first code still free and its
+ * statutory wording as the label (the commune may reword it); moving away clears the pick.
+ */
+export function withGroup(draft: CatalogueDraft, group: string, taken: ReadonlySet<string>): CatalogueDraft {
+  if (group !== LETTER_TYPE_GROUP) return { ...draft, group, code: "" };
+  const first = letterCodesLeft(taken)[0];
+  return { ...draft, group, code: first?.code ?? "", label: first?.label ?? "" };
+}
+
+/** The add row's check for "Loại đơn thư": a statutory code chosen, and a label. */
+export function checkLetterTypeAdd(
+  draft: Pick<CatalogueDraft, "code" | "label">,
+): { ok: true; label: string; code: string } | { ok: false; error: string } {
+  if (!LETTER_TYPES.some((t) => t.code === draft.code)) return { ok: false, error: LETTER_TYPE_REQUIRED };
+  const label = draft.label.trim();
+  if (label === "") return { ok: false, error: ADD_LABEL_REQUIRED };
+  return { ok: true, label, code: draft.code };
+}
+
 export function defaultFromNow(label: string): string {
   return `"${label}" là lựa chọn mặc định từ giờ.`;
 }
@@ -429,7 +493,7 @@ const GROUP_WITH_DEFAULT_BUTTON = "loaiNhiemVu";
  * One import button per group, bound to that group's target. A `Record` over every key, so a new
  * catalogue group fails `tsc` here instead of silently drawing no button.
  */
-const IMPORT_BUTTONS: Record<KhoaDanhMucGhi, (onImported: () => void) => ReactNode> = {
+const IMPORT_BUTTONS: Record<Exclude<KhoaDanhMucGhi, typeof LETTER_TYPE_GROUP>, (onImported: () => void) => ReactNode> = {
   loaiTaiNguyenBanDo: (f) => <ConfigImportButton target={MAP_ASSET_TYPE_IMPORT_TARGET} onImported={f} />,
   hangMucKeHoachVon: (f) => <ConfigImportButton target={CAPITAL_PLAN_CATEGORY_IMPORT_TARGET} onImported={f} />,
   loaiVanBan: (f) => <ConfigImportButton target={DOCUMENT_TYPE_IMPORT_TARGET} onImported={f} />,
@@ -457,14 +521,16 @@ export function catalogueImportButton(
   importGroup: KhoaDanhMucGhi | null,
   onImported: () => void,
   petitionFieldsShown = false,
+  letterTypesShown = false,
 ): ReactNode {
   if (!canWrite) return null;
-  if (importGroup !== null) return IMPORT_BUTTONS[importGroup](onImported);
-  if (petitionFieldsShown) {
+  if (importGroup !== null && importGroup !== LETTER_TYPE_GROUP) return IMPORT_BUTTONS[importGroup](onImported);
+  if (petitionFieldsShown || letterTypesShown) {
+    const reason = petitionFieldsShown ? PETITION_FIELD_IMPORT_REASON : LETTER_TYPE_IMPORT_REASON;
     return (
       <div className="mb-3 flex h-7 items-center justify-end">
         {/* The title sits on the wrapper: a disabled button fires no hover in some browsers. */}
-        <span title={PETITION_FIELD_IMPORT_REASON} className="inline-flex items-center">
+        <span title={reason} className="inline-flex items-center">
           <Button
             type="button"
             variant="outline"
@@ -477,7 +543,7 @@ export function catalogueImportButton(
             Nhập từ Excel
           </Button>
           <span id="petition-field-import-reason" className="an-thi-giac">
-            {PETITION_FIELD_IMPORT_REASON}
+            {reason}
           </span>
         </span>
       </div>
@@ -525,6 +591,8 @@ export type CatalogueDraft = {
   readonly reason: string;
   /** `#rrggbb` as the colour input returns it, or `null` = no colour. */
   readonly color: string | null;
+  /** "Loại đơn thư" only: the statutory code picked in the add row (`""` = none chosen). */
+  readonly code: string;
 };
 
 export const EMPTY_DRAFT: CatalogueDraft = {
@@ -534,6 +602,7 @@ export const EMPTY_DRAFT: CatalogueDraft = {
   isDefault: false,
   reason: "",
   color: null,
+  code: "",
 };
 
 export type CatalogueActions = {
@@ -715,6 +784,7 @@ export function CatalogueView({
       {!loading && canWrite && open !== null && open.kind === "add" && (
         <AddRow
           groups={writable}
+          letterCodesTaken={letterCodesTaken(groups)}
           draft={draft}
           setDraft={setDraft}
           localError={localError}
@@ -815,6 +885,7 @@ function FormErrors({ localError, serverError }: { localError: string; serverErr
 /** The spec's grey add row: group · label · colour · "Thêm" / "Huỷ". Enter in the label submits. */
 export function AddRow({
   groups,
+  letterCodesTaken: taken = new Set<string>(),
   draft,
   setDraft,
   localError,
@@ -825,6 +896,8 @@ export function AddRow({
 }: {
   /** The groups that have a write route — the only ones an entry can be added to. */
   groups: readonly NhomDanhMuc[];
+  /** "Loại đơn thư" codes already held — not offered again. */
+  letterCodesTaken?: ReadonlySet<string>;
   draft: CatalogueDraft;
   setDraft: (d: CatalogueDraft) => void;
   localError: string;
@@ -833,9 +906,11 @@ export function AddRow({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
+  const letterGroup = draft.group === LETTER_TYPE_GROUP;
+  const codesLeft = letterCodesLeft(taken);
   return (
     <ConfigFormRow
-      columns="sm:grid-cols-[16rem_1fr_6rem_auto]"
+      columns={letterGroup ? "sm:grid-cols-[16rem_12rem_1fr_6rem_auto]" : "sm:grid-cols-[16rem_1fr_6rem_auto]"}
       aria-label="Thêm mục danh mục"
       onSubmit={(e) => {
         e.preventDefault();
@@ -848,7 +923,7 @@ export function AddRow({
           name="group"
           className={formSelectCls}
           value={draft.group}
-          onChange={(e) => setDraft({ ...draft, group: e.target.value })}
+          onChange={(e) => setDraft(withGroup(draft, e.target.value, taken))}
         >
           {groups.map((g) => (
             <option key={g.khoa} value={g.khoa}>
@@ -857,6 +932,34 @@ export function AddRow({
           ))}
         </select>
       </ConfigField>
+      {letterGroup && (
+        <ConfigField label={LETTER_TYPE_FIELD} htmlFor="catalogue-add-letter-code">
+          {/* Only the four statutory codes exist (C4); one the commune already holds is not offered. */}
+          <select
+            id="catalogue-add-letter-code"
+            name="code"
+            className={formSelectCls}
+            value={draft.code}
+            disabled={codesLeft.length === 0}
+            onChange={(e) => {
+              const picked = LETTER_TYPES.find((t) => t.code === e.target.value);
+              const prior = LETTER_TYPES.find((t) => t.code === draft.code);
+              // The label follows the pick only while it is still the previous pick's statutory wording.
+              const label =
+                picked !== undefined && (draft.label.trim() === "" || draft.label === prior?.label)
+                  ? picked.label
+                  : draft.label;
+              setDraft({ ...draft, code: e.target.value, label });
+            }}
+          >
+            {codesLeft.map((t) => (
+              <option key={t.code} value={t.code}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        </ConfigField>
+      )}
       <ConfigField label={O_NHAN} htmlFor="catalogue-add-label">
         <input
           id="catalogue-add-label"
@@ -879,13 +982,21 @@ export function AddRow({
         />
       </ConfigField>
       <div className="flex gap-2">
-        <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+        <Button
+          type="submit"
+          variant="primary"
+          disabled={busy || (letterGroup && codesLeft.length === 0)}
+          aria-busy={busy}
+        >
           <BusyLabel busy={busy} label={ADD_SUBMIT} busyText={BUSY_SAVING} />
         </Button>
         <Button type="button" variant="outline" onClick={onCancel} disabled={busy}>
           {NUT_HUY}
         </Button>
       </div>
+      {letterGroup && codesLeft.length === 0 && (
+        <p className="text-ink-muted col-span-full text-[12px]">{LETTER_TYPES_ALL_PRESENT}</p>
+      )}
       {(localError !== "" || serverError !== "") && (
         <div className="col-span-full">
           <FormErrors localError={localError} serverError={serverError} />
@@ -959,6 +1070,7 @@ export function CatalogueTableRow({
   const keys = submitOrCancel(actions.submit, actions.cancel);
   const editing = canWrite && mode === "edit";
   const deleting = canWrite && mode === "delete";
+  const letterType = row.kind === "lookup" && row.group.khoa === LETTER_TYPE_GROUP;
 
   return (
     <tr>
@@ -981,7 +1093,7 @@ export function CatalogueTableRow({
               />
               {row.kind === "lookup" && <RowColorEdit label={label} draft={draft} setDraft={setDraft} />}
               {/* Decision 3: "Mặc định" stays editable. Every catalogue's PATCH carries `is_default`. */}
-              {writeShaped && (
+              {writeShaped && !letterType && (
                 <label className="text-ink inline-flex items-center gap-1.5 text-[12px] font-normal">
                   <input
                     type="checkbox"
@@ -1042,6 +1154,33 @@ export function CatalogueTableRow({
                 {NUT_HUY}
               </Button>
             </RowActions>
+          ) : deleting && letterType ? (
+            // No reason box (the server records a fixed sentence) — the step states that the deletion is
+            // final for this code and points to "Tắt" instead.
+            <div className="flex flex-col items-end gap-1">
+              <p id={`${row.key}-delete-note`} className="text-ink max-w-80 text-right text-[12px] whitespace-normal">
+                {LETTER_TYPE_DELETE_WARNING}
+              </p>
+              <RowActions>
+                <Button
+                  type="button"
+                  variant="danger"
+                  size="sm"
+                  disabled={busy}
+                  aria-busy={busy}
+                  aria-describedby={`${row.key}-delete-note`}
+                  onClick={actions.submit}
+                >
+                  <BusyLabel busy={busy} label={NUT_XOA} busyText={BUSY_DELETING} />
+                </Button>
+                <Button type="button" variant="outline" size="sm" disabled={busy} onClick={actions.cancel}>
+                  {NUT_HUY}
+                </Button>
+              </RowActions>
+              <div className="max-w-80 text-right">
+                <FormErrors localError={localError} serverError={serverError} />
+              </div>
+            </div>
           ) : deleting ? (
             <div className="flex flex-col items-end gap-1">
               <RowActions>

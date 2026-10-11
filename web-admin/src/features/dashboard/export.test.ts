@@ -87,8 +87,8 @@ const BUDGET = {
 // Two overdue rows whose CODES must never reach a file (rule 3 — aggregates only).
 const QUEUE: MergedQueue = {
   rows: [
-    { module: "citizen-report", code: "PA-7F3K-9QXR-MNPT", kind: "han-xu-ly-xong", categoryCode: "", missedAt: "2026-09-20T08:00:00+07:00", critical: true },
-    { module: "task", code: "NV-0042", kind: "han-xu-ly", categoryCode: "", missedAt: "2026-09-21T08:00:00+07:00", critical: false },
+    { module: "citizen-report", code: "PA-7F3K-9QXR-MNPT", kind: "han-xu-ly-xong", categoryCode: "", missedAt: "2026-09-20T08:00:00+07:00", critical: true, title: null, unitName: null },
+    { module: "task", code: "NV-0042", kind: "han-xu-ly", categoryCode: "", missedAt: "2026-09-21T08:00:00+07:00", critical: false, title: null, unitName: null },
   ],
   failures: [],
 };
