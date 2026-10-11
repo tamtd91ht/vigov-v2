@@ -77,6 +77,11 @@ type bmRig struct {
 	log     *bytes.Buffer
 }
 
+// bmIdle bounds a silent fake storage. It also covers the TLS handshake of a fresh connection, which on a
+// loaded Windows runner (full `make test`) took longer than 200ms and turned every case into a 504 — so
+// it is generous, and the "silent" case waits well past it.
+const bmIdle = 3 * time.Second
+
 // bmServer mounts the route over a TLS fake storage. configured=false leaves BASEMAP_URL unset.
 func bmServer(t *testing.T, configured bool) *bmRig {
 	t.Helper()
@@ -95,7 +100,7 @@ func bmServer(t *testing.T, configured bool) *bmRig {
 	var buf bytes.Buffer
 	mux := http.NewServeMux()
 	RegisterPublicBasemap(mux, PublicBasemapDeps{Xa: &ckNenTang{}, BaseURL: base, Client: srv.Client(),
-		Limiter: lim, IdleTimeout: 200 * time.Millisecond, Log: slog.New(slog.NewJSONHandler(&buf, nil))})
+		Limiter: lim, IdleTimeout: bmIdle, Log: slog.New(slog.NewJSONHandler(&buf, nil))})
 	return &bmRig{h: mux, storage: st, counter: c, log: &buf}
 }
 
@@ -323,7 +328,7 @@ func TestPublicBasemapStorageFailures(t *testing.T) {
 		{"missing object", func(rg *bmRig) { rg.storage.status = http.StatusNotFound }, http.StatusNotFound, "not_found"},
 		{"storage error", func(rg *bmRig) { rg.storage.status = http.StatusInternalServerError }, http.StatusBadGateway, "basemap_unavailable"},
 		{"forbidden", func(rg *bmRig) { rg.storage.status = http.StatusForbidden }, http.StatusBadGateway, "basemap_unavailable"},
-		{"silent", func(rg *bmRig) { rg.storage.delay = 2 * time.Second }, http.StatusGatewayTimeout, "basemap_unavailable"},
+		{"silent", func(rg *bmRig) { rg.storage.delay = 3 * bmIdle }, http.StatusGatewayTimeout, "basemap_unavailable"},
 	}
 	for _, c := range cases {
 		rg := bmServer(t, true)
