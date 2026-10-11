@@ -125,7 +125,7 @@ class ConfigPlan(unittest.TestCase):
         self.assertEqual(rows[0][1], "vigov-clamav:3310")
 
     def test_web_admin_key_restarts_web_admin(self):
-        _, _, restart = self.plan("BASEMAP-URL=https://minio.example.vn/p-public/basemap/20261010")
+        _, _, restart = self.plan("BASEMAP-URL=https://minio.example.vn/p-public/config/map/20261010")
         self.assertEqual(restart, ["vigov-web-admin"])
 
     def test_empty_value_keeps_and_unchanged_is_no_change(self):
@@ -380,9 +380,19 @@ class Basemap(unittest.TestCase):
         p = ops.plan_basemap(self.CM, "20261008")
         self.assertEqual(p["bucket"], "vigov-prod-public")
         self.assertEqual(p["upload_endpoint"], "https://s3.example.vn")
-        self.assertEqual(p["dest"], "vigov-prod-public/basemap/20261008/")
+        self.assertEqual(p["dest"], "vigov-prod-public/config/map/20261008/")
         # Read by the pod through the INTERNAL endpoint, never the public one the upload used.
-        self.assertEqual(p["basemap_url"], "https://minio.vigov-infra.svc:9000/vigov-prod-public/basemap/20261008")
+        self.assertEqual(p["basemap_url"], "https://minio.vigov-infra.svc:9000/vigov-prod-public/config/map/20261008")
+
+    def test_key_source_prefers_comms_then_platform(self):
+        both = set(ops.STORAGE_KEY_NAMES)
+        self.assertEqual(ops.pick_key_source({"comms-secrets": both, "platform-secrets": both}), "comms-secrets")
+        self.assertEqual(ops.pick_key_source({"comms-secrets": {"OBJECT_STORAGE_ACCESS_KEY"},
+                                              "platform-secrets": both}), "platform-secrets")
+        # Dashed spelling is what envFrom ignores — it is not the key the services read.
+        self.refuses(lambda: ops.pick_key_source({"comms-secrets": {"OBJECT-STORAGE-ACCESS-KEY", "OBJECT-STORAGE-SECRET-KEY"}}),
+                     "không Secret nào")
+        self.refuses(lambda: ops.pick_key_source({"petitions-secrets": both}), "không Secret nào")
 
     def test_date_validation(self):
         for bad, frag in [("2026-10-08", "YYYYMMDD"), ("19991231", "YYYYMMDD"), ("20261399", "có thật"),
@@ -413,7 +423,7 @@ class Basemap(unittest.TestCase):
             ops.basemap_tools(tools)
         self.assertIn("chưa ghim SHA-256 cho pmtiles", str(cm.exception))
         self.assertNotIn("mc,", str(cm.exception))
-        self.assertIn("checksums.txt", str(cm.exception))
+        self.assertIn("digest sha256", str(cm.exception))
         for t in tools:
             t["sha256"] = "b" * 64
         self.assertEqual([r[0] for r in ops.basemap_tools(tools)], ["pmtiles", "mc"])
@@ -426,6 +436,8 @@ class Basemap(unittest.TestCase):
             self.assertTrue(t["url"].startswith("https://"), t["name"])
         self.assertIn(ops.PMTILES_VERSION, ops.BASEMAP_TOOLS[0]["url"])
         self.assertIn(ops.MC_RELEASE, ops.BASEMAP_TOOLS[1]["url"])
+        # dl.min.io answers 410 Gone for mc binaries (11/10/2026) — the GitHub release is the source.
+        self.assertTrue(ops.BASEMAP_TOOLS[1]["url"].startswith("https://github.com/minio/mc/releases/download/"))
 
     def test_mc_host_percent_encodes_keys(self):
         url = ops.mc_host_url("https://s3.example.vn", "AK", "s/k+e@y:1")

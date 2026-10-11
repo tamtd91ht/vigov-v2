@@ -29,7 +29,7 @@ Danh sách tệp được phát: `web-admin/src/lib/basemap/assets.ts`.
 | Thấy gì | Nguyên nhân thường gặp | Làm gì |
 |---|---|---|
 | Bản đồ phản ánh hoặc `/ban-do` hiện **"Chưa cấu hình bản đồ nền."**; `/basemap/...` trả 503 | Key `BASEMAP-URL` chưa có trong `common-config`, hoặc sai dạng (không https, có thông tin đăng nhập, có truy vấn). Log pod web-admin có **một** dòng gọi tên biến | Mục "Đưa vào dùng" |
-| `/basemap/vn-mainland.pmtiles` trả **404** "Không tìm thấy tệp bản đồ nền." | Tiền tố trong `BASEMAP-URL` sai ngày, hoặc chưa tải lên | `mc ls <alias>/<bucket>/basemap/` — đối chiếu tên thư mục ngày với giá trị key |
+| `/basemap/vn-mainland.pmtiles` trả **404** "Không tìm thấy tệp bản đồ nền." | Tiền tố trong `BASEMAP-URL` sai ngày, hoặc chưa tải lên | `mc ls <alias>/<bucket>/config/map/` — đối chiếu tên thư mục ngày với giá trị key |
 | Trả **502** | MinIO trả 403 (bucket không cho đọc ẩn danh), chứng chỉ MinIO do CA nội bộ ký mà pod không tin, hoặc NetworkPolicy chặn | Lần lượt: `mc anonymous get <alias>/<bucket>` phải in `download`; CA nội bộ → mount CA và đặt `NODE_EXTRA_CA_CERTS` cho web-admin (**không bao giờ** tắt kiểm chứng chỉ); `kubectl get networkpolicy allow-web-admin-egress-storage` phải có, và cổng trong key phải là 9000 |
 | Trả **504** | MinIO không phản hồi trong 30 giây | Kiểm MinIO; không phải lỗi web-admin |
 | Bản đồ trắng, không câu nào, tab Network không có `/basemap/` | Trang gọi `new Map` trước `registerPmtilesProtocol` (`web-admin/src/lib/basemap/protocol.ts`) | Lỗi mã — báo người dựng màn |
@@ -47,8 +47,9 @@ Bước 2–3 (dựng + tải lên) chạy theo **một trong hai** cách — **
 
 - **Job Jenkins `vigov-van-hanh`, việc `nen-ban-do`** (nhóm Bảo trì; chủ dự án chốt 11/10/2026): chạy
   trên máy build, tự tải `pmtiles` + `mc` đã ghim SHA-256, lấy bucket và địa chỉ từ `common-config` của
-  `MT`, in dòng SHA-256, `BUILD-INFO.txt` và giá trị `BASEMAP-URL` để ghi vào danh mục ký. Job **không**
-  đổi `BASEMAP-URL`. Dựng job lần đầu (credential, mã băm): `deploy/van-hanh/README.md` §Nền bản đồ.
+  `MT`, dùng cặp khoá MinIO **có sẵn** của `comms-secrets` (thiếu thì `platform-secrets`), in dòng
+  SHA-256, `BUILD-INFO.txt` và giá trị `BASEMAP-URL` để ghi vào danh mục ký. Job **không** đổi
+  `BASEMAP-URL`. Dựng job lần đầu (mã băm công cụ): `deploy/van-hanh/README.md` §Nền bản đồ.
 - **Bằng tay** trên máy người vận hành có Internet, `pmtiles` (go-pmtiles v1.31.2), `curl`, `mc` có alias
   tới MinIO của ViGov — các lệnh ở bước 2–3 dưới.
 
@@ -57,7 +58,8 @@ Bước 2–3 (dựng + tải lên) chạy theo **một trong hai** cách — **
 2. **Dựng:** `web-admin/scripts/build-basemap.sh build --date <YYYYMMDD> --out <thư mục>` — cắt vùng
    (vài GB), tải glyph + sprite ở commit đã ghim, ghi `BUILD-INFO.txt` + `SHA256SUMS`.
 3. **Tải lên:** `web-admin/scripts/build-basemap.sh upload --date <YYYYMMDD> --out <thư mục> --alias <alias> --bucket <bucket>`.
-   Tiền tố mới `basemap/<YYYYMMDD>/`; script **từ chối ghi đè** tiền tố đã có. Tải lên **chưa** phải
+   Tiền tố mới `config/map/<YYYYMMDD>/` trong bucket (chủ dự án chốt 11/10/2026; không liên quan tuyến
+   `/basemap/*` của web-admin); script **từ chối ghi đè** tiền tố đã có. Tải lên **chưa** phải
    đưa vào dùng — chưa ai đọc tiền tố này.
 4. **Kiểm chủ quyền có ký** — mục dưới. Không ký thì dừng ở đây.
 5. **Đưa vào dùng** — mục dưới.
@@ -93,7 +95,7 @@ khung để "cho qua" — đó là điểm dừng của ADR 0072.
 
 ## Đưa vào dùng và quay lui
 
-1. Staging: đặt key `BASEMAP-URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/basemap/<YYYYMMDD>` trong
+1. Staging: đặt key `BASEMAP-URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/config/map/<YYYYMMDD>` trong
    `common-config` của `vigov-staging` — việc `sua-configmap` của job `vigov-van-hanh` (tự khởi động lại
    `vigov-web-admin`), hoặc `kubectl -n vigov-staging edit configmap common-config` rồi chạy lại job
    `web-admin` (bước "Triển khai" ánh xạ key thành env `BASEMAP_URL`). Kiểm, ký.

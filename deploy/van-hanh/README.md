@@ -52,7 +52,7 @@ Mỗi lần `Jenkinsfile` đổi phần form (kể cả vùng SINH RA, ví dụ 
 |---|---|---|
 | **Controller** | `kubectl` trong PATH, đọc được `/u01/rancher/rancher-vigov.yaml` | Script form chạy trên controller, CHỈ ĐỌC, hạn 6 giây. Không đọc được thì form hiện một câu và vẫn dùng được — job tự đọc lại cụm khi chạy |
 | **Máy build** | `kubectl`, `git`, Python **3.8+** (`python3.X`) | Như job cũ — stage `Chuẩn bị` tự kiểm và dừng nếu thiếu |
-| **Máy build — riêng `nen-ban-do`** | `bash`, `curl`, `sha256sum`, `tar`; ≥ 8 GB trống ở workspace; ra Internet tới `github.com`, `raw.githubusercontent.com`, `dl.min.io`, `build.protomaps.com`, `build-metadata.protomaps.dev`; tới `OBJECT_STORAGE_PUBLIC_ENDPOINT` | Mục "Nền bản đồ" dưới. Việc tự kiểm công cụ + chỗ trống và dừng nếu thiếu |
+| **Máy build — riêng `nen-ban-do`** | `bash`, `curl`, `sha256sum`, `tar`; ≥ 8 GB trống ở workspace; ra Internet tới `github.com`, `raw.githubusercontent.com`, `build.protomaps.com`, `build-metadata.protomaps.dev`; tới `OBJECT_STORAGE_PUBLIC_ENDPOINT` | Mục "Nền bản đồ" dưới. Việc tự kiểm công cụ + chỗ trống và dừng nếu thiếu |
 | **Kubeconfig** | Quyền đọc/ghi Secret, ConfigMap, Deployment; tạo/xoá Pod | ⚠ `deploy/cluster/rbac-jenkins.yaml` ghi "không quyền trên secrets" — job cũ và job này đều ghi Secret, tức kubeconfig thật **rộng hơn** tệp ấy. Lệch này có từ trước, cần chủ dự án quyết |
 
 ## 2. Form — bốn vùng
@@ -86,7 +86,7 @@ Mỗi lần ghi in một dòng `GHI · <người bấm> · <giờ UTC> · <names
 | Triển khai | `khoi-dong-lai` | `DICH_VU_CHON` | `rollout restart` + đợi |
 | | `lui-ban-truoc` | `DICH_VU_CHON` | `rollout undo` về revision liền trước |
 | Bảo trì | `tao-tai-khoan-van-hanh` | `EMAIL_VAN_HANH`, `TEN_VAN_HANH`, `TICKET` (mọi môi trường) | `operatorctl create` + 8 quyền `ops.*`. **Mật khẩu tạm in vào log** — đổi + đăng ký TOTP ngay |
-| | `nen-ban-do` | `NGAY_NEN` (YYYYMMDD); `XAC_NHAN`, `TICKET` (prod) | Tệp nền bản đồ vào MinIO, tiền tố **mới** `<tiền tố>-public/basemap/<ngày>/`. **Không** đổi `BASEMAP-URL` — mục "Nền bản đồ" |
+| | `nen-ban-do` | `NGAY_NEN` (YYYYMMDD); `XAC_NHAN`, `TICKET` (prod) | Tệp nền bản đồ vào MinIO, tiền tố **mới** `<tiền tố>-public/config/map/<ngày>/`. **Không** đổi `BASEMAP-URL` — mục "Nền bản đồ" |
 
 ### Quy tắc job tự giữ
 
@@ -166,26 +166,25 @@ phần dựng job. Chạy trên **máy build** (CentOS 7, có Internet), không 
 
 | # | Việc | Làm thế nào |
 |---|---|---|
-| 1 | Plugin **Credentials Binding** | Thường có sẵn cùng plugin Pipeline. Thiếu thì việc dừng với câu nêu tên plugin. Đây là credential **đầu tiên** một `Jenkinsfile` của kho gọi tên |
-| 2 | User MinIO riêng | `mc admin user add <alias quản trị> <access key> <secret key>` — **không** dùng lại cặp khoá của dịch vụ |
-| 3 | Policy chỉ ghi `basemap/*` | Tệp policy dưới (thay `<bucket>` = `<OBJECT_STORAGE_BUCKET_PREFIX>-public`), `mc admin policy create <alias> vigov-basemap-write <tệp>`, `mc admin policy attach <alias> vigov-basemap-write --user <access key>`. Staging và prod khác bucket thì liệt kê cả hai bucket |
-| 4 | Credential Jenkins | Manage Jenkins → Credentials → Global → Add: kiểu **Username with password**, ID **`vigov-minio-basemap`**, Username = access key, Password = secret key |
-| 5 | Ghim SHA-256 | Mục "Hằng phải điền" dưới — chưa điền thì việc **dừng** ở cả lượt chạy thử |
+| 1 | Ghim SHA-256 | Mục "Hằng phải điền" dưới — chưa điền thì việc **dừng** ở cả lượt chạy thử |
+| 2 | Duyệt lại script form | Mục 1.3 bước 2 — form có thêm ô `NGAY_NEN` và phần Vùng 3 của việc này |
 
-```json
-{"Version": "2012-10-17", "Statement": [
-  {"Effect": "Allow", "Action": ["s3:ListBucket"], "Resource": ["arn:aws:s3:::<bucket>"],
-   "Condition": {"StringLike": {"s3:prefix": ["basemap/*"]}}},
-  {"Effect": "Allow", "Action": ["s3:PutObject", "s3:GetObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"], "Resource": ["arn:aws:s3:::<bucket>/basemap/*"]}
-]}
-```
+Không user MinIO mới, không credential Jenkins, không plugin mới (chủ dự án 11/10/2026). Khoá MinIO là cặp
+`OBJECT_STORAGE_ACCESS_KEY` / `OBJECT_STORAGE_SECRET_KEY` **có sẵn** trong `comms-secrets` — comms đã ghi
+bucket public (`deploy/cau-hinh/README.md` mục 1); thiếu thì `platform-secrets`; không có cả hai thì việc dừng.
+Job đọc bằng kubeconfig của chính nó → tệp 0600 trong `$WORKSPACE/.mc` → biến `MC_HOST_<alias>` của `mc`:
+không lên dòng lệnh, không in, không tệp cấu hình.
+
+Policy MinIO của user ấy phải phủ `<tiền tố>-public/config/map/*` (`s3:ListBucket` với prefix `config/map/*`,
+`s3:GetObject`, `s3:PutObject`). Không phủ thì bước kiểm `mc ls` (trước khi dựng) dừng và in đúng câu cần
+thêm vào policy — người quản trị MinIO nới bằng `mc admin policy create` / `attach`.
 
 ### Hằng phải điền — `deploy/van-hanh/ops.py`
 
-| Hằng | Lấy ở đâu (trang phát hành **chính thức**, không chép từ nơi khác) |
+| Hằng | Lấy ở đâu (trang phát hành **chính thức** trên GitHub, không chép từ nơi khác) |
 |---|---|
-| `PMTILES_SHA256` | `https://github.com/protomaps/go-pmtiles/releases/tag/v1.31.2` → `checksums.txt`, dòng `go-pmtiles_1.31.2_Linux_x86_64.tar.gz` |
-| `MC_RELEASE` + `MC_SHA256` | `https://dl.min.io/client/mc/release/linux-amd64/archive/` — chọn một bản `mc.RELEASE.…` (giữ `MC_RELEASE` đang ghi nếu bản ấy có), cột đầu của tệp `mc.<RELEASE>.sha256sum` cạnh nó |
+| `PMTILES_SHA256` | `https://github.com/protomaps/go-pmtiles/releases/tag/v1.31.2` → mục **Assets**, digest `sha256:` GitHub hiện cạnh `go-pmtiles_1.31.2_Linux_x86_64.tar.gz` (bản phát hành này **không có** `checksums.txt`) |
+| `MC_RELEASE` + `MC_SHA256` | `https://github.com/minio/mc/releases/tag/<MC_RELEASE>` → cột đầu của tệp `mc.linux-amd64.<MC_RELEASE>.sha256sum`. **Không** dùng `dl.min.io` — trả 410 Gone cho bản mc (11/10/2026) |
 
 Đổi phiên bản = đổi mã băm **trong cùng lần sửa**. Sửa, commit, push; job đọc kho ở mỗi lượt.
 
@@ -193,14 +192,13 @@ phần dựng job. Chạy trên **máy build** (CentOS 7, có Internet), không 
 
 | # | Lượt bấm | Kết quả |
 |---|---|---|
-| 1 | `nen-ban-do`, `MT=staging`, `NGAY_NEN`, chạy thử | Bảng: bucket · địa chỉ tải lên · đích · giá trị `BASEMAP-URL` sẽ là; kiểm công cụ, credential, chỗ trống |
-| 2 | Như #1, bỏ `CHAY_THU`, `XAC_NHAN=vigov-staging` | Tải công cụ (kiểm SHA-256) → kiểm `mc ls` trước khi dựng → dựng → tải lên → so `SHA256SUMS` trên MinIO. In dòng SHA-256 của `vn-mainland.pmtiles`, `BUILD-INFO.txt`, giá trị `BASEMAP-URL` |
+| 1 | `nen-ban-do`, `MT=staging`, `NGAY_NEN`, chạy thử | Bảng: bucket · địa chỉ tải lên · đích · giá trị `BASEMAP-URL` sẽ là; Secret lấy khoá (chỉ tên); kiểm công cụ, chỗ trống |
+| 2 | Như #1, bỏ `CHAY_THU`, `XAC_NHAN=vigov-staging` | Tải công cụ (kiểm SHA-256) → kiểm `mc ls` trước khi dựng → dựng → tải lên `<tiền tố>-public/config/map/<ngày>/` → so `SHA256SUMS` trên MinIO. In dòng SHA-256 của `vn-mainland.pmtiles`, `BUILD-INFO.txt`, giá trị `BASEMAP-URL` |
 | 3 | `sua-configmap`, `MT=staging`, `BASEMAP-URL=<giá trị in ở #2>` | Khởi động lại `vigov-web-admin` |
 | 4 | Kiểm chủ quyền có ký trên staging — runbook | Không đạt: dừng, giữ giá trị cũ |
 | 5 | `sua-configmap`, `MT=prod`, cùng giá trị, `TICKET` | Chỉ sau khi đã ký. Prod khác bucket với staging thì chạy #2 với `MT=prod` trước |
 
-Khoá MinIO: credential → tệp 0600 → biến `MC_HOST_<alias>` của `mc` — không lên dòng lệnh, không tệp cấu
-hình. `$WORKSPACE/basemap`, `.tools`, `.mc` luôn bị xoá cuối lượt (vài GB). Hạn của việc là 180 phút.
+`$WORKSPACE/basemap`, `.tools`, `.mc` luôn bị xoá cuối lượt (vài GB). Hạn của việc là 180 phút.
 
 ## 5. Quay lui
 

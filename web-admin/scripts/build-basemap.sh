@@ -9,7 +9,8 @@
 #   upload  web-admin/scripts/build-basemap.sh upload --date 20261008 --out /data/basemap \
 #             --alias vigov --bucket vigov-prod-public
 #
-# Uploading is NOT going live: the files land under a NEW dated prefix that nothing reads until the
+# Uploading is NOT going live: the files land under a NEW dated prefix `config/map/<date>/` of the bucket
+# (prefix chosen by the owner 11/10/2026; the web-admin route /basemap/* is unrelated) that nothing reads until the
 # ConfigMap key BASEMAP-URL is changed to point at it — and that change comes only after the signed check.
 #
 # WHAT IS FIXED HERE AND WHY (changing any of it is a stop condition of ADR 0072, not a flag):
@@ -38,7 +39,7 @@ readonly SPRITE="light"
 die() { echo "DỪNG: $*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,13p' "$0" >&2
+  sed -n '2,14p' "$0" >&2
   exit 2
 }
 
@@ -118,7 +119,7 @@ upload() {
   [ -f "$dir/$ARCHIVE" ] && [ -f "$dir/SHA256SUMS" ] || die "$dir chưa dựng xong — chạy 'build' trước"
   (cd "$dir" && sha256sum --quiet -c SHA256SUMS) || die "tệp trong $dir không khớp SHA256SUMS"
 
-  local dest="${alias}/${bucket}/basemap/${date}/"
+  local dest="${alias}/${bucket}/config/map/${date}/"
   # Never overwrite: a prefix that is already live is being read in byte ranges right now, and mixing
   # ranges of two archives is a corrupted map. A refresh is always a new date.
   if [ -n "$(mc ls "$dest" 2>/dev/null | head -1)" ]; then
@@ -127,7 +128,7 @@ upload() {
   mc cp --recursive "$dir/" "$dest"
   echo
   echo "ĐÃ TẢI LÊN: $dest — CHƯA ai đọc tiền tố này."
-  echo "Giá trị BASEMAP-URL tương ứng: https://<MinIO nội bộ>:<cổng>/${bucket}/basemap/${date}"
+  echo "Giá trị BASEMAP-URL tương ứng: https://<MinIO nội bộ>:<cổng>/${bucket}/config/map/${date}"
   echo "Bước tiếp: đặt giá trị ấy ở STAGING, kiểm chủ quyền + ký danh mục, rồi mới đặt ở prod."
 }
 

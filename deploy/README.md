@@ -152,10 +152,9 @@ mục 1 phải sửa cùng lượt. Đừng đổi một nửa.
 | tuỳ đặt (gợi ý `git-vigov`) | Username with password (PAT) | ô `SCM` của cả 11 job |
 
 **ID đặt tên gì cũng được** — bản tài liệu trước viết là phải khớp từng ký tự, và điều đó
-**không còn đúng** kể từ khi `deploy/Jenkinsfile` bỏ `withCredentials`: credential SCM không được `Jenkinsfile` nào gọi tên. Nó chỉ được chọn trong ô SCM
-của từng job, nên tên là việc của người dựng job. Ngoại lệ duy nhất (từ 11/10/2026): việc
-`nen-ban-do` của `vigov-van-hanh` gọi credential `vigov-minio-basemap` qua plugin Credentials Binding —
-`deploy/van-hanh/README.md` mục "Nền bản đồ". Lượt chạy thật 23/09/2026 dùng `huypdk` và đi qua
+**không còn đúng** kể từ khi `deploy/Jenkinsfile` bỏ `withCredentials`: hôm nay **không một
+`Jenkinsfile` nào trong kho gọi tên một credential**. Nó chỉ được chọn trong ô SCM của từng
+job, nên tên là việc của người dựng job. Lượt chạy thật 23/09/2026 dùng `huypdk` và đi qua
 bình thường.
 
 Hai thứ còn lại **không** đi qua credentials của Jenkins, vì máy chủ này chỉ có bộ plugin lõi
@@ -178,8 +177,7 @@ vật — đừng gộp.
 | Cần | Ghi chú |
 |---|---|
 | Git · Pipeline | bộ lõi |
-| ~~Docker Pipeline~~ · ~~Kubernetes CLI~~ · ~~build-user-vars~~ | **không dùng cái nào.** `docker` CLI thay `docker.build`; `KUBECONFIG` thay `withKubeConfig`; `currentBuild.getBuildCauses()` thay `BUILD_USER_ID` |
-| Credentials Binding | Chỉ việc `nen-ban-do` của `vigov-van-hanh` dùng (11/10/2026); các job khác không cần |
+| ~~Docker Pipeline~~ · ~~Kubernetes CLI~~ · ~~build-user-vars~~ · ~~Credentials Binding~~ | **không dùng cái nào.** `docker` CLI thay `docker.build`; `KUBECONFIG` thay `withKubeConfig`; `currentBuild.getBuildCauses()` thay `BUILD_USER_ID` |
 
 Không xác định được người bấm ⇒ `vigov-deploy` **dừng** ở stage `Kiểm tham số`, trước khi
 chạm cụm. Job không có trigger tự động nên mọi lượt hợp lệ đều do một người đã đăng nhập bấm

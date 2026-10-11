@@ -289,11 +289,11 @@
     {
       "id": "viec-nen-ban-do-11-10",
       "menu": "ban-do-kinh-te-so",
-      "viec": "Job vigov-van-hanh có việc nen-ban-do (nhóm Bảo trì): dựng nền PMTiles bằng web-admin/scripts/build-basemap.sh trên máy build rồi tải lên <tiền tố>-public/basemap/<ngày>; không tự đổi BASEMAP-URL (chủ dự án 11/10/2026 cho chạy bằng job thay máy người vận hành).",
+      "viec": "Job vigov-van-hanh có việc nen-ban-do (nhóm Bảo trì): dựng nền PMTiles bằng web-admin/scripts/build-basemap.sh trên máy build rồi tải lên <tiền tố>-public/config/map/<ngày> bằng khoá MinIO có sẵn của comms-secrets (dự phòng platform-secrets) đọc qua kubeconfig của job — không user MinIO mới, không credential/plugin Jenkins mới (chủ dự án 11/10/2026). Không tự đổi BASEMAP-URL.",
       "trang_thai": "dang_lam",
-      "bang_chung": "bf6f44c1: unittest deploy/van-hanh 43 OK, make buildfiles PASS, bash -n OK. Chưa chạy trên Jenkins thật.",
+      "bang_chung": "bf6f44c1 + commit này: unittest deploy/van-hanh 44 OK, make buildfiles PASS, ops.py basemap-tools nhận 2 checksum đã ghim (pmtiles digest GitHub, mc .sha256sum GitHub). Chưa chạy trên Jenkins thật.",
       "no_confirm": [],
-      "tiep_theo": "Người vận hành: (1) MinIO user + policy basemap/* (deploy/van-hanh/README.md mục Nền bản đồ); (2) credential Jenkins vigov-minio-basemap; (3) điền PMTILES_SHA256, MC_SHA256, kiểm MC_RELEASE trong deploy/van-hanh/ops.py rồi commit; (4) duyệt lại script form; (5) chạy thử CHAY_THU trên staging rồi chạy thật; (6) sua-configmap BASEMAP-URL staging → kiểm chủ quyền có ký → prod. Chưa kiểm máy build ra được github.com, dl.min.io, protomaps, endpoint MinIO công khai. Đổi sang xong sau lượt chạy thật đầu tiên."
+      "tiep_theo": "Người vận hành: (1) duyệt lại script form (In-process Script Approval); (2) chạy nen-ban-do MT=staging, bật chạy thử, rồi chạy thật; (3) sua-configmap BASEMAP-URL staging theo giá trị job in ra → kiểm chủ quyền có ký → prod. Rủi ro chưa kiểm: máy build ra được github.com và các host Protomaps; endpoint MinIO công khai nhận tải lên vài GB; policy khoá comms phủ config/map/* (nếu bị từ chối, job in dòng policy cần thêm). Đổi sang xong sau lượt chạy thật đầu tiên. web-admin/src/lib/may-chu/basemap.ts:53 còn ví dụ /basemap/<ngày> trong câu báo lỗi vận hành."
     }
   ]
 }

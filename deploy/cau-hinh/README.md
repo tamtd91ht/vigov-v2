@@ -118,7 +118,7 @@ bất biến 4), nên không tới pod qua `envFrom`: `deploy/base/web-admin/dep
 
 | Key | Bắt buộc | Là gì · lấy giá trị | Value |
 |---|---|---|---|
-| `BASEMAP-URL` | không — thiếu thì bản đồ phản ánh **không có nền** + một câu; web-admin vẫn chạy (ADR 0072 §Trả lời 09/10/2026) | Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến `/basemap/*` của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền: `kb/40-runbooks/basemap-pmtiles.md` | `https://<minio nội bộ>:<cổng>/<tiền tố>-public/basemap/<YYYYMMDD>` — https, không thông tin đăng nhập. **Không bao giờ** URL của OpenFreeMap hay host ngoài |
+| `BASEMAP-URL` | không — thiếu thì bản đồ phản ánh **không có nền** + một câu; web-admin vẫn chạy (ADR 0072 §Trả lời 09/10/2026) | Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến `/basemap/*` của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền: `kb/40-runbooks/basemap-pmtiles.md` | `https://<minio nội bộ>:<cổng>/<tiền tố>-public/config/map/<YYYYMMDD>` — https, không thông tin đăng nhập. **Không bao giờ** URL của OpenFreeMap hay host ngoài |
 
 Đổi key xong: chạy lại job `web-admin` (bước "Triển khai" ánh xạ key), hoặc
 `kubectl -n <namespace> rollout restart deploy/vigov-web-admin` nếu ánh xạ đã có.

@@ -138,7 +138,7 @@ Xã/tenant|gan-ten-mien|off|ghi|Làm ở platform-admin, chi tiết xã → tên
 Xã/tenant|gan-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Mini App (ADR 0066, 0070)
 Xã/tenant|dat-secret-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Đặt/đổi khoá bí mật (job cũ còn dat-secret-mini-app)
 Bảo trì|tao-tai-khoan-van-hanh|on|ghi|operatorctl create + 8 quyền ops.* — MẬT KHẨU TẠM IN VÀO LOG (giá chủ dự án chấp nhận 02/10/2026, như job cũ)
-Bảo trì|nen-ban-do|on|ghi|Dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO ở tiền tố MỚI basemap/<ngày>/ — KHÔNG đổi BASEMAP-URL; kiểm chủ quyền có ký trước (kb/40-runbooks/basemap-pmtiles.md)
+Bảo trì|nen-ban-do|on|ghi|Dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO ở tiền tố MỚI config/map/<ngày>/ — KHÔNG đổi BASEMAP-URL; kiểm chủ quyền có ký trước (kb/40-runbooks/basemap-pmtiles.md)
 Bảo trì|dung-clamav|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy, việc dung-clamav
 Bảo trì|mo-netpol-identity-zalo|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy
 Bảo trì|sua-env-deployment|off|ghi|Sửa env đặt thẳng trong Deployment (README mục 3) — chưa dựng; job cũ có bo-sung-cau-hinh-*
@@ -878,14 +878,15 @@ void taskOperatorAccount() {
 // chưa phải đưa vào dùng — đổi key chỉ sau kiểm chủ quyền có ký, bằng việc sua-configmap.
 //   · bucket, đích, BASEMAP-URL: ops.py plan_basemap() từ common-config của MT (có test)
 //   · pmtiles + mc: tải vào $WORKSPACE/.tools, kiểm SHA-256 GHIM trong ops.py; chưa ghim thì DỪNG
-//   · khoá MinIO: credential vigov-minio-basemap → tệp 0600 → MC_HOST_<alias> (không argv, không tệp
-//     cấu hình mc); `set +x` của shLib
+//   · khoá MinIO: cặp OBJECT_STORAGE_ACCESS_KEY/_SECRET_KEY CÓ SẴN của comms-secrets (comms đã ghi bucket
+//     public), thiếu thì platform-secrets — chủ dự án 11/10/2026: không user MinIO mới, không credential
+//     Jenkins. kubectl (kubeconfig của job) → tệp 0600 trong $WORKSPACE/.mc → MC_HOST_<alias>; không
+//     argv, không echo, không tệp cấu hình mc; `set +x` của shLib
 //   · $WORKSPACE/basemap, .tools, .mc xoá ở finally — vài GB trên máy build dùng chung
 // ─────────────────────────────────────────────────────────────────────────────────────────────
 void taskBasemap() {
   withEnv(["NGAY_NEN=${(params.NGAY_NEN ?: '').trim()}"]) {
     try {
-      withBasemapCredential {
         sh(shLib() + '''
           kubectl -n "$NS" get configmap common-config -o json > "$TMP_DIR/cm.json" || {
             echo "DỪNG: không đọc được configmap/common-config trong $NS. Không làm gì."; exit 1; }
@@ -897,13 +898,19 @@ void taskBasemap() {
           for c in bash curl sha256sum tar df find xargs sort; do
             command -v "$c" >/dev/null 2>&1 || { echo "DỪNG: máy build thiếu $c (build-basemap.sh cần). Không làm gì."; exit 1; }
           done
-          [ -n "${MINIO_AK:-}" ] && [ -n "${MINIO_SK:-}" ] || {
-            echo "DỪNG: credential vigov-minio-basemap rỗng — deploy/van-hanh/README.md §Nền bản đồ. Không làm gì."; exit 1; }
+          # Key NAMES only — values are read after dry_stop, straight into files.
+          : > "$TMP_DIR/keysrc.tsv"
+          for s in comms platform; do
+            kubectl -n "$NS" get secret "$s-secrets" -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}' 2>/dev/null \\
+              | tr ' ' '\\n' | sed "s/^/$s-secrets\\t/" >> "$TMP_DIR/keysrc.tsv" || true
+          done
+          KEY_SECRET=$(OPS basemap-key-source --present "$TMP_DIR/keysrc.tsv") || { echo "$KEY_SECRET"; exit 1; }
+          echo "Khoá MinIO: cặp OBJECT_STORAGE_ACCESS_KEY / OBJECT_STORAGE_SECRET_KEY của secret/$KEY_SECRET (không in giá trị)"
           # Proposal, not a measured figure: the cut is a few GB; a full disk breaks every job on this machine.
           free_kb=$(df -Pk "$WORKSPACE" | awk 'NR==2 {print $4}')
           [ "${free_kb:-0}" -ge 8388608 ] || {
             echo "DỪNG: $WORKSPACE còn $((${free_kb:-0} / 1048576)) GB trống — cần ít nhất 8 GB. Không làm gì."; exit 1; }
-          echo "Sẽ: tải pmtiles + mc (kiểm SHA-256 đã ghim) → dựng → tải lên $BM_BUCKET/basemap/$NGAY_NEN/. BASEMAP-URL KHÔNG đổi."
+          echo "Sẽ: tải pmtiles + mc (kiểm SHA-256 đã ghim) → dựng → tải lên $BM_BUCKET/config/map/$NGAY_NEN/. BASEMAP-URL KHÔNG đổi."
           dry_stop
 
           trap 'rm -rf "$WORKSPACE/.mc"; cleanup' EXIT
@@ -929,32 +936,37 @@ void taskBasemap() {
           export MC_CONFIG_DIR="$WORKSPACE/.mc"
           echo "pmtiles: $(pmtiles version 2>&1 | head -1) · mc: $(mc --version 2>&1 | head -1)"
 
-          printf '%s' "$MINIO_AK" > "$TMP_DIR/ak"
-          printf '%s' "$MINIO_SK" > "$TMP_DIR/sk"
-          OPS mc-host --endpoint "$BM_ENDPOINT" --access-key-file "$TMP_DIR/ak" --secret-key-file "$TMP_DIR/sk" --out "$TMP_DIR/mchost"
-          rm -f "$TMP_DIR/ak" "$TMP_DIR/sk"
-          MC_HOST_vgbasemap=$(cat "$TMP_DIR/mchost"); export MC_HOST_vgbasemap
-          rm -f "$TMP_DIR/mchost"
-          unset MINIO_AK MINIO_SK
+          # Secret → pipe → 0600 file (umask 077 of shLib). Never a shell variable, never argv, never echoed.
+          K="$WORKSPACE/.mc/keys"
+          mkdir -p "$K"
+          kubectl -n "$NS" get secret "$KEY_SECRET" -o go-template='{{index .data "OBJECT_STORAGE_ACCESS_KEY"}}' | base64 -d > "$K/ak"
+          kubectl -n "$NS" get secret "$KEY_SECRET" -o go-template='{{index .data "OBJECT_STORAGE_SECRET_KEY"}}' | base64 -d > "$K/sk"
+          OPS mc-host --endpoint "$BM_ENDPOINT" --access-key-file "$K/ak" --secret-key-file "$K/sk" --out "$K/mchost"
+          rm -f "$K/ak" "$K/sk"
+          MC_HOST_vgbasemap=$(cat "$K/mchost"); export MC_HOST_vgbasemap
+          rm -rf "$K"
 
-          # Before an hour of building: the key works, the policy lists basemap/, the date is new.
+          # Before an hour of building: the key works, the policy lists config/map/, the date is new.
           # build-basemap.sh's own overwrite guard hides `mc ls` errors — a denied list would pass it.
-          if ! mc ls "vgbasemap/$BM_BUCKET/basemap/" > "$TMP_DIR/ls.txt" 2> "$TMP_DIR/ls.err"; then
+          if ! mc ls "vgbasemap/$BM_BUCKET/config/map/" > "$TMP_DIR/ls.txt" 2> "$TMP_DIR/ls.err"; then
             sed -e 's#//[^/@ ]*@#//***@#g' -e 's/^/   /' "$TMP_DIR/ls.err"
-            echo "DỪNG: không liệt kê được $BM_BUCKET/basemap/ qua $BM_ENDPOINT — khoá sai, policy thiếu s3:ListBucket"
-            echo "      trên basemap/*, hoặc máy build không tới được MinIO. Chưa dựng gì."
+            if grep -qi 'denied\\|forbidden\\|403' "$TMP_DIR/ls.err"; then
+              echo "DỪNG: policy MinIO của khoá trong secret/$KEY_SECRET không phủ $BM_BUCKET/config/map/* — người quản trị MinIO thêm s3:ListBucket (prefix config/map/*) + s3:GetObject + s3:PutObject trên arn:aws:s3:::$BM_BUCKET/config/map/* vào policy của user ấy (mc admin policy create/attach), rồi bấm lại. Chưa dựng gì."
+            else
+              echo "DỪNG: không liệt kê được $BM_BUCKET/config/map/ qua $BM_ENDPOINT — máy build không tới được MinIO, hoặc khoá trong secret/$KEY_SECRET sai. Chưa dựng gì."
+            fi
             exit 1
           fi
           if grep -q " $NGAY_NEN/\\$" "$TMP_DIR/ls.txt"; then
-            echo "DỪNG: $BM_BUCKET/basemap/$NGAY_NEN/ đã có — không ghi đè (tiền tố có thể đang được đọc). Chọn ngày khác."; exit 1
+            echo "DỪNG: $BM_BUCKET/config/map/$NGAY_NEN/ đã có — không ghi đè (tiền tố có thể đang được đọc). Chọn ngày khác."; exit 1
           fi
 
           bash web-admin/scripts/build-basemap.sh build --date "$NGAY_NEN" --out "$WORKSPACE/basemap"
           bash web-admin/scripts/build-basemap.sh upload --date "$NGAY_NEN" --out "$WORKSPACE/basemap" \
             --alias vgbasemap --bucket "$BM_BUCKET"
-          note "MinIO $BM_BUCKET/basemap/$NGAY_NEN/: tải nền bản đồ lên (CHƯA đưa vào dùng — BASEMAP-URL không đổi)"
+          note "MinIO $BM_BUCKET/config/map/$NGAY_NEN/: tải nền bản đồ lên (CHƯA đưa vào dùng — BASEMAP-URL không đổi)"
           DIR="$WORKSPACE/basemap/$NGAY_NEN"
-          if mc cat "vgbasemap/$BM_BUCKET/basemap/$NGAY_NEN/SHA256SUMS" 2>/dev/null | cmp -s - "$DIR/SHA256SUMS"; then
+          if mc cat "vgbasemap/$BM_BUCKET/config/map/$NGAY_NEN/SHA256SUMS" 2>/dev/null | cmp -s - "$DIR/SHA256SUMS"; then
             echo "✓ SHA256SUMS trên MinIO khớp bản vừa dựng"
           else
             echo "✗ SHA256SUMS trên MinIO KHÁC bản vừa dựng — KHÔNG đặt BASEMAP-URL; kiểm tay (runbook dòng 7)."; exit 1
@@ -973,32 +985,10 @@ void taskBasemap() {
           echo "2. Kiểm chủ quyền có ký trên staging — kb/40-runbooks/basemap-pmtiles.md. Một dòng không đạt: DỪNG."
           echo "3. Chỉ sau khi đã ký: sua-configmap ở MT=prod cùng giá trị. Không xoá tiền tố cũ (đường quay lui)."
         ''')
-      }
     } finally {
       // Several GB on a shared build machine, and .mc is the client's state dir — never left behind.
       sh 'rm -rf "$WORKSPACE/basemap" "$WORKSPACE/.tools" "$WORKSPACE/.mc"'
     }
-  }
-}
-
-// withCredentials needs the Credentials Binding plugin — the first credential any Jenkinsfile of this
-// repo names (deploy/README.md "Plugin và công cụ" predates it). Missing plugin or credential is a
-// sentence that says what to create, not a stack trace.
-void withBasemapCredential(Closure body) {
-  try {
-    withCredentials([usernamePassword(credentialsId: 'vigov-minio-basemap', usernameVariable: 'MINIO_AK', passwordVariable: 'MINIO_SK')]) {
-      body()
-    }
-  } catch (Throwable e) {
-    String m = e.message ?: ''
-    if (m.contains('No such DSL method')) {
-      error('nen-ban-do cần plugin "Credentials Binding" trên Jenkins controller — chưa cài. Cài rồi bấm lại (deploy/van-hanh/README.md §Nền bản đồ).')
-    }
-    if (e.getClass().getSimpleName() == 'CredentialNotFoundException' || m.contains('Could not find credentials')) {
-      error('Chưa có credential "vigov-minio-basemap" (Username with password: access key / secret key MinIO, ' +
-            'chỉ ghi được <bucket>/basemap/*). Tạo theo deploy/van-hanh/README.md §Nền bản đồ rồi bấm lại. Không làm gì.')
-    }
-    throw e
   }
 }
 
@@ -1231,7 +1221,7 @@ try {
       [esc(k), cm.containsKey(k) ? '<code>' + esc(cm[k]) + '</code>' : '<i>(chưa có)</i>']
     }
     sb << tbl(['Khoá common-config', 'Hiện tại'], rows)
-    sb << '<p>Điền NGAY_NEN (YYYYMMDD). Job tải lên bucket &lt;tiền tố&gt;-public qua OBJECT_STORAGE_PUBLIC_ENDPOINT, in giá trị BASEMAP-URL mới (gốc OBJECT_STORAGE_ENDPOINT) — KHÔNG đặt nó. Cần credential vigov-minio-basemap và SHA-256 đã ghim trong ops.py (README §Nền bản đồ).</p>'
+    sb << '<p>Điền NGAY_NEN (YYYYMMDD). Job tải lên bucket &lt;tiền tố&gt;-public qua OBJECT_STORAGE_PUBLIC_ENDPOINT, in giá trị BASEMAP-URL mới (gốc OBJECT_STORAGE_ENDPOINT) — KHÔNG đặt nó. Khoá MinIO: cặp có sẵn của comms-secrets (thiếu thì platform-secrets). Cần SHA-256 đã ghim trong ops.py (README §Nền bản đồ).</p>'
   }
 } catch (Throwable e) { sb << warn('không đọc được cụm', e) }
 return sb.append('</div>').toString()

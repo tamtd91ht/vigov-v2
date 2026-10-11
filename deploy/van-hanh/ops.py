@@ -772,26 +772,38 @@ BUCKET_PREFIX = re.compile(r"^[a-z0-9][a-z0-9.-]{0,53}[a-z0-9]$")
 HTTPS_ORIGIN = re.compile(r"^https://([A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:\d{1,5})?)/?$")
 
 # PINNED TOOLS. A binary fetched at run time and run with the MinIO write key is supply chain: an
-# unpinned download is whatever the server returns that day. The checksums could not be computed
-# where this was written (no download), so they hold UNPINNED and basemap_tools() REFUSES to run
-# until an operator copies each value from the OFFICIAL release page — deploy/van-hanh/README.md
-# §"Nền bản đồ". Changing a version means changing its checksum in the same edit.
+# unpinned download is whatever the server returns that day. Each value below was copied from the
+# OFFICIAL release on 11/10/2026 (sources in the `where` of each tool). basemap_tools() REFUSES to run
+# while a value is UNPINNED. Changing a version means changing its checksum in the same edit.
 UNPINNED = "UNPINNED-copy-the-sha256-from-the-official-release-page"
 PMTILES_VERSION = "1.31.2"          # = the version kb/40-runbooks/basemap-pmtiles.md names
-PMTILES_SHA256 = UNPINNED           # line `go-pmtiles_1.31.2_Linux_x86_64.tar.gz` of checksums.txt
+# GitHub asset digest of go-pmtiles_1.31.2_Linux_x86_64.tar.gz (the release has no checksums.txt).
+PMTILES_SHA256 = "3ed7dbf4ec2e6dfe5e25b6f70d1ffc932729f93c86db353bf514dd71010a312f"
 MC_RELEASE = "RELEASE.2025-08-13T08-35-41Z"
-MC_SHA256 = UNPINNED                # file mc.<MC_RELEASE>.sha256sum next to the binary
+# GitHub file mc.linux-amd64.<MC_RELEASE>.sha256sum (dl.min.io answers 410 Gone).
+MC_SHA256 = "01f866e9c5f9b87c2b09116fa5d7c06695b106242d829a8bb32990c00312e891"
 BASEMAP_TOOLS = [
     {"name": "pmtiles", "sha256": PMTILES_SHA256, "kind": "tar-gz:pmtiles",
      "url": f"https://github.com/protomaps/go-pmtiles/releases/download/v{PMTILES_VERSION}/"
             f"go-pmtiles_{PMTILES_VERSION}_Linux_x86_64.tar.gz",
-     "where": f"https://github.com/protomaps/go-pmtiles/releases/tag/v{PMTILES_VERSION} → checksums.txt, "
-              f"dòng go-pmtiles_{PMTILES_VERSION}_Linux_x86_64.tar.gz → hằng PMTILES_SHA256"},
+     # The release has NO checksums.txt (404, checked 11/10/2026): GitHub shows each asset's sha256 digest.
+     "where": f"https://github.com/protomaps/go-pmtiles/releases/tag/v{PMTILES_VERSION} → mục Assets, "
+              f"digest sha256 của go-pmtiles_{PMTILES_VERSION}_Linux_x86_64.tar.gz → hằng PMTILES_SHA256"},
+    # GitHub, not dl.min.io: dl.min.io answers 410 Gone for mc binaries (checked 11/10/2026).
     {"name": "mc", "sha256": MC_SHA256, "kind": "binary",
-     "url": f"https://dl.min.io/client/mc/release/linux-amd64/archive/mc.{MC_RELEASE}",
-     "where": f"https://dl.min.io/client/mc/release/linux-amd64/archive/mc.{MC_RELEASE}.sha256sum "
+     "url": f"https://github.com/minio/mc/releases/download/{MC_RELEASE}/mc.linux-amd64.{MC_RELEASE}",
+     "where": f"https://github.com/minio/mc/releases/download/{MC_RELEASE}/mc.linux-amd64.{MC_RELEASE}.sha256sum "
               f"(cột đầu) → hằng MC_SHA256"},
 ]
+
+# Where the existing MinIO key pair is read from (owner 11/10/2026: no new MinIO user, no Jenkins
+# credential). comms first — it already writes the public bucket (deploy/cau-hinh/README.md mục 1,
+# OBJECT_STORAGE_ACCESS_KEY row); platform second, for the same reason. Key names as envFrom reads them.
+BASEMAP_KEY_SOURCES = ["comms-secrets", "platform-secrets"]
+STORAGE_KEY_NAMES = ("OBJECT_STORAGE_ACCESS_KEY", "OBJECT_STORAGE_SECRET_KEY")
+# Object prefix inside the public bucket (owner 11/10/2026). The dated subfolder stays: a live prefix is
+# read in byte ranges, so a refresh is always a new folder, never an overwrite.
+BASEMAP_PREFIX = "config/map"
 
 
 def check_basemap_date(date: str) -> str:
@@ -831,7 +843,16 @@ def plan_basemap(cm: dict, date: str) -> dict:
     # Read by the web-admin POD: the internal endpoint (netpol allow-web-admin-egress-storage).
     internal = https_origin("OBJECT_STORAGE_ENDPOINT", cm["OBJECT_STORAGE_ENDPOINT"])
     return {"date": d, "bucket": bucket, "upload_endpoint": upload,
-            "dest": f"{bucket}/basemap/{d}/", "basemap_url": f"{internal}/{bucket}/basemap/{d}"}
+            "dest": f"{bucket}/{BASEMAP_PREFIX}/{d}/", "basemap_url": f"{internal}/{bucket}/{BASEMAP_PREFIX}/{d}"}
+
+
+def pick_key_source(present: dict) -> str:
+    """{secret name: set of key names} → the first Secret in BASEMAP_KEY_SOURCES holding BOTH keys."""
+    for s in BASEMAP_KEY_SOURCES:
+        if set(STORAGE_KEY_NAMES) <= present.get(s, set()):
+            return s
+    raise PlanError("không Secret nào trong " + ", ".join(BASEMAP_KEY_SOURCES) + " có đủ "
+                    + " + ".join(STORAGE_KEY_NAMES) + " — đặt cặp khoá MinIO của comms bằng việc sua-secret rồi bấm lại")
 
 
 def basemap_tools(tools: list = None) -> list:
@@ -853,7 +874,7 @@ def mc_host_url(endpoint: str, access_key: str, secret_key: str) -> str:
     origin = https_origin("OBJECT_STORAGE_PUBLIC_ENDPOINT", endpoint)
     for name, v in (("access key", access_key), ("secret key", secret_key)):
         if not v or any(ord(ch) < 32 for ch in v):
-            raise PlanError(f"credential vigov-minio-basemap: {name} rỗng hoặc có ký tự điều khiển")
+            raise PlanError(f"khoá MinIO đọc từ Secret: {name} rỗng hoặc có ký tự điều khiển")
     return "https://" + quote(access_key, safe="") + ":" + quote(secret_key, safe="") + "@" + origin[len("https://"):]
 
 
@@ -977,6 +998,9 @@ def main(argv=None) -> int:
 
     c = sub.add_parser("basemap-tools")
     c.add_argument("--out", required=True)
+
+    c = sub.add_parser("basemap-key-source")   # TSV `<secret>\t<key name>` (names only) → Secret name
+    c.add_argument("--present", required=True)
 
     c = sub.add_parser("mc-host")      # key FILES in, MC_HOST_ value FILE out — nothing printed
     c.add_argument("--endpoint", required=True)
@@ -1212,6 +1236,15 @@ def _run(a) -> int:
                                ["Đích", p["dest"]], ["BASEMAP-URL sẽ là", p["basemap_url"]]]))
         _write_private(a.out, f"BUCKET={p['bucket']}\nUPLOAD_ENDPOINT={p['upload_endpoint']}\n"
                               f"BASEMAP_URL={p['basemap_url']}\n")
+        return 0
+
+    if a.cmd == "basemap-key-source":
+        present = {}
+        for ln in _read(a.present).splitlines():
+            s, _, k = ln.partition("\t")
+            if s.strip() and k.strip():
+                present.setdefault(s.strip(), set()).add(k.strip())
+        print(pick_key_source(present))
         return 0
 
     if a.cmd == "basemap-tools":
