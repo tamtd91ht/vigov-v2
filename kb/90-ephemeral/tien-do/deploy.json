@@ -285,6 +285,15 @@
       "viec": "Job deploy (deploy/Jenkinsfile) có việc cap-quyen-van-hanh: cấp quyền ops.* cho tài khoản vận hành ĐÃ CÓ (mặc định ops.zalo_bot.manage, hoặc tat-ca-8-quyen). TAI_KHOAN_VAN_HANH nhận mã VH-xxxxx (cả viết thường), email đăng nhập (che theo core/privacy.MaskEmail rồi khớp operatorctl list — email không vào pod, không in log) hoặc tên hiển thị; 0 hoặc nhiều khớp thì DỪNG và in danh sách mã; quyền đã có thì bỏ qua. MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc. Lý do: tao-tai-khoan-van-hanh chỉ cấp quyền lúc tạo, nên tài khoản cũ không có khoá thứ tám và mục Zalo Bot của platform-admin ẩn.",
       "bang_chung": "commit 59d03c8a, 1f96b225, 8fdf9377. check_build PASS; phần khớp mã/email/tên chạy thử trên danh sách giả, dưới set -eu. Jenkins thật: lượt đầu đỏ ở bước kiểm tham số (giá trị không phải mã/email → thêm tên hiển thị), lượt #63 đỏ 'OP_CODE: unbound variable' (Jenkins không xuất env rỗng → đọc với ':-'). Chưa có lượt xanh.",
       "tiep_theo": "Người dùng chạy lại cap-quyen-van-hanh trên Jenkins; xanh thì đổi trang_thai = xong, ghi số lượt. Rồi người dùng đăng xuất/đăng nhập lại platform-admin để thấy mục Zalo Bot (service-platform ≥ 4526ff8d, đang chạy 95fffb3e). Job vận hành mới deploy/van-hanh/Jenkinsfile chưa có việc tương ứng."
+    },
+    {
+      "id": "viec-nen-ban-do-11-10",
+      "menu": "ban-do-kinh-te-so",
+      "viec": "Job vigov-van-hanh có việc nen-ban-do (nhóm Bảo trì): dựng nền PMTiles bằng web-admin/scripts/build-basemap.sh trên máy build rồi tải lên <tiền tố>-public/basemap/<ngày>; không tự đổi BASEMAP-URL (chủ dự án 11/10/2026 cho chạy bằng job thay máy người vận hành).",
+      "trang_thai": "dang_lam",
+      "bang_chung": "bf6f44c1: unittest deploy/van-hanh 43 OK, make buildfiles PASS, bash -n OK. Chưa chạy trên Jenkins thật.",
+      "no_confirm": [],
+      "tiep_theo": "Người vận hành: (1) MinIO user + policy basemap/* (deploy/van-hanh/README.md mục Nền bản đồ); (2) credential Jenkins vigov-minio-basemap; (3) điền PMTILES_SHA256, MC_SHA256, kiểm MC_RELEASE trong deploy/van-hanh/ops.py rồi commit; (4) duyệt lại script form; (5) chạy thử CHAY_THU trên staging rồi chạy thật; (6) sua-configmap BASEMAP-URL staging → kiểm chủ quyền có ký → prod. Chưa kiểm máy build ra được github.com, dl.min.io, protomaps, endpoint MinIO công khai. Đổi sang xong sau lượt chạy thật đầu tiên."
     }
   ]
 }
