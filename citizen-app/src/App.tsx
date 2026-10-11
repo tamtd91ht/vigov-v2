@@ -14,6 +14,7 @@ import {
   type ReopenWithPhoneResult,
   type SceneLocationResult,
   type ScenePhotoPickResult,
+  type ShareArticle,
   TrangXa,
   type ZaloFailure,
 } from "./cong-dan";
@@ -35,11 +36,14 @@ import {
 } from "./features/dang-nhap/current-location";
 import { moRaNgoai } from "./features/tinh-nang/mo-ra-ngoai";
 import {
-  layTenZalo,
   chooseScenePhotos,
+  minimiseMiniApp,
+  readRuntimeAppId,
+  readZaloProfile,
   type ScenePhotoPick,
   type SdkFailure,
   setCommuneActionBar,
+  shareLinkOnZalo,
   takeScenePhoto,
 } from "./features/tinh-nang/zalo-api";
 import { NhaCungCapPhien } from "./features/dang-nhap/kho-phien";
@@ -51,7 +55,7 @@ import {
   type ScreenId,
 } from "./features/company-intro/screens";
 import { cuonToiMoc } from "./lib/cuon-toi";
-import { type KetQuaDo, thamSoMoApp, thamSoXa } from "./lib/launch-params";
+import { type KetQuaDo, thamSo, thamSoMoApp, thamSoXa } from "./lib/launch-params";
 import { XA_CO_DINH } from "./lib/xa-co-dinh";
 
 /**
@@ -264,6 +268,9 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
   // `feedbackDraftStore` — the single-key store (ADR 0050 #7): a separate App ID, a separate origin, one commune.
   // The shared app's QR path (`QrCommuneApp`) gets a store keyed per commune host instead; its intro gets none
   // (`ranh-gioi-hai-nua.test.ts` §3b).
+  const [appId] = useState(readRuntimeAppId);
+  const [initialArticle] = useState(() => sharedArticleId(thamSo(thamSoMoApp())));
+  const shareArticle = useMemo(() => (appId === null ? undefined : shareCommuneArticle(appId)), [appId]);
   return (
     <TrangXa
       ten_mien={ten_mien}
@@ -274,9 +281,53 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
       openSession={openCommuneAppSession}
       openVideo={openCommuneVideo}
       openLink={openCommuneLink}
+      openDossierPortal={openDossierPortal}
+      shareArticle={shareArticle}
+      minimize={appId === null ? undefined : minimiseCommuneApp}
+      initialArticle={initialArticle ?? undefined}
     />
   );
 }
+
+/**
+ * THE SHARE LINK OF ONE ARTICLE (ADR 0047 G6: `zalo.me/s/<App ID>` with the article's id; owner 11/10/2026) — the
+ * RUNNING app's id (`readRuntimeAppId`, never a baked one: one bundle can be pushed to several App IDs), and the
+ * article's PUBLIC id. Nothing of the citizen's is in it. Built only in `AppRieng`: there the App ID IS the commune,
+ * so the link reopens this commune. The shared app's QR path gets no share — its App ID opens the ViHAT intro, and
+ * a forwarded link must not carry a trusted commune hint (`lib/launch-params.ts` `NGUON_CHON_SAN`). PURE.
+ */
+export function articleShareLink(appId: string, articleId: string): string {
+  return `https://zalo.me/s/${appId}/?${SHARED_ARTICLE_PARAM}=${encodeURIComponent(articleId)}`;
+}
+
+/** The launch parameter a shared article link carries (`articleShareLink`, `sharedArticleId`). */
+const SHARED_ARTICLE_PARAM = "article";
+
+/**
+ * The article a launch link names, or `null`. CLIENT-SUPPLIED: it only chooses which PUBLIC article of THIS build's
+ * commune is opened first — the read is the same public one a tap makes, and a wrong id is that screen's own "not
+ * found". Bounded and plain (no spaces, ≤ 64 characters) so nothing odd reaches the request. PURE.
+ */
+export function sharedArticleId(params: Record<string, string>): string | null {
+  const id = (params[SHARED_ARTICLE_PARAM] ?? "").trim();
+  return /^[A-Za-z0-9_-]{1,64}$/.test(id) ? id : null;
+}
+
+const shareCommuneArticle =
+  (appId: string): ShareArticle =>
+  async (articleId) =>
+    (await shareLinkOnZalo(articleShareLink(appId, articleId))).kieu === "xong";
+
+/** The minimise bubble's action (`minimizeApp`). A failure leaves the app open — nothing else to say. */
+const minimiseCommuneApp = (): void => {
+  void minimiseMiniApp();
+};
+
+/**
+ * "Tra cứu hồ sơ" (owner 11/10/2026): the national public-service portal, through the one declared door under the
+ * destination `"dich-vu-cong"` — whose host the door pins (`mo-ra-ngoai.ts`). Both commune hosts inject it.
+ */
+const openDossierPortal: OpenExternal = (url) => moRaNgoai("dich-vu-cong", url);
 
 /**
  * THE LINK OPENER of the commune's own app (ADR 0067 §1, §5; owner 01/10/2026): a link inside an article's body,
@@ -439,14 +490,17 @@ const pickCommuneScenePhotos: PickScenePhotos = async (source, max) =>
  * chuỗi rỗng giả làm tên. Zalo refused with a code → that code goes down too (`toZaloFailure`).
  */
 const layTenChoXa: LayTenZalo = async (mode) => {
-  const kq = await layTenZalo(mode === "ask");
+  const kq = await readZaloProfile(mode === "ask");
   if (kq.kieu === "khong-lay-duoc") {
     const zalo = toZaloFailure(kq.failure);
     return zalo === undefined ? { kieu: "khong-lay-duoc" } : { kieu: "khong-lay-duoc", zalo };
   }
   if (kq.kieu !== "xong") return { kieu: kq.kieu };
-  const ho_ten = kq.du_lieu.trim();
-  return ho_ten === "" ? { kieu: "khong-lay-duoc" } : { kieu: "xong", ho_ten };
+  const ho_ten = kq.du_lieu.name.trim();
+  if (ho_ten === "") return { kieu: "khong-lay-duoc" };
+  // The profile picture of the same answer, for Cá nhân (owner 11/10/2026) — only an https address goes down.
+  const avatar = kq.du_lieu.avatar.trim();
+  return avatar.startsWith("https://") ? { kieu: "xong", ho_ten, avatarUrl: avatar } : { kieu: "xong", ho_ten };
 };
 
 /**
@@ -596,6 +650,8 @@ export function openSharedAppSession(
 function QrCommuneApp({ ten_mien }: { ten_mien: string }) {
   const openSession = useMemo(() => openSharedAppSession(ten_mien), [ten_mien]);
   const draftStore = useMemo(() => sharedAppDraftStore(ten_mien), [ten_mien]);
+  // Zalo sets the App ID before our code runs: present = inside Zalo, where the minimise bubble has somewhere to go.
+  const [insideZalo] = useState(() => readRuntimeAppId() !== null);
   return (
     <TrangXa
       ten_mien={ten_mien}
@@ -606,6 +662,8 @@ function QrCommuneApp({ ten_mien }: { ten_mien: string }) {
       openSession={openSession}
       openVideo={openCommuneVideo}
       openLink={openCommuneLink}
+      openDossierPortal={openDossierPortal}
+      minimize={insideZalo ? minimiseCommuneApp : undefined}
       onCommuneShown={nameNativeBar}
     />
   );

@@ -28,7 +28,7 @@ vi.mock("../api/dia-chi-vigov", () => ({
 import { listScenePhotos, listVerificationPhotos, traCuuPhieu } from "../api/goi-vigov"; // vi-name-ok: existing export, not renamed (rule 12 #3)
 import { type PhieuCuaToi, verificationPhotosAddress } from "../api/hop-dong-phan-anh"; // vi-name-ok: existing type, not renamed (rule 12 #3)
 
-import { SCENE_PHOTOS, VERIFICATION_PHOTOS } from "./noi-dung";
+import { SCENE_PHOTOS, VERIFICATION_PHOTOS, XA_PA } from "./noi-dung";
 import { PetitionBody } from "./PhanAnhAppXa";
 import { ownPhotoListOutcome, VerificationPhotosView } from "./scene-photos";
 
@@ -438,45 +438,58 @@ describe("mounted — the detail and the lookup screen (both render `PetitionBod
   const body = (over: Partial<PhieuCuaToi> = {}, onSessionLost = vi.fn()) =>
     createElement(PetitionBody, { petition: { ...PETITION, ...over }, photos: { onSessionLost } });
 
-  it("an empty 'after' list: no 'Sau khi xử lý', and the citizen's own block keeps its own title", async () => {
+  // The prototype's `BeforeAfter` (owner 11/10/2026): ONE block "Hình ảnh trước và sau khi xử lý", two columns
+  // labelled "Trước" / "Sau" in words, an empty column said in words — and the block only once a photo exists.
+  it("own photos and an empty 'after' list: the one block, 'Chưa có ảnh sau' in the 'Sau' column", async () => {
     routeFetch({
       [AFTER_URL]: () => answer(200, { items: [] }),
       [OWN_URL]: () => answer(200, { items: [link("own-1")] }),
     });
     const { host, unmount } = await mount(body());
     const text = host.textContent;
+    expect(text).toContain(XA_PA.before_after_title);
+    expect(text).toContain(XA_PA.after_empty);
     expect(text).not.toContain(VERIFICATION_PHOTOS.after_title);
-    expect(text).not.toContain(VERIFICATION_PHOTOS.before_title);
-    expect(text).toContain(SCENE_PHOTOS.own_title);
+    expect(elements(host, "IMG").map((i) => i.getAttribute("alt"))).toEqual([SCENE_PHOTOS.photo_alt(1)]);
     expect(calls.some((c) => c.url === AFTER_URL)).toBe(true); // the server decided, not the app
     await unmount();
   });
 
-  it("with photos: 'Trước khi xử lý' above 'Sau khi xử lý', each image described in words", async () => {
+  it("with photos: 'Trước' before 'Sau', each image described in words, each photo drawn once", async () => {
     routeFetch({
       [AFTER_URL]: () => answer(200, { items: [link("after-1"), link("after-2")] }),
       [OWN_URL]: () => answer(200, { items: [link("own-1")] }),
     });
     const { host, unmount } = await mount(body({ trang_thai: "da-dong" }));
     const text = host.textContent;
-    expect(text).toContain(VERIFICATION_PHOTOS.before_title);
-    expect(text).toContain(VERIFICATION_PHOTOS.after_title);
-    expect(text.indexOf(VERIFICATION_PHOTOS.before_title)).toBeLessThan(text.indexOf(VERIFICATION_PHOTOS.after_title));
+    expect(text).toContain(XA_PA.before_after_title);
+    expect(text.indexOf(XA_PA.before_label)).toBeLessThan(text.indexOf(XA_PA.after_label, text.indexOf(XA_PA.before_after_title) + XA_PA.before_after_title.length));
     expect(text).not.toContain(SCENE_PHOTOS.own_title);
     const alts = elements(host, "IMG").map((i) => i.getAttribute("alt"));
     expect(alts).toEqual([SCENE_PHOTOS.photo_alt(1), VERIFICATION_PHOTOS.photo_alt(1), VERIFICATION_PHOTOS.photo_alt(2)]);
     await unmount();
   });
 
-  it("'after' photos with no own photos: only 'Sau khi xử lý' — no empty 'before' frame", async () => {
+  it("'after' photos with no own photos: the 'Trước' column says so in words, the photo stands in 'Sau'", async () => {
     routeFetch({
       [AFTER_URL]: () => answer(200, { items: [link("after-1")] }),
       [OWN_URL]: () => answer(200, { items: [] }),
     });
     const { host, unmount } = await mount(body());
-    expect(host.textContent).toContain(VERIFICATION_PHOTOS.after_title);
-    expect(host.textContent).not.toContain(VERIFICATION_PHOTOS.before_title);
+    expect(host.textContent).toContain(XA_PA.before_after_title);
+    expect(host.textContent).toContain(XA_PA.before_empty);
     expect(elements(host, "IMG")).toHaveLength(1);
+    await unmount();
+  });
+
+  it("no photo on either side: no block at all — never an empty frame", async () => {
+    routeFetch({
+      [AFTER_URL]: () => answer(200, { items: [] }),
+      [OWN_URL]: () => answer(200, { items: [] }),
+    });
+    const { host, unmount } = await mount(body());
+    expect(host.textContent).not.toContain(XA_PA.before_after_title);
+    expect(elements(host, "IMG")).toHaveLength(0);
     await unmount();
   });
 

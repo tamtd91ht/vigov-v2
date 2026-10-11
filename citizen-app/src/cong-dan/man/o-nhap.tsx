@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import { BieuTuong } from "./BieuTuong";
+
 /**
  * TỆP DUY NHẤT CỦA NỬA NHÀ NƯỚC CÓ Ô NHẬP — `phase1-collects-nothing.test.ts` miễn lệnh cấm
  * `<input|textarea>` cho ĐÚNG tệp này (24/09/2026), cạnh `features/yeu-cau/OGhiChu.tsx`.
@@ -23,7 +25,35 @@ type ChungProps = {
   gia_tri: string;
   toi_da: number;
   onDoi: (gia_tri: string) => void;
+  /**
+   * The prototype's grey example inside the box (commune app, owner 11/10/2026). NEVER instead of the label:
+   * the label stays (above, or `labelHidden` for a screen reader where the prototype shows a heading instead).
+   */
+  placeholder?: string;
+  /**
+   * The label is read by screen readers only (`xa-sr-only`) — ONLY where a visible heading right above the box
+   * already says what it asks (the prototype's address block, the directory search with its magnifier).
+   */
+  labelHidden?: boolean;
 };
+
+/** The label line: visible above the box, or screen-reader-only (`labelHidden`). */
+function Label(props: { id: string; nhan: string; hidden?: boolean; requiredMark?: boolean }) {
+  return (
+    <label className={props.hidden === true ? "xa-sr-only" : "cd-o__nhan"} htmlFor={props.id}>
+      {props.nhan}
+      {/* The required mark of the prototype (`NewFeedbackPage.tsx:333`) — decoration: `aria-required` says it. */}
+      {props.requiredMark === true && (
+        <>
+          {" "}
+          <span className="xa-required-mark" aria-hidden="true">
+            *
+          </span>
+        </>
+      )}
+    </label>
+  );
+}
 
 /**
  * `required`: OPTIONAL — only the typed-contact path asks for it (ADR 0080: name and number are the commune's
@@ -32,14 +62,13 @@ type ChungProps = {
  * replaces the button just pressed, and without it focus would fall back to the page.
  */
 export function ONhapDong(
-  props: ChungProps & { kieu_ban_phim?: "text" | "tel"; required?: boolean; autoFocus?: boolean },
+  props: ChungProps & { kieu_ban_phim?: "text" | "tel" | "numeric"; required?: boolean; autoFocus?: boolean },
 ) {
   const id_goi_y = props.goi_y ? `${props.id}-goi-y` : undefined;
+  const keyboard = props.kieu_ban_phim ?? "text";
   return (
     <div className="cd-o">
-      <label className="cd-o__nhan" htmlFor={props.id}>
-        {props.nhan}
-      </label>
+      <Label id={props.id} nhan={props.nhan} hidden={props.labelHidden} />
       {props.goi_y && (
         <p className="cd-o__goi-y" id={id_goi_y}>
           {props.goi_y}
@@ -48,8 +77,8 @@ export function ONhapDong(
       <input
         className="cd-o__nhap"
         id={props.id}
-        type={props.kieu_ban_phim === "tel" ? "tel" : "text"}
-        inputMode={props.kieu_ban_phim === "tel" ? "tel" : "text"}
+        type={keyboard === "tel" ? "tel" : "text"}
+        inputMode={keyboard}
         autoComplete="off"
         autoCapitalize="off"
         spellCheck={false}
@@ -57,6 +86,7 @@ export function ONhapDong(
         required={props.required}
         aria-required={props.required}
         autoFocus={props.autoFocus === true}
+        placeholder={props.placeholder}
         value={props.gia_tri}
         aria-describedby={id_goi_y}
         onChange={(e) => props.onDoi(e.target.value)}
@@ -84,7 +114,17 @@ export function fitToContent(box: HTMLTextAreaElement): void {
  * `autoGrow`: OPTIONAL, same single caller (owner, 08/10/2026): three lines to start, growing with the text up to
  * ten (`fitToContent`). The shared app's form and the rating keep their six-line box.
  */
-export function ONhapDoan(props: ChungProps & { bat_buoc?: boolean; autoFocus?: boolean; autoGrow?: boolean }) {
+export function ONhapDoan(
+  props: ChungProps & {
+    bat_buoc?: boolean;
+    autoFocus?: boolean;
+    autoGrow?: boolean;
+    /** Lines the box starts with (default: 3 growing, 6 fixed). The prototype's writing box starts at 5. */
+    rows?: number;
+    /** Show the prototype's red "*" after the label of a required box. */
+    requiredMark?: boolean;
+  },
+) {
   const id_goi_y = props.goi_y ? `${props.id}-goi-y` : undefined;
   const autoGrow = props.autoGrow === true;
   const box = useRef<HTMLTextAreaElement>(null);
@@ -94,9 +134,7 @@ export function ONhapDoan(props: ChungProps & { bat_buoc?: boolean; autoFocus?: 
   }, [autoGrow, props.gia_tri]);
   return (
     <div className="cd-o">
-      <label className="cd-o__nhan" htmlFor={props.id}>
-        {props.nhan}
-      </label>
+      <Label id={props.id} nhan={props.nhan} hidden={props.labelHidden} requiredMark={props.requiredMark} />
       {props.goi_y && (
         <p className="cd-o__goi-y" id={id_goi_y}>
           {props.goi_y}
@@ -108,10 +146,11 @@ export function ONhapDoan(props: ChungProps & { bat_buoc?: boolean; autoFocus?: 
         id={props.id}
         autoComplete="off"
         maxLength={props.toi_da}
-        rows={autoGrow ? 3 : 6}
+        rows={props.rows ?? (autoGrow ? 3 : 6)}
         required={props.bat_buoc}
         aria-required={props.bat_buoc}
         autoFocus={props.autoFocus === true}
+        placeholder={props.placeholder}
         value={props.gia_tri}
         aria-describedby={id_goi_y}
         onChange={(e) => {
@@ -121,5 +160,66 @@ export function ONhapDoan(props: ChungProps & { bat_buoc?: boolean; autoFocus?: 
         }}
       />
     </div>
+  );
+}
+
+/**
+ * THE DIRECTORY SEARCH — the prototype's box (`DirectoryPage.tsx:48-61`): a magnifier inside the field, the label
+ * for screen readers only, the example as placeholder. What is typed filters the loaded list on the phone and goes
+ * nowhere (`DanhBaXa.tsx` `locCanBo`).
+ */
+export function OTimKiem(props: { id: string; nhan: string; placeholder: string; gia_tri: string; toi_da: number; onDoi: (v: string) => void }) {
+  return (
+    <div className="xa-search">
+      <label className="xa-sr-only" htmlFor={props.id}>
+        {props.nhan}
+      </label>
+      <span className="xa-search__icon" aria-hidden="true">
+        <BieuTuong ten="search" co={22} />
+      </span>
+      <input
+        className="xa-search__input"
+        id={props.id}
+        type="search"
+        inputMode="search"
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        maxLength={props.toi_da}
+        placeholder={props.placeholder}
+        value={props.gia_tri}
+        onChange={(e) => props.onDoi(e.target.value)}
+      />
+    </div>
+  );
+}
+
+/**
+ * THE BROADCAST BAR'S SEEK (owner 11/10/2026: the prototype's `<input type="range">`, `BroadcastPage.tsx:265`). It
+ * lives in THIS file because it is an input control (`phase1-collects-nothing.test.ts`), though it takes no text:
+ * the value is a position in seconds and never leaves the screen. Its name and its value are said in words
+ * (`aria-label`, `aria-valuetext`), and the track is a full 44px touch target (`styles.css` `.xa-seek`).
+ */
+export function SeekBar(props: {
+  label: string;
+  valueText: string;
+  max: number;
+  value: number;
+  disabled?: boolean;
+  onSeek: (seconds: number) => void;
+}) {
+  return (
+    <input
+      className="xa-seek"
+      type="range"
+      min={0}
+      max={Math.max(props.max, 0)}
+      step={1}
+      value={Math.min(Math.max(Math.round(props.value), 0), Math.max(props.max, 0))}
+      disabled={props.disabled}
+      aria-label={props.label}
+      aria-valuetext={props.valueText}
+      onChange={(e) => props.onSeek(Number(e.target.value))}
+    />
   );
 }

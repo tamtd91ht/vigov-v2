@@ -34,12 +34,15 @@ import {
 import { type LanGui, taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not renamed (rule 12 #3)
 import type { ReopenWithPhone } from "../api/mo-phien-vigov";
 
-import { RATING, RATING_ERROR } from "./noi-dung";
+import { type PhoneVerificationWords, RATING, RATING_ERROR, type RatingWords, SHARED_PHONE_WORDS } from "./noi-dung";
 import { ONhapDoan } from "./o-nhap"; // vi-name-ok: existing export, not renamed (rule 12 #3)
 import { PhoneVerificationPanel, usePhoneVerification } from "./phone-verification";
 import { StarPicker } from "./star-picker";
 
 export type RatingErrorBranch = keyof typeof RATING_ERROR;
+
+/** The shared app's words — the block's default voice. */
+const SHARED_RATING: RatingWords = RATING;
 
 /** What one call's result means for this block. PURE, so each branch is tested without a DOM. */
 export type RatingOutcome =
@@ -119,9 +122,14 @@ export function RatingPanel(props: {
   onRateAgain: () => void;
   /** The phone-verification panel, when a 403 `chua_xac_thuc_so` asked for it. */
   phone?: ReactNode;
+  /** The block's words — `RATING` (the shared app) unless a screen passes its own voice (`COMMUNE_RATING`). */
+  words?: RatingWords;
+  /** The stars' drawn size (`StarPicker`). */
+  starSize?: number;
 }) {
   const p = props.petition;
   if (!showsRating(p)) return null;
+  const RATING = props.words ?? SHARED_RATING;
   const picking = isRateable(p.trang_thai) && props.open;
   const err = props.error === null ? null : RATING_ERROR[props.error];
 
@@ -138,7 +146,7 @@ export function RatingPanel(props: {
         </div>
       )}
 
-      {p.rating !== null && !picking && <StarPicker stars={p.rating} />}
+      {p.rating !== null && !picking && <StarPicker stars={p.rating} size={props.starSize} hint={RATING.tap_a_star} />}
       {p.rating !== null && <p className="cd-cau">{RATING.rated(p.rating)}</p>}
 
       {isRateable(p.trang_thai) && !props.open && (
@@ -150,10 +158,11 @@ export function RatingPanel(props: {
       {picking && (
         <>
           <p className="cd-ghi-chu">{RATING.why}</p>
-          <StarPicker stars={props.stars} onPick={props.onPick} />
+          <StarPicker stars={props.stars} onPick={props.onPick} size={props.starSize} hint={RATING.tap_a_star} />
           <ONhapDoan
             id="cd-nhan-xet"
             nhan={RATING.comment_label}
+            placeholder={RATING.comment_placeholder}
             gia_tri={props.comment}
             toi_da={RATING_COMMENT_MAX_LEN}
             onDoi={props.onComment}
@@ -209,6 +218,10 @@ export function PetitionRating(props: {
   reopenWithPhone?: ReopenWithPhone;
   /** Passed to the phone panel — the commune's own app names its own route (`PhoneVerificationPanel`). */
   zaloAsks?: string;
+  /** The commune app's voice (owner 11/10/2026): its rating words, its phone words, its star size. */
+  words?: RatingWords;
+  phoneWords?: PhoneVerificationWords;
+  starSize?: number;
 }) {
   const { petition } = props;
   const phone = usePhoneVerification(props.reopenWithPhone);
@@ -287,6 +300,8 @@ export function PetitionRating(props: {
         if (!sending && attempt !== null) void send(attempt);
       }}
       onReload={props.onReload}
+      words={props.words}
+      starSize={props.starSize}
       onRateAgain={() => {
         setNotice(null);
         setOpen(true);
@@ -297,6 +312,7 @@ export function PetitionRating(props: {
             state={phone.state}
             task="rate"
             zaloAsks={props.zaloAsks}
+            words={props.phoneWords ?? SHARED_PHONE_WORDS}
             onAllow={() => void phone.allow()}
             onDecline={phone.decline}
           />

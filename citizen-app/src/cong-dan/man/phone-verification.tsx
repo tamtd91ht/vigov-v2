@@ -31,10 +31,9 @@ import {
 } from "../api/mo-phien-vigov";
 
 import {
-  PHONE_VERIFICATION,
-  PHONE_VERIFICATION_TASK,
   type PhoneVerificationTask,
-  TYPED_CONTACT,
+  type PhoneVerificationWords,
+  SHARED_PHONE_WORDS,
   zaloFailureSentence,
   zaloSupportCode,
 } from "./noi-dung";
@@ -152,8 +151,10 @@ export function phoneVerificationMessage(
   outcome: PhoneVerificationStop,
   task: PhoneVerificationTask,
   zalo?: ZaloFailure,
+  /** The voice: the shared app's by default, `COMMUNE_PHONE_WORDS` in the commune app ("bà con"). */
+  PHONE_VERIFICATION: PhoneVerificationWords = SHARED_PHONE_WORDS,
 ): string {
-  const t = PHONE_VERIFICATION_TASK[task];
+  const t = PHONE_VERIFICATION.task[task];
   if (outcome === "thu-lai" && zalo !== undefined) {
     return PHONE_VERIFICATION.zalo_failed(zaloFailureSentence(zalo), t, zalo.transient);
   }
@@ -195,6 +196,8 @@ export function PhoneVerificationPanel(props: {
   focusId?: string;
   /** Màn gửi: nói thêm rằng nội dung đang viết vẫn còn. */
   draftKept?: boolean;
+  /** The voice — the shared app's by default; the commune app passes `COMMUNE_PHONE_WORDS` ("bà con"). */
+  words?: PhoneVerificationWords;
   /**
    * Where the number goes, said before Zalo's dialog. Default: the shared app's route (through
    * `vihat-miniapp`). The commune's own app passes `COMMUNE_APP_SESSION.zalo_asks`: its reopen goes straight
@@ -210,6 +213,7 @@ export function PhoneVerificationPanel(props: {
   onManual?: () => void;
 }) {
   const { state } = props;
+  const PHONE_VERIFICATION = props.words ?? SHARED_PHONE_WORDS;
   const draft = props.draftKept === true ? <p className="cd-ghi-chu">{PHONE_VERIFICATION.draft_kept}</p> : null;
 
   if (state.kieu === "dang-xac-nhan") {
@@ -226,7 +230,7 @@ export function PhoneVerificationPanel(props: {
     return (
       <div className="cd-buoc">
         <p className="cd-loi" role="alert" id={props.focusId} tabIndex={-1}>
-          {phoneVerificationMessage(state.outcome, props.task, state.zalo)}
+          {phoneVerificationMessage(state.outcome, props.task, state.zalo, PHONE_VERIFICATION)}
         </p>
         {supportCode !== null && <p className="cd-ghi-chu">{supportCode}</p>}
         {draft}
@@ -237,9 +241,9 @@ export function PhoneVerificationPanel(props: {
         )}
         {props.onManual !== undefined && phoneVerificationOffersManual(state.outcome, state.zalo) && (
           <>
-            <p className="cd-cau">{TYPED_CONTACT.offer}</p>
+            <p className="cd-cau">{PHONE_VERIFICATION.typed_contact_offer}</p>
             <button type="button" className="cd-nut" onClick={props.onManual}>
-              {TYPED_CONTACT.button}
+              {PHONE_VERIFICATION.typed_contact_button}
             </button>
           </>
         )}

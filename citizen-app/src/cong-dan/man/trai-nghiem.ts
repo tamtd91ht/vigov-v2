@@ -29,7 +29,11 @@ import { groupOf, STATUS_GROUP_LABEL, type StatusFilter, type StatusGroup, STEP_
  * thoại, nên không điền sẵn được ô "Số điện thoại" — bà con tự gõ số nếu muốn xã gọi lại.
  */
 export type KetQuaLayTen =
-  | { readonly kieu: "xong"; readonly ho_ten: string }
+  /**
+   * `avatarUrl`: the Zalo profile picture the SAME `getUserInfo` answer carried (owner 11/10/2026: Cá nhân shows
+   * it, as the prototype) — display only, never sent anywhere by this app. Absent = none, or not an https URL.
+   */
+  | { readonly kieu: "xong"; readonly ho_ten: string; readonly avatarUrl?: string }
   | { readonly kieu: "tu-choi" }
   | { readonly kieu: "ngoai-zalo" }
   /** `zalo`: Zalo refused with a code (`ZaloFailure`). Absent = nothing measured (empty name, a throw). */
@@ -46,7 +50,14 @@ export type NameAtEntry =
   | { readonly kind: "needs-consent" }
   | { readonly kind: "asking" }
   /** `zalo`: the ask was refused by Zalo with a code — the home screen says so (`TrangXa`). */
-  | { readonly kind: "settled"; readonly name: string | null; readonly zalo?: ZaloFailure };
+  | { readonly kind: "settled"; readonly name: string | null; readonly zalo?: ZaloFailure; readonly avatarUrl?: string };
+
+/** `settled` with the name — and the picture when the answer carried one (never an empty one). PURE. */
+function settledWith(kq: Extract<KetQuaLayTen, { kieu: "xong" }>): NameAtEntry {
+  return kq.avatarUrl !== undefined && kq.avatarUrl !== ""
+    ? { kind: "settled", name: kq.ho_ten, avatarUrl: kq.avatarUrl }
+    : { kind: "settled", name: kq.ho_ten };
+}
 
 /**
  * After the silent check. PURE. Outside Zalo there is nothing to ask, so it settles on `null` instead of
@@ -54,7 +65,7 @@ export type NameAtEntry =
  * the entry card: asking is the only way the name can still arrive.
  */
 export function afterNameCheck(kq: KetQuaLayTen): NameAtEntry {
-  if (kq.kieu === "xong") return { kind: "settled", name: kq.ho_ten };
+  if (kq.kieu === "xong") return settledWith(kq);
   if (kq.kieu === "ngoai-zalo") return { kind: "settled", name: null };
   return { kind: "needs-consent" };
 }
@@ -64,7 +75,7 @@ export function afterNameCheck(kq: KetQuaLayTen): NameAtEntry {
  * (a code, not the citizen's "Từ chối") is kept, so the screen can name it instead of going quiet.
  */
 export function afterNameAsk(kq: KetQuaLayTen): NameAtEntry {
-  if (kq.kieu === "xong") return { kind: "settled", name: kq.ho_ten };
+  if (kq.kieu === "xong") return settledWith(kq);
   if (kq.kieu === "khong-lay-duoc" && kq.zalo !== undefined) return { kind: "settled", name: null, zalo: kq.zalo };
   return { kind: "settled", name: null };
 }
@@ -72,6 +83,11 @@ export function afterNameAsk(kq: KetQuaLayTen): NameAtEntry {
 /** The name the screens may show, or `null` while the request is unfinished or came back empty. */
 export function nameShown(state: NameAtEntry): string | null {
   return state.kind === "settled" ? state.name : null;
+}
+
+/** The Zalo profile picture to show on Cá nhân, or `null`. PURE. */
+export function avatarShown(state: NameAtEntry): string | null {
+  return state.kind === "settled" && state.name !== null ? (state.avatarUrl ?? null) : null;
 }
 
 /*

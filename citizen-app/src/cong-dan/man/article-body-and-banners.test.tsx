@@ -422,13 +422,13 @@ describe("leaving the app — the question first, naming the host", () => {
     for (const bad of ["http://thongtin.example.vn", "javascript:alert(1)", "/tin-tuc", "https://a@b.example"]) {
       expect(askToLeave(bad), bad).toBeNull();
     }
-    expect(XA_TN.leave_app_question("thongtin.example.vn")).toBe("Bạn sắp rời ứng dụng để mở thongtin.example.vn");
+    expect(XA_TN.leave_app_question("thongtin.example.vn")).toBe("Bà con sắp rời ứng dụng để mở thongtin.example.vn");
   });
 
   it("the dialog: an alertdialog with the question, a note, 'Mở trang' and 'Ở lại ứng dụng' — and nothing opens without a tap", () => {
     const page = html(createElement(LeaveAppDialog, { host: "thongtin.example.vn", failed: false, onOpen: noop, onStay: noop }));
     expect(page).toContain('role="alertdialog" aria-modal="true" aria-labelledby="xa-leave-app-question"');
-    expect(page).toContain(">Bạn sắp rời ứng dụng để mở thongtin.example.vn</h2>");
+    expect(page).toContain(">Bà con sắp rời ứng dụng để mở thongtin.example.vn</h2>");
     expect(page).toContain(XA_TN.leave_app_note);
     expect(page).toContain(`<button type="button" class="xa-nut">${XA_TN.leave_app_open}</button>`);
     expect(page).toContain(`class="xa-nut xa-nut--phu"`);

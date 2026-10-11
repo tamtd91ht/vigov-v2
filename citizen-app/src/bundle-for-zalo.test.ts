@@ -53,7 +53,7 @@ import {
 } from "./features/dang-nhap/hop-dong";
 import { diaChiViGov } from "./cong-dan/api/dia-chi-vigov";
 import { DUONG_DAN_PHAN_ANH_CUA_TOI } from "./cong-dan/api/hop-dong-phan-anh";
-import { APP_RIENG, CUA_TOI, KENH_CHUA_MO, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
+import { APP_RIENG, COMMUNE_CHANNEL_CLOSED, CUA_TOI, KHAN_CAP, TRA_CUU } from "./cong-dan/man/noi-dung";
 
 /**
  * WHAT THIS CATCHES THAT NOTHING ELSE DOES:
@@ -396,7 +396,9 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
     expect(ban, "bundle không mang host của petitions").toContain(host_petitions);
 
     for (const chuoi of [
-      KENH_CHUA_MO.tieu_de,
+      // The commune interface's "channel not open" sentence ("bà con", 11/10/2026) — the shared app's old
+      // `KENH_CHUA_MO` screens are no longer rendered by any path, so their title left the bundle with them.
+      COMMUNE_CHANNEL_CLOSED,
       KHAN_CAP,
       TRA_CUU.khong_thay,
       APP_RIENG.dang_mo,

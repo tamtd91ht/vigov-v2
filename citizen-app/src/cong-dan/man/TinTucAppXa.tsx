@@ -19,7 +19,7 @@ import {
   type TinXaTomTat,
 } from "../api/hop-dong-cong-khai";
 import { NGAY_KHONG_DOC_DUOC, ngayVN, thoiDiemVN } from "../../lib/thoi-diem";
-import { NEWS_TYPE_LABEL, TIN_XA, XA_TN } from "./noi-dung";
+import { COMMUNE_NEWS_RATE_LIMIT, NEWS_TYPE_LABEL, TIN_XA, XA_TN } from "./noi-dung";
 import {
   batDauTaiTin,
   type DanhSachTin,
@@ -37,15 +37,32 @@ import { BroadcastPlayer, durationWords, formatClock } from "./broadcast-player"
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
 
-const ngay = (s: string) => ngayVN(s) ?? NGAY_KHONG_DOC_DUOC;
+/**
+ * A `YYYY-MM-DD` day as the prototype prints a date (`lib/format.ts` `formatDate`, owner 11/10/2026): "25/9/2026",
+ * no leading zeros. An unreadable day → `NGAY_KHONG_DOC_DUOC`.
+ */
+function ngay(s: string): string {
+  const d = ngayVN(s); // "dd/MM/yyyy", or null for a malformed or impossible day
+  if (d === null) return NGAY_KHONG_DOC_DUOC;
+  const [dd, mm, yyyy] = d.split("/") as [string, string, string];
+  return `${Number(dd)}/${Number(mm)}/${yyyy}`;
+}
 
-/** An instant in Vietnam time (+07, pinned — `lib/thoi-diem.ts`), split into its day and its time; `null` if unreadable. */
+/**
+ * An instant in Vietnam time (+07, pinned — `lib/thoi-diem.ts`), split into its day ("25/9/2026", the prototype's
+ * format) and its time ("09:07"); `null` if unreadable.
+ */
 function vnDayTime(iso: string): { day: string; time: string } | null {
   const s = thoiDiemVN(iso); // "dd/MM/yyyy HH:mm"
   if (s === null) return null;
-  const [day, time] = s.split(" ") as [string, string];
-  return { day, time };
+  const [date, time] = s.split(" ") as [string, string];
+  const [dd, mm, yyyy] = date.split("/") as [string, string, string];
+  return { day: `${Number(dd)}/${Number(mm)}/${yyyy}`, time };
 }
+
+/** A news read's failure in the commune app's voice ("bà con" for the 429 — owner 11/10/2026). */
+const newsError = (loi: Parameters<typeof errorSentence>[0], retryAfterSeconds: number | null) =>
+  errorSentence(loi, retryAfterSeconds, COMMUNE_NEWS_RATE_LIMIT);
 
 /**
  * When the article was published, for the detail's meta line: "09:07 ngày 25/09/2026" (§6.5) when the first
@@ -58,13 +75,14 @@ function vnDayTime(iso: string): { day: string; time: string } | null {
  */
 export function publishedLabel(tin: TinXaTomTat): string {
   const at = tin.publishedAt === undefined ? null : vnDayTime(tin.publishedAt);
-  const day = ngayVN(tin.ngay_dang);
+  const day = ngayVN(tin.ngay_dang) === null ? null : ngay(tin.ngay_dang);
   if (at === null || day === null || at.day !== day) return ngay(tin.ngay_dang);
   return XA_TN.time_on_day(at.time, at.day);
 }
 
+/** The detail's meta line: when it was published — no category name (the prototype's, owner 11/10/2026). */
 function dongPhu(tin: TinXaTomTat): string {
-  return tin.chuyen_muc !== "" ? `${tin.chuyen_muc} · ${publishedLabel(tin)}` : publishedLabel(tin);
+  return publishedLabel(tin);
 }
 
 /**
@@ -116,6 +134,14 @@ export function EventDetails({ tin }: { tin: TinXaTomTat }) {
  * the shared app) → no button.
  */
 export type OpenVideo = (url: string) => Promise<boolean>;
+
+/**
+ * SHARES ONE ARTICLE INTO A ZALO CHAT (ADR 0047 G6; owner 11/10/2026: the prototype's "Chia sẻ qua Zalo") — `true`
+ * when Zalo's share sheet opened. Injected by the shell (`App.tsx`), which builds the `zalo.me/s/<App ID>` link from
+ * the RUNNING app's id and calls `openShareSheet`; this half passes only the article's id, which is public. Not
+ * injected (tests, outside Zalo, an app with no App ID) → no button.
+ */
+export type ShareArticle = (articleId: string) => Promise<boolean>;
 
 /**
  * One tap on "Xem video": hand the commune's link to the opener, unchanged, and answer whether it FAILED. A
@@ -392,10 +418,30 @@ export function groupCategories(list: readonly NewsCategory[]): CategoryRows {
 }
 
 /**
- * The two chip rows (prototype `NewsPage.tsx:76-131`). Row 1: "Tất cả" + the roots. Row 2, only once a
- * root with children is chosen: "Tất cả mục này" + that root's direct children, indented and lighter so it
- * reads as belonging to row 1. The chosen chip says so with `aria-pressed`, a fill and a heavier weight —
- * never colour alone. `null` or no roots → nothing at all, never a row of empty chips. PURE.
+ * The id of the "Tin của xã" chip — the prototype's group for categories that belong to NO group
+ * (`NewsPage.tsx:87-131`, `groupByCategory`: the unnamed group, first). Not a server id: those are ULIDs, so this
+ * word can never name a real category.
+ */
+export const OWN_GROUP_ID = "tin-cua-xa";
+
+/**
+ * The prototype's two levels, from the server's tree. PURE.
+ *   `own`     the roots with NO children — a category with no group of its own; together they are "Tin của xã"
+ *   `groups`  the roots WITH children — each a group chip whose second row is its children
+ */
+export function chipGroups(rows: CategoryRows): { own: NewsCategory[]; groups: NewsCategory[] } {
+  const own: NewsCategory[] = [];
+  const groups: NewsCategory[] = [];
+  for (const r of rows.roots) ((rows.children.get(r.id) ?? []).length > 0 ? groups : own).push(r);
+  return { own, groups };
+}
+
+/**
+ * The two chip rows (prototype `NewsPage.tsx:76-131`, owner 11/10/2026). Row 1: "Tất cả", then "Tin của xã" FIRST
+ * when some category has no group (the commune's own news before what came from elsewhere — the prototype's
+ * reason), then each group. Row 2, once a chip of row 1 is chosen: "Tất cả mục này" + its categories, indented and
+ * lighter so it reads as belonging to row 1. The chosen chip says so with `aria-pressed`, a fill and a heavier
+ * weight — never colour alone. `null` or no categories → nothing at all, never a row of empty chips. PURE.
  */
 export function CategoryChips(props: {
   rows: CategoryRows | null;
@@ -406,8 +452,13 @@ export function CategoryChips(props: {
 }) {
   const { rows, root, child } = props;
   if (rows === null || rows.roots.length === 0) return null;
-  const chosenRoot = rows.roots.find((r) => r.id === root) ?? null;
-  const kids = chosenRoot === null ? [] : (rows.children.get(chosenRoot.id) ?? []);
+  const { own, groups } = chipGroups(rows);
+  const row1: Array<{ id: string; name: string }> = [
+    ...(own.length > 0 ? [{ id: OWN_GROUP_ID, name: XA_TN.news_own_group }] : []),
+    ...groups.map((g) => ({ id: g.id, name: g.name })),
+  ];
+  const chosen = row1.find((r) => r.id === root) ?? null;
+  const kids = chosen === null ? [] : chosen.id === OWN_GROUP_ID ? own : (rows.children.get(chosen.id) ?? []);
   return (
     <>
       <div className="xa-chips" role="group" aria-label={XA_TN.news_category_filter}>
@@ -419,7 +470,7 @@ export function CategoryChips(props: {
         >
           {XA_TN.loc_tat_ca}
         </button>
-        {rows.roots.map((r) => (
+        {row1.map((r) => (
           <button
             key={r.id}
             type="button"
@@ -431,12 +482,8 @@ export function CategoryChips(props: {
           </button>
         ))}
       </div>
-      {chosenRoot !== null && kids.length > 0 && (
-        <div
-          className="xa-chips xa-chips--phu"
-          role="group"
-          aria-label={XA_TN.news_subcategory_filter(chosenRoot.name)}
-        >
+      {chosen !== null && kids.length > 0 && (
+        <div className="xa-chips xa-chips--phu" role="group" aria-label={XA_TN.news_subcategory_filter(chosen.name)}>
           <button
             type="button"
             className={`xa-chip xa-chip--phu${child === null ? " xa-chip--on" : ""}`}
@@ -463,17 +510,35 @@ export function CategoryChips(props: {
 }
 
 /**
+ * What the list shows for a chip choice. PURE.
+ *   a category chip (row 2), or a group (row 1)  → the SERVER's filter by that id (a group includes its children)
+ *   "Tin của xã" with no category of it chosen  → the type's whole list, kept to the items whose category is one of
+ *                                                 the ungrouped ones — the server takes one category, and these are
+ *                                                 several (the prototype filters the same way, `NewsPage.tsx:42-46`)
+ *   "Tất cả"                                    → the whole list
+ */
+export function chipFilter(
+  rows: CategoryRows | null,
+  root: string | null,
+  child: string | null,
+): { category: string | null; keep?: (t: TinXaTomTat) => boolean } {
+  if (child !== null) return { category: child };
+  if (root === null) return { category: null };
+  if (root !== OWN_GROUP_ID) return { category: root };
+  const names = new Set((rows === null ? [] : chipGroups(rows).own).map((c) => c.name));
+  return { category: null, keep: (t) => names.has(t.chuyen_muc) };
+}
+
+/**
  * One type tab's body: the category chips, then the list for (type, category). The list is keyed by the
- * chosen category, so each selection is ONE fresh load through `useTinXa`'s StrictMode-safe ref guard, with
- * its own paging and "Xem thêm". Choosing a root filters by the root (the server includes descendants);
- * choosing a child filters by the child.
+ * chosen chip, so each selection is ONE fresh load through `useTinXa`'s StrictMode-safe ref guard, with
+ * its own paging and "Xem thêm". Every empty list says the prototype's sentence (`NewsPage.tsx:142-143`).
  */
 function NewsTypePanel(props: { ten_mien: string; type: NewsType; onMo: (id: string) => void }) {
   const rows = useNewsCategories(props.ten_mien, props.type);
   const [root, setRoot] = useState<string | null>(null);
   const [child, setChild] = useState<string | null>(null);
-  const category = child ?? root;
-  const chosen = rows === null || category === null ? undefined : findCategory(rows, category);
+  const shown = chipFilter(rows, root, child);
   return (
     <>
       <CategoryChips
@@ -487,20 +552,17 @@ function NewsTypePanel(props: { ten_mien: string; type: NewsType; onMo: (id: str
         onChild={setChild}
       />
       <NewsOfType
-        key={category ?? ""}
+        key={`${root ?? ""}:${child ?? ""}`}
         ten_mien={props.ten_mien}
         type={props.type}
-        category={category}
+        category={shown.category}
+        keep={shown.keep}
         onMo={props.onMo}
-        empty={chosen !== undefined ? XA_TN.news_category_empty(chosen.name) : XA_TN.news_type_empty(NEWS_TYPE_LABEL[props.type])}
-        hint={chosen !== undefined ? XA_TN.news_category_empty_hint : XA_TN.news_empty_hint}
+        empty={XA_TN.news_list_empty}
+        hint={XA_TN.news_empty_hint}
       />
     </>
   );
-}
-
-function findCategory(rows: CategoryRows, id: string): NewsCategory | undefined {
-  return rows.roots.find((r) => r.id === id) ?? [...rows.children.values()].flat().find((c) => c.id === id);
 }
 
 /**
@@ -511,7 +573,7 @@ function findCategory(rows: CategoryRows, id: string): NewsCategory | undefined 
  * working list and tell the citizen something is broken when nothing they need is. Every failure branch
  * (network, 5xx, malformed, bad domain) therefore ends in `null`, exactly like "no categories".
  */
-function useNewsCategories(ten_mien: string, type: NewsType): CategoryRows | null {
+export function useNewsCategories(ten_mien: string, type: NewsType): CategoryRows | null {
   const [rows, setRows] = useState<CategoryRows | null>(null);
   const loaded = useRef(false);
   useEffect(() => {
@@ -536,6 +598,8 @@ export function NewsOfType(props: {
   empty: string;
   /** What to do next under `empty` (`KhoiTrangThai` `hint`), or none. */
   hint?: string;
+  /** Keep only these of each loaded page ("Tin của xã", `chipFilter`); absent = every item. */
+  keep?: (t: TinXaTomTat) => boolean;
 }) {
   const news = useTinXa(props.ten_mien, props.type, props.category ?? null);
   // The Video list carries no view count (owner, 02/10/2026).
@@ -547,6 +611,7 @@ export function NewsOfType(props: {
       empty={props.empty}
       hint={props.hint}
       showViews={props.type !== "video"}
+      keep={props.keep}
     />
   );
 }
@@ -559,9 +624,12 @@ export function NewsListBody(props: {
   empty: string;
   hint?: string;
   showViews?: boolean;
+  /** Keep only these of the loaded items; absent = all. */
+  keep?: (t: TinXaTomTat) => boolean;
 }) {
   const { ds } = props;
   const showViews = props.showViews ?? true;
+  const items = props.keep === undefined ? ds.muc : ds.muc.filter(props.keep);
   if (!ds.da_co_trang_dau && ds.dang_tai) {
     return <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />;
   }
@@ -570,18 +638,21 @@ export function NewsListBody(props: {
       <KhoiTrangThai
         bieu_tuong="alert"
         loi
-        cau={errorSentence(ds.loi, ds.retryAfterSeconds ?? null)}
+        cau={newsError(ds.loi, ds.retryAfterSeconds ?? null)}
         nut={ds.loi !== "khong-hop-le" ? { nhan: TIN_XA.nut_thu_lai, onBam: props.onTai } : undefined}
       />
     );
   }
-  if (ds.muc.length === 0) return <KhoiTrangThai bieu_tuong="news" cau={props.empty} hint={props.hint} />;
+  // Kept-to-a-group lists may have matches on a later page: "empty" only once nothing is left to load.
+  if (items.length === 0 && !(props.keep !== undefined && ds.con_nua)) {
+    return <KhoiTrangThai bieu_tuong="news" cau={props.empty} hint={props.hint} />;
+  }
   return (
     <>
       {/* Every item the same card — no featured first card (wave 1): a big coloured block with no picture in it
           read as the most important news, when it was only the newest. */}
       <ul className="xa-ds">
-        {ds.muc.map((t) => (
+        {items.map((t) => (
           <li key={t.id}>
             <HangTin tin={t} onMo={props.onMo} showViews={showViews} />
           </li>
@@ -591,7 +662,7 @@ export function NewsListBody(props: {
         <KhoiTrangThai
           bieu_tuong="alert"
           loi
-          cau={errorSentence(ds.loi, ds.retryAfterSeconds ?? null)}
+          cau={newsError(ds.loi, ds.retryAfterSeconds ?? null)}
           nut={ds.loi !== "khong-hop-le" ? { nhan: TIN_XA.nut_thu_lai, onBam: props.onTai } : undefined}
         />
       )}
@@ -666,10 +737,13 @@ export function BaiTinXa(props: {
    * (`leave-app.tsx`). Absent → links are plain words.
    */
   openLink?: OpenExternal;
+  /** The shell's share (`ShareArticle`). Absent → no "Chia sẻ qua Zalo" button. */
+  shareArticle?: ShareArticle;
 }) {
   const [trang, datTrang] = useState<TrangBai>({ kieu: "dang-tai" });
   const [coverFailed, setCoverFailed] = useState(false);
   const [videoFailed, setVideoFailed] = useState(false);
+  const [shareFailed, setShareFailed] = useState(false);
   const da_tai = useRef(false);
   const openVideo = props.openVideo;
   const leave = useLeaveApp(props.openLink);
@@ -692,7 +766,23 @@ export function BaiTinXa(props: {
   // loads — from the list row it was opened from, so the title does not change under the reader. No type
   // known → the old general title.
   const type = trang.kieu === "xong" ? trang.bai.type : (props.ds?.find((t) => t.id === props.id)?.type ?? null);
-  const title = type !== null ? NEWS_TYPE_LABEL[type] : TIN_XA.tieu_de;
+  // An article that could not be opened says so in the header too (`NewsDetailPage.tsx:38`, owner 11/10/2026).
+  const title =
+    trang.kieu === "loi" || trang.kieu === "khong-thay"
+      ? XA_TN.news_open_failed
+      : type !== null
+        ? NEWS_TYPE_LABEL[type]
+        : TIN_XA.tieu_de;
+  const share = props.shareArticle;
+  const onShare =
+    share === undefined
+      ? undefined
+      : () => {
+          setShareFailed(false);
+          void share(props.id)
+            .catch(() => false)
+            .then((opened) => setShareFailed(!opened));
+        };
 
   // The button exists only with BOTH a link on the item and an opener from the shell. A new tap clears the old
   // failure first, so the sentence never stands under a tap that is still opening.
@@ -720,7 +810,7 @@ export function BaiTinXa(props: {
           <KhoiTrangThai
             bieu_tuong="alert"
             loi
-            cau={errorSentence(trang.loi, trang.retryAfterSeconds ?? null)}
+            cau={newsError(trang.loi, trang.retryAfterSeconds ?? null)}
             nut={trang.loi !== "khong-hop-le" ? { nhan: TIN_XA.nut_thu_lai, onBam: () => void tai() } : undefined}
           />
         )}
@@ -735,6 +825,8 @@ export function BaiTinXa(props: {
             onWatchVideo={onWatchVideo}
             onLink={leave.ask}
             refreshAudio={refreshAudio}
+            onShare={onShare}
+            shareFailed={shareFailed}
           />
         )}
       </TrangCon>
@@ -780,6 +872,10 @@ export function NewsArticle(props: {
   onLink?: (href: string) => void;
   /** Re-reads the item for a fresh audio link (`BaiTinXa`). Absent → an expired link ends in the failure sentence. */
   refreshAudio?: () => Promise<BroadcastAudio | null>;
+  /** "Chia sẻ qua Zalo" (`ShareArticle`); absent → no button. */
+  onShare?: () => void;
+  /** The last share did not open: the sentence under the button. */
+  shareFailed?: boolean;
 }) {
   const { bai } = props;
   return (
@@ -797,6 +893,20 @@ export function NewsArticle(props: {
       {bai.audio !== undefined && <BroadcastPlayer audio={bai.audio} refresh={props.refreshAudio} />}
       <div className="xa-ke" />
       <ArticleBody blocks={bai.bodyBlocks} text={bai.noi_dung} paragraphClass="xa-bai__doan" onLink={props.onLink} />
+      {/* The prototype's share button, under the body (`NewsDetailPage.tsx:126-136`). */}
+      {props.onShare !== undefined && (
+        <div className="xa-bai__share">
+          <button type="button" className="xa-nut xa-nut--phu" onClick={props.onShare}>
+            <BieuTuong ten="share" co={20} />
+            {XA_TN.share_zalo}
+          </button>
+          {props.shareFailed === true && (
+            <p className="xa-error-box" role="alert">
+              {XA_TN.share_failed}
+            </p>
+          )}
+        </div>
+      )}
       <TinLienQuan ds={props.ds} bai={bai} onMo={props.onMo} />
     </article>
   );

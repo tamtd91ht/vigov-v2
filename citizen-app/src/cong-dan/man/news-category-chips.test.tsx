@@ -10,7 +10,7 @@ import {
   readNewsCategories,
 } from "../api/hop-dong-cong-khai";
 import { XA_TN } from "./noi-dung";
-import { CategoryChips, type CategoryRows, groupCategories } from "./TinTucAppXa";
+import { CategoryChips, type CategoryRows, chipFilter, groupCategories, OWN_GROUP_ID } from "./TinTucAppXa";
 
 /**
  * Card D2 (owner decisions 30/09/2026): two-level category chips above the news list, from
@@ -128,15 +128,43 @@ describe("CategoryChips — markup", () => {
     expect(render(null, null, groupCategories([cat("o", "Mồ côi", 1, "missing")]))).toBe("");
   });
 
-  it("row 1 is 'Tất cả' + the roots; 'Tất cả' pressed by default; no row 2", () => {
+  // The prototype's grouping (`NewsPage.tsx:87-131`, owner 11/10/2026): a root WITH children is a group chip; the
+  // roots WITHOUT children have no group of their own and gather, FIRST, under "Tin của xã".
+  it("row 1 is 'Tất cả', then 'Tin của xã' (the ungrouped), then the groups; 'Tất cả' pressed by default; no row 2", () => {
     const html = render(null, null);
     expect(html).toContain(`role="group" aria-label="${XA_TN.news_category_filter}"`);
     expect(pressed(html)).toEqual([
       [XA_TN.loc_tat_ca, "true"],
+      ["Tin của xã", "false"],
       ["Y tế", "false"],
-      ["Giáo dục", "false"],
     ]);
     expect(html).not.toContain("xa-chips--phu");
+  });
+
+  it("'Tin của xã' opens row 2 with the ungrouped categories; no ungrouped category → no such chip", () => {
+    const html = render(OWN_GROUP_ID, null);
+    expect(pressed(html)).toEqual([
+      [XA_TN.loc_tat_ca, "false"],
+      ["Tin của xã", "true"],
+      ["Y tế", "false"],
+      [XA_TN.news_category_all_in_root, "true"],
+      ["Giáo dục", "false"],
+    ]);
+    const onlyGroups = groupCategories([cat("a", "Y tế", 1), cat("a1", "Tiêm chủng", 2, "a")]);
+    expect(render(null, null, onlyGroups)).not.toContain("Tin của xã");
+  });
+
+  it("what the list shows: a chip's own id on the server; 'Tin của xã' alone keeps the ungrouped items of the whole list", () => {
+    expect(chipFilter(rows, null, null)).toEqual({ category: null });
+    expect(chipFilter(rows, "a", null)).toEqual({ category: "a" });
+    expect(chipFilter(rows, "a", "a1")).toEqual({ category: "a1" });
+    expect(chipFilter(rows, OWN_GROUP_ID, "b")).toEqual({ category: "b" });
+    const own = chipFilter(rows, OWN_GROUP_ID, null);
+    expect(own.category).toBeNull();
+    const item = (chuyen_muc: string) => ({ id: "1", tieu_de: "T", tom_tat: "", ngay_dang: "2026-10-01", chuyen_muc, type: null });
+    expect(own.keep?.(item("Giáo dục"))).toBe(true);
+    expect(own.keep?.(item("Y tế"))).toBe(false);
+    expect(own.keep?.(item(""))).toBe(false);
   });
 
   it("a root with children opens row 2: 'Tất cả mục này' + its direct children, subordinate", () => {
@@ -144,8 +172,8 @@ describe("CategoryChips — markup", () => {
     expect(html).toContain(`aria-label="${XA_TN.news_subcategory_filter("Y tế")}"`);
     expect(pressed(html)).toEqual([
       [XA_TN.loc_tat_ca, "false"],
+      ["Tin của xã", "false"],
       ["Y tế", "true"],
-      ["Giáo dục", "false"],
       [XA_TN.news_category_all_in_root, "true"],
       ["Tiêm chủng", "false"],
     ]);
@@ -163,8 +191,9 @@ describe("CategoryChips — markup", () => {
     expect(html).toMatch(/class="xa-chip xa-chip--phu xa-chip--on" aria-pressed="true">Tiêm chủng</);
   });
 
-  it("a root without children shows no row 2", () => {
+  it("a root without children is no chip of row 1 (it is under 'Tin của xã'), so it cannot open an empty row 2", () => {
     expect(render("b", null)).not.toContain("xa-chips--phu");
+    expect(render("b", null)).not.toMatch(/aria-pressed="true">Giáo dục</);
   });
 
   it("every chip is a real button", () => {

@@ -36,7 +36,7 @@ import {
 import { taoLanGui } from "../api/lan-gui";
 
 import * as TEXTS from "./noi-dung";
-import { PHONE_VERIFICATION_TASK, RATING, RATING_ERROR, TRANG_THAI, XA_PA } from "./noi-dung";
+import { COMMUNE_RATING, PHONE_VERIFICATION_TASK, RATING, RATING_ERROR, TRANG_THAI, XA_PA } from "./noi-dung";
 import { PetitionBody } from "./PhanAnhAppXa";
 import { attemptFor, type RatingErrorBranch, ratingOutcome, RatingPanel, showsRating } from "./PetitionRating";
 import { STAR_LABELS, StarPicker } from "./star-picker";
@@ -442,7 +442,13 @@ describe("the shared star row — and the commune app rates through the same blo
     const open = renderToStaticMarkup(
       createElement(PetitionBody, { petition, onRated: () => {}, onReload: () => {} }),
     );
-    expect(open).toContain(RATING.title);
+    // The commune app's voice and the prototype's block (`RatingBlock.tsx`, owner 11/10/2026): the same component.
+    expect(open).toContain(COMMUNE_RATING.title);
+    expect(COMMUNE_RATING.title).toBe("Bà con đánh giá kết quả xử lý");
+    expect(open).toContain("Đánh giá của bà con giúp xã làm tốt hơn ở những lần sau.");
+    expect(open).toContain('placeholder="Bà con muốn nói thêm điều gì không? (không bắt buộc)"');
+    expect(open).toContain("Bà con chạm vào ngôi sao để chấm điểm");
+    expect(open).toMatch(/class="xa-sao__nut"[^>]*><svg class="xa-bt" width="34"/);
     expect(open).toContain('role="radiogroup"');
     expect(open).toContain(RATING.submit);
     expect(open).toContain(`maxLength="${RATING_COMMENT_MAX_LEN}"`);
@@ -450,7 +456,9 @@ describe("the shared star row — and the commune app rates through the same blo
     expect(spy).not.toHaveBeenCalled();
     const rated = docPhieu({ ...RESOLVED, rating: 5, rated_at: RATED_AT })!;
     const ro = renderToStaticMarkup(createElement(PetitionBody, { petition: rated, onRated: () => {}, onReload: () => {} }));
-    expect(ro).toContain(RATING.rated(5));
+    expect(ro).toContain(COMMUNE_RATING.rated(5));
+    expect(ro).toContain(COMMUNE_RATING.your_rating);
+    expect(COMMUNE_RATING.your_rating).toBe("Bà con đã đánh giá");
   });
 
   it("the lookup of the real channel still reads a rated petition", async () => {

@@ -21,7 +21,7 @@ import { citizenReportFields, guiPhanAnh, type KetQuaGoi } from "../api/goi-vigo
 import { readCitizenFields } from "../api/hop-dong-phan-anh";
 import { taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export
 
-import { CUA_TOI, KENH_CHUA_MO, LOI_GUI, TRA_CUU, XA_PA } from "./noi-dung";
+import { COMMUNE_CHANNEL_CLOSED, CUA_TOI, LOI_GUI, TRA_CUU, XA_PA } from "./noi-dung";
 import {
   catalogueOutcome,
   countLabel,
@@ -136,7 +136,7 @@ describe("reading every answer — one branch per next step", () => {
     expect(lookupOutcome({ kieu: "can-xac-thuc-so" })).toEqual({ kind: "session" });
     expect(lookupOutcome({ kieu: "loi-mang" })).toEqual({ kind: "failed", text: TRA_CUU.loi_mang });
     expect(lookupOutcome({ kieu: "loi-may-chu" })).toEqual({ kind: "failed", text: TRA_CUU.loi_may_chu });
-    expect(lookupOutcome({ kieu: "chua-cau-hinh" })).toEqual({ kind: "failed", text: KENH_CHUA_MO.cau });
+    expect(lookupOutcome({ kieu: "chua-cau-hinh" })).toEqual({ kind: "failed", text: COMMUNE_CHANNEL_CLOSED });
   });
 
   it("list: page, session loss, network, closed channel, anything else", () => {
@@ -147,7 +147,8 @@ describe("reading every answer — one branch per next step", () => {
     expect(listOutcome({ kieu: "chua-cau-hinh" })).toBe("closed");
     expect(listOutcome({ kieu: "khong-hop-le" })).toBe("server");
     expect(listFailureText("network")).toBe(CUA_TOI.loi_mang);
-    expect(listFailureText("closed")).toBe(KENH_CHUA_MO.cau);
+    // The commune app's voice ("bà con", owner 11/10/2026).
+    expect(listFailureText("closed")).toBe(COMMUNE_CHANNEL_CLOSED);
   });
 
   it("the typed code: trimmed, a leading '#' (as cards show it) removed", () => {

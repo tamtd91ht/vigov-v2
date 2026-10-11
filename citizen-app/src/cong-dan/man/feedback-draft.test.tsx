@@ -51,14 +51,17 @@ const render = (draftStore?: FeedbackDraftStore) =>
   );
 
 describe("send screen with a saved draft", () => {
-  it("asks first: 'Tiếp tục' / 'Bỏ nháp', says the draft stays on this phone, and hides the form", () => {
+  it("asks first, in the prototype's words and layout — and hides the form (and the step bar) until answered", () => {
     const { store, calls } = storeWith(DRAFT);
     const html = render(store);
+    // `NewFeedbackPage.tsx:426-453`, verbatim (owner 11/10/2026). "Kept on this phone" is said on the form itself.
+    expect(XA_PA.draft_title).toBe("Bà con có một phản ánh chưa gửi xong. Tiếp tục?");
     expect(html).toContain(XA_PA.draft_title);
-    expect(html).toContain(XA_PA.draft_kept_on_phone);
+    expect(html).toContain(XA_PA.draft_body);
+    expect(html).not.toContain("xa-thanh-buoc");
     // Both answers are full-size tap targets (`.xa-nut`, calc(var(--tap-min) + 4px) — accessibility.test.ts).
-    expect(html).toContain(`<button type="button" class="xa-nut">${XA_PA.draft_resume}</button>`);
-    expect(html).toContain(`<button type="button" class="xa-nut xa-nut--phu">${XA_PA.draft_discard}</button>`);
+    expect(html).toContain(`<button type="button" class="xa-nut">Tiếp tục phản ánh đang soạn</button>`);
+    expect(html).toContain(`<button type="button" class="xa-nut xa-nut--quiet">Bỏ và gửi phản ánh mới</button>`);
     // Step 1 is not offered until the citizen has answered — no overwriting the draft by accident.
     expect(html).not.toContain(XA_PA.chon_linh_vuc);
     expect(html).not.toContain(XA_PA.fields_loading);

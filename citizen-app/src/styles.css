@@ -2876,7 +2876,8 @@ body {
  * ════════════════════════════════════════════════════════════════════════════════════════════ */
 :root {
   /* Text navy: headings, card titles, names, codes, news covers. NOT the brand any more (below). */
-  --xa-navy: #1b3a5c;
+  /* The prototype's text colour (`tokens.css` --text, owner 11/10/2026). */
+  --xa-navy: #1e3a52;
   --xa-navy-dam: #16314e;
   /*
    * THE COMMUNE APP'S BRAND — government red, from the customer prototype (`vigov-require` v30,
@@ -2890,8 +2891,9 @@ body {
   --xa-brand: #c1121c;
   --xa-brand-dark: #96060f;
   --xa-brand-soft: #fdeaeb;
-  --xa-nen: #f5f7f9;
-  --xa-vien: #e5e8eb;
+  /* The prototype's page and border (`tokens.css` --bg / --border, owner 11/10/2026). */
+  --xa-nen: #f4f8fb;
+  --xa-vien: #dde7ef;
   /*
    * THE PROTOTYPE'S SIX TONES (`PROTOTYPE.md` §4.1, §4.4) — a light fill and its "ink", the dark shade
    * that carries text and icons on that fill. The bare tone colours of the prototype (`--blue` #2fb1f9 …)
@@ -2930,6 +2932,13 @@ body {
  * anything. `100vh` first for WebViews without `dvh`; `dvh` then follows the collapsing browser bar.
  */
 .xa-app {
+  /* The prototype's text and muted text (`tokens.css` --text / --muted, owner 11/10/2026), for the commune app ONLY:
+     redefined on this box, so the shared app's `--ink` is untouched. #566e8b is 4.9:1 on --xa-nen and 5.3:1 on white. */
+  --ink: #1e3a52;
+  --ink-muted: #566e8b;
+  /* `.xa-co-chu--lon` sets 1.2: the rem-sized titles below follow it like the body text does. */
+  --xa-text-scale: 1;
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -2937,6 +2946,8 @@ body {
   overflow: hidden;
   background: var(--xa-nen);
   color: var(--ink);
+  /* The prototype's system stack (`tailwind.config.js` fontFamily.sans). */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   font-size: var(--text-body);
   line-height: 1.55;
 }
@@ -3057,7 +3068,7 @@ body {
 .xa-app .xa-hero__ten {
   margin: 0;
   color: #ffffff;
-  font-size: 1.3rem;
+  font-size: calc(1.3rem * var(--xa-text-scale, 1));
   font-weight: 700;
 }
 
@@ -3132,7 +3143,7 @@ body {
   cursor: pointer;
 }
 .xa-app .xa-dau-con__tieu-de {
-  font-size: 1.125rem;
+  font-size: calc(1.125rem * var(--xa-text-scale, 1));
   line-height: 1.3;
   margin: 0;
   color: #ffffff;
@@ -3155,8 +3166,9 @@ body {
   margin: 0 0 18px;
   background: var(--surface);
   border: 1px solid var(--xa-vien);
-  border-radius: 14px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+  /* The prototype's card (`tokens.css` --r-lg, --shadow-card, owner 11/10/2026). */
+  border-radius: 16px;
+  box-shadow: 0 1px 4px rgba(15, 42, 67, 0.07);
 }
 .xa-the--dem {
   padding: 14px;
@@ -3246,7 +3258,7 @@ button.xa-o-nhanh {
 }
 .xa-app .xa-dau-khoi__tieu-de {
   flex: 1;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--xa-text-scale, 1));
   margin: 0;
 }
 /* A section heading that IS the `.xa-dau-khoi` row (Cá nhân: "Tiện ích của tôi", "Hiển thị", …). The
@@ -3444,7 +3456,7 @@ button.xa-o-nhanh {
   line-height: 1.4;
 }
 .xa-app .xa-bai__tieu-de {
-  font-size: 1.3rem;
+  font-size: calc(1.3rem * var(--xa-text-scale, 1));
   margin: 0 0 8px;
 }
 /* Body paragraphs "leading-relaxed" (§6.5). */
@@ -3772,15 +3784,17 @@ button.xa-o-nhanh {
   --xa-vang: #ffb020;
 }
 
-/* Cỡ chữ người dân chọn ở màn Cá nhân — chỉ TĂNG từ mức chuẩn, không bao giờ dưới --text-body. */
-.xa-co-chu--vua {
-  font-size: var(--text-body);
-}
+/*
+ * "Cỡ chữ lớn" (Cá nhân, the prototype's one switch — owner 11/10/2026): EVERY text of the commune app 20% larger.
+ * The base stays >= 16px (the floor is not traded for the prototype's 13px); the switch only scales UP from it. The
+ * two text tokens are redefined on this box, so every rule that reads them — the commune's and the shared `cd-*`
+ * pieces inside it — grows; the rem-sized titles read `--xa-text-scale`.
+ */
 .xa-co-chu--lon {
-  font-size: calc(var(--text-body) + 2px);
-}
-.xa-co-chu--rat-lon {
-  font-size: calc(var(--text-body) + 4px);
+  --text-body: calc(17px * 1.2);
+  --text-small: calc(16px * 1.2);
+  --xa-text-scale: 1.2;
+  font-size: var(--text-body);
 }
 
 .xa-mau--cam {
@@ -3796,7 +3810,7 @@ button.xa-o-nhanh {
 .xa-hero__nguoi {
   margin: 0;
   color: #ffffff;
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--xa-text-scale, 1));
   font-weight: 700;
 }
 .xa-hero__don-vi {
@@ -4043,7 +4057,7 @@ button.xa-o-nhanh {
 }
 /* The lookup code — the biggest thing on the screen (rule 10 #1), 30px bold blue-ink as §6.2. */
 .xa-ket-qua__code {
-  font-size: 1.875rem;
+  font-size: calc(1.875rem * var(--xa-text-scale, 1));
   line-height: 1.2;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -4110,7 +4124,7 @@ button.xa-o-nhanh {
 .xa-app .xa-dinh-danh__ten {
   margin: 0;
   color: #ffffff;
-  font-size: 1.5rem;
+  font-size: calc(1.5rem * var(--xa-text-scale, 1));
 }
 .xa-dinh-danh__tinh {
   margin: 0;
@@ -4149,12 +4163,12 @@ button.xa-o-nhanh {
   flex: none;
   background: var(--xa-green-50);
   color: var(--xa-green-ink);
-  font-size: 1.4rem;
+  font-size: calc(1.4rem * var(--xa-text-scale, 1));
   font-weight: 700;
 }
 .xa-app .xa-profile__name {
   color: var(--xa-navy);
-  font-size: 1.125rem;
+  font-size: calc(1.125rem * var(--xa-text-scale, 1));
   font-weight: 700;
 }
 /* A settings row's 40px round icon on blue-50 — decoration beside the words. */
@@ -4459,7 +4473,7 @@ button.xa-o-nhanh {
   margin: -4px 0 0;
 }
 .xa-xa-nhan {
-  font-size: 1.15rem;
+  font-size: calc(1.15rem * var(--xa-text-scale, 1));
   color: var(--xa-navy);
 }
 .xa-lien-quan {
@@ -4475,7 +4489,7 @@ button.xa-o-nhanh {
 /* Directory group titles "lg bold" (§6.9). */
 .xa-app .xa-nhom__tieu-de {
   margin: 4px 0 0;
-  font-size: 1.125rem;
+  font-size: calc(1.125rem * var(--xa-text-scale, 1));
   font-weight: 700;
 }
 
@@ -4592,17 +4606,34 @@ button.xa-o-nhanh {
   margin: 0;
   padding: 0;
   display: flex;
-  gap: 12px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: 16px;
 }
+/* Every slide the full width, snapped to the left edge (the prototype's `BannerStrip.tsx`, owner 11/10/2026): one
+   swipe moves exactly one picture; the dots under the strip say which. */
 .xa-banner-strip__item {
   flex: 0 0 100%;
   min-width: 0;
   scroll-snap-align: start;
 }
-.xa-banner-strip--many .xa-banner-strip__item {
-  flex-basis: 88%;
+.xa-banner-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.xa-banner-dots__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--xa-vien);
+}
+/* The current picture: a 24×6 bar in the brand red — longer, not only redder. */
+.xa-banner-dots__dot--on {
+  width: 24px;
+  background: var(--xa-brand);
 }
 /* A tappable banner is the whole picture: far above the tap minimum, stated anyway so the sweep measures it. */
 .xa-banner-strip__tap {
@@ -4864,17 +4895,33 @@ button.xa-o-nhanh {
 }
 
 /* The detail's summary card (§6.4): field + status, then the facts, each with its icon. */
+/* The prototype's summary (`FeedbackDetailPage.tsx:64-73`): the field small and muted, the content as the title,
+   the chip on the right. */
 .xa-summary-head {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
+  gap: 12px;
+}
+.xa-summary-head__text {
+  min-width: 0;
+  flex: 1;
 }
 .xa-app .xa-summary-head__field {
-  color: var(--xa-navy);
-  font-size: 1.125rem;
-  font-weight: 700;
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+  font-weight: 600;
+}
+.xa-app .xa-summary-head__content {
+  margin: 2px 0 0;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 600;
+  line-height: 1.6;
+}
+.xa-summary-head .xa-chip-tt {
+  flex: none;
 }
 .xa-facts {
   display: grid;
@@ -4927,7 +4974,7 @@ button.xa-o-nhanh {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
 }
 .xa-app .cd-danh-gia .cd-tieu-de-phu {
-  font-size: 1.1rem;
+  font-size: calc(1.1rem * var(--xa-text-scale, 1));
   color: var(--xa-navy);
 }
 .xa-app .cd-danh-gia .cd-nut {
@@ -4956,4 +5003,533 @@ button.xa-o-nhanh {
   max-width: 10rem;
   letter-spacing: 0.25em;
   font-variant-numeric: tabular-nums;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * THE COMMUNE APP AFTER "LÀM HẾT THEO PROTOTYPE" (owner 11/10/2026) — the customer prototype's send form, detail,
+ * libraries, directory search, profile switch and minimise bubble. Floors kept: text >= 16px, targets >= 44px.
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* The send form: sections on the page background, as the prototype's (`NewFeedbackPage.tsx:329`). */
+.xa-send-form {
+  display: grid;
+  gap: 20px;
+}
+.xa-send-form__describe {
+  display: grid;
+  gap: 8px;
+}
+.xa-app .xa-form-title {
+  margin: 0 0 4px;
+  color: var(--ink);
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+.xa-form-title__optional {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+/* The prototype's red "*" after a required label — decoration; `aria-required` says it. */
+.xa-required-mark {
+  color: var(--xa-red-ink);
+}
+
+/* Photos: the three-tile grid (`PhotoPicker.tsx`). */
+.xa-photo-grid {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.xa-photo-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+}
+.xa-photo-tile--take {
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 2px dashed var(--xa-blue-ink);
+  background: var(--xa-blue-50);
+  color: var(--xa-blue-ink);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 700;
+  cursor: pointer;
+}
+.xa-photo-tile--take:disabled {
+  opacity: 0.6;
+}
+.xa-photo-tile--empty {
+  border: 1px dashed var(--xa-vien);
+  background: var(--surface);
+}
+.xa-photo-tile__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 1px solid var(--xa-vien);
+  border-radius: 12px;
+}
+/* The "X": a 48px target in the corner around the prototype's 32px dark disc (the touch floor wins). */
+.xa-photo-tile__remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: calc(var(--tap-min) + 4px);
+  height: calc(var(--tap-min) + 4px);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.xa-photo-tile__x {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #ffffff;
+}
+
+/* The address block (`AddressBlock.tsx`): the card holds the box, the location line and the sketch map. */
+.xa-address__card {
+  margin: 8px 0 0;
+  overflow: hidden;
+}
+.xa-address__body {
+  padding: 12px;
+}
+.xa-address__body .cd-o {
+  margin: 0;
+}
+.xa-location-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 0;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+}
+.xa-location-status .xa-bt {
+  color: var(--xa-blue-ink);
+}
+/* A link-styled action that is still a full target: words, an icon, 48px tall. */
+.xa-location-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: calc(var(--tap-min) + 4px);
+  margin-top: 4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--xa-blue-ink);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 700;
+  cursor: pointer;
+}
+.xa-location-button:disabled {
+  opacity: 0.6;
+}
+.xa-mini-map {
+  border-top: 1px solid var(--xa-vien);
+}
+.xa-mini-map__canvas {
+  position: relative;
+  background: #e8f0f4;
+}
+.xa-mini-map__svg {
+  display: block;
+  width: 100%;
+  height: 112px;
+}
+.xa-mini-map__pin {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -100%);
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
+}
+.xa-mini-map__caption {
+  margin: 0;
+  padding: 6px 12px;
+  border-top: 1px solid var(--xa-vien);
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+}
+
+/* The prototype's offline box (`NewFeedbackPage.tsx:278`): the orange tone, words first. */
+.xa-offline-box {
+  margin: 0 0 8px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  background: var(--xa-orange-50);
+  color: var(--xa-orange-ink);
+  font-size: var(--text-body);
+  line-height: 1.45;
+}
+
+/* Before / after (`BeforeAfter.tsx`): two columns, each labelled in words on its own band. */
+.xa-before-after__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.xa-before-after__column {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+.xa-app .xa-before-after__label {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: #ffffff;
+  font-weight: 700;
+  text-align: center;
+}
+.xa-before-after__label--before {
+  background: var(--xa-orange-ink);
+}
+.xa-before-after__label--after {
+  background: var(--xa-green-ink);
+}
+.xa-before-after__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  margin: 0;
+  padding: 8px;
+  border: 1px dashed var(--xa-vien);
+  border-radius: 12px;
+  background: var(--xa-nen);
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+  text-align: center;
+}
+.xa-before-after__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.xa-before-after__image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border: 1px solid var(--xa-vien);
+  border-radius: 12px;
+}
+
+/* "Chia sẻ qua Zalo" under an article. */
+.xa-bai__share {
+  display: grid;
+  gap: 8px;
+  margin: 24px 0 8px;
+}
+
+/* Video: the two-column grid (`VideoPage.tsx`). */
+.xa-video-grid {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.xa-video-tile {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.xa-video-tile__cover {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  border: 1px solid var(--xa-vien);
+  border-radius: 12px;
+  background: var(--xa-blue-50);
+  color: var(--xa-blue-ink);
+}
+.xa-video-tile__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.xa-video-tile__play {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #ffffff;
+}
+.xa-video-tile__title {
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+/* Truyền thanh: day groups, rows with the round play button, the fixed bar. */
+.xa-broadcast-day {
+  margin: 0 0 20px;
+}
+.xa-app .xa-broadcast-day__title {
+  margin: 0 0 8px;
+  color: var(--ink-muted);
+  font-size: var(--text-body);
+  font-weight: 700;
+}
+.xa-broadcast-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+}
+/* The playing row: tinted AND its button says "Tạm dừng" — never the tint alone. */
+.xa-broadcast-row--active {
+  border-color: var(--xa-cyan-ink);
+  background: var(--xa-cyan-50);
+}
+.xa-broadcast-row__play {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--xa-cyan-ink);
+  color: #ffffff;
+  cursor: pointer;
+}
+.xa-broadcast-row__open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: calc(var(--tap-min) + 4px);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.xa-broadcast-row__text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.xa-broadcast-row__title {
+  line-height: 1.35;
+}
+.xa-broadcast-row__summary {
+  line-height: 1.4;
+}
+.xa-broadcast-bar {
+  flex: none;
+  padding: 12px 12px max(12px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--xa-vien);
+  background: var(--surface);
+}
+.xa-app .xa-broadcast-bar__title {
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 700;
+}
+.xa-broadcast-bar__seek {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.xa-broadcast-bar__time {
+  flex: none;
+  min-width: 3.2em;
+  color: var(--ink-muted);
+  font-size: var(--text-small);
+  font-variant-numeric: tabular-nums;
+}
+.xa-broadcast-bar__seek .xa-broadcast-bar__time:last-child {
+  text-align: right;
+}
+.xa-seek {
+  flex: 1;
+  min-width: 0;
+  height: var(--tap-min);
+  margin: 0;
+  accent-color: var(--xa-cyan-ink);
+}
+.xa-broadcast-bar__controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.xa-broadcast-bar__skip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--tap-min);
+  min-height: calc(var(--tap-min) + 12px);
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  background: none;
+  color: var(--ink-muted);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 600;
+  cursor: pointer;
+}
+.xa-broadcast-bar__skip:disabled {
+  opacity: 0.5;
+}
+.xa-broadcast-bar__toggle {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--xa-cyan-ink);
+  color: #ffffff;
+  cursor: pointer;
+}
+.xa-broadcast-bar__speed {
+  min-width: var(--tap-min);
+  min-height: var(--tap-min);
+  margin-left: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--xa-vien);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--xa-cyan-ink);
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 700;
+  cursor: pointer;
+}
+.xa-broadcast-bar .xa-error-box {
+  margin-top: 8px;
+}
+
+/* The directory search: a magnifier inside the field (`DirectoryPage.tsx:52-61`). */
+.xa-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid var(--xa-vien);
+  border-radius: 12px;
+  background: var(--xa-nen);
+  color: var(--ink-muted);
+}
+.xa-search__icon {
+  flex: none;
+  display: grid;
+}
+.xa-search__input {
+  flex: 1;
+  min-width: 0;
+  min-height: calc(var(--tap-min) + 4px);
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-body);
+}
+.xa-search__input::placeholder {
+  color: var(--ink-muted);
+}
+.xa-search__input:focus {
+  outline: none;
+}
+.xa-search:focus-within {
+  border-color: var(--xa-blue-ink);
+  box-shadow: 0 0 0 2px var(--xa-blue-50);
+}
+
+/* Cá nhân: the Zalo picture in the avatar's circle; the "Cỡ chữ lớn" row that is a switch. */
+.xa-avatar--image {
+  object-fit: cover;
+}
+.xa-setting-switch {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.xa-setting-switch .xa-cong-tac {
+  flex: none;
+  pointer-events: none;
+}
+
+/* The minimise bubble (`MinimiseBubble.tsx`): above the tab bar, at the right; draggable. */
+.xa-minimise {
+  position: absolute;
+  z-index: 40;
+  right: 10px;
+  bottom: calc(var(--xa-tab-h) + 8px + env(safe-area-inset-bottom));
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 50%;
+  background: var(--xa-brand-dark);
+  color: #ffffff;
+  opacity: 0.92;
+  box-shadow: 0 6px 20px rgba(15, 42, 67, 0.25);
+  touch-action: none;
+  cursor: grab;
+}
+.xa-minimise--dragging {
+  opacity: 1;
+  cursor: grabbing;
 }

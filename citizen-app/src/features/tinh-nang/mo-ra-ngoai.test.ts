@@ -66,6 +66,21 @@ describe("moRaNgoai — commune links (lien-ket-xa) must be https", () => {
     expect(openWebPage).toHaveBeenCalledWith("https://video.example/v/1");
   });
 
+  it("dich-vu-cong (11/10/2026, 'Tra cứu hồ sơ'): https AND the national portal's one host — nothing else opens", async () => {
+    for (const url of [
+      "http://vpcp.dichvucong.gov.vn/p/home/dvc-tra-cuu-ho-so.html",
+      "https://dichvucong.example/p/home/dvc-tra-cuu-ho-so.html",
+      "https://vpcp.dichvucong.gov.vn.example/x",
+      "https://user@vpcp.dichvucong.gov.vn/",
+    ]) {
+      expect(await moRaNgoai("dich-vu-cong", url), url).toBe(false);
+    }
+    expect(openWebPage).not.toHaveBeenCalled();
+    const portal = "https://vpcp.dichvucong.gov.vn/p/home/dvc-tra-cuu-ho-so.html";
+    expect(await moRaNgoai("dich-vu-cong", portal)).toBe(true);
+    expect(openWebPage).toHaveBeenCalledWith(portal);
+  });
+
   it("does not change other destinations: ma-qr still opens an http address", async () => {
     expect(await moRaNgoai("ma-qr", "http://vidu.vn")).toBe(true);
     expect(openWebPage).toHaveBeenCalledWith("http://vidu.vn");

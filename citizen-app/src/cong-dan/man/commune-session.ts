@@ -53,10 +53,9 @@ import { layPhienViGov } from "../api/phien-vigov";
 
 import {
   COMMUNE_APP_SESSION,
-  PHONE_VERIFICATION,
-  PHONE_VERIFICATION_TASK,
+  COMMUNE_PHONE_WORDS as PHONE_VERIFICATION,
+  communeZaloGaveNoNumber,
   type PhoneVerificationTask,
-  TYPED_CONTACT,
   zaloFailureSentence,
 } from "./noi-dung";
 
@@ -316,7 +315,8 @@ export function sessionGateMessage(
   task: PhoneVerificationTask,
   zalo?: ZaloFailure,
 ): string {
-  const t = PHONE_VERIFICATION_TASK[task];
+  // The commune app's voice, "bà con" (owner 11/10/2026: theo prototype): this gate is the commune app's alone.
+  const t = PHONE_VERIFICATION.task[task];
   if (outcome === "thu-lai" && zalo !== undefined) {
     return PHONE_VERIFICATION.zalo_failed(zaloFailureSentence(zalo), t, zalo.transient);
   }
@@ -333,7 +333,7 @@ export function sessionGateMessage(
       return PHONE_VERIFICATION.still_unverified(t);
     case "no-phone":
       // Only sending has the typed-contact path; any other act reads as "the number could not be confirmed".
-      return task === "submit" ? TYPED_CONTACT.zalo_gave_no_number(t) : PHONE_VERIFICATION.still_unverified(t);
+      return task === "submit" ? communeZaloGaveNoNumber(t) : PHONE_VERIFICATION.still_unverified(t);
     case "chua-ket-noi":
       return COMMUNE_APP_SESSION.not_connected(t);
     case "tam-ngung":

@@ -42,7 +42,7 @@ import type { ZaloFailure } from "../api/mo-phien-vigov";
 
 import { BieuTuong } from "./BieuTuong";
 import { ConsentDialog } from "./consent-dialog";
-import { SCENE_PHOTOS, VERIFICATION_PHOTOS, zaloFailureSentence, zaloSupportCode } from "./noi-dung";
+import { SCENE_PHOTOS, VERIFICATION_PHOTOS, XA_PA, zaloFailureSentence, zaloSupportCode } from "./noi-dung";
 import type { OnSessionLost } from "./PhanAnhAppXa";
 
 /* ═══════════════════════════════ PICKING — the injected capability ═══════════════════════════════ */
@@ -220,8 +220,19 @@ export function ScenePhotoButtons(props: {
 export type PickedPhoto = { readonly key: string; readonly path: string };
 
 /**
- * The send form's photo field: label, why, the picked photos (each with "Bỏ ảnh thứ n"), the count and the
- * buttons. A thumbnail the webview cannot show becomes words — the photo is still there and still goes.
+ * At most THREE photos on the send form — the prototype's `PhotoPicker` (`MAX_PHOTOS = 3`, owner 11/10/2026). The
+ * server still accepts `MAX_SCENE_PHOTOS`, and "Thêm ảnh" on the petition's own screen keeps that limit.
+ */
+export const SEND_FORM_MAX_PHOTOS = 3;
+
+/**
+ * The send form's photo field, as the prototype draws it (`PhotoPicker.tsx`): the title with "(không bắt buộc)", one
+ * hint, then a THREE-TILE GRID — the dashed "Chụp ảnh" tile while there is room, each picked photo with an "X" in
+ * its corner, and dashed empty tiles for the rest. "Chọn ảnh có sẵn" stays under the grid (the prototype's single
+ * input reached the album too; Zalo's camera does not). Both still ask first (`ConsentDialog`, policy 3.3.4).
+ *
+ * The "X" is a full 48px target (`.xa-photo-tile__remove`), not the prototype's 32px: the touch floor wins. A
+ * thumbnail the webview cannot show becomes words — the photo is still there and still goes.
  */
 export function ScenePhotoField(props: {
   photos: readonly PickedPhoto[];
@@ -229,50 +240,95 @@ export function ScenePhotoField(props: {
   picking: PhotoPicking;
   /** This screen keeps a draft: say that photos are not in it. */
   hasDraft: boolean;
+  /** How many the form takes (`SEND_FORM_MAX_PHOTOS`). */
+  max?: number;
 }) {
   const [noPreview, setNoPreview] = useState<ReadonlySet<string>>(() => new Set());
   const { photos, picking } = props;
+  const max = props.max ?? SEND_FORM_MAX_PHOTOS;
+  const room = photos.length < max;
+  const empties = Math.max(0, max - 1 - photos.length);
   return (
     <section className="xa-photos" aria-labelledby="xa-photos-label">
-      <p className="xa-nhan-o" id="xa-photos-label">
-        {SCENE_PHOTOS.label}
-      </p>
-      <p className="xa-phu">{SCENE_PHOTOS.why}</p>
+      <h2 className="xa-form-title" id="xa-photos-label">
+        {XA_PA.photos_title} <span className="xa-form-title__optional">{XA_PA.optional_suffix}</span>
+      </h2>
+      <p className="xa-phu">{XA_PA.photos_hint}</p>
       {props.hasDraft && <p className="xa-phu">{SCENE_PHOTOS.not_in_draft}</p>}
-      {photos.length > 0 && (
-        <ul className="xa-photos__list">
-          {photos.map((p, i) => (
-            <li key={p.key} className="xa-photos__item">
-              {noPreview.has(p.key) ? (
-                <p className="xa-photos__no-preview">{SCENE_PHOTOS.no_preview(i + 1)}</p>
-              ) : (
-                <img
-                  className="xa-photos__thumb"
-                  src={p.path}
-                  alt={SCENE_PHOTOS.photo_alt(i + 1)}
-                  onError={() => setNoPreview((s) => new Set(s).add(p.key))}
-                />
-              )}
-              <button type="button" className="xa-nut xa-nut--phu" onClick={() => props.onRemove(p.key)}>
-                <BieuTuong ten="trash" co={20} />
-                {SCENE_PHOTOS.remove(i + 1)}
-              </button>
-            </li>
-          ))}
-        </ul>
+      {picking.explaining !== null && (
+        <ConsentDialog
+          id="xa-photo-consent-question"
+          question={picking.explaining === "camera" ? SCENE_PHOTOS.camera_question : SCENE_PHOTOS.library_question}
+          onAllow={picking.confirm}
+          onDeny={picking.cancel}
+        />
       )}
-      <p className="xa-phu" role="status">
-        {SCENE_PHOTOS.count(photos.length, MAX_SCENE_PHOTOS)}
-      </p>
-      <ScenePhotoButtons
-        count={photos.length}
-        explaining={picking.explaining}
-        picking={picking.picking}
-        failure={picking.failure}
-        onAsk={picking.ask}
-        onConfirm={picking.confirm}
-        onCancel={picking.cancel}
-      />
+      <ul className="xa-photo-grid">
+        {room && (
+          <li>
+            <button
+              type="button"
+              className="xa-photo-tile xa-photo-tile--take"
+              disabled={picking.picking}
+              onClick={() => picking.ask("camera")}
+            >
+              <BieuTuong ten="camera" co={30} stroke={2} />
+              <span>{SCENE_PHOTOS.take}</span>
+            </button>
+          </li>
+        )}
+        {photos.map((p, i) => (
+          <li key={p.key} className="xa-photo-tile xa-photo-tile--photo">
+            {noPreview.has(p.key) ? (
+              <p className="xa-photos__no-preview">{SCENE_PHOTOS.no_preview(i + 1)}</p>
+            ) : (
+              <img
+                className="xa-photo-tile__image"
+                src={p.path}
+                alt={XA_PA.photo_alt(i + 1)}
+                onError={() => setNoPreview((s) => new Set(s).add(p.key))}
+              />
+            )}
+            <button
+              type="button"
+              className="xa-photo-tile__remove"
+              aria-label={XA_PA.photo_remove(i + 1)}
+              onClick={() => props.onRemove(p.key)}
+            >
+              <span className="xa-photo-tile__x" aria-hidden="true">
+                <BieuTuong ten="x" co={18} stroke={3} />
+              </span>
+            </button>
+          </li>
+        ))}
+        {Array.from({ length: empties }, (_, i) => (
+          <li key={`empty-${i}`} className="xa-photo-tile xa-photo-tile--empty" aria-hidden="true" />
+        ))}
+      </ul>
+      {room && (
+        <button
+          type="button"
+          className="xa-location-button"
+          disabled={picking.picking}
+          onClick={() => picking.ask("library")}
+        >
+          <BieuTuong ten="plus" co={20} />
+          {SCENE_PHOTOS.pick}
+        </button>
+      )}
+      {picking.picking && (
+        <p className="xa-phu" role="status">
+          {SCENE_PHOTOS.picking}
+        </p>
+      )}
+      {picking.failure !== null && (
+        <p className="xa-loi-o" role="status">
+          {pickFailureText(picking.failure)}
+        </p>
+      )}
+      {picking.failure !== null && zaloSupportCode(picking.failure.zalo) !== null && (
+        <p className="xa-phu">{zaloSupportCode(picking.failure.zalo)}</p>
+      )}
     </section>
   );
 }
@@ -685,10 +741,13 @@ export function usePhotoLinks(load: PhotoLinkLoader, code: string) {
 }
 
 /**
- * The photos of a petition the citizen opened, "Trước khi xử lý" then "Sau khi xử lý" (ADR 0047 row "THAY
- * G8"), STACKED: the detail is one phone column wide, and each block says which it is in WORDS, never by its
- * position. The "after" block appears only when the commune's list is non-empty (ADR 0047:254 (12)); then, and
- * only then, the citizen's own block is titled "Trước khi xử lý" — without an "after" there is no "before".
+ * The photos of a petition the citizen opened (ADR 0047 row "THAY G8"), laid out as the prototype's `BeforeAfter`
+ * (owner 11/10/2026): ONE block "Hình ảnh trước và sau khi xử lý", two columns, each labelled in WORDS on a
+ * coloured band — "Trước" (the citizen's own photos) and "Sau" (the commune's) — never by position alone. The block
+ * appears once either list has a photo (no empty frame, ADR 0047:254 (12)); an empty column says so in words.
+ *
+ * Under it, only what the block cannot show: "Thêm ảnh hiện trường" while the petition is `da-tiep-nhan` and the
+ * app has the picker (`OwnScenePhotosView`), and a retry line for a list that failed to load.
  */
 export function PetitionPhotos(props: {
   code: string;
@@ -696,18 +755,100 @@ export function PetitionPhotos(props: {
   pick?: PickScenePhotos;
   onSessionLost: OnSessionLost;
 }) {
-  const after = usePhotoLinks(listVerificationPhotos, props.code);
-  const hasAfter = after.list.kind === "ready" && after.list.items.length > 0;
+  const { code } = props;
+  const own = usePhotoLinks(listScenePhotos, code);
+  const after = usePhotoLinks(listVerificationPhotos, code);
+  const uploads = usePhotoUploads(props.onSessionLost, own.reload);
+  const canAdd = props.pick !== undefined && props.status === "da-tiep-nhan";
+  const stored = own.list.kind === "ready" ? own.list.items.length : 0;
+  const remaining = () => MAX_SCENE_PHOTOS - stored - photosInFlight(uploads.jobs);
+  const picking = usePhotoPicking(props.pick, remaining, (paths) => uploads.start(code, paths));
   return (
     <>
-      <OwnScenePhotos {...props} title={hasAfter ? VERIFICATION_PHOTOS.before_title : undefined} />
+      <BeforeAfterView before={own.list} after={after.list} onBeforeError={own.onImageError} onAfterError={after.onImageError} />
+      <OwnScenePhotosView
+        list={own.list}
+        canAdd={canAdd}
+        count={stored + photosInFlight(uploads.jobs)}
+        picking={picking}
+        jobs={uploads.jobs}
+        onRetryUpload={uploads.retry}
+        onRetryList={own.reload}
+        onImageError={own.onImageError}
+        showPhotos={false}
+      />
       <VerificationPhotosView
         list={after.list}
         status={props.status}
         onRetry={after.reload}
         onImageError={after.onImageError}
+        showPhotos={false}
       />
     </>
+  );
+}
+
+/** One column of the before/after block: its labelled band, then its photos or the words for none. */
+function BeforeAfterColumn(props: {
+  label: string;
+  tone: "before" | "after";
+  items: readonly ScenePhotoLink[];
+  emptyText: string;
+  alt: (i: number) => string;
+  onImageError: () => void;
+}) {
+  return (
+    <div className="xa-before-after__column">
+      <p className={`xa-before-after__label xa-before-after__label--${props.tone}`}>{props.label}</p>
+      {props.items.length === 0 ? (
+        <p className="xa-before-after__empty">{props.emptyText}</p>
+      ) : (
+        <ul className="xa-before-after__list">
+          {props.items.map((p, i) => (
+            <li key={p.id}>
+              <img className="xa-before-after__image" src={p.url} alt={props.alt(i + 1)} onError={props.onImageError} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The before/after block without its effects — what the tests render. Nothing until either list has a photo. */
+export function BeforeAfterView(props: {
+  before: OwnPhotoList;
+  after: OwnPhotoList;
+  onBeforeError: () => void;
+  onAfterError: () => void;
+}) {
+  const before = props.before.kind === "ready" ? props.before.items : [];
+  const after = props.after.kind === "ready" ? props.after.items : [];
+  if (before.length === 0 && after.length === 0) return null;
+  return (
+    <section className="xa-the xa-the--dem xa-khoi xa-before-after" aria-labelledby="xa-before-after-title">
+      <h2 className="xa-dau-khoi__tieu-de" id="xa-before-after-title">
+        {XA_PA.before_after_title}
+      </h2>
+      <div className="xa-before-after__grid">
+        <BeforeAfterColumn
+          label={XA_PA.before_label}
+          tone="before"
+          items={before}
+          emptyText={XA_PA.before_empty}
+          alt={SCENE_PHOTOS.photo_alt}
+          onImageError={props.onBeforeError}
+        />
+        <BeforeAfterColumn
+          label={XA_PA.after_label}
+          tone="after"
+          items={after}
+          emptyText={XA_PA.after_empty}
+          alt={VERIFICATION_PHOTOS.photo_alt}
+          onImageError={props.onAfterError}
+        />
+      </div>
+    </section>
   );
 }
 
@@ -730,10 +871,12 @@ export function VerificationPhotosView(props: {
   status: string;
   onRetry: () => void;
   onImageError: () => void;
+  /** `false` inside `PetitionPhotos`: the photos are in the before/after block, only a failure is said here. */
+  showPhotos?: boolean;
 }) {
   const { list } = props;
   if (list.kind === "loading") return null;
-  if (list.kind === "ready" && list.items.length === 0) return null;
+  if (list.kind === "ready" && (list.items.length === 0 || props.showPhotos === false)) return null;
   if (list.kind === "failed" && !AFTER_PHOTO_STATUSES.has(props.status)) return null;
   return (
     <section className="xa-the xa-the--dem xa-khoi xa-photos" aria-labelledby="xa-after-photos-title">
@@ -816,9 +959,15 @@ export function OwnScenePhotosView(props: {
   onRetryUpload: (key: string) => void;
   onRetryList: () => void;
   onImageError: () => void;
+  /**
+   * `false` inside `PetitionPhotos` (owner 11/10/2026): the photos are drawn by the before/after block, so this
+   * block is only "Thêm ảnh" and a failed load — never a second copy of the same photos.
+   */
+  showPhotos?: boolean;
 }) {
   const { list } = props;
-  const items = list.kind === "ready" ? list.items : [];
+  const showPhotos = props.showPhotos !== false;
+  const items = list.kind === "ready" && showPhotos ? list.items : [];
   // Nothing to show and nothing to do: no block at all (decision 12 — no empty photo frame).
   if (!props.canAdd && list.kind === "loading") return null;
   if (!props.canAdd && list.kind === "ready" && items.length === 0) return null;

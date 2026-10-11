@@ -49,6 +49,7 @@ import {
   refusalFailure,
   ScenePhotoButtons,
   ScenePhotoField,
+  SEND_FORM_MAX_PHOTOS,
   ScenePhotoUploads,
   sendOutcome,
   uploadSummary,
@@ -429,33 +430,47 @@ describe("the words — the owner's decisions, in what the citizen reads", () =>
 });
 
 describe("the send form's photo field", () => {
-  it("label, why, count and the two buttons; the draft note only when there is a draft", () => {
+  // The prototype's `PhotoPicker` (owner 11/10/2026): title + "(không bắt buộc)", one hint, a THREE-tile grid —
+  // the dashed "Chụp ảnh" tile, then dashed empty tiles; "Chọn ảnh có sẵn" stays under it (the album).
+  it("title, hint, the three-tile grid with 'Chụp ảnh' first, 'Chọn ảnh có sẵn' under it; the draft note only with a draft", () => {
     const html = renderToStaticMarkup(
       createElement(ScenePhotoField, { photos: [], onRemove: noop, picking: idlePicking, hasDraft: true }),
     );
-    expect(html).toContain(XA_PA.anh_bat_buoc);
-    expect(html).toContain(SCENE_PHOTOS.why);
+    expect(html).toContain('Ảnh hiện trường <span class="xa-form-title__optional">(không bắt buộc)</span>');
+    expect(html).toContain("Có ảnh thì cán bộ nắm được sự việc nhanh hơn.");
     expect(html).toContain(SCENE_PHOTOS.not_in_draft);
-    expect(html).toContain(SCENE_PHOTOS.count(0, MAX_SCENE_PHOTOS));
-    expect(html).toContain(SCENE_PHOTOS.take);
-    expect(html).toContain(SCENE_PHOTOS.pick);
-    expect(html.match(/class="xa-nut xa-nut--phu"/g)).toHaveLength(2);
+    expect(html).toMatch(/<button type="button" class="xa-photo-tile xa-photo-tile--take"><svg[^>]*>[\s\S]*?<\/svg><span>Chụp ảnh<\/span><\/button>/);
+    expect(html.match(/xa-photo-tile--empty/g)).toHaveLength(SEND_FORM_MAX_PHOTOS - 1);
+    expect(html).toContain(`>${SCENE_PHOTOS.pick}</button>`);
+    expect(SEND_FORM_MAX_PHOTOS).toBe(3);
     const noDraft = renderToStaticMarkup(
       createElement(ScenePhotoField, { photos: [], onRemove: noop, picking: idlePicking, hasDraft: false }),
     );
     expect(noDraft).not.toContain(SCENE_PHOTOS.not_in_draft);
   });
 
-  it("each picked photo: a thumbnail with words, and its own 'Bỏ ảnh thứ n' button", () => {
+  it("each picked photo: a tile with words, and its own 'X' named 'Xoá ảnh hiện trường n'; at three, no 'Chụp ảnh' tile", () => {
     const photos = [
       { key: "a", path: "zalo-temp://a.jpg" },
       { key: "b", path: "zalo-temp://b.jpg" },
     ];
     const html = renderToStaticMarkup(createElement(ScenePhotoField, { photos, onRemove: noop, picking: idlePicking, hasDraft: false }));
-    expect(html).toContain(`alt="${SCENE_PHOTOS.photo_alt(2)}"`);
-    expect(html).toContain(SCENE_PHOTOS.remove(1));
-    expect(html).toContain(SCENE_PHOTOS.remove(2));
-    expect(html).toContain(SCENE_PHOTOS.count(2, MAX_SCENE_PHOTOS));
+    expect(html).toContain(`alt="${XA_PA.photo_alt(2)}"`);
+    expect(html).toContain(`aria-label="${XA_PA.photo_remove(1)}"`);
+    expect(html).toContain(`aria-label="${XA_PA.photo_remove(2)}"`);
+    expect(XA_PA.photo_remove(2)).toBe("Xoá ảnh hiện trường 2");
+    // Two photos + the "Chụp ảnh" tile fill the three; no empty tile is left.
+    expect(html).not.toContain("xa-photo-tile--empty");
+    const full = renderToStaticMarkup(
+      createElement(ScenePhotoField, {
+        photos: [...photos, { key: "c", path: "zalo-temp://c.jpg" }],
+        onRemove: noop,
+        picking: idlePicking,
+        hasDraft: false,
+      }),
+    );
+    expect(full).not.toContain("xa-photo-tile--take");
+    expect(full).not.toContain(`>${SCENE_PHOTOS.pick}</button>`);
   });
 
   it("at five: no more buttons, and a sentence saying how to change one", () => {
@@ -559,7 +574,7 @@ describe("after 'Gửi phản ánh' — the photos go, the petition stands", () 
   it("the lookup code stays on screen above the photo list", () => {
     const petition = PETITION;
     const html = renderToStaticMarkup(
-      createElement(SendDone, { petition, onFollow: noop, onHome: noop }, createElement("p", null, "PHOTOS-HERE")),
+      createElement(SendDone, { communeName: "Xã Thử", petition, onFollow: noop, onHome: noop }, createElement("p", null, "PHOTOS-HERE")),
     );
     expect(html).toContain(`#${CODE}`);
     expect(html.indexOf(`#${CODE}`)).toBeLessThan(html.indexOf("PHOTOS-HERE"));

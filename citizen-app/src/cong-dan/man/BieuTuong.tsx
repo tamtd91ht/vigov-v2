@@ -386,6 +386,23 @@ const HINH = {
       <path d="M8.6,13.5l6.8,4M15.4,6.5l-6.8,4" />
     </>
   ),
+  // The send form's photo tile (lucide Camera), its remove button (X), the address block's "Lấy vị trí hiện tại"
+  // (LocateFixed) and the minimise bubble (Minus) — the prototype's marks, owner 11/10/2026.
+  camera: (
+    <>
+      <path d="M14.5,4h-5L7,7H4a2,2,0,0,0,-2,2v9a2,2,0,0,0,2,2h16a2,2,0,0,0,2,-2V9a2,2,0,0,0,-2,-2h-3z" />
+      <circle cx="12" cy="13" r="3" />
+    </>
+  ),
+  x: <path d="M18,6L6,18M6,6l12,12" />,
+  minus: <path d="M5,12h14" />,
+  "locate-fixed": (
+    <>
+      <path d="M2,12h3M19,12h3M12,2v3M12,19v3" />
+      <circle cx="12" cy="12" r="7" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
   // Cá nhân "Ngôn ngữ".
   globe: (
     <>
@@ -402,14 +419,25 @@ export type TenBieuTuong = keyof typeof HINH;
  * `stroke`: line weight. 1.8 everywhere; the current bottom tab draws heavier (2.4, `PROTOTYPE.md` §5.4) as a
  * second signal beside its bold label and `aria-current` — never the only one.
  */
-export function BieuTuong({ ten, co = 22, stroke = 1.8 }: { ten: TenBieuTuong; co?: number; stroke?: number }) {
+export function BieuTuong({
+  ten,
+  co = 22,
+  stroke = 1.8,
+  fill = "none",
+}: {
+  ten: TenBieuTuong;
+  co?: number;
+  stroke?: number;
+  /** `"currentColor"` for the prototype's filled play/pause marks; outline everywhere else. */
+  fill?: string;
+}) {
   return (
     <svg
       className="xa-bt"
       width={co}
       height={co}
       viewBox="0 0 24 24"
-      fill="none"
+      fill={fill}
       stroke="currentColor"
       strokeWidth={stroke}
       strokeLinecap="round"

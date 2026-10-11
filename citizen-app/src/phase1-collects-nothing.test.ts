@@ -272,11 +272,13 @@ const TRIPWIRES: readonly Tripwire[] = [
     // `getUserInfo` LÀ TÊN THỨ MƯỜI MỘT (28/09/2026) — xem lệnh cấm tuyệt đối ngay trên.
     // `chooseImage` and `configAppView` are the twelfth and thirteenth (08/10/2026): the phone's own camera for
     // "Chụp ảnh", and the commune name on Zalo's top bar (`zalo-api.ts` `takeScenePhoto`, `setCommuneActionBar`).
+    // `minimizeApp` and `openShareSheet` are the fourteenth and fifteenth (11/10/2026): the commune interface's
+    // minimise bubble and "Chia sẻ qua Zalo" (`zalo-api.ts` `minimiseMiniApp`, `shareLinkOnZalo`).
     what:
-      'a platform call outside "src/features/tinh-nang/" — those thirteen are the ONLY platform ' +
+      'a platform call outside "src/features/tinh-nang/" — those fifteen are the ONLY platform ' +
       "calls this app makes, and they live in exactly one directory",
     pattern:
-      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile|getUserInfo|chooseImage|configAppView)\s*\(/,
+      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile|getUserInfo|chooseImage|configAppView|minimizeApp|openShareSheet)\s*\(/,
     chi_trong: [THU_MUC_TINH_NANG],
   },
   {

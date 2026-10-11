@@ -17,7 +17,7 @@ import { DANH_BA, DIRECTORY_UNIT_HEAD, XA_GIAO_DIEN, XA_PA, XA_TN } from "./noi-
 
 import { BieuTuong } from "./BieuTuong";
 import { KhoiTrangThai } from "./khung-xa";
-import { ONhapDong } from "./o-nhap";
+import { OTimKiem } from "./o-nhap"; // vi-name-ok: existing module name, not renamed (rule 12 #3)
 
 /** Bỏ dấu tiếng Việt và hoa thường — người lớn tuổi hay gõ không dấu ("chu tich"). */
 export function boDau(s: string): string {
@@ -155,32 +155,55 @@ export function ThanDanhBaXa(props: { trang: TrangDanhBa; onTai: () => void }) {
     [trang, tu_khoa],
   );
 
-  if (trang.kieu === "dang-tai") return <KhoiTrangThai bieu_tuong="users" cau={DANH_BA.dang_tai} dang_tai shape="rows" />;
-  if (trang.kieu === "loi") {
-    return (
-      <KhoiTrangThai
-        bieu_tuong="alert"
-        loi
-        cau={CAU_LOI[trang.loi]}
-        nut={trang.loi !== "khong-hop-le" ? { nhan: DANH_BA.nut_thu_lai, onBam: props.onTai } : undefined}
+  // The search is ALWAYS there, as the prototype's (`DirectoryPage.tsx:48-62`, owner 11/10/2026) — also while the
+  // list loads or failed: a box that appears later moves the screen under the citizen's finger.
+  const search = (
+    // Sticky at the top of the scrolling area (§6.9): a long directory scrolls under it, and the search stays one
+    // tap away. It sits INSIDE the scroller, so it never covers the header or the tab bar.
+    <div className="xa-tim">
+      <OTimKiem
+        id="xa-tim-can-bo"
+        nhan={XA_GIAO_DIEN.tim_danh_ba}
+        placeholder={XA_GIAO_DIEN.tim_danh_ba_goi_y}
+        gia_tri={tu_khoa}
+        toi_da={60}
+        onDoi={datTuKhoa}
       />
+    </div>
+  );
+  if (trang.kieu === "dang-tai") {
+    return (
+      <>
+        {search}
+        <KhoiTrangThai bieu_tuong="users" cau={DANH_BA.dang_tai} dang_tai shape="rows" />
+      </>
     );
   }
-  if (trang.can_bo.length === 0) return <KhoiTrangThai bieu_tuong="users" cau={XA_PA.danh_ba_trong} />;
+  if (trang.kieu === "loi") {
+    return (
+      <>
+        {search}
+        <KhoiTrangThai
+          bieu_tuong="alert"
+          loi
+          cau={CAU_LOI[trang.loi]}
+          nut={trang.loi !== "khong-hop-le" ? { nhan: DANH_BA.nut_thu_lai, onBam: props.onTai } : undefined}
+        />
+      </>
+    );
+  }
+  if (trang.can_bo.length === 0) {
+    return (
+      <>
+        {search}
+        <KhoiTrangThai bieu_tuong="users" cau={XA_PA.danh_ba_trong} />
+      </>
+    );
+  }
 
   return (
     <>
-      {/* Sticky at the top of the scrolling area (§6.9): a long directory scrolls under it, and the search
-          stays one tap away. It sits INSIDE the scroller, so it never covers the header or the tab bar. */}
-      <div className="xa-tim">
-        <ONhapDong
-          id="xa-tim-can-bo"
-          nhan={XA_GIAO_DIEN.tim_danh_ba}
-          gia_tri={tu_khoa}
-          toi_da={60}
-          onDoi={datTuKhoa}
-        />
-      </div>
+      {search}
       {loc.length === 0 ? (
         <KhoiTrangThai bieu_tuong="users" cau={XA_GIAO_DIEN.khong_thay_can_bo} hint={XA_TN.directory_search_empty_hint} />
       ) : (

@@ -139,15 +139,19 @@ export function RootTabHeader(props: { title: string; subtitle?: string; right?:
  * Header của màn con: nút quay lại (mũi tên + chữ "Quay lại") + tiêu đề ở giữa. Nút Back của Zalo đóng cả app,
  * nên đây là đường về.
  */
-export function DauManCon({ tieu_de, onQuayLai }: { tieu_de: string; onQuayLai: () => void }) {
+export function DauManCon({ tieu_de, onQuayLai }: { tieu_de: string; onQuayLai?: () => void }) {
   return (
     <HeaderShell
       className="xa-dau-con"
       left={
-        <button type="button" className="xa-dau-con__lui" onClick={onQuayLai}>
-          <BieuTuong ten="chevron-left" co={24} stroke={2.4} />
-          <span>{QUAY_LAI}</span>
-        </button>
+        // No back button only where the prototype has none: the "Đã gửi phản ánh" screen, whose two buttons are
+        // the ways on (owner 11/10/2026: theo prototype `NewFeedbackPage.tsx:258`).
+        onQuayLai === undefined ? null : (
+          <button type="button" className="xa-dau-con__lui" onClick={onQuayLai}>
+            <BieuTuong ten="chevron-left" co={24} stroke={2.4} />
+            <span>{QUAY_LAI}</span>
+          </button>
+        )
       }
     >
       <h1 className="xa-dau-con__tieu-de">{tieu_de}</h1>

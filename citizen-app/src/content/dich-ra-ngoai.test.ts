@@ -240,12 +240,17 @@ describe("câu khai của chính sách khớp với danh sách đích", () => {
     );
   });
 
-  it("BẢY đích từ 01/10/2026 — đích thứ bảy là liên kết xã gắn trong bài hay trên ảnh trang chủ, mở sau khi xác nhận", () => {
+  it("TÁM đích từ 11/10/2026 — đích thứ bảy là liên kết xã gắn trong bài hay trên ảnh trang chủ, đích thứ tám là trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia", () => {
     // Ghim con số HÔM NAY để lần thêm/bớt đích tiếp theo là một ca đỏ có người đọc, không phải một câu
     // pháp lý lặng lẽ đổi. Sáu → bảy cùng ngày: chủ dự án trả lời ADR 0067 Còn mở #6 (liên kết trong thân bài
     // mở ra ngoài SAU một câu xác nhận, và chính sách thêm một câu), §5 thêm ảnh trang chủ trỏ ra ngoài.
-    expect(DICH_MO_RA_NGOAI).toHaveLength(7);
-    expect(cauKhaiDichRaNgoai()).toMatch(/^Có bảy chỗ ứng dụng mở một trang bên ngoài, và cả bảy đều chỉ mở khi chính bạn bấm: /);
+    // Bảy → tám 11/10/2026: "Tra cứu hồ sơ" mở Cổng Dịch vụ công quốc gia (chủ dự án: dữ liệu một cửa không ở ViGov).
+    expect(DICH_MO_RA_NGOAI).toHaveLength(8);
+    expect(cauKhaiDichRaNgoai()).toMatch(/^Có tám chỗ ứng dụng mở một trang bên ngoài, và cả tám đều chỉ mở khi chính bạn bấm: /);
+    const portal = DICH_MO_RA_NGOAI.find((d) => d.ma === "dich-vu-cong");
+    expect(portal, "Tra cứu hồ sơ mở một nơi mà chính sách không khai").toBeDefined();
+    expect(portal!.trong_chinh_sach).toMatch(/Cổng Dịch vụ công quốc gia/);
+    expect(portal!.trong_chinh_sach).toMatch(/sau khi bạn xác nhận rời ứng dụng/);
     const link = DICH_MO_RA_NGOAI.find((d) => d.ma === "lien-ket-xa");
     expect(link, "liên kết trong bài / ảnh trang chủ mở một nơi mà chính sách không khai").toBeDefined();
     expect(link!.trong_chinh_sach).toMatch(/xã gắn vào một bài viết hoặc một ảnh trên trang chủ/);

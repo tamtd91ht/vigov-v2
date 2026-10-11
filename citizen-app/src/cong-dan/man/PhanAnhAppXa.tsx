@@ -23,7 +23,7 @@
  *
  * Mọi ô nhập đi qua `o-nhap.tsx` — tệp duy nhất của nửa nhà nước được có ô nhập.
  */
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 import {
   type AccountlessLookupResult,
@@ -44,7 +44,6 @@ import {
   type AccountlessReport,
   accountlessReportBody,
   DO_DAI_TOI_DA,
-  MAX_SCENE_PHOTOS,
   type PhieuCuaToi, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type PhieuCuaToiTomTat, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type SceneLocation,
@@ -52,7 +51,8 @@ import {
 } from "../api/hop-dong-phan-anh";
 import { type LanGui, taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not renamed (rule 12 #3)
 import type { ReopenWithPhone } from "../api/mo-phien-vigov";
-import { thoiDiemVN } from "../../lib/thoi-diem";
+import { THOI_DIEM_KHONG_DOC_DUOC } from "../../lib/thoi-diem";
+import { formatDate, formatDateTime, formatDeadline } from "../../lib/vn-format";
 
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong"; // vi-name-ok: existing exported type, imported not renamed
 import {
@@ -67,14 +67,18 @@ import { DauManCon, KhoiTrangThai, type Tone, TrangCon } from "./khung-xa";
 import {
   ACCOUNTLESS,
   COMMUNE_APP_SESSION,
+  COMMUNE_CHANNEL_CLOSED,
+  COMMUNE_OFFLINE_NOTICE,
+  COMMUNE_PHONE_WORDS,
+  COMMUNE_RATING,
   COMMUNE_RESIDENTIAL_UNIT_WORDS,
+  COMMUNE_SEND_ERRORS,
+  COMMUNE_UNKNOWN_STATUS,
   CUA_TOI,
   GUI,
   giaiThichTrangThai,
-  KENH_CHUA_MO,
   KHAN_CAP,
   LOI_GUI,
-  nhanTrangThai,
   SCENE_PHOTOS,
   THE_PHIEU,
   TRA_CUU,
@@ -84,21 +88,19 @@ import {
 import { ONhapDoan, ONhapDong } from "./o-nhap";
 import { PetitionRating } from "./PetitionRating";
 import { ResidentialUnitField, residentialUnitName, useResidentialUnits } from "./residential-unit-picker";
-import {
-  type GetSceneLocation,
-  SceneLocationControl,
-  type SceneLocationWords,
-  useSceneLocation,
-} from "./scene-location";
+import { AddressBlock } from "./address-block";
+import { type GetSceneLocation, type SceneLocationWords, useSceneLocation } from "./scene-location";
 import {
   PetitionPhotos,
   type PickedPhoto,
   type PickScenePhotos,
   ScenePhotoField,
   ScenePhotoUploads,
+  SEND_FORM_MAX_PHOTOS,
   usePhotoPicking,
   usePhotoUploads,
 } from "./scene-photos";
+import { groupOf } from "./status-groups";
 import {
   type FeedbackDraftStore,
   kiemNhapPhieu,
@@ -107,7 +109,6 @@ import {
   NHAN_BUOC,
   NHAN_NHOM,
   nhomCua,
-  type NhomLoc,
   type NhapPhieu,
   VONG_DOI,
 } from "./trai-nghiem";
@@ -125,13 +126,16 @@ export type OnSessionLost = (retry: () => void) => void;
  */
 export function ChipTrangThai({ tt }: { tt: string }) {
   const nhom = nhomCua(tt);
-  if (nhom === null) return <span className="xa-chip-tt xa-chip-tt--unknown">{nhanTrangThai(tt)}</span>;
+  // The commune app's voice for an unknown code ("bà con", owner 11/10/2026) — still never a guessed group.
+  if (nhom === null) return <span className="xa-chip-tt xa-chip-tt--unknown">{COMMUNE_UNKNOWN_STATUS}</span>;
   return <span className={`xa-chip-tt xa-chip-tt--${nhom}`}>{NHAN_NHOM[nhom]}</span>;
 }
 
-const at = (iso: string) => thoiDiemVN(iso) ?? "";
-/** The day part of `thoiDiemVN` ("dd/MM/yyyy HH:mm" → "dd/MM/yyyy"); "" when unreadable. */
-const dayOf = (iso: string) => (thoiDiemVN(iso) ?? "").split(" ")[0] ?? "";
+// The prototype's formats (`lib/format.ts`, owner 11/10/2026): "14:30 ngày 22/8/2026", "22/8/2026", and a
+// deadline as "15h ngày 2/10" — read from what the server stored, never computed (rule 10 #2).
+const at = (iso: string) => formatDateTime(iso) ?? THOI_DIEM_KHONG_DOC_DUOC;
+const dayOf = (iso: string) => formatDate(iso) ?? "";
+const deadline = (iso: string) => formatDeadline(iso) ?? THOI_DIEM_KHONG_DOC_DUOC;
 
 /**
  * One row of "Phản ánh của tôi" — on the home screen and in the list (`PROTOTYPE.md` §6.3 FeedbackCard):
@@ -198,7 +202,7 @@ export function listOutcome(kq: KetQuaDanhSach): ListFailure | "session" | Extra
 
 export function listFailureText(f: ListFailure): string {
   if (f === "network") return CUA_TOI.loi_mang;
-  if (f === "closed") return KENH_CHUA_MO.cau;
+  if (f === "closed") return COMMUNE_CHANNEL_CLOSED;
   return CUA_TOI.loi_may_chu;
 }
 
@@ -281,9 +285,6 @@ export function countLabel(n: number, hasMore: boolean): string {
 
 /* ═══════════════════════════════ DANH SÁCH ═══════════════════════════════ */
 
-const GROUPS: readonly NhomLoc[] = ["tat-ca", "da-tiep-nhan", "dang-xu-ly", "da-xu-ly-xong", "da-dong"];
-const filterLabel = (n: NhomLoc) => (n === "tat-ca" ? XA_TN.loc_tat_ca : NHAN_NHOM[n]);
-
 /** The card that stands where the list will be until the citizen asks to see it (no session yet). */
 export function NeedSessionCard({ onOpen }: { onOpen: () => void }) {
   return (
@@ -327,13 +328,7 @@ export function PetitionList(props: {
   onLoadMore: () => void;
 }) {
   const { state } = props;
-  const [filter, setFilter] = useState<NhomLoc>("tat-ca");
   const items = state.kind === "ready" ? state.items : [];
-  const shown = useMemo(
-    () => (filter === "tat-ca" ? items : items.filter((p) => nhomCua(p.trang_thai) === filter)),
-    [items, filter],
-  );
-  const count = (n: NhomLoc) => (n === "tat-ca" ? items.length : items.filter((p) => nhomCua(p.trang_thai) === n).length);
 
   return (
     <>
@@ -348,33 +343,16 @@ export function PetitionList(props: {
         <BieuTuong ten="right" co={20} />
       </button>
       <ListStatus state={state} onOpen={props.onOpen} onRetry={props.onRetry} />
+      {/* NO status chips (owner 11/10/2026: theo prototype `FeedbackListPage.tsx` — the list, its paging, and the
+          "Tra cứu phiếu" row above). The status is on every card, in words. */}
       {state.kind === "ready" && (
         <>
-          <div className="xa-chips" role="group" aria-label={XA_TN.loc_nhom}>
-            {GROUPS.map((k) => (
-              <button
-                key={k}
-                type="button"
-                className={`xa-chip${filter === k ? " xa-chip--on" : ""}`}
-                aria-pressed={filter === k}
-                onClick={() => setFilter(k)}
-              >
-                {filterLabel(k)} ({countLabel(count(k), state.hasMore)})
-              </button>
-            ))}
-          </div>
-          {shown.length === 0 ? (
-            // Nothing sent yet: the title and what to do next — the "Gửi phản ánh mới" button right below
-            // (§6.3, `04-phan-anh-cua-toi-rong.png`). A filter with nothing in it gets a different hint: the way
-            // out is another chip, not the send button.
-            items.length === 0 ? (
-              <KhoiTrangThai bieu_tuong="message-square-plus" cau={XA_PA.chua_co_phieu} hint={XA_PA.empty_list_hint} />
-            ) : (
-              <KhoiTrangThai bieu_tuong="chat" cau={XA_TN.loc_trong} hint={XA_TN.petition_filter_empty_hint} />
-            )
+          {items.length === 0 ? (
+            // Nothing sent yet: the title and what to do next — the "Gửi phản ánh mới" button right below.
+            <KhoiTrangThai bieu_tuong="message-square-plus" cau={XA_PA.chua_co_phieu} hint={XA_PA.empty_list_hint} />
           ) : (
             <ul className="xa-ds">
-              {shown.map((p) => (
+              {items.map((p) => (
                 <li key={p.ma_tra_cuu}>
                   <PetitionCard petition={p} onOpen={() => props.onOpenPetition(p.ma_tra_cuu)} />
                 </li>
@@ -438,7 +416,7 @@ export function buocDaQua(tt: string): string[] {
 
 /** A step's words: its label, or — for a code this app does not know — the neutral sentence, never the code. */
 export function stepLabel(tt: string): string {
-  return Object.prototype.hasOwnProperty.call(NHAN_BUOC, tt) ? NHAN_BUOC[tt]! : nhanTrangThai(tt);
+  return Object.prototype.hasOwnProperty.call(NHAN_BUOC, tt) ? NHAN_BUOC[tt]! : COMMUNE_UNKNOWN_STATUS;
 }
 
 /**
@@ -474,6 +452,7 @@ export function DongThoiGian({ petition }: { petition: PhieuCuaToi }) {
             <span className="xa-dong-tg__text">
               <strong>{stepLabel(tt)}</strong>
               <span className="xa-phu">{XA_PA.don_vi_xu_ly}</span>
+              {/* The one step time the API has (sent at); per-step times need server data — a backend card. */}
               {i === 0 && <span className="xa-phu">{at(petition.goc_dem_han)}</span>}
               {last && giaiThichTrangThai(tt) && <span className="xa-dong-tg__note">{giaiThichTrangThai(tt)}</span>}
             </span>
@@ -514,28 +493,32 @@ export function PetitionBody(props: {
   const sender = p.an_danh
     ? XA_PA.giau_ten
     : [p.ho_ten_da_che || THE_PHIEU.khong_ghi_ten, p.dien_thoai_da_che].filter(Boolean).join(" · ");
+  // "Hạn xử lý" once the petition is handled, "Dự kiến xong trước" before (`FeedbackDetailPage.tsx:89-93`).
+  const group = groupOf(p.trang_thai);
+  const handled = group === "da-xu-ly-xong" || group === "da-dong";
   return (
     <>
-      {/* The summary card (§6.4): field and status on top, the content, then the facts with their icons. */}
+      {/* The summary card, laid out as the prototype's (`FeedbackDetailPage.tsx:63-97`, owner 11/10/2026): the field
+          small and muted, the content as the card's title, the status chip on the right; then the facts. The code
+          is the header's ("Phiếu #…"), so the card does not repeat it. */}
       <div className="xa-the xa-the--dem xa-khoi">
         <div className="xa-summary-head">
-          <strong className="xa-summary-head__field">{nhanLinhVuc(p.linh_vuc, p.nhan_linh_vuc)}</strong>
+          <div className="xa-summary-head__text">
+            <p className="xa-summary-head__field">{nhanLinhVuc(p.linh_vuc, p.nhan_linh_vuc)}</p>
+            <h2 className="xa-summary-head__content xa-giu-dong">{p.noi_dung}</h2>
+          </div>
           <ChipTrangThai tt={p.trang_thai} />
         </div>
-        <p className="xa-phu">
-          {XA_PA.ma_phieu}: <strong className="xa-ma">#{p.ma_tra_cuu}</strong>
-        </p>
-        <p className="xa-giu-dong">{p.noi_dung}</p>
         <dl className="xa-facts">
-          <Fact icon="pin" label={THE_PHIEU.dia_chi}>
+          <Fact icon="pin" label={XA_PA.detail_location}>
             {p.dia_chi || THE_PHIEU.dia_chi_trong}
           </Fact>
-          <Fact icon="clock" label={THE_PHIEU.gui_luc}>
+          <Fact icon="calendar" label={XA_PA.detail_sent_at}>
             {at(p.goc_dem_han)}
           </Fact>
-          {/* The server's stored deadline, verbatim — never computed here (rule 10 #2, #4). */}
-          <Fact icon="calendar" label={XA_PA.du_kien_xong}>
-            {p.han_xu_ly_xong ? at(p.han_xu_ly_xong) : THE_PHIEU.han_xu_ly_chua_co}
+          {/* The server's stored deadline — formatted, never computed here (rule 10 #2, #4). */}
+          <Fact icon="calendar" label={handled ? XA_PA.detail_due_done : XA_PA.detail_due_open}>
+            {p.han_xu_ly_xong ? deadline(p.han_xu_ly_xong) : THE_PHIEU.han_xu_ly_chua_co}
           </Fact>
           <Fact icon="user" label={THE_PHIEU.nguoi_gui}>
             {sender}
@@ -549,9 +532,9 @@ export function PetitionBody(props: {
           </>
         )}
       </div>
-      {/* "Trước khi xử lý" (the citizen's own photos) and "Sau khi xử lý" (the commune's) — each only when it
-          has photos, the own block also while more may be added (ADR 0047:254 (12)). `key` by status: a
-          petition that moved on drops "Thêm ảnh" and refetches the "after" list at once. */}
+      {/* "Hình ảnh trước và sau khi xử lý" (the citizen's own photos beside the commune's), and "Thêm ảnh" while
+          more may be added (ADR 0047:254 (12)). `key` by status: a petition that moved on drops "Thêm ảnh" and
+          refetches the "after" list at once. */}
       {props.photos && (
         <PetitionPhotos
           key={`${p.ma_tra_cuu}:${p.trang_thai}`}
@@ -561,11 +544,11 @@ export function PetitionBody(props: {
           onSessionLost={props.photos.onSessionLost}
         />
       )}
-      {/* The commune's result, in its own green frame (§6.4) — only when the commune wrote one. */}
+      {/* The commune's result, in its own green frame — only when the commune wrote one. */}
       {p.ket_qua !== "" && (
         <section className="xa-result-box" aria-labelledby="xa-ket-qua-tieu-de">
           <h2 className="xa-dau-khoi__tieu-de" id="xa-ket-qua-tieu-de">
-            {THE_PHIEU.ket_qua}
+            {XA_PA.detail_result}
           </h2>
           <p className="xa-giu-dong">{p.ket_qua}</p>
         </section>
@@ -575,7 +558,8 @@ export function PetitionBody(props: {
         <DongThoiGian petition={p} />
       </div>
       {props.onRated && props.onReload && (
-        // `key` by status: a server-side change (a reopen after a low rating) starts a fresh block.
+        // `key` by status: a server-side change (a reopen after a low rating) starts a fresh block. The commune
+        // app's voice and the prototype's 34px stars (`RatingBlock.tsx`, owner 11/10/2026).
         <PetitionRating
           key={`${p.ma_tra_cuu}:${p.trang_thai}`}
           petition={p}
@@ -583,6 +567,9 @@ export function PetitionBody(props: {
           onReload={props.onReload}
           reopenWithPhone={props.reopenWithPhone}
           zaloAsks={COMMUNE_APP_SESSION.zalo_asks}
+          words={COMMUNE_RATING}
+          phoneWords={COMMUNE_PHONE_WORDS}
+          starSize={34}
         />
       )}
     </>
@@ -606,7 +593,7 @@ export function lookupOutcome(kq: KetQuaGoi): LookupOutcome {
     case "khong-thay":
       return { kind: "failed", text: XA_PA.khong_thay_phieu };
     case "chua-cau-hinh":
-      return { kind: "failed", text: KENH_CHUA_MO.cau };
+      return { kind: "failed", text: COMMUNE_CHANNEL_CLOSED };
     case "loi-mang":
       return { kind: "failed", text: TRA_CUU.loi_mang };
     default:
@@ -829,7 +816,7 @@ export function catalogueFailureText(f: CatalogueFailure): string {
     case "network":
       return XA_PA.fields_network;
     case "closed":
-      return KENH_CHUA_MO.cau;
+      return COMMUNE_CHANNEL_CLOSED;
     case "server":
       return XA_PA.fields_server;
   }
@@ -1146,7 +1133,7 @@ export function FieldStep(props: {
     <div className="xa-khoi">
       {props.fieldChanged && (
         <p className="xa-error-box" role="alert">
-          {LOI_GUI["field-not-offered"].cau}
+          {COMMUNE_SEND_ERRORS["field-not-offered"].cau}
         </p>
       )}
       <p className="xa-phu">{XA_PA.chon_linh_vuc}</p>
@@ -1244,7 +1231,6 @@ export function CommuneSendScreen(props: {
   const [form, setForm] = useState<NhapPhieu>(() => blankForm(props.ho_ten));
   const [location, setLocation] = useState<SceneLocation | null>(null);
   const [errors, setErrors] = useState<LoiNhapPhieu>({});
-  const [confirmCancel, setConfirmCancel] = useState(false);
   /** The attempt in flight — kept across "Gửi lại" and the gate, dropped when what is sent changes. */
   const [attempt, setAttempt] = useState<LanGui | null>(null);
   const [sending, setSending] = useState(false);
@@ -1284,12 +1270,14 @@ export function CommuneSendScreen(props: {
   const photosRef = useRef<readonly PickedPhoto[]>(photos);
   photosRef.current = photos;
   const photoKey = useRef(0);
+  // At most THREE on the form (the prototype's `PhotoPicker`, owner 11/10/2026); the server still takes five, and
+  // "Thêm ảnh" on the petition's own screen keeps that limit.
   const photoPicking = usePhotoPicking(
     pickScenePhotos,
-    () => MAX_SCENE_PHOTOS - photosRef.current.length,
+    () => SEND_FORM_MAX_PHOTOS - photosRef.current.length,
     (paths) =>
       setPhotos((prev) =>
-        [...prev, ...paths.map((path) => ({ key: `picked-${photoKey.current++}`, path }))].slice(0, MAX_SCENE_PHOTOS),
+        [...prev, ...paths.map((path) => ({ key: `picked-${photoKey.current++}`, path }))].slice(0, SEND_FORM_MAX_PHOTOS),
       ),
   );
   const uploads = usePhotoUploads(props.onSessionLost);
@@ -1336,7 +1324,6 @@ export function CommuneSendScreen(props: {
     // A form restored while the name was pending may still hold a number with no box to show it in.
     if (verifiedSession) setForm((t) => withVerifiedSender(t, arrivedSender));
   }
-  const hasContent = form.linh_vuc !== "" || form.noi_dung.trim() !== "" || form.dia_chi.trim() !== "";
 
   // Save as the citizen types, on the writing step only (the prototype's rule, `NewFeedbackPage.tsx:124`).
   // Not while a found draft is still waiting for an answer, and not after sending (step 3).
@@ -1356,17 +1343,14 @@ export function CommuneSendScreen(props: {
     setForm(restored.form);
     setDraftOffer(null);
     setStep(restored.step);
+    // The prototype locates as soon as a restored draft reaches the writing step without an address
+    // (`NewFeedbackPage.tsx:224-228`). Coordinates are never in the draft, so they are taken again.
+    if (restored.step === 2 && restored.form.dia_chi.trim() === "" && location === null) void sceneLocation.locate();
   }
 
   function discardDraft() {
     draftStore?.clear();
     setDraftOffer(null);
-  }
-
-  /** "Huỷ bỏ" in the cancel dialog: what was typed is dropped — on the phone too. */
-  function cancelFeedback() {
-    draftStore?.clear();
-    props.onBack();
   }
 
   /** The accountless send (ADR 0083): same key on "Gửi lại", the draft kept on every refusal. */
@@ -1421,7 +1405,7 @@ export function CommuneSendScreen(props: {
       // goes — the next send has a different body. What was written stays.
       setAttempt(null);
       setUnitId("");
-      setUnitRefusal(out.message ?? LOI_GUI[out.failure].cau);
+      setUnitRefusal(out.message ?? COMMUNE_SEND_ERRORS[out.failure].cau);
       units.reload();
       return;
     }
@@ -1479,49 +1463,62 @@ export function CommuneSendScreen(props: {
     void send(a);
   }
 
+  /**
+   * Back leaves the screen, as the prototype's does (`Screen back` — owner 11/10/2026: no "Huỷ gửi phản ánh?"
+   * question any more). Nothing typed is lost where a draft is kept: the writing step saves as it changes, and
+   * the next open offers it back.
+   */
   function back() {
-    if (step === 2) return setStep(1);
-    if (step === 1 && hasContent) return setConfirmCancel(true);
     props.onBack();
   }
 
-  const failed = failure === null ? null : LOI_GUI[failure];
+  /*
+   * THE NETWORK CAME BACK (the prototype's promise, `NewFeedbackPage.tsx:279`): a send lost to the network goes
+   * again by itself, with the SAME attempt — same body, same `Idempotency-Key` (`api/lan-gui.ts`) — so it can
+   * never become a second petition. Only for `loi-mang`; every other refusal waits for the citizen.
+   */
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    if (failure !== "loi-mang" || attempt === null || sending) return;
+    const resend = () => void sendRef.current(attempt);
+    window.addEventListener("online", resend);
+    return () => window.removeEventListener("online", resend);
+  }, [failure, attempt, sending]);
 
-  return (
-    <>
-      <DauManCon tieu_de={GUI.tieu_de} onQuayLai={step === 3 ? props.onBack : back} />
-      <StepBar step={step} />
-      <TrangCon>
-        {confirmCancel && (
-          <div className="xa-the xa-the--dem xa-khoi xa-card-open" role="alertdialog" aria-label={XA_TN.hoi_huy_tieu_de}>
-            <h2 className="xa-dau-khoi__tieu-de">{XA_TN.hoi_huy_tieu_de}</h2>
-            <p>{XA_PA.hoi_huy_cau}</p>
-            <button type="button" className="xa-nut" onClick={() => setConfirmCancel(false)}>
-              {XA_TN.tiep_tuc_nhap}
-            </button>
-            <button type="button" className="xa-nut xa-nut--phu xa-nut--do-vien" onClick={cancelFeedback}>
-              {XA_TN.huy_bo}
-            </button>
-          </div>
-        )}
+  // The commune app's voice ("bà con", owner 11/10/2026); the retry rule is `LOI_GUI`'s, unchanged.
+  const failed = failure === null ? null : COMMUNE_SEND_ERRORS[failure];
 
-        {draftOffer !== null && (
+  // A draft found on opening: the prototype shows the question ALONE under the header (`NewFeedbackPage.tsx:248`).
+  if (draftOffer !== null) {
+    return (
+      <>
+        <DauManCon tieu_de={GUI.tieu_de} onQuayLai={back} />
+        <TrangCon>
           <section className="xa-the xa-the--dem xa-khoi xa-card-open" aria-labelledby="xa-nhap-tieu-de">
             <h2 className="xa-dau-khoi__tieu-de" id="xa-nhap-tieu-de">
               {XA_PA.draft_title}
             </h2>
-            <p>{XA_PA.draft_body}</p>
-            <p className="xa-phu">{XA_PA.draft_kept_on_phone}</p>
+            <p className="xa-phu">{XA_PA.draft_body}</p>
             <button type="button" className="xa-nut" onClick={resumeDraft}>
               {XA_PA.draft_resume}
             </button>
-            <button type="button" className="xa-nut xa-nut--phu" onClick={discardDraft}>
+            <button type="button" className="xa-nut xa-nut--quiet" onClick={discardDraft}>
               {XA_PA.draft_discard}
             </button>
           </section>
-        )}
+        </TrangCon>
+      </>
+    );
+  }
 
-        {step === 1 && draftOffer === null && (
+  return (
+    <>
+      {/* "Đã gửi phản ánh" has no back button (the prototype's done screen): its two buttons are the ways on. */}
+      {step === 3 ? <DauManCon tieu_de={XA_PA.xong_tieu_de} /> : <DauManCon tieu_de={GUI.tieu_de} onQuayLai={back} />}
+      <StepBar step={step} />
+      <TrangCon>
+        {step === 1 && (
           <FieldStep
             catalogue={catalogue}
             picked={form.linh_vuc}
@@ -1533,73 +1530,83 @@ export function CommuneSendScreen(props: {
               setFieldChanged(false);
               setFocusDescribe(true);
               setStep(2);
+              // The prototype locates as soon as a field is chosen (`NewFeedbackPage.tsx:239`) — once: a location
+              // already taken is kept when the citizen comes back to change the field.
+              if (location === null) void sceneLocation.locate();
             }}
           />
         )}
 
         {step === 2 && (
-          <div className="xa-the xa-the--dem xa-khoi">
-            <ONhapDoan
-              id="xa-noi-dung"
-              nhan={XA_PA.su_viec}
-              goi_y={XA_PA.goi_y_su_viec}
-              gia_tri={form.noi_dung}
-              toi_da={DO_DAI_TOI_DA.noi_dung}
-              bat_buoc
-              autoFocus={focusDescribe}
-              autoGrow
-              onDoi={edit("noi_dung")}
-            />
-            {errors.noi_dung && <p className="xa-loi-o" role="alert">{errors.noi_dung}</p>}
-            {/* The picked field, and the way back to change it (§6.2): a real 48px button, not a link. Only when
-                a field IS picked — a blank "Lĩnh vực:" would read as a field that failed to load. */}
-            {form.linh_vuc !== "" && (
-              <div className="xa-field-picked">
-                <span className="xa-field-picked__text">
-                  {XA_PA.linh_vuc}: <strong>{pickedLabel}</strong>
-                </span>
-                <button type="button" className="xa-field-change" onClick={() => setStep(1)}>
-                  {XA_TN.doi}
-                </button>
-              </div>
-            )}
-            {/* PHOTOS (02/10/2026, ADR 0047 row "Ảnh hiện trường khi gửi phản ánh"): OPTIONAL, at most 5, images
-                only — the owner's decision replaces SRS M4.2's "bắt buộc ảnh/video". Never blocks the send button
-                (`kiemNhapPhieu` does not look at them). Only with the shell's picker (`AppRieng`); without it the
-                label says the app cannot attach photos here. Vị trí: lấy được vị trí hiện tại, chưa có bản đồ. */}
+          <div className="xa-khoi xa-send-form">
+            <section className="xa-send-form__describe">
+              <ONhapDoan
+                id="xa-noi-dung"
+                nhan={XA_PA.su_viec}
+                placeholder={XA_PA.goi_y_su_viec}
+                gia_tri={form.noi_dung}
+                toi_da={DO_DAI_TOI_DA.noi_dung}
+                bat_buoc
+                requiredMark
+                rows={5}
+                autoFocus={focusDescribe}
+                autoGrow
+                onDoi={edit("noi_dung")}
+              />
+              {errors.noi_dung && <p className="xa-loi-o" role="alert">{errors.noi_dung}</p>}
+              {/* The picked field, and the way back to change it (§6.2): a real 48px button, not a link. Only when
+                  a field IS picked — a blank "Lĩnh vực:" would read as a field that failed to load. */}
+              {form.linh_vuc !== "" && (
+                <div className="xa-field-picked">
+                  <span className="xa-field-picked__text">
+                    {XA_PA.linh_vuc}: <strong>{pickedLabel}</strong>
+                  </span>
+                  <button type="button" className="xa-field-change" onClick={() => setStep(1)}>
+                    {XA_TN.doi}
+                  </button>
+                </div>
+              )}
+            </section>
+            {/* PHOTOS (ADR 0047 row "Ảnh hiện trường khi gửi phản ánh"): OPTIONAL — never blocks the send button
+                (`kiemNhapPhieu` does not look at them). The prototype's three-tile grid (`ScenePhotoField`). */}
             {accountless !== undefined ? (
-              <>
-                <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
+              <section className="xa-photos">
+                <h2 className="xa-form-title">
+                  {XA_PA.photos_title} <span className="xa-form-title__optional">{XA_PA.optional_suffix}</span>
+                </h2>
                 <p className="xa-phu">{ACCOUNTLESS.no_photos}</p>
-              </>
+              </section>
             ) : pickScenePhotos ? (
               <ScenePhotoField
                 photos={photos}
                 onRemove={(key) => setPhotos((prev) => prev.filter((p) => p.key !== key))}
                 picking={photoPicking}
                 hasDraft={draftStore !== undefined}
+                max={SEND_FORM_MAX_PHOTOS}
               />
             ) : (
-              <>
-                <p className="xa-nhan-o">{XA_PA.anh_bat_buoc}</p>
+              <section className="xa-photos">
+                <h2 className="xa-form-title">
+                  {XA_PA.photos_title} <span className="xa-form-title__optional">{XA_PA.optional_suffix}</span>
+                </h2>
                 <p className="xa-phu">{XA_PA.anh_sap_co}</p>
-              </>
+              </section>
             )}
-            <p className="xa-nhan-o">{XA_PA.vi_tri_bat_buoc}</p>
-            <p className="xa-phu">{getSceneLocation ? XA_PA.vi_tri_sap_co : XA_PA.location_without_button}</p>
-            <ONhapDong id="xa-dia-chi" nhan={XA_PA.dia_chi} goi_y={XA_PA.goi_y_dia_chi} gia_tri={form.dia_chi} toi_da={DO_DAI_TOI_DA.dia_chi} onDoi={edit("dia_chi")} />
-            {errors.dia_chi && <p className="xa-loi-o" role="alert">{errors.dia_chi}</p>}
-            {getSceneLocation && (
-              <SceneLocationControl
-                words={COMMUNE_LOCATION_WORDS}
-                look="commune"
-                locating={sceneLocation.locating}
-                location={location}
-                failure={sceneLocation.failure}
-                zalo={sceneLocation.zalo}
-                onLocate={() => void sceneLocation.locate()}
-              />
-            )}
+            {/* The prototype's address block (`AddressBlock.tsx`): the box, the location line and button, and the
+                SVG sketch map — no third-party map, nothing fetched; the coordinates go only with the petition. */}
+            <AddressBlock
+              address={form.dia_chi}
+              maxLength={DO_DAI_TOI_DA.dia_chi}
+              error={errors.dia_chi}
+              onAddress={edit("dia_chi")}
+              canLocate={getSceneLocation !== undefined}
+              words={COMMUNE_LOCATION_WORDS}
+              locating={sceneLocation.locating}
+              location={location}
+              failure={sceneLocation.failure}
+              zalo={sceneLocation.zalo}
+              onLocate={() => void sceneLocation.locate()}
+            />
             {/* OPTIONAL thôn / tổ dân phố (ADR 0088), right after the address block — the prototype's form has no
                 such field (PROTOTYPE.md §6.2). Hidden on the accountless path (`units` is never loaded there). */}
             <ResidentialUnitField
@@ -1622,7 +1629,7 @@ export function CommuneSendScreen(props: {
             {typedContact && (
               <div className="xa-ghi-chu" role="note">
                 <BieuTuong ten="info" co={22} />
-                {/* Accountless: said BEFORE sending — no notification, keep the code (ADR 0080 cost #2). */}
+                {/* Accountless: said BEFORE sending — no notification, keep the code (ADR 0080 cost 2). */}
                 <p>{accountless !== undefined ? ACCOUNTLESS.form_note : XA_PA.contact_note}</p>
               </div>
             )}
@@ -1712,6 +1719,7 @@ export function CommuneSendScreen(props: {
 
         {step === 3 && receipt !== null && (
           <AccountlessSendDone
+            communeName={props.ten_xa}
             receipt={receipt}
             onFollow={() => props.onOpenPetition(receipt.code)}
             onHome={props.onBack}
@@ -1719,7 +1727,12 @@ export function CommuneSendScreen(props: {
         )}
 
         {step === 3 && sent !== null && (
-          <SendDone petition={sent} onFollow={() => props.onOpenPetition(sent.ma_tra_cuu)} onHome={props.onBack}>
+          <SendDone
+            communeName={props.ten_xa}
+            petition={sent}
+            onFollow={() => props.onOpenPetition(sent.ma_tra_cuu)}
+            onHome={props.onBack}
+          >
             <ScenePhotoUploads jobs={uploads.jobs} onRetry={uploads.retry} afterSend />
           </SendDone>
         )}
@@ -1728,7 +1741,8 @@ export function CommuneSendScreen(props: {
       {/* THE SEND FOOTER (§6.2) — a block of the frame column under the scrolling form, so the button is always
           where the thumb is. Above the button, in reading order: THE COMMUNE, READ AGAIN AT THE LAST STEP
           (README §Non-negotiables #5 — the name on the header, which the session was checked against when it
-          opened, `openCommuneAppSession`), then the server's refusal in a red box, then "đang gửi". */}
+          opened, `openCommuneAppSession`), then the refusal: the prototype's orange box for a lost network (sent
+          again by itself, same key), the red box for anything else. */}
       {step === 2 && (
         <div className="xa-chan-gui xa-send-footer">
           <p className="xa-xa-nhan">{XA_PA.gui_toi(props.ten_xa)}</p>
@@ -1738,31 +1752,46 @@ export function CommuneSendScreen(props: {
             </p>
           )}
           {photos.length > 0 && <p className="xa-phu">{SCENE_PHOTOS.footer_with(photos.length)}</p>}
-          {failed !== null && (
-            <p className="xa-error-box" role="alert">
-              {failureMessage ?? failed.cau}
+          {failed !== null && failure === "loi-mang" ? (
+            <p className="xa-offline-box" role="alert">
+              {COMMUNE_OFFLINE_NOTICE}
             </p>
+          ) : (
+            failed !== null && (
+              <p className="xa-error-box" role="alert">
+                {failureMessage ?? failed.cau}
+              </p>
+            )
           )}
+          {/* The button's own words change to "Đang gửi…" (the prototype); the status line says it to a screen
+              reader that is not on the button. */}
           {sending && (
-            <p className="xa-phu" role="status">
+            <p className="xa-sr-only" role="status">
               {XA_PA.dang_gui}
             </p>
           )}
           {failed !== null && failed.co_the_gui_lai && attempt !== null ? (
             // Same key, same body — never a second petition (`api/lan-gui.ts`).
-            <button type="button" className="xa-nut" disabled={sending} onClick={() => void send(attempt)}>
+            <button
+              type="button"
+              className="xa-nut"
+              disabled={sending}
+              aria-busy={sending || undefined}
+              onClick={() => void send(attempt)}
+            >
               <BieuTuong ten="send" co={20} />
-              {GUI.nut_gui_lai}
+              {sending ? XA_PA.sending_button : GUI.nut_gui_lai}
             </button>
           ) : (
             <button
               type="button"
               className="xa-nut"
               onClick={submit}
+              aria-busy={sending || undefined}
               disabled={sending || senderPending || form.noi_dung.trim() === ""}
             >
               <BieuTuong ten="send" co={20} />
-              {GUI.tieu_de}
+              {sending ? XA_PA.sending_button : GUI.tieu_de}
             </button>
           )}
         </div>
@@ -1778,6 +1807,8 @@ export function CommuneSendScreen(props: {
  * Neither is ever computed here (rule 10 #2): an absent deadline is an absent line. Exported for tests.
  */
 export function SendDone(props: {
+  /** The commune the petition went to — the line under the title names it (`XA_PA.done_received`). */
+  communeName: string;
   petition: PhieuCuaToi;
   onFollow: () => void;
   onHome: () => void;
@@ -1785,15 +1816,16 @@ export function SendDone(props: {
   children?: ReactNode;
 }) {
   const p = props.petition;
-  const acknowledge = p.han_tiep_nhan !== null ? thoiDiemVN(p.han_tiep_nhan) : null;
-  const resolve = p.han_xu_ly_xong !== null ? thoiDiemVN(p.han_xu_ly_xong) : null;
+  // "… trước 15h ngày 2/10" (the prototype's `formatDeadline`), from the SERVER's values only (rule 10 #2).
+  const acknowledge = p.han_tiep_nhan !== null ? formatDeadline(p.han_tiep_nhan) : null;
+  const resolve = p.han_xu_ly_xong !== null ? formatDeadline(p.han_xu_ly_xong) : null;
   return (
     <div className="xa-ket-qua">
       <span className="xa-ket-qua__dau xa-pop" aria-hidden="true">
         <BieuTuong ten="check-circle" co={64} />
       </span>
       <h2 className="xa-bai__tieu-de">{XA_PA.xong_tieu_de}</h2>
-      <p className="xa-phu">{XA_PA.xong_mo_ta}</p>
+      <p className="xa-phu">{XA_PA.done_received(props.communeName)}</p>
       <div className="xa-the xa-the--dem xa-ket-qua__ma" role="status">
         <p className="xa-phu">{XA_PA.ma_phieu_cua_ba_con}</p>
         <strong className="xa-ket-qua__code">#{p.ma_tra_cuu}</strong>
@@ -1817,7 +1849,7 @@ export function SendDone(props: {
       <button type="button" className="xa-nut" onClick={props.onFollow}>
         {XA_PA.theo_doi}
       </button>
-      <button type="button" className="xa-nut xa-nut--phu" onClick={props.onHome}>
+      <button type="button" className="xa-nut xa-nut--quiet" onClick={props.onHome}>
         {XA_TN.nut_ve_trang_chu}
       </button>
     </div>
@@ -1831,17 +1863,22 @@ export function SendDone(props: {
  * verbatim (rule 10 #2), and — always, since no accountless petition is ever notified — the sentence that says
  * so and how to follow it. "Tra cứu phiếu này" opens the PUBLIC lookup. Exported for tests.
  */
-export function AccountlessSendDone(props: { receipt: AccountlessReceipt; onFollow: () => void; onHome: () => void }) {
+export function AccountlessSendDone(props: {
+  communeName: string;
+  receipt: AccountlessReceipt;
+  onFollow: () => void;
+  onHome: () => void;
+}) {
   const r = props.receipt;
-  const acknowledge = r.acknowledgeDue !== null ? thoiDiemVN(r.acknowledgeDue) : null;
-  const resolve = r.resolveDue !== null ? thoiDiemVN(r.resolveDue) : null;
+  const acknowledge = r.acknowledgeDue !== null ? formatDeadline(r.acknowledgeDue) : null;
+  const resolve = r.resolveDue !== null ? formatDeadline(r.resolveDue) : null;
   return (
     <div className="xa-ket-qua">
       <span className="xa-ket-qua__dau xa-pop" aria-hidden="true">
         <BieuTuong ten="check-circle" co={64} />
       </span>
       <h2 className="xa-bai__tieu-de">{XA_PA.xong_tieu_de}</h2>
-      <p className="xa-phu">{XA_PA.xong_mo_ta}</p>
+      <p className="xa-phu">{XA_PA.done_received(props.communeName)}</p>
       <div className="xa-the xa-the--dem xa-ket-qua__ma" role="status">
         <p className="xa-phu">{XA_PA.ma_phieu_cua_ba_con}</p>
         <strong className="xa-ket-qua__code">#{r.code}</strong>
@@ -1859,7 +1896,7 @@ export function AccountlessSendDone(props: { receipt: AccountlessReceipt; onFoll
       <button type="button" className="xa-nut" onClick={props.onFollow}>
         {ACCOUNTLESS.follow}
       </button>
-      <button type="button" className="xa-nut xa-nut--phu" onClick={props.onHome}>
+      <button type="button" className="xa-nut xa-nut--quiet" onClick={props.onHome}>
         {XA_TN.nut_ve_trang_chu}
       </button>
     </div>
@@ -1880,7 +1917,7 @@ export function accountlessLookupOutcome(kq: AccountlessLookupResult): Accountle
     case "rate-limited":
       return { kind: "failed", text: ACCOUNTLESS.lookup_rate_limited };
     case "chua-cau-hinh":
-      return { kind: "failed", text: KENH_CHUA_MO.cau };
+      return { kind: "failed", text: COMMUNE_CHANNEL_CLOSED };
     case "loi-mang":
       return { kind: "failed", text: TRA_CUU.loi_mang };
     default:

@@ -8,6 +8,7 @@ import { isSceneLocation, OPTIONAL_SCENE_FIELDS, type PhanAnhMoi, thanGuiPhanAnh
 // vi-name-ok: importing EXISTING names (`BuocNhap`, `BuocXacNhan`, `PHAN_ANH_TRONG`) — no new name
 import { BuocNhap, BuocXacNhan, PHAN_ANH_TRONG } from "./GuiPhanAnhScreen";
 import { GUI, SEND_LOCATION_WORDS } from "./noi-dung";
+import { AddressBlock } from "./address-block";
 import { COMMUNE_LOCATION_WORDS, CommuneSendScreen } from "./PhanAnhAppXa";
 import {
   formatCoordinates,
@@ -176,20 +177,39 @@ describe("what the citizen sees — live form (shared app)", () => {
 });
 
 describe("what the citizen sees — send form of the commune's own app", () => {
-  it("the control speaks 'bà con' and shows the real coordinates", () => {
-    const html = renderToStaticMarkup(
-      createElement(SceneLocationControl, {
-        words: COMMUNE_LOCATION_WORDS,
-        look: "commune",
-        locating: false,
-        location: HERE,
-        failure: null,
-        onLocate: () => {},
-      }),
-    );
-    expect(html).toContain(COMMUNE_LOCATION_WORDS.found("15.57123, 108.47654"));
-    expect(html).toContain("Bà con");
-    expect(html).toContain('class="xa-nut xa-nut--phu"');
+  // The commune app's control is the prototype's address block (`AddressBlock.tsx`, owner 11/10/2026).
+  it("the address block: the prototype's words, the real coordinates, the sketch map's pin — and nothing fetched", () => {
+    const block = (location: typeof HERE | null, locating = false) =>
+      renderToStaticMarkup(
+        createElement(AddressBlock, {
+          address: "",
+          maxLength: 500,
+          onAddress: () => {},
+          canLocate: true,
+          words: COMMUNE_LOCATION_WORDS,
+          locating,
+          location,
+          failure: null,
+          zalo: null,
+          onLocate: () => {},
+        }),
+      );
+    const html = block(HERE);
+    expect(html).toContain("Đã ghi nhận vị trí (15.57123, 108.47654)");
+    expect(html).toContain(">Lấy lại vị trí hiện tại</button>");
+    expect(html).toContain("Địa chỉ nơi xảy ra sự việc");
+    expect(html).toContain("(không bắt buộc)");
+    expect(html).toContain("Bà con ghi thêm số nhà, tên kiệt hay chỗ dễ nhận biết để cán bộ tìm đúng nơi.");
+    expect(html).toContain('placeholder="Ví dụ: Trước số nhà 112 đường Tiểu La, gần chợ Hà Lam"');
+    expect(html).toContain("Bản đồ chỉ minh hoạ vị trí tương đối.");
+    expect(html).toContain("xa-mini-map__pin");
+    // A drawing, not a map: no picture or script from anywhere, no coordinates in any address.
+    expect(html).not.toMatch(/<img|<script|<iframe|https?:\/\//);
+    // Before a location, and while taking one: no pin; the button says what it does.
+    expect(block(null)).not.toContain("xa-mini-map__pin");
+    expect(block(null)).toContain(">Lấy vị trí hiện tại</button>");
+    expect(block(HERE, true)).toContain("Đang lấy vị trí…");
+    expect(block(HERE, true)).not.toContain("xa-mini-map__pin");
     // The old token-only sentence is gone.
     expect(html).not.toContain("Đã nhận mã vị trí");
   });

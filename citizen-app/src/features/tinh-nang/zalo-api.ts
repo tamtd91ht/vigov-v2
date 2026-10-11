@@ -112,7 +112,7 @@ export type KhaiBaoLoiGoi = {
 };
 
 /**
- * MƯỜI LĂM LỜI GỌI (08/10/2026: `chooseImage`, `configAppView`), MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản lý quyền" đọc xuôi.
+ * MƯỜI BẢY LỜI GỌI (08/10/2026: `chooseImage`, `configAppView`; 11/10/2026: `minimizeApp`, `openShareSheet`), MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản lý quyền" đọc xuôi.
  *
  * Chín quyền phải xin ở Developer Console; `getAccessToken` là lời gọi thứ mười cần quyền nhưng
  * không hỏi người dùng; `openPhone` và `openWebview` là `@zaloOnly` và không nằm trong số quyền
@@ -173,12 +173,14 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trong ứng dụng của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng, và trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ, sau khi bạn xác nhận rời ứng dụng.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
+    // 11/10/2026 (owner): "Tra cứu hồ sơ" opens the national public-service portal's dossier lookup the same way,
+    // after the same question — and the question now says "Bà con" (ADR 0050 #6).
     commune_app: {
-      man: "Tin tức – Sự kiện · Video · Trang chủ",
-      tinh_nang: "Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã",
+      man: "Tin tức – Sự kiện · Video · Trang chủ · Tra cứu hồ sơ",
+      tinh_nang: "Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã · Tra cứu hồ sơ trên Cổng Dịch vụ công quốc gia",
       de_lam_gi:
-        "Mở video mà xã đăng kèm một tin khi chính bạn bấm “Xem video”, và mở trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ khi chính bạn bấm vào đó rồi chọn “Mở trang” ở câu hỏi “Bạn sắp rời ứng dụng để mở …”. Trang mở ngay trong Zalo; ứng dụng mở đúng địa chỉ xã đã đăng.",
-      roi_khoi_may: "Địa chỉ trang xã đã đăng đi tới trình duyệt trong Zalo.",
+        "Mở video mà xã đăng kèm một tin khi chính bạn bấm “Xem video”; mở trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ khi chính bạn bấm vào đó; và mở trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia khi chính bạn bấm “Tra cứu” ở màn Tra cứu hồ sơ — hai việc sau chỉ sau khi bạn chọn “Mở trang” ở câu hỏi “Bà con sắp rời ứng dụng để mở …”. Trang mở ngay trong Zalo; ứng dụng mở đúng địa chỉ đã đăng, không gửi kèm số điện thoại hay số hồ sơ bạn đã nhập.",
+      roi_khoi_may: "Địa chỉ trang (do xã đăng, hoặc trang tra cứu của Cổng Dịch vụ công quốc gia) đi tới trình duyệt trong Zalo.",
     },
   },
   {
@@ -285,6 +287,30 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may: "",
   },
   {
+    // ADDED 11/10/2026 (owner: the customer prototype's `MinimiseBubble`) — the state half's FIRST call of its own
+    // since `getUserInfo` became shared: the bubble over every screen of the commune interface.
+    api: "minimizeApp",
+    nua: "nha-nuoc",
+    man: "Mọi màn của ứng dụng của xã",
+    tinh_nang: "Nút thu nhỏ ứng dụng",
+    de_lam_gi:
+      "Thu nhỏ ứng dụng thành bong bóng của Zalo khi chính bà con chạm nút tròn có dấu trừ, để mở tin nhắn khác rồi quay lại đúng màn đang dở.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "",
+  },
+  {
+    // ADDED 11/10/2026 (ADR 0047 G6; owner: the prototype's "Chia sẻ qua Zalo").
+    api: "openShareSheet",
+    nua: "nha-nuoc",
+    man: "Tin tức – Sự kiện (ứng dụng của xã)",
+    tinh_nang: "Chia sẻ qua Zalo",
+    de_lam_gi:
+      "Mở cửa sổ chia sẻ của Zalo khi chính bà con bấm “Chia sẻ qua Zalo” dưới một tin của xã, để gửi đường liên kết tới tin ấy cho người thân. Bà con tự chọn gửi cho ai trong cửa sổ của Zalo; ứng dụng không biết bà con đã chọn ai.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may:
+      "Đường liên kết tới tin (mã ứng dụng của xã và mã tin, không có thông tin nào của bà con) đi tới cuộc trò chuyện Zalo mà bà con chọn.",
+  },
+  {
     api: "vibrate",
     nua: "thuong-mai",
     man: "Giải pháp · Danh thiếp",
@@ -337,7 +363,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
       tinh_nang: "Xác nhận số điện thoại với xã · Vị trí nơi xảy ra sự việc",
       de_lam_gi:
-        "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại. Lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh, mã này đi cùng mã số điện thoại bạn đồng ý chia sẻ tới hệ thống của xã, để mở phiên làm việc với xã. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
+        "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại. Lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh, mã này đi cùng mã số điện thoại bạn đồng ý chia sẻ tới hệ thống của xã, để mở phiên làm việc với xã. Khi ứng dụng lấy vị trí lúc gửi phản ánh (khi bạn chọn lĩnh vực, hoặc bấm “Lấy vị trí hiện tại”), mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
       roi_khoi_may:
         "Mã phiên được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — tới máy chủ của Tập đoàn ViHAT Group để đổi mã vị trí thành toạ độ.",
     },
@@ -391,20 +417,22 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // tôi", "Tra cứu", a rating), so tapping send shows no phone step — then the one-line question "Dùng tên Zalo
     // của bạn làm tên người gửi?" (`cong-dan/man/consent-dialog.tsx`, `TrangXa.tsx`) comes first, and Zalo is
     // asked only after its "Cho phép". Still at most once per open.
+    // 11/10/2026 (owner): the SAME answer's profile picture is shown on the commune interface's Cá nhân, as the
+    // customer prototype does (`readZaloProfile`) — read once with the name, shown on the phone, sent nowhere.
     api: "getUserInfo",
     nua: "ca-hai",
-    man: "Liên hệ · Trang của một xã mở bằng mã QR (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh)",
+    man: "Liên hệ · Trang của một xã mở bằng mã QR (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh; ảnh đại diện ở Cá nhân)",
     tinh_nang: "Chat với chuyên viên · Điền sẵn người gửi khi gửi phản ánh",
     de_lam_gi:
-      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý. Ở màn Liên hệ, khi bạn bấm “Chat với chuyên viên”, tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên. Trên trang của một xã, tên được lấy nhiều nhất một lần mỗi lần mở: khi trang mở ra nếu bạn đã đồng ý; hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh — ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại; hoặc, nếu số điện thoại đã được xác nhận trước đó, khi bạn bấm gửi phản ánh và chọn “Cho phép” ở câu hỏi “Dùng tên Zalo của bạn làm tên người gửi?”. Tên hiện sẵn ở dòng người gửi; bạn từ chối thì tự nhập họ tên. Tên ấy chỉ nằm trên điện thoại này cho tới khi bạn tự bấm gửi phản ánh.",
+      "Lấy tên hiển thị Zalo của bạn sau khi bạn đồng ý. Ở màn Liên hệ, khi bạn bấm “Chat với chuyên viên”, tên được gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group để chuyên viên biết ai đang nhắn; bạn từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên. Trên trang của một xã, tên được lấy nhiều nhất một lần mỗi lần mở: khi trang mở ra nếu bạn đã đồng ý; hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh — ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại; hoặc, nếu số điện thoại đã được xác nhận trước đó, khi bạn bấm gửi phản ánh và chọn “Cho phép” ở câu hỏi “Dùng tên Zalo của bà con làm tên người gửi?”. Tên hiện sẵn ở dòng người gửi; bạn từ chối thì tự nhập họ tên. Tên ấy chỉ nằm trên điện thoại này cho tới khi bạn tự bấm gửi phản ánh. Cùng lần lấy tên ấy, ảnh đại diện Zalo của bạn hiện ở màn Cá nhân của trang xã; ảnh không được gửi đi đâu.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
       "Ở màn Liên hệ: tên hiển thị Zalo được gửi tới máy chủ của Tập đoàn ViHAT Group cùng yêu cầu trò chuyện, khi bạn bấm “Chat với chuyên viên”. Trên trang của một xã: tên không rời khỏi máy cho tới khi bạn tự bấm gửi phản ánh.",
     commune_app: {
-      man: "Mở ứng dụng của xã · Gửi phản ánh (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh)",
+      man: "Mở ứng dụng của xã · Gửi phản ánh (tên hiện ở Trang chủ, Cá nhân và dòng người gửi của Gửi phản ánh; ảnh đại diện ở Cá nhân)",
       tinh_nang: "Điền sẵn người gửi khi gửi phản ánh",
       de_lam_gi:
-        "Lấy tên hiển thị Zalo của bạn nhiều nhất một lần mỗi lần mở — khi bạn mở ứng dụng của xã và đồng ý; hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh (ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại); hoặc, nếu số điện thoại đã được xác nhận trước đó, khi bạn bấm gửi phản ánh và chọn “Cho phép” ở câu hỏi “Dùng tên Zalo của bạn làm tên người gửi?” — để hiện sẵn ở dòng người gửi khi gửi phản ánh tới xã; bạn từ chối thì tự nhập họ tên. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh.",
+        "Lấy tên hiển thị Zalo của bạn nhiều nhất một lần mỗi lần mở — khi bạn mở ứng dụng của xã và đồng ý; hoặc ngay sau bước xác nhận số điện thoại khi bạn bấm gửi phản ánh (ứng dụng nói trước rằng sẽ xin cả họ tên và số điện thoại); hoặc, nếu số điện thoại đã được xác nhận trước đó, khi bạn bấm gửi phản ánh và chọn “Cho phép” ở câu hỏi “Dùng tên Zalo của bà con làm tên người gửi?” — để hiện sẵn ở dòng người gửi khi gửi phản ánh tới xã; bạn từ chối thì tự nhập họ tên. Tên chỉ nằm trên điện thoại này; ứng dụng không gửi nó đi đâu cho tới khi bạn tự bấm gửi phản ánh. Cùng lần lấy tên ấy, ảnh đại diện Zalo của bạn hiện ở màn Cá nhân; ảnh không được gửi đi đâu.",
       roi_khoi_may: "",
     },
   },
@@ -427,8 +455,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     commune_app: {
       man: "Gửi phản ánh",
       tinh_nang: "Vị trí nơi xảy ra sự việc",
+      // 11/10/2026 (owner: theo prototype): the form also asks as soon as a field is chosen, and when a draft is
+      // resumed without an address — the prototype's `NewFeedbackPage.tsx:227,239`.
       de_lam_gi:
-        "Lấy mã vị trí khi bạn bấm “Lấy vị trí hiện tại” và đồng ý chia sẻ. Mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
+        "Lấy mã vị trí khi bạn chọn lĩnh vực phản ánh (hoặc tiếp tục một phản ánh đang soạn chưa ghi địa chỉ), hoặc khi bạn bấm “Lấy vị trí hiện tại”, và chỉ khi bạn đồng ý chia sẻ. Mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
       roi_khoi_may:
         "Mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi.",
     },
@@ -634,8 +664,8 @@ export function readRuntimeAppId(): string | null {
 }
 
 /**
- * Tên hiển thị Zalo. Chỉ đọc `name`: `id` là định danh người dùng theo App ID và ảnh đại diện là dữ liệu
- * cá nhân không màn nào cần.
+ * Tên hiển thị Zalo. Chỉ đọc `name`: `id` là định danh người dùng theo App ID. Ảnh đại diện: xem
+ * `readZaloProfile` ngay dưới — chỉ màn Cá nhân của giao diện xã dùng (11/10/2026).
  *
  * `ask` false = CHECK ONLY: `autoRequestPermission: false` never opens Zalo's dialog — it returns the name
  * when the citizen already allowed it, and fails otherwise. That is what lets the commune app read the
@@ -643,10 +673,28 @@ export function readRuntimeAppId(): string | null {
  * and is only called after the entry card has said why the name is wanted (policy 3.3.4, `khung.tsx`) — or,
  * since 07/10/2026, after the "Chat với chuyên viên" block has said it (`features/yeu-cau/ChatWithSpecialist.tsx`).
  */
-export function layTenZalo(ask: boolean): Promise<KetQuaXin<string>> {
+export async function layTenZalo(ask: boolean): Promise<KetQuaXin<string>> {
+  const kq = await readZaloProfile(ask);
+  return kq.kieu === "xong" ? { kieu: "xong", du_lieu: kq.du_lieu.name } : kq;
+}
+
+/**
+ * THE NAME AND THE PROFILE PICTURE of the same `getUserInfo` answer (owner 11/10/2026: the commune interface's Cá
+ * nhân shows the picture, as the customer prototype does). ONE call — `layTenZalo` reads the name from it — so the
+ * picture costs no second dialog and no second request. The picture's address is Zalo's own; it is shown on the
+ * phone and sent nowhere by this app. `id` is still never read.
+ */
+export function readZaloProfile(ask: boolean): Promise<KetQuaXin<{ name: string; avatar: string }>> {
   // The check-only read (`ask` false) runs at every commune-app open and fails whenever the name was never
   // allowed — reporting it would send a report per open, before any tap. Only the asked read reports.
-  return xin("name", async (sdk) => (await sdk.getUserInfo({ autoRequestPermission: ask })).userInfo.name ?? "", ask);
+  return xin(
+    "name",
+    async (sdk) => {
+      const { userInfo } = await sdk.getUserInfo({ autoRequestPermission: ask });
+      return { name: userInfo.name ?? "", avatar: userInfo.avatar ?? "" };
+    },
+    ask,
+  );
 }
 
 /** Token vị trí. Không đọc `latitude`/`longitude` — xem khối chú thích đầu tệp. */
@@ -706,6 +754,29 @@ export function moCuocGoi(so: string): Promise<KetQuaXin<void>> {
 export function moTrangWeb(duong_dan: string): Promise<KetQuaXin<void>> {
   return xin("other", async (sdk) => {
     await sdk.openWebview({ url: duong_dan, config: { style: "normal" } });
+  });
+}
+
+/**
+ * MINIMISES THE MINI APP into Zalo's floating bubble (`minimizeApp`, `zmp-sdk/index.d.ts:5295-5298`) — the bubble
+ * button of the commune interface (owner 11/10/2026, the customer prototype's `MinimiseBubble`). Nothing is read and
+ * nothing leaves the phone; the screen the citizen was on stays as it was.
+ */
+export function minimiseMiniApp(): Promise<KetQuaXin<void>> {
+  return xin("other", async (sdk) => {
+    await sdk.minimizeApp();
+  });
+}
+
+/**
+ * OPENS ZALO'S SHARE SHEET WITH ONE LINK (`openShareSheet` type `link`, `zmp-sdk/index.d.ts:3923-3933`) — "Chia sẻ
+ * qua Zalo" under a commune article (ADR 0047 G6). The citizen picks the chat in Zalo's own sheet; this app learns
+ * nothing about it. The link is built by the shell from the RUNNING App ID and the article's public id — nothing of
+ * the citizen's is in it.
+ */
+export function shareLinkOnZalo(link: string): Promise<KetQuaXin<void>> {
+  return xin("other", async (sdk) => {
+    await sdk.openShareSheet({ type: "link", data: { link, chatOnly: false } });
   });
 }
 

@@ -49,7 +49,14 @@ const DA_KHAI: ReadonlySet<string> = new Set(DICH_MO_RA_NGOAI.map((d) => d.ma));
  */
 // `video` joined 02/10/2026 (owner: "làm theo đề xuất"): its address is the commune's `video_url`, and the
 // caller's `readVideoUrl` checks https but not the user part.
-const HTTPS_ONLY: ReadonlySet<MaDichRaNgoai> = new Set<MaDichRaNgoai>(["lien-ket-xa", "video"]);
+const HTTPS_ONLY: ReadonlySet<MaDichRaNgoai> = new Set<MaDichRaNgoai>(["lien-ket-xa", "video", "dich-vu-cong"]);
+
+/**
+ * Destinations with ONE allowed host, checked here at the door (11/10/2026): "Tra cứu hồ sơ" opens the national
+ * public-service portal and nothing else — a caller that passed another address would be using a declared exit to
+ * reach an undeclared place.
+ */
+const FIXED_HOST: Readonly<Partial<Record<MaDichRaNgoai, string>>> = { "dich-vu-cong": "vpcp.dichvucong.gov.vn" };
 
 /**
  * An absolute `https:` URL with a host and no user part. A LOCAL COPY of `readHttpsLink`
@@ -80,6 +87,8 @@ export async function moRaNgoai(dich: MaDichRaNgoai, duong_dan: string): Promise
   if (!DA_KHAI.has(dich) || duong_dan === "") return false;
   // Same failure result as a platform refusal, so the caller shows its own "what to do next" sentence.
   if (HTTPS_ONLY.has(dich) && !isHttpsLink(duong_dan)) return false;
+  const host = FIXED_HOST[dich];
+  if (host !== undefined && new URL(duong_dan).hostname !== host) return false;
   const ket_qua = await moTrangWeb(duong_dan);
   return ket_qua.kieu === "xong";
 }

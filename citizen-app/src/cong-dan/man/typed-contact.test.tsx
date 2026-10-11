@@ -36,7 +36,7 @@ import {
   type SessionGateState,
 } from "./commune-session";
 import { kiemPhanAnh, KetQuaGui } from "./GuiPhanAnhScreen"; // vi-name-ok: existing exports, imported not renamed (rule 12 #3)
-import { LOI_GUI, PHONE_VERIFICATION, TYPED_CONTACT, XA_PA } from "./noi-dung"; // vi-name-ok: existing exports, imported not renamed (rule 12 #3)
+import { COMMUNE_PHONE_WORDS, communeZaloGaveNoNumber, LOI_GUI, PHONE_VERIFICATION, TYPED_CONTACT, XA_PA } from "./noi-dung"; // vi-name-ok: existing exports, imported not renamed (rule 12 #3)
 import { SendDone, sendBody, sendOutcome } from "./PhanAnhAppXa";
 import { PhoneVerificationPanel, phoneVerificationOffersManual } from "./phone-verification";
 import { SessionGateScreen } from "./TrangXa";
@@ -113,7 +113,8 @@ describe("gate — the invitation to share comes first, the typed path only when
     // Told before the form asks them to type: the citizen agreed to share, and Zalo gave nothing.
     expect(last()).toEqual({ kieu: "ket-qua", outcome: "no-phone" });
     expect(run).not.toHaveBeenCalled();
-    expect(sessionGateMessage("no-phone", "submit")).toBe(TYPED_CONTACT.zalo_gave_no_number("phản ánh chưa được gửi"));
+    // The gate is the commune app's alone: its voice ("bà con", owner 11/10/2026).
+    expect(sessionGateMessage("no-phone", "submit")).toBe(communeZaloGaveNoNumber("phản ánh chưa được gửi"));
     await gate.manual();
     expect(open).toHaveBeenCalledTimes(1);
     expect(run).toHaveBeenCalledTimes(1);
@@ -172,9 +173,10 @@ describe("gate screen — the typed path is explained before it is chosen", () =
 
   it("`tu-choi` on a send: the refusal, then what the typed path means, then the 48px button", () => {
     const html = render({ kieu: "ket-qua", outcome: "tu-choi" }, "submit");
-    expect(html).toContain(TYPED_CONTACT.offer);
+    // The commune gate's voice ("bà con", owner 11/10/2026); the button's words are the same in both apps.
+    expect(html).toContain(COMMUNE_PHONE_WORDS.typed_contact_offer);
     expect(html).toContain(`<button type="button" class="xa-nut">${TYPED_CONTACT.button}</button>`);
-    expect(html.indexOf(TYPED_CONTACT.offer)).toBeLessThan(html.indexOf(TYPED_CONTACT.button));
+    expect(html.indexOf(COMMUNE_PHONE_WORDS.typed_contact_offer)).toBeLessThan(html.indexOf(TYPED_CONTACT.button));
   });
 
   it("not on 'Phản ánh của tôi', and not outside Zalo", () => {
@@ -314,11 +316,11 @@ describe("201 with `contact_unverified` — the code screen says no notification
 
   it("commune app: the notice stands under the code; an ordinary petition has none", () => {
     const unverified = docPhieu({ ...PETITION_OUT, contact_unverified: true }) as PhieuCuaToi;
-    const html = renderToStaticMarkup(createElement(SendDone, { petition: unverified, onFollow() {}, onHome() {} }));
+    const html = renderToStaticMarkup(createElement(SendDone, { communeName: COMMUNE, petition: unverified, onFollow() {}, onHome() {} }));
     expect(html).toContain(XA_PA.done_no_notice);
     expect(html.indexOf(PETITION_OUT.code)).toBeLessThan(html.indexOf(XA_PA.done_no_notice));
     const usual = renderToStaticMarkup(
-      createElement(SendDone, { petition: docPhieu(PETITION_OUT) as PhieuCuaToi, onFollow() {}, onHome() {} }),
+      createElement(SendDone, { communeName: COMMUNE, petition: docPhieu(PETITION_OUT) as PhieuCuaToi, onFollow() {}, onHome() {} }),
     );
     expect(usual).not.toContain(XA_PA.done_no_notice);
   });

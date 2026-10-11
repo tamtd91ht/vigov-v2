@@ -912,7 +912,8 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
 
   it("the copied commune screen names match the real screens word for word", () => {
     expect(TEN_MAN_CONG_KHAI.commune_news_tab).toBe(`Ứng dụng của xã: ${XA_TN.news_tab_title}`);
-    expect(TEN_MAN_CONG_KHAI.commune_directory).toBe(`Ứng dụng của xã: ${DANH_BA.tieu_de}`);
+    // The commune app's own title since 11/10/2026 (the prototype's `DirectoryPage.tsx`).
+    expect(TEN_MAN_CONG_KHAI.commune_directory).toBe(`Ứng dụng của xã: ${XA_TN.directory_title}`);
   });
 
   it("a `both` row with no commune view is refused, not printed in the shared app's words", () => {

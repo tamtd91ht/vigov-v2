@@ -32,7 +32,15 @@
  */
 
 /** Mã đích đến. Là một union để `moRaNgoai` không nhận nổi một đích chưa khai. */
-export type MaDichRaNgoai = "ban-do" | "ma-qr" | "trang-chu" | "tin-tuc" | "chat-oa" | "video" | "lien-ket-xa";
+export type MaDichRaNgoai =
+  | "ban-do"
+  | "ma-qr"
+  | "trang-chu"
+  | "tin-tuc"
+  | "chat-oa"
+  | "video"
+  | "lien-ket-xa"
+  | "dich-vu-cong";
 
 export type DichRaNgoai = {
   ma: MaDichRaNgoai;
@@ -41,7 +49,7 @@ export type DichRaNgoai = {
 };
 
 /**
- * BẢY ĐÍCH ĐẾN (từ 01/10/2026). Thứ tự này là thứ tự đọc ra trong câu khai của chính sách.
+ * TÁM ĐÍCH ĐẾN (từ 11/10/2026). Thứ tự này là thứ tự đọc ra trong câu khai của chính sách.
  *
  * Thêm một dòng ở đây là một thay đổi HÀNH VI XỬ LÝ DỮ LIỆU: bề mặt "dữ liệu của bạn có thể tới
  * những nơi nào" rộng ra thật sự. Xem bảng lên số phiên bản trong `chinh-sach-rieng-tu.ts`.
@@ -90,6 +98,15 @@ export const DICH_MO_RA_NGOAI: readonly DichRaNgoai[] = [
     ma: "lien-ket-xa",
     trong_chinh_sach:
       "trang web mà xã gắn vào một bài viết hoặc một ảnh trên trang chủ của ứng dụng của xã, chỉ sau khi bạn xác nhận rời ứng dụng",
+  },
+  {
+    // ADDED 11/10/2026 (owner): "Tra cứu hồ sơ" of the commune's interface — the one-stop-shop data is NOT in ViGov,
+    // so the lookup happens on the national portal, opened in Zalo's browser after the leave-app question. ONE fixed
+    // host (`features/tinh-nang/mo-ra-ngoai.ts` refuses any other), and the phone number and the four digits the
+    // citizen typed are NOT sent — not in the address, not anywhere (`cong-dan/man/TienIchAppXa.tsx`).
+    ma: "dich-vu-cong",
+    trong_chinh_sach:
+      "trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia, mở từ màn Tra cứu hồ sơ của ứng dụng của xã, chỉ sau khi bạn xác nhận rời ứng dụng",
   },
 ];
 

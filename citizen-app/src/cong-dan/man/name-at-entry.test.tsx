@@ -261,8 +261,10 @@ describe("the entry asks Zalo for the name ONCE and passes it down", () => {
     expect(host.textContent).toContain(XA_TN.name_card_why);
     expect(host.textContent).toContain(XA_TN.name_card_agree);
     expect(host.textContent).toContain(XA_TN.name_card_decline);
-    // No greeting with a name that does not exist: the province stands where the name would.
-    expect(host.textContent).toContain(commune.tinh);
+    // No greeting with a name that does not exist — and nothing else in its place (the prototype's header, owner
+    // 11/10/2026: no province fallback).
+    expect(host.textContent).not.toContain("Xin chào");
+    expect(host.textContent).not.toContain(commune.tinh);
     await unmount();
   });
 
@@ -271,7 +273,8 @@ describe("the entry asks Zalo for the name ONCE and passes it down", () => {
     const { host, unmount } = await mount(entry(bridge));
     expect(calls).toEqual(["check"]);
     expect(host.textContent).not.toContain(XA_TN.name_card_title);
-    expect(host.textContent).toContain(commune.tinh);
+    expect(host.textContent).not.toContain("Xin chào");
+    expect(host.textContent).not.toContain(commune.tinh);
     await unmount();
   });
 
@@ -351,9 +354,8 @@ const personal = (name: string | null) =>
       ho_ten: name,
       ten_xa: commune.ten,
       tinh: commune.tinh,
-      so_phieu: null,
-      co_chu: "vua",
-      onDoiCoChu: () => {},
+      largeText: false,
+      onLargeText: () => {},
       onMoPhanAnh: () => {},
       onMoTraCuu: () => {},
       onOpenNotifications: () => {},

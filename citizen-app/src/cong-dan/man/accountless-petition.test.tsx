@@ -349,6 +349,7 @@ describe("readers — strict, and the lookup never carries more than ADR 0083 #4
   it("the done screen: the code, the no-notification sentence, the lookup button; stored deadlines only", () => {
     const html = renderToStaticMarkup(
       createElement(AccountlessSendDone, {
+        communeName: "Xã Thử Nghiệm",
         receipt: { code: "PB9M3K7Q2XTD", status: "da-tiep-nhan", acknowledgeDue: null, resolveDue: null },
         onFollow() {},
         onHome() {},

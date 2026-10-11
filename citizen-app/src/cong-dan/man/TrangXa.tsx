@@ -30,7 +30,7 @@
  *
  * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log.
  */
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, type Ref, useEffect, useMemo, useRef, useState } from "react";
 
 import { communeProfiles, type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
@@ -59,12 +59,10 @@ import {
   APP_RIENG,
   COMMUNE_APP_SESSION,
   COMMUNE_OFFICE,
+  COMMUNE_PHONE_WORDS as PHONE_VERIFICATION,
   CUA_TOI,
-  DANH_BA,
-  PHONE_VERIFICATION,
   type PhoneVerificationTask,
   TIN_XA,
-  TYPED_CONTACT,
   XA_GIAO_DIEN,
   XA_PA,
   XA_TN,
@@ -83,13 +81,24 @@ import {
   PetitionLookup,
   useMyPetitions,
 } from "./PhanAnhAppXa";
-import { CaNhanXa, type CoChu, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
-import { BaiTinXa, DanhSachTinXa, FeaturedNews, HangTin, NewsOfType, type OpenVideo, useTinXa } from "./TinTucAppXa";
+import { BroadcastScreen, VideoScreen } from "./media-screens";
+import { MinimiseBubble } from "./minimise-bubble";
+import { CaNhanXa, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
+import {
+  BaiTinXa,
+  DanhSachTinXa,
+  HangTin,
+  NewsOfType,
+  type OpenVideo,
+  type ShareArticle,
+  useTinXa,
+} from "./TinTucAppXa";
 import type { GetSceneLocation } from "./scene-location";
 import type { PickScenePhotos } from "./scene-photos";
 import {
   afterNameAsk,
   afterNameCheck,
+  avatarShown,
   type FeedbackDraftStore,
   type LayTenZalo,
   type NameAtEntry,
@@ -175,7 +184,8 @@ function ThanhTabXa({ tab, onChon }: { tab: TabXa; onChon: (t: TabXa) => void })
           aria-current={t.tab === tab ? "page" : undefined}
           onClick={() => onChon(t.tab)}
         >
-          <BieuTuong ten={t.bieu_tuong} co={24} stroke={t.tab === tab ? 2.4 : 1.8} />
+          {/* The prototype's strokes (`BottomNav.tsx:239`): 2, and 2.4 on the current tab. */}
+          <BieuTuong ten={t.bieu_tuong} co={24} stroke={t.tab === tab ? 2.4 : 2} />
           <span>{t.nhan}</span>
         </button>
       ))}
@@ -271,21 +281,29 @@ export function bannerTap(linkTo: string | undefined, canOpenWeb: boolean): Bann
  * (`display_order` ascending). Each picture's words are its `title`, as `alt`. A tappable one is a full-width
  * `<button>` around the picture, so its accessible name is the title; the others are plain pictures.
  *
- * NO CAROUSEL, NO AUTOPLAY (same reason as before): one picture fills the width; with more, each takes most of
- * it and the next one shows at the edge, and the citizen swipes when they choose to. PURE: `onFail` reports a
- * picture that did not load, and the caller drops it.
+ * THE PROTOTYPE'S STRIP (`BannerStrip.tsx:55-83`, owner 11/10/2026): every slide is the FULL width and snaps to
+ * the left edge, so one swipe moves exactly one picture; with more than one, dots UNDER the strip (never over the
+ * picture) say which one is shown — the current dot is a 24×6 bar in the brand red, the others 6×6, so the
+ * position is told by shape as well as colour. Decoration (`aria-hidden`): the list itself says how many there are.
+ * NO AUTOPLAY: a strip that moves by itself is the hardest thing on a touch screen for a slow reader.
+ *
+ * PURE (`current` and `trackRef` are `BannerCarousel`'s): `onFail` reports a picture that did not load, and the
+ * caller drops it.
  */
-export function BannerStrip(props: {
+type BannerStripProps = {
   items: readonly CommuneBannerItem[];
   canOpenWeb: boolean;
   onScreen: (m: ManXa) => void;
   onWeb: (url: string) => void;
   onFail: (id: string) => void;
-}) {
+};
+
+export function BannerStrip(props: BannerStripProps & { current?: number; trackRef?: Ref<HTMLUListElement> }) {
   const many = props.items.length > 1;
+  const current = props.current ?? 0;
   return (
     <div className="xa-banner">
-      <ul className={`xa-banner-strip${many ? " xa-banner-strip--many" : ""}`} aria-label={XA_TN.banner_strip}>
+      <ul ref={props.trackRef} className={`xa-banner-strip${many ? " xa-banner-strip--many" : ""}`} aria-label={XA_TN.banner_strip}>
         {props.items.map((b) => {
           const picture = (
             <img className="xa-banner__anh" src={b.imageUrl} alt={b.title} decoding="async" onError={() => props.onFail(b.id)} />
@@ -308,8 +326,30 @@ export function BannerStrip(props: {
           );
         })}
       </ul>
+      {many && (
+        <div className="xa-banner-dots" aria-hidden="true">
+          {props.items.map((b, i) => (
+            <span key={b.id} className={`xa-banner-dots__dot${i === current ? " xa-banner-dots__dot--on" : ""}`} />
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+/** `BannerStrip` with its state: which picture is shown, read from the scroll position — only it knows where the finger stopped. */
+function BannerCarousel(props: BannerStripProps) {
+  const many = props.items.length > 1;
+  const track = useRef<HTMLUListElement>(null);
+  const [current, setCurrent] = useState(0);
+  useEffect(() => {
+    const el = track.current;
+    if (el === null || !many) return;
+    const onScroll = () => setCurrent(Math.round(el.scrollLeft / (el.clientWidth || 1)));
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [many, props.items.length]);
+  return <BannerStrip {...props} current={current} trackRef={track} />;
 }
 
 /**
@@ -373,7 +413,7 @@ export function HomeBanner(props: {
   const shown = (props.items ?? []).filter((b) => !failed.has(b.id));
   if (shown.length === 0) return <CommuneBanner />;
   return (
-    <BannerStrip
+    <BannerCarousel
       items={shown}
       canOpenWeb={props.canOpenWeb}
       onScreen={props.onScreen}
@@ -488,6 +528,9 @@ export function officeRows(p: CommuneProfile): Array<{ label: string; value: str
 }
 
 /**
+ * ⚠ NOT RENDERED since 11/10/2026 (owner: theo prototype — the prototype's home has no office block). Kept with its
+ * tests because the profile it reads is still loaded (the header logo); remove both together if no screen takes it.
+ *
  * Trụ sở · giờ làm việc · đường dây nóng, as the commune declared them — nothing when it declared nothing.
  * The hours are display text, never parsed (ADR 0007). The hotline becomes a `tel:` button (the dialler
  * opens; nothing goes over the network), a full tap target in words, not an icon alone.
@@ -547,9 +590,11 @@ function TrangChuXa(props: {
       {/* Header theo prototype (`AppHeader.tsx`): logo xã trái, tên xã giữa, lời chào dưới. Nó đứng NGOÀI vùng
           cuộn — chỉ phần giữa cuộn (§5.2). Góc phải để trống cho Zalo: chuông đã bỏ (quyết định 10, 30/09/2026),
           "Thông báo" nay là một dòng ở Cá nhân › Của tôi. */}
+      {/* The prototype's subtitle (`HomePage.tsx:41-47`, owner 11/10/2026): "Xin chào, <tên>" when the Zalo name is
+          known — otherwise nothing, never the province in its place nor a "loading" line the app cannot back. */}
       <RootTabHeader
         title={xa.ten}
-        subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : xa.tinh}
+        subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : undefined}
         logoUrl={profileLogoUrl(props.profile)}
       />
       <div className="xa-trang">
@@ -616,22 +661,17 @@ function TrangChuXa(props: {
               <KhoiTrangThai bieu_tuong="news" cau={XA_GIAO_DIEN.tin_moi_trong} hint={XA_TN.news_empty_hint} />
             ) : (
               <ul className="xa-ds">
-                {/* The newest item may be the large card — only with a cover that loaded (`FeaturedNews`); the
-                    second stays compact. */}
-                {tin_moi.map((t, i) => (
+                {/* Both items as the compact card, as the prototype's home (`HomePage.tsx:101-103`, owner 11/10/2026:
+                    no large featured card on home). */}
+                {tin_moi.map((t) => (
                   <li key={t.id}>
-                    {i === 0 ? (
-                      <FeaturedNews tin={t} onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
-                    ) : (
-                      <HangTin tin={t} compact onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
-                    )}
+                    <HangTin tin={t} compact onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
                   </li>
                 ))}
               </ul>
             )}
           </section>
-
-          <CommuneOffice profile={props.profile} />
+          {/* No "Ủy ban nhân dân xã" office block (owner 11/10/2026: the prototype's home has none). */}
         </div>
       </div>
     </>
@@ -759,9 +799,9 @@ export function SessionGateScreen(props: {
             />
             {manual && (
               <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-cong-tu-nhap">
-                <p id="xa-cong-tu-nhap">{TYPED_CONTACT.offer}</p>
+                <p id="xa-cong-tu-nhap">{PHONE_VERIFICATION.typed_contact_offer}</p>
                 <button type="button" className="xa-nut" onClick={props.onManual}>
-                  {TYPED_CONTACT.button}
+                  {PHONE_VERIFICATION.typed_contact_button}
                 </button>
               </section>
             )}
@@ -798,7 +838,8 @@ function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () =>
   const { trang, taiLai } = useDanhBaXa(ten_mien);
   return (
     <>
-      <DauManCon tieu_de={DANH_BA.tieu_de} onQuayLai={onQuayLai} />
+      {/* The prototype's title (`DirectoryPage.tsx:47`, owner 11/10/2026). */}
+      <DauManCon tieu_de={XA_TN.directory_title} onQuayLai={onQuayLai} />
       <TrangCon>
         <ThanDanhBaXa trang={trang} onTai={taiLai} />
       </TrangCon>
@@ -821,21 +862,29 @@ function AppCuaXa(props: {
   openSession?: OpenCommuneAppSession;
   openVideo?: OpenVideo;
   openLink?: OpenExternal;
+  shareArticle?: ShareArticle;
+  openDossierPortal?: OpenExternal;
+  minimize?: () => void;
+  /** An article named by the launch link (a shared `zalo.me/s/…?article=` link) — opened once, over home. */
+  initialArticle?: string;
 }) {
   const { ten_mien, xa, openSession } = props;
   // Họ tên lấy MỘT LẦN lúc mở app (`TrangXa`). Phiên ViGov chỉ trong bộ nhớ (`api/phien-vigov.ts`), mở ở
   // việc cá nhân đầu tiên qua cổng dưới đây. Thứ DUY NHẤT sống qua lần đóng app là NHÁP đang soạn, qua
   // `draftStore` lớp vỏ tiêm (ADR 0050 #7).
   const shownName = nameShown(props.name);
-  const [co_chu, datCoChu] = useState<CoChu>("vua");
-  const [man, datMan] = useState<ManXa>({ kieu: "tab", tab: "trang-chu" });
+  // "Cỡ chữ lớn" (owner 11/10/2026: the prototype's one switch) — in memory for this open, never on the phone.
+  const [largeText, setLargeText] = useState(false);
+  const [man, datMan] = useState<ManXa>(() =>
+    props.initialArticle !== undefined ? { kieu: "bai", id: props.initialArticle, tu: "trang-chu" } : { kieu: "tab", tab: "trang-chu" },
+  );
   const tin = useTinXa(ten_mien);
   const profile = useCommuneProfile(ten_mien);
   const banners = useCommuneBanners(ten_mien);
   // The home strip's "leave the app?" question. An article asks through its own (`BaiTinXa`).
   const leave = useLeaveApp(props.openLink);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
-  const lop = `xa-app xa-co-chu--${co_chu}`;
+  const lop = largeText ? "xa-app xa-co-chu--lon" : "xa-app";
 
   /*
    * THE ENTRY MOTION (owner, UI-1 02/10/2026). `entering` is decided DURING the render that changes the screen —
@@ -953,6 +1002,7 @@ function AppCuaXa(props: {
           onQuayLai={() => veTab(man.tu)}
           openVideo={props.openVideo}
           openLink={props.openLink}
+          shareArticle={props.shareArticle}
         />
       );
       break;
@@ -991,7 +1041,7 @@ function AppCuaXa(props: {
       man_con = <ManDanhBa ten_mien={ten_mien} onQuayLai={ve} />;
       break;
     case "tra-cuu":
-      man_con = <TraCuuHoSoXa onQuayLai={ve} />;
+      man_con = <TraCuuHoSoXa onQuayLai={ve} openPortal={props.openDossierPortal} />;
       break;
     case "gui-khong-tai-khoan":
       // ADR 0083: no session exists on this path, so nothing here can lose one; `onSessionLost` / `onSent` are
@@ -1025,27 +1075,13 @@ function AppCuaXa(props: {
       );
       break;
     case "truyen-thanh":
-    case "video": {
-      // Same list as "su-kien" below, filtered by the server's `?type=` (comms accepts both types). Until
-      // 01/10/2026 both tiles opened a static "nothing yet" screen although the commune could already
-      // publish these types from web-admin — the citizen was told there was nothing when there was.
-      const newsType = man.kieu;
-      man_con = (
-        <>
-          <DauManCon tieu_de={newsType === "video" ? XA_TN.video_tieu_de : XA_TN.truyen_thanh_tieu_de} onQuayLai={ve} />
-          <TrangCon>
-            <NewsOfType
-              ten_mien={ten_mien}
-              type={newsType}
-              onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })}
-              empty={newsType === "video" ? XA_TN.video_trong : XA_TN.truyen_thanh_trong}
-              hint={newsType === "video" ? XA_TN.news_empty_hint : XA_TN.broadcast_empty_hint}
-            />
-          </TrangCon>
-        </>
-      );
+      // The prototype's library (owner 11/10/2026): day groups, play in place, the fixed bar (`media-screens.tsx`).
+      man_con = <BroadcastScreen ten_mien={ten_mien} onBack={ve} onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })} />;
       break;
-    }
+    case "video":
+      // The prototype's two-column grid (owner 11/10/2026); a tile opens the item, whose "Xem video" opens the link.
+      man_con = <VideoScreen ten_mien={ten_mien} onBack={ve} onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })} />;
+      break;
     case "ban-do":
       man_con = (
         <ManChuaCoDuLieu
@@ -1123,6 +1159,9 @@ function AppCuaXa(props: {
   // nothing; it plays when the gate's act moved the citizen to a new screen, which is an entry.
   const withGate = (content: ReactNode) => (
     <div className={lop}>
+      {/* The prototype's minimise bubble, over every screen — only when the shell gave the platform call (inside
+          Zalo). It sits above the frames so the gate and the dialogs never hide it. */}
+      {props.minimize !== undefined && <MinimiseBubble onMinimise={props.minimize} />}
       {gateScreen !== null && <div className="xa-frame xa-frame--enter">{gateScreen}</div>}
       <div className={entering ? "xa-frame xa-frame--enter" : "xa-frame"} hidden={gateScreen !== null}>
         {content}
@@ -1204,15 +1243,11 @@ function AppCuaXa(props: {
         <DauTab tieu_de={XA_TN.ca_nhan_tieu_de} logoUrl={profileLogoUrl(profile)} />
         <CaNhanXa
           ho_ten={shownName}
+          avatarUrl={avatarShown(props.name)}
           ten_xa={xa.ten}
           tinh={xa.tinh}
-          so_phieu={
-            petitions.state.kind === "ready"
-              ? { count: petitions.state.items.length, more: petitions.state.hasMore }
-              : null
-          }
-          co_chu={co_chu}
-          onDoiCoChu={datCoChu}
+          largeText={largeText}
+          onLargeText={setLargeText}
           onMoPhanAnh={() => veTab("phan-anh")}
           onMoTraCuu={() => datMan({ kieu: "tra-cuu" })}
           onOpenNotifications={() => datMan({ kieu: "thong-bao" })}
@@ -1286,6 +1321,24 @@ export function TrangXa(props: {
    * shell then keeps its own title rather than a guessed commune.
    */
   onCommuneShown?: (communeName: string) => void;
+  /**
+   * "Chia sẻ qua Zalo" under an article (ADR 0047 G6; owner 11/10/2026), injected by the shell — this half may not
+   * import zmp-sdk. Absent (tests, outside Zalo, no App ID to link to) → no share button.
+   */
+  shareArticle?: ShareArticle;
+  /**
+   * Opens the national public-service portal's dossier lookup ("Tra cứu hồ sơ", owner 11/10/2026), injected by the
+   * shell through its declared door (`moRaNgoai("dich-vu-cong", …)`). Each tap asks first (`leave-app.tsx`). Absent
+   * → the screen says where to look it up, with no button.
+   */
+  openDossierPortal?: OpenExternal;
+  /** Minimises the Mini App (`minimizeApp`), injected by the shell inside Zalo only. Absent → no bubble. */
+  minimize?: () => void;
+  /**
+   * The article a shared link names (`?article=<id>`, read by the shell). It STEERS ONLY: one public article of
+   * THIS commune is opened over home, by the same public read as a tap; a wrong id is the article's own "not found".
+   */
+  initialArticle?: string;
 }) {
   const { ten_mien, lay_ten, getSceneLocation, pickScenePhotos, draftStore, openSession, openVideo, openLink } = props;
   const { onCommuneShown } = props;
@@ -1359,6 +1412,10 @@ export function TrangXa(props: {
         openSession={openSession}
         openVideo={openVideo}
         openLink={openLink}
+        shareArticle={props.shareArticle}
+        openDossierPortal={props.openDossierPortal}
+        minimize={props.minimize}
+        initialArticle={props.initialArticle}
       />
     );
   }

@@ -42,11 +42,16 @@ export function waitWords(seconds: number): string {
 }
 
 /** The sentence for an error; `retryAfterSeconds` matters only to `rate-limited`. PURE. */
-export function errorSentence(loi: LoiTin, retryAfterSeconds: number | null = null): string {
+export function errorSentence(
+  loi: LoiTin,
+  retryAfterSeconds: number | null = null,
+  /** The 429's voice: the shared app's "bạn" by default, the commune app's "bà con" (`COMMUNE_NEWS_RATE_LIMIT`). */
+  words: { rate_limited: string; rate_limited_wait: (wait: string) => string } = TIN_XA,
+): string {
   if (loi !== "rate-limited") return CAU_LOI[loi];
   return retryAfterSeconds === null || retryAfterSeconds <= 0
-    ? TIN_XA.rate_limited
-    : TIN_XA.rate_limited_wait(waitWords(retryAfterSeconds));
+    ? words.rate_limited
+    : words.rate_limited_wait(waitWords(retryAfterSeconds));
 }
 
 function loiCua(kieu: Exclude<NewsReadResult<unknown>["kieu"], "xong">): LoiTin {

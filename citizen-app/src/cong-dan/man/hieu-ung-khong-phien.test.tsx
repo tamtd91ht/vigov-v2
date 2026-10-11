@@ -66,7 +66,9 @@ import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
 import {
   ACCOUNTLESS,
   COMMUNE_APP_SESSION,
+  COMMUNE_PHONE_WORDS,
   COMMUNE_RESIDENTIAL_UNIT_WORDS,
+  COMMUNE_SEND_ERRORS,
   CONSENT_DIALOG,
   CUA_TOI,
   GUI,
@@ -1041,11 +1043,13 @@ describe("app xã — phiên đã xác thực số: (a) một dòng tên Zalo, (
     expect(khung.textContent).not.toContain(XA_PA.sender_verified_phone);
     await go();
   });
-  it("the description box: three lines, grows with the text; the shared app's box keeps six lines", async () => {
+  it("the description box: the prototype's five lines, grows with the text; the shared app's box keeps six lines", async () => {
     const { go } = await mountSend({});
     const box = doc().getElementById("xa-noi-dung")!;
     expect(box.getAttribute("class")).toContain("cd-o__nhap--grow");
-    expect(box.getAttribute("rows")).toBe("3");
+    // `NewFeedbackPage.tsx:339` rows={5} (owner 11/10/2026), still growing with the text.
+    expect(box.getAttribute("rows")).toBe("5");
+    expect(box.getAttribute("placeholder")).toBe(XA_PA.goi_y_su_viec);
     // The shim has no layout: give the box the measures a browser would, then type.
     Object.defineProperties(box, {
       scrollHeight: { get: () => 168 },
@@ -1121,11 +1125,13 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     await press(tatCaPhanTu(khung).filter((p) => p.getAttribute("role") === "radio")[0]!);
   }
 
-  /** From the writing step back to home: "Quay lại" twice, then "Huỷ bỏ" in the cancel question. */
+  /**
+   * From the writing step back to home: ONE "Quay lại" — the prototype's back leaves the screen, and the "Huỷ gửi
+   * phản ánh?" question is gone (owner 11/10/2026).
+   */
   async function leaveSendScreen(khung: PhanTuGia) {
     await press(buttonsNamed(khung, QUAY_LAI)[0]!);
-    await press(buttonsNamed(khung, QUAY_LAI)[0]!);
-    await press(buttonsNamed(khung, XA_TN.huy_bo)[0]!);
+    expect(buttonsNamed(khung, XA_TN.huy_bo)).toEqual([]);
   }
 
   it("name not settled: the explanation names BOTH; one tap → number, then name; (a); never asked again", async () => {
@@ -1183,7 +1189,8 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     const { khung, go } = await mountApp(bridge);
     await press(sendTile(khung));
     expect(khung.textContent).toContain(COMMUNE_APP_SESSION.zalo_asks);
-    expect(khung.textContent).toContain(PHONE_VERIFICATION.why);
+    // The commune gate's voice ("bà con", owner 11/10/2026).
+    expect(khung.textContent).toContain(COMMUNE_PHONE_WORDS.why);
     expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
     await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
     await toWritingStep(khung);
@@ -1247,7 +1254,7 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
       const dialog = namePrompt(khung)!;
       expect(dialog).not.toBeNull();
       expect(dialog.getAttribute("aria-modal")).toBe("true");
-      expect(XA_TN.name_prompt_question).toBe("Dùng tên Zalo của bạn làm tên người gửi?");
+      expect(XA_TN.name_prompt_question).toBe("Dùng tên Zalo của bà con làm tên người gửi?");
       // Nothing asked before the answer, and the form is not open under the question.
       expect(calls).toEqual(["check"]);
       expect(fieldTiles(khung)).toEqual([]);
@@ -1423,7 +1430,8 @@ describe("app xã — ảnh hiện trường: câu hỏi ngắn trước hộp t
     expect(dialog.textContent).toContain(SCENE_PHOTOS.library_question);
     expect(pick).toHaveBeenCalledTimes(2);
     await press(buttonsNamed(dialog, CONSENT_DIALOG.allow)[0]!);
-    expect(pick.mock.calls[2]).toEqual(["library", 5]);
+    // The send form takes at most THREE (the prototype's `PhotoPicker`, owner 11/10/2026).
+    expect(pick.mock.calls[2]).toEqual(["library", 3]);
     await press(library(khung));
     expect(consent(khung)).toBeNull();
     expect(pick).toHaveBeenCalledTimes(4);
@@ -1529,7 +1537,9 @@ describe("app xã — gửi không tài khoản (ADR 0083): cùng biểu mẫu, 
     expect(buttonsNamed(khung, XA_TN.vi_tri_nut)).toEqual([]);
     expect(khung.textContent).not.toContain(XA_TN.vi_tri_nut);
     expect(doc().getElementById("xa-dia-chi")).not.toBeNull();
-    expect(khung.textContent).toContain(XA_PA.location_without_button);
+    // The prototype's address block, without its location button (it needs the refused access token).
+    expect(khung.textContent).toContain(XA_PA.address_hint);
+    expect(buttonsNamed(khung, XA_TN.vi_tri_nut)).toEqual([]);
     expect(locate).not.toHaveBeenCalled();
     // Name and number required, anonymous off and disabled — the typed-contact rules (ADR 0083 #7).
     const toggle = tatCaPhanTu(khung).find((p) => p.getAttribute("role") === "switch")!;
@@ -1549,7 +1559,7 @@ describe("app xã — gửi không tài khoản (ADR 0083): cùng biểu mẫu, 
       body: { code: "PB9M3K7Q2XTD", status: "da-tiep-nhan", acknowledge_due: null, resolve_due: null },
     });
     await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
-    expect(khung.textContent).toContain(LOI_GUI["rate-limited"].cau);
+    expect(khung.textContent).toContain(COMMUNE_SEND_ERRORS["rate-limited"].cau);
     expect(khung.textContent).not.toContain("rate_limited");
     expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng đầu ngõ 12");
     await press(buttonsNamed(khung, GUI.nut_gui_lai)[0]!);
@@ -1589,8 +1599,8 @@ describe("app xã — gửi không tài khoản (ADR 0083): cùng biểu mẫu, 
     await fill(khung);
     postAnswers.push({ status: 429, body: { code: "commune_daily_limit" } });
     await press(buttonsNamed(khung, GUI.tieu_de)[0]!);
-    expect(khung.textContent).toContain(LOI_GUI["commune-daily-limit"].cau);
-    expect(LOI_GUI["commune-daily-limit"].cau).toContain("Bộ phận tiếp nhận của Ủy ban nhân dân xã");
+    expect(khung.textContent).toContain(COMMUNE_SEND_ERRORS["commune-daily-limit"].cau);
+    expect(COMMUNE_SEND_ERRORS["commune-daily-limit"].cau).toContain("Bộ phận tiếp nhận của Ủy ban nhân dân xã");
     expect(boxText("xa-ho-ten")).toBe("Nguyễn Văn An");
     await go();
   });
@@ -1829,7 +1839,8 @@ describe("app xã — ô 'Thôn, tổ dân phố': sau ô địa chỉ, dòng �
     vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
     const { khung, go } = await mountAndFill();
     const text = khung.textContent;
-    expect(text.indexOf(W.label)).toBeGreaterThan(text.indexOf(XA_PA.dia_chi));
+    expect(text.indexOf(XA_PA.address_title)).toBeGreaterThan(-1);
+    expect(text.indexOf(W.label)).toBeGreaterThan(text.indexOf(XA_PA.address_title));
     expect(text.indexOf(W.label)).toBeLessThan(text.indexOf(XA_PA.an_danh));
     await press(unitToggle(khung, W.open_name));
     await press(unitRadios(khung)[1]!);

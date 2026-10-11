@@ -411,17 +411,19 @@ export const COMMUNE_APP_SESSION = {
    * through `vihat-miniapp`. Reusing the shared sentence told the citizen — and Zalo's reviewer, who checks the
    * screen against the dossier — that the number passes through ViHAT Group's server when it does not.
    */
+  // "bà con", not "bạn" (ADR 0050 #6; owner 11/10/2026: theo prototype): every sentence of this table is the
+  // commune app's own.
   zalo_asks:
-    "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không. Số được gửi thẳng tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
+    "Khi bà con bấm nút dưới đây, Zalo sẽ hỏi bà con có đồng ý chia sẻ số điện thoại không. Số được gửi thẳng tới hệ thống của xã. Ứng dụng không lưu số này trên điện thoại.",
   /**
    * SENDING, when the Zalo name has not been settled in this open (owner, 09/10/2026): the same tap asks Zalo for
    * the number AND the name, so the words before it say both (policy 3.3.4 — the purpose before any dialog).
    * Shown only on that path: where only the number is asked, a sentence naming the name too would be false.
    */
   why_with_name:
-    "Với họ tên và số điện thoại Zalo của bạn, xã biết chắc phản ánh là của ai và liên hệ lại được với bạn; bạn không phải gõ họ tên, và xem lại được mọi phản ánh của mình trong “Phản ánh của tôi”. Dù bạn có chia sẻ hay không, chỉ bạn xem được phản ánh bạn đã gửi.",
+    "Với họ tên và số điện thoại Zalo của bà con, xã biết chắc phản ánh là của ai và liên hệ lại được với bà con; bà con không phải gõ họ tên, và xem lại được mọi phản ánh của mình trong “Phản ánh của tôi”. Dù bà con có chia sẻ hay không, chỉ bà con xem được phản ánh mình đã gửi.",
   zalo_asks_with_name:
-    "Khi bạn bấm nút dưới đây, Zalo sẽ hỏi bạn có đồng ý chia sẻ số điện thoại không, rồi hỏi bạn có đồng ý cho ứng dụng dùng họ tên trên Zalo không. Số được gửi thẳng tới hệ thống của xã, và ứng dụng không lưu số này trên điện thoại; họ tên chỉ tới xã khi bạn gửi phản ánh. Không đồng ý cho dùng họ tên thì bạn tự gõ họ tên khi gửi.",
+    "Khi bà con bấm nút dưới đây, Zalo sẽ hỏi bà con có đồng ý chia sẻ số điện thoại không, rồi hỏi bà con có đồng ý cho ứng dụng dùng họ tên trên Zalo không. Số được gửi thẳng tới hệ thống của xã, và ứng dụng không lưu số này trên điện thoại; họ tên chỉ tới xã khi bà con gửi phản ánh. Không đồng ý cho dùng họ tên thì bà con tự gõ họ tên khi gửi.",
   working: "Đang kết nối với hệ thống của xã…",
   not_connected: (task: string) =>
     `Ứng dụng của xã chưa được kết nối với hệ thống tiếp nhận phản ánh, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
@@ -430,8 +432,9 @@ export const COMMUNE_APP_SESSION = {
   wait: (task: string) =>
     `Zalo hoặc hệ thống của xã đang bận, nên ${task}. Hãy chờ một lát rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`,
   other_commune: (task: string) =>
-    `Ứng dụng chưa xác nhận được bạn đang làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+    `Ứng dụng chưa xác nhận được bà con đang làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
 } as const;
+
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * GỬI BẰNG HỌ TÊN VÀ SỐ ĐIỆN THOẠI TỰ NHẬP — khi Zalo không cho số (ADR 0080, 08/10/2026)
@@ -463,6 +466,133 @@ export const TYPED_CONTACT = {
   /** The code screen after a 201 with `contact_unverified` — said under the lookup code. */
   done_no_notice:
     "Bạn sẽ KHÔNG nhận được thông báo nào về phản ánh này, vì số điện thoại chưa được xác nhận qua Zalo. Hãy giữ mã tra cứu, rồi mở ứng dụng này bằng chính tài khoản Zalo bạn đang dùng và tra cứu theo mã để biết phản ánh đi tới đâu.",
+} as const;
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════
+ * THE COMMUNE APP'S VOICE FOR SENTENCES THE SHARED APP ALSO SAYS — "bà con", never "bạn" (ADR 0050 #6;
+ * owner 11/10/2026: "làm hết theo prototype"). The shared app's tables above stay untouched (its screens are
+ * out of this pass); each commune table below has the SAME shape, so a screen picks one or the other and the
+ * logic that builds the sentence is not copied.
+ * ══════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** Every sentence a phone-verification step says, in one voice. `task` completes "…, nên <task>". */
+export type PhoneVerificationWords = {
+  readonly task: Readonly<Record<PhoneVerificationTask, string>>;
+  readonly title: string;
+  readonly why: string;
+  readonly zalo_asks: string;
+  readonly allow: string;
+  readonly decline: string;
+  readonly working: string;
+  readonly refused: (task: string) => string;
+  readonly retry: (task: string) => string;
+  readonly outside_zalo: (task: string) => string;
+  readonly unavailable: (task: string) => string;
+  readonly still_unverified: (task: string) => string;
+  readonly other_commune: (task: string) => string;
+  readonly draft_kept: string;
+  readonly zalo_failed: (zalo: string, task: string, transient: boolean) => string;
+  readonly typed_contact_offer: string;
+  readonly typed_contact_button: string;
+};
+
+/** The shared app's words, as they always were — the default of every phone-verification piece. */
+export const SHARED_PHONE_WORDS: PhoneVerificationWords = {
+  ...PHONE_VERIFICATION,
+  task: PHONE_VERIFICATION_TASK,
+  typed_contact_offer: TYPED_CONTACT.offer,
+  typed_contact_button: TYPED_CONTACT.button,
+};
+
+/** The same steps in the commune app. Where the number goes is `COMMUNE_APP_SESSION.zalo_asks` (ADR 0066). */
+export const COMMUNE_PHONE_WORDS: PhoneVerificationWords = {
+  task: {
+    submit: "phản ánh chưa được gửi",
+    lookup: "chưa tra cứu được phiếu",
+    mine: "chưa xem được phản ánh của bà con",
+    rate: "đánh giá chưa được gửi",
+  },
+  title: "Cần xác nhận số điện thoại của bà con",
+  why: "Với số điện thoại Zalo của bà con, xã biết chắc phản ánh là của ai, và bà con xem lại được mọi phản ánh của mình trong “Phản ánh của tôi”. Dù bà con có chia sẻ số hay không, chỉ bà con xem được phản ánh mình đã gửi.",
+  zalo_asks: COMMUNE_APP_SESSION.zalo_asks,
+  allow: PHONE_VERIFICATION.allow,
+  decline: PHONE_VERIFICATION.decline,
+  working: PHONE_VERIFICATION.working,
+  refused: (task) =>
+    `Bà con chưa chia sẻ số điện thoại, nên ${task}. Bà con vẫn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  retry: (task) =>
+    `Chưa xác nhận được số điện thoại vì mạng yếu hoặc hệ thống đang bận, nên ${task}. Bà con kiểm tra mạng rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`,
+  outside_zalo: (task) =>
+    `Chỉ xác nhận được số điện thoại khi mở ứng dụng trong Zalo, nên ${task}. Bà con mở ứng dụng trong Zalo rồi làm lại.`,
+  unavailable: (task) =>
+    `Hệ thống của xã chưa xác nhận được số điện thoại qua ứng dụng lúc này, nên ${task}. Bà con hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  still_unverified: (task) =>
+    `Xã chưa xác nhận được số điện thoại của bà con, nên ${task}. Bà con hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  other_commune: (task) =>
+    `Ứng dụng chưa mở lại được phiên làm việc với đúng xã ghi ở đầu màn hình, nên ${task}. Bà con đóng ứng dụng rồi mở lại.`,
+  draft_kept: "Nội dung bà con đã viết vẫn còn nguyên.",
+  zalo_failed: (zalo, task, transient) =>
+    transient
+      ? `${zalo} Vì vậy ${task}. Bà con chờ một lát rồi bấm “Đồng ý chia sẻ số điện thoại” lần nữa.`
+      : `${zalo} Vì vậy ${task}. Bà con vẫn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã.`,
+  typed_contact_offer:
+    "Bà con vẫn gửi được phản ánh nếu tự nhập họ tên và số điện thoại để xã liên hệ lại. Số bà con nhập không được xác nhận qua Zalo, nên xã sẽ không gửi thông báo cho bà con; bà con theo dõi phản ánh bằng mã tra cứu.",
+  typed_contact_button: TYPED_CONTACT.button,
+};
+
+/** The commune gate's sentence when identity issued a phone-less session after the citizen agreed (ADR 0080). */
+export const communeZaloGaveNoNumber = (task: string): string =>
+  `Zalo chưa cho ứng dụng nhận số điện thoại của bà con, nên ${task}. Bà con bấm “Gửi bằng họ tên và số điện thoại” để tự nhập, hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.`;
+
+/**
+ * `LOI_GUI` in the commune app's voice — same keys, same `co_the_gui_lai` (the retry rule is not a wording
+ * choice), only the sentences that addressed the citizen as "bạn" differ.
+ */
+export const COMMUNE_SEND_ERRORS: typeof LOI_GUI = {
+  ...LOI_GUI,
+  "unverified-daily-limit": {
+    cau: "Hôm nay bà con đã gửi nhiều phản ánh mà chưa xác nhận số điện thoại, nên phản ánh này CHƯA được ghi nhận. Nội dung bà con viết vẫn còn nguyên. Bà con gửi lại vào ngày mai, hoặc gọi điện thoại cho xã.",
+    co_the_gui_lai: LOI_GUI["unverified-daily-limit"].co_the_gui_lai,
+  },
+  "rate-limited": {
+    cau: "Từ mạng bà con đang dùng đã có nhiều phản ánh được gửi trong một giờ qua, nên phản ánh này CHƯA được ghi nhận. Nội dung bà con viết vẫn còn nguyên. Bà con chờ khoảng một giờ rồi bấm Gửi lại, hoặc mang nội dung tới Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
+    co_the_gui_lai: LOI_GUI["rate-limited"].co_the_gui_lai,
+  },
+  "commune-daily-limit": {
+    cau: "Hôm nay xã đã nhận nhiều phản ánh gửi không cần tài khoản, nên phản ánh này CHƯA được ghi nhận. Nội dung bà con viết vẫn còn nguyên. Bà con gửi lại vào ngày mai, hoặc mang nội dung tới Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
+    co_the_gui_lai: LOI_GUI["commune-daily-limit"].co_the_gui_lai,
+  },
+  "dang-xu-ly-truoc": {
+    cau: "Lần gửi trước của bà con đang được xử lý. Bà con chờ một phút rồi bấm Gửi lại. Phản ánh sẽ không bị gửi hai lần.",
+    co_the_gui_lai: LOI_GUI["dang-xu-ly-truoc"].co_the_gui_lai,
+  },
+  "kenh-chua-mo": {
+    cau: "Ủy ban nhân dân xã chưa mở kênh nhận phản ánh trực tuyến. Phản ánh của bà con CHƯA được ghi nhận. Bà con liên hệ trực tiếp Ủy ban nhân dân xã.",
+    co_the_gui_lai: LOI_GUI["kenh-chua-mo"].co_the_gui_lai,
+  },
+};
+
+/**
+ * The prototype's offline box (`NewFeedbackPage.tsx:279-280`), shown for a send lost to the network. The
+ * screen resends BY ITSELF when the network comes back, with the same attempt (`api/lan-gui.ts`) — so the
+ * sentence's promise is kept and the petition is never recorded twice.
+ */
+export const COMMUNE_OFFLINE_NOTICE =
+  "Chưa gửi được do mất mạng. Phản ánh của bà con đã được lưu, sẽ tự gửi khi có mạng trở lại.";
+
+/** `KENH_CHUA_MO.cau` in the commune app's voice. */
+export const COMMUNE_CHANNEL_CLOSED =
+  "Ứng dụng chưa gửi được phản ánh tới xã. Bà con hãy đến Bộ phận tiếp nhận của Ủy ban nhân dân xã, hoặc gọi điện thoại cho xã để phản ánh.";
+
+/** `TRANG_THAI_CHUA_CO_NHAN` in the commune app's voice — an unknown status code, never guessed into a group. */
+export const COMMUNE_UNKNOWN_STATUS =
+  "Trạng thái mới, ứng dụng chưa có tên gọi. Bà con hãy hỏi Ủy ban nhân dân xã và đọc mã tra cứu.";
+
+/** The 429 of the public news reads, in the commune app's voice (`TinTucXaScreen.tsx` `errorSentence`). */
+export const COMMUNE_NEWS_RATE_LIMIT = {
+  rate_limited: "Bà con thao tác hơi nhanh, vui lòng thử lại sau ít giây.",
+  rate_limited_wait: (wait: string) =>
+    `Bà con thao tác hơi nhanh, vui lòng thử lại sau ít giây. Bà con chờ khoảng ${wait} rồi bấm Thử lại.`,
 } as const;
 
 /**
@@ -542,6 +672,49 @@ export const RATING = {
   rated: (n: number) => `Bạn đã đánh giá ${n} sao.`,
   reopened: "Phản ánh đã được chuyển lại cho Ủy ban nhân dân xã xử lý tiếp. Tình trạng mới ghi ở trên.",
 } as const;
+
+/** The rating block's words in one voice (`PetitionRating.tsx`) — `RATING` for the shared app, below for the commune's. */
+export type RatingWords = {
+  readonly title: string;
+  readonly your_rating: string;
+  readonly why: string;
+  readonly comment_label: string;
+  /** The comment box's placeholder, or none. */
+  readonly comment_placeholder?: string;
+  readonly submit: string;
+  readonly retry: string;
+  readonly reload: string;
+  readonly rate_again: string;
+  readonly sending: string;
+  readonly sent: string;
+  readonly rated: (n: number) => string;
+  readonly reopened: string;
+  /** Under the stars before one is picked (`StarPicker`). Absent = the picker's own neutral sentence. */
+  readonly tap_a_star?: string;
+};
+
+/**
+ * THE COMMUNE APP'S RATING BLOCK — the prototype's words (`components/feedback/RatingBlock.tsx`, owner
+ * 11/10/2026), "bà con" throughout. Still no threshold anywhere (ADR 0050).
+ */
+export const COMMUNE_RATING: RatingWords = {
+  title: "Bà con đánh giá kết quả xử lý",
+  your_rating: "Bà con đã đánh giá",
+  why: "Đánh giá của bà con giúp xã làm tốt hơn ở những lần sau.",
+  // The label stays ABOVE the box (`o-nhap.tsx`: a placeholder vanishes as the citizen types); the prototype's
+  // sentence is the placeholder, verbatim.
+  comment_label: "Nhận xét thêm",
+  comment_placeholder: "Bà con muốn nói thêm điều gì không? (không bắt buộc)",
+  submit: RATING.submit,
+  retry: RATING.retry,
+  reload: RATING.reload,
+  rate_again: RATING.rate_again,
+  sending: RATING.sending,
+  sent: "Đã gửi đánh giá. Cảm ơn bà con.",
+  rated: (n) => `Bà con đã đánh giá ${n} sao.`,
+  reopened: RATING.reopened,
+  tap_a_star: "Bà con chạm vào ngôi sao để chấm điểm",
+};
 
 /**
  * Câu cho từng nhánh không thành của lần gửi đánh giá. `can_retry`: nút "Gửi lại" dùng lại CÙNG lần gửi
@@ -786,7 +959,8 @@ export const DANH_BA = {
 
 export const XA_GIAO_DIEN = {
   chao: "Xin chào",
-  thanh_tab: "Các mục chính của ứng dụng",
+  // The prototype's `BottomNav` label (owner 11/10/2026: theo prototype).
+  thanh_tab: "Điều hướng chính",
   tab_trang_chu: "Trang chủ",
   tab_phan_anh: "Phản ánh",
   tab_tin_tuc: "Tin tức",
@@ -796,18 +970,22 @@ export const XA_GIAO_DIEN = {
   o_tra_cuu: "Tra cứu phiếu",
   o_danh_ba: "Danh bạ",
   muc_phan_anh: "Phản ánh của tôi",
-  muc_tin_moi: "Tin tức mới",
+  // The prototype's home section (`HomePage.tsx:94`, owner 11/10/2026).
+  muc_tin_moi: "Tin mới",
   xem_tat_ca: "Xem tất cả",
   tin_moi_trong: "Chưa có tin nào được đăng.",
   // App riêng ĐÃ ở đúng xã; thứ còn thiếu là xác nhận NGƯỜI DÂN (tài khoản Zalo) — câu cũ "chưa đăng
   // nhập được với xã" làm người đọc tưởng app vào nhầm xã (chủ dự án hỏi đúng câu ấy, 28/09/2026).
   chua_dang_nhap_tieu_de: "Tính năng đang được hoàn thiện",
-  chua_dang_nhap_ngan: "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bạn. Tính năng này đang được hoàn thiện.",
+  chua_dang_nhap_ngan: "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bà con. Tính năng này đang được hoàn thiện.",
   chua_dang_nhap_day_du:
-    "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bạn. Tính năng này đang được hoàn thiện. Trong lúc chờ, bạn có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã hoặc gọi điện cho cán bộ trong mục Danh bạ.",
-  tim_danh_ba: "Tìm theo tên, chức vụ, bộ phận, thôn",
-  khong_thay_can_bo: "Không tìm thấy cán bộ phù hợp.",
-  goi: "Gọi",
+    "Gửi và theo dõi phản ánh cần xác nhận tài khoản Zalo của bà con. Tính năng này đang được hoàn thiện. Trong lúc chờ, bà con có thể đến Bộ phận tiếp nhận của Ủy ban nhân dân xã hoặc gọi điện cho cán bộ trong mục Danh bạ.",
+  // The prototype's directory (`DirectoryPage.tsx:47-76`): the search's screen-reader label, its placeholder,
+  // the no-match title, and the call button's word.
+  tim_danh_ba: "Tìm theo tên, chức danh hoặc số điện thoại",
+  tim_danh_ba_goi_y: "Tìm tên, chức danh hoặc số máy",
+  khong_thay_can_bo: "Không tìm thấy ai phù hợp",
+  goi: "GỌI",
   goi_ai: (ten: string) => `Gọi ${ten}`,
   /** One call button per number on a directory card: the name AND which number, so two buttons never share a name. */
   call_number: (ten: string, which: string) => `Gọi ${ten}, ${which}`,
@@ -866,7 +1044,8 @@ export const XA_TN = {
   o_truyen_thanh: "Truyền thanh",
   o_video: "Video",
   o_ban_do: "Bản đồ tiện ích",
-  chua_co_phieu: "Bà con chưa gửi phản ánh nào.",
+  // The prototype's empty title, without a full stop (`HomePage.tsx:81`, owner 11/10/2026).
+  chua_co_phieu: "Bà con chưa gửi phản ánh nào",
   // Empty-state hints (UI-1, owner 02/10/2026). The prototype's words where it has them (`vigov-require`
   // `apps/miniapp/src/pages`, `${unit}` = "xã"); the others are new and listed for the owner's review.
   /** Home "Phản ánh của tôi" with nothing sent — the "Gửi phản ánh" tile is above (`HomePage.tsx:82`). */
@@ -915,7 +1094,7 @@ export const XA_TN = {
    * verified in this open — no gate, so no other moment said it (owner's wording, 09/10/2026). Buttons:
    * `CONSENT_DIALOG`.
    */
-  name_prompt_question: "Dùng tên Zalo của bạn làm tên người gửi?",
+  name_prompt_question: "Dùng tên Zalo của bà con làm tên người gửi?",
   chua_co_ten: "Chưa xác định",
   /** Accessible name of the Tin tức · Sự kiện · Thông báo tablist on the news tab. */
   loc_loai_tin: "Loại tin",
@@ -943,19 +1122,59 @@ export const XA_TN = {
   /** The button of a `video` article with a link (`TinTucAppXa.tsx` `WatchVideo`) — the citizen's tap opens it outside the app. */
   watch_video: "Xem video",
   /** The opener said no (outside Zalo, the platform refused, the page did not open): what to do next, no code. */
-  watch_video_failed: "Không mở được video lúc này. Bạn hãy bấm “Xem video” lần nữa sau ít phút.",
+  watch_video_failed: "Không mở được video lúc này. Bà con hãy bấm “Xem video” lần nữa sau ít phút.",
   /**
    * The confirmation before a link in an article, or a banner, opens OUTSIDE the app (owner, 01/10/2026). The
    * question names the HOST, read from the link itself — the words of the link are the commune's, the host is
    * where the citizen actually goes (`leave-app.tsx`).
    */
-  leave_app_question: (host: string) => `Bạn sắp rời ứng dụng để mở ${host}`,
+  leave_app_question: (host: string) => `Bà con sắp rời ứng dụng để mở ${host}`,
   leave_app_note:
-    "Trang ấy mở trong trình duyệt của Zalo và không thuộc ứng dụng của xã. Ứng dụng không gửi kèm thông tin nào của bạn.",
+    "Trang ấy mở trong trình duyệt của Zalo và không thuộc ứng dụng của xã. Ứng dụng không gửi kèm thông tin nào của bà con.",
   leave_app_open: "Mở trang",
   leave_app_stay: "Ở lại ứng dụng",
   /** The opener said no (outside Zalo, the platform refused): what to do next, no code. */
-  leave_app_failed: "Không mở được trang lúc này. Bạn hãy bấm “Mở trang” lần nữa sau ít phút.",
+  leave_app_failed: "Không mở được trang lúc này. Bà con hãy bấm “Mở trang” lần nữa sau ít phút.",
+  /*
+   * NEWS — the prototype's words (`NewsPage.tsx`, `NewsDetailPage.tsx`, `VideoPage.tsx`, owner 11/10/2026).
+   */
+  /** Any news list with nothing in it — every type tab and every category (`NewsPage.tsx:142`). */
+  news_list_empty: "Chưa có nội dung trong mục này",
+  /** The first category chip: the commune's own items, whose category belongs to no group (`NewsPage.tsx:100`). */
+  news_own_group: "Tin của xã",
+  /** The header of an article that could not be opened (`NewsDetailPage.tsx:38`). */
+  news_open_failed: "Không mở được tin",
+  /** The share button under an article (`NewsDetailPage.tsx:135`, ADR 0047 G6). */
+  share_zalo: "Chia sẻ qua Zalo",
+  /** The share sheet did not open (outside Zalo, the platform refused): what to do next, no code. */
+  share_failed: "Chưa mở được cửa sổ chia sẻ của Zalo. Bà con hãy bấm “Chia sẻ qua Zalo” lần nữa sau ít phút.",
+  /** "Chủ đề" chips of the Video screen (`VideoPage.tsx:254`). */
+  video_topics: "Chủ đề",
+  /** "Xem video <tên>" — the accessible name of one video tile. */
+  video_open: (title: string) => `Xem video ${title}`,
+  /*
+   * TRUYỀN THANH — the prototype's library (`BroadcastPage.tsx`, owner 11/10/2026).
+   */
+  /** Accessible name of the "Chuyên mục" chips. */
+  broadcast_categories: "Chuyên mục",
+  broadcast_empty: "Chưa có bản tin nào",
+  broadcast_category_empty: (category: string) => `Chưa có bản tin nào trong chuyên mục ${category}`,
+  /** A row's round button: what it does, which broadcast, which day. */
+  broadcast_row_play: (title: string, day: string) => `Phát ${title} ngày ${day}`,
+  broadcast_row_pause: (title: string, day: string) => `Tạm dừng ${title} ngày ${day}`,
+  /** The player bar's play button (`BroadcastPage.tsx:293`). */
+  broadcast_bar_play: "Phát",
+  /** The word under each skip button (`BroadcastPage.tsx:287`). */
+  broadcast_skip_label: (seconds: number) => `${seconds} giây`,
+  broadcast_skip_back: (seconds: number) => `Tua lùi ${seconds} giây`,
+  broadcast_skip_forward: (seconds: number) => `Tua tới ${seconds} giây`,
+  /** The speed button: the speed, and that a tap changes it. */
+  broadcast_speed: (speed: string) => `Tốc độ phát ${speed} lần, chạm để đổi`,
+  broadcast_seek: "Vị trí đang phát",
+  /** A broadcast row with no playable file: it opens the item instead. */
+  broadcast_open_item: (title: string) => `Mở bản tin ${title}`,
+  /** The floating button that minimises the Mini App (`MinimiseBubble.tsx:160`). */
+  minimise_app: "Thu nhỏ ứng dụng",
   /** Accessible name of the home banner strip (ADR 0067 §5) — a list of the commune's pictures. */
   banner_strip: "Ảnh của xã",
   /** The Truyền thanh player on a broadcast's article (ADR 0067 §4, `broadcast-player.tsx`). */
@@ -982,14 +1201,15 @@ export const XA_TN = {
   broadcast_failed:
     "Chưa phát được bản tin lúc này. Bà con kiểm tra kết nối mạng rồi bấm “Nghe” lần nữa, hoặc quay lại sau ít phút.",
   nhom_khac: "Cán bộ khác",
+  /** The directory's header (`DirectoryPage.tsx:47`, owner 11/10/2026). */
+  directory_title: "Danh bạ chính quyền",
   o_nay: "này",
   vi_tri_nut: "Lấy vị trí hiện tại",
   location_again: "Lấy lại vị trí hiện tại",
   vi_tri_dang_lay: "Đang lấy vị trí…",
   vi_tri_vi_sao: "Để cán bộ xã tìm đúng nơi xảy ra sự việc. Zalo sẽ hỏi bà con có đồng ý chia sẻ vị trí không.",
   // Prototype `AddressBlock.tsx:112`: "Đã ghi nhận vị trí (lat, lng)". Coordinates, never a guessed address.
-  location_found: (coordinates: string) =>
-    `Đã lấy vị trí hiện tại (${coordinates}). Bà con vẫn ghi rõ nơi xảy ra ở ô trên.`,
+  location_found: (coordinates: string) => `Đã ghi nhận vị trí (${coordinates})`,
   vi_tri_tu_choi: "Bà con chưa đồng ý chia sẻ vị trí. Bà con vẫn gửi được phản ánh — hãy ghi rõ nơi xảy ra ở ô trên.",
   vi_tri_ngoai_zalo: "Chỉ lấy được vị trí khi mở ứng dụng trong Zalo. Bà con hãy ghi rõ nơi xảy ra ở ô trên.",
   location_rate_limited:
@@ -1026,23 +1246,32 @@ export const XA_TN = {
   nut_lui: "Quay lại",
   nut_gui: "Gửi phản ánh",
   nut_ve_trang_chu: "Về trang chủ",
-  // Tra cứu hồ sơ
-  tra_cuu_tieu_de: "Tra cứu hồ sơ một cửa",
-  // Hai ô, cả hai bắt buộc (spec 05-nghiep-vu.md:148, chủ dự án 28/09/2026 "theo require"): số điện thoại
-  // một mình thì cầm danh bạ là tra ra hàng xóm; bốn số cuối nằm trên giấy biên nhận của chính người nộp.
-  o_so_dien_thoai_ho_so: "Số điện thoại đã khai khi nộp hồ sơ",
-  goi_y_so_dien_thoai_ho_so: "Nhập đủ số, ví dụ 0900000000",
+  // Tra cứu hồ sơ — the prototype's screen (`DossierPage.tsx:75-123`, owner 11/10/2026). The one-stop-shop data
+  // is NOT in ViGov (owner, same day): "Tra cứu" opens the national public-service portal in Zalo's browser, and
+  // the two fields never leave the phone.
+  tra_cuu_tieu_de: "Tra cứu hồ sơ",
+  o_so_dien_thoai_ho_so: "Số điện thoại",
+  goi_y_so_dien_thoai_ho_so: "Số bà con đã khai khi nộp hồ sơ tại Bộ phận Một cửa.",
+  // The prototype's example is a real-looking number; examples carry the agreed fake one (rule 3 #5).
+  placeholder_so_dien_thoai_ho_so: "Ví dụ: 0900 000 000",
   o_bon_so_cuoi: "4 số cuối của số hồ sơ",
-  goi_y_bon_so_cuoi: "In trên giấy biên nhận",
+  goi_y_bon_so_cuoi:
+    "Bốn số cuối in trên giấy biên nhận Bộ phận Một cửa đã đưa cho bà con. Cần cả số điện thoại và bốn số này để bảo vệ thông tin hồ sơ.",
+  placeholder_bon_so_cuoi: "Ví dụ: 1007",
   nut_tra_cuu: "Tra cứu",
-  tra_cuu_chua_ket_noi:
-    "Ứng dụng chưa kết nối với hệ thống một cửa của xã, nên chưa tra được hồ sơ. Bà con hãy liên hệ Bộ phận một cửa của Ủy ban nhân dân xã.",
+  // Kept beside the prototype's disabled button: a greyed button alone does not say what is missing.
   tra_cuu_can_ma: "Bà con nhập đủ số điện thoại và 4 số cuối của số hồ sơ.",
+  /** NEW — no prototype wording: says where the lookup happens and that the two numbers are not sent. */
+  tra_cuu_cong_dich_vu:
+    "Hồ sơ một cửa được tra cứu trên Cổng Dịch vụ công quốc gia. Bấm “Tra cứu” để mở cổng ngay trong Zalo, rồi nhập lại hai thông tin trên ở đó. Ứng dụng không gửi số điện thoại hay bốn số này đi đâu.",
   // Màn chưa có dữ liệu
-  truyen_thanh_tieu_de: "Truyền thanh",
+  // `Truyền thanh ${unit}` of the prototype (`BroadcastPage.tsx:91`).
+  truyen_thanh_tieu_de: "Truyền thanh xã",
   truyen_thanh_trong: "Chưa có bản tin truyền thanh nào được đăng.",
   video_tieu_de: "Video tuyên truyền",
-  video_trong: "Chưa có video tuyên truyền nào được đăng.",
+  // `VideoPage.tsx:269-270`, verbatim.
+  video_trong: "Chưa có video trong chủ đề này",
+  video_empty_hint: "Bà con chọn chủ đề khác hoặc xem mục Tất cả.",
   // SRS M6.1.12 gọi màn phía dân là "Bản đồ tiện ích"; "bản đồ kinh tế số" là màn M5 của cán bộ.
   ban_do_tieu_de: "Bản đồ tiện ích",
   ban_do_trong: "Chưa có dữ liệu bản đồ tiện ích (chợ, trường, trạm y tế, di tích…) trên ứng dụng.",
@@ -1059,14 +1288,13 @@ export const XA_TN = {
   so_phieu_more: (n: number) => `Hơn ${n} phiếu đã gửi`,
   /** Not loaded (no session in this open): no number is invented. */
   so_phieu_unknown: "Bấm để xem phản ánh đã gửi",
-  lich_su_tra_cuu: "Tra cứu hồ sơ một cửa",
+  // The prototype's row (`ProfilePage.tsx:117`, owner 11/10/2026): it opens "Tra cứu hồ sơ".
+  lich_su_tra_cuu: "Hồ sơ đã tra cứu",
   lich_su_tra_cuu_phu: "Tra cứu tiến độ hồ sơ của bà con",
   hien_thi: "Cài đặt hiển thị",
   co_chu: "Cỡ chữ",
-  co_chu_vua: "Vừa",
-  co_chu_lon: "Lớn",
-  co_chu_rat_lon: "Rất lớn",
-  xem_truoc_co_chu: "Xem trước: kích thước chữ hiện tại",
+  // ONE switch, the prototype's (`ProfilePage.tsx:80-86`); the old three levels went with it (owner 11/10/2026).
+  co_chu_lon: "Cỡ chữ lớn",
   muc_thong_bao: "Thông báo",
   ve_ung_dung: "Về ứng dụng",
   don_vi: "Đơn vị",
@@ -1075,7 +1303,7 @@ export const XA_TN = {
   huy: "Không",
   // Cá nhân after wave 1 (`PROTOTYPE.md` §6.6).
   of_mine: "Của tôi",
-  text_size_hint: "Phóng to chữ trong ứng dụng cho dễ đọc.",
+  text_size_hint: "Phóng to toàn bộ chữ trong app thêm 20% cho dễ đọc",
   language: "Ngôn ngữ",
   /** The only language the app has — a statement, not a setting (there is nothing to switch to). */
   language_value: "Tiếng Việt",
@@ -1106,9 +1334,15 @@ export const XA_PA = {
   fields_empty:
     "Hiện xã chưa mở lĩnh vực nào để nhận phản ánh qua ứng dụng. Bà con hãy gọi điện cho xã hoặc đến Bộ phận tiếp nhận của Ủy ban nhân dân xã.",
   dang_gui: "Đang gửi phản ánh tới xã…",
-  acknowledge_by: (moc: string) => `Cán bộ xã sẽ xem phiếu trước ${moc} (giờ Việt Nam).`,
+  /** The send button while the send runs (`NewFeedbackPage.tsx:297`). */
+  sending_button: "Đang gửi…",
+  // `moc` is `formatDeadline` of a deadline the SERVER stored ("15h ngày 2/10", `lib/vn-format.ts`) — never
+  // computed here (rule 10 #2). The prototype's wording (`NewFeedbackPage.tsx:482`).
+  acknowledge_by: (moc: string) => `Cán bộ xã sẽ xem phiếu trước ${moc}`,
   /** Shown only when the server returned `han_xu_ly_xong` — a stored deadline, never computed here (rule 10). */
-  resolve_by: (moc: string) => `Dự kiến xử lý xong trước ${moc} (giờ Việt Nam).`,
+  resolve_by: (moc: string) => `Dự kiến xử lý xong trước ${moc}`,
+  /** The done screen's line under its title (`NewFeedbackPage.tsx:471`): the commune that received it. */
+  done_received: (commune: string) => `${commune} đã nhận được phản ánh của bà con.`,
   /** Header of one petition's screen (`PROTOTYPE.md` §6: "Phiếu #{code}"). */
   ticket_title: (code: string) => `Phiếu #${code}`,
   /** A lifecycle step the petition has not reached yet, on the timeline. */
@@ -1117,8 +1351,9 @@ export const XA_PA = {
   empty_list_hint: "Chạm nút bên dưới để gửi phản ánh đầu tiên tới xã.",
   tra_cuu_tieu_de: "Tra cứu phiếu",
   tra_cuu_goi_y: "Nhập mã phiếu bà con đã nhận",
-  chua_co_phieu: "Bà con chưa gửi phản ánh nào.",
-  don_vi_xu_ly: "Cán bộ tiếp nhận phản ánh",
+  chua_co_phieu: "Bà con chưa gửi phản ánh nào",
+  // The prototype's step unit (`Timeline.tsx` `step.unit`, owner 11/10/2026).
+  don_vi_xu_ly: "UBND xã",
   da_mo_lai: (n: number) => `Đã mở lại để xử lý tiếp (lần ${n})`,
   da_danh_gia: "Đánh giá của bà con",
   danh_gia_tieu_de: "Bà con đánh giá kết quả xử lý",
@@ -1137,7 +1372,21 @@ export const XA_PA = {
   giau_ten: "Giấu tên",
   ma_phieu: "Mã phiếu",
   du_kien_xong: "Dự kiến xử lý xong",
-  tien_trinh: "Tiến trình xử lý",
+  // The petition's own screen, in the prototype's words (`FeedbackDetailPage.tsx:79-113`, owner 11/10/2026).
+  tien_trinh: "Quá trình xử lý",
+  detail_location: "Vị trí",
+  detail_sent_at: "Đã gửi lúc",
+  /** Before the petition is handled: when it should be done by. */
+  detail_due_open: "Dự kiến xong trước",
+  /** Once handled (`da-xu-ly-xong`, `da-dong`): the deadline it had. */
+  detail_due_done: "Hạn xử lý",
+  detail_result: "Kết quả xử lý",
+  // The before/after block (`BeforeAfter.tsx`): one title, two labelled columns, an empty line in each.
+  before_after_title: "Hình ảnh trước và sau khi xử lý",
+  before_label: "Trước",
+  after_label: "Sau",
+  before_empty: "Không có ảnh trước",
+  after_empty: "Chưa có ảnh sau",
   chi_tiet_tieu_de: "Chi tiết phản ánh",
   // ONE sentence for "no such code", "someone else's", "another commune's" — the server answers the same
   // 404 for all three, and the screen must not tell them apart (rule 4, forbidden #2).
@@ -1150,8 +1399,22 @@ export const XA_PA = {
   thieu_mo_ta: "Bà con mô tả sự việc trước khi gửi.",
   hoi_huy_cau: "Nội dung bà con đang nhập sẽ mất.",
   chon_linh_vuc: "Bà con chọn lĩnh vực gần đúng nhất với sự việc.",
-  su_viec: "Mô tả sự việc",
-  goi_y_su_viec: "Sự việc gì, ở đâu, từ khi nào…",
+  // The prototype's writing step (`NewFeedbackPage.tsx:332`). The placeholder is the default one; a per-field
+  // placeholder needs the server's catalogue to carry it (a backend card).
+  su_viec: "Sự việc gì đang xảy ra?",
+  goi_y_su_viec: "Bà con mô tả giúp sự việc, ở đâu, xảy ra khi nào.",
+  // The prototype's photo block (`PhotoPicker.tsx:203-208`): at most THREE on the form.
+  photos_title: "Ảnh hiện trường",
+  photos_hint: "Có ảnh thì cán bộ nắm được sự việc nhanh hơn.",
+  /** Beside a title: the block may stay empty. */
+  optional_suffix: "(không bắt buộc)",
+  photo_remove: (i: number) => `Xoá ảnh hiện trường ${i}`,
+  photo_alt: (i: number) => `Ảnh hiện trường ${i}`,
+  // The prototype's address block (`AddressBlock.tsx:35-58, 168-169`).
+  address_title: "Địa chỉ nơi xảy ra sự việc",
+  address_hint: "Bà con ghi thêm số nhà, tên kiệt hay chỗ dễ nhận biết để cán bộ tìm đúng nơi.",
+  address_placeholder: "Ví dụ: Trước số nhà 112 đường Tiểu La, gần chợ Hà Lam",
+  map_caption: "Bản đồ chỉ minh hoạ vị trí tương đối.",
   linh_vuc: "Lĩnh vực",
   dia_chi: "Nơi xảy ra",
   goi_y_dia_chi: "Thôn, tổ, đường, số nhà…",
@@ -1183,13 +1446,15 @@ export const XA_PA = {
   // yet, so the layout cannot change under the citizen's finger once the answer comes.
   sender_pending: "Đang lấy họ tên từ Zalo…",
   // Photos left this list on 02/10/2026 — optional by the owner's decision (`anh_bat_buoc`).
-  bat_buoc: "Bắt buộc: lĩnh vực, mô tả, vị trí, họ tên người gửi.",
-  bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả, vị trí.",
+  // "vị trí" left these lines on 11/10/2026: the prototype's address block is "(không bắt buộc)", and the server
+  // never required it (ADR 0050 #9) — a line saying "bắt buộc" over a block saying "không bắt buộc" is a lie.
+  bat_buoc: "Bắt buộc: lĩnh vực, mô tả, họ tên người gửi.",
+  bat_buoc_an_danh: "Bắt buộc: lĩnh vực, mô tả.",
   // The typed-contact path (ADR 0080, 08/10/2026): Zalo gave no number, so the name and number the citizen
   // types are the commune's only way back to them — both required, anonymous off.
   contact_note:
     "Zalo chưa cho ứng dụng số điện thoại của bà con, nên bà con nhập họ tên và số điện thoại để cán bộ xã liên hệ lại.",
-  contact_required: "Bắt buộc: lĩnh vực, mô tả, vị trí, họ tên và số điện thoại người gửi.",
+  contact_required: "Bắt buộc: lĩnh vực, mô tả, họ tên và số điện thoại người gửi.",
   phone_required_label: "Số điện thoại (bắt buộc)",
   contact_name_missing: "Bà con nhập họ tên để xã biết ai gửi phản ánh.",
   contact_phone_missing: "Bà con nhập số điện thoại để cán bộ xã liên hệ lại.",
@@ -1204,11 +1469,12 @@ export const XA_PA = {
   xong_mo_ta: "Ủy ban nhân dân xã đã nhận phản ánh của bà con. Bà con giữ mã phiếu dưới đây để theo dõi.",
   ma_phieu_cua_ba_con: "Mã phiếu của bà con",
   theo_doi: "Theo dõi phiếu này",
-  // Nháp đang soạn (ADR 0050 #7, prototype `NewFeedbackPage.tsx:426-453`) — chỉ app riêng của xã có nháp.
-  draft_title: "Bà con có một phản ánh đang soạn dở. Tiếp tục?",
+  // Nháp đang soạn (ADR 0050 #7, prototype `NewFeedbackPage.tsx:426-453`, nguyên văn từ 11/10/2026) — chỉ app riêng
+  // của xã có nháp.
+  draft_title: "Bà con có một phản ánh chưa gửi xong. Tiếp tục?",
   draft_body: "Nội dung bà con đã nhập vẫn được giữ nguyên.",
-  draft_resume: "Tiếp tục",
-  draft_discard: "Bỏ nháp",
+  draft_resume: "Tiếp tục phản ánh đang soạn",
+  draft_discard: "Bỏ và gửi phản ánh mới",
   draft_kept_on_phone:
     "Phản ánh đang soạn được giữ trên điện thoại này cho tới khi bà con gửi đi hoặc bỏ nháp.",
 } as const;

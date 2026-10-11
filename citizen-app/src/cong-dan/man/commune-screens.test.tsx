@@ -22,7 +22,7 @@ import {
   StepBar,
   stepsAhead,
 } from "./PhanAnhAppXa";
-import { CaNhanXa, dossierLookupReady, initials, TraCuuHoSoXa } from "./TienIchAppXa";
+import { CaNhanXa, DOSSIER_PORTAL_URL, dossierLookupReady, initials, lastFourDigits, TraCuuHoSoXa } from "./TienIchAppXa";
 import {
   ArticleCover,
   BaiTinXa,
@@ -112,12 +112,14 @@ describe("home: tiles and headers per §6.1, the bell gone (decision 10)", () =>
     // …and "Thông báo" is reachable from Cá nhân instead (below).
   });
 
-  it("Truyền thanh and Video read the commune's published items by type, like Sự kiện — not a static empty screen", () => {
+  it("Truyền thanh and Video read the commune's published items by type — the prototype's two libraries, not a static empty screen", () => {
     const src = import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
     const code = Object.values(src)[0]!.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
     const block = code.slice(code.indexOf('case "truyen-thanh":'), code.indexOf('case "ban-do":'));
     expect(block).toContain('case "video":');
-    expect(block).toMatch(/<NewsOfType[\s\S]*type=\{newsType\}/);
+    // owner 11/10/2026: the prototype's screens (`media-screens.tsx`), which read `?type=truyen-thanh|video`.
+    expect(block).toMatch(/<BroadcastScreen ten_mien=\{ten_mien\}/);
+    expect(block).toMatch(/<VideoScreen ten_mien=\{ten_mien\}/);
     expect(block).not.toContain("ManChuaCoDuLieu");
   });
 });
@@ -127,8 +129,9 @@ describe("Phản ánh của tôi: the card and the empty list (§6.3)", () => {
     const card = html(createElement(PetitionCard, { petition: ROW, onOpen: noop }));
     expect(card).toMatch(/^<button type="button" class="xa-the xa-petition-card">/);
     expect(card).toContain('<strong class="xa-petition-card__code">#PA7K2QX9M4TD</strong>');
-    expect(card).toContain("28/09/2026");
-    expect(card).not.toContain("28/09/2026 08:00"); // the day, not the minute
+    // The prototype's date (`lib/format.ts` `formatDate`, owner 11/10/2026): no leading zeros.
+    expect(card).toContain(">28/9/2026<");
+    expect(card).not.toContain("08:00"); // the day, not the minute
     expect(card).toContain(">Hạ tầng giao thông<");
     expect(card).toContain('<span class="xa-petition-card__excerpt">Ổ gà lớn trước cổng chợ</span>');
     expect(card).toContain("xa-chip-tt--dang-xu-ly");
@@ -162,15 +165,27 @@ describe("Chi tiết phiếu (§6.4)", () => {
   it("summary: the facts with their labels; the stored deadline or the 'not yet' sentence, never a computed one", () => {
     const body = html(createElement(PetitionBody, { petition: PETITION }));
     expect(body).toContain('<dl class="xa-facts">');
-    for (const label of ["Nơi xảy ra", "Gửi lúc", XA_PA.du_kien_xong, "Người gửi"]) expect(body).toContain(`<span>${label}</span>`);
+    // The prototype's labels (`FeedbackDetailPage.tsx:79-93`, owner 11/10/2026); "Người gửi" is ours and stays.
+    for (const label of ["Vị trí", "Đã gửi lúc", "Dự kiến xong trước", "Người gửi"]) expect(body).toContain(`<span>${label}</span>`);
+    expect(body).toContain("08:00 ngày 28/9/2026");
     expect(body).toContain("Chưa có. Hạn được ấn định sau khi cán bộ phân loại phiếu.");
+    // The field small, the content as the title, the chip on the right — and no second "Mã phiếu" line.
+    expect(body).toContain('<p class="xa-summary-head__field">Hạ tầng giao thông</p>');
+    expect(body).toContain('<h2 class="xa-summary-head__content xa-giu-dong">Ổ gà lớn trước cổng chợ, xe máy dễ ngã.</h2>');
+    expect(body).not.toContain(XA_PA.ma_phieu);
+    // Once handled, the stored deadline is "Hạn xử lý" — formatted, never computed (rule 10 #2).
+    const handled = html(
+      createElement(PetitionBody, { petition: { ...PETITION, trang_thai: "da-dong", han_xu_ly_xong: "2026-10-02T08:30:00Z" } }),
+    );
+    expect(handled).toContain("<span>Hạn xử lý</span>");
+    expect(handled).toContain("15h30 ngày 2/10");
     // No result written → no green frame.
     expect(body).not.toContain("xa-result-box");
   });
 
   it("'Kết quả xử lý' has its own green frame, only when the commune wrote one", () => {
     const body = html(createElement(PetitionBody, { petition: { ...PETITION, trang_thai: "da-xu-ly", ket_qua: "Đã vá ổ gà." } }));
-    expect(body).toMatch(/<section class="xa-result-box"[^>]*><h2[^>]*>Kết quả xử lý của xã<\/h2><p class="xa-giu-dong">Đã vá ổ gà\.<\/p><\/section>/);
+    expect(body).toMatch(/<section class="xa-result-box"[^>]*><h2[^>]*>Kết quả xử lý<\/h2><p class="xa-giu-dong">Đã vá ổ gà\.<\/p><\/section>/);
   });
 
   it("timeline: reached steps ticked, the current one aria-current, the rest greyed IN WORDS", () => {
@@ -220,19 +235,29 @@ describe("Gửi phản ánh (§6.2)", () => {
   });
 
   it("step 3: the issued code, the SERVER's deadlines only, the two ways on", () => {
-    const done = html(createElement(SendDone, { petition: PETITION, onFollow: noop, onHome: noop }));
+    const done = html(createElement(SendDone, { communeName: "Xã Thử", petition: PETITION, onFollow: noop, onHome: noop }));
     expect(done).toContain('<strong class="xa-ket-qua__code">#PA7K2QX9M4TD</strong>');
     expect(done).toContain("xa-pop");
-    expect(done).toContain(XA_PA.acknowledge_by("28/09/2026 10:00"));
+    // The prototype's line and deadline format (`NewFeedbackPage.tsx:471, 482`), from the server's value only.
+    expect(done).toContain("Xã Thử đã nhận được phản ánh của bà con.");
+    expect(done).toContain(XA_PA.acknowledge_by("10h ngày 28/9"));
     // `han_xu_ly_xong` null → no "Dự kiến xử lý xong" line; never a date computed here (rule 10 #2).
     expect(done).not.toContain("Dự kiến xử lý xong trước");
     expect(done).toContain(`>${XA_PA.theo_doi}</button>`);
     expect(done).toContain(`>${XA_TN.nut_ve_trang_chu}</button>`);
     const both = html(
-      createElement(SendDone, { petition: { ...PETITION, han_xu_ly_xong: "2026-10-02T09:00:00Z" }, onFollow: noop, onHome: noop }),
+      createElement(SendDone, {
+        communeName: "Xã Thử",
+        petition: { ...PETITION, han_xu_ly_xong: "2026-10-02T09:00:00Z" },
+        onFollow: noop,
+        onHome: noop,
+      }),
     );
-    expect(both).toContain(XA_PA.resolve_by("02/10/2026 16:00"));
-    const none = html(createElement(SendDone, { petition: { ...PETITION, han_tiep_nhan: null }, onFollow: noop, onHome: noop }));
+    expect(both).toContain(XA_PA.resolve_by("16h ngày 2/10"));
+    expect(XA_PA.resolve_by("16h ngày 2/10")).toBe("Dự kiến xử lý xong trước 16h ngày 2/10");
+    const none = html(
+      createElement(SendDone, { communeName: "Xã Thử", petition: { ...PETITION, han_tiep_nhan: null }, onFollow: noop, onHome: noop }),
+    );
     expect(none).not.toContain("xa-deadline-band");
   });
 
@@ -249,9 +274,8 @@ describe("Cá nhân (§6.6)", () => {
         ho_ten: name,
         ten_xa: "Xã Thử",
         tinh: "Tỉnh Mẫu",
-        so_phieu: null,
-        co_chu: "vua",
-        onDoiCoChu: noop,
+        largeText: false,
+        onLargeText: noop,
         onMoPhanAnh: noop,
         onMoTraCuu: noop,
         onOpenNotifications: noop,
@@ -271,12 +295,50 @@ describe("Cá nhân (§6.6)", () => {
     expect(page).not.toMatch(/\b0\d{9}\b/);
   });
 
-  it("three text sizes stay; language is a statement; 'Của tôi' has Phản ánh · Tra cứu hồ sơ · Thông báo; no switch", () => {
+  it("ONE 'Cỡ chữ lớn' switch (the prototype's); language is a statement; 'Của tôi' has Phản ánh · Hồ sơ đã tra cứu · Thông báo — no count", () => {
     const page = personal(null);
-    expect(page.match(/class="xa-chip( xa-chip--on)?" aria-pressed/g)).toHaveLength(3);
+    // owner 11/10/2026: the three levels became the prototype's one switch, with its hint; still no notification switch.
+    expect(page.match(/role="switch"/g)).toHaveLength(1);
+    expect(page).toContain('role="switch" aria-checked="false"');
+    expect(page).toContain(XA_TN.co_chu_lon);
+    expect(page).toContain("Phóng to toàn bộ chữ trong app thêm 20% cho dễ đọc");
+    expect(page).not.toMatch(/type="checkbox"|Nhận thông báo/);
     expect(page).toContain(XA_TN.language_value);
-    for (const row of [XA_TN.of_mine, XA_TN.o_tra_cuu_ho_so, XA_TN.thong_bao]) expect(page).toContain(row);
-    expect(page).not.toMatch(/role="switch"|type="checkbox"/);
+    for (const row of [XA_TN.of_mine, "Hồ sơ đã tra cứu", XA_TN.thong_bao]) expect(page).toContain(row);
+    expect(page).not.toMatch(/phiếu đã gửi|Bấm để xem phản ánh đã gửi/);
+  });
+
+  it("the Zalo picture when the name request brought one (https only); otherwise the initials", () => {
+    const withPicture = html(
+      createElement(CaNhanXa, {
+        ho_ten: "Nguyễn Văn Hùng",
+        avatarUrl: "https://s120-ava-talk.zadn.vn/a.jpg",
+        ten_xa: "Xã Thử",
+        tinh: "",
+        largeText: true,
+        onLargeText: noop,
+        onMoPhanAnh: noop,
+        onMoTraCuu: noop,
+        onOpenNotifications: noop,
+      }),
+    );
+    expect(withPicture).toContain('<img class="xa-avatar xa-avatar--image" src="https://s120-ava-talk.zadn.vn/a.jpg" alt=""');
+    expect(withPicture).toContain('role="switch" aria-checked="true"');
+    const notHttps = html(
+      createElement(CaNhanXa, {
+        ho_ten: "Nguyễn Văn Hùng",
+        avatarUrl: "http://example.invalid/a.jpg",
+        ten_xa: "Xã Thử",
+        tinh: "",
+        largeText: false,
+        onLargeText: noop,
+        onMoPhanAnh: noop,
+        onMoTraCuu: noop,
+        onOpenNotifications: noop,
+      }),
+    );
+    expect(notHttps).not.toContain("<img");
+    expect(notHttps).toContain('<span class="xa-avatar" aria-hidden="true">NH</span>');
   });
 
   it("the version line comes from the build, and is absent when the build had no label", () => {
@@ -301,8 +363,9 @@ describe("Tin tức (§6.5)", () => {
     expect(relativeDay("2026-09-29", "2026-09-30")).toBe(TIN_XA.yesterday);
     expect(relativeDay("2026-09-24", "2026-09-30")).toBe("6 ngày trước");
     expect(relativeDay("2026-08-31", "2026-09-30")).toBe("30 ngày trước");
-    expect(relativeDay("2026-08-30", "2026-09-30")).toBe("30/08/2026");
-    expect(relativeDay("2026-10-02", "2026-09-30")).toBe("02/10/2026");
+    // The prototype's date past 30 days (`formatRelative` → `formatDate`): no leading zeros.
+    expect(relativeDay("2026-08-30", "2026-09-30")).toBe("30/8/2026");
+    expect(relativeDay("2026-10-02", "2026-09-30")).toBe("2/10/2026");
     expect(relativeDay("2026-02-30", "2026-09-30")).toBe("Chưa rõ ngày");
     // Month and year boundaries count calendar days.
     expect(relativeDay("2025-12-31", "2026-01-01")).toBe(TIN_XA.yesterday);
@@ -387,10 +450,11 @@ describe("Tin tức (§6.5)", () => {
     it("commune app article: the meta line ends with the count; absent → the old line exactly", () => {
       const bai: BaiTinXaData = { ...item("1"), ngay_dang: "2026-09-25", noi_dung: "Đoạn.", viewCount: 1234 };
       const withCount = html(createElement(NewsArticle, { bai, coverFailed: false, onCoverFail: noop, ds: [] }));
-      expect(withCount).toMatch(/<p class="xa-phu news-meta">Kinh tế · 25\/09\/2026<span class="view-count"><svg[^>]*>[\s\S]*?<\/svg>1\.234 lượt xem<\/span><\/p>/);
+      // The prototype's meta line (`NewsDetailPage.tsx:57-62`, owner 11/10/2026): no category name, its date format.
+      expect(withCount).toMatch(/<p class="xa-phu news-meta">25\/9\/2026<span class="view-count"><svg[^>]*>[\s\S]*?<\/svg>1\.234 lượt xem<\/span><\/p>/);
       const { viewCount: _drop, ...noCount } = bai;
       const without = html(createElement(NewsArticle, { bai: noCount, coverFailed: false, onCoverFail: noop, ds: [] }));
-      expect(without).toContain('<p class="xa-phu">Kinh tế · 25/09/2026</p>');
+      expect(without).toContain('<p class="xa-phu">25/9/2026</p>');
       expect(without).not.toContain("lượt xem");
       expect(html(createElement(NewsArticle, { bai: { ...bai, viewCount: 0 }, coverFailed: false, onCoverFail: noop, ds: [] }))).toContain(
         "0 lượt xem",
@@ -567,10 +631,10 @@ describe("Trang chủ: the featured card (UI-1)", () => {
     expect(failed).toBe(1);
   });
 
-  it("the home screen features the FIRST item only; the second stays compact; lists keep one card shape", () => {
+  it("the home screen shows BOTH items as the compact card (owner 11/10/2026: the prototype's home); lists keep one card shape", () => {
     const src = Object.values(import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
-    expect(src).toMatch(/i === 0 \? \(\s*<FeaturedNews tin=\{t\}/);
-    expect(src).not.toMatch(/<FeaturedNews[^>]*showViews/);
+    expect(src).not.toMatch(/<FeaturedNews\b/);
+    expect(src).toContain("<HangTin tin={t} compact ");
     const tinSrc = Object.values(import.meta.glob("./TinTucAppXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
     const listBody = tinSrc.slice(tinSrc.indexOf("export function NewsListBody("), tinSrc.indexOf("export function useTinXa("));
     expect(listBody).not.toContain("FeaturedNews");
@@ -623,21 +687,24 @@ describe("Tin tức: published time and the event block (G1)", () => {
   };
   const render = (bai: BaiTinXaData) => html(createElement(NewsArticle, { bai, coverFailed: false, onCoverFail: noop, ds: [] }));
 
-  it("published at: 'HH:mm ngày dd/MM/yyyy' in Vietnam time when it falls on ngay_dang; otherwise the day alone", () => {
-    expect(publishedLabel({ ...base, publishedAt: "2026-09-25T02:07:00Z" })).toBe("09:07 ngày 25/09/2026");
+  // The prototype's format (`lib/format.ts` `formatDateTime`: "14:30 ngày 22/8/2026", owner 11/10/2026) — no
+  // leading zeros in the date — and no category name on the meta line.
+  it("published at: 'HH:mm ngày d/M/yyyy' in Vietnam time when it falls on ngay_dang; otherwise the day alone", () => {
+    expect(publishedLabel({ ...base, publishedAt: "2026-09-25T02:07:00Z" })).toBe("09:07 ngày 25/9/2026");
     // 18:30 UTC on the 24th is 01:30 on the 25th in Vietnam — the day is Vietnam's, not the phone's or UTC's.
-    expect(publishedLabel({ ...base, publishedAt: "2026-09-24T18:30:00Z" })).toBe("01:30 ngày 25/09/2026");
+    expect(publishedLabel({ ...base, publishedAt: "2026-09-24T18:30:00Z" })).toBe("01:30 ngày 25/9/2026");
     // A backdated item: the instant is another day than the one displayed — no time is claimed.
-    expect(publishedLabel({ ...base, ngay_dang: "2026-09-20", publishedAt: "2026-09-25T02:07:00Z" })).toBe("20/09/2026");
-    expect(publishedLabel(base)).toBe("25/09/2026");
-    expect(render({ ...base, publishedAt: "2026-09-25T02:07:00Z" })).toContain('<p class="xa-phu">Kinh tế · 09:07 ngày 25/09/2026</p>');
-    expect(render(base)).toContain('<p class="xa-phu">Kinh tế · 25/09/2026</p>');
+    expect(publishedLabel({ ...base, ngay_dang: "2026-09-20", publishedAt: "2026-09-25T02:07:00Z" })).toBe("20/9/2026");
+    expect(publishedLabel(base)).toBe("25/9/2026");
+    expect(render({ ...base, publishedAt: "2026-09-25T02:07:00Z" })).toContain('<p class="xa-phu">09:07 ngày 25/9/2026</p>');
+    expect(render(base)).toContain('<p class="xa-phu">25/9/2026</p>');
+    expect(render(base)).not.toContain("Kinh tế");
   });
 
   it("the event window in words: start only, same day, two days; no start → no time", () => {
-    expect(eventTimeLabel("2026-10-05T01:00:00Z", undefined)).toBe("08:00 ngày 05/10/2026");
-    expect(eventTimeLabel("2026-10-05T01:00:00Z", "2026-10-05T04:00:00Z")).toBe("08:00 – 11:00 ngày 05/10/2026");
-    expect(eventTimeLabel("2026-10-05T01:00:00Z", "2026-10-06T10:00:00Z")).toBe("08:00 ngày 05/10/2026 – 17:00 ngày 06/10/2026");
+    expect(eventTimeLabel("2026-10-05T01:00:00Z", undefined)).toBe("08:00 ngày 5/10/2026");
+    expect(eventTimeLabel("2026-10-05T01:00:00Z", "2026-10-05T04:00:00Z")).toBe("08:00 – 11:00 ngày 5/10/2026");
+    expect(eventTimeLabel("2026-10-05T01:00:00Z", "2026-10-06T10:00:00Z")).toBe("08:00 ngày 5/10/2026 – 17:00 ngày 6/10/2026");
     expect(eventTimeLabel(undefined, "2026-10-06T10:00:00Z")).toBeNull();
     expect(eventTimeLabel(undefined, undefined)).toBeNull();
   });
@@ -647,14 +714,14 @@ describe("Tin tức: published time and the event block (G1)", () => {
     const page = render(ev);
     expect(page).toContain(
       `<section class="xa-bai__event" aria-label="${XA_TN.event_details}"><dl class="xa-bai__event-list">` +
-        `<div><dt>Thời gian</dt><dd>08:00 – 11:00 ngày 05/10/2026</dd></div>` +
+        `<div><dt>Thời gian</dt><dd>08:00 – 11:00 ngày 5/10/2026</dd></div>` +
         `<div><dt>Địa điểm</dt><dd>Nhà văn hoá thôn</dd></div></dl></section><div class="xa-ke"></div>`,
     );
     const placeOnly = render({ ...base, type: "su-kien", eventPlace: "Sân UBND" });
     expect(placeOnly).toContain("<dt>Địa điểm</dt><dd>Sân UBND</dd>");
     expect(placeOnly).not.toContain("Thời gian");
     const timeOnly = render({ ...base, type: "su-kien", eventStartsAt: "2026-10-05T01:00:00Z" });
-    expect(timeOnly).toContain("<dt>Thời gian</dt><dd>08:00 ngày 05/10/2026</dd>");
+    expect(timeOnly).toContain("<dt>Thời gian</dt><dd>08:00 ngày 5/10/2026</dd>");
     expect(timeOnly).not.toContain("Địa điểm");
   });
 
@@ -701,7 +768,7 @@ describe("Tin tức: the 'Xem video' button", () => {
   it("present: one red primary button in plain words, after the meta line and before the body", () => {
     const page = render({ onWatchVideo: noop });
     expect(XA_TN.watch_video).toBe("Xem video");
-    expect(page).toContain(`<p class="xa-phu">Hành chính · 25/09/2026</p>${BUTTON}<div class="xa-ke"></div>`);
+    expect(page).toContain(`<p class="xa-phu">25/9/2026</p>${BUTTON}<div class="xa-ke"></div>`);
     expect(page.match(/Xem video/g)).toHaveLength(1);
     expect(page).not.toContain('role="alert"');
   });
@@ -820,9 +887,30 @@ describe("Tra cứu hồ sơ (§6.8)", () => {
     expect(dossierLookupReady("09000000", "1007")).toBe(false);
     expect(dossierLookupReady("0900000000", "107")).toBe(false);
     expect(dossierLookupReady("0900000000", "10a7")).toBe(false);
-    const page = html(createElement(TraCuuHoSoXa, { onQuayLai: noop }));
+    const page = html(createElement(TraCuuHoSoXa, { onQuayLai: noop, openPortal: async () => true }));
     expect(page).toMatch(/<button type="button" class="xa-nut" disabled="">/);
     // A disabled button alone does not say why: the missing part is in words under it.
     expect(page).toContain(XA_TN.tra_cuu_can_ma);
+  });
+
+  it("the prototype's screen; 'Tra cứu' opens the national portal after the leave-app question, and NOTHING typed goes anywhere", () => {
+    // owner 11/10/2026: the one-stop-shop data is not in ViGov — the portal does the lookup.
+    expect(DOSSIER_PORTAL_URL).toBe("https://vpcp.dichvucong.gov.vn/p/home/dvc-tra-cuu-ho-so.html");
+    const page = html(createElement(TraCuuHoSoXa, { onQuayLai: noop, openPortal: async () => true }));
+    expect(page).toContain(`<h1 class="xa-dau-con__tieu-de">Tra cứu hồ sơ</h1>`);
+    for (const words of ["Số điện thoại", "Số bà con đã khai khi nộp hồ sơ tại Bộ phận Một cửa.", "4 số cuối của số hồ sơ", "Ví dụ: 1007"]) {
+      expect(page).toContain(words);
+    }
+    // The four-digit box: numeric keypad, and only digits are kept.
+    expect(page).toMatch(/id="xa-bon-so-cuoi"[^>]*inputMode="numeric"|inputMode="numeric"[^>]*id="xa-bon-so-cuoi"/);
+    expect(lastFourDigits("1a0-07 9")).toBe("1007");
+    // No opener (tests, outside Zalo): no button that could only fail — the sentence still says where to look.
+    const noOpener = html(createElement(TraCuuHoSoXa, { onQuayLai: noop }));
+    expect(noOpener).not.toContain(`>${XA_TN.nut_tra_cuu}</button>`);
+    expect(noOpener).toContain(XA_TN.tra_cuu_cong_dich_vu);
+    // The source never puts the typed values into the portal's address.
+    const src = Object.values(import.meta.glob("./TienIchAppXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
+    expect(src).toContain("leave.ask?.(DOSSIER_PORTAL_URL)");
+    expect(src).not.toMatch(/DOSSIER_PORTAL_URL\s*\+|`\$\{DOSSIER_PORTAL_URL\}/);
   });
 });

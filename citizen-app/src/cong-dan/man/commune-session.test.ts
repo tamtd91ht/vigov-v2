@@ -179,6 +179,7 @@ describe("messages — plain Vietnamese, never a code, always a next step", () =
     expect(text).toContain("phản ánh chưa được gửi");
     expect(text).not.toMatch(/\b(4\d\d|5\d\d)\b|app_not_configured|chua_xac_thuc_so|undefined/);
     // A next step: an instruction ("Hãy …") or the always-available office/phone route ("vẫn có thể đến …").
-    expect(text).toMatch(/Hãy |vẫn có thể đến/);
+    // The commune app's voice (owner 11/10/2026): the instruction starts with "Bà con …" as often as "Hãy …".
+    expect(text).toMatch(/Hãy |hãy |vẫn có thể đến|Bà con /);
   });
 });

@@ -14,6 +14,7 @@ import { createSessionGate, sessionGateMessage, type SessionGateState } from "./
 import { KhoiTrangThai } from "./khung-xa";
 import {
   confirmCommuneZaloFailed,
+  COMMUNE_PHONE_WORDS,
   PHONE_VERIFICATION,
   PHONE_VERIFICATION_TASK,
   SEND_LOCATION_WORDS,
@@ -120,13 +121,14 @@ describe("phone — shared app (403 reopen) and commune app (session gate)", () 
     const s = sessionGateMessage("thu-lai", "mine", PHONE);
     expect(s).toContain("Zalo chưa cho phép ứng dụng lấy số điện thoại");
     expect(s).not.toMatch(NO_DIGIT);
-    expect(sessionGateMessage("thu-lai", "mine")).toBe(PHONE_VERIFICATION.retry(PHONE_VERIFICATION_TASK.mine));
+    // The gate is the commune app's alone, so it speaks its voice ("bà con", owner 11/10/2026).
+    expect(sessionGateMessage("thu-lai", "mine")).toBe(COMMUNE_PHONE_WORDS.retry(COMMUNE_PHONE_WORDS.task.mine));
     expect(phoneVerificationMessage("thu-lai", "lookup")).toBe(PHONE_VERIFICATION.retry(PHONE_VERIFICATION_TASK.lookup));
   });
 
   it("-201 is still the refusal sentence, with no code", () => {
     const s = sessionGateMessage("tu-choi", "submit");
-    expect(s).toBe(PHONE_VERIFICATION.refused(PHONE_VERIFICATION_TASK.submit));
+    expect(s).toBe(COMMUNE_PHONE_WORDS.refused(COMMUNE_PHONE_WORDS.task.submit));
     expect(s).not.toContain(SUPPORT_LABEL);
   });
 

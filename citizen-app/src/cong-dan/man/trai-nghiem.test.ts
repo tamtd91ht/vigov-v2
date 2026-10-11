@@ -44,7 +44,8 @@ describe("họ tên: xin quyền Zalo, không đăng nhập, không người dù
     const than = ma.slice(ma.indexOf("export function AppRieng("), ma.indexOf("function AppChung("));
     expect(than.length).toBeGreaterThan(0);
     expect(than).not.toMatch(/xinTokenSoDienThoai|xinHaiMaDangNhap/);
-    expect(than).toMatch(/layTenZalo/);
+    // The name (and, since 11/10/2026, the profile picture of the same answer) comes from `getUserInfo` only.
+    expect(than).toMatch(/readZaloProfile/);
     expect(than).toMatch(/openSession=\{openCommuneAppSession\}/);
   });
 

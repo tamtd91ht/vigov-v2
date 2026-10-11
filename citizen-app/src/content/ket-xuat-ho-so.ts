@@ -429,8 +429,8 @@ export const TEN_MAN_CONG_KHAI = {
   trang_chu_xa: "Ứng dụng của xã: Trang chủ",
   /** The commune app's news tab header (`XA_TN.news_tab_title`), prefixed the same way. */
   commune_news_tab: "Ứng dụng của xã: Tin tức – Sự kiện",
-  /** The commune app's directory screen (`ManDanhBa` titles it `DANH_BA.tieu_de`), prefixed the same way. */
-  commune_directory: "Ứng dụng của xã: Danh bạ cán bộ xã",
+  /** The commune app's directory screen (`ManDanhBa` titles it `XA_TN.directory_title` since 11/10/2026), prefixed the same way. */
+  commune_directory: "Ứng dụng của xã: Danh bạ chính quyền",
 } as const;
 
 /**

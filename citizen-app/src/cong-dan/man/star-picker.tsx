@@ -22,7 +22,19 @@ export const STAR_LABELS = ["Rất không hài lòng", "Không hài lòng", "Bì
  * `onPick` absent = READ-ONLY: the row is an image with one label ("Đã chấm n trên 5 sao"), the buttons are
  * disabled. Present = a radiogroup, one radio per star.
  */
-export function StarPicker({ stars, onPick }: { stars: number; onPick?: (stars: number) => void }) {
+export function StarPicker({
+  stars,
+  onPick,
+  size = 32,
+  hint = XA_PA.cham_vao_sao,
+}: {
+  stars: number;
+  onPick?: (stars: number) => void;
+  /** The star's drawn size; the prototype's commune block draws 34 (`RatingBlock.tsx:368`). */
+  size?: number;
+  /** The line under the row before a star is picked — each app's own voice. */
+  hint?: string;
+}) {
   const readOnly = onPick === undefined;
   return (
     <>
@@ -42,11 +54,11 @@ export function StarPicker({ stars, onPick }: { stars: number; onPick?: (stars: 
             className={`xa-sao__nut${n <= stars ? " xa-sao__nut--on" : ""}`}
             onClick={() => onPick?.(n)}
           >
-            <BieuTuong ten="star" co={32} />
+            <BieuTuong ten="star" co={size} />
           </button>
         ))}
       </div>
-      <p className="xa-giua">{stars > 0 ? STAR_LABELS[stars - 1] : XA_PA.cham_vao_sao}</p>
+      <p className="xa-giua">{stars > 0 ? STAR_LABELS[stars - 1] : hint}</p>
     </>
   );
 }

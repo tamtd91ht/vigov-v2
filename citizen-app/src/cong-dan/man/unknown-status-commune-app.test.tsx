@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import type { PhieuCuaToiTomTat } from "../api/hop-dong-phan-anh"; // vi-name-ok: existing contract type
 
-import { TRANG_THAI_CHUA_CO_NHAN, XA_TN } from "./noi-dung";
+// The commune app's neutral sentence is "bà con" (owner 11/10/2026); the shared app keeps `TRANG_THAI_CHUA_CO_NHAN`.
+import { COMMUNE_UNKNOWN_STATUS as TRANG_THAI_CHUA_CO_NHAN } from "./noi-dung";
 import { ChipTrangThai, PetitionCard, PetitionList, stepLabel } from "./PhanAnhAppXa";
 import { STATUS_GROUP_LABEL } from "./status-groups";
 
@@ -54,7 +55,7 @@ describe("commune app: unknown status code", () => {
     expect(html).not.toContain(STATUS_GROUP_LABEL["da-dong"]);
   });
 
-  it("the list counts it under 'Tất cả' only — no group, 'Đã đóng' included, claims it", () => {
+  it("the list shows it with the neutral chip — and no status chips claim it (they are gone, owner 11/10/2026)", () => {
     const html = renderToStaticMarkup(
       createElement(PetitionList, {
         state: ready([row(UNKNOWN, "PA-AAAAAAAAAAAA"), row("da-dong", "PA-BBBBBBBBBBBB")]),
@@ -65,13 +66,11 @@ describe("commune app: unknown status code", () => {
         onLoadMore: () => {},
       }),
     );
-    expect(html).toContain(`${XA_TN.loc_tat_ca} (2)`);
-    expect(html).toContain(`${STATUS_GROUP_LABEL["da-dong"]} (1)`);
-    expect(html).toContain(`${STATUS_GROUP_LABEL["da-tiep-nhan"]} (0)`);
-    expect(html).toContain(`${STATUS_GROUP_LABEL["dang-xu-ly"]} (0)`);
-    expect(html).toContain(`${STATUS_GROUP_LABEL["da-xu-ly-xong"]} (0)`);
-    // Shown in "Tất cả" (the default filter), with the neutral sentence.
+    // The prototype's list has no status filter: every petition is listed, each with its chip in words.
+    expect(html).not.toContain('aria-pressed');
+    expect(html.match(/xa-chip-tt--da-dong/g)).toHaveLength(1);
     expect(html).toContain("PA-AAAAAAAAAAAA");
+    expect(html).toContain("PA-BBBBBBBBBBBB");
     expect(html).toContain(TRANG_THAI_CHUA_CO_NHAN);
   });
 

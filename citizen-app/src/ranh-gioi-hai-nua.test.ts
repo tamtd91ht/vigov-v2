@@ -817,7 +817,7 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
     expect(location.roi_khoi_may).toMatch(/Liên hệ: không có gì rời khỏi máy/);
   });
 
-  it("nửa nhà nước không còn lời gọi riêng nào (getUserInfo thành ca-hai 07/10/2026) — và bảng nói ra nó thừa hưởng những gì", () => {
+  it("nửa nhà nước khai đúng HAI lời gọi riêng (11/10/2026: minimizeApp, openShareSheet) — và bảng nói ra nó thừa hưởng những gì", () => {
     // Quyền cấp theo App ID: ngày `src/cong-dan/` có tệp đầu tiên, nó thừa hưởng NGUYÊN VẸN mọi
     // quyền mà nửa thương mại đã xin được, không ai cấp lại. Ca này ghim tình trạng hôm nay để
     // lần khai đầu tiên của nửa ấy là một thay đổi có người đọc, chứ không phải một dòng lặng lẽ.
@@ -829,8 +829,10 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
       // dụng riêng của xã (chủ dự án: "chỉ cần xin quyền để lấy được name"). Tên không rời máy.
       // 07/10/2026 (owner decision): "Chat với chuyên viên" on the commercial half's Liên hệ asks the same name
       // and sends it with the chat request — the row became `ca-hai`, with the commune app's own wording in
-      // `commune_app`. The state half has no call of its own any more; the next one must change this line.
-    ).toEqual([]);
+      // `commune_app`.
+      // 11/10/2026 (owner: "làm hết theo prototype"): the commune interface's minimise bubble (`minimizeApp`) and
+      // "Chia sẻ qua Zalo" under an article (`openShareSheet`, ADR 0047 G6) — the state half's own two calls.
+    ).toEqual(["minimizeApp", "openShareSheet"]);
     expect(KHAI_BAO_LOI_GOI.find((k) => k.api === "getUserInfo")?.nua, "getUserInfo is used by both halves").toBe("ca-hai");
     expect(
       KHAI_BAO_LOI_GOI.filter((k) => k.nua === "ca-hai").length,
