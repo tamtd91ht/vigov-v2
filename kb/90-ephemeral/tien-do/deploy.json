@@ -277,6 +277,14 @@
       "bang_chung": "commit 'feat(deploy): job vận hành mới'. make check thoát 0 (builder); unittest ops 35/35; check_build PASS (10 ca tự chấm); ops.py catalog --check PASS (41 khoá). CHƯA chạy trên Jenkins thật và cụm thật.",
       "tiep_theo": "(1) Cài plugin Active Choices (uno-choice) trên Jenkins dùng chung, tạo job vigov-van-hanh (Script Path deploy/van-hanh/Jenkinsfile, không lightweight checkout, không shallow clone), bấm Build 1 lần để học tham số, duyệt 6+2 script ở In-process Script Approval. (2) Chạy theo README: tong-quan, kiem-ket-noi, trang-thai-migration, rồi chạy thử csdl-moi. (3) Chủ dự án: mẫu tài nguyên nho/vua/lon, tên DB vigov_<svc>_prod, sslmode chỉ require dùng được (chưa có CA trong ảnh), quyền kubeconfig thật rộng hơn deploy/cluster/rbac-jenkins.yaml. (4) Mâu thuẫn luật 11 về cách viết khoá (envFrom cần gạch dưới) — chưa quyết. (5) Bảng job ở deploy/README.md §2 thêm dòng sau khi job chạy thật.",
       "no_confirm": []
+    },
+    {
+      "id": "cap-quyen-van-hanh-11-10",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Job deploy (deploy/Jenkinsfile) có việc cap-quyen-van-hanh: cấp quyền ops.* cho tài khoản vận hành ĐÃ CÓ (mặc định ops.zalo_bot.manage, hoặc tat-ca-8-quyen). TAI_KHOAN_VAN_HANH nhận mã VH-xxxxx (cả viết thường), email đăng nhập (che theo core/privacy.MaskEmail rồi khớp operatorctl list — email không vào pod, không in log) hoặc tên hiển thị; 0 hoặc nhiều khớp thì DỪNG và in danh sách mã; quyền đã có thì bỏ qua. MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc. Lý do: tao-tai-khoan-van-hanh chỉ cấp quyền lúc tạo, nên tài khoản cũ không có khoá thứ tám và mục Zalo Bot của platform-admin ẩn.",
+      "bang_chung": "commit 59d03c8a, 1f96b225, 8fdf9377. check_build PASS; phần khớp mã/email/tên chạy thử trên danh sách giả, dưới set -eu. Jenkins thật: lượt đầu đỏ ở bước kiểm tham số (giá trị không phải mã/email → thêm tên hiển thị), lượt #63 đỏ 'OP_CODE: unbound variable' (Jenkins không xuất env rỗng → đọc với ':-'). Chưa có lượt xanh.",
+      "tiep_theo": "Người dùng chạy lại cap-quyen-van-hanh trên Jenkins; xanh thì đổi trang_thai = xong, ghi số lượt. Rồi người dùng đăng xuất/đăng nhập lại platform-admin để thấy mục Zalo Bot (service-platform ≥ 4526ff8d, đang chạy 95fffb3e). Job vận hành mới deploy/van-hanh/Jenkinsfile chưa có việc tương ứng."
     }
   ]
 }
