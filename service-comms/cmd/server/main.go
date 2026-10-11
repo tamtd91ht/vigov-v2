@@ -63,7 +63,9 @@ import (
 // ADR 0052): ObjectStore + MalwareScan like petitions, and PublicMedia because it is the first service
 // to PUBLISH a derivative — `image_url` on the public news routes is built from that base URL. Declared
 // ⇒ required in staging and prod (ADR 0057): comms refuses to start there without them. Since 2026-10-05
-// it holds the ONE shared Zalo Bot (ADR 0074): ZaloBotWebhook is the host its webhook points at.
+// it holds the ONE shared Zalo Bot (ADR 0074): ZaloBotWebhook is the host its webhook points at. Since
+// 2026-10-11 it serves the self-hosted basemap to the Mini App (ADR 0072 M1): Basemap is BASEMAP_URL —
+// the one group here that stays OPTIONAL in prod (core/config/basemap.go).
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -77,6 +79,7 @@ var configUses = config.Uses(
 	config.PublicMedia,
 	config.MalwareScan,
 	config.ZaloBotWebhook,
+	config.Basemap,
 )
 
 func main() {
@@ -586,7 +589,43 @@ func main() {
 		Limiter: disasterAlertsLimiter,
 		Log:     log,
 	})
+	// The commune's map frame, read publicly by host (ADR 0072 §"Sửa đổi 11/10/2026 (Mini App)" M2) —
+	// the SAME use case as the staff route (mapFrames, above), the SAME lookup and the SAME limiter
+	// instance as the news routes (owner, M2: "dùng chung trần tin công khai").
+	svchttp.RegisterPublicMapFrame(muxCongKhai, svchttp.PublicMapFrameDeps{
+		Xa:      publicDirectory,
+		Frames:  mapFrames,
+		Limiter: publicLimiter,
+		Log:     log,
+	})
 	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins(), log)
+
+	// THE PUBLIC BASEMAP (ADR 0072 §"Sửa đổi 11/10/2026 (Mini App)" M1) — the self-hosted PMTiles, glyphs
+	// and sprites, byte ranges streamed from MinIO at BASEMAP_URL. Its OWN mux and chain, because it is
+	// the one public route whose CORS answer must let the Mini App send Range/If-* and read Content-Range
+	// and ETag (httpx.CORSRangeReads); granting those on the news routes would expose headers nothing
+	// there needs. Its OWN limiter on its own policy (owner, M1: 6000 per minute per (host, client
+	// network)) — FAILS CLOSED: in dev without Redis it answers 503, by design (ratelimit.PublicBasemapRead).
+	// BASEMAP_URL unset (it waits for the signed sovereignty check) = 503 "Chưa cấu hình bản đồ nền.".
+	basemapLimiter, err := ratelimit.New(rateCounter, ratelimit.PublicBasemapRead)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn tần suất tuyến nền bản đồ công khai", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	if cfg.BasemapURL() == "" {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
+			"BASEMAP_URL trống — tuyến /api/v1/commune-basemap/* trả 503, bản đồ màn Gửi phản ánh của Mini App không có nền "+
+				"(đặt sau khi kiểm chủ quyền có ký: kb/40-runbooks/basemap-pmtiles.md; key BASEMAP_URL trong common-config)")
+	}
+	muxBasemap := http.NewServeMux()
+	svchttp.RegisterPublicBasemap(muxBasemap, svchttp.PublicBasemapDeps{
+		Xa:      publicDirectory,
+		BaseURL: cfg.BasemapURL(),
+		Client:  svchttp.NewBasemapClient(),
+		Limiter: basemapLimiter,
+		Log:     log,
+	})
+	basemapEdge := dungBienCongKhai(muxBasemap, cfg.CitizenCORSAllowedOrigins(), log, httpx.CORSRangeReads())
 
 	// THE CITIZEN SURFACE (ADR 0091 §4, 11/10/2026) — this service's first route a citizen calls WITH A
 	// SESSION, so the citizen chain service-petitions built is copied here (its main.go §dungBien is the
@@ -614,7 +653,7 @@ func main() {
 		// OUTERMOST, around BOTH chains: every layer reads one client address per request, crossing
 		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
 		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(withZaloBotWebhook(
-			dungBien(mux, congKhai, citizenEdge, directory, dinhDanh, idemStore, log),
+			dungBien(mux, congKhai, basemapEdge, citizenEdge, directory, dinhDanh, idemStore, log),
 			zaloBotChain(muxZaloBot), communeZaloBotChain(muxZaloBot, directory), cfg.ZaloBotWebhookHost())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -807,6 +846,8 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps, zaloBot commsv1.Za
 //	/api/v1/commune-news, /api/v1/commune-news/…   PUBLIC chain (congKhai, dungBienCongKhai)
 //	/api/v1/commune-external-contacts              PUBLIC chain
 //	/api/v1/commune-disaster-alerts                PUBLIC chain
+//	/api/v1/commune-map-frame                      PUBLIC chain
+//	/api/v1/commune-basemap/…                      PUBLIC basemap chain (same layers + range CORS)
 //	/api/v1/my-notification-preferences            CITIZEN chain — commune from the SESSION (ADR 0022)
 //	everything else                                STAFF chain — commune from `Host`
 //
@@ -815,7 +856,7 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps, zaloBot commsv1.Za
 // route mounted on the staff mux would start, pass every internal/http test, and 404 every resident.
 // `commune-news` is its own path ELEMENT: Go's ServeMux matches whole elements, so neither pattern can
 // capture `/api/v1/content-items/…`, the staff register. main_test.go asserts both directions.
-func dungBien(mux, congKhai, citizenEdge http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
+func dungBien(mux, congKhai, basemapEdge, citizenEdge http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
@@ -847,6 +888,13 @@ func dungBien(mux, congKhai, citizenEdge http.Handler, danhBa tenant.Directory, 
 	// The public disaster-alert read: the collection only, its own path ELEMENT — it captures neither
 	// `/api/v1/disaster-alerts` (staff) nor anything under it. Without this line: 404 to every resident.
 	ngoai.Handle(svchttp.PublicDisasterAlertsPath, congKhai)
+	// The public map frame (ADR 0072 M2): the resource only, its own path ELEMENT — it captures neither
+	// `/api/v1/map-frame` (staff) nor anything under it.
+	ngoai.Handle(svchttp.PublicMapFramePath, congKhai)
+	// The public basemap (ADR 0072 M1): the SUBTREE only (files live under it), on its own chain — the
+	// range-reading CORS answer. `/api/v1/commune-basemap` without the slash is redirected by ServeMux to
+	// the slash form, which names no file (404 — or the 503 of an unset BASEMAP_URL).
+	ngoai.Handle(svchttp.PublicBasemapPath, basemapEdge)
 	// The citizen's own switch: the resource only, no subtree. Its own path ELEMENT (`my-…`), so it
 	// captures no staff path. Without this line the staff chain answers 404 to every citizen on the
 	// reserved API host.
@@ -905,11 +953,12 @@ func (unavailableCounter) Incr(context.Context, string, time.Duration) (int64, t
 	return 0, 0, errors.New("REDIS_DSN chưa đặt")
 }
 
-func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS, log *slog.Logger) http.Handler {
+// dungBienCongKhai — see the chain description above unavailableCounter. corsOpts only WIDEN the CORS answer for one chain — the basemap's httpx.CORSRangeReads.
+func dungBienCongKhai(muxCongKhai http.Handler, nguonCORS httpx.NguonCORS, log *slog.Logger, corsOpts ...httpx.CORSOption) http.Handler {
 	c := muxCongKhai
 	c = httpx.Recover(traceID)(c)
 	c = httpx.StripTenantHeaders(c)
-	c = httpx.CORSCongDan(nguonCORS, log)(c)
+	c = httpx.CORSCongDan(nguonCORS, log, corsOpts...)(c)
 	return c
 }
 

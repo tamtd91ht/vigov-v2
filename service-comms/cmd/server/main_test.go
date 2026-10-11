@@ -163,7 +163,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 	}
 	// The public chain is the real one too (bien_cong_khai_test.go drives it); here it only has to be
 	// present so the staff tests run through the same outer mux main() builds.
-	return &mayChu{h: dungBien(mux, dungCongKhaiThu(t), newCitizenEdgeForTest(t), danhBa, pg, nil, log), kho: kho, pg: pg}
+	return &mayChu{h: dungBien(mux, dungCongKhaiThu(t), newBasemapEdgeForTest(t, ""), newCitizenEdgeForTest(t), danhBa, pg, nil, log), kho: kho, pg: pg}
 }
 
 func (m *mayChu) goi(t *testing.T, host, path, phieu string) *httptest.ResponseRecorder {

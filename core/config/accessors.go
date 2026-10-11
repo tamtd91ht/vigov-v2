@@ -179,6 +179,13 @@ func (c Config) ZaloBotWebhookHost() string {
 	return c.zaloBotWebhookHost
 }
 
+// BasemapURL is BASEMAP_URL, validated (https, no credentials, no query) and ending in "/" — the
+// storage prefix the public basemap route reads from. "" means not configured, in every environment.
+func (c Config) BasemapURL() string {
+	c.require("BasemapURL", Basemap)
+	return c.basemapURL
+}
+
 // RabbitMQDSN is RABBITMQ_DSN.
 func (c Config) RabbitMQDSN() secret.DSN {
 	c.require("RabbitMQDSN", RabbitMQ)
@@ -250,6 +257,7 @@ type configView struct {
 	OperatorGRPCListenAddr         string
 	IdentityOperatorGRPCAddr       string
 	ZaloBotWebhookHost             string
+	BasemapURL                     string
 	RabbitMQDSN                    secret.DSN
 	RabbitMQExchange               string
 	ElasticsearchAddrs             []string
@@ -294,6 +302,7 @@ func (c Config) view() configView {
 		OperatorGRPCListenAddr:         c.operatorGRPCListenAddr,
 		IdentityOperatorGRPCAddr:       c.identityOperatorGRPCAddr,
 		ZaloBotWebhookHost:             c.zaloBotWebhookHost,
+		BasemapURL:                     c.basemapURL,
 		RabbitMQDSN:                    c.rabbitMQDSN,
 		RabbitMQExchange:               c.rabbitMQExchange,
 		ElasticsearchAddrs:             c.elasticsearchAddrs,

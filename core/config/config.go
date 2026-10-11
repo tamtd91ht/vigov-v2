@@ -65,7 +65,8 @@
 //	OPERATOR_GRPC_LISTEN_ADDR             ConfigMap  OperatorRealm          default :9093
 //	IDENTITY_OPERATOR_GRPC_ADDR           Deploy env OperatorEdge           refused in staging/prod; dev: refused at Dial when OPERATOR_HOST is set
 //	ZALO_BOT_WEBHOOK_HOST                 Deploy env ZaloBotWebhook         refused in staging/prod; dev: "Trỏ webhook" refused by name
-//	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ               refused in staging/prod once declared
+//	BASEMAP_URL                           ConfigMap  Basemap                off, in EVERY environment: the basemap route answers 503
+//	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ              refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
 // An UNDECLARED group is not read at all, in any environment — see Group (uses.go). Which service
@@ -541,6 +542,10 @@ type Config struct {
 	// Group ZaloBotWebhook, comms only. Validated by parseZaloBotWebhookHost (zalo_bot.go): the
 	// OPERATOR_HOST shape, and never a commune's web host. A platform-wide constant (rule 8, invariant 5).
 	zaloBotWebhookHost string
+
+	// BasemapURL is the self-hosted basemap's storage prefix (BASEMAP_URL, basemap.go), validated and
+	// ending in "/"; "" = not configured. Group Basemap, comms only.
+	basemapURL string
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -710,6 +715,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// operator's "Trỏ webhook" is refused by name.
 	zaloBotHostRaw := r.read("ZALO_BOT_WEBHOOK_HOST", os.Getenv("ZALO_BOT_WEBHOOK_HOST"), requiredInProd, ZaloBotWebhook)
 
+	// ---- Basemap (ADR 0072 M1; comms only) --------------------------------------------------
+	// Optional IN EVERY ENVIRONMENT, prod included: operations sets it only after the signed
+	// sovereignty check of the archive (ADR 0072 §Còn mở #3). Empty = the public basemap route answers
+	// 503 with one sentence; the rest of comms is untouched. Why not "used ⇒ required": basemap.go.
+	basemapRaw := r.read("BASEMAP_URL", os.Getenv("BASEMAP_URL"), optional, Basemap)
+
 	// ---- RabbitMQ / Elasticsearch (ADR 0010; no service declares them yet) ----------------
 	// Required in prod once declared — the service that declares one is the one that connects to
 	// it. An Elasticsearch without an API key would hold petition contents unguarded (rule 3).
@@ -799,6 +810,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Malformed is fatal, never repaired (the OPERATOR_HOST rule) — even though empty is allowed.
+	basemapURL, err := parseBasemapURL(basemapRaw)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	// Malformed is fatal: a skipped entry is a KEK that silently cannot unwrap the DEKs it wrapped.
 	secretEncryptionKeys, err := parseAES256KeyList(secretKeysRaw, ErrSecretEncryptionKeysInvalid)
 	if err != nil {
@@ -842,6 +859,7 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		operatorGRPCListenAddr:     firstNonEmpty(opGRPCListen, ":9093"),
 		identityOperatorGRPCAddr:   opIdentityAddr,
 		zaloBotWebhookHost:         zaloBotWebhookHost,
+		basemapURL:                 basemapURL,
 
 		rabbitMQDSN:              secret.DSN(rabbitDSN),
 		rabbitMQExchange:         rabbitExchange,

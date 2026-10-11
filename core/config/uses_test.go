@@ -25,7 +25,7 @@ var allGroupVars = []string{
 	"OPERATOR_SESSION_SIGNING_KEYS", "OPERATOR_TOTP_ENCRYPTION_KEY", "OPERATOR_HOST",
 	"OPERATOR_GRPC_LISTEN_ADDR", "IDENTITY_OPERATOR_GRPC_ADDR", "ZALO_BOT_WEBHOOK_HOST",
 	"RABBITMQ_DSN", "RABBITMQ_EXCHANGE", "ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY",
-	"ELASTICSEARCH_INDEX_PREFIX", "DANGEROUS_AUTH_BYPASS",
+	"ELASTICSEARCH_INDEX_PREFIX", "DANGEROUS_AUTH_BYPASS", "BASEMAP_URL",
 }
 
 func clean(t *testing.T, env string, set map[string]string) {
@@ -70,6 +70,8 @@ var prodRequired = map[Group][]string{
 	ZaloBotWebhook: {"ZALO_BOT_WEBHOOK_HOST"},
 	// Owner rule (ADR 0057): petitions uses documents, so petitions requires its address in prod.
 	DocumentsClient: {"GRPC_CALLER_KEY", "DOCUMENTS_GRPC_ADDR"},
+	// BASEMAP_URL is deliberately absent: set only after the signed sovereignty check (basemap.go).
+	Basemap: nil,
 }
 
 func TestEveryGroupHasAProdDecision(t *testing.T) {

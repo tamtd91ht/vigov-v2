@@ -364,6 +364,9 @@ spec:
 # ⚠ ĐÍCH TẠM MỞ, cùng nợ với quy tắc 4 và 7 (`_chung/netpol-duong-ra-tam-mo`); GIỮ giới hạn CỔNG.
 # Cổng 9000 (MinIO) và 3310 (clamd `vigov-clamav:3310`, a0d2afec) phải khớp OBJECT_STORAGE_ENDPOINT và
 # MALWARE_SCANNER_ADDRESS — sai cổng thì mọi lần tải ảnh bìa trả 503 dù pod xanh.
+# Từ 11/10/2026 cổng 9000 này còn chở tuyến công khai `/api/v1/commune-basemap/*` (nền bản đồ cho Mini
+# App, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1) đọc tệp nền từ `BASEMAP_URL` — cùng MinIO; cổng trong
+# `BASEMAP_URL` phải là 9000, sai thì pod xanh mà bản đồ Mini App trả 502/504. Không thêm luật mới.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

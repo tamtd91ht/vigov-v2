@@ -98,6 +98,9 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 	svchttp.RegisterPublicDisasterAlerts(mux, svchttp.PublicDisasterAlertDeps{
 		Xa: xaTheoHostThu{}, Alerts: fakeAlertsInForce{}, Limiter: lim,
 	})
+	svchttp.RegisterPublicMapFrame(mux, svchttp.PublicMapFrameDeps{
+		Xa: xaTheoHostThu{}, Frames: fakeMapFrame{}, Limiter: lim,
+	})
 	return dungBienCongKhai(mux, nguon, slog.New(slog.DiscardHandler))
 }
 
@@ -183,7 +186,7 @@ func ngoaiThu(t *testing.T) (http.Handler, *canBoDanhDauComms) {
 	t.Helper()
 	cb := &canBoDanhDauComms{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return dungBien(cb, dungCongKhaiThu(t), newCitizenEdgeForTest(t), thuMucGia{}, canBoXaA(), nil, log), cb
+	return dungBien(cb, dungCongKhaiThu(t), newBasemapEdgeForTest(t, ""), newCitizenEdgeForTest(t), thuMucGia{}, canBoXaA(), nil, log), cb
 }
 
 func goiApi(h http.Handler, method, path, origin string) *httptest.ResponseRecorder {

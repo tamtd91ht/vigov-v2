@@ -93,6 +93,10 @@ const (
 	// would make staging/prod refuse to start without PETITIONS_GRPC_ADDR — petitions' OWN address,
 	// which it never dials. One variable, two groups, like GRPC_CALLER_KEY. APPENDED.
 	DocumentsClient
+	// Basemap: BASEMAP_URL — the self-hosted basemap's storage prefix, read by service-comms' public
+	// basemap route (ADR 0072 §"Sửa đổi 11/10/2026 (Mini App)" M1). OPTIONAL even in prod: see
+	// basemap.go for why its absence must not stop the service. APPENDED.
+	Basemap
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -120,6 +124,7 @@ var groupNames = map[Group]string{
 	OperatorEdge:        "OperatorEdge",
 	ZaloBotWebhook:      "ZaloBotWebhook",
 	DocumentsClient:     "DocumentsClient",
+	Basemap:             "Basemap",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

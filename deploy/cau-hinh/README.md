@@ -110,17 +110,20 @@ kubectl get pods -A -o wide | grep -E 'ingress|web-admin'
 ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes -o wide`). **Không bao giờ**
 `0.0.0.0/0` hay `::/0` — pod từ chối khởi động: tin mọi địa chỉ là tin `X-Forwarded-For` giả của bất kỳ ai.
 
-### Key trong `common-config` mà chỉ web-admin đọc
+### Key trong `common-config` mà web-admin cũng đọc — `BASEMAP_URL`
 
-Dịch vụ Go không đọc key này (`tools/check_env_map.py` không soát nó). Key viết `UPPER_SNAKE_CASE` như mọi
-key khác (luật 11 bất biến 4, ADR 0093): tới pod web-admin qua `envFrom` của `common-config`, không ánh xạ riêng.
+Bảng riêng vì `deploy/van-hanh/ops.py` nhận ra web-admin là người đọc **từ tiêu đề mục này** (web-admin không
+có `config.Uses`); người đọc là dịch vụ Go thì nó suy từ `core/config` như mọi key khác — `BASEMAP_URL` có
+cả hai: web-admin (bản đồ phản ánh, `/ban-do`) và comms (nhóm `config.Basemap`, nền bản đồ Mini App, ADR 0072
+§Sửa đổi 11/10/2026 (Mini App) M1). Key viết **gạch dưới**, tới cả hai pod qua `envFrom` (luật 11 bất biến 4,
+ADR 0093) — không có bước ánh xạ riêng nào.
 
 | Key | Bắt buộc | Là gì · lấy giá trị | Value |
 |---|---|---|---|
-| `BASEMAP_URL` | không — thiếu thì bản đồ phản ánh **không có nền** + một câu; web-admin vẫn chạy (ADR 0072 §Trả lời 09/10/2026) | Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite của bản đồ phản ánh; tuyến `/basemap/*` của web-admin phát lại cùng gốc. Dựng, tải lên, kiểm chủ quyền: `kb/40-runbooks/basemap-pmtiles.md` | `https://<minio nội bộ>:<cổng>/<tiền tố>-public/config/map/<YYYYMMDD>` — https, không thông tin đăng nhập. **Không bao giờ** URL của OpenFreeMap hay host ngoài |
+| `BASEMAP_URL` | không — kể cả prod; thiếu thì bản đồ phản ánh và `/ban-do` của web-admin **không có nền** + một câu, và tuyến công khai `GET /api/v1/commune-basemap/*` của comms trả 503 "Chưa cấu hình bản đồ nền." (bản đồ màn Gửi phản ánh của Mini App không có nền); cả hai pod vẫn chạy. **Sai dạng** (không https, có thông tin đăng nhập, có truy vấn) thì comms **không khởi động** (web-admin: không có nền) | Tiền tố trong MinIO chứa tệp nền PMTiles, glyph, sprite (ADR 0072 §Trả lời 09/10/2026; Mini App: §Sửa đổi 11/10/2026 (Mini App) M1). web-admin phát lại cùng gốc ở `/basemap/*`; comms phát lại cho Mini App (nhóm `config.Basemap`). Dựng, tải lên, kiểm chủ quyền: `kb/40-runbooks/basemap-pmtiles.md` — chỉ đặt sau khi kiểm có ký. Cổng phải khớp NetworkPolicy 6b (web-admin) và 7b (comms): 9000 | `https://<minio nội bộ>:9000/<tiền tố>-public/config/map/<YYYYMMDD>` — https, không thông tin đăng nhập, không truy vấn. **Không bao giờ** URL của OpenFreeMap hay host ngoài |
 
-Đổi key xong: `kubectl -n <namespace> rollout restart deploy/vigov-web-admin` (pod đọc env lúc khởi động),
-hoặc chạy lại job `web-admin` — job cũng gỡ dòng env `BASEMAP_URL` ánh xạ riêng mà các lượt cũ để lại.
+Đổi key xong: `kubectl -n <namespace> rollout restart deploy/vigov-web-admin deploy/vigov-service-comms`
+(`envFrom` chỉ đọc lúc pod khởi động), hoặc chạy lại job `web-admin` và job của comms.
 
 ## 3. Env viết thẳng trong Deployment (không qua ConfigMap)
 
