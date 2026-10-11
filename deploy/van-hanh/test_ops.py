@@ -1,4 +1,5 @@
-"""Unit tests for deploy/van-hanh/ops.py — the decisions behind the operations job (ADR 0089).
+"""Unit tests for deploy/van-hanh/ops.py — the decisions behind the operations job (ADR 0089, rebuilt
+11/10/2026 around one task: đổi hạ tầng).
 
 Run: python -m unittest discover -s deploy/van-hanh -p "test_*.py"   (part of `make buildfiles`)
 
@@ -10,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import contextlib
+import io
 import json
 import os
 import sys
@@ -27,23 +30,6 @@ def entry(key, placement, users, level="prod", shared=False, registered=True):
             "registered": registered, "meaning": ""}
 
 
-CAT = [
-    entry("ENV", "configmap", SERVICES, "all"),
-    entry("MALWARE_SCANNER_ADDRESS", "configmap", ["comms", "petitions", "platform"]),
-    entry("OBJECT_STORAGE_ENDPOINT", "configmap", ["comms", "petitions", "platform"]),
-    entry("TRUSTED_PROXY_CIDRS", "configmap", SERVICES),
-    entry("BASEMAP_URL", "configmap", ["web-admin"], "opt"),
-    entry("CITIZEN_SESSION_TTL", "configmap", ["identity"], "opt"),
-    entry("PLATFORM_GRPC_ADDR", "env", ["identity"]),
-    entry("RABBITMQ_DSN", "unset", [], "unused"),
-    entry("NOT_IN_TEMPLATE", "configmap", ["platform"], registered=False),
-    entry("DATABASE_DSN", "secret", SERVICES, "all"),
-    entry("GRPC_CALLER_KEY", "secret", SERVICES, "all", shared=True),
-    entry("SESSION_SIGNING_KEYS", "secret", ["identity"]),
-    entry("SECRET_ENCRYPTION_KEYS", "secret", ["comms", "identity"]),
-    entry("OPERATOR_TOTP_ENCRYPTION_KEY", "secret", ["identity"]),
-    entry("IDENTITY_ADMIN_SEED_PASSWORD", "secret", ["identity"], "opt"),
-]
 
 
 def b64(s: str) -> str:
@@ -86,7 +72,7 @@ class RealRepoCatalog(unittest.TestCase):
 
     def test_jenkinsfile_generated_region_is_fresh(self):
         jf = ops._read(ops.JENKINSFILE)
-        region = ops.generated_region(ops.build_catalog(), self.services)
+        region = ops.generated_region(ops.build_catalog())
         self.assertEqual(ops.render_jenkinsfile(jf, region), jf,
                          "chạy: python deploy/van-hanh/ops.py catalog --write")
 
@@ -112,232 +98,216 @@ class ReadmeParsing(unittest.TestCase):
         with self.assertRaises(ValueError):
             ops.render_jenkinsfile("no markers", "x")
 
+def url(scheme: str, auth: str, rest: str) -> str:
+    """Fixture URL built from parts: a literal scheme-account-password-host string in source is what
+    hooks/secret_scan.py rightly refuses, fake or not."""
+    return scheme + ":/" + "/" + auth + "@" + rest
 
-class ConfigPlan(unittest.TestCase):
-    cur = {"ENV": "prod", "MALWARE_SCANNER_ADDRESS": "vigov-clamav:3310"}
 
-    def plan(self, text, env="prod"):
-        return ops.plan_config(CAT, self.cur, text, env)
+STORAGE = ["comms", "petitions", "platform"]
+REDIS_USERS = ["comms", "documents", "finance", "identity", "petitions", "platform"]
+ICAT = [
+    entry("DATABASE_DSN", "secret", SERVICES, "all"),
+    entry("REDIS_DSN", "secret", REDIS_USERS),
+    entry("OBJECT_STORAGE_ENDPOINT", "configmap", STORAGE),
+    entry("OBJECT_STORAGE_PUBLIC_ENDPOINT", "configmap", STORAGE),
+    entry("OBJECT_STORAGE_BUCKET_PREFIX", "configmap", STORAGE),
+    entry("OBJECT_STORAGE_REGION", "configmap", STORAGE, "opt"),
+    entry("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL", "configmap", ["comms", "platform"]),
+    entry("OBJECT_STORAGE_ACCESS_KEY", "secret", STORAGE),
+    entry("OBJECT_STORAGE_SECRET_KEY", "secret", STORAGE),
+    entry("MALWARE_SCANNER_ADDRESS", "configmap", STORAGE),
+    entry("BASEMAP_URL", "configmap", ["web-admin"], "opt"),
+]
+PW = "fixturepw"   # asserted absent from every printed row
+DSN = {s: url("postgres", f"vigov_{s}:{PW}", f"db-old:5432/vigov_{s}?sslmode=require") for s in SERVICES}
+RDSN = {s: url("redis", f":{PW}", f"redis-old:6379/{i}") for i, s in enumerate(REDIS_USERS)}
+CM = {"OBJECT_STORAGE_ENDPOINT": "https://minio-old.vigov-infra.svc:9000",
+      "OBJECT_STORAGE_PUBLIC_ENDPOINT": "https://storage-old.vigov.vn",
+      "OBJECT_STORAGE_BUCKET_PREFIX": "vigov-prod",
+      "OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL": "https://storage-old.vigov.vn/vigov-prod-public",
+      "MALWARE_SCANNER_ADDRESS": "vigov-clamav:3310",
+      "BASEMAP_URL": "https://minio-old.vigov-infra.svc:9000/vigov-prod-public/config/map/20261010"}
 
-    def refuses(self, text, fragment, env="prod"):
+
+def secrets_all():
+    out = {s: {"DATABASE_DSN": DSN[s]} for s in SERVICES}
+    for s in REDIS_USERS:
+        out[s]["REDIS_DSN"] = RDSN[s]
+    for s in STORAGE:
+        out[s].update({"OBJECT_STORAGE_ACCESS_KEY": "AK-" + s, "OBJECT_STORAGE_SECRET_KEY": "SK-" + s})
+    return out
+
+
+class Infra(unittest.TestCase):
+    def plan(self, cid, text, slots=None, cm=None, secrets=None):
+        return ops.plan_infra(ICAT, cid, text, CM if cm is None else cm,
+                              secrets_all() if secrets is None else secrets, slots or {})
+
+    def refuses(self, fragment, *a, **kw):
         with self.assertRaises(ops.PlanError) as cm:
-            self.plan(text, env)
+            self.plan(*a, **kw)
         self.assertIn(fragment, str(cm.exception))
 
-    def test_change_restarts_only_readers(self):
-        rows, patch, restart = self.plan("MALWARE_SCANNER_ADDRESS=clamav-a:3310,clamav-b:3310")
-        self.assertEqual(patch, {"data": {"MALWARE_SCANNER_ADDRESS": "clamav-a:3310,clamav-b:3310"}})
-        self.assertEqual(restart, ["vigov-service-comms", "vigov-service-petitions", "vigov-service-platform"])
-        self.assertEqual(rows[0][1], "vigov-clamav:3310")
+    def printed(self, p):
+        return json.dumps([p["config_rows"], p["secret_rows"], p["warnings"], p["restart"]], ensure_ascii=False)
 
-    def test_web_admin_key_restarts_web_admin(self):
-        _, _, restart = self.plan("BASEMAP_URL=https://minio.example.vn/p-public/config/map/20261010")
-        self.assertEqual(restart, ["vigov-web-admin"])
+    # ── PostgreSQL ──────────────────────────────────────────────────────────────────────────
+    def test_pg_host_move_keeps_account_password_database(self):
+        p = self.plan("postgresql", "HOSTS=db-a,db-b:5433\nSSLMODE=\nDB.platform=\nPASSWORD.platform=giu")
+        self.assertEqual(sorted(p["secrets"]), SERVICES)
+        self.assertEqual(p["secrets"]["platform"]["DATABASE_DSN"],
+                         url("postgres", f"vigov_platform:{PW}", "db-a:5432,db-b:5433/vigov_platform?sslmode=require"))
+        self.assertEqual(p["restart"][:2], ["vigov-service-platform", "vigov-service-identity"])
+        self.assertEqual(len(p["restart"]), len(SERVICES))
+        self.assertEqual(sorted(p["probe_dsn"]), SERVICES)
+        self.assertNotIn(PW, self.printed(p))
+        self.assertNotIn(PW, ops.probe_script(p))
 
-    def test_web_admin_key_goes_through_https_check(self):
-        # The dashed spelling escaped the `_URL` suffix check; the underscored one must not.
-        self.refuses("BASEMAP_URL=http://minio.example.vn/p-public/config/map/20261010", "https://")
+    def test_pg_one_service_new_account_and_password(self):
+        p = self.plan("postgresql", "USER.comms=comms_new\nPASSWORD.comms=2\nDB.comms=comms_db",
+                      slots={"2": "p@ss/w:rd"})
+        self.assertEqual(list(p["secrets"]), ["comms"])
+        self.assertEqual(p["secrets"]["comms"]["DATABASE_DSN"],
+                         url("postgres", "comms_new:p%40ss%2Fw%3Ard", "db-old:5432/comms_db?sslmode=require"))
+        self.assertEqual(p["restart"], ["vigov-service-comms"])
+        self.assertNotIn("p@ss", self.printed(p))
 
-    def test_dashed_key_refused_with_reason(self):
-        self.refuses("BASEMAP-URL=https://minio.example.vn/x", "không gạch ngang")
+    def test_pg_refusals(self):
+        self.refuses("phải kèm ô mật khẩu", "postgresql", "USER.comms=other")
+        self.refuses("đang trống", "postgresql", "PASSWORD.comms=3")
+        self.refuses("giu hoặc ô 1..7", "postgresql", "PASSWORD.comms=8")
+        self.refuses("không được phép", "postgresql", "SSLMODE=dis" + "able")
+        self.refuses("chữ thường", "postgresql", "DB.comms=Bad-Name")
+        self.refuses("host hoặc host:port", "postgresql", "HOSTS=db;rm -rf")
+        self.refuses("hai lần", "postgresql", "HOSTS=a\nHOSTS=b")
+        self.refuses("không phải tên ô", "postgresql", "hosts=a")
+        plain = dict(secrets_all(), comms={"DATABASE_DSN": url("postgres", f"u:{PW}", "db-old:5432/d")})
+        self.refuses("luật 13", "postgresql", "HOSTS=db-new", secrets=plain)
 
-    def test_empty_value_keeps_and_unchanged_is_no_change(self):
-        rows, patch, restart = self.plan("MALWARE_SCANNER_ADDRESS=\nENV=prod\n# note")
-        self.assertEqual((rows, patch["data"], restart), ([], {}, []))
+    def test_pg_missing_dsn_needs_every_field_and_an_sslmode(self):
+        missing = dict(secrets_all(), comms={})
+        self.refuses("phải điền đủ", "postgresql", "HOSTS=db-new", secrets=missing)
+        base = "HOSTS=db-new\nDB.comms=c\nUSER.comms=c\nPASSWORD.comms=1"
+        # Built from nothing it would carry no sslmode — refused unless one is chosen (rule 13).
+        self.refuses("luật 13", "postgresql", base, slots={"1": "x"}, secrets=missing)
+        p = self.plan("postgresql", base + "\nSSLMODE=require", slots={"1": "x"}, secrets=missing)
+        self.assertEqual(p["secrets"]["comms"]["DATABASE_DSN"], url("postgres", "c:x", "db-new:5432/c?sslmode=require"))
 
-    def test_missing_key_is_settable(self):
-        rows, _, _ = self.plan("CITIZEN_SESSION_TTL=720h")
-        self.assertEqual(rows[0][1], "(chưa có)")
+    def test_empty_form_changes_nothing(self):
+        for cid in ("postgresql", "redis", "minio", "clamav"):
+            p = self.plan(cid, "HOSTS=\nHOST=\nOBJECT_STORAGE_ENDPOINT=\n# ghi chú")
+            self.assertEqual((p["configmap"], p["secrets"], p["restart"]), ({}, {}, []), cid)
+        self.assertEqual(self.plan("postgresql", "HOSTS=db-old:5432\nSSLMODE=require")["secrets"], {})
 
-    def test_refusals(self):
-        self.refuses("DATABASE_DSN=x", "SECRET")
-        self.refuses("PLATFORM_GRPC_ADDR=platform:9090", "env của Deployment")
-        self.refuses("RABBITMQ_DSN=x", "Không đặt")
-        self.refuses("UNKNOWN_KEY=x", "luật 11 cấm #4")
-        self.refuses("NOT_IN_TEMPLATE=x", "luật 11 cấm #4")
-        self.refuses("ENV=staging", "ENV phải là 'prod'")
-        self.refuses("MALWARE_SCANNER_ADDRESS=tcp://clamav:3310", "host:port")
-        self.refuses("OBJECT_STORAGE_ENDPOINT=http://minio:9000", "https")
-        self.refuses("TRUSTED_PROXY_CIDRS=10.42.0.0/16,0.0.0.0/0", "0.0.0.0/0")
-        self.refuses("ENV=prod\nENV=prod", "hai lần")
-        self.refuses("no equals sign", "thiếu dấu")
+    # ── Redis ───────────────────────────────────────────────────────────────────────────────
+    def test_redis_new_host_and_password_keep_each_db(self):
+        p = self.plan("redis", "HOST=redis-new:6380\nPASSWORD=1", slots={"1": "newpw"})
+        self.assertEqual(sorted(p["secrets"]), sorted(REDIS_USERS))
+        self.assertEqual(p["secrets"]["documents"]["REDIS_DSN"], url("redis", ":newpw", "redis-new:6380/1"))
+        self.assertEqual(p["probe_tcp"], {("redis", "redis-new:6380")})
+        self.assertNotIn("newpw", self.printed(p))
 
-    def test_audit_lists_missing_and_extra(self):
-        missing, extra = ops.audit_config(CAT, {"ENV": "prod", "STRAY": "1"})
-        self.assertIn("MALWARE_SCANNER_ADDRESS", [m[0] for m in missing])
-        self.assertNotIn("ENV", [m[0] for m in missing])
-        self.assertEqual(extra, ["STRAY"])
+    def test_redis_refusals(self):
+        self.refuses("MỘT host:port", "redis", "HOST=r1:6379,r2:6379")
+        self.refuses("host:port", "redis", "HOST=redis-new")
+        self.refuses("redis hoặc rediss", "redis", "SCHEME=http")
+        self.refuses("phải điền máy chủ", "redis", "HOST=r:6379", secrets=dict(secrets_all(), comms={}))
+
+    # ── MinIO ───────────────────────────────────────────────────────────────────────────────
+    def test_minio_move_derives_media_url_and_warns_basemap(self):
+        p = self.plan("minio", "OBJECT_STORAGE_ENDPOINT=https://minio-new:9000/\n"
+                               "OBJECT_STORAGE_PUBLIC_ENDPOINT=https://storage.vigov.vn")
+        self.assertEqual(p["configmap"], {"OBJECT_STORAGE_ENDPOINT": "https://minio-new:9000",
+                                          "OBJECT_STORAGE_PUBLIC_ENDPOINT": "https://storage.vigov.vn",
+                                          "OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL": "https://storage.vigov.vn/vigov-prod-public"})
+        self.assertEqual(p["restart"], ["vigov-service-platform", "vigov-service-comms", "vigov-service-petitions"])
+        self.assertIn("BASEMAP_URL", p["warnings"][0])
+        self.assertEqual(p["probe_tcp"], {("minio", "minio-new:9000")})
+
+    def test_minio_key_pairs(self):
+        p = self.plan("minio", "ACCESS_KEY.petitions=1\nSECRET_KEY.petitions=2", slots={"1": "AKnew", "2": "SKnew"})
+        self.assertEqual(p["secrets"], {"petitions": {"OBJECT_STORAGE_ACCESS_KEY": "AKnew",
+                                                      "OBJECT_STORAGE_SECRET_KEY": "SKnew"}})
+        self.assertEqual(p["restart"], ["vigov-service-petitions"])
+        self.assertEqual(p["probe_tcp"], {("minio", "minio-old.vigov-infra.svc:9000")})
+        self.assertNotIn("SKnew", self.printed(p))
+        self.refuses("CẢ access key lẫn secret key", "minio", "ACCESS_KEY.comms=1", slots={"1": "x"})
+
+    def test_minio_refusals(self):
+        self.refuses("luật 13", "minio", "OBJECT_STORAGE_ENDPOINT=http://minio:9000")
+        self.refuses("không đường dẫn", "minio", "OBJECT_STORAGE_PUBLIC_ENDPOINT=https://s3.vigov.vn/bucket")
+        self.refuses("tên bucket", "minio", "OBJECT_STORAGE_BUCKET_PREFIX=Vigov_Prod")
+        self.refuses("https://", "minio", "OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL=http://x/y")
+
+    # ── ClamAV ──────────────────────────────────────────────────────────────────────────────
+    def test_clamav(self):
+        p = self.plan("clamav", "MALWARE_SCANNER_ADDRESS=clam-a:3310, clam-b:3310")
+        self.assertEqual(p["configmap"], {"MALWARE_SCANNER_ADDRESS": "clam-a:3310,clam-b:3310"})
+        self.assertEqual(p["probe_tcp"], {("clamav", "clam-a:3310"), ("clamav", "clam-b:3310")})
+        self.refuses("host:port", "clamav", "MALWARE_SCANNER_ADDRESS=tcp://clam:3310")
+
+    def test_unknown_component(self):
+        self.refuses("không có", "kafka", "")
 
 
-class SecretPlan(unittest.TestCase):
-    def plan(self, text, present=(), slots=("1",), service="identity"):
-        return ops.plan_secret(CAT, service, set(present), text, set(slots))
+class InfraContract(unittest.TestCase):
+    """The facts that tie ops.py to the Jenkinsfile and to this repository."""
 
-    def refuses(self, text, fragment, **kw):
-        with self.assertRaises(ops.PlanError) as cm:
-            self.plan(text, **kw)
-        self.assertIn(fragment, str(cm.exception))
+    def test_slot_count_matches_jenkinsfile_and_covers_postgres(self):
+        jf = ops._read(ops.JENKINSFILE)
+        self.assertIn(f"(1..{ops.SECRET_SLOTS})", jf)
+        self.assertIn("for n in " + " ".join(str(n) for n in range(1, ops.SECRET_SLOTS + 1)) + ";", jf)
+        self.assertGreaterEqual(ops.SECRET_SLOTS, len(ops.by_key(ops.build_catalog())["DATABASE_DSN"]["users"]))
 
-    def test_modes(self):
-        rows, actions = self.plan("SESSION_SIGNING_KEYS=xoay\nOPERATOR_TOTP_ENCRYPTION_KEY=sinh\nDATABASE_DSN=o1\n"
-                                  "GRPC_CALLER_KEY=giu", present=("SESSION_SIGNING_KEYS", "DATABASE_DSN"))
-        self.assertEqual(actions, [("SESSION_SIGNING_KEYS", "xoay", 48), ("OPERATOR_TOTP_ENCRYPTION_KEY", "sinh", 32),
-                                   ("DATABASE_DSN", "o1", 48)])
-        self.assertEqual(len(rows), 3)
+    def test_every_infra_key_is_catalogued_and_writable(self):
+        cat = ops.by_key(ops.build_catalog())
+        for c in ops.INFRA:
+            for k in c["keys"]:
+                self.assertIn(cat[k]["placement"], ("secret", "configmap"), k)
+                self.assertTrue(cat[k]["registered"], k)
 
-    def test_refusals(self):
-        self.refuses("GRPC_CALLER_KEY=sinh", "CÙNG MỘT GIÁ TRỊ")
-        self.refuses("SESSION_SIGNING_KEYS=sinh", "đã có", present=("SESSION_SIGNING_KEYS",))
-        self.refuses("SESSION_SIGNING_KEYS=xoay", "chưa có")
-        self.refuses("OPERATOR_TOTP_ENCRYPTION_KEY=xoay", "_KEYS", present=("OPERATOR_TOTP_ENCRYPTION_KEY",))
-        self.refuses("IDENTITY_ADMIN_SEED_PASSWORD=sinh", "không phải khoá")
-        self.refuses("DATABASE_DSN=o2", "BI_MAT_2")
-        self.refuses("SESSION_SIGNING_KEYS=o1", "không phải khoá của platform-secrets", service="platform")
-        self.refuses("ENV=o1", "không phải khoá")
-        self.refuses("DATABASE_DSN=xoa", "không hợp lệ")
-
-    def test_apply_never_loses_the_old_value(self):
+    def test_cli_writes_values_only_to_private_files(self):
         with tempfile.TemporaryDirectory() as d:
-            with open(os.path.join(d, "slot1"), "w", encoding="utf-8") as f:
-                f.write("new-value\n")
-            current = {"SESSION_SIGNING_KEYS": b64("old1,old2"), "DATABASE_DSN": b64("old-dsn")}
-            patch, backup = ops.apply_secret(current, [("SESSION_SIGNING_KEYS", "xoay", 48), ("DATABASE_DSN", "o1", 48),
-                                                       ("OPERATOR_TOTP_ENCRYPTION_KEY", "sinh", 32)], d)
-        rotated = base64.b64decode(patch["SESSION_SIGNING_KEYS"]).decode()
-        new_key, rest = rotated.split(",", 1)
-        self.assertEqual(rest, "old1,old2")
-        self.assertEqual(len(base64.b64decode(new_key)), 48)
-        self.assertEqual(base64.b64decode(patch["DATABASE_DSN"]).decode(), "new-value")
-        self.assertEqual(len(base64.b64decode(base64.b64decode(patch["OPERATOR_TOTP_ENCRYPTION_KEY"]))), 32)
-        self.assertEqual(backup, current)
+            def w(name, obj):
+                p = os.path.join(d, name)
+                with open(p, "w", encoding="utf-8") as f:
+                    f.write(obj if isinstance(obj, str) else json.dumps(obj))
+                return p
+            os.makedirs(os.path.join(d, "sec"))
+            os.makedirs(os.path.join(d, "slots"))
+            for s in sorted(ops.service_groups()):
+                w(os.path.join("sec", s + ".json"), {"data": {"DATABASE_DSN": b64(DSN.get(s, DSN["comms"]))}})
+            w(os.path.join("slots", "slot1"), "brand-new-pw")
+            edits = w("edits", "HOSTS=db-new\nPASSWORD.comms=1")
+            cm = w("cm.json", {"data": {}})
+            out = os.path.join(d, "plan")
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                rc = ops.main(["infra-plan", "--component", "postgresql", "--edits", edits, "--configmap", cm,
+                               "--secrets-dir", os.path.join(d, "sec"), "--slot-dir", os.path.join(d, "slots"),
+                               "--out-dir", out, "--stamp", "20261011-000000", "--probe-secret", "vigov-ops-probe-1",
+                               "--note", "vigov.vn/ticket=T-1"])
+            self.assertEqual(rc, 0, buf.getvalue())
+            self.assertNotIn("brand-new-pw", buf.getvalue())
+            self.assertNotIn(PW, buf.getvalue())
 
-    def test_backup_secret_is_attached_to_nothing(self):
-        m = ops.secret_manifest("identity-secrets-backup-20261010-101010", {"K": "dg=="},
-                                {"vigov.vn/backup-of": "identity-secrets"}, {"vigov.vn/ticket": "T-1"})
-        self.assertEqual(m["kind"], "Secret")
-        self.assertTrue(ops.BACKUP_NAME.match(m["metadata"]["name"]))
-        self.assertEqual(m["metadata"]["annotations"], {"vigov.vn/ticket": "T-1"})
-
-
-class Resources(unittest.TestCase):
-    deploys = {"items": [
-        {"metadata": {"name": "vigov-service-platform"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [
-            {"name": "server", "resources": {"requests": {"cpu": "100m", "memory": "128Mi"},
-                                             "limits": {"cpu": "500m", "memory": "512Mi"}}}]}}}},
-        {"metadata": {"name": "vigov-web-admin"}, "spec": {"replicas": 1, "template": {"spec": {"containers": [
-            {"name": "web"}]}}}},
-    ]}
-
-    def setUp(self):
-        self.cur = ops.current_resources(self.deploys)
-
-    def test_prefilled_lines_unchanged_are_skipped(self):
-        rows, patches = ops.plan_resources(self.cur, ops.resource_lines(self.cur))
-        self.assertEqual((rows, patches), ([], {}))
-
-    def test_edit_and_preset(self):
-        rows, patches = ops.plan_resources(self.cur, "vigov-service-platform replicas=2 cpu=200m/1\n"
-                                                     "vigov-web-admin preset=vua mem=300Mi/1Gi")
-        p = patches["vigov-service-platform"]["spec"]
-        self.assertEqual(p["replicas"], 2)
-        self.assertEqual(p["template"]["spec"]["containers"][0],
-                         {"name": "server", "resources": {"requests": {"cpu": "200m", "memory": "128Mi"},
-                                                          "limits": {"cpu": "1", "memory": "512Mi"}}})
-        w = patches["vigov-web-admin"]["spec"]
-        self.assertEqual(w["replicas"], ops.PRESETS["vua"]["replicas"])
-        self.assertEqual(w["template"]["spec"]["containers"][0]["resources"]["requests"]["memory"], "300Mi")
-
-    def refuses(self, text, fragment):
-        with self.assertRaises(ops.PlanError) as cm:
-            ops.plan_resources(self.cur, text)
-        self.assertIn(fragment, str(cm.exception))
-
-    def test_refusals(self):
-        self.refuses("vigov-service-platform cpu=600m/500m", "cpu request lớn hơn limit")
-        self.refuses("vigov-service-platform mem=1Gi/512Mi", "memory request lớn hơn limit")
-        self.refuses("vigov-service-platform replicas=0", "1..10")
-        self.refuses("vigov-service-x replicas=2", "không có Deployment")
-        self.refuses("vigov-service-platform preset=huge", "nho | vua | lon")
-        self.refuses("vigov-web-admin replicas=2", "thiếu request/limit")
-        self.refuses("vigov-service-platform mem=1G/2G", "memory")
-
-
-class Databases(unittest.TestCase):
-    def test_default_names_differ_from_today(self):
-        self.assertEqual(ops.default_db_name("platform", "prod"), "vigov_platform_prod")
-        self.assertEqual(ops.default_db_name("platform", "staging"), "vigov_platform_stg")
-
-    def test_plan_refuses_the_database_in_use(self):
-        with self.assertRaises(ops.PlanError) as cm:
-            ops.plan_databases(SERVICES, "platform vigov_platform u1", {"platform": "vigov_platform"})
-        self.assertIn("CSDL cũ không bao giờ bị đụng", str(cm.exception))
-
-    def test_plan_validation(self):
-        for text, frag in [("platform Bad-Name u", "chữ thường"), ("nope db u", "không có"),
-                           ("platform db1 u1\ncomms db1 u2", "trùng"), ("platform db", "<dịch vụ>"), ("", "trống")]:
-            with self.assertRaises(ops.PlanError) as cm:
-                ops.plan_databases(SERVICES, text, {})
-            self.assertIn(frag, str(cm.exception))
-        self.assertEqual(ops.plan_databases(SERVICES, "platform a_db a_user", {}), [("platform", "a_db", "a_user")])
-
-    def test_create_sql_carries_no_password_and_checks_existence_first(self):
-        sql = ops.create_sql([("platform", "vigov_platform_prod", "vigov_platform_prod")])
-        self.assertIn("\\getenv pw_platform PW_PLATFORM", sql)
-        self.assertLess(sql.index("RAISE EXCEPTION"), sql.index("CREATE ROLE"))
-        self.assertIn("GRANT %I TO %I", sql)
-        self.assertNotIn("DROP", sql.upper())
-        self.assertNotIn("DELETE", sql.upper())
-
-    def test_dsn_shape(self):
-        pw = "a" * 48
-        dsn = ops.build_dsn(ops.parse_hosts("db1,db2:5433", "5432"), "vigov_x", "vigov_x", pw, "require")
-        self.assertEqual(dsn, "postgres://vigov_x:" + pw + "@db1:5432,db2:5433/vigov_x?sslmode=require")
-        for mode in ("dis" + "able", "allow", "prefer", ""):
-            with self.assertRaises(ops.PlanError):
-                ops.build_dsn("db:5432", "d", "u", pw, mode)
-        with self.assertRaises(ops.PlanError):
-            ops.build_dsn("db:5432", "d", "u", "short", "require")
-        with self.assertRaises(ops.PlanError):
-            ops.parse_hosts("", "5432")
-        with self.assertRaises(ops.PlanError):
-            ops.parse_hosts("db;rm -rf", "5432")
-
-    def test_db_name_never_returns_more_than_a_name(self):
-        uri = "postgres://u:" + "secretpw" + "@h:5432/vigov_platform?sslmode=require"
-        self.assertEqual(ops.db_name_of(uri), "vigov_platform")
-        self.assertEqual(ops.db_name_of("host=h dbname=vigov_x user=u"), "vigov_x")
-        self.assertEqual(ops.db_name_of("garbage with secretpw"), "")
-
-
-class Migrations(unittest.TestCase):
-    def test_rows(self):
-        image = {"a": [("0001.sql", "s1"), ("0002.sql", "s2")], "b": [("0001.sql", "t1")], "c": [("0001.sql", "u1")]}
-        applied = {"a": {"0001.sql": "s1"}, "b": {"0001.sql": "XX", "0009.sql": "z"}, "c": {"0001.sql": "u1"}}
-        rows, blocking, ok = ops.migration_rows(["a", "b", "c", "d"], image, applied)
-        self.assertIn("CHƯA ÁP: 0002.sql", rows[0][4])
-        self.assertIn("TỆP ĐÃ ÁP BỊ SỬA: 0001.sql", rows[1][4])
-        self.assertIn("CSDL MỚI HƠN ẢNH: 0009.sql", rows[1][4])
-        self.assertEqual(rows[2][3], "khớp")
-        self.assertEqual(rows[3][3], "?")
-        self.assertTrue(blocking)
-        self.assertFalse(ok)
-
-    def test_all_match(self):
-        _, blocking, ok = ops.migration_rows(["a"], {"a": [("1.sql", "s")]}, {"a": {"1.sql": "s"}})
-        self.assertEqual((blocking, ok), (False, True))
-
-    def test_empty_database_is_not_a_match(self):
-        _, _, ok = ops.migration_rows(["a"], {"a": [("1.sql", "s")]}, {})
-        self.assertFalse(ok)
-
-    def test_order(self):
-        self.assertEqual(ops.ordered_services(SERVICES)[:2], ["platform", "identity"])
+            def load(name):
+                with open(os.path.join(out, name), encoding="utf-8") as f:
+                    return f.read()
+            patch = json.loads(load("secret-comms.json"))
+            self.assertIn("brand-new-pw", base64.b64decode(patch["data"]["DATABASE_DSN"]).decode())
+            backup = json.loads(load("backup-comms.json"))
+            self.assertEqual(backup["metadata"]["name"], "comms-secrets-backup-20261011-000000")
+            self.assertEqual(base64.b64decode(backup["data"]["DATABASE_DSN"]).decode(), DSN["comms"])
+            self.assertEqual(json.loads(load("probe-secret.json"))["metadata"]["name"], "vigov-ops-probe-1")
+            self.assertNotIn("brand-new-pw", load("probe.sh"))
+            self.assertEqual(load("restart.txt").split()[0], "vigov-service-platform")
 
 
 class Pods(unittest.TestCase):
     def args(self, **kw):
-        base = dict(name="p", out="x", script=None, from_deploy=None, command_json=None, secret_env=[], env=[],
-                    envfrom_secret=[], envfrom_configmap=[], pull_secret=[])
+        base = dict(name="p", out="x", script=None, secret_env=[], envfrom_secret=[], pull_secret=[])
         base.update(kw)
         return argparse.Namespace(**base)
 
@@ -355,24 +325,6 @@ class Pods(unittest.TestCase):
         ref = [e for e in c["env"] if e["name"] == "DSN_platform"][0]["valueFrom"]["secretKeyRef"]
         self.assertEqual(ref, {"name": "platform-secrets", "key": "DATABASE_DSN", "optional": True})
 
-    def test_from_deploy_overrides_dsn_and_keeps_security_context(self):
-        dep = {"metadata": {"name": "vigov-service-platform"}, "spec": {"template": {"spec": {
-            "securityContext": {"runAsUser": 65532}, "imagePullSecrets": [{"name": "harbor-vigov"}],
-            "containers": [{"name": "s", "image": "harbor/x:abc", "envFrom": [{"secretRef": {"name": "platform-secrets"}}],
-                            "env": [{"name": "DATABASE_DSN", "value": "old"}, {"name": "LISTEN_ADDR", "value": ":8080"}]}]}}}}
-        with tempfile.TemporaryDirectory() as d:
-            f = os.path.join(d, "dep.json")
-            with open(f, "w", encoding="utf-8") as fh:
-                json.dump(dep, fh)
-            pod = ops.build_pod(self.args(from_deploy=f, secret_env=["DATABASE_DSN=platform-dsn-pending/DATABASE_DSN"]))
-        c = pod["spec"]["containers"][0]
-        names = [e["name"] for e in c["env"]]
-        self.assertEqual(names.count("DATABASE_DSN"), 1)
-        self.assertEqual([e for e in c["env"] if e["name"] == "DATABASE_DSN"][0]["valueFrom"]["secretKeyRef"]["name"],
-                         "platform-dsn-pending")
-        self.assertEqual(pod["spec"]["securityContext"], {"runAsUser": 65532})
-        self.assertNotIn("command", c)
-        self.assertEqual(c["image"], "harbor/x:abc")
 
     def test_bad_secret_env(self):
         with self.assertRaises(ops.PlanError):

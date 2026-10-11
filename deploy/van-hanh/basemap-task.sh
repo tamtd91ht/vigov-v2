@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Task `nen-ban-do` — build the self-hosted basemap on the BUILD MACHINE and upload it to the
-# environment's MinIO. ONE body for BOTH Jenkins jobs: `vigov-van-hanh` (deploy/van-hanh/Jenkinsfile)
-# and `vigov-deploy` (deploy/Jenkinsfile, until the controller has Active Choices — owner 11/10/2026).
-# Two copies of this shell would be two copies that drift; the jobs only check their own parameters
-# (XAC_NHAN = namespace, TICKET on prod) and call this file.
+# environment's MinIO. Called by `vigov-deploy` (deploy/Jenkinsfile), which only checks its own
+# parameters (XAC_NHAN = namespace, TICKET on prod). It lives beside ops.py because its decisions are
+# tested there; `vigov-van-hanh` no longer runs it (rebuilt for đổi hạ tầng only, ADR 0089 §Sửa đổi
+# 11/10/2026).
 #
 # Why and the full procedure: ADR 0072, kb/40-runbooks/basemap-pmtiles.md. Decisions with tests live in
 # deploy/van-hanh/ops.py (basemap-plan · basemap-tools · basemap-key-source · mc-host); the build itself

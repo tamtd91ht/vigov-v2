@@ -89,10 +89,10 @@ manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy tr
 |---|---|---|
 | `nen-ban-do` | `MT`, `NGAY_NEN` (YYYYMMDD), `CHAY_THU` (bật = chỉ in kế hoạch); làm thật: bỏ `CHAY_THU`, `XAC_NHAN` = namespace của `MT`, `TICKET` nếu prod | Dựng nền bản đồ PMTiles trên máy build, tải lên MinIO `<tiền tố>-public/config/map/<ngày>/` bằng khoá có sẵn của `comms-secrets`; **không** đổi `BASEMAP_URL`. Hạn 180 phút (việc khác giữ 20) |
 
-`nen-ban-do` cũng có ở job vận hành `vigov-van-hanh` (chủ dự án 11/10/2026: ở đây cho tới khi controller
-cài Active Choices). Hai job gọi **cùng** `deploy/van-hanh/basemap-task.sh` nên không trôi nhau. Dựng lần
-đầu, mã băm công cụ, các bước mỗi lần làm mới: `deploy/van-hanh/README.md` mục "Nền bản đồ"; quy trình
-và kiểm chủ quyền có ký: `kb/40-runbooks/basemap-pmtiles.md`.
+`nen-ban-do` chỉ còn ở job này: job vận hành `vigov-van-hanh` được dựng lại 11/10/2026 chỉ với việc đổi
+hạ tầng (ADR 0089 §Sửa đổi 11/10/2026). Thân việc vẫn ở `deploy/van-hanh/basemap-task.sh` + `ops.py`
+(có test). Mã băm công cụ, các bước mỗi lần làm mới: `deploy/van-hanh/README.md` mục "Nền bản đồ"; quy
+trình và kiểm chủ quyền có ký: `kb/40-runbooks/basemap-pmtiles.md`.
 
 Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → năm dịch vụ còn lại →
 `web-admin`. `platform-admin` chỉ cần `platform` (và `identity` cho đăng nhập vận hành) đã lên. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không

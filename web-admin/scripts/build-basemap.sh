@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds and uploads the self-hosted Vietnam basemap of the PETITION maps (ADR 0072 §Sửa đổi 09/10/2026,
 # §Trả lời 09/10/2026). Runs on a machine with Internet access and an `mc` alias to ViGov's MinIO: the
-# Jenkins operations job `vigov-van-hanh`, task `nen-ban-do` (owner 11/10/2026), or an operator by hand
+# Jenkins job `vigov-deploy`, task `nen-ban-do` (owner 11/10/2026), or an operator by hand
 # — never a pod. The whole procedure, the mandatory sovereignty check and the signed checklist:
 # kb/40-runbooks/basemap-pmtiles.md. Read it first.
 #

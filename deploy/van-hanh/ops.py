@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""Pure logic behind the operations job `deploy/van-hanh/Jenkinsfile` (ADR 0089).
+"""Pure logic behind the operations job `deploy/van-hanh/Jenkinsfile` (ADR 0089, rebuilt 11/10/2026).
 
-WHY THIS FILE EXISTS: the job decides things that are easy to get silently wrong — which keys a
-ConfigMap edit may touch, which services must restart for a changed key, whether a resource
-request exceeds its limit, what a DSN looks like. Written in Groovy those decisions would live in
-a Jenkinsfile no test ever runs. Here they are plain functions with unit tests
-(`deploy/van-hanh/test_ops.py`, run by `make buildfiles`), and the Groovy only moves files.
+The job has ONE task: point the cluster at a different piece of infrastructure — PostgreSQL, MinIO,
+Redis, ClamAV. The operator picks the component and types only that component's values; this file
+decides which ConfigMap key and which `<service>-secrets` keys those values become, which services
+must restart, and what to probe from inside the cluster before anything is written. Written in
+Groovy those decisions would live in a Jenkinsfile no test runs. Here they are plain functions with
+unit tests (`deploy/van-hanh/test_ops.py`, run by `make buildfiles`), and the Groovy only moves files.
 
-SECRET VALUES: the commands that touch them (`secret-apply`, `dsn`, `db-passwords`, `mc-host`) read and write
-FILES only (mode 0600) and never print a value — not even a prefix. Every printed line names keys.
+It also keeps the basemap commands `vigov-deploy` calls through `deploy/van-hanh/basemap-task.sh`.
+
+SECRET VALUES: the commands that touch them (`infra-plan`, `mc-host`) read and write FILES only
+(mode 0600) and never print a value — not even a prefix. Every printed line names keys, hosts,
+database and account names.
 
 Python 3.8+: the build machine is CentOS 7, `python3` there is 3.6 and the job picks the newest
 `python3.X` it finds (same loop as the root Jenkinsfile).
@@ -20,13 +24,10 @@ import argparse
 import base64
 import datetime
 import glob
-import hashlib
 import io
 import json
 import os
 import re
-import secrets
-import subprocess
 import sys
 from urllib.parse import quote
 
@@ -166,19 +167,15 @@ def catalog_text(cat: list) -> str:
 REGION = re.compile(r"(// BEGIN GENERATED ops-data[^\n]*\n)(.*?)(// END GENERATED ops-data)", re.S)
 
 
-def generated_region(cat: list, services: list) -> str:
-    """The Jenkinsfile block the FORM scripts read (they run on the controller, with no checkout).
-    Three methods, each a ''' literal holding plain lines: no backslash, no quote, no `'''`."""
-    presets = "\n".join(
-        f"{n}\t{p['replicas']}\t{p['cpu'][0]}/{p['cpu'][1]}\t{p['mem'][0]}/{p['mem'][1]}"
-        for n, p in PRESETS.items())
+def generated_region(cat: list) -> str:
+    """The Jenkinsfile block the FORM scripts and checkParameters() read (the form runs on the
+    controller, with no checkout). Each method is a ''' literal holding plain lines: no backslash,
+    no quote, no `'''`."""
 
     def method(name: str, body: str) -> str:
         return f"String {name}() {{\n  return '''\n{body}\n'''\n}}\n"
 
-    return (method("opsCatalog", catalog_text(cat)) + method("opsPresets", presets)
-            + method("opsDbLinesProd", db_lines(services, "prod"))
-            + method("opsDbLinesStaging", db_lines(services, "staging")))
+    return method("opsCatalog", catalog_text(cat)) + method("opsInfra", infra_text(cat))
 
 
 def render_jenkinsfile(text: str, region: str) -> str:
@@ -196,32 +193,11 @@ def deployment_of(user: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────
-# Shared parsing
+# Shared parsing and value checks
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
 class PlanError(Exception):
     """A refusal the operator must read. Message is Vietnamese; it never carries a secret."""
-
-
-def parse_assignments(text: str) -> list:
-    """`KEY=value` lines → [(key, value)]. Blank lines and `#` comments skipped."""
-    out, seen = [], set()
-    for n, raw in enumerate(text.replace("\r", "").split("\n"), 1):
-        s = raw.strip()
-        if not s or s.startswith("#"):
-            continue
-        if "=" not in s:
-            raise PlanError(f"dòng {n}: thiếu dấu '=' — viết KHOÁ=giá trị")
-        k, v = s.split("=", 1)
-        k, v = k.strip(), v.strip()
-        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", k):
-            raise PlanError(f"dòng {n}: '{k[:40]}' không phải tên khoá (chữ hoa, số, _ — không gạch ngang: "
-                            f"envFrom bỏ qua im lặng key có gạch ngang, ADR 0093)")
-        if k in seen:
-            raise PlanError(f"dòng {n}: khoá {k} xuất hiện hai lần")
-        seen.add(k)
-        out.append((k, v))
-    return out
 
 
 def table(headers: list, rows: list) -> str:
@@ -232,22 +208,12 @@ def table(headers: list, rows: list) -> str:
     return "\n".join([line(headers), sep] + [line(r) for r in rows])
 
 
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-# ConfigMap common-config
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-
 HOSTPORT = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?:\d{1,5}$")
-HOSTNAME = re.compile(r"^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$")
-OPEN_CIDRS = {"0.0.0.0/0", "::/0"}
 
 
-def check_config_value(key: str, value: str, env_expected: str) -> None:
+def check_config_value(key: str, value: str) -> None:
     if len(value) > 4096 or any(ord(ch) < 32 for ch in value):
         raise PlanError(f"{key}: giá trị quá dài hoặc có ký tự điều khiển")
-    if key == "ENV":
-        if value != env_expected:
-            raise PlanError(f"ENV phải là '{env_expected}' ở namespace này, không phải '{value}'")
-        return
     if key.endswith(("_ADDRESS", "_ADDR")):
         # Rule 11 invariant 5: an address is a LIST from its first line, even with one node.
         for item in value.split(","):
@@ -257,142 +223,25 @@ def check_config_value(key: str, value: str, env_expected: str) -> None:
         return
     if key.endswith(("_ENDPOINT", "_URL")):
         # Rule 13 invariant 1: traffic to data stores is encrypted. http:// is refused, not warned.
-        if not re.fullmatch(r"https://[^\s@]+", value):
-            raise PlanError(f"{key}: phải là https://… và không mang thông tin đăng nhập")
-        return
-    if key.endswith("_HOST"):
-        if not HOSTNAME.match(value):
-            raise PlanError(f"{key}: tên host trần, chữ thường, không giao thức/cổng/đường dẫn")
-        return
-    if key == "TRUSTED_PROXY_CIDRS":
-        for item in value.split(","):
-            it = item.strip()
-            if it in OPEN_CIDRS:
-                raise PlanError("TRUSTED_PROXY_CIDRS: không bao giờ 0.0.0.0/0 hay ::/0 (pod từ chối khởi động)")
-            if not re.fullmatch(r"[0-9a-fA-F:.]+/\d{1,3}", it):
-                raise PlanError(f"TRUSTED_PROXY_CIDRS: '{it}' không phải dải CIDR")
+        if not re.fullmatch(r"https://[^\s@?#]+", value):
+            raise PlanError(f"{key}: phải là https://…, không thông tin đăng nhập, không truy vấn")
 
 
-def plan_config(cat: list, current: dict, edits_text: str, env_expected: str):
-    """→ (rows, patch dict, restart deployment list). Raises PlanError on any refusal."""
-    idx = by_key(cat)
-    rows, patch, restart = [], {}, set()
-    for key, value in parse_assignments(edits_text):
-        e = idx.get(key)
-        if e is None or not e["registered"]:
-            raise PlanError(f"{key}: không có trong .env.example / bảng deploy/cau-hinh/README.md — "
-                            f"luật 11 cấm #4: khoá ngoài sổ đăng ký không được thêm")
-        if e["placement"] == "secret":
-            raise PlanError(f"{key}: là khoá SECRET — dùng việc sua-secret, không bao giờ ConfigMap")
-        if e["placement"] == "env":
-            raise PlanError(f"{key}: đặt thẳng trong env của Deployment (README mục 3), không ở common-config")
-        if e["placement"] == "unset":
-            raise PlanError(f"{key}: README mục 4 — 'Không đặt'")
-        if value == "":
-            continue  # empty = keep
-        check_config_value(key, value, env_expected)
-        old = current.get(key)
-        if old == value:
+def parse_hosts(hosts: str, port: str) -> str:
+    """`h1,h2:5433` → `h1:5432,h2:5433` — a list from the first line (rule 11 invariant 5)."""
+    out = []
+    for h in (hosts or "").split(","):
+        h = h.strip()
+        if not h:
             continue
-        patch[key] = value
-        deps = [deployment_of(u) for u in e["users"]]
-        restart.update(deps)
-        rows.append([key, "(chưa có)" if old is None else old, value, ", ".join(e["users"]) or "(không dịch vụ nào đọc)"])
-    return rows, {"data": patch}, sorted(restart)
-
-
-def audit_config(cat: list, current: dict):
-    """→ (missing rows, extra keys) of common-config against the catalog."""
-    idx = by_key(cat)
-    missing = [[e["key"], {"all": "bắt buộc", "prod": "bắt buộc ở staging/prod"}.get(e["level"], "không"),
-                ", ".join(e["users"])]
-               for e in cat if e["placement"] == "configmap" and e["key"] not in current]
-    extra = sorted(k for k in current if k not in idx or not idx[k]["registered"])
-    return missing, extra
-
-
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-# Secret <service>-secrets
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-
-MODES = {"giu", "o1", "o2", "o3", "sinh", "xoay"}
-
-
-def key_bytes(key: str) -> int:
-    # README section 1: encryption keys are `openssl rand -base64 32`, signing/caller keys 48.
-    return 32 if "ENCRYPTION" in key else 48
-
-
-def secret_allowed(e: dict, service: str) -> bool:
-    return e["placement"] == "secret" and e["registered"] and service in e["users"]
-
-
-def plan_secret(cat: list, service: str, present: set, edits_text: str, slots_filled: set):
-    """→ (rows, actions [(key, mode, nbytes)]). Values never enter this function."""
-    idx = by_key(cat)
-    rows, actions, slot_users = [], [], {}
-    for key, mode in parse_assignments(edits_text):
-        e = idx.get(key)
-        if e is None or not secret_allowed(e, service):
-            raise PlanError(f"{key}: không phải khoá của {service}-secrets theo bảng README mục 1 + "
-                            f"config.Uses của {service} — không thêm khoá ngoài sổ (luật 11 cấm #4)")
-        mode = mode.lower()
-        if mode not in MODES:
-            raise PlanError(f"{key}: chế độ '{mode}' không hợp lệ — giu | o1 | o2 | o3 | sinh | xoay")
-        if mode == "giu":
-            continue
-        is_key = key.endswith(("_KEY", "_KEYS"))
-        if mode in ("sinh", "xoay"):
-            if not is_key:
-                raise PlanError(f"{key}: không phải khoá ký/mã hoá — chỉ nhập qua ô o1/o2/o3")
-            if e["shared"]:
-                raise PlanError(f"{key}: phải CÙNG MỘT GIÁ TRỊ ở nhiều Secret ({', '.join(e['users'])}) — "
-                                f"sinh riêng ở một nơi là làm lệch; nhập cùng giá trị qua ô o1/o2/o3 cho từng dịch vụ")
-        if mode == "sinh" and key in present:
-            raise PlanError(f"{key}: đã có — 'sinh' chỉ dành cho khoá CHƯA có. Đổi khoá đang dùng: 'xoay' "
-                            f"(thêm khoá mới lên đầu, giữ khoá cũ) — ghi đè khoá mã hoá là mất mọi dữ liệu đã niêm")
-        if mode == "xoay":
-            if not key.endswith("_KEYS"):
-                raise PlanError(f"{key}: chỉ khoá dạng danh sách (_KEYS) mới xoay được")
-            if key not in present:
-                raise PlanError(f"{key}: chưa có — dùng 'sinh'")
-        if mode.startswith("o"):
-            if mode[1] not in slots_filled:
-                raise PlanError(f"{key}: ô BI_MAT_{mode[1]} đang trống")
-            slot_users.setdefault(mode, []).append(key)
-        what = {"sinh": "sinh ngẫu nhiên (CSPRNG)", "xoay": "thêm khoá mới lên đầu, giữ khoá cũ"}.get(
-            mode, f"giá trị ô BI_MAT_{mode[1:]}")
-        rows.append([key, "có" if key in present else "chưa có", what])
-        actions.append((key, mode, key_bytes(key)))
-    return rows, actions
-
-
-def random_key(nbytes: int) -> str:
-    return base64.b64encode(secrets.token_bytes(nbytes)).decode("ascii")
-
-
-def apply_secret(current_data: dict, actions: list, slot_dir: str):
-    """→ (patch data base64, backup data base64). Values handled here, never printed."""
-    patch, backup = {}, {}
-    for key, mode, nbytes in actions:
-        old_b64 = current_data.get(key)
-        if old_b64 is not None:
-            backup[key] = old_b64
-        if mode == "sinh":
-            value = random_key(nbytes)
-        elif mode == "xoay":
-            old = base64.b64decode(old_b64).decode("utf-8").strip()
-            value = random_key(nbytes) + "," + old
-        else:
-            with io.open(os.path.join(slot_dir, "slot" + mode[1]), encoding="utf-8") as f:
-                value = f.read().strip()
-            if not value or any(ord(ch) < 32 for ch in value):
-                raise PlanError(f"{key}: giá trị ô BI_MAT_{mode[1]} rỗng hoặc có ký tự điều khiển")
-        patch[key] = base64.b64encode(value.encode("utf-8")).decode("ascii")
-    return patch, backup
-
-
-BACKUP_NAME = re.compile(r"^([a-z]+)-secrets-backup-\d{8}-\d{6}$")
+        if ":" not in h:
+            h = f"{h}:{port}"
+        if not HOSTPORT.match(h):
+            raise PlanError(f"máy chủ '{h[:60]}' không đúng dạng host hoặc host:port")
+        out.append(h)
+    if not out:
+        raise PlanError("chưa nhập máy chủ")
+    return ",".join(out)
 
 
 def secret_manifest(name: str, data: dict, labels: dict, notes: dict = None) -> dict:
@@ -404,11 +253,18 @@ def secret_manifest(name: str, data: dict, labels: dict, notes: dict = None) -> 
     return {"apiVersion": "v1", "kind": "Secret", "type": "Opaque", "metadata": meta, "data": data}
 
 
+def ordered_services(services: list) -> list:
+    """platform → identity → the rest: the order deploy/README.md mục 2 gives for bringing services up
+    (every service resolves its commune through platform, and its staff through identity)."""
+    head = [s for s in ("platform", "identity") if s in services]
+    return head + [s for s in sorted(services) if s not in head]
+
+
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 # One-shot pods — `kubectl create -f` + poll, never `kubectl run -i` (it hung, deploy/Jenkinsfile:35)
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
-PSQL_IMAGE = "postgres:16-alpine"   # the cluster's PostgreSQL is 16; same image the old job uses
+PSQL_IMAGE = "postgres:16-alpine"   # the cluster's PostgreSQL is 16; has psql, pg_isready, busybox nc
 
 
 def _secret_env(spec: str) -> dict:
@@ -423,345 +279,393 @@ def _secret_env(spec: str) -> dict:
 
 
 def build_pod(a) -> dict:
-    """Pod manifest. Two shapes:
-      --script FILE : postgres image, the script travels base64 in an env var (no stdin, no attach)
-      --from-deploy F: the service's OWN image, env and pull secrets read from its Deployment, with
-                       --secret-env overriding (an explicit `env` entry wins over envFrom)."""
+    """Pod manifest: postgres image, the script travels base64 in an env var (no stdin, no attach)."""
+    if not a.script:
+        raise PlanError("pod: cần --script")
     labels = {"app.kubernetes.io/name": "vigov-ops-oneshot", "app.kubernetes.io/managed-by": "vigov-van-hanh"}
-    env, env_from, pull = [], [], [{"name": p} for p in a.pull_secret]
-    image, command = PSQL_IMAGE, None
-    if a.from_deploy:
-        d = _json(a.from_deploy)
-        cs = d["spec"]["template"]["spec"]["containers"]
-        if len(cs) != 1:
-            raise PlanError(f"{d['metadata']['name']} có {len(cs)} container — không biết lấy ảnh nào")
-        image = cs[0]["image"]
-        env = [e for e in cs[0].get("env", []) if e.get("name") not in {s.split("=", 1)[0] for s in a.secret_env}]
-        env_from = cs[0].get("envFrom", [])
-        pull = d["spec"]["template"]["spec"].get("imagePullSecrets", []) or pull
-        if a.command_json:
-            command = json.loads(a.command_json)
-    elif a.script:
-        script = base64.b64encode(_read(a.script).encode("utf-8")).decode("ascii")
-        env.append({"name": "SCRIPT_B64", "value": script})
-        command = ["sh", "-c", "echo \"$SCRIPT_B64\" | base64 -d > /tmp/s.sh && sh /tmp/s.sh"]
-    else:
-        raise PlanError("pod: cần --script hoặc --from-deploy")
-    env += [_secret_env(s) for s in a.secret_env]
-    for kv in a.env:
-        k, _, v = kv.partition("=")
-        env.append({"name": k, "value": v})
-    env_from += [{"secretRef": {"name": s}} for s in a.envfrom_secret]
-    env_from += [{"configMapRef": {"name": c}} for c in a.envfrom_configmap]
-    container = {"name": "oneshot", "image": image, "env": env, "envFrom": env_from,
+    script = base64.b64encode(_read(a.script).encode("utf-8")).decode("ascii")
+    env = [{"name": "SCRIPT_B64", "value": script}] + [_secret_env(s) for s in a.secret_env]
+    env_from = [{"secretRef": {"name": s}} for s in a.envfrom_secret]
+    container = {"name": "oneshot", "image": PSQL_IMAGE, "env": env, "envFrom": env_from,
+                 "command": ["sh", "-c", "echo \"$SCRIPT_B64\" | base64 -d > /tmp/s.sh && sh /tmp/s.sh"],
                  "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
                  "resources": {"requests": {"cpu": "20m", "memory": "64Mi"}, "limits": {"memory": "256Mi"}}}
-    pod_sc = {"runAsNonRoot": True, "runAsUser": 70,    # `postgres` in the alpine image
-              "seccompProfile": {"type": "RuntimeDefault"}}
-    if a.from_deploy:
-        # The service's own settings, not ours: a distroless image whose USER is a NAME fails
-        # `runAsNonRoot` unless the Deployment states the uid, and a migration needs the memory
-        # the service runs with.
-        tpl = d["spec"]["template"]["spec"]
-        pod_sc = tpl.get("securityContext", {})
-        container["securityContext"] = cs[0].get("securityContext", container["securityContext"])
-        container["resources"] = cs[0].get("resources", {})
-    if command:
-        container["command"] = command
     spec = {"restartPolicy": "Never", "automountServiceAccountToken": False,
-            "securityContext": pod_sc, "imagePullSecrets": pull, "containers": [container]}
+            "securityContext": {"runAsNonRoot": True, "runAsUser": 70,    # `postgres` in the alpine image
+                                "seccompProfile": {"type": "RuntimeDefault"}},
+            "imagePullSecrets": [{"name": p} for p in a.pull_secret], "containers": [container]}
     # NO Deployment label: carrying one would make the Service send real traffic to this pod.
     return {"apiVersion": "v1", "kind": "Pod", "metadata": {"name": a.name, "labels": labels}, "spec": spec}
 
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────
-# Resources (replicas, requests/limits)
+# Infrastructure — the job's one task (owner 11/10/2026: rebuilt around "đổi hạ tầng").
+#
+# A component is the set of keys an operator thinks of as ONE thing ("our MinIO"), spread over
+# common-config and several <service>-secrets. WHICH services read each key comes from the catalog
+# (derived from core/config); WHICH keys make a component is the only hand-written fact here.
+#
+# Form → job contract: the form's textarea sends `FIELD=value` lines, a per-service field written
+# `FIELD.<service>=value`. An EMPTY value means "keep what the cluster has" — the operator types only
+# what changes. Secret values never travel in that text: a secret field names a password slot
+# (`1`..`7` = Jenkins password parameters BI_MAT_1..7) or `giu`.
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
-# PROPOSALS ONLY (ADR 0089 open question #9) — the owner picks the numbers.
-PRESETS = {
-    "nho": {"replicas": 1, "cpu": ("50m", "500m"), "mem": ("128Mi", "256Mi")},
-    "vua": {"replicas": 2, "cpu": ("100m", "1000m"), "mem": ("256Mi", "512Mi")},
-    "lon": {"replicas": 3, "cpu": ("250m", "2000m"), "mem": ("512Mi", "1Gi")},
-}
-CPU = re.compile(r"^(\d+)m$|^(\d+(?:\.\d+)?)$")
-MEM = re.compile(r"^(\d+)(Mi|Gi)$")
-
-
-def cpu_milli(q: str) -> int:
-    m = CPU.match(q)
-    if not m:
-        raise PlanError(f"cpu '{q}' không hợp lệ — viết 100m hoặc 1")
-    return int(m.group(1)) if m.group(1) else int(float(m.group(2)) * 1000)
-
-
-def mem_mi(q: str) -> int:
-    m = MEM.match(q)
-    if not m:
-        raise PlanError(f"memory '{q}' không hợp lệ — viết 256Mi hoặc 1Gi")
-    return int(m.group(1)) * (1024 if m.group(2) == "Gi" else 1)
-
-
-def current_resources(deploy_list: dict) -> dict:
-    """{deployment: {container, replicas, cpu:(req,lim), mem:(req,lim)}} — single-container only."""
-    out = {}
-    for d in deploy_list.get("items", []):
-        name = d["metadata"]["name"]
-        cs = d["spec"]["template"]["spec"]["containers"]
-        if len(cs) != 1:
-            continue
-        r = cs[0].get("resources", {})
-        req, lim = r.get("requests", {}), r.get("limits", {})
-        out[name] = {"container": cs[0]["name"], "replicas": d["spec"].get("replicas", 1),
-                     "cpu": (req.get("cpu", ""), lim.get("cpu", "")),
-                     "mem": (req.get("memory", ""), lim.get("memory", ""))}
-    return out
-
-
-def resource_lines(cur: dict) -> str:
-    """The editable text the form pre-fills: one deployment per line."""
-    return "\n".join(
-        f"{n} replicas={v['replicas']} cpu={v['cpu'][0] or '-'}/{v['cpu'][1] or '-'} "
-        f"mem={v['mem'][0] or '-'}/{v['mem'][1] or '-'}" for n, v in sorted(cur.items()))
-
-
-def _pair(field: str, text: str):
-    if "/" not in text:
-        raise PlanError(f"{field}={text}: viết request/limit, ví dụ {field}=100m/500m")
-    a, b = (x.strip() for x in text.split("/", 1))
-    # `-` is how resource_lines() writes "not set"; reading it back as empty keeps an untouched
-    # pre-filled line equal to the cluster, so it is skipped instead of refused.
-    return ("" if a == "-" else a), ("" if b == "-" else b)
-
-
-def plan_resources(cur: dict, edits_text: str):
-    """→ (rows, {deployment: strategic-merge patch}). Lines: `<deploy> [preset=X] [replicas=N]
-    [cpu=req/lim] [mem=req/lim]`; a preset is applied first, explicit fields override it."""
-    rows, patches = [], {}
-    for n, raw in enumerate(edits_text.replace("\r", "").split("\n"), 1):
-        s = raw.strip()
-        if not s or s.startswith("#"):
-            continue
-        parts = s.split()
-        dep = parts[0]
-        if dep not in cur:
-            raise PlanError(f"dòng {n}: không có Deployment '{dep}' (một container) trong namespace")
-        c = cur[dep]
-        want = {"replicas": c["replicas"], "cpu": c["cpu"], "mem": c["mem"]}
-        for p in parts[1:]:
-            if "=" not in p:
-                raise PlanError(f"dòng {n}: '{p}' — viết trường=giá trị")
-            f, v = p.split("=", 1)
-            if f == "preset":
-                if v not in PRESETS:
-                    raise PlanError(f"dòng {n}: mẫu '{v}' không có — nho | vua | lon")
-                want = dict(PRESETS[v])
-            elif f == "replicas":
-                if not re.fullmatch(r"\d{1,2}", v) or not 1 <= int(v) <= 10:
-                    raise PlanError(f"dòng {n}: replicas phải 1..10 (0 là tắt dịch vụ — không làm qua đây)")
-                want["replicas"] = int(v)
-            elif f in ("cpu", "mem"):
-                want[f] = _pair(f, v)
-            else:
-                raise PlanError(f"dòng {n}: trường '{f}' không biết — preset | replicas | cpu | mem")
-        if (want["replicas"], tuple(want["cpu"]), tuple(want["mem"])) == (c["replicas"], tuple(c["cpu"]), tuple(c["mem"])):
-            continue  # untouched line — the form pre-fills every Deployment
-        if "" in tuple(want["cpu"]) + tuple(want["mem"]):
-            raise PlanError(f"dòng {n}: {dep} thiếu request/limit — điền đủ cả bốn số")
-        if cpu_milli(want["cpu"][0]) > cpu_milli(want["cpu"][1]):
-            raise PlanError(f"dòng {n}: {dep} cpu request lớn hơn limit")
-        if mem_mi(want["mem"][0]) > mem_mi(want["mem"][1]):
-            raise PlanError(f"dòng {n}: {dep} memory request lớn hơn limit")
-        fmt = lambda x: f"r={x['replicas']} cpu={x['cpu'][0] or '-'}/{x['cpu'][1] or '-'} mem={x['mem'][0] or '-'}/{x['mem'][1] or '-'}"
-        rows.append([dep, fmt(c), fmt(want)])
-        patches[dep] = {"spec": {"replicas": want["replicas"], "template": {"spec": {"containers": [{
-            "name": c["container"],
-            "resources": {"requests": {"cpu": want["cpu"][0], "memory": want["mem"][0]},
-                          "limits": {"cpu": want["cpu"][1], "memory": want["mem"][1]}}}]}}}}
-    return rows, patches
-
-
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-# New databases
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-
-SSLMODES = ("require", "verify-ca", "verify-full")   # never the plaintext mode (rule 13 forbidden #1)
+INFRA = [
+    {"id": "postgresql", "label": "PostgreSQL — CSDL của từng dịch vụ", "keys": ["DATABASE_DSN"]},
+    {"id": "minio", "label": "MinIO — lưu tệp đính kèm, ảnh, logo", "keys": [
+        "OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_PUBLIC_ENDPOINT", "OBJECT_STORAGE_BUCKET_PREFIX",
+        "OBJECT_STORAGE_REGION", "OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL",
+        "OBJECT_STORAGE_ACCESS_KEY", "OBJECT_STORAGE_SECRET_KEY"]},
+    {"id": "redis", "label": "Redis — chống gửi trùng, giới hạn tần suất", "keys": ["REDIS_DSN"]},
+    {"id": "clamav", "label": "ClamAV — quét mã độc tệp tải lên", "keys": ["MALWARE_SCANNER_ADDRESS"]},
+]
+# = the Jenkinsfile's BI_MAT_1..7 (test_ops checks both). Seven because PostgreSQL may need one
+# password per service holding DATABASE_DSN, and that is the largest need of any component.
+SECRET_SLOTS = 7
+KEEP = "giu"
+FIELD = re.compile(r"^([A-Z][A-Z0-9_]*)(?:\.([a-z]{2,30}))?$")
+PG_SSLMODES = ("require", "verify-ca", "verify-full")   # never a plaintext mode (rule 13 forbidden #1)
 IDENT = re.compile(r"^[a-z_][a-z0-9_]{0,62}$")
-DB_STEPS = ["tao-csdl", "chay-migration", "kiem-luoc-do", "dat-dsn", "khoi-dong-lai"]
+S3_REGION = re.compile(r"^[a-z0-9-]{1,32}$")
+# The URL shape deploy/cau-hinh/README.md mục 1 gives: scheme, account, optional password, a host
+# list, the database, optional query. Anything else is "not readable" — never guessed at.
+PG_URL = re.compile(r"^(postgres(?:ql)?)://([^:@/?#]+)(?::([^@/?#]*))?@([^/?#@]+)/([^/?#]+)(?:\?([^#]*))?$")
+# What go-redis ParseURL reads (core/idem, core/ratelimit): scheme, optional account and password,
+# ONE host:port, optional db number.
+REDIS_URL = re.compile(r"^(rediss?)://(?:([^:@/]*)(?::([^@/]*))?@)?([^/?#@]+?)(?:/(\d{1,2}))?/?$")
 
 
-def default_db_name(service: str, mt: str) -> str:
-    """Proposal (state it as such): `vigov_<service>_<prod|stg>`. A name distinct from today's
-    `vigov_<service>` so the new database can sit on the SAME server as the old one."""
-    return f"vigov_{service}_{'prod' if mt == 'prod' else 'stg'}"
+def infra_component(cid: str) -> dict:
+    for c in INFRA:
+        if c["id"] == cid:
+            return c
+    raise PlanError(f"hạ tầng '{cid[:40]}' không có — {', '.join(c['id'] for c in INFRA)}")
 
 
-def db_lines(services: list, mt: str) -> str:
-    return "\n".join(f"{s} {default_db_name(s, mt)} {default_db_name(s, mt)}" for s in services)
+def infra_text(cat: list) -> str:
+    """One key per line, TAB-separated: component · label · key · placement · readers. Embedded in the
+    Jenkinsfile for the form scripts (they run on the controller, with no checkout)."""
+    idx = by_key(cat)
+    lines = []
+    for c in INFRA:
+        for k in c["keys"]:
+            e = idx.get(k)
+            if e is None:
+                raise PlanError(f"{k} (hạ tầng {c['id']}) không có trong deploy/cau-hinh/README.md")
+            lines.append("\t".join([c["id"], c["label"], k, e["placement"], ",".join(e["users"]) or "-"]))
+    return "\n".join(lines)
 
 
-def parse_hosts(hosts: str, port: str) -> str:
-    """`h1,h2:5433` → `h1:5432,h2:5433` — a list from the first line (rule 11 invariant 5)."""
-    if not re.fullmatch(r"\d{1,5}", port or ""):
-        raise PlanError("cổng PostgreSQL phải là số")
-    out = []
-    for h in (hosts or "").split(","):
-        h = h.strip()
-        if not h:
-            continue
-        if ":" not in h:
-            h = f"{h}:{port}"
-        if not HOSTPORT.match(h):
-            raise PlanError(f"máy chủ '{h}' không đúng dạng host hoặc host:port")
-        out.append(h)
-    if not out:
-        raise PlanError("chưa nhập máy chủ PostgreSQL")
-    return ",".join(out)
+def secret_services(cat: list, cid: str) -> list:
+    """Services whose <service>-secrets this component writes — the job reads exactly these."""
+    idx = by_key(cat)
+    out = set()
+    for k in infra_component(cid)["keys"]:
+        if idx[k]["placement"] == "secret":
+            out.update(idx[k]["users"])
+    return sorted(out)
 
 
-def build_dsn(hostlist: str, db: str, user: str, password: str, sslmode: str) -> str:
-    if sslmode not in SSLMODES:
-        raise PlanError(f"sslmode '{sslmode}' không được phép — require | verify-ca | verify-full")
-    if not IDENT.match(db) or not IDENT.match(user):
-        raise PlanError("tên CSDL / tài khoản không hợp lệ")
-    if not re.fullmatch(r"[A-Za-z0-9]{24,128}", password):
-        raise PlanError("mật khẩu sinh ra không đúng dạng — dừng")
-    return "postgres://" + user + ":" + password + "@" + hostlist + "/" + db + "?sslmode=" + sslmode
-
-
-def plan_databases(services: list, edits_text: str, current_dbs: dict):
-    """Lines `<service> <database> <user>` → [(service, db, user)]. Refuses a name equal to the
-    database the service uses TODAY: on the same server that would be the old database (rule 7)."""
-    out, seen_db, seen_user = [], set(), set()
-    for n, raw in enumerate(edits_text.replace("\r", "").split("\n"), 1):
+def parse_fields(text: str) -> dict:
+    """`FIELD=value` / `FIELD.svc=value` lines → {(FIELD, svc or ''): value}. Blank values are kept
+    (they mean "keep"); blank lines and `#` comments are skipped."""
+    out = {}
+    for n, raw in enumerate(text.replace("\r", "").split("\n"), 1):
         s = raw.strip()
         if not s or s.startswith("#"):
             continue
-        parts = s.split()
-        if len(parts) != 3:
-            raise PlanError(f"dòng {n}: viết <dịch vụ> <tên CSDL> <tài khoản>")
-        svc, db, user = parts
-        if svc not in services:
-            raise PlanError(f"dòng {n}: dịch vụ '{svc}' không có — {', '.join(services)}")
+        if "=" not in s:
+            raise PlanError(f"dòng {n}: thiếu dấu '=' — viết Ô=giá trị")
+        k, v = (x.strip() for x in s.split("=", 1))
+        m = FIELD.match(k)
+        if not m:
+            raise PlanError(f"dòng {n}: '{k[:40]}' không phải tên ô (CHỮ_HOA hoặc CHỮ_HOA.dịch-vụ)")
+        key = (m.group(1), m.group(2) or "")
+        if key in out:
+            raise PlanError(f"dòng {n}: ô {k} xuất hiện hai lần")
+        out[key] = v
+    return out
+
+
+def slot_value(slots: dict, choice: str, what: str):
+    """`giu`/'' → None; `1`..`7` → that password parameter's value. Never returns ''."""
+    c = (choice or KEEP).strip().lower()
+    if c == KEEP:
+        return None
+    if not re.fullmatch(r"[1-9]", c) or int(c) > SECRET_SLOTS:
+        raise PlanError(f"{what}: '{c[:10]}' — chọn giu hoặc ô 1..{SECRET_SLOTS}")
+    v = slots.get(c, "")
+    if not v:
+        raise PlanError(f"{what}: chọn ô BI_MAT_{c} nhưng ô ấy đang trống")
+    if any(ord(ch) < 32 for ch in v) or len(v) > 1024:
+        raise PlanError(f"{what}: giá trị ô BI_MAT_{c} có ký tự điều khiển hoặc quá dài")
+    return v
+
+
+def split_pg(dsn: str):
+    m = PG_URL.match((dsn or "").strip())
+    if not m:
+        return None
+    params = [tuple(p.split("=", 1)) if "=" in p else (p, "") for p in (m.group(6) or "").split("&") if p]
+    return {"scheme": m.group(1), "user": m.group(2), "password": m.group(3), "hosts": m.group(4),
+            "db": m.group(5), "params": params}
+
+
+def join_pg(p: dict) -> str:
+    auth = p["user"] + (":" + p["password"] if p["password"] is not None else "")
+    q = "&".join(k + ("=" + v if v != "" else "") for k, v in p["params"])
+    return f"{p['scheme']}://{auth}@{p['hosts']}/{p['db']}" + ("?" + q if q else "")
+
+
+def pg_sslmode(p: dict) -> str:
+    return next((v for k, v in p["params"] if k == "sslmode"), "")
+
+
+def describe_pg(p) -> str:
+    """What the plan may print of a DSN: account, hosts, database, sslmode — never the password."""
+    if p is None:
+        return "(chưa có / không đọc được)"
+    return f"{p['user']}@{p['hosts']}/{p['db']} sslmode={pg_sslmode(p) or '(trống)'}"
+
+
+def split_redis(dsn: str):
+    m = REDIS_URL.match((dsn or "").strip())
+    if not m:
+        return None
+    return {"scheme": m.group(1), "user": m.group(2) or "", "password": m.group(3), "host": m.group(4),
+            "db": m.group(5) or ""}
+
+
+def join_redis(p: dict) -> str:
+    auth = ""
+    if p["user"] or p["password"] is not None:
+        auth = p["user"] + (":" + p["password"] if p["password"] is not None else "") + "@"
+    return f"{p['scheme']}://{auth}{p['host']}" + ("/" + p["db"] if p["db"] else "")
+
+
+def describe_redis(p) -> str:
+    if p is None:
+        return "(chưa có / không đọc được)"
+    return f"{p['scheme']}://{p['host']}/{p['db'] or '0'} mật khẩu: {'có' if p['password'] else 'không'}"
+
+
+def _plan_postgres(cat, f, secrets, slots, out):
+    hosts = parse_hosts(f[("HOSTS", "")], "5432") if f.get(("HOSTS", "")) else None
+    sslmode = f.get(("SSLMODE", ""), "")
+    if sslmode and sslmode not in PG_SSLMODES:
+        raise PlanError(f"sslmode '{sslmode[:20]}' không được phép — {' | '.join(PG_SSLMODES)} (luật 13)")
+    for svc in by_key(cat)["DATABASE_DSN"]["users"]:
+        raw = secrets.get(svc, {}).get("DATABASE_DSN")
+        cur = split_pg(raw) if raw else None
+        db, user = f.get(("DB", svc), ""), f.get(("USER", svc), "")
         for x in (db, user):
-            if not IDENT.match(x):
-                raise PlanError(f"dòng {n}: '{x}' — chỉ chữ thường, số, _ (tối đa 63)")
-        if db in seen_db or user in seen_user:
-            raise PlanError(f"dòng {n}: tên CSDL/tài khoản trùng một dòng khác")
-        if current_dbs.get(svc) == db:
-            raise PlanError(f"dòng {n}: '{db}' là CSDL {svc} đang dùng — CSDL cũ không bao giờ bị đụng")
-        seen_db.add(db)
-        seen_user.add(user)
-        out.append((svc, db, user))
-    if not out:
-        raise PlanError("bảng dịch vụ trống")
-    return out
-
-
-def create_sql(rows: list) -> str:
-    """psql script. Names are validated identifiers; passwords arrive as env vars PW_<SERVICE>
-    through `\\getenv` (psql 15+) and are quoted by format(%L) — never in the script text."""
-    dbs = ", ".join(f"'{d}'" for _, d, _ in rows)
-    users = ", ".join(f"'{u}'" for _, _, u in rows)
-    out = ["\\set ON_ERROR_STOP on", "\\set VERBOSITY terse",
-           "DO $$ BEGIN",
-           f"  IF EXISTS (SELECT 1 FROM pg_database WHERE datname IN ({dbs})) THEN",
-           "    RAISE EXCEPTION 'DUNG: mot CSDL trong danh sach da ton tai - khong tao gi, khong dung CSDL cu'; END IF;",
-           f"  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname IN ({users})) THEN",
-           "    RAISE EXCEPTION 'DUNG: mot tai khoan trong danh sach da ton tai - khong tao gi'; END IF;",
-           "END $$;"]
-    for svc, db, user in rows:
-        var = "pw_" + svc
-        out += [f"\\getenv {var} PW_{svc.upper()}",
-                f"SELECT format('CREATE ROLE %I LOGIN PASSWORD %L', '{user}', :'{var}') \\gexec",
-                # PostgreSQL 16: a CREATEROLE admin gets ADMIN on the new role but not SET, and
-                # CREATE DATABASE … OWNER needs SET. Harmless when the admin is a superuser.
-                f"SELECT format('GRANT %I TO %I', '{user}', current_user) \\gexec",
-                f"CREATE DATABASE {db} OWNER {user};",
-                f"REVOKE CONNECT ON DATABASE {db} FROM PUBLIC;",
-                f"GRANT CONNECT ON DATABASE {db} TO {user};",
-                f"\\echo tao {svc}: CSDL {db}, tai khoan {user}"]
-    return "\n".join(out) + "\n"
-
-
-def db_name_of(dsn: str) -> str:
-    """Only the database name of a DSN — what the plan may print. '' when unsure."""
-    s = dsn.strip().split("?", 1)[0]
-    m = re.search(r"dbname=([A-Za-z0-9_]+)", dsn)
-    name = m.group(1) if m else s.rsplit("/", 1)[-1] if "://" in s else ""
-    return name if re.fullmatch(r"[A-Za-z0-9_]{1,63}", name) else ""
-
-
-CONSEQUENCES = """HỆ QUẢ CỦA CSDL MỚI TRÊN PROD (ADR 0089 §Hệ quả) — đọc trước khi chạy thật:
-  1. CSDL mới RỖNG: không có xã nào → mọi tên miền xã trên prod trả 404 cho tới khi tạo lại xã.
-  2. Không có tài khoản vận hành → platform-admin không đăng nhập được cho tới khi tạo lại
-     (việc tao-tai-khoan-van-hanh của job này, SAU khi identity đã chạy trên CSDL mới).
-  3. Dòng mini_app và App Secret của xã ở lại CSDL cũ — app riêng của xã ngừng đăng nhập công dân.
-  4. Mọi hồ sơ đã ghi trên prod ở lại CSDL cũ (bản duy nhất — luật 7) và KHÔNG hiện trên prod.
-  5. Staging đang dùng chung CSDL cũ và Ở LẠI đó — job không đổi staging.
-  6. vihat-miniapp (CSDL trong vihat-miniapp-bi-mat) không thuộc việc này — giữ nguyên.
-  CSDL cũ không bị ghi, không bị xoá. Quay lui: việc khoi-phuc-secret với bản sao lưu DSN."""
-
-
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-# Migrations: image vs database
-# ─────────────────────────────────────────────────────────────────────────────────────────────
-
-def image_migrations(repo: str, service: str, commit: str) -> list:
-    """[(file, sha256)] of service-<svc>/migrations/*.sql at the image's commit — the same bytes
-    the binary embeds, so the same checksum core/migrate records."""
-    if not re.fullmatch(r"[0-9a-f]{7,40}", commit):
-        raise PlanError(f"thẻ ảnh '{commit}' không phải commit")
-    base = f"service-{service}/migrations"
-    names = subprocess.run(["git", "-C", repo, "ls-tree", "--name-only", commit, base + "/"],
-                           capture_output=True, text=True, check=True).stdout.split()
-    out = []
-    for p in sorted(n for n in names if n.endswith(".sql")):
-        blob = subprocess.run(["git", "-C", repo, "show", f"{commit}:{p}"], capture_output=True, check=True).stdout
-        out.append((os.path.basename(p), hashlib.sha256(blob).hexdigest()))
-    return out
-
-
-def migration_diff(image: list, applied: dict):
-    """→ (pending, edited, ahead). applied: {file: checksum}."""
-    names = {f for f, _ in image}
-    pending = [f for f, _ in image if f not in applied]
-    edited = [f for f, s in image if f in applied and applied[f] != s]
-    ahead = sorted(f for f in applied if f not in names)
-    return pending, edited, ahead
-
-
-def migration_rows(svcs: list, image: dict, applied: dict):
-    """→ (table rows, any service core/migrate would REFUSE, every service fully matches).
-    A service with no readable side is never a match: "could not read" is not "in sync"."""
-    rows, blocking, all_match = [], False, True
-    for s in svcs:
-        img, app = image.get(s), applied.get(s)
-        if not img or app is None:
-            all_match = False
-            rows.append([s, img[-1][0] if img else "(không đọc được)",
-                         max(app) if app else "(không đọc được / trống)", "?", ""])
+            if x and not IDENT.match(x):
+                raise PlanError(f"{svc}: '{x[:40]}' — tên CSDL/tài khoản chỉ chữ thường, số, _ (tối đa 63)")
+        pw = slot_value(slots, f.get(("PASSWORD", svc), KEEP), f"{svc}: mật khẩu")
+        if not (hosts or sslmode or db or user or pw):
             continue
-        pending, edited, ahead = migration_diff(img, app)
-        note = []
-        if pending:
-            note.append("CHƯA ÁP: " + " ".join(pending))
-        if edited:
-            note.append("TỆP ĐÃ ÁP BỊ SỬA: " + " ".join(edited))
-        if ahead:
-            note.append("CSDL MỚI HƠN ẢNH: " + " ".join(ahead))
-        blocking = blocking or bool(edited or ahead)
-        all_match = all_match and not note
-        rows.append([s, img[-1][0], max(app) if app else "(trống)", "khớp" if not note else "LỆCH", "; ".join(note)])
-    return rows, blocking, all_match
+        if cur is None:
+            if not (hosts and db and user and pw):
+                raise PlanError(f"{svc}: DATABASE_DSN hiện tại {'không đúng dạng URL postgres' if raw else 'chưa có'} — "
+                                f"phải điền đủ máy chủ, CSDL, tài khoản và ô mật khẩu cho dịch vụ này")
+            new = {"scheme": "postgres", "user": user, "password": None, "hosts": hosts, "db": db, "params": []}
+        else:
+            new = dict(cur, params=list(cur["params"]))
+            if user and user != cur["user"] and pw is None:
+                raise PlanError(f"{svc}: đổi tài khoản {cur['user']} → {user} thì phải kèm ô mật khẩu")
+        if hosts:
+            new["hosts"] = hosts
+        if db:
+            new["db"] = db
+        if user:
+            new["user"] = user
+        if pw is not None:
+            new["password"] = quote(pw, safe="")
+        if sslmode:
+            new["params"] = [(k, v) for k, v in new["params"] if k != "sslmode"] + [("sslmode", sslmode)]
+        if pg_sslmode(new) not in PG_SSLMODES:
+            raise PlanError(f"{svc}: sslmode đang là '{pg_sslmode(new) or 'trống'}' — đường tới CSDL không chắc được "
+                            f"mã hoá (luật 13); chọn sslmode require/verify-*")
+        dsn = join_pg(new)
+        if dsn == raw:
+            continue
+        out["secrets"].setdefault(svc, {})["DATABASE_DSN"] = dsn
+        out["secret_rows"].append([svc, "DATABASE_DSN", describe_pg(cur), describe_pg(new),
+                                   "đổi" if pw is not None else "giữ"])
+        out["probe_dsn"][svc] = dsn
 
 
-def ordered_services(services: list) -> list:
-    """platform → identity → the rest: the order deploy/README.md mục 2 gives for bringing services up
-    (every service resolves its commune through platform, and its staff through identity)."""
-    head = [s for s in ("platform", "identity") if s in services]
-    return head + [s for s in sorted(services) if s not in head]
+def _plan_redis(cat, f, secrets, slots, out):
+    host = f.get(("HOST", ""), "")
+    if host:
+        if "," in host:
+            raise PlanError("Redis: đúng MỘT host:port — core/idem và core/ratelimit đọc REDIS_DSN bằng go-redis "
+                            "ParseURL, danh sách máy chủ làm dịch vụ từ chối khởi động")
+        check_config_value("REDIS_ADDRESS", host)
+    db = f.get(("DB", ""), "")
+    if db and not re.fullmatch(r"\d{1,2}", db):
+        raise PlanError(f"Redis: số db '{db[:10]}' phải là số 0..99")
+    scheme = f.get(("SCHEME", ""), "")
+    if scheme and scheme not in ("redis", "rediss"):
+        raise PlanError(f"Redis: giao thức '{scheme[:10]}' — redis hoặc rediss")
+    pw = slot_value(slots, f.get(("PASSWORD", ""), KEEP), "Redis: mật khẩu")
+    if not (host or db or scheme or pw):
+        return
+    for svc in by_key(cat)["REDIS_DSN"]["users"]:
+        raw = secrets.get(svc, {}).get("REDIS_DSN")
+        cur = split_redis(raw) if raw else None
+        if cur is None:
+            if not (host and scheme and pw):
+                raise PlanError(f"{svc}: REDIS_DSN hiện tại {'không đúng dạng URL redis' if raw else 'chưa có'} — "
+                                f"phải điền máy chủ, giao thức và ô mật khẩu")
+            new = {"scheme": scheme, "user": "", "password": None, "host": host, "db": db}
+        else:
+            new = dict(cur)
+        if host:
+            new["host"] = host
+        if db:
+            new["db"] = db
+        if scheme:
+            new["scheme"] = scheme
+        if pw is not None:
+            new["password"] = quote(pw, safe="")
+        dsn = join_redis(new)
+        if dsn == raw:
+            continue
+        out["secrets"].setdefault(svc, {})["REDIS_DSN"] = dsn
+        out["secret_rows"].append([svc, "REDIS_DSN", describe_redis(cur), describe_redis(new),
+                                   "đổi" if pw is not None else "giữ"])
+        out["probe_tcp"].add(("redis", new["host"]))
 
+
+def _plan_minio(cat, f, cm, secrets, slots, out):
+    idx = by_key(cat)
+    want = {}
+    for k in ("OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_PUBLIC_ENDPOINT"):
+        if f.get((k, "")):
+            want[k] = https_origin(k, f[(k, "")])
+    prefix = f.get(("OBJECT_STORAGE_BUCKET_PREFIX", ""), "")
+    if prefix:
+        if not BUCKET_PREFIX.match(prefix):
+            raise PlanError(f"OBJECT_STORAGE_BUCKET_PREFIX '{prefix[:60]}' không làm thành tên bucket hợp lệ "
+                            f"(chữ thường, số, . -)")
+        want["OBJECT_STORAGE_BUCKET_PREFIX"] = prefix
+    region = f.get(("OBJECT_STORAGE_REGION", ""), "")
+    if region:
+        if not S3_REGION.match(region):
+            raise PlanError(f"OBJECT_STORAGE_REGION '{region[:40]}' — chữ thường, số, -")
+        want["OBJECT_STORAGE_REGION"] = region
+    media = f.get(("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL", ""), "")
+    if media:
+        check_config_value("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL", media)
+        want["OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL"] = media.rstrip("/")
+    else:
+        # Left empty: rebuilt only when what it is made of moved (deploy/cau-hinh/README.md mục 6:
+        # <PUBLIC_ENDPOINT>/<prefix>-public). Otherwise kept — never silently re-derived.
+        pub_changed = "OBJECT_STORAGE_PUBLIC_ENDPOINT" in want and want["OBJECT_STORAGE_PUBLIC_ENDPOINT"] != (
+            cm.get("OBJECT_STORAGE_PUBLIC_ENDPOINT") or "").rstrip("/")
+        pre_changed = "OBJECT_STORAGE_BUCKET_PREFIX" in want and want["OBJECT_STORAGE_BUCKET_PREFIX"] != cm.get(
+            "OBJECT_STORAGE_BUCKET_PREFIX")
+        if pub_changed or pre_changed:
+            pub = want.get("OBJECT_STORAGE_PUBLIC_ENDPOINT") or cm.get("OBJECT_STORAGE_PUBLIC_ENDPOINT") or ""
+            pre = want.get("OBJECT_STORAGE_BUCKET_PREFIX") or cm.get("OBJECT_STORAGE_BUCKET_PREFIX") or ""
+            if not (pub and pre):
+                raise PlanError("OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL: không tự dựng được — thiếu public endpoint "
+                                "hoặc tiền tố bucket; điền thẳng giá trị")
+            want["OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL"] = (
+                https_origin("OBJECT_STORAGE_PUBLIC_ENDPOINT", pub) + "/" + pre + "-public")
+    for k, v in want.items():
+        old = cm.get(k)
+        if old is not None and old.rstrip("/") == v:
+            continue
+        out["configmap"][k] = v
+        out["config_rows"].append([k, "(chưa có)" if old is None else old, v, ", ".join(idx[k]["users"])])
+
+    for svc in idx["OBJECT_STORAGE_ACCESS_KEY"]["users"]:
+        ak = slot_value(slots, f.get(("ACCESS_KEY", svc), KEEP), f"{svc}: access key")
+        sk = slot_value(slots, f.get(("SECRET_KEY", svc), KEEP), f"{svc}: secret key")
+        if ak is None and sk is None:
+            continue
+        if (ak is None) != (sk is None):
+            raise PlanError(f"{svc}: đổi cặp khoá MinIO thì đổi CẢ access key lẫn secret key — một nửa cặp cũ "
+                            f"với một nửa cặp mới không đăng nhập được")
+        have = secrets.get(svc, {})
+        for key, v in (("OBJECT_STORAGE_ACCESS_KEY", ak), ("OBJECT_STORAGE_SECRET_KEY", sk)):
+            if have.get(key) == v:
+                continue
+            out["secrets"].setdefault(svc, {})[key] = v
+            out["secret_rows"].append([svc, key, "có" if key in have else "chưa có", "giá trị mới", "đổi"])
+
+    endpoint = out["configmap"].get("OBJECT_STORAGE_ENDPOINT")
+    target = endpoint or cm.get("OBJECT_STORAGE_ENDPOINT") or ""
+    if (out["configmap"] or out["secrets"]) and target:
+        hp = https_origin("OBJECT_STORAGE_ENDPOINT", target)[len("https://"):]
+        out["probe_tcp"].add(("minio", hp if ":" in hp else hp + ":443"))
+    old_ep = (cm.get("OBJECT_STORAGE_ENDPOINT") or "").rstrip("/")
+    if endpoint and old_ep and (cm.get("BASEMAP_URL") or "").startswith(old_ep + "/"):
+        out["warnings"].append("BASEMAP_URL vẫn trỏ MinIO CŨ (" + old_ep + "). Job không đổi nó: tệp nền bản đồ phải có "
+                               "trên MinIO mới trước — job vigov-deploy, việc nen-ban-do, rồi đặt BASEMAP_URL "
+                               "(kb/40-runbooks/basemap-pmtiles.md).")
+
+
+def _plan_clamav(cat, f, cm, out):
+    v = f.get(("MALWARE_SCANNER_ADDRESS", ""), "")
+    if not v:
+        return
+    check_config_value("MALWARE_SCANNER_ADDRESS", v)
+    v = ",".join(x.strip() for x in v.split(","))
+    old = cm.get("MALWARE_SCANNER_ADDRESS")
+    if old == v:
+        return
+    out["configmap"]["MALWARE_SCANNER_ADDRESS"] = v
+    out["config_rows"].append(["MALWARE_SCANNER_ADDRESS", "(chưa có)" if old is None else old, v,
+                               ", ".join(by_key(cat)["MALWARE_SCANNER_ADDRESS"]["users"])])
+    for hp in v.split(","):
+        out["probe_tcp"].add(("clamav", hp))
+
+
+def plan_infra(cat: list, cid: str, edits_text: str, cm: dict, secrets: dict, slots: dict) -> dict:
+    """→ the whole change, or PlanError. `secrets` = {service: {key: plain value}} as on the cluster;
+    `slots` = {"1": value, …} of the password parameters that are filled. Pure: no I/O."""
+    infra_component(cid)
+    f = parse_fields(edits_text)
+    out = {"configmap": {}, "secrets": {}, "config_rows": [], "secret_rows": [], "warnings": [],
+           "probe_tcp": set(), "probe_dsn": {}}
+    if cid == "postgresql":
+        _plan_postgres(cat, f, secrets, slots, out)
+    elif cid == "redis":
+        _plan_redis(cat, f, secrets, slots, out)
+    elif cid == "minio":
+        _plan_minio(cat, f, cm, secrets, slots, out)
+    elif cid == "clamav":
+        _plan_clamav(cat, f, cm, out)
+    idx = by_key(cat)
+    services = set(out["secrets"])
+    for k in out["configmap"]:
+        services.update(idx[k]["users"])
+    out["restart"] = [deployment_of(s) for s in ordered_services(sorted(s for s in services if s != WEB_ADMIN))]
+    if WEB_ADMIN in services:
+        out["restart"].append(deployment_of(WEB_ADMIN))
+    return out
+
+
+def probe_script(plan: dict) -> str:
+    """Run inside the cluster BEFORE anything is written: TCP to every new address, and a real login
+    with every new DSN (env DSN_<service>, from a temporary Secret). Prints hosts, never a DSN."""
+    out = ["bad=0",
+           "tcp() { h=${2%:*}; p=${2##*:}; if nc -z -w 5 \"$h\" \"$p\" 2>/dev/null; then echo \"   $1 $2: mở\"; "
+           "else echo \"   $1 $2: KHÔNG tới được\"; bad=1; fi; }",
+           # psql's own error names host, port and account; the sed masks URL credentials regardless.
+           "pg() { d=$(printenv \"DSN_$1\" || true); if r=$(psql \"$d\" -XAtqc 'SELECT 1' 2>&1); then "
+           "echo \"   postgresql $1: đăng nhập được\"; else echo \"   postgresql $1: KHÔNG đăng nhập được — "
+           "$(printf '%s' \"$r\" | head -1 | sed -e 's#://[^ ]*@#://***@#g')\"; bad=1; fi; }"]
+    for kind, hp in sorted(plan["probe_tcp"]):
+        out.append(f"tcp {kind} {hp}")
+    for svc in ordered_services(sorted(plan["probe_dsn"])):
+        out.append(f"pg {svc}")
+    out.append("exit $bad")
+    return "\n".join(out) + "\n"
 
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 # Self-hosted basemap (task nen-ban-do) — procedure: kb/40-runbooks/basemap-pmtiles.md, why: ADR 0072.
@@ -838,7 +742,7 @@ def plan_basemap(cm: dict, date: str) -> dict:
     d = check_basemap_date(date)
     for k in ("OBJECT_STORAGE_BUCKET_PREFIX", "OBJECT_STORAGE_PUBLIC_ENDPOINT", "OBJECT_STORAGE_ENDPOINT"):
         if not (cm.get(k) or "").strip():
-            raise PlanError(f"common-config thiếu {k} — đặt bằng việc sua-configmap trước")
+            raise PlanError(f"common-config thiếu {k} — đặt bằng job vigov-van-hanh, hạ tầng minio, trước")
     prefix = cm["OBJECT_STORAGE_BUCKET_PREFIX"].strip()
     if not BUCKET_PREFIX.match(prefix):
         raise PlanError(f"OBJECT_STORAGE_BUCKET_PREFIX '{prefix[:60]}' không làm thành tên bucket hợp lệ")
@@ -857,7 +761,7 @@ def pick_key_source(present: dict) -> str:
         if set(STORAGE_KEY_NAMES) <= present.get(s, set()):
             return s
     raise PlanError("không Secret nào trong " + ", ".join(BASEMAP_KEY_SOURCES) + " có đủ "
-                    + " + ".join(STORAGE_KEY_NAMES) + " — đặt cặp khoá MinIO của comms bằng việc sua-secret rồi bấm lại")
+                    + " + ".join(STORAGE_KEY_NAMES) + " — đặt cặp khoá MinIO của comms bằng job vigov-van-hanh, hạ tầng minio, rồi bấm lại")
 
 
 def basemap_tools(tools: list = None) -> list:
@@ -898,6 +802,24 @@ def _json(path: str):
         return json.load(f)
 
 
+def _b64(s: str) -> str:
+    return base64.b64encode(s.encode("utf-8")).decode("ascii")
+
+
+def _labels(extra: dict) -> dict:
+    return dict({"app.kubernetes.io/managed-by": "vigov-van-hanh"}, **extra)
+
+
+def _notes(items: list) -> dict:
+    """Backup annotations: who · ticket · build. Free text, but bounded and single-line."""
+    out = {}
+    for kv in items:
+        k, _, v = kv.partition("=")
+        if re.fullmatch(r"vigov\.vn/[a-z-]{1,40}", k):
+            out[k] = "".join(ch if ord(ch) >= 32 else " " for ch in v)[:200]
+    return out
+
+
 def main(argv=None) -> int:
     for s in (sys.stdout, sys.stderr):
         try:
@@ -911,90 +833,23 @@ def main(argv=None) -> int:
     c.add_argument("--write", action="store_true")
     c.add_argument("--check", action="store_true")
 
-    c = sub.add_parser("config-plan")
-    c.add_argument("--current", required=True)
+    c = sub.add_parser("infra-services")      # services whose <svc>-secrets the component writes
+    c.add_argument("--component", required=True)
+
+    c = sub.add_parser("infra-plan")
+    c.add_argument("--component", required=True)
     c.add_argument("--edits", required=True)
-    c.add_argument("--env", required=True)
-    c.add_argument("--patch-out", required=True)
-    c.add_argument("--restart-out", required=True)
-
-    c = sub.add_parser("config-audit")
-    c.add_argument("--current", required=True)
-
-    c = sub.add_parser("secret-plan")
-    c.add_argument("--service", required=True)
-    c.add_argument("--present", required=True)
-    c.add_argument("--edits", required=True)
-    c.add_argument("--slots", default="")
-    c.add_argument("--actions-out", required=True)
-
-    c = sub.add_parser("secret-apply")
-    c.add_argument("--current", required=True)
-    c.add_argument("--actions", required=True)
-    c.add_argument("--slot-dir", required=True)
-    c.add_argument("--patch-out", required=True)
-    c.add_argument("--backup-out", required=True)
-    c.add_argument("--backup-name", required=True)
-    c.add_argument("--labels", default="")
-    c.add_argument("--note", action="append", default=[])
-
-    c = sub.add_parser("secret-copy")   # backup Secret → patch for <svc>-secrets (+ backup of current)
-    c.add_argument("--from", dest="src", required=True)
-    c.add_argument("--current", required=True)
-    c.add_argument("--patch-out", required=True)
-    c.add_argument("--backup-out", required=True)
-    c.add_argument("--backup-name", required=True)
-    c.add_argument("--labels", default="")
-    c.add_argument("--note", action="append", default=[])
-
-    c = sub.add_parser("resources-lines")
-    c.add_argument("--current", required=True)
-
-    c = sub.add_parser("resources-plan")
-    c.add_argument("--current", required=True)
-    c.add_argument("--edits", required=True)
+    c.add_argument("--configmap", required=True)     # kubectl get configmap common-config -o json
+    c.add_argument("--secrets-dir", required=True)   # <svc>.json = kubectl get secret <svc>-secrets -o json
+    c.add_argument("--slot-dir", required=True)      # slotN = value of password parameter BI_MAT_N
     c.add_argument("--out-dir", required=True)
+    c.add_argument("--stamp", required=True)
+    c.add_argument("--probe-secret", required=True)  # name of the temporary Secret holding new DSNs
+    c.add_argument("--note", action="append", default=[])
 
-    c = sub.add_parser("db-plan")
-    c.add_argument("--mt", required=True)
-    c.add_argument("--edits", required=True)
-    c.add_argument("--current-dbs", required=True)
-    c.add_argument("--hosts", required=True)
-    c.add_argument("--port", required=True)
-    c.add_argument("--sslmode", required=True)
-    c.add_argument("--rows-out", required=True)
-    c.add_argument("--sql-out", required=True)
-
-    c = sub.add_parser("dsn")
-    c.add_argument("--hosts", required=True)
-    c.add_argument("--port", required=True)
-    c.add_argument("--db", required=True)
-    c.add_argument("--user", required=True)
-    c.add_argument("--sslmode", required=True)
-    c.add_argument("--password-file", required=True)
-    c.add_argument("--out", required=True)
-
-    c = sub.add_parser("db-name")      # stdin: one DSN → stdout: its database name only
-    c = sub.add_parser("image-migrations")
-    c.add_argument("--service", required=True)
-    c.add_argument("--commit", required=True)
-
-    c = sub.add_parser("migration-report")
-    c.add_argument("--image", required=True)     # TSV svc file sha
-    c.add_argument("--applied", required=True)   # TSV svc file checksum
-    c.add_argument("--strict", action="store_true")   # rc 1 unless every service matches its image
-
-    sub.add_parser("services")
-
-    sub.add_parser("consequences")
-
-    c = sub.add_parser("secret-verify")
+    c = sub.add_parser("verify-data")   # read-back: every key of the patch has exactly that value
     c.add_argument("--current", required=True)
     c.add_argument("--patch", required=True)
-
-    c = sub.add_parser("pg-env")
-    c.add_argument("--hosts", required=True)
-    c.add_argument("--port", required=True)
 
     c = sub.add_parser("basemap-plan")
     c.add_argument("--current", required=True)
@@ -1016,13 +871,9 @@ def main(argv=None) -> int:
     c = sub.add_parser("pod")
     c.add_argument("--name", required=True)
     c.add_argument("--out", required=True)
-    c.add_argument("--script")
-    c.add_argument("--from-deploy")
-    c.add_argument("--command-json")
+    c.add_argument("--script", required=True)
     c.add_argument("--secret-env", action="append", default=[])
-    c.add_argument("--env", action="append", default=[])
     c.add_argument("--envfrom-secret", action="append", default=[])
-    c.add_argument("--envfrom-configmap", action="append", default=[])
     c.add_argument("--pull-secret", action="append", default=[])
 
     a = ap.parse_args(argv)
@@ -1033,22 +884,15 @@ def main(argv=None) -> int:
         return 2
 
 
-def _labels(text: str) -> dict:
-    out = {"app.kubernetes.io/managed-by": "vigov-van-hanh"}
-    for kv in filter(None, text.split(",")):
-        k, _, v = kv.partition("=")
-        if re.fullmatch(r"[A-Za-z0-9._/-]{1,63}", k) and re.fullmatch(r"[A-Za-z0-9._-]{0,63}", v):
-            out[k] = v
-    return out
-
-
-def _notes(items: list) -> dict:
-    """Backup annotations: who · ticket · build. Free text, but bounded and single-line."""
+def _read_secrets(d: str, services: list) -> dict:
+    """{svc: {key: plain value}} from `kubectl get secret -o json` files. Values stay in memory."""
     out = {}
-    for kv in items:
-        k, _, v = kv.partition("=")
-        if re.fullmatch(r"vigov\.vn/[a-z-]{1,40}", k):
-            out[k] = "".join(ch if ord(ch) >= 32 else " " for ch in v)[:200]
+    for svc in services:
+        p = os.path.join(d, svc + ".json")
+        if not os.path.exists(p):
+            raise PlanError(f"không đọc được secret/{svc}-secrets")
+        data = _json(p).get("data", {}) or {}
+        out[svc] = {k: base64.b64decode(v).decode("utf-8") for k, v in data.items()}
     return out
 
 
@@ -1058,75 +902,75 @@ def _run(a) -> int:
         text = catalog_text(cat)
         if a.write or a.check:
             jf = _read(JENKINSFILE)
-            new = render_jenkinsfile(jf, generated_region(cat, sorted(service_groups())))
+            new = render_jenkinsfile(jf, generated_region(cat))
             if a.check:
                 if new != jf:
-                    print("[FAIL] deploy/van-hanh/Jenkinsfile: danh mục khoá (opsCatalog) cũ so với "
-                          "core/config + deploy/cau-hinh/README.md + .env.example.\n"
+                    print("[FAIL] deploy/van-hanh/Jenkinsfile: vùng SINH RA (opsCatalog/opsInfra) cũ so với "
+                          "core/config + deploy/cau-hinh/README.md + .env.example + INFRA của ops.py.\n"
                           "       chạy: python deploy/van-hanh/ops.py catalog --write")
                     return 1
-                print(f"[PASS] danh mục khoá của job vận hành khớp mã — {text.count(chr(10)) + 1} khoá")
+                print(f"[PASS] danh mục khoá của job vận hành khớp mã — {text.count(chr(10)) + 1} khoá, "
+                      f"{len(INFRA)} hạ tầng")
                 return 0
             with io.open(JENKINSFILE, "w", encoding="utf-8", newline="\n") as f:
                 f.write(new)
-            print("đã ghi opsCatalog() vào deploy/van-hanh/Jenkinsfile")
+            print("đã ghi vùng SINH RA vào deploy/van-hanh/Jenkinsfile")
             return 0
         print(text)
         return 0
 
-    if a.cmd == "consequences":
-        print(CONSEQUENCES)
+    if a.cmd == "infra-services":
+        print(" ".join(secret_services(build_catalog(), a.component)))
         return 0
 
-    if a.cmd == "config-plan":
+    if a.cmd == "infra-plan":
         cat = build_catalog()
-        current = _json(a.current).get("data", {}) or {}
-        rows, patch, restart = plan_config(cat, current, _read(a.edits), a.env)
-        if not rows:
-            print("Không có khoá nào đổi — không có gì để ghi.")
+        comp = infra_component(a.component)
+        cm = _json(a.configmap).get("data", {}) or {}
+        secrets = _read_secrets(a.secrets_dir, secret_services(cat, a.component))
+        slots = {}
+        for n in range(1, SECRET_SLOTS + 1):
+            p = os.path.join(a.slot_dir, f"slot{n}")
+            if os.path.exists(p):
+                with io.open(p, encoding="utf-8") as f:
+                    slots[str(n)] = f.read().strip()
+        plan = plan_infra(cat, a.component, _read(a.edits), cm, secrets, slots)
+        print(f"Hạ tầng: {comp['label']}")
+        if not (plan["configmap"] or plan["secrets"]):
+            print("Không có giá trị nào khác cụm đang chạy — không có gì để ghi. (Ô để trống = giữ nguyên.)")
             return 3
-        print(table(["KHOÁ", "CŨ", "MỚI", "DỊCH VỤ ĐỌC"], rows))
-        print("\nKhởi động lại (chỉ dịch vụ đọc khoá vừa đổi): " + (", ".join(restart) or "(không)"))
-        _write_private(a.patch_out, json.dumps(patch, ensure_ascii=False))
-        _write_private(a.restart_out, "\n".join(restart) + ("\n" if restart else ""))
+        if plan["config_rows"]:
+            print("\n── configmap/common-config")
+            print(table(["KHOÁ", "CŨ", "MỚI", "DỊCH VỤ ĐỌC"], plan["config_rows"]))
+        if plan["secret_rows"]:
+            print("\n── <dịch vụ>-secrets (không in giá trị bí mật)")
+            print(table(["DỊCH VỤ", "KHOÁ", "CŨ", "MỚI", "MẬT KHẨU/KHOÁ"], plan["secret_rows"]))
+            print("Giá trị cũ của các khoá trên được sao lưu vào <dịch vụ>-secrets-backup-" + a.stamp
+                  + " (Secret riêng, không gắn Deployment nào) trước khi ghi.")
+        for w in plan["warnings"]:
+            print("\n⚠ " + w)
+        print("\nKhởi động lại theo thứ tự: " + (", ".join(plan["restart"]) or "(không)"))
+        os.makedirs(a.out_dir, exist_ok=True)
+        notes = _notes(a.note)
+        for svc, data in plan["secrets"].items():
+            _write_private(os.path.join(a.out_dir, f"secret-{svc}.json"),
+                           json.dumps({"data": {k: _b64(v) for k, v in data.items()}}))
+            old = {k: _b64(secrets[svc][k]) for k in data if k in secrets.get(svc, {})}
+            if old:
+                _write_private(os.path.join(a.out_dir, f"backup-{svc}.json"), json.dumps(secret_manifest(
+                    f"{svc}-secrets-backup-{a.stamp}", old, _labels({"vigov.vn/backup-of": f"{svc}-secrets"}), notes)))
+        if plan["configmap"]:
+            _write_private(os.path.join(a.out_dir, "configmap.json"), json.dumps({"data": plan["configmap"]},
+                                                                                ensure_ascii=False))
+        _write_private(os.path.join(a.out_dir, "restart.txt"), "\n".join(plan["restart"]) + "\n")
+        _write_private(os.path.join(a.out_dir, "probe.sh"), probe_script(plan))
+        if plan["probe_dsn"]:
+            _write_private(os.path.join(a.out_dir, "probe-secret.json"), json.dumps(secret_manifest(
+                a.probe_secret, {f"DSN_{s}": _b64(d) for s, d in plan["probe_dsn"].items()},
+                _labels({"app.kubernetes.io/name": "vigov-ops-probe"}))))
         return 0
 
-    if a.cmd == "config-audit":
-        missing, extra = audit_config(build_catalog(), _json(a.current).get("data", {}) or {})
-        print("── khoá common-config có trong sổ (.env.example + README mục 2) nhưng THIẾU trên cụm")
-        print(table(["KHOÁ", "BẮT BUỘC", "DỊCH VỤ ĐỌC"], missing) if missing else "   (không thiếu khoá nào)")
-        print("── khoá trên cụm KHÔNG có trong sổ (không dịch vụ nào đọc qua core/config)")
-        print("   " + (", ".join(extra) if extra else "(không có)"))
-        return 0
-
-    if a.cmd == "secret-plan":
-        cat = build_catalog()
-        present = {ln.strip() for ln in _read(a.present).splitlines() if ln.strip()}
-        rows, actions = plan_secret(cat, a.service, present, _read(a.edits), set(filter(None, a.slots.split(","))))
-        if not rows:
-            print("Không có khoá nào đổi — không có gì để ghi.")
-            return 3
-        print(table(["KHOÁ", "HIỆN", "SẼ ĐẶT"], rows))
-        _write_private(a.actions_out, "\n".join(f"{k}\t{m}\t{n}" for k, m, n in actions) + "\n")
-        return 0
-
-    if a.cmd == "secret-apply":
-        cur = _json(a.current).get("data", {}) or {}
-        actions = []
-        for ln in _read(a.actions).splitlines():
-            if ln.strip():
-                k, m, n = ln.split("\t")
-                actions.append((k, m, int(n)))
-        patch, backup = apply_secret(cur, actions, a.slot_dir)
-        _write_private(a.patch_out, json.dumps({"data": patch}))
-        if backup:
-            _write_private(a.backup_out, json.dumps(secret_manifest(a.backup_name, backup, _labels(a.labels), _notes(a.note))))
-            print(f"sao lưu {len(backup)} khoá cũ vào {a.backup_name}: {', '.join(sorted(backup))}")
-        else:
-            print("không có giá trị cũ nào để sao lưu (mọi khoá đều mới)")
-        return 0
-
-    if a.cmd == "secret-verify":
+    if a.cmd == "verify-data":
         cur = _json(a.current).get("data", {}) or {}
         want = _json(a.patch).get("data", {}) or {}
         off = sorted(k for k, v in want.items() if cur.get(k) != v)
@@ -1136,102 +980,8 @@ def _run(a) -> int:
         print(f"✓ đọc lại từ cụm khớp {len(want)} khoá: {', '.join(sorted(want))} (so trên tệp, không in giá trị)")
         return 0
 
-    if a.cmd == "pg-env":
-        hosts = parse_hosts(a.hosts, a.port).split(",")
-        print("PGHOST=" + ",".join(h.rsplit(":", 1)[0] for h in hosts))
-        print("PGPORT=" + ",".join(h.rsplit(":", 1)[1] for h in hosts))
-        return 0
-
     if a.cmd == "pod":
         _write_private(a.out, json.dumps(build_pod(a)))
-        return 0
-
-    if a.cmd == "secret-copy":
-        src = _json(a.src).get("data", {}) or {}
-        cur = _json(a.current).get("data", {}) or {}
-        if not src:
-            raise PlanError("bản sao lưu không có khoá nào")
-        backup = {k: cur[k] for k in src if k in cur}
-        _write_private(a.patch_out, json.dumps({"data": src}))
-        if backup:
-            _write_private(a.backup_out, json.dumps(secret_manifest(a.backup_name, backup, _labels(a.labels), _notes(a.note))))
-        print(f"khôi phục {len(src)} khoá: {', '.join(sorted(src))} · giá trị hiện tại sao lưu vào {a.backup_name}")
-        return 0
-
-    if a.cmd == "resources-lines":
-        print(resource_lines(current_resources(_json(a.current))))
-        return 0
-
-    if a.cmd == "resources-plan":
-        rows, patches = plan_resources(current_resources(_json(a.current)), _read(a.edits))
-        if not rows:
-            print("Không có Deployment nào đổi — không có gì để ghi.")
-            return 3
-        print(table(["DEPLOYMENT", "CŨ", "MỚI"], rows))
-        os.makedirs(a.out_dir, exist_ok=True)
-        for dep, p in patches.items():
-            _write_private(os.path.join(a.out_dir, dep + ".json"), json.dumps(p))
-        return 0
-
-    if a.cmd == "db-plan":
-        services = sorted(service_groups())
-        cur = {}
-        for ln in _read(a.current_dbs).splitlines():
-            if "\t" in ln:
-                k, v = ln.split("\t", 1)
-                cur[k.strip()] = v.strip()
-        hosts = parse_hosts(a.hosts, a.port)
-        if a.sslmode not in SSLMODES:
-            raise PlanError(f"sslmode '{a.sslmode}' không được phép")
-        rows = plan_databases(services, _read(a.edits), cur)
-        print(f"Máy chủ: {hosts} · sslmode={a.sslmode}")
-        print(table(["DỊCH VỤ", "CSDL ĐANG DÙNG", "CSDL MỚI", "TÀI KHOẢN MỚI"],
-                    [[s, cur.get(s) or "(không đọc được)", d, u] for s, d, u in rows]))
-        _write_private(a.rows_out, "\n".join(f"{s}\t{d}\t{u}" for s, d, u in rows) + "\n")
-        _write_private(a.sql_out, create_sql(rows))
-        return 0
-
-    if a.cmd == "dsn":
-        with io.open(a.password_file, encoding="utf-8") as f:
-            pw = f.read().strip()
-        _write_private(a.out, build_dsn(parse_hosts(a.hosts, a.port), a.db, a.user, pw, a.sslmode))
-        return 0
-
-    if a.cmd == "db-name":
-        print(db_name_of(sys.stdin.read()))
-        return 0
-
-    if a.cmd == "image-migrations":
-        for f, s in image_migrations(ROOT, a.service, a.commit):
-            print(f"{a.service}\t{f}\t{s}")
-        return 0
-
-    if a.cmd == "migration-report":
-        image, applied, svcs = {}, {}, []
-        for ln in _read(a.image).splitlines():
-            p = ln.split("\t")
-            if len(p) == 3:
-                image.setdefault(p[0], []).append((p[1], p[2]))
-                if p[0] not in svcs:
-                    svcs.append(p[0])
-        for ln in _read(a.applied).splitlines():
-            p = ln.split("\t")
-            if len(p) == 3:
-                applied.setdefault(p[0], {})[p[1]] = p[2]
-                if p[0] not in svcs:
-                    svcs.append(p[0])
-        rows, blocking, all_match = migration_rows(svcs, image, applied)
-        print(table(["DỊCH VỤ", "MỚI NHẤT TRONG ẢNH", "MỚI NHẤT ĐÃ ÁP", "", "CHÊNH"], rows))
-        if blocking:
-            print("\n⚠ Tệp đã áp bị sửa / CSDL mới hơn ảnh: dịch vụ sẽ TỪ CHỐI khởi động (core/migrate). "
-                  "Khởi động lại không chữa được — cần người xem.")
-        if a.strict and not all_match:
-            print("✗ chưa khớp: mọi dịch vụ phải có đủ migration của ảnh, không tệp sửa, không tệp lạ.")
-            return 1
-        return 0
-
-    if a.cmd == "services":
-        print(" ".join(ordered_services(sorted(service_groups()))))
         return 0
 
     if a.cmd == "basemap-plan":

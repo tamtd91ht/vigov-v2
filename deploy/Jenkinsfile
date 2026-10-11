@@ -141,7 +141,7 @@ pipeline {
                         'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
                         'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP_URL (kb/40-runbooks/basemap-pmtiles.md). ' +
                         'CHAY_THU bật = chỉ in kế hoạch; làm thật: bỏ tick, XAC_NHAN = namespace của MT, TICKET nếu prod. ' +
-                        'Cùng việc với vigov-van-hanh (deploy/van-hanh/basemap-task.sh)')
+                        'Thân việc: deploy/van-hanh/basemap-task.sh')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
@@ -2152,8 +2152,8 @@ EOF
       }
     }
 
-    // Nền bản đồ tự host — CÙNG thân với việc nen-ban-do của vigov-van-hanh: deploy/van-hanh/basemap-task.sh
-    // (chủ dự án 11/10/2026: chạy ở job này cho tới khi controller có Active Choices). Logic có test ở
+    // Nền bản đồ tự host — thân việc ở deploy/van-hanh/basemap-task.sh. Chỉ job này có việc ấy từ khi
+    // vigov-van-hanh được dựng lại chỉ cho đổi hạ tầng (ADR 0089 §Sửa đổi 11/10/2026). Logic có test ở
     // deploy/van-hanh/ops.py. Ở đây chỉ chốt tham số; job KHÔNG BAO GIỜ đổi BASEMAP_URL.
     stage('Nền bản đồ') {
       when { expression { params.HANH_DONG == 'nen-ban-do' } }

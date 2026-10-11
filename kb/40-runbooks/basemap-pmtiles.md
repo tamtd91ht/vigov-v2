@@ -45,9 +45,9 @@ curl -sI -H 'Range: bytes=0-126' "<giá trị BASEMAP_URL>/vn-mainland.pmtiles" 
 
 Bước 2–3 (dựng + tải lên) chạy theo **một trong hai** cách — **không bao giờ** trong pod:
 
-- **Job Jenkins, việc `nen-ban-do`** (chủ dự án chốt 11/10/2026) — job cũ `vigov-deploy`
-  (`HANH_DONG=nen-ban-do`) cho tới khi controller cài Active Choices, hoặc `vigov-van-hanh` (nhóm Bảo
-  trì); hai job chạy cùng `deploy/van-hanh/basemap-task.sh`. Việc chạy
+- **Job Jenkins, việc `nen-ban-do`** (chủ dự án chốt 11/10/2026) — job `vigov-deploy`
+  (`HANH_DONG=nen-ban-do`), chạy `deploy/van-hanh/basemap-task.sh`. `vigov-van-hanh` không còn việc này
+  từ khi dựng lại chỉ cho đổi hạ tầng (ADR 0089 §Sửa đổi 11/10/2026). Việc chạy
   trên máy build, tự tải `pmtiles` + `mc` đã ghim SHA-256, lấy bucket và địa chỉ từ `common-config` của
   `MT`, dùng cặp khoá MinIO **có sẵn** của `comms-secrets` (thiếu thì `platform-secrets`), in dòng
   SHA-256, `BUILD-INFO.txt` và giá trị `BASEMAP_URL` để ghi vào danh mục ký. Job **không** đổi
@@ -98,8 +98,8 @@ khung để "cho qua" — đó là điểm dừng của ADR 0072.
 ## Đưa vào dùng và quay lui
 
 1. Staging: đặt key `BASEMAP_URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/config/map/<YYYYMMDD>` trong
-   `common-config` của `vigov-staging` — việc `sua-configmap` của job `vigov-van-hanh`, hoặc
-   `kubectl -n vigov-staging edit configmap common-config` — rồi
+   `common-config` của `vigov-staging` — `kubectl -n vigov-staging edit configmap common-config`
+   (job `vigov-van-hanh` chỉ đổi hạ tầng, không đặt khoá này) — rồi
    `kubectl -n vigov-staging rollout restart deploy/vigov-web-admin`: key trùng tên biến, tới pod qua
    `envFrom`, mà `envFrom` chỉ đọc lúc pod khởi động (ADR 0093). Kiểm, ký.
 2. Prod: cùng giá trị ở `vigov-prod`, rồi `rollout restart` như bước 1.

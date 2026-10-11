@@ -9,6 +9,7 @@ owns_facts:
   - "vì sao có job vận hành Jenkins MỚI deploy/van-hanh/Jenkinsfile chạy song song job cũ deploy/Jenkinsfile, dựng trên plugin Active Choices, form bốn vùng (ngữ cảnh đọc từ cụm · nhóm → việc · tham số theo việc · an toàn) (chủ dự án, 10/10/2026)"
   - "vì sao job vận hành mặc định chạy thử (dry-run) in kế hoạch cũ → mới, chỉ khởi động lại dịch vụ dùng khoá vừa đổi, và đòi gõ namespace + số phiếu cho mọi lần ghi prod (chủ dự án, 10/10/2026)"
   - "lần dùng đầu của job vận hành: đổi cấu hình tài nguyên prod và chuyển prod sang một CSDL PostgreSQL MỚI (một máy chủ, mỗi dịch vụ một CSDL), bảng rỗng do migration của từng dịch vụ tạo, CSDL cũ không bị đụng, DSN cũ giữ được để quay lui, KHÔNG chuyển dữ liệu ở đợt này (mặc định chủ dự án 10/10/2026, có thể đổi)"
+  - "vì sao job vận hành được dựng lại chỉ với MỘT việc — đổi hạ tầng PostgreSQL/MinIO/Redis/ClamAV, form theo hạ tầng, ô trống = giữ, mật khẩu qua bảy tham số password, kiểm từ trong cụm trước khi ghi — và bỏ mọi việc cũ (chủ dự án, 11/10/2026)"
   - "rủi ro được chấp nhận: Jenkins lưu tham số của lượt build — tham số kiểu password được mã hoá nhưng quản trị viên Jenkins đọc được (10/10/2026)"
 ---
 
@@ -100,3 +101,24 @@ tới khi chủ dự án cho nghỉ — không gỡ, không chuyển việc cũ 
 | 9 | Mẫu tài nguyên đặt sẵn | Chỉ là **đề xuất**; con số do chủ dự án chọn |
 
 Ingress vẫn dựng tay trong Rancher — job mới **không** áp Ingress (ADR 0046 #4).
+
+## Sửa đổi 11/10/2026 — dựng lại chỉ cho "đổi hạ tầng"
+
+**Người quyết:** chủ dự án, 11/10/2026, trong phiên chính: "UI UX trên Jenkins đang rất kém, tôi chả dùng
+được gì ở đó", "xóa hết công việc đang có trong job vận hành này đi và làm lại mục hạ tầng, kiểu đập đi
+xây lại", "chỉ của jenkins vihat-van-hanh này thôi"; chọn **cài Active Choices** thay vì form tĩnh; giao
+phiên toàn quyền chọn phương án còn lại.
+
+| Điểm | Chốt | Vì sao |
+|---|---|---|
+| Phạm vi job | **Một việc**: đổi hạ tầng mà dịch vụ trỏ tới — PostgreSQL · MinIO · Redis · ClamAV. 14 việc cũ (nhóm Kiểm tra · Cấu hình · Bí mật · CSDL · Tài nguyên · Triển khai · Bảo trì) **bỏ** | Form cũ hiện 25 ô cho mọi việc; người vận hành nghĩ theo hạ tầng ("MinIO của mình"), không theo đối tượng k8s — đổi MinIO phải biết khoá nào ở `common-config`, khoá nào ở ba Secret |
+| Form | `MT` → `HA_TANG` (một hạ tầng) → bảng **chỉ các ô của hạ tầng ấy**, cạnh giá trị đang chạy; **ô trống = giữ** | Gõ đúng thứ cần đổi, không gõ lại thứ đang đúng |
+| Mật khẩu / khoá | Bảy tham số password `BI_MAT_1..7`; bảng chọn ô nào vào khoá nào | Giá trị ô động của Active Choices được Jenkins lưu **chữ thường**; chỉ tham số password được mã hoá (rủi ro chấp nhận ở bảng "Ràng buộc mang theo" vẫn đúng). Bảy = số dịch vụ giữ `DATABASE_DSN` |
+| Trước khi ghi | Pod một lượt **kiểm từ trong cụm**: mở được cổng máy chủ mới; **đăng nhập được** bằng từng DSN PostgreSQL mới. Không đạt → không ghi | Một DSN sai được phát hiện trước khi bảy dịch vụ cùng khởi động lại vào nó |
+| Ghi | Sao lưu giá trị cũ sang `<dịch vụ>-secrets-backup-<giờ>` (Secret riêng — trả lời câu mở #4) → ghi → đọc lại → khởi động lại platform → identity → còn lại | Như ràng buộc cũ |
+| Dữ liệu | Job **không** chuyển dữ liệu, **không** tạo CSDL. Hạ tầng mới do người quản trị dựng sẵn | Luật 7. Việc `csdl-moi` (CSDL mới rỗng) bỏ cùng các việc cũ |
+| `vigov-deploy` | Không đổi việc nào. `nen-ban-do` chỉ còn ở đó; thân việc (`deploy/van-hanh/basemap-task.sh` + `ops.py`) giữ nguyên chỗ | Lời chủ dự án: chỉ job `vigov-van-hanh` |
+
+**Hệ quả:** mục "Lần dùng đầu" (CSDL prod mới rỗng) và câu mở #7–#9 không còn việc nào trong job gánh;
+bảng "Vùng"/"Việc" ở mục Quyết định là lịch sử. Khôi phục Secret từ bản sao lưu nay làm bằng tay
+(`deploy/van-hanh/README.md` mục 4). Cách làm: `deploy/van-hanh/README.md`.
