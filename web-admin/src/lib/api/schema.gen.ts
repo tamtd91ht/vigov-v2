@@ -23,6 +23,24 @@ export type audit_EntryView = {
   "delta": JsonValue;
 };
 
+export type comms_DangerZonePoint = {
+  "x": number;
+  "y": number;
+};
+
+export type comms_EmergencyContact = {
+  "role": string;
+  "name": string;
+  "phone": string;
+};
+
+export type comms_EvacuationPoint = {
+  "name": string;
+  "address"?: string;
+  "phone"?: string;
+  "capacity"?: number | null;
+};
+
 export type comms_audioFileOut = {
   "id": string;
   "content_item_id": string;
@@ -133,6 +151,19 @@ export type comms_coverImageOut = {
   "preview_expires_at"?: string | null;
 };
 
+export type comms_createDisasterAlertIn = {
+  "kind": string;
+  "title": string;
+  "level"?: string;
+  "headline"?: string;
+  "detail": string;
+  "effective_from": string;
+  "effective_to"?: string;
+  "danger_zone"?: Array<comms_DangerZonePoint>;
+  "evacuation_points"?: Array<comms_EvacuationPoint>;
+  "emergency_contacts"?: Array<comms_EmergencyContact>;
+};
+
 export type comms_createExternalContactIn = {
   "name": string;
   "category": string;
@@ -197,6 +228,10 @@ export type comms_deleteContentItemIn = {
   "reason": string;
 };
 
+export type comms_deleteDisasterAlertIn = {
+  "reason": string;
+};
+
 export type comms_deleteExternalContactIn = {
   "reason": string;
 };
@@ -207,6 +242,29 @@ export type comms_deleteMapAssetIn = {
 
 export type comms_deleteMapFieldSchemaIn = {
   "reason"?: string;
+};
+
+export type comms_disasterAlertListOut = page_Result_comms_disasterAlertOut;
+
+export type comms_disasterAlertOut = {
+  "id": string;
+  "kind": string;
+  "title": string;
+  "level"?: string;
+  "headline"?: string;
+  "detail": string;
+  "effective_from": string;
+  "effective_to"?: string | null;
+  "ended_at"?: string | null;
+  "ended_by"?: string;
+  "in_force": boolean;
+  "danger_zone": Array<comms_DangerZonePoint>;
+  "evacuation_points": Array<comms_EvacuationPoint>;
+  "emergency_contacts": Array<comms_EmergencyContact>;
+  "created_at": string;
+  "created_by": string;
+  "updated_at": string;
+  "updated_by": string;
 };
 
 export type comms_externalContactListOut = {
@@ -510,6 +568,7 @@ export type comms_noiDungRa = {
   "event_ends_at"?: string | null;
   "event_place"?: string;
   "video_url"?: string;
+  "video_duration_seconds"?: number;
   "link_to"?: string;
   "display_order"?: number | null;
   "audio_file_id"?: string;
@@ -526,6 +585,14 @@ export type comms_notificationOut = {
   "read": boolean;
   "read_at": string | null;
   "created_at": string;
+};
+
+export type comms_notificationPreferenceIn = {
+  "zalo_enabled": boolean | null;
+};
+
+export type comms_notificationPreferenceOut = {
+  "zalo_enabled": boolean;
 };
 
 export type comms_optionalColorIn = Record<string, never>;
@@ -647,6 +714,24 @@ export type comms_publicCategoryOut = {
   "order": number;
 };
 
+export type comms_publicDisasterAlertListOut = {
+  "items": Array<comms_publicDisasterAlertOut>;
+};
+
+export type comms_publicDisasterAlertOut = {
+  "id": string;
+  "kind": string;
+  "title": string;
+  "headline": string;
+  "level"?: string;
+  "detail": string;
+  "effective_from": string;
+  "effective_to"?: string | null;
+  "danger_zone": Array<comms_DangerZonePoint>;
+  "evacuation_points": Array<comms_EvacuationPoint>;
+  "emergency_contacts": Array<comms_EmergencyContact>;
+};
+
 export type comms_seedMapAssetTypesOut = {
   /** nhóm vừa thêm vào danh mục của xã */
   "created": Array<comms_mapAssetTypeRefOut>;
@@ -680,6 +765,7 @@ export type comms_suaNoiDungVao = {
   "event_ends_at"?: string | null;
   "event_place"?: string | null;
   "video_url"?: string | null;
+  "video_duration_seconds"?: number | null;
   "cover_image_file_id"?: string | null;
   "link_to"?: string | null;
   "display_order"?: number | null;
@@ -715,6 +801,7 @@ export type comms_themNoiDungVao = {
   "event_ends_at"?: string;
   "event_place"?: string;
   "video_url"?: string;
+  "video_duration_seconds"?: number;
   "cover_image_file_id"?: string;
   "link_to"?: string;
   "display_order"?: number | null;
@@ -752,6 +839,7 @@ export type comms_tinXaRa = {
   "event_ends_at"?: string | null;
   "event_place"?: string;
   "video_url"?: string;
+  "video_duration_seconds"?: number;
   "image_url"?: string;
   "link_to"?: string;
   "audio_duration_seconds"?: number;
@@ -771,6 +859,19 @@ export type comms_updateCategoryIn = {
   "order"?: number | null;
   "hidden"?: boolean | null;
   "slug"?: string | null;
+};
+
+export type comms_updateDisasterAlertIn = {
+  "kind"?: string | null;
+  "title"?: string | null;
+  "level"?: string | null;
+  "headline"?: string | null;
+  "detail"?: string | null;
+  "effective_from"?: string | null;
+  "effective_to"?: string | null;
+  "danger_zone"?: Array<comms_DangerZonePoint> | null;
+  "evacuation_points"?: Array<comms_EvacuationPoint> | null;
+  "emergency_contacts"?: Array<comms_EmergencyContact> | null;
 };
 
 export type comms_updateExternalContactIn = {
@@ -3164,6 +3265,13 @@ export type page_Result_audit_EntryView = {
   "has_more": boolean;
 };
 
+export type page_Result_comms_disasterAlertOut = {
+  "items": Array<comms_disasterAlertOut>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
 export type page_Result_comms_mapAssetRowOut = {
   "items": Array<comms_mapAssetRowOut>;
   /** empty when has_more is false */
@@ -3403,6 +3511,7 @@ export type petitions_citizenFieldOut = {
   "label": string;
   "icon": string | null;
   "tone": string | null;
+  "placeholder"?: string;
 };
 
 export type petitions_citizenLetterTaskIn = {
@@ -3816,6 +3925,11 @@ export type petitions_phieuCuaToiRa = {
   "result": string;
   "reason"?: string;
   "receiving_body"?: string;
+  "classified_at"?: string | null;
+  "forwarded_for_processing_at"?: string | null;
+  "resolved_at"?: string | null;
+  "awaiting_confirmation_at"?: string | null;
+  "closed_at"?: string | null;
   "rating"?: number | null;
   "rated_at"?: string | null;
   "contact_unverified"?: boolean | null;
@@ -6280,6 +6394,28 @@ export type platform_post_commune_branding_logo_uploads = {
   };
 };
 
+/** GET /api/v1/commune-disaster-alerts — Cảnh báo thiên tai ĐANG HIỆU LỰC của xã theo tên miền — cho màn cảnh báo và băng đỏ trang chủ Zalo Mini App */
+export type comms_get_commune_disaster_alerts = {
+  duongDan: "/api/v1/commune-disaster-alerts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_publicDisasterAlertListOut;
+    400: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    429: "rate_limited";
+  };
+};
+
 /** GET /api/v1/commune-external-contacts — Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) theo tên miền của xã — cho danh bạ trên Zalo Mini App, nhóm theo `category` */
 export type comms_get_commune_external_contacts = {
   duongDan: "/api/v1/commune-external-contacts";
@@ -6754,6 +6890,134 @@ export type comms_delete_content_items_by_id = {
     403: httpx_Error;
     404: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/disaster-alerts — Cảnh báo thiên tai của xã — mọi trạng thái (sắp tới, đang hiệu lực, đã qua, đã kết thúc), mới bắt đầu nhất trước, phân trang theo con trỏ */
+export type comms_get_disaster_alerts = {
+  duongDan: "/api/v1/disaster-alerts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "effective_from";
+    "order"?: "asc" | "desc";
+  };
+  than: never;
+  phanHoi: {
+    200: comms_disasterAlertListOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/disaster-alerts — Đăng một cảnh báo thiên tai — hiện trên Zalo Mini App từ thời điểm bắt đầu hiệu lực (không đẩy ZNS) */
+export type comms_post_disaster_alerts = {
+  duongDan: "/api/v1/disaster-alerts";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_createDisasterAlertIn;
+  phanHoi: {
+    201: comms_disasterAlertOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** GET /api/v1/disaster-alerts/{id} — Một cảnh báo thiên tai của xã, đủ vùng nguy hiểm, điểm sơ tán và số khẩn cấp */
+export type comms_get_disaster_alerts_by_id = {
+  duongDan: "/api/v1/disaster-alerts/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_disasterAlertOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/disaster-alerts/{id} — Sửa một cảnh báo thiên tai đang còn (chưa kết thúc) — nội dung, thời gian, vùng nguy hiểm, điểm sơ tán, số khẩn cấp */
+export type comms_patch_disaster_alerts_by_id = {
+  duongDan: "/api/v1/disaster-alerts/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_updateDisasterAlertIn;
+  phanHoi: {
+    200: comms_disasterAlertOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "alert_ended";
+  };
+};
+
+/** DELETE /api/v1/disaster-alerts/{id} — Xoá mềm một cảnh báo thiên tai, kèm lý do bắt buộc — gỡ khỏi Zalo Mini App trong cùng lần ghi */
+export type comms_delete_disaster_alerts_by_id = {
+  duongDan: "/api/v1/disaster-alerts/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_deleteDisasterAlertIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/disaster-alerts/{id}/ending — Kết thúc sớm một cảnh báo thiên tai — gỡ khỏi Zalo Mini App ngay, ghi ai kết thúc và lúc nào */
+export type comms_post_disaster_alerts_by_id_ending = {
+  duongDan: "/api/v1/disaster-alerts/{id}/ending";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_disasterAlertOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "alert_ended";
   };
 };
 
@@ -8971,6 +9235,47 @@ export type petitions_get_my_citizen_reports_by_maTraCuu_verification_photos = {
     404: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+  };
+};
+
+/** GET /api/v1/my-notification-preferences — Lựa chọn nhận thông báo Zalo CỦA CHÍNH công dân trong xã của phiên — chưa từng đổi thì là đang nhận */
+export type comms_get_my_notification_preferences = {
+  duongDan: "/api/v1/my-notification-preferences";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_notificationPreferenceOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    403: "chua_xac_thuc_so";
+  };
+};
+
+/** PUT /api/v1/my-notification-preferences — Công dân bật / tắt nhận thông báo Zalo về phản ánh của mình — tắt vẫn nhận tin không tiếp nhận và chuyển cấp trên; mỗi lần đổi có vết kiểm toán */
+export type comms_put_my_notification_preferences = {
+  duongDan: "/api/v1/my-notification-preferences";
+  phuongThuc: "PUT";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_notificationPreferenceIn;
+  phanHoi: {
+    200: comms_notificationPreferenceOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
   };
   errorCodes: {
     403: "chua_xac_thuc_so";

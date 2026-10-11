@@ -84,6 +84,7 @@ import {
   canEditContent,
   categoryCellLabel,
   categoryPath,
+  contentRefusalText,
   CATEGORY_ADD_BUTTON,
   CATEGORY_ADD_LABEL,
   CATEGORY_ADD_PLACEHOLDER,
@@ -162,6 +163,8 @@ import {
   UPLOADING_FILES_LABEL,
   URL_TOI_DA,
   validateTypeFields,
+  VIDEO_DURATION_HINT,
+  VIDEO_DURATION_LABEL,
   VIEW_COUNT_LABEL,
   viewCountText,
   publishedStaffText,
@@ -512,7 +515,7 @@ export function SoNoiDung() {
         // The prototype's toast says it failed; the server's sentence stays INLINE, VERBATIM — its 400
         // names the field and the rule, and rewriting it here would be a second copy of a business rule.
         toast.error(SAVE_FAILED_TOAST);
-        datLoiForm(kq.thongBao);
+        datLoiForm(contentRefusalText(kq.thongBao));
         return;
       }
       uploadHeldAudio(kq.duLieu.id, audio, () => {
@@ -565,7 +568,7 @@ export function SoNoiDung() {
       if (!kq.ok) {
         datDangGui(false);
         toast.error(SAVE_FAILED_TOAST);
-        datLoiForm(kq.thongBao);
+        datLoiForm(contentRefusalText(kq.thongBao));
         return;
       }
       thenUpload();
@@ -1856,18 +1859,33 @@ export function FormNoiDung({
         )}
 
         {gt.type === CONTENT_TYPE_VIDEO && (
-          <Field label="Liên kết video" htmlFor="lien-ket-video" icon={Video} grow="auto">
-            <input
-              id="lien-ket-video"
-              name="lien-ket-video"
-              type="url"
-              value={gt.video_url}
-              maxLength={URL_TOI_DA}
-              placeholder="https://"
-              autoComplete="off"
-              onChange={(e) => datGT({ ...gt, video_url: e.target.value })}
-            />
-          </Field>
+          <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
+            <Field label="Liên kết video" htmlFor="lien-ket-video" icon={Video} grow="auto">
+              <input
+                id="lien-ket-video"
+                name="lien-ket-video"
+                type="url"
+                value={gt.video_url}
+                maxLength={URL_TOI_DA}
+                placeholder="https://"
+                autoComplete="off"
+                onChange={(e) => datGT({ ...gt, video_url: e.target.value })}
+              />
+            </Field>
+            {/* ADR 0091 §7: the officer types the length, as for a broadcast; the server never measures it. */}
+            <Field label={VIDEO_DURATION_LABEL} htmlFor="video-duration" icon={Clock} grow="auto" hint={VIDEO_DURATION_HINT}>
+              <input
+                id="video-duration"
+                name="video-duration"
+                inputMode="numeric"
+                placeholder="mm:ss"
+                value={gt.video_duration}
+                maxLength={6}
+                autoComplete="off"
+                onChange={(e) => datGT({ ...gt, video_duration: e.target.value })}
+              />
+            </Field>
+          </div>
         )}
 
         {/* ADR 0067 §4 — the prototype's two boxes (`ContentItemForm.tsx:312-336`), the same on create and

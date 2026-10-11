@@ -1,7 +1,7 @@
 import { QUYEN_QUAN_LY_NGUOI_DUNG, QUYEN_XEM_NOI_DUNG } from "@/lib/quyen";
 
 /**
- * The two tabs of `/mini-app` — "Quản trị nội dung Mini App" — and the rules that pick one.
+ * The tabs of `/mini-app` — "Quản trị nội dung Mini App" — and the rules that pick one.
  *
  * WHY ONE SCREEN (ADR 0068 lần 5, 06/10/2026): the prototype (`vigov-require` `apps/admin`
  * `MiniAppWorkspace.tsx`) puts the content book and the staff directory under one screen, two tabs,
@@ -17,7 +17,7 @@ import { QUYEN_QUAN_LY_NGUOI_DUNG, QUYEN_XEM_NOI_DUNG } from "@/lib/quyen";
  * Hiding a tab is convenience, never the control: the server checks the key on every call.
  */
 
-export type MiniAppTab = "noi-dung" | "danh-ba";
+export type MiniAppTab = "noi-dung" | "canh-bao" | "danh-ba";
 
 export type MiniAppTabSpec = {
   readonly key: MiniAppTab;
@@ -27,9 +27,13 @@ export type MiniAppTabSpec = {
   readonly permission: string;
 };
 
-/** Prototype order: Nội dung first, Danh bạ cán bộ second. */
+/**
+ * Prototype order: Nội dung first, Danh bạ cán bộ last. "Cảnh báo thiên tai" (ADR 0091 §2: "một tab trong
+ * 'Nội dung Mini App'", keys `content.read` / `content.update`) sits next to the content it belongs with.
+ */
 export const MINI_APP_TABS: readonly MiniAppTabSpec[] = [
   { key: "noi-dung", label: "Nội dung", permission: QUYEN_XEM_NOI_DUNG },
+  { key: "canh-bao", label: "Cảnh báo thiên tai", permission: QUYEN_XEM_NOI_DUNG },
   { key: "danh-ba", label: "Danh bạ cán bộ", permission: QUYEN_QUAN_LY_NGUOI_DUNG },
 ];
 
@@ -37,13 +41,13 @@ export const MINI_APP_TABS: readonly MiniAppTabSpec[] = [
  * The keys that open the menu item "Nội dung Mini App": one per tab, any one is enough. A closed list
  * of real `quyen` keys (rule 5, 3c), derived from the tabs so the door and the rooms cannot drift.
  */
-export const MINI_APP_MENU_KEYS: readonly string[] = MINI_APP_TABS.map((t) => t.permission);
+export const MINI_APP_MENU_KEYS: readonly string[] = [...new Set(MINI_APP_TABS.map((t) => t.permission))];
 
 export const MINI_APP_PATH = "/mini-app";
 
-/** The tab the URL asks for. Anything but exactly `danh-ba` (absent, repeated, unknown) is `noi-dung`. */
+/** The tab the URL asks for. Anything but exactly `danh-ba` or `canh-bao` (absent, repeated, unknown) is `noi-dung`. */
 export function requestedTab(tab: string | string[] | undefined): MiniAppTab {
-  return tab === "danh-ba" ? "danh-ba" : "noi-dung";
+  return tab === "danh-ba" || tab === "canh-bao" ? tab : "noi-dung";
 }
 
 /** Link of one tab — the prototype writes `/mini-app?tab=<key>` for both. */

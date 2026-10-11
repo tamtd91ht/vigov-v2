@@ -252,7 +252,11 @@ function addTypeFieldsForCreate(out: ThemNoiDungVao, than: ThemNoiDungVao): void
     if (than.event_ends_at) out.event_ends_at = than.event_ends_at;
     if (than.event_place) out.event_place = than.event_place;
   }
-  if (than.type === CONTENT_TYPE_VIDEO && than.video_url) out.video_url = than.video_url;
+  if (than.type === CONTENT_TYPE_VIDEO) {
+    if (than.video_url) out.video_url = than.video_url;
+    // The typed length (1 .. 21600 s, migration 0028); absent when not given — 0 is not a length.
+    if (than.video_duration_seconds) out.video_duration_seconds = than.video_duration_seconds;
+  }
   // Banner: an empty `link_to` is "not tappable", the same as absent; `display_order` absent = none.
   if (than.type === CONTENT_TYPE_BANNER) {
     if (than.link_to) out.link_to = than.link_to;
@@ -354,6 +358,8 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
     event_ends_at: than.event_ends_at,
     event_place: than.event_place,
     video_url: than.video_url,
+    // Absent = leave alone; 0 = CLEAR (length unknown); 1 .. 21600 = set. `thanSua` sends it only for a video.
+    video_duration_seconds: than.video_duration_seconds,
     // Absent = leave the cover alone; "" = DETACH (the server withdraws the public copy); an id = a
     // `ready` upload issued for THIS article (`content_item_id`). Passed through as given, `""` included.
     cover_image_file_id: than.cover_image_file_id,

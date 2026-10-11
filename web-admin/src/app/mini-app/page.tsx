@@ -1,6 +1,7 @@
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { DauTrang } from "@/components/dau-trang";
 import { StaffDirectoryTab } from "@/features/danh-ba/staff-directory-tab";
+import { DisasterAlertsTab } from "@/features/disaster-alerts/disaster-alerts-tab";
 import { MiniAppWorkspace } from "@/features/mini-app/mini-app-workspace";
 import { requestedTab } from "@/features/mini-app/mini-app-tabs";
 import { SoNoiDung } from "@/features/noi-dung/so-noi-dung";
@@ -24,6 +25,7 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *   | Tab            | Tab shown with  | Inside the tab                                               |
  *   |----------------|-----------------|--------------------------------------------------------------|
  *   | Nội dung       | `content.read`  | write controls only with `content.update` (`canEditContent`) |
+ *   | Cảnh báo t.tai | `content.read`  | write controls only with `content.update` (ADR 0091 §2)      |
  *   | Danh bạ cán bộ | `admin.user`    | `CongQuyen admin.user`; Mini App buttons `content.update`;   |
  *   |                |                 | 🗑 `admin.user.delete`                                        |
  *
@@ -69,6 +71,7 @@ export default async function MiniAppPage({
               key={tab}
               requested={tab}
               content={<SoNoiDung />}
+              alerts={<DisasterAlertsTab />}
               directory={<StaffDirectoryTab />}
             />
           </main>

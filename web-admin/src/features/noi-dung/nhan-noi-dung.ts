@@ -794,6 +794,8 @@ export type GiaTriFormNoiDung = {
   readonly event_place: string;
   /** `Video` — `Liên kết video`. */
   readonly video_url: string;
+  /** `Video` — `Thời lượng video`, AS TYPED (`m:ss`). `""` = not given. ADR 0091 §7: staff type it. */
+  readonly video_duration: string;
   /** `Banner` — the tap target: `/…` inside the Mini App or `https://…`. `""` = not tappable. */
   readonly link_to: string;
   /** `Banner` — `Thứ tự hiển thị`, AS TYPED (a number box gives a string). `""` = none. */
@@ -813,6 +815,7 @@ export const FORM_TRONG: GiaTriFormNoiDung = {
   event_ends_local: "",
   event_place: "",
   video_url: "",
+  video_duration: "",
   link_to: "",
   display_order: "",
 };
@@ -832,6 +835,52 @@ export const ERR_EVENT_PLACE_CONTROL_CHAR = "Địa điểm không được ch�
 export const ERR_VIDEO_URL_INVALID =
   "Liên kết video phải bắt đầu bằng http:// hoặc https:// và không chứa dấu cách.";
 export const ERR_VIDEO_URL_TOO_LONG = `Liên kết video tối đa ${URL_TOI_DA} ký tự.`;
+
+/* ── `Thời lượng video` (migration 0028 of service-comms; ADR 0091 §7: the officer types it) ──── */
+
+/** `domain.VideoDurationMinSeconds` / `MaxSeconds`: 1 second .. 6 hours. */
+export const VIDEO_DURATION_MIN_SECONDS = 1;
+export const VIDEO_DURATION_MAX_SECONDS = 6 * 60 * 60;
+export const VIDEO_DURATION_LABEL = "Thời lượng video";
+export const VIDEO_DURATION_HINT = "Phút:giây, ví dụ 3:25. Để trống nếu chưa biết.";
+export const ERR_VIDEO_DURATION_FORMAT = "Thời lượng video ghi theo phút:giây, ví dụ 3:25 hoặc 90:00.";
+export const ERR_VIDEO_DURATION_RANGE = "Thời lượng video phải từ 0:01 đến 360:00 (6 giờ).";
+
+/**
+ * `m:ss` as typed → seconds. `""` is "not given" (`seconds: null`). Minutes 0..360, seconds 00..59 — two
+ * digits, so `3:5` is refused rather than read as 3:05 or 3:50. The figure is shown to residents as typed;
+ * the server never measures it.
+ */
+export function parseVideoDuration(raw: string):
+  | { readonly ok: true; readonly seconds: number | null }
+  | { readonly ok: false; readonly message: string } {
+  const s = raw.trim();
+  if (s === "") return { ok: true, seconds: null };
+  const m = /^(\d{1,3}):([0-5]\d)$/.exec(s);
+  if (m === null) return { ok: false, message: ERR_VIDEO_DURATION_FORMAT };
+  const seconds = Number(m[1]) * 60 + Number(m[2]);
+  if (seconds < VIDEO_DURATION_MIN_SECONDS || seconds > VIDEO_DURATION_MAX_SECONDS) {
+    return { ok: false, message: ERR_VIDEO_DURATION_RANGE };
+  }
+  return { ok: true, seconds };
+}
+
+/** Seconds → `m:ss`; absent / 0 → `""` (the server's "not given"). */
+export function formatVideoDuration(seconds: number | null | undefined): string {
+  if (seconds === undefined || seconds === null || !Number.isFinite(seconds) || seconds <= 0) return "";
+  const whole = Math.round(seconds);
+  return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+/**
+ * The server's refusal of a save, with the one wire name an officer can meet in it — `` `video_duration_seconds` ``
+ * (422 `invalid_video_duration` / `video_duration_only_for_video`) — replaced by the box's label. ONLY the
+ * token changes: the rule in the sentence stays the server's. A sentence without it comes back unchanged.
+ */
+export function contentRefusalText(message: string): string {
+  const out = message.split("`video_duration_seconds`").join(VIDEO_DURATION_LABEL);
+  return out.charAt(0).toLocaleUpperCase("vi") + out.slice(1);
+}
 
 export const ERR_LINK_TO_INVALID =
   "Liên kết khi bấm phải là đường trong Mini App (bắt đầu bằng một dấu /) hoặc địa chỉ https://, " +
@@ -981,6 +1030,8 @@ export function validateTypeFields(
       }
       if (CONTROL_OR_SPACE.test(url)) return ERR_VIDEO_URL_INVALID;
     }
+    const duration = parseVideoDuration(gt.video_duration);
+    if (!duration.ok) return duration.message;
   }
   if (gt.type === CONTENT_TYPE_BANNER) {
     if (!isValidLinkTo(gt.link_to)) return ERR_LINK_TO_INVALID;
@@ -1021,6 +1072,7 @@ export function giaTriTuHang(nd: comms_noiDungRa): GiaTriFormNoiDung {
     event_ends_local: instantToLocalInput(nd.event_ends_at),
     event_place: nd.event_place ?? "",
     video_url: nd.video_url ?? "",
+    video_duration: formatVideoDuration(nd.video_duration_seconds),
     link_to: nd.link_to ?? "",
     display_order:
       nd.display_order === undefined || nd.display_order === null ? "" : String(nd.display_order),
@@ -1054,6 +1106,9 @@ export function thanThem(gt: GiaTriFormNoiDung): comms_themNoiDungVao {
   if (gt.type === CONTENT_TYPE_VIDEO) {
     const url = gt.video_url.trim();
     if (url !== "") ra.video_url = url;
+    // Only a valid, given length: `validateTypeFields` holds Lưu on a malformed one.
+    const duration = parseVideoDuration(gt.video_duration);
+    if (duration.ok && duration.seconds !== null) ra.video_duration_seconds = duration.seconds;
   }
   if (gt.type === CONTENT_TYPE_BANNER) {
     const link = gt.link_to.trim();
@@ -1114,6 +1169,16 @@ export function thanSua(
   }
   if (moi.type === CONTENT_TYPE_VIDEO && moi.video_url.trim() !== dau.video_url) {
     ra.video_url = moi.video_url.trim();
+  }
+  // The length, compared as SECONDS (so `3:05` retyped is no change). An emptied box sends `0` — the
+  // server's one spelling of "clear" for this field (absent = leave alone). Video only: on any other type
+  // the server refuses a non-zero value (422), and moving away from `video` clears it there.
+  if (moi.type === CONTENT_TYPE_VIDEO) {
+    const now = parseVideoDuration(moi.video_duration);
+    const was = parseVideoDuration(dau.video_duration);
+    const nowSeconds = now.ok ? (now.seconds ?? 0) : null;
+    const wasSeconds = was.ok ? (was.seconds ?? 0) : 0;
+    if (nowSeconds !== null && nowSeconds !== wasSeconds) ra.video_duration_seconds = nowSeconds;
   }
   // Banner: same shape. `link_to: ""` is the server's "not tappable any more". `display_order` has no
   // clear on the wire, so an emptied box sends nothing — `validateTypeFields` holds Lưu with a sentence

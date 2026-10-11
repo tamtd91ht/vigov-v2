@@ -101,6 +101,7 @@ const VIDEO_FULL: ThemNoiDungVao = {
   ...THEM_DAY_DU,
   type: "video",
   video_url: "https://video.example.vn/hoi-nghi",
+  video_duration_seconds: 205,
 };
 
 /** The banner's two fields (ADR 0067 §5), only on `type: banner`. */
@@ -127,6 +128,7 @@ const SUA_DAY_DU: SuaNoiDungVao = {
   event_ends_at: "",
   event_place: "Hội trường UBND xã",
   video_url: "",
+  video_duration_seconds: 0,
   cover_image_file_id: "",
   link_to: "",
   display_order: 4,

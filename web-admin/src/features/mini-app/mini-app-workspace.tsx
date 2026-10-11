@@ -1,6 +1,6 @@
 "use client";
 
-import { BookUser, Newspaper, type LucideIcon } from "lucide-react";
+import { BookUser, CloudAlert, Newspaper, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -17,7 +17,7 @@ import {
   type MiniAppTab,
 } from "./mini-app-tabs";
 
-const TAB_ICON: Record<MiniAppTab, LucideIcon> = { "noi-dung": Newspaper, "danh-ba": BookUser };
+const TAB_ICON: Record<MiniAppTab, LucideIcon> = { "noi-dung": Newspaper, "canh-bao": CloudAlert, "danh-ba": BookUser };
 
 /**
  * The padding under the tab band — the prototype's `p-7` of each tab's screen, drawn once here for both
@@ -41,16 +41,19 @@ export const TAB_BODY_CLASS = "min-w-0 px-4 pt-4 pb-10 md:p-7";
 export function MiniAppWorkspace({
   requested,
   content,
+  alerts,
   directory,
 }: {
   requested: MiniAppTab;
   /** The content tab's screen — rendered only when that tab is the one shown. */
   content: ReactNode;
+  /** The disaster-alert tab's screen (ADR 0091 §2). */
+  alerts: ReactNode;
   /** The directory tab's screen. */
   directory: ReactNode;
 }) {
   const session = usePhien();
-  return <MiniAppFrame session={session} requested={requested} content={content} directory={directory} />;
+  return <MiniAppFrame session={session} requested={requested} content={content} alerts={alerts} directory={directory} />;
 }
 
 /** Presentational half, session passed in — so the denied and unread cases render in a test. */
@@ -58,11 +61,13 @@ export function MiniAppFrame({
   session,
   requested,
   content,
+  alerts,
   directory,
 }: {
   session: ReturnType<typeof usePhien>;
   requested: MiniAppTab;
   content: ReactNode;
+  alerts: ReactNode;
   directory: ReactNode;
 }) {
   // The page's `main` has no padding of its own on this route (the tab band is flush); a screen with no
@@ -128,7 +133,7 @@ export function MiniAppFrame({
           tabs — so neither tab's component adds a padding of its own. 16px / 40px bottom below 768px,
           the page's padding at that width (`.than-trang`). */}
       <div className={TAB_BODY_CLASS} data-testid="mini-app-tab-body">
-        {shown === "noi-dung" ? content : directory}
+        {shown === "noi-dung" ? content : shown === "canh-bao" ? alerts : directory}
       </div>
     </div>
   );

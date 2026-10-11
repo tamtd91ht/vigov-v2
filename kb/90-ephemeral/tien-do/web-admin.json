@@ -1328,6 +1328,14 @@
       "viec": "Bảng lỗi khách 10/10/2026 — phần CHƯA làm sau đợt 2: (1) dòng 18, nhập Excel nhiệm vụ báo lỗi dù dữ liệu hợp lệ; (2) thẻ 'Tính lại số liệu Tổng quan' ở Cấu hình vẫn là control vô hiệu '?' (ADR 0068 §14); (3) Thu - Chi dòng 49, 54, 55 (bảng tính gốc 50, 55, 56: tiêu đề báo cáo chi, cụm số tổng, cột bảng thu) là DỮ LIỆU, không phải mã; (4) tệp đính kèm nhiệm vụ trên cụm cần biến triển khai.",
       "bang_chung": "(1) XONG ở 4bf0f0a6 (máy chủ; sổ service-petitions, mục `nhap-nhiem-vu-excel-10-11`). (3) đã có mẫu và đã sửa cách ghép %: 62cb1878 — popup 'Tải file mẫu' ở Nạp từ Excel (thu-chi/budget-template.ts sinh .xlsx đúng bố cục máy chủ nhận, budget-import-button.tsx); 982ab9ad — máy chủ ghép tử/mẫu cột % theo luật prototype (sổ service-finance, mục `nap-excel-ghep-cot-phan-tram-11-10`). (4) ở sổ service-petitions, mục `trien-khai-tep-nhiem-vu-10-11`.",
       "tiep_theo": "(1) xong; CÒN TREO chờ chủ dự án: hạn chỉ có ngày vẫn bị từ chối theo quyết định 28/09/2026 dù prototype nhận (giờ mặc định là quyết định của chủ dự án); nhập đơn vị theo tên cần hợp đồng identity mới. Chưa thử với tệp Excel thật của khách. (2) chưa có máy chủ cho thao tác này. (3) dòng dữ liệu bảng vẫn do xã đổi qua 'Sửa thông tin bảng' hoặc nạp lại từ mẫu — không đổi mã (thân 62cb1878). (4) người vận hành cụm đặt OBJECT_STORAGE_* + MALWARE_SCANNER_ADDRESS cho petitions."
+    },
+    {
+      "id": "canh-bao-thien-tai-web-admin-11-10",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "ADR 0091 §2 §7 phía cán bộ: tab 'Cảnh báo thiên tai' trong /mini-app (content.read xem, content.update đăng/sửa/kết thúc sớm/xoá có lý do), vẽ vùng nguy hiểm trên lưới 0..100 (bấm thêm điểm, kéo dời, xoá điểm cuối, xoá vùng, nhập X/Y bằng bàn phím), điểm sơ tán và số khẩn cấp lặp dòng kèm câu 'số công khai' của chủ dự án; ô 'Thời lượng video' (phút:giây → video_duration_seconds) ở biểu mẫu nội dung loại video.",
+      "bang_chung": "web-admin/src/features/disaster-alerts/*, web-admin/src/lib/api/disaster-alerts.ts, features/mini-app/mini-app-tabs.ts (?tab=canh-bao), features/noi-dung/nhan-noi-dung.ts (parseVideoDuration, contentRefusalText); schema.gen.ts sinh lại từ hợp đồng. tsc, eslint, vitest các thư mục disaster-alerts/mini-app/noi-dung xanh.",
+      "tiep_theo": "Chưa xem ảnh render thật (máy này không dựng được màn) — người dùng kiểm ảnh trên máy build, nhất là khung vẽ ở 320px. Không có màn nào liệt kê sổ thong_bao_gui_cong_dan, nên trạng thái 'dan-da-tat-nhan' chưa hiện ở web-admin; service-comms cũng chưa có tuyến cán bộ đọc sổ đó."
     }
   ]
 }

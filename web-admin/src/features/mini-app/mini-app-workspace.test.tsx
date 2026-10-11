@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
 
-import { NO_MINI_APP_ACCESS } from "./mini-app-tabs";
+import { NO_MINI_APP_ACCESS, type MiniAppTab } from "./mini-app-tabs";
 import { MiniAppFrame, TAB_BODY_CLASS } from "./mini-app-workspace";
 
 /**
@@ -25,29 +25,48 @@ function sessionWith(permissions: readonly string[]): PhienDaDoc {
 
 const CONTENT = <p>CONTENT-SCREEN</p>;
 const DIRECTORY = <p>DIRECTORY-SCREEN</p>;
+const ALERTS = <p>ALERTS-SCREEN</p>;
 
-function render(session: PhienDaDoc, requested: "noi-dung" | "danh-ba" = "noi-dung") {
+function render(session: PhienDaDoc, requested: MiniAppTab = "noi-dung") {
   return renderToStaticMarkup(
-    <MiniAppFrame session={session} requested={requested} content={CONTENT} directory={DIRECTORY} />,
+    <MiniAppFrame session={session} requested={requested} content={CONTENT} alerts={ALERTS} directory={DIRECTORY} />,
   );
 }
 
 const tabLinks = (html: string) => html.match(/<a [^>]*>.*?<\/a>/g) ?? [];
 
 describe("/mini-app tabs", () => {
-  it("both keys: two tab links in prototype order, the requested one current, its screen only", () => {
+  it("both keys: three tab links in order, the requested one current, its screen only", () => {
     const html = render(sessionWith(["content.read", "admin.user"]), "danh-ba");
     const links = tabLinks(html);
     expect(links.map((a) => /href="([^"]*)"/.exec(a)?.[1])).toEqual([
       "/mini-app?tab=noi-dung",
+      "/mini-app?tab=canh-bao",
       "/mini-app?tab=danh-ba",
     ]);
     expect(links[0]).toContain(">Nội dung</a>");
-    expect(links[1]).toContain(">Danh bạ cán bộ</a>");
-    expect(links[1]).toContain('aria-current="page"');
+    expect(links[1]).toContain(">Cảnh báo thiên tai</a>");
+    expect(links[2]).toContain(">Danh bạ cán bộ</a>");
+    expect(links[2]).toContain('aria-current="page"');
     expect(links[0]).not.toContain("aria-current");
     expect(html).toContain("DIRECTORY-SCREEN");
     expect(html).not.toContain("CONTENT-SCREEN");
+    expect(html).not.toContain("ALERTS-SCREEN");
+  });
+
+  it("?tab=canh-bao with content.read: the disaster-alert screen only", () => {
+    const html = render(sessionWith(["content.read"]), "canh-bao");
+    expect(html).toContain("ALERTS-SCREEN");
+    expect(html).not.toContain("CONTENT-SCREEN");
+    expect(html).not.toContain("DIRECTORY-SCREEN");
+    expect(tabLinks(html).find((a) => a.includes("canh-bao"))).toContain('aria-current="page"');
+  });
+
+  it("DENIED alerts: only admin.user → no disaster-alert tab and its screen never mounts, even when asked for", () => {
+    const html = render(sessionWith(["admin.user", "content.update"]), "canh-bao");
+    expect(html).not.toContain("Cảnh báo thiên tai");
+    expect(html).not.toContain("ALERTS-SCREEN");
+    expect(html).toContain("DIRECTORY-SCREEN");
   });
 
   it("both keys, no tab asked: the content tab", () => {
@@ -59,14 +78,15 @@ describe("/mini-app tabs", () => {
   it("DENIED content: only admin.user → one tab, the directory, even when the content tab is asked for", () => {
     const html = render(sessionWith(["admin.user", "content.update"]), "noi-dung");
     expect(tabLinks(html)).toHaveLength(1);
+    expect(html).not.toContain("ALERTS-SCREEN");
     expect(html).not.toContain(">Nội dung</a>");
     expect(html).toContain("DIRECTORY-SCREEN");
     expect(html).not.toContain("CONTENT-SCREEN");
   });
 
-  it("DENIED directory: only content.read → one tab, the content, even when ?tab=danh-ba", () => {
+  it("DENIED directory: only content.read → content and alert tabs, the content shown, even when ?tab=danh-ba", () => {
     const html = render(sessionWith(["content.read", "admin.user.delete"]), "danh-ba");
-    expect(tabLinks(html)).toHaveLength(1);
+    expect(tabLinks(html)).toHaveLength(2);
     expect(html).not.toContain("Danh bạ cán bộ");
     expect(html).toContain("CONTENT-SCREEN");
     expect(html).not.toContain("DIRECTORY-SCREEN");
@@ -93,6 +113,7 @@ describe("/mini-app tabs", () => {
     expect(links[0]).toContain("rounded-t-[10px] border border-b-0 px-4 py-2.5 text-[13px] font-semibold");
     expect(links[0]).toContain("border-line bg-white text-navy");
     expect(links[1]).toContain("border-transparent text-ink-muted hover:text-navy");
+    expect(links[2]).toContain("border-transparent text-ink-muted hover:text-navy");
     expect(html).toContain('<div class="border-t border-line"></div></nav>');
     // The body padding (prototype `p-7`) is drawn HERE once — the tab's screen sits inside it.
     expect(html).toContain(`<div class="${TAB_BODY_CLASS}" data-testid="mini-app-tab-body"><p>CONTENT-SCREEN</p></div>`);
