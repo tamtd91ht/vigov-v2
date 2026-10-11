@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Loader2, RefreshCw, TriangleAlert, Undo2, X } from "lucide-react";
+import { Check, Copy, Loader2, Pencil, Plus, RefreshCw, TriangleAlert, Undo2, Unlink, X } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -21,20 +21,30 @@ import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 // vi-name-ok: the existing result type and sentence of lib/api/goi.ts, imported, not a new name
 import { LOI_KHONG_RO, type KetQua } from "@/lib/api/goi";
-import type { comms_communeZaloBotCurrentOut } from "@/lib/api/schema.gen";
+import type { identity_danhSachBoPhanRa } from "@/lib/api/schema.gen";
 import {
   checkCommuneZaloBot,
+  createZaloGroupPairingCode,
+  editZaloGroup,
   getCommuneZaloBot,
   getZaloChannelSettings,
+  listZaloGroups,
   listZaloLinkedStaff,
   registerCommuneZaloWebhook,
   retireCommuneZaloBot,
   saveCommuneZaloBot,
   saveZaloChannelSettings,
+  unlinkZaloGroup,
+  type comms_groupPairingCodeOut,
+  type comms_zaloGroupList,
+  type comms_zaloGroupOut,
+  type CommuneZaloBotCurrent,
   type ZaloChannelSettings,
   type ZaloLinkedStaff,
 } from "@/lib/api/zalo";
 
+// vi-name-ok: the existing org-chart tree helpers of cay-bo-phan.ts, imported, not new names
+import { dungCay, traiPhang } from "./cay-bo-phan";
 import { ConfigDialog } from "./config-dialog";
 import { selectCls } from "./config-ui";
 import { zaloChannelTabDecision } from "./quyen-tab";
@@ -81,9 +91,45 @@ import {
   type UnitName,
   type ZaloChannelDraft,
 } from "./zalo-channel-form";
+import {
+  buildPatch,
+  CHANNEL_OFF_REASON,
+  checkDraft,
+  checkUnlinkReason,
+  CODE_EXPIRED,
+  CODE_ONCE,
+  COMMUNE_WIDE,
+  countdownText,
+  draftFromGroup,
+  droppedKinds,
+  droppedKindsText,
+  groupKindSections,
+  GROUPS_DESCRIPTION,
+  GROUPS_HOW_IT_WORKS,
+  isRowChecked,
+  kindNames,
+  KINDS_HINT,
+  linkedText,
+  NO_BOT_REASON,
+  NO_GROUP_KIND_REASON,
+  offerableKinds,
+  refusalFor,
+  SCOPE_HINT,
+  scopeText,
+  toggleGroupKinds,
+  UNIT_REMOVED_WARNING,
+  UNLINK_CONSEQUENCE,
+  UNLINK_REASON_MAX,
+  UNLINKED_TOAST,
+  type GroupDraft,
+  type GroupKindSection,
+  type Refusal,
+  type RefusalField,
+} from "./zalo-groups-form";
 
 type Directory = KetQua<{ items: DirectoryPerson[] }>;
-type Units = KetQua<{ items: UnitName[] }>;
+/** `GET /api/v1/org-units` as read: the people join needs `UnitName`, the group scope picker the tree. */
+type Units = KetQua<identity_danhSachBoPhanRa>;
 
 /**
  * "Cấu hình → Kênh Zalo" (ADR 0074 #6), laid out by spec 11 and the prototype's `ZaloChannelPanel`
@@ -121,6 +167,8 @@ export function ZaloChannelTab() {
    * is drawn on a guess.
    */
   const [platformReady, setPlatformReady] = useState<boolean | null>(null);
+  /** Bumped after a bot switch: comms ended every group link with it (ADR 0092), so the list is read again. */
+  const [groupsVersion, setGroupsVersion] = useState(0);
 
   const readPlatformReady = useCallback(() => {
     // After a bot switch the answer may change. A failed re-read keeps what was shown.
@@ -233,7 +281,23 @@ export function ZaloChannelTab() {
       held={held}
       dueSoonError={dueSoonError}
       people={peopleState(staff, directory, units)}
-      botSection={<CommuneBotSection onSwitched={readPlatformReady} />}
+      botSection={
+        <CommuneBotSection
+          onSwitched={() => {
+            readPlatformReady();
+            setGroupsVersion((v) => v + 1);
+          }}
+        />
+      }
+      groupSection={
+        <ZaloGroupsSection
+          key={groupsVersion}
+          channelEnabled={saved.is_enabled}
+          enabledKinds={saved.kinds}
+          platformReady={platformReady}
+          units={units}
+        />
+      }
     />
   );
 }
@@ -252,7 +316,11 @@ export type PeopleState =
   | { state: "linkedOnly"; links: ZaloLinkedStaff[]; reason: string }
   | { state: "failed"; reason: string };
 
-export function peopleState(staff: KetQua<ZaloLinkedStaff[]> | null, directory: Directory | null, units: Units | null): PeopleState {
+export function peopleState(
+  staff: KetQua<ZaloLinkedStaff[]> | null,
+  directory: Directory | null,
+  units: KetQua<{ items: UnitName[] }> | null,
+): PeopleState {
   if (staff === null || directory === null || units === null) return { state: "loading" };
   if (!staff.ok) return { state: "failed", reason: staff.thongBao };
   if (!directory.ok) return { state: "linkedOnly", links: staff.duLieu, reason: directory.thongBao };
@@ -398,6 +466,7 @@ export function ZaloChannelView({
   dueSoonError = null,
   people,
   botSection,
+  groupSection = null,
 }: {
   draft: ZaloChannelDraft;
   /** The server's `supported_events`: the only kinds a box may be ticked for. */
@@ -412,6 +481,8 @@ export function ZaloChannelView({
   people: PeopleState;
   /** §3, stateful (`CommuneBotSection`) — a slot, so this view stays pure for the tests. */
   botSection: ReactNode;
+  /** "Nhóm Zalo" (ADR 0092), stateful (`ZaloGroupsSection`) — a slot for the same reason. */
+  groupSection?: ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-5">
@@ -593,6 +664,8 @@ export function ZaloChannelView({
 
       {botSection}
 
+      {groupSection}
+
       <LinkedStaffSection people={people} />
 
       {saving && (
@@ -605,7 +678,7 @@ export function ZaloChannelView({
   );
 }
 
-type BotCurrent = comms_communeZaloBotCurrentOut;
+type BotCurrent = CommuneZaloBotCurrent;
 
 type BotBusy = "save" | "check" | "webhook" | "retire" | null;
 
@@ -705,7 +778,7 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
       toast.error(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED_TOAST : r.thongBao);
       return;
     }
-    toast.success(`${SAVED_TOAST}${endedLinksText(r.duLieu.ended_link_count)}`);
+    toast.success(`${SAVED_TOAST}${endedLinksText(r.duLieu.ended_link_count, r.duLieu.ended_group_count)}`);
     setRevokeNotice(r.duLieu.revoke_notice ?? null);
     await load(true);
     onSwitched();
@@ -779,7 +852,7 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
     // Prototype `ZaloChannelPanel.tsx:491` → `:48`: "Quay về bot chung" is a save, toasted "Đã lưu."
     toast.success(
       r.duLieu.retired
-        ? `${SAVED_TOAST}${endedLinksText(r.duLieu.ended_link_count)}`
+        ? `${SAVED_TOAST}${endedLinksText(r.duLieu.ended_link_count, r.duLieu.ended_group_count)}`
         : "Xã đã không còn bot riêng nào đang dùng.",
     );
     setRevokeNotice(r.duLieu.revoke_notice ?? null);
@@ -972,8 +1045,8 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
           >
             <p className="m-0" data-relink="">
               {pendingSwitch.kind === "adopt"
-                ? `Từ lúc lưu, mọi tin nhắc việc của xã đi bằng bot riêng. ${relinkSentence(bot.live_link_count)}`
-                : `Nếu mã mới là của một con bot khác, ${relinkSentence(bot.live_link_count)}`}
+                ? `Từ lúc lưu, mọi tin nhắc việc của xã đi bằng bot riêng. ${relinkSentence(bot.live_link_count, bot.live_group_count)}`
+                : `Nếu mã mới là của một con bot khác, ${relinkSentence(bot.live_link_count, bot.live_group_count)}`}
             </p>
           </ConfirmDialog>
         </ConfigDialog>
@@ -1010,7 +1083,7 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
             }
           >
             <p className="m-0" data-relink="">
-              {`Mọi tin nhắc việc của xã sẽ đi bằng bot chung của nền tảng. ${relinkSentence(bot.live_link_count)}`}
+              {`Mọi tin nhắc việc của xã sẽ đi bằng bot chung của nền tảng. ${relinkSentence(bot.live_link_count, bot.live_group_count)}`}
             </p>
             <div className="mt-3 flex flex-col gap-1.5">
               <label htmlFor="zalo-bot-retire-reason" className={FIELD_LABEL}>
@@ -1207,5 +1280,656 @@ function LinkedStaffSection({ people }: { people: PeopleState }) {
         chỉ cho bot nhắn cho người đã nhắn cho nó trước.
       </p>
     </section>
+  );
+}
+
+// ---- "Nhóm Zalo" (ADR 0092) -----------------------------------------------------------------------
+
+type GroupsState = KetQua<comms_zaloGroupList>;
+
+type GroupDialog =
+  | { mode: "create" }
+  | { mode: "edit"; group: comms_zaloGroupOut }
+  | { mode: "unlink"; group: comms_zaloGroupOut }
+  | null;
+
+/** One option of the scope select: "" = Toàn xã, else a unit id, indented by depth. */
+type ScopeOption = { value: string; label: string; disabled?: boolean };
+
+function scopeOptions(units: Units | null): ScopeOption[] {
+  const tree = units !== null && units.ok ? traiPhang(dungCay(units.duLieu.items)) : [];
+  return [
+    { value: "", label: COMMUNE_WIDE },
+    ...tree.map((row) => ({ value: row.bp.id, label: `${"— ".repeat(row.cap)}${row.bp.name}` })),
+  ];
+}
+
+/**
+ * "Nhóm Zalo" — ADR 0092 #1–#3, #8, against `zalo-groups` and `zalo-group-pairing-codes`. Its own reads
+ * and writes, like `CommuneBotSection`; never the settings autosave. Same key as the tab (`admin.lookup`),
+ * so it is only mounted inside the gate; comms checks it again.
+ *
+ * THE CODE IS A CREDENTIAL: it lives in the create dialog's state only, from the 201 until the dialog
+ * closes — no storage, no URL, no `title`/`aria-label`, no log (rule 3 forbidden #4, rule 8). Closing the
+ * dialog drops it and reads the list again (the group may already be linked by then).
+ *
+ * No chat id anywhere: comms returns none, and nothing here has a field for one.
+ */
+function ZaloGroupsSection({
+  channelEnabled,
+  enabledKinds,
+  platformReady,
+  units,
+}: {
+  channelEnabled: boolean;
+  /** The commune's SAVED kinds (§2): a group may tick only these. */
+  enabledKinds: readonly string[];
+  platformReady: boolean | null;
+  units: Units | null;
+}) {
+  const [groups, setGroups] = useState<GroupsState | null>(null);
+  const [dialog, setDialog] = useState<GroupDialog>(null);
+
+  const load = useCallback(async () => {
+    setGroups(await listZaloGroups());
+  }, []);
+
+  useEffect(() => {
+    let gone = false;
+    listZaloGroups().then((r) => {
+      if (!gone) setGroups(r);
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  const heading = (
+    <div className="min-w-0 flex-1">
+      <h3 id="zalo-groups-title" className={TITLE}>
+        Nhóm Zalo
+      </h3>
+      <p className={DESCRIPTION}>{GROUPS_DESCRIPTION}</p>
+    </div>
+  );
+
+  if (groups === null) {
+    return (
+      <section className={SECTION} aria-labelledby="zalo-groups-title">
+        {heading}
+        <p role="status" className="an-thi-giac">
+          Đang tải các nhóm Zalo…
+        </p>
+        <Skeleton className="mt-4 h-16 w-full" />
+      </section>
+    );
+  }
+  if (!groups.ok) {
+    return (
+      <section className={SECTION} aria-labelledby="zalo-groups-title">
+        {heading}
+        <p className="text-danger m-0 mt-2 text-[12.5px] font-medium" role="alert">
+          {groups.thongBao}
+        </p>
+      </section>
+    );
+  }
+  const list = groups.duLieu;
+  const order = list.supported_kinds;
+  const offerable = offerableKinds(order, channelEnabled, enabledKinds);
+  const sections = groupKindSections(offerable);
+  // The same causes comms answers 409 / 422 for, said before the click. Unknown bot state (null) is not a no.
+  const createBlocked = !channelEnabled
+    ? CHANNEL_OFF_REASON
+    : platformReady === false
+      ? NO_BOT_REASON
+      : sections.length === 0
+        ? NO_GROUP_KIND_REASON
+        : null;
+  const options = scopeOptions(units);
+  const unitsNote =
+    units !== null && !units.ok
+      ? `Chưa tải được danh sách bộ phận (${units.thongBao}), nên lúc này chỉ chọn được ${COMMUNE_WIDE}.`
+      : null;
+
+  function close(reload: boolean) {
+    setDialog(null);
+    if (reload) void load();
+  }
+
+  return (
+    <section className={SECTION} aria-labelledby="zalo-groups-title">
+      <div className="flex flex-wrap items-start gap-3">
+        {heading}
+        <Button
+          type="button"
+          variant="primary"
+          icon={<Plus aria-hidden="true" focusable="false" />}
+          disabled={createBlocked !== null}
+          aria-describedby={createBlocked !== null ? "zalo-groups-blocked" : undefined}
+          onClick={() => setDialog({ mode: "create" })}
+        >
+          Tạo mã gắn nhóm
+        </Button>
+      </div>
+      {createBlocked !== null && (
+        <p id="zalo-groups-blocked" className="text-ink-muted m-0 mt-2 text-[12px]" data-groups-blocked="">
+          {createBlocked}
+        </p>
+      )}
+
+      {list.items.length === 0 ? (
+        <p className="text-ink-muted m-0 mt-4 text-[12.5px]" data-groups-empty="">
+          {GROUPS_HOW_IT_WORKS}
+        </p>
+      ) : (
+        <ul className="m-0 mt-4 flex list-none flex-col p-0">
+          {list.items.map((g) => {
+            const names = kindNames(g.kinds);
+            return (
+              <li
+                key={g.id}
+                className={cn(HAIRLINE_BOTTOM, "flex flex-wrap items-start gap-3 py-3 first:pt-0 last:border-b-0 last:pb-0")}
+                data-group-id={g.id}
+              >
+                <div className="flex min-w-0 flex-1 basis-60 flex-col gap-0.5">
+                  <p className="text-navy m-0 text-[13px] font-semibold" data-group-scope="">
+                    {scopeText(g)}
+                  </p>
+                  {g.org_unit_removed && (
+                    <p className="text-danger m-0 flex items-center gap-1 text-[12px] font-medium" data-unit-removed="">
+                      <TriangleAlert aria-hidden="true" focusable="false" className="size-3.5 shrink-0" />
+                      {UNIT_REMOVED_WARNING}
+                    </p>
+                  )}
+                  <p className="text-ink m-0 text-[12px]" data-group-kinds="">
+                    {`${names.length} loại tin: ${names.join(", ")}`}
+                  </p>
+                  <p className="text-ink-muted m-0 text-[11.5px]">{linkedText(formatVietnamDateTime(g.linked_at), g)}</p>
+                </div>
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-white"
+                    icon={<Pencil aria-hidden="true" focusable="false" />}
+                    onClick={() => setDialog({ mode: "edit", group: g })}
+                  >
+                    Sửa
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={DANGER_OUTLINE}
+                    icon={<Unlink aria-hidden="true" focusable="false" />}
+                    onClick={() => setDialog({ mode: "unlink", group: g })}
+                  >
+                    Gỡ
+                  </Button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {dialog?.mode === "create" && (
+        <CreateGroupCodeDialog
+          sections={sections}
+          order={order}
+          options={options}
+          unitsNote={unitsNote}
+          onClose={() => close(true)}
+        />
+      )}
+      {dialog?.mode === "edit" && (
+        <EditGroupDialog
+          group={dialog.group}
+          sections={sections}
+          order={order}
+          offerable={offerable}
+          options={options}
+          unitsNote={unitsNote}
+          onClose={close}
+        />
+      )}
+      {dialog?.mode === "unlink" && <UnlinkGroupDialog group={dialog.group} onClose={close} />}
+    </section>
+  );
+}
+
+type FieldErrors = Partial<Record<RefusalField, string>>;
+
+function refusalErrors(r: Refusal): FieldErrors {
+  return { [r.field]: r.text };
+}
+
+function FieldError({ field, text }: { field: RefusalField; text: string | undefined }) {
+  if (text === undefined) return null;
+  return (
+    <p className="text-danger m-0 text-[12px] font-medium" role="alert" data-error={field}>
+      {text}
+    </p>
+  );
+}
+
+/** The two fields a group has — scope and kinds — each with its refusal drawn under it. */
+function GroupFields({
+  idPrefix,
+  draft,
+  onChange,
+  disabled,
+  sections,
+  order,
+  options,
+  unitsNote,
+  errors,
+}: {
+  idPrefix: string;
+  draft: GroupDraft;
+  onChange: (d: GroupDraft) => void;
+  disabled: boolean;
+  sections: readonly GroupKindSection[];
+  order: readonly string[];
+  options: readonly ScopeOption[];
+  unitsNote: string | null;
+  errors: FieldErrors;
+}) {
+  return (
+    <>
+      <ZaloField label="Phạm vi" htmlFor={`${idPrefix}-scope`} hint={SCOPE_HINT}>
+        <select
+          id={`${idPrefix}-scope`}
+          name="org_unit_id"
+          className={daySelectCls}
+          value={draft.scope}
+          disabled={disabled}
+          aria-invalid={errors.scope !== undefined}
+          onChange={(e) => onChange({ ...draft, scope: e.target.value })}
+        >
+          {options.map((o) => (
+            <option key={o.value} value={o.value} disabled={o.disabled}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        {unitsNote !== null && <p className={FIELD_HINT}>{unitsNote}</p>}
+        <FieldError field="scope" text={errors.scope} />
+      </ZaloField>
+
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <p className={FIELD_LABEL}>Loại tin</p>
+        <p className={FIELD_HINT}>{KINDS_HINT}</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {sections.map((s) => (
+            <div key={s.title} role="group" aria-label={s.title}>
+              <p className="text-ink-muted m-0 mb-1.5 text-[11px] font-semibold tracking-wide uppercase">{s.title}</p>
+              <div className="flex flex-col gap-1.5">
+                {s.rows.map((row) => (
+                  <label key={row.code} className="flex cursor-pointer items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      className={CHECKBOX}
+                      data-group-kind={row.code}
+                      checked={isRowChecked(row, draft.kinds)}
+                      disabled={disabled}
+                      onChange={(e) =>
+                        onChange({
+                          ...draft,
+                          kinds: toggleGroupKinds(draft.kinds, row, e.target.checked, order),
+                          kindsTouched: true,
+                        })
+                      }
+                    />
+                    <span className="text-navy text-[12.5px] font-semibold">{row.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <FieldError field="kinds" text={errors.kinds} />
+      </div>
+    </>
+  );
+}
+
+/**
+ * "Tạo mã gắn nhóm": scope + kinds → POST → the code, big, with its countdown, a copy button and the
+ * instruction. The code exists only while this dialog is open.
+ */
+function CreateGroupCodeDialog({
+  sections,
+  order,
+  options,
+  unitsNote,
+  onClose,
+}: {
+  sections: readonly GroupKindSection[];
+  order: readonly string[];
+  options: readonly ScopeOption[];
+  unitsNote: string | null;
+  onClose: () => void;
+}) {
+  const [draft, setDraft] = useState<GroupDraft>({ scope: "", kinds: [], kindsTouched: false });
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [issued, setIssued] = useState<comms_groupPairingCodeOut | null>(null);
+
+  async function submit() {
+    const refused = checkDraft(draft);
+    if (refused !== null) {
+      setErrors(refusalErrors(refused));
+      return;
+    }
+    setErrors({});
+    setBusy(true);
+    const r = await createZaloGroupPairingCode({ org_unit_id: draft.scope === "" ? null : draft.scope, kinds: draft.kinds });
+    setBusy(false);
+    if (!r.ok) {
+      setErrors(refusalErrors(refusalFor(r.code, r.thongBao, LOI_KHONG_RO)));
+      return;
+    }
+    setIssued(r.duLieu);
+  }
+
+  return (
+    <ConfigDialog
+      title="Tạo mã gắn nhóm"
+      onDismiss={() => {
+        if (!busy) onClose();
+      }}
+    >
+      {issued === null ? (
+        <form
+          aria-label="Tạo mã gắn nhóm"
+          className="m-0 flex flex-col gap-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!busy) void submit();
+          }}
+        >
+          <GroupFields
+            idPrefix="zalo-group-new"
+            draft={draft}
+            onChange={setDraft}
+            disabled={busy}
+            sections={sections}
+            order={order}
+            options={options}
+            unitsNote={unitsNote}
+            errors={errors}
+          />
+          <FieldError field="form" text={errors.form} />
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+              Tạo mã
+            </Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={onClose}>
+              {NUT_HUY}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <GroupCodeOnce issued={issued} onClose={onClose} />
+      )}
+    </ConfigDialog>
+  );
+}
+
+const COPY_FAILED = "Chưa chép được. Hãy chọn mã rồi chép tay.";
+
+/** The fresh code, ONCE: big, monospaced, a countdown to `expires_at`, "Chép", the instruction. */
+function GroupCodeOnce({ issued, onClose }: { issued: comms_groupPairingCodeOut; onClose: () => void }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const left = countdownText(issued.expires_at, now);
+  return (
+    <div className="flex flex-col gap-3" data-group-code-once="">
+      <p className="text-navy m-0 text-[12.5px]">{GROUPS_HOW_IT_WORKS}</p>
+      <div className="border-line bg-background flex flex-wrap items-center gap-3 rounded-[10px] border border-solid p-3">
+        <output
+          className={cn(
+            "min-w-0 flex-1 font-mono text-[26px] font-bold tracking-[0.2em] break-all",
+            left === null ? "text-ink-muted line-through" : "text-navy",
+          )}
+          data-group-code=""
+        >
+          {issued.code}
+        </output>
+        <Button
+          type="button"
+          variant="outline"
+          className="bg-white"
+          disabled={left === null}
+          icon={<Copy aria-hidden="true" focusable="false" />}
+          onClick={() => {
+            const clip = typeof navigator === "undefined" ? undefined : navigator.clipboard;
+            if (clip === undefined) {
+              toast.error(COPY_FAILED);
+              return;
+            }
+            clip.writeText(issued.code).then(
+              () => toast.success("Đã chép."),
+              () => toast.error(COPY_FAILED),
+            );
+          }}
+        >
+          Chép
+        </Button>
+      </div>
+      <p
+        className={cn("m-0 text-[12.5px] font-medium", left === null ? "text-danger" : "text-navy")}
+        role="status"
+        data-countdown=""
+      >
+        {left ?? CODE_EXPIRED}
+      </p>
+      <p className={FIELD_HINT}>{CODE_ONCE}</p>
+      <div className="flex justify-end">
+        <Button type="button" variant="primary" icon={<Check aria-hidden="true" focusable="false" />} onClick={onClose}>
+          Xong
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/** "Sửa": the same two fields → PATCH with only what changed. */
+function EditGroupDialog({
+  group,
+  sections,
+  order,
+  offerable,
+  options,
+  unitsNote,
+  onClose,
+}: {
+  group: comms_zaloGroupOut;
+  sections: readonly GroupKindSection[];
+  order: readonly string[];
+  offerable: readonly string[];
+  options: readonly ScopeOption[];
+  unitsNote: string | null;
+  onClose: (reload: boolean) => void;
+}) {
+  const [draft, setDraft] = useState<GroupDraft>(() => draftFromGroup(group, offerable));
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const dropped = droppedKinds(group, offerable);
+  // A unit no longer in the tree stays the select's value (nothing moves unasked), shown for what it is
+  // and not selectable again.
+  const scopeChoices: readonly ScopeOption[] =
+    group.org_unit_id !== null && !options.some((o) => o.value === group.org_unit_id)
+      ? [
+          ...options,
+          {
+            value: group.org_unit_id,
+            label: `${scopeText(group)} (${group.org_unit_removed ? "đã xoá" : "không có trong danh sách"})`,
+            disabled: true,
+          },
+        ]
+      : options;
+
+  async function submit() {
+    const built = buildPatch(group, draft);
+    if (!built.ok) {
+      setErrors(refusalErrors(built.refusal));
+      return;
+    }
+    setErrors({});
+    setBusy(true);
+    const r = await editZaloGroup(group.id, built.patch);
+    setBusy(false);
+    if (!r.ok) {
+      const refusal = refusalFor(r.code, r.thongBao, LOI_KHONG_RO);
+      if (r.code === "not_found") {
+        toast.error(refusal.text);
+        onClose(true);
+        return;
+      }
+      setErrors(refusalErrors(refusal));
+      return;
+    }
+    toast.success(SAVED_TOAST);
+    onClose(true);
+  }
+
+  return (
+    <ConfigDialog
+      title="Sửa nhóm Zalo"
+      description={scopeText(group)}
+      onDismiss={() => {
+        if (!busy) onClose(false);
+      }}
+    >
+      <form
+        aria-label="Sửa nhóm Zalo"
+        className="m-0 flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy) void submit();
+        }}
+      >
+        {group.org_unit_removed && (
+          <p className="text-danger m-0 text-[12.5px] font-medium" data-unit-removed="">
+            {UNIT_REMOVED_WARNING}.
+          </p>
+        )}
+        <GroupFields
+          idPrefix={`zalo-group-${group.id}`}
+          draft={draft}
+          onChange={setDraft}
+          disabled={busy}
+          sections={sections}
+          order={order}
+          options={scopeChoices}
+          unitsNote={unitsNote}
+          errors={errors}
+        />
+        {dropped.length > 0 && (
+          <p className={FIELD_HINT} data-dropped-kinds="">
+            {droppedKindsText(kindNames(dropped))}
+          </p>
+        )}
+        <FieldError field="form" text={errors.form} />
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            Lưu
+          </Button>
+          <Button type="button" variant="outline" disabled={busy} onClick={() => onClose(false)}>
+            {NUT_HUY}
+          </Button>
+        </div>
+      </form>
+    </ConfigDialog>
+  );
+}
+
+/** "Gỡ": the ONLY way a group is unlinked (ADR 0092 #8) — a required reason, then DELETE. */
+function UnlinkGroupDialog({ group, onClose }: { group: comms_zaloGroupOut; onClose: (reload: boolean) => void }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const title = `Gỡ nhóm Zalo “${scopeText(group)}”?`;
+
+  async function submit() {
+    const checked = checkUnlinkReason(reason);
+    if (!checked.ok) {
+      setErrors(refusalErrors(checked.refusal));
+      return;
+    }
+    setErrors({});
+    setBusy(true);
+    const r = await unlinkZaloGroup(group.id, checked.reason);
+    setBusy(false);
+    if (!r.ok) {
+      const refusal = refusalFor(r.code, r.thongBao, LOI_KHONG_RO);
+      if (r.code === "not_found") {
+        toast.error(refusal.text);
+        onClose(true);
+        return;
+      }
+      setErrors(refusalErrors(refusal));
+      return;
+    }
+    toast.success(UNLINKED_TOAST);
+    onClose(true);
+  }
+
+  return (
+    <ConfigDialog
+      title={title}
+      hideHeader
+      onDismiss={() => {
+        if (!busy) onClose(false);
+      }}
+    >
+      <ConfirmDialog
+        as="form"
+        aria-label="Gỡ nhóm Zalo"
+        icon={Unlink}
+        tone="danger"
+        title={title}
+        className="m-0 p-0 shadow-none"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!busy) void submit();
+        }}
+        actions={
+          <>
+            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+              Gỡ nhóm
+            </Button>
+            <Button type="button" variant="outline" disabled={busy} onClick={() => onClose(false)}>
+              {NUT_HUY}
+            </Button>
+          </>
+        }
+      >
+        <p className="m-0">{UNLINK_CONSEQUENCE}</p>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="zalo-group-unlink-reason" className={FIELD_LABEL}>
+            Lý do gỡ nhóm
+          </label>
+          {/* One line: comms refuses control characters, a newline included. */}
+          <input
+            id="zalo-group-unlink-reason"
+            type="text"
+            className={botInputCls}
+            maxLength={UNLINK_REASON_MAX}
+            value={reason}
+            disabled={busy}
+            aria-invalid={errors.reason !== undefined}
+            onChange={(e) => setReason(e.target.value)}
+          />
+          <FieldError field="reason" text={errors.reason} />
+          <FieldError field="form" text={errors.form} />
+        </div>
+      </ConfirmDialog>
+    </ConfigDialog>
   );
 }

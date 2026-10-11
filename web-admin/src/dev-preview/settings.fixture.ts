@@ -16,7 +16,7 @@ import type {
   petitions_systemMessageOut,
   platform_brandingSettingsOut,
 } from "@/lib/api/schema.gen";
-import type { ZaloChannelSettings, ZaloLinkCurrent, ZaloLinkedStaff } from "@/lib/api/zalo";
+import type { comms_zaloGroupList, ZaloChannelSettings, ZaloLinkCurrent, ZaloLinkedStaff } from "@/lib/api/zalo";
 
 import { PREVIEW_CATEGORIES } from "./disbursement.fixture";
 import { PREVIEW_DOCUMENT_TYPES } from "./documents.fixture";
@@ -316,6 +316,51 @@ const ZALO_LINKED: ZaloLinkedStaff[] = [
   { staff_code: "CB-00001", staff_name: "Cán bộ A", linked_at: "2026-10-06T08:10:00Z" },
 ];
 
+/**
+ * Nhóm Zalo (ADR 0092): one commune-wide group, one on a live unit, one whose unit left the org chart
+ * (the warning row). `supported_kinds` is comms' `domain.ZaloGroupKinds`. No chat id: comms returns none.
+ */
+const ZALO_GROUPS: comms_zaloGroupList = {
+  items: [
+    {
+      id: "01PREVIEWZGRP000000000001",
+      org_unit_id: null,
+      org_unit_name: "",
+      org_unit_removed: false,
+      kinds: ["nhiem-vu.qua-han", "nhiem-vu.giao-moi"],
+      linked_at: "2026-10-11T02:00:00Z",
+      linked_by: "CB-00003",
+      linked_by_name: "Cán bộ C",
+    },
+    {
+      id: "01PREVIEWZGRP000000000002",
+      org_unit_id: UNIT_ONE_STOP,
+      org_unit_name: "Bộ phận Một cửa",
+      org_unit_removed: false,
+      kinds: ["nhiem-vu.qua-han"],
+      linked_at: "2026-10-11T03:10:00Z",
+      linked_by: "CB-00001",
+      linked_by_name: "Cán bộ A",
+    },
+    {
+      id: "01PREVIEWZGRP000000000003",
+      org_unit_id: "01PREVIEWUNIT000000000099",
+      org_unit_name: "Tổ công tác cũ",
+      org_unit_removed: true,
+      kinds: ["nhiem-vu.leo-thang"],
+      linked_at: "2026-10-09T08:00:00Z",
+      linked_by: "CB-00003",
+      linked_by_name: "Cán bộ C",
+    },
+  ],
+  supported_kinds: [
+    "nhiem-vu.qua-han", "nhiem-vu.chua-cu-nguoi", "nhiem-vu.leo-thang",
+    "van-ban.qua-han", "van-ban.chua-cu-nguoi", "van-ban.leo-thang",
+    "phan-anh.qua-han", "phan-anh.chua-cu-nguoi", "phan-anh.leo-thang",
+    "nhiem-vu.giao-moi", "nhiem-vu.cho-duyet", "van-ban.chuyen-toi", "phan-anh.phan-cong", "phan-anh.mo-lai",
+  ],
+};
+
 const BRANDING: platform_brandingSettingsOut = {
   logo_public_url: "",
   web_admin_banner_public_url: "",
@@ -394,8 +439,10 @@ const SINGLE_ANSWERS: Record<string, unknown> = {
   "/api/v1/mail-settings": MAIL,
   "/api/v1/zalo-channel-settings": ZALO_SETTINGS,
   "/api/v1/zalo-links/current": ZALO_CURRENT,
-  // The commune still on the shared bot (the common case); live_link_count feeds the switch dialog.
-  "/api/v1/zalo-bots/current": { has_own_bot: false, bot: null, live_link_count: 2 },
+  // The commune still on the shared bot (the common case); live_link_count / live_group_count feed the
+  // switch dialog.
+  "/api/v1/zalo-bots/current": { has_own_bot: false, bot: null, live_link_count: 2, live_group_count: 3 },
+  "/api/v1/zalo-groups": ZALO_GROUPS,
   "/api/v1/commune-branding": BRANDING,
 };
 
@@ -438,6 +485,7 @@ export function answerSettings(method: string, url: URL): Response | null {
       const blank: comms_mailSettingsOut = { ...MAIL, configured: false, host: "", username: "", from_address: "", from_name: "", is_enabled: false, password_set: false };
       return json(blank);
     }
+    if (empty && p === "/api/v1/zalo-groups") return json({ ...ZALO_GROUPS, items: [] } satisfies comms_zaloGroupList);
     if (p === "/api/v1/mail-settings" && settingsPreviewState() === "mail-off") {
       return json({ ...MAIL, is_enabled: false } satisfies comms_mailSettingsOut);
     }

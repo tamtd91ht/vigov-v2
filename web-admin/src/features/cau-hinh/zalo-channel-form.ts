@@ -491,15 +491,22 @@ export const WEBHOOK_SECRET_ONCE =
  * ADR 0079 Q1 #4: a switch ends EVERY live link — the confirmation names how many. `live_link_count` is
  * the server's figure; nothing is estimated here.
  */
-export function relinkSentence(liveLinkCount: number): string {
+export function relinkSentence(liveLinkCount: number, liveGroupCount = 0): string {
+  // ADR 0092: a switch ends every linked Zalo GROUP too; each is linked again with a new group code.
+  // 0 (or a comms that does not send the count yet) says nothing about groups rather than "none".
+  if (liveGroupCount > 0) {
+    return liveLinkCount > 0
+      ? `${liveLinkCount} cán bộ đang ghép nối sẽ phải ghép nối lại, và ${liveGroupCount} nhóm Zalo phải gắn lại.`
+      : `Hiện chưa cán bộ nào ghép nối, nhưng ${liveGroupCount} nhóm Zalo phải gắn lại.`;
+  }
   return liveLinkCount > 0
     ? `${liveLinkCount} cán bộ đang ghép nối sẽ phải ghép nối lại.`
     : "Hiện chưa cán bộ nào ghép nối, nên không ai phải ghép nối lại.";
 }
 
-/** After a switch: what the server says actually ended. */
-export function endedLinksText(count: number): string {
-  return count > 0 ? ` ${count} cán bộ cần ghép nối lại.` : "";
+/** After a switch: what the server says actually ended — staff links, then groups (ADR 0092). */
+export function endedLinksText(count: number, groupCount = 0): string {
+  return (count > 0 ? ` ${count} cán bộ cần ghép nối lại.` : "") + (groupCount > 0 ? ` ${groupCount} nhóm Zalo cần gắn lại.` : "");
 }
 
 /**

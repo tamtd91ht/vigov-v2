@@ -6,7 +6,9 @@
  *   - the commune's channel settings and who is linked — `zalo-channel-settings`, `zalo-links`,
  *     `admin.lookup`;
  *   - the commune's OWN bot — `zalo-bots/current` (+ `/check`, `/webhook`; DELETE = back to the shared
- *     bot), `admin.lookup` (`service-comms/internal/http/zalo_commune_bot.go`).
+ *     bot), `admin.lookup` (`service-comms/internal/http/zalo_commune_bot.go`);
+ *   - the commune's Zalo GROUPS (ADR 0092) — `zalo-groups` (+ `/{id}`) and `zalo-group-pairing-codes`,
+ *     `admin.lookup` (`service-comms/internal/http/zalo_groups.go`).
  *
  * EVERY SHAPE IS `schema.gen.ts`'s (agent rule 6). The names below are ALIASES kept for the callers
  * that already import them (`features/zalo`, `dev-preview`), never a second copy of a shape; each path
@@ -80,6 +82,56 @@ export type ZaloChannelSettingsChange = comms_zaloChannelSettingsIn & Required<D
  */
 type DueSoonDaysUntilRegen = { due_soon_days?: number | null };
 
+// ---- UNTIL REGEN: Zalo groups (ADR 0092, comms cb0cab90) ----------------------------------------
+//
+// `schema.gen.ts` is NOT regenerated yet: `make kb` has not run in the shared tree, and regenerating it
+// here would mix in other sessions' uncommitted routes (the same stopgap as `DueSoonDaysUntilRegen`
+// above). Every shape below is copied from `service-comms/internal/http/zalo_groups.go` (groupPairingCodeIn
+// · groupPairingCodeOut · zaloGroupOut · zaloGroupList · zaloGroupPatchIn · zaloGroupUnlinkIn) and
+// `zalo_commune_bot.go` (live_group_count · ended_group_count), named as the generator will name them.
+//
+// DELETE THIS WHOLE BLOCK in the commit that lands the regen: import the `comms_*` names from
+// `schema.gen` instead, and turn each `…Route` below into the generated route type in the `satisfies`.
+// A shape that drifted from the server is then a red `tsc`, which is the point of rule 6.
+
+/** POST zalo-group-pairing-codes. `org_unit_id` null = the whole commune; `kinds` non-empty. */
+export type comms_groupPairingCodeIn = { org_unit_id: string | null; kinds: string[] };
+/** 201 — the code is shown ONCE (`Cache-Control: no-store`); the server keeps only its hash. */
+export type comms_groupPairingCodeOut = { code: string; expires_at: string };
+/**
+ * One live group. `org_unit_id` null = the whole commune; `org_unit_name` "" when identity holds no name;
+ * `org_unit_removed`: the unit left the org chart. `linked_by` is the code ISSUER's business code. NO chat id.
+ */
+export type comms_zaloGroupOut = {
+  id: string;
+  org_unit_id: string | null;
+  org_unit_name: string;
+  org_unit_removed: boolean;
+  kinds: string[];
+  linked_at: string;
+  linked_by: string;
+  linked_by_name: string;
+};
+/** GET zalo-groups. `supported_kinds`: the kinds a group may ever tick, in comms' display order. */
+export type comms_zaloGroupList = { items: comms_zaloGroupOut[]; supported_kinds: string[] };
+/** PATCH zalo-groups/{id}: an ABSENT key keeps its value; `org_unit_id: null` = the whole commune. */
+export type comms_zaloGroupPatchIn = { org_unit_id?: string | null; kinds?: string[] };
+/** DELETE zalo-groups/{id} — rule 7: a soft delete carries its reason. */
+export type comms_zaloGroupUnlinkIn = { reason: string };
+
+type PairingCodesRoute = { duongDan: "/api/v1/zalo-group-pairing-codes" };
+type GroupsRoute = { duongDan: "/api/v1/zalo-groups" };
+type GroupByIdRoute = { duongDan: "/api/v1/zalo-groups/{id}" };
+
+/** The two counts comms added to the bot routes for groups (zalo_commune_bot.go:90,110,144). */
+type BotGroupCountsUntilRegen = { live_group_count?: number };
+type BotEndedGroupsUntilRegen = { ended_group_count?: number };
+export type CommuneZaloBotCurrent = comms_communeZaloBotCurrentOut & BotGroupCountsUntilRegen;
+export type CommuneZaloBotSaved = comms_communeZaloBotSavedOut & BotEndedGroupsUntilRegen;
+export type CommuneZaloBotRetired = comms_communeZaloBotRetiredOut & BotEndedGroupsUntilRegen;
+
+// ---- end UNTIL REGEN ---------------------------------------------------------------------------
+
 /** GET /api/v1/zalo-links — staff of THIS commune with a live link. Names, codes, a date; no chat id. */
 export type ZaloLinkedStaff = comms_zaloLinkedStaffOut;
 
@@ -98,6 +150,14 @@ const BOT_PATH = "/api/v1/zalo-bots/current" satisfies comms_get_zalo_bots_curre
 const BOT_CHECK_PATH = "/api/v1/zalo-bots/current/check" satisfies comms_post_zalo_bots_current_check["duongDan"];
 const BOT_WEBHOOK_PATH =
   "/api/v1/zalo-bots/current/webhook" satisfies comms_post_zalo_bots_current_webhook["duongDan"];
+const GROUP_PAIRING_PATH = "/api/v1/zalo-group-pairing-codes" satisfies PairingCodesRoute["duongDan"];
+const GROUPS_PATH = "/api/v1/zalo-groups" satisfies GroupsRoute["duongDan"];
+const GROUP_TEMPLATE = "/api/v1/zalo-groups/{id}" satisfies GroupByIdRoute["duongDan"];
+
+/** `encodeURIComponent`: the id goes into the PATH, not the body. */
+function groupPath(id: string): string {
+  return GROUP_TEMPLATE.replace("{id}", encodeURIComponent(id));
+}
 
 /** Success statuses, as the contract publishes them (`phanHoi` of each route in `schema.gen.ts`). */
 export const ZALO_STATUS = {
@@ -109,6 +169,9 @@ export const ZALO_STATUS = {
   botChecked: 200,
   webhookRegistered: 200,
   botRetired: 200,
+  groupCodeCreated: 201,
+  groupEdited: 204,
+  groupUnlinked: 204,
 } as const;
 
 export function getCurrentZaloLink(): Promise<KetQua<ZaloLinkCurrent>> {
@@ -167,8 +230,8 @@ export async function listZaloLinkedStaff(): Promise<KetQua<ZaloLinkedStaff[]>> 
 // ---- the commune's own bot ---------------------------------------------------------------------
 
 /** GET zalo-bots/current: own bot or not, and `live_link_count` — never the token, never the secret. */
-export function getCommuneZaloBot(): Promise<KetQua<comms_communeZaloBotCurrentOut>> {
-  return docJSON<comms_communeZaloBotCurrentOut>(BOT_PATH);
+export function getCommuneZaloBot(): Promise<KetQua<CommuneZaloBotCurrent>> {
+  return docJSON<CommuneZaloBotCurrent>(BOT_PATH);
 }
 
 /**
@@ -177,10 +240,10 @@ export function getCommuneZaloBot(): Promise<KetQua<comms_communeZaloBotCurrentO
  * token. A token for another bot account ends every live link in the same transaction (ADR 0079
  * Q1 #4) — the caller confirms that BEFORE calling.
  */
-export function saveCommuneZaloBot(body: comms_communeZaloBotIn): Promise<KetQua<comms_communeZaloBotSavedOut>> {
+export function saveCommuneZaloBot(body: comms_communeZaloBotIn): Promise<KetQua<CommuneZaloBotSaved>> {
   const sent: comms_communeZaloBotIn = { bot_name: body.bot_name, chat_url: body.chat_url };
   if (body.bot_token !== undefined && body.bot_token !== "") sent.bot_token = body.bot_token;
-  return docThanLoiGoi<comms_communeZaloBotSavedOut>(goiGhi(BOT_PATH, "PUT", sent, ZALO_STATUS.botSaved));
+  return docThanLoiGoi<CommuneZaloBotSaved>(goiGhi(BOT_PATH, "PUT", sent, ZALO_STATUS.botSaved));
 }
 
 /** POST …/check — getMe with the STORED token; `result` is an outcome class, never Zalo's words. */
@@ -199,6 +262,44 @@ export function registerCommuneZaloWebhook(): Promise<KetQua<comms_zaloBotWebhoo
 }
 
 /** DELETE zalo-bots/current with `{reason}` — back to the shared bot; a soft delete carries its reason (rule 7). */
-export function retireCommuneZaloBot(reason: string): Promise<KetQua<comms_communeZaloBotRetiredOut>> {
-  return docThanLoiGoi<comms_communeZaloBotRetiredOut>(goiGhi(BOT_PATH, "DELETE", { reason }, ZALO_STATUS.botRetired));
+export function retireCommuneZaloBot(reason: string): Promise<KetQua<CommuneZaloBotRetired>> {
+  return docThanLoiGoi<CommuneZaloBotRetired>(goiGhi(BOT_PATH, "DELETE", { reason }, ZALO_STATUS.botRetired));
+}
+
+// ---- Zalo groups (ADR 0092) ---------------------------------------------------------------------
+//
+// `withCode` on every group write: the section draws each refusal under the field it is about (scope,
+// kinds, reason) — the fourth documented reader of `KetQua.code` (see `goi.ts`).
+
+/** GET zalo-groups — the commune's live groups and the kinds a group may tick. Never a chat id. */
+export function listZaloGroups(): Promise<KetQua<comms_zaloGroupList>> {
+  return docJSON<comms_zaloGroupList>(GROUPS_PATH);
+}
+
+/**
+ * POST zalo-group-pairing-codes. Built key by key; `org_unit_id` is ALWAYS a key (null = the whole
+ * commune). The reply holds a live credential: returned to the caller as is, never stored, logged or
+ * cached here (the server sends it `no-store`).
+ */
+export function createZaloGroupPairingCode(body: comms_groupPairingCodeIn): Promise<KetQua<comms_groupPairingCodeOut>> {
+  const sent: comms_groupPairingCodeIn = { org_unit_id: body.org_unit_id, kinds: [...body.kinds] };
+  return docThanLoiGoi<comms_groupPairingCodeOut>(
+    goiGhi(GROUP_PAIRING_PATH, "POST", sent, ZALO_STATUS.groupCodeCreated, undefined, { withCode: true }),
+  );
+}
+
+/** PATCH zalo-groups/{id}. Only the keys the caller set travel: an absent key keeps the stored value. */
+export async function editZaloGroup(id: string, patch: comms_zaloGroupPatchIn): Promise<KetQua<null>> {
+  const sent: comms_zaloGroupPatchIn = {};
+  if (patch.org_unit_id !== undefined) sent.org_unit_id = patch.org_unit_id;
+  if (patch.kinds !== undefined) sent.kinds = [...patch.kinds];
+  const r = await goiGhi(groupPath(id), "PATCH", sent, ZALO_STATUS.groupEdited, undefined, { withCode: true });
+  return r.ok ? { ok: true, duLieu: null } : r;
+}
+
+/** DELETE zalo-groups/{id} with `{reason}` — the ONLY way a group is unlinked (ADR 0092 #8); soft, trailed. */
+export async function unlinkZaloGroup(id: string, reason: string): Promise<KetQua<null>> {
+  const sent: comms_zaloGroupUnlinkIn = { reason };
+  const r = await goiGhi(groupPath(id), "DELETE", sent, ZALO_STATUS.groupUnlinked, undefined, { withCode: true });
+  return r.ok ? { ok: true, duLieu: null } : r;
 }

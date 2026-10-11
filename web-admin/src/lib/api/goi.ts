@@ -37,7 +37,9 @@ export type KetQua<T> =
        * Present for TWO documented uses, not as a licence to branch: the intake of an incoming document
        * shows the way to Cấu hình only when the refusal is `sla_chua_cau_hinh` — the remedy lives on
        * another screen, and matching the WORDING would break silently the day the sentence changes; and
-       * the Zalo channel tab draws `due_soon_days_out_of_range` under its own select (`zalo.ts`).
+       * the Zalo channel tab draws `due_soon_days_out_of_range` under its own select (`zalo.ts`), and
+       * its "Nhóm Zalo" section draws each group refusal under the field it is about (scope, kinds,
+       * reason — `zalo-groups-form.ts` GROUP_REFUSALS).
        * The sentence shown is still `thongBao`, verbatim; every other screen ignores this field.
        */
       code?: string;

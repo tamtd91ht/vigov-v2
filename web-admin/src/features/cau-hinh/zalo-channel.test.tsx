@@ -25,6 +25,7 @@ const {
   checkRetireReason,
   dayOptions,
   draftFromSettings,
+  endedLinksText,
   EVENT_NOT_OFFERED,
   hourOptions,
   joinStaffLinks,
@@ -37,6 +38,16 @@ const {
   ZALO_EVENT_GROUPS,
 } = await import("./zalo-channel-form");
 const { peopleState, ZaloChannelTab, ZaloChannelView } = await import("./zalo-channel-tab");
+const {
+  CHANNEL_OFF_REASON,
+  CODE_EXPIRED,
+  GENERIC_FAILURE,
+  GROUPS_HOW_IT_WORKS,
+  NO_BOT_REASON,
+  refusalFor,
+  UNIT_REMOVED_WARNING,
+} = await import("./zalo-groups-form");
+const { LOI_KHONG_RO } = await import("@/lib/api/goi");
 
 /** The nine act notices of ADR 0086 A2 (comms migration 0025), in comms' canonical order. */
 const ACT_KINDS = [
@@ -111,6 +122,23 @@ const OWN_BOT: comms_communeZaloBotCurrentOut = {
     last_check: { at: "2026-10-08T02:00:00Z", result: "thanh-cong" },
   },
 };
+/** comms `domain.ZaloGroupKinds` (`service-comms/internal/domain/zalo_group.go:26`) — `supported_kinds`. */
+const GROUP_KINDS = [
+  "nhiem-vu.qua-han",
+  "nhiem-vu.chua-cu-nguoi",
+  "nhiem-vu.leo-thang",
+  "van-ban.qua-han",
+  "van-ban.chua-cu-nguoi",
+  "van-ban.leo-thang",
+  "phan-anh.qua-han",
+  "phan-anh.chua-cu-nguoi",
+  "phan-anh.leo-thang",
+  "nhiem-vu.giao-moi",
+  "nhiem-vu.cho-duyet",
+  "van-ban.chuyen-toi",
+  "phan-anh.phan-cong",
+  "phan-anh.mo-lai",
+];
 const TOKEN_FAKE = "000000000:fake-token-for-tests";
 const SECRET_FAKE = "fake-webhook-secret-0000";
 
@@ -135,6 +163,10 @@ let directoryAnswer: { status: number; body: unknown } = { status: 200, body: { 
 let botNow: comms_communeZaloBotCurrentOut | null = SHARED_BOT;
 /** What the bot writes answer, by "METHOD url". */
 let botAnswers: Record<string, { status: number; body: unknown }> = {};
+/** What GET /api/v1/zalo-groups answers (ADR 0092). */
+let groupsNow: { status: number; body: unknown } = { status: 200, body: { items: [], supported_kinds: GROUP_KINDS } };
+/** What the group writes answer, by "METHOD url". */
+let groupAnswers: Record<string, { status: number; body: unknown }> = {};
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -147,6 +179,8 @@ beforeEach(() => {
   directoryAnswer = { status: 200, body: { items: DIRECTORY } };
   botNow = SHARED_BOT;
   botAnswers = {};
+  groupsNow = { status: 200, body: { items: [], supported_kinds: GROUP_KINDS } };
+  groupAnswers = {};
   H.toast.success.mockReset();
   H.toast.error.mockReset();
   vi.stubGlobal(
@@ -160,6 +194,12 @@ beforeEach(() => {
       if (url === "/api/v1/zalo-links") return json(200, { items: LINKED });
       if (url === "/api/v1/staff-directory") return json(directoryAnswer.status, directoryAnswer.body);
       if (url === "/api/v1/org-units") return json(200, { items: UNITS });
+      if (url.startsWith("/api/v1/zalo-group")) {
+        if (method === "GET" && url === "/api/v1/zalo-groups") return json(groupsNow.status, groupsNow.body);
+        const a = groupAnswers[`${method} ${url}`];
+        if (!a) return json(500, { code: "internal", message: "no stub" });
+        return a.status === 204 ? new Response(null, { status: 204 }) : json(a.status, a.body);
+      }
       if (url.startsWith("/api/v1/zalo-bots/")) {
         if (method === "GET") {
           return botNow === null ? json(500, { code: "internal", message: "Máy chủ bận" }) : json(200, botNow);
@@ -615,6 +655,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
       "/api/v1/staff-directory",
       "/api/v1/zalo-bots/current",
       "/api/v1/zalo-channel-settings",
+      "/api/v1/zalo-groups",
       "/api/v1/zalo-links",
     ]);
     expect(el.textContent).toContain("Nguyễn Văn A");
@@ -1083,5 +1124,330 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
     expect(H.toast.success).toHaveBeenCalledWith("Đã lưu. 5 cán bộ cần ghép nối lại.");
     expect(el.querySelector("[data-revoke-notice]")!.textContent).toBe("Mã của con bot cũ vẫn còn hiệu lực ở phía Zalo.");
     expect(botSection(el).querySelector("[data-bot-pill]")!.textContent).toBe("Bot chung");
+  });
+});
+
+describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
+  /** The commune has switched on group kinds AND per-person ones; only the former reach a group's boxes. */
+  const WITH_GROUP_KINDS: ZaloChannelSettings = {
+    ...SETTINGS,
+    kinds: [
+      "nhiem-vu.sap-den-han",
+      "nhiem-vu.qua-han",
+      "van-ban.qua-han",
+      "van-ban.chua-cu-nguoi",
+      "van-ban.leo-thang",
+      "nhiem-vu.giao-moi",
+      "nhiem-vu.nhac-ten",
+    ],
+  };
+
+  const COMMUNE_GROUP = {
+    id: "01GROUPCOMMUNE00000000000A",
+    org_unit_id: null as string | null,
+    org_unit_name: "",
+    org_unit_removed: false,
+    kinds: ["nhiem-vu.qua-han", "nhiem-vu.giao-moi"],
+    linked_at: "2026-10-11T02:00:00Z",
+    linked_by: "CB-00123",
+    linked_by_name: "Nguyễn Văn A",
+  };
+  const UNIT_GROUP = {
+    ...COMMUNE_GROUP,
+    id: "01GROUPUNIT0000000000000B",
+    org_unit_id: "01UNITVP",
+    org_unit_name: "Văn phòng",
+    kinds: ["van-ban.qua-han", "van-ban.chua-cu-nguoi", "van-ban.leo-thang"],
+    linked_by_name: "",
+  };
+  const REMOVED_GROUP = {
+    ...COMMUNE_GROUP,
+    id: "01GROUPGONE0000000000000C",
+    org_unit_id: "01UNITGONE",
+    org_unit_name: "Tổ cũ",
+    org_unit_removed: true,
+    kinds: ["phan-anh.phan-cong"],
+  };
+
+  function groupsSection(el: HTMLElement): HTMLElement {
+    return el.querySelector<HTMLElement>('section[aria-labelledby="zalo-groups-title"]')!;
+  }
+
+  function pick(select: HTMLSelectElement, value: string) {
+    act(() => {
+      select.value = value;
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+  }
+
+  function dialog(el: HTMLElement): HTMLElement {
+    return el.querySelector<HTMLElement>("dialog")!;
+  }
+
+  async function openCreateAndTickOverdue(el: HTMLElement) {
+    act(() => button(groupsSection(el), "Tạo mã gắn nhóm").click());
+    await settle();
+    act(() => dialog(el).querySelector<HTMLInputElement>('input[data-group-kind="task.overdue"]')!.click());
+    act(() => button(dialog(el), "Tạo mã").click());
+    await settle();
+  }
+
+  it("relink / ended sentences name the groups a switch unlinks; zero or absent says nothing about groups", () => {
+    expect(relinkSentence(4, 2)).toBe("4 cán bộ đang ghép nối sẽ phải ghép nối lại, và 2 nhóm Zalo phải gắn lại.");
+    expect(relinkSentence(0, 1)).toBe("Hiện chưa cán bộ nào ghép nối, nhưng 1 nhóm Zalo phải gắn lại.");
+    expect(relinkSentence(4, 0)).toBe("4 cán bộ đang ghép nối sẽ phải ghép nối lại.");
+    expect(endedLinksText(2, 3)).toBe(" 2 cán bộ cần ghép nối lại. 3 nhóm Zalo cần gắn lại.");
+    expect(endedLinksText(0, 1)).toBe(" 1 nhóm Zalo cần gắn lại.");
+    expect(endedLinksText(0)).toBe("");
+  });
+
+  it("refusals: own keys only — a code named like an Object method is unknown, never a function on screen", () => {
+    expect(refusalFor("toString", LOI_KHONG_RO, LOI_KHONG_RO)).toEqual({ field: "form", text: GENERIC_FAILURE });
+    expect(refusalFor("constructor", "Máy chủ nói vậy.", LOI_KHONG_RO)).toEqual({ field: "form", text: "Máy chủ nói vậy." });
+    expect(refusalFor(undefined, LOI_KHONG_RO, LOI_KHONG_RO).text).toBe(GENERIC_FAILURE);
+    expect(refusalFor("kind_not_enabled", "x", LOI_KHONG_RO).field).toBe("kinds");
+    expect(refusalFor("org_unit_not_live", "x", LOI_KHONG_RO).field).toBe("scope");
+    expect(refusalFor("reason_required", "x", LOI_KHONG_RO).field).toBe("reason");
+    expect(refusalFor("zalo_bot_not_configured", "x", LOI_KHONG_RO)).toEqual({ field: "form", text: NO_BOT_REASON });
+  });
+
+  it("empty list: the one how-it-works sentence; 'Tạo mã gắn nhóm' enabled", async () => {
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+    const sec = groupsSection(el);
+    expect(sec.querySelector("[data-groups-empty]")!.textContent).toBe(GROUPS_HOW_IT_WORKS);
+    expect(button(sec, "Tạo mã gắn nhóm").disabled).toBe(false);
+    expect(sec.querySelector("[data-groups-blocked]")).toBeNull();
+  });
+
+  it("list: commune-wide, a unit, a removed unit (warned); kinds count + §2 names; linked at · by; no chat id", async () => {
+    H.phien = session(["admin.lookup"]);
+    groupsNow = { status: 200, body: { items: [COMMUNE_GROUP, UNIT_GROUP, REMOVED_GROUP], supported_kinds: GROUP_KINDS } };
+    const el = await mount();
+    const rows = Array.from(groupsSection(el).querySelectorAll<HTMLElement>("li[data-group-id]"));
+    expect(rows.map((r) => r.querySelector("[data-group-scope]")!.textContent)).toEqual(["Toàn xã", "Văn phòng", "Tổ cũ"]);
+    expect(rows[0]!.querySelector("[data-group-kinds]")!.textContent).toBe("2 loại tin: Giao việc mới, Việc quá hạn");
+    // Three kinds, ONE §2 row: named once.
+    expect(rows[1]!.querySelector("[data-group-kinds]")!.textContent).toBe("1 loại tin: Văn bản, đơn thư quá hạn");
+    expect(rows[0]!.textContent).toContain("bởi Nguyễn Văn A (CB-00123)");
+    expect(rows[1]!.textContent).toContain("bởi CB-00123");
+    expect(rows[0]!.querySelector("[data-unit-removed]")).toBeNull();
+    expect(rows[2]!.querySelector("[data-unit-removed]")!.textContent).toBe(UNIT_REMOVED_WARNING);
+    expect(el.innerHTML).not.toMatch(/chat_id|chatId/);
+  });
+
+  it("the list read failing is said inside the section; the rest of the tab stays", async () => {
+    H.phien = session(["admin.lookup"]);
+    groupsNow = { status: 503, body: { code: "staff_names_unavailable", message: "Tạm thời không tải được họ tên cán bộ." } };
+    const el = await mount();
+    expect(groupsSection(el).querySelector('[role="alert"]')!.textContent).toBe("Tạm thời không tải được họ tên cán bộ.");
+    expect(el.textContent).toContain("Nhắc việc qua Zalo");
+  });
+
+  it("DISABLED with the reason when the channel is off", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = OFF;
+    const el = await mount();
+    expect(button(groupsSection(el), "Tạo mã gắn nhóm").disabled).toBe(true);
+    expect(groupsSection(el).querySelector("[data-groups-blocked]")!.textContent).toBe(CHANNEL_OFF_REASON);
+  });
+
+  it("DISABLED with the reason when no bot serves the commune (platform_ready false)", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = { ...WITH_GROUP_KINDS, platform_ready: false };
+    const el = await mount();
+    expect(button(groupsSection(el), "Tạo mã gắn nhóm").disabled).toBe(true);
+    expect(groupsSection(el).querySelector("[data-groups-blocked]")!.textContent).toBe(NO_BOT_REASON);
+  });
+
+  it("CREATE: boxes = supported_kinds ∩ the commune's enabled kinds; none ticked → refused on the spot; payload; code once", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = WITH_GROUP_KINDS;
+    groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = {
+      status: 201,
+      body: { code: "ABCD2345", expires_at: new Date(Date.now() + 10 * 60 * 1000).toISOString() },
+    };
+    const el = await mount();
+    act(() => button(groupsSection(el), "Tạo mã gắn nhóm").click());
+    await settle();
+    const dlg = dialog(el);
+    const offered = Array.from(dlg.querySelectorAll<HTMLInputElement>("input[data-group-kind]")).map((i) => i.dataset.groupKind);
+    // Enabled AND a group kind. Not "sắp đến hạn" / "nhắc tên" (per person, never a group), not
+    // "phân công phản ánh" (a group kind the commune has not switched on).
+    expect(offered).toEqual(["task.assigned", "task.overdue", "document.overdue"]);
+
+    act(() => button(dlg, "Tạo mã").click());
+    await settle();
+    expect(calls.some((c) => c.method === "POST")).toBe(false);
+    expect(dlg.querySelector('[data-error="kinds"]')!.textContent).toBe("Cần chọn ít nhất một loại tin cho nhóm.");
+
+    act(() => dlg.querySelector<HTMLInputElement>('input[data-group-kind="task.assigned"]')!.click());
+    act(() => dlg.querySelector<HTMLInputElement>('input[data-group-kind="document.overdue"]')!.click());
+    pick(dlg.querySelector<HTMLSelectElement>("#zalo-group-new-scope")!, "01UNITVP");
+    act(() => button(dlg, "Tạo mã").click());
+    await settle();
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.url).toBe("/api/v1/zalo-group-pairing-codes");
+    // supported_kinds' order, whatever the click order; the document row's three kinds together.
+    expect(JSON.parse(post.body!)).toEqual({
+      org_unit_id: "01UNITVP",
+      kinds: ["van-ban.qua-han", "van-ban.chua-cu-nguoi", "van-ban.leo-thang", "nhiem-vu.giao-moi"],
+    });
+    expect(dialog(el).querySelector("[data-group-code]")!.textContent).toBe("ABCD2345");
+    expect(dialog(el).querySelector("[data-countdown]")!.textContent).toMatch(/^Còn (09:5\d|10:00)$/);
+    expect(dialog(el).textContent).toContain(GROUPS_HOW_IT_WORKS);
+
+    const listReads = () => calls.filter((c) => c.method === "GET" && c.url === "/api/v1/zalo-groups").length;
+    expect(listReads()).toBe(1);
+    act(() => button(dialog(el), "Xong").click());
+    await settle();
+    expect(el.querySelector("dialog")).toBeNull();
+    expect(el.textContent).not.toContain("ABCD2345");
+    expect(listReads()).toBe(2);
+  });
+
+  it("CREATE 'Toàn xã' sends org_unit_id: null as a key", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = WITH_GROUP_KINDS;
+    groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = {
+      status: 201,
+      body: { code: "ABCD2345", expires_at: new Date(Date.now() + 60_000).toISOString() },
+    };
+    const el = await mount();
+    await openCreateAndTickOverdue(el);
+    expect(JSON.parse(calls.find((c) => c.method === "POST")!.body!)).toEqual({ org_unit_id: null, kinds: ["nhiem-vu.qua-han"] });
+  });
+
+  it("an expired code says so and cannot be copied", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = WITH_GROUP_KINDS;
+    groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = {
+      status: 201,
+      body: { code: "ABCD2345", expires_at: new Date(Date.now() - 1000).toISOString() },
+    };
+    const el = await mount();
+    await openCreateAndTickOverdue(el);
+    expect(dialog(el).querySelector("[data-countdown]")!.textContent).toBe(CODE_EXPIRED);
+    expect(button(dialog(el), "Chép").disabled).toBe(true);
+  });
+
+  it.each([
+    ["kind_not_enabled", 422, "kinds"],
+    ["org_unit_not_live", 422, "scope"],
+    ["zalo_channel_disabled", 409, "form"],
+    ["zalo_bot_not_configured", 409, "form"],
+  ] as const)("CREATE refused %s (%i) → drawn under '%s'", async (code, status, field) => {
+    H.phien = session(["admin.lookup"]);
+    stored = WITH_GROUP_KINDS;
+    groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = { status, body: { code, message: "câu của máy chủ" } };
+    const el = await mount();
+    await openCreateAndTickOverdue(el);
+    const shown = dialog(el).querySelector(`[data-error="${field}"]`)!;
+    expect(shown.textContent).toBe(refusalFor(code, "câu của máy chủ", LOI_KHONG_RO).text);
+    expect(dialog(el).querySelector("[data-group-code]")).toBeNull();
+  });
+
+  it("CREATE refused with an UNKNOWN code: the server's own sentence, at form level", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = WITH_GROUP_KINDS;
+    groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = { status: 403, body: { code: "forbidden", message: "Bạn không có quyền." } };
+    const el = await mount();
+    await openCreateAndTickOverdue(el);
+    expect(dialog(el).querySelector('[data-error="form"]')!.textContent).toBe("Bạn không có quyền.");
+  });
+
+  it("EDIT: unchanged → nothing sent; scope-only change sends only org_unit_id (null = Toàn xã)", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = WITH_GROUP_KINDS;
+    groupsNow = { status: 200, body: { items: [UNIT_GROUP], supported_kinds: GROUP_KINDS } };
+    groupAnswers[`PATCH /api/v1/zalo-groups/${UNIT_GROUP.id}`] = { status: 204, body: null };
+    const el = await mount();
+    act(() => button(groupsSection(el), "Sửa").click());
+    await settle();
+    expect(dialog(el).querySelector<HTMLInputElement>('input[data-group-kind="document.overdue"]')!.checked).toBe(true);
+    act(() => button(dialog(el), "Lưu").click());
+    await settle();
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    expect(dialog(el).querySelector('[data-error="form"]')!.textContent).toBe("Chưa có gì thay đổi.");
+
+    pick(dialog(el).querySelector<HTMLSelectElement>(`#zalo-group-${UNIT_GROUP.id}-scope`)!, "");
+    act(() => button(dialog(el), "Lưu").click());
+    await settle();
+    const patch = calls.find((c) => c.method === "PATCH")!;
+    expect(patch.url).toBe(`/api/v1/zalo-groups/${UNIT_GROUP.id}`);
+    expect(JSON.parse(patch.body!)).toEqual({ org_unit_id: null });
+    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu.");
+    expect(el.querySelector("dialog")).toBeNull();
+  });
+
+  it("EDIT a group on a removed unit: warned in the dialog; the removed unit is shown but not selectable", async () => {
+    H.phien = session(["admin.lookup"]);
+    stored = { ...WITH_GROUP_KINDS, kinds: [...WITH_GROUP_KINDS.kinds, "phan-anh.phan-cong"] };
+    groupsNow = { status: 200, body: { items: [REMOVED_GROUP], supported_kinds: GROUP_KINDS } };
+    const el = await mount();
+    act(() => button(groupsSection(el), "Sửa").click());
+    await settle();
+    expect(dialog(el).querySelector("[data-unit-removed]")).not.toBeNull();
+    const removed = dialog(el).querySelector<HTMLOptionElement>('option[value="01UNITGONE"]')!;
+    expect(removed.disabled).toBe(true);
+    expect(removed.textContent).toBe("Tổ cũ (đã xoá)");
+  });
+
+  it("UNLINK: the reason is REQUIRED — nothing sent without it; then DELETE {reason}, list read again", async () => {
+    H.phien = session(["admin.lookup"]);
+    groupsNow = { status: 200, body: { items: [COMMUNE_GROUP], supported_kinds: GROUP_KINDS } };
+    groupAnswers[`DELETE /api/v1/zalo-groups/${COMMUNE_GROUP.id}`] = { status: 204, body: null };
+    const el = await mount();
+    act(() => button(groupsSection(el), "Gỡ").click());
+    await settle();
+    act(() => button(dialog(el), "Gỡ nhóm").click());
+    await settle();
+    expect(calls.some((c) => c.method === "DELETE")).toBe(false);
+    expect(dialog(el).querySelector('[data-error="reason"]')!.textContent).toBe("Cần nhập lý do gỡ nhóm, tối đa 200 ký tự.");
+
+    typeInto(dialog(el).querySelector<HTMLInputElement>("#zalo-group-unlink-reason")!, "  Nhóm đã giải tán  ");
+    groupsNow = { status: 200, body: { items: [], supported_kinds: GROUP_KINDS } };
+    act(() => button(dialog(el), "Gỡ nhóm").click());
+    await settle();
+    const del = calls.find((c) => c.method === "DELETE")!;
+    expect(del.url).toBe(`/api/v1/zalo-groups/${COMMUNE_GROUP.id}`);
+    expect(JSON.parse(del.body!)).toEqual({ reason: "Nhóm đã giải tán" });
+    expect(H.toast.success).toHaveBeenCalledWith("Đã gỡ nhóm.");
+    expect(groupsSection(el).querySelector("[data-groups-empty]")).not.toBeNull();
+  });
+
+  it("BOT SWITCH: the confirmation names the groups that must be linked again; the toast the groups that ended; list re-read", async () => {
+    H.phien = session(["admin.lookup"]);
+    botNow = { ...SHARED_BOT, live_group_count: 3 } as comms_communeZaloBotCurrentOut;
+    botAnswers["PUT /api/v1/zalo-bots/current"] = {
+      status: 200,
+      body: { bot: OWN_BOT.bot, adopted: true, ended_link_count: 2, ended_group_count: 3 },
+    };
+    const el = await mount();
+    const sec = botSection(el);
+    typeInto(sec.querySelector<HTMLInputElement>("#zalo-bot-token")!, TOKEN_FAKE);
+    typeInto(sec.querySelector<HTMLInputElement>("#zalo-bot-name")!, "Bot Xã Thử");
+    typeInto(sec.querySelector<HTMLInputElement>("#zalo-bot-chat-url")!, "https://zalo.me/000000001");
+    act(() => button(sec, "Lưu con bot").click());
+    await settle();
+    expect(el.querySelector("[data-relink]")!.textContent).toContain(
+      "2 cán bộ đang ghép nối sẽ phải ghép nối lại, và 3 nhóm Zalo phải gắn lại.",
+    );
+    botNow = OWN_BOT;
+    act(() => button(dialog(el), "Lưu con bot").click());
+    await settle();
+    expect(H.toast.success).toHaveBeenCalledWith("Đã lưu. 2 cán bộ cần ghép nối lại. 3 nhóm Zalo cần gắn lại.");
+    expect(calls.filter((c) => c.method === "GET" && c.url === "/api/v1/zalo-groups")).toHaveLength(2);
+  });
+
+  it("'Quay về bot chung' names the groups too", async () => {
+    H.phien = session(["admin.lookup"]);
+    botNow = { ...OWN_BOT, live_group_count: 1 } as comms_communeZaloBotCurrentOut;
+    const el = await mount();
+    act(() => button(botSection(el), "Quay về bot chung").click());
+    await settle();
+    expect(dialog(el).querySelector("[data-relink]")!.textContent).toContain(
+      "5 cán bộ đang ghép nối sẽ phải ghép nối lại, và 1 nhóm Zalo phải gắn lại.",
+    );
   });
 });
