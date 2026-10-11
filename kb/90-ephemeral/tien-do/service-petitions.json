@@ -795,6 +795,15 @@
       "viec": "Thẻ Go của ADR 0047 G4 / ADR 0091 §5–§6. (1) Mọi đường vào da-chuyen-xu-ly (PhanCong) và cho-dan-xac-nhan (TienTrangThai, phiếu gộp đi theo phiếu chính) ghi giờ của thao tác vào forwarded_for_processing_at / awaiting_confirmation_at TRONG CÙNG câu UPDATE đổi trạng thái (domain.StatusEntryTimes + COALESCE): phân công lại giữ trạng thái thì giữ giờ cũ; vào lại sau khi mở lại thì ghi đè giờ mới nhất. (2) Chi tiết phiếu của dân (GET /api/v1/my-citizen-reports/{code}) thêm classified_at, forwarded_for_processing_at, resolved_at, awaiting_confirmation_at, closed_at — tuỳ chọn, NULL thì vắng ('không ghi nhận'), chỉ đọc cột trên phiếu, không đọc nhat_ky_phan_anh. (3) Danh mục lĩnh vực cho dân / nhập hộ / phiếu không tài khoản có trường placeholder (omitempty) từ tầng 1.",
       "bang_chung": "service-petitions/internal/domain/status_entry_times.go(+_test), store/{xu_ly_phan_anh,petition_merge,phieu_phan_anh}.go, app/{xu_ly_phan_anh,petition_merge}.go, http/{phieu_cua_toi,petition_fields,accountless}.go; test mới app/status_entry_times_test.go, store/status_entry_times_test.go, http/citizen_step_times_test.go. go build/vet/test ./... service-petitions xanh 11/10/2026 (driver giả — chưa chạy trên PostgreSQL).",
       "tiep_theo": "CHẶN: placeholder chưa tới được dân — core/platformclient.PetitionField chưa mang DescriptionPlaceholder (thẻ này không được sửa core/**); cần thêm trường + ánh xạ ở platformclient.usable và một dòng ở app/petition_field_catalogue.go platformTier1.Fields. vao_so_luc KHÔNG trả cho dân (phieu_cua_toi.go giữ nó nội bộ theo ADR 0028) — bước 'Đã tiếp nhận' dùng clock_from; cần chủ dự án xác nhận nếu muốn khác. citizen-app chưa hiện giờ từng bước. Chưa chạy trên PostgreSQL 16 thật."
+    },
+    {
+      "id": "migration-11-10-vi-tri-dan-dieu-chinh",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Migration 0044 (chủ dự án chốt 11/10/2026: dân được kéo ghim bản đồ trên Mini App xã để sửa vị trí): cột phieu_phan_anh.location_citizen_adjusted BOOLEAN cho phép NULL, không mặc định, không điền lại — true = dân tự đặt/kéo ghim, false = lat/lng lấy nguyên từ Zalo (hoặc không do dân đặt), NULL = không ghi nhận (phiếu trước khi luồng tiếp nhận ghi cờ). CHECK phieu_phan_anh_location_adjusted_has_coordinates: chỉ true khi có cả lat và lng.",
+      "bang_chung": "service-petitions/migrations/0044_petition_location_citizen_adjusted.sql + petition_location_citizen_adjusted_test.go; GOCACHE=D:/gocache go test ./... service-petitions xanh 11/10/2026 (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL, máy này không có VIGOV_TEST_DSN nên test PG bỏ qua).",
+      "tiep_theo": "Thẻ Go sau: tuyến tiếp nhận của dân nhận cờ điều chỉnh, ghi vào cột trong câu INSERT (false khi có toạ độ Zalo không đổi); đường đọc coi NULL là 'không rõ', không gộp thành false. citizen-app gửi cờ khi dân kéo ghim. Chưa chạy trên PostgreSQL 16 thật."
     }
   ]
 }
