@@ -376,6 +376,76 @@ message StaffNotification {
   // and the items follow the same per-recipient list as `body`). Not logged, like the rest of the
   // request.
   repeated DueSoonItem due_soon_items = 7;
+
+  // ---------------------------------------------------------------------------------------------------
+  // ZALO GROUP DELIVERY (owner decisions 11/10/2026) — fields 8 and 9.
+  //
+  // Comms also posts staff notices into Zalo GROUP chats linked to the commune. Each linked group has a
+  // SCOPE (one org unit, `bo_phan`, or the whole commune) and its own subset of kinds. A notice is
+  // posted to a group when ALL of:
+  //   (a) `group_posting` is GROUP_POSTING_ALLOWED;
+  //   (b) the group's kind subset contains `kind` (comms' stored value, as for the per-person box);
+  //   (c) the group is commune-wide, OR `holding_org_unit_id` is non-empty and equals the group's unit.
+  // ONE NOTICE = ONE GROUP MESSAGE per matching group, deduplicated per (commune, `idempotency_key`,
+  // group) — first delivery wins, as for recipients. A re-send of the same key with a different unit
+  // (the record moved) posts nothing new; the move's own act carries its own key.
+  //
+  // The group copy is independent of the recipient list: a group is posted to even when no recipient
+  // is linked to Zalo, and a notice with no matching group still delivers its bell rows unchanged.
+  // DISBURSEMENT_MENTION (17) stays bell-only (ADR 0081 #5) whatever these fields say.
+  //
+  // ROLLOUT ORDER — proto, then comms, then producers (as in StaffNotificationKind's header). A comms
+  // build that predates 8–9 ignores them as unknown fields and posts nothing to any group — the safe
+  // side. Older producers omit both: comms then reads GROUP_POSTING_UNSPECIFIED and posts NOTHING to a
+  // group for that notice (fail closed — see `group_posting`).
+
+  // The ULID of the identity `bo_phan` that CURRENTLY HOLDS the record this notice is about, read from
+  // that record's own unit column at the moment the producer writes the notice:
+  //   task              nhiem_vu.bo_phan_id                       (service-petitions)
+  //   petition          phieu_phan_anh.bo_phan_id                 (service-petitions)
+  //   incoming document van_ban_den.bo_phan_dang_giu_id           (service-documents)
+  //   citizen letter    holding_unit_id                           (service-documents)
+  // NEVER derived from a recipient's unit: a recipient may be a leader of another unit, and the group
+  // a notice reaches must follow the RECORD, not whoever was addressed.
+  //
+  // EMPTY = unknown or none (an unassigned record, a finance notice — disbursements carry no org unit):
+  // the notice reaches COMMUNE-WIDE groups only, never a unit group. Empty is never read as "every unit".
+  //
+  // VALIDATION: empty, or exactly 26 characters of Crockford base32 (a ULID). Anything else is
+  // INVALID_ARGUMENT for the whole batch, as for every other refusal. Comms does NOT check that the unit
+  // exists or is live: an id no linked group carries simply matches no unit group.
+  string holding_org_unit_id = 8;
+
+  // Whether this notice may be posted to a Zalo group at all. The PRODUCER decides, per record, because
+  // comms cannot: the same kind (PETITION_ASSIGNED, PETITION_OVERDUE, …) is sent both for an ordinary
+  // petition and for an ADR 0030 `can-bo` petition that only `feedback.restricted` holders may see, and
+  // a group has members nobody checked against that key. Deriving it from `kind` would either post
+  // restricted records or forbid every petition.
+  GroupPosting group_posting = 9;
+}
+
+// Whether a notice may be posted to a Zalo group. UNSPECIFIED is NOT "allowed": it is what every
+// producer that predates field 9 sends, and those producers have not checked restriction for a group
+// audience — so comms posts it to NO group (fail closed, CLAUDE.md). Group posting therefore starts
+// per producer, the day that producer sets ALLOWED.
+enum GroupPosting {
+  // Older producer, or the producer did not decide. Never posted to a group; bell and per-person Zalo
+  // copy unchanged.
+  GROUP_POSTING_UNSPECIFIED = 0;
+
+  // The notice is about ONE record that any member of the matching group may know exists, and
+  // `title` / `body` / `link` are the SAME for every recipient. Set ONLY when both hold.
+  //
+  // NOT for digests or per-person notices — DUE_SOON (1), WEEKLY_DIGEST (4), TASK_DUE_SOON (5),
+  // DOCUMENT_DUE_SOON (9), PETITION_DUE_SOON (13), REPORT_READY (25): their key is per person or per
+  // period, not per record, so the per-group dedupe would post the FIRST recipient's list to the group.
+  // Producers send UNSPECIFIED for those.
+  GROUP_POSTING_ALLOWED = 1;
+
+  // The record is restricted — today an ADR 0030 `can-bo` petition; any later confidential record
+  // class uses the same value. NEVER posted to a group, whatever the group's scope or kinds. Distinct
+  // from UNSPECIFIED so comms can count refusals by reason without logging content.
+  GROUP_POSTING_RESTRICTED = 2;
 }
 
 // One record in a due-soon digest.
