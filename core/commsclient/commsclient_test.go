@@ -234,3 +234,29 @@ func TestDeliverMapsDueSoonItems(t *testing.T) {
 		t.Error("không có mục phải ra nil")
 	}
 }
+
+// Fields 8 and 9 (ADR 0092) reach the wire as set; a notice that sets neither sends UNSPECIFIED and ""
+// — the shape comms posts to no group.
+func TestDeliverMapsGroupFields(t *testing.T) {
+	srv := &fakeServer{}
+	c := startClient(t, srv)
+	unit := "01JB" + strings.Repeat("B", 22)
+	grouped := notice("k1", "CB-1")
+	grouped.HoldingOrgUnitID = unit
+	grouped.GroupPosting = commsv1.GroupPosting_GROUP_POSTING_ALLOWED
+	restricted := notice("k2", "CB-2")
+	restricted.GroupPosting = commsv1.GroupPosting_GROUP_POSTING_RESTRICTED
+	if _, err := c.DeliverStaffNotifications(communeCtx(), []Notice{grouped, restricted, notice("k3", "CB-3")}); err != nil {
+		t.Fatalf("Deliver: %v", err)
+	}
+	ns := srv.saw.GetNotifications()
+	if ns[0].GetHoldingOrgUnitId() != unit || ns[0].GetGroupPosting() != commsv1.GroupPosting_GROUP_POSTING_ALLOWED {
+		t.Errorf("thông báo 1 trên dây: bộ phận %q, group_posting %v", ns[0].GetHoldingOrgUnitId(), ns[0].GetGroupPosting())
+	}
+	if ns[1].GetGroupPosting() != commsv1.GroupPosting_GROUP_POSTING_RESTRICTED || ns[1].GetHoldingOrgUnitId() != "" {
+		t.Errorf("thông báo 2 trên dây: %v / %q", ns[1].GetGroupPosting(), ns[1].GetHoldingOrgUnitId())
+	}
+	if ns[2].GetGroupPosting() != commsv1.GroupPosting_GROUP_POSTING_UNSPECIFIED || ns[2].GetHoldingOrgUnitId() != "" {
+		t.Errorf("thông báo không quyết phải là UNSPECIFIED, rỗng: %v / %q", ns[2].GetGroupPosting(), ns[2].GetHoldingOrgUnitId())
+	}
+}

@@ -309,5 +309,7 @@ func noticeFromPayload(row petstore.StaffNoticeRow) (commsclient.Notice, bool) {
 	return commsclient.Notice{
 		IdempotencyKey: row.IdempotencyKey, Kind: m.GetKind(), RecipientMa: m.GetRecipientMa(),
 		Title: m.GetTitle(), Body: m.GetBody(), Link: m.GetLink(),
+		// A row written before ADR 0092 has neither: UNSPECIFIED and "" — no group, as it was.
+		HoldingOrgUnitID: m.GetHoldingOrgUnitId(), GroupPosting: m.GetGroupPosting(),
 	}, true
 }

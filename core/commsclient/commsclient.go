@@ -58,6 +58,14 @@ type Notice struct {
 	// Body counts, each with its STORED deadline, so comms can apply the commune's Zalo lead to the
 	// Zalo copy. Empty is the old producer's shape — comms then sends the bell's text unchanged.
 	DueSoonItems []DueSoonItem
+	// HoldingOrgUnitID is the unit holding the record the notice is about, read from the RECORD's own
+	// unit column — never a recipient's unit (StaffNotification.holding_org_unit_id, ADR 0092 #7). ""
+	// when the record has none: the notice then reaches commune-wide groups only.
+	HoldingOrgUnitID string
+	// GroupPosting is the producer's decision whether this notice may enter a Zalo group at all
+	// (StaffNotification.group_posting). The zero value, UNSPECIFIED, posts to NO group — the shape
+	// every producer that has not decided sends.
+	GroupPosting commsv1.GroupPosting
 }
 
 // DueSoonItem is one record of a due-soon notice: its business code and its deadline as stored. The
@@ -152,6 +160,9 @@ func (c *Client) DeliverStaffNotifications(ctx context.Context, notices []Notice
 			Body:           n.Body,
 			Link:           n.Link,
 			DueSoonItems:   dueSoonItemsToWire(n.DueSoonItems),
+
+			HoldingOrgUnitId: n.HoldingOrgUnitID,
+			GroupPosting:     n.GroupPosting,
 		})
 	}
 	if recipients > MaxRecipientsPerCall {

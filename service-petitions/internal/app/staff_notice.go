@@ -56,6 +56,18 @@ func actNoticeWireKind(k domain.ActNoticeKind) (commsv1.StaffNotificationKind, b
 	return commsv1.StaffNotificationKind_STAFF_NOTIFICATION_KIND_UNSPECIFIED, false
 }
 
+// wireGroupPosting maps the domain's decision onto comms' enum (ADR 0092). Anything the domain did not
+// decide is UNSPECIFIED — comms posts that to no group, so an unknown value fails closed.
+func wireGroupPosting(g domain.GroupPosting) commsv1.GroupPosting {
+	switch g {
+	case domain.GroupPostingAllowed:
+		return commsv1.GroupPosting_GROUP_POSTING_ALLOWED
+	case domain.GroupPostingRestricted:
+		return commsv1.GroupPosting_GROUP_POSTING_RESTRICTED
+	}
+	return commsv1.GroupPosting_GROUP_POSTING_UNSPECIFIED
+}
+
 // writeStaffNotice records notice `n` inside `tx`. actorCode is the acting STAFF code (audit.Actor.ID —
 // Principal.Ma); it is removed from the recipients (A3 #1). Nobody left → NO ROW, and no error: an
 // officer assigning work to themselves owes nobody a notice (transaction boundary compensation (c)).
@@ -91,6 +103,7 @@ func writeStaffNotice(ctx context.Context, tx *store.ScopedTx, out StaffNoticeOu
 		}
 		payload, err := protojson.MarshalOptions{UseProtoNames: true}.Marshal(&commsv1.StaffNotification{
 			IdempotencyKey: key, Kind: kind, RecipientMa: parts[i], Title: n.Title, Body: n.Body, Link: n.Link,
+			HoldingOrgUnitId: n.HoldingOrgUnitID, GroupPosting: wireGroupPosting(n.GroupPosting),
 		})
 		if err != nil {
 			return fmt.Errorf("thông báo cán bộ: mã hoá: %w", err)

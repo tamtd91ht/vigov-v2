@@ -71,6 +71,11 @@ type ActNotice struct {
 	Title      string
 	Body       string
 	Link       string
+	// HoldingOrgUnitID is the record's own unit column AFTER the act (`nhiem_vu.bo_phan_id`,
+	// `phieu_phan_anh.bo_phan_id`) — never a recipient's unit (ADR 0092 #7); "" when it has none.
+	// GroupPosting is whether the notice may enter a Zalo group; zero posts to none (group_posting.go).
+	HoldingOrgUnitID string
+	GroupPosting     GroupPosting
 }
 
 // Key is `<stored value>:<act row id>` (comms.proto, "THE KEY IS THE ACT, NOT THE RECORD").
@@ -154,10 +159,14 @@ func TaskAssignedNotice(n NhiemVu, actRowID string, recipients []string) ActNoti
 		Title: clip("Bạn được giao nhiệm vụ: "+n.TieuDe, noticeTitleMax),
 		Body:  body,
 		Link:  AutomationTask.RecordLink(n.Ma),
+
+		HoldingOrgUnitID: GroupUnit(n.BoPhanID),
+		GroupPosting:     GroupPostingAllowed,
 	}
 }
 
 // TaskExtensionRequestedNotice — kind 19. The requested date, NEVER the reason (ADR 0086 stop #3).
+// Never posted to a group: a request addressed to the one leader who decides it (ADR 0092 #2).
 func TaskExtensionRequestedNotice(n NhiemVu, requestID string, newDue time.Time) ActNotice {
 	return ActNotice{
 		Kind: ActNoticeTaskExtensionRequested, ActRowID: requestID, Recipients: TaskLeaderOrCreator(n),
@@ -173,6 +182,9 @@ func TaskApprovalRequestedNotice(n NhiemVu, statusRowID string) ActNotice {
 		Kind: ActNoticeTaskApprovalRequested, ActRowID: statusRowID, Recipients: TaskLeaderOrCreator(n),
 		Title: clip("Nhiệm vụ chờ duyệt: "+n.TieuDe, noticeTitleMax),
 		Link:  AutomationTask.RecordLink(n.Ma),
+
+		HoldingOrgUnitID: GroupUnit(n.BoPhanID),
+		GroupPosting:     GroupPostingAllowed,
 	}
 }
 
@@ -180,6 +192,7 @@ func TaskApprovalRequestedNotice(n NhiemVu, statusRowID string) ActNotice {
 const MentionBodyMax = 280
 
 // TaskMentionNotice — kind 21. One notice per entry, every mentioned code (the actor is dropped later).
+// Never posted to a group: naming a person is personal (ADR 0092 #2).
 func TaskMentionNotice(n NhiemVu, logEntryID, entryText string, mentioned []string) ActNotice {
 	return ActNotice{
 		Kind: ActNoticeTaskMention, ActRowID: logEntryID, Recipients: mentioned,
@@ -196,6 +209,9 @@ func PetitionAssignedNotice(p PhieuPhanAnh, logRowID string) ActNotice {
 		Kind: ActNoticePetitionAssigned, ActRowID: logRowID, Recipients: []string{p.CanBoXuLyID},
 		Title: clip("Bạn được giao xử lý phản ánh "+p.MaTraCuu, noticeTitleMax),
 		Link:  AutomationCitizenReport.RecordLink(p.MaTraCuu),
+
+		HoldingOrgUnitID: GroupUnit(p.BoPhanID),
+		GroupPosting:     recordGroupPosting(p.LinhVuc == LinhVucHanChe),
 	}
 }
 
@@ -205,6 +221,9 @@ func PetitionReopenedNotice(p PhieuPhanAnh, logRowID string) ActNotice {
 		Kind: ActNoticePetitionReopened, ActRowID: logRowID, Recipients: []string{p.CanBoXuLyID},
 		Title: clip("Phản ánh "+p.MaTraCuu+" bị mở lại do đánh giá thấp", noticeTitleMax),
 		Link:  AutomationCitizenReport.RecordLink(p.MaTraCuu),
+
+		HoldingOrgUnitID: GroupUnit(p.BoPhanID),
+		GroupPosting:     recordGroupPosting(p.LinhVuc == LinhVucHanChe),
 	}
 }
 

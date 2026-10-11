@@ -149,6 +149,11 @@ type StaffNotice struct {
 	// lead to the Zalo copy. Built from the very records Body is built from — never a second
 	// selection that could name a record the recipient may not see (ADR 0030).
 	DueSoonItems []DueSoonItem
+	// HoldingOrgUnitID is the record's own `bo_phan_id` (AutomationRecord.OrgUnitID), "" for a digest or
+	// a record with no unit (ADR 0092 #7). GroupPosting is whether it may enter a Zalo group; the zero
+	// value posts to none (group_posting.go).
+	HoldingOrgUnitID string
+	GroupPosting     GroupPosting
 }
 
 // DueSoonItem is one record of a due-soon digest: its business code and its deadline as stored.
@@ -373,6 +378,9 @@ func OverdueNotice(kind AutomationWorkKind, r AutomationRecord, day string, reci
 		Title:      clip(fmt.Sprintf("%s %s đã quá hạn xử lý", capitalise(kind.noun()), r.Code), noticeTitleMax),
 		Body:       "Hạn xử lý: " + FormatLocalInstant(r.Deadline) + ".",
 		Link:       kind.RecordLink(r.Code),
+
+		HoldingOrgUnitID: GroupUnit(r.OrgUnitID),
+		GroupPosting:     recordGroupPosting(r.Restricted),
 	}
 }
 
@@ -389,6 +397,9 @@ func UnassignedNotice(kind AutomationWorkKind, r AutomationRecord, recipients []
 		Body: "Bộ phận nhận từ " + FormatLocalInstant(r.HoldStartedAt) +
 			" nhưng chưa phân công người thực hiện, đã quá thời gian xã quy định.",
 		Link: kind.RecordLink(r.Code),
+
+		HoldingOrgUnitID: GroupUnit(r.OrgUnitID),
+		GroupPosting:     recordGroupPosting(r.Restricted),
 	}
 }
 
@@ -407,6 +418,9 @@ func EscalationNotice(kind AutomationWorkKind, r AutomationRecord, level Escalat
 		Body: "Quá hạn xử lý từ " + FormatLocalInstant(r.Deadline) +
 			", đã vượt ngưỡng báo " + who + " theo quy định của xã.",
 		Link: kind.RecordLink(r.Code),
+
+		HoldingOrgUnitID: GroupUnit(r.OrgUnitID),
+		GroupPosting:     recordGroupPosting(r.Restricted),
 	}
 }
 
