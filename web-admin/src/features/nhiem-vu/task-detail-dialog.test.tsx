@@ -716,9 +716,27 @@ describe("compose box hand-over and files (prototype `TaskStatusPipeline.tsx:261
     expect(submit.textContent).toBe(STATUS_CONFIRM_HANDOVER);
     await act(async () => (document.getElementById(STATUS_COMPOSE_ID) as HTMLFormElement).requestSubmit());
     await settle();
+    // ĐỔI CHIỀU CÓ CHỦ Ý 10/10/2026 (sheet row 17): the current officer is not in `01JB`, so the person
+    // select empties — and that empty IS SENT (`assignee: ""`, the server's "clear"). Sending only the
+    // unit left the previous unit's officer holding the task.
     expect(move).toHaveBeenCalledWith("hoan-thanh", "", {
-      handover: { unit: "01JB", assignee: undefined },
+      handover: { unit: "01JB", assignee: "" },
       attachments: [],
     });
+  });
+
+  it("a person changed WITHOUT a unit change is sent alone; an unchanged box sends no hand-over", async () => {
+    stubQuietServer();
+    const move = vi.fn(async () => ({ ok: true as const, duLieu: task({ status: "hoan-thanh" }) }));
+    mount(pipeline("CB-2026-7K3M9Q", move));
+    await act(async () => byLabel(statusMoveName("Hoàn thành")).click());
+    const person = document.querySelector<HTMLSelectElement>(`#${STATUS_COMPOSE_ID}-nguoi`)!;
+    act(() => {
+      person.value = "";
+      person.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await act(async () => (document.getElementById(STATUS_COMPOSE_ID) as HTMLFormElement).requestSubmit());
+    await settle();
+    expect(move).toHaveBeenCalledWith("hoan-thanh", "", { handover: { unit: undefined, assignee: "" }, attachments: [] });
   });
 });

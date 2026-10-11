@@ -720,11 +720,16 @@ export function doiTrangThaiNhiemVu(
       : { status: trangThai };
   // `handover` (cebe0d47) only when it changes something — field by field, as `reassignTask`: an
   // absent field means "leave it", so an empty object is never sent.
+  //
+  // `assignee: ""` IS SENT — it is the server's "clear it" (`nhiem_vu_ghi.go:287-292`), the compose
+  // box's `— Để bộ phận tự phân công —`. Dropping it (the code before 10/10/2026, sheet row 17) moved
+  // the task to the new unit while the server KEPT the previous unit's officer as assignee, though the
+  // box showed nobody. `unit: ""` stays dropped: the server refuses clearing a unit (400).
   const h = extra.handover;
   if (h !== undefined) {
     const sent: petitions_taskAssignmentIn = {};
     if (h.unit !== undefined && h.unit !== null && h.unit !== "") sent.unit = h.unit;
-    if (h.assignee !== undefined && h.assignee !== null && h.assignee !== "") sent.assignee = h.assignee;
+    if (h.assignee !== undefined && h.assignee !== null) sent.assignee = h.assignee;
     if (sent.unit !== undefined || sent.assignee !== undefined) than.handover = sent;
   }
   // Ids of COMPLETED uploads, absent when none — same rule as `addTaskLogEntry`.

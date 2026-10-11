@@ -316,10 +316,13 @@ export function TaskStatusPipeline({
     history === null ? null : elapsedText(statusEnteredAt(task, history.rows, history.complete), now);
   // The hand-over is for `task.assign` holders or the assignee (the route's rule; the server checks).
   const canHandover = permissions.reassign || (staffCode !== "" && staffCode === task.assignee);
-  // A side counts only when it names a NEW holder: `handover` cannot clear a field (the client drops
-  // an empty value), so an emptied select must not relabel the button as a hand-over.
+  // The unit counts only when it names a NEW unit: the server refuses clearing one (400). The person
+  // counts whenever it differs, "" included — `— Để bộ phận tự phân công —` is a real choice the
+  // server applies as "clear" (prototype sends `assignee_id: null`). Picking a unit the current
+  // officer is not in empties the person select; that empty MUST travel, or the server keeps the
+  // previous unit's officer on the task (sheet row 17, 10/10/2026).
   const unitChanged = unit !== task.unit && unit !== "";
-  const assigneeChanged = assignee !== task.assignee && assignee !== "";
+  const assigneeChanged = assignee !== task.assignee;
   const handedOver = canHandover && (unitChanged || assigneeChanged);
   const waiting = anyInFlight(files.items);
 

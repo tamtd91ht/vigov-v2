@@ -3659,7 +3659,12 @@ export function ChiTietNhiemVu({
             {showAssignment && (
               <Section id="tieu-de-giao-viec-chuyen-viec" title={ASSIGNMENT_TITLE}>
                 <TaskAssignmentBlock
-                  key={`giao-lai-${nhiemVu.code}`}
+                  // Keyed by the HOLDER too: the block's form starts from the task once, and
+                  // `assignmentBody` sends every field that differs from the task. After a hand-over
+                  // from the status box (or anyone's write re-read here) a form kept from the old
+                  // holder would send the old unit back with the next `Giao việc` — handing the task
+                  // back without the officer choosing it (sheet row 17, 10/10/2026).
+                  key={`giao-lai-${nhiemVu.code}|${nhiemVu.unit}|${nhiemVu.assignee}`}
                   task={nhiemVu}
                   units={danhMuc.boPhan}
                   directory={danhBa}

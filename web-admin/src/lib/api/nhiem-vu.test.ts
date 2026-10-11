@@ -798,6 +798,8 @@ describe("07/10/2026 — extension history, attachment removal, a status move ca
   });
 
   it("POST …/status: `handover` only with a value, `attachments` only when non-empty", async () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 10/10/2026 (sheet row 17): `assignee: ""` is SENT — the server's "clear"
+    // (`nhiem_vu_ghi.go:287-292`). Dropping it kept the previous unit's officer on the task.
     const fake = batFetch(OK_JSON());
     await doiTrangThaiNhiemVu("NV19", "dang-thuc-hien", "giao lại", {
       handover: { unit: "01JBOPHAN", assignee: "" },
@@ -806,12 +808,13 @@ describe("07/10/2026 — extension history, attachment removal, a status move ca
     expect(than(fake)).toEqual({
       status: "dang-thuc-hien",
       note: "giao lại",
-      handover: { unit: "01JBOPHAN" },
+      handover: { unit: "01JBOPHAN", assignee: "" },
       attachments: ["01JTEP"],
     });
     vi.unstubAllGlobals();
+    // An empty UNIT is never sent (the server refuses clearing it); nothing left → no `handover`.
     const fake2 = batFetch(OK_JSON());
-    await doiTrangThaiNhiemVu("NV19", "dang-thuc-hien", "", { handover: { unit: "", assignee: "" }, attachments: [] });
+    await doiTrangThaiNhiemVu("NV19", "dang-thuc-hien", "", { handover: { unit: "" }, attachments: [] });
     expect(than(fake2)).toEqual({ status: "dang-thuc-hien" });
   });
 });
