@@ -162,12 +162,16 @@ giờ tắt TLS (luật 13).
 Quy trình đầy đủ, kiểm chủ quyền có ký, đưa vào dùng: `kb/40-runbooks/basemap-pmtiles.md`. Mục này chỉ là
 phần dựng job. Chạy trên **máy build** (CentOS 7, có Internet), không trong pod.
 
+Chạy từ **một trong hai** job, cùng tham số `MT` · `NGAY_NEN` · `CHAY_THU` · `XAC_NHAN` · `TICKET`: job này
+(nhóm Bảo trì), hoặc job cũ `vigov-deploy` (`HANH_DONG=nen-ban-do`) — dùng `vigov-deploy` **cho tới khi
+controller cài Active Choices** (chủ dự án 11/10/2026). Hai job gọi cùng `deploy/van-hanh/basemap-task.sh`.
+
 ### Dựng một lần
 
 | # | Việc | Làm thế nào |
 |---|---|---|
 | 1 | Ghim SHA-256 | Mục "Hằng phải điền" dưới — chưa điền thì việc **dừng** ở cả lượt chạy thử |
-| 2 | Duyệt lại script form | Mục 1.3 bước 2 — form có thêm ô `NGAY_NEN` và phần Vùng 3 của việc này |
+| 2 | Duyệt lại script form | Chỉ khi chạy từ job này: mục 1.3 bước 2 — form có thêm ô `NGAY_NEN` và phần Vùng 3 của việc này. `vigov-deploy` không cần; lượt đầu sau khi tệp đổi chỉ dừng với câu "Jenkins vừa học tham số mới" |
 
 Không user MinIO mới, không credential Jenkins, không plugin mới (chủ dự án 11/10/2026). Khoá MinIO là cặp
 `OBJECT_STORAGE_ACCESS_KEY` / `OBJECT_STORAGE_SECRET_KEY` **có sẵn** trong `comms-secrets` — comms đã ghi
@@ -194,9 +198,9 @@ thêm vào policy — người quản trị MinIO nới bằng `mc admin policy 
 |---|---|---|
 | 1 | `nen-ban-do`, `MT=staging`, `NGAY_NEN`, chạy thử | Bảng: bucket · địa chỉ tải lên · đích · giá trị `BASEMAP-URL` sẽ là; Secret lấy khoá (chỉ tên); kiểm công cụ, chỗ trống |
 | 2 | Như #1, bỏ `CHAY_THU`, `XAC_NHAN=vigov-staging` | Tải công cụ (kiểm SHA-256) → kiểm `mc ls` trước khi dựng → dựng → tải lên `<tiền tố>-public/config/map/<ngày>/` → so `SHA256SUMS` trên MinIO. In dòng SHA-256 của `vn-mainland.pmtiles`, `BUILD-INFO.txt`, giá trị `BASEMAP-URL` |
-| 3 | `sua-configmap`, `MT=staging`, `BASEMAP-URL=<giá trị in ở #2>` | Khởi động lại `vigov-web-admin` |
+| 3 | `sua-configmap`, `MT=staging`, `BASEMAP-URL=<giá trị in ở #2>` — chưa có Active Choices thì theo runbook mục "Đưa vào dùng" (`kubectl edit` + job `web-admin`) | Khởi động lại `vigov-web-admin` |
 | 4 | Kiểm chủ quyền có ký trên staging — runbook | Không đạt: dừng, giữ giá trị cũ |
-| 5 | `sua-configmap`, `MT=prod`, cùng giá trị, `TICKET` | Chỉ sau khi đã ký. Prod khác bucket với staging thì chạy #2 với `MT=prod` trước |
+| 5 | Như #3 với `MT=prod`, cùng giá trị, `TICKET` | Chỉ sau khi đã ký. Prod khác bucket với staging thì chạy #2 với `MT=prod` trước |
 
 `$WORKSPACE/basemap`, `.tools`, `.mc` luôn bị xoá cuối lượt (vài GB). Hạn của việc là 180 phút.
 

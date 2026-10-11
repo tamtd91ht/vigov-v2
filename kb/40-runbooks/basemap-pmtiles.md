@@ -45,7 +45,9 @@ curl -sI -H 'Range: bytes=0-126' "<giá trị BASEMAP-URL>/vn-mainland.pmtiles" 
 
 Bước 2–3 (dựng + tải lên) chạy theo **một trong hai** cách — **không bao giờ** trong pod:
 
-- **Job Jenkins `vigov-van-hanh`, việc `nen-ban-do`** (nhóm Bảo trì; chủ dự án chốt 11/10/2026): chạy
+- **Job Jenkins, việc `nen-ban-do`** (chủ dự án chốt 11/10/2026) — job cũ `vigov-deploy`
+  (`HANH_DONG=nen-ban-do`) cho tới khi controller cài Active Choices, hoặc `vigov-van-hanh` (nhóm Bảo
+  trì); hai job chạy cùng `deploy/van-hanh/basemap-task.sh`. Việc chạy
   trên máy build, tự tải `pmtiles` + `mc` đã ghim SHA-256, lấy bucket và địa chỉ từ `common-config` của
   `MT`, dùng cặp khoá MinIO **có sẵn** của `comms-secrets` (thiếu thì `platform-secrets`), in dòng
   SHA-256, `BUILD-INFO.txt` và giá trị `BASEMAP-URL` để ghi vào danh mục ký. Job **không** đổi

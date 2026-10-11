@@ -65,7 +65,8 @@ pipeline {
 
   options {
     timestamps()
-    timeout(time: 20, unit: 'MINUTES')
+    // nen-ban-do downloads and cuts several GB from the Internet; every other action keeps 20 minutes.
+    timeout(time: (params.HANH_DONG == 'nen-ban-do' ? 180 : 20), unit: 'MINUTES')
     buildDiscarder(logRotator(numToKeepStr: '200'))   // giữ lâu hơn job build: đây là hồ sơ
     disableConcurrentBuilds()
   }
@@ -93,7 +94,7 @@ pipeline {
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
                                   'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh',
-                                  'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp'],
+                                  'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp', 'nen-ban-do'],
            description:'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
                         'di-tru-vihat-miniapp: chạy migration của kho vihat-miniapp (main) vào CSDL trong ' +
                         'vihat-miniapp-bi-mat, chỉ những tệp chưa có trong sổ vihat_miniapp_migrations (MT=prod, XAC_NHAN=vigov-prod) · ' +
@@ -136,7 +137,11 @@ pipeline {
                         'mật khẩu tạm tự hết hạn sau 24 giờ · ' +
                         'cap-quyen-van-hanh: cấp QUYEN_VAN_HANH cho tài khoản ĐÃ CÓ (TAI_KHOAN_VAN_HANH = mã VH-xxxxx ' +
                         'hoặc email đăng nhập) — quyền đã có thì bỏ qua; xong thì người ấy đăng xuất rồi đăng nhập lại ' +
-                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc)')
+                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc) · ' +
+                        'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
+                        'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP-URL (kb/40-runbooks/basemap-pmtiles.md). ' +
+                        'CHAY_THU bật = chỉ in kế hoạch; làm thật: bỏ tick, XAC_NHAN = namespace của MT, TICKET nếu prod. ' +
+                        'Cùng việc với vigov-van-hanh (deploy/van-hanh/basemap-task.sh)')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
@@ -146,7 +151,7 @@ pipeline {
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
                         'tao-khoa-ma-hoa-identity / dat-secret-mini-app / di-tru-vihat-miniapp / bat-cau-phien-miniapp: gõ đúng vigov-prod. ' +
-                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / dung-clamav: gõ đúng namespace của MT ' +
+                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / dung-clamav / nen-ban-do: gõ đúng namespace của MT ' +
                         '(vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
            description: 'Cho dat-secret-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
@@ -177,6 +182,10 @@ pipeline {
                      'ops.petition_field.manage'],
            description: 'Cho cap-quyen-van-hanh: quyền cần cấp. Mặc định ops.zalo_bot.manage (màn Zalo Bot, ADR 0074 #3); ' +
                         'tat-ca-8-quyen = đủ 8 quyền như lúc tạo tài khoản.')
+    string(name: 'NGAY_NEN', defaultValue: '',
+           description: 'Cho nen-ban-do: ngày bản dựng hằng ngày Protomaps, YYYYMMDD (có ở https://build.protomaps.com/<ngày>.pmtiles).')
+    booleanParam(name: 'CHAY_THU', defaultValue: true,
+                 description: 'Cho nen-ban-do: CHẠY THỬ — in bucket, đích, giá trị BASEMAP-URL sẽ là; không tải, không ghi gì. Bỏ tick để làm thật.')
   }
 
   environment {
@@ -210,7 +219,7 @@ pipeline {
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
                                   'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh',
-                                  'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp'])) {
+                                  'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp', 'nen-ban-do'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
           }
@@ -2140,6 +2149,35 @@ EOF
             *) echo "✗ chưa thấy bat=true — xem log khởi động của pod vihat-zalo-miniapp trong Rancher."; exit 1 ;;
           esac
         '''
+      }
+    }
+
+    // Nền bản đồ tự host — CÙNG thân với việc nen-ban-do của vigov-van-hanh: deploy/van-hanh/basemap-task.sh
+    // (chủ dự án 11/10/2026: chạy ở job này cho tới khi controller có Active Choices). Logic có test ở
+    // deploy/van-hanh/ops.py. Ở đây chỉ chốt tham số; job KHÔNG BAO GIỜ đổi BASEMAP-URL.
+    stage('Nền bản đồ') {
+      when { expression { params.HANH_DONG == 'nen-ban-do' } }
+      steps {
+        script {
+          env.GHI = params.CHAY_THU ? '0' : '1'
+          if (env.GHI == '1') {
+            if (params.XAC_NHAN != env.NS) {
+              error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không làm gì.")
+            }
+            if (params.MT == 'prod' && !(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+              error("TICKET bắt buộc khi ghi prod, chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không làm gì.")
+            }
+          }
+          env.TICKET = params.TICKET ?: '-'
+          env.NGAY_NEN = (params.NGAY_NEN ?: '').trim()
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NS} · ${env.GHI == '1' ? 'GHI' : 'chạy thử'} · ${env.NGUOI_BAM}"
+          try {
+            sh 'bash deploy/van-hanh/basemap-task.sh'
+          } finally {
+            // The script cleans on exit; this covers an abort that kills it first. Several GB on a shared machine.
+            sh 'rm -rf "$WORKSPACE/basemap" "$WORKSPACE/.tools" "$WORKSPACE/.mc"'
+          }
+        }
       }
     }
 
