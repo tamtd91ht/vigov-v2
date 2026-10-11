@@ -1753,6 +1753,9 @@ EOF
             exit 1
           fi
 
+          # Jenkins KHÔNG xuất biến env gán chuỗi rỗng — `env.OP_CODE = ''` là biến vắng mặt, và `set -u`
+          # dừng job ở lần đọc đầu (lượt #63, 11/10/2026). Hai trong ba biến luôn rỗng, nên đọc cả ba với ':-'.
+          OP_CODE=${OP_CODE:-}; OP_MASKED=${OP_MASKED:-}; OP_DISPLAY=${OP_DISPLAY:-}
           # Cột của `operatorctl list` (tabwriter, đệm 2) cách nhau TỪ HAI dấu cách trở lên — tên hiển thị
           # có dấu cách đơn bên trong nên không tách theo một dấu cách. $1 mã · $2 email đã che · $3 tên.
           if [ -n "$OP_CODE" ]; then
