@@ -1356,7 +1356,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
     expect(dialog(el).querySelector('[data-error="form"]')!.textContent).toBe("Bạn không có quyền.");
   });
 
-  it("EDIT: unchanged → nothing sent; scope-only change sends only org_unit_id (null = Toàn xã)", async () => {
+  it("EDIT: unchanged → nothing sent; scope-only change sends only org_unit_id (\"\" = Toàn xã)", async () => {
     H.phien = session(["admin.lookup"]);
     stored = WITH_GROUP_KINDS;
     groupsNow = { status: 200, body: { items: [UNIT_GROUP], supported_kinds: GROUP_KINDS } };
@@ -1375,7 +1375,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
     await settle();
     const patch = calls.find((c) => c.method === "PATCH")!;
     expect(patch.url).toBe(`/api/v1/zalo-groups/${UNIT_GROUP.id}`);
-    expect(JSON.parse(patch.body!)).toEqual({ org_unit_id: null });
+    expect(JSON.parse(patch.body!)).toEqual({ org_unit_id: "" });
     expect(H.toast.success).toHaveBeenCalledWith("Đã lưu.");
     expect(el.querySelector("dialog")).toBeNull();
   });

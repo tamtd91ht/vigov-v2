@@ -114,8 +114,8 @@ export type comms_zaloGroupOut = {
 };
 /** GET zalo-groups. `supported_kinds`: the kinds a group may ever tick, in comms' display order. */
 export type comms_zaloGroupList = { items: comms_zaloGroupOut[]; supported_kinds: string[] };
-/** PATCH zalo-groups/{id}: an ABSENT key keeps its value; `org_unit_id: null` = the whole commune. */
-export type comms_zaloGroupPatchIn = { org_unit_id?: string | null; kinds?: string[] };
+/** PATCH zalo-groups/{id}: an ABSENT (or null) key keeps its value; `org_unit_id: ""` = the whole commune. */
+export type comms_zaloGroupPatchIn = { org_unit_id?: string; kinds?: string[] };
 /** DELETE zalo-groups/{id} — rule 7: a soft delete carries its reason. */
 export type comms_zaloGroupUnlinkIn = { reason: string };
 

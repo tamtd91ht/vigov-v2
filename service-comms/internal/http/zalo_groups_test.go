@@ -245,21 +245,28 @@ func TestZaloGroupShapes(t *testing.T) {
 	}
 }
 
-func TestZaloGroupPatchReadsNullAndAbsent(t *testing.T) {
+// "" = the whole commune; absent or null = keep (the repo's PATCH convention — a json.RawMessage tri-state
+// is a shape tools/apidoc cannot describe).
+func TestZaloGroupPatchReadsEmptyAndAbsent(t *testing.T) {
 	s := newZaloGroupServer(t)
 	s.grant(xaA, "admin.lookup")
 	patch := func(body string) *httptest.ResponseRecorder {
 		return s.call(t, http.MethodPatch, "/api/v1/zalo-groups/g1", hostA, canBoGhi(xaA), body)
 	}
-	doiMa(t, patch(`{"org_unit_id":null}`), http.StatusNoContent)
+	doiMa(t, patch(`{"org_unit_id":""}`), http.StatusNoContent)
 	if !s.fake.lastPatch.OrgUnitSet || s.fake.lastPatch.OrgUnitID != "" || s.fake.lastPatch.Kinds != nil {
-		t.Errorf("null → %+v, want commune-wide, kinds kept", s.fake.lastPatch)
+		t.Errorf(`"" → %+v, want commune-wide, kinds kept`, s.fake.lastPatch)
 	}
-	doiMa(t, patch(groupPatchBody), http.StatusNoContent)
-	if s.fake.lastPatch.OrgUnitSet || len(s.fake.lastPatch.Kinds) != 1 || s.fake.lastID != "g1" {
-		t.Errorf("absent unit → %+v", s.fake.lastPatch)
+	doiMa(t, patch(`{"org_unit_id":"01UNITVP0000000000000000AB"}`), http.StatusNoContent)
+	if !s.fake.lastPatch.OrgUnitSet || s.fake.lastPatch.OrgUnitID != "01UNITVP0000000000000000AB" {
+		t.Errorf("unit → %+v", s.fake.lastPatch)
 	}
-	doiMa(t, patch(`{"org_unit_id":""}`), http.StatusBadRequest)
+	for _, body := range []string{groupPatchBody, `{"org_unit_id":null,"kinds":["nhiem-vu.giao-moi"]}`} {
+		doiMa(t, patch(body), http.StatusNoContent)
+		if s.fake.lastPatch.OrgUnitSet || len(s.fake.lastPatch.Kinds) != 1 || s.fake.lastID != "g1" {
+			t.Errorf("%s → %+v, want unit kept", body, s.fake.lastPatch)
+		}
+	}
 	doiMa(t, patch(`{"org_unit_id":5}`), http.StatusBadRequest)
 }
 

@@ -205,7 +205,8 @@ export function checkDraft(d: GroupDraft): Refusal | null {
 export function buildPatch(g: comms_zaloGroupOut, d: GroupDraft): { ok: true; patch: comms_zaloGroupPatchIn } | { ok: false; refusal: Refusal } {
   const patch: comms_zaloGroupPatchIn = {};
   const stored = g.org_unit_id ?? "";
-  if (d.scope !== stored) patch.org_unit_id = d.scope === "" ? null : d.scope;
+  // "" = Toàn xã on PATCH (comms: absent or null = keep), the draft's own spelling of it.
+  if (d.scope !== stored) patch.org_unit_id = d.scope;
   if (d.kindsTouched) {
     const kindsRefusal = checkDraft(d);
     if (kindsRefusal !== null) return { ok: false, refusal: kindsRefusal };

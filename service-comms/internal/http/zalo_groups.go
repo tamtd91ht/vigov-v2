@@ -12,9 +12,7 @@ package http
 // NO chat_id LEAVES HERE (ADR 0092 §Hệ quả): no type below has a field for it.
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -80,11 +78,14 @@ type zaloGroupList struct {
 	SupportedKinds []string `json:"supported_kinds"`
 }
 
-// zaloGroupPatchIn is the body of PATCH zalo-groups/{id}. An ABSENT field keeps its value; org_unit_id null
-// moves the group to the whole commune. At least one of the two.
+// zaloGroupPatchIn is the body of PATCH zalo-groups/{id}. An ABSENT (or null) field keeps its value;
+// org_unit_id "" moves the group to the whole commune — the repo's PATCH convention (operator
+// petition-fields: absent = keep, "" = clear). Not a json.RawMessage tri-state: tools/apidoc cannot describe
+// a type outside the repo, and an undocumented shape is one the web builds against by guess. At least one
+// of the two.
 type zaloGroupPatchIn struct {
-	OrgUnitID json.RawMessage `json:"org_unit_id"`
-	Kinds     []string        `json:"kinds"`
+	OrgUnitID *string  `json:"org_unit_id"`
+	Kinds     []string `json:"kinds"`
 }
 
 // zaloGroupUnlinkIn is the body of DELETE — rule 7: a soft delete carries its reason.
@@ -252,15 +253,9 @@ func (h *zaloGroupHandler) EditGroup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := app.ZaloGroupPatch{Kinds: in.Kinds}
-	if raw := bytes.TrimSpace(in.OrgUnitID); len(raw) > 0 {
+	if in.OrgUnitID != nil {
 		p.OrgUnitSet = true
-		if !bytes.Equal(raw, []byte("null")) {
-			if err := json.Unmarshal(raw, &p.OrgUnitID); err != nil || p.OrgUnitID == "" {
-				httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-					"Bộ phận phải là mã bộ phận, hoặc null để áp dụng cho cả xã.", "")
-				return
-			}
-		}
+		p.OrgUnitID = *in.OrgUnitID // "" = the whole commune
 	}
 	actor, ok := h.actor(w, r)
 	if !ok {
