@@ -1672,16 +1672,24 @@ EOF
           if (!(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
             error("TICKET bắt buộc, chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không ghi gì cả.")
           }
+          // Ba cách gọi một tài khoản: mã (vh-00001 cũng nhận), email đăng nhập, hoặc TÊN HIỂN THỊ đúng
+          // như cột NAME của `operatorctl list`. Người bấm nhớ cái nào thì gõ cái ấy — lượt đầu ngày
+          // 11/10/2026 đỏ vì gõ tên, không phải mã hay email.
           String acc = (params.TAI_KHOAN_VAN_HANH ?: '').trim()
-          if (acc ==~ /^VH-[0-9]{5}$/) {
-            env.OP_CODE = acc
-            env.OP_MASKED = ''
+          env.OP_CODE = ''
+          env.OP_MASKED = ''
+          env.OP_DISPLAY = ''
+          if (acc ==~ /^(?i)VH-[0-9]{5}$/) {
+            env.OP_CODE = acc.toUpperCase()
           } else if (acc ==~ /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}$/) {
-            env.OP_CODE = ''
             // Đúng core/privacy.MaskEmail — đổi một bên thì đổi cả hai.
             env.OP_MASKED = acc.substring(0, 1) + '***@' + acc.substring(acc.indexOf('@') + 1)
+          } else if (acc ==~ /^\p{L}[\p{L} .'-]{0,99}$/) {
+            // Cùng bộ ký tự TEN_VAN_HANH nhận lúc tạo; gộp khoảng trắng liền nhau như cột NAME in ra.
+            env.OP_DISPLAY = acc.replaceAll(/\s+/, ' ')
           } else {
-            error("TAI_KHOAN_VAN_HANH phải là mã VH-00001 hoặc email đăng nhập. Không ghi gì cả.")   // không in lại (luật 3)
+            error("TAI_KHOAN_VAN_HANH phải là mã VH-00001, email đăng nhập, hoặc tên hiển thị của tài khoản. " +
+                  "Không ghi gì cả.")   // không in lại giá trị (luật 3)
           }
           List allKeys = ['ops.tenant.manage', 'ops.domain.manage', 'ops.profile.manage', 'ops.mini_app.manage',
                           'ops.upload_policy.manage', 'ops.qr.issue', 'ops.petition_field.manage', 'ops.zalo_bot.manage']
@@ -1745,26 +1753,28 @@ EOF
             exit 1
           fi
 
-          if [ -n "$OP_MASKED" ]; then
-            matches=$(awk -v m="$OP_MASKED" 'NR>1 && tolower($2)==tolower(m) {print $1}' "$TMP_DIR/list.log")
-            count=$(printf '%s\\n' "$matches" | grep -c '^VH-' || true)
-            if [ "$count" != "1" ]; then
-              echo "DỪNG: $count tài khoản khớp $OP_MASKED — chạy lại với TAI_KHOAN_VAN_HANH = mã VH- trong danh sách:"
-              cat "$TMP_DIR/list.log"
-              exit 1
-            fi
-            CODE=$matches
+          # Cột của `operatorctl list` (tabwriter, đệm 2) cách nhau TỪ HAI dấu cách trở lên — tên hiển thị
+          # có dấu cách đơn bên trong nên không tách theo một dấu cách. $1 mã · $2 email đã che · $3 tên.
+          if [ -n "$OP_CODE" ]; then
+            matches=$(awk -F'  +' -v c="$OP_CODE" 'NR>1 && $1==c {print $1}' "$TMP_DIR/list.log")
+            what="mã $OP_CODE"
+          elif [ -n "$OP_MASKED" ]; then
+            matches=$(awk -F'  +' -v m="$OP_MASKED" 'NR>1 && tolower($2)==tolower(m) {print $1}' "$TMP_DIR/list.log")
+            what="email $OP_MASKED"
           else
-            CODE=$OP_CODE
-            if ! awk -v c="$CODE" 'NR>1 && $1==c {f=1} END {exit !f}' "$TMP_DIR/list.log"; then
-              echo "DỪNG: không có tài khoản $CODE. Danh sách:"
-              cat "$TMP_DIR/list.log"
-              exit 1
-            fi
+            matches=$(awk -F'  +' -v n="$OP_DISPLAY" 'NR>1 && tolower($3)==tolower(n) {print $1}' "$TMP_DIR/list.log")
+            what="tên hiển thị đã nhập"
           fi
+          count=$(printf '%s\\n' "$matches" | grep -c '^VH-' || true)
+          if [ "$count" != "1" ]; then
+            echo "DỪNG: $count tài khoản khớp $what — chạy lại với TAI_KHOAN_VAN_HANH = một mã VH- trong danh sách:"
+            cat "$TMP_DIR/list.log"
+            exit 1
+          fi
+          CODE=$matches
           echo "── tài khoản:"
           head -1 "$TMP_DIR/list.log"
-          awk -v c="$CODE" 'NR>1 && $1==c' "$TMP_DIR/list.log"
+          awk -F'  +' -v c="$CODE" 'NR>1 && $1==c' "$TMP_DIR/list.log"
 
           failed=""
           for perm in $OP_PERMS; do
