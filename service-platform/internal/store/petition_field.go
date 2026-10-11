@@ -39,7 +39,7 @@ func NewPetitionFieldStore(db *sql.DB) *PetitionFieldStore { return &PetitionFie
 // The order is total (sort_order, then the primary key) so two rows sharing a sort_order cannot swap
 // places between two reads.
 const listPetitionFields = `
-	SELECT code, default_label, sort_order, icon, tone, active
+	SELECT ` + fieldColumns + `
 	FROM petition_field
 	ORDER BY sort_order, code`
 
@@ -55,8 +55,8 @@ func (s *PetitionFieldStore) ListPetitionFields(ctx context.Context) ([]domain.P
 
 	var out []domain.PetitionField
 	for rows.Next() {
-		var f domain.PetitionField
-		if err := rows.Scan(&f.Code, &f.DefaultLabel, &f.SortOrder, &f.Icon, &f.Tone, &f.Active); err != nil {
+		f, err := scanField(rows.Scan)
+		if err != nil {
 			return nil, fmt.Errorf("petition_field: scan: %w", err)
 		}
 		out = append(out, f)
@@ -87,19 +87,33 @@ const (
 )
 
 // fieldTrail is the before/after shape 0011's seed entries already have.
+// The placeholder is recorded as null when there is none — 0023's seed entries spell "none" that way.
 func fieldTrail(f domain.PetitionField) string {
 	return string(delta(map[string]any{
 		"default_label": f.DefaultLabel, "sort_order": f.SortOrder, "icon": f.Icon, "tone": f.Tone, "active": f.Active,
+		"description_placeholder": placeholderArg(f.DescriptionPlaceholder),
 	}))
 }
 
-const fieldColumns = `code, default_label, sort_order, icon, tone, active`
+// placeholderArg spells "" as SQL NULL: 0022's CHECK has no blank form of "none".
+func placeholderArg(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+
+const fieldColumns = `code, default_label, sort_order, icon, tone, active, description_placeholder`
 
 func scanField(scan func(...any) error) (domain.PetitionField, error) {
-	var f domain.PetitionField
-	if err := scan(&f.Code, &f.DefaultLabel, &f.SortOrder, &f.Icon, &f.Tone, &f.Active); err != nil {
+	var (
+		f           domain.PetitionField
+		placeholder sql.NullString // NULL = none (migration 0022) -> ""
+	)
+	if err := scan(&f.Code, &f.DefaultLabel, &f.SortOrder, &f.Icon, &f.Tone, &f.Active, &placeholder); err != nil {
 		return domain.PetitionField{}, err
 	}
+	f.DescriptionPlaceholder = placeholder.String
 	return f, nil
 }
 
@@ -188,14 +202,22 @@ func lockField(ctx context.Context, tx *sql.Tx, code string) (domain.PetitionFie
 }
 
 // EditPetitionField sets the default label, order, icon and tone of one code (validated by the
-// caller). The code is the WHERE, never a SET — no statement here could change it. changed=false,
+// caller), and its description placeholder when `placeholder` is non-nil ("" clears it to NULL;
+// validated by the caller, domain.ValidateDescriptionPlaceholder). nil leaves the stored sentence as it
+// is — the console that predates the column sends none, and its edits must not wipe a seeded sentence
+// (ADR 0091 §6). The code is the WHERE, never a SET — no statement here could change it. changed=false,
 // nothing written, when the values are the ones the row holds.
 func (s *PetitionFieldStore) EditPetitionField(ctx context.Context, code string, next domain.PetitionField,
-	reason string, by domain.OperatorActor) (out domain.PetitionField, changed bool, err error) {
+	placeholder *string, reason string, by domain.OperatorActor) (out domain.PetitionField, changed bool, err error) {
 	changed, err = s.fieldTx(ctx, by, func(tx *sql.Tx) (bool, error) {
 		before, err := lockField(ctx, tx, code)
 		if err != nil {
 			return false, err
+		}
+		// Resolved on the LOCKED row, so "leave it" means the value the database holds now.
+		next.DescriptionPlaceholder = before.DescriptionPlaceholder
+		if placeholder != nil {
+			next.DescriptionPlaceholder = *placeholder
 		}
 		if domain.SamePetitionFieldPresentation(before, next) {
 			out = before
@@ -203,10 +225,12 @@ func (s *PetitionFieldStore) EditPetitionField(ctx context.Context, code string,
 		}
 		out, err = scanField(tx.QueryRowContext(ctx, `
 			UPDATE petition_field
-			   SET default_label = $2, sort_order = $3, icon = $4, tone = $5, updated_at = now(), updated_by = $6
+			   SET default_label = $2, sort_order = $3, icon = $4, tone = $5, description_placeholder = $7,
+			       updated_at = now(), updated_by = $6
 			 WHERE code = $1
 			RETURNING `+fieldColumns,
-			code, next.DefaultLabel, next.SortOrder, next.Icon, next.Tone, by.Code).Scan)
+			code, next.DefaultLabel, next.SortOrder, next.Icon, next.Tone, by.Code,
+			placeholderArg(next.DescriptionPlaceholder)).Scan)
 		if err != nil {
 			return false, fmt.Errorf("petition_field: update: %w", err)
 		}

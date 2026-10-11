@@ -20,7 +20,7 @@ import (
 type PetitionFieldEditor interface {
 	ListPetitionFields(ctx context.Context) ([]domain.PetitionField, error)
 	CreatePetitionField(ctx context.Context, f domain.PetitionField, reason string, by domain.OperatorActor) (domain.PetitionField, error)
-	EditPetitionField(ctx context.Context, code string, next domain.PetitionField, reason string, by domain.OperatorActor) (domain.PetitionField, bool, error)
+	EditPetitionField(ctx context.Context, code string, next domain.PetitionField, placeholder *string, reason string, by domain.OperatorActor) (domain.PetitionField, bool, error)
 	SetPetitionFieldActive(ctx context.Context, code string, active bool, reason string, by domain.OperatorActor) (domain.PetitionField, bool, error)
 }
 
@@ -31,6 +31,9 @@ type petitionFieldView struct {
 	Icon         string `json:"icon"`
 	Tone         string `json:"tone"`
 	Active       bool   `json:"active"`
+	// DescriptionPlaceholder is the example sentence of the citizen's "Mô tả" box (ADR 0091 §6). Absent
+	// when the code has none — omitempty, so the response only grows.
+	DescriptionPlaceholder string `json:"description_placeholder,omitempty"`
 }
 
 // petitionFieldListView — every code, retired ones included (a retired code still labels old
@@ -52,12 +55,18 @@ type createPetitionFieldBody struct {
 
 // editPetitionFieldBody has NO code field: the code is the path's and never changes (ADR 0060 §4). A
 // body carrying "code" is refused as an unknown field (decodeBody), so a rename cannot even be asked.
+//
+// DescriptionPlaceholder IS THE ONE OPTIONAL FIELD, unlike icon and tone, and on purpose: absent (or
+// null) LEAVES the stored sentence as it is. The console written before migration 0022 sends no such
+// key, and every edit it makes must keep working without wiping a seeded sentence. Present: "" clears
+// it, anything else is checked by domain.ValidateDescriptionPlaceholder (ADR 0091 §6).
 type editPetitionFieldBody struct {
-	DefaultLabel string  `json:"default_label"`
-	SortOrder    *int32  `json:"sort_order"`
-	Icon         *string `json:"icon"`
-	Tone         *string `json:"tone"`
-	Reason       string  `json:"reason"`
+	DefaultLabel           string  `json:"default_label"`
+	SortOrder              *int32  `json:"sort_order"`
+	Icon                   *string `json:"icon"`
+	Tone                   *string `json:"tone"`
+	DescriptionPlaceholder *string `json:"description_placeholder"`
+	Reason                 string  `json:"reason"`
 }
 
 type petitionFieldActivationBody struct {
@@ -68,7 +77,7 @@ type petitionFieldActivationBody struct {
 
 func toPetitionFieldView(f domain.PetitionField) petitionFieldView {
 	return petitionFieldView{Code: f.Code, DefaultLabel: f.DefaultLabel, SortOrder: f.SortOrder,
-		Icon: f.Icon, Tone: f.Tone, Active: f.Active}
+		Icon: f.Icon, Tone: f.Tone, Active: f.Active, DescriptionPlaceholder: f.DescriptionPlaceholder}
 }
 
 func (h *operatorHandlers) writeFieldError(w http.ResponseWriter, r *http.Request, err error) {
@@ -88,7 +97,9 @@ func (h *operatorHandlers) writeFieldError(w http.ResponseWriter, r *http.Reques
 		domain.ErrPetitionFieldIconInvalid: {http.StatusUnprocessableEntity, "invalid_icon",
 			"Tên biểu tượng không hợp lệ (tên biểu tượng lucide, ví dụ Trash2), hoặc để trống."},
 		domain.ErrPetitionFieldToneInvalid: {http.StatusUnprocessableEntity, "invalid_tone", "Tông màu không thuộc bộ cho phép, hoặc để trống."},
-		domain.ErrReasonInvalid:            {http.StatusUnprocessableEntity, "invalid_reason", "Cần ghi lý do (tối đa 500 ký tự)."},
+		domain.ErrPetitionFieldPlaceholderInvalid: {http.StatusUnprocessableEntity, "invalid_description_placeholder",
+			"Câu gợi ý mô tả không hợp lệ (tối đa 500 ký tự, một dòng, không chỉ có dấu cách); để trống hẳn để bỏ câu gợi ý."},
+		domain.ErrReasonInvalid: {http.StatusUnprocessableEntity, "invalid_reason", "Cần ghi lý do (tối đa 500 ký tự)."},
 	} {
 		if errors.Is(err, target) {
 			httpx.WriteError(w, v.status, v.code, v.text, "")
@@ -162,7 +173,8 @@ func (h *operatorHandlers) pathFieldCode(w http.ResponseWriter, r *http.Request)
 	return code, true
 }
 
-// editPetitionField sets the default label, order, icon and tone of one code. Never the code.
+// editPetitionField sets the default label, order, icon, tone and — when sent — the description
+// placeholder of one code. Never the code.
 func (h *operatorHandlers) editPetitionField(w http.ResponseWriter, r *http.Request) {
 	code, ok := h.pathFieldCode(w, r)
 	if !ok {
@@ -181,12 +193,21 @@ func (h *operatorHandlers) editPetitionField(w http.ResponseWriter, r *http.Requ
 		h.writeFieldError(w, r, err)
 		return
 	}
+	var placeholder *string // nil = leave the stored sentence as it is
+	if b.DescriptionPlaceholder != nil {
+		p, err := domain.ValidateDescriptionPlaceholder(norm.NFC.String(*b.DescriptionPlaceholder))
+		if err != nil {
+			h.writeFieldError(w, r, err)
+			return
+		}
+		placeholder = &p
+	}
 	reason, err := domain.ValidateReason(norm.NFC.String(b.Reason))
 	if err != nil {
 		h.writeFieldError(w, r, err)
 		return
 	}
-	out, _, err := h.d.Fields.EditPetitionField(r.Context(), code, next, reason, actorOf(r))
+	out, _, err := h.d.Fields.EditPetitionField(r.Context(), code, next, placeholder, reason, actorOf(r))
 	if err != nil {
 		h.writeFieldError(w, r, err)
 		return

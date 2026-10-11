@@ -20,8 +20,10 @@ type fieldsFake struct {
 	sawCode   string
 	sawField  domain.PetitionField
 	sawActive *bool
-	sawReason string
-	sawActor  domain.OperatorActor
+	// sawPlaceholder is what the edit handed the store: nil = "leave it", "" = clear.
+	sawPlaceholder *string
+	sawReason      string
+	sawActor       domain.OperatorActor
 }
 
 func newFieldsFake() *fieldsFake {
@@ -53,9 +55,10 @@ func (f *fieldsFake) CreatePetitionField(_ context.Context, in domain.PetitionFi
 	return in, nil
 }
 
-func (f *fieldsFake) EditPetitionField(_ context.Context, code string, next domain.PetitionField, reason string, by domain.OperatorActor) (domain.PetitionField, bool, error) {
+func (f *fieldsFake) EditPetitionField(_ context.Context, code string, next domain.PetitionField, placeholder *string, reason string, by domain.OperatorActor) (domain.PetitionField, bool, error) {
 	f.record(code, reason, by)
 	f.sawField = next
+	f.sawPlaceholder = placeholder
 	row, ok := f.rows[code]
 	if !ok {
 		return domain.PetitionField{}, false, store.ErrPetitionFieldNotFound
@@ -158,6 +161,60 @@ func TestEditPetitionFieldNeverTouchesTheCode(t *testing.T) {
 	}
 	if rec := h.do("PUT", "/api/v1/petition-fields/dien", `{"default_label":"Điện","sort_order":4,"icon":"Zap","reason":"x"}`, opCookie(t)); rec.Code != 400 {
 		t.Errorf("absent tone: %d, want 400 (never a silent clear)", rec.Code)
+	}
+}
+
+// The description placeholder (ADR 0091 §6) is the one OPTIONAL key of the edit: absent leaves the
+// stored sentence alone (the console predating migration 0022 sends none), "" clears it, a blank or
+// over-long or multi-line one is refused before the store.
+func TestEditPetitionFieldDescriptionPlaceholder(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.petition_field.manage"}
+	path := "/api/v1/petition-fields/dien"
+	base := `"default_label":"Điện","sort_order":4,"icon":"Zap","tone":"orange","reason":"Gợi ý"`
+
+	long := strings.Repeat("a", domain.MaxPetitionFieldPlaceholderRunes+1)
+	for name, body := range map[string]string{
+		"blank":     `{` + base + `,"description_placeholder":"   "}`,
+		"too long":  `{` + base + `,"description_placeholder":"` + long + `"}`,
+		"two lines": `{` + base + `,"description_placeholder":"Dòng một\nDòng hai"}`,
+	} {
+		rec := h.do("PUT", path, body, opCookie(t))
+		if rec.Code != 422 || !strings.Contains(rec.Body.String(), `"code":"invalid_description_placeholder"`) {
+			t.Errorf("%s: %d %s, want 422 invalid_description_placeholder", name, rec.Code, rec.Body)
+		}
+	}
+	if h.fields.writes != 0 {
+		t.Fatal("a refused placeholder reached the store")
+	}
+
+	// Absent: the store is told to LEAVE the sentence (nil), never to clear it.
+	if rec := h.do("PUT", path, `{`+base+`}`, opCookie(t)); rec.Code != 200 || h.fields.sawPlaceholder != nil {
+		t.Errorf("absent: %d, store saw %v — want nil (leave as stored)", rec.Code, h.fields.sawPlaceholder)
+	}
+	// Exactly "": an explicit clear.
+	if rec := h.do("PUT", path, `{`+base+`,"description_placeholder":""}`, opCookie(t)); rec.Code != 200 ||
+		h.fields.sawPlaceholder == nil || *h.fields.sawPlaceholder != "" {
+		t.Errorf("clear: %d, store saw %v — want pointer to \"\"", rec.Code, h.fields.sawPlaceholder)
+	}
+	// A sentence: trimmed, handed over.
+	if rec := h.do("PUT", path, `{`+base+`,"description_placeholder":"  Ví dụ: đèn đường hỏng  "}`, opCookie(t)); rec.Code != 200 ||
+		h.fields.sawPlaceholder == nil || *h.fields.sawPlaceholder != "Ví dụ: đèn đường hỏng" {
+		t.Errorf("set: %d, store saw %v", rec.Code, h.fields.sawPlaceholder)
+	}
+}
+
+func TestPetitionFieldViewCarriesPlaceholder(t *testing.T) {
+	v := toPetitionFieldView(domain.PetitionField{Code: "dien", DescriptionPlaceholder: "Ví dụ"})
+	if v.DescriptionPlaceholder != "Ví dụ" {
+		t.Errorf("view = %+v", v)
+	}
+	b, err := json.Marshal(toPetitionFieldView(domain.PetitionField{Code: "dien"}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "description_placeholder") {
+		t.Errorf("no sentence must be ABSENT, not \"\": %s", b)
 	}
 }
 

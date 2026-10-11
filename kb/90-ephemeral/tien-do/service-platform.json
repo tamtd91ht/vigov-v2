@@ -341,6 +341,15 @@
       "viec": "Migration 0022: cột petition_field.description_placeholder (câu ví dụ ô Mô tả, tầng 1, cho phép NULL, ≤500 ký tự). Migration 0023 gieo câu cho 5 mã khớp prototype (rac-thai, giao-thong, cap-thoat-nuoc, trat-tu-do-thi, khac) theo phương án 2 phiên chính chốt 11/10/2026: giữ dáng câu 'Ví dụ: …' của prototype, bỏ mọi địa danh (chợ Hà Lam, Nguyễn Thành, Tiểu La, QL1A, số nhà, kiệt) và chữ 'xã' (ADR 0060 §4, ADR 0079). Chỉ ghi dòng còn NULL, vết platform_audit_log 'petition_field.changed' cùng câu lệnh. Ba mục prototype không khớp mã (ve-sinh-moi-truong, dien-chieu-sang, an-ninh-trat-tu) để NULL.",
       "bang_chung": "service-platform/migrations/0022_petition_field_description_placeholder.sql, 0023_petition_field_description_placeholder_seed.sql + petition_field_description_placeholder_test.go, petition_field_description_placeholder_seed_test.go; go vet ./migrations + go test ./... service-platform xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL).",
       "tiep_theo": "Thẻ Go sau: thêm cột vào ListPetitionFields và trường tuỳ chọn trong platform.proto; màn vận hành sửa được câu. Chủ dự án có thể muốn duyệt lại lời 5 câu. Chưa chạy trên PostgreSQL 16 thật."
+    },
+    {
+      "id": "go-11-10-goi-y-mo-ta-linh-vuc",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Thẻ Go của ADR 0091 §6: ListPetitionFields đọc description_placeholder (NULL -> \"\"), gRPC điền PetitionField.description_placeholder (thẻ 7). Tuyến vận hành PUT /api/v1/petition-fields/{code} nhận thêm khoá TUỲ CHỌN description_placeholder: vắng/null = giữ nguyên câu đang lưu (bảng điều khiển cũ không gửi khoá này, sửa nhãn không được xoá câu đã gieo); \"\" = bỏ câu (NULL); còn lại cắt khoảng trắng, không rỗng, ≤500 ký tự, một dòng, không ký tự điều khiển (khớp CHECK của 0022), sai thì 422 invalid_description_placeholder. Ghi vết 'petition_field.changed' cùng giao dịch, before/after có description_placeholder. Phản hồi vận hành thêm description_placeholder (omitempty).",
+      "bang_chung": "service-platform/internal/{domain,store,grpc,http}/petition_field*.go, operator_petition_fields.go + test (domain/petition_field_placeholder_test.go, grpc/petition_field_test.go, http/operator_petition_fields_test.go, store/operator_wave2b_pg_test.go). go build/vet/test ./... service-platform xanh 11/10/2026. Ca PG (operator_wave2b_pg_test) đã viết nhưng KHÔNG chạy — máy này không có VIGOV_TEST_DSN.",
+      "tiep_theo": "platform-admin chưa có ô sửa câu gợi ý (màn linh-vuc-phan-anh) — thẻ giao diện riêng. Tuyến tạo mã mới (POST) chưa nhận câu gợi ý (không được yêu cầu). Chưa chạy trên PostgreSQL 16 thật."
     }
   ]
 }

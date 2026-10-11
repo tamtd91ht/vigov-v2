@@ -33,7 +33,7 @@ func (f fieldsFake) ListPetitionFields(context.Context) ([]domain.PetitionField,
 func sampleFields() fieldsFake {
 	return fieldsFake{rows: []domain.PetitionField{
 		{Code: "rac-thai", DefaultLabel: "Rác thải – Vệ sinh môi trường", SortOrder: 1, Icon: "Trash2",
-			Tone: "orange", Active: true},
+			Tone: "orange", Active: true, DescriptionPlaceholder: "Ví dụ: rác tồn đọng nhiều ngày"},
 		{Code: "ma-da-ngung", DefaultLabel: "Mã đã ngừng", SortOrder: 13, Active: false},
 	}}
 }
@@ -59,11 +59,13 @@ func TestListPetitionFieldsMapsFieldByFieldIncludingRetired(t *testing.T) {
 	}
 	f := fs[0]
 	if f.GetCode() != "rac-thai" || f.GetDefaultLabel() != "Rác thải – Vệ sinh môi trường" ||
-		f.GetSortOrder() != 1 || f.GetIcon() != "Trash2" || f.GetTone() != "orange" || !f.GetActive() {
+		f.GetSortOrder() != 1 || f.GetIcon() != "Trash2" || f.GetTone() != "orange" || !f.GetActive() ||
+		f.GetDescriptionPlaceholder() != "Ví dụ: rác tồn đọng nhiều ngày" {
 		t.Errorf("rac-thai = %+v", f)
 	}
-	if r := fs[1]; r.GetCode() != "ma-da-ngung" || r.GetActive() || r.GetIcon() != "" || r.GetTone() != "" {
-		t.Errorf("retired = %+v; want present, active=false, icon/tone empty", r)
+	if r := fs[1]; r.GetCode() != "ma-da-ngung" || r.GetActive() || r.GetIcon() != "" || r.GetTone() != "" ||
+		r.GetDescriptionPlaceholder() != "" {
+		t.Errorf("retired = %+v; want present, active=false, icon/tone/placeholder empty", r)
 	}
 }
 

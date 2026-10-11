@@ -144,17 +144,36 @@ func TestPgPetitionFieldWrites(t *testing.T) {
 	}
 
 	next := domain.PetitionField{DefaultLabel: "Điện – chiếu sáng", SortOrder: 4, Icon: "Zap", Tone: "orange"}
-	got, changed, err := s.EditPetitionField(ctx, "dien", next, "Sửa nhãn", operatorFake)
+	got, changed, err := s.EditPetitionField(ctx, "dien", next, nil, "Sửa nhãn", operatorFake)
 	if err != nil || !changed || got.DefaultLabel != "Điện – chiếu sáng" || got.Code != "dien" || !got.Active {
 		t.Fatalf("edit: %+v changed=%v %v", got, changed, err)
 	}
-	if _, changed, err := s.EditPetitionField(ctx, "dien", next, "Lặp", operatorFake); err != nil || changed {
+	if _, changed, err := s.EditPetitionField(ctx, "dien", next, nil, "Lặp", operatorFake); err != nil || changed {
 		t.Errorf("repeat edit: changed=%v %v", changed, err)
 	}
 	if count(t, db, trail, "dien", ActionPetitionFieldChanged) != 1 {
 		t.Error("edit entries: want exactly one")
 	}
-	if _, _, err := s.EditPetitionField(ctx, "khong-co", next, "x", operatorFake); !errors.Is(err, ErrPetitionFieldNotFound) {
+	// The placeholder (ADR 0091 §6): set, then nil leaves it, then "" clears it to NULL — one entry each
+	// for the two changes, none for the no-op.
+	sentence := "Ví dụ: đèn đường hỏng"
+	if got, changed, err := s.EditPetitionField(ctx, "dien", next, &sentence, "Gợi ý", operatorFake); err != nil ||
+		!changed || got.DescriptionPlaceholder != sentence {
+		t.Fatalf("set placeholder: %+v changed=%v %v", got, changed, err)
+	}
+	if got, changed, err := s.EditPetitionField(ctx, "dien", next, nil, "Giữ", operatorFake); err != nil ||
+		changed || got.DescriptionPlaceholder != sentence {
+		t.Errorf("nil must leave the sentence: %+v changed=%v %v", got, changed, err)
+	}
+	clear := ""
+	if got, changed, err := s.EditPetitionField(ctx, "dien", next, &clear, "Bỏ", operatorFake); err != nil ||
+		!changed || got.DescriptionPlaceholder != "" {
+		t.Errorf("clear placeholder: %+v changed=%v %v", got, changed, err)
+	}
+	if count(t, db, trail, "dien", ActionPetitionFieldChanged) != 3 {
+		t.Error("edit entries: want three (label, set, clear)")
+	}
+	if _, _, err := s.EditPetitionField(ctx, "khong-co", next, nil, "x", operatorFake); !errors.Is(err, ErrPetitionFieldNotFound) {
 		t.Errorf("unknown code: %v", err)
 	}
 

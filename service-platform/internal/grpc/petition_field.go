@@ -41,6 +41,8 @@ func (s *Server) ListPetitionFields(ctx context.Context, _ *platformv1.ListPetit
 			Icon:         r.Icon,
 			Tone:         r.Tone,
 			Active:       r.Active,
+			// "" when the column is NULL: proto3 has no null, and the contract reads "" as "none".
+			DescriptionPlaceholder: r.DescriptionPlaceholder,
 		})
 	}
 	return out, nil
