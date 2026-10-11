@@ -354,6 +354,15 @@
       "viec": "BACKEND DEPENDENCY từ /fix-web-admin thu-chi 09/10: trả entry_count (số đợt sống) trên mỗi dòng finance_dongRa để web vẽ badge trên nút 'Các đợt thu, chi' như prototype (FiscalReportPanel.tsx ListPlus badge).",
       "bang_chung": "XONG PHÍA MÁY CHỦ 11/10/2026, 8cb12506: store/thu_chi_ngan_sach.go entryCountColumn — đếm đợt chưa xoá trong CÙNG câu đọc cây khoản mục (một truy vấn con tương quan, ràng tenant_id bằng $1, dùng chỉ mục từng phần dot_thu_chi_theo_khoan_muc của 0008), không N+1; domain.KhoanMucNganSach.EntryCount; http/budget_entry_count_test.go, store/budget_entry_count_pg_test.go.",
       "tiep_theo": "store/budget_entry_count_pg_test.go chưa chạy trên PostgreSQL (thiếu VIGOV_TEST_DSN). Web vẽ badge ĐANG LÀM (sổ web-admin, mục `thu-chi-10-11`). || Chữ cũ: /develop-backend-api thu-chi-ngan-sach: thêm trường tuỳ chọn, đếm trong cùng truy vấn đọc bảng (không N+1), rồi web vẽ badge."
+    },
+    {
+      "id": "nap-excel-ghep-cot-phan-tram-11-10",
+      "menu": "thu-chi-ngan-sach",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Nạp Excel bảng thu/chi: cột % tự ghép tử/mẫu theo luật prototype khi luật một-cột-dự-toán không quyết được — mẫu Thu mặc định nay ra NSNN ÷ TP giao thay vì 'không tính được' (bảng lỗi khách 10/10, phần dữ liệu Thu - Chi).",
+      "bang_chung": "982ab9ad — domain/budget_import.go guessPercentOperands hai bước: (1) đúng một cột dự toán + một cột số khác → khác ÷ dự toán (như cũ); (2) còn lại: mẫu = cột dự toán/kế hoạch đầu tiên, tử = cột số khác đầu tiên có tiêu đề chứa 'thực hiện'/'ngân sách'/'đã' (isActualHeading, theo vigov-require fiscal_import.py `_role_of`). Lý do: luật chủ dự án 11/10/2026 'chuẩn là prototype'. Không khớp → vẫn 'không tính được'; % trong tệp vẫn không đọc. domain/budget_import_test.go thêm ca. Thân commit: go vet/test ./... xanh service-finance; chỉ đổi đường nạp, bảng đã lưu không đụng.",
+      "tiep_theo": "Luật chuỗi con 'đã' chép nguyên prototype nên có thể khớp tiêu đề ngoài ý; ghép sai chỉ đổi tỷ lệ, sửa tệp rồi nạp lại. Bảng đã nạp trước commit không tự tính lại. Web: sổ web-admin, mục `con-lai-10-11`."
     }
   ]
 }

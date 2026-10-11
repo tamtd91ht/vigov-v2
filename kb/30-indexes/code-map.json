@@ -944,7 +944,7 @@
     },
     "app.Import": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_import.go:124"
+      "at": "service-petitions/internal/app/task_import.go:135"
     },
     "app.ImportBudgetWorkbook": {
       "kind": "func",
@@ -1880,7 +1880,7 @@
     },
     "app.NewTaskImport": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_import.go:100"
+      "at": "service-petitions/internal/app/task_import.go:111"
     },
     "app.NewTaskPriorityImporter": {
       "kind": "func",
@@ -2864,15 +2864,19 @@
     },
     "app.TaskImport": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:93"
+      "at": "service-petitions/internal/app/task_import.go:104"
+    },
+    "app.TaskImportLayoutError": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/task_import.go:76"
     },
     "app.TaskImportLookups": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:73"
+      "at": "service-petitions/internal/app/task_import.go:84"
     },
     "app.TaskImportResult": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:107"
+      "at": "service-petitions/internal/app/task_import.go:118"
     },
     "app.TaskOverdueReader": {
       "kind": "type",
@@ -2880,7 +2884,7 @@
     },
     "app.TaskPriorityCatalogue": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:87"
+      "at": "service-petitions/internal/app/task_import.go:98"
     },
     "app.TaskPrioritySource": {
       "kind": "type",
@@ -2904,7 +2908,7 @@
     },
     "app.TaskTypeCatalogue": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:82"
+      "at": "service-petitions/internal/app/task_import.go:93"
     },
     "app.TaskUpdateRight": {
       "kind": "type",
@@ -2981,6 +2985,10 @@
     "app.Unmerge": {
       "kind": "func",
       "at": "service-petitions/internal/app/petition_merge.go:178"
+    },
+    "app.Unwrap": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/task_import.go:81"
     },
     "app.Update": {
       "kind": "func",
@@ -4212,7 +4220,7 @@
     },
     "domain.AsBoard": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:752"
+      "at": "service-finance/internal/domain/budget_import.go:784"
     },
     "domain.AssignOperandsByIndex": {
       "kind": "func",
@@ -4324,15 +4332,15 @@
     },
     "domain.BudgetImportCell": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:61"
+      "at": "service-finance/internal/domain/budget_import.go:63"
     },
     "domain.BudgetImportIssue": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:80"
+      "at": "service-finance/internal/domain/budget_import.go:82"
     },
     "domain.BudgetImportSheet": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:67"
+      "at": "service-finance/internal/domain/budget_import.go:69"
     },
     "domain.BudgetPeriodClose": {
       "kind": "type",
@@ -4536,7 +4544,7 @@
     },
     "domain.CheckImportedColumnSet": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:993"
+      "at": "service-finance/internal/domain/budget_import.go:1025"
     },
     "domain.CheckIssueDueOn": {
       "kind": "func",
@@ -4652,7 +4660,7 @@
     },
     "domain.CheckTaskImportHeadings": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:153"
+      "at": "service-petitions/internal/domain/task_import.go:176"
     },
     "domain.CheckTypeFields": {
       "kind": "func",
@@ -5254,6 +5262,10 @@
       "kind": "func",
       "at": "service-documents/internal/domain/citizen_letter.go:696"
     },
+    "domain.DiagnoseTaskImportHeadings": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/task_import.go:223"
+    },
     "domain.DiemCham": {
       "kind": "func",
       "at": "service-finance/internal/domain/du_an.go:201"
@@ -5624,11 +5636,11 @@
     },
     "domain.HandEntriesConflict": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:1054"
+      "at": "service-finance/internal/domain/budget_import.go:1086"
     },
     "domain.HandEntriesError": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:1064"
+      "at": "service-finance/internal/domain/budget_import.go:1096"
     },
     "domain.HandoverStatus": {
       "kind": "func",
@@ -5644,7 +5656,7 @@
     },
     "domain.HasChildren": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:126"
+      "at": "service-finance/internal/domain/budget_import.go:128"
     },
     "domain.HasDeadline": {
       "kind": "func",
@@ -5720,19 +5732,19 @@
     },
     "domain.ImportedColumn": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:90"
+      "at": "service-finance/internal/domain/budget_import.go:92"
     },
     "domain.ImportedColumnSet": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:961"
+      "at": "service-finance/internal/domain/budget_import.go:993"
     },
     "domain.ImportedLine": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:98"
+      "at": "service-finance/internal/domain/budget_import.go:100"
     },
     "domain.ImportedSheet": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:111"
+      "at": "service-finance/internal/domain/budget_import.go:113"
     },
     "domain.IncomingAssignedNotice": {
       "kind": "func",
@@ -6370,6 +6382,10 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/automation.go:171"
     },
+    "domain.LocateTaskImportHeadings": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/task_import.go:205"
+    },
     "domain.LockConfirmsToo": {
       "kind": "func",
       "at": "service-finance/internal/domain/chung_tu_giai_ngan.go:483"
@@ -6758,6 +6774,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/du_an_ghi.go:319"
     },
+    "domain.NormaliseImportText": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/task_import.go:170"
+    },
     "domain.NormaliseIssueOwnerCode": {
       "kind": "func",
       "at": "service-finance/internal/domain/project_discussion.go:109"
@@ -6776,7 +6796,7 @@
     },
     "domain.NormaliseSourceFileName": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:1023"
+      "at": "service-finance/internal/domain/budget_import.go:1055"
     },
     "domain.NormalizeActorIP": {
       "kind": "func",
@@ -7072,7 +7092,7 @@
     },
     "domain.ParseBudgetWorkbook": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:174"
+      "at": "service-finance/internal/domain/budget_import.go:176"
     },
     "domain.ParseClock": {
       "kind": "func",
@@ -7088,7 +7108,7 @@
     },
     "domain.ParseImportDeadline": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:271"
+      "at": "service-petitions/internal/domain/task_import.go:381"
     },
     "domain.ParseIncomingMetric": {
       "kind": "func",
@@ -7100,7 +7120,7 @@
     },
     "domain.ParseTaskImportRow": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:182"
+      "at": "service-petitions/internal/domain/task_import.go:278"
     },
     "domain.ParseVoucherImportAmount": {
       "kind": "func",
@@ -7116,7 +7136,7 @@
     },
     "domain.ParsedBudgetWorkbook": {
       "kind": "type",
-      "at": "service-finance/internal/domain/budget_import.go:147"
+      "at": "service-finance/internal/domain/budget_import.go:149"
     },
     "domain.PastDeadlineAt": {
       "kind": "func",
@@ -7652,7 +7672,7 @@
     },
     "domain.Sentence": {
       "kind": "func",
-      "at": "service-identity/internal/domain/org_unit_delete.go:72"
+      "at": "service-petitions/internal/domain/task_import.go:244"
     },
     "domain.SessionIdleExpired": {
       "kind": "func",
@@ -7756,7 +7776,7 @@
     },
     "domain.SortedKinds": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:1085"
+      "at": "service-finance/internal/domain/budget_import.go:1117"
     },
     "domain.SplitIssueText": {
       "kind": "func",
@@ -7940,19 +7960,23 @@
     },
     "domain.TaskImportCarriesRetiredColumns": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:141"
+      "at": "service-petitions/internal/domain/task_import.go:142"
     },
     "domain.TaskImportError": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/task_import.go:100"
+      "at": "service-petitions/internal/domain/task_import.go:101"
+    },
+    "domain.TaskImportLayoutProblem": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/task_import.go:217"
     },
     "domain.TaskImportRow": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/task_import.go:108"
+      "at": "service-petitions/internal/domain/task_import.go:109"
     },
     "domain.TaskImportRowBlank": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:171"
+      "at": "service-petitions/internal/domain/task_import.go:267"
     },
     "domain.TaskLeaderOrCreator": {
       "kind": "func",
@@ -8240,7 +8264,7 @@
     },
     "domain.UnidentifiedPercentColumns": {
       "kind": "func",
-      "at": "service-finance/internal/domain/budget_import.go:136"
+      "at": "service-finance/internal/domain/budget_import.go:138"
     },
     "domain.UnmergeNextStep": {
       "kind": "func",
@@ -9916,7 +9940,7 @@
     },
     "http.ImportTemplate": {
       "kind": "func",
-      "at": "service-petitions/internal/http/task_import.go:292"
+      "at": "service-petitions/internal/http/task_import.go:383"
     },
     "http.IncomingDocumentOverdueQueue": {
       "kind": "func",

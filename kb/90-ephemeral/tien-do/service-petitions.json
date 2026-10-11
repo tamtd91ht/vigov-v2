@@ -768,6 +768,15 @@
       "viec": "Triển khai: tệp đính kèm nhiệm vụ trên cụm cần OBJECT_STORAGE_* và MALWARE_SCANNER_ADDRESS cho service-petitions (dòng 17 báo đính kèm lỗi).",
       "bang_chung": "deploy/base/petitions/deployment.yaml nạp common-config + petitions-secrets bằng envFrom. Mẫu đặt biến của comms ghi ở deploy/base/comms/deployment.yaml:136-139. Tên biến: .env.example:379-415.",
       "tiep_theo": "Người vận hành cụm đặt giá trị (kho không biết được). Không phải lỗi mã."
+    },
+    {
+      "id": "nhap-nhiem-vu-excel-10-11",
+      "menu": "nhiem-vu",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Nhập nhiệm vụ từ Excel không còn từ chối tệp hợp lệ (bảng lỗi khách 10/10, dòng 18 ở sổ web-admin).",
+      "bang_chung": "4bf0f0a6 — domain/task_import.go, app/task_import.go, http/task_import.go + ca kiểm cả ba tầng: tiêu đề so không phân biệt hoa/thường/khoảng trắng/xuống dòng/hoà-hòa uỷ-ủy; hàng tiêu đề tìm trong 10 hàng đầu (bỏ qua dòng tiêu đề gộp ô phía trên); lỗi bố cục chỉ đúng ô; hạn nhận thêm '17:00 30/09/2026', '17h00', '30-09-2026', '30.09.2026', ISO có T; ô ngày-giờ 00:00 theo định dạng ô, hệ ngày 1904; mã bộ phận/ưu tiên/loại/khối không phân biệt hoa thường; loại/ưu tiên nhận theo tên khi tên chỉ trỏ một dòng; ô phê duyệt FALSE/không/chưa = chưa duyệt. Thân commit: go test/build/vet ./... xanh service-petitions.",
+      "tiep_theo": "CÒN TREO chờ chủ dự án: (1) hạn chỉ có ngày (không giờ) VẪN bị từ chối theo quyết định 28/09/2026 (domain ParseImportDeadline), trong khi prototype nhận — chọn giờ mặc định là quyết định của chủ dự án, không tự đặt; (2) nhập đơn vị thực hiện THEO TÊN cần hợp đồng identity mới — hiện chỉ có LiveOrgUnitIDsByCode (tra theo mã). Chưa kiểm với tệp Excel thật của khách."
     }
   ]
 }

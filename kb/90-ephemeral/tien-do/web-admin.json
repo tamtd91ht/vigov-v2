@@ -1293,7 +1293,7 @@
       "no_confirm": [],
       "viec": "Thu - Chi theo bảng lỗi 10/10: sao không nháy màn (dòng 51); bỏ dòng công thức ở tiêu đề cột % (dòng 52); bỏ câu quy đổi triệu đồng (dòng 50); bỏ ô Lý do ở popup Thêm đợt (dòng 53).",
       "bang_chung": "75b622a1 (bang-thu-chi.tsx, in-cell-edit.test.tsx) · 61545b3b (dot-thu-chi.tsx, nhan-thu-chi.ts). · 2e7b8128 — bang-thu-chi.tsx + in-cell-edit.test.tsx: huy hiệu số đợt đọc entry_count, tăng ngay không tải lại (dòng 53).",
-      "tiep_theo": "XONG ở 2e7b8128. Dòng 49, 54, 55 là DỮ LIỆU — mục `con-lai-10-11`. GIỮ 'Sửa thông tin bảng' (dòng 47, ADR 0090). Dòng 48 (popup tải tệp mẫu khi Nạp từ Excel) chưa thấy commit trong lượt này — chưa kiểm. Chưa kiểm bằng ảnh render."
+      "tiep_theo": "XONG ở 2e7b8128. Dòng 49, 54, 55 là DỮ LIỆU — mục `con-lai-10-11`. GIỮ 'Sửa thông tin bảng' (dòng 47, ADR 0090). Dòng 48 (popup tải tệp mẫu khi Nạp từ Excel) XONG ở 62cb1878 — chi tiết ở mục `con-lai-10-11`. Chưa kiểm bằng ảnh render."
     },
     {
       "id": "giai-ngan-10-11",
@@ -1309,8 +1309,8 @@
       "trang_thai": "chua_lam",
       "no_confirm": [],
       "viec": "Bảng lỗi khách 10/10/2026 — phần CHƯA làm sau đợt 2: (1) dòng 18, nhập Excel nhiệm vụ báo lỗi dù dữ liệu hợp lệ; (2) thẻ 'Tính lại số liệu Tổng quan' ở Cấu hình vẫn là control vô hiệu '?' (ADR 0068 §14); (3) Thu - Chi dòng 49, 54, 55 (bảng tính gốc 50, 55, 56: tiêu đề báo cáo chi, cụm số tổng, cột bảng thu) là DỮ LIỆU, không phải mã; (4) tệp đính kèm nhiệm vụ trên cụm cần biến triển khai.",
-      "bang_chung": "Không có commit — mục ghi phần còn lại. (4) ở sổ service-petitions, mục `trien-khai-tep-nhiem-vu-10-11`.",
-      "tiep_theo": "(1) cần tệp Excel thật của khách để tái hiện. (2) chưa có máy chủ cho thao tác này. (3) xã đổi qua 'Sửa thông tin bảng' hoặc nạp lại. (4) người vận hành cụm đặt OBJECT_STORAGE_* + MALWARE_SCANNER_ADDRESS cho petitions."
+      "bang_chung": "(1) XONG ở 4bf0f0a6 (máy chủ; sổ service-petitions, mục `nhap-nhiem-vu-excel-10-11`). (3) đã có mẫu và đã sửa cách ghép %: 62cb1878 — popup 'Tải file mẫu' ở Nạp từ Excel (thu-chi/budget-template.ts sinh .xlsx đúng bố cục máy chủ nhận, budget-import-button.tsx); 982ab9ad — máy chủ ghép tử/mẫu cột % theo luật prototype (sổ service-finance, mục `nap-excel-ghep-cot-phan-tram-11-10`). (4) ở sổ service-petitions, mục `trien-khai-tep-nhiem-vu-10-11`.",
+      "tiep_theo": "(1) xong; CÒN TREO chờ chủ dự án: hạn chỉ có ngày vẫn bị từ chối theo quyết định 28/09/2026 dù prototype nhận (giờ mặc định là quyết định của chủ dự án); nhập đơn vị theo tên cần hợp đồng identity mới. Chưa thử với tệp Excel thật của khách. (2) chưa có máy chủ cho thao tác này. (3) dòng dữ liệu bảng vẫn do xã đổi qua 'Sửa thông tin bảng' hoặc nạp lại từ mẫu — không đổi mã (thân 62cb1878). (4) người vận hành cụm đặt OBJECT_STORAGE_* + MALWARE_SCANNER_ADDRESS cho petitions."
     }
   ]
 }
