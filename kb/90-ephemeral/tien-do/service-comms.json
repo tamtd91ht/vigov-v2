@@ -449,6 +449,17 @@
       "no_confirm": [],
       "bang_chung": "service-comms/internal/store/platformstore/store.go (communeStats, giữ // @cross-tenant), domain/zalo_bot.go (ZaloBotCommuneStat), grpc/zalo_bot_operator.go (ownBotName/ownBotLinks giữ 'chỉ khi uses_own_bot' ở biên) + grpc/zalo_bot_operator_test.go, platformstore/store_pg_test.go bước 8b. go vet + go test ./internal/... service-comms xanh.",
       "tiep_theo": "store_pg_test.go bước 8b CHƯA chạy trên PostgreSQL (máy này không có VIGOV_TEST_DSN). Platform/web-admin dùng ba trường mới là thẻ riêng."
+    },
+    {
+      "id": "task-08-sua-sau-ra-soat-adr-0091",
+      "menu": [
+        "noi-dung-mini-app"
+      ],
+      "viec": "Sửa theo rà soát cô lập + bảo mật của 093c7aea (ADR 0091): (1) CORS rìa công dân cho phép PUT (core/httpx/cors.go) — trước đó trình duyệt chặn preflight PUT /api/v1/my-notification-preferences; ca kiểm chuỗi công dân nay đòi PUT trong Access-Control-Allow-Methods. (2) Vết kiểm toán cảnh báo thiên tai: `level` là chữ tự do nên chỉ ghi has_level / level_changed, không ghi giá trị. (3) Trần thân yêu cầu riêng cho POST/PATCH /api/v1/disaster-alerts, tính từ giới hạn miền (≈0,9 MiB, 12 byte/ký tự cho cách viết JSON dài nhất); DELETE và các tuyến khác giữ 64 KiB. (4) Quyết định chủ dự án 11/10/2026: tuyến công khai GET /api/v1/commune-disaster-alerts có chính sách riêng ratelimit.PublicDisasterAlertsRead — 1200 lần/phút theo (tên miền, mạng máy gọi), sự kiện public_disaster_alerts.rate_limited, mở khi Redis hỏng như tin công khai — bộ giới hạn riêng trong main.go; bộ đệm danh sách đang hiệu lực theo xã 30 giây trong bộ nhớ (app.InForceAlertCache, khoá t:<tenant_id>, tối đa 4096 xã, lọc lại theo giờ khi trúng đệm, ghi của cán bộ xoá mục trên pod đó). (5) Test PostgreSQL cho công tắc nhận thông báo: hai xã cùng citizen_id, mỗi xã chỉ đọc/ghi dòng của mình.",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "bang_chung": "core/httpx/cors.go + cors_test.go; core/ratelimit/ratelimit.go + ratelimit_test.go (TestPublicDisasterAlertsReadIs1200PerMinuteAndFailsOpen, …OwnBudgetAndLabel, …ServesWhenStoreDown); service-comms/cmd/server/main.go, citizen_chain_test.go; internal/app/disaster_alert.go (+WithAfterWrite), disaster_alert_public_cache.go + _test.go; internal/http/danh_muc_ghi.go (readBodyCapped), disaster_alerts.go (disasterAlertBodyMax) + _test.go (TestDisasterAlertMaximalValidBodyPassesTheCap, TestDisasterAlertOversizeBodyIsRefused, TestPublicDisasterAlertsThroughCache); internal/store/citizen_notification_preference_pg_test.go. go build + go vet + go test ./... xanh ở service-comms và core 11/10/2026 (GOCACHE=D:/gocache); make kb đã chạy.",
+      "tiep_theo": "citizen_notification_preference_pg_test.go và disaster_alert_pg_test.go CHƯA chạy trên PostgreSQL 16 (máy này không có VIGOV_TEST_DSN). Bộ đệm 30 giây là theo pod: pod khác thấy cảnh báo mới chậm tối đa 30 giây (chủ dự án chấp nhận)."
     }
   ]
 }

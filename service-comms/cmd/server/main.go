@@ -444,10 +444,14 @@ func main() {
 	// checker, `content.read` / `content.update`. ONE store behind the reads, the use case and the public
 	// read below. See internal/http/disaster_alerts.go.
 	disasterAlerts := commsstore.NewDisasterAlertStore(kho)
+	// The public read's 30-second per-commune cache (owner, 11/10/2026) — mounted on the public mux below.
+	// The staff use case invalidates THIS pod's entry after each committed write; other pods catch up
+	// within the 30 s the owner accepted (the cache is correct without the invalidation).
+	inForceAlerts := commsapp.NewInForceAlertCache(disasterAlerts)
 	svchttp.RegisterDisasterAlerts(mux, svchttp.DisasterAlertDeps{
 		Checker: staffauth.Checker{},
 		Reader:  disasterAlerts,
-		Writer:  commsapp.NewDisasterAlerts(kho, disasterAlerts),
+		Writer:  commsapp.NewDisasterAlerts(kho, disasterAlerts).WithAfterWrite(inForceAlerts.Invalidate),
 		Log:     log,
 	})
 
@@ -556,12 +560,20 @@ func main() {
 		Limiter:  publicLimiter,
 		Log:      log,
 	})
-	// The public disaster-alert read (ADR 0091 §2) — the SAME platform lookup and the SAME limiter
-	// instance (the owner chose "giới hạn tần suất như tin công khai").
+	// The public disaster-alert read (ADR 0091 §2) — the SAME platform lookup, but its OWN limiter
+	// instance on its own policy (owner, 11/10/2026): ratelimit.PublicDisasterAlertsRead, 1200 per minute
+	// per (host, client network), fail-open like the news read, event public_disaster_alerts.rate_limited.
+	// Sharing publicLimiter would hold a storm-time hamlet to the news figure and let a news scrape spend
+	// the alert's budget. Same Redis counter (REDIS_DSN); separate keys by policy name.
+	disasterAlertsLimiter, err := ratelimit.New(rateCounter, ratelimit.PublicDisasterAlertsRead)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn tần suất tuyến cảnh báo thiên tai công khai", "service", "comms", "err", err)
+		os.Exit(1)
+	}
 	svchttp.RegisterPublicDisasterAlerts(muxCongKhai, svchttp.PublicDisasterAlertDeps{
 		Xa:      publicDirectory,
-		Alerts:  disasterAlerts,
-		Limiter: publicLimiter,
+		Alerts:  inForceAlerts,
+		Limiter: disasterAlertsLimiter,
 		Log:     log,
 	})
 	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins(), log)

@@ -9,8 +9,9 @@
 // limiter that opens when Redis is down removes that bound exactly when nothing else notices.
 //
 // THE SECOND POLICY is the public Mini App news read (PublicNewsRead, owner decision 02/10/2026):
-// 120 requests per minute per client network per commune host, and it is the ONE policy that fails
-// OPEN — see Policy.failOpen for why that is a per-policy field and never the package default.
+// 120 requests per minute per client network per commune host, and it FAILS OPEN — see Policy.failOpen
+// for why that is a per-policy field and never the package default. The public disaster-alert read
+// (PublicDisasterAlertsRead, owner decision 11/10/2026) is the only other policy that fails open.
 //
 // The others — CitizenPhotoUpload, StaffImageFetch (ADR 0067 K10) — fail closed, the default.
 //
@@ -53,6 +54,19 @@ const (
 const (
 	PublicNewsReadLimit  = 120
 	PublicNewsReadWindow = time.Minute
+)
+
+// The public disaster-alert read threshold — CHOSEN BY THE OWNER on 11/10/2026 (rule 13 threshold, a
+// stop condition decided by them) for service-comms GET /api/v1/commune-disaster-alerts: 1200 per minute
+// per (host, client network). TEN TIMES the news figure, and on its own budget, because the shape of the
+// traffic is different: during a storm a whole hamlet opens the Mini App at once, often behind ONE carrier
+// NAT address or one cultural-house Wi-Fi, and the alert banner on the home screen is read on every open —
+// at 120 the people the alert is for would be the ones refused. Sharing the news budget would also let a
+// burst of news reads starve the alert, the one read that must not fail. Constants for the operator pair's
+// reason: changing either is a rule 13 stop condition.
+const (
+	PublicDisasterAlertsReadLimit  = 1200
+	PublicDisasterAlertsReadWindow = time.Minute
 )
 
 // The citizen scene-photo upload threshold — ADR 0052 §12 requires "giới hạn tần suất theo công dân"
@@ -140,13 +154,15 @@ type Policy struct {
 	// failOpen: when the counter store cannot be asked, the request PROCEEDS — and a security warning
 	// is emitted once per window — instead of being refused with 503.
 	//
-	// FALSE FOR EVERY POLICY BUT ONE, which is why it is a field and not a mode of the limiter. A
+	// FALSE FOR EVERY POLICY BUT TWO, which is why it is a field and not a mode of the limiter. A
 	// security limiter that opens when Redis is down removes its bound exactly when nothing else
 	// notices: right for the operator sign-in, whose bound is what stands between an email address
 	// and a 12-hour lockout. The public news read is the OWNER'S EXPLICIT EXCEPTION (02/10/2026, D2):
 	// what it bounds is load on a notice board the commune published to every resident, and a Redis
-	// outage turning every commune's board into a 503 is the worse failure. No other policy may copy
-	// it without the same decision.
+	// outage turning every commune's board into a 503 is the worse failure. The public disaster-alert
+	// read is the second, by the owner's decision of 11/10/2026 ("same fail-open behaviour as the news
+	// read"): a 503 on a storm warning is worse still. No other policy may copy it without the same
+	// decision.
 	failOpen bool
 	// refusedCode / refusedMessage are the 429's machine code and its ONE Vietnamese sentence. Empty =
 	// the generic `rate_limited` answer. A field of the policy because a staff screen must be able to tell
@@ -166,6 +182,14 @@ var OperatorSignIn = Policy{name: "op-signin", limit: OperatorSignInLimit, windo
 // are built by PublicHostIPKey. FAILS OPEN — see Policy.failOpen.
 var PublicNewsRead = Policy{name: "public-news", limit: PublicNewsReadLimit, window: PublicNewsReadWindow,
 	event: "public_news.rate_limited", failOpen: true}
+
+// PublicDisasterAlertsRead is the policy of service-comms' public GET /api/v1/commune-disaster-alerts
+// (owner, 11/10/2026). Keys from PublicHostIPKey, like the news read — but its OWN name, so its counters
+// never share a budget with the news routes, and its OWN event, so a refusal on the alert read is told
+// apart from a news scrape in the security log. FAILS OPEN — the owner's second exception, see
+// Policy.failOpen.
+var PublicDisasterAlertsRead = Policy{name: "public-disaster-alerts", limit: PublicDisasterAlertsReadLimit,
+	window: PublicDisasterAlertsReadWindow, event: "public_disaster_alerts.rate_limited", failOpen: true}
 
 // CitizenPhotoUpload is the policy of the citizen scene-photo upload and completion routes
 // (service-petitions, ADR 0052 §12). Keys from CitizenKey. FAILS CLOSED, the package default: what it

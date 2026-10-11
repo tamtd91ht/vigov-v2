@@ -23,6 +23,10 @@ import (
 
 // thanToiDa bounds the request body. 64 KiB is far past any of these bodies and far short of
 // anything worth streaming: the point is that an unbounded body is memory a client chooses.
+//
+// NOT EVERY BODY: a route whose VALID body can exceed it declares its own cap, computed from its domain
+// bounds, and calls readBodyCapped (disasterAlertBodyMax is the one so far). A fixed cap below a valid
+// body is a 400 "quá lớn" on input the domain accepts — a refusal no form on the screen can explain.
 const thanToiDa = 64 << 10
 
 // docThan decodes a JSON body, answering 400 itself on failure.
@@ -31,8 +35,13 @@ const thanToiDa = 64 << 10
 // surface is free text somebody typed and on other surfaces would be personal data (rule 3,
 // forbidden #3). The sentence returned says what to fix without repeating what was sent.
 func docThan(w http.ResponseWriter, r *http.Request, vao any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, thanToiDa)
-	if err := json.NewDecoder(r.Body).Decode(vao); err != nil {
+	return readBodyCapped(w, r, vao, thanToiDa)
+}
+
+// readBodyCapped is docThan with the route's own cap.
+func readBodyCapped(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
+	if err := json.NewDecoder(r.Body).Decode(dst); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
 		return false

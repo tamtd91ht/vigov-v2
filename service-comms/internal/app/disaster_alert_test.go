@@ -85,7 +85,9 @@ func assertNoRawAlertPII(t *testing.T, e adrStmt) {
 func TestCreateDisasterAlertWritesRowAndEntryInOneTransaction(t *testing.T) {
 	d := alertDB(nil)
 	uc, ctx := newAlertUseCase(t, d)
-	got, err := uc.Create(ctx, validAlertInput(), alertStaff)
+	in := validAlertInput()
+	in.Level = "Cấp 3"
+	got, err := uc.Create(ctx, in, alertStaff)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -114,6 +116,11 @@ func TestCreateDisasterAlertWritesRowAndEntryInOneTransaction(t *testing.T) {
 		t.Errorf("contacts in the trail = %v", after["emergency_contacts"])
 	}
 	assertNoRawAlertPII(t, e)
+	// level is free text (0026 closes no vocabulary): presence only, never the value.
+	if _, ok := after["level"]; ok || after["has_level"] != true ||
+		strings.Contains(string(e.args[7].([]byte)), "Cấp 3") {
+		t.Errorf("level in the create trail = %v / has_level %v — presence only", after["level"], after["has_level"])
+	}
 	if got.ID != pinnedAlertID || got.CreatedBy != "CB-00123" {
 		t.Errorf("returned = %+v", got)
 	}
@@ -167,8 +174,15 @@ func TestUpdateDisasterAlertAuditsWhatMovedMasked(t *testing.T) {
 	e, delta := d.auditEntry(t)
 	before, _ := delta["truoc"].(map[string]any)
 	after, _ := delta["sau"].(map[string]any)
-	if before["level"] != "" || after["level"] != "Cấp 2" {
-		t.Errorf("level diff = %v → %v", before["level"], after["level"])
+	// level is free text (0026 closes no vocabulary): presence and "changed" only, never the value.
+	if before["has_level"] != false || after["has_level"] != true || after["level_changed"] != true {
+		t.Errorf("level diff = %v → %v", before, after)
+	}
+	if _, ok := after["level"]; ok {
+		t.Errorf("the level's value entered the trail: %v", after["level"])
+	}
+	if strings.Contains(string(e.args[7].([]byte)), "Cấp 2") {
+		t.Error("the trail holds the level's text")
 	}
 	if _, ok := after["title_changed"]; ok {
 		t.Error("an unchanged title reported as changed")
@@ -247,4 +261,46 @@ func TestDeleteDisasterAlertNeedsReasonAndIsSoft(t *testing.T) {
 	}
 	e, _ := d.auditEntry(t)
 	assertNoRawAlertPII(t, e)
+}
+
+// The after-write hook (the public cache's Invalidate) runs once per COMMITTED change, in the commune of
+// the write — never after a refusal, a no-op or a rolled-back write.
+func TestDisasterAlertAfterWriteRunsOnlyOnCommit(t *testing.T) {
+	var got []tenant.ID
+	hook := func(ctx context.Context) { got = append(got, tenant.MustFrom(ctx)) }
+
+	d := alertDB(nil)
+	uc, ctx := newAlertUseCase(t, d)
+	uc.WithAfterWrite(hook)
+	if _, err := uc.Create(ctx, validAlertInput(), alertStaff); err != nil {
+		t.Fatal(err)
+	}
+	bad := validAlertInput()
+	bad.EffectiveTo = bad.EffectiveFrom
+	_, _ = uc.Create(ctx, bad, alertStaff)
+
+	failing := alertDB(nil)
+	failing.failOn = "INSERT INTO audit_log"
+	ucFail, _ := newAlertUseCase(t, failing)
+	ucFail.WithAfterWrite(hook)
+	_, _ = ucFail.Create(ctx, validAlertInput(), alertStaff)
+
+	same := "Lũ"
+	noop, _ := newAlertUseCase(t, alertDB(alertRowValues(time.Time{})))
+	noop.WithAfterWrite(hook)
+	if _, err := noop.Update(ctx, pinnedAlertID, DisasterAlertPatch{Title: &same}, alertStaff); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != xaA {
+		t.Fatalf("hook calls = %v, want exactly one, in commune A", got)
+	}
+
+	ended, _ := newAlertUseCase(t, alertDB(alertRowValues(time.Time{})))
+	ended.WithAfterWrite(hook)
+	if _, err := ended.End(ctx, pinnedAlertID, alertStaff); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("End did not run the hook (%d)", len(got))
+	}
 }

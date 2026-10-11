@@ -47,6 +47,26 @@ import (
 // public chain; the route spells it as a literal for tools/apidoc, and a test asserts the two agree.
 const PublicDisasterAlertsPath = "/api/v1/commune-disaster-alerts"
 
+// disasterAlertBodyMax is the body cap of POST and PATCH /api/v1/disaster-alerts — COMPUTED FROM THE
+// DOMAIN BOUNDS, so a body the domain accepts is never refused as "too large" (the service-wide 64 KiB
+// thanToiDa is below a maximal valid alert: 10000 characters of detail plus 50 evacuation points and 50
+// contacts at their longest is ~69 000 characters before any JSON is around them).
+//
+//	every text character      × 12 bytes: the longest JSON spelling of ONE character is an escaped
+//	                          surrogate pair (`🚨`); `ệ` for Vietnamese is 6, raw UTF-8 ≤ 4
+//	every danger-zone point   × 64 bytes: `{"x":…,"y":…}` with two full-precision floats
+//	every list element        × 128 bytes: keys, quotes, commas, capacity digits
+//	+ 64 KiB                  the fixed keys, the two instants, and whitespace a client may pretty-print
+//
+// ≈ 0.9 MiB. DELETE keeps thanToiDa: its body is one reason.
+const disasterAlertBodyMax = 12*(domain.DisasterTitleMaxLen+domain.DisasterLevelMaxLen+domain.DisasterHeadlineMaxLen+
+	domain.DisasterDetailMaxLen+
+	domain.DisasterEvacuationMax*(domain.DisasterPlaceNameMaxLen+domain.DisasterAddressMaxLen+domain.ExternalContactPhoneMaxLen)+
+	domain.DisasterContactsMax*(domain.DisasterContactRoleMaxLen+domain.DisasterContactNameMaxLen+domain.ExternalContactPhoneMaxLen)) +
+	64*domain.DisasterDangerZoneMax +
+	128*(domain.DisasterEvacuationMax+domain.DisasterContactsMax) +
+	64<<10
+
 // DisasterAlertsReader is the staff READ half. *commsstore.DisasterAlertStore satisfies it.
 type DisasterAlertsReader interface {
 	List(ctx context.Context, req page.Request) (page.Result[domain.DisasterAlert], error)
@@ -81,11 +101,12 @@ type DisasterAlertDeps struct {
 type PublicDisasterAlertDeps struct {
 	// Xa is the platform lookup the public news routes use: an outage is a 503, never an empty list
 	// that reads as "no warning in this commune".
-	Xa     TraXaTheoHost
+	Xa TraXaTheoHost
+	// Alerts is, in production, app.InForceAlertCache over the store: 30 s per commune (owner, 11/10/2026).
 	Alerts PublicDisasterAlertsReader
-	// Limiter is ratelimit.PublicNewsRead — the EXISTING policy (ADR 0091 §2: "giới hạn tần suất như
-	// tin công khai") and in production the SAME instance the news and contact routes hold: one budget
-	// per (host, client network).
+	// Limiter is ratelimit.PublicDisasterAlertsRead (owner, 11/10/2026): 1200 per minute per (host, client
+	// network), fails open, and in production a SEPARATE instance from the news and contact routes' — its
+	// own budget and its own security-log event, so a news scrape can never starve the alert read.
 	Limiter *ratelimit.Limiter
 	Log     *slog.Logger
 	// Now is the clock "in force" is decided with. nil = time.Now.
@@ -337,7 +358,7 @@ func RegisterPublicDisasterAlerts(mux *http.ServeMux, d PublicDisasterAlertDeps)
 		panic("comms/http: thiếu kho cảnh báo thiên tai — tuyến công khai sẽ panic khi có người gọi")
 	case d.Limiter == nil:
 		// Rule 13 invariant 7: an unauthenticated route without its rate limit is refused at startup.
-		panic("comms/http: thiếu bộ giới hạn tần suất tuyến công khai (ratelimit.PublicNewsRead)")
+		panic("comms/http: thiếu bộ giới hạn tần suất tuyến cảnh báo thiên tai công khai (ratelimit.PublicDisasterAlertsRead)")
 	}
 	if d.Now == nil {
 		d.Now = time.Now
@@ -350,10 +371,12 @@ func RegisterPublicDisasterAlerts(mux *http.ServeMux, d PublicDisasterAlertDeps)
 	// PUBLIC (owner, 11/10/2026 — ADR 0091 §2 opens this unauthenticated route, rule 13 stop condition):
 	// a warning is public information; a resident opening the Mini App during a storm has no account.
 	//
-	// RATE LIMIT — ratelimit.PublicNewsRead, the existing policy: 120 per minute per (host, client
-	// network), shared with the news and contact reads. Over it: 429 + Retry-After. A Redis outage SERVES.
-	// NO SERVER-SIDE CACHE: comms has no content cache to copy; the host lookup is cached
-	// (tenant.CachedDirectory) and the read is one indexed statement over a handful of rows.
+	// RATE LIMIT — ratelimit.PublicDisasterAlertsRead (owner, 11/10/2026): 1200 per minute per (host, client
+	// network), its OWN budget and its own event `public_disaster_alerts.rate_limited`. Over it: 429 +
+	// Retry-After. A Redis outage SERVES (fail open, the owner's decision, like the news read).
+	// SERVER-SIDE CACHE (owner, 11/10/2026): the in-force list per commune for 30 s
+	// (app.InForceAlertCache, keyed t:<tenant_id>), behind `Alerts`; the host lookup is cached separately
+	// (tenant.CachedDirectory). An unknown host never reaches the cache.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
@@ -371,7 +394,7 @@ func RegisterPublicDisasterAlerts(mux *http.ServeMux, d PublicDisasterAlertDeps)
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error
 	mux.Handle("GET /api/v1/commune-disaster-alerts",
-		authz.Public("cảnh báo thiên tai đang hiệu lực mà xã đăng cho người dân, hiện trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0091 §2): người dân đọc không cần tài khoản; chỉ trả cảnh báo chưa xoá, chưa kết thúc, đang trong khung hiệu lực của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi")(
+		authz.Public("cảnh báo thiên tai đang hiệu lực mà xã đăng cho người dân, hiện trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0091 §2): người dân đọc không cần tài khoản; chỉ trả cảnh báo chưa xoá, chưa kết thúc, đang trong khung hiệu lực của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 1200 lần/phút theo tên miền và mạng của máy gọi (chủ dự án 11/10/2026), bộ đệm 30 giây theo xã")(
 			http.HandlerFunc(p.PublicDisasterAlerts)))
 }
 
@@ -412,7 +435,7 @@ func (h *disasterAlertHandler) GetDisasterAlert(w http.ResponseWriter, r *http.R
 // CreateDisasterAlert — POST /api/v1/disaster-alerts
 func (h *disasterAlertHandler) CreateDisasterAlert(w http.ResponseWriter, r *http.Request) {
 	var in createDisasterAlertIn
-	if !docThan(w, r, &in) {
+	if !readBodyCapped(w, r, &in, disasterAlertBodyMax) {
 		return
 	}
 	actor, ok := nguoiThucHien(r)
@@ -448,7 +471,7 @@ func (h *disasterAlertHandler) CreateDisasterAlert(w http.ResponseWriter, r *htt
 // UpdateDisasterAlert — PATCH /api/v1/disaster-alerts/{id}
 func (h *disasterAlertHandler) UpdateDisasterAlert(w http.ResponseWriter, r *http.Request) {
 	var in updateDisasterAlertIn
-	if !docThan(w, r, &in) {
+	if !readBodyCapped(w, r, &in, disasterAlertBodyMax) {
 		return
 	}
 	actor, ok := nguoiThucHien(r)

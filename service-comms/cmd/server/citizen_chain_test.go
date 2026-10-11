@@ -106,6 +106,23 @@ func TestMyNotificationPreferencesPreflight(t *testing.T) {
 	if w.Code != http.StatusNoContent || w.Header().Get("Access-Control-Allow-Origin") != "https://mini.zalo.me" {
 		t.Fatalf("preflight: %d ACAO=%q", w.Code, w.Header().Get("Access-Control-Allow-Origin"))
 	}
+	// The preflight asks for PUT (callCitizen): a 204 with an ACAO but without PUT in the allowed methods
+	// is a preflight the browser REFUSES — the Mini App's toggle would fail as a "network error" while the
+	// two lines above stay green. This is the line that was missing when PUT was absent from core/httpx.
+	if !allowsMethod(w.Header().Get("Access-Control-Allow-Methods"), http.MethodPut) {
+		t.Fatalf("preflight for PUT: Access-Control-Allow-Methods = %q, PUT absent — the browser blocks the save",
+			w.Header().Get("Access-Control-Allow-Methods"))
+	}
+}
+
+// allowsMethod reads Access-Control-Allow-Methods the way a browser does: a comma-separated token list.
+func allowsMethod(header, method string) bool {
+	for _, m := range strings.Split(header, ",") {
+		if strings.TrimSpace(m) == method {
+			return true
+		}
+	}
+	return false
 }
 
 func TestNoStaffPathFallsOntoTheCitizenChain(t *testing.T) {

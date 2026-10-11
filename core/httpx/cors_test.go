@@ -67,7 +67,7 @@ func TestCORSPreflightNguonDuocPhep_204CoHeader_KhongToiLopSau(t *testing.T) {
 	}
 	for k, muon := range map[string]string{
 		"Access-Control-Allow-Origin":  "https://stc.zdn.vn",
-		"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+		"Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
 		"Access-Control-Allow-Headers": "Authorization, Content-Type, Idempotency-Key",
 		"Access-Control-Max-Age":       "600",
 	} {

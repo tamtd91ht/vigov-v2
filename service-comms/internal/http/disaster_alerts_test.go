@@ -325,10 +325,29 @@ func publicAlertServer(t *testing.T, nt *ckNenTang, f *fakeDisasterAlerts, c *me
 	if c == nil {
 		c = &memCounter{}
 	}
+	return publicAlertServerOver(t, nt, f, c)
+}
+
+// publicAlertServerOver mounts the public route over any reader — the fake directly, or the production
+// cache around it.
+func publicAlertServerOver(t *testing.T, nt *ckNenTang, alerts PublicDisasterAlertsReader, c *memCounter) http.Handler {
+	t.Helper()
+	if c == nil {
+		c = &memCounter{}
+	}
 	mux := http.NewServeMux()
-	RegisterPublicDisasterAlerts(mux, PublicDisasterAlertDeps{Xa: nt, Alerts: f, Limiter: ckLimiterOn(c),
+	RegisterPublicDisasterAlerts(mux, PublicDisasterAlertDeps{Xa: nt, Alerts: alerts, Limiter: alertLimiterOn(c),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Now: func() time.Time { return alertStart.Add(time.Hour) }})
 	return mux
+}
+
+// alertLimiterOn is the production policy of the public alert read over a test counter.
+func alertLimiterOn(c ratelimit.Counter) *ratelimit.Limiter {
+	l, err := ratelimit.New(c, ratelimit.PublicDisasterAlertsRead)
+	if err != nil {
+		panic(err)
+	}
+	return l
 }
 
 func publicAlertGet(h http.Handler, host, remote string, extra ...string) *httptest.ResponseRecorder {
@@ -427,16 +446,139 @@ func TestPublicDisasterAlertsRateLimited(t *testing.T) {
 	c := &memCounter{}
 	f := alertFixture()
 	h := publicAlertServer(t, &ckNenTang{}, f, c)
-	for i := 0; i < ratelimit.PublicNewsReadLimit; i++ {
+	for i := 0; i < ratelimit.PublicDisasterAlertsReadLimit; i++ {
 		if w := publicAlertGet(h, ckHostA, "203.0.113.7:5000"); w.Code != http.StatusOK {
 			t.Fatalf("request %d: %d", i+1, w.Code)
 		}
 	}
 	w := publicAlertGet(h, ckHostA, "203.0.113.7:5000")
 	doiMa(t, w, http.StatusTooManyRequests)
-	if want := "t:" + string(xaA) + ":rl:public-news:host:" + ckHostA + ":ip:203.0.113.7"; c.keys[0] != want {
-		t.Errorf("limiter key = %q, want %q — the news budget, shared", c.keys[0], want)
+	// Its OWN budget (owner, 11/10/2026): the counter is the alert policy's, never the news one's.
+	if want := "t:" + string(xaA) + ":rl:public-disaster-alerts:host:" + ckHostA + ":ip:203.0.113.7"; c.keys[0] != want {
+		t.Errorf("limiter key = %q, want %q — the alert read's own budget", c.keys[0], want)
 	}
+}
+
+// Through the production cache: an unknown, reserved or inactive host is still byte-identical to a
+// commune with no alert and never reaches the cache or the store; a known commune's second read is a hit.
+func TestPublicDisasterAlertsThroughCache(t *testing.T) {
+	empty := &fakeDisasterAlerts{byCommune: map[tenant.ID][]domain.DisasterAlert{}}
+	reference := publicAlertGet(publicAlertServerOver(t, &ckNenTang{}, app.NewInForceAlertCache(empty), nil), ckHostA, "")
+	doiMa(t, reference, http.StatusOK)
+	if strings.TrimSpace(reference.Body.String()) != `{"items":[]}` {
+		t.Fatalf("empty = %q", reference.Body.String())
+	}
+	for _, host := range []string{ckHostKhongCo, ckHostNgung, ckHostRieng} {
+		f := alertFixture()
+		w := publicAlertGet(publicAlertServerOver(t, &ckNenTang{}, app.NewInForceAlertCache(f), nil), host, "")
+		if w.Code != http.StatusOK || w.Body.String() != reference.Body.String() || f.calls != 0 {
+			t.Errorf("%s: %d %q (store asked %d)", host, w.Code, w.Body.String(), f.calls)
+		}
+	}
+
+	f := alertFixture()
+	h := publicAlertServerOver(t, &ckNenTang{}, app.NewInForceAlertCache(f), nil)
+	first := publicAlertGet(h, ckHostA, "")
+	second := publicAlertGet(h, ckHostA, "")
+	if first.Code != http.StatusOK || first.Body.String() != second.Body.String() || f.calls != 1 {
+		t.Fatalf("second read: %d, same=%v, store asked %d — want a cache hit", second.Code,
+			first.Body.String() == second.Body.String(), f.calls)
+	}
+	if strings.Contains(first.Body.String(), "da-b-1") {
+		t.Fatal("commune B's alert in commune A's reply")
+	}
+}
+
+// --- body cap ---------------------------------------------------------------------------------
+
+// maximalAlertBody is the LARGEST body the domain accepts: every text at its bound, every list full —
+// and every text character spelt as an escaped surrogate pair (12 bytes), the longest JSON spelling.
+func maximalAlertBody() string {
+	const siren = `🚨` // ONE character, U+1F6A8, escaped: 12 bytes of JSON
+	txt := func(n int) string { return strings.Repeat(siren, n) }
+	var b strings.Builder
+	b.WriteString(`{"kind":"lu","title":"` + txt(domain.DisasterTitleMaxLen) + `","level":"` + txt(domain.DisasterLevelMaxLen) +
+		`","headline":"` + txt(domain.DisasterHeadlineMaxLen) + `","detail":"` + txt(domain.DisasterDetailMaxLen) +
+		`","effective_from":"2026-10-11T08:00:00+07:00","effective_to":"2026-10-12T08:00:00+07:00","danger_zone":[`)
+	for i := 0; i < domain.DisasterDangerZoneMax; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"x":12.345678901234567,"y":98.76543210987654}`)
+	}
+	// The longest dial string the domain accepts: the agreed fake number, separators up to 32 characters.
+	phone := "0900000000" + strings.Repeat("-", domain.ExternalContactPhoneMaxLen-11) + "0"
+	b.WriteString(`],"evacuation_points":[`)
+	for i := 0; i < domain.DisasterEvacuationMax; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"name":"` + txt(domain.DisasterPlaceNameMaxLen) + `","address":"` + txt(domain.DisasterAddressMaxLen) +
+			`","phone":"` + phone + `","capacity":2147483647}`)
+	}
+	b.WriteString(`],"emergency_contacts":[`)
+	for i := 0; i < domain.DisasterContactsMax; i++ {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		b.WriteString(`{"role":"` + txt(domain.DisasterContactRoleMaxLen) + `","name":"` + txt(domain.DisasterContactNameMaxLen) +
+			`","phone":"` + phone + `"}`)
+	}
+	b.WriteString(`]}`)
+	return b.String()
+}
+
+// The maximal valid alert passes the cap on POST and PATCH, reaches the use case whole, and IS valid —
+// the domain accepts it, so the cap is the only thing that could have refused it.
+func TestDisasterAlertMaximalValidBodyPassesTheCap(t *testing.T) {
+	body := maximalAlertBody()
+	if len(body) <= thanToiDa {
+		t.Fatalf("the maximal body is %d bytes — the test no longer exercises the cap", len(body))
+	}
+	if len(body) > disasterAlertBodyMax {
+		t.Fatalf("maximal valid body %d > cap %d", len(body), disasterAlertBodyMax)
+	}
+
+	s := newAlertServer(t)
+	s.grant(xaA, "content.update")
+	doiMa(t, s.call(t, http.MethodPost, hostA, alertPath, canBoGhi(xaA), body), http.StatusCreated)
+	in := s.fake.lastInput
+	if len([]rune(in.Detail)) != domain.DisasterDetailMaxLen || len(in.EvacuationPoints) != domain.DisasterEvacuationMax ||
+		len(in.EmergencyContacts) != domain.DisasterContactsMax || len(in.DangerZone) != domain.DisasterDangerZoneMax {
+		t.Fatalf("decoded detail %d runes, %d/%d/%d items", len([]rune(in.Detail)), len(in.EvacuationPoints),
+			len(in.EmergencyContacts), len(in.DangerZone))
+	}
+	if _, err := domain.NormalizeDisasterAlert(domain.DisasterAlert{Kind: domain.DisasterKind(in.Kind), Title: in.Title,
+		Level: in.Level, Headline: in.Headline, Detail: in.Detail, EffectiveFrom: in.EffectiveFrom, EffectiveTo: in.EffectiveTo,
+		DangerZone: in.DangerZone, EvacuationPoints: in.EvacuationPoints, EmergencyContacts: in.EmergencyContacts}); err != nil {
+		t.Fatalf("the 'maximal valid' body is not valid: %v", err)
+	}
+
+	s = newAlertServer(t)
+	s.grant(xaA, "content.update")
+	doiMa(t, s.call(t, http.MethodPatch, hostA, alertPath+"/da-a-1", canBoGhi(xaA), body), http.StatusOK)
+}
+
+// Past the cap is refused before the use case — 400 with the fixed sentence, no input echoed.
+func TestDisasterAlertOversizeBodyIsRefused(t *testing.T) {
+	pad := strings.Repeat(" ", disasterAlertBodyMax)
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodPost, alertPath}, {http.MethodPatch, alertPath + "/da-a-1"},
+	} {
+		s := newAlertServer(t)
+		s.grant(xaA, "content.update")
+		w := s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), `{"title":"Lũ"`+pad+`}`)
+		doiMa(t, w, http.StatusBadRequest)
+		if s.fake.calls != 0 || !strings.Contains(w.Body.String(), "quá lớn") {
+			t.Errorf("%s: use case ran %d times, body %s", tc.method, s.fake.calls, w.Body.String())
+		}
+	}
+	// DELETE keeps the service-wide 64 KiB: its body is one reason.
+	s := newAlertServer(t)
+	s.grant(xaA, "content.update")
+	w := s.call(t, http.MethodDelete, hostA, alertPath+"/da-a-1", canBoGhi(xaA),
+		`{"reason":"x"`+strings.Repeat(" ", thanToiDa)+`}`)
+	doiMa(t, w, http.StatusBadRequest)
 }
 
 func TestRegisterPublicDisasterAlertsRefusesIncompleteWiring(t *testing.T) {

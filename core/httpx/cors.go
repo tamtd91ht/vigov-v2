@@ -20,8 +20,13 @@ type NguonCORS interface {
 // The fixed CORS answer of the citizen edge. Constants, not configuration: they describe what the
 // citizen routes ACCEPT, which is a property of the code, not of a deployment.
 const (
-	// GET and POST are the only citizen methods (service-petitions/internal/http/routes_cong_dan.go).
-	corsPhuongThuc = "GET, POST, OPTIONS"
+	// The citizen methods across every service's citizen chain: GET and POST
+	// (service-petitions/internal/http/routes_cong_dan.go) and PUT (service-comms
+	// PUT /api/v1/my-notification-preferences, ADR 0091 §4). A method missing here is a route the
+	// browser refuses at the preflight while every server-side test stays green — the Mini App sees a
+	// "network error" and no service logs a line. Adding a citizen route with a new method means
+	// adding it here, in the same change.
+	corsPhuongThuc = "GET, POST, PUT, OPTIONS"
 	// Exactly what citizen-app sends (citizen-app/src/cong-dan/api/goi-vigov.ts): the bearer token,
 	// the JSON body type and the duplicate-request key of the intake.
 	corsTieuDe = "Authorization, Content-Type, Idempotency-Key"

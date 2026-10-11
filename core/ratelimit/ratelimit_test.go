@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -369,6 +370,75 @@ func TestPublicNewsBudgetIsPerCommune(t *testing.T) {
 	}
 	if ok, _, _ := l.Allow(b, kb); !ok {
 		t.Fatal("commune B refused on commune A's budget")
+	}
+}
+
+// ---- the public disaster-alert read (owner, 11/10/2026) --------------------------------------
+
+// The decided threshold pinned: a change must turn something red (rule 13 forbidden #4).
+func TestPublicDisasterAlertsReadIs1200PerMinuteAndFailsOpen(t *testing.T) {
+	if PublicDisasterAlertsReadLimit != 1200 || PublicDisasterAlertsReadWindow != time.Minute {
+		t.Fatalf("owner decided 1200 / minute, got %d / %v", PublicDisasterAlertsReadLimit, PublicDisasterAlertsReadWindow)
+	}
+	p := PublicDisasterAlertsRead
+	if p.limit != PublicDisasterAlertsReadLimit || p.window != PublicDisasterAlertsReadWindow {
+		t.Fatal("PublicDisasterAlertsRead does not use the named constants")
+	}
+	if !p.FailsOpen() {
+		t.Fatal("the owner decided the alert read fails OPEN, like the news read")
+	}
+	if p.name == PublicNewsRead.name {
+		t.Fatal("the alert read shares the news counters — the owner gave it its OWN budget")
+	}
+	if p.event != "public_disaster_alerts.rate_limited" || p.event == PublicNewsRead.event {
+		t.Fatalf("event = %q — the alert read needs its own security-log label", p.event)
+	}
+	if _, err := New(newFake(), p); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Its own budget: the news read exhausting its 120 does not touch the alert read for the same (host,
+// network), and the alert read refuses request 1201 with its own event.
+func TestPublicDisasterAlertsReadOwnBudgetAndLabel(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewJSONHandler(&buf, nil))
+	f := newFake()
+	news, _ := New(f, PublicNewsRead)
+	alerts, _ := New(f, PublicDisasterAlertsRead)
+	ctx := tenant.Into(context.Background(), tenant.ID(testCommune))
+	k, _ := PublicHostIPKey(ctx, true, "xa.vigov.vn", "203.0.113.7")
+
+	for i := 0; i <= PublicNewsReadLimit; i++ {
+		Gate(httptest.NewRecorder(), gateReq(), news, k, nil)
+	}
+	for i := 0; i < PublicDisasterAlertsReadLimit; i++ {
+		if !Gate(httptest.NewRecorder(), gateReq(), alerts, k, log) {
+			t.Fatalf("alert request %d refused — the news budget leaked into the alert one", i+1)
+		}
+	}
+	rec := httptest.NewRecorder()
+	if Gate(rec, gateReq(), alerts, k, log, "xa", testCommune) || rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("request %d served (code %d)", PublicDisasterAlertsReadLimit+1, rec.Code)
+	}
+	if !strings.Contains(buf.String(), `"event":"public_disaster_alerts.rate_limited"`) ||
+		strings.Contains(buf.String(), `"event":"public_news.rate_limited"`) {
+		t.Fatalf("security event: %s", buf.String())
+	}
+	if !slices.Contains(f.keys, "t:"+testCommune+":rl:public-disaster-alerts:host:xa.vigov.vn:ip:203.0.113.7") {
+		t.Fatalf("no commune-prefixed alert counter among %d keys", len(f.keys))
+	}
+}
+
+// Fail-open through Gate, exactly like the news read.
+func TestPublicDisasterAlertsReadServesWhenStoreDown(t *testing.T) {
+	f := newFake()
+	f.fail = errors.New("dial tcp: connection refused")
+	l, _ := New(f, PublicDisasterAlertsRead)
+	k, _ := PublicHostIPKey(context.Background(), false, "xa.vigov.vn", "203.0.113.7")
+	rec := httptest.NewRecorder()
+	if got := GateOutcome(rec, gateReq(), l, k, nil); got != NotEnforced || rec.Code != http.StatusOK {
+		t.Fatalf("store down: outcome %v code %d — want NotEnforced, served", got, rec.Code)
 	}
 }
 

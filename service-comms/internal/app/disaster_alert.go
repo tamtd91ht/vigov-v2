@@ -9,10 +9,13 @@ package app
 // PERSONAL DATA IN THE TRAIL (rule 3, rule 6 forbidden #4). 0026 treats the contact names and every
 // phone in the two lists as possibly an officer's own. So the delta carries phones MASKED
 // (privacy.MaskPhone), contact names MASKED (privacy.MaskName) and evacuation addresses as presence only.
-// Title, headline and detail are free text that can name a household ("nhà ông …"), so — content items'
-// rule (tomTatNoiDungMiniApp) — they enter the trail as "changed" only; kind, level and the times enter by
-// value; the danger zone by point count (relative coordinates name nobody, but 200 points of them say
-// nothing to an inspector either).
+// Title, level, headline and detail are free text that can name a household ("nhà ông …"), so — content
+// items' rule (tomTatNoiDungMiniApp) — they enter the trail as "changed" (and, for the optional two, as
+// presence) only. `level` is free text too: 0026 bounds it to 100 characters and closes no vocabulary, so
+// "Cấp 2" and "khẩn cấp cho hộ ông …" are both valid values — recording it by value would let a name into
+// the trail through the one field a reviewer assumed was an enum. Kind and the times enter by value; the
+// danger zone by point count (relative coordinates name nobody, but 200 points of them say nothing to an
+// inspector either).
 
 import (
 	"context"
@@ -47,10 +50,27 @@ type DisasterAlerts struct {
 	// newID and now are injected so a test can pin them. In production: ulid.Moi and time.Now.
 	newID func() (string, error)
 	now   func() time.Time
+
+	// afterWrite runs after a COMMITTED change (never after a refusal, a no-op or a rollback) — in
+	// production the public in-force cache's Invalidate, so the pod that took the write shows it at once.
+	// A courtesy only: the cache is correct within its 30 s without it. nil = nothing.
+	afterWrite func(context.Context)
 }
 
 func NewDisasterAlerts(db *store.DB, repo DisasterAlertRepo) *DisasterAlerts {
 	return &DisasterAlerts{db: db, repo: repo, newID: ulid.Moi, now: time.Now}
+}
+
+// WithAfterWrite sets the hook run after each committed change and returns uc.
+func (uc *DisasterAlerts) WithAfterWrite(f func(context.Context)) *DisasterAlerts {
+	uc.afterWrite = f
+	return uc
+}
+
+func (uc *DisasterAlerts) changed(ctx context.Context) {
+	if uc.afterWrite != nil {
+		uc.afterWrite(ctx)
+	}
 }
 
 // The business verbs on the trail — VALUES (ADR 0011), naming the register.
@@ -134,6 +154,7 @@ func (uc *DisasterAlerts) Create(ctx context.Context, in DisasterAlertInput, act
 	if err != nil {
 		return domain.DisasterAlert{}, wrapDisasterAlert(ctx, "đăng", err)
 	}
+	uc.changed(ctx)
 	return row, nil
 }
 
@@ -151,6 +172,7 @@ func (uc *DisasterAlerts) Update(ctx context.Context, id string, p DisasterAlert
 	// names the commune — which a client message must not carry.
 	var after domain.DisasterAlert
 	var refusal error
+	wrote := false
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		before, err := uc.repo.ByIDForUpdate(ctx, tx, id)
 		if err != nil {
@@ -181,6 +203,7 @@ func (uc *DisasterAlerts) Update(ctx context.Context, id string, p DisasterAlert
 		if err != nil {
 			return fmt.Errorf("disaster_alert: mã hoá delta: %w", err)
 		}
+		wrote = true
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor: actor, Action: ActionUpdateDisasterAlert, Subject: disasterAlertSubject(after), Delta: delta,
 		})
@@ -190,6 +213,9 @@ func (uc *DisasterAlerts) Update(ctx context.Context, id string, p DisasterAlert
 	}
 	if err != nil {
 		return domain.DisasterAlert{}, wrapDisasterAlert(ctx, "sửa", err)
+	}
+	if wrote {
+		uc.changed(ctx)
 	}
 	return after, nil
 }
@@ -240,6 +266,7 @@ func (uc *DisasterAlerts) End(ctx context.Context, id string, actor audit.Actor)
 	if err != nil {
 		return domain.DisasterAlert{}, wrapDisasterAlert(ctx, "kết thúc", err)
 	}
+	uc.changed(ctx)
 	return after, nil
 }
 
@@ -280,6 +307,7 @@ func (uc *DisasterAlerts) Delete(ctx context.Context, id, rawReason string, acto
 	if err != nil {
 		return wrapDisasterAlert(ctx, "xoá", err)
 	}
+	uc.changed(ctx)
 	return nil
 }
 
@@ -329,7 +357,7 @@ func disasterAlertForAudit(a domain.DisasterAlert) map[string]any {
 	return map[string]any{
 		"id":                 a.ID,
 		"kind":               string(a.Kind),
-		"level":              a.Level,
+		"has_level":          a.Level != "",
 		"has_headline":       a.Headline != "",
 		"effective_from":     instantOrEmpty(a.EffectiveFrom),
 		"effective_to":       instantOrEmpty(a.EffectiveTo),
@@ -372,7 +400,8 @@ func diffDisasterAlert(before, after domain.DisasterAlert) (map[string]any, map[
 		b["kind"], a["kind"] = string(before.Kind), string(after.Kind)
 	}
 	if before.Level != after.Level {
-		b["level"], a["level"] = before.Level, after.Level
+		b["has_level"], a["has_level"] = before.Level != "", after.Level != ""
+		a["level_changed"] = true
 	}
 	if before.Title != after.Title {
 		a["title_changed"] = true
