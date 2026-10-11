@@ -2093,6 +2093,26 @@
     {
       "service": "comms",
       "method": "GET",
+      "path": "/api/v1/commune-disaster-alerts",
+      "operation_id": "comms_get_commune_disaster_alerts",
+      "task_id": "02a3c3891434",
+      "summary": "Cảnh báo thiên tai ĐANG HIỆU LỰC của xã theo tên miền — cho màn cảnh báo và băng đỏ trang chủ Zalo Mini App",
+      "permission_kind": "public",
+      "permission_reason": "cảnh báo thiên tai đang hiệu lực mà xã đăng cho người dân, hiện trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0091 §2): người dân đọc không cần tài khoản; chỉ trả cảnh báo chưa xoá, chưa kết thúc, đang trong khung hiệu lực của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.publicDisasterAlertListOut",
+        "400": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/disaster_alerts.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
       "path": "/api/v1/commune-external-contacts",
       "operation_id": "comms_get_commune_external_contacts",
       "task_id": "01c6a8f66485",
@@ -2567,6 +2587,139 @@
         "503": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/routes.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/disaster-alerts",
+      "operation_id": "comms_get_disaster_alerts",
+      "task_id": "311ad6d1ff72",
+      "summary": "Cảnh báo thiên tai của xã — mọi trạng thái (sắp tới, đang hiệu lực, đã qua, đã kết thúc), mới bắt đầu nhất trước, phân trang theo con trỏ",
+      "screen": "11-noi-dung-mini-app",
+      "permission_kind": "permission",
+      "permission": "content.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.disasterAlertListOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/disaster_alerts.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/disaster-alerts",
+      "operation_id": "comms_post_disaster_alerts",
+      "task_id": "691831c2a5ce",
+      "summary": "Đăng một cảnh báo thiên tai — hiện trên Zalo Mini App từ thời điểm bắt đầu hiệu lực (không đẩy ZNS)",
+      "screen": "11-noi-dung-mini-app",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "DongKhiHong",
+      "request_schema": "comms.createDisasterAlertIn",
+      "reply_schemas": {
+        "201": "comms.disasterAlertOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/disaster_alerts.go"
+    },
+    {
+      "service": "comms",
+      "method": "DELETE",
+      "path": "/api/v1/disaster-alerts/{id}",
+      "operation_id": "comms_delete_disaster_alerts_by_id",
+      "task_id": "ed54e74a6843",
+      "summary": "Xoá mềm một cảnh báo thiên tai, kèm lý do bắt buộc — gỡ khỏi Zalo Mini App trong cùng lần ghi",
+      "screen": "11-noi-dung-mini-app",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một cảnh báo đã xoá trả 404: lượt đọc khoá dòng và câu UPDATE đều mang `AND deleted_at IS NULL`, nên lần thứ hai không ghi đè được người xoá và lý do",
+      "request_schema": "comms.deleteDisasterAlertIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/disaster_alerts.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/disaster-alerts/{id}",
+      "operation_id": "comms_get_disaster_alerts_by_id",
+      "task_id": "d57b96441d80",
+      "summary": "Một cảnh báo thiên tai của xã, đủ vùng nguy hiểm, điểm sơ tán và số khẩn cấp",
+      "screen": "11-noi-dung-mini-app",
+      "permission_kind": "permission",
+      "permission": "content.read",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.disasterAlertOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/disaster_alerts.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/disaster-alerts/{id}",
+      "operation_id": "comms_patch_disaster_alerts_by_id",
+      "task_id": "7ee4ec983d0b",
+      "summary": "Sửa một cảnh báo thiên tai đang còn (chưa kết thúc) — nội dung, thời gian, vùng nguy hiểm, điểm sơ tán, số khẩn cấp",
+      "screen": "11-noi-dung-mini-app",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết",
+      "request_schema": "comms.updateDisasterAlertIn",
+      "reply_schemas": {
+        "200": "comms.disasterAlertOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/disaster_alerts.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/disaster-alerts/{id}/ending",
+      "operation_id": "comms_post_disaster_alerts_by_id_ending",
+      "task_id": "32d840e578ca",
+      "summary": "Kết thúc sớm một cảnh báo thiên tai — gỡ khỏi Zalo Mini App ngay, ghi ai kết thúc và lúc nào",
+      "screen": "11-noi-dung-mini-app",
+      "permission_kind": "permission",
+      "permission": "content.update",
+      "idempotency": "khong-can",
+      "idempotency_reason": "kết thúc lần thứ hai trả 409: lượt đọc khoá dòng và câu UPDATE đều mang `ended_at IS NULL`, nên không ghi đè được người kết thúc",
+      "reply_schemas": {
+        "200": "comms.disasterAlertOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/disaster_alerts.go"
     },
     {
       "service": "finance",
@@ -4879,6 +5032,45 @@
         "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes_cong_dan.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/my-notification-preferences",
+      "operation_id": "comms_get_my_notification_preferences",
+      "task_id": "e2e7190536e4",
+      "summary": "Lựa chọn nhận thông báo Zalo CỦA CHÍNH công dân trong xã của phiên — chưa từng đổi thì là đang nhận",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.notificationPreferenceOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/citizen_notification_preference.go"
+    },
+    {
+      "service": "comms",
+      "method": "PUT",
+      "path": "/api/v1/my-notification-preferences",
+      "operation_id": "comms_put_my_notification_preferences",
+      "task_id": "15a6f81863fb",
+      "summary": "Công dân bật / tắt nhận thông báo Zalo về phản ánh của mình — tắt vẫn nhận tin không tiếp nhận và chuyển cấp trên; mỗi lần đổi có vết kiểm toán",
+      "permission_kind": "citizen-only",
+      "tenant_class": "tu-phien",
+      "idempotency": "khong-can",
+      "idempotency_reason": "PUT ghi đè một giá trị đã biết; use case không ghi và không ghi vết khi giá trị gửi lên trùng giá trị đang lưu, nên lần gửi thứ hai để lại đúng một trạng thái và một vết",
+      "request_schema": "comms.notificationPreferenceIn",
+      "reply_schemas": {
+        "200": "comms.notificationPreferenceOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/citizen_notification_preference.go"
     },
     {
       "service": "identity",

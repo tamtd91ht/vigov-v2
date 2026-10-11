@@ -135,11 +135,16 @@ func NewNoiDungMiniAppStore(db *store.DB) *NoiDungMiniAppStore {
 // (`audio_file_id`, `audio_duration_seconds` — written by the audio upload's completion and by the edit,
 // ADR 0067 §4), still before the body. The file id and the duration are adjacent and of different
 // types, so a swap is a scan error, not a silent mix-up.
+//
+// MIGRATION 0028's `video_duration_seconds` FOLLOWS, still before the body. It is an INT next to the
+// INT `audio_duration_seconds`: a swap there compiles and runs. The two can never both be non-NULL on
+// one row (different types), and the fake driver addresses columns by name, so a swap is red in
+// noi_dung_mini_app_test.go rather than silent.
 const cotNoiDungMiniApp = `id, loai, danh_muc_id, tieu_de, tom_tat, anh_dai_dien_url, ` +
 	`ngay_dang, luot_xem, trang_thai, nguon, nguon_url, nguon_id_ngoai, da_sua_tay, ` +
 	`nguoi_tao_ma, tao_luc, cap_nhat_luc, ` +
 	`published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id, ` +
-	`link_to, display_order, audio_file_id, audio_duration_seconds`
+	`link_to, display_order, audio_file_id, audio_duration_seconds, video_duration_seconds`
 
 // cotNoiDungMiniAppChiTiet adds the body AT THE END. Nowhere else: the shared scan appends one
 // destination when it is asked for the body, and an insertion anywhere but the tail would shift every
@@ -397,13 +402,14 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 		displayOrder                  sql.NullInt64
 		audioFile                     sql.NullString
 		audioSeconds                  sql.NullInt64
+		videoSeconds                  sql.NullInt64
 	)
 	dich := []any{
 		&n.ID, &loai, &danhMuc, &n.TieuDe, &tomTat, &anh,
 		&n.NgayDang, &n.LuotXem, &trang, &nguon, &nguonURL, &nguonIDNgoai, &n.DaSuaTay,
 		&n.NguoiTaoMa, &n.TaoLuc, &n.CapNhatLuc,
 		&publishedAt, &startsAt, &endsAt, &place, &videoURL, &cover,
-		&linkTo, &displayOrder, &audioFile, &audioSeconds,
+		&linkTo, &displayOrder, &audioFile, &audioSeconds, &videoSeconds,
 	}
 	if coThan {
 		dich = append(dich, &than)
@@ -435,10 +441,12 @@ func quetNoiDungMiniApp(r quetMotDongNoiDung, coThan bool) (domain.NoiDungMiniAp
 	}
 	n.AudioFileID = audioFile.String
 	n.AudioDurationSeconds = int(audioSeconds.Int64) // NULL → 0, "not set"
+	n.VideoDurationSeconds = int(videoSeconds.Int64) // NULL → 0, "not given"
 	return n, nil
 }
 
-// zeroIntAsNull binds 0 as NULL — for a column whose CHECK refuses 0 (audio_duration_seconds).
+// zeroIntAsNull binds 0 as NULL — for a column whose CHECK refuses 0 (audio_duration_seconds,
+// video_duration_seconds).
 func zeroIntAsNull(v int) any {
 	if v == 0 {
 		return nil
@@ -552,12 +560,14 @@ func (s *NoiDungMiniAppStore) DanhMucCoThat(ctx context.Context, tx *store.Scope
 // trigger checks it again (same commune, issued for THIS id, past the scan). `link_to` ($18) and
 // `display_order` ($19) are migration 0012's banner pair; app.Them refused them on any other type and
 // refused a banner with no cover before this statement could meet 0012's trigger.
+// `video_duration_seconds` ($20) is migration 0028's typed length, `video` only (app.Them refused it on
+// any other type; 0 binds NULL).
 const chenNoiDungMiniApp = `INSERT INTO noi_dung_mini_app
 	(tenant_id, id, loai, danh_muc_id, tieu_de, tom_tat, noi_dung, anh_dai_dien_url,
 	 ngay_dang, trang_thai, nguon, nguoi_tao_ma,
 	 published_at, event_starts_at, event_ends_at, event_place, video_url, cover_image_file_id,
-	 link_to, display_order)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11,$12,$13,$14,$15,$16,$17,$18,$19)`
+	 link_to, display_order, video_duration_seconds)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'thu-cong',$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`
 
 // Chen writes one item. The caller owns the transaction and the audit entry inside it.
 func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
@@ -574,7 +584,8 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 		string(n.TrangThai), n.NguoiTaoMa,
 		zeroTimeAsNull(n.PublishedAt), zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
 		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL),
-		rongThanhNull(n.CoverImageFileID), rongThanhNull(n.LinkTo), intOrNull(n.DisplayOrder)); err != nil {
+		rongThanhNull(n.CoverImageFileID), rongThanhNull(n.LinkTo), intOrNull(n.DisplayOrder),
+		zeroIntAsNull(n.VideoDurationSeconds)); err != nil {
 		return fmt.Errorf("noi_dung_mini_app: chèn: %w", err)
 	}
 	return nil
@@ -609,6 +620,9 @@ func (s *NoiDungMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 // exist (ADR 0067 §4): NULL / NULL removes the broadcast, a type change away from `truyen-thanh` clears
 // both in this same UPDATE (WithoutOtherTypeFields), and a new id meets 0012's trigger (same commune,
 // issued for THIS item as content-audio, past the scan) — app checked it first.
+//
+// MIGRATION 0028: `video_duration_seconds` ($21) is written in full from the merged row, so a type change
+// away from `video` clears it in this same UPDATE, which 0028's CHECK requires.
 const capNhatNoiDungMiniApp = `UPDATE noi_dung_mini_app
 	SET loai = $3, danh_muc_id = $4, tieu_de = $5, tom_tat = $6, noi_dung = $7,
 	    anh_dai_dien_url = $8, trang_thai = $9, da_sua_tay = $10,
@@ -616,6 +630,7 @@ const capNhatNoiDungMiniApp = `UPDATE noi_dung_mini_app
 	    published_at = COALESCE(published_at, $15), cover_image_file_id = $16,
 	    link_to = $17, display_order = $18,
 	    audio_file_id = $19, audio_duration_seconds = $20,
+	    video_duration_seconds = $21,
 	    cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
 
@@ -630,7 +645,8 @@ func (s *NoiDungMiniAppStore) CapNhat(ctx context.Context, tx *store.ScopedTx,
 		zeroTimeAsNull(n.EventStartsAt), zeroTimeAsNull(n.EventEndsAt),
 		rongThanhNull(n.EventPlace), rongThanhNull(n.VideoURL), zeroTimeAsNull(n.PublishedAt),
 		rongThanhNull(n.CoverImageFileID), rongThanhNull(n.LinkTo), intOrNull(n.DisplayOrder),
-		rongThanhNull(n.AudioFileID), zeroIntAsNull(n.AudioDurationSeconds))
+		rongThanhNull(n.AudioFileID), zeroIntAsNull(n.AudioDurationSeconds),
+		zeroIntAsNull(n.VideoDurationSeconds))
 	if err != nil {
 		return fmt.Errorf("noi_dung_mini_app: cập nhật: %w", err)
 	}

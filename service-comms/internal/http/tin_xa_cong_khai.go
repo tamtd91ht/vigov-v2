@@ -232,6 +232,11 @@ type tinXaRa struct {
 	// check is the second wall on a surface anybody can read.
 	VideoURL string `json:"video_url,omitempty"`
 
+	// VideoDurationSeconds is a video's length in seconds as the commune's officer typed it (migration
+	// 0028) — only on `video`, only when given, on the list and the detail. The card shows it; nothing
+	// measures it.
+	VideoDurationSeconds int `json:"video_duration_seconds,omitempty"`
+
 	// ImageURL is the cover (ADR 0047 §6 (1), 2026-10-01): the anonymous URL of the 1280 px JPEG
 	// DERIVATIVE in the public bucket, never the original (ADR 0052 §2). ABSENT when the item has no
 	// uploaded cover or no public copy is recorded for it. On the list and the detail. The URL is
@@ -450,6 +455,11 @@ func tinXaRaNgoai(n domain.NoiDungMiniApp, tenDanhMuc map[string]string, images 
 		if u, err := domain.ChuanHoaURL(n.VideoURL); err == nil {
 			// Dropped, not an error — the same reasoning as SourceURL above.
 			ra.VideoURL = u
+		}
+		// Range-checked again on the way out, like the link: a stored value outside 0028's bound is
+		// dropped, not shown as a length.
+		if domain.CheckVideoDuration(n.VideoDurationSeconds) == nil {
+			ra.VideoDurationSeconds = n.VideoDurationSeconds
 		}
 	}
 	if n.HienChoDan() && n.CoverImageFileID != "" {

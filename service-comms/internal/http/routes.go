@@ -661,7 +661,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `body` IS SANITISED BEFORE IT IS STORED (ADR 0067 §1, internal/richtext): p, br, strong, em, ul,
 	// ol, li, h2, h3 and https links survive, nothing else. 422 is a banner field refused (migration
 	// 0012): `invalid_link_to`, `invalid_display_order`, `banner_fields_only_for_banner`,
-	// `banner_cover_required`.
+	// `banner_cover_required`; or the typed video length refused (migration 0028):
+	// `invalid_video_duration` (outside 1 .. 21600 s), `video_duration_only_for_video`.
 	//
 	// @summary  Soạn một mục nội dung cho Mini App — chưa bật `publish` thì bà con chưa thấy
 	// @screen   11-noi-dung-mini-app §7
@@ -708,7 +709,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// A `body` sent is sanitised like the create's; a body not sent is left exactly as stored. 422 as on
 	// the create, plus `banner_cover_required` when the edit removes a banner's cover or turns an item
-	// into a banner without one. A type change away from `banner` clears `link_to` / `display_order`.
+	// into a banner without one. A type change away from `banner` clears `link_to` / `display_order`;
+	// away from `video`, `video_url` and `video_duration_seconds` (`0` clears the length on purpose).
 	//
 	// @summary  Sửa một mục nội dung Mini App — sửa bài đồng bộ về sẽ khoá không cho lượt đồng bộ sau ghi đè
 	// @screen   11-noi-dung-mini-app §6, §7

@@ -62,6 +62,32 @@ type MauTinXa interface {
 	MauTin(ctx context.Context, moc string) (string, error)
 }
 
+// NotificationPreferences answers whether the citizen of this commune turned Zalo notifications off
+// (migration 0027, ADR 0091 §4). *store.CitizenNotificationPreferenceStore satisfies it: NO ROW READS AS
+// ENABLED there, and an implementation that read a missing row as "off" would silence every citizen who
+// never touched the switch. The commune travels in the context (rule 1, invariant 4).
+type NotificationPreferences interface {
+	Get(ctx context.Context, citizenID string) (domain.CitizenNotificationPreference, error)
+}
+
+// citizenOptedOut decides whether this obligation is recorded `dan-da-tat-nhan` instead of `cho-gui`.
+//
+// The two closing transitions (domain.NotifiedDespiteOptOut) are sent whatever the switch says, so the
+// preference is not even read for them. Any other `moc` — status or merge act alike (ADR 0091 open #1:
+// merge/unmerge notices are treated as ordinary, the recorder's reading, unconfirmed) — follows the
+// switch. A read failure is RETURNED, never guessed either way: guessing "on" sends to a citizen who
+// said no, guessing "off" silences one who did not; the queue redelivers.
+func citizenOptedOut(ctx context.Context, prefs NotificationPreferences, citizenID, moc string) (bool, error) {
+	if domain.NotifiedDespiteOptOut(moc) {
+		return false, nil
+	}
+	p, err := prefs.Get(ctx, citizenID)
+	if err != nil {
+		return false, fmt.Errorf("su_kien: lựa chọn nhận thông báo: %w", err)
+	}
+	return !p.ZaloEnabled, nil
+}
+
 var (
 	// ErrXaChuaCauHinhKenh is what a MauTinXa implementation returns for a commune whose OA is not
 	// configured yet. It is declared here, next to the interface it belongs to, so both sides
@@ -110,16 +136,22 @@ var (
 
 // PhieuDoiTrangThai consumes `petitions.status_changed.v1`.
 type PhieuDoiTrangThai struct {
-	so  SoThongBao
-	mau MauTinXa
-	log *slog.Logger
+	so    SoThongBao
+	mau   MauTinXa
+	prefs NotificationPreferences
+	log   *slog.Logger
 }
 
-func NewPhieuDoiTrangThai(so SoThongBao, mau MauTinXa, log *slog.Logger) *PhieuDoiTrangThai {
+// NewPhieuDoiTrangThai refuses a nil preference reader at construction: without it the consumer could
+// not honour a citizen's opt-out, and it would find out on the first message (a panic) rather than here.
+func NewPhieuDoiTrangThai(so SoThongBao, mau MauTinXa, prefs NotificationPreferences, log *slog.Logger) *PhieuDoiTrangThai {
+	if prefs == nil {
+		panic("comms/event: thiếu kho lựa chọn nhận thông báo — không tôn trọng được việc công dân tắt nhận (ADR 0091 §4)")
+	}
 	if log == nil {
 		log = slog.Default()
 	}
-	return &PhieuDoiTrangThai{so: so, mau: mau, log: log}
+	return &PhieuDoiTrangThai{so: so, mau: mau, prefs: prefs, log: log}
 }
 
 // Nhan is the ONLY way in, and it is the only way in ON PURPOSE.
@@ -187,6 +219,16 @@ func (c *PhieuDoiTrangThai) xuLy(ctx context.Context, e events.Envelope) error {
 		return fmt.Errorf("su_kien: mẫu tin của xã: %w", err)
 	}
 
+	// THE CITIZEN'S SWITCH (ADR 0091 §4), read AFTER the template on purpose: the ledger row needs a
+	// template code either way (`mau_ma` NOT NULL — the message that WOULD have gone), and a commune with
+	// no channel stays the visible dead letter above whatever the citizen chose. Opted out → the row is
+	// still written, born `dan-da-tat-nhan`. Nothing is logged: it is a normal outcome, and pairing it
+	// with a lookup code would record a fact about a person.
+	optedOut, err := citizenOptedOut(ctx, c.prefs, tin.GetCitizenId(), tin.GetStatus())
+	if err != nil {
+		return err
+	}
+
 	// IDEMPOTENCY IS NOT IMPLEMENTED HERE, AND THAT IS THE DESIGN. app.GhiNo builds
 	// domain.KhoaLanGui from the business fact and lets a UNIQUE constraint decide, so a
 	// redelivery — and a republication under a fresh envelope id, which deduplicating on `e.ID`
@@ -205,6 +247,7 @@ func (c *PhieuDoiTrangThai) xuLy(ctx context.Context, e events.Envelope) error {
 			MocNhan:      tin.GetCitizenMessage().GetStatusLabel(),
 			ViecTiepTheo: tin.GetCitizenMessage().GetNextStep(),
 		},
+		CitizenOptedOut: optedOut,
 		// NguoiGay is left zero ON PURPOSE: app.GhiNo turns that into the system principal, which is
 		// what rule 6, invariant 6 prescribes for background work. The actor who moved the status is
 		// deliberately absent from the contract — `petitions` already audited that act, in the same

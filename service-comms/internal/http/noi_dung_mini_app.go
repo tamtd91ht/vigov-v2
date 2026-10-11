@@ -222,6 +222,10 @@ type noiDungRa struct {
 	// App (ADR 0047 §6 (3)).
 	VideoURL string `json:"video_url,omitempty"`
 
+	// VideoDurationSeconds — `video` only, only when staff typed it (migration 0028): the length in
+	// seconds shown on the Mini App's video card. Absent = not given.
+	VideoDurationSeconds int `json:"video_duration_seconds,omitempty"`
+
 	// LinkTo and DisplayOrder — `banner` only, only when set (migration 0012, ADR 0067 §5). LinkTo is an
 	// in-app path (`/…`) or an https URL; absent = not tappable. DisplayOrder ≥ 0, ascending; absent =
 	// after every ordered banner.
@@ -274,6 +278,8 @@ func noiDungRaNgoai(n domain.NoiDungMiniApp, coThan bool) noiDungRa {
 		EventEndsAt:   instantOut(n.EventEndsAt),
 		EventPlace:    n.EventPlace,
 		VideoURL:      n.VideoURL,
+
+		VideoDurationSeconds: n.VideoDurationSeconds,
 
 		CoverImageFileID: n.CoverImageFileID,
 
@@ -584,6 +590,11 @@ type themNoiDungVao struct {
 	// VideoURL is an http(s) link, only for `type: video`.
 	VideoURL string `json:"video_url,omitempty"`
 
+	// VideoDurationSeconds is the video's length as staff typed it, 1 .. 21600, only for `type: video`
+	// (migration 0028; 422 `video_duration_only_for_video` on another type, `invalid_video_duration` out
+	// of range). Absent or 0 = not given.
+	VideoDurationSeconds int `json:"video_duration_seconds,omitempty"`
+
 	// CoverImageFileID is a COMPLETED cover upload (status `ready`) issued WITHOUT `content_item_id`.
 	// The article is created under the id that upload reserved; with `publish: true` its derivative is
 	// published with it. Any other file is a 409 `cover_not_usable`.
@@ -646,6 +657,8 @@ func (h *Handler) ThemNoiDung(w http.ResponseWriter, r *http.Request) {
 		VideoURL:       vao.VideoURL,
 		DangLenMiniApp: vao.Publish,
 
+		VideoDurationSeconds: vao.VideoDurationSeconds,
+
 		CoverImageFileID: vao.CoverImageFileID,
 		LinkTo:           vao.LinkTo,
 		DisplayOrder:     vao.DisplayOrder,
@@ -685,6 +698,11 @@ type suaNoiDungVao struct {
 	EventEndsAt   *string `json:"event_ends_at,omitempty"`
 	EventPlace    *string `json:"event_place,omitempty"`
 	VideoURL      *string `json:"video_url,omitempty"`
+
+	// VideoDurationSeconds: ABSENT = leave alone; 0 = CLEAR (length unknown); 1 .. 21600 = set (migration
+	// 0028). A value on a type other than `video` is 422 `video_duration_only_for_video`; a type change
+	// away from `video` clears it by itself.
+	VideoDurationSeconds *int `json:"video_duration_seconds,omitempty"`
 
 	// CoverImageFileID: ABSENT = leave alone; "" = DETACH (the public copy, if any, is withdrawn); an id
 	// = a completed upload (`ready`) issued for THIS article (`content_item_id`). With the article
@@ -767,6 +785,8 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 		EventEndsAt:    endsAt,
 		EventPlace:     vao.EventPlace,
 		VideoURL:       vao.VideoURL,
+
+		VideoDurationSeconds: vao.VideoDurationSeconds,
 
 		CoverImageFileID: vao.CoverImageFileID,
 		LinkTo:           vao.LinkTo,
@@ -1045,6 +1065,11 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "audio_only_for_truyen_thanh", err.Error(), "")
 	case errors.Is(err, domain.ErrAudioAllOrNone):
 		httpx.WriteError(w, http.StatusUnprocessableEntity, "audio_all_or_none", err.Error(), "")
+	// Migration 0028's typed video length: 422 like the audio duration, the domain's own sentence.
+	case errors.Is(err, domain.ErrVideoDurationInvalid):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "invalid_video_duration", err.Error(), "")
+	case errors.Is(err, domain.ErrVideoDurationOnlyForVideo):
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "video_duration_only_for_video", err.Error(), "")
 	case errors.Is(err, domain.ErrAudioNotUsable):
 		httpx.WriteError(w, http.StatusConflict, "audio_not_usable", err.Error(), "")
 	case errors.Is(err, app.ErrAudioUploadNotConfigured):

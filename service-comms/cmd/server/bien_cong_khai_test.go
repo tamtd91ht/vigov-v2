@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/page"
@@ -94,7 +95,43 @@ func dungCongKhaiThu(t *testing.T) http.Handler {
 	svchttp.RegisterPublicExternalContacts(mux, svchttp.PublicExternalContactDeps{
 		Xa: xaTheoHostThu{}, Contacts: fakeContactList{}, Limiter: lim,
 	})
+	svchttp.RegisterPublicDisasterAlerts(mux, svchttp.PublicDisasterAlertDeps{
+		Xa: xaTheoHostThu{}, Alerts: fakeAlertsInForce{}, Limiter: lim,
+	})
 	return dungBienCongKhai(mux, nguon, slog.New(slog.DiscardHandler))
+}
+
+// fakeAlertsInForce is the public disaster-alert read, asserting it is asked inside a commune.
+type fakeAlertsInForce struct{}
+
+func (fakeAlertsInForce) InForce(ctx context.Context, _ time.Time) ([]domain.DisasterAlert, error) {
+	tenant.MustFrom(ctx)
+	return []domain.DisasterAlert{{ID: "da-1", Kind: domain.DisasterKindFlood, Title: "Lũ", Detail: "Sơ tán",
+		EffectiveFrom: time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)}}, nil
+}
+
+// The public disaster-alert read rides the public chain on the reserved API host — no session, CORS for
+// the Mini App — and the STAFF noun `disaster-alerts` does not.
+func TestPublicDisasterAlertsOnPublicChain(t *testing.T) {
+	h, cb := ngoaiThu(t)
+	w := goiApi(h, http.MethodGet, svchttp.PublicDisasterAlertsPath+"?host=xa-a.vigov.vn", nguonMiniAppThu)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"id":"da-1"`) ||
+		!strings.Contains(w.Body.String(), `"headline":"Lũ"`) {
+		t.Fatalf("public disaster alerts on the reserved API host: %d — body: %s", w.Code, w.Body.String())
+	}
+	if cb.goi != 0 {
+		t.Fatal("the staff chain was reached")
+	}
+	if w.Header().Get("Access-Control-Allow-Origin") != nguonMiniAppThu {
+		t.Fatalf("no ACAO: %v", w.Header())
+	}
+	for _, p := range []string{"/api/v1/disaster-alerts", "/api/v1/disaster-alerts/da-1",
+		svchttp.PublicDisasterAlertsPath + "/da-1", svchttp.PublicDisasterAlertsPath + "x"} {
+		h, _ := ngoaiThu(t)
+		if w := goiApi(h, http.MethodGet, p+"?host=xa-a.vigov.vn", ""); w.Code != http.StatusNotFound {
+			t.Errorf("%s: %d, want 404 from the staff chain's TenantMiddleware", p, w.Code)
+		}
+	}
 }
 
 // fakeContactList is the external-contact read, asserting it is asked inside a commune.
@@ -146,7 +183,7 @@ func ngoaiThu(t *testing.T) (http.Handler, *canBoDanhDauComms) {
 	t.Helper()
 	cb := &canBoDanhDauComms{}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	return dungBien(cb, dungCongKhaiThu(t), thuMucGia{}, canBoXaA(), nil, log), cb
+	return dungBien(cb, dungCongKhaiThu(t), newCitizenEdgeForTest(t), thuMucGia{}, canBoXaA(), nil, log), cb
 }
 
 func goiApi(h http.Handler, method, path, origin string) *httptest.ResponseRecorder {

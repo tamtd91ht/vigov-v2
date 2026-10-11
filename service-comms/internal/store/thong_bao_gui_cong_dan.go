@@ -103,11 +103,14 @@ const chenThongBao = `INSERT INTO thong_bao_gui_cong_dan
 // either — queues deliver at least once (rule 2, invariant 5), so the second delivery is normal
 // operation, not an error.
 //
-// `trang_thai` IS NOT A PARAMETER. A row is born `cho-gui` and nothing else: the obligation is
-// recorded before any send is attempted, because sending is eventually consistent with the
-// business write (ADR 0006, consequence 4). Letting the caller name the state would let a
-// producer insert a row already marked `da-gui`, which is a claim about the citizen's phone that
-// nothing in this service witnessed.
+// `trang_thai` IS ONE OF TWO BIRTH STATES AND NOTHING ELSE. A row is born `cho-gui`: the obligation
+// is recorded before any send is attempted, because sending is eventually consistent with the
+// business write (ADR 0006, consequence 4). Since migration 0027 it may instead be born
+// `dan-da-tat-nhan` — the citizen turned notifications off, so nothing will be sent, and the row is
+// the evidence of that (ADR 0091 §4). ANY OTHER VALUE IS BOUND AS `cho-gui`, as before 0027: a
+// producer inserting a row already marked `da-gui` would be a claim about the citizen's phone that
+// nothing in this service witnessed. The opt-out is the one value let through because it claims
+// nothing about a send — only that none will be attempted.
 func (s *ThongBaoGuiCongDanStore) Chen(ctx context.Context, tx *store.ScopedTx,
 	tb domain.ThongBaoGuiCongDan) (bool, error) {
 
@@ -118,10 +121,14 @@ func (s *ThongBaoGuiCongDanStore) Chen(ctx context.Context, tx *store.ScopedTx,
 	if err != nil {
 		return false, fmt.Errorf("thong_bao_gui_cong_dan: tham số: %w", err)
 	}
+	birth := domain.ChoGui
+	if tb.TrangThai == domain.CitizenOptedOut {
+		birth = domain.CitizenOptedOut
+	}
 
 	kq, err := tx.Exec(ctx, chenThongBao,
 		string(tx.TenantID()), tb.ID, tb.KhoaLanGui, string(tb.DoiTuongLoai), tb.DoiTuongMa,
-		tb.Moc, tb.Lan, string(tb.Kenh), tb.NguoiNhanMa, tb.MauMa, thamSo, string(domain.ChoGui))
+		tb.Moc, tb.Lan, string(tb.Kenh), tb.NguoiNhanMa, tb.MauMa, thamSo, string(birth))
 	if err != nil {
 		return false, fmt.Errorf("thong_bao_gui_cong_dan: ghi sổ: %w", err)
 	}

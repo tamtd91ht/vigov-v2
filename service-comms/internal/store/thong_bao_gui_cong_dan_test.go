@@ -562,3 +562,23 @@ func nhieuDongThongBao(n int) []dongThongBao {
 	}
 	return ra
 }
+
+func TestChenMayBeBornOptedOut(t *testing.T) {
+	// ADR 0091 §4: the citizen turned notifications off — the row is STILL written, born
+	// `dan-da-tat-nhan`, as the evidence that the obligation arose and why nothing went out.
+	k := &khoGhiGia{soDongDoi: 1}
+	kho := dungKhoThongBao(k)
+
+	tb := thongBaoThu()
+	tb.TrangThai = domain.CitizenOptedOut
+	if err := chayTrongGD(t, k, xaThu, func(tx *pkgstore.ScopedTx) error {
+		_, err := kho.Chen(context.Background(), tx, tb)
+		return err
+	}); err != nil {
+		t.Fatalf("Chen: %v", err)
+	}
+	args := k.lenh[0].args
+	if cuoi := args[len(args)-1]; cuoi != string(domain.CitizenOptedOut) {
+		t.Fatalf("trạng thái ghi vào = %v, muốn %q", cuoi, domain.CitizenOptedOut)
+	}
+}

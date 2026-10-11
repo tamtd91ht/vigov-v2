@@ -296,9 +296,11 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 		EventPlace:    sach.EventPlace,
 		VideoURL:      sach.VideoURL,
 		LinkTo:        sach.LinkTo,
-		DisplayOrder:  sach.DisplayOrder,
-		NgayDang:      ngayDang,
-		LuotXem:       0,
+
+		VideoDurationSeconds: sach.VideoDurationSeconds,
+		DisplayOrder:         sach.DisplayOrder,
+		NgayDang:             ngayDang,
+		LuotXem:              0,
 
 		CoverImageFileID: sach.CoverImageFileID,
 		// THE STATE IS DECIDED HERE FROM §7'S CHECKBOX, never taken from the request. See
@@ -533,6 +535,9 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		if sach.VideoURL != nil {
 			sau.VideoURL = *sach.VideoURL
 		}
+		if sach.VideoDurationSeconds != nil {
+			sau.VideoDurationSeconds = *sach.VideoDurationSeconds // 0 clears
+		}
 		if sach.CoverImageFileID != nil {
 			sau.CoverImageFileID = *sach.CoverImageFileID // "" detaches; the file row stays (rule 7)
 		}
@@ -574,6 +579,10 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 		}
 		if sau.Loai != domain.LoaiVideo && sach.SetsVideoURL() {
 			refusal = domain.ErrVideoURLOnlyForVideo
+			return refusal
+		}
+		if sau.Loai != domain.LoaiVideo && sach.SetsVideoDuration() {
+			refusal = domain.ErrVideoDurationOnlyForVideo
 			return refusal
 		}
 		if sau.Loai != domain.LoaiBanner && sach.SetsBannerField() {
@@ -1213,6 +1222,8 @@ func tomTatNoiDungMiniApp(n domain.NoiDungMiniApp) map[string]any {
 		"event_ends_at":   instantOrEmpty(n.EventEndsAt),
 		"has_event_place": n.EventPlace != "",
 		"has_video_url":   n.VideoURL != "",
+		// Migration 0028: a number of seconds the officer typed — the authority's own figure, by value.
+		"video_duration_seconds": n.VideoDurationSeconds,
 		// The cover's FILE ID — an internal handle, not personal data; its file name never enters here.
 		"cover_image_file_id": n.CoverImageFileID,
 		// Migration 0012's banner pair, split like the video link: position by value, link by presence.
@@ -1283,6 +1294,9 @@ func tomTatDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp, ben bool) map[str
 	if truoc.VideoURL != sau.VideoURL {
 		ra["video_url_changed"] = true
 	}
+	if truoc.VideoDurationSeconds != sau.VideoDurationSeconds {
+		ra["video_duration_seconds"] = chon(ben, truoc.VideoDurationSeconds, sau.VideoDurationSeconds)
+	}
 	if truoc.CoverImageFileID != sau.CoverImageFileID {
 		ra["cover_image_file_id"] = chon(ben, truoc.CoverImageFileID, sau.CoverImageFileID)
 	}
@@ -1351,6 +1365,7 @@ func khongDoiNoiDungMiniApp(truoc, sau domain.NoiDungMiniApp) bool {
 		truoc.EventEndsAt.Equal(sau.EventEndsAt) &&
 		truoc.EventPlace == sau.EventPlace &&
 		truoc.VideoURL == sau.VideoURL &&
+		truoc.VideoDurationSeconds == sau.VideoDurationSeconds &&
 		truoc.CoverImageFileID == sau.CoverImageFileID &&
 		truoc.LinkTo == sau.LinkTo &&
 		sameOrder(truoc.DisplayOrder, sau.DisplayOrder) &&

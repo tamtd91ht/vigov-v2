@@ -416,11 +416,22 @@
       "menu": [
         "noi-dung-mini-app"
       ],
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Migration theo quyết định chủ dự án 11/10/2026 (chỉ lược đồ; mã Go ở mục go-11-10-canh-bao-tat-nhan-video): 0026 bảng disaster_alerts (DisasterAlert, 6 loại bao/lu/sat-lo/mua-lon/dich-benh/chay, vùng nguy hiểm + điểm sơ tán + số khẩn cấp dạng mảng JSONB, kết thúc sớm ended_at/by, cảnh báo đã kết thúc không sửa được); 0027 bảng citizen_notification_preferences (không có dòng = đang bật) + trạng thái thứ năm 'dan-da-tat-nhan' của thong_bao_gui_cong_dan (thêm CHECK mới trước rồi mới bỏ CHECK cũ, không NOT VALID); 0028 cột noi_dung_mini_app.video_duration_seconds (chỉ loai='video', 1..21600).",
+      "bang_chung": "service-comms/migrations/0026_disaster_alerts.sql, 0027_citizen_notification_preferences.sql, 0028_content_item_video_duration.sql + disaster_alerts_test.go, citizen_notification_preferences_test.go; go vet ./migrations + go test ./... service-comms xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL, máy này không có VIGOV_TEST_DSN).",
+      "tiep_theo": "Mã Go đã dựng (mục go-11-10-canh-bao-tat-nhan-video). Còn: ô 'chưa báo được' phải hiện lý do 'dân đã tắt nhận'. Chưa chạy trên PostgreSQL 16 thật."
+    },
+    {
+      "id": "go-11-10-canh-bao-tat-nhan-video",
+      "menu": [
+        "noi-dung-mini-app"
+      ],
       "trang_thai": "dang_lam",
       "no_confirm": [],
-      "viec": "Migration theo quyết định chủ dự án 11/10/2026 (chỉ lược đồ, chưa có mã Go): 0026 bảng disaster_alerts (DisasterAlert, 6 loại bao/lu/sat-lo/mua-lon/dich-benh/chay, vùng nguy hiểm + điểm sơ tán + số khẩn cấp dạng mảng JSONB, kết thúc sớm ended_at/by, cảnh báo đã kết thúc không sửa được); 0027 bảng citizen_notification_preferences (không có dòng = đang bật) + trạng thái thứ năm 'dan-da-tat-nhan' của thong_bao_gui_cong_dan (thêm CHECK mới trước rồi mới bỏ CHECK cũ, không NOT VALID); 0028 cột noi_dung_mini_app.video_duration_seconds (chỉ loai='video', 1..21600).",
-      "bang_chung": "service-comms/migrations/0026_disaster_alerts.sql, 0027_citizen_notification_preferences.sql, 0028_content_item_video_duration.sql + disaster_alerts_test.go, citizen_notification_preferences_test.go; go vet ./migrations + go test ./... service-comms xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL, máy này không có VIGOV_TEST_DSN).",
-      "tiep_theo": "Thẻ Go sau: domain hằng trạng thái 'dan-da-tat-nhan' (domain/thong_bao_gui_cong_dan.go) + luồng gửi đọc tuỳ chọn theo COALESCE(zalo_enabled, true); kho/ca sử dụng/tuyến /disaster-alerts (content.read/content.update) và kiểm hình dạng phần tử JSONB; ô 'chưa báo được' phải hiện lý do 'dân đã tắt nhận'. ADR ghi việc đảo ADR 0047 điểm (12) (không công tắc 'Nhận thông báo') và G2 (4 → 6 loại) còn nợ. Chưa chạy trên PostgreSQL 16 thật."
+      "viec": "Mã Go cho ADR 0091 (11/10/2026): (1) cảnh báo thiên tai — 6 tuyến cán bộ /api/v1/disaster-alerts (danh sách phân trang, chi tiết, đăng, sửa, kết thúc sớm POST …/{id}/ending, xoá mềm có lý do) bằng content.read/content.update, vết kiểm toán cùng giao dịch, số điện thoại và tên người liên hệ được che trong delta; tuyến công khai GET /api/v1/commune-disaster-alerts?host= (authz.Public, PublicNewsRead, tên miền lạ = 200 rỗng y hệt). (2) công tắc nhận thông báo — GET/PUT /api/v1/my-notification-preferences trên chuỗi công dân mới của comms (CitizenEdge + CitizenPrincipal, CitizenOnly + XaTuPhien), ghi có vết kiểm toán chủ thể công dân. (3) đường gửi: dòng sổ sinh 'dan-da-tat-nhan' khi dân đã tắt, trừ khong-tiep-nhan và chuyen-cap-tren; tin gộp/tách bị chặn như tin thường. (4) video_duration_seconds cho nội dung loại video, trả trong commune-news.",
+      "bang_chung": "service-comms: domain/disaster_alert.go, citizen_notification_preference.go, content_video.go, thong_bao_gui_cong_dan.go (CitizenOptedOut, NotifiedDespiteOptOut); store/disaster_alert.go, citizen_notification_preference.go; app/disaster_alert.go, citizen_notification_preference.go, so_thong_bao.go; event/phieu_doi_trang_thai.go, petition_merge_changed.go; http/disaster_alerts.go, citizen_notification_preference.go, noi_dung_mini_app.go, tin_xa_cong_khai.go; cmd/server/main.go (buildCitizenEdge, ngoai.Handle cho commune-disaster-alerts và my-notification-preferences). Ca kiểm 401/403 sai quyền/403 sai xã/200 trên cả 6 tuyến cán bộ; chuỗi biên cmd/server/citizen_chain_test.go + bien_cong_khai_test.go. go build + go vet + go test ./... service-comms xanh 11/10/2026 (GOCACHE=D:/gocache). store/disaster_alert_pg_test.go CHƯA chạy (không có VIGOV_TEST_DSN).",
+      "tiep_theo": "Chạy make kb để sinh hợp đồng (kb/20-contracts, schema.gen.ts, ingress). Chạy disaster_alert_pg_test trên PostgreSQL 16. Danh từ URL my-notification-preferences chưa được người dùng chốt (ubiquitous-language ghi 'chưa chốt'). ADR 0091 mở #1 (tin gộp/tách có bị chặn khi tắt) và #2 (chưa có dòng = đang nhận) vẫn chờ chủ dự án. Consumer ZNS vẫn chưa mắc Kafka (ADR 0041 mở #4) nên công tắc chưa có tác dụng. web-admin tab cảnh báo và citizen-app màn cảnh báo/công tắc là thẻ riêng."
     },
     {
       "id": "zalo-bot-communes-table-11-10",

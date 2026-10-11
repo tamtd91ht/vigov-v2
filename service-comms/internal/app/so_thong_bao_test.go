@@ -518,3 +518,33 @@ func dem(a []string, x string) int {
 	}
 	return n
 }
+
+// --- ADR 0091 §4: the citizen turned notifications off --------------------------------------------
+
+func TestGhiNoOptedOutStillWritesTheRowAndAuditsItsState(t *testing.T) {
+	// The row is the evidence: born `dan-da-tat-nhan`, in the same transaction as its entry.
+	k := &khoGD{}
+	kho := &khoThongBaoGia{moi: true}
+	yc := yeuCauThu()
+	yc.CitizenOptedOut = true
+
+	if _, err := dungSo(t, k, kho).GhiNo(ctxXa(xaThu), yc); err != nil {
+		t.Fatalf("GhiNo: %v", err)
+	}
+	if kho.nhanDuoc.TrangThai != domain.CitizenOptedOut {
+		t.Errorf("born %q, want %q", kho.nhanDuoc.TrangThai, domain.CitizenOptedOut)
+	}
+	if muon := []string{"begin", "chen", "audit", "commit"}; !bangNhau(k.buoc, muon) {
+		t.Fatalf("thứ tự = %v, muốn %v", k.buoc, muon)
+	}
+}
+
+func TestGhiNoDefaultIsChoGui(t *testing.T) {
+	kho := &khoThongBaoGia{moi: true}
+	if _, err := dungSo(t, &khoGD{}, kho).GhiNo(ctxXa(xaThu), yeuCauThu()); err != nil {
+		t.Fatalf("GhiNo: %v", err)
+	}
+	if kho.nhanDuoc.TrangThai != domain.ChoGui {
+		t.Errorf("born %q, want cho-gui", kho.nhanDuoc.TrangThai)
+	}
+}

@@ -22,6 +22,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/config"
 	"github.com/vihat/vigov/core/crypto"
 	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
@@ -439,6 +440,17 @@ func main() {
 		Log:     log,
 	})
 
+	// Disaster alerts (migration 0026; ADR 0091 §2) — six staff routes on the SAME staff mux, the same
+	// checker, `content.read` / `content.update`. ONE store behind the reads, the use case and the public
+	// read below. See internal/http/disaster_alerts.go.
+	disasterAlerts := commsstore.NewDisasterAlertStore(kho)
+	svchttp.RegisterDisasterAlerts(mux, svchttp.DisasterAlertDeps{
+		Checker: staffauth.Checker{},
+		Reader:  disasterAlerts,
+		Writer:  commsapp.NewDisasterAlerts(kho, disasterAlerts),
+		Log:     log,
+	})
+
 	// The economic map's asset register (migration 0015; ADR 0072) — nine staff routes on the SAME staff
 	// mux, the same checker. ONE store behind the reads and the use case; the use case owns every write's
 	// transaction and its audit entry. The default-groups seed writes the type catalogue through its own
@@ -544,7 +556,32 @@ func main() {
 		Limiter:  publicLimiter,
 		Log:      log,
 	})
+	// The public disaster-alert read (ADR 0091 §2) — the SAME platform lookup and the SAME limiter
+	// instance (the owner chose "giới hạn tần suất như tin công khai").
+	svchttp.RegisterPublicDisasterAlerts(muxCongKhai, svchttp.PublicDisasterAlertDeps{
+		Xa:      publicDirectory,
+		Alerts:  disasterAlerts,
+		Limiter: publicLimiter,
+		Log:     log,
+	})
 	congKhai := dungBienCongKhai(muxCongKhai, cfg.CitizenCORSAllowedOrigins(), log)
+
+	// THE CITIZEN SURFACE (ADR 0091 §4, 11/10/2026) — this service's first route a citizen calls WITH A
+	// SESSION, so the citizen chain service-petitions built is copied here (its main.go §dungBien is the
+	// reasoning). The session registry is identity's, over the SAME *identityclient.Client the staff edge
+	// holds — no new dial, no new variable: config.IdentityClient and config.CitizenCORS were already
+	// declared. Its own mux and its own Deps, so a citizen route cannot reach a staff store (rule 4,
+	// invariant 5).
+	citizenSessions := identityclient.NewSoPhienCongDan(dinhDanh)
+	// The ONE preference store: the citizen routes below, and — the day the ZNS consumers are wired
+	// (step 5 above) — event.NewPhieuDoiTrangThai / NewPetitionMergeChangedConsumer, which require it.
+	notificationPreferences := commsstore.NewCitizenNotificationPreferenceStore(kho)
+	citizenMux := http.NewServeMux()
+	svchttp.RegisterCitizen(citizenMux, svchttp.CitizenDeps{
+		Preferences: commsapp.NewCitizenNotificationPreferences(kho, notificationPreferences),
+		Log:         log,
+	})
+	citizenEdge := buildCitizenEdge(citizenMux, citizenSessions, idemStore, cfg.CitizenCORSAllowedOrigins(), log)
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.
 	// LISTEN_ADDR or ":8080" — one default for every service, see config.Config.ListenAddr.
@@ -555,7 +592,7 @@ func main() {
 		// OUTERMOST, around BOTH chains: every layer reads one client address per request, crossing
 		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
 		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(withZaloBotWebhook(
-			dungBien(mux, congKhai, directory, dinhDanh, idemStore, log),
+			dungBien(mux, congKhai, citizenEdge, directory, dinhDanh, idemStore, log),
 			zaloBotChain(muxZaloBot), communeZaloBotChain(muxZaloBot, directory), cfg.ZaloBotWebhookHost())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
@@ -747,6 +784,8 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps, zaloBot commsv1.Za
 //
 //	/api/v1/commune-news, /api/v1/commune-news/…   PUBLIC chain (congKhai, dungBienCongKhai)
 //	/api/v1/commune-external-contacts              PUBLIC chain
+//	/api/v1/commune-disaster-alerts                PUBLIC chain
+//	/api/v1/my-notification-preferences            CITIZEN chain — commune from the SESSION (ADR 0022)
 //	everything else                                STAFF chain — commune from `Host`
 //
 // The split exists because the two disagree on the first question of every request — which commune.
@@ -754,7 +793,7 @@ func buildGRPCServer(callerKey secret.Secret, d svcgrpc.Deps, zaloBot commsv1.Za
 // route mounted on the staff mux would start, pass every internal/http test, and 404 every resident.
 // `commune-news` is its own path ELEMENT: Go's ServeMux matches whole elements, so neither pattern can
 // capture `/api/v1/content-items/…`, the staff register. main_test.go asserts both directions.
-func dungBien(mux, congKhai http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
+func dungBien(mux, congKhai, citizenEdge http.Handler, danhBa tenant.Directory, dinhDanh staffauth.Resolver,
 	idemStore idem.Store, log *slog.Logger) http.Handler {
 
 	var h http.Handler = mux
@@ -783,8 +822,41 @@ func dungBien(mux, congKhai http.Handler, danhBa tenant.Directory, dinhDanh staf
 	// The collection only: the public external-contact surface has no subtree. Its own path ELEMENT, so
 	// it captures neither `/api/v1/external-contacts` (staff) nor anything under it.
 	ngoai.Handle(svchttp.PublicExternalContactsPath, congKhai)
+	// The public disaster-alert read: the collection only, its own path ELEMENT — it captures neither
+	// `/api/v1/disaster-alerts` (staff) nor anything under it. Without this line: 404 to every resident.
+	ngoai.Handle(svchttp.PublicDisasterAlertsPath, congKhai)
+	// The citizen's own switch: the resource only, no subtree. Its own path ELEMENT (`my-…`), so it
+	// captures no staff path. Without this line the staff chain answers 404 to every citizen on the
+	// reserved API host.
+	ngoai.Handle(svchttp.MyNotificationPreferencesPath, citizenEdge)
 	ngoai.Handle("/", h)
 	return ngoai
+}
+
+// buildCitizenEdge builds the CITIZEN edge chain, outermost last — service-petitions' citizen chain,
+// copied (its cmd/server/main.go §dungBien argues each layer):
+//
+//	CORSCongDan         the Mini App webview is cross-origin; a preflight is answered before anything
+//	                    below sees it (no Authorization on a preflight)
+//	StripTenantHeaders  a client naming its own commune is granting itself access
+//	Recover             a panic becomes a traceable 500
+//	CitizenEdge         bearer token -> the session identity issued; an identity outage is 503. It puts
+//	                    no commune in the context and refuses nothing: the route's httpx.XaTuPhien does
+//	CitizenPrincipal    the same resolved session, read on the identity axis — one registry lookup
+//	idem.Middleware     innermost: the commune that prefixes a key is put there by XaTuPhien, per route
+//
+// NO TenantMiddleware (the reserved API host maps to no commune), NO staffauth (a citizen holds no staff
+// session). A NAMED FUNCTION so a test can drive the real chain.
+func buildCitizenEdge(citizenMux http.Handler, sessions httpx.CitizenSessions, idemStore idem.Store,
+	allowedOrigins httpx.NguonCORS, log *slog.Logger) http.Handler {
+	var c http.Handler = citizenMux
+	c = idem.Middleware(idemStore, log)(c)
+	c = authz.CitizenPrincipal()(c)
+	c = httpx.CitizenEdge(sessions)(c)
+	c = httpx.Recover(traceID)(c)
+	c = httpx.StripTenantHeaders(c)
+	c = httpx.CORSCongDan(allowedOrigins, log)(c)
+	return c
 }
 
 // dungBienCongKhai builds the PUBLIC edge chain, outermost last:

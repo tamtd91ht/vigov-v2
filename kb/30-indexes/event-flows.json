@@ -18,7 +18,7 @@
       "consumers": [
         {
           "service": "comms",
-          "at": "service-comms/internal/event/petition_merge_changed.go:84"
+          "at": "service-comms/internal/event/petition_merge_changed.go:90"
         }
       ],
       "unclassified_mentions": [],
@@ -32,13 +32,13 @@
       "publishers": [
         {
           "service": "petitions",
-          "at": "service-petitions/internal/app/xu_ly_phan_anh.go:1614"
+          "at": "service-petitions/internal/app/xu_ly_phan_anh.go:1618"
         }
       ],
       "consumers": [
         {
           "service": "comms",
-          "at": "service-comms/internal/event/phieu_doi_trang_thai.go:137"
+          "at": "service-comms/internal/event/phieu_doi_trang_thai.go:169"
         }
       ],
       "unclassified_mentions": [],

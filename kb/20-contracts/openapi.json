@@ -9644,6 +9644,86 @@
         }
       }
     },
+    "/api/v1/commune-disaster-alerts": {
+      "get": {
+        "summary": "Cảnh báo thiên tai ĐANG HIỆU LỰC của xã theo tên miền — cho màn cảnh báo và băng đỏ trang chủ Zalo Mini App",
+        "operationId": "comms_get_commune_disaster_alerts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "cảnh báo thiên tai đang hiệu lực mà xã đăng cho người dân, hiện trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0091 §2): người dân đọc không cần tài khoản; chỉ trả cảnh báo chưa xoá, chưa kết thúc, đang trong khung hiệu lực của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "02a3c3891434",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.publicDisasterAlertListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/commune-external-contacts": {
       "get": {
         "summary": "Liên hệ ngoài bộ máy xã (trạm y tế, công an, điện lực…) theo tên miền của xã — cho danh bạ trên Zalo Mini App, nhóm theo `category`",
@@ -11895,6 +11975,576 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disaster-alerts": {
+      "get": {
+        "summary": "Cảnh báo thiên tai của xã — mọi trạng thái (sắp tới, đang hiệu lực, đã qua, đã kết thúc), mới bắt đầu nhất trước, phân trang theo con trỏ",
+        "operationId": "comms_get_disaster_alerts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.read"
+        },
+        "x-vigov-task": "311ad6d1ff72",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Số bản ghi mỗi trang. Vượt trần thì máy chủ TRẢ VỀ trần kèm con trỏ để đọc tiếp, không báo lỗi.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Con trỏ MỜ ĐỤC do máy chủ phát ra ở `next_cursor`, chuyền lại nguyên văn. Không phải số thứ tự trang; không có `offset`, và không có tổng số bản ghi.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Cột sắp xếp. Danh sách đóng — giá trị ngoài danh sách bị từ chối.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "effective_from"
+              ],
+              "default": "effective_from"
+            }
+          },
+          {
+            "name": "order",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.disasterAlertListOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Đăng một cảnh báo thiên tai — hiện trên Zalo Mini App từ thời điểm bắt đầu hiệu lực (không đẩy ZNS)",
+        "operationId": "comms_post_disaster_alerts",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "691831c2a5ce",
+        "x-vigov-idempotency": {
+          "required": true,
+          "header": "Idempotency-Key",
+          "on_store_failure": "DongKhiHong",
+          "on_store_failure_effect": "Store không tới được -> trả 503"
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.createDisasterAlertIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.disasterAlertOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disaster-alerts/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Xoá mềm một cảnh báo thiên tai, kèm lý do bắt buộc — gỡ khỏi Zalo Mini App trong cùng lần ghi",
+        "operationId": "comms_delete_disaster_alerts_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "ed54e74a6843",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.deleteDisasterAlertIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Một cảnh báo thiên tai của xã, đủ vùng nguy hiểm, điểm sơ tán và số khẩn cấp",
+        "operationId": "comms_get_disaster_alerts_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.read"
+        },
+        "x-vigov-task": "d57b96441d80",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.disasterAlertOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa một cảnh báo thiên tai đang còn (chưa kết thúc) — nội dung, thời gian, vùng nguy hiểm, điểm sơ tán, số khẩn cấp",
+        "operationId": "comms_patch_disaster_alerts_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "7ee4ec983d0b",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.updateDisasterAlertIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.disasterAlertOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "alert_ended"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/disaster-alerts/{id}/ending": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Kết thúc sớm một cảnh báo thiên tai — gỡ khỏi Zalo Mini App ngay, ghi ai kết thúc và lúc nào",
+        "operationId": "comms_post_disaster_alerts_by_id_ending",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "11-noi-dung-mini-app",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "content.update"
+        },
+        "x-vigov-task": "32d840e578ca",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.disasterAlertOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "alert_ended"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -21908,6 +22558,152 @@
           },
           "503": {
             "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/my-notification-preferences": {
+      "get": {
+        "summary": "Lựa chọn nhận thông báo Zalo CỦA CHÍNH công dân trong xã của phiên — chưa từng đổi thì là đang nhận",
+        "operationId": "comms_get_my_notification_preferences",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "phone_verified_required": true
+        },
+        "x-vigov-task": "e2e7190536e4",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.notificationPreferenceOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "chua_xac_thuc_so"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Công dân bật / tắt nhận thông báo Zalo về phản ánh của mình — tắt vẫn nhận tin không tiếp nhận và chuyển cấp trên; mỗi lần đổi có vết kiểm toán",
+        "operationId": "comms_put_my_notification_preferences",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-permission": {
+          "kind": "citizen-only"
+        },
+        "x-vigov-tenant-class": {
+          "kind": "tu-phien",
+          "tenant_in_context": true,
+          "source": "phiên công dân — không bao giờ từ Host, header hay query (luật 1 cấm #2)",
+          "phone_verified_required": true
+        },
+        "x-vigov-task": "15a6f81863fb",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.notificationPreferenceIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.notificationPreferenceOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "chua_xac_thuc_so"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
             "content": {
               "application/json": {
                 "schema": {
@@ -36416,6 +37212,66 @@
         ],
         "additionalProperties": false
       },
+      "comms.DangerZonePoint": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "additionalProperties": false
+      },
+      "comms.EmergencyContact": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "phone",
+          "role"
+        ],
+        "additionalProperties": false
+      },
+      "comms.EvacuationPoint": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "phone": {
+            "type": "string"
+          },
+          "capacity": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
       "comms.audioFileOut": {
         "type": "object",
         "properties": {
@@ -36833,6 +37689,57 @@
         ],
         "additionalProperties": false
       },
+      "comms.createDisasterAlertIn": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "effective_from": {
+            "type": "string"
+          },
+          "effective_to": {
+            "type": "string"
+          },
+          "danger_zone": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.DangerZonePoint"
+            }
+          },
+          "evacuation_points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.EvacuationPoint"
+            }
+          },
+          "emergency_contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.EmergencyContact"
+            }
+          }
+        },
+        "required": [
+          "detail",
+          "effective_from",
+          "kind",
+          "title"
+        ],
+        "additionalProperties": false
+      },
       "comms.createExternalContactIn": {
         "type": "object",
         "properties": {
@@ -37063,6 +37970,18 @@
         ],
         "additionalProperties": false
       },
+      "comms.deleteDisasterAlertIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
       "comms.deleteExternalContactIn": {
         "type": "object",
         "properties": {
@@ -37094,6 +38013,104 @@
             "type": "string"
           }
         },
+        "additionalProperties": false
+      },
+      "comms.disasterAlertListOut": {
+        "$ref": "#/components/schemas/page.Result_comms.disasterAlertOut"
+      },
+      "comms.disasterAlertOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effective_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "ended_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "ended_by": {
+            "type": "string"
+          },
+          "in_force": {
+            "type": "boolean"
+          },
+          "danger_zone": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.DangerZonePoint"
+            }
+          },
+          "evacuation_points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.EvacuationPoint"
+            }
+          },
+          "emergency_contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.EmergencyContact"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_by": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "created_at",
+          "created_by",
+          "danger_zone",
+          "detail",
+          "effective_from",
+          "emergency_contacts",
+          "evacuation_points",
+          "id",
+          "in_force",
+          "kind",
+          "title",
+          "updated_at",
+          "updated_by"
+        ],
         "additionalProperties": false
       },
       "comms.externalContactListOut": {
@@ -38196,6 +39213,9 @@
           "video_url": {
             "type": "string"
           },
+          "video_duration_seconds": {
+            "type": "integer"
+          },
           "link_to": {
             "type": "string"
           },
@@ -38285,6 +39305,33 @@
           "read",
           "read_at",
           "title"
+        ],
+        "additionalProperties": false
+      },
+      "comms.notificationPreferenceIn": {
+        "type": "object",
+        "properties": {
+          "zalo_enabled": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "zalo_enabled"
+        ],
+        "additionalProperties": false
+      },
+      "comms.notificationPreferenceOut": {
+        "type": "object",
+        "properties": {
+          "zalo_enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "zalo_enabled"
         ],
         "additionalProperties": false
       },
@@ -38744,6 +39791,85 @@
         ],
         "additionalProperties": false
       },
+      "comms.publicDisasterAlertListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.publicDisasterAlertOut"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "additionalProperties": false
+      },
+      "comms.publicDisasterAlertOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "headline": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "effective_to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "danger_zone": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.DangerZonePoint"
+            }
+          },
+          "evacuation_points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.EvacuationPoint"
+            }
+          },
+          "emergency_contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.EmergencyContact"
+            }
+          }
+        },
+        "required": [
+          "danger_zone",
+          "detail",
+          "effective_from",
+          "emergency_contacts",
+          "evacuation_points",
+          "headline",
+          "id",
+          "kind",
+          "title"
+        ],
+        "additionalProperties": false
+      },
       "comms.seedMapAssetTypesOut": {
         "type": "object",
         "properties": {
@@ -38900,6 +40026,12 @@
               "null"
             ]
           },
+          "video_duration_seconds": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
           "cover_image_file_id": {
             "type": [
               "string",
@@ -39023,6 +40155,9 @@
           },
           "video_url": {
             "type": "string"
+          },
+          "video_duration_seconds": {
+            "type": "integer"
           },
           "cover_image_file_id": {
             "type": "string"
@@ -39171,6 +40306,9 @@
           "video_url": {
             "type": "string"
           },
+          "video_duration_seconds": {
+            "type": "integer"
+          },
           "image_url": {
             "type": "string"
           },
@@ -39254,6 +40392,81 @@
               "string",
               "null"
             ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "comms.updateDisasterAlertIn": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "level": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "headline": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "detail": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_from": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "effective_to": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "danger_zone": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/comms.DangerZonePoint"
+            }
+          },
+          "evacuation_points": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/comms.EvacuationPoint"
+            }
+          },
+          "emergency_contacts": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/comms.EmergencyContact"
+            }
           }
         },
         "additionalProperties": false
@@ -48030,6 +49243,30 @@
         ],
         "additionalProperties": false
       },
+      "page.Result_comms.disasterAlertOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.disasterAlertOut"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "description": "empty when has_more is false"
+          },
+          "has_more": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "has_more",
+          "items",
+          "next_cursor"
+        ],
+        "additionalProperties": false
+      },
       "page.Result_comms.mapAssetRowOut": {
         "type": "object",
         "properties": {
@@ -48951,6 +50188,9 @@
               "string",
               "null"
             ]
+          },
+          "placeholder": {
+            "type": "string"
           }
         },
         "required": [
@@ -50538,6 +51778,41 @@
           },
           "receiving_body": {
             "type": "string"
+          },
+          "classified_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "forwarded_for_processing_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "resolved_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "awaiting_confirmation_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "closed_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
           },
           "rating": {
             "type": [

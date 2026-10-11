@@ -681,6 +681,10 @@ type NoiDungMiniApp struct {
 	// §6 (3)). "" means NULL.
 	VideoURL string
 
+	// VideoDurationSeconds is migration 0028's typed length of a `video`, in seconds (owner, 11/10/2026).
+	// 0 = NULL = not given. Not tied to VideoURL (content_video.go says why).
+	VideoDurationSeconds int
+
 	// CoverImageFileID is migration 0011's `cover_image_file_id`: this service's own `stored_file` row
 	// holding the UPLOADED cover (ADR 0047 §6 (1)). "" = NULL. Distinct from AnhDaiDienURL, which is a
 	// link to a file some other system serves and is never published by this service.
@@ -741,6 +745,9 @@ func (n NoiDungMiniApp) CheckTypeFields() error {
 	if err := checkAudioFields(n.Loai, n.AudioFileID, n.AudioDurationSeconds); err != nil {
 		return err
 	}
+	if err := checkVideoDuration(n.Loai, n.VideoDurationSeconds); err != nil {
+		return err
+	}
 	return checkTypeFields(n.Loai, n.EventStartsAt, n.EventEndsAt, n.EventPlace, n.VideoURL)
 }
 
@@ -754,7 +761,8 @@ func (n NoiDungMiniApp) WithoutOtherTypeFields() NoiDungMiniApp {
 		n.EventStartsAt, n.EventEndsAt, n.EventPlace = time.Time{}, time.Time{}, ""
 	}
 	if n.Loai != LoaiVideo {
-		n.VideoURL = ""
+		// Migration 0028: the typed length goes with the type, in the same UPDATE (0028's reading).
+		n.VideoURL, n.VideoDurationSeconds = "", 0
 	}
 	// Migration 0012: the banner's tap target and position go with the type (ADR 0067 §5).
 	if n.Loai != LoaiBanner {
@@ -807,6 +815,9 @@ type YeuCauThemNoiDung struct {
 
 	// VideoURL — `video` only. "" = not given.
 	VideoURL string
+
+	// VideoDurationSeconds — `video` only (migration 0028). 0 = not given.
+	VideoDurationSeconds int
 
 	// LinkTo, DisplayOrder — `banner` only (migration 0012). "" / nil = not given.
 	LinkTo       string
@@ -879,6 +890,10 @@ func (y YeuCauThemNoiDung) KiemTra() (YeuCauThemNoiDung, error) {
 		ra.EventPlace, ra.VideoURL); err != nil {
 		return YeuCauThemNoiDung{}, err
 	}
+	if err := checkVideoDuration(LoaiNoiDung(ra.Loai), y.VideoDurationSeconds); err != nil {
+		return YeuCauThemNoiDung{}, err
+	}
+	ra.VideoDurationSeconds = y.VideoDurationSeconds
 
 	ra.DangLenMiniApp = y.DangLenMiniApp
 	return ra, nil
@@ -913,6 +928,11 @@ type YeuCauSuaNoiDung struct {
 	EventEndsAt   *time.Time
 	EventPlace    *string
 	VideoURL      *string
+
+	// VideoDurationSeconds — nil = leave alone; 0 = clear (unknown length); 1 .. VideoDurationMaxSeconds
+	// = set (migration 0028). A JSON 0 is distinguishable from an absent key through the pointer, and 0
+	// is not a valid length, so it can mean "clear" without ambiguity.
+	VideoDurationSeconds *int
 
 	// CoverImageFileID — nil = leave alone; "" = DETACH (the column goes NULL; the file row stays, rule
 	// 7); an id = attach that file, which must have been uploaded for THIS article and be `ready`.
@@ -967,6 +987,11 @@ func (y YeuCauSuaNoiDung) SetsEventField() bool {
 
 // SetsVideoURL is SetsEventField for `video_url`.
 func (y YeuCauSuaNoiDung) SetsVideoURL() bool { return y.VideoURL != nil && *y.VideoURL != "" }
+
+// SetsVideoDuration is SetsEventField for `video_duration_seconds` (clearing with 0 does not count).
+func (y YeuCauSuaNoiDung) SetsVideoDuration() bool {
+	return y.VideoDurationSeconds != nil && *y.VideoDurationSeconds != 0
+}
 
 // KiemTra validates whatever the request actually mentioned, and returns the cleaned values in the
 // same shape.
@@ -1028,6 +1053,12 @@ func (y YeuCauSuaNoiDung) KiemTra() (YeuCauSuaNoiDung, error) {
 			return YeuCauSuaNoiDung{}, err
 		}
 		ra.VideoURL = &v
+	}
+	if y.VideoDurationSeconds != nil {
+		if err := CheckVideoDuration(*y.VideoDurationSeconds); err != nil {
+			return YeuCauSuaNoiDung{}, err
+		}
+		ra.VideoDurationSeconds = copyInt(y.VideoDurationSeconds)
 	}
 	if y.CoverImageFileID != nil {
 		v, err := cleanFileID(*y.CoverImageFileID)

@@ -184,7 +184,7 @@ func cotChiTietND() []string {
 		"da_sua_tay", "nguoi_tao_ma", "tao_luc", "cap_nhat_luc",
 		"published_at", "event_starts_at", "event_ends_at", "event_place", "video_url",
 		"cover_image_file_id", "link_to", "display_order", "audio_file_id", "audio_duration_seconds",
-		"noi_dung"}
+		"video_duration_seconds", "noi_dung"}
 }
 
 func hangTu(n domain.NoiDungMiniApp) []driver.Value {
@@ -208,7 +208,7 @@ func hangTu(n domain.NoiDungMiniApp) []driver.Value {
 		instant(n.PublishedAt), instant(n.EventStartsAt), instant(n.EventEndsAt),
 		rong(n.EventPlace), rong(n.VideoURL), rong(n.CoverImageFileID),
 		rong(n.LinkTo), order(n.DisplayOrder), rong(n.AudioFileID), seconds(n.AudioDurationSeconds),
-		rong(n.NoiDung),
+		seconds(n.VideoDurationSeconds), rong(n.NoiDung),
 	}
 }
 
@@ -364,8 +364,8 @@ func TestThemNoiDungQuyetDinhTrangThaiNguonVaNguoiTaoTaiDay(t *testing.T) {
 	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12–$17 cột của migration 0011 ($17 ảnh bìa).
 	// `nguon` là hằng trong câu lệnh.
 	args := l[0].args
-	if len(args) != 19 { // $18 link_to, $19 display_order (migration 0012)
-		t.Fatalf("số tham số = %d, muốn 19", len(args))
+	if len(args) != 20 { // $18 link_to, $19 display_order (0012), $20 video_duration_seconds (0028)
+		t.Fatalf("số tham số = %d, muốn 20", len(args))
 	}
 	if args[16] != nil {
 		t.Errorf("không có ảnh bìa mà cover_image_file_id = %v, muốn NULL", args[16])
@@ -668,9 +668,10 @@ func updateArgs(t *testing.T, k *khoNDGia) []driver.Value {
 	if len(stmts) != 1 {
 		t.Fatalf("số câu cập nhật = %d, muốn 1", len(stmts))
 	}
-	// $16 cover_image_file_id, $17 link_to, $18 display_order, $19 audio_file_id, $20 audio_duration_seconds
-	if len(stmts[0].args) != 20 {
-		t.Fatalf("số tham số cập nhật = %d, muốn 20", len(stmts[0].args))
+	// $16 cover_image_file_id, $17 link_to, $18 display_order, $19 audio_file_id, $20 audio_duration_seconds,
+	// $21 video_duration_seconds (0028)
+	if len(stmts[0].args) != 21 {
+		t.Fatalf("số tham số cập nhật = %d, muốn 21", len(stmts[0].args))
 	}
 	return stmts[0].args
 }

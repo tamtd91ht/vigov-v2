@@ -72,6 +72,13 @@ type YeuCauGhiNo struct {
 	MauMa        string
 	ThamSo       domain.ThamSoThongBao
 
+	// CitizenOptedOut records the obligation as `dan-da-tat-nhan` instead of `cho-gui`: the citizen
+	// turned Zalo notifications off and this transition is not one of the two still sent (ADR 0091 §4,
+	// domain.NotifiedDespiteOptOut). The ROW IS STILL WRITTEN — it is the evidence that the obligation
+	// arose and why nothing went out. The consumer decides this from the citizen's preference; it is a
+	// bool and not a status so no caller can name `da-gui` (see store.Chen).
+	CitizenOptedOut bool
+
 	// NguoiGay is who caused this obligation to exist. An empty ID becomes the system principal:
 	// rule 6, invariant 6 requires background work to be audited too, with a system principal,
 	// and the producer of a status change is a consumer, not a person. It is deliberately not a
@@ -155,6 +162,9 @@ func (uc *SoThongBao) GhiNo(ctx context.Context, yc YeuCauGhiNo) (KetQuaGhiNo, e
 		ThamSo:       yc.ThamSo,
 		TrangThai:    domain.ChoGui,
 	}
+	if yc.CitizenOptedOut {
+		tb.TrangThai = domain.CitizenOptedOut
+	}
 
 	var moi bool
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
@@ -174,7 +184,7 @@ func (uc *SoThongBao) GhiNo(ctx context.Context, yc YeuCauGhiNo) (KetQuaGhiNo, e
 		// audit ledger that accumulates one per notification becomes a map of who reported what
 		// (rule 6, forbidden #4). The subject already names the record.
 		delta, err := json.Marshal(map[string]any{
-			"moc": yc.Moc, "lan": lan, "kenh": string(yc.Kenh), "trang_thai": string(domain.ChoGui),
+			"moc": yc.Moc, "lan": lan, "kenh": string(yc.Kenh), "trang_thai": string(tb.TrangThai),
 		})
 		if err != nil {
 			return fmt.Errorf("so_thong_bao: mã hoá delta: %w", err)

@@ -54,7 +54,7 @@ func newMergeConsumer(t *testing.T) (*PetitionMergeChangedConsumer, *soGia, *mau
 	templates := &mauGia{ma: maMauThu}
 	var logBuf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&logBuf, nil))
-	return NewPetitionMergeChangedConsumer(ledger, templates, log), ledger, templates, &logBuf
+	return NewPetitionMergeChangedConsumer(ledger, templates, &prefsFake{}, log), ledger, templates, &logBuf
 }
 
 // sampleMerge is a well-formed merge that owes the child's citizen a message.
@@ -247,7 +247,7 @@ func TestMergeLedgerErrorIsWrappedAndRetryable(t *testing.T) {
 
 func TestMergeDeduplication(t *testing.T) {
 	ledger := &dedupLedger{rows: map[string]app.YeuCauGhiNo{}}
-	c := NewPetitionMergeChangedConsumer(ledger, &mauGia{ma: maMauThu}, quietLog())
+	c := NewPetitionMergeChangedConsumer(ledger, &mauGia{ma: maMauThu}, &prefsFake{}, quietLog())
 	ctx := context.Background()
 
 	// 1. The same act, republished under a fresh envelope id — ONE row.
@@ -285,7 +285,7 @@ func TestMergeDeduplication(t *testing.T) {
 	}
 
 	// 4. The status consumer's notice for the same petition, occurrence 1, does NOT collide.
-	status := NewPhieuDoiTrangThai(ledger, &mauGia{ma: maMauThu}, quietLog())
+	status := NewPhieuDoiTrangThai(ledger, &mauGia{ma: maMauThu}, &prefsFake{}, quietLog())
 	if err := status.Nhan(ctx, phongBi(t, tinMau())); err != nil {
 		t.Fatalf("Nhan trạng thái: %v", err)
 	}

@@ -71,7 +71,7 @@ func TestUpdateWritesBannerPairAndClearsAudioOffBroadcasts(t *testing.T) {
 			t.Errorf("câu cập nhật thiếu %q: %s", want, stmt)
 		}
 	}
-	if args := k.lenh[0].args; len(args) != 20 || args[18] != nil || args[19] != nil {
+	if args := k.lenh[0].args; len(args) != 21 || args[18] != nil || args[19] != nil || args[20] != nil {
 		t.Errorf("a tin-tuc row must bind the audio pair as NULL: %v", args)
 	}
 }
@@ -86,7 +86,7 @@ func TestUpdateWritesTheAudioPairOfABroadcast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("cập nhật lỗi: %v", err)
 	}
-	if args := k.lenh[0].args; len(args) != 20 || args[18] != "01JAUDIO" || args[19] != int64(754) {
+	if args := k.lenh[0].args; len(args) != 21 || args[18] != "01JAUDIO" || args[19] != int64(754) {
 		t.Errorf("audio pair bound as %v / %v", args[18], args[19])
 	}
 }

@@ -84,7 +84,7 @@ func dungConsumer(t *testing.T) (*PhieuDoiTrangThai, *soGia, *mauGia, *bytes.Buf
 	mau := &mauGia{ma: maMauThu}
 	var nhatKy bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&nhatKy, nil))
-	return NewPhieuDoiTrangThai(so, mau, log), so, mau, &nhatKy
+	return NewPhieuDoiTrangThai(so, mau, &prefsFake{}, log), so, mau, &nhatKy
 }
 
 // tinMau is a well-formed transition that DOES owe the citizen a message.

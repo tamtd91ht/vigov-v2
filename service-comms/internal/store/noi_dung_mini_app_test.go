@@ -56,6 +56,9 @@ type dongNDMiniApp struct {
 	// Migration 0012's banner pair and audio pair. nil where NULL.
 	linkTo, displayOrder       any
 	audioFileID, audioDuration any
+
+	// Migration 0028. nil where NULL.
+	videoDuration any
 }
 
 func (d dongNDMiniApp) giaTri(cot string) driver.Value {
@@ -114,6 +117,8 @@ func (d dongNDMiniApp) giaTri(cot string) driver.Value {
 		return d.audioFileID
 	case "audio_duration_seconds":
 		return d.audioDuration
+	case "video_duration_seconds":
+		return d.videoDuration
 	default:
 		// LOUD, NOT ZERO. A silent zero here would let a column be added to cotNoiDungMiniApp and
 		// never actually be read by anything, while this suite "passed" and proved nothing about it.
@@ -590,12 +595,12 @@ func TestChenNoiDungBienChuoiRongThanhNull(t *testing.T) {
 	// $1 xã, $2 id, $3 loại, $4 danh mục, $5 tiêu đề, $6 tóm tắt, $7 nội dung, $8 ảnh,
 	// $9 ngày đăng, $10 trạng thái, $11 người tạo, $12 published_at, $13 event_starts_at,
 	// $14 event_ends_at, $15 event_place, $16 video_url, $17 cover_image_file_id, $18 link_to,
-	// $19 display_order.
+	// $19 display_order, $20 video_duration_seconds.
 	args := k.lenh[0].args
-	if len(args) != 19 {
-		t.Fatalf("số tham số = %d, muốn 19", len(args))
+	if len(args) != 20 {
+		t.Fatalf("số tham số = %d, muốn 20", len(args))
 	}
-	for _, i := range []int{3, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18} {
+	for _, i := range []int{3, 5, 6, 7, 11, 12, 13, 14, 15, 16, 17, 18, 19} {
 		if args[i] != nil {
 			t.Errorf("tham số $%d = %v, muốn NULL cho chuỗi rỗng", i+1, args[i])
 		}
@@ -733,7 +738,7 @@ func TestInsertBindsMigration0011ColumnsInPosition(t *testing.T) {
 	}
 	stmt := k.lenh[0]
 	args := stmt.args
-	if len(args) != 19 || args[16] != nil {
+	if len(args) != 20 || args[16] != nil {
 		t.Errorf("$17 cover_image_file_id phải là NULL khi không có ảnh bìa: %v", args)
 	}
 	if got, _ := args[11].(time.Time); !got.Equal(published) {
@@ -783,11 +788,11 @@ func TestUpdateCannotChangeFirstPublishAndWritesEveryTypeColumn(t *testing.T) {
 		t.Errorf("câu cập nhật phải ghi cover_image_file_id = $16: %s", stmt.sql)
 	}
 	// A tin-tuc row: every per-type column, the unset instant, the absent cover, the banner pair and the
-	// audio pair bind as NULL.
-	if len(stmt.args) != 20 {
-		t.Fatalf("số tham số = %d, muốn 20", len(stmt.args))
+	// audio pair and the video length (0028) bind as NULL.
+	if len(stmt.args) != 21 {
+		t.Fatalf("số tham số = %d, muốn 21", len(stmt.args))
 	}
-	for i := 10; i < 20; i++ {
+	for i := 10; i < 21; i++ {
 		if stmt.args[i] != nil {
 			t.Errorf("tham số $%d = %v, muốn NULL", i+1, stmt.args[i])
 		}

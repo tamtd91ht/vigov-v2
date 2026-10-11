@@ -67,7 +67,28 @@ const (
 	// to degrade VISIBLY rather than silently, and folding it into ThatBai would put it in a
 	// retry loop that can never succeed.
 	ChuaCauHinhKenh TrangThaiGui = "chua-cau-hinh-kenh"
+
+	// CitizenOptedOut — THE CITIZEN TURNED ZALO NOTIFICATIONS OFF (migration 0027, ADR 0091 §4). The
+	// obligation row is STILL WRITTEN, born in this state instead of ChoGui, so that "not told because
+	// they chose not to be" stays distinguishable, later, from "never told". Terminal like
+	// ChuaCauHinhKenh: never retried (it is not a failure) and never shown as sent. NOT a send OUTCOME —
+	// KetQuaGui.KiemTra refuses it, because nothing a channel did can produce it.
+	CitizenOptedOut TrangThaiGui = "dan-da-tat-nhan"
 )
+
+// NotifiedDespiteOptOut reports whether a petition reaching this status is told to the citizen EVEN
+// WHEN they turned notifications off (owner, 11/10/2026 — ADR 0091 §4): `khong-tiep-nhan` (not
+// accepted, with the reason) and `chuyen-cap-tren` (passed to a higher level). Both are the moments the
+// commune STOPS handling the matter; a citizen not told does not know where to go next.
+//
+// TWO STATUS CODES OF `petitions` WRITTEN HERE, against the rule the ledger otherwise keeps (`Moc` is
+// opaque to this service): the owner's decision names exactly these two, and they are the ADR 0027
+// values service-petitions/internal/domain/phieu_phan_anh.go declares. A third code would need a new
+// decision, not a new line. Merge/unmerge acts (`gop-phieu`, `tach-phieu`) are NOT here: ADR 0091 open
+// question #1 — the recorder's reading, unconfirmed by the owner, is that they are ordinary messages.
+func NotifiedDespiteOptOut(moc string) bool {
+	return moc == "khong-tiep-nhan" || moc == "chuyen-cap-tren"
+}
 
 // ThamSoThongBao is EXACTLY what leaves this system inside a message, and the list is closed.
 //

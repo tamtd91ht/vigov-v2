@@ -62,14 +62,20 @@ var ErrUnknownMergeKind = errors.New("su_kien: loại gộp/tách phiếu không
 type PetitionMergeChangedConsumer struct {
 	ledger    SoThongBao
 	templates MauTinXa
+	prefs     NotificationPreferences
 	log       *slog.Logger
 }
 
-func NewPetitionMergeChangedConsumer(ledger SoThongBao, templates MauTinXa, log *slog.Logger) *PetitionMergeChangedConsumer {
+// NewPetitionMergeChangedConsumer refuses a nil preference reader, as NewPhieuDoiTrangThai does.
+func NewPetitionMergeChangedConsumer(ledger SoThongBao, templates MauTinXa, prefs NotificationPreferences,
+	log *slog.Logger) *PetitionMergeChangedConsumer {
+	if prefs == nil {
+		panic("comms/event: thiếu kho lựa chọn nhận thông báo — không tôn trọng được việc công dân tắt nhận (ADR 0091 §4)")
+	}
 	if log == nil {
 		log = slog.Default()
 	}
-	return &PetitionMergeChangedConsumer{ledger: ledger, templates: templates, log: log}
+	return &PetitionMergeChangedConsumer{ledger: ledger, templates: templates, prefs: prefs, log: log}
 }
 
 // Nhan is the ONLY way in: core/events.Dispatch refuses an envelope with no commune and puts the
@@ -119,6 +125,14 @@ func (c *PetitionMergeChangedConsumer) handle(ctx context.Context, e events.Enve
 		return fmt.Errorf("su_kien: mẫu tin của xã: %w", err)
 	}
 
+	// The citizen's switch (ADR 0091 §4), after the template for the reason on the status consumer. A
+	// merge/unmerge notice is NOT one of the two closing transitions, so an opted-out citizen's row is
+	// born `dan-da-tat-nhan` — ADR 0091 open #1, the recorder's reading, awaiting the owner.
+	optedOut, err := citizenOptedOut(ctx, c.prefs, msg.GetCitizenId(), msg.GetKind())
+	if err != nil {
+		return err
+	}
+
 	// Idempotency is the ledger's: app.GhiNo builds domain.KhoaLanGui from these fields and a
 	// UNIQUE (tenant_id, khoa_lan_gui) decides. A republication under a fresh envelope id hands
 	// over the same fields and lands on the same row; `occurrence` is what lets a second merge of
@@ -138,6 +152,7 @@ func (c *PetitionMergeChangedConsumer) handle(ctx context.Context, e events.Enve
 			MocNhan:      msg.GetCitizenMessage().GetStatusLabel(),
 			ViecTiepTheo: msg.GetCitizenMessage().GetNextStep(),
 		},
+		CitizenOptedOut: optedOut,
 		// NguoiGay left zero: app.GhiNo records the system principal (rule 6, invariant 6). The
 		// staff member who merged was audited by `petitions`, in the merge's own transaction.
 	}); err != nil {
