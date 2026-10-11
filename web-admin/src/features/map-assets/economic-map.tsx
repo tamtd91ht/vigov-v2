@@ -12,6 +12,7 @@ import type {
 import { useEffect, useRef, useState } from "react";
 
 import { registerPmtilesProtocol } from "@/lib/basemap/protocol";
+import { cn } from "@/lib/cn";
 import { buildBasemapStyle } from "@/lib/basemap/style";
 
 import {
@@ -25,20 +26,21 @@ import {
   CLUSTER_RADIUS,
   HEAT_PAINT,
   HEAT_SOURCE_ID,
+  LABEL_COLOUR,
   LABEL_MIN_ZOOM,
   LAYER_CLUSTER_COUNT,
   LAYER_CLUSTERS,
+  LAYER_HALO,
   LAYER_HEAT,
   LAYER_LABELS,
   LAYER_POINTS,
-  LAYER_SELECTED,
   MAPLIBRE_WORKER_URL,
   SOURCE_ID,
   colourExpression,
   heatCollection,
   insideFrame,
+  pointSizes,
   pointsFilter,
-  selectedFilter,
   visibleCollection,
   type EconomicCollection,
   type HeatPoint,
@@ -80,9 +82,13 @@ export type EconomicMapProps = {
   centreLabel: string;
   /** Grown into the page overlay ("Mở rộng bản đồ"): fill the region instead of the fixed height. */
   expanded?: boolean;
+  /**
+   * "Trình chiếu" (spec 03): bigger pins and labels, no scale bar. The SAME map instance — switching
+   * repaints, it never rebuilds (a rebuild would refit the frame and drop the officer's view).
+   */
+  presentation?: boolean;
   collection: EconomicCollection;
   visible: ReadonlySet<string>;
-  selectedId: string | null;
   /** Fly to a point — honoured ONLY inside the frame (the parent checks too). `seq` makes a repeat fly again. */
   flyTo: FlyRequest | null;
   /**
@@ -101,9 +107,9 @@ export function EconomicMap({
   frame,
   centreLabel,
   expanded = false,
+  presentation = false,
   collection,
   visible,
-  selectedId,
   flyTo,
   heatPoints = null,
   onPointClick,
@@ -116,14 +122,14 @@ export function EconomicMap({
   // Latest callbacks and data for handlers registered once at creation.
   const onPointClickRef = useRef(onPointClick);
   const onLoadErrorRef = useRef(onLoadError);
-  const dataRef = useRef({ collection, visible, selectedId, heatPoints });
+  const dataRef = useRef({ collection, visible, heatPoints, presentation });
   // The saved centre, read when the map loads; a changed frame remounts this component (`key`), so a
   // stale centre cannot survive. The label may change (name corrected) and is pushed by an effect below.
   const centreRef = useRef(centreCollection(frame, centreLabel));
   useEffect(() => {
     onPointClickRef.current = onPointClick;
     onLoadErrorRef.current = onLoadError;
-    dataRef.current = { collection, visible, selectedId, heatPoints };
+    dataRef.current = { collection, visible, heatPoints, presentation };
     centreRef.current = centreCollection(frame, centreLabel);
   });
 
@@ -229,7 +235,8 @@ export function EconomicMap({
             "text-allow-overlap": true,
             "text-ignore-placement": true,
           },
-          paint: { "text-color": "#991b1b", "text-halo-color": "#ffffff", "text-halo-width": 2 },
+          // Navy with a white halo, as the asset labels (spec 08 B) — the red is the dot's, not the name's.
+          paint: { "text-color": LABEL_COLOUR, "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
         });
 
         map.addSource(SOURCE_ID, {
@@ -265,6 +272,16 @@ export function EconomicMap({
           },
           paint: { "text-color": "#ffffff" },
         });
+        // Prototype `AssetMap.tsx:200-251`: a faint halo beneath each pin, the pin, its name from z14.
+        // No selection ring — the prototype has none; the detail panel names the chosen place.
+        const size = pointSizes(d.presentation);
+        map.addLayer({
+          id: LAYER_HALO,
+          type: "circle",
+          source: SOURCE_ID,
+          filter: pointsFilter(d.visible) as unknown as FilterSpecification,
+          paint: { "circle-color": POINT_COLOUR, "circle-radius": size.halo, "circle-opacity": 0.18 },
+        });
         map.addLayer({
           id: LAYER_POINTS,
           type: "circle",
@@ -272,23 +289,11 @@ export function EconomicMap({
           filter: pointsFilter(d.visible) as unknown as FilterSpecification,
           paint: {
             "circle-color": POINT_COLOUR,
-            "circle-radius": 8,
-            "circle-stroke-width": 2,
+            "circle-radius": size.pin,
+            "circle-stroke-width": 1.5,
             "circle-stroke-color": "#ffffff",
             // Unverified drawn LIGHTER (spec §10 `da_xac_minh`); the panel says it in words.
-            "circle-opacity": ["case", ["==", ["get", "verified"], true], 1, 0.45],
-          },
-        });
-        map.addLayer({
-          id: LAYER_SELECTED,
-          type: "circle",
-          source: SOURCE_ID,
-          filter: selectedFilter(d.selectedId) as unknown as FilterSpecification,
-          paint: {
-            "circle-radius": 13,
-            "circle-color": "rgba(0,0,0,0)",
-            "circle-stroke-width": 3,
-            "circle-stroke-color": "#f59e0b",
+            "circle-opacity": ["case", ["==", ["get", "verified"], true], 1, 0.55],
           },
         });
         map.addLayer({
@@ -300,12 +305,12 @@ export function EconomicMap({
           layout: {
             "text-field": ["get", "name"],
             "text-font": ["Noto Sans Regular"],
-            "text-size": 12,
-            "text-offset": [0, 1.1],
+            "text-size": size.label,
+            "text-offset": [0, 1.4],
             "text-anchor": "top",
-            "text-max-width": 10,
+            "text-max-width": 12,
           },
-          paint: { "text-color": "#1f2937", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+          paint: { "text-color": LABEL_COLOUR, "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
         });
 
         map.on("click", LAYER_CLUSTERS, (e: MapLayerMouseEvent) => {
@@ -365,15 +370,23 @@ export function EconomicMap({
     const source = map.getSource(SOURCE_ID) as GeoJSONSource | undefined;
     source?.setData(visibleCollection(collection, visible) as unknown as GeoJSON.FeatureCollection);
     const filter = pointsFilter(visible) as unknown as FilterSpecification;
+    map.setFilter(LAYER_HALO, filter);
     map.setFilter(LAYER_POINTS, filter);
     map.setFilter(LAYER_LABELS, filter);
   }, [ready, collection, visible]);
 
+  // "Trình chiếu" on/off: repaint the sizes in place (the layers were created with the size in effect).
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || map === null) return;
-    map.setFilter(LAYER_SELECTED, selectedFilter(selectedId) as unknown as FilterSpecification);
-  }, [ready, selectedId]);
+    const size = pointSizes(presentation);
+    map.setPaintProperty(LAYER_HALO, "circle-radius", size.halo);
+    map.setPaintProperty(LAYER_POINTS, "circle-radius", size.pin);
+    map.setLayoutProperty(LAYER_LABELS, "text-size", size.label);
+    // The overlay is a different size from the page column.
+    const id = requestAnimationFrame(() => map.resize());
+    return () => cancelAnimationFrame(id);
+  }, [ready, presentation]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -402,13 +415,15 @@ export function EconomicMap({
   return (
     <div
       ref={containerRef}
-      className={
-        expanded
+      className={cn(
+        expanded || presentation
           ? "economic-map min-h-0 w-full flex-1 overflow-hidden"
-          : // Flush inside the workspace frame (prototype `MapWorkspace.tsx`). From lg the frame has a fixed
-            // height and the map takes what the toolbar leaves; stacked below lg, it has its own height.
-            "economic-map h-[60vh] min-h-[360px] w-full overflow-hidden lg:h-auto lg:min-h-0 lg:flex-1"
-      }
+          : // Flush to the column edges (prototype `MapWorkspace.tsx`). From lg the workspace has a fixed
+            // height and the map takes all of it; stacked below lg, it has its own height.
+            "economic-map h-[60vh] min-h-[360px] w-full overflow-hidden lg:h-auto lg:min-h-0 lg:flex-1",
+        // No scale bar in "Trình chiếu" (spec 03). Hidden, not removed: the control is created once with the map.
+        presentation && "[&_.maplibregl-ctrl-scale]:hidden",
+      )}
       data-expanded={expanded ? "" : undefined}
       role="region"
       aria-label="Bản đồ các đối tượng kinh tế của xã"

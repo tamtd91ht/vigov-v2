@@ -1,18 +1,18 @@
 "use client";
 
-import { Download, Layers, List, Map as MapIcon, MapPinned, Maximize2, Plus, RotateCcw, Upload } from "lucide-react";
+import { Download, Layers, List, Map as MapIcon, MapPinned, Maximize2, Minimize2, Plus, RotateCcw, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { useCauHinhXa } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
-import { PageHeader } from "@/components/ui/page-header";
-import { PendingButton } from "@/components/ui/pending-feature";
-import { Segmented } from "@/components/ui/segmented";
 import { SkeletonRows } from "@/components/ui/skeleton";
+import { inertOutside } from "@/features/dashboard/presentation";
 import { OverlayDialog } from "@/features/noi-dung/overlay-dialog";
+import { cn } from "@/lib/cn";
 // vi-name-ok: existing module and exports (rule 12 inv 3) — /phan-anh's own sentences, one copy (rule 9)
 import { HEAT_MAP_EMPTY_TITLE, HEAT_MAP_LOAD_FAILED, HEAT_MAP_LOADING } from "@/features/phan-anh/nhan-phieu";
 import { usePhien } from "@/features/phien/phien-hien-tai";
@@ -47,10 +47,15 @@ import { coQuyen, QUYEN_QUAN_LY_DANH_MUC, QUYEN_XEM_PHAN_ANH } from "@/lib/quyen
 import { AssetDialog, type AssetDialogMode } from "./asset-dialog";
 import { DeleteAssetDialog, DetailPanel } from "./detail-panel";
 import { EconomicMap, type FlyRequest } from "./economic-map";
-import { MapExpandToggle } from "./map-expand";
+import { FLOATING_BUTTON, MapExpandToggle } from "./map-expand";
 import { FrameForm, ResetFrameDialog } from "./frame-form";
 import {
   ADD_BUTTON,
+  GROUP_SELECT_LABEL,
+  PRESENTATION_BUTTON,
+  PRESENTATION_KPIS,
+  PRESENTATION_TITLE,
+  SUMMARY_LOADING,
   ASSET_UPDATE_PERMISSION,
   FRAME_ASK_ADMIN,
   FRAME_CHANGE_BUTTON,
@@ -67,7 +72,6 @@ import {
   NO_GROUPS,
   NO_GROUPS_ASK_ADMIN,
   OUTSIDE_FRAME,
-  PAGE_SUBTITLE,
   PAGE_TITLE,
   SEED_DEFAULTS_BUTTON,
   VIEW_MAP,
@@ -157,7 +161,11 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
   const [detail, setDetail] = useState<KetQua<comms_mapAssetOut> | "loading" | null>(null);
   const [detailFields, setDetailFields] = useState<readonly comms_mapFieldSchemaOut[]>([]);
   const [flyTo, setFlyTo] = useState<FlyRequest | null>(null);
-  const [notice, setNotice] = useState("");
+  // "Trình chiếu" (spec 03): the whole screen as a full-window overlay for a meeting room. A page
+  // state, not the Fullscreen API and not in the URL — the same reasoning as Tổng quan's mode
+  // (`features/dashboard/presentation.tsx`).
+  const [presenting, setPresenting] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [actionError, setActionError] = useState("");
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<Dialog | null>(null);
@@ -283,12 +291,15 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
   const activeTypes = typeItems.filter((t) => t.active);
   const currentGroup = activeTypes.some((t) => t.code === chosenGroup) ? chosenGroup : (activeTypes[0]?.code ?? "");
   const mapAvailable = frame !== null && basemapAvailable && !mapFailed;
+  // "Trình chiếu" always shows the map, even from Sổ địa điểm (spec 03); leaving it returns to that view.
+  const mapShown = view === "map" || presenting;
   // Expanded only while a map is actually on screen: switching to Sổ địa điểm, or losing the map,
-  // returns to the normal layout by itself — derived, so it cannot get stuck open.
-  const mapExpanded = mapExpandedState && view === "map" && mapAvailable;
+  // returns to the normal layout by itself — derived, so it cannot get stuck open. "Trình chiếu" is
+  // already full-window, so expanding means nothing there.
+  const mapExpanded = mapExpandedState && mapShown && mapAvailable && !presenting;
 
   // The heat layer is LIVE only while it can be drawn: no map → no citizen coordinate is asked for.
-  const heatLive = heatOn && canReadFeedback && mapAvailable && view === "map";
+  const heatLive = heatOn && canReadFeedback && mapAvailable && mapShown;
   useEffect(() => {
     if (!heatLive) return;
     let gone = false;
@@ -322,6 +333,30 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
     },
   };
 
+  // "Trình chiếu": lock the page behind, make the shell (sidebar, topbar) inert so Tab stays in the
+  // overlay, Esc leaves — unless a dialog or popover owns Esc first. Focus stays on the toggle: it is
+  // the same element in both states (the header keeps its position in the tree).
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!presenting || root === null) return;
+    const overflowBefore = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const madeInert = inertOutside(root);
+    if (!root.contains(document.activeElement)) root.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"], dialog[open]') !== null) return;
+      setPresenting(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = overflowBefore;
+      for (const el of madeInert) el.removeAttribute("inert");
+      root.querySelector<HTMLElement>("[data-map-presentation-toggle]")?.focus({ preventScroll: true });
+    };
+  }, [presenting]);
+
   useEffect(() => {
     if (!mapExpanded) return;
     // The page behind the overlay must not scroll under it.
@@ -352,7 +387,6 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
       setSelectedId(id);
       setDetail("loading");
       setActionError("");
-      setNotice("");
       const r = await getMapAsset(id);
       if (seq !== detailSeq.current) return;
       setDetail(r);
@@ -360,7 +394,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
       listMapFields(r.duLieu.asset_type_code).then((f) => seq === detailSeq.current && setDetailFields(f.ok ? f.duLieu.items : []));
       if (!fly) return;
       // Never move the camera outside the frame (security review 04/10/2026, #2).
-      if (frame === null || !insideFrame(frame.bounds, r.duLieu.lng, r.duLieu.lat)) return setNotice(OUTSIDE_FRAME);
+      if (frame === null || !insideFrame(frame.bounds, r.duLieu.lng, r.duLieu.lat)) return void toast.info(OUTSIDE_FRAME);
       setFlyTo((prev) => ({ lng: r.duLieu.lng, lat: r.duLieu.lat, seq: (prev?.seq ?? 0) + 1 }));
     },
     [frame],
@@ -387,7 +421,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
     setBusy(false);
     if (!r.ok) return setActionError(r.thongBao);
     setDetail(r);
-    setNotice(r.duLieu.verified ? `Đã xác minh ${r.duLieu.name}.` : `Đã bỏ xác minh ${r.duLieu.name}.`);
+    toast.success(r.duLieu.verified ? `Đã xác minh ${r.duLieu.name}.` : `Đã bỏ xác minh ${r.duLieu.name}.`);
     setReload((n) => n + 1);
   }
 
@@ -397,7 +431,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
     const r = await seedMapAssetTypeDefaults();
     setBusy(false);
     if (!r.ok) return setActionError(r.thongBao);
-    setNotice(`Đã nạp ${r.duLieu.created_count} nhóm tài nguyên mặc định.`);
+    toast.success(`Đã nạp ${r.duLieu.created_count} nhóm tài nguyên mặc định.`);
     setTypesReload((n) => n + 1);
   }
 
@@ -414,62 +448,157 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
 
   /* ---- parts ---------------------------------------------------------------------------------- */
 
-  const headerActions = (
-    <>
-      {activeTypes.length > 0 && (
-        <span className="inline-flex min-w-0">
-          <label htmlFor="header-group" className="an-thi-giac">
-            Nhóm tài nguyên đang thao tác
-          </label>
-          <select
-            id="header-group"
-            className="h-[34px] max-w-56 min-w-0 rounded-control border border-line-strong bg-surface px-2.5 text-[13px]"
-            value={currentGroup}
-            onChange={(e) => setChosenGroup(e.target.value)}
-          >
-            {activeTypes.map((t) => (
-              <option key={t.id} value={t.code}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </span>
-      )}
-      <PendingButton info={pendingPart("Mẫu Excel")} side="bottom" size="sm" icon={<Download aria-hidden="true" />} />
-      {canUpdate && <PendingButton info={pendingPart("Nhập Excel")} side="bottom" size="sm" icon={<Upload aria-hidden="true" />} />}
-      {canUpdate && activeTypes.length > 0 && (
+  /** The reason a header button is disabled — the `PHAN_CHUA_DUNG` sentence (one copy, rule 9). */
+  const excelButton = (name: "Mẫu Excel" | "Nhập Excel", Icon: typeof Download) => {
+    const reason = pendingPart(name).viSao;
+    // Spec 08 A4: an outline button, DISABLED (no backend route), the reason in `title` — no "?".
+    // The wrapper carries the title too: a disabled button takes no pointer events, so its own
+    // `title` never shows on hover.
+    return (
+      <span title={reason} className="inline-flex">
         <Button
           type="button"
-          variant="primary"
+          variant="outline"
           size="sm"
-          icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={() =>
-            setDialog({
-              kind: "asset",
-              mode: { kind: "create", assetTypeCode: currentGroup, idempotencyKey: crypto.randomUUID() },
-            })
-          }
+          disabled
+          title={reason}
+          icon={<Icon aria-hidden="true" focusable="false" className="size-3.5" />}
         >
-          {ADD_BUTTON}
+          {name}
         </Button>
-      )}
-      {/* The map answers "what is where"; the register answers "what does the commune manage" — the
-          question data-entry staff ask more often (prototype `MapWorkspace.tsx`). */}
-      <Segmented
-        legend="Chế độ xem"
-        name="map-view"
-        mode="buttons"
-        value={view}
-        onChange={(v) => setView(v === "register" ? "register" : "map")}
-        options={[
-          { value: "map", label: VIEW_MAP, icon: MapIcon },
-          { value: "register", label: VIEW_REGISTER, icon: List },
-        ]}
-      />
-      <PendingButton info={pendingPart("Trình chiếu")} side="bottom" size="sm" icon={<Maximize2 aria-hidden="true" />} />
-    </>
+      </span>
+    );
+  };
+
+  const summaryText =
+    summary === null ? SUMMARY_LOADING : summary.ok ? summaryLine(summary.duLieu.total, summary.duLieu.verified_ratio) : summary.thongBao;
+
+  // Prototype `MapWorkspace.tsx` / spec 03: ONE white bar — title and figures on the left, the toolbar on
+  // the right of the same row. In "Trình chiếu" only the 26px title and the toggle remain. The toggle
+  // keeps its position in the tree in both states, so the element that had focus is the one still there.
+  const header = (
+    <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-line bg-white px-5 py-3">
+      <div className="min-w-0">
+        <h1 className={cn("m-0 leading-tight font-bold text-navy", presenting ? "text-[26px]" : "text-[18px]")}>{PAGE_TITLE}</h1>
+        {!presenting && (
+          <p className="m-0 mt-0.5 text-[12px] text-ink-muted" data-summary-line="">
+            {summaryText}
+          </p>
+        )}
+      </div>
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        {!presenting && (
+          <>
+            {/* Also the default group of "Thêm đối tượng". Hidden while the commune has no active group. */}
+            {activeTypes.length > 0 && (
+              <select
+                aria-label={GROUP_SELECT_LABEL}
+                className="h-9 max-w-56 min-w-0 rounded-md border border-line bg-white px-2.5 text-[12.5px] text-ink-900"
+                value={currentGroup}
+                onChange={(e) => setChosenGroup(e.target.value)}
+              >
+                {activeTypes.map((t) => (
+                  <option key={t.id} value={t.code}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {excelButton("Mẫu Excel", Download)}
+            {canUpdate && excelButton("Nhập Excel", Upload)}
+            {canUpdate && activeTypes.length > 0 && (
+              <Button
+                type="button"
+                variant="primary"
+                size="sm"
+                icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
+                onClick={() =>
+                  setDialog({
+                    kind: "asset",
+                    mode: { kind: "create", assetTypeCode: currentGroup, idempotencyKey: crypto.randomUUID() },
+                  })
+                }
+              >
+                {ADD_BUTTON}
+              </Button>
+            )}
+            {/* The map answers "what is where"; the register answers "what does the commune manage" — the
+                question data-entry staff ask more often (prototype `MapWorkspace.tsx`). Toggle buttons with
+                `aria-pressed`, reached and pressed with Tab / Enter / Space like any button. */}
+            <div role="group" aria-label="Chế độ xem" className="flex gap-1 rounded-[10px] border border-line bg-canvas p-1">
+              {(
+                [
+                  ["map", VIEW_MAP, MapIcon],
+                  ["register", VIEW_REGISTER, List],
+                ] as const
+              ).map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={view === key}
+                  onClick={() => setView(key)}
+                  className={cn(
+                    "flex cursor-pointer items-center gap-1.5 rounded-[8px] border-0 px-3 py-1.5 text-[12.5px] font-semibold [font-family:inherit]",
+                    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
+                    view === key ? "bg-white text-navy shadow-card" : "bg-transparent text-ink-muted",
+                  )}
+                >
+                  <Icon aria-hidden="true" focusable="false" className="size-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+        <Button
+          type="button"
+          size="sm"
+          variant={presenting ? "primary" : "outline"}
+          title={PRESENTATION_TITLE}
+          aria-pressed={presenting}
+          data-map-presentation-toggle=""
+          icon={
+            presenting ? (
+              <Minimize2 aria-hidden="true" focusable="false" className="size-4" />
+            ) : (
+              <Maximize2 aria-hidden="true" focusable="false" className="size-4" />
+            )
+          }
+          onClick={() => setPresenting((v) => !v)}
+        >
+          {PRESENTATION_BUTTON}
+        </Button>
+      </div>
+    </header>
   );
 
+  // "Trình chiếu" KPI row (spec 03). Two figures the summary counts; the other two have no source on the
+  // server, so "—" with the reason — a 0 would be a false figure on a projector in front of leadership.
+  const kpiRow = (
+    <div className="grid shrink-0 grid-cols-2 gap-4 px-6 py-4 md:grid-cols-4">
+      {PRESENTATION_KPIS.map((k) => {
+        const reason = "reason" in k ? k.reason : null;
+        const value =
+          "typeCode" in k && summary !== null && summary.ok ? (counts.get(k.typeCode) ?? 0).toLocaleString("vi-VN") : "—";
+        return (
+          <div
+            key={k.key}
+            data-kpi={k.key}
+            title={reason ?? undefined}
+            className="min-w-0 rounded-[12px] border border-line bg-white px-5 py-4 shadow-card"
+          >
+            <div data-kpi-value="" className="text-[40px] leading-none font-bold tabular-nums text-navy">
+              {value}
+            </div>
+            <div data-kpi-label="" className="mt-1.5 text-[15px] text-ink-muted">
+              {k.label}
+            </div>
+            {reason !== null && <span className="an-thi-giac">{reason}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
   const detailNode =
     detail === null ? null : (
       <DetailPanel
@@ -520,7 +649,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
               titleId="frame-form-inline"
               onSaved={(out) => {
                 adoptFrame(out);
-                setNotice(FRAME_SAVED);
+                toast.success(FRAME_SAVED);
               }}
               onReloaded={adoptFrame}
             />
@@ -530,31 +659,45 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
         </div>
       );
     }
-    // The frame's own controls (ADR 0072; the prototype has none): one slim row above the map, with
-    // "Mở rộng bản đồ" at its end — they act on this map, so they sit on it, not in the page header.
-    const toolbar = (
-      <div className="flex min-w-0 flex-wrap items-center gap-2 border-b border-line px-3 py-2">
-        {canAdminLookup && (
-          <Button type="button" variant="secondary" size="sm" icon={<MapPinned aria-hidden="true" />} onClick={() => setDialog({ kind: "frame" })}>
-            {FRAME_CHANGE_BUTTON}
-          </Button>
-        )}
-        {canAdminLookup && frame.source === "commune" && (
-          <Button type="button" variant="secondary" size="sm" icon={<RotateCcw aria-hidden="true" />} onClick={() => setDialog({ kind: "reset" })}>
-            {FRAME_RESET_BUTTON}
-          </Button>
-        )}
-        {mapAvailable && (
-          <span className="ml-auto">
-            <MapExpandToggle expanded={mapExpanded} onToggle={() => setMapExpanded((v) => !v)} controls={MAP_REGION_ID} />
-          </span>
-        )}
-      </div>
-    );
+    // The frame's own controls (ADR 0072; the prototype has none — spec 08 B keeps them): floating on the
+    // map's top-left corner, with the icon-only "Mở rộng bản đồ". Without a map (no basemap, map failed)
+    // the same buttons sit in a plain row above the message. None of them in "Trình chiếu".
+    const frameButtons = (floating: boolean) =>
+      presenting ? null : (
+        <div className={floating ? "absolute top-3 left-3 z-10 flex gap-2" : "flex flex-wrap gap-2 px-4 pt-4"}>
+          {canAdminLookup && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={FLOATING_BUTTON}
+              icon={<MapPinned aria-hidden="true" focusable="false" className="size-3.5" />}
+              onClick={() => setDialog({ kind: "frame" })}
+            >
+              {FRAME_CHANGE_BUTTON}
+            </Button>
+          )}
+          {canAdminLookup && frame.source === "commune" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className={FLOATING_BUTTON}
+              icon={<RotateCcw aria-hidden="true" focusable="false" className="size-3.5" />}
+              onClick={() => setDialog({ kind: "reset" })}
+            >
+              {FRAME_RESET_BUTTON}
+            </Button>
+          )}
+          {floating && (
+            <MapExpandToggle floating expanded={mapExpanded} onToggle={() => setMapExpanded((v) => !v)} controls={MAP_REGION_ID} />
+          )}
+        </div>
+      );
     if (!basemapAvailable || mapFailed) {
       return (
         <>
-          {canAdminLookup && toolbar}
+          {canAdminLookup && frameButtons(false)}
           <div className="p-4">
             {!basemapAvailable ? (
               <Notice tone="neutral" title={BASEMAP_MISSING_SENTENCE}>
@@ -568,22 +711,22 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
       );
     }
     return (
-      <>
-        {toolbar}
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
+        {frameButtons(true)}
         <EconomicMap
           key={frame.bounds.join(",")}
           frame={frame}
           centreLabel={centreLabel}
           expanded={mapExpanded}
+          presentation={presenting}
           collection={collection}
           visible={visible}
-          selectedId={selectedId}
           flyTo={flyTo}
           heatPoints={heatPoints}
           onPointClick={(id) => void openAsset(id, false)}
           onLoadError={() => setMapFailed(true)}
         />
-      </>
+      </div>
     );
   }
 
@@ -633,95 +776,101 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
   }
 
   return (
-    <div className="economic-map-screen flex min-w-0 flex-col gap-4">
-      <PageHeader
-        icon={MapIcon}
-        title={PAGE_TITLE}
-        subtitle={
-          summary !== null && summary.ok ? (
-            <span data-summary-line="">{summaryLine(summary.duLieu.total, summary.duLieu.verified_ratio)}</span>
-          ) : (
-            PAGE_SUBTITLE
-          )
-        }
-        actions={headerActions}
-        className="mb-0"
-      />
+    // Prototype `MapWorkspace.tsx` / spec 03: FULL-BLEED — no page padding (removed on this route only,
+    // `app/ban-do/page.tsx`), no card; from lg the screen is exactly the window under the 4rem topbar, so
+    // the left column scrolls inside and the map runs to the right and bottom edges. Stacked below lg.
+    // "Trình chiếu" turns THIS element into the overlay (same element, so the map is never rebuilt).
+    // `data-map-presentation`, never `data-presentation`: that one switches on Tổng quan's dark tokens.
+    <div
+      ref={rootRef}
+      className={
+        presenting
+          ? // Above the topbar (30) and the expanded map (40), below tooltips and popovers (60).
+            "economic-map-screen fixed inset-0 z-50 flex min-w-0 flex-col bg-canvas outline-none"
+          : "economic-map-screen flex min-w-0 flex-col lg:h-[calc(100vh-4rem)]"
+      }
+      data-map-presentation={presenting ? "" : undefined}
+      tabIndex={presenting ? -1 : undefined}
+    >
+      {header}
+      {presenting && kpiRow}
 
-      {notice !== "" && (
-        <p role="status" className="m-0 text-sm font-medium text-ink-700" data-notice="">
-          {notice}
-        </p>
-      )}
-      {detail === null && actionError !== "" && (
-        <p className="thong-bao-loi m-0" role="alert">
+      {!presenting && detail === null && actionError !== "" && (
+        <p className="thong-bao-loi m-0 px-5 pt-3" role="alert">
           {actionError}
         </p>
       )}
 
-      {types !== null && !types.ok && <ErrorState role="alert" title="Chưa tải được nhóm tài nguyên" message={types.thongBao} />}
-      {types !== null && types.ok && typeItems.length === 0 && (
-        <EmptyState
-          icon={Layers}
-          title={NO_GROUPS}
-          description={canAdminLookup ? undefined : NO_GROUPS_ASK_ADMIN}
-          action={
-            canAdminLookup ? (
-              <Button type="button" variant="primary" disabled={busy} onClick={() => void seedDefaults()}>
-                {SEED_DEFAULTS_BUTTON}
-              </Button>
-            ) : undefined
-          }
-        />
+      {!presenting && types !== null && !types.ok && (
+        <div className="p-4">
+          <ErrorState role="alert" title="Chưa tải được nhóm tài nguyên" message={types.thongBao} />
+        </div>
+      )}
+      {!presenting && types !== null && types.ok && typeItems.length === 0 && (
+        <div className="p-4">
+          <EmptyState
+            icon={Layers}
+            title={NO_GROUPS}
+            description={canAdminLookup ? undefined : NO_GROUPS_ASK_ADMIN}
+            action={
+              canAdminLookup ? (
+                <Button type="button" variant="primary" disabled={busy} onClick={() => void seedDefaults()}>
+                  {SEED_DEFAULTS_BUTTON}
+                </Button>
+              ) : undefined
+            }
+          />
+        </div>
       )}
 
-      {/* Prototype `MapWorkspace.tsx`: ONE workspace — left column (layers · filters · density, divided
-          by rules), the map or the register in the middle, the detail card on the right. Fixed height
-          from lg so the left column scrolls inside and the map fills what is left; stacked below lg. */}
-      <div className="economic-workspace flex min-w-0 flex-col overflow-hidden rounded-xl border border-line bg-surface lg:h-[calc(100dvh-210px)] lg:min-h-[560px] lg:flex-row">
-        <aside
-          className="flex w-full min-w-0 flex-col gap-4 border-b border-line p-4 lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-b-0"
-          aria-label="Lớp và bộ lọc"
-        >
-          <LayerPanel
-            types={typeItems}
-            counts={counts}
-            hidden={hidden}
-            onToggle={(code) =>
-              setHidden((h) => {
-                const next = new Set(h);
-                if (next.has(code)) next.delete(code);
-                else next.add(code);
-                return next;
-              })
-            }
-            onOnly={(code) => setHidden(new Set(typeItems.map((t) => t.code).filter((c) => c !== code)))}
-            onHideAll={() => setHidden(new Set(typeItems.map((t) => t.code)))}
-            onShowAll={() => setHidden(new Set())}
-            centreIsDefault={frame?.source === "default"}
-            heat={heat}
-          />
-          <div className="border-t border-line pt-4">
-            <FilterPanel
-              value={{ search, industryCode: filter.industryCode, residentialUnitId: filter.residentialUnitId, status: filter.status }}
-              units={units}
-              results={results}
-              onSearchChange={setSearch}
-              onChange={(patch) => setFilter((f) => ({ ...f, ...patch }))}
-              onClear={() => {
-                setSearch("");
-                setFilter(NO_FILTER);
-              }}
-              onChooseResult={(row) => {
-                setView("map");
-                void openAsset(row.id, true);
-              }}
+      {/* ONE workspace — left column (layers · filters · density, divided by rules), the map or the
+          register in the middle, the detail panel on the right. */}
+      <div className="economic-workspace flex min-h-0 min-w-0 flex-1 flex-col bg-white lg:flex-row">
+        {!presenting && (
+          <aside
+            className="flex w-full min-w-0 flex-col gap-4 border-b border-line bg-white p-4 lg:w-72 lg:shrink-0 lg:overflow-y-auto lg:border-r lg:border-b-0"
+            aria-label="Lớp và bộ lọc"
+          >
+            <LayerPanel
+              types={typeItems}
+              counts={counts}
+              hidden={hidden}
+              onToggle={(code) =>
+                setHidden((h) => {
+                  const next = new Set(h);
+                  if (next.has(code)) next.delete(code);
+                  else next.add(code);
+                  return next;
+                })
+              }
+              onOnly={(code) => setHidden(new Set(typeItems.map((t) => t.code).filter((c) => c !== code)))}
+              onHideAll={() => setHidden(new Set(typeItems.map((t) => t.code)))}
+              onShowAll={() => setHidden(new Set())}
+              centreIsDefault={frame?.source === "default"}
+              heat={heat}
             />
-          </div>
-          <div className="border-t border-line pt-4">
-            <DensityPending />
-          </div>
-        </aside>
+            <div className="border-t border-line pt-4">
+              <FilterPanel
+                value={{ search, industryCode: filter.industryCode, residentialUnitId: filter.residentialUnitId, status: filter.status }}
+                units={units}
+                results={results}
+                onSearchChange={setSearch}
+                onChange={(patch) => setFilter((f) => ({ ...f, ...patch }))}
+                onClear={() => {
+                  setSearch("");
+                  setFilter(NO_FILTER);
+                }}
+                onChooseResult={(row) => {
+                  setView("map");
+                  void openAsset(row.id, true);
+                }}
+              />
+            </div>
+            <div className="border-t border-line pt-4">
+              <DensityPending />
+            </div>
+          </aside>
+        )}
 
         <div
           id={MAP_REGION_ID}
@@ -742,9 +891,9 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
                 </Notice>
               </div>
             )}
-            {view === "map" ? mapArea() : registerArea()}
+            {mapShown ? mapArea() : registerArea()}
           </div>
-          {detailNode}
+          {!presenting && detailNode}
         </div>
       </div>
 
@@ -758,7 +907,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
           onCancel={() => setDialog(null)}
           onSaved={(saved, created) => {
             setDialog(null);
-            setNotice(created ? `Đã thêm ${saved.name} lên bản đồ.` : `Đã lưu ${saved.name}.`);
+            toast.success(created ? `Đã thêm ${saved.name} lên bản đồ.` : `Đã lưu ${saved.name}.`);
             setReload((n) => n + 1);
             detailSeq.current += 1;
             setSelectedId(saved.id);
@@ -774,7 +923,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
             const name = dialog.asset.name;
             if (selectedId === dialog.asset.id) closeDetail();
             setDialog(null);
-            setNotice(`Đã xoá ${name} khỏi bản đồ.`);
+            toast.success(`Đã xoá ${name} khỏi bản đồ.`);
             setReload((n) => n + 1);
           }}
         />
@@ -791,7 +940,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
             onSaved={(out) => {
               setDialog(null);
               adoptFrame(out);
-              setNotice(FRAME_SAVED);
+              toast.success(FRAME_SAVED);
             }}
             onReloaded={adoptFrame}
           />
@@ -806,7 +955,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
           onDone={(out) => {
             setDialog(null);
             adoptFrame(out);
-            setNotice(out.configured ? FRAME_RESET_DONE : FRAME_RESET_DONE_NO_DEFAULT);
+            toast.success(out.configured ? FRAME_RESET_DONE : FRAME_RESET_DONE_NO_DEFAULT);
           }}
         />
       )}

@@ -40,7 +40,9 @@ export default async function EconomicMapPage() {
       <PhienProvider>
         <div className="khung-trang">
           <DauTrang />
-          <main className="than-trang">
+          {/* `p-0`: this screen is full-bleed (spec 03 — the map runs to the column's edges). On THIS route
+              only; `.than-trang`'s padding is a legacy-layer rule, so the utility wins. */}
+          <main className="than-trang p-0">
             <CongQuyen khoa={ASSET_READ_PERMISSION} cauThieuQuyen={NO_ASSET_READ}>
               <EconomicMapScreen basemapAvailable={basemapAvailable} />
             </CongQuyen>

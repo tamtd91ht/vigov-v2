@@ -3,9 +3,14 @@ import { describe, expect, it } from "vitest";
 import type { comms_mapAssetPointsOut, comms_mapFrameOut } from "@/lib/api/schema.gen";
 
 import {
+  CENTRE_COLOUR,
   GROUP_COLOURS,
   GROUP_SWATCH_CLASS,
   HEAT_PAINT,
+  OTHER_GROUP_COLOUR,
+  colourExpression,
+  groupSwatchClass,
+  pointSizes,
   frameDefaultFromApi,
   frameFromApi,
   frameHintsFromApi,
@@ -135,6 +140,31 @@ describe("layers", () => {
     expect(values).toHaveLength(11);
     expect(new Set(values).size).toBe(11);
     for (const [code, hex] of Object.entries(GROUP_COLOURS)) expect(GROUP_SWATCH_CLASS[code]).toBe(`bg-[${hex}]`);
+  });
+
+  it("the colours are the prototype's (asset-display.ts:18-28) on OUR codes; an unknown group is #8AA2B8", () => {
+    expect(GROUP_COLOURS).toEqual({
+      "doanh-nghiep": "#2FB1F9",
+      "ho-kinh-doanh": "#12B5C9",
+      "hop-tac-xa": "#6E59E8",
+      cho: "#FF7A1A",
+      "truong-hoc": "#86B940",
+      "co-so-y-te": "#E5484D",
+      "di-tich": "#B8860B",
+      "du-lich-lang-nghe": "#DB7093",
+      ocop: "#8B5A2B",
+      "ha-tang": "#43607B",
+      "cong-trinh-dau-tu-cong": "#102B43",
+    });
+    expect(OTHER_GROUP_COLOUR).toBe("#8AA2B8");
+    expect(groupSwatchClass("nhom-rieng-cua-xa")).toBe("bg-[#8AA2B8]");
+    expect(colourExpression().at(-1)).toBe("#8AA2B8");
+    expect(CENTRE_COLOUR).toBe("#E5484D");
+  });
+
+  it("point sizes: pin 6 / halo 10 / label 11, and 8 / 13 / 14 in Trình chiếu (prototype AssetMap.tsx:208-243)", () => {
+    expect(pointSizes(false)).toEqual({ pin: 6, halo: 10, label: 11 });
+    expect(pointSizes(true)).toEqual({ pin: 8, halo: 13, label: 14 });
   });
 });
 

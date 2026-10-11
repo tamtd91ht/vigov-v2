@@ -1,11 +1,12 @@
 "use client";
 
-import { Eye, EyeOff, Flame, Search, X } from "lucide-react";
+import { Eye, EyeOff, Flame, HelpCircle, Search, X } from "lucide-react";
+import type { ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Field } from "@/components/ui/field";
-import { PendingField, PendingMarker } from "@/components/ui/pending-feature";
+import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip } from "@/components/ui/tooltip";
 import { cn } from "@/lib/cn";
 import type { comms_loaiTaiNguyenRa, comms_mapAssetRowOut, identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 
@@ -38,8 +39,50 @@ export type HeatSwitchState = {
   readonly onChange: (on: boolean) => void;
 };
 
-/** Section heading of the left column — the prototype's small uppercase label (`LayerPanel.tsx`). */
-const SECTION_TITLE = "m-0 text-xs font-semibold tracking-wide text-ink-500";
+/** Section heading of the left column — spec 04: `text-ink-muted text-[11.5px] font-bold tracking-wide uppercase`. */
+const SECTION_TITLE = "m-0 text-[11.5px] font-bold tracking-wide uppercase text-ink-muted";
+
+/** Filter label — shadcn `Label` look at 11.5px (spec 04 §2). */
+const FILTER_LABEL = "text-[11.5px] leading-none font-medium text-ink-900";
+
+/** Filter select — spec 04 §2, verbatim classes. */
+const FILTER_SELECT =
+  "mt-1 h-9 w-full rounded-md border border-line bg-white px-2.5 text-[12.5px] text-ink-900 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50";
+
+/**
+ * The "?" of spec 08 B, kept beside a label for a part the server cannot serve yet: a HelpCircle with a
+ * tooltip. A BUTTON, so a keyboard reaches it (the disabled control next to it takes no focus), and its
+ * `aria-label` holds the whole reason — touch and screen readers get no tooltip (`tooltip.tsx`).
+ */
+function HelpHint({ info }: { info: PendingFeatureInfo }) {
+  return (
+    <Tooltip content={info.viSao}>
+      <button
+        type="button"
+        data-help-hint=""
+        aria-label={`${info.ten}: ${info.viSao}`}
+        className="relative inline-grid shrink-0 cursor-help place-items-center border-0 bg-transparent p-0 text-ink-muted/70 before:absolute before:-inset-2 before:content-[''] hover:text-ink-muted focus-visible:outline-2 focus-visible:outline-brand-500"
+      >
+        <HelpCircle aria-hidden="true" focusable="false" className="size-3.5" />
+      </button>
+    </Tooltip>
+  );
+}
+
+/** One filter: label above, control below (spec 04 §2 `Field`). `hint` sits on the label line. */
+function FilterField({ id, label, hint, children }: { id: string; label: string; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-1.5">
+        <label htmlFor={id} className={FILTER_LABEL}>
+          {label}
+        </label>
+        {hint}
+      </div>
+      {children}
+    </div>
+  );
+}
 
 /**
  * "LỚP BẢN ĐỒ" (spec §4.1, prototype `LayerPanel.tsx`): one row per group — swatch, name, count, and
@@ -95,26 +138,26 @@ export function LayerPanel({
           const on = !hidden.has(t.code);
           return (
             <li key={t.id}>
-              <div className={cn("group flex min-w-0 items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-surface-subtle", !on && "opacity-50")}>
+              <div className={cn("group flex min-w-0 items-center gap-2 rounded-[8px] px-2 py-1.5 hover:bg-canvas", !on && "opacity-50")}>
                 <button
                   type="button"
                   aria-pressed={on}
                   data-layer-toggle={t.code}
                   onClick={() => onToggle(t.code)}
                   title={t.label}
-                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left text-[13px] text-ink-900 focus-visible:outline-2 focus-visible:outline-brand-500"
+                  className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 border-0 bg-transparent p-0 text-left text-[12.5px] text-navy focus-visible:outline-2 focus-visible:outline-brand-500"
                 >
                   <span aria-hidden="true" className={cn("inline-block size-2.5 shrink-0 rounded-full", groupSwatchClass(t.code))} />
                   <span className="min-w-0 truncate">{t.label}</span>
                 </button>
-                <span className="shrink-0 text-xs tabular-nums text-ink-500">{counts.get(t.code) ?? 0}</span>
+                <span className="shrink-0 text-[11.5px] tabular-nums text-ink-muted">{counts.get(t.code) ?? 0}</span>
                 <button
                   type="button"
                   data-layer-only={t.code}
                   aria-label={`${ONLY_LAYER_TITLE}: ${t.label}`}
                   title={ONLY_LAYER_TITLE}
                   onClick={() => onOnly(t.code)}
-                  className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[11px] text-brand-700 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-brand-500"
+                  className="shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[10.5px] text-brand opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-brand-500"
                 >
                   {ONLY_LAYER}
                 </button>
@@ -155,13 +198,19 @@ export function LayerPanel({
           {heat.note.text}
         </p>
       )}
-      <p className="m-0 text-xs text-ink-500">{UNVERIFIED_LEGEND}</p>
-      <p className="m-0 flex items-center gap-2 text-xs text-ink-500">
-        <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-full border-2 border-white bg-[#dc2626] ring-2 ring-[#dc2626]/30" />
-        <span className="min-w-0" data-centre-legend="">
-          {centreIsDefault ? CENTRE_LEGEND_DEFAULT : CENTRE_LEGEND}
-        </span>
-      </p>
+      {/* Spec 08 B: the legend under the heat switch, each line with its dot. */}
+      <ul className="m-0 list-none space-y-1 p-0 text-[11px] leading-snug text-ink-muted">
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-full bg-brand opacity-55" />
+          <span className="min-w-0">{UNVERIFIED_LEGEND}</span>
+        </li>
+        <li className="flex items-center gap-2">
+          <span aria-hidden="true" className="inline-block size-2.5 shrink-0 rounded-full bg-[#E5484D] ring-2 ring-[#E5484D]/30" />
+          <span className="min-w-0" data-centre-legend="">
+            {centreIsDefault ? CENTRE_LEGEND_DEFAULT : CENTRE_LEGEND}
+          </span>
+        </li>
+      </ul>
     </section>
   );
 }
@@ -217,7 +266,11 @@ export function FilterPanel({
           </Button>
         )}
       </div>
-      <Field label="Tìm kiếm" hideLabel htmlFor="map-search" icon={Search} grow="auto" className="w-full">
+      <div className="relative">
+        <label htmlFor="map-search" className="an-thi-giac">
+          Tìm kiếm
+        </label>
+        <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-ink-muted" />
         <input
           id="map-search"
           type="search"
@@ -225,8 +278,9 @@ export function FilterPanel({
           value={value.search}
           autoComplete="off"
           onChange={(e) => onSearchChange(e.target.value)}
+          className="h-9 w-full min-w-0 rounded-md border border-line bg-white pr-2.5 pl-8 text-[12.5px] text-ink-900 outline-none placeholder:text-ink-muted focus-visible:ring-[3px] focus-visible:ring-ring/50"
         />
-      </Field>
+      </div>
       {results !== null && (
         <ul className="m-0 flex max-h-56 list-none flex-col gap-0.5 overflow-y-auto rounded-lg border border-line p-1" aria-label="Kết quả tìm kiếm">
           {results.length === 0 && <li className="px-2 py-1.5 text-[13px] text-ink-500">Không tìm thấy địa điểm nào.</li>}
@@ -244,8 +298,8 @@ export function FilterPanel({
           ))}
         </ul>
       )}
-      <Field label="Ngành nghề" htmlFor="map-industry" kind="select" grow="auto" className="w-full">
-        <select id="map-industry" value={value.industryCode} onChange={(e) => onChange({ industryCode: e.target.value })}>
+      <FilterField id="map-industry" label="Ngành nghề">
+        <select id="map-industry" className={FILTER_SELECT} value={value.industryCode} onChange={(e) => onChange({ industryCode: e.target.value })}>
           <option value="">Mọi ngành nghề</option>
           {INDUSTRIES.map((i) => (
             <option key={i.code} value={i.code}>
@@ -253,9 +307,9 @@ export function FilterPanel({
             </option>
           ))}
         </select>
-      </Field>
-      <Field label="Thôn / Tổ dân phố" htmlFor="map-unit" kind="select" grow="auto" className="w-full">
-        <select id="map-unit" value={value.residentialUnitId} onChange={(e) => onChange({ residentialUnitId: e.target.value })}>
+      </FilterField>
+      <FilterField id="map-unit" label="Thôn / Tổ dân phố">
+        <select id="map-unit" className={FILTER_SELECT} value={value.residentialUnitId} onChange={(e) => onChange({ residentialUnitId: e.target.value })}>
           <option value="">Toàn xã</option>
           {units.map((u) => (
             <option key={u.id} value={u.id}>
@@ -263,16 +317,15 @@ export function FilterPanel({
             </option>
           ))}
         </select>
-      </Field>
-      <PendingField
-        info={pendingPart("Quy mô lao động")}
-        id="map-labour"
-        kind="select"
-        placeholder="Mọi quy mô"
-        className="w-full max-w-none min-w-0 flex-none"
-      />
-      <Field label="Trạng thái" htmlFor="map-status" kind="select" grow="auto" className="w-full">
-        <select id="map-status" value={value.status} onChange={(e) => onChange({ status: e.target.value })}>
+      </FilterField>
+      {/* No such filter on the server: disabled, the reason on the "?" beside the label (spec 08 B). */}
+      <FilterField id="map-labour" label="Quy mô lao động" hint={<HelpHint info={pendingPart("Quy mô lao động")} />}>
+        <select id="map-labour" className={FILTER_SELECT} disabled data-pending="">
+          <option>Mọi quy mô</option>
+        </select>
+      </FilterField>
+      <FilterField id="map-status" label="Trạng thái">
+        <select id="map-status" className={FILTER_SELECT} value={value.status} onChange={(e) => onChange({ status: e.target.value })}>
           <option value="">Mọi trạng thái</option>
           {STATUS_OPTIONS.map((s) => (
             <option key={s.value} value={s.value}>
@@ -280,14 +333,14 @@ export function FilterPanel({
             </option>
           ))}
         </select>
-      </Field>
+      </FilterField>
     </section>
   );
 }
 
 /**
- * "MẬT ĐỘ THEO THÔN" (spec §4.3, prototype `HamletDensityPanel.tsx`) — not built (ADR 0072 §4): the
- * prototype's plain heading at its position, with the "?" and one sentence, no figures.
+ * "MẬT ĐỘ THEO THÔN" (spec 04 §3, prototype `HamletDensityPanel.tsx`) — not built (ADR 0072 §4): the
+ * heading at its position with the "?" help hint carrying the reason (spec 08 B), no figures.
  */
 export function DensityPending() {
   return (
@@ -296,9 +349,8 @@ export function DensityPending() {
         <h2 id="density-title" className={SECTION_TITLE}>
           {DENSITY_TITLE}
         </h2>
-        <PendingMarker info={pendingPart("Mật độ theo thôn")} />
+        <HelpHint info={pendingPart("Mật độ theo thôn")} />
       </div>
-      <p className="m-0 text-xs text-ink-500">Số cơ sở và số phản ánh theo từng thôn — tính năng đang phát triển.</p>
     </section>
   );
 }

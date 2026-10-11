@@ -9,7 +9,29 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
 export const ASSET_UPDATE_PERMISSION = "asset.update";
 
 export const PAGE_TITLE = "Bản đồ phát triển kinh tế số";
-export const PAGE_SUBTITLE = "Vị trí doanh nghiệp, hộ kinh doanh, hợp tác xã, trường học, cơ sở y tế và công trình trên địa bàn.";
+/** Under the title until the summary answers (prototype `MapWorkspace.tsx`, spec 03). */
+export const SUMMARY_LOADING = "Đang tải danh mục…";
+/** Accessible name of the header's group select (prototype, verbatim). */
+export const GROUP_SELECT_LABEL = "Nhóm để nhập hoặc tải mẫu";
+
+/* ---- "Trình chiếu" (spec 03) ------------------------------------------------------------------ */
+
+export const PRESENTATION_BUTTON = "Trình chiếu";
+// One copy of the sentence: Tổng quan's toggle carries the same title (spec 01 §2, spec 03).
+export { PRESENTATION_LABEL as PRESENTATION_TITLE } from "@/features/dashboard/presentation";
+/**
+ * The KPI row of the meeting-room mode, in the prototype's order. `typeCode` = counted from the summary's
+ * `by_type`; `reason` = the server has no figure, so the card shows "—" and says why — never a 0.
+ */
+export const PRESENTATION_KPIS: readonly (
+  | { readonly key: string; readonly label: string; readonly typeCode: string }
+  | { readonly key: string; readonly label: string; readonly reason: string }
+)[] = [
+  { key: "doanh-nghiep", label: "Doanh nghiệp", typeCode: "doanh-nghiep" },
+  { key: "ho-kinh-doanh", label: "Hộ kinh doanh", typeCode: "ho-kinh-doanh" },
+  { key: "lao-dong", label: "Lao động", reason: "Chưa có số liệu: máy chủ chưa lưu số lao động của các cơ sở." },
+  { key: "thanh-lap-moi", label: "Thành lập mới năm nay", reason: "Chưa có số liệu: máy chủ chưa lưu năm thành lập của các cơ sở." },
+];
 export const NO_ASSET_READ =
   "Tài khoản của bạn không có quyền xem bản đồ tài nguyên (asset.read), nên phần này không hiển thị. Liên hệ quản trị viên của đơn vị nếu bạn cần quyền này.";
 
@@ -190,8 +212,10 @@ export const MAP_COLLAPSE = "Thu gọn";
 /* ---- parts of the spec that are not built (ADR 0068 §14) -------------------------------------- */
 
 /**
- * Each reason is ADR 0072's (§4 scope, H2). Shown behind the "?" of a disabled control at the spec's
- * position; read by `tools/tien_do_san_pham.py` to count what this screen still lacks.
+ * Each reason is ADR 0072's (§4 scope, H2). Read by `tools/tien_do_san_pham.py` to count what this screen
+ * still lacks (it counts the `ten:` lines of this block; no "?" component is needed for that). Shown as:
+ * the `title` of the disabled Mẫu Excel / Nhập Excel (spec 08 A4: no "?" on those buttons), the help
+ * hint beside "Quy mô lao động" and "Mật độ theo thôn" (spec 08 B), the "?" of the form's place search.
  */
 // vi-name-ok: the product-progress tool (`tools/tien_do_san_pham.py`) counts every `PHAN_CHUA_DUNG*` block by this exact name
 export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
@@ -204,10 +228,6 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
     ten: "Nhập Excel",
     viSao:
       "Nạp hàng loạt đối tượng từ tệp Excel, trùng mã số thuế thì cập nhật. Hoãn theo phạm vi đã chốt (ADR 0072 §4).",
-  },
-  {
-    ten: "Trình chiếu",
-    viSao: "Chế độ phòng họp: bản đồ toàn màn hình, chữ lớn. Chưa dựng.",
   },
   {
     ten: "Quy mô lao động",

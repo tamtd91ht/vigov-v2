@@ -228,7 +228,10 @@ export const CENTRE_SOURCE_ID = "commune-centre";
 export const LAYER_CENTRE_HALO = "commune-centre-halo";
 export const LAYER_CENTRE = "commune-centre-point";
 export const LAYER_CENTRE_LABEL = "commune-centre-label";
-export const CENTRE_COLOUR = "#dc2626";
+/** Prototype's red (`asset-display.ts` "Cơ sở y tế", spec 08 B "Điểm tâm xã"). */
+export const CENTRE_COLOUR = "#E5484D";
+/** Navy of the prototype's pin labels (`AssetMap.tsx:249`) — also the centre's label (spec 08 B). */
+export const LABEL_COLOUR = "#102B43";
 
 /** One Point at the frame centre, `[lng, lat]` (GeoJSON order), labelled with the commune's name. */
 export function centreCollection(frame: FrameValues, label: string) {
@@ -251,31 +254,33 @@ export const LAYER_CLUSTERS = "economic-clusters";
 export const LAYER_CLUSTER_COUNT = "economic-cluster-count";
 export const LAYER_POINTS = "economic-points";
 export const LAYER_LABELS = "economic-labels";
-export const LAYER_SELECTED = "economic-selected-point";
+/** The faint disc under each pin (prototype `AssetMap.tsx:203-212`). Not clickable — the pin is. */
+export const LAYER_HALO = "economic-points-halo";
 export const CLUSTER_MAX_ZOOM = 14;
 export const CLUSTER_RADIUS = 50;
 export const LABEL_MIN_ZOOM = 14;
 
-/** Fallback colour of a group the commune added itself (not one of the eleven). */
-export const OTHER_GROUP_COLOUR = "#64748b";
+/** Fallback colour of a group the commune added itself (not one of the eleven) — the prototype's "no key" grey. */
+export const OTHER_GROUP_COLOUR = "#8AA2B8";
 
 /**
- * One colour per default group (ADR 0072 §3 codes, spec §3 hues). All dark enough to carry a white
- * outline on the light basemap; the legend and the detail panel always show the group's NAME too —
- * colour is never the only signal.
+ * One colour per default group: the prototype's `ASSET_LAYERS` (`vigov-require/apps/admin/src/lib/
+ * asset-display.ts:18-28`, spec 04) mapped onto OUR codes (ADR 0072 §3) — their `enterprise` is our
+ * `doanh-nghiep`, and so on in the same order. The legend and the detail panel always show the group's
+ * NAME too — colour is never the only signal.
  */
 export const GROUP_COLOURS: Readonly<Record<string, string>> = {
-  "doanh-nghiep": "#1d4ed8", // xanh dương
-  "ho-kinh-doanh": "#0f766e", // xanh ngọc
-  "hop-tac-xa": "#7e22ce", // tím
-  cho: "#c2410c", // cam
-  "truong-hoc": "#15803d", // xanh lá
-  "co-so-y-te": "#b91c1c", // đỏ
-  "di-tich": "#a16207", // vàng nâu
-  "du-lich-lang-nghe": "#0284c7", // xanh dương nhạt
-  ocop: "#9f1239", // nâu đỏ
-  "ha-tang": "#1e3a5f", // xanh đen
-  "cong-trinh-dau-tu-cong": "#111827", // đen
+  "doanh-nghiep": "#2FB1F9",
+  "ho-kinh-doanh": "#12B5C9",
+  "hop-tac-xa": "#6E59E8",
+  cho: "#FF7A1A",
+  "truong-hoc": "#86B940",
+  "co-so-y-te": "#E5484D",
+  "di-tich": "#B8860B",
+  "du-lich-lang-nghe": "#DB7093",
+  ocop: "#8B5A2B",
+  "ha-tang": "#43607B",
+  "cong-trinh-dau-tu-cong": "#102B43",
 };
 
 export function groupColour(code: string): string {
@@ -288,21 +293,29 @@ export function groupColour(code: string): string {
  * not allow inline styles. `map-logic.test.ts` holds the two tables equal.
  */
 export const GROUP_SWATCH_CLASS: Readonly<Record<string, string>> = {
-  "doanh-nghiep": "bg-[#1d4ed8]",
-  "ho-kinh-doanh": "bg-[#0f766e]",
-  "hop-tac-xa": "bg-[#7e22ce]",
-  cho: "bg-[#c2410c]",
-  "truong-hoc": "bg-[#15803d]",
-  "co-so-y-te": "bg-[#b91c1c]",
-  "di-tich": "bg-[#a16207]",
-  "du-lich-lang-nghe": "bg-[#0284c7]",
-  ocop: "bg-[#9f1239]",
-  "ha-tang": "bg-[#1e3a5f]",
-  "cong-trinh-dau-tu-cong": "bg-[#111827]",
+  "doanh-nghiep": "bg-[#2FB1F9]",
+  "ho-kinh-doanh": "bg-[#12B5C9]",
+  "hop-tac-xa": "bg-[#6E59E8]",
+  cho: "bg-[#FF7A1A]",
+  "truong-hoc": "bg-[#86B940]",
+  "co-so-y-te": "bg-[#E5484D]",
+  "di-tich": "bg-[#B8860B]",
+  "du-lich-lang-nghe": "bg-[#DB7093]",
+  ocop: "bg-[#8B5A2B]",
+  "ha-tang": "bg-[#43607B]",
+  "cong-trinh-dau-tu-cong": "bg-[#102B43]",
 };
 
 export function groupSwatchClass(code: string): string {
-  return GROUP_SWATCH_CLASS[code] ?? "bg-[#64748b]";
+  return GROUP_SWATCH_CLASS[code] ?? "bg-[#8AA2B8]";
+}
+
+/**
+ * Pin, halo and label sizes (prototype `AssetMap.tsx:208,220,243`): larger in "Trình chiếu" so a room
+ * reads the map off a projector (spec 03).
+ */
+export function pointSizes(presentation: boolean): { readonly pin: number; readonly halo: number; readonly label: number } {
+  return presentation ? { pin: 8, halo: 13, label: 14 } : { pin: 6, halo: 10, label: 11 };
 }
 
 /** MapLibre `match` expression: colour by `asset_type_code`. */
@@ -314,11 +327,6 @@ export function colourExpression(): unknown[] {
 /** Filter of the individual-point and label layers: not a cluster, and a visible group. */
 export function pointsFilter(visible: ReadonlySet<string>): unknown[] {
   return ["all", ["!", ["has", "point_count"]], ["in", ["get", "asset_type_code"], ["literal", [...visible].sort()]]];
-}
-
-/** Filter of the highlight layer: exactly the selected id, or nothing. */
-export function selectedFilter(id: string | null): unknown[] {
-  return ["all", ["!", ["has", "point_count"]], ["==", ["get", "id"], id ?? ""]];
 }
 
 /* ---- "Bản đồ nhiệt phản ánh" (spec 02, owner 11/10/2026) ------------------------------------- */

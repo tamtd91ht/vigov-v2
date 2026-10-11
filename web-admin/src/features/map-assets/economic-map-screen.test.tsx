@@ -12,6 +12,7 @@ import { join } from "node:path";
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { toast } from "sonner";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa"; // vi-name-ok: existing export (rule 12 inv 3)
@@ -23,6 +24,7 @@ import { BASEMAP_FONTS, BASEMAP_MISSING_SENTENCE } from "@/lib/basemap/assets";
 import { EconomicMapScreen } from "./economic-map-screen";
 import { RADIUS_ERROR } from "./frame-form";
 import {
+  ADD_BUTTON,
   CENTRE_LEGEND,
   CENTRE_LEGEND_DEFAULT,
   CLEAR_FILTERS,
@@ -50,8 +52,12 @@ import {
   NOTICE_RELOADED,
   NO_GROUPS,
   OUTSIDE_FRAME,
+  PHAN_CHUA_DUNG,
+  PRESENTATION_BUTTON,
+  PRESENTATION_TITLE,
   SEED_DEFAULTS_BUTTON,
   noticeOutdated,
+  pendingPart,
 } from "./labels";
 import {
   CENTRE_SOURCE_ID,
@@ -59,11 +65,14 @@ import {
   LAYER_CENTRE,
   LAYER_CENTRE_LABEL,
   LAYER_CLUSTERS,
+  LAYER_HALO,
   LAYER_HEAT,
   LAYER_LABELS,
   LAYER_POINTS,
   SOURCE_ID,
 } from "./map-logic";
+
+vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
 /* ---- fake MapLibre ------------------------------------------------------------------------------ */
 
@@ -130,6 +139,10 @@ const ml = vi.hoisted(() => {
     }
     setLayoutProperty(id: string, p: string, v: unknown) {
       this.layout.push([id, p, v]);
+    }
+    paint: [string, string, unknown][] = [];
+    setPaintProperty(id: string, p: string, v: unknown) {
+      this.paint.push([id, p, v]);
     }
     addSource(id: string, spec: Record<string, unknown>) {
       this.sources.set(id, new FakeSource(spec));
@@ -297,7 +310,11 @@ function serve({ permissions, frame = FRAME_SET, frameStatus = 200, types = TYPE
         return frameStatus === 200 ? json(200, { ...HINTS, ...f }) : json(frameStatus, { code: "x", message: "Máy chủ lỗi." });
       }
       if (path === "/api/v1/map-asset-summary")
-        return json(200, { total: 2, verified: 1, verified_ratio: 0.5, by_type: [{ asset_type_code: "cho", count: 1, verified: 0 }] });
+        return json(200, { total: 2, verified: 1, verified_ratio: 0.5, by_type: [
+          { asset_type_code: "doanh-nghiep", count: 4, verified: 1 },
+          { asset_type_code: "ho-kinh-doanh", count: 3, verified: 0 },
+          { asset_type_code: "cho", count: 1, verified: 0 },
+        ] });
       if (path === "/api/v1/residential-units") return json(200, { items: [] });
       if (path.startsWith("/api/v1/citizen-report-points")) {
         const r = heatPoints ?? { status: 200, body: HEAT_POINTS };
@@ -325,6 +342,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   ml.FakeMap.instances = [];
+  vi.mocked(toast.success).mockClear();
+  vi.mocked(toast.info).mockClear();
 });
 
 afterEach(() => {
@@ -426,6 +445,7 @@ describe("Mở rộng bản đồ / Thu gọn", () => {
     expect(region().hasAttribute("data-map-expanded")).toBe(false);
     const expand = button(MAP_EXPAND)!;
     expect(expand.getAttribute("aria-pressed")).toBe("false");
+    expect(expand.textContent).toBe("");
     expect(expand.getAttribute("aria-controls")).toBe("economic-map-region");
 
     await act(async () => expand.click());
@@ -494,7 +514,7 @@ describe("the map — created once, bounded in the constructor, removed on unmou
     expect(map.removed).toBe(true);
   });
 
-  it("one clustered GeoJSON source, points as [lng, lat], the centre landmark first, then the five asset layers", async () => {
+  it("one clustered GeoJSON source, points as [lng, lat], the centre landmark first, then the five asset layers (no selection ring)", async () => {
     await mount({ permissions: ["asset.read"] });
     const map = await load();
     const src = map.getSource(SOURCE_ID)!;
@@ -511,8 +531,8 @@ describe("the map — created once, bounded in the constructor, removed on unmou
       "commune-centre-label",
       "economic-clusters",
       "economic-cluster-count",
+      "economic-points-halo",
       "economic-points",
-      "economic-selected-point",
       "economic-labels",
     ]);
   });
@@ -764,7 +784,7 @@ describe("search never moves the camera outside the frame (security review #2)",
     expect(result).toBeDefined();
     await act(async () => result!.click());
     await settle();
-    expect(text()).toContain(OUTSIDE_FRAME);
+    expect(toast.info).toHaveBeenCalledWith(OUTSIDE_FRAME);
     expect(map.flights).toEqual([]);
   });
 });
@@ -806,20 +826,233 @@ describe("add button follows asset.update", () => {
     expect(picker.opts.attributionControl).toEqual({ compact: true });
   });
 
-  it("header, in the prototype's order: Mẫu Excel · Nhập Excel · Thêm đối tượng · Bản đồ / Sổ địa điểm · Trình chiếu", async () => {
+  it("header, in the prototype's order: group select · Mẫu Excel · Nhập Excel · Thêm đối tượng · Bản đồ / Sổ địa điểm · Trình chiếu", async () => {
     await mount({ permissions: ["asset.read", "asset.update"] });
     const header = host!.querySelector("header")!;
-    const labels = Array.from(header.querySelectorAll("button"))
-      .map((b) => b.textContent ?? "")
-      .filter((t) => t !== "" && t !== "?");
-    expect(labels).toEqual(["Mẫu Excel", "Nhập Excel", "Thêm đối tượng", "Bản đồ", "Sổ địa điểm", "Trình chiếu"]);
+    expect(header.className).toContain("border-b");
+    expect(header.className).toContain("px-5");
+    expect(header.className).toContain("py-3");
+    const h1 = header.querySelector("h1")!;
+    expect(h1.className).toContain("text-[18px]");
+    expect(h1.className).toContain("text-navy");
+    expect(header.querySelector("[data-summary-line]")!.textContent).toBe("2 đối tượng · 50% đã xác minh");
+    const controls = Array.from(header.querySelectorAll("select, button")).map((el) =>
+      el.tagName === "SELECT" ? `select:${el.getAttribute("aria-label")}` : (el.textContent ?? ""),
+    );
+    expect(controls).toEqual([
+      "select:Nhóm để nhập hoặc tải mẫu",
+      "Mẫu Excel",
+      "Nhập Excel",
+      ADD_BUTTON,
+      "Bản đồ",
+      "Sổ địa điểm",
+      PRESENTATION_BUTTON,
+    ]);
+  });
+
+  it("the summary line says it is loading until the summary answers", async () => {
+    serve({ permissions: ["asset.read"] });
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    act(() =>
+      root!.render(
+        <CauHinhXaProvider giaTri={{ displayName: "Xã Thăng Bình", parentAuthority: "", logoUrl: "", webAdminBannerUrl: "" }}>
+          <PhienProvider>
+            <EconomicMapScreen basemapAvailable />
+          </PhienProvider>
+        </CauHinhXaProvider>,
+      ),
+    );
+    expect(host.querySelector("header p")!.textContent).toBe("Đang tải danh mục…");
+    await settle();
+  });
+
+  it("Mẫu Excel / Nhập Excel: outline, DISABLED, reason in title, and NO '?' marker (spec 08 A4)", async () => {
+    await mount({ permissions: ["asset.read", "asset.update"] });
+    const header = host!.querySelector("header")!;
+    expect(header.querySelector("[data-pending-marker]")).toBeNull();
+    for (const name of ["Mẫu Excel", "Nhập Excel"]) {
+      const b = button(name)!;
+      expect(b.disabled).toBe(true);
+      expect(b.title).toBe(pendingPart(name).viSao);
+      // The disabled button takes no pointer events, so the wrapper carries the title for the hover too.
+      expect(b.parentElement!.getAttribute("title")).toBe(pendingPart(name).viSao);
+    }
   });
 
   it("DENIED: asset.read only → Mẫu Excel stays, Nhập Excel is not offered", async () => {
     await mount({ permissions: ["asset.read"] });
-    const header = host!.querySelector("header")!;
-    expect(header.querySelector(`[aria-label="${pendingMarkerLabel("Mẫu Excel")}"]`)).not.toBeNull();
-    expect(header.querySelector(`[aria-label="${pendingMarkerLabel("Nhập Excel")}"]`)).toBeNull();
+    expect(button("Mẫu Excel")).toBeDefined();
+    expect(button("Nhập Excel")).toBeUndefined();
+  });
+
+  it("segmented Bản đồ | Sổ địa điểm: the prototype's shell and item classes, aria-pressed follows the view", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const map = button("Bản đồ")!;
+    const reg = button("Sổ địa điểm")!;
+    const shell = map.parentElement!;
+    for (const c of ["rounded-[10px]", "border", "border-line", "bg-canvas", "p-1", "flex", "gap-1"]) expect(shell.className.split(" ")).toContain(c);
+    expect(map.getAttribute("aria-pressed")).toBe("true");
+    for (const c of ["bg-white", "text-navy", "shadow-card", "rounded-[8px]", "text-[12.5px]", "font-semibold"]) expect(map.className.split(" ")).toContain(c);
+    expect(reg.className.split(" ")).toContain("text-ink-muted");
+    await act(async () => reg.click());
+    await settle();
+    expect(reg.getAttribute("aria-pressed")).toBe("true");
+    expect(reg.className.split(" ")).toContain("bg-white");
+    expect(button("Bản đồ")!.className.split(" ")).toContain("text-ink-muted");
+  });
+});
+
+describe("Trình chiếu — the meeting-room mode (spec 03)", () => {
+  const overlay = () => host!.querySelector<HTMLElement>("[data-map-presentation]");
+
+  it("no longer an unbuilt part: no PHAN_CHUA_DUNG entry", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.ten === "Trình chiếu")).toBe(false);
+  });
+
+  it("opens a fixed overlay: H1 26px and the button only, 4 KPI cards (2 from by_type, 2 '—' with a reason), no aside, no scale bar, big pins; Esc closes", async () => {
+    await mount({ permissions: ["asset.read", "asset.update", "admin.lookup"] });
+    const map = await load();
+    const toggle = button(PRESENTATION_BUTTON)!;
+    expect(toggle.title).toBe(PRESENTATION_TITLE);
+    expect(toggle.getAttribute("aria-pressed")).toBe("false");
+    expect(overlay()).toBeNull();
+
+    await act(async () => toggle.click());
+    await settle();
+    const o = overlay()!;
+    for (const c of ["fixed", "inset-0", "z-50", "bg-canvas"]) expect(o.className.split(" ")).toContain(c);
+    expect(document.body.style.overflow).toBe("hidden");
+    const header = o.querySelector("header")!;
+    expect(header.querySelector("h1")!.className).toContain("text-[26px]");
+    expect(Array.from(header.querySelectorAll("button, select")).map((b) => b.textContent)).toEqual([PRESENTATION_BUTTON]);
+    expect(header.querySelector("[data-summary-line]")).toBeNull();
+    expect(button(PRESENTATION_BUTTON)!.getAttribute("aria-pressed")).toBe("true");
+    // The button that was pressed keeps focus (the same element in both states).
+    expect(document.activeElement === toggle || document.activeElement === o).toBe(true);
+
+    const cards = Array.from(o.querySelectorAll<HTMLElement>("[data-kpi]"));
+    expect(cards.map((c) => c.dataset.kpi)).toEqual(["doanh-nghiep", "ho-kinh-doanh", "lao-dong", "thanh-lap-moi"]);
+    const value = (c: HTMLElement) => c.querySelector("[data-kpi-value]")!;
+    expect(cards.map((c) => value(c).textContent)).toEqual(["4", "3", "—", "—"]);
+    expect(cards.map((c) => c.querySelector("[data-kpi-label]")!.textContent)).toEqual([
+      "Doanh nghiệp",
+      "Hộ kinh doanh",
+      "Lao động",
+      "Thành lập mới năm nay",
+    ]);
+    // "—" is never a fake 0: the reason travels with it (title + text for a screen reader).
+    for (const c of cards.slice(2)) {
+      expect(c.title).not.toBe("");
+      expect(c.textContent).toContain(c.title);
+    }
+    expect(cards[0]!.title).toBe("");
+    expect(value(cards[0]!).className).toContain("text-[40px]");
+
+    expect(o.querySelector("aside")).toBeNull();
+    expect(button(FRAME_CHANGE_BUTTON)).toBeUndefined();
+    expect(button(MAP_EXPAND)).toBeUndefined();
+    // Same map, no rebuild; the scale bar is hidden and the pins grow.
+    expect(ml.FakeMap.instances).toHaveLength(1);
+    expect(host!.querySelector<HTMLElement>('[data-testid="economic-map"]')!.className).toContain("[&_.maplibregl-ctrl-scale]:hidden");
+    expect(map.paint).toContainEqual([LAYER_POINTS, "circle-radius", 8]);
+    expect(map.paint).toContainEqual([LAYER_HALO, "circle-radius", 13]);
+    expect(map.layout).toContainEqual([LAYER_LABELS, "text-size", 14]);
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    await settle();
+    expect(overlay()).toBeNull();
+    expect(document.body.style.overflow).toBe("");
+    expect(host!.querySelector("aside")).not.toBeNull();
+    expect(map.paint).toContainEqual([LAYER_POINTS, "circle-radius", 6]);
+    expect(map.layout).toContainEqual([LAYER_LABELS, "text-size", 11]);
+  });
+
+  it("the map is shown even when Sổ địa điểm was open; leaving goes back to the register", async () => {
+    await mount({ permissions: ["asset.read"] });
+    await act(async () => button("Sổ địa điểm")!.click());
+    await settle();
+    expect(host!.querySelector('[data-testid="economic-map"]')).toBeNull();
+    await act(async () => button(PRESENTATION_BUTTON)!.click());
+    await settle();
+    expect(host!.querySelector('[data-testid="economic-map"]')).not.toBeNull();
+    await act(async () => button(PRESENTATION_BUTTON)!.click());
+    await settle();
+    expect(host!.querySelector('[data-testid="economic-map"]')).toBeNull();
+    expect(button("Sổ địa điểm")!.getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+describe("left column — prototype look (spec 04)", () => {
+  it("section titles are 11.5px bold uppercase muted", async () => {
+    await mount({ permissions: ["asset.read"] });
+    for (const id of ["layers-title", "filters-title", "density-title"]) {
+      const h = host!.querySelector(`#${id}`)!;
+      for (const c of ["text-[11.5px]", "font-bold", "uppercase", "tracking-wide", "text-ink-muted"]) expect(h.className.split(" ")).toContain(c);
+    }
+  });
+
+  it("filters: 11.5px labels, h-9 selects, the search box with its placeholder", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const search = host!.querySelector<HTMLInputElement>("#map-search")!;
+    expect(search.placeholder).toBe("Tên, địa chỉ, mã số thuế…");
+    expect(search.className).toContain("pl-8");
+    for (const id of ["map-industry", "map-unit", "map-status"]) {
+      const sel = host!.querySelector<HTMLSelectElement>(`#${id}`)!;
+      expect(sel.className.split(" ")).toContain("h-9");
+      expect(sel.className.split(" ")).toContain("text-[12.5px]");
+      expect(host!.querySelector(`label[for="${id}"]`)!.className).toContain("text-[11.5px]");
+    }
+  });
+
+  it("Quy mô lao động stays disabled with a help hint; Mật độ theo thôn carries the hint, not the 'đang phát triển' sentence", async () => {
+    await mount({ permissions: ["asset.read"] });
+    expect(host!.querySelector<HTMLSelectElement>("#map-labour")!.disabled).toBe(true);
+    const hints = Array.from(host!.querySelectorAll<HTMLElement>("[data-help-hint]"));
+    expect(hints.map((h) => h.getAttribute("aria-label"))).toEqual([
+      `Quy mô lao động: ${pendingPart("Quy mô lao động").viSao}`,
+      `Mật độ theo thôn: ${pendingPart("Mật độ theo thôn").viSao}`,
+    ]);
+    expect(text()).not.toContain("tính năng đang phát triển");
+    expect(host!.querySelector("aside [data-pending-marker]")).toBeNull();
+  });
+});
+
+describe("points, halo and labels — prototype paint (AssetMap.tsx:200-251)", () => {
+  it("pins r6, white 1.5 stroke, unverified .55; halo r10 .18 beneath; labels from z14, 11px navy with a white halo; centre #E5484D", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const map = await load();
+    const layer = (id: string) => map.layers.find((l) => l.id === id)!;
+    expect(layer(LAYER_POINTS).paint).toMatchObject({
+      "circle-radius": 6,
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": "#ffffff",
+      "circle-opacity": ["case", ["==", ["get", "verified"], true], 1, 0.55],
+    });
+    expect(layer(LAYER_HALO)).toMatchObject({ type: "circle", source: SOURCE_ID, paint: { "circle-radius": 10, "circle-opacity": 0.18 } });
+    expect((layer(LAYER_HALO).paint as Record<string, unknown>)["circle-color"]).toEqual((layer(LAYER_POINTS).paint as Record<string, unknown>)["circle-color"]);
+    expect(layer(LAYER_LABELS)).toMatchObject({
+      minzoom: 14,
+      layout: { "text-size": 11, "text-offset": [0, 1.4], "text-max-width": 12 },
+      paint: { "text-color": "#102B43", "text-halo-color": "#ffffff", "text-halo-width": 1.4 },
+    });
+    expect((layer(LAYER_CENTRE).paint as Record<string, unknown>)["circle-color"]).toBe("#E5484D");
+    expect(layer(LAYER_CENTRE_LABEL).paint).toMatchObject({ "text-color": "#102B43", "text-halo-color": "#ffffff", "text-halo-width": 1.4 });
+  });
+
+  it("frame buttons float on the map, top-left, with the icon-only Mở rộng bản đồ", async () => {
+    await mount({ permissions: ["asset.read", "admin.lookup"] });
+    await load();
+    const group = button(FRAME_CHANGE_BUTTON)!.parentElement!;
+    for (const c of ["absolute", "top-3", "left-3", "z-10", "flex", "gap-2"]) expect(group.className.split(" ")).toContain(c);
+    const expand = button(MAP_EXPAND)!;
+    expect(expand.parentElement).toBe(group);
+    expect(expand.textContent).toBe("");
+    expect(expand.title).toBe(MAP_EXPAND);
+    expect(button(FRAME_CHANGE_BUTTON)!.className).toContain("shadow-card");
   });
 });
 
@@ -936,7 +1169,7 @@ describe("frame form — source, hints, limits", () => {
     expect(writes()).toEqual([
       { path: "/api/v1/map-frame", method: "PUT", body: { center_lat: 15.7, center_lng: 108.35, radius_km: 45, notice_version: "2026-10-04.1" } },
     ]);
-    expect(text()).toContain(FRAME_SAVED);
+    expect(toast.success).toHaveBeenCalledWith(FRAME_SAVED);
   });
 });
 
@@ -959,7 +1192,7 @@ describe("frame change goes through the legal notice (K4)", () => {
     expect(writes()).toHaveLength(1);
     expect((writes()[0]!.body as { notice_version: string }).notice_version).toBe("2026-10-04.1");
     expect(confirmStep()).toBeNull();
-    expect(text()).toContain(FRAME_SAVED);
+    expect(toast.success).toHaveBeenCalledWith(FRAME_SAVED);
   });
 
   it("Huỷ on the notice sends nothing and returns to the form", async () => {
@@ -1018,7 +1251,7 @@ describe("Về mặc định (K4)", () => {
     expect(inStep(NOTICE_CONFIRM_BUTTON)!.disabled).toBe(true);
     await tickAndConfirm();
     expect(writes()).toEqual([{ path: "/api/v1/map-frame/reset", method: "POST", body: { notice_version: "2026-10-04.1" } }]);
-    expect(text()).toContain(FRAME_RESET_DONE);
+    expect(toast.success).toHaveBeenCalledWith(FRAME_RESET_DONE);
     expect(button(FRAME_RESET_BUTTON)).toBeUndefined();
     expect(host!.querySelector("[data-centre-legend]")!.textContent).toBe(CENTRE_LEGEND_DEFAULT);
     // A new map, bounded by the DEFAULT frame.
@@ -1030,7 +1263,7 @@ describe("Về mặc định (K4)", () => {
     await act(async () => button(FRAME_RESET_BUTTON)!.click());
     await settle();
     await tickAndConfirm();
-    expect(text()).toContain(FRAME_RESET_DONE_NO_DEFAULT);
+    expect(toast.success).toHaveBeenCalledWith(FRAME_RESET_DONE_NO_DEFAULT);
     expect(text()).toContain(FRAME_NOT_SET);
     expect(host!.querySelector("#frame-center-lat")).not.toBeNull();
   });

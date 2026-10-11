@@ -96,8 +96,9 @@ function dialogOpen(): boolean {
  * closing gives back only those (one already inert for its own reason stays inert).
  *
  * Portals opened LATER (a "?" description) are appended to `<body>` after this ran, so they stay live.
+ * Exported for `/ban-do`'s "Trình chiếu", which covers the same shell the same way.
  */
-function inertOutside(frame: HTMLElement): HTMLElement[] {
+export function inertOutside(frame: HTMLElement): HTMLElement[] {
   const changed: HTMLElement[] = [];
   for (let node: HTMLElement = frame; node.parentElement !== null && node !== document.body; node = node.parentElement) {
     for (const sibling of node.parentElement.children) {
