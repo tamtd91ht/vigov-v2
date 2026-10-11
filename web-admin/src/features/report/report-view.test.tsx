@@ -180,14 +180,14 @@ describe("export row (D3) — built, the prototype's outline buttons", () => {
     expect(html).not.toContain("Xuất PDF");
   });
 
-  it("ALLOWED and loaded: three enabled 'Xuất …' buttons, outline 36px, Download icon, NO '?'", () => {
+  it("ALLOWED and loaded: three enabled 'Xuất …' buttons, outline at the default 32px, Download icon, NO '?'", () => {
     const html = render(ALL, undefined, MONTH, loaded());
     expect(html).toContain('aria-label="Xuất báo cáo"');
     for (const f of ["pdf", "xlsx", "pptx"]) {
       const b = new RegExp(`<button[^>]*data-export-format="${f}"[^>]*>(.*?)</button>`, "s").exec(html);
       expect(b?.[0]).toBeDefined();
       expect(b?.[0]).not.toContain('disabled=""');
-      expect(b?.[0]).toContain("h-9");
+      expect(b?.[0]).toContain("h-8");
       expect(b?.[1]).toContain(`Xuất ${f.toUpperCase()}`);
       expect(b?.[1]).toContain("<svg");
     }
@@ -306,21 +306,11 @@ describe("ReportView — comparison chart (D2)", () => {
   const card = (figures: BlocksData, permissions = ALL) =>
     section(render(permissions, undefined, MONTH, figures), "So sánh với kỳ trước");
 
-  it("an SVG chart, navy 14px title, no '?' — one bar per PERIOD figure with a non-zero previous", () => {
+  it("an SVG chart, navy 14px title, no '?' — period figures only (the rows themselves: baseline M7 below)", () => {
     const html = card(loaded());
     expect(html).toMatch(/<h2 class="[^"]*text-\[14px\][^"]*text-navy[^"]*">So sánh với kỳ trước<\/h2>/);
-    expect(html).toContain('<svg role="img"');
+    expect(html).toContain('<svg role="group"');
     expect(html).not.toContain("data-pending-marker");
-    const bars = [...html.matchAll(/<g data-tone="(\w+)"><title>([^<]*)<\/title>/g)].map((m) => [m[2], m[1]]);
-    // Đến trong kỳ is absent: its previous was 0. Stock figures and fiscal never appear. An unchanged
-    // figure stays, as a zero-length bar (the prototype keeps every metric with a previous value).
-    expect(bars).toEqual([
-      ["Hoàn thành trong kỳ: +12,5%", "good"],
-      ["Đúng hạn trong kỳ (nhiệm vụ): 0,0%", "neutral"],
-      ["Tiếp nhận trong kỳ: -15,0%", "neutral"],
-      ["Đúng hạn trong kỳ (phản ánh): 0,0%", "neutral"],
-      ["Trễ hạn trong kỳ: -50,0%", "good"],
-    ]);
     expect(html).not.toContain("Đang thực hiện:");
     expect(html).not.toContain("Quá hạn:");
     expect(html).not.toContain("Thu đạt dự toán");
@@ -333,10 +323,9 @@ describe("ReportView — comparison chart (D2)", () => {
       tasks: { current: ok(TASKS), previous: ok({ ...TASKS, on_time: 7 }) }, // 75% vs 87,5%
       citizenReports: { current: ok(REPORTS), previous: ok({ ...REPORTS, on_time: 6 }) }, // 90% vs 60%
     });
-    expect(html).toContain("<title>Đúng hạn trong kỳ (nhiệm vụ): -14,3%</title>");
-    expect(html).toContain("<title>Đúng hạn trong kỳ (phản ánh): +50,0%</title>");
-    expect(html).toMatch(/data-tone="bad"><title>Đúng hạn trong kỳ \(nhiệm vụ\)/);
-    expect(html).toMatch(/data-tone="good"><title>Đúng hạn trong kỳ \(phản ánh\)/);
+    // Labels are verbatim (M8): the two are told apart by their metric key, and by their place.
+    expect(html).toMatch(/data-tone="bad" data-metric="tasks-on_time"[^>]*aria-label="Đúng hạn trong kỳ: -14,3%"/);
+    expect(html).toMatch(/data-tone="good" data-metric="citizen-reports-on_time"[^>]*aria-label="Đúng hạn trong kỳ: 50,0%"/);
   });
 
   it("a text table for screen readers: each figure, both periods, the change and its direction in words", () => {
@@ -351,18 +340,19 @@ describe("ReportView — comparison chart (D2)", () => {
 
   it("an unchanged figure draws no bar shape (zero length), only its label", () => {
     const html = card(loaded());
-    const flat = /<g data-tone="neutral"><title>Đúng hạn trong kỳ \(nhiệm vụ\)[^<]*<\/title>.*?<\/g>/s.exec(html)?.[0] ?? "";
+    const flat = /<g data-tone="neutral" data-metric="tasks-on_time".*?<\/g>/s.exec(html)?.[0] ?? "";
     expect(flat).toContain("<text");
     expect(flat).not.toContain("<path");
   });
 
   it("empty: no period figure with a previous value → the prototype's sentence, no SVG", () => {
-    const zero = { ...TASKS, completed: 0, on_time: 0, on_time_sample: 0 };
+    // A previous of 0 is a value (kept as a bar, M7); only a MISSING previous leaves a figure out.
+    const failed = { ok: false as const, thongBao: "Mạng hỏng." };
     const html = card({
       ...loaded(),
-      tasks: { current: ok(TASKS), previous: ok(zero) },
-      incomingDocuments: { current: ok(DOCS), previous: ok({ ...DOCS, arrived: 0 }) },
-      citizenReports: { current: ok(REPORTS), previous: ok({ ...REPORTS, received: 0, late: 0, on_time_sample: 0 }) },
+      tasks: { current: ok(TASKS), previous: failed },
+      incomingDocuments: { current: ok(DOCS), previous: failed },
+      citizenReports: { current: ok(REPORTS), previous: failed },
     });
     expect(html).toContain(COMPARISON_EMPTY);
     expect(html).not.toContain("<svg");
@@ -553,5 +543,143 @@ describe("ReportView — page shape (spec 13 §1–§2, ADR 0053 B4/B5a, D5)", (
     expect(html).toContain(">Báo cáo điều hành</h1>");
     expect(html).not.toContain("<button");
     expect(html).not.toContain("tính đến");
+  });
+});
+
+/* ── ui-ux-reviewer baseline 11/10/2026 — the MISMATCH rows left after bc041001 ─────────────────── */
+
+/** The labels of one block's tiles on the report, in drawn order. */
+function tileLabels(html: string, blockKey: string): string[] {
+  const block = new RegExp(`<section[^>]*data-block="${blockKey}".*?</section>`, "s").exec(html)?.[0] ?? "";
+  return [...block.matchAll(/<span class="mt-0\.5 block text-\[12px\] text-ink-muted">([^<]*)<\/span>/g)].map((m) => m[1]!);
+}
+
+/** The value of a report tile, by its label. */
+function tileValue(html: string, label: string): string {
+  const li = new RegExp(`<li[^>]*>(?:(?!</li>).)*>${label}</span>(?:(?!</li>).)*</li>`, "s").exec(html)?.[0] ?? "";
+  return /<span id="[^"]*-value"[^>]*>([^<]*)<\/span>/.exec(li)?.[1] ?? "";
+}
+
+/** `[label, tone]` of every bar of the comparison chart, in drawn order. */
+function chartBars(html: string): string[][] {
+  const card = section(html, "So sánh với kỳ trước");
+  return [...card.matchAll(/<g[^>]*data-tone="(\w+)"[^>]*aria-label="([^"]*)"/g)].map((m) => [m[2]!, m[1]!]);
+}
+
+describe("ui-ux baseline 11/10/2026 — /bao-cao against ReportWorkspace", () => {
+  const html = render(ALL, undefined, MONTH, loaded());
+
+  it("M1 export buttons: the prototype's default size (h-8), not h-9", () => {
+    for (const f of ["pdf", "xlsx", "pptx"]) {
+      const b = new RegExp(`<button[^>]*data-export-format="${f}"[^>]*>`).exec(html)?.[0] ?? "";
+      expect(b).toContain("h-8");
+      expect(b).not.toContain("h-9");
+    }
+  });
+
+  it("M2 period buttons: h-7 wins over the legacy .nut-phu min-height (min-h-0)", () => {
+    const group = /<div role="group" aria-label="Kỳ báo cáo".*?<\/div>/s.exec(html)?.[0] ?? "";
+    const buttons = [...group.matchAll(/<button class="([^"]*)"/g)].map((m) => m[1]!);
+    expect(buttons).toHaveLength(5);
+    for (const c of buttons) expect(c.split(" ")).toEqual(expect.arrayContaining(["h-7", "min-h-0"]));
+  });
+
+  it("M3 Nhiệm vụ tiles in the prototype order: open · overdue · done · on time, then Tạm dừng", () => {
+    expect(tileLabels(html, "tasks")).toEqual([
+      "Đang thực hiện",
+      "Quá hạn",
+      "Hoàn thành trong kỳ",
+      "Đúng hạn trong kỳ",
+      "Tạm dừng",
+    ]);
+  });
+
+  it("M4 Văn bản & Đơn thư: 'Đơn thư trong kỳ' 4th, 'Tỷ lệ đúng hạn văn bản' after it", () => {
+    expect(tileLabels(html, "documents")).toEqual([
+      "Đến trong kỳ",
+      "Chưa xử lý xong",
+      "Quá hạn xử lý",
+      "Đơn thư trong kỳ",
+      "Tỷ lệ đúng hạn văn bản",
+    ]);
+  });
+
+  it("M5 percent tiles: one fixed decimal, Vietnamese comma", () => {
+    expect(tileValue(html, "Tỷ lệ giải ngân")).toBe("37,6%");
+    expect(tileValue(html, "Thời gian đã trôi qua")).toBe("71,0%");
+    expect(tileValue(html, "Thu đạt dự toán")).toBe("73,5%");
+    expect(tileValue(html, "Chi đạt dự toán")).toBe("91,3%");
+    expect(html).not.toContain("37,62%");
+    expect(html).not.toContain("73,50%");
+  });
+
+  it("M5 over 100% keeps one decimal: 10812 basis points → 108,1%", () => {
+    const over = render(ALL, undefined, MONTH, {
+      ...loaded(),
+      fiscal: ok({ ...FISCAL, revenue_achievement: { name: "Thu đạt dự toán", basis_points: 10812 } }),
+    });
+    expect(tileValue(over, "Thu đạt dự toán")).toBe("108,1%");
+  });
+
+  it("M6 'Đến trong kỳ' and 'Tiếp nhận trong kỳ' read higher-is-better: a rise leaf, a fall danger", () => {
+    const moved = render(ALL, undefined, MONTH, {
+      ...loaded(),
+      incomingDocuments: { current: ok(DOCS), previous: ok({ ...DOCS, arrived: 20 }) }, // 31 vs 20
+    });
+    const line = (tone: string, text: string) =>
+      new RegExp(`${tone}"><svg[^>]*>(?:(?!<li).)*?</svg><span class="min-w-0">${text}`, "s");
+    expect(moved).toMatch(line("text-leaf", "\\+55,0% so với kỳ trước"));
+    // Tiếp nhận 17 vs 20
+    expect(moved).toMatch(line("text-danger", "-15,0% so với kỳ trước"));
+    expect(moved).not.toMatch(line("text-ink-muted", "-15,0%"));
+  });
+
+  it("M6/M7/M8 chart: every period figure with a previous value, verbatim labels, direction colours", () => {
+    expect(chartBars(html)).toEqual([
+      ["Hoàn thành trong kỳ: 12,5%", "good"],
+      ["Đúng hạn trong kỳ: 0,0%", "neutral"],
+      // previous 0: kept as a zero-length bar (prototype `delta_percent ?? 0`); no percentage is claimed
+      ["Đến trong kỳ: chưa có kỳ trước để so", "neutral"],
+      ["Tiếp nhận trong kỳ: -15,0%", "bad"],
+      ["Đúng hạn trong kỳ: 0,0%", "neutral"],
+      ["Trễ hạn trong kỳ: -50,0%", "good"],
+    ]);
+    const card = section(html, "So sánh với kỳ trước");
+    expect(card).not.toContain("(nhiệm vụ)");
+    expect(card).not.toContain("(phản ánh)");
+  });
+
+  it("M7 a missing previous (failed call) is still left out", () => {
+    const failed = render(ALL, undefined, MONTH, {
+      ...loaded(),
+      incomingDocuments: { current: ok(DOCS), previous: { ok: false, thongBao: "Mạng hỏng." } },
+    });
+    expect(chartBars(failed).map((b) => b[0])).not.toContain("Đến trong kỳ: chưa có kỳ trước để so");
+  });
+
+  it("M9 each bar is a Radix tooltip trigger (no native <title>), focusable, 12px / 8px radius bubble", () => {
+    const card = section(html, "So sánh với kỳ trước");
+    const g = /<g[^>]*data-tone="good"[^>]*>/.exec(card)?.[0] ?? "";
+    expect(g).toContain('tabindex="0"');
+    expect(g).toContain('data-state="closed"');
+    expect(card).not.toMatch(/<g[^>]*data-tone[^>]*><title>/);
+  });
+
+  it("M11 Từ ngày / Đến ngày: shadcn Label look — leading-none, ink, not navy", () => {
+    const r = customWindows("2026-09-01", "2026-09-17");
+    if (!r.ok) throw new Error(r.message);
+    const custom = render(ALL, { ok: true, duLieu: ROWS }, r.windows);
+    for (const id of ["bao-cao-tu-ngay", "bao-cao-den-ngay"]) {
+      const c = new RegExp(`<label for="${id}" class="([^"]*)"`).exec(custom)?.[1]?.split(" ") ?? [];
+      expect(c).toEqual(expect.arrayContaining(["text-[11.5px]", "leading-none", "font-medium", "text-ink"]));
+      expect(c).not.toContain("text-navy");
+      expect(c).not.toContain("leading-tight");
+    }
+  });
+
+  it("M16 no 'Năm 2026' chip beside the Giải ngân title; the year footnote stays", () => {
+    const budget = /<section[^>]*data-block="budget".*?<\/section>/s.exec(html)?.[0] ?? "";
+    expect(budget).not.toContain(">Năm 2026<");
+    expect(budget).toContain("Luỹ kế năm ngân sách 2026, không theo kỳ đang xem.");
   });
 });

@@ -184,6 +184,106 @@ describe("Tuỳ chọn — the prototype's behaviour (D5): empty inputs, applies
     expect(el.textContent).toContain("Kỳ tháng này");
   });
 
+  it("M12 refreshes every 120 s like a reload (figures + units, new 'tính đến'); a period change resets it; unmount stops it", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(AT);
+    const el = await mount(<ReportPage />);
+    const units = () => calls.filter((c) => c.startsWith("/api/v1/task-unit-summary?"));
+
+    calls = [];
+    await act(async () => vi.advanceTimersByTime(119_000));
+    expect(summaryCalls()).toEqual([]);
+    await act(async () => vi.advanceTimersByTime(1_000));
+    expect(summaryCalls()).toHaveLength(6);
+    expect(units()).toHaveLength(1);
+    // the clock is read on that tick: 16:43 + 2 min
+    expect(el.textContent).toContain("Số liệu tính đến 16:45 28/09/2026.");
+
+    // a period chosen 60 s into a cycle starts a fresh 120 s
+    await act(async () => vi.advanceTimersByTime(60_000));
+    await act(async () => button(el, "Năm nay").click());
+    calls = [];
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(summaryCalls()).toEqual([]);
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(summaryCalls()).toHaveLength(6);
+
+    act(() => root?.unmount());
+    root = null;
+    calls = [];
+    await act(async () => vi.advanceTimersByTime(240_000));
+    expect(calls).toEqual([]);
+  });
+
+  it("M12 the tick is a BACKGROUND refetch: old numbers and 'tính đến' stay, no skeleton, until the new answers settle", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(AT);
+    // Every read answers with the server's refusal (a settled answer); while `hold` is on, answers wait.
+    let hold = false;
+    const waiting: (() => void)[] = [];
+    const answer = () =>
+      new Response(JSON.stringify({ code: "busy", message: "Máy chủ bận." }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown) => {
+        calls.push(String(url));
+        if (!hold) return Promise.resolve(answer());
+        return new Promise<Response>((resolve) => waiting.push(() => resolve(answer())));
+      }),
+    );
+    const flush = async () => {
+      for (let i = 0; i < 5; i++) await act(async () => await Promise.resolve());
+    };
+    const busy = (el: HTMLElement) =>
+      el.querySelector('[aria-busy="true"]') !== null || el.querySelector(".animate-pulse") !== null;
+
+    const el = await mount(<ReportPage />);
+    await flush();
+    expect(busy(el)).toBe(false);
+    expect(el.textContent).toContain("Số liệu tính đến 16:43 28/09/2026.");
+
+    hold = true;
+    await act(async () => vi.advanceTimersByTime(120_000));
+    await flush();
+    expect(waiting.length).toBeGreaterThan(0);
+    expect(busy(el)).toBe(false);
+    expect(el.textContent).toContain("Số liệu tính đến 16:43 28/09/2026.");
+    expect(el.textContent).not.toContain("16:45");
+
+    hold = false;
+    await act(async () => waiting.splice(0).forEach((go) => go()));
+    await flush();
+    expect(el.textContent).toContain("Số liệu tính đến 16:45 28/09/2026.");
+    expect(busy(el)).toBe(false);
+  });
+
+  it("a person's act still shows loading — 'Tải lại'/a period is never silent", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    vi.setSystemTime(AT);
+    let hold = false;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: unknown) => {
+        calls.push(String(url));
+        if (hold) return new Promise(() => {});
+        return Promise.resolve(
+          new Response(JSON.stringify({ code: "busy", message: "Máy chủ bận." }), {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }),
+    );
+    const el = await mount(<ReportPage />);
+    for (let i = 0; i < 5; i++) await act(async () => await Promise.resolve());
+    hold = true;
+    await act(async () => button(el, "Năm nay").click());
+    expect(el.querySelector('[aria-busy="true"], .animate-pulse')).not.toBeNull();
+  });
+
   it("from another period, 'Tuỳ chọn' with no dates shows the month", async () => {
     const el = await mount(<ReportPage />);
     await act(async () => button(el, "Năm nay").click());

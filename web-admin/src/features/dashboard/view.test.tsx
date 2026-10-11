@@ -758,6 +758,25 @@ describe("/tong-quan is untouched by /bao-cao's tile (owner 09/10/2026: D4 and D
     expect(fiscalLabels(report)).toEqual(["Thu đạt dự toán", "Thu xã hưởng", "Chi đạt dự toán", "Tổng chi", NHAN_CHENH_LECH]);
   });
 
+  it("baseline 11/10/2026: Tổng quan keeps its task order (Tạm dừng 4th), its document order and 2-decimal fiscal %", () => {
+    const labels = (html: string, key: string) => {
+      const block = new RegExp(`<section[^>]*data-block="${key}".*?</section>`, "s").exec(html)?.[0] ?? "";
+      return [...block.matchAll(/<span class="[^"]*text-\[12px\][^"]*">([^<]*)<\/span>/g)].map((m) => m[1]);
+    };
+    expect(labels(dashboard, "tasks")).toEqual(["Đang thực hiện", "Quá hạn", "Hoàn thành trong kỳ", "Tạm dừng", "Đúng hạn trong kỳ"]);
+    expect(labels(report, "tasks")).toEqual(["Đang thực hiện", "Quá hạn", "Hoàn thành trong kỳ", "Đúng hạn trong kỳ", "Tạm dừng"]);
+    expect(dashboard).toContain("73,50%");
+    expect(report).toContain("73,5%");
+    expect(report).not.toContain("73,50%");
+  });
+
+  it("M2: the period buttons are 28px on Tổng quan too (min-h-0 beats the legacy .nut-phu min-height)", () => {
+    const group = /<div role="group" aria-label="Kỳ báo cáo".*?<\/div>/s.exec(dashboard)?.[0] ?? "";
+    const buttons = [...group.matchAll(/<button class="([^"]*)"/g)].map((m) => m[1]!);
+    expect(buttons.length).toBe(4);
+    for (const c of buttons) expect(c.split(" ")).toEqual(expect.arrayContaining(["h-7", "min-h-0"]));
+  });
+
   it("Tổng quan's '?' keeps PendingMarker's default look; Báo cáo restyles it", () => {
     const marker = (html: string) =>
       /<button[^>]*aria-label="Kinh tế &amp; Tài nguyên — [^"]*"[^>]*class="([^"]*)"/.exec(html)?.[1] ??

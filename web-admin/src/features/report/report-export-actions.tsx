@@ -22,8 +22,9 @@ export const REPORT_EXPORT_UNAVAILABLE = "Xuất tệp khi số liệu của tra
  * (`features/dashboard/export-files.ts`): the file is made from the figures on screen, never fetched.
  *
  * NOT TỔNG QUAN'S COMPONENT: the prototype draws this row differently on its two screens — here
- * outline buttons at the default 36px with "Xuất …" and a toast, there small header buttons with an
- * inline error — and Tổng quan's behaviour does not change with this page.
+ * outline buttons at the DEFAULT size (shadcn `h-8`, 32px — prototype `button.tsx:25`; `ReportWorkspace`
+ * passes no `size`) with "Xuất …" and a toast, there small header buttons with an inline error — and
+ * Tổng quan's behaviour does not change with this page.
  *
  * DRAWN ONLY with `report.read` + `report.export` (`reportAccess`, the caller decides); disabled while
  * a visible block is still loading, with the reason on the group's `title` and for screen readers.
@@ -72,7 +73,6 @@ export function ReportExportActions({ source }: { source?: ExportSource }) {
           key={format}
           type="button"
           variant="outline"
-          size="lg"
           disabled={blocked !== null || busy}
           data-export-format={format}
           onClick={() => void run(format)}

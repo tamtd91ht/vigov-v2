@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { useDashboardFigures } from "@/features/dashboard/overview";
 import { DEFAULT_PERIOD_KIND, toQueryPeriod } from "@/features/dashboard/period";
-import type { Loaded } from "@/features/dashboard/view";
+import { figuresSettled } from "@/features/dashboard/view";
+import type { BlocksData, Loaded } from "@/features/dashboard/view";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { fetchTaskUnitSummary } from "@/lib/api/dashboard";
@@ -14,10 +15,13 @@ import { quyetDinhTheoKhoa, REPORT_READ_PERMISSION } from "@/lib/quyen";
 
 import { reportAccess } from "./report-access";
 import { CUSTOM_PERIOD, reportWindows } from "./report-period";
-import type { ReportSelection } from "./report-period";
+import type { ReportSelection, ReportWindows } from "./report-period";
 import { ReportHeader, ReportView } from "./report-view";
 import { unitRowsFrom } from "./unit-table";
 import type { UnitRow } from "./unit-table";
+
+/** The prototype's auto-refresh period (`useReports.ts`). */
+const REPORT_REFRESH_MS = 120_000;
 
 /** Sentence shown instead of the page to an account without `report.read`. */
 export const MISSING_REPORT_READ =
@@ -51,7 +55,7 @@ export function ReportPage() {
 }
 
 /**
- * Owns the period and the clock. THE CLOCK IS READ ON AN ACT (mount, a period, a date, "Tải lại"),
+ * Owns the period and the clock. THE CLOCK IS READ ON AN ACT (mount, a period, a date, "Tải lại", the 2-minute refresh),
  * never during a render: that instant is the page's "tính đến", and every window of the load is
  * computed from it. The six KPI groups come from `/tong-quan`'s own loader (`useDashboardFigures`),
  * without its overdue queues — this page has no "Cần xử lý ngay".
@@ -61,9 +65,10 @@ function ReportOverview() {
   const permissions = session !== null && session.ok ? session.duLieu.permissions : [];
   const access = reportAccess(permissions);
 
-  const [request, setRequest] = useState<{ selection: ReportSelection; at: number }>(() => ({
+  const [request, setRequest] = useState<ReportRequest>(() => ({
     selection: { kind: DEFAULT_PERIOD_KIND },
     at: new Date().getTime(),
+    silent: false,
   }));
   const windows = useMemo(
     () => reportWindows(request.selection, new Date(request.at)),
@@ -74,18 +79,49 @@ function ReportOverview() {
   const [unitAttempt, setUnitAttempt] = useState(0);
   const units = useUnitRows(windows.current, request.at, access.unitTable, unitAttempt);
 
-  const ask = (selection: ReportSelection) => setRequest({ selection, at: new Date().getTime() });
+  // A person's act (period, date, "Tải lại") is never silent: it shows loading, as before.
+  const ask = (selection: ReportSelection) => setRequest({ selection, at: new Date().getTime(), silent: false });
+
+  // The prototype refreshes the report every 2 minutes (`useReports.ts` `refetchInterval: 120_000`).
+  // Each tick re-asks the same period with the clock read ON THE TICK — figures and unit table both.
+  // Keyed on the selection object: a new period (a new object) starts a fresh 120 s; a tick or
+  // "Tải lại" reuses the object and keeps the rhythm.
+  const selection = request.selection;
+  useEffect(() => {
+    const id = setInterval(
+      () => setRequest({ selection, at: new Date().getTime(), silent: true }),
+      REPORT_REFRESH_MS,
+    );
+    return () => clearInterval(id);
+  }, [selection]);
+
+  // A tick is a BACKGROUND refetch, like react-query's: the last settled numbers — and their "tính
+  // đến" — stay on screen until every new answer is in, so the page never flashes a skeleton every two
+  // minutes. Once settled the new result shows, A FAILURE INCLUDED: stale numbers must never hide an
+  // error. `useDashboardFigures` (shared with Tổng quan) is untouched; the hold lives only here.
+  const settled = figuresSettled(figures, access.blocks, false) && (!access.unitTable || units !== null);
+  const key = `${request.at}|${unitAttempt}`;
+  const [lastSettled, setLastSettled] = useState<SettledView | null>(null);
+  if (settled && lastSettled?.key !== key) {
+    // Render-phase update (React's "storing information from previous renders"): no extra frame.
+    setLastSettled({ key, windows, fetchedAt: request.at, figures, units });
+  }
+  const shown: Omit<SettledView, "key"> =
+    request.silent && !settled && lastSettled !== null
+      ? lastSettled
+      : { windows, fetchedAt: request.at, figures, units };
+
   // The commune printed on the export files: the runtime configuration the server resolved from
   // `Host` (rule 1 inv. 10) — the value the page header prints. Never a constant.
   const commune = useCauHinhXa();
 
   return (
     <ReportView
-      windows={windows}
-      fetchedAt={request.at}
-      figures={figures}
+      windows={shown.windows}
+      fetchedAt={shown.fetchedAt}
+      figures={shown.figures}
       access={access}
-      units={units}
+      units={shown.units}
       commune={{ displayName: commune.displayName, parentAuthority: commune.parentAuthority }}
       onNamedPeriod={(kind) => ask({ kind })}
       onCustomPeriod={(from, to) => ask({ kind: CUSTOM_PERIOD, from, to })}
@@ -94,6 +130,18 @@ function ReportOverview() {
     />
   );
 }
+
+/** `silent` = made by the 2-minute timer, not by a person: the old numbers stay until the new settle. */
+type ReportRequest = { selection: ReportSelection; at: number; silent: boolean };
+
+/** What the page last drew with every visible block answered. */
+type SettledView = {
+  key: string;
+  windows: ReportWindows;
+  fetchedAt: number;
+  figures: BlocksData;
+  units: Loaded<UnitRow[]>;
+};
 
 /**
  * The unit table's two reads, for the CURRENT window only (the table has no previous-period line,

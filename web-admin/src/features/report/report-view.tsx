@@ -14,7 +14,7 @@ import { formatCount, NO_VALUE } from "@/features/dashboard/figures";
 import { DEFAULT_PERIOD_KIND, formatDateTime, PERIOD_BUTTON_LABEL, PERIOD_KINDS } from "@/features/dashboard/period";
 import type { PeriodKind } from "@/features/dashboard/period";
 import {
-  comparedFigures,
+  chartFigures,
   DashboardBlocks,
   EXPORT_WAITING,
   figuresSettled,
@@ -225,7 +225,8 @@ export function ReportView({
   );
 }
 
-const DATE_LABEL = "block text-[11.5px] leading-tight font-medium text-navy";
+/** The prototype's shadcn `Label` at 11.5px: medium, `leading-none`, the body's ink — not navy. */
+const DATE_LABEL = "block text-[11.5px] leading-none font-medium text-ink";
 const DATE_INPUT = "mt-1 h-9 w-44 max-w-full text-[12.5px] md:text-[12.5px]";
 
 /** The prototype's custom-period box: two native date inputs on a bordered strip of the page colour. */
@@ -435,7 +436,7 @@ function ComparisonSection({ figures, access }: { figures: BlocksData; access: R
   return (
     <Card as="section" aria-label={COMPARISON_TITLE} className="p-4">
       <h2 className={SECTION_TITLE}>{COMPARISON_TITLE}</h2>
-      <ComparisonChart rows={comparedFigures(figures, access.blocks)} />
+      <ComparisonChart rows={chartFigures(figures, access.blocks)} />
     </Card>
   );
 }

@@ -893,7 +893,7 @@ function ReportFigureTile({ figure, value }: { figure: Figure; value?: ReactNode
   const valueId = `${figure.id}-value`;
   const sentence = figure.sentence === true;
   const loading = value === undefined && figure.display === LOADING;
-  const delta = reportDelta(figure);
+  const delta = reportDelta({ values: figure.values, trend: reportTrend(figure) });
   // "Kỳ trước: 0" / "Kỳ trước: —" is said only when no percentage could be drawn (README "giữ").
   const subLines = [figure.note, delta === null ? figure.comparison?.text : undefined].filter(
     (s): s is string => s !== undefined && s !== "",
@@ -1011,8 +1011,14 @@ export function TaskBlock({
   windows: ComparedWindows;
   onReload?: () => void;
 }) {
+  const layout = useContext(BlockLayoutContext);
   const t = taskFigures(pair, windows);
-  const figures = [t.inProgress, t.overdue, t.completed, t.suspended, t.onTime];
+  // Báo cáo: the prototype's four (`tasks.*` of `ReportWorkspace`) in its order, then our extra
+  // "Tạm dừng" last. Tổng quan keeps its own order. The files keep theirs (`exportBlocks`).
+  const figures =
+    layout === "report"
+      ? [t.inProgress, t.overdue, t.completed, t.onTime, t.suspended]
+      : [t.inProgress, t.overdue, t.completed, t.suspended, t.onTime];
   return (
     <Panel blockKey="tasks" title="Nhiệm vụ">
       <PairErrors pair={pair} noun="nhiệm vụ" onReload={onReload} />
@@ -1046,8 +1052,11 @@ export function DocumentBlock({
   windows: ComparedWindows;
   onReload?: () => void;
 }) {
+  const layout = useContext(BlockLayoutContext);
   const d = incomingDocumentFigures(pair, windows);
   const figures = [d.arrived, d.open, d.overdue];
+  const onTime = <NoSourceTile key="on-time" label={DOCUMENT_ON_TIME_LABEL} />;
+  const letters = <PendingTile key="letters" label={LETTERS_LABEL} info={pendingPart(LETTERS_LABEL)} />;
   return (
     <Panel blockKey="documents" title="Văn bản & Đơn thư">
       <PairErrors pair={pair} noun="văn bản đến" onReload={onReload} />
@@ -1055,8 +1064,9 @@ export function DocumentBlock({
         {figures.map((f) => (
           <FigureTile key={f.id} figure={f} />
         ))}
-        <NoSourceTile label={DOCUMENT_ON_TIME_LABEL} />
-        <PendingTile label={LETTERS_LABEL} info={pendingPart(LETTERS_LABEL)} />
+        {/* Báo cáo: "Đơn thư trong kỳ" at the prototype's 4th place (`register.petition_arrived`), our
+            extra on-time tile after it. Tổng quan keeps its order. */}
+        {layout === "report" ? [letters, onTime] : [onTime, letters]}
       </TileGrid>
     </Panel>
   );
@@ -1124,8 +1134,15 @@ export function budgetScope(year: number): string {
  * a year with no plan says "Chưa bố trí vốn", never 0%; an absent issue count is "—", never 0 (the
  * field is optional on the wire). Shared by the block and the export.
  */
-function budgetFigures(result: Loaded<finance_projectSummaryOut>, layout: BlockLayout): Figure[] {
+function budgetFigures(
+  result: Loaded<finance_projectSummaryOut>,
+  layout: BlockLayout,
+  onePlace = false,
+): Figure[] {
   const s = result !== null && result.ok ? result.duLieu : null;
+  // `onePlace` = the report tile's "37,6%" (`reportPercent`); the null / unreadable sentences stay.
+  const percent = (hundredths: number, giaiNgan: (h: number) => string) =>
+    onePlace && Number.isFinite(hundredths) ? reportPercent(hundredths) : giaiNgan(hundredths);
   const none = result === null ? LOADING : NO_VALUE;
   const fig = (id: string, label: string, rest: Partial<Figure>): Figure => ({
     id: `budget-${id}`,
@@ -1148,11 +1165,11 @@ function budgetFigures(result: Loaded<finance_projectSummaryOut>, layout: BlockL
   const issuesKnown = typeof issues === "number" && Number.isFinite(issues);
   return [
     fig("ratio", BUDGET_LABELS.ratio, {
-      display: nhanTyLeGiaiNgan(s.disbursed_ratio),
+      display: s.disbursed_ratio === null ? nhanTyLeGiaiNgan(null) : percent(s.disbursed_ratio, nhanTyLeGiaiNgan),
       // "Chưa bố trí vốn" is a sentence, not a percentage.
       sentence: s.disbursed_ratio === null,
     }),
-    fig("elapsed", BUDGET_LABELS.elapsed, { display: percentLabel(s.time_elapsed_ratio) }),
+    fig("elapsed", BUDGET_LABELS.elapsed, { display: percent(s.time_elapsed_ratio, percentLabel) }),
     fig("delayed", BUDGET_LABELS.delayed, {
       display: formatCount(s.delayed_project_count),
       raw: s.delayed_project_count,
@@ -1188,13 +1205,20 @@ export function BudgetBlock({
   onReload?: () => void;
 }) {
   const layout = useContext(BlockLayoutContext);
-  const figures = budgetFigures(result, layout).map((f) => figureFor(layout, f));
+  const report = layout === "report";
+  const figures = budgetFigures(result, layout, report).map((f) => figureFor(layout, f));
   const scope = budgetScope(year);
   return (
     <Panel
       blockKey="budget"
       title={BUDGET_TITLE}
-      aside={<span className="ml-auto shrink-0 text-[11px] font-semibold text-ink-500 tabular-nums">Năm {year}</span>}
+      // Báo cáo: no "Năm …" chip — the prototype's title row has none (owner, 11/10/2026); the
+      // footnote under the tiles still names the budget year.
+      aside={
+        report ? undefined : (
+          <span className="ml-auto shrink-0 text-[11px] font-semibold text-ink-500 tabular-nums">Năm {year}</span>
+        )
+      }
     >
       {result !== null && !result.ok && (
         <LoadError title="Chưa tải được số liệu giải ngân" onReload={onReload}>
@@ -1242,6 +1266,19 @@ export function CitizenReportBlock({
 const REPORT_LABELS: Readonly<Record<string, string>> = {
   "citizen-reports-received": "Tiếp nhận trong kỳ",
 };
+
+/**
+ * Figures `/bao-cao` reads as HIGHER-IS-BETTER where Tổng quan reads them as neutral volumes: the
+ * prototype's server sends `higher_is_better: true` for `register.arrived` and `feedback.received`, and
+ * its tile and chart colour them by it (owner, 11/10/2026 — prototype first). Report tile and chart
+ * only; Tổng quan and the files keep "neutral".
+ */
+const REPORT_HIGHER_IS_BETTER: ReadonlySet<string> = new Set(["incoming-documents-arrived", "citizen-reports-received"]);
+
+/** The direction `/bao-cao`'s tile and chart colour a figure by. */
+export function reportTrend(f: Pick<Figure, "id" | "trend">): Trend | undefined {
+  return REPORT_HIGHER_IS_BETTER.has(f.id) ? "higher-is-better" : f.trend;
+}
 
 /** A figure as `layout` draws it: on `/bao-cao` the report label and never the red (`alert`). */
 function figureFor(layout: BlockLayout, f: Figure): Figure {
@@ -1334,12 +1371,25 @@ function withUnit(text: string, hasNumber: boolean): string {
   return hasNumber && text !== "Không đọc được" ? `${text} đồng` : text;
 }
 
-function indicatorFigure(id: string, c: finance_chiSoRa): Figure {
+/**
+ * A percentage tile on `/bao-cao`: ONE fixed decimal with the Vietnamese comma ("32,6%", "108,1%"), as
+ * the prototype's `formatValue` prints `percent` (`toFixed(1)`; the comma is spec 00's). Input in
+ * hundredths of a percent — the unit of `disbursed_ratio`, `time_elapsed_ratio` and `basis_points`.
+ * Report tiles only: `/giai-ngan`, `/thu-chi`, Tổng quan and the files keep their two decimals.
+ */
+function reportPercent(hundredths: number): string {
+  return formatPercent(hundredths / 100);
+}
+
+function indicatorFigure(id: string, c: finance_chiSoRa, onePlace = false): Figure {
   return {
     id,
     // THE NAME COMES FROM THE SERVER (`ChiSoDatDuToan`), as on the Thu - Chi screen's own card.
     label: c.name,
-    display: nhanChiSo(c),
+    display:
+      onePlace && c.basis_points !== null && Number.isFinite(c.basis_points)
+        ? reportPercent(c.basis_points)
+        : nhanChiSo(c),
     href: FISCAL_SCREEN_PATH,
     comparison: null,
     sentence: c.basis_points === null,  };
@@ -1416,8 +1466,10 @@ export function FiscalBlock({
       />
     );
   });
-  const revenue = <FigureTile figure={indicatorFigure("fiscal-revenue", d.revenue_achievement)} />;
-  const expenditure = <FigureTile figure={indicatorFigure("fiscal-expenditure", d.expenditure_achievement)} />;
+  const revenue = <FigureTile figure={indicatorFigure("fiscal-revenue", d.revenue_achievement, report)} />;
+  const expenditure = (
+    <FigureTile figure={indicatorFigure("fiscal-expenditure", d.expenditure_achievement, report)} />
+  );
   const balance = <FigureTile figure={balanceFigure(d, layout)} />;
 
   if (report) {
@@ -1721,6 +1773,10 @@ function UrgentRowView({ row, category }: { row: UrgentRow; category: string | n
  * (`dark`), the rest the quiet `secondary` — `aria-pressed` says which, since the fill alone would
  * not. Shared with `/bao-cao`, which adds "Tuỳ chọn". An unknown value (impossible — the options are
  * the caller's own list) is dropped by the caller rather than cast here.
+ *
+ * `min-h-0`: the legacy `.nut-phu { min-height: var(--control-h) }` (globals.css, layer `legacy`)
+ * otherwise holds `h-7` at 32px. The prototype's `size="sm"` is 28px, on both pages (owner, 11/10/2026).
+ * Only here — the legacy rule still gives every other secondary button its height.
  */
 export function PeriodButtons<V extends string>({
   options,
@@ -1738,6 +1794,7 @@ export function PeriodButtons<V extends string>({
           key={o.value}
           type="button"
           size="sm"
+          className="min-h-0"
           variant={o.value === value ? "dark" : "secondary"}
           aria-pressed={o.value === value}
           onClick={() => onChange(o.value)}
@@ -2183,7 +2240,7 @@ export function exportBlocks(
  * `/bao-cao`'s "So sánh với kỳ trước" — the figures its chart plots
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** One bar of the comparison chart: a PERIOD figure whose two windows both answered. */
+/** One row of the files' comparison table: a PERIOD figure whose two windows both answered. */
 export type ComparedFigure = {
   readonly id: string;
   /** the tile's label, with the block named when two blocks share it ("Đúng hạn trong kỳ") */
@@ -2196,7 +2253,8 @@ export type ComparedFigure = {
 };
 
 /**
- * What the chart may plot, in the grid's order. PERIOD FIGURES ONLY (owner 09/10/2026, D2): a stock
+ * The comparison TABLE of `/bao-cao`'s files (`report-export.ts`), in the grid's order — the chart on
+ * screen reads `chartFigures` since 11/10/2026. PERIOD FIGURES ONLY (owner 09/10/2026, D3): a stock
  * figure has no previous period, Thu – Chi is year to date with no comparison, and "Điểm hài lòng" is a
  * stock. A figure is left out when either window failed, the sample was empty, or the previous value
  * is 0 — "from 0 to 3" is not a percentage (`comparisonLine`, user decision), and the tile says so.
@@ -2205,6 +2263,67 @@ export type ComparedFigure = {
  * picture as the whole one.
  */
 export function comparedFigures(data: BlocksData, visible: BlockVisibility): ComparedFigure[] | null {
+  const all = periodPairs(data, visible);
+  if (all === null) return null;
+  const rows = all.filter(({ v }) => v.previous !== 0);
+  const count = new Map<string, number>();
+  for (const { f } of rows) count.set(f.label, (count.get(f.label) ?? 0) + 1);
+  return rows.map(({ f, v, block }) => ({
+    id: f.id,
+    label: (count.get(f.label) ?? 0) > 1 ? `${f.label} (${block})` : f.label,
+    currentText: f.display,
+    previousText: v.previousText,
+    delta: ((v.current - v.previous) / v.previous) * 100,
+    trend: f.trend ?? "neutral",
+  }));
+}
+
+/** One bar of `/bao-cao`'s comparison CHART — the prototype's row, not the file's. */
+export type ChartFigure = {
+  readonly id: string;
+  /** the tile's label verbatim (prototype `metricLabel`) — two blocks' "Đúng hạn trong kỳ" both say so */
+  readonly label: string;
+  readonly currentText: string;
+  readonly previousText: string;
+  /** change in percent; 0 when there is none to compute (`comparable` false) — prototype `?? 0` */
+  readonly delta: number;
+  /** false = the previous value was 0: the bar is drawn at 0, and no percentage is claimed in words */
+  readonly comparable: boolean;
+  /** the report's direction (`reportTrend`) */
+  readonly trend: Trend;
+};
+
+/**
+ * The chart's rows — the prototype's rule (`ReportWorkspace.tsx:180-190`): every metric with a previous
+ * value, `delta ?? 0`, labelled `metricLabel(key)`. So unlike `comparedFigures` (the files' table), a
+ * previous of 0 STAYS, as a zero-length bar; a previous that is missing (failed call, empty sample) is
+ * still left out. Same period figures only (D3).
+ */
+export function chartFigures(data: BlocksData, visible: BlockVisibility): ChartFigure[] | null {
+  const all = periodPairs(data, visible);
+  if (all === null) return null;
+  return all.map(({ f, v }) => {
+    const comparable = v.previous !== 0;
+    return {
+      id: f.id,
+      label: f.label,
+      currentText: f.display,
+      previousText: v.previousText,
+      delta: comparable ? ((v.current - v.previous) / v.previous) * 100 : 0,
+      comparable,
+      trend: reportTrend(f) ?? "neutral",
+    };
+  });
+}
+
+/**
+ * Every PERIOD figure of the visible compared blocks whose two windows both answered, as `/bao-cao`
+ * labels it, in the grid's order. `null` while a visible compared block is still loading.
+ */
+function periodPairs(
+  data: BlocksData,
+  visible: BlockVisibility,
+): { f: Figure; v: NonNullable<Figure["values"]>; block: string }[] | null {
   const settled = <T,>(p: SummaryPair<T>) => p.current !== null && p.previous !== null;
   if (visible.tasks && !settled(data.tasks)) return null;
   if (visible.incomingDocuments && !settled(data.incomingDocuments)) return null;
@@ -2225,19 +2344,10 @@ export function comparedFigures(data: BlocksData, visible: BlockVisibility): Com
   for (const { figures, block } of groups) {
     for (const raw of figures) {
       const f = figureFor("report", raw);
-      if (f.kind === "period" && f.values !== undefined && f.values.previous !== 0) rows.push({ f, v: f.values, block });
+      if (f.kind === "period" && f.values !== undefined) rows.push({ f, v: f.values, block });
     }
   }
-  const count = new Map<string, number>();
-  for (const { f } of rows) count.set(f.label, (count.get(f.label) ?? 0) + 1);
-  return rows.map(({ f, v, block }) => ({
-    id: f.id,
-    label: (count.get(f.label) ?? 0) > 1 ? `${f.label} (${block})` : f.label,
-    currentText: f.display,
-    previousText: v.previousText,
-    delta: ((v.current - v.previous) / v.previous) * 100,
-    trend: f.trend ?? "neutral",
-  }));
+  return rows;
 }
 
 /**
