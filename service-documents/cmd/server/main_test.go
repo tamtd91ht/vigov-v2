@@ -147,6 +147,9 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		CitizenLetters:      app.NewCitizenLetters(nil, nil, nil, nil, nil),
 		CitizenLetterImport: app.NewCitizenLetterImport(nil, nil),
 		CitizenLetterExport: app.NewCitizenLetterReportExport(nil, nil),
+		// "Loại đơn thư" — same reason, equally unused here (suite: internal/http).
+		CitizenLetterTypeList: docstore.NewCitizenLetterTypeStore(nil),
+		CitizenLetterTypes:    app.NewCitizenLetterTypes(nil, nil),
 
 		Log: log,
 	})

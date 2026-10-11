@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     272 tuyến của 7 dịch vụ — petitions 80 · identity 67 · comms 48 · finance 40 · documents 29 · platform 6 · reporting 2
+#     274 tuyến của 7 dịch vụ — petitions 80 · identity 67 · comms 48 · finance 40 · documents 31 · platform 6 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -143,10 +143,10 @@ spec:
   # vụ xếp theo tên. Bản vá overlay `test` host cũ trước khi
   # `replace`, nên overlay lệch chỉ số là `kustomize build` ĐỔ chứ không vá nhầm host.
   rules:
-    # documents — 9 tài nguyên: /api/v1/citizen-letter-counts · /api/v1/citizen-letter-report
-    #   /api/v1/citizen-letters · /api/v1/document-types · /api/v1/documents-audit-entries
-    #   /api/v1/incoming-document-overdue-queue · /api/v1/incoming-document-summary
-    #   /api/v1/incoming-documents · /api/v1/outgoing-documents
+    # documents — 10 tài nguyên: /api/v1/citizen-letter-counts · /api/v1/citizen-letter-report
+    #   /api/v1/citizen-letter-types · /api/v1/citizen-letters · /api/v1/document-types
+    #   /api/v1/documents-audit-entries · /api/v1/incoming-document-overdue-queue
+    #   /api/v1/incoming-document-summary · /api/v1/incoming-documents · /api/v1/outgoing-documents
     - host: "documents.api.vigov.vn"
       http:
         paths:

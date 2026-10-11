@@ -109,6 +109,10 @@ var (
 
 	ErrLetterNotPermitted = &LetterError{Refusal: RefusalNotPermitted,
 		Msg: "Chỉ cán bộ được giao xử lý đơn này hoặc người có quyền Tiếp nhận đơn thư mới thực hiện được thao tác này."}
+	// ErrLetterHandoverNotPermitted — a status change carrying a unit / officer is a routing too, and
+	// routing is `petition.create`'s act (C13/C14): the assignee may move the status, not re-route.
+	ErrLetterHandoverNotPermitted = &LetterError{Refusal: RefusalNotPermitted,
+		Msg: "Chỉ người có quyền Tiếp nhận đơn thư mới chuyển đơn cho bộ phận hoặc cán bộ khác. Bỏ chọn bộ phận và cán bộ để chỉ đổi trạng thái."}
 )
 
 // --- types ------------------------------------------------------------------------------------------
@@ -358,6 +362,66 @@ func (l CitizenLetter) StatusGroup() LetterStatusGroup {
 		}
 	}
 	return ""
+}
+
+// --- the status a display group stands for (bug sheet row 44; owner rule of 11/10/2026) ------------
+
+// The prototype has no "Bước cụ thể" field: each chip of its status bar IS one real status
+// (vigov-require apps/admin/src/lib/document-display.ts:135-146; PetitionDetailDrawer.tsx:269-275 sends
+// `status: next`). Ours keeps TT 05/2021's ten statuses under six display groups (ADR 0084 §2), so a chip
+// names a GROUP. NextStatusInGroup is the server's half of letting the composer drop the field: the
+// real status is the ONE arrow of C3 out of the current status that lands in the group.
+//
+// WHERE IT IS UNAMBIGUOUS (exactly one arrow lands in the group) — every case but one:
+//
+//	moi-vao-so       → dang-xu-ly       = dang-xu-ly-don
+//	dang-xu-ly-don   → dang-xu-ly       = thu-ly            (⚠ admission: starts a KN/TC resolution deadline)
+//	dang-xu-ly-don   → chuyen-cap-tren  = chuyen-don
+//	thu-ly           → dang-xu-ly       = dang-giai-quyet
+//	dang-giai-quyet  → da-giai-quyet    = da-giai-quyet
+//	dang-giai-quyet  → luu-khong-thu-ly = dinh-chi
+//
+// THE ONE AMBIGUITY: dang-xu-ly-don → luu-khong-thu-ly has THREE arrows — khong-thu-ly, huong-dan,
+// luu-don — three different outcomes on an archival record under TT 05/2021. Refused with
+// ErrLetterGroupAmbiguous: the caller must send the explicit `status`, which stays accepted.
+//
+// `da-phan-cong` and `moi-vao-so` are never a target: assignment is an attribute (C3), done by routing.
+
+// ErrLetterGroupAmbiguous — the group holds more than one status reachable from here.
+var ErrLetterGroupAmbiguous = inputRefusal("Đổi trạng thái: nhóm này ứng với nhiều bước thật từ trạng thái hiện tại " +
+	"(Không thụ lý · Hướng dẫn · Lưu đơn) — hãy chọn bước cụ thể.")
+
+// ErrLetterGroupUnreachable — no arrow of C3 out of the current status lands in the group.
+var ErrLetterGroupUnreachable = stateRefusal("Không chuyển được đơn từ trạng thái hiện tại sang nhóm trạng thái đã chọn.")
+
+// ErrLetterGroupInvalid — a group outside the six, or both / neither of `status` and `status_group`.
+var ErrLetterGroupInvalid = inputRefusal("Đổi trạng thái: gửi đúng MỘT trong `status` (trạng thái thật) hoặc " +
+	"`status_group` (moi-vao-so, da-phan-cong, dang-xu-ly, da-giai-quyet, chuyen-cap-tren, luu-khong-thu-ly).")
+
+// NextStatusInGroup derives the real target status of a move requested as a display group.
+func NextStatusInGroup(from LetterStatus, g LetterStatusGroup) (LetterStatus, error) {
+	rule, ok := g.Rule()
+	if !ok {
+		return "", ErrLetterGroupInvalid
+	}
+	in := map[LetterStatus]bool{}
+	for _, s := range rule.Statuses {
+		in[s] = true
+	}
+	var found []LetterStatus
+	for _, next := range letterTransitions[from] {
+		if in[next] {
+			found = append(found, next)
+		}
+	}
+	switch len(found) {
+	case 0:
+		return "", ErrLetterGroupUnreachable
+	case 1:
+		return found[0], nil
+	default:
+		return "", ErrLetterGroupAmbiguous
+	}
 }
 
 // LetterLogKind is the kind of one log row — 0006's `citizen_letter_log_kind_valid`.

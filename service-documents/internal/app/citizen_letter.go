@@ -114,6 +114,9 @@ const (
 // logAssignedAtBooking is the prototype's sentence for a unit chosen on the booking form (ADR 0084 #2:
 // the letter stays `moi-vao-so` and its group derives "Đã phân công"). The row's from-unit stays EMPTY,
 // so the timeline prints "Một cửa → <unit>" — the letter came from the reception desk, not a unit.
+//
+// The same sentence is the reason of a hand-over made from the status composer with no note: it is the
+// prototype's own fallback there too (PetitionDetailDrawer.tsx:266, `note.trim() || "Phân công xử lý"`).
 const (
 	logSenderCorrected   = "Sửa thông tin người gửi"
 	logAssignedAtBooking = "Phân công xử lý"
@@ -153,10 +156,19 @@ type RouteLetterRequest struct {
 	Reason       string
 }
 
-// MoveLetterRequest is a status change.
+// MoveLetterRequest is a status change, optionally carrying a hand-over (the prototype's status
+// composer, "Bộ phận xử lý" + "Cán bộ phụ trách" — row 44). Both hand-over fields empty = no hand-over.
+// ToUnitID empty with AssigneeCode set = keep the unit holding the letter, name the officer.
+// AssigneeCode empty with ToUnitID set = "để bộ phận tự phân công" (the officer is cleared, as Route does).
+//
+// EXACTLY ONE OF Status / StatusGroup. StatusGroup is the prototype's chip (row 44): the real status is
+// derived by domain.NextStatusInGroup, and refused where that is ambiguous — Status stays accepted.
 type MoveLetterRequest struct {
-	Status domain.LetterStatus
-	Note   string
+	Status       domain.LetterStatus
+	StatusGroup  domain.LetterStatusGroup
+	Note         string
+	ToUnitID     string
+	AssigneeCode string
 }
 
 // LetterResultRequest is C10's result — a full replacement.
@@ -411,38 +423,51 @@ func (uc *CitizenLetters) Route(ctx context.Context, id string, req RouteLetterR
 		if before.Status.Finished() {
 			return domain.ErrLetterFinished
 		}
-		if err := uc.repo.UpdateHolder(ctx, tx, before.ID, unit, assignee, caller.Actor.ID); err != nil {
+		if err := uc.handOverInTx(ctx, tx, before, unit, assignee, reason, logID, caller, now); err != nil {
 			return err
-		}
-		if err := uc.repo.InsertLog(ctx, tx, domain.LetterLogEntry{
-			ID: logID, LetterID: before.ID, At: now, ActorCode: caller.Actor.ID,
-			Kind: domain.LetterLogRouting, FromUnitID: before.HoldingUnitID, ToUnitID: unit,
-			AssigneeCode: assignee, Content: reason,
-		}); err != nil {
-			return err
-		}
-		// THE NAMED OFFICER IS TOLD — from the outbox, in THIS transaction (ADR 0086 A1, kind 22), keyed
-		// on the log row just written. Title = the register number only; the body stays EMPTY (no
-		// summary, no sender, no type — a denunciation must not announce itself, ADR 0078 #4). Booking
-		// with a unit and no officer never reaches here, and owes no notice.
-		if assignee != "" {
-			if err := writeStaffNotice(ctx, tx, uc.notices, uc.newID,
-				domain.LetterAssignedNotice(before, logID, assignee), caller.Actor.ID, now); err != nil {
-				return err
-			}
 		}
 		after = before
 		after.HoldingUnitID, after.AssigneeCode, after.UpdatedAt = unit, assignee, now
-		// The reason is free text and may quote the letter: the entry records the move, not the words.
-		return writeLetterAudit(ctx, tx, caller.Actor, ActionRouteCitizenLetter, before, map[string]any{
-			"truoc": map[string]any{"bo_phan_giu": before.HoldingUnitID, "can_bo_xu_ly": before.AssigneeCode},
-			"sau":   map[string]any{"bo_phan_giu": unit, "can_bo_xu_ly": assignee},
-		})
+		return nil
 	})
 	if err != nil {
 		return domain.CitizenLetter{}, wrapLetter(ctx, "chuyển đơn thư", err)
 	}
 	return after, nil
+}
+
+// handOverInTx is ONE routing of a letter, inside the caller's transaction: the holder columns, the
+// `luan-chuyen` log row, the named officer's notice and the `chuyen_don_thu` audit entry. Route and Move
+// (a status change carrying a unit / officer, row 44) share it, so a hand-over made from the status
+// composer leaves exactly the trail a hand-over from "Chuyển xử lý" leaves. The unit and the officer
+// must already have been checked live with identity, OUTSIDE the transaction (the file header's reason).
+func (uc *CitizenLetters) handOverInTx(ctx context.Context, tx *store.ScopedTx, before domain.CitizenLetter,
+	unit, assignee, reason, logID string, caller LetterCaller, now time.Time) error {
+	if err := uc.repo.UpdateHolder(ctx, tx, before.ID, unit, assignee, caller.Actor.ID); err != nil {
+		return err
+	}
+	if err := uc.repo.InsertLog(ctx, tx, domain.LetterLogEntry{
+		ID: logID, LetterID: before.ID, At: now, ActorCode: caller.Actor.ID,
+		Kind: domain.LetterLogRouting, FromUnitID: before.HoldingUnitID, ToUnitID: unit,
+		AssigneeCode: assignee, Content: reason,
+	}); err != nil {
+		return err
+	}
+	// THE NAMED OFFICER IS TOLD — from the outbox, in THIS transaction (ADR 0086 A1, kind 22), keyed
+	// on the log row just written. Title = the register number only; the body stays EMPTY (no
+	// summary, no sender, no type — a denunciation must not announce itself, ADR 0078 #4). Booking
+	// with a unit and no officer never reaches here, and owes no notice.
+	if assignee != "" {
+		if err := writeStaffNotice(ctx, tx, uc.notices, uc.newID,
+			domain.LetterAssignedNotice(before, logID, assignee), caller.Actor.ID, now); err != nil {
+			return err
+		}
+	}
+	// The reason is free text and may quote the letter: the entry records the move, not the words.
+	return writeLetterAudit(ctx, tx, caller.Actor, ActionRouteCitizenLetter, before, map[string]any{
+		"truoc": map[string]any{"bo_phan_giu": before.HoldingUnitID, "can_bo_xu_ly": before.AssigneeCode},
+		"sau":   map[string]any{"bo_phan_giu": unit, "can_bo_xu_ly": assignee},
+	})
 }
 
 // --- status -----------------------------------------------------------------------------------------
@@ -457,6 +482,19 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 	if id == "" {
 		return domain.CitizenLetter{}, docstore.ErrCitizenLetterNotFound
 	}
+	if (req.Status == "") == (req.StatusGroup == "") || (req.StatusGroup != "" && !req.StatusGroup.Valid()) {
+		return domain.CitizenLetter{}, domain.ErrLetterGroupInvalid
+	}
+	if req.StatusGroup != "" {
+		// The group names no status by itself: read where the letter stands and take C3's one arrow into
+		// the group. Re-derived under the row lock below, so a move racing this one cannot make the
+		// derived status mean something the caller did not ask for.
+		target, err := uc.statusOfGroup(ctx, id, req.StatusGroup, caller)
+		if err != nil {
+			return domain.CitizenLetter{}, wrapLetter(ctx, "đổi trạng thái đơn thư", err)
+		}
+		req.Status = target
+	}
 	if !req.Status.Valid() {
 		return domain.CitizenLetter{}, domain.ErrLetterStatusInvalid
 	}
@@ -467,12 +505,46 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 	if err := requireActor(caller.Actor); err != nil {
 		return domain.CitizenLetter{}, err
 	}
+	unit, err := domain.TrimOptional(req.ToUnitID, domain.MaxLetterUnitID)
+	if err != nil {
+		return domain.CitizenLetter{}, err
+	}
+	assignee, err := domain.TrimOptional(req.AssigneeCode, domain.MaxStaffCode)
+	if err != nil {
+		return domain.CitizenLetter{}, err
+	}
+	handover := unit != "" || assignee != ""
+	if handover {
+		// ROUTING IS `petition.create`'s ACT (C13/C14), whichever route carries it. The status route is
+		// gated on `petition.read` + "assignee OR petition.create"; without this line an assignee could
+		// hand the letter to another unit from the status composer — a right the user withheld.
+		if !caller.CanBook {
+			return domain.CitizenLetter{}, domain.ErrLetterHandoverNotPermitted
+		}
+		// Checked live in THIS commune with identity, before any lock — the same two checks Route makes.
+		if unit != "" {
+			if err := uc.checkUnit(ctx, unit); err != nil {
+				return domain.CitizenLetter{}, err
+			}
+		}
+		if assignee != "" {
+			if err := uc.checkAssignee(ctx, assignee); err != nil {
+				return domain.CitizenLetter{}, err
+			}
+		}
+	}
 	// Truncated to the database's precision: `accepted_at` is the count origin of the resolution
 	// deadline, and the instant identity counts from must be the instant stored (ADR 0085 B2).
 	now := uc.clock().Truncate(time.Microsecond)
 	logID, err := uc.newID()
 	if err != nil {
 		return domain.CitizenLetter{}, fmt.Errorf("citizen_letter: sinh mã nhật ký: %w", err)
+	}
+	var routeLogID string
+	if handover {
+		if routeLogID, err = uc.newID(); err != nil {
+			return domain.CitizenLetter{}, fmt.Errorf("citizen_letter: sinh mã nhật ký: %w", err)
+		}
 	}
 	admission, err := uc.prepareAdmission(ctx, id, req.Status, caller, now)
 	if err != nil {
@@ -487,6 +559,15 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 		}
 		if err := mayWorkOn(before, caller); err != nil {
 			return err
+		}
+		if req.StatusGroup != "" {
+			again, err := domain.NextStatusInGroup(before.Status, req.StatusGroup)
+			if err != nil {
+				return err
+			}
+			if again != req.Status {
+				return domain.ErrLetterGroupUnreachable
+			}
 		}
 		if err := domain.CheckLetterTransition(before.Status, req.Status); err != nil {
 			return err
@@ -529,16 +610,63 @@ func (uc *CitizenLetters) Move(ctx context.Context, id string, req MoveLetterReq
 			beforeView["han_giai_quyet"] = instantText(before.ResolutionDueAt)
 			afterView["han_giai_quyet"] = instantText(after.ResolutionDueAt)
 		}
-		return writeLetterAudit(ctx, tx, caller.Actor, ActionMoveCitizenLetter, before, map[string]any{
+		if err := writeLetterAudit(ctx, tx, caller.Actor, ActionMoveCitizenLetter, before, map[string]any{
 			"truoc":      beforeView,
 			"sau":        afterView,
 			"co_ghi_chu": note != "",
-		})
+		}); err != nil {
+			return err
+		}
+		if !handover {
+			return nil
+		}
+		// THE HAND-OVER, IN THIS SAME TRANSACTION (row 44): the status and the routing commit together or
+		// not at all, so the register never shows a letter moved but not handed over, or the reverse.
+		// No unit sent = keep the unit holding the letter (prototype service.py:510); a letter no unit
+		// holds has nothing to keep, so naming only an officer there is refused.
+		target := unit
+		if target == "" {
+			target = before.HoldingUnitID
+		}
+		if target == "" {
+			return domain.ErrLetterUnitMissing
+		}
+		if target == before.HoldingUnitID && assignee == before.AssigneeCode {
+			return nil // nothing changes hands: no routing row for a move that did not happen
+		}
+		reason := note
+		if reason == "" {
+			reason = logAssignedAtBooking
+		}
+		if err := uc.handOverInTx(ctx, tx, before, target, assignee, reason, routeLogID, caller, now); err != nil {
+			return err
+		}
+		after.HoldingUnitID, after.AssigneeCode = target, assignee
+		return nil
 	})
 	if err != nil {
 		return domain.CitizenLetter{}, wrapLetter(ctx, "đổi trạng thái đơn thư", err)
 	}
 	return after, nil
+}
+
+// statusOfGroup reads the letter in a short read transaction and derives the real status a display
+// group stands for from where it is now (domain.NextStatusInGroup). Who may act is checked on that read
+// too, so a caller who may not move the letter is told 403, not which steps the group would offer.
+func (uc *CitizenLetters) statusOfGroup(ctx context.Context, id string, g domain.LetterStatusGroup,
+	caller LetterCaller) (domain.LetterStatus, error) {
+	var cur domain.CitizenLetter
+	if err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		var err error
+		cur, err = uc.repo.ByID(ctx, tx, id)
+		return err
+	}); err != nil {
+		return "", err
+	}
+	if err := mayWorkOn(cur, caller); err != nil {
+		return "", err
+	}
+	return domain.NextStatusInGroup(cur.Status, g)
 }
 
 // admissionDeadline is what prepareAdmission learned before Move's transaction.

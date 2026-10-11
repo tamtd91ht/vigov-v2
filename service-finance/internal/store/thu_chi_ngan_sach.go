@@ -208,6 +208,13 @@ func (s *NganSachStore) CotCuaBang(ctx context.Context, bangID string) ([]domain
 
 const cotKhoanMuc = `id, bang_id, COALESCE(cha_id, ''), tt, ten, thu_tu, cach_tinh, cap, is_headline`
 
+// entryCountColumn counts one line's LIVE batches. The batch side is bound to the commune by `$1` —
+// the same parameter scoped Query binds for the outer table — never by the line's id alone, which would
+// count another commune's batches wherever ids collide (rule 1). `deleted_at IS NULL`: a removed batch
+// is no longer on the line (rule 7, invariant 2).
+const entryCountColumn = `(SELECT count(*) FROM dot_thu_chi d
+	WHERE d.tenant_id = $1 AND d.khoan_muc_id = khoan_muc_ngan_sach.id AND d.deleted_at IS NULL)`
+
 // KhoanMucCuaBang reads one sheet's whole tree, in display order.
 //
 // ORDER BY thu_tu, id: `thu_tu` is what the screen draws by and `id` makes the order TOTAL, so two
@@ -218,10 +225,15 @@ const cotKhoanMuc = `id, bang_id, COALESCE(cha_id, ''), tt, ten, thu_tu, cach_ti
 // Selecting exactly the ceiling returns a full page indistinguishable from a complete tree of
 // exactly that size — the truncation this read refuses to perform, performed by the bound meant to
 // prevent it.
+//
+// THE LIVE-BATCH COUNT RIDES IN THE SAME STATEMENT (entryCountColumn) — one correlated count per line,
+// answered from the partial index `dot_thu_chi_theo_khoan_muc (tenant_id, khoan_muc_id) WHERE
+// deleted_at IS NULL` (migration 0008), so the sheet read stays one round trip for the tree and never
+// becomes one query per line.
 func (s *NganSachStore) KhoanMucCuaBang(ctx context.Context,
 	bangID string) ([]domain.KhoanMucNganSach, error) {
 
-	rows, err := s.db.For(ctx).Query(ctx, cotKhoanMuc, "khoan_muc_ngan_sach",
+	rows, err := s.db.For(ctx).Query(ctx, cotKhoanMuc+", "+entryCountColumn, "khoan_muc_ngan_sach",
 		`AND deleted_at IS NULL AND bang_id = $2 ORDER BY thu_tu, id LIMIT $3`,
 		bangID, TranKhoanMucMotBang+1)
 	if err != nil {
@@ -236,7 +248,7 @@ func (s *NganSachStore) KhoanMucCuaBang(ctx context.Context,
 			cachTinh string
 		)
 		err := rows.Scan(&k.ID, &k.BangID, &k.ChaID, &k.TT, &k.Ten, &k.ThuTu,
-			&cachTinh, &k.Cap, &k.LaDongTong)
+			&cachTinh, &k.Cap, &k.LaDongTong, &k.EntryCount)
 		if err != nil {
 			return nil, fmt.Errorf("ngan_sach: đọc dòng khoản mục: %w", err)
 		}

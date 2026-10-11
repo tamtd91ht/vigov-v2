@@ -211,6 +211,13 @@ type KhoanMucNganSach struct {
 
 	// LaDongTong is `is_headline`. See the block at the top of this file; nothing infers it.
 	LaDongTong bool
+
+	// EntryCount is how many LIVE batches (`dot_thu_chi`, not soft-deleted) the line holds — the badge
+	// on the "Các đợt thu, chi" button (prototype FiscalReportPanel.tsx:647-655). A READ-ONLY figure,
+	// counted by the screen's sheet read (store.KhoanMucCuaBang) and by nothing else: it is ZERO on every
+	// line read inside a write transaction, which is why only the full-sheet answer emits it. Never a
+	// column — a stored count beside the rows it counts drifts on the first missed update.
+	EntryCount int
 }
 
 // --- the refusals -------------------------------------------------------------------------------

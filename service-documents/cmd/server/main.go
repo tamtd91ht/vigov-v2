@@ -143,6 +143,7 @@ func run(log *slog.Logger) error {
 	//     (rule 6, invariant 3). The handlers only translate HTTP. It is given *store.DB rather
 	//     than a transaction because opening one is precisely what it is for.
 	ghiLoaiVanBan := app.NewDanhMucLoaiVanBan(kho, loaiVanBan)
+	citizenLetterTypes := docstore.NewCitizenLetterTypeStore(kho)
 
 	// 4. directory — Host -> commune, over gRPC to the platform service.
 	//
@@ -242,7 +243,10 @@ func run(log *slog.Logger) error {
 		// identity as well — removed units included.
 		CitizenLetterImport: app.NewCitizenLetterImport(citizenLetters, dinhDanh),
 		CitizenLetterExport: app.NewCitizenLetterReportExport(citizenLetters, dinhDanh),
-		Log:                 log,
+		// "Loại đơn thư" on the Danh mục screen: one store for the read, the use case for the writes.
+		CitizenLetterTypeList: citizenLetterTypes,
+		CitizenLetterTypes:    app.NewCitizenLetterTypes(kho, citizenLetterTypes),
+		Log:                   log,
 	})
 
 	// Rule 11, invariant 1: the environment is read in core/config and nowhere else.

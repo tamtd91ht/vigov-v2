@@ -301,6 +301,18 @@ func (c *connNSGia) QueryContext(_ context.Context, q string, args []driver.Name
 		}
 		return &rowsGia{cot: []string{"khoan_muc_id", "cot_id", "sum"}, hang: hang}, nil
 
+	// The screen's tree read carries a correlated live-batch count (store.entryCountColumn): BEFORE the
+	// plain batch count below, which its text also contains.
+	case strings.Contains(q, "FROM khoan_muc_ngan_sach WHERE") && strings.Contains(q, "count(*) FROM dot_thu_chi"):
+		var hang [][]driver.Value
+		for _, k := range c.k.khoanMuc {
+			hang = append(hang, []driver.Value{
+				k.ID, k.BangID, k.ChaID, k.TT, k.Ten, int64(k.ThuTu),
+				string(k.CachTinh), int64(k.Cap), k.LaDongTong, int64(k.EntryCount),
+			})
+		}
+		return &rowsGia{cot: append(cotKM(), "entry_count"), hang: hang}, nil
+
 	case strings.Contains(q, "SELECT EXISTS (SELECT 1 FROM dot_thu_chi"):
 		return &rowsGia{cot: []string{"exists"}, hang: [][]driver.Value{{c.k.dotConSong}}}, nil
 

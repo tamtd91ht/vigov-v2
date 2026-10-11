@@ -152,6 +152,12 @@ type dongRa struct {
 	// indicators. `null` = no figure, and then UnavailableReasons says why. Omitted on a sheet with no
 	// percentage column and on the single-line write responses (dongRaMot).
 	PercentBasisPoints map[string]*int64 `json:"percent_basis_points,omitempty"`
+
+	// EntryCount is how many live batches ("Các đợt thu, chi") the line holds — the badge on that button
+	// (prototype FiscalReportPanel.tsx:647-655). Present on every line of the full-sheet answer, 0
+	// included; OMITTED on the single-line write answers (dongRaMot), for the reason `values` is: a write
+	// route holds one row, not the count, and a 0 there would read as "no batches".
+	EntryCount *int `json:"entry_count,omitempty"`
 }
 
 // oTongRa is one summary cell: the marked row's figure in one numeric column (§2's "Hàng ô tóm tắt
@@ -293,10 +299,11 @@ func bangDayDuRaNgoai(d domain.BangDayDu) bangDayDuRa {
 				gia[c.ID] = nil
 			}
 		}
+		entryCount := k.EntryCount
 		ra.Lines = append(ra.Lines, dongRa{
 			ID: k.ID, ParentID: k.ChaID, No: k.TT, Name: k.Ten, Order: k.ThuTu,
 			Method: string(k.CachTinh), Level: k.Cap, IsHeadline: k.LaDongTong, Values: gia,
-			UnavailableReasons: lyDo, PercentBasisPoints: percents,
+			UnavailableReasons: lyDo, PercentBasisPoints: percents, EntryCount: &entryCount,
 		})
 	}
 

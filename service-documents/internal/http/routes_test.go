@@ -258,6 +258,9 @@ type mayChu struct {
 	letterImport *letterImportFake
 	letterExport *letterExportFake
 
+	// The "Loại đơn thư" catalogue — see citizen_letter_type_test.go.
+	letterTypes *letterTypesFake
+
 	// khoIdem is nil BY DEFAULT, and that is deliberate: a nil store is a valid deployment (local
 	// development with no Redis) and it is what makes the CheDoHong each route DECLARED the thing
 	// under test rather than Redis behaviour. The two routes that ISSUE A NUMBER declare
@@ -297,6 +300,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	letters := citizenLettersSample()
 	letterImport := &letterImportFake{}
 	letterExport := &letterExportFake{}
+	letterTypes := &letterTypesFake{}
 
 	m := &mayChu{
 		thuMuc:  thuMucMau(),
@@ -309,22 +313,24 @@ func dungMayChu(t *testing.T) *mayChu {
 		di:      di,
 		ghiDi:   ghiDi,
 		d: Deps{
-			Checker:             checker,
-			LoaiVanBan:          loai,
-			GhiLoaiVanBan:       ghi,
-			VanBanDen:           den,
-			GhiVanBanDen:        ghiDen,
-			ChiTietVanBanDen:    chiTiet,
-			VanBanDi:            di,
-			GhiVanBanDi:         ghiDi,
-			IncomingSummary:     summary,
-			OverdueQueue:        queue,
-			AuditLog:            auditLog,
-			CitizenLetters:      letters,
-			CitizenLetterImport: letterImport,
-			CitizenLetterExport: letterExport,
-			Clock:               func() time.Time { return testNow },
-			Log:                 slog.New(slog.NewTextHandler(io.Discard, nil)),
+			Checker:               checker,
+			LoaiVanBan:            loai,
+			GhiLoaiVanBan:         ghi,
+			VanBanDen:             den,
+			GhiVanBanDen:          ghiDen,
+			ChiTietVanBanDen:      chiTiet,
+			VanBanDi:              di,
+			GhiVanBanDi:           ghiDi,
+			IncomingSummary:       summary,
+			OverdueQueue:          queue,
+			AuditLog:              auditLog,
+			CitizenLetters:        letters,
+			CitizenLetterImport:   letterImport,
+			CitizenLetterExport:   letterExport,
+			CitizenLetterTypeList: letterTypes,
+			CitizenLetterTypes:    letterTypes,
+			Clock:                 func() time.Time { return testNow },
+			Log:                   slog.New(slog.NewTextHandler(io.Discard, nil)),
 		},
 		summary:      summary,
 		queue:        queue,
@@ -332,6 +338,7 @@ func dungMayChu(t *testing.T) *mayChu {
 		letters:      letters,
 		letterImport: letterImport,
 		letterExport: letterExport,
+		letterTypes:  letterTypes,
 	}
 	m.dungLai(t, nil)
 	return m
@@ -458,23 +465,27 @@ func TestRegisterTuChoiDepsThieuCheckerVaUseCaseGhi(t *testing.T) {
 		"missing citizen-letter register":         func(d *Deps) { d.CitizenLetters = nil },
 		"missing citizen-letter import":           func(d *Deps) { d.CitizenLetterImport = nil },
 		"missing citizen-letter report export":    func(d *Deps) { d.CitizenLetterExport = nil },
+		"missing citizen-letter type list":        func(d *Deps) { d.CitizenLetterTypeList = nil },
+		"missing citizen-letter type writes":      func(d *Deps) { d.CitizenLetterTypes = nil },
 	} {
 		t.Run(ten, func(t *testing.T) {
 			d := Deps{
-				Checker:             &checkerGia{},
-				LoaiVanBan:          loaiVanBanMau(),
-				GhiLoaiVanBan:       &ghiLoaiVanBanGia{},
-				VanBanDen:           vanBanDenMau(),
-				GhiVanBanDen:        &ghiVanBanDenGia{},
-				ChiTietVanBanDen:    chiTietVanBanDenMau(),
-				VanBanDi:            vanBanDiMau(),
-				GhiVanBanDi:         &ghiVanBanDiGia{},
-				IncomingSummary:     sampleSummaryReader(),
-				OverdueQueue:        sampleQueueReader(),
-				AuditLog:            &auditLogFake{},
-				CitizenLetters:      citizenLettersSample(),
-				CitizenLetterImport: &letterImportFake{},
-				CitizenLetterExport: &letterExportFake{},
+				Checker:               &checkerGia{},
+				LoaiVanBan:            loaiVanBanMau(),
+				GhiLoaiVanBan:         &ghiLoaiVanBanGia{},
+				VanBanDen:             vanBanDenMau(),
+				GhiVanBanDen:          &ghiVanBanDenGia{},
+				ChiTietVanBanDen:      chiTietVanBanDenMau(),
+				VanBanDi:              vanBanDiMau(),
+				GhiVanBanDi:           &ghiVanBanDiGia{},
+				IncomingSummary:       sampleSummaryReader(),
+				OverdueQueue:          sampleQueueReader(),
+				AuditLog:              &auditLogFake{},
+				CitizenLetters:        citizenLettersSample(),
+				CitizenLetterImport:   &letterImportFake{},
+				CitizenLetterExport:   &letterExportFake{},
+				CitizenLetterTypeList: &letterTypesFake{},
+				CitizenLetterTypes:    &letterTypesFake{},
 			}
 			bo(&d)
 			defer func() {

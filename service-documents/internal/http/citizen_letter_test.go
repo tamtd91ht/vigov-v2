@@ -66,6 +66,8 @@ type citizenLettersFake struct {
 	lastDue    *time.Time
 	lastBook   app.BookLetterRequest
 	lastResult app.LetterResultRequest
+	lastMove   app.MoveLetterRequest
+	moveErr    error // when set, Move refuses with it
 	bookErr    error // when set, Book refuses with it — the edge's mapping is what is under test
 }
 
@@ -121,8 +123,12 @@ func (f *citizenLettersFake) Route(ctx context.Context, id string, _ app.RouteLe
 	f.note(ctx, c)
 	return f.find(ctx, id)
 }
-func (f *citizenLettersFake) Move(ctx context.Context, id string, _ app.MoveLetterRequest, c app.LetterCaller) (domain.CitizenLetter, error) {
+func (f *citizenLettersFake) Move(ctx context.Context, id string, req app.MoveLetterRequest, c app.LetterCaller) (domain.CitizenLetter, error) {
 	f.note(ctx, c)
+	f.lastMove = req
+	if f.moveErr != nil {
+		return domain.CitizenLetter{}, f.moveErr
+	}
 	return f.find(ctx, id)
 }
 func (f *citizenLettersFake) RecordResult(ctx context.Context, id string, req app.LetterResultRequest, c app.LetterCaller) (domain.CitizenLetter, error) {
@@ -710,4 +716,25 @@ func TestCitizenLetter_ResultRouteAcceptsReplyOnly(t *testing.T) {
 	}
 	doiMa(t, m.goiThan(t, http.MethodPut, hostA, pathLetters+"/dt-a-001/result", canBoCua(xaA),
 		`{"result_summary":"x","result_document_date":"25/09/2026"}`), http.StatusBadRequest)
+}
+
+// Row 44: the status composer's "Bộ phận xử lý" / "Cán bộ phụ trách" reach the use case as sent, and
+// the use case's refusal of a hand-over by a non-`petition.create` caller answers 403 with its sentence.
+func TestCitizenLetter_StatusCarriesTheHandover(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(xaA, "petition.read")
+	doiMa(t, m.goiThan(t, http.MethodPost, hostA, pathLetters+"/dt-a-001/status", canBoCua(xaA),
+		`{"status":"dang-xu-ly-don","note":"Giao địa chính","org_unit_id":"bp-dia-chinh","assignee_code":"CB-00777"}`), http.StatusOK)
+	mv := m.letters.lastMove
+	if mv.Status != domain.LetterStatusScreening || mv.Note != "Giao địa chính" || mv.ToUnitID != "bp-dia-chinh" || mv.AssigneeCode != "CB-00777" {
+		t.Fatalf("yêu cầu tới use case: %+v", mv)
+	}
+
+	m.letters.moveErr = domain.ErrLetterHandoverNotPermitted
+	w := m.goiThan(t, http.MethodPost, hostA, pathLetters+"/dt-a-001/status", canBoCua(xaA),
+		`{"status":"dang-xu-ly-don","org_unit_id":"bp-dia-chinh"}`)
+	doiMa(t, w, http.StatusForbidden)
+	if !strings.Contains(w.Body.String(), "Tiếp nhận đơn thư") {
+		t.Fatalf("403 không mang câu của use case: %s", w.Body.String())
+	}
 }

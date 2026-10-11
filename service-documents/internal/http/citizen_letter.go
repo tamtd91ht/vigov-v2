@@ -367,9 +367,24 @@ type letterRoutingIn struct {
 	Reason   string `json:"reason"`
 }
 
+// letterStatusIn is the body of POST …/status. `org_unit_id` / `assignee_code` are the prototype's
+// "Bộ phận xử lý" / "Cán bộ phụ trách" of the status composer (row 44): when either is sent the letter is
+// also handed over, in the SAME transaction, with the routing's own checks, log row and audit entry —
+// and only by a holder of `petition.create` (C13/C14). Both absent = a status change only.
+// `org_unit_id` absent with `assignee_code` set keeps the unit holding the letter. `assignee_code` is a
+// STAFF BUSINESS CODE, the value `assignee_code` carries on the way out — never an account id.
+// The routing reason is `note`, or the fixed "Phân công xử lý" when no note is written.
+//
+// EXACTLY ONE OF `status` / `status_group` (400 otherwise). `status_group` is the prototype's chip: the
+// server takes C3's one arrow from the current status into that group (domain.NextStatusInGroup). The one
+// ambiguous case — "Lưu, không thụ lý" from `dang-xu-ly-don` (khong-thu-ly · huong-dan · luu-don) —
+// answers 400 asking for the explicit `status`, which is always accepted.
 type letterStatusIn struct {
-	Status string `json:"status"`
-	Note   string `json:"note,omitempty"`
+	Status       string `json:"status,omitempty"`
+	StatusGroup  string `json:"status_group,omitempty"`
+	Note         string `json:"note,omitempty"`
+	OrgUnitID    string `json:"org_unit_id,omitempty"`   // identity's `bo_phan.id`
+	AssigneeCode string `json:"assignee_code,omitempty"` // a staff business code
 }
 
 // letterResultIn is the body of PUT …/result. WHAT IS REQUIRED DEPENDS ON THE LETTER'S TYPE (ADR 0084
@@ -594,7 +609,9 @@ func (h *Handler) MoveCitizenLetter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	l, err := h.d.CitizenLetters.Move(r.Context(), r.PathValue("id"),
-		app.MoveLetterRequest{Status: domain.LetterStatus(in.Status), Note: in.Note}, caller)
+		app.MoveLetterRequest{Status: domain.LetterStatus(in.Status), StatusGroup: domain.LetterStatusGroup(in.StatusGroup),
+			Note:     in.Note,
+			ToUnitID: in.OrgUnitID, AssigneeCode: in.AssigneeCode}, caller)
 	if err != nil {
 		h.letterError(w, r, "đổi trạng thái", err)
 		return

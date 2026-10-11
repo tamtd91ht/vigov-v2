@@ -836,6 +836,94 @@
     {
       "service": "documents",
       "method": "GET",
+      "path": "/api/v1/citizen-letter-types",
+      "operation_id": "documents_get_citizen_letter_types",
+      "task_id": "008887065280",
+      "summary": "Danh mục Loại đơn thư của xã — nhãn, thứ tự, màu, bật/tắt cho bốn loại đơn theo luật",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "documents.citizenLetterTypeListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_type.go"
+    },
+    {
+      "service": "documents",
+      "method": "POST",
+      "path": "/api/v1/citizen-letter-types",
+      "operation_id": "documents_post_citizen_letter_types",
+      "task_id": "425550f629c7",
+      "summary": "Thêm nhãn của xã cho một trong bốn loại đơn thư (kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi)",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "required",
+      "idempotency_on_store_failure": "MoKhiHong",
+      "request_schema": "documents.addCitizenLetterTypeIn",
+      "reply_schemas": {
+        "201": "documents.citizenLetterTypeOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_type.go"
+    },
+    {
+      "service": "documents",
+      "method": "DELETE",
+      "path": "/api/v1/citizen-letter-types/{id}",
+      "operation_id": "documents_delete_citizen_letter_types_by_id",
+      "task_id": "881557ad45c6",
+      "summary": "Xoá mềm một dòng Loại đơn thư; lý do không bắt buộc (bỏ trống thì ghi câu cố định); mã không cấp lại",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "lần xoá thứ hai không thấy dòng còn sống nên trả 404 và không ghi gì",
+      "request_schema": "documents.removeCitizenLetterTypeIn",
+      "reply_schemas": {
+        "204": "",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_type.go"
+    },
+    {
+      "service": "documents",
+      "method": "PATCH",
+      "path": "/api/v1/citizen-letter-types/{id}",
+      "operation_id": "documents_patch_citizen_letter_types_by_id",
+      "task_id": "fae237f84ba4",
+      "summary": "Sửa nhãn, thứ tự, màu hoặc bật/tắt một dòng Loại đơn thư (mã không đổi được)",
+      "screen": "14-cau-hinh §5",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "khong-can",
+      "idempotency_reason": "ghi đè một trạng thái đã biết; app.EditType không ghi gì và không để vết khi không trường nào đổi",
+      "request_schema": "documents.editCitizenLetterTypeIn",
+      "reply_schemas": {
+        "200": "documents.citizenLetterTypeOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-documents/internal/http/routes_citizen_letter_type.go"
+    },
+    {
+      "service": "documents",
+      "method": "GET",
       "path": "/api/v1/citizen-letters",
       "operation_id": "documents_get_citizen_letters",
       "task_id": "261af67566b4",
@@ -1133,7 +1221,7 @@
       "path": "/api/v1/citizen-letters/{id}/status",
       "operation_id": "documents_post_citizen_letters_by_id_status",
       "task_id": "da3ac736e6b7",
-      "summary": "Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết",
+      "summary": "Đổi trạng thái đơn thư theo TT 05/2021 (C3), gửi trạng thái thật hoặc nhóm hiển thị (máy chủ suy ra bước thật khi chỉ có một); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết; kèm bộ phận / cán bộ thì chuyển đơn cùng giao dịch (cần quyền tiếp nhận)",
       "screen": "05-van-ban-don-thu §3.5",
       "permission_kind": "permission",
       "permission": "petition.read",
@@ -1189,7 +1277,8 @@
         "400": "httpx.Error",
         "401": "httpx.Error",
         "403": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes_citizen_report_figures.go"
     },
@@ -1274,7 +1363,8 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "422": "httpx.Error",
-        "500": "httpx.Error"
+        "500": "httpx.Error",
+        "503": "httpx.Error"
       },
       "declared_in": "service-petitions/internal/http/routes_citizen_report_figures.go"
     },
@@ -1304,7 +1394,7 @@
       "path": "/api/v1/citizen-reports",
       "operation_id": "petitions_get_citizen_reports",
       "task_id": "db9a4ae6ade1",
-      "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên)",
+      "summary": "Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi; `scope=related`: giao cho tôi · tôi có dòng nhật ký xử lý · bộ phận tôi đang giữ — mã lấy từ phiên, bộ phận hỏi identity, identity lỗi → 503 `citizen_report_filter_unavailable`) · tìm `q` không phân biệt dấu trên nội dung và địa chỉ",
       "screen": "09-phan-anh-nguoi-dan §2, §4",
       "permission_kind": "permission",
       "permission": "feedback.read",
@@ -5142,7 +5232,7 @@
       "path": "/api/v1/overdue-tasks",
       "operation_id": "petitions_get_overdue_tasks",
       "task_id": "a42edd22ed55",
-      "summary": "Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, hạn đã lỡ, có nghiêm trọng không",
+      "summary": "Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, tiêu đề, bộ phận (id + tên theo identity, vắng tên khi chưa tra được), hạn đã lỡ, có nghiêm trọng không",
       "screen": "01-tong-quan-dieu-hanh §5",
       "permission_kind": "permission",
       "permission": "report.read",

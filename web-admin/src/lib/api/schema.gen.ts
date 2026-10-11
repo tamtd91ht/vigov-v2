@@ -881,6 +881,18 @@ export type comms_zaloUpdateAck = {
   "ok": boolean;
 };
 
+export type documents_addCitizenLetterTypeIn = {
+  /** one of the four statutory codes; anything else is 400 */
+  "code": string;
+  "label": string;
+  "order"?: number;
+  /** `#RRGGBB`; absent or null = none */
+  "color"?: string | null;
+  "is_default"?: boolean | null;
+  "source"?: string | null;
+  "tier"?: number | null;
+};
+
 export type documents_bookLetterIn = {
   /** YYYY-MM-DD */
   "received_date": string;
@@ -997,6 +1009,27 @@ export type documents_citizenLetterOut = {
   "updated_at": string;
 };
 
+export type documents_citizenLetterTypeListOut = {
+  "items": Array<documents_citizenLetterTypeOut>;
+};
+
+export type documents_citizenLetterTypeOut = {
+  "id": string;
+  /** kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi */
+  "code": string;
+  /** the commune's wording */
+  "label": string;
+  "active": boolean;
+  /** always false — no default for this group */
+  "is_default": boolean;
+  "order": number;
+  /** always `don-vi` */
+  "source": string;
+  /** always 1 */
+  "tier": number;
+  "color": string | null;
+};
+
 export type documents_danhSachLichSuChuyenRa = {
   "items": Array<documents_lichSuChuyenRa>;
 };
@@ -1058,6 +1091,18 @@ export type documents_duplicateCheckIn = {
 
 export type documents_duplicatesOut = {
   "items": Array<documents_duplicateCandidateOut>;
+};
+
+export type documents_editCitizenLetterTypeIn = {
+  "label"?: string | null;
+  "order"?: number | null;
+  "active"?: boolean | null;
+  /** absent = keep; null = clear; `#RRGGBB` = set */
+  "color"?: documents_optionalColorIn;
+  "code"?: string | null;
+  "is_default"?: boolean | null;
+  "source"?: string | null;
+  "tier"?: number | null;
 };
 
 export type documents_goVanBanVao = {
@@ -1199,8 +1244,13 @@ export type documents_letterRoutingIn = {
 };
 
 export type documents_letterStatusIn = {
-  "status": string;
+  "status"?: string;
+  "status_group"?: string;
   "note"?: string;
+  /** identity's `bo_phan.id` */
+  "org_unit_id"?: string;
+  /** a staff business code */
+  "assignee_code"?: string;
 };
 
 export type documents_lichSuChuyenRa = {
@@ -1253,6 +1303,10 @@ export type documents_overdueQueueOut = {
   "items": Array<documents_overdueQueueItemOut>;
   /** RFC 3339 — the instant "overdue" and "critical" were judged at */
   "as_of": string;
+};
+
+export type documents_removeCitizenLetterTypeIn = {
+  "reason"?: string;
 };
 
 export type documents_senderCorrectionIn = {
@@ -1675,6 +1729,7 @@ export type finance_dongRa = {
   "values": Record<string, number | null>;
   "unavailable_reasons"?: Record<string, string>;
   "percent_basis_points"?: Record<string, number | null>;
+  "entry_count"?: number | null;
 };
 
 export type finance_dotRa = {
@@ -3680,6 +3735,9 @@ export type petitions_overdueItemOut = {
   "kind": string;
   "code": string;
   "category_code": string;
+  "title"?: string;
+  "org_unit_id"?: string;
+  "org_unit_name"?: string;
   "missed_deadline": string;
   "critical": boolean;
   "late_working_seconds"?: number | null;
@@ -4968,6 +5026,82 @@ export type petitions_post_citizen_letter_tasks = {
   };
 };
 
+/** GET /api/v1/citizen-letter-types — Danh mục Loại đơn thư của xã — nhãn, thứ tự, màu, bật/tắt cho bốn loại đơn theo luật */
+export type documents_get_citizen_letter_types = {
+  duongDan: "/api/v1/citizen-letter-types";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: documents_citizenLetterTypeListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-letter-types — Thêm nhãn của xã cho một trong bốn loại đơn thư (kien-nghi-phan-anh · khieu-nai · to-cao · de-nghi) */
+export type documents_post_citizen_letter_types = {
+  duongDan: "/api/v1/citizen-letter-types";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: documents_addCitizenLetterTypeIn;
+  phanHoi: {
+    201: documents_citizenLetterTypeOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** PATCH /api/v1/citizen-letter-types/{id} — Sửa nhãn, thứ tự, màu hoặc bật/tắt một dòng Loại đơn thư (mã không đổi được) */
+export type documents_patch_citizen_letter_types_by_id = {
+  duongDan: "/api/v1/citizen-letter-types/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_editCitizenLetterTypeIn;
+  phanHoi: {
+    200: documents_citizenLetterTypeOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/citizen-letter-types/{id} — Xoá mềm một dòng Loại đơn thư; lý do không bắt buộc (bỏ trống thì ghi câu cố định); mã không cấp lại */
+export type documents_delete_citizen_letter_types_by_id = {
+  duongDan: "/api/v1/citizen-letter-types/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: documents_removeCitizenLetterTypeIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
 /** GET /api/v1/citizen-letters — Sổ đơn thư công dân, phân trang theo con trỏ, mới vào sổ trước; lọc năm · trạng thái · nhóm trạng thái hiển thị (status_group) · loại · bộ phận · cán bộ · khoảng ngày nhận · từ khoá · phạm vi */
 export type documents_get_citizen_letters = {
   duongDan: "/api/v1/citizen-letters";
@@ -5241,7 +5375,7 @@ export type documents_patch_citizen_letters_by_id_sender = {
   };
 };
 
-/** POST /api/v1/citizen-letters/{id}/status — Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết */
+/** POST /api/v1/citizen-letters/{id}/status — Đổi trạng thái đơn thư theo TT 05/2021 (C3), gửi trạng thái thật hoặc nhóm hiển thị (máy chủ suy ra bước thật khi chỉ có một); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết; kèm bộ phận / cán bộ thì chuyển đơn cùng giao dịch (cần quyền tiếp nhận) */
 export type documents_post_citizen_letters_by_id_status = {
   duongDan: "/api/v1/citizen-letters/{id}/status";
   phuongThuc: "POST";
@@ -5315,6 +5449,10 @@ export type petitions_get_citizen_report_counts = {
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    503: "citizen_report_filter_unavailable";
   };
 };
 
@@ -5403,9 +5541,11 @@ export type petitions_get_citizen_report_points = {
     403: httpx_Error;
     422: httpx_Error;
     500: httpx_Error;
+    503: httpx_Error;
   };
   errorCodes: {
     422: "too_many_points";
+    503: "citizen_report_filter_unavailable";
   };
 };
 
@@ -5429,7 +5569,7 @@ export type petitions_get_citizen_report_summary = {
   };
 };
 
-/** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi, mã lấy từ phiên) */
+/** GET /api/v1/citizen-reports — Danh sách phiếu phản ánh của xã — phân trang theo con trỏ, lọc theo trạng thái · lĩnh vực · thôn · bộ phận · kênh · trễ hạn · đánh giá thấp (`rating_max=1..5`: dân chấm không quá n sao) · phạm vi (`scope=mine`: phiếu đang giao cho chính người gọi; `scope=related`: giao cho tôi · tôi có dòng nhật ký xử lý · bộ phận tôi đang giữ — mã lấy từ phiên, bộ phận hỏi identity, identity lỗi → 503 `citizen_report_filter_unavailable`) · tìm `q` không phân biệt dấu trên nội dung và địa chỉ */
 export type petitions_get_citizen_reports = {
   duongDan: "/api/v1/citizen-reports";
   phuongThuc: "GET";
@@ -9132,7 +9272,7 @@ export type petitions_get_overdue_citizen_reports = {
   };
 };
 
-/** GET /api/v1/overdue-tasks — Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, hạn đã lỡ, có nghiêm trọng không */
+/** GET /api/v1/overdue-tasks — Nhiệm vụ quá hạn cần xử lý ngay — tối đa 10, trễ lâu nhất trước; mỗi dòng: mã, loại, tiêu đề, bộ phận (id + tên theo identity, vắng tên khi chưa tra được), hạn đã lỡ, có nghiêm trọng không */
 export type petitions_get_overdue_tasks = {
   duongDan: "/api/v1/overdue-tasks";
   phuongThuc: "GET";

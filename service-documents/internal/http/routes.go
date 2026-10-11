@@ -185,6 +185,20 @@ type CitizenLetterReportExporter interface {
 	Export(ctx context.Context, year int, actor audit.Actor, render func(app.LetterReportSheet) ([]byte, error)) ([]byte, error)
 }
 
+// CitizenLetterTypeLister reads the commune's "Loại đơn thư" rows. *docstore.CitizenLetterTypeStore
+// satisfies it.
+type CitizenLetterTypeLister interface {
+	ListEntries(ctx context.Context) ([]domain.CitizenLetterTypeEntry, error)
+}
+
+// CitizenLetterTypeWriter is the write half — each method opens a transaction and writes its audit entry
+// inside it (the reason GhiLoaiVanBan is a separate interface). *app.CitizenLetterTypes satisfies it.
+type CitizenLetterTypeWriter interface {
+	AddType(ctx context.Context, req app.AddLetterTypeRequest, actor audit.Actor) (domain.CitizenLetterTypeEntry, error)
+	EditType(ctx context.Context, id string, req app.EditLetterTypeRequest, actor audit.Actor) (domain.CitizenLetterTypeEntry, error)
+	RemoveType(ctx context.Context, id, reason string, actor audit.Actor) error
+}
+
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
 type Deps struct {
 	// Checker guards the routes declared with authz.RequirePermission. THREE ROUTES NOW USE ONE,
@@ -219,6 +233,11 @@ type Deps struct {
 	// construction when missing.
 	CitizenLetterImport CitizenLetterImporter
 	CitizenLetterExport CitizenLetterReportExporter
+
+	// The "Loại đơn thư" group of the Danh mục screen (bug sheet row 33). Both refused at construction
+	// when missing.
+	CitizenLetterTypeList CitizenLetterTypeLister
+	CitizenLetterTypes    CitizenLetterTypeWriter
 
 	// Clock is the instant `overdue` is judged at, for the summary, the queue and the drill-down.
 	// A TEST SEAM: nil in production means the real clock, UTC.
@@ -262,6 +281,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("documents/http: thiếu use case nhập sổ đơn thư từ Excel — POST /api/v1/citizen-letters/imports sẽ panic khi có người gọi")
 	case d.CitizenLetterExport == nil:
 		panic("documents/http: thiếu use case xuất báo cáo đơn thư — GET /api/v1/citizen-letter-report/exports sẽ panic khi có người gọi")
+	case d.CitizenLetterTypeList == nil || d.CitizenLetterTypes == nil:
+		panic("documents/http: thiếu kho / use case danh mục loại đơn thư — các tuyến /api/v1/citizen-letter-types sẽ panic khi có người gọi")
 	case d.Checker == nil:
 		panic("documents/http: thiếu authz.Checker — mọi tuyến ghi sẽ không kiểm được quyền")
 	}
@@ -274,6 +295,9 @@ func Register(mux *http.ServeMux, d Deps) {
 	// Its Excel import (three routes, `petition.create`) and the report export (`report.export` AND
 	// `petition.read`) — routes_citizen_letter_import.go.
 	registerCitizenLetterImportRoutes(mux, d, h)
+
+	// The "Loại đơn thư" catalogue — four routes, all `admin.lookup` (routes_citizen_letter_type.go).
+	registerCitizenLetterTypeRoutes(mux, d, h)
 
 	// The document-type Excel import — three routes, all `admin.lookup` (routes_document_type_import.go).
 	registerDocumentTypeImportRoutes(mux, d, h)

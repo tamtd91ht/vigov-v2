@@ -161,7 +161,11 @@ func registerCitizenLetterRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 	// ĐỔI TRẠNG THÁI along C3's arrows. A second identical request is refused by the table itself
 	// (the letter is no longer in the `from` status), so it writes nothing.
 	//
-	// @summary  Đổi trạng thái đơn thư theo TT 05/2021 (C3); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết
+	// Optionally hands the letter over in the same transaction (org_unit_id / assignee_code — row 44);
+	// that half needs `petition.create`, decided by the use case (app.Move), not by this route's key.
+	// `status_group` may stand in for `status` — the server derives the real step (row 44).
+	//
+	// @summary  Đổi trạng thái đơn thư theo TT 05/2021 (C3), gửi trạng thái thật hoặc nhóm hiển thị (máy chủ suy ra bước thật khi chỉ có một); cán bộ được giao hoặc người có quyền tiếp nhận; khiếu nại / tố cáo cần kết quả trước khi sang Đã giải quyết; kèm bộ phận / cán bộ thì chuyển đơn cùng giao dịch (cần quyền tiếp nhận)
 	// @screen   05-van-ban-don-thu §3.5
 	// @request  letterStatusIn
 	// @reply    200 citizenLetterOut
