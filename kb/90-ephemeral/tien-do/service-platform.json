@@ -338,9 +338,9 @@
       "menu": "phan-anh-nguoi-dan",
       "trang_thai": "dang_lam",
       "no_confirm": [],
-      "viec": "Migration 0022: cột petition_field.description_placeholder (câu ví dụ ô Mô tả, tầng 1, cho phép NULL, ≤500 ký tự). KHÔNG gieo giá trị: 4/5 câu prototype khớp mã nêu địa danh Thăng Bình (chợ Hà Lam, Nguyễn Thành, Tiểu La, QL1A), câu 'khac' ghi 'cán bộ xã' — sai với phường; ADR 0060 §4 và ADR 0079 cấm tên xã ở tầng 1.",
-      "bang_chung": "service-platform/migrations/0022_petition_field_description_placeholder.sql + petition_field_description_placeholder_test.go; go vet ./migrations + go test ./... service-platform xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL).",
-      "tiep_theo": "CÒN TREO chờ chủ dự án: chọn câu gieo — nguyên văn prototype / viết lại bỏ địa danh / để tầng 2 theo xã; chọn xong là một migration UPDATE có điều kiện + vết platform_audit_log cùng câu lệnh. Thẻ Go sau: thêm cột vào ListPetitionFields và trường tuỳ chọn trong platform.proto."
+      "viec": "Migration 0022: cột petition_field.description_placeholder (câu ví dụ ô Mô tả, tầng 1, cho phép NULL, ≤500 ký tự). Migration 0023 gieo câu cho 5 mã khớp prototype (rac-thai, giao-thong, cap-thoat-nuoc, trat-tu-do-thi, khac) theo phương án 2 phiên chính chốt 11/10/2026: giữ dáng câu 'Ví dụ: …' của prototype, bỏ mọi địa danh (chợ Hà Lam, Nguyễn Thành, Tiểu La, QL1A, số nhà, kiệt) và chữ 'xã' (ADR 0060 §4, ADR 0079). Chỉ ghi dòng còn NULL, vết platform_audit_log 'petition_field.changed' cùng câu lệnh. Ba mục prototype không khớp mã (ve-sinh-moi-truong, dien-chieu-sang, an-ninh-trat-tu) để NULL.",
+      "bang_chung": "service-platform/migrations/0022_petition_field_description_placeholder.sql, 0023_petition_field_description_placeholder_seed.sql + petition_field_description_placeholder_test.go, petition_field_description_placeholder_seed_test.go; go vet ./migrations + go test ./... service-platform xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL).",
+      "tiep_theo": "Thẻ Go sau: thêm cột vào ListPetitionFields và trường tuỳ chọn trong platform.proto; màn vận hành sửa được câu. Chủ dự án có thể muốn duyệt lại lời 5 câu. Chưa chạy trên PostgreSQL 16 thật."
     }
   ]
 }
