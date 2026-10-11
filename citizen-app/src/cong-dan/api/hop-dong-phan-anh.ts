@@ -89,6 +89,15 @@ export const DO_DAI_TOI_DA = {
  */
 export const OPTIONAL_SCENE_FIELDS = ["lat", "lng"] as const;
 
+/**
+ * HOW `lat`/`lng` were placed (service-petitions 890e4e20, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M3): `true` = the
+ * citizen dragged the pin or tapped the map, `false` = Zalo's coordinates, untouched. Sent ONLY with a valid pair —
+ * `true` without coordinates is 422 there, and absent means "not recorded", which is what a form with no map says.
+ * The accountless route REFUSES it (400, `accountless.go`), so that body never carries it. It describes, it grants
+ * nothing, and it does not make any coordinate more trustworthy (M3 last row).
+ */
+export const OPTIONAL_LOCATION_ADJUSTED_KEY = "location_citizen_adjusted";
+
 /** The optional field-code key (af3fff0). Sent only when the citizen picked a field from the catalogue. */
 export const OPTIONAL_FIELD_KEY = "field";
 
@@ -262,6 +271,11 @@ export type PhanAnhMoi = {
    */
   scene_location?: SceneLocation | null;
   /**
+   * OPTIONAL: how `scene_location` was placed — `true` moved on the map by the citizen, `false` Zalo's own; absent or
+   * `null` = not recorded (no map on this form). Written only alongside a valid `scene_location`.
+   */
+  location_citizen_adjusted?: boolean | null;
+  /**
    * OPTIONAL: the field CODE the citizen picked from the commune's catalogue (`CitizenField.code`);
    * absent, `null` or "" = no `field` key at all. Never a label.
    */
@@ -297,6 +311,8 @@ function reportBodyFields(pa: PhanAnhMoi): Record<string, unknown> {
   const location = isSceneLocation(pa.scene_location) ? pa.scene_location : null;
   const field = typeof pa.field === "string" ? pa.field.trim() : "";
   const unit = typeof pa.residential_unit_id === "string" ? pa.residential_unit_id.trim() : "";
+  // The flag rides WITH the pair or not at all: `true` alone is a 422, and a flag about no coordinates says nothing.
+  const adjusted = location !== null && typeof pa.location_citizen_adjusted === "boolean" ? pa.location_citizen_adjusted : null;
   return {
     content: pa.noi_dung.trim(),
     address: pa.dia_chi.trim(),
@@ -304,6 +320,7 @@ function reportBodyFields(pa: PhanAnhMoi): Record<string, unknown> {
     reporter_phone: pa.an_danh ? "" : pa.dien_thoai.trim(),
     anonymous: pa.an_danh,
     ...(location === null ? {} : { lat: location.lat, lng: location.lng }),
+    ...(adjusted === null ? {} : { [OPTIONAL_LOCATION_ADJUSTED_KEY]: adjusted }),
     ...(field === "" ? {} : { [OPTIONAL_FIELD_KEY]: field }),
     ...(unit === "" ? {} : { [OPTIONAL_RESIDENTIAL_UNIT_KEY]: unit }),
   };
@@ -958,7 +975,11 @@ export function publicReportAddress(code: string, host: string): string {
  * this path does not have. Dropped here so no caller can turn an accountless send into that refusal.
  */
 export function accountlessReportBody(pa: PhanAnhMoi, host: string): string {
-  return JSON.stringify({ ...reportBodyFields({ ...pa, scene_location: null, residential_unit_id: null }), host });
+  // `location_citizen_adjusted` goes with the pair (`reportBodyFields`), and the route refuses it: dropped too.
+  return JSON.stringify({
+    ...reportBodyFields({ ...pa, scene_location: null, location_citizen_adjusted: null, residential_unit_id: null }),
+    host,
+  });
 }
 
 /** The `host` an accountless body carries, or `null` — read back so the caller's domain gate covers the body. */

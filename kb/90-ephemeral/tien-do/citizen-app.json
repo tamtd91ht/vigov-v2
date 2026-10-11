@@ -661,6 +661,15 @@
       "bang_chung": "tsc sạch; vitest 71 tệp/1935 ca xanh. Chưa xem ảnh render thật trên Zalo.",
       "tiep_theo": "(1) 'Tìm văn phòng gần tôi' vẫn KHÔNG xếp văn phòng theo khoảng cách — câu sau khi chia sẻ vị trí chỉ mời chọn; muốn đúng tên nút cần toạ độ văn phòng + đổi mã vị trí qua vihat-miniapp /api/v1/location (chủ dự án quyết). (2) Chính sách quyền riêng tư vẫn hiện nhãn '[CHỜ DUYỆT — bản nháp 02/10/2026…]' cho người dùng — chờ chủ dự án duyệt văn bản. (3) Phần app xã (src/cong-dan) chưa rà giọng văn.",
       "no_confirm": []
+    },
+    {
+      "id": "ban-do-that-gui-phan-anh-m4",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "viec": "Bản đồ THẬT ở khối \"Nơi xảy ra\" của màn Gửi phản ánh app xã (ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1–M5) — thay hình minh hoạ SVG",
+      "bang_chung": "citizen-app/src/cong-dan/map/{commune-basemap-style.ts, scene-map-logic.ts, maplibre-runtime.ts, scene-map.tsx, scene-map.test.tsx} (mới); address-block.tsx bỏ MiniMap SVG; PhanAnhAppXa.tsx giữ cờ placedOnMap → location_citizen_adjusted (dời ghim/chạm bản đồ = true, toạ độ Zalo nguyên = false, không toạ độ = bỏ khoá); TrangXa.tsx truyền mapDomain (chỉ đường có phiên, không đường không tài khoản); hop-dong-cong-khai.ts thêm COMMUNE_MAP_FRAME_PATH + readCommuneMapFrame + COMMUNE_BASEMAP_PATH (MỘT hằng); goi-vigov.ts thêm communeMapFrame; hop-dong-phan-anh.ts thêm OPTIONAL_LOCATION_ADJUSTED_KEY (chỉ đi kèm cặp lat/lng; thân không tài khoản luôn bỏ). Khai M5: ket-xuat-ho-so.ts thêm 2 dòng (khung bản đồ: host; nền bản đồ: file + Range, nói rõ lộ vùng đang xem, chỉ tới ViGov). Phụ thuộc: maplibre-gl 6.13.0 (5.x dính GHSA-jrc7-96c5-q579 critical), pmtiles 4.5.0, @protomaps/basemaps 5.7.2 — npm audit --omit=dev không thêm lỗ nào. scripts/bigint-literals.mjs: viết lại 8 literal BigInt của MapLibre thành BigInt(\"…\") để bundle một tệp vẫn PARSE được trên engine cũ; bundle-for-zalo.test.ts canh bằng AST. npx tsc --noEmit sạch + npx vitest run 72 tệp / 1957 ca xanh — chạy 11/10/2026.",
+      "tiep_theo": "CHƯA KIỂM TRÊN MÁY/ZALO THẬT — không dựng được màn ở phiên này: chưa thấy bản đồ vẽ, kéo ghim, ghi nguồn OSM, cử chỉ hai ngón, worker Blob (module worker) chạy trong webview Zalo. Bundle lớn lên: 1.011 kB thô / 263 kB gzip → 2.746 kB / 724 kB (iife không tách chunk được; nạp động chỉ hoãn CHẠY, không hoãn TẢI) — chủ dự án cần chấp nhận hoặc chọn tách MapLibre thành tệp riêng nạp lúc cần. Đường dẫn tuyến M1 giả định /api/v1/commune-basemap/{vn-mainland.pmtiles | fonts/<stack>/<range>.pbf | sprites/light*} theo style web-admin — service-comms chốt thì sửa COMMUNE_BASEMAP_PATH (hop-dong-cong-khai.ts) + bản chép ở ket-xuat-ho-so.ts. Câu chính sách quyền riêng tư về viewport KHÔNG viết (ADR 0072 mở #1, chờ chủ dự án). Ký duyệt pháp lý chủ quyền (mở #4) nay áp cả Mini App.",
+      "no_confirm": []
     }
   ]
 }

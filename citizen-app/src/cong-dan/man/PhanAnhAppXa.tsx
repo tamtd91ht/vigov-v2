@@ -91,6 +91,8 @@ import { PetitionRating } from "./PetitionRating";
 import { ResidentialUnitField, residentialUnitName, useResidentialUnits } from "./residential-unit-picker";
 import { AddressBlock } from "./address-block";
 import { type GetSceneLocation, type SceneLocationWords, useSceneLocation } from "./scene-location";
+import { useSceneMapState } from "../map/scene-map";
+import { locationAdjustedFlag } from "../map/scene-map-logic";
 import {
   PetitionPhotos,
   type PickedPhoto,
@@ -1042,6 +1044,8 @@ export function sendBody(
   location: SceneLocation | null,
   typedContact = false,
   residentialUnitId = "",
+  /** `location_citizen_adjusted` (ADR 0072 M3): `locationAdjustedFlag`'s answer; `null` = not recorded, no key. */
+  locationAdjusted: boolean | null = null,
 ): string {
   return thanGuiPhanAnh({
     noi_dung: form.noi_dung,
@@ -1050,6 +1054,7 @@ export function sendBody(
     dien_thoai: form.dien_thoai,
     an_danh: typedContact ? false : form.an_danh,
     scene_location: location,
+    location_citizen_adjusted: locationAdjusted,
     field: form.linh_vuc,
     residential_unit_id: residentialUnitId,
   });
@@ -1252,6 +1257,12 @@ export function CommuneSendScreen(props: {
    * lookup (`onOpenPetition`). `onSessionLost` and `onSent` are never called on this path.
    */
   accountless?: { readonly domain: string };
+  /**
+   * The commune domain of this build, for the address block's REAL map (ADR 0072 §Sửa đổi 11/10/2026 (Mini App)): the
+   * `?host=` lookup key of the public frame read — a key, never a commune reference; the session still decides the
+   * commune of the petition. Absent (tests, the accountless path) = no map, today's block.
+   */
+  mapDomain?: string;
   onBack: () => void;
   onSessionLost: OnSessionLost;
   /** 201 — the petition as the server recorded it. */
@@ -1301,10 +1312,22 @@ export function CommuneSendScreen(props: {
   const units = useResidentialUnits(myResidentialUnits, accountless === undefined);
   const [unitId, setUnitId] = useState("");
   const [unitRefusal, setUnitRefusal] = useState<string | null>(null);
+  /**
+   * The current location came from the MAP (pin dragged or map tapped), not from Zalo — `location_citizen_adjusted`
+   * (ADR 0072 M3). Every Zalo answer resets it: a fresh Zalo point is Zalo's again, until the citizen moves it.
+   */
+  const [placedOnMap, setPlacedOnMap] = useState(false);
   const sceneLocation = useSceneLocation(getSceneLocation, (l) => {
     setLocation(l);
+    setPlacedOnMap(false);
     setAttempt(null);
   });
+  /**
+   * The real map: only where a point can be sent (a session and a Zalo location bridge — never accountless, whose
+   * route refuses coordinates), read when the writing step first shows. It never gates the send.
+   */
+  const mapDomain = accountless === undefined && getSceneLocation !== undefined ? props.mapDomain : undefined;
+  const sceneMap = useSceneMapState(mapDomain, step === 2);
   /**
    * The photos picked for this petition — temp paths in memory, NOT in the draft (they do not survive the app
    * closing) and NOT in the send body: the attempt (`LanGui`) is the same with or without them, so picking a
@@ -1497,7 +1520,7 @@ export function CommuneSendScreen(props: {
       try {
         a = taoLanGui(
           accountless === undefined
-            ? sendBody(out, location, typedContact, unitId)
+            ? sendBody(out, location, typedContact, unitId, locationAdjustedFlag(location, placedOnMap))
             : accountlessSendBody(out, accountless.domain),
         );
       } catch {
@@ -1638,8 +1661,8 @@ export function CommuneSendScreen(props: {
                 <p className="xa-phu">{XA_PA.anh_sap_co}</p>
               </section>
             )}
-            {/* The prototype's address block (`AddressBlock.tsx`): the box, the location line and button, and the
-                SVG sketch map — no third-party map, nothing fetched; the coordinates go only with the petition. */}
+            {/* The prototype's address block (`AddressBlock.tsx`): the box, the location line and button, and — since
+                11/10/2026 — the REAL map (ADR 0072 §Sửa đổi 11/10/2026 (Mini App)): self-hosted basemap via comms only. */}
             <AddressBlock
               address={form.dia_chi}
               maxLength={DO_DAI_TOI_DA.dia_chi}
@@ -1652,6 +1675,20 @@ export function CommuneSendScreen(props: {
               failure={sceneLocation.failure}
               zalo={sceneLocation.zalo}
               onLocate={() => void sceneLocation.locate()}
+              map={
+                mapDomain === undefined
+                  ? undefined
+                  : {
+                      state: sceneMap.state,
+                      placedOnMap,
+                      onPlace: (l) => {
+                        setLocation(l);
+                        setPlacedOnMap(true);
+                        setAttempt(null);
+                      },
+                      onFail: sceneMap.fail,
+                    }
+              }
             />
             {/* OPTIONAL thôn / tổ dân phố (ADR 0088), right after the address block — the prototype's form has no
                 such field (PROTOTYPE.md §6.2). Hidden on the accountless path (`units` is never loaded there). */}

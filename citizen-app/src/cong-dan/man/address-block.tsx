@@ -6,14 +6,18 @@
  * THE BOX IS WHAT THE CITIZEN TYPED, NEVER A GUESS: the coordinates are shown on their own line, not written into
  * the box (officers need "trước số nhà 112", which only the person on the spot can say — the prototype's reason).
  *
- * THE MAP IS A DRAWING, NOT A MAP: inline SVG streets and blocks with a red pin in the middle once a location is
- * known, and the prototype's caption saying it only illustrates. No tile server, no third-party script, no request
- * of any kind — so the coordinates never leave the phone except inside the petition the citizen sends (rule 3).
+ * THE MAP IS REAL since 11/10/2026 (owner; ADR 0072 §Sửa đổi 11/10/2026 (Mini App)) — `../map/scene-map.tsx`, on the
+ * self-hosted basemap through ViGov's `comms`, locked to the commune's frame. The SVG sketch it replaces is gone. With
+ * no map (no frame, no route, failure, accountless path, outside Zalo) the block is today's: box, line, button, plus
+ * at most one sentence — and the send never waits for the map.
  *
- * ⚠ NOTHING HERE LOGS, STORES OR PUTS COORDINATES IN A URL OR A KEY (as `scene-location.tsx`).
+ * ⚠ NOTHING HERE LOGS, STORES OR PUTS COORDINATES IN A URL OR A KEY (as `scene-location.tsx`). The tile requests of
+ *   the map name the viewport; that is declared (M5, `content/ket-xuat-ho-so.ts`).
  */
 import type { SceneLocation } from "../api/hop-dong-phan-anh";
 import type { ZaloFailure } from "../api/mo-phien-vigov";
+import { SceneMapArea } from "../map/scene-map";
+import type { SceneMapState } from "../map/scene-map-logic";
 
 import { BieuTuong } from "./BieuTuong";
 import { XA_PA, zaloSupportCode } from "./noi-dung";
@@ -24,46 +28,6 @@ import {
   sceneLocationFailureText,
   type SceneLocationWords,
 } from "./scene-location";
-
-/**
- * The prototype's sketch (`AddressBlock.tsx:136-171`): streets and blocks in the page's blue-greys, the pin only
- * when a location is known and not being re-taken. Decoration (`aria-hidden`) — the coordinates line says it in
- * words; the caption is real text.
- */
-export function MiniMap({ active }: { active: boolean }) {
-  return (
-    <div className="xa-mini-map">
-      <div className="xa-mini-map__canvas">
-        <svg viewBox="0 0 300 112" className="xa-mini-map__svg" aria-hidden="true" focusable="false" preserveAspectRatio="xMidYMid slice">
-          <rect width="300" height="112" fill="#E8F0F4" />
-          <path d="M0 74 H300" stroke="#CBD9E2" strokeWidth="12" />
-          <path d="M0 30 H300" stroke="#D8E4EC" strokeWidth="7" />
-          <path d="M96 0 V112" stroke="#CBD9E2" strokeWidth="10" />
-          <path d="M212 0 V112" stroke="#D8E4EC" strokeWidth="6" />
-          <rect x="18" y="40" width="60" height="26" rx="3" fill="#DCE7EE" />
-          <rect x="112" y="38" width="80" height="30" rx="3" fill="#DCE7EE" />
-          <rect x="228" y="42" width="54" height="24" rx="3" fill="#DCE7EE" />
-          <rect x="120" y="82" width="70" height="22" rx="3" fill="#DCE7EE" />
-        </svg>
-        {active && (
-          <span className="xa-mini-map__pin" aria-hidden="true">
-            <svg width="34" height="34" viewBox="0 0 24 24" focusable="false">
-              <path
-                d="M12,21s6.8,-6.3,6.8,-10.8A6.8,6.8,0,0,0,5.2,10.2C5.2,14.7,12,21,12,21z"
-                fill="#e5484d"
-                stroke="#c0272c"
-                strokeWidth="2.5"
-                strokeLinejoin="round"
-              />
-              <circle cx="12" cy="10.2" r="2.4" fill="#ffffff" />
-            </svg>
-          </span>
-        )}
-      </div>
-      <p className="xa-mini-map__caption">{XA_PA.map_caption}</p>
-    </div>
-  );
-}
 
 /**
  * The location line under the box: "Đang lấy vị trí…" while it runs; the coordinates once known; the failure in
@@ -77,6 +41,8 @@ export function LocationStatus(props: {
   failure: SceneLocationFailure | null;
   zalo: ZaloFailure | null;
   onLocate: () => void;
+  /** The citizen placed the point on the map: the line says so, so Zalo's point and theirs never read alike. */
+  placedOnMap?: boolean;
 }) {
   const { words } = props;
   if (props.locating) {
@@ -91,7 +57,11 @@ export function LocationStatus(props: {
       {props.location !== null && (
         <p className="xa-location-status" role="status">
           <BieuTuong ten="pin" co={18} />
-          <span>{words.found(formatCoordinates(props.location))}</span>
+          <span>
+            {props.placedOnMap === true
+              ? XA_PA.map_placed(formatCoordinates(props.location))
+              : words.found(formatCoordinates(props.location))}
+          </span>
         </p>
       )}
       {props.failure !== null && (
@@ -122,6 +92,16 @@ export function AddressBlock(props: {
   failure: SceneLocationFailure | null;
   zalo: ZaloFailure | null;
   onLocate: () => void;
+  /**
+   * The real map (`../map/scene-map.tsx`), or absent = no map area at all (the accountless path cannot send a point;
+   * outside Zalo there is none to show). `placedOnMap`: the current location came from the pin, not from Zalo.
+   */
+  map?: {
+    state: SceneMapState;
+    placedOnMap: boolean;
+    onPlace: (location: SceneLocation) => void;
+    onFail: () => void;
+  };
 }) {
   return (
     <section className="xa-address" aria-labelledby="xa-address-title">
@@ -154,10 +134,18 @@ export function AddressBlock(props: {
               failure={props.failure}
               zalo={props.zalo}
               onLocate={props.onLocate}
+              placedOnMap={props.map?.placedOnMap === true}
             />
           )}
         </div>
-        <MiniMap active={!props.locating && props.location !== null} />
+        {props.map !== undefined && (
+          <SceneMapArea
+            state={props.map.state}
+            location={props.locating ? null : props.location}
+            onPlace={props.map.onPlace}
+            onFail={props.map.onFail}
+          />
+        )}
       </div>
     </section>
   );

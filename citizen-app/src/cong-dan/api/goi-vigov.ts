@@ -83,6 +83,8 @@ import {
   bannersAddress,
   type CanBoCongKhai,
   type CommuneBannerItem,
+  type CommuneMapFrameRead,
+  communeMapFrameAddress,
   type CommuneProfile,
   communeProfilesAddress,
   type DisasterAlert,
@@ -99,6 +101,7 @@ import {
   newsCategoriesAddress,
   type NewsType,
   readBanners,
+  readCommuneMapFrame,
   readCommuneProfiles,
   readDisasterAlerts,
   readNewsCategories,
@@ -829,6 +832,18 @@ export function communeBanners(ten_mien: string): Promise<NewsReadResult<readonl
  */
 export function communeDisasterAlerts(ten_mien: string): Promise<NewsReadResult<readonly DisasterAlert[]>> {
   return goiCongKhai(ten_mien, disasterAlertsAddress, readDisasterAlerts);
+}
+
+/**
+ * The commune's map frame for the send form's map (ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M2) — public by domain,
+ * with the news reads' 429. `{ frame: null }` = the commune has no frame. Wrapped because `goiCongKhai` reads `null`
+ * from a reader as "malformed", and "no frame" is a valid answer, not a malformed one.
+ */
+export function communeMapFrame(ten_mien: string): Promise<NewsReadResult<{ readonly frame: CommuneMapFrameRead }>> {
+  return goiCongKhai(ten_mien, communeMapFrameAddress, (body) => {
+    const frame = readCommuneMapFrame(body);
+    return frame === undefined ? null : { frame };
+  });
 }
 
 /**

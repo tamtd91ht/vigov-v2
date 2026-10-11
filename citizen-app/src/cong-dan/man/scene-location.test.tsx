@@ -178,7 +178,7 @@ describe("what the citizen sees — live form (shared app)", () => {
 
 describe("what the citizen sees — send form of the commune's own app", () => {
   // The commune app's control is the prototype's address block (`AddressBlock.tsx`, owner 11/10/2026).
-  it("the address block: the prototype's words, the real coordinates, the sketch map's pin — and nothing fetched", () => {
+  it("the address block: the prototype's words, the real coordinates — and, with no map given, nothing fetched", () => {
     const block = (location: typeof HERE | null, locating = false) =>
       renderToStaticMarkup(
         createElement(AddressBlock, {
@@ -201,15 +201,15 @@ describe("what the citizen sees — send form of the commune's own app", () => {
     expect(html).toContain("(không bắt buộc)");
     expect(html).toContain("Bà con ghi thêm số nhà, tên kiệt hay chỗ dễ nhận biết để cán bộ tìm đúng nơi.");
     expect(html).toContain('placeholder="Ví dụ: Trước số nhà 112 đường Tiểu La, gần chợ Hà Lam"');
-    expect(html).toContain("Bản đồ chỉ minh hoạ vị trí tương đối.");
-    expect(html).toContain("xa-mini-map__pin");
-    // A drawing, not a map: no picture or script from anywhere, no coordinates in any address.
+    // The SVG sketch is gone (11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App)): the real map lives in
+    // `../map/scene-map.tsx` and is drawn only when the screen hands one in (`map/scene-map.test.tsx`).
+    expect(html).not.toContain("minh hoạ");
+    expect(html).not.toContain("xa-scene-map");
+    // No picture or script from anywhere, no coordinates in any address.
     expect(html).not.toMatch(/<img|<script|<iframe|https?:\/\//);
-    // Before a location, and while taking one: no pin; the button says what it does.
-    expect(block(null)).not.toContain("xa-mini-map__pin");
+    // Before a location, and while taking one: the button and the line say what is happening.
     expect(block(null)).toContain(">Lấy vị trí hiện tại</button>");
     expect(block(HERE, true)).toContain("Đang lấy vị trí…");
-    expect(block(HERE, true)).not.toContain("xa-mini-map__pin");
     // The old token-only sentence is gone.
     expect(html).not.toContain("Đã nhận mã vị trí");
   });

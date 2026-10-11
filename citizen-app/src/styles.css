@@ -5145,32 +5145,49 @@ button.xa-o-nhanh {
 .xa-location-button:disabled {
   opacity: 0.6;
 }
-.xa-mini-map {
+/* The REAL map of the address block (`cong-dan/map/scene-map.tsx`, ADR 0072 §Sửa đổi 11/10/2026 (Mini App)). The
+   canvas exists only once a frame is known, so there is never an empty grey box: before that, and on any failure,
+   only `.xa-scene-map__note` (words) is drawn. */
+.xa-scene-map {
   border-top: 1px solid var(--xa-vien);
 }
-.xa-mini-map__canvas {
+.xa-scene-map__canvas {
   position: relative;
-  background: #e8f0f4;
-}
-.xa-mini-map__svg {
-  display: block;
   width: 100%;
-  height: 112px;
+  height: 260px;
 }
-.xa-mini-map__pin {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -100%);
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.25));
-}
-.xa-mini-map__caption {
+.xa-scene-map__note {
   margin: 0;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-top: 1px solid var(--xa-vien);
   background: var(--surface);
   color: var(--ink-muted);
   font-size: var(--text-small);
+}
+/* The pin is the drag handle: a full 48px target, the tip at the bottom centre (`anchor: "bottom"`). */
+.xa-scene-map__pin {
+  width: calc(var(--tap-min) + 4px);
+  height: calc(var(--tap-min) + 4px);
+  min-height: calc(var(--tap-min) + 4px);
+  cursor: grab;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
+}
+.xa-scene-map__pin svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+/* MapLibre's zoom buttons are 29px by default: raised to the app's target size. */
+.xa-scene-map .maplibregl-ctrl-group button {
+  width: calc(var(--tap-min) + 4px);
+  min-height: calc(var(--tap-min) + 4px);
+}
+/* The OSM credit stays readable — it is required, so it is not shrunk below the app's small text. */
+.xa-scene-map .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  font-size: var(--text-small);
+}
+.xa-scene-map .maplibregl-cooperative-gesture-screen {
+  font-size: var(--text-body);
 }
 
 /* The prototype's offline box (`NewFeedbackPage.tsx:278`): the orange tone, words first. */

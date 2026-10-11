@@ -4,6 +4,8 @@ import { defineConfig } from "vite";
 // `.env.local` bằng `loadEnv` (Vite KHÔNG tự nạp tệp ấy vào `process.env`), để biến shell thắng
 // tệp, và CHẶN mọi tên biến ngoài danh sách trắng. Đọc khối chú thích ở đó trước khi sửa.
 import { buildLabel, docCauHinh, xaCoDinh } from "./scripts/cau-hinh.mjs";
+// MapLibre's `123n` literals would make the WHOLE one-file bundle unparsable on old engines — see the file.
+import { bigintLiteralsPlugin } from "./scripts/bigint-literals.mjs";
 
 /**
  * MỘT BẢN DỰNG, KHÔNG BIẾN THỂ — 27/09/2026, quyết định của chủ sản phẩm.
@@ -101,7 +103,7 @@ const thePlainScript = {
 // Hàm, không phải hằng: biến môi trường phải được đọc mỗi lần dựng, không đóng băng lúc nạp tệp.
 export default defineConfig(() => ({
   base: "./",
-  plugins: [thePlainScript],
+  plugins: [bigintLiteralsPlugin, thePlainScript],
   // `__VIGOV_XA_CO_DINH__`: rỗng trừ khi `deploy.mjs --vao-thang` dựng app riêng của một xã — xem
   // `xaCoDinh` trong scripts/cau-hinh.mjs và src/lib/xa-co-dinh.ts.
   define: {
@@ -141,7 +143,11 @@ export default defineConfig(() => ({
     // ONE FILE BY CONSTRUCTION (`iife` cannot split), so the 500 kB default only repeats on every build
     // that the file is the file. Measured 01/10/2026: 835 kB raw / 224 kB gzip. The limit sits above that
     // so the warning comes back the day the bundle really grows, not never.
-    chunkSizeWarningLimit: 1200,
+    // 11/10/2026 — IT DID: the send form's real map (ADR 0072 §Sửa đổi 11/10/2026 (Mini App)) brings MapLibre GL 6,
+    // its worker source (as a string, `cong-dan/map/maplibre-runtime.ts`), its CSS and pmtiles. Measured: 2 746 kB raw
+    // / 724 kB gzip (was 1 011 kB / 263 kB the same day). Lazy loading cannot shrink the download here — `iife`
+    // inlines the dynamic import; it only keeps MapLibre from RUNNING outside that form.
+    chunkSizeWarningLimit: 3000,
     rollupOptions: {
       // EMPTY_IMPORT_META only, and only because it is harmless HERE: the one `import.meta` user is Vite's
       // preload helper around `await import("zmp-sdk")` (zalo-api.ts — dynamic on purpose: a failed import

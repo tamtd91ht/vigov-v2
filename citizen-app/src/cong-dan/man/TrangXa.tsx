@@ -1087,6 +1087,7 @@ function AppCuaXa(props: {
           draftStore={props.draftStore}
           typedContact={layPhienViGov()?.phone_verified === false}
           verifiedPhone={layPhienViGov()?.phone_verified === true}
+          mapDomain={ten_mien}
           onBack={ve}
           onSessionLost={sessionLost("submit")}
           onSent={() => void petitions.load()}

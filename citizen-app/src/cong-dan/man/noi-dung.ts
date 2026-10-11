@@ -1467,7 +1467,23 @@ export const XA_PA = {
   address_title: "Địa chỉ nơi xảy ra sự việc",
   address_hint: "Bà con ghi thêm số nhà, tên kiệt hay chỗ dễ nhận biết để cán bộ tìm đúng nơi.",
   address_placeholder: "Ví dụ: Trước số nhà 112 đường Tiểu La, gần chợ Hà Lam",
-  map_caption: "Bản đồ chỉ minh hoạ vị trí tương đối.",
+  // The REAL map of the address block (ADR 0072 §Sửa đổi 11/10/2026 (Mini App), `cong-dan/map/scene-map.tsx`). The
+  // coordinates line above stays the map's text alternative: everything the pin says, the line says in words.
+  map_label: "Bản đồ nơi xảy ra sự việc",
+  map_hint: "Bà con kéo ghim hoặc chạm vào bản đồ để chỉ đúng nơi xảy ra.",
+  map_loading: "Đang tải bản đồ…",
+  /** Frame not set, basemap unreachable, or the map failed: no map, and the send is NOT blocked (M2, M1 last row). */
+  map_unavailable: "Chưa xem được bản đồ lúc này. Bà con vẫn gửi phản ánh được như thường.",
+  /** Zalo's point lies outside the commune's frame: it still goes as taken unless the citizen places the pin. */
+  map_outside: "Vị trí vừa lấy nằm ngoài khung bản đồ của xã. Bà con chạm vào bản đồ để chỉ đúng nơi xảy ra.",
+  /** The coordinates line once the citizen moved the pin — said, so "Zalo's point" and "my point" never look alike. */
+  map_placed: (coordinates: string) => `Đã đặt vị trí trên bản đồ (${coordinates})`,
+  /** MapLibre's own control and gesture strings, in Vietnamese (its defaults are English). */
+  map_two_fingers: "Dùng hai ngón tay để kéo bản đồ",
+  map_zoom_in: "Phóng to",
+  map_zoom_out: "Thu nhỏ",
+  map_pin: "Ghim nơi xảy ra sự việc",
+  map_credit: "Nguồn bản đồ",
   linh_vuc: "Lĩnh vực",
   dia_chi: "Nơi xảy ra",
   goi_y_dia_chi: "Thôn, tổ, đường, số nhà…",

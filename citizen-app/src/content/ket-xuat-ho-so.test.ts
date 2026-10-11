@@ -10,6 +10,10 @@ import {
   diaChiDanhBa,
   diaChiTinXa,
   diaChiTraXa,
+  COMMUNE_BASEMAP_PATH as REAL_COMMUNE_BASEMAP_PATH,
+  communeBasemapBase,
+  COMMUNE_MAP_FRAME_PATH as REAL_COMMUNE_MAP_FRAME_PATH,
+  communeMapFrameAddress,
   DISASTER_ALERTS_PATH as REAL_DISASTER_ALERTS_PATH,
   disasterAlertsAddress,
   DUONG_DAN_DANH_BA,
@@ -66,6 +70,7 @@ import {
   TRUONG_GUI_DI_PHIEN,
 } from "../features/dang-nhap/hop-dong";
 import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../features/tinh-nang/zalo-api";
+import { buildCommuneBasemapStyle } from "../cong-dan/map/commune-basemap-style";
 
 import type { MucChinhSach } from "./chinh-sach-rieng-tu";
 import {
@@ -89,6 +94,10 @@ import {
   communeTermsDocument,
   COMMUNE_ALERT_SCREENS,
   COMMUNE_APP_ROUTES_OWED,
+  COMMUNE_BASEMAP_FIELDS,
+  COMMUNE_BASEMAP_PATH,
+  COMMUNE_BASEMAP_ROUTE,
+  COMMUNE_MAP_FRAME_PATH,
   COMMUNE_APP_SESSION_SCREENS,
   COMMUNE_PROFILE_SCREEN,
   DISASTER_ALERTS_PATH,
@@ -519,7 +528,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // − 2 (09/10/2026, ADR 0052 §Sửa đổi 09/10/2026): slot + store + completion became ONE multipart upload to
     // petitions — the photo rows are now two: the upload and the own list.
     // + 2 (11/10/2026, ADR 0091 §2, §4): the commune app's disaster alerts and its "Nhận thông báo" switch.
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(22);
+    // + 2 (11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M5): the send form's map frame and basemap.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(24);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -784,7 +794,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // 18, not 20, since 09/10/2026: the scene photo's three routes (slot, storage POST, completion) became
     // ONE multipart send to petitions (ADR 0052 §Sửa đổi 09/10/2026).
     // 11/10/2026 (ADR 0091): + the switch (a tap) and the disaster alerts (every home open, no tap).
-    expect(khoi).toContain("19 đường chạy khi chính người dùng bấm; 3 đường chạy mà không cần một cú bấm");
+    // 11/10/2026 (ADR 0072 M5): + the send form's map frame and basemap — both after the citizen opened the form.
+    expect(khoi).toContain("21 đường chạy khi chính người dùng bấm; 3 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");
@@ -950,6 +961,50 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
     expect(block).toContain(DISASTER_ALERTS_PATH);
     expect(block).toContain(MY_NOTIFICATION_PREFERENCES_PATH);
     expect(block).toContain(NOTIFICATION_PREFERENCE_FIELDS[0]!.trong_chinh_sach);
+  });
+
+  /**
+   * ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M5 — the send form's map. Both rows are COPIES (boundary), locked to the
+   * real frame address and to the URLs the real style asks for: a renamed path, a new query key, or a style URL
+   * outside the declared route is red.
+   */
+  it("the send form's map: frame and basemap rows locked to the real address and style", () => {
+    const DOMAIN = "xa-vi-du.vigov.example";
+    const row = (t: string) => DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === t)!;
+    // Frame: the path and `host` only — no session, nothing of the citizen.
+    expect(COMMUNE_MAP_FRAME_PATH).toBe(REAL_COMMUNE_MAP_FRAME_PATH);
+    const frame = new URL(communeMapFrameAddress(DOMAIN));
+    expect(frame.pathname).toBe(COMMUNE_MAP_FRAME_PATH);
+    expect(row(COMMUNE_MAP_FRAME_PATH).truong.map((t) => t.khoa)).toEqual([...frame.searchParams.keys()]);
+    // Basemap: the same one constant the style is built from; every URL of the style is a file under it, no query.
+    expect(COMMUNE_BASEMAP_PATH).toBe(REAL_COMMUNE_BASEMAP_PATH);
+    expect(COMMUNE_BASEMAP_ROUTE).toBe(`${COMMUNE_BASEMAP_PATH}/{file}`);
+    const base = communeBasemapBase();
+    expect(new URL(base).pathname).toBe(COMMUNE_BASEMAP_PATH);
+    const style = buildCommuneBasemapStyle(base);
+    const source = style.sources["protomaps"] as { url: string };
+    for (const url of [style.glyphs!, String(style.sprite), source.url.replace(/^pmtiles:\/\//, "")]) {
+      const u = new URL(url.replace("{fontstack}", "f").replace("{range}", "0-255"));
+      expect(u.origin, url).toBe(new URL(base).origin);
+      expect(u.pathname.startsWith(`${COMMUNE_BASEMAP_PATH}/`), url).toBe(true);
+      expect(u.search, url).toBe("");
+    }
+    // What the row declares: the file on the path and the byte range — and the range is SAID to reveal the viewport.
+    expect(COMMUNE_BASEMAP_FIELDS.map((t) => t.khoa)).toEqual(["file", "Range"]);
+    expect(row(COMMUNE_BASEMAP_ROUTE).truong).toBe(COMMUNE_BASEMAP_FIELDS);
+    expect(COMMUNE_BASEMAP_FIELDS[1]!.trong_chinh_sach).toMatch(/gần đúng khu vực/);
+    expect(COMMUNE_BASEMAP_FIELDS[1]!.trong_chinh_sach).toMatch(/không tới bên thứ ba/);
+    for (const t of [COMMUNE_MAP_FRAME_PATH, COMMUNE_BASEMAP_ROUTE]) {
+      expect(row(t).app, t).toBe("commune");
+      expect(row(t).nguoi_dung_bam, t).toBe(true);
+      expect(row(t).man, t).toBe(`Ứng dụng của xã: ${GUI.tieu_de}`);
+      expect(row(t).may_chu, t).toMatch(/^ViGov — dịch vụ `comms`/);
+    }
+    // The commune dossier prints both, with the build's domain sentence for `host`.
+    const block = khoiRoiKhoiMay(routes, { communeApp: true });
+    expect(block).toContain(COMMUNE_MAP_FRAME_PATH);
+    expect(block).toContain(COMMUNE_BASEMAP_ROUTE);
+    for (const t of COMMUNE_BASEMAP_FIELDS) expect(block).toContain(t.trong_chinh_sach);
   });
 
   it("the gap is printed inside the block until the petition routes are declared", () => {

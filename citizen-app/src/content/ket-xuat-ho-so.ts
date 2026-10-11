@@ -663,6 +663,65 @@ const COMMUNE_ALERT_AND_PREFERENCE_ROUTES: readonly DuongRoiKhoiMay[] = [
   },
 ];
 
+/* ---------------------------------------------------------------------------------------------
+   BẢN ĐỒ Ở “GỬI PHẢN ÁNH” (ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1, M2, M5) — two routes of the COMMUNE'S OWN
+   APP, copied, not imported
+   ---------------------------------------------------------------------------------------------
+
+   Same boundary as the public routes above: the frame path lives in `cong-dan/api/hop-dong-cong-khai.ts`
+   (`communeMapFrameAddress`), and so does the basemap path (`COMMUNE_BASEMAP_PATH`, the ONE constant to move when
+   `service-comms` settles M1's path — ADR 0072 open #2); this file may not import either. `ket-xuat-ho-so.test.ts`
+   locks each copy to the real address and style, both ways.
+
+   M5, said plainly: each basemap request names a byte range of the archive, and the ranges a map asks for follow its
+   viewport — roughly where the citizen stands, or the point they show on the map. It reaches ViGov's `comms` only,
+   never a third party. ⚠ THE PRIVACY-POLICY SENTENCE IS DRAFTED IN THE MAIN SESSION AND AWAITS THE OWNER (ADR 0072
+   open #1) — it is NOT written here or in `chinh-sach-rieng-tu.ts` until approved. */
+
+export const COMMUNE_MAP_FRAME_PATH = "/api/v1/commune-map-frame";
+export const COMMUNE_BASEMAP_PATH = "/api/v1/commune-basemap";
+/** The basemap row as declared: one route, the requested file on the path. */
+export const COMMUNE_BASEMAP_ROUTE = `${COMMUNE_BASEMAP_PATH}/{file}`;
+
+export const COMMUNE_BASEMAP_FIELDS: readonly TruongGuiDi[] = [
+  {
+    khoa: "file",
+    trong_chinh_sach:
+      "tên tệp của bản đồ nền cần tải — tệp nền, phông chữ hoặc biểu tượng của bản đồ — nằm trên đường dẫn; như nhau với mọi người dùng, không mang thông tin nào của bạn",
+  },
+  {
+    khoa: "Range",
+    trong_chinh_sach:
+      "khoảng byte của tệp nền ứng với vùng bản đồ đang hiện trên màn hình; vì vậy hệ thống của xã biết được gần đúng khu vực bạn đang xem trên bản đồ — thường là nơi bạn đang đứng hoặc nơi bạn chỉ trên bản đồ. Chỉ tới hệ thống ViGov, không tới bên thứ ba",
+  },
+];
+
+const COMMUNE_SEND_MAP_ROUTES: readonly DuongRoiKhoiMay[] = [
+  {
+    // Public, by the build's domain (M2): no session, no Zalo code, nothing of the citizen. Once per send form.
+    tuyen: COMMUNE_MAP_FRAME_PATH,
+    may_chu: "ViGov — dịch vụ `comms`, không mang phiên làm việc nào",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, khi người dùng tự mở “Gửi phản ánh” và tới bước viết (đã chọn lĩnh vực) — một lần, để lấy khung bản đồ của xã",
+    nguoi_dung_bam: true,
+    man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+    truong: [HOST_CONG_KHAI],
+    app: "commune",
+  },
+  {
+    // Public (M1), no session: the same bytes for everyone. What leaves is the viewport, through the ranges (M5).
+    tuyen: COMMUNE_BASEMAP_ROUTE,
+    may_chu:
+      "ViGov — dịch vụ `comms`, phát lại bản đồ nền ViGov tự lưu trữ (dữ liệu OpenStreetMap); không mang phiên làm việc nào",
+    khi_nao:
+      "trong ứng dụng riêng của một xã, khi bản đồ ở bước viết của “Gửi phản ánh” hiện ra, và mỗi lần người dùng kéo hoặc phóng to, thu nhỏ bản đồ — mỗi lần là nhiều yêu cầu nhỏ",
+    nguoi_dung_bam: true,
+    man: `Ứng dụng của xã: ${SEND_SCREEN_NAME}`,
+    truong: COMMUNE_BASEMAP_FIELDS,
+    app: "commune",
+  },
+];
+
 export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
   {
     tuyen: "/api/v1/communes",
@@ -967,6 +1026,8 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
   ...DUONG_CONG_KHAI.slice(1),
   // 11/10/2026 (ADR 0091 §2, §4): the disaster alerts at every home open, and the "Nhận thông báo" switch.
   ...COMMUNE_ALERT_AND_PREFERENCE_ROUTES,
+  // 11/10/2026 (ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M5): the send form's map — its frame and its basemap.
+  ...COMMUNE_SEND_MAP_ROUTES,
 ];
 
 /* =============================================================================================

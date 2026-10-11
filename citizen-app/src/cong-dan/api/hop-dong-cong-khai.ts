@@ -945,3 +945,71 @@ export function readDisasterAlerts(body: unknown): readonly DisasterAlert[] | nu
   }
   return out;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * KHUNG BẢN ĐỒ CỦA XÃ — `GET /api/v1/commune-map-frame?host=` (ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M2,
+ * `service-comms/internal/http/commune_map_frame.go`)
+ *
+ *   200 {"configured": false}                                  — the commune has no frame AND no platform default,
+ *                                                                or no active commune holds the domain (same bytes)
+ *   200 {"configured": true, center_lat, center_lng, radius_km,
+ *        bounds: [west, south, east, north]}                    — LONGITUDE FIRST, MapLibre's `maxBounds` order
+ *   400 `invalid_host` · 429 `rate_limited` (the public-news budget) · 500 · 503
+ *
+ * Four coordinates around the commune's territory — commune metadata, nothing of the citizen. The map of the send
+ * form is LOCKED to it (`maxBounds`); with no frame there is no map and the petition still goes (M2 last row).
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export const COMMUNE_MAP_FRAME_PATH = "/api/v1/commune-map-frame";
+
+/**
+ * THE ONE PLACE the public basemap route is named (M1: the self-hosted PMTiles archive, glyphs and sprite, with HTTP
+ * Range, public, no session). M1 was built in parallel with the map and ADR 0072 leaves the exact path to the builder
+ * (open #2) — when `service-comms` settles it, this line and the declaration copy in `content/ket-xuat-ho-so.ts`
+ * (pinned to this one by its test) are all that move. The files under it: `map/commune-basemap-style.ts`.
+ */
+export const COMMUNE_BASEMAP_PATH = "/api/v1/commune-basemap";
+
+/** `https://comms…/api/v1/commune-basemap`, or "" when the host table has no `comms` line — then: no map. */
+export function communeBasemapBase(): string {
+  return diaChiViGov("comms", COMMUNE_BASEMAP_PATH);
+}
+
+/** The public frame route: host and nothing else — the same `?host=` lookup key as the news reads. */
+export function communeMapFrameAddress(ten_mien: string): string {
+  return voiHost(diaChiViGov("comms", COMMUNE_MAP_FRAME_PATH), ten_mien);
+}
+
+/** `[west, south, east, north]` in degrees — the order the wire and MapLibre's `LngLatBoundsLike` both use. */
+export type FrameBounds = readonly [west: number, south: number, east: number, north: number];
+
+export type CommuneMapFrame = {
+  readonly bounds: FrameBounds;
+  readonly center: { readonly lat: number; readonly lng: number };
+};
+
+/** `null` = the commune has no frame: draw no map (K3 "Không có cả hai"). */
+export type CommuneMapFrameRead = CommuneMapFrame | null;
+
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/**
+ * 200 body → the frame, `null` for `configured: false`, or `undefined` when malformed. Field by field, never cast.
+ * A frame the map cannot honour is MALFORMED, not "no frame": an inverted or out-of-world box, or a centre outside
+ * its own box, would lock the map onto the wrong place — the screen then falls back as for any server fault.
+ */
+export function readCommuneMapFrame(body: unknown): CommuneMapFrameRead | undefined {
+  if (typeof body !== "object" || body === null) return undefined;
+  const r = body as Record<string, unknown>;
+  if (r["configured"] === false) return null;
+  if (r["configured"] !== true) return undefined;
+  const b = r["bounds"];
+  const lat = r["center_lat"];
+  const lng = r["center_lng"];
+  if (!Array.isArray(b) || b.length !== 4 || !b.every(finite) || !finite(lat) || !finite(lng)) return undefined;
+  const [west, south, east, north] = b as [number, number, number, number];
+  const inWorld = west >= -180 && east <= 180 && south >= -90 && north <= 90;
+  if (!inWorld || west >= east || south >= north) return undefined;
+  if (lng < west || lng > east || lat < south || lat > north) return undefined;
+  return { bounds: [west, south, east, north], center: { lat, lng } };
+}

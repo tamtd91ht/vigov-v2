@@ -829,6 +829,9 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
       ".xa-banner-strip__tap",
       // ADR 0067 §4 (01/10/2026): the Truyền thanh player — Nghe / Tạm dừng and the two ±15 giây buttons.
       ".xa-player__nut",
+      // ADR 0072 §Sửa đổi 11/10/2026 (Mini App): the send form's map — the draggable pin and MapLibre's zoom buttons.
+      ".xa-scene-map__pin",
+      ".xa-scene-map .maplibregl-ctrl-group button",
     ]) {
       expect(styles, `${lop} không còn cao calc(var(--tap-min) + 4px)`).toMatch(
         new RegExp(`\\${lop}\\s*\\{[^}]*min-height:\\s*calc\\(var\\(--tap-min\\) \\+ 4px\\)`),

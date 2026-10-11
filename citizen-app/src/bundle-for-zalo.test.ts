@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 import { beforeAll, describe, expect, it } from "vitest";
 
-import { build } from "vite";
+import { build, parseAst } from "vite";
 
 import appConfigRaw from "../app-config.json?raw";
 import indexHtml from "../index.html?raw";
@@ -182,6 +182,29 @@ describe("the bundle that gets uploaded to Zalo", () => {
     // `vite preview` chạy hoàn hảo, và app trắng trơn trên máy thật.
     expect(builtHtml()).not.toContain('type="module"');
     expect(builtHtml()).toMatch(/<script\s+src="\.\/assets\/app\.js"><\/script>/);
+  });
+
+  it("holds no BigInt literal — one unparsable token is a white screen on EVERY screen of an old phone", () => {
+    // ONE classic script: a token an old engine (before Safari 14 / Chrome 67) cannot PARSE kills the whole app, not
+    // the feature that uses it. maplibre-gl 6 brings eight `123n` literals the es2015 target cannot lower;
+    // `scripts/bigint-literals.mjs` rewrites them to `BigInt("123")` calls, which parse everywhere and only run on the
+    // map's own (never-requested) MLT path. Measured on the real emitted code, by AST, not by text search.
+    const app = emitted.find((f) => f.fileName === "assets/app.js");
+    expect(app, "no assets/app.js emitted").toBeDefined();
+    const found: string[] = [];
+    const walk = (node: unknown) => {
+      if (node === null || typeof node !== "object") return;
+      if (Array.isArray(node)) return node.forEach(walk);
+      const n = node as Record<string, unknown>;
+      if (n["type"] === "Literal" && typeof n["bigint"] === "string") found.push(n["bigint"]);
+      for (const [k, v] of Object.entries(n)) if (k !== "type") walk(v);
+    };
+    walk(parseAst(String(app!.code)));
+    expect(found, "the bundle carries BigInt literals again").toEqual([]);
+    // The measure measures: the same walk finds one in a snippet that has it.
+    found.length = 0;
+    walk(parseAst("const x = 2n;"));
+    expect(found).toEqual(["2"]);
   });
 
   it("emits stable file names — a content hash makes the committed config wrong", () => {
