@@ -84,7 +84,7 @@ Mỗi lần ghi in một dòng `GHI · <người bấm> · <giờ UTC> · <names
 | Tài nguyên | `sua-tai-nguyen` | Sửa số trong khung (điền sẵn từ cụm) hoặc bấm "Áp mẫu" | `replicas`, cpu/memory request/limit; đợi rollout |
 | Triển khai | `khoi-dong-lai` | `DICH_VU_CHON` | `rollout restart` + đợi |
 | | `lui-ban-truoc` | `DICH_VU_CHON` | `rollout undo` về revision liền trước |
-| Bảo trì | `tao-tai-khoan-van-hanh` | `EMAIL_VAN_HANH`, `TEN_VAN_HANH`, `TICKET` (mọi môi trường) | `operatorctl create` + 7 quyền `ops.*`. **Mật khẩu tạm in vào log** — đổi + đăng ký TOTP ngay |
+| Bảo trì | `tao-tai-khoan-van-hanh` | `EMAIL_VAN_HANH`, `TEN_VAN_HANH`, `TICKET` (mọi môi trường) | `operatorctl create` + 8 quyền `ops.*`. **Mật khẩu tạm in vào log** — đổi + đăng ký TOTP ngay |
 
 ### Quy tắc job tự giữ
 

@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -83,6 +84,27 @@ type identityFake struct {
 	statusRes       *operatorclient.ListMiniAppSecretStatusesResult
 	statusErr       error
 	sawStatusTenant []tenant.ID
+
+	// ListActiveStaffCounts (operator_zalo_bot_test.go). A nil result answers ACCEPTED with no counts.
+	staffRes      *operatorclient.ListActiveStaffCountsResult
+	staffErr      error
+	sawStaffToken []string
+	sawStaffIP    []string
+	sawStaffCtxT  []tenant.ID
+}
+
+func (f *identityFake) ListActiveStaffCounts(ctx context.Context, tok secret.Secret, clientIP string) (operatorclient.ListActiveStaffCountsResult, error) {
+	t, _ := tenant.From(ctx)
+	f.sawStaffToken = append(f.sawStaffToken, string(tok.Lo()))
+	f.sawStaffIP = append(f.sawStaffIP, clientIP)
+	f.sawStaffCtxT = append(f.sawStaffCtxT, t)
+	if f.staffErr != nil {
+		return operatorclient.ListActiveStaffCountsResult{}, f.staffErr
+	}
+	if f.staffRes != nil {
+		return *f.staffRes, nil
+	}
+	return operatorclient.ListActiveStaffCountsResult{Outcome: operatorclient.OutcomeAccepted, Counts: map[string]uint32{}}, nil
 }
 
 func (f *identityFake) hit() error {
@@ -137,13 +159,28 @@ type registryFake struct {
 	apps    []domain.CommuneMiniApp
 	setApps bool
 	removed []string
+	// pages, when set, is what ListCommunes answers page by page (the cursor is the page index) — the
+	// Zalo Bot communes table walks the whole list.
+	pages [][]domain.Commune
 }
 
 // deletedAppFake is an App ID communeIDFake held and removed.
 const deletedAppFake = "3000000000000000001"
 
-func (registryFake) ListCommunes(context.Context, page.Request) (page.Result[domain.Commune], error) {
+func (f registryFake) ListCommunes(_ context.Context, req page.Request) (page.Result[domain.Commune], error) {
 	r := page.NewResult[domain.Commune]()
+	if f.pages != nil {
+		i := 0
+		if a, ok := req.After(); ok {
+			i, _ = strconv.Atoi(a.ID)
+		}
+		r.Items = append(r.Items, f.pages[i]...)
+		if i+1 < len(f.pages) {
+			r.HasMore = true
+			r.NextCursor = page.Encode(req.Column(), req.Dir(), page.Anchor{Key: page.TimeKey(nowFake), ID: strconv.Itoa(i + 1)})
+		}
+		return r, nil
+	}
 	r.Items = append(r.Items, domain.Commune{ID: communeIDFake, Name: "Xã Thăng Bình", Province: "Đà Nẵng",
 		Active: true, Domains: []string{"thangbinh-danang.vigov.vn"}})
 	return r, nil
@@ -294,6 +331,8 @@ type harness struct {
 	shared  *sharedAppFake
 	fields  *fieldsFake
 	frames  *mapFramesFake
+	zalo    *zaloBotFake
+	zlog    *zaloLogFake
 	counter *memCounter
 	forgot  []string
 	logs    *bytes.Buffer // JSON lines the handlers logged
@@ -302,8 +341,8 @@ type harness struct {
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	h := &harness{reg: &registryFake{}, id: &identityFake{live: true}, w: &writerFake{}, pol: newPolicyFake(), oplog: &opLogFake{},
-		shared: newSharedAppFake(), fields: newFieldsFake(), frames: newMapFramesFake(), counter: &memCounter{},
-		logs: &bytes.Buffer{}}
+		shared: newSharedAppFake(), fields: newFieldsFake(), frames: newMapFramesFake(), zalo: &zaloBotFake{},
+		zlog: &zaloLogFake{}, counter: &memCounter{}, logs: &bytes.Buffer{}}
 	signer, err := operatortoken.NewSigner([]secret.Secret{opKeyFake})
 	if err != nil {
 		t.Fatal(err)
@@ -324,6 +363,8 @@ func newHarness(t *testing.T) *harness {
 		SharedApp:    h.shared,
 		Fields:       h.fields,
 		MapFrames:    h.frames,
+		ZaloBot:      h.zalo,
+		ZaloBotLog:   h.zlog,
 		OperatorHost: operatorHostFake,
 		NewID:        func() (string, error) { return newIDFake, nil },
 		Forget:       func(host string) { h.forgot = append(h.forgot, host) },
@@ -393,7 +434,8 @@ type guardedRoute struct {
 
 // decidedKeysFake is the closed operator key set, spelled out independently of opauth.
 var decidedKeysFake = []string{"ops.tenant.manage", "ops.domain.manage", "ops.profile.manage",
-	"ops.mini_app.manage", "ops.upload_policy.manage", "ops.qr.issue", "ops.petition_field.manage"}
+	"ops.mini_app.manage", "ops.upload_policy.manage", "ops.qr.issue", "ops.petition_field.manage",
+	"ops.zalo_bot.manage"}
 
 var guarded = []guardedRoute{
 	{"GET", "/api/v1/communes", "", nil, 200, true},
@@ -442,6 +484,12 @@ var guarded = []guardedRoute{
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/map-frame-default",
 		`{"center_lat":15.730507,"center_lng":108.37811,"radius_km":10,"reason":"Đặt khung mặc định"}`,
 		[]string{"ops.tenant.manage"}, 200, false},
+	{"GET", "/api/v1/zalo-bots/shared", "", []string{"ops.zalo_bot.manage"}, 200, false},
+	{"PUT", "/api/v1/zalo-bots/shared", zaloBotBodyFake, []string{"ops.zalo_bot.manage"}, 200, false},
+	{"POST", "/api/v1/zalo-bots/shared/check", "", []string{"ops.zalo_bot.manage"}, 200, false},
+	{"GET", "/api/v1/zalo-bots/shared/webhook", "", []string{"ops.zalo_bot.manage"}, 200, false},
+	{"PUT", "/api/v1/zalo-bots/shared/webhook", "", []string{"ops.zalo_bot.manage"}, 200, false},
+	{"GET", "/api/v1/zalo-bots/shared/communes", "", []string{"ops.zalo_bot.manage"}, 200, false},
 	{"GET", "/api/v1/operator-sessions/current", "", nil, 200, false},
 	{"DELETE", "/api/v1/operator-sessions/current", "", nil, 204, false},
 }
@@ -504,7 +552,7 @@ func TestGuardedRoutes(t *testing.T) {
 				if rec := h.do(rt.method, rt.path, rt.body, opCookie(t)); rec.Code != 403 {
 					t.Errorf("missing a key: %d, want 403", rec.Code)
 				}
-				if h.shared.declared+h.shared.launchReads+h.fields.writes+h.frames.writes != 0 {
+				if h.shared.declared+h.shared.launchReads+h.fields.writes+h.frames.writes+h.zalo.calls != 0 {
 					t.Errorf("a store ran without its key")
 				}
 				if h.w.target != "" {

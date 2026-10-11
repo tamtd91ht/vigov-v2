@@ -105,7 +105,9 @@ spec:
         - { port: 9090, protocol: TCP }
 ---
 # 3c. comms 9090 ← documents, petitions và finance (gửi thông báo qua `commsclient`; finance: nhắc tên
-# trong trao đổi dự án, ADR 0081 #5).
+# trong trao đổi dự án, ADR 0081 #5), và platform từ 11/10/2026 (màn Zalo Bot của khu vận hành chuyển
+# tiếp sang ZaloBotOperatorService — `commsclient.DialZaloBotOperator` trong
+# `service-platform/cmd/server/operator_edge.go`, ADR 0074; mặt RA là quy tắc 11c).
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -119,6 +121,7 @@ spec:
         - podSelector: { matchLabels: { app.kubernetes.io/name: documents } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: petitions } }
         - podSelector: { matchLabels: { app.kubernetes.io/name: finance } }
+        - podSelector: { matchLabels: { app.kubernetes.io/name: platform } }
       ports:
         - { port: 9090, protocol: TCP }
 ---
@@ -569,6 +572,26 @@ spec:
     - to:
         - podSelector:
             matchLabels: { app.kubernetes.io/name: identity }
+      ports:
+        - { port: 9090, protocol: TCP }
+---
+# 11c. platform → comms gRPC 9090: ZaloBotOperatorService — màn Zalo Bot của khu vận hành (ADR 0074,
+#      11/10/2026). Mặt RA của quy tắc 3c. Kênh này mang TOKEN bot Zalo dùng chung khi đổi token (chỉ
+#      ghi, không bao giờ trả lại), không TLS — cùng nợ kênh gRPC nội cụm (`@security-exception` trong
+#      `core/commsclient/zalo_bot_operator.go`); chỉ NetworkPolicy này và 3c thu hẹp nó tới đúng một cặp.
+#      Một đối tượng riêng, không gộp vào 11/11b: đọc tên phải biết nó mở cổng nào tới ai.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-platform-egress-comms-grpc
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: platform }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/name: comms }
       ports:
         - { port: 9090, protocol: TCP }
 ---

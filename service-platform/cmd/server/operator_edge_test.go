@@ -227,7 +227,7 @@ func TestOperatorEdgeRefusesCrossOriginWrite(t *testing.T) {
 func loadPlatformConfig(t *testing.T, set map[string]string) config.Config {
 	t.Helper()
 	for _, k := range []string{"IDENTITY_GRPC_ADDR", "IDENTITY_OPERATOR_GRPC_ADDR", "OPERATOR_HOST",
-		"OPERATOR_SESSION_SIGNING_KEYS", "SESSION_SIGNING_KEYS", "REDIS_DSN", "TRUSTED_PROXY_CIDRS"} {
+		"OPERATOR_SESSION_SIGNING_KEYS", "SESSION_SIGNING_KEYS", "REDIS_DSN", "TRUSTED_PROXY_CIDRS", "COMMS_GRPC_ADDR"} {
 		t.Setenv(k, "")
 	}
 	t.Setenv("ENV", "dev")
@@ -254,7 +254,7 @@ func TestOperatorEdgeDialsTheOperatorAddress(t *testing.T) {
 		"OPERATOR_HOST":      operatorHostTest,
 		"IDENTITY_GRPC_ADDR": "identity:9090",
 	})
-	_, err := wireOperatorEdge(cfg, readerEmpty{}, nil, nil, nil, nil, nil, nil, func(string) {}, log)
+	_, err := wireOperatorEdge(cfg, readerEmpty{}, nil, nil, nil, nil, nil, nil, nil, func(string) {}, log)
 	if err == nil || !strings.Contains(err.Error(), "IDENTITY_OPERATOR_GRPC_ADDR") {
 		t.Fatalf("with only IDENTITY_GRPC_ADDR set, want a refusal naming IDENTITY_OPERATOR_GRPC_ADDR, got %v", err)
 	}
@@ -263,12 +263,35 @@ func TestOperatorEdgeDialsTheOperatorAddress(t *testing.T) {
 		"OPERATOR_HOST":               operatorHostTest,
 		"IDENTITY_OPERATOR_GRPC_ADDR": "identity:9093",
 	})
-	w, err := wireOperatorEdge(cfg, readerEmpty{}, nil, nil, nil, nil, nil, nil, func(string) {}, log)
+	w, err := wireOperatorEdge(cfg, readerEmpty{}, nil, nil, nil, nil, nil, nil, nil, func(string) {}, log)
 	if err != nil {
 		t.Fatalf("wireOperatorEdge with IDENTITY_OPERATOR_GRPC_ADDR set: %v", err)
 	}
 	defer w.close()
 	if w.handler == nil {
 		t.Fatal("the operator edge was not built")
+	}
+}
+
+// The Zalo Bot relay (ADR 0074): with COMMS_GRPC_ADDR set the edge dials comms (lazily — nothing is
+// contacted at startup); in DEV without it the edge still starts and only the zalo-bots routes are
+// 503. Staging/prod never reach the second case: CommsClient is declared, so Load refuses first.
+func TestOperatorEdgeDialsComms(t *testing.T) {
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	cfg := loadPlatformConfig(t, map[string]string{
+		"OPERATOR_HOST":               operatorHostTest,
+		"IDENTITY_OPERATOR_GRPC_ADDR": "identity:9093",
+		"COMMS_GRPC_ADDR":             "comms:9090",
+	})
+	w, err := wireOperatorEdge(cfg, readerEmpty{}, nil, nil, nil, nil, nil, nil, nil, func(string) {}, log)
+	if err != nil || w.handler == nil {
+		t.Fatalf("wireOperatorEdge with COMMS_GRPC_ADDR set: %v", err)
+	}
+	w.close()
+
+	t.Setenv("ENV", "prod")
+	t.Setenv("COMMS_GRPC_ADDR", "")
+	if _, err := config.Load("platform", configUses); err == nil || !strings.Contains(err.Error(), "COMMS_GRPC_ADDR") {
+		t.Fatalf("prod without COMMS_GRPC_ADDR must refuse to load, naming it: %v", err)
 	}
 }

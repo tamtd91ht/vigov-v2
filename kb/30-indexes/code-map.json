@@ -700,19 +700,19 @@
     },
     "app.DisasterAlertInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/disaster_alert.go:68"
+      "at": "service-comms/internal/app/disaster_alert.go:88"
     },
     "app.DisasterAlertPatch": {
       "kind": "type",
-      "at": "service-comms/internal/app/disaster_alert.go:84"
+      "at": "service-comms/internal/app/disaster_alert.go:104"
     },
     "app.DisasterAlertRepo": {
       "kind": "type",
-      "at": "service-comms/internal/app/disaster_alert.go:34"
+      "at": "service-comms/internal/app/disaster_alert.go:37"
     },
     "app.DisasterAlerts": {
       "kind": "type",
-      "at": "service-comms/internal/app/disaster_alert.go:43"
+      "at": "service-comms/internal/app/disaster_alert.go:46"
     },
     "app.DisbursementImporter": {
       "kind": "type",
@@ -812,7 +812,7 @@
     },
     "app.End": {
       "kind": "func",
-      "at": "service-comms/internal/app/disaster_alert.go:199"
+      "at": "service-comms/internal/app/disaster_alert.go:225"
     },
     "app.Error": {
       "kind": "func",
@@ -1010,6 +1010,18 @@
       "kind": "type",
       "at": "service-finance/internal/app/disbursement_import.go:70"
     },
+    "app.InForce": {
+      "kind": "func",
+      "at": "service-comms/internal/app/disaster_alert_public_cache.go:99"
+    },
+    "app.InForceAlertCache": {
+      "kind": "type",
+      "at": "service-comms/internal/app/disaster_alert_public_cache.go:67"
+    },
+    "app.InForceAlertReader": {
+      "kind": "type",
+      "at": "service-comms/internal/app/disaster_alert_public_cache.go:49"
+    },
     "app.InTx": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_store.go:69"
@@ -1025,6 +1037,10 @@
     "app.IntakeSender": {
       "kind": "type",
       "at": "service-petitions/internal/app/gui_phan_anh.go:83"
+    },
+    "app.Invalidate": {
+      "kind": "func",
+      "at": "service-comms/internal/app/disaster_alert_public_cache.go:170"
     },
     "app.Is": {
       "kind": "func",
@@ -1704,7 +1720,7 @@
     },
     "app.NewDisasterAlerts": {
       "kind": "func",
-      "at": "service-comms/internal/app/disaster_alert.go:52"
+      "at": "service-comms/internal/app/disaster_alert.go:60"
     },
     "app.NewDisbursementImporter": {
       "kind": "func",
@@ -1741,6 +1757,10 @@
     "app.NewGuiPhanAnh": {
       "kind": "func",
       "at": "service-petitions/internal/app/gui_phan_anh.go:329"
+    },
+    "app.NewInForceAlertCache": {
+      "kind": "func",
+      "at": "service-comms/internal/app/disaster_alert_public_cache.go:79"
     },
     "app.NewIncomingDashboard": {
       "kind": "func",
@@ -3142,6 +3162,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/zalo_bot_access.go:74"
     },
+    "app.WithAfterWrite": {
+      "kind": "func",
+      "at": "service-comms/internal/app/disaster_alert.go:65"
+    },
     "app.WithAudioFiles": {
       "kind": "func",
       "at": "service-comms/internal/app/noi_dung_mini_app.go:105"
@@ -3644,7 +3668,7 @@
     },
     "commsclient.Close": {
       "kind": "func",
-      "at": "core/commsclient/commsclient.go:114"
+      "at": "core/commsclient/zalo_bot_operator.go:86"
     },
     "commsclient.DeliverStaffNotifications": {
       "kind": "func",
@@ -3658,6 +3682,10 @@
       "kind": "func",
       "at": "core/commsclient/commsclient.go:84"
     },
+    "commsclient.DialZaloBotOperator": {
+      "kind": "func",
+      "at": "core/commsclient/zalo_bot_operator.go:70"
+    },
     "commsclient.DueSoonItem": {
       "kind": "type",
       "at": "core/commsclient/commsclient.go:65"
@@ -3666,17 +3694,29 @@
       "kind": "func",
       "at": "core/commsclient/commsclient.go:106"
     },
+    "commsclient.NewZaloBotOperatorFromConn": {
+      "kind": "func",
+      "at": "core/commsclient/zalo_bot_operator.go:62"
+    },
     "commsclient.Notice": {
       "kind": "type",
       "at": "core/commsclient/commsclient.go:50"
     },
+    "commsclient.ZaloBotOperatorClient": {
+      "kind": "type",
+      "at": "core/commsclient/zalo_bot_operator.go:40"
+    },
+    "commsclient.ZaloBotOperatorInterceptors": {
+      "kind": "func",
+      "at": "core/commsclient/zalo_bot_operator.go:48"
+    },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:873"
+      "at": "core/config/config.go:874"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:1076"
+      "at": "core/config/config.go:1077"
     },
     "config.CheckBucketPrefix": {
       "kind": "func",
@@ -3736,7 +3776,7 @@
     },
     "config.Error": {
       "kind": "func",
-      "at": "core/config/uses.go:229"
+      "at": "core/config/uses.go:230"
     },
     "config.Format": {
       "kind": "func",
@@ -3756,7 +3796,7 @@
     },
     "config.Groups": {
       "kind": "func",
-      "at": "core/config/uses.go:163"
+      "at": "core/config/uses.go:164"
     },
     "config.IdentityAdminSeedPassword": {
       "kind": "func",
@@ -3772,11 +3812,11 @@
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:567"
+      "at": "core/config/config.go:568"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:1067"
+      "at": "core/config/config.go:1068"
     },
     "config.ListenAddr": {
       "kind": "func",
@@ -3784,7 +3824,7 @@
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:588"
+      "at": "core/config/config.go:589"
     },
     "config.LogValue": {
       "kind": "func",
@@ -3864,7 +3904,7 @@
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:939"
+      "at": "core/config/config.go:940"
     },
     "config.RedisDSN": {
       "kind": "func",
@@ -3888,7 +3928,7 @@
     },
     "config.String": {
       "kind": "func",
-      "at": "core/config/uses.go:125"
+      "at": "core/config/uses.go:126"
     },
     "config.TenantCacheTTL": {
       "kind": "func",
@@ -3900,11 +3940,11 @@
     },
     "config.Usage": {
       "kind": "type",
-      "at": "core/config/uses.go:134"
+      "at": "core/config/uses.go:135"
     },
     "config.Uses": {
       "kind": "func",
-      "at": "core/config/uses.go:140"
+      "at": "core/config/uses.go:141"
     },
     "config.ZaloBotWebhookHost": {
       "kind": "func",
@@ -8662,6 +8702,10 @@
       "kind": "type",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:800"
     },
+    "domain.ZaloBotAct": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/zalo_bot.go:12"
+    },
     "domain.ZaloBotCommuneStat": {
       "kind": "type",
       "at": "service-comms/internal/domain/zalo_bot.go:180"
@@ -9504,7 +9548,7 @@
     },
     "http.CreateDisasterAlert": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:413"
+      "at": "service-comms/internal/http/disaster_alerts.go:436"
     },
     "http.CreateExternalContact": {
       "kind": "func",
@@ -9724,7 +9768,7 @@
     },
     "http.DeleteDisasterAlert": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:507"
+      "at": "service-comms/internal/http/disaster_alerts.go:530"
     },
     "http.DeleteExternalContact": {
       "kind": "func",
@@ -9764,15 +9808,15 @@
     },
     "http.DisasterAlertDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/disaster_alerts.go:71"
+      "at": "service-comms/internal/http/disaster_alerts.go:91"
     },
     "http.DisasterAlertsReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/disaster_alerts.go:51"
+      "at": "service-comms/internal/http/disaster_alerts.go:71"
     },
     "http.DisasterAlertsWriter": {
       "kind": "type",
-      "at": "service-comms/internal/http/disaster_alerts.go:58"
+      "at": "service-comms/internal/http/disaster_alerts.go:78"
     },
     "http.DisbursementImportTemplate": {
       "kind": "func",
@@ -9856,7 +9900,7 @@
     },
     "http.EndDisasterAlert": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:491"
+      "at": "service-comms/internal/http/disaster_alerts.go:514"
     },
     "http.ExportCitizenLetterReport": {
       "kind": "func",
@@ -9904,7 +9948,7 @@
     },
     "http.GetDisasterAlert": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:402"
+      "at": "service-comms/internal/http/disaster_alerts.go:425"
     },
     "http.GetMailSettings": {
       "kind": "func",
@@ -10220,7 +10264,7 @@
     },
     "http.ListDisasterAlerts": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:379"
+      "at": "service-comms/internal/http/disaster_alerts.go:402"
     },
     "http.ListExternalContacts": {
       "kind": "func",
@@ -10496,11 +10540,11 @@
     },
     "http.OperatorDeps": {
       "kind": "type",
-      "at": "service-platform/internal/http/operator_routes.go:38"
+      "at": "service-platform/internal/http/operator_routes.go:39"
     },
     "http.OperatorHandler": {
       "kind": "func",
-      "at": "service-platform/internal/http/operator_routes.go:73"
+      "at": "service-platform/internal/http/operator_routes.go:79"
     },
     "http.OperatorIdentity": {
       "kind": "type",
@@ -10700,15 +10744,15 @@
     },
     "http.PublicDisasterAlertDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/disaster_alerts.go:81"
+      "at": "service-comms/internal/http/disaster_alerts.go:101"
     },
     "http.PublicDisasterAlerts": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:588"
+      "at": "service-comms/internal/http/disaster_alerts.go:611"
     },
     "http.PublicDisasterAlertsReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/disaster_alerts.go:66"
+      "at": "service-comms/internal/http/disaster_alerts.go:86"
     },
     "http.PublicExternalContactDeps": {
       "kind": "type",
@@ -10816,7 +10860,7 @@
     },
     "http.RegisterDisasterAlerts": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:208"
+      "at": "service-comms/internal/http/disaster_alerts.go:229"
     },
     "http.RegisterExternalContacts": {
       "kind": "func",
@@ -10836,7 +10880,7 @@
     },
     "http.RegisterPublicDisasterAlerts": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:332"
+      "at": "service-comms/internal/http/disaster_alerts.go:353"
     },
     "http.RegisterPublicExternalContacts": {
       "kind": "func",
@@ -11340,7 +11384,7 @@
     },
     "http.UpdateDisasterAlert": {
       "kind": "func",
-      "at": "service-comms/internal/http/disaster_alerts.go:449"
+      "at": "service-comms/internal/http/disaster_alerts.go:472"
     },
     "http.UpdateExternalContact": {
       "kind": "func",
@@ -11490,6 +11534,10 @@
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:381"
     },
+    "http.ZaloBotActRecorder": {
+      "kind": "type",
+      "at": "service-platform/internal/http/operator_zalo_bot.go:54"
+    },
     "http.ZaloBotUpdateDeps": {
       "kind": "type",
       "at": "service-comms/internal/http/zalo_bot_updates.go:87"
@@ -11520,7 +11568,7 @@
     },
     "httpx.CORSCongDan": {
       "kind": "func",
-      "at": "core/httpx/cors.go:67"
+      "at": "core/httpx/cors.go:72"
     },
     "httpx.CitizenEdge": {
       "kind": "func",
@@ -11992,11 +12040,11 @@
     },
     "main.Incr": {
       "kind": "func",
-      "at": "service-platform/cmd/server/operator_edge.go:89"
+      "at": "service-platform/cmd/server/operator_edge.go:91"
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:503"
+      "at": "service-platform/cmd/server/main.go:511"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -12044,23 +12092,23 @@
     },
     "opauth.Auth": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:141"
+      "at": "service-platform/internal/opauth/opauth.go:145"
     },
     "opauth.ClearCookie": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:324"
+      "at": "service-platform/internal/opauth/opauth.go:328"
     },
     "opauth.From": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:119"
+      "at": "service-platform/internal/opauth/opauth.go:123"
     },
     "opauth.Has": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:100"
+      "at": "service-platform/internal/opauth/opauth.go:104"
     },
     "opauth.Into": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:125"
+      "at": "service-platform/internal/opauth/opauth.go:129"
     },
     "opauth.Key": {
       "kind": "type",
@@ -12068,43 +12116,43 @@
     },
     "opauth.NewAuth": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:151"
+      "at": "service-platform/internal/opauth/opauth.go:155"
     },
     "opauth.Principal": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:91"
+      "at": "service-platform/internal/opauth/opauth.go:95"
     },
     "opauth.Public": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:288"
+      "at": "service-platform/internal/opauth/opauth.go:292"
     },
     "opauth.RequireKey": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:230"
+      "at": "service-platform/internal/opauth/opauth.go:234"
     },
     "opauth.SessionResolver": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:135"
+      "at": "service-platform/internal/opauth/opauth.go:139"
     },
     "opauth.SetCookie": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:300"
+      "at": "service-platform/internal/opauth/opauth.go:304"
     },
     "opauth.SignedIn": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:267"
+      "at": "service-platform/internal/opauth/opauth.go:271"
     },
     "opauth.TokenFrom": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:171"
+      "at": "service-platform/internal/opauth/opauth.go:175"
     },
     "opauth.TokenVerifier": {
       "kind": "type",
-      "at": "service-platform/internal/opauth/opauth.go:130"
+      "at": "service-platform/internal/opauth/opauth.go:134"
     },
     "opauth.WithClock": {
       "kind": "func",
-      "at": "service-platform/internal/opauth/opauth.go:162"
+      "at": "service-platform/internal/opauth/opauth.go:166"
     },
     "operatorauth.CodeAt": {
       "kind": "func",
@@ -12237,6 +12285,14 @@
     "operatorclient.Dial": {
       "kind": "func",
       "at": "core/operatorclient/dial.go:30"
+    },
+    "operatorclient.ListActiveStaffCounts": {
+      "kind": "func",
+      "at": "core/operatorclient/staff_counts.go:40"
+    },
+    "operatorclient.ListActiveStaffCountsResult": {
+      "kind": "type",
+      "at": "core/operatorclient/staff_counts.go:27"
     },
     "operatorclient.ListMiniAppSecretStatuses": {
       "kind": "func",
@@ -13032,19 +13088,19 @@
     },
     "ratelimit.AccountlessLookupKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:238"
+      "at": "core/ratelimit/ratelimit.go:262"
     },
     "ratelimit.ActorKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:331"
+      "at": "core/ratelimit/ratelimit.go:355"
     },
     "ratelimit.Allow": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:487"
+      "at": "core/ratelimit/ratelimit.go:511"
     },
     "ratelimit.CitizenKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:305"
+      "at": "core/ratelimit/ratelimit.go:329"
     },
     "ratelimit.Close": {
       "kind": "func",
@@ -13052,11 +13108,11 @@
     },
     "ratelimit.Counter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:438"
+      "at": "core/ratelimit/ratelimit.go:462"
     },
     "ratelimit.FailsOpen": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:158"
+      "at": "core/ratelimit/ratelimit.go:174"
     },
     "ratelimit.Gate": {
       "kind": "func",
@@ -13072,11 +13128,11 @@
     },
     "ratelimit.Key": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:250"
+      "at": "core/ratelimit/ratelimit.go:274"
     },
     "ratelimit.Limiter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:445"
+      "at": "core/ratelimit/ratelimit.go:469"
     },
     "ratelimit.Middleware": {
       "kind": "func",
@@ -13084,7 +13140,7 @@
     },
     "ratelimit.New": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:460"
+      "at": "core/ratelimit/ratelimit.go:484"
     },
     "ratelimit.NewRedisCounter": {
       "kind": "func",
@@ -13096,7 +13152,7 @@
     },
     "ratelimit.OperatorIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:361"
+      "at": "core/ratelimit/ratelimit.go:385"
     },
     "ratelimit.Outcome": {
       "kind": "type",
@@ -13104,15 +13160,15 @@
     },
     "ratelimit.PlatformIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:377"
+      "at": "core/ratelimit/ratelimit.go:401"
     },
     "ratelimit.Policy": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:474"
+      "at": "core/ratelimit/ratelimit.go:498"
     },
     "ratelimit.PublicHostIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:281"
+      "at": "core/ratelimit/ratelimit.go:305"
     },
     "ratelimit.RedisCounter": {
       "kind": "type",
@@ -13120,15 +13176,15 @@
     },
     "ratelimit.WebhookIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:369"
+      "at": "core/ratelimit/ratelimit.go:393"
     },
     "ratelimit.ZaloChatKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:387"
+      "at": "core/ratelimit/ratelimit.go:411"
     },
     "ratelimit.ZaloCommuneChatKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:409"
+      "at": "core/ratelimit/ratelimit.go:433"
     },
     "richtext.Block": {
       "kind": "type",
@@ -15242,6 +15298,10 @@
       "kind": "func",
       "at": "service-documents/internal/store/van_ban_di.go:36"
     },
+    "store.NewZaloBotDisplayLog": {
+      "kind": "func",
+      "at": "service-platform/internal/store/zalo_bot_display.go:24"
+    },
     "store.NewZaloCommuneBotStore": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_commune_bot.go:33"
@@ -15609,6 +15669,10 @@
     "store.RecordTest": {
       "kind": "func",
       "at": "service-comms/internal/store/mail_settings.go:181"
+    },
+    "store.RecordZaloBotAct": {
+      "kind": "func",
+      "at": "service-platform/internal/store/zalo_bot_display.go:29"
     },
     "store.RegistryWriter": {
       "kind": "type",
@@ -16309,6 +16373,10 @@
     "store.XoaMemVanBan": {
       "kind": "func",
       "at": "service-petitions/internal/store/nhiem_vu_van_ban.go:256"
+    },
+    "store.ZaloBotDisplayLog": {
+      "kind": "type",
+      "at": "service-platform/internal/store/zalo_bot_display.go:19"
     },
     "store.ZaloCommuneBotStore": {
       "kind": "type",

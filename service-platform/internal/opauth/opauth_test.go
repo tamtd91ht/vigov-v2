@@ -151,6 +151,7 @@ func TestRequireAnyKey(t *testing.T) {
 		"only ops.qr.issue":     {[]string{string(KeyQRIssue)}, 200},
 		"only mini app":         {[]string{string(KeyMiniAppManage)}, 200},
 		"only petition field":   {[]string{string(KeyPetitionFieldManage)}, 200},
+		"only zalo bot":         {[]string{"ops.zalo_bot.manage"}, 200},
 		"unknown + one decided": {[]string{"ops.anything.goes", string(KeyDomainManage)}, 200},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -166,11 +167,12 @@ func TestRequireAnyKey(t *testing.T) {
 	}
 }
 
-// The closed set, spelled out independently: the six keys of ADR 0048 §28/09 #3 and the seventh of
-// ADR 0073 #3 — the same list identity's migration 0023 holds. Growing it is an owner decision.
-func TestDecidedKeysAreTheSevenOwnerKeys(t *testing.T) {
+// The closed set, spelled out independently: the six keys of ADR 0048 §28/09 #3, the seventh of
+// ADR 0073 #3 and the eighth of ADR 0074 (owner 11/10/2026) — the same list identity's migrations
+// 0023 and 0025 hold. Growing it is an owner decision.
+func TestDecidedKeysAreTheEightOwnerKeys(t *testing.T) {
 	want := []string{"ops.tenant.manage", "ops.domain.manage", "ops.profile.manage", "ops.mini_app.manage",
-		"ops.upload_policy.manage", "ops.qr.issue", "ops.petition_field.manage"}
+		"ops.upload_policy.manage", "ops.qr.issue", "ops.petition_field.manage", "ops.zalo_bot.manage"}
 	if len(decidedKeys) != len(want) {
 		t.Fatalf("decided keys: %d, want %d", len(decidedKeys), len(want))
 	}

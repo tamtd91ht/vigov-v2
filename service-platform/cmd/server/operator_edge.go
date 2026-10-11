@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vihat/vigov/core/commsclient"
 	"github.com/vihat/vigov/core/config"
+	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/operatorclient"
 	"github.com/vihat/vigov/core/operatortoken"
@@ -143,13 +145,15 @@ type operatorWiring struct {
 func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.CommuneWriter,
 	policies svchttp.UploadPolicyEditor, oplog svchttp.OperatorLogReader,
 	shared svchttp.SharedMiniAppEditor, fields svchttp.PetitionFieldEditor,
-	mapFrames svchttp.MapFrameDefaultEditor,
+	mapFrames svchttp.MapFrameDefaultEditor, zaloBotLog svchttp.ZaloBotActRecorder,
 	forget func(string), log *slog.Logger) (operatorWiring, error) {
 	host := cfg.OperatorHost()
 	signingKeys := cfg.OperatorSessionSigningKeys()
 	// identity's OPERATOR listener, not IDENTITY_GRPC_ADDR's staff port: OperatorService is
 	// registered on that listener only (user decision 01/10/2026).
 	identityAddr := cfg.IdentityOperatorGRPCAddr()
+	// comms' inter-service port, where ZaloBotOperatorService answers the Zalo Bot screen (ADR 0074).
+	commsAddr := cfg.CommsGRPCAddr()
 	redisDSN := cfg.RedisDSN()
 	if host == "" {
 		log.Info("khu vận hành TẮT — OPERATOR_HOST trống, không gắn tuyến vận hành nào")
@@ -172,12 +176,30 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 		return operatorWiring{}, fmt.Errorf("platform: khu vận hành bật (OPERATOR_HOST) nhưng không nối được identity: %w", err)
 	}
 
+	// The shared Zalo Bot (ADR 0074). Staging/prod refuse to start without COMMS_GRPC_ADDR (CommsClient
+	// is declared — ADR 0057); in DEV an empty one leaves the zalo-bots routes answering 503 while the
+	// rest of the operator area serves. Declared as the INTERFACE and left nil when absent: a nil
+	// *ZaloBotOperatorClient inside it would be a non-nil interface the handlers would call.
+	var zaloBot commsv1.ZaloBotOperatorServiceClient
+	closeZalo := func() {}
+	if commsAddr != "" {
+		zc, err := commsclient.DialZaloBotOperator(commsAddr, cfg.GRPCCallerKey())
+		if err != nil {
+			_ = identity.Close()
+			return operatorWiring{}, fmt.Errorf("platform: khu vận hành bật nhưng không nối được comms (bot Zalo dùng chung): %w", err)
+		}
+		zaloBot, closeZalo = zc, func() { _ = zc.Close() }
+	} else {
+		log.Warn("CẢNH BÁO CẤU HÌNH: COMMS_GRPC_ADDR trống — các tuyến bot Zalo dùng chung (zalo-bots/shared…) trả 503")
+	}
+
 	var counter ratelimit.Counter = failingCounter{}
 	closeCounter := func() {}
 	if dsn := redisDSN.Lo(); dsn != "" {
 		rc, err := ratelimit.NewRedisCounter(dsn)
 		if err != nil {
 			_ = identity.Close()
+			closeZalo()
 			return operatorWiring{}, fmt.Errorf("platform: %w", err)
 		}
 		counter, closeCounter = rc, func() { _ = rc.Close() }
@@ -187,6 +209,7 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 	limiter, err := ratelimit.New(counter, ratelimit.OperatorSignIn)
 	if err != nil {
 		_ = identity.Close()
+		closeZalo()
 		closeCounter()
 		return operatorWiring{}, fmt.Errorf("platform: %w", err)
 	}
@@ -202,11 +225,13 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 		SharedApp:    shared,
 		Fields:       fields,
 		MapFrames:    mapFrames,
+		ZaloBot:      zaloBot,
+		ZaloBotLog:   zaloBotLog,
 		OperatorHost: host,
 		NewID:        ulid.Moi,
 		Forget:       forget,
 		Log:          log,
 	})
 	log.Info("khu vận hành BẬT", "host", host)
-	return operatorWiring{handler: h, close: func() { _ = identity.Close(); closeCounter() }}, nil
+	return operatorWiring{handler: h, close: func() { _ = identity.Close(); closeZalo(); closeCounter() }}, nil
 }

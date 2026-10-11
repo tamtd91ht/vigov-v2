@@ -2098,7 +2098,7 @@
       "task_id": "02a3c3891434",
       "summary": "Cảnh báo thiên tai ĐANG HIỆU LỰC của xã theo tên miền — cho màn cảnh báo và băng đỏ trang chủ Zalo Mini App",
       "permission_kind": "public",
-      "permission_reason": "cảnh báo thiên tai đang hiệu lực mà xã đăng cho người dân, hiện trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0091 §2): người dân đọc không cần tài khoản; chỉ trả cảnh báo chưa xoá, chưa kết thúc, đang trong khung hiệu lực của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi",
+      "permission_reason": "cảnh báo thiên tai đang hiệu lực mà xã đăng cho người dân, hiện trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0091 §2): người dân đọc không cần tài khoản; chỉ trả cảnh báo chưa xoá, chưa kết thúc, đang trong khung hiệu lực của đúng xã mà nền tảng phân giải từ tên miền; giới hạn 1200 lần/phút theo tên miền và mạng của máy gọi (chủ dự án 11/10/2026), bộ đệm 30 giây theo xã",
       "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {

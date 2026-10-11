@@ -76,6 +76,11 @@ spec:
             # (`core/staffauth`, như comms/petitions). Bắt buộc ở prod (config.IdentityClient, ADR 0057).
             # Đòi NetworkPolicy 3b + 4b cho platform → identity:9090 (`deploy/base/mang/netpol.yaml`).
             - { name: IDENTITY_GRPC_ADDR, value: identity:9090 }
+            # TỪ 11/10/2026 (ADR 0074 — màn Zalo Bot của khu vận hành): gRPC 9090 của comms, nơi
+            # ZaloBotOperatorService giữ bot Zalo dùng chung (`core/commsclient.DialZaloBotOperator`).
+            # Bắt buộc ở prod (config.CommsClient, ADR 0057). Đòi NetworkPolicy 3c + 11c cho
+            # platform → comms:9090 (`deploy/base/mang/netpol.yaml`).
+            - { name: COMMS_GRPC_ADDR, value: comms:9090 }
             # GIỚI HẠN MỀM của bộ thu gom Go (runtime đọc, không phải biến của core/config): ~78% của
             # `limits.memory: 384Mi` bên dưới. Từ 02/10/2026 pod này giải mã ảnh logo/banner (tới 96 MiB
             # ước tính một lượt, ADR 0069); không có dòng này GC chỉ chạy theo GOGC và heap có thể vượt

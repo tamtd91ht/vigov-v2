@@ -73,7 +73,8 @@ const (
 	// Elasticsearch: ELASTICSEARCH_ADDRS, ELASTICSEARCH_API_KEY, ELASTICSEARCH_INDEX_PREFIX.
 	Elasticsearch
 	// CommsClient: COMMS_GRPC_ADDR, GRPC_CALLER_KEY — an automation runner delivering staff
-	// notices into comms' bell inbox (ADR 0058 §3). APPENDED, never inserted: a Group is a bit
+	// notices into comms' bell inbox (ADR 0058 §3), and platform relaying the operator area's
+	// shared Zalo Bot screen to comms (ADR 0074). APPENDED, never inserted: a Group is a bit
 	// position, and renumbering the ones above changes nothing on disk but reads badly in a diff.
 	CommsClient
 	// OperatorEdge: OPERATOR_HOST, OPERATOR_SESSION_SIGNING_KEYS, IDENTITY_OPERATOR_GRPC_ADDR — the

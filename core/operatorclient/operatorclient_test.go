@@ -58,6 +58,9 @@ type fakeServer struct {
 	retireSecret *identityv1.RetireMiniAppSecretResponse
 	sawSet       *identityv1.SetMiniAppSecretRequest
 	statuses     *identityv1.ListMiniAppSecretStatusesResponse
+	// ListActiveStaffCounts (staff_counts_test.go).
+	staffCounts    *identityv1.ListActiveStaffCountsResponse
+	sawStaffCounts *identityv1.ListActiveStaffCountsRequest
 
 	calls     int
 	sawTenant [][]string

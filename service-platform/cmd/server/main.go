@@ -67,6 +67,12 @@ import (
 //
 // Declared => required in staging and prod (ADR 0057): platform refuses to start there without them, and
 // that is the point — a pod that started without the scanner would refuse every upload while green.
+//
+// SINCE 11/10/2026 (ADR 0074) the operator area's Zalo Bot screen relays to comms'
+// ZaloBotOperatorService, so platform declares
+//
+//	CommsClient      COMMS_GRPC_ADDR (+ GRPC_CALLER_KEY): comms' inter-service port. Prod-required for
+//	                 platform from this image on — used ⇒ required (ADR 0057, owner rule)
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -77,6 +83,7 @@ var configUses = config.Uses(
 	config.ObjectStore,
 	config.PublicMedia,
 	config.MalwareScan,
+	config.CommsClient,
 )
 
 func main() {
@@ -252,9 +259,10 @@ func run(log *slog.Logger) error {
 	// The upload limits (policyReader, the same raw-handle store the gRPC read uses) and the operator
 	// log are this service's own tables too (ADR 0073 #2, #5), as are the shared Mini App row and the
 	// tier-1 petition field codes (fields, the same store the gRPC read uses — ADR 0073 #3).
+	// The Zalo Bot display rows (ADR 0074) go to platform_audit_log, this service's own table.
 	opEdge, err := wireOperatorEdge(cfg, svcstore.NewOperatorRegistry(db),
 		svcstore.NewRegistryWriter(store.New(db)), policyReader, svcstore.NewOperatorLog(db),
-		svcstore.NewSharedMiniAppStore(db), fields, mapFrames, directory.Forget, log)
+		svcstore.NewSharedMiniAppStore(db), fields, mapFrames, svcstore.NewZaloBotDisplayLog(db), directory.Forget, log)
 	if err != nil {
 		return err
 	}

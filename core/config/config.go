@@ -41,7 +41,7 @@
 //	PETITIONS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    refused in staging/prod; dev: delete answers 503
 //	DOCUMENTS_GRPC_ADDR                   ConfigMap  OrgUnitOwnerClients    as above
 //	                                                 + DocumentsClient      refused in staging/prod; dev: letter→task answers 503
-//	COMMS_GRPC_ADDR                       ConfigMap  CommsClient            refused in staging/prod; dev: automation runner off
+//	COMMS_GRPC_ADDR                       ConfigMap  CommsClient            refused in staging/prod; dev: automation runner off, platform's Zalo Bot routes 503
 //	TENANT_CACHE_TTL                      —          TenantCache            default 30s, not set in the cluster
 //	REDIS_DSN                             Secret     Redis                  refused in staging/prod; dev: no cache
 //	SESSION_SIGNING_KEYS                  Secret     StaffSessionSigning    refused in staging/prod; dev: no sessions
@@ -285,9 +285,10 @@ type Config struct {
 	documentsGRPCAddr string
 
 	// CommsGRPCAddr is where comms answers DeliverStaffNotifications — the bell inbox the
-	// automation jobs write into (ADR 0058 §3; proto/vigov/comms/v1).
+	// automation jobs write into (ADR 0058 §3; proto/vigov/comms/v1) — and, for service-platform,
+	// ZaloBotOperatorService: the operator area's shared Zalo Bot screen (ADR 0074).
 	//
-	// Group CommsClient, declared by the services that RUN automation jobs. THE SHAPE OF
+	// Group CommsClient, declared by the services that RUN automation jobs and by platform. THE SHAPE OF
 	// PetitionsGRPCAddr: no default, refused at Load in staging/prod; in dev, empty turns the runner
 	// off with a warning. A guessed address would not fail open — a run whose delivery fails records
 	// DEPENDENCY_UNAVAILABLE and the next run retries under the same idempotency keys — but every

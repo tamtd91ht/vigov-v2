@@ -32,6 +32,9 @@ type OperatorIdentity interface {
 	RetireMiniAppSecret(ctx context.Context, req operatorclient.RetireMiniAppSecretRequest) (operatorclient.RetireMiniAppSecretResult, error)
 	// The read beside them, for the commune detail: metadata only, never a secret.
 	ListMiniAppSecretStatuses(ctx context.Context, token secret.Secret) (operatorclient.ListMiniAppSecretStatusesResult, error)
+	// Active staff accounts per commune, for the Zalo Bot communes table (operator_zalo_bot.go). No
+	// commune: it answers about every one, audited by identity.
+	ListActiveStaffCounts(ctx context.Context, token secret.Secret, clientIP string) (operatorclient.ListActiveStaffCountsResult, error)
 }
 
 type operatorHandlers struct{ d OperatorDeps }

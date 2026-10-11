@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"time"
 
+	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/ratelimit"
@@ -53,6 +54,11 @@ type OperatorDeps struct {
 	Fields    PetitionFieldEditor
 	// MapFrames is a commune's default map frame (ADR 0072 amendment 2, K1).
 	MapFrames MapFrameDefaultEditor
+	// ZaloBot is comms' ZaloBotOperatorService (ADR 0074; *commsclient.ZaloBotOperatorClient). nil only
+	// in dev without COMMS_GRPC_ADDR: every zalo-bots route then answers 503. ZaloBotLog writes the
+	// display row of each Zalo Bot write (operator_zalo_bot.go).
+	ZaloBot    commsv1.ZaloBotOperatorServiceClient
+	ZaloBotLog ZaloBotActRecorder
 	// OperatorHost is refused as a commune host (ADR 0048 stop condition #6).
 	OperatorHost string
 	NewID        func() (string, error)
@@ -531,4 +537,81 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 		opauth.RequireKey(h.d.Auth, opauth.KeyPetitionFieldManage)(
 			idem.KhongCan("setting the state it already has changes nothing and writes no entry")(
 				http.HandlerFunc(h.setPetitionFieldActivation))))
+
+	// --- the shared platform Zalo Bot (ADR 0074 §"Tài nguyên URL") ----------------------------------
+	//
+	// EVERY route, reads included, takes ops.zalo_bot.manage (owner 05/10/2026): the screen shows
+	// whether a token is set and by whom, and every commune's uptake. A relay to comms'
+	// ZaloBotOperatorService, which trusts THIS check (ADR 0074 #3) and writes the trail of each act;
+	// operator_zalo_bot.go lists every place the bot token goes. No reason on any write (owner
+	// 11/10/2026). KhongCan on the writes also keeps the token's body out of any idempotency store.
+
+	// @summary  Bot Zalo dùng chung: đã đặt token chưa, đặt lúc … bởi …, tên bot, liên kết trò chuyện, lần kiểm gần nhất — không bao giờ trả token
+	// @reply    200 sharedZaloBotView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable zalo_bot_unavailable zalo_bot_key_not_configured
+	mux.Handle("GET /api/v1/zalo-bots/shared",
+		opauth.RequireKey(h.d.Auth, opauth.KeyZaloBotManage)(
+			http.HandlerFunc(h.getSharedZaloBot)))
+
+	// The two refusal codes the screen keys on are kebab-case BY THE SCREEN CONTRACT (platform-admin
+	// api.ts errorFrom: `can-xac-nhan-ghep-lai`, `token-khong-dung-duoc`), which tools/apidoc's
+	// snake_case rule for @reply codes cannot express — they are named in the summary, not as codes.
+	// The 422 token refusal is zaloBotTokenRefusedView (httpx.Error + `outcome`); apidoc takes one body
+	// type per status, so the line below declares the field refusals' httpx.Error. These routes stay
+	// out of openapi.json anyway (opauth).
+	//
+	// @summary  Đặt token bot Zalo dùng chung kèm tên bot và liên kết trò chuyện; comms hỏi Zalo getMe trước khi lưu; đổi sang tài khoản bot khác thì 409 can-xac-nhan-ghep-lai kèm live_link_count; Zalo không nhận token thì 422 token-khong-dung-duoc kèm outcome
+	// @request  sharedZaloBotBody
+	// @reply    200 sharedZaloBotView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    409 zaloBotRelinkView
+	// @reply    422 httpx.Error invalid_token invalid_bot_name invalid_chat_url invalid_expected_relink_count invalid_request
+	// @reply    503 httpx.Error operator_auth_unavailable zalo_bot_unavailable zalo_bot_key_not_configured
+	mux.Handle("PUT /api/v1/zalo-bots/shared",
+		opauth.RequireKey(h.d.Auth, opauth.KeyZaloBotManage)(
+			idem.KhongCan("a retry after a lost response finds the same bot account stored, keeps the links and writes the token again — two true trail entries (zalo_bot_operator.proto); and no store may hold this body")(
+				http.HandlerFunc(h.setSharedZaloBot))))
+
+	// @summary  Kiểm token bot Zalo dùng chung: comms gọi Zalo getMe một lần, ghi lại làm lần kiểm gần nhất (không có thân yêu cầu)
+	// @reply    200 zaloBotCheckResultView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable zalo_bot_unavailable zalo_bot_key_not_configured
+	mux.Handle("POST /api/v1/zalo-bots/shared/check",
+		opauth.RequireKey(h.d.Auth, opauth.KeyZaloBotManage)(
+			idem.KhongCan("getMe changes nothing at Zalo; a repeat records one more true check (zalo_bot_operator.proto)")(
+				http.HandlerFunc(h.checkSharedZaloBot))))
+
+	// @summary  Webhook của bot Zalo dùng chung theo Zalo (getWebhookInfo), so với địa chỉ comms sẽ đặt; khoá webhook đặt lúc … bởi … — không bao giờ trả khoá
+	// @reply    200 zaloBotWebhookView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable zalo_bot_unavailable zalo_bot_key_not_configured
+	mux.Handle("GET /api/v1/zalo-bots/shared/webhook",
+		opauth.RequireKey(h.d.Auth, opauth.KeyZaloBotManage)(
+			http.HandlerFunc(h.getSharedZaloBotWebhook)))
+
+	// @summary  Trỏ webhook bot Zalo dùng chung về hệ thống: comms tự dựng địa chỉ và khoá mới (không có thân yêu cầu)
+	// @reply    200 zaloBotWebhookSetView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable zalo_bot_unavailable zalo_bot_key_not_configured
+	mux.Handle("PUT /api/v1/zalo-bots/shared/webhook",
+		opauth.RequireKey(h.d.Auth, opauth.KeyZaloBotManage)(
+			idem.KhongCan("each call rotates the webhook secret once more; safe to retry by contract (zalo_bot_operator.proto)")(
+				http.HandlerFunc(h.setSharedZaloBotWebhook))))
+
+	// @summary  Mọi xã: bật kênh Zalo chưa, dùng bot chung hay bot riêng (tên bot riêng), số cán bộ đã ghép với bot đang dùng / tổng cán bộ đang hoạt động; chỉ số đếm; lượt đọc được comms và identity ghi vết
+	// @reply    200 zaloBotCommuneListView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    500 httpx.Error internal
+	// @reply    503 httpx.Error operator_auth_unavailable staff_counts_unavailable zalo_bot_unavailable zalo_bot_key_not_configured
+	mux.Handle("GET /api/v1/zalo-bots/shared/communes",
+		opauth.RequireKey(h.d.Auth, opauth.KeyZaloBotManage)(
+			http.HandlerFunc(h.listZaloBotCommunes)))
 }

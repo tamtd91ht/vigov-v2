@@ -50,8 +50,8 @@ const CookieName = "__Host-vigov_operator_session"
 // Key is one `ops.<group>.<action>` permission key of the operator realm.
 //
 // NOT authz.Perm and NOT a row of `quyen`: see the package comment. The set below is CLOSED — the
-// six keys the owner decided (ADR 0048 §28/09 #3) plus the seventh of ADR 0073 #3 (identity
-// migration 0023 holds the database's copy). A key outside it is a programming error, refused
+// six keys the owner decided (ADR 0048 §28/09 #3), the seventh of ADR 0073 #3 (identity migration
+// 0023 holds the database's copy) and the eighth of ADR 0074 (identity migration 0025). A key outside it is a programming error, refused
 // at wiring time by RequireKey, because a route guarded by a key nobody can be granted answers 403
 // to every operator forever with every test green (the same failure rule 5 invariant 3c names).
 type Key string
@@ -65,12 +65,16 @@ const (
 	KeyQRIssue            Key = "ops.qr.issue"
 	// KeyPetitionFieldManage edits the tier-1 petition field codes (ADR 0060, ADR 0073 #3).
 	KeyPetitionFieldManage Key = "ops.petition_field.manage"
+	// KeyZaloBotManage manages the ONE shared platform Zalo Bot held by comms — token, webhook, the
+	// communes table (ADR 0074; the EIGHTH key, owner 11/10/2026; identity migration 0025 seeds it).
+	// Like every decided key it also opens the AnyKey console reads (ADR 0073 #1).
+	KeyZaloBotManage Key = "ops.zalo_bot.manage"
 )
 
 var decidedKeys = map[Key]bool{
 	KeyTenantManage: true, KeyDomainManage: true, KeyProfileManage: true,
 	KeyMiniAppManage: true, KeyUploadPolicyManage: true, KeyQRIssue: true,
-	KeyPetitionFieldManage: true,
+	KeyPetitionFieldManage: true, KeyZaloBotManage: true,
 }
 
 // AnyKey is NOT a key anybody holds: it is the declaration "any one decided key", for the console's

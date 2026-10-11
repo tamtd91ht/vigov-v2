@@ -134,7 +134,7 @@ Xã/tenant|tao-xa|off|ghi|Làm ở platform-admin (ADR 0048, 0070) — job này 
 Xã/tenant|gan-ten-mien|off|ghi|Làm ở platform-admin, chi tiết xã → tên miền (ADR 0046, 0048)
 Xã/tenant|gan-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Mini App (ADR 0066, 0070)
 Xã/tenant|dat-secret-mini-app|off|ghi|Làm ở platform-admin, chi tiết xã → Đặt/đổi khoá bí mật (job cũ còn dat-secret-mini-app)
-Bảo trì|tao-tai-khoan-van-hanh|on|ghi|operatorctl create + 7 quyền ops.* — MẬT KHẨU TẠM IN VÀO LOG (giá chủ dự án chấp nhận 02/10/2026, như job cũ)
+Bảo trì|tao-tai-khoan-van-hanh|on|ghi|operatorctl create + 8 quyền ops.* — MẬT KHẨU TẠM IN VÀO LOG (giá chủ dự án chấp nhận 02/10/2026, như job cũ)
 Bảo trì|dung-clamav|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy, việc dung-clamav
 Bảo trì|mo-netpol-identity-zalo|off|ghi|Chưa dựng ở job này — dùng job cũ vigov-deploy
 Bảo trì|sua-env-deployment|off|ghi|Sửa env đặt thẳng trong Deployment (README mục 3) — chưa dựng; job cũ có bo-sung-cau-hinh-*
@@ -834,7 +834,7 @@ void taskOperatorAccount() {
   withEnv(["OP_EMAIL=${params.EMAIL_VAN_HANH}", "OP_NAME=${params.TEN_VAN_HANH}"]) {
     sh(shLib() + '''
       DEP=vigov-service-identity
-      echo "Sẽ chạy: operatorctl create --email *** --name <TEN_VAN_HANH> --ticket $TICKET, rồi grant 7 quyền ops.*"
+      echo "Sẽ chạy: operatorctl create --email *** --name <TEN_VAN_HANH> --ticket $TICKET, rồi grant 8 quyền ops.*"
       dry_stop
       kubectl -n "$NS" get deploy "$DEP" -o json > "$TMP_DIR/dep.json"
       run_op() {
@@ -851,7 +851,7 @@ void taskOperatorAccount() {
       [ -n "$CODE" ] || { cat "$log"; echo "DỪNG: không đọc được mã VH- trong kết quả create."; exit 1; }
       note "tài khoản vận hành $CODE tạo"
       failed=""
-      for perm in ops.tenant.manage ops.domain.manage ops.profile.manage ops.mini_app.manage ops.upload_policy.manage ops.qr.issue ops.petition_field.manage; do
+      for perm in ops.tenant.manage ops.domain.manage ops.profile.manage ops.mini_app.manage ops.upload_policy.manage ops.qr.issue ops.petition_field.manage ops.zalo_bot.manage; do
         suffix="grant-$(printf '%s' "$perm" | tr '._' '--')"
         if run_op "$suffix" "$(printf '["/operatorctl","grant","--code","%s","--permission","%s","--ticket","%s"]' "$CODE" "$perm" "$TICKET")"; then
           echo "   ✓ $perm"; note "$CODE: cấp $perm"
@@ -1130,7 +1130,7 @@ IDENTITY_GRPC_ADDR	env	prod	comms,documents,finance,petitions,platform,reporting
 IDENTITY_OPERATOR_GRPC_ADDR	env	prod	platform	0	1	gRPC OperatorService của identity — tra / mở phiên vận hành (ADR 0048 §01/10 #2; cổng riêng chốt 01/10/2026). Cổng 9093, không phải 9090: 9090 nhận năm dịch vụ cán bộ, 9093 chỉ…
 PETITIONS_GRPC_ADDR	env	prod	identity	0	1	gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + 9090
 DOCUMENTS_GRPC_ADDR	env	prod	identity,petitions	0	1	gRPC của documents. identity: như trên. petitions: hỏi đơn thư trước khi chuyển thành nhiệm vụ (ResolveCitizenLetterForTask, ADR 0085) — thiếu ở dev thì POST…
-COMMS_GRPC_ADDR	env	prod	documents,finance,petitions	0	1	gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058); finance: thông báo nhắc tên trong trao đổi dự án (ADR 0081 #5). Tên Service + 9090
+COMMS_GRPC_ADDR	env	prod	documents,finance,petitions,platform	0	1	gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058); finance: thông báo nhắc tên trong trao đổi dự án (ADR 0081 #5); platform: màn Zalo Bot của khu vận hành (bot…
 OPERATOR_HOST	env	opt	platform	0	1	Host duy nhất của khu vận hành ViHAT. Chỉ đặt khi host đã có DNS + TLS + Ingress, và sau khi xong còn mở #12 của ADR 0048
 ZALO_BOT_WEBHOOK_HOST	env	prod	comms	0	1	Host mà Zalo gửi tin của bot dùng chung tới; comms tự dựng https://<host>/api/v1/zalo-bot-updates khi trỏ webhook (ADR 0074 #5). Chỉ đặt khi host đã có DNS + TLS + Ingress vào…
 CITIZEN_SESSION_BRIDGE_LISTEN_ADDR	env	prod	identity	0	1	Cổng cầu phiên công dân, chỉ vihat-miniapp gọi (ADR 0045). Chốt 9091 ngày 30/09/2026; manifest deploy/base/identity đã đặt sẵn
