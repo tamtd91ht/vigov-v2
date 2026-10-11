@@ -161,12 +161,16 @@ func TestImport_TwoRowHeaderJoinedAndRolesGuessed(t *testing.T) {
 	if rev.Columns[4].Kind != CotPhanTram {
 		t.Error("the % column is not a percentage column")
 	}
-	// FOUR figure columns: the % operands are not identifiable, and that is said, not guessed.
-	if got := rev.UnidentifiedPercentColumns(); len(got) != 1 || got[0] != "Tỷ lệ % thu" {
+	// FOUR figure columns: the single-plan rule cannot decide, the prototype's rule does —
+	// Thu ngân sách NSNN ÷ Dự toán TP giao (owner's rule of 11/10/2026).
+	if op := rev.Columns[4].Operands; op.Numerator == nil || *op.Numerator != 2 || op.Denominator == nil || *op.Denominator != 0 {
+		t.Errorf("operands = %+v, want NSNN(2) / TP giao(0)", op)
+	}
+	if got := rev.UnidentifiedPercentColumns(); len(got) != 0 {
 		t.Errorf("unidentified = %q", got)
 	}
-	if !hasIssue(rev.Warnings, "tử số") {
-		t.Errorf("no warning about the unidentified %% column: %+v", rev.Warnings)
+	if hasIssue(rev.Warnings, "tử số") {
+		t.Errorf("warning about an identified %% column: %+v", rev.Warnings)
 	}
 	// The data starts AFTER the sub-header: "A" is the first line, not a line built from "TP giao".
 	if rev.Lines[0].TT != "A" {
@@ -197,6 +201,80 @@ func TestImport_ExpenditurePercentOperandsAndValuesInVnd(t *testing.T) {
 	}
 	if _, has := byCode(exp)["I.1"].Values[0]; has {
 		t.Error("blank cell read as a figure")
+	}
+}
+
+// importPercentSheet is a one-row-header sheet with the given figure/percent headings and one data line.
+func importPercentSheet(title string, headings ...string) BudgetImportSheet {
+	head := []any{"TT", "Nội dung"}
+	row := []any{"A", "Tổng"}
+	for _, h := range headings {
+		head = append(head, h)
+		row = append(row, n(10))
+	}
+	return BudgetImportSheet{Name: "S", Rows: grid([]any{title}, []any{"Đơn vị tính: Đồng"}, head, row)}
+}
+
+func operandsOf(t *testing.T, s ImportedSheet, col int) (int, int, bool) {
+	t.Helper()
+	op := s.Columns[col].Operands
+	if op.Numerator == nil || op.Denominator == nil {
+		return 0, 0, false
+	}
+	return *op.Numerator, *op.Denominator, true
+}
+
+// The column set web-admin's template writes (features/thu-chi/nhan-thu-chi.ts boCotKhoiDiem, also
+// budget-template.ts) must pair as the prototype pairs it — fiscal_service.py _with_percent.
+func TestImport_PercentOperands_DefaultRevenueColumns(t *testing.T) {
+	s := parseOK(t, importPercentSheet("THU NGÂN SÁCH XÃ NĂM 2026",
+		"Dự toán 2026 TP giao", "Dự toán 2026 Xã giao", "Thu ngân sách NSNN", "Thu ngân sách Thu xã hưởng", "Tỷ lệ % thu")).Sheets[0]
+	if s.Kind != BangThu || s.Columns[4].Kind != CotPhanTram {
+		t.Fatalf("kind %q, col 4 kind %q", s.Kind, s.Columns[4].Kind)
+	}
+	if num, den, ok := operandsOf(t, s, 4); !ok || num != 2 || den != 0 {
+		t.Fatalf("operands = %d/%d (%v), want NSNN(2) / TP giao(0)", num, den, ok)
+	}
+	if hasIssue(s.Warnings, "tử số") {
+		t.Errorf("unexpected operand warning: %+v", s.Warnings)
+	}
+}
+
+func TestImport_PercentOperands_DefaultExpenditureColumns(t *testing.T) {
+	s := parseOK(t, importPercentSheet("CHI NGÂN SÁCH XÃ NĂM 2026", "Dự toán năm", "Chi ngân sách", "So sánh TH/DT (%)")).Sheets[0]
+	if s.Kind != BangChi {
+		t.Fatalf("kind %q", s.Kind)
+	}
+	if num, den, ok := operandsOf(t, s, 2); !ok || num != 1 || den != 0 {
+		t.Fatalf("operands = %d/%d (%v), want Chi ngân sách(1) / Dự toán năm(0)", num, den, ok)
+	}
+}
+
+// Chi with MORE than one non-plan column: the single-plan rule cannot decide, the prototype's rule
+// (same for chi as for thu) picks the first "ngân sách"/"thực hiện" column.
+func TestImport_PercentOperands_ExpenditurePrototypeRule(t *testing.T) {
+	s := parseOK(t, importPercentSheet("CHI NGÂN SÁCH XÃ NĂM 2026", "Dự toán năm", "Ghi chú số", "Thực hiện chi", "So sánh TH/DT (%)")).Sheets[0]
+	if num, den, ok := operandsOf(t, s, 3); !ok || num != 2 || den != 0 {
+		t.Fatalf("operands = %d/%d (%v), want Thực hiện chi(2) / Dự toán năm(0)", num, den, ok)
+	}
+}
+
+func TestImport_PercentOperands_NoMatchStaysEmpty(t *testing.T) {
+	for name, headings := range map[string][]string{
+		"no plan":   {"Số liệu A", "Thu ngân sách", "Tỷ lệ %"},
+		"no actual": {"Dự toán năm", "Số liệu A", "Số liệu B", "Tỷ lệ %"},
+	} {
+		s := parseOK(t, importPercentSheet("THU NGÂN SÁCH XÃ NĂM 2026", headings...)).Sheets[0]
+		pct := len(headings) - 1
+		if _, _, ok := operandsOf(t, s, pct); ok {
+			t.Errorf("%s: operands guessed: %+v", name, s.Columns[pct].Operands)
+		}
+		if got := s.UnidentifiedPercentColumns(); len(got) != 1 {
+			t.Errorf("%s: unidentified = %q", name, got)
+		}
+		if !hasIssue(s.Warnings, "tử số") {
+			t.Errorf("%s: no warning: %+v", name, s.Warnings)
+		}
 	}
 }
 
@@ -303,7 +381,9 @@ func TestParseBudgetAmount(t *testing.T) {
 }
 
 func TestImportedColumnSet_UnidentifiedPercentAllowedOnlyOnImport(t *testing.T) {
-	rev := parseOK(t, revenueSheet()).Sheets[0]
+	// Headings neither the single-plan rule nor the prototype's rule can pair (no "ngân sách" /
+	// "thực hiện" column beside the plan): the % column stays unidentified.
+	rev := parseOK(t, importPercentSheet("THU NGÂN SÁCH XÃ NĂM 2026", "Dự toán năm", "Số liệu A", "Số liệu B", "Số liệu C", "Tỷ lệ % thu")).Sheets[0]
 	cols, err := ImportedColumnSet(rev, "b1", []string{"c1", "c2", "c3", "c4", "c5"})
 	if err != nil {
 		t.Fatalf("ImportedColumnSet: %v", err)

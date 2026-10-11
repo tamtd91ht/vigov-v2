@@ -33,9 +33,11 @@ package domain
 // WHAT IS DELIBERATELY NOT TAKEN FROM THE FILE:
 //
 //	percentages      §9 rule 3 and the user's decision of 30/09/2026: the server computes them from two
-//	                 operand columns. The operands are identified from the headings only when the sheet
-//	                 has exactly one plan column and one other figure column; otherwise the column is
-//	                 kept, and every line of it reads "không tính được" with a sentence. Never guessed.
+//	                 operand columns. The operands are identified from the headings: one plan + one
+//	                 other figure column pair as other ÷ plan; otherwise the prototype's rule (first
+//	                 "ngân sách"/"thực hiện" column ÷ first "dự toán" column — owner's rule of 11/10/2026,
+//	                 "chuẩn là prototype"; see guessPercentOperands). No match → the column is kept, and
+//	                 every line of it reads "không tính được" with a sentence. The file's % is never read.
 //	a parent's figure the customer's rule of 06/09/2026: a line with children always sums them, so a
 //	                 figure the file states on a parent line is not stored (it could never be shown).
 //	                 Where the paper's parent is not the sum of its children (`Trong đó:` lines) the
@@ -691,10 +693,20 @@ func guessColumnRoles(s *ImportedSheet) {
 	}
 }
 
-// guessPercentOperands identifies a percentage column's operands ONLY when the sheet has exactly one
-// plan column and exactly one other figure column: then "thực hiện / dự toán" is the only ratio the
-// headings can mean (the chi sheet's "So sánh TH/DT (%)"). Anything else — the thu sheet's four figure
-// columns — is left unidentified and reads "không tính được".
+// guessPercentOperands names every percentage column's numerator and denominator, in two steps:
+//
+//  1. Exactly one plan column and exactly one other figure column: "thực hiện / dự toán" is the only
+//     ratio the headings can mean (the chi sheet's "So sánh TH/DT (%)").
+//  2. Otherwise the PROTOTYPE'S RULE (vigov-require fiscal_import.py `_role_of` + fiscal_service.py
+//     `_with_percent`), the same for thu and chi: denominator = the first figure column whose heading
+//     says "dự toán"/"kế hoạch"; numerator = the first OTHER figure column whose heading says
+//     "thực hiện", "ngân sách" or "đã". Taken because of the owner's rule of 11/10/2026 — "chuẩn là
+//     prototype, tính năng trên prototype phải được đảm bảo": before it, the thu sheet of our own
+//     template (Dự toán TP giao, Dự toán Xã giao, Thu ngân sách NSNN, Thu ngân sách Thu xã hưởng)
+//     read "không tính được" on every line, which the prototype computes as NSNN ÷ TP giao.
+//
+// Neither rule matches → the operands stay empty and the import warns (the caller's sentence). A wrong
+// pair is fixed in the file and loaded again; it never moves a money figure, only the ratio.
 func guessPercentOperands(s *ImportedSheet) {
 	var plans, others []int
 	for i, c := range s.Columns {
@@ -707,15 +719,35 @@ func guessPercentOperands(s *ImportedSheet) {
 			others = append(others, i)
 		}
 	}
-	if len(plans) != 1 || len(others) != 1 {
+	num, den := -1, -1
+	if len(plans) == 1 && len(others) == 1 {
+		num, den = others[0], plans[0]
+	} else {
+		if len(plans) > 0 {
+			den = plans[0]
+		}
+		for _, i := range others {
+			if isActualHeading(strings.ToLower(s.Columns[i].Name)) {
+				num = i
+				break
+			}
+		}
+	}
+	if num < 0 || den < 0 {
 		return
 	}
 	for i := range s.Columns {
 		if s.Columns[i].Kind == CotPhanTram {
-			num, den := others[0], plans[0]
-			s.Columns[i].Operands = OperandIndexes{Numerator: &num, Denominator: &den}
+			n, d := num, den
+			s.Columns[i].Operands = OperandIndexes{Numerator: &n, Denominator: &d}
 		}
 	}
+}
+
+// isActualHeading is the prototype's "actual" role test (fiscal_import.py `_role_of`), applied only to
+// headings that are not plans. Substring matches, exactly as there — "đã" included.
+func isActualHeading(low string) bool {
+	return strings.Contains(low, "thực hiện") || strings.Contains(low, "ngân sách") || strings.Contains(low, "đã")
 }
 
 // actualColumn is the column the headline is chosen on: the kind's "actual" role, else the first
