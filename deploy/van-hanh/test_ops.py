@@ -59,6 +59,10 @@ class RealRepoCatalog(unittest.TestCase):
         self.assertEqual((e["placement"], e["registered"]), ("configmap", True))
         self.assertNotIn("BASEMAP-URL", self.cat)
 
+    def test_web_admin_section_adds_a_reader_not_replaces_go_ones(self):
+        # comms reads BASEMAP_URL too (core/config group Basemap): both pods must restart after a change.
+        self.assertEqual(self.cat["BASEMAP_URL"]["users"], ["comms", "web-admin"])
+
     def test_no_catalogued_key_has_a_dash(self):
         # envFrom drops a dashed key silently — the pod just lacks the variable (rule 11 invariant 4).
         self.assertEqual([k for k in self.cat if "-" in k], [])

@@ -132,14 +132,16 @@ def build_catalog(root: str = ROOT) -> list:
     out = []
     for key, placement, row, meaning, web_only in readme_rows(
             _read(os.path.join(root, "deploy", "cau-hinh", "README.md"))):
-        if web_only:
-            level, users = "opt", [WEB_ADMIN]
-        elif key in reads:
+        level, users = "opt", []
+        if key in reads:
             lv, gs = reads[key]
             users = all_services if not gs else sorted(s for s, d in groups.items() if d & gs)
             level = lv
-        else:
-            level, users = "opt", []
+        if web_only:
+            # The web-admin section ADDS a reader; it does not replace the Go ones. BASEMAP_URL has both
+            # (comms since ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1) — dropping comms would leave its pod
+            # out of the restart list after a change, so the Mini App map keeps the old prefix.
+            users = users + [WEB_ADMIN]
         out.append({
             "key": key,
             "placement": placement,
