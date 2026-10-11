@@ -64,6 +64,7 @@ import { compactDong } from "@/lib/compact-dong";
 import { danhSachNam, namTheoDongHoMay } from "@/lib/nam";
 import { coQuyen, QUYEN_GHI_NGAN_SACH, QUYEN_XAC_NHAN_NGAN_SACH } from "@/lib/quyen";
 
+import { budgetTemplateFor, type BudgetTemplate } from "./budget-template";
 import { HopDotThuChi } from "./dot-thu-chi";
 import { FormGoKemLyDo } from "./form-go-ly-do";
 import { BudgetSheetHeaderActions } from "./header-actions";
@@ -411,6 +412,7 @@ export function BangThuChi() {
         canConfirm={coXacNhan}
         sheetLock={sheetLock}
         busy={dangGui}
+        template={budgetTemplateFor(loai, nam, bang.pha === "xong" ? bang.duLieu : null)}
         onCreate={() => {
           resetEdits();
           datDangMo({ kieu: "createSheet" });
@@ -756,6 +758,7 @@ export function SheetSelectionBar({
   canConfirm,
   sheetLock,
   busy,
+  template,
   onCreate,
   onEdit,
   onRemove,
@@ -772,6 +775,8 @@ export function SheetSelectionBar({
   canConfirm: boolean;
   sheetLock: string | null;
   busy: boolean;
+  /** `Tải file mẫu` of `Nạp từ Excel`: the sheet on screen's columns, or the default ones. */
+  template: BudgetTemplate;
   onCreate: () => void;
   onEdit: () => void;
   onRemove: () => void;
@@ -815,7 +820,9 @@ export function SheetSelectionBar({
 
       {(canRecord || canConfirm) && (
         <div className="ml-auto flex min-w-0 flex-wrap items-center gap-2">
-          {canRecord && <BudgetSheetHeaderActions year={year} busy={busy} onImported={onImported} />}
+          {canRecord && (
+            <BudgetSheetHeaderActions year={year} template={template} busy={busy} onImported={onImported} />
+          )}
           {canRecord && sheetState === "missing" && (
             <Button
               type="button"

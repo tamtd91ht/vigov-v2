@@ -9,6 +9,7 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import { BangDayDu, SheetSelectionBar } from "./bang-thu-chi"; // vi-name-ok: existing component under test
+import { budgetTemplateFor } from "./budget-template";
 import { FormGhiDot, HopDotThuChi, NoiDungHopDot } from "./dot-thu-chi"; // vi-name-ok: existing components under test
 import { donViCuaBang, dungThanDot, nhanGoKhoanMuc, nhanNutDot, nhanThemCon } from "./nhan-thu-chi"; // vi-name-ok: existing helpers under test
 import {
@@ -437,6 +438,7 @@ describe("sheet under a year close", () => {
         canConfirm
         sheetLock={sheetLock}
         busy={false}
+        template={budgetTemplateFor("chi", 2026, null)}
         onCreate={() => {}}
         onEdit={() => {}}
         onRemove={() => {}}

@@ -1038,6 +1038,11 @@ export function boCotKhoiDiem(loai: LoaiBang, nam: number): finance_cotVao[] {
     // 1, như 0011 đọc). GIỮ NGUYÊN nghĩa ấy dù chỉ số `Thu đạt dự toán` của §9 quy tắc 6 lấy mẫu số
     // là Dự toán Xã giao: đổi mẫu số của một cột đã có là quyết định nghiệp vụ của xã, không phải
     // của bộ cột điền sẵn — và biểu mẫu cho sửa ngay trước khi lập.
+    //
+    // FORMULA SOURCE (bug sheet rows 55–56, which name the column but not its denominator): the
+    // prototype's own — `vigov-require/apps/api/app/modules/budget/fiscal_service.py` `_with_percent`
+    // divides the first "ngân sách" (actual) column by the first "dự toán" (plan) column, i.e. on
+    // these headings Thu ngân sách NSNN / Dự toán TP giao. Same as above, so nothing changes here.
     {
       name: "Tỷ lệ % thu",
       order: 5,

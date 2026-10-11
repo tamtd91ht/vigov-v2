@@ -15,10 +15,13 @@ import { SheetSelectionBar } from "./bang-thu-chi"; // vi-name-ok: existing comp
 import {
   BAD_WORKBOOK,
   BudgetImportButton,
+  CHOOSE_FILE,
   IMPORT_BUTTON,
   NO_FISCAL_SHEET,
   NOT_IMPORTED,
+  TEMPLATE_DOWNLOAD,
 } from "./budget-import-button";
+import { budgetTemplateFor, TEMPLATE_REQUIRED_NOTE } from "./budget-template";
 
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -65,6 +68,7 @@ function bar(
       canConfirm={canConfirm}
       sheetLock={null}
       busy={false}
+      template={budgetTemplateFor("chi", 2026, null)}
       onCreate={() => {}}
       onEdit={() => {}}
       onRemove={() => {}}
@@ -74,10 +78,10 @@ function bar(
 }
 
 describe("`Nạp từ Excel` gating (budget.update)", () => {
-  it("with budget.update: the button and its hidden .xlsx picker, beside `Lập bảng` when the sheet is missing", () => {
+  it("with budget.update: the button (it opens the popup), beside `Lập bảng` when the sheet is missing", () => {
     const html = bar(true, false, "missing");
     expect(html).toContain(IMPORT_BUTTON);
-    expect(html).toContain('accept=".xlsx"');
+    expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain("Lập bảng");
   });
 
@@ -128,6 +132,7 @@ function mount(onImported = vi.fn()) {
     r.render(
       <BudgetImportButton
         year={2026}
+        template={budgetTemplateFor("chi", 2026, null)}
         onImported={onImported}
         mintKey={() => `khoa-${++n}`}
       />,
@@ -136,8 +141,19 @@ function mount(onImported = vi.fn()) {
   return onImported;
 }
 
+/** Opens the popup with the `Nạp từ Excel` button (the last button of the host: the popup comes first). */
+function openPopup() {
+  const buttons = host!.querySelectorAll<HTMLButtonElement>("button");
+  act(() => buttons[buttons.length - 1]!.click());
+}
+
+function popupButton(label: string): HTMLButtonElement {
+  return [...host!.querySelectorAll<HTMLButtonElement>("dialog button")].find((b) => b.textContent === label)!;
+}
+
 async function pick(name = "bao-cao.xlsx") {
-  const input = host!.querySelector<HTMLInputElement>('input[type="file"]')!;
+  openPopup();
+  const input = host!.querySelector<HTMLInputElement>('dialog input[type="file"]')!;
   Object.defineProperty(input, "files", {
     value: [new File(["x"], name)],
     configurable: true,
@@ -160,12 +176,18 @@ function json(body: unknown, status: number): Response {
 }
 
 describe("`Nạp từ Excel` — pick and load at once (prototype FiscalReportPanel.tsx:131-153)", () => {
-  it("pressing opens the picker and calls nothing", () => {
+  it("pressing opens the popup (note, Tải file mẫu, Chọn tệp) and calls nothing; Chọn tệp opens the picker", () => {
     const calls = stub(() => json({}, 500));
     mount();
-    const input = host!.querySelector<HTMLInputElement>('input[type="file"]')!;
+    expect(host!.querySelector("dialog")).toBeNull();
+    openPopup();
+    const dialog = host!.querySelector("dialog")!;
+    expect(dialog.textContent).toContain(TEMPLATE_REQUIRED_NOTE);
+    expect(popupButton(TEMPLATE_DOWNLOAD)).toBeDefined();
+    const input = dialog.querySelector<HTMLInputElement>('input[type="file"]')!;
+    expect(input.getAttribute("accept")).toBe(".xlsx");
     const click = vi.spyOn(input, "click");
-    act(() => button().click());
+    act(() => popupButton(CHOOSE_FILE).click());
     expect(click).toHaveBeenCalledTimes(1);
     expect(calls).toHaveLength(0);
   });
@@ -208,7 +230,8 @@ describe("`Nạp từ Excel` — pick and load at once (prototype FiscalReportPa
     let release: (r: Response) => void = () => {};
     stub(() => new Promise<Response>((r) => (release = r)));
     mount();
-    const input = host!.querySelector<HTMLInputElement>('input[type="file"]')!;
+    openPopup();
+    const input = host!.querySelector<HTMLInputElement>('dialog input[type="file"]')!;
     Object.defineProperty(input, "files", {
       value: [new File(["x"], "a.xlsx")],
       configurable: true,

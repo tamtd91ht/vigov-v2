@@ -24,6 +24,7 @@ import {
   TheChiSoNam,
   TheTomTat,
 } from "./bang-thu-chi";
+import { budgetTemplateFor } from "./budget-template";
 import { FormGhiDot, HopDotThuChi, NoiDungHopDot } from "./dot-thu-chi";
 import { BudgetSheetHeaderActions } from "./header-actions";
 import {
@@ -185,6 +186,7 @@ function renderSelectionBar(
       canConfirm={canConfirm}
       sheetLock={sheetLock}
       busy={false}
+      template={budgetTemplateFor("chi", 2026, null)}
       onCreate={() => {}}
       onEdit={() => {}}
       onRemove={() => {}}
@@ -703,12 +705,13 @@ describe("lập bảng — biểu mẫu cho xã không có tệp Excel", () => {
 
 describe("những phần đặc tả vẽ mà chưa dựng được", () => {
   it("không còn phần nào: `Nạp từ Excel` đã dựng (ADR 0081 #6) — nút THẬT, không vô hiệu, không dấu '?'", () => {
-    const html = renderToStaticMarkup(<BudgetSheetHeaderActions year={2026} busy={false} onImported={() => {}} />);
+    const html = renderToStaticMarkup(<BudgetSheetHeaderActions year={2026} template={budgetTemplateFor("chi", 2026, null)} busy={false} onImported={() => {}} />);
 
     expect(PHAN_CHUA_DUNG).toHaveLength(0);
     expect(html).not.toContain(`aria-label="${pendingMarkerLabel("Nạp từ Excel")}"`);
     expect(html).toMatch(/<button[^>]*>.*Nạp từ Excel<\/button>/);
-    expect(html).toContain('type="file" accept=".xlsx"');
+    // The picker sits in the popup the button opens (bug sheet row 49), not beside it.
+    expect(html).toContain('aria-haspopup="dialog"');
     expect(html).not.toMatch(/<button[^>]* disabled=""[^>]*>.*Nạp từ Excel<\/button>/);
   });
 });
