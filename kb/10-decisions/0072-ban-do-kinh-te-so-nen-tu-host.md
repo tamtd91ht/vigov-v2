@@ -3,7 +3,7 @@ id: 0072-ban-do-kinh-te-so-nen-tu-host
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: f783c749
+derived_from_commit: 95fffb3e
 expires: null
 owns_facts:
   - "Bản đồ kinh tế số — khung MẶC ĐỊNH theo xã (tâm + bán kính) do quản trị nền tảng đặt ở khu vận hành, lưu ở service-platform, là siêu dữ liệu xã trong ranh giới ADR 0003; giá trị riêng của xã thắng, mặc định chỉ áp khi xã chưa có giá trị riêng; 'Về mặc định' ngừng dùng giá trị riêng, có vết, không xoá cứng (chốt 04/10/2026, lần 2)"
@@ -14,11 +14,12 @@ owns_facts:
   - "nền bản đồ cho toạ độ phản ánh của công dân (tab Bản đồ nhiệt và bản đồ nhỏ trong ngăn chi tiết phiếu ở /phan-anh) = PMTiles TỰ HOST, cùng gốc, không host tile/style/glyph/sprite bên ngoài; đóng việc còn mở #3 của §Sửa đổi 04/10/2026; tệp vùng, nơi đặt, khung theo xã, trần tuyến điểm đã chốt cùng ngày (§Trả lời 09/10/2026); gói npm, CSP, tuyến điểm phía petitions, xác nhận pháp lý và câu K6 cho nền tự host còn mở; chưa dựng thì hai bản đồ giữ control vô hiệu dấu '?' (chủ dự án, 09/10/2026)"
   - "Bản đồ kinh tế số — khung xã CỨNG: giá trị riêng của xã (tâm lat/lng + bán kính km) lưu ở service-comms, áp làm maxBounds của MapLibre; người giữ admin.lookup đặt, có vết; xã không có giá trị riêng lẫn mặc định thì trang không vẽ bản đồ; tâm phải nằm trong khung đất liền Việt Nam; chủ quyền chưa có xác nhận pháp lý (chốt 04/10/2026; cận bán kính thay ở lần 2)"
   - "Bản đồ kinh tế số — danh mục loại tài nguyên = đúng 11 nhóm của đặc tả §3, mã tiếng Việt không dấu theo ADR 0011 (doanh-nghiep … cong-trinh-dau-tu-cong), vào từng xã bằng hành động 'nạp 11 nhóm mặc định' có vết, không bằng migration (chốt 04/10/2026)"
-  - "Bản đồ kinh tế số — phạm vi MVP và những phần hoãn: mật độ theo thôn, nhập Excel, Mini App, PostGIS/vector tile, geocoding ngoài (lớp nhiệt phản ánh hết hoãn 11/10/2026); phần đặc tả chờ backend: mẫu/nhập Excel, lọc quy mô lao động, tổng hợp theo bộ lọc, feedback_count theo thôn, tìm địa điểm, trạng thái 'Đang triển khai' và xác minh 'Cần cập nhật' (§Sửa đổi 11/10/2026 S4)"
+  - "Bản đồ kinh tế số — phạm vi MVP và những phần hoãn: mật độ theo thôn, nhập Excel, Mini App (trừ nền bản đồ ở màn Gửi phản ánh — hết hoãn 11/10/2026, §Sửa đổi 11/10/2026 (Mini App)), PostGIS/vector tile, geocoding ngoài (lớp nhiệt phản ánh hết hoãn 11/10/2026); phần đặc tả chờ backend: mẫu/nhập Excel, lọc quy mô lao động, tổng hợp theo bộ lọc, feedback_count theo thôn, tìm địa điểm, trạng thái 'Đang triển khai' và xác minh 'Cần cập nhật' (§Sửa đổi 11/10/2026 S4)"
   - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất; xoá = hộp xác nhận trong khung kèm lý do bắt buộc (11/10/2026)"
   - "Bản đồ kinh tế số — CSP khi trả nợ missing-security-headers: chỉ nguồn cùng gốc của nền tự host + worker-src blob:, không còn tiles.openfreemap.org (11/10/2026)"
   - "Bản đồ kinh tế số — cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng tự phục vụ (từ 11/10/2026 là phương án đang dùng, không còn dự phòng)"
   - "nền PMTiles tự host của /phan-anh (và của /ban-do từ 11/10/2026): tệp đất liền + đảo gần bờ (≈101,6–110,0°E, 7,9–23,9°N), luôn khoá khung xã, style lọc disputed và ranh giới biển, nhãn name:vi; đặt ở MinIO, phát qua tuyến cùng gốc /basemap/* có HTTP Range từ biến máy chủ BASEMAP_URL (ConfigMap, không fallback); tuyến map-frame mở thêm feedback.read; tuyến điểm nhiệt trần 5000, vượt thì 422; ký duyệt pháp lý và danh mục kiểm có ký sau mỗi lần làm mới (chủ dự án, 09/10/2026)"
+  - "nền bản đồ của Zalo Mini App xã (màn Gửi phản ánh): bản đồ thật trên cùng nền PMTiles tự host, phát lại qua tuyến CÔNG KHAI mới của service-comms (HTTP Range, CORS cho origin Zalo Mini App, trần riêng 6.000 lượt/phút theo tên miền + mạng của máy gọi); khung bản đồ xã đọc công khai theo ?host= ở service-comms, dùng chung trần tin công khai; người dân kéo ghim/chạm bản đồ được, phiếu mang cờ 'vị trí do người dân chỉnh'; khoá khung xã, name:vi, lọc disputed/biển như web-admin; khai dữ liệu rời máy cho Zalo thêm dòng, câu chính sách quyền riêng tư chờ duyệt (chủ dự án, 11/10/2026)"
   - "geocoding ngược cho ô 'Nơi xảy ra' của phản ánh: Nominatim TỰ HOST trong cụm, dữ liệu OSM Việt Nam, không host ngoài; địa chỉ điền sẵn và sửa được, toạ độ giữ riêng; đóng việc còn mở #3 của bảng gốc (chủ dự án, 08/10/2026)"
 ---
 
@@ -39,6 +40,9 @@ chủ dự án trả lời các việc còn mở của mục ấy (§Trả lời
 **Sửa đổi 11/10/2026:** `/ban-do` bỏ OpenFreeMap, sang nền PMTiles tự host của `/phan-anh` — thay H1; lớp
 nhiệt phản ánh trên `/ban-do` được dựng từ điểm phản ánh thật; bản nháp K6 `2026-10-11.1-nhap` chờ pháp
 lý; xoá có lý do bắt buộc (§Sửa đổi 11/10/2026, cuối tệp).
+**Sửa đổi 11/10/2026 (Mini App):** màn "Gửi phản ánh" của Mini App xã dùng bản đồ thật trên nền tự host,
+qua tuyến công khai của `service-comms`; khung xã đọc công khai; người dân chỉnh ghim, phiếu mang cờ —
+đóng phần nền bản đồ của việc còn mở #4 bảng gốc (§Sửa đổi 11/10/2026 (Mini App), cuối tệp).
 
 ## Bối cảnh
 
@@ -201,7 +205,7 @@ Trường Sa thuộc Khánh Hoà), một bản đồ tỉnh không có quần đ
 | 1 | Xác nhận pháp lý về thể hiện chủ quyền trước khi chạy thật | Chủ dự án |
 | 2 | Lớp nhiệt phản ánh và "Mật độ theo thôn" — cần hợp đồng đọc từ `petitions` | Chủ dự án + kiến trúc |
 | 3 | Geocoding địa chỉ đường phố — **đã chốt 08/10/2026: Nominatim tự host**, xem §Sửa đổi 08/10/2026 | Chủ dự án |
-| 4 | Bề mặt Mini App | Chủ dự án |
+| 4 | Bề mặt Mini App — **phần nền bản đồ đã chốt 11/10/2026** (màn Gửi phản ánh), xem §Sửa đổi 11/10/2026 (Mini App). App khảo sát hiện trường (M5.3.2) và Bản đồ tiện ích cho dân (M6.1.12) **vẫn mở** | Chủ dự án |
 
 ## Sửa đổi 04/10/2026 — OpenFreeMap và khung xã
 
@@ -626,3 +630,78 @@ Theo prototype: hộp **xác nhận ngay trong khung** — ở ngăn chi tiết 
 | 3 | Vận hành chạy `build-basemap.sh`, ký danh mục kiểm, đặt `BASEMAP-URL` — trước đó `/ban-do` không có nền | Vận hành |
 | 4 | Sáu phần ở S4 | `/develop-backend-api`; S4 #4 cần chủ dự án + kiến trúc chốt hợp đồng trước |
 | 5 | Ký duyệt pháp lý chủ quyền trước khi chạy thật — vẫn mở, nay áp cho cả `/ban-do` | Chủ dự án |
+
+## Sửa đổi 11/10/2026 (Mini App) — bản đồ thật ở màn "Gửi phản ánh"
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án, 11/10/2026,
+trả lời trực tiếp trong phiên chính. Chủ dự án báo: Mini App lấy được toạ độ nhưng bản đồ ở màn gửi là
+**hình minh hoạ** (SVG), muốn bản đồ thật **như các app bản đồ thông thường**. **Chưa dựng** khi ghi mục này.
+
+### M1. Nền bản đồ tới Mini App — tuyến CÔNG KHAI mới ở `service-comms`
+
+| Điểm | Nội dung |
+|---|---|
+| Chốt | Mini App xã vẽ bản đồ thật trên **đúng nền PMTiles tự host** của `/phan-anh` và `/ban-do` (§Trả lời 09/10/2026, S1): cùng tệp `.pmtiles`, glyph, sprite trên MinIO. `service-comms` mở một tuyến **công khai mới** phát lại các tệp ấy, có **HTTP Range** |
+| Vì sao `service-comms` | Mini App **đã được phép** gọi `comms.api.vigov.vn` trên bảng điều khiển Zalo — thêm tên miền khác là thêm một lần khai báo với Zalo. `comms` đã giữ khung bản đồ của xã (H3, K3) |
+| Vì sao không qua `/basemap/*` của web-admin | Mini App không có tên miền của xã (`CLAUDE.md`, bảng Stack) — tuyến cùng gốc của web-admin không phải cùng gốc với Mini App |
+| Không host bên thứ ba | Điểm dừng 1 và 4 gốc **áp nguyên** cho Mini App: không tile, style, glyph, sprite nào từ host ngoài, kể cả "tạm thời" khi tuyến chưa có |
+| CORS | Cho **origin của Zalo Mini App**, như các tuyến công khai sẵn có của `comms` |
+| Trần tần suất | **Riêng**: **6.000 lượt/phút** theo (tên miền host, mạng của máy gọi) — luật 13 bất biến 7 |
+| Luật 13 điểm dừng | "Tuyến mới không xác thực" — **chủ dự án đã quyết** ở đây |
+| Thiếu tệp nền | Như S1: không có nền + một câu; không bao giờ rơi về host khác |
+
+**Vì sao trần riêng, không dùng chung trần tin công khai.** PMTiles đọc theo khoảng byte: mỗi lần kéo hay
+phóng bản đồ là nhiều yêu cầu. Trần tin công khai (`ratelimit.PublicNewsRead`, 120/phút,
+`core/ratelimit/ratelimit.go:55`) sẽ làm bản đồ trắng sau vài lần kéo; dùng chung thì bản đồ còn ăn hết
+ngân sách đọc tin của cùng mạng.
+
+### M2. Khung bản đồ xã — đọc CÔNG KHAI theo tên miền
+
+| Điểm | Nội dung |
+|---|---|
+| Chốt | Khung hiệu lực của xã (giá trị riêng, không có thì mặc định — K3) đọc được **không cần tài khoản**, theo `?host=`, ở `service-comms` |
+| Vì sao công khai được | Khung là **bốn toạ độ biên** quanh địa bàn xã — siêu dữ liệu xã (K1), **không** dữ liệu cá nhân |
+| Trần tần suất | **Dùng chung** trần tin công khai (`ratelimit.PublicNewsRead`) — một lần đọc mỗi lần mở màn, không phải luồng byte như M1 |
+| Không đổi | Tuyến cán bộ `GET /api/v1/map-frame` (`service-comms/internal/http/map_frame.go:6`) giữ nguyên quyền; tuyến công khai **không** trả phần chỉ cán bộ cần (nguồn đang áp, mặc định kèm theo) |
+| Xã không có khung | Như K3 "Không có cả hai": Mini App không vẽ bản đồ, vẫn gửi được phản ánh bằng toạ độ đã lấy |
+
+### M3. Người dân chỉnh vị trí — phiếu mang cờ
+
+| Điểm | Nội dung |
+|---|---|
+| Chốt | Người dân **kéo ghim** hoặc **chạm bản đồ** để đặt đúng chỗ xảy ra sự việc |
+| Cờ | Phiếu mang cờ **"vị trí do người dân chỉnh"** để cán bộ phân biệt toạ độ GPS với toạ độ người dân tự đặt. Tên tiếng Anh: `kb/00-foundation/ubiquitous-language.md`, §Phản ánh và SLA |
+| Chủ sở hữu | `service-petitions` (chủ phiếu phản ánh) — cờ cần **migration mới**; toạ độ vẫn là `lat`/`lng` sẵn có (`service-petitions/migrations/0004_phieu_phan_anh.sql:268`) |
+| Đọc cờ đúng nghĩa | Cờ nói **cách toạ độ được tạo**, không nói toạ độ **đúng hay sai**. Toạ độ GPS cũng do máy người dân gửi lên (dữ liệu client) — cờ không làm toạ độ nào thành đáng tin hơn |
+
+### M4. Kiểu bản đồ — như web-admin
+
+Khoá trong **khung xã** (`maxBounds`, H3 + K2), nhãn **`name:vi`** trước rồi `name`, **lọc** ranh giới
+`disputed` và ranh giới trên biển (§Trả lời 09/10/2026). Ghi nguồn OSM thu gọn bắt buộc (§1 gốc, S1). Ký
+duyệt pháp lý chủ quyền trước khi chạy thật vẫn mở và nay áp cả Mini App.
+
+### M5. Dữ liệu rời máy — viewport tới hạ tầng của ViGov
+
+| Điểm | Nội dung |
+|---|---|
+| Hệ quả nói thẳng | Mỗi yêu cầu tile mang **viewport** — gần đúng **vị trí người dân** đang đứng (luật 3). Chỉ tới hạ tầng của ViGov (`comms`, MinIO), không tới bên thứ ba — luật 3 điều kiện dừng #2 không bật, cùng lý lẽ §Sửa đổi 09/10/2026 |
+| Khai với Zalo | Bản khai dữ liệu rời máy của `citizen-app` (`citizen-app/src/content/ket-xuat-ho-so.ts`) **thêm dòng** cho tuyến nền bản đồ |
+| Chính sách quyền riêng tư | Câu khai đã soạn ở phiên chính, **chờ chủ dự án duyệt** — không đưa vào app trước khi duyệt |
+
+### Chỗ ở tệp này | Nay (Mini App)
+
+| Chỗ ở tệp này | Nay |
+|---|---|
+| §4 — "Bề mặt Mini App (SRS M5.3.2 / M6.1.12)" hoãn | **Nền bản đồ cho màn Gửi phản ánh** dựng (M1–M5). App khảo sát hiện trường (M5.3.2) và Bản đồ tiện ích cho dân (M6.1.12) — vẽ **tài nguyên của xã** cho người dân — **vẫn hoãn**: lời chốt này không nói về chúng |
+| Việc còn mở #4 bảng gốc | Đóng phần nền bản đồ; M5.3.2, M6.1.12 vẫn mở |
+| §Hệ quả — chỗ đặt tệp nền cho CORS "từ các origin của web-admin" | Thêm origin Zalo Mini App, qua tuyến của `comms` (M1) |
+| Tuyến khung chỉ cho `asset.read` / `feedback.read` | Thêm đường đọc công khai theo `?host=` (M2) |
+
+### Còn mở sau sửa đổi 11/10/2026 (Mini App)
+
+| # | Việc | Ai |
+|---|---|---|
+| 1 | Duyệt câu chính sách quyền riêng tư về viewport bản đồ | Chủ dự án |
+| 2 | Đường dẫn hai tuyến công khai (M1, M2), tên chính sách trần tần suất của M1 | Người dựng — theo `ubiquitous-language.md` §Tên tài nguyên trên URL |
+| 3 | Mini App có cần văn bản lưu ý kiểu K6 cho người dân không | Chủ dự án + pháp chế |
+| 4 | Ký duyệt pháp lý chủ quyền — vẫn mở, nay áp cả Mini App | Chủ dự án |

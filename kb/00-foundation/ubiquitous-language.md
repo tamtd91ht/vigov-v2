@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 0960b2a
+derived_from_commit: 95fffb3e
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -82,6 +82,7 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 | Gộp phiếu (phiếu trùng) | `merged_into` · `merged_at` · `merged_by` (`phieu_phan_anh`) · lịch sử `petition_merge_event` · Go: `merge` | **Liên kết**, không phải trạng thái (ADR 0087). **Phiếu chính** = phiếu được trỏ tới; **phiếu phụ** = phiếu mang `merged_into`. Không dùng `duplicate_of`, `parent`, `master` |
 | Tách phiếu | `unmerge` · `hanh_vi`/`kind` = `tach-phieu` (gộp: `gop-phieu`) | Bỏ liên kết, lý do bắt buộc. Giá trị enum theo ADR 0011, cùng chuỗi ở `petition_merge_event.kind` và `nhat_ky_phan_anh.hanh_vi` |
 | Phiếu nghi trùng | `duplicate candidates` | Chỉ **gợi ý** cho cán bộ, theo ngưỡng của xã (migration 0038) — không gộp gì |
+| Vị trí do người dân chỉnh | **`citizen-adjusted location`** — cờ trên phiếu, cột `location_citizen_adjusted` (`service-petitions/migrations/0044_petition_location_citizen_adjusted.sql:63`) | Người dân kéo ghim hoặc chạm bản đồ ở Mini App để đặt chỗ xảy ra; cờ cho cán bộ phân biệt với toạ độ GPS (chủ dự án, 11/10/2026 — ADR 0072 §Sửa đổi 11/10/2026 (Mini App), M3). Cờ nói **cách toạ độ được tạo**, không nói toạ độ đúng hay sai. Không dùng `manual_location`, `user_location`, `pin_moved` |
 
 ### Chín trạng thái của phiếu phản ánh — ADR 0027
 
