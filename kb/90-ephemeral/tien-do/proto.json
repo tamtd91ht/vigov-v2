@@ -177,6 +177,14 @@
       "viec": "comms StaffNotificationKind 18–25; identity AUTOMATION_JOB_SCHEDULED_REPORTS, ScheduledReportPeriod.",
       "bang_chung": "d0b02227. buf lint/breaking/generate xanh.",
       "tiep_theo": "Chạy migration trên PostgreSQL thật."
+    },
+    {
+      "id": "zalo-bot-communes-table-11-10",
+      "viec": "Hợp đồng cho bảng xã ở màn Zalo Bot của platform-admin theo prototype (cột Bot: bot riêng · tên / bot chung; Đã ghép nối = đã ghép / tổng cán bộ đang hoạt động) — ADR 0074, sửa bởi ADR 0079; chủ dự án chốt 11/10/2026",
+      "trang_thai": "dang_lam",
+      "bang_chung": "proto/vigov/comms/v1/zalo_bot_operator.proto — ZaloBotCommuneStats thêm uses_own_bot = 4, own_bot_name = 5, own_bot_linked_staff_count = 6 (trường 3 giữ nghĩa: liên kết bot chung); chú thích ListZaloBotCommuneStats: xã có bot riêng sống vẫn được liệt kê. proto/vigov/identity/v1/operator.proto — rpc OperatorService.ListActiveStaffCounts(ListActiveStaffCountsRequest{session_token = 1, client_ip = 2}) → ListActiveStaffCountsResponse{outcome = 1, counts = 2}, CommuneActiveStaffCount{tenant_id = 1, active_staff_count = 2}; đếm nguoi_dung deleted_at IS NULL AND co_tai_khoan AND dang_hoat_dong; xã 0 người thì vắng; @cross-tenant, có ghi nhật ký vận hành. TỰ CHẠY 11/10/2026: buf lint · buf breaking --against '.git#ref=HEAD' · buf generate · go build ./... core và 7 service · go test core/grpcx — đều rc=0.",
+      "no_confirm": [],
+      "tiep_theo": "Miễn xã cho /vigov.identity.v1.OperatorService/ListActiveStaffCounts: chủ dự án đồng ý 11/10/2026 (điều kiện: chỉ trả lời phiên op1. còn sống, đọc có ghi nhật ký, như ListMiniAppSecretStatuses) — đã thêm vào core/grpcx.methodsWithoutTenant kèm đoạn chú thích có ngày, và ca kiểm tên chữ khớp FullMethodName trong core/grpcx/grpcx_test.go. Còn cài đặt: comms (ba trường mới, hợp tập xã có bot riêng), identity (phân giải phiên, kiểm khoá ops.*, đếm, ghi nhật ký vận hành), platform (ghép hai nguồn theo tenant_id, vắng = 0)."
     }
   ]
 }

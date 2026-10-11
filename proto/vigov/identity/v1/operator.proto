@@ -59,6 +59,15 @@ import "google/protobuf/timestamp.proto";
 // them, follows the same commune rule for the same reason (it reads the same commune-owned rows) and
 // is likewise never on methodsWithoutTenant.
 //
+// THE COMMUNE, FOR ListActiveStaffCounts: NONE — IT ANSWERS ABOUT EVERY COMMUNE AT ONCE. It cannot
+// know a commune at call time (structural no to ADR 0012 decision 1's test), so it is on
+// core/grpcx.methodsWithoutTenant BY FULL NAME. Putting it there was a STOP CONDITION (ADR 0012,
+// `0012-grpc-boundary-contract.md:96-98`) answered by the owner for THIS RPC on 2026-10-11, on the
+// condition stated next — the yes for ListZaloBotCommuneStats (ADR 0074) did not carry over, and this
+// one does not carry over to any other RPC. What keeps it narrow: no request field names a commune; the response is COUNTS keyed by commune
+// ULID, no staff data; and, unlike the realm RPCs' exemption argument above, it still answers only to
+// a live `op1.` token whose operator holds an `ops.*` key, resolved HERE (see the RPC).
+//
 // AUTHENTICATION IS HYBRID AND NOT CACHED (ADR 0048 §01/10 #2). service-platform verifies the `op1.`
 // signature locally (it holds OPERATOR_SESSION_SIGNING_KEYS too), then calls ResolveOperatorSession
 // on EVERY operator request. Signature-only was rejected: it cannot measure the 5-minute idle limit
@@ -314,6 +323,55 @@ service OperatorService {
   //   OK + PERMISSION_DENIED live session holding no `ops.*` key. Caller answers 403.
   //   INVALID_ARGUMENT       empty `session_token`, or no "x-tenant-id" metadata.
   rpc ListMiniAppSecretStatuses(ListMiniAppSecretStatusesRequest) returns (ListMiniAppSecretStatusesResponse);
+
+  // ---- Reads ACROSS communes: counts for the operator console ----
+
+  // ListActiveStaffCounts reports, per commune, how many ACTIVE STAFF ACCOUNTS it has — the
+  // denominator of "Đã ghép nối" (linked / total) on platform-admin's Zalo Bot communes table (ADR
+  // 0074 §"Tài nguyên URL", owner 11/10/2026). COUNTS ONLY: no staff code, name, email, unit, role —
+  // nothing that identifies or describes a person (ADR 0003: platform holds metadata, never a
+  // commune's people).
+  //
+  // "ACTIVE STAFF ACCOUNT" (owner, 11/10/2026: "not soft-deleted AND not locked"), as identity's rows
+  // say it: a `nguoi_dung` row with `deleted_at IS NULL AND co_tai_khoan AND dang_hoat_dong` — the
+  // same three conditions store.locChonNguoi uses for "somebody who can act". `co_tai_khoan` is part of
+  // "account": a directory-only person has no sign-in, so can never pair with a bot, and counting them
+  // would make 100% linked unreachable. A failed-login lockout is NOT "locked" here: it is temporary
+  // and the person is still staff.
+  //
+  // @cross-tenant: one operator screen shows every commune's uptake of the Zalo Bot channel; there is
+  // no single commune to scope it to. The identity store query behind it carries the same
+  // `// @cross-tenant:` marker (rule 1, forbidden #6).
+  //
+  // WHO MAY READ. The operator is resolved HERE from `session_token`, as ListMiniAppSecretStatuses
+  // does (refreshing the idle timer — call it only for a request a person made), never from a code
+  // the caller names: this RPC sits on the exemption list, and that list's argument for OperatorService
+  // is "none answers without a password, a second factor or a live `op1.` token" (core/grpcx,
+  // methodsWithoutTenant). An `actor_code` field would be the first exception to that sentence, for a
+  // read the caller key alone would then unlock. Key: ANY granted `ops.*` key (ADR 0073 #1's read
+  // line, as ListMiniAppSecretStatuses); service-platform's own route guard is the narrower check
+  // (`ops.zalo_bot.manage` on the Zalo Bot screen).
+  //
+  // AUDITED (rule 6, invariant 7 — a read across communes). One entry per ACCEPTED call in identity's
+  // operator trail (operator_audit_log: actor_kind "operator", actor = the RESOLVED principal's `VH-`
+  // code — rule 6 invariant 8, no fallback; actor_ip = client_ip), naming the act and the number of
+  // communes answered, never a count per commune. Platform-scope, so it never lands on a commune's
+  // staff audit screen. FAIL CLOSED: if the entry cannot be written, the RPC fails (UNAVAILABLE) and
+  // returns no counts — an unaudited cross-commune read is the state rule 6 forbids.
+  //
+  // A COMMUNE WITH ZERO ACTIVE STAFF ACCOUNTS IS ABSENT from the list: identity does not own the
+  // commune list (platform does), so it can only report communes it holds rows for. The caller joins on
+  // tenant_id and shows an absent commune as 0. Ordered by tenant_id — a stable order with no meaning.
+  //
+  //   OK + ACCEPTED          `counts` as above; EMPTY is a valid answer.
+  //   OK + SESSION_NOT_LIVE  caller answers 401. Nothing read, no entry.
+  //   OK + PERMISSION_DENIED live session holding no `ops.*` key. Caller answers 403. No entry.
+  //   INVALID_ARGUMENT       empty `session_token`. Never "no x-tenant-id": the RPC is on
+  //                          methodsWithoutTenant (see the service).
+  //
+  // A read: idempotent apart from the trail entry and the idle-timer refresh. Not paginated: one row
+  // per commune, two scalars each.
+  rpc ListActiveStaffCounts(ListActiveStaffCountsRequest) returns (ListActiveStaffCountsResponse);
 }
 
 // What an RPC of OperatorService decided. Each RPC's comment lists the subset it answers; a value
@@ -333,9 +391,9 @@ enum OperatorAuthOutcome {
   OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE = 4;
   // ChangeOperatorPassword / CompleteOperatorEnrollment only: see `new_password_refusal`.
   OPERATOR_AUTH_OUTCOME_NEW_PASSWORD_REJECTED = 5;
-  // SetMiniAppSecret / RetireMiniAppSecret / ListMiniAppSecretStatuses only: a live session whose
-  // operator lacks the key the act needs (`ops.mini_app.manage` for the two writes, any `ops.*` key
-  // for the read). Nothing written. Never sent by the seven realm RPCs — none of them is guarded by
+  // SetMiniAppSecret / RetireMiniAppSecret / ListMiniAppSecretStatuses / ListActiveStaffCounts only:
+  // a live session whose operator lacks the key the act needs (`ops.mini_app.manage` for the two
+  // writes, any `ops.*` key for the two reads). Nothing written. Never sent by the seven realm RPCs — none of them is guarded by
   // a key.
   OPERATOR_AUTH_OUTCOME_PERMISSION_DENIED = 6;
 }
@@ -692,4 +750,33 @@ message MiniAppSecretStatus {
   // no secret: the screen shows "chưa đặt", never the version's set_at as if a secret were set.
   // A bool and nothing more about the value (see MiniAppSecretVersion).
   bool secret_set = 2;
+}
+
+message ListActiveStaffCountsRequest {
+  // CREDENTIAL — as SetMiniAppSecretRequest.session_token. The reader is resolved from it; there is
+  // no operator field (see the RPC, "WHO MAY READ"). Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // As OpenOperatorSessionRequest.client_ip: stored as the trail entry's actor_ip. Decides nothing.
+  string client_ip = 2;
+  // DELIBERATELY NO commune field and NO commune filter: the answer is every commune, and a commune
+  // named in the body is caller-declared data (rule 1, forbidden #2).
+}
+
+message ListActiveStaffCountsResponse {
+  // ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED.
+  OperatorAuthOutcome outcome = 1;
+  // Set only when ACCEPTED: one entry per commune with AT LEAST ONE active staff account, ordered by
+  // tenant_id. A commune absent here has zero (see the RPC).
+  repeated CommuneActiveStaffCount counts = 2;
+}
+
+// One commune's count of active staff accounts. A count and the commune it is about — nothing about
+// any person.
+message CommuneActiveStaffCount {
+  // The commune (ULID). An ANSWER about stored rows, never an input. Platform joins it with its own
+  // commune list.
+  string tenant_id = 1;
+  // `nguoi_dung` rows of this commune with deleted_at IS NULL AND co_tai_khoan AND dang_hoat_dong.
+  // Always >= 1 in an entry.
+  uint32 active_staff_count = 2;
 }

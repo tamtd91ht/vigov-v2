@@ -199,8 +199,17 @@ service ZaloBotOperatorService {
   rpc GetSharedZaloBotWebhook(GetSharedZaloBotWebhookRequest) returns (GetSharedZaloBotWebhookResponse);
 
   // ListZaloBotCommuneStats reports, per commune that comms holds Zalo Bot data for, whether the
-  // commune turned the channel on and how many of its staff have a live link. COUNTS ONLY — no
-  // staff code, no name, no chat_id (ADR 0003: platform holds metadata, never a commune's people).
+  // commune turned the channel on, whether it uses its OWN bot (ADR 0079) and under which display
+  // name, and how many of its staff have a live link — to the shared bot and to its own bot,
+  // separately (see ZaloBotCommuneStats). COUNTS ONLY — no staff code, no name, no chat_id (ADR 0003:
+  // platform holds metadata, never a commune's people), and nothing of the own bot but its display
+  // name: no token, no webhook secret, no bot account id.
+  //
+  // "HOLDS ZALO BOT DATA FOR" INCLUDES AN OWN BOT. A commune with a live own bot is LISTED even when
+  // it has no channel settings row and no shared-bot link: leaving it out would show a commune that
+  // configured its own bot as "Bot chung, off, 0" — a false statement about which bot its staff use.
+  // The server's set of communes is therefore the union of: channel settings rows, live staff links
+  // (any bot), live own-bot rows.
   //
   // @cross-tenant: the operator screen `GET zalo-bots/shared/communes` (ADR 0074 §"Tài nguyên URL",
   // decided by the user 05/10/2026) shows every commune's uptake of the ONE shared bot; there is no
@@ -411,7 +420,21 @@ message ListZaloBotCommuneStatsResponse {
   repeated ZaloBotCommuneStats communes = 1;
 }
 
-// One commune's uptake of the shared bot. Counts and a switch — nothing about any person.
+// One commune's uptake of the Zalo Bot channel. Counts, a switch, and which bot — nothing about any
+// person.
+//
+// WHICH BOT THE COMMUNE USES (ADR 0079 #4): a LIVE zalo_commune_bot row means the commune uses its
+// OWN bot; no live row means the shared bot. The operator screen shows "Bot riêng · <own_bot_name>"
+// or "Bot chung", and "Đã ghép nối" as the link count of THAT bot over the commune's active staff
+// (identity, OperatorService.ListActiveStaffCounts).
+//
+// WHY TWO LINK COUNTS AND NOT ONE "COUNT ON THE BOT IN USE": field 3 is published with the meaning
+// "shared-bot links" and a field never changes meaning (rule: field numbers are never reused, and a
+// reused MEANING is worse — an older platform would read the own-bot count as a shared-bot count with
+// no error). Each count below means one thing regardless of any other field; the caller picks the one
+// `uses_own_bot` names. Switching bot ends every live link (ADR 0079 §"Đổi bot chung ↔ bot riêng"),
+// so the count of the bot NOT in use is normally 0 — not guaranteed, which is why the caller must not
+// sum them.
 message ZaloBotCommuneStats {
   // The commune (ULID) this row is about. An ANSWER the server returns about a stored record — never
   // an input (the comms.proto header draws this line). Platform joins it with its own commune list.
@@ -419,6 +442,20 @@ message ZaloBotCommuneStats {
   // The commune's own switch on `Cấu hình → Kênh Zalo` (`zalo-channel-settings`). False when the
   // commune never saved one.
   bool channel_enabled = 2;
-  // Staff of this commune with a LIVE (not soft-deleted) link to a chat of the shared bot.
+  // Staff of this commune with a LIVE (not soft-deleted) link to a chat of the SHARED bot. Meaning
+  // unchanged since the field was published; links to the commune's own bot are NOT counted here.
   uint32 linked_staff_count = 3;
+
+  // True when the commune has a LIVE own bot (zalo_commune_bot, not retired) — it uses that bot, not
+  // the shared one. The default false is "uses the shared bot", which is also what a comms older than
+  // this field means: before ADR 0079 every commune used the shared bot.
+  bool uses_own_bot = 4;
+  // The own bot's display name as the commune saved it (CommuneZaloBot.BotName — starts with "Bot",
+  // not a secret, not personal data). Set exactly when `uses_own_bot`; empty otherwise. NEVER the
+  // token, the webhook secret, the Zalo bot account id, or anything derived from them.
+  string own_bot_name = 5;
+  // Staff of this commune with a LIVE (not soft-deleted) link to a chat of the commune's CURRENT own
+  // bot (zalo_link.bot_ref = that bot's ref). 0 when `uses_own_bot` is false. Links to a RETIRED own
+  // bot are not counted: they reach nobody through the bot in use.
+  uint32 own_bot_linked_staff_count = 6;
 }

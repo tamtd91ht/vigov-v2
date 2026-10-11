@@ -115,6 +115,14 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 			t.Fatalf("%s must be exempt: the shared Zalo Bot belongs to no commune (ADR 0074)", literal)
 		}
 	}
+	// Owner's decision of 2026-10-11: a cross-commune COUNT read for the operator console, gated by a
+	// live op1. token and audited. Literal string checked against the generated name, as above.
+	if literal, generated := "/vigov.identity.v1.OperatorService/ListActiveStaffCounts",
+		identityv1.OperatorService_ListActiveStaffCounts_FullMethodName; literal != generated {
+		t.Fatalf("the proto renamed %s to %s — the exemption no longer names the real RPC", literal, generated)
+	} else if !grpcx.ExemptFromTenant(literal) {
+		t.Fatalf("%s must be exempt: it answers about every commune (owner, 2026-10-11)", literal)
+	}
 	// Per RPC, never per service: CommsService stays commune-bound.
 	if grpcx.ExemptFromTenant("/vigov.comms.v1.CommsService/DeliverStaffNotifications") {
 		t.Fatal("a comms RPC outside ZaloBotOperatorService is exempt — exemption leaked by prefix")

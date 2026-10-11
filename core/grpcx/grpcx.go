@@ -233,6 +233,21 @@ const MethodResolveMiniApp = "/vigov.platform.v1.PlatformService/ResolveMiniApp"
 //	the exemption is from the COMMUNE, not from the CALLER: the caller key is still required.
 //
 // By full name, all six, for the same reason as the operator block.
+//
+// OperatorService/ListActiveStaffCounts WAS asked, and answered on 2026-10-11: the owner said yes,
+// on the condition that it answers only to a live `op1.` session token resolved by identity and that
+// the read is audited, as ListMiniAppSecretStatuses is. It passes ADR 0012's test with a structural
+// no: it counts active staff accounts of EVERY commune for the platform-admin Zalo Bot communes table
+// (ADR 0074, amended by ADR 0079), so there is no single commune to know at call time. What keeps it
+// from widening the hole (proto/vigov/identity/v1/operator.proto, the RPC comment):
+//
+//	no request field names a commune, and no handler reads tenant.From;
+//	the response is COUNTS keyed by commune ULID — no staff code, name or any personal data. It DOES
+//	return every commune's ULID, the exposure that keeps ListTenants off this list; accepted for
+//	this RPC only, and it does NOT carry over to ListTenants;
+//	unlike ListZaloBotCommuneStats it takes no caller-declared actor: identity resolves the operator
+//	from the token, requires an `ops.*` key, and writes the operator-trail entry or answers nothing;
+//	the exemption is from the COMMUNE, not from the CALLER: the caller key is still required.
 var methodsWithoutTenant = map[string]struct{}{
 	MethodResolveHost:           {},
 	MethodResolveCitizenSession: {},
@@ -246,6 +261,7 @@ var methodsWithoutTenant = map[string]struct{}{
 	"/vigov.identity.v1.OperatorService/RegenerateOperatorRecoveryCodes": {},
 	"/vigov.identity.v1.OperatorService/BeginOperatorEnrollment":         {},
 	"/vigov.identity.v1.OperatorService/CompleteOperatorEnrollment":      {},
+	"/vigov.identity.v1.OperatorService/ListActiveStaffCounts":           {},
 
 	"/vigov.comms.v1.ZaloBotOperatorService/SetSharedZaloBot":        {},
 	"/vigov.comms.v1.ZaloBotOperatorService/GetSharedZaloBot":        {},
