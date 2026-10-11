@@ -3770,13 +3770,17 @@
       "kind": "func",
       "at": "core/commsclient/zalo_bot_operator.go:48"
     },
+    "config.BasemapURL": {
+      "kind": "func",
+      "at": "core/config/accessors.go:184"
+    },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:874"
+      "at": "core/config/config.go:892"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:1077"
+      "at": "core/config/config.go:1095"
     },
     "config.CheckBucketPrefix": {
       "kind": "func",
@@ -3812,7 +3816,7 @@
     },
     "config.Config": {
       "kind": "type",
-      "at": "core/config/config.go:109"
+      "at": "core/config/config.go:110"
     },
     "config.Configured": {
       "kind": "func",
@@ -3824,23 +3828,23 @@
     },
     "config.ElasticsearchAPIKey": {
       "kind": "func",
-      "at": "core/config/accessors.go:201"
+      "at": "core/config/accessors.go:208"
     },
     "config.ElasticsearchAddrs": {
       "kind": "func",
-      "at": "core/config/accessors.go:195"
+      "at": "core/config/accessors.go:202"
     },
     "config.ElasticsearchIndexPrefix": {
       "kind": "func",
-      "at": "core/config/accessors.go:207"
+      "at": "core/config/accessors.go:214"
     },
     "config.Error": {
       "kind": "func",
-      "at": "core/config/uses.go:230"
+      "at": "core/config/uses.go:235"
     },
     "config.Format": {
       "kind": "func",
-      "at": "core/config/accessors.go:306"
+      "at": "core/config/accessors.go:315"
     },
     "config.GRPCCallerKey": {
       "kind": "func",
@@ -3856,7 +3860,7 @@
     },
     "config.Groups": {
       "kind": "func",
-      "at": "core/config/uses.go:164"
+      "at": "core/config/uses.go:169"
     },
     "config.IdentityAdminSeedPassword": {
       "kind": "func",
@@ -3872,11 +3876,11 @@
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:568"
+      "at": "core/config/config.go:573"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:1068"
+      "at": "core/config/config.go:1086"
     },
     "config.ListenAddr": {
       "kind": "func",
@@ -3884,11 +3888,11 @@
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:589"
+      "at": "core/config/config.go:594"
     },
     "config.LogValue": {
       "kind": "func",
-      "at": "core/config/accessors.go:311"
+      "at": "core/config/accessors.go:320"
     },
     "config.MalwareScanner": {
       "kind": "type",
@@ -3896,7 +3900,7 @@
     },
     "config.MarshalJSON": {
       "kind": "func",
-      "at": "core/config/accessors.go:314"
+      "at": "core/config/accessors.go:323"
     },
     "config.Missing": {
       "kind": "func",
@@ -3956,15 +3960,15 @@
     },
     "config.RabbitMQDSN": {
       "kind": "func",
-      "at": "core/config/accessors.go:183"
+      "at": "core/config/accessors.go:190"
     },
     "config.RabbitMQExchange": {
       "kind": "func",
-      "at": "core/config/accessors.go:189"
+      "at": "core/config/accessors.go:196"
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:940"
+      "at": "core/config/config.go:958"
     },
     "config.RedisDSN": {
       "kind": "func",
@@ -3988,7 +3992,7 @@
     },
     "config.String": {
       "kind": "func",
-      "at": "core/config/uses.go:126"
+      "at": "core/config/uses.go:131"
     },
     "config.TenantCacheTTL": {
       "kind": "func",
@@ -4000,11 +4004,11 @@
     },
     "config.Usage": {
       "kind": "type",
-      "at": "core/config/uses.go:135"
+      "at": "core/config/uses.go:140"
     },
     "config.Uses": {
       "kind": "func",
-      "at": "core/config/uses.go:141"
+      "at": "core/config/uses.go:146"
     },
     "config.ZaloBotWebhookHost": {
       "kind": "func",
@@ -10626,6 +10630,10 @@
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:73"
     },
+    "http.NewBasemapClient": {
+      "kind": "func",
+      "at": "service-comms/internal/http/commune_basemap.go:171"
+    },
     "http.NewHandler": {
       "kind": "func",
       "at": "service-reporting/internal/http/handler.go:20"
@@ -10886,6 +10894,14 @@
       "kind": "type",
       "at": "service-comms/internal/http/tin_xa_cong_khai.go:153"
     },
+    "http.PublicBasemap": {
+      "kind": "func",
+      "at": "service-comms/internal/http/commune_basemap.go:278"
+    },
+    "http.PublicBasemapDeps": {
+      "kind": "type",
+      "at": "service-comms/internal/http/commune_basemap.go:188"
+    },
     "http.PublicCoverImages": {
       "kind": "type",
       "at": "service-comms/internal/http/tin_xa_cong_khai.go:146"
@@ -10909,6 +10925,14 @@
     "http.PublicExternalContacts": {
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:471"
+    },
+    "http.PublicMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/http/commune_map_frame.go:122"
+    },
+    "http.PublicMapFrameDeps": {
+      "kind": "type",
+      "at": "service-comms/internal/http/commune_map_frame.go:41"
     },
     "http.PublicNewsCategories": {
       "kind": "func",
@@ -11026,6 +11050,10 @@
       "kind": "func",
       "at": "service-platform/internal/http/mini_app_ids.go:70"
     },
+    "http.RegisterPublicBasemap": {
+      "kind": "func",
+      "at": "service-comms/internal/http/commune_basemap.go:205"
+    },
     "http.RegisterPublicDisasterAlerts": {
       "kind": "func",
       "at": "service-comms/internal/http/disaster_alerts.go:353"
@@ -11033,6 +11061,10 @@
     "http.RegisterPublicExternalContacts": {
       "kind": "func",
       "at": "service-comms/internal/http/external_contacts.go:257"
+    },
+    "http.RegisterPublicMapFrame": {
+      "kind": "func",
+      "at": "service-comms/internal/http/commune_map_frame.go:76"
     },
     "http.RegisterZaloBotUpdates": {
       "kind": "func",

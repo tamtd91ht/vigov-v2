@@ -1974,6 +1974,33 @@
       "declared_in": "service-comms/internal/http/routes.go"
     },
     {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/commune-basemap/{file}",
+      "operation_id": "comms_get_commune_basemap_by_file",
+      "task_id": "bc9851c3ec9c",
+      "summary": "Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png",
+      "permission_kind": "public",
+      "permission_reason": "nền bản đồ tự host cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1): người dân không có tài khoản; chỉ phát lại một danh sách đóng tệp nền PMTiles, glyph và sprite dựng từ dữ liệu OSM công khai trong MinIO của ViGov — không dữ liệu của xã, không dữ liệu cá nhân; chỉ cho tên miền của một xã đang hoạt động; giới hạn 6.000 lần/phút theo tên miền và mạng của máy gọi, trần riêng",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "",
+        "206": "",
+        "304": "",
+        "400": "httpx.Error",
+        "404": "httpx.Error",
+        "412": "",
+        "416": "",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "502": "httpx.Error",
+        "503": "httpx.Error",
+        "504": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/commune_basemap.go"
+    },
+    {
       "service": "platform",
       "method": "GET",
       "path": "/api/v1/commune-branding",
@@ -2130,6 +2157,26 @@
         "503": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/external_contacts.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/commune-map-frame",
+      "operation_id": "comms_get_commune_map_frame",
+      "task_id": "0d24a088e8bf",
+      "summary": "Khung bản đồ đang áp của xã theo tên miền — khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, tâm và bán kính — cho bản đồ màn Gửi phản ánh của Zalo Mini App; xã không có khung thì configured=false",
+      "permission_kind": "public",
+      "permission_reason": "khung bản đồ đang áp của xã cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M2): người dân không có tài khoản; chỉ trả bốn toạ độ biên, tâm và bán kính của đúng xã mà nền tảng phân giải từ tên miền — siêu dữ liệu xã, không dữ liệu cá nhân, không phần chỉ cán bộ cần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi, chung trần tin công khai",
+      "consumer": "citizen-app",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.publicMapFrameOut",
+        "400": "httpx.Error",
+        "429": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/commune_map_frame.go"
     },
     {
       "service": "comms",

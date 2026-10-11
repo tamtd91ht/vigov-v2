@@ -9125,6 +9125,148 @@
         }
       }
     },
+    "/api/v1/commune-basemap/{file}": {
+      "parameters": [
+        {
+          "name": "file",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png",
+        "operationId": "comms_get_commune_basemap_by_file",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "nền bản đồ tự host cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1): người dân không có tài khoản; chỉ phát lại một danh sách đóng tệp nền PMTiles, glyph và sprite dựng từ dữ liệu OSM công khai trong MinIO của ViGov — không dữ liệu của xã, không dữ liệu cá nhân; chỉ cho tên miền của một xã đang hoạt động; giới hạn 6.000 lần/phút theo tên miền và mạng của máy gọi, trần riêng"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "bc9851c3ec9c",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "206": {
+            "description": "Partial Content"
+          },
+          "304": {
+            "description": "Not Modified"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_host"
+            ]
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "412": {
+            "description": "Precondition Failed"
+          },
+          "416": {
+            "description": "Requested Range Not Satisfiable"
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "basemap_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "basemap_not_configured",
+              "platform_unavailable",
+              "rate_limit_unavailable"
+            ]
+          },
+          "504": {
+            "description": "Gateway Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "basemap_unavailable"
+            ]
+          }
+        }
+      }
+    },
     "/api/v1/commune-branding": {
       "get": {
         "summary": "Xem logo và banner web-admin hiện tại của xã (tab Cấu hình › Nhận diện xã)",
@@ -9801,6 +9943,93 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/commune-map-frame": {
+      "get": {
+        "summary": "Khung bản đồ đang áp của xã theo tên miền — khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, tâm và bán kính — cho bản đồ màn Gửi phản ánh của Zalo Mini App; xã không có khung thì configured=false",
+        "operationId": "comms_get_commune_map_frame",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "khung bản đồ đang áp của xã cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M2): người dân không có tài khoản; chỉ trả bốn toạ độ biên, tâm và bán kính của đúng xã mà nền tảng phân giải từ tên miền — siêu dữ liệu xã, không dữ liệu cá nhân, không phần chỉ cán bộ cần; giới hạn 120 lần/phút theo tên miền và mạng của máy gọi, chung trần tin công khai"
+        },
+        "x-vigov-consumer": "citizen-app",
+        "x-vigov-task": "0d24a088e8bf",
+        "parameters": [
+          {
+            "name": "host",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.publicMapFrameOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_host"
+            ]
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "map_frame_default_unavailable",
+              "platform_unavailable"
+            ]
           }
         }
       }
@@ -40350,6 +40579,42 @@
           "id",
           "kind",
           "title"
+        ],
+        "additionalProperties": false
+      },
+      "comms.publicMapFrameOut": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "center_lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "center_lng": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "radius_km": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "bounds": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            }
+          }
+        },
+        "required": [
+          "configured"
         ],
         "additionalProperties": false
       },
