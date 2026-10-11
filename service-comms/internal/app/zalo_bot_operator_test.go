@@ -41,6 +41,8 @@ type zbState struct {
 	pending      []byte
 	links        map[string][]string // live links: commune -> staff codes
 	ended        []string            // "commune/staff/by"
+	groups       map[string]int      // live GROUP links: commune -> count
+	endedGroups  int                 // group links ended by the account change
 	channelOn    map[string]bool
 	trail        []platformstore.OperatorAudit
 	communeTrail []string // "commune/staff/actor"
@@ -57,6 +59,7 @@ func (s zbState) clone() zbState {
 		c.links[k] = slices.Clone(v)
 	}
 	c.channelOn = maps.Clone(s.channelOn)
+	c.groups = maps.Clone(s.groups)
 	c.ended = slices.Clone(s.ended)
 	c.trail = slices.Clone(s.trail)
 	c.communeTrail = slices.Clone(s.communeTrail)
@@ -204,6 +207,17 @@ func (t *fakeZaloTx) EndAllLiveLinks(_ context.Context, op platformstore.Operato
 		out[c], total = len(staff), total+len(staff)
 	}
 	t.st.links = map[string][]string{}
+	return out, total, nil
+}
+
+func (t *fakeZaloTx) EndAllLiveGroupLinks(_ context.Context, _ platformstore.Operator) (map[string]int, int, error) {
+	t.wrote = true
+	out, total := map[string]int{}, 0
+	for c, n := range t.st.groups {
+		out[c], total = n, total+n
+	}
+	t.st.endedGroups += total
+	t.st.groups = map[string]int{}
 	return out, total, nil
 }
 
@@ -475,6 +489,35 @@ func TestSetSharedZaloBotOtherAccountNeedsTheConfirmedCount(t *testing.T) {
 		t.Fatalf("per-commune counts = %v", byCommune)
 	}
 	noSecretIn(t, st, zbToken, zbOtherToken)
+}
+
+// ADR 0092 / 0029: a different account ends the shared bot's live GROUP links too — even with no staff link
+// to confirm (the confirmed number stays the STAFF count) — and the trail says how many, per commune. The
+// same account keeps them.
+func TestSetSharedZaloBotOtherAccountEndsGroupLinksToo(t *testing.T) {
+	r := newZBRig(t)
+	if _, err := r.uc.SetSharedZaloBot(context.Background(), setIn(zbToken, 0)); err != nil {
+		t.Fatal(err)
+	}
+	r.store.st.groups = map[string]int{communeX: 2, communeY: 1}
+	r.zalo.accounts["123456789:FAKE-rotated-NOT-REAL"] = zalobot.BotInfo{AccountID: "bot-111"}
+	if _, err := r.uc.SetSharedZaloBot(context.Background(), setIn("123456789:FAKE-rotated-NOT-REAL", 0)); err != nil {
+		t.Fatal(err)
+	}
+	if r.store.st.endedGroups != 0 {
+		t.Fatal("the same account ended group links")
+	}
+	out, err := r.uc.SetSharedZaloBot(context.Background(), setIn(zbOtherToken, 0))
+	if err != nil || out.Result != SetSaved || out.EndedLinkCount != 0 {
+		t.Fatalf("= %+v, %v — groups are not part of the confirmed staff count", out, err)
+	}
+	if r.store.st.endedGroups != 3 || len(r.store.st.groups) != 0 {
+		t.Fatalf("ended groups %d, live %v", r.store.st.endedGroups, r.store.st.groups)
+	}
+	last := r.store.st.trail[len(r.store.st.trail)-1].After.(map[string]any)
+	if last["ended_group_link_count"] != 3 {
+		t.Fatalf("trail after = %v", last)
+	}
 }
 
 // Nothing stored while links exist: "unknown" is "different" (fail closed).

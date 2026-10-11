@@ -83,6 +83,14 @@ type botRig struct {
 	bot    *liveBot
 	// endedLinks is what EndLiveLinksOfBot's RETURNING hands back.
 	endedLinks [][]driver.Value
+	// endedGroups is what EndLiveGroupLinksOfBot's RETURNING hands back; groupCount the live-group COUNT.
+	endedGroups [][]driver.Value
+	groupCount  int
+	// groupCodeID answers the commune's GROUP code lookup ("" = none); groupCodeUnit is its scope;
+	// groupLive: the chat is live as a group here.
+	groupCodeID   string
+	groupCodeUnit string
+	groupLive     bool
 	// pairingCodeID answers the commune's by-hash lookup ("" = none).
 	pairingCodeID string
 	host          string
@@ -115,6 +123,23 @@ func newBotRig(t *testing.T) *botRig {
 			return communeBotCols(sealed), [][]driver.Value{r.bot.values(sealed)}, nil
 		case strings.Contains(q, "UPDATE zalo_link SET unlinked_at"):
 			return []string{"id", "staff_code", "linked_at", "bot_ref"}, r.endedLinks, nil
+		case strings.Contains(q, "UPDATE zalo_group_link SET unlinked_at"):
+			return groupLinkCols(), r.endedGroups, nil
+		case strings.Contains(q, "count(*)") && strings.Contains(q, "FROM zalo_group_link"):
+			return []string{"count"}, [][]driver.Value{{int64(r.groupCount)}}, nil
+		case strings.Contains(q, "SELECT id FROM zalo_group_link"):
+			if !r.groupLive {
+				return []string{"id"}, nil, nil
+			}
+			return []string{"id"}, [][]driver.Value{{"01JGLINKLIVE00000000000001"}}, nil
+		case strings.Contains(q, "SELECT id FROM zalo_group_pairing_code"):
+			if r.groupCodeID == "" {
+				return []string{"id"}, nil, nil
+			}
+			return []string{"id"}, [][]driver.Value{{r.groupCodeID}}, nil
+		case strings.Contains(q, "FROM zalo_group_pairing_code"):
+			return groupCodeCols(), [][]driver.Value{{r.groupCodeID, "CB-00123", r.groupCodeUnit, "nhiem-vu.giao-moi",
+				botClock.Add(5 * time.Minute), int64(0)}}, nil
 		case strings.Contains(q, "count(*)") && strings.Contains(q, "FROM zalo_link"):
 			return []string{"count"}, [][]driver.Value{{int64(r.linkCount)}}, nil
 		case strings.Contains(q, "FROM zalo_link"):
@@ -759,7 +784,9 @@ func TestCommuneWebhookRefusesACodeNotOfThisCommune(t *testing.T) {
 }
 
 // A group (or a chat whose type is absent) on the commune's own bot: the same replies as the shared bot,
-// and the commune's code — which DOES exist here — is never looked up, consumed or counted.
+// and the commune's PERSONAL code — which DOES exist here — is never looked up or consumed. In a GROUP the
+// code-shaped texts are looked up in the GROUP table only (none open here: the one refusal) and each spends
+// one try of the chat's budget; in a chat of unknown type nothing is looked up or counted.
 func TestCommuneWebhookGroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.T) {
 	for _, ct := range []zalobot.ChatType{zalobot.ChatTypeGroup, zalobot.ChatTypeUnknown} {
 		r := newBotRig(t)
@@ -770,6 +797,9 @@ func TestCommuneWebhookGroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.
 		ctx := authed(t, r, w)
 		before := len(r.f.stmts)
 		for in, want := range groupCases {
+			if ct == zalobot.ChatTypeGroup && want == domain.ZaloReplyGroupPersonalCode {
+				want = domain.ZaloReplyGroupCodeRefused
+			}
 			if got := w.Handle(ctx, inChat(ct, in), "203.0.113.9"); got != want {
 				t.Errorf("%v %q → %q, want %q", ct, in, got, want)
 			}
@@ -778,9 +808,16 @@ func TestCommuneWebhookGroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.
 			ChatType: ct}, ""); got != "" {
 			t.Errorf("%v unsupported → %q", ct, got)
 		}
-		if lim.calls != 0 || r.f.begun != 0 || len(r.f.stmts) != before {
-			t.Errorf("%v: limiter %d, tx %d, statements %v — a group must touch nothing",
-				ct, lim.calls, r.f.begun, r.f.stmts[before:])
+		wantCalls := 0
+		if ct == zalobot.ChatTypeGroup {
+			wantCalls = groupCodeCases
+		}
+		if lim.calls != wantCalls || r.f.begun != 0 || len(r.f.with("FROM zalo_pairing_code")) != 0 {
+			t.Errorf("%v: limiter %d (want %d), tx %d, personal lookups %d — a group must never read a personal code",
+				ct, lim.calls, wantCalls, r.f.begun, len(r.f.with("FROM zalo_pairing_code")))
+		}
+		if ct == zalobot.ChatTypeUnknown && len(r.f.stmts) != before {
+			t.Errorf("unknown chat type: statements %v — must touch nothing", r.f.stmts[before:])
 		}
 	}
 }
@@ -890,10 +927,15 @@ func TestCommuneBotCurrentCountsTheServingBotsLinks(t *testing.T) {
 	if _, err := r.uc.Current(r.ctx); err != nil {
 		t.Fatal(err)
 	}
-	counts := r.f.with("count(*)")
+	// Staff links and (ADR 0092) group links, each counted for the serving bot.
+	counts := r.f.with("count(*) FROM zalo_link")
 	if len(counts) != 2 || counts[0].args[0] != string(xaA) || counts[0].args[1] != domain.SharedZaloBotRef ||
 		counts[1].args[1] != "commune:bot-111" {
 		t.Fatalf("counts = %v", counts)
+	}
+	groups := r.f.with("count(*) FROM zalo_group_link")
+	if len(groups) != 2 || groups[0].args[1] != domain.SharedZaloBotRef || groups[1].args[1] != "commune:bot-111" {
+		t.Fatalf("group counts = %v", groups)
 	}
 }
 

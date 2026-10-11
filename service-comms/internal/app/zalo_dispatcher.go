@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/audit"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -76,6 +77,7 @@ type ZaloDispatcherDeps struct {
 // ZaloDispatcher sends owed Zalo messages. Run blocks until ctx is done.
 type ZaloDispatcher struct {
 	d          ZaloDispatcherDeps
+	groups     *docstore.ZaloGroupStore // the group outbox (0029), on the same handle as Repo
 	interval   time.Duration
 	tickBudget time.Duration
 	now        func() time.Time
@@ -89,7 +91,7 @@ func NewZaloDispatcher(d ZaloDispatcherDeps) (*ZaloDispatcher, error) {
 	if d.Log == nil {
 		d.Log = slog.Default()
 	}
-	return &ZaloDispatcher{d: d, interval: ZaloDispatchTickInterval, tickBudget: zaloDispatchTickBudget,
+	return &ZaloDispatcher{d: d, groups: docstore.NewZaloGroupStore(d.DB), interval: ZaloDispatchTickInterval, tickBudget: zaloDispatchTickBudget,
 		now: func() time.Time { return time.Now().UTC() }}, nil
 }
 
@@ -176,9 +178,19 @@ func (z *ZaloDispatcher) sendCommune(ctx context.Context, id tenant.ID) {
 	}
 	defer clear(token)
 
+	z.sendPersonal(cctx, id, t.Host, bot, token)
+	// The GROUP outbox (ADR 0092): its own three steps, after the personal ones, through the same bot. A
+	// failure of one never stops the other — each step is its own transaction.
+	z.sendGroups(cctx, id, t.Host, bot, token)
+}
+
+// sendPersonal runs the three steps over zalo_delivery for one commune.
+func (z *ZaloDispatcher) sendPersonal(cctx context.Context, id tenant.ID, host string, bot ActiveZaloBot,
+	token secret.Secret) {
+
 	now := z.now().Truncate(time.Microsecond)
 	var jobs []zaloJob
-	err = z.d.DB.For(cctx).Tx(cctx, func(tx *store.ScopedTx) error {
+	err := z.d.DB.For(cctx).Tx(cctx, func(tx *store.ScopedTx) error {
 		jobs = nil
 		due, err := z.d.Repo.ClaimDueDeliveries(cctx, tx, now, docstore.MaxZaloDeliveryBatch)
 		if err != nil || len(due) == 0 {
@@ -198,7 +210,7 @@ func (z *ZaloDispatcher) sendCommune(ctx context.Context, id tenant.ID) {
 		}
 		tally := map[string][]string{}
 		for _, d := range due {
-			outcome, err := z.decide(cctx, tx, d, settings, chats, bot.Configured, t.Host, now, &jobs)
+			outcome, err := z.decide(cctx, tx, d, settings, chats, bot.Configured, host, now, &jobs)
 			if err != nil {
 				return err
 			}

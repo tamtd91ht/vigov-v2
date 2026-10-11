@@ -41,6 +41,8 @@ import (
 type CommuneZaloWebhook struct {
 	db       *store.DB
 	repo     *docstore.ZaloLinkStore
+	groups   *docstore.ZaloGroupStore // group codes and links (0029), on the same handle
+	units    OrgUnitNamer             // the group confirmation's unit name; nil = "bộ phận đã chọn"
 	bots     *docstore.ZaloCommuneBotStore
 	envelope *crypto.Envelope // the COMMUNE envelope; nil = nothing opens, every update is refused
 	limiter  ZaloPairingLimiter
@@ -62,8 +64,15 @@ func NewCommuneZaloWebhook(db *store.DB, repo *docstore.ZaloLinkStore, bots *doc
 	if log == nil {
 		log = slog.Default()
 	}
-	return &CommuneZaloWebhook{db: db, repo: repo, bots: bots, envelope: envelope, limiter: limiter, send: send,
-		log: log, newID: ulid.Moi, now: time.Now, replies: make(chan struct{}, maxConcurrentReplies)}
+	return &CommuneZaloWebhook{db: db, repo: repo, groups: docstore.NewZaloGroupStore(db), bots: bots,
+		envelope: envelope, limiter: limiter, send: send, log: log, newID: ulid.Moi, now: time.Now,
+		replies: make(chan struct{}, maxConcurrentReplies)}
+}
+
+// WithOrgUnitNames wires identity's unit names for the group confirmation.
+func (w *CommuneZaloWebhook) WithOrgUnitNames(n OrgUnitNamer) *CommuneZaloWebhook {
+	w.units = n
+	return w
 }
 
 func (w *CommuneZaloWebhook) clock() time.Time { return w.now().UTC().Truncate(time.Microsecond) }
@@ -98,7 +107,9 @@ func (w *CommuneZaloWebhook) Handle(ctx context.Context, u zalobot.Update, clien
 		return ""
 	}
 	// Bots' own messages and chats that are not one-to-one: the shared bot's rules (outsidePrivateChat).
-	if reply, handled := outsidePrivateChat(u); handled {
+	if reply, handled, groupCode := outsidePrivateChat(u); groupCode != "" {
+		return w.groupPair(ctx, bot, u.ChatID, groupCode, clientIP)
+	} else if handled {
 		return reply
 	}
 	switch u.EventName {
@@ -144,6 +155,10 @@ func (w *CommuneZaloWebhook) pair(ctx context.Context, bot domain.CommuneZaloBot
 		return domain.ZaloReplyUnavailable
 	}
 	if !found {
+		// A GROUP code of this commune typed here (ADR 0092): guidance, nothing consumed.
+		if _, group, err := w.groups.OpenGroupPairingCodeByHash(ctx, domain.PairingCodeHash(code)); err == nil && group {
+			return domain.ZaloReplyPrivateGroupCode
+		}
 		return domain.ZaloReplyPairingRefused
 	}
 	at := w.clock()

@@ -110,6 +110,10 @@ type NotificationDelivery struct {
 	// DueSoonItems shape the ZALO copy only (comms.proto StaffNotification.due_soon_items); the bell row
 	// never sees them. Empty = an old producer: today's Zalo copy, never "drop it".
 	DueSoonItems []DueSoonItem
+	// HoldingOrgUnitID is comms.proto field 8: the unit holding the RECORD, upper-case ULID, or "" (commune-
+	// wide groups only). GroupPosting is field 9: only Allowed ever reaches a group (zalo_group.go).
+	HoldingOrgUnitID string
+	GroupPosting     GroupPosting
 }
 
 // DeliveryOutcome is what one notice produced: rows created, and recipients who already had the key.
@@ -188,14 +192,26 @@ func ValidateDeliveries(in []NotificationDelivery) ([]NotificationDelivery, erro
 			return nil, invalid("notifications[%d].due_soon_items%s", i, err.Error())
 		}
 
+		// comms.proto field 8: empty, or exactly a ULID. Comms does not ask whether the unit is live — an id
+		// no group carries simply matches no unit group.
+		unit := ""
+		if n.HoldingOrgUnitID != "" {
+			var ok bool
+			if unit, ok = NormalizeOrgUnitID(n.HoldingOrgUnitID); !ok {
+				return nil, invalid("notifications[%d].holding_org_unit_id is not a ULID", i)
+			}
+		}
+
 		out = append(out, NotificationDelivery{
-			IdempotencyKey: n.IdempotencyKey,
-			Kind:           n.Kind,
-			RecipientCodes: codes,
-			Title:          title,
-			Body:           body,
-			Link:           n.Link,
-			DueSoonItems:   items,
+			IdempotencyKey:   n.IdempotencyKey,
+			Kind:             n.Kind,
+			RecipientCodes:   codes,
+			Title:            title,
+			Body:             body,
+			Link:             n.Link,
+			DueSoonItems:     items,
+			HoldingOrgUnitID: unit,
+			GroupPosting:     n.GroupPosting,
 		})
 	}
 	return out, nil

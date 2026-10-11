@@ -66,7 +66,51 @@ type StaffNotifications struct {
 	// zalo is the Zalo Bot outbox (ADR 0074, migration 0018): one zalo_delivery row per notice created,
 	// in the SAME transaction. nil = no Zalo channel wired (tests of the bell alone).
 	zalo ZaloOutbox
-	log  *slog.Logger
+	// groups is the Zalo GROUP outbox (ADR 0092, migration 0029): one zalo_group_delivery row per (notice,
+	// matching group), in the SAME transaction under its own savepoint. nil = no group channel wired.
+	groups ZaloGroupOutbox
+	log    *slog.Logger
+}
+
+// ZaloGroupOutbox queues the group copies of one Deliver call (transaction boundary gui_tin_nhom_zalo).
+// *store.ZaloGroupStore satisfies it. Like ZaloOutbox, its failure is rolled back to its own savepoint and
+// reported, never propagated into the bell's transaction.
+type ZaloGroupOutbox interface {
+	EnqueueGroupDeliveries(ctx context.Context, tx *store.ScopedTx,
+		match func([]domain.ZaloGroupTarget) ([]docstore.GroupDeliveryRow, error), at time.Time) (int, error)
+}
+
+// WithZaloGroupOutbox wires the Zalo group outbox.
+func (uc *StaffNotifications) WithZaloGroupOutbox(o ZaloGroupOutbox) *StaffNotifications {
+	uc.groups = o
+	return uc
+}
+
+// groupRows is the enqueue's match: for each notice this call CREATED (a pure retry posts nothing new),
+// ALLOWED by its producer and of a group kind, one row per matching live group (domain.ZaloGroupMatches) —
+// one per (notice, group) whatever the recipients (ADR 0092 #5). The text is the notice's, the same for
+// every recipient by GROUP_POSTING_ALLOWED's contract.
+func (uc *StaffNotifications) groupRows(notices []domain.NotificationDelivery, created []int) func(
+	[]domain.ZaloGroupTarget) ([]docstore.GroupDeliveryRow, error) {
+
+	return func(groups []domain.ZaloGroupTarget) ([]docstore.GroupDeliveryRow, error) {
+		var out []docstore.GroupDeliveryRow
+		for i, n := range notices {
+			if created[i] == 0 {
+				continue
+			}
+			for _, gid := range domain.ZaloGroupMatches(domain.GroupNotice{IdempotencyKey: n.IdempotencyKey,
+				Kind: n.Kind, HoldingOrgUnitID: n.HoldingOrgUnitID, Posting: n.GroupPosting}, groups) {
+				id, err := uc.newID()
+				if err != nil {
+					return nil, fmt.Errorf("zalo_group_delivery: new id: %w", err)
+				}
+				out = append(out, docstore.GroupDeliveryRow{ID: id, GroupLinkID: gid, IdempotencyKey: n.IdempotencyKey,
+					Kind: n.Kind, Title: n.Title, Body: n.Body, Link: n.Link})
+			}
+		}
+		return out, nil
+	}
 }
 
 // ZaloOutbox queues the Zalo copies of the notices one Deliver call created, with the due-soon items each
@@ -116,6 +160,7 @@ func (uc *StaffNotifications) Deliver(ctx context.Context, in []domain.Notificat
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		out = make([]domain.DeliveryOutcome, 0, len(clean))
 		items := make([]map[string]any, 0, len(clean))
+		createdPer := make([]int, 0, len(clean))
 		totalCreated, totalAlready := 0, 0
 		for _, n := range clean {
 			ids := make([]string, len(n.RecipientCodes))
@@ -131,6 +176,7 @@ func (uc *StaffNotifications) Deliver(ctx context.Context, in []domain.Notificat
 				return err
 			}
 			already := len(n.RecipientCodes) - created
+			createdPer = append(createdPer, created)
 			totalCreated += created
 			totalAlready += already
 			out = append(out, domain.DeliveryOutcome{
@@ -179,6 +225,27 @@ func (uc *StaffNotifications) Deliver(ctx context.Context, in []domain.Notificat
 				deltaMap["zalo_loi_xep_hang"] = true
 			} else {
 				deltaMap["zalo_xep_hang"] = queued
+			}
+		}
+		if uc.groups != nil {
+			// Refusals by reason, counted — never content (comms.proto GROUP_POSTING_RESTRICTED).
+			restricted := 0
+			for _, n := range clean {
+				if n.GroupPosting == domain.GroupPostingRestricted {
+					restricted++
+				}
+			}
+			if restricted > 0 {
+				deltaMap["zalo_nhom_han_che"] = restricted
+			}
+			queued, err := uc.groups.EnqueueGroupDeliveries(ctx, tx, uc.groupRows(clean, createdPer), at)
+			if err != nil {
+				// NOT returned (ADR 0074 #1 for groups): the bell stands, the trail says the group copies did not.
+				uc.log.WarnContext(ctx, "CẢNH BÁO: không xếp được tin nhóm Zalo cho thông báo chuông — chuông vẫn giao đủ",
+					"xa", string(tx.TenantID()), "so_thong_bao", len(clean), "err", err)
+				deltaMap["zalo_nhom_loi_xep_hang"] = true
+			} else if queued > 0 {
+				deltaMap["zalo_nhom_xep_hang"] = queued
 			}
 		}
 		delta, err := json.Marshal(deltaMap)

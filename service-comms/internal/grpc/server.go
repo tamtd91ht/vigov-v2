@@ -154,6 +154,9 @@ func (s *Server) DeliverStaffNotifications(ctx context.Context, req *commsv1.Del
 			Body:           n.GetBody(),
 			Link:           n.GetLink(),
 			DueSoonItems:   dueSoonItemsFromWire(n.GetDueSoonItems()),
+			// Fields 8–9 (ADR 0092). The unit is validated by domain.ValidateDeliveries (INVALID_ARGUMENT).
+			HoldingOrgUnitID: n.GetHoldingOrgUnitId(),
+			GroupPosting:     groupPostingFromWire(n.GetGroupPosting()),
 		})
 	}
 
@@ -186,6 +189,18 @@ func (s *Server) DeliverStaffNotifications(ctx context.Context, req *commsv1.Del
 	s.d.Log.InfoContext(ctx, "comms/grpc: đã giao thông báo chuông",
 		"xa", string(tenant.MustFrom(ctx)), "so_thong_bao", len(out), "tao_moi", created)
 	return res, nil
+}
+
+// groupPostingFromWire maps comms.proto GroupPosting. A value this build does not know (a newer producer) is
+// UNSPECIFIED — posted to no group, the fail-closed side; never read as ALLOWED.
+func groupPostingFromWire(g commsv1.GroupPosting) domain.GroupPosting {
+	switch g {
+	case commsv1.GroupPosting_GROUP_POSTING_ALLOWED:
+		return domain.GroupPostingAllowed
+	case commsv1.GroupPosting_GROUP_POSTING_RESTRICTED:
+		return domain.GroupPostingRestricted
+	}
+	return domain.GroupPostingUnspecified
 }
 
 // dueSoonItemsFromWire copies StaffNotification.due_soon_items. An unset or out-of-range deadline becomes

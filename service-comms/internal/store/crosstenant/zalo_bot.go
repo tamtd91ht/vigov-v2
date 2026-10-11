@@ -151,9 +151,13 @@ func (z *ZaloBot) EndChatLinksInOtherCommunes(ctx context.Context, tx *store.Sco
 	return n, nil
 }
 
-// dueZaloCommunes — the communes holding an owed, due message. Served by 0018's zalo_delivery_due.
-const dueZaloCommunes = `SELECT DISTINCT tenant_id FROM zalo_delivery
-	WHERE status = 'cho-gui' AND deleted_at IS NULL AND next_attempt_at <= $1
+// dueZaloCommunes — the communes holding an owed, due message, personal OR GROUP (0029). Served by 0018's
+// zalo_delivery_due and 0029's zalo_group_delivery_due.
+const dueZaloCommunes = `SELECT tenant_id FROM zalo_delivery
+		WHERE status = 'cho-gui' AND deleted_at IS NULL AND next_attempt_at <= $1
+	UNION
+	SELECT tenant_id FROM zalo_group_delivery
+		WHERE status = 'cho-gui' AND deleted_at IS NULL AND next_attempt_at <= $1
 	ORDER BY tenant_id`
 
 // CommunesWithDueZaloDeliveries lists the communes the dispatcher has work in. Identifiers only.

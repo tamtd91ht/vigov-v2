@@ -61,6 +61,8 @@ type ZaloBotTx interface {
 	ClearPendingWebhookSecret(ctx context.Context, pendingSealed []byte) error
 	CountLiveLinks(ctx context.Context) (int, error)
 	EndAllLiveLinks(ctx context.Context, op platformstore.Operator) (map[string]int, int, error)
+	// EndAllLiveGroupLinks ends the shared bot's live GROUP links (0029), every commune, each audited there.
+	EndAllLiveGroupLinks(ctx context.Context, op platformstore.Operator) (map[string]int, int, error)
 	CommuneStats(ctx context.Context) ([]domain.ZaloBotCommuneStat, error)
 	AppendOperatorAudit(ctx context.Context, e platformstore.OperatorAudit) error
 }
@@ -224,6 +226,7 @@ func (uc *ZaloBotOperator) SetSharedZaloBot(ctx context.Context, in SetSharedZal
 		// link of another bot.
 		accountChanged := !found || cur.BotAccountID != info.AccountID
 		ended, endedTotal := map[string]int{}, 0
+		endedGroups, endedGroupTotal := map[string]int{}, 0
 		if accountChanged {
 			live, err := tx.CountLiveLinks(ctx)
 			if err != nil {
@@ -241,6 +244,12 @@ func (uc *ZaloBotOperator) SetSharedZaloBot(ctx context.Context, in SetSharedZal
 				if endedTotal != in.ExpectedRelinkCount {
 					return errRelink{live: endedTotal}
 				}
+			}
+			// GROUP links of the old account end too (0029 widened the deferred check). NOT part of the
+			// confirmed number: expected_relink_count is the contract's STAFF count (zalo_bot_operator.proto),
+			// and the proto has no group field — the ended groups are in the trail, per commune.
+			if endedGroups, endedGroupTotal, err = tx.EndAllLiveGroupLinks(ctx, op); err != nil {
+				return err
 			}
 		}
 		setAt, err := tx.SaveToken(ctx, platformstore.SavedToken{
@@ -266,6 +275,10 @@ func (uc *ZaloBotOperator) SetSharedZaloBot(ctx context.Context, in SetSharedZal
 		}
 		if endedTotal > 0 {
 			after["ended_links_by_commune"] = ended
+		}
+		if endedGroupTotal > 0 {
+			after["ended_group_link_count"] = endedGroupTotal
+			after["ended_group_links_by_commune"] = endedGroups
 		}
 		if err := tx.AppendOperatorAudit(ctx, platformstore.OperatorAudit{
 			Operator: op, Action: domain.ActionZaloBotTokenSet, Target: domain.ZaloBotTarget, Before: before, After: after,

@@ -46,6 +46,9 @@ type ZaloChatResolver interface {
 	OpenPairingCodesByHash(ctx context.Context, hash []byte) ([]crosstenant.PairingCodeMatch, error)
 	CommuneOfLiveChat(ctx context.Context, chatID string) (tenant.ID, bool, error)
 	EndChatLinksInOtherCommunes(ctx context.Context, tx *store.ScopedTx, chatID string, at time.Time) (int, error)
+	// The GROUP half (ADR 0092): the commune from a group code, and whether a chat is live as a group.
+	OpenGroupPairingCodesByHash(ctx context.Context, hash []byte) ([]crosstenant.PairingCodeMatch, error)
+	GroupChatLiveAnywhere(ctx context.Context, botRef, chatID string) (bool, error)
 }
 
 // ZaloPairingLimiter is ratelimit.ZaloBotPairing's limiter. *ratelimit.Limiter satisfies it.
@@ -63,6 +66,8 @@ const maxConcurrentReplies = 32
 type ZaloWebhook struct {
 	db       *store.DB
 	repo     *docstore.ZaloLinkStore
+	groups   *docstore.ZaloGroupStore      // group codes and links (0029), on the same handle
+	units    OrgUnitNamer                  // the group confirmation's unit name; nil = "bộ phận đã chọn"
 	own      *docstore.ZaloCommuneBotStore // a commune with its own bot pairs through it, never the shared one
 	resolver ZaloChatResolver
 	limiter  ZaloPairingLimiter
@@ -86,8 +91,15 @@ func NewZaloWebhook(db *store.DB, repo *docstore.ZaloLinkStore, own *docstore.Za
 	if log == nil {
 		log = slog.Default()
 	}
-	return &ZaloWebhook{db: db, repo: repo, own: own, resolver: resolver, limiter: limiter, bot: bot, send: send,
-		log: log, newID: ulid.Moi, now: time.Now, replies: make(chan struct{}, maxConcurrentReplies)}
+	return &ZaloWebhook{db: db, repo: repo, groups: docstore.NewZaloGroupStore(db), own: own, resolver: resolver,
+		limiter: limiter, bot: bot, send: send, log: log, newID: ulid.Moi, now: time.Now,
+		replies: make(chan struct{}, maxConcurrentReplies)}
+}
+
+// WithOrgUnitNames wires identity's unit names for the group confirmation ("nhận nhắc việc của bộ phận …").
+func (w *ZaloWebhook) WithOrgUnitNames(n OrgUnitNamer) *ZaloWebhook {
+	w.units = n
+	return w
 }
 
 // Authenticate compares the X-Bot-Api-Secret-Token header with the stored secrets, in constant time.
@@ -98,7 +110,9 @@ func (w *ZaloWebhook) Authenticate(ctx context.Context, presented string) (bool,
 // Handle decides what one update does and returns the reply to send ("" = none). It never fails the
 // request: Zalo is answered 200 once authenticated, whatever happens here.
 func (w *ZaloWebhook) Handle(ctx context.Context, u zalobot.Update, clientIP string) string {
-	if reply, handled := outsidePrivateChat(u); handled {
+	if reply, handled, groupCode := outsidePrivateChat(u); groupCode != "" {
+		return w.groupPair(ctx, u.ChatID, groupCode, clientIP)
+	} else if handled {
 		return reply
 	}
 	switch u.EventName {
@@ -121,40 +135,43 @@ func (w *ZaloWebhook) Handle(ctx context.Context, u zalobot.Update, clientIP str
 }
 
 // outsidePrivateChat answers every update that is NOT a person writing one-to-one — for BOTH bots, before
-// anything is looked up. handled=false: a person's private chat, which the caller handles as before.
+// anything is looked up. handled=false and groupCode="": a person's private chat, handled as before.
 //
 //	a bot's own message        ignored, no reply (a bot answering a bot is a loop)
 //	not PRIVATE (group, or a chat_type absent/unrecognised — fail closed):
 //	  /trogiup /help …         the group help
 //	  /dung /stop              NO link change; unlinking a group is done on ViGov
-//	  a code-shaped text       the fixed sentence: a PERSONAL code is not looked up, not consumed and no
-//	                           attempt is counted — the reply is the same whether or not it exists
+//	  a code-shaped text       in a GROUP: returned as groupCode — the caller looks it up in the GROUP
+//	                           table only (zalo_group_webhook.go); a personal code is never read there.
+//	                           In a chat of UNKNOWN type: the fixed sentence, nothing looked up or counted
 //	  anything else            no reply: a group's conversation is not the bot's to answer
 //
-// WHY a personal code is refused here: pairing links the CHAT, and a group chat is read by everybody in
-// it — a code typed there would send one person's reminders to the whole group.
-func outsidePrivateChat(u zalobot.Update) (reply string, handled bool) {
+// WHY a personal code is never looked up here: pairing links the CHAT, and a group chat is read by
+// everybody in it — a code typed there would send one person's reminders to the whole group.
+func outsidePrivateChat(u zalobot.Update) (reply string, handled bool, groupCode string) {
 	if u.FromBot {
-		return "", true
+		return "", true, ""
 	}
 	if u.ChatType == zalobot.ChatTypePrivate {
-		return "", false
+		return "", false, ""
 	}
 	if u.EventName != domain.ZaloEventTextReceived {
-		return "", true
+		return "", true, ""
 	}
 	switch domain.ParseZaloGroupCommand(u.Text) {
 	case domain.ZaloCommandHelp:
-		return domain.ZaloReplyGroupHelp, true
+		return domain.ZaloReplyGroupHelp, true, ""
 	case domain.ZaloCommandStop:
-		return domain.ZaloReplyGroupStop, true
+		return domain.ZaloReplyGroupStop, true, ""
 	}
-	if _, ok := domain.PairingCodeInGroupText(u.Text); ok {
-		// GROUP PAIRING SEAM: a group pairing code (a later card) will be told apart from a personal one
-		// here. Until then every code-shaped text in a group is a personal code, refused unread.
-		return domain.ZaloReplyGroupPersonalCode, true
+	if code, ok := domain.PairingCodeInGroupText(u.Text); ok {
+		if u.ChatType == zalobot.ChatTypeGroup {
+			return "", true, code
+		}
+		// Unknown chat type: not known to be a group, so not linked as one either (fail closed).
+		return domain.ZaloReplyGroupPersonalCode, true, ""
 	}
-	return "", true
+	return "", true, ""
 }
 
 func (w *ZaloWebhook) clock() time.Time { return w.now().UTC().Truncate(time.Microsecond) }
@@ -182,6 +199,12 @@ func (w *ZaloWebhook) pair(ctx context.Context, chatID, code, clientIP string) s
 	if err != nil {
 		w.log.ErrorContext(ctx, "ghép nối Zalo: không tra được mã ghép", "err", err)
 		return domain.ZaloReplyUnavailable
+	}
+	if len(matches) == 0 {
+		// A GROUP code typed here (ADR 0092): guidance, nothing consumed — the try is already counted.
+		if g, err := w.resolver.OpenGroupPairingCodesByHash(ctx, domain.PairingCodeHash(code)); err == nil && len(g) > 0 {
+			return domain.ZaloReplyPrivateGroupCode
+		}
 	}
 	if len(matches) != 1 {
 		// None, or two communes holding the same live code: NO match (0018, fail closed).

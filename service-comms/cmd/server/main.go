@@ -296,6 +296,8 @@ func main() {
 	// pool, like the portal runner's.
 	zaloBot := commsapp.NewSharedZaloBotAccess(commsapp.NewZaloBotStore(platformStore), platformStore, platformEnvelope)
 	zaloLinks := commsstore.NewZaloLinkStore(kho)
+	// Zalo GROUP chats (migration 0029, ADR 0092): the three commune tables, on the same scoped handle.
+	zaloGroups := commsstore.NewZaloGroupStore(kho)
 	zaloCross := crosstenant.NewZaloBot(db)
 	// A COMMUNE'S OWN BOT (migration 0022, ADR 0079 Q1): a COMMUNE table on the scoped handle, its token and
 	// webhook secret sealed by the COMMUNE envelope (the mail password's, above). The router answers, per
@@ -313,7 +315,8 @@ func main() {
 	staffInbox := commsstore.NewStaffNotificationStore(kho)
 	// Since 2026-10-05 the same transaction also queues each notice's Zalo copy (ADR 0074; zalo_delivery is
 	// the outbox), inside a savepoint: a Zalo failure never fails the bell.
-	staffNotifications := commsapp.NewStaffNotifications(kho, staffInbox).WithZaloOutbox(zaloLinks, log)
+	staffNotifications := commsapp.NewStaffNotifications(kho, staffInbox).WithZaloOutbox(zaloLinks, log).
+		WithZaloGroupOutbox(zaloGroups)
 
 	// The portal sync (migration 0013, ADR 0067 §2). ONE outbound client for the process — its
 	// transport is the only way to a socket and it carries both SSRF checks (internal/portal). NO NEW
@@ -498,6 +501,13 @@ func main() {
 		Bots:    commsapp.NewCommuneZaloBots(kho, zaloCommuneBots, zaloLinks, envelope, zaloClient, nenTang, log),
 		Log:     log,
 	})
+	// Zalo GROUP chats (ADR 0092) — four admin.lookup routes on the SAME staff mux. Identity answers whether
+	// a unit is live and the unit and staff names, over the client the edge already holds.
+	svchttp.RegisterZaloGroups(mux, svchttp.ZaloGroupDeps{
+		Checker: staffauth.Checker{},
+		Groups:  commsapp.NewZaloGroups(kho, zaloGroups, zaloLinks, zaloRouter, dinhDanh, dinhDanh, log),
+		Log:     log,
+	})
 
 	// THE THIRD EDGE CHAIN — the Zalo Bot webhook (ADR 0074 #5; ADR 0079 Q1 #2). Its own mux: no session,
 	// no CORS. Mounted twice by withZaloBotWebhook: on ZALO_BOT_WEBHOOK_HOST with no commune (the shared
@@ -505,9 +515,9 @@ func main() {
 	muxZaloBot := http.NewServeMux()
 	svchttp.RegisterZaloBotUpdates(muxZaloBot, svchttp.ZaloBotUpdateDeps{
 		Updates: commsapp.NewZaloWebhook(kho, zaloLinks, zaloCommuneBots, zaloCross, zaloPairingLimiter, zaloBot,
-			zaloClient, log),
+			zaloClient, log).WithOrgUnitNames(dinhDanh),
 		CommuneUpdates: commsapp.NewCommuneZaloWebhook(kho, zaloLinks, zaloCommuneBots, envelope, zaloPairingLimiter,
-			zaloClient, log),
+			zaloClient, log).WithOrgUnitNames(dinhDanh),
 		Limiter: zaloWebhookLimiter,
 		Log:     log,
 	})

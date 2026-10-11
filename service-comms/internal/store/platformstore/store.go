@@ -447,6 +447,57 @@ func (t *Tx) EndAllLiveLinks(ctx context.Context, op Operator) (map[string]int, 
 	return out, total, nil
 }
 
+// endAllLiveGroupLinks is endAllLiveLinks for the shared bot's GROUP links (0029): 0018's account-change
+// check, widened by 0029, refuses a commit that leaves one live. Each end is audited in its own commune.
+const endAllLiveGroupLinks = `WITH ended AS (
+		UPDATE zalo_group_link SET unlinked_at = now(), unlinked_by = $2, unlink_reason = $3, updated_at = now()
+		WHERE bot_ref = $1 AND unlinked_at IS NULL
+		RETURNING tenant_id, id
+	), trail AS (
+		INSERT INTO audit_log (tenant_id, actor_id, actor_kind, actor_ip, action, subject, at, delta)
+		SELECT tenant_id, $2, $4, $5, $6, 'nhom-zalo/' || id, now(), $7::jsonb FROM ended
+		RETURNING tenant_id
+	)
+	SELECT tenant_id, count(*) FROM trail GROUP BY tenant_id ORDER BY tenant_id`
+
+// EndAllLiveGroupLinks ends every live GROUP link of the shared bot, across communes, with unlinked_by = the
+// operator's code. Returns the per-commune counts and the total.
+func (t *Tx) EndAllLiveGroupLinks(ctx context.Context, op Operator) (map[string]int, int, error) {
+	t.wrote = true
+	delta, err := json.Marshal(map[string]any{
+		"ly_do":   domain.ZaloGroupEndedByBotChange,
+		"nguon":   "doi_tai_khoan_zalo_bot",
+		"bot_ref": domain.SharedZaloBotRef,
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("platformstore: encode the group-link-end delta: %w", err)
+	}
+	// @cross-tenant: ADR 0092 / 0029 zalo_bot_shared_account_change_check — a different shared-bot account
+	// ends EVERY live group link of the shared bot, every commune, in the same transaction as the token,
+	// each end audited in its own commune (tenant_id of the row it ends), never in another's.
+	rows, err := t.tx.QueryContext(ctx, endAllLiveGroupLinks, domain.SharedZaloBotRef, op.Code,
+		domain.ZaloGroupEndedByBotChange, audit.KindOperator, op.IP, domain.ActionEndZaloGroupLink, delta)
+	if err != nil {
+		return nil, 0, fmt.Errorf("platformstore: end live group links: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	total := 0
+	for rows.Next() {
+		var tid string
+		var n int
+		if err := rows.Scan(&tid, &n); err != nil {
+			return nil, 0, fmt.Errorf("platformstore: end live group links: %w", err)
+		}
+		out[tid] = n
+		total += n
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("platformstore: end live group links: %w", err)
+	}
+	return out, total, nil
+}
+
 // communeStats — the commune set is the UNION of channel settings rows, live links of ANY bot and live
 // own-bot rows (proto ListZaloBotCommuneStats): a commune with only an own bot must still be listed, or
 // the operator screen would call it "Bot chung, off, 0".

@@ -11,6 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	commsv1 "github.com/vihat/vigov/core/gen/vigov/comms/v1"
+	"github.com/vihat/vigov/service-comms/internal/domain"
 )
 
 // StaffNotification.due_soon_items (comms.proto, ADR 0079 lô 5 Q13) through the whole RPC: the items reach
@@ -81,6 +82,29 @@ func TestDeliverRefusesBadDueSoonItemsWholeBatch(t *testing.T) {
 				t.Errorf("the refusal echoes a code: %v", err)
 			}
 		})
+	}
+}
+
+// Fields 8–9 (ADR 0092): the unit and the posting reach the use case; a unit that is not a ULID refuses the
+// whole batch without echoing it; an enum value this build does not know is UNSPECIFIED (posted nowhere).
+func TestDeliverCarriesGroupFieldsAndValidatesTheUnit(t *testing.T) {
+	r := goodRequest()
+	r.Notifications[0].HoldingOrgUnitId = "01JBPHAN00000000000000000A"
+	r.Notifications[0].GroupPosting = commsv1.GroupPosting_GROUP_POSTING_ALLOWED
+	r.Notifications[1].GroupPosting = commsv1.GroupPosting(7)
+	f := &fakeDeliverer{}
+	if _, err := newTestServer(f).DeliverStaffNotifications(ctxWithPeer(), r); err != nil {
+		t.Fatal(err)
+	}
+	if f.lastIn[0].HoldingOrgUnitID != "01JBPHAN00000000000000000A" || f.lastIn[0].GroupPosting != domain.GroupPostingAllowed ||
+		f.lastIn[1].GroupPosting != domain.GroupPostingUnspecified {
+		t.Fatalf("in = %+v", f.lastIn)
+	}
+	r = goodRequest()
+	r.Notifications[1].HoldingOrgUnitId = "bp-van-phong"
+	_, err := newTestServer(&fakeDeliverer{}).DeliverStaffNotifications(ctxWithPeer(), r)
+	if status.Code(err) != codes.InvalidArgument || strings.Contains(err.Error(), "bp-van-phong") {
+		t.Fatalf("err = %v", err)
 	}
 }
 

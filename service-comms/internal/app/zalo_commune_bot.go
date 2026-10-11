@@ -157,6 +157,9 @@ type CommuneZaloBotView struct {
 	// LiveLinkCount is how many staff are paired through the bot that serves the commune now — what a
 	// switch of bot would end (ADR 0079 Q1 #4: "hộp xác nhận nêu số người bị ảnh hưởng").
 	LiveLinkCount int
+	// LiveGroupCount is how many Zalo GROUPS are linked through that bot — a switch ends them too (ADR 0092);
+	// kept apart so LiveLinkCount still counts staff.
+	LiveGroupCount int
 }
 
 // SetCommuneZaloBotInput is one PUT. Token empty = keep the live bot's token (then a live bot is required).
@@ -171,6 +174,8 @@ type SetCommuneZaloBotOutput struct {
 	Bot            domain.CommuneZaloBot
 	Adopted        bool // a NEW live row: shared → own, or a different own bot
 	EndedLinkCount int
+	// EndedGroupCount: linked Zalo groups whose link ended with the switch (ADR 0092).
+	EndedGroupCount int
 	// RetiredPrevious: a different own bot was retired — the reply tells the commune to revoke its token.
 	RetiredPrevious bool
 }
@@ -190,6 +195,8 @@ type CommuneWebhookOutput struct {
 type RetireCommuneZaloBotOutput struct {
 	Retired        bool
 	EndedLinkCount int
+	// EndedGroupCount: linked Zalo groups whose link ended with the bot (ADR 0092) — linked again by code.
+	EndedGroupCount int
 }
 
 // CommuneZaloBots owns the five acts on the commune's own bot.
@@ -197,6 +204,7 @@ type CommuneZaloBots struct {
 	db       *store.DB
 	bots     *docstore.ZaloCommuneBotStore
 	links    *docstore.ZaloLinkStore
+	groups   *docstore.ZaloGroupStore // the same handle's group links (0029), ended with the bot
 	envelope *crypto.Envelope
 	api      ZaloBotAPI
 	registry PortalCommuneRegistry // the commune's host, for the webhook URL
@@ -217,7 +225,8 @@ func NewCommuneZaloBots(db *store.DB, bots *docstore.ZaloCommuneBotStore, links 
 	if log == nil {
 		log = slog.Default()
 	}
-	return &CommuneZaloBots{db: db, bots: bots, links: links, envelope: envelope, api: api, registry: registry,
+	return &CommuneZaloBots{db: db, bots: bots, links: links, groups: docstore.NewZaloGroupStore(db),
+		envelope: envelope, api: api, registry: registry,
 		log: log, newID: ulid.Moi, now: time.Now, newSecret: newWebhookSecret}
 }
 
@@ -260,7 +269,11 @@ func (uc *CommuneZaloBots) Current(ctx context.Context) (CommuneZaloBotView, err
 	if err != nil {
 		return CommuneZaloBotView{}, fmt.Errorf("zalo: count the links: %w", err)
 	}
-	return CommuneZaloBotView{HasOwnBot: found, Bot: b, LiveLinkCount: n}, nil
+	g, err := uc.groups.CountLiveGroupLinksOfBot(ctx, ref)
+	if err != nil {
+		return CommuneZaloBotView{}, fmt.Errorf("zalo: count the group links: %w", err)
+	}
+	return CommuneZaloBotView{HasOwnBot: found, Bot: b, LiveLinkCount: n, LiveGroupCount: g}, nil
 }
 
 // Set saves the commune's own bot (spec Cấu hình 11 §3 "Lưu con bot").
@@ -359,7 +372,7 @@ func (uc *CommuneZaloBots) Set(ctx context.Context, in SetCommuneZaloBotInput, a
 			}
 			endedFrom = cur.Bot.Ref()
 		}
-		ended, err := uc.endLinks(ctx, tx, endedFrom, actor, at)
+		ended, endedGroups, err := uc.endLinks(ctx, tx, endedFrom, actor, at)
 		if err != nil {
 			return err
 		}
@@ -368,7 +381,8 @@ func (uc *CommuneZaloBots) Set(ctx context.Context, in SetCommuneZaloBotInput, a
 		if err := uc.bots.InsertLive(ctx, tx, after, sealed); err != nil {
 			return err
 		}
-		out = SetCommuneZaloBotOutput{Bot: after, Adopted: true, EndedLinkCount: ended, RetiredPrevious: found}
+		out = SetCommuneZaloBotOutput{Bot: after, Adopted: true, EndedLinkCount: ended, EndedGroupCount: endedGroups,
+			RetiredPrevious: found}
 		var before any
 		if found {
 			before = communeBotDelta(cur.Bot)
@@ -376,6 +390,7 @@ func (uc *CommuneZaloBots) Set(ctx context.Context, in SetCommuneZaloBotInput, a
 		return writeCommuneBotAudit(ctx, tx, actor, domain.ActionSetCommuneZaloBot, after.Subject(), at,
 			before, communeBotDelta(after), map[string]any{
 				"adopted": true, "replaced_bot": found, "ended_link_count": ended, "ended_bot_ref": endedFrom,
+				"ended_group_link_count": endedGroups,
 			})
 	})
 	if err != nil {
@@ -432,20 +447,31 @@ func (uc *CommuneZaloBots) updateMeta(ctx context.Context, seen domain.CommuneZa
 	return out, nil
 }
 
-// endLinks ends every live link of botRef in this commune, one ket_thuc_lien_ket_zalo entry each.
+// endLinks ends every live link of botRef in this commune, one ket_thuc_lien_ket_zalo entry each — and every
+// live GROUP link of it, one ket_thuc_nhom_zalo entry each (0029 widened the deferred adopt/retire checks:
+// a switch that leaves one cannot commit). Returns the staff links and the groups ended, separately.
 func (uc *CommuneZaloBots) endLinks(ctx context.Context, tx *store.ScopedTx, botRef string, actor audit.Actor,
-	at time.Time) (int, error) {
+	at time.Time) (int, int, error) {
 
 	ended, err := uc.links.EndLiveLinksOfBot(ctx, tx, botRef, actor.ID, domain.ZaloLinkEndedByBotChange, at)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 	for _, l := range ended {
 		if err := writeLinkEnded(ctx, tx, actor, l, domain.ZaloLinkEndedByBotChange, "doi_bot_zalo_cua_xa", at); err != nil {
-			return 0, err
+			return 0, 0, err
 		}
 	}
-	return len(ended), nil
+	groups, err := uc.groups.EndLiveGroupLinksOfBot(ctx, tx, botRef, actor.ID, domain.ZaloGroupEndedByBotChange, at)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, g := range groups {
+		if err := writeGroupLinkEnded(ctx, tx, actor, g, domain.ZaloGroupEndedByBotChange, "doi_bot_zalo_cua_xa", at); err != nil {
+			return 0, 0, err
+		}
+	}
+	return len(ended), len(groups), nil
 }
 
 // Check — getMe with the live own bot's token, then the result recorded with its entry in one
@@ -633,14 +659,14 @@ func (uc *CommuneZaloBots) Retire(ctx context.Context, rawReason string, actor a
 		if err := uc.bots.Retire(ctx, tx, cur.Bot.ID, actor.ID, reason, at); err != nil {
 			return err
 		}
-		ended, err := uc.endLinks(ctx, tx, cur.Bot.Ref(), actor, at)
+		ended, endedGroups, err := uc.endLinks(ctx, tx, cur.Bot.Ref(), actor, at)
 		if err != nil {
 			return err
 		}
-		out = RetireCommuneZaloBotOutput{Retired: true, EndedLinkCount: ended}
+		out = RetireCommuneZaloBotOutput{Retired: true, EndedLinkCount: ended, EndedGroupCount: endedGroups}
 		return writeCommuneBotAudit(ctx, tx, actor, domain.ActionRetireCommuneZaloBot, cur.Bot.Subject(), at,
 			communeBotDelta(cur.Bot), map[string]any{"retired_at": at, "retired_by": actor.ID, "retire_reason": reason},
-			map[string]any{"ended_link_count": ended})
+			map[string]any{"ended_link_count": ended, "ended_group_link_count": endedGroups})
 	})
 	if err != nil {
 		return RetireCommuneZaloBotOutput{}, fmt.Errorf("zalo: retire the commune bot: %w", err)

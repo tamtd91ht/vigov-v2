@@ -86,6 +86,8 @@ type communeZaloBotCurrentOut struct {
 	// confirmation of a switch shows (ADR 0079 Q1 #4): saving another bot, or going back to the shared
 	// one, ends every one of these links.
 	LiveLinkCount int `json:"live_link_count"`
+	// LiveGroupCount: Zalo GROUPS linked through that bot (ADR 0092) — a switch ends them too.
+	LiveGroupCount int `json:"live_group_count"`
 }
 
 // communeZaloBotIn is the body of PUT. `bot_token` IS WRITE-ONLY: omitted or "" keeps the live bot's
@@ -104,6 +106,8 @@ type communeZaloBotSavedOut struct {
 	Adopted bool `json:"adopted"`
 	// EndedLinkCount: staff whose pairing ended with the switch — they pair again (ADR 0079 Q1 #4).
 	EndedLinkCount int `json:"ended_link_count"`
+	// EndedGroupCount: linked Zalo groups whose link ended with the switch — linked again by code (ADR 0092).
+	EndedGroupCount int `json:"ended_group_count"`
 	// RevokeNotice is set when another own bot was retired: the sentence telling the commune that the old
 	// bot's credential is still valid at Zalo and must be revoked there (0022 "OWED BY GO").
 	RevokeNotice string `json:"revoke_notice,omitempty"`
@@ -135,8 +139,9 @@ type communeZaloBotRetireIn struct {
 // communeZaloBotRetiredOut is the reply of DELETE. `retired` false: the commune had no own bot; nothing
 // was written.
 type communeZaloBotRetiredOut struct {
-	Retired        bool `json:"retired"`
-	EndedLinkCount int  `json:"ended_link_count"`
+	Retired         bool `json:"retired"`
+	EndedLinkCount  int  `json:"ended_link_count"`
+	EndedGroupCount int  `json:"ended_group_count"`
 	// RevokeNotice: the retired bot's credential is still valid at Zalo — revoke it there.
 	RevokeNotice string `json:"revoke_notice,omitempty"`
 }
@@ -280,7 +285,7 @@ func (h *zaloCommuneBotHandler) GetCurrent(w http.ResponseWriter, r *http.Reques
 		h.fail(w, r, "đọc", err)
 		return
 	}
-	out := communeZaloBotCurrentOut{HasOwnBot: v.HasOwnBot, LiveLinkCount: v.LiveLinkCount}
+	out := communeZaloBotCurrentOut{HasOwnBot: v.HasOwnBot, LiveLinkCount: v.LiveLinkCount, LiveGroupCount: v.LiveGroupCount}
 	if v.HasOwnBot {
 		b := communeBotToOut(v.Bot)
 		out.Bot = &b
@@ -308,7 +313,8 @@ func (h *zaloCommuneBotHandler) PutCurrent(w http.ResponseWriter, r *http.Reques
 		h.fail(w, r, "lưu", err)
 		return
 	}
-	out := communeZaloBotSavedOut{Bot: communeBotToOut(res.Bot), Adopted: res.Adopted, EndedLinkCount: res.EndedLinkCount}
+	out := communeZaloBotSavedOut{Bot: communeBotToOut(res.Bot), Adopted: res.Adopted, EndedLinkCount: res.EndedLinkCount,
+		EndedGroupCount: res.EndedGroupCount}
 	if res.RetiredPrevious {
 		out.RevokeNotice = domain.CommuneZaloBotRevokeNotice
 	}
@@ -366,7 +372,8 @@ func (h *zaloCommuneBotHandler) DeleteCurrent(w http.ResponseWriter, r *http.Req
 		h.fail(w, r, "quay về bot chung", err)
 		return
 	}
-	out := communeZaloBotRetiredOut{Retired: res.Retired, EndedLinkCount: res.EndedLinkCount}
+	out := communeZaloBotRetiredOut{Retired: res.Retired, EndedLinkCount: res.EndedLinkCount,
+		EndedGroupCount: res.EndedGroupCount}
 	if res.Retired {
 		out.RevokeNotice = domain.CommuneZaloBotRevokeNotice
 	}

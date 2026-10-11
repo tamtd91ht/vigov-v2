@@ -95,11 +95,22 @@ type fakeResolver struct {
 	matches []crosstenant.PairingCodeMatch
 	err     error
 	asked   int
+	// The GROUP half: open group codes by hash, and whether the chat is live as a group anywhere.
+	groupMatches []crosstenant.PairingCodeMatch
+	groupLive    bool
+	groupAsked   int
 }
 
 func (r *fakeResolver) OpenPairingCodesByHash(context.Context, []byte) ([]crosstenant.PairingCodeMatch, error) {
 	r.asked++
 	return r.matches, r.err
+}
+func (r *fakeResolver) OpenGroupPairingCodesByHash(context.Context, []byte) ([]crosstenant.PairingCodeMatch, error) {
+	r.groupAsked++
+	return r.groupMatches, nil
+}
+func (r *fakeResolver) GroupChatLiveAnywhere(context.Context, string, string) (bool, error) {
+	return r.groupLive, nil
 }
 func (r *fakeResolver) CommuneOfLiveChat(context.Context, string) (tenant.ID, bool, error) {
 	return "", false, nil
@@ -190,6 +201,12 @@ var groupCases = map[string]string{
 	"@ViGov cảm ơn bot": "",
 }
 
+// groupCodeCases is how many entries of groupCases are code-shaped.
+const groupCodeCases = 3
+
+// A PERSONAL code is never looked up from a group or an unknown chat (ADR 0092 #4). In a GROUP the
+// code-shaped texts are looked up in the GROUP table only — none open: the one refusal — and each spends a
+// try of the chat's budget; a chat of unknown type touches nothing.
 func TestWebhook_GroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.T) {
 	ctx := context.Background()
 	for _, ct := range []zalobot.ChatType{zalobot.ChatTypeGroup, zalobot.ChatTypeUnknown} {
@@ -203,6 +220,9 @@ func TestWebhook_GroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.T) {
 		w := NewZaloWebhook(kho, docstore.NewZaloLinkStore(kho), docstore.NewZaloCommuneBotStore(kho), r, lim,
 			fakeBot{}, fakeSend{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 		for in, want := range groupCases {
+			if ct == zalobot.ChatTypeGroup && want == domain.ZaloReplyGroupPersonalCode {
+				want = domain.ZaloReplyGroupCodeRefused
+			}
 			if got := w.Handle(ctx, inChat(ct, in), "1.2.3.4"); got != want {
 				t.Errorf("%v %q → %q, want %q", ct, in, got, want)
 			}
@@ -212,9 +232,13 @@ func TestWebhook_GroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.T) {
 			ChatType: ct}, ""); got != "" {
 			t.Errorf("%v unsupported → %q", ct, got)
 		}
-		if r.asked != 0 || lim.calls != 0 || f.begun != 0 || len(f.stmts) != 0 {
-			t.Errorf("%v: lookups %d, limiter %d, tx %d, statements %d — a group must touch nothing",
-				ct, r.asked, lim.calls, f.begun, len(f.stmts))
+		wantCalls := 0
+		if ct == zalobot.ChatTypeGroup {
+			wantCalls = groupCodeCases
+		}
+		if r.asked != 0 || lim.calls != wantCalls || r.groupAsked != wantCalls || f.begun != 0 || len(f.stmts) != 0 {
+			t.Errorf("%v: personal lookups %d, group lookups %d, limiter %d, tx %d, statements %d",
+				ct, r.asked, r.groupAsked, lim.calls, f.begun, len(f.stmts))
 		}
 	}
 }
