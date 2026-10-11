@@ -46,7 +46,6 @@ import {
 } from "./map-field-form";
 import type { MapFieldDraft } from "./map-field-form";
 import { mapFieldTabDecision, mapFieldWriteDecision } from "./quyen-tab";
-import { kiemLyDoXoa } from "./tang-danh-muc";
 
 /* ---- wording ---------------------------------------------------------------------------------- */
 
@@ -104,8 +103,9 @@ type OpenForm =
  * declares `asset_type_code` required. The groups are the COMMUNE'S catalogue (GET /map-asset-types,
  * ADR 0072), never the spec's eleven hard-coded keys.
  *
- * Kept against the prototype (ADR 0079): delete asks for a REASON (rule 7 — the server requires it);
- * edit also changes Bắt buộc, Thứ tự and the options of a `chon` field (decision 3).
+ * Kept against the prototype (ADR 0079): delete asks to CONFIRM (no reason box since 10/10/2026, bug
+ * sheet row 34 — the server records a fixed sentence); edit also changes Bắt buộc, Thứ tự and the
+ * options of a `chon` field (decision 3).
  */
 export function MapFieldTab() {
   const phien = usePhien();
@@ -120,7 +120,6 @@ export function MapFieldTab() {
 
   const [open, setOpen] = useState<OpenForm | null>(null);
   const [draft, setDraft] = useState<MapFieldDraft>(newDraft(""));
-  const [reason, setReason] = useState("");
   const [formError, setFormError] = useState("");
   const [sending, setSending] = useState(false);
   const [rowError, setRowError] = useState("");
@@ -167,7 +166,6 @@ export function MapFieldTab() {
   function start(form: OpenForm, d: MapFieldDraft) {
     setOpen(form);
     setDraft(d);
-    setReason("");
     setFormError("");
     setRowError("");
   }
@@ -188,13 +186,8 @@ export function MapFieldTab() {
     if (open === null || sending) return;
     setFormError("");
     if (open.kind === "delete") {
-      const checked = kiemLyDoXoa(reason);
-      if (!checked.ok) {
-        setFormError(checked.loi);
-        return;
-      }
       setSending(true);
-      const r = await deleteMapField(open.row.id, checked.giaTri);
+      const r = await deleteMapField(open.row.id);
       setSending(false);
       if (!r.ok) return setFormError(r.thongBao);
       return finish(FIELD_DELETED);
@@ -307,8 +300,6 @@ export function MapFieldTab() {
                       form: (
                         <MapFieldDeleteForm
                           label={open.row.label}
-                          reason={reason}
-                          setReason={setReason}
                           error={formError}
                           sending={sending}
                           onSubmit={() => void submit()}
@@ -518,13 +509,13 @@ export type RowEditing = {
   readonly onCancel: () => void;
 };
 
-/** The row whose delete (reason step) is open, and that form. */
+/** The row whose delete confirm is open, and that form. */
 export type RowDeleting = { readonly rowId: string; readonly form: ReactNode };
 
 /**
  * The field list (prototype `AssetFieldTable.tsx:94-124`) in the shared hairline frame, which scrolls
  * sideways at 320px. An edited row turns its label, Bắt buộc and Thứ tự cells into inputs; a `chon`
- * field's options, an error and the delete reason open in a full-width row right under it.
+ * field's options, an error and the delete confirm open in a full-width row right under it.
  */
 export function MapFieldTable({
   rows,
@@ -823,23 +814,25 @@ function OptionsEditor({ draft, setDraft }: { draft: MapFieldDraft; setDraft: (d
   );
 }
 
+/** The question of the delete confirm. */
+export function deleteFieldQuestion(label: string): string {
+  return `Xoá trường ${label}?`;
+}
+
 /**
- * Delete's REASON STEP (rule 7: the server soft-deletes and requires `reason`; ADR 0079 "Giữ bất kể
- * spec"), compact: one grey row under the field's row — reason, Xoá / Huỷ. No explanatory sentence:
- * the prototype has none (owner, "Bỏ hết, đúng prototype", ADR 0079 lô 3 Q7).
+ * Delete's CONFIRM, compact: one grey row under the field's row — the question, Xoá / Huỷ. NO REASON
+ * BOX (bug sheet row 34, owner decision 10/10/2026): the request carries an empty reason and the
+ * server records its fixed sentence. Focus lands on Huỷ, so a stray Enter does not delete. The
+ * server's refusal shows verbatim under it.
  */
 export function MapFieldDeleteForm({
   label,
-  reason,
-  setReason,
   error,
   sending,
   onSubmit,
   onCancel,
 }: {
   label: string;
-  reason: string;
-  setReason: (s: string) => void;
   error: string;
   sending: boolean;
   onSubmit: () => void;
@@ -857,24 +850,12 @@ export function MapFieldDeleteForm({
         if (e.key === "Escape" && !sending) onCancel();
       }}
     >
-      <ConfigField label={`Lý do xoá trường ${label}`} htmlFor="o-ly-do-xoa-truong">
-        {/* `required` is the browser's reminder, not the check: `kiemLyDoXoa` runs before sending. */}
-        <input
-          id="o-ly-do-xoa-truong"
-          name="reason"
-          required
-          autoFocus
-          className={formInputCls}
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          aria-invalid={error !== ""}
-        />
-      </ConfigField>
+      <p className="text-foreground m-0 self-center text-[12.5px] font-medium">{deleteFieldQuestion(label)}</p>
       <div className="flex gap-2">
         <Button type="submit" variant="danger" disabled={sending} aria-busy={sending}>
           <BusyLabel busy={sending} label="Xoá" busyText={BUSY_DELETING} />
         </Button>
-        <Button type="button" variant="outline" onClick={onCancel} disabled={sending}>
+        <Button type="button" variant="outline" autoFocus onClick={onCancel} disabled={sending}>
           Huỷ
         </Button>
       </div>

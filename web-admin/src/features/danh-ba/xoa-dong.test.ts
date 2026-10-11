@@ -5,8 +5,6 @@ import { QUYEN_XOA_DONG_DANH_BA } from "@/lib/quyen";
 
 import {
   CAU_CO_TAI_KHOAN,
-  CAU_LY_DO_QUA_DAI,
-  CAU_THIEU_LY_DO,
   GIAI_THICH_XOA,
   duocXoaTheoPhien,
   yeuCauXoa,
@@ -15,7 +13,8 @@ import {
 /**
  * Xoá một dòng nhập trùng (#10). Hai điều chịu lực:
  *
- *   1. KHÔNG CÓ YÊU CẦU XOÁ NÀO THIẾU LÝ DO — rỗng, toàn khoảng trắng, quá dài đều dừng ở client.
+ *   1. Dòng có tài khoản đăng nhập dừng ở client; mọi dòng khác gửi được, KHÔNG cần lý do
+ *      (bug sheet row 27, owner decision 10/10/2026 — the server records a fixed sentence).
  *   2. Nút chỉ hiện khi phiên đã đọc xong VÀ có `admin.user.delete` — `admin.user` một mình không đủ.
  */
 
@@ -42,32 +41,14 @@ function canBo(ghiDe: Partial<identity_canBoTomTat> = {}): identity_canBoTomTat 
   };
 }
 
-describe("yeuCauXoa — không yêu cầu nào thiếu lý do", () => {
-  it("lý do rỗng hay toàn khoảng trắng → câu từ chối, không có lý do để gửi", () => {
-    expect(yeuCauXoa(canBo(), "")).toEqual({ loi: CAU_THIEU_LY_DO });
-    expect(yeuCauXoa(canBo(), "   \n ")).toEqual({ loi: CAU_THIEU_LY_DO });
+describe("yeuCauXoa — chỉ dòng có tài khoản bị chặn tại chỗ", () => {
+  it("dòng không có tài khoản → gửi được, không hỏi lý do", () => {
+    expect(yeuCauXoa(canBo())).toBeNull();
   });
 
-  it("lý do 501 ký tự → câu từ chối; 500 ký tự có dấu → nhận", () => {
-    expect(yeuCauXoa(canBo(), "ễ".repeat(501))).toEqual({ loi: CAU_LY_DO_QUA_DAI });
-    expect("lyDo" in yeuCauXoa(canBo(), "ễ".repeat(500))).toBe(true);
-  });
-
-  it("lý do hợp lệ → đã cắt hai đầu", () => {
-    expect(yeuCauXoa(canBo(), "  nhập trùng  ")).toEqual({
-      lyDo: { loai: "hopLe", lyDo: "nhập trùng" },
-    });
-  });
-
-  it("dòng CÓ tài khoản → câu giải thích, không gửi — kể cả khi lý do hợp lệ", () => {
-    expect(yeuCauXoa(canBo({ has_account: true }), "nhập trùng")).toEqual({
-      loi: CAU_CO_TAI_KHOAN,
-    });
+  it("dòng CÓ tài khoản → câu giải thích, không gửi", () => {
+    expect(yeuCauXoa(canBo({ has_account: true }))).toBe(CAU_CO_TAI_KHOAN);
     expect(CAU_CO_TAI_KHOAN).toContain("khoá tài khoản");
-  });
-
-  it("câu giới hạn nói con số", () => {
-    expect(CAU_LY_DO_QUA_DAI).toContain("500");
   });
 });
 
@@ -92,12 +73,11 @@ describe("khoá quyền của nút 🗑", () => {
   });
 });
 
-describe("câu giải thích nói đủ bốn điều TRƯỚC khi bấm", () => {
-  it("chỉ cho dòng nhập trùng · nghỉ hưu/chuyển công tác thì KHOÁ · dòng có tài khoản không xoá · mã không cấp lại · lý do được lưu", () => {
-    expect(GIAI_THICH_XOA).toContain("hai lần do nhầm");
-    expect(GIAI_THICH_XOA).toContain("nghỉ hưu hoặc chuyển công tác thì phải khoá tài khoản");
-    expect(GIAI_THICH_XOA).toContain("tài khoản đăng nhập không xoá được");
-    expect(GIAI_THICH_XOA).toContain("không bao giờ được cấp lại");
-    expect(GIAI_THICH_XOA).toContain("lý do xoá được lưu");
+describe("câu giải thích theo prototype", () => {
+  it("nói người này khuất khỏi danh bạ và Mini App, bản ghi vẫn được giữ, không có nút hoàn tác", () => {
+    expect(GIAI_THICH_XOA).toContain("khuất khỏi danh bạ và khỏi Mini App");
+    expect(GIAI_THICH_XOA).toContain("Bản ghi vẫn được giữ trong hệ thống");
+    expect(GIAI_THICH_XOA).toContain("không có nút hoàn tác");
+    expect(GIAI_THICH_XOA).not.toMatch(/lý do/i);
   });
 });

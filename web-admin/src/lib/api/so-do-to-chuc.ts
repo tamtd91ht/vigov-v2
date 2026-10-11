@@ -16,7 +16,7 @@
  * biên dịch; thân được dựng TỪNG TRƯỜNG để chặn lúc chạy — một `...than` là đường để `code` đi lên
  * vào ngày ai đó truyền vào một dòng đọc được từ máy chủ.
  *
- * XOÁ (`DELETE /api/v1/org-units/{id}`, ADR 0056) là xoá MỀM kèm lý do bắt buộc, và máy chủ từ chối
+ * XOÁ (`DELETE /api/v1/org-units/{id}`, ADR 0056) là xoá MỀM, và máy chủ từ chối
  * khi bộ phận còn cán bộ, bộ phận con hay hồ sơ đang mở ở phân hệ khác (§12.4) — xem `deleteOrgUnit`.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
@@ -110,7 +110,10 @@ export const DELETE_UNAVAILABLE_FALLBACK =
   "Chưa kiểm được hồ sơ bộ phận đang giữ ở các phân hệ khác, nên chưa xoá. Vui lòng thử lại sau ít phút.";
 
 /**
- * DELETE /api/v1/org-units/{id} — SOFT delete, reason required (rule 7, invariant 1). 204, no body.
+ * DELETE /api/v1/org-units/{id} — SOFT delete (rule 7, invariant 1). 204, no body.
+ *
+ * EMPTY REASON (owner decision 10/10/2026, bug sheet row 30): the dialog has no reason box; the body
+ * carries `reason: ""` and the server records its fixed sentence (`OrgUnitDeleteDefaultReason`).
  *
  * WHY NOT `goiGhi`: it reduces every refusal to `message`, and the 409 here carries `holdings` —
  * the counts are the answer to "what do I move before I can delete". The branch is on the HTTP
@@ -124,8 +127,8 @@ export const DELETE_UNAVAILABLE_FALLBACK =
  * NO `Idempotency-Key`: the contract declares none, and deleting an already-deleted unit is a 404,
  * not a second row.
  */
-export async function deleteOrgUnit(id: string, reason: string): Promise<OrgUnitDeleteResult> {
-  const body: identity_orgUnitDeleteIn = { reason };
+export async function deleteOrgUnit(id: string): Promise<OrgUnitDeleteResult> {
+  const body: identity_orgUnitDeleteIn = { reason: "" };
   let res: Response;
   try {
     res = await fetch(DELETE_PATH.replace("{id}", encodeURIComponent(id)), {
@@ -135,7 +138,6 @@ export async function deleteOrgUnit(id: string, reason: string): Promise<OrgUnit
       body: JSON.stringify(body),
     });
   } catch {
-    // No log: the body carries the reason staff typed (rule 3).
     return { ok: false, message: LOI_KHONG_RO, holdings: null };
   }
 

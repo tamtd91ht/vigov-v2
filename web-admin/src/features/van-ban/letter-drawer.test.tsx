@@ -11,7 +11,15 @@ import { answer as fixtureAnswer } from "@/dev-preview/fixture-fetch";
 import { danhBaTheoMa } from "@/features/phan-anh/nhan-phieu";
 import type { documents_citizenLetterOut, documents_letterLogOut } from "@/lib/api/schema.gen";
 
-import { DEADLINE_CLEARED, DEADLINE_EDIT_LABEL, DEADLINE_SAVED, LetterDrawer, RESULT_LOCKED_HINT, letterDrawerTitle } from "./letter-drawer";
+import {
+  DEADLINE_CLEARED,
+  DEADLINE_EDIT_LABEL,
+  DEADLINE_SAVED,
+  LetterDrawer,
+  RESULT_LOCKED_HINT,
+  RESULT_NOT_YOURS_HINT,
+  letterDrawerTitle,
+} from "./letter-drawer";
 import { NO_DEADLINE, WITHHELD_SENDER } from "./letter-display";
 
 beforeAll(() => {
@@ -435,6 +443,13 @@ describe("letter drawer — reply “Nội dung trả lời công dân” (ADR 0
     });
   });
 
+  it("a viewer who may not work on an OPEN letter is told why the box is closed (bug sheet row 43)", () => {
+    mount(drawer(letter({ ...resolving, result_summary: "Đang trả lời" }), { canBook: false, mayWork: false }));
+    expect(dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!.disabled).toBe(true);
+    expect(dialog().textContent).toContain(RESULT_NOT_YOURS_HINT);
+    expect(button("Lưu nội dung trả lời")).toBeUndefined();
+  });
+
   it("a saved summary-only reply is shown read-only to a viewer who may not work on the letter", () => {
     mount(
       drawer(letter({ status: "da-giai-quyet", status_group: "da-giai-quyet", is_closed: true, next_statuses: [], result_summary: "Đã trả lời" }), {
@@ -443,6 +458,8 @@ describe("letter drawer — reply “Nội dung trả lời công dân” (ADR 0
       }),
     );
     expect(dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!.value).toBe("Đã trả lời");
+    // Closed by its status: the status sentence, said to this viewer too.
+    expect(dialog().textContent).toContain(RESULT_LOCKED_HINT);
   });
 });
 

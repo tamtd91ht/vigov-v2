@@ -172,7 +172,7 @@ describe("Ngừng dùng / Dùng lại — the active toggle body", () => {
     expect(api.updateMock).toHaveBeenCalledWith("01JTHON1", { active: false });
     expect(r).toEqual({
       kind: "done",
-      sentence: "Đã ngừng dùng Thôn Bình An. Hồ sơ đã lập ở địa bàn này vẫn giữ nguyên tên địa bàn.",
+      sentence: "Đã xoá Thôn Bình An.", // the prototype's toast (bug sheet row 31)
     });
     const back = await toggleResidentialUnitActive(unit({ active: false }), api);
     expect(back).toEqual({ kind: "done", sentence: "Đã đưa Thôn Bình An vào dùng lại." });

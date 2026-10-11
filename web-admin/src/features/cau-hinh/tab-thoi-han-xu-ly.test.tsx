@@ -35,8 +35,8 @@ import {
  *
  * 1. KHỐI CẢNH BÁO CÓ MẶT KHI XÃ CHƯA KHAI XONG, VÀ NÓI RA HẬU QUẢ — and is ABSENT once configured.
  * 2. "+ Thêm thời hạn cho một lĩnh vực" and "Xoá thời hạn riêng" are LIVE (ADR 0079 lô 2 Q4): the add
- *    row offers only the kind's own ACTIVE list, never `don-thu`; removal asks a reason (rule 7) and
- *    never appears on the default row.
+ *    row offers only the kind's own ACTIVE list, never `don-thu`; removal is a Xoá / Huỷ confirm with NO
+ *    reason box (bug sheet row 38, 10/10/2026) and never appears on the default row.
  * 3. The banner states the unit "giờ làm việc" — the cells say only "{n} giờ" (spec 08), so the banner
  *    is now the one place the unit is said — and never a hardcoded SLA figure (rule 10 forbidden #3).
  * 4. Nothing beyond the prototype (owner 08/10/2026): no re-seed button once rows exist, no footnote.
@@ -75,11 +75,9 @@ function addOf(more: Partial<AddForm> = {}): AddForm {
 function removeOf(row: identity_dongSLARa, more: Partial<InlineRemove> = {}): InlineRemove {
   return {
     rowId: row.id,
-    reason: "",
     localError: "",
     serverError: "",
     busy: false,
-    setReason: () => {},
     onConfirm: () => {},
     onCancel: () => {},
     ...more,
@@ -297,7 +295,7 @@ describe("bảng thời hạn xử lý", () => {
     expect(html).not.toContain("lĩnh vực mới");
   });
 
-  it("ô số nói '{n} giờ', Xử lý xong in đậm, ba cột báo nói 'sau {n} giờ'", () => {
+  it("ô số nói '{n} giờ', Xử lý xong in đậm, hai cột báo nói 'sau {n} giờ'", () => {
     const html = ve();
 
     expect(html).toContain("<td>2 giờ</td>");
@@ -309,7 +307,7 @@ describe("bảng thời hạn xử lý", () => {
     expect(html).not.toContain("16 giờ làm việc");
   });
 
-  it("thứ tự cột theo spec, cột Giữ chưa phân công đứng trước cột thao tác", () => {
+  it("thứ tự cột theo prototype — KHÔNG còn cột Giữ chưa phân công (bug sheet row 37)", () => {
     const heads = (ve().match(/<th[^>]*>(?:(?!<\/th>).)*<\/th>/g) ?? []).map((h) => h.replace(/<[^>]+>/g, ""));
     expect(heads).toEqual([
       "Loại việc",
@@ -319,7 +317,6 @@ describe("bảng thời hạn xử lý", () => {
       "Sắp đến hạn khi còn",
       "Báo lãnh đạo trực tiếp",
       "Báo Chủ tịch",
-      "Giữ chưa phân công",
       "Thao tác",
     ]);
   });
@@ -416,7 +413,7 @@ describe("bảng thời hạn xử lý", () => {
     expect(html).toContain('<th scope="col" class="w-[152px]">Sắp đến hạn khi còn</th>');
     expect(html).toContain('<th scope="col" class="w-[172px]">Báo lãnh đạo trực tiếp</th>');
     expect(html).toContain('<th scope="col" class="w-[104px]">Báo Chủ tịch</th>');
-    expect(html).toContain('<th scope="col" class="w-[148px]">Giữ chưa phân công</th>');
+    expect(html).not.toContain("Giữ chưa phân công");
     // No catalogue passed → the raw code, in the one cell allowed to wrap.
     expect(html).toContain('<td class="whitespace-normal!">an-ninh-trat-tu</td>');
   });
@@ -474,15 +471,11 @@ describe("bảng thời hạn xử lý", () => {
   });
 });
 
-describe("cột Giữ chưa phân công (migration 0016, ADR 0079 quyết định 3)", () => {
-  it("con số hiện 'sau {n} giờ'", () => {
-    expect(ve({ thoiHan: rowsOf({ ...DONG_SLA, unassigned_hold_hours: 12 }) })).toContain("<td>sau 12 giờ</td>");
-  });
-
-  it("CHƯA ĐẶT hiện '—' và vẫn nói 'Không báo' cho trình đọc màn hình — không một con số nào thay lựa chọn của xã", () => {
+describe("cột Giữ chưa phân công đã bỏ (bug sheet row 37, chủ dự án 10/10/2026)", () => {
+  it("con số đã lưu KHÔNG hiện, kể cả khi đặt hay chưa đặt", () => {
+    expect(ve({ thoiHan: rowsOf({ ...DONG_SLA, unassigned_hold_hours: 12 }) })).not.toContain("sau 12 giờ");
     const html = ve({ thoiHan: rowsOf({ ...DONG_SLA, unassigned_hold_hours: null }) });
-
-    expect(html).toContain('<td><span aria-hidden="true">—</span><span class="sr-only">Không báo</span></td>');
+    expect(html).not.toContain("Không báo");
     expect(html).not.toContain("null");
   });
 
@@ -500,11 +493,12 @@ describe("cột Giữ chưa phân công (migration 0016, ADR 0079 quyết địn
 });
 
 describe("sửa tại chỗ (spec 08)", () => {
-  it("dòng đang sửa: sáu ô số h-8 w-20 nạp sẵn con số hiện tại; nút thành Lưu / Huỷ", () => {
+  it("dòng đang sửa: năm ô số h-8 w-20 nạp sẵn con số hiện tại; nút thành Lưu / Huỷ", () => {
     const html = ve({}, { edit: editOf(DONG_SLA) });
     const boxes = inputs(html);
 
-    expect(boxes).toHaveLength(6);
+    expect(boxes).toHaveLength(5);
+    expect(html).not.toContain('name="unassigned_hold_hours"');
     for (const b of boxes) {
       expect(b).toContain('type="number"');
       expect(b).toContain("h-8 w-20 text-[12.5px]");
@@ -524,7 +518,7 @@ describe("sửa tại chỗ (spec 08)", () => {
 
   it("chỉ DÒNG đang sửa thành ô nhập; dòng khác giữ chữ và nút bút", () => {
     const html = ve({ thoiHan: rowsOf(DONG_SLA, DEFAULT_ROW) }, { edit: editOf(DONG_SLA) });
-    expect(inputs(html)).toHaveLength(6);
+    expect(inputs(html)).toHaveLength(5);
     expect(html).toContain('aria-label="Sửa thời hạn Phản ánh của người dân — Mặc định cho mọi lĩnh vực"');
   });
 
@@ -534,7 +528,7 @@ describe("sửa tại chỗ (spec 08)", () => {
 
     expect(html).toContain(`<p role="alert" class="text-danger m-0 text-[12.5px]">${RESOLVE_HOURS_ERROR}</p>`);
     expect(html).toContain(`<p role="alert" class="text-danger m-0 text-[12.5px]">${serverSentence}</p>`);
-    expect(html).toContain('<td colSpan="9">');
+    expect(html).toContain('<td colSpan="8">');
   });
 
   it("đang lưu: nút Lưu báo bận, ô nhập khoá", () => {
@@ -561,36 +555,35 @@ describe("xoá thời hạn riêng (ADR 0079 lô 2 Q4)", () => {
     expect(html).toContain('title="Sửa thời hạn"');
   });
 
-  it("bước lý do: ô lý do + Xoá + Huỷ trong ô thao tác, thay bút và thùng rác của dòng ấy", () => {
+  it("bước xác nhận: Xoá + Huỷ trong ô thao tác, KHÔNG ô lý do (bug sheet row 38)", () => {
     const html = ve({ thoiHan: rowsOf(DONG_SLA, DEFAULT_ROW) }, { remove: removeOf(DONG_SLA) });
 
-    expect(inputNamed(html, "reason")).toContain('placeholder="Lý do xoá"');
-    expect(html).toContain('aria-label="Lý do xoá — Phản ánh của người dân — an-ninh-trat-tu"');
+    expect(html).not.toContain('name="reason"');
+    expect(html).not.toContain("Lý do xoá");
     expect(html).toMatch(/<button[^>]*>Xoá<\/button>/);
     expect(html).toMatch(/<button[^>]*>Huỷ<\/button>/);
     expect(html).not.toContain('title="Xoá thời hạn riêng"');
     // The other row keeps its pencil; the figures stay text, not boxes.
     expect(html).toContain('aria-label="Sửa thời hạn Phản ánh của người dân — Mặc định cho mọi lĩnh vực"');
-    expect(inputs(html)).toHaveLength(1);
+    expect(inputs(html)).toHaveLength(0);
   });
 
-  it("thiếu lý do và câu máy chủ (409 dòng mặc định) hiện ngay dưới dòng, tách hai câu", () => {
+  it("câu máy chủ (409 dòng mặc định) hiện ngay dưới dòng", () => {
     const server = "Không xoá được thời hạn mặc định — mọi lĩnh vực chưa có quy định riêng đều dựa vào nó.";
-    const html = ve({}, { remove: removeOf(DONG_SLA, { localError: "Hãy nêu lý do xoá.", serverError: server }) });
+    const html = ve({}, { remove: removeOf(DONG_SLA, { serverError: server }) });
 
-    expect(html).toContain('<p role="alert" class="text-danger m-0 text-[12.5px]">Hãy nêu lý do xoá.</p>');
     expect(html).toContain(`<p role="alert" class="text-danger m-0 text-[12.5px]">${server}</p>`);
   });
 
   it("một `remove` trỏ vào dòng mặc định vẫn không vẽ bước xoá", () => {
     const html = ve({ thoiHan: rowsOf(DEFAULT_ROW) }, { remove: removeOf(DEFAULT_ROW) });
-    expect(html).not.toContain('name="reason"');
+    expect(html).not.toMatch(/<button[^>]*>Xoá<\/button>/);
   });
 
-  it("đang xoá: nút báo bận, ô lý do khoá", () => {
-    const html = ve({}, { remove: removeOf(DONG_SLA, { busy: true, reason: "Trùng" }) });
+  it("đang xoá: nút báo bận, Huỷ khoá", () => {
+    const html = ve({}, { remove: removeOf(DONG_SLA, { busy: true }) });
     expect(html).toContain("Đang xoá…");
-    expect(inputNamed(html, "reason")).toContain('disabled=""');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Huỷ<\/button>/);
   });
 });
 

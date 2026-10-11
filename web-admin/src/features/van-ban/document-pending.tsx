@@ -34,17 +34,17 @@ export function pendingPart(name: string): PendingPart {
 /* ---- the tab bar ------------------------------------------------------------------------------ */
 
 /**
- * The prototype's four tabs, in its order: the registers first, then `Đơn thư công dân`, then
- * `Báo cáo`. The prototype HIDES its `Văn bản đến` tab because ITS demo commune asked (17/09/2026);
- * that request does not apply here, and our two working registers each get their tab. Only
+ * The prototype's two tabs FIRST, in its order (`DocumentWorkspace.tsx:156-166`): `Đơn thư công dân`,
+ * then `Báo cáo` (bug sheet row 42). Our two working registers follow — `Văn bản đến`, `Văn bản đi`:
+ * owner, 11/10/2026, a capability the prototype lacks stays when no other path in the app has it. Only
  * `Đơn thư công dân` carries the prototype's count in brackets (ADR 0084 #7), and only the SERVER's count
  * (`GET /api/v1/citizen-letter-counts`) — every register is paged, so a loaded page is never counted.
  */
 export const DOCUMENT_TABS = [
-  { id: "incoming", label: "Văn bản đến" },
-  { id: "outgoing", label: "Văn bản đi" },
   { id: "petitions", label: "Đơn thư công dân" },
   { id: "report", label: "Báo cáo" },
+  { id: "incoming", label: "Văn bản đến" },
+  { id: "outgoing", label: "Văn bản đi" },
 ] as const;
 
 export type DocumentTabId = (typeof DOCUMENT_TABS)[number]["id"];

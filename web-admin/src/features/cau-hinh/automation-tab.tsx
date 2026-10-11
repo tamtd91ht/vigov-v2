@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { NoAccess } from "@/components/ui/no-access";
+import { PendingMarker, type PendingFeatureInfo } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -56,10 +57,12 @@ import { automationTabDecision } from "./quyen-tab";
  * "Cấu hình → Tự động hoá" (§9, ADR 0058). All three routes declare `admin.sla`, the read included, so
  * the tab hides as a whole without it — convenience; the server refuses on every request.
  *
- * ONE JOB OF §9 IS NOT A CARD: `Tính lại số liệu Tổng quan` is dropped (ADR 0053, ADR 0086 C: the
- * overview counts live, there is nothing to precompute) and gets NO placeholder — a spot for it would
- * announce a job the owner refused (ADR 0068 §14). `Gửi báo cáo định kỳ` (`scheduled_reports`, ADR
- * 0086 B) is a live card like the others, last in the server's order.
+ * ONE JOB OF §9 IS NOT A LIVE CARD: `Tính lại số liệu Tổng quan` has nothing to run (ADR 0053, ADR
+ * 0086 C: the overview counts live, there is nothing to precompute). Since 10/10/2026 (bug sheet row 39,
+ * owner decision) it is drawn as the prototype draws it (`automation.py:80-90`, fourth, before
+ * `Gửi báo cáo định kỳ`), but DISABLED and marked "?" (ADR 0068 §14), the "?" saying why it has no
+ * effect — `RefreshDashboardsPlaceholder`. It is no server job: nothing is read or saved for it.
+ * `Gửi báo cáo định kỳ` (`scheduled_reports`, ADR 0086 B) is a live card like the others.
  *
  * Drawn after `tmp/web/cau-hinh/vigov-cau-hinh-spec/09-tu-dong-hoa.md` and the prototype's
  * `AutomationTable.tsx` (ADR 0079). "Chạy ngay" and the last-runs table are not in either; ADR 0079
@@ -130,8 +133,75 @@ export function AutomationTabView({ loaded }: { loaded: KetQua<readonly Automati
       ) : loaded.duLieu.length === 0 ? (
         <EmptyState icon={BellRing} title="Chưa có việc tự động hoá nào." className="rounded-card border border-line bg-surface" />
       ) : (
-        loaded.duLieu.map((j) => <AutomationJobCard key={j.job} initial={j} />)
+        withRefreshPlaceholder(loaded.duLieu).map((j) =>
+          j === REFRESH_DASHBOARDS ? (
+            <RefreshDashboardsPlaceholder key={REFRESH_DASHBOARDS} />
+          ) : (
+            <AutomationJobCard key={j.job} initial={j} />
+          ),
+        )
       )}
+    </section>
+  );
+}
+
+/** The prototype's fourth job (`automation.py:80-90` `refresh_dashboards`) — a marker, not a server job. */
+const REFRESH_DASHBOARDS = "refresh_dashboards";
+
+/** The server's job that follows it in the prototype's order. */
+const SCHEDULED_REPORTS_JOB = "scheduled_reports";
+
+/**
+ * The server's jobs with the placeholder slotted where the prototype lists it: just before
+ * `scheduled_reports`, or last when that job is absent.
+ */
+export function withRefreshPlaceholder(
+  jobs: readonly AutomationJob[],
+): readonly (AutomationJob | typeof REFRESH_DASHBOARDS)[] {
+  const at = jobs.findIndex((j) => j.job === SCHEDULED_REPORTS_JOB);
+  return at < 0 ? [...jobs, REFRESH_DASHBOARDS] : [...jobs.slice(0, at), REFRESH_DASHBOARDS, ...jobs.slice(at)];
+}
+
+/** Title and description are the prototype's words (`automation.py:82-86`). */
+export const REFRESH_DASHBOARDS_TITLE = "Tính lại số liệu Tổng quan";
+export const REFRESH_DASHBOARDS_DESCRIPTION =
+  "Dựng sẵn số liệu bảng điều hành. Tắt thì màn Tổng quan chỉ đổi khi có người bấm Tính lại ngay.";
+
+/** Why it is disabled — the tooltip of the card and the "?" description. */
+export const REFRESH_DASHBOARDS_WHY =
+  "Số liệu màn Tổng quan được tính trực tiếp mỗi lần mở, nên không cần dựng sẵn — việc này không có tác dụng.";
+
+const REFRESH_DASHBOARDS_INFO: PendingFeatureInfo = {
+  ten: REFRESH_DASHBOARDS_TITLE,
+  viSao: REFRESH_DASHBOARDS_WHY,
+};
+
+/**
+ * The disabled card (ADR 0068 §14): the off card's frame and fill, the prototype's title and
+ * description, a switch that cannot be pressed, and the "?" whose description says why.
+ */
+export function RefreshDashboardsPlaceholder() {
+  const id = `tu-dong-hoa-${REFRESH_DASHBOARDS}`;
+  return (
+    <section
+      className={cn(CARD_CLASS, CARD_OFF_FILL)}
+      aria-labelledby={`${id}-ten`}
+      title={REFRESH_DASHBOARDS_WHY}
+      data-pending=""
+    >
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 id={`${id}-ten`} className="text-ink-500 m-0 inline-flex items-center gap-1.5 text-[13px] font-bold">
+            {REFRESH_DASHBOARDS_TITLE}
+            <PendingMarker info={REFRESH_DASHBOARDS_INFO} />
+          </h3>
+          <p className="text-ink-muted m-0 mt-0.5 text-[12px]">{REFRESH_DASHBOARDS_DESCRIPTION}</p>
+        </div>
+        <label className="text-ink-muted m-0 flex shrink-0 items-center gap-2 text-[12.5px]">
+          <Switch id={`${id}-bat`} checked={false} disabled aria-labelledby={`${id}-ten`} onCheckedChange={() => {}} />
+          {switchWord(false)}
+        </label>
+      </div>
     </section>
   );
 }

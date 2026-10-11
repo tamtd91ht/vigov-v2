@@ -216,9 +216,8 @@ export function DanhBaCanBo({
   const [patchedRow, setPatchedRow] = useState<identity_canBoTomTat | null>(null);
   const [loiMayChu, datLoiMayChu] = useState("");
   const [dangGui, datDangGui] = useState(false);
-  /** The row whose deletion is being confirmed, and the reason typed for it (rule 7: never without one). */
+  /** The row whose deletion is being confirmed. No reason box (bug sheet row 27, 10/10/2026). */
   const [deleting, setDeleting] = useState<identity_canBoTomTat | null>(null);
-  const [deleteReason, setDeleteReason] = useState("");
   /**
    * Đếm số lần cần đọc lại danh sách. Tăng sau MỖI lần ghi thành công.
    *
@@ -398,7 +397,6 @@ export function DanhBaCanBo({
     setPatchedRow(null);
     datLoiMayChu("");
     setDeleting(null);
-    setDeleteReason("");
     toast.success(cau);
     datLanDoc((n) => n + 1);
   }, []);
@@ -525,38 +523,36 @@ export function DanhBaCanBo({
     datMoTaiKhoan(null);
     datLoiTaiKhoan("");
     datLoiMayChu("");
-    setDeleteReason("");
     setDeleting(cb);
   }, []);
 
   const closeDelete = useCallback(() => {
     setDeleting(null);
-    setDeleteReason("");
     datLoiMayChu("");
   }, []);
 
   /**
-   * Send the deletion. A row with an account, an empty or too long reason stop HERE (`yeuCauXoa`, the
-   * same decision `/danh-ba` uses) — no request is built without a reason: `xoaCanBo` only takes a
-   * validated one. The server still refuses a row with an account (409, its sentence shown verbatim).
+   * Send the deletion. A row with an account stops HERE (`yeuCauXoa`, the same decision `/danh-ba`
+   * uses); no reason is asked (bug sheet row 27) — the server records its fixed sentence. The server
+   * still refuses a row with an account (409, its sentence shown verbatim).
    */
   const sendDelete = useCallback(() => {
     if (deleting === null || dangGui) return;
-    const check = yeuCauXoa(deleting, deleteReason);
-    if ("loi" in check) {
-      datLoiMayChu(check.loi);
+    const refused = yeuCauXoa(deleting);
+    if (refused !== null) {
+      datLoiMayChu(refused);
       return;
     }
     datLoiMayChu("");
     datDangGui(true);
     const fullName = deleting.full_name;
-    void xoaCanBo(deleting.id, check.lyDo)
+    void xoaCanBo(deleting.id)
       .then((answer) => {
         if (answer.ok) ghiXong(daXoa(fullName));
         else datLoiMayChu(answer.thongBao);
       })
       .finally(() => datDangGui(false));
-  }, [dangGui, deleteReason, deleting, ghiXong]);
+  }, [dangGui, deleting, ghiXong]);
 
   /* ---- cấp tài khoản và đặt lại mật khẩu ---------------------------------------------------- */
 
@@ -723,7 +719,7 @@ export function DanhBaCanBo({
         </AccountDialog>
       )}
 
-      {/* Delete: the reason dialog `/danh-ba` already uses, inside this screen's dialog frame. */}
+      {/* Delete: the confirm dialog `/danh-ba` already uses, inside this screen's dialog frame. */}
       {deleting !== null && (
         <ConfigDialog
           title={tieuDeXoa(deleting.full_name)}
@@ -734,8 +730,6 @@ export function DanhBaCanBo({
         >
           <HopXoa
             canBo={deleting}
-            lyDo={deleteReason}
-            datLyDo={setDeleteReason}
             loiMayChu={loiMayChu}
             dangGui={dangGui}
             onGui={sendDelete}

@@ -103,24 +103,53 @@ describe("Tự động hoá — 'Gửi báo cáo định kỳ' is a live card fr
   it("is drawn from the server's 4th job, last, with an ENABLED switch and no '?'", () => {
     const el = mount();
     const headings = [...el.querySelectorAll("h3")].map((h) => h.textContent);
-    expect(headings).toHaveLength(4);
+    // Four server jobs + the disabled "Tính lại số liệu Tổng quan" placeholder (bug sheet row 39).
+    expect(headings).toHaveLength(5);
     expect(headings.at(-1)).toBe("Gửi báo cáo định kỳ");
     expect(el.textContent).toContain("Báo cáo tuần vào đầu tuần, báo cáo tháng vào ngày mùng 1.");
     const sw = el.querySelector<HTMLButtonElement>("#tu-dong-hoa-scheduled_reports-bat")!;
     expect(sw.disabled).toBe(false);
     expect(el.querySelector(`button[aria-label="${pendingMarkerLabel("Gửi báo cáo định kỳ")}"]`)).toBeNull();
-    expect(el.querySelector("[data-pending]")).toBeNull();
+    expect(sw.closest("[data-pending]")).toBeNull();
   });
 
   it("no server job → no card: nothing is drawn the server did not return", () => {
     const el = mount(FOUR_JOBS.slice(0, 3));
     expect(el.textContent).not.toContain("Gửi báo cáo định kỳ");
   });
+});
 
-  it("has no placeholder for 'Tính lại số liệu Tổng quan' — the owner dropped that job (ADR 0053, 0086 C)", () => {
-    expect(mount().textContent).not.toContain("Tính lại số liệu");
+describe("Tự động hoá — 'Tính lại số liệu Tổng quan' is a DISABLED '?' card (bug sheet row 39, ADR 0068 §14)", () => {
+  it("sits 4th, before 'Gửi báo cáo định kỳ', as the prototype lists it", () => {
+    const headings = [...mount().querySelectorAll("h3")].map((h) => h.textContent ?? "");
+    expect(headings[3]).toContain("Tính lại số liệu Tổng quan");
+    expect(headings[4]).toBe("Gửi báo cáo định kỳ");
   });
 
+  it("goes last when the server has no report job", () => {
+    const headings = [...mount(FOUR_JOBS.slice(0, 3)).querySelectorAll("h3")].map((h) => h.textContent ?? "");
+    expect(headings.at(-1)).toContain("Tính lại số liệu Tổng quan");
+  });
+
+  it("its switch cannot be pressed, it carries the '?', and it says why it has no effect", () => {
+    const el = mount();
+    const sw = el.querySelector<HTMLButtonElement>("#tu-dong-hoa-refresh_dashboards-bat")!;
+    expect(sw.disabled).toBe(true);
+    expect(sw.getAttribute("aria-checked")).toBe("false");
+    const card = sw.closest("section")!;
+    expect(card.hasAttribute("data-pending")).toBe(true);
+    expect(card.getAttribute("title")).toContain("tính trực tiếp");
+    expect(el.querySelector(`button[aria-label="${pendingMarkerLabel("Tính lại số liệu Tổng quan")}"]`)).not.toBeNull();
+  });
+
+  it("nothing is sent for it — it is no server job", () => {
+    const el = mount();
+    act(() => el.querySelector<HTMLButtonElement>("#tu-dong-hoa-refresh_dashboards-bat")!.click());
+    expect(api.saveAutomationJob).not.toHaveBeenCalled();
+  });
+});
+
+describe("Tự động hoá — 'Gửi báo cáo định kỳ' cadence (ADR 0086 B)", () => {
   it("on: weekday + HH:MM inputs and the last-run line, like the weekly job", () => {
     const el = mount([
       {

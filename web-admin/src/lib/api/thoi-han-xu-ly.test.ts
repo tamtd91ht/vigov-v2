@@ -260,14 +260,14 @@ describe("POST /api/v1/sla — thêm thời hạn riêng cho một lĩnh vực",
 });
 
 describe("DELETE /api/v1/sla/{id} — xoá thời hạn riêng", () => {
-  it("DELETE, id đã mã hoá, thân CHỈ có lý do, 204 không thân là thành công", async () => {
+  it("DELETE, id đã mã hoá, thân `{reason: \"\"}` (không còn ô lý do, 10/10/2026), 204 không thân là thành công", async () => {
     const gia = ghiGia(204, null);
-    const kq = await removeSlaFieldRow("a/b", "Gộp vào dòng mặc định");
+    const kq = await removeSlaFieldRow("a/b");
 
     const { duongDan, tuyChon, header } = loiGoi(gia, 0);
     expect(duongDan).toBe("/api/v1/sla/a%2Fb");
     expect(tuyChon.method).toBe("DELETE");
-    expect(JSON.parse(String(tuyChon.body))).toEqual({ reason: "Gộp vào dòng mặc định" });
+    expect(JSON.parse(String(tuyChon.body))).toEqual({ reason: "" });
     expect(header.get("Idempotency-Key")).toBeNull();
     expect(kq).toEqual({ ok: true, duLieu: null });
   });
@@ -275,6 +275,6 @@ describe("DELETE /api/v1/sla/{id} — xoá thời hạn riêng", () => {
   it("409 default_sla_rule: câu của spec 08, nguyên văn từ máy chủ", async () => {
     const cau = "Không xoá được thời hạn mặc định — mọi lĩnh vực chưa có quy định riêng đều dựa vào nó.";
     ghiGia(409, { code: "default_sla_rule", message: cau, trace_id: "" });
-    expect(await removeSlaFieldRow(DONG.id, "x")).toEqual({ ok: false, thongBao: cau });
+    expect(await removeSlaFieldRow(DONG.id)).toEqual({ ok: false, thongBao: cau });
   });
 });

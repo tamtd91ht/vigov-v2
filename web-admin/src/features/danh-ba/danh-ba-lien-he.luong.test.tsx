@@ -23,7 +23,7 @@ import { KPI_PUBLISHED, KPI_TOTAL, NHAN_SO_KHOI } from "./nhan-danh-ba";
 import { StaffContactForm } from "./staff-contact-form";
 import { StaffDirectoryImportDialog } from "./staff-directory-import-dialog";
 import { ADDED_TOAST, FULL_NAME_REQUIRED, SAVED_TOAST, UNIT_REQUIRED } from "./staff-contact";
-import { CAU_CO_TAI_KHOAN, CAU_THIEU_LY_DO } from "./xoa-dong";
+import { CAU_CO_TAI_KHOAN } from "./xoa-dong";
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════════════════════
@@ -408,40 +408,15 @@ describe("màn trao nút theo ĐÚNG khoá của phiên", () => {
 /* ---- xoá ------------------------------------------------------------------------------------- */
 
 describe("xoá qua màn thật", () => {
-  it("lý do rỗng → không gọi mạng; dòng có tài khoản → không gọi mạng, kể cả khi `onGui` bị gọi thẳng", async () => {
+  it("dòng có tài khoản → không gọi mạng, kể cả khi `onGui` bị gọi thẳng", async () => {
     const m = await moMan();
-    phaiCo(m.cay(), BangLienHe).onXoa?.(A);
-    m.ve();
-    phaiCo(m.cay(), HopXoa).datLyDo("   ");
-    m.ve();
-    phaiCo(m.cay(), HopXoa).onGui();
-    m.ve();
-    expect(phaiCo(m.cay(), HopXoa).loiMayChu).toBe(CAU_THIEU_LY_DO);
-
-    phaiCo(m.cay(), HopXoa).onHuy();
-    m.ve();
     phaiCo(m.cay(), BangLienHe).onXoa?.(C);
-    m.ve();
-    phaiCo(m.cay(), HopXoa).datLyDo("nhập trùng");
     m.ve();
     phaiCo(m.cay(), HopXoa).onGui();
     m.ve();
     expect(phaiCo(m.cay(), HopXoa).loiMayChu).toBe(CAU_CO_TAI_KHOAN);
 
     expect(xoa).not.toHaveBeenCalled();
-  });
-
-  it("mở hộp xoá lần hai: lý do của lần trước KHÔNG còn", async () => {
-    const m = await moMan();
-    phaiCo(m.cay(), BangLienHe).onXoa?.(A);
-    m.ve();
-    phaiCo(m.cay(), HopXoa).datLyDo("lý do cho người khác");
-    m.ve();
-    phaiCo(m.cay(), HopXoa).onHuy();
-    m.ve();
-    phaiCo(m.cay(), BangLienHe).onXoa?.(B);
-    m.ve();
-    expect(phaiCo(m.cay(), HopXoa).lyDo).toBe("");
   });
 
   it("sau 204, đọc lại với CÙNG chữ tìm, bộ lọc khối, bộ lọc hiển thị và con trỏ — không về trang đầu", async () => {
@@ -467,12 +442,11 @@ describe("xoá qua màn thật", () => {
 
     phaiCo(m.cay(), BangLienHe).onXoa?.(A);
     m.ve();
-    phaiCo(m.cay(), HopXoa).datLyDo("  nhập trùng  ");
-    m.ve();
     phaiCo(m.cay(), HopXoa).onGui();
     await xongMang(m);
 
-    expect(xoa).toHaveBeenCalledWith(A.id, { loai: "hopLe", lyDo: "nhập trùng" });
+    // No reason (bug sheet row 27): the id alone.
+    expect(xoa).toHaveBeenCalledWith(A.id);
     expect(propsCua(m.cay(), HopXoa)).toBeNull();
     const soLanDoc = docTrang.mock.calls.length;
     expect(docTrang.mock.calls.at(-1)).toEqual(truocXoa);
@@ -484,8 +458,6 @@ describe("xoá qua màn thật", () => {
     xoa.mockResolvedValueOnce({ ok: false, thongBao: cau });
     const m = await moMan();
     phaiCo(m.cay(), BangLienHe).onXoa?.(A);
-    m.ve();
-    phaiCo(m.cay(), HopXoa).datLyDo("nhập trùng");
     m.ve();
     phaiCo(m.cay(), HopXoa).onGui();
     await xongMang(m);

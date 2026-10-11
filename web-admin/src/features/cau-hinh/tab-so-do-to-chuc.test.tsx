@@ -173,7 +173,7 @@ describe("hộp thoại bộ phận", () => {
     expect(html).not.toMatch(/class="[^"]*\b(form-danh-muc|o-nhap|ghi-chu)\b/);
   });
 
-  it("thêm con: tiêu đề 'Thêm bộ phận', cha chọn sẵn, Tên → Trực thuộc → Thứ tự, nút Huỷ rồi Thêm", () => {
+  it("thêm con: tiêu đề 'Thêm bộ phận', cha chọn sẵn, Tên → Trực thuộc, KHÔNG Thứ tự (bug sheet row 29), nút Huỷ rồi Thêm", () => {
     const html = bieuMau({
       dangMo: moThem("01JLD", "LÃNH ĐẠO", () => "k"),
       ban: banThem("01JLD"),
@@ -183,12 +183,13 @@ describe("hộp thoại bộ phận", () => {
     expect(html).not.toContain('name="ma"');
     expect(html).toContain('placeholder="Ví dụ: Bộ phận Một cửa"');
     expect(html).toContain('<option value="">— Trực thuộc Uỷ ban —</option>');
-    for (const id of ["o-ten-bo-phan", "o-cha-bo-phan", "o-thu-tu-bo-phan"]) {
+    for (const id of ["o-ten-bo-phan", "o-cha-bo-phan"]) {
       expect(html).toContain(`for="${id}"`);
       expect(html).toContain(`id="${id}"`);
     }
+    expect(html).not.toContain("o-thu-tu-bo-phan");
+    expect(html).not.toContain(">Thứ tự<");
     expect(html.indexOf(">Tên bộ phận<")).toBeLessThan(html.indexOf(">Trực thuộc<"));
-    expect(html.indexOf(">Trực thuộc<")).toBeLessThan(html.indexOf(">Thứ tự<"));
     expect(html).toMatch(/<option value="01JLD" selected="">/);
     expect(html.indexOf(">Huỷ<")).toBeLessThan(html.indexOf(">Thêm<"));
     expect(html).toContain("sm:max-w-lg");

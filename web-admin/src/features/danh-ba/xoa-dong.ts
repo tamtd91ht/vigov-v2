@@ -9,13 +9,12 @@
  *   khoá cho cán bộ nghỉ hưu / chuyển công tác — người vẫn còn trong danh bạ, tên vẫn đọc được trên
  *        mọi hồ sơ đã xử lý.
  *
- * Xoá là xoá MỀM (luật 7): dòng rời mọi đường đọc, lý do được lưu, mã cán bộ không bao giờ cấp lại.
+ * Xoá là xoá MỀM (luật 7): dòng rời mọi đường đọc, mã cán bộ không bao giờ cấp lại.
  * MODULE THUẦN, KHÔNG JSX.
  * ─────────────────────────────────────────────────────────────────────────────────────────
  */
 
 import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
-import { LY_DO_XOA_TOI_DA, chuanHoaLyDoXoa, type LyDoXoaHopLe } from "@/lib/api/can-bo";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 import { QUYEN_XOA_DONG_DANH_BA, quyetDinhTheoKhoa } from "@/lib/quyen";
 
@@ -47,15 +46,13 @@ export function deleteQuestion(hoTen: string): string {
 }
 
 /**
- * Nói TRƯỚC khi bấm — bốn điều, mỗi điều chặn một hiểu nhầm có thật: xoá để "dọn" người đã nghỉ;
- * xoá một người đang đăng nhập được; nghĩ rằng mã sẽ được dùng lại cho người sau; nghĩ rằng lý do là
- * ô ghi chú không ai đọc.
+ * The dialog's description — the prototype's own sentence (`StaffDirectoryWorkspace.tsx:427-429`, spec
+ * `08-modal-can-bo-va-excel.md` "Xoá hàng loạt"), said of one person. No reason box (bug sheet row 27,
+ * owner decision 10/10/2026): the server records a fixed sentence in the trail.
  */
 export const GIAI_THICH_XOA =
-  "Chỉ dùng khi một người bị nhập vào danh bạ hai lần do nhầm. Cán bộ nghỉ hưu hoặc chuyển công " +
-  "tác thì phải khoá tài khoản (Khoá tài khoản, ở màn Người dùng), không xoá. Dòng đang có " +
-  "tài khoản đăng nhập không xoá được. Mã cán bộ của dòng bị xoá không bao giờ được cấp lại, và lý " +
-  "do xoá được lưu vào hồ sơ.";
+  "Người này sẽ khuất khỏi danh bạ và khỏi Mini App. Bản ghi vẫn được giữ trong hệ thống, nhưng " +
+  "giao diện không có nút hoàn tác — muốn có lại thì phải nhập hoặc thêm lại.";
 
 /**
  * Câu cho dòng ĐANG CÓ tài khoản — hiện trong hộp THAY cho nút xác nhận, trước khi gửi gì. Máy chủ
@@ -65,13 +62,11 @@ export const CAU_CO_TAI_KHOAN =
   "Người này đang có tài khoản đăng nhập nên không xoá được. Nếu đây là cán bộ nghỉ hưu hoặc " +
   "chuyển công tác, hãy khoá tài khoản ở màn Người dùng.";
 
-export const O_LY_DO_XOA = "Lý do xoá";
-export const MO_TA_LY_DO_XOA = `Bắt buộc, tối đa ${LY_DO_XOA_TOI_DA} ký tự. Ví dụ: nhập trùng với dòng của cùng người này.`;
-
-export const NUT_XAC_NHAN_XOA = "Xác nhận xoá khỏi danh bạ";
-
-export const CAU_THIEU_LY_DO = "Hãy nhập lý do xoá.";
-export const CAU_LY_DO_QUA_DAI = `Lý do xoá quá dài (tối đa ${LY_DO_XOA_TOI_DA} ký tự).`;
+/**
+ * The confirm button. The question above it already names the person and "khỏi danh bạ", so the button
+ * is the verb alone — as the prototype's red confirm buttons are.
+ */
+export const NUT_XAC_NHAN_XOA = "Xoá";
 
 export function daXoa(hoTen: string): string {
   return `Đã xoá ${hoTen} khỏi danh bạ.`;
@@ -86,18 +81,8 @@ export function duocXoaTheoPhien(phien: PhienDaDoc): boolean {
 }
 
 /**
- * Bấm "Xác nhận xoá": hoặc một câu từ chối (KHÔNG gọi mạng), hoặc lý do đã chuẩn hoá để gửi.
- *
- * Dòng có tài khoản, lý do rỗng, lý do quá dài — cả ba dừng ở đây. Không có đường nào dựng ra một
- * yêu cầu xoá thiếu lý do: `xoaCanBo` chỉ nhận `LyDoXoaHopLe`.
+ * Bấm "Xoá": một câu từ chối (KHÔNG gọi mạng) cho dòng có tài khoản, hoặc `null` — gửi được.
  */
-export function yeuCauXoa(
-  cb: identity_canBoTomTat,
-  lyDoTho: string,
-): { readonly loi: string } | { readonly lyDo: LyDoXoaHopLe } {
-  if (cb.has_account) return { loi: CAU_CO_TAI_KHOAN };
-  const lyDo = chuanHoaLyDoXoa(lyDoTho);
-  if (lyDo.loai === "rong") return { loi: CAU_THIEU_LY_DO };
-  if (lyDo.loai === "quaDai") return { loi: CAU_LY_DO_QUA_DAI };
-  return { lyDo };
+export function yeuCauXoa(cb: identity_canBoTomTat): string | null {
+  return cb.has_account ? CAU_CO_TAI_KHOAN : null;
 }

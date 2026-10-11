@@ -320,27 +320,26 @@ describe("toolbar and footnote", () => {
   });
 });
 
-describe("delete keeps its reason step (rule 7)", () => {
-  it("a reason field, Xoá / Huỷ, and the server's refusal in place — no explanatory sentence (ADR 0079 lô 3 Q7)", () => {
+describe("delete is a confirm, no reason box (bug sheet row 34, 10/10/2026)", () => {
+  it("the question, Xoá / Huỷ, and the server's refusal in place — no reason field", () => {
     const html = renderToStaticMarkup(
       <MapFieldDeleteForm
         label="Loại hình doanh nghiệp"
-        reason=""
-        setReason={NOOP}
-        error="Vui lòng nhập lý do xoá."
+        error="Không tìm thấy trường."
         sending={false}
         onSubmit={NOOP}
         onCancel={NOOP}
       />,
     );
     expect(html).toContain('aria-label="Xoá trường Loại hình doanh nghiệp"');
-    expect(html).toContain('name="reason"');
+    expect(html).toContain("Xoá trường Loại hình doanh nghiệp?");
+    expect(html).not.toContain('name="reason"');
+    expect(html).not.toMatch(/Lý do/i);
     expect(html).toContain(">Xoá<");
     expect(html).toContain(">Huỷ<");
-    expect(html).toContain("Vui lòng nhập lý do xoá.");
-    // REGRESSION: the consequence sentence the prototype lacks is gone.
+    expect(html).toContain("Không tìm thấy trường.");
+    // REGRESSION: the consequence sentence the prototype lacks stays gone.
     expect(html).not.toContain("Xoá trường thì trường không còn trên biểu mẫu");
     expect(html).not.toContain("không bao giờ được cấp lại");
-    expect(html).not.toContain("aria-describedby");
   });
 });

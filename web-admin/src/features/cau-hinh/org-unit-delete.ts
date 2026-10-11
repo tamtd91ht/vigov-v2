@@ -11,50 +11,58 @@
 import type { identity_orgUnitHoldingsOut } from "@/lib/api/schema.gen";
 
 /**
- * Each non-zero count as a line, in the order a person must work through them — people and
- * sub-units first, then records. The labels are the server's own words (`OrgUnitHoldings.Sentence`,
- * `service-identity/internal/domain/org_unit_delete.go`), so the list and the sentence above it
- * never name one thing two ways.
+ * One sentence per kind the unit still holds, in the order a person must work through them — people
+ * and sub-units first, then records. The first two are the prototype's own refusals
+ * (`OrgChart.tsx:142-147`, "Bộ phận còn cán bộ. Hãy chuyển cán bộ sang bộ phận khác trước."), with the
+ * server's count added; the nouns are the server's (`OrgUnitHoldings.Sentence`,
+ * `service-identity/internal/domain/org_unit_delete.go`), so the dialog never names one thing two ways.
+ *
+ * Built from the 409's `holdings` (the STATUS and the SHAPE of the body), never from its `code`.
  */
-export function holdingLines(h: identity_orgUnitHoldingsOut): readonly string[] {
-  const lines: string[] = [];
-  const add = (n: number, label: string) => {
-    if (n > 0) lines.push(`${n} ${label}`);
-  };
-  add(h.staff, "cán bộ");
-  add(h.child_units, "bộ phận con");
-  add(h.open_petitions, "phản ánh chưa xử lý xong");
-  add(h.open_tasks, "nhiệm vụ chưa hoàn thành");
-  add(h.open_incoming_documents, "văn bản đến chưa xử lý xong");
-  return lines;
+export function holdingSentences(h: identity_orgUnitHoldingsOut): readonly string[] {
+  const out: string[] = [];
+  if (h.staff > 0) {
+    out.push(`Bộ phận còn ${h.staff} cán bộ trực thuộc. Hãy chuyển cán bộ sang bộ phận khác trước.`);
+  }
+  if (h.child_units > 0) {
+    out.push(`Bộ phận còn ${h.child_units} bộ phận con. Hãy xoá hoặc chuyển bộ phận con trước.`);
+  }
+  if (h.open_petitions > 0) {
+    out.push(`Bộ phận còn ${h.open_petitions} phản ánh chưa xử lý xong. Hãy chuyển sang bộ phận khác trước.`);
+  }
+  if (h.open_tasks > 0) {
+    out.push(`Bộ phận còn ${h.open_tasks} nhiệm vụ chưa hoàn thành. Hãy chuyển sang bộ phận khác trước.`);
+  }
+  if (h.open_incoming_documents > 0) {
+    out.push(
+      `Bộ phận còn ${h.open_incoming_documents} văn bản đến chưa xử lý xong. Hãy chuyển sang bộ phận khác trước.`,
+    );
+  }
+  return out;
 }
 
 // No emoji: the screen draws a lucide `Trash2` beside the word (ADR 0068 §2).
 export const DELETE_BUTTON = "Xoá";
-export const DELETE_CONFIRM_BUTTON = "Xác nhận xoá";
+export const DELETE_CONFIRM_BUTTON = "Xoá";
 export const DELETE_CANCEL_BUTTON = "Huỷ";
-export const DELETE_REASON_LABEL = "Lý do xoá";
-export const HOLDINGS_HEADING = "Bộ phận này còn đang giữ:";
 
 export function deleteButtonLabel(unitName: string): string {
   return `Xoá bộ phận ${unitName}`;
 }
 
+/** The dialog's question (spec v2 §7: a confirm's title is the concrete question). */
 export function deleteFormTitle(unitName: string): string {
-  return `Xoá bộ phận ${unitName}`;
+  return `Xoá bộ phận ${unitName}?`;
 }
 
 /**
- * Said before the click. What happens (soft delete, code never reused), and what blocks it — so a
- * refusal does not read as a fault.
+ * Said before the click: what happens and what blocks it — the prototype's rule (`OrgChart.tsx:46`),
+ * so a refusal does not read as a fault. NO REASON BOX (bug sheet row 30, owner decision 10/10/2026):
+ * the server records a fixed sentence in the trail.
  */
 export const DELETE_EXPLANATION =
-  "Bộ phận bị xoá sẽ không còn trên sơ đồ và ô chọn bộ phận, nhưng hồ sơ cũ vẫn giữ tên bộ phận này; " +
-  "mã của bộ phận không được cấp lại. Hệ thống chỉ cho xoá khi bộ phận không còn cán bộ, bộ phận con " +
-  "và hồ sơ đang xử lý — nếu còn, hãy chuyển sang bộ phận khác trước.";
-
-export const DELETE_REASON_HINT =
-  "Lý do được lưu lại cùng bộ phận đã xoá và là câu trả lời khi có người hỏi vì sao sơ đồ tổ chức thay đổi.";
+  "Bộ phận bị xoá sẽ không còn trên sơ đồ, nhưng hồ sơ cũ vẫn giữ tên bộ phận này. Không xoá được " +
+  "khi bộ phận còn cán bộ, bộ phận con hoặc hồ sơ đang xử lý.";
 
 export function deletedSentence(unitName: string): string {
   return `Đã xoá bộ phận ${unitName}.`;

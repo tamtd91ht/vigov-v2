@@ -6,7 +6,6 @@ import type { TuKhoaHopLe } from "@/lib/api/can-bo";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 import { Skeleton } from "@/components/ui/skeleton";
 import { HopXoa } from "@/features/danh-ba/hop-xoa";
-import { CAU_THIEU_LY_DO } from "@/features/danh-ba/xoa-dong";
 
 import { BAN_TRONG, NUT_THEM_CAN_BO } from "@/components/danh-ba/nhan-ghi-danh-ba";
 
@@ -463,32 +462,24 @@ describe("count line and loading (decision 3, U6/U7)", () => {
   });
 });
 
-/* ---- 5. xoá: hộp lý do, DELETE mang lý do (decision 1) ---------------------------------------- */
+/* ---- 5. xoá: hộp xác nhận, KHÔNG lý do (bug sheet row 27, 10/10/2026) ------------------------- */
 
-describe("delete — reason dialog, then DELETE /api/v1/staff/{id} {reason}", () => {
-  it("Trash2 opens the reason dialog; an empty reason sends nothing; a reason is sent in the body", async () => {
+describe("delete — confirm dialog, then DELETE /api/v1/staff/{id} {reason: \"\"}", () => {
+  it("Trash2 opens the confirm dialog; Xoá sends an EMPTY reason — the server writes its own sentence", async () => {
     const m = await moMan({ canDelete: true });
     const table = phaiCo(m.cay(), BangCanBo);
     expect(table.canDelete).toBe(true);
     table.thaoTac.xoa(A);
     m.ve();
 
-    let dialog = phaiCo(m.cay(), HopXoa);
+    const dialog = phaiCo(m.cay(), HopXoa);
     expect(dialog.canBo.id).toBe(A.id);
-    dialog.onGui();
-    m.ve();
-    expect(allCalls().some((c) => c.method === "DELETE")).toBe(false);
-    expect(phaiCo(m.cay(), HopXoa).loiMayChu).toBe(CAU_THIEU_LY_DO);
-
-    phaiCo(m.cay(), HopXoa).datLyDo("Nhập trùng với dòng CB-00002");
-    m.ve();
-    dialog = phaiCo(m.cay(), HopXoa);
     dialog.onGui();
     await xongMang(m);
 
     const del = allCalls().find((c) => c.method === "DELETE");
     expect(del?.url).toBe(`/api/v1/staff/${A.id}`);
-    expect(del?.than).toEqual({ reason: "Nhập trùng với dòng CB-00002" });
+    expect(del?.than).toEqual({ reason: "" });
     // Closed after the 204, and the list is read again.
     expect(tatCa(m.cay(), (p) => p.type === HopXoa)).toHaveLength(0);
   });

@@ -37,7 +37,6 @@ import {
 import {
   boCotKhoiDiem,
   CANH_BAO_GO_BANG,
-  cauQuyDoi,
   CAU_THIEU_QUYEN_XEM,
   cellValueDraft,
   cellValueEdit,
@@ -385,7 +384,9 @@ describe("con số ra tới trang", () => {
     expect(html).toContain("3.401.673,3");
     expect(html).toContain("3.463.459,2");
     expect(html).not.toContain("3.401.673.300.000");
-    expect(html).toContain(cauQuyDoi(donViCuaBang(bang().sheet)));
+    // Bug sheet row 50: "Đơn vị tính: …" only — no conversion sentence.
+    expect(html).not.toContain("màn hình chia cho");
+    expect(html).not.toContain("Số liệu lưu bằng đồng");
     expect(html).toContain("Đơn vị tính: Triệu đồng");
   });
 

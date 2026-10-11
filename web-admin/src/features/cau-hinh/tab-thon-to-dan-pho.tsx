@@ -1,6 +1,6 @@
 "use client";
 
-import { Pencil, Plus, PowerOff, RotateCcw } from "lucide-react";
+import { Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -8,16 +8,11 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { ErrorState } from "@/components/ui/error-state";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
-import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
+import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 
-import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi";
 import { layLoaiDonViDanCu } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
-import type {
-  identity_danhBaChonNguoiRa,
-  identity_danhSachLoaiDonViDanCuRa,
-  identity_thonToDanPhoRa,
-} from "@/lib/api/schema.gen";
+import type { identity_danhSachLoaiDonViDanCuRa, identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { QUYEN_QUAN_LY_SO_DO, quyetDinhTheoKhoa } from "@/lib/quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
@@ -45,13 +40,11 @@ import {
   CREATE_TITLE,
   EDIT_BUTTON,
   EMPTY_CELL,
-  FIELD_HEAD,
   FIELD_HOUSEHOLDS,
   FIELD_NAME,
-  FIELD_ORDER,
   FIELD_POPULATION,
   FIELD_TYPE,
-  HEAD_NONE,
+  HIDE_RETIRED_LABEL,
   NAME_PLACEHOLDER,
   REACTIVATE_BUTTON,
   RESIDENTIAL_UNIT_API,
@@ -62,11 +55,12 @@ import {
   draftFromUnit,
   editButtonLabel,
   editTitle,
-  headOptions,
   openCreate,
   reactivateButtonLabel,
   retireButtonLabel,
   retireConfirmSentence,
+  retireQuestion,
+  showRetiredLabel,
   submitResidentialUnitForm,
   toggleResidentialUnitActive,
   typeOptions,
@@ -81,9 +75,11 @@ import {
  * framed table. Add / edit open a DIALOG like every other Cấu hình add/edit (bug sheet row 32 — it
  * replaced spec 02's grey row above the table).
  *
- * WHAT THE SPEC DROPS AND THIS TAB KEEPS (ADR 0079 decision 3, "Giữ, trình bày theo spec"): the
- * `Trưởng thôn / Tổ trưởng` picker and column, the `Thứ tự` box, and `Loại` editable after create —
- * the server serves all three. They are fields of the same dialog.
+ * COLUMNS AND FIELDS ARE THE PROTOTYPE'S (`HamletTable.tsx:81-101`; bug sheet row 31, owner decision
+ * 10/10/2026, which reverses ADR 0079 decision 3 here): Tên · Mã · Loại · Số hộ · Nhân khẩu · Trạng
+ * thái. No `Trưởng thôn / Tổ trưởng`, no `Thứ tự` — neither shown nor sent: the draft carries the
+ * unit's own values, so an edit never changes them and a create leaves them absent. `Loại` stays
+ * editable after create.
  *
  * TAB RIÊNG, KHÔNG NHẬP VÀO TAB DANH MỤC, dù cả hai cùng đọc một tuyến kiểu danh sách: một thôn
  * không phải một mục danh mục. Hợp đồng nói ra điều đó bằng chính tên trường (`name` chứ không
@@ -96,10 +92,12 @@ import {
  * phản ánh), còn hai tuyến ghi và ba tuyến nhập khai `RequirePermission("admin.org")`. Ẩn nút là TIỆN
  * DỤNG, không phải biện pháp: máy chủ kiểm khoá trên TỪNG yêu cầu (luật 5, cấm #1).
  *
- * KHÔNG CÓ XOÁ, CÓ CHỦ Ý (ADR 0059 §2, ADR 0068 §15). The prototype's Trash2 position is "Ngừng dùng"
- * (`active: false`); the unit stays listed and records pointing at it keep printing its name
- * (`residential_unit_write.go:20-24`). Ngừng dùng asks once; Dùng lại does not — it only puts a unit
- * back in the pickers.
+ * "XOÁ" IS `active: false` (ADR 0059 §2; bug sheet row 31). The prototype's Trash2 reads "Xoá" and asks
+ * once, with no reason box; it sends the SAME deactivate PATCH as before — not a `deleted_at` delete:
+ * the server keeps the unit, inactive, and records pointing at it keep printing its name
+ * (`residential_unit_write.go:20-24`). So that the press reads as deletion, the list shows ACTIVE units
+ * by default; the inactive ones sit behind one small switch under the table, where Dùng lại (no
+ * confirm — it only puts a unit back in the pickers) stays reachable.
  *
  * ĐỌC LẠI SAU MỖI LẦN GHI, KHÔNG VÁ TẠI CHỖ: thứ tự và nhãn loại là của máy chủ.
  * ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -141,7 +139,8 @@ export function TabThonToDanPho() {
   const [rowError, setRowError] = useState<{ id: string; message: string } | null>(null);
 
   const [types, setTypes] = useState<KetQua<identity_danhSachLoaiDonViDanCuRa> | null>(null);
-  const [directory, setDirectory] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
+  /** Inactive ("đã xoá") units are hidden unless this switch is on. */
+  const [showRetired, setShowRetired] = useState(false);
 
   const phien = usePhien();
   /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào. */
@@ -164,15 +163,12 @@ export function TabThonToDanPho() {
     };
   }, [reads]);
 
-  // The two pickers' sources, read only for an account that can write — nobody else opens the form.
+  // The type picker's source, read only for an account that can write — nobody else opens the form.
   useEffect(() => {
     if (!canWrite) return;
     let dropped = false;
     layLoaiDonViDanCu().then((kq) => {
       if (!dropped) setTypes(kq);
-    });
-    layDanhBaChonNguoi().then((kq) => {
-      if (!dropped) setDirectory(kq);
     });
     return () => {
       dropped = true;
@@ -280,12 +276,7 @@ export function TabThonToDanPho() {
           types !== null && types.ok ? types.duLieu.items : [],
           current === null ? null : { code: current.type_code, label: current.type_label },
         )}
-        headChoices={headOptions(
-          directory !== null && directory.ok ? directory.duLieu.items : [],
-          current === null ? null : { code: current.head_staff_code, name: current.head_staff_name },
-        )}
         typesError={types !== null && !types.ok ? types.thongBao : ""}
-        directoryError={directory !== null && !directory.ok ? directory.thongBao : ""}
         localError={localError}
         serverError={serverError}
         sending={sending}
@@ -315,6 +306,8 @@ export function TabThonToDanPho() {
         form={form}
         retiring={retiring}
         rowError={rowError}
+        showRetired={showRetired}
+        onToggleRetired={() => setShowRetired((v) => !v)}
       />
     </section>
   );
@@ -352,11 +345,16 @@ export function ResidentialUnitsView({
   form,
   retiring,
   rowError,
+  showRetired = false,
+  onToggleRetired = () => {},
 }: {
   load: ResidentialUnitsLoad;
   canWrite: boolean;
   actions: ResidentialUnitActions;
   sending: boolean;
+  /** Show the inactive ("đã xoá") units too. Default: active only. */
+  showRetired?: boolean;
+  onToggleRetired?: () => void;
   /**
    * The open add/edit dialog, or `null`. A DIALOG, like every other Cấu hình add/edit (bug sheet row 32,
    * the customer's call over spec 02's "grey row above the table, never a modal").
@@ -411,6 +409,8 @@ export function ResidentialUnitsView({
             sending={sending}
             retiring={retiring}
             rowError={rowError}
+            showRetired={showRetired}
+            onToggleRetired={onToggleRetired}
           />
         )}
       </div>
@@ -419,8 +419,9 @@ export function ResidentialUnitsView({
 }
 
 /**
- * Bảng địa bàn. Giữ nguyên thứ tự máy chủ trả về. KHÔNG LỌC BỎ địa bàn đã ngừng dùng: một hồ sơ đã
- * lập ở đó vẫn phải tra ra được tên của nó, và đây là chỗ duy nhất đưa nó vào dùng lại được.
+ * Bảng địa bàn. Giữ nguyên thứ tự máy chủ trả về. Mặc định CHỈ địa bàn đang dùng — "Xoá" phải trông
+ * như xoá (bug sheet row 31). Địa bàn đã xoá (inactive) không mất: một công tắc nhỏ dưới bảng hiện
+ * chúng, vì đây là chỗ duy nhất đưa một địa bàn vào dùng lại được.
  */
 function UnitsTable({
   units,
@@ -429,6 +430,8 @@ function UnitsTable({
   sending,
   retiring,
   rowError,
+  showRetired,
+  onToggleRetired,
 }: {
   units: readonly identity_thonToDanPhoRa[];
   canWrite: boolean;
@@ -436,8 +439,12 @@ function UnitsTable({
   sending: boolean;
   retiring: identity_thonToDanPhoRa | null;
   rowError: { id: string; message: string } | null;
+  showRetired: boolean;
+  onToggleRetired: () => void;
 }) {
-  const columns = canWrite ? 8 : 7;
+  const columns = canWrite ? 7 : 6;
+  const retiredCount = units.filter((t) => !t.active).length;
+  const shown = showRetired ? units : units.filter((t) => t.active);
   return (
     <>
       {canWrite && retiring !== null && <RetireDialog unit={retiring} sending={sending} actions={actions} />}
@@ -447,7 +454,6 @@ function UnitsTable({
             <th scope="col">Tên</th>
             <th scope="col">Mã</th>
             <th scope="col">{FIELD_TYPE}</th>
-            <th scope="col">{FIELD_HEAD}</th>
             <th scope="col">{FIELD_HOUSEHOLDS}</th>
             <th scope="col">{FIELD_POPULATION}</th>
             <th scope="col">Trạng thái</th>
@@ -460,8 +466,8 @@ function UnitsTable({
           </tr>
         </thead>
         <tbody>
-          {units.length === 0 && <EmptyRow colSpan={columns}>{THON_RONG}</EmptyRow>}
-          {units.map((t) => {
+          {shown.length === 0 && <EmptyRow colSpan={columns}>{THON_RONG}</EmptyRow>}
+          {shown.map((t) => {
             const loai = loaiDonVi(t.type_code, t.type_label);
             return (
               <UnitRows key={t.id}>
@@ -473,7 +479,6 @@ function UnitsTable({
                   {/* Unclassified is "—" (spec 04). A code whose label left the catalogue still says so:
                       that is drift only an administrator can fix, not an empty cell (`nhan-thon.ts`). */}
                   <td>{loai.loai === "chuaPhanLoai" ? EMPTY_CELL : nhanLoaiDonVi(loai)}</td>
-                  <td>{t.head_staff_code === "" ? EMPTY_CELL : t.head_staff_name}</td>
                   <td>{countCell(t.household_count)}</td>
                   <td>{countCell(t.population_count)}</td>
                   <td>
@@ -481,8 +486,8 @@ function UnitsTable({
                   </td>
                   {canWrite && (
                     <td>
-                      {/* The prototype's Pencil + Trash2. Trash2's place is "Ngừng dùng" / "Dùng lại": a
-                          hamlet is never deleted (ADR 0059 §2). The words are the title and the name. */}
+                      {/* The prototype's Pencil + Trash2 "Xoá" (= `active: false`, ADR 0059 §2); an inactive
+                          unit, shown only behind the switch, offers "Dùng lại" instead. */}
                       <RowActions>
                         <Button
                           type="button"
@@ -507,7 +512,7 @@ function UnitsTable({
                             onClick={() => actions.askRetire(t)}
                             disabled={sending}
                           >
-                            <PowerOff aria-hidden="true" focusable="false" className="size-3.5" />
+                            <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
                           </Button>
                         ) : (
                           <Button
@@ -538,12 +543,24 @@ function UnitsTable({
           })}
         </tbody>
       </ConfigTable>
+      {retiredCount > 0 && (
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            className="text-ink-muted cursor-pointer border-0 bg-transparent p-0 text-[12px] underline-offset-2 hover:underline"
+            aria-pressed={showRetired}
+            onClick={onToggleRetired}
+          >
+            {showRetired ? HIDE_RETIRED_LABEL : showRetiredLabel(retiredCount)}
+          </button>
+        </div>
+      )}
     </>
   );
 }
 
 /**
- * "Ngừng dùng" asks once (ADR 0059, ADR 0068 §15), in a dialog over the list. The question is the
+ * "Xoá" asks once, with no reason box (bug sheet row 31), in a dialog over the list. The question is the
  * visible title; the dialog's own header only names it for assistive technology.
  */
 function RetireDialog({
@@ -555,7 +572,7 @@ function RetireDialog({
   sending: boolean;
   actions: ResidentialUnitActions;
 }) {
-  const question = `${RETIRE_BUTTON} ${unit.name}?`;
+  const question = retireQuestion(unit.name);
   return (
     <ConfigDialog
       title={question}
@@ -565,16 +582,17 @@ function RetireDialog({
       }}
     >
       <ConfirmDialog
-        icon={PowerOff}
+        icon={Trash2}
+        tone="danger"
         title={question}
         className="m-0 p-0 shadow-none"
         actions={
           <>
-            <Button type="button" variant="primary" onClick={actions.confirmRetire} disabled={sending} aria-busy={sending}>
-              <BusyLabel busy={sending} label={CONFIRM_RETIRE_BUTTON} busyText={BUSY_SAVING} />
-            </Button>
             <Button type="button" variant="outline" onClick={actions.cancelRetire} disabled={sending}>
               {NUT_HUY}
+            </Button>
+            <Button type="button" variant="danger" onClick={actions.confirmRetire} disabled={sending} aria-busy={sending}>
+              <BusyLabel busy={sending} label={CONFIRM_RETIRE_BUTTON} busyText={BUSY_DELETING} />
             </Button>
           </>
         }
@@ -597,8 +615,9 @@ function UnitRows({ children }: { children: ReactNode }) {
  * `draft`, every change out through `setDraft`; bodies are built in `residential-unit-form.ts`. EXPORTED
  * so the server's refusal is rendered in a test.
  *
- * THE FIELDS AND RULES ARE THE GREY ROW'S, UNCHANGED: Tên · Loại · Số hộ · Nhân khẩu, then (ADR 0079
- * decision 3) Trưởng thôn / Tổ trưởng and Thứ tự. Only the frame moved.
+ * THE FIELDS ARE THE PROTOTYPE'S (`HamletTable.tsx:269-318`): Tên · Loại · Số hộ · Nhân khẩu. No
+ * Trưởng thôn / Tổ trưởng, no Thứ tự (bug sheet row 31) — the draft keeps the unit's own values, so
+ * neither is ever sent from here.
  *
  * NO CODE BOX: on create the server derives the code from the name (`residential_unit_write.go:32`);
  * on edit it refuses one with 400 `code_not_editable` (rule 7, invariant 3). The code is in the table.
@@ -612,9 +631,7 @@ export function ResidentialUnitForm({
   draft,
   setDraft,
   typeChoices,
-  headChoices,
   typesError,
-  directoryError,
   localError,
   serverError,
   sending,
@@ -625,9 +642,7 @@ export function ResidentialUnitForm({
   draft: ResidentialUnitDraft;
   setDraft: (d: ResidentialUnitDraft) => void;
   typeChoices: readonly PickerOption[];
-  headChoices: readonly PickerOption[];
   typesError: string;
-  directoryError: string;
   localError: string;
   serverError: string;
   sending: boolean;
@@ -717,39 +732,9 @@ export function ResidentialUnitForm({
             </ConfigField>
           </div>
 
-          <ConfigField label={FIELD_HEAD} htmlFor="o-truong-thon">
-            <select
-              id="o-truong-thon"
-              name="head"
-              className={formSelectCls}
-              value={draft.headStaffCode}
-              onChange={(e) => setDraft({ ...draft, headStaffCode: e.target.value })}
-            >
-              <option value="">{HEAD_NONE}</option>
-              {headChoices.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </ConfigField>
-
-          <ConfigField label={FIELD_ORDER} htmlFor="o-thu-tu-thon">
-            <input
-              id="o-thu-tu-thon"
-              name="order"
-              type="number"
-              step={1}
-              className={formInputCls}
-              value={draft.order}
-              onChange={(e) => setDraft({ ...draft, order: e.target.value })}
-            />
-          </ConfigField>
-
-          {/* The pickers' own read failures, then TWO error regions: the local one (nothing was sent) and
+          {/* The picker's own read failure, then TWO error regions: the local one (nothing was sent) and
               the server's refusal, after the spec's sentence. Merged, one overwrites the other. */}
           {typesError !== "" && <InlineError>{typesError}</InlineError>}
-          {directoryError !== "" && <InlineError>{directoryError}</InlineError>}
           {localError !== "" && <InlineError>{localError}</InlineError>}
           {serverError !== "" && <InlineError>{`${SAVE_FAILED} ${serverError}`}</InlineError>}
         </div>

@@ -140,13 +140,13 @@ describe("updateMapField — PATCH", () => {
 });
 
 describe("deleteMapField — DELETE", () => {
-  it("reason in the body, 204 is success", async () => {
+  it("EMPTY reason in the body (no reason box since 10/10/2026), 204 is success", async () => {
     const fake = stubFetch(() => new Response(null, { status: 204 }));
-    expect(await deleteMapField("01JMF1", "Trùng trường khác")).toEqual({ ok: true, duLieu: null });
+    expect(await deleteMapField("01JMF1")).toEqual({ ok: true, duLieu: null });
     const c = call(fake);
     expect(c.method).toBe("DELETE");
     expect(c.path).toBe("/api/v1/map-field-schemas/01JMF1");
-    expect(c.body).toEqual({ reason: "Trùng trường khác" });
+    expect(c.body).toEqual({ reason: "" });
     expect(c.headers.get("Idempotency-Key")).toBeNull();
   });
 });

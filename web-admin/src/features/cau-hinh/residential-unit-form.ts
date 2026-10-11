@@ -10,8 +10,11 @@
  *    end to end; `0` asserts "no households", `null` is the absence of an assertion, and a 0 nobody
  *    asserted travels into the report sent upward as a real figure. So on create a blank box is
  *    ABSENT, and on edit clearing a box that held a number sends `null` (the server's "clear").
- * 2. NO DELETE. Taking a unit out of use is `active: false` on the PATCH; the unit stays on the list
- *    and every record pointing at it keeps printing its name (`residential_unit_write.go:20-24`).
+ * 2. NO HARD DELETE. The button reads "Xoá" (bug sheet row 31, owner decision 10/10/2026, prototype
+ *    `HamletTable.tsx:189-201`), but what it sends is `active: false` on the PATCH (ADR 0059 §2) — NOT
+ *    a `deleted_at` soft delete: the server keeps the unit, inactive, and every record pointing at it
+ *    keeps printing its name (`residential_unit_write.go:20-24`). The tab hides inactive units by
+ *    default so the press reads as deletion, and keeps them one click away for Dùng lại.
  * 3. THE SERVER'S SENTENCE IS SHOWN VERBATIM. Name/code taken, list full, type or head not found —
  *    the rules live on the server with a Vietnamese sentence each; this file never re-checks them and
  *    never branches on `code` (`lib/api/goi.ts`). Only what cannot be SENT is checked here: an empty
@@ -183,7 +186,7 @@ export function updateBody(u: Unit, d: ResidentialUnitDraft): BodyResult<UpdateR
   return Object.keys(body).length === 0 ? { kind: "unchanged" } : { kind: "send", body };
 }
 
-/** Ngừng dùng / Dùng lại — the ONE field, nothing else rides along. */
+/** Xoá (soft) / Dùng lại — the ONE field, nothing else rides along. */
 export function activeToggleBody(u: Unit): UpdateResidentialUnitBody {
   return { active: !u.active };
 }
@@ -286,9 +289,10 @@ export function headOptions(
 export const ADD_BUTTON = "Thêm thôn / tổ dân phố";
 // No emoji: the screen draws a lucide `Pencil` beside the word (ADR 0068 §2).
 export const EDIT_BUTTON = "Sửa";
-export const RETIRE_BUTTON = "Ngừng dùng";
+/** The prototype's Trash2 title (`HamletTable.tsx:193`). It sends `active: false` — see the header. */
+export const RETIRE_BUTTON = "Xoá";
 export const REACTIVATE_BUTTON = "Dùng lại";
-export const CONFIRM_RETIRE_BUTTON = "Xác nhận ngừng dùng";
+export const CONFIRM_RETIRE_BUTTON = "Xoá";
 
 export const CREATE_TITLE = "Thêm thôn / tổ dân phố";
 export function editTitle(name: string): string {
@@ -298,7 +302,7 @@ export function editButtonLabel(name: string): string {
   return `Sửa ${name}`;
 }
 export function retireButtonLabel(name: string): string {
-  return `Ngừng dùng ${name}`;
+  return `Xoá ${name}`;
 }
 export function reactivateButtonLabel(name: string): string {
   return `Dùng lại ${name}`;
@@ -320,16 +324,28 @@ export const NAME_PLACEHOLDER = "Ví dụ: Tổ dân phố 5";
 /** A cell with no value (null count, unclassified, no head) — spec 04 "rỗng thì —". */
 export const EMPTY_CELL = "—";
 
+/** The confirm's question. No reason box (bug sheet row 31). */
+export function retireQuestion(name: string): string {
+  return `Xoá ${name}?`;
+}
+
 /**
- * Said before `Ngừng dùng` is confirmed — the one thing staff need to know before pressing it: nothing
- * is erased, and nothing already recorded changes.
+ * Said before `Xoá` is confirmed — what staff need to know before pressing it: the unit leaves the
+ * list and the pickers, and nothing already recorded changes. It promises nothing irreversible: the
+ * server only marks the unit inactive.
  */
 export function retireConfirmSentence(name: string): string {
   return (
-    `Ngừng dùng ${name}? Địa bàn vẫn nằm trong danh sách, và mọi hồ sơ, phản ánh đã lập ở đây vẫn giữ ` +
-    `nguyên tên địa bàn. Chỉ là không chọn được địa bàn này cho hồ sơ mới. Có thể bấm Dùng lại bất cứ lúc nào.`
+    `${name} sẽ không còn hiện trong danh sách và không chọn được cho hồ sơ mới. Mọi hồ sơ, phản ánh ` +
+    `đã lập ở địa bàn này vẫn giữ nguyên tên địa bàn.`
   );
 }
+
+/** The out-of-the-way switch under the table that shows the inactive ("đã xoá") units. */
+export function showRetiredLabel(count: number): string {
+  return `Hiện ${count} địa bàn đã xoá`;
+}
+export const HIDE_RETIRED_LABEL = "Ẩn địa bàn đã xoá";
 
 // Spec 04's sentences: toasts on success, in place in the form on failure.
 export const ADDED_TOAST = "Đã thêm đơn vị dân cư mới.";
@@ -337,8 +353,9 @@ export const SAVED_TOAST = "Đã lưu.";
 export const NAME_REQUIRED = "Vui lòng nhập tên thôn hoặc tổ dân phố.";
 /** Said before the server's own sentence, when there is one. */
 export const SAVE_FAILED = "Không lưu được đơn vị dân cư.";
+/** The prototype's toast (`HamletTable.tsx:152`). */
 export function retiredSentence(name: string): string {
-  return `Đã ngừng dùng ${name}. Hồ sơ đã lập ở địa bàn này vẫn giữ nguyên tên địa bàn.`;
+  return `Đã xoá ${name}.`;
 }
 export function reactivatedSentence(name: string): string {
   return `Đã đưa ${name} vào dùng lại.`;

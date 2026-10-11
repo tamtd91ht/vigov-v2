@@ -95,11 +95,9 @@ function addOf(more: Partial<AddForm>): AddForm {
 function removeOf(more: Partial<InlineRemove>): InlineRemove {
   return {
     rowId: ROW.id,
-    reason: "",
     localError: "",
     serverError: "",
     busy: false,
-    setReason: () => {},
     onConfirm: () => {},
     onCancel: () => {},
     ...more,
@@ -234,8 +232,8 @@ describe("thêm thời hạn cho một lĩnh vực — nút và hàng thêm", ()
   });
 });
 
-describe("xoá thời hạn riêng — thùng rác và bước lý do", () => {
-  it("bấm thùng rác mở bước lý do của ĐÚNG dòng ấy", () => {
+describe("xoá thời hạn riêng — thùng rác và bước xác nhận (không lý do, bug sheet row 38)", () => {
+  it("bấm thùng rác mở bước xác nhận của ĐÚNG dòng ấy", () => {
     const startRemove = vi.fn();
     mount(actions(undefined, { startRemove }), null);
 
@@ -243,25 +241,19 @@ describe("xoá thời hạn riêng — thùng rác và bước lý do", () => {
     expect(startRemove).toHaveBeenCalledWith(ROW);
   });
 
-  it("gõ lý do → setReason; Enter → xác nhận; Esc → huỷ; nút Xoá / Huỷ gọi đúng việc", () => {
-    const setReason = vi.fn();
+  it("không ô lý do; tiêu điểm ở Huỷ; nút Xoá / Huỷ gọi đúng việc", () => {
     const onConfirm = vi.fn();
     const onCancel = vi.fn();
-    mount(actions(), null, { remove: removeOf({ setReason, onConfirm, onCancel }) });
+    mount(actions(), null, { remove: removeOf({ onConfirm, onCancel }) });
 
-    const reason = box("reason");
-    setValue(reason, "Trùng với dòng mặc định", "input");
-    expect(setReason).toHaveBeenCalledWith("Trùng với dòng mặc định");
-
-    press(reason, "Enter");
-    expect(onConfirm).toHaveBeenCalledTimes(1);
-    press(reason, "Escape");
-    expect(onCancel).toHaveBeenCalledTimes(1);
-
+    expect(host!.querySelector('input[name="reason"]')).toBeNull();
     const buttons = [...host!.querySelectorAll("button")];
+    const cancel = buttons.find((b) => b.textContent === "Huỷ")!;
+    expect(document.activeElement).toBe(cancel);
+
     act(() => buttons.find((b) => b.textContent === "Xoá")!.click());
-    act(() => buttons.find((b) => b.textContent === "Huỷ")!.click());
-    expect(onConfirm).toHaveBeenCalledTimes(2);
-    expect(onCancel).toHaveBeenCalledTimes(2);
+    act(() => cancel.click());
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

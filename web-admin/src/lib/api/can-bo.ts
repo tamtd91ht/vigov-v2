@@ -703,38 +703,12 @@ export async function publishStaffBulk(
 /* ---- xoá một dòng nhập trùng --------------------------------------------------------------- */
 
 /**
- * Giới hạn lý do xoá, tính bằng KÝ TỰ (điểm mã) — cùng con số với `tranLyDoXoa`
- * (`service-identity/internal/domain/danh_ba_ghi.go:58`). Ký tự chứ không byte hay đơn vị UTF-16,
- * cùng lý do với `TU_KHOA_TIM_TOI_DA`: một chữ Việt có dấu là hai, ba byte.
- *
- * Bản ở client chỉ để từ chối TẠI CHỖ, trước khi gửi. Máy chủ vẫn là nơi quyết định — lệch nhau thì
- * câu của máy chủ hiện nguyên văn.
- */
-export const LY_DO_XOA_TOI_DA = 500;
-
-/** Lý do đã cắt và hợp lệ. Chỉ `chuanHoaLyDoXoa` dựng ra được kiểu này. */
-export type LyDoXoaHopLe = { readonly loai: "hopLe"; readonly lyDo: string };
-
-export type LyDoXoa = { readonly loai: "rong" } | { readonly loai: "quaDai" } | LyDoXoaHopLe;
-
-/**
- * Chuẩn hoá lý do xoá ĐÚNG như máy chủ (`domain.ChuanHoaLyDoXoa`): cắt hai đầu — KHÔNG gộp khoảng
- * trắng bên trong, vì máy chủ không gộp và lý do là văn bản lưu vào hồ sơ — rồi đếm ký tự.
- */
-export function chuanHoaLyDoXoa(tho: string): LyDoXoa {
-  const lyDo = tho.trim();
-  if (lyDo === "") return { loai: "rong" };
-  if (Array.from(lyDo).length > LY_DO_XOA_TOI_DA) return { loai: "quaDai" };
-  return { loai: "hopLe", lyDo };
-}
-
-/**
  * DELETE /api/v1/staff/{id} — xoá mềm MỘT dòng danh bạ nhập trùng. 204, KHÔNG THÂN: dòng đã rời mọi
  * đường đọc, nên không có gì để vẽ lại từ câu trả lời — màn hình đọc lại trang.
  *
- * LÝ DO ĐI TRONG THÂN, KHÔNG TRÊN URL: nó là chữ tự do về một hồ sơ công vụ, và chuỗi truy vấn đi vào
- * mọi log truy cập (`can_bo_ghi.go`, `xoaCanBoVao`). Nhận `LyDoXoaHopLe` chứ không nhận `string`,
- * nên không chỗ gọi nào gửi được một lý do rỗng hay quá dài — `tsc` chặn trước máy chủ.
+ * LÝ DO RỖNG (owner decision 10/10/2026, bug sheet row 27): the dialog has no reason box any more, so
+ * the body carries `reason: ""` and the server records its own fixed sentence in the trail. The field
+ * is still sent — not omitted — so the body matches the contract type as generated today.
  *
  * KHÔNG RẼ NHÁNH THEO `code`. Năm lần từ chối về tới người dùng NGUYÊN VĂN câu máy chủ:
  * 409 `staff_has_account` (dòng có tài khoản đăng nhập), 403 `self_target_forbidden`, 409
@@ -742,9 +716,9 @@ export function chuanHoaLyDoXoa(tho: string): LyDoXoa {
  *
  * MÃ CÁN BỘ CỦA DÒNG BỊ XOÁ KHÔNG BAO GIỜ ĐƯỢC CẤP LẠI (luật 7, bất biến 3).
  */
-export async function xoaCanBo(id: string, lyDo: LyDoXoaHopLe): Promise<KetQua<null>> {
+export async function xoaCanBo(id: string): Promise<KetQua<null>> {
   const mau: identity_delete_staff_by_id["duongDan"] = "/api/v1/staff/{id}";
-  const thanGui: identity_xoaCanBoVao = { reason: lyDo.lyDo };
+  const thanGui: identity_xoaCanBoVao = { reason: "" };
   const kq = await goiGhi(duongDanMotCanBo(mau, id), "DELETE", thanGui, 204);
   return kq.ok ? { ok: true, duLieu: null } : kq;
 }

@@ -222,8 +222,9 @@ describe("preview — Sổ tay lãnh đạo", () => {
   it("the real notebook on the fixture: three columns, every row variant, Sổ tay lit, no network", async () => {
     const el = await mountNotebook(null);
     await settle(600);
-    // The menu lights what it lights on the real `/nhiem-vu/so-tay` (the menu itself is out of scope here).
-    expect([...el.querySelectorAll('.side-nav a[aria-current="page"]')].map((a) => a.getAttribute("href"))).toContain("/nhiem-vu");
+    // The menu lights what it lights on the real `/nhiem-vu/so-tay`: its own item, the longest match
+    // (bug sheet 10/10 — a parent no longer lights beside its child item).
+    expect([...el.querySelectorAll('.side-nav a[aria-current="page"]')].map((a) => a.getAttribute("href"))).toEqual(["/nhiem-vu/so-tay"]);
     const text = el.querySelector(".leader-notebook")!.textContent!;
     expect(text).toContain("Khắc phục đèn chiếu sáng hỏng trên tuyến đường liên thôn"); // late, column 1
     expect(text).toMatch(/· trễ \d+ ngày/);

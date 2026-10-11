@@ -12,12 +12,15 @@ import { NUT_HUY, NUT_XOA, O_LY_DO_XOA } from "./nhan-thoi-han";
 import type { InlineRemove } from "./tab-thoi-han-xu-ly";
 
 /**
- * The reason step of one row's removal, inside the action cell: compact (spec 08 draws only a trash
- * button), but never a one-click delete — the server keeps the row and records why (rule 7). Enter
- * confirms, Esc cancels. Refusals show in the row below, like the edit's.
+ * The delete step of one row, inside the action cell: compact (spec 08 draws only a trash button), but
+ * never a one-click delete — Xoá / Huỷ confirm it. Refusals show in the row below, like the edit's.
  *
- * Its own file because two tables of tab "Thời hạn xử lý" remove this way — the SLA table and the
- * citizen-letter block — and the block importing it from the tab that renders the block would be a cycle.
+ * THE REASON BOX IS DRAWN ONLY WHEN THE CALLER ASKS FOR ONE (`setReason` present). The SLA table no
+ * longer does (bug sheet row 38, owner decision 10/10/2026 — the server records a fixed sentence); the
+ * citizen-letter block, no longer mounted, still does. Enter in the box confirms, Esc cancels.
+ *
+ * Its own file because two tables remove this way — the SLA table and the citizen-letter block — and
+ * the block importing it from the tab would be a cycle.
  */
 export function RemoveStep({
   remove,
@@ -35,20 +38,23 @@ export function RemoveStep({
       remove.onCancel();
     }
   };
+  const setReason = remove.setReason;
   return (
     <>
-      <input
-        name="reason"
-        autoFocus
-        aria-label={`${O_LY_DO_XOA} — ${rowName}`}
-        aria-invalid={remove.localError !== ""}
-        placeholder={O_LY_DO_XOA}
-        className={cn(controlClass, "h-8 w-44 text-[12.5px]")}
-        value={remove.reason}
-        disabled={remove.busy}
-        onChange={(e) => remove.setReason(e.currentTarget.value)}
-        onKeyDown={onKeyDown}
-      />
+      {setReason !== undefined && (
+        <input
+          name="reason"
+          autoFocus
+          aria-label={`${O_LY_DO_XOA} — ${rowName}`}
+          aria-invalid={remove.localError !== ""}
+          placeholder={O_LY_DO_XOA}
+          className={cn(controlClass, "h-8 w-44 text-[12.5px]")}
+          value={remove.reason ?? ""}
+          disabled={remove.busy}
+          onChange={(e) => setReason(e.currentTarget.value)}
+          onKeyDown={onKeyDown}
+        />
+      )}
       <Button
         type="button"
         variant="danger"
@@ -63,10 +69,12 @@ export function RemoveStep({
           busyText={BUSY_DELETING}
         />
       </Button>
+      {/* Without a reason box, focus lands on Huỷ: a stray Enter must not delete. */}
       <Button
         type="button"
         variant="outline"
         size="sm"
+        autoFocus={setReason === undefined}
         disabled={remove.busy}
         onClick={remove.onCancel}
       >

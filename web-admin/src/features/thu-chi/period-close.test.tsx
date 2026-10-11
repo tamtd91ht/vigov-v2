@@ -364,13 +364,12 @@ describe("entries dialog: lock state and adjustment entries", () => {
     expect(html).toContain("Lý do điều chỉnh: Sai số chứng từ PT-12");
   });
 
-  it("entry form has the optional adjustment reason field, capped at 500", () => {
+  it("entry form has NO adjustment reason box (bug sheet row 53) — the reason is optional on the server", () => {
     const html = renderToStaticMarkup(
       <FormGhiDot cot={COT} dangGui={false} gui={() => {}} />,
     );
-    expect(html).toContain('name="adjustment_reason"');
-    expect(html).toMatch(/name="adjustment_reason"[^>]*maxLength="500"/);
-    expect(html).not.toMatch(/name="adjustment_reason"[^>]*required/);
+    expect(html).not.toContain('name="adjustment_reason"');
+    expect(html).not.toContain("Lý do điều chỉnh");
   });
 
   it("adjustment reason: trimmed and sent; blank omitted; over 500 refused", () => {
@@ -418,7 +417,8 @@ describe("entries dialog: lock state and adjustment entries", () => {
         daDoiSoLieu={() => {}}
       />,
     );
-    expect(html).toContain('name="adjustment_reason"');
+    // The entry form stays (no adjustment reason box since bug sheet row 53).
+    expect(html).toContain('aria-label="Ghi một đợt"');
     expect(html).toContain("Các tháng đã chốt: 9/2026");
   });
 });

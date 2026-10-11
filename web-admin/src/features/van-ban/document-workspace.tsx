@@ -64,8 +64,8 @@ const HEADER_ACTIONS_CLASS =
  * `[+ Cấp số văn bản đi]`, Đơn thư and Báo cáo the prototype's `[+ Vào sổ đơn thư] hoặc [Nhập từ
  * Excel]` (ADR 0084 #5). No "Quét & OCR": the prototype has none (ADR 0078 #5).
  *
- * Tab order is the prototype's with `Văn bản đi` after `Văn bản đến`; the opening tab is
- * `initialDocumentTab`. `Đơn thư công dân (N)` is the WHOLE register's count — scope `all`, no filter, as
+ * Tab order: the prototype's two first (`Đơn thư công dân`, `Báo cáo`), then `Văn bản đến`,
+ * `Văn bản đi` (bug sheet row 42, owner 11/10/2026); the opening tab is `initialDocumentTab`. `Đơn thư công dân (N)` is the WHOLE register's count — scope `all`, no filter, as
  * the prototype's tab (`DocumentWorkspace.tsx:163-165`) — read once here and again after a booking or an
  * import, from either tab. The tab is NOT in the URL (see `app/van-ban/page.tsx`). Only the selected tab is
  * mounted, as in the prototype: switching tabs starts the other register from its first page.

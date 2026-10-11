@@ -87,8 +87,26 @@ export const RESULT_SECTION_TITLE = "Nội dung trả lời công dân";
 export const RESULT_SAVE_LABEL = "Lưu nội dung trả lời";
 /** The server's own sentence for a result outside the two statuses (`ErrLetterResultNotAllowed`). */
 export const RESULT_LOCKED_HINT = "Chỉ ghi kết quả giải quyết khi đơn đang ở Thụ lý hoặc Đang giải quyết.";
+/**
+ * Why the reply box is closed to a viewer who may not work on the letter — said so a disabled box never
+ * stands without a reason (bug sheet row 43). Mirrors `mayWorkOnLetter`: the assignee, or `petition.create`.
+ */
+export const RESULT_NOT_YOURS_HINT =
+  "Chỉ cán bộ được giao xử lý đơn này hoặc người có quyền vào sổ đơn thư mới ghi được nội dung trả lời.";
+
+/**
+ * The sentence under a CLOSED reply box, for every viewer: the status rule first (it is the same for
+ * everyone), then the permission rule. `null` when the box is open.
+ */
+export function resultClosedHint(mayWork: boolean, status: string): string | null {
+  if (!RESULT_EDITABLE_STATUSES.includes(status)) return RESULT_LOCKED_HINT;
+  return mayWork ? null : RESULT_NOT_YOURS_HINT;
+}
 const CLOSE_LABEL = "Đóng chi tiết đơn thư";
-/** Not in the prototype (it has no deadline edit in the drawer) — patterned on "Sửa thông tin người gửi". */
+/**
+ * Not in the prototype (it has no deadline edit in the drawer) — patterned on "Sửa thông tin người gửi".
+ * KEPT (owner, 11/10/2026; ADR 0084 lets staff edit the deadline): no other path in the app sets it.
+ */
 export const DEADLINE_EDIT_LABEL = "Sửa hạn xử lý";
 export const DEADLINE_SAVED = "Đã lưu hạn xử lý.";
 export const DEADLINE_CLEARED = "Đã bỏ hạn xử lý.";
@@ -108,7 +126,8 @@ export const DEADLINE_CLEARED = "Đã bỏ hạn xử lý.";
  *            no holding unit the "Phân công" chip only takes the clerk to the routing box.
  *   left     badges (status group · type · source · deadline), figures (the ADDRESS IS NEVER SHOWN —
  *            only whether one exists), the clerk's "Hạn xử lý" editor (ADR 0079 lô 5 Q18, kept by ADR 0084
- *            #3, `petition.create`, open phases only), sender correction (an EMPTY form), "Chuyển thành
+ *            #3 and the owner 11/10/2026, `petition.create`, open phases only), sender correction (an
+ *            EMPTY form), "Chuyển thành
  *            nhiệm vụ" (`task.create` + `petition.read`, never a denunciation — `letter-task.tsx`),
  *            "Chuyển cho bộ phận khác" (routing), and the reply — one textarea, plus the
  *            issued document for a complaint or a denunciation (ADR 0084 #2).
@@ -944,6 +963,7 @@ export function ResultSection({
   onSaved: () => void;
 }) {
   const editable = mayWork && RESULT_EDITABLE_STATUSES.includes(letter.status);
+  const closedHint = resultClosedHint(mayWork, letter.status);
   const withDocument = resultNeedsDocument(letter.letter_type);
   const [draft, setDraft] = useState<ResultDraft>(() => resultDraftOf(letter));
   const [error, setError] = useState("");
@@ -1015,7 +1035,8 @@ export function ResultSection({
             {field("ket-qua-co-quan", "Cơ quan ban hành", "issuer")}
           </div>
         )}
-        {!editable && mayWork && <p className="m-0 text-[11.5px] text-ink-muted">{RESULT_LOCKED_HINT}</p>}
+        {/* Every viewer of a closed box is told why (bug sheet row 43), not only those who may work on it. */}
+        {closedHint !== null && <p className="m-0 text-[11.5px] text-ink-muted">{closedHint}</p>}
         {error !== "" && (
           <p className="thong-bao-loi m-0" role="alert">
             {error}

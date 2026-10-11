@@ -97,11 +97,11 @@ function TabHarness() {
 }
 
 describe("thanh tab theo prototype", () => {
-  it("bốn tab đúng thứ tự, đều bấm được; tab đầu (Văn bản đến) được chọn khi vào", () => {
+  it("bốn tab: hai tab của prototype trước (bug sheet row 42), đều bấm được; Văn bản đến chọn được", () => {
     const el = mount(<TabHarness />);
     const tabs = [...el.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((t) => t.textContent)).toEqual(["Văn bản đến", "Văn bản đi", "Đơn thư công dân", "Báo cáo"]);
-    expect(tabs.map((t) => t.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Đơn thư công dân", "Báo cáo", "Văn bản đến", "Văn bản đi"]);
+    expect(tabs.map((t) => t.getAttribute("aria-selected"))).toEqual(["false", "false", "true", "false"]);
     for (const t of tabs) expect(t.disabled).toBe(false);
     // No count until the server has answered one.
     for (const t of tabs) expect(t.textContent).not.toMatch(/\(\d+\)/);
@@ -110,7 +110,7 @@ describe("thanh tab theo prototype", () => {
   it("“Đơn thư công dân (N)” once the register's count is known (prototype `DocumentWorkspace.tsx:163-165`)", () => {
     const el = mount(<DocumentTabBar selected="petitions" onSelect={() => {}} letterCount={8} />);
     const tabs = [...el.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
-    expect(tabs.map((t) => t.textContent)).toEqual(["Văn bản đến", "Văn bản đi", "Đơn thư công dân (8)", "Báo cáo"]);
+    expect(tabs.map((t) => t.textContent)).toEqual(["Đơn thư công dân (8)", "Báo cáo", "Văn bản đến", "Văn bản đi"]);
   });
 
   it("bấm tab Đơn thư thì chọn tab ấy; mũi tên trái/phải đi vòng", () => {
@@ -121,8 +121,9 @@ describe("thanh tab theo prototype", () => {
     const list = el.querySelector<HTMLElement>('[role="tablist"]')!;
     act(() => list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
     expect(el.querySelector('[data-testid="dang-chon"]')!.textContent).toBe("report");
-    act(() => list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true })));
-    expect(el.querySelector('[data-testid="dang-chon"]')!.textContent).toBe(DOCUMENT_TABS[0].id);
+    act(() => list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })));
+    act(() => list.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })));
+    expect(el.querySelector('[data-testid="dang-chon"]')!.textContent).toBe(DOCUMENT_TABS[3].id);
   });
 });
 

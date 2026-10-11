@@ -5,7 +5,6 @@ import type { finance_bangRa, finance_cotRa, finance_dongRa } from "@/lib/api/sc
 import {
   boCotKhoiDiem,
   canhBaoDoiCachTinh,
-  cauQuyDoi,
   cellNameEdit,
   chonDuocCachTinh,
   editKeyIntent,
@@ -150,12 +149,6 @@ describe("đơn vị của một bảng", () => {
     expect(dv.canhBao).not.toBeNull();
   });
 
-  it("câu quy đổi nói đúng hệ số chia", () => {
-    expect(cauQuyDoi(donViCuaBang(bangRa()))).toContain("1.000.000");
-    expect(cauQuyDoi(donViCuaBang(bangRa({ unit: "dong", unit_label: "Đồng" })))).toContain(
-      "không quy đổi",
-    );
-  });
 });
 
 describe("đọc một ô tiền vừa gõ — theo đơn vị của bảng, ra số nguyên đồng", () => {

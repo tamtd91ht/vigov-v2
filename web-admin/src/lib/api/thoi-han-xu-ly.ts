@@ -141,12 +141,15 @@ export async function addSlaFieldRow(
 }
 
 /**
- * DELETE /api/v1/sla/{id} — soft delete of a field's own row, with the reason the trail keeps
- * (rule 7). 204, no body. No `Idempotency-Key` (`idem.KhongCan`): a second send is a 404.
- * 409 `default_sla_rule` is the default row; its sentence comes back verbatim.
+ * DELETE /api/v1/sla/{id} — soft delete of a field's own row (rule 7). 204, no body. No
+ * `Idempotency-Key` (`idem.KhongCan`): a second send is a 404. 409 `default_sla_rule` is the default
+ * row; its sentence comes back verbatim.
+ *
+ * EMPTY REASON (owner decision 10/10/2026, bug sheet row 38): the row has no reason box; the body
+ * carries `reason: ""` and the server records its fixed sentence in the trail.
  */
-export async function removeSlaFieldRow(id: string, reason: string): Promise<KetQua<null>> {
-  const body: identity_removeSLAFieldRowIn = { reason };
+export async function removeSlaFieldRow(id: string): Promise<KetQua<null>> {
+  const body: identity_removeSLAFieldRowIn = { reason: "" };
   const template: identity_delete_sla_by_id["duongDan"] = "/api/v1/sla/{id}";
   const kq = await goiGhi(template.replace("{id}", encodeURIComponent(id)), "DELETE", body, 204);
   return kq.ok ? { ok: true, duLieu: null } : kq;

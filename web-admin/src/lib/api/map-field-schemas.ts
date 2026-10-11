@@ -91,12 +91,13 @@ export function updateMapField(id: string, body: UpdateMapFieldIn): Promise<KetQ
 }
 
 /**
- * DELETE — soft delete with a required reason, 204. The field code is NEVER issued again in that
+ * DELETE — soft delete, 204. EMPTY REASON (owner decision 10/10/2026, bug sheet row 34): the row has
+ * no reason box; the body carries `reason: ""` and the server records its fixed sentence. The field code is NEVER issued again in that
  * asset type (409 `field_code_retired` on a later create), and values already stored under it are
  * kept (rule 7, invariant 3).
  */
-export async function deleteMapField(id: string, reason: string): Promise<KetQua<null>> {
-  const body: comms_deleteMapFieldSchemaIn = { reason };
+export async function deleteMapField(id: string): Promise<KetQua<null>> {
+  const body: comms_deleteMapFieldSchemaIn = { reason: "" };
   const res = await goiGhi(itemPath(id), "DELETE", body, 204);
   return res.ok ? { ok: true, duLieu: null } : res;
 }

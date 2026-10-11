@@ -198,9 +198,8 @@ export function DanhBaLienHe() {
   const [dangMoCK, datDangMoCK] = useState<DangMoCongKhai | null>(null);
   const [banCK, datBanCK] = useState<BanCongKhai>({ daHoiY: false, thuTu: "" });
 
-  /** Hộp xoá dòng nhập trùng đang mở, và lý do đang gõ. */
+  /** Hộp xoá dòng nhập trùng đang mở. */
   const [dangXoa, datDangXoa] = useState<identity_canBoTomTat | null>(null);
-  const [lyDoXoa, datLyDoXoa] = useState("");
 
   /**
    * The bulk consent dialog. THE IDEMPOTENCY KEY BELONGS TO ONE BODY: re-minted whenever a tick
@@ -305,7 +304,6 @@ export function DanhBaLienHe() {
     setContactErrors({});
     datDangMoCK(null);
     datDangXoa(null);
-    datLyDoXoa("");
     setBulkOpen(false);
     setBulkOutcome(null);
     setBulkError("");
@@ -469,7 +467,7 @@ export function DanhBaLienHe() {
 
   /* ---- delete ONE row ------------------------------------------------------------------------ */
 
-  /** Mở hộp xoá cho MỘT dòng. Lý do luôn bắt đầu trống — mỗi lần xoá một lý do của riêng nó. */
+  /** Mở hộp xoá cho MỘT dòng. */
   const moXoa = useCallback(
     (cb: identity_canBoTomTat) => {
       closeAll();
@@ -480,25 +478,24 @@ export function DanhBaLienHe() {
 
   const dongXoa = useCallback(() => {
     datDangXoa(null);
-    datLyDoXoa("");
     datLoiMayChu("");
   }, []);
 
   /**
-   * Gửi xoá. Dòng có tài khoản, lý do rỗng hay quá dài dừng TẠI ĐÂY (`yeuCauXoa`). Sau 204 đọc lại
+   * Gửi xoá. Dòng có tài khoản dừng TẠI ĐÂY (`yeuCauXoa`); không có lý do để gửi (bug sheet row 27). Sau 204 đọc lại
    * với ĐÚNG chữ tìm, bộ lọc và con trỏ đang áp (`lanDoc`, không đụng `truyVan`).
    */
   const guiXoa = useCallback(() => {
     if (dangXoa === null || dangGui) return;
-    const kq = yeuCauXoa(dangXoa, lyDoXoa);
-    if ("loi" in kq) {
-      datLoiMayChu(kq.loi);
+    const tuChoi = yeuCauXoa(dangXoa);
+    if (tuChoi !== null) {
+      datLoiMayChu(tuChoi);
       return;
     }
     datLoiMayChu("");
     datDangGui(true);
     const person = dangXoa;
-    void xoaCanBo(person.id, kq.lyDo)
+    void xoaCanBo(person.id)
       .then((ketQua) => {
         if (!ketQua.ok) {
           datLoiMayChu(ketQua.thongBao);
@@ -508,7 +505,7 @@ export function DanhBaLienHe() {
         ghiXong(daXoa(person.full_name));
       })
       .finally(() => datDangGui(false));
-  }, [dangGui, dangXoa, ghiXong, lyDoXoa]);
+  }, [dangGui, dangXoa, ghiXong]);
 
   /* ---- the selection bar --------------------------------------------------------------------- */
 
@@ -812,8 +809,6 @@ export function DanhBaLienHe() {
         >
           <HopXoa
             canBo={dangXoa}
-            lyDo={lyDoXoa}
-            datLyDo={datLyDoXoa}
             loiMayChu={loiMayChu}
             dangGui={dangGui}
             onGui={guiXoa}

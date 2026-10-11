@@ -84,12 +84,11 @@ import {
 import { quyetDinhGhiThoiHan, slaFieldLabelReadDecision } from "./quyen-tab";
 // vi-name-ok: imports the existing exports of sua-thoi-han.ts unchanged (rule 12 invariant 3)
 import {
-  COT_GIO,
   NHAN_COT,
+  REQUIRED_HOURS_COLUMNS,
   banTuDong,
   changeAddKind,
   composeAdd,
-  composeRemoveReason,
   newAddDraft,
   soanSua,
   type AddDraft,
@@ -123,7 +122,15 @@ import { KhoiChuaKhai } from "./working-calendar-tab";
  * "+ Thêm thời hạn cho một lĩnh vực" AND "Xoá thời hạn riêng" ARE LIVE (ADR 0079 lô 2 Q4): `POST
  * /api/v1/sla` and `DELETE /api/v1/sla/{id}`. The server checks the field code against the list's
  * owner (`service-identity/internal/app/sla_field_rule.go`); the select here only offers that list.
- * The add row toggles above the table, never a modal (spec 02); removal is a reason typed in the row.
+ * The add row toggles above the table, never a modal (spec 02); removal is a Xoá / Huỷ confirm in the
+ * row, with NO reason box (bug sheet row 38, owner decision 10/10/2026 — the server records a fixed
+ * sentence).
+ *
+ * NO SIXTH COLUMN "Giữ chưa phân công" (bug sheet row 37, prototype `SlaTable.tsx`). The stored sixth
+ * figure is untouched: the edit draft carries the row's own value, so `soanSua` never sends it.
+ *
+ * THE "Thời hạn giải quyết đơn thư" BLOCK STAYS, AFTER the prototype's content (owner, 11/10/2026: a
+ * capability with no other path in the app — the only place letter deadlines are set).
  *
  * ẨN NÚT LÀ TIỆN DỤNG, KHÔNG PHẢI BIỆN PHÁP: các tuyến ghi khai `RequirePermission("admin.sla")` và
  * kiểm trên TỪNG yêu cầu (luật 5, cấm #1).
@@ -168,7 +175,7 @@ export type ThaoTacThoiHan = {
   readonly suaThoiHan: (d: identity_dongSLARa) => void;
   /** Opens the add row, or closes it when open (spec 08: the button toggles). */
   readonly toggleAdd: () => void;
-  /** Opens the reason step of one non-default row. */
+  /** Opens the delete confirm of one non-default row. */
   readonly startRemove: (d: identity_dongSLARa) => void;
 };
 
@@ -190,14 +197,18 @@ export type AddForm = {
   readonly onCancel: () => void;
 };
 
-/** The row whose removal reason is being typed (rule 7: the server keeps the row and requires why). */
+/**
+ * The row whose removal is being confirmed. `reason`/`setReason` are present only where a reason is
+ * still asked — the citizen-letter block, which this tab no longer mounts; the SLA table omits them
+ * (bug sheet row 38).
+ */
 export type InlineRemove = {
   readonly rowId: string;
-  readonly reason: string;
+  readonly reason?: string;
   readonly localError: string;
   readonly serverError: string;
   readonly busy: boolean;
-  readonly setReason: (reason: string) => void;
+  readonly setReason?: (reason: string) => void;
   readonly onConfirm: () => void;
   readonly onCancel: () => void;
 };
@@ -300,8 +311,7 @@ export function TabThoiHanXuLy() {
   const [addLocalError, setAddLocalError] = useState("");
   const [addServerError, setAddServerError] = useState("");
 
-  const [removing, setRemoving] = useState<{ row: identity_dongSLARa; reason: string } | null>(null);
-  const [removeLocalError, setRemoveLocalError] = useState("");
+  const [removing, setRemoving] = useState<identity_dongSLARa | null>(null);
   const [removeServerError, setRemoveServerError] = useState("");
 
   useEffect(() => {
@@ -316,13 +326,12 @@ export function TabThoiHanXuLy() {
 
   const cancelRemove = useCallback(() => {
     setRemoving(null);
-    setRemoveLocalError("");
     setRemoveServerError("");
   }, []);
 
   const startEdit = useCallback(
     (d: identity_dongSLARa) => {
-      // One row in one mode at a time: a reason step left open on another row would be a second
+      // One row in one mode at a time: a delete confirm left open on another row would be a second
       // pending act the officer no longer sees.
       cancelRemove();
       setEditing(d);
@@ -414,8 +423,7 @@ export function TabThoiHanXuLy() {
   const startRemove = useCallback(
     (d: identity_dongSLARa) => {
       cancelEdit();
-      setRemoving({ row: d, reason: "" });
-      setRemoveLocalError("");
+      setRemoving(d);
       setRemoveServerError("");
     },
     [cancelEdit],
@@ -424,14 +432,8 @@ export function TabThoiHanXuLy() {
   const confirmRemove = useCallback(() => {
     if (removing === null || busy) return;
     setRemoveServerError("");
-    const composed = composeRemoveReason(removing.reason);
-    if (!composed.ok) {
-      setRemoveLocalError(composed.error);
-      return;
-    }
-    setRemoveLocalError("");
     setBusy(true);
-    void removeSlaFieldRow(removing.row.id, composed.reason).then((kq) => {
+    void removeSlaFieldRow(removing.id).then((kq) => {
       setBusy(false);
       if (!kq.ok) {
         // 409 `default_sla_rule` included: the server's sentence is spec 08's, verbatim.
@@ -446,7 +448,7 @@ export function TabThoiHanXuLy() {
 
   return (
     <div className="space-y-6">
-      <ManThoiHanXuLy
+    <ManThoiHanXuLy
       du={{ thoiHan }}
       coQuyenGhi={coQuyenGhi}
       catalogues={shownCatalogues}
@@ -470,13 +472,10 @@ export function TabThoiHanXuLy() {
         removing === null
           ? null
           : {
-              rowId: removing.row.id,
-              reason: removing.reason,
-              localError: removeLocalError,
+              rowId: removing.id,
+              localError: "",
               serverError: removeServerError,
               busy,
-              setReason: (reason) =>
-                setRemoving((open) => (open === null ? null : { ...open, reason })),
               onConfirm: confirmRemove,
               onCancel: cancelRemove,
             }
@@ -495,9 +494,9 @@ export function TabThoiHanXuLy() {
               onCancel: cancelEdit,
             }
       }
-      />
-      {/* ADR 0084 #3 / ADR 0085: the citizen-letter rules, same key (`admin.sla`). Three states, as
-          above: an unread session draws nothing, never "allowed". */}
+    />
+      {/* ADR 0084 #3 / ADR 0085: the citizen-letter rules, same key (`admin.sla`), after the prototype's
+          content (owner, 11/10/2026). Three states, as above: an unread session draws nothing. */}
       <CitizenLetterDeadlineBlock canWrite={coQuyenGhi} />
     </div>
   );
@@ -535,7 +534,7 @@ export function ManThoiHanXuLy({
   edit?: InlineEdit | null;
   /** The open add row, or `null`. */
   add?: AddForm | null;
-  /** The row whose removal reason is being typed, or `null`. */
+  /** The row whose removal is being confirmed, or `null`. */
   remove?: InlineRemove | null;
 }) {
   // Only the SLA table here; the weekly-hours half of the block lives on "Lịch làm việc" (ADR 0079 D2).
@@ -735,9 +734,12 @@ const COLUMN_WIDTH: Record<KhoaGio, string> = {
   unassigned_hold_hours: "w-[148px]",
 };
 
+/** The figure columns the table shows: the prototype's five (`SlaTable.tsx:96-126`). */
+const SHOWN_COLUMNS = REQUIRED_HOURS_COLUMNS;
+
 /**
- * The SLA table (`SlaTable.tsx:96-126`) plus the sixth figure "Giữ chưa phân công" before the actions
- * (ADR 0079 decision 3). Rows in the prototype's order (`orderSlaRows`, user 09/10/2026): the default
+ * The SLA table (`SlaTable.tsx:96-126`): the five figures, no "Giữ chưa phân công" column (bug sheet
+ * row 37, owner decision 10/10/2026 — the stored value stays and is never sent by an edit). Rows in the prototype's order (`orderSlaRows`, user 09/10/2026): the default
  * row still leads its own kind, so sorting by label no longer splits it from its group.
  */
 function SlaTable({
@@ -757,7 +759,7 @@ function SlaTable({
   edit: InlineEdit | null;
   remove: InlineRemove | null;
 }) {
-  const columnCount = 2 + COT_GIO.length + (coQuyenGhi ? 1 : 0);
+  const columnCount = 2 + SHOWN_COLUMNS.length + (coQuyenGhi ? 1 : 0);
   const fieldLabel = (d: identity_dongSLARa) =>
     nhanLinhVuc(d.field, d.is_default, labelsFor(catalogues, d.work_kind));
   const ordered = orderSlaRows(rows, fieldLabel);
@@ -775,7 +777,7 @@ function SlaTable({
           <tr>
             <th scope="col">Loại việc</th>
             <th scope="col">Lĩnh vực</th>
-            {COT_GIO.map((c) => (
+            {SHOWN_COLUMNS.map((c) => (
               <th scope="col" key={c} className={COLUMN_WIDTH[c]}>
                 {NHAN_COT[c]}
               </th>
@@ -811,7 +813,7 @@ function SlaTable({
                   <td className={cn("whitespace-normal!", d.is_default && "text-ink-muted")}>
                     {fieldText}
                   </td>
-                  {COT_GIO.map((c) => (
+                  {SHOWN_COLUMNS.map((c) => (
                     <td
                       key={c}
                       className={

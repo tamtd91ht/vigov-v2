@@ -444,7 +444,9 @@ export function FormGhiDot({
             noiDung: String(fd.get("content") ?? ""),
             doiTac: String(fd.get("counterparty") ?? ""),
             soChungTu: String(fd.get("document_no") ?? ""),
-            adjustmentReason: String(fd.get("adjustment_reason") ?? ""),
+            // No "Lý do điều chỉnh" box any more (bug sheet row 53, owner decision 10/10/2026): the
+            // server treats the reason as optional, so an empty one is never sent (`dungThanDot`).
+            adjustmentReason: "",
             gia,
           },
           bieuMau,
@@ -496,26 +498,6 @@ export function FormGhiDot({
             type="text"
             maxLength={DO_DAI_TOI_DA_DOT.document_no}
           />
-        </div>
-        {/* KEPT, not in the prototype: an adjustment entry corrects a closed period (rule 7 — a
-            closed period is never edited). SAME FIELD ORDER AS BEFORE (keyboard order is behaviour):
-            the reason, then the money. */}
-        <div className="sm:col-span-4">
-          <label htmlFor="dot-adjustment-reason" className={ENTRY_LABEL}>
-            Lý do điều chỉnh (chỉ điền khi đây là đợt điều chỉnh)
-          </label>
-          <textarea
-            id="dot-adjustment-reason"
-            name="adjustment_reason"
-            className={cn(controlClass, "mt-1 h-auto py-2 text-[12.5px] md:text-[12.5px]")}
-            rows={2}
-            maxLength={DO_DAI_TOI_DA_DOT.adjustment_reason}
-            aria-describedby="dot-adjustment-reason-hint"
-          />
-          <p id="dot-adjustment-reason-hint" className="m-0 mt-1 text-[11px] text-ink-muted">
-            Đợt điều chỉnh sửa sai sót của một kỳ đã chốt và được ghi ở kỳ còn mở. Để trống nếu là đợt
-            thu chi thông thường. Tối đa {DO_DAI_TOI_DA_DOT.adjustment_reason} ký tự.
-          </p>
         </div>
         {cot.map((c) => (
           // The column's own label, as the prototype (`:155-157`).

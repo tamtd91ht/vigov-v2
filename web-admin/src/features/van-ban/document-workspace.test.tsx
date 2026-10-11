@@ -74,9 +74,9 @@ describe("khung trang Văn bản & đơn thư", () => {
     expect(render({ metric: "overdue" })).toMatch(/<h1[^>]*>Văn bản &amp; đơn thư<\/h1>/);
   });
 
-  it("thứ tự tab: Văn bản đến · Văn bản đi · Đơn thư công dân · Báo cáo", () => {
+  it("thứ tự tab: hai tab của prototype trước — Đơn thư công dân · Báo cáo — rồi Văn bản đến · Văn bản đi (bug sheet row 42)", () => {
     const tabs = [...html.matchAll(/<button[^>]*role="tab"[^>]*>([^<]*)<\/button>/g)].map((m) => m[1]);
-    expect(tabs).toEqual(["Văn bản đến", "Văn bản đi", "Đơn thư công dân", "Báo cáo"]);
+    expect(tabs).toEqual(["Đơn thư công dân", "Báo cáo", "Văn bản đến", "Văn bản đi"]);
   });
 
   it("phiên chưa đọc xong: đầu trang CHƯA vẽ nút ghi nào (ba trạng thái, không hai); không còn “Quét & OCR”", () => {

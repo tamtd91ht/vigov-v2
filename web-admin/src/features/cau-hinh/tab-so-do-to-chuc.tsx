@@ -60,15 +60,14 @@ import {
   nhanSoCanBo,
 } from "./nhan-so-do";
 import { deleteButtonLabel, deletedSentence } from "./org-unit-delete";
-import { DELETE_REASON_ID, OrgUnitDeleteForm } from "./org-unit-delete-form";
+import { DELETE_CANCEL_ID, OrgUnitDeleteForm } from "./org-unit-delete-form";
 import type { DeleteRefusal } from "./org-unit-delete-form";
 import { DIALOG_FOOTER_CLASS, DIALOG_LABEL_CLASS } from "./org-unit-dialog-classes";
-import { kiemLyDoXoa } from "./tang-danh-muc";
 
 /**
  * Tab "Sơ đồ tổ chức" — spec Cấu hình `03-so-do-to-chuc.md` (ADR 0079), prototype
  * `vigov-require/apps/admin/src/components/admin/OrgChart.tsx`: cây bộ phận của đơn vị; thêm, đổi tên,
- * dời sang bộ phận khác, đổi thứ tự, XOÁ MỀM kèm lý do (ADR 0056), và nhập từ Excel.
+ * dời sang bộ phận khác, đổi thứ tự, XOÁ MỀM (ADR 0056), và nhập từ Excel.
  *
  * ─────────────────────────────────────────────────────────────────────────────────────────
  * CÂY HIỆN CHO MỌI TÀI KHOẢN, CHỈ NÚT GHI MỚI ẨN: `GET /api/v1/org-units` khai `any-authenticated`
@@ -82,7 +81,8 @@ import { kiemLyDoXoa } from "./tang-danh-muc";
  * XOÁ: máy chủ là bên chặn khi bộ phận còn cán bộ, bộ phận con hay hồ sơ đang mở ở phân hệ khác
  * (409 kèm số đếm từng loại; 503 khi chưa hỏi được phân hệ khác — KHÔNG BAO GIỜ là "đã xoá"). Nút xoá
  * vì vậy hiện trên mọi thẻ, kể cả thẻ "0 cán bộ": con số ấy chỉ là một trong năm thứ được đếm. Spec 03
- * xoá không hỏi; ở đây vẫn hỏi lý do vì máy chủ đòi `reason` (luật 7, ADR 0079).
+ * xoá không hỏi; ở đây hỏi xác nhận, KHÔNG hỏi lý do (bug sheet row 30, owner 10/10/2026) — máy chủ
+ * ghi câu cố định của nó vào nhật ký.
  *
  * MỘT HỘP THOẠI MỞ MỘT LÚC: mở hộp xoá thì đóng hộp thêm/sửa và ngược lại.
  * ─────────────────────────────────────────────────────────────────────────────────────────
@@ -105,8 +105,6 @@ export function TabSoDoToChuc() {
 
   /** The unit whose delete dialog is open, and that dialog's state. */
   const [removing, setRemoving] = useState<identity_boPhanRa | null>(null);
-  const [reason, setReason] = useState("");
-  const [deleteLocalError, setDeleteLocalError] = useState("");
   const [refusal, setRefusal] = useState<DeleteRefusal | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -131,7 +129,7 @@ export function TabSoDoToChuc() {
   // Mở hộp thoại → tiêu điểm vào ô đầu tiên. Đóng → tiêu điểm về nút đã mở nó.
   useEffect(() => {
     if (removing !== null) {
-      document.getElementById(DELETE_REASON_ID)?.focus();
+      document.getElementById(DELETE_CANCEL_ID)?.focus();
       return;
     }
     if (dangMo !== null) {
@@ -171,8 +169,6 @@ export function TabSoDoToChuc() {
         nutDaMo.current = deleteButtonId(bp.id);
         datDangMo(null);
         setRemoving(bp);
-        setReason("");
-        setDeleteLocalError("");
         setRefusal(null);
       },
     }),
@@ -181,26 +177,19 @@ export function TabSoDoToChuc() {
 
   const closeDelete = useCallback(() => {
     setRemoving(null);
-    setDeleteLocalError("");
     setRefusal(null);
   }, []);
 
   const submitDelete = useCallback(() => {
     if (removing === null || deleting) return;
-    const checked = kiemLyDoXoa(reason);
-    if (!checked.ok) {
-      setDeleteLocalError(checked.loi);
-      return;
-    }
-    setDeleteLocalError("");
     setRefusal(null);
     setDeleting(true);
     const unit = removing;
-    void deleteOrgUnit(unit.id, checked.giaTri).then((r) => {
+    void deleteOrgUnit(unit.id).then((r) => {
       setDeleting(false);
       if (!r.ok) {
-        // The dialog stays open with the reason as typed: once what the unit holds is moved, the
-        // same click is the retry.
+        // The dialog stays open with the refusal: once what the unit holds is moved, the same click
+        // is the retry.
         setRefusal({ message: r.message, holdings: r.holdings });
         return;
       }
@@ -210,7 +199,7 @@ export function TabSoDoToChuc() {
       toast.success(deletedSentence(unit.name));
       datLanDoc((n) => n + 1);
     });
-  }, [deleting, reason, removing]);
+  }, [deleting, removing]);
 
   const dong = useCallback(() => {
     datDangMo(null);
@@ -280,9 +269,6 @@ export function TabSoDoToChuc() {
       {removing !== null && (
         <OrgUnitDeleteForm
           unit={removing}
-          reason={reason}
-          setReason={setReason}
-          localError={deleteLocalError}
           refusal={refusal}
           sending={deleting}
           onSubmit={submitDelete}
@@ -500,7 +486,9 @@ function TheBoPhan({
  *
  * NO CODE FIELD (spec 03): the server derives the code from the name when none is sent
  * (`service-identity/internal/store/bo_phan_ghi.go`, `MaCungGoc`), and an issued code never changes.
- * `Thứ tự` stays after `Trực thuộc` — owner decision 3 of ADR 0079.
+ * `Thứ tự` stays after `Trực thuộc` WHEN EDITING (owner decision 3 of ADR 0079) and is gone from the
+ * add dialog (bug sheet row 29, owner decision 10/10/2026, as `OrgChart.tsx:294-325`): `banThem` leaves
+ * it empty, so `thanThem` sends no `order` and the server defaults it.
  *
  * `Trực thuộc` lists every unit flat, minus — when editing — the unit itself AND its descendants
  * (`luaChonCha`): picking one of those is a cycle the server would refuse anyway.
@@ -586,22 +574,24 @@ export function BieuMauBoPhan({
             </select>
           </div>
 
-          <div className="block">
-            <label htmlFor="o-thu-tu-bo-phan" className={DIALOG_LABEL_CLASS}>
-              {O_THU_TU}
-            </label>
-            {/* `inputMode="numeric"` chứ không `type="number"`: cuộn chuột trên ô số đổi giá trị mà
-                người dùng không biết. */}
-            <input
-              id="o-thu-tu-bo-phan"
-              name="thuTu"
-              inputMode="numeric"
-              value={ban.thuTu}
-              onChange={(e) => datBan({ ...ban, thuTu: e.target.value })}
-              aria-invalid={loiTaiCho === LOI_THU_TU}
-              className={cn(controlClass, "mt-1.5")}
-            />
-          </div>
+          {editing && (
+            <div className="block">
+              <label htmlFor="o-thu-tu-bo-phan" className={DIALOG_LABEL_CLASS}>
+                {O_THU_TU}
+              </label>
+              {/* `inputMode="numeric"` chứ không `type="number"`: cuộn chuột trên ô số đổi giá trị mà
+                  người dùng không biết. */}
+              <input
+                id="o-thu-tu-bo-phan"
+                name="thuTu"
+                inputMode="numeric"
+                value={ban.thuTu}
+                onChange={(e) => datBan({ ...ban, thuTu: e.target.value })}
+                aria-invalid={loiTaiCho === LOI_THU_TU}
+                className={cn(controlClass, "mt-1.5")}
+              />
+            </div>
+          )}
 
           {/* HAI VÙNG LỖI RIÊNG, TẠI CHỖ: lỗi chưa gửi gì, và câu của máy chủ, nguyên văn. */}
           {loiTaiCho !== "" && (

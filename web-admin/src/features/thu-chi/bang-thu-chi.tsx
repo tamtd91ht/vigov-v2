@@ -73,7 +73,6 @@ import {
   CANH_BAO_GO_BANG,
   CANH_BAO_GO_KHOAN_MUC,
   canhBaoDoiCachTinh,
-  cauQuyDoi,
   cellNameEdit,
   cellValueDraft,
   cellValueEdit,
@@ -1292,7 +1291,6 @@ export function TheTomTat({
           {donVi.nhanCu !== null && ` Đơn vị đang lưu: "${donVi.nhanCu}".`}
         </p>
       )}
-      <p className="m-0 mt-1 text-[11.5px] text-ink-muted">{cauQuyDoi(donVi)}</p>
 
       {reason !== "" ? (
         <EmptyState icon={Star} tone="neutral" title={reason} className="py-4" />

@@ -236,17 +236,11 @@ export function lyDoKhongTinh(lyDo: string | undefined): string | null {
   return s === "" ? null : s;
 }
 
-/** Câu nói ra cách con số được quy đổi — hiện cạnh đơn vị tính, không nằm trong chú thích mã. */
-export function cauQuyDoi(donVi: DonViHien): string {
-  if (donVi.ma === "dong") {
-    return "Số liệu lưu bằng đồng và hiện bằng đồng, không quy đổi.";
-  }
-  const heSo = donVi.ma === "nghin-dong" ? "1.000" : "1.000.000";
-  return (
-    `Số liệu lưu bằng đồng; màn hình chia cho ${heSo} để hiện theo ${donVi.nhan.toLowerCase()}. ` +
-    `Số gõ vào ô cũng được hiểu theo ${donVi.nhan.toLowerCase()}.`
-  );
-}
+/*
+ * NO CONVERSION SENTENCE (bug sheet row 50, owner decision 10/10/2026): the report card says only
+ * "Đơn vị tính: …", as the prototype (`FiscalReportPanel.tsx:243`). The figures still follow the
+ * sheet's own unit (`donViCuaBang`).
+ */
 
 /**
  * `basis_points` là **phần vạn**: `10811` ⇒ `108,11%`.

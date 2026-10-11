@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 import type { identity_canBoTomTat } from "@/lib/api/schema.gen";
 
 import { HopXoa } from "./hop-xoa";
-import { CAU_CO_TAI_KHOAN, GIAI_THICH_XOA, NUT_XAC_NHAN_XOA, O_LY_DO_XOA } from "./xoa-dong";
+import { CAU_CO_TAI_KHOAN, GIAI_THICH_XOA } from "./xoa-dong";
 
-/** Hộp xoá — kiểm cái RA TỚI TRANG: câu giải thích, ô lý do bắt buộc, ca dòng có tài khoản. */
+/** Hộp xoá — kiểm cái RA TỚI TRANG: câu hỏi, câu giải thích, KHÔNG ô lý do, ca dòng có tài khoản. */
 
 const CB: identity_canBoTomTat = {
   id: "01J00000000000000000000001",
@@ -32,8 +32,6 @@ function ve(canBo: identity_canBoTomTat, loiMayChu = ""): string {
   return renderToStaticMarkup(
     <HopXoa
       canBo={canBo}
-      lyDo=""
-      datLyDo={() => undefined}
       loiMayChu={loiMayChu}
       dangGui={false}
       onGui={() => undefined}
@@ -43,20 +41,20 @@ function ve(canBo: identity_canBoTomTat, loiMayChu = ""): string {
 }
 
 describe("hộp xoá — dòng không có tài khoản", () => {
-  it("tiêu đề gọi tên người và mã; câu giải thích có mặt TRƯỚC nút", () => {
+  it("câu hỏi gọi tên người, mã; câu giải thích có mặt TRƯỚC nút gửi", () => {
     const html = ve(CB);
-    expect(html).toContain("Xoá khỏi danh bạ: Nguyễn Văn A");
+    expect(html).toContain("Xoá Nguyễn Văn A khỏi danh bạ?");
     expect(html).toContain("CB-00123");
     expect(html.indexOf(GIAI_THICH_XOA)).toBeGreaterThan(-1);
-    expect(html.indexOf(GIAI_THICH_XOA)).toBeLessThan(html.indexOf(NUT_XAC_NHAN_XOA));
+    expect(html.indexOf(GIAI_THICH_XOA)).toBeLessThan(html.indexOf('type="submit"'));
   });
 
-  it("ô lý do BẮT BUỘC, không `maxlength` (đếm sai đơn vị)", () => {
+  it("KHÔNG có ô lý do (bug sheet row 27); Huỷ và nút Xoá", () => {
     const html = ve(CB);
-    expect(html).toContain(O_LY_DO_XOA);
-    const o = /<textarea[^>]*id="o-ly-do-xoa-can-bo"[^>]*>/.exec(html)?.[0] ?? "";
-    expect(o).toContain('required=""');
-    expect(o).not.toMatch(/maxlength/i);
+    expect(html).not.toContain("<textarea");
+    expect(html).not.toMatch(/Lý do/i);
+    expect(html).toContain("Huỷ");
+    expect(html).toMatch(/type="submit"[^>]*>[\s\S]*?Xoá/);
   });
 
   it("câu từ chối của máy chủ hiện NGUYÊN VĂN", () => {
@@ -66,11 +64,10 @@ describe("hộp xoá — dòng không có tài khoản", () => {
 });
 
 describe("hộp xoá — dòng CÓ tài khoản đăng nhập", () => {
-  it("nói vì sao không xoá được, KHÔNG có ô lý do và KHÔNG có nút xác nhận", () => {
+  it("nói vì sao không xoá được, KHÔNG có nút xác nhận", () => {
     const html = ve({ ...CB, has_account: true });
     expect(html).toContain(CAU_CO_TAI_KHOAN);
     expect(html).not.toContain("<textarea");
-    expect(html).not.toContain(NUT_XAC_NHAN_XOA);
     expect(html).not.toContain('type="submit"');
     expect(html).toContain("Huỷ");
   });
