@@ -36835,6 +36835,438 @@
         }
       }
     },
+    "/api/v1/zalo-group-pairing-codes": {
+      "post": {
+        "summary": "Tạo mã gắn nhóm Zalo 8 ký tự cho một phạm vi — một bộ phận đang hoạt động của xã hoặc cả xã (org_unit_id null), các loại tin là tập con các loại dành cho nhóm mà xã đang bật; dùng một lần, sống 10 phút, chỉ lưu bản băm; gõ mã vào nhóm Zalo đã thêm bot (có thể kèm @tên bot); có ghi vết (không ghi mã)",
+        "operationId": "comms_post_zalo_group_pairing_codes",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0092 #3 — Cấu hình → tab Kênh Zalo",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "df67ce0f6412",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.groupPairingCodeIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.groupPairingCodeOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_bot_not_configured",
+              "zalo_channel_disabled"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "kind_not_enabled",
+              "kinds_required",
+              "org_unit_invalid",
+              "org_unit_not_live",
+              "unknown_kind"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "org_units_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-groups": {
+      "get": {
+        "summary": "Các nhóm Zalo đang gắn với xã — phạm vi (bộ phận hoặc cả xã, kèm tên bộ phận và cờ bộ phận đã gỡ), các loại tin, gắn lúc nào, mã và tên cán bộ đã tạo mã; supported_kinds là danh sách loại được chọn cho nhóm; không bao giờ trả chat_id",
+        "operationId": "comms_get_zalo_groups",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0092 #1 — Cấu hình → tab Kênh Zalo",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "00980d5a3f8b",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloGroupList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "org_units_unavailable",
+              "staff_names_unavailable"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-groups/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Gỡ một nhóm Zalo khỏi xã — kết thúc mềm liên kết (giữ làm lịch sử), cần lý do, có ghi vết; đây là cách DUY NHẤT gỡ nhóm (/dung trong nhóm không có tác dụng)",
+        "operationId": "comms_delete_zalo_groups_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0092 #8 — Cấu hình → tab Kênh Zalo",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "80438ac8727b",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.zaloGroupUnlinkIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "reason_required"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Sửa phạm vi (bộ phận hoặc cả xã) và/hoặc các loại tin của một nhóm Zalo đang gắn — loại tin phải là loại dành cho nhóm mà xã đang bật; có ghi vết trước/sau",
+        "operationId": "comms_patch_zalo_groups_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0092 #1 #2 — Cấu hình → tab Kênh Zalo",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "ce67c7d989a3",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.zaloGroupPatchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_channel_disabled"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "kind_not_enabled",
+              "kinds_required",
+              "nothing_to_change",
+              "org_unit_invalid",
+              "org_unit_not_live",
+              "unknown_kind"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "org_units_unavailable"
+            ]
+          }
+        }
+      }
+    },
     "/api/v1/zalo-links": {
       "get": {
         "summary": "Danh sách cán bộ của xã đang ghép nối Zalo — mã cán bộ, họ tên, ghép từ lúc nào; không có chat_id",
@@ -37488,11 +37920,15 @@
           },
           "live_link_count": {
             "type": "integer"
+          },
+          "live_group_count": {
+            "type": "integer"
           }
         },
         "required": [
           "bot",
           "has_own_bot",
+          "live_group_count",
           "live_link_count"
         ],
         "additionalProperties": false
@@ -37597,11 +38033,15 @@
           "ended_link_count": {
             "type": "integer"
           },
+          "ended_group_count": {
+            "type": "integer"
+          },
           "revoke_notice": {
             "type": "string"
           }
         },
         "required": [
+          "ended_group_count",
           "ended_link_count",
           "retired"
         ],
@@ -37619,6 +38059,9 @@
           "ended_link_count": {
             "type": "integer"
           },
+          "ended_group_count": {
+            "type": "integer"
+          },
           "revoke_notice": {
             "type": "string"
           }
@@ -37626,6 +38069,7 @@
         "required": [
           "adopted",
           "bot",
+          "ended_group_count",
           "ended_link_count"
         ],
         "additionalProperties": false
@@ -38190,6 +38634,45 @@
         "required": [
           "label",
           "value"
+        ],
+        "additionalProperties": false
+      },
+      "comms.groupPairingCodeIn": {
+        "type": "object",
+        "properties": {
+          "org_unit_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kinds",
+          "org_unit_id"
+        ],
+        "additionalProperties": false
+      },
+      "comms.groupPairingCodeOut": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "code",
+          "expires_at"
         ],
         "additionalProperties": false
       },
@@ -40868,6 +41351,109 @@
           "quiet_end",
           "quiet_start",
           "supported_events"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloGroupList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.zaloGroupOut"
+            }
+          },
+          "supported_kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "items",
+          "supported_kinds"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloGroupOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "org_unit_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "org_unit_name": {
+            "type": "string"
+          },
+          "org_unit_removed": {
+            "type": "boolean"
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "linked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "linked_by": {
+            "type": "string"
+          },
+          "linked_by_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kinds",
+          "linked_at",
+          "linked_by",
+          "linked_by_name",
+          "org_unit_id",
+          "org_unit_name",
+          "org_unit_removed"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloGroupPatchIn": {
+        "type": "object",
+        "properties": {
+          "org_unit_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kinds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "kinds",
+          "org_unit_id"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloGroupUnlinkIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -49809,6 +50395,12 @@
               "null"
             ]
           },
+          "location_citizen_adjusted": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
           "residential_unit_id": {
             "type": [
               "string",
@@ -49884,6 +50476,7 @@
           "lat",
           "linh_vuc",
           "lng",
+          "location_citizen_adjusted",
           "reporter_name",
           "reporter_phone",
           "residential_unit_id",
@@ -50897,6 +51490,12 @@
           "lng": {
             "type": [
               "number",
+              "null"
+            ]
+          },
+          "location_citizen_adjusted": {
+            "type": [
+              "boolean",
               "null"
             ]
           },
@@ -51949,6 +52548,12 @@
           "lng": {
             "type": [
               "number",
+              "null"
+            ]
+          },
+          "location_citizen_adjusted": {
+            "type": [
+              "boolean",
               "null"
             ]
           },

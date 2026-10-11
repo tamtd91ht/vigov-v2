@@ -68,7 +68,7 @@
     },
     "app.AddNote": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:1036"
+      "at": "service-documents/internal/app/citizen_letter.go:1039"
     },
     "app.AddType": {
       "kind": "func",
@@ -116,7 +116,7 @@
     },
     "app.Authenticate": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_webhook.go:91"
+      "at": "service-comms/internal/app/zalo_webhook.go:106"
     },
     "app.Automation": {
       "kind": "type",
@@ -312,7 +312,7 @@
     },
     "app.Check": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:453"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:479"
     },
     "app.CheckAssignableStaff": {
       "kind": "func",
@@ -332,11 +332,11 @@
     },
     "app.CheckOutput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:122"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:124"
     },
     "app.CheckSharedZaloBot": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:307"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:320"
     },
     "app.CheckStaffIntakeField": {
       "kind": "func",
@@ -344,7 +344,7 @@
     },
     "app.ChiTiet": {
       "kind": "func",
-      "at": "service-documents/internal/app/van_ban_den.go:604"
+      "at": "service-documents/internal/app/van_ban_den.go:606"
     },
     "app.ChoicesFor": {
       "kind": "func",
@@ -496,7 +496,7 @@
     },
     "app.CommuneWebhookOutput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:179"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:184"
     },
     "app.CommuneZaloBotView": {
       "kind": "type",
@@ -504,7 +504,7 @@
     },
     "app.CommuneZaloBots": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:196"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:203"
     },
     "app.CommuneZaloWebhook": {
       "kind": "type",
@@ -524,11 +524,11 @@
     },
     "app.CorrectSender": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:887"
+      "at": "service-documents/internal/app/citizen_letter.go:890"
     },
     "app.Count": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:1151"
+      "at": "service-documents/internal/app/citizen_letter.go:1154"
     },
     "app.CoverFiles": {
       "kind": "type",
@@ -680,7 +680,7 @@
     },
     "app.Deliver": {
       "kind": "func",
-      "at": "service-comms/internal/app/staff_notification.go:101"
+      "at": "service-comms/internal/app/staff_notification.go:145"
     },
     "app.DescriptionChange": {
       "kind": "type",
@@ -688,7 +688,7 @@
     },
     "app.Detail": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:1081"
+      "at": "service-documents/internal/app/citizen_letter.go:1084"
     },
     "app.DinhDanhKho": {
       "kind": "type",
@@ -784,7 +784,7 @@
     },
     "app.Duplicates": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:1191"
+      "at": "service-documents/internal/app/citizen_letter.go:1194"
     },
     "app.Edit": {
       "kind": "func",
@@ -793,6 +793,10 @@
     "app.EditCustom": {
       "kind": "func",
       "at": "service-petitions/internal/app/system_message_custom.go:181"
+    },
+    "app.EditGroup": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_groups.go:271"
     },
     "app.EditLetterTypeRequest": {
       "kind": "type",
@@ -876,15 +880,15 @@
     },
     "app.GetSharedZaloBot": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:297"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:310"
     },
     "app.GetSharedZaloBotWebhook": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:467"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:480"
     },
     "app.GetWebhookOutput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:137"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:139"
     },
     "app.GhiBienBanHop": {
       "kind": "type",
@@ -950,13 +954,25 @@
       "kind": "func",
       "at": "service-identity/internal/app/operator_admin.go:187"
     },
+    "app.GroupPairingCodeInput": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_groups.go:48"
+    },
+    "app.GroupPairingCodeView": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_groups.go:54"
+    },
+    "app.Groups": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_groups.go:219"
+    },
     "app.Gui": {
       "kind": "func",
-      "at": "service-petitions/internal/app/gui_phan_anh.go:361"
+      "at": "service-petitions/internal/app/gui_phan_anh.go:366"
     },
     "app.GuiPhanAnh": {
       "kind": "type",
-      "at": "service-petitions/internal/app/gui_phan_anh.go:296"
+      "at": "service-petitions/internal/app/gui_phan_anh.go:301"
     },
     "app.HanTiepNhanDoc": {
       "kind": "type",
@@ -968,7 +984,7 @@
     },
     "app.Handle": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_webhook.go:97"
+      "at": "service-comms/internal/app/zalo_webhook.go:112"
     },
     "app.Has": {
       "kind": "func",
@@ -1069,6 +1085,10 @@
     "app.IsStaffIntakeInputError": {
       "kind": "func",
       "at": "service-petitions/internal/app/staff_intake.go:349"
+    },
+    "app.IssueGroupPairingCode": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_groups.go:158"
     },
     "app.IssuePairingCode": {
       "kind": "func",
@@ -1328,7 +1348,7 @@
     },
     "app.LichSuChuyen": {
       "kind": "func",
-      "at": "service-documents/internal/app/van_ban_den.go:626"
+      "at": "service-documents/internal/app/van_ban_den.go:628"
     },
     "app.LinkedStaff": {
       "kind": "func",
@@ -1352,7 +1372,7 @@
     },
     "app.ListZaloBotCommuneStats": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:492"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:505"
     },
     "app.LiveOrgUnits": {
       "kind": "func",
@@ -1364,7 +1384,7 @@
     },
     "app.Log": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:1113"
+      "at": "service-documents/internal/app/citizen_letter.go:1116"
     },
     "app.LogAttachmentLinker": {
       "kind": "type",
@@ -1496,11 +1516,11 @@
     },
     "app.MarkAllRead": {
       "kind": "func",
-      "at": "service-comms/internal/app/staff_notification.go:256"
+      "at": "service-comms/internal/app/staff_notification.go:323"
     },
     "app.MarkRead": {
       "kind": "func",
-      "at": "service-comms/internal/app/staff_notification.go:208"
+      "at": "service-comms/internal/app/staff_notification.go:275"
     },
     "app.MaxUploadBytes": {
       "kind": "func",
@@ -1564,7 +1584,7 @@
     },
     "app.Move": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:481"
+      "at": "service-documents/internal/app/citizen_letter.go:484"
     },
     "app.MoveLetterRequest": {
       "kind": "type",
@@ -1656,11 +1676,11 @@
     },
     "app.NewCommuneZaloBots": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:211"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:219"
     },
     "app.NewCommuneZaloWebhook": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_commune_webhook.go:56"
+      "at": "service-comms/internal/app/zalo_commune_webhook.go:58"
     },
     "app.NewContentAudio": {
       "kind": "func",
@@ -1756,7 +1776,7 @@
     },
     "app.NewGuiPhanAnh": {
       "kind": "func",
-      "at": "service-petitions/internal/app/gui_phan_anh.go:329"
+      "at": "service-petitions/internal/app/gui_phan_anh.go:334"
     },
     "app.NewInForceAlertCache": {
       "kind": "func",
@@ -1920,7 +1940,7 @@
     },
     "app.NewStaffNotifications": {
       "kind": "func",
-      "at": "service-comms/internal/app/staff_notification.go:81"
+      "at": "service-comms/internal/app/staff_notification.go:125"
     },
     "app.NewStaffPetitionPhotos": {
       "kind": "func",
@@ -1988,7 +2008,7 @@
     },
     "app.NewZaloBotOperator": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:155"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:157"
     },
     "app.NewZaloBotRouter": {
       "kind": "func",
@@ -1996,11 +2016,15 @@
     },
     "app.NewZaloBotStore": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:69"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:71"
     },
     "app.NewZaloDispatcher": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_dispatcher.go:85"
+      "at": "service-comms/internal/app/zalo_dispatcher.go:87"
+    },
+    "app.NewZaloGroups": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_groups.go:97"
     },
     "app.NewZaloLinks": {
       "kind": "func",
@@ -2008,7 +2032,7 @@
     },
     "app.NewZaloWebhook": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_webhook.go:76"
+      "at": "service-comms/internal/app/zalo_webhook.go:84"
     },
     "app.NganSach": {
       "kind": "type",
@@ -2125,6 +2149,14 @@
     "app.OrgUnitNameResolver": {
       "kind": "type",
       "at": "service-petitions/internal/app/overdue_queue.go:53"
+    },
+    "app.OrgUnitNamer": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_group_webhook.go:43"
+    },
+    "app.OrgUnits": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_groups.go:38"
     },
     "app.OutboxDrain": {
       "kind": "type",
@@ -2416,7 +2448,7 @@
     },
     "app.RecordResult": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:770"
+      "at": "service-documents/internal/app/citizen_letter.go:773"
     },
     "app.RegenerateRecoveryCodes": {
       "kind": "func",
@@ -2432,7 +2464,7 @@
     },
     "app.RegisterWebhook": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:490"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:516"
     },
     "app.Remove": {
       "kind": "func",
@@ -2452,11 +2484,11 @@
     },
     "app.Reply": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_webhook.go:291"
+      "at": "service-comms/internal/app/zalo_webhook.go:357"
     },
     "app.Report": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:1210"
+      "at": "service-documents/internal/app/citizen_letter.go:1213"
     },
     "app.RequestRun": {
       "kind": "func",
@@ -2532,7 +2564,7 @@
     },
     "app.RetireCommuneZaloBotOutput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:190"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:195"
     },
     "app.Reveal": {
       "kind": "func",
@@ -2636,7 +2668,7 @@
     },
     "app.Set": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:275"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:288"
     },
     "app.SetActive": {
       "kind": "func",
@@ -2644,11 +2676,11 @@
     },
     "app.SetCommuneZaloBotInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:163"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:166"
     },
     "app.SetCommuneZaloBotOutput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_commune_bot.go:170"
+      "at": "service-comms/internal/app/zalo_commune_bot.go:173"
     },
     "app.SetConfirmation": {
       "kind": "func",
@@ -2656,7 +2688,7 @@
     },
     "app.SetDeadline": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter.go:979"
+      "at": "service-documents/internal/app/citizen_letter.go:982"
     },
     "app.SetGrantedAmount": {
       "kind": "func",
@@ -2668,7 +2700,7 @@
     },
     "app.SetResult": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:94"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:96"
     },
     "app.SetSecret": {
       "kind": "func",
@@ -2680,23 +2712,23 @@
     },
     "app.SetSharedZaloBot": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:182"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:184"
     },
     "app.SetSharedZaloBotInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:103"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:105"
     },
     "app.SetSharedZaloBotOutput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:113"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:115"
     },
     "app.SetSharedZaloBotWebhook": {
       "kind": "func",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:345"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:358"
     },
     "app.SetWebhookOutput": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:129"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:131"
     },
     "app.Settings": {
       "kind": "func",
@@ -3054,6 +3086,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/zalo_links.go:224"
     },
+    "app.UnlinkGroup": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_groups.go:335"
+    },
     "app.Unlock": {
       "kind": "func",
       "at": "service-identity/internal/app/operator_admin.go:313"
@@ -3186,6 +3222,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/content_body_image_url.go:97"
     },
+    "app.WithOrgUnitNames": {
+      "kind": "func",
+      "at": "service-comms/internal/app/zalo_webhook.go:100"
+    },
     "app.WithPetitionFields": {
       "kind": "func",
       "at": "service-identity/internal/app/sla_field_rule.go:103"
@@ -3205,6 +3245,10 @@
     "app.WithUnitHolders": {
       "kind": "func",
       "at": "service-petitions/internal/app/nhiem_vu.go:312"
+    },
+    "app.WithZaloGroupOutbox": {
+      "kind": "func",
+      "at": "service-comms/internal/app/staff_notification.go:84"
     },
     "app.WithZaloOutbox": {
       "kind": "func",
@@ -3488,7 +3532,7 @@
     },
     "app.ZaloBotOperator": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_bot_operator.go:147"
+      "at": "service-comms/internal/app/zalo_bot_operator.go:149"
     },
     "app.ZaloBotRouter": {
       "kind": "type",
@@ -3508,23 +3552,39 @@
     },
     "app.ZaloChatResolver": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_webhook.go:42"
+      "at": "service-comms/internal/app/zalo_webhook.go:45"
     },
     "app.ZaloDispatchLocks": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_dispatcher.go:57"
+      "at": "service-comms/internal/app/zalo_dispatcher.go:58"
     },
     "app.ZaloDispatcher": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_dispatcher.go:77"
+      "at": "service-comms/internal/app/zalo_dispatcher.go:78"
     },
     "app.ZaloDispatcherDeps": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_dispatcher.go:64"
+      "at": "service-comms/internal/app/zalo_dispatcher.go:65"
     },
     "app.ZaloExchange": {
       "kind": "type",
       "at": "service-identity/internal/app/own_app_sign_in.go:88"
+    },
+    "app.ZaloGroupOutbox": {
+      "kind": "type",
+      "at": "service-comms/internal/app/staff_notification.go:78"
+    },
+    "app.ZaloGroupPatch": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_groups.go:75"
+    },
+    "app.ZaloGroupView": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_groups.go:60"
+    },
+    "app.ZaloGroups": {
+      "kind": "type",
+      "at": "service-comms/internal/app/zalo_groups.go:82"
     },
     "app.ZaloLinkCurrentView": {
       "kind": "type",
@@ -3540,11 +3600,11 @@
     },
     "app.ZaloOutbox": {
       "kind": "type",
-      "at": "service-comms/internal/app/staff_notification.go:76"
+      "at": "service-comms/internal/app/staff_notification.go:120"
     },
     "app.ZaloPairingLimiter": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_webhook.go:49"
+      "at": "service-comms/internal/app/zalo_webhook.go:55"
     },
     "app.ZaloSendError": {
       "kind": "type",
@@ -3556,7 +3616,7 @@
     },
     "app.ZaloWebhook": {
       "kind": "type",
-      "at": "service-comms/internal/app/zalo_webhook.go:60"
+      "at": "service-comms/internal/app/zalo_webhook.go:66"
     },
     "app.ZaloWebhookSecrets": {
       "kind": "type",
@@ -3664,7 +3724,7 @@
     },
     "commsclient.Client": {
       "kind": "type",
-      "at": "core/commsclient/commsclient.go:77"
+      "at": "core/commsclient/commsclient.go:85"
     },
     "commsclient.Close": {
       "kind": "func",
@@ -3672,15 +3732,15 @@
     },
     "commsclient.DeliverStaffNotifications": {
       "kind": "func",
-      "at": "core/commsclient/commsclient.go:130"
+      "at": "core/commsclient/commsclient.go:138"
     },
     "commsclient.Delivery": {
       "kind": "type",
-      "at": "core/commsclient/commsclient.go:71"
+      "at": "core/commsclient/commsclient.go:79"
     },
     "commsclient.Dial": {
       "kind": "func",
-      "at": "core/commsclient/commsclient.go:84"
+      "at": "core/commsclient/commsclient.go:92"
     },
     "commsclient.DialZaloBotOperator": {
       "kind": "func",
@@ -3688,11 +3748,11 @@
     },
     "commsclient.DueSoonItem": {
       "kind": "type",
-      "at": "core/commsclient/commsclient.go:65"
+      "at": "core/commsclient/commsclient.go:73"
     },
     "commsclient.New": {
       "kind": "func",
-      "at": "core/commsclient/commsclient.go:106"
+      "at": "core/commsclient/commsclient.go:114"
     },
     "commsclient.NewZaloBotOperatorFromConn": {
       "kind": "func",
@@ -3988,7 +4048,7 @@
     },
     "crosstenant.CommunesWithDueZaloDeliveries": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_bot.go:160"
+      "at": "service-comms/internal/store/crosstenant/zalo_bot.go:164"
     },
     "crosstenant.CommunesWithPendingStaffNotices": {
       "kind": "func",
@@ -4021,6 +4081,10 @@
     "crosstenant.GhepPhienStore": {
       "kind": "type",
       "at": "service-identity/internal/store/crosstenant/ghep_phien.go:43"
+    },
+    "crosstenant.GroupChatLiveAnywhere": {
+      "kind": "func",
+      "at": "service-comms/internal/store/crosstenant/zalo_group.go:54"
     },
     "crosstenant.LockKey": {
       "kind": "func",
@@ -4069,6 +4133,10 @@
     "crosstenant.NhoXaCuaGiaoDich": {
       "kind": "func",
       "at": "service-identity/internal/store/crosstenant/tai_khoan_zalo.go:199"
+    },
+    "crosstenant.OpenGroupPairingCodesByHash": {
+      "kind": "func",
+      "at": "service-comms/internal/store/crosstenant/zalo_group.go:27"
     },
     "crosstenant.OpenPairingCodesByHash": {
       "kind": "func",
@@ -4128,7 +4196,7 @@
     },
     "crosstenant.TryLockScheduler": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_bot.go:195"
+      "at": "service-comms/internal/store/crosstenant/zalo_bot.go:199"
     },
     "crosstenant.XaCuaCongDanTrongPhien": {
       "kind": "func",
@@ -4140,7 +4208,7 @@
     },
     "crosstenant.ZaloDispatchLockKey": {
       "kind": "func",
-      "at": "service-comms/internal/store/crosstenant/zalo_bot.go:187"
+      "at": "service-comms/internal/store/crosstenant/zalo_bot.go:191"
     },
     "crypto.CurrentKEKID": {
       "kind": "func",
@@ -4256,7 +4324,7 @@
     },
     "domain.AbsoluteStaffLink": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:635"
+      "at": "service-comms/internal/domain/zalo_link.go:692"
     },
     "domain.Accountless": {
       "kind": "func",
@@ -4852,7 +4920,7 @@
     },
     "domain.ChuaChotHanXuLy": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:356"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:363"
     },
     "domain.ChuaPhanCong": {
       "kind": "func",
@@ -4880,11 +4948,11 @@
     },
     "domain.ChuanHoaDiaChi": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/gui_phan_anh.go:154"
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:188"
     },
     "domain.ChuanHoaDienThoai": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/gui_phan_anh.go:174"
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:208"
     },
     "domain.ChuanHoaDoiTac": {
       "kind": "func",
@@ -4908,7 +4976,7 @@
     },
     "domain.ChuanHoaHoTen": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/gui_phan_anh.go:164"
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:198"
     },
     "domain.ChuanHoaLyDoGo": {
       "kind": "func",
@@ -4988,7 +5056,7 @@
     },
     "domain.ChuanHoaNoiDung": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/gui_phan_anh.go:140"
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:174"
     },
     "domain.ChuanHoaNoiDungDot": {
       "kind": "func",
@@ -5156,7 +5224,7 @@
     },
     "domain.CitizenReportDigestNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:429"
+      "at": "service-petitions/internal/domain/automation.go:443"
     },
     "domain.CitizenReportFieldFigures": {
       "kind": "type",
@@ -5204,7 +5272,7 @@
     },
     "domain.CleanRecipients": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:208"
+      "at": "service-petitions/internal/domain/automation.go:213"
     },
     "domain.Clear": {
       "kind": "func",
@@ -5372,11 +5440,11 @@
     },
     "domain.DefaultZaloChannelSetting": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:320"
+      "at": "service-comms/internal/domain/zalo_link.go:377"
     },
     "domain.DeliveryOutcome": {
       "kind": "type",
-      "at": "service-comms/internal/domain/staff_notification.go:116"
+      "at": "service-comms/internal/domain/staff_notification.go:120"
     },
     "domain.DepartmentStaffTally": {
       "kind": "type",
@@ -5404,11 +5472,11 @@
     },
     "domain.Digest": {
       "kind": "func",
-      "at": "service-documents/internal/domain/automation.go:394"
+      "at": "service-documents/internal/domain/automation.go:412"
     },
     "domain.DigestLink": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:298"
+      "at": "service-petitions/internal/domain/automation.go:303"
     },
     "domain.Disabled": {
       "kind": "func",
@@ -5516,7 +5584,7 @@
     },
     "domain.DropActor": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:86"
+      "at": "service-petitions/internal/domain/staff_notice.go:91"
     },
     "domain.DuAn": {
       "kind": "type",
@@ -5524,7 +5592,7 @@
     },
     "domain.DueSoon": {
       "kind": "func",
-      "at": "service-documents/internal/domain/automation.go:284"
+      "at": "service-documents/internal/domain/automation.go:293"
     },
     "domain.DueSoonAt": {
       "kind": "func",
@@ -5536,19 +5604,19 @@
     },
     "domain.DueSoonItem": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/automation.go:155"
+      "at": "service-petitions/internal/domain/automation.go:160"
     },
     "domain.DueSoonKey": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:227"
+      "at": "service-petitions/internal/domain/automation.go:232"
     },
     "domain.DueSoonLink": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:290"
+      "at": "service-petitions/internal/domain/automation.go:295"
     },
     "domain.DueSoonNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:321"
+      "at": "service-petitions/internal/domain/automation.go:326"
     },
     "domain.DueTrigger": {
       "kind": "func",
@@ -5596,11 +5664,11 @@
     },
     "domain.Escalation": {
       "kind": "func",
-      "at": "service-documents/internal/domain/automation.go:371"
+      "at": "service-documents/internal/domain/automation.go:386"
     },
     "domain.EscalationKey": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:244"
+      "at": "service-petitions/internal/domain/automation.go:249"
     },
     "domain.EscalationLevel": {
       "kind": "type",
@@ -5608,7 +5676,7 @@
     },
     "domain.EscalationNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:396"
+      "at": "service-petitions/internal/domain/automation.go:407"
     },
     "domain.EvacuationPoint": {
       "kind": "type",
@@ -5640,7 +5708,7 @@
     },
     "domain.ExpandZaloKinds": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:237"
+      "at": "service-comms/internal/domain/zalo_link.go:294"
     },
     "domain.ExtensionDecisionLogText": {
       "kind": "func",
@@ -5700,7 +5768,7 @@
     },
     "domain.FormatClock": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:449"
+      "at": "service-comms/internal/domain/zalo_link.go:506"
     },
     "domain.FormatDong": {
       "kind": "func",
@@ -5708,7 +5776,7 @@
     },
     "domain.FormatLocalInstant": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:306"
+      "at": "service-petitions/internal/domain/automation.go:311"
     },
     "domain.FormatOperatorCode": {
       "kind": "func",
@@ -5770,13 +5838,25 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/nhan_trang_thai_nhiem_vu.go:147"
     },
+    "domain.GroupNotice": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/zalo_group.go:80"
+    },
+    "domain.GroupPosting": {
+      "kind": "type",
+      "at": "service-petitions/internal/domain/group_posting.go:11"
+    },
+    "domain.GroupUnit": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/group_posting.go:41"
+    },
     "domain.HanGiaiNganMacDinh": {
       "kind": "func",
       "at": "service-finance/internal/domain/du_an_ghi.go:412"
     },
     "domain.HanSomHon": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:439"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:446"
     },
     "domain.HanTiepNhanApDung": {
       "kind": "func",
@@ -5784,7 +5864,7 @@
     },
     "domain.HanTiepNhanKhongApDung": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:347"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:354"
     },
     "domain.HandEntriesConflict": {
       "kind": "type",
@@ -5872,7 +5952,7 @@
     },
     "domain.ISOWeek": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:174"
+      "at": "service-petitions/internal/domain/automation.go:179"
     },
     "domain.ImportLockingClose": {
       "kind": "func",
@@ -5904,11 +5984,11 @@
     },
     "domain.IncomingAssignedNotice": {
       "kind": "func",
-      "at": "service-documents/internal/domain/staff_notice.go:87"
+      "at": "service-documents/internal/domain/staff_notice.go:93"
     },
     "domain.IncomingDigestNotice": {
       "kind": "func",
-      "at": "service-documents/internal/domain/automation.go:388"
+      "at": "service-documents/internal/domain/automation.go:406"
     },
     "domain.IncomingMetric": {
       "kind": "type",
@@ -6002,6 +6082,10 @@
       "kind": "func",
       "at": "service-finance/internal/domain/budget_period_close.go:52"
     },
+    "domain.IsZaloGroupKind": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:35"
+    },
     "domain.JSON": {
       "kind": "func",
       "at": "service-comms/internal/domain/thong_bao_gui_cong_dan.go:172"
@@ -6036,7 +6120,7 @@
     },
     "domain.Key": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:77"
+      "at": "service-petitions/internal/domain/staff_notice.go:82"
     },
     "domain.KhaiCuTru": {
       "kind": "type",
@@ -6096,7 +6180,7 @@
     },
     "domain.KiemGocDemHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:480"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:487"
     },
     "domain.KiemKetQua": {
       "kind": "func",
@@ -6316,7 +6400,7 @@
     },
     "domain.KindEnabled": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:327"
+      "at": "service-comms/internal/domain/zalo_link.go:384"
     },
     "domain.LaCham": {
       "kind": "func",
@@ -6348,7 +6432,7 @@
     },
     "domain.LaLoiGuiPhanAnh": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/gui_phan_anh.go:189"
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:223"
     },
     "domain.LaLoiThamQuyenLuiHan": {
       "kind": "func",
@@ -6376,7 +6460,7 @@
     },
     "domain.LetterAssignedNotice": {
       "kind": "func",
-      "at": "service-documents/internal/domain/staff_notice.go:104"
+      "at": "service-documents/internal/domain/staff_notice.go:115"
     },
     "domain.LetterAuditSubject": {
       "kind": "func",
@@ -6536,7 +6620,7 @@
     },
     "domain.LocalDay": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:171"
+      "at": "service-petitions/internal/domain/automation.go:176"
     },
     "domain.LocateTaskImportHeadings": {
       "kind": "func",
@@ -6796,7 +6880,7 @@
     },
     "domain.NarrowDueSoonItems": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:527"
+      "at": "service-comms/internal/domain/zalo_link.go:584"
     },
     "domain.NeedsApproval": {
       "kind": "func",
@@ -6938,9 +7022,13 @@
       "kind": "func",
       "at": "service-finance/internal/domain/project_discussion.go:109"
     },
+    "domain.NormaliseLocationCitizenAdjusted": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:101"
+    },
     "domain.NormaliseMentions": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:225"
+      "at": "service-petitions/internal/domain/staff_notice.go:244"
     },
     "domain.NormaliseReopenReason": {
       "kind": "func",
@@ -6948,7 +7036,7 @@
     },
     "domain.NormaliseSceneLocation": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/gui_phan_anh.go:104"
+      "at": "service-petitions/internal/domain/gui_phan_anh.go:138"
     },
     "domain.NormaliseSourceFileName": {
       "kind": "func",
@@ -7098,6 +7186,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/org_unit_delete.go:38"
     },
+    "domain.NormalizeOrgUnitID": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:66"
+    },
     "domain.NormalizePairingCode": {
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_link.go:38"
@@ -7140,7 +7232,15 @@
     },
     "domain.NormalizeZaloChannelSetting": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:379"
+      "at": "service-comms/internal/domain/zalo_link.go:436"
+    },
+    "domain.NormalizeZaloGroupKinds": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:160"
+    },
+    "domain.NormalizeZaloGroupUnlinkReason": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:184"
     },
     "domain.NoticeKind": {
       "kind": "type",
@@ -7148,7 +7248,7 @@
     },
     "domain.NoticeRegister": {
       "kind": "type",
-      "at": "service-documents/internal/domain/automation.go:254"
+      "at": "service-documents/internal/domain/automation.go:263"
     },
     "domain.NotificationDelivery": {
       "kind": "type",
@@ -7228,7 +7328,7 @@
     },
     "domain.Overdue": {
       "kind": "func",
-      "at": "service-documents/internal/domain/automation.go:334"
+      "at": "service-documents/internal/domain/automation.go:343"
     },
     "domain.OverdueItem": {
       "kind": "type",
@@ -7236,11 +7336,11 @@
     },
     "domain.OverdueKey": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:232"
+      "at": "service-petitions/internal/domain/automation.go:237"
     },
     "domain.OverdueNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:367"
+      "at": "service-petitions/internal/domain/automation.go:372"
     },
     "domain.Overrun": {
       "kind": "func",
@@ -7254,13 +7354,17 @@
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_link.go:59"
     },
+    "domain.PairingCodeInGroupText": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_link.go:98"
+    },
     "domain.ParseBudgetWorkbook": {
       "kind": "func",
       "at": "service-finance/internal/domain/budget_import.go:176"
     },
     "domain.ParseClock": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:436"
+      "at": "service-comms/internal/domain/zalo_link.go:493"
     },
     "domain.ParseCommuneHost": {
       "kind": "func",
@@ -7297,6 +7401,10 @@
     "domain.ParseZaloCommand": {
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_link.go:77"
+    },
+    "domain.ParseZaloGroupCommand": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_link.go:120"
     },
     "domain.ParsedBudgetWorkbook": {
       "kind": "type",
@@ -7344,7 +7452,7 @@
     },
     "domain.PetitionAssignedNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:194"
+      "at": "service-petitions/internal/domain/staff_notice.go:207"
     },
     "domain.PetitionField": {
       "kind": "type",
@@ -7376,7 +7484,7 @@
     },
     "domain.PetitionReopenedNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:203"
+      "at": "service-petitions/internal/domain/staff_notice.go:219"
     },
     "domain.PhanBoNguonVon": {
       "kind": "type",
@@ -7568,15 +7676,15 @@
     },
     "domain.QuaHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:371"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:378"
     },
     "domain.QuaHanPhanLoai": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:414"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:421"
     },
     "domain.QuaHanTiepNhan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:388"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:395"
     },
     "domain.QuanHeCongDanXa": {
       "kind": "type",
@@ -7584,7 +7692,7 @@
     },
     "domain.QuietUntil": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:460"
+      "at": "service-comms/internal/domain/zalo_link.go:517"
     },
     "domain.Quyen": {
       "kind": "type",
@@ -7628,11 +7736,11 @@
     },
     "domain.ReadStoredZaloKinds": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:310"
+      "at": "service-comms/internal/domain/zalo_link.go:367"
     },
     "domain.RecordLink": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:284"
+      "at": "service-petitions/internal/domain/automation.go:289"
     },
     "domain.Recorded": {
       "kind": "func",
@@ -7664,23 +7772,23 @@
     },
     "domain.ReportFigure": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/automation.go:513"
+      "at": "service-petitions/internal/domain/automation.go:527"
     },
     "domain.ReportPeriod": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/automation.go:482"
+      "at": "service-petitions/internal/domain/automation.go:496"
     },
     "domain.ReportPeriodStart": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:493"
+      "at": "service-petitions/internal/domain/automation.go:507"
     },
     "domain.ReportReadyNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:531"
+      "at": "service-petitions/internal/domain/automation.go:545"
     },
     "domain.ReportReadyTitle": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:522"
+      "at": "service-petitions/internal/domain/automation.go:536"
     },
     "domain.RequiredCitizenLetterUnit": {
       "kind": "func",
@@ -7768,11 +7876,11 @@
     },
     "domain.Same": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:330"
+      "at": "service-comms/internal/domain/zalo_link.go:387"
     },
     "domain.SameClockDaysLater": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:185"
+      "at": "service-petitions/internal/domain/automation.go:190"
     },
     "domain.SameMailSettings": {
       "kind": "func",
@@ -7812,11 +7920,11 @@
     },
     "domain.ScheduledReportKey": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:507"
+      "at": "service-petitions/internal/domain/automation.go:521"
     },
     "domain.ScheduledReportNotice": {
       "kind": "func",
-      "at": "service-documents/internal/domain/staff_notice.go:160"
+      "at": "service-documents/internal/domain/staff_notice.go:174"
     },
     "domain.ScheduledReportPeriod": {
       "kind": "func",
@@ -7908,7 +8016,7 @@
     },
     "domain.SinhMaTraCuu": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:536"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:543"
     },
     "domain.SinhMatKhauTam": {
       "kind": "func",
@@ -7952,7 +8060,7 @@
     },
     "domain.SplitRecipients": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:101"
+      "at": "service-petitions/internal/domain/staff_notice.go:106"
     },
     "domain.StaffChoiceLabel": {
       "kind": "func",
@@ -8100,15 +8208,15 @@
     },
     "domain.TaskApprovalRequestedNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:171"
+      "at": "service-petitions/internal/domain/staff_notice.go:180"
     },
     "domain.TaskAssignedNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:147"
+      "at": "service-petitions/internal/domain/staff_notice.go:152"
     },
     "domain.TaskAssignedRecipients": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:131"
+      "at": "service-petitions/internal/domain/staff_notice.go:136"
     },
     "domain.TaskAssignmentChange": {
       "kind": "type",
@@ -8124,11 +8232,11 @@
     },
     "domain.TaskDigestNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:414"
+      "at": "service-petitions/internal/domain/automation.go:428"
     },
     "domain.TaskExtensionRequestedNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:161"
+      "at": "service-petitions/internal/domain/staff_notice.go:170"
     },
     "domain.TaskImportCarriesRetiredColumns": {
       "kind": "func",
@@ -8152,7 +8260,7 @@
     },
     "domain.TaskLeaderOrCreator": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:118"
+      "at": "service-petitions/internal/domain/staff_notice.go:123"
     },
     "domain.TaskLogAttachment": {
       "kind": "type",
@@ -8160,7 +8268,7 @@
     },
     "domain.TaskMentionNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/staff_notice.go:183"
+      "at": "service-petitions/internal/domain/staff_notice.go:196"
     },
     "domain.TaskMetric": {
       "kind": "type",
@@ -8288,7 +8396,7 @@
     },
     "domain.TranPhanLoaiKhongApDung": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:401"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:408"
     },
     "domain.TrangThai": {
       "kind": "type",
@@ -8412,15 +8520,15 @@
     },
     "domain.Unassigned": {
       "kind": "func",
-      "at": "service-documents/internal/domain/automation.go:353"
+      "at": "service-documents/internal/domain/automation.go:365"
     },
     "domain.UnassignedKey": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:238"
+      "at": "service-petitions/internal/domain/automation.go:243"
     },
     "domain.UnassignedNotice": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:382"
+      "at": "service-petitions/internal/domain/automation.go:390"
     },
     "domain.Undisbursed": {
       "kind": "func",
@@ -8500,11 +8608,15 @@
     },
     "domain.ValidNoticeKey": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:254"
+      "at": "service-petitions/internal/domain/automation.go:259"
     },
     "domain.ValidOperatorCode": {
       "kind": "func",
       "at": "service-identity/internal/domain/operator.go:115"
+    },
+    "domain.ValidOrgUnitID": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:48"
     },
     "domain.ValidPublicCategoryID": {
       "kind": "func",
@@ -8512,7 +8624,7 @@
     },
     "domain.ValidRecipientCode": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:194"
+      "at": "service-petitions/internal/domain/automation.go:199"
     },
     "domain.ValidValueType": {
       "kind": "func",
@@ -8540,7 +8652,7 @@
     },
     "domain.ValidateDeliveries": {
       "kind": "func",
-      "at": "service-comms/internal/domain/staff_notification.go:132"
+      "at": "service-comms/internal/domain/staff_notification.go:136"
     },
     "domain.ValidateDescriptionPlaceholder": {
       "kind": "func",
@@ -8668,7 +8780,7 @@
     },
     "domain.WeeklyDigestKey": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/automation.go:249"
+      "at": "service-petitions/internal/domain/automation.go:254"
     },
     "domain.WithResult": {
       "kind": "func",
@@ -8712,7 +8824,7 @@
     },
     "domain.ZaloChannelSetting": {
       "kind": "type",
-      "at": "service-comms/internal/domain/zalo_link.go:290"
+      "at": "service-comms/internal/domain/zalo_link.go:347"
     },
     "domain.ZaloCommand": {
       "kind": "type",
@@ -8720,39 +8832,63 @@
     },
     "domain.ZaloDeliveryBackoff": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:602"
+      "at": "service-comms/internal/domain/zalo_link.go:659"
     },
     "domain.ZaloDueSoonCutoff": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:521"
+      "at": "service-comms/internal/domain/zalo_link.go:578"
     },
     "domain.ZaloDueSoonText": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:558"
+      "at": "service-comms/internal/domain/zalo_link.go:615"
+    },
+    "domain.ZaloGroupError": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/zalo_group.go:122"
+    },
+    "domain.ZaloGroupLink": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/zalo_group.go:109"
+    },
+    "domain.ZaloGroupMatches": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:92"
+    },
+    "domain.ZaloGroupSubject": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:208"
+    },
+    "domain.ZaloGroupTarget": {
+      "kind": "type",
+      "at": "service-comms/internal/domain/zalo_group.go:72"
     },
     "domain.ZaloKindSelected": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:256"
+      "at": "service-comms/internal/domain/zalo_link.go:313"
     },
     "domain.ZaloLegacyKindPairs": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:268"
+      "at": "service-comms/internal/domain/zalo_link.go:325"
     },
     "domain.ZaloLink": {
       "kind": "type",
-      "at": "service-comms/internal/domain/zalo_link.go:116"
+      "at": "service-comms/internal/domain/zalo_link.go:173"
     },
     "domain.ZaloQueueableKinds": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:199"
+      "at": "service-comms/internal/domain/zalo_link.go:256"
     },
     "domain.ZaloReminderText": {
       "kind": "func",
-      "at": "service-comms/internal/domain/zalo_link.go:616"
+      "at": "service-comms/internal/domain/zalo_link.go:673"
+    },
+    "domain.ZaloReplyGroupLinked": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/zalo_group.go:243"
     },
     "domain.ZaloSettingError": {
       "kind": "type",
-      "at": "service-comms/internal/domain/zalo_link.go:347"
+      "at": "service-comms/internal/domain/zalo_link.go:404"
     },
     "domain.ZaloWebhookURL": {
       "kind": "func",
@@ -9558,6 +9694,10 @@
       "kind": "func",
       "at": "service-finance/internal/http/funding_sources.go:214"
     },
+    "http.CreateGroupPairingCode": {
+      "kind": "func",
+      "at": "service-comms/internal/http/zalo_groups.go:202"
+    },
     "http.CreateMapAsset": {
       "kind": "func",
       "at": "service-comms/internal/http/map_assets.go:665"
@@ -9760,7 +9900,7 @@
     },
     "http.DeleteCurrent": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:355"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:361"
     },
     "http.DeleteCustomMessage": {
       "kind": "func",
@@ -9860,7 +10000,7 @@
     },
     "http.DocPhieuPhanAnh": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_phan_anh.go:431"
+      "at": "service-petitions/internal/http/phieu_phan_anh.go:441"
     },
     "http.DocumentTypeImportTemplate": {
       "kind": "func",
@@ -9897,6 +10037,10 @@
     "http.EditCustomMessage": {
       "kind": "func",
       "at": "service-petitions/internal/http/system_messages.go:255"
+    },
+    "http.EditGroup": {
+      "kind": "func",
+      "at": "service-comms/internal/http/zalo_groups.go:250"
     },
     "http.EndDisasterAlert": {
       "kind": "func",
@@ -9940,7 +10084,7 @@
     },
     "http.GetCurrent": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:277"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:282"
     },
     "http.GetCurrentZaloLink": {
       "kind": "func",
@@ -10092,7 +10236,7 @@
     },
     "http.GuiPhieu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/gui_phan_anh.go:155"
+      "at": "service-petitions/internal/http/gui_phan_anh.go:163"
     },
     "http.Handler": {
       "kind": "type",
@@ -10232,7 +10376,7 @@
     },
     "http.ListAccountlessFields": {
       "kind": "func",
-      "at": "service-petitions/internal/http/accountless.go:252"
+      "at": "service-petitions/internal/http/accountless.go:257"
     },
     "http.ListAuditEntries": {
       "kind": "func",
@@ -10277,6 +10421,10 @@
     "http.ListFundingSources": {
       "kind": "func",
       "at": "service-finance/internal/http/funding_sources.go:177"
+    },
+    "http.ListGroups": {
+      "kind": "func",
+      "at": "service-comms/internal/http/zalo_groups.go:226"
     },
     "http.ListMapAssets": {
       "kind": "func",
@@ -10364,7 +10512,7 @@
     },
     "http.LookupAccountless": {
       "kind": "func",
-      "at": "service-petitions/internal/http/accountless.go:404"
+      "at": "service-petitions/internal/http/accountless.go:409"
     },
     "http.LuuPhanQuyenVaiTro": {
       "kind": "func",
@@ -10660,11 +10808,11 @@
     },
     "http.PostCheck": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:319"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:325"
     },
     "http.PostWebhook": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:333"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:339"
     },
     "http.PreviewBudgetImport": {
       "kind": "func",
@@ -10776,7 +10924,7 @@
     },
     "http.PutCurrent": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:292"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:297"
     },
     "http.PutMailSettings": {
       "kind": "func",
@@ -10892,7 +11040,11 @@
     },
     "http.RegisterZaloCommuneBot": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:158"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:163"
+    },
+    "http.RegisterZaloGroups": {
+      "kind": "func",
+      "at": "service-comms/internal/http/zalo_groups.go:97"
     },
     "http.RegisterZaloLinks": {
       "kind": "func",
@@ -10992,7 +11144,7 @@
     },
     "http.SendAccountless": {
       "kind": "func",
-      "at": "service-petitions/internal/http/accountless.go:348"
+      "at": "service-petitions/internal/http/accountless.go:353"
     },
     "http.SendTestMail": {
       "kind": "func",
@@ -11366,6 +11518,10 @@
       "kind": "func",
       "at": "service-comms/internal/http/zalo_links.go:325"
     },
+    "http.UnlinkGroup": {
+      "kind": "func",
+      "at": "service-comms/internal/http/zalo_groups.go:272"
+    },
     "http.UnmarshalJSON": {
       "kind": "func",
       "at": "service-platform/internal/http/operator_platform.go:62"
@@ -11550,6 +11706,14 @@
       "kind": "type",
       "at": "service-comms/internal/http/zalo_commune_bot.go:49"
     },
+    "http.ZaloGroupAdmin": {
+      "kind": "type",
+      "at": "service-comms/internal/http/zalo_groups.go:33"
+    },
+    "http.ZaloGroupDeps": {
+      "kind": "type",
+      "at": "service-comms/internal/http/zalo_groups.go:41"
+    },
     "http.ZaloLinkDeps": {
       "kind": "type",
       "at": "service-comms/internal/http/zalo_links.go:58"
@@ -11568,7 +11732,15 @@
     },
     "httpx.CORSCongDan": {
       "kind": "func",
-      "at": "core/httpx/cors.go:72"
+      "at": "core/httpx/cors.go:105"
+    },
+    "httpx.CORSOption": {
+      "kind": "type",
+      "at": "core/httpx/cors.go:52"
+    },
+    "httpx.CORSRangeReads": {
+      "kind": "func",
+      "at": "core/httpx/cors.go:63"
     },
     "httpx.CitizenEdge": {
       "kind": "func",
@@ -12844,7 +13016,7 @@
     },
     "platformstore.AppendOperatorAudit": {
       "kind": "func",
-      "at": "service-comms/internal/store/platformstore/store.go:522"
+      "at": "service-comms/internal/store/platformstore/store.go:573"
     },
     "platformstore.ClearPendingWebhookSecret": {
       "kind": "func",
@@ -12852,7 +13024,7 @@
     },
     "platformstore.CommuneStats": {
       "kind": "func",
-      "at": "service-comms/internal/store/platformstore/store.go:483"
+      "at": "service-comms/internal/store/platformstore/store.go:534"
     },
     "platformstore.CountLiveLinks": {
       "kind": "func",
@@ -12860,7 +13032,11 @@
     },
     "platformstore.CreatePlatformDEK": {
       "kind": "func",
-      "at": "service-comms/internal/store/platformstore/store.go:582"
+      "at": "service-comms/internal/store/platformstore/store.go:633"
+    },
+    "platformstore.EndAllLiveGroupLinks": {
+      "kind": "func",
+      "at": "service-comms/internal/store/platformstore/store.go:465"
     },
     "platformstore.EndAllLiveLinks": {
       "kind": "func",
@@ -12868,7 +13044,7 @@
     },
     "platformstore.GetPlatformDEK": {
       "kind": "func",
-      "at": "service-comms/internal/store/platformstore/store.go:565"
+      "at": "service-comms/internal/store/platformstore/store.go:616"
     },
     "platformstore.InTx": {
       "kind": "func",
@@ -12888,7 +13064,7 @@
     },
     "platformstore.OperatorAudit": {
       "kind": "type",
-      "at": "service-comms/internal/store/platformstore/store.go:513"
+      "at": "service-comms/internal/store/platformstore/store.go:564"
     },
     "platformstore.PendingWebhookSecret": {
       "kind": "func",
@@ -12908,7 +13084,7 @@
     },
     "platformstore.ReplacePlatformDEK": {
       "kind": "func",
-      "at": "service-comms/internal/store/platformstore/store.go:617"
+      "at": "service-comms/internal/store/platformstore/store.go:668"
     },
     "platformstore.SaveToken": {
       "kind": "func",
@@ -13088,19 +13264,19 @@
     },
     "ratelimit.AccountlessLookupKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:262"
+      "at": "core/ratelimit/ratelimit.go:287"
     },
     "ratelimit.ActorKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:355"
+      "at": "core/ratelimit/ratelimit.go:380"
     },
     "ratelimit.Allow": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:511"
+      "at": "core/ratelimit/ratelimit.go:536"
     },
     "ratelimit.CitizenKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:329"
+      "at": "core/ratelimit/ratelimit.go:354"
     },
     "ratelimit.Close": {
       "kind": "func",
@@ -13108,11 +13284,11 @@
     },
     "ratelimit.Counter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:462"
+      "at": "core/ratelimit/ratelimit.go:487"
     },
     "ratelimit.FailsOpen": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:174"
+      "at": "core/ratelimit/ratelimit.go:188"
     },
     "ratelimit.Gate": {
       "kind": "func",
@@ -13128,11 +13304,11 @@
     },
     "ratelimit.Key": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:274"
+      "at": "core/ratelimit/ratelimit.go:299"
     },
     "ratelimit.Limiter": {
       "kind": "type",
-      "at": "core/ratelimit/ratelimit.go:469"
+      "at": "core/ratelimit/ratelimit.go:494"
     },
     "ratelimit.Middleware": {
       "kind": "func",
@@ -13140,7 +13316,7 @@
     },
     "ratelimit.New": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:484"
+      "at": "core/ratelimit/ratelimit.go:509"
     },
     "ratelimit.NewRedisCounter": {
       "kind": "func",
@@ -13152,7 +13328,7 @@
     },
     "ratelimit.OperatorIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:385"
+      "at": "core/ratelimit/ratelimit.go:410"
     },
     "ratelimit.Outcome": {
       "kind": "type",
@@ -13160,15 +13336,15 @@
     },
     "ratelimit.PlatformIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:401"
+      "at": "core/ratelimit/ratelimit.go:426"
     },
     "ratelimit.Policy": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:498"
+      "at": "core/ratelimit/ratelimit.go:523"
     },
     "ratelimit.PublicHostIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:305"
+      "at": "core/ratelimit/ratelimit.go:330"
     },
     "ratelimit.RedisCounter": {
       "kind": "type",
@@ -13176,15 +13352,15 @@
     },
     "ratelimit.WebhookIPKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:393"
+      "at": "core/ratelimit/ratelimit.go:418"
     },
     "ratelimit.ZaloChatKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:411"
+      "at": "core/ratelimit/ratelimit.go:436"
     },
     "ratelimit.ZaloCommuneChatKey": {
       "kind": "func",
-      "at": "core/ratelimit/ratelimit.go:433"
+      "at": "core/ratelimit/ratelimit.go:458"
     },
     "richtext.Block": {
       "kind": "type",
@@ -13780,7 +13956,7 @@
     },
     "store.ChotLinhVuc": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:486"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:498"
     },
     "store.ChungTuGiaiNganStore": {
       "kind": "type",
@@ -13849,6 +14025,10 @@
     "store.ClaimDueDeliveries": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:651"
+    },
+    "store.ClaimDueGroupDeliveries": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:462"
     },
     "store.ClaimScope": {
       "kind": "func",
@@ -13970,6 +14150,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/system_message_custom.go:108"
     },
+    "store.CountLiveGroupLinksOfBot": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:343"
+    },
     "store.CountLiveItems": {
       "kind": "func",
       "at": "service-comms/internal/store/noi_dung_mini_app.go:938"
@@ -14024,7 +14208,7 @@
     },
     "store.CuaCongDanTheoMaTraCuu": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:138"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:139"
     },
     "store.CustomForUpdate": {
       "kind": "func",
@@ -14064,7 +14248,7 @@
     },
     "store.DanhSachCuaCongDan": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:258"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:259"
     },
     "store.DanhSachDeGhi": {
       "kind": "func",
@@ -14190,6 +14374,10 @@
       "kind": "type",
       "at": "service-comms/internal/store/zalo_link.go:623"
     },
+    "store.DueZaloGroupDelivery": {
+      "kind": "type",
+      "at": "service-comms/internal/store/zalo_group.go:434"
+    },
     "store.Dung": {
       "kind": "func",
       "at": "service-identity/internal/store/ghep_phien.go:210"
@@ -14222,13 +14410,25 @@
       "kind": "func",
       "at": "service-comms/internal/store/disaster_alert.go:273"
     },
+    "store.EndGroupLink": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:316"
+    },
     "store.EndLink": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:405"
     },
+    "store.EndLiveGroupLinksOfBot": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:328"
+    },
     "store.EndLiveLinksOfBot": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:387"
+    },
+    "store.EnqueueGroupDeliveries": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:384"
     },
     "store.EnqueueZaloDeliveries": {
       "kind": "func",
@@ -14253,6 +14453,10 @@
     "store.FailDelivery": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:736"
+    },
+    "store.FailGroupDelivery": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:544"
     },
     "store.FieldCodeState": {
       "kind": "func",
@@ -14346,6 +14550,14 @@
       "kind": "func",
       "at": "service-identity/internal/store/role_template.go:126"
     },
+    "store.GroupDeliveryRow": {
+      "kind": "type",
+      "at": "service-comms/internal/store/zalo_group.go:365"
+    },
+    "store.GroupPairingCode": {
+      "kind": "type",
+      "at": "service-comms/internal/store/zalo_group.go:59"
+    },
     "store.HandEntries": {
       "kind": "func",
       "at": "service-finance/internal/store/budget_import.go:73"
@@ -14429,6 +14641,14 @@
     "store.InsertComment": {
       "kind": "func",
       "at": "service-finance/internal/store/project_discussion.go:426"
+    },
+    "store.InsertGroupLink": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:278"
+    },
+    "store.InsertGroupPairingCode": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:75"
     },
     "store.InsertImported": {
       "kind": "func",
@@ -14670,6 +14890,18 @@
       "kind": "func",
       "at": "service-reporting/internal/store/system_message_override.go:98"
     },
+    "store.LiveGroupLinkOfChat": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:255"
+    },
+    "store.LiveGroupLinks": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:195"
+    },
+    "store.LiveGroupTargets": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:207"
+    },
     "store.LiveIDs": {
       "kind": "func",
       "at": "service-identity/internal/store/org_unit_lookup.go:25"
@@ -14802,6 +15034,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/zalo_commune_bot.go:104"
     },
+    "store.LockLiveGroupLink": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:236"
+    },
     "store.LockLiveLinkOfChat": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:349"
@@ -14809,6 +15045,10 @@
     "store.LockLiveLinkOfStaff": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:338"
+    },
+    "store.LockOpenGroupPairingCode": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:129"
     },
     "store.LockOpenPairingCode": {
       "kind": "func",
@@ -14913,6 +15153,14 @@
     "store.MarkFailed": {
       "kind": "func",
       "at": "service-petitions/internal/store/staff_notice_outbox.go:100"
+    },
+    "store.MarkGroupDeliverySent": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:529"
+    },
+    "store.MarkGroupPairingCodeUsed": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:158"
     },
     "store.MarkPairingCodeUsed": {
       "kind": "func",
@@ -15306,6 +15554,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/zalo_commune_bot.go:33"
     },
+    "store.NewZaloGroupStore": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:36"
+    },
     "store.NewZaloLinkStore": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:34"
@@ -15378,6 +15630,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/automation.go:121"
     },
+    "store.OpenGroupPairingCodeByHash": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:102"
+    },
     "store.OpenIncomingForAutomation": {
       "kind": "func",
       "at": "service-documents/internal/store/automation.go:70"
@@ -15432,7 +15688,7 @@
     },
     "store.OwnedByCode": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:181"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:182"
     },
     "store.OwnedForUpdate": {
       "kind": "func",
@@ -15533,6 +15789,10 @@
     "store.PostponeDelivery": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:706"
+    },
+    "store.PostponeGroupDelivery": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:516"
     },
     "store.ProfileForUpdate": {
       "kind": "func",
@@ -15722,6 +15982,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:728"
     },
+    "store.RetryGroupDelivery": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:535"
+    },
     "store.ReviveAllocation": {
       "kind": "func",
       "at": "service-finance/internal/store/du_an_ghi.go:667"
@@ -15828,7 +16092,7 @@
     },
     "store.SetResidentialUnit": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:522"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:534"
     },
     "store.SetSignInLock": {
       "kind": "func",
@@ -15865,6 +16129,10 @@
     "store.SkipDelivery": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:700"
+    },
+    "store.SkipGroupDelivery": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:510"
     },
     "store.SlugDaDung": {
       "kind": "func",
@@ -15938,6 +16206,10 @@
       "kind": "func",
       "at": "service-comms/internal/store/zalo_link.go:714"
     },
+    "store.StartGroupAttempt": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:523"
+    },
     "store.StatesByCode": {
       "kind": "func",
       "at": "service-petitions/internal/store/task_priority_codes.go:31"
@@ -15988,7 +16260,7 @@
     },
     "store.Tao": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:424"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:433"
     },
     "store.TaoBienBan": {
       "kind": "func",
@@ -16084,7 +16356,7 @@
     },
     "store.TheoMaTraCuu": {
       "kind": "func",
-      "at": "service-petitions/internal/store/phieu_phan_anh.go:69"
+      "at": "service-petitions/internal/store/phieu_phan_anh.go:70"
     },
     "store.TheoMaTraCuuDeSua": {
       "kind": "func",
@@ -16221,6 +16493,10 @@
     "store.UpdateDeadline": {
       "kind": "func",
       "at": "service-documents/internal/store/citizen_letter.go:458"
+    },
+    "store.UpdateGroupLinkScope": {
+      "kind": "func",
+      "at": "service-comms/internal/store/zalo_group.go:305"
     },
     "store.UpdateHolder": {
       "kind": "func",
@@ -16381,6 +16657,10 @@
     "store.ZaloCommuneBotStore": {
       "kind": "type",
       "at": "service-comms/internal/store/zalo_commune_bot.go:29"
+    },
+    "store.ZaloGroupStore": {
+      "kind": "type",
+      "at": "service-comms/internal/store/zalo_group.go:32"
     },
     "store.ZaloLinkStore": {
       "kind": "type",
@@ -16606,6 +16886,10 @@
       "kind": "type",
       "at": "service-comms/internal/zalobot/client.go:118"
     },
+    "zalobot.ChatType": {
+      "kind": "type",
+      "at": "service-comms/internal/zalobot/update.go:40"
+    },
     "zalobot.Client": {
       "kind": "type",
       "at": "service-comms/internal/zalobot/client.go:136"
@@ -16632,7 +16916,7 @@
     },
     "zalobot.ParseUpdate": {
       "kind": "func",
-      "at": "service-comms/internal/zalobot/update.go:40"
+      "at": "service-comms/internal/zalobot/update.go:97"
     },
     "zalobot.Retryable": {
       "kind": "func",
@@ -16648,11 +16932,11 @@
     },
     "zalobot.String": {
       "kind": "func",
-      "at": "service-comms/internal/zalobot/client.go:99"
+      "at": "service-comms/internal/zalobot/update.go:50"
     },
     "zalobot.Update": {
       "kind": "type",
-      "at": "service-comms/internal/zalobot/update.go:19"
+      "at": "service-comms/internal/zalobot/update.go:20"
     },
     "zalobot.ValidToken": {
       "kind": "func",

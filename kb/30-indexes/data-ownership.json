@@ -761,6 +761,27 @@
       "source": "service-comms/migrations/0018_zalo_bot.sql:471"
     },
     {
+      "entity": "ZaloGroupDelivery",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_group_delivery",
+      "source": "service-comms/migrations/0029_zalo_group_link.sql:596"
+    },
+    {
+      "entity": "ZaloGroupLink",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_group_link",
+      "source": "service-comms/migrations/0029_zalo_group_link.sql:312"
+    },
+    {
+      "entity": "ZaloGroupPairingCode",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "zalo_group_pairing_code",
+      "source": "service-comms/migrations/0029_zalo_group_link.sql:188"
+    },
+    {
       "entity": "ZaloLink",
       "service": "comms",
       "scope": "tenant",
