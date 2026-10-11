@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-10",
+  "cap_nhat": "2026-10-11",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -332,6 +332,15 @@
       "viec": "Thống nhất với petitions/comms: sau khi có dòng pending, mọi lỗi (kể cả 503 máy quét bận/giải mã bận/công bố hỏng) → failed + trail + xoá tạm trên ngữ cảnh tách rời; bị từ chối giữ nhánh rejected",
       "bang_chung": "(commit này) — TestUploadCompletionNotNowMovesTheRowToFailed, TestUploadRejectionKeepsItsRejectedPath, TestUploadAbandonFailureJoinsBothErrors; go vet + go test ./... service-platform xanh",
       "tiep_theo": "Tệp gốc đã chép sang private trước khi bước sau hỏng nằm lại không ai trỏ tới (như comms) — dọn sau."
+    },
+    {
+      "id": "migration-11-10-goi-y-mo-ta-linh-vuc",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Migration 0022: cột petition_field.description_placeholder (câu ví dụ ô Mô tả, tầng 1, cho phép NULL, ≤500 ký tự). KHÔNG gieo giá trị: 4/5 câu prototype khớp mã nêu địa danh Thăng Bình (chợ Hà Lam, Nguyễn Thành, Tiểu La, QL1A), câu 'khac' ghi 'cán bộ xã' — sai với phường; ADR 0060 §4 và ADR 0079 cấm tên xã ở tầng 1.",
+      "bang_chung": "service-platform/migrations/0022_petition_field_description_placeholder.sql + petition_field_description_placeholder_test.go; go vet ./migrations + go test ./... service-platform xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL).",
+      "tiep_theo": "CÒN TREO chờ chủ dự án: chọn câu gieo — nguyên văn prototype / viết lại bỏ địa danh / để tầng 2 theo xã; chọn xong là một migration UPDATE có điều kiện + vết platform_audit_log cùng câu lệnh. Thẻ Go sau: thêm cột vào ListPetitionFields và trường tuỳ chọn trong platform.proto."
     }
   ]
 }

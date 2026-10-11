@@ -152,6 +152,13 @@
       "source": "service-comms/migrations/0004_thong_bao_gui_cong_dan.sql:130"
     },
     {
+      "entity": "CitizenNotificationPreference",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "citizen_notification_preferences",
+      "source": "service-comms/migrations/0027_citizen_notification_preferences.sql:87"
+    },
+    {
       "entity": "CitizenSession",
       "service": "identity",
       "scope": "tenant",
@@ -192,6 +199,13 @@
       "scope": "tenant",
       "table": "data_encryption_key",
       "source": "service-comms/migrations/0008_mail_settings.sql:52"
+    },
+    {
+      "entity": "DisasterAlert",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "disaster_alerts",
+      "source": "service-comms/migrations/0026_disaster_alerts.sql:117"
     },
     {
       "entity": "DisbursementSettings",

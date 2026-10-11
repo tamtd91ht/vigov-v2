@@ -410,6 +410,17 @@
       "viec": "Bảng lỗi khách 10/10/2026 (ADR 0090): xoá nhãn trường bản đồ không bắt nhập lý do (câu cố định, vẫn xoá mềm + vết cùng giao dịch); tạo danh mục tin không cần slug — máy chủ sinh từ tên, không cấp lại slug đã dùng kể cả đã xoá (dòng 21); danh sách tin trả link xem trước ảnh đại diện đã ký theo từng dòng (dòng 22).",
       "bang_chung": "b6ae86fa — domain/map_field_schema.go (MapFieldDeleteDefaultReason), domain/noi_dung_mini_app.go (slug máy chủ cấp), app/content_cover.go + http/content_cover.go, store/stored_file.go + ca kiểm.",
       "tiep_theo": "store/stored_file_pg_test.go chưa chạy trên PostgreSQL (thiếu VIGOV_TEST_DSN). Web đã nối ở 2dff300e: tạo danh mục không gửi slug + cột ảnh đại diện (sổ web-admin, mục `noi-dung-10-11`)."
+    },
+    {
+      "id": "migration-11-10-canh-bao-tat-nhan-video",
+      "menu": [
+        "noi-dung-mini-app"
+      ],
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Migration theo quyết định chủ dự án 11/10/2026 (chỉ lược đồ, chưa có mã Go): 0026 bảng disaster_alerts (DisasterAlert, 6 loại bao/lu/sat-lo/mua-lon/dich-benh/chay, vùng nguy hiểm + điểm sơ tán + số khẩn cấp dạng mảng JSONB, kết thúc sớm ended_at/by, cảnh báo đã kết thúc không sửa được); 0027 bảng citizen_notification_preferences (không có dòng = đang bật) + trạng thái thứ năm 'dan-da-tat-nhan' của thong_bao_gui_cong_dan (thêm CHECK mới trước rồi mới bỏ CHECK cũ, không NOT VALID); 0028 cột noi_dung_mini_app.video_duration_seconds (chỉ loai='video', 1..21600).",
+      "bang_chung": "service-comms/migrations/0026_disaster_alerts.sql, 0027_citizen_notification_preferences.sql, 0028_content_item_video_duration.sql + disaster_alerts_test.go, citizen_notification_preferences_test.go; go vet ./migrations + go test ./... service-comms xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL, máy này không có VIGOV_TEST_DSN).",
+      "tiep_theo": "Thẻ Go sau: domain hằng trạng thái 'dan-da-tat-nhan' (domain/thong_bao_gui_cong_dan.go) + luồng gửi đọc tuỳ chọn theo COALESCE(zalo_enabled, true); kho/ca sử dụng/tuyến /disaster-alerts (content.read/content.update) và kiểm hình dạng phần tử JSONB; ô 'chưa báo được' phải hiện lý do 'dân đã tắt nhận'. ADR ghi việc đảo ADR 0047 điểm (12) (không công tắc 'Nhận thông báo') và G2 (4 → 6 loại) còn nợ. Chưa chạy trên PostgreSQL 16 thật."
     }
   ]
 }

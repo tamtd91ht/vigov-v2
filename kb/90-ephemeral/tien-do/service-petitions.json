@@ -777,6 +777,15 @@
       "viec": "Nhập nhiệm vụ từ Excel không còn từ chối tệp hợp lệ (bảng lỗi khách 10/10, dòng 18 ở sổ web-admin).",
       "bang_chung": "4bf0f0a6 — domain/task_import.go, app/task_import.go, http/task_import.go + ca kiểm cả ba tầng: tiêu đề so không phân biệt hoa/thường/khoảng trắng/xuống dòng/hoà-hòa uỷ-ủy; hàng tiêu đề tìm trong 10 hàng đầu (bỏ qua dòng tiêu đề gộp ô phía trên); lỗi bố cục chỉ đúng ô; hạn nhận thêm '17:00 30/09/2026', '17h00', '30-09-2026', '30.09.2026', ISO có T; ô ngày-giờ 00:00 theo định dạng ô, hệ ngày 1904; mã bộ phận/ưu tiên/loại/khối không phân biệt hoa thường; loại/ưu tiên nhận theo tên khi tên chỉ trỏ một dòng; ô phê duyệt FALSE/không/chưa = chưa duyệt. Thân commit: go test/build/vet ./... xanh service-petitions.",
       "tiep_theo": "CÒN TREO chờ chủ dự án: (1) hạn chỉ có ngày (không giờ) VẪN bị từ chối theo quyết định 28/09/2026 (domain ParseImportDeadline), trong khi prototype nhận — chọn giờ mặc định là quyết định của chủ dự án, không tự đặt; (2) nhập đơn vị thực hiện THEO TÊN cần hợp đồng identity mới — hiện chỉ có LiveOrgUnitIDsByCode (tra theo mã). Chưa kiểm với tệp Excel thật của khách."
+    },
+    {
+      "id": "migration-11-10-gio-vao-trang-thai",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Migration 0043 (ADR 0047 G4, chủ dự án xác nhận 11/10/2026): hai cột phieu_phan_anh.forwarded_for_processing_at (lần gần nhất vào da-chuyen-xu-ly) và awaiting_confirmation_at (lần gần nhất vào cho-dan-xac-nhan), cho phép NULL, không mặc định, không điền lại cho phiếu cũ (không dựng lại được tin cậy, G4 cấm đọc nhat_ky_phan_anh); CHECK sau vao_so_luc.",
+      "bang_chung": "service-petitions/migrations/0043_petition_status_entered_times.sql + petition_status_entered_times_test.go; go vet ./migrations + go test ./... service-petitions xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL, máy này không có VIGOV_TEST_DSN).",
+      "tiep_theo": "Thẻ Go sau: ca chuyển trạng thái ghi giờ vào hai cột (mở lại thì ghi đè giờ mới nhất), đường đọc của dân trả hai giờ; NULL nghĩa là 'không ghi nhận' chứ không phải 'chưa vào trạng thái'. Chưa chạy trên PostgreSQL 16 thật."
     }
   ]
 }
