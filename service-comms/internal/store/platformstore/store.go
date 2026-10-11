@@ -447,19 +447,43 @@ func (t *Tx) EndAllLiveLinks(ctx context.Context, op Operator) (map[string]int, 
 	return out, total, nil
 }
 
-// communeStats — a commune appears when it has a settings row or a live link of the shared bot.
-const communeStats = `SELECT tenant_id, bool_or(enabled), sum(links)::bigint FROM (
-		SELECT tenant_id, is_enabled AS enabled, 0::bigint AS links FROM zalo_channel_setting
-		UNION ALL
-		SELECT tenant_id, false, count(*) FROM zalo_link
-		WHERE bot_ref = $1 AND unlinked_at IS NULL GROUP BY tenant_id
-	) s GROUP BY tenant_id ORDER BY tenant_id`
+// communeStats — the commune set is the UNION of channel settings rows, live links of ANY bot and live
+// own-bot rows (proto ListZaloBotCommuneStats): a commune with only an own bot must still be listed, or
+// the operator screen would call it "Bot chung, off, 0".
+//
+// Two link counts, each with one meaning: shared = bot_ref 'shared'; own = bot_ref equal to the
+// commune's CURRENT live own bot (0022: at most one live row per commune). A live link to a RETIRED own
+// bot matches neither — 0022's deferred retire check makes that state uncommittable, but the count must
+// not depend on it. Only bot_name leaves zalo_commune_bot; never a sealed column or bot_account_id.
+// One live link per staff member (0018 zalo_link_one_live_per_staff), so count(*) counts staff.
+const communeStats = `WITH own AS (
+		SELECT tenant_id, bot_ref, bot_name FROM zalo_commune_bot WHERE retired_at IS NULL
+	), links AS (
+		SELECT l.tenant_id,
+			count(*) FILTER (WHERE l.bot_ref = $1) AS shared_links,
+			count(*) FILTER (WHERE o.bot_ref IS NOT NULL AND l.bot_ref = o.bot_ref) AS own_links
+		FROM zalo_link l LEFT JOIN own o ON o.tenant_id = l.tenant_id
+		WHERE l.unlinked_at IS NULL
+		GROUP BY l.tenant_id
+	), communes AS (
+		SELECT tenant_id FROM zalo_channel_setting
+		UNION SELECT tenant_id FROM links
+		UNION SELECT tenant_id FROM own
+	)
+	SELECT c.tenant_id, coalesce(s.is_enabled, false), coalesce(k.shared_links, 0)::bigint,
+		o.tenant_id IS NOT NULL, coalesce(o.bot_name, ''), coalesce(k.own_links, 0)::bigint
+	FROM communes c
+	LEFT JOIN zalo_channel_setting s ON s.tenant_id = c.tenant_id
+	LEFT JOIN links k ON k.tenant_id = c.tenant_id
+	LEFT JOIN own o ON o.tenant_id = c.tenant_id
+	ORDER BY c.tenant_id`
 
-// CommuneStats reads every commune's switch and live-link count. Inside a Tx because the read is
-// audited in the same transaction (rule 6, invariant 7).
+// CommuneStats reads every commune's switch, which bot it uses and its live-link counts. Inside a Tx
+// because the read is audited in the same transaction (rule 6, invariant 7).
 func (t *Tx) CommuneStats(ctx context.Context) ([]domain.ZaloBotCommuneStat, error) {
 	// @cross-tenant: GET zalo-bots/shared/communes (ADR 0074 §"Tài nguyên URL", user 05/10/2026) — the
-	// uptake of the ONE shared bot across every commune. Counts and a switch, never a person; audited.
+	// uptake of the Zalo Bot channel across every commune: counts, a switch, which bot and the own bot's
+	// display name (ADR 0079, proto ZaloBotCommuneStats). Never a person, never a secret; audited.
 	rows, err := t.tx.QueryContext(ctx, communeStats, domain.SharedZaloBotRef)
 	if err != nil {
 		return nil, fmt.Errorf("platformstore: commune stats: %w", err)
@@ -468,11 +492,12 @@ func (t *Tx) CommuneStats(ctx context.Context) ([]domain.ZaloBotCommuneStat, err
 	var out []domain.ZaloBotCommuneStat
 	for rows.Next() {
 		var s domain.ZaloBotCommuneStat
-		var n int64
-		if err := rows.Scan(&s.TenantID, &s.ChannelEnabled, &n); err != nil {
+		var shared, own int64
+		if err := rows.Scan(&s.TenantID, &s.ChannelEnabled, &shared, &s.UsesOwnBot, &s.OwnBotName, &own); err != nil {
 			return nil, fmt.Errorf("platformstore: commune stats: %w", err)
 		}
-		s.LinkedStaffCount = int(n)
+		s.LinkedStaffCount = int(shared)
+		s.OwnBotLinkedStaffCount = int(own)
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {

@@ -153,9 +153,27 @@ func (s *ZaloBotServer) ListZaloBotCommuneStats(ctx context.Context, req *commsv
 	for _, st := range stats {
 		res.Communes = append(res.Communes, &commsv1.ZaloBotCommuneStats{
 			TenantId: st.TenantID, ChannelEnabled: st.ChannelEnabled, LinkedStaffCount: clampUint32(st.LinkedStaffCount),
+			UsesOwnBot: st.UsesOwnBot, OwnBotName: ownBotName(st), OwnBotLinkedStaffCount: ownBotLinks(st),
 		})
 	}
 	return res, nil
+}
+
+// ownBotName and ownBotLinks hold the proto's "set exactly when uses_own_bot; empty / 0 otherwise" at
+// the boundary, whatever the store returned: a name or count beside uses_own_bot=false would tell the
+// operator screen a commune uses a bot it does not.
+func ownBotName(st domain.ZaloBotCommuneStat) string {
+	if !st.UsesOwnBot {
+		return ""
+	}
+	return st.OwnBotName
+}
+
+func ownBotLinks(st domain.ZaloBotCommuneStat) uint32 {
+	if !st.UsesOwnBot {
+		return 0
+	}
+	return clampUint32(st.OwnBotLinkedStaffCount)
 }
 
 // status is the proto's one status table:

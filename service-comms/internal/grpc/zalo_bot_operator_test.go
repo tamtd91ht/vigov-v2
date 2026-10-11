@@ -176,3 +176,24 @@ func TestListZaloBotCommuneStatsTranslates(t *testing.T) {
 		t.Fatalf("= %v, %v", res, err)
 	}
 }
+
+func TestListZaloBotCommuneStatsTranslatesOwnBot(t *testing.T) {
+	s, _ := zbServer(&fakeZaloBotUC{stats: []domain.ZaloBotCommuneStat{
+		{TenantID: "01JTESTCOMMUNEAAAAAAAAAAAA", ChannelEnabled: true, LinkedStaffCount: 0,
+			UsesOwnBot: true, OwnBotName: "Bot Xã A", OwnBotLinkedStaffCount: 3},
+		// A name and count beside uses_own_bot=false are dropped at the boundary (proto: set exactly
+		// when uses_own_bot).
+		{TenantID: "01JTESTCOMMUNEBBBBBBBBBBBB", LinkedStaffCount: 2, OwnBotName: "Bot cũ", OwnBotLinkedStaffCount: 5},
+	}})
+	res, err := s.ListZaloBotCommuneStats(context.Background(), &commsv1.ListZaloBotCommuneStatsRequest{ActorCode: "VH-00001"})
+	if err != nil || len(res.GetCommunes()) != 2 {
+		t.Fatalf("= %v, %v", res, err)
+	}
+	a, b := res.GetCommunes()[0], res.GetCommunes()[1]
+	if !a.GetUsesOwnBot() || a.GetOwnBotName() != "Bot Xã A" || a.GetOwnBotLinkedStaffCount() != 3 || a.GetLinkedStaffCount() != 0 {
+		t.Fatalf("own-bot commune = %v", a)
+	}
+	if b.GetUsesOwnBot() || b.GetOwnBotName() != "" || b.GetOwnBotLinkedStaffCount() != 0 || b.GetLinkedStaffCount() != 2 {
+		t.Fatalf("shared-bot commune = %v", b)
+	}
+}

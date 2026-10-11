@@ -421,6 +421,14 @@
       "viec": "Migration theo quyết định chủ dự án 11/10/2026 (chỉ lược đồ, chưa có mã Go): 0026 bảng disaster_alerts (DisasterAlert, 6 loại bao/lu/sat-lo/mua-lon/dich-benh/chay, vùng nguy hiểm + điểm sơ tán + số khẩn cấp dạng mảng JSONB, kết thúc sớm ended_at/by, cảnh báo đã kết thúc không sửa được); 0027 bảng citizen_notification_preferences (không có dòng = đang bật) + trạng thái thứ năm 'dan-da-tat-nhan' của thong_bao_gui_cong_dan (thêm CHECK mới trước rồi mới bỏ CHECK cũ, không NOT VALID); 0028 cột noi_dung_mini_app.video_duration_seconds (chỉ loai='video', 1..21600).",
       "bang_chung": "service-comms/migrations/0026_disaster_alerts.sql, 0027_citizen_notification_preferences.sql, 0028_content_item_video_duration.sql + disaster_alerts_test.go, citizen_notification_preferences_test.go; go vet ./migrations + go test ./... service-comms xanh (chỉ kiểm chữ SQL — chưa áp lên PostgreSQL, máy này không có VIGOV_TEST_DSN).",
       "tiep_theo": "Thẻ Go sau: domain hằng trạng thái 'dan-da-tat-nhan' (domain/thong_bao_gui_cong_dan.go) + luồng gửi đọc tuỳ chọn theo COALESCE(zalo_enabled, true); kho/ca sử dụng/tuyến /disaster-alerts (content.read/content.update) và kiểm hình dạng phần tử JSONB; ô 'chưa báo được' phải hiện lý do 'dân đã tắt nhận'. ADR ghi việc đảo ADR 0047 điểm (12) (không công tắc 'Nhận thông báo') và G2 (4 → 6 loại) còn nợ. Chưa chạy trên PostgreSQL 16 thật."
+    },
+    {
+      "id": "zalo-bot-communes-table-11-10",
+      "viec": "Bảng xã màn Zalo Bot (vận hành) theo prototype: ListZaloBotCommuneStats điền uses_own_bot / own_bot_name / own_bot_linked_staff_count (proto a35273a3). Tập xã = hợp của dòng cấu hình kênh, liên kết đang sống của MỌI bot, bot riêng đang sống; trường 3 giữ nghĩa (chỉ liên kết bot chung); số liên kết bot riêng chỉ đếm bot_ref của bot riêng HIỆN TẠI; tên bot riêng chỉ khi uses_own_bot, không bao giờ token/bí mật/bot_account_id.",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "bang_chung": "service-comms/internal/store/platformstore/store.go (communeStats, giữ // @cross-tenant), domain/zalo_bot.go (ZaloBotCommuneStat), grpc/zalo_bot_operator.go (ownBotName/ownBotLinks giữ 'chỉ khi uses_own_bot' ở biên) + grpc/zalo_bot_operator_test.go, platformstore/store_pg_test.go bước 8b. go vet + go test ./internal/... service-comms xanh.",
+      "tiep_theo": "store_pg_test.go bước 8b CHƯA chạy trên PostgreSQL (máy này không có VIGOV_TEST_DSN). Platform/web-admin dùng ba trường mới là thẻ riêng."
     }
   ]
 }

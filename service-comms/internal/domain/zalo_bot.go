@@ -174,9 +174,19 @@ type SharedZaloBot struct {
 	HasPendingWebhook bool
 }
 
-// ZaloBotCommuneStat is one commune's uptake of the shared bot — counts and a switch only.
+// ZaloBotCommuneStat is one commune's uptake of the Zalo Bot channel — counts, a switch and which bot.
+// Nothing about any person, and nothing of the own bot but its display name (never a token, a secret or
+// the bot account id).
 type ZaloBotCommuneStat struct {
-	TenantID         string
-	ChannelEnabled   bool
+	TenantID       string
+	ChannelEnabled bool
+	// LinkedStaffCount: live links to the SHARED bot only — the published meaning of proto field 3.
 	LinkedStaffCount int
+	// UsesOwnBot: the commune has a live (not retired) zalo_commune_bot row.
+	UsesOwnBot bool
+	// OwnBotName: that row's bot_name; empty unless UsesOwnBot.
+	OwnBotName string
+	// OwnBotLinkedStaffCount: live links whose bot_ref is the CURRENT own bot's; 0 unless UsesOwnBot.
+	// Links to a retired own bot are never counted — they reach nobody through the bot in use.
+	OwnBotLinkedStaffCount int
 }

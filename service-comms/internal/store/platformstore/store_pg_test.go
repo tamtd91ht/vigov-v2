@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -75,6 +76,34 @@ func addLink(t *testing.T, db *sql.DB, tid, id, staff, chat string) {
 	if _, err := db.Exec(`INSERT INTO zalo_link (tenant_id, id, staff_code, bot_ref, chat_id) VALUES ($1,$2,$3,'shared',$4)`,
 		tid, id, staff, chat); err != nil {
 		t.Fatalf("insert link: %v", err)
+	}
+}
+
+const (
+	pgCommuneC = "01JTESTCOMMUNECCCCCCCCCCCC"
+	pgCommuneD = "01JTESTCOMMUNEDDDDDDDDDDDD"
+	// ownBotTokenMarker sits inside the fake sealed token: CommuneStats must never surface it.
+	ownBotTokenMarker = "OWN-BOT-FAKE-TOKEN"
+)
+
+type execFunc func(query string, args ...any) (sql.Result, error)
+
+// addOwnBot inserts a LIVE zalo_commune_bot row through exec (the db, or a transaction).
+func addOwnBot(t *testing.T, exec execFunc, tid, id, account, name string) {
+	t.Helper()
+	sealed := []byte(ownBotTokenMarker + "-padding-past-29-bytes")
+	if _, err := exec(`INSERT INTO zalo_commune_bot (tenant_id, id, bot_account_id, token_sealed, bot_name, set_at, set_by)
+		VALUES ($1,$2,$3,$4,$5,now(),'CB-001')`, tid, id, account, sealed, name); err != nil {
+		t.Fatalf("insert own bot: %v", err)
+	}
+}
+
+// addOwnLink inserts a live link to the commune's own bot (bot_ref = 'commune:' || account).
+func addOwnLink(t *testing.T, exec execFunc, tid, id, staff, account, chat string) {
+	t.Helper()
+	if _, err := exec(`INSERT INTO zalo_link (tenant_id, id, staff_code, bot_ref, chat_id) VALUES ($1,$2,$3,$4,$5)`,
+		tid, id, staff, domain.CommuneZaloBotRefPrefix+account, chat); err != nil {
+		t.Fatalf("insert own-bot link: %v", err)
 	}
 }
 
@@ -281,7 +310,67 @@ func TestPlatformStoreAgainstPostgres(t *testing.T) {
 		t.Fatalf("stats = %+v", stats)
 	}
 
-	// 9. The trail refuses anybody but an operator, and no entry ever holds a sealed value.
+	// 8b. Own bots (ADR 0079): a commune with only an own bot is listed; shared and own links counted
+	// apart; a live link to a RETIRED own bot is never counted; nothing of the bot leaves but its name.
+	addLink(t, db, pgCommuneB, "01JLINKB2", "CB-004", "chat-b2")
+	addOwnBot(t, db.Exec, pgCommuneC, "01JBOTC", "cbot-c", "Bot Xã C")
+	addOwnBot(t, db.Exec, pgCommuneD, "01JBOTX", "cbot-x", "Bot X")
+	addOwnLink(t, db.Exec, pgCommuneD, "01JLINKD1", "CB-010", "cbot-x", "chat-d1")
+	readStats := func(tx *Tx) ([]domain.ZaloBotCommuneStat, error) {
+		st, err := tx.CommuneStats(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return st, tx.AppendOperatorAudit(ctx, OperatorAudit{Operator: pgOp, Action: domain.ActionZaloBotCommunesRead, Target: domain.ZaloBotTarget})
+	}
+	if err := s.InTx(ctx, func(tx *Tx) error {
+		var err error
+		stats, err = readStats(tx)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	want := []domain.ZaloBotCommuneStat{
+		{TenantID: pgCommuneA, LinkedStaffCount: 1},
+		{TenantID: pgCommuneB, ChannelEnabled: true, LinkedStaffCount: 1},
+		{TenantID: pgCommuneC, UsesOwnBot: true, OwnBotName: "Bot Xã C"},
+		{TenantID: pgCommuneD, UsesOwnBot: true, OwnBotName: "Bot X", OwnBotLinkedStaffCount: 1},
+	}
+	if fmt.Sprint(stats) != fmt.Sprint(want) {
+		t.Fatalf("stats = %+v\nwant    %+v", stats, want)
+	}
+	for _, st := range stats {
+		if strings.Contains(st.OwnBotName, "cbot-") || strings.Contains(st.OwnBotName, ownBotTokenMarker) {
+			t.Fatalf("own_bot_name carries the account id or the token: %+v", st)
+		}
+	}
+	// Retire X while its link is still live — a state 0022's deferred retire check refuses AT COMMIT, so
+	// it exists only inside this transaction, which is rolled back. Read here, the count must already
+	// ignore it: only the link to the CURRENT bot Y counts.
+	errRollback := errors.New("rollback")
+	err = s.InTx(ctx, func(tx *Tx) error {
+		if _, err := tx.tx.ExecContext(ctx, `UPDATE zalo_commune_bot SET retired_at = now(), retired_by = 'CB-001',
+			retire_reason = $3, updated_at = now() WHERE tenant_id = $1 AND id = $2`,
+			pgCommuneD, "01JBOTX", domain.CommuneZaloBotReplacedReason); err != nil {
+			return err
+		}
+		addOwnBot(t, tx.tx.Exec, pgCommuneD, "01JBOTY", "cbot-y", "Bot Y")
+		addOwnLink(t, tx.tx.Exec, pgCommuneD, "01JLINKD2", "CB-011", "cbot-y", "chat-d2")
+		st, err := readStats(tx)
+		if err != nil {
+			return err
+		}
+		d := st[len(st)-1]
+		if d.TenantID != pgCommuneD || !d.UsesOwnBot || d.OwnBotName != "Bot Y" || d.OwnBotLinkedStaffCount != 1 || d.LinkedStaffCount != 0 {
+			return fmt.Errorf("after the switch, D = %+v", d)
+		}
+		return errRollback
+	})
+	if !errors.Is(err, errRollback) {
+		t.Fatal(err)
+	}
+
+	// 9.The trail refuses anybody but an operator, and no entry ever holds a sealed value.
 	if err := s.InTx(ctx, func(tx *Tx) error {
 		return tx.AppendOperatorAudit(ctx, OperatorAudit{Operator: Operator{Code: "system", IP: "x"}, Action: "a", Target: "t"})
 	}); !errors.Is(err, ErrNoOperator) {
