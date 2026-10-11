@@ -652,6 +652,15 @@
       "bang_chung": "CHƯA COMMIT (giao cho phiên chính). citizen-app/src/cong-dan/man/disaster-alerts.tsx (mới), notification-preference.ts (mới), api/notification-preference.ts (mới), api/hop-dong-cong-khai.ts (readDisasterAlerts, readVideoDuration), api/hop-dong-phan-anh.ts (step_times, CitizenField.placeholder), api/goi-vigov.ts (communeDisasterAlerts, myNotificationPreference, setMyNotificationPreference, PUT), TrangXa.tsx, TienIchAppXa.tsx (NotificationSwitchRow), PhanAnhAppXa.tsx (stepTime, describeExample), media-screens.tsx, noi-dung.ts, styles.css; test commune-new-apis.test.tsx (30 ca); hồ sơ Zalo content/ket-xuat-ho-so.ts khai thêm hai đường (commune-disaster-alerts: host, mỗi lần mở trang chủ; my-notification-preferences: đọc khi mở Cá nhân có phiên, ghi zalo_enabled sau cú bấm) — DUONG_ROI_KHOI_MAY 20 → 22, không lên số phiên bản chính sách (chưa công bố). tsc sạch; vitest 71 tệp/1940 ca xanh. Chưa đối chiếu ảnh render với prototype; chưa thử trên máy Zalo thật.",
       "tiep_theo": "Câu chữ chính sách quyền riêng tư cho hai đường mới còn nợ (lời pháp lý của chủ dự án). Chủ dự án xem: câu gợi ý prototype 'Báo qua Zalo khi … hồ sơ có kết quả' nói về hồ sơ (ViGov không giữ) và công tắc hôm nay chưa đổi tin nào (ADR 0091 §Cái giá); tiêu đề 'Vùng có nguy cơ ngập' chỉ dùng cho bão/lũ/mưa lớn, loại khác dùng 'Vùng nguy hiểm' (câu mới); bỏ 'và báo qua Zalo cho bà con' ở trạng thái trống vì chưa đẩy ZNS. Kiểm ảnh trên máy build.",
       "no_confirm": []
+    },
+    {
+      "id": "giong-van-app-chung-vihat-11-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Phần giới thiệu ViHAT của app chung (features/company-intro, tinh-nang, dang-nhap, yeu-cau, goi-y-giai-phap, content/chien-dich): đổi văn phong sang app đã phát hành (chủ dự án 11/10/2026 'bỏ từ hướng dẫn và các dạng như đây là bản dựng'). Bỏ câu 'Bản dựng này…/Bản hiện tại chưa…', 'Người dựng bản cần đặt VIGOV_API_HOST' (thay 'Hệ thống đang gián đoạn'), 'nút bên trên/ngay bên dưới', 'Không sao cả'; bỏ hiển thị độ dài/vài ký tự đầu của mã Zalo, giờ hết hạn phiên, đoạn 'phiên không ghi xuống máy', các đoạn ranh giới/riêng tư dưới mỗi tính năng (chi tiết ở chính sách + màn Quản lý quyền); câu mục đích quyền (vi_sao) rút còn một câu; màn Quản lý quyền bỏ tên API; 'Số hoá danh thiếp giấy' đổi tiêu đề 'Chụp ảnh danh thiếp giấy' (không có OCR). Thêm ca kiểm 'giọng văn' chặn các mẫu câu ấy quay lại.",
+      "bang_chung": "tsc sạch; vitest 71 tệp/1935 ca xanh. Chưa xem ảnh render thật trên Zalo.",
+      "tiep_theo": "(1) 'Tìm văn phòng gần tôi' vẫn KHÔNG xếp văn phòng theo khoảng cách — câu sau khi chia sẻ vị trí chỉ mời chọn; muốn đúng tên nút cần toạ độ văn phòng + đổi mã vị trí qua vihat-miniapp /api/v1/location (chủ dự án quyết). (2) Chính sách quyền riêng tư vẫn hiện nhãn '[CHỜ DUYỆT — bản nháp 02/10/2026…]' cho người dùng — chờ chủ dự án duyệt văn bản. (3) Phần app xã (src/cong-dan) chưa rà giọng văn.",
+      "no_confirm": []
     }
   ]
 }

@@ -55,17 +55,17 @@ export const CHIEN_DICH: Readonly<Record<string, ChienDich>> = {
   "vp-quay": {
     tieu_de: "Bạn vừa quét mã tại quầy",
     cau_chao:
-      "Cảm ơn bạn đã ghé văn phòng ViHAT Group. Xem giải pháp ngay tại đây, hoặc gọi hotline để có người trả lời trực tiếp.",
+      "Cảm ơn bạn đã ghé thăm ViHAT Group. Khám phá các giải pháp của chúng tôi hoặc liên hệ hotline để được tư vấn.",
   },
   "thiep-nhan-vien": {
     tieu_de: "Từ tấm danh thiếp bạn vừa nhận",
     cau_chao:
-      "Đây là ứng dụng của ViHAT Group. Bạn có thể xem các dòng giải pháp, hoặc gọi lại cho chúng tôi bất cứ lúc nào.",
+      "Khám phá hệ sinh thái giải pháp của ViHAT Group và kết nối với chúng tôi bất cứ lúc nào.",
   },
   "trang-zalo": {
     tieu_de: "Từ trang Zalo của ViHAT Group",
     cau_chao:
-      "Bạn đang xem ứng dụng giới thiệu giải pháp của ViHAT Group. Ba bước gợi ý bên dưới giúp bạn tìm đúng dòng sản phẩm cần hỏi.",
+      "Tìm giải pháp phù hợp với doanh nghiệp của bạn chỉ trong 3 bước.",
   },
 };
 

@@ -105,7 +105,6 @@ export function SoHoaThiepGiay() {
       }}
       cap_tieu_de="h2"
       glyph={<TargetGlyph className="tn__glyph" />}
-      dan_nhap={SO_HOA_THIEP.dan_nhap}
       veKetQua={(cho_phep) => <TraLoiQuyenMayAnh cho_phep={cho_phep} />}
       duoi_cung={
         <>
@@ -132,11 +131,6 @@ export function SoHoaThiepGiay() {
             )}
             {anh.kieu === "tu-choi" && <p className="tn__loi">{SO_HOA_THIEP.khong_chon_anh}</p>}
           </div>
-
-          {/* HAI CÂU NÀY LUÔN HIỆN, KHÔNG CHỜ TỚI LÚC CÓ ẢNH. Người quyết định có đưa ảnh của
-              một người khác vào hay không cần đọc chúng TRƯỚC, không phải sau. */}
-          <p className="tn__ranh-gioi">{SO_HOA_THIEP.chua_doc_duoc_chu}</p>
-          <p className="tn__rieng-tu">{SO_HOA_THIEP.anh_khong_roi_may}</p>
         </>
       }
     />

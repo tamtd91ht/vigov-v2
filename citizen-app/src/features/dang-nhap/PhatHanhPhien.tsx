@@ -20,7 +20,6 @@
  */
 import { useEffect, useState } from "react";
 
-import { thoiDiemVN } from "../../lib/thoi-diem";
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
 import { type KetQuaPhien, phatHanhPhien } from "./goi-may-chu";
@@ -38,27 +37,17 @@ import { dungPhien } from "./kho-phien";
  * xảy ra và việc phải làm tiếp; một `401` trên màn hình là thứ README §Error message shape cấm.
  */
 const CHU_PHIEN = {
-  dang_gui: "Đang mở phiên đăng nhập…",
-  xong: "Bạn đã đăng nhập.",
-  giu_trong_bo_nho:
-    "Phiên này chỉ nằm trong bộ nhớ của ứng dụng: nó không được ghi xuống máy bạn, và mất đi khi bạn đóng ứng dụng. Lần sau mở lại, bạn đăng nhập bằng một lần chạm như vừa rồi.",
-  ma_het_han:
-    "Mã đăng nhập của Zalo chỉ dùng được trong hai phút và đã quá hạn. Bạn hãy bấm lại nút đăng nhập bên trên để lấy mã mới.",
-  // 502 — KHÁC HẲN `ma_het_han`, và khác ở đúng chỗ quan trọng: bấm lại ngay cũng hỏng y như
-  // vậy. Câu này nói CHỜ rồi thử lại, và nói ra rằng lỗi không nằm ở phía người dùng.
-  zalo_khong_tra_loi:
-    "Zalo đang không trả lời phần xác thực, nên lần đăng nhập này chưa thành công. Việc này không do máy bạn. Bạn hãy chờ một lát rồi bấm lại nút đăng nhập bên trên.",
-  // ⚠ KHÔNG ĐƯỢC MỞ ĐẦU BẰNG "Chưa mở…", DÙ ĐÓ LÀ CÂU TIẾNG VIỆT TỰ NHIÊN NHẤT Ở ĐÂY. `Chưa mở`
-  // là nhãn của lớp khám phá (dịch vụ xã chưa mở), và `bundle-for-zalo.test.ts` khẳng định bản
-  // NỘP không chứa một chuỗi nào của lớp ấy. Câu đầu tiên viết ở đây đã làm ca ấy đỏ — dây bẫy
-  // hoạt động đúng như thiết kế. Ghi lại để lần sau không ai viết lại nó rồi đi tìm nguyên nhân.
-  khong_goi_duoc:
-    "Phiên đăng nhập chưa được tạo. Bạn hãy kiểm tra kết nối mạng rồi bấm lại nút đăng nhập bên trên.",
-  // Câu này thực chất nói với NGƯỜI DỰNG BẢN — một bản dựng quên khai địa chỉ máy chủ. Nó vẫn
-  // nói việc cần làm tiếp bằng tiếng Việt, không phải một mã lỗi. `scripts/deploy.mjs` chặn
-  // đường đẩy khi biến chưa khai, nên câu này không được phép tới tay người dùng thật.
-  chua_khai_host:
-    "Bản dựng này chưa được khai địa chỉ máy chủ, nên chưa đăng nhập được. Người dựng bản cần đặt biến VIGOV_API_HOST rồi dựng lại.",
+  dang_gui: "Đang đăng nhập…",
+  xong: "Đăng nhập thành công.",
+  ma_het_han: "Phiên xác thực đã hết hạn. Vui lòng đăng nhập lại.",
+  // 502 — KHÁC HẲN `ma_het_han`: bấm lại ngay cũng hỏng y như vậy, nên câu này nói CHỜ.
+  zalo_khong_tra_loi: "Zalo đang bận. Vui lòng thử lại sau ít phút.",
+  // ⚠ KHÔNG MỞ ĐẦU BẰNG "Chưa mở…": đó là nhãn của lớp khám phá, và `bundle-for-zalo.test.ts`
+  // khẳng định bản NỘP không chứa chuỗi nào của lớp ấy.
+  khong_goi_duoc: "Không kết nối được. Vui lòng kiểm tra mạng và thử lại.",
+  // Bản dựng quên khai địa chỉ máy chủ — `scripts/deploy.mjs` chặn đường đẩy khi biến chưa khai, nên
+  // người dùng thật không gặp câu này. Nếu có gặp, đó là sự cố của hệ thống, không phải việc của họ.
+  chua_khai_host: "Hệ thống đang gián đoạn. Vui lòng thử lại sau.",
 } as const;
 
 
@@ -115,16 +104,7 @@ export function PhatHanhPhien({ ma }: { ma: MaDangNhap }) {
   }
 
   if (trang_thai.kieu === "xong") {
-    // Giờ hết hạn GHIM +07 (quyết định 27/09/2026, `lib/thoi-diem.ts`), không theo múi của máy.
-    // Giá trị lạ thì `null` và dòng ấy bỏ hẳn — không hiện một chuỗi kỹ thuật.
-    const gio = thoiDiemVN(trang_thai.phien.het_han);
-    return (
-      <>
-        <p className="tn__xong">{CHU_PHIEN.xong}</p>
-        {gio !== null && <p className="tn__do">Phiên có hiệu lực tới {gio}</p>}
-        <p className="tn__giai-thich">{CHU_PHIEN.giu_trong_bo_nho}</p>
-      </>
-    );
+    return <p className="tn__xong">{CHU_PHIEN.xong}</p>;
   }
 
   // Bốn nhánh còn lại, mỗi nhánh một việc phải làm tiếp. Bảng tra thay cho một chuỗi `? :` lồng

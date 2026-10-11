@@ -26,7 +26,7 @@ import { MAN_TU_VAN, MAN_YEU_CAU } from "./index";
 import { GIAI_THICH_TRANG_THAI, ngayDoc, NHAN_LOAI, NHAN_TRANG_THAI } from "./trang-thai";
 import { TuVanBaoGiaScreen } from "./TuVanBaoGiaScreen";
 import { DongYeuCau, ThanDanhSach, YeuCauCuaToiScreen } from "./YeuCauCuaToiScreen";
-import { YEU_CAU_CUA_TOI } from "./noi-dung";
+import { TU_VAN, YEU_CAU_CUA_TOI } from "./noi-dung";
 
 const ve = (node: ReactElement) => renderToStaticMarkup(node);
 const chuCua = (markup: string) =>
@@ -378,7 +378,7 @@ describe("chưa đăng nhập thì không vẽ biểu mẫu, và không vẽ m�
       /<(form|input|textarea|select)\b/,
     );
     const chu = chuCua(markup);
-    expect(chu).toContain("Bạn cần đăng nhập trước");
+    expect(chu).toContain(TU_VAN.can_dang_nhap_tieu_de);
     // HOTLINE Ở LẠI: đường duy nhất chạy được khi chưa đăng nhập.
     expect(markup).toContain('href="tel:');
   });
@@ -476,7 +476,7 @@ describe("đã đăng nhập: biểu mẫu hiện ra, và nó có ĐÚNG MỘT �
   });
 
   it("nói ra TRẦN GỌI LẠI ngay trên màn, không để người dùng gặp nó dưới dạng một câu từ chối", () => {
-    expect(chuCua(daDangNhap())).toContain("tối đa 3 lần trong 24 giờ");
+    expect(chuCua(daDangNhap())).toContain("Tối đa 3 lần đề nghị gọi lại trong 24 giờ");
   });
 
   it("KHÔNG in một cam kết thời gian nào, và KHÔNG hứa chắc có tin ZNS", () => {
@@ -485,9 +485,6 @@ describe("đã đăng nhập: biểu mẫu hiện ra, và nó có ĐÚNG MỘT �
     expect(chu, "hứa chắc rằng sẽ có tin ZNS").not.toMatch(/[Bb]ạn sẽ nhận được (một )?tin/);
   });
 
-  it("nói ra rằng phiên không được ghi xuống máy — người dùng không nên tự phát hiện", () => {
-    expect(chuCua(daDangNhap())).toContain("không ghi phiên đăng nhập xuống máy bạn");
-  });
 });
 
 describe("danh sách yêu cầu nói ra mọi nhánh, kể cả nhánh rỗng", () => {

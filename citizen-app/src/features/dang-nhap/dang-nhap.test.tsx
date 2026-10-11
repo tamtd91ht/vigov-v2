@@ -157,13 +157,11 @@ describe("màn hình: nói việc đang xảy ra và việc phải làm tiếp, 
     expect(ma_nguon).not.toMatch(/\/api\/|http|[Tt]oken|401|502|fetch/);
   });
 
-  it("giờ hết hạn phiên GHIM +07 qua hàm dùng chung, không theo múi của máy (quyết định 27/09/2026)", () => {
-    // Nhánh "đã đăng nhập" chỉ vẽ sau `useEffect`, nên dựng tĩnh không tới được dòng "Phiên có
-    // hiệu lực tới …". Canh ở mã nguồn: dòng ấy đi qua `thoiDiemVN` (định dạng của nó có ca so
-    // nguyên văn ở `lib/thoi-diem.test.ts`), và không còn lời gọi `toLocale*String` nào ở đây.
+  it("không in giờ hết hạn phiên, và không định dạng giờ theo múi của máy", () => {
+    // 11/10/2026: dòng "Phiên có hiệu lực tới …" là chi tiết kỹ thuật, đã bỏ khỏi màn. Nếu ai thêm
+    // lại một mốc giờ, nó phải đi qua `thoiDiemVN` (+07), không qua `toLocale*String`.
     const ma = maPhatHanhPhien;
-    expect(ma).toMatch(/import \{ thoiDiemVN \} from "\.\.\/\.\.\/lib\/thoi-diem"/);
-    expect(ma).toMatch(/thoiDiemVN\(trang_thai\.phien\.het_han\)/);
+    expect(ma).not.toMatch(/hiệu lực tới/);
     expect(ma, "còn định dạng giờ theo múi của máy").not.toMatch(/\.toLocale(Date|Time)?String\(/);
   });
 });

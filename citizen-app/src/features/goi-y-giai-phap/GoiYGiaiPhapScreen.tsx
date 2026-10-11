@@ -47,19 +47,19 @@ import {
 export const LOI = {
   tieu_de: "Gợi ý giải pháp",
   dan_nhap:
-    "Ba câu hỏi ngắn, trả lời ngay trên máy bạn. Không có gì được lưu lại và không có gì được gửi đi.",
+    "Trả lời 3 câu hỏi để tìm giải pháp phù hợp với doanh nghiệp của bạn.",
   buoc: (thu: number, tong: number) => `Bước ${thu} / ${tong}`,
-  nut_quay_lai: "‹ Quay lại bước trước",
-  nut_lam_lai: "Làm lại từ đầu",
-  tieu_de_ket_qua: "Dòng giải pháp nên hỏi trước",
+  nut_quay_lai: "‹ Quay lại",
+  nut_lam_lai: "Làm lại",
+  tieu_de_ket_qua: "Giải pháp phù hợp với bạn",
   co_so_goi_y:
-    "Gợi ý dưới đây chọn theo việc bạn đang cần. Lĩnh vực và quy mô nằm trong câu tóm tắt bên dưới, để bạn đọc lại cho người trực hotline nghe.",
-  nhan_tom_tat: "Tóm tắt câu trả lời của bạn",
+    "Dựa trên nhu cầu bạn đã chọn.",
+  nhan_tom_tat: "Lựa chọn của bạn",
   nhan_linh_vuc: "Lĩnh vực",
   nhan_quy_mo: "Quy mô",
   nhan_viec: "Đang cần",
   nut_xem_chi_tiet: "Xem chi tiết giải pháp",
-  phu_xem_chi_tiet: "Mở màn Giải pháp",
+  phu_xem_chi_tiet: "Tính năng và lợi ích",
   // ⚠ HÀNH ĐỘNG THỨ BA, THÊM 22/09/2026 — VÀ NÓ CHỈ ĐƯỢC PHÉP TỒN TẠI TỪ HÔM NAY.
   //
   //   Giai đoạn A cấm mọi nhãn kiểu "gửi yêu cầu" trên màn này, vì KHÔNG CÓ TUYẾN NÀO NHẬN, và
@@ -71,7 +71,7 @@ export const LOI = {
   phu_gui_yeu_cau: "Chúng tôi liên hệ lại",
   nut_goi: "Gọi hotline",
   khong_co_goi_y:
-    "Chưa có dòng giải pháp nào khớp với lựa chọn này. Bạn hãy gọi hotline, chúng tôi trả lời trực tiếp.",
+    "Liên hệ hotline để được tư vấn giải pháp phù hợp nhất với nhu cầu của bạn.",
 } as const;
 
 const TONG_SO_BUOC = 3;

@@ -7,8 +7,7 @@
  * Giải pháp, ngay dưới phần nói về tổng đài — không phải trong một tab tên "Quyền".
  *
  * ⚠ KHÔNG BỊA MỘT CON SỐ NÀO. Nền tảng trả về đúng một chuỗi: kiểu kết nối. Không độ trễ, không
- * băng thông, không điểm chất lượng. Màn hình này nói đúng chừng ấy và nói thêm rằng nó KHÔNG
- * đo được những thứ kia (`DUONG_TRUYEN.khong_do_toc_do`). Một con số bịa ra trong ứng dụng của
+ * băng thông, không điểm chất lượng. Màn hình này nói đúng chừng ấy. Một con số bịa ra trong ứng dụng của
  * một nhà cung cấp hạ tầng thoại là con số khách hàng của họ sẽ đem đối chiếu với máy đo thật.
  *
  * `vibrate` rung một nhịp khi có kết quả: người vừa bấm nút thường đang nhìn đi chỗ khác, và
@@ -37,7 +36,6 @@ export function KetQuaDuongTruyen({ tu_nen_tang }: { tu_nen_tang: string }) {
         {DUONG_TRUYEN.nhan_ket_qua}: {kieu.nhan}
       </p>
       <p className="tn__giai-thich">{kieu.y_nghia}</p>
-      <p className="tn__ranh-gioi">{DUONG_TRUYEN.khong_do_toc_do}</p>
     </>
   );
 }
@@ -55,7 +53,6 @@ export function KiemTraDuongTruyen() {
       }}
       cap_tieu_de="h2"
       glyph={<CloudGlyph className="tn__glyph" />}
-      dan_nhap={DUONG_TRUYEN.dan_nhap}
       veKetQua={(tu_nen_tang) => <KetQuaDuongTruyen tu_nen_tang={tu_nen_tang} />}
     />
   );

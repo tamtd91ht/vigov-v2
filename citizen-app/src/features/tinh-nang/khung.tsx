@@ -21,20 +21,8 @@
  */
 import { type ReactNode, useState } from "react";
 
-import { CHI_HIEN_LEN_MAN_HINH, type MaTinhNang, MA_RONG, noiDung, TOKEN_KHONG_CHUA_GI } from "./noi-dung";
+import { type MaTinhNang, noiDung } from "./noi-dung";
 import type { KetQuaXin } from "./zalo-api";
-
-/**
- * Che token, chỉ để vài ký tự đầu.
- *
- * Token KHÔNG chứa số điện thoại hay toạ độ (xem `zalo-api.ts`), nên đây không phải chuyện dữ
- * liệu cá nhân — nó là một CHỨNG TỪ đổi được dữ liệu ở máy chủ. Hiện trọn vẹn lên màn hình là
- * mời người đứng cạnh chụp lại trong hai phút nó còn sống. Vài ký tự đầu đủ để người duyệt thấy
- * "đã nhận được một chuỗi thật", và không đủ để dùng lại.
- */
-export function cheToken(token: string): string {
-  return token.length <= 6 ? "…" : `${token.slice(0, 6)}…`;
-}
 
 export type TrangThai<T = string> = { kieu: "chua-goi" } | { kieu: "dang-cho" } | KetQuaXin<T>;
 
@@ -68,7 +56,6 @@ export function KhungTinhNang<T>({
   onBam,
   cap_tieu_de = "h1",
   glyph,
-  dan_nhap,
   truoc_nut,
   veKetQua,
   duoi_cung,
@@ -79,8 +66,6 @@ export function KhungTinhNang<T>({
   cap_tieu_de?: "h1" | "h2";
   /** Hình trang trí cạnh tiêu đề. `aria-hidden` như mọi glyph khác — chữ mới là nội dung. */
   glyph?: ReactNode;
-  /** Câu dẫn riêng của tính năng, đứng trên nút. */
-  dan_nhap?: string;
   /**
    * Phần đứng GIỮA lời giải thích và cái nút.
    *
@@ -110,7 +95,6 @@ export function KhungTinhNang<T>({
           {nd.tieu_de}
         </TieuDe>
       </div>
-      {dan_nhap !== undefined && <p className="tn__dan">{dan_nhap}</p>}
       <p className="tn__vi-sao">{nd.vi_sao}</p>
 
       {truoc_nut}
@@ -136,8 +120,6 @@ export function KhungTinhNang<T>({
       </div>
 
       {duoi_cung}
-
-      <p className="tn__loi-hua">{CHI_HIEN_LEN_MAN_HINH}</p>
     </section>
   );
 }
@@ -148,7 +130,6 @@ export function TinhNangCoTrangThai<T>({
   xin,
   cap_tieu_de,
   glyph,
-  dan_nhap,
   truoc_nut,
   veKetQua,
   duoi_cung,
@@ -157,7 +138,6 @@ export function TinhNangCoTrangThai<T>({
   xin: () => Promise<KetQuaXin<T>>;
   cap_tieu_de?: "h1" | "h2";
   glyph?: ReactNode;
-  dan_nhap?: string;
   truoc_nut?: ReactNode;
   veKetQua: (du_lieu: T) => ReactNode;
   duoi_cung?: ReactNode;
@@ -178,46 +158,9 @@ export function TinhNangCoTrangThai<T>({
       onBam={() => void bam()}
       cap_tieu_de={cap_tieu_de}
       glyph={glyph}
-      dan_nhap={dan_nhap}
       truoc_nut={truoc_nut}
       veKetQua={veKetQua}
       duoi_cung={duoi_cung}
     />
-  );
-}
-
-/**
- * Kết quả của hai tính năng dùng token: độ dài, vài ký tự đầu, và vì sao màn hình này không có
- * gì để che.
- *
- * `noi_them` là câu nói ra thứ bản dựng này CHƯA làm được với cái token ấy. NÓ TUỲ CHỌN, và
- * khác biệt ấy có lý do: với `van-phong` thì bản dựng thật sự dừng ở chỗ nhận được mã — không
- * xếp được văn phòng theo khoảng cách — nên có một câu ranh giới để nói. Với `dang-nhap` thì
- * KHÔNG CÓ RANH GIỚI NÀO ĐỂ NÓI: mã đi thẳng tới máy chủ và một phiên được mở, nên phần đuôi là
- * TRẠNG THÁI THẬT của lời gọi ấy (`features/dang-nhap/PhatHanhPhien.tsx`), không phải một câu
- * ghim sẵn. Ghim một câu "bản này chưa làm gì" ở đây là nói dối bằng giao diện.
- */
-export function KetQuaToken({
-  ma,
-  token,
-  da_nhan,
-  noi_them,
-}: {
-  ma: "dang-nhap" | "van-phong";
-  token: string;
-  da_nhan: string;
-  noi_them?: string;
-}) {
-  if (token === "") return <p className="tn__loi">{MA_RONG}</p>;
-  return (
-    <>
-      <p className="tn__xong">{da_nhan}</p>
-      <ul className="tn__do">
-        <li>Độ dài mã: {token.length} ký tự</li>
-        <li>Vài ký tự đầu: {cheToken(token)}</li>
-      </ul>
-      <p className="tn__giai-thich">{TOKEN_KHONG_CHUA_GI[ma]}</p>
-      {noi_them !== undefined && <p className="tn__ranh-gioi">{noi_them}</p>}
-    </>
   );
 }

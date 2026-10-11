@@ -16,7 +16,6 @@ import {
 import {
   DOAN_CHINH_SACH_TINH_NANG,
   DOAN_CHINH_SACH_TUNG_QUYEN,
-  TOKEN_KHONG_CHUA_GI,
 } from "../features/tinh-nang/noi-dung";
 import { TRUONG_THIEP_CUA_CHUNG_TOI } from "../features/tinh-nang/vcard";
 import { PHOTO_UPLOAD_PARTS, photoUploadForm } from "../cong-dan/api/hop-dong-phan-anh";
@@ -788,16 +787,13 @@ describe("bên phát hành và bên nhận dữ liệu là HAI câu khác nhau",
 
   it("khai nơi nhận dữ liệu là máy chủ của Tập đoàn ViHAT Group — ở ĐỦ mọi chỗ khai (#28)", () => {
     // ⚠ GHIM TỪNG CHỖ, KHÔNG GHIM "CÓ Ở ĐÂU ĐÓ": văn bản khai nơi nhận ở câu đầu, mục Đăng nhập
-    // và mục Chuyển dữ liệu cho bên thứ ba; hai câu nữa nằm ngoài tệp chính sách, ở
-    // `TOKEN_KHONG_CHUA_GI`. Sửa nửa vời — một chỗ mới, một chỗ cũ — là hai nơi nhận khác nhau
-    // trong cùng thứ Nghị định 13 bắt khai, và một ca "toMatch trên toàn văn" vẫn xanh.
+    // và mục Chuyển dữ liệu cho bên thứ ba. Sửa nửa vời — một chỗ mới, một chỗ cũ — là hai nơi nhận
+    // khác nhau trong cùng thứ Nghị định 13 bắt khai, và một ca "toMatch trên toàn văn" vẫn xanh.
     const muc = (ma: string) => MUC_CHINH_SACH.find((m) => m.ma === ma)!.doan.join("\n");
     const choKhai: Record<string, string> = {
       "câu đầu": CAU_DAU,
       "mục Đăng nhập": muc("dang-nhap"),
       "mục Chuyển dữ liệu cho bên thứ ba": muc("ben-thu-ba"),
-      "token đăng nhập": TOKEN_KHONG_CHUA_GI["dang-nhap"],
-      "token vị trí": TOKEN_KHONG_CHUA_GI["van-phong"],
     };
     for (const [cho, chu] of Object.entries(choKhai)) {
       expect(chu, `${cho}: không khai nơi nhận là ViHAT Group`).toMatch(
@@ -809,7 +805,6 @@ describe("bên phát hành và bên nhận dữ liệu là HAI câu khác nhau",
     const toanBo = [
       CAU_DAU,
       ...MUC_CHINH_SACH.flatMap((m) => m.doan),
-      ...Object.values(TOKEN_KHONG_CHUA_GI),
     ].join("\n");
     expect(toanBo, "còn sót lời khai nơi nhận cũ").not.toMatch(
       /m[áa]y ch[ủu] c[ủu]a\s+vihat\s*software/i,

@@ -23,7 +23,7 @@
  *   đọc chúng. `navigator.geolocation` thì bị cấm bởi dây bẫy trong
  *   `phase1-collects-nothing.test.ts` và cũng là một quyền khác hẳn. Nghĩa là **không thể xếp
  *   văn phòng theo khoảng cách trên máy** — nên ở đây không có một dòng nào tính khoảng cách, và
- *   màn hình nói ra điều đó bằng tiếng Việt (`VAN_PHONG.chua_xep_duoc`).
+ *   câu sau khi chia sẻ vị trí chỉ mời chọn văn phòng, không nói "đã xếp" (`VAN_PHONG.da_nhan_vi_tri`).
  *
  *   `getPhoneNumber` cũng chỉ trả token. Đổi token cần khoá bí mật của Mini App, và khoá ấy chỉ
  *   được nằm ở máy chủ (ADR 0020, bất biến 2) — nên không có bước đổi mã nào ở client, ở bất kỳ
@@ -36,9 +36,9 @@ import { CONTACT, OFFICES } from "../../content/company-profile";
 import { CompassGlyph, HandshakeGlyph, MailGlyph, PhoneGlyph, PinGlyph } from "../company-intro/icons";
 import { PhatHanhPhien } from "../dang-nhap/PhatHanhPhien";
 
-import { KetQuaToken, TinhNangCoTrangThai } from "./khung";
+import { TinhNangCoTrangThai } from "./khung";
 import { moRaNgoai } from "./mo-ra-ngoai";
-import { DANG_NHAP, LOI_MO_NGOAI, VAN_PHONG } from "./noi-dung";
+import { DANG_NHAP, LOI_MO_NGOAI, MA_RONG, VAN_PHONG } from "./noi-dung";
 import { type MaDangNhap, xinMaDangNhap, xinTokenViTri } from "./zalo-api";
 import { useState } from "react";
 
@@ -92,15 +92,9 @@ export function TimVanPhong() {
       xin={xinTokenViTri}
       cap_tieu_de="h2"
       glyph={<CompassGlyph className="tn__glyph" />}
-      dan_nhap={VAN_PHONG.dan_nhap}
-      veKetQua={(token) => (
-        <KetQuaToken
-          ma="van-phong"
-          token={token}
-          da_nhan={VAN_PHONG.da_nhan_ma}
-          noi_them={VAN_PHONG.chua_xep_duoc}
-        />
-      )}
+      veKetQua={(token) =>
+        token === "" ? <p className="tn__loi">{MA_RONG}</p> : <p className="tn__xong">{VAN_PHONG.da_nhan_vi_tri}</p>
+      }
       duoi_cung={
         <>
           <DanhSachVanPhong onChiDuong={(dia_chi) => void chiDuong(dia_chi)} />
@@ -138,19 +132,15 @@ function DuongLienHeNgay() {
 }
 
 /**
- * Kết quả một lần đăng nhập: mã nhận được, rồi bước máy chủ của ĐÚNG biến thể đang dựng.
+ * Kết quả một lần đăng nhập: bước máy chủ đổi mã lấy phiên. Mã không hiện lên màn hình.
  *
  * MÃ RỖNG THÌ DỪNG Ở ĐÂY, KHÔNG GỌI MÁY CHỦ. `zmp-sdk` trả mã rỗng ở môi trường phát triển
  * (`MA_RONG` nói ra điều đó). Gửi một mã rỗng đi thì máy chủ từ chối, và người đọc nhận một câu
  * "mã đã quá hạn" — một câu SAI, chỉ ra một việc phải làm không giải quyết được gì.
  */
-function KetQuaDangNhap({ ma }: { ma: MaDangNhap }) {
-  return (
-    <>
-      <KetQuaToken ma="dang-nhap" token={ma.ma_so_dien_thoai} da_nhan={DANG_NHAP.da_nhan_ma} />
-      {ma.ma_so_dien_thoai !== "" && <PhatHanhPhien ma={ma} />}
-    </>
-  );
+export function KetQuaDangNhap({ ma }: { ma: MaDangNhap }) {
+  if (ma.ma_so_dien_thoai === "") return <p className="tn__loi">{MA_RONG}</p>;
+  return <PhatHanhPhien ma={ma} />;
 }
 
 /**
@@ -167,7 +157,6 @@ export function KhoiDangNhap() {
       xin={xinMaDangNhap}
       cap_tieu_de="h2"
       glyph={<HandshakeGlyph className="tn__glyph" />}
-      dan_nhap={DANG_NHAP.dan_nhap}
       veKetQua={(ma) => <KetQuaDangNhap ma={ma} />}
       duoi_cung={<DuongLienHeNgay />}
     />

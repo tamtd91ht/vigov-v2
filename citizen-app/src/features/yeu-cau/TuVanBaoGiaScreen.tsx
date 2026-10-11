@@ -40,7 +40,7 @@ import { bearerCua, dungPhien } from "../dang-nhap/kho-phien";
 import { QUY_MO } from "../goi-y-giai-phap/anh-xa";
 
 import { MoiDangNhap } from "./MoiDangNhap";
-import { PHIEN_KHONG_LUU, TU_VAN } from "./noi-dung";
+import { TU_VAN } from "./noi-dung";
 import { OGhiChu } from "./OGhiChu";
 
 const ID_O_GHI_CHU = "yc-ghi-chu";
@@ -253,8 +253,6 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
       <div className="tn__ket-qua" role="status">
         <CauTraLoi ket_qua={ket_qua} onDangNhapLai={() => di({ man: "contact", moc: MOC_DANG_NHAP })} />
       </div>
-
-      <p className="tn__rieng-tu">{PHIEN_KHONG_LUU}</p>
     </>
   );
 }

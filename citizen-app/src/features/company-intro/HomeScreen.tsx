@@ -8,7 +8,6 @@ import {
   soNamHoatDong,
   SOLUTIONS,
 } from "../../content/company-profile";
-import { KHAI_BAO_LOI_GOI } from "../tinh-nang/zalo-api";
 import { SmsOffers } from "../yeu-cau/SmsOffers";
 
 import { DaiChienDich } from "./DaiChienDich";
@@ -195,9 +194,6 @@ export function HomeScreen({ onDi }: ThamSoMan) {
         khẩu vị: ở 320px, sáu tab chỉ còn ~4 ký tự cho từ dài nhất của một nhãn, mà "Trang",
         "thiếp", "ViHAT", "Quyền" đều 5 (`accessibility.test.ts`).
 
-        CON SỐ ĐỌC TỪ BẢNG KHAI, KHÔNG GÕ VÀO: `KHAI_BAO_LOI_GOI` là cùng một bảng mà màn chi tiết
-        vẽ ra và `ranh-gioi-hai-nua.test.ts` đối chiếu với mã nguồn. Gõ "12" vào đây là dựng con số
-        thứ hai cho một sự thật, và con số sai sẽ là con số nằm trên màn chủ.
       */}
       <button type="button" className="action action--mo" onClick={() => di({ man: "contact", moc: MOC_QUAN_LY_QUYEN })}>
         <span className="tile tile--soft" aria-hidden="true">
@@ -205,9 +201,7 @@ export function HomeScreen({ onDi }: ThamSoMan) {
         </span>
         <span>
           <span className="action__label">Quản lý quyền</span>
-          <span className="action__value">
-            {KHAI_BAO_LOI_GOI.length} chức năng của Zalo — dùng ở màn nào, để làm gì
-          </span>
+          <span className="action__value">Quyền truy cập và mục đích sử dụng</span>
         </span>
       </button>
 

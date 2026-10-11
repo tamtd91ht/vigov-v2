@@ -4,21 +4,24 @@ import { describe, expect, it } from "vitest";
 import { OFFICES } from "../../content/company-profile";
 
 import { docMaQR, thiepCoNoiDung } from "./danh-thiep";
-import { cheToken, KetQuaToken, KhungTinhNang } from "./khung";
-import { DanhSachVanPhong, duongDanBanDo, KhoiDangNhap, TimVanPhong } from "./LienHeTinhNang";
+import { KhungTinhNang } from "./khung";
+import { DanhSachVanPhong, duongDanBanDo, KetQuaDangNhap, KhoiDangNhap, TimVanPhong } from "./LienHeTinhNang";
 import { KetQuaQuet, ManDanhThiep, TheDanhThiep } from "./ManDanhThiep";
 import { MAN_DANH_THIEP } from "./index";
 import {
-  CHI_HIEN_LEN_MAN_HINH,
   DANH_THIEP,
+  DUONG_TRUYEN,
+  KIEU_KET_NOI,
   MA_RONG,
   type MaTinhNang,
   noiDung,
   NOI_DUNG_TINH_NANG,
   DANG_NHAP,
-  TOKEN_KHONG_CHUA_GI,
+  SO_HOA_THIEP,
+  THIEP_CUA_CHUNG_TOI,
   VAN_PHONG,
 } from "./noi-dung";
+import type { MaDangNhap } from "./zalo-api";
 
 /**
  * KÊNH CÔNG DÂN ĐÃ TỪNG ĐO ĐƯỢC **KHÔNG CÓ TEST NÀO**. Tệp này là phần của ba tính năng.
@@ -30,8 +33,8 @@ import {
  *      và người dùng gửi thư đi đâu đó.
  *   2. **Người dùng từ chối là đường đi bình thường.** Nhánh ấy phải hiện một câu tiếng Việt nói
  *      họ bấm lại được, KHÔNG phải một chuỗi lỗi kỹ thuật (README §Error message shape).
- *   3. **Màn hình nói ra rằng số điện thoại và toạ độ KHÔNG tới thiết bị**, và nói ra thứ bản
- *      dựng này CHƯA làm được với cái token ấy. Bỏ câu thứ hai đi là hứa một việc mã không làm.
+ *   3. **Giọng văn của một ứng dụng đã phát hành** (11/10/2026, chủ dự án): không câu nào kể
+ *      cách ứng dụng được dựng, và không câu nào hứa một việc mã không làm.
  *   4. **Từ chối quyền không được làm mất tính năng.** Ba văn phòng và hai đường liên hệ phải
  *      còn nguyên trên màn, dù người dùng có bấm đồng ý hay không.
  *
@@ -225,8 +228,6 @@ describe("mỗi tính năng tự giải thích được cho người duyệt", (
       ...Object.values(DANH_THIEP),
       ...Object.values(VAN_PHONG),
       ...Object.values(DANG_NHAP),
-      ...Object.values(TOKEN_KHONG_CHUA_GI),
-      CHI_HIEN_LEN_MAN_HINH,
       MA_RONG,
     ].join(" ");
     for (const tu of ["cơ quan", "công dân", "chính quyền", "hành chính", "thủ tục"]) {
@@ -252,7 +253,6 @@ describe("mỗi tính năng tự giải thích được cho người duyệt", (
       expect(chu, "không thấy nhãn nút").toContain(nd.nut);
       expect(markup).toContain('role="status"');
       expect(markup, "nút bị khoá ngay từ đầu").not.toContain("disabled");
-      expect(chu).toContain(CHI_HIEN_LEN_MAN_HINH);
     });
   }
 
@@ -316,52 +316,39 @@ describe("từ chối là đường đi bình thường, không phải lỗi", (
   });
 });
 
-describe("hai tính năng dùng token: màn hình không có dữ liệu cá nhân để mà che", () => {
-  const TOKEN = "AbCdEf0123456789xyz";
+describe("giọng văn của một ứng dụng đã phát hành", () => {
+  /**
+   * 11/10/2026, chủ dự án: ứng dụng là bộ mặt của tập đoàn trên kho Zalo — không câu nào kể cách
+   * nó được dựng ("bản dựng này…", "bản hiện tại chưa…", tên biến môi trường), không câu nào chỉ
+   * tay "nút bên trên/bên dưới", không trấn an kiểu "Không sao cả".
+   */
+  const TAT_CA_CAU = [
+    ...NOI_DUNG_TINH_NANG.flatMap((nd) => Object.values(nd)),
+    ...Object.values(DANH_THIEP),
+    ...Object.values(VAN_PHONG),
+    ...Object.values(DANG_NHAP),
+    ...Object.values(DUONG_TRUYEN),
+    ...Object.values(KIEU_KET_NOI).flatMap((kieu) => Object.values(kieu)),
+    ...Object.values(THIEP_CUA_CHUNG_TOI),
+    ...Object.values(SO_HOA_THIEP),
+    MA_RONG,
+  ];
 
-  // `van-phong` có một câu ranh giới truyền qua `noi_them`; `dang-nhap` thì KHÔNG, vì nó không
-  // có ranh giới nào để nói — mã đi thẳng tới máy chủ và phần đuôi là trạng thái thật của lời
-  // gọi ấy (`features/dang-nhap/PhatHanhPhien.tsx`, có test riêng). Nhánh bỏ trống `noi_them`
-  // được kiểm ở ca cuối của khối "khối đăng nhập" bên dưới.
-  for (const [ma, da_nhan, noi_them] of [
-    ["dang-nhap", DANG_NHAP.da_nhan_ma, undefined],
-    ["van-phong", VAN_PHONG.da_nhan_ma, VAN_PHONG.chua_xep_duoc],
+  for (const [mau, ly_do] of [
+    [/[Bb]ản (dựng|hiện tại|này|nộp)/, "kể cách ứng dụng được dựng"],
+    [/VIGOV_|người dựng|máy chủ/i, "nói chuyện hạ tầng với người dùng"],
+    [/(nút|ngay) bên (trên|dưới)/, "chỉ tay vị trí trên màn"],
+    [/Không sao cả/, "trấn an thừa"],
   ] as const) {
-    it(`${ma}: hiện độ dài và vài ký tự đầu, KHÔNG hiện trọn token`, () => {
-      const markup = ve(
-        <KetQuaToken ma={ma} token={TOKEN} da_nhan={da_nhan} noi_them={noi_them} />,
-      );
-      const chu = textOf(markup);
-
-      expect(chu).toContain(String(TOKEN.length));
-      expect(chu).toContain(cheToken(TOKEN));
-      // Token sống 2 phút và đổi được dữ liệu ở máy chủ. Hiện trọn vẹn là mời người đứng cạnh
-      // chụp lại trong hai phút ấy.
-      expect(markup, "token hiện trọn vẹn trên màn hình").not.toContain(TOKEN);
-    });
-
-    it(`${ma}: nói rõ dữ liệu thật KHÔNG nằm trong token`, () => {
-      const chu = textOf(
-        ve(<KetQuaToken ma={ma} token={TOKEN} da_nhan={da_nhan} noi_them={noi_them} />),
-      );
-      expect(chu).toContain(TOKEN_KHONG_CHUA_GI[ma]);
-      expect(TOKEN_KHONG_CHUA_GI[ma]).toMatch(/không nằm trong mã này/);
-      expect(TOKEN_KHONG_CHUA_GI[ma]).toMatch(/máy chủ/);
-      // Vế thứ hai: ranh giới — chỉ với tính năng CÓ một ranh giới thật để nói.
-      if (noi_them !== undefined) expect(chu).toContain(noi_them);
+    it(`không câu nào ${ly_do}`, () => {
+      for (const cau of TAT_CA_CAU) expect(cau, ly_do).not.toMatch(mau);
     });
   }
 
-  it("token rỗng là câu trả lời thật của môi trường phát triển — nói ra, không để ô trống", () => {
-    expect(
-      textOf(ve(<KetQuaToken ma="van-phong" token="" da_nhan="x" noi_them="y" />)),
-    ).toContain(MA_RONG);
-  });
-
-  it("che token chỉ để vài ký tự đầu, và không rò gì khi token quá ngắn", () => {
-    expect(cheToken("AbCdEf0123456789")).toBe("AbCdEf…");
-    expect(cheToken("abc")).toBe("…");
-    expect(cheToken("")).toBe("…");
+  it("sau khi chia sẻ vị trí, câu không khẳng định đã xếp theo khoảng cách", () => {
+    // `getLocation` chỉ trả token và màn này chưa đổi nó thành toạ độ: nói "gần nhất" hay "đã xếp"
+    // ở đây là nói dối bằng giao diện.
+    expect(VAN_PHONG.da_nhan_vi_tri).not.toMatch(/gần nhất|đã xếp|khoảng cách/);
   });
 });
 
@@ -431,10 +418,6 @@ describe("mã không phải danh thiếp vẫn dùng được", () => {
   it("mã rỗng: nói ra, không hiện một ô trống", () => {
     expect(ve_qr("")).toContain(DANH_THIEP.ma_rong);
   });
-
-  it("thiếp quét được kèm một câu nhắc về dữ liệu cá nhân của NGƯỜI KHÁC", () => {
-    expect(ve_qr(VCARD_DU)).toContain(DANH_THIEP.rieng_tu);
-  });
 });
 
 describe("tìm văn phòng: từ chối quyền KHÔNG được làm mất tính năng", () => {
@@ -473,13 +456,6 @@ describe("tìm văn phòng: từ chối quyền KHÔNG được làm mất tính
     expect(duong).toContain(encodeURIComponent(OFFICES[0]!.address));
     expect(duong).not.toMatch(/token|lat|lng|latitude|longitude/i);
   });
-
-  it("câu nói ra ranh giới: chưa xếp được theo khoảng cách, và nói vì sao", () => {
-    // Viết "đang tìm văn phòng gần bạn…" rồi hiện danh sách theo thứ tự cũ là nói dối bằng giao
-    // diện. `getLocation` chỉ trả token, và đổi token cần một bước máy chủ.
-    expect(VAN_PHONG.chua_xep_duoc).toMatch(/máy chủ/);
-    expect(VAN_PHONG.chua_xep_duoc).toMatch(/chưa/);
-  });
 });
 
 describe("khối đăng nhập: một chạm, và luôn có một đường liên hệ chạy được NGAY", () => {
@@ -502,8 +478,6 @@ describe("khối đăng nhập: một chạm, và luôn có một đường liê
       ...Object.values(noiDung("dang-nhap")),
     ].join(" ");
     expect(chu, "câu chữ khối đăng nhập hứa một mã OTP").not.toMatch(/OTP|mã xác thực|mã kích hoạt/i);
-    // Nói "không phải gõ mã" thì được — đó là lời phủ định, và là điều người dùng cần biết.
-    expect(chu).toMatch(/không.{0,40}(mã sáu số|gõ mã)/);
   });
 
   it("nói mục đích ĐỦ HAI VẾ: đăng nhập / định danh, và nhận thông báo ZNS", () => {
@@ -527,17 +501,17 @@ describe("khối đăng nhập: một chạm, và luôn có một đường liê
   it("mã rỗng thì KHÔNG có bước máy chủ nào được vẽ ra", () => {
     // Nền tảng trả mã rỗng ở môi trường phát triển. Gửi một mã rỗng đi thì máy chủ từ chối, và
     // người đọc nhận một câu "mã đã quá hạn" — một câu SAI chỉ ra một việc không sửa được gì.
-    const chu = textOf(ve(<KetQuaToken ma="dang-nhap" token="" da_nhan={DANG_NHAP.da_nhan_ma} />));
+    const ma_rong: MaDangNhap = { ma_so_dien_thoai: "", ma_truy_cap: "abc" };
+    const chu = textOf(ve(<KetQuaDangNhap ma={ma_rong} />));
     expect(chu).toContain(MA_RONG);
-    expect(chu).not.toContain(DANG_NHAP.da_nhan_ma);
+    expect(chu).not.toContain(noiDung("dang-nhap").dang_cho);
   });
 
-  it("`noi_them` bỏ trống thì không vẽ ra một đoạn rỗng", () => {
-    // Khối đăng nhập không truyền `noi_them` — phần đuôi do cửa biến thể vẽ. Một `<p>` rỗng ở
-    // đó là một khoảng trắng không ai giải thích được giữa hai đoạn chữ.
-    expect(ve(<KetQuaToken ma="dang-nhap" token="abcdefgh" da_nhan={DANG_NHAP.da_nhan_ma} />)).not.toContain(
-      'class="tn__ranh-gioi"',
-    );
+  it("mã đăng nhập không bao giờ hiện lên màn hình", () => {
+    const ma: MaDangNhap = { ma_so_dien_thoai: "AbCdEf0123456789xyz", ma_truy_cap: "Zz9988776655" };
+    const markup = ve(<KetQuaDangNhap ma={ma} />);
+    expect(markup).not.toContain("AbCdEf");
+    expect(markup).not.toContain("Zz9988");
   });
 });
 

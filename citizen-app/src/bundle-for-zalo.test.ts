@@ -27,7 +27,6 @@ import { NHAN_NUT_CHAT } from "./features/company-intro/NutChatOA";
 import { MAN_GIOI_THIEU, TABS } from "./features/company-intro/screens";
 import { MAN_DANH_THIEP } from "./features/tinh-nang/index";
 import {
-  CHI_HIEN_LEN_MAN_HINH,
   DANG_NHAP,
   DANH_THIEP,
   DUONG_TRUYEN,
@@ -37,7 +36,6 @@ import {
   NOI_DUNG_TINH_NANG,
   SO_HOA_THIEP,
   THIEP_CUA_CHUNG_TOI,
-  TOKEN_KHONG_CHUA_GI,
   VAN_PHONG,
 } from "./features/tinh-nang/noi-dung";
 // HAI HỢP ĐỒNG, HAI HÀM CÙNG TÊN `thanYeuCau` — và chúng được ĐẶT BÍ DANH ở đây thay vì đổi tên
@@ -220,11 +218,8 @@ describe("bản đẩy lên Zalo — một bundle, đúng bằng thứ người 
    */
   const CHUOI_SAU_TINH_NANG = () => [
     MAN_DANH_THIEP.headerTitle,
-    CHI_HIEN_LEN_MAN_HINH,
     MA_RONG,
     LOI_MO_NGOAI,
-    TOKEN_KHONG_CHUA_GI["dang-nhap"],
-    TOKEN_KHONG_CHUA_GI["van-phong"],
     ...Object.values(DANH_THIEP),
     ...Object.values(VAN_PHONG),
     ...Object.values(DANG_NHAP),

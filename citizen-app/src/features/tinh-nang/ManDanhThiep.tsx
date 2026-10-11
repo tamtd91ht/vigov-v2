@@ -148,7 +148,6 @@ export function KetQuaQuet({
     return (
       <>
         <TheDanhThiep thiep={doc} onGoi={onGoi} onMoLienKet={onMoLienKet} />
-        <p className="tn__rieng-tu">{DANH_THIEP.rieng_tu}</p>
       </>
     );
 
@@ -221,7 +220,6 @@ export function QuetDanhThiep() {
       onBam={() => void quet()}
       cap_tieu_de="h2"
       glyph={<NamecardGlyph className="tn__glyph" />}
-      dan_nhap={DANH_THIEP.dan_nhap}
       veKetQua={(noi_dung_qr) => (
         <>
           <KetQuaQuet
@@ -248,8 +246,7 @@ export function QuetDanhThiep() {
  *      nó là dòng sản phẩm đã công bố (`SOLUTIONS` mục `namecard`) mà ô menu "Danh thiếp" mang
  *      tên. Mở màn bằng nó là mở màn bằng thứ chạy được ngay. Nó giữ `<h1>`.
  *   2. **Quét thiếp số của đối tác** — việc thứ hai, và là việc cần một lời xin quyền máy ảnh.
- *   3. **Số hoá thiếp giấy** — cuối, vì nó là khối tự nói rằng bản này CHƯA đọc được chữ trên ảnh
- *      (`SO_HOA_THIEP.chua_doc_duoc_chu`). Một màn không mở đầu bằng ranh giới của chính nó.
+ *   3. **Chụp ảnh thiếp giấy** — cuối: nó chỉ hiện ảnh, không đọc được chữ trên ảnh.
  *
  *   Trước lượt này khối quét đứng đầu, vì màn có tên "Quét danh thiếp" và vào bằng một ô menu tên
  *   "Quét QR Lead". Cả hai cái tên ấy đã đổi (`index.ts`, `MenuNhanh.tsx`), nên thứ tự đi theo.

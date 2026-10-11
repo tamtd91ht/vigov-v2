@@ -48,13 +48,11 @@ export function QuanLyQuyenScreen(props: { onQuayLai: () => void }) {
 
       <section className="card">
         <p className="card__body">
-          Ứng dụng {COMPANY.name} gọi {KHAI_BAO_LOI_GOI.length} chức năng của nền tảng Zalo. Dưới
-          đây là từng chức năng: dùng ở màn nào, để làm gì, Zalo có hỏi bạn trước hay không, và có
-          gì rời khỏi máy bạn hay không.
+          Các chức năng của Zalo mà ứng dụng {COMPANY.name} sử dụng, mục đích sử dụng và dữ liệu liên
+          quan.
         </p>
         <p className="card__body">
-          Quyền do Zalo cấp và do Zalo giữ. Ứng dụng này không bật hay tắt được quyền nào — bạn thu
-          hồi trong phần cài đặt của Zalo, và ứng dụng vẫn mở được sau khi bạn thu hồi.
+          Bạn có thể thu hồi quyền bất cứ lúc nào trong phần cài đặt của Zalo.
         </p>
       </section>
 
@@ -71,18 +69,14 @@ export function QuanLyQuyenScreen(props: { onQuayLai: () => void }) {
             <p className="quyen__de-lam-gi">{quyen.de_lam_gi}</p>
             <p className="quyen__hoi">
               {quyen.hoi_nguoi_dung
-                ? "Zalo sẽ hỏi bạn trước khi chức năng này chạy."
-                : "Zalo không hỏi lại: chức năng này không đọc dữ liệu riêng của bạn."}
+                ? "Cần bạn cho phép."
+                : "Không truy cập dữ liệu cá nhân."}
             </p>
             <p className="quyen__ra-ngoai">
               {quyen.roi_khoi_may === ""
-                ? "Không có gì rời khỏi máy bạn."
+                ? "Dữ liệu không rời khỏi thiết bị."
                 : quyen.roi_khoi_may}
             </p>
-            {/* Tên kỹ thuật ở CUỐI, cỡ nhỏ hơn nhưng vẫn ≥16px: người dùng không cần nó, người
-                duyệt hồ sơ thì đối chiếu đúng cái tên này với danh sách quyền ở Developer
-                Console. Giấu nó đi là bắt người duyệt tự đoán ánh xạ. */}
-            <p className="quyen__api">{quyen.api}</p>
           </li>
         ))}
       </ul>

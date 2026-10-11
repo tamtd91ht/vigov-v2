@@ -20,7 +20,7 @@ import { GridGlyph } from "../company-intro/icons";
 import { bearerCua, dungPhien } from "../dang-nhap/kho-phien";
 
 import { MoiDangNhap } from "./MoiDangNhap";
-import { PHIEN_KHONG_LUU, YEU_CAU_CUA_TOI } from "./noi-dung";
+import { YEU_CAU_CUA_TOI } from "./noi-dung";
 import { GIAI_THICH_TRANG_THAI, ngayDoc, NHAN_LOAI, NHAN_TRANG_THAI } from "./trang-thai";
 
 /** Một dòng của danh sách, THUẦN. */
@@ -159,8 +159,6 @@ export function YeuCauCuaToiScreen({ onDi }: ThamSoMan) {
           </button>
         </>
       )}
-
-      <p className="tn__rieng-tu">{PHIEN_KHONG_LUU}</p>
     </>
   );
 }

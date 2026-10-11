@@ -358,7 +358,6 @@ describe("màn Quản lý quyền vẽ từ bảng khai, không từ một danh 
   it("in đủ mọi lời gọi có trong bảng, không thiếu một dòng nào", () => {
     expect(KHAI_BAO_LOI_GOI.length).toBeGreaterThanOrEqual(10);
     for (const quyen of KHAI_BAO_LOI_GOI) {
-      expect(text, `màn quyền thiếu tên kỹ thuật: ${quyen.api}`).toContain(quyen.api);
       expect(text, `màn quyền thiếu câu "để làm gì" của ${quyen.api}`).toContain(quyen.de_lam_gi);
       expect(text, `màn quyền thiếu tính năng của ${quyen.api}`).toContain(quyen.tinh_nang);
     }
@@ -371,23 +370,25 @@ describe("màn Quản lý quyền vẽ từ bảng khai, không từ một danh 
     const khong_hoi = KHAI_BAO_LOI_GOI.length - co_hoi;
     expect(co_hoi, "không lời gọi nào được khai là có hỏi người dùng").toBeGreaterThan(0);
     expect(khong_hoi, "không lời gọi nào được khai là không hỏi").toBeGreaterThan(0);
-    expect(text).toContain("Zalo sẽ hỏi bạn trước khi chức năng này chạy.");
-    expect(text).toContain("Zalo không hỏi lại");
+    expect(text).toContain("Cần bạn cho phép.");
+    expect(text).toContain("Không truy cập dữ liệu cá nhân.");
   });
 
   it("nói ra thứ rời khỏi máy, và nói ra cả khi không có gì rời đi", () => {
-    // Một ô để trống trông giống "chưa ai điền". Câu "Không có gì rời khỏi máy bạn" là một KHẲNG
+    // Một ô để trống trông giống "chưa ai điền". Câu "Dữ liệu không rời khỏi thiết bị" là một KHẲNG
     // ĐỊNH, và nó là câu người đọc chính sách đang tìm.
-    expect(text).toContain("Không có gì rời khỏi máy bạn.");
+    expect(text).toContain("Dữ liệu không rời khỏi thiết bị.");
     for (const quyen of KHAI_BAO_LOI_GOI.filter((q) => q.roi_khoi_may !== "")) {
       expect(text, `màn quyền không nói ${quyen.api} gửi gì đi`).toContain(quyen.roi_khoi_may);
     }
   });
 
-  it("nói thẳng rằng nó không bật/tắt được quyền nào", () => {
+  it("nói quyền được thu hồi ở đâu — màn này không có công tắc nào", () => {
     // Quyền do Zalo giữ. Một màn tên "Quản lý quyền" mà không nói điều đó là một màn hứa một việc
     // nó không làm được, và người dùng đi tìm cái công tắc không có.
-    expect(text).toContain("Ứng dụng này không bật hay tắt được quyền nào");
+    expect(text).toContain("thu hồi quyền bất cứ lúc nào trong phần cài đặt của Zalo");
+    // Tên API là chữ kỹ thuật cho người duyệt hồ sơ, không phải cho người dùng (11/10/2026).
+    for (const quyen of KHAI_BAO_LOI_GOI) expect(text).not.toContain(quyen.api);
   });
 });
 
@@ -516,11 +517,9 @@ describe("màn chủ dẫn đi đâu, và có dẫn tới nơi thật không", (
     expect(home, "mục đặt lịch tư vấn — một biểu mẫu — đã được dựng").not.toMatch(/Đặt lịch/i);
   });
 
-  it("khối Quản lý quyền tóm tắt đọc số từ BẢNG KHAI, không gõ vào", () => {
+  it("khối Quản lý quyền có mặt trên màn chủ, không gõ một con số nào", () => {
     expect(home).toContain("Quản lý quyền");
-    expect(home, "số chức năng trên màn chủ không khớp bảng khai").toContain(
-      `${KHAI_BAO_LOI_GOI.length} chức năng`,
-    );
+    expect(home, "một con số chức năng gõ tay trên màn chủ").not.toMatch(/\d+ chức năng/);
   });
 
   it("hero mang HAI câu bản mẫu, câu định vị đã công bố, và năm THÀNH LẬP", () => {

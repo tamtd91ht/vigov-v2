@@ -119,7 +119,6 @@ export function ManThiepCuaChungToi() {
          đứng chứ không theo tính năng. Xem khối chú thích của `ManDanhThiep`. */
       cap_tieu_de="h1"
       glyph={<NamecardGlyph className="tn__glyph" />}
-      dan_nhap={THIEP_CUA_CHUNG_TOI.dan_nhap}
       truoc_nut={
         <>
           <TheQrCuaChungToi noi_dung_vcard={vcard} />
@@ -136,13 +135,7 @@ export function ManThiepCuaChungToi() {
           {giu_sang && <p className="tn__giai-thich">{THIEP_CUA_CHUNG_TOI.dang_giu_sang}</p>}
         </>
       }
-      veKetQua={() => (
-        <>
-          <p className="tn__xong">{THIEP_CUA_CHUNG_TOI.da_tai_xong}</p>
-          <p className="tn__ranh-gioi">{THIEP_CUA_CHUNG_TOI.zalo_quyet_dinh_cho_luu}</p>
-        </>
-      )}
-      duoi_cung={<p className="tn__rieng-tu">{THIEP_CUA_CHUNG_TOI.tep_la_cua_chung_toi}</p>}
+      veKetQua={() => <p className="tn__xong">{THIEP_CUA_CHUNG_TOI.da_tai_xong}</p>}
     />
   );
 }

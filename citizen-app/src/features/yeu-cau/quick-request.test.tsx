@@ -344,7 +344,8 @@ describe("the SMS block: consent, the stop button never out of reach, state in w
   it("the consent names the number, the content (ViHAT offers) and how to stop", () => {
     expect(SMS_OFFERS.consent).toContain("số điện thoại Zalo của bạn");
     expect(SMS_OFFERS.consent).toContain("ưu đãi và chương trình khuyến mại của ViHAT Group");
-    expect(SMS_OFFERS.consent).toContain(`“${SMS_OFFERS.unsubscribe}” ngay tại đây, bất cứ lúc nào`);
+    expect(SMS_OFFERS.consent).toContain("huỷ bất cứ lúc nào");
+    expect(SMS_OFFERS.consent).toContain(`“${SMS_OFFERS.unsubscribe}” tại đây`);
     expect(textOf(view("unknown"))).toContain(SMS_OFFERS.consent);
   });
 

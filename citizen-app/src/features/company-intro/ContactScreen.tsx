@@ -113,7 +113,7 @@ export function ContactScreen({ moc }: ThamSoMan) {
         </span>
         <span>
           <span className="action__label">Quản lý quyền</span>
-          <span className="action__value">Ứng dụng dùng quyền nào, ở màn nào, để làm gì</span>
+          <span className="action__value">Quyền truy cập và mục đích sử dụng</span>
         </span>
       </button>
 

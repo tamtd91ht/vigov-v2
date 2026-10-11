@@ -21,7 +21,7 @@ export const NHAN_TRANG_THAI: Readonly<Record<MaTrangThai, string>> = {
   moi: "Đã tiếp nhận",
   dang_xu_ly: "Đang xử lý",
   da_lien_he: "Đã liên hệ với bạn",
-  dong: "Đã khép lại",
+  dong: "Đã hoàn tất",
 };
 
 /**
@@ -31,10 +31,10 @@ export const NHAN_TRANG_THAI: Readonly<Record<MaTrangThai, string>> = {
  * "Đã khép lại" mà không giải thích là một câu nghe như bị từ chối.
  */
 export const GIAI_THICH_TRANG_THAI: Readonly<Record<MaTrangThai, string>> = {
-  moi: "Yêu cầu của bạn đã vào hệ thống của chúng tôi.",
-  dang_xu_ly: "Chúng tôi đang chuẩn bị nội dung để trả lời bạn.",
-  da_lien_he: "Chúng tôi đã liên hệ với bạn về yêu cầu này.",
-  dong: "Yêu cầu này đã xong. Bạn có thể gửi một yêu cầu mới bất cứ lúc nào.",
+  moi: "Yêu cầu đã được tiếp nhận.",
+  dang_xu_ly: "Chuyên viên đang xử lý yêu cầu của bạn.",
+  da_lien_he: "Chuyên viên đã liên hệ với bạn về yêu cầu này.",
+  dong: "Yêu cầu đã được xử lý xong.",
 };
 
 /** Nhãn loại yêu cầu. Cùng lý do, cùng chỗ. */

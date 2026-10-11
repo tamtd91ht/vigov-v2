@@ -87,10 +87,10 @@ describe("kiểu kết nối: bốn giá trị nền tảng khai, cộng mọi g
     }
   });
 
-  it("nói ra rằng nó KHÔNG đo tốc độ, ngay cạnh mọi kết quả", () => {
+  it("mọi kết quả nói ra kiểu kết nối bằng chữ, cạnh nhãn", () => {
     for (const kieu of ["wifi", "cellular", "none", "unknown", "5g"]) {
       const chu = textOf(ve(<KetQuaDuongTruyen tu_nen_tang={kieu} />));
-      expect(chu, `${kieu}: thiếu câu nói ra ranh giới`).toContain(DUONG_TRUYEN.khong_do_toc_do);
+      expect(chu, `${kieu}: thiếu nhãn kết quả`).toContain(DUONG_TRUYEN.nhan_ket_qua);
     }
   });
 
@@ -105,7 +105,6 @@ describe("kiểu kết nối: bốn giá trị nền tảng khai, cộng mọi g
     const chu = textOf(ve(<KiemTraDuongTruyen />));
     expect(chu).toContain(noiDung("duong-truyen").vi_sao);
     expect(chu).toContain(noiDung("duong-truyen").nut);
-    expect(chu).toContain(DUONG_TRUYEN.dan_nhap);
   });
 });
 
@@ -175,11 +174,9 @@ describe("danh thiếp số của chúng tôi", () => {
     }
   });
 
-  it("nói ra rằng tệp tải về là tệp CỦA CHÚNG TÔI, không phải dữ liệu của người dùng", () => {
-    // "Ứng dụng ghi một tệp xuống máy bạn" là một hành vi mới. Nói ra nó là nghĩa vụ, và nói ra
-    // tệp ấy chứa gì là thứ phân biệt một lời khai với một lời trấn an.
+  it("nói vì sao cần quyền giữ màn hình sáng và ghi tệp, ngay trên nút", () => {
+    // Nội dung tệp tải về được khai ở chính sách quyền riêng tư; màn chỉ nói mục đích.
     const chu = textOf(ve(<ManThiepCuaChungToi />));
-    expect(chu).toContain(THIEP_CUA_CHUNG_TOI.tep_la_cua_chung_toi);
     expect(chu).toContain(noiDung("thiep-cua-chung-toi").vi_sao);
   });
 
@@ -244,17 +241,11 @@ describe("số hoá danh thiếp giấy", () => {
     expect(textOf(ve(<TraLoiQuyenMayAnh cho_phep />))).toContain(SO_HOA_THIEP.cho_phep);
   });
 
-  it("nói thẳng rằng bản này CHƯA đọc được chữ trên ảnh", () => {
-    // ⚠ Ranh giới thật: OCR cần một bước máy chủ. Màn hình nói ra thay vì vẽ một thanh tiến
-    // trình cho một việc không xảy ra.
+  it("tiêu đề không hứa bóc chữ khỏi ảnh — ứng dụng không có bước OCR", () => {
+    // Một tiêu đề "Số hoá" trên một màn chỉ hiện ảnh là hứa một việc mã không làm.
     const chu = textOf(ve(<SoHoaThiepGiay />));
-    expect(chu).toContain(SO_HOA_THIEP.chua_doc_duoc_chu);
-  });
-
-  it("nói ra rằng ảnh KHÔNG RỜI KHỎI MÁY, và nói trước khi có ảnh nào", () => {
-    // Người quyết định có đưa ảnh của một người khác vào hay không cần đọc câu này TRƯỚC.
-    const chu = textOf(ve(<SoHoaThiepGiay />));
-    expect(chu).toContain(SO_HOA_THIEP.anh_khong_roi_may);
+    expect(noiDung("so-hoa-thiep").tieu_de).not.toMatch(/[Ss]ố hoá|nhận dạng|đọc chữ/);
+    expect(chu).not.toMatch(/đang phân tích|đang nhận dạng/);
     expect(chu).toContain(SO_HOA_THIEP.nut_chon_anh);
   });
 

@@ -448,7 +448,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     man: "Liên hệ · Gửi phản ánh",
     tinh_nang: "Tìm văn phòng gần bạn · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ. Ở màn Liên hệ, mã chỉ ở lại trên máy: bản dựng này chưa xếp được văn phòng theo khoảng cách và nói thẳng điều đó trên màn hình. Ở màn Gửi phản ánh, khi bạn bấm “Lấy vị trí hiện tại”, mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
+      "Lấy mã vị trí sau khi bạn đồng ý chia sẻ. Ở màn Liên hệ, mã chỉ ở lại trên máy. Ở màn Gửi phản ánh, khi bạn bấm “Lấy vị trí hiện tại”, mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
       "Ở màn Gửi phản ánh: mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi. Ở màn Liên hệ: không có gì rời khỏi máy.",
