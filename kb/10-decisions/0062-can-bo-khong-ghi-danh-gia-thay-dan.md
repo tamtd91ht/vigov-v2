@@ -8,7 +8,7 @@ expires: null
 owns_facts:
   - "cán bộ không ghi nhận đánh giá sao thay người dân — không có tuyến cán bộ ghi điểm hài lòng, qua điện thoại hay tại quầy"
   - "điểm hài lòng trong KPI và báo cáo chỉ đếm lời đánh giá do chính người dân gửi qua tuyến công dân"
-  - "vì sao ViGov lệch có chủ ý khỏi tuyến POST /{id}/rating (feedback.resolve) của kho yêu cầu và khỏi §8.6 của đặc tả phản ánh"
+  - "vì sao ViGov lệch có chủ ý khỏi tuyến POST /{id}/rating (feedback.resolve) của kho yêu cầu và khỏi §8.6 của đặc tả phản ánh — ĐANG ĐỔI từ 11/10/2026: cán bộ ghi nhận đánh giá với nguồn staff_recorded, không cộng vào điểm hài lòng (§Sửa đổi 10–11/10/2026, ĐANG LÀM)"
 ---
 
 # 0062. Cán bộ không ghi nhận đánh giá sao thay người dân
@@ -65,6 +65,35 @@ Hiện trạng lúc ghi: chỉ có tuyến công dân `POST /api/v1/my-citizen-r
 2. Một nguồn điểm hài lòng thứ hai (khảo sát qua điện thoại, phiếu giấy nhập lại) cộng vào cùng KPI —
    nếu xã cần, đó là một chỉ số **khác**, tên khác, và là câu hỏi mới cho người dùng
 3. Dựng khối §8.6 của đặc tả
+
+## Sửa đổi 10–11/10/2026 — ĐANG LÀM: cán bộ ghi nhận đánh giá, không cộng vào điểm hài lòng
+
+Mục này ghi thêm, không sửa phần trên. **Trạng thái: ĐANG LÀM.** Builder của service-petitions đang
+chạy. Lúc ghi mục này (11/10/2026) lượt ấy **chưa commit**. Trên đĩa đã có tệp chưa theo dõi
+`service-petitions/migrations/0042_petition_staff_recorded_rating.sql` (bảng riêng
+`petition_staff_recorded_rating`) và tệp domain/store cùng tên. Kiểm lại mục này khi lượt ấy commit.
+
+Dòng 60 của bảng lỗi khách đòi khối "Ghi nhận đánh giá của người dân" của prototype. Luật 11/10/2026
+(ADR 0090 #1) là tính năng trên prototype phải có. Hướng đang dựng, do phiên chính chuyển lại:
+
+| Quyết định cũ | Hướng mới |
+|---|---|
+| #1 Không có tuyến cán bộ ghi điểm | **Đảo:** cán bộ ghi được lời đánh giá người dân nói qua điện thoại hoặc tại quầy. Lời đánh giá ấy mang nguồn **`staff_recorded`** |
+| #2 KPI và báo cáo "điểm hài lòng" chỉ đếm lời của chính người dân | **Giữ:** điểm `staff_recorded` **không** vào điểm hài lòng của người dân |
+| #3 web-admin không có khối §8.6 | **Đảo:** có khối, theo prototype |
+
+**Vì sao #2 phải giữ dù #1 đảo:** hai lý do đầu của §*Vì sao* vẫn đúng. Bên bị chấm lại là bên ghi
+điểm, và điểm 5 sao nhập hộ không phân biệt được với điểm thật. Tách nguồn là cách duy nhất để vừa có
+khối của prototype, vừa không cho con số báo lên lãnh đạo đo chính người ghi nó.
+
+**Còn phải chốt khi lượt dựng commit — đừng tự chọn:**
+
+- Điểm 1–2 sao do cán bộ ghi có tự mở lại phiếu không (ADR 0050 điểm 2). Ghi hộ mà né được việc mở lại
+  là lý do thứ hai của §*Vì sao*.
+- ĐIỀU KIỆN DỪNG #1, #3 ở trên đã bắn. Lời chủ dự án ngày 11/10 trả lời hai điều kiện này. Điều kiện #2
+  (cộng vào cùng KPI) **chưa** bắn và vẫn đứng.
+- ADR 0068 lần 5 #4 có dòng "cán bộ không nhập đánh giá thay công dân (ADR 0062)". Dòng ấy nay chỉ còn
+  vế "không cộng vào điểm hài lòng".
 
 → ADR 0050 điểm 2 (dân chấm 1–5 sao, 1–2 sao tự mở lại): `kb/10-decisions/0050-kenh-cong-dan-theo-kho-yeu-cau.md`
 → Danh từ `rating` trên URL: `kb/00-foundation/ubiquitous-language.md` §Tên tài nguyên trên URL

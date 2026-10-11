@@ -13,7 +13,7 @@ owns_facts:
   - "đơn vị dân cư có tuyến nhập Excel; ngưng dùng không bị chặn khi còn hồ sơ trỏ tới — người dùng 29/09/2026"
   - "nhập danh mục từ Excel: mỗi service sở hữu một tuyến nhập cho nhóm của mình, không có tuyến nhập danh mục chung"
   - "nhập cán bộ chỉ cấp tài khoản cho dòng có email; tạo một cán bộ vẫn bắt buộc email — nợ so với §Hệ quả"
-  - "đơn vị dân cư không có tuyến DELETE; ngưng dùng / dùng lại là PATCH active"
+  - "đơn vị dân cư không có tuyến DELETE; ngưng dùng / dùng lại là PATCH active — từ 10/10/2026 giao diện gọi ngưng dùng là 'Xoá' (§Sửa đổi 10–11/10/2026)"
 ---
 
 # 0059. Nhập từ Excel: cán bộ kèm tài khoản, đơn vị dân cư ghi được, danh mục nhập theo service sở hữu
@@ -148,6 +148,16 @@ không** (thông điệp commit `e687f07`), đúng câu trả lời của ngư�
 2. Một tuyến gộp hay tách đơn vị dân cư
 3. Một tuyến nhập danh mục chung cho nhiều nhóm, ở bất kỳ service nào
 4. Tệp mẫu có cột Mã cán bộ
+
+## Sửa đổi 10–11/10/2026 — nhãn "Xoá" cho thôn
+
+Mục này ghi thêm, không sửa phần trên. Theo dòng 31 của bảng lỗi khách (ADR 0090), nút ngưng dùng
+thôn ở Cấu hình nay **đọc là "Xoá"** (`61545b3b`). §2 **không đổi**: không có tuyến `DELETE`. "Xoá" vẫn
+là `PATCH active:false`, hồ sơ trỏ tới thôn giữ nguyên tên, và thôn dùng lại được. Danh sách và ô chọn
+mặc định ẩn thôn đã xoá. Chi tiết trình bày ở ADR 0079 §*Sửa đổi 10–11/10/2026* #5.
+
+**Vì sao chỉ đổi chữ:** khách muốn thấy một thao tác xoá như prototype. Xoá thật một thôn là xoá dòng
+mà hồ sơ lưu trữ đang trỏ tới (luật 7, luật 1 cấm #7).
 
 → Câu mở #9 · #15 · #16: `kb/00-foundation/open-questions.json`
 → ADR 0024 (chủ sở hữu từng nhóm danh mục) · 0056 (chặn xoá bộ phận)

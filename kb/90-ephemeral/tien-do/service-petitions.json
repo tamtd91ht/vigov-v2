@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-11",
   "muc": [
     {
       "id": "so-tay-lanh-dao-bo-loc-may-chu",
@@ -722,6 +722,40 @@
       "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ D: ảnh hiện trường (công dân), ảnh sau xử lý, tệp nhật ký phiếu, tệp nhiệm vụ tải lên bằng MỘT lệnh multipart qua service-petitions (size, content_type?, file_name? cho tệp đính kèm, file) → 201 tệp đã lưu; bỏ 4 tuyến …/completion; photoGate tính 1 lần/ảnh (30/15 phút); tuyến công dân bỏ qua tên tệp; 4 lượt/pod; mọi lỗi sau khi có dòng pending → failed + xoá tạm",
       "bang_chung": "(commit này) — app/upload_stream.go, http/upload.go; go vet + go test ./... service-petitions xanh (phiên chính chạy lại); ca 401/403/401-sai-xã/201, 404 giống nhau cho phiếu người khác, TestAccountlessChainHasNoPhotoUpload",
       "tiep_theo": "citizen-app (scene-photos, goi-vigov) và web-admin (task-attachments, phieu-phan-anh, verification-photos) CHƯA chuyển — không triển khai riêng petitions. Thêm @multipart khi make kb. 503 upload_busy vẫn tốn 1 lượt trong 30 của người dân (photoGate chạy trước slot). xu_ly_phan_anh.go:141 còn chú thích …/completion (tệp phiên khác)."
+    },
+    {
+      "id": "petitions-bang-loi-10-11",
+      "menu": [
+        "nhiem-vu",
+        "phan-anh-nguoi-dan",
+        "tong-quan-dieu-hanh"
+      ],
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Bảng lỗi khách 10/10/2026, đợt 1: tìm không dấu cho nhiệm vụ và phản ánh (core/textfold + migration 0041, cột sinh title_folded/content_folded/address_folded, không dùng extension — dòng 8); dòng nhiệm vụ của 'Cần xử lý ngay' có title + org_unit_id + org_unit_name, dòng phản ánh vẫn chỉ mã (dòng 5, ADR 0053 §Sửa đổi E2); lọc phản ánh 'Liên quan đến tôi' (scope=related): được giao, có trong nhật ký xử lý, hoặc thuộc bộ phận của tôi — danh tính lấy từ phiên, không từ tham số (dòng 57).",
+      "bang_chung": "a06a12ab — core/textfold/textfold.go + test; migrations/0041_search_folded_columns.sql + search_folded_columns_test.go; app/overdue_queue.go (nameUnits, một lần ResolveOrgUnitNames); http/summary.go (tên chỉ gắn cho dòng loại nhiệm vụ); http/xu_ly_phan_anh.go (locPhieuTuQuery); store/search_folded_pg_test.go.",
+      "tiep_theo": "CHƯA CHẠY TRÊN PostgreSQL: migration 0041 và store/search_folded_pg_test.go (thiếu VIGOV_TEST_DSN). Web: đọc title/org_unit_name ở Tổng quan và nối scope=related ĐANG LÀM (sổ web-admin, mục `tong-quan-10-11`, `phan-anh-10-11`)."
+    },
+    {
+      "id": "petitions-bang-loi-dot-2-10-11",
+      "menu": [
+        "nhiem-vu",
+        "phan-anh-nguoi-dan"
+      ],
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Bảng lỗi khách 10/10/2026, đợt 2: (a) chuyen-tiep trở lại làm trạng thái rẽ nhánh khi giao/chuyển việc — đảo quyết định 28/09/2026 ở mục `giao-lai-nhiem-vu` (ADR 0076 §Sửa đổi G2, dòng 17); (b) nhật ký đề nghị lùi hạn hiện trên nhiệm vụ (dòng 17); (c) cán bộ ghi nhận đánh giá của người dân, nguồn staff_recorded, không cộng vào điểm hài lòng (ADR 0062 §Sửa đổi, dòng 60).",
+      "bang_chung": "Chưa commit lúc ghi (11/10/2026): (a) đang sửa trong domain/nhiem_vu.go, domain/task_assignment.go, app/task_status_handover.go và các tệp cùng lượt; (c) tệp chưa theo dõi migrations/0042_petition_staff_recorded_rating.sql (+ _test.go), domain/ và store/petition_staff_recorded_rating.go.",
+      "tiep_theo": "Builder đang chạy. Khi commit: cập nhật ADR 0076 G2 và ADR 0062 §Sửa đổi (bỏ chữ ĐANG LÀM, ghi commit), chốt câu 1–2 sao do cán bộ ghi có mở lại phiếu không (ADR 0062 §Sửa đổi)."
+    },
+    {
+      "id": "trien-khai-tep-nhiem-vu-10-11",
+      "menu": "nhiem-vu",
+      "trang_thai": "chua_lam",
+      "no_confirm": [],
+      "viec": "Triển khai: tệp đính kèm nhiệm vụ trên cụm cần OBJECT_STORAGE_* và MALWARE_SCANNER_ADDRESS cho service-petitions (dòng 17 báo đính kèm lỗi).",
+      "bang_chung": "deploy/base/petitions/deployment.yaml nạp common-config + petitions-secrets bằng envFrom. Mẫu đặt biến của comms ghi ở deploy/base/comms/deployment.yaml:136-139. Tên biến: .env.example:379-415.",
+      "tiep_theo": "Người vận hành cụm đặt giá trị (kho không biết được). Không phải lỗi mã."
     }
   ]
 }

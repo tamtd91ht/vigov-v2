@@ -111,6 +111,12 @@ Lượt giao thiết kế sự kiện bị chặn quyền; chờ chủ dự án.
 | 5 | `assignee_id` của dự án giữ **mã cán bộ** hay id | Web gửi mã cán bộ (`744582d7`); đặc tả §11 ghi `uuid` |
 | 6 | Kế hoạch vốn và thời hạn **theo hạng mục** | Suy ra từ các dự án (`a3fdcac2`); đặc tả §5 nói đặt trên hạng mục. ⚠ Câu mở #34 (đã chốt 22/09) ghi *"màn hình KHÔNG được hiện chúng"* — số suy ra đang hiện ở bảng Tiến độ theo hạng mục, cần chủ dự án xác nhận đây là cách đọc mới hay là lệch |
 
+## Sửa đổi 10–11/10/2026
+
+#4a ("lý do không bắt buộc, máy chủ ghi câu cố định") nay là tiền lệ cho mọi thao tác xoá của
+web-admin theo bảng lỗi khách. Luật chung ở ADR 0090 #4; danh sách chỗ đã áp ở ADR 0077 §*Sửa đổi
+10–11/10/2026*. #4a không đổi.
+
 → ADR 0036 (sửa chứng từ đã xác nhận) · ADR 0068 lần 5 · ADR 0035 (câu #31, #34)
 → Đặc tả: `docs/ui-ux/06-giai-ngan.md` §6, §7.2, §8, §9, §11, §13
 → Sổ tiến độ: `python tools/tien_do.py --menu giai-ngan`

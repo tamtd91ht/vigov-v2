@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-11",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -608,6 +608,18 @@
       "bang_chung": "3996b279. go build/vet/test -race service-identity xanh; ca PG SKIP (không DSN).",
       "tiep_theo": "Trần tần suất chưa có — luật 13, chờ chủ dự án (đề xuất 30/phút/công dân). Mini App chưa dùng tuyến này (citizen-app).",
       "no_confirm": []
+    },
+    {
+      "id": "identity-bang-loi-10-11",
+      "menu": [
+        "cau-hinh",
+        "danh-ba-can-bo"
+      ],
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Bảng lỗi khách 10/10/2026 (ADR 0090): xoá dòng danh bạ cán bộ, bộ phận, dòng thời hạn riêng của lĩnh vực không bắt nhập lý do — trống thì ghi câu cố định, vẫn xoá mềm + vết cùng giao dịch; bộ phận con không cần Thứ tự (máy chủ xếp sau anh em cuối); thêm cán bộ nhận role_ids và gán vai trò cùng giao dịch (một vai trò/người, hai vai trò khác nhau thì từ chối, qua chốt chống leo quyền của PUT /staff/{id}/role, không thêm khoá quyền); SĐT di động tối đa 10 số sau chuẩn hoá (máy bàn không giới hạn — số cố định 11 số).",
+      "bang_chung": "a8f30265 — domain/danh_ba_ghi.go (StaffDeleteDefaultReason, MaxMobileDigits, NewStaffRole + ErrOneRolePerStaff), domain/org_unit_delete.go (OrgUnitDeleteDefaultReason), domain/sla_field_rule.go (SLAFieldRowDeleteDefaultReason), app/staff_create_role_test.go, app/org_unit_default_order_test.go; hợp đồng sinh lại (openapi.json, schema.gen.ts). Không migration.",
+      "tiep_theo": "Web đã nối: xoá không ô lý do (61545b3b); cụm Vai trò + SĐT 10 số ở popup thêm người dùng (2dff300e). Ô mật khẩu tự đặt TỪ CHỐI — mật khẩu tạm do hệ thống cấp (ADR 0090, ADR 0059 §1)."
     }
   ]
 }

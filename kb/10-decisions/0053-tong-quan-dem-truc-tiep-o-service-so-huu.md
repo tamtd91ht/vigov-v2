@@ -18,7 +18,8 @@ owns_facts:
   - "hai khoá lồng nhau report.read + khoá đọc của phân hệ trên mọi tuyến số liệu /tong-quan (trừ budget-indicators, sửa đổi 04/10/2026 B6), và vì sao web không được tin x-vigov-permission của các tuyến ấy"
   - "kỳ Tuần/Tháng/Quý/Năm (mặc định Tháng, tuần bắt đầu thứ Hai, Asia/Ho_Chi_Minh, client tính [from,to)) và kỳ so sánh = kỳ liền trước cùng loại, cùng phần đã trôi qua, chỉ cho số theo kỳ"
   - "định nghĩa từng ô của /tong-quan đợt 1: phản ánh nhận vào, đang xử lý, trễ theo trần phân loại; nhiệm vụ tạm dừng, việc con, đúng hạn theo han_ban_dau; văn bản đến theo ngay_den (tạm)"
-  - "khối Cần xử lý ngay: top 10 gộp ba hàng đợi, những trường được hiện, ngưỡng nghiêm trọng 48 giờ làm việc qua identity, không có dòng 'quá hạn N ngày M giờ'"
+  - "khối Cần xử lý ngay: top 10 gộp ba hàng đợi, những trường được hiện, ngưỡng nghiêm trọng 48 giờ làm việc qua identity, không có dòng 'quá hạn N ngày M giờ' — trường hiện của DÒNG NHIỆM VỤ bị thay bởi §Sửa đổi 10–11/10/2026 E2"
+  - "/tong-quan từ 10/10/2026: ô số nhiệm vụ mở popup danh sách và ngăn chi tiết tại chỗ; dòng nhiệm vụ của Cần xử lý ngay có tên + bộ phận, dòng phản ánh vẫn chỉ mã; khối Giải ngân là luỹ kế năm ngân sách (§Sửa đổi 10–11/10/2026)"
   - "phạm vi /tong-quan đợt 1 và câu 'Chưa có dữ liệu nguồn' cho ô không có nguồn"
   - "drill-down ?metric= (+from/to) tới /nhiem-vu, /phan-anh, /van-ban và vì sao ca kiểm không-trạng-thái-URL của sổ văn bản đến được nới"
   - "ảnh trước/sau bị chặn, cảnh báo thiên tai để đợt sau, trên /tong-quan"
@@ -34,7 +35,8 @@ owns_facts:
 `:104`) **cho riêng `/tong-quan`** — không thay hai ADR ấy ở chỗ khác · Phạm vi: M7 đợt 1.
 **Sửa đổi 04/10/2026:** mở `/bao-cao` (cuối tệp). **Sửa đổi 09/10/2026:** tab Báo cáo của `/phan-anh`
 (cuối tệp). **Sửa đổi 09/10/2026 (lần 2):** `/bao-cao` theo prototype — thay một phần §3, §4, §7, B3,
-B4, B5b **cho riêng `/bao-cao`** (cuối tệp).
+B4, B5b **cho riêng `/bao-cao`** (cuối tệp). **Sửa đổi 10–11/10/2026:** bảng lỗi của khách — thay một
+phần §5, §6, §7 **cho `/tong-quan`** (cuối tệp).
 
 ## Bối cảnh
 
@@ -511,3 +513,48 @@ so sánh tốt lên `features/dashboard/view.tsx:805`) **không đạt** WCAG AA
 ngày 07/10/2026 (ADR 0068 lần 6).
 
 → ADR 0068 §4, lần 6 #11 · ADR 0058 · luật 3 bất biến 4 · luật 5 bất biến 3c · luật 6
+
+## Sửa đổi 10–11/10/2026 — bảng lỗi của khách, cho `/tong-quan`
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án, luật
+"chuẩn là prototype" của ADR 0090. Số dòng là dòng của bảng lỗi, theo quy ước ở ADR 0090.
+
+### E1. §7 — ô số nhiệm vụ mở popup tại chỗ (dòng 3)
+
+| Trước | Từ 10/10/2026 |
+|---|---|
+| Mọi con số là liên kết `?metric=` sang màn danh sách | Ô số **nhiệm vụ** mở popup ngay trên Tổng quan. Popup có tiêu đề, mô tả và bảng Mã · Nội dung · Bộ phận · Người xử lý · Hạn · nút **Mở**. **Mở** hiện ngăn chi tiết nhiệm vụ tại chỗ, không chuyển sang `/nhiem-vu` |
+
+- Dòng của popup lấy từ `GET /api/v1/tasks?metric=…[&from&to]`, cùng vị từ với con số, nên §7 vẫn đúng ở
+  tầng dữ liệu. Chỉ chỗ hiện đổi.
+- Các ô **không phải nhiệm vụ** vẫn là liên kết `?metric=` như §7.
+- Commit `5b7039a2` (`web-admin/src/features/dashboard/task-drill.tsx`).
+
+### E2. §5 — dòng nhiệm vụ của "Cần xử lý ngay" có tên và bộ phận (dòng 5)
+
+| Loại dòng | Hiện thêm | Không hiện |
+|---|---|---|
+| Nhiệm vụ | **Tên nhiệm vụ** · **bộ phận đang giữ** (tên do identity trả hôm nay; không tra được thì để trống, dòng vẫn hiện) | — |
+| Phản ánh | — | Nội dung, người gửi, vị trí. Vẫn chỉ **mã + lĩnh vực** như §5 |
+
+- Bấm một dòng nhiệm vụ mở ngăn chi tiết tại chỗ, không chuyển màn.
+- **Vì sao tên nhiệm vụ không phải lộ thêm:** `GET /api/v1/overdue-tasks` đòi `task.read` **và**
+  `report.read`. Riêng `task.read` đã đọc được mọi tên nhiệm vụ của xã qua `GET /api/v1/tasks`. Tên
+  nhiệm vụ vẫn không được làm khoá sắp xếp trên URL; đó là bề mặt khác (URL, nhật ký truy cập).
+- **Vì sao phản ánh giữ nguyên:** nội dung phản ánh là dữ liệu cá nhân (luật 3). Máy chủ chỉ gắn tên
+  cho dòng có loại nhiệm vụ (`service-petitions/internal/http/summary.go`), nên không tầng nào bên dưới
+  làm lọt nội dung phản ánh lên bảng này được.
+- **Vẫn không có "quá hạn N ngày M giờ".** Bảng lỗi đòi dòng này. §5 vẫn đứng: phép trừ giờ đồng hồ bị
+  luật 10 cấm #2. Dòng hiện "quá hạn từ <hạn>" (`web-admin/src/features/dashboard/figures.ts:350`).
+- Commit `a06a12ab` (máy chủ), `5b7039a2` (web). Web đọc trường `title`/`org_unit_name`: **ĐANG LÀM**
+  (sổ `web-admin`, mục `tong-quan-10-11`).
+
+### E3. §6 — khối Giải ngân có số liệu (dòng 6)
+
+- §6 ghi Giải ngân là "Chưa có dữ liệu nguồn". Từ `5b7039a2`, khối đọc
+  `GET /api/v1/investment-project-summary` của **năm ngân sách**. Đây là tuyến mà `/giai-ngan` đọc, khoá
+  `budget.read`.
+- **Đây là khối duy nhất không theo kỳ đang xem.** Khối ghi rõ "Luỹ kế năm ngân sách N, không theo kỳ
+  đang xem." Nếu không ghi, người xem chọn "Tuần này" sẽ đọc năm con số cả năm như số của tuần.
+
+→ ADR 0090 · ADR 0076 (ngăn chi tiết nhiệm vụ) · luật 3 · luật 10 cấm #2

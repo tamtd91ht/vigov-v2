@@ -8,7 +8,7 @@ expires: null
 owns_facts:
   - "ghi danh mục hạng mục kế hoạch vốn (POST/PATCH/DELETE /api/v1/capital-plan-categories) nhận admin.lookup HOẶC budget.update qua authz.RequireAnyPermission; ba tuyến nhập Excel danh mục vẫn chỉ admin.lookup (chốt 07/10/2026)"
   - "thêm hạng mục không cần mã: máy chủ cấp mã kebab-case từ tên (DeriveCatalogueCode), trùng thì -2…-99, quá 99 thì 409 code_series_blocked thay vì đuôi hex ngẫu nhiên; không cấp lại mã đã dùng kể cả của dòng đã xoá mềm (chốt 07/10/2026)"
-  - "xoá hạng mục: lý do không bắt buộc, để trống thì ghi câu cố định domain.CategoryRemovalDefaultReason; vẫn xoá mềm, có vết (chốt 07/10/2026)"
+  - "xoá hạng mục: lý do không bắt buộc, để trống thì ghi câu cố định domain.CategoryRemovalDefaultReason; vẫn xoá mềm, có vết (chốt 07/10/2026) — luật chung từ 10/10/2026 ở ADR 0090 #4"
   - "danh sách dự án Giải ngân lệch đặc tả 06-giai-ngan theo lựa chọn người dùng: bấm cả dòng mở dự án; số tiền rút gọn trong cột; màu tiến độ theo ngưỡng 80/50/30 của prototype là luật HIỂN THỊ, cờ chậm của máy chủ vẫn là nguồn duy nhất của 'chậm' (chốt 07/10/2026)"
   - "hạn đã qua KHÔNG tô đỏ ở danh sách Giải ngân — cần đồng hồ trình duyệt (chốt 07/10/2026)"
 ---
@@ -85,6 +85,25 @@ nay là *"`admin.lookup` hoặc `budget.update`"*, trừ nhập Excel. Nửa *"n
 |---|---|---|
 | 1 | Câu chữ lý do mặc định khi xoá hạng mục | `"Xoá khỏi danh mục hạng mục kế hoạch vốn"` (`service-finance/internal/domain/danh_muc_ba_tang.go:232`) |
 | 2 | Chống gửi trùng của `POST` thêm hạng mục khi Redis hỏng: cho qua (`MoKhiHong`) hay từ chối 503 (`DongKhiHong`) | `MoKhiHong` (`service-finance/internal/http/routes.go:938-943`): dòng sinh đôi không mang tiền, không mang số văn bản, xoá mềm được ngay trên hộp thoại |
+
+## Sửa đổi 10–11/10/2026 — tiền lệ "lý do xoá tuỳ chọn" mở rộng
+
+Mục này ghi thêm, không sửa phần trên. #3 ở đây và ADR 0075 #4a nay là **tiền lệ chung**. Theo bảng lỗi
+khách 10/10/2026, chủ dự án nói "ẩn ô, máy ghi câu cố định". Luật chung nay thuộc ADR 0090 #4 và đã
+áp cho:
+
+| Thứ bị xoá | Service | Commit |
+|---|---|---|
+| Dòng danh bạ cán bộ | identity | `a8f30265` |
+| Bộ phận (vẫn chặn theo ADR 0056) | identity | `a8f30265` |
+| Dòng thời hạn riêng của lĩnh vực | identity | `a8f30265` |
+| Nhãn trường bản đồ | comms | `b6ae86fa` |
+| Mục Loại đơn thư | documents | `8cb12506` |
+
+Web bỏ ô lý do ở `61545b3b`. **Khác #3 ở một điểm:** câu cố định của các mục trên nói rõ người xoá
+**không nhập lý do**. Câu của hạng mục (`"Xoá khỏi danh mục hạng mục kế hoạch vốn"`, câu còn mở #1)
+không nói vậy, nên người đọc vết dễ tưởng đó là lý do có người gõ. Nếu chủ dự án chốt câu còn mở #1,
+nên chốt theo cùng mẫu.
 
 → ADR 0075 #4a, #4b · ADR 0068 lần 5
 → Đặc tả: `docs/ui-ux/06-giai-ngan.md` `:79`, `:146`, `:156` · `docs/ui-ux/14-cau-hinh.md:109`

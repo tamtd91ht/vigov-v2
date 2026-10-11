@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-11",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -398,6 +398,18 @@
       "viec": "ADR 0052 §Sửa đổi 09/10/2026 thẻ E: ảnh bìa, ảnh thân bài, âm thanh truyền thanh tải lên bằng MỘT lệnh multipart qua service-comms (size, file_name?, content_type?, content_item_id?, audio_duration_seconds cho âm thanh) → 201 tệp đã lưu; bỏ 3 tuyến …/completion; 4 lượt/pod; mọi lỗi sau khi có dòng pending → failed (kể cả máy quét bận — không còn tuyến thử lại)",
       "bang_chung": "(commit này) — internal/http/upload.go (bảng lỗi 415/413/408/400/503), go vet + go test ./... service-comms xanh (phiên chính chạy lại, internal/grpc cũng xanh); ca 401/403/403-sai-xã/201 cho 3 tuyến",
       "tiep_theo": "web-admin (features/noi-dung/cover-image.ts, body-image.ts, broadcast-audio.ts) CHƯA chuyển — không triển khai riêng comms. Thêm @multipart cho 3 tuyến khi make kb. Tệp gốc đã chép sang private mà bước sau hỏng thì nằm lại không ai trỏ tới (dọn sau)."
+    },
+    {
+      "id": "comms-bang-loi-10-11",
+      "menu": [
+        "cau-hinh",
+        "noi-dung-mini-app"
+      ],
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Bảng lỗi khách 10/10/2026 (ADR 0090): xoá nhãn trường bản đồ không bắt nhập lý do (câu cố định, vẫn xoá mềm + vết cùng giao dịch); tạo danh mục tin không cần slug — máy chủ sinh từ tên, không cấp lại slug đã dùng kể cả đã xoá (dòng 21); danh sách tin trả link xem trước ảnh đại diện đã ký theo từng dòng (dòng 22).",
+      "bang_chung": "b6ae86fa — domain/map_field_schema.go (MapFieldDeleteDefaultReason), domain/noi_dung_mini_app.go (slug máy chủ cấp), app/content_cover.go + http/content_cover.go, store/stored_file.go + ca kiểm.",
+      "tiep_theo": "store/stored_file_pg_test.go chưa chạy trên PostgreSQL (thiếu VIGOV_TEST_DSN). Web đã nối ở 2dff300e: tạo danh mục không gửi slug + cột ảnh đại diện (sổ web-admin, mục `noi-dung-10-11`)."
     }
   ]
 }

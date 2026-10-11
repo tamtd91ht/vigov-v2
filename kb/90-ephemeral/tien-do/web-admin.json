@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-10",
+  "cap_nhat": "2026-10-11",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -1214,6 +1214,95 @@
       "viec": "ADR 0052 §Sửa đổi 09/10/2026, đợt 3 (web-admin): mọi luồng tải tệp gửi MỘT lệnh multipart cùng origin tới đúng tuyến cũ (tệp nhiệm vụ, tệp nhật ký phiếu, ảnh sau xử lý, ảnh bìa, ảnh thân bài, âm thanh truyền thanh, logo/banner xã); bỏ hẳn POST thẳng MinIO và mọi lệnh …/completion. Một hàm dùng chung lib/api/upload.ts (XHR để giữ tiến độ, phần chữ theo thứ tự hợp đồng, size = file.size trước file, Idempotency-Key, lỗi máy chủ giữ nguyên câu; lỗi không có thân httpx.Error dùng câu cố định theo mã trạng thái). scripts/gen-api-types.mjs sinh kiểu multipart + multipartParts (tuple thứ tự) và TỪ CHỐI mọi content type khác. Cổng web: lệnh POST multipart có bộ đếm nhàn rỗi 210 s (service tự cắt ở 180 s gồm cả quét), lệnh khác giữ 30 s. Trạng thái 'retry' nay là GỬI LẠI cùng tệp (chỉ với lỗi nhất thời 0/408/502/503/504, và invalid_audio_duration); nút đổi chữ thành 'Gửi lại'. Ảnh sau xử lý không gửi tên tệp gốc (tuyến không đọc). CSP connect-src: web-admin chưa có CSP nên không có gì để gỡ.",
       "bang_chung": "Commit này. web-admin: tsc sạch; eslint sạch; npm run check:api khớp; npx vitest run toàn bộ 304 tệp / 5617 ca xanh (mới: lib/api/upload.test.ts, lib/may-chu/gateway-upload-timeout.test.ts; viết lại các bài ghim luồng presigned).",
       "tiep_theo": "(1) Chưa kiểm trên trình duyệt thật/ảnh render, chưa thử tải 50 MB qua ingress + cổng web trên cụm. (2) Mỗi lần thử là một Idempotency-Key mới: mất kết nối sau khi máy chủ đã lưu thì 'Gửi lại' có thể tạo tệp thứ hai (ảnh sau xử lý tính vào giới hạn 5; âm thanh gặp 409 audio_limit) — cần người dùng quyết có dùng lại khoá và xử lý trả lời phát lại hay không. (3) Bộ đếm 210 s của cổng áp cho MỌI POST multipart (theo Content-Type), không theo danh sách tuyến."
+    },
+    {
+      "id": "chung-10-11",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Bảng lỗi khách 10/10/2026, phần CHUNG: ô chọn có giá trị dài không đè mũi tên (dòng 2); menu bên chỉ sáng đúng mục dài nhất, Thu-Chi không kéo Giải ngân sáng theo (dòng 46). Luật xử lý bảng lỗi: ADR 0090.",
+      "bang_chung": "5b7039a2 (globals.css: select không đè mũi tên) · 75b622a1 (components/muc-menu.ts, side-nav.tsx + ca kiểm).",
+      "tiep_theo": "Dòng 1 (phiên 7 ngày) TỪ CHỐI theo ADR 0090 §Từ chối. Dòng 4 (chức vụ dưới tên người dùng ở đầu trang) chưa thấy commit nào trong lượt 10–11/10 — chưa kiểm."
+    },
+    {
+      "id": "tong-quan-10-11",
+      "menu": "tong-quan-dieu-hanh",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Tổng quan theo bảng lỗi 10/10 (ADR 0053 §Sửa đổi 10–11/10/2026): bấm số nhiệm vụ mở popup danh sách (Mã · Nội dung · Bộ phận · Người xử lý · Hạn · Mở), Mở = ngăn chi tiết tại chỗ (dòng 3); dòng nhiệm vụ của Cần xử lý ngay mở ngăn tại chỗ (dòng 5); khối Giải ngân có số liệu luỹ kế năm ngân sách (dòng 6).",
+      "bang_chung": "5b7039a2 — features/dashboard/task-drill.tsx (mới) + task-drill.interaction.test.tsx, view.tsx, overview.tsx (getProjectSummary). Máy chủ cho tên + bộ phận của dòng nhiệm vụ: a06a12ab (sổ service-petitions, mục `petitions-bang-loi-10-11`).",
+      "tiep_theo": "ĐANG LÀM: web đọc `title` + `org_unit_name` của dòng nhiệm vụ trong Cần xử lý ngay (máy chủ đã trả từ a06a12ab). Không làm 'quá hạn … ngày … giờ' — luật 10 cấm #2, ADR 0053 §5 đứng. Chưa kiểm bằng ảnh render."
+    },
+    {
+      "id": "nhiem-vu-10-11",
+      "menu": "nhiem-vu",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Nhiệm vụ theo bảng lỗi 10/10: không nhảy khi đổi Toàn xã/Giao cho tôi (dòng 7); checkbox, hover tiêu đề, menu đổi trạng thái Kanban theo prototype (dòng 10–13); ô hạn dd/mm/yyyy, nhóm văn bản một ô nội dung, khoá cuộn trang khi mở popup Giao việc mới (dòng 16); tick phê duyệt không nhảy, đính kèm ở nhật ký/chuyển trạng thái, giao việc/chuyển việc (dòng 17).",
+      "bang_chung": "5b7039a2 (so-nhiem-vu.tsx, due-date-input.tsx mới, sheet-layout.test.tsx) · 75b622a1 (task-attachments-ui.tsx) · b4b45840 (đổi bộ phận mà để trống người xử lý nay gửi assignee rỗng; khối Giao việc dựng lại khi người giữ việc đổi).",
+      "tiep_theo": "ĐANG LÀM (đợt 2 service-petitions): chuyen-tiep là trạng thái rẽ nhánh khi giao/chuyển việc (ADR 0076 §Sửa đổi G2), nhật ký đề nghị lùi hạn (dòng 17). GIỮ theo ADR 0090: Xuất Excel Sổ theo dõi (dòng 15), + Thêm việc con (dòng 17). CHƯA RÕ, cần tệp của khách: dòng 18 (nhập Excel báo lỗi dù dữ liệu hợp lệ). Đính kèm tệp trên cụm cần OBJECT_STORAGE_* + MALWARE_SCANNER_ADDRESS cho petitions (sổ service-petitions, mục `trien-khai-tep-nhiem-vu-10-11`). Dòng 9 (bộ lọc loại nhiệm vụ 3 giá trị) và dòng 14 (Sổ theo dõi 13 cột) chưa thấy commit trong lượt này — chưa kiểm."
+    },
+    {
+      "id": "phan-anh-10-11",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Phản ánh theo bảng lỗi 10/10: số KPI không bấm lọc, bỏ lọc Bộ phận/Kênh theo prototype (dòng 56); ảnh sau xử lý gọn, nút × cho ảnh chưa lưu (dòng 58); nhật ký: nút Đính kèm cỡ chuẩn, chip tệp, xem ảnh trong popup (dòng 61).",
+      "bang_chung": "75b622a1 — petition-kpis.tsx, so-phan-anh.tsx, verification-photos.tsx, petition-log-attachments.tsx + ca kiểm.",
+      "tiep_theo": "ĐANG LÀM: nối lọc 'Liên quan đến tôi' (scope=related, máy chủ a06a12ab) — dòng 57; khối 'Ghi nhận đánh giá của người dân' (dòng 60) chờ máy chủ đợt 2 (ADR 0062 §Sửa đổi, ĐANG LÀM). 'Có thể trùng với phiếu khác' GIỮ: prototype có (ADR 0090). Dòng 59 (Chuyển xử lý, không đổi trạng thái) chưa đối chiếu trong lượt này."
+    },
+    {
+      "id": "noi-dung-10-11",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Nội dung Mini App theo bảng lỗi 10/10: bộ lọc về một hàng, Danh mục luôn hiện (dòng 20); popup Tin tức hết khoảng trắng, cảnh báo không tràn (dòng 23–24); tạo danh mục tin không còn ô Slug — máy chủ sinh (dòng 21); cột ảnh đại diện hiện ảnh thật từ link ký sẵn của dòng, rơi về ô trống khi hết hạn/lỗi (dòng 22).",
+      "bang_chung": "70b77fbe — so-noi-dung.tsx, nhan-noi-dung.ts + ca kiểm · 2dff300e — so-noi-dung.tsx, content-register.flow.test.tsx (máy chủ b6ae86fa).",
+      "tiep_theo": "Chưa kiểm bằng ảnh render."
+    },
+    {
+      "id": "danh-ba-10-11",
+      "menu": "danh-ba-can-bo",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Danh bạ cán bộ theo bảng lỗi 10/10: tìm + lọc về một hàng (dòng 25); ẩn Máy bàn cơ quan ở danh sách và chi tiết, dữ liệu giữ (dòng 26); xoá không còn ô lý do, máy chủ ghi câu cố định (dòng 27).",
+      "bang_chung": "70b77fbe (danh-ba-lien-he.tsx, bang-lien-he.tsx) · 61545b3b (hop-xoa.tsx, xoa-dong.ts, lib/api/can-bo.ts) · máy chủ a8f30265.",
+      "tiep_theo": "Chưa kiểm bằng ảnh render."
+    },
+    {
+      "id": "cau-hinh-10-11",
+      "menu": "cau-hinh",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Cấu hình theo bảng lỗi 10/10 (ADR 0079 §Sửa đổi 10–11/10/2026): Nhập Excel + Thêm một hàng bên phải; form Thôn thành popup; Thôn có 'Xoá' (= ngừng dùng, ẩn mặc định, công tắc 'Hiện địa bàn đã xoá'), bỏ Trưởng thôn/Thứ tự; Thêm bộ phận con không có Thứ tự; xoá bộ phận/nhãn bản đồ/thời hạn lĩnh vực không còn ô lý do, bộ phận báo đủ lý do từ chối; bỏ cột Giữ chưa phân công; thẻ 'Tính lại số liệu Tổng quan' vô hiệu '?'; câu mô tả Thời hạn và Tự động hoá theo prototype.",
+      "bang_chung": "70b77fbe (tab-thon-to-dan-pho.tsx, tab-so-do-to-chuc.tsx, automation-form.ts, nhan-thoi-han.ts) · 61545b3b (org-unit-delete*, map-field-tab.tsx, tab-thoi-han-xu-ly.tsx, automation-tab.tsx, residential-unit-form.ts).",
+      "tiep_theo": "XONG ở 2dff300e (dòng 41): popup thêm người dùng có cụm Vai trò (một vai trò, gửi role_ids — máy chủ a8f30265), SĐT di động xxx xxx xxxx tối đa 10 số, ghi chú mật khẩu tạm do hệ thống cấp; ô Mật khẩu tự đặt TỪ CHỐI (ADR 0090). ĐANG LÀM (chưa commit lúc ghi): nhóm Danh mục 'Loại đơn thư' (máy chủ 8cb12506, dòng 33). GIỮ: ba tab sau 9 tab prototype (dòng 28), cụm Thời hạn đơn thư (dòng 35)."
+    },
+    {
+      "id": "van-ban-10-11",
+      "menu": "van-ban-don-thu",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Văn bản & Đơn thư theo bảng lỗi 10/10: tab Đơn thư + Báo cáo lên đầu; ô Trả lời công dân luôn nói lý do khoá (dòng 43).",
+      "bang_chung": "61545b3b — document-workspace.tsx, document-pending.tsx, letter-drawer.tsx + ca kiểm. Máy chủ: 8cb12506 (sổ service-documents, mục `don-thu-bang-loi-10-11`).",
+      "tiep_theo": "ĐANG LÀM: khung đổi trạng thái gửi status_group + Bộ phận xử lý + Cán bộ phụ trách; ô Bước cụ thể chỉ hiện cho 'Lưu, không thụ lý' từ dang-xu-ly-don (ADR 0084 §Sửa đổi F1, dòng 44). GIỮ: tab Văn bản đi/đến (dòng 42), Sửa hạn xử lý (dòng 43). SĐT vẫn che (dòng 43, ADR 0090 §Từ chối)."
+    },
+    {
+      "id": "thu-chi-10-11",
+      "menu": "thu-chi-ngan-sach",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Thu - Chi theo bảng lỗi 10/10: sao không nháy màn (dòng 51); bỏ dòng công thức ở tiêu đề cột % (dòng 52); bỏ câu quy đổi triệu đồng (dòng 50); bỏ ô Lý do ở popup Thêm đợt (dòng 53).",
+      "bang_chung": "75b622a1 (bang-thu-chi.tsx, in-cell-edit.test.tsx) · 61545b3b (dot-thu-chi.tsx, nhan-thu-chi.ts).",
+      "tiep_theo": "ĐANG LÀM: badge số đợt trên nút 'Các đợt thu, chi' đọc entry_count (máy chủ 8cb12506, dòng 53). DỮ LIỆU, KHÔNG PHẢI MÃ: tiêu đề báo cáo chi, cụm số tổng và cột bảng thu (dòng 49, 54, 55 của tệp bảng lỗi; bảng tính gốc đánh số 50, 55, 56) — xã đổi qua 'Sửa thông tin bảng' hoặc nạp lại. GIỮ 'Sửa thông tin bảng' (dòng 47, ADR 0090). Dòng 48 (popup tải tệp mẫu khi Nạp từ Excel) chưa thấy commit trong lượt này — chưa kiểm."
+    },
+    {
+      "id": "giai-ngan-10-11",
+      "menu": "giai-ngan",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Giải ngân theo bảng lỗi 10/10: thêm hạng mục không làm giật màn chính (dòng 19).",
+      "bang_chung": "5b7039a2 — giai-ngan/disbursement-workspace.tsx, bang-du-an.tsx + disbursement-overview.test.tsx.",
+      "tiep_theo": "Chưa kiểm bằng ảnh render."
     }
   ]
 }

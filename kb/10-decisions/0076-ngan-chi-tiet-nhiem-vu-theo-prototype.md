@@ -22,6 +22,7 @@ owns_facts:
   - "ngăn chi tiết nhiệm vụ không có cột thao tác bên phải; Xoá (xoá mềm, có lý do) ở đầu ngăn; dòng 'Tạo bởi …' bỏ nếu prototype không có (chốt 07/10/2026 lần 2 #15)"
   - "Sổ theo dõi nhiệm vụ vẽ đủ 13 cột prototype, ngăn chi tiết có ô 'Cơ quan chủ trì tham mưu' và 'Chuyên viên VP tham mưu/theo dõi' — hiện CÙNG dữ liệu với Đơn vị thực hiện / Người thực hiện; chỉ trình bày, mô hình dữ liệu ADR 0065 NV5 giữ (chốt 07/10/2026 lần 2 #16)"
   - "hộp 'Giao việc mới' rộng 500px, 800px khi loại 'Theo văn bản' (spec 06) — thay chốt 07/10/2026 'luôn 800px' vốn chỉ nằm ở sổ tiến độ và mã (chốt 07/10/2026 lần 2 #17)"
+  - "bảng lỗi khách 10–11/10/2026: #13 (Xuất Excel) và #14 (+ Thêm việc con) giữ; ĐANG LÀM — chuyen-tiep trở lại làm trạng thái rẽ nhánh, đảo quyết định 28/09/2026 (§Sửa đổi 10–11/10/2026)"
   - "menu Nhiệm vụ: trạng thái trống/lỗi của danh sách giữ cách xử lý hiện có; số liệu chỉ đọc cần máy chủ (vd 'đã gia hạn n lần') = control vô hiệu '?' đúng vị trí prototype (mặc định phiên 07/10/2026 lần 2 #18–#19)"
 ---
 
@@ -201,3 +202,31 @@ Cùng người quyết, cùng phiên. Nguyên văn lựa chọn của chủ dự
 | i | Hai ô chủ trì / theo dõi | Người đọc thấy **cùng một giá trị hai lần** và có thể nghĩ hệ thống có hai vai riêng — trong khi ADR 0065 NV5 nói là **một** vai |
 | j | ADR 0068 *05/10* dòng "URL theo hộp" | Vế "đi tới việc **cha** trong hộp thay mục lịch sử" không còn chỗ dùng (#14); vế đi tới việc **con** giữ |
 | k | Mặc định #5 lô một | "Không thêm ô bộ phận chủ trì / người theo dõi; Sổ theo dõi giữ 11 cột" **bị thay** bởi #16 |
+
+## Sửa đổi 10–11/10/2026 — bảng lỗi của khách
+
+Mục này ghi thêm, không sửa phần trên. **Người quyết:** chủ dự án; luật chung ở ADR 0090. Số dòng là
+dòng của bảng lỗi, theo quy ước ở ADR 0090.
+
+### G1. #13 và #14 giữ
+
+Dòng 15 đòi bỏ nút "Xuất Excel" của Sổ theo dõi. Dòng 17 đòi "Bỏ chức năng giao việc con". Cả hai
+**giữ**: #13 ("Xuất Excel") và #14 ("+ Thêm việc con" trong ngăn của việc cha) không đổi. Mỗi thứ là
+đường duy nhất tới một khả năng (ADR 0090 §*Giữ*).
+
+### G2. ĐANG LÀM — `chuyen-tiep` trở lại làm trạng thái rẽ nhánh
+
+**Trạng thái: ĐANG LÀM.** Lúc ghi mục này (11/10/2026), thay đổi đang nằm chưa commit trong
+`service-petitions/internal/domain/nhiem_vu.go` và các tệp cùng lượt. Kiểm lại mục này khi lượt ấy
+commit.
+
+| Quyết định cũ | Hướng đang dựng |
+|---|---|
+| Chủ dự án 28/09/2026 (sổ `service-petitions`, mục `giao-lai-nhiem-vu`): chuyển tiếp là **cùng dòng giao cho bộ phận/người khác** qua `POST /api/v1/tasks/{ma}/assignment`; `chuyen-tiep` bị gỡ khỏi mọi danh sách đích, gửi lên thì 400 | Theo dòng 17 ("Khi giao việc, chuyển việc sẽ update thành trạng thái rẽ nhánh") và luật 11/10: `chuyen-tiep` lại là **đích** từ `moi-giao`, `da-tiep-nhan`, `dang-thuc-hien`, như bảng chuyển của prototype. Giao việc mang tính chuyển tiếp thì nhiệm vụ vào `chuyen-tiep`. Từ `chuyen-tiep`, người nhận mới đưa sang `da-tiep-nhan` / `dang-thuc-hien` |
+
+- #4c (đường gộp "Cập nhật và giao việc" về đúng trạng thái đã chọn) cũng bị chạm. Ghi lại khi lượt dựng
+  commit.
+- Đây là đổi bảng chuyển trạng thái **nhiệm vụ**, không phải phản ánh. Luật 10 điều kiện dừng #2 chỉ
+  áp cho phản ánh.
+- Commit liên quan đã có: `b4b45840` (web) — đổi bộ phận mà để trống người xử lý nay gửi `assignee` rỗng.
+  Trước đó trường bị bỏ, nên máy chủ giữ cán bộ cũ của bộ phận trước.

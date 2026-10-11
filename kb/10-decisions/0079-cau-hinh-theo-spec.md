@@ -9,7 +9,8 @@ owns_facts:
   - "từ 08/10/2026 menu Cấu hình web-admin theo spec Cấu hình 02–12 của chủ dự án (tmp/web/cau-hinh/vigov-cau-hinh-spec/, ngoài git, viết từ prototype ../vigov-require/apps/admin/src/components/admin/ConfigWorkspace.tsx); luật cứng và các điểm 'Giữ bất kể spec' của ADR này thắng spec"
   - "menu Cấu hình giữ hai tab ngoài spec — Nhật ký hệ thống (ADR 0054) và Nhận diện xã (ADR 0069) — ở CUỐI thanh tab (chốt 08/10/2026)"
   - "ba bảng lịch (giờ làm việc, ngày lễ, ngày làm bù) + nút gieo tách khỏi tab Thời hạn xử lý thành tab 'Lịch làm việc' đứng NGAY SAU tab Thời hạn xử lý; tab Thời hạn xử lý chỉ hiện khi có admin.sla; tab Lịch làm việc hiện cho mọi cán bộ (đọc any-authenticated), nút ghi theo khoá máy chủ đòi (chốt 08/10/2026)"
-  - "chức năng máy chủ đang hỗ trợ mà spec Cấu hình bỏ (Chạy ngay + bảng lượt chạy ở Tự động hoá, thẻ 'Gửi báo cáo định kỳ ?', Trưởng thôn, sửa Loại thôn sau khi tạo, ô Thứ tự, cột 'Giữ chưa phân công' SLA, sửa Bắt buộc/tuỳ chọn trường bản đồ, Mặc định ngoài task_kind) GIỮ, trình bày theo spec (chốt 08/10/2026)"
+  - "chức năng máy chủ đang hỗ trợ mà spec Cấu hình bỏ (Chạy ngay + bảng lượt chạy ở Tự động hoá, thẻ 'Gửi báo cáo định kỳ ?', Trưởng thôn, sửa Loại thôn sau khi tạo, ô Thứ tự, cột 'Giữ chưa phân công' SLA, sửa Bắt buộc/tuỳ chọn trường bản đồ, Mặc định ngoài task_kind) GIỮ, trình bày theo spec (chốt 08/10/2026) — Trưởng thôn, ô Thứ tự và cột 'Giữ chưa phân công' BỎ khỏi giao diện bởi §Sửa đổi 10–11/10/2026"
+  - "menu Cấu hình theo bảng lỗi khách 10–11/10/2026: xoá không còn ô lý do (đảo Q4 và dòng 'Xoá không lý do'), Thôn có nút 'Xoá' = ngừng dùng và ẩn mặc định, thẻ 'Tính lại số liệu Tổng quan' vô hiệu '?', nhóm Danh mục Loại đơn thư chỉ 4 mã luật định; ba tab sau 9 tab prototype và cụm Thời hạn đơn thư GIỮ (§Sửa đổi 10–11/10/2026)"
   - "Kênh Zalo theo spec 11: bot RIÊNG của xã cấu hình ở web-admin (mã bot cất mã hoá, kiểm tra kết nối, đăng ký webhook, quay về bot chung), 18 sự kiện, danh sách cả cán bộ chưa ghép nối, lưu ngay mỗi thay đổi; web trước, backend Zalo ngay sau — THAY ADR 0074 #1, #3, #4 cho phần bot của xã (chốt 08/10/2026)"
   - "hành vi spec Cấu hình mà máy chủ chưa có (thêm/tắt/xoá câu hệ thống; thêm/xoá dòng thời hạn; màu mục danh mục; lưu kết quả gửi thư thử + dòng máy chủ thư nền tảng) sẽ làm backend; lượt web đặt control '?' (ADR 0068 §14) đúng vị trí spec (chốt 08/10/2026)"
   - "huy hiệu trạng thái menu Cấu hình giữ icon + chữ (ADR 0068 lần 2 #8b), lệch prototype có lý do (chốt 08/10/2026)"
@@ -312,3 +313,27 @@ Chủ dự án chỉ trả lời **"tuân thủ prototype nhé"**. Phiên chính
 ## Sửa đổi
 
 - 08/10/2026 — Lô thứ năm Q18, câu "không tự điền hạn từ dòng SLA", **đảo cho đơn thư**: hạn tự điền lúc vào sổ theo loại đơn, cán bộ vẫn sửa được. Xem `0084-don-thu-bam-prototype-08-10.md` mục 3.
+
+## Sửa đổi 10–11/10/2026 — bảng lỗi của khách
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án; luật
+chung và danh sách "giữ" ở ADR 0090. Số dòng là dòng của bảng lỗi, theo quy ước ở ADR 0090.
+
+| # | Điểm cũ của ADR này | Từ 10–11/10/2026 | Dòng | Commit |
+|---|---|---|---|---|
+| 1 | §*Giữ bất kể spec* "Xoá không lý do: bước nhập lý do vẫn có" · lô hai Q4 "Xoá dòng riêng phải có lý do" | **Đảo.** Không còn ô lý do khi xoá bộ phận, dòng thời hạn riêng của lĩnh vực, nhãn trường bản đồ, mục Loại đơn thư. Để trống thì máy chủ ghi câu cố định (ADR 0090 #4). Vẫn xoá mềm, vết cùng giao dịch | 30, 34, 38 | `a8f30265` · `b6ae86fa` · `8cb12506` · web `61545b3b` |
+| 2 | Bộ phận (ADR 0056) | Chặn xoá như cũ khi còn cán bộ, bộ phận con hay hồ sơ đang xử lý. Hộp xoá nay nêu **đủ** mọi lý do từ chối | 30 | `61545b3b` |
+| 3 | #3 "Trưởng thôn, ô Thứ tự: giữ" | **Bỏ khỏi giao diện:** Trưởng thôn/Tổ trưởng và Thứ tự ở Thôn, Thứ tự ở "Thêm bộ phận con". Bộ phận con mới được máy chủ xếp sau bộ phận anh em cuối cùng. Không migration; cột dữ liệu giữ nguyên | 29, 31 | `a8f30265` · `61545b3b` |
+| 4 | #3 "cột 'Giữ chưa phân công' (SLA): giữ" | **Bỏ cột** | 37 | `61545b3b` |
+| 5 | §*Giữ bất kể spec* "Thôn không có xoá; 'Ngừng dùng'" · 09/10 "Thôn giữ Ngừng dùng thay Xoá" | Nút đọc là **"Xoá"**, nhưng vẫn là `PATCH active:false` (ADR 0059 §2: không có `DELETE`). Danh sách mặc định chỉ hiện thôn đang dùng. Công tắc "Hiện địa bàn đã xoá" hiện lại thôn đã xoá để dùng lại. Biểu mẫu thêm/sửa thôn thành popup | 31, 32 | `70b77fbe` · `61545b3b` |
+| 6 | 09/10 "không thêm việc nền Tính lại số liệu Tổng quan" | Giữ: không có việc nền. Thẻ "Tính lại số liệu Tổng quan" **hiện ở Tự động hoá, vô hiệu, dấu "?"** (ADR 0068 §14). Dấu "?" giải thích vì sao không có gì để chạy: Tổng quan đếm trực tiếp (ADR 0053) | 39 | `61545b3b` |
+| 7 | Danh mục: chưa có nhóm Loại đơn thư | Thêm nhóm **Loại đơn thư**. Mỗi dòng là nhãn, thứ tự, màu, bật/tắt của xã cho **một trong bốn mã luật định**. Máy chủ từ chối mã thứ năm, khớp dòng 09/10 "không tách Loại đơn thư". Khoá `admin.lookup` cả đọc lẫn ghi; xoá mềm, có câu cố định. Sổ đơn thư chưa đọc nhãn của xã | 33 | `8cb12506` (máy chủ, migration documents 0010); web **ĐANG LÀM** |
+| 8 | 09/10: 9 tab prototype rồi Lịch làm việc · Nhật ký hệ thống · Nhận diện xã | **Giữ** dù dòng 28 đòi gỡ ba tab sau — ADR 0090 §*Giữ* | 28 | — |
+| 9 | Cụm Thời hạn đơn thư ở tab Thời hạn xử lý | **Giữ** dù dòng 35 đòi gỡ — ADR 0090 §*Giữ* | 35 | — |
+| 10 | Câu mô tả Thời hạn xử lý và Tự động hoá | Theo câu của prototype; giữ phần giờ làm việc | 36, 40 | `70b77fbe` |
+
+**Cái giá của #5:** nút đọc "Xoá" nhưng thôn không mất. Thôn "đã xoá" vẫn hiện tên trên hồ sơ cũ
+(ADR 0059 §2) và dùng lại được. Ai đọc vết sẽ thấy `active` đổi, không thấy một lần xoá.
+
+**Cái giá của #3:** không migration nào gỡ hai trường Trưởng thôn và Thứ tự, nên máy chủ vẫn giữ
+chúng. Nhưng không màn nào hiện chúng nữa, nên dữ liệu đã nhập vào hai trường này không ai thấy.

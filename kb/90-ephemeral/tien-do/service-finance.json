@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-finance",
-  "cap_nhat": "2026-10-09",
+  "cap_nhat": "2026-10-11",
   "muc": [
     {
       "id": "hang-muc-ke-hoach-von-tuyen-doc",
@@ -349,11 +349,11 @@
     {
       "id": "budget-line-entry-count",
       "menu": "thu-chi-ngan-sach",
-      "trang_thai": "chua_lam",
+      "trang_thai": "xong",
       "no_confirm": [],
       "viec": "BACKEND DEPENDENCY từ /fix-web-admin thu-chi 09/10: trả entry_count (số đợt sống) trên mỗi dòng finance_dongRa để web vẽ badge trên nút 'Các đợt thu, chi' như prototype (FiscalReportPanel.tsx ListPlus badge).",
-      "bang_chung": "",
-      "tiep_theo": "/develop-backend-api thu-chi-ngan-sach: thêm trường tuỳ chọn, đếm trong cùng truy vấn đọc bảng (không N+1), rồi web vẽ badge."
+      "bang_chung": "XONG PHÍA MÁY CHỦ 11/10/2026, 8cb12506: store/thu_chi_ngan_sach.go entryCountColumn — đếm đợt chưa xoá trong CÙNG câu đọc cây khoản mục (một truy vấn con tương quan, ràng tenant_id bằng $1, dùng chỉ mục từng phần dot_thu_chi_theo_khoan_muc của 0008), không N+1; domain.KhoanMucNganSach.EntryCount; http/budget_entry_count_test.go, store/budget_entry_count_pg_test.go.",
+      "tiep_theo": "store/budget_entry_count_pg_test.go chưa chạy trên PostgreSQL (thiếu VIGOV_TEST_DSN). Web vẽ badge ĐANG LÀM (sổ web-admin, mục `thu-chi-10-11`). || Chữ cũ: /develop-backend-api thu-chi-ngan-sach: thêm trường tuỳ chọn, đếm trong cùng truy vấn đọc bảng (không N+1), rồi web vẽ badge."
     }
   ]
 }

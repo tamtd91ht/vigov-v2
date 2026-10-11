@@ -12,6 +12,7 @@ owns_facts:
   - "hạn đơn thư TỰ ĐIỀN lúc vào sổ = ngày nhận + số ngày cấu hình theo loại đơn của xã; chưa cấu hình → 'Không đặt hạn'; cán bộ vẫn sửa được; khiếu nại/tố cáo giữ hai hạn ADR 0064 sau một ô 'Hạn giải quyết' — đảo ADR 0079 lô 5 Q18 'không tự điền hạn' cho đơn thư (chốt 08/10/2026)"
   - "báo cáo đơn thư: đơn đã giải quyết KHÔNG có hạn tính là ĐÚNG hạn (đảo C12); chủ dự án chấp nhận rủi ro tỷ lệ đúng hạn báo lên trên bị thổi phồng (chốt 08/10/2026)"
   - "đóng đơn kiến nghị-phản ánh / đề nghị không bắt buộc nội dung trả lời; khiếu nại / tố cáo vẫn bắt buộc số, ngày, người ký, cơ quan ban hành văn bản kết quả — C10 thu hẹp vào KN/TC (chốt 08/10/2026)"
+  - "đổi trạng thái đơn thư nhận status_group, máy chủ suy bước từ mũi tên C3 duy nhất; ô 'Bước cụ thể' chỉ còn cho 'Lưu, không thụ lý' từ dang-xu-ly-don; khung đổi trạng thái có Bộ phận xử lý + Cán bộ phụ trách, chuyển giao cùng giao dịch và cần petition.create (§Sửa đổi 10–11/10/2026)"
   - "lượt 08/10/2026 dựng cả backend: nhập Excel, xuất Excel báo cáo, chuyển thành nhiệm vụ (trừ đơn tố cáo, C9), nguồn vào sổ, số đếm trên tab, tiêu đề 'Đơn thư công dân' ở tab Đơn thư/Báo cáo (chốt 08/10/2026)"
 ---
 
@@ -114,3 +115,39 @@ vụ: nhiệm vụ liên kết đơn, kế thừa hạn (C9), qua hợp đồng 
 
 - §3 "ADR 0007 (hai loại còn lại)" là sai: `kien-nghi-phan-anh`, `de-nghi` đếm **ngày làm việc**, không
   phải giờ làm việc — chủ dự án chốt, xem ADR 0085 §Trả lời 08/10/2026 câu 3.
+
+## Sửa đổi 10–11/10/2026 — bảng lỗi của khách
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án; luật
+chung ở ADR 0090. Số dòng là dòng của bảng lỗi, theo quy ước ở ADR 0090.
+
+### F1. Đổi trạng thái theo nhóm, kèm chuyển bộ phận/cán bộ (dòng 44)
+
+| Điểm cũ | Từ 10–11/10/2026 |
+|---|---|
+| §2: bấm "Đang xử lý" hoặc "Lưu, không thụ lý" thì khung xác nhận có thêm **ô chọn bước cụ thể** | Tuyến đổi trạng thái nhận **`status_group`** (nhãn nhóm). Máy chủ suy ra trạng thái thật: lấy **mũi tên C3 duy nhất** từ trạng thái hiện tại rơi vào nhóm ấy (`domain.NextStatusInGroup`). Ô "Bước cụ thể" **chỉ còn** ở một ca: **"Lưu, không thụ lý" từ `dang-xu-ly-don`**. Ca này có ba mũi tên (`khong-thu-ly` · `huong-dan` · `luu-don`), là ba kết quả khác nhau trên hồ sơ lưu trữ, nên máy chủ từ chối đoán và đòi `status` cụ thể. `status` vẫn được nhận |
+| Khung đổi trạng thái không có bộ phận/cán bộ | Khung có **"Bộ phận xử lý"** và **"Cán bộ phụ trách"** như prototype. Chuyển giao ghi **cùng giao dịch** với đổi trạng thái, qua đúng đường của "Chuyển xử lý": cột người giữ, dòng nhật ký luân chuyển, thông báo cho cán bộ được giao, vết `chuyen_don_thu` |
+
+- **Vì sao không bỏ hẳn ô bước cụ thể như prototype:** prototype không cần ô này vì mỗi ô của nó là một
+  trạng thái thật. Ở đây một ô là một **nhóm** (§2 giữ bộ trạng thái TT 05/2021). Đoán bước ở ca có ba
+  mũi tên là ghi một kết quả không ai chọn lên hồ sơ lưu trữ.
+- **Quyền:** chuyển bộ phận/cán bộ từ khung đổi trạng thái vẫn cần quyền Tiếp nhận đơn thư
+  (`petition.create`, C13/C14). Người được giao chỉ đổi được trạng thái; gửi kèm bộ phận/cán bộ thì bị
+  từ chối với câu nói rõ cách bỏ chọn.
+- Commit `8cb12506` (máy chủ). Web nối `status_group` + hai ô chuyển giao: **ĐANG LÀM**.
+- ⚠ `dang-xu-ly-don` → nhóm "Đang xử lý" là `thu-ly`. Bước này mở hạn giải quyết KN/TC (ADR 0064).
+  Chọn một ô mà khởi động một hạn luật định — người dựng web phải làm câu xác nhận nói rõ điều đó.
+
+### F2. Các điểm khác của menu
+
+| Điểm | Từ 10–11/10/2026 | Dòng | Commit |
+|---|---|---|---|
+| Xuất báo cáo đơn thư | Theo mẫu prototype: dải tiêu đề nền xanh đậm, viền xanh nhạt | 45 | `8cb12506` |
+| Danh mục Loại đơn thư | Nhãn theo xã cho bốn mã luật định; chi tiết ở ADR 0079 §*Sửa đổi 10–11/10/2026* #7 | 33 | `8cb12506` |
+| Thứ tự tab | Đơn thư + Báo cáo lên đầu | — | `61545b3b` |
+| Ô "Trả lời công dân" | Khi bị khoá, ô luôn nói lý do khoá | 43 | `61545b3b` |
+| Tab Văn bản đi/đến · nút Sửa hạn xử lý | **Giữ** dù bảng lỗi đòi gỡ — ADR 0090 §*Giữ* | 42, 43 | — |
+| Số điện thoại người gửi | **Vẫn che** (#1 ở trên) dù dòng 43 đòi hiện đủ — ADR 0090 §*Từ chối* | 43 | — |
+
+**Chưa chạy trên PostgreSQL:** migration `service-documents/migrations/0010_citizen_letter_type.sql`; các ca PG bỏ qua vì
+không có `VIGOV_TEST_DSN`.
