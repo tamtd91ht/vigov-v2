@@ -74,6 +74,14 @@ type guiPhanAnhVao struct {
 	Lat *float64 `json:"lat"`
 	Lng *float64 `json:"lng"`
 
+	// LocationCitizenAdjusted says HOW lat/lng were placed (ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M3):
+	// true = the citizen dragged/placed the pin on the map, false = Zalo's coordinates untouched. A
+	// pointer: ABSENT (or null) = the client did not say — an older Mini App build — and is stored NULL,
+	// never false. true without lat/lng is 422 `location_adjusted_without_coordinates`; false without
+	// them stores NULL (domain.NormaliseLocationCitizenAdjusted). Client-supplied description, on no
+	// isolation path, like the coordinates themselves.
+	LocationCitizenAdjusted *bool `json:"location_citizen_adjusted,omitempty"`
+
 	// Field is the code the citizen picked from GET /api/v1/my-citizen-report-fields (ADR 0050 point 1).
 	// OPTIONAL FOR NOW: ADR 0050 point 9 makes it required, but the shared citizen screen does not send
 	// it yet. A field the commune does not offer — unknown, retired, switched off, `can-bo` — is refused
@@ -200,6 +208,8 @@ func (h *HandlerCongDan) GuiPhieu(w http.ResponseWriter, r *http.Request) {
 		Field:     field,
 		Lat:       vao.Lat,
 		Lng:       vao.Lng,
+
+		LocationCitizenAdjusted: vao.LocationCitizenAdjusted,
 	}
 	if vao.ResidentialUnitID != nil {
 		yc.ResidentialUnitID = *vao.ResidentialUnitID
@@ -388,6 +398,13 @@ func writeIntakeError(w http.ResponseWriter, r *http.Request, log *slog.Logger, 
 		httpx.WriteError(w, http.StatusServiceUnavailable, "contact_phone_unavailable",
 			"Chưa lấy được số điện thoại đã xác thực của bạn nên phản ánh CHƯA được ghi nhận. "+
 				"Vui lòng thử lại sau ít phút.", "")
+
+	case errors.Is(err, domain.ErrLocationAdjustedWithoutCoordinates):
+		// BEFORE the generic 400 below (domain.LaLoiGuiPhanAnh lists it too): the body decoded and is
+		// well formed, but its two location facts contradict each other — 422, with its own code so the
+		// Mini App can tell a pin-state bug from a malformed body. Nothing written, no code issued.
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "location_adjusted_without_coordinates",
+			"Phản ánh báo vị trí do người dân chỉnh nhưng không kèm toạ độ. Vui lòng chọn lại vị trí trên bản đồ.", "")
 
 	case errors.Is(err, app.ErrResidentialUnitNotActive):
 		writeResidentialUnitNotOffered(w)

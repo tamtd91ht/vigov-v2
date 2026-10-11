@@ -108,6 +108,11 @@ type accountlessReportIn struct {
 	Lat *float64 `json:"lat"`
 	Lng *float64 `json:"lng"`
 
+	// LocationCitizenAdjusted is REFUSED WITH THE COORDINATES (400, the same answer): it describes how
+	// lat/lng were placed (ADR 0072 M3), and this path stores no lat/lng, so any value — false included —
+	// would be a fact about nothing that the sender believes was kept.
+	LocationCitizenAdjusted *bool `json:"location_citizen_adjusted"`
+
 	// ResidentialUnitID is REFUSED ON THIS PATH (400), like the location: the session intake accepts it
 	// (ADR 0088), but this TEMPORARY path has no route a sender could have read the commune's list from
 	// (ADR 0088 open item 2) and no owner to answer for it. Refused rather than dropped, so a client
@@ -310,7 +315,7 @@ func (h *HandlerAccountless) withBodyCommune(next http.Handler) http.Handler {
 					"Hãy gửi lại chỉ với nội dung phản ánh.", "")
 			return
 		}
-		if in.Lat != nil || in.Lng != nil {
+		if in.Lat != nil || in.Lng != nil || in.LocationCitizenAdjusted != nil {
 			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 				"Phản ánh gửi không qua tài khoản không nhận toạ độ hiện trường. Hãy ghi vị trí vào ô địa chỉ.", "")
 			return

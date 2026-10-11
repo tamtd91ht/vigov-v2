@@ -59,7 +59,8 @@ const cotPhieu = `id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vu
 	diem_hai_long, rating_comment, danh_gia_luc,
 	zalo_account_id,
 	merged_into, merged_at, merged_by,
-	forwarded_for_processing_at, awaiting_confirmation_at`
+	forwarded_for_processing_at, awaiting_confirmation_at,
+	location_citizen_adjusted`
 
 // TheoMaTraCuu reads one petition by the code the citizen was handed.
 //
@@ -343,6 +344,9 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		// The status-entry times (migration 0043, ADR 0047 G4). NULL = not recorded.
 		forwardedAt, awaitingAt sql.NullTime
 
+		// Migration 0044. NULL = not recorded, and it stays nil — never folded into false.
+		locationAdjusted sql.NullBool
+
 		// `publication_status` (migration 0017) is NOT NULL with a default, so a plain string. It sits in
 		// the position `hien_cong_khai` used to hold — that column is superseded and no longer read.
 		publication string
@@ -361,6 +365,7 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		&zaloAccount,
 		&mergedInto, &mergedAt, &mergedBy,
 		&forwardedAt, &awaitingAt,
+		&locationAdjusted,
 	}
 	if err := r.Scan(append(dich, them...)...); err != nil {
 		return domain.PhieuPhanAnh{}, fmt.Errorf("phieu_phan_anh: đọc dòng: %w", err)
@@ -401,6 +406,10 @@ func quetPhieuThem(r quangKiem, them ...any) (domain.PhieuPhanAnh, error) {
 		v := lng.Float64
 		p.Lng = &v
 	}
+	if locationAdjusted.Valid {
+		v := locationAdjusted.Bool
+		p.LocationCitizenAdjusted = &v
+	}
 	// NULL -> the zero time.Time, and the MEANING of that zero differs per column. domain's
 	// HanTiepNhanKhongApDung / ChuaChotHanXuLy are the only sanctioned way to ask.
 	p.HanTiepNhan = hanTiepNhan.Time
@@ -435,8 +444,8 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		tenant_id, id, ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vuc,
 		dia_chi, thon_id, lat, lng, nguoi_gui_ho_ten, nguoi_gui_dien_thoai, an_danh,
 		trang_thai, goc_dem_han, vao_so_luc, han_tiep_nhan, han_xu_ly_xong, han_phan_loai,
-		publication_status, zalo_account_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`
+		publication_status, zalo_account_id, location_citizen_adjusted)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`
 
 	_, err := tx.Exec(ctx, stmt,
 		string(tx.TenantID()), p.ID, p.MaTraCuu, string(p.Kenh), rongThanhNull(p.CongDanID),
@@ -452,7 +461,10 @@ func (s *PhieuPhanAnhStore) Tao(ctx context.Context, tx *store.ScopedTx, p domai
 		khongThanhNull(p.HanPhanLoai),
 		// THE ZALO-ACCOUNT OWNER (ADR 0080): NULL, never '', on every petition that is not one —
 		// migration 0032's CHECKs refuse a blank owner and refuse both owners at once.
-		string(p.PublicationStatus), rongThanhNull(p.ZaloAccountID))
+		string(p.PublicationStatus), rongThanhNull(p.ZaloAccountID),
+		// Migration 0044: a nil pointer binds as NULL ("not recorded"), never false — as p.Lat does.
+		// Only the citizen intake sets it.
+		p.LocationCitizenAdjusted)
 	if err != nil {
 		// NOT the content, NOT the reporter, NOT the lookup code — an INSERT error message can
 		// carry the whole row on some drivers, and this row is citizen personal data (rule 3).

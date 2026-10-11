@@ -77,7 +77,41 @@ var (
 		"phan_anh: `lat` và `lng` phải gửi cùng nhau — không nhận một toạ độ đơn lẻ")
 	ErrSceneLocationOutOfRange = errors.New(
 		"phan_anh: toạ độ ngoài phạm vi — `lat` từ -90 đến 90, `lng` từ -180 đến 180")
+
+	// ErrLocationAdjustedWithoutCoordinates — "the citizen moved the pin" with no pin is a claim about
+	// nothing (migration 0044's CHECK refuses the row too; refusing here keeps it a client answer, not a
+	// 500). Like the two above, the sentence names the rule and never a value.
+	ErrLocationAdjustedWithoutCoordinates = errors.New(
+		"phan_anh: `location_citizen_adjusted` là true nhưng không gửi `lat` và `lng` — " +
+			"chỉ báo vị trí do người dân chỉnh khi có toạ độ")
 )
+
+// NormaliseLocationCitizenAdjusted decides the `location_citizen_adjusted` value stored beside an
+// ALREADY-NORMALISED scene location (ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M3; migration 0044).
+//
+//	sent    coordinates   stored
+//	absent  any           nil    — the client did not say (older Mini App builds): NOT RECORDED
+//	true    present       true   — the citizen dragged or placed the pin
+//	true    absent        ErrLocationAdjustedWithoutCoordinates
+//	false   present       false  — Zalo's coordinates, untouched
+//	false   absent        nil    — nothing to describe; a stored false would assert a fact about no pin
+//
+// ABSENT IS NEVER FOLDED INTO false: false asserts "Zalo's location, untouched", which nobody said.
+// The flag says HOW the coordinates were placed, not whether they are right (M3 "Đọc cờ đúng nghĩa").
+func NormaliseLocationCitizenAdjusted(lat, lng *float64, adjusted *bool) (*bool, error) {
+	if adjusted == nil {
+		return nil, nil
+	}
+	hasLocation := lat != nil && lng != nil
+	if *adjusted && !hasLocation {
+		return nil, ErrLocationAdjustedWithoutCoordinates
+	}
+	if !hasLocation {
+		return nil, nil
+	}
+	v := *adjusted
+	return &v, nil
+}
 
 // SceneLocationDecimals is the precision `phieu_phan_anh.lat`/`lng` hold: NUMERIC(9,6), migration
 // 0004. About 11 cm at the equator — far finer than any phone's fix, so rounding to it loses nothing
@@ -191,6 +225,7 @@ func LaLoiGuiPhanAnh(err error) bool {
 		ErrNoiDungTrong, ErrNoiDungQuaDai,
 		ErrDiaChiQuaDai, ErrHoTenQuaDai, ErrDienThoaiQuaDai,
 		ErrSceneLocationIncomplete, ErrSceneLocationOutOfRange,
+		ErrLocationAdjustedWithoutCoordinates,
 	} {
 		if errors.Is(err, mot) {
 			return true

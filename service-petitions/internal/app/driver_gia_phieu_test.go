@@ -180,6 +180,7 @@ func dongPhieuMau(sua map[string]any) map[string]driver.Value {
 		// The status-entry times (migration 0043) — NULL: never entered, or not recorded.
 		"forwarded_for_processing_at": nil,
 		"awaiting_confirmation_at":    nil,
+		"location_citizen_adjusted":   nil, // migration 0044 — NULL = not recorded
 		"tao_luc":                     mocGocThu,
 	}
 	for k, v := range sua {

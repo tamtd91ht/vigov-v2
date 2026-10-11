@@ -60,6 +60,65 @@ func TestIntakeRefusesLoneCoordinateBeforeAnything(t *testing.T) {
 	}
 }
 
+// TestIntakeStoresLocationCitizenAdjusted: migration 0044 — the flag reaches the row as sent when there
+// are coordinates, stays nil when not sent (NEVER false), and appears in the audit delta as the same
+// three-valued fact (null = not recorded).
+func TestIntakeStoresLocationCitizenAdjusted(t *testing.T) {
+	yes, no := true, false
+	for name, c := range map[string]struct {
+		sent, want *bool
+		delta      any
+	}{
+		"true":   {&yes, &yes, true},
+		"false":  {&no, &no, false},
+		"absent": {nil, nil, nil},
+	} {
+		t.Run(name, func(t *testing.T) {
+			k, kho, han := &khoGia{}, &khoPhieuGia{}, hanThu()
+			yc := ycThu()
+			yc.Lat, yc.Lng = sceneCoord(16.0544), sceneCoord(108.2022)
+			yc.LocationCitizenAdjusted = c.sent
+			if _, err := dungGui(k, kho, han).Gui(ctxXa(xaThu), yc, congDanThu()); err != nil {
+				t.Fatalf("Gui: %v", err)
+			}
+			got := kho.thay[0].LocationCitizenAdjusted
+			switch {
+			case c.want == nil && got != nil:
+				t.Errorf("row flag = %v, want nil — absent must not be folded into false", *got)
+			case c.want != nil && (got == nil || *got != *c.want):
+				t.Errorf("row flag = %v, want %v", got, *c.want)
+			}
+			raw, ok := k.lenh[1].args[7].([]byte)
+			if !ok {
+				t.Fatalf("delta = %T, want []byte", k.lenh[1].args[7])
+			}
+			var d map[string]any
+			if err := json.Unmarshal(raw, &d); err != nil {
+				t.Fatalf("delta is not JSON: %q", raw)
+			}
+			v, has := d["location_citizen_adjusted"]
+			if !has || v != c.delta {
+				t.Errorf("delta location_citizen_adjusted = %v (present %v), want %v: %s", v, has, c.delta, raw)
+			}
+		})
+	}
+}
+
+func TestIntakeRefusesLocationAdjustedWithoutCoordinatesBeforeAnything(t *testing.T) {
+	k, kho, han := &khoGia{}, &khoPhieuGia{}, hanThu()
+	yes := true
+	yc := ycThu()
+	yc.LocationCitizenAdjusted = &yes
+	_, err := dungGui(k, kho, han).Gui(ctxXa(xaThu), yc, congDanThu())
+	if !errors.Is(err, domain.ErrLocationAdjustedWithoutCoordinates) {
+		t.Fatalf("err = %v, want ErrLocationAdjustedWithoutCoordinates", err)
+	}
+	if han.goi != 0 || len(k.lenh) != 0 || len(kho.thay) != 0 {
+		t.Errorf("asked identity %d times, ran %d statements, wrote %d rows for a contradictory request",
+			han.goi, len(k.lenh), len(kho.thay))
+	}
+}
+
 func TestIntakeDeltaFlagsSceneLocationWithoutCoordinates(t *testing.T) {
 	for name, c := range map[string]struct {
 		lat, lng *float64

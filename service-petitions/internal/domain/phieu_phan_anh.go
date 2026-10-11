@@ -224,6 +224,13 @@ type PhieuPhanAnh struct {
 	Lat *float64
 	Lng *float64
 
+	// LocationCitizenAdjusted is `location_citizen_adjusted` (migration 0044, ADR 0072 §Sửa đổi
+	// 11/10/2026 (Mini App) M3): true = the citizen dragged/placed the pin, false = Zalo's coordinates
+	// untouched, nil = NOT RECORDED (older rows, older app builds, staff-booked). NEVER read nil as false
+	// — that would assert "untouched" about rows nobody recorded. Only true with Lat/Lng set
+	// (NormaliseLocationCitizenAdjusted; the table's CHECK). Fixed at intake with the coordinates.
+	LocationCitizenAdjusted *bool
+
 	// PERSONAL DATA (rule 3, Decree 13/2023). Never logged, never in an error message, never in
 	// a file name or a cache key. Masked on the way out unless the caller holds an explicit
 	// full-view permission.

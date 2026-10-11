@@ -285,6 +285,11 @@ type YeuCauGuiPhanAnh struct {
 	Lat *float64
 	Lng *float64
 
+	// LocationCitizenAdjusted is the Mini App's word on HOW Lat/Lng were placed (ADR 0072 §Sửa đổi
+	// 11/10/2026 (Mini App) M3): nil = not said (stored NULL), true = the citizen moved the pin, false =
+	// Zalo's coordinates untouched. Normalised by domain.NormaliseLocationCitizenAdjusted.
+	LocationCitizenAdjusted *bool
+
 	// ResidentialUnitID is the thôn / tổ dân phố the citizen OPTIONALLY picked (ADR 0088 §1). "" = none.
 	// Client-supplied until identity confirms it is an active unit of the SESSION's commune — checked
 	// before the code is minted; identity down refuses the intake (503) rather than filing it without the
@@ -398,6 +403,10 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 		return domain.PhieuPhanAnh{}, err
 	}
 	lat, lng, err := domain.NormaliseSceneLocation(yc.Lat, yc.Lng)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
+	locationAdjusted, err := domain.NormaliseLocationCitizenAdjusted(lat, lng, yc.LocationCitizenAdjusted)
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
@@ -548,6 +557,9 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 		Lat:      lat,
 		Lng:      lng,
 
+		// Written in the SAME INSERT as the coordinates it describes (migration 0044).
+		LocationCitizenAdjusted: locationAdjusted,
+
 		NguoiGuiHoTen:     hoTen,
 		NguoiGuiDienThoai: dienThoai,
 		AnDanh:            yc.AnDanh,
@@ -663,6 +675,9 @@ func (uc *GuiPhanAnh) Gui(ctx context.Context, yc YeuCauGuiPhanAnh, sender Intak
 			"do_dai_noi_dung":    len([]rune(moi.NoiDung)),
 			"publication_status": string(moi.PublicationStatus),
 			"has_scene_location": moi.Lat != nil,
+			// Migration 0044: true/false, or null = not recorded — never folded into false. A boolean
+			// about HOW the pin was placed, not where; no personal data.
+			"location_citizen_adjusted": moi.LocationCitizenAdjusted,
 			// ADR 0088: the unit id identity confirmed, or null. An id, not personal data.
 			"residential_unit_id": nilIfEmpty(moi.ThonID),
 			// ADR 0080: whether the contact details are self-declared and unverified (a Zalo-account

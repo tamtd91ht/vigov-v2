@@ -114,6 +114,10 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, sender ap
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
+	adjusted, err := domain.NormaliseLocationCitizenAdjusted(lat, lng, yc.LocationCitizenAdjusted)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
+	}
 	// THE FIELD, per commune, as the real use case's catalogue check answers: one sentinel for every
 	// field the commune does not offer — which is what makes "another commune's field" refusable here.
 	var resolveDue time.Time
@@ -128,22 +132,24 @@ func (s *soPhieuGia) Gui(ctx context.Context, yc app.YeuCauGuiPhanAnh, sender ap
 	// A DIFFERENT CODE EVERY TIME. Were it constant, the duplicate-request test would pass even if
 	// the handler ran twice.
 	p := domain.PhieuPhanAnh{
-		ID:                fmt.Sprintf("pa-%03d", s.dem),
-		MaTraCuu:          fmt.Sprintf("PA-4K7M-92XR-BTV%d", s.dem),
-		Kenh:              domain.KenhZaloMiniApp,
-		NoiDung:           yc.NoiDung,
-		DiaChi:            yc.DiaChi,
-		Lat:               lat,
-		Lng:               lng,
-		NguoiGuiHoTen:     yc.HoTen,
-		NguoiGuiDienThoai: yc.DienThoai,
-		AnDanh:            yc.AnDanh,
-		TrangThai:         domain.DaTiepNhan,
-		GocDemHan:         mocGuiThuGui,
-		VaoSoLuc:          mocGuiThuGui,
-		HanTiepNhan:       mocHanThuGui,
-		LinhVuc:           yc.Field,
-		HanXuLyXong:       resolveDue,
+		ID:            fmt.Sprintf("pa-%03d", s.dem),
+		MaTraCuu:      fmt.Sprintf("PA-4K7M-92XR-BTV%d", s.dem),
+		Kenh:          domain.KenhZaloMiniApp,
+		NoiDung:       yc.NoiDung,
+		DiaChi:        yc.DiaChi,
+		Lat:           lat,
+		Lng:           lng,
+		NguoiGuiHoTen: yc.HoTen,
+		// Stored, never returned to the citizen (phieuCuaToiRa has no such key) — asserted there.
+		LocationCitizenAdjusted: adjusted,
+		NguoiGuiDienThoai:       yc.DienThoai,
+		AnDanh:                  yc.AnDanh,
+		TrangThai:               domain.DaTiepNhan,
+		GocDemHan:               mocGuiThuGui,
+		VaoSoLuc:                mocGuiThuGui,
+		HanTiepNhan:             mocHanThuGui,
+		LinhVuc:                 yc.Field,
+		HanXuLyXong:             resolveDue,
 	}
 	// The owner in exactly one column, as the real use case writes it.
 	switch sender.Owner.Kind {

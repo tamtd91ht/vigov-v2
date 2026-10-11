@@ -107,6 +107,14 @@ type phieuPhanAnhRa struct {
 	Lat *float64 `json:"lat,omitempty"`
 	Lng *float64 `json:"lng,omitempty"`
 
+	// LocationCitizenAdjusted is `location_citizen_adjusted` (migration 0044, ADR 0072 §Sửa đổi
+	// 11/10/2026 (Mini App) M3) — Web Admin's "Vị trí do người dân chỉnh": true = the citizen moved the
+	// pin, false = Zalo's coordinates untouched. ABSENT = NOT RECORDED (older petitions, older app
+	// builds, staff-booked) and a screen must not render absent as false. It says how the coordinates
+	// were placed, not whether they are right. STAFF SURFACE ONLY; phieuCuaToiRa does not carry it.
+	// Pointer + omitempty: `false` travels as `false`, the key stays optional in the contract.
+	LocationCitizenAdjusted *bool `json:"location_citizen_adjusted,omitempty"`
+
 	// ResidentialUnitID is `thon_id` — the thôn / tổ dân phố the petition was received in (ADR 0088),
 	// checked with identity when it was written. ABSENT when none was picked. Never derived from Lat/Lng.
 	//
@@ -301,6 +309,8 @@ func phieuRaNgoai(p domain.PhieuPhanAnh, nhan string, xemDayDu bool) phieuPhanAn
 		Lat:        p.Lat,
 		Lng:        p.Lng,
 		Anonymous:  p.AnDanh,
+
+		LocationCitizenAdjusted: p.LocationCitizenAdjusted,
 
 		// The name is filled by the caller, which can ask identity; this function cannot.
 		ResidentialUnitID: p.ThonID,

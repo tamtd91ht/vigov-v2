@@ -19,7 +19,7 @@ import (
 // clause, so the isolation is asserted where it is decidable without PostgreSQL: the statement text
 // and its bound arguments.
 //
-//	PROVED HERE   Tao binds `zalo_account_id` as $22 — the value on a Zalo-owned row, NULL (never '')
+//	PROVED HERE   Tao binds `zalo_account_id` as $22 (of 23) —the value on a Zalo-owned row, NULL (never '')
 //	              on a citizen's · the owner read binds `zalo_account_id = $3` for an account and
 //	              `cong_dan_id = $3` for a citizen, never both · an owner with no id or an undeclared
 //	              kind is refused BEFORE any statement · the locking read carries FOR UPDATE · the
@@ -36,11 +36,14 @@ func TestCreateBindsZaloAccountOwner(t *testing.T) {
 	p.CongDanID, p.ZaloAccountID = "", zaloThu
 	st := runCreate(t, p)
 
-	if !strings.Contains(st.sql, "publication_status, zalo_account_id)") {
+	// $22 is the 22nd column: publication_status ($21) then zalo_account_id, followed only by
+	// location_citizen_adjusted ($23, migration 0044 — location_citizen_adjusted_test.go pins that one).
+	if !strings.Contains(st.sql, "publication_status, zalo_account_id, location_citizen_adjusted)") ||
+		!strings.Contains(st.sql, "$21,$22,$23)") {
 		t.Fatalf("column list moved; $22 no longer means zalo_account_id: %s", st.sql)
 	}
-	if len(st.args) != 22 {
-		t.Fatalf("%d arguments, want 22", len(st.args))
+	if len(st.args) != 23 {
+		t.Fatalf("%d arguments, want 23", len(st.args))
 	}
 	if st.args[21] != zaloThu {
 		t.Errorf("$22 = %#v, want the account id", st.args[21])
