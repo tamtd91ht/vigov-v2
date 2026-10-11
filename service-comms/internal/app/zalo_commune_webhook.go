@@ -97,6 +97,10 @@ func (w *CommuneZaloWebhook) Handle(ctx context.Context, u zalobot.Update, clien
 		w.log.ErrorContext(ctx, "webhook bot riêng: thiếu bot đã xác thực trong ngữ cảnh — bỏ gói")
 		return ""
 	}
+	// Bots' own messages and chats that are not one-to-one: the shared bot's rules (outsidePrivateChat).
+	if reply, handled := outsidePrivateChat(u); handled {
+		return reply
+	}
 	switch u.EventName {
 	case domain.ZaloEventUnsupportedReceived:
 		return domain.ZaloReplyUnsupported

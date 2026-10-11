@@ -63,6 +63,43 @@ func TestParseZaloCommand(t *testing.T) {
 	}
 }
 
+func TestPairingCodeInGroupText(t *testing.T) {
+	ok := map[string]string{
+		"K7QM2XPA":                      "K7QM2XPA",
+		"abcd-efgh":                     "ABCDEFGH",
+		"@ViGov K7QM2XPA":               "K7QM2XPA",
+		"@ViGov Bot Nhac Viec k7qm2xpa": "K7QM2XPA",
+		"  @Bot   ABCD EFGH ":           "ABCDEFGH",
+		"@Bot ABCD-2345":                "ABCD2345",
+	}
+	for in, want := range ok {
+		got, valid := PairingCodeInGroupText(in)
+		if !valid || got != want {
+			t.Errorf("%q → %q,%v; want %q", in, got, valid, want)
+		}
+	}
+	// No leading mention, the mention alone, a code not last, look-alikes: not code-shaped.
+	for _, in := range []string{"xin chào K7QM2XPA", "@K7QM2XPA", "@Bot K7QM2XPA cảm ơn", "@Bot", "@Bot ABCDEF0H",
+		"@Bot xin chào", "", "nhóm ABCD EFGH"} {
+		if code, valid := PairingCodeInGroupText(in); valid {
+			t.Errorf("%q accepted as the code %q", in, code)
+		}
+	}
+}
+
+func TestParseZaloGroupCommand(t *testing.T) {
+	cases := map[string]ZaloCommand{
+		"/dung": ZaloCommandStop, "@Bot /dung": ZaloCommandStop, "@ViGov Bot /STOP": ZaloCommandStop,
+		"@Bot /trogiup": ZaloCommandHelp, "/help": ZaloCommandHelp,
+		"@Bot xin chào": ZaloCommandNone, "xin chào /dung": ZaloCommandNone, "@Bot": ZaloCommandNone, "": ZaloCommandNone,
+	}
+	for in, want := range cases {
+		if got := ParseZaloGroupCommand(in); got != want {
+			t.Errorf("%q → %v, want %v", in, got, want)
+		}
+	}
+}
+
 func days(n int) *int { return &n }
 
 func TestNormalizeZaloChannelSettingMirrorsTheChecks(t *testing.T) {

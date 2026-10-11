@@ -9,6 +9,9 @@ package app
 //	an unsupported msg  the explanatory reply
 //	any other text      the help text (nothing counted: it is not code-shaped)
 //
+// That table is a person's PRIVATE chat. A bot's message, a group, and a chat whose type is absent or
+// unrecognised go through outsidePrivateChat first, and never reach a lookup (owner, 11/10/2026).
+//
 // THE COMMUNE: there is no commune Host on this path. It is found FROM the pairing code, or FROM the live
 // link (crosstenant), and the work then runs in that commune's context through core/store. Nothing found
 // = the one refusal sentence, never a guess (ADR 0074 #5: "không ra xã thì bỏ gói, không đoán").
@@ -95,6 +98,9 @@ func (w *ZaloWebhook) Authenticate(ctx context.Context, presented string) (bool,
 // Handle decides what one update does and returns the reply to send ("" = none). It never fails the
 // request: Zalo is answered 200 once authenticated, whatever happens here.
 func (w *ZaloWebhook) Handle(ctx context.Context, u zalobot.Update, clientIP string) string {
+	if reply, handled := outsidePrivateChat(u); handled {
+		return reply
+	}
 	switch u.EventName {
 	case domain.ZaloEventUnsupportedReceived:
 		return domain.ZaloReplyUnsupported
@@ -112,6 +118,43 @@ func (w *ZaloWebhook) Handle(ctx context.Context, u zalobot.Update, clientIP str
 		return w.pair(ctx, u.ChatID, code, clientIP)
 	}
 	return domain.ZaloReplyHelp
+}
+
+// outsidePrivateChat answers every update that is NOT a person writing one-to-one — for BOTH bots, before
+// anything is looked up. handled=false: a person's private chat, which the caller handles as before.
+//
+//	a bot's own message        ignored, no reply (a bot answering a bot is a loop)
+//	not PRIVATE (group, or a chat_type absent/unrecognised — fail closed):
+//	  /trogiup /help …         the group help
+//	  /dung /stop              NO link change; unlinking a group is done on ViGov
+//	  a code-shaped text       the fixed sentence: a PERSONAL code is not looked up, not consumed and no
+//	                           attempt is counted — the reply is the same whether or not it exists
+//	  anything else            no reply: a group's conversation is not the bot's to answer
+//
+// WHY a personal code is refused here: pairing links the CHAT, and a group chat is read by everybody in
+// it — a code typed there would send one person's reminders to the whole group.
+func outsidePrivateChat(u zalobot.Update) (reply string, handled bool) {
+	if u.FromBot {
+		return "", true
+	}
+	if u.ChatType == zalobot.ChatTypePrivate {
+		return "", false
+	}
+	if u.EventName != domain.ZaloEventTextReceived {
+		return "", true
+	}
+	switch domain.ParseZaloGroupCommand(u.Text) {
+	case domain.ZaloCommandHelp:
+		return domain.ZaloReplyGroupHelp, true
+	case domain.ZaloCommandStop:
+		return domain.ZaloReplyGroupStop, true
+	}
+	if _, ok := domain.PairingCodeInGroupText(u.Text); ok {
+		// GROUP PAIRING SEAM: a group pairing code (a later card) will be told apart from a personal one
+		// here. Until then every code-shaped text in a group is a personal code, refused unread.
+		return domain.ZaloReplyGroupPersonalCode, true
+	}
+	return "", true
 }
 
 func (w *ZaloWebhook) clock() time.Time { return w.now().UTC().Truncate(time.Microsecond) }

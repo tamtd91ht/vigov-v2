@@ -758,6 +758,52 @@ func TestCommuneWebhookRefusesACodeNotOfThisCommune(t *testing.T) {
 	}
 }
 
+// A group (or a chat whose type is absent) on the commune's own bot: the same replies as the shared bot,
+// and the commune's code — which DOES exist here — is never looked up, consumed or counted.
+func TestCommuneWebhookGroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.T) {
+	for _, ct := range []zalobot.ChatType{zalobot.ChatTypeGroup, zalobot.ChatTypeUnknown} {
+		r := newBotRig(t)
+		r.withLiveBot(t, "bot-111")
+		r.pairingCodeID = "01JCODE00000000000000000001"
+		lim := &countingLimiter{}
+		w := newCommuneWebhook(t, r, lim, nil)
+		ctx := authed(t, r, w)
+		before := len(r.f.stmts)
+		for in, want := range groupCases {
+			if got := w.Handle(ctx, inChat(ct, in), "203.0.113.9"); got != want {
+				t.Errorf("%v %q → %q, want %q", ct, in, got, want)
+			}
+		}
+		if got := w.Handle(ctx, zalobot.Update{EventName: domain.ZaloEventUnsupportedReceived, ChatID: "g",
+			ChatType: ct}, ""); got != "" {
+			t.Errorf("%v unsupported → %q", ct, got)
+		}
+		if lim.calls != 0 || r.f.begun != 0 || len(r.f.stmts) != before {
+			t.Errorf("%v: limiter %d, tx %d, statements %v — a group must touch nothing",
+				ct, lim.calls, r.f.begun, r.f.stmts[before:])
+		}
+	}
+}
+
+func TestCommuneWebhookBotAuthoredMessagesAreIgnored(t *testing.T) {
+	r := newBotRig(t)
+	r.withLiveBot(t, "bot-111")
+	r.pairingCodeID = "01JCODE00000000000000000001"
+	w := newCommuneWebhook(t, r, fakeLimiter{allow: true}, nil)
+	ctx := authed(t, r, w)
+	before := len(r.f.stmts)
+	for _, ct := range []zalobot.ChatType{zalobot.ChatTypePrivate, zalobot.ChatTypeGroup} {
+		u := inChat(ct, "ABCD2345")
+		u.FromBot = true
+		if got := w.Handle(ctx, u, ""); got != "" {
+			t.Errorf("bot in %v → %q", ct, got)
+		}
+	}
+	if r.f.begun != 0 || len(r.f.stmts) != before {
+		t.Error("a bot's message reached a lookup or a transaction")
+	}
+}
+
 // --- the shared bot refuses pairing in a commune that has its own ------------------------------------------
 
 func TestSharedWebhookRefusesPairingWhereTheCommuneHasItsOwnBot(t *testing.T) {

@@ -85,6 +85,54 @@ func ParseZaloCommand(text string) ZaloCommand {
 	return ZaloCommandNone
 }
 
+// ---- what a GROUP chat says to the bot ---------------------------------------------------------------
+//
+// In a group the bot may be addressed with a leading mention ("@BotName K7QM2XPA", "@BotName /dung"), and a
+// bot name may hold spaces, so where the mention ends is unknown. These readers are used for chats that are
+// NOT one-to-one only; a private chat keeps NormalizePairingCode / ParseZaloCommand unchanged.
+
+// PairingCodeInGroupText reads a code-shaped message in a group: the whole text by NormalizePairingCode's
+// rules, or — after a leading @mention — its last whitespace-separated token ("@Bot K7QM2XPA"), or its
+// last two tokens in the "ABCD EFGH" form NormalizePairingCode tolerates ("@Bot ABCD EFGH"). The mention
+// itself is never part of the code.
+func PairingCodeInGroupText(text string) (string, bool) {
+	if code, ok := NormalizePairingCode(text); ok {
+		return code, true
+	}
+	t := strings.TrimSpace(text)
+	if !strings.HasPrefix(t, "@") {
+		return "", false
+	}
+	fields := strings.Fields(t)
+	if n := len(fields); n >= 2 {
+		if code, ok := NormalizePairingCode(fields[n-1]); ok {
+			return code, true
+		}
+		if n >= 3 && len(fields[n-2]) == 4 && len(fields[n-1]) == 4 {
+			return NormalizePairingCode(fields[n-2] + " " + fields[n-1])
+		}
+	}
+	return "", false
+}
+
+// ParseZaloGroupCommand is ParseZaloCommand for a group: the command may follow a leading @mention
+// ("@BotName /dung"), and is then read from the first word that starts with "/".
+func ParseZaloGroupCommand(text string) ZaloCommand {
+	if c := ParseZaloCommand(text); c != ZaloCommandNone {
+		return c
+	}
+	t := strings.TrimSpace(text)
+	if !strings.HasPrefix(t, "@") {
+		return ZaloCommandNone
+	}
+	for _, w := range strings.Fields(t)[1:] {
+		if strings.HasPrefix(w, "/") {
+			return ParseZaloCommand(w)
+		}
+	}
+	return ZaloCommandNone
+}
+
 // The bot's replies — FIXED IN CODE for wave 1 (ADR 0074 #8). None carries personal data: not the staff
 // member's name, not their code, not the commune (decision #7 allowed a name; nothing needs it).
 const (
@@ -99,6 +147,15 @@ const (
 	ZaloReplyNotLinked      = "Chat này chưa ghép nối với tài khoản ViGov nào."
 	ZaloReplyUnsupported    = "Bot chỉ đọc được tin nhắn chữ. Gửi mã ghép nối 8 ký tự, hoặc gõ /trogiup."
 	ZaloReplyUnavailable    = "Hệ thống tạm thời không xử lý được. Vui lòng thử lại sau ít phút."
+	// The GROUP replies (owner, 11/10/2026). A personal code is never acted on in a group: it is not looked
+	// up, not consumed, not counted, and the reply is the same whether or not it exists. Unlinking a group is
+	// done by staff on ViGov, never by a command anybody in the group can type.
+	ZaloReplyGroupPersonalCode = "Mã ghép nối cá nhân chỉ dùng khi nhắn riêng cho bot. " +
+		"Hãy mở cuộc trò chuyện riêng với bot rồi gửi lại mã."
+	ZaloReplyGroupStop = "Lệnh /dung không áp dụng trong nhóm. Việc gỡ ghép nối nhóm được thực hiện trên ViGov, " +
+		"tại mục Cấu hình → Kênh Zalo."
+	ZaloReplyGroupHelp = "Đây là kênh nhắc việc của ViGov cho cán bộ. Để ghép nối tài khoản cá nhân, hãy nhắn riêng " +
+		"cho bot. Việc gỡ ghép nối nhóm được thực hiện trên ViGov, tại mục Cấu hình → Kênh Zalo."
 	// ZaloTestMessageText is the fixed test message of `POST zalo-links/current/test-messages`.
 	ZaloTestMessageText = "Tin thử từ ViGov: kênh nhắc việc qua Zalo của bạn đang hoạt động."
 )

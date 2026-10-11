@@ -158,8 +158,96 @@ func newWebhook(t *testing.T, f *sqlFake, r *fakeResolver, l fakeLimiter) *ZaloW
 		fakeSend{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 }
 
+// text is a person's message in a PRIVATE chat — the only chat a personal code pairs.
 func text(s string) zalobot.Update {
-	return zalobot.Update{EventName: domain.ZaloEventTextReceived, ChatID: "chat-1", Text: s}
+	return zalobot.Update{EventName: domain.ZaloEventTextReceived, ChatID: "chat-1", Text: s,
+		ChatType: zalobot.ChatTypePrivate}
+}
+
+// inChat is s typed into a chat of the given type (GROUP, or Unknown: chat_type absent).
+func inChat(ct zalobot.ChatType, s string) zalobot.Update {
+	return zalobot.Update{EventName: domain.ZaloEventTextReceived, ChatID: "group-1", Text: s, ChatType: ct}
+}
+
+// countingLimiter counts Allow calls: a group code must not spend the chat's pairing budget.
+type countingLimiter struct{ calls int }
+
+func (l *countingLimiter) Allow(context.Context, ratelimit.Key) (bool, time.Duration, error) {
+	l.calls++
+	return true, time.Minute, nil
+}
+
+// The replies outside a private chat, for every chat type that is not PRIVATE.
+var groupCases = map[string]string{
+	"K7QM2XPA":          domain.ZaloReplyGroupPersonalCode,
+	"@ViGov K7QM2XPA":   domain.ZaloReplyGroupPersonalCode,
+	"@ViGov ABCD EFGH":  domain.ZaloReplyGroupPersonalCode,
+	"/dung":             domain.ZaloReplyGroupStop,
+	"@ViGov /stop":      domain.ZaloReplyGroupStop,
+	"/trogiup":          domain.ZaloReplyGroupHelp,
+	"@ViGov /help":      domain.ZaloReplyGroupHelp,
+	"xin chào cả nhóm":  "",
+	"@ViGov cảm ơn bot": "",
+}
+
+func TestWebhook_GroupAndUnknownChatsNeverLookUpOrConsumeACode(t *testing.T) {
+	ctx := context.Background()
+	for _, ct := range []zalobot.ChatType{zalobot.ChatTypeGroup, zalobot.ChatTypeUnknown} {
+		f := &sqlFake{}
+		r := &fakeResolver{matches: []crosstenant.PairingCodeMatch{{TenantID: xaA, CodeID: "c1"}}}
+		lim := &countingLimiter{}
+		noCommuneBot(f)
+		db := sql.OpenDB(f)
+		t.Cleanup(func() { db.Close() })
+		kho := store.New(db)
+		w := NewZaloWebhook(kho, docstore.NewZaloLinkStore(kho), docstore.NewZaloCommuneBotStore(kho), r, lim,
+			fakeBot{}, fakeSend{}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+		for in, want := range groupCases {
+			if got := w.Handle(ctx, inChat(ct, in), "1.2.3.4"); got != want {
+				t.Errorf("%v %q → %q, want %q", ct, in, got, want)
+			}
+		}
+		// A sticker in a group: no reply either.
+		if got := w.Handle(ctx, zalobot.Update{EventName: domain.ZaloEventUnsupportedReceived, ChatID: "g",
+			ChatType: ct}, ""); got != "" {
+			t.Errorf("%v unsupported → %q", ct, got)
+		}
+		if r.asked != 0 || lim.calls != 0 || f.begun != 0 || len(f.stmts) != 0 {
+			t.Errorf("%v: lookups %d, limiter %d, tx %d, statements %d — a group must touch nothing",
+				ct, r.asked, lim.calls, f.begun, len(f.stmts))
+		}
+	}
+}
+
+func TestWebhook_BotAuthoredMessagesAreIgnored(t *testing.T) {
+	f := &sqlFake{}
+	r := &fakeResolver{matches: []crosstenant.PairingCodeMatch{{TenantID: xaA, CodeID: "c1"}}}
+	w := newWebhook(t, f, r, fakeLimiter{allow: true})
+	for _, ct := range []zalobot.ChatType{zalobot.ChatTypePrivate, zalobot.ChatTypeGroup, zalobot.ChatTypeUnknown} {
+		for _, in := range []string{"K7QM2XPA", "/dung", "/trogiup", "xin chào"} {
+			u := inChat(ct, in)
+			u.FromBot = true
+			if got := w.Handle(context.Background(), u, ""); got != "" {
+				t.Errorf("bot in %v: %q → %q", ct, in, got)
+			}
+		}
+	}
+	if r.asked != 0 || f.begun != 0 {
+		t.Error("a bot's message reached a lookup or a transaction")
+	}
+}
+
+// The PRIVATE path keeps reading a mention-prefixed text as before: help, never a code.
+func TestWebhook_PrivateChatIsUnchanged(t *testing.T) {
+	f := &sqlFake{}
+	r := &fakeResolver{}
+	w := newWebhook(t, f, r, fakeLimiter{allow: true})
+	if got := w.Handle(context.Background(), text("@ViGov K7QM2XPA"), ""); got != domain.ZaloReplyHelp {
+		t.Errorf("private mention-prefixed → %q", got)
+	}
+	if got := w.Handle(context.Background(), text("K7QM2XPA"), ""); got != domain.ZaloReplyPairingRefused || r.asked != 1 {
+		t.Errorf("private code → %q (asked %d) — a private code is still looked up", got, r.asked)
+	}
 }
 
 func TestWebhook_CommandsAndOtherText(t *testing.T) {
@@ -176,7 +264,8 @@ func TestWebhook_CommandsAndOtherText(t *testing.T) {
 			t.Errorf("%q → %q, want %q", in, got, want)
 		}
 	}
-	if got := w.Handle(ctx, zalobot.Update{EventName: domain.ZaloEventUnsupportedReceived, ChatID: "c"}, ""); got != domain.ZaloReplyUnsupported {
+	if got := w.Handle(ctx, zalobot.Update{EventName: domain.ZaloEventUnsupportedReceived, ChatID: "c",
+		ChatType: zalobot.ChatTypePrivate}, ""); got != domain.ZaloReplyUnsupported {
 		t.Errorf("unsupported → %q", got)
 	}
 	if got := w.Handle(ctx, zalobot.Update{EventName: "user.joined", ChatID: "c"}, ""); got != "" {
