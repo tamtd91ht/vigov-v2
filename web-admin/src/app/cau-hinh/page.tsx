@@ -21,6 +21,11 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * bản mẫu mà chủ dự án đã duyệt, không phải tên tự đặt ở đây. Liên kết cũ `?tab=nguoi-dung` /
  * `?tab=phan-quyen` chuyển sang màn mới (`features/cau-hinh/moved-tabs.ts`).
  *
+ * NINE TABS, THE PROTOTYPE'S (owner 12/10/2026, customer bug sheet S27): "Lịch làm việc", "Nhật ký hệ
+ * thống" and "Nhận diện xã" left this screen for the "Hệ thống" menu item (`/he-thong`), gates and
+ * components unchanged; their old `?tab=` links redirect there. Where the text below still speaks of
+ * "Lịch làm việc" as a tab, that tab now lives on `/he-thong`.
+ *
  * MƯỜI TAB CỦA §0, Ở ĐÂY CÓ SÁU. Bốn tab còn lại — Trường bản đồ, Lời hệ thống, Tự động hoá, Máy
  * chủ thư — chưa có tuyến nào trong hợp đồng REST. Một thanh mười tab mà bốn tab bấm vào không ra
  * gì là bốn lần hứa hẹn suông, nên thanh tab chỉ mọc thêm khi tuyến mọc thêm.
@@ -59,7 +64,6 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *   | Sơ đồ tổ chức   | `admin.org`    | chỉ nút ghi — tuyến đọc `any-authenticated`           |
  *   | Danh mục        | `admin.lookup` | chỉ nút ghi — cùng lý do                              |
  *   | Thời hạn xử lý  | `admin.sla`    | cả tab — `GET /sla` đòi khoá (ADR 0079 D1)             |
- *   | Lịch làm việc   | `admin.sla`    | chỉ nút ghi — ba tuyến đọc lịch `any-authenticated`   |
  *   | Thôn/Tổ dân phố | —              | không cổng — phần chỉ xem, tuyến `any-authenticated`  |
  *
  * Ẩn cả một phần mà máy chủ vẫn phục vụ là để GIAO DIỆN quyết định điều máy chủ không từ chối —
@@ -85,8 +89,9 @@ export default async function TrangCauHinh({
   // Commune first: a Host matching no commune 404s before any redirect is issued.
   const xa = await layCauHinhXa();
 
-  // Người dùng and Phân quyền moved to `/nguoi-dung` (05/10/2026). A saved `?tab=` link to either
-  // lands on its new screen instead of on the first tab here (`moved-tabs.ts`).
+  // Người dùng and Phân quyền moved to `/nguoi-dung` (05/10/2026); Lịch làm việc, Nhật ký hệ thống and
+  // Nhận diện xã to `/he-thong` (12/10/2026). A saved `?tab=` link to any of them lands on its new
+  // screen instead of on the first tab here (`moved-tabs.ts`).
   const moved = movedTabRoute((await searchParams).tab);
   if (moved !== null) redirect(moved);
 

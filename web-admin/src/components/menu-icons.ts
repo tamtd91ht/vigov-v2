@@ -12,6 +12,7 @@ import {
   MessageSquareWarning,
   NotebookPen,
   Send,
+  ServerCog,
   Settings,
   ShieldCheck,
   Smartphone,
@@ -55,6 +56,8 @@ export const MENU_ICONS: Readonly<Record<string, LucideIcon>> = {
   "Phân quyền": ShieldCheck,
   "Hướng dẫn sử dụng": BookOpen,
   "Cấu hình": Settings,
+  // Not a prototype row (owner 12/10/2026): a cog like Cấu hình's, on a server, so the two read apart.
+  "Hệ thống": ServerCog,
 };
 
 export function menuIcon(label: string): LucideIcon {

@@ -6,6 +6,8 @@ import { quyetDinhTabNguoiDung } from "./quyen-tab";
 import {
   cacTabHien,
   coThanhTab,
+  SYSTEM_TABS,
+  systemTabFromQuery,
   TAB_CAU_HINH,
   tabKeTheoPhim,
   type MoTaTab,
@@ -32,7 +34,20 @@ async function phienVoi(tra: Response) {
   return layPhienHienTai();
 }
 
-const nhan = (ds: readonly MoTaTab[]) => ds.map((t) => t.nhan);
+const nhan = (ds: readonly MoTaTab<string>[]) => ds.map((t) => t.nhan);
+
+/** The prototype's nine (`ConfigWorkspace.tsx:61-73`), in its order — owner 12/10/2026, S27. */
+const PROTOTYPE_NINE = [
+  "Sơ đồ tổ chức",
+  "Thôn / Tổ dân phố",
+  "Danh mục",
+  "Trường bản đồ",
+  "Lời hệ thống",
+  "Thời hạn xử lý",
+  "Tự động hoá",
+  "Máy chủ thư",
+  "Kênh Zalo",
+];
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -40,41 +55,30 @@ afterEach(() => {
 });
 
 describe("tab nào của màn Cấu hình được hiện", () => {
-  it("đủ khoá cổng (trừ `admin.org`) → mười một tab: chín tab đầu theo prototype, rồi Lịch làm việc, Nhật ký hệ thống (người dùng, 09/10/2026)", async () => {
+  it("mọi khoá → đúng chín tab của prototype, đúng thứ tự — không còn ba tab dư (chủ dự án 12/10/2026, S27)", async () => {
     const phien = await phienVoi(
-      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit"]),
+      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit", "admin.org"]),
     );
     const hien = cacTabHien(TAB_CAU_HINH, phien);
-    expect(nhan(hien)).toEqual([
-      "Sơ đồ tổ chức",
-      "Thôn / Tổ dân phố",
-      "Danh mục",
-      "Trường bản đồ",
-      "Lời hệ thống",
-      "Thời hạn xử lý",
-      "Tự động hoá",
-      "Máy chủ thư",
-      "Kênh Zalo",
-      "Lịch làm việc",
-      "Nhật ký hệ thống",
-    ]);
+    expect(nhan(hien)).toEqual(PROTOTYPE_NINE);
+    expect(nhan(TAB_CAU_HINH)).toEqual(PROTOTYPE_NINE);
     expect(coThanhTab(phien, hien.length)).toBe(true);
   });
 
-  it("Thời hạn xử lý đi theo `admin.sla` (ADR 0079 D1) — ca bị từ chối trước; Lịch làm việc thì không cổng", async () => {
+  it("ba tab dư KHÔNG còn ở /cau-hinh, và mỗi tab chỉ ở một nơi", () => {
+    const here = TAB_CAU_HINH.map((t) => t.ma as string);
+    for (const id of ["lich-lam-viec", "nhat-ky-he-thong", "nhan-dien-xa"]) expect(here).not.toContain(id);
+    for (const t of SYSTEM_TABS) expect(here).not.toContain(t.ma);
+  });
+
+  it("Thời hạn xử lý đi theo `admin.sla` (ADR 0079 D1) — ca bị từ chối trước", async () => {
     // `GET /api/v1/sla` declares `admin.sla`: without it the tab's one read is a 403, so the tab hides.
-    // The three calendar reads are any-authenticated, so "Lịch làm việc" shows to every account.
     const denied = await phienVoi(
       phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit", "admin.org", "admin.slas", "ADMIN.SLA"]),
     );
-    const deniedTabs = nhan(cacTabHien(TAB_CAU_HINH, denied));
-    expect(deniedTabs).not.toContain("Thời hạn xử lý");
-    expect(deniedTabs).toContain("Lịch làm việc");
+    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Thời hạn xử lý");
     const holder = await phienVoi(phanHoiPhien(["admin.sla"]));
-    const holderTabs = nhan(cacTabHien(TAB_CAU_HINH, holder));
-    expect(holderTabs).toContain("Thời hạn xử lý");
-    expect(holderTabs).toContain("Lịch làm việc");
-    expect(TAB_CAU_HINH.find((t) => t.ma === "lich-lam-viec")?.cong).toBeNull();
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Thời hạn xử lý");
   });
 
   it("Kênh Zalo đi theo `admin.lookup` (ADR 0074 #6) — ca bị từ chối trước", async () => {
@@ -94,17 +98,6 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Tự động hoá");
   });
 
-  it("Nhận diện xã đi theo `admin.org` — khoá của cả bảy tuyến commune-branding; ca bị từ chối", async () => {
-    const holder = await phienVoi(phanHoiPhien(["admin.org"]));
-    const shown = nhan(cacTabHien(TAB_CAU_HINH, holder));
-    expect(shown).toContain("Nhận diện xã");
-    expect(shown[shown.length - 1]).toBe("Nhận diện xã");
-    // Other admin keys and look-alikes do not open it (rule 5, invariant 3b).
-    const denied = await phienVoi(
-      phanHoiPhien(["admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit", "admin.orgs", "ADMIN.ORG"]),
-    );
-    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Nhận diện xã");
-  });
 
   it("Trường bản đồ đi theo `asset.read` (khoá ĐỌC), không theo `admin.lookup`", async () => {
     // `admin.lookup` là khoá GHI của tab ấy: có nó mà không có `asset.read` thì GET vẫn 403.
@@ -128,23 +121,15 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Lời hệ thống");
   });
 
-  it("Nhật ký hệ thống đi theo `admin.audit`, và chỉ khoá ấy — ca bị từ chối", async () => {
+  it("`admin.audit` không mở tab có cổng nào ở /cau-hinh (luật 5, bất biến 3b)", async () => {
     const holder = await phienVoi(phanHoiPhien(["admin.audit"]));
-    const shown = nhan(cacTabHien(TAB_CAU_HINH, holder));
-    expect(shown).toContain("Nhật ký hệ thống");
-    // `admin.audit` không mở tab nào khác có cổng (luật 5, bất biến 3b).
-    expect(shown).not.toContain("Người dùng");
-    expect(shown).not.toContain("Lời hệ thống");
-    const denied = await phienVoi(
-      phanHoiPhien(["admin.user", "admin.role", "admin.lookup", "admin.audits", "ADMIN.AUDIT"]),
-    );
-    expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Nhật ký hệ thống");
+    expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục"]);
   });
 
-  it("thiếu mọi khoá cổng → bốn tab; Người dùng, Phân quyền, Trường bản đồ, Máy chủ thư, Thời hạn xử lý ẩn", async () => {
+  it("thiếu mọi khoá cổng → ba tab đọc mở; mọi tab có cổng ẩn", async () => {
     const phien = await phienVoi(phanHoiPhien(["task.read"]));
     const hien = cacTabHien(TAB_CAU_HINH, phien);
-    expect(nhan(hien)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Lịch làm việc"]);
+    expect(nhan(hien)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục"]);
     expect(coThanhTab(phien, hien.length)).toBe(true);
   });
 
@@ -155,16 +140,11 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(TAB_CAU_HINH)).not.toContain("Phân quyền");
   });
 
-  it("KHÔNG thêm cổng cho bốn tab đọc mở: không khoá nào thì bốn tab ấy vẫn hiện", async () => {
-    // Tuyến đọc của bốn tab này mở cho mọi tài khoản đã đăng nhập (ba bảng lịch: any-authenticated).
+  it("KHÔNG thêm cổng cho ba tab đọc mở: không khoá nào thì ba tab ấy vẫn hiện", async () => {
+    // Tuyến đọc của ba tab này mở cho mọi tài khoản đã đăng nhập.
     // Giao diện ẩn chúng là giao diện từ chối điều máy chủ không từ chối — luật 5, cấm #1.
     const khong = await phienVoi(phanHoiPhien([]));
-    expect(nhan(cacTabHien(TAB_CAU_HINH, khong))).toEqual([
-      "Sơ đồ tổ chức",
-      "Thôn / Tổ dân phố",
-      "Danh mục",
-      "Lịch làm việc",
-    ]);
+    expect(nhan(cacTabHien(TAB_CAU_HINH, khong))).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục"]);
   });
 
   it("phiên hết hạn (401) → đóng khi không chắc: mọi tab có cổng ẩn", async () => {
@@ -193,6 +173,66 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(hien)).not.toContain("Người dùng");
     expect(nhan(hien)).not.toContain("Phân quyền");
     expect(coThanhTab(null, hien.length)).toBe(false);
+  });
+});
+
+describe("tab nào của màn Hệ thống được hiện (chủ dự án 12/10/2026, S27)", () => {
+  it("mọi khoá → ba tab, đúng thứ tự: Lịch làm việc · Nhật ký hệ thống · Nhận diện xã", async () => {
+    const phien = await phienVoi(phanHoiPhien(["admin.sla", "admin.audit", "admin.org"]));
+    const hien = cacTabHien(SYSTEM_TABS, phien);
+    expect(nhan(hien)).toEqual(["Lịch làm việc", "Nhật ký hệ thống", "Nhận diện xã"]);
+    expect(coThanhTab(phien, hien.length)).toBe(true);
+  });
+
+  it("Lịch làm việc không cổng — ba tuyến đọc lịch any-authenticated; cổng giữ nguyên khi chuyển màn", async () => {
+    const none = await phienVoi(phanHoiPhien([]));
+    expect(nhan(cacTabHien(SYSTEM_TABS, none))).toEqual(["Lịch làm việc"]);
+    expect(SYSTEM_TABS.find((t) => t.ma === "lich-lam-viec")?.cong).toBeNull();
+  });
+
+  it("Nhật ký hệ thống đi theo `admin.audit`, và chỉ khoá ấy — ca bị từ chối", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.audit"]));
+    expect(nhan(cacTabHien(SYSTEM_TABS, holder))).toEqual(["Lịch làm việc", "Nhật ký hệ thống"]);
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.org", "admin.audits", "ADMIN.AUDIT"]),
+    );
+    expect(nhan(cacTabHien(SYSTEM_TABS, denied))).not.toContain("Nhật ký hệ thống");
+  });
+
+  it("Nhận diện xã đi theo `admin.org` — khoá của cả bảy tuyến commune-branding; ca bị từ chối", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.org"]));
+    expect(nhan(cacTabHien(SYSTEM_TABS, holder))).toEqual(["Lịch làm việc", "Nhận diện xã"]);
+    // Other admin keys and look-alikes do not open it (rule 5, invariant 3b).
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit", "admin.orgs", "ADMIN.ORG"]),
+    );
+    expect(nhan(cacTabHien(SYSTEM_TABS, denied))).not.toContain("Nhận diện xã");
+  });
+
+  it("chỉ `admin.sla` → một tab (Lịch làm việc) → không dựng thanh (quyết định 26/09)", async () => {
+    const phien = await phienVoi(phanHoiPhien(["admin.sla"]));
+    const hien = cacTabHien(SYSTEM_TABS, phien);
+    expect(nhan(hien)).toEqual(["Lịch làm việc"]);
+    expect(coThanhTab(phien, hien.length)).toBe(false);
+  });
+
+  it("phiên hết hạn (401) → đóng khi không chắc: hai tab có cổng ẩn", async () => {
+    const phien = await phienVoi(
+      new Response(JSON.stringify({ code: "unauthenticated", message: "Phiên đã hết hạn" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    expect(nhan(cacTabHien(SYSTEM_TABS, phien))).toEqual(["Lịch làm việc"]);
+  });
+
+  it("?tab= chỉ chọn tab đầu khi khớp đúng một mã của màn này", () => {
+    expect(systemTabFromQuery("lich-lam-viec")).toBe("lich-lam-viec");
+    expect(systemTabFromQuery("nhat-ky-he-thong")).toBe("nhat-ky-he-thong");
+    expect(systemTabFromQuery("nhan-dien-xa")).toBe("nhan-dien-xa");
+    for (const v of [undefined, "", "danh-muc", "Nhan-Dien-Xa", "constructor", "__proto__", ["nhan-dien-xa"]]) {
+      expect(systemTabFromQuery(v)).toBeNull();
+    }
   });
 });
 

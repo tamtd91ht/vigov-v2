@@ -50,10 +50,13 @@ export type MucMenu = {
  * nào (`identity.ResolveDeadlines` từ chối).
  *
  * DANH SÁCH ĐÓNG, LIỆT KÊ TỪNG KHOÁ, chứ không phải `admin.*`: `admin.user.delete` (nút ở
- * `/mini-app?tab=danh-ba`) cố ý VẮNG. `admin.audit` VẮNG cho tới 29/09/2026 vì chưa tab nào canh nó; nay tab Nhật
- * ký hệ thống canh nó, nên nó vào đây cùng lượt dựng tab (ADR 0054 §6). Thêm một tab có cổng quyền
- * mới thì thêm đúng khoá của tab ấy vào đây, và chỉ khoá có thật trong bảng `quyen` (luật 5, bất
- * biến 3c).
+ * `/mini-app?tab=danh-ba`) cố ý VẮNG. Thêm một tab có cổng quyền mới thì thêm đúng khoá của tab ấy vào
+ * đây, và chỉ khoá có thật trong bảng `quyen` (luật 5, bất biến 3c).
+ *
+ * `admin.audit` LEFT THIS LIST ON 12/10/2026 (owner, customer bug sheet S27): it entered on 29/09/2026
+ * with the Nhật ký hệ thống tab (ADR 0054 §6), and that tab now lives on `/he-thong`
+ * (`SYSTEM_MENU_KEYS`). No tab on `/cau-hinh` gates on it any more, so keeping it would lead an account
+ * holding only `admin.audit` to a screen with nothing of theirs on it.
  *
  * `admin.user` VÀ `admin.role` RA KHỎI DANH SÁCH NGÀY 05/10/2026, cùng lượt hai tab của chúng rời
  * `/cau-hinh` thành hai mục menu riêng (`Người dùng`, `Phân quyền`, theo bản mẫu chủ dự án duyệt).
@@ -66,7 +69,23 @@ export const KHOA_MO_CAU_HINH: readonly string[] = [
   QUYEN_QUAN_LY_SO_DO, // Sơ đồ tổ chức — nút ghi
   QUYEN_QUAN_LY_DANH_MUC, // Danh mục — nút ghi
   QUYEN_CAU_HINH_THOI_HAN, // Thời hạn xử lý — bảng thời hạn và mọi nút ghi
-  AUDIT_READ_PERMISSION, // Nhật ký hệ thống — cả tab
+];
+
+/**
+ * Keys that open the "Hệ thống" menu item (`/he-thong`, owner 12/10/2026) — one per gate on that screen,
+ * the same closed-list rule as `KHOA_MO_CAU_HINH` above, and only keys the `quyen` table has (rule 5, 3c).
+ * Each tab still decides on its own single key (`features/cau-hinh/quyen-tab.ts`).
+ *
+ * "Lịch làm việc" has no gate (its reads are any-authenticated); `admin.sla` is listed because it is the
+ * key of that tab's write buttons — the work someone is sent to this screen to do (no working calendar,
+ * no deadline: `identity.ResolveDeadlines` refuses). An account with none of the three keys could still
+ * read the calendar but change nothing here, so the item stays closed to it — as "Cấu hình" is to an
+ * account with no configuration key.
+ */
+export const SYSTEM_MENU_KEYS: readonly string[] = [
+  QUYEN_CAU_HINH_THOI_HAN, // Lịch làm việc — write buttons
+  AUDIT_READ_PERMISSION, // Nhật ký hệ thống — whole tab
+  QUYEN_QUAN_LY_SO_DO, // Nhận diện xã — whole tab (`admin.org`, ADR 0069 #2)
 ];
 
 /**
@@ -197,6 +216,8 @@ export const NHOM_MENU: readonly NhomMenu[] = [
       },
       { nhan: "Hướng dẫn sử dụng", duong: null, khoa: null },
       { nhan: "Cấu hình", duong: "/cau-hinh", khoa: KHOA_MO_CAU_HINH },
+      // Not in the prototype: the three tabs `/cau-hinh` carried beyond its nine (owner 12/10/2026, S27).
+      { nhan: "Hệ thống", duong: "/he-thong", khoa: SYSTEM_MENU_KEYS },
     ],
   },
 ];

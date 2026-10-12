@@ -11,11 +11,19 @@
  * link typed into a guide, a chat or a bookmark is not under this app's control, and it is cheaper to
  * honour it than to explain a screen that silently opens on "Sơ đồ tổ chức".
  *
+ * THE SAME, 12/10/2026 (owner, customer bug sheet S27): `/cau-hinh` shows only the prototype's nine
+ * tabs, and "Lịch làm việc", "Nhật ký hệ thống", "Nhận diện xã" moved to the "Hệ thống" menu item. They
+ * keep their ids there, and `/he-thong` reads `?tab=` as its starting tab, so the link lands on the very
+ * tab it named rather than on that screen's first one.
+ *
  * A `Map`, not an object literal: `?tab=constructor` must not resolve to a prototype property.
  */
 const MOVED_TAB_ROUTES: ReadonlyMap<string, string> = new Map([
   ["nguoi-dung", "/nguoi-dung"],
   ["phan-quyen", "/nguoi-dung/phan-quyen"],
+  ["lich-lam-viec", "/he-thong?tab=lich-lam-viec"],
+  ["nhat-ky-he-thong", "/he-thong?tab=nhat-ky-he-thong"],
+  ["nhan-dien-xa", "/he-thong?tab=nhan-dien-xa"],
 ]);
 
 /**

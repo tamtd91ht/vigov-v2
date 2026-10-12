@@ -52,6 +52,13 @@ describe("/cau-hinh with an old tab link", () => {
     await expect(open({ tab: "phan-quyen" })).rejects.toThrow("NEXT_REDIRECT /nguoi-dung/phan-quyen");
   });
 
+  it.each(["lich-lam-viec", "nhat-ky-he-thong", "nhan-dien-xa"])(
+    "?tab=%s → /he-thong?tab=%s (12/10/2026, S27)",
+    async (tab) => {
+      await expect(open({ tab })).rejects.toThrow(`NEXT_REDIRECT /he-thong?tab=${tab}`);
+    },
+  );
+
   it("no tab, or a tab still here → the screen renders, no redirect", async () => {
     for (const params of [{}, { tab: "danh-muc" }, { tab: "x" }]) {
       await expect(open(params)).resolves.toBeTruthy();
@@ -62,6 +69,9 @@ describe("/cau-hinh with an old tab link", () => {
   it("the commune is resolved BEFORE any redirect: an unknown Host 404s, never redirects", async () => {
     tenantResolves = false;
     await expect(open({ tab: "nguoi-dung" })).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(calls).toEqual(["tenant"]);
+    calls.length = 0;
+    await expect(open({ tab: "nhat-ky-he-thong" })).rejects.toThrow("NEXT_NOT_FOUND");
     expect(calls).toEqual(["tenant"]);
   });
 });

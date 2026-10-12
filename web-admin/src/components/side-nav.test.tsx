@@ -73,6 +73,7 @@ describe("sidebar — what it draws (expanded)", () => {
       "/nguoi-dung",
       "/nguoi-dung/phan-quyen",
       "/cau-hinh",
+      "/he-thong", // not a prototype row: owner 12/10/2026 (S27)
     ]);
     for (const m of BUILT) {
       const a = links(html).find((x) => x.includes(`href="${m.duong!}"`) && x.includes(`<span class="side-nav-label">${esc(m.nhan)}</span>`));
@@ -127,8 +128,12 @@ describe("sidebar — what it draws (expanded)", () => {
     expect(hrefs(sidebar(["task.read"]))).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban"]);
   });
 
-  it("`admin.sla` alone opens Cấu hình (one key of the tab set)", () => {
-    expect(hrefs(sidebar(["admin.sla"]))).toEqual(["/cau-hinh"]);
+  it("`admin.sla` alone opens Cấu hình and Hệ thống (one key of each tab set)", () => {
+    expect(hrefs(sidebar(["admin.sla"]))).toEqual(["/cau-hinh", "/he-thong"]);
+  });
+
+  it("`admin.audit` alone opens Hệ thống only — Nhật ký hệ thống left /cau-hinh (12/10/2026)", () => {
+    expect(hrefs(sidebar(["admin.audit"]))).toEqual(["/he-thong"]);
   });
 
   it("DENIED: no key, or the session not read yet → no link at all; only the unbuilt items, disabled; the toggle stays", () => {

@@ -11,6 +11,7 @@ import {
   NHOM_MENU,
   parentRoute,
   PENDING_SCREENS,
+  SYSTEM_MENU_KEYS,
   type MenuParent,
 } from "./muc-menu";
 
@@ -64,6 +65,7 @@ describe("locMenu", () => {
       "Thu - Chi ngân sách",
       "Phản ánh người dân",
       "Cấu hình",
+      "Hệ thống",
       "Nhiệm vụ",
       "Biên bản họp",
       "Thông báo nội bộ",
@@ -95,18 +97,17 @@ describe("locMenu", () => {
     // 3b cấm, và `coQuyen` so chuỗi chính xác để chặn.
     //
     // SỬA CÓ CHỦ Ý 29/09/2026: ca này từng dùng `admin.audit` làm "khoá không canh tab nào". Tab Nhật
-    // ký hệ thống (ADR 0054) nay canh đúng khoá ấy, nên nó mở mục Cấu hình — và CHỈ mục ấy (ca dưới).
+    // ký hệ thống (ADR 0054) nay canh đúng khoá ấy — since 12/10/2026 on `/he-thong` (ca dưới).
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.user.delete", "admin.users", "admin"]));
     expect(ten).not.toContain("Cấu hình");
+    expect(ten).not.toContain("Hệ thống");
     expect(ten).not.toContain("Nội dung Mini App");
     expect(ten).toHaveLength(0);
   });
 
-  it("chỉ có `admin.audit`: THẤY mục Cấu hình (tab Nhật ký hệ thống), không thấy Nội dung Mini App", () => {
+  it("chỉ có `admin.audit`: THẤY mục Hệ thống (tab Nhật ký hệ thống), KHÔNG thấy Cấu hình (12/10/2026)", () => {
     const names = tenMuc(locMenu(NHOM_MENU, ["admin.audit"]));
-    expect(names).toContain("Cấu hình");
-    expect(names).not.toContain("Nội dung Mini App");
-    expect(names).toHaveLength(1);
+    expect(names).toEqual(["Hệ thống"]);
   });
 
   it("chỉ có `document.read`: THẤY mục Văn bản & Đơn thư", () => {
@@ -194,12 +195,11 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     // Ca thật đã hỏng: menu từng canh bằng riêng `admin.lookup`, nên người được giao gieo bảng
     // thời hạn — việc mà thiếu nó xã không nhận được phản ánh nào — không tìm thấy lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.sla"]));
-    expect(ten).toContain("Cấu hình");
-    // Và KHÔNG mở thêm mục nào khác: đúng một mục này.
-    expect(ten).toHaveLength(1);
+    // Cấu hình (Thời hạn xử lý) and Hệ thống (Lịch làm việc write buttons) — and nothing else.
+    expect(ten).toEqual(["Cấu hình", "Hệ thống"]);
   });
 
-  it.each(["admin.org", "admin.lookup", "admin.sla", "admin.audit"])(
+  it.each(["admin.org", "admin.lookup", "admin.sla"])(
     "chỉ có `%s`: thấy mục Cấu hình",
     (khoa) => {
       expect(tenMuc(locMenu(NHOM_MENU, [khoa]))).toContain("Cấu hình");
@@ -240,12 +240,47 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
   });
 
   it("tập khoá liệt kê từng khoá, không chứa khoá không canh tab nào", () => {
-    // SỬA CÓ CHỦ Ý 29/09/2026 (ADR 0054 §6): ca này từng ghim `admin.audit` VẮNG, vì khi ấy chưa tab
-    // nào canh nó. Tab Nhật ký hệ thống nay canh đúng khoá ấy, nên nó phải CÓ MẶT — vắng thì cán bộ
-    // chỉ giữ `admin.audit` không tìm thấy lối vào tab của mình. `admin.user.delete` vẫn vắng: nút
-    // của nó ở `/danh-ba`, không ở đây.
-    expect(KHOA_MO_CAU_HINH).toContain("admin.audit");
+    // SỬA CÓ CHỦ Ý LẦN HAI 12/10/2026 (S27): `admin.audit` entered on 29/09/2026 with the Nhật ký hệ
+    // thống tab; that tab now lives on `/he-thong`, so no tab here gates on the key and it must be ABSENT —
+    // present, it would lead an `admin.audit`-only account to a screen with nothing of theirs on it.
+    // `admin.user.delete` vẫn vắng: nút của nó ở `/danh-ba`, không ở đây.
+    expect(KHOA_MO_CAU_HINH).not.toContain("admin.audit");
     expect(KHOA_MO_CAU_HINH).not.toContain("admin.user.delete");
+  });
+});
+
+describe("mục Hệ thống — mở khi có BẤT KỲ khoá nào của ba tab trên /he-thong (12/10/2026, S27)", () => {
+  const item = (ds: readonly string[] | null) =>
+    builtItems(locMenu(NHOM_MENU, ds)).find((m) => m.nhan === "Hệ thống");
+
+  it("tập khoá đóng, đúng ba khoá có thật: admin.sla · admin.audit · admin.org", () => {
+    expect([...SYSTEM_MENU_KEYS]).toEqual(["admin.sla", "admin.audit", "admin.org"]);
+  });
+
+  it.each(["admin.sla", "admin.audit", "admin.org"])("chỉ có `%s`: THẤY mục Hệ thống, dẫn tới /he-thong", (khoa) => {
+    expect(item([khoa])?.duong).toBe("/he-thong");
+  });
+
+  it("CA BỊ TỪ CHỐI: không khoá nào trong ba (kể cả mọi khoá admin.* khác, chuỗi gần giống) → không thấy", () => {
+    for (const ds of [
+      [],
+      null,
+      ["admin.user", "admin.role", "admin.lookup", "admin.user.delete", "asset.read", "report.read"],
+      ["admin.slas", "ADMIN.AUDIT", "admin.orgs", "admin.audit.read", "admin"],
+    ]) {
+      expect(item(ds)).toBeUndefined();
+    }
+  });
+
+  it("đứng ngay sau Cấu hình, trong nhóm Quản trị", () => {
+    const admin = NHOM_MENU.find((n) => n.ten === "Quản trị")!;
+    const labels = admin.muc.map((m) => m.nhan);
+    expect(labels.indexOf("Hệ thống")).toBe(labels.indexOf("Cấu hình") + 1);
+  });
+
+  it("chỉ sáng ở /he-thong, không làm sáng Cấu hình", () => {
+    expect(activeMenuRoute(NHOM_MENU, "/he-thong")).toBe("/he-thong");
+    expect(activeMenuRoute(NHOM_MENU, "/cau-hinh")).toBe("/cau-hinh");
   });
 });
 
@@ -352,7 +387,8 @@ describe("cấu trúc menu theo bản mẫu (ADR 0068 lần 5, 06/10/2026)", () 
       ],
       [
         "Quản trị",
-        ["Nội dung Mini App", "Báo cáo", "Người dùng & Phân quyền", "Hướng dẫn sử dụng", "Cấu hình"],
+        // "Hệ thống" is not a prototype row: owner 12/10/2026 (S27), right after "Cấu hình".
+        ["Nội dung Mini App", "Báo cáo", "Người dùng & Phân quyền", "Hướng dẫn sử dụng", "Cấu hình", "Hệ thống"],
       ],
     ]);
   });

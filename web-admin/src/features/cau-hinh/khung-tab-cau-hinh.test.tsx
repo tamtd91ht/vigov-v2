@@ -18,7 +18,12 @@ vi.mock("@/components/cau-hinh-xa", () => ({
 // The Nhận diện xã tab refreshes the server-rendered shell after a change; no app router in a test.
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
 
-const { KhungTabCauHinh } = await import("./khung-tab-cau-hinh");
+const { KhungTabCauHinh, SystemTabFrame } = await import("./khung-tab-cau-hinh");
+
+const ALL_KEYS = ["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"];
+const tabOrder = (html: string) => [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
+/** Id of the selected tab button (`aria-selected` renders before `id`). */
+const selectedTab = (html: string) => html.match(/role="tab" aria-selected="true"[^>]*\sid="([^"]+)"/)?.[1];
 
 function phienCo(quyen: readonly string[]): PhienDaDoc {
   return {
@@ -48,14 +53,14 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
   });
 
-  it("đủ quyền trừ `admin.sla` → thanh chín tab (Lịch làm việc thay Thời hạn xử lý, ADR 0079 D1); tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
-    phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit"]);
+  it("đủ quyền trừ `admin.sla` → thanh bảy tab (không Thời hạn xử lý, Tự động hoá); tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
+    phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit", "admin.org"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).toContain('role="tablist"');
-    expect(soNutTab(html)).toBe(9);
+    expect(html).toContain('aria-label="Các phần cấu hình"');
+    expect(soNutTab(html)).toBe(7);
     expect(html).toContain('aria-controls="panel-cau-hinh-kenh-zalo"');
     expect(html).toContain('aria-controls="panel-cau-hinh-loi-he-thong"');
-    expect(html).toContain('aria-controls="panel-cau-hinh-nhat-ky-he-thong"');
     expect(html).toContain('aria-controls="panel-cau-hinh-truong-ban-do"');
     expect(html).toContain('aria-controls="panel-cau-hinh-may-chu-thu"');
     expect((html.match(/aria-selected="true"/g) ?? []).length).toBe(1);
@@ -63,11 +68,10 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).toContain('role="tabpanel"');
   });
 
-  it("CA BỊ TỪ CHỐI: thiếu mọi khoá cổng → bốn tab đọc mở, không panel có cổng nào", () => {
+  it("CA BỊ TỪ CHỐI: thiếu mọi khoá cổng → ba tab đọc mở, không panel có cổng nào", () => {
     phienGia = phienCo(["task.read"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
-    expect(soNutTab(html)).toBe(4);
-    expect(html).toContain('id="tab-cau-hinh-lich-lam-viec"');
+    expect(soNutTab(html)).toBe(3);
     expect(html).not.toContain("panel-cau-hinh-thoi-han-xu-ly");
     expect(html).not.toContain(">Người dùng</button>");
     expect(html).not.toContain(">Phân quyền</button>");
@@ -79,10 +83,10 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-nhat-ky-he-thong");
   });
 
-  it("CA BỊ TỪ CHỐI: `admin.lookup` mà thiếu `admin.audit` → có Lời hệ thống, không có Nhật ký", () => {
-    phienGia = phienCo(["admin.lookup"]);
+  it("`admin.audit` mở KHÔNG tab nào ở đây — Nhật ký hệ thống đã sang /he-thong (12/10/2026)", () => {
+    phienGia = phienCo(["admin.audit"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
-    expect(html).toContain(">Lời hệ thống</button>");
+    expect(soNutTab(html)).toBe(3);
     expect(html).not.toContain(">Nhật ký hệ thống</button>");
     expect(html).not.toContain("panel-cau-hinh-nhat-ky-he-thong");
   });
@@ -95,59 +99,44 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-truong-ban-do");
   });
 
-  it("`admin.org` → tab Nhận diện xã có nút và panel (ADR 0069 #2)", () => {
+  it("CA BỊ TỪ CHỐI: `admin.org` không còn mở Nhận diện xã ở đây — tab ấy đã sang /he-thong (12/10/2026)", () => {
     phienGia = phienCo(["admin.org"]);
-    const html = renderToStaticMarkup(<KhungTabCauHinh />);
-    expect(html).toContain(">Nhận diện xã</button>");
-    expect(html).toContain('id="panel-cau-hinh-nhan-dien-xa"');
-  });
-
-  it("CA BỊ TỪ CHỐI: thiếu `admin.org` (dù có mọi khoá admin.* khác) → không nút, không panel Nhận diện xã", () => {
-    phienGia = phienCo(["admin.user", "admin.role", "admin.lookup", "admin.sla", "admin.audit", "asset.read", "admin.orgs"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).not.toContain(">Nhận diện xã</button>");
     expect(html).not.toContain("panel-cau-hinh-nhan-dien-xa");
   });
 
   it("Người dùng và Phân quyền KHÔNG còn ở màn này, kể cả khi giữ đủ khoá (05/10/2026 → /nguoi-dung)", () => {
-    phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"]);
+    phienGia = phienCo(ALL_KEYS);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).not.toContain(">Người dùng</button>");
     expect(html).not.toContain(">Phân quyền</button>");
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
     expect(html).not.toContain("panel-cau-hinh-phan-quyen");
-    // Twelve: "Kênh Zalo" (ADR 0074 #6) and "Lịch làm việc" (ADR 0079 D1).
-    expect(soNutTab(html)).toBe(12);
+    // Nine: the prototype's (owner 12/10/2026, S27).
+    expect(soNutTab(html)).toBe(9);
   });
 
-  it("CA BỊ TỪ CHỐI: thiếu `admin.sla` → không nút, không panel Thời hạn xử lý; Lịch làm việc vẫn có (ADR 0079 D1)", () => {
+  it("CA BỊ TỪ CHỐI: thiếu `admin.sla` → không nút, không panel Thời hạn xử lý (ADR 0079 D1)", () => {
     phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.audit", "asset.read", "admin.slas"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).not.toContain(">Thời hạn xử lý</button>");
     expect(html).not.toContain("panel-cau-hinh-thoi-han-xu-ly");
-    expect(html).toContain(">Lịch làm việc</button>");
-    expect(html).toContain('id="panel-cau-hinh-lich-lam-viec"');
   });
 
-  it("`admin.sla` → Thời hạn xử lý rồi Tự động hoá; Lịch làm việc sau các tab của prototype (người dùng, 09/10/2026)", () => {
+  it("`admin.sla` → Thời hạn xử lý rồi Tự động hoá, không Lịch làm việc (sang /he-thong 12/10/2026)", () => {
     phienGia = phienCo(["admin.sla"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
-    const order = [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
-    expect(order).toEqual([
-      "Sơ đồ tổ chức",
-      "Thôn / Tổ dân phố",
-      "Danh mục",
-      "Thời hạn xử lý",
-      "Tự động hoá",
-      "Lịch làm việc",
-    ]);
+    expect(tabOrder(html)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", "Thời hạn xử lý", "Tự động hoá"]);
   });
 
-  it("đủ mọi khoá → mười hai tab: chín tab đúng thứ tự prototype, rồi Lịch làm việc · Nhật ký hệ thống · Nhận diện xã", () => {
-    phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"]);
+  it("đủ mọi khoá → ĐÚNG chín tab, đúng thứ tự prototype; không panel nào của ba tab dư (chủ dự án 12/10/2026, S27)", () => {
+    phienGia = phienCo(ALL_KEYS);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
-    const order = [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
-    expect(order).toEqual([
+    for (const id of ["lich-lam-viec", "nhat-ky-he-thong", "nhan-dien-xa"]) {
+      expect(html).not.toContain(`panel-cau-hinh-${id}`);
+    }
+    expect(tabOrder(html)).toEqual([
       "Sơ đồ tổ chức",
       "Thôn / Tổ dân phố",
       "Danh mục",
@@ -157,15 +146,12 @@ describe("khung tab màn Cấu hình", () => {
       "Tự động hoá",
       "Máy chủ thư",
       "Kênh Zalo",
-      "Lịch làm việc",
-      "Nhật ký hệ thống",
-      "Nhận diện xã",
     ]);
   });
 
-  it("thanh mười hai tab MỘT DÒNG, cuộn ngang, ẩn thanh cuộn, cao 32px (người dùng, 09/10/2026)", () => {
-    // A wrapped strip grew to 56px with "Nhận diện xã" on a second row; the prototype's is one 32px row.
-    phienGia = phienCo(["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"]);
+  it("thanh chín tab MỘT DÒNG, cuộn ngang, ẩn thanh cuộn, cao 32px (người dùng, 09/10/2026)", () => {
+    // A wrapped strip grew to 56px with its last tab on a second row; the prototype's is one 32px row.
+    phienGia = phienCo(ALL_KEYS);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     const tablist = html.match(/<div role="tablist"[^>]*class="([^"]*)"/);
     expect(tablist).not.toBeNull();
@@ -178,7 +164,7 @@ describe("khung tab màn Cấu hình", () => {
     expect(cls).toContain("bg-muted");
     expect(cls).not.toContain("flex-wrap");
     expect(cls).not.toContain("h-auto");
-    expect(html).toContain('id="tab-cau-hinh-nhan-dien-xa"');
+    expect(html).toContain('id="tab-cau-hinh-kenh-zalo"');
   });
 
   it("phiên đọc hỏng → câu của máy chủ vẫn ra tới màn hình", () => {
@@ -186,5 +172,59 @@ describe("khung tab màn Cấu hình", () => {
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).toContain("Phiên làm việc đã hết hạn");
     expect(html).not.toContain("panel-cau-hinh-nguoi-dung");
+  });
+});
+
+describe("khung tab màn Hệ thống (/he-thong, chủ dự án 12/10/2026, S27)", () => {
+  it("đủ ba khoá → thanh ba tab đúng thứ tự, nhãn riêng, id riêng của màn này", () => {
+    phienGia = phienCo(["admin.sla", "admin.audit", "admin.org"]);
+    const html = renderToStaticMarkup(<SystemTabFrame />);
+    expect(html).toContain('aria-label="Các phần hệ thống"');
+    expect(tabOrder(html)).toEqual(["Lịch làm việc", "Nhật ký hệ thống", "Nhận diện xã"]);
+    expect(html).toContain('id="tab-he-thong-lich-lam-viec"');
+    expect(html).toContain('aria-controls="panel-he-thong-nhat-ky-he-thong"');
+    expect(html).toContain('id="panel-he-thong-nhan-dien-xa"');
+    // Not a single tab of /cau-hinh here.
+    expect(html).not.toContain("cau-hinh-so-do-to-chuc");
+    // No initial tab → the first one is selected.
+    expect(selectedTab(html)).toBe("tab-he-thong-lich-lam-viec");
+  });
+
+  it("`admin.audit` → Lịch làm việc + Nhật ký hệ thống; CA BỊ TỪ CHỐI: không Nhận diện xã", () => {
+    phienGia = phienCo(["admin.audit"]);
+    const html = renderToStaticMarkup(<SystemTabFrame />);
+    expect(tabOrder(html)).toEqual(["Lịch làm việc", "Nhật ký hệ thống"]);
+    expect(html).not.toContain("panel-he-thong-nhan-dien-xa");
+  });
+
+  it("`admin.org` → Lịch làm việc + Nhận diện xã; CA BỊ TỪ CHỐI: không Nhật ký hệ thống", () => {
+    phienGia = phienCo(["admin.org"]);
+    const html = renderToStaticMarkup(<SystemTabFrame />);
+    expect(tabOrder(html)).toEqual(["Lịch làm việc", "Nhận diện xã"]);
+    expect(html).not.toContain("panel-he-thong-nhat-ky-he-thong");
+  });
+
+  it("CA BỊ TỪ CHỐI: không khoá nào (hoặc gần giống) → chỉ Lịch làm việc, hiện thẳng, không thanh", () => {
+    phienGia = phienCo(["task.read", "admin.audits", "ADMIN.ORG", "admin.orgs"]);
+    const html = renderToStaticMarkup(<SystemTabFrame />);
+    expect(html).not.toContain('role="tablist"');
+    expect(html).toContain('id="panel-he-thong-lich-lam-viec"');
+    expect(html).not.toContain("panel-he-thong-nhat-ky-he-thong");
+    expect(html).not.toContain("panel-he-thong-nhan-dien-xa");
+  });
+
+  it("initialTab (từ ?tab=) chọn sẵn tab ấy", () => {
+    phienGia = phienCo(["admin.sla", "admin.audit", "admin.org"]);
+    const html = renderToStaticMarkup(<SystemTabFrame initialTab="nhan-dien-xa" />);
+    expect(selectedTab(html)).toBe("tab-he-thong-nhan-dien-xa");
+    expect(html).toMatch(/<div id="panel-he-thong-lich-lam-viec"[^>]*hidden=""/);
+    expect((html.match(/aria-selected="true"/g) ?? []).length).toBe(1);
+  });
+
+  it("CA BỊ TỪ CHỐI: initialTab là tab tài khoản không được thấy → về tab đầu được hiện, không mở panel ấy", () => {
+    phienGia = phienCo(["admin.audit"]);
+    const html = renderToStaticMarkup(<SystemTabFrame initialTab="nhan-dien-xa" />);
+    expect(html).not.toContain("panel-he-thong-nhan-dien-xa");
+    expect(selectedTab(html)).toBe("tab-he-thong-lich-lam-viec");
   });
 });

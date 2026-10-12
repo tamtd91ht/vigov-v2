@@ -392,9 +392,10 @@ describe("preview — Cấu hình", () => {
   });
 
   it("?tab= presses the real tab button", async () => {
-    const el = await mount("/xem-thu/cau-hinh", <SettingsPreview tab="lich-lam-viec" />, false, "", keys, "lanh-dao");
+    // "lich-lam-viec" until 12/10/2026, when that tab moved to /he-thong (S27).
+    const el = await mount("/xem-thu/cau-hinh", <SettingsPreview tab="thoi-han-xu-ly" />, false, "", keys, "lanh-dao");
     await settle(600);
-    expect(el.querySelector("#tab-cau-hinh-lich-lam-viec")!.getAttribute("aria-selected")).toBe("true");
+    expect(el.querySelector("#tab-cau-hinh-thoi-han-xu-ly")!.getAttribute("aria-selected")).toBe("true");
     expect(network).not.toHaveBeenCalled();
   });
 

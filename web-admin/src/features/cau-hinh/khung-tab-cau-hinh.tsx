@@ -21,9 +21,12 @@ import { ZaloChannelTab } from "./zalo-channel-tab";
 import {
   cacTabHien,
   coThanhTab,
+  SYSTEM_TABS,
   TAB_CAU_HINH,
   tabKeTheoPhim,
   type MaTabCauHinh,
+  type MoTaTab, // vi-name-ok: existing type of thanh-tab-cau-hinh.ts, imported not declared (rule 12 inv 3)
+  type SystemTabId,
 } from "./thanh-tab-cau-hinh";
 
 /**
@@ -38,45 +41,84 @@ const NOI_DUNG: Record<MaTabCauHinh, (active: boolean) => ReactNode> = {
   "truong-ban-do": () => <MapFieldTab />,
   "loi-he-thong": () => <SystemMessagesTab />,
   "thoi-han-xu-ly": () => <TabThoiHanXuLy />,
-  "lich-lam-viec": () => <WorkingCalendarTab />,
   "tu-dong-hoa": () => <AutomationTab />,
   "may-chu-thu": () => <MailServerTab />,
   "kenh-zalo": () => <ZaloChannelTab />,
+};
+
+/** Panels of `/he-thong` — the three tabs that left `/cau-hinh` on 12/10/2026, components unchanged. */
+const SYSTEM_PANELS: Record<SystemTabId, (active: boolean) => ReactNode> = {
+  "lich-lam-viec": () => <WorkingCalendarTab />,
   "nhat-ky-he-thong": () => <AuditLogTab />,
   "nhan-dien-xa": () => <CommuneBrandingTab />,
 };
 
-const idTab = (ma: MaTabCauHinh) => `tab-cau-hinh-${ma}`;
-const idPanel = (ma: MaTabCauHinh) => `panel-cau-hinh-${ma}`;
+/** Thanh tab + các panel của màn Cấu hình — the prototype's nine tabs (owner, 12/10/2026). */
+// vi-name-ok: existing export of this file, kept so its callers do not change (rule 12 inv 3)
+export function KhungTabCauHinh() {
+  return <TabFrame tabs={TAB_CAU_HINH} panels={NOI_DUNG} idPrefix="cau-hinh" label="Các phần cấu hình" />;
+}
 
 /**
- * Thanh tab + các panel của màn Cấu hình. Quyết định tab nào hiện và có thanh hay không nằm ở
- * `thanh-tab-cau-hinh.ts` (có bài test riêng); ở đây chỉ dựng.
+ * The tab frame of `/he-thong`. `initialTab` comes from `?tab=` (an old `/cau-hinh?tab=` link redirected
+ * here, `moved-tabs.ts`) and is only a starting choice: a tab the account may not see falls back to the
+ * first visible one, exactly like a choice that stopped being visible.
+ */
+export function SystemTabFrame({ initialTab = null }: { initialTab?: SystemTabId | null }) {
+  return (
+    <TabFrame
+      tabs={SYSTEM_TABS}
+      panels={SYSTEM_PANELS}
+      idPrefix="he-thong"
+      label="Các phần hệ thống"
+      initialTab={initialTab}
+    />
+  );
+}
+
+/**
+ * Thanh tab + các panel của một màn nhiều tab (Cấu hình, Hệ thống). Quyết định tab nào hiện và có thanh
+ * hay không nằm ở `thanh-tab-cau-hinh.ts` (có bài test riêng); ở đây chỉ dựng.
  *
  * PANEL KHÔNG ĐƯỢC CHỌN VẪN ĐƯỢC GIỮ (`hidden`), không gỡ khỏi cây: một cột Phân quyền đang sửa dở
  * hay một biểu mẫu nhập nửa chừng mà mất chỉ vì bấm sang tab khác là mất việc của cán bộ. Cái giá là
  * mọi tab được phép đều đọc dữ liệu của nó ngay khi mở màn — đúng như khi các phần còn dựng nối tiếp.
  *
  * Tab đang chọn chỉ nằm trong state của component: không ghi `localStorage`, không đồng bộ URL.
+ * `initialTab` is read once, as the starting state — choosing a tab afterwards never rewrites `?tab=`.
  */
-export function KhungTabCauHinh() {
+function TabFrame<M extends string>({
+  tabs,
+  panels,
+  idPrefix,
+  label,
+  initialTab = null,
+}: {
+  tabs: readonly MoTaTab<M>[];
+  panels: Record<M, (active: boolean) => ReactNode>;
+  /** Element ids are `tab-<idPrefix>-<id>` / `panel-<idPrefix>-<id>` — unique per screen. */
+  idPrefix: string;
+  label: string;
+  initialTab?: M | null;
+}) {
   const phien = usePhien();
-  const hien = cacTabHien(TAB_CAU_HINH, phien);
+  const hien = cacTabHien(tabs, phien);
   const coThanh = coThanhTab(phien, hien.length);
 
-  const [dangChon, datDangChon] = useState<MaTabCauHinh>("so-do-to-chuc");
-  const nutTab = useRef<Partial<Record<MaTabCauHinh, HTMLButtonElement | null>>>({});
+  const idTab = (ma: M) => `tab-${idPrefix}-${ma}`;
+  const idPanel = (ma: M) => `panel-${idPrefix}-${ma}`;
+
+  const [dangChon, datDangChon] = useState<M | null>(initialTab ?? tabs[0]?.ma ?? null);
+  const nutTab = useRef<Partial<Record<M, HTMLButtonElement | null>>>({});
 
   // Tab đã chọn mà nay không còn trong danh sách được hiện thì về tab đầu tiên được hiện — không
   // bao giờ để một panel bị ẩn mà không panel nào hiện thay.
-  const chon: MaTabCauHinh | undefined = hien.some((t) => t.ma === dangChon)
-    ? dangChon
-    : hien[0]?.ma;
+  const chon: M | undefined = hien.some((t) => t.ma === dangChon) ? (dangChon ?? undefined) : hien[0]?.ma;
 
   // The strip scrolls sideways (one row, user 09/10/2026), so a tab chosen by click or arrow key is
-  // brought into view — otherwise "Nhận diện xã" could be selected while sitting past the right edge.
+  // brought into view — otherwise the last tab could be selected while sitting past the right edge.
   // `nearest` on both axes: never scroll the page vertically just because a tab was chosen.
-  function selectTab(ma: MaTabCauHinh) {
+  function selectTab(ma: M) {
     datDangChon(ma);
     nutTab.current[ma]?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
   }
@@ -111,7 +153,7 @@ export function KhungTabCauHinh() {
           hidden, and the chosen tab scrolled into view (`selectTab`) so it is never selected off-screen. */}
       {coThanh && (
         <TabList
-          aria-label="Các phần cấu hình"
+          aria-label={label}
           className="flex-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {hien.map((t, i) => (
@@ -148,7 +190,7 @@ export function KhungTabCauHinh() {
             ? { role: "tabpanel", "aria-labelledby": idTab(t.ma), tabIndex: 0 }
             : {})}
         >
-          {NOI_DUNG[t.ma](t.ma === chon)}
+          {panels[t.ma](t.ma === chon)}
         </div>
       ))}
     </>

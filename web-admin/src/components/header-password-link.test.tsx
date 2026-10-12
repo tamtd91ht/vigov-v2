@@ -130,7 +130,8 @@ describe("DauTrang — the left sidebar follows the session's permissions (UX; t
 
   it("`admin.sla`: Cấu hình in the sidebar, to /cau-hinh — not a header button", () => {
     const el = mount(session(["admin.sla"]));
-    expect(sideNames(el)).toEqual(["Cấu hình"]);
+    // "Hệ thống" too: `admin.sla` writes its Lịch làm việc tab (owner 12/10/2026, S27).
+    expect(sideNames(el)).toEqual(["Cấu hình", "Hệ thống"]);
     expect(el.querySelector<HTMLAnchorElement>('.side-nav a[href="/cau-hinh"]')).not.toBeNull();
     expect(header(el).querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
