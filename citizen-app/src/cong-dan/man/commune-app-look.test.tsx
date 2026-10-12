@@ -91,9 +91,11 @@ describe("header: một khuôn cho mọi màn", () => {
     expect(html).toContain('<div class="xa-header__side xa-header__side--end"></div>');
   });
 
-  it("root tab: the commune's logo on the left (not the national emblem), optional subtitle, right slot as given", () => {
+  // Customer sheet 12/10/2026, row 5: the prototype's star emblem replaces the commune logo (ADR 0069) in this slot.
+  it("root tab: the star emblem on the left (no logo picture), optional subtitle, right slot as given", () => {
     const plain = renderToStaticMarkup(createElement(RootTabHeader, { title: "Tin tức – Sự kiện" }));
-    expect(plain).toContain('src="./logo-xa.png"');
+    expect(plain).toContain('<div class="xa-header__side"><span class="xa-emblem" aria-hidden="true"><svg');
+    expect(plain).not.toContain("<img");
     expect(plain).not.toContain("xa-header__subtitle");
     const home = renderToStaticMarkup(
       createElement(RootTabHeader, { title: "Xã Thử", subtitle: "Xin chào", right: createElement("button", { type: "button" }, "x") }),

@@ -196,6 +196,8 @@ export async function moPhienSauXacNhan(mo: MoPhienViGov, ten_mien: string): Pro
  * ánh của mình, tra cứu phiếu của mình, chấm sao — SAU lời giải thích và cú bấm đồng ý, vì lần mở đầu tiên
  * xin số điện thoại. Zalo không cho số (từ chối, lỗi, hoặc identity từ chối mã số trước khi app được duyệt)
  * thì có phiên KHÔNG SỐ (ADR 0080) — chỉ để gửi và theo dõi phiếu chưa xác thực.
+ * MỘT NGOẠI LỆ từ 12/10/2026 (bảng lỗi của khách dòng 7): Zalo ĐÃ giữ quyền số điện thoại → phiên mở ngay lúc mở
+ * app, không màn nào (`commune-session.ts` `openIfGranted`), qua đúng hàm này và đúng phép so tên xã dưới đây.
  *
  * ⚠ HÀM TIÊM VÀO NHẬN ĐÚNG MỘT THAM SỐ, VÀ NÓ ĐI RA, KHÔNG ĐI VÀO: the ViGov `identity` host from this
  *   half's address map (ADR 0066 — the commune app's login now goes to identity). App ID, hai mã Zalo và số

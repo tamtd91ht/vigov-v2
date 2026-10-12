@@ -351,10 +351,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // ADR 0066: the commune app's login goes straight to ViGov identity; only the location exchange still
     // goes to `vihat-miniapp` (decision 5 moves it later — change this sentence in that card).
     commune_app: {
-      man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
+      man: "Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
       tinh_nang: "Xác nhận số điện thoại với xã · Vị trí nơi xảy ra sự việc",
       de_lam_gi:
-        "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại. Lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh, mã này đi cùng mã số điện thoại bạn đồng ý chia sẻ tới hệ thống của xã, để mở phiên làm việc với xã. Khi ứng dụng lấy vị trí lúc gửi phản ánh (khi bạn chọn lĩnh vực, hoặc bấm “Lấy vị trí hiện tại”), mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
+        "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại. Lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh, mã này đi cùng mã số điện thoại bạn đồng ý chia sẻ tới hệ thống của xã, để mở phiên làm việc với xã — và ở những lần mở ứng dụng sau, nếu bạn đã cho phép chia sẻ số điện thoại trong Zalo, ngay lúc mở. Khi ứng dụng lấy vị trí lúc gửi phản ánh (khi bạn chọn lĩnh vực, hoặc bấm “Lấy vị trí hiện tại”), mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
       // 11/10/2026 (owner): commune text names no company — the location exchange's server is the technical platform's.
       roi_khoi_may:
         "Mã phiên được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — tới máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng để đổi mã vị trí thành toạ độ.",
@@ -387,10 +387,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may:
       "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập (kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS), hoặc để mở lại phiên làm việc với xã kèm số điện thoại đã xác nhận.",
     commune_app: {
-      man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
+      man: "Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
       tinh_nang: "Xác nhận số điện thoại với xã",
       de_lam_gi:
-        "Lấy mã số điện thoại ở lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh — sau khi ứng dụng nói rõ vì sao và bạn bấm đồng ý. Số điện thoại KHÔNG nằm trong mã; chỉ hệ thống của xã đổi được mã thành số. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
+        "Lấy mã số điện thoại ở lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh — sau khi ứng dụng nói rõ vì sao và bạn bấm đồng ý. Ở những lần mở ứng dụng sau, nếu bạn đã cho phép chia sẻ số điện thoại trong Zalo, ứng dụng lấy lại mã ngay lúc mở để hiện “Phản ánh của tôi” mà không hỏi lại. Số điện thoại KHÔNG nằm trong mã; chỉ hệ thống của xã đổi được mã thành số. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
       roi_khoi_may: "Mã số điện thoại được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã.",
     },
     intro_app: {
@@ -439,11 +439,13 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "",
+    // The commune app reads it at OPEN too since 12/10/2026 (customer sheet row 7, `phoneScopeGranted`): granted →
+    // the session reopens and "Phản ánh của tôi" shows with no tap. The words say so, not just "before the code".
     commune_app: {
-      man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
+      man: "Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
       tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
       de_lam_gi:
-        "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
+        "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa — lúc mở ứng dụng và khi bạn mở “Phản ánh của tôi” — để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
       roi_khoi_may: "",
     },
     intro_app: {
@@ -692,6 +694,22 @@ async function grantPhoneScope(sdk: typeof import("zmp-sdk")): Promise<void> {
     if (granted[PHONE_SCOPE] === false) throw { code: MA_TU_CHOI };
   } catch (loi) {
     if (sdkErrorCode(loi) === MA_TU_CHOI) throw loi;
+  }
+}
+
+/**
+ * WHETHER ZALO ALREADY HOLDS THE PHONE PERMISSION — for the commune's own app at open and on "Phản ánh của tôi"
+ * (customer sheet 12/10/2026 row 7; `cong-dan/man/commune-session.ts` `ReadPhoneGrant`). The same `getSetting` read
+ * `grantPhoneScope` makes, and only that: nothing is asked, nothing leaves the phone, and the answer is used at once.
+ * `false` on ANY doubt — outside Zalo, a Zalo too old to answer, a failed read: the caller then explains first, as
+ * it did before this existed. Never reported as an SDK failure: an unreadable setting is not the citizen's problem.
+ */
+export async function phoneScopeGranted(): Promise<boolean> {
+  try {
+    const sdk = await import("zmp-sdk");
+    return (await sdk.getSetting()).authSetting[PHONE_SCOPE] === true;
+  } catch {
+    return false;
   }
 }
 

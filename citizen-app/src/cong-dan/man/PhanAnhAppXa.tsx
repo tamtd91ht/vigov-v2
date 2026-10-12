@@ -51,7 +51,7 @@ import {
   thanGuiPhanAnh, // vi-name-ok: existing export, not renamed (rule 12 #3)
 } from "../api/hop-dong-phan-anh";
 import { type LanGui, taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not renamed (rule 12 #3)
-import type { ReopenWithPhone } from "../api/mo-phien-vigov";
+import { dropCommuneAppSession, type ReopenWithPhone } from "../api/mo-phien-vigov";
 import { THOI_DIEM_KHONG_DOC_DUOC } from "../../lib/thoi-diem";
 import { formatDate, formatDateTime, formatDeadline } from "../../lib/vn-format";
 
@@ -141,18 +141,44 @@ const dayOf = (iso: string) => formatDate(iso) ?? "";
 const deadline = (iso: string) => formatDeadline(iso) ?? THOI_DIEM_KHONG_DOC_DUOC;
 
 /**
+ * The lookup code as the LIST CARD shows it (customer sheet 12/10/2026 row 9: "ID phản ánh quá dài"; owner: shorten
+ * on the list card only): the prefix and the LAST group, `PA-4K7M-92XR-BTVD` → `PA-…-BTVD`. Display only — the issued
+ * code is never changed, sent or matched in this form (rule 4 #4: its length is what makes it unguessable), and the
+ * detail, post-submit and lookup screens keep it whole. Anything not shaped `<prefix>-…-<last>` with at least three
+ * non-empty groups is returned UNCHANGED: a shortened unknown shape could make two codes look alike. PURE.
+ */
+export function shortPetitionCode(code: string): string {
+  const groups = code.split("-");
+  if (groups.length < 3 || groups.some((g) => g === "")) return code;
+  return `${groups[0]}-…-${groups[groups.length - 1]}`;
+}
+
+/**
  * One row of "Phản ánh của tôi" — on the home screen and in the list (`PROTOTYPE.md` §6.3 FeedbackCard):
- * `#code` and the day it was sent, the field, the content on one line, the status chip. NO photo box: the
+ * `#code` (short form, `shortPetitionCode`) with the day it was sent on the same row at the right, the field, the content on one line, the status chip. NO photo box: the
  * box appears only when a petition HAS photos (decision 12), and the list route says nothing about photos —
  * the card cannot know, and one photo read per card would be five calls for a list. The photos are on the
  * petition's own screen (`OwnScenePhotos`). An empty "Không ảnh" frame would be a placeholder for nothing.
  */
 export function PetitionCard({ petition, onOpen }: { petition: PhieuCuaToiTomTat; onOpen: () => void }) {
+  const code = petition.ma_tra_cuu;
+  const shown = shortPetitionCode(code);
   return (
     <button type="button" className="xa-the xa-petition-card" onClick={onOpen}>
       <span className="xa-petition-card__body">
         <span className="xa-petition-card__head">
-          <strong className="xa-petition-card__code">#{petition.ma_tra_cuu}</strong>
+          {/* The card shows the short form; a screen reader and a long-press get the FULL code — the one the citizen
+              reads out on the phone to the commune, so it must stay reachable from the list too. */}
+          <strong className="xa-petition-card__code" title={`#${code}`}>
+            {shown === code ? (
+              `#${code}`
+            ) : (
+              <>
+                <span aria-hidden="true">#{shown}</span>
+                <span className="xa-sr-only">#{code}</span>
+              </>
+            )}
+          </strong>
           <span className="xa-phu">{dayOf(petition.goc_dem_han)}</span>
         </span>
         <span className="xa-petition-card__field">{nhanLinhVuc(petition.linh_vuc, petition.nhan_linh_vuc)}</span>
@@ -222,7 +248,12 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
   const current = useRef<MyPetitions>(state);
   current.current = state;
 
-  async function load() {
+  /**
+   * `quiet`: the read that follows the silent session open at app start (`loadQuietly`). Nobody tapped anything, so
+   * a refused session must not throw the gate over the home screen: it is dropped and the list goes back to the
+   * card that asks — exactly where the citizen would be without the silent open (fail closed).
+   */
+  async function fetchFirstPage(quiet: boolean) {
     if (busy.current) return;
     busy.current = true;
     setState({ kind: "loading" });
@@ -230,7 +261,8 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
     busy.current = false;
     if (out === "session") {
       setState({ kind: "idle" });
-      onSessionLost(() => void load());
+      if (quiet) dropCommuneAppSession();
+      else onSessionLost(() => void load());
       return;
     }
     if (typeof out === "string") {
@@ -246,6 +278,10 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
       moreFailure: null,
     });
   }
+
+  const load = () => fetchFirstPage(false);
+  // Idle only: a list the citizen's own tap already started (or loaded) is not read a second time.
+  const loadQuietly = () => (current.current.kind === "idle" ? fetchFirstPage(true) : Promise.resolve());
 
   async function loadMore() {
     const s = current.current;
@@ -300,7 +336,7 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
     return typeof out !== "string" || out === "session";
   }
 
-  return { state, load, loadMore, loadIfIdle, refresh };
+  return { state, load, loadQuietly, loadMore, loadIfIdle, refresh };
 }
 
 /**

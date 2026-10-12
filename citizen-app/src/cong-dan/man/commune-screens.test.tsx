@@ -88,14 +88,15 @@ const PETITION: PhieuCuaToi = {
 };
 
 describe("home: tiles and headers per §6.1, the bell gone (decision 10)", () => {
-  it("the two groups carry the prototype's marks and tones; 'Bản đồ' is kept; 'Xem tất cả' opens the directory", () => {
+  // Customer sheet 12/10/2026 row 6 ("dư Bản đồ tiện ích → bỏ"): the prototype's three tiles (`FunctionGrid.tsx:53-70`).
+  it("the two groups carry the prototype's marks and tones; no 'Bản đồ tiện ích'; 'Xem tất cả' opens the directory", () => {
     const [gov, info] = NHOM_CHUC_NANG;
     expect(gov!.o.map((o) => [o.bieu_tuong, o.mau])).toEqual([
       ["camera-pin", "red"],
       ["file-search", "xanh"],
       ["contact-book", "luc"],
-      ["map", "cam"],
     ]);
+    expect(gov!.o.map((o) => o.nhan)).not.toContain("Bản đồ tiện ích");
     expect(gov!.them).toEqual({ nhan: XA_GIAO_DIEN.xem_tat_ca, man: { kieu: "danh-ba" } });
     expect(info!.o.map((o) => [o.bieu_tuong, o.mau])).toEqual([
       ["newspaper", "xanh"],
@@ -115,7 +116,8 @@ describe("home: tiles and headers per §6.1, the bell gone (decision 10)", () =>
   it("Truyền thanh and Video read the commune's published items by type — the prototype's two libraries, not a static empty screen", () => {
     const src = import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
     const code = Object.values(src)[0]!.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
-    const block = code.slice(code.indexOf('case "truyen-thanh":'), code.indexOf('case "ban-do":'));
+    const block = code.slice(code.indexOf('case "truyen-thanh":'), code.indexOf('case "su-kien":'));
+    expect(block.length, "the two cases are no longer where this case looks").toBeGreaterThan(50);
     expect(block).toContain('case "video":');
     // owner 11/10/2026: the prototype's screens (`media-screens.tsx`), which read `?type=truyen-thanh|video`.
     expect(block).toMatch(/<BroadcastScreen ten_mien=\{ten_mien\}/);
@@ -128,7 +130,8 @@ describe("Phản ánh của tôi: the card and the empty list (§6.3)", () => {
   it("card: #code in its own element, the day it was sent, the field, the content, the chip — and no photo box", () => {
     const card = html(createElement(PetitionCard, { petition: ROW, onOpen: noop }));
     expect(card).toMatch(/^<button type="button" class="xa-the xa-petition-card">/);
-    expect(card).toContain('<strong class="xa-petition-card__code">#PA7K2QX9M4TD</strong>');
+    // A code with no groups is shown whole (`shortPetitionCode`); the full code is also the long-press title.
+    expect(card).toContain('<strong class="xa-petition-card__code" title="#PA7K2QX9M4TD">#PA7K2QX9M4TD</strong>');
     // The prototype's date (`lib/format.ts` `formatDate`, owner 11/10/2026): no leading zeros.
     expect(card).toContain(">28/9/2026<");
     expect(card).not.toContain("08:00"); // the day, not the minute
@@ -388,7 +391,8 @@ describe("Tin tức (§6.5)", () => {
 
   /**
    * THE VIEW COUNT (owner, 02/10/2026): "{n} lượt xem" after the day, with an aria-hidden eye, on the list cards and
-   * the article in BOTH apps; never on the home "Tin mới" card or the Video list. An older server sends no count →
+   * the article in BOTH apps, and since 12/10/2026 on the home "Tin mới" card too (customer sheet row 10); never on the
+   * Video list. An older server sends no count →
    * nothing at all, never a made-up "0". A count of 0 (a new article) is a real count → "0 lượt xem".
    */
   describe("view count", () => {
@@ -421,11 +425,16 @@ describe("Tin tức (§6.5)", () => {
       expect(list.match(/<span class="xa-phu">/g)).toHaveLength(1);
     });
 
-    it("NOT on the Video list, NOT on the home screen's compact card; YES on 'Tin liên quan'", () => {
+    // Customer sheet 12/10/2026 row 10 ("Cụm Tin mới: thiếu số lượt xem"; prototype `NewsCard.tsx:29-34`): the home
+    // screen's compact card shows it too — reversing 6a29447b's "not on home". Still off unless a caller asks.
+    it("NOT on the Video list; on the home screen's compact card when asked (off by default); YES on 'Tin liên quan'", () => {
       expect(page([{ ...item("1"), viewCount: 5 }], false)).not.toContain("lượt xem");
       expect(html(createElement(HangTin, { tin: { ...item("1"), viewCount: 5 }, onMo: noop, compact: true }))).not.toContain(
         "lượt xem",
       );
+      expect(
+        html(createElement(HangTin, { tin: { ...item("1"), viewCount: 5 }, onMo: noop, compact: true, showViews: true })),
+      ).toContain("</svg>5 lượt xem</span>");
       const tin = { ...item("1"), viewCount: 9 };
       const related = html(
         createElement(NewsArticle, {
@@ -445,7 +454,10 @@ describe("Tin tức (§6.5)", () => {
         string
       >;
       expect(src["./TinTucAppXa.tsx"]).toContain('showViews={props.type !== "video"}');
-      expect(src["./TrangXa.tsx"]).not.toMatch(/<HangTin[^>]*showViews/);
+      // Home's "Tin mới" asks for it (row 10) — the one `HangTin` of TrangXa.tsx, compact and with the count.
+      expect(src["./TrangXa.tsx"]!.match(/<HangTin\b[^>]*>/g)).toEqual([
+        expect.stringMatching(/<HangTin tin=\{t\} compact showViews /),
+      ]);
     });
 
     it("commune app article: the meta line ends with the count; absent → the old line exactly", () => {
@@ -605,7 +617,8 @@ describe("Trang chủ: the featured card (UI-1)", () => {
         `^<button type="button" class="xa-the xa-featured-news"><span class="xa-featured-news__cover" aria-hidden="true"><img class="xa-featured-news__image" src="${COVER.replace(/[.]/g, "\\.")}" alt="" decoding="async"/></span><span class="xa-featured-news__body"><strong class="xa-hang-tin__tieu-de xa-cat-2">Tin một</strong><span class="xa-phu">${TIN_XA.today}</span></span></button>$`,
       ),
     );
-    // No view count, like the compact home card (6a29447b).
+    // No view count (6a29447b). The home's compact card shows one since 12/10/2026 (row 10); this card is not on home
+    // any more (owner 11/10/2026) and was left as it was.
     expect(card).not.toContain("lượt xem");
   });
 

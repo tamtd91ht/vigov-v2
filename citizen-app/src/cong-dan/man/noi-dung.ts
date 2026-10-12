@@ -1058,7 +1058,6 @@ export const XA_TN = {
   o_tra_cuu_ho_so: "Tra cứu hồ sơ",
   o_truyen_thanh: "Truyền thanh",
   o_video: "Video",
-  o_ban_do: "Bản đồ tiện ích",
   // The prototype's empty title, without a full stop (`HomePage.tsx:81`, owner 11/10/2026).
   chua_co_phieu: "Bà con chưa gửi phản ánh nào",
   // Empty-state hints (UI-1, owner 02/10/2026). The prototype's words where it has them (`vigov-require`
@@ -1075,8 +1074,6 @@ export const XA_TN = {
   petition_filter_empty_hint: "Bà con chọn trạng thái khác hoặc xem mục Tất cả.",
   /** A directory search with no match (`DirectoryPage.tsx:76`). */
   directory_search_empty_hint: "Bà con thử gõ ngắn hơn, ví dụ chỉ gõ họ hoặc tên bộ phận.",
-  /** Bản đồ tiện ích, not on the app yet. NEW — no prototype wording. */
-  map_empty_hint: "Khi xã đưa bản đồ tiện ích lên ứng dụng, bà con sẽ xem được ngay ở đây.",
   // Phản ánh
   loc_tat_ca: "Tất cả",
   loc_trong: "Chưa có phản ánh nào ở trạng thái này.",
@@ -1281,9 +1278,6 @@ export const XA_TN = {
   // `VideoPage.tsx:269-270`, verbatim.
   video_trong: "Chưa có video trong chủ đề này",
   video_empty_hint: "Bà con chọn chủ đề khác hoặc xem mục Tất cả.",
-  // SRS M6.1.12 gọi màn phía dân là "Bản đồ tiện ích"; "bản đồ kinh tế số" là màn M5 của cán bộ.
-  ban_do_tieu_de: "Bản đồ tiện ích",
-  ban_do_trong: "Chưa có dữ liệu bản đồ tiện ích (chợ, trường, trạm y tế, di tích…) trên ứng dụng.",
   thong_bao_chua_co:
     "Ứng dụng chưa gửi thông báo. Khi có, kết quả phản ánh và tin khẩn của xã sẽ gửi qua tin nhắn Zalo.",
   thong_bao_trong: "Chưa có thông báo nào.",

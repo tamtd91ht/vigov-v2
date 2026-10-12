@@ -3095,25 +3095,14 @@ body {
   align-items: center;
   gap: 14px;
 }
-/* Logo fallback on the RED header (owner, 30/09/2026: no pink left): a red disc would vanish into the
-   header, so the red goes to the icon on a white disc — the same white the commune logo sits on. */
-.xa-hero__dai-dien {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #ffffff;
-  color: var(--xa-brand);
+/* The star emblem (`khung-xa.tsx` `NationalEmblem`, customer sheet 12/10/2026 row 5): the prototype's 32px drawing
+   centred in a slot as wide as the header's left side, as the prototype centres it in its tap-sized box — so the
+   root tabs' title sits where a child screen's sits beside its back arrow. */
+.xa-emblem {
+  width: calc(var(--tap-min) + 4px);
+  height: calc(var(--tap-min) + 4px);
   display: grid;
   place-items: center;
-  flex: none;
-}
-/* 40px inside the header's 48px left slot (`RootTabHeader`), as the prototype's emblem sits in its slot. */
-.xa-hero__logo {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: #ffffff;
-  object-fit: contain;
   flex: none;
 }
 .xa-hero__chu {
@@ -3135,7 +3124,7 @@ body {
 /* ---------- header (mọi màn: trang chủ, tab gốc, màn con) ---------- */
 /*
  * One shape (`PROTOTYPE.md` §5.3, `khung-xa.tsx` `HeaderShell`): left slot · title · right slot. A root tab's
- * left slot holds the 40px commune logo; a child screen's holds the 48px back arrow (its words "Quay lại" left the
+ * left slot holds the 32px star emblem (customer sheet 12/10/2026, row 5; the commune logo before); a child screen's holds the 48px back arrow (its words "Quay lại" left the
  * screen on 12/10/2026 — customer sheet, row 3 — and live on as its `aria-label`). The right slot is Zalo's corner:
  * empty on every screen.
  *
@@ -3164,7 +3153,7 @@ body {
   position: relative;
   min-width: 0;
 }
-/* 48px floor on both sides, so the logo (left) and the bell (right) sit in slots of one size. */
+/* 48px floor on both sides, so the emblem or back arrow (left) and Zalo's empty corner (right) are slots of one size. */
 .xa-header__side {
   min-width: calc(var(--tap-min) + 4px);
   display: flex;
@@ -4933,16 +4922,26 @@ button.xa-o-nhanh {
   display: grid;
   gap: 4px;
 }
+/* The code and the day on ONE row, the day at the right edge (customer sheet 12/10/2026 row 9; prototype
+   `FeedbackCard.tsx:33-39`). The code is short on the card (`shortPetitionCode`), so it fits beside the day; if a
+   code ever came in unshortened, it is the code that gives way (ellipsis), never the day. */
 .xa-petition-card__head {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  justify-content: space-between;
   align-items: baseline;
-  gap: 4px 10px;
+  gap: 10px;
 }
 .xa-petition-card__head .xa-phu {
   display: inline;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .xa-petition-card__code {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   color: var(--xa-blue-ink);
   font-weight: 700;
   letter-spacing: 0.3px;

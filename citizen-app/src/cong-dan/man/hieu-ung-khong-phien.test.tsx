@@ -2024,3 +2024,107 @@ describe("app xã — trạng thái phản ánh mới: đọc lại khi về tab
     await go();
   });
 });
+
+/* ═════════════════ 12/10/2026 (customer sheet, row 7) — the phone permission Zalo already holds ═════════════════ */
+
+describe("app xã — quyền số điện thoại đã cấp: mở lại phiên lặng lẽ, không hỏi lại", () => {
+  const COMMUNE = "Xã Thử Nghiệm";
+  const list = () => vi.mocked(phanAnhCuaToi);
+  const page = {
+    kieu: "xong",
+    trang: {
+      muc: [
+        {
+          ma_tra_cuu: "PA-4K7M-92XR-BTVD",
+          trang_thai: "da-tiep-nhan",
+          linh_vuc: "moi-truong",
+          nhan_linh_vuc: "Môi trường",
+          trich_noi_dung: "Rác ở đầu ngõ",
+          goc_dem_han: "2026-10-01T08:00:00+07:00",
+          han_tiep_nhan: null,
+          han_xu_ly_xong: null,
+          rating: null,
+          rated_at: null,
+        },
+      ],
+      con_tro: "",
+      con_nua: false,
+    },
+  } as Awaited<ReturnType<typeof phanAnhCuaToi>>;
+  const openSession = vi.fn<OpenCommuneAppSession>(async () => ({
+    kieu: "xong",
+    token: "tok-thu-nghiem",
+    ten_xa: COMMUNE,
+    da_xac_thuc_so: true,
+  }));
+
+  beforeEach(() => {
+    trang.phien = undefined;
+    datPhienViGov(null);
+    openSession.mockClear();
+    list().mockReset();
+    list().mockResolvedValue(page);
+    vi.mocked(traXaTheoTenMien).mockResolvedValue({
+      kieu: "xong",
+      gia_tri: [{ ten: COMMUNE, tinh: "Tỉnh Thử Nghiệm" }],
+    } as Awaited<ReturnType<typeof traXaTheoTenMien>>);
+    fetch_gia.mockImplementation(async () => ({ status: 404, ok: false, json: async () => ({}) }));
+  });
+
+  afterEach(() => {
+    datPhienViGov(null);
+  });
+
+  const mountApp = (phoneGranted: () => Promise<boolean>) =>
+    gan(createElement(TrangXa, { ten_mien: "thu.vigov.example", openSession, phoneGranted }));
+
+  it("granted: the session opens at app start with no screen, and home shows the list without a tap — once, under StrictMode", async () => {
+    const { khung, go } = await mountApp(async () => true);
+    expect(openSession.mock.calls.map((c) => c[1])).toEqual(["ask"]);
+    expect(layPhienViGov()).toEqual({ token: "tok-thu-nghiem", ten_xa: COMMUNE, phone_verified: true });
+    expect(list().mock.calls).toEqual([[""]]);
+    expect(khung.textContent).toContain("Rác ở đầu ngõ");
+    // Row 9: the card's code is short; the full one is still there for a screen reader.
+    expect(khung.textContent).toContain("#PA-…-BTVD");
+    expect(khung.textContent).toContain("#PA-4K7M-92XR-BTVD");
+    expect(khung.textContent).not.toContain(COMMUNE_PHONE_WORDS.title);
+    expect(buttonsNamed(khung, XA_PA.need_session_button)).toEqual([]);
+    await go();
+  });
+
+  it("not granted: nothing is opened or read at start; the card asks, and its tap shows the explanation as before", async () => {
+    const { khung, go } = await mountApp(async () => false);
+    expect(openSession).not.toHaveBeenCalled();
+    expect(list()).not.toHaveBeenCalled();
+    await press(buttonsNamed(khung, XA_PA.need_session_button)[0]!);
+    expect(buttonsNamed(khung, PHONE_VERIFICATION.allow)).toHaveLength(1);
+    expect(openSession).not.toHaveBeenCalled();
+    await go();
+  });
+
+  it("the permission read throws: exactly as not granted — nothing opened, the explanation on the tap", async () => {
+    const { khung, go } = await mountApp(async () => {
+      throw new Error("getSetting failed");
+    });
+    expect(openSession).not.toHaveBeenCalled();
+    expect(layPhienViGov()).toBeNull();
+    await press(buttonsNamed(khung, XA_PA.need_session_button)[0]!);
+    expect(buttonsNamed(khung, PHONE_VERIFICATION.allow)).toHaveLength(1);
+    await go();
+  });
+
+  it("granted but the silent open is refused: nothing kept, no screen; the tap then asks the number with no explanation", async () => {
+    openSession.mockResolvedValueOnce({ kieu: "tu-choi" });
+    const { khung, go } = await mountApp(async () => true);
+    expect(openSession).toHaveBeenCalledTimes(1);
+    expect(layPhienViGov()).toBeNull();
+    expect(list()).not.toHaveBeenCalled();
+    expect(buttonsNamed(khung, PHONE_VERIFICATION.allow)).toEqual([]);
+    // The citizen's own tap: the permission is still granted, so straight to Zalo — and the list shows.
+    await press(buttonsNamed(khung, XA_PA.need_session_button)[0]!);
+    expect(openSession).toHaveBeenCalledTimes(2);
+    expect(khung.textContent).not.toContain(COMMUNE_PHONE_WORDS.title);
+    expect(khung.textContent).toContain("Rác ở đầu ngõ");
+    await go();
+  });
+});

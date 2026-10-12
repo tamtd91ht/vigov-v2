@@ -228,8 +228,9 @@ export function NewsThumb(props: { imageUrl: string | undefined; failed: boolean
  * picture slot (`NewsThumb`), the title on two lines, how long ago. `compact`: the home screen's smaller slot
  * (88×72 against 96×80, §6.5).
  *
- * `showViews` (owner, 02/10/2026): the view count after the day, when the server sent one — on the lists and
- * "Tin liên quan", NOT on the home screen's "Tin mới" nor the Video list, so it is off unless a caller asks.
+ * `showViews` (owner, 02/10/2026): the view count after the day, when the server sent one — on the lists, "Tin liên
+ * quan" and, since 12/10/2026, the home screen's "Tin mới" too (customer sheet row 10; prototype `NewsCard.tsx:29-34`,
+ * reversing 6a29447b's "not on home"). Not on the Video list, so it is off unless a caller asks.
  */
 export function HangTin({
   tin,
@@ -272,8 +273,8 @@ export type CoverState = "pending" | "loaded" | "failed";
  * coloured block with nothing in it read as "the most important news" when it was only the newest, and a large
  * card is only honest when the commune's own picture fills it.
  *
- * NO VIEW COUNT, like the compact home card (the rule of 6a29447b): the home screen is a glance at what is new,
- * the count is for the lists. PURE — `cover` is the caller's state, so every branch renders without a DOM.
+ * NO VIEW COUNT (the rule of 6a29447b). The compact home card shows one since 12/10/2026 (customer sheet row 10);
+ * this card is not rendered on home any more (owner 11/10/2026), so it was left as it was. PURE — `cover` is the caller's state, so every branch renders without a DOM.
  */
 export function FeaturedNewsView(props: {
   tin: TinXaTomTat;

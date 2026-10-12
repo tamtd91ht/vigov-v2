@@ -11,6 +11,13 @@
  * never opens Zalo's dialog. It shows the explanation (`hoi`); only the citizen's tap on "Đồng ý chia sẻ số
  * điện thoại" (`allow`) calls the injected opener, which is what opens the dialog.
  *
+ * ONCE ZALO HOLDS THE PERMISSION THERE IS NO DIALOG TO EXPLAIN (customer sheet 12/10/2026 row 7: "mỗi lần vào lại app
+ * phải request lại quyền… mới xem được danh sách phản ánh"; owner: reopen silently when already granted). Two
+ * places read the grant (`ReadPhoneGrant`, the shell's `getSetting`): `openIfGranted` at app start opens the verified
+ * session with no screen, and a tap on "Phản ánh của tôi" (`explicitTap`) skips the explanation. Not granted, or any
+ * doubt → exactly the flow above. The session still lives in memory only (`phien-vigov.ts`): what Zalo remembers is
+ * the permission, never our session.
+ *
  * NO LOOP: an outcome a new tap cannot change (not connected, other commune, unverified, outside Zalo, a
  * session the server made unusable) is FINAL — the next `require` shows that sentence and asks nothing.
  * Only refusal (the citizen may change their mind), network and "wait" outcomes allow asking again.
@@ -44,6 +51,7 @@
  */
 import {
   type CommuneAppSessionOutcome,
+  dropCommuneAppSession,
   type OpenCommuneAppSession,
   openCommuneAppSession,
   type SessionPhone,
@@ -59,6 +67,13 @@ import {
   zaloFailureSentence,
 } from "./noi-dung";
 
+/**
+ * Whether Zalo already holds the citizen's phone permission for this app (`getSetting` `scope.userPhonenumber`),
+ * injected by the shell — this half may not import zmp-sdk. `false` on ANY doubt (outside Zalo, a read that fails):
+ * the caller then does what it did before this existed. Reads a flag on the phone; nothing leaves it.
+ */
+export type ReadPhoneGrant = () => Promise<boolean>;
+
 /** Outcomes that stop the act — each one sentence. */
 export type SessionGateStop = Exclude<CommuneAppSessionOutcome["kieu"], "da-mo">;
 
@@ -69,12 +84,29 @@ export type SessionGateState =
   /** `zalo` (with `thu-lai` only): Zalo refused a step with a code — the sentence names it. */
   | { readonly kieu: "ket-qua"; readonly outcome: SessionGateStop; readonly zalo?: ZaloFailure };
 
+/**
+ * `explicitTap`: the act is the citizen's own tap on "Phản ánh của tôi" (customer sheet 12/10/2026 row 7). Then,
+ * when Zalo already holds the phone permission (`ReadPhoneGrant`), the explanation is skipped and the number is
+ * asked at once — the explanation exists to come BEFORE Zalo's dialog, and a granted permission shows none. Never
+ * set by a retry after a lost session: that would let a server that keeps refusing the session re-open it in a loop
+ * with no tap in between.
+ */
+export type RequireOptions = { readonly explicitTap?: boolean };
+
 export type SessionGate = {
   /**
    * A personal act wants to run. Runs it at once when a session that can serve it exists; otherwise explains
    * and waits. `task` absent = the strict reading: only a verified session runs it, and no fallback is offered.
    */
-  require(run: () => void, task?: PhoneVerificationTask): void;
+  require(run: () => void, task?: PhoneVerificationTask, opts?: RequireOptions): void;
+  /**
+   * THE SILENT REOPEN AT APP START (customer sheet 12/10/2026 row 7; owner: "reopen silently when already granted").
+   * Only when no session exists and Zalo already holds the phone permission: the verified session opens with no
+   * screen at all, and `true` comes back. ANY other answer — not granted, a failed read, a refused or phone-less
+   * session, another commune — leaves NOTHING behind (no stored session, no remembered outcome, no screen) and
+   * answers `false`: the citizen is exactly where they were without it, and the tap flow below runs as before.
+   */
+  openIfGranted(): Promise<boolean>;
   /** The citizen tapped "Đồng ý chia sẻ số điện thoại". */
   allow(): Promise<void>;
   /** The citizen tapped "Không chia sẻ". */
@@ -133,8 +165,13 @@ export function createSessionGate(
   open: OpenCommuneAppSession | undefined,
   communeName: () => string,
   setState: (s: SessionGateState | null) => void,
+  readGrant?: ReadPhoneGrant,
 ): SessionGate {
   let pending: (() => void) | null = null;
+  /** The silent reopen (`openIfGranted`) is in flight. Holds `busy` too: one Zalo/server exchange at a time. */
+  let silent = false;
+  /** An act tapped WHILE the silent reopen ran: asked again once it settles, so it meets the session or the flow. */
+  let afterSilent: { run: () => void; task?: PhoneVerificationTask; opts?: RequireOptions } | null = null;
   /** The task of `pending` — what decides whether a phone-less session may serve it. */
   let pendingTask: PhoneVerificationTask | undefined;
   let finalOutcome: SessionGateStop | null = null;
@@ -219,7 +256,7 @@ export function createSessionGate(
   }
 
   const gate: SessionGate = {
-    require(run, task) {
+    require(run, task, opts) {
       const session = layPhienViGov();
       if (session !== null && (session.phone_verified || runsWithoutPhone(task))) {
         pending = null;
@@ -236,6 +273,14 @@ export function createSessionGate(
         pending = null;
         finalOutcome = "chua-ket-noi";
         setState({ kieu: "ket-qua", outcome: "chua-ket-noi" });
+        return;
+      }
+      if (silent) {
+        // The silent reopen is running: wait for it on the waiting screen (never a silent tap, never a second
+        // exchange), then ask again — the act runs on the session it opened, or meets today's flow.
+        pending = null;
+        afterSilent = { run, task, opts };
+        setState({ kieu: "dang-mo" });
         return;
       }
       if (session === null && accessRefused !== null) {
@@ -273,7 +318,50 @@ export function createSessionGate(
         void openAndFollow("ask");
         return;
       }
+      if (opts?.explicitTap === true && readGrant !== undefined) {
+        // Row 7: read the permission first — "connecting" words meanwhile, the gate's own waiting screen. Granted →
+        // the number is asked at once (Zalo shows nothing for a granted scope); otherwise, or on any failure of
+        // the read, the explanation exactly as before. A citizen who left meanwhile (`reset`) is not followed.
+        setState({ kieu: "dang-mo" });
+        const asked = run;
+        void readGrant()
+          .catch(() => false)
+          .then((granted) => {
+            if (pending !== asked || busy) return;
+            if (granted) void openAndFollow("ask");
+            else setState({ kieu: "hoi" });
+          });
+        return;
+      }
       setState({ kieu: "hoi" });
+    },
+
+    async openIfGranted() {
+      if (open === undefined || readGrant === undefined || busy || finalOutcome !== null || layPhienViGov() !== null) {
+        return false;
+      }
+      busy = true;
+      silent = true;
+      let opened = false;
+      try {
+        if ((await readGrant()) === true) {
+          const outcome = await openCommuneAppSession(open, communeName(), "ask");
+          opened = outcome.kieu === "da-mo";
+          // A phone-less session would change what the next tap does (sending would skip straight to the typed
+          // form): nobody asked for it here, so it is not kept. No session existed before this call.
+          if (outcome.kieu === "no-phone") dropCommuneAppSession();
+        }
+      } catch {
+        // Only `readGrant` can throw here (`openCommuneAppSession` never does), so nothing was opened: fail closed.
+        opened = false;
+      } finally {
+        busy = false;
+        silent = false;
+      }
+      const next = afterSilent;
+      afterSilent = null;
+      if (next !== null) gate.require(next.run, next.task, next.opts);
+      return opened;
     },
 
     async allow() {
@@ -296,6 +384,7 @@ export function createSessionGate(
 
     reset() {
       pending = null;
+      afterSilent = null;
       waiting = false;
       setState(null);
     },

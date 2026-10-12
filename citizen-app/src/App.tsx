@@ -39,6 +39,7 @@ import { moRaNgoai } from "./features/tinh-nang/mo-ra-ngoai";
 import {
   chooseScenePhotos,
   minimiseMiniApp,
+  phoneScopeGranted,
   readRuntimeAppId,
   readZaloProfile,
   rememberLaunchCommuneHost,
@@ -281,6 +282,10 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
       pickScenePhotos={pickCommuneScenePhotos}
       draftStore={feedbackDraftStore}
       openSession={openCommuneAppSession}
+      // Customer sheet 12/10/2026 row 7: here the commune IS the App ID, so a silent reopen names no commune the
+      // client chose. NOT on `QrCommuneApp` below: there the commune comes from the QR, and a session may open
+      // only by the citizen's own act (ADR 0005 · 0019 · 0022).
+      phoneGranted={phoneScopeGranted}
       openVideo={openCommuneVideo}
       openLink={openCommuneLink}
       openDossierPortal={openDossierPortal}

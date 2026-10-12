@@ -6,11 +6,14 @@
  * Khác prototype ở chỗ bắt buộc (`skills/accessibility-elderly`, `accessibility.test.ts`) và ở các quyết định
  * của chủ dự án: chữ không dưới 16px (prototype cho 13px), đích chạm không dưới 48px, nút chính màu ĐỎ thương
  * hiệu (prototype: xanh), "đang tải" là CÂU CHỮ HIỆN RÕ kèm khối xám hình nội dung (từ 02/10/2026; trước đó chỉ chữ
- * — câu vẫn mang `role="status"`, khối chỉ trang trí), và ô trái header là LOGO CỦA XÃ (prototype: quốc huy vẽ tay).
+ * — câu vẫn mang `role="status"`, khối chỉ trang trí).
+ * Ô trái header của bốn tab gốc nay THEO prototype — quốc huy vẽ tay (`NationalEmblem`, `AppHeader.tsx:57-64, 98-142`;
+ * bảng lỗi của khách 12/10/2026, dòng 5: "đổi icon ở góc trái thành icon ngôi sao giống prototype"), thay logo của xã
+ * mà ADR 0069 đặt vào ô này.
  * Nút lùi nay THEO prototype — chỉ mũi tên, tên "Quay lại" ở `aria-label` (`AppHeader.tsx:48-55`; bảng lỗi của
  * khách 12/10/2026, dòng 3: "dư text 'Quay lại'"); trước đó chủ dự án giữ chữ cạnh mũi tên.
  */
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 
 import { QUAY_LAI, XA_GIAO_DIEN } from "./noi-dung";
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
@@ -46,64 +49,38 @@ export function DrumPattern() {
 }
 
 /**
- * The file `deploy.mjs --vao-thang` copies from `scripts/logo-xa/<domain>.png` into the build (ADR 0047:246).
- * KEPT AS A FALLBACK until every commune has uploaded its own logo (ADR 0069 Hệ quả, same reasoning as ADR 0067
- * B11 for the banner): removing it early turns the header of a commune that has not uploaded yet from its logo
- * into the building icon.
+ * The twelve rice-ear strokes of the emblem's ring (prototype `AppHeader.tsx:118-134`), rounded once at module
+ * load for the same reason as `DRUM_RAYS`: the server-rendered markup the tests read must be stable.
  */
-export const BUNDLED_LOGO_SRC = "./logo-xa.png";
+const EMBLEM_STROKES = Array.from({ length: 12 }, (_, i) => {
+  const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
+  const at = (r: number) => ({ x: +(16 + Math.cos(a) * r).toFixed(2), y: +(16 + Math.sin(a) * r).toFixed(2) });
+  return { from: at(10.4), to: at(12.6) };
+});
 
 /**
- * The pictures the header tries, in order: the logo the commune uploaded (`/commune-profiles` `logo_url`, read
- * at runtime — ADR 0069 #4, #8), then the bundled file. `""` (none uploaded, or the profile not read) skips
- * the first. After the list, the building icon (ADR 0069 #7). PURE.
- */
-export function logoSources(runtimeLogoUrl: string): readonly string[] {
-  return runtimeLogoUrl === "" ? [BUNDLED_LOGO_SRC] : [runtimeLogoUrl, BUNDLED_LOGO_SRC];
-}
-
-/**
- * What the header slot draws, given which sources already failed to load: the first source not failed, or the
- * building icon when none is left. Hookless so tests can call it and fire `onError` directly.
+ * THE STAR EMBLEM in the root tabs' left slot — the prototype's `NationalEmblem` (`AppHeader.tsx:98-142`), same
+ * 32px, same red disc, same gold (customer sheet 12/10/2026, row 5). Drawn inline, never an image file: it must be
+ * sharp at every pixel density and cost no network read, and a header that waits on a picture shifts its title.
  *
- * `alt=""`: decoration — the commune's name stands right beside it in words (the header title), so a screen
- * reader reading "logo Xã …" before "Xã …" says the name twice. The box is the same 40×40 for picture and icon
- * (`.xa-hero__logo` / `.xa-hero__dai-dien`), so a swap or a failure never moves the title.
+ * Decoration (`aria-hidden`), not a button: the prototype's button only opened its demo toolbar, which this app
+ * does not have, and a tap target that does nothing is the "app is broken" signal for an elderly citizen. The
+ * commune's name stands beside it in words, so nothing is lost to a screen reader.
  */
-export function CommuneLogoView(props: {
-  sources: readonly string[];
-  failed: readonly string[];
-  onFail: (src: string) => void;
-}) {
-  const src = props.sources.find((s) => !props.failed.includes(s));
-  if (src === undefined) {
-    return (
-      <span className="xa-hero__dai-dien" aria-hidden="true">
-        <BieuTuong ten="build" co={22} />
-      </span>
-    );
-  }
-  // `key`: a new element per source, so a late `onError` of the previous picture cannot be read as this one's.
-  return <img key={src} className="xa-hero__logo" src={src} alt="" decoding="async" onError={() => props.onFail(src)} />;
-}
-
-/**
- * LOGO XÃ ở ô trái header của bốn tab gốc: logo xã tự tải (đọc lúc chạy) → ảnh chép lúc dựng → biểu tượng tòa
- * nhà; ảnh tải hỏng thì xuống bước sau. Chuyển từ `TrangXa.tsx` (30/09/2026) để mọi header gốc dùng chung một ô.
- *
- * Failures are remembered BY URL, not as one flag: the profile arrives after the first paint, so the slot first
- * shows the bundled file and then the uploaded logo — a bundled file that already failed must stay skipped, and
- * an uploaded logo that fails falls to the bundled one, not straight to the icon.
- */
-// vi-name-ok: existing component moved from TrangXa.tsx, not renamed (rule 12 #3)
-export function LogoXa({ logoUrl = "" }: { logoUrl?: string }) {
-  const [failed, setFailed] = useState<readonly string[]>([]);
-  return <CommuneLogoView sources={logoSources(logoUrl)} failed={failed} onFail={(src) => setFailed((f) => markLogoFailed(f, src))} />;
-}
-
-/** `failed` with `src` added once. PURE — the state step `LogoXa` takes on an image error, exported for tests. */
-export function markLogoFailed(failed: readonly string[], src: string): readonly string[] {
-  return failed.includes(src) ? failed : [...failed, src];
+export function NationalEmblem() {
+  return (
+    <span className="xa-emblem" aria-hidden="true">
+      <svg width="32" height="32" viewBox="0 0 32 32" focusable="false">
+        <circle cx="16" cy="16" r="15" fill="#b8000c" />
+        <circle cx="16" cy="16" r="12.5" fill="none" stroke="#f5c518" strokeWidth="1.6" />
+        {EMBLEM_STROKES.map((s, i) => (
+          <line key={i} x1={s.from.x} y1={s.from.y} x2={s.to.x} y2={s.to.y} stroke="#f5c518" strokeWidth="1.5" strokeLinecap="round" />
+        ))}
+        <path d="m16 8.4 2.2 4.6 5 .7-3.6 3.6.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.6 5-.7L16 8.4Z" fill="#f5c518" />
+        <rect x="12" y="23" width="8" height="1.8" rx="0.9" fill="#f5c518" />
+      </svg>
+    </span>
+  );
 }
 
 /**
@@ -123,14 +100,13 @@ function HeaderShell(props: { className: string; left: ReactNode; right?: ReactN
 }
 
 /**
- * Header of the four root tabs: the commune's logo on the left, the title (and an optional line under it —
- * the greeting on home) in the middle. `right`: no screen passes one any more (decision 10); the slot is
- * kept so the title stays centred between two equal sides. `logoUrl`: the uploaded logo from the profile
- * read (`""` or absent = none — see `LogoXa`).
+ * Header of the four root tabs: the star emblem on the left (`NationalEmblem`), the title (and an optional line
+ * under it — the greeting on home) in the middle. `right`: no screen passes one any more (decision 10); the slot
+ * is kept so the title stays centred between two equal sides.
  */
-export function RootTabHeader(props: { title: string; subtitle?: string; right?: ReactNode; logoUrl?: string }) {
+export function RootTabHeader(props: { title: string; subtitle?: string; right?: ReactNode }) {
   return (
-    <HeaderShell className="xa-dau-tab" left={<LogoXa logoUrl={props.logoUrl} />} right={props.right}>
+    <HeaderShell className="xa-dau-tab" left={<NationalEmblem />} right={props.right}>
       <h1 className="xa-dau-con__tieu-de">{props.title}</h1>
       {props.subtitle !== undefined && props.subtitle !== "" && <p className="xa-header__subtitle">{props.subtitle}</p>}
     </HeaderShell>

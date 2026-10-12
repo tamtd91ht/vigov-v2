@@ -4,7 +4,7 @@
  * Mong muốn của chủ dự án (28/09/2026): chọn app của xã trên Zalo là thấy NGAY giao diện của xã ấy; xã
  * sau y hệt, không sửa mã. GIAO DIỆN theo bản mẫu `vi-gov/zalo-miniapp`, ĐỦ CÁC MÀN (chủ dự án: "làm đủ
  * các màn như bản mẫu đi"): trang chủ, phản ánh, tin tức, cá nhân, gửi phản ánh, tra cứu hồ
- * sơ, danh bạ, truyền thanh, video, bản đồ, thông báo.
+ * sơ, danh bạ, truyền thanh, video, thông báo (màn "Bản đồ tiện ích" bỏ 12/10/2026 — bảng lỗi của khách dòng 6).
  *
  * DỮ LIỆU:
  *   · công khai — tên xã (`/communes`), tin tức (`/commune-news`), dải ảnh trang chủ (`/commune-news?type=banner`,
@@ -16,7 +16,7 @@
  *     (gửi, xem phản ánh của tôi, tra cứu phiếu, chấm sao): lời giải thích trước, rồi mới tới hộp thoại xin
  *     số của Zalo (`commune-session.ts`, chính sách 3.3.4). Danh tính người gửi lấy từ phiên ở máy chủ, xã
  *     lấy từ App ID của app — và phiên chỉ được giữ khi tên xã của nó TRÙNG tên xã trên đầu màn hình;
- *   · chưa có — truyền thanh, video, bản đồ, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
+ *   · chưa có — truyền thanh, video, thông báo, tra cứu hồ sơ: trạng thái trống bằng lời.
  *
  * NHÁP PHẢN ÁNH (ADR 0050 #7, chủ dự án 28/09/2026): có, như bản mẫu — nhưng nửa này KHÔNG chạm kho lưu
  * trữ; lớp vỏ tiêm `draftStore` (`AppRieng`, và app chung qua QR xã — khoá theo tên miền xã, 06/10/2026), tệp
@@ -28,11 +28,15 @@
  * KHÔNG LẤY TỪ BẢN MẪU: router, lưu trữ trực tiếp, tên xã từ biến môi trường, lớp gọi máy chủ của nó, OTP,
  * quét căn cước, số ngày cam kết viết cứng (luật 10). Bước chọn lĩnh vực CÓ, và lĩnh vực ấy là của phiếu (ADR 0050, thay ADR 0049).
  *
- * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6). Tên miền chỉ là KHOÁ TRA, không vẽ ra, không ghi log.
+ * KHÔNG MỞ PHIÊN LÚC MỞ APP (ADR 0047 §6) — TRỪ MỘT CA (bảng lỗi của khách 12/10/2026 dòng 7; chủ dự án: mở lại
+ * lặng lẽ khi đã được phép): app riêng của xã, Zalo ĐÃ giữ quyền số điện thoại của bà con (`phoneGranted`) — khi ấy
+ * không có hộp thoại nào để giải thích, nên phiên mở ngay và "Phản ánh của tôi" hiện không cần bấm
+ * (`SessionGate.openIfGranted`). Chưa được phép hay hỏng bất cứ bước nào → như cũ. Tên miền chỉ là KHOÁ TRA, không
+ * vẽ ra, không ghi log.
  */
 import { type ReactNode, type Ref, useEffect, useMemo, useRef, useState } from "react";
 
-import { communeProfiles, type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
+import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import { myNotificationPreference, setMyNotificationPreference } from "../api/goi-vigov";
 import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
 import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
@@ -45,6 +49,8 @@ import {
   createSessionGate,
   offersAccountless,
   offersManualSend,
+  type ReadPhoneGrant,
+  type RequireOptions,
   type SessionGate,
   sessionGateMessage,
   sessionGateOffersRetry,
@@ -145,7 +151,6 @@ type ManXa =
   | { readonly kieu: "tra-cuu-khong-tai-khoan"; readonly ma: string }
   | { readonly kieu: "truyen-thanh" }
   | { readonly kieu: "video" }
-  | { readonly kieu: "ban-do" }
   | { readonly kieu: "thong-bao" }
   | { readonly kieu: "su-kien" }
   /** ADR 0091 §2: the alerts in force — from the home banner. */
@@ -468,9 +473,8 @@ export const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccen
       { nhan: XA_GIAO_DIEN.o_gui, bieu_tuong: "camera-pin", mau: "red", man: { kieu: "gui" } },
       { nhan: XA_TN.o_tra_cuu_ngan, bieu_tuong: "file-search", mau: "xanh", man: { kieu: "tra-cuu" } },
       { nhan: XA_GIAO_DIEN.o_danh_ba, bieu_tuong: "contact-book", mau: "luc", man: { kieu: "danh-ba" } },
-      // SRS M6.1.12 (P1). The screen had no way in, so it read as "done" to anyone reading the code. Not in
-      // the prototype's grid; kept (owner, wave 1).
-      { nhan: XA_TN.o_ban_do, bieu_tuong: "map", mau: "cam", man: { kieu: "ban-do" } },
+      // No "Bản đồ tiện ích" tile (customer sheet 12/10/2026 row 6: "dư Bản đồ tiện ích → bỏ"): the prototype's grid
+      // has three tiles here, and the screen it opened had no data. Its screen went with it — nothing else led there.
     ],
   },
   {
@@ -486,32 +490,6 @@ export const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccen
   },
 ];
 
-/**
- * The commune's profile from `/commune-profiles` (public, by domain, no session) — or `null` while loading,
- * when the call failed, or when the answer is not exactly one profile. `null` shows NOTHING: the office
- * block is information, the app works without it, and a guessed hotline is a wrong number published by a
- * public authority. Loaded once per open, with the ref guard `useTinXa` uses against StrictMode's double run.
- */
-function useCommuneProfile(ten_mien: string): { profile: CommuneProfile | null; refresh: () => Promise<boolean> } {
-  const [profile, setProfile] = useState<CommuneProfile | null>(null);
-  const loaded = useRef(false);
-  useEffect(() => {
-    if (loaded.current) return;
-    loaded.current = true;
-    void communeProfiles(ten_mien).then((kq) => {
-      if (kq.kieu === "xong" && kq.gia_tri.length === 1) setProfile(kq.gia_tri[0]!);
-    });
-  }, [ten_mien]);
-  // Home's pull: the header logo comes from here. A failed or ambiguous answer keeps the profile already read —
-  // silently, as at open: the logo is the header's decoration, and the bundled file stands in for it anyway.
-  const refresh = async (): Promise<boolean> => {
-    const kq = await communeProfiles(ten_mien);
-    if (kq.kieu === "xong" && kq.gia_tri.length === 1) setProfile(kq.gia_tri[0]!);
-    return true;
-  };
-  return { profile, refresh };
-}
-
 /** The rows the commune actually declared, in reading order. PURE, exported for tests. */
 export function officeRows(p: CommuneProfile): Array<{ label: string; value: string }> {
   return [
@@ -522,8 +500,10 @@ export function officeRows(p: CommuneProfile): Array<{ label: string; value: str
 }
 
 /**
- * ⚠ NOT RENDERED since 11/10/2026 (owner: theo prototype — the prototype's home has no office block). Kept with its
- * tests because the profile it reads is still loaded (the header logo); remove both together if no screen takes it.
+ * ⚠ NOT RENDERED since 11/10/2026 (owner: theo prototype — the prototype's home has no office block), and since
+ * 12/10/2026 the profile it would show is NOT LOADED either: its last reader, the header logo, gave its slot to the
+ * star emblem (customer sheet row 5). Kept with its tests only until someone decides to remove it (out of that task's
+ * scope); a screen that takes it again must load `/commune-profiles` itself.
  *
  * Trụ sở · giờ làm việc · đường dây nóng, as the commune declared them — nothing when it declared nothing.
  * The hours are display text, never parsed (ADR 0007). The hotline becomes a `tel:` button (the dialler
@@ -568,13 +548,11 @@ function TrangChuXa(props: {
   petitions: MyPetitions;
   onOpenPetitions: () => void;
   onRetryPetitions: () => void;
-  /** The commune's declared office (`/commune-profiles`), or `null` — then no office block. */
-  profile: CommuneProfile | null;
   /** The posted banner strip (`useCommuneBanners`), or `null` — then the bundled picture. */
   banners: readonly CommuneBannerItem[] | null;
   /** Ask before opening a banner's https page (`useLeaveApp().ask`); absent → such banners are not tappable. */
   askLeave?: (url: string) => void;
-  /** Home's own loaders held by `AppCuaXa` (news, strip, profile, petitions) — run by the pull with the alerts. */
+  /** Home's own loaders held by `AppCuaXa` (news, strip, petitions) — run by the pull with the alerts. */
   onRefresh: Refresher;
   di: (m: ManXa) => void;
 }) {
@@ -589,7 +567,7 @@ function TrangChuXa(props: {
 
   return (
     <>
-      {/* Header theo prototype (`AppHeader.tsx`): logo xã trái, tên xã giữa, lời chào dưới. Nó đứng NGOÀI vùng
+      {/* Header theo prototype (`AppHeader.tsx`): quốc huy trái, tên xã giữa, lời chào dưới. Nó đứng NGOÀI vùng
           cuộn — chỉ phần giữa cuộn (§5.2). Góc phải để trống cho Zalo: chuông đã bỏ (quyết định 10, 30/09/2026),
           "Thông báo" nay là một dòng ở Cá nhân › Của tôi. */}
       {/* The prototype's subtitle (`HomePage.tsx:41-47`, owner 11/10/2026): "Xin chào, <tên>" when the Zalo name is
@@ -597,7 +575,6 @@ function TrangChuXa(props: {
       <RootTabHeader
         title={xa.ten}
         subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : undefined}
-        logoUrl={profileLogoUrl(props.profile)}
       />
       <PullToRefresh className="xa-trang" onRefresh={refresh}>
         {/* Above everything else, as the prototype's home (`HomePage.tsx:50-58`): on a storm day it is the one thing
@@ -667,10 +644,11 @@ function TrangChuXa(props: {
             ) : (
               <ul className="xa-ds">
                 {/* Both items as the compact card, as the prototype's home (`HomePage.tsx:101-103`, owner 11/10/2026:
-                    no large featured card on home). */}
+                    no large featured card on home) — WITH the view count, as the prototype's `NewsCard.tsx:29-34`
+                    (customer sheet 12/10/2026 row 10: "thiếu số lượt xem"; reverses 6a29447b's "not on home"). */}
                 {tin_moi.map((t) => (
                   <li key={t.id}>
-                    <HangTin tin={t} compact onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
+                    <HangTin tin={t} compact showViews onMo={(id) => di({ kieu: "bai", id, tu: "trang-chu" })} />
                   </li>
                 ))}
               </ul>
@@ -702,18 +680,9 @@ export function PetitionSendFooter({ onSend }: { onSend: () => void }) {
   );
 }
 
-/** Header of a root tab other than home: the commune's logo, the tab's title centred (`RootTabHeader`). */
-function DauTab({ tieu_de, logoUrl }: { tieu_de: string; logoUrl: string }) {
-  return <RootTabHeader title={tieu_de} logoUrl={logoUrl} />;
-}
-
-/**
- * The uploaded logo of the profile this open read, or `""` while it loads / when it failed — the header then
- * shows the bundled file (`LogoXa`). The profile is the one `/commune-profiles` returned for THIS build's domain;
- * nothing the citizen sends chooses it. PURE, exported for tests.
- */
-export function profileLogoUrl(profile: CommuneProfile | null): string {
-  return profile === null ? "" : profile.logo_url;
+/** Header of a root tab other than home: the star emblem, the tab's title centred (`RootTabHeader`). */
+function DauTab({ tieu_de }: { tieu_de: string }) {
+  return <RootTabHeader title={tieu_de} />;
 }
 
 /**
@@ -832,12 +801,12 @@ export function SessionGateScreen(props: {
 }
 
 /** `createSessionGate` held once per open. The commune name is read at call time, from the header's source. */
-function useSessionGate(open: OpenCommuneAppSession | undefined, communeName: string) {
+function useSessionGate(open: OpenCommuneAppSession | undefined, communeName: string, readGrant: ReadPhoneGrant | undefined) {
   const [state, setState] = useState<SessionGateState | null>(null);
   const name = useRef(communeName);
   name.current = communeName;
   const gate = useRef<SessionGate | null>(null);
-  if (gate.current === null) gate.current = createSessionGate(open, () => name.current, setState);
+  if (gate.current === null) gate.current = createSessionGate(open, () => name.current, setState, readGrant);
   return { gate: gate.current, state };
 }
 
@@ -896,6 +865,8 @@ function AppCuaXa(props: {
   pickScenePhotos?: PickScenePhotos;
   draftStore?: FeedbackDraftStore;
   openSession?: OpenCommuneAppSession;
+  /** Zalo already holds the phone permission (`TrangXa` `phoneGranted`); absent → never read, today's flow. */
+  phoneGranted?: ReadPhoneGrant;
   openVideo?: OpenVideo;
   openLink?: OpenExternal;
   shareArticle?: ShareArticle;
@@ -915,7 +886,6 @@ function AppCuaXa(props: {
     props.initialArticle !== undefined ? { kieu: "bai", id: props.initialArticle, tu: "trang-chu" } : { kieu: "tab", tab: "trang-chu" },
   );
   const tin = useTinXa(ten_mien);
-  const { profile, refresh: refreshProfile } = useCommuneProfile(ten_mien);
   const { items: banners, refresh: refreshBanners } = useCommuneBanners(ten_mien);
   // The home strip's "leave the app?" question. An article asks through its own (`BaiTinXa`).
   const leave = useLeaveApp(props.openLink);
@@ -938,7 +908,7 @@ function AppCuaXa(props: {
   }, [entering, shownKey]);
 
   /* ── THE GATE: every personal act asks here first (`commune-session.ts`) ── */
-  const { gate, state: gateState } = useSessionGate(openSession, xa.ten);
+  const { gate, state: gateState } = useSessionGate(openSession, xa.ten, props.phoneGranted);
   const [gateTask, setGateTask] = useState<PhoneVerificationTask>("submit");
   // The 403 path of the rating block (`usePhoneVerification`): the same opener, the same commune check.
   const reopenWithPhone = useMemo(() => (openSession ? communeAppReopen(openSession) : undefined), [openSession]);
@@ -976,7 +946,7 @@ function AppCuaXa(props: {
    * Run `act` with a session — at once if one exists, otherwise after the explanation and the tap. `offerName`:
    * the act opens "Gửi phản ánh" (only `go`), so a name never asked may be asked first — never for a retry.
    */
-  function requireSession(task: PhoneVerificationTask, act: () => void, offerName = false) {
+  function requireSession(task: PhoneVerificationTask, act: () => void, offerName = false, opts?: RequireOptions) {
     setGateTask(task);
     // Sending with no session asks Zalo at once (`gate.require`), with no "Đồng ý" tap to carry this flag: the
     // name rides along exactly as that tap would have sent it. A session that already exists keeps the short
@@ -998,7 +968,7 @@ function AppCuaXa(props: {
       // VERIFIED phone. A phone-less session (ADR 0080) is refused by the list route, and that refusal would
       // drop the session and put the gate over the form the citizen just opened.
       if (verified) petitions.loadIfIdle();
-    }, task);
+    }, task, opts);
   }
 
   /** The name question's answer, then the send screen it was holding back. */
@@ -1019,7 +989,26 @@ function AppCuaXa(props: {
     };
 
   const petitions = useMyPetitions(sessionLost("mine"));
-  const openPetitions = () => requireSession("mine", () => void petitions.load());
+  // The citizen's own tap on "Phản ánh của tôi": with the permission already granted, no explanation (row 7). The
+  // lost-session retry above passes no option, so it always meets the explanation — no reopen loop without a tap.
+  const openPetitions = () => requireSession("mine", () => void petitions.load(), false, { explicitTap: true });
+
+  /*
+   * ROW 7 OF THE CUSTOMER SHEET (12/10/2026): "mỗi lần vào lại app phải request lại quyền chia sẻ số điện thoại mới
+   * xem được danh sách phản ánh". Once per open, after the commune name is known (this component mounts only then —
+   * the session must match it): if Zalo already holds the phone permission, the session opens with no screen and
+   * the list loads on its own. Any failure leaves the home card that asks, as before. The ref guards StrictMode's
+   * double effect run, as `useTinXa` does — two runs would be two Zalo/server exchanges.
+   */
+  const silentTried = useRef(false);
+  useEffect(() => {
+    if (silentTried.current) return;
+    silentTried.current = true;
+    void gate.openIfGranted().then((opened) => {
+      if (opened) void petitions.loadQuietly();
+    });
+    // `gate` lives for the whole open (`useSessionGate`), and this runs once by design.
+  }, [gate]);
 
   /*
    * ROW 8 OF THE CUSTOMER SHEET (12/10/2026): a status the commune moved must show without closing the app. Entering
@@ -1034,7 +1023,7 @@ function AppCuaXa(props: {
   }, [shownKey]);
 
   // Home's pull: the loaders `AppCuaXa` holds for it (its alerts are `TrangChuXa`'s own).
-  const refreshHome = () => runRefreshers([tin.refresh, refreshBanners, refreshProfile, petitions.refresh]);
+  const refreshHome = () => runRefreshers([tin.refresh, refreshBanners, petitions.refresh]);
 
   /*
    * "NHẬN THÔNG BÁO" (ADR 0091 §4). Opening Cá nhân with a VERIFIED session already in this open reads the switch
@@ -1173,17 +1162,6 @@ function AppCuaXa(props: {
       // The prototype's two-column grid (owner 11/10/2026); a tile opens the item, whose "Xem video" opens the link.
       man_con = <VideoScreen ten_mien={ten_mien} onBack={ve} onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })} />;
       break;
-    case "ban-do":
-      man_con = (
-        <ManChuaCoDuLieu
-          tieu_de={XA_TN.ban_do_tieu_de}
-          bieu_tuong="map"
-          cau={XA_TN.ban_do_trong}
-          hint={XA_TN.map_empty_hint}
-          onQuayLai={ve}
-        />
-      );
-      break;
     case "su-kien":
       // The items the commune published AS EVENTS — the server's `?type=su-kien` (comms b22bf76), no longer
       // a guess from the free-text category.
@@ -1301,7 +1279,6 @@ function AppCuaXa(props: {
         petitions={petitions.state}
         onOpenPetitions={openPetitions}
         onRetryPetitions={() => void petitions.load()}
-        profile={profile}
         banners={banners}
         askLeave={leave.ask}
         onRefresh={refreshHome}
@@ -1311,7 +1288,7 @@ function AppCuaXa(props: {
   } else if (tab === "tin-tuc") {
     than = (
       <>
-        <DauTab tieu_de={XA_TN.news_tab_title} logoUrl={profileLogoUrl(profile)} />
+        <DauTab tieu_de={XA_TN.news_tab_title} />
         {/* The list of the chosen type and chip registers itself (`useTinXa`); other tabs are not mounted, so not read. */}
         <PullToRefresh className="xa-trang xa-trang--tab">
           <DanhSachTinXa ten_mien={ten_mien} onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })} />
@@ -1321,7 +1298,7 @@ function AppCuaXa(props: {
   } else if (tab === "phan-anh") {
     than = (
       <>
-        <DauTab tieu_de={CUA_TOI.tieu_de} logoUrl={profileLogoUrl(profile)} />
+        <DauTab tieu_de={CUA_TOI.tieu_de} />
         <PullToRefresh className="xa-trang xa-trang--tab xa-trang--co-chan" onRefresh={petitions.refresh}>
           <PetitionList
             state={petitions.state}
@@ -1338,7 +1315,7 @@ function AppCuaXa(props: {
   } else {
     than = (
       <>
-        <DauTab tieu_de={XA_TN.ca_nhan_tieu_de} logoUrl={profileLogoUrl(profile)} />
+        <DauTab tieu_de={XA_TN.ca_nhan_tieu_de} />
         <CaNhanXa
           ho_ten={shownName}
           avatarUrl={avatarShown(props.name)}
@@ -1400,10 +1377,18 @@ export function TrangXa(props: {
   /**
    * Mở phiên công dân ViGov (App ID + `getAccessToken` + `getPhoneNumber` → ViGov identity trực tiếp, ADR 0066), do lớp vỏ
    * tiêm — nửa này không nhập zmp-sdk. Gọi CHỈ ở việc cá nhân đầu tiên, sau lời giải thích và cú bấm đồng
-   * ý (`commune-session.ts`), không bao giờ lúc mở app (ADR 0047:251). Không truyền (chạy thử, test) thì
+   * ý (`commune-session.ts`), không lúc mở app (ADR 0047:251) — trừ khi Zalo đã giữ quyền số điện thoại
+   * (`phoneGranted`, bảng lỗi 12/10/2026 dòng 7): khi ấy không có hộp thoại nào, và phiên mở ngay. Không truyền (chạy thử, test) thì
    * mọi việc cá nhân nói "chưa kết nối" và không gọi mạng.
    */
   openSession?: OpenCommuneAppSession;
+  /**
+   * Zalo đã giữ quyền số điện thoại của bà con cho app này chưa (`getSetting`), do lớp vỏ tiêm — CHỈ app riêng của
+   * xã truyền (bảng lỗi 12/10/2026 dòng 7). Có và trả `true` → lúc mở app phiên mở lặng lẽ, và bấm "Phản ánh của
+   * tôi" không qua lời giải thích. App chung qua QR xã KHÔNG truyền: ở đó xã vào phiên chỉ bằng hành vi của chính
+   * người dân (ADR 0005 · 0019 · 0022), một phiên tự mở theo tên miền của QR là QR cấp quyền. Không truyền → như cũ.
+   */
+  phoneGranted?: ReadPhoneGrant;
   /**
    * Mở đường dẫn video xã đăng kèm một tin, ra ngoài app (`moRaNgoai("video", …)`), do lớp vỏ tiêm — nửa này
    * không nhập `features/` hay zmp-sdk. Không truyền (chạy thử, test) thì chi tiết tin không có nút "Xem video".
@@ -1510,6 +1495,7 @@ export function TrangXa(props: {
         pickScenePhotos={pickScenePhotos}
         draftStore={draftStore}
         openSession={openSession}
+        phoneGranted={props.phoneGranted}
         openVideo={openVideo}
         openLink={openLink}
         shareArticle={props.shareArticle}
