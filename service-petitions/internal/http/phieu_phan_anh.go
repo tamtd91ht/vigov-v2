@@ -289,6 +289,15 @@ type phieuPhanAnhRa struct {
 	// (staff recorded, then the citizen rated: the citizen's wins, this stays as history). On the DETAIL and
 	// on the recording act's reply only; absent elsewhere. STAFF SURFACE ONLY.
 	StaffRecordedRating *staffRecordedRatingOut `json:"staff_recorded_rating,omitempty"`
+
+	// CoverPhoto is the register card's 80×80 cover (owner decision 12/10/2026, prototype FeedbackCard):
+	// the petition's FIRST citizen scene photo — the first item of GET …/{maTraCuu}/photos — with a signed
+	// link valid until `url_expires_at` (at most 15 minutes). ON THE LIST ONLY (GET /api/v1/citizen-reports).
+	// ABSENT when the petition has no stored photo, when the caller may not open its photos (`can-bo`
+	// without `feedback.restricted`), or when no object store is configured — render "no image" then.
+	// Its hand-out is audited once per page (app.StaffPetitionPhotos.Covers). A bearer credential: the
+	// list reply carries `Cache-Control: no-store`. Pointer + omitempty: optional in the contract.
+	CoverPhoto *photoLinkOut `json:"cover_photo,omitempty"`
 }
 
 // phieuRaNgoai builds the response. `xemDayDu` is the ONLY switch between masked and full, and it

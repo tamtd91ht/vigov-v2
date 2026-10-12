@@ -1038,23 +1038,50 @@ type StaffPhotoPetitions interface {
 	TheoMaTraCuu(ctx context.Context, ma string) (domain.PhieuPhanAnh, error)
 }
 
+// StaffPhotoFiles is the two reads the staff side signs links from: one petition's photos (the detail)
+// and the cover of each petition of a register page (the list). The citizen side never needs the
+// second, so it is not on PetitionPhotoFiles.
+type StaffPhotoFiles interface {
+	photoLister
+	PetitionCoverPhotos(ctx context.Context, petitionIDs []string) ([]domain.StoredFile, error)
+}
+
 // StaffPetitionPhotos lists a petition's citizen photos to a member of staff who may read the petition.
 type StaffPetitionPhotos struct {
 	db        *store.DB
 	petitions StaffPhotoPetitions
-	files     photoLister
+	files     StaffPhotoFiles
 	objects   PhotoObjectStore
 	now       func() time.Time
 }
 
 // NewStaffPetitionPhotos builds the staff read. objects may be UNTYPED nil (not configured → 503).
-func NewStaffPetitionPhotos(db *store.DB, petitions StaffPhotoPetitions, files PetitionPhotoFiles,
+func NewStaffPetitionPhotos(db *store.DB, petitions StaffPhotoPetitions, files StaffPhotoFiles,
 	objects PhotoObjectStore) *StaffPetitionPhotos {
 	return &StaffPetitionPhotos{db: db, petitions: petitions, files: files, objects: objects}
 }
 
-// ActionPetitionPhotosViewed is the verb of the trail a staff read of the photos leaves.
+// ActionPetitionPhotosViewed is the verb of the trail a staff read of the photos leaves — the detail's
+// list and the register's covers alike: both hand a member of staff a link to a citizen's scene photo.
 const ActionPetitionPhotosViewed = "xem_anh_hien_truong"
+
+// CoverAuditSubject is the trail's subject for the covers of one register page. The page is not ONE
+// record, so it is named the way other collective reads are (`bao-cao-don-thu/<năm>`); the delta names
+// the files. NOT the petitions' codes: the "Nhật ký hệ thống" screen withholds `can-bo` petitions by
+// SUBJECT (store.RestrictedPetitionAuditSubjects), and a list of codes in a delta would slip past it.
+const CoverAuditSubject = "danh-sach-phan-anh/anh-bia"
+
+// ErrPhotoReaderUnattributed: the reader carries no staff business code, so no trail could name them
+// and no link is signed (rule 6, invariant 8 — no fallback to the internal id).
+var ErrPhotoReaderUnattributed = errors.New("anh_hien_truong: người đọc không phải cán bộ có mã — " +
+	"không ghi được vết thì không mở ảnh")
+
+// staffMayOpenPhotos is THE ONE predicate deciding whether a member of staff may be handed links to a
+// petition's scene photos: a `can-bo` petition (a report ABOUT staff) only with `feedback.restricted`.
+// ListPhotos and Covers both ask it, so the detail and the register cannot drift apart on it.
+func staffMayOpenPhotos(p domain.PhieuPhanAnh, mayReadRestricted bool) bool {
+	return p.LinhVuc != domain.LinhVucHanChe || mayReadRestricted
+}
 
 // ListPhotos answers the photos of petition `ma` in this commune with signed links.
 //
@@ -1087,18 +1114,83 @@ func (uc *StaffPetitionPhotos) ListPhotos(ctx context.Context, ma string, mayRea
 	if err != nil {
 		return nil, bocPhieu(ctx, "đọc ảnh hiện trường", err)
 	}
-	if p.LinhVuc == domain.LinhVucHanChe && !mayReadRestricted {
+	if !staffMayOpenPhotos(p, mayReadRestricted) {
 		return nil, bocPhieu(ctx, "đọc ảnh hiện trường", petstore.ErrPhieuKhongTonTai)
 	}
-	now := time.Now().UTC()
-	if uc.now != nil {
-		now = uc.now().UTC()
-	}
+	now := uc.clock()
 	links, err := signPhotos(ctx, uc.files, uc.objects, p.ID, now)
 	if err != nil {
 		return nil, err
 	}
 	return auditStaffPhotoRead(ctx, uc.db, reader, p.MaTraCuu, ActionPetitionPhotosViewed, links, now)
+}
+
+func (uc *StaffPetitionPhotos) clock() time.Time {
+	if uc.now != nil {
+		return uc.now().UTC()
+	}
+	return time.Now().UTC()
+}
+
+// Covers answers the register LIST's cover photo (owner decision 12/10/2026, prototype FeedbackCard):
+// for each petition of the page the viewer may open photos for, a signed link to its FIRST citizen scene
+// photo — the same photo ListPhotos lists first — keyed by the petition's INTERNAL id. A petition with no
+// such photo, or one staffMayOpenPhotos refuses, is absent from the map.
+//
+// `petitions` is the page the register just read for this commune; the restricted filter has already
+// been applied there, and is applied AGAIN here through the same predicate as the detail, so a future
+// change to the list's filter cannot hand out a `can-bo` photo by itself.
+//
+// LOADED ONCE: one batched read for the page (PetitionCoverPhotos), never one per row.
+//
+// AUDITED exactly as ListPhotos — ONE entry for the page (CoverAuditSubject, ActionPetitionPhotosViewed,
+// the file ids), committed BEFORE the links are returned; an error writing it means no links at all.
+// A page with no cover writes nothing. ErrUploadNotConfigured with no object store;
+// ErrPhotoReaderUnattributed with no staff business code — both BEFORE any read.
+func (uc *StaffPetitionPhotos) Covers(ctx context.Context, petitions []domain.PhieuPhanAnh,
+	mayReadRestricted bool, reader audit.Actor) (map[string]PhotoLink, error) {
+
+	if reader.ID == "" || reader.Kind != "staff" {
+		return nil, ErrPhotoReaderUnattributed
+	}
+	if uc.objects == nil {
+		return nil, ErrUploadNotConfigured
+	}
+	ids := make([]string, 0, len(petitions))
+	open := make(map[string]bool, len(petitions))
+	for _, p := range petitions {
+		if p.ID == "" || open[p.ID] || !staffMayOpenPhotos(p, mayReadRestricted) {
+			continue
+		}
+		open[p.ID] = true
+		ids = append(ids, p.ID)
+	}
+	out := map[string]PhotoLink{}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	photos, err := uc.files.PetitionCoverPhotos(ctx, ids)
+	if err != nil {
+		return nil, bocPhieu(ctx, "đọc ảnh bìa danh sách", err)
+	}
+	now := uc.clock()
+	links, err := signPhotoList(ctx, uc.objects, photos, func(f domain.StoredFile) bool {
+		// The second wall: a cover must be a citizen photo of a petition THIS call asked for.
+		return open[f.SubjectID] && domain.IsCitizenPhotoOf(f, f.SubjectID)
+	}, now)
+	if err != nil {
+		return nil, err
+	}
+	links, err = auditStaffPhotoRead(ctx, uc.db, reader, CoverAuditSubject, ActionPetitionPhotosViewed, links, now)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range links {
+		if _, dup := out[l.File.SubjectID]; !dup {
+			out[l.File.SubjectID] = l
+		}
+	}
+	return out, nil
 }
 
 // auditStaffPhotoRead commits the trail of one staff read of a petition's photos, THEN returns the
@@ -1136,6 +1228,7 @@ func auditStaffPhotoRead(ctx context.Context, db *store.DB, reader audit.Actor, 
 var (
 	_ PhotoObjectStore      = (*storage.Client)(nil)
 	_ PetitionPhotoFiles    = (*petstore.StoredFileStore)(nil)
+	_ StaffPhotoFiles       = (*petstore.StoredFileStore)(nil)
 	_ CitizenPhotoPetitions = (*petstore.PhieuPhanAnhStore)(nil)
 	_ OwnedPhotoPetitions   = (*petstore.PhieuPhanAnhStore)(nil)
 	_ StaffPhotoPetitions   = (*petstore.PhieuPhanAnhStore)(nil)

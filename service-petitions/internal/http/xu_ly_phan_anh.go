@@ -325,13 +325,27 @@ func (h *Handler) DanhSachPhieu(w http.ResponseWriter, r *http.Request) {
 		writeResidentialUnitNamesUnavailable(w)
 		return
 	}
+	// THE COVER PHOTOS, ONE BATCHED READ AND ONE AUDIT ENTRY FOR THE PAGE (listCovers says which failures
+	// refuse the page and which serve it without covers). LAST, after every other read that can refuse:
+	// the entry records a disclosure, so nothing may refuse the page after it is committed.
+	covers, ok := h.listCovers(w, r, kq.Items)
+	if !ok {
+		return
+	}
 	for _, p := range kq.Items {
 		// `false` IS THE MASKING DECISION AND IT IS A LITERAL. There is no branch here that could
 		// become `true` — see the note on this handler.
 		item := phieuRaNgoai(p, theoMa[p.LinhVuc], false)
 		item.ResidentialUnitName = unitNames[p.ThonID].Name
+		if c, has := covers[p.ID]; has {
+			out := photoLinkFrom(c)
+			item.CoverPhoto = &out
+		}
 		ra.Items = append(ra.Items, item)
 	}
+	// The items may carry signed links (bearer credentials) — and the register is citizens' personal data
+	// either way: no cache between here and the officer keeps it.
+	noStore(w)
 	vietJSON(w, http.StatusOK, ra)
 }
 

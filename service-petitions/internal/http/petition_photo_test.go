@@ -132,6 +132,12 @@ type staffPhotosFake struct {
 	restricted bool
 	reader     audit.Actor
 	err        error
+
+	// The register's covers (list_cover_test.go): which internal ids have one, the page handed down.
+	covers     map[string]bool
+	coverCalls int
+	coverPage  []domain.PhieuPhanAnh
+	coverErr   error
 }
 
 func newStaffPhotosFake() *staffPhotosFake { return &staffPhotosFake{} }
@@ -151,6 +157,30 @@ func (f *staffPhotosFake) ListPhotos(ctx context.Context, ma string, mayReadRest
 	}
 	return []app.PhotoLink{{File: domain.StoredFile{ID: photoIDHTTP, MIMEType: storage.MIMEJPEG, SizeBytes: 9},
 		URL: storage.PresignedURL("https://s3.example.gov.vn/p?X-Amz-Signature=s"), ExpiresAt: photoAtHTTP}}, nil
+}
+
+// Covers gives the ordinary petition `pa-001` of commune A a cover, refuses `can-bo` petitions without the
+// flag the handler computes, and records what it was handed.
+func (f *staffPhotosFake) Covers(ctx context.Context, petitions []domain.PhieuPhanAnh, mayReadRestricted bool,
+	reader audit.Actor) (map[string]app.PhotoLink, error) {
+	f.coverCalls++
+	f.seenTenant, f.restricted, f.reader = tenant.MustFrom(ctx), mayReadRestricted, reader
+	f.coverPage = petitions
+	if f.coverErr != nil {
+		return nil, f.coverErr
+	}
+	out := map[string]app.PhotoLink{}
+	for _, p := range petitions {
+		if p.LinhVuc == domain.LinhVucHanChe && !mayReadRestricted {
+			continue
+		}
+		if f.covers[p.ID] {
+			out[p.ID] = app.PhotoLink{File: domain.StoredFile{ID: photoIDHTTP + "-" + p.ID, MIMEType: storage.MIMEJPEG,
+				SizeBytes: 9, CreatedAt: photoAtHTTP}, URL: storage.PresignedURL("https://s3.example.gov.vn/p?X-Amz-Signature=s"),
+				ExpiresAt: photoAtHTTP.Add(15 * time.Minute)}
+		}
+	}
+	return out, nil
 }
 
 // photoCounter is an in-memory fixed window for the real ratelimit policy.

@@ -4041,6 +4041,7 @@ export type petitions_phieuPhanAnhRa = {
   "merged_by"?: string;
   "merged_petitions"?: Array<string>;
   "staff_recorded_rating"?: petitions_staffRecordedRatingOut | null;
+  "cover_photo"?: petitions_photoLinkOut | null;
 };
 
 export type petitions_photoLinkOut = {

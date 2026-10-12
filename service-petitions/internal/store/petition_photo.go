@@ -5,8 +5,10 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -43,6 +45,57 @@ func (s *StoredFileStore) PetitionPhotos(ctx context.Context, petitionID string)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("stored_file: duyệt ảnh hiện trường: %w", err)
+	}
+	return out, nil
+}
+
+// petitionCoverPhotosTail is petitionPhotosTail for MANY petitions at once — the same purpose, uploader,
+// liveness and status, bound the same way — ordered so the FIRST row of each petition is its oldest
+// photo, the one ListPhotos would list first.
+const petitionCoverPhotosTail = `AND subject_type = $2 AND subject_id = ANY($3) AND purpose = $4 AND uploaded_by = $5
+	AND deleted_at IS NULL AND status IN ('stored', 'ready')
+	ORDER BY subject_id, created_at, id`
+
+// errCoverPetitionList: more ids than one page holds, an empty id, or one id twice.
+var errCoverPetitionList = errors.New("stored_file: danh sách phiếu đọc ảnh bìa không hợp lệ")
+
+// PetitionCoverPhotos reads the COVER of each petition of one register page in ONE statement: the
+// oldest citizen scene photo per petition, exactly the first item PetitionPhotos would return for it.
+// A petition with no such photo is simply absent. Rows come back at most 5 per petition (migration
+// 0026's trigger) and the first per petition is kept here — a DISTINCT ON would do the same in SQL,
+// and is not used so the statement keeps Scoped.Query's `SELECT <cols> FROM` shape.
+//
+// petitionIDs are INTERNAL ids the caller has just read from the commune's register (which already
+// applied the restricted-field filter); the commune is $1 from the context, so another commune's id
+// matches nothing. At most page.MaxLimit ids, distinct and non-empty — anything else is not a page.
+func (s *StoredFileStore) PetitionCoverPhotos(ctx context.Context, petitionIDs []string) ([]domain.StoredFile, error) {
+	out := []domain.StoredFile{}
+	if len(petitionIDs) == 0 {
+		return out, nil
+	}
+	if len(petitionIDs) > page.MaxLimit || !distinctNonEmpty(petitionIDs) {
+		return nil, errCoverPetitionList
+	}
+	rows, err := s.db.For(ctx).Query(ctx, storedFileCols, "stored_file", petitionCoverPhotosTail,
+		domain.StoredFileSubjectPetition, petitionIDs, domain.PurposePetitionPhoto, domain.CitizenLogActor)
+	if err != nil {
+		return nil, fmt.Errorf("stored_file: đọc ảnh bìa phản ánh: %w", err)
+	}
+	defer rows.Close()
+	seen := make(map[string]bool, len(petitionIDs))
+	for rows.Next() {
+		f, err := scanStoredFile(rows)
+		if err != nil {
+			return nil, err
+		}
+		if seen[f.SubjectID] {
+			continue
+		}
+		seen[f.SubjectID] = true
+		out = append(out, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("stored_file: duyệt ảnh bìa phản ánh: %w", err)
 	}
 	return out, nil
 }

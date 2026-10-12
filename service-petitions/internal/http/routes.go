@@ -1188,6 +1188,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	//	                     holds, because rule 6 invariant 7 wants one audit entry per disclosure
 	//	                     and a list cannot produce an honest one
 	//
+	// `cover_photo` (owner decision 12/10/2026): each item MAY carry a signed link to its first citizen
+	// scene photo, under the same `feedback.read` + `feedback.restricted` rule as …/{maTraCuu}/photos, read
+	// in ONE batch for the page and AUDITED ONCE per page that hands out ≥1 link (`xem_anh_hien_truong`,
+	// subject `danh-sach-phan-anh/anh-bia`) — app.StaffPetitionPhotos.Covers. If that entry cannot be
+	// written the page answers 500, never links without a trail. `Cache-Control: no-store`.
+	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
 	// 503 `field_catalogue_unavailable`: the field labels (commune wording, else platform default)

@@ -52984,6 +52984,16 @@
                 "type": "null"
               }
             ]
+          },
+          "cover_photo": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/petitions.photoLinkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [

@@ -223,6 +223,7 @@ type ppFiles struct {
 	inserted    []domain.StoredFile
 	transitions []string
 	marked      []domain.StoredFileFacts
+	coverCalls  [][]string // PetitionCoverPhotos' id lists, one per call (petition_cover_test.go)
 }
 
 func (f *ppFiles) all(commune tenant.ID) map[string]domain.StoredFile {

@@ -50,6 +50,9 @@ type CitizenVerificationPhotoReader interface {
 type StaffPetitionPhotos interface {
 	// reader is the staff member, ID = their business code (principal.Ma): the use case audits the read.
 	ListPhotos(ctx context.Context, ma string, mayReadRestricted bool, reader audit.Actor) ([]app.PhotoLink, error)
+	// Covers is the register list's cover per petition (keyed by INTERNAL id), audited once per page.
+	Covers(ctx context.Context, petitions []domain.PhieuPhanAnh, mayReadRestricted bool, reader audit.Actor) (
+		map[string]app.PhotoLink, error)
 }
 
 // photoOut is one photo as its sender sees it on the upload reply. No object key, no uploader, no file
@@ -89,10 +92,50 @@ type photoListOut struct {
 func photoListFrom(links []app.PhotoLink) photoListOut {
 	out := photoListOut{Items: make([]photoLinkOut, 0, len(links))}
 	for _, l := range links {
-		out.Items = append(out.Items, photoLinkOut{ID: l.File.ID, ContentType: l.File.MIMEType,
-			SizeBytes: l.File.SizeBytes, CreatedAt: l.File.CreatedAt, URL: l.URL.URL(), URLExpiresAt: l.ExpiresAt})
+		out.Items = append(out.Items, photoLinkFrom(l))
 	}
 	return out
+}
+
+func photoLinkFrom(l app.PhotoLink) photoLinkOut {
+	return photoLinkOut{ID: l.File.ID, ContentType: l.File.MIMEType, SizeBytes: l.File.SizeBytes,
+		CreatedAt: l.File.CreatedAt, URL: l.URL.URL(), URLExpiresAt: l.ExpiresAt}
+}
+
+// listCovers is the register list's cover photos for one page (app.StaffPetitionPhotos.Covers), keyed by
+// the petition's INTERNAL id. The reader is built exactly as ListPetitionPhotos builds it: `principal.Ma`,
+// never `principal.ID`, no fallback (rule 6, invariant 8); `feedback.restricted` through coQuyenHanChe,
+// the list's own reading of that key.
+//
+// TWO CAUSES SERVE THE PAGE WITHOUT COVERS rather than refuse it, because neither discloses anything and
+// the register is the officer's main screen: no object store configured (the photos route answers 503 and
+// the startup line reports it), and an account with no business code (identity older than the field — the
+// write routes refuse it; a read of the register does not need the code). The second is logged.
+// ANY OTHER ERROR — the read, the signing, THE AUDIT ENTRY — refuses the page (500), as ListPhotos does:
+// a link with no trail is the one state rule 6 does not permit. false means the response was written.
+func (h *Handler) listCovers(w http.ResponseWriter, r *http.Request, petitions []domain.PhieuPhanAnh) (
+	map[string]app.PhotoLink, bool) {
+	ctx := r.Context()
+	principal, ok := authz.From(ctx)
+	reader := audit.Actor{Kind: principal.Kind, IP: httpx.ClientIP(r)}
+	if ok {
+		reader.ID = principal.Ma
+	}
+	covers, err := h.d.PetitionPhotos.Covers(ctx, petitions, bool(h.coQuyenHanChe(ctx)), reader)
+	switch {
+	case err == nil:
+		return covers, true
+	case errors.Is(err, app.ErrUploadNotConfigured):
+		return nil, true
+	case errors.Is(err, app.ErrPhotoReaderUnattributed):
+		h.d.Log.Warn("CẢNH BÁO: danh sách phản ánh không kèm ảnh bìa vì tài khoản chưa có mã cán bộ",
+			"xa", string(tenant.MustFrom(ctx)))
+		return nil, true
+	default:
+		h.d.Log.Error("danh sách phiếu phản ánh: lỗi đọc ảnh bìa", "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return nil, false
+	}
 }
 
 // noStore: a reply carrying a bearer credential is kept by no cache between here and the reader.
