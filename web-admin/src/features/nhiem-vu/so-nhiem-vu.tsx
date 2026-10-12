@@ -2892,8 +2892,9 @@ export function cardDueText(task: petitions_nhiemVuRa, labels: BangNhanTrangThai
  * THE STRIP IS COLOUR, so the priority is also said in words for a screen reader (colour is never the
  * only signal). Its colour: the commune's catalogue colour, else by code (`priorityStrip`).
  *
- * The move button (`Chuyển sang cột…`, kept #5) sits at the card's top-right corner; the open button
- * leaves room for it so the title never runs under it.
+ * The move button (`Chuyển sang cột…`, kept #5) sits at the right of the `Chọn` row when the account may
+ * select (the row is the card's only hover fill); with no checkbox it floats at the card's top-right
+ * corner and the open button leaves room for it so the title never runs under it.
  */
 export function TheNhiemVu({
   nhiemVu,
@@ -3014,9 +3015,11 @@ export function TheNhiemVu({
             the fill encloses it. `bg-canvas` = the prototype's `bg-surface` (token trap: our `surface` is
             white). No checkbox (no delete right): no row, the button floats at the corner. */}
         {selection !== null && !overlay ? (
-          <div className="hover:bg-canvas flex items-center gap-2 px-3 pt-1.5 pb-0.5 transition-colors">
-            {/* OUTSIDE the open button, never inside it: a checkbox in a button is a nested control. */}
-            <label className="text-ink-muted m-0 flex min-h-8 flex-1 cursor-pointer items-center gap-2 text-[11px]">
+          <div className="hover:bg-canvas flex items-stretch gap-2 pr-3 transition-colors">
+            {/* OUTSIDE the open button, never inside it: a checkbox in a button is a nested control. The
+                label carries the row's left and vertical padding so a press anywhere left of ⇄ toggles it
+                — the same target the full-width label had before the button joined the row. */}
+            <label className="text-ink-muted m-0 flex min-h-10 flex-1 cursor-pointer items-center gap-2 pt-1.5 pb-0.5 pl-3 text-[11px]">
               <CardCheckbox
                 label={selectLabel(nhiemVu.code)}
                 checked={selection.selected.has(nhiemVu.code)}
@@ -3025,7 +3028,7 @@ export function TheNhiemVu({
               />
               Chọn
             </label>
-            {moveMenu !== null && <div className="relative z-[1] -mr-1">{moveMenu}</div>}
+            {moveMenu !== null && <div className="relative z-[1] -mr-1 flex items-center pt-1.5 pb-0.5">{moveMenu}</div>}
           </div>
         ) : (
           moveMenu !== null && <div className="absolute top-2 right-2 z-[1]">{moveMenu}</div>
