@@ -713,6 +713,15 @@
       "con_no": "Bản App ViHAT đọc x phải nộp Zalo duyệt (gộp với các thay đổi 12/10); chỉ in QR x sau khi bản ấy phát hành. Một bản sau bỏ đường d."
     },
     {
+      "id": "app-vihat-nang-cap-nop-zalo-12-10",
+      "trang_thai": "dang_lam",
+      "viec": "App ViHAT (app chung giới thiệu ViHAT Group) nâng cấp UI/UX cho lần nộp Zalo duyệt — chủ dự án 12/10/2026: mọi quyền xin phải có tính năng ViHAT thật, nhìn thấy, người dùng tự bấm, có câu mục đích trước hộp thoại Zalo (chính sách 3.3.4). Giữ camera/ảnh/vị trí bằng tính năng ViHAT mới.",
+      "bang_chung": "4b62f8c5 (V1: giao diện phẳng --vh-*, tab bar 76px, vùng chạm 48px, 6 hotline qua openPhone, Yêu cầu của tôi đủ trạng thái + kéo tải lại, chính sách thành màn riêng) · 6b87ac4b (V2: thẻ Kết nối với ViHAT gộp Đăng nhập/Chat/SMS) · 29c7a653 (V5: đính ≤3 ảnh vào Tư vấn và báo giá) · 41d1d97f (V3: Tìm văn phòng gần tôi, toạ độ do chủ dự án đưa, đổi vị trí ở /api/v1/location không lưu, khoảng cách tính trên máy; NGAY_HIEU_LUC 12/10/2026) · vihat-miniapp d9592b71 (tuyến ảnh yêu cầu, migration 0005_request_photo, bỏ EXIF) + 2cf31a30 (webhook request.photo_added kèm link ký 24 giờ, biến REQUEST_PHOTO_URL_SECRET + PUBLIC_API_BASE_URL). citizen-app tsc sạch, vitest 85 tệp/2172 ca xanh 12/10/2026; vihat-miniapp go vet + go test xanh (ca CSDL SKIP — không có TEST_DATABASE_DSN).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA thử trên Zalo thật và chưa có ảnh render: giao diện mới, nút gọi openPhone, đọc đường tạm của bộ chọn ảnh, ảnh >5 MB, hộp thoại vị trí + đổi vị trí thật. Triển khai vihat-miniapp: chạy migration 0005 TRƯỚC (thiếu thì GET /api/v1/requests hỏng); kiểm job migration Jenkins (MIG_LIST ngoài kho) nhận 0005; đặt REQUEST_PHOTO_URL_SECRET (≥32 byte, khác khoá webhook) + PUBLIC_API_BASE_URL. Bên nhận webhook phải lọc trùng theo photoId, không log downloadUrl. Còn mở ở vihat-miniapp README NỢ #19: (b) chưa có trần ảnh theo người, (c) 0005 chưa chạy trên Postgres thật. Hồ sơ nộp Zalo: phần chữ viết tay tmp/xin-quyen-zalo/app-chung-vihat/README.md và ảnh chụp màn hình phải làm lại trên Zalo thật.",
+      "menu": "noi-dung-mini-app"
+    },
+    {
       "id": "bang-loi-app-xa-12-10",
       "menu": "phan-anh-nguoi-dan",
       "trang_thai": "dang_lam",
