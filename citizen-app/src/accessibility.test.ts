@@ -918,7 +918,22 @@ describe("app riêng của xã: cùng thước với phần còn lại", () => {
     // ADR 0067 §4 (01/10/2026): the Truyền thanh player box and the length chip on a list row.
     ["thời gian và khung trình phát truyền thanh: chữ trên nền xanh ngọc nhạt", token("ink"), token("xa-cyan-50")],
     ["độ dài bản tin truyền thanh trên hàng danh sách", token("xa-cyan-ink"), token("xa-cyan-50")],
+    // Customer sheet 12/10/2026. Row 4: a focused box only changes its border colour — a non-text indicator (3:1 is
+    // the floor), held here to the text floor anyway, on both surfaces a box sits on. Row 2: the pull-to-refresh band.
+    ["viền ô nhập đang được gõ, trên thẻ trắng", token("xa-blue-ink"), token("surface")],
+    ["viền ô nhập đang được gõ, trên nền trang", token("xa-blue-ink"), token("xa-nen")],
+    ["chữ 'Kéo xuống để tải lại' / 'Đang tải lại…' trên nền trang", token("ink-muted"), token("xa-nen")],
+    ["câu 'Chưa tải được dữ liệu mới' trên nền trang", token("xa-loi"), token("xa-nen")],
   ];
+
+  it("ô nhập đang gõ chỉ đổi màu viền — không thêm vòng viền ngoài (bảng lỗi của khách 12/10/2026, dòng 4)", () => {
+    const rule = /\.xa-app \.cd-o__nhap:focus,\s*\.xa-app \.cd-o__nhap:focus-visible\s*\{([^}]*)\}/.exec(styles);
+    expect(rule, "the commune app's focus rule for text boxes is gone").not.toBeNull();
+    expect(rule![1]).toMatch(/border-color:\s*var\(--xa-blue-ink\)/);
+    // Transparent: invisible normally, painted by forced colours (Windows high contrast), so focus never vanishes.
+    expect(rule![1]).toMatch(/outline:\s*2px solid transparent/);
+    expect(rule![1]).not.toMatch(/box-shadow/);
+  });
   it("không còn màu hồng nào trong app riêng (chủ dự án, 30/09/2026)", () => {
     // Rules only: the comment that records WHY pink went names the old value.
     expect(styles.replace(/\/\*[\s\S]*?\*\//g, " ")).not.toMatch(/--xa-hong|xa-mau--hong|#e91e8c/i);

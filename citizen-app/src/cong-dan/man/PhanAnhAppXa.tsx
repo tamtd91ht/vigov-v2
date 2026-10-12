@@ -278,7 +278,51 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
     if (current.current.kind === "idle") void load();
   }
 
-  return { state, load, loadMore, loadIfIdle };
+  /**
+   * THE PULL, AND A RETURN TO THE HOME / PHẢN ÁNH TAB (customer sheet 12/10/2026, row 8: "trạng thái phản ánh chưa
+   * update realtime"). Only a list the citizen already asked for is re-read: `idle` means no session was opened for
+   * it, and a refresh must never be what opens the gate. A list on screen stays while its first page is re-read, then
+   * is REPLACED by it (`petitionsAfterRefresh`). QUIET on a lost session: the list goes back to the card that asks —
+   * a tab change must not throw the gate over the screen; the citizen's tap on that card is the explicit act, and the
+   * read it starts drops the dead session through the usual 401 path.
+   */
+  async function refresh(): Promise<boolean> {
+    const s = current.current;
+    if (busy.current || s.kind === "idle" || s.kind === "loading") return true;
+    if (s.kind === "failed") {
+      await load();
+      return true;
+    }
+    busy.current = true;
+    const out = listOutcome(await phanAnhCuaToi(""));
+    busy.current = false;
+    setState((now) => petitionsAfterRefresh(now, out));
+    return typeof out !== "string" || out === "session";
+  }
+
+  return { state, load, loadMore, loadIfIdle, refresh };
+}
+
+/**
+ * The list after a refresh's re-read of the first page. PURE.
+ *   the page        → a fresh list from it (paging restarts; a petition whose status moved shows the new one)
+ *   lost session    → `idle`: the card that asks, never the old list under a session that no longer reads it
+ *   any failure     → the list as it was: the pull's sentence says it is not fresh, a tab change says nothing
+ */
+export function petitionsAfterRefresh(
+  now: MyPetitions,
+  out: ListFailure | "session" | Extract<KetQuaDanhSach, { kieu: "xong" }>,
+): MyPetitions {
+  if (out === "session") return { kind: "idle" };
+  if (typeof out === "string") return now;
+  return {
+    kind: "ready",
+    items: out.trang.muc,
+    cursor: out.trang.con_tro,
+    hasMore: out.trang.con_nua,
+    loadingMore: false,
+    moreFailure: null,
+  };
 }
 
 /** "Hơn n" when more pages exist: a count of loaded rows is a floor, never presented as the total. */
@@ -676,10 +720,28 @@ export function PetitionDetail(props: {
 
   const reload = () => setRound((n) => n + 1);
 
+  /*
+   * THE PULL (customer sheet 12/10/2026, rows 2 and 8). A petition on screen is re-read WITHOUT blanking it, so the
+   * citizen reading its timeline never sees it vanish into "Đang tải"; a status that moved shows the new one. Not on
+   * screen (failed, session) → the same read as "Thử lại".
+   */
+  async function refresh(): Promise<boolean> {
+    if (state.kind === "loading") return true;
+    if (state.kind !== "found") {
+      reload();
+      return true;
+    }
+    const out = lookupOutcome(await traCuuPhieu(code));
+    if (out.kind === "failed") return false;
+    setState(out);
+    if (out.kind === "session") props.onSessionLost(() => setRound((n) => n + 1));
+    return true;
+  }
+
   return (
     <>
       <DauManCon tieu_de={XA_PA.ticket_title(code)} onQuayLai={props.onBack} />
-      <TrangCon>
+      <TrangCon onRefresh={refresh}>
         {state.kind === "loading" && <KhoiTrangThai bieu_tuong="chat" cau={XA_PA.loading_ticket} dang_tai shape="card" />}
         {state.kind === "session" && (
           <KhoiTrangThai bieu_tuong="alert" loi cau={XA_PA.session_expired} nut={{ nhan: CUA_TOI.nut_thu_lai, onBam: reload }} />
@@ -732,10 +794,24 @@ export function PetitionLookup(props: {
     if (out.kind === "session") props.onSessionLost(() => void search(value));
   }
 
+  /**
+   * The pull: the petition already found is re-read in place (as the detail screen does). Nothing found yet → nothing
+   * to refresh: the lookup is the citizen's typed act, and a pull never sends a code they have not asked for.
+   */
+  async function refresh(): Promise<boolean> {
+    if (state?.kind !== "found") return true;
+    const code = state.petition.ma_tra_cuu;
+    const out = lookupOutcome(await traCuuPhieu(code));
+    if (out.kind === "failed") return false;
+    setState(out);
+    if (out.kind === "session") props.onSessionLost(() => void search(code));
+    return true;
+  }
+
   return (
     <>
       <DauManCon tieu_de={XA_PA.tra_cuu_tieu_de} onQuayLai={props.onBack} />
-      <TrangCon>
+      <TrangCon onRefresh={refresh}>
         <div className="xa-the xa-the--dem xa-khoi">
           <ONhapDong id="xa-ma-tra-cuu" nhan={XA_PA.ma_phieu} goi_y={XA_PA.tra_cuu_goi_y} gia_tri={code} toi_da={40} onDoi={setCode} />
           <button
@@ -2072,6 +2148,17 @@ export function AccountlessLookup(props: { domain: string; initialCode?: string;
     setState(out);
   }
 
+  /** The pull: the report already found is re-read in place; nothing found → nothing sent (the code is the citizen's act). */
+  async function refresh(): Promise<boolean> {
+    if (busy.current || state?.kind !== "found") return true;
+    busy.current = true;
+    const out = accountlessLookupOutcome(await lookupAccountlessReport(props.domain, state.report.code));
+    busy.current = false;
+    if (out.kind !== "found") return false;
+    setState(out);
+    return true;
+  }
+
   // Opened from the done screen with its code: look it up once (ref guard — StrictMode runs effects twice).
   const started = useRef(false);
   useEffect(() => {
@@ -2084,7 +2171,7 @@ export function AccountlessLookup(props: { domain: string; initialCode?: string;
   return (
     <>
       <DauManCon tieu_de={XA_PA.tra_cuu_tieu_de} onQuayLai={props.onBack} />
-      <TrangCon>
+      <TrangCon onRefresh={refresh}>
         <div className="xa-the xa-the--dem xa-khoi">
           <ONhapDong
             id="xa-ma-tra-cuu-khong-tk"

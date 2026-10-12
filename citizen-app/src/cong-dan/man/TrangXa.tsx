@@ -90,6 +90,7 @@ import {
 } from "./PhanAnhAppXa";
 import { BroadcastScreen, VideoScreen } from "./media-screens";
 import { MinimiseBubble } from "./minimise-bubble";
+import { PullToRefresh, type Refresher, runRefreshers } from "./pull-to-refresh";
 import { CaNhanXa, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import {
   BaiTinXa,
@@ -365,8 +366,12 @@ function BannerCarousel(props: BannerStripProps) {
  * The strip as loaded this open — `null` while loading, on any failure, or when the commune posted none (all
  * three → the bundled fallback; a strip that failed says nothing, like the category chips: the home screen works
  * without it). Loaded once, with the ref guard `useTinXa` uses against StrictMode's double run.
+ *
+ * `refresh` (home's pull): ONE read, no `Retry-After` wait — a spinner must not stand for up to a minute over a
+ * decoration. Answered → the posted strip (or, none posted any more, the bundled picture); failed, a 429 included →
+ * the strip already shown stays, and the pull is told it did not refresh.
  */
-function useCommuneBanners(ten_mien: string): readonly CommuneBannerItem[] | null {
+function useCommuneBanners(ten_mien: string): { items: readonly CommuneBannerItem[] | null; refresh: () => Promise<boolean> } {
   const [items, setItems] = useState<readonly CommuneBannerItem[] | null>(null);
   const loaded = useRef(false);
   useEffect(() => {
@@ -379,7 +384,13 @@ function useCommuneBanners(ten_mien: string): readonly CommuneBannerItem[] | nul
       if (got !== null) setItems(got);
     });
   }, [ten_mien]);
-  return items;
+  const refresh = async (): Promise<boolean> => {
+    const kq = await communeBanners(ten_mien);
+    if (kq.kieu !== "xong") return false;
+    setItems(kq.gia_tri.length > 0 ? kq.gia_tri : null);
+    return true;
+  };
+  return { items, refresh };
 }
 
 /** Wait before the one banner retry when a 429 named no wait, and the cap when it named a long one. */
@@ -481,7 +492,7 @@ export const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccen
  * block is information, the app works without it, and a guessed hotline is a wrong number published by a
  * public authority. Loaded once per open, with the ref guard `useTinXa` uses against StrictMode's double run.
  */
-function useCommuneProfile(ten_mien: string): CommuneProfile | null {
+function useCommuneProfile(ten_mien: string): { profile: CommuneProfile | null; refresh: () => Promise<boolean> } {
   const [profile, setProfile] = useState<CommuneProfile | null>(null);
   const loaded = useRef(false);
   useEffect(() => {
@@ -491,7 +502,14 @@ function useCommuneProfile(ten_mien: string): CommuneProfile | null {
       if (kq.kieu === "xong" && kq.gia_tri.length === 1) setProfile(kq.gia_tri[0]!);
     });
   }, [ten_mien]);
-  return profile;
+  // Home's pull: the header logo comes from here. A failed or ambiguous answer keeps the profile already read —
+  // silently, as at open: the logo is the header's decoration, and the bundled file stands in for it anyway.
+  const refresh = async (): Promise<boolean> => {
+    const kq = await communeProfiles(ten_mien);
+    if (kq.kieu === "xong" && kq.gia_tri.length === 1) setProfile(kq.gia_tri[0]!);
+    return true;
+  };
+  return { profile, refresh };
 }
 
 /** The rows the commune actually declared, in reading order. PURE, exported for tests. */
@@ -556,6 +574,8 @@ function TrangChuXa(props: {
   banners: readonly CommuneBannerItem[] | null;
   /** Ask before opening a banner's https page (`useLeaveApp().ask`); absent → such banners are not tappable. */
   askLeave?: (url: string) => void;
+  /** Home's own loaders held by `AppCuaXa` (news, strip, profile, petitions) — run by the pull with the alerts. */
+  onRefresh: Refresher;
   di: (m: ManXa) => void;
 }) {
   const { xa, tin, di, ho_ten, petitions } = props;
@@ -565,6 +585,7 @@ function TrangChuXa(props: {
   // Read on EVERY home open (this component mounts with the home tab), never polled, never shown from a previous
   // read: a banner for an alert that has ended is a false warning under the commune's name (ADR 0091 §2).
   const alerts = useDisasterAlerts(props.domain);
+  const refresh = () => runRefreshers([props.onRefresh, alerts.refresh]);
 
   return (
     <>
@@ -578,7 +599,7 @@ function TrangChuXa(props: {
         subtitle={ho_ten !== null ? XA_TN.xin_chao_ten(ho_ten) : undefined}
         logoUrl={profileLogoUrl(props.profile)}
       />
-      <div className="xa-trang">
+      <PullToRefresh className="xa-trang" onRefresh={refresh}>
         {/* Above everything else, as the prototype's home (`HomePage.tsx:50-58`): on a storm day it is the one thing
             to see. Nothing while loading or after a failure. */}
         <HomeAlertBanner state={alerts.state} onOpen={() => di({ kieu: "canh-bao" })} />
@@ -657,7 +678,7 @@ function TrangChuXa(props: {
           </section>
           {/* No "Ủy ban nhân dân xã" office block (owner 11/10/2026: the prototype's home has none). */}
         </div>
-      </div>
+      </PullToRefresh>
     </>
   );
 }
@@ -850,12 +871,12 @@ function useNotificationPreference(onSessionLost: (retry: () => void) => void): 
 }
 
 function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () => void }) {
-  const { trang, taiLai } = useDanhBaXa(ten_mien);
+  const { trang, taiLai, refresh } = useDanhBaXa(ten_mien);
   return (
     <>
       {/* The prototype's title (`DirectoryPage.tsx:47`, owner 11/10/2026). */}
       <DauManCon tieu_de={XA_TN.directory_title} onQuayLai={onQuayLai} />
-      <TrangCon>
+      <TrangCon onRefresh={refresh}>
         <ThanDanhBaXa trang={trang} onTai={taiLai} />
       </TrangCon>
     </>
@@ -894,8 +915,8 @@ function AppCuaXa(props: {
     props.initialArticle !== undefined ? { kieu: "bai", id: props.initialArticle, tu: "trang-chu" } : { kieu: "tab", tab: "trang-chu" },
   );
   const tin = useTinXa(ten_mien);
-  const profile = useCommuneProfile(ten_mien);
-  const banners = useCommuneBanners(ten_mien);
+  const { profile, refresh: refreshProfile } = useCommuneProfile(ten_mien);
+  const { items: banners, refresh: refreshBanners } = useCommuneBanners(ten_mien);
   // The home strip's "leave the app?" question. An article asks through its own (`BaiTinXa`).
   const leave = useLeaveApp(props.openLink);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
@@ -1001,6 +1022,21 @@ function AppCuaXa(props: {
   const openPetitions = () => requireSession("mine", () => void petitions.load());
 
   /*
+   * ROW 8 OF THE CUSTOMER SHEET (12/10/2026): a status the commune moved must show without closing the app. Entering
+   * the home or Phản ánh tab — from another tab or back from a petition — re-reads the list the citizen already
+   * opened (`refresh` does nothing for one never asked for, and never opens the gate). No polling: one read per
+   * entry, and a read already in flight makes this a no-op.
+   */
+  const petitionsRefresh = useRef(petitions.refresh);
+  petitionsRefresh.current = petitions.refresh;
+  useEffect(() => {
+    if (shownKey === "tab:trang-chu" || shownKey === "tab:phan-anh") void petitionsRefresh.current();
+  }, [shownKey]);
+
+  // Home's pull: the loaders `AppCuaXa` holds for it (its alerts are `TrangChuXa`'s own).
+  const refreshHome = () => runRefreshers([tin.refresh, refreshBanners, refreshProfile, petitions.refresh]);
+
+  /*
    * "NHẬN THÔNG BÁO" (ADR 0091 §4). Opening Cá nhân with a VERIFIED session already in this open reads the switch
    * at once — the citizen's own data, no dialog. Without one nothing is read: the row says a tap shows the state,
    * and that tap goes through the gate like every personal act.
@@ -1012,6 +1048,17 @@ function AppCuaXa(props: {
       void notification.control.load();
     }
   }, [onProfile, notification.state.kind, notification.control]);
+
+  /**
+   * Cá nhân's pull: re-read the switch — only once its value is known (a verified session read it) and no save is
+   * running. Unknown stays unknown: a pull never starts the first read, which may need the gate. A session that
+   * expired since goes the controller's usual way, as a tap would. The row says its own failure, so `true`.
+   */
+  async function refreshNotification(): Promise<boolean> {
+    const s = notification.state;
+    if (s.kind === "ready" && !s.saving) await notification.control.load();
+    return true;
+  }
 
   /** A tap on the row: change it when its value is known, otherwise (gate first) read it. */
   function pressNotification() {
@@ -1257,6 +1304,7 @@ function AppCuaXa(props: {
         profile={profile}
         banners={banners}
         askLeave={leave.ask}
+        onRefresh={refreshHome}
         di={go}
       />
     );
@@ -1264,16 +1312,17 @@ function AppCuaXa(props: {
     than = (
       <>
         <DauTab tieu_de={XA_TN.news_tab_title} logoUrl={profileLogoUrl(profile)} />
-        <div className="xa-trang xa-trang--tab">
+        {/* The list of the chosen type and chip registers itself (`useTinXa`); other tabs are not mounted, so not read. */}
+        <PullToRefresh className="xa-trang xa-trang--tab">
           <DanhSachTinXa ten_mien={ten_mien} onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })} />
-        </div>
+        </PullToRefresh>
       </>
     );
   } else if (tab === "phan-anh") {
     than = (
       <>
         <DauTab tieu_de={CUA_TOI.tieu_de} logoUrl={profileLogoUrl(profile)} />
-        <div className="xa-trang xa-trang--tab xa-trang--co-chan">
+        <PullToRefresh className="xa-trang xa-trang--tab xa-trang--co-chan" onRefresh={petitions.refresh}>
           <PetitionList
             state={petitions.state}
             onOpenPetition={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
@@ -1282,7 +1331,7 @@ function AppCuaXa(props: {
             onRetry={() => void petitions.load()}
             onLoadMore={() => void petitions.loadMore()}
           />
-        </div>
+        </PullToRefresh>
         <PetitionSendFooter onSend={() => go({ kieu: "gui" })} />
       </>
     );
@@ -1301,6 +1350,7 @@ function AppCuaXa(props: {
           onMoTraCuu={() => datMan({ kieu: "tra-cuu" })}
           onOpenNotifications={() => datMan({ kieu: "thong-bao" })}
           notification={{ state: notification.state, onPress: pressNotification }}
+          onRefresh={refreshNotification}
         />
       </>
     );

@@ -17,6 +17,7 @@ import {
   type NewsCategory,
   type NewsType,
   type TinXaTomTat,
+  type TrangTinXa, // vi-name-ok: existing contract type, imported (rule 12 #3)
 } from "../api/hop-dong-cong-khai";
 import { NGAY_KHONG_DOC_DUOC, ngayVN, thoiDiemVN } from "../../lib/thoi-diem";
 import { COMMUNE_NEWS_RATE_LIMIT, NEWS_TYPE_LABEL, TIN_XA, XA_TN } from "./noi-dung";
@@ -36,6 +37,7 @@ import { BieuTuong } from "./BieuTuong";
 import { BroadcastPlayer, durationWords, formatClock } from "./broadcast-player";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
+import { useRefresher } from "./pull-to-refresh";
 
 /**
  * A `YYYY-MM-DD` day as the prototype prints a date (`lib/format.ts` `formatDate`, owner 11/10/2026): "25/9/2026",
@@ -583,6 +585,13 @@ export function useNewsCategories(ten_mien: string, type: NewsType): CategoryRow
       if (kq.kieu === "xong") setRows(groupCategories(kq.gia_tri));
     });
   }, []);
+  // A pull re-reads the chips with the list. Same silence as the first load: a failure keeps the rows already shown
+  // and reports "refreshed", so it never puts the pull's failure sentence over a list that did refresh.
+  useRefresher(async () => {
+    const kq = await newsCategories(ten_mien, type);
+    if (kq.kieu === "xong") setRows(groupCategories(kq.gia_tri));
+    return true;
+  });
   return rows;
 }
 
@@ -683,11 +692,26 @@ export function NewsListBody(props: {
 export function useTinXa(ten_mien: string, type: NewsType | null = null, category: string | null = null) {
   const [ds, datDs] = useState<DanhSachTin>(TIN_DAU);
   const da_tai = useRef(false);
+  // One read at a time — a page, or a pull's refresh. A refresh that replaced the list while "Xem thêm" appended to it
+  // would leave whichever answered last, with a cursor from the other.
+  const busy = useRef(false);
 
   async function tai(con_tro: string) {
+    busy.current = true;
     datDs(batDauTaiTin);
     const kq = await tinCuaXa(ten_mien, con_tro, type, category);
+    busy.current = false;
     datDs((truoc) => sauKhiTaiTin(truoc, kq));
+  }
+
+  /** The pull: the FIRST page again, replacing the list; the list on screen stays until the answer is in. */
+  async function refresh(): Promise<boolean> {
+    if (busy.current) return true;
+    busy.current = true;
+    const kq = await tinCuaXa(ten_mien, "", type, category);
+    busy.current = false;
+    datDs((truoc) => afterNewsRefresh(truoc, kq));
+    return kq.kieu === "xong";
   }
 
   useEffect(() => {
@@ -696,12 +720,29 @@ export function useTinXa(ten_mien: string, type: NewsType | null = null, categor
     void tai("");
   }, []);
 
+  // Inside a scroller (the news tab, Sự kiện, Video, Truyền thanh) the pull finds this list by itself; home's copy
+  // lives above its scroller and is passed by `AppCuaXa` instead.
+  useRefresher(refresh);
+
   return {
     ds,
     taiTiep: () => {
-      if (!ds.dang_tai) void tai(ds.da_co_trang_dau ? ds.con_tro : "");
+      if (!ds.dang_tai && !busy.current) void tai(ds.da_co_trang_dau ? ds.con_tro : "");
     },
+    refresh,
   };
+}
+
+/**
+ * The list after a pull's re-read of the first page. PURE.
+ *   answered → the fresh first page REPLACES the list (an item withdrawn since is gone; paging restarts from it)
+ *   failed, a list on screen → that list, unchanged: the pull's own sentence says it is not fresh (a 429 included —
+ *                                no wait, no retry from here)
+ *   failed, nothing on screen → the failure, exactly as the first load shows it, with its "Thử lại"
+ */
+export function afterNewsRefresh(ds: DanhSachTin, kq: NewsReadResult<TrangTinXa>): DanhSachTin {
+  if (kq.kieu === "xong") return sauKhiTaiTin({ ...TIN_DAU, dang_tai: false }, kq);
+  return ds.da_co_trang_dau ? ds : sauKhiTaiTin(ds, kq);
 }
 
 /**
@@ -762,6 +803,23 @@ export function BaiTinXa(props: {
     void tai();
   }, []);
 
+  /*
+   * THE PULL. An article on screen was already counted by its open, so its re-read carries `no_view=1` (as the
+   * player's link re-read) — a pull must never add a view. One that is NOT on screen (failed, not found) was never
+   * counted, so the pull is the same counted read as "Thử lại". A failed re-read keeps the article being read.
+   */
+  async function refresh(): Promise<boolean> {
+    if (trang.kieu === "dang-tai") return true;
+    if (trang.kieu !== "xong") {
+      await tai();
+      return true;
+    }
+    const next = sauKhiTaiBai(await baiTinCuaXa(props.ten_mien, props.id, { noView: true }));
+    if (next.kieu === "loi") return false;
+    datTrang(next);
+    return true;
+  }
+
   // The header names the item's TYPE (`PROTOTYPE.md` §6: "back, loại tin"): from the loaded item, or — while it
   // loads — from the list row it was opened from, so the title does not change under the reader. No type
   // known → the old general title.
@@ -803,7 +861,7 @@ export function BaiTinXa(props: {
   return (
     <>
       <DauManCon tieu_de={title} onQuayLai={props.onQuayLai} />
-      <TrangCon>
+      <TrangCon onRefresh={refresh}>
         {trang.kieu === "dang-tai" && <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai_bai} dang_tai shape="article" />}
         {trang.kieu === "khong-thay" && <KhoiTrangThai bieu_tuong="news" loi cau={TIN_XA.khong_thay} />}
         {trang.kieu === "loi" && (

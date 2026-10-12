@@ -75,6 +75,7 @@ import {
   KENH_CHUA_MO,
   LOI_GUI,
   PHONE_VERIFICATION,
+  PULL_REFRESH,
   QUAY_LAI,
   SCENE_PHOTOS,
   SEND_RESIDENTIAL_UNIT_WORDS,
@@ -1130,7 +1131,8 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
    * phản ánh?" question is gone (owner 11/10/2026).
    */
   async function leaveSendScreen(khung: PhanTuGia) {
-    await press(buttonsNamed(khung, QUAY_LAI)[0]!);
+    // The header's back is the arrow alone since 12/10/2026 (customer sheet, row 3): found by its accessible name.
+    await press(tatCaPhanTu(khung).find((p) => p.tagName === "BUTTON" && p.getAttribute("aria-label") === QUAY_LAI)!);
     expect(buttonsNamed(khung, XA_TN.huy_bo)).toEqual([]);
   }
 
@@ -1882,6 +1884,143 @@ describe("app xã — ô 'Thôn, tổ dân phố': sau ô địa chỉ, dòng �
     await press(unitRadios(khung)[0]!);
     expect(myResidentialUnits).not.toHaveBeenCalled();
     expect(khung.textContent).not.toContain(W.label);
+    await go();
+  });
+});
+
+/* ═════════════════ 12/10/2026 (customer sheet, rows 2 and 8) — pull to refresh, and the list re-read on tab return ═════════════════ */
+
+describe("app xã — trạng thái phản ánh mới: đọc lại khi về tab, và khi kéo xuống ở đầu danh sách", () => {
+  const COMMUNE = "Xã Thử Nghiệm";
+  const list = () => vi.mocked(phanAnhCuaToi);
+  const page = (excerpt: string) =>
+    ({
+      kieu: "xong",
+      trang: {
+        muc: [
+          {
+            ma_tra_cuu: "PA-THU-0001",
+            trang_thai: "da-tiep-nhan",
+            linh_vuc: "moi-truong",
+            nhan_linh_vuc: "Môi trường",
+            trich_noi_dung: excerpt,
+            goc_dem_han: "2026-10-01T08:00:00+07:00",
+            han_tiep_nhan: null,
+            han_xu_ly_xong: null,
+            rating: null,
+            rated_at: null,
+          },
+        ],
+        con_tro: "",
+        con_nua: false,
+      },
+    }) as Awaited<ReturnType<typeof phanAnhCuaToi>>;
+
+  beforeEach(() => {
+    trang.phien = undefined;
+    // A verified session already open in this app (what "Phản ánh của tôi" leaves behind): the gate is skipped.
+    datPhienViGov({ token: "tok-thu-nghiem", ten_xa: COMMUNE, phone_verified: true });
+    list().mockReset();
+    vi.mocked(traXaTheoTenMien).mockResolvedValue({
+      kieu: "xong",
+      gia_tri: [{ ten: COMMUNE, tinh: "Tỉnh Thử Nghiệm" }],
+    } as Awaited<ReturnType<typeof traXaTheoTenMien>>);
+    // News, profile, banners, alerts: "nothing here".
+    fetch_gia.mockImplementation(async () => ({ status: 404, ok: false, json: async () => ({}) }));
+  });
+
+  afterEach(() => {
+    datPhienViGov(null);
+  });
+
+  const mountApp = () => gan(createElement(TrangXa, { ten_mien: "thu.vigov.example" }));
+  const tab = (khung: PhanTuGia, label: string) => buttonsNamed(tatCaPhanTu(khung).find((p) => p.tagName === "NAV")!, label)[0]!;
+  const scroller = (khung: PhanTuGia, cls: string) =>
+    tatCaPhanTu(khung).find((p) => (p.getAttribute("class") ?? "").split(" ").includes(cls))!;
+
+  /** A finger from the top of the scroller, `travel` px down, then lifted — the scroller is at its top (no scrollTop). */
+  async function pull(target: PhanTuGia, travel = 200) {
+    await act(async () => {
+      dispatch(target, "touchstart", { touches: [{ clientY: 10 }] });
+      dispatch(target, "touchmove", { touches: [{ clientY: 10 + travel }] });
+      dispatch(target, "touchend", { touches: [] });
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  it("a list never asked for is never read — not at open, not on a tab change, not on a pull", async () => {
+    datPhienViGov(null);
+    const { khung, go } = await mountApp();
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    await press(tab(khung, XA_GIAO_DIEN.tab_trang_chu));
+    await pull(scroller(khung, "xa-trang"));
+    expect(list()).not.toHaveBeenCalled();
+    expect(khung.textContent).toContain(XA_PA.need_session_button);
+    await go();
+  });
+
+  it("row 8: back on the Phản ánh tab, the list is read AGAIN and the new status shows — one read per entry", async () => {
+    list().mockResolvedValueOnce(page("Lần đọc thứ nhất")).mockResolvedValueOnce(page("Lần đọc thứ hai"));
+    const { khung, go } = await mountApp();
+    expect(list()).not.toHaveBeenCalled();
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    await press(buttonsNamed(khung, XA_PA.need_session_button)[0]!);
+    expect(list().mock.calls).toEqual([[""]]);
+    expect(khung.textContent).toContain("Lần đọc thứ nhất");
+
+    await press(tab(khung, XA_GIAO_DIEN.tab_tin_tuc));
+    expect(list()).toHaveBeenCalledTimes(1);
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    // StrictMode runs the entry effect twice: still ONE read.
+    expect(list().mock.calls).toEqual([[""], [""]]);
+    expect(khung.textContent).toContain("Lần đọc thứ hai");
+    expect(khung.textContent).not.toContain("Lần đọc thứ nhất");
+    await go();
+  });
+
+  it("row 2: a pull at the top of Phản ánh re-reads the first page; a second pull while it runs does nothing", async () => {
+    list().mockResolvedValueOnce(page("Trước khi kéo"));
+    const { khung, go } = await mountApp();
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    await press(buttonsNamed(khung, XA_PA.need_session_button)[0]!);
+    expect(list()).toHaveBeenCalledTimes(1);
+
+    let answer: (v: Awaited<ReturnType<typeof phanAnhCuaToi>>) => void = () => {};
+    list().mockImplementationOnce(() => new Promise((done) => (answer = done)));
+    const body = scroller(khung, "xa-trang--co-chan");
+    await pull(body);
+    expect(list()).toHaveBeenCalledTimes(2);
+    // In flight: the words say so, and the list on screen stays — never blanked into "Đang tải".
+    expect(khung.textContent).toContain(PULL_REFRESH.refreshing);
+    expect(khung.textContent).toContain("Trước khi kéo");
+    await pull(body);
+    expect(list()).toHaveBeenCalledTimes(2);
+
+    await act(async () => answer(page("Sau khi kéo")));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(khung.textContent).toContain("Sau khi kéo");
+    expect(khung.textContent).not.toContain(PULL_REFRESH.refreshing);
+    await go();
+  });
+
+  it("a short pull (a scroll jitter) reads nothing; a failed refresh keeps the list and says what to do", async () => {
+    list().mockResolvedValueOnce(page("Danh sách đang xem"));
+    const { khung, go } = await mountApp();
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    await press(buttonsNamed(khung, XA_PA.need_session_button)[0]!);
+    const body = scroller(khung, "xa-trang--co-chan");
+    await pull(body, 40);
+    expect(list()).toHaveBeenCalledTimes(1);
+
+    list().mockResolvedValueOnce({ kieu: "loi-mang" });
+    await pull(body);
+    expect(list()).toHaveBeenCalledTimes(2);
+    expect(khung.textContent).toContain("Danh sách đang xem");
+    expect(khung.textContent).toContain(PULL_REFRESH.failed);
     await go();
   });
 });

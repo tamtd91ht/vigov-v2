@@ -27,6 +27,7 @@ import { BieuTuong } from "./BieuTuong";
 import { createPlayback, durationWords, formatClock, type Playback, type PlayerPhase, SKIP_SECONDS } from "./broadcast-player";
 import { DauManCon, KhoiTrangThai } from "./khung-xa";
 import { TIN_XA, XA_TN, COMMUNE_NEWS_RATE_LIMIT } from "./noi-dung";
+import { PullToRefresh } from "./pull-to-refresh";
 import { SeekBar } from "./o-nhap"; // vi-name-ok: existing module name, not renamed (rule 12 #3)
 import { type CategoryRows, rereadAudio, todayVN, useNewsCategories, useTinXa } from "./TinTucAppXa";
 import { errorSentence } from "./TinTucXaScreen";
@@ -169,10 +170,11 @@ export function VideoScreen(props: { ten_mien: string; onBack: () => void; onMo:
   return (
     <>
       <DauManCon tieu_de={XA_TN.video_tieu_de} onQuayLai={props.onBack} />
-      <div className="xa-trang xa-trang--con">
+      {/* The pull re-reads the grid shown (`useTinXa` registers itself); the chips are read above it, once. */}
+      <PullToRefresh className="xa-trang xa-trang--con">
         <TopicChips label={XA_TN.video_topics} rows={rows} value={topic} onChange={setTopic} />
         <VideoList key={topic ?? ""} ten_mien={props.ten_mien} category={topic} onMo={props.onMo} />
-      </div>
+      </PullToRefresh>
     </>
   );
 }
@@ -470,7 +472,8 @@ export function BroadcastScreen(props: { ten_mien: string; onBack: () => void; o
   return (
     <>
       <DauManCon tieu_de={XA_TN.truyen_thanh_tieu_de} onQuayLai={props.onBack} />
-      <div className="xa-trang xa-trang--con">
+      {/* The pull re-reads the list shown; what is playing keeps playing (its item is this screen's state). */}
+      <PullToRefresh className="xa-trang xa-trang--con">
         <TopicChips label={XA_TN.broadcast_categories} rows={rows} value={categoryId} onChange={setCategoryId} />
         <BroadcastList
           key={categoryId ?? ""}
@@ -481,7 +484,7 @@ export function BroadcastScreen(props: { ten_mien: string; onBack: () => void; o
           onPlay={play}
           onMo={props.onMo}
         />
-      </div>
+      </PullToRefresh>
       <audio
         ref={ref}
         preload="none"

@@ -79,10 +79,13 @@ describe("tab Phản ánh: nút gửi ở chân trang", () => {
  * What is pinned is what the owner decided AGAINST the prototype as much as what was taken from it.
  */
 describe("header: một khuôn cho mọi màn", () => {
-  it("child screen: back button keeps the WORD 'Quay lại' beside the icon, title in the middle slot", () => {
+  // Customer sheet 12/10/2026, row 3 ("dư text 'Quay lại'"): the arrow alone, as the prototype (`AppHeader.tsx:48-55`) —
+  // the name a screen reader says is still "Quay lại", on the button itself.
+  it("child screen: back button is the arrow alone, named 'Quay lại' by aria-label; title in the middle slot", () => {
     const html = renderToStaticMarkup(createElement(DauManCon, { tieu_de: "Danh bạ", onQuayLai: () => {} }));
     expect(html).toMatch(/^<header class="xa-header xa-dau-con">/);
-    expect(html).toContain(`<span>${QUAY_LAI}</span>`);
+    expect(html).toContain(`<button type="button" class="xa-dau-con__lui" aria-label="${QUAY_LAI}">`);
+    expect(html).not.toContain(`>${QUAY_LAI}<`);
     expect(html).toContain('<div class="xa-header__title"><h1 class="xa-dau-con__tieu-de">Danh bạ</h1></div>');
     // Zalo's corner stays empty on a child screen.
     expect(html).toContain('<div class="xa-header__side xa-header__side--end"></div>');

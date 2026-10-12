@@ -6,14 +6,16 @@
  * Khác prototype ở chỗ bắt buộc (`skills/accessibility-elderly`, `accessibility.test.ts`) và ở các quyết định
  * của chủ dự án: chữ không dưới 16px (prototype cho 13px), đích chạm không dưới 48px, nút chính màu ĐỎ thương
  * hiệu (prototype: xanh), "đang tải" là CÂU CHỮ HIỆN RÕ kèm khối xám hình nội dung (từ 02/10/2026; trước đó chỉ chữ
- * — câu vẫn mang `role="status"`, khối chỉ trang trí), nút lùi giữ chữ "Quay lại" cạnh
- * mũi tên (prototype: chỉ mũi tên), và ô trái header là LOGO CỦA XÃ (prototype: quốc huy vẽ tay).
+ * — câu vẫn mang `role="status"`, khối chỉ trang trí), và ô trái header là LOGO CỦA XÃ (prototype: quốc huy vẽ tay).
+ * Nút lùi nay THEO prototype — chỉ mũi tên, tên "Quay lại" ở `aria-label` (`AppHeader.tsx:48-55`; bảng lỗi của
+ * khách 12/10/2026, dòng 3: "dư text 'Quay lại'"); trước đó chủ dự án giữ chữ cạnh mũi tên.
  */
 import { type ReactNode, useState } from "react";
 
 import { QUAY_LAI, XA_GIAO_DIEN } from "./noi-dung";
 import { BieuTuong, type TenBieuTuong } from "./BieuTuong";
 import { EmptyIllustration, type IllustrationKind, LoadingSkeleton, type SkeletonShape } from "./state-visuals";
+import { PullToRefresh, type Refresher } from "./pull-to-refresh";
 
 /* ═══════════════════════════════ HEADER ═══════════════════════════════ */
 
@@ -136,8 +138,8 @@ export function RootTabHeader(props: { title: string; subtitle?: string; right?:
 }
 
 /**
- * Header của màn con: nút quay lại (mũi tên + chữ "Quay lại") + tiêu đề ở giữa. Nút Back của Zalo đóng cả app,
- * nên đây là đường về.
+ * Header của màn con: nút quay lại (mũi tên; tên "Quay lại" cho trình đọc màn hình ở `aria-label`) + tiêu đề ở giữa.
+ * Nút Back của Zalo đóng cả app, nên đây là đường về — vẫn là một đích chạm 48×48 dù chỉ còn mũi tên.
  */
 export function DauManCon({ tieu_de, onQuayLai }: { tieu_de: string; onQuayLai?: () => void }) {
   return (
@@ -147,9 +149,8 @@ export function DauManCon({ tieu_de, onQuayLai }: { tieu_de: string; onQuayLai?:
         // No back button only where the prototype has none: the "Đã gửi phản ánh" screen, whose two buttons are
         // the ways on (owner 11/10/2026: theo prototype `NewFeedbackPage.tsx:258`).
         onQuayLai === undefined ? null : (
-          <button type="button" className="xa-dau-con__lui" onClick={onQuayLai}>
-            <BieuTuong ten="chevron-left" co={24} stroke={2.4} />
-            <span>{QUAY_LAI}</span>
+          <button type="button" className="xa-dau-con__lui" aria-label={QUAY_LAI} onClick={onQuayLai}>
+            <BieuTuong ten="chevron-left" co={28} stroke={2.5} />
           </button>
         )
       }
@@ -333,7 +334,15 @@ export function ChuaDangNhap({ cau }: { cau: string }) {
   );
 }
 
-/** The body of a child screen — the ONE part that scrolls; its header above and any footer below stay put. */
-export function TrangCon({ children }: { children: ReactNode }) {
-  return <div className="xa-trang xa-trang--con">{children}</div>;
+/**
+ * The body of a child screen — the ONE part that scrolls; its header above and any footer below stay put. A pull at
+ * its top re-runs the screen's loaders (`pull-to-refresh.tsx`): `onRefresh` for those the screen holds itself, plus
+ * any list below that registered its own. Neither → the pull does nothing.
+ */
+export function TrangCon({ children, onRefresh }: { children: ReactNode; onRefresh?: Refresher }) {
+  return (
+    <PullToRefresh className="xa-trang xa-trang--con" onRefresh={onRefresh}>
+      {children}
+    </PullToRefresh>
+  );
 }

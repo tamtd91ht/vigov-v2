@@ -1036,6 +1036,14 @@ body {
     animation: skel-pulse 1.4s ease-in-out infinite alternate;
   }
 
+  /* Pull to refresh: the "Đang tải lại…" / failure band fades in (180ms, the box-open motion). The arrow does NOT
+     turn while the refresh runs: the owner settled "đang tải: không vòng quay" for every loading state
+     (KhoiTrangThai), and the words already say it is loading. */
+  .xa-pull--busy,
+  .xa-pull--failed {
+    animation: xa-enter 180ms ease-out backwards;
+  }
+
   /*
    * PRESS FEEDBACK: a tap pushes the control down a little (scale .98, 120ms), so a finger that tapped knows it
    * did. No vibration: that would be a platform call (`zmp-sdk`), and this half calls none. Disabled controls do
@@ -1087,6 +1095,7 @@ body {
     transform: translate(0, 0);
   }
 }
+
 
 @keyframes skel-pulse {
   from {
@@ -2474,6 +2483,26 @@ body {
   outline-offset: 2px;
 }
 
+/*
+ * COMMUNE APP: FOCUS = THE BORDER CHANGES COLOUR, nothing is added around it (customer sheet 12/10/2026, row 4: "khi
+ * focus bị thêm border → chỉ đổi màu border"; prototype `NewFeedbackPage.tsx:341`, `focus:border-blue-ink
+ * focus:outline-none`). The shared app keeps its ring above: the sheet is the commune app's.
+ * The focus colour is a non-text indicator, so it must reach 3:1 against what the box sits on: --xa-blue-ink (the
+ * prototype's own colour) is 5.6:1 on white and 5.3:1 on --xa-nen (`accessibility.test.ts` pins both). ⚠ Against
+ * the RESTING border (--ink-muted #566e8b) it is only 1.07:1 — the change is a hue change, grey-blue to blue, which a
+ * reader with weak colour vision may not see. That is the cost of "chỉ đổi màu viền"; a thicker or darker focus
+ * border is the fix if it is ever reported.
+ * `:focus`, not only `:focus-visible`: a tap focuses a text box too, and the colour is the only sign it took.
+ * The outline is TRANSPARENT rather than removed: forced colours (Windows high contrast) override the border colour
+ * and paint the transparent outline instead — without it, focus would vanish there.
+ */
+.xa-app .cd-o__nhap:focus,
+.xa-app .cd-o__nhap:focus-visible {
+  border-color: var(--xa-blue-ink);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+
 .cd-nut {
   display: block;
   width: 100%;
@@ -3022,6 +3051,37 @@ body {
 .xa-trang__than {
   padding: 16px;
 }
+/*
+ * PULL TO REFRESH (`pull-to-refresh.tsx`, customer sheet 12/10/2026 row 2): a band at the top of the scroller, present
+ * only while pulling, refreshing or after a failure. Its height follows the finger (an inline height — a drag, not an
+ * animation); the words are body size, muted on the page, and the failure is the error colour WITH an icon and a
+ * sentence. Its only motion (the fade-in, the turning arrow) sits in the reduced-motion guard above.
+ */
+.xa-pull {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+.xa-pull--busy {
+  min-height: calc(var(--tap-min) + 4px);
+}
+.xa-pull--failed {
+  margin: 0;
+  padding: 10px 16px;
+  align-items: flex-start;
+  justify-content: flex-start;
+  overflow: visible;
+  color: var(--xa-loi);
+}
+.xa-pull__icon {
+  display: inline-flex;
+  flex: none;
+}
 
 /* ---------- header trang chủ (đỏ bo đáy) ---------- */
 .xa-hero {
@@ -3075,8 +3135,9 @@ body {
 /* ---------- header (mọi màn: trang chủ, tab gốc, màn con) ---------- */
 /*
  * One shape (`PROTOTYPE.md` §5.3, `khung-xa.tsx` `HeaderShell`): left slot · title · right slot. A root tab's
- * left slot holds the 40px commune logo; a child screen's holds the back button, whose words "Quay lại" stay
- * (owner decision), so it is ~94px. The right slot is Zalo's corner: empty, except the home bell.
+ * left slot holds the 40px commune logo; a child screen's holds the 48px back arrow (its words "Quay lại" left the
+ * screen on 12/10/2026 — customer sheet, row 3 — and live on as its `aria-label`). The right slot is Zalo's corner:
+ * empty on every screen.
  *
  * THE COLUMNS: the two sides are `minmax(max-content, 1fr)` and the title `minmax(0, max-content)`. While the
  * title fits, both sides get the same share and the title is centred ON THE SCREEN; when it does not, the
@@ -3126,12 +3187,16 @@ body {
   opacity: 0.14;
   pointer-events: none;
 }
+/* The arrow alone since 12/10/2026 (prototype `AppHeader.tsx:48-55`): still a full 48×48 target, the name is its
+   `aria-label`. */
 .xa-dau-con__lui {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 2px;
   min-height: calc(var(--tap-min) + 4px);
-  padding: 0 6px 0 0;
+  min-width: calc(var(--tap-min) + 4px);
+  padding: 0;
   border: 0;
   border-radius: 12px;
   background: none;

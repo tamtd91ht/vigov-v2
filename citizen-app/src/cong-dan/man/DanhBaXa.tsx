@@ -239,5 +239,22 @@ export function useDanhBaXa(ten_mien: string) {
     void tai();
   }, []);
 
-  return { trang, taiLai: () => void tai() };
+  /** The pull: read again without blanking the list; what the citizen typed in the search box stays (`ThanDanhBaXa`). */
+  async function refresh(): Promise<boolean> {
+    if (trang.kieu === "dang-tai") return true;
+    const next = sauKhiTaiDanhBa(await danhBaCanBoXa(ten_mien));
+    datTrang((now) => directoryAfterRefresh(now, next));
+    return next.kieu !== "loi";
+  }
+
+  return { trang, taiLai: () => void tai(), refresh };
+}
+
+/**
+ * The directory after a pull's re-read. PURE. A failed re-read keeps a list on screen — a phone number the citizen
+ * may be about to dial must not vanish because a refresh failed; the pull's own sentence says it is not fresh.
+ * Anything else (fresh list, or a failure with no list to keep) is the re-read's answer.
+ */
+export function directoryAfterRefresh(now: TrangDanhBa, next: TrangDanhBa): TrangDanhBa {
+  return next.kieu === "loi" && now.kieu === "xong" ? now : next;
 }

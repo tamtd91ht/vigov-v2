@@ -22,6 +22,7 @@ import { type OpenExternal, useLeaveApp } from "./leave-app";
 import { CUA_TOI, XA_TN } from "./noi-dung";
 import type { NotificationPreferenceState } from "./notification-preference";
 import { ONhapDong } from "./o-nhap";
+import { PullToRefresh, type Refresher } from "./pull-to-refresh";
 
 /* ═══════════════════════════════ TRA CỨU HỒ SƠ ═══════════════════════════════ */
 
@@ -258,9 +259,11 @@ export function CaNhanXa(props: {
    * (tests that pin the rest of the screen).
    */
   notification?: { state: NotificationPreferenceState; onPress: () => void };
+  /** The pull: re-reads what this tab shows from the server (the "Nhận thông báo" switch). Absent = nothing to read. */
+  onRefresh?: Refresher;
 }) {
   return (
-    <div className="xa-trang xa-trang--tab">
+    <PullToRefresh className="xa-trang xa-trang--tab" onRefresh={props.onRefresh}>
       {/* The profile card (§6.6): what this app KNOWS — the Zalo name (and picture) taken at entry and the commune of
           the app. No hamlet and no phone line: the app holds neither, and a guessed line is a wrong one. */}
       <div className="xa-the xa-the--dem xa-profile">
@@ -329,6 +332,6 @@ export function CaNhanXa(props: {
           <span>{XA_TN.app_version(BUILD_LABEL)}</span>
         </p>
       )}
-    </div>
+    </PullToRefresh>
   );
 }

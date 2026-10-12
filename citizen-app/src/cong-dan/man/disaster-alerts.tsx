@@ -42,14 +42,16 @@ const RETRY_MAX_SECONDS = 60;
 /**
  * One read, with EXACTLY ONE retry after a 429 (the home banner strip's rule, `TrangXa.tsx` `loadBanners`): after the
  * server's `Retry-After`, capped at 60 s, 5 s when absent. A second 429 — or any other failure — is the answer.
- * PURE apart from `load` and `wait`, which the caller injects.
+ * `retryOnce: false` (a pull): no wait at all — the 429 is the answer at once, its sentence names the wait, and the
+ * spinner never stands for up to a minute. PURE apart from `load` and `wait`, which the caller injects.
  */
 export async function loadDisasterAlerts(
   load: () => Promise<NewsReadResult<readonly DisasterAlert[]>>,
   wait: (ms: number) => Promise<void>,
+  retryOnce = true,
 ): Promise<DisasterAlertsState> {
   let result = await load();
-  if (result.kieu === "rate-limited") {
+  if (retryOnce && result.kieu === "rate-limited") {
     const seconds = result.retryAfterSeconds === null ? RETRY_DEFAULT_SECONDS : result.retryAfterSeconds;
     await wait(Math.min(Math.max(seconds, 1), RETRY_MAX_SECONDS) * 1000);
     result = await load();
@@ -66,31 +68,41 @@ export async function loadDisasterAlerts(
  * StrictMode's double run, as `useCommuneBanners` does); `reload` reads again ("Thử lại"). An answer that arrives
  * after the screen is gone is dropped.
  */
-export function useDisasterAlerts(domain: string): { state: DisasterAlertsState; reload: () => void } {
+export function useDisasterAlerts(domain: string): {
+  state: DisasterAlertsState;
+  reload: () => void;
+  /**
+   * The pull (`pull-to-refresh.tsx`): a fresh read, never the old answer kept. Always reports "refreshed": nothing old
+   * is left on screen to warn about — the alert screen says its own failure with "Thử lại", home hides the banner.
+   */
+  refresh: () => Promise<boolean>;
+} {
   const [state, setState] = useState<DisasterAlertsState>({ kind: "loading" });
   const started = useRef(false);
   const alive = useRef(true);
-  const run = () => {
+  // A pull goes through the SAME read as a mount: `loading` first, never the previous answer while a new one is
+  // pending (the header's rule — an alert that ended must not stay up while its replacement is read).
+  const run = async (retryOnce = true): Promise<void> => {
     setState({ kind: "loading" });
-    void loadDisasterAlerts(
+    const s = await loadDisasterAlerts(
       () => communeDisasterAlerts(domain),
       (ms) => new Promise((done) => setTimeout(done, ms)),
-    ).then((s) => {
-      if (alive.current) setState(s);
-    });
+      retryOnce,
+    );
+    if (alive.current) setState(s);
   };
   useEffect(() => {
     alive.current = true;
     if (!started.current) {
       started.current = true;
-      run();
+      void run();
     }
     return () => {
       alive.current = false;
     };
     // The domain is the build's constant for the life of the app: one read per mount.
   }, []);
-  return { state, reload: run };
+  return { state, reload: () => void run(), refresh: () => run(false).then(() => true) };
 }
 
 /* ═══════════════════════════════ HOME BANNER ═══════════════════════════════ */
@@ -281,11 +293,11 @@ export function DisasterAlertBody(props: { state: DisasterAlertsState; communeNa
 
 /** The screen: title "Cảnh báo thiên tai", back, and a fresh read of the alerts in force. */
 export function DisasterAlertScreen(props: { domain: string; communeName: string; onBack: () => void }) {
-  const { state, reload } = useDisasterAlerts(props.domain);
+  const { state, reload, refresh } = useDisasterAlerts(props.domain);
   return (
     <>
       <DauManCon tieu_de={XA_TN.alert_title} onQuayLai={props.onBack} />
-      <TrangCon>
+      <TrangCon onRefresh={refresh}>
         <DisasterAlertBody state={state} communeName={props.communeName} onRetry={reload} />
       </TrangCon>
     </>

@@ -81,6 +81,17 @@ export const KHAN_CAP =
 
 export const QUAY_LAI = "Quay lại";
 
+/**
+ * Kéo xuống để tải lại — mọi màn của app xã (`pull-to-refresh.tsx`, bảng lỗi của khách 12/10/2026, dòng 2). Lỗi nói
+ * việc cần làm tiếp và nói rõ chữ đang hiện là dữ liệu cũ: bà con không được tưởng đó là dữ liệu mới nhất.
+ */
+export const PULL_REFRESH = {
+  pull: "Kéo xuống để tải lại",
+  release: "Thả tay để tải lại",
+  refreshing: "Đang tải lại…",
+  failed: "Chưa tải được dữ liệu mới, đang hiện dữ liệu cũ. Bà con đợi một lát rồi kéo xuống để thử lại.",
+} as const;
+
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * MÀN "GỬI PHẢN ÁNH"
  * ══════════════════════════════════════════════════════════════════════════════════════════ */

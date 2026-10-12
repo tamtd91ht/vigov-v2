@@ -341,3 +341,50 @@ describe("one counted read per open, both apps", () => {
     });
   }
 });
+
+/** The scroller's touch handlers, called through the props React keeps on the element (the shim has no events). */
+async function pullDown(host: FakeNode) {
+  const find = (n: FakeNode): FakeElement | null => {
+    if (n instanceof FakeElement && (n.getAttribute("class") ?? "").split(" ").includes("xa-trang")) return n;
+    for (const c of n.childNodes) {
+      const hit = find(c);
+      if (hit !== null) return hit;
+    }
+    return null;
+  };
+  const scroller = find(host);
+  expect(scroller, "no scroller").not.toBeNull();
+  const key = Object.keys(scroller!).find((k) => k.startsWith("__reactProps$"))!;
+  const props = (scroller as unknown as Record<string, Record<string, (e: unknown) => void>>)[key]!;
+  const at = (y: number) => ({ touches: [{ clientY: y }], currentTarget: { scrollTop: 0 } });
+  await act(async () => {
+    props["onTouchStart"]!(at(0));
+    props["onTouchMove"]!(at(300));
+    props["onTouchEnd"]!({ touches: [], currentTarget: { scrollTop: 0 } });
+  });
+  await settle();
+}
+
+describe("a pull on an open article (customer sheet 12/10/2026, row 2) adds NO view", () => {
+  it("commune app: the re-read carries `no_view=1`; the open stays the only counted read", async () => {
+    const calls = stubFetch(answer(200, { ...ITEM, view_count: 5 }), answer(200, { ...ITEM, view_count: 9 }));
+    const { host, unmount } = await mount(createElement(BaiTinXa, { ten_mien: DOMAIN, id: "tin-01", onQuayLai: () => {} }));
+    await pullDown(host);
+    expect(reads()).toHaveLength(2);
+    expect(reads().map(counted)).toEqual([true, false]);
+    expect(calls.map(noViewOf)).toEqual([null, "1"]);
+    // The fresh answer replaced the article on screen.
+    expect(host.textContent).toContain("9 lượt xem");
+    await unmount();
+  });
+
+  it("an article that failed to open: the pull is the same COUNTED read as 'Thử lại' (nothing was counted yet)", async () => {
+    const calls = stubFetch(answer(503, {}), answer(200, { ...ITEM, view_count: 1 }));
+    const { host, unmount } = await mount(createElement(BaiTinXa, { ten_mien: DOMAIN, id: "tin-01", onQuayLai: () => {} }));
+    await pullDown(host);
+    expect(reads().every(counted)).toBe(true);
+    expect(calls.map(noViewOf)).toEqual([null, null]);
+    expect(host.textContent).toContain("1 lượt xem");
+    await unmount();
+  });
+});
