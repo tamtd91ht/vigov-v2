@@ -141,7 +141,7 @@ pipeline {
                         'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
                         'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP_URL (kb/40-runbooks/basemap-pmtiles.md). ' +
                         'CHAY_THU bật = chỉ in kế hoạch; làm thật: bỏ tick, XAC_NHAN = namespace của MT, TICKET nếu prod. ' +
-                        'Thân việc: deploy/van-hanh/basemap-task.sh')
+                        'Thân việc: deploy/basemap/basemap-task.sh')
     choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
@@ -2152,9 +2152,8 @@ EOF
       }
     }
 
-    // Nền bản đồ tự host — thân việc ở deploy/van-hanh/basemap-task.sh. Chỉ job này có việc ấy từ khi
-    // vigov-van-hanh được dựng lại chỉ cho đổi hạ tầng (ADR 0089 §Sửa đổi 11/10/2026). Logic có test ở
-    // deploy/van-hanh/ops.py. Ở đây chỉ chốt tham số; job KHÔNG BAO GIỜ đổi BASEMAP_URL.
+    // Nền bản đồ tự host — thân việc ở deploy/basemap/basemap-task.sh, logic có test ở
+    // deploy/basemap/basemap.py. Ở đây chỉ chốt tham số; job KHÔNG BAO GIỜ đổi BASEMAP_URL.
     stage('Nền bản đồ') {
       when { expression { params.HANH_DONG == 'nen-ban-do' } }
       steps {
@@ -2172,7 +2171,7 @@ EOF
           env.NGAY_NEN = (params.NGAY_NEN ?: '').trim()
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NS} · ${env.GHI == '1' ? 'GHI' : 'chạy thử'} · ${env.NGUOI_BAM}"
           try {
-            sh 'bash deploy/van-hanh/basemap-task.sh'
+            sh 'bash deploy/basemap/basemap-task.sh'
           } finally {
             // The script cleans on exit; this covers an abort that kills it first. Several GB on a shared machine.
             sh 'rm -rf "$WORKSPACE/basemap" "$WORKSPACE/.tools" "$WORKSPACE/.mc"'

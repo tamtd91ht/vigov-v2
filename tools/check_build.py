@@ -454,85 +454,6 @@ def self_test_deploy_actions() -> list[str]:
     return bad
 
 
-# deploy/van-hanh/Jenkinsfile — the operations job (ADR 0089; rebuilt 11/10/2026 around ONE task, đổi hạ
-# tầng). Its decisions are tested in deploy/van-hanh/test_ops.py; what no unit test reaches is the Groovy
-# around them — the guards copied from the old job, which nothing else watches in this file.
-VAN_HANH_JENKINSFILE = os.path.join(GOC, "deploy", "van-hanh", "Jenkinsfile")
-
-
-def check_van_hanh(text: str) -> list[str]:
-    """PURE: Jenkinsfile text in, violations out — graded by `self_test_van_hanh()`."""
-    code = bo_chu_thich_groovy(text)
-    out: list[str] = []
-    if not re.search(r"String\s+opsInfra\(\)", code):
-        out.append("không tìm thấy `opsInfra()` (vùng SINH RA) — form và chốt HA_TANG không có danh sách hạ tầng")
-    if not re.search(r"params\.HA_TANG\s+in\s+infraIds\(\)", code):
-        out.append("HA_TANG không được kiểm theo danh sách sinh ra — một lượt Rebuild cũ sẽ xanh mà không làm gì")
-    if "KUBECONFIG=/u01/rancher/rancher-vigov.yaml" not in code:
-        out.append("không đặt KUBECONFIG=/u01/rancher/rancher-vigov.yaml — kubectl rơi về ~/.kube/config")
-    if "rancher-omi" in code:
-        out.append("nhắc `rancher-omi` trong mã — kubeconfig của dự án KHÁC")
-    if re.search(r"kubectl\s+(?:-n\s+\S+\s+)?run\b", code):
-        out.append("dùng `kubectl run` — pod một lượt phải `kubectl create -f` + hỏi pha (`run -i` đã treo)")
-    if re.search(r"\bset\s+image\b", code):
-        out.append("`set image` — đặt ảnh là việc của job dịch vụ (ADR 0089 · deploy/README.md mục 1)")
-    if re.search(r"kubectl\s+(?:-n\s+\S+\s+)?apply\b", code):
-        out.append("`kubectl apply` — job vận hành không áp manifest/Ingress (ADR 0046 #4)")
-    if re.search(r"sslmode=dis" + r"able", code):
-        out.append("sslmode tắt TLS (luật 13 cấm #1)")
-    if not re.search(r"params\.MT\s*==\s*null\s*\|\|\s*params\.HA_TANG\s*==\s*null", code):
-        out.append("thiếu chốt lượt-đầu-tham-số-null (`params.MT == null || params.HA_TANG == null`)")
-    if not re.search(r"\bnguoiBam\s*\(\s*\)", code):
-        out.append("không xác định người bấm (`nguoiBam()`)")
-    if not re.search(r"params\.TICKET\s*==~", code):
-        out.append("TICKET không được kiểm dạng")
-    if not re.search(r"params\.XAC_NHAN[^\n]*!=\s*env\.NS", code):
-        out.append("ghi không đòi XAC_NHAN = namespace")
-    if "Active Choices" not in code:
-        out.append("thiếu câu báo tên plugin \"Active Choices\" khi form không dựng được")
-    if re.search(r"^\s*set\s+-x", code, re.M):
-        out.append("`set -x` — bí mật lọt vào log qua trace")
-    # The plan holds secret values in files; a second sh block would need them to outlive the first.
-    if len(re.findall(r"\bsh\(shLib\(\)", code)) != 1:
-        out.append("kế hoạch có giá trị bí mật phải sống trong ĐÚNG MỘT khối `sh(shLib() + …)`")
-    return out
-
-
-_VAN_HANH_GOOD = """
-withEnv(['KUBECONFIG=/u01/rancher/rancher-vigov.yaml']) {}
-error('plugin Active Choices')
-if (params.MT == null || params.HA_TANG == null || params.CHAY_THU == null) { error('x') }
-if (!(params.HA_TANG in infraIds())) { error('x') }
-env.NGUOI_BAM = nguoiBam()
-if (params.TICKET && !(params.TICKET ==~ /^[A-Z]$/)) { error('x') }
-if ((params.XAC_NHAN ?: '').trim() != env.NS) { error('x') }
-void changeInfra() { sh(shLib() + 'x') }
-String opsInfra() { return '' }
-"""
-
-
-def self_test_van_hanh() -> list[str]:
-    bad: list[str] = []
-    if check_van_hanh(_VAN_HANH_GOOD):
-        bad.append(f"ca PHẢI XANH bị đỏ oan: {check_van_hanh(_VAN_HANH_GOOD)[0]}")
-    for name, (old, new, frag) in {
-        "bỏ kiểm HA_TANG": ("params.HA_TANG in infraIds()", "true", "Rebuild cũ"),
-        "mất vùng sinh": ("String opsInfra()", "String other()", "opsInfra"),
-        "kubeconfig dự án khác": ("rancher-vigov.yaml']", "rancher-omi.yaml']", "rancher-omi"),
-        "kubectl run": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\nsh 'kubectl -n x run p'", "kubectl run"),
-        "set image": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\nsh 'kubectl set image deploy/x *=y'", "set image"),
-        "apply": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\nsh 'kubectl -n x apply -f i.yaml'", "kubectl apply"),
-        "bỏ chốt null": ("params.MT == null || params.HA_TANG == null", "params.MT == null", "tham-số-null"),
-        "bỏ XAC_NHAN": ("!= env.NS", "!= ''", "XAC_NHAN"),
-        "set -x": ("env.NGUOI_BAM = nguoiBam()", "env.NGUOI_BAM = nguoiBam()\n  set -x", "set -x"),
-        "hai khối sh": ("sh(shLib() + 'x')", "sh(shLib() + 'x'); sh(shLib() + 'y')", "ĐÚNG MỘT"),
-    }.items():
-        broken = _VAN_HANH_GOOD.replace(old, new, 1)
-        if broken == _VAN_HANH_GOOD or not any(frag in v for v in check_van_hanh(broken)):
-            bad.append(f"ca PHẢI ĐỎ lọt qua: {name}")
-    return bad
-
-
 def kiem_dong_em(svcs: list[str], loi: list[str]) -> int:
     """Hạn `Shutdown` trong mã phải NHỎ HƠN `terminationGracePeriodSeconds` của manifest.
 
@@ -765,14 +686,6 @@ def main() -> int:
     else:
         loi.append("deploy/Jenkinsfile KHÔNG TỒN TẠI")
 
-    # deploy/van-hanh/Jenkinsfile: task table vs dispatcher + copied invariants. Self-test first.
-    for s in self_test_van_hanh():
-        loi.append(f"tools/check_build.py — phép kiểm deploy/van-hanh/Jenkinsfile: {s}")
-    if os.path.isfile(VAN_HANH_JENKINSFILE):
-        with open(VAN_HANH_JENKINSFILE, encoding="utf-8") as f:
-            for l in check_van_hanh(f.read()):
-                loi.append(f"deploy/van-hanh/Jenkinsfile {l}")
-
     if loi:
         print(f"[FAIL] hồ sơ dựng — {len(loi)} vấn đề trên {len(svcs)} dịch vụ + web-admin + platform-admin")
         for l in loi:
@@ -786,8 +699,7 @@ def main() -> int:
           f"{len(svcs) + 2} Dockerfile · {len(svcs) + 2} Jenkinsfile · "
           f"{len(BAT_BIEN)} bất biến an toàn · ngữ cảnh build kín · "
           f"{so_dong_em} cặp hạn đóng-êm đối chiếu · "
-          f"citizen-app/Jenkinsfile + {so_ca_citizen} ca tự chấm · "
-          f"deploy/van-hanh/Jenkinsfile {'có' if os.path.isfile(VAN_HANH_JENKINSFILE) else 'KHÔNG CÓ'} + 10 ca tự chấm · 0 vi phạm")
+          f"citizen-app/Jenkinsfile + {so_ca_citizen} ca tự chấm · 0 vi phạm")
     return 0
 
 

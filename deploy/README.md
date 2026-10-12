@@ -89,10 +89,20 @@ manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy tr
 |---|---|---|
 | `nen-ban-do` | `MT`, `NGAY_NEN` (YYYYMMDD), `CHAY_THU` (bật = chỉ in kế hoạch); làm thật: bỏ `CHAY_THU`, `XAC_NHAN` = namespace của `MT`, `TICKET` nếu prod | Dựng nền bản đồ PMTiles trên máy build, tải lên MinIO `<tiền tố>-public/config/map/<ngày>/` bằng khoá có sẵn của `comms-secrets`; **không** đổi `BASEMAP_URL`. Hạn 180 phút (việc khác giữ 20) |
 
-`nen-ban-do` chỉ còn ở job này: job vận hành `vigov-van-hanh` được dựng lại 11/10/2026 chỉ với việc đổi
-hạ tầng (ADR 0089 §Sửa đổi 11/10/2026). Thân việc vẫn ở `deploy/van-hanh/basemap-task.sh` + `ops.py`
-(có test). Mã băm công cụ, các bước mỗi lần làm mới: `deploy/van-hanh/README.md` mục "Nền bản đồ"; quy
-trình và kiểm chủ quyền có ký: `kb/40-runbooks/basemap-pmtiles.md`.
+Thân việc: `deploy/basemap/basemap-task.sh`; quyết định có test ở `deploy/basemap/basemap.py`. Quy trình
+và kiểm chủ quyền có ký: `kb/40-runbooks/basemap-pmtiles.md`. (Job `vigov-van-hanh` đã gỡ 12/10/2026 —
+ADR 0089 §Gỡ.)
+
+| `nen-ban-do` cần | Chi tiết |
+|---|---|
+| Máy build | `bash`, `curl`, `sha256sum`, `tar`, Python 3.8+; ≥ 8 GB trống ở workspace; ra Internet tới `github.com`, `raw.githubusercontent.com`, `build.protomaps.com`, `build-metadata.protomaps.dev`; tới `OBJECT_STORAGE_PUBLIC_ENDPOINT` |
+| Khoá MinIO | Cặp `OBJECT_STORAGE_ACCESS_KEY` / `_SECRET_KEY` **có sẵn** của `comms-secrets` (thiếu thì `platform-secrets`), đọc bằng kubeconfig của job vào tệp 0600 → `MC_HOST_<alias>`; không lên dòng lệnh, không in |
+| Policy của user ấy | `s3:ListBucket` (prefix `config/map/*`), `s3:GetObject`, `s3:PutObject` trên `<tiền tố>-public/config/map/*`. Thiếu thì bước `mc ls` dừng trước khi dựng và in câu cần thêm |
+| Công cụ ghim SHA-256 | `PMTILES_SHA256` (digest GitHub của `go-pmtiles_<bản>_Linux_x86_64.tar.gz`, bản phát hành không có `checksums.txt`) · `MC_RELEASE` + `MC_SHA256` (tệp `.sha256sum` trên GitHub; **không** `dl.min.io` — trả 410). Hằng ở `deploy/basemap/basemap.py`; đổi bản = đổi mã băm trong cùng lần sửa |
+
+Mỗi lần làm mới: chạy thử `MT=staging` → chạy thật (in SHA-256, `BUILD-INFO.txt`, giá trị `BASEMAP_URL`) →
+đặt `BASEMAP_URL` staging theo runbook mục "Đưa vào dùng" → kiểm chủ quyền có ký → prod. `$WORKSPACE/basemap`,
+`.tools`, `.mc` luôn bị xoá cuối lượt.
 
 Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → năm dịch vụ còn lại →
 `web-admin`. `platform-admin` chỉ cần `platform` (và `identity` cho đăng nhập vận hành) đã lên. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không

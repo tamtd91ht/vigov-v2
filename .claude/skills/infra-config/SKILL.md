@@ -29,7 +29,7 @@ This skill is the convention. The machine-decidable half is **rule 11**, enforce
 
 **A ConfigMap/Secret key is spelled EXACTLY like the environment variable the code reads.** One
 token from the cluster to the binary: ConfigMap key = Secret key = env var = `.env.example` line =
-the name in `core/config` = the row in the operations job's key catalogue.
+the name in `core/config`.
 
 | # | Rule | Example |
 |---|---|---|
@@ -38,7 +38,7 @@ the name in `core/config` = the row in the operations job's key catalogue.
 | 3 | A pod loads its objects WHOLE with `envFrom` (`common-config` + `<service>-secrets`). No per-key `configMapKeyRef`/`secretKeyRef` for renaming, no `kubectl set env --from … --keys=…` | — |
 | 4 | Group prefix by dependency, suffix by value shape: `DB_` `REDIS_` `OBJECT_STORAGE_` `KAFKA_` `RABBITMQ_` `ELASTIC_` … / `_URL` `_ADDRESS` `_ADDRS` `_DSN` `_KEY` `_SECRET` | `REDIS_ADDRESS`, `OBJECT_STORAGE_SECRET_KEY` |
 | 5 | A name lives in ONE object — Secret if it would hurt in a log, ConfigMap otherwise (§5) | — |
-| 6 | Every key has a `.env.example` placeholder line and a row in `deploy/van-hanh/ops.py`'s catalogue | — |
+| 6 | Every key has a `.env.example` placeholder line and a row in `deploy/cau-hinh/README.md` | — |
 
 **Why not dashes** (the convention before 11/10/2026, which the cluster never actually followed):
 
@@ -157,7 +157,7 @@ variable the next person discovers from a stack trace.
 4. Decide required vs optional, and write the reason beside it.
 5. Add the placeholder line to `.env.example`. **Never a real value** — a template that looks
    like a working config is a template somebody ships (rule 8).
-6. Add its row to the operations job's catalogue (`python deploy/van-hanh/ops.py catalog --write`).
+6. Add its row to `deploy/cau-hinh/README.md` (`tools/check_env_map.py` turns red without it).
 7. Tell whoever owns the cluster which object supplies it — the key is the SAME `UPPER_SNAKE_CASE`
    name, added to `common-config` or `<service>-secrets`; `envFrom` picks it up on the next restart.
 

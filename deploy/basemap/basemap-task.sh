@@ -1,17 +1,15 @@
 #!/usr/bin/env bash
 # Task `nen-ban-do` — build the self-hosted basemap on the BUILD MACHINE and upload it to the
 # environment's MinIO. Called by `vigov-deploy` (deploy/Jenkinsfile), which only checks its own
-# parameters (XAC_NHAN = namespace, TICKET on prod). It lives beside ops.py because its decisions are
-# tested there; `vigov-van-hanh` no longer runs it (rebuilt for đổi hạ tầng only, ADR 0089 §Sửa đổi
-# 11/10/2026).
+# parameters (XAC_NHAN = namespace, TICKET on prod) and calls this file.
 #
 # Why and the full procedure: ADR 0072, kb/40-runbooks/basemap-pmtiles.md. Decisions with tests live in
-# deploy/van-hanh/ops.py (basemap-plan · basemap-tools · basemap-key-source · mc-host); the build itself
+# deploy/basemap/basemap.py (plan · tools · key-source · mc-host); the build itself
 # is web-admin/scripts/build-basemap.sh.
 #
 # Environment (set by the calling job, never by a person):
 #   NS          vigov-prod | vigov-staging
-#   NGAY_NEN    YYYYMMDD of a Protomaps daily build (validated by ops.py before any use)
+#   NGAY_NEN    YYYYMMDD of a Protomaps daily build (validated by basemap.py before any use)
 #   GHI         1 = do it; anything else = dry run (print the plan, change nothing)
 #   KUBECONFIG  the job's ViGov kubeconfig       WORKSPACE  Jenkins workspace (repo checkout = cwd)
 #   PYTHON      optional — Python 3.8+; discovered here when unset
@@ -44,7 +42,7 @@ if [ -z "${PYTHON:-}" ]; then
   done
   [ -n "${PYTHON:-}" ] || { echo "DỪNG: máy build không có Python 3.8+ trong PATH."; exit 1; }
 fi
-OPS() { "$PYTHON" deploy/van-hanh/ops.py "$@"; }
+OPS() { "$PYTHON" deploy/basemap/basemap.py "$@"; }
 note() {
   echo "GHI · ${NGUOI_BAM:-?} · $(date -u +%Y-%m-%dT%H:%M:%SZ) · $NS · ticket ${TICKET:--} · $*"
   [ -z "${OPS_SUMMARY:-}" ] || printf '%s · %s\n' "$(date -u +%H:%M:%SZ)" "$*" >> "$OPS_SUMMARY"
@@ -53,11 +51,11 @@ note() {
 # ── Plan (read only) ──────────────────────────────────────────────────────────────────────────
 kubectl -n "$NS" get configmap common-config -o json > "$TMP_DIR/cm.json" || {
   echo "DỪNG: không đọc được configmap/common-config trong $NS. Không làm gì."; exit 1; }
-OPS basemap-plan --current "$TMP_DIR/cm.json" --date "$NGAY_NEN" --out "$TMP_DIR/bm.env"
+OPS plan --current "$TMP_DIR/cm.json" --date "$NGAY_NEN" --out "$TMP_DIR/bm.env"
 BM_BUCKET=$(sed -n 's/^BUCKET=//p' "$TMP_DIR/bm.env")
 BM_ENDPOINT=$(sed -n 's/^UPLOAD_ENDPOINT=//p' "$TMP_DIR/bm.env")
 BM_URL=$(sed -n 's/^BASEMAP_URL=//p' "$TMP_DIR/bm.env")
-OPS basemap-tools --out "$TMP_DIR/tools.tsv"
+OPS tools --out "$TMP_DIR/tools.tsv"
 for c in curl sha256sum tar df find xargs sort base64 cmp; do
   command -v "$c" >/dev/null 2>&1 || { echo "DỪNG: máy build thiếu $c (build-basemap.sh cần). Không làm gì."; exit 1; }
 done
@@ -67,7 +65,7 @@ for s in comms platform; do
   kubectl -n "$NS" get secret "$s-secrets" -o go-template='{{range $k, $v := .data}}{{$k}} {{end}}' 2>/dev/null \
     | tr ' ' '\n' | sed "s/^/$s-secrets\t/" >> "$TMP_DIR/keysrc.tsv" || true
 done
-KEY_SECRET=$(OPS basemap-key-source --present "$TMP_DIR/keysrc.tsv") || { echo "$KEY_SECRET"; exit 1; }
+KEY_SECRET=$(OPS key-source --present "$TMP_DIR/keysrc.tsv") || { echo "$KEY_SECRET"; exit 1; }
 echo "Khoá MinIO: cặp OBJECT_STORAGE_ACCESS_KEY / OBJECT_STORAGE_SECRET_KEY của secret/$KEY_SECRET (không in giá trị)"
 # Proposal, not a measured figure: the cut is a few GB; a full disk breaks every job on this machine.
 free_kb=$(df -Pk "$WORKSPACE" | awk 'NR==2 {print $4}')
@@ -90,7 +88,7 @@ while IFS="$TAB" read -r name url sha kind; do
   f="$TOOLS/dl/$name.download"
   curl -fsSL --retry 3 --proto '=https' --proto-redir '=https' -o "$f" "$url"
   echo "$sha  $f" | sha256sum -c --quiet - || {
-    echo "DỪNG: $name tải từ $url KHÔNG khớp SHA-256 đã ghim trong ops.py — không chạy tệp ấy."; exit 1; }
+    echo "DỪNG: $name tải từ $url KHÔNG khớp SHA-256 đã ghim trong basemap.py — không chạy tệp ấy."; exit 1; }
   case "$kind" in
     tar-gz:*) member=${kind#tar-gz:}; tar -xzf "$f" -C "$TOOLS/dl" "$member"; mv "$TOOLS/dl/$member" "$TOOLS/$name" ;;
     binary) mv "$f" "$TOOLS/$name" ;;
@@ -148,8 +146,8 @@ cat "$DIR/BUILD-INFO.txt"
 echo "── Giá trị BASEMAP_URL (job KHÔNG đặt):"
 echo "   $BM_URL"
 echo "════ BƯỚC TIẾP ═══════════════════════════════════════════════════════════════"
-echo "1. STAGING: đặt BASEMAP_URL=$BM_URL trong common-config của vigov-staging (việc sua-configmap của"
-echo "   vigov-van-hanh, hoặc theo runbook), khởi động lại vigov-web-admin."
+echo "1. STAGING: đặt BASEMAP_URL=$BM_URL trong common-config của vigov-staging (runbook, mục"
+echo "   'Đưa vào dùng'), khởi động lại vigov-web-admin và vigov-service-comms."
 echo "   (Nếu bucket/endpoint của staging khác prod: tải lên lại bằng việc này với MT=staging.)"
 echo "2. Kiểm chủ quyền có ký trên staging — kb/40-runbooks/basemap-pmtiles.md. Một dòng không đạt: DỪNG."
 echo "3. Chỉ sau khi đã ký: cùng giá trị ở vigov-prod. Không xoá tiền tố cũ (đường quay lui)."

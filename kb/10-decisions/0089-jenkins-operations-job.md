@@ -10,12 +10,13 @@ owns_facts:
   - "vì sao job vận hành mặc định chạy thử (dry-run) in kế hoạch cũ → mới, chỉ khởi động lại dịch vụ dùng khoá vừa đổi, và đòi gõ namespace + số phiếu cho mọi lần ghi prod (chủ dự án, 10/10/2026)"
   - "lần dùng đầu của job vận hành: đổi cấu hình tài nguyên prod và chuyển prod sang một CSDL PostgreSQL MỚI (một máy chủ, mỗi dịch vụ một CSDL), bảng rỗng do migration của từng dịch vụ tạo, CSDL cũ không bị đụng, DSN cũ giữ được để quay lui, KHÔNG chuyển dữ liệu ở đợt này (mặc định chủ dự án 10/10/2026, có thể đổi)"
   - "vì sao job vận hành được dựng lại chỉ với MỘT việc — đổi hạ tầng PostgreSQL/MinIO/Redis/ClamAV, form theo hạ tầng, ô trống = giữ, mật khẩu qua bảy tham số password, kiểm từ trong cụm trước khi ghi — và bỏ mọi việc cũ (chủ dự án, 11/10/2026)"
+  - "vì sao job vận hành vigov-van-hanh bị GỠ hẳn, thư mục deploy/van-hanh xoá, việc nen-ban-do của vigov-deploy chuyển thân sang deploy/basemap (chủ dự án, 12/10/2026)"
   - "rủi ro được chấp nhận: Jenkins lưu tham số của lượt build — tham số kiểu password được mã hoá nhưng quản trị viên Jenkins đọc được (10/10/2026)"
 ---
 
 # 0089. Job vận hành Jenkins mới, form đọc từ cụm (Active Choices)
 
-**Trạng thái:** đã chốt hướng, chưa dựng · **Ngày:** 2026-10-10 · **Người quyết:** chủ dự án,
+**Trạng thái:** ĐÃ GỠ 12/10/2026 (§Gỡ cuối tệp) — trước đó: đã chốt hướng, chưa dựng · **Ngày:** 2026-10-10 · **Người quyết:** chủ dự án,
 10/10/2026, truyền qua phiên chính (không có phiếu hỏi trong kho để đối chiếu) · **Dựng:** chưa có
 commit nào.
 
@@ -119,6 +120,22 @@ phiên toàn quyền chọn phương án còn lại.
 | Dữ liệu | Job **không** chuyển dữ liệu, **không** tạo CSDL. Hạ tầng mới do người quản trị dựng sẵn | Luật 7. Việc `csdl-moi` (CSDL mới rỗng) bỏ cùng các việc cũ |
 | `vigov-deploy` | Không đổi việc nào. `nen-ban-do` chỉ còn ở đó; thân việc (`deploy/van-hanh/basemap-task.sh` + `ops.py`) giữ nguyên chỗ | Lời chủ dự án: chỉ job `vigov-van-hanh` |
 
-**Hệ quả:** mục "Lần dùng đầu" (CSDL prod mới rỗng) và câu mở #7–#9 không còn việc nào trong job gánh;
+## Gỡ 12/10/2026 — job `vigov-van-hanh` không còn
+
+**Người quyết:** chủ dự án, 12/10/2026, phiên chính: "chức năng vigov-van-hanh này kém quá, gỡ ra đi,
+hiện tôi không dùng được gì từ đây".
+
+| Điểm | Hiện trạng sau khi gỡ |
+|---|---|
+| `deploy/van-hanh/` | Xoá cả thư mục: `Jenkinsfile`, `ops.py`, `test_ops.py`, `README.md` |
+| `nen-ban-do` của `vigov-deploy` | Giữ nguyên việc; thân chuyển sang `deploy/basemap/basemap-task.sh` + `basemap.py` (có test, `make buildfiles`) |
+| Đổi hạ tầng, sửa ConfigMap/Secret | Không còn job nào làm: `kubectl` / Rancher bằng tay theo `deploy/cau-hinh/README.md`, hoặc các việc sẵn có của `vigov-deploy` |
+| Plugin Active Choices | Không còn job nào cần |
+| Trên Jenkins | Người vận hành xoá job `vigov-van-hanh` (Delete Pipeline) — kho không xoá được job |
+
+Mọi mục ở trên là **lịch sử**: vì sao từng có job này và vì sao nó bị gỡ. Một job vận hành mới, nếu có,
+là quyết định mới — ADR mới, không hồi sinh mục này.
+
+**Hệ quả của §Sửa đổi 11/10/2026 (trước khi gỡ):** mục "Lần dùng đầu" (CSDL prod mới rỗng) và câu mở #7–#9 không còn việc nào trong job gánh;
 bảng "Vùng"/"Việc" ở mục Quyết định là lịch sử. Khôi phục Secret từ bản sao lưu nay làm bằng tay
 (`deploy/van-hanh/README.md` mục 4). Cách làm: `deploy/van-hanh/README.md`.

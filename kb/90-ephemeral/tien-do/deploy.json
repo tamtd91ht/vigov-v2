@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "deploy",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-12",
   "muc": [
     {
       "id": "bo-vigov-deploy-job-dich-vu-tu-dat-anh",
@@ -293,7 +293,7 @@
       "trang_thai": "dang_lam",
       "bang_chung": "bf6f44c1 + commit này: unittest deploy/van-hanh 44 OK, make buildfiles PASS, ops.py basemap-tools nhận 2 checksum đã ghim (pmtiles digest GitHub, mc .sha256sum GitHub). Chưa chạy trên Jenkins thật.",
       "no_confirm": [],
-      "tiep_theo": "SỬA 11/10/2026: vigov-van-hanh không còn việc này (dựng lại chỉ cho đổi hạ tầng) — chạy từ vigov-deploy, HANH_DONG=nen-ban-do; thân việc vẫn là deploy/van-hanh/basemap-task.sh + ops.py. Người vận hành: (2) chạy nen-ban-do MT=staging, bật chạy thử, rồi chạy thật; (3) đặt BASEMAP_URL staging bằng kubectl edit (runbook) theo giá trị job in ra → kiểm chủ quyền có ký → prod. Rủi ro chưa kiểm: máy build ra được github.com và các host Protomaps; endpoint MinIO công khai nhận tải lên vài GB; policy khoá comms phủ config/map/* (nếu bị từ chối, job in dòng policy cần thêm). Đổi sang xong sau lượt chạy thật đầu tiên. web-admin/src/lib/may-chu/basemap.ts:53 còn ví dụ /basemap/<ngày> trong câu báo lỗi vận hành."
+      "tiep_theo": "SỬA 12/10/2026: thân việc nay ở deploy/basemap/basemap-task.sh + basemap.py (11 ca test); chạy từ vigov-deploy, HANH_DONG=nen-ban-do. SỬA 11/10/2026: vigov-van-hanh không còn việc này (dựng lại chỉ cho đổi hạ tầng) — chạy từ vigov-deploy, HANH_DONG=nen-ban-do; thân việc vẫn là deploy/van-hanh/basemap-task.sh + ops.py. Người vận hành: (2) chạy nen-ban-do MT=staging, bật chạy thử, rồi chạy thật; (3) đặt BASEMAP_URL staging bằng kubectl edit (runbook) theo giá trị job in ra → kiểm chủ quyền có ký → prod. Rủi ro chưa kiểm: máy build ra được github.com và các host Protomaps; endpoint MinIO công khai nhận tải lên vài GB; policy khoá comms phủ config/map/* (nếu bị từ chối, job in dòng policy cần thêm). Đổi sang xong sau lượt chạy thật đầu tiên. web-admin/src/lib/may-chu/basemap.ts:53 còn ví dụ /basemap/<ngày> trong câu báo lỗi vận hành."
     },
     {
       "id": "ten-key-upper-snake-case-11-10",
@@ -306,9 +306,9 @@
     {
       "id": "job-van-hanh-ha-tang-11-10",
       "viec": "Dựng lại job vigov-van-hanh (chủ dự án 11/10/2026: 'đập đi xây lại', chỉ job này): bỏ 14 việc cũ, còn MỘT việc đổi hạ tầng — PostgreSQL (máy chủ/sslmode chung; CSDL/tài khoản/mật khẩu từng dịch vụ, giữ phần không gõ), MinIO (5 khoá common-config, cặp khoá riêng từng dịch vụ, tự dựng PUBLIC_MEDIA_BASE_URL khi public endpoint/tiền tố đổi), Redis (một host:port, db, redis/rediss, mật khẩu), ClamAV. Form Active Choices: MT → HA_TANG → chỉ ô của hạ tầng ấy cạnh giá trị đang chạy, ô trống = giữ; mật khẩu qua BI_MAT_1..7. Trước khi ghi: pod kiểm cổng + đăng nhập thử từng DSN PostgreSQL mới; sao lưu Secret riêng; đọc lại so khớp; khởi động lại platform → identity → còn lại.",
-      "trang_thai": "dang_lam",
-      "bang_chung": "commit 'feat(deploy): vigov-van-hanh dựng lại — một việc đổi hạ tầng'. unittest deploy/van-hanh 36 OK (12 ca hạ tầng + 3 ca hợp đồng; đột biến bỏ kiểm sslmode / in DSN làm đỏ 3 ca); ops.py catalog --check PASS (41 khoá, 4 hạ tầng); check_build PASS (10 ca tự chấm van-hanh); make check — xem commit. CHƯA chạy trên Jenkins thật, chưa có Active Choices trên controller, chưa xem form render.",
-      "tiep_theo": "(1) Cài Active Choices (uno-choice) trên controller dùng chung; bấm Build Now một lần; duyệt 3+2 script ở In-process Script Approval. (2) MT=staging, từng hạ tầng: để trống mọi ô, chạy thử → phải in 'không có gì để ghi'; rồi gõ đúng giá trị đang chạy cho máy chủ → vẫn không có gì để ghi (kiểm form đọc đúng). (3) Lần đổi thật đầu tiên trên staging, đọc bảng kế hoạch + kết quả pod kiểm trước khi bỏ CHAY_THU. (4) Kiểm Map trả về của ChoiceParameter hiện nhãn (Active Choices); nếu chỉ hiện mã thì chấp nhận được, không chặn. (5) Khôi phục Secret từ bản sao lưu nay làm tay (README mục 4) — nếu cần một việc 'quay lui' trong job thì là yêu cầu mới.",
+      "trang_thai": "xong",
+      "bang_chung": "commit 'feat(deploy): vigov-van-hanh dựng lại — một việc đổi hạ tầng'. unittest deploy/van-hanh 36 OK (12 ca hạ tầng + 3 ca hợp đồng; đột biến bỏ kiểm sslmode / in DSN làm đỏ 3 ca); ops.py catalog --check PASS (41 khoá, 4 hạ tầng); check_build PASS (10 ca tự chấm van-hanh); make check — xem commit. CHƯA chạy trên Jenkins thật, chưa có Active Choices trên controller, chưa xem form render. GỠ 12/10/2026 theo lời chủ dự án ('kém quá, gỡ ra đi'): deploy/van-hanh xoá hết (ADR 0089 §Gỡ); nen-ban-do chuyển thân sang deploy/basemap. Các bước tiếp theo dưới không còn áp dụng.",
+      "tiep_theo": "Người vận hành: xoá job vigov-van-hanh trên Jenkins (Delete Pipeline). Không cài Active Choices nữa — không job nào cần.",
       "no_confirm": []
     }
   ]

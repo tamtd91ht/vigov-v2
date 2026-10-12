@@ -112,9 +112,8 @@ ingress-nginx chạy `hostNetwork` thì thêm dải IP node (`kubectl get nodes 
 
 ### Key trong `common-config` mà web-admin cũng đọc — `BASEMAP_URL`
 
-Bảng riêng vì `deploy/van-hanh/ops.py` nhận ra web-admin là người đọc **từ tiêu đề mục này** (web-admin không
-có `config.Uses`); người đọc là dịch vụ Go thì nó suy từ `core/config` như mọi key khác — `BASEMAP_URL` có
-cả hai: web-admin (bản đồ phản ánh, `/ban-do`) và comms (nhóm `config.Basemap`, nền bản đồ Mini App, ADR 0072
+Bảng riêng vì web-admin không có `config.Uses` nên không suy được nó là người đọc từ `core/config`;
+người đọc là dịch vụ Go thì suy như mọi key khác — `BASEMAP_URL` có cả hai: web-admin (bản đồ phản ánh, `/ban-do`) và comms (nhóm `config.Basemap`, nền bản đồ Mini App, ADR 0072
 §Sửa đổi 11/10/2026 (Mini App) M1). Key viết **gạch dưới**, tới cả hai pod qua `envFrom` (luật 11 bất biến 4,
 ADR 0093) — không có bước ánh xạ riêng nào.
 
