@@ -62,3 +62,9 @@ hand-maintained copies, drifting.
 - Permission-gated views have a test for the denied case, not only the allowed one
 
 → Skills: `nextjs-multi-tenant` · `session-and-token` · `administrative-language`
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

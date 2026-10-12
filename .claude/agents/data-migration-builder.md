@@ -56,3 +56,9 @@ Question 4 is the one that gets skipped and the one that causes incidents.
 4. Anything that renumbers or reissues business codes
 
 → Skills: `admin-unit-merge` · `mask-personal-data` · `go-tenant-context`
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

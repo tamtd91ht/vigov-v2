@@ -20,9 +20,22 @@ Dùng chung cho bản đồ phản ánh (`/phan-anh`) và, từ 11/10/2026, Bả
 bbox, mức thu nhỏ và mức phóng to cố định trong `web-admin/scripts/build-basemap.sh` (đầu tệp có lý
 do từng con số) — không chép lại ở đây.
 
-Đường đi của một byte: trình duyệt → `https://<xã>/basemap/<tệp>` (cùng gốc, sau cổng phiên của
-`web-admin/src/proxy.ts`) → `web-admin/src/lib/may-chu/basemap.ts` → `BASEMAP_URL/<tệp>` trong MinIO.
-Danh sách tệp được phát: `web-admin/src/lib/basemap/assets.ts`.
+| Khi nào dùng | Ảnh hưởng | Điều cấm |
+|---|---|---|
+| Bản đồ không có nền / lỗi 404·502·504 ở `/basemap/`; làm mới tệp nền; đổi MinIO | Đặt sai `BASEMAP_URL` làm cả hai bản đồ mất nền; các phần khác của web-admin và comms vẫn chạy | Đưa vào dùng khi **chưa có danh mục kiểm chủ quyền đã ký** · dùng URL OpenFreeMap hay host ngoài · ghi đè tiền tố ngày đang được đọc · tắt kiểm chứng chỉ MinIO |
+
+Đường đi của một byte nền bản đồ:
+
+```mermaid
+flowchart LR
+    B[Trình duyệt cán bộ] -->|"https://{xã}/basemap/{tệp}"| W["web-admin<br/>proxy.ts: cổng phiên<br/>may-chu/basemap.ts"]
+    Z[Mini App] -->|"GET /api/v1/commune-basemap/{tệp}"| C[service-comms]
+    W -->|"BASEMAP_URL/{tệp}, cổng 9000"| M[("MinIO<br/>{tiền tố}-public/config/map/{ngày}")]
+    C -->|"BASEMAP_URL/{tệp}"| M
+```
+
+Danh sách tệp web-admin phát: `web-admin/src/lib/basemap/assets.ts`. Nhánh Mini App: `deploy/cau-hinh/README.md`
+mục `BASEMAP_URL` (comms trả 503 khi thiếu khoá).
 
 ## Triệu chứng → việc làm
 

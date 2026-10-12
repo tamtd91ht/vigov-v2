@@ -78,6 +78,9 @@ built). Anything you did not run yourself is written under **CHƯA KIỂM**, nev
 
 ### 3. Write the file
 
+Style: `skills/writing-reports` — each row states a fact with its evidence, the trap or open item
+first, no narrative of the session.
+
 Frontmatter — `tier: T5` and `expires` are enforced by `hooks/doc_guard.py`:
 
 ```yaml

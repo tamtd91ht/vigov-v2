@@ -59,3 +59,9 @@ across the whole backend, so "every write leaves a trail" could not actually hol
 - Assumptions stated explicitly in the final report
 
 → Skills: `go-service-pattern` · `go-tenant-context` · `audit-trail` · `session-and-token`
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

@@ -151,7 +151,7 @@ did not. Nothing worth recording? Say that sentence out loud — never write an 
 | **Simplest thing first** | The least code that solves the actual problem. No abstraction for a single call site |
 | **Reuse before writing** | Check `kb/30-indexes/code-map.json` before writing a helper |
 | **Comments explain WHY** | Give the reason and the consequence of getting it wrong; never restate the code |
-| **Write short, technical, complete** | One idea per sentence, prefer tables, cite `file:line`. No preamble, no metaphor |
+| **Report for a busy reader** | Answer first, evidence per claim, tables over prose: `skills/writing-reports` |
 | **Plan multi-step work** | State `1. [step] → verified by: [how]` before starting |
 
 Prose in documentation (`kb/`) is written in **Vietnamese** — the people supervising this

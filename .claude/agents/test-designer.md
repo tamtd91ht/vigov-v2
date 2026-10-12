@@ -61,3 +61,9 @@ commune. It is the shape a real cross-tenant breach takes.
 catch** — if that sentence is hard to write, the tests are probably testing the wrong thing.
 
 → Skill: `audit-trail`
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

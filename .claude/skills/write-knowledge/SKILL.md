@@ -28,7 +28,7 @@ The hand-written copy is wrong by the next day.
 | `kb/10-decisions/` T1 | Permanent | ADRs — never edited, never deleted |
 | `kb/30-indexes/` T3 | Per commit | **GENERATED** — never hand-edited |
 | `kb/20-contracts/` T2 | Per API version | **GENERATED** — `openapi.json` from `tools/apidoc`. The REST surface only; `proto/` owns the contract between services |
-| _`kb/40-runbooks/` T4_ | Per incident | **Not created yet** — create on the first real incident |
+| `kb/40-runbooks/` T4 | Per incident / procedure | Step-by-step operator procedures. Frame: `writing-reports` §7 E |
 | `kb/90-ephemeral/` T5 | Days–weeks | Session handovers. **`expires` is mandatory** — a handover with no expiry is read as fact six months on |
 
 A tier in italics does not exist on disk. Create it when there is a real first occupant —
@@ -54,4 +54,9 @@ file rots entirely — including the part that would have been correct for years
 Session logs · restatements of the code · narratives of how the work went · lists derivable
 from the code · "summary documents" that gather what already exists elsewhere.
 
-→ Rule 9 · `/knowledge-health` · `/decision`
+## How to write it
+
+This skill answers **whether** and **where**. **How** — answer first, evidence on every claim,
+table or diagram over paragraphs, no AI phrasing — is `writing-reports`. Read it before writing.
+
+→ Rule 9 · `/knowledge-health` · `/decision` · `writing-reports`

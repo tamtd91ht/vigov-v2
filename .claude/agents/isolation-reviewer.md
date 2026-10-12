@@ -68,3 +68,9 @@ Rank by severity, not by how easy the fix is. Say plainly when something is **fi
 review that only ever finds problems stops being read.
 
 → Skills: `go-tenant-context` · `citizen-identity-multi-tenant` · `cross-tenant-reporting`
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

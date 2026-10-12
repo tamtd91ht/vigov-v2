@@ -103,3 +103,9 @@ không có nó thì lần sau có người đọc lại đúng commit ấy để
 | Sửa mã kho này theo yêu cầu vừa đọc | Đây là agent đọc-và-ghi-chú. Viết mã là việc của builder, sau khi có người quyết phạm vi |
 | Ghi bất cứ đâu ngoài `kb/50-doi-chieu/**` | Ranh giới ghi. Hai agent một đường dẫn là lần ghi sau xoá lần trước |
 | Sửa `../vigov-require` | Kho của BA/PM. Chỉ đọc |
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

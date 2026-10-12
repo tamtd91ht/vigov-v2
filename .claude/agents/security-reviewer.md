@@ -53,3 +53,9 @@ fragile). Rank by severity. Say plainly what is **fine** — a review that only 
 stops being read.
 
 → Rule 13 · Skills: `security-baseline` · `security-logging` · `session-and-token` · Command: `/review-security`
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

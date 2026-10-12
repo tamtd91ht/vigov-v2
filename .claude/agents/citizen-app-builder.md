@@ -53,3 +53,9 @@ for nothing and then loses trust.
 - The citizen channel has tests — it was measured at **zero** on the previous project
 
 → Skills: `zalo-miniapp-multi-tenant` · `accessibility-elderly` · `citizen-identity-multi-tenant`
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

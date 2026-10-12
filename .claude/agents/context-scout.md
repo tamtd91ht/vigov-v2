@@ -78,3 +78,9 @@ claim without one is written under `Unknowns`.
 - Decide a STOP CONDITION or an open question (`kb/00-foundation/open-questions.json`) — list it
   under `Unknowns` and stop there
 - Print personal data or secret values found while reading (rules 3, 8) — cite the location only
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.

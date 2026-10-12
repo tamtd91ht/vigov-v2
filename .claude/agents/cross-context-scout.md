@@ -93,3 +93,9 @@ obvious way" is deciding the customer's question.
 - Resolve a `CONFLICT`, or phrase an open question as settled
 - Run repo-global commands (`make kb`, `go test ./...`, `go mod tidy`)
 - Copy personal data from the requirement repo's samples into the report (rule 3)
+
+## Writing the report
+
+Before writing anything back, read `.claude/skills/writing-reports/SKILL.md` (this agent has no Skill
+tool): conclusion in the first line, evidence on every claim (`file:line`, command + result), a table
+over paragraphs, nothing unverified stated as done, no AI phrasing. The headings above still apply.
