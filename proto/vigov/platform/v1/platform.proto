@@ -80,6 +80,28 @@ import "google/protobuf/timestamp.proto";
 service PlatformService {
   // ResolveHost maps an incoming Host to a commune. Called by every service edge, so it must
   // be cheap and cacheable with a short TTL.
+  //
+  // It also maps a commune's LAUNCH CODE to that commune — the opaque public code a commune's QR
+  // / launch link carries (`?x=<launch code>&src=qr`) in place of the commune's domain (owner,
+  // 12/10/2026). The Mini App resolves the code ONCE at launch and from then on uses the host
+  // returned here, exactly as before. Extended here rather than added as a new RPC on purpose: a
+  // new RPC would need its own place on core/grpcx.methodsWithoutTenant, which is a STOP
+  // CONDITION (ADR 0012, decision 1); this one already holds that place for the same reason —
+  // it runs before any commune is known.
+  //
+  // EXACTLY ONE of `host` / `launch_code` is non-empty. Both empty or both set → INVALID_ARGUMENT;
+  // a caller is never answered by picking one of the two for it.
+  //
+  //   by `host`          unchanged: the commune owning that Host.
+  //   by `launch_code`   the commune holding that code, with `Tenant.host` = that commune's
+  //                      PRIMARY host — blanked to "" when the primary is a reserved platform host,
+  //                      exactly as GetTenant does. "" means "no usable domain"; the caller refuses
+  //                      and never substitutes another of the commune's hosts.
+  //   NOT_FOUND          unknown host, unknown code, or a deactivated / merged commune — ONE answer,
+  //                      byte-for-byte the same for all of them, so probing cannot enumerate which
+  //                      communes or codes exist. A merged commune's code does not follow
+  //                      tenant_succession here.
+  //   INVALID_ARGUMENT   malformed input (a code not matching the format on the message).
   rpc ResolveHost(ResolveHostRequest) returns (ResolveHostResponse);
 
   // GetTenant returns metadata only: name, status, quota. Never business data.
@@ -640,7 +662,19 @@ message Tenant {
   string province = 6;
 }
 
-message ResolveHostRequest { string host = 1; }
+// EXACTLY ONE of the two fields is non-empty — see the RPC comment for the full answer table.
+// Callers written before `launch_code` existed send `host` only and are answered exactly as before.
+message ResolveHostRequest {
+  string host = 1;
+
+  // A commune's launch code: the opaque public code printed into its QR / launch link. Format:
+  // exactly 12 lowercase hex characters, `^[0-9a-f]{12}$`. Fixed per commune (no rotation today).
+  //
+  // NOT `tenant_id` and NOT derived from it, the domain, the administrative code or the name
+  // (rule 1, forbidden #2 and #5): it is a public lookup key that grants nothing on its own — what
+  // it yields is the same registry answer a Host yields, never a session and never business data.
+  string launch_code = 2;
+}
 message ResolveHostResponse { Tenant tenant = 1; }
 message GetTenantRequest { string id = 1; }
 // Wrapped, not a bare Tenant: adding a field later must not change the RPC signature.
