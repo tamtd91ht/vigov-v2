@@ -67,7 +67,7 @@ chủ dự án chưa quyết); đã khuyên **không** tách `tenant_domain.host
 | **Bản test là bản thật:** không chữ "demo"/"trải nghiệm" trong app; `--demo` chỉ thay danh tính, chạy thật tới máy chủ | ADR 0047 §6 dòng "Cờ `--demo` làm lại" · ghi nhớ `ban-test-la-that` |
 | Mã QR bản thử v30 trong App ID do ViHAT Group đứng tên là **prototype của `vigov-require`**, không phải `citizen-app` — App ID ấy ghim cứng trong `vigov-require/apps/miniapp/zmp-cli.json` | ADR 0031 · tệp đã nêu |
 | `citizen-app/ui-design/` (tài liệu khách gửi) không vào kho | `citizen-app/.gitignore` · `tools/check_brain.py` |
-| Trần `always_load` 28000 token — **đừng tự nâng** | `kb/INDEX.yaml` `budget` |
+| Trần `always_load` 30000 token (người dùng nâng 12/10/2026) — **đừng tự nâng** | `kb/INDEX.yaml` `budget` |
 | Cụm thật PostgreSQL 16 | ghi nhớ `pg16-miniapp-chua-len-zalo` |
 | Chưa có **dữ liệu thật** trên môi trường nào (người dùng nói 30/09) | **chưa kiểm** — không có gì trên đĩa chứng minh được |
 
