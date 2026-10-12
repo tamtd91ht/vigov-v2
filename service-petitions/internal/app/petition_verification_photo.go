@@ -604,8 +604,8 @@ func NewCitizenVerificationPhotos(petitions CitizenPhotoPetitions, files Verific
 // issued only AFTER the session's citizen and commune matched it (rule 4, invariants 2, 3 and 7).
 // Another citizen's code, another commune's and an unknown one are ONE ErrPhieuKhongTonTai.
 //
-// ONLY AT `cho-dan-xac-nhan` AND `da-dong` (owner decision (b), 02/10/2026 —
-// domain.VerificationPhotosVisibleToCitizen states the rule and the reopened case). At any other status
+// ONLY AT `da-xu-ly`, `cho-dan-xac-nhan` AND `da-dong` (owner decision 12/10/2026, replacing (b) of
+// 02/10/2026 — domain.VerificationPhotosVisibleToCitizen states the rule and the reopened case). At any other status
 // the answer is an EMPTY list, not a 404: the petition exists and is this citizen's (the identity read
 // above already passed), so a 404 would be false, and "no photo to show yet" leaks nothing — the same
 // shape as the citizen view, which gates the refusal reason on the status and otherwise leaves it

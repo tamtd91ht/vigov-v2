@@ -227,18 +227,21 @@ func TestCloseGate_AfterTheLifecycleCheck(t *testing.T) {
 	}
 }
 
-// --- the citizen's view of verification photos by status (owner decision (b), 02/10/2026) ----------
+// --- the citizen's view of verification photos by status (owner decision 12/10/2026) ----------------
 
-func TestVerificationPhoto_CitizenSeesThemOnlyFromAwaitingConfirmation(t *testing.T) {
+func TestVerificationPhoto_CitizenSeesThemFromProcessed(t *testing.T) {
 	reopened := vpPetitionRow(domain.DangXuLy, "rac-thai")
-	reopened.SoLanMoLai = 1 // shown at cho-dan-xac-nhan before, reopened since: hidden again
+	reopened.SoLanMoLai = 1 // shown before, reopened since: hidden again until da-xu-ly
+	reprocessed := vpPetitionRow(domain.DaXuLy, "rac-thai")
+	reprocessed.SoLanMoLai = 1 // reopened, then processed again: visible again
 	for name, c := range map[string]struct {
 		row  domain.PhieuPhanAnh
 		want int
 	}{
 		"dang-xu-ly":                   {vpPetitionRow(domain.DangXuLy, "rac-thai"), 0},
-		"da-xu-ly":                     {vpPetitionRow(domain.DaXuLy, "rac-thai"), 0},
+		"da-xu-ly":                     {vpPetitionRow(domain.DaXuLy, "rac-thai"), 1},
 		"reopened, back at dang-xu-ly": {reopened, 0},
+		"reopened, back at da-xu-ly":   {reprocessed, 1},
 		"khong-tiep-nhan":              {vpPetitionRow(domain.KhongTiepNhan, "rac-thai"), 0},
 		"cho-dan-xac-nhan":             {vpPetitionRow(domain.ChoDanXacNhan, "rac-thai"), 1},
 		"da-dong":                      {vpPetitionRow(domain.DaDong, "rac-thai"), 1},
@@ -1242,12 +1245,27 @@ func TestStaffFilePurposesMatchCoreStorage(t *testing.T) {
 	}
 }
 
+// Owner decision 12/10/2026: visible from `da-xu-ly` onward. Every status written out, so a change to
+// the set has to change a line here rather than slip through a derived `want`.
 func TestVerificationPhotosVisibleToCitizen(t *testing.T) {
-	for _, s := range []domain.TrangThai{domain.DaTiepNhan, domain.DangPhanLoai, domain.DaChuyenXuLy, domain.DangXuLy,
-		domain.DaXuLy, domain.ChoDanXacNhan, domain.DaDong, domain.KhongTiepNhan, domain.ChuyenCapTren, "not-a-status"} {
-		want := s == domain.ChoDanXacNhan || s == domain.DaDong
-		if got := domain.VerificationPhotosVisibleToCitizen(s); got != want {
-			t.Errorf("%s: visible = %v, want %v", s, got, want)
+	for _, c := range []struct {
+		status  domain.TrangThai
+		visible bool
+	}{
+		{domain.DaTiepNhan, false},
+		{domain.DangPhanLoai, false},
+		{domain.DaChuyenXuLy, false},
+		{domain.DangXuLy, false},
+		{domain.DaXuLy, true},
+		{domain.ChoDanXacNhan, true},
+		{domain.DaDong, true},
+		{domain.KhongTiepNhan, false},
+		{domain.ChuyenCapTren, false},
+		{"", false},
+		{"not-a-status", false},
+	} {
+		if got := domain.VerificationPhotosVisibleToCitizen(c.status); got != c.visible {
+			t.Errorf("%q: visible = %v, want %v", c.status, got, c.visible)
 		}
 	}
 }

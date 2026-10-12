@@ -51,21 +51,27 @@ func VerificationPhotoUploadOpen(s TrangThai) bool {
 }
 
 // VerificationPhotosVisibleToCitizen reports whether the citizen may see the verification photos of
-// their own petition in this status: `cho-dan-xac-nhan` and `da-dong`, AND NOTHING ELSE (owner decision
-// (b), 02/10/2026, ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8": "từ khi phiếu sang
-// `cho-dan-xac-nhan` trở đi (và sau khi đóng), không phải ngay lúc cán bộ tải").
+// their own petition in this status: `da-xu-ly`, `cho-dan-xac-nhan` and `da-dong`, AND NOTHING ELSE —
+// i.e. once processing is done (owner decision 12/10/2026, "Hiện từ 'Đã xử lý'", replacing decision
+// (b) of 02/10/2026, which started at `cho-dan-xac-nhan`).
+//
+// WHY `da-xu-ly` WAS ADDED: under (b) a petition the officer had finished, with after-photos uploaded,
+// showed the citizen no before/after block until staff moved it on to `cho-dan-xac-nhan` — reported by
+// the customer as "the processing photos are missing". `da-xu-ly` is the status that says the work is
+// done, so the evidence of that work belongs with it; hiding it there made a finished fix look ignored.
+// Photos uploaded WHILE the work is in progress (`dang-xu-ly` and earlier) stay hidden: they are not yet
+// the result staff are presenting.
 //
 // THE CURRENT STATUS DECIDES, NOT THE HISTORY. A petition reopened by a 1–2 star rating is back at
-// `dang-xu-ly`, and from then until it again reaches `cho-dan-xac-nhan` the citizen sees NO verification
-// photo — not even the ones shown before the reopening. Two reasons: the photos uploaded during the
-// reopened work are exactly what (b) keeps from the citizen until staff present them, and the old ones
-// are the result the citizen has just rejected (decision (c)); showing those alone would need a
-// per-photo cut at the reopening instant that nobody decided, and would present rejected evidence as
-// the current answer. `da-dong` is shown whether or not the petition passed through `cho-dan-xac-nhan`
-// ("và sau khi đóng"). `da-xu-ly`, the early statuses and the two terminal branches are hidden —
-// fail closed: a status not named by the owner shows nothing.
+// `dang-xu-ly`, and from then until it again reaches `da-xu-ly` the citizen sees NO verification photo —
+// not even the ones shown before the reopening. The old ones are the result the citizen has just
+// rejected (decision (c)); showing those alone would need a per-photo cut at the reopening instant that
+// nobody decided, and would present rejected evidence as the current answer. `da-dong` is shown whether
+// or not the petition passed through the earlier two ("và sau khi đóng"). The early statuses and the
+// two terminal branches (`khong-tiep-nhan`, `chuyen-cap-tren`) are hidden — fail closed: a status not
+// named by the owner shows nothing.
 func VerificationPhotosVisibleToCitizen(s TrangThai) bool {
-	return s == ChoDanXacNhan || s == DaDong
+	return s == DaXuLy || s == ChoDanXacNhan || s == DaDong
 }
 
 // IsVerificationPhotoOf reports whether f is a verification photo of the petition with internal id
