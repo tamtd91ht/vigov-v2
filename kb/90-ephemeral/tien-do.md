@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: f3033d9b
+derived_from_commit: fb35ee22
 expires: 2027-01-10
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 180 |
 | chưa làm | 43 |
 | treo | 13 |
-| xong | 516 |
+| xong | 518 |
 
 ## Theo menu
 
@@ -1190,7 +1190,7 @@ Cập nhật 2026-10-12 · 74 mục
 
 ## `service-petitions`
 
-Cập nhật 2026-10-12 · 91 mục
+Cập nhật 2026-10-12 · 92 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1367,6 +1367,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `petitions-bang-loi-dot-2-10-11` — Bảng lỗi khách 10/10/2026, đợt 2: (a) chuyen-tiep trở lại làm trạng thái rẽ nhánh khi giao/chuyển việc — đảo quyết định 28/09/2026 ở mục `giao-lai-nhiem-vu` (ADR 0076 §Sửa đổi G2, dòng 17); (b) nhật ký đề nghị lùi hạn hiện trên nhiệm vụ (dòng 17); (c) cán bộ ghi nhận đánh giá của người dân, nguồn staff_recorded, không cộng vào điểm hài lòng (ADR 0062 §Sửa đổi, dòng 60). | xong | f33dd452 — (a) domain/nhiem_vu.go (chuyen-tiep là đích từ moi-giao/da-tiep-nhan/dang-thuc-hien), domain/task_assignment.go (HandoverStatus: đổi người giữ CÓ note → chuyen-tiep, KHÔNG note → giữ trạng thái; bỏ ResetStatus), domain/nhiem_vu_ghi.go (bỏ ErrForwardingIsAssignment), app/task_status_handover.go; (b) app/nhiem_vu.go: gửi/duyệt/từ chối đề nghị lùi hạn ghi nhật ký nhiệm vụ cùng giao dịch (ExtensionRequestLogText, ExtensionDecisionLogText); (c) migrations/0042_petition_staff_recorded_rating.sql, domain/app/store/http petition_staff_recorded_rating*.go, http/routes_staff_recorded_rating.go: POST /api/v1/citizen-reports/{maTraCuu}/staff-recorded-rating, feedback.resolve, 409 citizen_rated / staff_rating_exists, không vào số liệu hài lòng (summary_metrics.go, store/citizen_report_summary.go). Thân commit: make check exit 0, golangci-lint chưa cài nên không chạy. Web: 3421992a. | — | XONG; ADR 0076 G2 và ADR 0062 §Sửa đổi đã ghi commit. Đảo quyết định 28/09/2026 ở mục `giao-lai-nhiem-vu`: đổi người giữ không còn về moi-giao. CÒN TREO chờ chủ dự án: 1–2 sao cán bộ ghi KHÔNG tự mở lại phiếu (luật 10 điều kiện dừng, ADR 0062 §Còn treo); Kanban 'Chuyển tiếp' không có cột; giao việc không lý do giữ trạng thái (ADR 0076 G2 §Còn treo). Migration 0042 chưa chạy trên PostgreSQL: mục `pg-migration-10-11`. |
 | `nhap-nhiem-vu-excel-10-11` — Nhập nhiệm vụ từ Excel không còn từ chối tệp hợp lệ (bảng lỗi khách 10/10, dòng 18 ở sổ web-admin). | xong | 4bf0f0a6 — domain/task_import.go, app/task_import.go, http/task_import.go + ca kiểm cả ba tầng: tiêu đề so không phân biệt hoa/thường/khoảng trắng/xuống dòng/hoà-hòa uỷ-ủy; hàng tiêu đề tìm trong 10 hàng đầu (bỏ qua dòng tiêu đề gộp ô phía trên); lỗi bố cục chỉ đúng ô; hạn nhận thêm '17:00 30/09/2026', '17h00', '30-09-2026', '30.09.2026', ISO có T; ô ngày-giờ 00:00 theo định dạng ô, hệ ngày 1904; mã bộ phận/ưu tiên/loại/khối không phân biệt hoa thường; loại/ưu tiên nhận theo tên khi tên chỉ trỏ một dòng; ô phê duyệt FALSE/không/chưa = chưa duyệt. Thân commit: go test/build/vet ./... xanh service-petitions. | — | CÒN TREO chờ chủ dự án: (1) hạn chỉ có ngày (không giờ) VẪN bị từ chối theo quyết định 28/09/2026 (domain ParseImportDeadline), trong khi prototype nhận — chọn giờ mặc định là quyết định của chủ dự án, không tự đặt; (2) nhập đơn vị thực hiện THEO TÊN cần hợp đồng identity mới — hiện chỉ có LiveOrgUnitIDsByCode (tra theo mã). Chưa kiểm với tệp Excel thật của khách. |
 | `anh-sau-xu-ly-tu-da-xu-ly-12-10` — Bảng lỗi App Xã 12/10/2026 dòng 18: người dân thấy ảnh sau xử lý (nghiệm thu) từ `da-xu-ly` — thay quyết định (b) 02/10/2026 (từ `cho-dan-xac-nhan`). Chủ dự án chọn đề xuất 'Hiện từ Đã xử lý' 12/10/2026 | xong | commit 3fe0fdc6. domain/petition_staff_file.go VerificationPhotosVisibleToCitizen = da-xu-ly · cho-dan-xac-nhan · da-dong; app/petition_verification_photo.go chú thích ListPhotos; test bảng đủ mọi trạng thái + ca mở lại về da-xu-ly ở app/petition_staff_file_test.go. go vet + go test -p 1 ./... service-petitions xanh 12/10/2026. ADR 0047 dòng THAY G8 ghi sửa đổi 12/10/2026. | — | Phiếu mở lại về dang-xu-ly thì ẩn mọi ảnh nghiệm thu; xử lý xong lần nữa thì hiện CẢ ảnh cũ (bị chê) lẫn ảnh mới, không phân biệt — cắt ảnh theo lượt mở lại chưa ai quyết (đã như vậy từ (b)). Chưa thử trên app thật. |
+| `danh-sach-anh-bia-12-10` — GET /api/v1/citizen-reports mang cover_photo tuỳ chọn: link ký ≤15 phút ảnh hiện trường đầu tiên, một truy vấn ANY cho cả trang, một vết xem_anh_hien_truong (chủ thể danh-sach-phan-anh/anh-bia, delta chỉ tep_id) mỗi trang; can-bo thiếu feedback.restricted bỏ qua; ghi vết lỗi → 500. Danh sách luôn no-store. Chủ dự án chốt 12/10/2026. | xong | d816ecc0 · app/petition_photo.go Covers + staffMayOpenPhotos · store/petition_photo.go · http/list_cover_test.go (401/403/403 sai xã/200). go test ./... xanh. | — | Truy vấn ANY($3) CHƯA chạy trên PostgreSQL thật (VIGOV_TEST_DSN). Chỉ mục dùng: stored_file_by_subject_uploader (0021). |
 
 ## `service-platform`
 
@@ -1466,7 +1467,7 @@ Cập nhật 2026-10-11 · 22 mục
 
 ## `web-admin`
 
-Cập nhật 2026-10-12 · 153 mục
+Cập nhật 2026-10-12 · 154 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1623,3 +1624,4 @@ Cập nhật 2026-10-12 · 153 mục
 | `schema-gen-lech-hop-dong-12-10` — web-admin build đỏ ở `npm run check:api`: schema.gen.ts lệch openapi.json sau ba lượt đổi hợp đồng (b3dba9b5 nhóm Zalo, 890e4e20 location_citizen_adjusted, 5e8aceb1 commune-map-frame/commune-basemap) chỉ chạy make kb mà không chạy npm run gen:api. Sinh lại + sửa hai test lộ ra (fixture Kênh Zalo thiếu live_group_count; danh sách trường phiếu cán bộ thêm location_citizen_adjusted). | xong | d447bc0e — lint, typecheck, vitest 312 tệp/5842 ca, check:api, next build xanh trên máy dev 12/10/2026. Nguyên nhân gốc đóng: make kb nay chạy `cd web-admin && node scripts/gen-api-types.mjs` ngay sau tools/ingress (người dùng đồng ý 12/10/2026). | — | — |
 | `kanban-the-menu-chuyen-va-hover-12-10` — Thẻ Kanban Nhiệm vụ (ảnh tmp/web/ui-bug/nhiem-vu-chuyen-trang-thai.png): menu nổi của nút ⇄ chuyển trạng thái về cỡ chữ của thẻ (12.8px, dòng 32px, rộng tối đa 15rem); nền hover chỉ phủ hàng 'Chọn' + nút ⇄, không phủ mã và tiêu đề — theo prototype TaskCard.tsx:53, thay quyết định bảng lỗi khách dòng 12. | xong | 1b26d973 — globals.css .menu-noi/.menu-chuyen-cot, so-nhiem-vu.tsx thẻ Kanban; test batch-delete, kanban-move, sheet-layout. vitest 312 tệp/5843 ca xanh; đo trên /xem-thu/nhiem-vu (next dev, máy dev): mục menu 12.8px cao 32px, hàng hover chứa nút ⇄, không chứa tiêu đề. 91701cb6: nhãn 'Chọn' nhận cả phần đệm hàng; chú thích TheNhiemVu. Quyết định ghi ở ADR 0076 §Sửa đổi 12/10/2026 (G3 ngoại lệ cỡ menu chung, G4 hover). | — | — |
 | `bang-loi-reopen-12-10` — Bảng lỗi web admin xã — 8 dòng Reopen ngày 12/10/2026 (S4, S8, S20, S27, S29, S32, S33, S35). Cột H 'Nội dung đã làm (dev)' trên sheet ghi từng dòng. | xong | c2e712f0 (S27: /cau-hinh còn 9 tab, ba tab Lịch làm việc · Nhật ký hệ thống · Nhận diện xã chuyển sang mục menu 'Hệ thống' /he-thong — chủ dự án 12/10, thay ADR 0090:60 'giữ ở Cấu hình') · 09ae9954 (S33: xoá trường bản đồ bằng popup) · 3e35ae5b (S35: câu 'hồ sơ tiếp nhận' nguyên văn prototype, chủ dự án 12/10; 'Mặc định {n} giờ' vẫn từ dữ liệu) · 72de0f73 (S29, service-identity). Toàn web-admin vitest 313/313 tệp xanh. | — | S4, S8, S20, S32: mã đã có từ trước (e4d0f53d, 56a930f8, b6ae86fa+2dff300e, 2e7b8128) — đánh Fixed 'cần build lại', chưa kiểm trên môi trường khách. S4: đầu trang ẩn khối tên+chức vụ ở 768–1023px (globals.css:1065-1074), prototype không ẩn — nếu khách vẫn báo thì đây là chỗ sửa. Chưa kiểm bằng ảnh render: /he-thong, /cau-hinh 9 tab, popup xoá trường bản đồ. Hai dòng 'New' cuối sheet (ảnh phản ánh trong danh sách, vị trí người gửi) chưa làm. |
+| `phan-anh-the-anh-bia-vi-tri-12-10` — Bảng lỗi web admin (2 dòng New 12/10): thẻ danh sách phản ánh hiện ảnh bìa (prototype FeedbackCard.tsx:39) và 'Toạ độ …' khi không có thôn/địa chỉ nhưng có toạ độ. Chủ dự án chốt 12/10: ảnh bìa ký ở danh sách, 1 vết kiểm toán/trang. | xong | fb35ee22 (CoverTile trong so-phan-anh.tsx, coverPhotoAlt) · 74d2a151 (cardPlaceLabel dùng sceneCoordinates). vitest phan-anh + lib/api 68 tệp xanh. | — | Chưa kiểm bằng ảnh render. Khi viết CSP (security_debt missing-security-headers, hạn 30/11/2026) img-src phải cho host kho tệp, nếu không ảnh bìa và ảnh ngăn chi tiết trắng. |

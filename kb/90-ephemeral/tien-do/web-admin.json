@@ -1368,6 +1368,14 @@
       "viec": "Bảng lỗi web admin xã — 8 dòng Reopen ngày 12/10/2026 (S4, S8, S20, S27, S29, S32, S33, S35). Cột H 'Nội dung đã làm (dev)' trên sheet ghi từng dòng.",
       "bang_chung": "c2e712f0 (S27: /cau-hinh còn 9 tab, ba tab Lịch làm việc · Nhật ký hệ thống · Nhận diện xã chuyển sang mục menu 'Hệ thống' /he-thong — chủ dự án 12/10, thay ADR 0090:60 'giữ ở Cấu hình') · 09ae9954 (S33: xoá trường bản đồ bằng popup) · 3e35ae5b (S35: câu 'hồ sơ tiếp nhận' nguyên văn prototype, chủ dự án 12/10; 'Mặc định {n} giờ' vẫn từ dữ liệu) · 72de0f73 (S29, service-identity). Toàn web-admin vitest 313/313 tệp xanh.",
       "tiep_theo": "S4, S8, S20, S32: mã đã có từ trước (e4d0f53d, 56a930f8, b6ae86fa+2dff300e, 2e7b8128) — đánh Fixed 'cần build lại', chưa kiểm trên môi trường khách. S4: đầu trang ẩn khối tên+chức vụ ở 768–1023px (globals.css:1065-1074), prototype không ẩn — nếu khách vẫn báo thì đây là chỗ sửa. Chưa kiểm bằng ảnh render: /he-thong, /cau-hinh 9 tab, popup xoá trường bản đồ. Hai dòng 'New' cuối sheet (ảnh phản ánh trong danh sách, vị trí người gửi) chưa làm."
+    },
+    {
+      "id": "phan-anh-the-anh-bia-vi-tri-12-10",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Bảng lỗi web admin (2 dòng New 12/10): thẻ danh sách phản ánh hiện ảnh bìa (prototype FeedbackCard.tsx:39) và 'Toạ độ …' khi không có thôn/địa chỉ nhưng có toạ độ. Chủ dự án chốt 12/10: ảnh bìa ký ở danh sách, 1 vết kiểm toán/trang.",
+      "bang_chung": "fb35ee22 (CoverTile trong so-phan-anh.tsx, coverPhotoAlt) · 74d2a151 (cardPlaceLabel dùng sceneCoordinates). vitest phan-anh + lib/api 68 tệp xanh.",
+      "tiep_theo": "Chưa kiểm bằng ảnh render. Khi viết CSP (security_debt missing-security-headers, hạn 30/11/2026) img-src phải cho host kho tệp, nếu không ảnh bìa và ảnh ngăn chi tiết trắng."
     }
   ]
 }

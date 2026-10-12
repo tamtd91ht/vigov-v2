@@ -558,6 +558,10 @@
       "kind": "func",
       "at": "service-comms/internal/app/content_cover.go:1069"
     },
+    "app.Covers": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/petition_photo.go:1150"
+    },
     "app.Create": {
       "kind": "func",
       "at": "service-identity/internal/app/residential_unit.go:94"
@@ -1944,7 +1948,7 @@
     },
     "app.NewStaffPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_photo.go:1051"
+      "at": "service-petitions/internal/app/petition_photo.go:1059"
     },
     "app.NewStaffRecordedRatings": {
       "kind": "func",
@@ -2836,7 +2840,11 @@
     },
     "app.StaffPetitionPhotos": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:1042"
+      "at": "service-petitions/internal/app/petition_photo.go:1050"
+    },
+    "app.StaffPhotoFiles": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/petition_photo.go:1044"
     },
     "app.StaffPhotoPetitions": {
       "kind": "type",
@@ -9516,7 +9524,7 @@
     },
     "http.ChuyenCapTrenPhieu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:603"
+      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:617"
     },
     "http.ChuyenVanBanDen": {
       "kind": "func",
@@ -10016,7 +10024,7 @@
     },
     "http.DocPhieuPhanAnh": {
       "kind": "func",
-      "at": "service-petitions/internal/http/phieu_phan_anh.go:441"
+      "at": "service-petitions/internal/http/phieu_phan_anh.go:450"
     },
     "http.DocumentTypeImportTemplate": {
       "kind": "func",
@@ -10036,7 +10044,7 @@
     },
     "http.DongPhieu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:559"
+      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:573"
     },
     "http.DuAnTienDo": {
       "kind": "type",
@@ -10372,7 +10380,7 @@
     },
     "http.KhongTiepNhanPhieu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:581"
+      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:595"
     },
     "http.KyBienBan": {
       "kind": "func",
@@ -10456,7 +10464,7 @@
     },
     "http.ListMyPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:210"
+      "at": "service-petitions/internal/http/petition_photo.go:253"
     },
     "http.ListMyResidentialUnits": {
       "kind": "func",
@@ -10464,7 +10472,7 @@
     },
     "http.ListMyVerificationPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:226"
+      "at": "service-petitions/internal/http/petition_photo.go:269"
     },
     "http.ListPetitionFields": {
       "kind": "func",
@@ -10472,7 +10480,7 @@
     },
     "http.ListPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:351"
+      "at": "service-petitions/internal/http/petition_photo.go:394"
     },
     "http.ListPortalSyncRuns": {
       "kind": "func",
@@ -10776,11 +10784,11 @@
     },
     "http.PhanCongPhieu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:488"
+      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:502"
     },
     "http.PhanLoaiPhieu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:465"
+      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:479"
     },
     "http.PhanQuyenGhi": {
       "kind": "type",
@@ -11544,7 +11552,7 @@
     },
     "http.TienTrangThaiPhieu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:533"
+      "at": "service-petitions/internal/http/xu_ly_phan_anh.go:547"
     },
     "http.TimCanBo": {
       "kind": "func",
@@ -11624,7 +11632,7 @@
     },
     "http.UploadPetitionPhoto": {
       "kind": "func",
-      "at": "service-petitions/internal/http/petition_photo.go:180"
+      "at": "service-petitions/internal/http/petition_photo.go:223"
     },
     "http.UploadPolicyEditor": {
       "kind": "type",
@@ -15782,6 +15790,10 @@
       "kind": "func",
       "at": "service-petitions/internal/store/stored_file.go:269"
     },
+    "store.PetitionCoverPhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/store/petition_photo.go:71"
+    },
     "store.PetitionFieldStore": {
       "kind": "type",
       "at": "service-platform/internal/store/petition_field.go:27"
@@ -15792,7 +15804,7 @@
     },
     "store.PetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/store/petition_photo.go:29"
+      "at": "service-petitions/internal/store/petition_photo.go:31"
     },
     "store.PetitionSettingsStore": {
       "kind": "type",
@@ -16668,7 +16680,7 @@
     },
     "store.VerificationPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/store/petition_photo.go:62"
+      "at": "service-petitions/internal/store/petition_photo.go:115"
     },
     "store.VoucherCountBySource": {
       "kind": "func",

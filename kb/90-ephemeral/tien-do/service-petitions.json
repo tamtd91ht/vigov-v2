@@ -820,6 +820,14 @@
       "bang_chung": "commit 3fe0fdc6. domain/petition_staff_file.go VerificationPhotosVisibleToCitizen = da-xu-ly · cho-dan-xac-nhan · da-dong; app/petition_verification_photo.go chú thích ListPhotos; test bảng đủ mọi trạng thái + ca mở lại về da-xu-ly ở app/petition_staff_file_test.go. go vet + go test -p 1 ./... service-petitions xanh 12/10/2026. ADR 0047 dòng THAY G8 ghi sửa đổi 12/10/2026.",
       "no_confirm": [],
       "tiep_theo": "Phiếu mở lại về dang-xu-ly thì ẩn mọi ảnh nghiệm thu; xử lý xong lần nữa thì hiện CẢ ảnh cũ (bị chê) lẫn ảnh mới, không phân biệt — cắt ảnh theo lượt mở lại chưa ai quyết (đã như vậy từ (b)). Chưa thử trên app thật."
+    },
+    {
+      "id": "danh-sach-anh-bia-12-10",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "GET /api/v1/citizen-reports mang cover_photo tuỳ chọn: link ký ≤15 phút ảnh hiện trường đầu tiên, một truy vấn ANY cho cả trang, một vết xem_anh_hien_truong (chủ thể danh-sach-phan-anh/anh-bia, delta chỉ tep_id) mỗi trang; can-bo thiếu feedback.restricted bỏ qua; ghi vết lỗi → 500. Danh sách luôn no-store. Chủ dự án chốt 12/10/2026.",
+      "bang_chung": "d816ecc0 · app/petition_photo.go Covers + staffMayOpenPhotos · store/petition_photo.go · http/list_cover_test.go (401/403/403 sai xã/200). go test ./... xanh.",
+      "tiep_theo": "Truy vấn ANY($3) CHƯA chạy trên PostgreSQL thật (VIGOV_TEST_DSN). Chỉ mục dùng: stored_file_by_subject_uploader (0021)."
     }
   ]
 }
