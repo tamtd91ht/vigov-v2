@@ -1218,6 +1218,9 @@ function tempPaths(data: readonly string[] | string): readonly string[] {
  * (`apis/common/apis/general/openMediaPicker.js`), and a cropped scene loses the very thing the officer needs.
  * `compressLevel: 1` ("Nén nhẹ"): an uncompressed modern photo can pass the server's 10 MB policy (G3) and is
  * slow on a rural line; the server re-encodes anyway. ⚠ An assumption, stated: the owner chose no level.
+ * Since 12/10/2026 a photo still over 4 MB after Zalo's compression — and every camera photo, which `chooseImage`
+ * cannot compress — is shrunk again on the phone before upload (`cong-dan/man/scene-photos.tsx` `preparePhoto` →
+ * `lib/shrink-photo.ts`).
  */
 const SCENE_PICKER = { editView: { enable: false }, compressLevel: 1 } as const;
 
@@ -1271,7 +1274,8 @@ function untilReturnWithoutPhoto<T>(pending: Promise<T>): Promise<T | typeof NO_
  * `chooseImage` (`zmp-sdk/index.d.ts:4912-4956`): `{ count, sourceType: ["camera"], cameraType }` → `{ filePaths }`.
  * `cameraType: "back"` because the SDK's default is "front" (`chooseImage.js`), and a selfie is not a scene.
  * `filePaths` are object URLs of the taken file — read by `cong-dan/api/goi-vigov.ts` `readPickedPhoto` like the
- * picker's temp paths; nothing is uploaded by this call.
+ * picker's temp paths; nothing is uploaded by this call. `chooseImage` takes NO compression option: the original
+ * (6–15 MB) is shrunk on the phone before upload (`lib/shrink-photo.ts`, owner report 12/10/2026).
  *
  * The permission call is KEPT although `index.d.ts` does not mark `chooseImage` `@requirePermission`: whether
  * Zalo's webview opens the camera for a Mini App without it has not been measured on a device. The app's own
@@ -1331,8 +1335,9 @@ const CONSULT_PICKER = { editView: { enable: false }, compressLevel: 2 } as cons
 /**
  * "Chụp ảnh" on "Tư vấn và báo giá": the camera permission, then the phone's own BACK camera for one photo —
  * exactly the scene photo's path (`takeScenePhoto`), including the "closed without a photo" watch.
- * ⚠ `chooseImage` takes no compression option: a camera original can exceed 5 MB, and the screen then says so
- *   before sending (`REQUEST_PHOTO_MAX_BYTES`). Not measured on a device.
+ * `chooseImage` takes no compression option, and a camera original exceeds 5 MB (owner report 12/10/2026): the
+ * photo is shrunk ON THE PHONE before the size check (`yeu-cau/consult-photos.ts` `preparePickedPhoto` →
+ * `lib/shrink-photo.ts`). Only a photo the phone cannot decode still meets `REQUEST_PHOTO_MAX_BYTES` as it was.
  */
 export function takeConsultPhoto(): Promise<PhotoPick> {
   return takeScenePhoto();

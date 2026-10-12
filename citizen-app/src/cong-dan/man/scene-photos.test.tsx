@@ -46,7 +46,9 @@ import {
   type PickScenePhotos,
   photosInFlight,
   type PreparedPhoto,
+  preparePhoto,
   refusalFailure,
+  SCENE_PHOTO_TARGET_BYTES,
   ScenePhotoButtons,
   ScenePhotoField,
   SEND_FORM_MAX_PHOTOS,
@@ -210,6 +212,27 @@ describe("one photo — read · send (ONE multipart request to petitions)", () =
       retry: null,
     });
     expect(calls).toHaveLength(1);
+  });
+
+  it("a camera original is SHRUNK on the phone before upload, and the type is read from the SHRUNK bytes (12/10/2026)", async () => {
+    // A 12 MB "camera original" — over the server's 10 MB scene-photo policy — and a HEIC body: the type must
+    // come from what is sent, not from what was taken.
+    const big = new Uint8Array(12 * 1024 * 1024);
+    big.set(HEIC);
+    const original = new Blob([big]);
+    const shrunk = new Blob([JPEG], { type: "image/jpeg" });
+    const seen: number[] = [];
+    fakeFetch(answer(200, undefined, original));
+    const out = await preparePhoto(LOCAL, async (b) => {
+      seen.push(b.size);
+      return shrunk;
+    });
+    expect(out).toEqual({ blob: shrunk, type: "image/jpeg" });
+    expect(seen).toEqual([original.size]);
+    // The phone could not shrink it: the original goes on, and its own bytes decide (here: not a photo).
+    fakeFetch(answer(200, undefined, original));
+    expect(await preparePhoto(LOCAL, async (b) => b)).toBe("not-a-photo");
+    expect(SCENE_PHOTO_TARGET_BYTES).toBeLessThan(10 * 1024 * 1024);
   });
 
   it("a DROPPED LINE retries with the SAME Idempotency-Key — and the server's replay counts as stored", async () => {

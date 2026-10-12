@@ -39,6 +39,7 @@ import {
 } from "../api/hop-dong-phan-anh";
 import { taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not renamed (rule 12 #3)
 import type { ZaloFailure } from "../api/mo-phien-vigov";
+import { BROWSER_PHOTO_CODEC, shrinkPhoto } from "../../lib/shrink-photo";
 
 import { BieuTuong } from "./BieuTuong";
 import { ConsentDialog, DialogPortal } from "./consent-dialog";
@@ -471,10 +472,30 @@ export function sendOutcome(
   return { kind: "failed", failure, retry };
 }
 
-/** Read the picked file and learn its type from its bytes. */
-export async function preparePhoto(path: string): Promise<PreparedPhoto | "not-readable" | "not-a-photo"> {
-  const blob = await readPickedPhoto(path);
-  if (blob === null) return "not-readable";
+/**
+ * What a scene photo is shrunk to on the phone before upload (`lib/shrink-photo.ts`). 4 MB, well under the
+ * server's 10 MB scene-photo policy: a camera original (6–15 MB, `chooseImage` cannot compress) was refused
+ * as too large (owner report 12/10/2026), and 4 MB still leaves room for a commune whose policy is set lower
+ * than the default — and is one-third of the upload time on a rural line. ⚠ An assumption, stated: the owner
+ * chose no number; `service-petitions` stores at most 2560 px anyway, so the first ladder step loses nothing kept.
+ */
+export const SCENE_PHOTO_TARGET_BYTES = 4 * 1024 * 1024;
+
+const shrinkScenePhoto = (blob: Blob) => shrinkPhoto(blob, SCENE_PHOTO_TARGET_BYTES, BROWSER_PHOTO_CODEC);
+
+/**
+ * Read the picked file, shrink it if it is over the target, and learn its type from the bytes that will be SENT.
+ * Shrinking comes BEFORE the sniff: a re-encoded photo is JPEG whatever it was (a decodable HEIC included), and
+ * the declared type must match the bytes uploaded. A photo the phone cannot shrink is sent as it was, and the
+ * server's own limit speaks. `shrink` is injected for tests (Node has no canvas).
+ */
+export async function preparePhoto(
+  path: string,
+  shrink: (blob: Blob) => Promise<Blob> = shrinkScenePhoto,
+): Promise<PreparedPhoto | "not-readable" | "not-a-photo"> {
+  const picked = await readPickedPhoto(path);
+  if (picked === null) return "not-readable";
+  const blob = await shrink(picked);
   let head: Uint8Array;
   try {
     head = new Uint8Array(await blob.slice(0, 12).arrayBuffer());

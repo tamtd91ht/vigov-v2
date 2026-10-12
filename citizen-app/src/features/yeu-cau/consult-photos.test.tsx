@@ -27,6 +27,7 @@ import { NhaCungCapPhien } from "../dang-nhap/kho-phien"; // vi-name-ok: existin
 import { KHAI_BAO_LOI_GOI, type PhotoPick } from "../tinh-nang/zalo-api";
 
 import {
+  CONSULT_PHOTO_TARGET_BYTES,
   type ConsultPhoto,
   type ConsultSteps,
   markForRetry,
@@ -416,6 +417,23 @@ describe("picking: at most 3, the camera one at a time, a bad file said while th
     const out = await pickConsultPhotos(async () => answer(["ok", "bad"]), "library", 3, counter(), read);
     expect(out.photos.map((p) => p.path)).toEqual(["ok"]);
     expect(pickMessages("library", null, out.rejected)).toEqual([CONSULT_PHOTOS.rejected["file-unreadable"]]);
+  });
+
+  it("a camera original over 5 MB is SHRUNK on the phone BEFORE the size check (owner report 12/10/2026)", async () => {
+    const original = jpeg(REQUEST_PHOTO_MAX_BYTES + 1);
+    const shrunk = jpeg(1024);
+    const seen: Blob[] = [];
+    const shrink = async (file: Blob) => {
+      seen.push(file);
+      return shrunk;
+    };
+    // The bytes that pass are the shrunk ones, and the shrinker saw the original — so the size check ran after it.
+    expect(await preparePickedPhoto("p", async () => original, shrink)).toEqual({ file: shrunk });
+    expect(seen).toEqual([original]);
+    // A photo the phone could not shrink keeps its own bytes, and the size check still speaks.
+    expect(await preparePickedPhoto("p", async () => original, async (f) => f)).toEqual({ rejected: "too-large" });
+    // The target sits well under the server's limit.
+    expect(CONSULT_PHOTO_TARGET_BYTES).toBeLessThan(REQUEST_PHOTO_MAX_BYTES);
   });
 });
 

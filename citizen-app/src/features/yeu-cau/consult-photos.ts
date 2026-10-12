@@ -28,6 +28,7 @@ import {
   sniffRequestPhotoType,
   type YeuCauMoi, // vi-name-ok: existing type
 } from "../../api/hop-dong-yeu-cau";
+import { BROWSER_PHOTO_CODEC, shrinkPhoto } from "../../lib/shrink-photo";
 import { chooseConsultPhotos, type PhotoPick, takeConsultPhoto } from "../tinh-nang/zalo-api";
 
 /** "Chụp ảnh" (the phone's camera, one photo) or "Chọn ảnh" (the photo picker). */
@@ -55,18 +56,34 @@ export type PickOutcome = {
 };
 
 /**
- * Read a picked file and check it the way the server will, so a refusal is said BEFORE the request is sent.
+ * What a consultation photo is shrunk to on the phone (`lib/shrink-photo.ts`). 3 MB, well under `vihat-miniapp`'s
+ * 5 MB (`REQUEST_PHOTO_MAX_BYTES`): the camera (`chooseImage`) cannot compress, and its originals were over 5 MB.
+ * The margin is for a busy photo that stays large at the first ladder step; three photos of 3 MB are also what a
+ * rural line can send one after another. ⚠ An assumption, stated: the owner chose no number.
+ */
+export const CONSULT_PHOTO_TARGET_BYTES = 3 * 1024 * 1024;
+
+const shrinkConsultPhoto = (file: Blob) => shrinkPhoto(file, CONSULT_PHOTO_TARGET_BYTES, BROWSER_PHOTO_CODEC);
+
+/**
+ * Read a picked file, shrink it if it is over the target, and check it the way the server will, so a refusal is
+ * said BEFORE the request is sent.
  *
  *   unreadable path   the open device question (`readPickedFile`) — "chụp lại hoặc chọn ảnh khác"
- *   over 5 MB         `REQUEST_PHOTO_MAX_BYTES`
+ *   over target       shrunk on the phone FIRST; a photo the phone cannot shrink keeps its own bytes
+ *   over 5 MB         `REQUEST_PHOTO_MAX_BYTES`, checked on the bytes that will be sent
  *   not JPEG/PNG/WebP  read from the first bytes, as the server reads them (a HEIC from an iPhone is the usual one)
+ *
+ * `shrink` is injected for tests (Node has no canvas).
  */
 export async function preparePickedPhoto(
   path: string,
   readFile: (path: string) => Promise<Blob | null>,
+  shrink: (file: Blob) => Promise<Blob> = shrinkConsultPhoto,
 ): Promise<{ file: Blob } | { rejected: PhotoRejection }> {
-  const file = await readFile(path);
-  if (file === null) return { rejected: "file-unreadable" };
+  const picked = await readFile(path);
+  if (picked === null) return { rejected: "file-unreadable" };
+  const file = await shrink(picked);
   if (file.size > REQUEST_PHOTO_MAX_BYTES) return { rejected: "too-large" };
   let head: Uint8Array;
   try {
