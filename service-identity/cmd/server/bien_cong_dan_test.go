@@ -36,8 +36,8 @@ const (
 
 type xaTheoHostThu struct{}
 
-func (xaTheoHostThu) XaTheoHost(context.Context, string) (tenant.Tenant, bool, error) {
-	return tenant.Tenant{ID: ulidThu, Name: "Xã Thử", Active: true}, true, nil
+func (xaTheoHostThu) CommuneByHost(context.Context, string) (platformclient.Commune, bool, error) {
+	return platformclient.Commune{Tenant: tenant.Tenant{ID: ulidThu, Name: "Xã Thử", Active: true}}, true, nil
 }
 
 func (xaTheoHostThu) CommuneByLaunchCode(context.Context, string) (tenant.Tenant, bool, error) {

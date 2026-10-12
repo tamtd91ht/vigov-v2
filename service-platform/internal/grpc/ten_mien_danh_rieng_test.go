@@ -8,7 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	platformv1 "github.com/vihat/vigov/core/gen/vigov/platform/v1"
-	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-platform/internal/store"
 )
 
 // danhBaDem wraps the fake directory and counts host lookups, so a test can prove the directory
@@ -18,7 +18,7 @@ type danhBaDem struct {
 	soLanHoi atomic.Int32
 }
 
-func (d *danhBaDem) ByHostErr(ctx context.Context, host string) (tenant.Tenant, error) {
+func (d *danhBaDem) ByHostErr(ctx context.Context, host string) (store.Commune, error) {
 	d.soLanHoi.Add(1)
 	return d.danhBaGia.ByHostErr(ctx, host)
 }

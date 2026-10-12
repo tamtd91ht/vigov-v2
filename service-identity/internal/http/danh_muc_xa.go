@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 )
@@ -32,8 +33,11 @@ import (
 //
 // A NARROW INTERFACE, NOT tenant.Directory: that one's bool folds an outage into "unknown Host",
 // which is right for the Host edge and wrong here — see platformclient.XaTheoHost.
+//
+// CommuneByHost rather than XaTheoHost: the same lookup with the commune's launch code kept, which
+// the `?host=` answer publishes. ONE host method, so every public route resolves a host the same way.
 type TraXaTheoHost interface {
-	XaTheoHost(ctx context.Context, host string) (tenant.Tenant, bool, error)
+	CommuneByHost(ctx context.Context, host string) (platformclient.Commune, bool, error)
 	// CommuneByLaunchCode: same three outcomes; Host is the commune's PRIMARY host, "" if reserved.
 	CommuneByLaunchCode(ctx context.Context, code string) (tenant.Tenant, bool, error)
 }
@@ -66,9 +70,12 @@ type danhMucXaRa struct {
 // bridge) is keyed by host (owner decision 2026-10-12, "only the link changes"). omitempty keeps the
 // `?host=` answer byte-identical to what it was; the code path never emits "" (see communeByCode).
 //
-// NO `launch_code` FIELD YET, although the QR CLI (citizen-app/scripts/commune-qr.mjs) reads one from
-// the `?host=` answer: proto Tenant does not carry the code, so this service has nothing to return.
-// The CLI already treats its absence as "write the legacy d= QR and warn".
+// `launch_code` ONLY IN THE `?host=` ANSWER (owner decision 2026-10-12, ADR 0047 §Sửa đổi 12/10/2026
+// row 5). The QR CLI (citizen-app/scripts/commune-qr.mjs, `npm run qr --domain=`) learns from it which
+// code to print as `?x=`. Asked by code, the caller already holds the code, so it is not echoed. The
+// code is public — it is printed on the QR — and grants nothing (proto Tenant.launch_code). omitempty:
+// a platform that sends none (an older service-platform) gives no key, never an invented code; the
+// CLI treats its absence as "write the legacy d= QR and warn".
 //
 // NO `active` FIELD: an inactive commune is never returned (see DanhMucXa), so it could only ever be
 // true.
@@ -81,6 +88,10 @@ type xaCongKhai struct {
 
 	// Host: the commune's primary host, `?code=` answers only. Absent from `?host=` answers.
 	Host string `json:"host,omitempty"`
+
+	// LaunchCode: tenant.launch_code, `?host=` answers only. Absent from `?code=` answers, and absent
+	// when the platform sent "".
+	LaunchCode string `json:"launch_code,omitempty"`
 }
 
 // HandlerCongKhai serves the PUBLIC routes of this service. A SEPARATE TYPE from Handler, with its own
@@ -140,13 +151,13 @@ func (h *HandlerCongKhai) DanhMucXa(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	xa, co, ok := h.xaTheoHost(w, r, gia[0], "danh mục xã")
+	xa, co, ok := h.communeByHost(w, r, gia[0], "danh mục xã")
 	if !ok {
 		return
 	}
 	ra := danhMucXaRa{Items: []xaCongKhai{}} // `[]`, never `null`: one shape for the client
 	if co {
-		ra.Items = append(ra.Items, xaCongKhai{Name: xa.Name, Province: xa.Province})
+		ra.Items = append(ra.Items, xaCongKhai{Name: xa.Name, Province: xa.Province, LaunchCode: xa.LaunchCode})
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -225,16 +236,23 @@ func viet400Host(w http.ResponseWriter) {
 // NO PERSONAL DATA IN THE LOG LINE: the host is a domain, not a person, and it has passed
 // domain.HopLeTenMienXa, so it cannot carry a log-injection payload either.
 func (h *HandlerCongKhai) xaTheoHost(w http.ResponseWriter, r *http.Request, host, viec string) (tenant.Tenant, bool, bool) {
-	xa, co, err := h.d.Xa.XaTheoHost(r.Context(), host)
+	xa, co, ok := h.communeByHost(w, r, host, viec)
+	return xa.Tenant, co, ok
+}
+
+// communeByHost is xaTheoHost with the commune's launch code kept — the body both share, so the three
+// outcomes cannot drift between the catalogue answer and the routes that read business data.
+func (h *HandlerCongKhai) communeByHost(w http.ResponseWriter, r *http.Request, host, viec string) (platformclient.Commune, bool, bool) {
+	xa, co, err := h.d.Xa.CommuneByHost(r.Context(), host)
 	if err != nil {
 		h.d.Log.WarnContext(r.Context(), viec+": không hỏi được dịch vụ nền tảng", "host", host, "err", err)
 		viet503Platform(w)
-		return tenant.Tenant{}, false, false
+		return platformclient.Commune{}, false, false
 	}
 	if !co || !xa.Active || !xa.ID.Valid() {
 		// An invalid id cannot come back from platformclient (it refuses non-ULIDs); checked anyway
 		// because tenant.Into with an empty id would be a scoped read of "no commune" (fail closed).
-		return tenant.Tenant{}, false, true
+		return platformclient.Commune{}, false, true
 	}
 	return xa, true, true
 }

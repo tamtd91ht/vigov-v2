@@ -24,9 +24,9 @@ import (
 // therefore always runs, which matters because "somebody edited two of the three" is a code-review
 // failure, not an environment-dependent one.
 
-// cotBatBuoc is every column the three paths must agree on. Adding a field to tenant.Tenant means
-// adding its column here — that is the whole mechanism.
-var cotBatBuoc = []string{"t.id", "t.ten", "t.tinh_thanh", "t.dang_hoat_dong"}
+// cotBatBuoc is every column the three paths must agree on. Adding a field to Commune (or the
+// tenant.Tenant it embeds) means adding its column here — that is the whole mechanism.
+var cotBatBuoc = []string{"t.id", "t.ten", "t.tinh_thanh", "t.dang_hoat_dong", "t.launch_code"}
 
 func TestMoiTruyVanDanhBaDeuChonDuCot(t *testing.T) {
 	for ten, stmt := range map[string]string{
@@ -88,7 +88,7 @@ func TestThuTuCotGiongThuTuQuet(t *testing.T) {
 	//
 	// The order is asserted as a whole string, not column by column, because the defect IS the
 	// order: every column can be present and the result still be wrong.
-	const muon = `t.id, d.host, t.ten, t.tinh_thanh, t.dang_hoat_dong`
+	const muon = `t.id, d.host, t.ten, t.tinh_thanh, t.dang_hoat_dong, t.launch_code`
 	if got := cotXa("d.host"); got != muon {
 		t.Fatalf("thứ tự cột = %q, muốn %q — quetXa quét theo VỊ TRÍ, đổi thứ tự là đổi giá trị "+
 			"giữa hai cột TEXT mà driver không báo gì", got, muon)

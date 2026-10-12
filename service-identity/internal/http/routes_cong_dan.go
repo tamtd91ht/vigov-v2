@@ -91,8 +91,11 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// domain, so the link does not show the domain. The answer by code adds the commune's PRIMARY host,
 	// because the Mini App then uses that host for every later public read ("only the link changes").
 	// The host is already public — it is the commune's website — so this hides nothing new; the goal
-	// was only that the link stops displaying it. The `?host=` answer stays name + province: the owner
-	// also wants it to carry `launch_code` for the QR CLI, but proto Tenant has no such field yet.
+	// was only that the link stops displaying it. The `?host=` answer adds the commune's `launch_code`
+	// (owner decision 2026-10-12, ADR 0047 §Sửa đổi 12/10/2026 row 5): the QR CLI
+	// (`npm run qr --domain=`) learns from it which code to print. The code is printed publicly on
+	// the QR anyway and grants nothing — no session, no tenant id — so a caller holding the domain
+	// learns nothing it could not read off the commune's own QR.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
@@ -101,7 +104,8 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// NO @screen: docs/ui-ux/ has no section for the Mini App's QR confirmation screen, and naming
 	// one that does not describe it would be design intent invented here.
 	//
-	// 200 carries ZERO or ONE commune: `{name, province}` by host, `{name, province, host}` by code.
+	// 200 carries ZERO or ONE commune: `{name, province, launch_code}` by host (`launch_code` omitted
+	// when the platform sends none), `{name, province, host}` by code.
 	// `items: []` is the ONE answer for a domain or code no commune holds, a domain reserved for the
 	// platform, a commune whose primary host is reserved, and a commune that is no longer active —
 	// identical bytes.
@@ -117,7 +121,7 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error platform_unavailable
 	mux.Handle("GET /api/v1/communes",
-		authz.Public("Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền hoặc mã mở app in trên mã QR ra tên và tỉnh của xã (tra theo mã thì kèm tên miền chính — vốn là trang web công khai của xã) — siêu dữ liệu công khai, không trả mã định danh xã, không mở phiên")(
+		authz.Public("Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền hoặc mã mở app in trên mã QR ra tên và tỉnh của xã (tra theo mã thì kèm tên miền chính — vốn là trang web công khai của xã; tra theo tên miền thì kèm mã mở app — vốn in công khai trên mã QR) — siêu dữ liệu công khai, không trả mã định danh xã, không mở phiên")(
 			http.HandlerFunc(h.DanhMucXa)))
 
 	// --- the commune's published staff directory ------------------------------------------------

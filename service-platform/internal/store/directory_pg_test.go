@@ -358,6 +358,20 @@ func TestPgByLaunchCodeErr(t *testing.T) {
 		got.Province != "Thành phố Đà Nẵng" {
 		t.Fatalf("got %+v %v", got, err)
 	}
+	// Every gRPC path carries the code (Tenant.launch_code) — by code, by host and by id alike.
+	byHost, err := NewDirectory(db, "").ByHostErr(ctx, "cu.vigov.vn")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID, err := NewDirectory(db, "").ByID(ctx, tenant.ID(ulidA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, c := range map[string]string{"by code": got.LaunchCode, "by host": byHost.LaunchCode, "by id": byID.LaunchCode} {
+		if c != codeOf(ulidA) {
+			t.Errorf("%s: launch code %q, want %q", name, c, codeOf(ulidA))
+		}
+	}
 	// The same commune, with its primary host reserved as OPERATOR_HOST: found, host blanked.
 	if got, err := d.ByLaunchCodeErr(ctx, codeOf(ulidA)); err != nil || got.Host != "" || got.ID != tenant.ID(ulidA) {
 		t.Errorf("reserved primary: %+v %v, want host \"\"", got, err)

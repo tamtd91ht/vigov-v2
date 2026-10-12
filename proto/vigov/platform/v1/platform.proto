@@ -660,6 +660,19 @@ message Tenant {
   // cannot make. There is no NULL behind this column, so `has_province()` would be true for
   // every commune and any branch on it would be code that never runs.
   string province = 6;
+
+  // The commune's launch code (`tenant.launch_code`, service-platform migration 0024): the PUBLIC
+  // per-commune code printed into its QR / launch link (`?x=`, owner decision 2026-10-12). Same
+  // format as ResolveHostRequest.launch_code, `^[0-9a-f]{12}$`.
+  //
+  // NOT AN IDENTIFIER FOR AUTHORISATION. It is printed on paper and grants nothing: no session, no
+  // tenant id, no business data. Nothing may route, key or authorise on it — only `id` identifies a
+  // commune (rule 1, invariant 2). Published here so a public lookup by host can tell the QR tool
+  // which code to print (ADR 0047 §Sửa đổi 12/10/2026).
+  //
+  // "" means UNKNOWN — an older platform service that does not send this field. A consumer never
+  // invents a code for "" and never derives one from the id, the host or the name.
+  string launch_code = 7;
 }
 
 // EXACTLY ONE of the two fields is non-empty — see the RPC comment for the full answer table.

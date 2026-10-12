@@ -30,6 +30,7 @@ import (
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-platform/internal/domain"
 	svcgrpc "github.com/vihat/vigov/service-platform/internal/grpc"
+	"github.com/vihat/vigov/service-platform/internal/store"
 )
 
 // khoaGoiGia is fake key material — the text says so in full (rule 8, forbidden #1).
@@ -44,16 +45,16 @@ const (
 // the handlers only have to answer something.
 type danhBaGia struct{}
 
-func (danhBaGia) ByHostErr(context.Context, string) (tenant.Tenant, error) {
-	return tenant.Tenant{ID: ulidThu, Host: hostThu, Active: true}, nil
+func (danhBaGia) ByHostErr(context.Context, string) (store.Commune, error) {
+	return store.Commune{Tenant: tenant.Tenant{ID: ulidThu, Host: hostThu, Active: true}}, nil
 }
 
-func (danhBaGia) ByID(_ context.Context, id tenant.ID) (tenant.Tenant, error) {
-	return tenant.Tenant{ID: id, Host: hostThu, Active: true}, nil
+func (danhBaGia) ByID(_ context.Context, id tenant.ID) (store.Commune, error) {
+	return store.Commune{Tenant: tenant.Tenant{ID: id, Host: hostThu, Active: true}}, nil
 }
 
-func (danhBaGia) ByLaunchCodeErr(context.Context, string) (tenant.Tenant, error) {
-	return tenant.Tenant{ID: ulidThu, Host: hostThu, Active: true}, nil
+func (danhBaGia) ByLaunchCodeErr(context.Context, string) (store.Commune, error) {
+	return store.Commune{Tenant: tenant.Tenant{ID: ulidThu, Host: hostThu, Active: true}}, nil
 }
 
 func (danhBaGia) MiniApp(_ context.Context, appID string) (domain.MiniApp, error) {

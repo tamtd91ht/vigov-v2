@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/platformclient"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/domain"
 )
@@ -37,22 +38,26 @@ type nenTangXaGia struct {
 	goi  int
 }
 
-func (n *nenTangXaGia) XaTheoHost(_ context.Context, host string) (tenant.Tenant, bool, error) {
+// CommuneByHost: hostQR carries a launch code; hostXaB carries NONE (an older platform sends no field 7),
+// so the `?host=` answer can be shown to omit the key rather than print "".
+func (n *nenTangXaGia) CommuneByHost(_ context.Context, host string) (platformclient.Commune, bool, error) {
 	n.goi++
 	if n.chet {
-		return tenant.Tenant{}, false, errors.New("rpc error: code = Unavailable")
+		return platformclient.Commune{}, false, errors.New("rpc error: code = Unavailable")
 	}
 	switch host {
 	case hostQR:
-		return tenant.Tenant{ID: xaQR, Host: hostQR, Name: "Xã Quế Sơn", Province: "Thành phố Đà Nẵng", Active: true}, true, nil
+		return platformclient.Commune{Tenant: tenant.Tenant{ID: xaQR, Host: hostQR, Name: "Xã Quế Sơn",
+			Province: "Thành phố Đà Nẵng", Active: true}, LaunchCode: codeQR}, true, nil
 	case hostXaB:
-		return tenant.Tenant{ID: xaB, Host: hostXaB, Name: "Xã B", Active: true}, true, nil
+		return platformclient.Commune{Tenant: tenant.Tenant{ID: xaB, Host: hostXaB, Name: "Xã B", Active: true}}, true, nil
 	case hostNgung:
 		// A merged commune: the registry still knows it (rule 7), it is simply not active.
-		return tenant.Tenant{ID: xaA, Host: hostNgung, Name: "Xã đã sáp nhập", Active: false}, true, nil
+		return platformclient.Commune{Tenant: tenant.Tenant{ID: xaA, Host: hostNgung, Name: "Xã đã sáp nhập",
+			Active: false}, LaunchCode: codeInactive}, true, nil
 	}
-	// Unknown AND reserved: service-platform answers both with NotFound, which XaTheoHost maps here.
-	return tenant.Tenant{}, false, nil
+	// Unknown AND reserved: service-platform answers both with NotFound, which CommuneByHost maps here.
+	return platformclient.Commune{}, false, nil
 }
 
 // Launch codes the fake registry knows. Every one is a well-formed 12-hex code, so a 200 `[]` proves
@@ -171,14 +176,14 @@ func TestDanhMucXaHostDungTraTenVaTinhKhongTraMaXa(t *testing.T) {
 		t.Fatalf("items = %v, muốn đúng một xã", ra.Items)
 	}
 	// EXACT key set: a field named id, tenant, commune_id or host is a new question to answer, not
-	// a free addition.
+	// a free addition. launch_code was such a question, answered by the owner on 2026-10-12.
 	var khoa []string
 	for k := range ra.Items[0] {
 		khoa = append(khoa, k)
 	}
 	sort.Strings(khoa)
-	if strings.Join(khoa, ",") != "name,province" {
-		t.Fatalf("trường trả về = %v, muốn đúng [name province]", khoa)
+	if strings.Join(khoa, ",") != "launch_code,name,province" {
+		t.Fatalf("trường trả về = %v, muốn đúng [launch_code name province]", khoa)
 	}
 	if ra.Items[0]["name"] != "Xã Quế Sơn" || ra.Items[0]["province"] != "Thành phố Đà Nẵng" {
 		t.Fatalf("xã trả về sai: %v", ra.Items[0])
@@ -312,15 +317,21 @@ func TestCommunesByCodeReturnsNameProvinceAndPrimaryHostOnly(t *testing.T) {
 	}
 }
 
-func TestCommunesByHostStillOmitsHostAndLaunchCode(t *testing.T) {
-	// The `?host=` answer is unchanged byte-wise: the new Host field is omitempty and never set there.
-	// launch_code is NOT added — proto Tenant has no such field (a contract change, not this service's).
+func TestCommunesByHostCarriesLaunchCodeNotHost(t *testing.T) {
+	// The `?host=` answer carries the commune's launch code for the QR CLI (owner 2026-10-12) and still
+	// never the host: exactly launch_code, name, province.
 	h := dungChuoiCongKhai(t, &nenTangXaGia{}, nil)
 	w := goiDanhMucXa(h, qHost(hostQR))
 	doiMa(t, w, http.StatusOK)
-	want := `{"items":[{"name":"Xã Quế Sơn","province":"Thành phố Đà Nẵng"}]}`
+	want := `{"items":[{"name":"Xã Quế Sơn","province":"Thành phố Đà Nẵng","launch_code":"` + codeQR + `"}]}`
 	if strings.TrimSpace(w.Body.String()) != want {
 		t.Fatalf("body = %s, want %s", w.Body.String(), want)
+	}
+	// The platform sent no code: the key is absent, never "" — the CLI reads absence as "legacy d= QR".
+	w = goiDanhMucXa(h, qHost(hostXaB))
+	doiMa(t, w, http.StatusOK)
+	if _, keys := itemKeys(t, w); len(keys) != 1 || keys[0] != "name,province" {
+		t.Fatalf("keys = %v, want exactly [name province] when the platform sends no launch code", keys)
 	}
 }
 

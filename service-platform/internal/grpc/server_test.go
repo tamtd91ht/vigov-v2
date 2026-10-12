@@ -43,55 +43,63 @@ type danhBaGia struct {
 	theoHost map[string]tenant.Tenant
 	theoID   map[tenant.ID]tenant.Tenant
 	byCode   map[string]tenant.Tenant
-	hong     bool // every lookup fails as infrastructure
+	// launchCodes is each commune's tenant.launch_code, attached to EVERY answer (host, id, code) as the
+	// store does — so a test reading Tenant.launch_code off ResolveHost-by-host proves sangProto carries it.
+	launchCodes map[tenant.ID]string
+	hong        bool // every lookup fails as infrastructure
 	// codeReads counts ByLaunchCodeErr calls: a malformed code must be refused before the directory.
 	codeReads int
 }
 
+// row is what store.Directory returns for t: the commune plus its launch code.
+func (d *danhBaGia) row(t tenant.Tenant) store.Commune {
+	return store.Commune{Tenant: t, LaunchCode: d.launchCodes[t.ID]}
+}
+
 // ByLaunchCodeErr follows store.Directory's contract, minus the reserved-host blanking: that is
 // left out ON PURPOSE, so the test of the server's own blanking cannot pass on the fake's.
-func (d *danhBaGia) ByLaunchCodeErr(_ context.Context, code string) (tenant.Tenant, error) {
+func (d *danhBaGia) ByLaunchCodeErr(_ context.Context, code string) (store.Commune, error) {
 	d.codeReads++
 	if d.hong {
-		return tenant.Tenant{}, loiHaTang
+		return store.Commune{}, loiHaTang
 	}
 	t, ok := d.byCode[code]
 	if !ok {
-		return tenant.Tenant{}, store.ErrKhongCoXa
+		return store.Commune{}, store.ErrKhongCoXa
 	}
 	if !t.Active {
-		return tenant.Tenant{}, store.ErrXaNgungHoatDong
+		return store.Commune{}, store.ErrXaNgungHoatDong
 	}
-	return t, nil
+	return d.row(t), nil
 }
 
-func (d *danhBaGia) ByHostErr(_ context.Context, host string) (tenant.Tenant, error) {
+func (d *danhBaGia) ByHostErr(_ context.Context, host string) (store.Commune, error) {
 	if d.hong {
-		return tenant.Tenant{}, loiHaTang
+		return store.Commune{}, loiHaTang
 	}
 	h, err := domain.NormaliseHost(host)
 	if err != nil {
-		return tenant.Tenant{}, err
+		return store.Commune{}, err
 	}
 	t, ok := d.theoHost[h]
 	if !ok {
-		return tenant.Tenant{}, store.ErrKhongCoXa
+		return store.Commune{}, store.ErrKhongCoXa
 	}
 	if !t.Active {
-		return tenant.Tenant{}, store.ErrXaNgungHoatDong
+		return store.Commune{}, store.ErrXaNgungHoatDong
 	}
-	return t, nil
+	return d.row(t), nil
 }
 
-func (d *danhBaGia) ByID(_ context.Context, id tenant.ID) (tenant.Tenant, error) {
+func (d *danhBaGia) ByID(_ context.Context, id tenant.ID) (store.Commune, error) {
 	if d.hong {
-		return tenant.Tenant{}, loiHaTang
+		return store.Commune{}, loiHaTang
 	}
 	t, ok := d.theoID[id]
 	if !ok {
-		return tenant.Tenant{}, store.ErrKhongCoXa
+		return store.Commune{}, store.ErrKhongCoXa
 	}
-	return t, nil // a deactivated commune is still describable — rule 7
+	return d.row(t), nil // a deactivated commune is still describable — rule 7
 }
 
 func danhBaMau() *danhBaGia {
@@ -104,9 +112,10 @@ func danhBaMau() *danhBaGia {
 	}
 	cu := tenant.Tenant{ID: xaDaSapNhap, Host: "xacu.vigov.vn", Name: "Xã Cũ", Active: false}
 	return &danhBaGia{
-		theoHost: map[string]tenant.Tenant{tanPhu.Host: tanPhu, cu.Host: cu},
-		theoID:   map[tenant.ID]tenant.Tenant{xaTanPhu: tanPhu, xaDaSapNhap: cu},
-		byCode:   map[string]tenant.Tenant{codeActive: tanPhu, codeMerged: cu},
+		theoHost:    map[string]tenant.Tenant{tanPhu.Host: tanPhu, cu.Host: cu},
+		theoID:      map[tenant.ID]tenant.Tenant{xaTanPhu: tanPhu, xaDaSapNhap: cu},
+		byCode:      map[string]tenant.Tenant{codeActive: tanPhu, codeMerged: cu},
+		launchCodes: map[tenant.ID]string{xaTanPhu: codeActive, xaDaSapNhap: codeMerged},
 	}
 }
 
@@ -187,6 +196,10 @@ func TestResolveHostChayDuocKhiKhongCoXaTrongContext(t *testing.T) {
 		t.Fatalf("province = %q, muốn %q — sangProto đánh rơi một trường",
 			got, "Thành phố Đà Nẵng")
 	}
+	// The host lookup is how the QR tool learns which code to print (ADR 0047 §Sửa đổi 12/10/2026).
+	if got := res.GetTenant().GetLaunchCode(); got != codeActive {
+		t.Fatalf("launch_code = %q, want %q — sangProto dropped a field", got, codeActive)
+	}
 }
 
 func TestResolveHostKhongKhopTraNotFound(t *testing.T) {
@@ -254,7 +267,8 @@ func TestResolveHostByLaunchCode(t *testing.T) {
 	}
 	got := res.GetTenant()
 	if got.GetId() != xaTanPhu.String() || got.GetHost() != "tanphu.vigov.vn" ||
-		got.GetDisplayName() != "Phường Tân Phú" || got.GetProvince() != "Thành phố Đà Nẵng" || !got.GetActive() {
+		got.GetDisplayName() != "Phường Tân Phú" || got.GetProvince() != "Thành phố Đà Nẵng" || !got.GetActive() ||
+		got.GetLaunchCode() != codeActive {
 		t.Fatalf("tenant = %+v", got)
 	}
 }
@@ -383,6 +397,9 @@ func TestGetTenantTraSieuDuLieu(t *testing.T) {
 	// mapper, and a mapper that maps field by field (ADR 0003) has one line per field to forget.
 	if got.GetProvince() != "Thành phố Đà Nẵng" {
 		t.Fatalf("province = %q, muốn %q", got.GetProvince(), "Thành phố Đà Nẵng")
+	}
+	if got.GetLaunchCode() != codeActive {
+		t.Fatalf("launch_code = %q, want %q", got.GetLaunchCode(), codeActive)
 	}
 }
 

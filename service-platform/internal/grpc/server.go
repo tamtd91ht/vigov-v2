@@ -40,13 +40,15 @@ import (
 // the HTTP edge — it needs a yes or a no. It is wrong here: those two produce different gRPC
 // codes, and collapsing them turns an infrastructure incident into "that commune does not
 // exist", which is the kind of answer that sends an operator looking at DNS for an afternoon.
+//
+// store.Commune, not tenant.Tenant: it carries the launch code sangProto publishes (Tenant.launch_code).
 type Directory interface {
-	ByHostErr(ctx context.Context, host string) (tenant.Tenant, error)
-	ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, error)
+	ByHostErr(ctx context.Context, host string) (store.Commune, error)
+	ByID(ctx context.Context, id tenant.ID) (store.Commune, error)
 	// ByLaunchCodeErr resolves a commune launch code (migration 0024): Host = the PRIMARY host,
 	// unknown → store.ErrKhongCoXa, inactive → store.ErrXaNgungHoatDong, malformed →
 	// domain.ErrLaunchCodeInvalid.
-	ByLaunchCodeErr(ctx context.Context, code string) (tenant.Tenant, error)
+	ByLaunchCodeErr(ctx context.Context, code string) (store.Commune, error)
 }
 
 // SoMiniApp is the Mini App registry (ADR 0044). Unscoped for the reason store.Directory is: it
@@ -361,7 +363,7 @@ func (s *Server) loi(ctx context.Context, err error, rpc string) error {
 // Field by field, never by reflection or a generic mapper: this is the boundary ADR 0003
 // draws, and a mapper that copies "whatever is on the struct" is how a business field
 // eventually leaves this service without anybody deciding that it should.
-func sangProto(t tenant.Tenant) *platformv1.Tenant {
+func sangProto(t store.Commune) *platformv1.Tenant {
 	return &platformv1.Tenant{
 		Id:          t.ID.String(),
 		Host:        t.Host,
@@ -371,5 +373,8 @@ func sangProto(t tenant.Tenant) *platformv1.Tenant {
 		// the contract declares, never an error and never a default to be filled in here. See the
 		// field comment in proto/vigov/platform/v1/platform.proto.
 		Province: t.Province,
+		// Public, grants nothing (platform.proto, Tenant.launch_code). Every path fills it: the host
+		// lookup is how the QR tool learns which code to print for a domain.
+		LaunchCode: t.LaunchCode,
 	}
 }

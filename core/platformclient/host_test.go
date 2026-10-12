@@ -138,3 +138,45 @@ func TestCommuneByLaunchCodePassesBlankHostAndInactiveThrough(t *testing.T) {
 		t.Fatalf("ok=%v err=%v got=%+v, want passed through unchanged", ok, err, got)
 	}
 }
+
+// --- CommuneByHost: XaTheoHost with Tenant.launch_code kept --------------------------------------
+
+func TestCommuneByHostCarriesTheLaunchCode(t *testing.T) {
+	gia := &nenTangGia{ra: &platformv1.ResolveHostResponse{Tenant: &platformv1.Tenant{
+		Id: ulidThu, Host: hostThu, DisplayName: "Xã Thăng Bình", Active: true, LaunchCode: launchCodeTest,
+	}}}
+	d, _ := dungThu(t, gia)
+	got, ok, err := d.CommuneByHost(context.Background(), hostThu)
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v, want resolved", ok, err)
+	}
+	if gia.lastReq.GetHost() != hostThu || gia.lastReq.GetLaunchCode() != "" {
+		t.Fatalf("request = %v, want host only", gia.lastReq)
+	}
+	if got.LaunchCode != launchCodeTest || got.Name != "Xã Thăng Bình" || !got.Active {
+		t.Fatalf("commune = %+v", got)
+	}
+}
+
+// An older platform service sends no field 7: "" passes through, never a code made up here.
+func TestCommuneByHostMissingLaunchCodeIsEmpty(t *testing.T) {
+	d, _ := dungThu(t, &nenTangGia{ra: &platformv1.ResolveHostResponse{Tenant: &platformv1.Tenant{
+		Id: ulidThu, Host: hostThu, DisplayName: "Xã Thăng Bình", Active: true,
+	}}})
+	got, ok, err := d.CommuneByHost(context.Background(), hostThu)
+	if err != nil || !ok || got.LaunchCode != "" {
+		t.Fatalf("ok=%v err=%v got=%+v, want LaunchCode \"\"", ok, err, got)
+	}
+}
+
+// Outage and broken contract: the same errors XaTheoHost gives — one body, one mapping.
+func TestCommuneByHostPlatformDownIsAnError(t *testing.T) {
+	d, _ := dungThu(t, &nenTangGia{loi: status.Error(codes.Unavailable, "x")})
+	if _, ok, err := d.CommuneByHost(context.Background(), hostThu); ok || err == nil {
+		t.Fatalf("ok=%v err=%v, want an error", ok, err)
+	}
+	d, _ = dungThu(t, &nenTangGia{loi: status.Error(codes.NotFound, "x")})
+	if _, ok, err := d.CommuneByHost(context.Background(), hostThu); ok || err != nil {
+		t.Fatalf("ok=%v err=%v, want ok=false err=nil", ok, err)
+	}
+}

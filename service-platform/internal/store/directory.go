@@ -89,7 +89,7 @@ func (d *Directory) HostHeld(ctx context.Context, host string) (bool, error) {
 // tenant_domain row that must exist, ByID left-joins one that need not. That single expression is
 // the only parameter; everything else is fixed here.
 func cotXa(host string) string {
-	return `t.id, ` + host + `, t.ten, t.tinh_thanh, t.dang_hoat_dong`
+	return `t.id, ` + host + `, t.ten, t.tinh_thanh, t.dang_hoat_dong, t.launch_code`
 }
 
 // The two statements. ByHost and ByHostErr share ONE string rather than two identical ones: they
@@ -122,6 +122,20 @@ var (
 		WHERE t.launch_code = $1`
 )
 
+// Commune is the registry row the gRPC paths answer with: the shared tenant.Tenant plus the commune's
+// launch code (migration 0024).
+//
+// A PLATFORM-LOCAL WRAPPER, NOT A FIELD ON tenant.Tenant. That type rides every service's request
+// context (tenant.IntoFull) and fifty files across the services; the launch code is needed by exactly
+// one consumer — the public `?host=` lookup that tells the QR tool which code to print. Embedding keeps
+// t.ID / t.Host / … readable as before, and ByHost (tenant.Directory, the hot path) drops the code.
+//
+// LaunchCode is PUBLIC and grants nothing (platform.proto, Tenant.launch_code): never an authorisation key.
+type Commune struct {
+	tenant.Tenant
+	LaunchCode string
+}
+
 // hangDoc is what both *sql.Row and *sql.Rows satisfy, so quetXa has one caller shape.
 type hangDoc interface{ Scan(dest ...any) error }
 
@@ -131,11 +145,11 @@ type hangDoc interface{ Scan(dest ...any) error }
 // It returns the driver's error unchanged: each caller below tells sql.ErrNoRows apart from a
 // real failure differently, and collapsing the two here is precisely the mistake ByHostErr exists
 // to undo.
-func quetXa(hang hangDoc) (tenant.Tenant, error) {
-	var out tenant.Tenant
+func quetXa(hang hangDoc) (Commune, error) {
+	var out Commune
 	var id string
-	if err := hang.Scan(&id, &out.Host, &out.Name, &out.Province, &out.Active); err != nil {
-		return tenant.Tenant{}, err
+	if err := hang.Scan(&id, &out.Host, &out.Name, &out.Province, &out.Active, &out.LaunchCode); err != nil {
+		return Commune{}, err
 	}
 	out.ID = tenant.ID(id)
 	return out, nil
@@ -176,7 +190,7 @@ func (d *Directory) ByHost(ctx context.Context, host string) (tenant.Tenant, boo
 	if !out.Active {
 		return tenant.Tenant{}, false
 	}
-	return out, true
+	return out.Tenant, true
 }
 
 // ByHostErr is ByHost with the failure reason preserved.
@@ -186,26 +200,26 @@ func (d *Directory) ByHost(ctx context.Context, host string) (tenant.Tenant, boo
 // collapsing "no such commune" and "the database is down" into one false is how an outage gets
 // misdiagnosed as a misconfigured domain. The platform service's own admin paths use this
 // variant so the operator sees which one actually happened.
-func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, error) {
+func (d *Directory) ByHostErr(ctx context.Context, host string) (Commune, error) {
 	h, err := domain.NormaliseHost(host)
 	if err != nil {
-		return tenant.Tenant{}, fmt.Errorf("directory: %w", err)
+		return Commune{}, fmt.Errorf("directory: %w", err)
 	}
 	// Same refusal as ByHost, and the SAME sentinel as an unknown Host: a distinct error would let
 	// a caller tell "reserved" from "unclaimed", and nothing needs that distinction.
 	if domain.IsReservedCommuneHost(h, d.operatorHost) {
-		return tenant.Tenant{}, ErrKhongCoXa
+		return Commune{}, ErrKhongCoXa
 	}
 
 	out, err := quetXa(d.db.QueryRowContext(ctx, truyVanTheoHost, h))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return tenant.Tenant{}, ErrKhongCoXa
+		return Commune{}, ErrKhongCoXa
 	case err != nil:
-		return tenant.Tenant{}, fmt.Errorf("directory: truy vấn host %q: %w", h, err)
+		return Commune{}, fmt.Errorf("directory: truy vấn host %q: %w", h, err)
 	}
 	if !out.Active {
-		return tenant.Tenant{}, ErrXaNgungHoatDong
+		return Commune{}, ErrXaNgungHoatDong
 	}
 	return out, nil
 }
@@ -226,22 +240,22 @@ func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, 
 // only this type knows. "" tells the caller there is no usable domain, and the caller refuses.
 //
 // One row or none: launch_code is unique across every commune (tenant_launch_code_unique).
-func (d *Directory) ByLaunchCodeErr(ctx context.Context, code string) (tenant.Tenant, error) {
+func (d *Directory) ByLaunchCodeErr(ctx context.Context, code string) (Commune, error) {
 	if !domain.ValidLaunchCode(code) {
-		return tenant.Tenant{}, fmt.Errorf("directory: %w", domain.ErrLaunchCodeInvalid)
+		return Commune{}, fmt.Errorf("directory: %w", domain.ErrLaunchCodeInvalid)
 	}
 	// @cross-tenant: the code is how the commune is FOUND — no commune is known yet, exactly like a
 	// Host lookup. Reads the registry only, one row.
 	out, err := quetXa(d.db.QueryRowContext(ctx, queryByLaunchCode, code))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return tenant.Tenant{}, ErrKhongCoXa
+		return Commune{}, ErrKhongCoXa
 	case err != nil:
 		// The code is public by design (not personal data), so naming it here costs nothing.
-		return tenant.Tenant{}, fmt.Errorf("directory: launch code lookup %q: %w", code, err)
+		return Commune{}, fmt.Errorf("directory: launch code lookup %q: %w", code, err)
 	}
 	if !out.Active {
-		return tenant.Tenant{}, ErrXaNgungHoatDong
+		return Commune{}, ErrXaNgungHoatDong
 	}
 	if out.Host != "" && domain.IsReservedCommuneHost(out.Host, d.operatorHost) {
 		out.Host = ""
@@ -260,17 +274,17 @@ func (d *Directory) ByLaunchCodeErr(ctx context.Context, code string) (tenant.Te
 //
 // It returns exactly one commune or an error. Like the rest of this type it never returns a
 // list, so there is no query here that could span communes.
-func (d *Directory) ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, error) {
+func (d *Directory) ByID(ctx context.Context, id tenant.ID) (Commune, error) {
 	if !id.Valid() {
-		return tenant.Tenant{}, fmt.Errorf("directory: %w", domain.ErrIDKhongHopLe)
+		return Commune{}, fmt.Errorf("directory: %w", domain.ErrIDKhongHopLe)
 	}
 
 	out, err := quetXa(d.db.QueryRowContext(ctx, truyVanTheoID, id.String()))
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return tenant.Tenant{}, ErrKhongCoXa
+		return Commune{}, ErrKhongCoXa
 	case err != nil:
-		return tenant.Tenant{}, fmt.Errorf("directory: truy vấn xã %q: %w", id, err)
+		return Commune{}, fmt.Errorf("directory: truy vấn xã %q: %w", id, err)
 	}
 	return out, nil
 }
