@@ -641,6 +641,13 @@ describe("the petition detail — own photos only when there are some; 'Thêm �
     expect(failed).toContain(SCENE_PHOTOS.own_retry);
   });
 
+  it("while Đã tiếp nhận the detail shows ONE 'Thêm ảnh hiện trường' block, never two (12/10/2026 screenshot)", () => {
+    const pick = vi.fn<PickScenePhotos>();
+    fakeFetch(answer(200, { items: [] }));
+    const html = renderToStaticMarkup(createElement(PetitionBody, { petition: PETITION, photos: { pick, onSessionLost: noop } }));
+    expect(html.split(SCENE_PHOTOS.add_title).length - 1).toBe(1);
+  });
+
   it("the body never lists photos on its own render, and a moved-on petition has no add block", () => {
     const pick = vi.fn<PickScenePhotos>();
     fakeFetch(answer(200, { items: [] }));
