@@ -87,7 +87,7 @@ manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy tr
 
 | Việc | Tham số | Làm gì |
 |---|---|---|
-| `nen-ban-do` | `MT`, `NGAY_NEN` (YYYYMMDD), `CHAY_THU` (bật = chỉ in kế hoạch); làm thật: bỏ `CHAY_THU`, `XAC_NHAN` = namespace của `MT`, `TICKET` nếu prod | Dựng nền bản đồ PMTiles trên máy build, tải lên MinIO `<tiền tố>-public/config/map/<ngày>/` bằng khoá có sẵn của `comms-secrets`; **không** đổi `BASEMAP_URL`. Hạn 180 phút (việc khác giữ 20) |
+| `nen-ban-do` | `MT`, `NGAY_NEN` (YYYYMMDD), `BAN_OVERTURE` (mã bản phát hành Overture, dạng `2026-09-23.1`; Overture chỉ giữ vài bản gần nhất — danh sách ở `https://stac.overturemaps.org/catalog.json`), `CHAY_THU` (bật = chỉ in kế hoạch); làm thật: bỏ `CHAY_THU`, `XAC_NHAN` = namespace của `MT`, `TICKET` nếu prod | Dựng **hai** tệp PMTiles trên máy build — `vn-mainland.pmtiles` (Protomaps) và `vn-places.pmtiles` (địa điểm Overture, ADR 0072 §Sửa đổi 12/10/2026) — tải lên **cùng** tiền tố MinIO `<tiền tố>-public/config/map/<ngày>/` bằng khoá có sẵn của `comms-secrets`; **không** đổi `BASEMAP_URL`. Hạn 180 phút (việc khác giữ 20) |
 
 Thân việc: `deploy/basemap/basemap-task.sh`; quyết định có test ở `deploy/basemap/basemap.py`. Quy trình
 và kiểm chủ quyền có ký: `kb/40-runbooks/basemap-pmtiles.md`. (Job `vigov-van-hanh` đã gỡ 12/10/2026 —
@@ -95,10 +95,14 @@ ADR 0089 §Gỡ.)
 
 | `nen-ban-do` cần | Chi tiết |
 |---|---|
-| Máy build | `bash`, `curl`, `sha256sum`, `tar`, Python 3.8+; ≥ 8 GB trống ở workspace; ra Internet tới `github.com`, `raw.githubusercontent.com`, `build.protomaps.com`, `build-metadata.protomaps.dev`; tới `OBJECT_STORAGE_PUBLIC_ENDPOINT` |
+| Máy build | `bash`, `curl`, `sha256sum`, `tar`, `od`, `awk`, Python 3.8+; `docker` với daemon mà user `jenkins` gọi được (DuckDB và tippecanoe chạy trong ảnh — thiếu thì việc dừng trước khi làm gì). ≥ 8 GB trống ở workspace, cộng vài trăm MB cho lớp địa điểm và vài trăm MB ảnh ở `/var/lib/docker`. Ra Internet tới: `github.com` (cả `git fetch` tippecanoe), `raw.githubusercontent.com`, `build.protomaps.com`, `build-metadata.protomaps.dev`; `registry-1.docker.io`, `auth.docker.io`, `production.cloudflare.docker.com` (kéo ảnh); `archive.ubuntu.com`, `security.ubuntu.com` (apt khi dựng ảnh tippecanoe); `extensions.duckdb.org` (phần mở rộng `httpfs` + `spatial`, DuckDB kiểm chữ ký); `overturemaps-us-west-2.s3.us-west-2.amazonaws.com` (dữ liệu Overture, ẩn danh); tới `OBJECT_STORAGE_PUBLIC_ENDPOINT` |
 | Khoá MinIO | Cặp `OBJECT_STORAGE_ACCESS_KEY` / `_SECRET_KEY` **có sẵn** của `comms-secrets` (thiếu thì `platform-secrets`), đọc bằng kubeconfig của job vào tệp 0600 → `MC_HOST_<alias>`; không lên dòng lệnh, không in |
 | Policy của user ấy | `s3:ListBucket` (prefix `config/map/*`), `s3:GetObject`, `s3:PutObject` trên `<tiền tố>-public/config/map/*`. Thiếu thì bước `mc ls` dừng trước khi dựng và in câu cần thêm |
 | Công cụ ghim SHA-256 | `PMTILES_SHA256` (digest GitHub của `go-pmtiles_<bản>_Linux_x86_64.tar.gz`, bản phát hành không có `checksums.txt`) · `MC_RELEASE` + `MC_SHA256` (tệp `.sha256sum` trên GitHub; **không** `dl.min.io` — trả 410). Hằng ở `deploy/basemap/basemap.py`; đổi bản = đổi mã băm trong cùng lần sửa |
+| Ảnh ghim digest / commit | `DUCKDB_TAG` + `DUCKDB_DIGEST` · `UBUNTU_TAG` + `UBUNTU_DIGEST` (nền dựng tippecanoe) · `TIPPECANOE_VERSION` + `TIPPECANOE_COMMIT` (thẻ phát hành `felt/tippecanoe`; felt không phát ảnh hay tệp chạy sẵn, nên `deploy/basemap/tippecanoe.Dockerfile` dựng từ commit đã ghim). Digest phải là **index digest** — lấy từ header `Docker-Content-Digest` của registry hoặc `docker buildx imagetools inspect <ảnh>:<thẻ>`, **không** phải digest theo kiến trúc mà trang thẻ Docker Hub liệt kê đầu tiên (suýt nhầm ngày 12/10/2026). Hằng ở `deploy/basemap/basemap.py`; `basemap.py images` từ chối khi còn thiếu; đổi bản = đổi digest/commit trong cùng lần sửa |
+
+Lần làm mới **đầu tiên có lớp địa điểm** phải dùng một `NGAY_NEN` **mới**: bước tải lên từ chối ghi đè tiền tố
+ngày đã có, mà hai tệp phải nằm chung một tiền tố.
 
 Mỗi lần làm mới: chạy thử `MT=staging` → chạy thật (in SHA-256, `BUILD-INFO.txt`, giá trị `BASEMAP_URL`) →
 đặt `BASEMAP_URL` staging theo runbook mục "Đưa vào dùng" → kiểm chủ quyền có ký → prod. `$WORKSPACE/basemap`,
