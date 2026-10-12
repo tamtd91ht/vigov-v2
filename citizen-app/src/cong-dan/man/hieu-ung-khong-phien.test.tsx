@@ -2333,3 +2333,140 @@ describe("app xã — danh bạ: GỌI / NHẮN ZALO qua lớp vỏ, nút X củ
     await go();
   });
 });
+
+/*
+ * Customer screenshot App Xã 12/10/2026 (`tmp/web/ui-bug/app-phan-anh.jpg`): a petition at "Đã tiếp nhận" with no
+ * photos showed the "Thêm ảnh hiện trường" block TWICE. A server render of `PetitionBody` gives one; the doubling
+ * lives only in the mounted path (effects, StrictMode, the screen switch), so it is mounted here, the whole app, by
+ * the two ways the citizen opens a petition: a card of "Phản ánh của tôi", and a full code typed in the search box.
+ */
+describe("app xã — chi tiết phản ánh gắn thật: mỗi khối hiện MỘT lần", () => {
+  const COMMUNE = "Xã Thử Nghiệm";
+  const CODE = "PA-4K7M-92XR-BTVD";
+  const doc = () => (globalThis as unknown as { document: TaiLieuGia }).document;
+  const petition: PhieuCuaToi = { ...SENT, ma_tra_cuu: CODE, an_danh: false, ho_ten_da_che: "Nguyễn V. A." };
+  const page = {
+    kieu: "xong",
+    trang: {
+      muc: [
+        {
+          ma_tra_cuu: CODE,
+          trang_thai: "da-tiep-nhan",
+          linh_vuc: "an-ninh",
+          nhan_linh_vuc: "An ninh trật tự",
+          trich_noi_dung: "Rác ở đầu ngõ",
+          goc_dem_han: "2026-10-01T08:00:00+07:00",
+          han_tiep_nhan: null,
+          han_xu_ly_xong: null,
+          rating: null,
+          rated_at: null,
+        },
+      ],
+      con_tro: "",
+      con_nua: false,
+    },
+  } as Awaited<ReturnType<typeof phanAnhCuaToi>>;
+  const openSession = vi.fn<OpenCommuneAppSession>(async () => ({
+    kieu: "xong",
+    token: "tok-thu-nghiem",
+    ten_xa: COMMUNE,
+    da_xac_thuc_so: true,
+  }));
+  let photoCalls: string[];
+
+  beforeEach(() => {
+    trang.phien = undefined;
+    datPhienViGov(null);
+    photoCalls = [];
+    vi.mocked(phanAnhCuaToi).mockReset();
+    vi.mocked(phanAnhCuaToi).mockResolvedValue(page);
+    vi.mocked(traCuuPhieu).mockReset();
+    vi.mocked(traCuuPhieu).mockResolvedValue({ kieu: "xong", phieu: petition });
+    vi.mocked(traXaTheoTenMien).mockResolvedValue({
+      kieu: "xong",
+      gia_tri: [{ ten: COMMUNE, tinh: "Tỉnh Thử Nghiệm" }],
+    } as Awaited<ReturnType<typeof traXaTheoTenMien>>);
+    // The two photo lists answer EMPTY (no photo yet); everything else on home answers "nothing here".
+    fetch_gia.mockImplementation(async (url: string) => {
+      if (/\/(photos|verification-photos)$/.test(url)) {
+        photoCalls.push(url);
+        return { status: 200, ok: true, json: async () => ({ items: [] }) };
+      }
+      return { status: 404, ok: false, json: async () => ({}) };
+    });
+  });
+
+  afterEach(() => {
+    datPhienViGov(null);
+  });
+
+  const mountApp = () =>
+    gan(
+      createElement(TrangXa, {
+        ten_mien: "thu.vigov.example",
+        openSession,
+        phoneGranted: async () => true,
+        pickScenePhotos: vi.fn<PickScenePhotos>(async () => ({ kind: "huy" })),
+      }),
+    );
+  const tab = (khung: PhanTuGia, label: string) => buttonsNamed(tatCaPhanTu(khung).find((p) => p.tagName === "NAV")!, label)[0]!;
+  /** Every element in the WHOLE document (portals included) whose text is exactly `text`. */
+  const countText = (tag: string, text: string) =>
+    tatCaPhanTu(doc()).filter((p) => p.tagName === tag && p.textContent === text).length;
+
+  /**
+   * The detail's pull (customer sheet row 2): the petition is re-read and drawn AGAIN — the update the real phone
+   * goes through (a pull, a rating, a link refresh), where a reconciliation fault shows and a first paint hides it.
+   */
+  async function pullDetail(khung: PhanTuGia) {
+    const scroller = tatCaPhanTu(khung).find((p) => (p.getAttribute("class") ?? "").split(" ").includes("xa-trang--con"))!;
+    await act(async () => {
+      dispatch(scroller, "touchstart", { touches: [{ clientY: 10 }] });
+      dispatch(scroller, "touchmove", { touches: [{ clientY: 210 }] });
+      dispatch(scroller, "touchend", { touches: [] });
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+
+  function expectEachBlockOnce() {
+    expect(countText("H2", SCENE_PHOTOS.add_title)).toBe(1);
+    expect(countText("P", SCENE_PHOTOS.add_why)).toBe(1);
+    expect(countText("H2", XA_PA.tien_trinh)).toBe(1);
+    expect(countText("H2", XA_PA.before_after_title)).toBe(0);
+    expect(tatCaPhanTu(doc()).filter((p) => p.tagName === "H2" && p.textContent === petition.noi_dung)).toHaveLength(1);
+  }
+
+  it("opened from a card of 'Phản ánh của tôi'", async () => {
+    const { khung, go } = await mountApp();
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    const card = tatCaPhanTu(khung).find((p) => p.tagName === "BUTTON" && p.textContent.includes("Rác ở đầu ngõ"))!;
+    await press(card);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(khung.textContent).toContain(petition.noi_dung);
+    expectEachBlockOnce();
+    await pullDetail(khung);
+    expectEachBlockOnce();
+    await go();
+  });
+
+  it("opened by a full code typed in the search box", async () => {
+    const { khung, go } = await mountApp();
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    const other = "PA-7K2Q-X9M4-TDHN";
+    vi.mocked(traCuuPhieu).mockResolvedValue({ kieu: "xong", phieu: { ...petition, ma_tra_cuu: other } });
+    await typeInto(doc().getElementById("xa-tim-phan-anh")!, other);
+    await press(buttonsNamed(khung, XA_PA.lookup_code_button(other))[0]!);
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(khung.textContent).toContain(petition.noi_dung);
+    expectEachBlockOnce();
+    await pullDetail(khung);
+    expectEachBlockOnce();
+    await go();
+  });
+});

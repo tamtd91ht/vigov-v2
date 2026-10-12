@@ -789,10 +789,12 @@ export function PetitionBody(props: {
       )}
       {/* "Hình ảnh trước và sau khi xử lý" (the citizen's own photos beside the commune's), and "Thêm ảnh" while
           more may be added (ADR 0047:254 (12)). `key` by status: a petition that moved on drops "Thêm ảnh" and
-          refetches the "after" list at once. */}
+          refetches the "after" list at once. The key carries the block's NAME: it is a sibling of `PetitionRating`
+          below in one fragment, and a key shared between siblings made React's update keep the old photo block's
+          DOM and add a new one — "Thêm ảnh hiện trường" twice after any re-read (customer screenshot 12/10/2026). */}
       {props.photos && (
         <PetitionPhotos
-          key={`${p.ma_tra_cuu}:${p.trang_thai}`}
+          key={`photos:${p.ma_tra_cuu}:${p.trang_thai}`}
           code={p.ma_tra_cuu}
           status={p.trang_thai}
           pick={props.photos.pick}
@@ -816,7 +818,7 @@ export function PetitionBody(props: {
         // `key` by status: a server-side change (a reopen after a low rating) starts a fresh block. The commune
         // app's voice and the prototype's 34px stars (`RatingBlock.tsx`, owner 11/10/2026).
         <PetitionRating
-          key={`${p.ma_tra_cuu}:${p.trang_thai}`}
+          key={`rating:${p.ma_tra_cuu}:${p.trang_thai}`}
           petition={p}
           onRated={props.onRated}
           onReload={props.onReload}
