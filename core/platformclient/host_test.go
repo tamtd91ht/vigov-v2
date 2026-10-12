@@ -72,3 +72,69 @@ func TestXaTheoHostXaNgungHoatDongVanTraVeKemCo(t *testing.T) {
 		t.Fatalf("ok=%v err=%v active=%v, muốn xã trả về với Active=false", ok, err, got.Active)
 	}
 }
+
+// --- CommuneByLaunchCode: the same three outcomes, keyed by the QR's launch code -----------------
+
+const launchCodeTest = "a1b2c3d4e5f6"
+
+func TestCommuneByLaunchCodeSendsTheCodeNotAHost(t *testing.T) {
+	gia := &nenTangGia{ra: &platformv1.ResolveHostResponse{Tenant: &platformv1.Tenant{
+		Id: ulidThu, Host: hostThu, DisplayName: "Xã Thăng Bình", Active: true, Province: "Thành phố Đà Nẵng",
+	}}}
+	d, _ := dungThu(t, gia)
+	got, ok, err := d.CommuneByLaunchCode(context.Background(), launchCodeTest)
+	if err != nil || !ok {
+		t.Fatalf("ok=%v err=%v, want resolved", ok, err)
+	}
+	// EXACTLY ONE of the two request fields: the platform answers INVALID_ARGUMENT to both or neither.
+	if gia.lastReq.GetLaunchCode() != launchCodeTest || gia.lastReq.GetHost() != "" {
+		t.Fatalf("request = %v, want launch_code only", gia.lastReq)
+	}
+	if got.Host != hostThu || got.Name != "Xã Thăng Bình" || got.Province != "Thành phố Đà Nẵng" || !got.Active {
+		t.Fatalf("commune = %+v", got)
+	}
+}
+
+func TestCommuneByLaunchCodeUnknownIsAnAnswerNotAnError(t *testing.T) {
+	for _, ma := range []codes.Code{codes.NotFound, codes.InvalidArgument} {
+		d, _ := dungThu(t, &nenTangGia{loi: status.Error(ma, "x")})
+		_, ok, err := d.CommuneByLaunchCode(context.Background(), launchCodeTest)
+		if ok || err != nil {
+			t.Errorf("%s: ok=%v err=%v, want ok=false err=nil", ma, ok, err)
+		}
+	}
+}
+
+func TestCommuneByLaunchCodePlatformDownIsAnError(t *testing.T) {
+	for _, ma := range []codes.Code{codes.Unavailable, codes.DeadlineExceeded, codes.Unauthenticated, codes.Internal} {
+		d, _ := dungThu(t, &nenTangGia{loi: status.Error(ma, "x")})
+		_, ok, err := d.CommuneByLaunchCode(context.Background(), launchCodeTest)
+		if ok || err == nil {
+			t.Errorf("%s: ok=%v err=%v, want an error", ma, ok, err)
+		}
+	}
+}
+
+func TestCommuneByLaunchCodeBrokenContractIsAnError(t *testing.T) {
+	for name, ra := range map[string]*platformv1.ResolveHostResponse{
+		"no tenant":   {},
+		"id not ULID": {Tenant: &platformv1.Tenant{Id: "xa-thang-binh", Host: hostThu, Active: true}},
+	} {
+		d, _ := dungThu(t, &nenTangGia{ra: ra})
+		_, ok, err := d.CommuneByLaunchCode(context.Background(), launchCodeTest)
+		if ok || !errors.Is(err, ErrNenTangTraSai) {
+			t.Errorf("%s: ok=%v err=%v, want ErrNenTangTraSai", name, ok, err)
+		}
+	}
+}
+
+func TestCommuneByLaunchCodePassesBlankHostAndInactiveThrough(t *testing.T) {
+	// The CALLER decides: "" host (reserved primary) and Active=false are both "no commune" there.
+	d, _ := dungThu(t, &nenTangGia{ra: &platformv1.ResolveHostResponse{Tenant: &platformv1.Tenant{
+		Id: ulidThu, Host: "", DisplayName: "Xã cũ", Active: false,
+	}}})
+	got, ok, err := d.CommuneByLaunchCode(context.Background(), launchCodeTest)
+	if err != nil || !ok || got.Active || got.Host != "" {
+		t.Fatalf("ok=%v err=%v got=%+v, want passed through unchanged", ok, err, got)
+	}
+}

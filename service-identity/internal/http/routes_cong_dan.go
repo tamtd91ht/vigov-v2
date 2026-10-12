@@ -28,7 +28,7 @@ import (
 
 // DepsCongKhai is everything the public routes may touch. Nothing else is reachable from them.
 type DepsCongKhai struct {
-	// Xa is the platform registry read that turns `?host=` into a commune. Registry METADATA only
+	// Xa is the platform registry read that turns `?host=` (or `?code=`) into a commune. Registry METADATA only
 	// (ADR 0003).
 	Xa TraXaTheoHost
 
@@ -79,34 +79,45 @@ func RegisterCongKhai(mux *http.ServeMux, d DepsCongKhai) {
 	// --- the commune a QR's domain belongs to, before the citizen confirms it -------------------
 	//
 	// `communes` IS THE SETTLED NOUN (kb/00-foundation/ubiquitous-language.md §Kênh công dân: "Danh
-	// mục xã cho Mini App"). `?host=` IS A FILTER ON IT.
+	// mục xã cho Mini App"). `?host=` and `?code=` ARE FILTERS ON IT — exactly one per request.
 	//
 	// PUBLIC SINCE 2026-09-27 (owner decision; it was CitizenOnly + KhongThuocXa in 2f075b9). The
 	// confirmation screen must name the commune before any session exists. What that gives away is
 	// small and already public: a commune's name and province for a domain the caller already holds —
 	// the same fact the commune's own sign-in page prints at GET /api/v1/communes/current. No id, no
-	// host, no activity state; unknown, reserved and inactive answer identically.
+	// activity state; unknown, reserved and inactive answer identically.
+	//
+	// `?code=` (owner decision 2026-10-12): commune QR links carry an opaque launch code instead of the
+	// domain, so the link does not show the domain. The answer by code adds the commune's PRIMARY host,
+	// because the Mini App then uses that host for every later public read ("only the link changes").
+	// The host is already public — it is the commune's website — so this hides nothing new; the goal
+	// was only that the link stops displaying it. The `?host=` answer stays name + province: the owner
+	// also wants it to carry `launch_code` for the QR CLI, but proto Tenant has no such field yet.
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
-	// @summary  Tra xã theo tên miền trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi có phiên nào — không trả mã xã
+	// @summary  Tra xã theo tên miền hoặc mã mở app trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi có phiên nào — không trả mã định danh xã; tra theo mã thì trả tên miền chính
 	// @consumer citizen-app
 	// NO @screen: docs/ui-ux/ has no section for the Mini App's QR confirmation screen, and naming
 	// one that does not describe it would be design intent invented here.
 	//
-	// 200 carries ZERO or ONE commune. `items: []` is the ONE answer for a domain no commune holds, a
-	// domain reserved for the platform, and a commune that is no longer active — identical bytes.
+	// 200 carries ZERO or ONE commune: `{name, province}` by host, `{name, province, host}` by code.
+	// `items: []` is the ONE answer for a domain or code no commune holds, a domain reserved for the
+	// platform, a commune whose primary host is reserved, and a commune that is no longer active —
+	// identical bytes.
 	//
-	// 400 is `host` missing, repeated, or not a bare lowercase hostname. The platform is not asked.
+	// 400 is `host` and `code` both sent (invalid_query); neither sent, or `host` repeated or not a bare
+	// lowercase hostname (invalid_host); `code` repeated or not 12 lowercase hex (invalid_code). The
+	// platform is not asked.
 	//
 	// 503 is the platform registry unreachable — never an empty list, never a remembered commune.
 	//
 	// @reply    200 danhMucXaRa
-	// @reply    400 httpx.Error
+	// @reply    400 httpx.Error invalid_host invalid_code invalid_query
 	// @reply    500 httpx.Error
-	// @reply    503 httpx.Error
+	// @reply    503 httpx.Error platform_unavailable
 	mux.Handle("GET /api/v1/communes",
-		authz.Public("Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền in trên mã QR ra tên và tỉnh của xã — siêu dữ liệu công khai mà trang đăng nhập của chính xã ấy vốn đã hiện; không trả mã xã, không trả tên miền")(
+		authz.Public("Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền hoặc mã mở app in trên mã QR ra tên và tỉnh của xã (tra theo mã thì kèm tên miền chính — vốn là trang web công khai của xã) — siêu dữ liệu công khai, không trả mã định danh xã, không mở phiên")(
 			http.HandlerFunc(h.DanhMucXa)))
 
 	// --- the commune's published staff directory ------------------------------------------------

@@ -11,7 +11,7 @@ import (
 	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
-// The Mini App's commune confirmation. GET /api/v1/communes?host=<domain>
+// The Mini App's commune confirmation. GET /api/v1/communes?host=<domain> | ?code=<launch code>
 //
 // The shared Mini App opens from a QR whose parameter carries a commune's DOMAIN (owner's decision
 // 2026-09-27). Before the citizen confirms "Làm việc với xã X?", the app needs X's display name.
@@ -21,6 +21,11 @@ import (
 // nothing: the commune enters a session only by the citizen's explicit act through the session
 // bridge (ADR 0005 · 0019 · 0022), never because this route answered. A QR parameter steers the
 // interface; it is client-supplied data (rule 1, forbidden #2).
+//
+// THE LAUNCH CODE IS THE SAME KIND OF KEY (owner decision 2026-10-12). Commune QR links now carry
+// `?x=<launch code>` instead of the domain, so the link does not show the domain. The Mini App resolves
+// the code ONCE through `?code=` to the commune's name, province and PRIMARY host, then uses that host
+// everywhere it used the QR's domain before. The code grants nothing either: no session, no tenant id.
 
 // TraXaTheoHost is the one platform read the public surface makes. *platformclient.Directory
 // satisfies it.
@@ -29,6 +34,8 @@ import (
 // which is right for the Host edge and wrong here — see platformclient.XaTheoHost.
 type TraXaTheoHost interface {
 	XaTheoHost(ctx context.Context, host string) (tenant.Tenant, bool, error)
+	// CommuneByLaunchCode: same three outcomes; Host is the commune's PRIMARY host, "" if reserved.
+	CommuneByLaunchCode(ctx context.Context, code string) (tenant.Tenant, bool, error)
 }
 
 // danhMucXaRa is the catalogue answer: ZERO or ONE commune.
@@ -52,9 +59,16 @@ type danhMucXaRa struct {
 // invariant 7), and a public reader has nothing to do with it. The app sends the DOMAIN back to the
 // session bridge when the citizen confirms; the bridge resolves it again on the server side.
 //
-// THERE IS NO `host` FIELD EITHER, unlike thongTinXa: the caller already holds the domain it asked
-// about, and echoing the registry's canonical form would hand out, per query, which of a commune's
-// domains is the primary one — something the confirmation screen does not need.
+// `host` ONLY IN THE `?code=` ANSWER. Asked by host, the caller already holds the domain, and echoing
+// the registry's canonical form would hand out which of a commune's domains is the primary one —
+// something that screen does not need. Asked by code, the caller holds NO domain, and the primary host is
+// exactly what it needs: every later public read (`commune-profiles`, `commune-staff`, the session
+// bridge) is keyed by host (owner decision 2026-10-12, "only the link changes"). omitempty keeps the
+// `?host=` answer byte-identical to what it was; the code path never emits "" (see communeByCode).
+//
+// NO `launch_code` FIELD YET, although the QR CLI (citizen-app/scripts/commune-qr.mjs) reads one from
+// the `?host=` answer: proto Tenant does not carry the code, so this service has nothing to return.
+// The CLI already treats its absence as "write the legacy d= QR and warn".
 //
 // NO `active` FIELD: an inactive commune is never returned (see DanhMucXa), so it could only ever be
 // true.
@@ -64,6 +78,9 @@ type xaCongKhai struct {
 
 	// Province: "" means not declared; the screen renders nothing (same contract as thongTinXa).
 	Province string `json:"province"`
+
+	// Host: the commune's primary host, `?code=` answers only. Absent from `?host=` answers.
+	Host string `json:"host,omitempty"`
 }
 
 // HandlerCongKhai serves the PUBLIC routes of this service. A SEPARATE TYPE from Handler, with its own
@@ -75,9 +92,13 @@ type HandlerCongKhai struct {
 	limiter *ipRateLimiter
 }
 
-// DanhMucXa answers which commune, if any, a domain belongs to. GET /api/v1/communes?host=
+// DanhMucXa answers which commune, if any, a domain or a launch code belongs to.
+// GET /api/v1/communes?host= | ?code=
 //
-// ORDER IS THE DESIGN: the shape of the host is checked BEFORE the platform is asked. A malformed
+// EXACTLY ONE OF `host` / `code`, each at most once. Both, or neither, is 400: the caller is never
+// answered by picking one of the two for it — the same rule service-platform's ResolveHost applies.
+//
+// ORDER IS THE DESIGN: the shape of the host (or code) is checked BEFORE the platform is asked. A malformed
 // value is the caller's mistake and costs nothing; sending it on would spend a platform call per junk
 // request on a route anybody on the internet can reach. The shape is domain.HopLeTenMienXa — the SAME
 // function the session bridge applies to `commune_host_hint`, so this screen can never name a commune
@@ -100,7 +121,20 @@ type HandlerCongKhai struct {
 // asks for neither case. This handler never puts the commune into the context, so store.For(ctx)
 // would panic if anything here tried.
 func (h *HandlerCongKhai) DanhMucXa(w http.ResponseWriter, r *http.Request) {
-	gia := r.URL.Query()["host"]
+	q := r.URL.Query()
+	gia, hasHost := q["host"]
+	codes, hasCode := q["code"]
+	switch {
+	case hasHost && hasCode:
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_query",
+			"Chỉ gửi một trong hai tham số: tên miền hoặc mã xã.", "")
+		return
+	case hasCode:
+		h.communeByCode(w, r, codes)
+		return
+	}
+	// Neither parameter falls through to here and is refused as a missing host — the answer it got
+	// before `code` existed.
 	if len(gia) != 1 || !domain.HopLeTenMienXa(gia[0]) {
 		viet400Host(w)
 		return
@@ -115,6 +149,55 @@ func (h *HandlerCongKhai) DanhMucXa(w http.ResponseWriter, r *http.Request) {
 		ra.Items = append(ra.Items, xaCongKhai{Name: xa.Name, Province: xa.Province})
 	}
 	vietJSON(w, http.StatusOK, ra)
+}
+
+// communeByCode is the `?code=` half of DanhMucXa: the commune a QR's launch code names, with its
+// primary host.
+//
+// THE SAME NEGATIVE AS `?host=`: unknown, inactive, and a commune whose primary host the platform blanked
+// (reserved) are all `{"items": []}`, byte for byte. A blank host is "no commune" rather than a commune
+// with no host, because a commune the Mini App cannot address by host is one it cannot open — and it
+// must never fall back to another of the commune's hosts (rule 1, forbidden #1).
+func (h *HandlerCongKhai) communeByCode(w http.ResponseWriter, r *http.Request, codes []string) {
+	if len(codes) != 1 || !validLaunchCode(codes[0]) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_code", "Mã xã không hợp lệ.", "")
+		return
+	}
+	code := codes[0]
+	xa, found, err := h.d.Xa.CommuneByLaunchCode(r.Context(), code)
+	if err != nil {
+		// The code is a public, opaque 12-hex key that passed validLaunchCode — not personal data and
+		// not a log-injection payload.
+		h.d.Log.WarnContext(r.Context(), "danh mục xã theo mã: không hỏi được dịch vụ nền tảng", "code", code, "err", err)
+		viet503Platform(w)
+		return
+	}
+	ra := danhMucXaRa{Items: []xaCongKhai{}} // `[]`, never `null`
+	if found && xa.Active && xa.ID.Valid() && xa.Host != "" {
+		if domain.HopLeTenMienXa(xa.Host) {
+			ra.Items = append(ra.Items, xaCongKhai{Name: xa.Name, Province: xa.Province, Host: xa.Host})
+		} else {
+			// The registry handed back a primary host the session bridge would refuse. Answering it
+			// would open a commune the next request cannot reach: fail closed, and say so.
+			h.d.Log.WarnContext(r.Context(), "danh mục xã theo mã: nền tảng trả tên miền chính sai hình dạng", "code", code)
+		}
+	}
+	vietJSON(w, http.StatusOK, ra)
+}
+
+// validLaunchCode is the launch code's shape, `^[0-9a-f]{12}$` (proto ResolveHostRequest.launch_code).
+// Checked here so junk never costs a platform call.
+func validLaunchCode(s string) bool {
+	if len(s) != 12 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // viet400Host is the ONE refusal of a malformed `host`, shared by every public route so the Mini App
@@ -145,8 +228,7 @@ func (h *HandlerCongKhai) xaTheoHost(w http.ResponseWriter, r *http.Request, hos
 	xa, co, err := h.d.Xa.XaTheoHost(r.Context(), host)
 	if err != nil {
 		h.d.Log.WarnContext(r.Context(), viec+": không hỏi được dịch vụ nền tảng", "host", host, "err", err)
-		httpx.WriteError(w, http.StatusServiceUnavailable, "platform_unavailable",
-			"Hệ thống đang bận. Vui lòng thử lại sau ít phút.", "")
+		viet503Platform(w)
 		return tenant.Tenant{}, false, false
 	}
 	if !co || !xa.Active || !xa.ID.Valid() {
@@ -155,6 +237,12 @@ func (h *HandlerCongKhai) xaTheoHost(w http.ResponseWriter, r *http.Request, hos
 		return tenant.Tenant{}, false, true
 	}
 	return xa, true, true
+}
+
+// viet503Platform is the ONE answer for an unreachable platform registry on the public surface.
+func viet503Platform(w http.ResponseWriter) {
+	httpx.WriteError(w, http.StatusServiceUnavailable, "platform_unavailable",
+		"Hệ thống đang bận. Vui lòng thử lại sau ít phút.", "")
 }
 
 // newHandlerCongKhai defaults the logger the same way NewHandler does.

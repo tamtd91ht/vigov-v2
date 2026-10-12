@@ -30,11 +30,14 @@ type nenTangGia struct {
 	ra  *platformv1.ResolveHostResponse
 	loi error
 	goi int
+	// lastReq is the last request sent, so a test can tell a code lookup from a host lookup.
+	lastReq *platformv1.ResolveHostRequest
 }
 
-func (n *nenTangGia) ResolveHost(_ context.Context, _ *platformv1.ResolveHostRequest,
+func (n *nenTangGia) ResolveHost(_ context.Context, req *platformv1.ResolveHostRequest,
 	_ ...grpc.CallOption) (*platformv1.ResolveHostResponse, error) {
 	n.goi++
+	n.lastReq = req
 	return n.ra, n.loi
 }
 

@@ -32,10 +32,30 @@ import (
 //
 // It does not log: the caller logs once, in its own voice, and the Host is caller input.
 func (d *Directory) XaTheoHost(ctx context.Context, host string) (tenant.Tenant, bool, error) {
+	return d.resolveWithOutage(ctx, &platformv1.ResolveHostRequest{Host: host})
+}
+
+// CommuneByLaunchCode is XaTheoHost keyed by a commune's launch code: the opaque public code printed
+// into its QR link (`?x=`, owner decision 2026-10-12). Same three outcomes, same error mapping — the
+// platform answers an unknown code with the same NotFound as an unknown Host, and a malformed one with
+// InvalidArgument, both folded into ok=false here.
+//
+// tenant.Tenant.Host is the commune's PRIMARY host, or "" when that primary is a reserved platform host
+// (service-platform blanks it, see the ResolveHost comment in proto/vigov/platform/v1/platform.proto).
+// The caller must treat "" as "no usable commune" and never pick another of the commune's hosts.
+//
+// THE CODE IS A LOOKUP KEY, NOT A COMMUNE REFERENCE: it is printed publicly and grants nothing (rule 1,
+// forbidden #2). What it yields is the same registry answer a Host yields.
+func (d *Directory) CommuneByLaunchCode(ctx context.Context, code string) (tenant.Tenant, bool, error) {
+	return d.resolveWithOutage(ctx, &platformv1.ResolveHostRequest{LaunchCode: code})
+}
+
+// resolveWithOutage is the body both lookups share, so the two can never map an outage differently.
+func (d *Directory) resolveWithOutage(ctx context.Context, req *platformv1.ResolveHostRequest) (tenant.Tenant, bool, error) {
 	ctx, cancel := context.WithTimeout(ctx, HanGoi)
 	defer cancel()
 
-	ra, err := d.cl.ResolveHost(ctx, &platformv1.ResolveHostRequest{Host: host})
+	ra, err := d.cl.ResolveHost(ctx, req)
 	if err != nil {
 		switch status.Code(err) {
 		case codes.NotFound, codes.InvalidArgument:

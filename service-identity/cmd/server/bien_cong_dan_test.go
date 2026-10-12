@@ -40,6 +40,10 @@ func (xaTheoHostThu) XaTheoHost(context.Context, string) (tenant.Tenant, bool, e
 	return tenant.Tenant{ID: ulidThu, Name: "Xã Thử", Active: true}, true, nil
 }
 
+func (xaTheoHostThu) CommuneByLaunchCode(context.Context, string) (tenant.Tenant, bool, error) {
+	return tenant.Tenant{ID: ulidThu, Host: "xa-thu.vigov.vn", Name: "Xã Thử", Active: true}, true, nil
+}
+
 type danhBaThu struct{}
 
 func (danhBaThu) DanhBaCongKhai(ctx context.Context) ([]domain.CanBoCongKhai, error) {
