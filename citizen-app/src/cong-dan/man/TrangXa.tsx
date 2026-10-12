@@ -1414,8 +1414,8 @@ export function TrangXa(props: {
    */
   dialStaff?: DialNumber;
   /**
-   * The directory's "NHẮN ZALO" (`openOutApp` + zalo.me, sheet rows 12 and 14), injected by the shell. Absent → no
-   * such button.
+   * The directory's "NHẮN ZALO" (zalo.me opened inside Zalo by `openWebview`, `openOutApp` as fallback — owner's
+   * device finding 12/10/2026; sheet rows 12 and 14), injected by the shell. Absent → no such button.
    */
   openZaloChat?: OpenZaloChat;
 }) {

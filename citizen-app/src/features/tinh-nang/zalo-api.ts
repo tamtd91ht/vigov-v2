@@ -196,15 +196,18 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // instead of by WHO USES THE CALL would be the under-declaration this table exists to close.
     // 01/10/2026 (ADR 0067 §1, §5): also a link inside a commune article's body and a home banner pointing at an
     // https page — commune app only, each after the "Bạn sắp rời ứng dụng để mở <host>" question (`leave-app.tsx`).
+    // 12/10/2026 (owner, real Zalo device): also "NHẮN ZALO" in the commune directory — the zalo.me link with a staff
+    // member's published mobile, opened in Zalo (`openZaloChat`); `openOutApp` alone did nothing there.
     api: "openWebview",
     nua: "ca-hai",
-    man: "Mọi màn · Tin tức của xã, Trang chủ và Tra cứu hồ sơ (giao diện của xã)",
+    man: "Mọi màn · Tin tức của xã, Trang chủ, Tra cứu hồ sơ và Danh bạ (giao diện của xã)",
     tinh_nang:
-      "Chat với Official Account · Quét danh thiếp · Chỉ đường tới văn phòng · Tin ViHAT · Website · Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã · Tra cứu hồ sơ",
+      "Chat với Official Account · Quét danh thiếp · Chỉ đường tới văn phòng · Tin ViHAT · Website · Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã · Tra cứu hồ sơ · Nhắn Zalo cho cán bộ trong danh bạ của xã",
     de_lam_gi:
-      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trên giao diện của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng, trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ, và trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia, sau khi bạn xác nhận rời ứng dụng.",
+      "Mở một trang bên ngoài ngay trong Zalo, và chỉ khi chính bạn bấm: cửa sổ trò chuyện với Official Account của chúng tôi, bản đồ chỉ đường tới một văn phòng, trang web ghi trên mã QR bạn vừa quét, một bài trên trang tin của chúng tôi, trang web chính thức của chúng tôi, hoặc — trên giao diện của xã — video mà xã đăng kèm một tin, đúng địa chỉ xã đã đăng, trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ, và trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia, sau khi bạn xác nhận rời ứng dụng; và trang Zalo của một cán bộ trong danh bạ của xã, khi bạn bấm “NHẮN ZALO” trên thẻ của cán bộ ấy.",
     hoi_nguoi_dung: false,
-    roi_khoi_may: "Địa chỉ trang được mở đi tới trình duyệt trong Zalo.",
+    roi_khoi_may:
+      "Địa chỉ trang được mở đi tới trình duyệt trong Zalo. Với “NHẮN ZALO”, đó là đường dẫn zalo.me kèm số di động mà cán bộ ấy đã đồng ý công khai; không có thông tin nào của bạn đi kèm.",
     intro_app: {
       man: "Mọi màn",
       tinh_nang: "Chat với Official Account · Chỉ đường tới văn phòng · Quét danh thiếp · Tin ViHAT · Website",
@@ -215,11 +218,13 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // 11/10/2026 (owner): "Tra cứu hồ sơ" opens the national public-service portal's dossier lookup the same way,
     // after the same question — and the question now says "Bà con" (ADR 0050 #6).
     commune_app: {
-      man: "Tin tức – Sự kiện · Video · Trang chủ · Tra cứu hồ sơ",
-      tinh_nang: "Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã · Tra cứu hồ sơ trên Cổng Dịch vụ công quốc gia",
+      man: "Tin tức – Sự kiện · Video · Trang chủ · Tra cứu hồ sơ · Danh bạ",
+      tinh_nang:
+        "Xem video của xã · Liên kết trong bài và ảnh trang chủ của xã · Tra cứu hồ sơ trên Cổng Dịch vụ công quốc gia · Nhắn Zalo cho cán bộ trong danh bạ của xã",
       de_lam_gi:
-        "Mở video mà xã đăng kèm một tin khi chính bạn bấm “Xem video”; mở trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ khi chính bạn bấm vào đó; và mở trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia khi chính bạn bấm “Tra cứu” ở màn Tra cứu hồ sơ — hai việc sau chỉ sau khi bạn chọn “Mở trang” ở câu hỏi “Bà con sắp rời ứng dụng để mở …”. Trang mở ngay trong Zalo; ứng dụng mở đúng địa chỉ đã đăng, không gửi kèm số điện thoại hay số hồ sơ bạn đã nhập.",
-      roi_khoi_may: "Địa chỉ trang (do xã đăng, hoặc trang tra cứu của Cổng Dịch vụ công quốc gia) đi tới trình duyệt trong Zalo.",
+        "Mở video mà xã đăng kèm một tin khi chính bạn bấm “Xem video”; mở trang web mà xã gắn vào một bài viết hay một ảnh trên trang chủ khi chính bạn bấm vào đó; và mở trang tra cứu hồ sơ của Cổng Dịch vụ công quốc gia khi chính bạn bấm “Tra cứu” ở màn Tra cứu hồ sơ — hai việc sau chỉ sau khi bạn chọn “Mở trang” ở câu hỏi “Bà con sắp rời ứng dụng để mở …”. Trang mở ngay trong Zalo; ứng dụng mở đúng địa chỉ đã đăng, không gửi kèm số điện thoại hay số hồ sơ bạn đã nhập. Khi bà con bấm “NHẮN ZALO” trên thẻ của một cán bộ trong danh bạ, mở trang Zalo của cán bộ ấy ngay trong Zalo để bà con tự bấm “Nhắn tin”; nút chỉ có khi cán bộ đã đồng ý công khai số di động và có dùng Zalo.",
+      roi_khoi_may:
+        "Địa chỉ trang (do xã đăng, hoặc trang tra cứu của Cổng Dịch vụ công quốc gia) đi tới trình duyệt trong Zalo. Với “NHẮN ZALO”, đó là đường dẫn zalo.me kèm số di động mà cán bộ ấy đã đồng ý công khai; không có thông tin nào của bà con đi kèm.",
     },
   },
   {
@@ -354,16 +359,17 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
   {
     // ADDED 12/10/2026 (customer sheet App Xã rows 12 and 14, owner): "NHẮN ZALO" on a directory card, shown only
     // for a mobile number the staff member agreed to publish (#12/#16) and only when the directory says that person
-    // uses Zalo. `openOutApp`, not `openWebview`: handed to the OS, the link is caught by the Zalo app itself and
-    // opens that person's profile with "Nhắn tin"; inside the webview it would be a web page, not a chat
-    // (prototype `services/zalo.ts:274-289`). Reverses ADR 0047 G6's "bỏ Nhắn Zalo". The shell injects
-    // `openZaloChat` in both places the commune interface runs, so the row is the state half's.
+    // uses Zalo. Reverses ADR 0047 G6's "bỏ Nhắn Zalo". The shell injects `openZaloChat` in both places the commune
+    // interface runs, so the row is the state half's.
+    // 12/10/2026, LATER (owner, real Zalo device): with `openOutApp` alone the button did nothing — handed to the OS,
+    // the link most likely bounced back to the Zalo already open. The link now opens in Zalo with `openWebview` (that
+    // row); this call is only the FALLBACK when that page cannot open. It can still run, so the row stays declared.
     api: "openOutApp",
     nua: "nha-nuoc",
     man: "Danh bạ",
-    tinh_nang: "Nhắn Zalo cho cán bộ trong danh bạ của xã",
+    tinh_nang: "Nhắn Zalo cho cán bộ trong danh bạ của xã — dự phòng khi trang không mở được trong Zalo",
     de_lam_gi:
-      "Mở Zalo tới trang của một cán bộ để bà con bấm “Nhắn tin”, chỉ khi chính bà con bấm “NHẮN ZALO” trên thẻ của cán bộ ấy trong danh bạ. Nút chỉ có khi cán bộ đã đồng ý công khai số di động và có dùng Zalo. Ứng dụng không biết bà con có nhắn hay không, và không đọc gì của cuộc trò chuyện.",
+      "Dự phòng khi trang không mở được trong Zalo: nếu trang Zalo của cán bộ không mở được ngay trong Zalo, chuyển đường dẫn ấy sang điện thoại để mở bằng ứng dụng Zalo, chỉ khi chính bà con bấm “NHẮN ZALO” trên thẻ của cán bộ ấy trong danh bạ. Nút chỉ có khi cán bộ đã đồng ý công khai số di động và có dùng Zalo. Ứng dụng không biết bà con có nhắn hay không, và không đọc gì của cuộc trò chuyện.",
     hoi_nguoi_dung: false,
     roi_khoi_may:
       "Đường dẫn zalo.me kèm số di động mà cán bộ ấy đã đồng ý công khai đi tới ứng dụng Zalo trên điện thoại. Không có thông tin nào của bà con đi kèm.",
@@ -989,8 +995,17 @@ export function dialHotline(number: string): Promise<KetQuaXin<void>> {
 /**
  * THE COMMUNE DIRECTORY'S "NHẮN ZALO" (customer sheet App Xã rows 12 and 14, 12/10/2026). Zalo opens a chat directly
  * only from a Zalo user id, which the commune does not have; `https://zalo.me/<number>` opens that person's profile,
- * one tap from "Nhắn tin" (prototype `services/zalo.ts:274-289`). `openOutApp` (`zmp-sdk/index.d.ts:4903-4910`) hands
- * the link to the OS so the Zalo app catches it — `openWebview` would show a web page instead of a chat.
+ * one tap from "Nhắn tin" (prototype `services/zalo.ts:274-289`).
+ *
+ * ⚠ `openWebview`, NOT `openOutApp` — owner report 12/10/2026, on a real Zalo device: with `openOutApp` the button did
+ * nothing. `openOutApp` (`zmp-sdk/index.d.ts:4903-4910`) is the native `OPEN_OUTAPP`: it hands the URL OUT of Zalo to
+ * the OS, it is not documented for zalo.me, and from inside Zalo the OS most likely routes the link straight back to
+ * the Zalo already in front, so nothing visible happens. Zalo's own in-app browser handles a zalo.me profile link
+ * natively (profile with "Nhắn tin") — the same way the ViHAT intro opens its OA chat `https://zalo.me/<OA id>`
+ * (`content/dich-ra-ngoai.ts` `DUONG_DAN_CHAT_OA` → `moTrangWeb`), so the same call and the same `style: "normal"`.
+ * `moTrangWeb` itself is not reused: it reports failures, and this URL carries a staff member's mobile.
+ * If `openWebview` rejects, `openOutApp` is tried ONCE with the same URL — on a Zalo version where the in-app browser
+ * refuses the link, handing it to the OS is the only remaining way — and its failure is what the screen reports.
  *
  * The URL is built HERE from digits only, so this door opens zalo.me and nothing else. The number goes into that link
  * and nowhere else: `report` false for `dialStaffNumber`'s reason.
@@ -998,10 +1013,15 @@ export function dialHotline(number: string): Promise<KetQuaXin<void>> {
 export function openZaloChat(number: string): Promise<KetQuaXin<void>> {
   const digits = number.replace(/\D/g, "");
   if (!/^\d{9,15}$/.test(digits)) return Promise.resolve({ kieu: "khong-lay-duoc" });
+  const url = `https://zalo.me/${digits}`;
   return xin(
     "other",
     async (sdk) => {
-      await sdk.openOutApp({ url: `https://zalo.me/${digits}` });
+      try {
+        await sdk.openWebview({ url, config: { style: "normal" } });
+      } catch {
+        await sdk.openOutApp({ url });
+      }
     },
     false,
   );

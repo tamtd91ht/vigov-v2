@@ -308,7 +308,9 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
  * opens (`QrCommuneApp`): `tel:` is ignored by every Mini App webview, and neither button opens a session or grants
  * anything, so the reason `phoneGranted` is withheld from the QR path does not apply. Inside Zalo only (an App ID is
  * set, as for the minimise bubble): outside it, the card keeps its `tel:` link and has no "NHẮN ZALO". The number is a staff member's
- * published one; it goes to the dialer or into the zalo.me link and nowhere else (`zalo-api.ts`).
+ * published one; it goes to the dialer or into the zalo.me link and nowhere else (`zalo-api.ts`). The zalo.me link
+ * opens in Zalo's own browser (`openWebview`, `openOutApp` only as a fallback): handed to the OS with `openOutApp`
+ * it did nothing on a real device (owner, 12/10/2026).
  */
 const dialCommuneStaff: DialNumber = async (digits) => (await dialStaffNumber(digits)).kieu === "xong";
 const chatWithCommuneStaff: OpenZaloChat = async (digits) => (await openZaloChat(digits)).kieu === "xong";

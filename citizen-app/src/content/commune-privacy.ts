@@ -223,7 +223,9 @@ export function communePrivacy(values: CommuneTermsValues): CommunePrivacy {
         "Mở trang bên ngoài (openWebview), chia sẻ qua Zalo (openShareSheet) và thu nhỏ ứng dụng (minimizeApp) — chỉ chạy khi chính bạn bấm, và không đọc dữ liệu nào của bạn. Khi bạn chia sẻ một tin, chỉ đường liên kết tới tin ấy đi tới cuộc trò chuyện bạn chọn trong cửa sổ của Zalo.",
         // 12/10/2026 (customer sheet App Xã rows 11, 12, 14): the directory card's two buttons (`DanhBaXa.tsx`), through
         // `zalo-api.ts` `dialStaffNumber` / `openZaloChat`. The number in both is the STAFF MEMBER's published one.
-        "Gọi cán bộ (openPhone) và nhắn Zalo cho cán bộ (openOutApp) trong danh bạ — chỉ chạy khi chính bạn bấm “GỌI” hoặc “NHẮN ZALO” trên thẻ của một cán bộ. “GỌI” chuyển số mà xã đã công khai sang màn hình gọi của điện thoại, và điện thoại hỏi bạn trước khi gọi. “NHẮN ZALO” chỉ có khi cán bộ ấy đã đồng ý công khai số di động và có dùng Zalo; nó mở ứng dụng Zalo tới trang của cán bộ ấy bằng đường dẫn zalo.me kèm số di động đó, để bạn tự bấm nhắn tin. Không có thông tin nào của bạn đi kèm, và ứng dụng không biết bạn có gọi hay nhắn hay không.",
+        // 12/10/2026, later (owner, real device): "NHẮN ZALO" opens the zalo.me link inside Zalo (`openWebview`) —
+        // `openOutApp` alone did nothing — and keeps `openOutApp` only as the fallback, so the line names both.
+        "Gọi cán bộ (openPhone) và nhắn Zalo cho cán bộ (openWebview, dự phòng bằng openOutApp) trong danh bạ — chỉ chạy khi chính bạn bấm “GỌI” hoặc “NHẮN ZALO” trên thẻ của một cán bộ. “GỌI” chuyển số mà xã đã công khai sang màn hình gọi của điện thoại, và điện thoại hỏi bạn trước khi gọi. “NHẮN ZALO” chỉ có khi cán bộ ấy đã đồng ý công khai số di động và có dùng Zalo; nó mở trang Zalo của cán bộ ấy ngay trong Zalo bằng đường dẫn zalo.me kèm số di động đó, để bạn tự bấm nhắn tin — nếu trang không mở được trong Zalo, đường dẫn ấy được chuyển sang điện thoại để mở bằng ứng dụng Zalo. Không có thông tin nào của bạn đi kèm, và ứng dụng không biết bạn có gọi hay nhắn hay không.",
       ],
     },
     {

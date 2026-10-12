@@ -121,7 +121,11 @@ export function offersZaloChat(cb: CanBoCongKhai, shown: { mobile: boolean } | n
  * (with one leading `+`); `true` when the phone's dial screen opened. Absent (tests, a browser) → a `tel:` link.
  */
 export type DialNumber = (digits: string) => Promise<boolean>;
-/** The shell's "Nhắn Zalo" (`openOutApp` with zalo.me, `App.tsx`). `true` when Zalo opened. Absent → no button. */
+/**
+ * The shell's "Nhắn Zalo" (zalo.me opened inside Zalo with `openWebview`, `openOutApp` only as a fallback — the
+ * `openOutApp`-only version did nothing on a real device, owner 12/10/2026; `App.tsx`, `zalo-api.ts` `openZaloChat`).
+ * `true` when Zalo opened the link. Absent → no button.
+ */
 export type OpenZaloChat = (digits: string) => Promise<boolean>;
 
 export type DirectoryActions = { dial?: DialNumber; openZaloChat?: OpenZaloChat };
