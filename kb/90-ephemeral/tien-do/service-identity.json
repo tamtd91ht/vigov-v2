@@ -636,6 +636,14 @@
       "viec": "GET /api/v1/communes nhận ?code=<mã công khai 12 hex> → {name, province, host} (Mini App tra mã trên QR); ?host= trả thêm launch_code (cho npm run qr --domain). Đúng một trong hai tham số; mã lạ / xã ngừng → items [] y hệt. ADR 0047 §Sửa đổi 12/10/2026.",
       "bang_chung": "5b9b16ed (?code=) + commit Tenant.launch_code — go build/vet/test core, platform, identity xanh.",
       "con_no": "Tuyến công khai chưa khai giới hạn tần suất dù core/ratelimit đã có — chọn ngưỡng là STOP luật 13, hỏi chủ dự án (chung với commune-staff, commune-profiles)."
+    },
+    {
+      "id": "xoa-bo-phan-409-truoc-grpc-12-10",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Xoá bộ phận còn cán bộ/bộ phận con trả 409 ngay, trước khi hỏi petitions/documents (bảng lỗi web admin S29 reopen).",
+      "bang_chung": "72de0f73 · internal/app/org_unit_delete.go + TestRemoveOrgUnitLocalHoldingsAnswerBeforeOwners; go test ./... service-identity xanh.",
+      "tiep_theo": "Nguyên nhân 503 'Chưa kiểm được hồ sơ bộ phận…' trên cụm khách CHƯA rõ — cần log identity dòng 'xoá bộ phận: không hỏi được phản ánh/văn bản' (mã gRPC). Nghi: GRPC_CALLER_KEY lệch, image petitions/documents cũ, migration documents 0010. Ngoài phạm vi: kiểm ErrOrgUnitDeleteNotConfigured vẫn chạy trước đếm tại chỗ."
     }
   ]
 }

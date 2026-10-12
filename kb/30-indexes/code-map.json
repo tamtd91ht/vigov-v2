@@ -724,7 +724,7 @@
     },
     "app.DocumentHoldingsSource": {
       "kind": "type",
-      "at": "service-identity/internal/app/org_unit_delete.go:54"
+      "at": "service-identity/internal/app/org_unit_delete.go:55"
     },
     "app.DocumentTypeImportRejected": {
       "kind": "type",
@@ -2144,7 +2144,7 @@
     },
     "app.OrgUnitInUseError": {
       "kind": "type",
-      "at": "service-identity/internal/app/org_unit_delete.go:70"
+      "at": "service-identity/internal/app/org_unit_delete.go:71"
     },
     "app.OrgUnitNameResolver": {
       "kind": "type",
@@ -2212,7 +2212,7 @@
     },
     "app.PetitionHoldingsSource": {
       "kind": "type",
-      "at": "service-identity/internal/app/org_unit_delete.go:49"
+      "at": "service-identity/internal/app/org_unit_delete.go:50"
     },
     "app.PetitionLogAttachmentFiles": {
       "kind": "type",
@@ -3216,7 +3216,7 @@
     },
     "app.WithHoldingsSources": {
       "kind": "func",
-      "at": "service-identity/internal/app/org_unit_delete.go:81"
+      "at": "service-identity/internal/app/org_unit_delete.go:82"
     },
     "app.WithImageFetcher": {
       "kind": "func",
@@ -4772,7 +4772,7 @@
     },
     "domain.CheckPetitionLogAttachable": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/petition_staff_file.go:99"
+      "at": "service-petitions/internal/domain/petition_staff_file.go:105"
     },
     "domain.CheckPortalSelectedCount": {
       "kind": "func",
@@ -6052,7 +6052,7 @@
     },
     "domain.IsPetitionLogAttachmentOf": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/petition_staff_file.go:80"
+      "at": "service-petitions/internal/domain/petition_staff_file.go:86"
     },
     "domain.IsPortalTargetKind": {
       "kind": "func",
@@ -6080,7 +6080,7 @@
     },
     "domain.IsVerificationPhotoOf": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/petition_staff_file.go:74"
+      "at": "service-petitions/internal/domain/petition_staff_file.go:80"
     },
     "domain.IsYearClose": {
       "kind": "func",
@@ -6820,7 +6820,7 @@
     },
     "domain.MayDownloadPetitionLogAttachment": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/petition_staff_file.go:112"
+      "at": "service-petitions/internal/domain/petition_staff_file.go:118"
     },
     "domain.MeasureWorkingTime": {
       "kind": "func",
@@ -7480,7 +7480,7 @@
     },
     "domain.PetitionLogAttachment": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/petition_staff_file.go:88"
+      "at": "service-petitions/internal/domain/petition_staff_file.go:94"
     },
     "domain.PetitionMergeEvent": {
       "kind": "type",
@@ -8748,7 +8748,7 @@
     },
     "domain.VerificationPhotosVisibleToCitizen": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/petition_staff_file.go:67"
+      "at": "service-petitions/internal/domain/petition_staff_file.go:73"
     },
     "domain.VerifiedRatio": {
       "kind": "func",

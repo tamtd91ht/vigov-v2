@@ -57,7 +57,7 @@ luật ngày 11/10/2026.
 
 | Tính năng | Dòng | Gỡ đi thì mất |
 |---|---|---|
-| Ba tab Cấu hình Lịch làm việc · Nhật ký hệ thống · Nhận diện xã, đứng sau 9 tab của prototype | 28 | Chỗ duy nhất nhập giờ làm việc, ngày lễ, ngày làm bù, tức đầu vào của mọi hạn tính theo giờ làm việc (ADR 0007). Chỗ duy nhất đọc vết kiểm toán (ADR 0054). Chỗ duy nhất đặt tên và logo xã (ADR 0069) |
+| Ba màn Lịch làm việc · Nhật ký hệ thống · Nhận diện xã — **từ 12/10/2026 không còn là tab Cấu hình** mà ở mục menu riêng "Hệ thống" (`/he-thong`), xem *Sửa đổi 12/10/2026* | 28 | Chỗ duy nhất nhập giờ làm việc, ngày lễ, ngày làm bù, tức đầu vào của mọi hạn tính theo giờ làm việc (ADR 0007). Chỗ duy nhất đọc vết kiểm toán (ADR 0054). Chỗ duy nhất đặt tên và logo xã (ADR 0069) |
 | Cụm Thời hạn đơn thư ở tab Thời hạn xử lý | 35 | Số ngày theo loại đơn, nguồn của hạn đơn thư tự điền (ADR 0084 §3) |
 | Tab Văn bản đi / Văn bản đến | 42 | Sổ văn bản đến và đi chỉ có ở đây |
 | Sửa hạn xử lý (chi tiết đơn thư) | 43 | Cách duy nhất đặt hoặc sửa hạn sau khi vào sổ (ADR 0079 Q18, ADR 0084 §3) |
@@ -92,3 +92,12 @@ có mục này (`web-admin/src/features/phan-anh/petition-merge.tsx:24`, ADR 008
 
 → ADR 0068 lần 5 #3–#4 · ADR 0075 #4a · ADR 0077 · `kb/90-ephemeral/tien-do/` (mục `*-10-11` của từng
 module)
+
+## Sửa đổi 12/10/2026 — bảng lỗi mở lại
+
+Chủ dự án chốt hai dòng khách mở lại:
+
+| Dòng | Quyết định | Lý do |
+|---|---|---|
+| 28 (S27) | `/cau-hinh` chỉ còn 9 tab đúng prototype. Ba màn Lịch làm việc · Nhật ký hệ thống · Nhận diện xã **chuyển** sang mục menu "Hệ thống" (`/he-thong`, nhóm Quản trị, ngay sau Cấu hình). Không gỡ | Vẫn theo #2: là đường duy nhất tới ADR 0007 · 0054 · 0069. Chuyển chỗ thoả cả prototype lẫn #2. Cổng từng màn giữ nguyên; link `/cau-hinh?tab=` cũ tự chuyển (`moved-tabs.ts`) |
+| 36 (S35) | Câu mô tả Thời hạn xử lý dùng nguyên văn prototype "hồ sơ **tiếp nhận** sau thời điểm lưu" (thay "được đặt hạn" của 08/10). Câu cuối vẫn là "Mặc định {n} giờ." lấy từ dữ liệu xã | "tiếp nhận" hiểu theo ADR 0028 §(c). Con số "72 giờ, tức ba ngày" không viết cứng (luật 10 cấm #3; giờ làm việc ≠ ngày lịch) |
