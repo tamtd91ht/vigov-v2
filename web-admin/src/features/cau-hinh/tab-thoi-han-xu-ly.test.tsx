@@ -264,15 +264,14 @@ describe("hộp giải thích (spec 08)", () => {
     expect(html).not.toMatch(/Mặc định \d+ giờ/);
   });
 
-  it("câu chung theo bản mẫu, đúng điều hệ thống làm: 'được đặt hạn', không 'tiếp nhận' (luật 10 bất biến 2, ADR 0028)", () => {
-    // The prototype's "chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu" is false read literally: a
-    // citizen's petition received before the save gets `han_xu_ly_xong` when its field is settled — possibly after.
+  it("câu chung nguyên văn bản mẫu: 'hồ sơ tiếp nhận sau thời điểm lưu' (chủ dự án 12/10, bảng lỗi S35)", () => {
+    // Owner chose the prototype's words over the 08/10 "được đặt hạn" — see `SLA_BANNER_APPLIES`.
     const html = ve();
     expect(html).toContain(
       "Thời hạn tính theo <b>giờ làm việc</b>, không tính ngày nghỉ và ngày lễ. " +
-        "Thay đổi chỉ áp dụng cho hồ sơ được đặt hạn sau thời điểm lưu.<br/>",
+        "Thay đổi chỉ áp dụng cho hồ sơ tiếp nhận sau thời điểm lưu.<br/>",
     );
-    expect(html).not.toContain("hồ sơ tiếp nhận sau thời điểm lưu");
+    expect(html).not.toContain("hồ sơ được đặt hạn");
   });
 
   it("cột Sắp đến hạn khi còn: ba công dụng, tên cột in đậm", () => {
