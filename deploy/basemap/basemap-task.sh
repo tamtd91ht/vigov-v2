@@ -115,9 +115,21 @@ TIPPECANOE_IMAGE=$(sed -n 's/^TIPPECANOE_TAG=//p' "$TMP_DIR/images.env")
 docker pull -q "$DUCKDB_IMAGE" >/dev/null || { echo "DỪNG: không kéo được $DUCKDB_IMAGE (máy build tới được Docker Hub?)."; exit 1; }
 docker pull -q "$TIPPECANOE_BASE" >/dev/null || { echo "DỪNG: không kéo được $TIPPECANOE_BASE."; exit 1; }
 # No build context (stdin): the Dockerfile fetches exactly TIPPECANOE_COMMIT and checks it before compiling.
-DOCKER_BUILDKIT=1 docker build --progress=plain -t "$TIPPECANOE_IMAGE" --build-arg BASE_IMAGE="$TIPPECANOE_BASE" \
-  --build-arg TIPPECANOE_COMMIT="$TIPPECANOE_COMMIT" - < deploy/basemap/tippecanoe.Dockerfile \
-  || { echo "DỪNG: dựng ảnh tippecanoe ($TIPPECANOE_COMMIT) hỏng — xem log ở trên."; exit 1; }
+# `buildx build --load` when buildx exists: a buildx builder with the docker-container driver builds the
+# image INSIDE its own container and never hands it to the local daemon unless told to — the build
+# "succeeds" and `docker run` then finds nothing (lượt Jenkins 12/10/2026, 22:07: pull access denied for
+# vigov-basemap/tippecanoe, after the whole mainland cut).
+TIP_BUILD_ARGS=(--progress=plain -t "$TIPPECANOE_IMAGE" --build-arg BASE_IMAGE="$TIPPECANOE_BASE"
+  --build-arg TIPPECANOE_COMMIT="$TIPPECANOE_COMMIT" -)
+if docker buildx version >/dev/null 2>&1; then
+  docker buildx build --load "${TIP_BUILD_ARGS[@]}" < deploy/basemap/tippecanoe.Dockerfile
+else
+  DOCKER_BUILDKIT=1 docker build "${TIP_BUILD_ARGS[@]}" < deploy/basemap/tippecanoe.Dockerfile
+fi || { echo "DỪNG: dựng ảnh tippecanoe ($TIPPECANOE_COMMIT) hỏng — xem log ở trên."; exit 1; }
+# Checked here, before the hour of building, not discovered by `docker run` at step 4/4.
+docker image inspect "$TIPPECANOE_IMAGE" >/dev/null 2>&1 || {
+  echo "DỪNG: dựng xong nhưng Docker cục bộ không có ảnh $TIPPECANOE_IMAGE — builder buildx đang dùng không nạp ảnh về"
+  echo "      (docker buildx ls: builder có dấu * phải dùng driver 'docker', hoặc build cần --load). Chưa dựng nền."; exit 1; }
 echo "duckdb: $DUCKDB_IMAGE · tippecanoe: $TIPPECANOE_IMAGE (commit $TIPPECANOE_COMMIT)"
 export DUCKDB_IMAGE TIPPECANOE_IMAGE
 
