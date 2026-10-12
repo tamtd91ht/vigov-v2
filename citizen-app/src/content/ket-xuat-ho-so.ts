@@ -15,6 +15,7 @@
 
 import {
   DUONG_DAN_YEU_CAU,
+  REQUEST_PHOTO_PART,
   TRUONG_GUI_DI,
   type TruongGuiDi,
 } from "../api/hop-dong-yeu-cau";
@@ -505,6 +506,24 @@ export const SCENE_PHOTO_UPLOAD_FIELDS: readonly TruongGuiDi[] = [
 
 export const SCENE_PHOTO_LIST_FIELDS: readonly TruongGuiDi[] = [PETITION_CODE_FIELD];
 
+/**
+ * The ViHAT app's consultation photo upload (12/10/2026): the request's id on the path, then the ONE multipart part
+ * `requestPhotoForm` sends. Imported from the contract, not copied — this file and `api/hop-dong-yeu-cau.ts` are
+ * the same half; `ket-xuat-ho-so.test.ts` locks the parts to the real form both ways.
+ */
+export const CONSULT_PHOTO_UPLOAD_FIELDS: readonly TruongGuiDi[] = [
+  {
+    khoa: "requestId",
+    trong_chinh_sach:
+      "mã của yêu cầu tư vấn bạn vừa gửi, do máy chủ cấp, nằm trên đường dẫn; nó chỉ mở được yêu cầu của chính bạn",
+  },
+  {
+    khoa: REQUEST_PHOTO_PART,
+    trong_chinh_sach:
+      "ảnh bạn đã chụp hoặc chọn, dưới một tên cố định là “photo”, không phải tên tệp trên máy bạn; máy chủ bỏ thông tin vị trí chụp và các thông tin kèm theo khác trong ảnh trước khi lưu",
+  },
+];
+
 const SCENE_PHOTO_ROUTES: readonly DuongRoiKhoiMay[] = [
   {
     tuyen: SCENE_PHOTOS_PATH,
@@ -908,6 +927,20 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     // 12/10/2026: both one-tap blocks sit in the "Kết nối với ViHAT" card on Liên hệ (SMS left the home screen).
     man: "Tư vấn và báo giá · Liên hệ — thẻ “Kết nối với ViHAT”, khối “Chat với chuyên viên” và khối “Nhận ưu đãi qua SMS”",
     truong: TRUONG_GUI_DI,
+    app: "shared",
+  },
+  {
+    // 12/10/2026 (owner): the photos of a consultation request — the use of the camera / photo permissions in this
+    // resubmission. Only the upload runs today: the app never lists or downloads a stored photo (no screen shows
+    // one; "Yêu cầu của tôi" reads `photoCount` from the list above), so no GET row is declared.
+    tuyen: `${DUONG_DAN_YEU_CAU}/{requestId}/photos`,
+    may_chu:
+      "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group; một yêu cầu cho mỗi ảnh, chỉ với yêu cầu tư vấn, tối đa 3 ảnh mỗi yêu cầu và 5 MB mỗi ảnh; máy chủ dò loại ảnh từ chính byte ảnh và bỏ thông tin vị trí chụp cùng các thông tin kèm theo trước khi lưu",
+    khi_nao:
+      "ngay sau khi yêu cầu tư vấn người dùng tự bấm “Gửi yêu cầu tư vấn” đã được ghi nhận, nếu người dùng đã chụp hoặc chọn ảnh — mỗi ảnh một lần; và khi người dùng tự bấm “Tải lại ảnh …”",
+    nguoi_dung_bam: true,
+    man: "Tư vấn và báo giá",
+    truong: CONSULT_PHOTO_UPLOAD_FIELDS,
     app: "shared",
   },
   DUONG_CONG_KHAI[0]!,

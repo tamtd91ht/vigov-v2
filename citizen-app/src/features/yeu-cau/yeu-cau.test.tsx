@@ -505,6 +505,7 @@ describe("danh sách yêu cầu nói ra mọi nhánh, kể cả nhánh rỗng", 
             loai: "callback",
             trang_thai: "dang_xu_ly",
             tao_luc: "2026-09-22T03:00:00Z",
+            photo_count: 0,
           }}
         />,
       ),

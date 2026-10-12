@@ -569,9 +569,38 @@ describe("chính sách của ứng dụng ViHAT — không một chữ nào về
     }
   });
 
-  it("the intro's camera is the QR scan only — no photo leaves, no library is read", () => {
-    expect(MUC_CHINH_SACH.find((m) => m.ma === "du-lieu")!.doan.join("\n")).toMatch(
-      /chỉ dùng máy ảnh để quét mã QR, khi chính bạn bấm 'Quét mã QR'/,
+  // 12/10/2026 (owner): the camera is the QR scan AND the consultation photos; the library is opened for those only.
+  it("the intro's camera: the QR scan and the consultation photos, each on a tap; the library only for 'Chọn ảnh'", () => {
+    const text = MUC_CHINH_SACH.find((m) => m.ma === "du-lieu")!.doan.join("\n");
+    expect(text).toMatch(/để quét mã QR khi bạn bấm 'Quét mã QR'/);
+    expect(text).toMatch(/để chụp ảnh gửi kèm một yêu cầu tư vấn khi bạn bấm 'Chụp ảnh' ở màn 'Tư vấn và báo giá'/);
+    expect(text).toMatch(/chỉ mở thư viện ảnh khi bạn bấm 'Chọn ảnh'/);
+    expect(text).toMatch(/không lưu ảnh nào trên máy bạn/);
+    // The old absolute sentence is gone — it became false the day photos could be attached.
+    expect(text).not.toMatch(/không đọc thư viện ảnh của bạn/);
+  });
+
+  it("the consultation photos paragraph says what, where, who, the metadata removal, retention and erasure", () => {
+    const section = MUC_CHINH_SACH.find((m) => m.ma === "yeu-cau-tu-van")!.doan.join("\n");
+    const photos = section.split("\n").find((d) => d.startsWith("ẢNH GỬI KÈM YÊU CẦU TƯ VẤN"));
+    expect(photos, "the request section lost its photo paragraph").toBeDefined();
+    for (const said of [
+      /tối đa 3 ảnh, mỗi ảnh không quá 5 MB/, // what, and the caps the server enforces
+      /chỉ nhận đúng những ảnh bạn chụp hoặc chọn/,
+      /tới máy chủ của Tập đoàn ViHAT Group — cùng nơi lưu yêu cầu/, // where
+      /chuyên viên của Tập đoàn ViHAT Group mở ảnh/, // who
+      /đường tải ảnh chỉ dùng được trong 24 giờ/, // how: the request.photo_added webhook's signed link (vihat-miniapp 2cf31a30)
+      /không kèm số điện thoại, tên hay ghi chú/,
+      /bỏ thông tin vị trí chụp/, // EXIF/XMP stripped server-side (vihat-miniapp `internal/photo`)
+      /lưu bằng thời hạn của yêu cầu — 24 tháng/, // retention
+      /ảnh bị xoá cùng lúc với phần ghi chú/, // erasure
+      /không gửi kèm đề nghị gọi lại/,
+    ]) {
+      expect(photos!, String(said)).toMatch(said);
+    }
+    // And the erasure section says the photos go too.
+    expect(MUC_CHINH_SACH.find((m) => m.ma === "cach-thuc")!.doan.join("\n")).toMatch(
+      /cùng mọi ảnh bạn đã gửi kèm yêu cầu tư vấn/,
     );
   });
 
@@ -583,7 +612,8 @@ describe("chính sách của ứng dụng ViHAT — không một chữ nào về
     const listed = DOAN_CHINH_SACH_TUNG_QUYEN.map((d) => /\(([A-Za-z]+)\)/.exec(d)?.[1]);
     expect([...listed].sort()).toEqual([...shown].sort());
     // And nothing of the commune interface rides along.
-    for (const api of ["getLocation", "requestCameraPermission", "openMediaPicker", "chooseImage", "getNetworkType"]) {
+    // (12/10/2026: the camera, the picker and `chooseImage` are the intro's again — listed above through `shown`.)
+    for (const api of ["getLocation", "getNetworkType"]) {
       expect(DOAN_CHINH_SACH_TUNG_QUYEN.join("\n"), api).not.toContain(api);
     }
   });

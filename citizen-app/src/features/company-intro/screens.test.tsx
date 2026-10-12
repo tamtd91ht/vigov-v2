@@ -375,8 +375,13 @@ describe("màn Quản lý quyền vẽ từ bảng khai, không từ một danh 
     for (const hidden of KHAI_BAO_LOI_GOI.filter((q) => !shownApis.has(q.api))) {
       expect(text, `màn quyền hiện lời gọi của giao diện xã: ${hidden.api}`).not.toContain(hidden.de_lam_gi);
     }
-    for (const api of ["getLocation", "requestCameraPermission", "openMediaPicker", "chooseImage", "configAppView", "minimizeApp", "openShareSheet", "openOutApp"]) {
+    for (const api of ["getLocation", "configAppView", "minimizeApp", "openShareSheet", "openOutApp"]) {
       expect(shownApis.has(api), `${api} is not the intro's`).toBe(false);
+    }
+    // 12/10/2026 (owner): "Tư vấn và báo giá" photos — the camera and the picker ARE the intro's again, in its words.
+    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
+      expect(shownApis.has(api), `${api} is the intro's (consultation photos)`).toBe(true);
+      expect(shown.find((q) => q.api === api)!.man, api).toBe("Tư vấn và báo giá");
     }
   });
 

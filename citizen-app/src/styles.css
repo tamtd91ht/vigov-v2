@@ -1436,6 +1436,132 @@ body {
   color: var(--ink-muted);
 }
 
+/* ---------- Photos on "Tư vấn và báo giá" (`features/yeu-cau/ConsultPhotos.tsx`, 12/10/2026) ----------
+   The intro's own classes, not the commune's `xa-photo-*`: the two halves are two apps to the user. Flat
+   colours already measured in `accessibility.test.ts` (navy on --vh-blue-50, ink on white). */
+.vh-photos {
+  margin: 16px 0 0;
+}
+.vh-photo-grid {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.vh-photo-tile {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+}
+/* "Chụp ảnh" / "Chọn ảnh": a whole tile is the target, and never under the 48px floor. Words, not an icon alone. */
+.vh-photo-tile--add {
+  width: 100%;
+  height: 100%;
+  min-height: var(--tap-min);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border: 2px dashed var(--navy);
+  background: var(--vh-blue-50);
+  color: var(--navy);
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 700;
+  text-align: center;
+}
+/* Disabled while a question or a pick is open — said by the open question itself, not by fading the text. */
+.vh-photo-tile--add:disabled {
+  border-style: dotted;
+}
+.vh-photo-tile--add:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+.vh-photo-tile__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border: 1px solid var(--vh-line);
+  border-radius: 12px;
+}
+.vh-photo-tile__words {
+  margin: 0;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  border: 1px solid var(--vh-line);
+  border-radius: 12px;
+  background: var(--surface);
+  font-size: var(--text-small);
+  color: var(--ink);
+  text-align: center;
+}
+/* The "✕": a 48px target in the corner around a 32px dark disc (the touch floor wins over the drawing). */
+.vh-photo-tile__remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: var(--tap-min);
+  height: var(--tap-min);
+  min-height: var(--tap-min);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.vh-photo-tile__remove:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: -2px;
+}
+.vh-photo-tile__x {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #ffffff;
+  font-size: var(--text-small);
+  line-height: 1;
+}
+/* The question asked before Zalo's dialog: in the flow, framed so it reads as a question, not as page text. */
+.vh-photo-question {
+  margin: 12px 0 0;
+  padding: 16px;
+  border: 1px solid var(--navy);
+  border-radius: var(--vh-radius);
+  background: var(--surface);
+}
+.vh-photo-question__text {
+  margin: 0 0 8px;
+  font-size: var(--text-body);
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--navy);
+}
+.vh-photo-question__why {
+  margin: 0 0 14px;
+  font-size: var(--text-body);
+  line-height: 1.55;
+  color: var(--ink);
+}
+.vh-photo-message {
+  margin-top: 10px;
+}
+.vh-photo-status__list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
 /* Nút hành động dùng chung: gọi, gửi email, mở liên kết, chỉ đường. Đích chạm đủ 44px, chữ navy
    trên nền thẻ — cặp ấy có tên trong `accessibility.test.ts`. */
 .tn-hanh-dong {

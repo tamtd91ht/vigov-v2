@@ -203,7 +203,8 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
   "Với số điện thoại, Zalo không trả số thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại của bạn không nằm trong mã đó.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",
-  "Với máy ảnh, ứng dụng chỉ dùng nó để quét mã QR khi chính bạn bấm 'Quét mã QR': không chụp ảnh, không lưu ảnh, và không đọc thư viện ảnh của bạn.",
+  // 12/10/2026 (owner): the consultation photos — the camera and the picker are used again, on one screen.
+  "Với máy ảnh và thư viện ảnh, ứng dụng chỉ dùng chúng khi chính bạn bấm: máy ảnh để quét mã QR khi bạn bấm 'Quét mã QR', và để chụp ảnh gửi kèm một yêu cầu tư vấn khi bạn bấm 'Chụp ảnh' ở màn 'Tư vấn và báo giá'; thư viện ảnh khi bạn bấm 'Chọn ảnh' ở cùng màn ấy. Trước khi Zalo hỏi quyền, ứng dụng hỏi bạn bằng một câu nói rõ ảnh dùng để làm gì. Ứng dụng chỉ nhận ảnh bạn chụp hoặc chọn, không xem các ảnh khác trong máy, và không lưu ảnh trên máy bạn.",
   "Với việc giữ màn hình sáng, ứng dụng chỉ bật chế độ ấy khi bạn tự bấm, và tự tắt lại khi bạn rời màn hình danh thiếp. Chế độ này không đọc gì và không gửi gì; nó chỉ ngăn màn hình tối đi trong lúc người khác đang quét mã.",
   // LIỆT KÊ ĐÚNG NHỮNG TRƯỜNG TẤM THIẾP THẬT SỰ CHỨA. Câu này và câu `ghi-tep` trong chính sách
   // phải khớp nhau VÀ khớp với `vcard.ts` — `chinh-sach.test.ts`, khối "khai của tệp danh thiếp khớp
@@ -226,8 +227,9 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
  * Nghị định 13 buộc nói ra.
  *
  * 11/10/2026: exactly the calls the ViHAT intro's "Quản lý quyền" shows that need a Console permission
- * (`chinh-sach.test.ts` checks the list against `introPermissionRows`). `getLocation`, the camera, the picker and
- * `chooseImage` are the commune interface's — `content/commune-privacy.ts` lists them.
+ * (`chinh-sach.test.ts` checks the list against `introPermissionRows`). `getLocation` is the commune interface's —
+ * `content/commune-privacy.ts` lists it. 12/10/2026: the camera, the picker and `chooseImage` are the intro's too
+ * again ("Tư vấn và báo giá" photos), so they are listed here in the intro's words.
  */
 export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá; để chuyên viên biết ai đang nhắn khi bạn bấm 'Chat với chuyên viên'; và để gửi tin nhắn SMS ưu đãi tới đúng số ấy nếu bạn bấm 'Đăng ký nhận', cho tới khi bạn bấm 'Huỷ nhận ưu đãi SMS'. Ứng dụng chỉ nhận một mã, không nhận số.",
@@ -239,4 +241,7 @@ export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   "Rung (vibrate) — để báo bằng một nhịp rung khi danh thiếp của chúng tôi đã được tải xuống máy bạn.",
   "Giữ màn hình sáng (keepScreen) — để màn hình không tối đi trong lúc người khác quét mã danh thiếp của chúng tôi.",
   "Tải tệp (downloadFile) — để ghi tệp danh thiếp của chúng tôi xuống máy bạn.",
+  "Quyền máy ảnh (requestCameraPermission) — để hỏi bạn cho phép dùng máy ảnh khi bạn bấm 'Chụp ảnh' ở màn 'Tư vấn và báo giá', sau khi bạn đã bấm 'Cho phép' ở câu hỏi của ứng dụng. Bấm 'Không' thì Zalo không được hỏi.",
+  "Chụp ảnh (chooseImage) — để mở máy ảnh của điện thoại cho bạn chụp một ảnh gửi kèm yêu cầu tư vấn; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
+  "Chọn ảnh (openMediaPicker) — để bạn chọn ảnh có sẵn trong máy gửi kèm yêu cầu tư vấn; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận những ảnh bạn chọn, không xem các ảnh khác trong máy.",
 ];

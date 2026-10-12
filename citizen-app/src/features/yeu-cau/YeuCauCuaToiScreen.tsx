@@ -71,6 +71,14 @@ export function DongYeuCau({ yeu_cau }: { yeu_cau: YeuCauDaGui }) {
             <span className="the-tt__gia-tri">{luc}</span>
           </li>
         )}
+        {/* A count, no thumbnails (owner 12/10/2026): it tells the person their photos arrived without fetching
+            any image — the image route needs the bearer and would cost one call per photo per opening. */}
+        {yeu_cau.photo_count > 0 && (
+          <li className="the-tt__dong">
+            <span className="the-tt__nhan">{YEU_CAU_CUA_TOI.photos_label}</span>
+            <span className="the-tt__gia-tri">{YEU_CAU_CUA_TOI.photo_count(yeu_cau.photo_count)}</span>
+          </li>
+        )}
       </ul>
       {/* A sentence under the pill: "Đã hoàn tất" alone can read as a refusal to exactly the reader least likely to
           ask again. */}

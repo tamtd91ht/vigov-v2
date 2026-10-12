@@ -829,15 +829,12 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
       // (`openShareSheet`, ADR 0047 G6). Same day: the intro's paper-card photo and office location were removed,
       // so the camera, the picker, `chooseImage` and `getLocation` are the commune interface's alone.
       // 12/10/2026 (customer sheet App Xã rows 12, 14): the directory's "NHẮN ZALO" (`openOutApp`).
-    ).toEqual([
-      "chooseImage",
-      "getLocation",
-      "minimizeApp",
-      "openMediaPicker",
-      "openOutApp",
-      "openShareSheet",
-      "requestCameraPermission",
-    ]);
+      // 12/10/2026 (owner, Zalo resubmission): the camera, the picker and `chooseImage` left this list — the intro's
+      // "Tư vấn và báo giá" attaches photos to a consultation request, so the three are "ca-hai" (below).
+    ).toEqual(["getLocation", "minimizeApp", "openOutApp", "openShareSheet"]);
+    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
+      expect(KHAI_BAO_LOI_GOI.find((k) => k.api === api)?.nua, `${api} is used by both halves`).toBe("ca-hai");
+    }
     expect(KHAI_BAO_LOI_GOI.find((k) => k.api === "getUserInfo")?.nua, "getUserInfo is used by both halves").toBe("ca-hai");
     expect(
       KHAI_BAO_LOI_GOI.filter((k) => k.nua === "ca-hai").length,

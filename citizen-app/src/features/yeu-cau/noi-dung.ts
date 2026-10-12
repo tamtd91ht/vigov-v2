@@ -74,6 +74,80 @@ export const TU_VAN = {
     "Hệ thống đang gián đoạn. Vui lòng thử lại sau.",
 } as const;
 
+/**
+ * PHOTOS ON "TƯ VẤN VÀ BÁO GIÁ" (owner 12/10/2026): up to 3, optional, sent to ViHAT Group's specialists with the
+ * consultation request.
+ *
+ * ⚠ THE TWO QUESTIONS ARE SAID BEFORE ZALO'S OWN DIALOG (Mini App policy 3.3.4), and their words are quoted in the
+ *   platform-call table (`zalo-api.ts`, rows `requestCameraPermission` and `openMediaPicker`, `intro_app`) — a
+ *   reviewer reads the table and then looks for exactly these words on screen. `consult-photos.test.tsx` pins both.
+ *
+ * ⚠ AFTER THE REQUEST IS SENT, NO SENTENCE ASKS TO "CHOOSE ANOTHER PHOTO": the form is gone, so a photo that the
+ *   server refused for good is sent another way — the floating "Chat Zalo" button (`NHAN_NUT_CHAT`), which every
+ *   screen of the intro carries. A sentence pointing at a button that is not there is a dead end.
+ */
+export const CONSULT_PHOTOS = {
+  title: "Ảnh gửi kèm (không bắt buộc)",
+  hint: "Tối đa 3 ảnh, mỗi ảnh không quá 5 MB, định dạng JPEG, PNG hoặc WebP — ví dụ ảnh thiết bị, tài liệu hoặc màn hình bạn muốn chuyên viên xem.",
+  take: "Chụp ảnh",
+  pick: "Chọn ảnh",
+  picking: "Đang mở…",
+  photo_alt: (n: number) => `Ảnh ${n} bạn đã chọn`,
+  no_preview: (n: number) => `Ảnh ${n} (không xem trước được)`,
+  remove: (n: number) => `Bỏ ảnh ${n}`,
+  full: "Đã đủ 3 ảnh. Bỏ một ảnh nếu bạn muốn thay ảnh khác.",
+
+  // The purpose, then "Cho phép" / "Không" — once per button per screen opening.
+  camera_question: "Cho phép ứng dụng dùng máy ảnh để chụp ảnh gửi kèm yêu cầu tư vấn?",
+  library_question: "Cho phép ứng dụng mở thư viện ảnh để bạn chọn ảnh gửi kèm yêu cầu tư vấn?",
+  question_why:
+    "Ảnh chỉ được gửi tới chuyên viên ViHAT Group khi bạn bấm “Gửi yêu cầu tư vấn”. Ứng dụng chỉ nhận ảnh bạn chụp hoặc chọn, và không lưu ảnh trên máy.",
+  allow: "Cho phép",
+  deny: "Không",
+
+  // A pick that brought nothing — each says what to do next, and that the request can go without photos.
+  camera_refused: "Bạn chưa cho phép dùng máy ảnh. Bạn vẫn gửi được yêu cầu không kèm ảnh, hoặc bấm “Chọn ảnh”.",
+  library_refused: "Bạn chưa cho phép chọn ảnh. Bạn vẫn gửi được yêu cầu không kèm ảnh, hoặc bấm “Chụp ảnh”.",
+  pick_failed: "Zalo chưa mở được máy ảnh hoặc thư viện ảnh. Vui lòng thử lại, hoặc gửi yêu cầu không kèm ảnh.",
+
+  // A picked photo kept OUT of the request, said while the person can still choose another.
+  rejected: {
+    "file-unreadable":
+      "Ứng dụng không đọc được ảnh này trên máy bạn. Vui lòng chụp lại hoặc chọn một ảnh khác.",
+    "too-large": "Ảnh này lớn hơn 5 MB. Vui lòng chọn ảnh nhỏ hơn hoặc chụp lại.",
+    unsupported: "Ảnh này không phải JPEG, PNG hoặc WebP. Vui lòng chọn một ảnh khác.",
+  },
+
+  // Photos are for a consultation request only (409 `photo_not_allowed` otherwise) — said before the tap.
+  callback_no_photos: "Ảnh chỉ được gửi kèm “Gửi yêu cầu tư vấn”, không gửi kèm đề nghị gọi lại.",
+
+  // After the request is sent.
+  sending: (n: number, total: number) => `Đang gửi ảnh ${n}/${total} tới chuyên viên…`,
+  all_arrived: (total: number) => (total === 1 ? "Chuyên viên đã nhận ảnh của bạn." : `Chuyên viên đã nhận đủ ${total} ảnh của bạn.`),
+  some_arrived: (stored: number, total: number) =>
+    `Chuyên viên đã nhận ${stored}/${total} ảnh. Yêu cầu của bạn vẫn đã được gửi; ảnh chưa gửi được ghi lý do bên dưới.`,
+  row_failed: (n: number, why: string) => `Ảnh ${n} chưa gửi được. ${why}`,
+  retry: (n: number) => `Tải lại ảnh ${n}`,
+  /** Every server answer → what to do next. Keys: `RequestPhotoFailure` (`api/hop-dong-yeu-cau.ts`). */
+  failures: {
+    "invalid-upload": "Ảnh này không gửi được. Bạn có thể gửi ảnh cho chuyên viên qua nút “Chat Zalo”.",
+    "not-found":
+      "Không tìm thấy yêu cầu để đính ảnh. Vui lòng xem lại ở mục Yêu cầu của tôi, hoặc gửi ảnh qua nút “Chat Zalo”.",
+    limit: "Yêu cầu này đã đủ 3 ảnh, nên ảnh này không được gửi thêm.",
+    "not-allowed": "Chỉ yêu cầu tư vấn mới gửi kèm được ảnh, nên ảnh này không được gửi.",
+    "too-large": "Ảnh lớn hơn 5 MB. Bạn có thể gửi ảnh nhỏ hơn qua nút “Chat Zalo”.",
+    unsupported: "Ảnh không phải JPEG, PNG hoặc WebP. Bạn có thể gửi ảnh khác qua nút “Chat Zalo”.",
+    unreadable: "Ảnh bị hỏng hoặc chưa lưu trọn. Bạn có thể chụp lại rồi gửi qua nút “Chat Zalo”.",
+    server: "Hệ thống chưa nhận được ảnh. Vui lòng bấm “Tải lại”.",
+    unavailable: "Chức năng nhận ảnh đang tạm ngưng. Vui lòng bấm “Tải lại” sau ít phút, hoặc gửi ảnh qua nút “Chat Zalo”.",
+    session:
+      "Phiên đăng nhập đã hết hạn. Yêu cầu của bạn đã được ghi nhận; vui lòng gửi ảnh qua nút “Chat Zalo”.",
+    "rate-limited": "Bạn đã gửi nhiều lần trong ít phút. Vui lòng chờ khoảng 5 phút rồi bấm “Tải lại”.",
+    network: "Không kết nối được. Vui lòng kiểm tra mạng rồi bấm “Tải lại”.",
+    "not-configured": "Hệ thống đang gián đoạn. Vui lòng bấm “Tải lại” sau ít phút.",
+  },
+} as const;
+
 export const YEU_CAU_CUA_TOI = {
   tieu_de: "Yêu cầu của tôi",
   dan_nhap: "Các yêu cầu tư vấn bạn đã gửi.",
@@ -110,6 +184,9 @@ export const YEU_CAU_CUA_TOI = {
 
   nhan_ma: "Mã yêu cầu",
   nhan_gui_luc: "Gửi lúc",
+  // 12/10/2026: how many photos the server holds for the request (`photoCount`); the row is absent at 0.
+  photos_label: "Ảnh đính kèm",
+  photo_count: (n: number) => `${n} ảnh`,
 } as const;
 
 /**

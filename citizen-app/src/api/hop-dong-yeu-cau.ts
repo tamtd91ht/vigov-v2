@@ -8,7 +8,14 @@
  *     nhận: 201 { "requestId", "kind", "status": "moi", "createdAt" }
  *
  *   GET  <api-host>/api/v1/requests   Authorization: Bearer <phiếu phiên>
- *     nhận: 200 { "items": [ { "requestId", "kind", "status", "createdAt" } ] }
+ *     nhận: 200 { "items": [ { "requestId", "kind", "status", "createdAt", "photoCount" } ] }
+ *
+ *   PHOTOS (owner 12/10/2026, `vihat-miniapp` README §"Ảnh đính kèm yêu cầu"), `consult` requests only:
+ *   POST <api-host>/api/v1/requests/{requestId}/photos   multipart, EXACTLY one part "photo", one photo per call
+ *     nhận: 201 { "photoId", "requestId", "position": 1..3, "contentType", "size", "createdAt" }
+ *   GET  <api-host>/api/v1/requests/{requestId}/photos              → 200 { "items": [<as above>] }
+ *   GET  <api-host>/api/v1/requests/{requestId}/photos/{photoId}    → 200 the image bytes
+ *     lỗi : { "code", "message" } — `REQUEST_PHOTO_ERROR`; 401 and 429 by status only
  *
  *   lỗi : 400 sai khuôn hoặc ghi chú quá 2000 ký tự · 401 chưa đăng nhập / phiên hết hạn ·
  *         429 vượt trần (theo IP, HOẶC trần gọi lại 3 lượt/24 giờ) · 503 gọi lại chưa cấu hình
@@ -141,6 +148,8 @@ export type YeuCauDaGui = {
   loai: LoaiYeuCau;
   trang_thai: MaTrangThai;
   tao_luc: string;
+  /** How many photos the server holds for this request (`photoCount`); 0 when absent or unreadable. */
+  photo_count: number;
 };
 
 /**
@@ -277,7 +286,7 @@ export function docDanhSach(than: unknown): readonly YeuCauDaGui[] {
   const ra: YeuCauDaGui[] = [];
   for (const mot of items) {
     if (typeof mot !== "object" || mot === null) continue;
-    const { requestId, kind, status, createdAt } = mot as Record<string, unknown>;
+    const { requestId, kind, status, createdAt, photoCount } = mot as Record<string, unknown>;
     if (typeof requestId !== "string" || requestId === "") continue;
     if (!isRequestKind(kind)) continue;
     if (!laMaTrangThai(status)) continue;
@@ -286,6 +295,8 @@ export function docDanhSach(than: unknown): readonly YeuCauDaGui[] {
       loai: kind,
       trang_thai: status,
       tao_luc: typeof createdAt === "string" ? createdAt : "",
+      // An older server sends no `photoCount`: 0, so the row says nothing about photos rather than a wrong number.
+      photo_count: isPhotoCount(photoCount) ? photoCount : 0,
     });
   }
   return ra;
@@ -304,4 +315,199 @@ export function docCauLoi(than: unknown): string | null {
   if (typeof than !== "object" || than === null) return null;
   const { message } = than as Record<string, unknown>;
   return typeof message === "string" && message.trim() !== "" ? message : null;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * PHOTOS OF A CONSULTATION REQUEST (owner 12/10/2026) — `vihat-miniapp` d9592b71 + 2cf31a30
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * The server's caps, copied because no route publishes them (as `MA_HOP_LE` above): at most 3 photos per request
+ * (CHECK + UNIQUE in its database), at most 5 MB of uploaded bytes each. Checked here only to say so BEFORE a 5 MB
+ * upload crosses a rural line to meet a 413; the server stays the authority.
+ */
+export const REQUEST_PHOTO_MAX = 3;
+export const REQUEST_PHOTO_MAX_BYTES = 5 * 1024 * 1024;
+
+/** The ONE multipart part the server accepts — a second part, or another name, is 400 `invalid_upload`. */
+export const REQUEST_PHOTO_PART = "photo";
+
+/**
+ * `<api-host>/api/v1/requests/{requestId}/photos`, or "" when the host is not declared (the caller fails closed).
+ * Built FROM `diaChiYeuCau` so the route's path is written once — `bundle-for-zalo.test.ts` counts it. The id is
+ * the server's own UUID; it is encoded anyway, so a malformed one can only miss, never reach another path.
+ */
+export function requestPhotosAddress(requestId: string): string {
+  const base = diaChiYeuCau();
+  return base === "" ? "" : `${base}/${encodeURIComponent(requestId)}/photos`;
+}
+
+/** `<api-host>/api/v1/requests/{requestId}/photos/{photoId}` — the image bytes, behind the same bearer. */
+export function requestPhotoAddress(requestId: string, photoId: string): string {
+  const list = requestPhotosAddress(requestId);
+  return list === "" ? "" : `${list}/${encodeURIComponent(photoId)}`;
+}
+
+/**
+ * The upload body: exactly one part, named `photo`. No file name of the phone's: the server ignores it, and a
+ * camera file name can carry a date or a person's name (rule 3, forbidden #4) — so a fixed one is sent.
+ */
+export function requestPhotoForm(photo: Blob): FormData {
+  const form = new FormData();
+  form.append(REQUEST_PHOTO_PART, photo, REQUEST_PHOTO_PART);
+  return form;
+}
+
+/** One stored photo, in our shape. */
+export type RequestPhoto = {
+  id: string;
+  request_id: string;
+  position: number;
+  content_type: string;
+  size: number;
+  created_at: string;
+};
+
+/** A 201 body or one list item → our shape, or `null` when a field the screen relies on is missing. */
+export function readRequestPhoto(body: unknown): RequestPhoto | null {
+  if (typeof body !== "object" || body === null) return null;
+  const { photoId, requestId, position, contentType, size, createdAt } = body as Record<string, unknown>;
+  if (typeof photoId !== "string" || photoId === "") return null;
+  if (typeof requestId !== "string" || requestId === "") return null;
+  if (typeof position !== "number" || !Number.isInteger(position) || position < 1 || position > REQUEST_PHOTO_MAX) {
+    return null;
+  }
+  return {
+    id: photoId,
+    request_id: requestId,
+    position,
+    content_type: typeof contentType === "string" ? contentType : "",
+    size: typeof size === "number" && Number.isFinite(size) ? size : 0,
+    created_at: typeof createdAt === "string" ? createdAt : "",
+  };
+}
+
+/** The list body → its readable items, in the server's order. Always an array. */
+export function readRequestPhotoList(body: unknown): readonly RequestPhoto[] {
+  if (typeof body !== "object" || body === null) return [];
+  const { items } = body as Record<string, unknown>;
+  if (!Array.isArray(items)) return [];
+  return items.map(readRequestPhoto).filter((p): p is RequestPhoto => p !== null);
+}
+
+function isPhotoCount(v: unknown): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= REQUEST_PHOTO_MAX;
+}
+
+/** The stable `code`s of the photo routes (`vihat-miniapp` README). Renamed never, only added to. */
+export const REQUEST_PHOTO_ERROR = {
+  invalidUpload: "invalid_upload",
+  notFound: "not_found",
+  limit: "photo_limit",
+  notAllowed: "photo_not_allowed",
+  tooLarge: "file_too_large",
+  unsupported: "unsupported_photo_type",
+  unreadable: "photo_unreadable",
+  internal: "internal_error",
+  unavailable: "photo_unavailable",
+} as const;
+
+/**
+ * Why a photo did not go — one sentence each in `features/yeu-cau/noi-dung.ts` (`CONSULT_PHOTOS.failures`),
+ * keyed by WHAT THE PERSON DOES NEXT, not by the HTTP status.
+ *
+ *   `session` · `rate-limited`            401 · 429 (no `code` on these, by status)
+ *   `network` · `not-configured`          nothing reached the server
+ *   the rest                              the server's `code`
+ */
+export type RequestPhotoFailure =
+  | "invalid-upload"
+  | "not-found"
+  | "limit"
+  | "not-allowed"
+  | "too-large"
+  | "unsupported"
+  | "unreadable"
+  | "server"
+  | "unavailable"
+  | "session"
+  | "rate-limited"
+  | "network"
+  | "not-configured";
+
+/** The error body's `code`, or `null`. */
+export function readErrorCode(body: unknown): string | null {
+  if (typeof body !== "object" || body === null) return null;
+  const { code } = body as Record<string, unknown>;
+  return typeof code === "string" && code !== "" ? code : null;
+}
+
+/**
+ * A refused answer → its failure. The `code` decides; without one (a proxy answering 413/415 itself, an empty
+ * body) the status does. An UNKNOWN code is a server fault, never "fix your photo": telling someone to choose
+ * another picture for a reason that is not theirs sends them in a circle.
+ */
+export function photoFailureFrom(status: number, code: string | null): RequestPhotoFailure {
+  if (status === 401) return "session";
+  if (status === 429) return "rate-limited";
+  switch (code) {
+    case REQUEST_PHOTO_ERROR.invalidUpload:
+      return "invalid-upload";
+    case REQUEST_PHOTO_ERROR.notFound:
+      return "not-found";
+    case REQUEST_PHOTO_ERROR.limit:
+      return "limit";
+    case REQUEST_PHOTO_ERROR.notAllowed:
+      return "not-allowed";
+    case REQUEST_PHOTO_ERROR.tooLarge:
+      return "too-large";
+    case REQUEST_PHOTO_ERROR.unsupported:
+      return "unsupported";
+    case REQUEST_PHOTO_ERROR.unreadable:
+      return "unreadable";
+    case REQUEST_PHOTO_ERROR.unavailable:
+      return "unavailable";
+    case REQUEST_PHOTO_ERROR.internal:
+      return "server";
+  }
+  if (code !== null) return "server";
+  switch (status) {
+    case 400:
+      return "invalid-upload";
+    case 404:
+      return "not-found";
+    case 413:
+      return "too-large";
+    case 415:
+      return "unsupported";
+    case 422:
+      return "unreadable";
+    case 503:
+      return "unavailable";
+    default:
+      return "server";
+  }
+}
+
+/** Failures a second press can change. The rest meet the same answer again, so no "Tải lại" is offered. */
+export const RETRYABLE_PHOTO_FAILURES: ReadonlySet<RequestPhotoFailure> = new Set<RequestPhotoFailure>([
+  "server",
+  "unavailable",
+  "rate-limited",
+  "network",
+  "not-configured",
+]);
+
+/**
+ * The image types the server accepts, read from the FIRST BYTES (its own rule: the name and the declared type
+ * are not trusted). Used to say "choose another photo" while the person can still choose — a HEIC from an
+ * iPhone would otherwise be refused only after the request was sent. The server re-checks; this never decides.
+ */
+export function sniffRequestPhotoType(head: Uint8Array): "image/jpeg" | "image/png" | "image/webp" | null {
+  const at = (i: number) => head[i] ?? -1;
+  if (at(0) === 0xff && at(1) === 0xd8 && at(2) === 0xff) return "image/jpeg";
+  if (at(0) === 0x89 && at(1) === 0x50 && at(2) === 0x4e && at(3) === 0x47) return "image/png";
+  const ascii = (from: number, to: number) => String.fromCharCode(...Array.from(head.slice(from, to)));
+  if (head.length >= 12 && ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
+  return null;
 }

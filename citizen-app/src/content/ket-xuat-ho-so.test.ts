@@ -529,7 +529,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // + 2 (11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M5): the send form's map frame and basemap.
     // − 1 (12/10/2026, customer sheet App Xã): `/commune-profiles` — the header's logo and the office block it fed are
     // gone, nothing calls it any more, and a declared route that never runs is a false line in the dossier.
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(23);
+    // + 1 (12/10/2026, owner): the ViHAT app's consultation photo upload (`/api/v1/requests/{requestId}/photos`).
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(24);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -694,7 +695,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
    * object-store address, no completion. A row naming any of them again is red too.
    */
   it("ảnh hiện trường: hai đường của app riêng, đường dẫn và phần gửi đi khoá với hợp đồng thật", () => {
-    const rows = DUONG_ROI_KHOI_MAY.filter((d) => d.tuyen.includes("/photos"));
+    // The commune's scene photos only — the ViHAT app's consultation photo row (12/10/2026) has its own case below.
+    const rows = DUONG_ROI_KHOI_MAY.filter((d) => d.tuyen.includes("/photos") && d.app !== "shared");
     expect(rows).toHaveLength(2);
     expect(rows.map((r) => r.tuyen)).toEqual([SCENE_PHOTOS_PATH, SCENE_PHOTOS_PATH]);
     for (const r of rows) {
@@ -796,7 +798,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // 11/10/2026 (ADR 0091): + the switch (a tap) and the disaster alerts (every home open, no tap).
     // 11/10/2026 (ADR 0072 M5): + the send form's map frame and basemap — both after the citizen opened the form.
     // 12/10/2026: − `/commune-profiles` (ran at open; nothing calls it any more) — 3 → 2 without a tap.
-    expect(khoi).toContain("21 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    // 12/10/2026 (owner): + the consultation photo upload, after the citizen's own "Gửi yêu cầu tư vấn" — 21 → 22.
+    expect(khoi).toContain("22 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

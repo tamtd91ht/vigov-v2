@@ -265,7 +265,7 @@ describe("Nhận ưu đãi qua SMS: session → POST sms_promo / sms_optout", ()
    ============================================================================================ */
 
 describe("deriveSmsSubscription", () => {
-  const row = (loai: YeuCauDaGui["loai"], tao_luc: string, ma = tao_luc): YeuCauDaGui => ({ ma, loai, trang_thai: "moi", tao_luc }); // vi-name-ok: existing type
+  const row = (loai: YeuCauDaGui["loai"], tao_luc: string, ma = tao_luc): YeuCauDaGui => ({ ma, loai, trang_thai: "moi", tao_luc, photo_count: 0 }); // vi-name-ok: existing type
 
   it("no SMS row at all — not subscribed (other kinds do not count)", () => {
     expect(deriveSmsSubscription([])).toBe("not-subscribed");

@@ -182,9 +182,10 @@ describe("the commune app's declarations name the short questions, word for word
   };
 
   it("camera and photo picker: the question's exact words, and 'Cho phép' before Zalo", () => {
-    // 11/10/2026: the three calls are the commune interface's alone (the intro's paper-card photo was removed).
+    // 11/10/2026: the three calls were the commune interface's alone; 12/10/2026 they are "ca-hai" again (the intro's
+    // consultation photos), so the commune app's words live in `commune_app`.
     for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
-      expect(row(api).nua, api).toBe("nha-nuoc");
+      expect(row(api).nua, api).toBe("ca-hai");
       expect(communeView(api).de_lam_gi, api).toContain(`“${CONSENT_DIALOG.allow}”`);
     }
     expect(communeView("requestCameraPermission").de_lam_gi).toContain(`“${SCENE_PHOTOS.camera_question}”`);

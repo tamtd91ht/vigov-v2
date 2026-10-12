@@ -31,6 +31,15 @@ import {
   docCauLoi,
   docDanhSach,
   docMaYeuCau,
+  photoFailureFrom,
+  readErrorCode,
+  readRequestPhoto,
+  readRequestPhotoList,
+  type RequestPhoto,
+  requestPhotoAddress,
+  requestPhotoForm,
+  type RequestPhotoFailure,
+  requestPhotosAddress,
   thanYeuCau,
   type YeuCauDaGui,
   type YeuCauMoi,
@@ -163,5 +172,146 @@ export async function docYeuCauCuaToi(
     return { kieu: "khong-goi-duoc" };
   } finally {
     clearTimeout(dong_ho);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * PHOTOS OF A CONSULTATION REQUEST (owner 12/10/2026). Same file, same rules as above: no log, nothing
+ * written to the device, identity from the bearer only. A photo, a temp path and a photo id are never logged.
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * How long one photo may take. Longer than `HAN_CHO_MS`: up to 5 MB goes UP, on the phone's line — 15 s would
+ * call a slow but working upload a failure and invite a second copy. ⚠ An assumption, not a measurement.
+ */
+const PHOTO_UPLOAD_WAIT_MS = 60_000;
+
+export type PhotoUploadResult =
+  | { kind: "stored"; photo: RequestPhoto }
+  | { kind: "failed"; failure: RequestPhotoFailure };
+
+export type PhotoListResult =
+  | { kind: "listed"; photos: readonly RequestPhoto[] }
+  | { kind: "failed"; failure: RequestPhotoFailure };
+
+export type PhotoImageResult = { kind: "read"; image: Blob } | { kind: "failed"; failure: RequestPhotoFailure };
+
+/** A non-2xx answer → its failure, reading the `code` when the body is JSON. Never throws. */
+async function refusedPhotoCall(answer: Response): Promise<RequestPhotoFailure> {
+  let code: string | null = null;
+  try {
+    code = readErrorCode(await answer.json());
+  } catch {
+    code = null;
+  }
+  return photoFailureFrom(answer.status, code);
+}
+
+/**
+ * One authorised call of a photo route, reduced to "the answer" or "the failure". Fail closed before the network:
+ * no host → `not-configured`, no session → `session`, no request id → `not-found` (nothing to attach to).
+ */
+async function photoCall(
+  address: string,
+  token: string,
+  requestId: string,
+  init: { method: "GET" | "POST"; body?: FormData },
+  waitMs: number,
+): Promise<{ answer: Response } | { failure: RequestPhotoFailure }> {
+  if (address === "") return { failure: "not-configured" };
+  if (token === "") return { failure: "session" };
+  if (requestId === "") return { failure: "not-found" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), waitMs);
+  try {
+    // No Content-Type: the browser writes the multipart boundary itself, and a hand-set one breaks it.
+    const answer = await fetch(address, { ...init, headers: tieuDe(token), signal: controller.signal });
+    return answer.ok ? { answer } : { failure: await refusedPhotoCall(answer) };
+  } catch {
+    return { failure: "network" };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Upload ONE photo to a request the person has just created. Called only after the request's 201 — the request
+ * exists whatever happens here, which is why a failure is a value, never a throw.
+ */
+export async function uploadRequestPhoto(
+  token: string,
+  requestId: string,
+  photo: Blob,
+  /** Tests pass an address; production never does (the real one is read at build time). */
+  address: string = requestPhotosAddress(requestId),
+): Promise<PhotoUploadResult> {
+  const out = await photoCall(address, token, requestId, { method: "POST", body: requestPhotoForm(photo) }, PHOTO_UPLOAD_WAIT_MS);
+  if ("failure" in out) return { kind: "failed", failure: out.failure };
+  try {
+    const stored = readRequestPhoto(await out.answer.json());
+    // A 2xx we cannot read is reported as not stored: saying "sent" for a photo we cannot confirm is the worse lie.
+    return stored === null ? { kind: "failed", failure: "server" } : { kind: "stored", photo: stored };
+  } catch {
+    return { kind: "failed", failure: "server" };
+  }
+}
+
+/** The photos of the person's OWN request (the server matches the session's user; another's is the same 404). */
+export async function listRequestPhotos(
+  token: string,
+  requestId: string,
+  address: string = requestPhotosAddress(requestId),
+): Promise<PhotoListResult> {
+  const out = await photoCall(address, token, requestId, { method: "GET" }, HAN_CHO_MS);
+  if ("failure" in out) return { kind: "failed", failure: out.failure };
+  try {
+    return { kind: "listed", photos: readRequestPhotoList(await out.answer.json()) };
+  } catch {
+    return { kind: "failed", failure: "server" };
+  }
+}
+
+/**
+ * The bytes of one stored photo. The route needs the bearer, so an `<img src>` cannot load it: the caller turns
+ * the Blob into an object URL, shows it, and revokes it — it is never written to the device (the server answers
+ * `Cache-Control: private, no-store` too).
+ */
+export async function readRequestPhotoImage(
+  token: string,
+  requestId: string,
+  photoId: string,
+  address: string = requestPhotoAddress(requestId, photoId),
+): Promise<PhotoImageResult> {
+  if (photoId === "") return { kind: "failed", failure: "not-found" };
+  const out = await photoCall(address, token, requestId, { method: "GET" }, HAN_CHO_MS);
+  if ("failure" in out) return { kind: "failed", failure: out.failure };
+  try {
+    const image = await out.answer.blob();
+    return image.size > 0 ? { kind: "read", image } : { kind: "failed", failure: "server" };
+  } catch {
+    return { kind: "failed", failure: "server" };
+  }
+}
+
+/**
+ * The bytes of a photo the person just took or picked, from the LOCAL path Zalo handed back (`openMediaPicker`
+ * without an upload URL returns "đường dẫn tạm thời (local cache path)", `zmp-sdk/index.d.ts:4721`; the camera's
+ * `chooseImage` returns object URLs). NOT A CALL TO ANY SERVER: `fetch` is how a webview reads a local file, and
+ * this file is where the ViHAT half may write `fetch(`.
+ *
+ * ⚠ NOT MEASURED ON A DEVICE: whether Zalo's webview serves the picker's temp path to `fetch` (the commune half
+ *   carries the same doubt). An unreadable path is `null`, and the screen says "choose or take it again" in a
+ *   sentence; it never throws, and the path is never logged.
+ */
+export async function readPickedFile(path: string): Promise<Blob | null> {
+  if (path === "") return null;
+  try {
+    const answer = await fetch(path);
+    // A local file read may answer status 0 (no HTTP involved) — only an explicit HTTP failure is refused.
+    if (answer.status >= 400) return null;
+    const file = await answer.blob();
+    return file.size > 0 ? file : null;
+  } catch {
+    return null;
   }
 }

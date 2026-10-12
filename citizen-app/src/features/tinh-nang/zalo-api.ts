@@ -129,6 +129,8 @@ export type KhaiBaoLoiGoi = {
  * `requestCameraPermission`, `openMediaPicker`, `chooseImage` and `getLocation` are the commune interface's alone
  * (`nha-nuoc`). They are still called under the SHARED App ID — on the commune page a QR opens (`App.tsx`
  * `QrCommuneApp`) — so the shared dossier keeps every one of them: it prints the whole table.
+ * 12/10/2026 (owner): the camera, the picker and `chooseImage` are "ca-hai" again — the intro's "Tư vấn và báo
+ * giá" attaches photos to a consultation request. `getLocation` stays the commune interface's.
  *
  * `getAccessToken` cần quyền nhưng không hỏi người dùng; `openPhone` và `openWebview` là `@zaloOnly` và không nằm
  * trong số quyền phải xin — chúng vẫn ở đây, vì màn "Quản lý quyền" trả lời câu "app này gọi những gì của nền
@@ -245,44 +247,95 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // `QrCommuneApp`). `nha-nuoc` = the state half calls it, whichever App ID runs that half.
     // 09/10/2026 (owner): the long explanation card became ONE question, "Cho phép ứng dụng dùng camera để chụp ảnh
     // hiện trường?" (`cong-dan/man/consent-dialog.tsx`); Zalo is asked only after its "Cho phép".
+    // `nua` BECAME "ca-hai" AGAIN ON 12/10/2026 (owner, Zalo resubmission): the ViHAT intro's "Tư vấn và báo giá"
+    // attaches up to 3 photos to a consultation request (`features/yeu-cau/ConsultPhotos.tsx` → `takeConsultPhoto`).
+    // The main fields describe the shared App ID as a whole; `intro_app` is the intro's view, `commune_app` the
+    // commune's own app — its words are the ones this row held until today.
     api: "requestCameraPermission",
-    nua: "nha-nuoc",
-    man: "Gửi phản ánh · Phản ánh của tôi",
-    tinh_nang: "Ảnh hiện trường",
+    nua: "ca-hai",
+    man: "Tư vấn và báo giá · Gửi phản ánh · Phản ánh của tôi (trang của một xã mở bằng mã QR)",
+    tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn · Ảnh hiện trường",
     de_lam_gi:
-      "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?”. Bấm “Không” thì Zalo không được hỏi.",
+      "Hỏi bạn có cho phép dùng máy ảnh hay không, chỉ khi chính bạn bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng: ở màn Tư vấn và báo giá, để chụp ảnh gửi kèm một yêu cầu tư vấn; trên trang của một xã, để chụp nơi xảy ra sự việc. Bấm “Không” thì Zalo không được hỏi.",
     hoi_nguoi_dung: true,
     // The question itself sends nothing; the photo's way out is the `chooseImage` row below.
     roi_khoi_may: "",
+    intro_app: {
+      man: "Tư vấn và báo giá",
+      tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn",
+      de_lam_gi:
+        "Hỏi bạn có cho phép dùng máy ảnh hay không, chỉ khi chính bạn bấm “Chụp ảnh” ở màn Tư vấn và báo giá rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng dùng máy ảnh để chụp ảnh gửi kèm yêu cầu tư vấn?”. Bấm “Không” thì Zalo không được hỏi.",
+      roi_khoi_may: "",
+    },
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi",
+      tinh_nang: "Ảnh hiện trường",
+      de_lam_gi:
+        "Hỏi bà con có cho phép dùng máy ảnh hay không, chỉ khi chính bà con bấm “Chụp ảnh” để chụp nơi xảy ra sự việc rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng dùng camera để chụp ảnh hiện trường?”. Bấm “Không” thì Zalo không được hỏi.",
+      roi_khoi_may: "",
+    },
   },
   {
     // Same history as the row above: the intro's paper-card picker is gone (11/10/2026), the commune interface keeps
     // "Chọn ảnh có sẵn" (`chooseScenePhotos`). Since 08/10/2026 "Chụp ảnh" is the `chooseImage` row below.
     // 09/10/2026 (owner): opened only after "Cho phép" on the app's own one-line question.
+    // "ca-hai" again from 12/10/2026 — the intro's consultation photos (`chooseConsultPhotos`), as the row above.
     api: "openMediaPicker",
-    nua: "nha-nuoc",
-    man: "Gửi phản ánh · Phản ánh của tôi",
-    tinh_nang: "Ảnh hiện trường",
+    nua: "ca-hai",
+    man: "Tư vấn và báo giá · Gửi phản ánh · Phản ánh của tôi (trang của một xã mở bằng mã QR)",
+    tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn · Ảnh hiện trường",
     de_lam_gi:
-      "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
+      "Mở cửa sổ chọn ảnh để bạn chọn ảnh có sẵn trong máy, chỉ khi chính bạn bấm nút chọn ảnh rồi bấm “Cho phép” ở câu hỏi của ứng dụng: tối đa 3 ảnh gửi kèm một yêu cầu tư vấn ở màn Tư vấn và báo giá; tối đa 5 ảnh hiện trường cho một phản ánh trên trang của một xã. Ứng dụng chỉ nhận những ảnh bạn đã chọn, không xem các ảnh khác trong máy.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
-      "Ảnh bà con đã chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+      "Ảnh bạn đã chọn được gửi đi sau khi yêu cầu tư vấn — hoặc phản ánh — đã được ghi nhận, để đính vào chính yêu cầu hay phản ánh ấy: ảnh gửi kèm yêu cầu tư vấn tới máy chủ của Tập đoàn ViHAT Group; ảnh hiện trường, kèm loại ảnh và dung lượng, tới hệ thống của xã. Ảnh không được lưu trên máy.",
+    intro_app: {
+      man: "Tư vấn và báo giá",
+      tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn",
+      de_lam_gi:
+        "Mở cửa sổ chọn ảnh để bạn chọn ảnh có sẵn trong máy gửi kèm một yêu cầu tư vấn, chỉ khi chính bạn bấm “Chọn ảnh” ở màn Tư vấn và báo giá rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng mở thư viện ảnh để bạn chọn ảnh gửi kèm yêu cầu tư vấn?”; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận những ảnh bạn đã chọn, không xem các ảnh khác trong máy.",
+      roi_khoi_may:
+        "Ảnh bạn đã chọn được gửi tới máy chủ của Tập đoàn ViHAT Group sau khi yêu cầu tư vấn đã được ghi nhận, mỗi ảnh một lần, để đính vào chính yêu cầu ấy; máy chủ bỏ thông tin vị trí và các thông tin kèm theo khác trong ảnh trước khi lưu. Ảnh không được lưu trên máy.",
+    },
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi",
+      tinh_nang: "Ảnh hiện trường",
+      de_lam_gi:
+        "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
+      roi_khoi_may:
+        "Ảnh bà con đã chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+    },
   },
   {
     // ADDED 08/10/2026 (owner): "Chụp ảnh" opens the phone's own camera instead of Zalo's full-screen one
     // (`takeScenePhoto`). Same feature, same way out as the `openMediaPicker` row above — so the same sentences.
     // `hoi_nguoi_dung` false: the question is the `requestCameraPermission` row, which runs right before it;
-    // this call opens the camera, it asks nothing. `nha-nuoc` since 11/10/2026, as the two rows above.
+    // this call opens the camera, it asks nothing. "ca-hai" again from 12/10/2026, as the two rows above.
     api: "chooseImage",
-    nua: "nha-nuoc",
-    man: "Gửi phản ánh · Phản ánh của tôi",
-    tinh_nang: "Ảnh hiện trường",
+    nua: "ca-hai",
+    man: "Tư vấn và báo giá · Gửi phản ánh · Phản ánh của tôi (trang của một xã mở bằng mã QR)",
+    tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn · Ảnh hiện trường",
     de_lam_gi:
-      "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
+      "Mở máy ảnh của điện thoại để bạn chụp một ảnh, chỉ khi chính bạn bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng: ảnh gửi kèm một yêu cầu tư vấn (tối đa 3 ảnh), hoặc — trên trang của một xã — ảnh nơi xảy ra sự việc (tối đa 5 ảnh cho một phản ánh). Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
     hoi_nguoi_dung: false,
     roi_khoi_may:
-      "Ảnh bà con đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+      "Ảnh bạn đã chụp được gửi đi sau khi yêu cầu tư vấn — hoặc phản ánh — đã được ghi nhận, để đính vào chính yêu cầu hay phản ánh ấy: ảnh gửi kèm yêu cầu tư vấn tới máy chủ của Tập đoàn ViHAT Group; ảnh hiện trường, kèm loại ảnh và dung lượng, tới hệ thống của xã. Ảnh không được lưu trên máy.",
+    intro_app: {
+      man: "Tư vấn và báo giá",
+      tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn",
+      de_lam_gi:
+        "Mở máy ảnh của điện thoại để bạn chụp một ảnh gửi kèm yêu cầu tư vấn, chỉ khi chính bạn bấm “Chụp ảnh” ở màn Tư vấn và báo giá rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
+      roi_khoi_may:
+        "Ảnh bạn đã chụp được gửi tới máy chủ của Tập đoàn ViHAT Group sau khi yêu cầu tư vấn đã được ghi nhận, mỗi ảnh một lần, để đính vào chính yêu cầu ấy; máy chủ bỏ thông tin vị trí và các thông tin kèm theo khác trong ảnh trước khi lưu. Ảnh không được lưu trên máy.",
+    },
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi",
+      tinh_nang: "Ảnh hiện trường",
+      de_lam_gi:
+        "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
+      roi_khoi_may:
+        "Ảnh bà con đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+    },
   },
   {
     // ADDED 08/10/2026 (owner): the shared App ID opened by a commune QR shows THAT commune's name on Zalo's own
@@ -1224,6 +1277,48 @@ export async function chooseScenePhotos(max: number): Promise<ScenePhotoPick> {
   return asPick(
     await xin("photos", async (sdk) => {
       const { data } = await sdk.openMediaPicker({ type: "photo", maxSelectItem: limit, ...SCENE_PICKER });
+      return tempPaths(data).slice(0, limit);
+    }),
+  );
+}
+
+/* ==============================================================================================
+   PHOTOS FOR A CONSULTATION REQUEST — the ViHAT intro's "Tư vấn và báo giá" (owner 12/10/2026)
+   ----------------------------------------------------------------------------------------------
+   Same platform calls as the scene photos above, under DIFFERENT NAMES, and the names are the point:
+   `ranh-gioi-hai-nua.test.ts` §3d pins that only `App.tsx` names `takeScenePhoto` / `chooseScenePhotos` (the
+   commune interface's capability, injected into the state half). The intro calls these two instead, from its own
+   screen; nothing of the commune half is reached. Both return LOCAL paths and upload nothing — the bytes go up
+   only from `api/goi-may-chu.ts` `uploadRequestPhoto`, after the request exists.
+   ============================================================================================== */
+
+/** A pick for a consultation photo: the same branches as a scene photo's. */
+export type PhotoPick = ScenePhotoPick;
+
+/**
+ * Picker options for a consultation photo. `compressLevel: 2` ("Nén trung bình", the SDK's own default) and not
+ * the scene photo's 1: `vihat-miniapp` refuses a photo over 5 MB (half the commune's limit), and a lightly
+ * compressed modern photo can pass it. `editView` off for the same reason as the scene photo: a 1:1 crop loses
+ * half of a document or a rack. ⚠ An assumption, stated: the owner chose no level.
+ */
+const CONSULT_PICKER = { editView: { enable: false }, compressLevel: 2 } as const;
+
+/**
+ * "Chụp ảnh" on "Tư vấn và báo giá": the camera permission, then the phone's own BACK camera for one photo —
+ * exactly the scene photo's path (`takeScenePhoto`), including the "closed without a photo" watch.
+ * ⚠ `chooseImage` takes no compression option: a camera original can exceed 5 MB, and the screen then says so
+ *   before sending (`REQUEST_PHOTO_MAX_BYTES`). Not measured on a device.
+ */
+export function takeConsultPhoto(): Promise<PhotoPick> {
+  return takeScenePhoto();
+}
+
+/** "Chọn ảnh" on "Tư vấn và báo giá": the photo picker, at most `max` photos (the slots the request still has). */
+export async function chooseConsultPhotos(max: number): Promise<PhotoPick> {
+  const limit = Math.max(1, Math.floor(max));
+  return asPick(
+    await xin("photos", async (sdk) => {
+      const { data } = await sdk.openMediaPicker({ type: "photo", maxSelectItem: limit, ...CONSULT_PICKER });
       return tempPaths(data).slice(0, limit);
     }),
   );

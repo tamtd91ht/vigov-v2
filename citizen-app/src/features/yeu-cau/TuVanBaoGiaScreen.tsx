@@ -21,8 +21,13 @@
  *                        đầu dưới dạng một câu từ chối.
  *
  * ⚠ KHÔNG MỘT CAM KẾT THỜI GIAN NÀO TRÊN MÀN NÀY — xem khối đầu `noi-dung.ts`.
+ *
+ * ⚠ PHOTOS (owner 12/10/2026): up to 3, optional, under the note field (`ConsultPhotos.tsx`). "Gửi yêu cầu tư vấn"
+ *   creates the request FIRST and only then uploads the photos one by one (`consult-photos.ts` `sendConsultation`):
+ *   the success screen with the request code comes up as soon as the request is recorded, and each photo's fate is
+ *   said there. A photo failure never turns the request into a failure. "Đề nghị gọi lại" carries no photo.
  */
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 
 import {
   conLaiGhiChu,
@@ -30,7 +35,7 @@ import {
   SO_QUAN_TAM_TOI_DA,
   type YeuCauMoi,
 } from "../../api/hop-dong-yeu-cau";
-import { guiYeuCau, type KetQuaGui } from "../../api/goi-may-chu";
+import type { KetQuaGui } from "../../api/goi-may-chu";
 import { KHOA_CHIEN_DICH, maChienDichHopLe } from "../../content/chien-dich";
 import { SOLUTIONS } from "../../content/company-profile";
 import { thamSo, thamSoMoApp } from "../../lib/launch-params";
@@ -39,8 +44,20 @@ import { HandshakeGlyph } from "../company-intro/icons";
 import { bearerCua, dungPhien } from "../dang-nhap/kho-phien";
 import { QUY_MO } from "../goi-y-giai-phap/anh-xa";
 
+import {
+  type ConsultPhoto,
+  type ConsultSteps,
+  LIVE_CONSULT_STEPS,
+  LIVE_PICKER,
+  markForRetry,
+  type PhotoPicker,
+  type PhotoUpload,
+  sendConsultation,
+  uploadInOrder,
+} from "./consult-photos";
+import { ConsultPhotoField, ConsultPhotoStatus, useConsultPhotoPicking } from "./ConsultPhotos";
 import { MoiDangNhap } from "./MoiDangNhap";
-import { TU_VAN } from "./noi-dung";
+import { CONSULT_PHOTOS, TU_VAN } from "./noi-dung";
 import { OGhiChu } from "./OGhiChu";
 
 const ID_O_GHI_CHU = "yc-ghi-chu";
@@ -95,10 +112,13 @@ export function DaGuiXong({
   ma_yeu_cau,
   onXemDanhSach,
   onGuiTiep,
+  photoStatus,
 }: {
   ma_yeu_cau: string;
   onXemDanhSach: () => void;
   onGuiTiep: () => void;
+  /** How many photos arrived (`ConsultPhotoStatus`), under the code — absent when none were picked. */
+  photoStatus?: ReactNode;
 }) {
   return (
     <section className="card" role="status">
@@ -110,6 +130,7 @@ export function DaGuiXong({
         <span className="the-tt__nhan">{TU_VAN.nhan_ma}</span>{" "}
         <strong className="the-tt__gia-tri">{ma_yeu_cau}</strong>
       </p>
+      {photoStatus}
       {/* ⚠ CÂU NÀY ĐÚNG Ở CẢ HAI CA — có tin ZNS và không có. ZNS có trần và có thể tắt. */}
       <p className="card__body">{TU_VAN.xong_xem_lai}</p>
       <button type="button" className="tn__nut" onClick={onXemDanhSach}>
@@ -122,7 +143,15 @@ export function DaGuiXong({
   );
 }
 
-export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
+export function TuVanBaoGiaScreen({
+  onDi,
+  steps = LIVE_CONSULT_STEPS,
+  picker = LIVE_PICKER,
+}: ThamSoMan & {
+  /** Tests only — production passes nothing, and gets the real send, upload and Zalo picker. */
+  steps?: ConsultSteps;
+  picker?: PhotoPicker;
+}) {
   const di = onDi ?? (() => {});
   const { phien } = dungPhien();
 
@@ -131,6 +160,9 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
   const [ghi_chu, datGhiChu] = useState("");
   const [dang_gui, datDangGui] = useState(false);
   const [ket_qua, datKetQua] = useState<KetQuaGui | null>(null);
+  const [photos, setPhotos] = useState<readonly ConsultPhoto[]>([]);
+  const [uploads, setUploads] = useState<readonly PhotoUpload[]>([]);
+  const picking = useConsultPhotoPicking(picker, photos, setPhotos);
 
   /**
    * `source` CHỈ ĐƯỢC GỬI KHI MÃ KHỚP MỘT DÒNG CÓ THẬT trong `content/chien-dich.ts`.
@@ -156,19 +188,30 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
   }
 
   if (ket_qua?.kieu === "xong") {
+    const requestId = ket_qua.ma_yeu_cau;
+    /** "Tải lại ảnh n": that photo back in the queue, sent with the session as it is NOW. */
+    const retry = (key: string) => {
+      const queued = markForRetry(uploads, key);
+      setUploads(queued);
+      void uploadInOrder(queued, bearerCua(phien), requestId, steps.upload, setUploads);
+    };
     return (
       <>
         <BangTieuDe />
         <DaGuiXong
-          ma_yeu_cau={ket_qua.ma_yeu_cau}
+          ma_yeu_cau={requestId}
+          photoStatus={<ConsultPhotoStatus jobs={uploads} onRetry={retry} />}
           onXemDanhSach={() => di({ man: "yeu-cau" })}
           onGuiTiep={() => {
             // ĐẶT LẠI TRỌN VẸN, kể cả ô ghi chú: người bấm "gửi một yêu cầu khác" đang bắt đầu
             // một việc mới, và để lại chữ cũ trong ô là mời họ gửi nhầm hai lần cùng một câu.
+            // The photos too: they belong to the request just sent, never to the next one.
             datKetQua(null);
             datQuanTam([]);
             datQuyMo("");
             datGhiChu("");
+            setPhotos([]);
+            setUploads([]);
           }}
         />
       </>
@@ -179,7 +222,8 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
   const qua_dai = con_lai < 0;
   const qua_nhieu = quan_tam.length > SO_QUAN_TAM_TOI_DA;
   const chua_chon = quan_tam.length === 0;
-  const chan_gui = dang_gui || qua_dai || qua_nhieu || chua_chon;
+  // A pick still in flight holds the send: a photo arriving after the tap would silently miss the request.
+  const chan_gui = dang_gui || qua_dai || qua_nhieu || chua_chon || picking.picking;
 
   async function gui(loai: LoaiYeuCau) {
     datDangGui(true);
@@ -187,8 +231,11 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
     // `bearerCua` chứ không `phien.token`: một chỗ quyết định "phiếu nào gửi được", xem
     // `kho-phien.tsx`. `phien` không thể là `null` ở đây — nhánh trên đã trả về — nhưng hàm vẫn
     // nhận `null` để không có một `!` nào trong mã sản phẩm.
-    datKetQua(await guiYeuCau(bearerCua(phien), yc));
-    datDangGui(false);
+    // The request answers first (`onSent`: the success screen comes up), then the photos go one by one.
+    await sendConsultation(steps, bearerCua(phien), yc, photos, (sent) => {
+      datKetQua(sent);
+      datDangGui(false);
+    }, setUploads);
   }
 
   return (
@@ -222,6 +269,17 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
 
       <OGhiChu id={ID_O_GHI_CHU} gia_tri={ghi_chu} onDoi={datGhiChu} />
 
+      <ConsultPhotoField
+        photos={photos}
+        asking={picking.asking}
+        picking={picking.picking}
+        messages={picking.messages}
+        onAsk={picking.ask}
+        onAllow={picking.allow}
+        onDeny={picking.deny}
+        onRemove={(key) => setPhotos(photos.filter((p) => p.key !== key))}
+      />
+
       {/* BA CÂU CHẶN, MỖI CÂU NÓI VIỆC PHẢI LÀM TIẾP — không phải một nút xám không giải thích.
           Một nút bị vô hiệu mà không nói vì sao là thứ người lớn tuổi bấm ba lần rồi bỏ đi. */}
       {chua_chon && <p className="tn__loi">{TU_VAN.chua_chon_gi}</p>}
@@ -240,6 +298,8 @@ export function TuVanBaoGiaScreen({ onDi }: ThamSoMan) {
       {/* TRẦN NÓI TRƯỚC, NGAY TRÊN NÚT GỌI LẠI. Gặp cái trần lần đầu dưới dạng một câu từ chối là
           cách nhanh nhất làm người dùng nghĩ mình bị chặn nhầm. */}
       <p className="tn__giai-thich">{TU_VAN.tran_goi_lai}</p>
+      {/* Said before the tap, not discovered after it: a callback carries no photo (409 `photo_not_allowed`). */}
+      {photos.length > 0 && <p className="tn__giai-thich">{CONSULT_PHOTOS.callback_no_photos}</p>}
       <button
         type="button"
         className="tn__nut-phu"

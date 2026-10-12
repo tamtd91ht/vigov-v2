@@ -112,7 +112,7 @@ describe("Yêu cầu của tôi: every state says what it is and what to do next
 describe("pull to refresh keeps what the user was reading", () => {
   const list: KetQuaDoc = {
     kieu: "xong",
-    danh_sach: [{ ma: "YC-TEST-1", loai: "consult", trang_thai: "moi", tao_luc: "2026-10-01T03:00:00Z" }],
+    danh_sach: [{ ma: "YC-TEST-1", loai: "consult", trang_thai: "moi", tao_luc: "2026-10-01T03:00:00Z", photo_count: 0 }],
   };
 
   it("a fresh list replaces the old one; a failure KEEPS the list and reports failure", () => {
