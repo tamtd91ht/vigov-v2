@@ -217,6 +217,11 @@ kb:                             ## Regenerate the GENERATED tiers of kb/ from so
 	@# do đã viết ngay trên: một lệnh sinh lại mọi thứ dẫn xuất từ mã. Ingress lệch hợp đồng
 	@# nghĩa là tuyến của dịch vụ không phải identity trả 404 dù pod xanh và probe xanh.
 	go run ./tools/ingress
+	@# Mắt thứ ba của cùng chuỗi, cũng SAU `apidoc`: kiểu TypeScript của web-admin sinh từ
+	@# openapi.json. Thiếu bước này thì Jenkins web-admin đỏ ở `npm run check:api` sau mỗi lần đổi
+	@# hợp đồng — 12/10/2026 ba lượt đổi liền chỉ chạy `make kb` và web-admin không build được
+	@# (d447bc0e). Script chỉ dùng thư viện có sẵn của Node, không cần `npm ci`.
+	cd web-admin && node scripts/gen-api-types.mjs
 	@# Tầng tiến độ: tệp ĐỌC sinh từ các tệp GHI theo module. Nằm cùng mục `kb` vì lý do đã
 	@# viết ngay trên: thứ phải nhớ chạy riêng là thứ sẽ có ngày không ai chạy, và một
 	@# `tien-do.md` cũ hơn các tệp module là tệp nói dối về việc gì đã xong.

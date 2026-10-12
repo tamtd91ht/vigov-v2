@@ -1350,8 +1350,8 @@
       "viec": "web-admin build đỏ ở `npm run check:api`: schema.gen.ts lệch openapi.json sau ba lượt đổi hợp đồng (b3dba9b5 nhóm Zalo, 890e4e20 location_citizen_adjusted, 5e8aceb1 commune-map-frame/commune-basemap) chỉ chạy make kb mà không chạy npm run gen:api. Sinh lại + sửa hai test lộ ra (fixture Kênh Zalo thiếu live_group_count; danh sách trường phiếu cán bộ thêm location_citizen_adjusted).",
       "trang_thai": "xong",
       "no_confirm": [],
-      "bang_chung": "d447bc0e — lint, typecheck, vitest 312 tệp/5842 ca, check:api, next build xanh trên máy dev 12/10/2026.",
-      "tiep_theo": "Nguyên nhân gốc còn mở: make kb không sinh lại web-admin/src/lib/api/schema.gen.ts nên lỗi này tái diễn mỗi lần đổi hợp đồng — đề xuất thêm bước gen:api vào make kb (chờ người dùng đồng ý)."
+      "bang_chung": "d447bc0e — lint, typecheck, vitest 312 tệp/5842 ca, check:api, next build xanh trên máy dev 12/10/2026. Nguyên nhân gốc đóng: make kb nay chạy `cd web-admin && node scripts/gen-api-types.mjs` ngay sau tools/ingress (người dùng đồng ý 12/10/2026).",
+      "tiep_theo": ""
     }
   ]
 }
