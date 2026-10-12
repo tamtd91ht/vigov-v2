@@ -321,7 +321,7 @@
       "id": "van-phong-bao-cao-12-10",
       "viec": "Skill writing-reports (chủ dự án 12/10/2026: báo cáo của agent thiên AI, trừu tượng, nhiều chữ, thiếu minh chứng và sơ đồ): kết luận ở dòng đầu, bằng chứng cho mọi khẳng định, chọn bảng/sơ đồ thay đoạn văn, bảng câu chữ AI cần xoá, khung trả lời/review/đề xuất/điều tra/runbook. Gắn vào 15 agent, /handover, CLAUDE.md, write-knowledge. Nguyên liệu: tmp/skills/project-documentation-skill (không cài nguyên gói — mẫu tổng quan/ghi chú thay đổi trái luật 9).",
       "trang_thai": "dang_lam",
-      "bang_chung": "commit 'docs(brain): skill writing-reports'. make brain / hooks — xem commit. Runbook basemap-pmtiles theo khung mới (khối khi nào dùng/điều cấm + sơ đồ Mermaid, đã đối chiếu 4 tệp có thật).",
+      "bang_chung": "commit 'docs(brain): skill writing-reports'. make brain / hooks — xem commit. Runbook basemap-pmtiles theo khung mới (khối khi nào dùng/điều cấm + sơ đồ Mermaid, đã đối chiếu 4 tệp có thật). Áp dụng lần đầu: docs/van-hanh-vigov.html viết lại (e2c07e85 + commit chỉnh bảng bìa) — 4 agent kiểm 50 slide với mã, sửa 16 slide sai (130 bảng, vigov-van-hanh đã gỡ, đăng nhập cán bộ chưa giới hạn tần suất…), thêm trang tra nhanh + slide nợ; đã xem render trên Chrome 1500px các slide 1, 4, 29, 50.",
       "tiep_theo": "(1) Theo dõi vài phiên: báo cáo cuối lượt có kết luận ở dòng 1 và bằng chứng không. (2) Nếu vẫn trôi: thêm rào advisory quét cụm từ ở bảng §5 trong kb/*.md và commit message (chưa làm — skill không cần hook theo bất biến brain). (3) Ngân sách always-loaded vẫn quá 28039/28000 từ trước — lần này không tăng.",
       "no_confirm": []
     }
