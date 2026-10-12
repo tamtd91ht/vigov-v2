@@ -34,7 +34,7 @@ tuyến công khai cố ý không trả logo. Mini App dùng logo và banner ch�
 | 1 | Ai sửa | **Chỉ xã**, trong web-admin. Không có đường sửa ở platform-admin |
 | 2 | Quyền | `admin.org` (khoá đã có trong `quyen`) |
 | 3 | Duyệt | Không — lưu là hiện; ghi nhật ký cùng giao dịch, mã `CB-` |
-| 4 | Logo | Dùng chung web-admin (thanh bên — THAY bởi 0068 lần 6 #8; màn đăng nhập) và Mini App. PNG/WebP/JPEG ≤ 2 MB, không HEIC → PNG vuông 512px **giữ nền trong** |
+| 4 | Logo | Dùng chung web-admin (thanh bên — THAY bởi 0068 lần 6 #8; màn đăng nhập) và Mini App (**SỬA ĐỔI 12/10/2026**, chủ dự án, bảng lỗi App Xã dòng 5: góc trái header Mini App xã nay là biểu tượng ngôi sao/quốc huy vẽ như prototype `AppHeader.tsx`, không còn logo xã; Mini App thôi đọc `/commune-profiles` lúc mở. Logo vẫn dùng ở web-admin). PNG/WebP/JPEG ≤ 2 MB, không HEIC → PNG vuông 512px **giữ nền trong** |
 | 5 | Banner web-admin | Ảnh **riêng**, dải dưới topbar ở **mọi trang** web-admin — THAY bởi 0068 lần 6 #8 (không còn dải). PNG/WebP/JPEG ≤ 2 MB → rộng 1600px |
 | 6 | Banner Mini App | **Giữ** loại nội dung `banner` (ADR 0067 §5) ở Nội dung Mini App; không gộp với banner web-admin |
 | 7 | Chưa có logo | Biểu tượng toà nhà; chưa có banner thì không có dải |

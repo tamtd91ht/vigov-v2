@@ -216,7 +216,7 @@ export function communeTerms(values: CommuneTermsValues): CommuneTerms {
         "Không gửi phản ánh sai sự thật hoặc bịa đặt. Không xúc phạm, đe doạ hay bôi nhọ cá nhân, tổ chức nào. Không gửi quảng cáo, nội dung không liên quan, và không gửi lặp lại cùng một việc nhiều lần.",
         "Ảnh hiện trường không bắt buộc. Ảnh gửi kèm phải do bạn chụp hoặc bạn có quyền sử dụng, và phải là ảnh của đúng sự việc. Không chụp rõ mặt người, giấy tờ, biển số xe hay bên trong nhà riêng của người khác, trừ khi thật cần để làm rõ sự việc.",
         `Bạn có thể chọn "Gửi ẩn danh". Ứng dụng nói rõ ngay tại đó những thông tin nào của bạn khi ấy không hiện cho cán bộ xử lý.`,
-        `${authority} tiếp nhận và xử lý phản ánh theo quy trình và thời hạn của xã. Phản ánh chỉ được xem là đã gửi khi ứng dụng hiện mã phiếu. Cùng với mã phiếu, ứng dụng hiện mốc thời gian cán bộ xã sẽ xem phiếu; khi xã đã xác định lĩnh vực, phiếu hiện thêm thời hạn dự kiến xử lý xong.`,
+        `${authority} tiếp nhận và xử lý phản ánh theo quy trình và thời hạn của xã. Phản ánh chỉ được xem là đã gửi khi ứng dụng hiện mã phiếu. Khi xã đã xác định lĩnh vực, phiếu hiện thêm thời hạn dự kiến xử lý xong.`,
         // Not a string starting "Xã …": `kham-pha.test.tsx` reads any such literal as a commune name baked into code.
         `${authority} có thể không tiếp nhận một phản ánh, hoặc chuyển phản ánh tới cơ quan có thẩm quyền. Khi đó phiếu ghi rõ lý do, hoặc tên cơ quan nhận.`,
         COMMUNE_TERMS_EMERGENCY,

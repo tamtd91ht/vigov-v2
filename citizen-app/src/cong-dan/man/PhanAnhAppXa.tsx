@@ -2108,7 +2108,8 @@ export function AccountlessSendDone(props: {
   onHome: () => void;
 }) {
   const r = props.receipt;
-  const acknowledge = r.acknowledgeDue !== null ? formatDeadline(r.acknowledgeDue) : null;
+  // Same screen as the signed-in SendDone, same answer to customer sheet row 24 (owner, 12/10/2026): no
+  // "Cán bộ xã sẽ xem phiếu trước …" line; the terms (commune-terms.ts, gui-phan-anh) promise only the resolve date.
   const resolve = r.resolveDue !== null ? formatDeadline(r.resolveDue) : null;
   return (
     <div className="xa-ket-qua">
@@ -2125,10 +2126,9 @@ export function AccountlessSendDone(props: {
         <BieuTuong ten="info" co={22} />
         <p>{ACCOUNTLESS.done_notice}</p>
       </div>
-      {(acknowledge !== null || resolve !== null) && (
+      {resolve !== null && (
         <div className="xa-deadline-band">
-          {acknowledge !== null && <p>{XA_PA.acknowledge_by(acknowledge)}</p>}
-          {resolve !== null && <p>{XA_PA.resolve_by(resolve)}</p>}
+          <p>{XA_PA.resolve_by(resolve)}</p>
         </div>
       )}
       <button type="button" className="xa-nut" onClick={props.onFollow}>
