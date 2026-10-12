@@ -631,7 +631,7 @@
     },
     {
       "id": "communes-theo-ma-cong-khai-12-10",
-      "menu": "kenh-cong-dan",
+      "menu": "noi-dung-mini-app",
       "trang_thai": "xong",
       "viec": "GET /api/v1/communes nhận ?code=<mã công khai 12 hex> → {name, province, host} (Mini App tra mã trên QR); ?host= trả thêm launch_code (cho npm run qr --domain). Đúng một trong hai tham số; mã lạ / xã ngừng → items [] y hệt. ADR 0047 §Sửa đổi 12/10/2026.",
       "bang_chung": "5b9b16ed (?code=) + commit Tenant.launch_code — go build/vet/test core, platform, identity xanh.",

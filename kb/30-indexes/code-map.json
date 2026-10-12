@@ -6462,6 +6462,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/automation.go:240"
     },
+    "domain.LegacyDomainLaunchLink": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/shared_mini_app.go:76"
+    },
     "domain.LetterAssignedNotice": {
       "kind": "func",
       "at": "service-documents/internal/domain/staff_notice.go:115"
@@ -6864,7 +6868,7 @@
     },
     "domain.MiniAppLaunchLink": {
       "kind": "func",
-      "at": "service-platform/internal/domain/shared_mini_app.go:48"
+      "at": "service-platform/internal/domain/shared_mini_app.go:49"
     },
     "domain.MocDatDuoc": {
       "kind": "type",
@@ -6889,6 +6893,10 @@
     "domain.NeedsApproval": {
       "kind": "func",
       "at": "service-petitions/internal/domain/nhiem_vu.go:195"
+    },
+    "domain.NewLaunchCode": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/launch_code.go:36"
     },
     "domain.NewPeriod": {
       "kind": "func",
@@ -7352,7 +7360,7 @@
     },
     "domain.OwnMiniAppLaunchLink": {
       "kind": "func",
-      "at": "service-platform/internal/domain/shared_mini_app.go:69"
+      "at": "service-platform/internal/domain/shared_mini_app.go:97"
     },
     "domain.PairingCodeHash": {
       "kind": "func",
@@ -8598,6 +8606,10 @@
       "kind": "func",
       "at": "service-comms/internal/domain/disaster_alert.go:37"
     },
+    "domain.ValidLaunchCode": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/launch_code.go:47"
+    },
     "domain.ValidMapAssetStatus": {
       "kind": "func",
       "at": "service-comms/internal/domain/map_asset.go:30"
@@ -9032,11 +9044,11 @@
     },
     "grpc.Deps": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:84"
+      "at": "service-platform/internal/grpc/server.go:90"
     },
     "grpc.Directory": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:43"
+      "at": "service-platform/internal/grpc/server.go:45"
     },
     "grpc.DocumentTypeCodeReader": {
       "kind": "type",
@@ -9056,15 +9068,15 @@
     },
     "grpc.GetTenant": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:157"
+      "at": "service-platform/internal/grpc/server.go:198"
     },
     "grpc.GetTenantProfile": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:255"
+      "at": "service-platform/internal/grpc/server.go:296"
     },
     "grpc.HoSoHienThi": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:55"
+      "at": "service-platform/internal/grpc/server.go:61"
     },
     "grpc.IdleSessionRevoker": {
       "kind": "type",
@@ -9096,7 +9108,7 @@
     },
     "grpc.MapFrameDefaults": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:79"
+      "at": "service-platform/internal/grpc/server.go:85"
     },
     "grpc.MeasureWorkingHours": {
       "kind": "func",
@@ -9124,7 +9136,7 @@
     },
     "grpc.NewServer": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:113"
+      "at": "service-platform/internal/grpc/server.go:119"
     },
     "grpc.NewZaloBotServer": {
       "kind": "func",
@@ -9176,7 +9188,7 @@
     },
     "grpc.PetitionFields": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:73"
+      "at": "service-platform/internal/grpc/server.go:79"
     },
     "grpc.PhienCongDanDoc": {
       "kind": "type",
@@ -9188,7 +9200,7 @@
     },
     "grpc.PublicURLs": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:61"
+      "at": "service-platform/internal/grpc/server.go:67"
     },
     "grpc.QuyenDoc": {
       "kind": "type",
@@ -9248,7 +9260,7 @@
     },
     "grpc.ResolveHost": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:127"
+      "at": "service-platform/internal/grpc/server.go:134"
     },
     "grpc.ResolveLeadershipStaff": {
       "kind": "func",
@@ -9264,7 +9276,7 @@
     },
     "grpc.ResolveMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/grpc/server.go:200"
+      "at": "service-platform/internal/grpc/server.go:241"
     },
     "grpc.ResolveOperatorSession": {
       "kind": "func",
@@ -9320,7 +9332,7 @@
     },
     "grpc.Server": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:98"
+      "at": "service-platform/internal/grpc/server.go:104"
     },
     "grpc.SetMiniAppSecret": {
       "kind": "func",
@@ -9336,7 +9348,7 @@
     },
     "grpc.SoMiniApp": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:50"
+      "at": "service-platform/internal/grpc/server.go:56"
     },
     "grpc.StaffNotificationDeliverer": {
       "kind": "type",
@@ -9356,7 +9368,7 @@
     },
     "grpc.UploadPolicies": {
       "kind": "type",
-      "at": "service-platform/internal/grpc/server.go:67"
+      "at": "service-platform/internal/grpc/server.go:73"
     },
     "grpc.WithActiveStaffCounts": {
       "kind": "func",
@@ -9760,7 +9772,7 @@
     },
     "http.DanhMucXa": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_xa.go:102"
+      "at": "service-identity/internal/http/danh_muc_xa.go:134"
     },
     "http.DanhSachBienBan": {
       "kind": "func",
@@ -10256,7 +10268,7 @@
     },
     "http.HandlerCongKhai": {
       "kind": "type",
-      "at": "service-identity/internal/http/danh_muc_xa.go:72"
+      "at": "service-identity/internal/http/danh_muc_xa.go:100"
     },
     "http.HangMucKeHoachVonDanhMuc": {
       "kind": "type",
@@ -11540,7 +11552,7 @@
     },
     "http.TraXaTheoHost": {
       "kind": "type",
-      "at": "service-identity/internal/http/danh_muc_xa.go:30"
+      "at": "service-identity/internal/http/danh_muc_xa.go:39"
     },
     "http.TrangThaiNhiemVuDoc": {
       "kind": "type",
@@ -12982,6 +12994,18 @@
       "kind": "func",
       "at": "core/platformclient/directory.go:122"
     },
+    "platformclient.Commune": {
+      "kind": "type",
+      "at": "core/platformclient/host.go:46"
+    },
+    "platformclient.CommuneByHost": {
+      "kind": "func",
+      "at": "core/platformclient/host.go:53"
+    },
+    "platformclient.CommuneByLaunchCode": {
+      "kind": "func",
+      "at": "core/platformclient/host.go:68"
+    },
     "platformclient.Current": {
       "kind": "func",
       "at": "core/platformclient/mini_app.go:138"
@@ -13696,7 +13720,7 @@
     },
     "store.AddDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:266"
+      "at": "service-platform/internal/store/operator_writes.go:304"
     },
     "store.AddEntry": {
       "kind": "func",
@@ -13764,7 +13788,7 @@
     },
     "store.AttachMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:484"
+      "at": "service-platform/internal/store/operator_writes.go:522"
     },
     "store.AttachTreeFactsTx": {
       "kind": "func",
@@ -13840,11 +13864,11 @@
     },
     "store.ByHost": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:140"
+      "at": "service-platform/internal/store/directory.go:163"
     },
     "store.ByHostErr": {
       "kind": "func",
-      "at": "service-platform/internal/store/directory.go:180"
+      "at": "service-platform/internal/store/directory.go:203"
     },
     "store.ByID": {
       "kind": "func",
@@ -13853,6 +13877,10 @@
     "store.ByIDForUpdate": {
       "kind": "func",
       "at": "service-petitions/internal/store/petition_merge.go:26"
+    },
+    "store.ByLaunchCodeErr": {
+      "kind": "func",
+      "at": "service-platform/internal/store/directory.go:243"
     },
     "store.CaLamBuDeGhi": {
       "kind": "type",
@@ -14110,9 +14138,9 @@
       "kind": "type",
       "at": "service-comms/internal/store/zalo_commune_bot.go:41"
     },
-    "store.CommuneLaunchHost": {
+    "store.CommuneLaunchTarget": {
       "kind": "func",
-      "at": "service-platform/internal/store/shared_mini_app.go:209"
+      "at": "service-platform/internal/store/shared_mini_app.go:222"
     },
     "store.ConTrucTiep": {
       "kind": "func",
@@ -14132,7 +14160,7 @@
     },
     "store.CorrectName": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:359"
+      "at": "service-platform/internal/store/operator_writes.go:397"
     },
     "store.CotCuaBang": {
       "kind": "func",
@@ -14228,7 +14256,7 @@
     },
     "store.CreateCommune": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:151"
+      "at": "service-platform/internal/store/operator_writes.go:171"
     },
     "store.CreateDEK": {
       "kind": "func",
@@ -14332,7 +14360,7 @@
     },
     "store.DeclareSharedMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/shared_mini_app.go:120"
+      "at": "service-platform/internal/store/shared_mini_app.go:121"
     },
     "store.DemChungTuConSong": {
       "kind": "func",
@@ -14813,6 +14841,10 @@
     "store.LatestReopenAtTx": {
       "kind": "func",
       "at": "service-petitions/internal/store/petition_rating.go:138"
+    },
+    "store.LaunchTarget": {
+      "kind": "type",
+      "at": "service-platform/internal/store/shared_mini_app.go:204"
     },
     "store.LeadershipCodes": {
       "kind": "func",
@@ -15948,7 +15980,7 @@
     },
     "store.RecordMiniAppSecretForward": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:768"
+      "at": "service-platform/internal/store/operator_writes.go:806"
     },
     "store.RecordRating": {
       "kind": "func",
@@ -15972,7 +16004,7 @@
     },
     "store.RemoveMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:722"
+      "at": "service-platform/internal/store/operator_writes.go:760"
     },
     "store.ReopenBudgetPeriodClose": {
       "kind": "func",
@@ -15988,7 +16020,7 @@
     },
     "store.ReplaceMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:650"
+      "at": "service-platform/internal/store/operator_writes.go:688"
     },
     "store.ReportRows": {
       "kind": "func",
@@ -16084,7 +16116,7 @@
     },
     "store.SetActivation": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:406"
+      "at": "service-platform/internal/store/operator_writes.go:444"
     },
     "store.SetActive": {
       "kind": "func",
@@ -16112,7 +16144,7 @@
     },
     "store.SetPrimaryDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:297"
+      "at": "service-platform/internal/store/operator_writes.go:335"
     },
     "store.SetPublicObjectKey": {
       "kind": "func",
@@ -16148,7 +16180,7 @@
     },
     "store.SharedMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/shared_mini_app.go:99"
+      "at": "service-platform/internal/store/shared_mini_app.go:100"
     },
     "store.SharedMiniAppStore": {
       "kind": "type",

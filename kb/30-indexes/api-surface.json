@@ -2287,9 +2287,9 @@
       "path": "/api/v1/communes",
       "operation_id": "identity_get_communes",
       "task_id": "86a653af479d",
-      "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi có phiên nào — không trả mã xã",
+      "summary": "Tra xã theo tên miền hoặc mã mở app trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi có phiên nào — không trả mã định danh xã; tra theo mã thì trả tên miền chính",
       "permission_kind": "public",
-      "permission_reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền in trên mã QR ra tên và tỉnh của xã — siêu dữ liệu công khai mà trang đăng nhập của chính xã ấy vốn đã hiện; không trả mã xã, không trả tên miền",
+      "permission_reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền hoặc mã mở app in trên mã QR ra tên và tỉnh của xã (tra theo mã thì kèm tên miền chính — vốn là trang web công khai của xã; tra theo tên miền thì kèm mã mở app — vốn in công khai trên mã QR) — siêu dữ liệu công khai, không trả mã định danh xã, không mở phiên",
       "consumer": "citizen-app",
       "idempotency": "",
       "reply_schemas": {

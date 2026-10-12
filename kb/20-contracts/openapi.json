@@ -10513,18 +10513,26 @@
     },
     "/api/v1/communes": {
       "get": {
-        "summary": "Tra xã theo tên miền trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi có phiên nào — không trả mã xã",
+        "summary": "Tra xã theo tên miền hoặc mã mở app trong mã QR, để Mini App hỏi \"Làm việc với xã X?\" trước khi có phiên nào — không trả mã định danh xã; tra theo mã thì trả tên miền chính",
         "operationId": "identity_get_communes",
         "tags": [
           "identity"
         ],
         "x-vigov-permission": {
           "kind": "public",
-          "reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền in trên mã QR ra tên và tỉnh của xã — siêu dữ liệu công khai mà trang đăng nhập của chính xã ấy vốn đã hiện; không trả mã xã, không trả tên miền"
+          "reason": "Mini App hỏi \"Làm việc với xã X?\" TRƯỚC khi có phiên nào: tra tên miền hoặc mã mở app in trên mã QR ra tên và tỉnh của xã (tra theo mã thì kèm tên miền chính — vốn là trang web công khai của xã; tra theo tên miền thì kèm mã mở app — vốn in công khai trên mã QR) — siêu dữ liệu công khai, không trả mã định danh xã, không mở phiên"
         },
         "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "86a653af479d",
         "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "host",
             "in": "query",
@@ -10553,7 +10561,12 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "invalid_code",
+              "invalid_host",
+              "invalid_query"
+            ]
           },
           "500": {
             "description": "Internal Server Error",
@@ -10573,7 +10586,10 @@
                   "$ref": "#/components/schemas/httpx.Error"
                 }
               }
-            }
+            },
+            "x-vigov-error-codes": [
+              "platform_unavailable"
+            ]
           }
         }
       }
@@ -50028,6 +50044,12 @@
             "type": "string"
           },
           "province": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "launch_code": {
             "type": "string"
           }
         },

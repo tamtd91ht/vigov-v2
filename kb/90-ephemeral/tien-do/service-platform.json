@@ -361,7 +361,7 @@
     },
     {
       "id": "ma-cong-khai-xa-launch-code-12-10",
-      "menu": "van-hanh-qr",
+      "menu": "noi-dung-mini-app",
       "trang_thai": "xong",
       "viec": "tenant.launch_code (migration 0024: 12 hex CSPRNG, NOT NULL, UNIQUE, backfill có vết). Tạo xã sinh mã bằng crypto/rand, ghi vào delta tao_xa. ResolveHost nhận launch_code (proto ebe15783). Link vận hành: chung (?x=), chung_ten_mien (?d=, chuyển tiếp), rieng. ADR 0047 §Sửa đổi 12/10/2026.",
       "bang_chung": "7735ec93 — go build/vet/test xanh; 4 test PostgreSQL SKIP (không có VIGOV_TEST_DSN): migration 0024 CHƯA chạy trên PG thật.",

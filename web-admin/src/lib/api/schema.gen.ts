@@ -3290,6 +3290,8 @@ export type identity_vanDeSLARa = {
 export type identity_xaCongKhai = {
   "name": string;
   "province": string;
+  "host"?: string;
+  "launch_code"?: string;
 };
 
 export type identity_xoaCanBoVao = {
@@ -6658,13 +6660,14 @@ export type identity_get_commune_staff = {
   };
 };
 
-/** GET /api/v1/communes — Tra xã theo tên miền trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi có phiên nào — không trả mã xã */
+/** GET /api/v1/communes — Tra xã theo tên miền hoặc mã mở app trong mã QR, để Mini App hỏi "Làm việc với xã X?" trước khi có phiên nào — không trả mã định danh xã; tra theo mã thì trả tên miền chính */
 export type identity_get_communes = {
   duongDan: "/api/v1/communes";
   phuongThuc: "GET";
   thamSo: {
   };
   truyVan: {
+    "code"?: string;
     "host"?: string;
   };
   than: never;
@@ -6673,6 +6676,10 @@ export type identity_get_communes = {
     400: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_code" | "invalid_host" | "invalid_query";
+    503: "platform_unavailable";
   };
 };
 

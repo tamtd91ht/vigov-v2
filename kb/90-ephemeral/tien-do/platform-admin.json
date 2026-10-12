@@ -93,7 +93,7 @@
     },
     {
       "id": "the-qr-link-chuyen-tiep-12-10",
-      "menu": "communes",
+      "menu": "noi-dung-mini-app",
       "trang_thai": "xong",
       "viec": "Thẻ Mã QR hiện nhãn link chuyển tiếp chung_ten_mien (?d=) cạnh link mã công khai (?x=), câu nói rõ link nào chạy với bản app nào; lỗi commune_launch_code_invalid.",
       "bang_chung": "dcdb796b — tsc sạch, vitest 11 tệp/251 test xanh. Chưa xem ảnh render thật.",
