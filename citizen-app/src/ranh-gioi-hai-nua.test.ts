@@ -811,11 +811,17 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
         `${ten} gửi một mã tới máy chủ nhưng bảng khai nói không có gì rời khỏi máy`,
       ).toBeGreaterThan(0);
     }
-    // 11/10/2026: the intro's office list asks no location any more (owner) — the row is the commune interface's
-    // only, and must not still describe a Liên hệ use that no longer exists.
+    // 11/10/2026 the intro's office list stopped asking a location (it could not sort), and this case pinned the
+    // row to the commune interface alone. 12/10/2026 (owner): "Tìm văn phòng gần tôi" asks again, with the code
+    // exchanged on the server — so the row is both halves', the intro's view names Liên hệ and says where the code
+    // goes, and the commune app's own words stay free of the intro's screen.
     const location = KHAI_BAO_LOI_GOI.find((k) => k.api === "getLocation")!;
-    expect(location.nua).toBe("nha-nuoc");
-    expect(`${location.man} ${location.de_lam_gi} ${location.roi_khoi_may}`).not.toMatch(/Liên hệ|văn phòng/);
+    expect(location.nua).toBe("ca-hai");
+    expect(location.intro_app?.man).toBe("Liên hệ");
+    expect(location.intro_app?.roi_khoi_may).toMatch(/máy chủ của Tập đoàn ViHAT Group/);
+    expect(location.intro_app?.roi_khoi_may).toMatch(/không lưu/);
+    const commune = location.commune_app!;
+    expect(`${commune.man} ${commune.de_lam_gi} ${commune.roi_khoi_may}`).not.toMatch(/Liên hệ|văn phòng|ViHAT/);
   });
 
   it("nửa nhà nước khai đúng BẢY lời gọi riêng — và bảng nói ra nó thừa hưởng những gì", () => {
@@ -830,9 +836,10 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
       // so the camera, the picker, `chooseImage` and `getLocation` are the commune interface's alone.
       // 12/10/2026 (customer sheet App Xã rows 12, 14): the directory's "NHẮN ZALO" (`openOutApp`).
       // 12/10/2026 (owner, Zalo resubmission): the camera, the picker and `chooseImage` left this list — the intro's
-      // "Tư vấn và báo giá" attaches photos to a consultation request, so the three are "ca-hai" (below).
-    ).toEqual(["getLocation", "minimizeApp", "openOutApp", "openShareSheet"]);
-    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
+      // "Tư vấn và báo giá" attaches photos to a consultation request, so the three are "ca-hai" (below). Same day,
+      // `getLocation` left too: the intro's "Tìm văn phòng gần tôi".
+    ).toEqual(["minimizeApp", "openOutApp", "openShareSheet"]);
+    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage", "getLocation"]) {
       expect(KHAI_BAO_LOI_GOI.find((k) => k.api === api)?.nua, `${api} is used by both halves`).toBe("ca-hai");
     }
     expect(KHAI_BAO_LOI_GOI.find((k) => k.api === "getUserInfo")?.nua, "getUserInfo is used by both halves").toBe("ca-hai");

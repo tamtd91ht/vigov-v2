@@ -229,8 +229,10 @@ export const PHIEN_BAN_CHINH_SACH = "1.0";
  * 11/10/2026: the day the text became what it now says — the commune sections left for the commune's own policy
  * (`commune-privacy.ts`), the removed intro features left with them, and the owner approved the wording (decision
  * of 11/10/2026). A legal text dated before the facts it states misstates its own date. Still `1.0`: never published.
+ * Moved to 12/10/2026: that day added the consultation photos and "Tìm văn phòng gần tôi" (owner, App ViHAT upgrade
+ * for the Zalo resubmission) — facts the 11/10 date would predate.
  */
-export const NGAY_HIEU_LUC = "11/10/2026";
+export const NGAY_HIEU_LUC = "12/10/2026";
 
 export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
 
@@ -245,8 +247,9 @@ export const TIEU_DE_CHINH_SACH = "Chính sách quyền riêng tư";
  * 11/10/2026 (owner): the "hai cách dùng" framing is gone. To the user this is ViHAT Group's app and nothing else;
  * the commune page a commune QR opens is the commune's app, with the commune's own policy (`commune-privacy.ts`).
  */
+// 12/10/2026 (owner): "Tìm văn phòng gần tôi" joined the list — the one-time location exchange is a send too.
 export const CAU_DAU =
-  "Ứng dụng này là ứng dụng của Tập đoàn ViHAT Group trên Zalo. Ứng dụng không lưu dữ liệu nào của bạn xuống máy, và chỉ gửi dữ liệu đi khi chính bạn bấm đăng nhập, gửi một yêu cầu tư vấn, bấm 'Chat với chuyên viên', hoặc đăng ký hay huỷ nhận ưu đãi qua SMS — tới máy chủ của Tập đoàn ViHAT Group.";
+  "Ứng dụng này là ứng dụng của Tập đoàn ViHAT Group trên Zalo. Ứng dụng không lưu dữ liệu nào của bạn xuống máy, và chỉ gửi dữ liệu đi khi chính bạn bấm đăng nhập, gửi một yêu cầu tư vấn, bấm 'Chat với chuyên viên', đăng ký hay huỷ nhận ưu đãi qua SMS, hoặc bấm 'Tìm văn phòng gần tôi' rồi cho phép lấy vị trí — tới máy chủ của Tập đoàn ViHAT Group.";
 
 /**
  * MỘT DANH SÁCH PHẲNG, ĐỌC TỪ TRÊN XUỐNG.
@@ -383,6 +386,25 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     ],
   },
   {
+    /**
+     * "TÌM VĂN PHÒNG GẦN TÔI" (owner decision 12/10/2026) — the intro's one use of the location permission.
+     *
+     *   What each clause is read from:
+     *     · when / once — `features/tinh-nang/nearby-offices.ts` `createNearbyFlow`: Zalo is asked only after the
+     *       app's own "Cho phép", one `getLocation` per tap;
+     *     · where — `features/dang-nhap/current-location.ts` `getCurrentLocation` → `vihat-miniapp`
+     *       `POST /api/v1/location`, body `accessToken` + `locationToken` (`hop-dong.ts` `LOCATION_FIELDS`);
+     *     · not stored — `vihat-miniapp` `internal/httpapi/vi_tri.go:89-92,157`: nothing written, coordinates and
+     *       tokens never logged, not even a success line;
+     *     · on the phone only — `locateNearbyOffices` keeps distances, not the coordinates.
+     */
+    ma: "vi-tri-van-phong",
+    tieu_de: "Vị trí khi bạn tìm văn phòng gần nhất",
+    doan: [
+      "Ở màn Liên hệ có nút 'Tìm văn phòng gần tôi'. Chỉ khi bạn bấm nút ấy, đọc câu giải thích của ứng dụng và bấm 'Cho phép', ứng dụng mới xin Zalo vị trí hiện tại của bạn — MỘT LẦN cho mỗi lần bấm. Zalo không trả toạ độ về máy mà chỉ trả một mã dùng một lần; ứng dụng gửi mã ấy, cùng mã phiên Zalo, tới máy chủ của Tập đoàn ViHAT Group để đổi ra toạ độ, và máy chủ trả toạ độ về máy bạn. MÁY CHỦ KHÔNG LƯU vị trí của bạn — không lưu mã, không lưu toạ độ, không ghi chúng vào nhật ký. Trên máy bạn, toạ độ chỉ dùng để tính khoảng cách tới từng văn phòng và xếp văn phòng gần nhất lên đầu; ứng dụng không giữ lại toạ độ, không lưu xuống máy, và không dùng hay gửi chúng cho việc gì khác. Bấm 'Không', hoặc từ chối trên hộp thoại của Zalo, thì không có gì được gửi đi và danh sách văn phòng giữ thứ tự sẵn có.",
+    ],
+  },
+  {
     ma: "cac-quyen",
     tieu_de: "Các quyền ứng dụng xin, và vì sao",
     doan: DOAN_CHINH_SACH_TINH_NANG,
@@ -467,12 +489,13 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
       // 11/10/2026: the receivers of THIS app only. No "và không nơi nào khác": `vihat-miniapp` can post each new
       // request to a configured webhook receiver (see the `chat-sms` block) — the owner states whether that is
       // on, and who receives, before publication.
-      "Ứng dụng gửi dữ liệu của bạn tới máy chủ của Tập đoàn ViHAT Group: khi bạn đăng nhập, gửi một yêu cầu tư vấn, bấm 'Chat với chuyên viên', hoặc đăng ký hay huỷ nhận ưu đãi SMS, và khi một chức năng của Zalo bạn vừa dùng báo lỗi. Từng bước gửi được nói ở mục Đăng nhập, mục 'Yêu cầu tư vấn và đề nghị gọi lại', mục 'Chat với chuyên viên và nhận ưu đãi qua SMS' và mục 'Cách xử lý và thời gian lưu'.",
+      "Ứng dụng gửi dữ liệu của bạn tới máy chủ của Tập đoàn ViHAT Group: khi bạn đăng nhập, gửi một yêu cầu tư vấn, bấm 'Chat với chuyên viên', đăng ký hay huỷ nhận ưu đãi SMS, hoặc bấm 'Tìm văn phòng gần tôi' rồi cho phép lấy vị trí, và khi một chức năng của Zalo bạn vừa dùng báo lỗi. Từng bước gửi được nói ở mục Đăng nhập, mục 'Yêu cầu tư vấn và đề nghị gọi lại', mục 'Chat với chuyên viên và nhận ưu đãi qua SMS', mục 'Vị trí khi bạn tìm văn phòng gần nhất' và mục 'Cách xử lý và thời gian lưu'.",
       // ⚠ CÂU NÀY KHÔNG GÕ TAY — 21/09/2026. Dựng từ `INTRO_DESTINATIONS` (`content/dich-ra-ngoai.ts`): cách duy
       // nhất con số và danh sách không lệch nhau. Đếm theo LOẠI ĐÍCH ĐẾN, không theo số nút.
       cauKhaiDichRaNgoai(INTRO_DESTINATIONS),
-      // 11/10/2026: the intro no longer asks a location at all ("Tìm văn phòng gần tôi" lists the offices).
-      "Nút chỉ đường chỉ mang theo ĐỊA CHỈ VĂN PHÒNG của chúng tôi — không mang theo vị trí của bạn: ứng dụng không hỏi vị trí của bạn.",
+      // 11/10/2026 the sentence ended "ứng dụng không hỏi vị trí của bạn" — false since 12/10/2026, when "Tìm văn
+      // phòng gần tôi" asks it again. What stays true: the map link carries the office's address and nothing else.
+      "Nút chỉ đường chỉ mang theo ĐỊA CHỈ VĂN PHÒNG của chúng tôi — không mang theo vị trí của bạn, kể cả khi bạn vừa cho phép lấy vị trí để tìm văn phòng gần nhất.",
       "Zalo là nền tảng ứng dụng chạy trên đó. Việc bạn dùng Zalo chịu sự điều chỉnh của chính sách quyền riêng tư của Zalo, nằm ngoài phạm vi văn bản này.",
     ],
   },
@@ -491,7 +514,7 @@ export const MUC_CHINH_SACH: readonly MucChinhSach[] = [
     doan: [
       // ⚠ CÂU NÀY ĐÃ PHẢI SỬA 22/09/2026, VÀ ĐÓ LÀ MỘT LẦN BỚT MỘT LỜI TRẤN AN: ô ghi chú là văn bản tự do, nên
       // nó phải có tên trong mục rủi ro.
-      "Ứng dụng không lưu dữ liệu nào của bạn trên máy; thứ nó gửi đi là hai mã đăng nhập dùng một lần — số điện thoại của bạn không nằm trong hai mã ấy — và, nếu bạn tự gửi một yêu cầu tư vấn, những gì bạn đã chọn cùng phần ghi chú bạn tự gõ và những ảnh bạn tự chụp hoặc chọn gửi kèm; nếu bạn bấm 'Chat với chuyên viên' và đồng ý, tên Zalo của bạn.",
+      "Ứng dụng không lưu dữ liệu nào của bạn trên máy; thứ nó gửi đi là hai mã đăng nhập dùng một lần — số điện thoại của bạn không nằm trong hai mã ấy — và, nếu bạn tự gửi một yêu cầu tư vấn, những gì bạn đã chọn cùng phần ghi chú bạn tự gõ và những ảnh bạn tự chụp hoặc chọn gửi kèm; nếu bạn bấm 'Chat với chuyên viên' và đồng ý, tên Zalo của bạn; nếu bạn bấm 'Tìm văn phòng gần tôi' và cho phép, một mã vị trí dùng một lần, để đổi ra toạ độ mà máy chủ không lưu.",
       "RỦI RO ĐÁNG KỂ NHẤT NẰM Ở CHÍNH Ô GHI CHÚ ẤY: nó là văn bản tự do, nên nó chứa đúng những gì bạn viết vào. Bạn hãy cân nhắc trước khi ghi vào đó số căn cước, thông tin tài khoản ngân hàng, hay dữ liệu cá nhân của một người khác — chúng tôi không có cách nào biết trước để ngăn.",
       "Rủi ro còn lại nằm ở màn hình: nội dung hiển thị sau khi bạn dùng một tính năng có thể bị người đứng cạnh nhìn thấy. Điều này đáng lưu ý nhất khi bạn vừa quét một tấm danh thiếp — thứ hiện ra là dữ liệu cá nhân của người đã đưa nó cho bạn, và bạn là người đang giữ nó.",
       "Khi bạn bật chế độ giữ màn hình sáng để người khác quét mã, màn hình sẽ không tự tối đi. Ứng dụng tắt chế độ ấy ngay khi bạn rời màn hình danh thiếp, nhưng trong lúc đang bật, những gì trên màn hình nằm trong tầm nhìn của người xung quanh lâu hơn bình thường.",

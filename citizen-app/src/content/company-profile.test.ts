@@ -253,6 +253,15 @@ describe("sourced facts stay exactly as published", () => {
       expect(office.address.trim().length).toBeGreaterThan(0);
     }
   });
+
+  it("gives each office the coordinates the owner read off Google Maps (12/10/2026)", () => {
+    // Pinned verbatim: "Tìm văn phòng gần tôi" sorts by these, and a swapped lat/lng would still be a number.
+    expect(OFFICES.map((office) => [office.name, office.lat, office.lng])).toEqual([
+      ["Trụ sở chính", 10.84359680293984, 106.7115579810477],
+      ["Chi nhánh Hà Nội", 21.045981719076952, 105.80335202151468],
+      ["Chi nhánh Cambodia", 11.546906444004492, 104.89364745429609],
+    ]);
+  });
 });
 
 describe("the published figures and who they belong to", () => {

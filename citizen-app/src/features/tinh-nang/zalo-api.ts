@@ -130,7 +130,8 @@ export type KhaiBaoLoiGoi = {
  * (`nha-nuoc`). They are still called under the SHARED App ID — on the commune page a QR opens (`App.tsx`
  * `QrCommuneApp`) — so the shared dossier keeps every one of them: it prints the whole table.
  * 12/10/2026 (owner): the camera, the picker and `chooseImage` are "ca-hai" again — the intro's "Tư vấn và báo
- * giá" attaches photos to a consultation request. `getLocation` stays the commune interface's.
+ * giá" attaches photos to a consultation request. Same day, `getLocation` too: "Tìm văn phòng gần tôi" on Liên hệ,
+ * with the code exchanged on the server (`nearby-offices.ts`).
  *
  * `getAccessToken` cần quyền nhưng không hỏi người dùng; `openPhone` và `openWebview` là `@zaloOnly` và không nằm
  * trong số quyền phải xin — chúng vẫn ở đây, vì màn "Quản lý quyền" trả lời câu "app này gọi những gì của nền
@@ -435,14 +436,16 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // đãi qua SMS" (Trang chủ) log the citizen in with this same call when no session is held
     // (`features/dang-nhap/ensure-session.ts`). Same call, two more buttons it runs behind — so the row says so.
     // "Trang chủ" LEFT 12/10/2026: the SMS block moved into the "Kết nối với ViHAT" card on Liên hệ.
+    // "Tìm văn phòng gần tôi" JOINED 12/10/2026 (owner): the intro's location exchange carries this token beside the
+    // `getLocation` one, exactly as the commune page's does (`requestLocationCodes`).
     man: "Liên hệ · Xác nhận xã · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
     tinh_nang:
-      "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS · Mở phiên làm việc với xã · Vị trí nơi xảy ra sự việc",
+      "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS · Tìm văn phòng gần tôi · Mở phiên làm việc với xã · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ. Khi bạn bấm “Tìm văn phòng gần tôi” ở màn Liên hệ, hoặc “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
     hoi_nguoi_dung: false,
     roi_khoi_may:
-      "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập (kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS), để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — để đổi mã vị trí thành toạ độ.",
+      "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập (kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS), để mở phiên làm việc với xã, hoặc — khi bạn bấm tìm văn phòng gần bạn hay lấy vị trí — để đổi mã vị trí thành toạ độ.",
     // ADR 0066: the commune app's login goes straight to ViGov identity; only the location exchange still
     // goes to `vihat-miniapp` (decision 5 moves it later — change this sentence in that card).
     commune_app: {
@@ -456,11 +459,11 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     },
     intro_app: {
       man: "Liên hệ",
-      tinh_nang: "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS",
+      tinh_nang: "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS · Tìm văn phòng gần tôi",
       de_lam_gi:
-        "Lấy mã phiên Zalo của bạn khi bạn đăng nhập. Mã này không chứa tên hay số điện thoại; chỉ máy chủ của chúng tôi đổi được nó thành định danh người dùng. Phiên mở ra từ mã này cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình. Khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm.",
+        "Lấy mã phiên Zalo của bạn khi bạn đăng nhập. Mã này không chứa tên hay số điện thoại; chỉ máy chủ của chúng tôi đổi được nó thành định danh người dùng. Phiên mở ra từ mã này cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình. Khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm. Khi bạn bấm “Tìm văn phòng gần tôi” rồi bấm “Cho phép”, mã này đi cùng mã vị trí để máy chủ của chúng tôi đổi mã vị trí thành toạ độ; lần ấy không mở phiên đăng nhập nào.",
       roi_khoi_may:
-        "Mã phiên được gửi tới máy chủ của Tập đoàn ViHAT Group để mở phiên đăng nhập, kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS.",
+        "Mã phiên được gửi tới máy chủ của Tập đoàn ViHAT Group để mở phiên đăng nhập, kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS; và, khi bạn bấm tìm văn phòng gần bạn, để đổi mã vị trí thành toạ độ.",
     },
   },
   {
@@ -616,14 +619,36 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // exchange server is named neutrally (owner decision 1): to the citizen it is the technical platform's.
     // 11/10/2026 (owner: theo prototype): the form also asks as soon as a field is chosen, and when a draft is
     // resumed without an address — the prototype's `NewFeedbackPage.tsx:227,239`.
-    nua: "nha-nuoc",
-    man: "Gửi phản ánh",
-    tinh_nang: "Vị trí nơi xảy ra sự việc",
+    // `nua` BECAME "ca-hai" AGAIN ON 12/10/2026 (owner, Zalo resubmission): the intro's "Tìm văn phòng gần tôi" on
+    // Liên hệ asks a location once more — and this time the code IS exchanged, at `vihat-miniapp`
+    // `POST /api/v1/location` (`nearby-offices.ts`), so the list really is sorted by distance. The coordinates stay
+    // in one function on the phone; only distances reach the screen. The main fields describe the shared App ID as
+    // a whole (Liên hệ + the commune page a QR opens); `intro_app` is the intro's view; `commune_app` is the
+    // commune's own app — its words are the ones this row held until today, unchanged.
+    nua: "ca-hai",
+    man: "Liên hệ · Gửi phản ánh (trang của một xã mở bằng mã QR)",
+    tinh_nang: "Tìm văn phòng gần tôi · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã vị trí khi bạn chọn lĩnh vực phản ánh (hoặc tiếp tục một phản ánh đang soạn chưa ghi địa chỉ), hoặc khi bạn bấm “Lấy vị trí hiện tại”, và chỉ khi bạn đồng ý chia sẻ. Mã được gửi tới máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
+      "Lấy mã vị trí, chỉ khi bạn đồng ý chia sẻ: ở màn Liên hệ, khi bạn bấm “Tìm văn phòng gần tôi” rồi bấm “Cho phép” ở câu hỏi của ứng dụng — mã được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ, ứng dụng tính khoảng cách tới từng văn phòng ngay trên máy và xếp văn phòng gần nhất lên đầu; trên trang của một xã, khi bạn chọn lĩnh vực phản ánh (hoặc tiếp tục một phản ánh đang soạn chưa ghi địa chỉ), hoặc khi bạn bấm “Lấy vị trí hiện tại” — toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
-      "Mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi.",
+      "Mã vị trí được gửi tới máy chủ để đổi thành toạ độ; máy chủ không lưu mã lẫn toạ độ. Ở màn Liên hệ, toạ độ chỉ dùng trên máy để tính khoảng cách, không được lưu và không gửi đi đâu khác; trên trang của một xã, toạ độ đi cùng phản ánh tới xã khi bạn gửi.",
+    intro_app: {
+      man: "Liên hệ",
+      tinh_nang: "Tìm văn phòng gần tôi",
+      de_lam_gi:
+        "Lấy mã vị trí hiện tại của bạn một lần, chỉ khi bạn bấm “Tìm văn phòng gần tôi” rồi bấm “Cho phép” ở câu hỏi của ứng dụng và đồng ý chia sẻ trên hộp thoại của Zalo, để xếp văn phòng của ViHAT Group gần bạn nhất lên đầu và hiện khoảng cách tới từng văn phòng. Bấm “Không” thì Zalo không được hỏi và danh sách giữ thứ tự sẵn có.",
+      roi_khoi_may:
+        "Mã vị trí được gửi tới máy chủ của Tập đoàn ViHAT Group để đổi thành toạ độ; máy chủ không lưu mã lẫn toạ độ. Toạ độ trả về máy bạn chỉ dùng để tính khoảng cách tới từng văn phòng, không được lưu và không gửi đi đâu khác.",
+    },
+    commune_app: {
+      man: "Gửi phản ánh",
+      tinh_nang: "Vị trí nơi xảy ra sự việc",
+      de_lam_gi:
+        "Lấy mã vị trí khi bạn chọn lĩnh vực phản ánh (hoặc tiếp tục một phản ánh đang soạn chưa ghi địa chỉ), hoặc khi bạn bấm “Lấy vị trí hiện tại”, và chỉ khi bạn đồng ý chia sẻ. Mã được gửi tới máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng để đổi thành toạ độ; toạ độ hiện lên màn hình và chỉ tới xã nếu bạn bấm gửi phản ánh.",
+      roi_khoi_may:
+        "Mã vị trí được gửi tới máy chủ để đổi thành toạ độ, và toạ độ đi cùng phản ánh tới xã khi bạn gửi.",
+    },
   },
 ];
 

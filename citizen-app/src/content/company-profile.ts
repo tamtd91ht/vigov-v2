@@ -54,6 +54,12 @@ export type NamedText = {
 export type Office = {
   name: string;
   address: string;
+  /**
+   * WGS84 degrees of the office's door — only so "Tìm văn phòng gần tôi" can sort the list by distance on the
+   * phone (`features/tinh-nang/nearby-offices.ts`). Business data, published; never sent anywhere.
+   */
+  lat: number;
+  lng: number;
 };
 
 /**
@@ -438,18 +444,29 @@ export const CERTIFICATES: readonly Certificate[] = [
   { name: "Chứng nhận đại lý chính thức của Zalo" },
 ];
 
+/**
+ * `lat` / `lng`: given by the owner on 12/10/2026, read off Google Maps at each office — not geocoded from the
+ * address here. A coordinate guessed from an address string would put an office in the wrong ward and sort the
+ * list wrongly with nothing turning red; if an office moves, ask for its new point rather than deriving one.
+ */
 export const OFFICES: readonly Office[] = [
   {
     name: "Trụ sở chính",
     address: "140 – 142 đường số 2, KDC Vạn Phúc, Phường Hiệp Bình Phước, TP Hồ Chí Minh",
+    lat: 10.84359680293984,
+    lng: 106.7115579810477,
   },
   {
     name: "Chi nhánh Hà Nội",
     address: "85 – 87 Hoàng Quốc Việt, P Nghĩa Đô, Cầu Giấy, Hà Nội",
+    lat: 21.045981719076952,
+    lng: 105.80335202151468,
   },
   {
     name: "Chi nhánh Cambodia",
     address: "Thida Rath #154 St.33MC, Sangkat Steung Meanchey, Khan Mean Chey Phnom Penh",
+    lat: 11.546906444004492,
+    lng: 104.89364745429609,
   },
 ];
 

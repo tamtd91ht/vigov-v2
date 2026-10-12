@@ -1702,6 +1702,15 @@ body {
   color: var(--ink-muted);
 }
 
+/* "Cách khoảng X km" after "Tìm văn phòng gần tôi": body size and ink, not muted — it is the answer the person asked for. */
+.van-phong__khoang-cach {
+  display: block;
+  margin-top: 4px;
+  font-size: var(--text-body);
+  font-weight: 600;
+  color: var(--navy);
+}
+
 /* ---------------------------------------------------------------------------------------------
    CHÍNH SÁCH QUYỀN RIÊNG TƯ — màn con riêng từ 12/10/2026 (trước đó: cuối màn Liên hệ). Mở từ
    hàng "Chính sách quyền riêng tư" trên Liên hệ và từ màn Quản lý quyền.

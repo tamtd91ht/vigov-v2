@@ -16,6 +16,7 @@ import {
   noiDung,
   NOI_DUNG_TINH_NANG,
   DANG_NHAP,
+  NEARBY_OFFICES,
   THIEP_CUA_CHUNG_TOI,
   VAN_PHONG,
 } from "./noi-dung";
@@ -340,8 +341,27 @@ describe("giọng văn của một ứng dụng đã phát hành", () => {
     });
   }
 
-  it("khối văn phòng không hứa 'gần bạn' — nó không biết người dùng đứng ở đâu", () => {
+  // 11/10/2026 this case pinned "the office block does not promise 'gần bạn'" — it could not know where the person
+  // stood. 12/10/2026 (owner): "Tìm văn phòng gần tôi" exchanges the location on the server, so the promise is kept —
+  // but only after the tap: the heading itself still promises nothing, and the voice rules above hold for every new
+  // sentence. `purpose` alone may name the server: it is the disclosure shown before Zalo's dialog (owner's words).
+  it("khối văn phòng chỉ nói 'gần bạn' sau khi đã xếp được — tiêu đề không hứa gì", () => {
     expect(VAN_PHONG.tieu_de).not.toMatch(/gần/);
+    expect(NEARBY_OFFICES.find).toBe("Tìm văn phòng gần tôi");
+    const { purpose, distance, ...rest } = NEARBY_OFFICES;
+    const sentences = [...Object.values(rest), distance("1,0")];
+    for (const [mau, ly_do] of [
+      [/[Bb]ản (dựng|hiện tại|này|nộp)/, "kể cách ứng dụng được dựng"],
+      [/VIGOV_|người dựng|máy chủ/i, "nói chuyện hạ tầng với người dùng"],
+      [/(nút|ngay) bên (trên|dưới)/, "chỉ tay vị trí trên màn"],
+      [/Không sao cả/, "trấn an thừa"],
+      [/-?\d{3}|[Ee]rror|code|SDK/, "một mã lỗi"],
+    ] as const) {
+      for (const cau of sentences) expect(cau, ly_do).not.toMatch(mau);
+    }
+    expect(purpose).toMatch(/MỘT LẦN/);
+    expect(purpose).toMatch(/máy chủ của Tập đoàn ViHAT Group để đổi ra toạ độ/);
+    expect(purpose).toMatch(/Máy chủ không lưu vị trí của bạn/);
   });
 });
 
@@ -413,7 +433,7 @@ describe("mã không phải danh thiếp vẫn dùng được", () => {
   });
 });
 
-describe("văn phòng: ba địa chỉ và nút chỉ đường, không xin quyền vị trí", () => {
+describe("văn phòng: ba địa chỉ và nút chỉ đường hiện ngay; vị trí chỉ xin sau khi bấm và cho phép", () => {
   it("ba văn phòng và nút chỉ đường hiện ngay, trước khi bấm gì", () => {
     const chu = textOf(ve(<TimVanPhong />));
     for (const van_phong of OFFICES) {
@@ -425,10 +445,12 @@ describe("văn phòng: ba địa chỉ và nút chỉ đường, không xin quy�
     );
   });
 
-  it("không có nút xin vị trí nào, và tiêu đề là mỏ neo của menu nhanh", () => {
+  it("đúng một nút 'Tìm văn phòng gần tôi' cạnh ba nút chỉ đường, và tiêu đề là mỏ neo của menu nhanh", () => {
     const markup = ve(<TimVanPhong />);
-    // Mỗi `<button>` là một nút "Chỉ đường" — không có nút thứ tư xin quyền.
-    expect((markup.match(/<button/g) ?? []).length).toBe(OFFICES.length);
+    // 12/10/2026: one find button + one "Chỉ đường" per office. The purpose sentence is NOT shown before the tap.
+    expect((markup.match(/<button/g) ?? []).length).toBe(OFFICES.length + 1);
+    expect(textOf(markup)).toContain(NEARBY_OFFICES.find);
+    expect(textOf(markup)).not.toContain(NEARBY_OFFICES.purpose);
     expect(textOf(markup)).toContain(VAN_PHONG.tieu_de);
     expect(markup).toContain(`id="${MOC_TIM_VAN_PHONG}"`);
   });

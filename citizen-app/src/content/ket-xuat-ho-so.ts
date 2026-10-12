@@ -1009,6 +1009,20 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     app: "shared",
   },
   {
+    // SAME ROUTE, SAME BODY, the ViHAT intro (owner 12/10/2026): "Tìm văn phòng gần tôi" on Liên hệ — the use of the
+    // location permission in this resubmission. Same client (`current-location.ts` `getCurrentLocation`), so the
+    // same field table. Policy: `chinh-sach-rieng-tu.ts`, section `vi-tri-van-phong`.
+    tuyen: LOCATION_PATH,
+    may_chu:
+      "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group, không lưu mã vị trí lẫn toạ độ; toạ độ trả về máy chỉ dùng để tính khoảng cách tới từng văn phòng, ngay trên máy",
+    khi_nao:
+      "người dùng tự bấm “Tìm văn phòng gần tôi”, bấm “Cho phép” ở câu giải thích của ứng dụng và đồng ý chia sẻ vị trí trên hộp thoại của Zalo",
+    nguoi_dung_bam: true,
+    man: "Liên hệ — khối “Văn phòng ViHAT Group”",
+    truong: LOCATION_FIELDS,
+    app: "shared",
+  },
+  {
     // SAME ROUTE, the commune's OWN app (29/09/2026, `vihat-miniapp` 4114f00): the body adds `appId` so
     // the server exchanges the token with that app's secret. Same tap, same screen, one more key.
     // Policy: `commune-privacy.ts`, section `phan-anh` (the `appId` sentence included).

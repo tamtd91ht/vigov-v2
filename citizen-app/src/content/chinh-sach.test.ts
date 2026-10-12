@@ -175,8 +175,8 @@ describe("chính sách mô tả đúng thứ ứng dụng thật sự làm", () 
     // ⚠ TỪ LẦN PHÁT HÀNH ĐẦU TIÊN TRỞ ĐI, QUY TẮC ĐẢO NGƯỢC: mỗi thay đổi hành vi xử lý dữ liệu
     // phải lên một số mới và KHÔNG được gộp lại nữa. Ca này khi ấy đổi thành "không lùi số".
     expect(PHIEN_BAN_CHINH_SACH).toBe("1.0");
-    // 11/10/2026: the day the text became what it says (the split, the owner's approval) — still 1.0.
-    expect(NGAY_HIEU_LUC).toBe("11/10/2026");
+    // 12/10/2026: the day the text became what it says (consultation photos, nearest office) — still 1.0.
+    expect(NGAY_HIEU_LUC).toBe("12/10/2026");
   });
 
   it("mỗi mục có mã riêng và không mục nào rỗng", () => {
@@ -562,9 +562,11 @@ describe("chính sách của ứng dụng ViHAT — không một chữ nào về
     expect(all()).not.toMatch(/GIÁ TRỊ TẠM|CẦN CHỦ DỰ ÁN QUYẾT|bản nháp 02\/10\/2026/);
   });
 
-  it("no removed feature, and no build talk: paper card, network type, office location, 'sáu tính năng', 'bản dựng'", () => {
+  // `/văn phòng gần/` left this list 12/10/2026: "Tìm văn phòng gần tôi" came back (owner), this time with the location
+  // exchanged on the server and a section of its own (`vi-tri-van-phong`, pinned below).
+  it("no removed feature, and no build talk: paper card, network type, 'sáu tính năng', 'bản dựng'", () => {
     const t = all();
-    for (const gone of [/thiếp giấy/i, /số hoá/i, /kiểu kết nối/i, /văn phòng gần/i, /sáu tính năng/i, /bản dựng/i, /đầy đủ chức năng/i]) {
+    for (const gone of [/thiếp giấy/i, /số hoá/i, /kiểu kết nối/i, /sáu tính năng/i, /bản dựng/i, /đầy đủ chức năng/i]) {
       expect(t, `the ViHAT policy still says ${gone}`).not.toMatch(gone);
     }
   });
@@ -612,10 +614,13 @@ describe("chính sách của ứng dụng ViHAT — không một chữ nào về
     const listed = DOAN_CHINH_SACH_TUNG_QUYEN.map((d) => /\(([A-Za-z]+)\)/.exec(d)?.[1]);
     expect([...listed].sort()).toEqual([...shown].sort());
     // And nothing of the commune interface rides along.
-    // (12/10/2026: the camera, the picker and `chooseImage` are the intro's again — listed above through `shown`.)
-    for (const api of ["getLocation", "getNetworkType"]) {
-      expect(DOAN_CHINH_SACH_TUNG_QUYEN.join("\n"), api).not.toContain(api);
-    }
+    // (12/10/2026: the camera, the picker, `chooseImage` and `getLocation` are the intro's again — listed above
+    // through `shown`.)
+    expect(DOAN_CHINH_SACH_TUNG_QUYEN.join("\n")).not.toContain("getNetworkType");
+    // The intro's location line names no commune use — that is the commune policy's (`commune-privacy.ts`).
+    const location = DOAN_CHINH_SACH_TUNG_QUYEN.find((d) => d.includes("(getLocation)"))!;
+    expect(location).toMatch(/'Tìm văn phòng gần tôi'/);
+    expect(location).not.toMatch(/phản ánh|(?<!\p{L})xã(?!\p{L})/u);
   });
 
   it("the outside destinations are the intro's only, counted from `INTRO_DESTINATIONS`", () => {
@@ -624,7 +629,37 @@ describe("chính sách của ứng dụng ViHAT — không một chữ nào về
     for (const d of DICH_MO_RA_NGOAI.filter((x) => x.app !== "intro")) {
       expect(thirdParty, `a commune destination is in the ViHAT text: ${d.ma}`).not.toContain(d.trong_chinh_sach);
     }
-    expect(thirdParty).toMatch(/ứng dụng không hỏi vị trí của bạn/);
+    // 12/10/2026: "ứng dụng không hỏi vị trí của bạn" became false ("Tìm văn phòng gần tôi"); what stays true is that
+    // the map link carries the office's address only — and the old absolute sentence must not come back.
+    expect(thirdParty).toMatch(/không mang theo vị trí của bạn, kể cả khi bạn vừa cho phép lấy vị trí/);
+    expect(thirdParty).not.toMatch(/không hỏi vị trí/);
+    expect(thirdParty).toMatch(/bấm 'Tìm văn phòng gần tôi' rồi cho phép lấy vị trí/);
+  });
+
+  /**
+   * "TÌM VĂN PHÒNG GẦN TÔI" (owner decision 12/10/2026) — one paragraph, and each fact it states is the code's:
+   * what (one location, on a tap, after "Cho phép"), where (ViHAT's server, to convert the Zalo code), not stored by
+   * that server (`vihat-miniapp` `vi_tri.go:89-92,157`), distances on the phone (`nearby-offices.ts`), no other use.
+   */
+  it("the nearby-offices paragraph says what, when, where, not stored, on the phone, and no other use", () => {
+    const section = MUC_CHINH_SACH.find((m) => m.ma === "vi-tri-van-phong");
+    expect(section, "the policy lost its nearby-offices section").toBeDefined();
+    expect(section!.doan).toHaveLength(1);
+    const t = section!.doan[0]!;
+    for (const said of [
+      /nút 'Tìm văn phòng gần tôi'/, // the tap
+      /bấm 'Cho phép'/, // the app's own question first
+      /MỘT LẦN cho mỗi lần bấm/, // what: once
+      /chỉ trả một mã dùng một lần/,
+      /tới máy chủ của Tập đoàn ViHAT Group để đổi ra toạ độ/, // where, and why
+      /MÁY CHỦ KHÔNG LƯU vị trí của bạn — không lưu mã, không lưu toạ độ, không ghi chúng vào nhật ký/, // not stored
+      /toạ độ chỉ dùng để tính khoảng cách tới từng văn phòng/, // on the phone
+      /không giữ lại toạ độ, không lưu xuống máy, và không dùng hay gửi chúng cho việc gì khác/, // no other use
+      /thì không có gì được gửi đi và danh sách văn phòng giữ thứ tự sẵn có/, // refusal
+    ]) {
+      expect(t, String(said)).toMatch(said);
+    }
+    expect(CAU_DAU).toMatch(/bấm 'Tìm văn phòng gần tôi' rồi cho phép lấy vị trí/);
   });
 
   it("the SDK failure report: every field the intro can send is declared VERBATIM — and `host` is not (the intro has none)", () => {

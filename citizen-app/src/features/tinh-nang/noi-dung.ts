@@ -169,6 +169,33 @@ export const VAN_PHONG = {
   nut_chi_duong: "Chỉ đường",
 } as const;
 
+/**
+ * "Tìm văn phòng gần tôi" (owner 12/10/2026). Every failure sentence says what to do next and that the list is still
+ * usable as it is — the offices never disappear because a location could not be had.
+ *
+ * `purpose` is the ONE sentence of this app's voice that names a server: it is the disclosure shown before Zalo's own
+ * dialog (Mini App policy 3.3.4), and where the location goes IS the fact the person is agreeing to. Its wording is
+ * the owner's (12/10/2026); `tinh-nang.test.tsx` exempts this key alone from the "no infrastructure talk" rule.
+ */
+export const NEARBY_OFFICES = {
+  find: "Tìm văn phòng gần tôi",
+  purpose:
+    "Ứng dụng lấy vị trí hiện tại của bạn MỘT LẦN, gửi tới máy chủ của Tập đoàn ViHAT Group để đổi ra toạ độ, rồi xếp văn phòng gần bạn nhất lên đầu. Máy chủ không lưu vị trí của bạn.",
+  allow: "Cho phép",
+  deny: "Không",
+  locating: "Đang tìm văn phòng gần bạn…",
+  sorted: "Văn phòng gần bạn nhất ở trên cùng. Khoảng cách tính theo đường chim bay.",
+  /** "cách khoảng 3,4 km" — the number comes from `formatDistanceKm`. */
+  distance: (km: string) => `Cách khoảng ${km} km`,
+  denied: "Bạn chưa cho phép lấy vị trí, nên danh sách giữ thứ tự sẵn có. Bạn vẫn bấm “Chỉ đường” ở văn phòng muốn tới được ngay.",
+  zalo_refused:
+    "Bạn chưa cho Zalo chia sẻ vị trí, nên danh sách giữ thứ tự sẵn có. Muốn xếp theo khoảng cách, bấm lại “Tìm văn phòng gần tôi” và đồng ý chia sẻ vị trí.",
+  outside_zalo: "Tính năng này chỉ khả dụng trên ứng dụng Zalo. Bạn vẫn bấm “Chỉ đường” ở văn phòng muốn tới được ngay.",
+  too_many: "Bạn đã thử nhiều lần trong ít phút. Vui lòng chờ vài phút rồi bấm lại; danh sách vẫn giữ thứ tự sẵn có.",
+  retry: "Chưa lấy được vị trí của bạn. Vui lòng bấm lại sau ít phút, hoặc bấm “Chỉ đường” ở văn phòng muốn tới.",
+  paused: "Tính năng xếp theo khoảng cách đang tạm ngưng. Bạn vẫn bấm “Chỉ đường” ở văn phòng muốn tới được ngay.",
+} as const;
+
 /** ---------- Đăng nhập bằng số Zalo ---------- */
 
 export const DANG_NHAP = {
@@ -195,11 +222,12 @@ export const THIEP_CUA_CHUNG_TOI = {
  *
  * 11/10/2026 (owner): this is the ViHAT Group app's policy only — no commune, petition or ViGov sentence
  * (`content/commune-privacy.ts` holds the commune interface's), and no sentence about the features removed that
- * day (paper-card photo, network type, location for offices). Every paragraph that is not joined at run time is a
- * literal, so `bundle-for-zalo.test.ts` can find it in the bundle.
+ * day (paper-card photo, network type). Every paragraph that is not joined at run time is a literal, so
+ * `bundle-for-zalo.test.ts` can find it in the bundle.
+ * 12/10/2026 (owner): the location is asked again, for "Tìm văn phòng gần tôi" — the first paragraph names it.
  */
 export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
-  "Ứng dụng xin các quyền của nền tảng Zalo cho các tính năng dưới đây, và cho hai nút một chạm trong thẻ 'Kết nối với ViHAT' ở màn Liên hệ: 'Chat với chuyên viên' xin số điện thoại và tên Zalo của bạn để chuyên viên biết ai đang nhắn; 'Đăng ký nhận' ưu đãi SMS xin số điện thoại để gửi tin nhắn ưu đãi tới đúng số ấy. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
+  "Ứng dụng xin các quyền của nền tảng Zalo cho các tính năng dưới đây; cho hai nút một chạm trong thẻ 'Kết nối với ViHAT' ở màn Liên hệ: 'Chat với chuyên viên' xin số điện thoại và tên Zalo của bạn để chuyên viên biết ai đang nhắn; 'Đăng ký nhận' ưu đãi SMS xin số điện thoại để gửi tin nhắn ưu đãi tới đúng số ấy; và cho nút 'Tìm văn phòng gần tôi' ở màn Liên hệ, xin vị trí hiện tại của bạn một lần để xếp văn phòng gần bạn nhất lên đầu. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
   "Với số điện thoại, Zalo không trả số thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại của bạn không nằm trong mã đó.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",
@@ -210,7 +238,7 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
   // phải khớp nhau VÀ khớp với `vcard.ts` — `chinh-sach.test.ts`, khối "khai của tệp danh thiếp khớp
   // với tấm thiếp thật", hỏi cả hai câu cùng một câu hỏi.
   "Với việc tải tệp, ứng dụng GHI MỘT TỆP XUỐNG MÁY BẠN, và đây là tệp duy nhất ứng dụng ghi xuống máy. Tệp ấy là danh thiếp của chúng tôi — tên, hotline, email và trang web của công ty — không phải dữ liệu của bạn. Ứng dụng không đọc, không sửa và không xoá bất kỳ tệp nào khác.",
-  "Ngoài tệp danh thiếp của chúng tôi, ứng dụng không lưu gì xuống máy bạn; những gì được gửi đi, và gửi tới đâu, được nói ở mục Đăng nhập, mục 'Yêu cầu tư vấn và đề nghị gọi lại' và mục 'Chat với chuyên viên và nhận ưu đãi qua SMS'.",
+  "Ngoài tệp danh thiếp của chúng tôi, ứng dụng không lưu gì xuống máy bạn; những gì được gửi đi, và gửi tới đâu, được nói ở mục Đăng nhập, mục 'Yêu cầu tư vấn và đề nghị gọi lại', mục 'Chat với chuyên viên và nhận ưu đãi qua SMS' và mục 'Vị trí khi bạn tìm văn phòng gần nhất'.",
 ];
 
 /**
@@ -227,15 +255,16 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
  * Nghị định 13 buộc nói ra.
  *
  * 11/10/2026: exactly the calls the ViHAT intro's "Quản lý quyền" shows that need a Console permission
- * (`chinh-sach.test.ts` checks the list against `introPermissionRows`). `getLocation` is the commune interface's —
- * `content/commune-privacy.ts` lists it. 12/10/2026: the camera, the picker and `chooseImage` are the intro's too
- * again ("Tư vấn và báo giá" photos), so they are listed here in the intro's words.
+ * (`chinh-sach.test.ts` checks the list against `introPermissionRows`). 12/10/2026: the camera, the picker and
+ * `chooseImage` are the intro's too again ("Tư vấn và báo giá" photos), and so is `getLocation` ("Tìm văn phòng gần
+ * tôi"), so they are listed here in the intro's words; `content/commune-privacy.ts` keeps the commune's own words.
  */
 export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá; để chuyên viên biết ai đang nhắn khi bạn bấm 'Chat với chuyên viên'; và để gửi tin nhắn SMS ưu đãi tới đúng số ấy nếu bạn bấm 'Đăng ký nhận', cho tới khi bạn bấm 'Huỷ nhận ưu đãi SMS'. Ứng dụng chỉ nhận một mã, không nhận số.",
   "Ghi nhớ quyền số điện thoại (authorize) — ngay trước khi lấy mã số điện thoại, ứng dụng xin Zalo ghi nhớ quyền bạn vừa đồng ý, để mục quyền của ứng dụng trong Zalo hiện đúng là đã bật. Ứng dụng chỉ xin đúng quyền số điện thoại; bạn tắt được nó bất cứ lúc nào trong phần cài đặt của Zalo.",
   "Trạng thái quyền số điện thoại (getSetting) — để xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, và không hỏi lại điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
-  "Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn. Phiên mở ra từ hai mã ấy là thứ cho bạn gửi yêu cầu tư vấn — kể cả yêu cầu trò chuyện với chuyên viên và việc đăng ký hay huỷ nhận ưu đãi SMS — và chỉ xem được yêu cầu của chính mình.",
+  "Thông tin xác thực phiên Zalo (getAccessToken) — mã này cho biết bạn là người dùng Zalo nào đối với riêng ứng dụng này. Nó đi cùng mã số điện thoại ở bước đăng nhập, và không cho ứng dụng biết tên hay ảnh đại diện của bạn. Phiên mở ra từ hai mã ấy là thứ cho bạn gửi yêu cầu tư vấn — kể cả yêu cầu trò chuyện với chuyên viên và việc đăng ký hay huỷ nhận ưu đãi SMS — và chỉ xem được yêu cầu của chính mình. Khi bạn bấm 'Tìm văn phòng gần tôi', mã này đi cùng mã vị trí để máy chủ của Tập đoàn ViHAT Group đổi mã vị trí thành toạ độ.",
+  "Vị trí (getLocation) — để xếp văn phòng của chúng tôi gần bạn nhất lên đầu khi bạn bấm 'Tìm văn phòng gần tôi' ở màn Liên hệ rồi bấm 'Cho phép' ở câu hỏi của ứng dụng. Ứng dụng chỉ nhận một mã; máy chủ của Tập đoàn ViHAT Group đổi mã thành toạ độ, không lưu mã lẫn toạ độ, và khoảng cách tới từng văn phòng được tính ngay trên máy bạn. Bấm 'Không' thì Zalo không được hỏi.",
   "Tên Zalo (getUserInfo) — khi bạn bấm 'Chat với chuyên viên' ở màn Liên hệ: để gửi kèm yêu cầu trò chuyện tới máy chủ của Tập đoàn ViHAT Group, cho chuyên viên biết ai đang nhắn. Ứng dụng chỉ dùng tên hiển thị Zalo của bạn, sau khi bạn đồng ý; từ chối thì cửa sổ trò chuyện vẫn mở, chỉ là không có tên.",
   "Quét mã QR (scanQRCode) — để đọc danh thiếp số của đối tác.",
   "Rung (vibrate) — để báo bằng một nhịp rung khi danh thiếp của chúng tôi đã được tải xuống máy bạn.",

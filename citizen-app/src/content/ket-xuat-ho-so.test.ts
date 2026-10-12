@@ -530,7 +530,14 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // − 1 (12/10/2026, customer sheet App Xã): `/commune-profiles` — the header's logo and the office block it fed are
     // gone, nothing calls it any more, and a declared route that never runs is a false line in the dossier.
     // + 1 (12/10/2026, owner): the ViHAT app's consultation photo upload (`/api/v1/requests/{requestId}/photos`).
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(24);
+    // + 1 (12/10/2026, owner): the ViHAT app's "Tìm văn phòng gần tôi" — the same `/api/v1/location`, from Liên hệ.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(25);
+    const officeLocationRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === LOCATION_PATH && d.man.startsWith("Liên hệ"));
+    expect(officeLocationRow, "hồ sơ không khai đổi mã vị trí của 'Tìm văn phòng gần tôi'").toBeDefined();
+    expect(officeLocationRow!.app).toBe("shared");
+    expect(officeLocationRow!.nguoi_dung_bam).toBe(true);
+    expect(officeLocationRow!.truong).toBe(LOCATION_FIELDS);
+    expect(officeLocationRow!.may_chu).toMatch(/không lưu mã vị trí lẫn toạ độ/);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -799,7 +806,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // 11/10/2026 (ADR 0072 M5): + the send form's map frame and basemap — both after the citizen opened the form.
     // 12/10/2026: − `/commune-profiles` (ran at open; nothing calls it any more) — 3 → 2 without a tap.
     // 12/10/2026 (owner): + the consultation photo upload, after the citizen's own "Gửi yêu cầu tư vấn" — 21 → 22.
-    expect(khoi).toContain("22 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
+    // 12/10/2026 (owner): + "Tìm văn phòng gần tôi", after the tap and the app's own "Cho phép" — 22 → 23.
+    expect(khoi).toContain("23 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");

@@ -1,10 +1,11 @@
 /**
  * KHỐI ĐĂNG NHẬP (`getPhoneNumber`) VÀ DANH SÁCH VĂN PHÒNG CỦA MÀN LIÊN HỆ.
  *
- * ⚠ VĂN PHÒNG KHÔNG XIN VỊ TRÍ NỮA (11/10/2026, chủ dự án: "xử lý luôn"). `getLocation` chỉ trả một
- * mã, và màn này chưa bao giờ đổi được nó thành toạ độ — nút "Tìm văn phòng gần tôi" xin quyền vị
- * trí mà không xếp được gì. Nay ba văn phòng hiện thẳng, mỗi văn phòng một nút "Chỉ đường": bản đồ
- * tự dùng vị trí của người dùng ở bước chỉ đường, và ứng dụng không cần biết họ đứng ở đâu.
+ * ⚠ "TÌM VĂN PHÒNG GẦN TÔI" ĐÃ TRỞ LẠI — VÀ LẦN NÀY XẾP ĐƯỢC THẬT (12/10/2026, chủ dự án). Ngày 11/10 nút
+ * ấy bị gỡ vì `getLocation` chỉ trả một mã và màn này không đổi được mã thành toạ độ: xin quyền mà không
+ * xếp được gì. Nay mã được đổi Ở MÁY CHỦ (`vihat-miniapp` `POST /api/v1/location`, cùng client với trang
+ * xã — `nearby-offices.ts`), khoảng cách tính trên máy, danh sách xếp gần nhất lên đầu. Ba văn phòng và
+ * nút "Chỉ đường" vẫn hiện thẳng trước khi bấm gì: từ chối hay hỏng thì danh sách vẫn nguyên thứ tự cũ.
  *
  * ⚠ KHỐI `getPhoneNumber` LÀ KHỐI ĐĂNG NHẬP, KHÔNG PHẢI "ĐĂNG KÝ NHẬN TƯ VẤN" NỮA (ADR 0020):
  *
@@ -32,9 +33,10 @@ import { PhatHanhPhien } from "../dang-nhap/PhatHanhPhien";
 import { HotlineLink } from "./HotlineLink";
 import { TinhNangCoTrangThai } from "./khung";
 import { moRaNgoai } from "./mo-ra-ngoai";
-import { DANG_NHAP, LOI_MO_NGOAI, MA_RONG, VAN_PHONG } from "./noi-dung";
+import { createNearbyFlow, formatDistanceKm, type NearbyRow, type NearbyState } from "./nearby-offices";
+import { DANG_NHAP, LOI_MO_NGOAI, MA_RONG, NEARBY_OFFICES, VAN_PHONG } from "./noi-dung";
 import { type MaDangNhap, xinMaDangNhap } from "./zalo-api";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /**
  * Đường mở bản đồ cho một địa chỉ văn phòng.
@@ -47,41 +49,79 @@ export function duongDanBanDo(dia_chi: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(dia_chi)}`;
 }
 
-/** Ba văn phòng, THUẦN. */
-export function DanhSachVanPhong({ onChiDuong }: { onChiDuong: (dia_chi: string) => void }) {
+/**
+ * Ba văn phòng, THUẦN. `rows` absent = the published order with no distance; present = nearest first, each with
+ * "Cách khoảng X km" (the only trace of the person's location, `nearby-offices.ts`).
+ */
+export function DanhSachVanPhong({
+  onChiDuong,
+  rows,
+}: {
+  onChiDuong: (dia_chi: string) => void;
+  rows?: readonly NearbyRow[];
+}) {
+  const ordered = rows ?? OFFICES.map((_, index) => ({ index, km: null as number | null }));
   return (
     <ul className="van-phong">
-      {OFFICES.map((van_phong) => (
-        <li className="van-phong__mot" key={van_phong.name}>
-          <PinGlyph className="van-phong__glyph" />
-          <span className="van-phong__chu">
-            <strong className="van-phong__ten">{van_phong.name}</strong>
-            <span className="van-phong__dia-chi">{van_phong.address}</span>
-          </span>
-          <button
-            type="button"
-            className="tn-hanh-dong"
-            onClick={() => onChiDuong(van_phong.address)}
-          >
-            {VAN_PHONG.nut_chi_duong}
-          </button>
-        </li>
-      ))}
+      {ordered.map(({ index, km }) => {
+        const office = OFFICES[index]!;
+        return (
+          <li className="van-phong__mot" key={office.name}>
+            <PinGlyph className="van-phong__glyph" />
+            <span className="van-phong__chu">
+              <strong className="van-phong__ten">{office.name}</strong>
+              <span className="van-phong__dia-chi">{office.address}</span>
+              {km !== null && (
+                <span className="van-phong__khoang-cach">{NEARBY_OFFICES.distance(formatDistanceKm(km))}</span>
+              )}
+            </span>
+            <button type="button" className="tn-hanh-dong" onClick={() => onChiDuong(office.address)}>
+              {VAN_PHONG.nut_chi_duong}
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-export function TimVanPhong() {
-  const [khong_mo_duoc, datKhongMoDuoc] = useState(false);
+/** The in-page question before Zalo's dialog — the purpose, then "Cho phép" / "Không". Focus lands on "Không". */
+function NearbyQuestion({ onAllow, onDeny }: { onAllow: () => void; onDeny: () => void }) {
+  const denyRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    denyRef.current?.focus();
+  }, []);
+  const id = "tn-van-phong-cau-hoi";
+  return (
+    <div className="vh-photo-question" role="group" aria-labelledby={id}>
+      <p className="vh-photo-question__why" id={id}>
+        {NEARBY_OFFICES.purpose}
+      </p>
+      <button type="button" className="tn__nut" onClick={onAllow}>
+        {NEARBY_OFFICES.allow}
+      </button>
+      <button type="button" className="tn__nut-phu" ref={denyRef} onClick={onDeny}>
+        {NEARBY_OFFICES.deny}
+      </button>
+    </div>
+  );
+}
 
-  // Qua CỬA KHAI BÁO (`mo-ra-ngoai.ts`), không gọi thẳng `moTrangWeb`: `"ban-do"` là một đích đã
-  // khai trong `content/dich-ra-ngoai.ts`, tức một dòng đã có trong câu khai của chính sách.
-  async function chiDuong(dia_chi: string) {
-    datKhongMoDuoc(!(await moRaNgoai("ban-do", duongDanBanDo(dia_chi))));
-  }
-
-  // Cùng khung chữ với các khối tính năng (`tn`), nhưng không có nút xin quyền nào. `id` của tiêu đề là
-  // mỏ neo mục "Văn phòng" của menu nhanh (`MOC_TIM_VAN_PHONG`).
+/**
+ * The block, PURE apart from the callbacks — the tests render every state without a DOM.
+ *
+ * The find button sits above the list in every state but `asking` (where the question takes its place), and is
+ * disabled while locating, the state said in WORDS on the button, not by colour.
+ */
+export function NearbyOfficesView(props: {
+  state: NearbyState;
+  onFind: () => void;
+  onAllow: () => void;
+  onDeny: () => void;
+  onChiDuong: (dia_chi: string) => void;
+  cannotOpen: boolean;
+}) {
+  const { state } = props;
   return (
     <section className="tn hien-len" aria-labelledby={MOC_TIM_VAN_PHONG}>
       <div className="tn__dau">
@@ -92,9 +132,51 @@ export function TimVanPhong() {
           {VAN_PHONG.tieu_de}
         </h2>
       </div>
-      <DanhSachVanPhong onChiDuong={(dia_chi) => void chiDuong(dia_chi)} />
-      {khong_mo_duoc && <p className="tn__loi">{LOI_MO_NGOAI}</p>}
+      {state.step === "asking" ? (
+        <NearbyQuestion onAllow={props.onAllow} onDeny={props.onDeny} />
+      ) : (
+        <button
+          type="button"
+          className="tn__nut"
+          disabled={state.step === "locating"}
+          aria-busy={state.step === "locating"}
+          onClick={props.onFind}
+        >
+          {state.step === "locating" ? NEARBY_OFFICES.locating : NEARBY_OFFICES.find}
+        </button>
+      )}
+      <div role="status">
+        {state.step === "sorted" && <p className="tn__nhac">{NEARBY_OFFICES.sorted}</p>}
+        {state.step === "default" && <p className="tn__loi">{state.note}</p>}
+      </div>
+      <DanhSachVanPhong onChiDuong={props.onChiDuong} rows={state.step === "sorted" ? state.rows : undefined} />
+      {props.cannotOpen && <p className="tn__loi">{LOI_MO_NGOAI}</p>}
     </section>
+  );
+}
+
+export function TimVanPhong() {
+  const [khong_mo_duoc, datKhongMoDuoc] = useState(false);
+  const [state, setState] = useState<NearbyState>({ step: "idle" });
+  // One flow per screen opening: "Cho phép" is remembered until the screen unmounts, never written down.
+  const [flow] = useState(() => createNearbyFlow(setState));
+
+  // Qua CỬA KHAI BÁO (`mo-ra-ngoai.ts`), không gọi thẳng `moTrangWeb`: `"ban-do"` là một đích đã
+  // khai trong `content/dich-ra-ngoai.ts`, tức một dòng đã có trong câu khai của chính sách.
+  async function chiDuong(dia_chi: string) {
+    datKhongMoDuoc(!(await moRaNgoai("ban-do", duongDanBanDo(dia_chi))));
+  }
+
+  // `id` của tiêu đề là mỏ neo mục "Văn phòng" của menu nhanh (`MOC_TIM_VAN_PHONG`).
+  return (
+    <NearbyOfficesView
+      state={state}
+      onFind={flow.find}
+      onAllow={() => void flow.allow()}
+      onDeny={flow.deny}
+      onChiDuong={(dia_chi) => void chiDuong(dia_chi)}
+      cannotOpen={khong_mo_duoc}
+    />
   );
 }
 
