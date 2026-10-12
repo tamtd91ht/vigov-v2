@@ -278,17 +278,13 @@ if (!kiem_token.ok && interactive) {
 
 const own_app = dich.loai === "app-rieng";
 
-/**
- * LOGO XÃ — TẠM THỜI (chủ dự án, 28/09/2026: "copy tạm sang đâu đó dùng trước, sau này nó sẽ cấu hình
- * ở platform-admin"). Ảnh nằm ở `scripts/logo-xa/<tên-miền>.png`, được chép vào `public/logo-xa.png`
- * cho ĐÚNG lần dựng app riêng của xã ấy rồi xoá ngay sau đó, nên không bản dựng nào khác mang logo của
- * một xã. Nguồn thật sẽ là `ho_so_hien_thi_xa.logo_url` của service-platform, đọc lúc chạy.
+/*
+ * No per-commune LOGO is copied any more (customer sheet App Xã 12/10/2026: the header shows the national emblem,
+ * `NationalEmblem`, for every commune). The `scripts/logo-xa/` → `public/logo-xa.png` copy that stood here fed a
+ * header image nothing renders, so it was removed with the logo itself.
  */
-const LOGO_NGUON = own_app ? new URL(`./logo-xa/${dich.ten_mien}.png`, import.meta.url) : null;
-const LOGO_DICH = new URL("../public/logo-xa.png", import.meta.url);
-const co_logo = LOGO_NGUON !== null && existsSync(LOGO_NGUON);
 /**
- * BANNER XÃ — the same TEMPORARY per-domain bundle exception as the logo above (ADR 0047 §6), for the
+ * BANNER XÃ — a TEMPORARY per-domain bundle exception (ADR 0047 §6), for the
  * picture under the home header. `scripts/banner-xa/<domain>.png` is copied to `public/banner-xa.png`
  * for EXACTLY the commune's own-app build and removed in the same `finally`, so no other build — the
  * shared app above all — ever carries one commune's picture. No file for the domain = no banner: the
@@ -326,7 +322,6 @@ for (const dong of planLines({
   api_host,
   platform_host,
   mota,
-  logo: co_logo ? `scripts/logo-xa/${dich.ten_mien}.png` : null,
   banner: has_banner ? `scripts/banner-xa/${dich.ten_mien}.png` : null,
 })) {
   console.log(dong);
@@ -380,14 +375,12 @@ if (chi_thu) {
 }
 
 console.log(`Đẩy lên ${targetName(dich)} — App ID ${dich.app_id}.\n`);
-if (co_logo) copyFileSync(LOGO_NGUON, LOGO_DICH);
 if (has_banner) copyFileSync(BANNER_SOURCE, BANNER_TARGET);
 let ma;
 try {
   ma = dung(env_dung);
 } finally {
   // `dist/` đã có bản chép; tệp trong `public/` không được nằm lại cho lần dựng App ViHAT kế tiếp.
-  if (co_logo) rmSync(LOGO_DICH, { force: true });
   if (has_banner) rmSync(BANNER_TARGET, { force: true });
 }
 if (ma !== 0) process.exit(ma);

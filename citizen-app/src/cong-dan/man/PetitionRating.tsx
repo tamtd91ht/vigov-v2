@@ -216,6 +216,11 @@ export function PetitionRating(props: {
   /** Read the petition again (after a 409). */
   onReload: () => void;
   reopenWithPhone?: ReopenWithPhone;
+  /**
+   * The commune app only: whether Zalo already holds the phone permission — granted → no explanation before the
+   * reopen (owner 12/10/2026, `createPhoneVerification`). The shared app passes nothing: explanation as before.
+   */
+  phoneGranted?: () => Promise<boolean>;
   /** Passed to the phone panel — the commune's own app names its own route (`PhoneVerificationPanel`). */
   zaloAsks?: string;
   /** The commune app's voice (owner 11/10/2026): its rating words, its phone words, its star size. */
@@ -224,7 +229,7 @@ export function PetitionRating(props: {
   starSize?: number;
 }) {
   const { petition } = props;
-  const phone = usePhoneVerification(props.reopenWithPhone);
+  const phone = usePhoneVerification(props.reopenWithPhone, props.phoneGranted);
   const [open, setOpen] = useState(petition.rating === null);
   const [stars, setStars] = useState(0);
   const [comment, setComment] = useState("");

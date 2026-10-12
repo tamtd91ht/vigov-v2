@@ -86,7 +86,7 @@ import {
   XA_PA,
   XA_TN,
 } from "./noi-dung";
-import { CommuneSendScreen, SERVER_ATTACHES_SESSION_PHONE } from "./PhanAnhAppXa";
+import { CommuneSendScreen, SERVER_ATTACHES_SESSION_PHONE, useMyPetitions } from "./PhanAnhAppXa";
 import { PhanAnhCuaToiScreen } from "./PhanAnhCuaToiScreen";
 import type { PickScenePhotos } from "./scene-photos";
 // vi-name-ok: importing the EXISTING type `KetQuaLayTen` — no new name
@@ -327,6 +327,8 @@ function boxText(id: string): string {
  * named ON the button since 12/10/2026, customer sheet row 23).
  */
 const SEND_LABEL = XA_PA.send_to("Xã Thử Nghiệm");
+/** The commune send screen's retry names the commune too (owner 12/10/2026) — never a bare "Gửi lại". */
+const RESEND_LABEL = XA_PA.resend_to("Xã Thử Nghiệm");
 
 /** The buttons under `root` whose text is exactly `text`. */
 function buttonsNamed(root: PhanTuGia, text: string): PhanTuGia[] {
@@ -846,7 +848,7 @@ describe("app xã — phiên chưa xác thực số: họ tên + số bắt bu�
     vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "unverified-daily-limit", message: "Câu của máy chủ." });
     await press(buttonsNamed(khung, SEND_LABEL)[0]!);
     expect(khung.textContent).toContain("Câu của máy chủ.");
-    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    expect(buttonsNamed(khung, RESEND_LABEL)).toEqual([]);
     expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng");
     vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
     await press(buttonsNamed(khung, SEND_LABEL)[0]!);
@@ -1554,7 +1556,13 @@ describe("app xã — gửi không tài khoản (ADR 0083): cùng biểu mẫu, 
     expect(khung.textContent).toContain(COMMUNE_SEND_ERRORS["rate-limited"].cau);
     expect(khung.textContent).not.toContain("rate_limited");
     expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng đầu ngõ 12");
-    await press(buttonsNamed(khung, GUI.nut_gui_lai)[0]!);
+    // The retry names the commune verbatim, like the main button (owner 12/10/2026); a bare "Gửi lại" is gone.
+    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    const retry = buttonsNamed(khung, RESEND_LABEL);
+    expect(retry).toHaveLength(1);
+    // Wraps instead of cutting a long commune name (`xa-nut--wrap`, min-height 48px, `accessibility.test.ts`).
+    expect(retry[0]!.getAttribute("class")).toContain("xa-nut--wrap");
+    await press(retry[0]!);
 
     const posts = calls.filter((c) => c.method === "POST");
     expect(posts).toHaveLength(2);
@@ -1856,7 +1864,7 @@ describe("app xã — ô 'Thôn, tổ dân phố': sau ô địa chỉ, dòng �
     expect(khung.textContent).toContain(SERVER_400);
     expect(myResidentialUnits).toHaveBeenCalledTimes(2);
     expect(unitRadios(khung)[0]!.getAttribute("aria-checked")).toBe("true");
-    expect(buttonsNamed(khung, GUI.nut_gui_lai)).toEqual([]);
+    expect(buttonsNamed(khung, RESEND_LABEL)).toEqual([]);
     expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng");
     // Leaving it on "Không chọn" sends without the key, as a NEW attempt.
     vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
@@ -1879,7 +1887,7 @@ describe("app xã — ô 'Thôn, tổ dân phố': sau ô địa chỉ, dòng �
     expect(boxText("xa-noi-dung")).toBe("Rác tồn đọng");
     expect(khung.textContent).toContain(`${W.summary_label}: ${UNITS[1].name}`);
     vi.mocked(guiPhanAnh).mockResolvedValueOnce({ kieu: "xong", phieu: SENT });
-    await press(buttonsNamed(khung, GUI.nut_gui_lai)[0]!);
+    await press(buttonsNamed(khung, RESEND_LABEL)[0]!);
     const [first, second] = vi.mocked(guiPhanAnh).mock.calls.map((c) => c[0]);
     expect(second!.khoa).toBe(first!.khoa);
     expect(JSON.parse(second!.than)["residential_unit_id"]).toBe(UNITS[1].id);
@@ -2041,6 +2049,67 @@ describe("app xã — trạng thái phản ánh mới: đọc lại khi về tab
     expect(khung.textContent).toContain(PULL_REFRESH.failed);
     await go();
   });
+
+  /*
+   * The race (owner follow-up 12/10/2026): `refresh` and `load` share one in-flight guard, so a rating's `onChanged` →
+   * `load()` landing during a tab-return refresh was DROPPED, and the refresh — whose request left before the rating
+   * was recorded — painted the pre-rating list for good. The hook alone, mounted: the screens around it add nothing.
+   */
+  it("a load asked for DURING a refresh (a rating) is not dropped: the list ends on the post-rating read", async () => {
+    let api: ReturnType<typeof useMyPetitions> | null = null;
+    function Harness() {
+      const p = useMyPetitions(() => {});
+      api = p;
+      return createElement("p", null, p.state.kind === "ready" ? p.state.items[0]!.trich_noi_dung : p.state.kind);
+    }
+    const { khung, go } = await gan(createElement(Harness));
+    list().mockResolvedValueOnce(page("Lần đọc đầu"));
+    await act(async () => {
+      await api!.load();
+    });
+    expect(khung.textContent).toBe("Lần đọc đầu");
+
+    // The tab-return refresh is in flight; its answer predates the rating.
+    let answerRefresh: (v: Awaited<ReturnType<typeof phanAnhCuaToi>>) => void = () => {};
+    list().mockImplementationOnce(() => new Promise((done) => (answerRefresh = done)));
+    let refreshed: Promise<boolean> = Promise.resolve(true);
+    await act(async () => {
+      refreshed = api!.refresh();
+    });
+    // The rating succeeds → `onChanged` → `load()`, while the refresh is still out.
+    list().mockResolvedValueOnce(page("Sau khi đánh giá"));
+    await act(async () => {
+      void api!.load();
+    });
+    await act(async () => {
+      answerRefresh(page("Trước khi đánh giá"));
+      await refreshed;
+    });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(list()).toHaveBeenCalledTimes(3);
+    expect(khung.textContent).toBe("Sau khi đánh giá");
+    await go();
+  });
+
+  it("loadIfIdle right after a load the same tap started does not queue a second, identical read", async () => {
+    let api: ReturnType<typeof useMyPetitions> | null = null;
+    function Harness() {
+      api = useMyPetitions(() => {});
+      return null;
+    }
+    const { go } = await gan(createElement(Harness));
+    list().mockResolvedValue(page("Một lần"));
+    await act(async () => {
+      // What `requireSession` does for "Phản ánh của tôi": the act (`load`), then `loadIfIdle` in the same tick.
+      void api!.load();
+      api!.loadIfIdle();
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(list()).toHaveBeenCalledTimes(1);
+    await go();
+  });
 });
 
 /* ═════════════════ 12/10/2026 (customer sheet, row 7) — the phone permission Zalo already holds ═════════════════ */
@@ -2143,6 +2212,59 @@ describe("app xã — quyền số điện thoại đã cấp: mở lại phiên
     expect(openSession).toHaveBeenCalledTimes(2);
     expect(khung.textContent).not.toContain(COMMUNE_PHONE_WORDS.title);
     expect(khung.textContent).toContain("Rác ở đầu ngõ");
+    await go();
+  });
+
+  /*
+   * Owner 12/10/2026 (follow-up): the same for EVERY act a tap starts. Each case refuses the silent open first, so the
+   * act's tap meets a gate with no session — the path the explanation used to stand on.
+   */
+  const tab = (khung: PhanTuGia, label: string) => buttonsNamed(tatCaPhanTu(khung).find((p) => p.tagName === "NAV")!, label)[0]!;
+  const CODE = "PA-7K2Q-X9M4-TDHN";
+  async function lookUpFromSearch(khung: PhanTuGia) {
+    await press(tab(khung, XA_GIAO_DIEN.tab_phan_anh));
+    const doc = (globalThis as unknown as { document: TaiLieuGia }).document;
+    await typeInto(doc.getElementById("xa-tim-phan-anh")!, CODE);
+    await press(buttonsNamed(khung, XA_PA.lookup_code_button(CODE))[0]!);
+  }
+  const notificationRow = (khung: PhanTuGia) =>
+    tatCaPhanTu(khung).find((p) => p.tagName === "BUTTON" && p.textContent.includes(XA_TN.notify_label))!;
+
+  it("'Tra cứu' from the search, granted → straight to Zalo, no explanation; the lookup runs", async () => {
+    openSession.mockResolvedValueOnce({ kieu: "tu-choi" });
+    const { khung, go } = await mountApp(async () => true);
+    await lookUpFromSearch(khung);
+    expect(openSession.mock.calls.map((c) => c[1])).toEqual(["ask", "ask"]);
+    expect(khung.textContent).not.toContain(COMMUNE_PHONE_WORDS.title);
+    expect(vi.mocked(traCuuPhieu).mock.calls.map((c) => c[0])).toContain(CODE);
+    await go();
+  });
+
+  it("'Tra cứu' from the search, NOT granted → the explanation; nothing opened", async () => {
+    const { khung, go } = await mountApp(async () => false);
+    await lookUpFromSearch(khung);
+    expect(buttonsNamed(khung, PHONE_VERIFICATION.allow)).toHaveLength(1);
+    expect(openSession).not.toHaveBeenCalled();
+    await go();
+  });
+
+  it("'Nhận thông báo', granted → straight to Zalo, no explanation", async () => {
+    openSession.mockResolvedValueOnce({ kieu: "tu-choi" });
+    const { khung, go } = await mountApp(async () => true);
+    await press(tab(khung, XA_TN.tab_ca_nhan));
+    await press(notificationRow(khung));
+    expect(openSession).toHaveBeenCalledTimes(2);
+    expect(khung.textContent).not.toContain(COMMUNE_PHONE_WORDS.title);
+    expect(layPhienViGov()?.phone_verified).toBe(true);
+    await go();
+  });
+
+  it("'Nhận thông báo', NOT granted → the explanation; nothing opened", async () => {
+    const { khung, go } = await mountApp(async () => false);
+    await press(tab(khung, XA_TN.tab_ca_nhan));
+    await press(notificationRow(khung));
+    expect(buttonsNamed(khung, PHONE_VERIFICATION.allow)).toHaveLength(1);
+    expect(openSession).not.toHaveBeenCalled();
     await go();
   });
 });

@@ -3098,18 +3098,6 @@ body {
   flex: none;
 }
 
-/* ---------- header trang chủ (đỏ bo đáy) ---------- */
-.xa-hero {
-  background: linear-gradient(135deg, var(--xa-brand-dark), var(--xa-brand));
-  color: #ffffff;
-  padding: 24px 16px 28px;
-  border-radius: 0 0 22px 22px;
-}
-.xa-hero__hang {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
 /* The star emblem (`khung-xa.tsx` `NationalEmblem`, customer sheet 12/10/2026 row 5): the prototype's 32px drawing
    centred in a slot as wide as the header's left side, as the prototype centres it in its tap-sized box — so the
    root tabs' title sits where a child screen's sits beside its back arrow. */
@@ -3119,21 +3107,6 @@ body {
   display: grid;
   place-items: center;
   flex: none;
-}
-.xa-hero__chu {
-  min-width: 0;
-}
-.xa-hero__chao,
-.xa-hero__tinh {
-  margin: 0;
-  font-size: var(--text-small);
-  color: var(--xa-hero-phu);
-}
-.xa-app .xa-hero__ten {
-  margin: 0;
-  color: #ffffff;
-  font-size: calc(1.3rem * var(--xa-text-scale, 1));
-  font-weight: 700;
 }
 
 /* ---------- header (mọi màn: trang chủ, tab gốc, màn con) ---------- */
@@ -3909,20 +3882,6 @@ button.xa-o-nhanh {
 .xa-mau--tim {
   background: var(--xa-purple-50);
   color: var(--xa-purple-ink);
-}
-
-/* header trang chủ: lời chào + tên người dùng + chuông, rồi khối đơn vị */
-.xa-hero__nguoi {
-  margin: 0;
-  color: #ffffff;
-  font-size: calc(1.1rem * var(--xa-text-scale, 1));
-  font-weight: 700;
-}
-.xa-hero__don-vi {
-  margin-top: 14px;
-  display: grid;
-  gap: 2px;
-  justify-items: start;
 }
 
 

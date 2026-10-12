@@ -1,98 +1,16 @@
-import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import {
-  type CommuneProfile,
-  docDanhBa,
-  docTrangTinXa,
-  readCommuneProfiles,
-} from "./api/hop-dong-cong-khai";
-import { COMMUNE_OFFICE, NEWS_TYPE_LABEL } from "./man/noi-dung";
-import { CommuneOffice, officeRows } from "./man/TrangXa";
+import { docDanhBa, docTrangTinXa } from "./api/hop-dong-cong-khai";
+import { NEWS_TYPE_LABEL } from "./man/noi-dung";
 
 /**
- * W6c — the commune app's three public reads, as the server now sends them (29/09/2026): the commune's
- * declared office (identity cdbf276), the directory's order and village heads (556c6e9), news types
- * (comms b22bf76). Every added field is OPTIONAL on the wire: absent is an older server, never malformed.
+ * W6c — the commune app's public reads, as the server now sends them (29/09/2026): the directory's order and
+ * village heads (556c6e9), news types (comms b22bf76). Every added field is OPTIONAL on the wire: absent is an
+ * older server, never malformed. (`/commune-profiles` is no longer read: its office block and logo are gone,
+ * customer sheet App Xã 12/10/2026.)
  */
 
 const STAFF = { full_name: "Lê Văn Bình", position: "", department_name: "", phone: "", mobile: "", has_zalo: false };
-
-describe("/commune-profiles — read field by field", () => {
-  const P = { name: "Xã Thử Nghiệm", office_address: "Số 1 đường A", hotline: "0900000000", office_hours_text: "Thứ Hai–Thứ Sáu, 7:30–17:00" };
-
-  const LOGO = "https://media.example.test/vigov-public/t_01HZZZZZZZZZZZZZZZZZZZZZZZ/logo.png";
-
-  it("one profile; an empty list; malformed on a missing or wrong-typed field", () => {
-    expect(readCommuneProfiles({ items: [{ ...P, logo_url: LOGO }] })).toEqual([{ ...P, logo_url: LOGO }]);
-    expect(readCommuneProfiles({ items: [] })).toEqual([]);
-    expect(readCommuneProfiles({ items: [{ ...P, hotline: undefined }] })).toBeNull();
-    expect(readCommuneProfiles({ items: [{ ...P, office_hours_text: 7 }] })).toBeNull();
-    expect(readCommuneProfiles({})).toBeNull();
-  });
-
-  it("logo_url (ADR 0069): kept as received when it is an absolute https URL", () => {
-    // Opaque: the exact string comes back — not normalised, not re-encoded, not split.
-    const odd = "https://media.example.test/vigov-public/t_X/a%20b.png?v=1";
-    expect(readCommuneProfiles({ items: [{ ...P, logo_url: odd }] })![0]!.logo_url).toBe(odd);
-  });
-
-  it("logo_url \"\" or absent (an older server) → \"\": no uploaded logo, the rest of the profile still read", () => {
-    expect(readCommuneProfiles({ items: [{ ...P, logo_url: "" }] })).toEqual([{ ...P, logo_url: "" }]);
-    expect(readCommuneProfiles({ items: [P] })).toEqual([{ ...P, logo_url: "" }]);
-  });
-
-  it("logo_url of any other shape → \"\", never an src: http, javascript, data, relative, user part, junk", () => {
-    for (const bad of [
-      "http://media.example.test/logo.png",
-      "javascript:alert(1)",
-      "data:image/png;base64,AAAA",
-      "./logo-xa.png",
-      "/vigov-public/logo.png",
-      "//media.example.test/logo.png",
-      "https://gov.vn@other.example/logo.png",
-      "not a url",
-    ]) {
-      const got = readCommuneProfiles({ items: [{ ...P, logo_url: bad }] });
-      expect(got, bad).toEqual([{ ...P, logo_url: "" }]);
-    }
-  });
-
-  it("logo_url present but not a string → malformed, the whole answer (as every other field here)", () => {
-    for (const bad of [7, null, true, {}, ["https://media.example.test/logo.png"]]) {
-      expect(readCommuneProfiles({ items: [{ ...P, logo_url: bad }] })).toBeNull();
-    }
-  });
-});
-
-describe("the office block — only what the commune declared, nothing in its place", () => {
-  const full: CommuneProfile = {
-    name: "Xã Thử Nghiệm",
-    office_address: "Số 1 đường A",
-    hotline: "0900.000 000",
-    office_hours_text: "Thứ Hai–Thứ Sáu",
-    logo_url: "",
-  };
-
-  it("rows in reading order; blank fields dropped", () => {
-    expect(officeRows(full).map((r) => r.label)).toEqual([COMMUNE_OFFICE.address, COMMUNE_OFFICE.hours, COMMUNE_OFFICE.hotline]);
-    expect(officeRows({ ...full, office_address: " ", hotline: "" }).map((r) => r.label)).toEqual([COMMUNE_OFFICE.hours]);
-  });
-
-  it("the hotline is a tel: button in words; the hours are shown verbatim, never parsed", () => {
-    const html = renderToStaticMarkup(createElement(CommuneOffice, { profile: full }));
-    expect(html).toContain('href="tel:0900000000"');
-    expect(html).toContain(COMMUNE_OFFICE.call_hotline("0900.000 000"));
-    expect(html).toContain("Thứ Hai–Thứ Sáu");
-  });
-
-  it("no profile, or nothing declared → no block at all (never a default)", () => {
-    expect(renderToStaticMarkup(createElement(CommuneOffice, { profile: null }))).toBe("");
-    const empty = { ...full, office_address: "", hotline: "", office_hours_text: "" };
-    expect(renderToStaticMarkup(createElement(CommuneOffice, { profile: empty }))).toBe("");
-  });
-});
 
 describe("/commune-staff — display_order and residential_units_headed", () => {
   it("absent → null and []; present → read", () => {

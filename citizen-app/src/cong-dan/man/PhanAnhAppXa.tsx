@@ -246,8 +246,25 @@ export function listFailureText(f: ListFailure): string {
 export function useMyPetitions(onSessionLost: OnSessionLost) {
   const [state, setState] = useState<MyPetitions>({ kind: "idle" });
   const busy = useRef(false);
+  /**
+   * A `load()` asked for while another read was in flight (customer sheet App Xã 12/10/2026 follow-up). The case
+   * that made it necessary: a rating (`onChanged` → `load`) lands during a tab-return `refresh`. Dropping that load,
+   * as the shared lock did, let the refresh — whose request left BEFORE the rating was recorded — paint the
+   * pre-rating list, and nothing re-read it. So the load is remembered and runs once the in-flight read settles,
+   * and that read's own result is DISCARDED (latest wins): it may predate the change the load was asked for.
+   * One flag, not a queue: any number of loads asked for meanwhile need exactly one fresh read.
+   */
+  const loadQueued = useRef(false);
   const current = useRef<MyPetitions>(state);
   current.current = state;
+
+  /** After any read settles: run the queued load instead of applying it. `true` = the result must be dropped. */
+  function runQueuedLoad(): boolean {
+    if (!loadQueued.current) return false;
+    loadQueued.current = false;
+    void fetchFirstPage(false);
+    return true;
+  }
 
   /**
    * `quiet`: the read that follows the silent session open at app start (`loadQuietly`). Nobody tapped anything, so
@@ -255,11 +272,16 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
    * card that asks — exactly where the citizen would be without the silent open (fail closed).
    */
   async function fetchFirstPage(quiet: boolean) {
-    if (busy.current) return;
+    if (busy.current) {
+      // A quiet read is only ever wanted when nothing was asked for yet — an in-flight read already serves it.
+      if (!quiet) loadQueued.current = true;
+      return;
+    }
     busy.current = true;
     setState({ kind: "loading" });
     const out = listOutcome(await phanAnhCuaToi(""));
     busy.current = false;
+    if (runQueuedLoad()) return;
     if (out === "session") {
       setState({ kind: "idle" });
       if (quiet) dropCommuneAppSession();
@@ -291,6 +313,8 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
     setState({ ...s, loadingMore: true, moreFailure: null });
     const out = listOutcome(await phanAnhCuaToi(s.cursor));
     busy.current = false;
+    // A load asked for meanwhile restarts from the first page: appending this page to a list being replaced is moot.
+    if (runQueuedLoad()) return;
     if (out === "session") {
       setState({ ...s, loadingMore: false });
       onSessionLost(() => void loadMore());
@@ -310,9 +334,13 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
     });
   }
 
-  /** Load once if nothing is loaded yet — after the gate opened a session for any personal act. */
+  /**
+   * Load once if nothing is loaded yet — after the gate opened a session for any personal act. Not while a read is in
+   * flight: that read IS the load (the act may have just started it, before `current` re-rendered out of `idle`), and
+   * calling `load` here would queue a second, identical read.
+   */
   function loadIfIdle() {
-    if (current.current.kind === "idle") void load();
+    if (current.current.kind === "idle" && !busy.current) void load();
   }
 
   /**
@@ -333,6 +361,8 @@ export function useMyPetitions(onSessionLost: OnSessionLost) {
     busy.current = true;
     const out = listOutcome(await phanAnhCuaToi(""));
     busy.current = false;
+    // Its request left before whatever asked for the load (a rating, a send): the load's read is the fresh one.
+    if (runQueuedLoad()) return true;
     setState((now) => petitionsAfterRefresh(now, out));
     return typeof out !== "string" || out === "session";
   }
@@ -698,6 +728,8 @@ export function PetitionBody(props: {
   onRated?: (p: PhieuCuaToi) => void;
   onReload?: () => void;
   reopenWithPhone?: ReopenWithPhone;
+  /** Zalo already holds the phone permission → the rating's reopen skips the explanation (`PetitionRating`). */
+  phoneGranted?: () => Promise<boolean>;
   /**
    * The citizen's own scene photos (and "Thêm ảnh" while `da-tiep-nhan`, when `pick` is injected). Absent = no
    * photo block at all, e.g. in a test that renders the body alone.
@@ -789,6 +821,7 @@ export function PetitionBody(props: {
           onRated={props.onRated}
           onReload={props.onReload}
           reopenWithPhone={props.reopenWithPhone}
+          phoneGranted={props.phoneGranted}
           zaloAsks={COMMUNE_APP_SESSION.zalo_asks}
           words={COMMUNE_RATING}
           phoneWords={COMMUNE_PHONE_WORDS}
@@ -837,6 +870,8 @@ export function PetitionDetail(props: {
   /** A rating or reload changed the petition — the list refreshes. */
   onChanged: () => void;
   reopenWithPhone?: ReopenWithPhone;
+  /** The shell's `getSetting` reader (commune app only), handed to the rating block. */
+  phoneGranted?: () => Promise<boolean>;
   /** The shell's photo picker (commune app only): "Thêm ảnh" while the petition is `da-tiep-nhan`. */
   pickScenePhotos?: PickScenePhotos;
 }) {
@@ -899,6 +934,7 @@ export function PetitionDetail(props: {
             }}
             onReload={reload}
             reopenWithPhone={props.reopenWithPhone}
+            phoneGranted={props.phoneGranted}
             photos={{ pick: props.pickScenePhotos, onSessionLost: props.onSessionLost }}
           />
         )}
@@ -2006,15 +2042,17 @@ export function CommuneSendScreen(props: {
           )}
           {failed !== null && failed.co_the_gui_lai && attempt !== null ? (
             // Same key, same body — never a second petition (`api/lan-gui.ts`).
+            // Names the commune verbatim like the main button (README §Non-negotiables #5) — `xa-nut--wrap` so a long
+            // commune name wraps instead of being cut, the button growing past its 48px minimum.
             <button
               type="button"
-              className="xa-nut"
+              className="xa-nut xa-nut--wrap"
               disabled={sending}
               aria-busy={sending || undefined}
               onClick={() => void send(attempt)}
             >
               <BieuTuong ten="send" co={20} />
-              {sending ? XA_PA.sending_button : GUI.nut_gui_lai}
+              {sending ? XA_PA.sending_button : XA_PA.resend_to(props.ten_xa)}
             </button>
           ) : (
             <button

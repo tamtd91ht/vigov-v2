@@ -4,8 +4,6 @@ import { thanYeuCau, TRUONG_GUI_DI } from "../api/hop-dong-yeu-cau";
 // ⚠ Tệp TEST nhập client ViGov — được, vì lượt quét ranh giới (`ranh-gioi-hai-nua.test.ts`) bỏ mọi
 // tệp `.test.`. Tệp SẢN XUẤT `ket-xuat-ho-so.ts` thì không được, nên nó chép, và ca §5 khoá bản chép.
 import {
-  COMMUNE_PROFILES_PATH,
-  communeProfilesAddress,
   diaChiBaiTin,
   diaChiDanhBa,
   diaChiTinXa,
@@ -529,7 +527,9 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // petitions — the photo rows are now two: the upload and the own list.
     // + 2 (11/10/2026, ADR 0091 §2, §4): the commune app's disaster alerts and its "Nhận thông báo" switch.
     // + 2 (11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M5): the send form's map frame and basemap.
-    expect(DUONG_ROI_KHOI_MAY).toHaveLength(24);
+    // − 1 (12/10/2026, customer sheet App Xã): `/commune-profiles` — the header's logo and the office block it fed are
+    // gone, nothing calls it any more, and a declared route that never runs is a false line in the dossier.
+    expect(DUONG_ROI_KHOI_MAY).toHaveLength(23);
     const fieldsRow = DUONG_ROI_KHOI_MAY.find((d) => d.tuyen === CITIZEN_FIELDS_PATH);
     expect(fieldsRow, "hồ sơ không khai tuyến danh mục lĩnh vực").toBeDefined();
     expect(fieldsRow!.truong).toEqual([]);
@@ -661,7 +661,6 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     const CA: ReadonlyArray<readonly [string, string, readonly string[]]> = [
       // [tuyến khai, địa chỉ client dựng, tham số đường dẫn]
       [DUONG_DAN_XA, diaChiTraXa(TEN_MIEN), []],
-      [COMMUNE_PROFILES_PATH, communeProfilesAddress(TEN_MIEN), []],
       [DUONG_DAN_DANH_BA, diaChiDanhBa(TEN_MIEN), []],
       // Every parameter the client can send: cursor, type AND category.
       [DUONG_DAN_TIN_XA, diaChiTinXa(TEN_MIEN, "con-tro-thu", "su-kien", "dm-thu"), []],
@@ -681,8 +680,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
       const gui_di = [...url.searchParams.keys(), ...tham_so_duong_dan].sort();
       expect(duong!.truong.map((t) => t.khoa).sort(), `tuyến ${tuyen}: khai ⇄ gửi đi lệch nhau`).toEqual(gui_di);
       // Không tuyến công khai nào tự nhận là "do người dùng bấm" khi nó chạy lúc mở app, và ngược lại.
-      // Two run at open: the commune lookup (QR path) and the commune app's office profile.
-      expect(duong!.nguoi_dung_bam, tuyen).toBe(tuyen !== DUONG_DAN_XA && tuyen !== COMMUNE_PROFILES_PATH);
+      // One runs at open: the commune lookup.
+      expect(duong!.nguoi_dung_bam, tuyen).toBe(tuyen !== DUONG_DAN_XA);
     }
   });
 
@@ -796,7 +795,8 @@ describe("5 — mọi thứ rời khỏi máy đều được khai, và mọi th
     // ONE multipart send to petitions (ADR 0052 §Sửa đổi 09/10/2026).
     // 11/10/2026 (ADR 0091): + the switch (a tap) and the disaster alerts (every home open, no tap).
     // 11/10/2026 (ADR 0072 M5): + the send form's map frame and basemap — both after the citizen opened the form.
-    expect(khoi).toContain("21 đường chạy khi chính người dùng bấm; 3 đường chạy mà không cần một cú bấm");
+    // 12/10/2026: − `/commune-profiles` (ran at open; nothing calls it any more) — 3 → 2 without a tap.
+    expect(khoi).toContain("21 đường chạy khi chính người dùng bấm; 2 đường chạy mà không cần một cú bấm");
     // Và khi mọi đường đều chờ một cú bấm, câu cũ quay lại — cột ấy thật sự được đọc.
     const chi_bam = DUONG_ROI_KHOI_MAY.filter((d) => d.nguoi_dung_bam);
     expect(khoiRoiKhoiMay(chi_bam)).toContain("không đường nào chạy lúc mở ứng dụng");
@@ -924,9 +924,11 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
     }
   });
 
-  it("what runs at open, the commune app says so: the lookup, the office profile, the home-screen news and alerts", () => {
+  it("what runs at open, the commune app says so: the lookup, the home-screen news and alerts", () => {
     const atOpen = routes.filter((r) => !r.nguoi_dung_bam).map((r) => r.tuyen).sort();
-    expect(atOpen).toEqual([COMMUNE_PROFILES_PATH, DUONG_DAN_TIN_XA, DUONG_DAN_XA, DISASTER_ALERTS_PATH].sort());
+    expect(atOpen).toEqual([DUONG_DAN_TIN_XA, DUONG_DAN_XA, DISASTER_ALERTS_PATH].sort());
+    // `/commune-profiles` is not called by the commune app (12/10/2026): the dossier must not declare it.
+    expect(DUONG_ROI_KHOI_MAY.map((r) => r.tuyen)).not.toContain("/api/v1/commune-profiles");
   });
 
   /**

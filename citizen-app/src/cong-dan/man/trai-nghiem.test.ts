@@ -220,9 +220,26 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
     expect(offersZaloChat({ ...zalo, co_zalo: false }, { mobile: true })).toBe(false);
   });
 
-  it("the search still finds a village head by the village's name", () => {
+  // Owner 12/10/2026: the card no longer shows "Trưởng thôn …" (sheet row 14), so the search matches only what the
+  // card shows — a hit on a hidden village name would surface a card with nothing on it explaining the match.
+  it("the search does NOT match a village name the card no longer shows", () => {
     const ds = [person("Lê Văn Bình", null, ["Thôn Hà Lam"]), person("Trần Thị Đào", null)];
-    expect(locCanBo(ds, "ha lam").map((c) => c.ho_ten)).toEqual(["Lê Văn Bình"]);
+    expect(locCanBo(ds, "ha lam")).toEqual([]);
+    expect(locCanBo(ds, "thon")).toEqual([]);
+    expect(locCanBo(ds, "binh").map((c) => c.ho_ten)).toEqual(["Lê Văn Bình"]);
+  });
+
+  it("the search matches the department, and only the ONE number the card shows", () => {
+    const ds: CanBoCongKhai[] = [
+      // Mobile shown; the office line is not on the card, so its digits must not match.
+      { ...person("Lê Văn Bình", null), bo_phan: "Địa chính", di_dong: "0900 000 001", so_co_quan: "0900 000 002" },
+      // No dialable mobile: the office line is the shown number.
+      { ...person("Trần Thị Đào", null), di_dong: "09", so_co_quan: "0900 000 003" },
+    ];
+    expect(locCanBo(ds, "dia chinh").map((c) => c.ho_ten)).toEqual(["Lê Văn Bình"]);
+    expect(locCanBo(ds, "000 001").map((c) => c.ho_ten)).toEqual(["Lê Văn Bình"]);
+    expect(locCanBo(ds, "000 002")).toEqual([]);
+    expect(locCanBo(ds, "000 003").map((c) => c.ho_ten)).toEqual(["Trần Thị Đào"]);
   });
 
   it("tìm danh bạ không phân biệt dấu, và theo số điện thoại khi từ khoá toàn là số", () => {

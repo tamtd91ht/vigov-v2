@@ -439,7 +439,6 @@ export function planLines({
   api_host,
   platform_host,
   mota,
-  logo = null,
   banner = null,
 }) {
   const own = dich.loai === "app-rieng";
@@ -456,10 +455,7 @@ export function planLines({
       ? `  Nung xã  : CÓ — ${dich.ten_mien} nung vào bundle; app mở thẳng vào xã, ẩn thanh tiêu đề Zalo`
       : "  Nung xã  : KHÔNG — bundle chung; vào xã bằng QR có `d` (platform-admin, hoặc npm run qr)",
   ];
-  if (own) {
-    lines.push(`  Logo xã  : ${logo ?? "(chưa có — header hiện biểu tượng)"}`);
-    lines.push(`  Banner xã: ${banner ?? "(chưa có — trang chủ không có banner)"}`);
-  }
+  if (own) lines.push(`  Banner xã: ${banner ?? "(chưa có — trang chủ không có banner)"}`);
   lines.push(`  Token    : ${token_source} — ${kiem_token.ok ? "" : "KHÔNG QUA: "}${kiem_token.ly_do}`);
   lines.push(
     phat_hanh

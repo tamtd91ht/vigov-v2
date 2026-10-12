@@ -14,7 +14,7 @@
  * ONCE ZALO HOLDS THE PERMISSION THERE IS NO DIALOG TO EXPLAIN (customer sheet 12/10/2026 row 7: "mỗi lần vào lại app
  * phải request lại quyền… mới xem được danh sách phản ánh"; owner: reopen silently when already granted). Two
  * places read the grant (`ReadPhoneGrant`, the shell's `getSetting`): `openIfGranted` at app start opens the verified
- * session with no screen, and a tap on "Phản ánh của tôi" (`explicitTap`) skips the explanation. Not granted, or any
+ * session with no screen, and the citizen's own tap on any personal act (`explicitTap`) skips the explanation. Not granted, or any
  * doubt → exactly the flow above. The session still lives in memory only (`phien-vigov.ts`): what Zalo remembers is
  * the permission, never our session.
  *
@@ -85,11 +85,13 @@ export type SessionGateState =
   | { readonly kieu: "ket-qua"; readonly outcome: SessionGateStop; readonly zalo?: ZaloFailure };
 
 /**
- * `explicitTap`: the act is the citizen's own tap on "Phản ánh của tôi" (customer sheet 12/10/2026 row 7). Then,
- * when Zalo already holds the phone permission (`ReadPhoneGrant`), the explanation is skipped and the number is
- * asked at once — the explanation exists to come BEFORE Zalo's dialog, and a granted permission shows none. Never
- * set by a retry after a lost session: that would let a server that keeps refusing the session re-open it in a loop
- * with no tap in between.
+ * `explicitTap`: the act is the citizen's own tap — "Phản ánh của tôi" (customer sheet 12/10/2026 row 7), and since the
+ * owner's follow-up the same day EVERY personal act a tap starts: "Tra cứu" from the search, the "Nhận thông báo" row,
+ * and (through `createPhoneVerification`'s own reader) "Gửi đánh giá". Then, when Zalo already holds the phone
+ * permission (`ReadPhoneGrant`), the explanation is skipped and the number is asked at once — the explanation exists to
+ * come BEFORE Zalo's dialog, and a granted permission shows none. ("Gửi phản ánh" asks Zalo at once anyway, below.)
+ * Never set by a retry after a lost session: that would let a server that keeps refusing the session re-open it in a
+ * loop with no tap in between.
  */
 export type RequireOptions = { readonly explicitTap?: boolean };
 

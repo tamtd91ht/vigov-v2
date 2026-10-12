@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -434,18 +434,18 @@ describe("kế hoạch in ra trước khi chạy", () => {
     expect(t).toMatch(/THỬ NGHIỆM/);
   });
 
-  it("app riêng: tên miền CÓ nung vào bundle; logo/banner; token không qua thì nói ra", () => {
+  it("app riêng: tên miền CÓ nung vào bundle; banner; token không qua thì nói ra", () => {
     const t = planLines({
       ...base,
       dich: rieng,
       phat_hanh: true,
       kiem_token: { ok: false, ly_do: "lý do" },
-      logo: "scripts/logo-xa/xa-a.vigov.example.png",
     }).join("\n");
     expect(t).toMatch(/Đích {5}: APP RIÊNG của xã xa-a\.vigov\.example/);
     expect(t).toMatch(/\(platform https:\/\/platform\.vigov\.example\)/);
     expect(t).toMatch(/Nung xã {2}: CÓ — xa-a\.vigov\.example/);
-    expect(t).toMatch(/Logo xã {2}: scripts\/logo-xa/);
+    // The header shows the national emblem for every commune (12/10/2026): no logo line, no logo copied.
+    expect(t).not.toMatch(/Logo xã/);
     expect(t).toMatch(/Banner xã: \(chưa có/);
     expect(t).toMatch(/KHÔNG QUA: lý do/);
     expect(t).toMatch(/PHÁT HÀNH/);
@@ -555,30 +555,14 @@ describe("mọi script dòng lệnh phải PHÂN TÍCH ĐƯỢC", () => {
   }
 });
 
-describe("logo xã tạm thời chỉ đi vào đúng bản dựng app riêng của xã", () => {
-  const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
-
-  it("chỉ chép cho app riêng, và xoá trong `finally` sau bước dựng", () => {
-    expect(ma).toMatch(/const LOGO_NGUON = own_app \?/);
-    expect(ma).toMatch(/if \(co_logo\) copyFileSync\(LOGO_NGUON, LOGO_DICH\)/);
-    expect(ma).toMatch(/finally \{[^}]*if \(co_logo\) rmSync\(LOGO_DICH/);
-  });
-
-  it("logo Thăng Bình có ở chỗ deploy.mjs tìm, và bản chép vào public/ bị git bỏ qua", () => {
-    expect(existsSync(new URL("./logo-xa/thangbinh-danang.vigov.vn.png", import.meta.url))).toBe(true);
-    expect(readFileSync(new URL("../.gitignore", import.meta.url), "utf8")).toMatch(/^public\/logo-xa\.png$/m);
-  });
-});
-
 describe("banner xã tạm thời chỉ đi vào đúng bản dựng app riêng của xã", () => {
-  // Same exception, same shape as the logo: a banner left in `public/` would ship one commune's picture
-  // inside the next build — the shared app included.
+  // A banner left in `public/` would ship one commune's picture inside the next build — the shared app included.
   const ma = readFileSync(new URL("./deploy.mjs", import.meta.url), "utf8");
 
   it("chỉ chép cho app riêng, và xoá trong `finally` sau bước dựng", () => {
     expect(ma).toMatch(/const BANNER_SOURCE = own_app \?/);
     expect(ma).toMatch(/if \(has_banner\) copyFileSync\(BANNER_SOURCE, BANNER_TARGET\)/);
-    // The block is read whole: the logo's `{ force: true }` before it would stop a `[^}]*` match short.
+    // The block is read whole: a `{ force: true }` inside it would stop a `[^}]*` match short.
     const sau_dung = /ma = dung\(env_dung\);\s*\} finally \{([\s\S]*?)\n\}/.exec(ma);
     expect(sau_dung, "khối finally sau bước dựng").not.toBeNull();
     expect(sau_dung[1]).toMatch(/if \(has_banner\) rmSync\(BANNER_TARGET/);

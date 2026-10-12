@@ -69,6 +69,15 @@ const CAN_ASK_AGAIN: ReadonlySet<PhoneVerificationStop> = new Set(["tu-choi", "t
 export function createPhoneVerification(
   reopen: ReopenWithPhone | undefined,
   setState: (s: PhoneVerificationState | null) => void,
+  /**
+   * COMMUNE APP ONLY (owner 12/10/2026: no explanation once Zalo holds the permission, for EVERY personal act — here
+   * "Gửi đánh giá"): whether Zalo already holds the phone permission (`commune-session.ts` `ReadPhoneGrant`, the
+   * shell's `getSetting`). Granted → straight to the reopen, which shows no Zalo dialog; not granted, or the read
+   * fails → the explanation as before. Absent (the shared app, every QR path) → the explanation, always.
+   * Every `onPhoneRequired` here follows the citizen's own tap on a screen that calls this machine, and a reopen that
+   * succeeds sets the final outcome below — so a server that keeps answering 403 meets that sentence, never a loop.
+   */
+  readGrant?: () => Promise<boolean>,
 ): PhoneVerification {
   /** Việc chờ gọi lại. Chỉ sống giữa lúc gặp 403 và lúc có kết cục. */
   let pending: (() => void) | null = null;
@@ -76,7 +85,7 @@ export function createPhoneVerification(
   let finalOutcome: PhoneVerificationStop | null = null;
   let busy = false;
 
-  return {
+  const machine: PhoneVerification = {
     onPhoneRequired(rerun) {
       if (finalOutcome !== null) {
         pending = null;
@@ -92,6 +101,19 @@ export function createPhoneVerification(
         return;
       }
       pending = rerun;
+      if (readGrant !== undefined) {
+        // The "working" words while the permission is read. A citizen who started something else meanwhile
+        // (`reset`) is not followed, and neither is a second 403 that replaced this one.
+        setState({ kieu: "dang-xac-nhan" });
+        void readGrant()
+          .catch(() => false)
+          .then((granted) => {
+            if (pending !== rerun || busy) return;
+            if (granted) void machine.allow();
+            else setState({ kieu: "hoi" });
+          });
+        return;
+      }
       setState({ kieu: "hoi" });
     },
 
@@ -131,15 +153,20 @@ export function createPhoneVerification(
       setState(null);
     },
   };
+  return machine;
 }
 
-/** Máy trạng thái trong một màn. Dựng MỘT lần cho mỗi lần gắn màn (StrictMode dựng lại vẫn một). */
+/**
+ * Máy trạng thái trong một màn. Dựng MỘT lần cho mỗi lần gắn màn (StrictMode dựng lại vẫn một). `readGrant`: the
+ * commune app's permission reader (`createPhoneVerification`); the shared app never passes it.
+ */
 export function usePhoneVerification(
   reopen: ReopenWithPhone | undefined,
+  readGrant?: () => Promise<boolean>,
 ): PhoneVerification & { state: PhoneVerificationState | null } {
   const [state, setState] = useState<PhoneVerificationState | null>(null);
   const machine = useRef<PhoneVerification | null>(null);
-  if (machine.current === null) machine.current = createPhoneVerification(reopen, setState);
+  if (machine.current === null) machine.current = createPhoneVerification(reopen, setState, readGrant);
   return { ...machine.current, state };
 }
 

@@ -89,8 +89,6 @@ import {
   communeByCodeAddress,
   type CommuneMapFrameRead,
   communeMapFrameAddress,
-  type CommuneProfile,
-  communeProfilesAddress,
   type DisasterAlert,
   disasterAlertsAddress,
   diaChiBaiTin,
@@ -107,7 +105,6 @@ import {
   readBanners,
   readCommunesByCode,
   readCommuneMapFrame,
-  readCommuneProfiles,
   readDisasterAlerts,
   readNewsCategories,
   type TrangTinXa,
@@ -805,14 +802,6 @@ export function communeByLaunchCode(code: string): Promise<KetQuaCongKhai<readon
  */
 export function danhBaCanBoXa(ten_mien: string): Promise<KetQuaCongKhai<readonly CanBoCongKhai[]>> {
   return goiCongKhai(ten_mien, diaChiDanhBa, docDanhBa).then(identityRead);
-}
-
-/**
- * Trụ sở, đường dây nóng, giờ làm việc mà xã đã khai (`CommuneProfile`). Công khai theo tên miền, không
- * phiên. Không có logo — xem `hop-dong-cong-khai.ts`.
- */
-export function communeProfiles(ten_mien: string): Promise<KetQuaCongKhai<readonly CommuneProfile[]>> {
-  return goiCongKhai(ten_mien, communeProfilesAddress, readCommuneProfiles).then(identityRead);
 }
 
 /**

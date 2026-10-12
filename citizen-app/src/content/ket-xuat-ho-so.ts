@@ -766,19 +766,6 @@ export const DUONG_CONG_KHAI: readonly DuongRoiKhoiMay[] = [
     },
   },
   {
-    // 29/09/2026 (identity cdbf276): the commune's declared office — address, hotline, office hours — shown
-    // on the home screen of the commune's own app. Runs at open, like the lookup above, and carries only
-    // the domain: no session, no Zalo code, nothing of the citizen.
-    tuyen: "/api/v1/commune-profiles",
-    may_chu: "ViGov — dịch vụ `identity`",
-    khi_nao:
-      "ứng dụng riêng của một xã được mở — chạy NGAY LÚC MỞ, trước khi người dùng bấm gì, để hiện trụ sở, đường dây nóng và giờ làm việc mà xã đã công bố",
-    nguoi_dung_bam: false,
-    man: TEN_MAN_CONG_KHAI.trang_chu_xa,
-    truong: [HOST_CONG_KHAI],
-    app: "commune",
-  },
-  {
     tuyen: "/api/v1/commune-staff",
     may_chu: "ViGov — dịch vụ `identity`",
     khi_nao: `người dùng tự bấm “${TEN_MAN_CONG_KHAI.danh_ba}”, sau khi đã xác nhận xã`,

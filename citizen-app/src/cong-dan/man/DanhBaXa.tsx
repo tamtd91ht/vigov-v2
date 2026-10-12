@@ -29,6 +29,11 @@ export function boDau(s: string): string {
 /**
  * Lọc trên máy, không phân biệt hoa thường, không phân biệt dấu, và theo SỐ điện thoại (bỏ dấu cách, chấm
  * trong số) — như danh bạ của prototype. Không dấu hiệu nào của từ khoá rời khỏi máy.
+ *
+ * MATCHES ONLY WHAT THE CARD SHOWS (owner, 12/10/2026, after sheet row 14 took "Trưởng thôn …" and the second number
+ * off the card): name, title, department (the group heading), and the ONE number `publishedNumber` displays. A hit on
+ * a village name or an undisplayed number would put a card on screen with nothing on it that explains why it matched —
+ * an elderly citizen reads that as a wrong result and stops trusting the search.
  */
 export function locCanBo(ds: readonly CanBoCongKhai[], tu_khoa: string): readonly CanBoCongKhai[] {
   const q = boDau(tu_khoa.trim());
@@ -36,12 +41,11 @@ export function locCanBo(ds: readonly CanBoCongKhai[], tu_khoa: string): readonl
   const so = q.replace(/\D/g, "");
   // Chỉ so theo số khi từ khoá TOÀN là số (cho phép dấu cách, chấm, gạch) — "tổ 3" không khớp mọi số có chữ 3.
   const theo_so = so.length >= 3 && /^[\d\s.\-+]+$/.test(q);
-  return ds.filter(
-    (cb) =>
-      // The units a person heads are searchable too: "ha lam" finds the Trưởng thôn Hà Lam.
-      [cb.ho_ten, cb.chuc_vu, cb.bo_phan, ...cb.residential_units_headed].some((o) => boDau(o).includes(q)) ||
-      (theo_so && [cb.so_co_quan, cb.di_dong].some((o) => o.replace(/\D/g, "").includes(so))),
-  );
+  return ds.filter((cb) => {
+    if ([cb.ho_ten, cb.chuc_vu, cb.bo_phan].some((o) => boDau(o).includes(q))) return true;
+    const shown = theo_so ? publishedNumber(cb) : null;
+    return shown !== null && shown.value.replace(/\D/g, "").includes(so);
+  });
 }
 
 /**

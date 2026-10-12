@@ -39,7 +39,7 @@ import { type ReactNode, type Ref, useEffect, useMemo, useRef, useState } from "
 import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import { myNotificationPreference, setMyNotificationPreference } from "../api/goi-vigov";
 import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
-import type { CommuneProfile, XaTraDuoc } from "../api/hop-dong-cong-khai";
+import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type CommuneBannerItem, readHttpsLink } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
@@ -57,7 +57,6 @@ import {
   type SessionGateState,
 } from "./commune-session";
 import { ConsentDialog, DialogHostContext } from "./consent-dialog";
-import { dichGoi } from "./DanhBaCanBoScreen";
 import { DisasterAlertScreen, HomeAlertBanner, useDisasterAlerts } from "./disaster-alerts";
 import {
   createNotificationPreference,
@@ -71,7 +70,6 @@ import {
   ACCOUNTLESS,
   APP_RIENG,
   COMMUNE_APP_SESSION,
-  COMMUNE_OFFICE,
   COMMUNE_PHONE_WORDS as PHONE_VERIFICATION,
   CUA_TOI,
   type PhoneVerificationTask,
@@ -494,52 +492,6 @@ export const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccen
     ],
   },
 ];
-
-/** The rows the commune actually declared, in reading order. PURE, exported for tests. */
-export function officeRows(p: CommuneProfile): Array<{ label: string; value: string }> {
-  return [
-    { label: COMMUNE_OFFICE.address, value: p.office_address.trim() },
-    { label: COMMUNE_OFFICE.hours, value: p.office_hours_text.trim() },
-    { label: COMMUNE_OFFICE.hotline, value: p.hotline.trim() },
-  ].filter((r) => r.value !== "");
-}
-
-/**
- * ⚠ NOT RENDERED since 11/10/2026 (owner: theo prototype — the prototype's home has no office block), and since
- * 12/10/2026 the profile it would show is NOT LOADED either: its last reader, the header logo, gave its slot to the
- * star emblem (customer sheet row 5). Kept with its tests only until someone decides to remove it (out of that task's
- * scope); a screen that takes it again must load `/commune-profiles` itself.
- *
- * Trụ sở · giờ làm việc · đường dây nóng, as the commune declared them — nothing when it declared nothing.
- * The hours are display text, never parsed (ADR 0007). The hotline becomes a `tel:` button (the dialler
- * opens; nothing goes over the network), a full tap target in words, not an icon alone.
- */
-export function CommuneOffice({ profile }: { profile: CommuneProfile | null }) {
-  if (profile === null) return null;
-  const rows = officeRows(profile);
-  if (rows.length === 0) return null;
-  const hotline = profile.hotline.trim();
-  const dial = hotline === "" ? null : dichGoi(hotline);
-  return (
-    <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-tru-so">
-      <h2 className="xa-dau-khoi__tieu-de" id="xa-tru-so">
-        {COMMUNE_OFFICE.title}
-      </h2>
-      {rows.map((r) => (
-        <div key={r.label}>
-          <p className="xa-nhan-o">{r.label}</p>
-          <p className="xa-giu-dong">{r.value}</p>
-        </div>
-      ))}
-      {dial !== null && (
-        <a className="xa-nut" href={dial}>
-          <BieuTuong ten="phone" co={20} />
-          {COMMUNE_OFFICE.call_hotline(hotline)}
-        </a>
-      )}
-    </section>
-  );
-}
 
 function TrangChuXa(props: {
   /** The build's commune domain — the lookup key of the public alert read (never drawn, never logged). */
@@ -1001,9 +953,13 @@ function AppCuaXa(props: {
     };
 
   const petitions = useMyPetitions(sessionLost("mine"));
-  // The citizen's own tap on "Phản ánh của tôi": with the permission already granted, no explanation (row 7). The
-  // lost-session retry above passes no option, so it always meets the explanation — no reopen loop without a tap.
-  const openPetitions = () => requireSession("mine", () => void petitions.load(), false, { explicitTap: true });
+  /*
+   * THE CITIZEN'S OWN TAP (row 7, extended by the owner on 12/10/2026 to every personal act): with the permission
+   * already granted in Zalo, no explanation — "Phản ánh của tôi", "Tra cứu" and "Nhận thông báo" all pass it. The
+   * lost-session retry above passes NO option, so it always meets the explanation — no reopen loop without a tap.
+   */
+  const TAPPED: RequireOptions = { explicitTap: true };
+  const openPetitions = () => requireSession("mine", () => void petitions.load(), false, TAPPED);
 
   /*
    * ROW 7 OF THE CUSTOMER SHEET (12/10/2026): "mỗi lần vào lại app phải request lại quyền chia sẻ số điện thoại mới
@@ -1069,16 +1025,17 @@ function AppCuaXa(props: {
       void notification.control.toggle();
       return;
     }
-    requireSession("notify", () => void notification.control.load());
+    requireSession("notify", () => void notification.control.load(), false, TAPPED);
   }
 
   /** Navigation from a tap. The two personal screens pass the gate; everything else is public. */
   function go(m: ManXa) {
-    if (m.kieu === "gui") requireSession("submit", () => datMan(m), true);
+    // "Gửi phản ánh" passes the tap too, for the record — the gate asks Zalo at once for a send in any case.
+    if (m.kieu === "gui") requireSession("submit", () => datMan(m), true, TAPPED);
     else if (m.kieu === "tra-cuu-phieu") {
       // Kept for the gate's accountless offer: leaving the gate for the public lookup carries the code typed.
       pendingLookupCode.current = m.ma;
-      requireSession("lookup", () => datMan(m));
+      requireSession("lookup", () => datMan(m), false, TAPPED);
     } else datMan(m);
   }
 
@@ -1128,6 +1085,7 @@ function AppCuaXa(props: {
           onSessionLost={sessionLost("mine")}
           onChanged={() => void petitions.load()}
           reopenWithPhone={reopenWithPhone}
+          phoneGranted={props.phoneGranted}
           pickScenePhotos={props.pickScenePhotos}
         />
       );
@@ -1169,6 +1127,7 @@ function AppCuaXa(props: {
           onSessionLost={sessionLost("lookup")}
           onChanged={() => void petitions.load()}
           reopenWithPhone={reopenWithPhone}
+          phoneGranted={props.phoneGranted}
           pickScenePhotos={props.pickScenePhotos}
         />
       );

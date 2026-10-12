@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { CommuneAppSessionResult, OpenCommuneAppSession } from "../api/mo-phien-vigov";
+import type { CommuneAppSessionResult, OpenCommuneAppSession, ReopenWithPhone } from "../api/mo-phien-vigov";
 import { datPhienViGov, layPhienViGov } from "../api/phien-vigov";
 
 import { createSessionGate, type ReadPhoneGrant, type SessionGateState } from "./commune-session";
+import type { PhoneVerificationTask } from "./noi-dung";
+import { createPhoneVerification, type PhoneVerificationState } from "./phone-verification";
 
 /**
  * Customer sheet 12/10/2026 row 7 ("mỗi lần vào lại app phải request lại quyền chia sẻ số điện thoại mới xem được
@@ -178,6 +180,134 @@ describe("explicitTap — 'Phản ánh của tôi' with the permission already g
     answer(true);
     await flush();
     expect(open).not.toHaveBeenCalled();
+    expect(last()).toBeNull();
+  });
+});
+
+/*
+ * Owner 12/10/2026 (follow-up to row 7): "bỏ màn giải thích khi Zalo đã cho quyền số" for EVERY personal act the
+ * citizen taps, not only "Phản ánh của tôi". The gate's acts — lookup from the search, the "Nhận thông báo" row, and
+ * sending (which asks Zalo at once in any case) — then the rating's own machine, whose reopen is reached from a 403.
+ */
+describe("explicitTap — every personal act a tap starts, with the permission granted or not", () => {
+  it.each<PhoneVerificationTask>(["lookup", "notify", "mine"])("%s, granted → no explanation: asked at once, the act runs", async (task) => {
+    const open = vi.fn<OpenCommuneAppSession>(async () => OK);
+    const run = vi.fn();
+    const { gate, states } = harness(open, async () => true);
+    gate.require(run, task, { explicitTap: true });
+    await flush();
+    await flush();
+    expect(states).not.toContainEqual({ kieu: "hoi" });
+    expect(open.mock.calls.map((c) => c[1])).toEqual(["ask"]);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it.each<PhoneVerificationTask>(["lookup", "notify", "mine"])("%s, NOT granted → the explanation; nothing opened", async (task) => {
+    const open = vi.fn<OpenCommuneAppSession>(async () => OK);
+    const run = vi.fn();
+    const { gate, last } = harness(open, async () => false);
+    gate.require(run, task, { explicitTap: true });
+    await flush();
+    expect(last()).toEqual({ kieu: "hoi" });
+    expect(open).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("sending: Zalo is asked at once whether granted or not — never the explanation, never the reader", async () => {
+    for (const granted of [true, false]) {
+      datPhienViGov(null);
+      const open = vi.fn<OpenCommuneAppSession>(async () => OK);
+      const read = vi.fn(async () => granted);
+      const run = vi.fn();
+      const { gate, states } = harness(open, read);
+      gate.require(run, "submit", { explicitTap: true });
+      await flush();
+      expect(states, String(granted)).not.toContainEqual({ kieu: "hoi" });
+      expect(open, String(granted)).toHaveBeenCalledTimes(1);
+      expect(run, String(granted)).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("a lost-session retry (no flag) of a lookup still meets the explanation — the loop guard holds for every act", async () => {
+    const open = vi.fn<OpenCommuneAppSession>(async () => OK);
+    const read = vi.fn(async () => true);
+    const { gate, last } = harness(open, read);
+    gate.require(() => {}, "lookup");
+    await flush();
+    expect(last()).toEqual({ kieu: "hoi" });
+    expect(read).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe("the rating's phone machine (`createPhoneVerification` + reader) — commune app only", () => {
+  const VERIFIED = { kieu: "xong", token: "tok-moi", ten_xa: COMMUNE, da_xac_thuc_so: true } as const;
+  function machine(readGrant?: () => Promise<boolean>) {
+    const reopen = vi.fn<ReopenWithPhone>(async () => VERIFIED);
+    const states: (PhoneVerificationState | null)[] = [];
+    const m = createPhoneVerification(reopen, (s) => states.push(s), readGrant);
+    return { m, reopen, states, last: () => states[states.length - 1] };
+  }
+
+  // The 403 arrives on a session already open in this app (phone-less, e.g. after a lookup) — the reopen replaces it.
+  const phoneLess = () => datPhienViGov({ token: "tok-cu", ten_xa: COMMUNE, phone_verified: false });
+
+  it("granted → no explanation: reopened at once, the rating re-sent ONCE", async () => {
+    phoneLess();
+    const rerun = vi.fn();
+    const { m, reopen, states } = machine(async () => true);
+    m.onPhoneRequired(rerun);
+    await flush();
+    await flush();
+    expect(states).not.toContainEqual({ kieu: "hoi" });
+    expect(reopen).toHaveBeenCalledTimes(1);
+    expect(rerun).toHaveBeenCalledTimes(1);
+    expect(layPhienViGov()?.phone_verified).toBe(true);
+  });
+
+  it("granted, and the re-sent rating still gets 403 → the final sentence, no second reopen (no loop)", async () => {
+    phoneLess();
+    const rerun = vi.fn();
+    const { m, reopen, last } = machine(async () => true);
+    m.onPhoneRequired(rerun);
+    await flush();
+    await flush();
+    m.onPhoneRequired(rerun);
+    await flush();
+    expect(last()).toEqual({ kieu: "ket-qua", outcome: "van-chua-xac-thuc" });
+    expect(reopen).toHaveBeenCalledTimes(1);
+    expect(rerun).toHaveBeenCalledTimes(1);
+  });
+
+  it("not granted, or the read throws → the explanation; nothing reopened until 'Đồng ý'", async () => {
+    for (const read of [async () => false, async () => Promise.reject(new Error("getSetting"))]) {
+      phoneLess();
+      const { m, reopen, last } = machine(read);
+      m.onPhoneRequired(() => {});
+      await flush();
+      expect(last()).toEqual({ kieu: "hoi" });
+      expect(reopen).not.toHaveBeenCalled();
+    }
+  });
+
+  it("no reader (the shared app) → the explanation at once, never a read", () => {
+    phoneLess();
+    const { m, reopen, last } = machine();
+    m.onPhoneRequired(() => {});
+    expect(last()).toEqual({ kieu: "hoi" });
+    expect(reopen).not.toHaveBeenCalled();
+  });
+
+  it("the citizen starts something else while the read runs (`reset`) → not followed", async () => {
+    phoneLess();
+    let answer: (g: boolean) => void = () => {};
+    const { m, reopen, last } = machine(() => new Promise((done) => (answer = done)));
+    m.onPhoneRequired(() => {});
+    expect(last()).toEqual({ kieu: "dang-xac-nhan" });
+    m.reset();
+    answer(true);
+    await flush();
+    expect(reopen).not.toHaveBeenCalled();
     expect(last()).toBeNull();
   });
 });

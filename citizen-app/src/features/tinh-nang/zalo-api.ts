@@ -428,7 +428,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       man: "Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
       tinh_nang: "Xác nhận số điện thoại với xã",
       de_lam_gi:
-        "Lấy mã số điện thoại ở lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh — sau khi ứng dụng nói rõ vì sao và bạn bấm đồng ý. Ở những lần mở ứng dụng sau, nếu bạn đã cho phép chia sẻ số điện thoại trong Zalo, ứng dụng lấy lại mã ngay lúc mở để hiện “Phản ánh của tôi” mà không hỏi lại. Số điện thoại KHÔNG nằm trong mã; chỉ hệ thống của xã đổi được mã thành số. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
+        "Lấy mã số điện thoại ở lần đầu bạn gửi, xem, tra cứu hoặc đánh giá phản ánh — sau khi ứng dụng nói rõ vì sao và bạn bấm đồng ý. Ở những lần sau, nếu bạn đã cho phép chia sẻ số điện thoại trong Zalo, ứng dụng lấy lại mã mà không hỏi lại: ngay lúc mở để hiện “Phản ánh của tôi”, hoặc ngay khi bạn bấm một việc cần số. Số điện thoại KHÔNG nằm trong mã; chỉ hệ thống của xã đổi được mã thành số. Nhờ số này, xã biết phản ánh là của ai, và chỉ bạn xem được phản ánh của bạn.",
       roi_khoi_may: "Mã số điện thoại được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã.",
     },
     intro_app: {
@@ -479,11 +479,13 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may: "",
     // The commune app reads it at OPEN too since 12/10/2026 (customer sheet row 7, `phoneScopeGranted`): granted →
     // the session reopens and "Phản ánh của tôi" shows with no tap. The words say so, not just "before the code".
+    // Same day (owner): also on the citizen's tap on any act that needs the number (`commune-session.ts`
+    // `explicitTap`, `phone-verification.tsx` `readGrant`) — granted → no explanation screen before it.
     commune_app: {
       man: "Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
       tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
       de_lam_gi:
-        "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa — lúc mở ứng dụng và khi bạn mở “Phản ánh của tôi” — để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
+        "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa — lúc mở ứng dụng, và khi bạn bấm một việc cần số điện thoại (xem “Phản ánh của tôi”, tra cứu phiếu, đánh giá, bật hay tắt nhận thông báo) — để không hỏi lại và không giải thích lại với bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
       roi_khoi_may: "",
     },
     intro_app: {

@@ -1015,18 +1015,6 @@ export const XA_GIAO_DIEN = {
 } as const;
 
 /**
- * THE COMMUNE'S OFFICE — what the commune declared (`/commune-profiles`). A row appears only when the
- * commune filled it; nothing is shown in its place ("" is "not declared", never a default).
- */
-export const COMMUNE_OFFICE = {
-  title: "Ủy ban nhân dân xã",
-  address: "Trụ sở",
-  hours: "Giờ làm việc",
-  hotline: "Đường dây nóng",
-  call_hotline: (so: string) => `Gọi đường dây nóng ${so}`,
-} as const;
-
-/**
  * News type chips and the Sự kiện screen — the staff register's words for the same codes
  * (`web-admin/src/features/noi-dung/nhan-noi-dung.ts`), so a commune and its citizens name a type alike.
  */
@@ -1553,6 +1541,12 @@ export const XA_PA = {
    * was removed.
    */
   send_to: (xa: string) => `Gửi phản ánh tới ${xa}`,
+  /**
+   * The retry after a failed send names the commune too (owner 12/10/2026): it is the same last-step confirmation as
+   * `send_to`, and a bare "Gửi lại" is the one tap that would submit without the citizen reading where it goes. It
+   * still STARTS with "Gửi lại", the words the failure sentences above tell the citizen to tap.
+   */
+  resend_to: (xa: string) => `Gửi lại tới ${xa}`,
   // Said only after a 201: the petition is in the commune's register and has its lookup code (rule 10 #1).
   xong_tieu_de: "Đã gửi phản ánh",
   xong_mo_ta: "Ủy ban nhân dân xã đã nhận phản ánh của bà con. Bà con giữ mã phiếu dưới đây để theo dõi.",
