@@ -8,7 +8,6 @@ import {
 import {
   CompassGlyph,
   HandshakeGlyph,
-  NetworkBackdrop,
   PinGlyph,
   ShieldGlyph,
   TargetGlyph,
@@ -40,7 +39,6 @@ export function AboutScreen() {
   return (
     <>
       <section className="banner">
-        <NetworkBackdrop className="banner__backdrop" />
         <div className="banner__content">
           <h1 className="banner__title">Về {COMPANY.name}</h1>
         </div>

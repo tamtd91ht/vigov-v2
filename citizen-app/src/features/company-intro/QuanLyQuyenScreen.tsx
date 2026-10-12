@@ -1,7 +1,8 @@
+import { TIEU_DE_CHINH_SACH } from "../../content/chinh-sach-rieng-tu";
 import { COMPANY } from "../../content/company-profile";
 import { KHAI_BAO_LOI_GOI, type KhaiBaoLoiGoi } from "../tinh-nang/zalo-api";
 
-import { ShieldGlyph } from "./icons";
+import { DocumentGlyph, ShieldGlyph } from "./icons";
 
 /**
  * Màn "Quản lý quyền" — app này xin nền tảng những gì, ở màn nào, để làm gì.
@@ -41,7 +42,15 @@ export function introPermissionRows(table: readonly KhaiBaoLoiGoi[]): KhaiBaoLoi
   });
 }
 
-export function QuanLyQuyenScreen(props: { onQuayLai: () => void }) {
+export function QuanLyQuyenScreen(props: {
+  onQuayLai: () => void;
+  /**
+   * Opens the privacy policy (12/10/2026: the policy left the bottom of Liên hệ for its own screen, and stays one
+   * tap from here — this screen says what the app CALLS, the policy says where data GOES). Optional only so a test
+   * can render the screen alone; `ContactScreen` always passes it.
+   */
+  onOpenPolicy?: () => void;
+}) {
   return (
     <>
       <button type="button" className="quay-lai" onClick={props.onQuayLai}>
@@ -91,6 +100,18 @@ export function QuanLyQuyenScreen(props: { onQuayLai: () => void }) {
           </li>
         ))}
       </ul>
+
+      {props.onOpenPolicy !== undefined && (
+        <button type="button" className="action action--mo" onClick={props.onOpenPolicy}>
+          <span className="tile tile--soft" aria-hidden="true">
+            <DocumentGlyph className="tile__glyph" />
+          </span>
+          <span>
+            <span className="action__label">Dữ liệu của bạn được dùng thế nào</span>
+            <span className="action__value">{TIEU_DE_CHINH_SACH}</span>
+          </span>
+        </button>
+      )}
     </>
   );
 }

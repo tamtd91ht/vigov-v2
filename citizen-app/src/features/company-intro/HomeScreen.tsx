@@ -12,7 +12,7 @@ import { SmsOffers } from "../yeu-cau/SmsOffers";
 
 import { DaiChienDich } from "./DaiChienDich";
 import { MOC_CHANG_DUONG, type ThamSoMan } from "./dieu-huong";
-import { HandshakeGlyph, NetworkBackdrop } from "./icons";
+import { GridGlyph, HandshakeGlyph } from "./icons";
 import { KhoiTin } from "./KhoiTin";
 import { MenuNhanh } from "./MenuNhanh";
 
@@ -60,7 +60,7 @@ export function HomeScreen({ onDi }: ThamSoMan) {
   return (
     <>
       {/*
-        HERO TRÀN NGANG, CHUYỂN SẮC, CHỮ TRẮNG, CHỈ SỐ NẰM NGAY TRONG NÓ — bản mẫu của PM.
+        HERO TRÀN NGANG, NỀN NAVY PHẲNG (12/10/2026), CHỮ TRẮNG, CHỈ SỐ NẰM NGAY TRONG NÓ — bản mẫu của PM.
 
         ⚠ HUY HIỆU "Vi" CẮT RA TỪ CHÍNH TÊN PHÁP NHÂN, KHÔNG GÕ VÀO. Gõ "Vi" vào JSX là dựng chỗ
         thứ hai giữ tên công ty, và ngày cái tên đổi thì huy hiệu là chỗ không ai nhớ sửa. Nó
@@ -161,7 +161,7 @@ export function HomeScreen({ onDi }: ThamSoMan) {
             của cả app cho một chỗ. */}
         <h2 className="section-title">
           <span className="section-title__mark" aria-hidden="true">
-            <NetworkBackdrop className="section-title__net" />
+            <GridGlyph />
           </span>
           Giải pháp nổi bật
         </h2>

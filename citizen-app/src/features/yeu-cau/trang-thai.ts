@@ -37,6 +37,20 @@ export const GIAI_THICH_TRANG_THAI: Readonly<Record<MaTrangThai, string>> = {
   dong: "Yêu cầu đã được xử lý xong.",
 };
 
+/**
+ * The pill tone of each status (12/10/2026). Same file, same reason as the labels: one place maps a code to what the
+ * user sees. The tone is the THIRD signal after the words and the icon, never the only one; `Record<MaTrangThai, …>`
+ * so a new status without a tone is a `tsc` error, not a grey pill nobody chose.
+ */
+export type StatusTone = "received" | "working" | "contacted" | "done";
+
+export const STATUS_TONE: Readonly<Record<MaTrangThai, StatusTone>> = {
+  moi: "received",
+  dang_xu_ly: "working",
+  da_lien_he: "contacted",
+  dong: "done",
+};
+
 /** Nhãn loại yêu cầu. Cùng lý do, cùng chỗ. */
 export const NHAN_LOAI: Readonly<Record<LoaiYeuCau, string>> = {
   consult: "Tư vấn và báo giá",

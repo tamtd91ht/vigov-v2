@@ -83,12 +83,23 @@ export const YEU_CAU_CUA_TOI = {
     "Đăng nhập bằng số Zalo để xem các yêu cầu bạn đã gửi.",
   nut_toi_dang_nhap: "Đăng nhập",
 
-  dang_doc: "Đang tải…",
+  dang_doc: "Đang tải danh sách yêu cầu…",
   // DANH SÁCH RỖNG CÓ MỘT CÂU, KHÔNG PHẢI MỘT MÀN TRẮNG. Một màn trắng và một màn hỏng trông
   // giống hệt nhau, và người lớn tuổi đọc cả hai thành "app hỏng".
   rong: "Bạn chưa có yêu cầu nào.",
+  // The next step, said under the empty sentence (12/10/2026): what sending one gets you.
+  rong_goi_y: "Gửi yêu cầu tư vấn, chuyên viên ViHAT Group sẽ liên hệ lại và bạn theo dõi tình trạng tại đây.",
   nut_gui_moi: "Gửi yêu cầu tư vấn",
   nut_doc_lai: "Tải lại",
+  // Under every failure that a second try can fix (12/10/2026): one button, the word the commune app uses too.
+  nut_thu_lai: "Thử lại",
+  tieu_de_loi: "Chưa tải được danh sách",
+
+  // PULL TO REFRESH (12/10/2026). A failed refresh KEEPS the list on screen and says so above it.
+  keo_tai_lai: "Kéo xuống để tải lại",
+  tha_tai_lai: "Thả tay để tải lại",
+  dang_tai_lai: "Đang tải lại…",
+  tai_lai_hong: "Chưa tải được dữ liệu mới. Danh sách dưới đây là lần tải trước — kéo xuống để thử lại.",
 
   phien_het_han:
     "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",

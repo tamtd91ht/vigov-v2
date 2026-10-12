@@ -1,6 +1,7 @@
 import type { ComponentType, ReactNode } from "react";
 
 import { CONTACT } from "../../content/company-profile";
+import { HotlineLink } from "../tinh-nang/HotlineLink";
 
 import type { DiemDen } from "./dieu-huong";
 import { MOC_TIM_VAN_PHONG } from "./dieu-huong";
@@ -48,10 +49,11 @@ import {
  *   biểu mẫu sẽ gửi dữ liệu đi đâu; hơn nữa `phase1-collects-nothing.test.ts` cấm
  *   `<form|input|textarea|select>` ở mọi tệp, nên một ô nhập ở đây là một dây bẫy bị nới.
  *
- *   Thứ CÓ THẬT và chạy được ngay là hotline. Nên mục này là một neo `tel:` — đúng cách hai màn
- *   khác của app đã gọi cùng số ấy, chạy được cả ngoài Zalo, và KHÔNG cần khai thêm một lời gọi
- *   nền tảng nào (`openPhone` đang khai cho việc gọi một số vừa QUÉT được ở màn Danh thiếp; mượn
- *   nó cho việc này là làm sai lệch chính bảng khai mà màn Quản lý quyền đọc ra).
+ *   Thứ CÓ THẬT và chạy được ngay là hotline. Nên mục này là một `HotlineLink`
+ *   (`features/tinh-nang/HotlineLink.tsx`, 12/10/2026): trong Zalo nó gọi qua `openPhone` — webview
+ *   của Mini App bỏ qua `tel:`, nên neo trần cũ bấm không ra gì — và ngoài Zalo nó vẫn là neo `tel:`.
+ *   Dòng `openPhone` của bảng khai (`zalo-api.ts`) đã kể việc gọi hotline, nên màn Quản lý quyền
+ *   nói đúng thứ app làm.
  *
  *   Dòng phụ "Gọi hotline" là phần bắt buộc: một nút tên "Tư vấn" mà mở thẳng màn quay số là một
  *   bất ngờ, và với người lớn tuổi thì một bất ngờ là một lần bấm nhầm.
@@ -98,7 +100,7 @@ type MucMenu = {
   glyph: ComponentType<{ className?: string }>;
 } & (
   | { kieu: "man"; di: DiemDen }
-  /** `tel:` — không phải một lời gọi nền tảng, xem khối chú thích trên. */
+  /** The hotline, dialled by `HotlineLink` — see the block above. `so` is the number it dials. */
   | { kieu: "goi"; so: string }
 );
 
@@ -217,9 +219,7 @@ export function MenuNhanh({
           return (
             <li className="menu-nhanh__muc" key={muc.ma}>
               {muc.kieu === "goi" ? (
-                <a className="menu-nhanh__nut" href={`tel:${muc.so}`}>
-                  {ben_trong}
-                </a>
+                <HotlineLink className="menu-nhanh__nut">{ben_trong}</HotlineLink>
               ) : (
                 <button type="button" className="menu-nhanh__nut" onClick={() => onDi(muc.di)}>
                   {ben_trong}

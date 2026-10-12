@@ -22,10 +22,9 @@ import type { KeywordId, SolutionId } from "../../content/company-profile";
  *
  * WHY `stroke="currentColor"`:
  *
- *   The glyph then inherits the contrast of the text around it. On a brand-gradient tile the
- *   colour is `--tile-glyph`, whose ratio against both ends of that gradient is pinned in
- *   accessibility.test.ts — a white glyph on brand blue would be 2.5:1 and fails the 3:1 that
- *   a graphical object owes a reader.
+ *   The glyph then inherits the contrast of the text around it. On a tile the colour is `--navy`
+ *   on `--vh-blue-50` (flat since 12/10/2026), a pair pinned in accessibility.test.ts — a white
+ *   glyph on brand blue would be 2.5:1 and fails the 3:1 that a graphical object owes a reader.
  *
  * Path data uses COMMAS between coordinates on purpose: phase1-collects-nothing.test.ts strips
  * spaces, dots, dashes and brackets before sweeping the source for numbers that look like a
@@ -301,38 +300,70 @@ export function BuildingGlyph({ className }: GlyphProps) {
   );
 }
 
-/**
- * The backdrop drawn behind the dark panels: a constellation of linked nodes over a soft grid.
- *
- * It is one `<svg>` scaled to its container rather than a repeated background image, so it
- * costs no file and no request. `preserveAspectRatio="none"` lets it stretch to whatever the
- * panel is; nothing in it has to stay circular to read as a network.
+/*
+ * STATE GLYPHS (12/10/2026) — "Yêu cầu của tôi": the status pills, the empty and error blocks and the
+ * pull band. Each always stands BESIDE words that say the same thing; none is the only signal.
  */
-export function NetworkBackdrop({ className }: GlyphProps) {
+
+/** Đã tiếp nhận — an inbox tray. Also the empty-list drawing. */
+export function InboxGlyph({ className }: GlyphProps) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 320 180"
-      preserveAspectRatio="none"
-      aria-hidden={true}
-      focusable="false"
-    >
-      <g stroke="currentColor" strokeWidth="1" fill="none" opacity="0.55">
-        <path d="M18,150 L70,96 L140,124 L196,58 L266,86 L310,34" />
-        <path d="M70,96 L96,32 L196,58" />
-        <path d="M140,124 L188,166 L266,86" />
-        <path d="M18,150 L96,32" />
-      </g>
-      <g fill="currentColor" opacity="0.75">
-        <circle cx="18" cy="150" r="3" />
-        <circle cx="70" cy="96" r="4" />
-        <circle cx="96" cy="32" r="3" />
-        <circle cx="140" cy="124" r="3.5" />
-        <circle cx="196" cy="58" r="4.5" />
-        <circle cx="266" cy="86" r="3" />
-        <circle cx="188" cy="166" r="2.5" />
-        <circle cx="310" cy="34" r="2.5" />
-      </g>
+    <svg {...BOX} className={className}>
+      <path d="M4,13 l2.5,-7 h11 l2.5,7 v5 a1,1 0 0 1 -1,1 h-14 a1,1 0 0 1 -1,-1 z" />
+      <path d="M4,13 h4.5 l1,2 h5 l1,-2 h4.5" />
+    </svg>
+  );
+}
+
+/** Đang xử lý — a clock. */
+export function ClockGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12,7.5 v4.5 l3,2" />
+    </svg>
+  );
+}
+
+/** Đã hoàn tất — a check in a circle. */
+export function CheckGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M8.5,12.2 L11,14.6 L15.6,9.6" />
+    </svg>
+  );
+}
+
+/** Tải lại — a circular arrow. */
+export function RefreshGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <path d="M19,12 a7,7 0 1 1 -2.1,-5" />
+      <path d="M19,4.5 v3.5 h-3.5" />
+    </svg>
+  );
+}
+
+/** Cảnh báo — a triangle with an exclamation mark. */
+export function AlertGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <path d="M12,4 L21,19.5 H3 Z" />
+      <path d="M12,10 v4" />
+      <path d="M12,16.8 v0.4" />
+    </svg>
+  );
+}
+
+/** Văn bản — a page with lines. The privacy policy row. */
+export function DocumentGlyph({ className }: GlyphProps) {
+  return (
+    <svg {...BOX} className={className}>
+      <path d="M7,3 h7 l4,4 v13 a1,1 0 0 1 -1,1 h-10 a1,1 0 0 1 -1,-1 v-16 a1,1 0 0 1 1,-1 z" />
+      <path d="M14,3 v4 h4" />
+      <path d="M9,12 h6" />
+      <path d="M9,15.5 h6" />
     </svg>
   );
 }

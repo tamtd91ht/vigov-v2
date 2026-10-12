@@ -1,5 +1,8 @@
 import { COMPANY, CONTACT, type Solution } from "../../content/company-profile";
 
+import { HotlineLink } from "../tinh-nang/HotlineLink";
+
+import { ExpandableText } from "./ExpandableText";
 import { MailGlyph, PhoneGlyph, SOLUTION_GLYPHS } from "./icons";
 import { NutWebsite } from "./NutWebsite";
 
@@ -34,7 +37,7 @@ export function ChiTietGiaiPhap(props: { giai_phap: Solution; onQuayLai: () => v
         ‹ Tất cả giải pháp
       </button>
 
-      <section className="banner banner--giai-phap">
+      <section className="banner">
         <div className="banner__content">
           <span className="tile tile--lon" aria-hidden="true">
             <Glyph className="tile__glyph" />
@@ -48,7 +51,8 @@ export function ChiTietGiaiPhap(props: { giai_phap: Solution; onQuayLai: () => v
             Khi không có tên sản phẩm thì headline ĐÃ là `<h1>`, và in lại nó ngay dưới là đọc
             cùng một câu hai lần liền nhau. */}
         {giai_phap.product ? <p className="card__body card__body--lon">{giai_phap.headline}</p> : null}
-        {giai_phap.note ? <p className="card__body">{giai_phap.note}</p> : null}
+        {/* A long note starts at three lines with "Xem thêm" (12/10/2026); the whole text stays in the page. */}
+        {giai_phap.note ? <ExpandableText className="card__body" text={giai_phap.note} /> : null}
         {giai_phap.product === undefined && giai_phap.note === undefined ? (
           <p className="card__body">
             Đây là một dòng giải pháp trong hệ sinh thái của {COMPANY.name}.
@@ -58,7 +62,8 @@ export function ChiTietGiaiPhap(props: { giai_phap: Solution; onQuayLai: () => v
 
       <h2 className="section-title">Hỏi thêm về giải pháp này</h2>
 
-      <a className="action action--primary" href={`tel:${CONTACT.hotlineDialable}`}>
+      {/* `HotlineLink`: inside Zalo `tel:` does nothing; it dials through the platform (12/10/2026). */}
+      <HotlineLink className="action action--primary">
         <span className="tile" aria-hidden="true">
           <PhoneGlyph className="tile__glyph" />
         </span>
@@ -66,7 +71,7 @@ export function ChiTietGiaiPhap(props: { giai_phap: Solution; onQuayLai: () => v
           <span className="action__label">Gọi hotline</span>
           <span className="action__value">{CONTACT.hotlineLabel}</span>
         </span>
-      </a>
+      </HotlineLink>
 
       <a className="action" href={`mailto:${CONTACT.email}`}>
         <span className="tile tile--soft" aria-hidden="true">

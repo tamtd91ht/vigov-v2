@@ -483,7 +483,7 @@ Xin quyền mà không có văn bản này thì vòng duyệt trả về. HAI v�
 
 | Văn bản | Đứng tên | Ở đâu |
 |---|---|---|
-| `src/content/chinh-sach-rieng-tu.ts` | Tập đoàn ViHAT Group — phần giới thiệu, không một chữ nào về xã | vẽ ở **cuối màn Liên hệ**; hồ sơ app chung `tmp/xin-quyen-zalo/app-chung-vihat/` |
+| `src/content/chinh-sach-rieng-tu.ts` | Tập đoàn ViHAT Group — phần giới thiệu, không một chữ nào về xã | vẽ ở **màn con riêng** mở từ hàng "Chính sách quyền riêng tư" trên Liên hệ và từ màn Quản lý quyền (từ 12/10/2026); hồ sơ app chung `tmp/xin-quyen-zalo/app-chung-vihat/` |
 | `src/content/commune-privacy.ts` | Ủy ban nhân dân xã — giao diện của xã, không tên doanh nghiệp nào | hồ sơ app xã `tmp/xin-quyen-zalo/`, điền theo `COMMUNE_TERMS_BY_DOMAIN`; **chưa có màn nào trong giao diện xã vẽ nó** |
 
 **Quy tắc chi phối cả hai: chính sách phải mô tả ĐÚNG ứng dụng nó nằm trong.** Văn bản công bố

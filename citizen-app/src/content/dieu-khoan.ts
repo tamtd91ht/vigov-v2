@@ -221,7 +221,7 @@ export const MUC_DIEU_KHOAN: readonly MucDieuKhoan[] = [
     ma: "quyen-rieng-tu",
     tieu_de: "Quyền riêng tư",
     doan: [
-      'Ứng dụng xử lý dữ liệu thế nào, xin quyền gì và vì sao — tất cả nằm trong Chính sách quyền riêng tư của ứng dụng, đọc được ngay trong Mini App ở cuối màn hình "Liên hệ".',
+      'Ứng dụng xử lý dữ liệu thế nào, xin quyền gì và vì sao — tất cả nằm trong Chính sách quyền riêng tư của ứng dụng, đọc được ngay trong Mini App: màn hình "Liên hệ", mục "Chính sách quyền riêng tư".',
       "Nội dung ấy không chép lại vào đây, để hai văn bản không bao giờ nói hai điều khác nhau về cùng một việc.",
     ],
   },

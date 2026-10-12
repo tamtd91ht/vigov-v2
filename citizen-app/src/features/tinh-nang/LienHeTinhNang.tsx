@@ -29,6 +29,7 @@ import { CompassGlyph, HandshakeGlyph, MailGlyph, PhoneGlyph, PinGlyph } from ".
 import { MOC_TIM_VAN_PHONG } from "../company-intro/dieu-huong";
 import { PhatHanhPhien } from "../dang-nhap/PhatHanhPhien";
 
+import { HotlineLink } from "./HotlineLink";
 import { TinhNangCoTrangThai } from "./khung";
 import { moRaNgoai } from "./mo-ra-ngoai";
 import { DANG_NHAP, LOI_MO_NGOAI, MA_RONG, VAN_PHONG } from "./noi-dung";
@@ -110,10 +111,11 @@ function DuongLienHeNgay() {
     <>
       <p className="tn__nhac">{DANG_NHAP.nhac_lien_he}</p>
       <div className="tn__doi-nut">
-        <a className="tn-hanh-dong tn-hanh-dong--rong" href={`tel:${CONTACT.hotlineDialable}`}>
+        {/* Through `HotlineLink`: inside Zalo a bare `tel:` does nothing (owner 12/10/2026). */}
+        <HotlineLink className="tn-hanh-dong tn-hanh-dong--rong">
           <PhoneGlyph className="tn-hanh-dong__glyph" />
           Gọi {CONTACT.hotlineLabel}
-        </a>
+        </HotlineLink>
         <a className="tn-hanh-dong tn-hanh-dong--rong" href={`mailto:${CONTACT.email}`}>
           <MailGlyph className="tn-hanh-dong__glyph" />
           {CONTACT.email}

@@ -9,7 +9,8 @@ import {
 } from "../../content/company-profile";
 
 import { ChiTietGiaiPhap } from "./ChiTietGiaiPhap";
-import { BuildingGlyph, KEYWORD_GLYPHS, NetworkBackdrop, SOLUTION_GLYPHS } from "./icons";
+import { ExpandableText } from "./ExpandableText";
+import { BuildingGlyph, GridGlyph, KEYWORD_GLYPHS, SOLUTION_GLYPHS } from "./icons";
 
 /**
  * Screen 2 — the group's technology lines, and the six member units behind them.
@@ -66,16 +67,18 @@ export function SolutionsScreen() {
       <h1 className="screen-heading">Giải pháp</h1>
       {COMPANY.positioning ? <p className="screen-lead">{COMPANY.positioning}</p> : null}
 
+      {/* THE PUBLISHED DESCRIPTION, THREE LINES FIRST (owner 12/10/2026: no text walls). It stays verbatim and
+          whole in the page — `ExpandableText` only clamps what the eye sees until "Xem thêm". */}
       {COMPANY.description ? (
         <section className="card card--accent">
           <h2 className="card__title">{COMPANY.name}</h2>
-          <p className="card__body">{COMPANY.description}</p>
+          <ExpandableText className="card__body" text={COMPANY.description} />
         </section>
       ) : null}
 
       <h2 className="section-title">
         <span className="section-title__mark" aria-hidden="true">
-          <NetworkBackdrop className="section-title__net" />
+          <GridGlyph />
         </span>
         Hệ sinh thái giải pháp
       </h2>

@@ -16,6 +16,7 @@ import type { ComponentType } from "react";
 import { ManDanhThiep } from "./ManDanhThiep";
 
 export { KhoiDangNhap, TimVanPhong } from "./LienHeTinhNang";
+export { HotlineLink } from "./HotlineLink";
 
 /**
  * Màn "Danh thiếp" — KHÔNG CÒN LÀ MỘT TAB từ 21/09/2026 (khuya).

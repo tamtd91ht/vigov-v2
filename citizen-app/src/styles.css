@@ -26,12 +26,14 @@
  * the hex values by accessibility.test.ts — these numbers are a summary, that test is the check):
  *   --ink on white ....................... 14.5:1     --ink on --surface-tint ......... 13.0:1
  *   --ink-muted on white ................. 7.4:1      --ink-muted on --surface-tint ... 6.2:1
- *   white on --navy ...................... 13.0:1     --ink-muted on --grid-line ...... 6.2:1
- *   white on --panel-glow-blue ........... 9.3:1      --on-panel on --panel-glow-blue . 7.1:1
- *   white on --panel-line-blue ........... 6.8:1      --on-panel on --panel-line-blue . 5.2:1
+ *   white on --navy ...................... 13.0:1     --on-panel on --navy ............ 10.0:1
  *   --tile-glyph on --brand-blue ......... 6.1:1      --tile-glyph on --brand-green ... 6.7:1
- * The gradients are built from these stops and no others, so the lightest point any text sits
- * on is one of the values above — that is why a gradient can be checked at all.
+ *
+ * FLAT SURFACES ONLY (owner 12/10/2026, Zalo resubmission: "hiện đại = ít ma sát, không trang trí").
+ * Every surface text sits on is ONE named colour, so every pair the app renders is a pair the test
+ * can compute. The gradients, the graph-paper page and the drawn constellation behind the panels
+ * are gone; a gradient is a background with infinitely many colours, and only its stops were ever
+ * measured.
  */
 
 :root {
@@ -47,46 +49,16 @@
   --brand-blue: #00aef4;
   --brand-green: #78bd1a;
 
-  /* The two lightest points of the dark panels: brand glow blended into navy at the strength
-     used below. Declared as solid stops so the gradients contain no colour nobody measured. */
-  --panel-glow-blue: #184a71;
-  --panel-glow-green: #2a4336;
-  /* Secondary text on a dark panel. 10.0:1 on --navy, 7.1:1 at the lightest point of the glow,
-     and 5.2:1 where it crosses a node line of the drawn backdrop — the worst case, and the
-     reason this value is lighter than the grey that reads well on white. */
+  /* Secondary text on the navy hero: 10.0:1 on --navy. Lighter than the grey that reads well on
+     white because it sits on a dark surface. */
   --on-panel: #d8e2f0;
 
-  /* The colour a 1px node line of the backdrop actually becomes: the brand stroke at the
-     opacity used below, over the LIGHTEST point of the panel. Text does cross those lines, so
-     they are stops like any other and accessibility.test.ts measures them. */
-  --panel-line-blue: #13608e;
-  --panel-line-green: #2d635e;
-
-  /* The two washes of the page background, and the graph-paper rule drawn over them. */
+  /* Two light tints. Still read by the commune channel's empty-state drawing (`.cd-illus`), so they
+     stay; the intro now uses its own `--vh-*` tints below. */
   --surface-tint: #d5ecf8;
   --surface-tint-green: #e3eede;
-  --grid-line: #e3e9f1;
 
-  /*
-   * ĐẦU SÁNG CỦA DẢI HERO — #0a6398, VÀ NÓ KHÔNG PHẢI #00aef4 CỦA BẢN MẪU. LÝ DO LÀ MỘT PHÉP ĐO.
-   *
-   *   Bản mẫu vẽ hero đi từ `--brand-blue` (#00aef4) xuống navy, chữ TRẮNG. Trắng trên #00aef4 là
-   *   **2,5:1** — dưới xa ngưỡng 4,5:1 mà app này đã cam kết, tức tiêu đề lớn nhất của cả ứng
-   *   dụng là chữ khó đọc nhất. Không đọc được ngoài nắng, và người phát hiện ra là người ít có
-   *   khả năng báo lại nhất.
-   *
-   *   Nên đầu sáng được đẩy xuống ĐÚNG ĐIỂM SÁNG NHẤT còn đạt ngưỡng, không xa hơn:
-   *     trắng trên #0a6398 ............ 6,5:1
-   *     --on-panel trên #0a6398 ....... 4,9:1   ← đây mới là cặp chặn, không phải cặp chữ trắng
-   *   Đo ở ĐẦU SÁNG chứ không ở giữa dải: chữ đứng trên cả dải, và chỗ hỏng là chỗ sáng nhất.
-   *   `accessibility.test.ts` tính lại cả hai con số này từ chính hai mã màu.
-   *
-   *   HỆ QUẢ NÓI THẲNG RA: hero của app xanh ĐẬM hơn hero của bản mẫu. Đổi lại được thì chỉ bằng
-   *   cách bỏ chữ trắng, không phải bằng cách hạ ngưỡng.
-   */
-  --hero-sang: #0a6398;
-
-  /* Glyph colour on a brand-gradient tile. Dark on purpose: see the note above. */
+  /* Glyph colour on a brand-coloured surface. Dark on purpose: see the note above. */
   --tile-glyph: #16253d;
 
   /* Mã QR danh thiếp. ĐEN TUYỀN TRÊN TRẮNG TUYỀN, và đây là một ràng buộc kỹ thuật chứ không
@@ -102,43 +74,52 @@
   --tap-min: 44px;
 
   /*
-   * CHIỀU SÂU — hai bóng đổ, dựng từ chính `--navy` (#144a80) ở độ mờ thấp.
-   *
-   * VÌ SAO BÓNG ĐỔ LÀ THỨ AN TOÀN NHẤT ĐỂ LÀM "HIỆN ĐẠI", VÀ ĐƯỜNG KẺ THÌ KHÔNG:
-   *
-   *   Bóng đổ nằm NGOÀI hộp. Không một chữ nào đứng trên nó, nên nó không sinh ra một cặp
-   *   nền/chữ nào — tức không có gì cho `accessibility.test.ts` phải đo, và không có cách nào nó
-   *   làm tụt độ tương phản. Phân tầng bằng nền + khoảng trắng + bóng thay cho một lưới đường kẻ
-   *   là đúng thứ làm một app trông như hạ tầng công nghệ chứ như một tờ rơi.
-   *
-   *   Bóng mang SẮC XANH ĐẬM chứ không phải xám đen: một bóng xám trên nền có ánh xanh/lục đọc
-   *   ra là bẩn. Đây là lý do nó dựng từ `--navy` chứ từ `#000`.
+   * DEPTH — one soft shadow, built from `--navy` at low opacity (the commune app's card shadow,
+   * re-tinted). A shadow sits OUTSIDE the box: no text stands on it, so it adds no colour pair and
+   * cannot lower contrast. Navy-tinted rather than black, because grey on a blue-white page reads
+   * as dirt.
    */
-  --bong-the: 0 1px 2px rgba(20, 74, 128, 0.06), 0 10px 22px -14px rgba(20, 74, 128, 0.4);
-  --bong-noi: 0 2px 4px rgba(20, 74, 128, 0.08), 0 18px 34px -18px rgba(20, 74, 128, 0.55);
+  --bong-the: 0 1px 4px rgba(20, 74, 128, 0.08);
+  --bong-noi: 0 4px 14px rgba(20, 74, 128, 0.14);
 
   /*
-   * NỀN CỦA MỘT THẺ SÁNG — chuyển sắc, không phẳng trơn.
-   *
-   * ⚠ HAI ĐẦU ĐỀU LÀ MÀU ĐÃ ĐO, và đó là điều kiện để dùng được chuyển sắc ở đây: `--surface` và
-   * `--surface-tint` đều đã có trong danh sách cặp màu của `accessibility.test.ts` với cả ba màu
-   * chữ (`--ink`, `--ink-muted`, `--navy`). Nghĩa là chữ rơi vào bất kỳ điểm nào của dải này cũng
-   * nằm giữa hai giá trị đã đo. Một chuyển sắc kết thúc ở một màu chưa ai đo là chỗ độ tương phản
-   * chết đầu tiên, và nó chết ở phía DƯỚI thẻ — chỗ mắt đã mỏi khi đọc tới.
+   * SURFACES ARE ONE COLOUR EACH. These names were gradients until 12/10/2026; they are kept as
+   * names so every card rule keeps reading one token, and `accessibility.test.ts` now pins that
+   * each resolves to a single measured colour — a gradient slipped back in turns that test red.
    */
-  --nen-the: linear-gradient(168deg, var(--surface) 58%, var(--surface-tint) 100%);
-  --nen-the-luc: linear-gradient(168deg, var(--surface) 58%, var(--surface-tint-green) 100%);
+  --nen-the: var(--surface);
+  --nen-the-luc: var(--vh-green-50);
+  --nen-hero: var(--navy);
 
   /*
-   * NỀN HERO — dải xanh của bản mẫu, dựng từ HAI MÀU CÓ TÊN và không màu nào khác.
+   * THE VIHAT INTRO'S OWN TOKEN SET (12/10/2026) — the commune app's newer language (16px cards, soft
+   * shadow, pill chips, a 76px icon tab bar) in ViHAT's brand: navy #144a80 and green #78bd1a.
+   * Separate names from `--xa-*` on purpose: the two apps are two products to the user, and a shared
+   * token is one edit that silently restyles the other app.
    *
-   * Cùng điều kiện với `--nen-the` ngay trên: mỗi điểm dừng phải là một token đã có cặp màu đo
-   * trong `accessibility.test.ts`, và không có `transparent` — một dải hoà qua trong suốt là một
-   * dải đi qua những màu không ai đo được, vì thứ nằm dưới nó cũng là một dải.
-   *
-   * `--hero-sang` là đầu SÁNG, tức đầu quyết định. Xem chú thích của nó ở trên.
+   * Every ink/fill pair here is measured in `accessibility.test.ts`. Green #78bd1a is 2.3:1 on white,
+   * so it is decoration only; text on a green tint uses `--vh-green-ink`.
    */
-  --nen-hero: linear-gradient(162deg, var(--hero-sang) 0%, var(--navy-deep) 76%);
+  --vh-page: #f4f7fa;
+  --vh-line: #dde5ee;
+  --vh-radius: 16px;
+  --vh-blue-50: #e8f0f8;
+  --vh-green-50: #eef6e1;
+  --vh-green-ink: #3f6b0c;
+  --vh-orange-50: #fff3e6;
+  --vh-orange-ink: #9a4300;
+  --vh-grey-50: #eef1f5;
+  --vh-error: #b42318;
+  --vh-tab-h: 76px;
+}
+
+/*
+ * 48px TARGETS IN THE VIHAT INTRO (owner 12/10/2026). Raised on the intro's own root rather than on
+ * `:root`: the commune channel computes its targets as `--tap-min + 4px` and must not grow with this
+ * change. Every intro control already reads `--tap-min`, so one declaration moves them all.
+ */
+.app {
+  --tap-min: 48px;
 }
 
 * {
@@ -169,7 +150,7 @@ body {
 
 /* ---------- header ---------- */
 .app-header {
-  background: linear-gradient(120deg, var(--navy-deep) 0%, var(--navy) 100%);
+  background: var(--navy);
   color: #ffffff;
   padding: 14px 16px 16px;
   padding-top: calc(14px + env(safe-area-inset-top, 0px));
@@ -178,7 +159,8 @@ body {
 }
 
 /* The seam with the platform's own header. A brand rule here reads as intent; without it the
-   two navy bars look like one bar that failed to render. Decoration only — no text sits on it. */
+   two navy bars look like one bar that failed to render. Decoration only — no text sits on it.
+   One flat brand green since 12/10/2026 (no gradients). */
 .app-header::after {
   content: "";
   position: absolute;
@@ -186,7 +168,7 @@ body {
   right: 0;
   bottom: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+  background: var(--brand-green);
 }
 
 /* Tên chủ sở hữu và tên màn. Không có nút đổi xã (ADR 0044 câu 4 · ADR 0047): một phiên, một xã. */
@@ -220,19 +202,15 @@ body {
 /* ---------- scrolling content ---------- */
 
 /*
- * The page itself carries the technology motif: two soft brand washes and a faint graph-paper
- * rule. Every stop is a SOLID colour — no `transparent`, no alpha — so the darkest background
- * any body text can land on is --grid-line, which is measured (6.2:1 for secondary text).
- * A gradient fading to `transparent` would blend through unmeasured colours and, in older
- * WebViews, fringe grey.
+ * The page is ONE flat colour (12/10/2026). The graph-paper rule and the two washes it replaced
+ * were decoration under every line of body text; a flat page is the one background every pair
+ * below can be measured against. The bottom padding leaves room for the floating chat button
+ * (its height plus a gap) so it never covers the last line of a screen.
  */
 .app-main {
   -webkit-overflow-scrolling: touch;
   padding: 16px 16px calc(28px + var(--tap-min) + 16px);
-  background-color: var(--surface-alt);
-  background-image: linear-gradient(var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px), linear-gradient(90deg, var(--grid-line) 1px, rgba(255, 255, 255, 0) 1px), linear-gradient(165deg, var(--surface-tint) 0%, var(--surface-alt) 46%, var(--surface-tint-green) 100%);
-  background-size: 34px 34px, 34px 34px, 100% 100%;
-  background-attachment: local, local, local;
+  background: var(--vh-page);
   flex: auto;
   overflow-y: auto;
 }
@@ -250,32 +228,13 @@ body {
   margin: 0 0 16px;
 }
 
-/* ---------- dark panels: hero, banner, stat band ---------- */
+/* ---------- panels: the home hero (navy) and the screen banners (light) ---------- */
 
 /*
- * One construction, three uses. The dark panel is what gives the app a spine: a citizen
- * scrolling four screens should be able to tell them apart without reading, and the panel is
- * the landmark each screen opens with.
+ * TWO SURFACES, BOTH FLAT (12/10/2026). The home hero stays the one dark landmark of the app:
+ * flat navy, white words (13.0:1). Every other screen opens with a LIGHT banner — navy title on
+ * `--vh-blue-50` — so a screen title no longer stacks a second navy bar under the navy header.
  */
-.hero,
-.banner {
-  position: relative;
-  overflow: hidden;
-  border-radius: 18px;
-  color: #ffffff;
-  background-color: var(--navy);
-  /*
-   * ONE glow per panel, not two stacked. A second opaque gradient layer simply hides the first,
-   * and the only way to see both would be an alpha layer — which puts text over a blend nobody
-   * declared and nobody measured. Each screen gets its own single glow instead; that is where
-   * the rhythm between the four screens comes from.
-   */
-  background-image: radial-gradient(
-    78% 130% at 108% -20%,
-    var(--panel-glow-blue) 0%,
-    var(--navy-deep) 68%
-  );
-}
 
 /*
  * HERO TRÀN NGANG, BO GÓC DƯỚI — bản mẫu của PM.
@@ -289,16 +248,17 @@ body {
  *   con số ra khỏi tệp này và so — một chồng lớp mà không ai đo là một chồng lớp đúng trên máy
  *   người viết nó.
  *
- * KHÔNG CÒN `NetworkBackdrop` TRONG HERO, và đó là điều kiện để dải xanh sáng được tới #0a6398:
- * một nét vẽ sáng 0,22 chồng lên đầu sáng của dải tạo ra một màu sáng hơn nữa, và chữ phụ đứng
- * trên nó tụt xuống dưới 4,5:1. Nét vẽ ấy vẫn còn trên `.banner` của ba màn kia, nơi nền tối hơn.
+ * NỀN PHẲNG MỘT MÀU (12/10/2026): `--nen-hero` nay là `--navy`, không còn dải chuyển sắc và
+ * không còn nét vẽ nào sau chữ. `accessibility.test.ts` ghim rằng nó là một màu đã đo.
  */
 .hero {
-  box-shadow: var(--bong-noi);
+  position: relative;
+  overflow: hidden;
+  color: #ffffff;
   margin: 0 -16px;
   padding: 22px 20px 76px;
   border-radius: 0 0 24px 24px;
-  background-image: var(--nen-hero);
+  background: var(--nen-hero);
 }
 
 /* Chạm luôn vào thanh tiêu đề — nhưng CHỈ khi hero là thứ đầu tiên trong vùng cuộn. Lối vào kênh
@@ -318,8 +278,8 @@ body {
 /*
  * HUY HIỆU "Vi" — hai chữ cái đầu của tên pháp nhân, cắt ra lúc chạy (xem HomeScreen.tsx).
  *
- * Nền `--surface-tint` chứ không phải `--brand-blue`: chữ trên nó là `--navy`, và cặp
- * navy/surface-tint đã có tên trong bảng cặp màu. Chữ navy trên brand-blue thì chưa ai đo.
+ * Nền trắng, chữ `--navy` (13,0:1, cặp "card titles and figures"). Chữ navy trên brand-blue thì
+ * chưa ai đo.
  */
 .hero__huy-hieu {
   display: inline-flex;
@@ -329,7 +289,7 @@ body {
   width: 46px;
   height: 46px;
   border-radius: 14px;
-  background: var(--surface-tint);
+  background: var(--surface);
   color: var(--navy);
   font-size: 20px;
   font-weight: 700;
@@ -340,47 +300,27 @@ body {
   min-width: 0;
 }
 
+/* The light banner every non-home screen opens with: navy title on `--vh-blue-50` (measured), a
+   white icon tile beside it. No shadow and no drawing behind the words — a title, not a poster. */
 .banner {
-  box-shadow: var(--bong-noi);
   margin: 0 0 16px;
-  padding: 20px;
+  padding: 18px 18px 16px;
+  border-radius: var(--vh-radius);
+  background: var(--vh-blue-50);
+  color: var(--navy);
 }
 
-/* Rhythm between screens: the same panel, lit from the other side. */
-.banner--contact {
-  background-image: radial-gradient(
-    76% 130% at -8% -20%,
-    var(--panel-glow-green) 0%,
-    var(--navy) 70%
-  );
+.banner .tile {
+  background: var(--surface);
+  color: var(--navy);
 }
 
 /* `.band` — dải chỉ số tối, đứng riêng dưới hero — KHÔNG CÒN từ 21/09/2026 (khuya): bản mẫu đặt
    chỉ số NGAY TRONG hero, và giữ lại một lớp không màn nào dùng là để sẵn một bề mặt tối mà người
    sau sẽ gắn chữ lên, không ai đo. Xem `.stat-grid` bên dưới. */
 
-/*
- * The drawn backdrop sits BEHIND the words, so its opacity is not a taste decision: at 0.22 the
- * lightest line a letter can cross is --panel-line-blue / --panel-line-green, and secondary text
- * still clears 4.5:1 there. Raising it is how a panel becomes beautiful and unreadable at once.
- */
-.banner__backdrop {
-  position: absolute;
-  top: 0;
-  right: -6%;
-  width: 62%;
-  height: 130%;
-  pointer-events: none;
-  color: var(--brand-blue);
-  opacity: 0.22;
-}
-
-/* Màn Liên hệ được thắp bằng ánh lục (`--panel-glow-green`), nên nét vẽ trên nó cũng là nét LỤC:
-   `--panel-line-green` là đúng màu nét lục 0,22 chồng lên đầu sáng lục ấy, và nó có tên trong
-   bảng cặp màu. Một nét XANH trên nền lục là một màu pha chưa ai đo. */
-.banner--contact .banner__backdrop {
-  color: var(--brand-green);
-}
+/* `.banner__backdrop` (the drifting constellation behind the panel titles) is gone with the
+   gradients, 12/10/2026: decoration behind words is exactly what "modern = low friction" removes. */
 
 .hero__content,
 .banner__content {
@@ -397,10 +337,10 @@ body {
 }
 
 .banner__title {
-  font-size: 26px;
+  font-size: 24px;
   line-height: 1.25;
   margin: 0;
-  color: #ffffff;
+  color: var(--navy);
 }
 
 /*
@@ -448,6 +388,11 @@ body {
   font-size: var(--text-body);
   margin: 6px 0 0;
   color: var(--on-panel);
+}
+
+/* The banner is light now, so its lead line is the muted ink, not the on-navy grey. */
+.banner__lead {
+  color: var(--ink-muted);
 }
 
 /* ---------- section titles ---------- */
@@ -498,7 +443,7 @@ body {
 }
 
 .section-title__mark {
-  background: linear-gradient(135deg, var(--surface-tint) 0%, var(--surface-tint-green) 100%);
+  background: var(--vh-blue-50);
   width: 34px;
   height: 34px;
   color: var(--navy);
@@ -515,27 +460,24 @@ body {
   height: 20px;
 }
 
-/* The constellation used as a section mark fills its tile instead of sitting inside it. */
-.section-title__net {
-  width: 100%;
-  height: 100%;
-  color: var(--navy);
-}
 
 /* ---------- cards ---------- */
+/* The intro's card: white, a hairline in the page's own line colour, 16px radius, one soft
+   shadow — the commune app's card shape in ViHAT's tokens. */
 .card {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   margin: 0 0 12px;
   padding: 16px;
   position: relative;
 }
 
-/* A brand edge instead of a brand headline: the colour carries no meaning, so it may be light. */
+/* No coloured stripe any more (12/10/2026): the stripe carried no meaning, and a flat card reads
+   cleaner. The class stays because `SolutionsScreen` still marks the publisher's description. */
 .card--accent {
-  border-left: 4px solid var(--brand-blue);
+  border-color: var(--vh-line);
 }
 
 .card--statement {
@@ -561,16 +503,16 @@ body {
 /* ---------- icon tiles ---------- */
 
 /*
- * 44x44 — the same minimum a tap target has, so a tile next to a link never makes the row
- * shorter than a thumb needs. The glyph is --tile-glyph on the brand gradient: 6.1:1 at the
- * blue end and 6.7:1 at the green end. A white glyph there would be 2.5:1.
+ * As tall as a tap target (`--tap-min`), so a tile next to a link never makes the row shorter than
+ * a thumb needs. FLAT since 12/10/2026: navy glyph on `--vh-blue-50` (measured). The brand gradient
+ * it replaced needed a dark glyph because both brand colours are light.
  */
 .tile {
   width: var(--tap-min);
   height: var(--tap-min);
-  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-green) 100%);
-  color: var(--tile-glyph);
-  border-radius: 13px;
+  background: var(--vh-blue-50);
+  color: var(--navy);
+  border-radius: 14px;
   flex: none;
   justify-content: center;
   align-items: center;
@@ -578,7 +520,7 @@ body {
 }
 
 .tile--soft {
-  background: var(--surface-tint);
+  background: var(--vh-blue-50);
   color: var(--navy);
 }
 
@@ -654,10 +596,10 @@ body {
   padding: 0;
 }
 
+/* Pill chips, flat: ink on `--vh-blue-50`, no shadow — a label, not a button. */
 .chip {
-  border: 1px solid var(--hairline);
-  background: var(--surface-tint);
-  box-shadow: var(--bong-the);
+  border: 1px solid var(--vh-line);
+  background: var(--vh-blue-50);
   color: var(--ink);
   font-size: var(--text-small);
   border-radius: 999px;
@@ -683,9 +625,9 @@ body {
 
 .solution {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   align-items: flex-start;
   gap: 14px;
   margin: 0 0 12px;
@@ -695,19 +637,9 @@ body {
   overflow: hidden;
 }
 
-.solution::before {
-  content: "";
-  background: linear-gradient(180deg, var(--brand-blue) 0%, var(--brand-green) 100%);
-  width: 4px;
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-}
-
+/* Pressed: the flat green tint (navy and ink on it are measured). No stripe at the edge any more. */
 .solution:active {
   background: var(--nen-the-luc);
-  box-shadow: var(--bong-noi);
 }
 
 .solution__text {
@@ -745,23 +677,13 @@ body {
 
 .unit {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
   font-size: var(--text-body);
-  border-radius: 18px;
-  padding: 16px 14px 14px;
+  border-radius: var(--vh-radius);
+  padding: 14px;
   position: relative;
   overflow: hidden;
-}
-
-.unit::before {
-  content: "";
-  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
-  height: 3px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
 }
 
 .unit__name {
@@ -782,9 +704,9 @@ body {
 
 .cert {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   padding: 14px;
 }
 
@@ -823,9 +745,9 @@ body {
 
 .office {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   align-items: flex-start;
   gap: 12px;
   margin: 0 0 10px;
@@ -860,10 +782,10 @@ body {
 .action {
   min-height: var(--tap-min);
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
   color: var(--ink);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   align-items: center;
   gap: 12px;
   margin: 0 0 10px;
@@ -872,11 +794,17 @@ body {
   display: flex;
 }
 
+/* The one emphasised action of a screen: flat navy, white words (13.0:1). Its tile turns white so
+   the navy glyph stays visible on the navy button. */
 .action--primary {
-  background-color: var(--navy);
-  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
+  background: var(--navy);
   border-color: var(--navy);
   color: #ffffff;
+}
+
+.action--primary .tile {
+  background: var(--surface);
+  color: var(--navy);
 }
 
 .action--primary .action__label {
@@ -897,12 +825,16 @@ body {
 }
 
 /* ---------- tab bar ---------- */
+/* 76px tall, as the commune app's bar (`--vh-tab-h`): an icon over a word, each tab a full-height
+   target. Four tabs at 320px leave 80px each. */
 .tabbar {
   background: var(--surface);
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--vh-line);
+  min-height: var(--vh-tab-h);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   flex: none;
   display: flex;
+  align-items: stretch;
 }
 
 /*
@@ -930,27 +862,35 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   padding: 6px 4px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
+/* The icon sits in a pill that fills for the current tab — the commune bar's shape. */
 .tabbar__glyph {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex: 0 0 auto;
+  box-sizing: content-box;
+  padding: 3px 14px;
+  border-radius: 999px;
 }
 
 .tabbar__nhan {
   display: block;
 }
 
-/* The active tab is marked three ways at once — weight, a top rule and aria-current —
-   so it never depends on colour to be readable. */
+/* The active tab is marked FOUR ways at once — weight, a top rule, a filled icon pill and
+   aria-current — so it never depends on colour to be readable. Navy on `--vh-blue-50` is measured. */
 .tabbar__item[aria-current="page"] {
   color: var(--navy);
   font-weight: 700;
   border-top-color: var(--navy);
+}
+
+.tabbar__item[aria-current="page"] .tabbar__glyph {
+  background: var(--vh-blue-50);
 }
 
 .tabbar__item:focus-visible {
@@ -967,10 +907,7 @@ body {
  * gets a completely static app rather than an app that stops animating some of the time.
  */
 @media (prefers-reduced-motion: no-preference) {
-  /* `.hero__backdrop` không còn: hero nay là một dải trơn, xem `.hero`. */
-  .banner__backdrop {
-    animation: drift 24s ease-in-out infinite alternate;
-  }
+  /* `.hero__backdrop` và `.banner__backdrop` không còn (12/10/2026): nền phẳng, không nét vẽ trôi. */
 
   /* HAI THỨ VÀ CHỈ HAI THỨ: `transform` và `opacity`. Cả hai chạy trên trình tổng hợp, nên một
      máy Android yếu không phải vẽ lại cả trang mỗi khung hình. Bất cứ thứ gì làm trang phải bố
@@ -993,11 +930,34 @@ body {
     animation-delay: 210ms;
   }
 
-  /* Huy hiệu tròn của ba tính năng: dải màu thương hiệu trôi chậm. Không đổi độ sáng của glyph,
-     vì glyph dùng `--tile-glyph` đã đo tương phản với CẢ HAI đầu dải. */
-  .tn__huy-hieu {
-    background-size: 220% 220%;
-    animation: troi-mau 18s ease-in-out infinite alternate;
+  /* The ViHAT intro's press feedback (12/10/2026), the commune app's rule below in ViHAT's classes:
+     a tap pushes the control down a little, so a finger knows it landed. Transform only. */
+  .action,
+  .menu-nhanh__nut,
+  .solution--mo,
+  .tabbar__item,
+  .tn__nut,
+  .tn__nut-phu,
+  .tn-hanh-dong,
+  .vh-more {
+    transition: transform 120ms ease-out;
+  }
+
+  .action:active,
+  .menu-nhanh__nut:active,
+  .solution--mo:active,
+  .tabbar__item:active,
+  .tn__nut:active:not(:disabled),
+  .tn__nut-phu:active:not(:disabled),
+  .tn-hanh-dong:active,
+  .vh-more:active {
+    transform: scale(0.98);
+  }
+
+  /* The pull band of "Yêu cầu của tôi" fades in — the same 180ms box-open motion as the commune app. */
+  .vh-pull--busy,
+  .vh-pull--failed {
+    animation: xa-enter 180ms ease-out backwards;
   }
 
   /* Commune app, "Đã gửi" (`PhanAnhAppXa.tsx` `SendDone`, `PROTOTYPE.md` §6.2): the check pops in ONCE,
@@ -1137,16 +1097,6 @@ body {
   }
 }
 
-@keyframes drift {
-  from {
-    transform: translate(0, 0);
-  }
-
-  to {
-    transform: translate(-10px, 6px);
-  }
-}
-
 @keyframes hien-len {
   from {
     opacity: 0;
@@ -1156,16 +1106,6 @@ body {
   to {
     opacity: 1;
     transform: translate(0, 0);
-  }
-}
-
-@keyframes troi-mau {
-  0% {
-    background-position: 0%;
-  }
-
-  to {
-    background-position: 100%;
   }
 }
 
@@ -1262,8 +1202,7 @@ body {
 /* Hành động chính: nền navy đặc, chữ trắng (13,0:1). Nó là nút DUY NHẤT được nhấn mạnh trên
    màn — hai nút cùng nổi bật là hai nút không nút nào nổi bật. */
 .goi-y__nut--chinh {
-  background-color: var(--navy);
-  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
+  background: var(--navy);
   border-color: var(--navy);
   color: #ffffff;
   font-size: 19px;
@@ -1285,12 +1224,12 @@ body {
    đổi màu, không nới ngưỡng — chữ mờ là thứ người ít có khả năng phàn nàn nhất phải chịu.
    --------------------------------------------------------------------------------------------- */
 .tn {
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   padding: 18px 16px 16px;
-  border: 1px solid var(--hairline);
-  border-radius: 16px;
+  border: 1px solid var(--vh-line);
+  border-radius: var(--vh-radius);
   background: var(--surface);
-  box-shadow: 0 1px 2px rgba(22, 37, 61, 0.06);
+  box-shadow: var(--bong-the);
 }
 
 .tn__dau {
@@ -1300,13 +1239,13 @@ body {
   margin: 0 0 10px;
 }
 
-/* Huy hiệu tròn mang dải màu thương hiệu. Glyph bên trong dùng `--tile-glyph` — tối, vì hai màu
-   thương hiệu đều SÁNG; chữ trắng trên chúng chỉ đạt 2,3:1. */
+/* The feature badge: flat, navy glyph on `--vh-blue-50` (measured) — the same tile as everywhere
+   else in the intro, no brand gradient, no drifting colour. */
 .tn__huy-hieu {
-  background: linear-gradient(135deg, var(--brand-blue) 0%, var(--brand-green) 100%);
+  background: var(--vh-blue-50);
   width: 44px;
   height: 44px;
-  color: var(--tile-glyph);
+  color: var(--navy);
   border-radius: 14px;
   flex: none;
   justify-content: center;
@@ -1350,8 +1289,7 @@ body {
   padding: 10px 16px;
   border: 1px solid var(--navy);
   border-radius: 12px;
-  background-color: var(--navy);
-  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
+  background: var(--navy);
   font: inherit;
   font-size: 19px;
   font-weight: 600;
@@ -1362,8 +1300,7 @@ body {
    ngưỡng 4,5:1 đúng lúc màn hình đang nói một điều người dùng cần đọc. Trạng thái nói bằng CHỮ
    trên chính nút ("Đang chờ bạn trả lời trên Zalo…"). */
 .tn__nut:disabled {
-  background-color: var(--navy-deep);
-  background-image: none;
+  background: var(--navy-deep);
   border-color: var(--navy-deep);
 }
 
@@ -1624,7 +1561,8 @@ body {
 }
 
 /* ---------------------------------------------------------------------------------------------
-   CHÍNH SÁCH QUYỀN RIÊNG TƯ — cuối màn Liên hệ.
+   CHÍNH SÁCH QUYỀN RIÊNG TƯ — màn con riêng từ 12/10/2026 (trước đó: cuối màn Liên hệ). Mở từ
+   hàng "Chính sách quyền riêng tư" trên Liên hệ và từ màn Quản lý quyền.
 
    `summary` là thứ duy nhất bấm được ở đây, nên nó phải đạt `--tap-min` như mọi đích chạm khác:
    một văn bản pháp lý mà tay run không mở nổi là một văn bản không đọc được. `accessibility.
@@ -1635,10 +1573,15 @@ body {
    tự để trình đọc màn hình đọc đúng "mục 3 trên 9". Để trình duyệt tự đánh số thì số của nó và
    số trong tiêu đề sẽ hiện ra hai lần cạnh nhau.
    --------------------------------------------------------------------------------------------- */
+/* Its own screen now, so it is a card like every other block: no rule above it to separate it
+   from the contacts it used to follow. */
 .chinh-sach {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--hairline);
+  margin: 0 0 12px;
+  padding: 4px 16px 8px;
+  border: 1px solid var(--vh-line);
+  border-radius: var(--vh-radius);
+  background: var(--surface);
+  box-shadow: var(--bong-the);
 }
 
 .chinh-sach__cau-dau {
@@ -1646,7 +1589,7 @@ body {
   padding: 12px 14px;
   border-left: 3px solid var(--brand-green);
   border-radius: 0 8px 8px 0;
-  background: var(--surface-tint-green);
+  background: var(--vh-green-50);
   color: var(--ink);
   font-size: var(--text-body);
   font-weight: 600;
@@ -1666,7 +1609,11 @@ body {
 }
 
 .chinh-sach__phan {
-  border-bottom: 1px solid var(--hairline);
+  border-bottom: 1px solid var(--vh-line);
+}
+
+.chinh-sach__muc > li:last-child .chinh-sach__phan {
+  border-bottom: none;
 }
 
 .chinh-sach__tieu-de {
@@ -1770,7 +1717,7 @@ body {
 
 .quay-lai {
   min-height: var(--tap-min);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   background: var(--nen-the);
   box-shadow: var(--bong-the);
   font: inherit;
@@ -1817,10 +1764,6 @@ body {
   line-height: 1;
 }
 
-.banner--giai-phap {
-  background-image: radial-gradient(120% 160% at 0% 0%, var(--panel-glow-blue) 0%, var(--navy) 62%);
-}
-
 .tile--lon {
   border-radius: 16px;
   width: 56px;
@@ -1840,9 +1783,9 @@ body {
   font-weight: 600;
 }
 
+/* The timeline's spine: one flat brand-green line (decoration — the years say the order in words). */
 .lich-su {
-  border-left: 3px solid var(--brand-blue);
-  border-image: linear-gradient(180deg, var(--brand-blue) 0%, var(--brand-green) 100%) 1;
+  border-left: 3px solid var(--brand-green);
   margin: 0 0 16px;
   padding: 0 0 0 16px;
   list-style: none;
@@ -1850,9 +1793,9 @@ body {
 
 .moc {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   margin: 0 0 12px;
   padding: 12px 14px;
   position: relative;
@@ -1892,23 +1835,13 @@ body {
 
 .quyen {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   margin: 0 0 12px;
   padding: 16px 14px 14px;
   position: relative;
   overflow: hidden;
-}
-
-.quyen::before {
-  content: "";
-  background: linear-gradient(90deg, var(--brand-blue) 0%, var(--brand-green) 100%);
-  height: 3px;
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
 }
 
 .quyen__ten {
@@ -1931,7 +1864,7 @@ body {
 
 .quyen__hoi,
 .quyen__ra-ngoai {
-  background: var(--surface-tint);
+  background: var(--vh-blue-50);
   font-size: var(--text-small);
   color: var(--ink);
   border-radius: 10px;
@@ -1967,8 +1900,8 @@ body {
   margin: -56px 0 18px;
   padding: 14px;
   background: var(--surface);
-  border: 1px solid var(--hairline);
-  border-radius: 22px;
+  border: 1px solid var(--vh-line);
+  border-radius: 20px;
   box-shadow: var(--bong-noi);
 }
 
@@ -1992,8 +1925,16 @@ body {
   display: grid;
 }
 
+/* A column, so the one sentence a failed hotline call shows (`HotlineLink`) stacks under its tile
+   instead of squeezing beside it. */
 .menu-nhanh__muc {
   display: flex;
+  flex-direction: column;
+}
+
+.menu-nhanh__muc .tn__loi {
+  margin-top: 6px;
+  font-size: var(--text-small);
 }
 
 /* Ô menu KHÔNG có viền và bóng riêng: chúng nằm TRONG một thẻ trắng đã có viền và bóng, và một
@@ -2017,11 +1958,11 @@ body {
   display: flex;
 }
 
-/* Hai màu pastel xen kẽ cho ô biểu tượng — bản mẫu xen kẽ BỐN màu; ở đây là hai, và cả hai đã có
-   cặp với `--navy` trong bảng cặp màu. Bốn màu mới là bốn cặp chưa ai đo, để lấy một nhịp trang
-   trí. Màu ở đây KHÔNG mang thông tin nào: nhãn chữ dưới mỗi ô nói hết. */
+/* Hai màu nhạt xen kẽ cho ô biểu tượng — xanh navy nhạt và xanh lục nhạt của bộ token ViHAT; cả hai
+   có cặp với `--navy` trong bảng cặp màu. Màu ở đây KHÔNG mang thông tin nào: nhãn chữ dưới mỗi ô
+   nói hết. */
 .menu-nhanh__muc:nth-child(even) .tile--soft {
-  background: var(--surface-tint-green);
+  background: var(--vh-green-50);
 }
 
 .menu-nhanh__nut:focus-visible {
@@ -2056,16 +1997,16 @@ body {
    trước, và đúng MỘT nút "Xem tất cả" dẫn sang chỗ đầy đủ. Xem chú thích trong `HomeScreen.tsx`. */
 .gp-noi-bat {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   margin: 0 0 12px;
   padding: 4px 14px;
   list-style: none;
 }
 
 .gp-noi-bat__mot {
-  border-top: 1px solid var(--hairline);
+  border-top: 1px solid var(--vh-line);
   padding: 12px 0;
 }
 
@@ -2095,9 +2036,9 @@ body {
 
 .tin {
   background: var(--nen-the);
-  border: 1px solid var(--hairline);
+  border: 1px solid var(--vh-line);
   box-shadow: var(--bong-the);
-  border-radius: 18px;
+  border-radius: var(--vh-radius);
   margin: 0 0 12px;
   padding: 14px;
 }
@@ -2147,7 +2088,8 @@ body {
  */
 .chat-noi {
   right: 16px;
-  bottom: calc(var(--tap-min) + 16px + env(safe-area-inset-bottom, 0px));
+  /* Clears the 76px tab bar plus a gap; the bar is a sibling in the column, the button floats. */
+  bottom: calc(var(--vh-tab-h) + 12px + env(safe-area-inset-bottom, 0px));
   pointer-events: none;
   flex-direction: column;
   align-items: flex-end;
@@ -2168,8 +2110,7 @@ body {
   min-height: var(--tap-min);
   pointer-events: auto;
   border: 1px solid var(--navy);
-  background-color: var(--navy);
-  background-image: radial-gradient(90% 200% at 110% 50%, var(--panel-glow-blue) 0%, var(--navy) 70%);
+  background: var(--navy);
   box-shadow: var(--bong-noi);
   font: inherit;
   font-size: var(--text-small);
@@ -2202,11 +2143,11 @@ body {
  *   lên khối mới chứ không trèo lên hero nữa — thẻ trắng trùm mất chính dải vừa thêm — và phép
  *   kiểm vẫn xanh, vì hai con số nó đọc không đổi. Nên dải ở TRONG thẻ.
  *
- *   Nền `--surface-tint` chứ không phải một màu chiến dịch riêng: mọi cặp màu của dải này đã có
+ *   Nền `--vh-blue-50` chứ không phải một màu chiến dịch riêng: mọi cặp màu của dải này đã có
  *   tên trong bảng cặp màu, và một màu mới là một cặp chưa ai đo để lấy một nhịp trang trí.
  */
 .dai-cd {
-  background: var(--surface-tint);
+  background: var(--vh-blue-50);
   border-radius: 14px;
   margin: 0 0 12px;
   padding: 10px 12px;
@@ -2327,6 +2268,203 @@ body {
 .o-ghi-chu__dem--qua {
   color: var(--navy);
   font-weight: 700;
+}
+
+/* ---------- ViHAT intro, 12/10/2026: long text, request states, pull to refresh ---------- */
+
+/*
+ * A LONG PARAGRAPH SHOWS THREE LINES FIRST (`ExpandableText`). The clamp is CSS only, so the full
+ * text is still in the page — a screen reader reads all of it, and "Xem thêm" only changes what
+ * the eye sees. `-webkit-line-clamp` is the one form every Zalo webview supports.
+ */
+.vh-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* "Xem thêm" / "Thu gọn": a real button, a full target, words in navy (measured on white). */
+.vh-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--tap-min);
+  margin: 4px 0 0;
+  padding: 0 4px;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-small);
+  font-weight: 700;
+  color: var(--navy);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.vh-more:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+/*
+ * STATUS PILL of a request (`RequestStatusChip`): an icon AND the words, on a tone per state.
+ * The tone is the third signal, never the only one (README §Non-negotiables #6). Each ink/fill pair
+ * is measured in `accessibility.test.ts`.
+ */
+.vh-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px 4px 8px;
+  border-radius: 999px;
+  font-size: var(--text-small);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.vh-status__glyph {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.vh-status--received {
+  background: var(--vh-blue-50);
+  color: var(--navy);
+}
+
+.vh-status--working {
+  background: var(--vh-orange-50);
+  color: var(--vh-orange-ink);
+}
+
+.vh-status--contacted {
+  background: var(--vh-green-50);
+  color: var(--vh-green-ink);
+}
+
+.vh-status--done {
+  background: var(--vh-grey-50);
+  color: var(--ink-muted);
+}
+
+/* One request: type on top, the status pill, then the code and time as label/value rows. */
+.vh-request__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.vh-request__head .card__title {
+  margin: 0;
+}
+
+.vh-request-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vh-request-list > .card {
+  margin: 0;
+}
+
+/* LOADING: flat blocks in the shape of a request card, under a visible sentence. They pulse by
+   opacity only (`.skel`, inside the reduced-motion guard) and stand still under "reduce". */
+.vh-skeleton {
+  display: grid;
+  gap: 12px;
+}
+
+.vh-skeleton .skel-row {
+  border: 1px solid var(--vh-line);
+  border-radius: var(--vh-radius);
+}
+
+.vh-skeleton .skel {
+  background: var(--vh-line);
+}
+
+/* EMPTY AND ERROR: one centred block — a drawn circle, a sentence, the next action. */
+.vh-state {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--ink);
+}
+
+.vh-state p {
+  margin: 0;
+}
+
+.vh-state__circle {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--vh-blue-50);
+  color: var(--navy);
+}
+
+.vh-state__circle svg {
+  width: 30px;
+  height: 30px;
+}
+
+.vh-state--error .vh-state__circle {
+  background: var(--vh-orange-50);
+  color: var(--vh-orange-ink);
+}
+
+.vh-state__title {
+  font-weight: 700;
+}
+
+.vh-state .tn__nut,
+.vh-state .tn__nut-phu {
+  margin: 4px 0 0;
+}
+
+/* PULL TO REFRESH of "Yêu cầu của tôi" (`IntroPullToRefresh`): a band present only while pulling,
+   refreshing or after a failed refresh. Words, never a spinner alone; a failure carries an icon. */
+.vh-pull {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--ink-muted);
+  font-size: var(--text-body);
+  font-weight: 600;
+}
+
+.vh-pull--busy {
+  min-height: var(--tap-min);
+}
+
+.vh-pull--failed {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--vh-error);
+}
+
+.vh-pull__glyph {
+  width: 22px;
+  height: 22px;
+  flex: none;
 }
 
 /* =============================================================================================

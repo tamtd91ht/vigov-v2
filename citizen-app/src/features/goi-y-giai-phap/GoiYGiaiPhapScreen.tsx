@@ -27,6 +27,7 @@ import { useState } from "react";
 import { CONTACT } from "../../content/company-profile";
 import { type ThamSoMan } from "../company-intro/dieu-huong";
 import { CompassGlyph, HandshakeGlyph, PhoneGlyph, SOLUTION_GLYPHS } from "../company-intro/icons";
+import { HotlineLink } from "../tinh-nang/HotlineLink";
 
 import {
   CAU_HOI_NGANH,
@@ -221,10 +222,10 @@ export function KetQuaGoiY({
         </button>
       )}
 
-      {/* `tel:` — không phải một lời gọi nền tảng. `openPhone` đang được khai cho việc gọi một số
-          vừa QUÉT được ở màn Danh thiếp; mượn nó ở đây là làm sai lệch chính bảng khai mà màn Quản
-          lý quyền đọc ra. Một neo `tel:` chạy được cả ngoài Zalo và không cần khai thêm quyền nào. */}
-      <a className="action action--primary" href={`tel:${CONTACT.hotlineDialable}`}>
+      {/* `HotlineLink` (12/10/2026): inside Zalo the webview ignores `tel:`, so the tap dials through `openPhone`,
+          whose declaration row (`zalo-api.ts`) now names "Gọi hotline" for Quản lý quyền to read; outside Zalo it
+          is still the `tel:` link. */}
+      <HotlineLink className="action action--primary">
         <span className="tile" aria-hidden="true">
           <PhoneGlyph className="tile__glyph" />
         </span>
@@ -232,7 +233,7 @@ export function KetQuaGoiY({
           <span className="action__label">{LOI.nut_goi}</span>
           <span className="action__value">{CONTACT.hotlineLabel}</span>
         </span>
-      </a>
+      </HotlineLink>
     </>
   );
 }

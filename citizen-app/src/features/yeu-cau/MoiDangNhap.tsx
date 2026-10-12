@@ -8,11 +8,12 @@
  *   tệ hơn một bậc: một danh sách rỗng khi chưa đăng nhập đọc ra thành "tôi chưa gửi yêu cầu nào"
  *   — một câu SAI, và người đọc nó sẽ gửi lại lần nữa.
  *
- * ⚠ HOTLINE Ở LẠI NGAY DƯỚI NÚT, VÀ NÓ KHÔNG PHẢI TRANG TRÍ. `tel:` là đường DUY NHẤT của cả bề
+ * ⚠ HOTLINE Ở LẠI NGAY DƯỚI NÚT, VÀ NÓ KHÔNG PHẢI TRANG TRÍ. Gọi hotline là đường DUY NHẤT của cả bề
  * mặt này chạy được khi chưa đăng nhập. Người đang cần gấp không nên bị buộc đăng nhập trước.
  */
 import { CONTACT } from "../../content/company-profile";
 import { PhoneGlyph, ShieldGlyph } from "../company-intro/icons";
+import { HotlineLink } from "../tinh-nang/HotlineLink";
 
 import { TU_VAN } from "./noi-dung";
 
@@ -40,12 +41,12 @@ export function MoiDangNhap({
       </button>
 
       <p className="tn__giai-thich">{TU_VAN.van_goi_duoc}</p>
-      {/* `tel:` — không phải một lời gọi nền tảng, và không cần khai thêm quyền nào. Xem khối
-          chú thích của `MenuNhanh` về vì sao `openPhone` KHÔNG được mượn cho việc này. */}
-      <a className="tn-hanh-dong tn-hanh-dong--rong" href={`tel:${CONTACT.hotlineDialable}`}>
+      {/* `HotlineLink` (12/10/2026): inside Zalo a bare `tel:` does nothing, so it dials through `openPhone`
+          (declared for the hotline in `zalo-api.ts`); outside Zalo it stays the `tel:` link. */}
+      <HotlineLink className="tn-hanh-dong tn-hanh-dong--rong">
         <PhoneGlyph className="tn-hanh-dong__glyph" />
         Gọi {CONTACT.hotlineLabel}
-      </a>
+      </HotlineLink>
     </section>
   );
 }

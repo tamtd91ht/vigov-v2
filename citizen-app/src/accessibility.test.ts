@@ -70,6 +70,20 @@ describe("text and targets stay usable for an ageing eye", () => {
     expect(pixels("tap-min")).toBeGreaterThanOrEqual(44);
   });
 
+  it("the ViHAT intro raises its targets to 48px on its own root, not on :root", () => {
+    // Owner 12/10/2026. On `.app` (the intro's shell) so every intro control reading `--tap-min` grows, while the
+    // commune channel — `--tap-min + 4px` from `:root` — does not. Lowering it back turns this red.
+    const rules = [...styles.matchAll(/(?:^|\n)\.app\s*\{([^}]*)\}/g)].map((m) => m[1]!);
+    const value = rules.map((rule) => /--tap-min:\s*(\d+(?:\.\d+)?)px/.exec(rule)?.[1]).find((v) => v !== undefined);
+    expect(value, ".app no longer sets --tap-min").toBeDefined();
+    expect(Number(value)).toBeGreaterThanOrEqual(48);
+  });
+
+  it("the ViHAT tab bar is a 76px icon bar whose tabs fill its height", () => {
+    expect(styles).toMatch(/\.tabbar\s*\{[^}]*min-height:\s*var\(--vh-tab-h\)/);
+    expect(Number.parseFloat(token("vh-tab-h"))).toBeGreaterThanOrEqual(76);
+  });
+
   it("applies the tap minimum to the controls that are actually tapped", () => {
     // A token nothing references protects nothing. The tab bar buttons and the contact actions
     // are the only tappable things in phase 1.
@@ -124,6 +138,11 @@ describe("text and targets stay usable for an ageing eye", () => {
     //   chữ, và đúng chỗ người ta hay dựng một liên kết chữ cao 20px. Một dòng chữ xanh bấm được
     //   là một đích chạm mà ngón cái phải ngắm, và ở mép phải thì ngắm trượt là chuyện thường.
     expect(styles).toMatch(/\.hang-tieu-de__them\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+
+    // 12/10/2026: "Xem thêm" / "Thu gọn" under a long paragraph — a short text button, the shape most often built
+    // 20px tall; and the busy band of the pull to refresh, which holds the "Đang tải lại…" sentence.
+    expect(styles).toMatch(/\.vh-more\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+    expect(styles).toMatch(/\.vh-pull--busy\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
   it("kênh công dân: mọi đích chạm và ô nhập cao ít nhất 48px", () => {
@@ -205,14 +224,13 @@ describe("text and targets stay usable for an ageing eye", () => {
 });
 
 /**
- * WHY A GRADIENT CAN BE CHECKED AT ALL:
+ * WHY EVERY SURFACE IS ONE NAMED COLOUR (flat since 12/10/2026):
  *
- *   A ratio can only be computed against a colour that is written down. The dark panels and the
- *   page wash are therefore built from SOLID stops declared as tokens — `--panel-glow-blue` and
- *   `--panel-glow-green` are the lightest points of the panel gradients, `--surface-tint`,
- *   `--surface-tint-green` and `--grid-line` are the extremes of the page background. Every pair
- *   below is text that actually lands on one of them. A gradient fading to `transparent` would
- *   pass through colours nobody measured, and this file could say nothing about it.
+ *   A ratio can only be computed against a colour that is written down. Until 12/10/2026 the
+ *   panels, cards and page were gradients, and this list measured their stops — the colours in
+ *   between were never measured. The intro is now flat: every surface text sits on is one token,
+ *   so every pair below is text that actually lands on exactly that colour. The block after this
+ *   one pins that the surface tokens stay single colours.
  *
  *   The brand pair is here for the opposite reason: #00aef4 and #78bd1a are LIGHT (2.5:1 and
  *   2.3:1 against white), so the two cases pinned are the dark glyph that is allowed to sit on
@@ -234,27 +252,13 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["chip text on its tinted pill", token("ink"), token("surface-tint")],
     ["body text on the green wash", token("ink"), token("surface-tint-green")],
     ["secondary text on the green wash", token("ink-muted"), token("surface-tint-green")],
-    ["secondary text crossing a grid line", token("ink-muted"), token("grid-line")],
     ["section titles on the washes", token("navy"), token("surface-tint")],
 
-    // Dark panels: hero, banner, statistics band, primary action. Checked at BOTH ends of each
-    // gradient, because "the darkest end is fine" is exactly the half-check that ships.
-    ["panel text at the navy end", "#ffffff", token("navy")],
-    ["panel text at the deep end", "#ffffff", token("navy-deep")],
-    ["panel text at the blue glow", "#ffffff", token("panel-glow-blue")],
-    ["panel text at the green glow", "#ffffff", token("panel-glow-green")],
+    // The navy surfaces — the home hero, the primary action, the disabled/waiting button. Flat since
+    // 12/10/2026, so one pair per text colour is the whole check.
+    ["panel text on navy", "#ffffff", token("navy")],
+    ["panel text on the deep navy", "#ffffff", token("navy-deep")],
     ["figure labels on the navy panel", token("on-panel"), token("navy")],
-    ["figure labels at the blue glow", token("on-panel"), token("panel-glow-blue")],
-    ["figure labels at the green glow", token("on-panel"), token("panel-glow-green")],
-
-    // The drawn constellation passes BEHIND the words. A 1px node line is thin, and a thin light
-    // line under a letter is exactly what an ageing eye loses the letter in, so the line is a
-    // background colour like any other: these two are the stroke at the opacity it is drawn with,
-    // over the lightest point of the panel.
-    ["panel text crossing a blue node line", "#ffffff", token("panel-line-blue")],
-    ["panel text crossing a green node line", "#ffffff", token("panel-line-green")],
-    ["figure labels crossing a blue node line", token("on-panel"), token("panel-line-blue")],
-    ["figure labels crossing a green node line", token("on-panel"), token("panel-line-green")],
 
     // Brand surfaces. The glyph is dark BECAUSE the brand colours are light.
     ["the glyph on the blue end of a tile", token("tile-glyph"), token("brand-blue")],
@@ -269,7 +273,6 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the commune name on the confirm card", token("navy"), token("surface")],
     ["the province line under the commune name", token("ink-muted"), token("surface")],
     ["the confirm button label", "#ffffff", token("navy")],
-    ["the confirm button label at its blue glow", "#ffffff", token("panel-glow-blue")],
     ["the 'not this commune' button label", token("ink"), token("surface")],
     ["the reason line above the confirm card", token("ink-muted"), token("surface-alt")],
 
@@ -281,7 +284,6 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the feature lead line", token("ink-muted"), token("surface")],
     ["the reason the app needs this permission", token("ink"), token("surface")],
     ["the permission button label", "#ffffff", token("navy")],
-    ["the permission button label at its blue glow", "#ffffff", token("panel-glow-blue")],
     ["the permission button label while waiting", "#ffffff", token("navy-deep")],
     ["the scan-again button label", token("navy"), token("surface")],
     ["a call / mail / directions button label", token("navy"), token("surface")],
@@ -352,8 +354,8 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the back-to-list control of a sub-screen", token("navy"), token("surface")],
     ["the arrow marking a solution card as tappable", token("navy"), token("surface")],
     ["the headline on a solution detail page", token("navy"), token("surface")],
-    ["the title of a solution detail page", "#ffffff", token("navy")],
-    ["the title of a solution detail page at its blue glow", "#ffffff", token("panel-glow-blue")],
+    // Screen banners are light since 12/10/2026: navy title on the ViHAT blue tint.
+    ["the title of a solution detail page", token("navy"), token("vh-blue-50")],
 
     // MÀN QUẢN LÝ QUYỀN. Đây là chữ người dùng đọc để quyết định có chia sẻ dữ liệu của mình hay
     // không, và là chữ người duyệt của Zalo đọc để đối chiếu từng quyền với chỗ nó được dùng.
@@ -365,92 +367,43 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the technical API name a reviewer matches against the console", token("ink-muted"), token("surface")],
 
     /**
-     * ⚠ MỌI THẺ SÁNG NAY CÓ NỀN CHUYỂN SẮC — 21/09/2026, hướng thị giác của chủ dự án.
+     * MÀN CHỦ — hero, menu nhanh, giải pháp nổi bật, khối tin, nút chat nổi.
      *
-     *   `--nen-the` đi từ `--surface` (trắng) xuống `--surface-tint`, `--nen-the-luc` xuống
-     *   `--surface-tint-green`. Mọi cặp ở trên đo chữ trên `--surface` — tức đo ĐẦU SÁNG của dải,
-     *   chỗ dễ đọc nhất. **Chữ ở đáy thẻ đứng trên đầu kia.**
-     *
-     *   Một dải chuyển sắc là chỗ độ tương phản chết đầu tiên, và nó chết ở phía DƯỚI thẻ — chỗ
-     *   mắt đã mỏi khi đọc tới, và chỗ không ai soi khi duyệt một ảnh chụp màn hình. Nên cả ba
-     *   màu chữ được đo lại trên CẢ HAI đầu kia, và ba dòng này là thứ giữ cho "nền đẹp" không
-     *   bao giờ được đổi thành "nền đẹp, chữ khó đọc".
-     */
-    ["card text where the card gradient ends blue", token("ink"), token("surface-tint")],
-    ["card secondary text where the card gradient ends blue", token("ink-muted"), token("surface-tint")],
-    ["card titles where the card gradient ends blue", token("navy"), token("surface-tint")],
-    /**
-     * MÀN CHỦ SAU LƯỢT 21/09/2026 (tối): hai câu mới trong hero, menu nhanh, giải pháp nổi bật,
-     * khối tin, nút chat nổi.
-     *
-     * KHÔNG MỘT MÀU MỚI NÀO — đúng bảng đã đo ở trên. Vẫn liệt kê riêng, vì cùng lý do như mọi
-     * khối trước: một cặp màu chỉ được bảo vệ khi có TÊN NÓ trong danh sách này. Đổi `.tin__ngay`
-     * sang `--brand-blue` cho "nhẹ mắt" thì không dòng nào ở trên đỏ lên, và ngày đăng — thứ duy
-     * nhất nói cho người đọc biết tin này cũ hay mới — là chữ mất trước nhất khi ra nắng.
+     * HERO PHẲNG TỪ 12/10/2026: `--nen-hero` là `--navy`, một màu. Mọi chữ của hero (tên pháp nhân,
+     * slogan, câu sản phẩm, câu định vị, chỉ số) đo trên đúng màu ấy. Bản mẫu cũ vẽ hero sáng tới
+     * `--brand-blue` (#00aef4), nơi chữ trắng chỉ còn 2,5:1 — ca "nền hero là một màu đã đo" ở khối
+     * dưới đỏ lên nếu ai đó vẽ lại dải ấy.
      */
     ["the prototype slogan in the hero", "#ffffff", token("navy")],
-    ["the prototype slogan at the blue glow", "#ffffff", token("panel-glow-blue")],
-    ["the prototype slogan crossing a blue node line", "#ffffff", token("panel-line-blue")],
+    ["the entity name in the hero", "#ffffff", token("navy")],
+    ["the product sentence in the hero", token("on-panel"), token("navy")],
     ["the founding-year line above the entity name", token("on-panel"), token("navy")],
-    ["the founding-year line at the blue glow", token("on-panel"), token("panel-glow-blue")],
-
-    /**
-     * ⚠ HERO CHUYỂN SẮC — 21/09/2026 (khuya), theo bản mẫu của PM. ĐÂY LÀ CHỖ ĐỘ TƯƠNG PHẢN CHẾT
-     * ĐẦU TIÊN CỦA CẢ ỨNG DỤNG, và bảy dòng dưới đây là thứ duy nhất đứng chắn.
-     *
-     *   Hero nay là một dải đi từ `--hero-sang` xuống `--navy-deep`, mang TOÀN BỘ chữ mở đầu của
-     *   app: tên pháp nhân, câu slogan lớn nhất màn hình, câu sản phẩm, câu định vị, và năm chỉ
-     *   số. Mọi dòng ấy đứng trên cả dải, nên chúng được đo ở ĐẦU SÁNG — `--hero-sang` — chứ
-     *   không ở điểm trung bình và cũng không ở đầu tối. "Đầu tối thì đạt" là đúng phép kiểm nửa
-     *   vời sẽ được nộp lên.
-     *
-     *   BẢN MẪU VẼ ĐẦU SÁNG LÀ `--brand-blue` (#00aef4). Trắng trên nó là 2,5:1. Nếu ai đó đổi
-     *   `--hero-sang` về đúng màu bản mẫu cho "giống ảnh", hai dòng đầu dưới đây đỏ ngay — và đó
-     *   chính xác là cuộc trò chuyện phải xảy ra TRƯỚC, không phải sau khi nộp.
-     */
-    ["the entity name at the bright end of the hero", "#ffffff", token("hero-sang")],
-    ["the prototype slogan at the bright end of the hero", "#ffffff", token("hero-sang")],
-    ["the product sentence at the bright end of the hero", token("on-panel"), token("hero-sang")],
-    ["the founding-year line at the bright end of the hero", token("on-panel"), token("hero-sang")],
-    ["a figure in the hero at its bright end", "#ffffff", token("hero-sang")],
-    ["a figure label in the hero at its bright end", token("on-panel"), token("hero-sang")],
-    // Huy hiệu "Vi": chữ navy trên `--surface-tint`, đúng cặp của mọi ô biểu tượng mềm khác.
-    ["the two-letter badge in the hero", token("navy"), token("surface-tint")],
+    ["a figure in the hero", "#ffffff", token("navy")],
+    ["a figure label in the hero", token("on-panel"), token("navy")],
+    // Huy hiệu "Vi": chữ navy trên nền trắng.
+    ["the two-letter badge in the hero", token("navy"), token("surface")],
 
     ["a quick-menu label", token("navy"), token("surface")],
-    ["a quick-menu label where its card gradient ends", token("navy"), token("surface-tint")],
     ["the line saying where a quick-menu item leads", token("ink-muted"), token("surface")],
-    [
-      "that line where the card gradient ends",
-      token("ink-muted"),
-      token("surface-tint"),
-    ],
-    ["a quick-menu label on the green pressed state", token("navy"), token("surface-tint-green")],
-    // Glyph trong ô biểu tượng xen kẽ: `--navy` trên hai màu pastel, cả hai đã đo ở trên. Vẫn có
-    // tên riêng ở đây, vì một cặp màu chỉ được bảo vệ khi có TÊN NÓ trong danh sách này.
-    ["a quick-menu glyph on its blue pastel tile", token("navy"), token("surface-tint")],
-    ["a quick-menu glyph on its green pastel tile", token("navy"), token("surface-tint-green")],
-    // "Xem tất cả" trên nền trang — hai đầu của nền ấy, vì nó là một dải.
-    ["the see-all control beside a section title", token("navy"), token("surface-alt")],
-    ["the see-all control over the blue wash", token("navy"), token("surface-tint")],
-    ["the see-all control over the green wash", token("navy"), token("surface-tint-green")],
+    ["a quick-menu label on the green pressed state", token("navy"), token("vh-green-50")],
+    // Glyph trong ô biểu tượng xen kẽ: `--navy` trên hai màu nhạt của bộ token ViHAT.
+    ["a quick-menu glyph on its blue tile", token("navy"), token("vh-blue-50")],
+    ["a quick-menu glyph on its green tile", token("navy"), token("vh-green-50")],
+    // "Xem tất cả" trên nền trang (phẳng, `--vh-page`).
+    ["the see-all control beside a section title", token("navy"), token("vh-page")],
     // Nhãn tab: ô đang xem (`--navy`) và ô không xem (`--ink-muted`), trên nền trắng thanh tab.
     ["the label of the current tab", token("navy"), token("surface")],
     ["the label of a tab that is not current", token("ink-muted"), token("surface")],
 
     ["a featured product name on the home screen", token("navy"), token("surface")],
     ["a featured solution line on the home screen", token("ink"), token("surface")],
-    ["a featured solution line where its card gradient ends", token("ink"), token("surface-tint")],
 
     ["the publication date of a news item", token("ink-muted"), token("surface")],
     ["the headline of a news item", token("navy"), token("surface")],
     ["the excerpt of a news item", token("ink"), token("surface")],
-    ["the excerpt where the news card gradient ends", token("ink"), token("surface-tint")],
-    ["the note saying the news block is a snapshot", token("ink-muted"), token("surface-alt")],
-    ["that note over the blue wash", token("ink-muted"), token("surface-tint")],
+    ["the note saying the news block is a snapshot", token("ink-muted"), token("vh-page")],
 
     ["the floating chat label", "#ffffff", token("navy")],
-    ["the floating chat label at its blue glow", "#ffffff", token("panel-glow-blue")],
     ["the 'opens only inside Zalo' line under the chat button", token("ink"), token("surface-alt")],
 
     /**
@@ -460,8 +413,8 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
      * tên riêng ở đây, vì cùng lý do như mọi khối trước — một cặp màu chỉ được bảo vệ khi có TÊN
      * NÓ trong danh sách này. Đây là hai dòng đầu tiên một người tới từ mã QR đọc được.
      */
-    ["the campaign strip title", token("navy"), token("surface-tint")],
-    ["the campaign strip greeting", token("ink"), token("surface-tint")],
+    ["the campaign strip title", token("navy"), token("vh-blue-50")],
+    ["the campaign strip greeting", token("ink"), token("vh-blue-50")],
 
     /**
      * BỘ CHỌN BA BƯỚC "GỢI Ý GIẢI PHÁP" (22/09/2026).
@@ -471,11 +424,9 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
      * không dòng nào ở trên đỏ lên, và đây là chữ người dùng đọc để CHỌN — đọc sai một dòng là
      * chọn sai một bước.
      */
-    ["a wizard question", token("navy"), token("surface-alt")],
-    ["a wizard question over the blue wash", token("navy"), token("surface-tint")],
-    ["the step counter above a wizard question", token("ink-muted"), token("surface-alt")],
+    ["a wizard question", token("navy"), token("vh-page")],
+    ["the step counter above a wizard question", token("ink-muted"), token("vh-page")],
     ["a wizard option label", token("ink"), token("surface")],
-    ["a wizard option label where its card gradient ends", token("ink"), token("surface-tint")],
     ["the answer summary label", token("ink-muted"), token("surface")],
     ["the answer summary value", token("ink"), token("surface")],
 
@@ -501,13 +452,34 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the status word on a petition card", token("navy"), token("surface")],
     ["the channel-not-open notice", token("ink"), token("surface")],
 
-    ["card text where the card gradient ends green", token("ink"), token("surface-tint-green")],
-    [
-      "card secondary text where the card gradient ends green",
-      token("ink-muted"),
-      token("surface-tint-green"),
-    ],
-    ["card titles where the card gradient ends green", token("navy"), token("surface-tint-green")],
+    /**
+     * THE VIHAT INTRO'S OWN TOKENS (12/10/2026) — flat page, light banners, pill chips, status pills, the policy
+     * screen, the request states. Listed by name for the reason every block above gives: a pair is only protected
+     * while its NAME is in this list.
+     */
+    ["body text on the flat page", token("ink"), token("vh-page")],
+    ["secondary text on the flat page", token("ink-muted"), token("vh-page")],
+    ["a screen-lead line on the flat page", token("ink-muted"), token("vh-page")],
+    ["a section title on the flat page", token("navy"), token("vh-page")],
+    ["a banner title on its light tint", token("navy"), token("vh-blue-50")],
+    ["a banner lead line on its light tint", token("ink-muted"), token("vh-blue-50")],
+    ["a glyph on an icon tile", token("navy"), token("vh-blue-50")],
+    ["a keyword chip label", token("ink"), token("vh-blue-50")],
+    ["the current tab's icon pill", token("navy"), token("vh-blue-50")],
+    ["a pressed solution card's text", token("ink"), token("vh-green-50")],
+    ["a pressed solution card's title", token("navy"), token("vh-green-50")],
+    ["a chosen option on the request form", token("navy"), token("vh-green-50")],
+    ["a permission row's 'asks first' and 'leaves the device' lines", token("ink"), token("vh-blue-50")],
+    ["the policy's opening sentence on its green tint", token("ink"), token("vh-green-50")],
+    ["'Xem thêm' under a long paragraph", token("navy"), token("surface")],
+    ["status pill 'Đã tiếp nhận'", token("navy"), token("vh-blue-50")],
+    ["status pill 'Đang xử lý'", token("vh-orange-ink"), token("vh-orange-50")],
+    ["status pill 'Đã liên hệ với bạn'", token("vh-green-ink"), token("vh-green-50")],
+    ["status pill 'Đã hoàn tất'", token("ink-muted"), token("vh-grey-50")],
+    ["the error circle's glyph", token("vh-orange-ink"), token("vh-orange-50")],
+    ["the empty/error block sentences on the flat page", token("ink"), token("vh-page")],
+    ["the pull band words on the flat page", token("ink-muted"), token("vh-page")],
+    ["the 'could not refresh' sentence on its white strip", token("vh-error"), token("surface")],
   ];
 
   for (const [what, foreground, background] of pairs) {
@@ -545,65 +517,48 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
  * kêu sớm hơn thực tế, chứ không im lặng cho tới lúc một người nhìn thấy nhãn mất đuôi.
  */
 /**
- * NỀN CHUYỂN SẮC CHỈ ĐO ĐƯỢC KHI MỌI ĐIỂM DỪNG CỦA NÓ LÀ MỘT MÀU CÓ TÊN.
+ * NỀN PHẲNG — MỖI BỀ MẶT LÀ ĐÚNG MỘT MÀU ĐÃ ĐO (chủ dự án, 12/10/2026: "hiện đại = ít ma sát, không trang trí").
  *
- *   Bảng cặp màu ở trên đo `--surface`, `--surface-tint` và `--surface-tint-green`. Điều đó chỉ
- *   bảo vệ được các thẻ **chừng nào dải chuyển sắc của thẻ đi giữa đúng những màu ấy**. Đổi một
- *   điểm dừng thành `#fafcff` thì mọi cặp ở trên vẫn xanh — chúng đo token, không đo dải — và chữ
- *   ở đáy thẻ rơi xuống một màu chưa ai đo. Đó là cách một phép kiểm về độ tương phản chết trong
- *   im lặng, và nó chết đúng vào lúc ai đó đang làm cho app "hiện đại hơn".
+ *   Bảng cặp màu ở trên chỉ bảo vệ chữ CHỪNG NÀO bề mặt dưới chữ là đúng màu nó đo. Một dải chuyển
+ *   sắc là vô số màu, và bảng chỉ từng đo các điểm dừng. Nên ba token nền của phần giới thiệu ViHAT phải
+ *   là ĐÚNG MỘT `var(--…)` trỏ vào một màu có cặp trong bảng, và các luật CSS của phần ấy không còn một
+ *   `gradient(` nào. Ai vẽ lại một dải cho "giống ảnh" thì ca dưới đỏ — đó là cuộc trò chuyện phải có
+ *   TRƯỚC khi nộp, không phải sau.
  */
-describe("nền chuyển sắc của thẻ chỉ đi qua những màu đã đo", () => {
-  const CHO_PHEP = ["--surface", "--surface-tint", "--surface-tint-green"];
+describe("nền của phần giới thiệu ViHAT là màu phẳng đã đo", () => {
+  /** A surface token must be exactly `var(--<one of these>)`. */
+  const MEASURED: Readonly<Record<string, readonly string[]>> = {
+    "nen-the": ["--surface"],
+    "nen-the-luc": ["--vh-green-50"],
+    "nen-hero": ["--navy"],
+  };
 
-  /**
-   * ⚠ DẢI HERO — CÙNG MỘT LUẬT, VÀ Ở ĐÂY NÓ ĐẮT HƠN HẲN.
-   *
-   *   `--nen-hero` là nền của khối mang chữ lớn nhất ứng dụng, và nó là nền TỐI mang chữ TRẮNG —
-   *   tức là ngược chiều với các thẻ sáng ở trên: chỗ hỏng không phải đầu tối mà là ĐẦU SÁNG. Một
-   *   điểm dừng viết thẳng `#00aef4` cho "giống bản mẫu" thì mọi cặp màu ở trên vẫn xanh (chúng
-   *   đo token, không đo dải), và tiêu đề của app rơi xuống 2,5:1.
-   */
-  it("--nen-hero chỉ dừng ở những màu đã đo, và không có điểm dừng viết thẳng", () => {
-    const gia_tri = token("nen-hero");
-    expect(gia_tri, "--nen-hero không còn là một linear-gradient").toContain("linear-gradient");
-    expect(gia_tri, "--nen-hero chứa một mã màu viết thẳng, không phải một token đã đo").not.toMatch(
-      /#[0-9a-fA-F]{3,8}|\brgba?\(|\bhsla?\(/,
-    );
-    expect(gia_tri, "--nen-hero hoà qua transparent").not.toContain("transparent");
-    const bien = [...gia_tri.matchAll(/var\(\s*(--[a-z-]+)\s*\)/g)].map((m) => m[1]!);
-    expect(bien.length, "--nen-hero không tham chiếu token nào").toBeGreaterThan(1);
-    for (const b of bien) {
-      expect(
-        ["--hero-sang", "--navy", "--navy-deep", "--panel-glow-blue"],
-        `--nen-hero dừng ở ${b}, một màu không có trong bảng cặp màu của hero`,
-      ).toContain(b);
-    }
-    // Và hero PHẢI dùng chính token ấy, không tự dựng một dải riêng trong luật `.hero`.
-    const luat = /\.hero\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
-    expect(luat, ".hero không còn đọc --nen-hero").toContain("var(--nen-hero)");
-    expect(luat, ".hero tự dựng một dải chuyển sắc thay vì dùng --nen-hero").not.toMatch(
-      /background(-image)?:\s*(linear|radial)-gradient/,
-    );
-  });
-
-  for (const ten of ["nen-the", "nen-the-luc"]) {
-    it(`--${ten} không mang một màu nào ngoài bảng đã đo`, () => {
+  for (const [ten, cho_phep] of Object.entries(MEASURED)) {
+    it(`--${ten} là đúng một màu đã đo, không phải một dải`, () => {
       const gia_tri = token(ten);
-      expect(gia_tri, `--${ten} không còn là một linear-gradient`).toContain("linear-gradient");
-      expect(gia_tri, `--${ten} chứa một mã màu viết thẳng, không phải một token đã đo`).not.toMatch(
-        /#[0-9a-fA-F]{3,8}|\brgba?\(|\bhsla?\(/,
-      );
-      const bien = [...gia_tri.matchAll(/var\(\s*(--[a-z-]+)\s*\)/g)].map((m) => m[1]!);
-      expect(bien.length, `--${ten} không tham chiếu token nào`).toBeGreaterThan(1);
-      for (const b of bien) {
-        expect(CHO_PHEP, `--${ten} dừng ở ${b}, một màu không có trong bảng cặp màu`).toContain(b);
-      }
-      // `transparent` là cách một dải đi qua những màu không ai đo được: nó hoà với bất cứ thứ gì
-      // nằm dưới, và thứ nằm dưới là nền trang — vốn cũng là một dải.
-      expect(gia_tri, `--${ten} hoà qua transparent`).not.toContain("transparent");
+      expect(gia_tri, `--${ten} lại là một dải chuyển sắc`).not.toMatch(/gradient\(/);
+      const one = /^var\(\s*(--[a-z0-9-]+)\s*\)$/.exec(gia_tri)?.[1];
+      expect(one, `--${ten} không còn là đúng một var(--…)`).toBeDefined();
+      expect(cho_phep, `--${ten} trỏ vào ${one}, một màu không có cặp cho bề mặt này`).toContain(one);
     });
   }
+
+  it(".hero đọc --nen-hero và không tự dựng một dải", () => {
+    const luat = /\.hero\s*\{([^}]*)\}/.exec(styles)?.[1] ?? "";
+    expect(luat, ".hero không còn đọc --nen-hero").toContain("var(--nen-hero)");
+    expect(luat).not.toMatch(/gradient\(/);
+  });
+
+  it("không luật CSS nào của phần giới thiệu ViHAT còn một gradient", () => {
+    // The intro's rules are everything BEFORE the citizen channel's section banner; comments are stripped so
+    // the sentences that explain why gradients went do not trip the check that enforces it.
+    const marker = styles.indexOf("KÊNH CÔNG DÂN — ");
+    expect(marker, "the citizen channel's section banner moved — this case would read the whole file").toBeGreaterThan(0);
+    const intro = styles.slice(0, marker).replace(/\/\*[\s\S]*?\*\//g, " ");
+    expect(intro, "a gradient is back in the ViHAT intro's styles").not.toMatch(/gradient\(/);
+    // Must-still-catch: the check sees a gradient written the usual way.
+    expect(".x { background: linear-gradient(#fff, #000); }").toMatch(/gradient\(/);
+  });
 
   it("các thẻ dùng token nền ấy, không tự dựng một dải riêng", () => {
     // Một `.moc { background: linear-gradient(...#fff...) }` viết thẳng đi vòng qua cả ba ca trên.

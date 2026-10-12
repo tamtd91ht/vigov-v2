@@ -42,6 +42,7 @@ import { TuVanBaoGiaScreen } from "../yeu-cau/TuVanBaoGiaScreen";
 import { YeuCauCuaToiScreen } from "../yeu-cau/YeuCauCuaToiScreen";
 import { AboutScreen } from "./AboutScreen";
 import { ChiTietGiaiPhap } from "./ChiTietGiaiPhap";
+import { PrivacyPolicyScreen } from "./PrivacyPolicyScreen";
 import { introPermissionRows, QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
 import { ContactScreen } from "./ContactScreen";
 import { MOC_CHANG_DUONG, MOC_QUAN_LY_QUYEN } from "./dieu-huong";
@@ -195,6 +196,11 @@ const SCREEN_MARKUP = [
     ),
   },
   { id: "quan-ly-quyen", markup: render(<QuanLyQuyenScreen onQuayLai={() => {}} />) },
+  // 12/10/2026: the privacy policy left the bottom of Liên hệ for its own sub-screen — same sweep, same reason.
+  {
+    id: "chinh-sach-rieng-tu",
+    markup: render(<PrivacyPolicyScreen backLabel="Quay lại Liên hệ" onBack={() => {}} />),
+  },
 ] as const;
 
 describe("what the content file stores reaches the screen", () => {

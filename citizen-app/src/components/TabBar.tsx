@@ -4,8 +4,9 @@ import { type ScreenId, TABS, tabDangSang } from "../features/company-intro/scre
  * Bottom tab bar.
  *
  * Every tab is a real <button> inside a <nav>, so the screen reader announces it and the
- * active one is announced through `aria-current` rather than through colour. Height comes from
- * `--tap-min` (44px): a target smaller than that is one an unsteady hand cannot hit.
+ * active one is announced through `aria-current` rather than through colour. Each tab fills the
+ * 76px bar (`--vh-tab-h`, 12/10/2026) and is never shorter than `--tap-min` (48px in the intro): a
+ * target smaller than that is one an unsteady hand cannot hit.
  *
  * ⚠ BỐN Ô, MỖI Ô MỘT HÌNH TRÊN MỘT NHÃN CHỮ — bản mẫu của PM, 21/09/2026.
  *
@@ -13,8 +14,8 @@ import { type ScreenId, TABS, tabDangSang } from "../features/company-intro/scre
  *   thuộc, và hình cũng là "trạng thái báo bằng hình ảnh đơn thuần" — đúng thứ README cấm ở
  *   yêu cầu #6. Mỗi glyph vì thế `aria-hidden`: nhãn chữ bên dưới đã nói hết.
  *
- *   Ô đang xem được đánh dấu BA CÁCH cùng lúc — `aria-current`, chữ đậm, một vạch trên — nên nó
- *   không bao giờ phụ thuộc vào màu để đọc ra.
+ *   Ô đang xem được đánh dấu BỐN CÁCH cùng lúc — `aria-current`, chữ đậm, một vạch trên, và nền
+ *   viên thuốc quanh hình (12/10/2026) — nên nó không bao giờ phụ thuộc vào màu để đọc ra.
  *
  * ⚠ `tabDangSang` CHỨ KHÔNG PHẢI `props.current`: màn "Danh thiếp" không có ô riêng, và nếu so
  * thẳng thì đứng ở đó thanh tab không sáng ô nào. Xem `screens.ts`.

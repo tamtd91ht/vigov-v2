@@ -1,13 +1,14 @@
 import { useState } from "react";
 
+import { TIEU_DE_CHINH_SACH } from "../../content/chinh-sach-rieng-tu";
 import { CONTACT } from "../../content/company-profile";
-import { KhoiDangNhap, TimVanPhong } from "../tinh-nang/index";
+import { HotlineLink, KhoiDangNhap, TimVanPhong } from "../tinh-nang/index";
 import { ChatWithSpecialist } from "../yeu-cau/ChatWithSpecialist";
 
-import { ChinhSachRiengTu } from "./ChinhSachRiengTu";
 import { MOC_QUAN_LY_QUYEN, type ThamSoMan } from "./dieu-huong";
-import { MailGlyph, NetworkBackdrop, PhoneGlyph, ShieldGlyph } from "./icons";
+import { DocumentGlyph, MailGlyph, PhoneGlyph, ShieldGlyph } from "./icons";
 import { NutWebsite } from "./NutWebsite";
+import { PrivacyPolicyScreen } from "./PrivacyPolicyScreen";
 import { QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
 
 /**
@@ -46,34 +47,55 @@ import { QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
  *   những tab đang có tới chỗ không còn đọc ra nghĩa, hoặc bằng cách thu nhỏ chữ — và thu nhỏ chữ
  *   là thứ phép đo ấy sinh ra để chặn.
  *
- *   Tab Liên hệ là đúng chỗ: nó đã là nơi chính sách quyền riêng tư đứng, tức là nơi người tìm
- *   thông tin pháp lý — và người duyệt của Zalo — đã đứng sẵn.
+ *   Tab Liên hệ là đúng chỗ: hàng "Chính sách quyền riêng tư" ở đây (màn con riêng từ 12/10/2026),
+ *   tức là nơi người tìm thông tin pháp lý — và người duyệt của Zalo — đã đứng sẵn.
  */
+/**
+ * Which sub-screen of Liên hệ is open. The policy remembers where it was opened from, so its back button returns
+ * there (Quản lý quyền links to it too, 12/10/2026). UI state only — never written to the device.
+ */
+type ContactView = "contact" | "permissions" | "policy-from-contact" | "policy-from-permissions";
+
 export function ContactScreen({ moc }: ThamSoMan) {
   /**
-   * Màn con "Quản lý quyền". Trạng thái giao diện thuần, không ghi xuống máy.
+   * Màn con đang mở. Trạng thái giao diện thuần, không ghi xuống máy.
    *
    * ⚠ GIÁ TRỊ BAN ĐẦU ĐỌC TỪ `moc`, và điều đó chỉ đúng vì vỏ app DỰNG LẠI màn này mỗi lần điều
    * hướng có mốc (`key` trong `App.tsx`). Không có bước dựng lại ấy thì mục "Quyền" trên màn chủ
    * chỉ mở được đúng một lần trong cả phiên: lần thứ hai `useState` giữ nguyên giá trị cũ và
    * người bấm thấy đầu tab Liên hệ — một nút im lặng không làm gì.
    */
-  const [xem_quyen, datXemQuyen] = useState(moc === MOC_QUAN_LY_QUYEN);
+  const [view, setView] = useState<ContactView>(moc === MOC_QUAN_LY_QUYEN ? "permissions" : "contact");
 
-  if (xem_quyen) {
-    return <QuanLyQuyenScreen onQuayLai={() => datXemQuyen(false)} />;
+  if (view === "permissions") {
+    return (
+      <QuanLyQuyenScreen
+        onQuayLai={() => setView("contact")}
+        onOpenPolicy={() => setView("policy-from-permissions")}
+      />
+    );
+  }
+
+  if (view === "policy-from-contact" || view === "policy-from-permissions") {
+    const fromPermissions = view === "policy-from-permissions";
+    return (
+      <PrivacyPolicyScreen
+        backLabel={fromPermissions ? "Quay lại Quản lý quyền" : "Quay lại Liên hệ"}
+        onBack={() => setView(fromPermissions ? "permissions" : "contact")}
+      />
+    );
   }
 
   return (
     <>
-      <section className="banner banner--contact">
-        <NetworkBackdrop className="banner__backdrop" />
+      <section className="banner">
         <div className="banner__content">
           <h1 className="banner__title">Liên hệ</h1>
         </div>
       </section>
 
-      <a className="action action--primary hien-len" href={`tel:${CONTACT.hotlineDialable}`}>
+      {/* `HotlineLink`: inside Zalo a bare `tel:` does nothing; it dials through the platform (12/10/2026). */}
+      <HotlineLink className="action action--primary hien-len">
         <span className="tile" aria-hidden="true">
           <PhoneGlyph className="tile__glyph" />
         </span>
@@ -81,7 +103,7 @@ export function ContactScreen({ moc }: ThamSoMan) {
           <span className="action__label">Gọi hotline</span>
           <span className="action__value">{CONTACT.hotlineLabel}</span>
         </span>
-      </a>
+      </HotlineLink>
 
       <a className="action hien-len hien-len--2" href={`mailto:${CONTACT.email}`}>
         <span className="tile tile--soft" aria-hidden="true">
@@ -107,7 +129,7 @@ export function ContactScreen({ moc }: ThamSoMan) {
           nửa của cùng một câu hỏi — "app này lấy gì của tôi": màn quyền nói app GỌI những gì của
           nền tảng, chính sách nói dữ liệu ĐI ĐÂU. Để chúng cạnh nhau thì người đọc không phải tìm
           nửa còn lại. */}
-      <button type="button" className="action action--mo" onClick={() => datXemQuyen(true)}>
+      <button type="button" className="action action--mo" onClick={() => setView("permissions")}>
         <span className="tile tile--soft" aria-hidden="true">
           <ShieldGlyph className="tile__glyph" />
         </span>
@@ -117,9 +139,18 @@ export function ContactScreen({ moc }: ThamSoMan) {
         </span>
       </button>
 
-      {/* Chính sách quyền riêng tư nằm CUỐI màn Liên hệ, không phải một tab riêng: đây là chỗ
-          người tìm thông tin pháp lý đã đứng sẵn, và là chỗ người duyệt Zalo tìm nó. */}
-      <ChinhSachRiengTu />
+      {/* THE POLICY IS ONE ROW HERE, ITS TEXT ON ITS OWN SCREEN (owner 12/10/2026: no text walls). The row stays
+          on Liên hệ — where people and the Zalo reviewer look for legal information — right under Quản lý quyền,
+          the other half of "what does this app take from me". */}
+      <button type="button" className="action action--mo" onClick={() => setView("policy-from-contact")}>
+        <span className="tile tile--soft" aria-hidden="true">
+          <DocumentGlyph className="tile__glyph" />
+        </span>
+        <span>
+          <span className="action__label">Dữ liệu của bạn được dùng thế nào</span>
+          <span className="action__value">{TIEU_DE_CHINH_SACH}</span>
+        </span>
+      </button>
     </>
   );
 }

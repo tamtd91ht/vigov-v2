@@ -152,18 +152,21 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // import it: the shell injects `dialStaffNumber`, in the commune's own app AND on the commune page a QR opens.
     // The main fields describe the shared App ID as a whole (Danh thiếp + that commune page); `intro_app` keeps the
     // intro's words; `commune_app` is the commune's own app.
+    // 12/10/2026 (owner, Zalo resubmission): the intro's six "Gọi hotline" links dial through this call too
+    // (`HotlineLink.tsx` → `dialHotline`), so both the shared fields and the intro's view name the hotline.
     api: "openPhone",
     nua: "ca-hai",
-    man: "Danh thiếp · Danh bạ (trang của một xã mở bằng mã QR)",
-    tinh_nang: "Quét danh thiếp · Gọi cán bộ trong danh bạ của xã",
+    man: "Trang chủ · Giải pháp · Gợi ý giải pháp · Tư vấn và báo giá · Yêu cầu của tôi · Liên hệ · Danh thiếp · Danh bạ (trang của một xã mở bằng mã QR)",
+    tinh_nang: "Gọi hotline · Quét danh thiếp · Gọi cán bộ trong danh bạ của xã",
     de_lam_gi:
-      "Chuyển số điện thoại sang màn hình gọi của điện thoại, chỉ khi chính bạn bấm: số vừa quét được trên một danh thiếp, hoặc — trên trang của một xã — số của cán bộ mà xã đã công khai trong danh bạ, khi bạn bấm “GỌI”. Điện thoại hỏi bạn trước khi gọi.",
+      "Chuyển số điện thoại sang màn hình gọi của điện thoại, chỉ khi chính bạn bấm: số hotline của ViHAT Group khi bạn bấm “Gọi hotline”, số vừa quét được trên một danh thiếp, hoặc — trên trang của một xã — số của cán bộ mà xã đã công khai trong danh bạ, khi bạn bấm “GỌI”. Điện thoại hỏi bạn trước khi gọi.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "",
     intro_app: {
-      man: "Danh thiếp",
-      tinh_nang: "Quét danh thiếp",
-      de_lam_gi: "Chuyển số điện thoại vừa quét sang màn hình gọi của điện thoại.",
+      man: "Trang chủ · Giải pháp · Gợi ý giải pháp · Tư vấn và báo giá · Yêu cầu của tôi · Liên hệ · Danh thiếp",
+      tinh_nang: "Gọi hotline · Quét danh thiếp",
+      de_lam_gi:
+        "Chuyển số điện thoại sang màn hình gọi của điện thoại, chỉ khi chính bạn bấm: số hotline của ViHAT Group khi bạn bấm “Gọi hotline”, hoặc số vừa quét được trên một danh thiếp. Điện thoại hỏi bạn trước khi gọi.",
       roi_khoi_may: "",
     },
     commune_app: {
@@ -917,6 +920,17 @@ export function moCuocGoi(so: string): Promise<KetQuaXin<void>> {
 export function dialStaffNumber(number: string): Promise<KetQuaXin<void>> {
   if (!/^\+?\d{3,15}$/.test(number)) return Promise.resolve({ kieu: "khong-lay-duoc" });
   return xin("other", async (sdk) => sdk.openPhone({ phoneNumber: number }), false);
+}
+
+/**
+ * THE VIHAT HOTLINE, dialled through the platform (owner 12/10/2026, Zalo resubmission): the six "Gọi hotline" links
+ * of the intro did nothing inside Zalo, because the Mini App's webview ignores `tel:`. Same `openPhone`, same
+ * digits-only check as `dialStaffNumber`. Reported on failure like `moCuocGoi`: the number is the company's PUBLISHED
+ * hotline (`content/company-profile.ts`), not a person's, so the SDK's message may reach `vihat-miniapp`'s log.
+ */
+export function dialHotline(number: string): Promise<KetQuaXin<void>> {
+  if (!/^\+?\d{3,15}$/.test(number)) return Promise.resolve({ kieu: "khong-lay-duoc" });
+  return xin("other", async (sdk) => sdk.openPhone({ phoneNumber: number }));
 }
 
 /**
