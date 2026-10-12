@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/vihat/vigov/core/migrate"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-platform/internal/domain"
 	"github.com/vihat/vigov/service-platform/migrations"
 )
 
@@ -103,11 +105,23 @@ const (
 	ulidB = "01JD8ZQK9M3NPXR7TVWYB2C4EG"
 )
 
+// testLaunchCode mints a code for a fixture row: tenant.launch_code is NOT NULL with no default
+// (migration 0024), so a fixture that omits it fails — and a test asserting a DIFFERENT refusal would
+// then pass for the wrong reason.
+func testLaunchCode(t *testing.T) string {
+	t.Helper()
+	c, err := domain.NewLaunchCode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
 func themXa(t *testing.T, db *sql.DB, id, ten string, hoatDong bool) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong) VALUES ($1,$2,$3,$4)`,
-		id, ten, "Thành phố Đà Nẵng", hoatDong)
+		`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong, launch_code) VALUES ($1,$2,$3,$4,$5)`,
+		id, ten, "Thành phố Đà Nẵng", hoatDong, testLaunchCode(t))
 	if err != nil {
 		t.Fatalf("thêm xã %s: %v", ten, err)
 	}
@@ -155,7 +169,8 @@ func TestPgXaChuaKhaiTinhThanhTraChuoiRong(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)
 
-	if _, err := db.Exec(`INSERT INTO tenant (id, ten) VALUES ($1,$2)`, ulidA, "Xã Chưa Khai"); err != nil {
+	if _, err := db.Exec(`INSERT INTO tenant (id, ten, launch_code) VALUES ($1,$2,$3)`,
+		ulidA, "Xã Chưa Khai", testLaunchCode(t)); err != nil {
 		t.Fatalf("thêm xã: %v", err)
 	}
 	themHost(t, db, "chuakhai.vigov.vn", ulidA, true)
@@ -284,8 +299,10 @@ func TestPgTenantIdPhaiLaUlid(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)
 
+	// launch_code supplied, so the ONLY thing wrong with this row is the id — without it the row would
+	// fail NOT NULL (0024) and the test would stay green whatever the id check did.
 	_, err := db.Exec(
-		`INSERT INTO tenant (id, ten) VALUES ($1,$2)`, "thang-binh", "Xã Thăng Bình")
+		`INSERT INTO tenant (id, ten, launch_code) VALUES ($1,$2,$3)`, "thang-binh", "Xã Thăng Bình", testLaunchCode(t))
 	if err == nil {
 		t.Fatal("mã hành chính dùng làm tenant_id — sáp nhập đầu tiên sẽ phải sửa hồ sơ lưu trữ")
 	}
@@ -311,6 +328,49 @@ func TestPgAuditLogNhanDuocDuLieu(t *testing.T) {
 	}
 	if n != 1 {
 		t.Errorf("đọc lại được %d dòng nhật ký, muốn 1", n)
+	}
+}
+
+// ByLaunchCodeErr against the real schema: the code resolves to its commune with the PRIMARY host; an
+// unknown code and an inactive commune's code give ByHostErr's two sentinels; a reserved primary host
+// (one of 0007's kept admin rows, or OPERATOR_HOST) is blanked, never swapped for another host.
+func TestPgByLaunchCodeErr(t *testing.T) {
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
+	ctx := context.Background()
+	codeOf := func(id string) string {
+		t.Helper()
+		var c string
+		if err := db.QueryRow(`SELECT launch_code FROM tenant WHERE id = $1`, id).Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	themXa(t, db, ulidA, "Xã Thăng Bình", true)
+	themHost(t, db, "cu.vigov.vn", ulidA, false)
+	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+	themXa(t, db, ulidB, "Xã đã sáp nhập", false)
+	themHost(t, db, "xacu.vigov.vn", ulidB, true)
+
+	d := NewDirectory(db, "thangbinh.vigov.vn")
+	got, err := NewDirectory(db, "").ByLaunchCodeErr(ctx, codeOf(ulidA))
+	if err != nil || got.ID != tenant.ID(ulidA) || got.Host != "thangbinh.vigov.vn" || !got.Active ||
+		got.Province != "Thành phố Đà Nẵng" {
+		t.Fatalf("got %+v %v", got, err)
+	}
+	// The same commune, with its primary host reserved as OPERATOR_HOST: found, host blanked.
+	if got, err := d.ByLaunchCodeErr(ctx, codeOf(ulidA)); err != nil || got.Host != "" || got.ID != tenant.ID(ulidA) {
+		t.Errorf("reserved primary: %+v %v, want host \"\"", got, err)
+	}
+	if _, err := d.ByLaunchCodeErr(ctx, codeOf(ulidB)); !errors.Is(err, ErrXaNgungHoatDong) {
+		t.Errorf("inactive commune: %v", err)
+	}
+	unknown := "ffffffffffff"
+	if unknown == codeOf(ulidA) || unknown == codeOf(ulidB) { // 2^-48, but a test must not flake on it
+		unknown = "000000000000"
+	}
+	if _, err := d.ByLaunchCodeErr(ctx, unknown); !errors.Is(err, ErrKhongCoXa) {
+		t.Errorf("unknown code: %v", err)
 	}
 }
 

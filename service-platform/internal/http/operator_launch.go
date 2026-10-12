@@ -21,7 +21,7 @@ import (
 type SharedMiniAppEditor interface {
 	SharedMiniApp(ctx context.Context) (domain.SharedMiniApp, error)
 	DeclareSharedMiniApp(ctx context.Context, appID, reason string, by domain.OperatorActor) (domain.SharedMiniApp, bool, error)
-	CommuneLaunchHost(ctx context.Context, communeID string) (host string, active bool, err error)
+	CommuneLaunchTarget(ctx context.Context, communeID string) (store.LaunchTarget, error)
 }
 
 type sharedMiniAppView struct {
@@ -39,10 +39,13 @@ type sharedMiniAppBody struct {
 }
 
 // launchLinkView is one of the commune's QR links. The console renders the QR client-side from `url`;
-// `domain` is shown beside it so the person printing it can read which commune it names (it may be
-// "" on a `rieng` link for a commune with no primary host — that link does not carry it).
-// `source` says which app the link opens, so the card can label it: "rieng" (the commune's own app)
-// or "chung" (the shared app). Enum values Vietnamese snake_case (ADR 0011).
+// `domain` is the commune's PRIMARY host, shown beside it so the person printing it can read which
+// commune it names — on every link, including the `x=` one, which does not carry it (it is "" for a
+// commune with no primary host). `source` says which app and which link shape, so the card can label
+// it: "chung" (the shared app, `x=<launch code>`), "chung_ten_mien" (the shared app, TRANSITIONAL
+// `d=<domain>` form — owner 12/10/2026, removed in a later release with
+// domain.LegacyDomainLaunchLink) or "rieng" (the commune's own app). Enum values Vietnamese snake_case
+// (ADR 0011).
 type launchLinkView struct {
 	URL    string `json:"url"`
 	Domain string `json:"domain"`
@@ -68,6 +71,9 @@ type launchLinkUnavailable struct {
 const (
 	launchSourceOwn    = "rieng"
 	launchSourceShared = "chung"
+	// launchSourceSharedLegacy — TRANSITIONAL (owner 12/10/2026, ADR 0047 §Sửa đổi 12/10/2026): the
+	// shared app's `d=` link, for the app version that reads only `d`. Removed in a later release.
+	launchSourceSharedLegacy = "chung_ten_mien"
 )
 
 const msgSharedAppNotDeclared = "Chưa khai báo App ID của Mini App dùng chung. Người giữ quyền Mini App khai báo trước."
@@ -108,6 +114,11 @@ func launchRefusalOf(err error) (launchRefusal, bool) {
 		return launchRefusal{status: http.StatusConflict, code: "commune_no_primary_domain",
 			text: "Tên miền chính của xã không dùng được trong liên kết mở app. Báo nhóm nền tảng.",
 			log:  "khu vận hành: tên miền chính của xã không dùng được trong liên kết QR"}, true
+	case errors.Is(err, domain.ErrLaunchCodeInvalid):
+		// Not reachable through the registry (0024: NOT NULL + shape CHECK); a row edited by hand.
+		return launchRefusal{status: http.StatusConflict, code: "commune_launch_code_invalid",
+			text: "Mã mở app của xã không đúng dạng. Báo nhóm nền tảng.",
+			log:  "khu vận hành: mã mở app (launch_code) của xã không đúng dạng — không tạo liên kết QR x="}, true
 	}
 	return launchRefusal{}, false
 }
@@ -169,15 +180,23 @@ func (h *operatorHandlers) declareSharedMiniApp(w http.ResponseWriter, r *http.R
 
 // getLaunchLink returns EVERY QR link the commune has, so the operator chooses which to print (owner
 // 06/10/2026: "QR từ đâu thì mở app từ đó" — this replaces ADR 0070 §Sửa đổi 05/10/2026 #4's "own app
-// first"). Shared app first: `https://zalo.me/s/<shared App ID>/?d=<primary host>&src=qr`, present when
-// a shared app is declared and the commune has a usable primary host — for EVERY active commune, own
-// app or not, because communes borrow the shared app while their own waits for Zalo's approval. Then
-// the own app: `https://zalo.me/s/<its App ID>/?src=qr`, no `d=`, present when exactly one is live.
+// first"). In this order:
 //
-// A link that cannot be built is listed in `unavailable` with the code and text it was refused with
-// before, so one link's problem never hides the other. Only when NEITHER link exists is the request
-// refused, with the answer it had before 06/10/2026 (own-app ambiguity first, else the shared link's
-// reason). An inactive commune is refused before any link is considered.
+//  1. shared app, source "chung": `https://zalo.me/s/<shared App ID>/?src=qr&x=<launch code>` (owner
+//     12/10/2026) — present when a shared app is declared, for EVERY active commune, own app or not,
+//     because communes borrow the shared app while their own waits for Zalo's approval;
+//  2. shared app, source "chung_ten_mien", TRANSITIONAL: `…/?d=<primary host>&src=qr` — the form the
+//     app version in Zalo review reads. Present when a shared app is declared AND the commune has a
+//     usable primary host; otherwise listed as unavailable (commune_no_primary_domain). Removed in a
+//     later release (ADR 0047 §Sửa đổi 12/10/2026);
+//  3. own app, source "rieng": `https://zalo.me/s/<its App ID>/?src=qr`, no commune parameter, present
+//     when exactly one is live.
+//
+// A link that cannot be built is listed in `unavailable` with its code and text, so one link's problem
+// never hides another. When the shared app itself is missing or ambiguous, that reason is listed ONCE,
+// under "chung" — both shared links share it. Only when NO link exists is the request refused (own-app
+// ambiguity first, else the shared link's reason). An inactive commune is refused before any link is
+// considered.
 //
 // NOT TRAILED, by the owner's decision (ADR 0048 §30/09 #9): issuing a QR is not a write. The price,
 // stated there: a misprinted QR cannot be traced to whoever generated it. ops.qr.issue is the gate.
@@ -188,22 +207,22 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	host, active, hostErr := h.d.SharedApp.CommuneLaunchHost(r.Context(), id)
-	if hostErr != nil && !errors.Is(hostErr, store.ErrCommuneNoPrimaryHost) {
-		h.writeSharedAppError(w, r, hostErr)
+	target, err := h.d.SharedApp.CommuneLaunchTarget(r.Context(), id)
+	if err != nil {
+		h.writeSharedAppError(w, r, err)
 		return
 	}
 	// An inactive (merged, dissolved) commune is refused before anything else: a QR for it would send
 	// citizens to an authority that no longer takes petitions (rule 7 invariant 6).
-	if !active {
+	if !target.Active {
 		h.writeRegistryError(w, r, store.ErrCommuneInactive)
 		return
 	}
-	shared, sharedErr := h.sharedLaunchLink(r.Context(), host, hostErr)
-	own, ownFound, ownErr := h.ownLaunchLink(r.Context(), id, host)
+	shared, legacy, sharedErr, legacyErr := h.sharedLaunchLinks(r.Context(), target)
+	own, ownFound, ownErr := h.ownLaunchLink(r.Context(), id, target.Host)
 	// A failure that is not a property of one link (store down, commune vanished) refuses the request:
 	// listing it as "unavailable" would hide an outage behind a half-empty card.
-	for _, err := range []error{ownErr, sharedErr} {
+	for _, err := range []error{ownErr, sharedErr, legacyErr} {
 		if _, perLink := launchRefusalOf(err); err != nil && !perLink {
 			h.writeSharedAppError(w, r, err)
 			return
@@ -212,6 +231,9 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 	out := launchLinksView{Links: []launchLinkView{}, Unavailable: []launchLinkUnavailable{}}
 	if sharedErr == nil {
 		out.Links = append(out.Links, shared)
+	}
+	if legacy != nil && legacyErr == nil {
+		out.Links = append(out.Links, *legacy)
 	}
 	if ownFound && ownErr == nil {
 		out.Links = append(out.Links, own)
@@ -227,7 +249,7 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 	for _, u := range []struct {
 		source string
 		err    error
-	}{{launchSourceShared, sharedErr}, {launchSourceOwn, ownErr}} {
+	}{{launchSourceShared, sharedErr}, {launchSourceSharedLegacy, legacyErr}, {launchSourceOwn, ownErr}} {
 		if u.err == nil {
 			continue
 		}
@@ -238,21 +260,31 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, out)
 }
 
-// sharedLaunchLink is the shared app's link for the commune's primary host. hostErr is the host read's
-// own refusal (no primary host), reported first, as it was before 06/10/2026.
-func (h *operatorHandlers) sharedLaunchLink(ctx context.Context, host string, hostErr error) (launchLinkView, error) {
-	if hostErr != nil {
-		return launchLinkView{}, hostErr
-	}
+// sharedLaunchLinks builds the shared app's two links: the `x=` one (sharedErr) and the TRANSITIONAL
+// `d=` one (legacy, legacyErr). When the shared app itself cannot be read, sharedErr carries that and
+// legacy is nil with no error — the one reason is reported once, under "chung".
+func (h *operatorHandlers) sharedLaunchLinks(ctx context.Context, target store.LaunchTarget) (
+	shared launchLinkView, legacy *launchLinkView, sharedErr, legacyErr error) {
+
 	app, err := h.d.SharedApp.SharedMiniApp(ctx)
 	if err != nil {
-		return launchLinkView{}, err
+		return launchLinkView{}, nil, err, nil
 	}
-	link, err := domain.MiniAppLaunchLink(app.AppID, host)
+	if link, err := domain.MiniAppLaunchLink(app.AppID, target.LaunchCode); err != nil {
+		sharedErr = err
+	} else {
+		shared = launchLinkView{URL: link, Domain: target.Host, AppID: app.AppID, Source: launchSourceShared}
+	}
+	// TRANSITIONAL — removed in a later release with domain.LegacyDomainLaunchLink (owner 12/10/2026).
+	if target.Host == "" {
+		return shared, nil, sharedErr, store.ErrCommuneNoPrimaryHost
+	}
+	link, err := domain.LegacyDomainLaunchLink(app.AppID, target.Host)
 	if err != nil {
-		return launchLinkView{}, err
+		return shared, nil, sharedErr, err
 	}
-	return launchLinkView{URL: link, Domain: host, AppID: app.AppID, Source: launchSourceShared}, nil
+	return shared, &launchLinkView{URL: link, Domain: target.Host, AppID: app.AppID, Source: launchSourceSharedLegacy},
+		sharedErr, nil
 }
 
 // ownLaunchLink is the commune's live own app's link. found is false, with no error, when the commune

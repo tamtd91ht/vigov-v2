@@ -90,6 +90,33 @@ func TestPgCreateCommuneWritesRowsAndAuditTogether(t *testing.T) {
 		a[0].delta["tinh_thanh"] != "Đà Nẵng" {
 		t.Fatalf("audit = %+v", a)
 	}
+	// The launch code is minted here (0024 has no default) and named in the SAME entry, under the key
+	// 0024's backfill entries use.
+	var code string
+	if err := db.QueryRow(`SELECT launch_code FROM tenant WHERE id = $1`, ulidNew).Scan(&code); err != nil {
+		t.Fatal(err)
+	}
+	if !domain.ValidLaunchCode(code) || a[0].delta["launch_code"] != code {
+		t.Fatalf("launch_code %q, delta %v", code, a[0].delta["launch_code"])
+	}
+}
+
+// CreateCommune redraws on a collision. The draw itself cannot be forced to collide from outside, so
+// this checks what the retry rests on: 0024's index really refuses a second commune with the same
+// code, under the constraint name isLaunchCodeCollision matches. A renamed index would make the
+// retry dead code with every other test green.
+func TestPgLaunchCodeCollisionIsRecognised(t *testing.T) {
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
+	themXa(t, db, ulidA, "Xã A", true)
+	var code string
+	if err := db.QueryRow(`SELECT launch_code FROM tenant WHERE id = $1`, ulidA).Scan(&code); err != nil {
+		t.Fatal(err)
+	}
+	_, err := db.Exec(`INSERT INTO tenant (id, ten, launch_code) VALUES ($1, $2, $3)`, ulidB, "Xã B", code)
+	if !isLaunchCodeCollision(err) {
+		t.Fatalf("second commune with the same code: %v — want a violation of %s", err, launchCodeConstraint)
+	}
 }
 
 // The tenant INSERT succeeds, the domain INSERT fails on migration 0007's CHECK — and the tenant row

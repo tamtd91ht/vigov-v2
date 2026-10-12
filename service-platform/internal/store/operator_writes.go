@@ -143,8 +143,28 @@ type NewCommune struct {
 	Host       string // domain.ParseCommuneHost output
 }
 
+// launchCodeConstraint is migration 0024's unique index on tenant.launch_code.
+const launchCodeConstraint = "tenant_launch_code_unique"
+
+// launchCodeAttempts bounds the redraws after a launch code collision. At 48 random bits and a few
+// thousand communes at most, one collision is already ~1e-11; a second in a row means the source is
+// not random, and failing is the right answer to that.
+const launchCodeAttempts = 3
+
+// isLaunchCodeCollision is a unique violation on 0024's index — and only that one: a collision on the
+// tenant id or anything else is not cured by drawing another code.
+func isLaunchCodeCollision(err error) bool {
+	var pg *pgconn.PgError
+	return errors.As(err, &pg) && pg.Code == "23505" && pg.ConstraintName == launchCodeConstraint
+}
+
 // CreateCommune inserts the tenant row, its primary host and the `tao_xa` entry — the checks the
 // Jenkins stage `tao-xa-thang-binh` made, in the same order, in one transaction.
+//
+// It mints the commune's LAUNCH CODE (migration 0024, owner 12/10/2026) — the column has no default
+// on purpose, so this is the only place a new commune gets one. A collision on the unique index
+// aborts the PostgreSQL transaction, so the redraw retries the WHOLE transaction (lock, checks,
+// inserts, entry) rather than the one statement; nothing of a failed attempt survives.
 //
 // It seeds NOTHING of the commune's internal configuration (roles, SLA, hours, holidays, staff):
 // that is the commune administrator's (ADR 0048 §01/10 #1).
@@ -153,10 +173,24 @@ func (w *RegistryWriter) CreateCommune(ctx context.Context, in NewCommune, by do
 	if err != nil {
 		return domain.Commune{}, err
 	}
+	for attempt := 1; ; attempt++ {
+		code, err := domain.NewLaunchCode()
+		if err != nil {
+			return domain.Commune{}, fmt.Errorf("operator registry: %w", err)
+		}
+		c, err := w.createCommune(ctx, in, act, code)
+		if isLaunchCodeCollision(err) && attempt < launchCodeAttempts {
+			continue
+		}
+		return c, err
+	}
+}
+
+func (w *RegistryWriter) createCommune(ctx context.Context, in NewCommune, act audit.Actor, launchCode string) (domain.Commune, error) {
 	s := w.db.For(ctx)
 	id := s.TenantID().String()
 	var province string
-	err = s.Tx(ctx, func(tx *corestore.ScopedTx) error {
+	err := s.Tx(ctx, func(tx *corestore.ScopedTx) error {
 		if _, err := tx.Exec(ctx, nameLock); err != nil {
 			return fmt.Errorf("operator registry: lock: %w", err)
 		}
@@ -177,8 +211,8 @@ func (w *RegistryWriter) CreateCommune(ctx context.Context, in NewCommune, by do
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong) VALUES ($1, $2, $3, true)`,
-			id, in.Name, province); err != nil {
+			`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong, launch_code) VALUES ($1, $2, $3, true, $4)`,
+			id, in.Name, province, launchCode); err != nil {
 			return fmt.Errorf("operator registry: insert tenant: %w", err)
 		}
 		if _, err := tx.Exec(ctx,
@@ -186,10 +220,14 @@ func (w *RegistryWriter) CreateCommune(ctx context.Context, in NewCommune, by do
 			in.Host, id); err != nil {
 			return domainWriteError(err, "insert domain")
 		}
-		// The delta keeps the Jenkins stage's shape: {ten, tinh_thanh, ten_mien}.
+		// The delta keeps the Jenkins stage's shape: {ten, tinh_thanh, ten_mien}, plus `launch_code` — the
+		// key 0024's `launch_code.issued` backfill entries use, so "which code did this commune get" is
+		// answered by one key across both lanes. The code is public by design (not personal data), and
+		// keeping it here is what lets a reversal of 0024 restore printed codes from the trail.
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor: act, Action: ActionCreateCommune, Subject: in.Name,
-			Delta: delta(map[string]any{"ten": in.Name, "tinh_thanh": province, "ten_mien": []string{in.Host}}),
+			Delta: delta(map[string]any{"ten": in.Name, "tinh_thanh": province, "ten_mien": []string{in.Host},
+				"launch_code": launchCode}),
 		})
 	})
 	if err != nil {

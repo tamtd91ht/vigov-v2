@@ -42,7 +42,27 @@ var loiHaTang = errors.New("pgx: connection refused on 10.0.0.7:5432")
 type danhBaGia struct {
 	theoHost map[string]tenant.Tenant
 	theoID   map[tenant.ID]tenant.Tenant
+	byCode   map[string]tenant.Tenant
 	hong     bool // every lookup fails as infrastructure
+	// codeReads counts ByLaunchCodeErr calls: a malformed code must be refused before the directory.
+	codeReads int
+}
+
+// ByLaunchCodeErr follows store.Directory's contract, minus the reserved-host blanking: that is
+// left out ON PURPOSE, so the test of the server's own blanking cannot pass on the fake's.
+func (d *danhBaGia) ByLaunchCodeErr(_ context.Context, code string) (tenant.Tenant, error) {
+	d.codeReads++
+	if d.hong {
+		return tenant.Tenant{}, loiHaTang
+	}
+	t, ok := d.byCode[code]
+	if !ok {
+		return tenant.Tenant{}, store.ErrKhongCoXa
+	}
+	if !t.Active {
+		return tenant.Tenant{}, store.ErrXaNgungHoatDong
+	}
+	return t, nil
 }
 
 func (d *danhBaGia) ByHostErr(_ context.Context, host string) (tenant.Tenant, error) {
@@ -86,8 +106,15 @@ func danhBaMau() *danhBaGia {
 	return &danhBaGia{
 		theoHost: map[string]tenant.Tenant{tanPhu.Host: tanPhu, cu.Host: cu},
 		theoID:   map[tenant.ID]tenant.Tenant{xaTanPhu: tanPhu, xaDaSapNhap: cu},
+		byCode:   map[string]tenant.Tenant{codeActive: tanPhu, codeMerged: cu},
 	}
 }
+
+const (
+	codeActive  = "0a1b2c3d4e5f"
+	codeMerged  = "a1b2c3d4e5f6"
+	codeUnknown = "ffffffffffff"
+)
 
 // dung starts the real server behind bufconn and returns two clients: one that goes through
 // the grpcx client interceptor (the production path) and one raw, used to send calls the
@@ -212,6 +239,100 @@ func TestResolveHostRong(t *testing.T) {
 	_, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{Host: ""})
 	if status.Code(err) != codes.InvalidArgument {
 		t.Fatalf("mã = %v, muốn InvalidArgument (lỗi: %v)", status.Code(err), err)
+	}
+}
+
+// ---- ResolveHost by launch code (owner 12/10/2026) --------------------------------------
+
+func TestResolveHostByLaunchCode(t *testing.T) {
+	t.Parallel()
+
+	cli, _ := dung(t, danhBaMau())
+	res, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{LaunchCode: codeActive})
+	if err != nil {
+		t.Fatalf("ResolveHost(launch_code): %v", err)
+	}
+	got := res.GetTenant()
+	if got.GetId() != xaTanPhu.String() || got.GetHost() != "tanphu.vigov.vn" ||
+		got.GetDisplayName() != "Phường Tân Phú" || got.GetProvince() != "Thành phố Đà Nẵng" || !got.GetActive() {
+		t.Fatalf("tenant = %+v", got)
+	}
+}
+
+// Exactly one key: the server never picks one of two for the caller, and never answers neither.
+// A malformed code is refused before the directory is asked.
+func TestResolveHostLaunchCodeInvalidArguments(t *testing.T) {
+	t.Parallel()
+
+	for name, req := range map[string]*platformv1.ResolveHostRequest{
+		"both set":           {Host: "tanphu.vigov.vn", LaunchCode: codeActive},
+		"neither":            {},
+		"upper case code":    {LaunchCode: "0A1B2C3D4E5F"},
+		"short code":         {LaunchCode: "0a1b2c3d4e5"},
+		"long code":          {LaunchCode: "0a1b2c3d4e5f0"},
+		"not hex":            {LaunchCode: "0a1b2c3d4e5g"},
+		"host in code field": {LaunchCode: "tanphu.vigov.vn"},
+		"tenant id as code":  {LaunchCode: xaTanPhu.String()},
+	} {
+		dir := danhBaMau()
+		cli, _ := dung(t, dir)
+		_, err := cli.ResolveHost(ctxTest(t), req)
+		if status.Code(err) != codes.InvalidArgument {
+			t.Errorf("%s: code %v, want InvalidArgument (%v)", name, status.Code(err), err)
+		}
+		if dir.codeReads != 0 {
+			t.Errorf("%s: reached the directory %d time(s)", name, dir.codeReads)
+		}
+	}
+}
+
+// Unknown code, deactivated commune and unknown Host: ONE answer, byte-for-byte, so probing cannot
+// tell which codes or communes exist. The merged commune's code does not follow succession.
+func TestResolveHostLaunchCodeNotFoundIsIdentical(t *testing.T) {
+	t.Parallel()
+
+	cli, _ := dung(t, danhBaMau())
+	_, unknownHost := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{Host: "khonghe.vigov.vn"})
+	_, unknownCode := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{LaunchCode: codeUnknown})
+	_, merged := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{LaunchCode: codeMerged})
+	want := status.Convert(unknownHost)
+	if want.Code() != codes.NotFound {
+		t.Fatalf("unknown host: %v", unknownHost)
+	}
+	for name, err := range map[string]error{"unknown code": unknownCode, "merged commune": merged} {
+		got := status.Convert(err)
+		if got.Code() != codes.NotFound || got.Message() != want.Message() || len(got.Details()) != 0 {
+			t.Errorf("%s: %v — want exactly %v", name, err, unknownHost)
+		}
+	}
+}
+
+// A primary host that is a platform address is blanked, never replaced by another of the commune's
+// hosts (GetTenant's rule). The fake does not blank it, so only the server's own check can pass this.
+func TestResolveHostLaunchCodeBlanksReservedPrimary(t *testing.T) {
+	t.Parallel()
+
+	dir := danhBaMau()
+	dir.byCode[codeUnknown] = tenant.Tenant{ID: xaTanPhu, Host: "admin.vigov.vn", Name: "Phường Tân Phú", Active: true}
+	cli, _ := dung(t, dir)
+	res, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{LaunchCode: codeUnknown})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.GetTenant().GetHost() != "" || res.GetTenant().GetId() != xaTanPhu.String() {
+		t.Fatalf("tenant = %+v, want host \"\"", res.GetTenant())
+	}
+}
+
+func TestResolveHostLaunchCodeOutageIsInternal(t *testing.T) {
+	t.Parallel()
+
+	dir := danhBaMau()
+	dir.hong = true
+	cli, _ := dung(t, dir)
+	_, err := cli.ResolveHost(ctxTest(t), &platformv1.ResolveHostRequest{LaunchCode: codeActive})
+	if status.Code(err) != codes.Internal || strings.Contains(err.Error(), "10.0.0.7") {
+		t.Fatalf("%v, want Internal without the cause", err)
 	}
 }
 

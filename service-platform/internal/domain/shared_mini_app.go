@@ -34,18 +34,46 @@ const LaunchSourceQR = "qr"
 // check (laTenMien) would drop it and the QR would open the app with no commune suggestion.
 var ErrLaunchHostInvalid = errors.New("mini_app: tên miền xã không dùng được trong liên kết mở app")
 
-// MiniAppLaunchLink builds the shared app's QR link for one commune host:
+// MiniAppLaunchLink builds the shared app's QR link for one commune, by its LAUNCH CODE:
+//
+//	https://zalo.me/s/<shared app id>/?src=qr&x=<commune launch code>
+//
+// `x` replaced `d=<domain>` on the owner's decision of 12/10/2026 (ADR 0047 §Sửa đổi 12/10/2026): the
+// code is opaque, fixed per commune and names no domain. Like `d` before it, `x` and `src` STEER THE
+// INTERFACE AND GRANT NOTHING: the app asks the server which commune holds the code (ResolveHost), and
+// enters a session only after the citizen confirms (ADR 0047 stop condition #4).
+//
+// The code is the registry's stored value; it is checked again rather than trusted, because a code the
+// app's parser refuses (isLaunchCode) yields a QR that silently opens no commune. url.Values encodes
+// with sorted keys, so the query is exactly `src=qr&x=…`.
+func MiniAppLaunchLink(appID, launchCode string) (string, error) {
+	if err := ValidateMiniAppID(appID); err != nil {
+		return "", err
+	}
+	if !ValidLaunchCode(launchCode) {
+		return "", ErrLaunchCodeInvalid
+	}
+	q := url.Values{}
+	q.Set("x", launchCode)
+	q.Set("src", LaunchSourceQR)
+	return zaloMiniAppLinkBase + appID + "/?" + q.Encode(), nil
+}
+
+// LegacyDomainLaunchLink builds the shared app's QR link the way it was built before 12/10/2026, by
+// the commune's PRIMARY host:
 //
 //	https://zalo.me/s/<shared app id>/?d=<commune primary host>&src=qr
 //
-// `d` and `src` are the two launch parameters ADR 0047 decided (27/09/2026). They STEER THE
-// INTERFACE AND GRANT NOTHING: the app asks the server whether the host is a commune's, and enters
-// a session only after the citizen confirms (ADR 0047 stop condition #4).
+// TRANSITIONAL (owner, 12/10/2026; ADR 0047 §Sửa đổi 12/10/2026): the shared-app version now in Zalo
+// review reads only `d`; the next one reads `x` first and falls back to `d`. Until every published
+// version reads `x`, the operator must be able to print this form too. REMOVED IN A LATER RELEASE,
+// together with citizen-app's `d` branch — not before, or the QRs printed for the reviewed version
+// stop naming a commune.
 //
 // The host is the registry's stored value (lower-case LDH, ParseCommuneHost); it is checked again
 // rather than trusted, because a host the app's parser refuses yields a QR that silently does
 // nothing. url.Values encodes with sorted keys, so the query is exactly `d=…&src=qr`.
-func MiniAppLaunchLink(appID, host string) (string, error) {
+func LegacyDomainLaunchLink(appID, host string) (string, error) {
 	if err := ValidateMiniAppID(appID); err != nil {
 		return "", err
 	}

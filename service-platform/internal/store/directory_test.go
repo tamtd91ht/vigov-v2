@@ -1,8 +1,12 @@
 package store
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
+
+	"github.com/vihat/vigov/service-platform/internal/domain"
 )
 
 // WHAT THIS FILE IS FOR, and why it runs WITHOUT a database while directory_pg_test.go does not.
@@ -26,8 +30,9 @@ var cotBatBuoc = []string{"t.id", "t.ten", "t.tinh_thanh", "t.dang_hoat_dong"}
 
 func TestMoiTruyVanDanhBaDeuChonDuCot(t *testing.T) {
 	for ten, stmt := range map[string]string{
-		"theo host": truyVanTheoHost,
-		"theo id":   truyVanTheoID,
+		"theo host":      truyVanTheoHost,
+		"theo id":        truyVanTheoID,
+		"by launch code": queryByLaunchCode,
 	} {
 		for _, cot := range cotBatBuoc {
 			if !strings.Contains(stmt, cot) {
@@ -50,6 +55,29 @@ func TestHaiDuongTheoHostDungChungMotCauLenh(t *testing.T) {
 	}
 	if !strings.Contains(truyVanTheoID, cotXa("COALESCE(d.host, '')")) {
 		t.Fatalf("câu lệnh theo id không dựng từ cotXa:\n%s", truyVanTheoID)
+	}
+	if !strings.Contains(queryByLaunchCode, cotXa("COALESCE(d.host, '')")) {
+		t.Fatalf("the launch code statement is not built from cotXa:\n%s", queryByLaunchCode)
+	}
+}
+
+// The launch code path answers with the PRIMARY host only (platform.proto, ResolveHost): never "some
+// host of the commune", which after a merger may be the absorbed commune's old address.
+func TestLaunchCodeStatementJoinsThePrimaryHostOnly(t *testing.T) {
+	for _, want := range []string{"d.la_chinh", "WHERE t.launch_code = $1"} {
+		if !strings.Contains(queryByLaunchCode, want) {
+			t.Errorf("launch code statement lacks %q:\n%s", want, queryByLaunchCode)
+		}
+	}
+}
+
+// A malformed code is refused before any query — so this runs with no database at all (nil handle).
+func TestByLaunchCodeErrRefusesMalformedWithoutQuerying(t *testing.T) {
+	d := NewDirectory(nil, "")
+	for _, bad := range []string{"", "0123456789AB", "0123456789a", "xa.vigov.vn"} {
+		if _, err := d.ByLaunchCodeErr(context.Background(), bad); !errors.Is(err, domain.ErrLaunchCodeInvalid) {
+			t.Errorf("%q: %v, want ErrLaunchCodeInvalid", bad, err)
+		}
 	}
 }
 

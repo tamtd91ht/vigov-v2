@@ -474,12 +474,12 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("declaring the App ID that is already the running shared app changes nothing and writes no entry")(
 				http.HandlerFunc(h.declareSharedMiniApp))))
 
-	// @summary  Mọi liên kết mở Mini App của xã để in QR, người vận hành chọn mã nào in (chủ đầu tư 06/10/2026): app dùng chung với tên miền chính (source=chung) trước, app riêng đang sống (source=rieng, không d=) sau; liên kết không tạo được nằm ở unavailable kèm mã lỗi; chỉ từ chối khi không có liên kết nào; không ghi vết (ADR 0048 §30/09 #9)
+	// @summary  Mọi liên kết mở Mini App của xã để in QR, người vận hành chọn mã nào in (chủ đầu tư 06/10/2026): app dùng chung với mã mở app x= (source=chung, chủ dự án 12/10/2026) trước, rồi app dùng chung dạng cũ d=<tên miền chính> (source=chung_ten_mien, CHUYỂN TIẾP — bỏ ở bản sau), rồi app riêng đang sống (source=rieng, không tham số xã); liên kết không tạo được nằm ở unavailable kèm mã lỗi; chỉ từ chối khi không có liên kết nào; không ghi vết (ADR 0048 §30/09 #9)
 	// @reply    200 launchLinksView
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found
-	// @reply    409 httpx.Error commune_inactive commune_no_primary_domain shared_mini_app_not_declared shared_mini_app_ambiguous own_mini_app_ambiguous
+	// @reply    409 httpx.Error commune_inactive commune_launch_code_invalid shared_mini_app_not_declared shared_mini_app_ambiguous own_mini_app_ambiguous
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("GET /api/v1/communes/{id}/mini-app-launch-link",
 		opauth.RequireKey(h.d.Auth, opauth.KeyQRIssue)(

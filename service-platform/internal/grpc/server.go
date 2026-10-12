@@ -43,6 +43,10 @@ import (
 type Directory interface {
 	ByHostErr(ctx context.Context, host string) (tenant.Tenant, error)
 	ByID(ctx context.Context, id tenant.ID) (tenant.Tenant, error)
+	// ByLaunchCodeErr resolves a commune launch code (migration 0024): Host = the PRIMARY host,
+	// unknown → store.ErrKhongCoXa, inactive → store.ErrXaNgungHoatDong, malformed →
+	// domain.ErrLaunchCodeInvalid.
+	ByLaunchCodeErr(ctx context.Context, code string) (tenant.Tenant, error)
 }
 
 // SoMiniApp is the Mini App registry (ADR 0044). Unscoped for the reason store.Directory is: it
@@ -119,13 +123,26 @@ func NewServer(d Deps, log *slog.Logger) *Server {
 		frames: d.MapFrames, urls: d.URLs, log: log}
 }
 
-// ResolveHost maps an incoming Host to a commune.
+// ResolveHost maps an incoming Host — or a commune LAUNCH CODE (owner 12/10/2026) — to a commune.
+// The answer table is on the RPC in platform.proto; this follows it.
 //
 // This runs with NO commune in context — it is the call that establishes one, and it is on
 // grpcx's exemption list for that reason. Nothing below may therefore reach for
 // tenant.MustFrom.
 func (s *Server) ResolveHost(ctx context.Context, req *platformv1.ResolveHostRequest) (
 	*platformv1.ResolveHostResponse, error) {
+
+	// EXACTLY ONE of the two keys. Both set is refused rather than answered from one of them: a
+	// caller that sends two keys that might name two communes is never answered by this server
+	// choosing which one it meant.
+	if req.GetLaunchCode() != "" {
+		if req.GetHost() != "" {
+			return nil, status.Error(codes.InvalidArgument, "chỉ gửi một trong host hoặc launch_code")
+		}
+		return s.resolveLaunchCode(ctx, req.GetLaunchCode())
+	}
+	// Host only — and neither: an empty host reaches ByHostErr and is refused there with
+	// ErrHostTrong → INVALID_ARGUMENT, exactly as before launch_code existed.
 
 	// A platform address (admin.vigov.vn, *.api.vigov.vn, the apex …) never resolves to a commune,
 	// whatever tenant_domain holds — two such rows are kept by rule 7 (migration 0007). Refused
@@ -140,6 +157,28 @@ func (s *Server) ResolveHost(ctx context.Context, req *platformv1.ResolveHostReq
 	t, err := s.dir.ByHostErr(ctx, req.GetHost())
 	if err != nil {
 		return nil, s.loi(ctx, err, "ResolveHost")
+	}
+	return &platformv1.ResolveHostResponse{Tenant: sangProto(t)}, nil
+}
+
+// resolveLaunchCode is ResolveHost's launch-code branch. Unknown code and deactivated commune both go
+// through loi to the SAME NOT_FOUND an unknown Host gets, so probing cannot tell which codes exist.
+//
+// The format is checked HERE as well as in the directory: a malformed code never reaches the
+// database, whichever Directory is wired.
+func (s *Server) resolveLaunchCode(ctx context.Context, code string) (*platformv1.ResolveHostResponse, error) {
+	if !domain.ValidLaunchCode(code) {
+		return nil, status.Error(codes.InvalidArgument, "tham số tra cứu không hợp lệ")
+	}
+	t, err := s.dir.ByLaunchCodeErr(ctx, code)
+	if err != nil {
+		return nil, s.loi(ctx, err, "ResolveHost")
+	}
+	// The primary host, blanked when it is a platform address — GetTenant's rule and reason, verbatim
+	// in effect: "" is "no usable domain", never a substitute host. The directory already blanks it
+	// (with OPERATOR_HOST too); repeated here so the contract holds whichever Directory is wired.
+	if domain.LaTenMienDanhRieng(t.Host) {
+		t.Host = ""
 	}
 	return &platformv1.ResolveHostResponse{Tenant: sangProto(t)}, nil
 }
@@ -307,7 +346,8 @@ func (s *Server) loi(ctx context.Context, err error, rpc string) error {
 
 	case errors.Is(err, domain.ErrHostTrong),
 		errors.Is(err, domain.ErrHostCoGiaoThuc),
-		errors.Is(err, domain.ErrIDKhongHopLe):
+		errors.Is(err, domain.ErrIDKhongHopLe),
+		errors.Is(err, domain.ErrLaunchCodeInvalid):
 		return status.Error(codes.InvalidArgument, "tham số tra cứu không hợp lệ")
 
 	default:

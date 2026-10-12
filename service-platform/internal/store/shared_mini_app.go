@@ -40,7 +40,8 @@ var (
 	// store (every write holds sharedAppLock), so it is a row written by hand. Refused rather than
 	// guessed: a QR printed with the wrong one of two App IDs lives for years.
 	ErrSharedMiniAppAmbiguous = errors.New("shared mini app: có hơn một Mini App dùng chung đang chạy")
-	// ErrCommuneNoPrimaryHost — the commune holds no primary domain, so there is nothing for `d=`.
+	// ErrCommuneNoPrimaryHost — the commune holds no primary domain, so there is nothing for the
+	// transitional `d=` link (domain.LegacyDomainLaunchLink).
 	ErrCommuneNoPrimaryHost = errors.New("operator registry: xã chưa có tên miền chính")
 )
 
@@ -199,27 +200,40 @@ func (s *SharedMiniAppStore) DeclareSharedMiniApp(ctx context.Context, appID, re
 	return out, true, nil
 }
 
-// CommuneLaunchHost reads what a QR link needs about one commune: whether it is active and its
-// PRIMARY host. The id comes from the path, ULID-checked by the caller. ErrCommuneNotFound for an
-// unknown commune; ErrCommuneNoPrimaryHost when it holds no primary row.
+// LaunchTarget is what a commune's QR links need about it.
+type LaunchTarget struct {
+	Active bool
+	// LaunchCode is tenant.launch_code (migration 0024) — what the shared app's `x=` link carries.
+	LaunchCode string
+	// Host is the PRIMARY host, "" when the commune holds none. Only the TRANSITIONAL `d=` link needs
+	// it (domain.LegacyDomainLaunchLink); the console also shows it beside every link.
+	Host string
+}
+
+// CommuneLaunchTarget reads what a QR link needs about one commune: whether it is active, its launch
+// code and its PRIMARY host. The id comes from the path, ULID-checked by the caller.
+// ErrCommuneNotFound for an unknown commune. A commune with no primary host is NOT an error here any
+// more: since 12/10/2026 the shared app's link names the launch code, and only the transitional `d=`
+// link needs a host — the caller reports that one link as unavailable (ErrCommuneNoPrimaryHost).
 //
 // The primary row only (la_chinh), never "the first host": after a merger a commune may hold the
 // absorbed commune's old host, and a QR naming that would suggest the wrong authority (ADR 0047
 // decision 4).
-func (s *SharedMiniAppStore) CommuneLaunchHost(ctx context.Context, communeID string) (host string, active bool, err error) {
+func (s *SharedMiniAppStore) CommuneLaunchTarget(ctx context.Context, communeID string) (LaunchTarget, error) {
+	var out LaunchTarget
 	var primary sql.NullString
-	err = s.db.QueryRowContext(ctx, `
-		SELECT t.dang_hoat_dong, d.host
+	err := s.db.QueryRowContext(ctx, `
+		SELECT t.dang_hoat_dong, t.launch_code, d.host
 		  FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
-		 WHERE t.id = $1`, communeID).Scan(&active, &primary)
+		 WHERE t.id = $1`, communeID).Scan(&out.Active, &out.LaunchCode, &primary)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		return "", false, ErrCommuneNotFound
+		return LaunchTarget{}, ErrCommuneNotFound
 	case err != nil:
-		return "", false, fmt.Errorf("shared mini app: commune host: %w", err)
+		return LaunchTarget{}, fmt.Errorf("shared mini app: commune launch target: %w", err)
 	}
-	if !primary.Valid || primary.String == "" {
-		return "", active, ErrCommuneNoPrimaryHost
+	if primary.Valid {
+		out.Host = primary.String
 	}
-	return primary.String, active, nil
+	return out, nil
 }

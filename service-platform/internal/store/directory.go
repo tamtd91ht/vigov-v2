@@ -111,6 +111,15 @@ var (
 		FROM tenant t
 		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
 		WHERE t.id = $1`
+
+	// The commune holding a launch code (migration 0024), with its PRIMARY host — the same LEFT JOIN
+	// as truyVanTheoID and for the same reason: the code names the commune, not a host, so a commune
+	// with no primary host is still found, with Host "" (the contract's "no usable domain").
+	queryByLaunchCode = `
+		SELECT ` + cotXa("COALESCE(d.host, '')") + `
+		FROM tenant t
+		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
+		WHERE t.launch_code = $1`
 )
 
 // hangDoc is what both *sql.Row and *sql.Rows satisfy, so quetXa has one caller shape.
@@ -197,6 +206,45 @@ func (d *Directory) ByHostErr(ctx context.Context, host string) (tenant.Tenant, 
 	}
 	if !out.Active {
 		return tenant.Tenant{}, ErrXaNgungHoatDong
+	}
+	return out, nil
+}
+
+// ByLaunchCodeErr resolves a commune's LAUNCH CODE (migration 0024, owner 12/10/2026) — the public
+// code a commune QR carries as `?x=` — to that commune, with Host = its PRIMARY host.
+//
+// SAME SENTINELS AS ByHostErr, because it answers the same question ("may this be served") from a
+// different key: unknown code → ErrKhongCoXa; a deactivated / merged commune → ErrXaNgungHoatDong,
+// which ResolveHost turns into the same NOT_FOUND. A merged commune's code does NOT follow
+// tenant_succession here (owner 12/10/2026): a QR for a dissolved commune opens nothing.
+//
+// A malformed code is refused before the query (domain.ErrLaunchCodeInvalid): the query would only
+// ever answer "no rows" for it, and a caller sending garbage deserves INVALID_ARGUMENT, not NOT_FOUND.
+//
+// A RESERVED PRIMARY HOST IS BLANKED to "", never replaced by another of the commune's hosts — the
+// same rule GetTenant applies, here with OPERATOR_HOST included (domain.IsReservedCommuneHost), which
+// only this type knows. "" tells the caller there is no usable domain, and the caller refuses.
+//
+// One row or none: launch_code is unique across every commune (tenant_launch_code_unique).
+func (d *Directory) ByLaunchCodeErr(ctx context.Context, code string) (tenant.Tenant, error) {
+	if !domain.ValidLaunchCode(code) {
+		return tenant.Tenant{}, fmt.Errorf("directory: %w", domain.ErrLaunchCodeInvalid)
+	}
+	// @cross-tenant: the code is how the commune is FOUND — no commune is known yet, exactly like a
+	// Host lookup. Reads the registry only, one row.
+	out, err := quetXa(d.db.QueryRowContext(ctx, queryByLaunchCode, code))
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return tenant.Tenant{}, ErrKhongCoXa
+	case err != nil:
+		// The code is public by design (not personal data), so naming it here costs nothing.
+		return tenant.Tenant{}, fmt.Errorf("directory: launch code lookup %q: %w", code, err)
+	}
+	if !out.Active {
+		return tenant.Tenant{}, ErrXaNgungHoatDong
+	}
+	if out.Host != "" && domain.IsReservedCommuneHost(out.Host, d.operatorHost) {
+		out.Host = ""
 	}
 	return out, nil
 }

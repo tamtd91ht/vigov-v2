@@ -52,6 +52,10 @@ func (danhBaGia) ByID(_ context.Context, id tenant.ID) (tenant.Tenant, error) {
 	return tenant.Tenant{ID: id, Host: hostThu, Active: true}, nil
 }
 
+func (danhBaGia) ByLaunchCodeErr(context.Context, string) (tenant.Tenant, error) {
+	return tenant.Tenant{ID: ulidThu, Host: hostThu, Active: true}, nil
+}
+
 func (danhBaGia) MiniApp(_ context.Context, appID string) (domain.MiniApp, error) {
 	return domain.MiniApp{AppID: appID, CheDo: domain.CheDoChinh}, nil
 }

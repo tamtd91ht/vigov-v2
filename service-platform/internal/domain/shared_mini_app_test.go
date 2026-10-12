@@ -7,17 +7,34 @@ import (
 )
 
 func TestMiniAppLaunchLink(t *testing.T) {
-	got, err := MiniAppLaunchLink("1234567890123456789", "thangbinh-danang.vigov.vn")
+	got, err := MiniAppLaunchLink("1234567890123456789", "0a1b2c3d4e5f")
+	if err != nil || got != "https://zalo.me/s/1234567890123456789/?src=qr&x=0a1b2c3d4e5f" {
+		t.Fatalf("got %q, %v", got, err)
+	}
+	if _, err := MiniAppLaunchLink("12a", "0a1b2c3d4e5f"); !errors.Is(err, ErrMiniAppIDInvalid) {
+		t.Errorf("a non-numeric App ID: %v", err)
+	}
+	// Each of these would make citizen-app's isLaunchCode refuse `x`, so the QR would open no commune.
+	for _, bad := range []string{"", "0A1B2C3D4E5F", "0a1b2c3d4e5", "0a1b2c3d4e5f0", "xa.vigov.vn", " 0a1b2c3d4e5f"} {
+		if _, err := MiniAppLaunchLink("1", bad); !errors.Is(err, ErrLaunchCodeInvalid) {
+			t.Errorf("code %q: %v, want ErrLaunchCodeInvalid", bad, err)
+		}
+	}
+}
+
+// TRANSITIONAL — removed with LegacyDomainLaunchLink (owner 12/10/2026).
+func TestLegacyDomainLaunchLink(t *testing.T) {
+	got, err := LegacyDomainLaunchLink("1234567890123456789", "thangbinh-danang.vigov.vn")
 	if err != nil || got != "https://zalo.me/s/1234567890123456789/?d=thangbinh-danang.vigov.vn&src=qr" {
 		t.Fatalf("got %q, %v", got, err)
 	}
-	if _, err := MiniAppLaunchLink("12a", "xa.vigov.vn"); !errors.Is(err, ErrMiniAppIDInvalid) {
+	if _, err := LegacyDomainLaunchLink("12a", "xa.vigov.vn"); !errors.Is(err, ErrMiniAppIDInvalid) {
 		t.Errorf("a non-numeric App ID: %v", err)
 	}
 	// Each of these would make citizen-app's laTenMien drop `d`, so the QR would suggest no commune.
 	for _, bad := range []string{"", "xa", "XA.vigov.vn", "xa.vigov.vn:443", "xa.vigov.vn/x", " xa.vigov.vn",
 		"api.vigov.vn", "xa.vigov.vn."} {
-		if _, err := MiniAppLaunchLink("1", bad); !errors.Is(err, ErrLaunchHostInvalid) {
+		if _, err := LegacyDomainLaunchLink("1", bad); !errors.Is(err, ErrLaunchHostInvalid) {
 			t.Errorf("host %q: %v, want ErrLaunchHostInvalid", bad, err)
 		}
 	}

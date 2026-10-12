@@ -95,23 +95,34 @@ func TestPgDeclareSharedMiniApp(t *testing.T) {
 	}
 }
 
-func TestPgCommuneLaunchHost(t *testing.T) {
+func TestPgCommuneLaunchTarget(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)
 	s := NewSharedMiniAppStore(db)
 	ctx := context.Background()
+	codeOf := func(id string) string {
+		t.Helper()
+		var c string
+		if err := db.QueryRow(`SELECT launch_code FROM tenant WHERE id = $1`, id).Scan(&c); err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
 	themXa(t, db, ulidA, "Xã Thăng Bình", true)
 	themHost(t, db, "a-phu.vigov.vn", ulidA, false)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
-	if host, active, err := s.CommuneLaunchHost(ctx, ulidA); err != nil || !active || host != "thangbinh.vigov.vn" {
-		t.Errorf("got %q %v %v, want the PRIMARY host", host, active, err)
+	if got, err := s.CommuneLaunchTarget(ctx, ulidA); err != nil || !got.Active || got.Host != "thangbinh.vigov.vn" ||
+		got.LaunchCode != codeOf(ulidA) {
+		t.Errorf("got %+v %v, want the PRIMARY host and the stored code", got, err)
 	}
+	// No primary host is no longer an error: the `x=` link does not need one. Host "" tells the
+	// caller the transitional `d=` link cannot be built.
 	themXa(t, db, ulidB, "Xã Cũ", false)
 	themHost(t, db, "xacu.vigov.vn", ulidB, false)
-	if _, active, err := s.CommuneLaunchHost(ctx, ulidB); !errors.Is(err, ErrCommuneNoPrimaryHost) || active {
-		t.Errorf("no primary, inactive: active=%v err=%v", active, err)
+	if got, err := s.CommuneLaunchTarget(ctx, ulidB); err != nil || got.Active || got.Host != "" || got.LaunchCode != codeOf(ulidB) {
+		t.Errorf("no primary, inactive: %+v %v", got, err)
 	}
-	if _, _, err := s.CommuneLaunchHost(ctx, "01JD8ZQK9M3NPXR7TVWYB2C4EZ"); !errors.Is(err, ErrCommuneNotFound) {
+	if _, err := s.CommuneLaunchTarget(ctx, "01JD8ZQK9M3NPXR7TVWYB2C4EZ"); !errors.Is(err, ErrCommuneNotFound) {
 		t.Errorf("unknown: %v", err)
 	}
 }
