@@ -703,6 +703,14 @@
       "viec": "App xã (ADR 0050 §Sửa đổi 12/10/2026): bỏ thẻ 'Điền sẵn họ tên khi gửi phản ánh' ở trang chủ (TrangXa NameCard + chuỗi name_card_*); bấm 'Gửi phản ánh' khi chưa có phiên thì hỏi Zalo ngay (commune-session.ts require: task submit → openAndFollow('ask')), không màn 'Cần xác nhận số điện thoại của bà con'; tên chưa có đi cùng bước số (nameAfterPhone đặt trong requireSession). Màn chờ/kết quả của cổng gửi mang tiêu đề 'Gửi phản ánh'. Các việc khác (Phản ánh của tôi, Tra cứu, đánh giá, Nhận thông báo) giữ màn giải thích.",
       "bang_chung": "citizen-app: tsc sạch, vitest 73 tệp/1954 test xanh (typed-contact, accountless-petition, hieu-ung-khong-phien, name-at-entry sửa theo hành vi mới). CHƯA thử trên điện thoại thật.",
       "con_no": "Chủ dự án kiểm trên máy thật; mô tả quyền nộp Zalo phải nói đủ mục đích vì không còn màn giải thích trước hộp thoại (chính sách 3.3.4)."
+    },
+    {
+      "id": "qr-ma-cong-khai-x-12-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Link QR app chung đọc mã công khai x= (12 hex) trước, tra GET /communes?code= một lần rồi chạy theo tên miền như cũ (CommuneByLaunchCode); không có x thì đọc d= (CHUYỂN TIẾP — bỏ ở bản sau); x sai khuôn không lùi về d. Báo lỗi client chỉ gửi tên miền đã tra. npm run qr vẫn --domain, ghi cả QR x và QR d-legacy. ADR 0047 §Sửa đổi 12/10/2026.",
+      "bang_chung": "9bdd8f5a — tsc sạch, vitest 74 tệp/1980 test xanh. CHƯA thử trên điện thoại thật.",
+      "con_no": "Bản App ViHAT đọc x phải nộp Zalo duyệt (gộp với các thay đổi 12/10); chỉ in QR x sau khi bản ấy phát hành. Một bản sau bỏ đường d."
     }
   ]
 }

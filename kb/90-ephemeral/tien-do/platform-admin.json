@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "platform-admin",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-12",
   "muc": [
     {
       "id": "ts-chua-tung-duoc-kiem",
@@ -90,6 +90,14 @@
       "trang_thai": "dang_lam",
       "bang_chung": "e6484436 mục 'Zalo Bot' dưới ops.zalo_bot.manage: token chỉ ghi, xác nhận ghép lại khi đổi tài khoản bot (409 can-xac-nhan-ghep-lai), webhook, số đếm theo xã. Theo chủ dự án 11/10/2026: mở màn chỉ đọc cấu hình + bảng xã, webhook chỉ hỏi Zalo khi bấm 'Kiểm tra webhook' (trước đó khối webhook nói chưa hỏi, không hiện trạng thái giả); bảng 'Kênh Zalo theo xã' theo prototype (Xã, phường · Kênh · Bot · Đã ghép nối = 'Bot riêng · <tên>'/'Bot chung', '<đã ghép>/<tổng> cán bộ'); không ô Lý do; invalid_token/invalid_bot_name/invalid_chat_url là mã thật; nhật ký vận hành có nhãn zalo_bot.token_set/checked/webhook_set. tsc + eslint + vitest 249/249 xanh (chưa commit).",
       "tiep_theo": "Kiểm ảnh render thật cạnh prototype; chạy đầu-cuối với tuyến zalo-bots/shared của service-platform (4526ff8d) trên cụm thật — cần netpol platform→comms và COMMS_GRPC_ADDR đã áp, tài khoản vận hành có ops.zalo_bot.manage (job cap-quyen-van-hanh). 503 đã có câu riêng theo mã máy chủ (zalo_bot_key_not_configured / zalo_bot_unavailable / staff_counts_unavailable), không còn rơi về AUTH_UNAVAILABLE."
+    },
+    {
+      "id": "the-qr-link-chuyen-tiep-12-10",
+      "menu": "communes",
+      "trang_thai": "xong",
+      "viec": "Thẻ Mã QR hiện nhãn link chuyển tiếp chung_ten_mien (?d=) cạnh link mã công khai (?x=), câu nói rõ link nào chạy với bản app nào; lỗi commune_launch_code_invalid.",
+      "bang_chung": "dcdb796b — tsc sạch, vitest 11 tệp/251 test xanh. Chưa xem ảnh render thật.",
+      "con_no": "Bỏ nhãn/nhánh chung_ten_mien khi bỏ đường d."
     }
   ]
 }

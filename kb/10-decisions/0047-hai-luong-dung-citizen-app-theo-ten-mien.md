@@ -12,7 +12,8 @@ owns_facts:
   - "hai luồng dựng citizen-app: truyền tên miền xã thì đẩy lên App ID riêng của xã, không truyền thì đẩy lên app chung — một mã nguồn, một bundle, tên miền chỉ chọn App ID đích (phần 'không truyền' thay 06/10/2026 — xem §Sửa đổi 06/10/2026 #5)"
   - "lệnh đẩy lên Zalo chỉ chọn APP NÀO, luôn tường minh (--app=vihat không bao giờ nung xã · --domain=<x> luôn nung xã · không cờ thì menu, không người ngồi thì từ chối), không bao giờ suy đích từ citizen-app/.env; QR mang tham số xã do platform-admin sinh, không do lệnh đẩy (chủ dự án, 06/10/2026)"
   - "vì sao tệp ánh xạ tên miền → App ID ở citizen-app/scripts không vi phạm ADR 0044 điều kiện dừng #1, và vì sao nó không phải nguồn sự thật về xã của một App ID"
-  - "tham số QR/URL của app chung mang TÊN MIỀN xã thay cho t=<ULID>; máy chủ phân giải; tên miền không bao giờ được lưu làm tham chiếu xã"
+  - "tham số QR/URL của app chung mang TÊN MIỀN xã thay cho t=<ULID>; máy chủ phân giải; tên miền không bao giờ được lưu làm tham chiếu xã (THAY 12/10/2026: link mang mã công khai x=<launch_code>, d= chỉ còn chuyển tiếp — §Sửa đổi 12/10/2026)"
+  - "mã công khai của xã (tenant.launch_code): 12 hex ngẫu nhiên, cố định, không phải tenant_id; app tra một lần rồi chạy theo tên miền; app đọc x trước, không có x thì d, x sai khuôn không lùi về d; QR in cả hai trong giai đoạn chuyển tiếp (chủ dự án, 12/10/2026)"
   - "xã sáp nhập: trỏ tên miền cũ sang xã kế thừa, có vết, thay cho thông báo kế thừa qua t"
   - "vì sao phát hành app riêng được phép khi UNKNOWN #1 của ADR 0045 chưa đo, và cái giá của quyết định ấy"
   - "cờ --vao-thang: app riêng nung tên miền xã vào bundle và mở thẳng vào xã, không màn ViHAT, không bước xác nhận — ngoại lệ duy nhất của câu 1 (chủ dự án, 27/09/2026; tên cờ thay 06/10/2026 — --domain nay luôn nung, xem §Sửa đổi 06/10/2026 #5)"
@@ -33,7 +34,8 @@ chỉ chọn app nào, QR mang xã sinh ở platform-admin — §*Sửa đổi 0
 **Sửa đổi 08/10/2026** (thanh tiêu đề gốc của Zalo mang tên xã ở app chung; chụp ảnh hiện trường bằng
 máy ảnh mặc định — §*Sửa đổi 08/10/2026*) ·
 **Sửa đổi 11/10/2026** (app xã theo prototype; thay mục (4), (7), (11), (12) và G2 của dòng *"Theo
-PROTOTYPE.md"* — ADR 0091, §*Sửa đổi 11/10/2026*)
+PROTOTYPE.md"* — ADR 0091, §*Sửa đổi 11/10/2026*) ·
+**Sửa đổi 12/10/2026** (link QR mang mã công khai `x`, `d` chỉ còn chuyển tiếp — §*Sửa đổi 12/10/2026*)
 
 ## Bối cảnh
 
@@ -424,6 +426,32 @@ API"* của mục 6.
 | (11) Giữ 3 mức cỡ chữ | Một công tắc **"Cỡ chữ lớn"**; sàn 16px giữ — ADR 0091 §1 |
 | (12) Không công tắc "Nhận thông báo" | **Đảo:** công tắc thật — ADR 0091 §4 |
 | G4 (giờ từng bước) · G7 (thời lượng âm thanh cán bộ gõ) | Đứng nguyên. ADR 0091 §5 xác nhận G4; §7 áp cách của G7 cho video |
+
+### Sửa đổi 12/10/2026 — link QR mang mã công khai của xã, không mang tên miền
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+12/10/2026, trong phiên chính: *"tôi không muốn dùng domain … vì nó lộ thông tin domain ở đây, liệu có
+thể dùng tenantId hoặc 1 id nào đó"*, rồi chọn mã công khai riêng thay `tenant_id`. Sau đó, vì bản app
+ViHAT đang chờ Zalo duyệt chỉ đọc `d`: *"link domain hoặc xã đều được để đáp ứng giai đoạn chuyển tiếp
+này"*.
+
+| # | Chốt |
+|---|---|
+| 1 | Link app chung của một xã: `https://zalo.me/s/<App ID chung>/?x=<mã công khai>&src=qr`. Mã: 12 ký tự hex chữ thường, ngẫu nhiên (CSPRNG), cột `tenant.launch_code` của `service-platform` (migration 0024). **Không** là `tenant_id`, không suy ra từ tên, tên miền, mã hành chính (luật 1 cấm #2, #5) |
+| 2 | Mã **cố định** theo xã, chưa có thao tác cấp lại. Xã ngừng hoạt động / sáp nhập vẫn giữ mã nhưng tra ra **không có xã** — y như tên miền hôm nay; không đi theo xã kế thừa |
+| 3 | **Chỉ link đổi.** App tra mã **một lần** (`GET /api/v1/communes?code=` của `identity`, qua `ResolveHost` với `launch_code`), rồi mọi tuyến công khai, khoá nháp, phiên qua `vihat-miniapp` vẫn chạy bằng tên miền đã tra. Tên miền không nằm trên link nhưng vẫn đi trong lời gọi API |
+| 4 | **Chuyển tiếp:** bản app mới đọc `x` trước; không có `x` thì đọc `d` như cũ. `x` có mặt mà sai khuôn thì **không** lùi về `d` (hai tham số có thể chỉ hai xã khác nhau). Thẻ QR ở platform-admin và `npm run qr -- --domain=…` sinh **cả hai** link (`chung` = `x`, `chung_ten_mien` = `d`). `d` bị bỏ ở một bản app sau, khi bản đọc `x` đã phát hành |
+| 5 | `GET /api/v1/communes?host=` trả thêm `launch_code` — để `npm run qr` vẫn nhận `--domain` (chủ dự án: *"lệnh npm vẫn dùng domain cho dễ nhớ"*). Biết tên miền thì tra được mã; chấp nhận vì mã vốn in công khai trên QR |
+| 6 | Link app riêng (`?src=qr`, không tham số xã) **không đổi** — xã nung lúc dựng |
+
+**Thay gì:** dòng *"Tên tham số tên miền | `d`"* của §*Trả lời 30/09* và *"tham số QR/URL của app chung
+mang TÊN MIỀN xã"* ở `owns_facts` (nay: mã công khai, `d` chỉ còn chuyển tiếp); vế *"QR in trước vẫn
+chạy"* của ADR 0070 dòng 12 — QR `d=` chạy tới khi bỏ đường chuyển tiếp, rồi phải in lại.
+
+**Cái giá:** (1) bản app ViHAT đọc `x` phải qua một vòng duyệt Zalo nữa; QR `x=` không được in trước khi
+bản ấy phát hành. (2) Ai xem lưu lượng mạng của app vẫn thấy tên miền — mục tiêu chỉ là link không lộ
+tên miền. (3) Tuyến tra công khai chưa có giới hạn tần suất (`core/ratelimit` chưa có) — như hai tuyến
+công khai cùng nhóm.
 
 
 1. Đề xuất lưu **tên miền** làm tham chiếu xã ở bất kỳ đâu (phiên, xã đã nhớ, vết, bản ghi nghiệp vụ)
