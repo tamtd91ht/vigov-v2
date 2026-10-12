@@ -247,8 +247,20 @@ const TRIPWIRES: readonly Tripwire[] = [
     // án: "không còn đăng nhập nữa, chỉ cần xin quyền để lấy được name". Nó trả TÊN (và ảnh đại diện) —
     // dữ liệu cá nhân thật — nên vẫn chỉ được gọi trong đúng một thư mục, qua hộp xin quyền của Zalo, và
     // `zalo-api.ts` chỉ đọc `name`. Khai báo: `KHAI_BAO_LOI_GOI`, dòng `nua: "nha-nuoc"` đầu tiên.
-    what: "a Zalo SDK call that asks the platform for permission state or more scopes",
+    //
+    // `authorize`/`getSetting` LEFT THE ABSOLUTE BAN on 12/10/2026, narrowed to ONE FILE, not one directory.
+    // Owner: "người dùng đồng ý nhưng khi vào quyền của Mini App vẫn bị off" — `getPhoneNumber` alone never
+    // flips Zalo's remembered permission; `authorize({ scopes: ["scope.userPhonenumber"] })` does
+    // (`zalo-api.ts` `grantPhoneScope`). WHICH scope may be asked is pinned by the absolute ban right below.
+    what: 'a Zalo SDK call that asks the platform for permission state or more scopes, outside "zalo-api.ts"',
     pattern: /\b(getSetting|authorize)\s*\(/,
+    chi_trong: [`${THU_MUC_TINH_NANG}zalo-api.ts`],
+  },
+  {
+    // The half of the old ban that did NOT move: asking for any scope but the phone number's. One
+    // `"scope.userLocation"` added to that `authorize` is a new permission nobody reviewed, in every file.
+    what: "a Zalo permission scope other than scope.userPhonenumber",
+    pattern: /["'`]scope\.(?!userPhonenumber["'`])/,
   },
   {
     // BA LỜI GỌI CỦA BA TÍNH NĂNG, và chỉ trong `src/features/tinh-nang/`. Ở mọi tệp khác chúng
@@ -485,7 +497,8 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // hẹp cái thứ năm, tức đúng lúc phải có một cuộc trò chuyện.
     // NĂM TỪ 28/09/2026: `localStorage` rời lệnh cấm lưu trữ tuyệt đối sang một lệnh cấm một-tệp (nháp của
     // app riêng, ADR 0050 #7).
-    expect(co_pham_vi.length, "số lệnh cấm ĐƯỢC THU HẸP vừa đổi").toBe(5);
+    // SIX FROM 12/10/2026: `getSetting`/`authorize` left the absolute ban for `zalo-api.ts` alone (phone scope).
+    expect(co_pham_vi.length, "số lệnh cấm ĐƯỢC THU HẸP vừa đổi").toBe(6);
 
     const VI_PHAM = [
       { path: "./App.tsx", code: 'const { token } = await getPhoneNumber();' },
@@ -600,6 +613,8 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     // BỐN TỪ 22/09/2026 (trước đó năm): lệnh cấm ô nhập chuyển sang nhóm CÓ PHẠM VI. Bốn cái còn
     // lại — `getSetting`/`authorize` · `serverUploadUrl` · lưu trữ · geolocation —
     // vẫn tuyệt đối, và con số này là thứ đỏ lên nếu cái thứ năm mất tính tuyệt đối.
+    // STILL FOUR from 12/10/2026: `getSetting`/`authorize` became one-file, and its absolute place is taken by
+    // the "scope other than the phone number's" ban.
     expect(TUYET_DOI.length, "một lệnh cấm tuyệt đối vừa được cho một phạm vi").toBe(4);
 
     // getUserInfo (28/09/2026) thuộc lệnh cấm CÓ PHẠM VI: được trong thư mục tính năng, vẫn đỏ ở mọi tệp
@@ -611,9 +626,17 @@ describe("phase 1 collects nothing, and cannot start collecting quietly", () => 
     expect(goiTen("./App.tsx"), "getUserInfo lọt vào lớp vỏ").toBe(true);
     expect(goiTen(`${THU_MUC_TINH_NANG}zalo-api.ts`), "getUserInfo bị cấm cả ở chỗ duy nhất được phép").toBe(false);
 
+    // authorize/getSetting (12/10/2026): allowed in `zalo-api.ts` only — red in the rest of its own directory,
+    // and any scope but the phone number's stays red EVEN in `zalo-api.ts` (absolute ban, VI_PHAM below).
+    const scopedCatches = (path: string, code: string) =>
+      CO_PHAM_VI.some((day) => viPham(day, [{ path, code }]).length === 1);
+    expect(scopedCatches(`${THU_MUC_TINH_NANG}zalo-api.ts`, "const q = await getSetting();"), "getSetting cấm cả ở chỗ được phép").toBe(false);
+    expect(scopedCatches(`${THU_MUC_TINH_NANG}lien-he.ts`, "const q = await getSetting();"), "getSetting lọt ra ngoài zalo-api.ts").toBe(true);
+    expect(scopedCatches("./App.tsx", 'await authorize({ scopes: ["scope.userPhonenumber"] });'), "authorize lọt vào lớp vỏ").toBe(true);
+
     const VI_PHAM = [
       { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'await authorize({ scopes: ["scope.userInfo"] });' },
-      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: "const q = await getSetting();" },
+      { path: `${THU_MUC_TINH_NANG}zalo-api.ts`, code: 'const PHONE_SCOPE = "scope.userLocation";' },
       ...TEP_GOI_MANG.map((path) => ({ path, code: 'document.cookie = "phien=" + token;' })),
       { path: "./features/dang-nhap/kho-phien.tsx", code: 'sessionStorage.setItem("phien", t);' },
       { path: "./features/dang-nhap/PhatHanhPhien.tsx", code: "sessionStorage.setItem(k, v);" },

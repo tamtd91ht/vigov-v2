@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-12",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -687,6 +687,14 @@
       "bang_chung": "656d4cee, 847a464c + commit này. tsc sạch, vitest 73 tệp/1947 ca xanh. Chưa chạy npm run ho-so, make check, chưa xem ảnh render.",
       "tiep_theo": "(1) Chưa có màn nào trong giao diện xã hiện chính sách của xã. (2) Hồ sơ app chung chỉ mang chính sách ViHAT nhưng App ID ấy vẫn chạy trang xã qua QR (máy ảnh, vị trí, phản ánh) — cần quyết có kèm chính sách xã không. (3) Chủ dự án xác nhận webhook chuyển tiếp yêu cầu (REQUEST_WEBHOOK_URL) có bật ở production không, ai nhận. (4) Nhật ký mở phiên là nhật ký kiểm tra chỉ ghi thêm — 'xoá khi yêu cầu' thực tế là ẩn danh hoá; có thể cần sửa câu. (5) Ảnh chụp màn cũ trong tmp/xin-quyen-zalo/app-chung-vihat/anh/ (đường truyền, số hoá thiếp, tìm văn phòng) phải chụp lại.",
       "no_confirm": []
+    },
+    {
+      "id": "qr-xa-khong-hien-vihat-va-quyen-so-12-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "(1) Mở app chung bằng QR xã: main.tsx xoá tiêu đề thanh Zalo + đổi màu đỏ của xã (clearSharedActionBar) TRƯỚC lần render đầu, tên xã điền sau như cũ — người dân không thấy 'ViHAT Group' trên thanh. Màn chờ tải của chính Zalo (tên đăng ký App ID) thì app không đổi được. (2) Quyền số điện thoại: trước getPhoneNumber gọi getSetting → authorize({scopes:['scope.userPhonenumber']}) (grantPhoneScope) để Zalo ghi nhớ quyền, mục quyền của Mini App hiện BẬT; từ chối = tu-choi, Zalo cũ không có authorize thì lùi về hộp của getPhoneNumber. Lệnh cấm authorize/getSetting trong phase1-collects-nothing.test.ts thu hẹp còn MỘT tệp zalo-api.ts; scope khác số điện thoại vẫn cấm tuyệt đối. Khai báo KHAI_BAO_LOI_GOI + hai chính sách quyền riêng tư.",
+      "bang_chung": "citizen-app: tsc sạch, vitest 73 tệp/1954 test xanh (sdk-failure.test.ts thêm 6 ca authorize). CHƯA thử trên điện thoại thật: thời điểm thanh Zalo đổi và công tắc quyền sau authorize.",
+      "con_no": "Chủ dự án kiểm trên máy thật; Developer Console phải cấp quyền số điện thoại cho App ID; nộp lại mô tả quyền cho Zalo."
     }
   ]
 }

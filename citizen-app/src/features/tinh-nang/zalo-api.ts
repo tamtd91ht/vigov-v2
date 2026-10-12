@@ -271,7 +271,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     man: "Trang của một xã mở bằng mã QR",
     tinh_nang: "Tên xã trên thanh tiêu đề của Zalo",
     de_lam_gi:
-      "Đổi dòng chữ trên thanh tiêu đề của Zalo thành tên xã bạn đang xem, cùng màu với phần đầu trang của xã, để bạn luôn biết mình đang làm việc với xã nào.",
+      "Ngay khi ứng dụng mở bằng mã QR của xã, đổi thanh tiêu đề của Zalo sang màu phần đầu trang của xã; khi đã có tên xã, hiện tên xã trên thanh ấy, để bạn luôn biết mình đang làm việc với xã nào.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "",
     intro_app: null,
@@ -400,6 +400,58 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
         "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ của chúng tôi đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ, số ấy giúp chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Khi bạn bấm “Đăng ký nhận” ưu đãi SMS ở Trang chủ, số ấy là nơi nhận tin nhắn SMS giới thiệu ưu đãi của chúng tôi, cho tới khi bạn bấm “Huỷ nhận ưu đãi SMS”.",
       roi_khoi_may:
         "Mã số điện thoại được gửi tới máy chủ của Tập đoàn ViHAT Group để mở phiên đăng nhập, kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS.",
+    },
+  },
+  {
+    // ADDED 12/10/2026 (owner: the phone permission stayed off in Zalo's settings after the citizen agreed).
+    // Runs only right before `getPhoneNumber`, on the same tap, and asks for that one scope (`grantPhoneScope`).
+    api: "authorize",
+    nua: "ca-hai",
+    man: "Liên hệ · Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
+    de_lam_gi:
+      "Ngay trước khi lấy mã số điện thoại, xin Zalo ghi nhớ quyền số điện thoại mà bạn vừa đồng ý chia sẻ, để mục quyền của ứng dụng trong Zalo hiện đúng là đã bật. Ứng dụng chỉ xin đúng quyền này, không xin quyền nào khác. Bạn tắt được quyền ấy bất cứ lúc nào trong phần cài đặt của Zalo.",
+    hoi_nguoi_dung: true,
+    roi_khoi_may: "",
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
+      tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
+      de_lam_gi:
+        "Ngay trước khi lấy mã số điện thoại, xin Zalo ghi nhớ quyền số điện thoại mà bạn vừa đồng ý chia sẻ, để mục quyền của ứng dụng trong Zalo hiện đúng là đã bật. Ứng dụng chỉ xin đúng quyền này, không xin quyền nào khác. Bạn tắt được quyền ấy bất cứ lúc nào trong phần cài đặt của Zalo.",
+      roi_khoi_may: "",
+    },
+    intro_app: {
+      man: "Liên hệ · Trang chủ",
+      tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
+      de_lam_gi:
+        "Ngay trước khi lấy mã số điện thoại, xin Zalo ghi nhớ quyền số điện thoại mà bạn vừa đồng ý chia sẻ, để mục quyền của ứng dụng trong Zalo hiện đúng là đã bật. Ứng dụng chỉ xin đúng quyền này, không xin quyền nào khác. Bạn tắt được quyền ấy bất cứ lúc nào trong phần cài đặt của Zalo.",
+      roi_khoi_may: "",
+    },
+  },
+  {
+    // ADDED 12/10/2026 with `authorize`: reads whether that one scope is already granted, so Zalo's dialog is not
+    // shown again to a citizen who granted it before. Nothing leaves the phone.
+    api: "getSetting",
+    nua: "ca-hai",
+    man: "Liên hệ · Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
+    de_lam_gi:
+      "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may: "",
+    commune_app: {
+      man: "Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi · Đánh giá kết quả xử lý",
+      tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
+      de_lam_gi:
+        "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
+      roi_khoi_may: "",
+    },
+    intro_app: {
+      man: "Liên hệ · Trang chủ",
+      tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
+      de_lam_gi:
+        "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
+      roi_khoi_may: "",
     },
   },
   {
@@ -600,9 +652,41 @@ async function xin<T>(
   }
 }
 
+/**
+ * THE PHONE PERMISSION ZALO REMEMBERS (owner, 12/10/2026: "người dùng đồng ý nhưng khi vào quyền của Mini App
+ * vẫn bị off"). `getPhoneNumber` alone shows a one-call consent: the citizen agrees, the code is given, and the
+ * Mini App's permission switch stays off. `authorize({ scopes: ["scope.userPhonenumber"] })` is the scope grant
+ * Zalo records "cho những lần sử dụng sau này" (`zmp-sdk/index.d.ts`, authorize), and `getSetting` reads it back.
+ *
+ * Order, called only AFTER the citizen pressed the app's own consent button:
+ *   getSetting says granted          → nothing to ask
+ *   otherwise authorize              → Zalo's dialog; `false` or -201 is the citizen's NO → thrown as -201,
+ *                                      which `xin` answers `tu-choi` (and getPhoneNumber is never reached)
+ *   any OTHER failure of the two     → swallowed: a Zalo older than 23.12.02 has no authorize, and
+ *                                      getPhoneNumber's own dialog still asks — the previous behaviour
+ */
+const PHONE_SCOPE = "scope.userPhonenumber";
+
+async function grantPhoneScope(sdk: typeof import("zmp-sdk")): Promise<void> {
+  try {
+    if ((await sdk.getSetting()).authSetting[PHONE_SCOPE] === true) return;
+  } catch {
+    // unreadable setting: ask below
+  }
+  try {
+    const granted = await sdk.authorize({ scopes: [PHONE_SCOPE] });
+    if (granted[PHONE_SCOPE] === false) throw { code: MA_TU_CHOI };
+  } catch (loi) {
+    if (sdkErrorCode(loi) === MA_TU_CHOI) throw loi;
+  }
+}
+
 /** Token số điện thoại. Chuỗi rỗng là câu trả lời thật của nền tảng ở môi trường phát triển. */
 export function xinTokenSoDienThoai(): Promise<KetQuaXin<string>> {
-  return xin("phone", async (sdk) => (await sdk.getPhoneNumber()).token ?? "");
+  return xin("phone", async (sdk) => {
+    await grantPhoneScope(sdk);
+    return (await sdk.getPhoneNumber()).token ?? "";
+  });
 }
 
 /**
@@ -630,6 +714,7 @@ export function xinMaDangNhap(): Promise<KetQuaXin<MaDangNhap>> {
   return xin("access-token", async (sdk, step) => {
     const ma_truy_cap = await sdk.getAccessToken();
     step("phone");
+    await grantPhoneScope(sdk);
     const { token } = await sdk.getPhoneNumber();
     return { ma_so_dien_thoai: token ?? "", ma_truy_cap };
   });
@@ -803,6 +888,29 @@ export function setCommuneActionBar(title: string, headerColor: string): Promise
     "other",
     async (sdk) => {
       await sdk.configAppView({ actionBar: { title: name }, headerColor, headerTextColor: "white" });
+    },
+    false,
+  );
+}
+
+/**
+ * THE FIRST THING THE QR PATH DOES (owner, 12/10/2026: "người dùng không nhìn thấy ViHAT Group ở đoạn render
+ * đầu tiên"). `app-config.json` is static for the shared App ID, so Zalo opens with "ViHAT Group" on a ViHAT-blue
+ * bar; `setCommuneActionBar` can only name the commune after its public lookup returns — a network round trip
+ * during which the old bar stayed. This runs from `main.tsx` BEFORE React renders: the commune's colour and an
+ * EMPTY title — not a guessed name — so the ViHAT title is gone as soon as our code runs. The name follows.
+ *
+ * What it cannot remove: Zalo's own loading screen, drawn from the App ID's registration before any of our
+ * code exists. Only a commune's own App ID removes that.
+ *
+ * `report` false, for `setCommuneActionBar`'s reason: no tap precedes it.
+ */
+export function clearSharedActionBar(headerColor: string): Promise<KetQuaXin<void>> {
+  if (!/^#[0-9a-fA-F]{6}$/.test(headerColor)) return Promise.resolve({ kieu: "khong-lay-duoc" });
+  return xin(
+    "other",
+    async (sdk) => {
+      await sdk.configAppView({ actionBar: { title: "" }, headerColor, headerTextColor: "white" });
     },
     false,
   );

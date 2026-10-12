@@ -19,6 +19,8 @@ const sdk = vi.hoisted(() => ({
   getPhoneNumber: vi.fn<() => Promise<{ token?: string }>>(),
   getLocation: vi.fn<() => Promise<{ token?: string }>>(),
   getUserInfo: vi.fn<() => Promise<{ userInfo: { name?: string } }>>(),
+  getSetting: vi.fn<() => Promise<{ authSetting: Record<string, boolean> }>>(),
+  authorize: vi.fn<(o: { scopes: string[] }) => Promise<Record<string, boolean>>>(),
 }));
 vi.mock("zmp-sdk", () => sdk);
 // Coded failures here would POST a real report on a machine whose `.env.local` sets the API host.
@@ -33,6 +35,40 @@ beforeEach(() => {
   sdk.getPhoneNumber.mockReset().mockResolvedValue({ token: "phone-test" });
   sdk.getLocation.mockReset().mockResolvedValue({ token: "location-test" });
   sdk.getUserInfo.mockReset().mockResolvedValue({ userInfo: { name: "Nguyễn Văn Thử" } });
+  sdk.getSetting.mockReset().mockResolvedValue({ authSetting: {} });
+  sdk.authorize.mockReset().mockResolvedValue({ "scope.userPhonenumber": true });
+});
+
+describe("the phone permission Zalo remembers (owner 12/10/2026: agreed, yet the switch stayed off)", () => {
+  it.each([
+    ["token", xinTokenSoDienThoai],
+    ["sign-in", xinMaDangNhap],
+  ] as const)("%s: asks authorize for the phone scope only, before getPhoneNumber", async (_, call) => {
+    expect((await call()).kieu).toBe("xong");
+    expect(sdk.authorize).toHaveBeenCalledWith({ scopes: ["scope.userPhonenumber"] });
+    expect(sdk.authorize.mock.invocationCallOrder[0]).toBeLessThan(sdk.getPhoneNumber.mock.invocationCallOrder[0]!);
+  });
+
+  it("already granted: Zalo's dialog is not shown again", async () => {
+    sdk.getSetting.mockResolvedValue({ authSetting: { "scope.userPhonenumber": true } });
+    expect((await xinTokenSoDienThoai()).kieu).toBe("xong");
+    expect(sdk.authorize).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["answers false", () => sdk.authorize.mockResolvedValue({ "scope.userPhonenumber": false })],
+    ["throws -201", () => sdk.authorize.mockRejectedValue(zaloError(-201))],
+  ])("refusal %s: the citizen's NO, and the number is never asked", async (_, arrange) => {
+    arrange();
+    expect((await xinTokenSoDienThoai()).kieu).toBe("tu-choi");
+    expect(sdk.getPhoneNumber).not.toHaveBeenCalled();
+  });
+
+  it("an older Zalo without authorize falls back to getPhoneNumber's own dialog", async () => {
+    sdk.getSetting.mockRejectedValue(zaloError(-1404));
+    sdk.authorize.mockRejectedValue(zaloError(-1404));
+    expect(await xinTokenSoDienThoai()).toEqual({ kieu: "xong", du_lieu: "phone-test" });
+  });
 });
 
 describe("a code other than -201 carries the capability and Zalo's code", () => {
