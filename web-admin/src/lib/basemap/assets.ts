@@ -18,12 +18,25 @@
 export const BASEMAP_ROUTE = "/basemap";
 
 /**
- * The one tile archive: mainland Vietnam + near-shore islands, bbox 101.6–110.0°E, 7.9–23.9°N (owner,
+ * The main tile archive: mainland Vietnam + near-shore islands, bbox 101.6–110.0°E, 7.9–23.9°N (owner,
  * 09/10/2026). A FIXED name on purpose: a refresh uploads under a NEW dated prefix and changes
  * `BASEMAP_URL` (runbook `kb/40-runbooks/basemap-pmtiles.md`), so the name never has to change and an
  * archive being read is never overwritten in place.
  */
 export const BASEMAP_FILE = "vn-mainland.pmtiles";
+
+/**
+ * The second archive: Overture Maps places for the whole country, drawn as part of the basemap from
+ * zoom 13 (owner, 12/10/2026; ADR 0072 §Sửa đổi 12/10/2026). Uploaded under the SAME dated prefix as
+ * `BASEMAP_FILE`, so one `BASEMAP_URL` change refreshes both together and the two never come from
+ * different builds. A separate file rather than a layer merged into the mainland archive: the map
+ * treats it as optional (`isOptionalBasemapSourceError` in `./style.ts`), which only works if it can
+ * fail on its own.
+ */
+export const PLACES_FILE = "vn-places.pmtiles";
+
+/** Both tile archives, each served as a byte-range read of a single object. */
+const ARCHIVE_FILES: readonly string[] = [BASEMAP_FILE, PLACES_FILE];
 
 /**
  * Font stacks the style uses — exactly the ones the Protomaps `light` layers name in `text-font`, and
@@ -73,8 +86,8 @@ const STATIC_CACHE = "private, max-age=86400";
  * route answers with 404. Every check is an exact comparison; nothing is normalised first.
  */
 export function basemapAsset(segments: readonly string[]): BasemapAsset | null {
-  if (segments.length === 1 && segments[0] === BASEMAP_FILE) {
-    return { key: BASEMAP_FILE, contentType: "application/octet-stream", cacheControl: ARCHIVE_CACHE };
+  if (segments.length === 1 && ARCHIVE_FILES.includes(segments[0]!)) {
+    return { key: segments[0]!, contentType: "application/octet-stream", cacheControl: ARCHIVE_CACHE };
   }
   if (segments.length === 3 && segments[0] === "fonts") {
     const [, stack, range] = segments as [string, string, string];

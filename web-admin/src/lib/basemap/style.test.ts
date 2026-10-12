@@ -1,7 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { BASEMAP_FILE, BASEMAP_FONTS, BASEMAP_ROUTE, basemapAsset } from "./assets";
-import { BASEMAP_ATTRIBUTION, BASEMAP_SOURCE_ID, BASEMAP_TEXT_FIELD, buildBasemapStyle } from "./style";
+import { BASEMAP_FILE, BASEMAP_FONTS, BASEMAP_ROUTE, PLACES_FILE, basemapAsset } from "./assets";
+import {
+  BASEMAP_ATTRIBUTION,
+  BASEMAP_SOURCE_ID,
+  BASEMAP_TEXT_FIELD,
+  PLACES_ATTRIBUTION,
+  PLACES_DOT_LAYER_ID,
+  PLACES_LABEL_LAYER_ID,
+  PLACES_SOURCE_ID,
+  buildBasemapStyle,
+  isOptionalBasemapSourceError,
+} from "./style";
 
 const ORIGIN = "https://xa-thu.example.test";
 
@@ -25,7 +35,7 @@ describe("basemap style — nothing leaves the origin (ADR 0072 §Sửa đổi 0
 
   it("every URL-like string in the whole style is under <origin>/basemap/", () => {
     const urls = strings(style).filter((s) => /:\/\/|^\/\/|^www\./i.test(s));
-    expect(urls.length).toBeGreaterThanOrEqual(3); // glyphs, sprite, source
+    expect(urls.length).toBeGreaterThanOrEqual(4); // glyphs, sprite, two sources
     for (const u of urls) {
       const plain = u.replace(/^pmtiles:\/\//, "");
       expect(plain.startsWith(`${ORIGIN}${BASEMAP_ROUTE}/`), u).toBe(true);
@@ -39,10 +49,19 @@ describe("basemap style — nothing leaves the origin (ADR 0072 §Sửa đổi 0
     }
   });
 
-  it("source, glyphs and sprite point at files the /basemap route actually serves", () => {
+  it("sources, glyphs and sprite point at files the /basemap route actually serves", () => {
+    expect(Object.keys(style.sources).sort()).toEqual([PLACES_SOURCE_ID, BASEMAP_SOURCE_ID].sort());
     const src = style.sources[BASEMAP_SOURCE_ID] as { url: string; attribution: string };
     expect(src.url).toBe(`pmtiles://${ORIGIN}/basemap/${BASEMAP_FILE}`);
-    expect(basemapAsset([BASEMAP_FILE])).not.toBeNull();
+    const places = style.sources[PLACES_SOURCE_ID] as { url: string };
+    expect(places.url).toBe(`pmtiles://${ORIGIN}/basemap/${PLACES_FILE}`);
+    // EVERY source, not only the two named above: a third one added later must be served too.
+    for (const [id, s] of Object.entries(style.sources)) {
+      const url = (s as { url?: string }).url ?? "";
+      const prefix = `pmtiles://${ORIGIN}/basemap/`;
+      expect(url.startsWith(prefix), id).toBe(true);
+      expect(basemapAsset(url.slice(prefix.length).split("/")), id).not.toBeNull();
+    }
     expect(style.glyphs).toBe(`${ORIGIN}/basemap/fonts/{fontstack}/{range}.pbf`);
     for (const f of BASEMAP_FONTS) expect(basemapAsset(["fonts", f, "0-255.pbf"]), f).not.toBeNull();
     // MapLibre appends these four suffixes to `sprite`.
@@ -62,6 +81,17 @@ describe("basemap style — nothing leaves the origin (ADR 0072 §Sửa đổi 0
   it("carries the OpenStreetMap credit (ODbL)", () => {
     expect((style.sources[BASEMAP_SOURCE_ID] as { attribution: string }).attribution).toBe(BASEMAP_ATTRIBUTION);
     expect(BASEMAP_ATTRIBUTION).toContain("© OpenStreetMap contributors");
+  });
+
+  it("carries the Overture Maps credit on the places source", () => {
+    expect((style.sources[PLACES_SOURCE_ID] as { attribution: string }).attribution).toBe(PLACES_ATTRIBUTION);
+    expect(PLACES_ATTRIBUTION).toBe("© Overture Maps Foundation");
+  });
+
+  it("every source carries a non-empty attribution", () => {
+    for (const [id, s] of Object.entries(style.sources)) {
+      expect(((s as { attribution?: string }).attribution ?? "").trim().length, id).toBeGreaterThan(0);
+    }
   });
 
   it("refuses an origin that is not scheme://host[:port]", () => {
@@ -89,6 +119,50 @@ describe("basemap style — labels read name:vi, then name (owner, 09/10/2026)",
     const fields = layers.map((l) => JSON.stringify(l.layout?.["text-field"] ?? ""));
     expect(fields.some((f) => f.includes("shield_text"))).toBe(true);
     expect(fields.some((f) => f.includes("addr_housenumber"))).toBe(true);
+  });
+});
+
+describe("basemap style — Overture places, part of the basemap (owner, 12/10/2026)", () => {
+  type PlacesLayer = AnyLayer & { source?: string; minzoom?: number; paint?: Record<string, unknown> };
+  const all = layers as PlacesLayer[];
+  const ids = all.map((l) => l.id);
+  const dot = all.find((l) => l.id === PLACES_DOT_LAYER_ID)!;
+  const label = all.find((l) => l.id === PLACES_LABEL_LAYER_ID)!;
+
+  it("the source is a vector source for zoom 13–15", () => {
+    const s = style.sources[PLACES_SOURCE_ID] as { type: string; minzoom: number; maxzoom: number };
+    expect(s).toMatchObject({ type: "vector", minzoom: 13, maxzoom: 15 });
+  });
+
+  it("exactly two layers read it — a dot and a label — both from zoom 13, on source-layer `places`", () => {
+    const reading = all.filter((l) => l.source === PLACES_SOURCE_ID).map((l) => l.id);
+    expect(reading).toEqual([PLACES_DOT_LAYER_ID, PLACES_LABEL_LAYER_ID]);
+    expect(dot).toMatchObject({ type: "circle", "source-layer": "places", minzoom: 13 });
+    expect(label).toMatchObject({ type: "symbol", "source-layer": "places", minzoom: 13 });
+  });
+
+  it("drawn AFTER every Protomaps layer (above roads), the last two of the style", () => {
+    expect(ids.slice(-2)).toEqual([PLACES_DOT_LAYER_ID, PLACES_LABEL_LAYER_ID]);
+    const lastProtomaps = Math.max(...all.map((l, i) => (l.source === BASEMAP_SOURCE_ID ? i : -1)));
+    expect(lastProtomaps).toBeLessThan(ids.indexOf(PLACES_DOT_LAYER_ID));
+  });
+
+  it("the label reads exactly name:vi, then name, in a font /basemap serves, never overlapping", () => {
+    expect(label.layout!["text-field"]).toEqual(BASEMAP_TEXT_FIELD);
+    expect(label.layout!["text-font"]).toEqual(["Noto Sans Regular"]);
+    expect(label.layout!["text-allow-overlap"]).toBe(false);
+  });
+});
+
+describe("isOptionalBasemapSourceError — only the places archive may fail without breaking the map", () => {
+  it("true for an overture source error", () => {
+    expect(isOptionalBasemapSourceError({ sourceId: PLACES_SOURCE_ID, error: new Error("x") })).toBe(true);
+  });
+
+  it("false for the protomaps source, a source-less error, and junk", () => {
+    expect(isOptionalBasemapSourceError({ sourceId: BASEMAP_SOURCE_ID, error: new Error("x") })).toBe(false);
+    expect(isOptionalBasemapSourceError({ error: new Error("style") })).toBe(false);
+    for (const v of [undefined, null, "overture", 0]) expect(isOptionalBasemapSourceError(v)).toBe(false);
   });
 });
 

@@ -14,7 +14,7 @@ import { listCitizenReportPoints, type CitizenReportFilter, type PointsResult } 
 import type { comms_mapFrameOut, petitions_citizenReportPointOut } from "@/lib/api/schema.gen";
 import { BASEMAP_MISSING_SENTENCE } from "@/lib/basemap/assets";
 import { registerPmtilesProtocol } from "@/lib/basemap/protocol";
-import { buildBasemapStyle } from "@/lib/basemap/style";
+import { buildBasemapStyle, isOptionalBasemapSourceError } from "@/lib/basemap/style";
 
 import {
   HEAT_MAP_EMPTY_HINT,
@@ -169,8 +169,10 @@ export function PetitionMapCanvas({ frame, content, label, className }: Petition
       map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
 
       let loaded = false;
-      map.on("error", () => {
-        // A tile failing after load is a gap; only a style that never loads is a broken map.
+      map.on("error", (e) => {
+        // A tile failing after load is a gap; only a style that never loads is a broken map. The optional
+        // places archive failing is never one — the map draws without it (owner, 12/10/2026).
+        if (isOptionalBasemapSourceError(e)) return;
         if (!loaded && !cancelled) setFailed(true);
       });
 

@@ -48,6 +48,7 @@ import {
   MAP_FRAME_NOTICE_ITEMS,
   MAP_FRAME_NOTICE_TITLE,
   MAP_FRAME_NOTICE_VERSION,
+  MAP_LOAD_FAILED,
   NOTICE_CONFIRM_BUTTON,
   NOTICE_RELOADED,
   NO_GROUPS,
@@ -627,6 +628,17 @@ describe("the map — created once, bounded in the constructor, removed on unmou
     expect(JSON.stringify(map.opts.style)).toContain("OpenStreetMap");
     const custom = map.controls.filter((c) => (c as { opts?: Record<string, unknown> }).opts?.customAttribution !== undefined);
     expect(custom).toEqual([]);
+  });
+
+  it("the Overture places archive failing before load does NOT break the map; a protomaps error still does", async () => {
+    await mount({ permissions: ["asset.read"] });
+    const map = theMap();
+    await act(async () => map.fire("error", { sourceId: "overture", error: new Error("404") }));
+    await settle();
+    expect(text()).not.toContain(MAP_LOAD_FAILED);
+    await act(async () => map.fire("error", { sourceId: "protomaps", error: new Error("404") }));
+    await settle();
+    expect(text()).toContain(MAP_LOAD_FAILED);
   });
 });
 

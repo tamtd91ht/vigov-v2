@@ -1376,6 +1376,14 @@
       "viec": "Bảng lỗi web admin (2 dòng New 12/10): thẻ danh sách phản ánh hiện ảnh bìa (prototype FeedbackCard.tsx:39) và 'Toạ độ …' khi không có thôn/địa chỉ nhưng có toạ độ. Chủ dự án chốt 12/10: ảnh bìa ký ở danh sách, 1 vết kiểm toán/trang.",
       "bang_chung": "fb35ee22 (CoverTile trong so-phan-anh.tsx, coverPhotoAlt) · 74d2a151 (cardPlaceLabel dùng sceneCoordinates). vitest phan-anh + lib/api 68 tệp xanh.",
       "tiep_theo": "Chưa kiểm bằng ảnh render. Khi viết CSP (security_debt missing-security-headers, hạn 30/11/2026) img-src phải cho host kho tệp, nếu không ảnh bìa và ảnh ngăn chi tiết trắng."
+    },
+    {
+      "id": "ban-do-nen-dia-diem-overture-12-10",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Lớp địa điểm Overture Maps trên mọi bản đồ web-admin (chủ dự án chốt 12/10/2026, ADR 0072 §Sửa đổi 12/10/2026): tệp thứ hai vn-places.pmtiles cạnh vn-mainland.pmtiles; chấm xám + nhãn xám từ zoom 13, dưới lớp tài sản của xã, không tìm kiếm, không đếm; chỉ lớp này lỗi thì bản đồ vẫn hiện.",
+      "bang_chung": "web-admin/src/lib/basemap/assets.ts (PLACES_FILE trong danh sách đóng, cùng Content-Type/Cache-Control với tệp nền) · lib/basemap/style.ts (nguồn 'overture', hai lớp overture-places-dot/-label nối sau lớp Protomaps, isOptionalBasemapSourceError) · petition-map.tsx + economic-map.tsx bỏ qua lỗi nguồn 'overture' trước load. Kiểm 12/10: vitest src/lib/basemap src/lib/may-chu/basemap src/features/map-assets src/features/phan-anh src/proxy-basemap 28 tệp / 636 ca xanh; tsc --noEmit sạch; eslint các tệp sửa sạch. Chưa commit.",
+      "tiep_theo": "Chờ tệp vn-places.pmtiles dựng thật (thẻ việc pipeline) và tải lên cùng tiền tố BASEMAP_URL; kiểm ảnh render ở zoom 13–15; pháp chế duyệt câu ghi nguồn '© Overture Maps Foundation' (hiện là đề xuất)."
     }
   ]
 }

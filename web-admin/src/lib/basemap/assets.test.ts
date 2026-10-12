@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { BASEMAP_FILE, basemapAsset } from "./assets";
+import { BASEMAP_FILE, PLACES_FILE, basemapAsset } from "./assets";
 
 describe("basemapAsset — the exact allow-list behind /basemap/*", () => {
-  it("serves the archive, the three font stacks and the four sprite files", () => {
+  it("serves both archives, the three font stacks and the four sprite files", () => {
     expect(basemapAsset([BASEMAP_FILE])?.key).toBe("vn-mainland.pmtiles");
+    expect(basemapAsset([PLACES_FILE])?.key).toBe("vn-places.pmtiles");
     expect(basemapAsset(["fonts", "Noto Sans Regular", "7680-7935.pbf"])?.key).toBe(
       "fonts/Noto%20Sans%20Regular/7680-7935.pbf",
     );
@@ -16,13 +17,15 @@ describe("basemapAsset — the exact allow-list behind /basemap/*", () => {
 
   it("sets its own content type — never what storage says", () => {
     expect(basemapAsset([BASEMAP_FILE])?.contentType).toBe("application/octet-stream");
+    expect(basemapAsset([PLACES_FILE])?.contentType).toBe("application/octet-stream");
     expect(basemapAsset(["fonts", "Noto Sans Medium", "0-255.pbf"])?.contentType).toBe("application/x-protobuf");
     expect(basemapAsset(["sprites", "light.png"])?.contentType).toBe("image/png");
     expect(basemapAsset(["sprites", "light.json"])?.contentType).toBe("application/json");
   });
 
-  it("the archive must be revalidated: a cached range of the previous file would corrupt tiles", () => {
+  it("each archive must be revalidated: a cached range of the previous file would corrupt tiles", () => {
     expect(basemapAsset([BASEMAP_FILE])?.cacheControl).toContain("no-cache");
+    expect(basemapAsset([PLACES_FILE])?.cacheControl).toContain("no-cache");
   });
 
   it("refuses traversal and anything not listed, by exact comparison", () => {
@@ -40,6 +43,11 @@ describe("basemapAsset — the exact allow-list behind /basemap/*", () => {
       ["other.pmtiles"],
       [BASEMAP_FILE, ""],
       ["VN-MAINLAND.PMTILES"],
+      ["..", PLACES_FILE],
+      [PLACES_FILE, ""],
+      ["VN-PLACES.PMTILES"],
+      ["vn-places.pmtiles.html"],
+      ["places", PLACES_FILE],
       ["fonts", "Arial Regular", "0-255.pbf"],
       ["fonts", "Noto Sans Regular", "1-256.pbf"],
       ["fonts", "Noto Sans Regular", "0-511.pbf"],

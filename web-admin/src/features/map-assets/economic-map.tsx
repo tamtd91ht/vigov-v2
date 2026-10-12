@@ -13,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { registerPmtilesProtocol } from "@/lib/basemap/protocol";
 import { cn } from "@/lib/cn";
-import { buildBasemapStyle } from "@/lib/basemap/style";
+import { buildBasemapStyle, isOptionalBasemapSourceError } from "@/lib/basemap/style";
 
 import {
   CENTRE_COLOUR,
@@ -171,8 +171,10 @@ export function EconomicMap({
       map.addControl(new ml.ScaleControl({ unit: "metric" }), "bottom-right");
 
       let loaded = false;
-      map.on("error", () => {
-        // A tile that fails after load is a gap, not a broken page; only a style that never loads is.
+      map.on("error", (e) => {
+        // A tile that fails after load is a gap, not a broken page; only a style that never loads is. The
+        // optional places archive failing is never one — the map draws without it (owner, 12/10/2026).
+        if (isOptionalBasemapSourceError(e)) return;
         if (!loaded) onLoadErrorRef.current();
       });
 

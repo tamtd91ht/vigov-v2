@@ -27,7 +27,7 @@ const ml = vi.hoisted(() => {
   const markers: { opts: unknown; at: unknown }[] = [];
   const protocols: string[] = [];
   class FakeMap {
-    handlers = new Map<string, () => void>();
+    handlers = new Map<string, (e?: unknown) => void>();
     sources = new Map<string, unknown>();
     layers: Record<string, unknown>[] = [];
     removed = false;
@@ -36,7 +36,7 @@ const ml = vi.hoisted(() => {
       calls.push("new Map");
       maps.push(this);
     }
-    on(event: string, handler: () => void) {
+    on(event: string, handler: (e?: unknown) => void) {
       this.handlers.set(event, handler);
     }
     addControl() {}
@@ -343,6 +343,16 @@ describe("the real canvas — what MapLibre is handed", () => {
     const h = mount(<PetitionMapCanvas frame={frame} content={{ kind: "heat", points: [] }} label="x" />);
     await flush();
     act(() => ml.maps[0]!.handlers.get("error")?.());
+    expect(h.textContent).toContain("Không tải được bản đồ nền");
+  });
+
+  it("the Overture places archive failing before load does NOT break the map; a protomaps error still does", async () => {
+    const h = mount(<PetitionMapCanvas frame={frame} content={{ kind: "heat", points: [] }} label="x" />);
+    await flush();
+    const onError = ml.maps[0]!.handlers.get("error")!;
+    act(() => onError({ sourceId: "overture", error: new Error("404") }));
+    expect(h.textContent).not.toContain("Không tải được bản đồ nền");
+    act(() => onError({ sourceId: "protomaps", error: new Error("404") }));
     expect(h.textContent).toContain("Không tải được bản đồ nền");
   });
 });

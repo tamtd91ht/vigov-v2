@@ -1,7 +1,7 @@
 import { layers, namedFlavor } from "@protomaps/basemaps";
 import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 
-import { BASEMAP_FILE, BASEMAP_ROUTE, BASEMAP_SPRITE } from "./assets";
+import { BASEMAP_FILE, BASEMAP_ROUTE, BASEMAP_SPRITE, PLACES_FILE } from "./assets";
 
 /**
  * The MapLibre style of every web-admin map: the petition maps (heat-map tab, scene map in the ticket
@@ -18,6 +18,9 @@ import { BASEMAP_FILE, BASEMAP_ROUTE, BASEMAP_SPRITE } from "./assets";
  *   2. Boundary lines: disputed and maritime ones are filtered out (§Trả lời, and the reason there:
  *      OSM draws them in a way that does not match Vietnam's position).
  *   3. Attribution `© OpenStreetMap contributors` is carried on the source (ODbL; ADR 0072 §Dựng step 6).
+ *
+ * Plus one addition (owner, 12/10/2026): the Overture places archive as a second, OPTIONAL source —
+ * see `PLACES_SOURCE_ID` and `isOptionalBasemapSourceError`.
  */
 
 /** Source id inside the style. Not a URL, never shown. */
@@ -31,6 +34,92 @@ export const BASEMAP_TEXT_FIELD = ["coalesce", ["get", "name:vi"], ["get", "name
  * style same-origin would have to make an exception. ODbL asks for the credit, which this is.
  */
 export const BASEMAP_ATTRIBUTION = "Protomaps © OpenStreetMap contributors";
+
+/**
+ * Source id of the Overture Maps places archive (`PLACES_FILE`). Owner, 12/10/2026 (ADR 0072 §Sửa đổi
+ * 12/10/2026): places are PART OF THE BASEMAP — a grey dot and grey label from zoom 13, under every
+ * layer the app adds after load, not searchable, not counted. Nothing reads them as data.
+ */
+export const PLACES_SOURCE_ID = "overture";
+
+/**
+ * PROPOSED wording, pending legal approval — ADR 0072 §Sửa đổi 12/10/2026. Change it there first, then
+ * here. Plain text for the same reason as `BASEMAP_ATTRIBUTION`: no third-party URL in the style.
+ */
+export const PLACES_ATTRIBUTION = "© Overture Maps Foundation";
+
+/** Zoom band the pipeline builds `PLACES_FILE` for. Below 13 a country of POIs is noise over the roads. */
+const PLACES_MINZOOM = 13;
+const PLACES_MAXZOOM = 15;
+
+/** The vector layer inside `PLACES_FILE` (contract with the archive's build script). */
+const PLACES_SOURCE_LAYER = "places";
+
+export const PLACES_DOT_LAYER_ID = "overture-places-dot";
+export const PLACES_LABEL_LAYER_ID = "overture-places-label";
+
+/**
+ * Neutral grey on purpose: these are background context, and must never read as one of the commune's
+ * own coloured asset pins drawn above them.
+ */
+const PLACES_GREY = "#8a8f98";
+const PLACES_TEXT_GREY = "#6b7079";
+
+/**
+ * Appended AFTER the Protomaps layers: above roads and landuse, so a shop is not hidden under a street
+ * fill — and still below everything the maps add on `load`, because `addLayer` without `beforeId`
+ * appends after these.
+ */
+function placesLayers(): LayerSpecification[] {
+  return [
+    {
+      id: PLACES_DOT_LAYER_ID,
+      type: "circle",
+      source: PLACES_SOURCE_ID,
+      "source-layer": PLACES_SOURCE_LAYER,
+      minzoom: PLACES_MINZOOM,
+      paint: {
+        "circle-radius": 2.5,
+        "circle-color": PLACES_GREY,
+        "circle-stroke-width": 0.75,
+        "circle-stroke-color": "#ffffff",
+      },
+    },
+    {
+      id: PLACES_LABEL_LAYER_ID,
+      type: "symbol",
+      source: PLACES_SOURCE_ID,
+      "source-layer": PLACES_SOURCE_LAYER,
+      minzoom: PLACES_MINZOOM,
+      layout: {
+        // Same rule as every other basemap label: name:vi, then name — never English.
+        "text-field": BASEMAP_TEXT_FIELD,
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 11,
+        "text-anchor": "top",
+        "text-offset": [0, 0.4],
+        // Default collision: a dense street drops labels rather than piling them over Protomaps' own.
+        "text-allow-overlap": false,
+      },
+      paint: {
+        "text-color": PLACES_TEXT_GREY,
+        "text-halo-color": "#ffffff",
+        "text-halo-width": 1.2,
+      },
+    },
+  ] as unknown as LayerSpecification[];
+}
+
+/**
+ * True for a MapLibre `error` event that comes from an OPTIONAL basemap source — today only the places
+ * archive. Owner, 12/10/2026: a failure of ONLY that layer must not take the map down, so every map's
+ * "never loaded → show the failure sentence" handler skips these. MapLibre marks a source whose header
+ * cannot be read as loaded-and-ignored and still fires `load`, so the rest of the map draws normally.
+ * A `protomaps` error (or one with no source) is still a broken map.
+ */
+export function isOptionalBasemapSourceError(e: unknown): boolean {
+  return typeof e === "object" && e !== null && (e as { sourceId?: unknown }).sourceId === PLACES_SOURCE_ID;
+}
 
 /**
  * Boundary kinds that are drawn — an ALLOW-list over the `kind` property of the Protomaps `boundaries`
@@ -129,7 +218,14 @@ export function buildBasemapStyle(origin: string): StyleSpecification {
         url: `pmtiles://${base}/${BASEMAP_FILE}`,
         attribution: BASEMAP_ATTRIBUTION,
       },
+      [PLACES_SOURCE_ID]: {
+        type: "vector",
+        url: `pmtiles://${base}/${PLACES_FILE}`,
+        attribution: PLACES_ATTRIBUTION,
+        minzoom: PLACES_MINZOOM,
+        maxzoom: PLACES_MAXZOOM,
+      },
     },
-    layers: out,
+    layers: [...out, ...placesLayers()],
   };
 }
