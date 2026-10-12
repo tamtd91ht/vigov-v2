@@ -156,10 +156,12 @@ export type SharedMiniApp = { app_id: string; created_at: string; created_by: st
  * operator_launch.go `launchLinkView`. `source` says which app the link opens: `chung` = the shared
  * ViHAT app, `rieng` = the commune's own running app (`domain` may then be "").
  */
-export type LaunchLink = { url: string; domain: string; app_id: string; source: "rieng" | "chung" };
+// `chung_ten_mien` (12/10/2026): the shared app's TRANSITIONAL `?d=<domain>` link, printed only while the app
+// version that reads `?x=` is not yet live on Zalo (ADR 0047 §Sửa đổi 12/10/2026).
+export type LaunchLink = { url: string; domain: string; app_id: string; source: "rieng" | "chung" | "chung_ten_mien" };
 
 /** operator_launch.go `launchLinkUnavailable`: a link the commune cannot get now, and why. */
-export type LaunchLinkUnavailable = { source: "rieng" | "chung"; code: string; message: string };
+export type LaunchLinkUnavailable = { source: "rieng" | "chung" | "chung_ten_mien"; code: string; message: string };
 
 /**
  * operator_launch.go `launchLinksView` (owner 06/10/2026): every link the commune has, shared first,

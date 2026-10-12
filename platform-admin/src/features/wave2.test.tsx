@@ -289,6 +289,7 @@ describe("launch link: every 409 is a Vietnamese next step", () => {
   it.each([
     ["commune_inactive", false],
     ["commune_no_primary_domain", false],
+    ["commune_launch_code_invalid", false],
     ["shared_mini_app_not_declared", true],
     ["shared_mini_app_ambiguous", false],
     ["own_mini_app_ambiguous", false],
@@ -371,6 +372,8 @@ describe("launch link: every 409 is a Vietnamese next step", () => {
 
   it("an unknown source is shown as it is, never guessed", () => {
     expect(launchSourceLabel("khac")).toBe("Nguồn không xác định: khac");
+    // The transitional `?d=` link (12/10/2026) is named, never shown as an unknown source.
+    expect(launchSourceLabel("chung_ten_mien")).toBe("Mở bằng app ViHAT (liên kết tên miền, tạm thời)");
   });
 });
 
@@ -479,7 +482,7 @@ describe("tier-1 petition fields", () => {
 
 describe("the CSP holds: no wave-2 view draws a style attribute", () => {
   it("every new view renders without style=", () => {
-    const link = { url: "https://zalo.me/s/1/?d=a.example.vn&src=qr", domain: "a.example.vn", app_id: "1", source: "chung" as const };
+    const link = { url: "https://zalo.me/s/1/?src=qr&x=0123456789ab", domain: "a.example.vn", app_id: "1", source: "chung" as const };
     const own = { url: "https://zalo.me/s/2/?src=qr", domain: "a.example.vn", app_id: "2", source: "rieng" as const };
     const views = [
       <SidebarView key="sb" permissionKeys={SEVEN} />,

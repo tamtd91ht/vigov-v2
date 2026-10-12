@@ -39,6 +39,8 @@ export function launchSourceLabel(source: string): string {
   switch (source) {
     case "chung":
       return "Mở bằng app ViHAT";
+    case "chung_ten_mien":
+      return "Mở bằng app ViHAT (liên kết tên miền, tạm thời)";
     case "rieng":
       return "Mở bằng app riêng của xã";
     default:
@@ -84,7 +86,9 @@ function LaunchLinkItem({ link, onCopy }: { link: LaunchLink; onCopy: (url: stri
       <p className="m-0 text-[13px] text-ink-500">
         {own
           ? "Mã QR mở thẳng Mini App riêng của xã. Nếu xã đổi hoặc gỡ App ID này, mã đã in sẽ không còn dùng được và cần in lại."
-          : "Mã QR mở app ViHAT (Mini App dùng chung) và đưa người dân vào đúng xã này. Nếu App ID dùng chung được đổi, mã đã in sẽ không còn dùng được và cần in lại."}
+          : link.source === "chung_ten_mien"
+            ? "Liên kết cũ mang tên miền của xã, chỉ dùng trong giai đoạn chuyển tiếp: chạy với bản app ViHAT hiện tại. Khi bản app đọc mã công khai đã phát hành, in mã QR “Mở bằng app ViHAT” thay cho mã này; liên kết tên miền sẽ bị bỏ ở bản sau."
+            : "Mã QR mở app ViHAT (Mini App dùng chung) và đưa người dân vào đúng xã này. Nếu App ID dùng chung được đổi, mã đã in sẽ không còn dùng được và cần in lại."}
       </p>
     </li>
   );

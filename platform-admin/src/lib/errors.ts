@@ -234,6 +234,10 @@ const LAUNCH_LINK_ERRORS: Record<string, { text: string; toSharedAppPage: boolea
     text: "Xã đang ngừng hoạt động nên không phát hành mã QR: mã QR sẽ đưa người dân tới một xã không còn nhận phản ánh.",
     toSharedAppPage: false,
   },
+  commune_launch_code_invalid: {
+    text: "Mã công khai của xã đang lưu không đúng khuôn, nên chưa tạo được liên kết. Báo nhóm nền tảng kiểm tra cột launch_code của xã.",
+    toSharedAppPage: false,
+  },
   commune_no_primary_domain: {
     text: "Xã chưa có tên miền chính dùng được trong liên kết mở Mini App. Kiểm tra mục Tên miền của xã; nếu xã đã có tên miền chính, báo nhóm nền tảng.",
     toSharedAppPage: false,
