@@ -126,6 +126,7 @@ func (rg *bmRig) do(method, file, host string, headers ...string) *httptest.Resp
 func TestPublicBasemapServesExactlyTheClosedSet(t *testing.T) {
 	cases := []struct{ file, key, ct, cache string }{
 		{"vn-mainland.pmtiles", "vn-mainland.pmtiles", "application/octet-stream", "public, no-cache"},
+		{"vn-places.pmtiles", "vn-places.pmtiles", "application/octet-stream", "public, no-cache"},
 		{"fonts/Noto%20Sans%20Regular/0-255.pbf", "fonts/Noto%20Sans%20Regular/0-255.pbf", "application/x-protobuf", "public, max-age=86400"},
 		{"fonts/Noto%20Sans%20Medium/7680-7935.pbf", "fonts/Noto%20Sans%20Medium/7680-7935.pbf", "application/x-protobuf", "public, max-age=86400"},
 		{"fonts/Noto%20Sans%20Italic/65280-65535.pbf", "fonts/Noto%20Sans%20Italic/65280-65535.pbf", "application/x-protobuf", "public, max-age=86400"},
@@ -162,6 +163,9 @@ func TestPublicBasemapServesExactlyTheClosedSet(t *testing.T) {
 func TestPublicBasemapRefusesEverythingElse(t *testing.T) {
 	for _, file := range []string{
 		"", "other.pmtiles", "vn-mainland.pmtiles/x", "VN-MAINLAND.pmtiles",
+		// The archive set is EXACT names — no prefix, suffix or case variant of either archive.
+		"vn-places.pmtiles/x", "VN-PLACES.pmtiles", "vn-places.pmtiles.bak", "x-vn-places.pmtiles",
+		"vn-places", "vn-places2.pmtiles", "vn.pmtiles",
 		"../vn-mainland.pmtiles", "%2e%2e/vn-mainland.pmtiles", "fonts%2FNoto%20Sans%20Regular%2F0-255.pbf",
 		"fonts/Noto%20Sans%20Bold/0-255.pbf", "fonts/Noto%20Sans%20Regular/1-256.pbf",
 		"fonts/Noto%20Sans%20Regular/0-511.pbf", "fonts/Noto%20Sans%20Regular/65536-65791.pbf",
@@ -225,6 +229,65 @@ func TestPublicBasemapForwardsRangeAndPasses206(t *testing.T) {
 	}
 	if up.URL.RawQuery != "" {
 		t.Errorf("the query reached storage: %q", up.URL.RawQuery)
+	}
+}
+
+// The second archive (owner, 12/10/2026) is read the same way PMTiles reads the first: by range, with
+// Accept-Ranges, the archive's content type and cache policy, from ITS own object key.
+func TestPublicBasemapPlacesArchiveServesRange(t *testing.T) {
+	rg := bmServer(t, true)
+	w := rg.do(http.MethodGet, "vn-places.pmtiles", ckHostA, "Range: bytes=0-15")
+	if w.Code != http.StatusPartialContent || w.Body.String() != bmArchive[:16] {
+		t.Fatalf("places range read: %d %q", w.Code, w.Body.String())
+	}
+	for k, want := range map[string]string{
+		"Content-Range": "bytes 0-15/36", "Accept-Ranges": "bytes", "Content-Type": "application/octet-stream",
+		"Cache-Control": "public, no-cache",
+	} {
+		if got := w.Header().Get(k); got != want {
+			t.Errorf("%s = %q, want %q", k, got, want)
+		}
+	}
+	reqs := rg.storage.requests()
+	if len(reqs) != 1 || reqs[0].URL.EscapedPath() != bmPrefix+"vn-places.pmtiles" {
+		t.Fatalf("storage asked %v", reqs)
+	}
+}
+
+// Accept-Ranges is OURS for both archives: a storage answer without it still carries it, because
+// PMTiles refuses an archive whose server does not announce byte ranges.
+func TestPublicBasemapAcceptRangesOnBothArchives(t *testing.T) {
+	st := &bmStorage{}
+	stripped := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := httptest.NewRecorder()
+		st.ServeHTTP(rec, r)
+		for k, v := range rec.Header() {
+			if k != "Accept-Ranges" {
+				w.Header()[k] = v
+			}
+		}
+		w.WriteHeader(rec.Code)
+		_, _ = w.Write(rec.Body.Bytes())
+	})
+	srv := httptest.NewTLSServer(stripped)
+	t.Cleanup(srv.Close)
+	lim, err := ratelimit.New(&memCounter{}, ratelimit.PublicBasemapRead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	RegisterPublicBasemap(mux, PublicBasemapDeps{Xa: &ckNenTang{}, BaseURL: srv.URL + bmPrefix, Client: srv.Client(),
+		Limiter: lim, IdleTimeout: bmIdle, Log: slog.New(slog.DiscardHandler)})
+	rg := &bmRig{h: mux}
+	for _, file := range []string{"vn-mainland.pmtiles", "vn-places.pmtiles"} {
+		w := rg.do(http.MethodGet, file, ckHostA, "Range: bytes=0-3")
+		if w.Code != http.StatusPartialContent || w.Header().Get("Accept-Ranges") != "bytes" {
+			t.Errorf("%s: %d Accept-Ranges=%q", file, w.Code, w.Header().Get("Accept-Ranges"))
+		}
+	}
+	// A non-archive file never gets it from us.
+	if w := rg.do(http.MethodGet, "sprites/light.json", ckHostA); w.Header().Get("Accept-Ranges") != "" {
+		t.Errorf("sprite: Accept-Ranges=%q", w.Header().Get("Accept-Ranges"))
 	}
 }
 

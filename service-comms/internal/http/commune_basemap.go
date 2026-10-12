@@ -67,12 +67,20 @@ const (
 
 // The closed set of files (web-admin/src/lib/basemap/assets.ts — keep the two in step).
 const (
-	// basemapArchive is the one tile archive: mainland Vietnam + near-shore islands. A FIXED name: a
+	// basemapArchive is the base tile archive: mainland Vietnam + near-shore islands. A FIXED name: a
 	// refresh uploads under a NEW dated prefix and changes BASEMAP_URL, so an archive being read is never
 	// overwritten in place.
 	basemapArchive = "vn-mainland.pmtiles"
-	basemapSprite  = "light"
+	// basemapPlacesArchive is the second archive beside it under the same BASEMAP_URL (owner, 12/10/2026):
+	// Overture Maps places (CDLA-Permissive-2.0), vector layer `places`, z13–15, drawn as part of the
+	// basemap. Same fixed-name and refresh rule as basemapArchive.
+	basemapPlacesArchive = "vn-places.pmtiles"
+	basemapSprite        = "light"
 )
+
+// basemapArchives is the EXACT-name set of tile archives: looked up by the whole segment, never by
+// prefix or suffix — a pattern would serve any `*.pmtiles` someone uploads under the prefix.
+var basemapArchives = map[string]bool{basemapArchive: true, basemapPlacesArchive: true}
 
 // basemapFonts are the font stacks the Protomaps `light` style names in `text-font`.
 var basemapFonts = map[string]bool{"Noto Sans Regular": true, "Noto Sans Medium": true, "Noto Sans Italic": true}
@@ -88,7 +96,8 @@ var basemapGlyphRange = regexp.MustCompile(`^(\d{1,5})-(\d{1,5})\.pbf$`)
 // Cache policy. The archive is `no-cache` (revalidate every time; the ETag still saves the body): a
 // stale cached range of the PREVIOUS archive mixed with ranges of the new one is a corrupted tile.
 // Glyphs and sprites are immutable per refresh and tiny. `public` (web-admin says `private` because its
-// route sits behind the staff session): these bytes are public OSM-derived data, the same for everyone.
+// route sits behind the staff session): these bytes are derived from public OpenStreetMap and Overture
+// Maps data, the same for everyone.
 const (
 	basemapArchiveCache = "public, no-cache"
 	basemapStaticCache  = "public, max-age=86400"
@@ -107,8 +116,8 @@ type basemapAsset struct {
 // attempt (`..`, an encoded `/`, a second dot) is simply not on the list.
 func basemapAssetFor(segs []string) (basemapAsset, bool) {
 	switch {
-	case len(segs) == 1 && segs[0] == basemapArchive:
-		return basemapAsset{key: basemapArchive, contentType: "application/octet-stream", cacheControl: basemapArchiveCache}, true
+	case len(segs) == 1 && basemapArchives[segs[0]]:
+		return basemapAsset{key: segs[0], contentType: "application/octet-stream", cacheControl: basemapArchiveCache}, true
 	case len(segs) == 3 && segs[0] == "fonts" && basemapFonts[segs[1]]:
 		m := basemapGlyphRange.FindStringSubmatch(segs[2])
 		if m == nil {
@@ -240,7 +249,7 @@ func RegisterPublicBasemap(mux *http.ServeMux, d PublicBasemapDeps) {
 	// GET ALSO ANSWERS HEAD (Go's ServeMux). NO idem.* DECLARATION: nothing changes state. NO AUDIT ENTRY:
 	// nothing is written, and the bytes are public map data, not personal data (rule 6 invariant 7).
 	//
-	// @summary  Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png
+	// @summary  Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, vn-places.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png
 	// @consumer citizen-app
 	//
 	// 200/206/304/412/416 are storage's answer, passed through with Content-Range, Accept-Ranges, ETag,
@@ -263,7 +272,7 @@ func RegisterPublicBasemap(mux *http.ServeMux, d PublicBasemapDeps) {
 	// @reply    503 httpx.Error basemap_not_configured platform_unavailable rate_limit_unavailable
 	// @reply    504 httpx.Error basemap_unavailable
 	mux.Handle("GET /api/v1/commune-basemap/{file...}",
-		authz.Public("nền bản đồ tự host cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1): người dân không có tài khoản; chỉ phát lại một danh sách đóng tệp nền PMTiles, glyph và sprite dựng từ dữ liệu OSM công khai trong MinIO của ViGov — không dữ liệu của xã, không dữ liệu cá nhân; chỉ cho tên miền của một xã đang hoạt động; giới hạn 6.000 lần/phút theo tên miền và mạng của máy gọi, trần riêng")(
+		authz.Public("nền bản đồ tự host cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1): người dân không có tài khoản; chỉ phát lại một danh sách đóng tệp nền PMTiles, glyph và sprite dựng từ dữ liệu công khai OpenStreetMap và Overture Maps trong MinIO của ViGov — không dữ liệu của xã, không dữ liệu cá nhân; chỉ cho tên miền của một xã đang hoạt động; giới hạn 6.000 lần/phút theo tên miền và mạng của máy gọi, trần riêng")(
 			http.HandlerFunc(p.PublicBasemap)))
 }
 
@@ -389,7 +398,7 @@ func (p *publicBasemap) proxy(ctx context.Context, w http.ResponseWriter, r *htt
 	if withLength && res.ContentLength >= 0 && !hasHeader(out, "Content-Length") {
 		out.Set("Content-Length", strconv.FormatInt(res.ContentLength, 10))
 	}
-	if asset.key == basemapArchive && !hasHeader(out, "Accept-Ranges") {
+	if basemapArchives[asset.key] && !hasHeader(out, "Accept-Ranges") {
 		out.Set("Accept-Ranges", "bytes")
 	}
 	w.WriteHeader(res.StatusCode)
