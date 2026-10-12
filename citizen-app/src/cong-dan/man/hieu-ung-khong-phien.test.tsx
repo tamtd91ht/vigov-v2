@@ -58,10 +58,12 @@ import {
   traCuuPhieu,
   traXaTheoTenMien,
 } from "../api/goi-vigov";
+import type { CanBoCongKhai } from "../api/hop-dong-cong-khai";
 import type { PhieuCuaToi } from "../api/hop-dong-phan-anh";
 import type { OpenCommuneAppSession } from "../api/mo-phien-vigov";
 import { datPhienViGov, layPhienViGov } from "../api/phien-vigov";
 
+import { ThanDanhBaXa } from "./DanhBaXa";
 import { GuiPhanAnhScreen, ID_DAU_BUOC } from "./GuiPhanAnhScreen";
 import {
   ACCOUNTLESS,
@@ -2125,6 +2127,71 @@ describe("app xã — quyền số điện thoại đã cấp: mở lại phiên
     expect(openSession).toHaveBeenCalledTimes(2);
     expect(khung.textContent).not.toContain(COMMUNE_PHONE_WORDS.title);
     expect(khung.textContent).toContain("Rác ở đầu ngõ");
+    await go();
+  });
+});
+
+/*
+ * Customer sheet App Xã 12/10/2026, rows 11-13: the directory card's two buttons go through the shell's openers (the
+ * webview ignores `tel:`), a failed call says what to do next, and the search box's "X" clears and refocuses.
+ */
+describe("app xã — danh bạ: GỌI / NHẮN ZALO qua lớp vỏ, nút X của ô tìm", () => {
+  const staff: CanBoCongKhai = {
+    ho_ten: "Cán Bộ Mẫu",
+    bo_phan: "Văn phòng",
+    chuc_vu: "Văn thư",
+    so_co_quan: "",
+    di_dong: "0900 000 000",
+    co_zalo: true,
+    display_order: null,
+    residential_units_headed: [],
+  };
+  const directory = (actions: { dial?: (d: string) => Promise<boolean>; openZaloChat?: (d: string) => Promise<boolean> }) =>
+    gan(createElement(ThanDanhBaXa, { trang: { kieu: "xong", can_bo: [staff] }, onTai: () => {}, ...actions }));
+  const byLabel = (root: PhanTuGia, label: string) =>
+    tatCaPhanTu(root).filter((p) => p.getAttribute("aria-label") === label);
+
+  it("GỌI calls the injected dialer with the digits only; no `tel:` link is drawn", async () => {
+    const dial = vi.fn(async () => true);
+    const { khung, go } = await directory({ dial });
+    expect(tatCaPhanTu(khung).filter((p) => (p.getAttribute("href") ?? "").startsWith("tel:"))).toEqual([]);
+    await press(buttonsNamed(khung, XA_GIAO_DIEN.goi)[0]!);
+    expect(dial).toHaveBeenCalledWith("0900000000");
+    expect(khung.textContent).not.toContain(XA_GIAO_DIEN.call_failed);
+    await go();
+  });
+
+  it("a dialer that could not open says what to do next, in words", async () => {
+    const { khung, go } = await directory({ dial: async () => false });
+    await press(buttonsNamed(khung, XA_GIAO_DIEN.goi)[0]!);
+    expect(khung.textContent).toContain(XA_GIAO_DIEN.call_failed);
+    await go();
+  });
+
+  it("NHẮN ZALO calls the injected opener with the mobile's digits; a failure says what to do next", async () => {
+    const openZaloChat = vi.fn(async () => false);
+    const { khung, go } = await directory({ dial: async () => true, openZaloChat });
+    await press(buttonsNamed(khung, XA_GIAO_DIEN.zalo_chat)[0]!);
+    expect(openZaloChat).toHaveBeenCalledWith("0900000000");
+    expect(khung.textContent).toContain(XA_GIAO_DIEN.zalo_chat_failed);
+    await go();
+  });
+
+  it("the search box: no X while empty; typing shows it; pressing it clears the box and puts the cursor back", async () => {
+    const { khung, go } = await directory({});
+    const doc = (globalThis as unknown as { document: TaiLieuGia }).document;
+    const box = doc.getElementById("xa-tim-can-bo")!;
+    expect(byLabel(khung, XA_GIAO_DIEN.clear_search)).toEqual([]);
+    await typeInto(box, "khong ai");
+    expect(khung.textContent).toContain(XA_GIAO_DIEN.khong_thay_can_bo);
+    const clear = byLabel(khung, XA_GIAO_DIEN.clear_search);
+    expect(clear).toHaveLength(1);
+    await press(clear[0]!);
+    expect(boxText("xa-tim-can-bo")).toBe("");
+    expect(doc.activeElement).toBe(box);
+    expect(byLabel(khung, XA_GIAO_DIEN.clear_search)).toEqual([]);
+    // The list is back: the filter followed the cleared box.
+    expect(khung.textContent).toContain(staff.ho_ten);
     await go();
   });
 });

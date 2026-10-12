@@ -34,6 +34,7 @@ export type { GetSceneLocation, SceneLocationFailure, SceneLocationResult } from
 export type { PickScenePhotos, ScenePhotoPickResult, ScenePhotoSource } from "./man/scene-photos";
 export type { OpenVideo, ShareArticle } from "./man/TinTucAppXa";
 export type { OpenExternal } from "./man/leave-app";
+export type { DialNumber, OpenZaloChat } from "./man/DanhBaXa";
 export { type KetThucXacNhan, XacNhanXa } from "./man/XacNhanXa";
 export type {
   CommuneAppSessionResult,

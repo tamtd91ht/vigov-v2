@@ -818,7 +818,7 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
     expect(`${location.man} ${location.de_lam_gi} ${location.roi_khoi_may}`).not.toMatch(/Liên hệ|văn phòng/);
   });
 
-  it("nửa nhà nước khai đúng SÁU lời gọi riêng — và bảng nói ra nó thừa hưởng những gì", () => {
+  it("nửa nhà nước khai đúng BẢY lời gọi riêng — và bảng nói ra nó thừa hưởng những gì", () => {
     // Quyền cấp theo App ID: nửa nhà nước thừa hưởng NGUYÊN VẸN mọi quyền mà nửa thương mại đã xin được, không ai
     // cấp lại. Ca này ghim tình trạng hôm nay để lần khai tiếp theo của nửa ấy là một thay đổi có người đọc.
     expect(
@@ -828,7 +828,16 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
       // 11/10/2026 (owner: "làm hết theo prototype"): the minimise bubble (`minimizeApp`) and "Chia sẻ qua Zalo"
       // (`openShareSheet`, ADR 0047 G6). Same day: the intro's paper-card photo and office location were removed,
       // so the camera, the picker, `chooseImage` and `getLocation` are the commune interface's alone.
-    ).toEqual(["chooseImage", "getLocation", "minimizeApp", "openMediaPicker", "openShareSheet", "requestCameraPermission"]);
+      // 12/10/2026 (customer sheet App Xã rows 12, 14): the directory's "NHẮN ZALO" (`openOutApp`).
+    ).toEqual([
+      "chooseImage",
+      "getLocation",
+      "minimizeApp",
+      "openMediaPicker",
+      "openOutApp",
+      "openShareSheet",
+      "requestCameraPermission",
+    ]);
     expect(KHAI_BAO_LOI_GOI.find((k) => k.api === "getUserInfo")?.nua, "getUserInfo is used by both halves").toBe("ca-hai");
     expect(
       KHAI_BAO_LOI_GOI.filter((k) => k.nua === "ca-hai").length,

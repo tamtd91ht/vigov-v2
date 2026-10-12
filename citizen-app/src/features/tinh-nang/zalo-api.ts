@@ -120,8 +120,9 @@ export type KhaiBaoLoiGoi = {
 };
 
 /**
- * MƯỜI SÁU LỜI GỌI (08/10/2026: `chooseImage`, `configAppView`; 11/10/2026: `minimizeApp`, `openShareSheet` added,
- * `getNetworkType` removed with the intro's "Kiểm tra đường truyền"), MỘT BẢNG. Thứ tự theo màn hình, để màn "Quản
+ * ONE TABLE (08/10/2026: `chooseImage`, `configAppView`; 11/10/2026: `minimizeApp`, `openShareSheet` added,
+ * `getNetworkType` removed with the intro's "Kiểm tra đường truyền"; 12/10/2026: `authorize`, `getSetting`, and the
+ * directory's `openOutApp`). Thứ tự theo màn hình, để màn "Quản
  * lý quyền" đọc xuôi.
  *
  * 11/10/2026 (owner): the intro no longer photographs paper cards nor asks a location for offices, so
@@ -145,13 +146,33 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     roi_khoi_may: "",
   },
   {
+    // `nua` BECAME "ca-hai" ON 12/10/2026 (customer sheet App Xã row 11, owner: "click mở popup confirm gọi default
+    // của device"): the "GỌI" button of the commune directory (`cong-dan/man/DanhBaXa.tsx`) dials through this call —
+    // the Mini App's webview ignores a `tel:` link, which is why the button did nothing. The state half does not
+    // import it: the shell injects `dialStaffNumber`, in the commune's own app AND on the commune page a QR opens.
+    // The main fields describe the shared App ID as a whole (Danh thiếp + that commune page); `intro_app` keeps the
+    // intro's words; `commune_app` is the commune's own app.
     api: "openPhone",
-    nua: "thuong-mai",
-    man: "Danh thiếp",
-    tinh_nang: "Quét danh thiếp",
-    de_lam_gi: "Chuyển số điện thoại vừa quét sang màn hình gọi của điện thoại.",
+    nua: "ca-hai",
+    man: "Danh thiếp · Danh bạ (trang của một xã mở bằng mã QR)",
+    tinh_nang: "Quét danh thiếp · Gọi cán bộ trong danh bạ của xã",
+    de_lam_gi:
+      "Chuyển số điện thoại sang màn hình gọi của điện thoại, chỉ khi chính bạn bấm: số vừa quét được trên một danh thiếp, hoặc — trên trang của một xã — số của cán bộ mà xã đã công khai trong danh bạ, khi bạn bấm “GỌI”. Điện thoại hỏi bạn trước khi gọi.",
     hoi_nguoi_dung: false,
     roi_khoi_may: "",
+    intro_app: {
+      man: "Danh thiếp",
+      tinh_nang: "Quét danh thiếp",
+      de_lam_gi: "Chuyển số điện thoại vừa quét sang màn hình gọi của điện thoại.",
+      roi_khoi_may: "",
+    },
+    commune_app: {
+      man: "Danh bạ",
+      tinh_nang: "Gọi cán bộ trong danh bạ của xã",
+      de_lam_gi:
+        "Chuyển số điện thoại của một cán bộ mà xã đã công khai trong danh bạ sang màn hình gọi của điện thoại, chỉ khi chính bà con bấm “GỌI”. Điện thoại hỏi bà con trước khi gọi; ứng dụng không gọi thay.",
+      roi_khoi_may: "",
+    },
   },
   {
     // ⚠ DÒNG NÀY RỘNG RA NGÀY 21/09/2026, VÀ VIỆC SỬA NÓ LÀ BẮT BUỘC, KHÔNG PHẢI LỊCH SỰ: nút
@@ -299,6 +320,23 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     hoi_nguoi_dung: false,
     roi_khoi_may:
       "Đường liên kết tới tin (mã ứng dụng của xã và mã tin, không có thông tin nào của bà con) đi tới cuộc trò chuyện Zalo mà bà con chọn.",
+  },
+  {
+    // ADDED 12/10/2026 (customer sheet App Xã rows 12 and 14, owner): "NHẮN ZALO" on a directory card, shown only
+    // for a mobile number the staff member agreed to publish (#12/#16) and only when the directory says that person
+    // uses Zalo. `openOutApp`, not `openWebview`: handed to the OS, the link is caught by the Zalo app itself and
+    // opens that person's profile with "Nhắn tin"; inside the webview it would be a web page, not a chat
+    // (prototype `services/zalo.ts:274-289`). Reverses ADR 0047 G6's "bỏ Nhắn Zalo". The shell injects
+    // `openZaloChat` in both places the commune interface runs, so the row is the state half's.
+    api: "openOutApp",
+    nua: "nha-nuoc",
+    man: "Danh bạ",
+    tinh_nang: "Nhắn Zalo cho cán bộ trong danh bạ của xã",
+    de_lam_gi:
+      "Mở Zalo tới trang của một cán bộ để bà con bấm “Nhắn tin”, chỉ khi chính bà con bấm “NHẮN ZALO” trên thẻ của cán bộ ấy trong danh bạ. Nút chỉ có khi cán bộ đã đồng ý công khai số di động và có dùng Zalo. Ứng dụng không biết bà con có nhắn hay không, và không đọc gì của cuộc trò chuyện.",
+    hoi_nguoi_dung: false,
+    roi_khoi_may:
+      "Đường dẫn zalo.me kèm số di động mà cán bộ ấy đã đồng ý công khai đi tới ứng dụng Zalo trên điện thoại. Không có thông tin nào của bà con đi kèm.",
   },
   {
     api: "vibrate",
@@ -863,6 +901,41 @@ export function quetMaQR(): Promise<KetQuaXin<string>> {
  */
 export function moCuocGoi(so: string): Promise<KetQuaXin<void>> {
   return xin("other", async (sdk) => sdk.openPhone({ phoneNumber: so }));
+}
+
+/**
+ * THE COMMUNE DIRECTORY'S "GỌI" (customer sheet App Xã row 11, 12/10/2026) — the same `openPhone`, for a number the
+ * commune PUBLISHED for a staff member. A `tel:` link does nothing in the Mini App's webview; the platform call opens
+ * the phone's own dialer, which asks before dialling.
+ *
+ * Only digits and one leading `+` are accepted — anything else is answered `khong-lay-duoc` without loading the SDK.
+ * `report` false, unlike `moCuocGoi`: the SDK's error `message` may echo the argument, and a staff member's mobile
+ * is personal data that must not reach `vihat-miniapp`'s log (rule 3). The screen says what to do instead.
+ */
+export function dialStaffNumber(number: string): Promise<KetQuaXin<void>> {
+  if (!/^\+?\d{3,15}$/.test(number)) return Promise.resolve({ kieu: "khong-lay-duoc" });
+  return xin("other", async (sdk) => sdk.openPhone({ phoneNumber: number }), false);
+}
+
+/**
+ * THE COMMUNE DIRECTORY'S "NHẮN ZALO" (customer sheet App Xã rows 12 and 14, 12/10/2026). Zalo opens a chat directly
+ * only from a Zalo user id, which the commune does not have; `https://zalo.me/<number>` opens that person's profile,
+ * one tap from "Nhắn tin" (prototype `services/zalo.ts:274-289`). `openOutApp` (`zmp-sdk/index.d.ts:4903-4910`) hands
+ * the link to the OS so the Zalo app catches it — `openWebview` would show a web page instead of a chat.
+ *
+ * The URL is built HERE from digits only, so this door opens zalo.me and nothing else. The number goes into that link
+ * and nowhere else: `report` false for `dialStaffNumber`'s reason.
+ */
+export function openZaloChat(number: string): Promise<KetQuaXin<void>> {
+  const digits = number.replace(/\D/g, "");
+  if (!/^\d{9,15}$/.test(digits)) return Promise.resolve({ kieu: "khong-lay-duoc" });
+  return xin(
+    "other",
+    async (sdk) => {
+      await sdk.openOutApp({ url: `https://zalo.me/${digits}` });
+    },
+    false,
+  );
 }
 
 /**

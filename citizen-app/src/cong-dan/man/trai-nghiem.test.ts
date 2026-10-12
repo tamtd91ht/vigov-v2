@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { CanBoCongKhai, TinXaTomTat } from "../api/hop-dong-cong-khai";
 import { TRUONG_DUOC_NHAN } from "../api/hop-dong-phan-anh";
 
-import { byDisplayOrder, locCanBo, nhomTheoBoPhan, unitHeadLine } from "./DanhBaXa";
+import { byDisplayOrder, locCanBo, nhomTheoBoPhan, offersZaloChat, publishedNumber } from "./DanhBaXa";
 import { TRANG_THAI } from "./noi-dung";
 import { buocDaQua } from "./PhanAnhAppXa";
 import { groupOf, STATUS_GROUP_LABEL, STEP_LABEL } from "./status-groups";
@@ -197,15 +197,30 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
     expect(byDisplayOrder([person("X", null), person("Y", null)]).map((c) => c.ho_ten)).toEqual(["X", "Y"]);
   });
 
-  it("village heads: 'Trưởng thôn <X>', without doubling the unit's own kind", () => {
-    expect(unitHeadLine("Hà Lam")).toBe("Trưởng thôn Hà Lam");
-    expect(unitHeadLine("Thôn Hà Lam")).toBe("Trưởng thôn Hà Lam");
-    expect(unitHeadLine("Tổ dân phố 3")).toBe("Trưởng tổ dân phố 3");
-    // A name that merely starts with the letters is not a kind.
-    expect(unitHeadLine("Thônxyz")).toBe("Trưởng thôn Thônxyz");
+  // Customer sheet App Xã 12/10/2026 row 14 (owner: "mobile if published, else office").
+  it("the card's one number: the published mobile, else the office line, else none — never an undialable one", () => {
+    const withNumbers = (di_dong: string, so_co_quan: string): CanBoCongKhai => ({ ...person("A", null), di_dong, so_co_quan });
+    expect(publishedNumber(withNumbers("0900 000 000", "0900000000"))).toEqual({
+      value: "0900 000 000",
+      dial: "tel:0900000000",
+      mobile: true,
+    });
+    expect(publishedNumber(withNumbers("", " 0900.000.000 "))).toEqual({ value: "0900.000.000", dial: "tel:0900000000", mobile: false });
+    // A mobile too short to dial is passed over for the office line.
+    expect(publishedNumber(withNumbers("09", "0900000000"))?.mobile).toBe(false);
+    expect(publishedNumber(withNumbers("", ""))).toBeNull();
+    expect(publishedNumber(withNumbers("  ", "12"))).toBeNull();
   });
 
-  it("the search finds a village head by the village's name", () => {
+  it("'Nhắn Zalo' only for a shown MOBILE of a person the directory says uses Zalo", () => {
+    const zalo = { ...person("A", null), co_zalo: true };
+    expect(offersZaloChat(zalo, { mobile: true })).toBe(true);
+    expect(offersZaloChat(zalo, { mobile: false })).toBe(false);
+    expect(offersZaloChat(zalo, null)).toBe(false);
+    expect(offersZaloChat({ ...zalo, co_zalo: false }, { mobile: true })).toBe(false);
+  });
+
+  it("the search still finds a village head by the village's name", () => {
     const ds = [person("Lê Văn Bình", null, ["Thôn Hà Lam"]), person("Trần Thị Đào", null)];
     expect(locCanBo(ds, "ha lam").map((c) => c.ho_ten)).toEqual(["Lê Văn Bình"]);
   });
@@ -221,14 +236,16 @@ describe("tin tức và danh bạ: lọc và nhóm trên dữ liệu đã tải"
     expect(locCanBo(ds, "xa 000")).toEqual([]);
   });
 
-  it("danh bạ nhóm theo bộ phận, giữ thứ tự máy chủ, người không ghi bộ phận ở cuối", () => {
+  it("danh bạ nhóm theo bộ phận, giữ thứ tự máy chủ, người không ghi bộ phận ở cuối — nhóm không tên", () => {
     const cb = (ho_ten: string, bo_phan: string) =>
       ({ ho_ten, bo_phan, chuc_vu: "", so_co_quan: "", di_dong: "", co_zalo: false, display_order: null, residential_units_headed: [] }) as CanBoCongKhai;
-    const n = nhomTheoBoPhan([cb("A", "Địa chính"), cb("B", ""), cb("C", "Văn phòng"), cb("D", "Địa chính")], "Khác");
+    const n = nhomTheoBoPhan([cb("A", "Địa chính"), cb("B", ""), cb("C", "Văn phòng"), cb("D", "Địa chính")]);
     expect(n.map((x) => [x.bo_phan, x.can_bo.map((c) => c.ho_ten)])).toEqual([
       ["Địa chính", ["A", "D"]],
       ["Văn phòng", ["C"]],
-      ["Khác", ["B"]],
+      [null, ["B"]],
     ]);
+    // Everybody has a department: no trailing group at all.
+    expect(nhomTheoBoPhan([cb("A", "Địa chính")]).map((x) => x.bo_phan)).toEqual(["Địa chính"]);
   });
 });

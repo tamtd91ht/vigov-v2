@@ -64,7 +64,7 @@ import {
   type NotificationPreferenceControl,
   type NotificationPreferenceState,
 } from "./notification-preference";
-import { ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
+import { type DialNumber, type DirectoryActions, type OpenZaloChat, ThanDanhBaXa, useDanhBaXa } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, RootTabHeader, SectionHeader, type SectionAccent, type Tone, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
 import {
@@ -839,14 +839,14 @@ function useNotificationPreference(onSessionLost: (retry: () => void) => void): 
   return { state, control: control.current };
 }
 
-function ManDanhBa({ ten_mien, onQuayLai }: { ten_mien: string; onQuayLai: () => void }) {
+function ManDanhBa({ ten_mien, onQuayLai, ...actions }: { ten_mien: string; onQuayLai: () => void } & DirectoryActions) {
   const { trang, taiLai, refresh } = useDanhBaXa(ten_mien);
   return (
     <>
       {/* The prototype's title (`DirectoryPage.tsx:47`, owner 11/10/2026). */}
       <DauManCon tieu_de={XA_TN.directory_title} onQuayLai={onQuayLai} />
       <TrangCon onRefresh={refresh}>
-        <ThanDanhBaXa trang={trang} onTai={taiLai} />
+        <ThanDanhBaXa trang={trang} onTai={taiLai} dial={actions.dial} openZaloChat={actions.openZaloChat} />
       </TrangCon>
     </>
   );
@@ -874,6 +874,9 @@ function AppCuaXa(props: {
   minimize?: () => void;
   /** An article named by the launch link (a shared `zalo.me/s/…?article=` link) — opened once, over home. */
   initialArticle?: string;
+  /** The directory's "GỌI" and "NHẮN ZALO" (`TrangXa` `dialStaff` / `openZaloChat`). */
+  dialStaff?: DialNumber;
+  openZaloChat?: OpenZaloChat;
 }) {
   const { ten_mien, xa, openSession } = props;
   // Họ tên lấy MỘT LẦN lúc mở app (`TrangXa`). Phiên ViGov chỉ trong bộ nhớ (`api/phien-vigov.ts`), mở ở
@@ -1118,7 +1121,7 @@ function AppCuaXa(props: {
       );
       break;
     case "danh-ba":
-      man_con = <ManDanhBa ten_mien={ten_mien} onQuayLai={ve} />;
+      man_con = <ManDanhBa ten_mien={ten_mien} onQuayLai={ve} dial={props.dialStaff} openZaloChat={props.openZaloChat} />;
       break;
     case "tra-cuu":
       man_con = <TraCuuHoSoXa onQuayLai={ve} openPortal={props.openDossierPortal} />;
@@ -1424,6 +1427,16 @@ export function TrangXa(props: {
    * THIS commune is opened over home, by the same public read as a tap; a wrong id is the article's own "not found".
    */
   initialArticle?: string;
+  /**
+   * The directory's "GỌI" (`openPhone`, customer sheet App Xã 12/10/2026 row 11), injected by the shell — this half may
+   * not import zmp-sdk, and the Mini App's webview ignores `tel:`. Absent (tests, a browser) → a `tel:` link.
+   */
+  dialStaff?: DialNumber;
+  /**
+   * The directory's "NHẮN ZALO" (`openOutApp` + zalo.me, sheet rows 12 and 14), injected by the shell. Absent → no
+   * such button.
+   */
+  openZaloChat?: OpenZaloChat;
 }) {
   const { ten_mien, lay_ten, getSceneLocation, pickScenePhotos, draftStore, openSession, openVideo, openLink } = props;
   const { onCommuneShown } = props;
@@ -1502,6 +1515,8 @@ export function TrangXa(props: {
         openDossierPortal={props.openDossierPortal}
         minimize={props.minimize}
         initialArticle={props.initialArticle}
+        dialStaff={props.dialStaff}
+        openZaloChat={props.openZaloChat}
       />
     );
   }

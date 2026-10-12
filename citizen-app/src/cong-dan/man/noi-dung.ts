@@ -1002,15 +1002,16 @@ export const XA_GIAO_DIEN = {
   khong_thay_can_bo: "Không tìm thấy ai phù hợp",
   goi: "GỌI",
   goi_ai: (ten: string) => `Gọi ${ten}`,
-  /** One call button per number on a directory card: the name AND which number, so two buttons never share a name. */
-  call_number: (ten: string, which: string) => `Gọi ${ten}, ${which}`,
-} as const;
-
-/** Directory lines of the commune app for the units a person heads (`DanhBaXa.tsx` `unitHeadLine`). */
-export const DIRECTORY_UNIT_HEAD = {
-  head_of_village: "Trưởng thôn",
-  /** Used when the unit name already says its kind: "Trưởng" + "thôn Hà Lam" / "tổ dân phố 3". */
-  head_of: "Trưởng",
+  /** The directory card's call button, as the prototype names it (`DirectoryPage.tsx:109`): who, and which number. */
+  call_person: (ten: string, so: string) => `Gọi ${ten}, số ${so}`,
+  /** The directory card's second button (`DirectoryPage.tsx:117-125`, sheet row 12). */
+  zalo_chat: "NHẮN ZALO",
+  zalo_chat_person: (ten: string) => `Nhắn Zalo cho ${ten}`,
+  // What to do when the platform call failed (README §Non-negotiables #7: the next step, never a code).
+  call_failed: "Chưa mở được màn hình gọi. Bà con bấm GỌI lần nữa, hoặc gọi số ở trên bằng bàn phím của điện thoại.",
+  zalo_chat_failed: "Chưa mở được Zalo. Bà con bấm NHẮN ZALO lần nữa, hoặc bấm GỌI để gọi cán bộ.",
+  /** The search box's clear button (`o-nhap.tsx` `OTimKiem`, sheet row 13). */
+  clear_search: "Xoá nội dung tìm kiếm",
 } as const;
 
 /**
@@ -1206,6 +1207,7 @@ export const XA_TN = {
    */
   broadcast_failed:
     "Chưa phát được bản tin lúc này. Bà con kiểm tra kết nối mạng rồi bấm “Nghe” lần nữa, hoặc quay lại sau ít phút.",
+  /** Screen-reader name of the trailing, heading-less group of staff with no department (`DanhBaXa.tsx`, row 15). */
   nhom_khac: "Cán bộ khác",
   /** The directory's header (`DirectoryPage.tsx:47`, owner 11/10/2026). */
   directory_title: "Danh bạ chính quyền",

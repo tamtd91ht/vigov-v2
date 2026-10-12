@@ -369,7 +369,7 @@ describe("màn Quản lý quyền vẽ từ bảng khai, không từ một danh 
     for (const hidden of KHAI_BAO_LOI_GOI.filter((q) => !shownApis.has(q.api))) {
       expect(text, `màn quyền hiện lời gọi của giao diện xã: ${hidden.api}`).not.toContain(hidden.de_lam_gi);
     }
-    for (const api of ["getLocation", "requestCameraPermission", "openMediaPicker", "chooseImage", "configAppView", "minimizeApp", "openShareSheet"]) {
+    for (const api of ["getLocation", "requestCameraPermission", "openMediaPicker", "chooseImage", "configAppView", "minimizeApp", "openShareSheet", "openOutApp"]) {
       expect(shownApis.has(api), `${api} is not the intro's`).toBe(false);
     }
   });

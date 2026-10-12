@@ -3529,18 +3529,22 @@ button.xa-o-nhanh {
    cao theo `.cd-o__nhap`. Ở đây chỉ còn khoảng cách. */
 /* Sticky at the top of the SCROLLING area (§6.9) — `.xa-trang--con` pads 16px, so the block pulls itself flush
    with negative margins and `top: -16px`, the same arithmetic as `.xa-tabs-tin` (checked at 390×844). It
-   sits inside the scroller, never over the header. */
+   sits inside the scroller, never over the header.
+   Padding 12px top AND bottom (customer sheet App Xã 12/10/2026 row 16: the bottom was 4px; the prototype's `p-3`).
+   Only the bottom changed, so the sticky offset (`top`, the negative top margin) is untouched. */
 .xa-tim {
   position: sticky;
   top: -16px;
   z-index: 15;
   margin: -16px -16px 14px;
-  padding: 12px 16px 4px;
+  padding: 12px 16px;
   background: var(--xa-nen);
   border-bottom: 1px solid var(--xa-vien);
 }
-/* One directory card (`DanhBaXa.tsx` `TheCanBoXa`): name, title, units, then per number its kind, the digits
-   in tabular figures, and a full-width primary "Gọi" (brand red, like every primary action). */
+/* One directory card (`DanhBaXa.tsx` `TheCanBoXa`), the prototype's `DirectoryRow` (`DirectoryPage.tsx:97-131`, sheet
+   rows 11, 12, 14): name, title, ONE number in tabular figures, then "GỌI" (filled) and "NHẮN ZALO" (outlined) side
+   by side, each at least 48px tall. Both in --xa-blue-ink as the prototype: white on it is 5.6:1, and it on white
+   5.6:1 (`accessibility.test.ts`). The two differ by fill AND by word and icon, never by colour alone. */
 .xa-staff-card {
   display: grid;
   gap: 4px;
@@ -3550,19 +3554,51 @@ button.xa-o-nhanh {
   color: var(--xa-navy);
   font-weight: 700;
 }
-.xa-staff-card__number {
-  display: grid;
-  gap: 2px;
-  margin-top: 8px;
-}
 .xa-staff-card__digits {
+  margin-top: 4px;
   color: var(--ink);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
+.xa-staff-card__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.xa-staff-card__call,
+.xa-staff-card__zalo {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 2px solid var(--xa-blue-ink);
+  border-radius: 12px;
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
 .xa-staff-card__call {
-  margin-top: 6px;
-  text-transform: uppercase;
+  background: var(--xa-blue-ink);
+  color: #ffffff;
+}
+.xa-staff-card__zalo {
+  background: var(--surface);
+  color: var(--xa-blue-ink);
+}
+.xa-staff-card__call:focus-visible,
+.xa-staff-card__zalo:focus-visible {
+  outline: 3px solid var(--xa-navy);
+  outline-offset: 2px;
+}
+.xa-staff-card__failed {
+  margin: 0;
 }
 
 /* ---------- trạng thái · ghi chú · nút ---------- */
@@ -5582,9 +5618,43 @@ button.xa-o-nhanh {
 .xa-search__input:focus {
   outline: none;
 }
+/* Customer sheet App Xã 12/10/2026 row 13: tapping into the box flashed its background. Focus is now ONLY the border
+   colour, as `.xa-app .cd-o__nhap:focus` (row 4) — no halo, no background change, no tap highlight, no native search
+   look. --xa-blue-ink is ≥ 3:1 on --xa-nen (`accessibility.test.ts`). The transparent outline is for forced colours,
+   where the border colour is overridden and the outline is what is painted. */
+.xa-search,
+.xa-search__input,
+.xa-search__clear {
+  -webkit-tap-highlight-color: transparent;
+}
+.xa-search__input {
+  -webkit-appearance: none;
+  appearance: none;
+}
 .xa-search:focus-within {
   border-color: var(--xa-blue-ink);
-  box-shadow: 0 0 0 2px var(--xa-blue-50);
+  outline: 2px solid transparent;
+  outline-offset: -2px;
+}
+/* The clear "X" at the right edge (row 13): a 48px target; the box's own padding-right is pulled back so the icon
+   sits where the prototype's text would end. */
+.xa-search__clear {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-right: -12px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ink-muted);
+  cursor: pointer;
+}
+.xa-search__clear:focus-visible {
+  outline: 3px solid var(--xa-blue-ink);
+  outline-offset: -3px;
 }
 
 /* Cá nhân: the Zalo picture in the avatar's circle; the "Cỡ chữ lớn" row that is a switch. */

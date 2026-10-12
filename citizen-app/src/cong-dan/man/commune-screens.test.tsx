@@ -882,15 +882,78 @@ describe("Danh bạ (§6.9)", () => {
     residential_units_headed: ["Thôn Hà Lam"],
   };
 
-  it("one full-width 'Gọi' per number, each named with the person AND the kind; no 'Nhắn Zalo'", () => {
-    const page = html(createElement(ThanDanhBaXa, { trang: { kieu: "xong", can_bo: [person] }, onTai: noop }));
-    expect(page.match(/<a class="xa-nut xa-staff-card__call" href="tel:0900000000"/g)).toHaveLength(2);
-    expect(page).toContain(`aria-label="${XA_GIAO_DIEN.call_number(person.ho_ten, DANH_BA.so_co_quan)}"`);
-    expect(page).toContain(`aria-label="${XA_GIAO_DIEN.call_number(person.ho_ten, DANH_BA.di_dong)}"`);
-    expect(page).toContain("Trưởng thôn Hà Lam");
-    expect(page).toContain('<span class="xa-staff-card__digits">0900 000 000</span>');
-    expect(page).not.toMatch(/Nhắn Zalo|NHẮN ZALO/i);
-    expect(page).toContain('<div class="xa-tim">');
+  const page = (can_bo: CanBoCongKhai[], actions: { dial?: () => Promise<boolean>; openZaloChat?: () => Promise<boolean> } = {}) =>
+    html(createElement(ThanDanhBaXa, { trang: { kieu: "xong", can_bo }, onTai: noop, ...actions }));
+  const yes = async () => true;
+
+  // Customer sheet App Xã 12/10/2026 row 14: name, title, ONE number, GỌI, NHẮN ZALO — nothing else.
+  it("the card holds name, title, ONE number and its buttons — no kind labels, no 'Có dùng Zalo', no unit-head line", () => {
+    const out = page([person], { dial: yes, openZaloChat: yes });
+    expect(out).toContain(person.ho_ten);
+    expect(out).toContain(person.chuc_vu);
+    expect(out.match(/class="xa-staff-card__digits"/g)).toHaveLength(1);
+    expect(out).toContain('<span class="xa-staff-card__digits">0900 000 000</span>');
+    for (const gone of [DANH_BA.so_co_quan, DANH_BA.di_dong, DANH_BA.co_zalo, "Trưởng thôn Hà Lam"]) {
+      expect(out).not.toContain(gone);
+    }
+    // The department is the group's heading, not a card line.
+    expect(out.match(new RegExp(person.bo_phan, "g"))).toHaveLength(1);
+    expect(out).toContain('<div class="xa-tim">');
+  });
+
+  // Sheet row 13: no native search look (it flashed on tap), the search keyboard kept; no "X" while empty.
+  it("the search box is a plain text input with the search keyboard, and no clear button while empty", () => {
+    const out = page([person]);
+    expect(out).toMatch(/<input class="xa-search__input" id="xa-tim-can-bo" type="text" inputMode="search" enterKeyHint="search"/);
+    expect(out).not.toContain('type="search"');
+    expect(out).not.toContain(XA_GIAO_DIEN.clear_search);
+  });
+
+  it("styles: equal top/bottom padding above the list, focus = border colour only, a 48px clear target", async () => {
+    const nodeFs = "node:fs";
+    const { readFileSync } = (await import(/* @vite-ignore */ nodeFs)) as {
+      readFileSync: (path: URL, encoding: "utf8") => string;
+    };
+    const css = readFileSync(new URL("../../styles.css", import.meta.url), "utf8");
+    expect(css.match(/\.xa-tim \{([^}]*)\}/)![1]).toMatch(/padding: 12px 16px;/);
+    const focus = css.match(/\.xa-search:focus-within \{([^}]*)\}/)![1]!;
+    expect(focus).toMatch(/border-color: var\(--xa-blue-ink\)/);
+    expect(focus).not.toMatch(/box-shadow|background/);
+    const clear = css.match(/\.xa-search__clear \{([^}]*flex: none[^}]*)\}/)![1]!;
+    expect(clear).toMatch(/width: 48px;[\s\S]*height: 48px;/);
+    const buttons = css.match(/\.xa-staff-card__call,\r?\n\.xa-staff-card__zalo \{([^}]*)\}/)![1]!;
+    expect(buttons).toMatch(/min-height: 48px;/);
+  });
+
+  it("GỌI: a button when the shell injects a dialer, else a `tel:` link; named with the person and the number", () => {
+    const injected = page([person], { dial: yes });
+    expect(injected).not.toContain('href="tel:');
+    expect(injected).toMatch(/<button type="button" class="xa-staff-card__call" aria-label="Gọi Cán Bộ Mẫu, số 0900 000 000">/);
+    const fallback = page([person]);
+    expect(fallback).toMatch(/<a class="xa-staff-card__call" href="tel:0900000000" aria-label="Gọi Cán Bộ Mẫu, số 0900 000 000">/);
+  });
+
+  it("NHẮN ZALO only for a published mobile whose owner uses Zalo, and only with the shell's opener", () => {
+    const has = (out: string) => out.includes(XA_GIAO_DIEN.zalo_chat);
+    expect(has(page([person], { openZaloChat: yes }))).toBe(true);
+    expect(page([person], { openZaloChat: yes })).toContain(`aria-label="${XA_GIAO_DIEN.zalo_chat_person(person.ho_ten)}"`);
+    // No opener (tests, a browser): no button.
+    expect(has(page([person]))).toBe(false);
+    // Not on Zalo.
+    expect(has(page([{ ...person, co_zalo: false }], { openZaloChat: yes }))).toBe(false);
+    // Only an office line is published: zalo.me needs the person's own number.
+    expect(has(page([{ ...person, di_dong: "" }], { openZaloChat: yes }))).toBe(false);
+  });
+
+  it("people with no department are listed at the end WITHOUT a heading — never dropped", () => {
+    const loner: CanBoCongKhai = { ...person, ho_ten: "Người Không Bộ Phận", bo_phan: "" };
+    const out = page([loner, person]);
+    expect(out).toContain(loner.ho_ten);
+    expect(out.indexOf(loner.ho_ten)).toBeGreaterThan(out.indexOf(person.ho_ten));
+    expect(out.match(/<h2/g)).toHaveLength(1);
+    expect(out).not.toContain(`>${XA_TN.nhom_khac}<`);
+    // A screen reader still hears them as their own region, not as members of the department above.
+    expect(out).toContain(`<section class="xa-nhom" aria-label="${XA_TN.nhom_khac}">`);
   });
 });
 

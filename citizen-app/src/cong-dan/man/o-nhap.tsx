@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 
 import { BieuTuong } from "./BieuTuong";
+import { XA_GIAO_DIEN } from "./noi-dung";
 
 /**
  * TỆP DUY NHẤT CỦA NỬA NHÀ NƯỚC CÓ Ô NHẬP — `phase1-collects-nothing.test.ts` miễn lệnh cấm
@@ -164,11 +165,20 @@ export function ONhapDoan(
 }
 
 /**
- * THE DIRECTORY SEARCH — the prototype's box (`DirectoryPage.tsx:48-61`): a magnifier inside the field, the label
- * for screen readers only, the example as placeholder. What is typed filters the loaded list on the phone and goes
- * nowhere (`DanhBaXa.tsx` `locCanBo`).
+ * THE COMMUNE APP'S SEARCH BOX — the prototype's (`DirectoryPage.tsx:48-61`): a magnifier inside the field, the label
+ * for screen readers only, the example as placeholder. The directory uses it (`DanhBaXa.tsx` `locCanBo`); any list
+ * that filters on the phone can (the Phản ánh tab, TASK-04) — what is typed goes nowhere.
+ *
+ * Customer sheet App Xã 12/10/2026 row 13:
+ *   · NO FLASH ON TAP. `type="text"`, not `"search"`: WebKit draws its own search-field look and cancel button on a
+ *     `search` input, and the Zalo webview repainted it on focus. The keyboard still shows "search"
+ *     (`inputMode`, `enterKeyHint`). The tap highlight is off in CSS; focus shows ONLY as the border colour
+ *     (`styles.css` `.xa-search:focus-within`), as `.cd-o__nhap` does since row 4.
+ *   · AN "X" AT THE RIGHT once something is typed: clears and puts the cursor back, so the citizen types again
+ *     without a second tap. A 48px target (`.xa-search__clear`), named in words for a screen reader.
  */
 export function OTimKiem(props: { id: string; nhan: string; placeholder: string; gia_tri: string; toi_da: number; onDoi: (v: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
   return (
     <div className="xa-search">
       <label className="xa-sr-only" htmlFor={props.id}>
@@ -178,10 +188,12 @@ export function OTimKiem(props: { id: string; nhan: string; placeholder: string;
         <BieuTuong ten="search" co={22} />
       </span>
       <input
+        ref={input}
         className="xa-search__input"
         id={props.id}
-        type="search"
+        type="text"
         inputMode="search"
+        enterKeyHint="search"
         autoComplete="off"
         autoCapitalize="off"
         spellCheck={false}
@@ -190,6 +202,19 @@ export function OTimKiem(props: { id: string; nhan: string; placeholder: string;
         value={props.gia_tri}
         onChange={(e) => props.onDoi(e.target.value)}
       />
+      {props.gia_tri !== "" && (
+        <button
+          type="button"
+          className="xa-search__clear"
+          aria-label={XA_GIAO_DIEN.clear_search}
+          onClick={() => {
+            props.onDoi("");
+            input.current?.focus();
+          }}
+        >
+          <BieuTuong ten="x" co={20} />
+        </button>
+      )}
     </div>
   );
 }

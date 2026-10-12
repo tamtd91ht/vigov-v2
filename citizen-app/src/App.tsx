@@ -5,12 +5,14 @@ import { TabBar } from "./components/TabBar";
 import {
   type CommuneAppSessionResult,
   CommuneByLaunchCode,
+  type DialNumber,
   type GetSceneLocation,
   type KetQuaMoPhien,
   type LayTenZalo,
   type OpenCommuneAppSession,
   type OpenExternal,
   type OpenVideo,
+  type OpenZaloChat,
   type PickScenePhotos,
   type ReopenWithPhoneResult,
   type SceneLocationResult,
@@ -38,7 +40,9 @@ import {
 import { moRaNgoai } from "./features/tinh-nang/mo-ra-ngoai";
 import {
   chooseScenePhotos,
+  dialStaffNumber,
   minimiseMiniApp,
+  openZaloChat,
   phoneScopeGranted,
   readRuntimeAppId,
   readZaloProfile,
@@ -292,9 +296,22 @@ export function AppRieng({ ten_mien }: { ten_mien: string }) {
       shareArticle={shareArticle}
       minimize={appId === null ? undefined : minimiseCommuneApp}
       initialArticle={initialArticle ?? undefined}
+      dialStaff={appId === null ? undefined : dialCommuneStaff}
+      openZaloChat={appId === null ? undefined : chatWithCommuneStaff}
     />
   );
 }
+
+/**
+ * THE DIRECTORY'S TWO BUTTONS (customer sheet App Xã 12/10/2026 rows 11, 12, 14), built here because the state half
+ * may not import zmp-sdk. Injected in BOTH places the commune interface runs — this app and the commune page a QR
+ * opens (`QrCommuneApp`): `tel:` is ignored by every Mini App webview, and neither button opens a session or grants
+ * anything, so the reason `phoneGranted` is withheld from the QR path does not apply. Inside Zalo only (an App ID is
+ * set, as for the minimise bubble): outside it, the card keeps its `tel:` link and has no "NHẮN ZALO". The number is a staff member's
+ * published one; it goes to the dialer or into the zalo.me link and nowhere else (`zalo-api.ts`).
+ */
+const dialCommuneStaff: DialNumber = async (digits) => (await dialStaffNumber(digits)).kieu === "xong";
+const chatWithCommuneStaff: OpenZaloChat = async (digits) => (await openZaloChat(digits)).kieu === "xong";
 
 /**
  * THE SHARE LINK OF ONE ARTICLE (ADR 0047 G6: `zalo.me/s/<App ID>` with the article's id; owner 11/10/2026) — the
@@ -681,6 +698,8 @@ function QrCommuneApp({ ten_mien }: { ten_mien: string }) {
       openDossierPortal={openDossierPortal}
       minimize={insideZalo ? minimiseCommuneApp : undefined}
       onCommuneShown={nameNativeBar}
+      dialStaff={insideZalo ? dialCommuneStaff : undefined}
+      openZaloChat={insideZalo ? chatWithCommuneStaff : undefined}
     />
   );
 }

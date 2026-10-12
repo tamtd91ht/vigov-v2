@@ -219,6 +219,9 @@ export function communePrivacy(values: CommuneTermsValues): CommunePrivacy {
         "Máy ảnh (requestCameraPermission, chooseImage) — để bạn chụp ảnh hiện trường gửi kèm một phản ánh, khi chính bạn bấm 'Chụp ảnh'.",
         "Chọn ảnh (openMediaPicker) — để bạn chọn tối đa 5 ảnh hiện trường có sẵn gửi kèm một phản ánh, khi chính bạn bấm 'Chọn ảnh có sẵn'.",
         "Mở trang bên ngoài (openWebview), chia sẻ qua Zalo (openShareSheet) và thu nhỏ ứng dụng (minimizeApp) — chỉ chạy khi chính bạn bấm, và không đọc dữ liệu nào của bạn. Khi bạn chia sẻ một tin, chỉ đường liên kết tới tin ấy đi tới cuộc trò chuyện bạn chọn trong cửa sổ của Zalo.",
+        // 12/10/2026 (customer sheet App Xã rows 11, 12, 14): the directory card's two buttons (`DanhBaXa.tsx`), through
+        // `zalo-api.ts` `dialStaffNumber` / `openZaloChat`. The number in both is the STAFF MEMBER's published one.
+        "Gọi cán bộ (openPhone) và nhắn Zalo cho cán bộ (openOutApp) trong danh bạ — chỉ chạy khi chính bạn bấm “GỌI” hoặc “NHẮN ZALO” trên thẻ của một cán bộ. “GỌI” chuyển số mà xã đã công khai sang màn hình gọi của điện thoại, và điện thoại hỏi bạn trước khi gọi. “NHẮN ZALO” chỉ có khi cán bộ ấy đã đồng ý công khai số di động và có dùng Zalo; nó mở ứng dụng Zalo tới trang của cán bộ ấy bằng đường dẫn zalo.me kèm số di động đó, để bạn tự bấm nhắn tin. Không có thông tin nào của bạn đi kèm, và ứng dụng không biết bạn có gọi hay nhắn hay không.",
       ],
     },
     {
