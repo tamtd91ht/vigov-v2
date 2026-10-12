@@ -1347,7 +1347,7 @@ export function TrangXa(props: {
    */
   getSceneLocation?: GetSceneLocation;
   /**
-   * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `chooseImage` / `openMediaPicker`), do lớp vỏ tiêm — app riêng của
+   * Chụp / chọn ảnh hiện trường (`requestCameraPermission` + `openMediaPicker`: máy ảnh Zalo `zcamera_photo` / chọn ảnh), do lớp vỏ tiêm — app riêng của
    * xã (`AppRieng`) và app chung qua QR xã (`QrCommuneApp`, owner 06/10/2026). Không truyền thì không có nút ảnh
    * nào (test).
    */

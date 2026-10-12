@@ -282,17 +282,20 @@ const TRIPWIRES: readonly Tripwire[] = [
     // Console vẫn là chín: `index.d.ts` dòng 3009 ghi rằng từ SDK 2.35.0 lời gọi này không cần
     // người dùng xác nhận.
     // `getUserInfo` LÀ TÊN THỨ MƯỜI MỘT (28/09/2026) — xem lệnh cấm tuyệt đối ngay trên.
-    // `chooseImage` and `configAppView` are the twelfth and thirteenth (08/10/2026): the phone's own camera for
+    // `chooseImage` and `configAppView` were the twelfth and thirteenth (08/10/2026): the phone's own camera for
     // "Chụp ảnh", and the commune name on Zalo's top bar (`zalo-api.ts` `takeScenePhoto`, `setCommuneActionBar`).
+    // `chooseImage` LEFT THIS LIST ON 12/10/2026 — not the ban: "Chụp ảnh" is Zalo's camera again (`openMediaPicker`
+    // `zcamera_photo`, owner after a real-device test), so no file may call it, this directory included. That
+    // stricter, every-file ban is `features/tinh-nang/scene-photo-pick.test.ts` "no `chooseImage` call anywhere".
     // `minimizeApp` and `openShareSheet` are the fourteenth and fifteenth (11/10/2026): the commune interface's
     // minimise bubble and "Chia sẻ qua Zalo" (`zalo-api.ts` `minimiseMiniApp`, `shareLinkOnZalo`).
     // `openOutApp` is the sixteenth (12/10/2026): the directory's "NHẮN ZALO" (`zalo-api.ts` `openZaloChat`) — it hands
     // a link to the OS, so one call elsewhere would open any address outside the app with nothing declaring it.
     what:
-      'a platform call outside "src/features/tinh-nang/" — those sixteen are the ONLY platform ' +
+      'a platform call outside "src/features/tinh-nang/" — those fifteen are the ONLY platform ' +
       "calls this app makes, and they live in exactly one directory",
     pattern:
-      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile|getUserInfo|chooseImage|configAppView|minimizeApp|openShareSheet|openOutApp)\s*\(/,
+      /\b(getPhoneNumber|getAccessToken|getLocation|scanQRCode|getNetworkType|keepScreen|vibrate|requestCameraPermission|openMediaPicker|downloadFile|getUserInfo|configAppView|minimizeApp|openShareSheet|openOutApp)\s*\(/,
     chi_trong: [THU_MUC_TINH_NANG],
   },
   {

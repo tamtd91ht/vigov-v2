@@ -838,8 +838,11 @@ describe("3c — mỗi lời gọi nền tảng khai mục đích tại chỗ", 
       // 12/10/2026 (owner, Zalo resubmission): the camera, the picker and `chooseImage` left this list — the intro's
       // "Tư vấn và báo giá" attaches photos to a consultation request, so the three are "ca-hai" (below). Same day,
       // `getLocation` left too: the intro's "Tìm văn phòng gần tôi".
+      // 12/10/2026 (owner, real device): `chooseImage` is gone from the table — "Chụp ảnh" is `openMediaPicker`
+      // `zcamera_photo` again — so two calls remain "ca-hai" for the photos, checked below.
     ).toEqual(["minimizeApp", "openOutApp", "openShareSheet"]);
-    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage", "getLocation"]) {
+    expect(KHAI_BAO_LOI_GOI.some((k) => k.api === "chooseImage"), "chooseImage is declared but no longer called").toBe(false);
+    for (const api of ["requestCameraPermission", "openMediaPicker", "getLocation"]) {
       expect(KHAI_BAO_LOI_GOI.find((k) => k.api === api)?.nua, `${api} is used by both halves`).toBe("ca-hai");
     }
     expect(KHAI_BAO_LOI_GOI.find((k) => k.api === "getUserInfo")?.nua, "getUserInfo is used by both halves").toBe("ca-hai");

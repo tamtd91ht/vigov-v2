@@ -489,7 +489,9 @@ describe("the purpose is said before Zalo's dialog, per button, per screen openi
     const view = (api: string) => KHAI_BAO_LOI_GOI.find((r) => r.api === api)!.intro_app!;
     expect(view("requestCameraPermission").de_lam_gi).toContain(`“${CONSULT_PHOTOS.camera_question}”`);
     expect(view("openMediaPicker").de_lam_gi).toContain(`“${CONSULT_PHOTOS.library_question}”`);
-    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
+    // 12/10/2026: "Chụp ảnh" is Zalo's camera, so the picker's row speaks for the camera too.
+    expect(view("openMediaPicker").de_lam_gi).toContain("máy ảnh của Zalo");
+    for (const api of ["requestCameraPermission", "openMediaPicker"]) {
       expect(view(api).de_lam_gi, api).toContain(`“${CONSULT_PHOTOS.allow}”`);
       expect(view(api).man, api).toBe("Tư vấn và báo giá");
     }

@@ -2,11 +2,12 @@
  * SHRINK A PHOTO ON THE PHONE before it is checked against a size limit and uploaded (owner report 12/10/2026, a
  * real Zalo device: "Chụp ảnh" → the photo is "too large" and never sent).
  *
- * WHY: "Chụp ảnh" is zmp-sdk `chooseImage` (`features/tinh-nang/zalo-api.ts` `takeScenePhoto`), a hidden
- * `<input type="file">` that takes NO compression option. A modern camera original is 6–15 MB, over the commune's
- * scene-photo limit (10 MB) and the consultation-photo limit (5 MB, `vihat-miniapp`). The picker path
- * (`openMediaPicker`, `compressLevel`) compresses on Zalo's side; a picked photo still over the target goes
- * through here too.
+ * WHY: "Chụp ảnh" was the phone's own camera from 08/10 to 12/10/2026, a hidden `<input type="file">` that took NO
+ * compression option. A modern camera original is 6–15 MB, over the commune's scene-photo limit (10 MB) and the
+ * consultation-photo limit (5 MB, `vihat-miniapp`). Since 12/10/2026 (owner) "Chụp ảnh" is Zalo's camera again
+ * (`openMediaPicker` `zcamera_photo`, `features/tinh-nang/zalo-api.ts` `takeScenePhoto`), asked for `compressLevel`
+ * like the picker — but `index.d.ts` documents that option for type `photo` only, so this file stays as the safety
+ * net: any photo still over the target, taken or picked, goes through here.
  *
  * WHY HERE (`lib/`): both halves need it — the commune's scene photos (`cong-dan/man/scene-photos.tsx`) and the
  * ViHAT intro's consultation photos (`features/yeu-cau/consult-photos.ts`) — and they may not import each other

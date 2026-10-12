@@ -474,8 +474,9 @@ export function sendOutcome(
 
 /**
  * What a scene photo is shrunk to on the phone before upload (`lib/shrink-photo.ts`). 4 MB, well under the
- * server's 10 MB scene-photo policy: a camera original (6–15 MB, `chooseImage` cannot compress) was refused
- * as too large (owner report 12/10/2026), and 4 MB still leaves room for a commune whose policy is set lower
+ * server's 10 MB scene-photo policy: a camera original (6–15 MB, from the phone's own camera used 08–12/10/2026,
+ * which could not compress) was refused as too large (owner report 12/10/2026). "Chụp ảnh" is Zalo's compressing
+ * camera again since then, but whether it compresses `zcamera_photo` is unmeasured, so this stays; 4 MB still leaves room for a commune whose policy is set lower
  * than the default — and is one-third of the upload time on a rural line. ⚠ An assumption, stated: the owner
  * chose no number; `service-petitions` stores at most 2560 px anyway, so the first ladder step loses nothing kept.
  */

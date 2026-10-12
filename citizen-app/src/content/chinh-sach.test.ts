@@ -614,9 +614,10 @@ describe("chính sách của ứng dụng ViHAT — không một chữ nào về
     const listed = DOAN_CHINH_SACH_TUNG_QUYEN.map((d) => /\(([A-Za-z]+)\)/.exec(d)?.[1]);
     expect([...listed].sort()).toEqual([...shown].sort());
     // And nothing of the commune interface rides along.
-    // (12/10/2026: the camera, the picker, `chooseImage` and `getLocation` are the intro's again — listed above
-    // through `shown`.)
+    // (12/10/2026: the camera, the picker and `getLocation` are the intro's again — listed above through `shown`.
+    // Same day `chooseImage` left: "Chụp ảnh" is Zalo's camera, the picker's own call.)
     expect(DOAN_CHINH_SACH_TUNG_QUYEN.join("\n")).not.toContain("getNetworkType");
+    expect(DOAN_CHINH_SACH_TUNG_QUYEN.join("\n")).not.toContain("chooseImage");
     // The intro's location line names no commune use — that is the commune policy's (`commune-privacy.ts`).
     const location = DOAN_CHINH_SACH_TUNG_QUYEN.find((d) => d.includes("(getLocation)"))!;
     expect(location).toMatch(/'Tìm văn phòng gần tôi'/);

@@ -255,9 +255,11 @@ export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
  * Nghị định 13 buộc nói ra.
  *
  * 11/10/2026: exactly the calls the ViHAT intro's "Quản lý quyền" shows that need a Console permission
- * (`chinh-sach.test.ts` checks the list against `introPermissionRows`). 12/10/2026: the camera, the picker and
- * `chooseImage` are the intro's too again ("Tư vấn và báo giá" photos), and so is `getLocation` ("Tìm văn phòng gần
+ * (`chinh-sach.test.ts` checks the list against `introPermissionRows`). 12/10/2026: the camera and the picker are
+ * the intro's too again ("Tư vấn và báo giá" photos), and so is `getLocation` ("Tìm văn phòng gần
  * tôi"), so they are listed here in the intro's words; `content/commune-privacy.ts` keeps the commune's own words.
+ * Same day (owner, on a real device): "Chụp ảnh" is Zalo's camera again, i.e. `openMediaPicker` `zcamera_photo` —
+ * so the picker's line names both uses and the phone-camera line (`chooseImage`) is gone.
  */
 export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   "Số điện thoại (getPhoneNumber) — để bạn đăng nhập bằng một lần chạm; để gửi thông báo ZNS tới đúng số ấy; để chúng tôi gọi lại đúng số ấy nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá; để chuyên viên biết ai đang nhắn khi bạn bấm 'Chat với chuyên viên'; và để gửi tin nhắn SMS ưu đãi tới đúng số ấy nếu bạn bấm 'Đăng ký nhận', cho tới khi bạn bấm 'Huỷ nhận ưu đãi SMS'. Ứng dụng chỉ nhận một mã, không nhận số.",
@@ -271,6 +273,5 @@ export const DOAN_CHINH_SACH_TUNG_QUYEN: readonly string[] = [
   "Giữ màn hình sáng (keepScreen) — để màn hình không tối đi trong lúc người khác quét mã danh thiếp của chúng tôi.",
   "Tải tệp (downloadFile) — để ghi tệp danh thiếp của chúng tôi xuống máy bạn.",
   "Quyền máy ảnh (requestCameraPermission) — để hỏi bạn cho phép dùng máy ảnh khi bạn bấm 'Chụp ảnh' ở màn 'Tư vấn và báo giá', sau khi bạn đã bấm 'Cho phép' ở câu hỏi của ứng dụng. Bấm 'Không' thì Zalo không được hỏi.",
-  "Chụp ảnh (chooseImage) — để mở máy ảnh của điện thoại cho bạn chụp một ảnh gửi kèm yêu cầu tư vấn; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
-  "Chọn ảnh (openMediaPicker) — để bạn chọn ảnh có sẵn trong máy gửi kèm yêu cầu tư vấn; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận những ảnh bạn chọn, không xem các ảnh khác trong máy.",
+  "Máy ảnh của Zalo và chọn ảnh (openMediaPicker) — để bạn chụp một ảnh bằng máy ảnh của Zalo khi bạn bấm 'Chụp ảnh', hoặc chọn ảnh có sẵn trong máy khi bạn bấm 'Chọn ảnh', gửi kèm yêu cầu tư vấn ở màn 'Tư vấn và báo giá'; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận những ảnh bạn vừa chụp hoặc đã chọn, không xem các ảnh khác trong máy.",
 ];

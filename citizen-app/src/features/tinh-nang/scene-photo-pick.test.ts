@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 /**
  * THE SHELL'S HALF OF THE SCENE PHOTOS — `takeScenePhoto` / `chooseScenePhotos` in `zalo-api.ts`, and the table
@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  *
  * What must hold:
  *   · the camera asks `requestCameraPermission` FIRST; `userAllow: false` is the citizen's no, and the camera
- *     is then never opened. Since 08/10/2026 it is the PHONE'S camera (`chooseImage`), not Zalo's (`zcamera_photo`)
+ *     is then never opened. It is ZALO'S camera (`openMediaPicker` `zcamera_photo`): the phone's own camera
+ *     (`chooseImage`, 08/10/2026) was reverted on 12/10/2026 by the owner after a real-device test ("ảnh hiện tại
+ *     chụp rất khó và dung lượng rất lớn") — so no source file may call `chooseImage` any more
  *   · the picker gets the right type and count, the edit view off — and NEVER `serverUploadUrl`: the picker
  *     uploads nothing, it hands back local temp paths
  *   · the SDK's own citizen codes (`constants.js`: -2002 denied, -2003 cancel) are what they are; any other
@@ -17,6 +19,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   requestCameraPermission: vi.fn<() => Promise<{ userAllow: boolean; message: string }>>(),
   openMediaPicker: vi.fn<(args: Record<string, unknown>) => Promise<{ data: string[] | string }>>(),
+  // Present so a regression back to the phone's camera would be CALLED and caught, not crash on a missing mock.
   chooseImage: vi.fn<(args: Record<string, unknown>) => Promise<{ filePaths: string[] }>>(),
 }));
 vi.mock("zmp-sdk", () => sdk);
@@ -36,26 +39,40 @@ beforeEach(() => {
   sdk.chooseImage.mockReset().mockResolvedValue({ filePaths: ["blob:camera-1"] });
 });
 
-describe("Chụp ảnh — camera permission, then the PHONE'S camera for one photo (owner, 08/10/2026)", () => {
-  it("allowed: `chooseImage` with the camera only, ONE photo, the BACK camera; Zalo's own camera is not used", async () => {
-    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["blob:camera-1"] });
+describe("Chụp ảnh — camera permission, then ZALO'S camera for one photo (owner, 12/10/2026)", () => {
+  it("allowed: zcamera_photo, ONE photo, edit view off, compressLevel 1, no upload URL; never the phone's camera", async () => {
+    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["zalo-temp://a.jpg"] });
     expect(sdk.requestCameraPermission).toHaveBeenCalledTimes(1);
-    expect(sdk.chooseImage.mock.calls).toEqual([[{ count: 1, sourceType: ["camera"], cameraType: "back" }]]);
-    // The full-screen Zalo camera (`openMediaPicker` `zcamera_photo`) is what the owner asked to replace.
-    expect(sdk.openMediaPicker).not.toHaveBeenCalled();
+    expect(sdk.requestCameraPermission.mock.invocationCallOrder[0]!).toBeLessThan(
+      sdk.openMediaPicker.mock.invocationCallOrder[0]!,
+    );
+    expect(sdk.openMediaPicker.mock.calls).toEqual([
+      [{ type: "zcamera_photo", maxSelectItem: 1, editView: { enable: false }, compressLevel: 1 }],
+    ]);
+    // The phone's own camera (`chooseImage`) is what the owner reverted after testing on a real device.
+    expect(sdk.chooseImage).not.toHaveBeenCalled();
   });
 
-  it("empty paths are dropped — an empty answer is `xong` with nothing to keep", async () => {
-    sdk.chooseImage.mockResolvedValue({ filePaths: ["", "blob:camera-2"] });
-    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["blob:camera-2"] });
-    sdk.chooseImage.mockResolvedValue({ filePaths: [] });
+  it("empty paths are dropped, a single string normalised — an empty answer is `xong` with nothing to keep", async () => {
+    sdk.openMediaPicker.mockResolvedValue({ data: ["", "zalo-temp://b.jpg"] });
+    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["zalo-temp://b.jpg"] });
+    sdk.openMediaPicker.mockResolvedValue({ data: "zalo-temp://c.jpg" });
+    expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: ["zalo-temp://c.jpg"] });
+    sdk.openMediaPicker.mockResolvedValue({ data: [] });
     expect(await takeScenePhoto()).toEqual({ kieu: "xong", du_lieu: [] });
   });
 
   it("not allowed: tu-choi, and the camera is never opened", async () => {
     sdk.requestCameraPermission.mockResolvedValue({ userAllow: false, message: "denied" });
     expect(await takeScenePhoto()).toEqual({ kieu: "tu-choi" });
-    expect(sdk.chooseImage).not.toHaveBeenCalled();
+    expect(sdk.openMediaPicker).not.toHaveBeenCalled();
+  });
+
+  it("Zalo's camera closed without a photo (-2003) is `huy`; -2002 is the citizen's no", async () => {
+    sdk.openMediaPicker.mockRejectedValue(zaloError(-2003));
+    expect(await takeScenePhoto()).toEqual({ kieu: "huy" });
+    sdk.openMediaPicker.mockRejectedValue(zaloError(-2002));
+    expect(await takeScenePhoto()).toEqual({ kieu: "tu-choi" });
   });
 
   it("the permission call refused with a code: the CAMERA capability, the code verbatim", async () => {
@@ -67,72 +84,42 @@ describe("Chụp ảnh — camera permission, then the PHONE'S camera for one ph
   });
 
   it("the camera step refused: the capability moves to PHOTOS (the step that failed)", async () => {
-    sdk.chooseImage.mockRejectedValue(zaloError(-2004));
+    sdk.openMediaPicker.mockRejectedValue(zaloError(-2004));
     expect(await takeScenePhoto()).toMatchObject({ kieu: "khong-lay-duoc", failure: { capability: "photos", code: -2004 } });
   });
 });
 
 /**
- * THE CAMERA CLOSED WITHOUT A PHOTO. `chooseImage` is a hidden file input that settles only on `change`, so a
- * closed camera never answers (`zalo-api.ts` `untilReturnWithoutPhoto`). The page coming back visible and focused,
- * with still no photo after the grace period, is `huy` — the photo buttons are free again. A photo that arrives
- * within the grace period is kept. A page with a window is faked here: this file runs under Node.
+ * NO `chooseImage` CALL ANYWHERE (owner, 12/10/2026). The phone's own camera was reverted after a real-device test;
+ * `KHAI_BAO_LOI_GOI` no longer declares it, so a call that came back would be an undeclared platform call shipped
+ * to Zalo review. `phase1-collects-nothing.test.ts` dropped the name from its one-directory list for this reason:
+ * the ban here is every production file, `features/tinh-nang/` included. Comments are stripped, as there, because
+ * several files EXPLAIN the reversal in prose.
  */
-describe("Chụp ảnh — the camera closed without a photo is `huy`, never a button stuck disabled", () => {
-  type Listener = () => void;
-  let listeners: Map<string, Listener[]>;
-  const fire = (type: string) => listeners.get(type)?.forEach((l) => l());
-  const target = () => ({
-    addEventListener: (type: string, l: Listener) => listeners.set(type, [...(listeners.get(type) ?? []), l]),
-    removeEventListener: (type: string, l: Listener) =>
-      listeners.set(type, (listeners.get(type) ?? []).filter((x) => x !== l)),
+describe("no `chooseImage` call anywhere", () => {
+  const SOURCES = import.meta.glob("../../**/*.{ts,tsx}", { query: "?raw", import: "default", eager: true }) as Record<
+    string,
+    string
+  >;
+  const withoutComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/(?<!:)\/\/[^\n]*/g, " ");
+  const CALL = /\bchooseImage\s*\(/;
+
+  it("scans the real tree — an empty sweep would pass for the wrong reason", () => {
+    const production = Object.keys(SOURCES).filter((p) => !p.includes(".test."));
+    expect(production.length).toBeGreaterThan(50);
+    // Vite keys this file's own directory as "./…", the rest as "../../…": the file that once called it is in.
+    expect(production.some((p) => /(^|\/)tinh-nang\/zalo-api\.ts$|^\.\/zalo-api\.ts$/.test(p))).toBe(true);
+    expect(production.some((p) => p.endsWith("/App.tsx"))).toBe(true);
   });
 
-  beforeEach(() => {
-    listeners = new Map();
-    vi.useFakeTimers();
-    vi.stubGlobal("window", target());
-    vi.stubGlobal("document", { ...target(), visibilityState: "visible" });
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.unstubAllGlobals();
-  });
-
-  it("back on the page, nothing after the grace period → huy; the listeners are removed", async () => {
-    sdk.chooseImage.mockReturnValue(new Promise(() => {}));
-    const pick = takeScenePhoto();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(sdk.chooseImage).toHaveBeenCalledTimes(1);
-    fire("focus");
-    await vi.advanceTimersByTimeAsync(2999);
-    let settled = false;
-    void pick.then(() => (settled = true));
-    await vi.advanceTimersByTimeAsync(0);
-    expect(settled).toBe(false);
-    await vi.advanceTimersByTimeAsync(1);
-    expect(await pick).toEqual({ kieu: "huy" });
-    expect([...listeners.values()].flat()).toEqual([]);
-  });
-
-  it("a photo delivered just after the page came back is kept", async () => {
-    let deliver: (v: { filePaths: string[] }) => void = () => {};
-    sdk.chooseImage.mockReturnValue(new Promise((r) => (deliver = r)));
-    const pick = takeScenePhoto();
-    await vi.advanceTimersByTimeAsync(0);
-    fire("visibilitychange");
-    await vi.advanceTimersByTimeAsync(500);
-    deliver({ filePaths: ["blob:camera-3"] });
-    expect(await pick).toEqual({ kieu: "xong", du_lieu: ["blob:camera-3"] });
-    expect([...listeners.values()].flat()).toEqual([]);
-  });
-
-  it("no return to the page → no timer: the call is simply still open", async () => {
-    sdk.chooseImage.mockReturnValue(new Promise(() => {}));
-    let settled = false;
-    void takeScenePhoto().then(() => (settled = true));
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(settled).toBe(false);
+  it("no production file calls it, and the trap itself catches a call", () => {
+    const offenders = Object.entries(SOURCES)
+      .filter(([p]) => !p.includes(".test."))
+      .filter(([, s]) => CALL.test(withoutComments(s)))
+      .map(([p]) => p);
+    expect(offenders).toEqual([]);
+    expect(CALL.test(withoutComments('await sdk.chooseImage({ count: 1, sourceType: ["camera"] });'))).toBe(true);
+    expect(CALL.test(withoutComments("// the phone's own camera (`chooseImage(`) was reverted"))).toBe(false);
   });
 });
 
@@ -182,9 +169,11 @@ describe("the commune app's declarations name the short questions, word for word
   };
 
   it("camera and photo picker: the question's exact words, and 'Cho phép' before Zalo", () => {
-    // 11/10/2026: the three calls were the commune interface's alone; 12/10/2026 they are "ca-hai" again (the intro's
-    // consultation photos), so the commune app's words live in `commune_app`.
-    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
+    // 11/10/2026: the calls were the commune interface's alone; 12/10/2026 they are "ca-hai" again (the intro's
+    // consultation photos), so the commune app's words live in `commune_app`. Same day `chooseImage` left: the
+    // picker's row now speaks for Zalo's camera too.
+    expect(communeView("openMediaPicker").de_lam_gi).toContain("máy ảnh của Zalo");
+    for (const api of ["requestCameraPermission", "openMediaPicker"]) {
       expect(row(api).nua, api).toBe("ca-hai");
       expect(communeView(api).de_lam_gi, api).toContain(`“${CONSENT_DIALOG.allow}”`);
     }

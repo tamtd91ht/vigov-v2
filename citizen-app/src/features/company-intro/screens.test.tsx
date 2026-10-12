@@ -381,7 +381,9 @@ describe("màn Quản lý quyền vẽ từ bảng khai, không từ một danh 
     // 12/10/2026 (owner): "Tìm văn phòng gần tôi" — the location is the intro's again, in its words, on Liên hệ.
     expect(shown.find((q) => q.api === "getLocation")?.man, "getLocation is the intro's (nearby offices)").toBe("Liên hệ");
     // 12/10/2026 (owner): "Tư vấn và báo giá" photos — the camera and the picker ARE the intro's again, in its words.
-    for (const api of ["requestCameraPermission", "openMediaPicker", "chooseImage"]) {
+    // Same day: "Chụp ảnh" is Zalo's camera again (`openMediaPicker` `zcamera_photo`), so `chooseImage` is not shown.
+    expect(shownApis.has("chooseImage"), "chooseImage is no longer called").toBe(false);
+    for (const api of ["requestCameraPermission", "openMediaPicker"]) {
       expect(shownApis.has(api), `${api} is the intro's (consultation photos)`).toBe(true);
       expect(shown.find((q) => q.api === api)!.man, api).toBe("Tư vấn và báo giá");
     }

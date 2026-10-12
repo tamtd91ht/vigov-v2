@@ -31,7 +31,7 @@ import {
 import { BROWSER_PHOTO_CODEC, shrinkPhoto } from "../../lib/shrink-photo";
 import { chooseConsultPhotos, type PhotoPick, takeConsultPhoto } from "../tinh-nang/zalo-api";
 
-/** "Chụp ảnh" (the phone's camera, one photo) or "Chọn ảnh" (the photo picker). */
+/** "Chụp ảnh" (Zalo's camera, one photo) or "Chọn ảnh" (the photo picker). */
 export type PhotoSource = "camera" | "library";
 
 /** Asks Zalo for photos. `max` is how many the request can still take. Injected so tests need no Zalo. */
@@ -57,7 +57,8 @@ export type PickOutcome = {
 
 /**
  * What a consultation photo is shrunk to on the phone (`lib/shrink-photo.ts`). 3 MB, well under `vihat-miniapp`'s
- * 5 MB (`REQUEST_PHOTO_MAX_BYTES`): the camera (`chooseImage`) cannot compress, and its originals were over 5 MB.
+ * 5 MB (`REQUEST_PHOTO_MAX_BYTES`): the phone's own camera used 08–12/10/2026 could not compress, and its originals
+ * were over 5 MB. Zalo's camera is back since 12/10/2026, but whether it compresses `zcamera_photo` is unmeasured.
  * The margin is for a busy photo that stays large at the first ladder step; three photos of 3 MB are also what a
  * rural line can send one after another. ⚠ An assumption, stated: the owner chose no number.
  */

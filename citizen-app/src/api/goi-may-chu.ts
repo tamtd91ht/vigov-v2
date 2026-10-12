@@ -295,8 +295,8 @@ export async function readRequestPhotoImage(
 
 /**
  * The bytes of a photo the person just took or picked, from the LOCAL path Zalo handed back (`openMediaPicker`
- * without an upload URL returns "đường dẫn tạm thời (local cache path)", `zmp-sdk/index.d.ts:4721`; the camera's
- * `chooseImage` returns object URLs). NOT A CALL TO ANY SERVER: `fetch` is how a webview reads a local file, and
+ * without an upload URL returns "đường dẫn tạm thời (local cache path)", `zmp-sdk/index.d.ts:4721`, for
+ * Zalo's camera `zcamera_photo` and the picker alike). NOT A CALL TO ANY SERVER: `fetch` is how a webview reads a local file, and
  * this file is where the ViHAT half may write `fetch(`.
  *
  * ⚠ NOT MEASURED ON A DEVICE: whether Zalo's webview serves the picker's temp path to `fetch` (the commune half

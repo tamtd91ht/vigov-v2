@@ -120,16 +120,17 @@ export type KhaiBaoLoiGoi = {
 };
 
 /**
- * ONE TABLE (08/10/2026: `chooseImage`, `configAppView`; 11/10/2026: `minimizeApp`, `openShareSheet` added,
+ * ONE TABLE (08/10/2026: `configAppView`; 11/10/2026: `minimizeApp`, `openShareSheet` added,
  * `getNetworkType` removed with the intro's "Kiểm tra đường truyền"; 12/10/2026: `authorize`, `getSetting`, and the
- * directory's `openOutApp`). Thứ tự theo màn hình, để màn "Quản
+ * directory's `openOutApp`; 12/10/2026 also: the phone-camera row added 08/10/2026 removed — "Chụp ảnh" is Zalo's
+ * camera again, through `openMediaPicker`, see `takeScenePhoto`). Thứ tự theo màn hình, để màn "Quản
  * lý quyền" đọc xuôi.
  *
  * 11/10/2026 (owner): the intro no longer photographs paper cards nor asks a location for offices, so
- * `requestCameraPermission`, `openMediaPicker`, `chooseImage` and `getLocation` are the commune interface's alone
+ * `requestCameraPermission`, `openMediaPicker` and `getLocation` are the commune interface's alone
  * (`nha-nuoc`). They are still called under the SHARED App ID — on the commune page a QR opens (`App.tsx`
  * `QrCommuneApp`) — so the shared dossier keeps every one of them: it prints the whole table.
- * 12/10/2026 (owner): the camera, the picker and `chooseImage` are "ca-hai" again — the intro's "Tư vấn và báo
+ * 12/10/2026 (owner): the camera and the picker are "ca-hai" again — the intro's "Tư vấn và báo
  * giá" attaches photos to a consultation request. Same day, `getLocation` too: "Tìm văn phòng gần tôi" on Liên hệ,
  * with the code exchanged on the server (`nearby-offices.ts`).
  *
@@ -259,7 +260,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     de_lam_gi:
       "Hỏi bạn có cho phép dùng máy ảnh hay không, chỉ khi chính bạn bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng: ở màn Tư vấn và báo giá, để chụp ảnh gửi kèm một yêu cầu tư vấn; trên trang của một xã, để chụp nơi xảy ra sự việc. Bấm “Không” thì Zalo không được hỏi.",
     hoi_nguoi_dung: true,
-    // The question itself sends nothing; the photo's way out is the `chooseImage` row below.
+    // The question itself sends nothing; the photo's way out is the `openMediaPicker` row below (Zalo's camera).
     roi_khoi_may: "",
     intro_app: {
       man: "Tư vấn và báo giá",
@@ -278,64 +279,36 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
   },
   {
     // Same history as the row above: the intro's paper-card picker is gone (11/10/2026), the commune interface keeps
-    // "Chọn ảnh có sẵn" (`chooseScenePhotos`). Since 08/10/2026 "Chụp ảnh" is the `chooseImage` row below.
+    // "Chọn ảnh có sẵn" (`chooseScenePhotos`).
     // 09/10/2026 (owner): opened only after "Cho phép" on the app's own one-line question.
     // "ca-hai" again from 12/10/2026 — the intro's consultation photos (`chooseConsultPhotos`), as the row above.
+    // 12/10/2026 (owner, after testing on a real Zalo device): "Chụp ảnh" is THIS call again, `type: "zcamera_photo"`
+    // (`takeScenePhoto`, `takeConsultPhoto`). The phone's own camera (`chooseImage`, 08/10/2026) was hard to use and
+    // gave files too large to send; its row is gone. So this row now says BOTH uses: Zalo's camera and the picker.
     api: "openMediaPicker",
     nua: "ca-hai",
     man: "Tư vấn và báo giá · Gửi phản ánh · Phản ánh của tôi (trang của một xã mở bằng mã QR)",
     tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn · Ảnh hiện trường",
     de_lam_gi:
-      "Mở cửa sổ chọn ảnh để bạn chọn ảnh có sẵn trong máy, chỉ khi chính bạn bấm nút chọn ảnh rồi bấm “Cho phép” ở câu hỏi của ứng dụng: tối đa 3 ảnh gửi kèm một yêu cầu tư vấn ở màn Tư vấn và báo giá; tối đa 5 ảnh hiện trường cho một phản ánh trên trang của một xã. Ứng dụng chỉ nhận những ảnh bạn đã chọn, không xem các ảnh khác trong máy.",
+      "Mở máy ảnh của Zalo để bạn chụp một ảnh, hoặc mở cửa sổ chọn ảnh để bạn chọn ảnh có sẵn trong máy, chỉ khi chính bạn bấm “Chụp ảnh” hoặc nút chọn ảnh rồi bấm “Cho phép” ở câu hỏi của ứng dụng: tối đa 3 ảnh gửi kèm một yêu cầu tư vấn ở màn Tư vấn và báo giá; tối đa 5 ảnh hiện trường cho một phản ánh trên trang của một xã. Ứng dụng chỉ nhận những ảnh bạn vừa chụp hoặc đã chọn, không xem các ảnh khác trong máy.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
-      "Ảnh bạn đã chọn được gửi đi sau khi yêu cầu tư vấn — hoặc phản ánh — đã được ghi nhận, để đính vào chính yêu cầu hay phản ánh ấy: ảnh gửi kèm yêu cầu tư vấn tới máy chủ của Tập đoàn ViHAT Group; ảnh hiện trường, kèm loại ảnh và dung lượng, tới hệ thống của xã. Ảnh không được lưu trên máy.",
+      "Ảnh bạn đã chụp hoặc chọn được gửi đi sau khi yêu cầu tư vấn — hoặc phản ánh — đã được ghi nhận, để đính vào chính yêu cầu hay phản ánh ấy: ảnh gửi kèm yêu cầu tư vấn tới máy chủ của Tập đoàn ViHAT Group; ảnh hiện trường, kèm loại ảnh và dung lượng, tới hệ thống của xã. Ảnh không được lưu trên máy.",
     intro_app: {
       man: "Tư vấn và báo giá",
       tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn",
       de_lam_gi:
-        "Mở cửa sổ chọn ảnh để bạn chọn ảnh có sẵn trong máy gửi kèm một yêu cầu tư vấn, chỉ khi chính bạn bấm “Chọn ảnh” ở màn Tư vấn và báo giá rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng mở thư viện ảnh để bạn chọn ảnh gửi kèm yêu cầu tư vấn?”; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận những ảnh bạn đã chọn, không xem các ảnh khác trong máy.",
+        "Mở máy ảnh của Zalo để bạn chụp một ảnh gửi kèm yêu cầu tư vấn, chỉ khi chính bạn bấm “Chụp ảnh” ở màn Tư vấn và báo giá rồi bấm “Cho phép” ở câu hỏi của ứng dụng; hoặc mở cửa sổ chọn ảnh để bạn chọn ảnh có sẵn trong máy, chỉ khi chính bạn bấm “Chọn ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng mở thư viện ảnh để bạn chọn ảnh gửi kèm yêu cầu tư vấn?”; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận những ảnh bạn vừa chụp hoặc đã chọn, không xem các ảnh khác trong máy.",
       roi_khoi_may:
-        "Ảnh bạn đã chọn được gửi tới máy chủ của Tập đoàn ViHAT Group sau khi yêu cầu tư vấn đã được ghi nhận, mỗi ảnh một lần, để đính vào chính yêu cầu ấy; máy chủ bỏ thông tin vị trí và các thông tin kèm theo khác trong ảnh trước khi lưu. Ảnh không được lưu trên máy.",
+        "Ảnh bạn đã chụp hoặc chọn được gửi tới máy chủ của Tập đoàn ViHAT Group sau khi yêu cầu tư vấn đã được ghi nhận, mỗi ảnh một lần, để đính vào chính yêu cầu ấy; máy chủ bỏ thông tin vị trí và các thông tin kèm theo khác trong ảnh trước khi lưu. Ảnh không được lưu trên máy.",
     },
     commune_app: {
       man: "Gửi phản ánh · Phản ánh của tôi",
       tinh_nang: "Ảnh hiện trường",
       de_lam_gi:
-        "Mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con đã chọn, không xem các ảnh khác trong máy.",
+        "Mở máy ảnh của Zalo để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng; hoặc mở cửa sổ chọn ảnh để bà con chọn ảnh có sẵn trong máy, chỉ khi chính bà con bấm “Chọn ảnh có sẵn” rồi bấm “Cho phép” ở câu hỏi của ứng dụng “Cho phép ứng dụng truy cập ảnh trong máy để chọn ảnh hiện trường?”; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận những ảnh bà con vừa chụp hoặc đã chọn, không xem các ảnh khác trong máy.",
       roi_khoi_may:
-        "Ảnh bà con đã chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
-    },
-  },
-  {
-    // ADDED 08/10/2026 (owner): "Chụp ảnh" opens the phone's own camera instead of Zalo's full-screen one
-    // (`takeScenePhoto`). Same feature, same way out as the `openMediaPicker` row above — so the same sentences.
-    // `hoi_nguoi_dung` false: the question is the `requestCameraPermission` row, which runs right before it;
-    // this call opens the camera, it asks nothing. "ca-hai" again from 12/10/2026, as the two rows above.
-    api: "chooseImage",
-    nua: "ca-hai",
-    man: "Tư vấn và báo giá · Gửi phản ánh · Phản ánh của tôi (trang của một xã mở bằng mã QR)",
-    tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn · Ảnh hiện trường",
-    de_lam_gi:
-      "Mở máy ảnh của điện thoại để bạn chụp một ảnh, chỉ khi chính bạn bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng: ảnh gửi kèm một yêu cầu tư vấn (tối đa 3 ảnh), hoặc — trên trang của một xã — ảnh nơi xảy ra sự việc (tối đa 5 ảnh cho một phản ánh). Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
-    hoi_nguoi_dung: false,
-    roi_khoi_may:
-      "Ảnh bạn đã chụp được gửi đi sau khi yêu cầu tư vấn — hoặc phản ánh — đã được ghi nhận, để đính vào chính yêu cầu hay phản ánh ấy: ảnh gửi kèm yêu cầu tư vấn tới máy chủ của Tập đoàn ViHAT Group; ảnh hiện trường, kèm loại ảnh và dung lượng, tới hệ thống của xã. Ảnh không được lưu trên máy.",
-    intro_app: {
-      man: "Tư vấn và báo giá",
-      tinh_nang: "Ảnh gửi kèm yêu cầu tư vấn",
-      de_lam_gi:
-        "Mở máy ảnh của điện thoại để bạn chụp một ảnh gửi kèm yêu cầu tư vấn, chỉ khi chính bạn bấm “Chụp ảnh” ở màn Tư vấn và báo giá rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 3 ảnh cho một yêu cầu. Ứng dụng chỉ nhận ảnh bạn vừa chụp.",
-      roi_khoi_may:
-        "Ảnh bạn đã chụp được gửi tới máy chủ của Tập đoàn ViHAT Group sau khi yêu cầu tư vấn đã được ghi nhận, mỗi ảnh một lần, để đính vào chính yêu cầu ấy; máy chủ bỏ thông tin vị trí và các thông tin kèm theo khác trong ảnh trước khi lưu. Ảnh không được lưu trên máy.",
-    },
-    commune_app: {
-      man: "Gửi phản ánh · Phản ánh của tôi",
-      tinh_nang: "Ảnh hiện trường",
-      de_lam_gi:
-        "Mở máy ảnh của điện thoại để bà con chụp một ảnh nơi xảy ra sự việc, chỉ khi chính bà con bấm “Chụp ảnh” rồi bấm “Cho phép” ở câu hỏi của ứng dụng; tối đa 5 ảnh cho một phản ánh. Ứng dụng chỉ nhận ảnh bà con vừa chụp.",
-      roi_khoi_may:
-        "Ảnh bà con đã chụp, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
+        "Ảnh bà con đã chụp hoặc chọn, kèm loại ảnh và dung lượng, được gửi tới hệ thống của xã sau khi phản ánh đã được ghi nhận, để đính vào chính phản ánh ấy. Ảnh không được giữ trong bản nháp trên máy.",
     },
   },
   {
@@ -1127,9 +1100,9 @@ export function clearSharedActionBar(headerColor: string): Promise<KetQuaXin<voi
      requestCameraPermission()     -> { userAllow: boolean; message: string }               :1293, :4002
      openMediaPicker({ type, … })  -> { data: string[] | string }                           :1403, :4804
      downloadFile({ url?, fileBase64Data? }) -> Promise<void>                               :6060–6116
-     chooseImage({ count?, sourceType?, cameraType? }) -> { filePaths: string[]; … }        :1517, :4912–4956
      configAppView({ actionBar?, headerColor?, headerTextColor?, … }) -> Promise<void>      :5192–5283
-   (the last two were added 08/10/2026; `configAppView` is `@zaloOnly`.)
+   (`configAppView` was added 08/10/2026 and is `@zaloOnly`. `chooseImage`, added the same day for "Chụp ảnh",
+   left on 12/10/2026: "Chụp ảnh" is `openMediaPicker` `zcamera_photo` again, see `takeScenePhoto`.)
 
    Các lời gọi trên đều `@requirePermission` và `@zaloOnly` trong chính `index.d.ts`: chúng cần được cấp
    quyền cho App ID ở trang Quản lý ứng dụng, và ngoài Zalo thì không chạy. Nhánh `ngoai-zalo`
@@ -1218,86 +1191,53 @@ function tempPaths(data: readonly string[] | string): readonly string[] {
  * (`apis/common/apis/general/openMediaPicker.js`), and a cropped scene loses the very thing the officer needs.
  * `compressLevel: 1` ("Nén nhẹ"): an uncompressed modern photo can pass the server's 10 MB policy (G3) and is
  * slow on a rural line; the server re-encodes anyway. ⚠ An assumption, stated: the owner chose no level.
- * Since 12/10/2026 a photo still over 4 MB after Zalo's compression — and every camera photo, which `chooseImage`
- * cannot compress — is shrunk again on the phone before upload (`cong-dan/man/scene-photos.tsx` `preparePhoto` →
- * `lib/shrink-photo.ts`).
+ * A photo still over 4 MB after Zalo's compression is shrunk again on the phone before upload
+ * (`cong-dan/man/scene-photos.tsx` `preparePhoto` → `lib/shrink-photo.ts`, 12/10/2026) — kept as a safety net
+ * after "Chụp ảnh" went back to Zalo's camera, because whether Zalo compresses a `zcamera_photo` is not measured.
  */
 const SCENE_PICKER = { editView: { enable: false }, compressLevel: 1 } as const;
 
 /**
- * How long after the citizen comes BACK from the camera a photo may still arrive before the tap counts as
- * "closed without a photo". See `untilReturnWithoutPhoto`. ⚠ An assumption, not a measurement: Android usually
- * delivers the picked file within a few hundred ms of the page regaining focus; 3 s leaves room for a slow phone.
- */
-const CAMERA_RETURN_GRACE_MS = 3000;
-
-/** The camera closed without a photo — distinct from every SDK answer. */
-const NO_PHOTO = Symbol("no-photo");
-
-/**
- * WHY THIS EXISTS: `chooseImage` (`zmp-sdk/apis/apis/chooseImage.js`, 2.53.0) is a hidden `<input type="file">`
- * whose promise settles only on `change`. Closing the camera without a photo fires no `change`, so the promise
- * NEVER settles — and `usePhotoPicking` would keep both photo buttons disabled until the citizen left the screen.
- * The page losing focus to the camera and regaining it is the only signal left: once it is visible and focused
- * again, a photo still not delivered after `CAMERA_RETURN_GRACE_MS` means none is coming. Outside a browser (Node
- * tests) there is no page to watch and the call is awaited as is.
- */
-function untilReturnWithoutPhoto<T>(pending: Promise<T>): Promise<T | typeof NO_PHOTO> {
-  if (typeof window === "undefined" || typeof document === "undefined") return pending;
-  return new Promise<T | typeof NO_PHOTO>((resolve, reject) => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const onBack = () => {
-      if (document.visibilityState !== "visible" || timer !== undefined) return;
-      timer = setTimeout(() => finish(() => resolve(NO_PHOTO)), CAMERA_RETURN_GRACE_MS);
-    };
-    const finish = (settle: () => void) => {
-      window.removeEventListener("focus", onBack);
-      document.removeEventListener("visibilitychange", onBack);
-      if (timer !== undefined) clearTimeout(timer);
-      settle();
-    };
-    window.addEventListener("focus", onBack);
-    document.addEventListener("visibilitychange", onBack);
-    pending.then(
-      (value) => finish(() => resolve(value)),
-      (error: unknown) => finish(() => reject(error)),
-    );
-  });
-}
-
-/**
- * "Chụp ảnh": the camera permission first (`requestCameraPermission` answers `userAllow`, it does not throw),
- * then THE PHONE'S OWN CAMERA for ONE photo (owner, 08/10/2026 — it was Zalo's full-screen camera,
- * `openMediaPicker` `zcamera_photo`). `userAllow === false` is the citizen's no → `tu-choi`; closing the camera
- * without a photo → `huy`, as closing the picker is.
+ * "Chụp ảnh" through ZALO'S camera: the camera permission first (`requestCameraPermission` answers `userAllow`,
+ * it does not throw), then `openMediaPicker` `type: "zcamera_photo"` for ONE photo with the given picker options.
+ * `userAllow === false` is the citizen's no → `tu-choi`; Zalo's own cancel/deny codes go through `asPick`, as the
+ * picker's do — the picker's promise rejects on close, so no "closed without a photo" watch is needed.
  *
- * `chooseImage` (`zmp-sdk/index.d.ts:4912-4956`): `{ count, sourceType: ["camera"], cameraType }` → `{ filePaths }`.
- * `cameraType: "back"` because the SDK's default is "front" (`chooseImage.js`), and a selfie is not a scene.
- * `filePaths` are object URLs of the taken file — read by `cong-dan/api/goi-vigov.ts` `readPickedPhoto` like the
- * picker's temp paths; nothing is uploaded by this call. `chooseImage` takes NO compression option: the original
- * (6–15 MB) is shrunk on the phone before upload (`lib/shrink-photo.ts`, owner report 12/10/2026).
+ * WHY ZALO'S CAMERA AND NOT THE PHONE'S (owner, 12/10/2026, after testing on a real Zalo device: "ảnh hiện tại
+ * chụp rất khó và dung lượng rất lớn"): the phone's own camera (`chooseImage`, chosen 08/10/2026) was hard to use
+ * inside Zalo, took no compression option and returned 6–15 MB originals; its promise also never settled when the
+ * camera was closed without a photo. Zalo's camera accepts `compressLevel` and its promise settles through the
+ * native callback (`fail` on close — the -2003 USER_CANCEL of `constants.js` is the expected code, not measured on
+ * a device for `zcamera_photo`; any other code still reaches the screen as "thử lại" with its "Mã hỗ trợ").
  *
- * The permission call is KEPT although `index.d.ts` does not mark `chooseImage` `@requirePermission`: whether
- * Zalo's webview opens the camera for a Mini App without it has not been measured on a device. The app's own
- * one-line question (`cong-dan/man/consent-dialog.tsx`, 09/10/2026) runs BEFORE this whole function, not instead
- * of the permission call. Dropping it is one line once measured.
+ * ⚠ `index.d.ts:4746` documents `compressLevel` as "Mức nén ảnh khi chọn type là `photo`"; the SDK passes it to
+ * the native `PICK_MEDIA` call for every type (`apis/common/apis/general/openMediaPicker.js`). Whether Zalo honours
+ * it for `zcamera_photo` is not measured — `lib/shrink-photo.ts` stays as the safety net either way.
+ * `editView` off: the SDK's default edit view crops to 1:1 (same file), and a cropped photo loses half the scene.
  */
-export async function takeScenePhoto(): Promise<ScenePhotoPick> {
+async function takePhotoWithZaloCamera(
+  picker: { readonly editView: { readonly enable: false }; readonly compressLevel: number },
+): Promise<ScenePhotoPick> {
   const kq = await xin("camera", async (sdk, step) => {
     const { userAllow } = await sdk.requestCameraPermission();
     if (!userAllow) return null;
     step("photos");
-    const picked = await untilReturnWithoutPhoto(
-      sdk.chooseImage({ count: 1, sourceType: ["camera"], cameraType: "back" }),
-    );
-    return picked === NO_PHOTO ? NO_PHOTO : tempPaths(picked.filePaths);
+    const { data } = await sdk.openMediaPicker({ type: "zcamera_photo", maxSelectItem: 1, ...picker });
+    return tempPaths(data);
   });
-  if (kq.kieu === "xong") {
-    if (kq.du_lieu === null) return { kieu: "tu-choi" };
-    if (kq.du_lieu === NO_PHOTO) return { kieu: "huy" };
-    return { kieu: "xong", du_lieu: kq.du_lieu };
-  }
+  if (kq.kieu === "xong") return kq.du_lieu === null ? { kieu: "tu-choi" } : { kieu: "xong", du_lieu: kq.du_lieu };
   return asPick(kq);
+}
+
+/**
+ * "Chụp ảnh" on "Gửi phản ánh" / "Phản ánh của tôi": Zalo's camera, one photo, the scene picker's compression.
+ *
+ * The permission call is KEPT: `openMediaPicker` is `@requirePermission` (`index.d.ts:4725`), and the app's own
+ * one-line question (`cong-dan/man/consent-dialog.tsx`, 09/10/2026) runs BEFORE this whole function, not instead
+ * of the permission call.
+ */
+export function takeScenePhoto(): Promise<ScenePhotoPick> {
+  return takePhotoWithZaloCamera(SCENE_PICKER);
 }
 
 /** "Chọn ảnh có sẵn": the photo picker, at most `max` photos (the slots the petition still has). */
@@ -1333,14 +1273,14 @@ export type PhotoPick = ScenePhotoPick;
 const CONSULT_PICKER = { editView: { enable: false }, compressLevel: 2 } as const;
 
 /**
- * "Chụp ảnh" on "Tư vấn và báo giá": the camera permission, then the phone's own BACK camera for one photo —
- * exactly the scene photo's path (`takeScenePhoto`), including the "closed without a photo" watch.
- * `chooseImage` takes no compression option, and a camera original exceeds 5 MB (owner report 12/10/2026): the
- * photo is shrunk ON THE PHONE before the size check (`yeu-cau/consult-photos.ts` `preparePickedPhoto` →
+ * "Chụp ảnh" on "Tư vấn và báo giá": the camera permission, then Zalo's camera for one photo — the scene photo's
+ * path (`takePhotoWithZaloCamera`), with THIS screen's compression (`CONSULT_PICKER`, for `vihat-miniapp`'s 5 MB
+ * limit). Back to Zalo's camera on 12/10/2026 for the reason given there. The photo is still shrunk ON THE PHONE
+ * before the size check when it is over the limit (`yeu-cau/consult-photos.ts` `preparePickedPhoto` →
  * `lib/shrink-photo.ts`). Only a photo the phone cannot decode still meets `REQUEST_PHOTO_MAX_BYTES` as it was.
  */
 export function takeConsultPhoto(): Promise<PhotoPick> {
-  return takeScenePhoto();
+  return takePhotoWithZaloCamera(CONSULT_PICKER);
 }
 
 /** "Chọn ảnh" on "Tư vấn và báo giá": the photo picker, at most `max` photos (the slots the request still has). */

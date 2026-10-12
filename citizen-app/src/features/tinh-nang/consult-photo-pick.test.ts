@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 /**
  * THE VIHAT INTRO'S TWO PHOTO CALLS — `takeConsultPhoto` / `chooseConsultPhotos` in `zalo-api.ts` (owner 12/10/2026,
  * "Tư vấn và báo giá"). What must hold:
- *   · the camera asks `requestCameraPermission` first and opens the phone's back camera for ONE photo;
+ *   · the camera asks `requestCameraPermission` first and opens ZALO'S camera (`zcamera_photo`, owner 12/10/2026)
+ *     for ONE photo, no crop, the same medium compression as the picker;
  *   · the picker gets the type, the count, the edit view off, the SDK's medium compression — and NEVER
  *     `serverUploadUrl`: it hands back local paths, the upload is `api/goi-may-chu.ts`'s, after the request exists;
  *   · the citizen's own codes are what they are (-2003 closed → `huy`, -2002 → `tu-choi`).
@@ -12,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const sdk = vi.hoisted(() => ({
   requestCameraPermission: vi.fn<() => Promise<{ userAllow: boolean; message: string }>>(),
   openMediaPicker: vi.fn<(args: Record<string, unknown>) => Promise<{ data: string[] | string }>>(),
+  // Present so a regression back to the phone's camera would be CALLED and caught, not crash on a missing mock.
   chooseImage: vi.fn<(args: Record<string, unknown>) => Promise<{ filePaths: string[] }>>(),
 }));
 vi.mock("zmp-sdk", () => sdk);
@@ -28,15 +30,31 @@ beforeEach(() => {
   sdk.chooseImage.mockReset().mockResolvedValue({ filePaths: ["blob:camera-1"] });
 });
 
-describe("Chụp ảnh on Tư vấn và báo giá", () => {
-  it("permission first, then the back camera for one photo; a no never opens the camera", async () => {
-    expect(await takeConsultPhoto()).toEqual({ kieu: "xong", du_lieu: ["blob:camera-1"] });
+describe("Chụp ảnh on Tư vấn và báo giá — Zalo's camera (owner, 12/10/2026)", () => {
+  it("permission first, then zcamera_photo for one photo, no crop, compressLevel 2; never the phone's camera", async () => {
+    sdk.openMediaPicker.mockResolvedValue({ data: "zalo-temp://cam.jpg" });
+    expect(await takeConsultPhoto()).toEqual({ kieu: "xong", du_lieu: ["zalo-temp://cam.jpg"] });
     expect(sdk.requestCameraPermission).toHaveBeenCalledTimes(1);
-    expect(sdk.chooseImage.mock.calls).toEqual([[{ count: 1, sourceType: ["camera"], cameraType: "back" }]]);
-    sdk.chooseImage.mockClear();
+    expect(sdk.requestCameraPermission.mock.invocationCallOrder[0]!).toBeLessThan(
+      sdk.openMediaPicker.mock.invocationCallOrder[0]!,
+    );
+    expect(sdk.openMediaPicker.mock.calls).toEqual([
+      [{ type: "zcamera_photo", maxSelectItem: 1, editView: { enable: false }, compressLevel: 2 }],
+    ]);
+    expect(sdk.chooseImage).not.toHaveBeenCalled();
+  });
+
+  it("a no never opens the camera", async () => {
     sdk.requestCameraPermission.mockResolvedValue({ userAllow: false, message: "" });
     expect(await takeConsultPhoto()).toEqual({ kieu: "tu-choi" });
-    expect(sdk.chooseImage).not.toHaveBeenCalled();
+    expect(sdk.openMediaPicker).not.toHaveBeenCalled();
+  });
+
+  it("Zalo's camera closed is `huy`, -2002 is the person's no", async () => {
+    sdk.openMediaPicker.mockRejectedValue(zaloError(-2003));
+    expect(await takeConsultPhoto()).toEqual({ kieu: "huy" });
+    sdk.openMediaPicker.mockRejectedValue(zaloError(-2002));
+    expect(await takeConsultPhoto()).toEqual({ kieu: "tu-choi" });
   });
 });
 
