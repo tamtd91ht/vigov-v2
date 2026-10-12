@@ -1256,7 +1256,7 @@
       "no_confirm": [],
       "viec": "Nhiệm vụ theo bảng lỗi 10/10: không nhảy khi đổi Toàn xã/Giao cho tôi (dòng 7); checkbox, hover tiêu đề, menu đổi trạng thái Kanban theo prototype (dòng 10–13); ô hạn dd/mm/yyyy, nhóm văn bản một ô nội dung, khoá cuộn trang khi mở popup Giao việc mới (dòng 16); tick phê duyệt không nhảy, đính kèm ở nhật ký/chuyển trạng thái, giao việc/chuyển việc (dòng 17).",
       "bang_chung": "5b7039a2 (so-nhiem-vu.tsx, due-date-input.tsx mới, sheet-layout.test.tsx) · 75b622a1 (task-attachments-ui.tsx) · b4b45840 (đổi bộ phận mà để trống người xử lý nay gửi assignee rỗng; khối Giao việc dựng lại khi người giữ việc đổi). · 3421992a — 'Chuyển tiếp' là chip trạng thái thường (task-status-pipeline.tsx) kèm giao việc tuỳ chọn; câu gợi ý khối Giao việc nói đúng luật mới (task-assignment.ts, task-assignment-block.tsx); nhật ký lùi hạn nhiều dòng. Máy chủ f33dd452 (sổ service-petitions, mục `petitions-bang-loi-dot-2-10-11`).",
-      "tiep_theo": "XONG ở f33dd452 + 3421992a (ADR 0076 §Sửa đổi G2). CÒN TREO chờ chủ dự án (ADR 0076 G2 §Còn treo): Kanban cho 'Chuyển tiếp' từ ba trạng thái nhưng không có cột, thẻ rời bảng; giao việc không lý do giữ trạng thái (theo /assign của prototype) trong khi câu của khách có thể hiểu là mọi lần đổi người giữ. GIỮ theo ADR 0090: Xuất Excel Sổ theo dõi (dòng 15), + Thêm việc con (dòng 17). Dòng 18 và triển khai tệp đính kèm: mục `con-lai-10-11`. Dòng 9 (bộ lọc loại nhiệm vụ 3 giá trị) và dòng 14 (Sổ theo dõi 13 cột) chưa thấy commit trong lượt này — chưa kiểm. Chưa kiểm bằng ảnh render."
+      "tiep_theo": "XONG ở f33dd452 + 3421992a (ADR 0076 §Sửa đổi G2). CÒN TREO chờ chủ dự án (ADR 0076 G2 §Còn treo): Kanban cho 'Chuyển tiếp' từ ba trạng thái nhưng không có cột, thẻ rời bảng; giao việc không lý do giữ trạng thái (theo /assign của prototype) trong khi câu của khách có thể hiểu là mọi lần đổi người giữ. GIỮ theo ADR 0090: Xuất Excel Sổ theo dõi (dòng 15), + Thêm việc con (dòng 17). Dòng 18 và triển khai tệp đính kèm: mục `con-lai-10-11`. Dòng 9 (bộ lọc loại nhiệm vụ 3 giá trị) và dòng 14 (Sổ theo dõi 13 cột) chưa thấy commit trong lượt này — chưa kiểm. Chưa kiểm bằng ảnh render. Dòng 12–13 (hover thẻ Kanban, cỡ menu chuyển cột) đã được chủ dự án đổi lại 12/10/2026 — xem mục kanban-the-menu-chuyen-va-hover-12-10 và ADR 0076 §Sửa đổi 12/10/2026."
     },
     {
       "id": "phan-anh-10-11",
@@ -1358,7 +1358,7 @@
       "viec": "Thẻ Kanban Nhiệm vụ (ảnh tmp/web/ui-bug/nhiem-vu-chuyen-trang-thai.png): menu nổi của nút ⇄ chuyển trạng thái về cỡ chữ của thẻ (12.8px, dòng 32px, rộng tối đa 15rem); nền hover chỉ phủ hàng 'Chọn' + nút ⇄, không phủ mã và tiêu đề — theo prototype TaskCard.tsx:53, thay quyết định bảng lỗi khách dòng 12.",
       "trang_thai": "xong",
       "no_confirm": [],
-      "bang_chung": "1b26d973 — globals.css .menu-noi/.menu-chuyen-cot, so-nhiem-vu.tsx thẻ Kanban; test batch-delete, kanban-move, sheet-layout. vitest 312 tệp/5843 ca xanh; đo trên /xem-thu/nhiem-vu (next dev, máy dev): mục menu 12.8px cao 32px, hàng hover chứa nút ⇄, không chứa tiêu đề.",
+      "bang_chung": "1b26d973 — globals.css .menu-noi/.menu-chuyen-cot, so-nhiem-vu.tsx thẻ Kanban; test batch-delete, kanban-move, sheet-layout. vitest 312 tệp/5843 ca xanh; đo trên /xem-thu/nhiem-vu (next dev, máy dev): mục menu 12.8px cao 32px, hàng hover chứa nút ⇄, không chứa tiêu đề. 91701cb6: nhãn 'Chọn' nhận cả phần đệm hàng; chú thích TheNhiemVu. Quyết định ghi ở ADR 0076 §Sửa đổi 12/10/2026 (G3 ngoại lệ cỡ menu chung, G4 hover).",
       "tiep_theo": ""
     }
   ]

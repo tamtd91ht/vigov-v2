@@ -23,6 +23,7 @@ owns_facts:
   - "Sổ theo dõi nhiệm vụ vẽ đủ 13 cột prototype, ngăn chi tiết có ô 'Cơ quan chủ trì tham mưu' và 'Chuyên viên VP tham mưu/theo dõi' — hiện CÙNG dữ liệu với Đơn vị thực hiện / Người thực hiện; chỉ trình bày, mô hình dữ liệu ADR 0065 NV5 giữ (chốt 07/10/2026 lần 2 #16)"
   - "hộp 'Giao việc mới' rộng 500px, 800px khi loại 'Theo văn bản' (spec 06) — thay chốt 07/10/2026 'luôn 800px' vốn chỉ nằm ở sổ tiến độ và mã (chốt 07/10/2026 lần 2 #17)"
   - "bảng lỗi khách 10–11/10/2026: #13 (Xuất Excel) và #14 (+ Thêm việc con) giữ; ĐÃ LÀM (f33dd452 + 3421992a) — chuyen-tiep trở lại làm đích rẽ nhánh từ moi-giao/da-tiep-nhan/dang-thuc-hien; giao việc đổi người giữ CÓ lý do chuyển thì vào chuyen-tiep, KHÔNG lý do thì giữ trạng thái — đảo quyết định 28/09/2026 'đổi người giữ thì về moi-giao' cho cả POST /assignment (§Sửa đổi 10–11/10/2026)"
+  - "thẻ Kanban Nhiệm vụ (chủ dự án 12/10/2026): menu nổi 'Chuyển sang cột…' theo CỠ CHỮ CỦA THẺ — 12.8px, dòng 32px, rộng tối đa 15rem — NGOẠI LỆ của 'UI chung' #13 (menu chung 36px/14px); nền hover chỉ phủ hàng 'Chọn' chứa nút ⇄, không phủ mã + tiêu đề, theo prototype TaskCard.tsx:53 — thay cách làm dòng 12 bảng lỗi 10/10 (§Sửa đổi 12/10/2026)"
   - "menu Nhiệm vụ: trạng thái trống/lỗi của danh sách giữ cách xử lý hiện có; số liệu chỉ đọc cần máy chủ (vd 'đã gia hạn n lần') = control vô hiệu '?' đúng vị trí prototype (mặc định phiên 07/10/2026 lần 2 #18–#19)"
 ---
 
@@ -238,3 +239,16 @@ giao dịch; dòng quyết định luôn nói duyệt hay từ chối và hai m�
 | 2 | Giao việc **không** lý do giữ nguyên trạng thái (theo `/assign` của prototype). Câu của khách "Khi giao việc, chuyển việc sẽ update thành trạng thái rẽ nhánh" có thể hiểu là **mọi** lần đổi người giữ | Hai cách đọc cho hai bảng chuyển khác nhau; đã chọn cách của prototype, cần khách xác nhận |
 - Commit liên quan đã có: `b4b45840` (web) — đổi bộ phận mà để trống người xử lý nay gửi `assignee` rỗng.
   Trước đó trường bị bỏ, nên máy chủ giữ cán bộ cũ của bộ phận trước.
+
+## Sửa đổi 12/10/2026 — thẻ Kanban: menu chuyển cột và nền hover
+
+Mục này ghi thêm, không sửa phần trên. **Người quyết:** chủ dự án, kèm ảnh
+`tmp/web/ui-bug/nhiem-vu-chuyen-trang-thai.png` (ngoài git). Đã dựng: `1b26d973`, `91701cb6`.
+
+| # | Trước | Nay | Vì sao ghi ở đây |
+|---|---|---|---|
+| G3 | #13 "vẽ lại theo UI chung": menu nổi của nút ⇄ dùng cỡ menu chung `components/ui/action-menu.tsx` `ITEM` — dòng 36px, chữ 14px (dòng 13 bảng lỗi 10/10) | Chữ **12.8px** (= tiêu đề thẻ), dòng **32px**, menu rộng tối đa **15rem**, mục dài xuống dòng | Đây là **ngoại lệ** của câu "chuẩn UI UX chung" ở #13. Không ghi thì phiên sau đọc #13 sẽ "sửa" menu về 36px/14px |
+| G4 | Nền hover phủ cả dải đầu thẻ: dải màu, "Chọn", nút ⇄, mã, tiêu đề (cách đọc dòng 12 bảng lỗi 10/10, `5b7039a2`) | Nền hover chỉ phủ **hàng "Chọn"**, nút ⇄ nằm trong hàng ấy; mã và tiêu đề không sáng. Thẻ không có ô chọn (không `task.delete`): không có hàng, không nền hover, nút ⇄ nổi ở góc | Prototype chỉ đặt `hover:bg-surface` trên nhãn "Chọn" (`../vigov-require/apps/admin/src/components/tasks/TaskCard.tsx:53`). Nguyên văn dòng 12 không có trong kho (ADR 0090: bảng lỗi ngoài git) — nếu khách nêu lại dòng 12, đối chiếu với mục này |
+
+Dòng menu 32px vẫn trên ngưỡng 24px của WCAG 2.5.8 nhưng dưới chiều cao control 36px của ADR 0068 §5 —
+đánh đổi chủ dự án đã chọn cho riêng menu này.
