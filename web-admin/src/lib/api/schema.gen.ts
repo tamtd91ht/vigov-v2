@@ -6333,7 +6333,7 @@ export type comms_get_comms_audit_entries = {
   };
 };
 
-/** GET /api/v1/commune-basemap/{file} — Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png */
+/** GET /api/v1/commune-basemap/{file} — Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, vn-places.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png */
 export type comms_get_commune_basemap_by_file = {
   duongDan: "/api/v1/commune-basemap/{file}";
   phuongThuc: "GET";

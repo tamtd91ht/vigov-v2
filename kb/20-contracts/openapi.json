@@ -9137,14 +9137,14 @@
         }
       ],
       "get": {
-        "summary": "Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png",
+        "summary": "Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, vn-places.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png",
         "operationId": "comms_get_commune_basemap_by_file",
         "tags": [
           "comms"
         ],
         "x-vigov-permission": {
           "kind": "public",
-          "reason": "nền bản đồ tự host cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1): người dân không có tài khoản; chỉ phát lại một danh sách đóng tệp nền PMTiles, glyph và sprite dựng từ dữ liệu OSM công khai trong MinIO của ViGov — không dữ liệu của xã, không dữ liệu cá nhân; chỉ cho tên miền của một xã đang hoạt động; giới hạn 6.000 lần/phút theo tên miền và mạng của máy gọi, trần riêng"
+          "reason": "nền bản đồ tự host cho bản đồ màn Gửi phản ánh trên Zalo Mini App (chủ dự án mở tuyến này 11/10/2026, ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M1): người dân không có tài khoản; chỉ phát lại một danh sách đóng tệp nền PMTiles, glyph và sprite dựng từ dữ liệu công khai OpenStreetMap và Overture Maps trong MinIO của ViGov — không dữ liệu của xã, không dữ liệu cá nhân; chỉ cho tên miền của một xã đang hoạt động; giới hạn 6.000 lần/phút theo tên miền và mạng của máy gọi, trần riêng"
         },
         "x-vigov-consumer": "citizen-app",
         "x-vigov-task": "bc9851c3ec9c",

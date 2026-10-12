@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 7e3c3730
+derived_from_commit: aea8d902
 expires: 2027-01-10
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -110,7 +110,7 @@ một lời trấn an không có gì đứng sau.
 | GET | `/api/v1/public-citizen-reports/{maTraCuu}` | ✗ |
 
 ⚠ **`citizen-app` hôm nay chưa gọi một tuyến ViGov nào**, và đó không phải thiếu sót của nó: nó đang
-gọi `/api/v1/citizen-sessions`, `/api/v1/client-errors`, `/api/v1/commune-basemap`, `/api/v1/commune-disaster-alerts`, `/api/v1/commune-map-frame`, `/api/v1/commune-news`, `/api/v1/commune-news/categories`, `/api/v1/commune-news/{id}`, `/api/v1/commune-profiles`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-report-fields`, `/api/v1/my-citizen-reports`, `/api/v1/my-notification-preferences`, `/api/v1/my-residential-units`, `/api/v1/public-citizen-report-fields`, `/api/v1/public-citizen-reports`, `/api/v1/public-citizen-reports/{code}`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
+gọi `/api/v1/citizen-sessions`, `/api/v1/client-errors`, `/api/v1/commune-basemap`, `/api/v1/commune-disaster-alerts`, `/api/v1/commune-map-frame`, `/api/v1/commune-news`, `/api/v1/commune-news/categories`, `/api/v1/commune-news/{id}`, `/api/v1/commune-staff`, `/api/v1/communes`, `/api/v1/location`, `/api/v1/my-citizen-report-fields`, `/api/v1/my-citizen-reports`, `/api/v1/my-notification-preferences`, `/api/v1/my-residential-units`, `/api/v1/public-citizen-report-fields`, `/api/v1/public-citizen-reports`, `/api/v1/public-citizen-reports/{code}`, `/api/v1/requests`, `/api/v1/sessions`, `/api/v1/x` — bề mặt của **kho anh em**
 `vihat-miniapp`, không phải của ViGov (CLAUDE.md, mục hai kho). Giai đoạn 2 — màn nghiệp vụ xã —
 bị chặn ở `service-identity`, xem `kb/90-ephemeral/tien-do/citizen-app.json`.
 
@@ -121,12 +121,12 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 4 | 8 | 6 |
-| `citizen-app` | 52 | 27 | 4 | 0 |
+| `citizen-app` | 52 | 29 | 4 | 0 |
 | `core` | 41 | 3 | 1 | 1 |
-| `deploy` | 22 | 15 | 1 | 0 |
+| `deploy` | 22 | 16 | 1 | 0 |
 | `platform-admin` | 9 | 3 | 0 | 0 |
 | `proto` | 20 | 3 | 0 | 0 |
-| `service-comms` | 31 | 17 | 5 | 3 |
+| `service-comms` | 31 | 18 | 5 | 3 |
 | `service-documents` | 14 | 5 | 3 | 0 |
 | `service-finance` | 34 | 5 | 2 | 0 |
 | `service-identity` | 57 | 14 | 2 | 1 |
@@ -134,5 +134,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 19 | 20 | 5 | 1 |
 | `service-reporting` | 5 | 0 | 1 | 0 |
 | `tools` | 22 | 0 | 0 | 0 |
-| `web-admin` | 109 | 40 | 4 | 1 |
+| `web-admin` | 109 | 41 | 4 | 1 |
 

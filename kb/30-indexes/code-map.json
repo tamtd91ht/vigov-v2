@@ -10652,7 +10652,7 @@
     },
     "http.NewBasemapClient": {
       "kind": "func",
-      "at": "service-comms/internal/http/commune_basemap.go:171"
+      "at": "service-comms/internal/http/commune_basemap.go:180"
     },
     "http.NewHandler": {
       "kind": "func",
@@ -10916,11 +10916,11 @@
     },
     "http.PublicBasemap": {
       "kind": "func",
-      "at": "service-comms/internal/http/commune_basemap.go:278"
+      "at": "service-comms/internal/http/commune_basemap.go:287"
     },
     "http.PublicBasemapDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/commune_basemap.go:188"
+      "at": "service-comms/internal/http/commune_basemap.go:197"
     },
     "http.PublicCoverImages": {
       "kind": "type",
@@ -11072,7 +11072,7 @@
     },
     "http.RegisterPublicBasemap": {
       "kind": "func",
-      "at": "service-comms/internal/http/commune_basemap.go:205"
+      "at": "service-comms/internal/http/commune_basemap.go:214"
     },
     "http.RegisterPublicDisasterAlerts": {
       "kind": "func",
