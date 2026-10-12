@@ -698,7 +698,7 @@
     },
     {
       "id": "bo-the-ten-va-man-giai-thich-gui-12-10",
-      "menu": "phan-anh-app-xa",
+      "menu": "phan-anh-nguoi-dan",
       "trang_thai": "xong",
       "viec": "App xã (ADR 0050 §Sửa đổi 12/10/2026): bỏ thẻ 'Điền sẵn họ tên khi gửi phản ánh' ở trang chủ (TrangXa NameCard + chuỗi name_card_*); bấm 'Gửi phản ánh' khi chưa có phiên thì hỏi Zalo ngay (commune-session.ts require: task submit → openAndFollow('ask')), không màn 'Cần xác nhận số điện thoại của bà con'; tên chưa có đi cùng bước số (nameAfterPhone đặt trong requireSession). Màn chờ/kết quả của cổng gửi mang tiêu đề 'Gửi phản ánh'. Các việc khác (Phản ánh của tôi, Tra cứu, đánh giá, Nhận thông báo) giữ màn giải thích.",
       "bang_chung": "citizen-app: tsc sạch, vitest 73 tệp/1954 test xanh (typed-contact, accountless-petition, hieu-ung-khong-phien, name-at-entry sửa theo hành vi mới). CHƯA thử trên điện thoại thật.",
