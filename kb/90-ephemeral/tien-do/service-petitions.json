@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-12",
   "muc": [
     {
       "id": "so-tay-lanh-dao-bo-loc-may-chu",
@@ -812,6 +812,14 @@
       "bang_chung": "Dựng 11/10/2026, CHƯA commit. domain/group_posting.go: kiểu GroupPosting (Unspecified = 0, giá trị không quyết là không nhóm nào) + GroupUnit (chỉ giữ ULID 26 ký tự Crockford viết hoa, sai dạng → rỗng, vì comms từ chối CẢ LÔ khi mã sai dạng). Việc nền (domain/automation.go): OverdueNotice / UnassignedNotice / EscalationNotice → bộ phận = AutomationRecord.OrgUnitID (nhiem_vu.bo_phan_id, phieu_phan_anh.bo_phan_id), ALLOWED, phiếu Restricted → RESTRICTED; DueSoonNotice, bản tin tuần, ReportReadyNotice để UNSPECIFIED + rỗng. Hành vi (domain/staff_notice.go): kind 18 giao nhiệm vụ, 20 chờ duyệt → ALLOWED + nhiem_vu.bo_phan_id SAU hành vi; 23 phân công, 24 mở lại → ALLOWED (RESTRICTED nếu linh_vuc = can-bo) + phieu_phan_anh.bo_phan_id SAU hành vi; 19 đề nghị lùi hạn, 21 nhắc tên → UNSPECIFIED (cá nhân, ADR 0092 #2). Dây: app/staff_notice.go (wireGroupPosting, payload outbox), app/staff_notice_relay.go (đọc lại; dòng cũ không có trường → UNSPECIFIED), app/automation_jobs.go (automationPages), core/commsclient (Notice thêm HoldingOrgUnitID, GroupPosting). Test: domain/group_posting_test.go, app/staff_notice_group_test.go (outbox→relay, dòng cũ, Tick đầu-cuối, giao nhiệm vụ thật, phân công phiếu lấy bộ phận MỚI), core/commsclient TestDeliverMapsGroupFields. go vet ./... sạch; go test ./internal/... ./cmd/... xanh trừ internal/store TestCreateBindsZaloAccountOwner — đỏ do sửa chưa commit của phiên khác ở store/phieu_phan_anh.go (cột location_citizen_adjusted), không thuộc việc này.",
       "no_confirm": [],
       "tiep_theo": "Chưa kiểm với comms thật (comms chưa đọc trường 8–9 lúc làm). Tiêu đề kind 18/23 viết 'Bạn được giao …' — vào nhóm vẫn là câu ngôi thứ hai, comms hoặc chủ dự án quyết có dựng câu riêng cho nhóm không. GroupUnit chỉ nhận chữ hoa: nếu comms chấp nhận cả chữ thường thì mã chữ thường đang bị bỏ (chỉ ra nhóm cả xã)."
+    },
+    {
+      "id": "anh-sau-xu-ly-tu-da-xu-ly-12-10",
+      "viec": "Bảng lỗi App Xã 12/10/2026 dòng 18: người dân thấy ảnh sau xử lý (nghiệm thu) từ `da-xu-ly` — thay quyết định (b) 02/10/2026 (từ `cho-dan-xac-nhan`). Chủ dự án chọn đề xuất 'Hiện từ Đã xử lý' 12/10/2026",
+      "trang_thai": "xong",
+      "bang_chung": "commit 3fe0fdc6. domain/petition_staff_file.go VerificationPhotosVisibleToCitizen = da-xu-ly · cho-dan-xac-nhan · da-dong; app/petition_verification_photo.go chú thích ListPhotos; test bảng đủ mọi trạng thái + ca mở lại về da-xu-ly ở app/petition_staff_file_test.go. go vet + go test -p 1 ./... service-petitions xanh 12/10/2026. ADR 0047 dòng THAY G8 ghi sửa đổi 12/10/2026.",
+      "no_confirm": [],
+      "tiep_theo": "Phiếu mở lại về dang-xu-ly thì ẩn mọi ảnh nghiệm thu; xử lý xong lần nữa thì hiện CẢ ảnh cũ (bị chê) lẫn ảnh mới, không phân biệt — cắt ảnh theo lượt mở lại chưa ai quyết (đã như vậy từ (b)). Chưa thử trên app thật."
     }
   ]
 }
