@@ -5,7 +5,7 @@
  *
  *   Đo ngày 18/09/2026 trên bản thử nghiệm Version 6, mở nguội qua deep link: `location.search`
  *   mang **đúng** những gì `getRouteParams()` mang — cả tham số nền tảng (`env`, `version`) lẫn
- *   tham số riêng (hồi ấy là `t`, `src`; nay là `d`, `src` — ADR 0047), đứng cạnh nhau trong cùng
+ *   tham số riêng (hồi ấy là `t`, `src`; nay là `x`/`d`, `src` — ADR 0047), đứng cạnh nhau trong cùng
  *   một chuỗi truy vấn.
  *
  *   `zmp-sdk` tốn **256 kB thô / 64 kB gzip** vì nó kéo theo `zod` — đo được bằng cách dựng hai
@@ -81,23 +81,57 @@ export function laTenMien(chuoi: string): boolean {
 }
 
 /**
- * GỢI Ý XÃ TRÊN ĐƯỜNG LIÊN KẾT — `d` (tên miền xã) và `src`, theo quyết định 27/09/2026 (ADR 0047
- * §Trả lời). `t` và `v` đã bỏ: có mặt thì bị lờ đi, không đọc, không báo.
- *
- * `null` — mở như không có tham số — khi: không có `d`; `src` không nằm trong `NGUON_CHON_SAN`
- * (kể cả thiếu `src`: không có mặc định "coi như qr", luật 1 cấm #1); `d` không đúng khuôn tên miền.
- *
- * ⚠ KẾT QUẢ LÀ DỮ LIỆU CLIENT CUNG CẤP. Nó chỉ quyết app có HỎI máy chủ hay không; nó không chọn xã,
- * không vào phiên nếu công dân chưa bấm xác nhận (ADR 0047 điều kiện dừng #4), và không bao giờ được
- * vẽ ra như thể nó là tên xã.
- *
- * Chữ HOA trong `d` được hạ xuống: tên miền không phân biệt hoa thường, nên đây không phải đoán.
+ * The commune LAUNCH CODE on a shared-app link: exactly 12 lowercase hex characters (`?x=`, ADR 0047
+ * amendment 12/10/2026). Checked here, before any byte leaves the phone — the same gate `laTenMien` is for
+ * `?host=`. The server alone decides whether the code names a commune (`GET /api/v1/communes?code=`).
  */
-export function thamSoXa(ket_qua: KetQuaDo): { ten_mien: string; nguon: string } | null {
+const LAUNCH_CODE = /^[0-9a-f]{12}$/;
+
+export function isLaunchCode(value: string): boolean {
+  return LAUNCH_CODE.test(value);
+}
+
+/**
+ * What a trusted commune link names: a LAUNCH CODE (`x`, resolved once by the server), or — TRANSITIONAL — the
+ * commune's DOMAIN (`d`, the shape the version in Zalo review reads).
+ */
+export type CommuneLinkHint =
+  | { readonly kind: "code"; readonly code: string; readonly nguon: string } // vi-name-ok: `nguon` mirrors the existing field
+  | { readonly kind: "host"; readonly ten_mien: string; readonly nguon: string }; // vi-name-ok: existing field names
+
+/**
+ * GỢI Ý XÃ TRÊN ĐƯỜNG LIÊN KẾT — `x` (mã mở app của xã) và `src` (ADR 0047 §Sửa đổi 12/10/2026, chủ dự án), với
+ * `d` (tên miền xã, 27/09/2026) còn đọc trong THỜI GIAN CHUYỂN TIẾP. `t` và `v` đã bỏ: có mặt thì bị lờ đi.
+ *
+ * Thứ tự đọc:
+ *   1. `x` đúng khuôn (`isLaunchCode`)          → `{ kind: "code" }` — có `d` đi kèm thì `d` bị lờ, không so, không gộp
+ *   2. `x` CÓ MẶT nhưng sai khuôn (kể cả rỗng) → `null`, KHÔNG rơi xuống `d`. Một liên kết mang cả hai mà `x`
+ *      hỏng có thể đang trỏ HAI xã khác nhau; lặng lẽ lấy `d` là để app tự chọn một trong hai — gửi nhầm xã là thứ
+ *      README §Non-negotiables #2, #5 canh giữ. Mở phần giới thiệu, công dân quét lại mã đúng.
+ *   3. không có `x` → `d` đúng y như trước (`laTenMien`) → `{ kind: "host" }`.
+ *      ⚠ TRANSITIONAL (owner, 12/10/2026): the version now in Zalo review reads only `d`, so both link shapes must
+ *      work for a while. The `d` branch is REMOVED IN A LATER RELEASE — ADR 0047 §Sửa đổi 12/10/2026.
+ *
+ * `null` — mở như không có tham số — cũng khi: `src` không nằm trong `NGUON_CHON_SAN` (kể cả thiếu `src`: không
+ * có mặc định "coi như qr", luật 1 cấm #1); không có `x` và `d` sai khuôn hoặc vắng.
+ *
+ * ⚠ KẾT QUẢ LÀ DỮ LIỆU CLIENT CUNG CẤP. Nó chỉ quyết app có HỎI máy chủ hay không; mã được máy chủ đổi sang tên
+ * miền xã MỘT LẦN lúc mở (`cong-dan/man/commune-by-launch-code.tsx`), rồi mọi thứ đi tiếp bằng tên miền ấy. Nó
+ * không chọn xã, không vào phiên nếu công dân chưa bấm (ADR 0047 điều kiện dừng #4), và không bao giờ được vẽ ra
+ * như thể nó là tên xã.
+ *
+ * Chữ HOA trong `x` và `d` được hạ xuống: mã là hex, tên miền không phân biệt hoa thường — không phải đoán.
+ */
+export function thamSoXa(ket_qua: KetQuaDo): CommuneLinkHint | null {
   const p = thamSo(ket_qua);
   const nguon = p["src"] ?? "";
   if (!NGUON_CHON_SAN.has(nguon)) return null;
+  if (Object.prototype.hasOwnProperty.call(p, "x")) {
+    const code = (p["x"] ?? "").toLowerCase();
+    return isLaunchCode(code) ? { kind: "code", code, nguon } : null;
+  }
+  // TRANSITIONAL — removed in a later release (owner 12/10/2026, ADR 0047 §Sửa đổi 12/10/2026).
   const ten_mien = (p["d"] ?? "").toLowerCase();
   if (!laTenMien(ten_mien)) return null;
-  return { ten_mien, nguon };
+  return { kind: "host", ten_mien, nguon };
 }

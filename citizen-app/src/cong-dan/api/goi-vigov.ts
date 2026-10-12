@@ -20,6 +20,8 @@
  * ⚠ BA TUYẾN CÔNG KHAI (27/09/2026) — tra xã theo tên miền, danh bạ cán bộ, tin của xã — KHÔNG đi
  *   qua cổng phiên và KHÔNG mang bearer: chúng chỉ trả thứ xã đã công bố (`hop-dong-cong-khai.ts`).
  *   Cổng của chúng là TÊN MIỀN: không đúng khuôn (`lib/launch-params.ts` `laTenMien`) thì không gọi.
+ *   Tra xã theo MÃ MỞ APP (`communeByLaunchCode`, 12/10/2026) cũng công khai; cổng của nó là khuôn MÃ
+ *   (`isLaunchCode`), cùng nguyên tắc: sai khuôn thì không một byte nào đi ra.
  *   Chúng đi qua CÙNG MỘT `fetch(` ở `goi` bên dưới — tệp này vẫn chỉ có một chỗ gọi mạng.
  *
  * ⚠ ACCOUNTLESS PETITIONS (ADR 0083, 08/10/2026, TEMPORARY): three more calls with no session and no bearer,
@@ -83,6 +85,8 @@ import {
   bannersAddress,
   type CanBoCongKhai,
   type CommuneBannerItem,
+  type CommuneByCode,
+  communeByCodeAddress,
   type CommuneMapFrameRead,
   communeMapFrameAddress,
   type CommuneProfile,
@@ -101,6 +105,7 @@ import {
   newsCategoriesAddress,
   type NewsType,
   readBanners,
+  readCommunesByCode,
   readCommuneMapFrame,
   readCommuneProfiles,
   readDisasterAlerts,
@@ -115,7 +120,7 @@ import {
   readNotificationPreference,
 } from "./notification-preference";
 import { layPhienViGov } from "./phien-vigov";
-import { laTenMien } from "../../lib/launch-params";
+import { isLaunchCode, laTenMien } from "../../lib/launch-params";
 
 /**
  * Mỗi nhánh là một VIỆC NGƯỜI DÂN PHẢI LÀM khác nhau.
@@ -746,7 +751,11 @@ async function goiCongKhai<T>(
 ): Promise<NewsReadResult<T>> {
   // Cổng TÊN MIỀN đứng trước cổng địa chỉ: không có tên miền đúng khuôn thì không một byte nào đi ra.
   if (!laTenMien(ten_mien)) return { kieu: "khong-hop-le" };
-  const url = dia_chi(ten_mien);
+  return publicRead(dia_chi(ten_mien), doc);
+}
+
+/** The public read after its gate: no session, no bearer, one `goi`. `""` = no host for the service. */
+async function publicRead<T>(url: string, doc: (than: unknown) => T | null): Promise<NewsReadResult<T>> {
   if (url === "") return { kieu: "chua-cau-hinh" };
   const kq = await goi(url, { method: "GET" }, doc, { kieu: "khong-thay" });
   switch (kq.kieu) {
@@ -776,6 +785,19 @@ function identityRead<T>(kq: NewsReadResult<T>): KetQuaCongKhai<T> {
  */
 export function traXaTheoTenMien(ten_mien: string): Promise<KetQuaCongKhai<readonly XaTraDuoc[]>> {
   return goiCongKhai(ten_mien, diaChiTraXa, docXa).then(identityRead);
+}
+
+/**
+ * The commune a shared-app link's launch code names (`?x=`, ADR 0047 §Sửa đổi 12/10/2026) — read ONCE at launch;
+ * from then on the app uses the returned `host` exactly as it used the old `d`. Public, no bearer.
+ *
+ * The CODE gate stands in front, like the domain gate of the other public reads: a value that is not exactly 12
+ * lowercase hex characters is `khong-hop-le` and NOTHING is sent. `items: []` (unknown, inactive, reserved — the
+ * server answers all three with the same bytes) is `xong` with no commune; the caller decides what that means.
+ */
+export function communeByLaunchCode(code: string): Promise<KetQuaCongKhai<readonly CommuneByCode[]>> {
+  if (!isLaunchCode(code)) return Promise.resolve({ kieu: "khong-hop-le" });
+  return publicRead(communeByCodeAddress(code), readCommunesByCode).then(identityRead);
 }
 
 /**

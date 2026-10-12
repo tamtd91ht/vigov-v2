@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { type KetQuaDo, laTenMien, thamSo, thamSoMoApp, thamSoXa } from "./launch-params";
+import { isLaunchCode, type KetQuaDo, laTenMien, thamSo, thamSoMoApp, thamSoXa } from "./launch-params";
 
 /**
  * VÌ SAO TỆP NHỎ NÀY ĐÁNG CÓ:
@@ -20,8 +20,8 @@ const do_thu = (url: Record<string, string>): KetQuaDo => ({ url });
 
 describe("đọc tham số mở app", () => {
   it("trả thẳng bảng tham số của URL — một nguồn, không còn gì phải gộp", () => {
-    expect(thamSo(do_thu({ d: "xa-vi-du.vigov.example", src: "qr" }))).toEqual({
-      d: "xa-vi-du.vigov.example",
+    expect(thamSo(do_thu({ x: "0a1b2c3d4e5f", src: "qr" }))).toEqual({
+      x: "0a1b2c3d4e5f",
       src: "qr",
     });
   });
@@ -41,30 +41,68 @@ describe("đọc tham số mở app", () => {
 });
 
 /**
- * `d` + `src` (quyết định 27/09/2026, ADR 0047 §Trả lời). `d` không kèm một `src` tin được thì bị bỏ
+ * `x` + `src` (ADR 0047 §Sửa đổi 12/10/2026, chủ dự án), và `d` + `src` (27/09/2026) còn đọc trong THỜI GIAN
+ * CHUYỂN TIẾP — bản đang chờ Zalo duyệt chỉ đọc `d`; `d` bỏ ở một bản sau. Không kèm một `src` tin được thì bị bỏ
  * qua — cư xử như mở không tham số, tức KHÔNG hỏi máy chủ về xã nào. `t` và `v` đã bỏ hẳn.
  */
-describe("gợi ý xã trên đường liên kết — `d` chỉ được đọc khi `src` là qr hoặc zns", () => {
+describe("gợi ý xã trên đường liên kết — `x` trước, `d` chuyển tiếp, chỉ khi `src` là qr hoặc zns", () => {
+  const X = "0a1b2c3d4e5f";
   const D = "xa-vi-du.vigov.example";
 
-  it("qr và zns: trả tên miền và nguồn", () => {
-    expect(thamSoXa(do_thu({ d: D, src: "qr" }))).toEqual({ ten_mien: D, nguon: "qr" });
-    expect(thamSoXa(do_thu({ d: D, src: "zns" }))).toEqual({ ten_mien: D, nguon: "zns" });
+  it("`x` một mình — qr và zns: trả mã và nguồn", () => {
+    expect(thamSoXa(do_thu({ x: X, src: "qr" }))).toEqual({ kind: "code", code: X, nguon: "qr" });
+    expect(thamSoXa(do_thu({ x: X, src: "zns" }))).toEqual({ kind: "code", code: X, nguon: "zns" });
   });
 
-  it("không `src`, `src` lạ, hay `src` viết hoa: bỏ qua `d` — không có mặc định 'coi như qr'", () => {
-    for (const src of [undefined, "", "share", "QR", "email", "constructor", "__proto__"]) {
-      const tham_so: Record<string, string> = { d: D };
-      if (src !== undefined) tham_so["src"] = src;
-      expect(thamSoXa(do_thu(tham_so)), `src=${String(src)}`).toBeNull();
+  it("`d` một mình (chuyển tiếp) — qr và zns: trả tên miền và nguồn, đúng như trước 12/10", () => {
+    expect(thamSoXa(do_thu({ d: D, src: "qr" }))).toEqual({ kind: "host", ten_mien: D, nguon: "qr" });
+    expect(thamSoXa(do_thu({ d: D, src: "zns" }))).toEqual({ kind: "host", ten_mien: D, nguon: "zns" });
+  });
+
+  it("cả `x` lẫn `d`: `x` thắng, `d` bị lờ — không so, không gộp", () => {
+    expect(thamSoXa(do_thu({ d: D, x: X, src: "qr" }))).toEqual({ kind: "code", code: X, nguon: "qr" });
+  });
+
+  it("`x` có mặt nhưng sai khuôn thì KHÔNG rơi xuống `d` — hai tham số có thể trỏ hai xã", () => {
+    for (const x of ["", "0a1b2c3d4e5", "0a1b2c3d4e5g", D]) {
+      expect(thamSoXa(do_thu({ x, d: D, src: "qr" })), `x=${x}`).toBeNull();
     }
   });
 
-  it("`t` và `v` không còn nghĩa gì: không thay được `d`, không đi kèm được `d`", () => {
+  it("không `src`, `src` lạ, hay `src` viết hoa: bỏ qua cả `x` lẫn `d` — không có mặc định 'coi như qr'", () => {
+    for (const src of [undefined, "", "share", "QR", "email", "constructor", "__proto__"]) {
+      for (const base of [{ x: X }, { d: D }] as Array<Record<string, string>>) {
+        const tham_so: Record<string, string> = { ...base };
+        if (src !== undefined) tham_so["src"] = src;
+        expect(thamSoXa(do_thu(tham_so)), `src=${String(src)}`).toBeNull();
+      }
+    }
+  });
+
+  it("`t` và `v` không còn nghĩa gì: không thay được `x`/`d`, không đi kèm được chúng", () => {
     expect(thamSoXa(do_thu({ t: D, src: "qr" }))).toBeNull();
     expect(thamSoXa(do_thu({ t: "01JDEMXA00000000000000000A", src: "qr" }))).toBeNull();
     expect(thamSoXa(do_thu({ v: "2", src: "zns" }))).toBeNull();
-    expect(thamSoXa(do_thu({ d: D, t: "x", v: "2", src: "qr" }))).toEqual({ ten_mien: D, nguon: "qr" });
+    expect(thamSoXa(do_thu({ d: D, t: "x", v: "2", src: "qr" }))).toEqual({ kind: "host", ten_mien: D, nguon: "qr" });
+    expect(thamSoXa(do_thu({ x: X, t: "y", v: "2", src: "qr" }))).toEqual({ kind: "code", code: X, nguon: "qr" });
+  });
+
+  it("`x` sai khuôn (không đúng 12 ký tự hex) thì bỏ qua — chặn rác trước khi một byte nào đi ra", () => {
+    for (const x of [
+      "",
+      "0a1b2c3d4e5",
+      "0a1b2c3d4e5f0",
+      "0a1b2c3d4e5g",
+      " 0a1b2c3d4e5f",
+      "0a1b2c3d4e5f ",
+      "0a1b-2c3d4e5",
+      "0a1b2c3d4e5f\n",
+      D,
+      "01JDEMXA00000000000000000A",
+    ]) {
+      expect(thamSoXa(do_thu({ x, src: "qr" })), `x=${x}`).toBeNull();
+      expect(isLaunchCode(x.toLowerCase()), `x=${x}`).toBe(false);
+    }
   });
 
   it("`d` sai khuôn tên miền thì bỏ qua — chặn rác ở giao diện, máy chủ vẫn là bên quyết", () => {
@@ -88,8 +126,11 @@ describe("gợi ý xã trên đường liên kết — `d` chỉ được đọc
     }
   });
 
-  it("chữ hoa trong `d` được hạ xuống — tên miền không phân biệt hoa thường", () => {
-    expect(thamSoXa(do_thu({ d: "XA-Vi-Du.VIGOV.example", src: "qr" }))).toEqual({ ten_mien: D, nguon: "qr" });
+  it("chữ hoa trong `x` và `d` được hạ xuống", () => {
+    expect(thamSoXa(do_thu({ x: "0A1B2C3D4E5F", src: "qr" }))).toEqual({ kind: "code", code: X, nguon: "qr" });
+    expect(thamSoXa(do_thu({ d: "XA-Vi-Du.VIGOV.example", src: "qr" }))).toEqual({ kind: "host", ten_mien: D, nguon: "qr" });
+    // The call-side gate takes only the canonical form: lower-casing is the reader's job, not the caller's.
+    expect(isLaunchCode("0A1B2C3D4E5F")).toBe(false);
   });
 
   it("không tham số nào thì không có gợi ý", () => {

@@ -12,8 +12,9 @@ import "./styles.css";
  *
  * ONE PLATFORM CALL BEFORE THE FIRST RENDER, AND ONLY ON THE SHARED APP'S COMMUNE QR PATH (owner, 12/10/2026):
  * Zalo opens the shared App ID with "ViHAT Group" on its own top bar (`app-config.json` is static per App ID).
- * The same branch `App.tsx` `AppChung` takes — a commune's own build never, a trusted `?d=&src=qr|zns` link
- * always — clears that bar now instead of after the commune lookup (`clearSharedActionBar`). Fire and forget:
+ * The same branch `App.tsx` `AppChung` takes — a commune's own build never, a trusted `?x=<code>&src=qr|zns` link
+ * — or, transitionally, `?d=<domain>&src=qr|zns` (ADR 0047 §Sửa đổi 12/10/2026) — always — clears that bar now,
+ * before the code is resolved and the commune looked up (`clearSharedActionBar`). Fire and forget:
  * outside Zalo it answers `ngoai-zalo` and nothing changes; React does not wait for it.
  */
 if (XA_CO_DINH === null && thamSoXa(thamSoMoApp()) !== null) {

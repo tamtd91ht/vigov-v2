@@ -40,7 +40,7 @@
  * ⚠ ONE EXCEPTION SINCE 08/10/2026 — a coded SDK FAILURE is reported to `vihat-miniapp` (`reportSdkFailure`).
  *   The `fetch` itself stays in `dang-nhap/goi-may-chu.ts`; what is sent is the SDK's error, never a result.
  */
-import { thamSoMoApp, thamSoXa } from "../../lib/launch-params";
+import { laTenMien } from "../../lib/launch-params"; // vi-name-ok: existing exported function
 import { XA_CO_DINH } from "../../lib/xa-co-dinh";
 import { reportClientError } from "../dang-nhap/goi-may-chu";
 
@@ -600,6 +600,20 @@ function sdkErrorCode(loi: unknown): number | null {
  * The SDK's `message` is technical text: it goes to the server log and NEVER to a screen (README §Error
  * message shape). Not awaited: the citizen's result does not wait for a diagnostic.
  */
+/**
+ * The commune domain the shared app RESOLVED from its launch code (`?x=`, ADR 0047 §Sửa đổi 12/10/2026), set once
+ * by the shell when the commune interface mounts (`App.tsx` `QrCommuneApp`). Memory only, never written down.
+ *
+ * WHY NOT READ THE LINK HERE ANY MORE: the link now carries a CODE, and `vihat-miniapp` accepts only a domain in a
+ * client-error report's `host` (`client_errors.go`). Sending the code would be rejected — or worse, stored as if it
+ * were a host. Not resolved yet (the intro, the lookup still running, a code naming no commune) → no host at all.
+ */
+let launchCommuneHost: string | null = null;
+
+export function rememberLaunchCommuneHost(host: string): void {
+  launchCommuneHost = laTenMien(host) ? host : null;
+}
+
 function reportSdkFailure(capability: ZaloCapability, code: number, loi: unknown): void {
   const message = (loi as { message?: unknown }).message;
   void reportClientError({
@@ -608,7 +622,7 @@ function reportSdkFailure(capability: ZaloCapability, code: number, loi: unknown
     message: typeof message === "string" ? message : "",
     app_id: readRuntimeAppId(),
     // Same precedence as the shell (`App.tsx`): a commune's own build is that commune, whatever the link says.
-    host: XA_CO_DINH ?? thamSoXa(thamSoMoApp())?.ten_mien ?? null,
+    host: XA_CO_DINH ?? launchCommuneHost,
   });
 }
 

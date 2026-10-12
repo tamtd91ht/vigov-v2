@@ -28,6 +28,7 @@
  */
 export { KenhCongDan, NutVaoKenhCongDan } from "./man/KenhCongDan";
 export { TrangXa, type XaCuaApp } from "./man/TrangXa";
+export { CommuneByLaunchCode } from "./man/commune-by-launch-code";
 export type { FeedbackDraftStore, KetQuaLayTen, LayTenZalo, NhapPhieu } from "./man/trai-nghiem";
 export type { GetSceneLocation, SceneLocationFailure, SceneLocationResult } from "./man/scene-location";
 export type { PickScenePhotos, ScenePhotoPickResult, ScenePhotoSource } from "./man/scene-photos";

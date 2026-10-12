@@ -11,7 +11,7 @@ vi.mock("../dang-nhap/goi-may-chu", () => ({ reportClientError }));
 const sdk = { getAccessToken: vi.fn(), getPhoneNumber: vi.fn() };
 vi.mock("zmp-sdk", () => sdk);
 
-const { xinMaDangNhap } = await import("./zalo-api");
+const { rememberLaunchCommuneHost, xinMaDangNhap } = await import("./zalo-api"); // vi-name-ok: existing export
 const { CLIENT_ERROR_FIELDS, clientErrorBody } = await import("../dang-nhap/hop-dong");
 
 afterEach(() => {
@@ -51,6 +51,27 @@ describe("reporting a failed SDK call", () => {
     await xinMaDangNhap();
 
     expect(reportClientError).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `host` is the commune domain the shared app RESOLVED from its launch code (ADR 0047 §Sửa đổi 12/10/2026) — never
+ * the code itself, which `vihat-miniapp` (`client_errors.go`) would refuse as a host. Not resolved → no host.
+ */
+describe("the host a report names", () => {
+  it("nothing before the commune is resolved; the resolved domain after; never a launch code", async () => {
+    sdk.getAccessToken.mockRejectedValue({ code: -1401, message: "x" });
+
+    await xinMaDangNhap();
+    expect(reportClientError).toHaveBeenLastCalledWith(expect.objectContaining({ host: null }));
+
+    rememberLaunchCommuneHost("xa-vi-du.vigov.example");
+    await xinMaDangNhap();
+    expect(reportClientError).toHaveBeenLastCalledWith(expect.objectContaining({ host: "xa-vi-du.vigov.example" }));
+
+    rememberLaunchCommuneHost("0a1b2c3d4e5f");
+    await xinMaDangNhap();
+    expect(reportClientError).toHaveBeenLastCalledWith(expect.objectContaining({ host: null }));
   });
 });
 

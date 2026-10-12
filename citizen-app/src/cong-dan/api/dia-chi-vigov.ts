@@ -16,7 +16,8 @@
  * host không ai kiểm được nó đúng hay sai:
  *
  *   `petitions` — `/api/v1/my-citizen-reports…` (cần phiên ViGov)
- *   `identity`  — `/api/v1/communes?host=` (màn xác nhận xã) · `/api/v1/commune-staff?host=` (danh bạ) ·
+ *   `identity`  — `/api/v1/communes?host=` (màn xác nhận xã) · `/api/v1/communes?code=` (mã mở app `x` →
+ *                 tên miền xã, một lần lúc mở, 12/10/2026) · `/api/v1/commune-staff?host=` (danh bạ) ·
  *                 `/api/v1/my-residential-units` (ô chọn thôn ở form gửi — cần phiên ViGov, 09/10/2026)
  *   `comms`     — `/api/v1/commune-news?host=` · `/api/v1/commune-news/{id}?host=` (tin của xã) ·
  *                 `/api/v1/commune-disaster-alerts?host=` (cảnh báo thiên tai, công khai) ·

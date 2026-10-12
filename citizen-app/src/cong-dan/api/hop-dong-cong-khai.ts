@@ -2,6 +2,10 @@
  * HỢP ĐỒNG CỦA BA TUYẾN CÔNG KHAI THEO TÊN MIỀN XÃ — đường dẫn, tham số, và cách đọc thân trả lời.
  *
  *   GET identity  /api/v1/communes?host=<tên miền>        → { items: [{ name, province }] }
+ *                                                             (`launch_code` may also be present — this app
+ *                                                             never reads it; `scripts/commune-qr.mjs` does)
+ *   GET identity  /api/v1/communes?code=<12 hex>          → { items: [{ name, province, host }] } — zero or
+ *                                                             one item (ADR 0047 §Sửa đổi 12/10/2026)
  *   GET identity  /api/v1/commune-profiles?host=…         → { items: [{ name, office_address, hotline,
  *                                                             office_hours_text, logo_url? }] }
  *                                                             (cdbf276; logo_url: d93851b9, ADR 0069)
@@ -54,6 +58,7 @@
  * ấy lặng lẽ.
  */
 import { diaChiViGov } from "./dia-chi-vigov";
+import { laTenMien } from "../../lib/launch-params";
 
 export const DUONG_DAN_XA = "/api/v1/communes";
 export const COMMUNE_PROFILES_PATH = "/api/v1/commune-profiles";
@@ -80,6 +85,12 @@ function voiHost(goc: string, ten_mien: string, them: Record<string, string> = {
 
 export function diaChiTraXa(ten_mien: string): string {
   return voiHost(diaChiViGov("identity", DUONG_DAN_XA), ten_mien);
+}
+
+/** The launch code in `?code=` — `URLSearchParams` encodes it; the caller has already checked its shape. */
+export function communeByCodeAddress(code: string): string {
+  const base = diaChiViGov("identity", DUONG_DAN_XA);
+  return base === "" ? "" : `${base}?${new URLSearchParams({ code }).toString()}`;
 }
 
 export function communeProfilesAddress(ten_mien: string): string {
@@ -163,6 +174,34 @@ export function docXa(than: unknown): readonly XaTraDuoc[] | null {
     const { name, province } = m as Record<string, unknown>;
     if (!laChuoi(name) || !laChuoi(province)) return null;
     ra.push({ ten: name, tinh: province });
+  }
+  return ra;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+ * XÃ THEO MÃ MỞ APP (`?code=`, ADR 0047 §Sửa đổi 12/10/2026)
+ * ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/** The commune a launch code names: what `TrangXa` shows, plus the domain every later public read uses. */
+export type CommuneByCode = { readonly ten: string; readonly tinh: string; readonly host: string };
+
+/**
+ * `null` = malformed (a field missing or not a string). An empty array = no commune — and so is an item whose
+ * `host` fails `laTenMien`: a host this app would refuse to send in `?host=` cannot become the commune it
+ * opens, so it is dropped here and the caller sees "no commune", never a half-usable answer.
+ *
+ * More than one item is passed through as-is; the caller treats anything but exactly one as "no commune",
+ * the same rule `docXa`'s callers apply.
+ */
+export function readCommunesByCode(than: unknown): readonly CommuneByCode[] | null {
+  const items = docMang(than);
+  if (items === null) return null;
+  const ra: CommuneByCode[] = [];
+  for (const m of items) {
+    if (typeof m !== "object" || m === null) return null;
+    const { name, province, host } = m as Record<string, unknown>;
+    if (!laChuoi(name) || !laChuoi(province) || !laChuoi(host)) return null;
+    if (laTenMien(host)) ra.push({ ten: name, tinh: province, host });
   }
   return ra;
 }

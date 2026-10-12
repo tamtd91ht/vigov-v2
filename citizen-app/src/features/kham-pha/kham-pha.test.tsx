@@ -332,8 +332,9 @@ describe("khoá tra `?host=` của tin tức và danh bạ", () => {
  * chính `App`, không dựng một mảnh của nó: ai đó "nối tạm" một tên xã dựng từ tham số QR vào `App.tsx`
  * thì đây là ca đỏ lên.
  *
- * 27/09/2026: tham số tên miền là `d` (ADR 0047 §Trả lời). `t` và `v` đã bỏ — chúng vẫn nằm trong
- * danh sách dưới để ghim rằng chúng KHÔNG mở gì. `d` không kèm `src` tin được, hoặc sai khuôn, cũng thế.
+ * 12/10/2026: tham số là mã mở app `x` (ADR 0047 §Sửa đổi 12/10/2026); `d` (tên miền, 27/09/2026) còn đọc trong
+ * thời gian chuyển tiếp. `t` và `v` đã bỏ — chúng vẫn nằm trong danh sách dưới để ghim rằng chúng KHÔNG mở gì.
+ * `x`/`d` không kèm `src` tin được, hoặc sai khuôn, cũng thế — và một `x` sai khuôn KHÔNG rơi xuống `d` đi kèm.
  */
 describe("app mở bằng một liên kết không đủ tin — fail closed, không hỏi máy chủ", () => {
   const MO = [
@@ -347,6 +348,13 @@ describe("app mở bằng một liên kết không đủ tin — fail closed, kh
     "?src=QR&d=xa-vi-du.vigov.example",
     "?src=qr&d=https://xa-vi-du.vigov.example",
     "?src=qr&d=xa%20vi%20du",
+    "?src=qr&x=0a1b2c3d4e5g&d=xa-vi-du.vigov.example",
+    "?x=0a1b2c3d4e5f",
+    "?src=share&x=0a1b2c3d4e5f",
+    "?src=QR&x=0a1b2c3d4e5f",
+    "?src=qr&x=0a1b2c3d4e5",
+    "?src=qr&x=xa-vi-du.vigov.example",
+    "?src=qr&x=0a1b2c3d4e5g",
   ];
 
   it("không hiện màn xác nhận, không hiện tên xã nào, không hiện lối vào kênh công dân", () => {
@@ -371,23 +379,30 @@ describe("app mở bằng một liên kết không đủ tin — fail closed, kh
 });
 
 /**
- * ĐƯỜNG LIÊN KẾT ĐỦ TIN (`d` đúng khuôn + `src` qr/zns) → GIAO DIỆN ĐẦY ĐỦ CỦA XÃ (chủ dự án 06/10/2026: app
+ * ĐƯỜNG LIÊN KẾT ĐỦ TIN (`x` đúng khuôn + `src` qr/zns) → GIAO DIỆN ĐẦY ĐỦ CỦA XÃ (chủ dự án 06/10/2026: app
  * của xã chưa nộp được, nên công dân MƯỢN app chung — cùng `TrangXa` app riêng dựng).
  *
  * `renderToStaticMarkup` không chạy hiệu ứng, nên lượt dựng đầu tiên là đúng thứ người dân thấy trong lúc
- * app hỏi máy chủ tên xã: một câu chờ, KHÔNG một tên xã nào, KHÔNG tên miền nào. `TrangXa` chiếm cả màn hình
+ * app đổi mã sang xã: một câu chờ, KHÔNG một tên xã nào, KHÔNG mã nào. `TrangXa` chiếm cả màn hình
  * như ở app riêng: không header ViHAT, không thanh tab, không bước xác nhận cũ. Tên xã chỉ hiện khi máy chủ
  * trả lời — `cong-dan/cong-khai.test.tsx` và `commune-screens.test.tsx` kiểm bước ấy.
  */
-describe("app mở bằng QR có `d` — giao diện của xã, hỏi máy chủ, không tự dựng tên xã", () => {
-  for (const chuoi of ["?src=qr&d=xa-vi-du.vigov.example", "?d=xa-vi-du.vigov.example&src=zns"]) {
-    it(`mở bằng "${chuoi}": câu chờ của app xã, không header ViHAT, không tab, không tên xã, không tên miền`, () => {
+describe("app mở bằng QR có `x` (hoặc `d` chuyển tiếp) — giao diện của xã, hỏi máy chủ, không tự dựng tên xã", () => {
+  for (const chuoi of [
+    "?src=qr&x=0a1b2c3d4e5f",
+    "?x=0A1B2C3D4E5F&src=zns",
+    "?src=qr&d=xa-vi-du.vigov.example",
+    "?d=xa-vi-du.vigov.example&src=zns",
+    "?src=qr&x=0a1b2c3d4e5f&d=xa-vi-du.vigov.example",
+  ]) {
+    it(`mở bằng "${chuoi}": câu chờ của app xã, không header ViHAT, không tab, không tên xã, không mã/tên miền`, () => {
       const markup = moVoi(chuoi, () => render(<App />));
       const chu = textOf(markup);
       expect(chu).toContain(APP_RIENG.dang_mo);
       expect(chu).not.toContain(COMPANY.name);
       expect(markup).not.toContain("tabbar");
       expect(chu).not.toContain(TIEU_DE_XAC_NHAN_XA);
+      expect(chu.toLowerCase()).not.toContain("0a1b2c3d4e5f");
       expect(chu).not.toContain("xa-vi-du");
       expect(chu).not.toContain("Bạn cần liên hệ với xã này?");
       expect(chu).not.toContain(NHAN_KENH_CONG_DAN);

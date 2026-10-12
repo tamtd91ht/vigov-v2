@@ -377,7 +377,7 @@ export type PhienViGovQuaCau = {
  *
  * TUỲ CHỌN VÀ KHÔNG LÀM HỎNG PHIÊN: trường này mới, và một máy chủ cũ không gửi nó. Sai khuôn thì chỉ
  * mất hai màn công khai — không mất phiên, vì gửi phản ánh không cần tên miền. Chữ thường hoá trước khi
- * kiểm, đúng cách `thamSoXa` đọc `d`: tên miền không phân biệt hoa thường, và khuôn `laTenMien` thì có.
+ * kiểm: tên miền không phân biệt hoa thường, và khuôn `laTenMien` thì có.
  */
 function docTenMienPhien(v: unknown): string | null {
   if (typeof v !== "string") return null;

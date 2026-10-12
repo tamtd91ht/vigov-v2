@@ -4,6 +4,7 @@ import { feedbackDraftStore, sharedAppDraftStore } from "./commune-app/feedback-
 import { TabBar } from "./components/TabBar";
 import {
   type CommuneAppSessionResult,
+  CommuneByLaunchCode,
   type GetSceneLocation,
   type KetQuaMoPhien,
   type LayTenZalo,
@@ -40,6 +41,7 @@ import {
   minimiseMiniApp,
   readRuntimeAppId,
   readZaloProfile,
+  rememberLaunchCommuneHost,
   type ScenePhotoPick,
   type SdkFailure,
   setCommuneActionBar,
@@ -72,8 +74,8 @@ import { XA_CO_DINH } from "./lib/xa-co-dinh";
  * WHY NOT A ROUTER:
  *
  *   Four sibling screens with no deep-linkable state do not need history. The one deep link the app
- *   reads (`?d=<commune domain>&src=qr|zns`, ADR 0047) swaps the WHOLE app for the commune's interface
- *   (`QrCommuneApp`, owner 06/10/2026), not a route, so there is still nothing to route.
+ *   reads (`?x=<launch code>&src=qr|zns`, or the transitional `?d=<domain>`, ADR 0047 §Sửa đổi 12/10/2026) swaps the WHOLE app for the commune's
+ *   interface (`QrCommuneApp`, owner 06/10/2026), not a route, so there is still nothing to route.
  */
 
 /**
@@ -506,13 +508,19 @@ const layTenChoXa: LayTenZalo = async (mode) => {
 /**
  * THE SHARED VIHAT APP — two shapes, chosen once from the launch link (read at mount; `location.search` is
  * synchronous, so the branch never changes between renders and each branch keeps its own hooks):
- *   a trusted commune link (`?d=<host>&src=qr|zns`, `thamSoXa`) → `QrCommuneApp`, the commune's full interface
- *   anything else                                                → `SharedAppIntro`, the ViHAT intro and tabs
+ *   a trusted commune link with a code (`?x=<code>&src=qr|zns`) → the code is resolved to the commune's domain ONCE
+ *                                                               (`CommuneByLaunchCode`, in the commune look — no
+ *                                                               ViHAT intro flashes), then `QrCommuneApp` on it
+ *   TRANSITIONAL: no `x`, a trusted `?d=<host>&src=qr|zns`      → `QrCommuneApp` on that host, as before 12/10/2026;
+ *                                                               removed in a later release (ADR 0047 §Sửa đổi 12/10/2026)
+ *   anything else (a malformed `x` included — `thamSoXa`)       → `SharedAppIntro`, the ViHAT intro and tabs
  */
 function AppChung() {
   const [thamSo] = useState<KetQuaDo>(thamSoMoApp);
   const goiY = thamSoXa(thamSo);
-  return goiY !== null ? <QrCommuneApp ten_mien={goiY.ten_mien} /> : <SharedAppIntro />;
+  if (goiY === null) return <SharedAppIntro />;
+  if (goiY.kind === "host") return <QrCommuneApp ten_mien={goiY.ten_mien} />;
+  return <CommuneByLaunchCode code={goiY.code}>{(host) => <QrCommuneApp ten_mien={host} />}</CommuneByLaunchCode>;
 }
 
 /** The ViHAT intro and tabs — the shared app opened WITHOUT a commune QR. Unchanged by 06/10/2026. */
@@ -605,7 +613,8 @@ export function toSharedAppSessionResult(result: ReopenWithPhoneResult): Commune
 /**
  * The shared app's session opener for ONE commune host. It IGNORES the identity host `TrangXa` hands out: that
  * host is where a commune's OWN App ID logs in (ADR 0066); the shared App ID logs in through `vihat-miniapp`.
- * The host it sends is the QR's `d` — the commune whose public pages the citizen is looking at — and the
+ * The host it sends is the one the QR's launch code resolved to (or, transitionally, the QR's `d`) — the commune whose public pages the citizen is
+ * looking at — and the
  * session is still kept only if the server's commune name equals the name on screen (`openCommuneAppSession`).
  *
  * `skip` (ADR 0080, after "Gửi bằng họ tên và số điện thoại"): the bridge body WITHOUT `phoneToken`
@@ -631,7 +640,7 @@ export function openSharedAppSession(
  * whole screen, as in `AppRieng`: no ViHAT header, tab bar or chat button; the commune name is on every screen
  * and the send button names the commune (README §Non-negotiables #2, #5).
  *
- * `d` STEERS THE INTERFACE AND GRANTS NOTHING (ADR 0005 · 0019 · 0022): it picks whose PUBLIC pages are looked
+ * The domain (resolved from `x`, or the transitional `d`) STEERS THE INTERFACE AND GRANTS NOTHING (ADR 0005 · 0019 · 0022): it picks whose PUBLIC pages are looked
  * up. A session opens only by the citizen's explicit act through `TrangXa`'s gate (`commune-session.ts`), and
  * is kept only if its commune name equals the one on screen (`cong-dan/api/mo-phien-vigov.ts`).
  *
@@ -652,6 +661,8 @@ function QrCommuneApp({ ten_mien }: { ten_mien: string }) {
   const draftStore = useMemo(() => sharedAppDraftStore(ten_mien), [ten_mien]);
   // Zalo sets the App ID before our code runs: present = inside Zalo, where the minimise bubble has somewhere to go.
   const [insideZalo] = useState(() => readRuntimeAppId() !== null);
+  // A failed SDK call reported from here on names this commune's domain — never the launch code (`zalo-api.ts`).
+  useEffect(() => rememberLaunchCommuneHost(ten_mien), [ten_mien]);
   return (
     <TrangXa
       ten_mien={ten_mien}

@@ -23,7 +23,8 @@
  * KHÔNG CÓ MENU CÁC XÃ: tuyến ấy cố ý không có lệnh "liệt kê" — nó trả lời đúng một câu hỏi cho đúng
  * một đích. Nên khi không cờ, script hỏi người gõ tên đích, không đưa danh sách.
  *
- * QR mở App ViHAT vào một xã (`zalo.me/s/<App ID app chung>/?d=<host>&src=qr`) KHÔNG phải việc của
+ * QR mở App ViHAT vào một xã (`zalo.me/s/<App ID app chung>/?x=<mã mở app>&src=qr`; trong thời gian chuyển
+ * tiếp cả `?d=<host>&src=qr`, ADR 0047 §Sửa đổi 12/10/2026) KHÔNG phải việc của
  * bước đẩy: nó làm ở platform-admin (chi tiết xã → "Mở bằng app ViHAT"), hoặc `npm run qr` (`make-qr.mjs`).
  *
  * Mọi hàm ở đây THUẦN — nhận dữ liệu, trả dữ liệu hoặc ném lỗi, không đọc đĩa, không đọc môi

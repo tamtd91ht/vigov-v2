@@ -1321,7 +1321,7 @@ type TrangTra =
   | { readonly kieu: "xong"; readonly xa: XaCuaApp };
 
 export function TrangXa(props: {
-  /** Tên miền xã: nung vào bản dựng (`lib/xa-co-dinh.ts`), hoặc `d` của QR xã trên app chung (`QrCommuneApp`). */
+  /** Tên miền xã: nung vào bản dựng (`lib/xa-co-dinh.ts`), hoặc trên app chung (`QrCommuneApp`) tên miền mà mã `x` của QR xã phân giải ra — hay, trong thời gian chuyển tiếp, `d` của QR (12/10/2026). */
   ten_mien: string;
   /**
    * Lấy họ tên từ Zalo (`getUserInfo`), do lớp vỏ tiêm — nửa này không nhập zmp-sdk (`ranh-gioi-hai-nua.test.ts`
