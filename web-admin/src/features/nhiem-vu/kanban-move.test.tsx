@@ -15,6 +15,7 @@ import {
 } from "@/lib/quyen";
 
 import { KANBAN_CARD_ROLE } from "./kanban-drag";
+import { EMPTY_SELECTION, type TaskSelection } from "./batch-delete";
 import { menuKey } from "./kanban-move-menu";
 import { serverTransitions } from "./task-transitions.fixture";
 import {
@@ -101,7 +102,7 @@ function page(items: readonly petitions_nhiemVuRa[]): page_Result_petitions_nhie
   return { items: [...items], next_cursor: "", has_more: false };
 }
 
-function board(task: petitions_nhiemVuRa, move: KanbanMove | null): string {
+function board(task: petitions_nhiemVuRa, move: KanbanMove | null, selection: TaskSelection | null = null): string {
   const cot: readonly CotKanban[] = TRANG_THAI_CHINH.map((ma) => ({
     ma,
     tai: { pha: "xong" as const, duLieu: page(ma === task.status ? [task] : []) },
@@ -116,6 +117,7 @@ function board(task: petitions_nhiemVuRa, move: KanbanMove | null): string {
       moNhiemVu={() => {}}
       counts={{ pha: "dangTai" }}
       move={move}
+      selection={selection}
     />,
   );
 }
@@ -275,6 +277,19 @@ describe("the board — allowed, denied, pending, refused, done", () => {
     // accessible name above is unchanged.
     expect(html).toContain('class="nut-chuyen-cot-gon"');
     expect(html).toContain(`title="${KANBAN_MOVE_BUTTON}"`);
+  });
+
+  it("owner 12/10/2026: the move button sits IN the hover-filled `Chọn` row; without a checkbox there is no fill", () => {
+    const selection: TaskSelection = { selected: EMPTY_SELECTION, toggle: () => {}, disabled: false };
+    const withRow = board(TASK, moveWith(), selection);
+    const row = /<div class="[^"]*hover:bg-canvas[^"]*">(.*?)<button type="button" class="text-ink block/s.exec(withRow)?.[1] ?? "";
+    expect(row).toContain("Chọn");
+    expect(row).toContain('class="nut-chuyen-cot-gon"');
+    expect(row).not.toContain('id="the-nhiem-vu-NV19"');
+    // No delete right → no checkbox → no row and no fill; the button floats at the corner.
+    const noRow = board(TASK, moveWith());
+    expect(noRow).not.toContain("hover:bg-canvas");
+    expect(noRow).toContain('<div class="absolute top-2 right-2 z-[1]"><div class="chuyen-cot">');
   });
 
   it("DENIED — no `task.update` and not the assignee: no drag handle, no menu; the card still opens", () => {

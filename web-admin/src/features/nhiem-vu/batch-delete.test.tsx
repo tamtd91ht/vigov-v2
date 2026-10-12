@@ -324,16 +324,16 @@ describe("checkboxes — allowed and DENIED", () => {
     expect(html).toMatch(/aria-label="Chọn NV19" checked=""[^>]*\/><svg[^>]*peer-checked:opacity-100/);
   });
 
-  it("sheet row 12: ONE hover fill over the whole card header (strip, `Chọn`, code, title)", () => {
+  it("owner 12/10/2026 (prototype TaskCard.tsx:53): the hover fill covers ONLY the `Chọn` row with the move button, never the title", () => {
     const html = board(SELECTION);
     const card = /<article[^>]*data-task-card=""[^>]*>(.*?)<\/article>/s.exec(html)?.[1] ?? "";
-    const header = /^<div class="([^"]*)">/.exec(card)?.[1] ?? "";
-    expect(header).toContain("hover:bg-canvas");
-    // The `Chọn` row no longer carries a fill of its own, and the title sits inside the same header.
-    expect(card).not.toMatch(/<label class="[^"]*hover:bg-canvas/);
-    const headerEnd = card.indexOf("</button></div>");
-    expect(card.indexOf("Chọn")).toBeLessThan(headerEnd);
-    expect(card.indexOf('id="the-nhiem-vu-NV19"')).toBeLessThan(headerEnd);
+    // Exactly one element on the card carries the fill, and it is the row holding `Chọn`.
+    expect(card.match(/hover:bg-canvas/g)?.length).toBe(1);
+    const row = /<div class="[^"]*hover:bg-canvas[^"]*">(.*?)<button type="button" class="text-ink block/s.exec(card)?.[1] ?? "";
+    expect(row).toContain("Chọn");
+    // The title is NOT inside the filled row.
+    expect(row).not.toContain('id="the-nhiem-vu-NV19"');
+    expect(card).toContain('id="the-nhiem-vu-NV19"');
   });
 });
 

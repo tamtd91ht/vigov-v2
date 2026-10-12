@@ -2963,6 +2963,21 @@ export function TheNhiemVu({
   const late = !completedLate && isOverdueNow(nhiemVu, bayGio);
   const children = childCountLabel(nhiemVu.child_count);
   const extensions = extensionCountText(nhiemVu.extension_count);
+  // The keyboard path to moving the card — drag-and-drop alone has none (a11y). An icon button, its menu
+  // floating over the card.
+  const moveMenu = hasMenu ? (
+    <KanbanMoveMenu
+      compact
+      code={nhiemVu.code}
+      targets={targets}
+      labels={nhanTT}
+      disabled={busy}
+      showReturnNote={canReturn}
+      onMove={(t) => move.move(nhiemVu, t, "menu")}
+    />
+  ) : null;
+  // A checkbox row (`Chọn` + the move button) exists only when the account may select (delete right).
+  const headerRow = selection !== null && !overlay;
 
   return (
     <article
@@ -2987,49 +3002,41 @@ export function TheNhiemVu({
       aria-describedby={canDrag ? drag.attributes["aria-describedby"] : undefined}
       {...(canDrag ? drag.listeners : {})}
     >
-      {/* THE CARD HEADER — strip, `Chọn`, the move button, code and title — is ONE hover area
-          (customer sheet row 12): the fill used to cover only the thin `Chọn` row, so pointing at the
-          title lit a band above it and nothing under it. The menu sits inside, so pointing at it keeps
-          the fill. `bg-canvas` = the prototype's `hover:bg-surface` (token trap: our `surface` is white). */}
-      <div className={cn("relative rounded-t-[9px] transition-colors", !overlay && "hover:bg-canvas")}>
+      <div className="relative">
         <div
           className={cn("h-[3px] rounded-t-[9px]", strip.className)}
           style={strip.style}
           aria-hidden="true"
         />
-        {selection !== null && !overlay && (
-          // OUTSIDE the open button, never inside it: a checkbox in a button is a nested control.
-          <label className="text-ink-muted m-0 flex cursor-pointer items-center gap-2 px-3 pt-2.5 text-[11px]">
-            <CardCheckbox
-              label={selectLabel(nhiemVu.code)}
-              checked={selection.selected.has(nhiemVu.code)}
-              disabled={selection.disabled}
-              onToggle={() => selection.toggle(nhiemVu)}
-            />
-            Chọn
-          </label>
-        )}
-        {/* The keyboard path to moving the card — drag-and-drop alone has none (a11y). An icon button
-            at the corner, its menu floating over the card. */}
-        {hasMenu && (
-          <div className="absolute top-2 right-2 z-[1]">
-            <KanbanMoveMenu
-              compact
-              code={nhiemVu.code}
-              targets={targets}
-              labels={nhanTT}
-              disabled={busy}
-              showReturnNote={canReturn}
-              onMove={(t) => move.move(nhiemVu, t, "menu")}
-            />
+        {/* THE HOVER FILL COVERS ONLY THE ROW OF `Chọn` AND THE MOVE BUTTON — the prototype's
+            `hover:bg-surface` on that row (`TaskCard.tsx:53`), owner 12/10/2026: lighting the title as well
+            (customer sheet row 12) read as the whole card being selected. The button sits IN the row, so
+            the fill encloses it. `bg-canvas` = the prototype's `bg-surface` (token trap: our `surface` is
+            white). No checkbox (no delete right): no row, the button floats at the corner. */}
+        {selection !== null && !overlay ? (
+          <div className="hover:bg-canvas flex items-center gap-2 px-3 pt-1.5 pb-0.5 transition-colors">
+            {/* OUTSIDE the open button, never inside it: a checkbox in a button is a nested control. */}
+            <label className="text-ink-muted m-0 flex min-h-8 flex-1 cursor-pointer items-center gap-2 text-[11px]">
+              <CardCheckbox
+                label={selectLabel(nhiemVu.code)}
+                checked={selection.selected.has(nhiemVu.code)}
+                disabled={selection.disabled}
+                onToggle={() => selection.toggle(nhiemVu)}
+              />
+              Chọn
+            </label>
+            {moveMenu !== null && <div className="relative z-[1] -mr-1">{moveMenu}</div>}
           </div>
+        ) : (
+          moveMenu !== null && <div className="absolute top-2 right-2 z-[1]">{moveMenu}</div>
         )}
         <button
           type="button"
           className={cn(
-            "text-ink block w-full cursor-pointer border-0 bg-transparent px-3 pt-3 pb-0 text-left [font-family:inherit]",
+            "text-ink block w-full cursor-pointer border-0 bg-transparent px-3 pb-0 text-left [font-family:inherit]",
             "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500",
-            hasMenu && selection === null && "pr-11",
+            headerRow ? "pt-1.5" : "pt-3",
+            hasMenu && !headerRow && "pr-11",
           )}
           onClick={() => moNhiemVu(nhiemVu)}
           aria-expanded={nhiemVu.code === maDangMo}

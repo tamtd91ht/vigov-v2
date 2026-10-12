@@ -51,9 +51,11 @@ describe("rows 7, 13, 16 — globals.css", () => {
     expect(CSS).toMatch(/html:has\(dialog:modal\) \{\s*overflow: hidden;/);
   });
 
-  it("row 13: the card's move menu uses the app's menu size (36px rows, 14px text)", () => {
+  it("row 13 + owner 12/10/2026: the card's move menu is at the card's type size (32px rows, 12.8px text), no wider than a card", () => {
     const rule = /\.menu-noi \.menu-chuyen-cot button \{([^}]*)\}/.exec(CSS)?.[1] ?? "";
-    expect(rule).toContain("min-height: 2.25rem;");
-    expect(rule).toContain("font-size: 0.875rem;");
+    expect(rule).toContain("min-height: 2rem;");
+    expect(rule).toContain("font-size: 0.8rem;");
+    expect(rule).not.toContain("nowrap");
+    expect(/\.menu-noi \{([^}]*)\}/.exec(CSS)?.[1] ?? "").toContain("max-width: 15rem;");
   });
 });

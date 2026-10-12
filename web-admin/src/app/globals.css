@@ -3310,6 +3310,7 @@ aside.khoi-chua-khai h3 {
   right: 0;
   z-index: 30;
   min-width: 13rem;
+  max-width: 15rem;
   box-shadow: 0 4px 16px rgba(30, 49, 80, 0.16);
   border-radius: 0.5rem;
   background: #fff;
@@ -3319,15 +3320,18 @@ aside.khoi-chua-khai h3 {
   margin: 0;
 }
 
-/* The card's floating move menu at the app's ONE menu size — `components/ui/action-menu.tsx` `ITEM`:
- * 36px rows, 14px text (customer sheet row 13: the 44px / 16px rows of the old full-width menu read as
- * oversized over a 12.8px card). Only the compact menu: the full-size `nut-phu` variant keeps its rule. */
+/* The card's floating move menu at the CARD's type size: 12.8px text = the card title (`text-[12.8px]`),
+ * 32px rows. Customer sheet row 13 had brought it down from 16px to the app menu's 14px; the owner
+ * (12/10/2026, screenshot `ui-bug/nhiem-vu-chuyen-trang-thai.png`) still read it as oversized over a card
+ * whose largest text is 12.8px. NOT `nowrap`: a one-line menu is wider than a 240px card, and in the first
+ * column it ran past the board's edge and lost its first letters — `.menu-noi`'s `max-width` holds it to a
+ * card's width and the longest item wraps instead. Only the compact menu: `nut-phu` keeps its rule. */
 .menu-noi .menu-chuyen-cot button {
-  min-height: 2.25rem;
+  min-height: 2rem;
   padding: 0.375rem 0.625rem;
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  line-height: 1.25;
+  line-height: 1.3;
 }
 
 .menu-noi .ghi-chu {
