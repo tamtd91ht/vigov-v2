@@ -265,6 +265,14 @@ export function createSessionGate(
         setState({ kieu: "dang-mo" });
         return;
       }
+      // SENDING ASKS ZALO AT ONCE (owner, 12/10/2026: "bỏ luôn layout 'Cần xác nhận số điện thoại của bà con'…
+      // chỉ hiển thị xin quyền luôn khi người dùng click vào phản ánh lần đầu"). The tap on "Gửi phản ánh" IS the
+      // citizen's act; Zalo's own dialog asks the consent, and a NO still lands on `tu-choi` with the typed-contact
+      // path (ADR 0080). The other acts keep the explanation first.
+      if (task === "submit") {
+        void openAndFollow("ask");
+        return;
+      }
       setState({ kieu: "hoi" });
     },
 

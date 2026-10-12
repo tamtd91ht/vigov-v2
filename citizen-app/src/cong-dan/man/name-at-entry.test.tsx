@@ -238,6 +238,9 @@ function nameBridge(answer: Awaited<ReturnType<NameBridge>>) {
   return { bridge, calls };
 }
 
+/** The home entry card's title, removed 12/10/2026 (owner) — pinned here so it cannot come back unnoticed. */
+const OLD_NAME_CARD_TITLE = "Điền sẵn họ tên khi gửi phản ánh";
+
 const entry = (bridge?: NameBridge) =>
   createElement(TrangXa, { ten_mien: "thu.vigov.vn", ...(bridge ? { lay_ten: bridge } : {}) });
 
@@ -248,19 +251,16 @@ describe("the entry asks Zalo for the name ONCE and passes it down", () => {
     // StrictMode mounted twice; the platform was asked once, and never with the dialog.
     expect(calls).toEqual(["check"]);
     expect(host.textContent).toContain(XA_TN.xin_chao_ten(NAME));
-    expect(host.textContent).not.toContain(XA_TN.name_card_title);
+    expect(host.textContent).not.toContain(OLD_NAME_CARD_TITLE);
     expect(host.textContent).not.toContain(OLD_BUTTON);
     await unmount();
   });
 
-  it("not allowed yet: the card says WHY before any dialog, and nothing is asked until the citizen taps", async () => {
+  it("not allowed yet: NO card on home (owner 12/10/2026) — nothing is asked until the first 'Gửi phản ánh'", async () => {
     const { bridge, calls } = nameBridge({ kieu: "tu-choi" });
     const { host, unmount } = await mount(entry(bridge));
     expect(calls).toEqual(["check"]);
-    expect(host.textContent).toContain(XA_TN.name_card_title);
-    expect(host.textContent).toContain(XA_TN.name_card_why);
-    expect(host.textContent).toContain(XA_TN.name_card_agree);
-    expect(host.textContent).toContain(XA_TN.name_card_decline);
+    expect(host.textContent).not.toContain(OLD_NAME_CARD_TITLE);
     // No greeting with a name that does not exist — and nothing else in its place (the prototype's header, owner
     // 11/10/2026: no province fallback).
     expect(host.textContent).not.toContain("Xin chào");
@@ -272,7 +272,7 @@ describe("the entry asks Zalo for the name ONCE and passes it down", () => {
     const { bridge, calls } = nameBridge({ kieu: "ngoai-zalo" });
     const { host, unmount } = await mount(entry(bridge));
     expect(calls).toEqual(["check"]);
-    expect(host.textContent).not.toContain(XA_TN.name_card_title);
+    expect(host.textContent).not.toContain(OLD_NAME_CARD_TITLE);
     expect(host.textContent).not.toContain("Xin chào");
     expect(host.textContent).not.toContain(commune.tinh);
     await unmount();
@@ -288,7 +288,7 @@ describe("the entry asks Zalo for the name ONCE and passes it down", () => {
 
   it("no bridge injected (dev, tests): nothing is asked, nothing is offered", async () => {
     const { host, unmount } = await mount(entry());
-    expect(host.textContent).not.toContain(XA_TN.name_card_title);
+    expect(host.textContent).not.toContain(OLD_NAME_CARD_TITLE);
     expect(host.textContent).toContain(commune.ten);
     await unmount();
   });
@@ -368,8 +368,7 @@ describe("Cá nhân: the name is DISPLAY ONLY", () => {
     expect(XA_TN.chua_co_ten).toBe("Chưa xác định");
     expect(html).toContain(XA_TN.chua_co_ten);
     expect(html).not.toContain(OLD_BUTTON);
-    expect(html).not.toContain(XA_TN.name_card_agree);
-  });
+      });
 
   it("with a name → the name", () => {
     const html = personal(NAME);

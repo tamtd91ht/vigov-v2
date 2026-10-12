@@ -61,35 +61,31 @@ function harness(open: OpenCommuneAppSession) {
 
 /* ─────────────────────────────── the gate: ask first, fallback second ─────────────────────────────── */
 
-describe("gate — the invitation to share comes first, the typed path only when Zalo gave no number", () => {
-  it("send: `hoi` first and NOTHING opened; the typed path is not even offered before the citizen answers", () => {
+/** Lets the open `require` starts on its own (sending, owner 12/10/2026) run to its end. */
+const settle = () => new Promise<void>((r) => setTimeout(r, 0));
+
+describe("gate — sending asks Zalo at once, the typed path only when Zalo gave no number", () => {
+  it("send: NO `hoi` step — Zalo is asked at once (owner 12/10/2026), and a verified session runs the send", async () => {
+    const open = vi.fn<OpenCommuneAppSession>(async () => VERIFIED);
+    const run = vi.fn();
+    const states: (SessionGateState | null)[] = [];
+    const gate = createSessionGate(open, () => COMMUNE, (s) => states.push(s));
+    gate.require(run, "submit");
+    await settle();
+    expect(states).not.toContainEqual({ kieu: "hoi" });
+    expect(open.mock.calls.map((c) => c[1])).toEqual<SessionPhone[]>(["ask"]);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it("the other acts still explain first: `hoi`, and nothing opened", () => {
     const open = vi.fn<OpenCommuneAppSession>(async () => VERIFIED);
     const { gate, last } = harness(open);
-    gate.require(() => {}, "submit");
+    gate.require(() => {}, "mine");
     expect(last()).toEqual({ kieu: "hoi" });
     expect(open).not.toHaveBeenCalled();
   });
 
-  it("declined → `tu-choi` with the typed path; the tap opens a PHONE-LESS session (`skip`) and runs the send once", async () => {
-    const open = vi.fn<OpenCommuneAppSession>(async () => PHONE_LESS);
-    const run = vi.fn();
-    const { gate, last } = harness(open);
-    gate.require(run, "submit");
-    gate.decline();
-    expect(last()).toEqual({ kieu: "ket-qua", outcome: "tu-choi" });
-    expect(offersManualSend("tu-choi", "submit")).toBe(true);
-    expect(open).not.toHaveBeenCalled();
-    await gate.manual();
-    expect(open.mock.calls.map((c) => c[1])).toEqual<SessionPhone[]>(["skip"]);
-    expect(run).toHaveBeenCalledTimes(1);
-    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: COMMUNE, phone_verified: false });
-    // The next send runs at once on that session — the citizen is not asked again in this open.
-    gate.require(run, "submit");
-    expect(run).toHaveBeenCalledTimes(2);
-    expect(open).toHaveBeenCalledTimes(1);
-  });
-
-  it("agreed, Zalo's dialog refused → `tu-choi`, the send is KEPT for the typed path", async () => {
+  it("Zalo's dialog refused → `tu-choi`, the send is KEPT; the typed path opens a PHONE-LESS session (`skip`) once", async () => {
     const open = vi
       .fn<OpenCommuneAppSession>()
       .mockResolvedValueOnce({ kieu: "tu-choi" })
@@ -97,19 +93,25 @@ describe("gate — the invitation to share comes first, the typed path only when
     const run = vi.fn();
     const { gate, last } = harness(open);
     gate.require(run, "submit");
-    await gate.allow();
+    await settle();
     expect(last()).toEqual({ kieu: "ket-qua", outcome: "tu-choi" });
+    expect(offersManualSend("tu-choi", "submit")).toBe(true);
     await gate.manual();
     expect(open.mock.calls.map((c) => c[1])).toEqual<SessionPhone[]>(["ask", "skip"]);
     expect(run).toHaveBeenCalledTimes(1);
+    expect(layPhienViGov()).toEqual({ token: "tok-test", ten_xa: COMMUNE, phone_verified: false });
+    // The next send runs at once on that session — the citizen is not asked again in this open.
+    gate.require(run, "submit");
+    expect(run).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(2);
   });
 
-  it("agreed, identity issued a PHONE-LESS session (the commune app's retry) → `no-phone` first, then the tap runs it with NO second open", async () => {
+  it("identity issued a PHONE-LESS session (the commune app's retry) → `no-phone` first, then the tap runs it with NO second open", async () => {
     const open = vi.fn<OpenCommuneAppSession>(async () => PHONE_LESS);
     const run = vi.fn();
     const { gate, last } = harness(open);
     gate.require(run, "submit");
-    await gate.allow();
+    await settle();
     // Told before the form asks them to type: the citizen agreed to share, and Zalo gave nothing.
     expect(last()).toEqual({ kieu: "ket-qua", outcome: "no-phone" });
     expect(run).not.toHaveBeenCalled();

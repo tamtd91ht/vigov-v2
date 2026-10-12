@@ -52,6 +52,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+
 function harness(open: OpenCommuneAppSession) {
   const states: (SessionGateState | null)[] = [];
   const gate = createSessionGate(open, () => COMMUNE, (s) => states.push(s));
@@ -80,18 +81,21 @@ describe("gate — the accountless path only when Zalo refused the ACCESS TOKEN"
     const run = vi.fn();
     const { gate, last } = harness(open);
     gate.require(run, "submit");
-    await gate.allow();
+    await settle();
     expect(last()).toEqual({ kieu: "ket-qua", outcome: "thu-lai", zalo: ACCESS });
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("declined, then 'Gửi bằng họ tên…' fails the SAME way (the phone-less open needs the access token too) → offered", async () => {
-    const open = vi.fn<OpenCommuneAppSession>(async () => ({ kieu: "thu-lai", zalo: ACCESS }));
+  it("declined in Zalo's dialog, then 'Gửi bằng họ tên…' fails on the access token (the phone-less open needs it too) → offered", async () => {
+    const open = vi
+      .fn<OpenCommuneAppSession>()
+      .mockResolvedValueOnce({ kieu: "tu-choi" })
+      .mockResolvedValueOnce({ kieu: "thu-lai", zalo: ACCESS });
     const { gate, last } = harness(open);
     gate.require(() => {}, "submit");
-    gate.decline();
+    await settle();
     await gate.manual();
-    expect(open).toHaveBeenCalledTimes(1);
+    expect(open.mock.calls.map((c) => c[1])).toEqual(["ask", "skip"]);
     const s = last()!;
     expect(s.kieu === "ket-qua" && offersAccountless(s.outcome, "submit", s.zalo)).toBe(true);
   });
@@ -100,7 +104,7 @@ describe("gate — the accountless path only when Zalo refused the ACCESS TOKEN"
     const open = vi.fn<OpenCommuneAppSession>(async () => ({ kieu: "thu-lai", zalo: ACCESS }));
     const { gate, last } = harness(open);
     gate.require(() => {}, "submit");
-    await gate.allow();
+    await settle();
     gate.reset();
     gate.require(() => {}, "lookup");
     expect(last()).toEqual({ kieu: "ket-qua", outcome: "thu-lai", zalo: ACCESS });
@@ -113,17 +117,19 @@ describe("gate — the accountless path only when Zalo refused the ACCESS TOKEN"
     const open = vi.fn<OpenCommuneAppSession>(async () => ({ kieu: "thu-lai", zalo: ACCESS_TRANSIENT }));
     const { gate, last } = harness(open);
     gate.require(() => {}, "submit");
-    await gate.allow();
+    await settle();
     gate.reset();
     gate.require(() => {}, "submit");
-    expect(last()).toEqual({ kieu: "hoi" });
+    await settle();
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(last()).toEqual({ kieu: "ket-qua", outcome: "thu-lai", zalo: ACCESS_TRANSIENT });
   });
 
   it("a session that opens later still runs acts normally (the memory only stands while there is no session)", async () => {
     const open = vi.fn<OpenCommuneAppSession>(async () => ({ kieu: "thu-lai", zalo: ACCESS }));
     const { gate } = harness(open);
     gate.require(() => {}, "submit");
-    await gate.allow();
+    await settle();
     datPhienViGov({ token: "t", ten_xa: COMMUNE, phone_verified: true });
     const run = vi.fn();
     gate.require(run, "mine");

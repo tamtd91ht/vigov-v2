@@ -695,6 +695,14 @@
       "viec": "(1) Mở app chung bằng QR xã: main.tsx xoá tiêu đề thanh Zalo + đổi màu đỏ của xã (clearSharedActionBar) TRƯỚC lần render đầu, tên xã điền sau như cũ — người dân không thấy 'ViHAT Group' trên thanh. Màn chờ tải của chính Zalo (tên đăng ký App ID) thì app không đổi được. (2) Quyền số điện thoại: trước getPhoneNumber gọi getSetting → authorize({scopes:['scope.userPhonenumber']}) (grantPhoneScope) để Zalo ghi nhớ quyền, mục quyền của Mini App hiện BẬT; từ chối = tu-choi, Zalo cũ không có authorize thì lùi về hộp của getPhoneNumber. Lệnh cấm authorize/getSetting trong phase1-collects-nothing.test.ts thu hẹp còn MỘT tệp zalo-api.ts; scope khác số điện thoại vẫn cấm tuyệt đối. Khai báo KHAI_BAO_LOI_GOI + hai chính sách quyền riêng tư.",
       "bang_chung": "citizen-app: tsc sạch, vitest 73 tệp/1954 test xanh (sdk-failure.test.ts thêm 6 ca authorize). CHƯA thử trên điện thoại thật: thời điểm thanh Zalo đổi và công tắc quyền sau authorize.",
       "con_no": "Chủ dự án kiểm trên máy thật; Developer Console phải cấp quyền số điện thoại cho App ID; nộp lại mô tả quyền cho Zalo."
+    },
+    {
+      "id": "bo-the-ten-va-man-giai-thich-gui-12-10",
+      "menu": "phan-anh-app-xa",
+      "trang_thai": "xong",
+      "viec": "App xã (ADR 0050 §Sửa đổi 12/10/2026): bỏ thẻ 'Điền sẵn họ tên khi gửi phản ánh' ở trang chủ (TrangXa NameCard + chuỗi name_card_*); bấm 'Gửi phản ánh' khi chưa có phiên thì hỏi Zalo ngay (commune-session.ts require: task submit → openAndFollow('ask')), không màn 'Cần xác nhận số điện thoại của bà con'; tên chưa có đi cùng bước số (nameAfterPhone đặt trong requireSession). Màn chờ/kết quả của cổng gửi mang tiêu đề 'Gửi phản ánh'. Các việc khác (Phản ánh của tôi, Tra cứu, đánh giá, Nhận thông báo) giữ màn giải thích.",
+      "bang_chung": "citizen-app: tsc sạch, vitest 73 tệp/1954 test xanh (typed-contact, accountless-petition, hieu-ung-khong-phien, name-at-entry sửa theo hành vi mới). CHƯA thử trên điện thoại thật.",
+      "con_no": "Chủ dự án kiểm trên máy thật; mô tả quyền nộp Zalo phải nói đủ mục đích vì không còn màn giải thích trước hộp thoại (chính sách 3.3.4)."
     }
   ]
 }

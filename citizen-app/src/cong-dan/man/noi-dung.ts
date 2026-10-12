@@ -1081,16 +1081,8 @@ export const XA_TN = {
   o_tin_tuc: "Tin tức",
   o_su_kien: "Sự kiện",
   xin_chao_ten: (ten: string) => `Xin chào, ${ten}`,
-  // The entry card (`TrangXa`, 29/09/2026): the ONLY place the app asks Zalo for the name. It must say
-  // what the name is for before Zalo's own dialog appears — policy 3.3.4 (`features/tinh-nang/khung.tsx`).
-  name_card_title: "Điền sẵn họ tên khi gửi phản ánh",
-  name_card_why:
-    "Để bà con không phải gõ lại họ tên mỗi lần gửi phản ánh tới xã, ứng dụng xin phép dùng tên Zalo của bà con. Tên chỉ nằm trên điện thoại này và chỉ đi tới xã khi bà con tự bấm gửi phản ánh.",
-  name_card_zalo_asks:
-    "Bấm “Đồng ý” thì Zalo sẽ hỏi bà con thêm một lần. Không đồng ý thì bà con vẫn dùng ứng dụng bình thường và tự gõ họ tên khi gửi phản ánh.",
-  name_card_agree: "Đồng ý",
-  name_card_decline: "Không, tôi sẽ tự gõ tên",
-  name_card_asking: "Đang chờ bà con trả lời Zalo…",
+  // The home entry card ("Điền sẵn họ tên khi gửi phản ánh") was REMOVED 12/10/2026 (owner): the name is asked by
+  // Zalo with the number on the first "Gửi phản ánh" (`TrangXa` `asksName`).
   /** Zalo refused the name with a code (`zaloFailureSentence`). Not asked again in this open — no retry. */
   name_zalo_failed: (zalo: string) => `${zalo} Bà con vẫn dùng ứng dụng bình thường và tự gõ họ tên khi gửi phản ánh.`,
   /**

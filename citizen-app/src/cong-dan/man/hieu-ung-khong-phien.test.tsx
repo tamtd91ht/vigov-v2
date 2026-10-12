@@ -1134,20 +1134,15 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     expect(buttonsNamed(khung, XA_TN.huy_bo)).toEqual([]);
   }
 
-  it("name not settled: the explanation names BOTH; one tap → number, then name; (a); never asked again", async () => {
+  it("name not settled: the FIRST tap on 'Gửi phản ánh' asks Zalo at once — number, then name; (a); never asked again", async () => {
     const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: NAME });
     const { khung, go } = await mountApp(bridge);
     expect(calls).toEqual(["check"]);
 
     await press(sendTile(khung));
-    // Policy 3.3.4: the purpose of BOTH dialogs is said before either opens; nothing asked yet.
-    expect(khung.textContent).toContain(COMMUNE_APP_SESSION.why_with_name);
-    expect(khung.textContent).toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
-    expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks);
-    expect(openSession).not.toHaveBeenCalled();
-    expect(calls).toEqual(["check"]);
-
-    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+    // Owner 12/10/2026: no "Cần xác nhận số điện thoại" block — Zalo's own dialogs ask, on this very tap.
+    expect(khung.textContent).not.toContain(COMMUNE_PHONE_WORDS.title);
+    expect(buttonsNamed(khung, PHONE_VERIFICATION.allow)).toEqual([]);
     expect(openSession).toHaveBeenCalledTimes(1);
     expect(calls).toEqual(["check", "ask"]);
     await toWritingStep(khung);
@@ -1169,7 +1164,6 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "tu-choi" });
     const { khung, go } = await mountApp(bridge);
     await press(sendTile(khung));
-    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
     await toWritingStep(khung);
     expect(calls).toEqual(["check", "ask"]);
     expect(doc().getElementById("xa-ho-ten")!.getAttribute("aria-required")).toBe("true");
@@ -1184,32 +1178,23 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     await go();
   });
 
-  it("name already settled at open: the gate speaks of the number only and asks Zalo for nothing else; (a)", async () => {
+  it("name already settled at open: the first send asks Zalo for the number only, nothing else; (a)", async () => {
     const { bridge, calls } = nameBridge({ kieu: "xong", ho_ten: NAME }, { kieu: "xong", ho_ten: "never asked" });
     const { khung, go } = await mountApp(bridge);
     await press(sendTile(khung));
-    expect(khung.textContent).toContain(COMMUNE_APP_SESSION.zalo_asks);
-    // The commune gate's voice ("bà con", owner 11/10/2026).
-    expect(khung.textContent).toContain(COMMUNE_PHONE_WORDS.why);
-    expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
-    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
+    expect(openSession).toHaveBeenCalledTimes(1);
     await toWritingStep(khung);
     expect(calls).toEqual(["check"]);
     expect(khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
     await go();
   });
 
-  it("name declined on the home card: the gate does not ask it again; (c)", async () => {
+  it("no entry card on home (owner 12/10/2026): opening the app asks Zalo nothing but the silent check", async () => {
     const { bridge, calls } = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: "never asked" });
     const { khung, go } = await mountApp(bridge);
-    await press(buttonsNamed(khung, XA_TN.name_card_decline)[0]!);
-    await press(sendTile(khung));
-    expect(khung.textContent).not.toContain(COMMUNE_APP_SESSION.zalo_asks_with_name);
-    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
-    await toWritingStep(khung);
+    expect(khung.textContent).not.toContain("Điền sẵn họ tên khi gửi phản ánh");
     expect(calls).toEqual(["check"]);
-    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
-    expect(doc().getElementById("xa-dien-thoai")).toBeNull();
+    expect(openSession).not.toHaveBeenCalled();
     await go();
   });
 
@@ -1218,7 +1203,6 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     const { khung, go } = await mountApp(bridge);
     openSession.mockResolvedValueOnce({ kieu: "tu-choi" });
     await press(sendTile(khung));
-    await press(buttonsNamed(khung, PHONE_VERIFICATION.allow)[0]!);
     expect(openSession).toHaveBeenCalledTimes(1);
     expect(calls).toEqual(["check"]);
     await go();
@@ -1334,7 +1318,7 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     await go();
   });
 
-  it("no popup when the name is already settled — given at open (a), or declined on the home card (c)", async () => {
+  it("no popup when the name is already settled — given at open (a)", async () => {
     const given = nameBridge({ kieu: "xong", ho_ten: NAME }, { kieu: "xong", ho_ten: "never asked" });
     const a = await mountApp(given.bridge);
     verifiedSessionExists();
@@ -1344,18 +1328,6 @@ describe("app xã — cổng gửi phản ánh: hỏi họ tên cùng bước x�
     expect(a.khung.textContent).toContain(XA_PA.sender_summary_with_phone(NAME));
     expect(given.calls).toEqual(["check"]);
     await a.go();
-
-    datPhienViGov(null);
-    const declined = nameBridge({ kieu: "tu-choi" }, { kieu: "xong", ho_ten: "never asked" });
-    const c = await mountApp(declined.bridge);
-    verifiedSessionExists();
-    await press(buttonsNamed(c.khung, XA_TN.name_card_decline)[0]!);
-    await press(sendTile(c.khung));
-    expect(namePrompt(c.khung)).toBeNull();
-    await toWritingStep(c.khung);
-    expect(doc().getElementById("xa-ho-ten")).not.toBeNull();
-    expect(declined.calls).toEqual(["check"]);
-    await c.go();
   });
 });
 

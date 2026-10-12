@@ -476,39 +476,6 @@ export const NHOM_CHUC_NANG: ReadonlyArray<{ tieu_de: string; vach: SectionAccen
 ];
 
 /**
- * THE ENTRY CARD — the only place the app asks Zalo for the name, shown on the home screen right after
- * opening, and only when the silent check found no permission yet (`afterNameCheck`).
- *
- * WHY A CARD BEFORE ZALO'S DIALOG, NOT THE DIALOG STRAIGHT AWAY: Zalo's dialog says WHAT is shared, not
- * WHY. Policy 3.3.4 (quoted in `features/tinh-nang/khung.tsx`) refuses apps whose permission flow does not
- * state its purpose, and an elderly citizen who meets a system dialog the instant the app opens cannot
- * tell what they are agreeing to. So the card says why first, and the dialog opens only on "Đồng ý".
- * "Không" is an ordinary answer: the card goes away, the form's name field is simply empty.
- */
-function NameCard(props: { asking: boolean; onAgree: () => void; onDecline: () => void }) {
-  return (
-    <section className="xa-the xa-the--dem xa-khoi" aria-labelledby="xa-ten-tieu-de">
-      <h2 className="xa-dau-khoi__tieu-de" id="xa-ten-tieu-de">
-        {XA_TN.name_card_title}
-      </h2>
-      <p>{XA_TN.name_card_why}</p>
-      <p className="xa-phu">{XA_TN.name_card_zalo_asks}</p>
-      {props.asking && (
-        <p className="xa-phu" role="status">
-          {XA_TN.name_card_asking}
-        </p>
-      )}
-      <button type="button" className="xa-nut" onClick={props.onAgree} disabled={props.asking}>
-        {XA_TN.name_card_agree}
-      </button>
-      <button type="button" className="xa-nut xa-nut--phu" onClick={props.onDecline} disabled={props.asking}>
-        {XA_TN.name_card_decline}
-      </button>
-    </section>
-  );
-}
-
-/**
  * The commune's profile from `/commune-profiles` (public, by domain, no session) — or `null` while loading,
  * when the call failed, or when the answer is not exactly one profile. `null` shows NOTHING: the office
  * block is information, the app works without it, and a guessed hotline is a wrong number published by a
@@ -774,7 +741,9 @@ export function SessionGateScreen(props: {
     offersAccountless(state.outcome, props.task, state.zalo);
   return (
     <>
-      <DauManCon tieu_de={PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
+      {/* Sending never shows the "hoi" step (owner, 12/10/2026), so its waiting and result screens are titled by
+          the act the citizen tapped, not by the explanation that no longer exists. */}
+      <DauManCon tieu_de={props.task === "submit" ? XA_GIAO_DIEN.o_gui : PHONE_VERIFICATION.title} onQuayLai={props.onClose} />
       <TrangCon>
         {state.kieu === "dang-mo" && (
           <>
@@ -988,6 +957,10 @@ function AppCuaXa(props: {
    */
   function requireSession(task: PhoneVerificationTask, act: () => void, offerName = false) {
     setGateTask(task);
+    // Sending with no session asks Zalo at once (`gate.require`), with no "Đồng ý" tap to carry this flag: the
+    // name rides along exactly as that tap would have sent it. A session that already exists keeps the short
+    // name question below (`namePrompt`) — nothing is asked of Zalo on that path without it.
+    nameAfterPhone.current = task === "submit" && layPhienViGov() === null && nameNow.current.kind === "needs-consent";
     gate.require(() => {
       const verified = layPhienViGov()?.phone_verified === true;
       const askedWithPhone = nameAfterPhone.current;
@@ -1260,10 +1233,10 @@ function AppCuaXa(props: {
     // After the citizen agreed and Zalo still refused with a code, the slot says so — which capability, and
     // Zalo's code on its own secondary line — instead of going quiet on "Chưa xác định" (user rule
     // 30/09/2026: a permission the App ID lacks must be SEEN). Words and not colour alone: `role="status"`.
+    // NO ENTRY CARD since 12/10/2026 (owner: "bỏ hẳn layout 'Điền sẵn họ tên khi gửi phản ánh'"): a name not yet
+    // granted is asked by Zalo itself, in the same step as the number, on the first "Gửi phản ánh" (`asksName`).
     const name_card =
-      props.name.kind === "needs-consent" || props.name.kind === "asking" ? (
-        <NameCard asking={props.name.kind === "asking"} onAgree={props.onAgreeName} onDecline={props.onDeclineName} />
-      ) : props.name.kind === "settled" && props.name.zalo !== undefined ? (
+      props.name.kind === "settled" && props.name.zalo !== undefined ? (
         <>
           <p className="xa-loi-o" role="status">
             {XA_TN.name_zalo_failed(zaloFailureSentence(props.name.zalo))}

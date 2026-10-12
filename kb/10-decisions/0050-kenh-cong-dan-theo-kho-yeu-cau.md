@@ -56,6 +56,9 @@ phần ADR 0028** (quyết định E cho kênh Mini App), **ADR 0041** (thêm m�
 >
 > 11/10/2026 — chủ dự án: **tra cứu hồ sơ mở trang của Cổng Dịch vụ công** (thay điểm 11) —
 > §*Sửa đổi 11/10/2026*.
+>
+> 12/10/2026 — chủ dự án: **bỏ thẻ "Điền sẵn họ tên" ở trang chủ; gửi phản ánh hỏi Zalo ngay** —
+> §*Sửa đổi 12/10/2026*.
 
 ## Bối cảnh
 
@@ -237,6 +240,26 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 sơ) và vế *"hồ sơ một cửa … chưa có service sở hữu"* của §*Cái giá* điểm 11, 13. ViGov không giữ hồ sơ
 một cửa, nên không có tuyến tra cứu, không có service sở hữu, và điều kiện dừng luật 4 #2 không còn
 phát sinh cho việc này. Điểm 13 (hỏi đáp, lịch tiếp dân, khảo sát, thanh toán) **không đổi**.
+
+## Sửa đổi 12/10/2026 — bỏ thẻ "Điền sẵn họ tên" ở trang chủ; gửi phản ánh hỏi Zalo ngay, không màn giải thích
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+12/10/2026, trong phiên chính: *"ở màn hình trang chủ bỏ layout 'Điền sẵn họ tên khi gửi phản ánh' … ở
+gửi phản ánh bỏ luôn layout 'Cần xác nhận số điện thoại của bà con' … chỉ hiển thị xin quyền luôn khi
+người dùng click vào phản ánh lần đầu"*.
+
+| # | Chốt |
+|---|---|
+| 1 | Trang chủ app xã **không còn** thẻ "Điền sẵn họ tên khi gửi phản ánh". Lần kiểm im lặng lúc mở app vẫn giữ; tên chưa có thì hỏi ở lần gửi đầu (điểm 2) |
+| 2 | Bấm "Gửi phản ánh" mà chưa có phiên: **không** màn "Cần xác nhận số điện thoại của bà con" — hộp thoại của Zalo hiện ngay (số, rồi tên nếu chưa có). Từ chối vẫn ra màn kết quả với đường nhập tay (ADR 0080) / không tài khoản (ADR 0083) |
+| 3 | "Phản ánh của tôi", "Tra cứu phiếu", đánh giá, "Nhận thông báo" **giữ** màn giải thích — chủ dự án chỉ nói về gửi phản ánh |
+
+**Thay gì:** vế *"màn giải thích trước hộp thoại Zalo nói rõ xin cả họ tên và số (chính sách Zalo 3.3.4)"*
+và *"đồng ý ở thẻ trang chủ"* của hàng (d) §*Sửa đổi 09/10/2026*. Hàng (g), (h) vẫn đứng.
+
+**Cái giá:** lời nói mục đích trước hộp thoại (chính sách Zalo 3.3.4) nay chỉ còn ở **mô tả quyền nộp cho
+Zalo** — hộp thoại của Zalo hiện câu ấy. Mô tả quyền số điện thoại và tên phải nói đủ mục đích, nếu không
+vòng duyệt có thể trả về.
 
 ## ĐIỀU KIỆN DỪNG
 
