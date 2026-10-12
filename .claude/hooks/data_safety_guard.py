@@ -53,11 +53,16 @@ DANGEROUS_BASH = [
      ".gitignore blocking env files is BY DESIGN. Only the template is committed."),
 ]
 
+# (pattern, name, flags). The ORM method forms are CASE-SENSITIVE: Go exports are capitalised
+# (`.Delete(`), while lower-case `.delete(` is JavaScript's Set/Map removing one in-memory entry.
+# Matched case-insensitively, every such line under citizen-app/** was blocked as "business data"
+# because the path says "citizen" (measured 12/10/2026) — the same cry-wolf class as Go's
+# built-in delete() below.
 HARD_DELETE = [
-    (r"\bDELETE\s+FROM\b", "DELETE FROM"),
-    (r"\.\s*(Delete|DeleteAll|HardDelete)\s*\(", "hard delete"),
-    (r"\.\s*Unscoped\s*\(\s*\)\s*\.\s*Delete", "Unscoped().Delete — bypasses soft delete"),
-    (r"\bdb\.Migrator\(\)\.DropTable|\bDropColumn\b", "dropping a table / column"),
+    (r"\bDELETE\s+FROM\b", "DELETE FROM", re.I),
+    (r"\.\s*(Delete|DeleteAll|HardDelete)\s*\(", "hard delete", 0),
+    (r"\.\s*Unscoped\s*\(\s*\)\s*\.\s*Delete", "Unscoped().Delete — bypasses soft delete", 0),
+    (r"\bdb\.Migrator\(\)\.DropTable|\bDropColumn\b", "dropping a table / column", 0),
 ]
 
 # An UPDATE or DELETE with no WHERE touches every row of the table.
@@ -138,8 +143,8 @@ def check_bash(cmd: str, tool: str) -> None:
 
 def check_code(content: str, path: str, tool: str) -> None:
     hits = []
-    for pattern, name in HARD_DELETE:
-        for m in re.finditer(pattern, content, re.I):
+    for pattern, name, flags in HARD_DELETE:
+        for m in re.finditer(pattern, content, flags):
             ctx = content[max(0, m.start() - 150): m.end() + 80]
             if BUSINESS.search(ctx) or BUSINESS.search(path):
                 hits.append(f"{name} on business data")

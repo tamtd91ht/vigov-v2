@@ -604,6 +604,12 @@ CASES = [
     ("data_safety_guard", "UPDATE with WHERE on the next line", PASS,
      w("donthu/internal/store/q.go",
        'const q = `UPDATE don_thu SET trang_thai = $3\n\t WHERE tenant_id = $1 AND id = $2`')),
+    # JS Set/Map .delete() removes one entry from an in-memory collection. Matched case-insensitively
+    # it blocked every such line under citizen-app/** (the path says "citizen"), 12/10/2026.
+    ("data_safety_guard", "JS Set.delete in a citizen-app file", PASS,
+     w("citizen-app/src/cong-dan/man/pull-to-refresh.tsx", "refreshers.delete(fn);")),
+    ("data_safety_guard", "ORM .Delete( on petition data still blocked", BLOCK,
+     w("service-petitions/internal/store/q.go", "db.Model(&Petition{}).Delete(&p)")),
 
     # ---- rule 8 · secrets --------------------------------------------------
     ("secret_scan", "hardcoded secret", BLOCK,
