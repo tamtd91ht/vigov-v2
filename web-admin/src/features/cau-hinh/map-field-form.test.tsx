@@ -22,13 +22,13 @@ import type { MapFieldDraft } from "./map-field-form";
 import {
   MAP_FIELD_NOTE,
   MapFieldAddRow,
-  MapFieldDeleteForm,
+  MapFieldDeleteDialog,
   MapFieldTable,
   MapFieldToolbar,
   NO_FIELDS,
   assetTypeOptionLabel,
 } from "./map-field-tab";
-import type { RowDeleting, RowEditing } from "./map-field-tab";
+import type { RowEditing } from "./map-field-tab";
 
 /**
  * "Trường bản đồ" (spec Cấu hình 06, ADR 0079): the OPTION LOCK (an issued option value can be
@@ -169,13 +169,12 @@ describe("bodies", () => {
 
 const NOOP = () => {};
 
-function table(canWrite: boolean, rows = [ROW], editing: RowEditing | null = null, deleting: RowDeleting | null = null) {
+function table(canWrite: boolean, rows = [ROW], editing: RowEditing | null = null) {
   return renderToStaticMarkup(
     <MapFieldTable
       rows={rows}
       canWrite={canWrite}
       editing={editing}
-      deleting={deleting}
       onEdit={NOOP}
       onToggle={NOOP}
       onDelete={NOOP}
@@ -208,10 +207,9 @@ describe("field table", () => {
     expect(html).not.toContain("Thao tác");
   });
 
-  it("DENIED: an edit or delete state passed without admin.lookup renders no input", () => {
-    const html = table(false, [ROW], editingOf(editDraft(ROW)), { rowId: ROW.id, form: <form id="x" /> });
+  it("DENIED: an edit state passed without admin.lookup renders no input", () => {
+    const html = table(false, [ROW], editingOf(editDraft(ROW)));
     expect(html).not.toContain("<input");
-    expect(html).not.toContain('id="x"');
   });
 
   it("an inactive field offers Bật; an empty group says the prototype's sentence", () => {
@@ -320,10 +318,10 @@ describe("toolbar and footnote", () => {
   });
 });
 
-describe("delete is a confirm, no reason box (bug sheet row 34, 10/10/2026)", () => {
-  it("the question, Xoá / Huỷ, and the server's refusal in place — no reason field", () => {
+describe("delete is a confirm dialog, no reason box (bug sheet row 34, 10/10/2026; S33)", () => {
+  it("a dialog with the question, Huỷ / Xoá, and the server's refusal inside it — no reason field", () => {
     const html = renderToStaticMarkup(
-      <MapFieldDeleteForm
+      <MapFieldDeleteDialog
         label="Loại hình doanh nghiệp"
         error="Không tìm thấy trường."
         sending={false}
@@ -331,8 +329,10 @@ describe("delete is a confirm, no reason box (bug sheet row 34, 10/10/2026)", ()
         onCancel={NOOP}
       />,
     );
+    expect(html).toMatch(/^<dialog/);
     expect(html).toContain('aria-label="Xoá trường Loại hình doanh nghiệp"');
     expect(html).toContain("Xoá trường Loại hình doanh nghiệp?");
+    expect(html).toContain('role="alert"');
     expect(html).not.toContain('name="reason"');
     expect(html).not.toMatch(/Lý do/i);
     expect(html).toContain(">Xoá<");

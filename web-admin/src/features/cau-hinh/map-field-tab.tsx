@@ -6,6 +6,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { BUSY_DELETING, BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
@@ -30,6 +31,7 @@ import {
   formSelectCls,
   selectCls,
 } from "./config-ui";
+import { ConfigDialog } from "./config-dialog";
 import {
   CHOICE_TYPE,
   VALUE_TYPES,
@@ -293,25 +295,19 @@ export function MapFieldTab() {
                     }
                   : null
               }
-              deleting={
-                open !== null && open.kind === "delete"
-                  ? {
-                      rowId: open.row.id,
-                      form: (
-                        <MapFieldDeleteForm
-                          label={open.row.label}
-                          error={formError}
-                          sending={sending}
-                          onSubmit={() => void submit()}
-                          onCancel={close}
-                        />
-                      ),
-                    }
-                  : null
-              }
               onEdit={(row) => start({ kind: "edit", row }, editDraft(row))}
               onToggle={(row) => void toggle(row)}
               onDelete={(row) => start({ kind: "delete", row }, editDraft(row))}
+            />
+          )}
+
+          {canWrite && open !== null && open.kind === "delete" && (
+            <MapFieldDeleteDialog
+              label={open.row.label}
+              error={formError}
+              sending={sending}
+              onSubmit={() => void submit()}
+              onCancel={close}
             />
           )}
         </>
@@ -509,19 +505,16 @@ export type RowEditing = {
   readonly onCancel: () => void;
 };
 
-/** The row whose delete confirm is open, and that form. */
-export type RowDeleting = { readonly rowId: string; readonly form: ReactNode };
-
 /**
  * The field list (prototype `AssetFieldTable.tsx:94-124`) in the shared hairline frame, which scrolls
  * sideways at 320px. An edited row turns its label, Bắt buộc and Thứ tự cells into inputs; a `chon`
- * field's options, an error and the delete confirm open in a full-width row right under it.
+ * field's options and an error open in a full-width row right under it. Delete's confirm is a dialog
+ * over the list (`MapFieldDeleteDialog`), not a row.
  */
 export function MapFieldTable({
   rows,
   canWrite,
   editing,
-  deleting,
   onEdit,
   onToggle,
   onDelete,
@@ -529,7 +522,6 @@ export function MapFieldTable({
   rows: readonly comms_mapFieldSchemaOut[];
   canWrite: boolean;
   editing: RowEditing | null;
-  deleting: RowDeleting | null;
   onEdit: (row: comms_mapFieldSchemaOut) => void;
   onToggle: (row: comms_mapFieldSchemaOut) => void;
   onDelete: (row: comms_mapFieldSchemaOut) => void;
@@ -561,7 +553,6 @@ export function MapFieldTable({
             canWrite={canWrite}
             cols={cols}
             editing={canWrite && editing !== null && editing.rowId === r.id ? editing : null}
-            deleteForm={canWrite && deleting !== null && deleting.rowId === r.id ? deleting.form : null}
             onEdit={onEdit}
             onToggle={onToggle}
             onDelete={onDelete}
@@ -581,7 +572,6 @@ function FieldRow({
   canWrite,
   cols,
   editing,
-  deleteForm,
   onEdit,
   onToggle,
   onDelete,
@@ -590,7 +580,6 @@ function FieldRow({
   canWrite: boolean;
   cols: number;
   editing: RowEditing | null;
-  deleteForm: ReactNode;
   onEdit: (row: comms_mapFieldSchemaOut) => void;
   onToggle: (row: comms_mapFieldSchemaOut) => void;
   onDelete: (row: comms_mapFieldSchemaOut) => void;
@@ -740,13 +729,6 @@ function FieldRow({
           </td>
         </tr>
       )}
-      {deleteForm !== null && (
-        <tr>
-          <td colSpan={cols} className="whitespace-normal">
-            {deleteForm}
-          </td>
-        </tr>
-      )}
     </>
   );
 }
@@ -820,12 +802,15 @@ export function deleteFieldQuestion(label: string): string {
 }
 
 /**
- * Delete's CONFIRM, compact: one grey row under the field's row — the question, Xoá / Huỷ. NO REASON
- * BOX (bug sheet row 34, owner decision 10/10/2026): the request carries an empty reason and the
- * server records its fixed sentence. Focus lands on Huỷ, so a stray Enter does not delete. The
- * server's refusal shows verbatim under it.
+ * Delete's CONFIRM, in a dialog over the list — the same box as Thôn, tổ dân phố's `RetireDialog`
+ * (customer bug S33: the grey row inserted under the table row read as part of the table). The question
+ * is the visible title; the dialog's own header only names it for assistive technology. NO REASON BOX
+ * (bug sheet row 34, owner decision 10/10/2026): the request carries an empty reason and the server
+ * records its fixed sentence. Opening focus lands on the title (`ModalDialog`), never on Xoá, so a stray
+ * Enter does not delete. The server's refusal shows verbatim INSIDE the dialog, which stays open so the
+ * same click is the retry. Esc / ✕ / Huỷ are refused while the request is in flight.
  */
-export function MapFieldDeleteForm({
+export function MapFieldDeleteDialog({
   label,
   error,
   sending,
@@ -838,32 +823,39 @@ export function MapFieldDeleteForm({
   onSubmit: () => void;
   onCancel: () => void;
 }) {
+  const question = deleteFieldQuestion(label);
   return (
-    <ConfigFormRow
-      columns="sm:grid-cols-[minmax(0,1fr)_auto]"
-      aria-label={deleteFieldTitle(label)}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Escape" && !sending) onCancel();
+    <ConfigDialog
+      title={question}
+      hideHeader
+      onDismiss={() => {
+        if (!sending) onCancel();
       }}
     >
-      <p className="text-foreground m-0 self-center text-[12.5px] font-medium">{deleteFieldQuestion(label)}</p>
-      <div className="flex gap-2">
-        <Button type="submit" variant="danger" disabled={sending} aria-busy={sending}>
-          <BusyLabel busy={sending} label="Xoá" busyText={BUSY_DELETING} />
-        </Button>
-        <Button type="button" variant="outline" autoFocus onClick={onCancel} disabled={sending}>
-          Huỷ
-        </Button>
-      </div>
-      {error !== "" && (
-        <div className="col-span-full">
-          <InlineError>{error}</InlineError>
-        </div>
-      )}
-    </ConfigFormRow>
+      <ConfirmDialog
+        as="form"
+        aria-label={deleteFieldTitle(label)}
+        icon={Trash2}
+        tone="danger"
+        title={question}
+        className="m-0 p-0 shadow-none"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!sending) onSubmit();
+        }}
+        actions={
+          <>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={sending}>
+              Huỷ
+            </Button>
+            <Button type="submit" variant="danger" disabled={sending} aria-busy={sending}>
+              <BusyLabel busy={sending} label="Xoá" busyText={BUSY_DELETING} />
+            </Button>
+          </>
+        }
+      >
+        {error !== "" ? <InlineError>{error}</InlineError> : undefined}
+      </ConfirmDialog>
+    </ConfigDialog>
   );
 }

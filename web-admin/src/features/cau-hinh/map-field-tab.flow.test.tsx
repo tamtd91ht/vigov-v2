@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// jsdom: the row switch is behaviour — clicked, read from the call made and from the toasts raised.
+// jsdom: the row switch and the delete confirm are behaviour — clicked, read from the call made and from the toasts raised.
 // The markup itself is pinned in `map-field-form.test.tsx`.
 
 import { act } from "react";
@@ -15,6 +15,7 @@ const H = vi.hoisted(() => ({
   phien: null as PhienDaDoc,
   update: vi.fn(),
   list: vi.fn(),
+  remove: vi.fn(),
 }));
 vi.mock("@/features/phien/phien-hien-tai", () => ({ usePhien: () => H.phien }));
 const T = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
@@ -29,7 +30,7 @@ vi.mock("@/lib/api/map-field-schemas", () => ({
   listMapFields: H.list,
   updateMapField: H.update,
   createMapField: vi.fn(),
-  deleteMapField: vi.fn(),
+  deleteMapField: H.remove,
 }));
 
 const { MapFieldTab } = await import("./map-field-tab");
@@ -62,6 +63,7 @@ beforeEach(() => {
   T.error.mockReset();
   H.update.mockReset();
   H.list.mockReset();
+  H.remove.mockReset();
   H.list.mockResolvedValue({ ok: true, duLieu: { items: [ROW] } } satisfies KetQua<{ items: comms_mapFieldSchemaOut[] }>);
 });
 
@@ -114,5 +116,81 @@ describe("Tắt / Bật a field (ADR 0079 lô 6 #3, prototype AssetFieldTable.ts
     await settle();
     expect(el.textContent).toContain("Bạn không có quyền thực hiện thao tác này.");
     expect(T.success).not.toHaveBeenCalled();
+  });
+});
+
+function trash(el: HTMLElement): HTMLButtonElement {
+  const b = el.querySelector<HTMLButtonElement>('table button[aria-label="Xoá trường Loại hình doanh nghiệp"]');
+  expect(b, "the row's Trash2").not.toBeNull();
+  return b!;
+}
+
+function confirmButton(dialog: HTMLDialogElement): HTMLButtonElement {
+  const b = Array.from(dialog.querySelectorAll<HTMLButtonElement>('button[type="submit"]')).find(
+    (x) => x.textContent === "Xoá",
+  );
+  expect(b, "the dialog's Xoá").not.toBeUndefined();
+  return b!;
+}
+
+describe("Xoá a field: a confirm DIALOG, not a row under the table (S33)", () => {
+  it("Trash2 opens a dialog with the question; nothing is sent before Xoá", async () => {
+    H.phien = session(["asset.read", "admin.lookup"]);
+    const el = await mount();
+    expect(el.querySelector("dialog")).toBeNull();
+    act(() => trash(el).click());
+    const dialog = el.querySelector("dialog");
+    expect(dialog).not.toBeNull();
+    expect(dialog!.textContent).toContain("Xoá trường Loại hình doanh nghiệp?");
+    expect(dialog!.querySelector('[name="reason"]')).toBeNull();
+    // REGRESSION: no confirm row inserted into the table any more.
+    expect(el.querySelector("table form")).toBeNull();
+    expect(H.remove).not.toHaveBeenCalled();
+  });
+
+  it("Xoá calls deleteMapField(id), closes the dialog, toasts and reads the list again", async () => {
+    H.phien = session(["asset.read", "admin.lookup"]);
+    const el = await mount();
+    H.remove.mockResolvedValue({ ok: true, duLieu: null });
+    act(() => trash(el).click());
+    const readsBefore = H.list.mock.calls.length;
+    act(() => confirmButton(el.querySelector("dialog")!).click());
+    await settle();
+    expect(H.remove).toHaveBeenCalledTimes(1);
+    expect(H.remove).toHaveBeenCalledWith("01JMF1");
+    expect(el.querySelector("dialog")).toBeNull();
+    expect(T.success).toHaveBeenCalledWith("Đã xoá trường.");
+    expect(H.list.mock.calls.length).toBeGreaterThan(readsBefore);
+  });
+
+  it("refusal: the server's sentence shows INSIDE the dialog, which stays open; not in the table", async () => {
+    H.phien = session(["asset.read", "admin.lookup"]);
+    const el = await mount();
+    H.remove.mockResolvedValue({ ok: false, thongBao: "Không tìm thấy trường." });
+    act(() => trash(el).click());
+    act(() => confirmButton(el.querySelector("dialog")!).click());
+    await settle();
+    const dialog = el.querySelector("dialog");
+    expect(dialog).not.toBeNull();
+    expect(dialog!.querySelector('[role="alert"]')?.textContent).toBe("Không tìm thấy trường.");
+    expect(el.querySelector("table")!.textContent).not.toContain("Không tìm thấy trường.");
+    expect(T.success).not.toHaveBeenCalled();
+  });
+
+  it("Huỷ closes the dialog without a request", async () => {
+    H.phien = session(["asset.read", "admin.lookup"]);
+    const el = await mount();
+    act(() => trash(el).click());
+    const huy = Array.from(el.querySelectorAll<HTMLButtonElement>("dialog button")).find((b) => b.textContent === "Huỷ");
+    act(() => huy!.click());
+    expect(el.querySelector("dialog")).toBeNull();
+    expect(H.remove).not.toHaveBeenCalled();
+  });
+
+  it("DENIED: without admin.lookup there is no Trash2 and no dialog", async () => {
+    H.phien = session(["asset.read"]);
+    const el = await mount();
+    expect(el.querySelector('button[aria-label="Xoá trường Loại hình doanh nghiệp"]')).toBeNull();
+    expect(el.querySelector("dialog")).toBeNull();
   });
 });
