@@ -471,6 +471,10 @@ const KHOA_PHIEU_MONG_DOI = [
   // false Zalo's point untouched, ABSENT not recorded (never render absent as false). How the coordinates were
   // placed, nothing more; staff responses only (`phieuCuaToiRa` does not carry it).
   "location_citizen_adjusted",
+  // Owner 12/10/2026 (web-admin bug sheet: list photo): the LIST item's cover — one signed link (≤15 min) to the
+  // first citizen scene photo, absent when none or not permitted; the list page writes one audit entry. A link to
+  // a citizen's photograph (rule 3): rendered only as `<img src>` on the card, never logged or put in a URL.
+  "cover_photo",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */

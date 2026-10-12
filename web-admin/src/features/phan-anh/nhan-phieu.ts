@@ -403,6 +403,14 @@ export function scenePhotoAlt(index: number, total: number): string {
   return `Ảnh hiện trường ${index + 1}/${total}`;
 }
 
+/**
+ * Alt text of the list card's cover photo. Names the photo by the petition's lookup code — already
+ * printed on the same card — and nothing a citizen wrote (rule 3: no personal data in attributes).
+ */
+export function coverPhotoAlt(lookupCode: string): string {
+  return `Ảnh hiện trường của phản ánh ${lookupCode}`;
+}
+
 /** Screen-reader label of a thumbnail button. */
 export function scenePhotoOpenLabel(index: number, total: number): string {
   return `Xem cỡ lớn ${scenePhotoAlt(index, total).toLowerCase()}`;

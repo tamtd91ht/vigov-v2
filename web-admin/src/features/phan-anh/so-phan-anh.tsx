@@ -87,6 +87,7 @@ import {
   CO_QUAN_TOI_DA,
   composerTitle,
   congThaoTac,
+  coverPhotoAlt,
   DANG_TAI_SO,
   danhBaTheoMa,
   dateTimeLabel,
@@ -152,6 +153,7 @@ import {
   RESTRICTED_FLOW_NOTE,
   RESULT_PLACEHOLDER,
   SCENE_COORDINATES_NOTE,
+  scenePhotoSrc,
   LOCATION_SECTION_TITLE,
   sceneAddressLine,
   sceneCoordinates,
@@ -1075,9 +1077,11 @@ export function DanhSachThe({
  * content (two lines), the place, the sender, and status · deadline · stars-or-channel at the foot.
  * The whole card is the button that opens the drawer.
  *
- * THE TILE IS A NEUTRAL PLACEHOLDER, NEVER A PHOTO: the list carries no photo reference
- * (`petitions_phieuPhanAnhRa`), and reading `GET …/photos` per card would sign fresh links over a
- * citizen's photographs (rule 3) for twenty petitions nobody opened. The photos are in the drawer.
+ * THE TILE IS THE SERVER'S `cover_photo`, ELSE A NEUTRAL PLACEHOLDER (prototype `FeedbackCard.tsx:56-67`,
+ * owner 12/10/2026). The list route signs ONE link per petition — the first citizen scene photo — in the
+ * same list query, and writes ONE `xem_anh_hien_truong` audit entry per page, server-side. The card never
+ * calls `GET …/photos` itself: that would sign every photo of twenty petitions nobody opened (rule 3).
+ * No `cover_photo` (no photo, or not permitted) = placeholder; nothing is inferred. See `CoverTile`.
  *
  * THE SENDER IS THE SERVER'S MASKED PAIR (`cardSenderLabel`) — the prototype prints the phone in full; the
  * list route always masks (rule 3, ADR 0030), and an anonymous petition says so and nothing more.
@@ -1125,12 +1129,8 @@ export function ThePhieu({
         pastDeadline && "border-l-4 border-l-danger",
       )}
     >
-      <span
-        aria-hidden="true"
-        className="grid size-20 shrink-0 place-items-center rounded-[8px] bg-[#F7FAFC] text-ink-muted"
-      >
-        <ImageOff className="size-5 opacity-40" strokeWidth={1.6} focusable="false" />
-      </span>
+      {/* Keyed by the link: a re-read list with a FRESH link retries a tile whose old link had failed. */}
+      <CoverTile key={phieu.cover_photo?.url ?? ""} lookupCode={phieu.code} cover={phieu.cover_photo} />
 
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="flex flex-wrap items-center gap-1.5">
@@ -1184,6 +1184,53 @@ export function ThePhieu({
         </span>
       </span>
     </button>
+  );
+}
+
+/**
+ * The card's 80×80 tile. Renders the signed cover link exactly as the drawer renders its thumbnails
+ * (`scene-photos.tsx` header): a plain `<img>`, never `next/image` (the optimiser would cache a bearer
+ * credential under the commune's origin); `src` only through `scenePhotoSrc` (absolute http(s) or
+ * nothing); `referrerPolicy="no-referrer"`; NO `loading="lazy"` — a card scrolled into view after the
+ * ≤15-minute link expired would request a dead link.
+ *
+ * THE LIST IS NOT RE-READ ON A TIMER (only on filter, page, or a write), so a register left open can
+ * outlive its links. A tile already drawn keeps its bytes; one that must load a dead or broken link
+ * (`onError`) falls back to the placeholder — the same tile as "no photo", never an error box over a
+ * petition the officer did not ask about. The next list read brings a fresh link and `key` retries it.
+ */
+function CoverTile({
+  lookupCode,
+  cover,
+}: {
+  lookupCode: string;
+  cover: petitions_phieuPhanAnhRa["cover_photo"];
+}) {
+  const [broken, setBroken] = useState(false);
+  const src = cover == null ? null : scenePhotoSrc(cover);
+
+  if (src === null || broken) {
+    return (
+      <span
+        aria-hidden="true"
+        className="grid size-20 shrink-0 place-items-center rounded-[8px] bg-[#F7FAFC] text-ink-muted"
+      >
+        <ImageOff className="size-5 opacity-40" strokeWidth={1.6} focusable="false" />
+      </span>
+    );
+  }
+  return (
+    <span className="block size-20 shrink-0 overflow-hidden rounded-[8px] bg-[#F7FAFC]">
+      {/* eslint-disable-next-line @next/next/no-img-element -- see the comment above */}
+      <img
+        src={src}
+        alt={coverPhotoAlt(lookupCode)}
+        referrerPolicy="no-referrer"
+        decoding="async"
+        onError={() => setBroken(true)}
+        className="block size-full object-cover"
+      />
+    </span>
   );
 }
 

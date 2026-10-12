@@ -1430,10 +1430,48 @@ describe("prototype composition — list cards", () => {
     expect(html).toContain("Nguyễn V. A. · 09****0000");
   });
 
-  it("the tile is a neutral placeholder: NO image is loaded, no photo link is signed", () => {
-    const html = card(phieu());
+  it.each([undefined, null])("no cover_photo (%s): the tile is the neutral placeholder, NO image", (cover) => {
+    const html = card(phieu({ cover_photo: cover }));
     expect(html).not.toContain("<img");
     expect(html).not.toMatch(/src="/);
+  });
+
+  it("cover_photo: the tile is an <img> of the signed link, drawn like the drawer's thumbnails", () => {
+    const url = "https://store.example.test/t_01J/scene/1.jpg?X-Amz-Signature=abc";
+    const html = card(
+      phieu({
+        cover_photo: {
+          id: "01JPHOTO",
+          content_type: "image/jpeg",
+          size_bytes: 1024,
+          created_at: "2026-09-09T07:20:00Z",
+          url,
+          url_expires_at: "2026-09-10T02:15:00Z",
+        },
+      }),
+    );
+    expect(html.match(/<img /g)?.length).toBe(1);
+    expect(html).toContain(`src="${url.replace(/&/g, "&amp;")}"`);
+    expect(html).toContain('alt="Ảnh hiện trường của phản ánh PA-2026-0021"');
+    expect(html).toContain('referrerPolicy="no-referrer"');
+    expect(html).toContain("object-cover");
+    expect(html).not.toContain('loading="lazy"');
+  });
+
+  it("cover_photo with a non-http(s) url: placeholder, the string never reaches src", () => {
+    const html = card(
+      phieu({
+        cover_photo: {
+          id: "01JPHOTO",
+          content_type: "image/jpeg",
+          size_bytes: 1024,
+          created_at: "2026-09-09T07:20:00Z",
+          url: "javascript:alert(1)",
+          url_expires_at: "2026-09-10T02:15:00Z",
+        },
+      }),
+    );
+    expect(html).not.toContain("<img");
   });
 
   it("no address: the prototype's fallback words; no duplicate count is ever invented", () => {
