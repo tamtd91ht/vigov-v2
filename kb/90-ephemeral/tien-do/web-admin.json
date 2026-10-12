@@ -1352,6 +1352,14 @@
       "no_confirm": [],
       "bang_chung": "d447bc0e — lint, typecheck, vitest 312 tệp/5842 ca, check:api, next build xanh trên máy dev 12/10/2026. Nguyên nhân gốc đóng: make kb nay chạy `cd web-admin && node scripts/gen-api-types.mjs` ngay sau tools/ingress (người dùng đồng ý 12/10/2026).",
       "tiep_theo": ""
+    },
+    {
+      "id": "kanban-the-menu-chuyen-va-hover-12-10",
+      "viec": "Thẻ Kanban Nhiệm vụ (ảnh tmp/web/ui-bug/nhiem-vu-chuyen-trang-thai.png): menu nổi của nút ⇄ chuyển trạng thái về cỡ chữ của thẻ (12.8px, dòng 32px, rộng tối đa 15rem); nền hover chỉ phủ hàng 'Chọn' + nút ⇄, không phủ mã và tiêu đề — theo prototype TaskCard.tsx:53, thay quyết định bảng lỗi khách dòng 12.",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "bang_chung": "1b26d973 — globals.css .menu-noi/.menu-chuyen-cot, so-nhiem-vu.tsx thẻ Kanban; test batch-delete, kanban-move, sheet-layout. vitest 312 tệp/5843 ca xanh; đo trên /xem-thu/nhiem-vu (next dev, máy dev): mục menu 12.8px cao 32px, hàng hover chứa nút ⇄, không chứa tiêu đề.",
+      "tiep_theo": ""
     }
   ]
 }
