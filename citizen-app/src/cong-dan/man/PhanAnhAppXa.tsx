@@ -448,21 +448,45 @@ export function completeLookupCode(typed: string): string | null {
   return `PA-${compact.slice(2, 6)}-${compact.slice(6, 10)}-${compact.slice(10, 14)}`;
 }
 
+/** Diacritic-free, lower-case words; any punctuation is a word break ("hẻm 13," → ["hem", "13"]). PURE. */
+export function searchWords(s: string): readonly string[] {
+  return boDau(s)
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w !== "");
+}
+
 /**
- * The citizen's OWN loaded petitions that match `query` — ON THE PHONE, nothing typed is sent anywhere. Case- and
- * diacritic-insensitive like the directory (`boDau`): the field's name, the content excerpt, and the code. The code
- * is compared without its dashes and only from three characters on: every code starts with "PA", so a one- or
+ * One typed word against the petition's words: a NUMBER must equal a whole word ("13" must not find "hẻm 130" — a
+ * different alley), a word with letters matches the START of a word, so a half-typed "rac th" already finds
+ * "Rác thải". PURE.
+ */
+function wordMatches(typed: string, words: readonly string[]): boolean {
+  return /^\p{N}+$/u.test(typed) ? words.includes(typed) : words.some((w) => w.startsWith(typed));
+}
+
+/**
+ * The citizen's OWN loaded petitions that match `query` — ON THE PHONE, nothing typed is sent anywhere.
+ *
+ * KEYWORDS, NOT A PHRASE (owner, 12/10/2026): "rac thai", "hem 13" or "mui hoi rac" all find "Rác thải ở hẻm 13 quá
+ * nhiều, gây mùi hôi" — EVERY typed word must appear, in any order, among the words of the field's name and the content
+ * excerpt; case, diacritics and punctuation do not matter (`boDau`). The excerpt is what the list read carries — the
+ * server cuts it at 140 characters (`hop-dong-phan-anh.ts`), so a word only in the rest of a long text is not found
+ * here; the detail screen has the whole text.
+ *
+ * The code is compared without its dashes and only from three characters on: every code starts with "PA", so a one- or
  * two-letter query would otherwise match the whole list through the prefix. PURE.
  */
 export function filterOwnPetitions(items: readonly PhieuCuaToiTomTat[], query: string): readonly PhieuCuaToiTomTat[] {
-  const q = boDau(query.trim());
-  if (q === "") return items;
-  const compact = q.replace(/[\s#-]/g, "");
-  return items.filter(
-    (p) =>
-      [nhanLinhVuc(p.linh_vuc, p.nhan_linh_vuc), p.trich_noi_dung].some((t) => boDau(t).includes(q)) ||
-      (compact.length >= 3 && boDau(p.ma_tra_cuu).replace(/-/g, "").includes(compact)),
-  );
+  const typed = searchWords(query);
+  if (typed.length === 0) return items;
+  const compact = boDau(query.trim()).replace(/[\s#-]/g, "");
+  return items.filter((p) => {
+    const words = searchWords(`${nhanLinhVuc(p.linh_vuc, p.nhan_linh_vuc)} ${p.trich_noi_dung}`);
+    return (
+      typed.every((t) => wordMatches(t, words)) ||
+      (compact.length >= 3 && boDau(p.ma_tra_cuu).replace(/-/g, "").includes(compact))
+    );
+  });
 }
 
 /**

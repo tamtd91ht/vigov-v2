@@ -122,6 +122,22 @@ describe("row 17 — search of the citizen's OWN petitions, and one lookup for a
     expect(filterOwnPetitions(ROWS, "khong co gi")).toEqual([]);
   });
 
+  it("keywords, not a phrase (owner 12/10/2026): every typed word, any order, no diacritics, punctuation ignored", () => {
+    const rows = [
+      { ...ROWS[0]!, ma_tra_cuu: "PA-RRRR-AAAA-CCCC", trich_noi_dung: "Rác thải ở hẻm 13 quá nhiều, gây mùi hôi" },
+      { ...ROWS[0]!, ma_tra_cuu: "PA-HHHH-EEEE-MMMM", trich_noi_dung: "Đèn đường hẻm 130 hỏng" },
+    ];
+    const codes = (q: string) => filterOwnPetitions(rows, q).map((p) => p.ma_tra_cuu);
+    for (const q of ["hem 13", "rac thai", "Rác Thải", "mui hoi rac", "13 hem", "rac th", "hẻm 13,", "gay mui"]) {
+      expect(codes(q), q).toEqual(["PA-RRRR-AAAA-CCCC"]);
+    }
+    // A number is a whole word: "13" is not alley 130, and "130" is not alley 13.
+    expect(codes("hem 130")).toEqual(["PA-HHHH-EEEE-MMMM"]);
+    expect(codes("hem")).toEqual(["PA-RRRR-AAAA-CCCC", "PA-HHHH-EEEE-MMMM"]);
+    // Every word must be there: one missing word drops the row.
+    expect(codes("rac thai den")).toEqual([]);
+  });
+
   it("a complete code, typed any way an elderly citizen reads it off a slip → the issued shape; anything else → null", () => {
     for (const typed of ["PA-4K7M-92XR-BTVD", "#pa4k7m92xrbtvd", " pa 4k7m 92xr btvd ", "pa-4k7m92xr-btvd"]) {
       expect(completeLookupCode(typed), typed).toBe("PA-4K7M-92XR-BTVD");
