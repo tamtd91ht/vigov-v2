@@ -12,8 +12,10 @@
  *     send button never waits for the map (M2 last row, ADR 0072 S1).
  *
  * ACCESSIBILITY: the map is a pointer surface; its text alternative is the coordinates line above it and the address
- * box, which say everything the pin says. Gestures are cooperative (two fingers move the map) so a one-finger scroll
- * of the form is never captured — the pin itself still drags with one finger. Zoom buttons are 48px.
+ * box, which say everything the pin says. ONE FINGER PANS THE MAP (`MAP_GESTURES`, customer sheet App Xã 12/10/2026
+ * row 22: "Map không move được, chỉ cho 2 tay zoom → cho phép kéo thả map"). The form still scrolls past it because
+ * the map's height is bounded (`styles.css` `.xa-scene-map__canvas`, 260px): only a drag that STARTS on the map moves
+ * it. The pin drags with one finger; zoom buttons are 48px.
  *
  * ⚠ M5: every tile request names the viewport — roughly where the citizen is. It reaches ViGov's `comms` only; it is
  *   declared in `content/ket-xuat-ho-so.ts`. Nothing here logs, stores, or puts coordinates in a URL or a key.
@@ -38,6 +40,18 @@ import {
 
 /** No first draw by then = the basemap is not coming (weak network, route missing): fall back rather than hang. */
 export const MAP_LOAD_TIMEOUT_MS = 20_000;
+
+/**
+ * The map's gestures. Plain 2-D: rotation and tilt only disorient, and a rotated map makes "which side of the road"
+ * harder. `cooperativeGestures: false` since 12/10/2026 (sheet row 22): with it on, a one-finger drag scrolled the
+ * page and only a two-finger drag moved the map, and the citizen read that as a map that does not move.
+ */
+export const MAP_GESTURES = {
+  dragRotate: false,
+  pitchWithRotate: false,
+  touchPitch: false,
+  cooperativeGestures: false,
+} as const;
 
 /**
  * The frame read and the map's fate, for one send form. Reads the frame ONCE, the first time `wanted` is true with a
@@ -172,11 +186,7 @@ function SceneMap(props: {
             maxBounds: [...frame.bounds] as [number, number, number, number],
             ...camera,
             maxZoom: 19,
-            // Plain 2-D: rotation and tilt only disorient, and a rotated map makes "which side of the road" harder.
-            dragRotate: false,
-            pitchWithRotate: false,
-            touchPitch: false,
-            cooperativeGestures: true,
+            ...MAP_GESTURES,
             attributionControl: { compact: false },
             locale: {
               "Map.Title": XA_PA.map_label,
@@ -184,9 +194,6 @@ function SceneMap(props: {
               "NavigationControl.ZoomIn": XA_PA.map_zoom_in,
               "NavigationControl.ZoomOut": XA_PA.map_zoom_out,
               "AttributionControl.ToggleAttribution": XA_PA.map_credit,
-              "CooperativeGesturesHandler.MobileHelpText": XA_PA.map_two_fingers,
-              "CooperativeGesturesHandler.WindowsHelpText": XA_PA.map_two_fingers,
-              "CooperativeGesturesHandler.MacHelpText": XA_PA.map_two_fingers,
             },
           });
         } catch {

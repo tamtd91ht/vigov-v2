@@ -56,7 +56,7 @@ import {
   sessionGateOffersRetry,
   type SessionGateState,
 } from "./commune-session";
-import { ConsentDialog } from "./consent-dialog";
+import { ConsentDialog, DialogHostContext } from "./consent-dialog";
 import { dichGoi } from "./DanhBaCanBoScreen";
 import { DisasterAlertScreen, HomeAlertBanner, useDisasterAlerts } from "./disaster-alerts";
 import {
@@ -91,7 +91,6 @@ import {
   PetitionCard,
   PetitionDetail,
   PetitionList,
-  PetitionLookup,
   useMyPetitions,
 } from "./PhanAnhAppXa";
 import { BroadcastScreen, VideoScreen } from "./media-screens";
@@ -145,7 +144,13 @@ type ManXa =
   | { readonly kieu: "bai"; readonly id: string; readonly tu: TabXa }
   | { readonly kieu: "danh-ba" }
   | { readonly kieu: "tra-cuu" }
-  | { readonly kieu: "tra-cuu-phieu" }
+  /**
+   * One petition opened BY ITS FULL CODE from the Phản ánh tab's search (customer sheet App Xã 12/10/2026 row 17) —
+   * the own-only read `GET /my-citizen-reports/{code}`, through the gate's "lookup" task: a phone-less session (ADR
+   * 0080) may look up its own petition although it cannot read the list, and a refused access token offers the
+   * accountless public lookup (ADR 0083) with this code.
+   */
+  | { readonly kieu: "tra-cuu-phieu"; readonly ma: string }
   /** ADR 0083 (TEMPORARY): the accountless send, and its public lookup (`ma` "" = the citizen types it). */
   | { readonly kieu: "gui-khong-tai-khoan" }
   | { readonly kieu: "tra-cuu-khong-tai-khoan"; readonly ma: string }
@@ -913,6 +918,10 @@ function AppCuaXa(props: {
   /* ── THE GATE: every personal act asks here first (`commune-session.ts`) ── */
   const { gate, state: gateState } = useSessionGate(openSession, xa.ten, props.phoneGranted);
   const [gateTask, setGateTask] = useState<PhoneVerificationTask>("submit");
+  /** The code of the last lookup sent to the gate — memory only, read if the citizen takes the accountless lookup. */
+  const pendingLookupCode = useRef("");
+  /** The `.xa-app` root, once mounted: where dialogs and the photo viewer are portalled (`DialogHostContext`). */
+  const [dialogHost, setDialogHost] = useState<HTMLElement | null>(null);
   // The 403 path of the rating block (`usePhoneVerification`): the same opener, the same commune check.
   const reopenWithPhone = useMemo(() => (openSession ? communeAppReopen(openSession) : undefined), [openSession]);
 
@@ -1066,8 +1075,11 @@ function AppCuaXa(props: {
   /** Navigation from a tap. The two personal screens pass the gate; everything else is public. */
   function go(m: ManXa) {
     if (m.kieu === "gui") requireSession("submit", () => datMan(m), true);
-    else if (m.kieu === "tra-cuu-phieu") requireSession("lookup", () => datMan(m));
-    else datMan(m);
+    else if (m.kieu === "tra-cuu-phieu") {
+      // Kept for the gate's accountless offer: leaving the gate for the public lookup carries the code typed.
+      pendingLookupCode.current = m.ma;
+      requireSession("lookup", () => datMan(m));
+    } else datMan(m);
   }
 
   const ve = () => veTab("trang-chu");
@@ -1147,8 +1159,12 @@ function AppCuaXa(props: {
       man_con = <AccountlessLookup key={man.ma} domain={ten_mien} initialCode={man.ma} onBack={() => veTab("phan-anh")} />;
       break;
     case "tra-cuu-phieu":
+      // The same screen as a tapped card; only the gate task differs (see `ManXa`). A 404 is the detail's one
+      // sentence for "unknown", "someone else's" and "another commune's" (rule 4 forbidden #2).
       man_con = (
-        <PetitionLookup
+        <PetitionDetail
+          key={man.ma}
+          code={man.ma}
           onBack={() => veTab("phan-anh")}
           onSessionLost={sessionLost("lookup")}
           onChanged={() => void petitions.load()}
@@ -1185,7 +1201,7 @@ function AppCuaXa(props: {
       break;
     case "canh-bao":
       // ADR 0091 §2: a FRESH read of the alerts in force (not the home banner's), every one of them, newest first.
-      man_con = <DisasterAlertScreen domain={ten_mien} communeName={xa.ten} onBack={ve} />;
+      man_con = <DisasterAlertScreen domain={ten_mien} communeName={xa.ten} onBack={ve} dial={props.dialStaff} />;
       break;
     case "thong-bao":
       // Reached from Cá nhân › Của tôi (decision 10: no bell on the home header), so "Quay lại" goes back there.
@@ -1219,7 +1235,11 @@ function AppCuaXa(props: {
         onAccountless={() => {
           // Leave the gate for the accountless screen (ADR 0083). The pending act is dropped: it needs a session.
           gate.reset();
-          datMan(gateTask === "lookup" ? { kieu: "tra-cuu-khong-tai-khoan", ma: "" } : { kieu: "gui-khong-tai-khoan" });
+          datMan(
+            gateTask === "lookup"
+              ? { kieu: "tra-cuu-khong-tai-khoan", ma: pendingLookupCode.current }
+              : { kieu: "gui-khong-tai-khoan" },
+          );
         }}
         onClose={gate.reset}
       />
@@ -1234,22 +1254,24 @@ function AppCuaXa(props: {
   // The covered frame carries the class only while `entering`, so being un-hidden when the gate closes replays
   // nothing; it plays when the gate's act moved the citizen to a new screen, which is an entry.
   const withGate = (content: ReactNode) => (
-    <div className={lop}>
-      {/* The prototype's minimise bubble, over every screen — only when the shell gave the platform call (inside
-          Zalo). It sits above the frames so the gate and the dialogs never hide it. */}
-      {props.minimize !== undefined && <MinimiseBubble onMinimise={props.minimize} />}
-      {gateScreen !== null && <div className="xa-frame xa-frame--enter">{gateScreen}</div>}
-      <div className={entering ? "xa-frame xa-frame--enter" : "xa-frame"} hidden={gateScreen !== null}>
-        {content}
-      </div>
-      {namePrompt !== null && (
-        <ConsentDialog
-          id="xa-name-prompt-question"
-          question={XA_TN.name_prompt_question}
-          onAllow={() => answerNamePrompt(true)}
-          onDeny={() => answerNamePrompt(false)}
-        />
-      )}
+    <div className={lop} ref={setDialogHost}>
+      <DialogHostContext.Provider value={dialogHost}>
+        {/* The prototype's minimise bubble, over every screen — only when the shell gave the platform call (inside
+            Zalo). It sits above the frames so the gate and the dialogs never hide it. */}
+        {props.minimize !== undefined && <MinimiseBubble onMinimise={props.minimize} />}
+        {gateScreen !== null && <div className="xa-frame xa-frame--enter">{gateScreen}</div>}
+        <div className={entering ? "xa-frame xa-frame--enter" : "xa-frame"} hidden={gateScreen !== null}>
+          {content}
+        </div>
+        {namePrompt !== null && (
+          <ConsentDialog
+            id="xa-name-prompt-question"
+            question={XA_TN.name_prompt_question}
+            onAllow={() => answerNamePrompt(true)}
+            onDeny={() => answerNamePrompt(false)}
+          />
+        )}
+      </DialogHostContext.Provider>
     </div>
   );
 
@@ -1306,7 +1328,7 @@ function AppCuaXa(props: {
           <PetitionList
             state={petitions.state}
             onOpenPetition={(ma) => datMan({ kieu: "phieu", ma, tu: "phan-anh" })}
-            onLookup={() => go({ kieu: "tra-cuu-phieu" })}
+            onLookupCode={(ma) => go({ kieu: "tra-cuu-phieu", ma })}
             onOpen={openPetitions}
             onRetry={() => void petitions.load()}
             onLoadMore={() => void petitions.loadMore()}

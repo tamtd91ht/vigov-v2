@@ -60,7 +60,7 @@ describe("commune app: unknown status code", () => {
       createElement(PetitionList, {
         state: ready([row(UNKNOWN, "PA-AAAAAAAAAAAA"), row("da-dong", "PA-BBBBBBBBBBBB")]),
         onOpenPetition: () => {},
-        onLookup: () => {},
+        onLookupCode: () => {},
         onOpen: () => {},
         onRetry: () => {},
         onLoadMore: () => {},

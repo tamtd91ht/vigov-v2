@@ -280,7 +280,7 @@ describe("the list before any session — it asks, it never fetches", () => {
       createElement(PetitionList, {
         state: { kind: "idle" },
         onOpenPetition: () => {},
-        onLookup: () => {},
+        onLookupCode: () => {},
         onOpen: () => {},
         onRetry: () => {},
         onLoadMore: () => {},

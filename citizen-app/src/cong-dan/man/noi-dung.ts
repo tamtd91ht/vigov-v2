@@ -1402,8 +1402,23 @@ export const XA_PA = {
   /** Under "Bà con chưa gửi phản ánh nào" on the Phản ánh tab — the footer button is below. */
   empty_list_hint: "Chạm nút bên dưới để gửi phản ánh đầu tiên tới xã.",
   tra_cuu_tieu_de: "Tra cứu phiếu",
-  tra_cuu_goi_y: "Nhập mã phiếu bà con đã nhận",
   chua_co_phieu: "Bà con chưa gửi phản ánh nào",
+  // The Phản ánh tab's search box (customer sheet App Xã 12/10/2026 row 17: "dạng ô search như màn Danh bạ"). It
+  // filters the citizen's OWN loaded petitions on the phone; a complete code not among them offers one lookup.
+  search_label: "Tìm trong phản ánh của bà con",
+  search_placeholder: "Tìm theo mã phiếu, lĩnh vực, nội dung",
+  search_empty: "Không thấy phản ánh nào khớp với chữ bà con gõ",
+  search_empty_hint: "Bà con thử gõ ngắn hơn, hoặc nhập đủ mã phiếu để tra cứu.",
+  /** More pages exist: the filter has only looked at the loaded ones, and says so. */
+  search_loaded_only: "Ứng dụng mới tìm trong các phản ánh đã tải. Bấm “Xem thêm” để tìm cả các phản ánh cũ hơn.",
+  /** The one lookup a complete code offers when it is not in the list on screen. */
+  lookup_code_button: (code: string) => `Tra cứu phiếu #${code}`,
+  lookup_code_why: "Phiếu này chưa có trong danh sách đang hiện. Bấm nút dưới đây để tra cứu theo mã.",
+  /**
+   * The petition is back in processing after the citizen's own low rating (sheet row 21; owner chose the wording with
+   * the citizen's own stars). `n` is the rating the server returned — the threshold itself is never said.
+   */
+  reopened_by_rating: (n: number) => `Bà con đánh giá ${n} sao — phiếu được mở lại để xử lý tiếp.`,
   // The prototype's step unit (`Timeline.tsx` `step.unit`, owner 11/10/2026).
   don_vi_xu_ly: "UBND xã",
   da_mo_lai: (n: number) => `Đã mở lại để xử lý tiếp (lần ${n})`,
@@ -1415,7 +1430,9 @@ export const XA_PA = {
   cham_vao_sao: "Chạm vào sao để chấm điểm",
   nhan_xet: "Nhận xét thêm (không bắt buộc)",
   gui_danh_gia: "Gửi đánh giá",
-  // Không nói ngưỡng sao mở lại: ngưỡng và số lần mở lại là cấu hình TỪNG XÃ (ADR 0008), không phải hằng.
+  // Không nói ngưỡng sao mở lại. Ngưỡng là HẰNG của máy chủ ("1 hoặc 2 sao", ADR 0050 điểm 2,
+  // `service-petitions/internal/domain/petition_rating.go` `RatingReopenThreshold`), không phải cấu hình từng xã —
+  // nhưng chép nó vào câu chữ ở đây là một bản thứ hai sẽ lệch ngày chủ dự án đổi nó.
   chua_ghi: "Ứng dụng chưa nhận được thông tin này. Bà con hãy liên hệ Ủy ban nhân dân xã để hỏi.",
   // App riêng không có mã QR để quét lại (khác câu chung `DANH_BA`).
   danh_ba_trong:
@@ -1477,8 +1494,7 @@ export const XA_PA = {
   map_outside: "Vị trí vừa lấy nằm ngoài khung bản đồ của xã. Bà con chạm vào bản đồ để chỉ đúng nơi xảy ra.",
   /** The coordinates line once the citizen moved the pin — said, so "Zalo's point" and "my point" never look alike. */
   map_placed: (coordinates: string) => `Đã đặt vị trí trên bản đồ (${coordinates})`,
-  /** MapLibre's own control and gesture strings, in Vietnamese (its defaults are English). */
-  map_two_fingers: "Dùng hai ngón tay để kéo bản đồ",
+  /** MapLibre's own control strings, in Vietnamese (its defaults are English). */
   map_zoom_in: "Phóng to",
   map_zoom_out: "Thu nhỏ",
   map_pin: "Ghim nơi xảy ra sự việc",
@@ -1531,7 +1547,12 @@ export const XA_PA = {
     "Không gửi ẩn danh được khi tự nhập số: họ tên và số điện thoại là cách duy nhất để xã liên hệ lại với bà con.",
   done_no_notice:
     "Bà con sẽ KHÔNG nhận được thông báo nào về phản ánh này, vì số điện thoại chưa được xác nhận qua Zalo. Bà con giữ mã phiếu, rồi mở ứng dụng này bằng chính tài khoản Zalo đang dùng và tra cứu theo mã để biết phản ánh đi tới đâu.",
-  gui_toi: (xa: string) => `Phản ánh sẽ gửi tới: ${xa}`,
+  /**
+   * THE SEND BUTTON NAMES THE COMMUNE, VERBATIM (README §Non-negotiables #5; owner 12/10/2026, sheet row 23): the
+   * confirmation at the last step is the label the citizen taps, since the line "Phản ánh sẽ gửi tới: …" above it
+   * was removed.
+   */
+  send_to: (xa: string) => `Gửi phản ánh tới ${xa}`,
   // Said only after a 201: the petition is in the commune's register and has its lookup code (rule 10 #1).
   xong_tieu_de: "Đã gửi phản ánh",
   xong_mo_ta: "Ủy ban nhân dân xã đã nhận phản ánh của bà con. Bà con giữ mã phiếu dưới đây để theo dõi.",
@@ -1585,9 +1606,13 @@ export const SCENE_PHOTOS = {
   /** Zalo refused with a code (`zaloFailureSentence`). Only a "try again later" code invites a retry. */
   pick_zalo_failed: (zalo: string, transient: boolean) =>
     transient ? `${zalo} Bà con chờ một lát rồi bấm lại nút.` : `${zalo} Bà con vẫn gửi được phản ánh không kèm ảnh.`,
-  /** In the send footer, under the commune's name: what goes with the petition. */
-  footer_with: (n: number) => `Kèm ${n} ảnh hiện trường, gửi ngay sau phản ánh.`,
   uploads_title: "Ảnh hiện trường",
+  /**
+   * "Đã gửi phản ánh" when a photo did NOT arrive (sheet row 24): the prototype's screen shows no photos, but a photo
+   * dropped silently is a citizen who believes the commune has it. Under it, each failed photo's reason and retry.
+   */
+  done_failed: (failed: number, total: number) =>
+    `${failed}/${total} ảnh hiện trường chưa tới được xã. Phản ánh của bà con vẫn đã được ghi nhận.`,
   sending: (i: number, n: number) => `Đang gửi ảnh ${i}/${n} tới xã…`,
   all_sent: (n: number) => `Đã gửi ${n}/${n} ảnh tới xã.`,
   some_failed: (ok: number, n: number) =>
@@ -1620,6 +1645,14 @@ export const SCENE_PHOTOS = {
     network: "Mất kết nối khi đang gửi ảnh. Bà con kiểm tra mạng rồi bấm “Tải lại”.",
     server: "Hệ thống của xã chưa nhận được ảnh. Bà con chờ ít phút rồi bấm “Tải lại”.",
   },
+  // The full-screen viewer of the petition detail's photos (sheet row 19: "click mở full ảnh").
+  open_photo: (alt: string) => `Xem lớn: ${alt}`,
+  viewer_close: "Đóng ảnh",
+  viewer_previous: "Ảnh trước",
+  viewer_next: "Ảnh sau",
+  viewer_position: (i: number, n: number) => `Ảnh ${i}/${n}`,
+  /** The read link expired or the photo did not load: no silent retry loop — close, and the block reloads its links. */
+  viewer_failed: "Chưa xem được ảnh này. Bà con bấm “Đóng ảnh” rồi chạm lại vào ảnh.",
   // The petition detail (`OwnScenePhotos`).
   own_title: "Ảnh hiện trường bà con đã gửi",
   own_loading: "Đang tải ảnh hiện trường…",

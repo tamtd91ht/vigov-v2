@@ -20,7 +20,7 @@
  * ⚠ NOTHING HERE LOGS, STORES OR PUTS IN A URL OR KEY a path, a photo or a read link (rule 3; the links are
  *   bearer credentials). They live in React state and refs, and die with the screen.
  */
-import { useEffect, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import {
   listScenePhotos,
@@ -41,7 +41,7 @@ import { taoLanGui } from "../api/lan-gui"; // vi-name-ok: existing export, not 
 import type { ZaloFailure } from "../api/mo-phien-vigov";
 
 import { BieuTuong } from "./BieuTuong";
-import { ConsentDialog } from "./consent-dialog";
+import { ConsentDialog, DialogPortal } from "./consent-dialog";
 import { SCENE_PHOTOS, VERIFICATION_PHOTOS, XA_PA, zaloFailureSentence, zaloSupportCode } from "./noi-dung";
 import type { OnSessionLost } from "./PhanAnhAppXa";
 
@@ -674,6 +674,189 @@ export function ScenePhotoUploads(props: {
   );
 }
 
+/**
+ * The photos on "Đã gửi phản ánh" (customer sheet App Xã 12/10/2026 row 24: "theo Prototype" — whose step 3 shows no
+ * photos). So, in order:
+ *
+ *   no photo picked, or every one stored   nothing at all
+ *   one still waiting or going up          ONE quiet status line ("Đang gửi ảnh 1/2 tới xã…")
+ *   none in flight, at least one failed    ONE line saying how many did not arrive and that the petition stands,
+ *                                          then each failed photo's reason and its "Tải lại" when it can help
+ *
+ * The failure is never dropped: a citizen who leaves this screen believing the commune has the photo is the defect
+ * the old full upload list was there to prevent. PURE apart from `onRetry`.
+ */
+export function SendDonePhotoStatus(props: { jobs: readonly UploadJob[]; onRetry: (key: string) => void }) {
+  const { jobs } = props;
+  if (jobs.length === 0) return null;
+  const going = jobs.find((j) => j.status === "sending") ?? jobs.find((j) => j.status === "waiting");
+  if (going !== undefined) {
+    return (
+      <p className="xa-phu" role="status">
+        {SCENE_PHOTOS.sending(going.index, jobs.length)}
+      </p>
+    );
+  }
+  const failed = jobs.filter((j) => j.status === "failed");
+  if (failed.length === 0) return null;
+  return (
+    <section className="xa-error-box xa-done-photos" role="alert">
+      <p>{SCENE_PHOTOS.done_failed(failed.length, jobs.length)}</p>
+      <ul className="xa-done-photos__list">
+        {failed.map((j) => (
+          <li key={j.key}>
+            <p>{uploadRowText(j)}</p>
+            {j.canRetry === true && (
+              <button type="button" className="xa-nut xa-nut--phu" onClick={() => props.onRetry(j.key)}>
+                <BieuTuong ten="refresh" co={20} />
+                {SCENE_PHOTOS.retry(j.index)}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════ THE FULL-SCREEN VIEWER — petition detail ═══════════════════════════════ */
+
+/** One photo the viewer can show: the CURRENT read link of the list it came from, never a copy kept elsewhere. */
+export type ViewerPhoto = { readonly key: string; readonly src: string; readonly alt: string };
+
+/**
+ * A tapped photo, full screen (customer sheet App Xã 12/10/2026 row 19: "click mở full ảnh"). Portalled to the app's
+ * dialog host (`DialogPortal`), a dark backdrop, the image `object-fit: contain`, a 48px "Đóng ảnh". Escape closes;
+ * "Ảnh trước" / "Ảnh sau" (and the arrow keys) step through the photos of the SAME block.
+ *
+ * THE LINKS EXPIRE (≤ 15 min, `msUntilRefresh`): `photos` is the block's list as it is NOW, so a list refreshed while
+ * the viewer is open hands it the new link. A photo that does not load says one sentence; it is NOT retried here —
+ * a silent retry on an expired link is a loop the citizen only sees as a black screen. Nothing is downloaded or
+ * kept on the phone: the browser shows the signed link, as the thumbnail does.
+ */
+export function PhotoViewer(props: {
+  photos: readonly ViewerPhoto[];
+  index: number;
+  onIndex: (index: number) => void;
+  onClose: () => void;
+}) {
+  if (props.photos.length === 0) return null;
+  return (
+    <DialogPortal>
+      <PhotoViewerBox {...props} />
+    </DialogPortal>
+  );
+}
+
+function PhotoViewerBox(props: {
+  photos: readonly ViewerPhoto[];
+  index: number;
+  onIndex: (index: number) => void;
+  onClose: () => void;
+}) {
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  /** The link that failed — keyed by the link, so a refreshed link for the same photo is tried once more. */
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const n = props.photos.length;
+  const i = Math.min(Math.max(props.index, 0), n - 1);
+  const photo = props.photos[i]!;
+
+  // The focus goes to "Đóng ảnh" and back where it was on close — the consent dialog's rule.
+  useLayoutEffect(() => {
+    const before = document.activeElement as { focus?: () => void } | null;
+    closeRef.current?.focus();
+    return () => before?.focus?.();
+  }, []);
+
+  const go = (to: number) => {
+    if (to >= 0 && to < n) props.onIndex(to);
+  };
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      props.onClose();
+    } else if (e.key === "ArrowLeft") {
+      go(i - 1);
+    } else if (e.key === "ArrowRight") {
+      go(i + 1);
+    } else if (e.key === "Tab") {
+      // The viewer is modal: Tab cycles its own buttons only.
+      const buttons = Array.from(boxRef.current?.querySelectorAll<HTMLButtonElement>("button:not([disabled])") ?? []);
+      if (buttons.length === 0) return;
+      e.preventDefault();
+      const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      const next = e.shiftKey ? (at <= 0 ? buttons.length - 1 : at - 1) : at < 0 || at === buttons.length - 1 ? 0 : at + 1;
+      buttons[next]!.focus();
+    }
+  }
+
+  return (
+    <div className="xa-viewer" role="dialog" aria-modal="true" aria-label={photo.alt} ref={boxRef} onKeyDown={onKeyDown}>
+      <div className="xa-viewer__bar">
+        {n > 1 && <p className="xa-viewer__position">{SCENE_PHOTOS.viewer_position(i + 1, n)}</p>}
+        <button type="button" className="xa-viewer__close" ref={closeRef} aria-label={SCENE_PHOTOS.viewer_close} onClick={props.onClose}>
+          <BieuTuong ten="x" co={28} stroke={2.6} />
+        </button>
+      </div>
+      <div className="xa-viewer__stage">
+        {failedSrc === photo.src ? (
+          <p className="xa-viewer__failed" role="status">
+            {SCENE_PHOTOS.viewer_failed}
+          </p>
+        ) : (
+          <img key={photo.src} className="xa-viewer__image" src={photo.src} alt={photo.alt} onError={() => setFailedSrc(photo.src)} />
+        )}
+      </div>
+      {n > 1 && (
+        <div className="xa-viewer__steps">
+          <button type="button" className="xa-viewer__step" disabled={i === 0} onClick={() => go(i - 1)}>
+            <BieuTuong ten="chevron-left" co={24} />
+            {SCENE_PHOTOS.viewer_previous}
+          </button>
+          <button type="button" className="xa-viewer__step" disabled={i === n - 1} onClick={() => go(i + 1)}>
+            {SCENE_PHOTOS.viewer_next}
+            <BieuTuong ten="chevron-right" co={24} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A block's photos as tappable thumbnails, and the viewer they open. The viewer reads `items` as passed on EVERY
+ * render — the block's refreshed list — so it always shows the link that is valid now (`ViewerPhoto`).
+ */
+export function PhotoThumbList(props: {
+  items: readonly ScenePhotoLink[];
+  alt: (i: number) => string;
+  listClass: string;
+  itemClass?: string;
+  imageClass: string;
+  onImageError: () => void;
+}) {
+  const [open, setOpen] = useState<number | null>(null);
+  const photos: ViewerPhoto[] = props.items.map((p, i) => ({ key: p.id, src: p.url, alt: props.alt(i + 1) }));
+  return (
+    <>
+      <ul className={props.listClass}>
+        {photos.map((p, i) => (
+          <li key={p.key} className={props.itemClass}>
+            <button type="button" className="xa-photo-open" aria-label={SCENE_PHOTOS.open_photo(p.alt)} onClick={() => setOpen(i)}>
+              <img className={props.imageClass} src={p.src} alt={p.alt} onError={props.onImageError} />
+            </button>
+          </li>
+        ))}
+      </ul>
+      {open !== null && photos.length > 0 && (
+        <PhotoViewer photos={photos} index={open} onIndex={setOpen} onClose={() => setOpen(null)} />
+      )}
+    </>
+  );
+}
+
 /* ═══════════════════════════════ THE CITIZEN'S OWN PHOTOS — petition detail ═══════════════════════════════ */
 
 export type OwnPhotoList =
@@ -803,13 +986,14 @@ function BeforeAfterColumn(props: {
       {props.items.length === 0 ? (
         <p className="xa-before-after__empty">{props.emptyText}</p>
       ) : (
-        <ul className="xa-before-after__list">
-          {props.items.map((p, i) => (
-            <li key={p.id}>
-              <img className="xa-before-after__image" src={p.url} alt={props.alt(i + 1)} onError={props.onImageError} />
-            </li>
-          ))}
-        </ul>
+        // A tap opens the photo full screen (sheet row 19); "Sau" steps through the commune's photos only.
+        <PhotoThumbList
+          items={props.items}
+          alt={props.alt}
+          listClass="xa-before-after__list"
+          imageClass="xa-before-after__image"
+          onImageError={props.onImageError}
+        />
       )}
     </div>
   );
@@ -894,18 +1078,14 @@ export function VerificationPhotosView(props: {
           </button>
         </>
       ) : (
-        <ul className="xa-photos__list">
-          {list.items.map((p, i) => (
-            <li key={p.id} className="xa-photos__item">
-              <img
-                className="xa-photos__thumb"
-                src={p.url}
-                alt={VERIFICATION_PHOTOS.photo_alt(i + 1)}
-                onError={props.onImageError}
-              />
-            </li>
-          ))}
-        </ul>
+        <PhotoThumbList
+          items={list.items}
+          alt={VERIFICATION_PHOTOS.photo_alt}
+          listClass="xa-photos__list"
+          itemClass="xa-photos__item"
+          imageClass="xa-photos__thumb"
+          onImageError={props.onImageError}
+        />
       )}
     </section>
   );
@@ -993,13 +1173,14 @@ export function OwnScenePhotosView(props: {
         </>
       )}
       {items.length > 0 && (
-        <ul className="xa-photos__list">
-          {items.map((p, i) => (
-            <li key={p.id} className="xa-photos__item">
-              <img className="xa-photos__thumb" src={p.url} alt={SCENE_PHOTOS.photo_alt(i + 1)} onError={props.onImageError} />
-            </li>
-          ))}
-        </ul>
+        <PhotoThumbList
+          items={items}
+          alt={SCENE_PHOTOS.photo_alt}
+          listClass="xa-photos__list"
+          itemClass="xa-photos__item"
+          imageClass="xa-photos__thumb"
+          onImageError={props.onImageError}
+        />
       )}
       {props.canAdd && list.kind === "ready" && (
         <>

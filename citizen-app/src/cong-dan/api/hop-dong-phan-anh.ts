@@ -415,6 +415,12 @@ function readStepTimes(t: Record<string, unknown>): PetitionStepTimes | undefine
 /** Stars bounds and comment limit — COPIED from `service-petitions/internal/domain/petition_rating.go`. */
 export const RATING_MIN_STARS = 1;
 export const RATING_MAX_STARS = 5;
+/**
+ * The highest rating that REOPENS the petition — `RatingReopenThreshold` in the same file. A FIXED constant, not
+ * per-commune configuration (ADR 0050 point 2). Read ONLY to recognise, after the fact, a petition the server has
+ * already reopened (`PhanAnhAppXa.tsx` `reopenedByRating`): the app never decides a reopening, and never prints it.
+ */
+export const RATING_REOPEN_THRESHOLD = 2;
 /** Counted in CHARACTERS (code points), as the server's `utf8.RuneCountInString`. */
 export const RATING_COMMENT_MAX_LEN = 1000;
 

@@ -163,7 +163,7 @@ thất bại**, không bằng suy luận; xem khối chú thích của ca ấy.
 | 2 | Once confirmed, the commune name appears on **every** screen |
 | 3 | **No switching commune** inside a session — one session, one commune (ADR 0044 answer 4) |
 | 4 | Identity comes from the session; the backend never trusts a client-supplied identity |
-| 5 | The commune is confirmed again at the final step before submitting |
+| 5 | The commune is confirmed again at the final step before submitting — in the commune's own app, **by the send button's label**, "Gửi phản ánh tới {tên xã nguyên văn}" (owner, 12/10/2026; customer sheet App Xã row 23 removed the line above the button) |
 | 6 | Body text ≥ 16px · touch targets ≥ 44×44px · contrast ≥ 4.5:1 · status never by colour alone |
 | 7 | Error messages say what to do next, never an error code |
 | 8 | Nothing personal in logs, URLs, or file names |

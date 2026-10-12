@@ -13,7 +13,8 @@
  * "you are here" dot on the map (same reason), no promise of a Zalo message in the empty state (no ZNS push yet).
  * Several alerts in force are all shown, newest first (the prototype shows one).
  *
- * ⚠ The phones may be an officer's own (comms 0026): shown, dialled through `tel:`, never logged or sent anywhere.
+ * ⚠ The phones may be an officer's own (comms 0026): shown, dialled through the shell's `openPhone` (or `tel:` outside
+ *   Zalo), never logged or sent anywhere.
  */
 import { useEffect, useRef, useState } from "react";
 
@@ -23,8 +24,9 @@ import { formatDateTime } from "../../lib/vn-format";
 
 import { BieuTuong } from "./BieuTuong";
 import { dichGoi } from "./DanhBaCanBoScreen"; // vi-name-ok: existing export, reused (rule 12 #3)
+import type { DialNumber } from "./DanhBaXa";
 import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa"; // vi-name-ok: existing components (rule 12 #3)
-import { COMMUNE_NEWS_RATE_LIMIT, TIN_XA, XA_TN } from "./noi-dung"; // vi-name-ok: existing string tables
+import { COMMUNE_NEWS_RATE_LIMIT, TIN_XA, XA_GIAO_DIEN, XA_TN } from "./noi-dung"; // vi-name-ok: existing string tables
 import { errorSentence, type LoiTin } from "./TinTucXaScreen"; // vi-name-ok: existing type, reused (rule 12 #3)
 
 /* ═══════════════════════════════ LOAD ═══════════════════════════════ */
@@ -162,37 +164,66 @@ export function DangerZoneMap(props: { zone: readonly DangerZonePoint[]; label: 
 }
 
 /**
- * "GỌI {số}" — a `tel:` link (the dialler opens; nothing goes over the network), 52px high, the number in the words.
- * Nothing when the number has nothing to dial: a button that dials nothing on a storm day is worse than none.
+ * "GỌI {số}", 52px high, the number in the words. Nothing when the number has nothing to dial: a button that dials
+ * nothing on a storm day is worse than none.
+ *
+ * THE SHELL'S DIALER WHEN IT GAVE ONE (`dial`, `openPhone` — same defect as the directory's row 11 of the customer
+ * sheet 12/10/2026): the Mini App's webview ignores a `tel:` link, so the old link did nothing inside Zalo. A failed
+ * platform call says what to do instead, in words. Absent (a browser, tests) → the `tel:` link, which works there.
  */
-function CallButton(props: { phone: string; who: string }) {
-  const dial = dichGoi(props.phone);
-  if (dial === null) return null;
+function CallButton(props: { phone: string; who: string; dial?: DialNumber }) {
+  const [failed, setFailed] = useState(false);
+  const target = dichGoi(props.phone);
+  if (target === null) return null;
+  const { dial } = props;
+  const label = XA_TN.alert_call_label(props.who, props.phone);
+  if (dial === undefined) {
+    return (
+      <a className="xa-call-button" href={target} aria-label={label}>
+        <BieuTuong ten="phone" co={22} stroke={2.4} />
+        {XA_TN.alert_call(props.phone)}
+      </a>
+    );
+  }
   return (
-    <a className="xa-call-button" href={dial} aria-label={XA_TN.alert_call_label(props.who, props.phone)}>
-      <BieuTuong ten="phone" co={22} stroke={2.4} />
-      {XA_TN.alert_call(props.phone)}
-    </a>
+    <>
+      <button
+        type="button"
+        className="xa-call-button"
+        aria-label={label}
+        onClick={() => {
+          setFailed(false);
+          void dial(target.slice("tel:".length)).then((ok) => setFailed(!ok));
+        }}
+      >
+        <BieuTuong ten="phone" co={22} stroke={2.4} />
+        {XA_TN.alert_call(props.phone)}
+      </button>
+      {/* Always present, so a screen reader announces the sentence when it appears. */}
+      <p className="xa-phu" role="status">
+        {failed ? XA_GIAO_DIEN.call_failed : ""}
+      </p>
+    </>
   );
 }
 
-function EvacuationCard({ point }: { point: EvacuationPoint }) {
+function EvacuationCard({ point, dial }: { point: EvacuationPoint; dial?: DialNumber }) {
   return (
     <div className="xa-the xa-alert-card">
       <h4 className="xa-alert-card__name">{point.name}</h4>
       {point.address !== "" && <p className="xa-phu">{point.address}</p>}
       {point.capacity !== null && <p className="xa-phu">{XA_TN.alert_capacity(point.capacity)}</p>}
-      <CallButton phone={point.phone} who={point.name} />
+      <CallButton phone={point.phone} who={point.name} dial={dial} />
     </div>
   );
 }
 
-function ContactCard({ contact }: { contact: EmergencyContact }) {
+function ContactCard({ contact, dial }: { contact: EmergencyContact; dial?: DialNumber }) {
   return (
     <div className="xa-the xa-alert-card">
       <h4 className="xa-alert-card__name">{contact.role}</h4>
       {contact.name !== "" && <p className="xa-phu">{contact.name}</p>}
-      <CallButton phone={contact.phone} who={contact.role} />
+      <CallButton phone={contact.phone} who={contact.role} dial={dial} />
     </div>
   );
 }
@@ -202,7 +233,15 @@ function ContactCard({ contact }: { contact: EmergencyContact }) {
  * when one was drawn, the evacuation points, the emergency numbers. A block with nothing in it is left out — an empty
  * "Điểm sơ tán" heading would read as "there is nowhere to go". PURE.
  */
-export function DisasterAlertCard({ alert, communeName }: { alert: DisasterAlert; communeName: string }) {
+export function DisasterAlertCard({
+  alert,
+  communeName,
+  dial,
+}: {
+  alert: DisasterAlert;
+  communeName: string;
+  dial?: DialNumber;
+}) {
   const from = formatDateTime(alert.effectiveFrom);
   const to = alert.effectiveTo === undefined ? null : formatDateTime(alert.effectiveTo);
   const zone = zoneWords(alert.kind, communeName);
@@ -248,7 +287,7 @@ export function DisasterAlertCard({ alert, communeName }: { alert: DisasterAlert
         <section className="xa-alert-list">
           <h3 className="xa-alert-list__title">{XA_TN.alert_evacuation}</h3>
           {alert.evacuationPoints.map((p, i) => (
-            <EvacuationCard key={`${i}-${p.name}`} point={p} />
+            <EvacuationCard key={`${i}-${p.name}`} point={p} dial={dial} />
           ))}
         </section>
       )}
@@ -257,7 +296,7 @@ export function DisasterAlertCard({ alert, communeName }: { alert: DisasterAlert
         <section className="xa-alert-list">
           <h3 className="xa-alert-list__title">{XA_TN.alert_contacts}</h3>
           {alert.emergencyContacts.map((c, i) => (
-            <ContactCard key={`${i}-${c.role}`} contact={c} />
+            <ContactCard key={`${i}-${c.role}`} contact={c} dial={dial} />
           ))}
         </section>
       )}
@@ -266,7 +305,13 @@ export function DisasterAlertCard({ alert, communeName }: { alert: DisasterAlert
 }
 
 /** What the screen shows for a state: words while loading, the sentence and "Thử lại" on failure, the empty state, or every alert. PURE. */
-export function DisasterAlertBody(props: { state: DisasterAlertsState; communeName: string; onRetry: () => void }) {
+export function DisasterAlertBody(props: {
+  state: DisasterAlertsState;
+  communeName: string;
+  onRetry: () => void;
+  /** The shell's dialer (`TrangXa` `dialStaff`); absent → `tel:` links. */
+  dial?: DialNumber;
+}) {
   const { state } = props;
   if (state.kind === "loading") return <KhoiTrangThai bieu_tuong="cloud-rain" cau={XA_TN.alert_loading} dang_tai shape="card" />;
   if (state.kind === "failed") {
@@ -285,20 +330,20 @@ export function DisasterAlertBody(props: { state: DisasterAlertsState; communeNa
   return (
     <div className="xa-alerts">
       {state.items.map((a) => (
-        <DisasterAlertCard key={a.id} alert={a} communeName={props.communeName} />
+        <DisasterAlertCard key={a.id} alert={a} communeName={props.communeName} dial={props.dial} />
       ))}
     </div>
   );
 }
 
 /** The screen: title "Cảnh báo thiên tai", back, and a fresh read of the alerts in force. */
-export function DisasterAlertScreen(props: { domain: string; communeName: string; onBack: () => void }) {
+export function DisasterAlertScreen(props: { domain: string; communeName: string; onBack: () => void; dial?: DialNumber }) {
   const { state, reload, refresh } = useDisasterAlerts(props.domain);
   return (
     <>
       <DauManCon tieu_de={XA_TN.alert_title} onQuayLai={props.onBack} />
       <TrangCon onRefresh={refresh}>
-        <DisasterAlertBody state={state} communeName={props.communeName} onRetry={reload} />
+        <DisasterAlertBody state={state} communeName={props.communeName} onRetry={reload} dial={props.dial} />
       </TrangCon>
     </>
   );

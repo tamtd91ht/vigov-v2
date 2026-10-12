@@ -1031,6 +1031,11 @@ body {
     animation: xa-enter 180ms ease-out backwards;
   }
 
+  /* The full-screen photo viewer fades in — opacity only: a photo that slides is a photo that blurs. */
+  .xa-viewer {
+    animation: xa-viewer-in 180ms ease-out backwards;
+  }
+
   /* Loading blocks breathe — opacity only, slow, and not at all under reduce (they then stand still). */
   .skel {
     animation: skel-pulse 1.4s ease-in-out infinite alternate;
@@ -1096,6 +1101,16 @@ body {
   }
 }
 
+
+@keyframes xa-viewer-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
 
 @keyframes skel-pulse {
   from {
@@ -5251,6 +5266,8 @@ button.xa-o-nhanh {
 .xa-scene-map {
   border-top: 1px solid var(--xa-vien);
 }
+/* A BOUNDED height is what keeps the form scrollable since one finger pans the map (sheet row 22): a drag that
+   starts on the map moves the map, a drag anywhere else on the form scrolls the page past it. */
 .xa-scene-map__canvas {
   position: relative;
   width: 100%;
@@ -5285,9 +5302,6 @@ button.xa-o-nhanh {
 /* The OSM credit stays readable — it is required, so it is not shrunk below the app's small text. */
 .xa-scene-map .maplibregl-ctrl.maplibregl-ctrl-attrib {
   font-size: var(--text-small);
-}
-.xa-scene-map .maplibregl-cooperative-gesture-screen {
-  font-size: var(--text-body);
 }
 
 /* The prototype's offline box (`NewFeedbackPage.tsx:278`): the orange tone, words first. */
@@ -5355,6 +5369,142 @@ button.xa-o-nhanh {
   object-fit: cover;
   border: 1px solid var(--xa-vien);
   border-radius: 12px;
+}
+
+/* A photo thumbnail is a button that opens the full-screen viewer (`scene-photos.tsx` `PhotoThumbList`, sheet row
+   19). It adds no look of its own: the thumbnail is the target, and it is far larger than 48px. */
+.xa-photo-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
+  -webkit-tap-highlight-color: transparent;
+}
+.xa-photo-open:focus-visible {
+  outline: 3px solid var(--xa-brand);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+/* The full-screen viewer (`PhotoViewer`): portalled to the `.xa-app` root, above every frame, footer, tab bar and
+   the minimise bubble (z 40). Text on the dark backdrop is white — 17:1 against #000 at .92. */
+.xa-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  background: rgba(0, 0, 0, 0.92);
+  color: #ffffff;
+  padding: env(safe-area-inset-top, 0) 0 env(safe-area-inset-bottom, 0);
+}
+.xa-viewer__bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+}
+.xa-viewer__position {
+  margin: 0;
+  font-size: var(--text-body);
+}
+.xa-viewer__close {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  cursor: pointer;
+}
+.xa-viewer__close:focus-visible,
+.xa-viewer__step:focus-visible {
+  outline: 3px solid #ffffff;
+  outline-offset: 2px;
+}
+.xa-viewer__stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+}
+.xa-viewer__image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.xa-viewer__failed {
+  margin: 0;
+  max-width: 32ch;
+  padding: 16px;
+  text-align: center;
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+.xa-viewer__steps {
+  flex: none;
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px 16px;
+}
+.xa-viewer__step {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 48px;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  background: transparent;
+  color: #ffffff;
+  font: inherit;
+  font-size: var(--text-body);
+  font-weight: 600;
+  cursor: pointer;
+}
+.xa-viewer__step:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+/* Opening is a 180ms fade — opacity only, declared in THE reduced-motion guard at the top (`.xa-viewer`), so none at
+   all under "reduce". */
+
+/* "Đã gửi phản ánh" when a photo did not arrive (`SendDonePhotoStatus`, sheet row 24): the red box, then each photo. */
+.xa-done-photos {
+  width: 100%;
+  text-align: left;
+}
+.xa-done-photos p {
+  margin: 0;
+}
+.xa-done-photos__list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+/* A button whose label carries a long value — the send button naming the commune verbatim (README §Non-negotiables
+   #5), the lookup of a full code: the words wrap inside the button, centred, never pushing it wider than the screen. */
+.xa-nut--wrap {
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 /* "Chia sẻ qua Zalo" under an article. */
@@ -5838,6 +5988,13 @@ button.xa-o-nhanh {
   font-size: var(--text-body);
   font-weight: 700;
   text-decoration: none;
+}
+/* Inside Zalo it is a <button> calling the shell's dialer (a `tel:` link does nothing there): same look. */
+button.xa-call-button {
+  width: 100%;
+  border: 0;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 /* The minimise bubble (`MinimiseBubble.tsx`): above the tab bar, at the right; draggable. */

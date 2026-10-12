@@ -47,6 +47,7 @@ import {
   DO_DAI_TOI_DA,
   type PhieuCuaToi, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
   type PhieuCuaToiTomTat, // vi-name-ok: existing contract type, not renamed (rule 12 #3)
+  RATING_REOPEN_THRESHOLD,
   type SceneLocation,
   thanGuiPhanAnh, // vi-name-ok: existing export, not renamed (rule 12 #3)
 } from "../api/hop-dong-phan-anh";
@@ -80,13 +81,13 @@ import {
   giaiThichTrangThai,
   KHAN_CAP,
   LOI_GUI,
-  SCENE_PHOTOS,
   THE_PHIEU,
   TRA_CUU,
   XA_PA,
   XA_TN,
 } from "./noi-dung";
-import { ONhapDoan, ONhapDong } from "./o-nhap";
+import { ONhapDoan, ONhapDong, OTimKiem } from "./o-nhap";
+import { boDau } from "./DanhBaXa"; // vi-name-ok: existing export, reused (rule 12 #3)
 import { PetitionRating } from "./PetitionRating";
 import { ResidentialUnitField, residentialUnitName, useResidentialUnits } from "./residential-unit-picker";
 import { AddressBlock } from "./address-block";
@@ -98,7 +99,7 @@ import {
   type PickedPhoto,
   type PickScenePhotos,
   ScenePhotoField,
-  ScenePhotoUploads,
+  SendDonePhotoStatus,
   SEND_FORM_MAX_PHOTOS,
   usePhotoPicking,
   usePhotoUploads,
@@ -401,47 +402,95 @@ export function ListStatus(props: { state: MyPetitions; onOpen: () => void; onRe
   return null;
 }
 
-export function PetitionList(props: {
+/* ─────────── THE SEARCH OF THE PHẢN ÁNH TAB (customer sheet App Xã 12/10/2026 row 17) ─────────── */
+
+/** The issued code's alphabet (`service-petitions/internal/domain/phieu_phan_anh.go` `chuCaiMaTraCuu`). */
+const LOOKUP_CODE_TYPED = /^PA[23456789ABCDEFGHJKMNPQRSTVWXYZ]{12}$/;
+
+/**
+ * What was typed → the COMPLETE lookup code in the shape the server issues it (`PA-4K7M-92XR-BTVD`), or `null`. Case,
+ * spaces, dashes and a leading "#" (as the cards show it) do not matter: an elderly citizen reading the code off a
+ * slip types it any of those ways. Anything shorter or with a letter the alphabet lacks is not a code. PURE.
+ */
+export function completeLookupCode(typed: string): string | null {
+  const compact = normaliseCode(typed).toUpperCase().replace(/[\s-]/g, "");
+  if (!LOOKUP_CODE_TYPED.test(compact)) return null;
+  return `PA-${compact.slice(2, 6)}-${compact.slice(6, 10)}-${compact.slice(10, 14)}`;
+}
+
+/**
+ * The citizen's OWN loaded petitions that match `query` — ON THE PHONE, nothing typed is sent anywhere. Case- and
+ * diacritic-insensitive like the directory (`boDau`): the field's name, the content excerpt, and the code. The code
+ * is compared without its dashes and only from three characters on: every code starts with "PA", so a one- or
+ * two-letter query would otherwise match the whole list through the prefix. PURE.
+ */
+export function filterOwnPetitions(items: readonly PhieuCuaToiTomTat[], query: string): readonly PhieuCuaToiTomTat[] {
+  const q = boDau(query.trim());
+  if (q === "") return items;
+  const compact = q.replace(/[\s#-]/g, "");
+  return items.filter(
+    (p) =>
+      [nhanLinhVuc(p.linh_vuc, p.nhan_linh_vuc), p.trich_noi_dung].some((t) => boDau(t).includes(q)) ||
+      (compact.length >= 3 && boDau(p.ma_tra_cuu).replace(/-/g, "").includes(compact)),
+  );
+}
+
+/**
+ * The tab's body under the search box, for one `query`. PURE apart from the callbacks — what the tests render.
+ *
+ *   a complete code not among the loaded petitions → ONE action, the own-only lookup (`onLookupCode`). Its answer is
+ *       the detail screen's: one sentence for "unknown", "someone else's" and "another commune's" (rule 4 forbidden
+ *       #2). Offered also before the list is loaded: a phone-less session can look up its own petition by code but
+ *       cannot read the list (ADR 0080), and the gate's accountless lookup (ADR 0083) starts from here.
+ *   nothing matches → one short line. Never a list of anybody else's petitions: there is none on the phone to show.
+ */
+export function PetitionSearchResults(props: {
   state: MyPetitions;
+  query: string;
   onOpenPetition: (code: string) => void;
-  onLookup: () => void;
-  /** No session yet: the citizen asks to see the list (goes through the gate). */
+  onLookupCode: (code: string) => void;
   onOpen: () => void;
   onRetry: () => void;
   onLoadMore: () => void;
 }) {
-  const { state } = props;
+  const { state, query } = props;
   const items = state.kind === "ready" ? state.items : [];
+  const searching = query.trim() !== "";
+  const shown = filterOwnPetitions(items, query);
+  const code = completeLookupCode(query);
+  const offerLookup = code !== null && !items.some((p) => p.ma_tra_cuu.toUpperCase() === code);
 
   return (
     <>
-      <button type="button" className="xa-the xa-hang xa-hang--vien" onClick={props.onLookup}>
-        <span className="xa-o-bt xa-mau--xanh" aria-hidden="true">
-          <BieuTuong ten="search" co={24} />
-        </span>
-        <span className="xa-hang__chu">
-          <strong>{XA_PA.tra_cuu_tieu_de}</strong>
-          <span className="xa-phu">{XA_PA.tra_cuu_goi_y}</span>
-        </span>
-        <BieuTuong ten="right" co={20} />
-      </button>
+      {offerLookup && (
+        <div className="xa-the xa-the--dem xa-khoi xa-lookup-offer">
+          <p className="xa-phu">{XA_PA.lookup_code_why}</p>
+          <button type="button" className="xa-nut xa-nut--wrap" onClick={() => props.onLookupCode(code)}>
+            <BieuTuong ten="search" co={20} />
+            <span>{XA_PA.lookup_code_button(code)}</span>
+          </button>
+        </div>
+      )}
       <ListStatus state={state} onOpen={props.onOpen} onRetry={props.onRetry} />
-      {/* NO status chips (owner 11/10/2026: theo prototype `FeedbackListPage.tsx` — the list, its paging, and the
-          "Tra cứu phiếu" row above). The status is on every card, in words. */}
+      {/* NO status chips (owner 11/10/2026: theo prototype `FeedbackListPage.tsx`). The status is on every card, in
+          words. */}
       {state.kind === "ready" && (
         <>
-          {items.length === 0 ? (
+          {items.length === 0 && !searching ? (
             // Nothing sent yet: the title and what to do next — the "Gửi phản ánh mới" button right below.
             <KhoiTrangThai bieu_tuong="message-square-plus" cau={XA_PA.chua_co_phieu} hint={XA_PA.empty_list_hint} />
+          ) : shown.length === 0 ? (
+            !offerLookup && <KhoiTrangThai bieu_tuong="search" cau={XA_PA.search_empty} hint={XA_PA.search_empty_hint} />
           ) : (
             <ul className="xa-ds">
-              {items.map((p) => (
+              {shown.map((p) => (
                 <li key={p.ma_tra_cuu}>
                   <PetitionCard petition={p} onOpen={() => props.onOpenPetition(p.ma_tra_cuu)} />
                 </li>
               ))}
             </ul>
           )}
+          {searching && state.hasMore && <p className="xa-phu">{XA_PA.search_loaded_only}</p>}
           {state.moreFailure !== null && (
             <p className="xa-loi-o" role="alert">
               {listFailureText(state.moreFailure)}
@@ -459,6 +508,40 @@ export function PetitionList(props: {
           )}
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * The Phản ánh tab: the search box at the top, as the directory's (sheet row 17: "dạng ô search như màn Danh bạ"),
+ * ALWAYS there — also before the list is loaded, so a box appearing later never moves the screen under the citizen's
+ * finger, and so a code can be looked up without the list. It replaced the "Tra cứu phiếu" row and its own screen.
+ * The query lives in this component only: kept while the tab is open, never sent, never stored.
+ */
+export function PetitionList(props: {
+  state: MyPetitions;
+  onOpenPetition: (code: string) => void;
+  /** A complete code typed that is not in the loaded list: the own-only lookup, through the gate (`TrangXa`). */
+  onLookupCode: (code: string) => void;
+  /** No session yet: the citizen asks to see the list (goes through the gate). */
+  onOpen: () => void;
+  onRetry: () => void;
+  onLoadMore: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  return (
+    <>
+      <div className="xa-tim">
+        <OTimKiem
+          id="xa-tim-phan-anh"
+          nhan={XA_PA.search_label}
+          placeholder={XA_PA.search_placeholder}
+          gia_tri={query}
+          toi_da={60}
+          onDoi={setQuery}
+        />
+      </div>
+      <PetitionSearchResults {...props} query={query} />
     </>
   );
 }
@@ -592,6 +675,20 @@ export function DongThoiGian({ petition }: { petition: PhieuCuaToi }) {
 }
 
 /**
+ * The citizen's OWN rating when it is what put this petition back into processing, or `null` (customer sheet App Xã
+ * 12/10/2026 row 21: the reopening was never said once the rating block remounted). Derived from what the citizen
+ * route already returns — no extra field: a rating at or below the server's fixed threshold reopens the petition in
+ * the same statement that stores it, and a reopening does not clear `rating` (`service-petitions/internal/store/
+ * petition_rating.go` `ReopenByRating`). Shown only while the petition is in the "Đang xử lý" group: once handled
+ * again it would describe a reopening that is over; a later 3–5 star rating replaces the low one, and then no
+ * notice. PURE.
+ */
+export function reopenedByRating(p: PhieuCuaToi): number | null {
+  if (p.rating === null || p.rating > RATING_REOPEN_THRESHOLD) return null;
+  return groupOf(p.trang_thai) === "dang-xu-ly" ? p.rating : null;
+}
+
+/**
  * The petition as the server returns it to its sender — no staff notes, no routing history (rule 4
  * forbidden #5). Rating is `PetitionRating`, the same block as the shared app: one network path, one rule.
  */
@@ -614,6 +711,7 @@ export function PetitionBody(props: {
   // "Hạn xử lý" once the petition is handled, "Dự kiến xong trước" before (`FeedbackDetailPage.tsx:89-93`).
   const group = groupOf(p.trang_thai);
   const handled = group === "da-xu-ly-xong" || group === "da-dong";
+  const reopenedStars = reopenedByRating(p);
   return (
     <>
       {/* The summary card, laid out as the prototype's (`FeedbackDetailPage.tsx:63-97`, owner 11/10/2026): the field
@@ -650,6 +748,13 @@ export function PetitionBody(props: {
           </>
         )}
       </div>
+      {/* Said in words under the summary, so the citizen who rated low sees at once that the commune took it back. */}
+      {reopenedStars !== null && (
+        <div className="xa-ghi-chu" role="note">
+          <BieuTuong ten="info" co={22} />
+          <p>{XA_PA.reopened_by_rating(reopenedStars)}</p>
+        </div>
+      )}
       {/* "Hình ảnh trước và sau khi xử lý" (the citizen's own photos beside the commune's), and "Thêm ảnh" while
           more may be added (ADR 0047:254 (12)). `key` by status: a petition that moved on drops "Thêm ảnh" and
           refetches the "after" list at once. */}
@@ -804,81 +909,16 @@ export function PetitionDetail(props: {
 
 /* ═══════════════════════════════ TRA CỨU PHIẾU ═══════════════════════════════ */
 
+/*
+ * The commune app's own "Tra cứu phiếu" screen (a box and a button) is GONE since 12/10/2026 (customer sheet row 17):
+ * the Phản ánh tab's search box filters the citizen's own list and, for a complete code not in it, opens that one
+ * petition (`PetitionSearchResults`, `TrangXa` route `tra-cuu-phieu`). The accountless public lookup (ADR 0083,
+ * `AccountlessLookup` below) keeps its own box: it has no list to search.
+ */
+
 /** The typed code, as the route takes it: trimmed, a leading "#" (as the card shows it) removed. */
 export function normaliseCode(typed: string): string {
   return typed.trim().replace(/^#/, "").trim();
-}
-
-export function PetitionLookup(props: {
-  onBack: () => void;
-  onSessionLost: OnSessionLost;
-  onChanged: () => void;
-  reopenWithPhone?: ReopenWithPhone;
-  pickScenePhotos?: PickScenePhotos;
-}) {
-  const [code, setCode] = useState("");
-  const [state, setState] = useState<DetailState | { readonly kind: "missing" } | null>(null);
-
-  async function search(value: string) {
-    if (value === "") {
-      setState({ kind: "missing" });
-      return;
-    }
-    setState({ kind: "loading" });
-    const out = lookupOutcome(await traCuuPhieu(value));
-    setState(out);
-    if (out.kind === "session") props.onSessionLost(() => void search(value));
-  }
-
-  /**
-   * The pull: the petition already found is re-read in place (as the detail screen does). Nothing found yet → nothing
-   * to refresh: the lookup is the citizen's typed act, and a pull never sends a code they have not asked for.
-   */
-  async function refresh(): Promise<boolean> {
-    if (state?.kind !== "found") return true;
-    const code = state.petition.ma_tra_cuu;
-    const out = lookupOutcome(await traCuuPhieu(code));
-    if (out.kind === "failed") return false;
-    setState(out);
-    if (out.kind === "session") props.onSessionLost(() => void search(code));
-    return true;
-  }
-
-  return (
-    <>
-      <DauManCon tieu_de={XA_PA.tra_cuu_tieu_de} onQuayLai={props.onBack} />
-      <TrangCon onRefresh={refresh}>
-        <div className="xa-the xa-the--dem xa-khoi">
-          <ONhapDong id="xa-ma-tra-cuu" nhan={XA_PA.ma_phieu} goi_y={XA_PA.tra_cuu_goi_y} gia_tri={code} toi_da={40} onDoi={setCode} />
-          <button
-            type="button"
-            className="xa-nut"
-            disabled={state?.kind === "loading"}
-            onClick={() => void search(normaliseCode(code))}
-          >
-            <BieuTuong ten="search" co={20} />
-            {TRA_CUU.nut_tra}
-          </button>
-        </div>
-        {state?.kind === "missing" && <KhoiTrangThai bieu_tuong="info" loi cau={XA_PA.thieu_ma} />}
-        {state?.kind === "loading" && <KhoiTrangThai bieu_tuong="search" cau={TRA_CUU.dang_tra} dang_tai shape="card" />}
-        {state?.kind === "session" && <KhoiTrangThai bieu_tuong="alert" loi cau={XA_PA.session_expired} />}
-        {state?.kind === "failed" && <KhoiTrangThai bieu_tuong="search" loi cau={state.text} />}
-        {state?.kind === "found" && (
-          <PetitionBody
-            petition={state.petition}
-            onRated={(p) => {
-              setState({ kind: "found", petition: p });
-              props.onChanged();
-            }}
-            onReload={() => void search(state.petition.ma_tra_cuu)}
-            reopenWithPhone={props.reopenWithPhone}
-            photos={{ pick: props.pickScenePhotos, onSessionLost: props.onSessionLost }}
-          />
-        )}
-      </TrangCon>
-    </>
-  );
 }
 
 /* ═══════════════════════════════ GỬI — Lĩnh vực → Mô tả → Đã gửi ═══════════════════════════════ */
@@ -1928,25 +1968,24 @@ export function CommuneSendScreen(props: {
             onFollow={() => props.onOpenPetition(sent.ma_tra_cuu)}
             onHome={props.onBack}
           >
-            <ScenePhotoUploads jobs={uploads.jobs} onRetry={uploads.retry} afterSend />
+            <SendDonePhotoStatus jobs={uploads.jobs} onRetry={uploads.retry} />
           </SendDone>
         )}
       </TrangCon>
 
       {/* THE SEND FOOTER (§6.2) — a block of the frame column under the scrolling form, so the button is always
-          where the thumb is. Above the button, in reading order: THE COMMUNE, READ AGAIN AT THE LAST STEP
-          (README §Non-negotiables #5 — the name on the header, which the session was checked against when it
-          opened, `openCommuneAppSession`), then the refusal: the prototype's orange box for a lost network (sent
-          again by itself, same key), the red box for anything else. */}
+          where the thumb is. THE COMMUNE, READ AGAIN AT THE LAST STEP (README §Non-negotiables #5), is the button's
+          own label since 12/10/2026 (owner, customer sheet row 23: the lines "Phản ánh sẽ gửi tới: …" and "Kèm n
+          ảnh…" were removed) — the name on the header, which the session was checked against when it opened
+          (`openCommuneAppSession`). Above the button: the thôn picked, then the refusal — the prototype's orange box
+          for a lost network (sent again by itself, same key), the red box for anything else. */}
       {step === 2 && (
         <div className="xa-chan-gui xa-send-footer">
-          <p className="xa-xa-nhan">{XA_PA.gui_toi(props.ten_xa)}</p>
           {residentialUnitName(units.list, unitId) !== "" && (
             <p className="xa-phu">
               {COMMUNE_RESIDENTIAL_UNIT_WORDS.summary_label}: <strong>{residentialUnitName(units.list, unitId)}</strong>
             </p>
           )}
-          {photos.length > 0 && <p className="xa-phu">{SCENE_PHOTOS.footer_with(photos.length)}</p>}
           {failed !== null && failure === "loi-mang" ? (
             <p className="xa-offline-box" role="alert">
               {COMMUNE_OFFLINE_NOTICE}
@@ -1980,13 +2019,13 @@ export function CommuneSendScreen(props: {
           ) : (
             <button
               type="button"
-              className="xa-nut"
+              className="xa-nut xa-nut--wrap"
               onClick={submit}
               aria-busy={sending || undefined}
               disabled={sending || senderPending || form.noi_dung.trim() === ""}
             >
               <BieuTuong ten="send" co={20} />
-              {sending ? XA_PA.sending_button : GUI.tieu_de}
+              {sending ? XA_PA.sending_button : XA_PA.send_to(props.ten_xa)}
             </button>
           )}
         </div>
@@ -1996,10 +2035,16 @@ export function CommuneSendScreen(props: {
 }
 
 /**
- * Step 3 — "Đã gửi" (§6.2), shown only after a 201: the check in its green circle (a ≤300ms pop, only under
- * `prefers-reduced-motion: no-preference`), the lookup code the server issued (rule 10 #1), and a blue band
- * with the deadlines the SERVER returned — `han_tiep_nhan`, and `han_xu_ly_xong` when it already has one.
- * Neither is ever computed here (rule 10 #2): an absent deadline is an absent line. Exported for tests.
+ * Step 3 — "Đã gửi" (§6.2), as the prototype's `SuccessPanel` (`NewFeedbackPage.tsx:455-495`; customer sheet App Xã
+ * 12/10/2026 row 24): the check in its green circle (a ≤300ms pop, only under `prefers-reduced-motion:
+ * no-preference`), the commune that received it, the lookup code the server issued, WHOLE (rule 10 #1), and the blue
+ * band with ONE line, "Dự kiến xử lý xong trước …" — the prototype's line and the commitment `commune-terms.ts` says
+ * is shown (rule 10). The "Cán bộ xã sẽ xem phiếu trước …" line is gone (owner, row 24); the band shows only when the
+ * SERVER returned `han_xu_ly_xong` — never computed here (rule 10 #2): an absent deadline is an absent line.
+ *
+ * KEPT, though the prototype has neither: the ADR 0080 notice for an unverified petition (it is never notified, and
+ * the citizen must be told so before leaving — a decision, not decoration), and a photo that did NOT arrive
+ * (`SendDonePhotoStatus`, passed as `children`). Exported for tests.
  */
 export function SendDone(props: {
   /** The commune the petition went to — the line under the title names it (`XA_PA.done_received`). */
@@ -2007,12 +2052,11 @@ export function SendDone(props: {
   petition: PhieuCuaToi;
   onFollow: () => void;
   onHome: () => void;
-  /** The photos going up after the 201 (`ScenePhotoUploads`) — under the code, above the two buttons. */
+  /** The photos' state after the 201 (`SendDonePhotoStatus`) — under the code, above the two buttons. */
   children?: ReactNode;
 }) {
   const p = props.petition;
-  // "… trước 15h ngày 2/10" (the prototype's `formatDeadline`), from the SERVER's values only (rule 10 #2).
-  const acknowledge = p.han_tiep_nhan !== null ? formatDeadline(p.han_tiep_nhan) : null;
+  // "… trước 15h ngày 2/10" (the prototype's `formatDeadline`), from the SERVER's value only (rule 10 #2).
   const resolve = p.han_xu_ly_xong !== null ? formatDeadline(p.han_xu_ly_xong) : null;
   return (
     <div className="xa-ket-qua">
@@ -2034,10 +2078,9 @@ export function SendDone(props: {
           <p>{XA_PA.done_no_notice}</p>
         </div>
       )}
-      {(acknowledge !== null || resolve !== null) && (
+      {resolve !== null && (
         <div className="xa-deadline-band">
-          {acknowledge !== null && <p>{XA_PA.acknowledge_by(acknowledge)}</p>}
-          {resolve !== null && <p>{XA_PA.resolve_by(resolve)}</p>}
+          <p>{XA_PA.resolve_by(resolve)}</p>
         </div>
       )}
       {props.children}

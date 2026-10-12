@@ -147,7 +147,7 @@ describe("Phản ánh của tôi: the card and the empty list (§6.3)", () => {
       createElement(PetitionList, {
         state: { kind: "ready", items: [], cursor: "", hasMore: false, loadingMore: false, moreFailure: null },
         onOpenPetition: noop,
-        onLookup: noop,
+        onLookupCode: noop,
         onOpen: noop,
         onRetry: noop,
         onLoadMore: noop,
@@ -243,9 +243,12 @@ describe("Gửi phản ánh (§6.2)", () => {
     expect(done).toContain("xa-pop");
     // The prototype's line and deadline format (`NewFeedbackPage.tsx:471, 482`), from the server's value only.
     expect(done).toContain("Xã Thử đã nhận được phản ánh của bà con.");
-    expect(done).toContain(XA_PA.acknowledge_by("10h ngày 28/9"));
-    // `han_xu_ly_xong` null → no "Dự kiến xử lý xong" line; never a date computed here (rule 10 #2).
+    // Customer sheet App Xã 12/10/2026 row 24 (owner): no "Cán bộ xã sẽ xem phiếu trước …" line any more.
+    expect(done).not.toContain(XA_PA.acknowledge_by("10h ngày 28/9"));
+    expect(done).not.toContain("Cán bộ xã sẽ xem phiếu");
+    // `han_xu_ly_xong` null → no "Dự kiến xử lý xong" line and no band; never a date computed here (rule 10 #2).
     expect(done).not.toContain("Dự kiến xử lý xong trước");
+    expect(done).not.toContain("xa-deadline-band");
     expect(done).toContain(`>${XA_PA.theo_doi}</button>`);
     expect(done).toContain(`>${XA_TN.nut_ve_trang_chu}</button>`);
     const both = html(
