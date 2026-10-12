@@ -1232,6 +1232,22 @@ body {
   box-shadow: var(--bong-the);
 }
 
+/* One action inside a `.tn` card ("Kết nối với ViHAT", 12/10/2026): no second frame — a card inside a card reads
+   as two unrelated things. A rule above each action is what tells the three apart, plus its own `h3`. */
+.tn--muc {
+  margin: 16px 0 0;
+  padding: 16px 0 0;
+  border: 0;
+  border-top: 1px solid var(--vh-line);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+
+.tn--muc .tn__tieu-de {
+  font-size: 20px;
+}
+
 .tn__dau {
   display: flex;
   align-items: center;

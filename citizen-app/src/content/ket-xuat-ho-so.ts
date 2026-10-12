@@ -892,7 +892,7 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     may_chu: "`vihat-miniapp` — máy chủ của Tập đoàn ViHAT Group",
     khi_nao: "người dùng tự bấm nút đăng nhập và đồng ý chia sẻ số Zalo trên hộp thoại của Zalo",
     nguoi_dung_bam: true,
-    man: "Liên hệ — khối “Đăng nhập bằng số Zalo”",
+    man: "Liên hệ — thẻ “Kết nối với ViHAT”, khối “Đăng nhập bằng số Zalo”",
     truong: TRUONG_GUI_DI_PHIEN,
     app: "shared",
   },
@@ -903,7 +903,8 @@ export const DUONG_ROI_KHOI_MAY: readonly DuongRoiKhoiMay[] = [
     khi_nao:
       "người dùng tự bấm “Gửi yêu cầu tư vấn” hoặc “Đề nghị gọi lại cho tôi”; “Chat với chuyên viên” (kèm tên Zalo nếu người dùng đồng ý); hoặc “Đăng ký nhận” / “Huỷ nhận ưu đãi SMS”",
     nguoi_dung_bam: true,
-    man: "Tư vấn và báo giá · Liên hệ — khối “Chat với chuyên viên” · Trang chủ — khối “Nhận ưu đãi qua SMS”",
+    // 12/10/2026: both one-tap blocks sit in the "Kết nối với ViHAT" card on Liên hệ (SMS left the home screen).
+    man: "Tư vấn và báo giá · Liên hệ — thẻ “Kết nối với ViHAT”, khối “Chat với chuyên viên” và khối “Nhận ưu đãi qua SMS”",
     truong: TRUONG_GUI_DI,
     app: "shared",
   },

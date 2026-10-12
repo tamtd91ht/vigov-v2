@@ -1,5 +1,6 @@
 /**
- * "CHAT VỚI CHUYÊN VIÊN" — a block on Liên hệ (owner decision 07/10/2026).
+ * "CHAT VỚI CHUYÊN VIÊN" — owner decision 07/10/2026; since 12/10/2026 one of the three actions of the
+ * "Kết nối với ViHAT" card on Liên hệ (`company-intro/ConnectWithVihat.tsx`).
  *
  * ONE TAP: log in if needed (the existing one-tap login, `ensure-session.ts`), ask Zalo for the display name,
  * record a `chat` request, open the OA chat. No account to create, no status to wait on.
@@ -40,20 +41,36 @@ function outcomeSentence(state: ChatOutcome): { text: string; done: boolean } {
   }
 }
 
+/**
+ * Heading level = where the block sits. `h3` means "one action inside the 'Kết nối với ViHAT' card" (12/10/2026):
+ * the card already carries the `h2`, so a second `h2` here would tell a screen reader this is a sibling section,
+ * and the card frame is dropped (`tn--muc`) so it does not read as a card inside a card.
+ */
+export type BlockHeading = "h2" | "h3";
+
 /** The block, PURE — every state renders without Zalo, a server or a DOM. */
-export function ChatWithSpecialistView({ state, onPress }: { state: ChatViewState; onPress: () => void }) {
+export function ChatWithSpecialistView({
+  state,
+  onPress,
+  heading = "h2",
+}: {
+  state: ChatViewState;
+  onPress: () => void;
+  heading?: BlockHeading;
+}) {
   const busy = state.kind === "busy";
   const sentence = state.kind === "idle" || state.kind === "busy" ? null : outcomeSentence(state);
+  const Heading = heading;
 
   return (
-    <section className="tn hien-len" aria-labelledby={HEADING_ID}>
+    <section className={heading === "h3" ? "tn tn--muc" : "tn hien-len"} aria-labelledby={HEADING_ID}>
       <div className="tn__dau">
         <span className="tn__huy-hieu" aria-hidden="true">
           <MessagingGlyph className="tn__glyph" />
         </span>
-        <h2 className="tn__tieu-de" id={HEADING_ID}>
+        <Heading className="tn__tieu-de" id={HEADING_ID}>
           {CHAT_SPECIALIST.title}
-        </h2>
+        </Heading>
       </div>
       <p className="tn__vi-sao">{CHAT_SPECIALIST.why}</p>
 
@@ -71,7 +88,13 @@ export function ChatWithSpecialistView({ state, onPress }: { state: ChatViewStat
   );
 }
 
-export function ChatWithSpecialist({ steps = LIVE_STEPS }: { steps?: QuickRequestSteps }) {
+export function ChatWithSpecialist({
+  steps = LIVE_STEPS,
+  heading,
+}: {
+  steps?: QuickRequestSteps;
+  heading?: BlockHeading;
+}) {
   const { phien, datPhien } = dungPhien(); // vi-name-ok: existing context fields
   const [state, setState] = useState<ChatViewState>({ kind: "idle" });
 
@@ -81,5 +104,5 @@ export function ChatWithSpecialist({ steps = LIVE_STEPS }: { steps?: QuickReques
     setState(await chatWithSpecialist(phien, campaignSource(), datPhien, steps));
   }
 
-  return <ChatWithSpecialistView state={state} onPress={() => void press()} />;
+  return <ChatWithSpecialistView state={state} onPress={() => void press()} heading={heading} />;
 }

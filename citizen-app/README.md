@@ -369,7 +369,7 @@ vị trí ở "Tìm văn phòng".
 | **Quét danh thiếp số** | Tab "Danh thiếp" | `scanQRCode` | **Trọn vẹn.** Quét → bóc tách vCard → thẻ có cấu trúc → nút Gọi (`openPhone`) · Gửi email (`mailto:`) · Mở liên kết (`openWebview`) · Quét mã khác |
 | **Văn phòng ViHAT Group** | Tab "Liên hệ" | `openWebview` | **Trọn vẹn.** Ba văn phòng thật và nút "Chỉ đường" (bản đồ). **Không xin vị trí** |
 | **Đăng nhập bằng số Zalo** | Tab "Liên hệ" | `getPhoneNumber` + `getAccessToken` | **Trọn vẹn.** Một chạm, **không OTP, không ô nhập sáu số** (ADR 0020) → hai mã → máy chủ `vihat-miniapp` đổi mã và phát hành phiên → phiên giữ trong `useState`, không ghi xuống máy. Hotline và email nằm ngay dưới nút: đường lui cho người từ chối quyền |
-| **Chat với chuyên viên** · **Nhận ưu đãi qua SMS** | Liên hệ · Trang chủ | đăng nhập một chạm + `getUserInfo` (chỉ chat) | Một chạm; tên Zalo chỉ gửi kèm yêu cầu trò chuyện khi người dùng đồng ý |
+| **Chat với chuyên viên** · **Nhận ưu đãi qua SMS** | Tab "Liên hệ", thẻ "Kết nối với ViHAT" (cùng khối đăng nhập, từ 12/10/2026) | đăng nhập một chạm + `getUserInfo` (chỉ chat) | Một chạm; tên Zalo chỉ gửi kèm yêu cầu trò chuyện khi người dùng đồng ý. Đã có phiên thì khối đăng nhập thay bằng câu "Đã kết nối…" (không hiện số — ứng dụng không nhận số) |
 | **Danh thiếp số của chúng tôi** | Tab "Danh thiếp" | `keepScreen` + `downloadFile` + `vibrate` | **Trọn vẹn.** Mã QR chứa vCard dựng từ `COMPANY`/`CONTACT` → giữ màn sáng khi người khác quét (**tắt lại khi rời màn**) → tải `.vcf` bằng `fileBase64Data`, **không máy chủ nào** → rung một nhịp khi tải xong |
 
 ### SỰ THẬT ĐÃ ĐO TỪ `zmp-sdk` 2.53.0 — đừng tra lại tài liệu web

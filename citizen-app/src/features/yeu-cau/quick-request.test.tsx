@@ -396,12 +396,14 @@ describe("where the blocks sit, and what the declarations say about them", () =>
     expect(textOf(render(<ContactScreen />))).toContain(CHAT_SPECIALIST.title);
   });
 
-  it("the home screen carries the SMS block, right after 'Tin ViHAT'", () => {
-    const t = textOf(render(<HomeScreen />));
-    const news = t.indexOf(TIEU_DE_KHOI_TIN);
-    const sms = t.indexOf(SMS_OFFERS.title);
-    expect(news).toBeGreaterThan(-1);
-    expect(sms).toBeGreaterThan(news);
+  // 12/10/2026 (owner, Zalo resubmission): the SMS block moved from the home screen into the "Kết nối với ViHAT"
+  // card on Liên hệ. The home screen still carries "Tin ViHAT" — and no longer any ask of the phone number.
+  it("the SMS block is on Liên hệ now, and the home screen asks for no phone number", () => {
+    const home = textOf(render(<HomeScreen />));
+    expect(home).toContain(TIEU_DE_KHOI_TIN);
+    expect(home).not.toContain(SMS_OFFERS.title);
+    expect(home).not.toContain(SMS_OFFERS.consent);
+    expect(textOf(render(<ContactScreen />))).toContain(SMS_OFFERS.title);
   });
 
   it("the platform-call declarations name both features where the call runs behind them", () => {
@@ -409,7 +411,10 @@ describe("where the blocks sit, and what the declarations say about them", () =>
     for (const api of ["getPhoneNumber", "getAccessToken"]) {
       expect(row(api).tinh_nang, api).toContain("Chat với chuyên viên");
       expect(row(api).tinh_nang, api).toContain("Nhận ưu đãi qua SMS");
-      expect(row(api).man, api).toContain("Trang chủ");
+      expect(row(api).man, api).toContain("Liên hệ");
+      // A declaration naming a screen the call no longer runs on sends the reviewer looking for a missing button.
+      expect(row(api).intro_app?.man, api).toBe("Liên hệ");
+      expect(row(api).de_lam_gi, api).not.toContain("ở Trang chủ");
       expect(row(api).de_lam_gi, api).toContain("Chat với chuyên viên");
     }
     const name = row("getUserInfo");

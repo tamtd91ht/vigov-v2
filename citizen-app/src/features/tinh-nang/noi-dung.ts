@@ -199,7 +199,7 @@ export const THIEP_CUA_CHUNG_TOI = {
  * literal, so `bundle-for-zalo.test.ts` can find it in the bundle.
  */
 export const DOAN_CHINH_SACH_TINH_NANG: readonly string[] = [
-  "Ứng dụng xin các quyền của nền tảng Zalo cho các tính năng dưới đây, và cho hai nút một chạm: 'Chat với chuyên viên' ở màn Liên hệ xin số điện thoại và tên Zalo của bạn để chuyên viên biết ai đang nhắn; 'Đăng ký nhận' ưu đãi SMS ở Trang chủ xin số điện thoại để gửi tin nhắn ưu đãi tới đúng số ấy. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
+  "Ứng dụng xin các quyền của nền tảng Zalo cho các tính năng dưới đây, và cho hai nút một chạm trong thẻ 'Kết nối với ViHAT' ở màn Liên hệ: 'Chat với chuyên viên' xin số điện thoại và tên Zalo của bạn để chuyên viên biết ai đang nhắn; 'Đăng ký nhận' ưu đãi SMS xin số điện thoại để gửi tin nhắn ưu đãi tới đúng số ấy. Mỗi quyền chỉ được hỏi khi bạn tự bấm nút, và bạn có quyền từ chối mà vẫn dùng được ứng dụng.",
   ...NOI_DUNG_TINH_NANG.map((mot) => `${mot.nhan_ngan} — ${mot.vi_sao}`),
   "Với số điện thoại, Zalo không trả số thật về máy: ứng dụng chỉ nhận một mã dùng được một lần và hết hạn sau 2 phút. Số điện thoại của bạn không nằm trong mã đó.",
   "Với quét mã QR, nội dung mã hiện lên màn hình và mất đi khi bạn quét mã khác hoặc rời màn hình. Nếu mã là một tấm danh thiếp, nội dung ấy là dữ liệu cá nhân của người đã đưa nó cho bạn, và ứng dụng cũng không lưu lại.",

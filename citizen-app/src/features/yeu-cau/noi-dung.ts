@@ -113,7 +113,25 @@ export const YEU_CAU_CUA_TOI = {
 } as const;
 
 /**
- * "CHAT VỚI CHUYÊN VIÊN" — the block on Liên hệ (07/10/2026).
+ * "KẾT NỐI VỚI ViHAT" — the one card on Liên hệ holding every ask of the phone number (owner 12/10/2026, Zalo
+ * resubmission): log in, chat with a specialist, SMS offers. Each action keeps its own purpose sentence, shown before
+ * its button and so before Zalo's dialog (Mini App policy 3.3.4).
+ *
+ * ⚠ `connected` NAMES NO NUMBER, NOT EVEN MASKED: the app never receives the number — `getPhoneNumber` returns a
+ *   code only the server can exchange (`dang-nhap/hop-dong.ts`, type `Phien`: "KHÔNG CÓ `so_dien_thoai`"). A masked
+ *   number on screen would need the server to send it back, a new data flow nobody decided.
+ */
+export const CONNECT_VIHAT = {
+  title: "Kết nối với ViHAT",
+  lead: "Ba việc riêng, mỗi việc nói rõ để làm gì. Zalo chỉ hỏi quyền khi chính bạn bấm.",
+  connected: "Đã kết nối với ViHAT bằng số Zalo của bạn.",
+  // A session can expire on the server while the app still holds it (nothing clears it), so a way to log in
+  // again always stays; it opens the login action with its purpose sentence, it does not call Zalo by itself.
+  relogin: "Đăng nhập lại",
+} as const;
+
+/**
+ * "CHAT VỚI CHUYÊN VIÊN" — an action of the "Kết nối với ViHAT" card on Liên hệ (07/10/2026).
  *
  * The explanation says WHY before Zalo's dialog does (Mini App policy 3.3.4): the specialist knows who is
  * writing and can call back if the chat drops. It names the floating "Chat Zalo" button (`NHAN_NUT_CHAT`,
@@ -136,7 +154,8 @@ export const CHAT_SPECIALIST = {
 } as const;
 
 /**
- * "NHẬN ƯU ĐÃI QUA SMS" — the block on the home screen (07/10/2026).
+ * "NHẬN ƯU ĐÃI QUA SMS" — an action of the "Kết nối với ViHAT" card on Liên hệ (07/10/2026; on the home screen
+ * until 12/10/2026).
  *
  * ⚠ THE CONSENT SENTENCE NAMES ALL THREE THINGS, AND NONE MAY BE DROPPED: which number (the Zalo phone number),
  *   what arrives (ViHAT's offers and promotions — it is ADVERTISING, said as such), and how to stop (the

@@ -143,13 +143,16 @@ export function KetQuaDangNhap({ ma }: { ma: MaDangNhap }) {
  * Vẫn đúng khuôn `TinhNangCoTrangThai` như năm khối kia: một tiêu đề, một lý do đọc được, một
  * nút, một chỗ hiện kết quả, và bốn nhánh — xong · từ chối · ngoài Zalo · không lấy được. Từ
  * chối là ĐƯỜNG BÌNH THƯỜNG (`code === -201`), không phải lỗi.
+ *
+ * Since 12/10/2026 it is the first action of the "Kết nối với ViHAT" card (`heading="h3"`,
+ * `company-intro/ConnectWithVihat.tsx`), which shows it only while no session is held.
  */
-export function KhoiDangNhap() {
+export function KhoiDangNhap({ heading = "h2" }: { heading?: "h2" | "h3" }) {
   return (
     <TinhNangCoTrangThai
       ma="dang-nhap"
       xin={xinMaDangNhap}
-      cap_tieu_de="h2"
+      cap_tieu_de={heading}
       glyph={<HandshakeGlyph className="tn__glyph" />}
       veKetQua={(ma) => <KetQuaDangNhap ma={ma} />}
       duoi_cung={<DuongLienHeNgay />}

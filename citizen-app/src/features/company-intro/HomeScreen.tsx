@@ -8,7 +8,6 @@ import {
   soNamHoatDong,
   SOLUTIONS,
 } from "../../content/company-profile";
-import { SmsOffers } from "../yeu-cau/SmsOffers";
 
 import { DaiChienDich } from "./DaiChienDich";
 import { MOC_CHANG_DUONG, type ThamSoMan } from "./dieu-huong";
@@ -182,9 +181,8 @@ export function HomeScreen({ onDi }: ThamSoMan) {
 
       <KhoiTin />
 
-      {/* RIGHT UNDER "Tin ViHAT" (07/10/2026): someone who just read our news is the reader for our offers.
-          One tap, a consent sentence that names the number, the content and the way to stop. */}
-      <SmsOffers />
+      {/* "Nhận ưu đãi qua SMS" stood here 07/10 → 12/10/2026; it moved into the "Kết nối với ViHAT" card on Liên hệ
+          (owner, Zalo resubmission), so every ask of the phone number sits in one place with its purpose. */}
 
       {/* "Quản lý quyền" is no longer a block on this screen (owner 11/10/2026); it stays reachable from Liên hệ. */}
 

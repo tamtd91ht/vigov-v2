@@ -1,5 +1,7 @@
 /**
- * "NHẬN ƯU ĐÃI QUA SMS" — a block on the home screen, beside "Tin ViHAT" (owner decision 07/10/2026).
+ * "NHẬN ƯU ĐÃI QUA SMS" — owner decision 07/10/2026. Since 12/10/2026 one of the three actions of the
+ * "Kết nối với ViHAT" card on Liên hệ (`company-intro/ConnectWithVihat.tsx`), no longer a block on the home screen:
+ * one card for every ask of the phone number, each with its own purpose, instead of three asks on two screens.
  *
  * ONE TAP: log in if needed (the existing one-tap login), record `sms_promo`, say "Đã ghi nhận". Stopping is the
  * same shape: one tap, `sms_optout`.
@@ -21,6 +23,7 @@ import { MessagingGlyph } from "../company-intro/icons";
 import { bearerCua, dungPhien } from "../dang-nhap/kho-phien"; // vi-name-ok: existing exports
 import { LOI_MO_NGOAI } from "../tinh-nang/noi-dung"; // vi-name-ok: existing export
 
+import type { BlockHeading } from "./ChatWithSpecialist";
 import { SMS_OFFERS, TU_VAN } from "./noi-dung"; // vi-name-ok: existing export TU_VAN
 import {
   campaignSource,
@@ -70,23 +73,27 @@ export function SmsOffersView({
   subscription,
   action,
   onChoose,
+  heading = "h2",
 }: {
   subscription: SmsSubscription;
   action: SmsAction;
   onChoose: (choice: SmsKind) => void;
+  /** `h3` = an action inside the "Kết nối với ViHAT" card — see `BlockHeading`. */
+  heading?: BlockHeading;
 }) {
   const busy = action.kind === "busy";
   const sentence = action.kind === "done" ? outcomeSentence(action.choice, action.outcome) : null;
+  const Heading = heading;
 
   return (
-    <section className="tn hien-len" aria-labelledby={HEADING_ID}>
+    <section className={heading === "h3" ? "tn tn--muc" : "tn hien-len"} aria-labelledby={HEADING_ID}>
       <div className="tn__dau">
         <span className="tn__huy-hieu" aria-hidden="true">
           <MessagingGlyph className="tn__glyph" />
         </span>
-        <h2 className="tn__tieu-de" id={HEADING_ID}>
+        <Heading className="tn__tieu-de" id={HEADING_ID}>
           {SMS_OFFERS.title}
-        </h2>
+        </Heading>
       </div>
       <p className="tn__vi-sao">{SMS_OFFERS.consent}</p>
 
@@ -126,9 +133,11 @@ export function SmsOffersView({
 export function SmsOffers({
   steps = LIVE_STEPS,
   readList = docYeuCauCuaToi, // vi-name-ok: existing export
+  heading,
 }: {
   steps?: QuickRequestSteps;
   readList?: (bearer: string) => Promise<KetQuaDoc>; // vi-name-ok: existing type
+  heading?: BlockHeading;
 }) {
   const { phien, datPhien } = dungPhien(); // vi-name-ok: existing context fields
   const bearer = bearerCua(phien); // vi-name-ok: existing export
@@ -169,5 +178,5 @@ export function SmsOffers({
     setAction({ kind: "done", choice, outcome });
   }
 
-  return <SmsOffersView subscription={subscription} action={action} onChoose={(c) => void choose(c)} />;
+  return <SmsOffersView subscription={subscription} action={action} onChoose={(c) => void choose(c)} heading={heading} />;
 }

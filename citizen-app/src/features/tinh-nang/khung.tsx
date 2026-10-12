@@ -26,6 +26,8 @@ import type { KetQuaXin } from "./zalo-api";
 
 export type TrangThai<T = string> = { kieu: "chua-goi" } | { kieu: "dang-cho" } | KetQuaXin<T>;
 
+export type HeadingLevel = "h1" | "h2" | "h3";
+
 /**
  * `id` của tiêu đề một khối tính năng — và cũng là MỎ NEO để một màn khác cuộn tới nó.
  *
@@ -63,7 +65,11 @@ export function KhungTinhNang<T>({
   ma: MaTinhNang;
   trang_thai: TrangThai<T>;
   onBam: () => void;
-  cap_tieu_de?: "h1" | "h2";
+  /**
+   * `h3` (12/10/2026) = one action inside the "Kết nối với ViHAT" card on Liên hệ: the card holds the `h2`, and
+   * the frame is dropped (`tn--muc`) so the action does not read as a card inside a card.
+   */
+  cap_tieu_de?: HeadingLevel;
   /** Hình trang trí cạnh tiêu đề. `aria-hidden` như mọi glyph khác — chữ mới là nội dung. */
   glyph?: ReactNode;
   /**
@@ -84,7 +90,7 @@ export function KhungTinhNang<T>({
   const TieuDe = cap_tieu_de;
 
   return (
-    <section className="tn hien-len" aria-labelledby={mocTinhNang(ma)}>
+    <section className={cap_tieu_de === "h3" ? "tn tn--muc" : "tn hien-len"} aria-labelledby={mocTinhNang(ma)}>
       <div className="tn__dau">
         {glyph !== undefined && (
           <span className="tn__huy-hieu" aria-hidden="true">
@@ -136,7 +142,7 @@ export function TinhNangCoTrangThai<T>({
 }: {
   ma: MaTinhNang;
   xin: () => Promise<KetQuaXin<T>>;
-  cap_tieu_de?: "h1" | "h2";
+  cap_tieu_de?: HeadingLevel;
   glyph?: ReactNode;
   truoc_nut?: ReactNode;
   veKetQua: (du_lieu: T) => ReactNode;

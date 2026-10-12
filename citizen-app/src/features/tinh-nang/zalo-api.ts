@@ -381,11 +381,12 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // "Trang chủ" and the two one-tap features JOINED 07/10/2026: "Chat với chuyên viên" (Liên hệ) and "Nhận ưu
     // đãi qua SMS" (Trang chủ) log the citizen in with this same call when no session is held
     // (`features/dang-nhap/ensure-session.ts`). Same call, two more buttons it runs behind — so the row says so.
-    man: "Liên hệ · Trang chủ · Xác nhận xã · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    // "Trang chủ" LEFT 12/10/2026: the SMS block moved into the "Kết nối với ViHAT" card on Liên hệ.
+    man: "Liên hệ · Xác nhận xã · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
     tinh_nang:
       "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS · Mở phiên làm việc với xã · Vị trí nơi xảy ra sự việc",
     de_lam_gi:
-      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ hoặc “Đăng ký nhận” ưu đãi SMS ở Trang chủ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
+      "Lấy mã phiên Zalo của bạn. Mã này không chứa tên hay số điện thoại; chỉ máy chủ đổi được nó thành định danh người dùng. Phiên mở ra từ mã này là thứ cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình, và — sau khi bạn quét mã QR của xã và bấm xác nhận — là thứ mở phiên làm việc với đúng xã ấy. Khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm. Khi xã cần xác nhận số điện thoại của bạn, ứng dụng lấy lại mã này để mở lại phiên ấy kèm số điện thoại bạn đồng ý chia sẻ. Khi bạn bấm “Lấy vị trí hiện tại” lúc gửi phản ánh, mã này đi cùng mã vị trí để máy chủ đổi mã vị trí thành toạ độ.",
     hoi_nguoi_dung: false,
     roi_khoi_may:
       "Mã phiên được gửi tới máy chủ để phát hành phiên đăng nhập (kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS), để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — để đổi mã vị trí thành toạ độ.",
@@ -401,10 +402,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
         "Mã phiên được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã, hoặc — khi bạn bấm lấy vị trí — tới máy chủ của đơn vị cung cấp nền tảng kỹ thuật của ứng dụng để đổi mã vị trí thành toạ độ.",
     },
     intro_app: {
-      man: "Liên hệ · Trang chủ",
+      man: "Liên hệ",
       tinh_nang: "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS",
       de_lam_gi:
-        "Lấy mã phiên Zalo của bạn khi bạn đăng nhập. Mã này không chứa tên hay số điện thoại; chỉ máy chủ của chúng tôi đổi được nó thành định danh người dùng. Phiên mở ra từ mã này cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ hoặc “Đăng ký nhận” ưu đãi SMS ở Trang chủ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm.",
+        "Lấy mã phiên Zalo của bạn khi bạn đăng nhập. Mã này không chứa tên hay số điện thoại; chỉ máy chủ của chúng tôi đổi được nó thành định danh người dùng. Phiên mở ra từ mã này cho bạn gửi yêu cầu tư vấn và xem lại những yêu cầu của chính mình. Khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ mà chưa đăng nhập, ứng dụng đăng nhập cho bạn bằng chính mã này, trong cùng một lần bấm.",
       roi_khoi_may:
         "Mã phiên được gửi tới máy chủ của Tập đoàn ViHAT Group để mở phiên đăng nhập, kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS.",
     },
@@ -419,11 +420,12 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // "Trang chủ" · "Chat với chuyên viên" · "Nhận ưu đãi qua SMS" JOINED 07/10/2026 — the one-tap login those
     // two buttons run when no session is held. The number gains two purposes the citizen has NOT agreed to by
     // agreeing to log in: being shown to a specialist, and receiving promotional SMS. Both are said here.
-    man: "Liên hệ · Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    // "Trang chủ" LEFT 12/10/2026: all three now sit in the "Kết nối với ViHAT" card on Liên hệ.
+    man: "Liên hệ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
     tinh_nang:
       "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS · Xác nhận số điện thoại với xã",
     de_lam_gi:
-      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ, số ấy giúp chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Khi bạn bấm “Đăng ký nhận” ưu đãi SMS ở Trang chủ, số ấy là nơi nhận tin nhắn SMS giới thiệu ưu đãi của chúng tôi, cho tới khi bạn bấm “Huỷ nhận ưu đãi SMS”. Khi xã cần xác nhận số điện thoại của bạn để gửi hoặc xem phản ánh, ứng dụng nói rõ vì sao và hỏi bạn trước; chỉ khi bạn bấm đồng ý, mã mới được gửi qua máy chủ của chúng tôi tới hệ thống của xã.",
+      "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ, số ấy giúp chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Khi bạn bấm “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ, số ấy là nơi nhận tin nhắn SMS giới thiệu ưu đãi của chúng tôi, cho tới khi bạn bấm “Huỷ nhận ưu đãi SMS”. Khi xã cần xác nhận số điện thoại của bạn để gửi hoặc xem phản ánh, ứng dụng nói rõ vì sao và hỏi bạn trước; chỉ khi bạn bấm đồng ý, mã mới được gửi qua máy chủ của chúng tôi tới hệ thống của xã.",
     hoi_nguoi_dung: true,
     roi_khoi_may:
       "Mã số điện thoại được gửi tới máy chủ để phát hành phiên đăng nhập (kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS), hoặc để mở lại phiên làm việc với xã kèm số điện thoại đã xác nhận.",
@@ -435,10 +437,10 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       roi_khoi_may: "Mã số điện thoại được gửi thẳng tới hệ thống của xã để mở phiên làm việc với xã.",
     },
     intro_app: {
-      man: "Liên hệ · Trang chủ",
+      man: "Liên hệ",
       tinh_nang: "Đăng nhập bằng số Zalo · Chat với chuyên viên · Nhận ưu đãi qua SMS",
       de_lam_gi:
-        "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ của chúng tôi đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ, số ấy giúp chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Khi bạn bấm “Đăng ký nhận” ưu đãi SMS ở Trang chủ, số ấy là nơi nhận tin nhắn SMS giới thiệu ưu đãi của chúng tôi, cho tới khi bạn bấm “Huỷ nhận ưu đãi SMS”.",
+        "Lấy mã số điện thoại sau khi bạn đồng ý chia sẻ. Số điện thoại KHÔNG nằm trong mã; chỉ máy chủ của chúng tôi đổi được mã thành số. Số ấy làm tên đăng nhập của bạn, là nơi nhận thông báo ZNS, và là số chúng tôi gọi lại nếu bạn tự đề nghị gọi lại ở màn Tư vấn và báo giá. Khi bạn bấm “Chat với chuyên viên” ở màn Liên hệ, số ấy giúp chuyên viên biết ai đang nhắn và gọi lại cho bạn nếu cuộc trò chuyện bị gián đoạn. Khi bạn bấm “Đăng ký nhận” ưu đãi SMS ở màn Liên hệ, số ấy là nơi nhận tin nhắn SMS giới thiệu ưu đãi của chúng tôi, cho tới khi bạn bấm “Huỷ nhận ưu đãi SMS”.",
       roi_khoi_may:
         "Mã số điện thoại được gửi tới máy chủ của Tập đoàn ViHAT Group để mở phiên đăng nhập, kể cả khi bạn bấm “Chat với chuyên viên” hoặc “Đăng ký nhận” ưu đãi SMS.",
     },
@@ -448,7 +450,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // Runs only right before `getPhoneNumber`, on the same tap, and asks for that one scope (`grantPhoneScope`).
     api: "authorize",
     nua: "ca-hai",
-    man: "Liên hệ · Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    man: "Liên hệ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
     tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
     de_lam_gi:
       "Ngay trước khi lấy mã số điện thoại, xin Zalo ghi nhớ quyền số điện thoại mà bạn vừa đồng ý chia sẻ, để mục quyền của ứng dụng trong Zalo hiện đúng là đã bật. Ứng dụng chỉ xin đúng quyền này, không xin quyền nào khác. Bạn tắt được quyền ấy bất cứ lúc nào trong phần cài đặt của Zalo.",
@@ -462,7 +464,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       roi_khoi_may: "",
     },
     intro_app: {
-      man: "Liên hệ · Trang chủ",
+      man: "Liên hệ",
       tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
       de_lam_gi:
         "Ngay trước khi lấy mã số điện thoại, xin Zalo ghi nhớ quyền số điện thoại mà bạn vừa đồng ý chia sẻ, để mục quyền của ứng dụng trong Zalo hiện đúng là đã bật. Ứng dụng chỉ xin đúng quyền này, không xin quyền nào khác. Bạn tắt được quyền ấy bất cứ lúc nào trong phần cài đặt của Zalo.",
@@ -474,7 +476,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
     // shown again to a citizen who granted it before. Nothing leaves the phone.
     api: "getSetting",
     nua: "ca-hai",
-    man: "Liên hệ · Trang chủ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
+    man: "Liên hệ · Gửi phản ánh · Phản ánh của tôi · Tra cứu phiếu của tôi",
     tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
     de_lam_gi:
       "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",
@@ -492,7 +494,7 @@ export const KHAI_BAO_LOI_GOI: readonly KhaiBaoLoiGoi[] = [
       roi_khoi_may: "",
     },
     intro_app: {
-      man: "Liên hệ · Trang chủ",
+      man: "Liên hệ",
       tinh_nang: "Ghi nhớ quyền số điện thoại trong Zalo",
       de_lam_gi:
         "Xem bạn đã cho phép chia sẻ số điện thoại trong Zalo hay chưa, để không hỏi lại bạn điều bạn đã đồng ý. Kết quả chỉ dùng ngay trên máy, không lưu và không gửi đi.",

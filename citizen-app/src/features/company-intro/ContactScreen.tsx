@@ -2,9 +2,9 @@ import { useState } from "react";
 
 import { TIEU_DE_CHINH_SACH } from "../../content/chinh-sach-rieng-tu";
 import { CONTACT } from "../../content/company-profile";
-import { HotlineLink, KhoiDangNhap, TimVanPhong } from "../tinh-nang/index";
-import { ChatWithSpecialist } from "../yeu-cau/ChatWithSpecialist";
+import { HotlineLink, TimVanPhong } from "../tinh-nang/index";
 
+import { ConnectWithVihat } from "./ConnectWithVihat";
 import { MOC_QUAN_LY_QUYEN, type ThamSoMan } from "./dieu-huong";
 import { DocumentGlyph, MailGlyph, PhoneGlyph, ShieldGlyph } from "./icons";
 import { NutWebsite } from "./NutWebsite";
@@ -21,11 +21,11 @@ import { QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
  *      ⚠ WEBSITE NAY LÀ MỘT NÚT, KHÔNG CÒN LÀ MỘT NEO `<a target="_blank">` (21/09/2026): bên
  *      trong Zalo, một liên kết mở bằng thẻ `a` không có đường quay lại app. Nó cũng chỉ hiện khi
  *      `COMPANY.website` có giá trị — xem `NutWebsite.tsx`.
- *   2. Đăng nhập bằng số Zalo (`getPhoneNumber`) — một lần chạm, không mã sáu số nào phải gõ
- *      (ADR 0020). Bản nộp dừng ở chỗ nhận được mã và nói thẳng rằng bước đổi mã cần máy chủ;
- *      hai đường liên hệ chạy được ngay vẫn nằm ngay dưới nút, cho người từ chối chia sẻ số.
- *   3. Tìm văn phòng gần bạn (`getLocation`) — ba văn phòng và nút chỉ đường luôn hiện, chia sẻ
- *      vị trí hay không cũng vậy.
+ *   2. Thẻ "Kết nối với ViHAT" (12/10/2026) — ba việc xin số điện thoại, mỗi việc một câu mục
+ *      đích đứng trước nút của nó: đăng nhập bằng số Zalo (`getPhoneNumber`, một lần chạm, không
+ *      mã sáu số — ADR 0020), chat với chuyên viên, nhận ưu đãi qua SMS. Hai đường liên hệ chạy
+ *      được ngay vẫn nằm ngay dưới nút đăng nhập, cho người từ chối chia sẻ số.
+ *   3. Văn phòng — ba văn phòng và nút chỉ đường luôn hiện; không xin vị trí (11/10/2026).
  *
  *   Đặt hai tính năng cần quyền lên trước ba đường liên hệ chạy được là bắt một khách hàng đang
  *   cần gọi phải đi qua hai lời xin quyền trước đã. Không ai làm thế với một khách hàng.
@@ -117,12 +117,11 @@ export function ContactScreen({ moc }: ThamSoMan) {
 
       <NutWebsite lop_them="hien-len hien-len--3" />
 
-      {/* FIRST OF THE BLOCKS THAT ASK A PERMISSION (07/10/2026): someone on Liên hệ came to talk to us, and
-          this is the one-tap way to talk with the specialist knowing who they are. Below the three contacts
-          that need nothing, by the rule at the top of this file. The floating "Chat Zalo" stays as is. */}
-      <ChatWithSpecialist />
+      {/* EVERY ASK OF THE PHONE NUMBER, IN ONE CARD (12/10/2026): log in, chat with a specialist, SMS offers — each
+          its own action with its own purpose sentence before its button (`ConnectWithVihat.tsx`). Below the three
+          contacts that need nothing, by the rule at the top of this file. The floating "Chat Zalo" stays as is. */}
+      <ConnectWithVihat />
 
-      <KhoiDangNhap />
       <TimVanPhong />
 
       {/* ĐƯỜNG VÀO MÀN QUẢN LÝ QUYỀN, ĐẶT NGAY TRÊN CHÍNH SÁCH QUYỀN RIÊNG TƯ. Hai thứ trả lời hai
