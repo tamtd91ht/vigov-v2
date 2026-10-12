@@ -9,7 +9,8 @@
  *   - `name:vi` labels, disputed/maritime boundaries filtered, the OSM credit shown uncollapsed (M4).
  *   - ANY failure — no frame, no route, no WebGL, a style/tile error before the first draw, or no draw within
  *     `MAP_LOAD_TIMEOUT_MS` — removes the map and says ONE sentence. Never a grey box, never an error code, and the
- *     send button never waits for the map (M2 last row, ADR 0072 S1).
+ *     send button never waits for the map (M2 last row, ADR 0072 S1). One exception: the Overture places archive is
+ *     optional — its errors alone never remove the map (`isOptionalBasemapSourceError`, §Sửa đổi 12/10/2026 O4).
  *
  * ACCESSIBILITY: the map is a pointer surface; its text alternative is the coordinates line above it and the address
  * box, which say everything the pin says. ONE FINGER PANS THE MAP (`MAP_GESTURES`, customer sheet App Xã 12/10/2026
@@ -27,7 +28,7 @@ import { communeMapFrame } from "../api/goi-vigov";
 import type { SceneLocation } from "../api/hop-dong-phan-anh";
 import { XA_PA } from "../man/noi-dung";
 
-import { buildCommuneBasemapStyle, communeBasemapBase } from "./commune-basemap-style";
+import { buildCommuneBasemapStyle, communeBasemapBase, isOptionalBasemapSourceError } from "./commune-basemap-style";
 import {
   frameOutcome,
   initialMapView,
@@ -207,7 +208,11 @@ function SceneMap(props: {
         map.addControl(new ml.NavigationControl({ showCompass: false }), "top-right");
         // Before the first draw any error (archive header, style, sprite, glyphs) means the map is not coming.
         // After it, a single missed tile is left alone: the map is usable and the pin still works.
-        map.on("error", () => giveUp());
+        // The places archive is the exception even before it (owner, 12/10/2026, ADR 0072 §Sửa đổi 12/10/2026 O4):
+        // a failure of ONLY that layer leaves the basemap drawing, and MapLibre still fires `load`.
+        map.on("error", (e) => {
+          if (!isOptionalBasemapSourceError(e)) giveUp();
+        });
         map.once("load", () => {
           if (cancelled) return;
           loaded = true;

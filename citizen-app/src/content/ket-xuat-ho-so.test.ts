@@ -988,8 +988,11 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
     const base = communeBasemapBase();
     expect(new URL(base).pathname).toBe(COMMUNE_BASEMAP_PATH);
     const style = buildCommuneBasemapStyle(base, DOMAIN);
-    const source = style.sources["protomaps"] as { url: string };
-    for (const url of [style.glyphs!, String(style.sprite), source.url.replace(/^pmtiles:\/\//, "")]) {
+    // EVERY source — the mainland archive and the Overture places one (ADR 0072 §Sửa đổi 12/10/2026) — not only
+    // `protomaps`: a second archive outside the declared route would leave the device undeclared.
+    const sources = Object.values(style.sources).map((s) => (s as { url: string }).url.replace(/^pmtiles:\/\//, ""));
+    expect(sources.length).toBe(2);
+    for (const url of [style.glyphs!, String(style.sprite), ...sources]) {
       const u = new URL(url.replace("{fontstack}", "f").replace("{range}", "0-255"));
       expect(u.origin, url).toBe(new URL(base).origin);
       expect(u.pathname.startsWith(`${COMMUNE_BASEMAP_PATH}/`), url).toBe(true);
@@ -1000,6 +1003,10 @@ describe("7 — the commune app's dossier lists that app only, in its own words"
     expect(row(COMMUNE_BASEMAP_ROUTE).truong).toBe(COMMUNE_BASEMAP_FIELDS);
     expect(COMMUNE_BASEMAP_FIELDS[2]!.trong_chinh_sach).toMatch(/gần đúng khu vực/);
     expect(COMMUNE_BASEMAP_FIELDS[2]!.trong_chinh_sach).toMatch(/không tới bên thứ ba/);
+    // Both data sources are named, and the places archive is among the files (ADR 0072 §Sửa đổi 12/10/2026 O5 —
+    // proposed wording, pending legal approval).
+    expect(row(COMMUNE_BASEMAP_ROUTE).may_chu).toContain("dữ liệu OpenStreetMap và Overture Maps");
+    expect(COMMUNE_BASEMAP_FIELDS[0]!.trong_chinh_sach).toMatch(/tệp địa điểm/);
     for (const t of [COMMUNE_MAP_FRAME_PATH, COMMUNE_BASEMAP_ROUTE]) {
       expect(row(t).app, t).toBe("commune");
       expect(row(t).nguoi_dung_bam, t).toBe(true);

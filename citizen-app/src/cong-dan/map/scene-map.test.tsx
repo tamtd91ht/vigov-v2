@@ -15,6 +15,12 @@ import {
   BASEMAP_TEXT_FIELD,
   buildCommuneBasemapStyle,
   communeBasemapBase,
+  isOptionalBasemapSourceError,
+  PLACES_ATTRIBUTION,
+  PLACES_DOT_LAYER_ID,
+  PLACES_FILE,
+  PLACES_LABEL_LAYER_ID,
+  PLACES_SOURCE_ID,
 } from "./commune-basemap-style";
 import { COMMUNE_BASEMAP_PATH } from "../api/hop-dong-cong-khai";
 import { SceneMapArea } from "./scene-map";
@@ -249,8 +255,10 @@ describe("the basemap style — ViGov's comms only, the owner's three rewrites",
   });
 
   it("EVERY file asks with `?host=<domain>` — comms refuses a basemap request that names no commune (400)", () => {
-    const source = style.sources[BASEMAP_SOURCE_ID] as { url: string };
-    for (const url of [style.glyphs!, String(style.sprite), source.url.replace(/^pmtiles:\/\//, "")]) {
+    // Every source, not only protomaps: a second archive without `?host=` would be a 400 that only shows on a phone.
+    const sourceUrls = Object.values(style.sources).map((s) => (s as { url: string }).url.replace(/^pmtiles:\/\//, ""));
+    expect(Object.keys(style.sources).sort()).toEqual([BASEMAP_SOURCE_ID, PLACES_SOURCE_ID].sort());
+    for (const url of [style.glyphs!, String(style.sprite), ...sourceUrls]) {
       const u = new URL(url.replace("{fontstack}", "Noto Sans Regular").replace("{range}", "0-255"));
       expect([...u.searchParams.entries()], url).toEqual([["host", DOMAIN]]);
     }
@@ -282,5 +290,41 @@ describe("the basemap style — ViGov's comms only, the owner's three rewrites",
     }
     expect((style.sources["protomaps"] as { attribution?: string }).attribution).toBe(BASEMAP_ATTRIBUTION);
     expect(BASEMAP_ATTRIBUTION).toContain("OpenStreetMap");
+    expect((style.sources[PLACES_SOURCE_ID] as { attribution?: string }).attribution).toBe(PLACES_ATTRIBUTION);
+    expect(PLACES_ATTRIBUTION).toBe("© Overture Maps Foundation");
+  });
+});
+
+describe("the Overture places layer (ADR 0072 §Sửa đổi 12/10/2026) — part of the basemap, optional", () => {
+  const base = communeBasemapBase();
+  const style = buildCommuneBasemapStyle(base, DOMAIN);
+
+  it("the places archive: same route and `?host=` as the mainland one, zoom 13–15", () => {
+    const src = style.sources[PLACES_SOURCE_ID] as { type: string; url: string; minzoom: number; maxzoom: number };
+    expect(src.type).toBe("vector");
+    expect(src.url).toBe(`pmtiles://${base}/${PLACES_FILE}?host=${DOMAIN}`);
+    expect(PLACES_FILE).toBe("vn-places.pmtiles");
+    expect([src.minzoom, src.maxzoom]).toEqual([13, 15]);
+  });
+
+  it("dot and label, appended AFTER every Protomaps layer, from zoom 13; the label is the owner's coalesce", () => {
+    const ids = style.layers.map((l) => l.id);
+    expect(ids.slice(-2)).toEqual([PLACES_DOT_LAYER_ID, PLACES_LABEL_LAYER_ID]);
+    for (const l of style.layers.slice(0, -2)) expect("source" in l ? l.source : BASEMAP_SOURCE_ID, l.id).toBe(BASEMAP_SOURCE_ID);
+    const [dot, label] = style.layers.slice(-2) as Array<Record<string, unknown>>;
+    expect(dot).toMatchObject({ type: "circle", source: PLACES_SOURCE_ID, "source-layer": "places", minzoom: 13 });
+    expect(label).toMatchObject({ type: "symbol", source: PLACES_SOURCE_ID, "source-layer": "places", minzoom: 13 });
+    const layout = label!["layout"] as Record<string, unknown>;
+    expect(JSON.stringify(layout["text-field"])).toBe(JSON.stringify(BASEMAP_TEXT_FIELD));
+    expect(layout["text-font"]).toEqual(["Noto Sans Regular"]);
+    expect(layout["text-allow-overlap"]).toBe(false);
+  });
+
+  it("an error from the places source does not give up the map; a protomaps / glyph / sprite error still does", () => {
+    expect(isOptionalBasemapSourceError({ type: "error", sourceId: PLACES_SOURCE_ID, error: new Error("x") })).toBe(true);
+    expect(isOptionalBasemapSourceError({ type: "error", sourceId: BASEMAP_SOURCE_ID, error: new Error("x") })).toBe(false);
+    // Glyph and sprite failures carry no sourceId.
+    expect(isOptionalBasemapSourceError({ type: "error", error: new Error("x") })).toBe(false);
+    for (const odd of [null, undefined, "overture", 0]) expect(isOptionalBasemapSourceError(odd)).toBe(false);
   });
 });

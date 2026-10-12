@@ -709,7 +709,7 @@ export const COMMUNE_BASEMAP_FIELDS: readonly TruongGuiDi[] = [
   {
     khoa: "file",
     trong_chinh_sach:
-      "tên tệp của bản đồ nền cần tải — tệp nền, phông chữ hoặc biểu tượng của bản đồ — nằm trên đường dẫn; như nhau với mọi người dùng, không mang thông tin nào của bạn",
+      "tên tệp của bản đồ nền cần tải — tệp nền, tệp địa điểm, phông chữ hoặc biểu tượng của bản đồ — nằm trên đường dẫn; như nhau với mọi người dùng, không mang thông tin nào của bạn",
   },
   // comms counts its ceiling per commune domain and refuses an unknown one (ADR 0072 M1 "Trần tần suất"). Commune
   // app only, so the build's domain sentence — never "lấy từ mã QR".
@@ -735,9 +735,11 @@ const COMMUNE_SEND_MAP_ROUTES: readonly DuongRoiKhoiMay[] = [
   },
   {
     // Public (M1), no session: the same bytes for everyone. What leaves is the viewport, through the ranges (M5).
+    // "và Overture Maps" (the places archive, `vn-places.pmtiles`) is PROPOSED wording pending ViHAT legal approval —
+    // ADR 0072 §Sửa đổi 12/10/2026 O5, open #1. Change it there first, then here.
     tuyen: COMMUNE_BASEMAP_ROUTE,
     may_chu:
-      "ViGov — dịch vụ `comms`, phát lại bản đồ nền ViGov tự lưu trữ (dữ liệu OpenStreetMap); không mang phiên làm việc nào",
+      "ViGov — dịch vụ `comms`, phát lại bản đồ nền ViGov tự lưu trữ (dữ liệu OpenStreetMap và Overture Maps); không mang phiên làm việc nào",
     khi_nao:
       "trong ứng dụng riêng của một xã, khi bản đồ ở bước viết của “Gửi phản ánh” hiện ra, và mỗi lần người dùng kéo hoặc phóng to, thu nhỏ bản đồ — mỗi lần là nhiều yêu cầu nhỏ",
     nguoi_dung_bam: true,
