@@ -138,7 +138,8 @@ pipeline {
                         'cap-quyen-van-hanh: cấp QUYEN_VAN_HANH cho tài khoản ĐÃ CÓ (TAI_KHOAN_VAN_HANH = mã VH-xxxxx ' +
                         'hoặc email đăng nhập) — quyền đã có thì bỏ qua; xong thì người ấy đăng xuất rồi đăng nhập lại ' +
                         '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc) · ' +
-                        'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) trên máy build, tải lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
+                        'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) + lớp địa điểm Overture (BAN_OVERTURE) trên máy build, ' +
+                        'tải cả hai tệp lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
                         'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP_URL (kb/40-runbooks/basemap-pmtiles.md). ' +
                         'CHAY_THU bật = chỉ in kế hoạch; làm thật: bỏ tick, XAC_NHAN = namespace của MT, TICKET nếu prod. ' +
                         'Thân việc: deploy/basemap/basemap-task.sh')
@@ -184,6 +185,9 @@ pipeline {
                         'tat-ca-8-quyen = đủ 8 quyền như lúc tạo tài khoản.')
     string(name: 'NGAY_NEN', defaultValue: '',
            description: 'Cho nen-ban-do: ngày bản dựng hằng ngày Protomaps, YYYYMMDD (có ở https://build.protomaps.com/<ngày>.pmtiles).')
+    string(name: 'BAN_OVERTURE', defaultValue: '',
+           description: 'Cho nen-ban-do: bản phát hành Overture Maps cho lớp địa điểm (vn-places.pmtiles), dạng 2026-09-23.1. ' +
+                        'Overture chỉ giữ vài bản gần nhất — danh sách: https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/?list-type=2&prefix=release/&delimiter=/')
     booleanParam(name: 'CHAY_THU', defaultValue: true,
                  description: 'Cho nen-ban-do: CHẠY THỬ — in bucket, đích, giá trị BASEMAP_URL sẽ là; không tải, không ghi gì. Bỏ tick để làm thật.')
   }
@@ -2169,6 +2173,7 @@ EOF
           }
           env.TICKET = params.TICKET ?: '-'
           env.NGAY_NEN = (params.NGAY_NEN ?: '').trim()
+          env.BAN_OVERTURE = (params.BAN_OVERTURE ?: '').trim()
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NS} · ${env.GHI == '1' ? 'GHI' : 'chạy thử'} · ${env.NGUOI_BAM}"
           try {
             sh 'bash deploy/basemap/basemap-task.sh'

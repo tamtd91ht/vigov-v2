@@ -4,18 +4,20 @@
 # parameters (XAC_NHAN = namespace, TICKET on prod) and calls this file.
 #
 # Why and the full procedure: ADR 0072, kb/40-runbooks/basemap-pmtiles.md. Decisions with tests live in
-# deploy/basemap/basemap.py (plan · tools · key-source · mc-host); the build itself
+# deploy/basemap/basemap.py (plan · tools · images · key-source · mc-host); the build itself
 # is web-admin/scripts/build-basemap.sh.
 #
 # Environment (set by the calling job, never by a person):
 #   NS          vigov-prod | vigov-staging
 #   NGAY_NEN    YYYYMMDD of a Protomaps daily build (validated by basemap.py before any use)
+#   BAN_OVERTURE  Overture release of the places archive, e.g. 2026-09-23.1 (validated by basemap.py)
 #   GHI         1 = do it; anything else = dry run (print the plan, change nothing)
 #   KUBECONFIG  the job's ViGov kubeconfig       WORKSPACE  Jenkins workspace (repo checkout = cwd)
 #   PYTHON      optional — Python 3.8+; discovered here when unset
 #   NGUOI_BAM · TICKET · OPS_SUMMARY   optional — who/ticket for the GHI line, summary file to append to
 #
-# Guarantees: tools pinned by SHA-256 (refuses while UNPINNED) · MinIO keys = the EXISTING pair of
+# Guarantees: tools pinned by SHA-256, Docker images by digest, tippecanoe by commit (refuses while
+# UNPINNED) · MinIO keys = the EXISTING pair of
 # comms-secrets (fallback platform-secrets), read with the job's kubeconfig into 0600 files → MC_HOST_*,
 # never argv, never echoed · prefix <bucket>/config/map/<date>/, never overwritten · NEVER writes
 # BASEMAP_URL · $WORKSPACE/basemap, .tools, .mc removed on every exit.
@@ -25,7 +27,7 @@ set +x
 set -eu
 umask 077
 
-: "${NS:?}" "${NGAY_NEN?}" "${WORKSPACE:?}" "${KUBECONFIG:?}"
+: "${NS:?}" "${NGAY_NEN?}" "${BAN_OVERTURE?}" "${WORKSPACE:?}" "${KUBECONFIG:?}"
 case "$NS" in vigov-prod|vigov-staging) ;; *) echo "DỪNG: NS '$NS' không hợp lệ."; exit 1 ;; esac
 
 TMP_DIR=$(mktemp -d)
@@ -51,14 +53,17 @@ note() {
 # ── Plan (read only) ──────────────────────────────────────────────────────────────────────────
 kubectl -n "$NS" get configmap common-config -o json > "$TMP_DIR/cm.json" || {
   echo "DỪNG: không đọc được configmap/common-config trong $NS. Không làm gì."; exit 1; }
-OPS plan --current "$TMP_DIR/cm.json" --date "$NGAY_NEN" --out "$TMP_DIR/bm.env"
+OPS plan --current "$TMP_DIR/cm.json" --date "$NGAY_NEN" --overture "$BAN_OVERTURE" --out "$TMP_DIR/bm.env"
 BM_BUCKET=$(sed -n 's/^BUCKET=//p' "$TMP_DIR/bm.env")
 BM_ENDPOINT=$(sed -n 's/^UPLOAD_ENDPOINT=//p' "$TMP_DIR/bm.env")
 BM_URL=$(sed -n 's/^BASEMAP_URL=//p' "$TMP_DIR/bm.env")
+BM_OVERTURE=$(sed -n 's/^OVERTURE=//p' "$TMP_DIR/bm.env")
 OPS tools --out "$TMP_DIR/tools.tsv"
-for c in curl sha256sum tar df find xargs sort base64 cmp; do
+OPS images --out "$TMP_DIR/images.env"
+for c in curl sha256sum tar df find xargs sort base64 cmp od awk docker; do
   command -v "$c" >/dev/null 2>&1 || { echo "DỪNG: máy build thiếu $c (build-basemap.sh cần). Không làm gì."; exit 1; }
 done
+docker info >/dev/null 2>&1 || { echo "DỪNG: user $(id -un) không gọi được docker daemon (DuckDB + tippecanoe chạy trong ảnh). Không làm gì."; exit 1; }
 # Key NAMES only — values are read after the dry-run stop, straight into files.
 : > "$TMP_DIR/keysrc.tsv"
 for s in comms platform; do
@@ -71,7 +76,8 @@ echo "Khoá MinIO: cặp OBJECT_STORAGE_ACCESS_KEY / OBJECT_STORAGE_SECRET_KEY c
 free_kb=$(df -Pk "$WORKSPACE" | awk 'NR==2 {print $4}')
 [ "${free_kb:-0}" -ge 8388608 ] || {
   echo "DỪNG: $WORKSPACE còn $((${free_kb:-0} / 1048576)) GB trống — cần ít nhất 8 GB. Không làm gì."; exit 1; }
-echo "Sẽ: tải pmtiles + mc (kiểm SHA-256 đã ghim) → dựng → tải lên $BM_BUCKET/config/map/$NGAY_NEN/. BASEMAP_URL KHÔNG đổi."
+echo "Sẽ: tải pmtiles + mc (kiểm SHA-256 đã ghim), kéo DuckDB + dựng tippecanoe (ảnh ghim digest) → dựng vn-mainland +"
+echo "    vn-places (Overture $BM_OVERTURE) → tải lên $BM_BUCKET/config/map/$NGAY_NEN/. BASEMAP_URL KHÔNG đổi."
 if [ "${GHI:-0}" != "1" ]; then
   echo ""
   echo "CHẠY THỬ — kế hoạch ở trên, KHÔNG làm gì. Làm thật: bỏ tick CHAY_THU, gõ XAC_NHAN=$NS (+ TICKET nếu prod)."
@@ -101,6 +107,20 @@ PATH="$TOOLS:$PATH"; export PATH
 export MC_CONFIG_DIR="$WORKSPACE/.mc"
 echo "pmtiles: $(pmtiles version 2>&1 | head -1) · mc: $(mc --version 2>&1 | head -1)"
 
+# ── Images of the places archive: pulled/built from pins only, never a tag from a registry ────
+DUCKDB_IMAGE=$(sed -n 's/^DUCKDB_IMAGE=//p' "$TMP_DIR/images.env")
+TIPPECANOE_BASE=$(sed -n 's/^TIPPECANOE_BASE=//p' "$TMP_DIR/images.env")
+TIPPECANOE_COMMIT=$(sed -n 's/^TIPPECANOE_COMMIT=//p' "$TMP_DIR/images.env")
+TIPPECANOE_IMAGE=$(sed -n 's/^TIPPECANOE_TAG=//p' "$TMP_DIR/images.env")
+docker pull -q "$DUCKDB_IMAGE" >/dev/null || { echo "DỪNG: không kéo được $DUCKDB_IMAGE (máy build tới được Docker Hub?)."; exit 1; }
+docker pull -q "$TIPPECANOE_BASE" >/dev/null || { echo "DỪNG: không kéo được $TIPPECANOE_BASE."; exit 1; }
+# No build context (stdin): the Dockerfile fetches exactly TIPPECANOE_COMMIT and checks it before compiling.
+DOCKER_BUILDKIT=1 docker build --progress=plain -t "$TIPPECANOE_IMAGE" --build-arg BASE_IMAGE="$TIPPECANOE_BASE" \
+  --build-arg TIPPECANOE_COMMIT="$TIPPECANOE_COMMIT" - < deploy/basemap/tippecanoe.Dockerfile \
+  || { echo "DỪNG: dựng ảnh tippecanoe ($TIPPECANOE_COMMIT) hỏng — xem log ở trên."; exit 1; }
+echo "duckdb: $DUCKDB_IMAGE · tippecanoe: $TIPPECANOE_IMAGE (commit $TIPPECANOE_COMMIT)"
+export DUCKDB_IMAGE TIPPECANOE_IMAGE
+
 # ── Keys: Secret → pipe → 0600 file. Never a shell variable, never argv, never echoed ─────────
 K="$WORKSPACE/.mc/keys"
 mkdir -p "$K"
@@ -127,7 +147,7 @@ if grep -q " $NGAY_NEN/\$" "$TMP_DIR/ls.txt"; then
 fi
 
 # ── Build + upload ────────────────────────────────────────────────────────────────────────────
-bash web-admin/scripts/build-basemap.sh build --date "$NGAY_NEN" --out "$WORKSPACE/basemap"
+bash web-admin/scripts/build-basemap.sh build --date "$NGAY_NEN" --overture "$BM_OVERTURE" --out "$WORKSPACE/basemap"
 bash web-admin/scripts/build-basemap.sh upload --date "$NGAY_NEN" --out "$WORKSPACE/basemap" \
   --alias vgbasemap --bucket "$BM_BUCKET"
 note "MinIO $BM_BUCKET/config/map/$NGAY_NEN/: tải nền bản đồ lên (CHƯA đưa vào dùng — BASEMAP_URL không đổi)"
@@ -141,6 +161,8 @@ echo ""
 echo "════ GHI VÀO DANH MỤC KÝ ════════════════════════════════════════════════════"
 echo "── SHA-256 vn-mainland.pmtiles"
 grep 'vn-mainland[.]pmtiles$' "$DIR/SHA256SUMS"
+echo "── SHA-256 vn-places.pmtiles"
+grep 'vn-places[.]pmtiles$' "$DIR/SHA256SUMS"
 echo "── BUILD-INFO.txt"
 cat "$DIR/BUILD-INFO.txt"
 echo "── Giá trị BASEMAP_URL (job KHÔNG đặt):"

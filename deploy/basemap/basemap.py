@@ -44,6 +44,9 @@ def table(headers: list, rows: list) -> str:
 # ─────────────────────────────────────────────────────────────────────────────────────────────
 
 BASEMAP_DATE = re.compile(r"^20[0-9]{6}$")
+# Overture release id, e.g. 2026-09-23.1 (date of the release + revision). It reaches an S3 path and the
+# DuckDB SQL of build-basemap.sh, so this pattern is all that may.
+OVERTURE_RELEASE = re.compile(r"^20[0-9]{2}-[0-9]{2}-[0-9]{2}\.[0-9]+$")
 # The prefix part of an S3 bucket name; "-public" is appended (3..63 chars total, lowercase).
 BUCKET_PREFIX = re.compile(r"^[a-z0-9][a-z0-9.-]{0,53}[a-z0-9]$")
 # Scheme + host[:port], nothing else: a path would be read by mc as part of the bucket, and
@@ -75,6 +78,33 @@ BASEMAP_TOOLS = [
               f"(cột đầu) → hằng MC_SHA256"},
 ]
 
+# PINNED IMAGES of the places archive (owner 12/10/2026): DuckDB cuts Overture, tippecanoe tiles it. The
+# build machine (CentOS 7) can run neither natively, so both run in Docker, pulled BY DIGEST — a tag is
+# whatever the registry says that day. Each digest was read from the registry itself (registry-1.docker.io,
+# Docker-Content-Digest of the multi-arch index) on 12/10/2026 and matches Docker Hub's tag page.
+# basemap_images() REFUSES while one is UNPINNED_IMAGE. Changing a tag means changing its digest in the same edit.
+UNPINNED_IMAGE = "UNPINNED-copy-the-index-digest-from-the-official-registry"
+# DuckDB Labs' own image (gcr.io/distroless/cc-debian12 base, runs /duckdb). 1.5.5 rather than 1.5.6:
+# 1.5.6 was 13 days old on 12/10/2026; a patch release that has been out for months is the cheaper bet.
+DUCKDB_TAG = "1.5.5"
+DUCKDB_DIGEST = "sha256:d17f30055ff2eeb7f45c7ac2b7e574542b91cfc7f41b73c049b99e40f5dc5b73"
+# felt/tippecanoe publishes no image and no binary: deploy/basemap/tippecanoe.Dockerfile compiles it from
+# TIPPECANOE_COMMIT on this base. 22.04 = the base of felt's own Dockerfile at that commit.
+UBUNTU_TAG = "22.04"
+UBUNTU_DIGEST = "sha256:5ec03bb3441e8b0bf3b4f9cd4629a1ae763010dc3035bb8da3ae6cf026486401"
+TIPPECANOE_VERSION = "2.79.0"       # latest GitHub release of felt/tippecanoe on 12/10/2026 (>= 2.17 writes .pmtiles)
+TIPPECANOE_COMMIT = "68ab8dcc229f95b8b25877697d5e8d66783af503"   # refs/tags/2.79.0
+BASEMAP_IMAGES = [
+    {"name": "duckdb", "repo": "docker.io/duckdb/duckdb", "tag": DUCKDB_TAG, "digest": DUCKDB_DIGEST,
+     "where": f"https://hub.docker.com/r/duckdb/duckdb/tags?name={DUCKDB_TAG} (Index digest) hoặc "
+              f"`docker buildx imagetools inspect duckdb/duckdb:{DUCKDB_TAG}` → dòng Digest → hằng DUCKDB_DIGEST"},
+    {"name": "tippecanoe-base", "repo": "docker.io/library/ubuntu", "tag": UBUNTU_TAG, "digest": UBUNTU_DIGEST,
+     "where": f"https://hub.docker.com/_/ubuntu/tags?name={UBUNTU_TAG} (Index digest) hoặc "
+              f"`docker buildx imagetools inspect ubuntu:{UBUNTU_TAG}` → dòng Digest → hằng UBUNTU_DIGEST"},
+]
+TIPPECANOE_WHERE = (f"https://github.com/felt/tippecanoe/releases/tag/{TIPPECANOE_VERSION} → mã commit đầy đủ "
+                    f"(40 ký tự) → hằng TIPPECANOE_COMMIT")
+
 # Where the existing MinIO key pair is read from (owner 11/10/2026: no new MinIO user, no Jenkins
 # credential). comms first — it already writes the public bucket (deploy/cau-hinh/README.md mục 1,
 # OBJECT_STORAGE_ACCESS_KEY row); platform second, for the same reason. Key names as envFrom reads them.
@@ -96,6 +126,17 @@ def check_basemap_date(date: str) -> str:
     return d
 
 
+def check_overture_release(release: str) -> str:
+    r = (release or "").strip()
+    if not OVERTURE_RELEASE.match(r):
+        raise PlanError(f"BAN_OVERTURE '{r[:20]}' phải là mã bản phát hành Overture dạng 2026-09-23.1")
+    try:
+        datetime.datetime.strptime(r.split(".")[0], "%Y-%m-%d")
+    except ValueError:
+        raise PlanError(f"BAN_OVERTURE '{r}': phần ngày không phải một ngày có thật")
+    return r
+
+
 def https_origin(key: str, value: str) -> str:
     """`https://host[:port]` → itself without a trailing slash. http is REFUSED (rule 13)."""
     v = (value or "").strip()
@@ -107,9 +148,10 @@ def https_origin(key: str, value: str) -> str:
     return "https://" + m.group(1)
 
 
-def plan_basemap(cm: dict, date: str) -> dict:
-    """common-config data + date → where the files go and the BASEMAP_URL they will be read at."""
+def plan_basemap(cm: dict, date: str, overture: str) -> dict:
+    """common-config data + date + Overture release → where the files go and the BASEMAP_URL they will be read at."""
     d = check_basemap_date(date)
+    rel = check_overture_release(overture)
     for k in ("OBJECT_STORAGE_BUCKET_PREFIX", "OBJECT_STORAGE_PUBLIC_ENDPOINT", "OBJECT_STORAGE_ENDPOINT"):
         if not (cm.get(k) or "").strip():
             raise PlanError(f"common-config thiếu {k} — đặt khoá ấy trong common-config trước (deploy/cau-hinh/README.md mục 2)")
@@ -121,7 +163,7 @@ def plan_basemap(cm: dict, date: str) -> dict:
     upload = https_origin("OBJECT_STORAGE_PUBLIC_ENDPOINT", cm["OBJECT_STORAGE_PUBLIC_ENDPOINT"])
     # Read by the web-admin POD: the internal endpoint (netpol allow-web-admin-egress-storage).
     internal = https_origin("OBJECT_STORAGE_ENDPOINT", cm["OBJECT_STORAGE_ENDPOINT"])
-    return {"date": d, "bucket": bucket, "upload_endpoint": upload,
+    return {"date": d, "overture": rel, "bucket": bucket, "upload_endpoint": upload,
             "dest": f"{bucket}/{BASEMAP_PREFIX}/{d}/", "basemap_url": f"{internal}/{bucket}/{BASEMAP_PREFIX}/{d}"}
 
 
@@ -144,6 +186,24 @@ def basemap_tools(tools: list = None) -> list:
                         + " · ".join(t["where"] for t in missing)
                         + "; sửa trong deploy/basemap/basemap.py, commit, chạy lại (deploy/README.md §nen-ban-do)")
     return [(t["name"], t["url"], t["sha256"], t["kind"]) for t in tools]
+
+
+def basemap_images(images: list = None, commit: str = None) -> dict:
+    """{DUCKDB_IMAGE, TIPPECANOE_BASE, TIPPECANOE_COMMIT, TIPPECANOE_TAG} — refuses while any digest or the
+    commit is not real. The refs carry NO tag: `repo@sha256:…` is the only form docker cannot re-resolve."""
+    images = BASEMAP_IMAGES if images is None else images
+    commit = TIPPECANOE_COMMIT if commit is None else commit
+    missing = [i["name"] + ": " + i["where"] for i in images if not re.fullmatch(r"sha256:[0-9a-f]{64}", i["digest"])]
+    if not re.fullmatch(r"[0-9a-f]{40}", commit):
+        missing.append("tippecanoe: " + TIPPECANOE_WHERE)
+    if missing:
+        raise PlanError("chưa ghim ảnh/commit cho " + " · ".join(missing)
+                        + " — job không chạy ảnh Docker theo tag. Sửa trong deploy/basemap/basemap.py, commit, chạy lại")
+    ref = {i["name"]: f"{i['repo']}@{i['digest']}" for i in images}
+    return {"DUCKDB_IMAGE": ref["duckdb"], "TIPPECANOE_BASE": ref["tippecanoe-base"],
+            "TIPPECANOE_COMMIT": commit,
+            # Local tag of the image this job builds; version + commit make a stale one visible in the log.
+            "TIPPECANOE_TAG": f"vigov-basemap/tippecanoe:{TIPPECANOE_VERSION}-{commit[:12]}"}
 
 
 def mc_host_url(endpoint: str, access_key: str, secret_key: str) -> str:
@@ -184,9 +244,13 @@ def main(argv=None) -> int:
     c = sub.add_parser("plan")
     c.add_argument("--current", required=True)    # kubectl get configmap common-config -o json
     c.add_argument("--date", required=True)
+    c.add_argument("--overture", required=True)
     c.add_argument("--out", required=True)
 
     c = sub.add_parser("tools")
+    c.add_argument("--out", required=True)
+
+    c = sub.add_parser("images")       # KEY=value file of the pinned image refs + tippecanoe commit
     c.add_argument("--out", required=True)
 
     c = sub.add_parser("key-source")   # TSV `<secret>\t<key name>` (names only) → Secret name
@@ -208,12 +272,18 @@ def main(argv=None) -> int:
 
 def _run(a) -> int:
     if a.cmd == "plan":
-        p = plan_basemap(json.loads(_read(a.current)).get("data", {}) or {}, a.date)
-        print(table(["", ""], [["Bản dựng Protomaps", p["date"]], ["Bucket", p["bucket"]],
+        p = plan_basemap(json.loads(_read(a.current)).get("data", {}) or {}, a.date, a.overture)
+        print(table(["", ""], [["Bản dựng Protomaps", p["date"]], ["Bản Overture (địa điểm)", p["overture"]],
+                               ["Bucket", p["bucket"]],
                                ["Tải lên qua (máy build)", p["upload_endpoint"]],
                                ["Đích", p["dest"]], ["BASEMAP_URL sẽ là", p["basemap_url"]]]))
         _write_private(a.out, f"BUCKET={p['bucket']}\nUPLOAD_ENDPOINT={p['upload_endpoint']}\n"
-                              f"BASEMAP_URL={p['basemap_url']}\n")
+                              f"BASEMAP_URL={p['basemap_url']}\nOVERTURE={p['overture']}\n")
+        return 0
+    if a.cmd == "images":
+        imgs = basemap_images()
+        _write_private(a.out, "".join(f"{k}={v}\n" for k, v in imgs.items()))
+        print("ảnh đã ghim: " + " · ".join(f"{k} …{v[-12:]}" for k, v in imgs.items() if k != "TIPPECANOE_TAG"))
         return 0
     if a.cmd == "key-source":
         present = {}

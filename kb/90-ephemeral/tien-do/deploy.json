@@ -296,6 +296,15 @@
       "tiep_theo": "SỬA 12/10/2026: thân việc nay ở deploy/basemap/basemap-task.sh + basemap.py (11 ca test); chạy từ vigov-deploy, HANH_DONG=nen-ban-do. SỬA 11/10/2026: vigov-van-hanh không còn việc này (dựng lại chỉ cho đổi hạ tầng) — chạy từ vigov-deploy, HANH_DONG=nen-ban-do; thân việc vẫn là deploy/van-hanh/basemap-task.sh + ops.py. Người vận hành: (2) chạy nen-ban-do MT=staging, bật chạy thử, rồi chạy thật; (3) đặt BASEMAP_URL staging bằng kubectl edit (runbook) theo giá trị job in ra → kiểm chủ quyền có ký → prod. Rủi ro chưa kiểm: máy build ra được github.com và các host Protomaps; endpoint MinIO công khai nhận tải lên vài GB; policy khoá comms phủ config/map/* (nếu bị từ chối, job in dòng policy cần thêm). Đổi sang xong sau lượt chạy thật đầu tiên. web-admin/src/lib/may-chu/basemap.ts:53 còn ví dụ /basemap/<ngày> trong câu báo lỗi vận hành."
     },
     {
+      "id": "nen-ban-do-dia-diem-overture-12-10",
+      "menu": "ban-do-kinh-te-so",
+      "viec": "nen-ban-do dựng thêm vn-places.pmtiles (chủ dự án 12/10/2026): địa điểm Overture cả nước, confidence >= 0.5, trong vùng quốc gia VN của cùng bản phát hành VÀ trong BBOX của build-basemap.sh (ADR 0072), bỏ tên có chữ CJK; một lớp places, chỉ name + kind; z13–15 (z15 giữ mọi điểm). Cùng thư mục ngày, cùng tiền tố config/map/<ngày>/; upload từ chối nếu thiếu một trong hai tệp. Tham số Jenkins mới BAN_OVERTURE.",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chưa commit (thẻ TASK-02). unittest deploy/basemap 16 OK (thêm 5 ca: mã bản Overture, ảnh/commit chưa ghim, ghim là digest không phải tag, lệnh images, hợp đồng lớp places trong build-basemap.sh); make buildfiles PASS; bash -n hai script. Ghim: duckdb/duckdb:1.5.5 và ubuntu:22.04 theo digest đọc từ registry-1.docker.io 12/10/2026; tippecanoe 2.79.0 commit 68ab8dcc dựng bằng deploy/basemap/tippecanoe.Dockerfile (felt không phát hành ảnh). Chạy thử SQL sinh ra bằng DuckDB 1.5.5 trên bản 2026-09-23.1, khung Thăng Bình 108.31,15.66,108.40,15.78: 542 điểm (721 thô), 513 có kind, 86 s. CHƯA chạy docker build/tippecanoe ở đâu cả, chưa chạy Jenkins thật.",
+      "no_confirm": [],
+      "tiep_theo": "Người vận hành: (1) chạy nen-ban-do MT=staging với BAN_OVERTURE (bản còn trên bucket), chạy thử rồi chạy thật — lượt đầu kiểm docker build tippecanoe trên CentOS 7, máy build tới được Docker Hub, extensions.duckdb.org, overturemaps-us-west-2.s3.us-west-2.amazonaws.com; (2) ký chủ quyền CẢ HAI tệp (SHA-256 job in ra); (3) đo dung lượng vn-places.pmtiles, số điểm, thời gian bước 4/4 và ghi vào đây. README deploy + runbook basemap-pmtiles chưa sửa (thẻ sau)."
+    },
+    {
       "id": "ten-key-upper-snake-case-11-10",
       "viec": "Chuẩn tên key ConfigMap/Secret = UPPER_SNAKE_CASE, trùng tên biến, nạp bằng envFrom (chủ dự án 11/10/2026; luật 11 bất biến 4, skill infra-config §1, ADR 0093 — đóng câu hỏi mở #3 của ADR 0089). Kiểm kê: 22 key, chỉ BASEMAP-URL gạch ngang → đổi BASEMAP_URL, bỏ ánh xạ riêng (Jenkinsfile web-admin, manifest).",
       "trang_thai": "dang_lam",
