@@ -14,7 +14,8 @@ package app
 // THE ORDER IS THE DESIGN:
 //
 //  1. reason, shape only — a request that fails its shape costs nothing
-//  2. read the live unit and its two local counts — 404 before anybody else is asked
+//  2. read the live unit and its two local counts — 404 before anybody else is asked; staff or
+//     child units held → 409 right here, so an outage in another service cannot mask it as a 503
 //  3. ask petitions, then documents — OUTSIDE and BEFORE the transaction, so no row lock is held
 //     across two network calls. ANY failure refuses the delete (503); it is NEVER read as zero,
 //     because zero is the one answer that lets a delete through (fail closed)
@@ -109,6 +110,15 @@ func (uc *SoDoToChuc) Remove(ctx context.Context, id, rawReason string, actor Ng
 	unit, held, err := uc.kho.LiveForDelete(ctx, id)
 	if err != nil {
 		return err
+	}
+	// LOCAL HOLDINGS ANSWER FIRST. Staff or child units already make the delete impossible, so the
+	// answer is 409 whatever petitions and documents would say — asking them only adds a way to fail:
+	// an outage there used to turn a true, actionable "move the staff first" into an opaque 503.
+	// Fail closed is untouched: this branch only REFUSES; the remote check below still runs before
+	// any delete can happen. Cost: this 409 names the local kinds only; once those are moved, the
+	// next attempt asks the remote owners and names theirs.
+	if held.Staff > 0 || held.ChildUnits > 0 {
+		return &OrgUnitInUseError{Holdings: held}
 	}
 
 	// THE UNIT'S ID, AS READ — never the path value — is what is asked about.

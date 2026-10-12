@@ -167,6 +167,48 @@ func TestRemoveOrgUnitOwnerErrorWritesNothing(t *testing.T) {
 	}
 }
 
+// LOCAL HOLDINGS ARE ANSWERED BEFORE THE OWNERS ARE ASKED: with staff or a child unit in the unit,
+// a petitions/documents outage must not turn the actionable 409 into a 503 — and the owners are
+// not called at all, since nothing they say could let the delete through.
+func TestRemoveOrgUnitLocalHoldingsAnswerBeforeOwners(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(k *khoBoPhanGia)
+		want  domain.OrgUnitHoldings
+	}{
+		{"staff", func(k *khoBoPhanGia) { k.staff = map[string]int{"bp-c": 3} }, domain.OrgUnitHoldings{Staff: 3}},
+		{"child unit", func(k *khoBoPhanGia) {
+			k.hang = append(k.hang, hangBoPhan{xa: xaBoPhan, id: "bp-d", ma: "to-con", ten: "TỔ CON", cha: "bp-c"})
+		}, domain.OrgUnitHoldings{ChildUnits: 1}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			k := &khoBoPhanGia{hang: cayBaTang()}
+			uc, ctx, p, d := removeSetup(t, k)
+			c.setup(k)
+			p.err = fmt.Errorf("petitionsclient: CountOrgUnitHoldings: %w", petitionsclient.ErrPetitionsUnavailable)
+			d.err = documentsclient.ErrDocumentsUnavailable
+
+			err := uc.Remove(ctx, "bp-c", "sáp nhập", nguoiBoPhan())
+			var inUse *OrgUnitInUseError
+			if !errors.As(err, &inUse) {
+				t.Fatalf("lỗi = %v, muốn *OrgUnitInUseError (409), không phải 503", err)
+			}
+			if errors.Is(err, ErrOrgUnitHoldingsUnavailable) {
+				t.Errorf("lỗi 409 mang theo ErrOrgUnitHoldingsUnavailable: %v", err)
+			}
+			if inUse.Holdings != c.want {
+				t.Errorf("số còn giữ = %+v, muốn %+v", inUse.Holdings, c.want)
+			}
+			if p.calls != 0 || d.calls != 0 {
+				t.Errorf("vẫn hỏi chủ sở hữu: petitions %d lần, documents %d lần — muốn 0", p.calls, d.calls)
+			}
+			if k.batDau != 0 || len(k.cau("UPDATE")) != 0 || len(k.cau("INSERT")) != 0 {
+				t.Errorf("bị từ chối mà vẫn mở giao dịch (%d) hoặc ghi", k.batDau)
+			}
+		})
+	}
+}
+
 // THE AUDIT ENTRY FAILING TAKES THE SOFT DELETE WITH IT (rule 6, invariant 3).
 func TestRemoveOrgUnitAuditFailureRollsBack(t *testing.T) {
 	k := &khoBoPhanGia{hang: cayBaTang(), loiSau: "INSERT INTO audit_log"}
