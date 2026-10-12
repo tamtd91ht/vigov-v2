@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: c3c502e4
-expires: 2027-01-09
+derived_from_commit: 54402aa2
+expires: 2027-01-10
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-10-11** · hết hạn **2027-01-09**.
+Sinh ngày **2026-10-12** · hết hạn **2027-01-10**.
 
 ## 1 · Theo chương đặc tả
 
@@ -120,9 +120,9 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
 | `_chung` | 22 | 3 | 8 | 6 |
-| `citizen-app` | 48 | 25 | 4 | 0 |
+| `citizen-app` | 49 | 25 | 4 | 0 |
 | `core` | 41 | 3 | 1 | 1 |
-| `deploy` | 21 | 16 | 1 | 0 |
+| `deploy` | 22 | 15 | 1 | 0 |
 | `platform-admin` | 8 | 3 | 0 | 0 |
 | `proto` | 20 | 3 | 0 | 0 |
 | `service-comms` | 31 | 17 | 5 | 3 |
@@ -133,5 +133,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 18 | 20 | 5 | 1 |
 | `service-reporting` | 5 | 0 | 1 | 0 |
 | `tools` | 22 | 0 | 0 | 0 |
-| `web-admin` | 105 | 40 | 4 | 1 |
+| `web-admin` | 106 | 40 | 4 | 1 |
 
