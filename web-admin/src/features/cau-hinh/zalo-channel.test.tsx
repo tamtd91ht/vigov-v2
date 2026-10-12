@@ -106,10 +106,11 @@ const OFF: ZaloChannelSettings = {
   platform_ready: true,
 };
 
-const SHARED_BOT: comms_communeZaloBotCurrentOut = { has_own_bot: false, bot: null, live_link_count: 2 };
+const SHARED_BOT: comms_communeZaloBotCurrentOut = { has_own_bot: false, bot: null, live_link_count: 2, live_group_count: 0 };
 const OWN_BOT: comms_communeZaloBotCurrentOut = {
   has_own_bot: true,
   live_link_count: 5,
+  live_group_count: 0,
   bot: {
     bot_account_id: "000000001",
     bot_name: "Bot Xã Thử",

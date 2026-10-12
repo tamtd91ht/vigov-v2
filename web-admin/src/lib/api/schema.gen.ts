@@ -98,6 +98,7 @@ export type comms_communeZaloBotCurrentOut = {
   "has_own_bot": boolean;
   "bot": comms_communeZaloBotOut | null;
   "live_link_count": number;
+  "live_group_count": number;
 };
 
 export type comms_communeZaloBotIn = {
@@ -125,6 +126,7 @@ export type comms_communeZaloBotRetireIn = {
 export type comms_communeZaloBotRetiredOut = {
   "retired": boolean;
   "ended_link_count": number;
+  "ended_group_count": number;
   "revoke_notice"?: string;
 };
 
@@ -132,6 +134,7 @@ export type comms_communeZaloBotSavedOut = {
   "bot": comms_communeZaloBotOut;
   "adopted": boolean;
   "ended_link_count": number;
+  "ended_group_count": number;
   "revoke_notice"?: string;
 };
 
@@ -288,6 +291,16 @@ export type comms_fieldOptionIn = {
 export type comms_fieldOptionOut = {
   "value": string;
   "label": string;
+};
+
+export type comms_groupPairingCodeIn = {
+  "org_unit_id": string | null;
+  "kinds": Array<string>;
+};
+
+export type comms_groupPairingCodeOut = {
+  "code": string;
+  "expires_at": string;
 };
 
 export type comms_inlineRunOut = {
@@ -732,6 +745,14 @@ export type comms_publicDisasterAlertOut = {
   "emergency_contacts": Array<comms_EmergencyContact>;
 };
 
+export type comms_publicMapFrameOut = {
+  "configured": boolean;
+  "center_lat"?: number | null;
+  "center_lng"?: number | null;
+  "radius_km"?: number | null;
+  "bounds"?: Array<number>;
+};
+
 export type comms_seedMapAssetTypesOut = {
   /** nhóm vừa thêm vào danh mục của xã */
   "created": Array<comms_mapAssetTypeRefOut>;
@@ -958,6 +979,31 @@ export type comms_zaloChannelSettingsOut = {
   "updated_by"?: string;
   "supported_events": Array<string>;
   "platform_ready"?: boolean | null;
+};
+
+export type comms_zaloGroupList = {
+  "items": Array<comms_zaloGroupOut>;
+  "supported_kinds": Array<string>;
+};
+
+export type comms_zaloGroupOut = {
+  "id": string;
+  "org_unit_id": string | null;
+  "org_unit_name": string;
+  "org_unit_removed": boolean;
+  "kinds": Array<string>;
+  "linked_at": string;
+  "linked_by": string;
+  "linked_by_name": string;
+};
+
+export type comms_zaloGroupPatchIn = {
+  "org_unit_id": string | null;
+  "kinds": Array<string>;
+};
+
+export type comms_zaloGroupUnlinkIn = {
+  "reason": string;
 };
 
 export type comms_zaloLinkCurrentOut = {
@@ -3424,6 +3470,7 @@ export type petitions_accountlessReportIn = {
   "field"?: string | null;
   "lat": number | null;
   "lng": number | null;
+  "location_citizen_adjusted": boolean | null;
   "residential_unit_id": string | null;
   "citizen_id": string | null;
   "cong_dan_id": string | null;
@@ -3702,6 +3749,7 @@ export type petitions_guiPhanAnhVao = {
   "anonymous": boolean;
   "lat": number | null;
   "lng": number | null;
+  "location_citizen_adjusted"?: boolean | null;
   "field"?: string | null;
   "residential_unit_id"?: string | null;
   "citizen_id": string | null;
@@ -3960,6 +4008,7 @@ export type petitions_phieuPhanAnhRa = {
   "address": string;
   "lat"?: number | null;
   "lng"?: number | null;
+  "location_citizen_adjusted"?: boolean | null;
   "residential_unit_id"?: string;
   "residential_unit_name"?: string;
   "reporter_name": string;
@@ -6281,6 +6330,41 @@ export type comms_get_comms_audit_entries = {
   };
 };
 
+/** GET /api/v1/commune-basemap/{file} — Nền bản đồ tự host (PMTiles, glyph, sprite) cho bản đồ màn Gửi phản ánh của Zalo Mini App — đọc theo khoảng byte (Range, If-Range, If-Match, If-None-Match); chỉ tệp trong danh sách đóng: vn-mainland.pmtiles, fonts/<Noto Sans Regular|Medium|Italic>/<n>-<n+255>.pbf, sprites/light[@2x].json|png */
+export type comms_get_commune_basemap_by_file = {
+  duongDan: "/api/v1/commune-basemap/{file}";
+  phuongThuc: "GET";
+  thamSo: {
+    "file": string;
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    206: void;
+    304: void;
+    400: httpx_Error;
+    404: httpx_Error;
+    412: void;
+    416: void;
+    429: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+    504: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_host";
+    404: "not_found";
+    429: "rate_limited";
+    502: "basemap_unavailable";
+    503: "basemap_not_configured" | "platform_unavailable" | "rate_limit_unavailable";
+    504: "basemap_unavailable";
+  };
+};
+
 /** GET /api/v1/commune-branding — Xem logo và banner web-admin hiện tại của xã (tab Cấu hình › Nhận diện xã) */
 export type platform_get_commune_branding = {
   duongDan: "/api/v1/commune-branding";
@@ -6435,6 +6519,30 @@ export type comms_get_commune_external_contacts = {
   };
   errorCodes: {
     429: "rate_limited";
+  };
+};
+
+/** GET /api/v1/commune-map-frame — Khung bản đồ đang áp của xã theo tên miền — khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, tâm và bán kính — cho bản đồ màn Gửi phản ánh của Zalo Mini App; xã không có khung thì configured=false */
+export type comms_get_commune_map_frame = {
+  duongDan: "/api/v1/commune-map-frame";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "host"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: comms_publicMapFrameOut;
+    400: httpx_Error;
+    429: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_host";
+    429: "rate_limited";
+    503: "map_frame_default_unavailable" | "platform_unavailable";
   };
 };
 
@@ -12453,6 +12561,110 @@ export type comms_put_zalo_channel_settings = {
   errorCodes: {
     400: "invalid_request";
     422: "due_soon_days_out_of_range" | "empty_quiet_window" | "enabled_without_kind" | "invalid_quiet_time" | "overdue_cadence_incomplete" | "overdue_cadence_required" | "overdue_repeat_out_of_range" | "overdue_start_out_of_range" | "unknown_kind";
+  };
+};
+
+/** POST /api/v1/zalo-group-pairing-codes — Tạo mã gắn nhóm Zalo 8 ký tự cho một phạm vi — một bộ phận đang hoạt động của xã hoặc cả xã (org_unit_id null), các loại tin là tập con các loại dành cho nhóm mà xã đang bật; dùng một lần, sống 10 phút, chỉ lưu bản băm; gõ mã vào nhóm Zalo đã thêm bot (có thể kèm @tên bot); có ghi vết (không ghi mã) */
+export type comms_post_zalo_group_pairing_codes = {
+  duongDan: "/api/v1/zalo-group-pairing-codes";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_groupPairingCodeIn;
+  phanHoi: {
+    201: comms_groupPairingCodeOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    409: "zalo_bot_not_configured" | "zalo_channel_disabled";
+    422: "kind_not_enabled" | "kinds_required" | "org_unit_invalid" | "org_unit_not_live" | "unknown_kind";
+    503: "org_units_unavailable";
+  };
+};
+
+/** GET /api/v1/zalo-groups — Các nhóm Zalo đang gắn với xã — phạm vi (bộ phận hoặc cả xã, kèm tên bộ phận và cờ bộ phận đã gỡ), các loại tin, gắn lúc nào, mã và tên cán bộ đã tạo mã; supported_kinds là danh sách loại được chọn cho nhóm; không bao giờ trả chat_id */
+export type comms_get_zalo_groups = {
+  duongDan: "/api/v1/zalo-groups";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloGroupList;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    503: "org_units_unavailable" | "staff_names_unavailable";
+  };
+};
+
+/** PATCH /api/v1/zalo-groups/{id} — Sửa phạm vi (bộ phận hoặc cả xã) và/hoặc các loại tin của một nhóm Zalo đang gắn — loại tin phải là loại dành cho nhóm mà xã đang bật; có ghi vết trước/sau */
+export type comms_patch_zalo_groups_by_id = {
+  duongDan: "/api/v1/zalo-groups/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_zaloGroupPatchIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "not_found";
+    409: "zalo_channel_disabled";
+    422: "kind_not_enabled" | "kinds_required" | "nothing_to_change" | "org_unit_invalid" | "org_unit_not_live" | "unknown_kind";
+    503: "org_units_unavailable";
+  };
+};
+
+/** DELETE /api/v1/zalo-groups/{id} — Gỡ một nhóm Zalo khỏi xã — kết thúc mềm liên kết (giữ làm lịch sử), cần lý do, có ghi vết; đây là cách DUY NHẤT gỡ nhóm (/dung trong nhóm không có tác dụng) */
+export type comms_delete_zalo_groups_by_id = {
+  duongDan: "/api/v1/zalo-groups/{id}";
+  phuongThuc: "DELETE";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_zaloGroupUnlinkIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "not_found";
+    422: "reason_required";
   };
 };
 

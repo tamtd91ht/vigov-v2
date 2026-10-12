@@ -467,6 +467,10 @@ const KHOA_PHIEU_MONG_DOI = [
   // citizen's own verdict, the only one any figure counts). Staff responses only; detail and the recording
   // act's reply. Its `note` may name people (rule 3), shown under `feedback.read` like `rating_comment`.
   "staff_recorded_rating",
+  // ADR 0072 §Sửa đổi 11/10/2026 (Mini App) M3 (migration 0044): whether the citizen moved the map pin — true moved,
+  // false Zalo's point untouched, ABSENT not recorded (never render absent as false). How the coordinates were
+  // placed, nothing more; staff responses only (`phieuCuaToiRa` does not carry it).
+  "location_citizen_adjusted",
 ] as const satisfies readonly KhoaPhieu[];
 
 /** Hợp đồng mọc thêm một trường mà danh sách trên không có → đỏ ngay tại đây. */
