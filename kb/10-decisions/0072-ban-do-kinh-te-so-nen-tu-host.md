@@ -3,13 +3,13 @@ id: 0072-ban-do-kinh-te-so-nen-tu-host
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 95fffb3e
+derived_from_commit: 6b87ac4b
 expires: null
 owns_facts:
   - "Bản đồ kinh tế số — khung MẶC ĐỊNH theo xã (tâm + bán kính) do quản trị nền tảng đặt ở khu vận hành, lưu ở service-platform, là siêu dữ liệu xã trong ranh giới ADR 0003; giá trị riêng của xã thắng, mặc định chỉ áp khi xã chưa có giá trị riêng; 'Về mặc định' ngừng dùng giá trị riêng, có vết, không xoá cứng (chốt 04/10/2026, lần 2)"
   - "Bản đồ kinh tế số — bán kính khung: > 0 và trần CỨNG 50 km, không cận chính sách nào khác; người đặt chịu trách nhiệm; khu vận hành cảnh báo và đòi xác nhận khi lệch xa mức khuyến nghị (đề xuất 10 km, lệch xa = dưới 3 km hoặc trên 20 km); phép kiểm chủ quyền với trần 50 km (chốt 04/10/2026, lần 2)"
   - "Bản đồ kinh tế số — văn bản lưu ý pháp lý khi xã đổi khung bản đồ, phiên bản 2026-10-04.1: mỗi lần đổi tâm hoặc bán kính ở web-admin phải tích xác nhận, máy chủ từ chối lưu khi thiếu xác nhận, vết ghi xác nhận + phiên bản văn bản (chốt 04/10/2026, lần 2); câu 1 và 4 thành sai sau khi /ban-do sang nền tự host — bản nháp 2026-10-11.1-nhap chưa có hiệu lực, chờ pháp chế ViHAT + UBND, ban hành cần đổi phiên bản phía service-comms (chủ dự án, 11/10/2026, §Sửa đổi 11/10/2026 S3)"
-  - "Bản đồ kinh tế số — nền bản đồ = PMTiles TỰ HOST dùng chung với /phan-anh (tuyến cùng gốc /basemap/*, BASEMAP_URL, không NEXT_PUBLIC_*, không tệp danang.pmtiles của prototype); thiếu thì 'chưa cấu hình bản đồ nền', không bao giờ rơi về host khác; MAP_STYLE_URL bỏ; ghi nguồn OSM thu gọn giữ, ghi nguồn OpenFreeMap bỏ (chủ dự án, 11/10/2026, thay OpenFreeMap của H1 chốt 04/10/2026)"
+  - "Bản đồ kinh tế số — nền bản đồ = PMTiles TỰ HOST dùng chung với /phan-anh (tuyến cùng gốc /basemap/*, BASEMAP_URL, không NEXT_PUBLIC_*, không tệp danang.pmtiles của prototype); thiếu thì 'chưa cấu hình bản đồ nền', không bao giờ rơi về host khác; MAP_STYLE_URL bỏ; ghi nguồn OSM thu gọn giữ, ghi nguồn OpenFreeMap bỏ (chủ dự án, 11/10/2026, thay OpenFreeMap của H1 chốt 04/10/2026); ghi nguồn bổ sung '© Overture Maps Foundation' cho lớp địa điểm (§Sửa đổi 12/10/2026)"
   - "Bản đồ kinh tế số — lớp nhiệt phản ánh trên /ban-do dựng từ GET /api/v1/citizen-report-points (service-petitions, feedback.read), chỉ hiện cho tài khoản giữ feedback.read, không dựng từ điểm tài nguyên; chặn của H2 hết áp vì nền cùng gốc; vẽ toạ độ công dân trên bất kỳ nền ngoài nào vẫn là điểm dừng (chủ dự án, 11/10/2026)"
   - "nền bản đồ cho toạ độ phản ánh của công dân (tab Bản đồ nhiệt và bản đồ nhỏ trong ngăn chi tiết phiếu ở /phan-anh) = PMTiles TỰ HOST, cùng gốc, không host tile/style/glyph/sprite bên ngoài; đóng việc còn mở #3 của §Sửa đổi 04/10/2026; tệp vùng, nơi đặt, khung theo xã, trần tuyến điểm đã chốt cùng ngày (§Trả lời 09/10/2026); gói npm, CSP, tuyến điểm phía petitions, xác nhận pháp lý và câu K6 cho nền tự host còn mở; chưa dựng thì hai bản đồ giữ control vô hiệu dấu '?' (chủ dự án, 09/10/2026)"
   - "Bản đồ kinh tế số — khung xã CỨNG: giá trị riêng của xã (tâm lat/lng + bán kính km) lưu ở service-comms, áp làm maxBounds của MapLibre; người giữ admin.lookup đặt, có vết; xã không có giá trị riêng lẫn mặc định thì trang không vẽ bản đồ; tâm phải nằm trong khung đất liền Việt Nam; chủ quyền chưa có xác nhận pháp lý (chốt 04/10/2026; cận bán kính thay ở lần 2)"
@@ -17,9 +17,10 @@ owns_facts:
   - "Bản đồ kinh tế số — phạm vi MVP và những phần hoãn: mật độ theo thôn, nhập Excel, Mini App (trừ nền bản đồ ở màn Gửi phản ánh — hết hoãn 11/10/2026, §Sửa đổi 11/10/2026 (Mini App)), PostGIS/vector tile, geocoding ngoài (lớp nhiệt phản ánh hết hoãn 11/10/2026); phần đặc tả chờ backend: mẫu/nhập Excel, lọc quy mô lao động, tổng hợp theo bộ lọc, feedback_count theo thôn, tìm địa điểm, trạng thái 'Đang triển khai' và xác minh 'Cần cập nhật' (§Sửa đổi 11/10/2026 S4)"
   - "Bản đồ kinh tế số — toạ độ numeric(10,6) bắt buộc; 3 trạng thái + cờ xác minh; số điện thoại người đại diện che khi xuất; xoá = hộp xác nhận trong khung kèm lý do bắt buộc (11/10/2026)"
   - "Bản đồ kinh tế số — CSP khi trả nợ missing-security-headers: chỉ nguồn cùng gốc của nền tự host + worker-src blob:, không còn tiles.openfreemap.org (11/10/2026)"
-  - "Bản đồ kinh tế số — cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng tự phục vụ (từ 11/10/2026 là phương án đang dùng, không còn dự phòng)"
+  - "Bản đồ kinh tế số — cách dựng, nơi đặt và ghi nguồn tệp PMTiles vùng tự phục vụ (từ 11/10/2026 là phương án đang dùng, không còn dự phòng; từ 12/10/2026 thêm archive thứ hai vn-places.pmtiles, §Sửa đổi 12/10/2026)"
   - "nền PMTiles tự host của /phan-anh (và của /ban-do từ 11/10/2026): tệp đất liền + đảo gần bờ (≈101,6–110,0°E, 7,9–23,9°N), luôn khoá khung xã, style lọc disputed và ranh giới biển, nhãn name:vi; đặt ở MinIO, phát qua tuyến cùng gốc /basemap/* có HTTP Range từ biến máy chủ BASEMAP_URL (ConfigMap, không fallback); tuyến map-frame mở thêm feedback.read; tuyến điểm nhiệt trần 5000, vượt thì 422; ký duyệt pháp lý và danh mục kiểm có ký sau mỗi lần làm mới (chủ dự án, 09/10/2026)"
-  - "nền bản đồ của Zalo Mini App xã (màn Gửi phản ánh): bản đồ thật trên cùng nền PMTiles tự host, phát lại qua tuyến CÔNG KHAI mới của service-comms (HTTP Range, CORS cho origin Zalo Mini App, trần riêng 6.000 lượt/phút theo tên miền + mạng của máy gọi); khung bản đồ xã đọc công khai theo ?host= ở service-comms, dùng chung trần tin công khai; người dân kéo ghim/chạm bản đồ được, phiếu mang cờ 'vị trí do người dân chỉnh'; khoá khung xã, name:vi, lọc disputed/biển như web-admin; khai dữ liệu rời máy cho Zalo thêm dòng, câu chính sách quyền riêng tư chờ duyệt (chủ dự án, 11/10/2026)"
+  - "nền bản đồ của Zalo Mini App xã (màn Gửi phản ánh): bản đồ thật trên cùng nền PMTiles tự host, phát lại qua tuyến CÔNG KHAI mới của service-comms (HTTP Range, CORS cho origin Zalo Mini App, trần riêng 6.000 lượt/phút theo tên miền + mạng của máy gọi); khung bản đồ xã đọc công khai theo ?host= ở service-comms, dùng chung trần tin công khai; người dân kéo ghim/chạm bản đồ được, phiếu mang cờ 'vị trí do người dân chỉnh'; khoá khung xã, name:vi, lọc disputed/biển như web-admin; khai dữ liệu rời máy cho Zalo thêm dòng, câu chính sách quyền riêng tư chờ duyệt (chủ dự án, 11/10/2026); câu khai nay phải nêu cả Overture Maps (§Sửa đổi 12/10/2026)"
+  - "lớp địa điểm Overture Maps (theme places, CDLA-Permissive-2.0) trên nền tự host: archive vn-places.pmtiles cho cả nước, dựng bởi việc nen-ban-do, cùng tiền tố config/map/<ngày>/ với vn-mainland.pmtiles, phát qua đúng hai tuyến /basemap/* và /api/v1/commune-basemap/*; cắt theo đa giác quốc gia VN giao khung BBOX của nền, bỏ tên có chữ Hán, độ tin cậy ≥ 0,5, chỉ giữ name và kind; chấm + nhãn xám từ z13, dưới lớp tài sản của xã, không tìm kiếm được, không phải Sổ địa điểm; ghi nguồn '© Overture Maps Foundation' — lời văn chờ pháp chế ViHAT; thôn vẫn chưa có nguồn (chủ dự án, 12/10/2026)"
   - "geocoding ngược cho ô 'Nơi xảy ra' của phản ánh: Nominatim TỰ HOST trong cụm, dữ liệu OSM Việt Nam, không host ngoài; địa chỉ điền sẵn và sửa được, toạ độ giữ riêng; đóng việc còn mở #3 của bảng gốc (chủ dự án, 08/10/2026)"
 ---
 
@@ -43,6 +44,9 @@ lý; xoá có lý do bắt buộc (§Sửa đổi 11/10/2026, cuối tệp).
 **Sửa đổi 11/10/2026 (Mini App):** màn "Gửi phản ánh" của Mini App xã dùng bản đồ thật trên nền tự host,
 qua tuyến công khai của `service-comms`; khung xã đọc công khai; người dân chỉnh ghim, phiếu mang cờ —
 đóng phần nền bản đồ của việc còn mở #4 bảng gốc (§Sửa đổi 11/10/2026 (Mini App), cuối tệp).
+**Sửa đổi 12/10/2026:** thêm lớp địa điểm Overture Maps (`vn-places.pmtiles`) vào nền tự host, cả
+web-admin lẫn Mini App xã; nền không còn "chỉ dữ liệu OSM" — ghi nguồn, câu 1 bản nháp K6 và câu khai
+Zalo phải theo (§Sửa đổi 12/10/2026, cuối tệp).
 
 ## Bối cảnh
 
@@ -705,3 +709,88 @@ duyệt pháp lý chủ quyền trước khi chạy thật vẫn mở và nay á
 | 2 | Đường dẫn hai tuyến công khai (M1, M2), tên chính sách trần tần suất của M1 | Người dựng — theo `ubiquitous-language.md` §Tên tài nguyên trên URL |
 | 3 | Mini App có cần văn bản lưu ý kiểu K6 cho người dân không | Chủ dự án + pháp chế |
 | 4 | Ký duyệt pháp lý chủ quyền — vẫn mở, nay áp cả Mini App | Chủ dự án |
+
+## Sửa đổi 12/10/2026 — lớp địa điểm Overture trên nền tự host
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+12/10/2026, trả lời trực tiếp trong phiên chính. **Đang dựng** khi ghi mục này — mã chưa commit.
+
+### O1. Vì sao — nền OSM thiếu địa điểm, không thiếu đường
+
+Phiên chính đo 12/10/2026 trên 7 xã: xã Thăng Bình (TP Đà Nẵng) và 6 xã giáp ranh, theo ranh giới
+OSM relation `19337498`. Tệp và lệnh đo không nằm trong kho; số dưới đây là số phiên chính báo.
+
+| Nguồn | Đo được | Kết luận |
+|---|---|---|
+| OSM | 2.361 km đường, trong đó 1.859 km đường nhỏ; **77** điểm có tên; **4** điểm thôn | Đường đủ dùng; địa điểm có tên quá thưa |
+| Microsoft ML Road Detections | Thêm **40 km** đường (≈ 1,7% so với OSM) | **Không dùng** — không đáng một nguồn dữ liệu thứ hai |
+| Overture Maps places, bản phát hành `2026-09-23.1` | Thêm **1.137** điểm mới (cách điểm OSM > 50 m), **529** điểm có độ tin cậy ≥ 0,7 | **Dùng** — xem O2 |
+| Thôn | Không nguồn mở nào có | **Vẫn mở**: xã cung cấp, hoặc cán bộ chấm |
+
+### O2. Chốt — archive thứ hai `vn-places.pmtiles`
+
+| Điểm | Nội dung |
+|---|---|
+| Chốt | Thêm lớp địa điểm **Overture Maps** (theme `places`, giấy phép **CDLA-Permissive-2.0**) cho **cả nước** |
+| Tệp | Archive thứ hai **`vn-places.pmtiles`**, dựng bởi việc `nen-ban-do`, đặt **cùng tiền tố có ngày** `config/map/<ngày>/` cạnh `vn-mainland.pmtiles` (`deploy/README.md:90`) |
+| Đường tới máy dùng | **Đúng hai tuyến cùng gốc đã có**: web-admin `/basemap/*` (§Trả lời 09/10/2026) và comms `/api/v1/commune-basemap/*` (M1, `service-comms/internal/http/commune_basemap.go:52`). Không tuyến mới, **không host ngoài nào** — điểm dừng 1 và 4 gốc áp nguyên |
+| Bề mặt | **Cả** web-admin (`/ban-do`, ô chọn vị trí, Trình chiếu, `/phan-anh`) **và** Mini App xã |
+| Không dùng | Microsoft ML Road Detections (O1) |
+
+### O3. Lọc khi dựng
+
+| Bộ lọc | Nội dung | Vì sao |
+|---|---|---|
+| Biên giới | Cắt theo **đa giác quốc gia Việt Nam** của Overture (`divisions`, `division_area`, subtype `country`, country `VN`) **giao** với đúng khung `BBOX` của nền (`web-admin/scripts/build-basemap.sh:27`) | Khung chữ nhật đo được chứa **~606 nghìn** điểm của Thái Lan, Campuchia, Lào, Trung Quốc. Cắt theo biên giới là **bắt buộc về chủ quyền**, không phải để gọn tệp |
+| Chữ Hán | Bỏ **mọi tên có chữ Hán** | Đo: **5.940** tên như vậy trong khung |
+| Độ tin cậy | Chỉ giữ điểm **≥ 0,5** | Ngưỡng do chủ dự án chốt; O1 đo ở ngưỡng 0,7 chỉ để so |
+| Thuộc tính | Chỉ hai: **`name`** (từ `names.primary`) và **`kind`** (từ `basic_category`) | Không số điện thoại, email, website, địa chỉ — tệp phát công khai (M1), không mang gì hơn cái được vẽ |
+
+### O4. Trình bày — một phần của nền, không phải dữ liệu của xã
+
+| Điểm | Nội dung |
+|---|---|
+| Kiểu | Chấm xám + nhãn xám từ **mức zoom 13** (tile z13–15). Nhãn `coalesce(name:vi, name)` như mọi nhãn nền (§Trả lời 09/10/2026) |
+| Thứ tự lớp | Vẽ **dưới** lớp tài sản của xã |
+| Không phải | Không tìm kiếm được; không tính vào chỉ tiêu; **không phải Sổ địa điểm**. §4 *"Tìm địa điểm = chỉ tài nguyên của xã và tên thôn/tổ dân phố"* **không đổi** |
+| Lỗi tải | Lỗi tải riêng lớp này **không** làm mất bản đồ — nền vẫn hiện |
+
+### O5. Ghi nguồn và câu khai — câu ĐỀ XUẤT, chờ pháp chế
+
+| Điểm | Nội dung |
+|---|---|
+| Ghi nguồn | Thêm `© Overture Maps Foundation` trên **nguồn tile của lớp này**, cạnh chuỗi sẵn có `Protomaps © OpenStreetMap contributors` (`web-admin/src/lib/basemap/style.ts:33`) |
+| Câu khai Zalo | Bản khai dữ liệu rời máy (M5) nói nền dựng từ **"dữ liệu OpenStreetMap và Overture Maps"** |
+| Trạng thái | Cả hai là câu **đề xuất**, chờ **pháp chế ViHAT** duyệt — như các câu pháp lý khác của ADR này (K6, S3, M5) |
+
+### O6. Hệ quả
+
+| Hệ quả | Việc phải làm |
+|---|---|
+| Câu 1 bản nháp K6 `2026-10-11.1-nhap` (*"dựng từ dữ liệu OpenStreetMap"*, S3) nay **thiếu** | Sửa **trước khi gửi pháp chế**. Đổi một chữ = phiên bản nháp mới, ghi ở đây trước (K6, điểm dừng 3 của lần 2). Lời văn chưa viết ở mục này |
+| Danh mục kiểm chủ quyền có ký (§Trả lời 09/10/2026, dòng "Pháp lý") chỉ nói tệp nền | Phải phủ **cả `vn-places.pmtiles`**. Sửa ở `kb/40-runbooks/basemap-pmtiles.md` — thẻ việc sau, không thuộc mục này |
+| Mỗi lần kéo bản đồ thêm yêu cầu `Range` tới archive thứ hai | Chung trần **6.000 lượt/phút** của tuyến công khai Mini App (M1). **Chưa đo** tần suất thật |
+| Nhịp làm mới dữ liệu Overture | **Chưa chốt** — cùng câu nhịp làm mới tệp nền đang mở (§Trả lời 09/10/2026, còn mở #3) |
+
+### Chỗ ở tệp này | Nay (12/10/2026)
+
+| Chỗ ở tệp này | Nay |
+|---|---|
+| §1 gốc và §Dựng bước 6 — ghi nguồn chỉ `© OpenStreetMap contributors` | Thêm `© Overture Maps Foundation` cho lớp địa điểm (O5). Ghi nguồn OSM giữ |
+| §Trả lời 09/10/2026 — nền là một tệp `vn-mainland.pmtiles`, dữ liệu OSM | Hai archive cùng tiền tố, cùng tuyến (O2); bộ lọc chủ quyền của lớp địa điểm ở O3 |
+| S1 dòng "Ghi nguồn" — chỉ dòng OSM thu gọn | Bổ sung O5 |
+| S3 — câu 1 bản nháp K6 *"dựng từ dữ liệu OpenStreetMap"* | Thiếu; phải ra phiên bản nháp mới trước khi gửi pháp chế (O6) |
+| M4 — ghi nguồn OSM thu gọn bắt buộc ở Mini App | Thêm `© Overture Maps Foundation` (O5) |
+| M5 — câu khai Zalo cho tuyến nền bản đồ | Câu khai nêu cả Overture Maps, chờ pháp chế (O5) |
+| M1 — tuyến công khai phát `vn-mainland.pmtiles`, glyph, sprite | Thêm `vn-places.pmtiles` vào danh sách đóng; trần 6.000/phút không đổi (O6) |
+| §4 — tìm địa điểm chỉ trong tài nguyên của xã và tên thôn | **Không đổi** — lớp Overture không tìm được (O4) |
+
+### Còn mở sau sửa đổi 12/10/2026
+
+| # | Việc | Ai |
+|---|---|---|
+| 1 | Duyệt lời văn ghi nguồn `© Overture Maps Foundation` và câu khai Zalo "dữ liệu OpenStreetMap và Overture Maps" | Chủ dự án + pháp chế ViHAT |
+| 2 | Viết phiên bản nháp K6 mới thay câu 1 của `2026-10-11.1-nhap`, trước khi gửi pháp chế | Chủ dự án + pháp chế |
+| 3 | Thôn: không nguồn mở nào có — xã cung cấp hay cán bộ chấm | Chủ dự án |
+| 4 | Đo tần suất yêu cầu `Range` khi có hai archive, so với trần 6.000/phút | Người dựng / vận hành |
+| 5 | Nhịp làm mới Overture — cùng câu nhịp làm mới tệp nền | Chủ dự án |
