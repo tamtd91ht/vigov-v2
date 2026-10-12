@@ -246,12 +246,25 @@ export const LOCATION_SECTION_TITLE = "Vị trí";
  * The place line of a card (prototype `FeedbackCard.tsx:98`: hamlet ?? address ?? "Chưa rõ vị trí"). The
  * hamlet is the one recorded ON the petition at intake/classification (ADR 0088 §1), never derived from
  * the coordinates.
+ *
+ * COORDINATES BEFORE "Chưa rõ vị trí" (owner, 12/10/2026, customer sheet "Vị trí gửi phản ánh chưa hiển
+ * thị"): a Mini App petition often carries only a GPS point, and "Chưa rõ vị trí" on it told the officer
+ * the scene was unknown when it was not. Hamlet and address still win — they are what an officer reads
+ * at a glance. Same `sceneCoordinates` as the drawer, so both say one thing; the list already receives
+ * `lat`/`lng` under `feedback.read`, so this shows nothing the page did not already hold (rule 3).
  */
-export function cardPlaceLabel(p: Pick<petitions_phieuPhanAnhRa, "address" | "residential_unit_name">): string {
+export function cardPlaceLabel(
+  p: Pick<petitions_phieuPhanAnhRa, "address" | "residential_unit_name" | "lat" | "lng">,
+): string {
   const hamlet = p.residential_unit_name ?? "";
   if (hamlet !== "") return hamlet;
-  return p.address === "" ? CARD_NO_LOCATION : p.address;
+  if (p.address !== "") return p.address;
+  const coordinates = sceneCoordinates(p);
+  return coordinates === null ? CARD_NO_LOCATION : `${CARD_COORDINATES_PREFIX} ${coordinates}`;
 }
+
+/** The card's coordinates-only place line: `Toạ độ 16.054407, 108.202167`. */
+export const CARD_COORDINATES_PREFIX = "Toạ độ";
 
 /** The drawer's `Vị trí` line (prototype `FeedbackDetailDrawer.tsx:400-404`): address, then ` · hamlet`. */
 export function sceneAddressLine(p: Pick<petitions_phieuPhanAnhRa, "address" | "residential_unit_name">): string {

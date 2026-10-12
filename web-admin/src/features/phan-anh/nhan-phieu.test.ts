@@ -1072,6 +1072,17 @@ describe("built 09/10/2026 — labels and presentation arithmetic", () => {
     expect(cardPlaceLabel({ address: "" })).toBe("Chưa rõ vị trí");
   });
 
+  it("card place: coordinates only → `Toạ độ lat, lng`; hamlet and address still win (owner 12/10/2026)", () => {
+    const point = { lat: 16.054407, lng: 108.202167 };
+    expect(cardPlaceLabel({ ...point, address: "Tổ 6", residential_unit_name: "Thôn Hà Lam" })).toBe("Thôn Hà Lam");
+    expect(cardPlaceLabel({ ...point, address: "Tổ 6", residential_unit_name: "" })).toBe("Tổ 6");
+    expect(cardPlaceLabel({ ...point, address: "", residential_unit_name: "" })).toBe("Toạ độ 16.054407, 108.202167");
+    expect(cardPlaceLabel({ address: "", lat: null, lng: null })).toBe("Chưa rõ vị trí");
+    // Half a coordinate is no location.
+    expect(cardPlaceLabel({ address: "", lat: 16.054407 })).toBe("Chưa rõ vị trí");
+    expect(cardPlaceLabel({ address: "", lat: 16.054407, lng: null })).toBe("Chưa rõ vị trí");
+  });
+
   it("drawer `Vị trí` line: address · hamlet (prototype `FeedbackDetailDrawer.tsx:400-404`)", () => {
     expect(sceneAddressLine({ address: "Tổ 6", residential_unit_name: "Thôn Hà Lam" })).toBe("Tổ 6 · Thôn Hà Lam");
     expect(sceneAddressLine({ address: "", residential_unit_name: "Thôn Hà Lam" })).toBe(
