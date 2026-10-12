@@ -784,6 +784,7 @@ OSM relation `19337498`. Tệp và lệnh đo không nằm trong kho; số dư�
 | M5 — câu khai Zalo cho tuyến nền bản đồ | Câu khai nêu cả Overture Maps, chờ pháp chế (O5) |
 | M1 — tuyến công khai phát `vn-mainland.pmtiles`, glyph, sprite | Thêm `vn-places.pmtiles` vào danh sách đóng; trần 6.000/phút không đổi (O6) |
 | §4 — tìm địa điểm chỉ trong tài nguyên của xã và tên thôn | **Không đổi** — lớp Overture không tìm được (O4) |
+| §Dựng bước 5 — *"không ghi đè tệp đang được cache"*; script từ chối tiền tố ngày đã có | **Bị thay (chủ dự án, 12/10/2026):** `nen-ban-do` nhập lại cùng `NGAY_NEN` thì **ghi đè** tiền tố ấy, có in cảnh báo. Chủ dự án chấp nhận hệ quả: nếu `BASEMAP_URL` đang đọc tiền tố ấy, bản đồ đang mở có thể vỡ ô tới khi tải lại trang, và danh mục kiểm chủ quyền đã ký của tiền tố hết khớp — phải kiểm và ký lại. Ngày mới vẫn là cách làm mới an toàn |
 
 ### Còn mở sau sửa đổi 12/10/2026
 

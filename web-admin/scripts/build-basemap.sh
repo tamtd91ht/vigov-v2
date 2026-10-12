@@ -282,7 +282,7 @@ build() {
 upload() {
   command -v mc >/dev/null || die "thiếu mc (MinIO client)"
   [ -n "$alias" ] && [ -n "$bucket" ] || die "--alias và --bucket là bắt buộc khi upload"
-  # Both archives or nothing: the style reads both from the same prefix, and a prefix is never rewritten.
+  # Both archives or nothing: the style reads both from the same prefix.
   [ -f "$dir/$ARCHIVE" ] && [ -f "$dir/$PLACES_ARCHIVE" ] && [ -f "$dir/SHA256SUMS" ] \
     || die "$dir chưa dựng xong (cần $ARCHIVE + $PLACES_ARCHIVE + SHA256SUMS) — chạy 'build' trước"
   grep -q " ./${ARCHIVE}\$" "$dir/SHA256SUMS" && grep -q " ./${PLACES_ARCHIVE}\$" "$dir/SHA256SUMS" \
@@ -290,14 +290,15 @@ upload() {
   (cd "$dir" && sha256sum --quiet -c SHA256SUMS) || die "tệp trong $dir không khớp SHA256SUMS"
 
   local dest="${alias}/${bucket}/config/map/${date}/"
-  # Never overwrite: a prefix that is already live is being read in byte ranges right now, and mixing
-  # ranges of two archives is a corrupted map. A refresh is always a new date.
+  # Same date again overwrites (owner, 12/10/2026). If the prefix is live, maps open during the copy can
+  # read byte ranges of two different archives until reloaded, and the signed checklist of this prefix
+  # no longer matches — basemap-task.sh says which case it is; here it is said in one line.
   if [ -n "$(mc ls "$dest" 2>/dev/null | head -1)" ]; then
-    die "$dest đã có tệp — không ghi đè. Dùng một ngày dựng khác."
+    echo "⚠ GHI ĐÈ: $dest đã có tệp — thay bằng bản dựng này. Tiền tố đang dùng thì kiểm và ký lại sau đó."
   fi
   mc cp --recursive "$dir/" "$dest"
   echo
-  echo "ĐÃ TẢI LÊN: $dest — CHƯA ai đọc tiền tố này."
+  echo "ĐÃ TẢI LÊN: $dest — job không đổi BASEMAP_URL."
   echo "Giá trị BASEMAP_URL tương ứng: https://<MinIO nội bộ>:<cổng>/${bucket}/config/map/${date}"
   echo "Bước tiếp: đặt giá trị ấy ở STAGING, kiểm chủ quyền + ký danh mục, rồi mới đặt ở prod."
 }

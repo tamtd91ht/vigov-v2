@@ -142,8 +142,20 @@ if ! mc ls "vgbasemap/$BM_BUCKET/config/map/" > "$TMP_DIR/ls.txt" 2> "$TMP_DIR/l
   fi
   exit 1
 fi
+# Same date again OVERWRITES the prefix (owner, 12/10/2026 — reverses the earlier "a refresh is always a
+# new date"). Said out loud, never silent: if BASEMAP_URL already reads this prefix, maps being viewed
+# during the upload can mix byte ranges of the old and new archives until reloaded, and the signed
+# sovereignty checklist of this prefix no longer matches its SHA-256 — it must be checked and signed again.
 if grep -q " $NGAY_NEN/\$" "$TMP_DIR/ls.txt"; then
-  echo "DỪNG: $BM_BUCKET/config/map/$NGAY_NEN/ đã có — không ghi đè (tiền tố có thể đang được đọc). Chọn ngày khác."; exit 1
+  LIVE_URL=$("$PYTHON" -c 'import json,sys; print(((json.load(open(sys.argv[1])).get("data") or {}).get("BASEMAP_URL") or "").strip().rstrip("/"))' "$TMP_DIR/cm.json")
+  if [ -n "$LIVE_URL" ] && [ "$LIVE_URL" = "${BM_URL%/}" ]; then
+    echo "⚠ GHI ĐÈ BẢN ĐANG DÙNG: BASEMAP_URL của $NS đang đọc chính $BM_BUCKET/config/map/$NGAY_NEN/."
+    echo "  Trong lúc tải lên, bản đồ đang mở có thể vỡ ô tới khi tải lại trang; danh mục kiểm chủ quyền đã ký"
+    echo "  của tiền tố này hết khớp SHA-256 — kiểm và ký lại sau lượt này."
+  else
+    echo "⚠ GHI ĐÈ: $BM_BUCKET/config/map/$NGAY_NEN/ đã có — tệp cùng tên sẽ bị thay bằng bản dựng lượt này."
+  fi
+  note "MinIO $BM_BUCKET/config/map/$NGAY_NEN/: GHI ĐÈ tiền tố đã có"
 fi
 
 # ── Build + upload ────────────────────────────────────────────────────────────────────────────

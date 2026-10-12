@@ -22,7 +22,7 @@ do từng con số) — không chép lại ở đây.
 
 | Khi nào dùng | Ảnh hưởng | Điều cấm |
 |---|---|---|
-| Bản đồ không có nền / lỗi 404·502·504 ở `/basemap/`; làm mới tệp nền; đổi MinIO | Đặt sai `BASEMAP_URL` làm cả hai bản đồ mất nền; các phần khác của web-admin và comms vẫn chạy | Đưa vào dùng khi **chưa có danh mục kiểm chủ quyền đã ký** · dùng URL OpenFreeMap hay host ngoài · ghi đè tiền tố ngày đang được đọc · tắt kiểm chứng chỉ MinIO |
+| Bản đồ không có nền / lỗi 404·502·504 ở `/basemap/`; làm mới tệp nền; đổi MinIO | Đặt sai `BASEMAP_URL` làm cả hai bản đồ mất nền; các phần khác của web-admin và comms vẫn chạy | Đưa vào dùng khi **chưa có danh mục kiểm chủ quyền đã ký** · dùng URL OpenFreeMap hay host ngoài · ghi đè tiền tố đang được đọc mà **không** kiểm và ký lại sau đó · tắt kiểm chứng chỉ MinIO |
 
 Đường đi của một byte nền bản đồ:
 
@@ -86,9 +86,10 @@ Bước 2–3 (dựng + tải lên) chạy theo **một trong hai** cách — **
    `web-admin/scripts/build-basemap.sh places-sql --overture <bản>`. Bộ lọc địa điểm và lý do: đầu tệp script.
 3. **Tải lên:** `web-admin/scripts/build-basemap.sh upload --date <YYYYMMDD> --out <thư mục> --alias <alias> --bucket <bucket>`.
    Tiền tố mới `config/map/<YYYYMMDD>/` trong bucket (chủ dự án chốt 11/10/2026; không liên quan tuyến
-   `/basemap/*` của web-admin); script **từ chối ghi đè** tiền tố đã có — nên lần làm mới đầu tiên có lớp
-   địa điểm phải dùng ngày **mới**, để hai tệp chung một tiền tố. Tải lên **chưa** phải
-   đưa vào dùng — chưa ai đọc tiền tố này.
+   `/basemap/*` của web-admin). Nhập lại **cùng ngày** thì **ghi đè** tiền tố đó (chủ dự án, 12/10/2026),
+   có in cảnh báo. Nếu `BASEMAP_URL` đang đọc chính tiền tố ấy: bản đồ đang mở có thể vỡ ô tới khi tải
+   lại trang, và danh mục ký của tiền tố hết khớp SHA-256 — kiểm và ký lại. Làm mới an toàn vẫn là ngày
+   **mới**. Tải lên **chưa** phải đưa vào dùng — job không đổi `BASEMAP_URL`.
 4. **Kiểm chủ quyền có ký** — mục dưới. Không ký thì dừng ở đây.
 5. **Đưa vào dùng** — mục dưới.
 

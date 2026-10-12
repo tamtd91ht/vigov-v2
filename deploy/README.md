@@ -101,8 +101,9 @@ ADR 0089 §Gỡ.)
 | Công cụ ghim SHA-256 | `PMTILES_SHA256` (digest GitHub của `go-pmtiles_<bản>_Linux_x86_64.tar.gz`, bản phát hành không có `checksums.txt`) · `MC_RELEASE` + `MC_SHA256` (tệp `.sha256sum` trên GitHub; **không** `dl.min.io` — trả 410). Hằng ở `deploy/basemap/basemap.py`; đổi bản = đổi mã băm trong cùng lần sửa |
 | Ảnh ghim digest / commit | `DUCKDB_TAG` + `DUCKDB_DIGEST` · `UBUNTU_TAG` + `UBUNTU_DIGEST` (nền dựng tippecanoe) · `TIPPECANOE_VERSION` + `TIPPECANOE_COMMIT` (thẻ phát hành `felt/tippecanoe`; felt không phát ảnh hay tệp chạy sẵn, nên `deploy/basemap/tippecanoe.Dockerfile` dựng từ commit đã ghim). Digest phải là **index digest** — lấy từ header `Docker-Content-Digest` của registry hoặc `docker buildx imagetools inspect <ảnh>:<thẻ>`, **không** phải digest theo kiến trúc mà trang thẻ Docker Hub liệt kê đầu tiên (suýt nhầm ngày 12/10/2026). Hằng ở `deploy/basemap/basemap.py`; `basemap.py images` từ chối khi còn thiếu; đổi bản = đổi digest/commit trong cùng lần sửa |
 
-Lần làm mới **đầu tiên có lớp địa điểm** phải dùng một `NGAY_NEN` **mới**: bước tải lên từ chối ghi đè tiền tố
-ngày đã có, mà hai tệp phải nằm chung một tiền tố.
+Nhập lại một `NGAY_NEN` **đã có** thì job **ghi đè** tiền tố ngày ấy (chủ dự án, 12/10/2026) và in cảnh báo;
+nếu đó là tiền tố `BASEMAP_URL` đang đọc thì kiểm chủ quyền và ký lại sau lượt chạy
+(`kb/40-runbooks/basemap-pmtiles.md`, bước 3).
 
 Mỗi lần làm mới: chạy thử `MT=staging` → chạy thật (in SHA-256, `BUILD-INFO.txt`, giá trị `BASEMAP_URL`) →
 đặt `BASEMAP_URL` staging theo runbook mục "Đưa vào dùng" → kiểm chủ quyền có ký → prod. `$WORKSPACE/basemap`,

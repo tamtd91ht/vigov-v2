@@ -110,8 +110,9 @@ TIPPECANOE_WHERE = (f"https://github.com/felt/tippecanoe/releases/tag/{TIPPECANO
 # OBJECT_STORAGE_ACCESS_KEY row); platform second, for the same reason. Key names as envFrom reads them.
 BASEMAP_KEY_SOURCES = ["comms-secrets", "platform-secrets"]
 STORAGE_KEY_NAMES = ("OBJECT_STORAGE_ACCESS_KEY", "OBJECT_STORAGE_SECRET_KEY")
-# Object prefix inside the public bucket (owner 11/10/2026). The dated subfolder stays: a live prefix is
-# read in byte ranges, so a refresh is always a new folder, never an overwrite.
+# Object prefix inside the public bucket (owner 11/10/2026). The dated subfolder stays: a new date is the
+# safe refresh (a live prefix is read in byte ranges); the same date overwrites, with a warning (owner,
+# 12/10/2026 — basemap-task.sh).
 BASEMAP_PREFIX = "config/map"
 
 
