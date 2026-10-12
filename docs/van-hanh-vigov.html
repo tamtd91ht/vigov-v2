@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ViGov v2 — Tài liệu vận hành rút gọn</title>
+<style>
+  :root{
+    --ink:#1b2430; --muted:#5b6675; --line:#d9dee5; --bg:#f6f7f9; --card:#fff; --accent:#144a80;
+    --pa:#7a3e9d; --wa:#1f6fb2; --mv:#c2410c; --mx:#0f7b5f; --be:#475569; --sec:#b91c1c;
+  }
+  *{box-sizing:border-box}
+  html{scroll-snap-type:y mandatory;scroll-behavior:smooth}
+  body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+  section.slide{min-height:100vh;scroll-snap-align:start;padding:36px 56px 56px;border-bottom:1px solid var(--line);position:relative;background:var(--card)}
+  section.slide:nth-child(even){background:#fbfcfd}
+  section.part{background:var(--accent)!important;color:#fff;display:flex;flex-direction:column;justify-content:center}
+  section.part h1{font-size:44px;margin:0 0 12px}
+  section.part p{font-size:18px;opacity:.9;max-width:900px}
+  section.part code{background:rgba(255,255,255,.15);color:#fff}
+  h1{font-size:30px;margin:0 0 6px}
+  h2{font-size:24px;margin:0 0 4px}
+  h3{font-size:16px;margin:18px 0 6px;color:var(--accent)}
+  .sub{color:var(--muted);margin:0 0 16px}
+  .tags{margin:0 0 10px}
+  .tag{display:inline-block;font-size:12px;font-weight:600;color:#fff;border-radius:4px;padding:2px 8px;margin-right:6px}
+  .t-pa{background:var(--pa)} .t-wa{background:var(--wa)} .t-mv{background:var(--mv)} .t-mx{background:var(--mx)} .t-be{background:var(--be)} .t-sec{background:var(--sec)}
+  table{border-collapse:collapse;width:100%;font-size:13px;margin:6px 0 10px}
+  th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  th{background:#eef2f6;font-weight:600}
+  code{font:12.5px/1.4 ui-monospace,Consolas,monospace;background:#eef2f6;padding:1px 4px;border-radius:3px}
+  ul,ol{margin:4px 0 8px;padding-left:20px} li{margin:2px 0}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+  .cols3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
+  .box{border:1px solid var(--line);border-radius:8px;padding:12px 14px;background:#fff}
+  .src{position:absolute;left:56px;bottom:14px;font-size:11.5px;color:var(--muted)}
+  .num{position:absolute;right:24px;bottom:14px;font-size:12px;color:var(--muted)}
+  section.part .num{color:#fff}
+  .warn{border-left:4px solid #d97706;background:#fff7ed;padding:8px 12px;margin:8px 0;font-size:13.5px}
+  .pend{color:#8a6d00;font-weight:600}
+  nav#toc{position:fixed;right:12px;top:12px;z-index:5;font-size:12px}
+  nav#toc select{font-size:12px;padding:3px;max-width:280px}
+  .diagram{font:12.5px/1.45 ui-monospace,Consolas,monospace;background:#0f1b2b;color:#dbe7f5;padding:14px 18px;border-radius:8px;white-space:pre;overflow:auto}
+  @media print{html{scroll-snap-type:none} section.slide{page-break-after:always;min-height:auto} nav#toc{display:none}}
+</style>
+</head>
+<body>
+<nav id="toc"><select id="jump" aria-label="Đi tới slide"></select></nav>
+
+<!-- ======================================================= BÌA -->
+<section class="slide part" data-title="Bìa">
+  <h1>ViGov v2 — Tài liệu vận hành rút gọn</h1>
+  <p>Nền tảng hành chính số cấp xã/phường. Một hệ thống phục vụ nhiều xã trên hạ tầng dùng chung, phân biệt bằng tên miền.</p>
+  <p>Phần 1 Tổng quan · Phần 2 Chức năng nhiệm vụ · Phần 3 Cấu trúc tài nguyên · Phần 4 Quy trình vận hành · Phần 5 Bảo mật &amp; cấu hình k8s · Phần 6 Mini App</p>
+  <p class="tags"><span class="tag t-pa">Platform Admin</span><span class="tag t-wa">Web Admin</span><span class="tag t-mv">Mini App – App ViHAT</span><span class="tag t-mx">Mini App – App xã</span><span class="tag t-be">Backend dùng chung</span><span class="tag t-sec">Bảo mật / hạ tầng</span></p>
+  <p style="font-size:13px">Nguồn: mã nguồn kho <code>vigov-v2</code> và kho anh em <code>vihat-miniapp</code>, trạng thái ngày 12/10/2026. Mục ghi "không xác định từ mã" là mã chưa trả lời được. Phím ↑/↓ hoặc PageUp/PageDown để chuyển slide; ô chọn góc phải để nhảy tới slide.</p>
+</section>
+
+<!-- ======================================================= PHẦN 1 -->
+<section class="slide part" data-title="Phần 1 — Tổng quan">
+  <h1>Phần 1 — Tổng quan chung</h1>
+  <p>Hệ thống là gì, gồm những module nào, các module nối với nhau ra sao, và các nguyên tắc cách ly dữ liệu.</p>
+</section>
+
+<section class="slide" data-title="1.1 ViGov là gì">
+  <h2>1.1 ViGov là gì</h2>
+  <p class="sub">Nền tảng điều hành số cho Ủy ban nhân dân cấp xã/phường</p>
+  <div class="cols">
+    <div>
+      <h3>Phạm vi nghiệp vụ</h3>
+      <ul>
+        <li>Văn bản đến/đi, sổ đơn thư công dân</li>
+        <li>Nhiệm vụ, biên bản và kết luận họp, sổ tay lãnh đạo</li>
+        <li>Phản ánh của người dân: tiếp nhận, phân loại, xử lý, đóng phiếu, đánh giá</li>
+        <li>Theo dõi giải ngân, thu – chi ngân sách xã</li>
+        <li>Tin tức, truyền thanh, video, cảnh báo thiên tai, bản đồ kinh tế số</li>
+        <li>Thông báo nội bộ, nhắc việc qua Zalo, thông báo ZNS cho người dân</li>
+        <li>Tổ chức – cán bộ, phân quyền, thời hạn xử lý (SLA), lịch làm việc</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Nguyên tắc vận hành</h3>
+      <ul>
+        <li><b>Nhiều xã, một hệ thống:</b> xã xác định từ <code>Host</code> của request; mỗi bản ghi nghiệp vụ mang <code>tenant_id</code> (ULID, không phải mã hành chính).</li>
+        <li><b>Hồ sơ lưu trữ:</b> không xoá cứng (xoá mềm <code>deleted_at/by/reason</code>), mã đã cấp không cấp lại.</li>
+        <li><b>Mọi thao tác ghi để lại vết</b> trong <code>audit_log</code>, cùng giao dịch.</li>
+        <li><b>Dữ liệu cá nhân</b> (Nghị định 13/2023) không vào log; trả ra API được che (<code>MaskPhone</code>, <code>MaskCccd</code>).</li>
+        <li><b>Thời hạn phản ánh</b> tính bằng giờ làm việc theo cấu hình từng xã; trạng thái quá hạn được suy ra, không lưu thành cột.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: CLAUDE.md, kb/00-foundation/domain-boundaries.md, .claude/rules/critical/*</div>
+</section>
+
+<section class="slide" data-title="1.2 Bản đồ module">
+  <h2>1.2 Bản đồ module</h2>
+  <p class="sub">Ba module người dùng thấy, cộng tầng backend dùng chung</p>
+  <table>
+    <tr><th style="width:18%">Module</th><th style="width:22%">Mã nguồn</th><th style="width:20%">Người dùng</th><th>Vai trò</th></tr>
+    <tr><td><span class="tag t-pa">Platform Admin</span></td><td><code>platform-admin/</code> (Next.js)</td><td>Người vận hành nền tảng (tài khoản <code>VH-…</code>)</td><td>Quản lý danh sách xã, tên miền, Mini App, lĩnh vực phản ánh cấp 1, giới hạn tải lên, Zalo Bot dùng chung, nhật ký vận hành. Chạy tại <code>admin.vigov.vn</code>, chỉ có ở prod.</td></tr>
+    <tr><td><span class="tag t-wa">Web Admin</span></td><td><code>web-admin/</code> (Next.js)</td><td>Cán bộ một xã</td><td>Màn hình điều hành nghiệp vụ của xã. Chạy tại <code>&lt;xã&gt;.vigov.vn</code>; xã suy ra từ Host.</td></tr>
+    <tr><td><span class="tag t-mv">Mini App – App ViHAT</span></td><td><code>citizen-app/</code> + kho <code>vihat-miniapp</code></td><td>Khách hàng, đối tác doanh nghiệp</td><td>Ứng dụng giới thiệu giải pháp của Tập đoàn ViHAT Group trên Zalo. Backend riêng là <code>vihat-miniapp</code>.</td></tr>
+    <tr><td><span class="tag t-mx">Mini App – App xã</span></td><td><code>citizen-app/src/cong-dan</code></td><td>Người dân của một xã</td><td>Giao diện của xã trên Zalo: phản ánh, tin tức, danh bạ, tra cứu. Hai cách mở: app riêng của xã (App ID riêng), hoặc App ViHAT mở bằng mã QR của xã.</td></tr>
+    <tr><td><span class="tag t-be">Backend</span></td><td><code>service-*/</code> (Go), <code>core/</code>, <code>proto/</code></td><td>—</td><td>7 service: identity, documents, petitions, finance, comms, platform, reporting. Mỗi service có CSDL PostgreSQL riêng.</td></tr>
+  </table>
+  <div class="warn">Với người dùng, App ViHAT và App xã là hai ứng dụng riêng: chữ của bên này không nhắc bên kia. Việc App xã đi qua <code>vihat-miniapp</code> (mở phiên trên đường QR, đổi vị trí) là cơ chế kỹ thuật bên dưới, không lộ ra giao diện (ADR 0044, 11/10/2026).</div>
+  <div class="src">Nguồn: thư mục gốc repo, kb/10-decisions/0044-hai-che-do-mini-app.md</div>
+</section>
+
+<section class="slide" data-title="1.3 Kiến trúc tổng thể">
+  <h2>1.3 Kiến trúc tổng thể</h2>
+  <p class="sub">Đường đi của request, từ trình duyệt hoặc Zalo tới CSDL</p>
+<div class="diagram">  Trình duyệt cán bộ ── https://&lt;xã&gt;.vigov.vn ──► Ingress nginx ──► web-admin:3000 ──(/api/v1/* theo tiền tố, giữ Host)──┐
+  Trình duyệt vận hành ─ https://admin.vigov.vn ───► Ingress (dựng tay) ─► platform-admin:3000 ─(/api/v1/*, Host=OPERATOR_HOST)┐
+                                                                                                                              │
+  Zalo – App xã ──────── https://&lt;svc&gt;.api.vigov.vn ─► Ingress ──────────────────────────────────────────────────────┐        │
+  Zalo – App ViHAT ───── VIGOV_API_HOST ───────────► vihat-miniapp (kho riêng) ── gRPC :9091 CitizenSessionBridge ─┐  │        │
+                                                                                                               ▼  ▼        ▼
+     ┌───────────────────────────── REST :8080  ·  gRPC :9090 (x-vigov-caller-key, x-tenant-id) ─────────────────────────────┐
+     │  platform   identity(:9090/:9091/:9093)   documents   petitions   finance   comms   reporting                         │
+     └────┬───────────┬──────────────┬───────────┬──────────┬─────────┬──────┬──────────────────────────────────────────────┘
+          ▼           ▼              ▼           ▼          ▼         ▼      ▼
+     PostgreSQL (mỗi service một CSDL vigov_&lt;svc&gt;) · Redis (idem, rate limit) · MinIO (tệp) · ClamAV vigov-clamav:3310
+     Ra ngoài: Zalo Graph API / Zalo Bot / Cổng TTĐT xã / SMTP (từ identity, comms)</div>
+  <ul>
+    <li>Web Admin không gọi thẳng service từ trình duyệt: Next.js chuyển tiếp <code>/api/v1/*</code> tới service chủ theo <code>web-admin/src/lib/api/dinh-tuyen.gen.ts</code>, cookie host-only, cùng gốc.</li>
+    <li>App xã gọi thẳng <code>&lt;svc&gt;.api.vigov.vn</code> với <code>Authorization: Bearer</code>, qua CORS allow-list.</li>
+    <li>Sự kiện liên service (Kafka, ADR 0010) mới có outbox; chưa có client broker. Xem Phần 5.</li>
+  </ul>
+  <div class="src">Nguồn: deploy/base/mang/ingress.yaml, netpol.yaml, web-admin/src/lib/may-chu/chuyen-tiep.ts, platform-admin/src/lib/server/gateway.ts</div>
+</section>
+
+<section class="slide" data-title="1.4 Cách ly dữ liệu">
+  <h2>1.4 Bốn trục cách ly và vết kiểm toán</h2>
+  <table>
+    <tr><th style="width:18%">Trục</th><th>Cơ chế trong mã</th></tr>
+    <tr><td>Theo xã (luật 1)</td><td>Xã suy ra từ <code>Host</code> ở biên (<code>platform.ResolveHost</code>, cache 30s). Không xác định được xã → 404. <code>tenant_id</code> đi trong <code>context.Context</code> và metadata gRPC <code>x-tenant-id</code>. Mọi bảng có tenant được phân vùng <code>PARTITION BY HASH (tenant_id)</code> 32 phần. Token mang <code>tenant_id</code>, so với xã của Host. Header <code>x-tenant*</code> từ client bị xoá.</td></tr>
+    <tr><td>Theo công dân (luật 4)</td><td>Danh tính công dân lấy từ phiên, không lấy từ tham số. Tuyến công dân tách riêng tuyến cán bộ. Mã tra cứu không tuần tự. Tệp đính kèm phục vụ qua link ký, có hạn.</td></tr>
+    <tr><td>Theo vai trò (luật 5)</td><td>Khoá quyền phẳng <code>"&lt;nhóm&gt;.&lt;việc&gt;"</code> trong bảng <code>quyen</code>; vai trò ↔ quyền theo xã (<code>vai_tro_quyen</code>). Mỗi tuyến khai <code>RequirePermission</code> / <code>Public</code> / <code>AnyAuthenticated</code> / <code>CitizenOnly</code>. Mọi khoá dùng trong mã phải có trong bảng (<code>make quyen</code>).</td></tr>
+    <tr><td>Vết kiểm toán (luật 6)</td><td>Bảng <code>audit_log</code> ở mọi service, ghi cùng giao dịch, chỉ ghi thêm (trigger chặn UPDATE/DELETE/TRUNCATE). Người thực hiện ghi bằng mã nghiệp vụ (<code>CB-…</code>, <code>VH-…</code>, <code>system</code>). Lưu tối thiểu 12 tháng.</td></tr>
+  </table>
+  <div class="src">Nguồn: .claude/rules/critical/1,4,5,6; core/grpcx/grpcx.go; core/audit/audit.go; core/tenant/cache.go</div>
+</section>
+
+<section class="slide" data-title="1.5 Công nghệ và quy ước">
+  <h2>1.5 Công nghệ và quy ước</h2>
+  <div class="cols">
+    <div>
+      <h3>Công nghệ</h3>
+      <table>
+        <tr><th>Tầng</th><th>Công nghệ</th></tr>
+        <tr><td>Backend</td><td>Go (mỗi service một binary <code>cmd/server</code>), gRPC + protobuf (<code>buf generate</code>), PostgreSQL 16, Redis</td></tr>
+        <tr><td>Web</td><td>Next.js (App Router, output standalone, Node 22-alpine), không dùng biến <code>NEXT_PUBLIC_*</code></td></tr>
+        <tr><td>Mini App</td><td>React 19 + Vite 8, <code>zmp-sdk ^2.53.0</code>, maplibre-gl/pmtiles</td></tr>
+        <tr><td>Tệp</td><td>MinIO (S3), ClamAV quét mã độc</td></tr>
+        <tr><td>Hạ tầng</td><td>Kubernetes (Rancher), Harbor <code>harbor.omicrm.services/ci</code>, Jenkins</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Quy ước</h3>
+      <ul>
+        <li>Hợp đồng giữa service: <code>proto/</code> là nguồn chuẩn; mã sinh ra không sửa tay.</li>
+        <li>Hợp đồng REST cho web: sinh từ khai báo route Go → <code>kb/20-contracts/openapi.json</code>.</li>
+        <li>Một service sở hữu một thực thể (<code>kb/30-indexes/data-ownership.json</code>); không service nào mở CSDL của service khác.</li>
+        <li>Tên mới (hàm, bảng, cột, tệp) bằng tiếng Anh; đường dẫn UI và câu chữ hiển thị bằng tiếng Việt.</li>
+        <li>Biến môi trường <code>UPPER_SNAKE_CASE</code>, chỉ đọc ở <code>core/config</code>.</li>
+        <li>Git: commit thẳng <code>main</code>, một commit một việc, push ngay.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: CLAUDE.md, rules 2/11/12, web-admin/Dockerfile, citizen-app/package.json</div>
+</section>
+
+<!-- ======================================================= PHẦN 2 -->
+<section class="slide part" data-title="Phần 2 — Chức năng nhiệm vụ">
+  <h1>Phần 2 — Chức năng nhiệm vụ</h1>
+  <p>Web Admin (cán bộ xã) và Platform Admin (vận hành nền tảng): từng menu, các màn và chức năng con, khoá quyền, service phục vụ. Mini App nằm ở Phần 6.</p>
+  <p style="font-size:14px">Quy ước: "?" = control đang hiển thị ở trạng thái vô hiệu, chưa dựng ("Tính năng đang phát triển").</p>
+</section>
+
+<section class="slide" data-title="2.1 Web Admin — khung chung">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.1 Web Admin — khung chung và cây menu</h2>
+  <div class="cols">
+    <div>
+      <h3>Cây menu (web-admin/src/components/muc-menu.ts)</h3>
+      <table>
+        <tr><th>Nhóm</th><th>Mục</th><th>Đường dẫn</th></tr>
+        <tr><td rowspan="12">Điều hành</td><td>Tổng quan</td><td><code>/tong-quan</code></td></tr>
+        <tr><td>Nhiệm vụ</td><td><code>/nhiem-vu</code></td></tr>
+        <tr><td>Sổ tay lãnh đạo</td><td><code>/nhiem-vu/so-tay</code></td></tr>
+        <tr><td>Biên bản họp</td><td><code>/nhiem-vu/bien-ban</code></td></tr>
+        <tr><td>Văn bản &amp; Đơn thư</td><td><code>/van-ban</code></td></tr>
+        <tr><td>Giải ngân</td><td><code>/giai-ngan</code></td></tr>
+        <tr><td>Thu - Chi ngân sách</td><td><code>/giai-ngan/thu-chi</code></td></tr>
+        <tr><td>Thông báo nội bộ</td><td><code>/thong-bao</code></td></tr>
+        <tr><td>Danh bạ người dân <span class="pend">?</span></td><td>—</td></tr>
+        <tr><td>Gửi tin ZNS / SMS <span class="pend">?</span></td><td>—</td></tr>
+        <tr><td>Phản ánh người dân</td><td><code>/phan-anh</code></td></tr>
+        <tr><td>Bản đồ kinh tế số</td><td><code>/ban-do</code></td></tr>
+        <tr><td rowspan="5">Quản trị</td><td>Nội dung Mini App</td><td><code>/mini-app</code></td></tr>
+        <tr><td>Báo cáo</td><td><code>/bao-cao</code></td></tr>
+        <tr><td>Người dùng &amp; Phân quyền</td><td><code>/nguoi-dung</code>, <code>/nguoi-dung/phan-quyen</code></td></tr>
+        <tr><td>Hướng dẫn sử dụng <span class="pend">?</span></td><td>—</td></tr>
+        <tr><td>Cấu hình</td><td><code>/cau-hinh</code></td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Khung chung</h3>
+      <ul>
+        <li>Trang <code>/</code>: lãnh đạo (<code>role.is_leader</code>) → <code>/nhiem-vu/so-tay</code>; còn lại → <code>/tong-quan</code>.</li>
+        <li>Xã lấy từ Host qua <code>GET /api/v1/communes/current</code> (identity); không khớp → 404.</li>
+        <li>Chưa có cookie phiên → chuyển về <code>/dang-nhap</code> (<code>src/proxy.ts</code>).</li>
+        <li>Menu ẩn theo khoá quyền chỉ để tiện dùng; máy chủ kiểm khoá trên từng lời gọi.</li>
+        <li>Đầu trang: ô tìm toàn hệ thống <span class="pend">?</span>; chuông thông báo (comms <code>/notifications</code>); menu người dùng: Hồ sơ cá nhân, Đổi mật khẩu, Đăng xuất.</li>
+        <li>Ngoài menu: <code>/ca-nhan</code> (nhắc việc qua Zalo), <code>/doi-mat-khau</code>, <code>/dang-nhap</code>.</li>
+        <li><code>/noi-dung</code> và <code>/danh-ba</code> chuyển hướng sang <code>/mini-app</code>.</li>
+        <li><code>(dev)/xem-thu</code> là màn xem thử cho phát triển, không phải màn nghiệp vụ.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: web-admin/src/components/muc-menu.ts, lib/quyen.ts, lib/home-route.ts, lib/tenant.server.ts</div>
+</section>
+
+<section class="slide" data-title="2.2 Tổng quan · Báo cáo">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.2 Tổng quan điều hành · Báo cáo</h2>
+  <div class="cols">
+    <div class="box">
+      <h3>Tổng quan — <code>/tong-quan</code> · khoá <code>report.read</code></h3>
+      <ul>
+        <li>Chức năng: bảng điều hành toàn xã; số liệu đọc trực tiếp từ service sở hữu. Mỗi khối cần thêm khoá đọc của phân hệ (<code>task.read</code>, <code>document.read</code>, <code>feedback.read</code>).</li>
+        <li>Kỳ: Tuần này · Tháng này · Quý này · Năm nay. Xuất PDF / XLSX / PPTX (<code>report.export</code>). Chế độ trình chiếu phòng họp.</li>
+        <li>Khối: Nhiệm vụ · Văn bản &amp; Đơn thư · Giải ngân ngân sách · Phản ánh người dân · Thu - Chi ngân sách xã · Kinh tế &amp; Tài nguyên <span class="pend">?</span> · Cần xử lý ngay (hàng đợi quá hạn).</li>
+        <li>Bấm con số → hộp danh sách / ngăn chi tiết nhiệm vụ, hoặc dẫn sang <code>/nhiem-vu</code>, <code>/van-ban</code>, <code>/phan-anh</code> kèm bộ lọc.</li>
+        <li>Chưa dựng: "Đơn thư trong kỳ", "Kinh tế &amp; Tài nguyên".</li>
+        <li>Service: petitions (task-summary, overdue-tasks, citizen-report-summary…), documents (incoming-document-summary…), finance (investment-project-summary, budget-indicators), identity (staff-directory).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Báo cáo — <code>/bao-cao</code> · khoá <code>report.read</code></h3>
+      <ul>
+        <li>Tiêu đề "Báo cáo điều hành". Kỳ như Tổng quan, cộng "Tuỳ chọn" (Từ ngày / Đến ngày).</li>
+        <li>Dùng lại khối KPI của Tổng quan, cộng "Xếp hạng bộ phận" (Tổng việc, Quá hạn, Hoàn thành, Đúng hạn) và "So sánh với kỳ trước".</li>
+        <li>Xuất PDF / XLSX / PPTX (<code>report.export</code>).</li>
+        <li>Chưa dựng: "Tổng chi".</li>
+        <li>Service: petitions, documents, finance; identity (org-units).</li>
+      </ul>
+      <div class="warn">Mã có hai ghi chú ngược nhau về phần xuất: <code>lib/quyen.ts</code> ghi "not built", còn <code>features/report/labels.ts</code> ghi đã dựng 09/10/2026.</div>
+    </div>
+  </div>
+  <div class="src">Nguồn: web-admin/src/features/dashboard/*, features/report/*, lib/api/dashboard.ts</div>
+</section>
+
+<section class="slide" data-title="2.3 Nhiệm vụ · Sổ tay · Biên bản">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.3 Nhiệm vụ · Sổ tay lãnh đạo · Biên bản họp</h2>
+  <div class="cols3">
+    <div class="box">
+      <h3>Nhiệm vụ — <code>/nhiem-vu</code></h3>
+      <ul>
+        <li>"Quản lý nhiệm vụ": giao việc từ kết luận họp, theo dõi tiến độ, đôn đốc tự động.</li>
+        <li>Nút: Nhập từ Excel (giao việc hàng loạt), Giao việc mới (<code>task.create</code>).</li>
+        <li>Chế độ xem: Kanban (kéo thẻ) · Danh sách · Sổ theo dõi (Xuất Excel).</li>
+        <li>Lọc: Toàn xã / Giao cho tôi / Liên quan đến tôi; bộ phận, người thực hiện, ưu tiên, loại, khối, nguồn giao, trạng thái; Chỉ việc quá hạn; Sắp đến hạn.</li>
+        <li>Hàng chờ "Đề nghị lùi hạn chờ duyệt".</li>
+        <li>Ngăn chi tiết: sửa thông tin; chuyển bước vòng đời (hoàn thành cần <code>task.approve</code>); Giao/Chuyển việc (<code>task.assign</code>); đề nghị và duyệt lùi hạn (<code>task.extend</code>); nhiệm vụ con/việc cha; Nhật ký &amp; Trao đổi, đính kèm; Xoá (<code>task.delete</code>, bắt buộc lý do).</li>
+        <li><span class="pend">?</span> Cập nhật tiến độ (%), trọng số việc con.</li>
+        <li>Service: petitions (tasks, task-extensions, task-statuses…), identity (task-blocs, org-units, staff-directory).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Sổ tay lãnh đạo — <code>/nhiem-vu/so-tay</code></h3>
+      <ul>
+        <li>Ba cột: Việc quá hạn · Chờ tôi duyệt (Duyệt hoàn thành, Duyệt lùi hạn) · Việc tôi đã giao.</li>
+        <li>Không có bộ lọc, ô tìm hay nút thao tác.</li>
+        <li>Khoá <code>task.read</code>. Là trang mặc định của lãnh đạo.</li>
+        <li>Service: petitions, identity.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Biên bản họp — <code>/nhiem-vu/bien-ban</code></h3>
+      <ul>
+        <li>Nhập biên bản, tách kết luận thành nhiều nhiệm vụ; mỗi nhiệm vụ giữ liên kết ngược về kết luận gốc.</li>
+        <li>Biên bản: Xem / Sửa / Gỡ; Ký biên bản (<code>task.approve</code>); Ghi số Thông báo kết luận; Lập biên bản bổ sung.</li>
+        <li>Kết luận: Thêm / Sửa / Gỡ; đánh dấu "không phát sinh nhiệm vụ"; Tách thành nhiệm vụ.</li>
+        <li><span class="pend">?</span> Hạn gợi ý từ ngày trong kết luận; tệp scan biên bản.</li>
+        <li>Service: petitions (meetings…), identity.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: web-admin/src/features/nhiem-vu/*, leader-notebook/*, bien-ban/*</div>
+</section>
+
+<section class="slide" data-title="2.4 Văn bản & Đơn thư">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.4 Văn bản &amp; Đơn thư — <code>/van-ban</code> · khoá <code>document.read</code></h2>
+  <p class="sub">Vào sổ, phân công xử lý, theo dõi hạn giải quyết. 4 tab: Đơn thư công dân · Báo cáo · Văn bản đến · Văn bản đi</p>
+  <table>
+    <tr><th style="width:16%">Tab</th><th>Chức năng con</th><th style="width:22%">Khoá</th></tr>
+    <tr><td>Đơn thư công dân</td><td>Vào sổ đơn thư; Nhập từ Excel; lọc Giao cho tôi / Liên quan đến tôi. Ngăn chi tiết: sửa người gửi, sửa hạn xử lý, chuyển cho bộ phận khác (có ghi vết), nội dung trả lời công dân, ghi nhật ký, phân công, Chuyển thành nhiệm vụ.</td><td><code>petition.read</code>, <code>petition.create</code>; chuyển thành nhiệm vụ cần thêm <code>task.create</code></td></tr>
+    <tr><td>Báo cáo</td><td>Báo cáo đơn thư năm hiện tại theo loại đơn và theo bộ phận; Xuất Excel.</td><td><code>report.export</code> + <code>petition.read</code></td></tr>
+    <tr><td>Văn bản đến</td><td>Vào sổ (nhập tay, "Lưu &amp; nhập tiếp"), Sửa, Gỡ khỏi sổ; chuyển cho bộ phận khác, không đổi trạng thái.</td><td><code>document.create</code>, <code>document.route</code></td></tr>
+    <tr><td>Văn bản đi</td><td>Cấp số văn bản đi, Sửa, Gỡ khỏi sổ.</td><td><code>document.create</code></td></tr>
+  </table>
+  <p><span class="pend">Chưa dựng:</span> chuyển trạng thái văn bản đến; lọc Giao cho tôi ở sổ văn bản đến; nhập hàng loạt Excel văn bản đến; xuất sổ văn bản đến; chuyển văn bản đến thành nhiệm vụ; nguồn nhập; gợi ý cơ quan ban hành; chuyển ngay khi vào sổ; ghi chú văn bản đến.</p>
+  <p>Service: documents (incoming/outgoing-documents, document-types, citizen-letters, citizen-letter-counts/report/types), petitions (citizen-letter-tasks), identity (org-units, staff-directory).</p>
+  <div class="src">Nguồn: web-admin/src/features/van-ban/*</div>
+</section>
+
+<section class="slide" data-title="2.5 Giải ngân · Thu - Chi">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.5 Giải ngân · Thu - Chi ngân sách</h2>
+  <div class="cols">
+    <div class="box">
+      <h3>Theo dõi giải ngân — <code>/giai-ngan</code> · <code>budget.read</code></h3>
+      <ul>
+        <li>Chọn năm ngân sách. Nút: Hạng mục kế hoạch vốn (<code>budget.update</code> hoặc <code>admin.lookup</code>); Nhập lần giải ngân từ Excel; Thêm dự án (<code>budget.update</code>).</li>
+        <li>Tổng quan năm: Kế hoạch vốn năm, Đã giải ngân, Còn phải giải ngân, Cần chú ý; luỹ kế so với kế hoạch; tiến độ theo hạng mục; tiến độ theo nguồn vốn (thêm và quản lý nguồn vốn).</li>
+        <li>Bảng dự án: tìm, lọc hạng mục và đơn vị phụ trách; xoá hàng loạt.</li>
+        <li>Chi tiết dự án <code>/giai-ngan/du-an/:id</code>: tab Vướng mắc · Chứng từ · Biểu đồ · Trao đổi; Sửa / Gỡ dự án. Chứng từ đi qua các bước Kế toán nhập → Đã xác nhận → Đã khoá; Mở khoá; Gỡ khoản chi. Xác nhận, khoá, gỡ cần <code>budget.confirm</code>.</li>
+        <li><span class="pend">?</span> Tự sinh nhiệm vụ theo dõi.</li>
+        <li>Service: finance (investment-projects, disbursements, funding-sources, capital-plan-categories, project-issues…), identity.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Thu - Chi ngân sách xã — <code>/giai-ngan/thu-chi</code> · <code>budget.read</code></h3>
+      <ul>
+        <li>Tab: Thu ngân sách N / Chi ngân sách N.</li>
+        <li><code>budget.update</code>: nạp từ Excel (có tệp mẫu), lập bảng, sửa thông tin bảng, thêm khoản mục cấp cao nhất, sửa số thứ tự, ghi đợt.</li>
+        <li><code>budget.confirm</code>: gỡ bảng/khoản mục/đợt, chọn dòng tổng; Chốt kỳ / Mở chốt.</li>
+        <li>Service: finance (budget-sheets, budget-lines, budget-entries, budget-indicators, budget-period-closes).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: web-admin/src/features/giai-ngan/*, features/thu-chi/*</div>
+</section>
+
+<section class="slide" data-title="2.6 Phản ánh · Bản đồ">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.6 Phản ánh người dân · Bản đồ kinh tế số</h2>
+  <div class="cols">
+    <div class="box">
+      <h3>Phản ánh — <code>/phan-anh</code> · <code>feedback.read</code></h3>
+      <ul>
+        <li>Tiếp nhận từ Zalo Mini App và các kênh khác; theo dõi thời hạn; đối chiếu ảnh trước và sau xử lý.</li>
+        <li>Nhập hộ phản ánh (<code>feedback.create</code>) → trả "Mã tra cứu".</li>
+        <li>KPI: Tổng 90 ngày, Đúng/trễ hạn, Điểm hài lòng TB, Chờ kiểm duyệt.</li>
+        <li>Tab: Danh sách · Bản đồ nhiệt · Báo cáo (đúng/trễ hạn, theo lĩnh vực, theo bộ phận, mật độ theo thôn; <code>report.read</code>). Khối tra cứu theo mã.</li>
+        <li>Ngăn chi tiết: phân loại/chốt lĩnh vực, Không tiếp nhận, Chuyển cấp trên (<code>feedback.classify</code>); Chuyển xử lý, ẩn/hiện công khai (<code>feedback.assign</code>); chuyển bước kế tiếp; Đóng phiếu, tải ảnh sau xử lý, ghi nhận đánh giá (<code>feedback.resolve</code>); Gộp/Tách phiếu trùng; Tạo nhiệm vụ; nhật ký xử lý.</li>
+        <li>Phiếu thuộc lĩnh vực "cán bộ" cần thêm <code>feedback.restricted</code>.</li>
+        <li><span class="pend">?</span> Đính ảnh hiện trường; số ngày trễ.</li>
+        <li>Service: petitions (citizen-reports…), identity (residential-units…), comms (map-frame).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Bản đồ kinh tế số — <code>/ban-do</code> · <code>asset.read</code></h3>
+      <ul>
+        <li>Chế độ xem: Bản đồ · Sổ địa điểm; Trình chiếu; Mở rộng bản đồ.</li>
+        <li>Lớp bản đồ, bộ lọc; công tắc "Bản đồ nhiệt phản ánh" (<code>feedback.read</code>).</li>
+        <li><code>asset.update</code>: Thêm đối tượng, Sửa, Xác minh/Bỏ xác minh, Xoá (bắt buộc lý do).</li>
+        <li><code>admin.lookup</code>: Đặt/Đổi khung bản đồ của xã, Về mặc định, Nạp 11 nhóm mặc định.</li>
+        <li><span class="pend">?</span> Mẫu Excel, Nhập Excel, quy mô lao động, tìm theo tên, mật độ theo thôn.</li>
+        <li>Nền bản đồ: PMTiles phục vụ qua <code>/basemap/[...path]</code> của web-admin (<code>BASEMAP_URL</code>).</li>
+        <li>Service: comms (map-assets, map-asset-types, map-field-schemas, map-frame…), petitions (citizen-report-points), identity (residential-units).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: web-admin/src/features/phan-anh/*, features/map-assets/*</div>
+</section>
+
+<section class="slide" data-title="2.7 Thông báo · Mini App · Người dùng">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.7 Thông báo nội bộ · Nội dung Mini App · Người dùng &amp; Phân quyền</h2>
+  <div class="cols3">
+    <div class="box">
+      <h3>Thông báo — <code>/thong-bao</code></h3>
+      <ul>
+        <li>Khoá <code>announcement.create</code>. Soạn thông báo gửi các bộ phận (kèm thư điện tử) và chọn người nhận đích danh; Phát hành.</li>
+        <li>Phạm vi: Gửi cho tôi / Cả sổ thông báo.</li>
+        <li><span class="pend">?</span> Gửi theo bộ phận, lưu nháp, danh sách người nhận, gỡ, xác nhận đã đọc, trạng thái gửi thư, ghim.</li>
+        <li>Service: comms (announcements), identity.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Nội dung Mini App — <code>/mini-app?tab=</code></h3>
+      <ul>
+        <li><b>Nội dung</b> (<code>content.read</code>/<code>content.update</code>): thêm/sửa/xoá, Đăng/Gỡ; danh mục tin; đồng bộ tin từ Cổng TTĐT; loại: Tin tức, Sự kiện, Thông báo, Truyền thanh, Video, Banner.</li>
+        <li><b>Cảnh báo thiên tai</b>: đăng, sửa, kết thúc sớm, xoá; loại Bão, Lũ, Sạt lở, Mưa lớn, Dịch bệnh, Cháy.</li>
+        <li><b>Danh bạ cán bộ</b> (<code>admin.user</code>): nhập Excel, thêm/sửa cán bộ, đưa vào/rút khỏi danh bạ Mini App, xoá (<code>admin.user.delete</code>).</li>
+        <li>Service: comms (content-items, content-categories, portal-sync, disaster-alerts), identity (staff, commune-staff).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>Người dùng &amp; Phân quyền</h3>
+      <ul>
+        <li><b>Người dùng</b> <code>/nguoi-dung</code> (<code>admin.user</code>): thêm tài khoản, nhập Excel, sửa (gán vai trò), Khoá/Mở khoá, Cấp tài khoản / Đặt lại mật khẩu, xoá (<code>admin.user.delete</code>).</li>
+        <li><b>Phân quyền</b> <code>/nguoi-dung/phan-quyen</code> (<code>admin.role</code>): ma trận quyền × vai trò; bật/tắt ô rồi Lưu/Huỷ ở đầu cột; cột vai trò của chính người đang đăng nhập bị khoá.</li>
+        <li>Service: identity (staff, roles, role-permissions, org-units).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: web-admin/src/features/thong-bao/*, mini-app/*, noi-dung/*, disaster-alerts/*, danh-ba/*, cau-hinh/tab-nguoi-dung.tsx, tab-phan-quyen.tsx</div>
+</section>
+
+<section class="slide" data-title="2.8 Cấu hình (12 tab)">
+  <p class="tags"><span class="tag t-wa">Web Admin</span></p>
+  <h2>2.8 Cấu hình hệ thống — <code>/cau-hinh</code></h2>
+  <p class="sub">Menu mở khi có một trong các khoá <code>admin.org</code>, <code>admin.lookup</code>, <code>admin.sla</code>, <code>admin.audit</code>. Thanh tab chỉ hiện khi tài khoản mở được từ 2 tab trở lên.</p>
+  <table>
+    <tr><th>#</th><th>Tab</th><th>Chức năng</th><th>Khoá</th><th>Service</th></tr>
+    <tr><td>1</td><td>Sơ đồ tổ chức</td><td>Thêm bộ phận / bộ phận con, sửa, xoá</td><td>ghi: <code>admin.org</code></td><td>identity</td></tr>
+    <tr><td>2</td><td>Thôn / Tổ dân phố</td><td>Đơn vị dân cư và loại đơn vị</td><td>ghi: <code>admin.org</code></td><td>identity</td></tr>
+    <tr><td>3</td><td>Danh mục</td><td>Loại tài nguyên bản đồ; hạng mục kế hoạch vốn; loại văn bản, loại đơn thư; loại đơn vị dân cư, khối nhiệm vụ; loại nhiệm vụ, mức ưu tiên, trạng thái nhiệm vụ; lĩnh vực phản ánh. Thêm/Sửa/Tắt/Bật lại/Xoá, nhập Excel từng nhóm</td><td>ghi: <code>admin.lookup</code></td><td>comms, finance, documents, identity, petitions</td></tr>
+    <tr><td>4</td><td>Trường bản đồ</td><td>Trường tuỳ biến theo nhóm tài nguyên</td><td><code>asset.read</code>; ghi <code>admin.lookup</code></td><td>comms</td></tr>
+    <tr><td>5</td><td>Lời hệ thống</td><td>Ghi đè câu chữ hệ thống: Phản ánh, Dùng chung, Giải ngân, Báo cáo; khôi phục lời gốc; tắt/bật</td><td><code>admin.lookup</code></td><td>petitions, finance, reporting</td></tr>
+    <tr><td>6</td><td>Thời hạn xử lý</td><td>Bảng SLA theo lĩnh vực; thời hạn riêng; gieo mặc định; thời hạn giải quyết đơn thư</td><td><code>admin.sla</code></td><td>identity, petitions, documents</td></tr>
+    <tr><td>7</td><td>Tự động hoá</td><td>Nhắc việc sắp/đã quá hạn; leo thang việc trễ; bản tin đầu tuần; báo cáo định kỳ. Lưu nhịp, Chạy ngay. <span class="pend">?</span> Tính lại số liệu Tổng quan</td><td><code>admin.sla</code></td><td>identity</td></tr>
+    <tr><td>8</td><td>Máy chủ thư</td><td>SMTP của xã: máy chủ, cổng, tài khoản, mật khẩu (niêm bằng khoá mã hoá), địa chỉ gửi; Gửi thử</td><td><code>admin.lookup</code></td><td>comms</td></tr>
+    <tr><td>9</td><td>Kênh Zalo</td><td>Bot của xã (kiểm tra, webhook, quay về bot chung); loại việc nhắn qua Zalo; giờ yên lặng; cán bộ đã ghép nối; nhóm Zalo (mã gắn nhóm, sửa, gỡ)</td><td><code>admin.lookup</code></td><td>comms, identity</td></tr>
+    <tr><td>10</td><td>Lịch làm việc</td><td>Ca làm việc, ngày nghỉ lễ, ca làm bù; gieo mặc định</td><td>ghi: <code>admin.sla</code></td><td>identity</td></tr>
+    <tr><td>11</td><td>Nhật ký hệ thống</td><td>Đọc audit_log của 5 service, lọc theo ngày</td><td><code>admin.audit</code></td><td>identity, documents, petitions, finance, comms</td></tr>
+    <tr><td>12</td><td>Nhận diện xã</td><td>Logo và banner (PNG/WebP/JPEG ≤ 2 MB)</td><td><code>admin.org</code></td><td>platform</td></tr>
+  </table>
+  <p>Ngoài menu: <b>Cá nhân</b> <code>/ca-nhan</code> (ghép nối nhận nhắc việc qua Zalo — comms); <b>Đổi mật khẩu</b> <code>/doi-mat-khau</code> (identity; khi máy chủ bắt đổi, các màn khác trả 403); <b>Đăng nhập</b> <code>/dang-nhap</code> (thư điện tử công vụ + mật khẩu → <code>POST /api/v1/sessions</code>).</p>
+  <div class="src">Nguồn: web-admin/src/features/cau-hinh/*, features/zalo/*, features/mat-khau/*, features/auth/*</div>
+</section>
+
+<section class="slide" data-title="2.9 Platform Admin">
+  <p class="tags"><span class="tag t-pa">Platform Admin</span></p>
+  <h2>2.9 Platform Admin — "ViGov — Khu vận hành nền tảng"</h2>
+  <p class="sub">Mọi lời gọi <code>/api/v1/*</code> đi qua gateway Next.js về service-platform (Host ghim <code>OPERATOR_HOST</code>). Khoá quyền <code>ops.*</code>. Trang <code>/</code> chuyển về <code>/xa</code>.</p>
+  <table>
+    <tr><th style="width:20%">Màn</th><th>Chức năng</th><th style="width:20%">Khoá</th></tr>
+    <tr><td>Danh sách xã <code>/xa</code></td><td>Tên xã, tỉnh/thành, trạng thái, tên miền chính và các tên miền khác; Tạo xã</td><td>bất kỳ <code>ops.*</code></td></tr>
+    <tr><td>Tạo xã <code>/xa/moi</code></td><td>Tên xã, tỉnh/thành (34 tỉnh), tên miền chính</td><td><code>ops.tenant.manage</code> + <code>ops.domain.manage</code></td></tr>
+    <tr><td>Thông tin xã <code>/xa/[id]</code></td><td>Sửa tên, ngừng/bật hoạt động · Thêm tên miền, đặt tên miền chính · Mini App riêng: gắn App ID, đổi, gỡ, bật lại, lưu/thu hồi khoá bí mật · Khung bản đồ mặc định · Mã QR mở Mini App (bằng App ViHAT hoặc app riêng) · Nhật ký vận hành của xã</td><td><code>ops.tenant.manage</code>, <code>ops.domain.manage</code>, <code>ops.mini_app.manage</code>, <code>ops.qr.issue</code></td></tr>
+    <tr><td>Mini App dùng chung</td><td>Khai báo / đổi App ID mà QR của mọi xã dùng chung</td><td><code>ops.mini_app.manage</code></td></tr>
+    <tr><td>Lĩnh vực phản ánh</td><td>Bộ mã lĩnh vực cấp 1 (mã, nhãn mặc định, thứ tự, biểu tượng, tông màu); cấp mã, sửa, ngừng/dùng lại</td><td><code>ops.petition_field.manage</code></td></tr>
+    <tr><td>Giới hạn tải lên</td><td>Dung lượng, kiểu tệp, số tệp mỗi bản ghi theo mục đích; áp dụng chung mọi xã</td><td><code>ops.upload_policy.manage</code></td></tr>
+    <tr><td>Zalo Bot</td><td>Token bot dùng chung, kiểm tra kết nối, trỏ/kiểm webhook, thống kê kênh Zalo theo xã (chuyển tiếp sang comms gRPC)</td><td><code>ops.zalo_bot.manage</code></td></tr>
+    <tr><td>Nhật ký vận hành</td><td>Thao tác của người vận hành: thời điểm, người, thao tác, xã, đối tượng, lý do; lọc theo ngày</td><td>bất kỳ <code>ops.*</code></td></tr>
+    <tr><td>Tài khoản</td><td>Đổi mật khẩu (cần mã TOTP); tạo lại bộ mã khôi phục</td><td>—</td></tr>
+    <tr><td>Đăng nhập</td><td>Thư điện tử + mật khẩu + TOTP (hoặc mã khôi phục); lần đầu: mật khẩu tạm → quét QR → mật khẩu mới</td><td>công khai</td></tr>
+  </table>
+  <div class="src">Nguồn: platform-admin/src/components/sidebar.tsx, lib/permissions.ts, features/communes/*, shared-mini-app/*, petition-fields/*, upload-policies/*, zalo-bot/*, operator-log/*, auth/*</div>
+</section>
+
+<section class="slide" data-title="2.10 Ma trận menu × service">
+  <p class="tags"><span class="tag t-wa">Web Admin</span><span class="tag t-pa">Platform Admin</span></p>
+  <h2>2.10 Ma trận menu × service phục vụ</h2>
+  <table>
+    <tr><th>Menu</th><th>identity</th><th>documents</th><th>petitions</th><th>finance</th><th>comms</th><th>reporting</th><th>platform</th></tr>
+    <tr><td>Tổng quan / Báo cáo</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td></td><td></td><td></td></tr>
+    <tr><td>Nhiệm vụ / Sổ tay / Biên bản</td><td>✔</td><td></td><td>✔</td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>Văn bản &amp; Đơn thư</td><td>✔</td><td>✔</td><td>✔</td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>Giải ngân / Thu - Chi</td><td>✔</td><td></td><td></td><td>✔</td><td></td><td></td><td></td></tr>
+    <tr><td>Thông báo nội bộ, chuông</td><td>✔</td><td></td><td></td><td></td><td>✔</td><td></td><td></td></tr>
+    <tr><td>Phản ánh</td><td>✔</td><td></td><td>✔</td><td></td><td>✔</td><td></td><td></td></tr>
+    <tr><td>Bản đồ kinh tế số</td><td>✔</td><td></td><td>✔</td><td></td><td>✔</td><td></td><td></td></tr>
+    <tr><td>Nội dung Mini App</td><td>✔</td><td></td><td></td><td></td><td>✔</td><td></td><td></td></tr>
+    <tr><td>Người dùng / Phân quyền</td><td>✔</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    <tr><td>Cấu hình</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td><td>✔</td></tr>
+    <tr><td>Cá nhân (Zalo)</td><td></td><td></td><td></td><td></td><td>✔</td><td></td><td></td></tr>
+    <tr><td>Platform Admin (mọi màn)</td><td colspan="6">qua service-platform (platform gọi tiếp identity:9093 và comms:9090)</td><td>✔</td></tr>
+  </table>
+  <p>Số tiền tố đường dẫn web-admin chuyển tiếp theo service (<code>dinh-tuyen.gen.ts</code>): comms 27 · petitions 26 · identity 23 · finance 14 · documents 10 · platform 2 · reporting 1.</p>
+  <div class="src">Nguồn: web-admin/src/lib/api/dinh-tuyen.gen.ts, web-admin/src/lib/api/*</div>
+</section>
+
+<!-- ======================================================= PHẦN 3 -->
+<section class="slide part" data-title="Phần 3 — Cấu trúc tài nguyên">
+  <h1>Phần 3 — Cấu trúc tài nguyên</h1>
+  <p>Từng deployment: chức năng, manifest, cổng, điểm vào, việc nền, cơ sở dữ liệu và toàn bộ bảng. Biến cấu hình chi tiết nằm ở Phần 5; vihat-miniapp nằm ở Phần 6.</p>
+</section>
+
+<section class="slide" data-title="3.0 Khuôn chung deployment">
+  <p class="tags"><span class="tag t-be">Backend</span></p>
+  <h2>3.0 Khuôn chung của 7 service Go</h2>
+  <div class="cols">
+    <div>
+      <ul>
+        <li>Container <code>server</code>, image <code>harbor.omicrm.services/ci/vigov-service-&lt;svc&gt;:&lt;commit12&gt;</code>; imagePullSecret <code>harbor-vigov</code>.</li>
+        <li>Probe startup / readiness / liveness: <code>GET /healthz</code> cổng <code>rest</code>; chu kỳ 5/10/20s, ngưỡng lỗi 60/3/5.</li>
+        <li>Tài nguyên: requests cpu 100m, mem 96Mi; limit mem 384Mi; <code>terminationGracePeriodSeconds: 45</code>; RollingUpdate maxUnavailable 0 / maxSurge 1.</li>
+        <li><code>envFrom</code>: ConfigMap <code>common-config</code> + Secret <code>&lt;svc&gt;-secrets</code>.</li>
+        <li>Pod: runAsNonRoot (uid 65532), readOnlyRootFilesystem, drop ALL, seccomp RuntimeDefault, emptyDir <code>/tmp</code> 64Mi.</li>
+        <li>Không có cổng metrics, không có CronJob trong <code>deploy/</code>.</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li>Migration nhúng vào binary, chạy lúc khởi động (<code>core/migrate.Chay</code>) trong <code>pg_advisory_lock</code>; bảng tiến độ <code>schema_migration</code> do bộ chạy tự tạo.</li>
+        <li>CSDL riêng mỗi service, tên <code>vigov_&lt;svc&gt;</code>, địa chỉ lấy từ <code>DATABASE_DSN</code>. Không có <code>CREATE SCHEMA</code>/<code>search_path</code> trong migration.</li>
+        <li>Mọi bảng có <code>tenant_id</code> được chia 32 phân vùng hash (trừ bảng ghi "không phân vùng").</li>
+        <li><code>audit_log</code> có ở mọi service, chỉ ghi thêm.</li>
+        <li>Namespace: <code>vigov-prod</code>, <code>vigov-staging</code>.</li>
+      </ul>
+      <div class="warn">Cụm thật dựng tay trong Rancher, không dựng từ <code>deploy/base</code> + overlays. Tên Deployment trên cụm là <code>vigov-service-&lt;svc&gt;</code> / <code>vigov-web-admin</code>; base dùng tên trần (<code>platform</code>, <code>identity</code>…). Không chạy <code>kubectl apply -k</code> lên namespace đang chạy (deploy/README.md §0).</div>
+    </div>
+  </div>
+  <div class="src">Nguồn: deploy/base/*/deployment.yaml, deploy/README.md, core/migrate/migrate.go</div>
+</section>
+
+<section class="slide" data-title="3.1 identity — deployment">
+  <p class="tags"><span class="tag t-be">service-identity</span></p>
+  <h2>3.1 service-identity — triển khai và điểm vào</h2>
+  <p class="sub">Tổ chức – cán bộ, RBAC theo xã, định danh công dân và phiên, lịch làm việc, SLA, cấu hình tự động hoá, khu vận hành Vihat, secret Mini App của từng xã</p>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Mục</th><th>Giá trị</th></tr>
+        <tr><td>Deployment</td><td><code>identity</code>, replicas 2 (staging 1), PDB minAvailable 1</td></tr>
+        <tr><td>Cổng</td><td>rest 8080 · grpc 9090 · bridge 9091 · grpc-operator 9093</td></tr>
+        <tr><td>env trong manifest</td><td><code>CITIZEN_SESSION_BRIDGE_LISTEN_ADDR=:9091</code>, <code>PLATFORM_GRPC_ADDR</code>, <code>PETITIONS_GRPC_ADDR</code>, <code>DOCUMENTS_GRPC_ADDR</code></td></tr>
+        <tr><td>Secret</td><td><code>identity-secrets</code></td></tr>
+        <tr><td>Binary</td><td><code>cmd/server</code>; <code>cmd/operatorctl</code> (CLI tài khoản vận hành, <code>mini-app-secret set|retire</code>)</td></tr>
+        <tr><td>REST</td><td>89 tuyến (permission 70, any-auth 12, public 6, citizen 1). Tiền tố chính: staff, org-units, residential-units(-types), task-blocs, sla, working-hours, public-holidays, swap-working-days, citizen-letter-deadline-rules, roles, sessions, automation-jobs, communes, citizen-sessions, commune-profiles, commune-staff</td></tr>
+        <tr><td>Việc nền</td><td>Không có; lịch tự động hoá được phục vụ qua RPC <code>ClaimDueAutomationRuns</code> / <code>RecordAutomationRunOutcome</code></td></tr>
+        <tr><td>Gọi ra</td><td>gRPC platform (bắt buộc), documents, petitions; HTTPS Zalo Graph API</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>gRPC phục vụ</h3>
+      <ul>
+        <li><b>IdentityService</b> :9090 — 25 RPC: ResolveStaffPrincipal, ResolveCitizenSession, ResolveCitizenContactPhone, BatchGetStaff, ResolveStaffNames, ResolveAssignableStaff, ResolveLiveOrgUnits, ResolveStaffOrgUnits, ResolveOrgUnitNames, ResolveTaskBlocLabels, ResolveLiveOrgUnitCodes, ResolveActiveResidentialUnits, ResolveResidentialUnitNames, ListCitizenCommunes, AdvanceWorkingHours, MeasureWorkingHours, ResolveDeadlines, ResolveCitizenLetterDeadline, ResolveDueSoonCutoff, ResolveEscalationInstants, ResolveUnassignedHoldInstants, ResolveOrgUnitPermissionHolders, ResolveLeadershipStaff, ClaimDueAutomationRuns, RecordAutomationRunOutcome</li>
+        <li><b>OperatorService</b> :9093 — 12 RPC: phiên vận hành (Open/Resolve/Revoke), đổi mật khẩu, mã khôi phục, đăng ký TOTP, Set/Retire/List MiniAppSecret, ListActiveStaffCounts</li>
+        <li><b>CitizenSessionBridgeService</b> :9091 — OpenCitizenSession (chỉ mở khi cấu hình <code>CITIZEN_SESSION_BRIDGE_*</code>)</li>
+      </ul>
+      <h3>Nhóm cấu hình</h3>
+      <p>HTTPServer, GRPCServer, PlatformClient, TenantCache, Redis, StaffSessionSigning, CitizenCORS, CitizenBridge, AdminSeed, OrgUnitOwnerClients, SecretEncryption, OperatorRealm</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: deploy/base/identity/*, service-identity/cmd/server/main.go, proto/vigov/identity/v1/*, kb/30-indexes/api-surface.json</div>
+</section>
+
+<section class="slide" data-title="3.2 identity — bảng">
+  <p class="tags"><span class="tag t-be">service-identity</span></p>
+  <h2>3.2 service-identity — 30 bảng (29 migration)</h2>
+  <table>
+    <tr><th>Bảng</th><th>Chức năng</th><th>Cột chính</th><th>tenant</th><th>Xoá mềm</th><th>Ràng buộc / trigger</th></tr>
+    <tr><td>audit_log</td><td>Nhật ký kiểm toán</td><td>actor_id, actor_kind, actor_ip, action, subject, at, delta</td><td>có</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>automation_job_setting</td><td>Cấu hình job tự động của xã</td><td>job, enabled, interval_minutes, run_hour/minute, weekday</td><td>có</td><td>—</td><td>job ∈ sla_reminders, escalation, weekly_digest, scheduled_reports</td></tr>
+    <tr><td>automation_run</td><td>Một lượt chạy</td><td>job, work_kind, run_trigger, claimed_at, outcome, records_examined</td><td>có</td><td>—</td><td>work_kind ∈ van-ban-den, phan-anh, nhiem-vu, don-thu</td></tr>
+    <tr><td>automation_run_scope</td><td>Lượt chạy gần nhất theo (job, work_kind)</td><td>last_run_id, last_claimed_at</td><td>có</td><td>—</td><td>PK (tenant, job, work_kind)</td></tr>
+    <tr><td>bo_phan</td><td>Sơ đồ tổ chức dạng cây</td><td>ten, ma, cha_id, thu_tu</td><td>có</td><td>có</td><td>UNIQUE (tenant, ma)</td></tr>
+    <tr><td>citizen_letter_deadline_rule</td><td>Hạn đơn thư theo loại đơn</td><td>letter_type, deadline_kind, amount, unit</td><td>có</td><td>có</td><td>UNIQUE theo live_key</td></tr>
+    <tr><td>data_encryption_key</td><td>DEK của xã, bọc bằng KEK</td><td>kek_id, wrapped</td><td>có (PK)</td><td>—</td><td>trigger guard</td></tr>
+    <tr><td>dinh_danh_cong_dan</td><td>Công dân toàn nền tảng</td><td>id, so_dien_thoai</td><td>không</td><td>—</td><td>UNIQUE so_dien_thoai</td></tr>
+    <tr><td>ghep_phien</td><td>Mã ghép phiên</td><td>bam_ma, ky_tu_doi_chieu, het_han_luc, dung_luc</td><td>có</td><td>—</td><td>hạn ≤ 120 giây</td></tr>
+    <tr><td>khoi_nhiem_vu</td><td>Danh mục khối nhiệm vụ</td><td>ma, nhan, thu_tu, nguon, dang_dung, color</td><td>có</td><td>có</td><td>trigger ba_tang</td></tr>
+    <tr><td>lich_lam_viec</td><td>Ca làm việc trong tuần</td><td>thu, bat_dau, ket_thuc</td><td>có</td><td>có</td><td>UNIQUE (tenant, thu, bat_dau)</td></tr>
+    <tr><td>loai_don_vi_dan_cu</td><td>Loại đơn vị dân cư</td><td>ma, nhan, nguon, dang_dung, color</td><td>có</td><td>có</td><td>trigger ba_tang</td></tr>
+    <tr><td>mini_app_secret</td><td>Secret Zalo của app riêng của xã</td><td>app_id, app_secret_sealed, set_at/by, live_app_id</td><td>có</td><td>có</td><td>trigger guard</td></tr>
+    <tr><td>ngay_lam_bu</td><td>Ngày làm bù</td><td>ngay, bat_dau, ket_thuc, ten</td><td>có</td><td>có</td><td>UNIQUE (tenant, ngay, bat_dau)</td></tr>
+    <tr><td>ngay_nghi_le</td><td>Ngày nghỉ lễ</td><td>ngay, ten</td><td>có</td><td>có</td><td>UNIQUE (tenant, ngay)</td></tr>
+    <tr><td>nguoi_dung</td><td>Tài khoản cán bộ</td><td>ma, ho_ten, email, bo_phan_id, vai_tro_id, mat_khau_hash, phai_doi_mat_khau, failed_sign_in_count, sign_in_locked_until</td><td>có</td><td>có</td><td>UNIQUE (tenant, ma)</td></tr>
+    <tr><td>operator_account</td><td>Tài khoản vận hành Vihat</td><td>code (VH-…), email, password_hash, totp_*, failed_attempts, locked_until</td><td>không</td><td>disabled_*</td><td>UNIQUE code</td></tr>
+    <tr><td>operator_audit_log</td><td>Vết thao tác vận hành</td><td>occurred_at, actor, action, subject, before, after, reason</td><td>không</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>operator_permission_grant</td><td>Khoá <code>ops.*</code> cấp cho tài khoản</td><td>permission_key, granted_*, revoked_*</td><td>không</td><td>—</td><td>CHECK danh sách khoá</td></tr>
+    <tr><td>operator_recovery_code</td><td>Mã khôi phục dùng một lần</td><td>code_hash, batch_id, used_at, voided_at</td><td>không</td><td>—</td><td>UNIQUE code_hash</td></tr>
+    <tr><td>operator_session</td><td>Phiên vận hành</td><td>expires_at, revoked_*, created_ip, last_seen_at</td><td>không</td><td>—</td><td>hạn ≤ 8 giờ</td></tr>
+    <tr><td>phien</td><td>Sổ phiên cán bộ</td><td>nguoi_dung_id, refresh_hash, het_han_luc, thu_hoi_*</td><td>có</td><td>—</td><td>FK nguoi_dung</td></tr>
+    <tr><td>phien_cong_dan</td><td>Phiên công dân</td><td>cong_dan_id, bam_token, nguon, het_han_luc, tai_khoan_zalo_id</td><td>có</td><td>—</td><td>UNIQUE (tenant, bam_token)</td></tr>
+    <tr><td>quan_he_cong_dan_xa</td><td>Quan hệ công dân ↔ xã</td><td>khai_cu_tru, trang_thai_xac_thuc, xet_duyet_*</td><td>có</td><td>có</td><td>PK (tenant, cong_dan_id)</td></tr>
+    <tr><td>quyen</td><td>Danh mục khoá quyền</td><td>ma, nhom, nhan, thu_tu</td><td>không</td><td>—</td><td>PK ma</td></tr>
+    <tr><td>sla</td><td>Thời hạn xử lý (giờ làm việc)</td><td>loai_viec, linh_vuc, gio_tiep_nhan, gio_xu_ly_xong, gio_sap_den_han, gio_bao_lanh_dao, gio_bao_chu_tich</td><td>có</td><td>có</td><td>UNIQUE (tenant, loai_viec, linh_vuc)</td></tr>
+    <tr><td>tai_khoan_zalo</td><td>Tài khoản Zalo qua một Mini App</td><td>app_id, bam_zalo_user_id, cong_dan_id, xa_da_nho</td><td>không</td><td>—</td><td>UNIQUE (app_id, bam_zalo_user_id)</td></tr>
+    <tr><td>thon_to_dan_pho</td><td>Đơn vị dân cư</td><td>ten, ma, loai, so_ho, nhan_khau, head_staff_id</td><td>có</td><td>có</td><td>trigger giu</td></tr>
+    <tr><td>vai_tro</td><td>Vai trò theo xã</td><td>ten, ma, la_lanh_dao, thu_tu</td><td>có</td><td>có</td><td>UNIQUE (tenant, ma)</td></tr>
+    <tr><td>vai_tro_quyen</td><td>Vai trò ↔ quyền</td><td>quyen_ma, cap_luc, cap_boi</td><td>có</td><td>—</td><td>PK (tenant, vai_tro_id, quyen_ma)</td></tr>
+  </table>
+  <div class="src">Nguồn: service-identity/migrations/0001–0029</div>
+</section>
+
+<section class="slide" data-title="3.3 documents">
+  <p class="tags"><span class="tag t-be">service-documents</span></p>
+  <h2>3.3 service-documents — văn thư</h2>
+  <p class="sub">Văn bản đến/đi, sổ đơn thư công dân, cấp số theo cơ quan, chuyển văn bản giữa bộ phận</p>
+  <table>
+    <tr><th>Mục</th><th>Giá trị</th></tr>
+    <tr><td>Deployment</td><td><code>documents</code>, 1 replica, rest 8080 · grpc 9090; Secret <code>documents-secrets</code>; env <code>PLATFORM/IDENTITY/COMMS_GRPC_ADDR</code></td></tr>
+    <tr><td>REST</td><td>42 tuyến: citizen-letters (14), document-types, incoming-documents, outgoing-documents, citizen-letter-types/report/counts, documents-audit-entries, incoming-document-overdue-queue/summary</td></tr>
+    <tr><td>gRPC phục vụ</td><td>DocumentsService: Health, CountOrgUnitHoldings, ResolveDocumentTypeCodes, ResolveCitizenLetterForTask</td></tr>
+    <tr><td>Gọi ra</td><td>platform, identity, comms</td></tr>
+    <tr><td>Việc nền</td><td>AutomationRunner 1 phút; StaffNoticeRelay 15 giây (chỉ chạy khi có <code>COMMS_GRPC_ADDR</code>)</td></tr>
+    <tr><td>Nhóm cấu hình</td><td>HTTPServer, GRPCServer, PlatformClient, IdentityClient, TenantCache, Redis, CommsClient</td></tr>
+  </table>
+  <table>
+    <tr><th>Bảng (10)</th><th>Chức năng</th><th>Cột chính</th><th>Xoá mềm</th><th>Ràng buộc / trigger</th></tr>
+    <tr><td>audit_log</td><td>Nhật ký kiểm toán</td><td>như identity</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>citizen_letter</td><td>Sổ đơn thư công dân</td><td>number, year, received_date, letter_type, sender_*, status, holding_unit_id, processing_due_at, resolution_due_at</td><td>có</td><td>UNIQUE (tenant, year, number); cấm xoá cứng; số bất biến</td></tr>
+    <tr><td>citizen_letter_log</td><td>Nhật ký xử lý đơn</td><td>letter_id, at, actor_code, kind, from/to_status, from/to_unit_id</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>citizen_letter_type</td><td>Loại đơn thư</td><td>code (4 giá trị), label, active, color</td><td>có</td><td>cấm xoá cứng</td></tr>
+    <tr><td>day_so_van_ban</td><td>Bộ đếm số theo (xã, sổ, năm)</td><td>so_sach (den/di/don-thu), nam, so_cuoi</td><td>—</td><td>cấm xoá cứng, không lùi số</td></tr>
+    <tr><td>lich_su_chuyen_van_ban</td><td>Dòng thời gian chuyển văn bản đến</td><td>van_ban_den_id, thoi_diem, nguoi_ma, tu/den_bo_phan_id</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>loai_van_ban</td><td>Danh mục loại văn bản</td><td>ma, nhan, nguon, dang_dung, color</td><td>có</td><td>trigger ba_tang</td></tr>
+    <tr><td>staff_notice_outbox</td><td>Thông báo cán bộ chờ gửi comms</td><td>name, idempotency_key, payload, delivered_at, attempts</td><td>—</td><td>UNIQUE (tenant, idempotency_key)</td></tr>
+    <tr><td>van_ban_den</td><td>Sổ văn bản đến</td><td>so_vao_so, nam, ngay_den, so_ky_hieu, co_quan_ban_hanh, trich_yeu, do_khan, bo_phan_dang_giu_id, han_xu_ly_xong, trang_thai</td><td>có</td><td>UNIQUE (tenant, nam, so_vao_so); số bất biến</td></tr>
+    <tr><td>van_ban_di</td><td>Sổ văn bản đi</td><td>so_di, nam, ngay_van_ban, trich_yeu, noi_nhan, nguoi_ky</td><td>có</td><td>UNIQUE (tenant, nam, so_di); số bất biến</td></tr>
+  </table>
+  <div class="src">Nguồn: deploy/base/documents/*, service-documents/cmd/server/main.go, service-documents/migrations/0001–0010</div>
+</section>
+
+<section class="slide" data-title="3.4 petitions — deployment">
+  <p class="tags"><span class="tag t-be">service-petitions</span></p>
+  <h2>3.4 service-petitions — triển khai và điểm vào</h2>
+  <p class="sub">Phản ánh của công dân, nhiệm vụ (từ phản ánh và từ kết luận họp), biên bản họp, tệp đính kèm, gộp phiếu, SLA phản ánh</p>
+  <table>
+    <tr><th>Mục</th><th>Giá trị</th></tr>
+    <tr><td>Deployment</td><td><code>petitions</code>, 1 replica, rest 8080 · grpc 9090; <code>GOMEMLIMIT=300MiB</code>; Secret <code>petitions-secrets</code>; netpol cho phép ra MinIO và clamd</td></tr>
+    <tr><td>REST</td><td>104 tuyến (permission 90, citizen 8, public 3, any-auth 3): citizen-reports (23), tasks (18), meetings (13), my-citizen-reports (7), petitions-system-messages, task-priorities, task-types, citizen-report-fields, public-citizen-reports (không tài khoản, ADR 0083), task-statuses, overdue-*, *-summary, *-counts…</td></tr>
+    <tr><td>gRPC phục vụ</td><td>PetitionsService: Health, CountOrgUnitHoldings, ResolveTaskPriorityCodes</td></tr>
+    <tr><td>Gọi ra</td><td>gRPC platform, identity (gồm kiểm phiên công dân), documents (ResolveCitizenLetterForTask), comms; MinIO; ClamAV; Redis</td></tr>
+    <tr><td>Sự kiện phát</td><td><code>petitions.status_changed.v1</code>, <code>petitions.merge_changed.v1</code> → ghi outbox <code>su_kien_di</code>. <b>Chưa có bộ chuyển (relay) nào đọc outbox này.</b></td></tr>
+    <tr><td>Việc nền</td><td>AutomationRunner 1 phút; StaffNoticeRelay 20 giây</td></tr>
+    <tr><td>Nhóm cấu hình</td><td>HTTPServer, GRPCServer, PlatformClient, IdentityClient, TenantCache, Redis, CitizenCORS, ObjectStore, MalwareScan, CommsClient, DocumentsClient</td></tr>
+  </table>
+  <div class="src">Nguồn: deploy/base/petitions/*, service-petitions/cmd/server/main.go, kb/30-indexes/event-flows.json</div>
+</section>
+
+<section class="slide" data-title="3.5 petitions — bảng">
+  <p class="tags"><span class="tag t-be">service-petitions</span></p>
+  <h2>3.5 service-petitions — 24 bảng (44 migration, mọi bảng có tenant_id)</h2>
+  <table>
+    <tr><th>Bảng</th><th>Chức năng</th><th>Cột chính</th><th>Xoá mềm</th><th>Ràng buộc / trigger</th></tr>
+    <tr><td>audit_log</td><td>Nhật ký kiểm toán</td><td>như trên</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>bien_ban_hop</td><td>Biên bản cuộc họp</td><td>ten_cuoc_hop, ngay_hop, so_hieu, chu_tri_ma, trang_thai (du-thao/da-ky), ky_luc, bo_sung_cho_id</td><td>có</td><td>cấm xoá cứng; đã ký bất biến</td></tr>
+    <tr><td>custom_system_message</td><td>Câu thông báo riêng của xã</td><td>group_code, message_key, message_text, is_active</td><td>có</td><td>UNIQUE (tenant, message_key)</td></tr>
+    <tr><td>de_nghi_lui_han</td><td>Đề nghị lùi hạn nhiệm vụ</td><td>nhiem_vu_id, nguoi_de_nghi_ma, nguoi_duyet_ma, han_moi, ly_do, trang_thai</td><td>có</td><td>trigger luu_tru</td></tr>
+    <tr><td>ket_luan_hop</td><td>Kết luận đánh số trong biên bản</td><td>bien_ban_id, thu_tu, noi_dung, khong_phat_sinh*</td><td>có</td><td>bất biến khi biên bản đã ký</td></tr>
+    <tr><td>loai_nhiem_vu</td><td>Loại nhiệm vụ</td><td>ma, nhan, nguon, dang_dung, color</td><td>có</td><td>ba_tang</td></tr>
+    <tr><td>muc_uu_tien_nhiem_vu</td><td>Mức ưu tiên</td><td>như trên</td><td>có</td><td>ba_tang</td></tr>
+    <tr><td>nhan_linh_vuc</td><td>Nhãn lĩnh vực phản ánh của xã</td><td>ma, nhan, thu_tu, enabled</td><td>có</td><td>UNIQUE (tenant, ma)</td></tr>
+    <tr><td>nhan_trang_thai_nhiem_vu</td><td>Ghi đè nhãn trạng thái nhiệm vụ</td><td>ma, nhan, thu_tu</td><td>—</td><td>bất biến</td></tr>
+    <tr><td>nhat_ky_nhiem_vu</td><td>Nhật ký nhiệm vụ</td><td>nhiem_vu_id, thoi_diem, nguoi_ma, noi_dung, dinh_kem</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>nhat_ky_phan_anh</td><td>Dòng thời gian xử lý phản ánh</td><td>phieu_phan_anh_id, thoi_diem, nguoi_ma, hanh_vi, noi_dung</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>nhiem_vu</td><td>Nhiệm vụ</td><td>ma, loai, khoi, tieu_de, trang_thai, muc_uu_tien, nguon_giao, bo_phan_id, nguoi_thuc_hien_ma, han_xu_ly, nhiem_vu_cha_id</td><td>có</td><td>luu_tru; ghi task_issued_code</td></tr>
+    <tr><td>nhiem_vu_van_ban</td><td>Văn bản gắn với nhiệm vụ</td><td>nhiem_vu_id, nhom, so_ky_hieu, trich_yeu</td><td>có</td><td>cấm xoá</td></tr>
+    <tr><td>petition_log_attachment</td><td>Tệp gắn dòng nhật ký phản ánh</td><td>stored_file_id, log_entry_id</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>petition_merge_event</td><td>Lịch sử gộp / tách phiếu</td><td>petition_id, main_petition_id, kind, performed_at/by, reason</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>petition_settings</td><td>Công tắc vòng đời phản ánh của xã</td><td>verification_photo_required, duplicate_radius_meters, duplicate_window_days</td><td>—</td><td>PK tenant_id</td></tr>
+    <tr><td>petition_staff_recorded_rating</td><td>Đánh giá do cán bộ ghi hộ</td><td>petition_id, stars 1–5, channel, note, recorded_by</td><td>—</td><td>chỉ ghi thêm; một lần mỗi phiếu</td></tr>
+    <tr><td>phieu_phan_anh</td><td>Phiếu phản ánh</td><td>ma_tra_cuu, kenh_tiep_nhan, cong_dan_id, noi_dung, linh_vuc, dia_chi, thon_id, lat, lng, trang_thai, bo_phan_id, han_*, diem_hai_long, publication_status, merged_into</td><td>có</td><td>UNIQUE (tenant, ma_tra_cuu); trạng thái kết thúc bất biến; chủ Zalo cố định; guard gộp</td></tr>
+    <tr><td>staff_notice_outbox</td><td>Thông báo cán bộ chờ gửi comms</td><td>như documents</td><td>—</td><td>UNIQUE idempotency_key</td></tr>
+    <tr><td>stored_file</td><td>Tệp trong kho đối tượng</td><td>bucket, object_key, retention_class, purpose, subject_*, mime_type, size_bytes, sha256, status, legal_hold</td><td>có</td><td>UNIQUE (tenant, object_key)</td></tr>
+    <tr><td>su_kien_di</td><td>Outbox sự kiện</td><td>ten, doi_tuong, than, xay_ra_luc, gui_luc</td><td>—</td><td>—</td></tr>
+    <tr><td>system_message_override</td><td>Ghi đè câu hệ thống</td><td>message_key, message_text, is_active</td><td>có</td><td>cấm xoá</td></tr>
+    <tr><td>task_issued_code</td><td>Mọi mã nhiệm vụ đã cấp</td><td>code, task_id, issued_at</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>task_log_attachment</td><td>Tệp gắn dòng nhật ký nhiệm vụ</td><td>stored_file_id, log_entry_id</td><td>—</td><td>chỉ ghi thêm</td></tr>
+  </table>
+  <div class="src">Nguồn: service-petitions/migrations/0001–0044</div>
+</section>
+
+<section class="slide" data-title="3.6 finance">
+  <p class="tags"><span class="tag t-be">service-finance</span></p>
+  <h2>3.6 service-finance — tài chính, giải ngân</h2>
+  <table>
+    <tr><th>Mục</th><th>Giá trị</th></tr>
+    <tr><td>Deployment</td><td><code>finance</code>, 1 replica, chỉ rest 8080 (không có gRPC server); Secret <code>finance-secrets</code></td></tr>
+    <tr><td>REST</td><td>59 tuyến: investment-projects (11), disbursements (9), capital-plan-categories, finance-system-messages, budget-lines, budget-sheets, funding-sources, budget-period-closes, budget-entries, budget-indicators, implementing-units, project-issues</td></tr>
+    <tr><td>Gọi ra / Việc nền</td><td>gRPC platform, identity, comms (thông báo khi được nhắc tên trong trao đổi dự án) · không có việc nền</td></tr>
+  </table>
+  <table>
+    <tr><th>Bảng (20)</th><th>Chức năng</th><th>Cột chính</th><th>Xoá mềm</th><th>Ràng buộc</th></tr>
+    <tr><td>audit_log</td><td>Nhật ký kiểm toán</td><td>—</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>bang_ngan_sach</td><td>Một tab × một năm ngân sách</td><td>ma, nam, loai (thu/chi), lan, tieu_de</td><td>có</td><td>UNIQUE (tenant, nam, loai, lan)</td></tr>
+    <tr><td>budget_period_closes</td><td>Khoá sổ tháng/năm</td><td>code, year, month, revision, closed_*, reopened_*</td><td>—</td><td>bất biến</td></tr>
+    <tr><td>cau_hinh_giai_ngan</td><td>Ngưỡng cảnh báo dự án chậm</td><td>nam, nguong_canh_bao_cham</td><td>—</td><td>PK (tenant, nam)</td></tr>
+    <tr><td>chung_tu_giai_ngan</td><td>Chứng từ giải ngân</td><td>du_an_id, ngay_chi, so_tien, trang_thai, nguoi_nhap/xac_nhan/khoa_id, nguon_von_id</td><td>có</td><td>khoá thì bất biến</td></tr>
+    <tr><td>cot_ngan_sach</td><td>Cột của bảng ngân sách</td><td>bang_id, ten, kieu, cong_thuc, vai_tro</td><td>có</td><td>cấm xoá cứng</td></tr>
+    <tr><td>custom_system_message</td><td>Câu thông báo riêng của xã</td><td>group_code, message_key, message_text</td><td>có</td><td>guard</td></tr>
+    <tr><td>dot_thu_chi</td><td>Một đợt thu/chi trên khoản mục lá</td><td>khoan_muc_id, ngay, noi_dung, so_chung_tu</td><td>có</td><td>bất biến</td></tr>
+    <tr><td>du_an</td><td>Dự án đầu tư theo năm</td><td>ma, nam, hang_muc_id, ten, ke_hoach_von_nam, tong_muc_duoc_duyet, at_risk</td><td>có</td><td>UNIQUE (tenant, ma)</td></tr>
+    <tr><td>funding_source_annual_amounts</td><td>Vốn được giao của nguồn theo năm</td><td>funding_source_id, year, granted_amount</td><td>—</td><td>cấm xoá cứng</td></tr>
+    <tr><td>gia_tri_dot</td><td>Số tiền của đợt theo cột</td><td>dot_id, cot_id, gia_tri</td><td>—</td><td>bất biến</td></tr>
+    <tr><td>gia_tri_khoan_muc</td><td>Giá trị ô (khoản mục × cột)</td><td>khoan_muc_id, cot_id, gia_tri</td><td>—</td><td>cấm xoá cứng</td></tr>
+    <tr><td>hang_muc_ke_hoach_von</td><td>Hạng mục kế hoạch vốn</td><td>ma, nhan, nguon, dang_dung, color</td><td>có</td><td>ba_tang</td></tr>
+    <tr><td>khoan_muc_ngan_sach</td><td>Dòng của cây ngân sách</td><td>bang_id, cha_id, tt, ten, cach_tinh, cap</td><td>có</td><td>cấm xoá cứng</td></tr>
+    <tr><td>nguon_von</td><td>Nguồn vốn</td><td>ten, thu_tu</td><td>có</td><td>cấm xoá cứng</td></tr>
+    <tr><td>phan_bo_nguon_von</td><td>Phân bổ vốn dự án theo nguồn</td><td>du_an_id, nguon_von_id, so_tien_phan_bo</td><td>có</td><td>cấm xoá cứng</td></tr>
+    <tr><td>project_code_counters</td><td>Bộ đếm mã dự án</td><td>next_number</td><td>—</td><td>PK tenant_id</td></tr>
+    <tr><td>project_comments</td><td>Trao đổi về dự án</td><td>project_id, body, author_code, mentioned_staff_codes</td><td>có</td><td>guard</td></tr>
+    <tr><td>project_issues</td><td>Vướng mắc của dự án</td><td>project_id, title, resolved_*, tracking_task_id, owner_code, due_on</td><td>có</td><td>guard</td></tr>
+    <tr><td>system_message_override</td><td>Ghi đè câu hệ thống</td><td>message_key, message_text, is_active</td><td>có</td><td>cấm xoá</td></tr>
+  </table>
+  <div class="src">Nguồn: deploy/base/finance/*, service-finance/cmd/server/main.go, service-finance/migrations/0001–0019</div>
+</section>
+
+<section class="slide" data-title="3.7 comms — deployment">
+  <p class="tags"><span class="tag t-be">service-comms</span></p>
+  <h2>3.7 service-comms — triển khai và điểm vào</h2>
+  <p class="sub">Tin bài, truyền thanh, video, bản đồ, danh bạ ngoài, cảnh báo thiên tai, thông báo nội bộ, chuông cán bộ, kênh Zalo (bot, nhóm), tin gửi công dân, đồng bộ Cổng TTĐT</p>
+  <table>
+    <tr><th>Mục</th><th>Giá trị</th></tr>
+    <tr><td>Deployment</td><td><code>comms</code>, 1 replica, rest 8080 · grpc 9090; <code>GOMEMLIMIT=300MiB</code>; Secret <code>comms-secrets</code></td></tr>
+    <tr><td>REST</td><td>88 thao tác trên 58 path. Bốn chuỗi biên trên cổng 8080: STAFF (xã từ Host), PUBLIC (commune-news, commune-external-contacts, commune-disaster-alerts, commune-map-frame), PUBLIC basemap (CORS cho Range), CITIZEN (my-notification-preferences). Webhook Zalo Bot gắn trên <code>ZALO_BOT_WEBHOOK_HOST</code></td></tr>
+    <tr><td>gRPC phục vụ</td><td>CommsService: Health, DeliverStaffNotifications · ZaloBotOperatorService: Set/Get/CheckSharedZaloBot, Set/GetSharedZaloBotWebhook, ListZaloBotCommuneStats</td></tr>
+    <tr><td>Gọi ra</td><td>gRPC platform, identity; HTTPS tới Zalo Bot, Cổng TTĐT, SMTP (TLS ≥ 1.2)</td></tr>
+    <tr><td>Sự kiện</td><td>Có handler cho <code>petitions.status_changed.v1</code>, <code>petitions.merge_changed.v1</code> nhưng <b>chưa nối vào main</b> (chưa có Kafka client)</td></tr>
+    <tr><td>Việc nền</td><td>PortalSyncRunner 5 phút · BodyImageSweep 1 giờ · ZaloDispatcher 30 giây (mỗi việc lấy advisory lock để chỉ một replica chạy)</td></tr>
+    <tr><td>Nhóm cấu hình</td><td>HTTPServer, GRPCServer, PlatformClient, IdentityClient, TenantCache, Redis, CitizenCORS, SecretEncryption, ObjectStore, PublicMedia, MalwareScan, ZaloBotWebhook, Basemap</td></tr>
+  </table>
+  <div class="src">Nguồn: deploy/base/comms/*, service-comms/cmd/server/main.go, proto/vigov/comms/v1/*</div>
+</section>
+
+<section class="slide" data-title="3.8 comms — bảng">
+  <p class="tags"><span class="tag t-be">service-comms</span></p>
+  <h2>3.8 service-comms — 32 bảng (29 migration)</h2>
+  <table>
+    <tr><th>Bảng</th><th>Chức năng</th><th>Cột chính</th><th>tenant</th><th>Xoá mềm</th><th>Ràng buộc</th></tr>
+    <tr><td>audit_log</td><td>Nhật ký thao tác</td><td>actor_id, action, subject, at, delta</td><td>có</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>loai_tai_nguyen_ban_do</td><td>Loại tài nguyên bản đồ</td><td>ma, nhan, nguon, la_mac_dinh, dang_dung, color</td><td>có</td><td>có</td><td>ba_tang</td></tr>
+    <tr><td>thong_bao_gui_cong_dan</td><td>Sổ tin gửi công dân (ZNS)</td><td>khoa_lan_gui, doi_tuong_loai, kenh, nguoi_nhan_ma/che, mau_ma, trang_thai, so_lan_thu</td><td>có</td><td>có</td><td>UNIQUE khoa_lan_gui; bất biến</td></tr>
+    <tr><td>thong_bao</td><td>Thông báo nội bộ</td><td>tieu_de, noi_dung, trang_thai, ghim, bat_buoc_xac_nhan, gui_thu_dien_tu</td><td>có</td><td>có</td><td>cấm xoá cứng</td></tr>
+    <tr><td>thong_bao_bo_phan</td><td>Bộ phận nhận thông báo</td><td>thong_bao_id, bo_phan_id</td><td>có</td><td>—</td><td>chặn DELETE</td></tr>
+    <tr><td>thong_bao_nguoi_nhan</td><td>Người nhận, trạng thái mở/xác nhận</td><td>nguoi_nhan_ma, da_mo_luc, da_xac_nhan_luc, thu_gui_luc</td><td>có</td><td>—</td><td>chặn DELETE</td></tr>
+    <tr><td>danh_muc_mini_app</td><td>Danh mục nội dung</td><td>ten, slug, cha_id, thu_tu, hidden</td><td>có</td><td>có</td><td>UNIQUE (tenant, slug)</td></tr>
+    <tr><td>noi_dung_mini_app</td><td>Tin, sự kiện, thông báo, truyền thanh, video, banner</td><td>loai, danh_muc_id, tieu_de, trang_thai, nguon, cover_image_file_id, audio_file_id, event_*, video_url, link_to</td><td>có</td><td>có</td><td>nhiều CHECK theo loại</td></tr>
+    <tr><td>map_field_schema</td><td>Trường tuỳ biến theo loại tài nguyên</td><td>asset_type_code, field_code, label, value_type, options, is_required</td><td>có</td><td>có</td><td>guard</td></tr>
+    <tr><td>data_encryption_key</td><td>Khoá dữ liệu bọc theo xã</td><td>kek_id, wrapped</td><td>có</td><td>—</td><td>guard</td></tr>
+    <tr><td>mail_settings</td><td>Máy chủ thư của xã</td><td>host, port, security, username, from_*, password_sealed, is_enabled</td><td>có</td><td>—</td><td>guard</td></tr>
+    <tr><td>staff_notification</td><td>Hộp chuông cán bộ</td><td>recipient_code, idempotency_key, kind, title, body, link, read_at</td><td>có</td><td>có</td><td>link phải tương đối</td></tr>
+    <tr><td>stored_file</td><td>Metadata tệp nội dung</td><td>bucket, object_key, purpose, status, public_object_key, sha256, legal_hold</td><td>có</td><td>có + purge</td><td>máy trạng thái</td></tr>
+    <tr><td>portal_sync_settings</td><td>Cấu hình đồng bộ Cổng</td><td>provider, api_url, api_key_sealed, publish_mode, interval_hours</td><td>có</td><td>—</td><td>guard</td></tr>
+    <tr><td>portal_categories</td><td>Chuyên mục Cổng được chọn</td><td>external_id, name, target_kind, is_selected</td><td>có</td><td>—</td><td>guard</td></tr>
+    <tr><td>portal_sync_runs</td><td>Lượt đồng bộ</td><td>trigger_kind, started/finished_at, outcome, số đếm</td><td>có</td><td>—</td><td>đóng một lần</td></tr>
+    <tr><td>external_contacts</td><td>Danh bạ liên hệ ngoài</td><td>name, category, phone, address</td><td>có</td><td>có</td><td>guard</td></tr>
+    <tr><td>map_asset</td><td>Tài sản / doanh nghiệp trên bản đồ</td><td>asset_type_code, name, lat/lng, status, verified, tax_code, custom_values</td><td>có</td><td>có</td><td>UNIQUE mã số thuế sống</td></tr>
+    <tr><td>map_frame</td><td>Khung bản đồ riêng của xã</td><td>center_lat/lng, radius_km, is_enabled</td><td>có</td><td>—</td><td>guard</td></tr>
+    <tr><td>zalo_channel_setting</td><td>Cấu hình kênh Zalo</td><td>is_enabled, kinds[], quiet_start/end, due_soon_days</td><td>có</td><td>—</td><td>guard</td></tr>
+    <tr><td>zalo_pairing_code</td><td>Mã ghép Zalo cá nhân</td><td>staff_code, code_hash, expires_at</td><td>có</td><td>—</td><td>một mã mở mỗi cán bộ</td></tr>
+    <tr><td>zalo_link</td><td>Liên kết chat Zalo của cán bộ (không phân vùng)</td><td>staff_code, bot_ref, chat_id</td><td>có</td><td>unlinked_*</td><td>một liên kết sống mỗi cán bộ/chat</td></tr>
+    <tr><td>zalo_delivery</td><td>Outbox gửi Zalo</td><td>notification_id, staff_code, kind, status, attempts, next_attempt_at</td><td>có</td><td>có</td><td>guard</td></tr>
+    <tr><td>platform_data_encryption_key</td><td>Khoá dữ liệu cấp nền tảng</td><td>scope, kek_id, wrapped</td><td>không</td><td>—</td><td>guard</td></tr>
+    <tr><td>zalo_bot_shared</td><td>Bot Zalo dùng chung (một dòng)</td><td>bot_ref, token_sealed, webhook_secret_*</td><td>không</td><td>—</td><td>guard</td></tr>
+    <tr><td>platform_operator_audit_log</td><td>Vết thao tác vận hành với bot</td><td>actor_code, ip, action, target, before/after</td><td>không</td><td>—</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>zalo_commune_bot</td><td>Bot riêng của xã (không phân vùng)</td><td>bot_account_id, bot_ref, token_sealed, webhook_*</td><td>có</td><td>retired_*</td><td>một bot sống mỗi xã</td></tr>
+    <tr><td>disaster_alerts</td><td>Cảnh báo thiên tai</td><td>kind, title, level, detail, effective_*, danger_zone, evacuation_points, emergency_contacts</td><td>có</td><td>có</td><td>guard</td></tr>
+    <tr><td>citizen_notification_preferences</td><td>Tuỳ chọn nhận tin của công dân</td><td>citizen_id, zalo_enabled</td><td>có</td><td>—</td><td>PK (tenant, citizen_id)</td></tr>
+    <tr><td>zalo_group_pairing_code</td><td>Mã ghép nhóm Zalo</td><td>issued_by, org_unit_id, kinds[], code_hash, expires_at</td><td>có</td><td>—</td><td>guard</td></tr>
+    <tr><td>zalo_group_link</td><td>Liên kết nhóm Zalo (không phân vùng)</td><td>bot_ref, chat_id, org_unit_id, kinds[]</td><td>có</td><td>unlinked_*</td><td>một liên kết sống mỗi chat</td></tr>
+    <tr><td>zalo_group_delivery</td><td>Outbox gửi nhóm</td><td>group_link_id, idempotency_key, kind, status, attempts</td><td>có</td><td>có</td><td>guard</td></tr>
+  </table>
+  <div class="src">Nguồn: service-comms/migrations/0001–0029</div>
+</section>
+
+<section class="slide" data-title="3.9 platform">
+  <p class="tags"><span class="tag t-be">service-platform</span></p>
+  <h2>3.9 service-platform — sổ xã và cấu hình nền tảng</h2>
+  <p class="sub">Danh sách xã, tên miền, đơn vị kế thừa, Mini App, hồ sơ hiển thị xã, giới hạn tải lên, lĩnh vực phản ánh cấp 1, khung bản đồ mặc định, biên HTTP của khu vận hành. Đọc liên xã theo thiết kế</p>
+  <table>
+    <tr><th>Mục</th><th>Giá trị</th></tr>
+    <tr><td>Deployment</td><td><code>platform</code>, 3 replica (staging 1), PDB minAvailable 2; rest 8080 · grpc 9090; env <code>IDENTITY_OPERATOR_GRPC_ADDR=identity:9093</code>, <code>IDENTITY_GRPC_ADDR</code>, <code>COMMS_GRPC_ADDR</code>; <code>OPERATOR_HOST=admin.vigov.vn</code> đặt tay trên cụm</td></tr>
+    <tr><td>REST</td><td>6 tuyến: commune-branding (5, <code>admin.org</code>); <code>GET /api/v1/mini-app-ids</code> (công khai, 30/phút/IP). Cộng 41 tuyến vận hành chỉ phục vụ khi Host = <code>OPERATOR_HOST</code></td></tr>
+    <tr><td>gRPC phục vụ</td><td>PlatformService: ResolveHost, GetTenant, ListTenants, ResolveTenantSuccession, ResolveMiniApp, GetTenantProfile, ListUploadPolicies, ListPetitionFields, GetMapFrameDefault</td></tr>
+    <tr><td>Gọi ra / Việc nền</td><td>identity 9090 và 9093, comms 9090 (Zalo Bot) · không có việc nền, không phát/nhận sự kiện</td></tr>
+  </table>
+  <table>
+    <tr><th>Bảng (12)</th><th>Chức năng</th><th>Cột chính</th><th>tenant</th><th>Ràng buộc</th></tr>
+    <tr><td>audit_log</td><td>Nhật ký theo xã</td><td>—</td><td>có</td><td>chỉ ghi thêm; bảng duy nhất được phân vùng</td></tr>
+    <tr><td>tenant</td><td>Sổ xã</td><td>id (ULID 26), ten, tinh_thanh, dang_hoat_dong</td><td>là PK</td><td>CHECK độ dài id = 26</td></tr>
+    <tr><td>tenant_domain</td><td>Tên miền → xã</td><td>host (PK), tenant_id, la_chinh</td><td>có</td><td>một host chính mỗi xã; chặn nhãn admin/api/stg/www</td></tr>
+    <tr><td>tenant_succession</td><td>Đơn vị cũ → đơn vị kế thừa (sáp nhập)</td><td>tu_id, den_id, can_cu, hieu_luc_tu</td><td>FK</td><td>chặn vòng lặp kế thừa</td></tr>
+    <tr><td>tinh_thanh</td><td>Danh mục 34 tỉnh</td><td>id, ten, thu_tu</td><td>không</td><td>seed 34 dòng</td></tr>
+    <tr><td>mini_app</td><td>Sổ Zalo Mini App</td><td>app_id (PK), che_do (chinh/rieng), tenant_id</td><td>khi riêng</td><td>xoá mềm; cấm xoá cứng</td></tr>
+    <tr><td>ho_so_hien_thi_xa</td><td>Hồ sơ hiển thị xã</td><td>dia_chi_tru_so, duong_day_nong, gio_lam_viec_hien_thi, gioi_thieu, logo_file_id, web_admin_banner_file_id</td><td>có (PK)</td><td>xoá mềm</td></tr>
+    <tr><td>upload_policy</td><td>Giới hạn tải lên theo mục đích</td><td>purpose (PK), max_bytes, allowed_mime_types[], max_files_per_subject</td><td>không</td><td>13 mục đích</td></tr>
+    <tr><td>platform_audit_log</td><td>Vết cấu hình cấp nền tảng</td><td>actor, action, subject, before/after, reason</td><td>không</td><td>chỉ ghi thêm</td></tr>
+    <tr><td>petition_field</td><td>Mã lĩnh vực phản ánh cấp 1</td><td>code (PK), default_label, sort_order, icon, tone, active</td><td>không</td><td>chặn xoá và đổi mã; seed 12 mã</td></tr>
+    <tr><td>stored_file</td><td>Tệp logo/banner</td><td>bucket, object_key, purpose, status</td><td>có</td><td>guard</td></tr>
+    <tr><td>commune_map_frame_default</td><td>Khung bản đồ mặc định do vận hành đặt</td><td>center_lat/lng, radius_km ≤ 50</td><td>có (PK)</td><td>chặn xoá</td></tr>
+  </table>
+  <div class="src">Nguồn: deploy/base/platform/*, service-platform/cmd/server/*, internal/http/operator_routes.go, migrations/0001–0023</div>
+</section>
+
+<section class="slide" data-title="3.10 reporting · web-admin · platform-admin">
+  <p class="tags"><span class="tag t-be">service-reporting</span><span class="tag t-wa">web-admin</span><span class="tag t-pa">platform-admin</span></p>
+  <h2>3.10 service-reporting · web-admin · platform-admin</h2>
+  <div class="cols3">
+    <div class="box">
+      <h3>service-reporting</h3>
+      <ul>
+        <li>Read model; trong mã hiện chỉ có "Lời hệ thống" (38 khoá <code>report.*</code>); chưa có projection nào.</li>
+        <li>Deployment <code>reporting</code>, 1 replica, chỉ rest 8080. Secret <code>reporting-secrets</code>.</li>
+        <li>REST: <code>GET /api/v1/reporting-system-messages</code>, <code>PUT|PATCH|DELETE …/{code}/override</code> (<code>admin.lookup</code>).</li>
+        <li>Không có gRPC server, không Redis, không việc nền; gọi platform, identity.</li>
+        <li>Bảng: <code>audit_log</code>; <code>system_message_override</code> (message_key, message_text, is_active, live_key; CHECK thuộc 38 khoá; chặn DELETE).</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>web-admin</h3>
+      <ul>
+        <li>Deployment <code>web-admin</code>, 2 replica (staging 1), cổng 3000; <code>envFrom: common-config</code>, không có Secret.</li>
+        <li>Node 22-alpine, standalone, <code>node server.js</code>; build từ chối nếu có biến <code>NEXT_PUBLIC_*</code>.</li>
+        <li>Xác định xã lúc chạy từ Host (identity <code>/communes/current</code>).</li>
+        <li>Chuyển tiếp <code>/api/v1/*</code>: chọn service theo tiền tố, giữ Host gốc, bỏ <code>x-tenant*</code>; lỗi kết nối → 502, hết giờ → 504.</li>
+        <li>Địa chỉ backend: <code>*_HTTP_ADDR</code>, mặc định <code>http://&lt;svc&gt;:8080</code>. Nền bản đồ: <code>/basemap/[...path]</code> đọc <code>BASEMAP_URL</code>.</li>
+      </ul>
+    </div>
+    <div class="box">
+      <h3>platform-admin (chỉ prod)</h3>
+      <ul>
+        <li>Deployment <code>platform-admin</code>, 2 replica, cổng 3000; env <code>PLATFORM_HTTP_ADDR</code>, <code>OPERATOR_HOST=admin.vigov.vn</code>.</li>
+        <li>Mọi <code>/api/v1/*</code> → <code>PLATFORM_HTTP_ADDR</code>, Host ghim <code>OPERATOR_HOST</code> (chỉ chấp nhận <code>admin.*</code>/<code>admin-stg.*</code>); thiếu cấu hình → 503 <code>platform_unconfigured</code>.</li>
+        <li>Header: CSP theo nonce, HSTS, nosniff, Referrer-Policy no-referrer, X-Frame-Options DENY.</li>
+        <li>Trên cụm thật: Deployment <code>vigov-platform-admin</code>, Ingress dựng tay.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: deploy/base/{reporting,web-admin,platform-admin}/*, service-reporting/*, web-admin/src/lib/may-chu/*, platform-admin/src/lib/server/*</div>
+</section>
+
+<section class="slide" data-title="3.11 Mạng — Ingress · NetworkPolicy">
+  <p class="tags"><span class="tag t-sec">Hạ tầng</span></p>
+  <h2>3.11 Mạng — Ingress, NetworkPolicy, thành phần cụm</h2>
+  <div class="cols">
+    <div>
+      <h3>Bảng định tuyến (prod; staging: <code>*.stg.vigov.vn</code>, <code>*.api-stg.vigov.vn</code>)</h3>
+      <table>
+        <tr><th>Ingress</th><th>Host</th><th>Path</th><th>Backend</th></tr>
+        <tr><td>vigov</td><td><code>*.vigov.vn</code></td><td>/</td><td>web-admin:3000</td></tr>
+        <tr><td>vigov</td><td><code>comms.api.vigov.vn</code></td><td>/</td><td>comms:8080</td></tr>
+        <tr><td>vigov</td><td><code>petitions.api.vigov.vn</code></td><td>/</td><td>petitions:8080</td></tr>
+        <tr><td>vigov</td><td><code>platform.api.vigov.vn</code></td><td>/api/v1/mini-app-ids (Exact)</td><td>platform:8080</td></tr>
+        <tr><td>vigov-no-upload</td><td><code>documents|finance|identity|reporting.api.vigov.vn</code></td><td>/</td><td>&lt;svc&gt;:8080</td></tr>
+        <tr><td>dựng tay</td><td><code>admin.vigov.vn</code></td><td>/</td><td>platform-admin:3000</td></tr>
+        <tr><td>dựng tay</td><td><code>bot.api.vigov.vn</code></td><td>—</td><td>comms (webhook Zalo Bot)</td></tr>
+      </table>
+      <p>Ingress <code>vigov</code>: body 55m, request-buffering off, timeout 180s · <code>vigov-no-upload</code>: body 25m · cả hai <code>ssl-redirect</code>. TLS: <code>vigov-wildcard-tls</code>, <code>vigov-api-wildcard-tls</code> (prod); <code>vigov-staging-tls</code>, <code>vigov-api-staging-tls</code>. CORS và rate limit nằm trong mã Go, không ở Ingress. Tệp <code>ingress.yaml</code> sinh từ openapi bằng <code>tools/ingress</code>.</p>
+    </div>
+    <div>
+      <h3>NetworkPolicy (<code>deploy/base/mang/netpol.yaml</code>)</h3>
+      <ul>
+        <li><code>deny-all</code> trước, mở theo cặp.</li>
+        <li>REST 8080/3000 từ namespace <code>ingress-nginx</code>; web-admin → rest 8080; platform-admin → platform 8080.</li>
+        <li>gRPC 9090: vào platform từ 6 service; vào identity từ 6 service; vào comms từ documents, petitions, finance, platform; vào documents từ identity, petitions; vào petitions từ identity.</li>
+        <li>platform → identity 9093; vihat-miniapp → identity 9091.</li>
+        <li>Egress: DNS; PostgreSQL 5432, Redis 6379, Kafka 9092; MinIO 9000 và clamd 3310 cho petitions, comms, platform; comms ra 443 (trừ dải private); identity ra Zalo 443.</li>
+      </ul>
+      <div class="warn">Theo <code>tools/security_debt.json</code>, NetworkPolicy chưa được áp lên cụm thật.</div>
+      <h3>Thành phần cụm (<code>deploy/cluster</code>)</h3>
+      <ul>
+        <li>Namespace <code>vigov-prod</code>, <code>vigov-staging</code>.</li>
+        <li>RBAC Jenkins <code>jenkins-trien-khai</code>.</li>
+        <li><code>vigov-clamav</code>: <code>clamav/clamav:1.4.6</code>, ClusterIP 3310, StreamMaxLength 50M.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: deploy/base/mang/*, deploy/hosts.yaml, deploy/overlays/*, deploy/cluster/*</div>
+</section>
+
+<section class="slide" data-title="3.12 Sở hữu dữ liệu">
+  <p class="tags"><span class="tag t-be">Backend</span></p>
+  <h2>3.12 Sở hữu dữ liệu — tổng hợp</h2>
+  <table>
+    <tr><th>Service</th><th>Số bảng</th><th>Migration</th><th>Thực thể chính</th></tr>
+    <tr><td>identity</td><td>30</td><td>0001–0029</td><td>Cán bộ, bộ phận, vai trò–quyền, công dân và phiên, đơn vị dân cư, SLA, lịch làm việc, tự động hoá, vận hành viên, secret Mini App</td></tr>
+    <tr><td>documents</td><td>10</td><td>0001–0010</td><td>Văn bản đến/đi, đơn thư, bộ đếm số, lịch sử chuyển</td></tr>
+    <tr><td>petitions</td><td>24</td><td>0001–0044</td><td>Phiếu phản ánh, nhiệm vụ, biên bản/kết luận, đề nghị lùi hạn, tệp, gộp phiếu, outbox sự kiện</td></tr>
+    <tr><td>finance</td><td>20</td><td>0001–0019</td><td>Dự án, chứng từ giải ngân, nguồn vốn, bảng thu–chi, khoá sổ, vướng mắc</td></tr>
+    <tr><td>comms</td><td>32</td><td>0001–0029</td><td>Nội dung Mini App, thông báo, bản đồ, Zalo (bot, liên kết, outbox), cảnh báo thiên tai, đồng bộ Cổng, tin gửi công dân</td></tr>
+    <tr><td>platform</td><td>12</td><td>0001–0023</td><td>Xã, tên miền, kế thừa, Mini App, hồ sơ hiển thị, giới hạn tải lên, lĩnh vực cấp 1</td></tr>
+    <tr><td>reporting</td><td>2</td><td>0001–0005</td><td>Ghi đè câu chữ báo cáo</td></tr>
+  </table>
+  <ul>
+    <li>Không migration nào xoá hay đổi tên bảng; một lần đổi tên cột: <code>nguoi_dung.dien_thoai → dien_thoai_co_quan</code> (identity 0009).</li>
+    <li>Bảng tiến độ <code>schema_migration</code> có ở mỗi CSDL, nằm ngoài số đếm trên.</li>
+    <li>Chỉ mục sinh ra: <code>kb/30-indexes/data-ownership.json</code>. Một số bảng chưa khai dấu <code>@entity</code> nên không có trong chỉ mục (audit_log, staff_notice_outbox, nguoi_dung, vai_tro…).</li>
+  </ul>
+  <div class="src">Nguồn: service-*/migrations, kb/30-indexes/data-ownership.json</div>
+</section>
+
+<!-- ======================================================= PHẦN 4 -->
+<section class="slide part" data-title="Phần 4 — Quy trình vận hành">
+  <h1>Phần 4 — Quy trình vận hành</h1>
+  <p>Build và triển khai, migration CSDL, xem log, sửa lỗi, runbook.</p>
+</section>
+
+<section class="slide" data-title="4.1 Build và triển khai">
+  <p class="tags"><span class="tag t-sec">Vận hành</span></p>
+  <h2>4.1 Build và triển khai</h2>
+  <div class="cols">
+    <div>
+      <h3>Luồng chuẩn</h3>
+      <p>code → commit → push <code>main</code> → bấm job Jenkins của service. Job không có trigger tự động, trừ <code>vigov-gate</code>.</p>
+      <h3>Job của một service (<code>service-*/Jenkinsfile</code>)</h3>
+      <ol>
+        <li>Chuẩn bị: kiểm go, buf, docker, gcc, kubectl; đăng nhập Harbor; <code>KUBECONFIG=/u01/rancher/rancher-vigov.yaml</code>; <code>NS=vigov-prod</code>; Deployment <code>vigov-service-&lt;svc&gt;</code> phải có sẵn.</li>
+        <li>Thẻ ảnh = commit 12 ký tự; <code>canDungLai()</code> bỏ qua nếu không có thay đổi kể từ ảnh trước.</li>
+        <li><code>buf generate</code> → gofmt → <code>go vet</code> → <code>go test -race</code> → <code>go build</code> (GOWORK=off).</li>
+        <li><code>docker build/push</code> → <code>harbor.omicrm.services/ci/vigov-service-&lt;svc&gt;:&lt;tag&gt;</code>.</li>
+        <li><code>kubectl set image "*=&lt;ảnh&gt;"</code> → <code>rollout status --timeout=6m</code>; lỗi thì <code>rollout undo</code>.</li>
+      </ol>
+      <h3>Danh sách job</h3>
+      <p><code>vigov-gate</code> (đêm <code>H 2 * * *</code>: proto, npm ci, <code>make check</code>, <code>make vuln</code>) · <code>vigov-svc-{comms,documents,finance,identity,petitions,platform,reporting}</code> · <code>vigov-web-admin</code> · <code>vigov-platform-admin</code> (prod) · <code>vigov-deploy</code> · <code>vigov-van-hanh</code>.</p>
+      <p><b>Thứ tự triển khai:</b> platform → identity → 5 service còn lại → web-admin.</p>
+    </div>
+    <div>
+      <h3><code>vigov-deploy</code> (<code>deploy/Jenkinsfile</code>) — tham số <code>HANH_DONG</code></h3>
+      <ul>
+        <li><code>kiem-tra</code>, <code>xem-log</code> (describe + 300 dòng log + log <code>--previous</code>).</li>
+        <li>Khởi tạo xã/app: <code>tao-xa-…</code>, <code>gan-mini-app-…</code>, <code>doi-app-id-…</code>, <code>doi-ten-mien-…</code>.</li>
+        <li>App riêng của xã: <code>tao-khoa-ma-hoa-identity</code>, <code>mo-netpol-identity-zalo</code>, <code>bo-sung-cau-hinh-identity/petitions</code>, <code>kiem-tra-dang-nhap-app-rieng</code>, <code>dat-secret-mini-app</code>.</li>
+        <li>Khác: <code>dung-clamav</code>, <code>tao-tai-khoan-van-hanh</code>, <code>cap-quyen-van-hanh</code>, <code>di-tru-vihat-miniapp</code>, <code>bat-cau-phien-miniapp</code>, <code>nen-ban-do</code>.</li>
+        <li><code>XAC_NHAN</code> phải gõ đúng namespace; <code>TICKET</code> bắt buộc với việc vận hành và secret.</li>
+      </ul>
+      <h3><code>vigov-van-hanh</code> (<code>deploy/van-hanh</code>)</h3>
+      <p>Đổi hạ tầng (postgresql, minio, redis, clamav): đọc <code>common-config</code> + <code>&lt;svc&gt;-secrets</code> → <code>ops.py infra-plan</code> → pod probe kiểm từ trong cụm → chạy thử (mặc định) → sao lưu <code>&lt;svc&gt;-secrets-backup-&lt;STAMP&gt;</code> → patch → <code>verify-data</code> → <code>rollout restart</code> (platform → identity → còn lại).</p>
+      <div class="warn">Không dùng <code>kubectl apply -k</code> lên namespace đang chạy: thẻ ảnh <code>CHUA-TRIEN-KHAI-LAN-NAO</code> trong overlay sẽ ghi đè mọi Deployment.</div>
+    </div>
+  </div>
+  <div class="src">Nguồn: deploy/README.md, deploy/Jenkinsfile, service-platform/Jenkinsfile, deploy/van-hanh/*, Jenkinsfile gốc</div>
+</section>
+
+<section class="slide" data-title="4.2 Migration · Makefile">
+  <p class="tags"><span class="tag t-sec">Vận hành</span></p>
+  <h2>4.2 Migration CSDL và các lệnh make</h2>
+  <div class="cols">
+    <div>
+      <h3>Migration</h3>
+      <ul>
+        <li><code>core/migrate.Chay</code> chạy khi mỗi pod khởi động, hạn 5 phút; SQL nhúng bằng <code>go:embed</code>, theo thứ tự tên tệp.</li>
+        <li>Mỗi tệp một giao dịch, kèm dòng tiến độ trong <code>schema_migration</code>; một advisory lock cho mỗi service (replica sau phải chờ, nên rollout timeout 6 phút).</li>
+        <li>Tệp đã chạy mà bị sửa byte → dừng khởi động.</li>
+        <li>Không có rollback; không hỗ trợ <code>CREATE INDEX CONCURRENTLY</code>.</li>
+        <li>Áp lên schema dùng chung, không chạy theo từng xã; cơ chế backfill dữ liệu theo xã chưa có.</li>
+        <li>SQL một lần chạy qua pod <code>postgres:16-alpine</code> do job <code>vigov-deploy</code> dựng (nạp <code>platform-secrets</code>).</li>
+        <li>vihat-miniapp có migration riêng: <code>di-tru-vihat-miniapp</code> → <code>deploy/migrate.sh</code> (Phần 6).</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Makefile</h3>
+      <table>
+        <tr><th>Lệnh</th><th>Làm gì</th></tr>
+        <tr><td><code>make check</code></td><td>brain, hooks, quyen, vet-actor, khoaduynhat, envmap, buildfiles, security, lint, build, standalone, test, web</td></tr>
+        <tr><td><code>make vuln</code></td><td>govulncheck (chỉ tính phát hiện chạm tới hàm) + <code>npm audit --omit=dev</code> mức high/critical; cần mạng</td></tr>
+        <tr><td><code>make kb</code></td><td>Sinh lại chỉ mục <code>kb/30-indexes</code>, openapi, ingress, bảng tiến độ</td></tr>
+        <tr><td><code>make proto</code></td><td><code>buf generate</code></td></tr>
+        <tr><td><code>make quyen</code></td><td>Mọi khoá quyền trong mã có trong bảng <code>quyen</code></td></tr>
+        <tr><td><code>make envmap</code></td><td>Đối chiếu <code>deploy/cau-hinh/README.md</code> với <code>core/config</code></td></tr>
+      </table>
+      <p>Trên Windows: <code>PYTHONIOENCODING=utf-8 mingw32-make check</code>.</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: core/migrate/migrate.go, Makefile, deploy/Jenkinsfile</div>
+</section>
+
+<section class="slide" data-title="4.3 Xem log">
+  <p class="tags"><span class="tag t-sec">Vận hành</span></p>
+  <h2>4.3 Xem log</h2>
+  <div class="cols">
+    <div>
+      <h3>Cách đọc</h3>
+      <ul>
+        <li><code>kubectl -n vigov-prod logs deploy/vigov-service-&lt;svc&gt;</code> (thêm <code>--previous</code> khi pod vừa khởi động lại), hoặc giao diện Rancher.</li>
+        <li>Job <code>vigov-deploy</code> HANH_DONG=<code>xem-log</code>, tham số <code>DICH_VU</code>: describe + 300 dòng + log lần chạy trước. Pod tìm theo tiền tố tên (nhãn Rancher khác nhãn base).</li>
+        <li>Thư mục <code>k8s-logs/</code> trong repo chứa log Jenkins và log web-admin đã tải về để phân tích.</li>
+      </ul>
+      <h3>Định dạng</h3>
+      <ul>
+        <li>Go: <code>slog</code> JSON ra stdout (<code>time</code>, <code>level</code>, <code>msg</code> + thuộc tính).</li>
+        <li>Không có middleware request-id trong <code>core/</code> hay <code>service-*</code>.</li>
+        <li>Thiếu biến cấu hình lúc khởi động: <code>config: thiếu biến môi trường bắt buộc: X (service S, ENV=E)</code> kèm gợi ý.</li>
+        <li>Giới hạn tần suất: <code>rate_limit.store_unavailable</code>, <code>&lt;policy&gt;.rate_limited</code>.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Ba nguồn, ba mục đích</h3>
+      <table>
+        <tr><th>Nguồn</th><th>Nằm ở</th><th>Lưu</th><th>Dùng khi</th></tr>
+        <tr><td>Log tiến trình</td><td>stdout pod (slog)</td><td>theo hạ tầng</td><td>Lỗi kỹ thuật, khởi động, kết nối</td></tr>
+        <tr><td>Nhật ký an ninh</td><td>stdout pod, sự kiện <code>staff.sign_in_locked</code>, <code>session.idle_expired</code>, <code>operator.login*</code>…</td><td>6 tháng (quyết định #35); việc gửi tới kho tập trung là của hạ tầng</td><td>Đăng nhập sai, khoá tài khoản, phiên</td></tr>
+        <tr><td>Vết kiểm toán</td><td>Bảng <code>audit_log</code> của từng service; web-admin "Nhật ký hệ thống"; platform-admin "Nhật ký vận hành"</td><td>≥ 12 tháng, không xoá</td><td>Ai làm gì, trên bản ghi nào, lúc nào</td></tr>
+      </table>
+      <p>Log không chứa dữ liệu cá nhân (số điện thoại, họ tên, nội dung phản ánh): khi cần dò, tìm theo mã nghiệp vụ (mã tra cứu, mã nhiệm vụ, <code>CB-…</code>).</p>
+      <p>vihat-miniapp: xem Phần 6 (<code>[ZALO_SDK_ERROR]</code>, CORS WARN, bảng <code>nhat_ky_dang_nhap</code>).</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: deploy/Jenkinsfile (xem-log), core/config/hints.go, core/ratelimit/middleware.go, core/audit/audit.go, .claude/rules/critical/3</div>
+</section>
+
+<section class="slide" data-title="4.4 Sửa lỗi">
+  <p class="tags"><span class="tag t-sec">Vận hành</span></p>
+  <h2>4.4 Quy trình sửa lỗi</h2>
+  <div class="cols">
+    <div>
+      <h3>Các bước (<code>/fix-web-admin</code>, ROUTING §0)</h3>
+      <ol>
+        <li>Xác định menu và mô tả lỗi; đọc sổ tiến độ module (<code>kb/90-ephemeral/tien-do/&lt;module&gt;.json</code>) và <code>git log</code> vùng mã.</li>
+        <li>Lỗi giao diện: chụp màn hình, đối chiếu prototype (<code>../vigov-require</code>).</li>
+        <li>Khảo sát: bối cảnh trực tiếp (context-scout) và bối cảnh xung quanh (cross-context-scout).</li>
+        <li>Chẩn đoán nguyên nhân gốc, chỉ ra <code>file:line</code>.</li>
+        <li>Lỗi nằm ở backend hoặc module khác: ghi rõ là phụ thuộc backend.</li>
+        <li>Viết test hồi quy trước — test phải đỏ.</li>
+        <li>Sửa đúng gốc → <code>npm run typecheck/lint/test</code> + <code>make check</code>.</li>
+        <li>Commit <code>fix(&lt;scope&gt;): …</code> theo đường dẫn cụ thể (không <code>git add -A</code>) → <code>git push origin main</code>.</li>
+        <li>Ghi sổ tiến độ, chạy <code>make kb</code>.</li>
+        <li>Triển khai: bấm job của service bị ảnh hưởng (4.1).</li>
+      </ol>
+    </div>
+    <div>
+      <h3>Điều kiện dừng phải hỏi chủ dự án trước khi sửa</h3>
+      <ul>
+        <li>Không rõ thực thể thuộc xã hay thuộc nền tảng; cần đọc liên xã.</li>
+        <li>Không rõ service nào sở hữu dữ liệu; hợp đồng hiện tại không cung cấp dữ liệu cần.</li>
+        <li>Không rõ khoá quyền; cần khoá chưa có trong bảng <code>quyen</code>.</li>
+        <li>Đổi cách tính thời hạn, trạng thái vòng đời phản ánh, bảng thông báo người dân.</li>
+        <li>Xoá thật một bản ghi nghiệp vụ; migration làm mất cột.</li>
+        <li>Nới ngưỡng bảo mật (mật khẩu, khoá tài khoản, phiên, lưu log).</li>
+      </ul>
+      <h3>Runbook</h3>
+      <ul>
+        <li><code>kb/40-runbooks/basemap-pmtiles.md</code>: nền bản đồ PMTiles (triệu chứng → việc làm, làm mới, kiểm chữ ký, quay lui).</li>
+        <li><code>deploy/README.md</code> §0–13, <code>deploy/van-hanh/README.md</code>, <code>deploy/cau-hinh/README.md</code> §1–6.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: .claude/commands/fix-web-admin.md, .claude/agents/ROUTING.md, CLAUDE.md, kb/40-runbooks/</div>
+</section>
+
+<!-- ======================================================= PHẦN 5 -->
+<section class="slide part" data-title="Phần 5 — Bảo mật & cấu hình k8s">
+  <h1>Phần 5 — Bảo mật và cấu hình k8s</h1>
+  <p>Cấu trúc ConfigMap/Secret, từng khoá, mô hình service-to-service, đặt lịch, các lớp bảo mật. Giá trị bí mật không được ghi trong tài liệu này: chỉ có tên khoá, chức năng và định dạng.</p>
+</section>
+
+<section class="slide" data-title="5.1 Cấu trúc cấu hình k8s">
+  <p class="tags"><span class="tag t-sec">Cấu hình</span></p>
+  <h2>5.1 Cấu trúc cấu hình trên k8s</h2>
+  <div class="cols">
+    <div>
+      <h3>Nguyên tắc</h3>
+      <ul>
+        <li>Biến môi trường chỉ chứa hằng toàn nền tảng, chỉ đọc ở <code>core/config</code>. Giá trị riêng từng xã nằm trong CSDL, đọc lúc chạy.</li>
+        <li>Một cách viết: <code>UPPER_SNAKE_CASE</code>; khoá ConfigMap/Secret chính là tên biến; nạp nguyên đối tượng bằng <code>envFrom</code> (khoá có gạch ngang bị bỏ qua im lặng).</li>
+        <li>Có bí mật → Secret (kiểu Go <code>secret.Secret</code>, không in ra log); còn lại → ConfigMap.</li>
+        <li>Đổi khoá xong phải <code>kubectl -n &lt;ns&gt; rollout restart deploy/vigov-service-&lt;svc&gt;</code> (envFrom chỉ đọc lúc pod khởi động).</li>
+        <li><b>Bắt buộc theo nhóm (ADR 0057):</b> mỗi service khai <code>configUses = config.Uses(...)</code>. <code>requiredEverywhere</code>: ENV, DATABASE_DSN, GRPC_CALLER_KEY (service có gRPC). <code>requiredInProd</code>: thiếu thì không khởi động ở staging/prod. <code>optional</code>: có mặc định. Đọc nhóm chưa khai → panic.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Đối tượng</h3>
+      <table>
+        <tr><th>Đối tượng</th><th>Loại</th><th>Ai nạp</th></tr>
+        <tr><td><code>common-config</code></td><td>ConfigMap</td><td>7 service Go, web-admin, platform-admin (envFrom)</td></tr>
+        <tr><td><code>&lt;svc&gt;-secrets</code> × 7</td><td>Secret Opaque</td><td>đúng service đó (envFrom)</td></tr>
+        <tr><td><code>harbor-vigov</code></td><td>dockerconfigjson</td><td>imagePullSecrets của 8 pod</td></tr>
+        <tr><td><code>dockerhub-omicrm</code></td><td>dockerconfigjson</td><td>clamd, pod psql, pod probe của job</td></tr>
+        <tr><td><code>vigov-wildcard-tls</code>, <code>vigov-api-wildcard-tls</code>, <code>vigov-staging-tls</code>, <code>vigov-api-staging-tls</code></td><td>kubernetes.io/tls</td><td>Ingress</td></tr>
+        <tr><td><code>vihat-miniapp-cau-hinh</code> / <code>vihat-miniapp-bi-mat</code></td><td>ConfigMap / Secret</td><td>vihat-miniapp (Phần 6)</td></tr>
+        <tr><td><code>&lt;svc&gt;-secrets-backup-&lt;STAMP&gt;</code></td><td>Secret</td><td>bản sao lưu do <code>vigov-van-hanh</code> tạo</td></tr>
+      </table>
+      <p>Overlay chỉ sinh <code>ENV=prod|staging</code> cho <code>common-config</code>; các khoá còn lại đặt tay trên cụm. Kiểm đồng bộ tài liệu với mã: <code>make envmap</code>, <code>ops.py catalog --check</code>.</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: core/config/config.go, uses.go, deploy/cau-hinh/README.md, kb/10-decisions/0057-*, deploy/overlays/*</div>
+</section>
+
+<section class="slide" data-title="5.2 ConfigMap common-config">
+  <p class="tags"><span class="tag t-sec">Cấu hình</span></p>
+  <h2>5.2 ConfigMap <code>common-config</code> — từng khoá</h2>
+  <p class="sub">Cột "Bắt buộc": <b>có</b> = mọi môi trường · <b>prod</b> = staging + prod · <b>không</b> = tuỳ chọn</p>
+  <table>
+    <tr><th>Khoá</th><th>Chức năng</th><th>Giá trị trong repo</th><th>Bắt buộc</th><th>Service đọc</th></tr>
+    <tr><td>ENV</td><td>Môi trường</td><td><code>prod</code> / <code>staging</code></td><td>có</td><td>tất cả</td></tr>
+    <tr><td>TRUSTED_PROXY_CIDRS</td><td>Proxy được tin cho X-Forwarded-For</td><td>ví dụ <code>10.42.0.0/16</code>; cấm <code>0.0.0.0/0</code>, <code>::/0</code></td><td>prod</td><td>7 service</td></tr>
+    <tr><td>CITIZEN_CORS_ALLOWED_ORIGINS</td><td>CORS kênh công dân</td><td><code>https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me</code></td><td>prod</td><td>identity, petitions, comms</td></tr>
+    <tr><td>CITIZEN_SESSION_TTL</td><td>Hạn phiên công dân</td><td><code>720h</code> (mặc định)</td><td>không</td><td>identity</td></tr>
+    <tr><td>OBJECT_STORAGE_ENDPOINT</td><td>MinIO nội bộ</td><td><code>https://&lt;minio nội bộ&gt;:&lt;cổng&gt;</code></td><td>prod</td><td>petitions, comms, platform</td></tr>
+    <tr><td>OBJECT_STORAGE_PUBLIC_ENDPOINT</td><td>Cổng S3 điện thoại thấy (presigned GET)</td><td><code>https://storage-api.vigov.vn</code></td><td>prod</td><td>petitions, comms, platform</td></tr>
+    <tr><td>OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL</td><td>Gốc bucket public</td><td><code>&lt;PUBLIC_ENDPOINT&gt;/vigov-prod-public</code></td><td>prod</td><td>comms, platform</td></tr>
+    <tr><td>OBJECT_STORAGE_REGION</td><td>Region</td><td><code>us-east-1</code> (mặc định)</td><td>không</td><td>petitions, comms, platform</td></tr>
+    <tr><td>OBJECT_STORAGE_BUCKET_PREFIX</td><td>Tiền tố bucket (<code>-private</code>/<code>-public</code>/<code>-temp</code>)</td><td><code>vigov-prod</code> (staging <code>vigov-stg</code>)</td><td>prod</td><td>petitions, comms, platform</td></tr>
+    <tr><td>MALWARE_SCANNER_ADDRESS</td><td>clamd</td><td><code>vigov-clamav:3310</code></td><td>prod</td><td>petitions, comms, platform</td></tr>
+    <tr><td>BASEMAP_URL</td><td>Tiền tố PMTiles nền bản đồ</td><td><code>https://&lt;minio&gt;:9000/&lt;tiền tố&gt;-public/config/map/&lt;YYYYMMDD&gt;</code></td><td>không</td><td>comms, web-admin</td></tr>
+  </table>
+  <p>Không đặt trên cụm (dùng mặc định): <code>GRPC_LISTEN_ADDR</code> (<code>:9090</code>), <code>OPERATOR_GRPC_LISTEN_ADDR</code> (<code>:9093</code>), <code>TENANT_CACHE_TTL</code> (<code>30s</code>). Chưa dùng: <code>RABBITMQ_EXCHANGE</code>, <code>ELASTICSEARCH_*</code>. <code>DANGEROUS_AUTH_BYPASS</code>: với <code>ENV=prod</code> service từ chối khởi động.</p>
+  <div class="src">Nguồn: deploy/cau-hinh/README.md, .env.example, core/config/config.go</div>
+</section>
+
+<section class="slide" data-title="5.3 Secret <svc>-secrets">
+  <p class="tags"><span class="tag t-sec">Cấu hình</span></p>
+  <h2>5.3 Secret <code>&lt;svc&gt;-secrets</code> — từng khoá (không ghi giá trị)</h2>
+  <table>
+    <tr><th>Khoá</th><th>Chức năng</th><th>Định dạng</th><th>Bắt buộc</th><th>Service đọc</th></tr>
+    <tr><td>DATABASE_DSN</td><td>Kết nối PostgreSQL tới CSDL riêng của service</td><td>URL PostgreSQL gồm tài khoản, mật khẩu, máy chủ, cổng 5432, tên CSDL <code>vigov_&lt;svc&gt;</code>, tham số <code>sslmode=require</code></td><td>có</td><td>cả 7</td></tr>
+    <tr><td>GRPC_CALLER_KEY</td><td>Khoá dùng chung xác thực mọi RPC liên service (metadata <code>x-vigov-caller-key</code>, ADR 0025)</td><td>chuỗi base64 sinh bằng <code>openssl rand -base64 48</code>, cùng giá trị ở mọi Secret</td><td>có (service có gRPC)</td><td>6 service; reporting không đọc</td></tr>
+    <tr><td>REDIS_DSN</td><td>Chống gửi trùng (idempotency), giới hạn tần suất</td><td>URL Redis có mật khẩu, cổng 6379, DB 0</td><td>prod</td><td>6 service (trừ reporting)</td></tr>
+    <tr><td>SESSION_SIGNING_KEYS</td><td>Ký/kiểm token phiên cán bộ (HMAC-SHA256)</td><td>danh sách phân cách dấu phẩy, khoá mới đứng đầu, mỗi khoá ≥ 32 byte</td><td>prod</td><td>identity</td></tr>
+    <tr><td>CITIZEN_SESSION_BRIDGE_KEYS</td><td>Khoá vihat-miniapp gửi tới cầu phiên (<code>x-vigov-bridge-key</code>, ADR 0045)</td><td>danh sách, mỗi khoá ≥ 32 byte; trùng giá trị với Secret của vihat-miniapp</td><td>prod</td><td>identity</td></tr>
+    <tr><td>IDENTITY_ADMIN_SEED_PASSWORD</td><td>Tạo tài khoản <code>admin</code> một lần cho xã mới</td><td>chuỗi ≥ 12 ký tự</td><td>không</td><td>identity</td></tr>
+    <tr><td>OPERATOR_SESSION_SIGNING_KEYS</td><td>Ký/kiểm token vận hành <code>op1.</code>; không được trùng SESSION_SIGNING_KEYS</td><td>danh sách, mỗi khoá ≥ 32 byte; cùng giá trị ở identity và platform</td><td>prod</td><td>identity (ký), platform (kiểm)</td></tr>
+    <tr><td>OPERATOR_TOTP_ENCRYPTION_KEY</td><td>AES-256-GCM mã hoá bí mật TOTP vận hành</td><td>danh sách base64, mỗi khoá đúng 32 byte</td><td>prod</td><td>identity</td></tr>
+    <tr><td>SECRET_ENCRYPTION_KEYS</td><td>KEK của mã hoá phong bì từng xã (ADR 0009): mật khẩu SMTP (comms), secret Zalo app riêng (identity)</td><td>danh sách base64 32 byte, mỗi Secret một bộ riêng</td><td>prod</td><td>comms, identity</td></tr>
+    <tr><td>OBJECT_STORAGE_ACCESS_KEY / _SECRET_KEY</td><td>Cặp khoá MinIO riêng của service (ADR 0052)</td><td>access key / secret key do MinIO cấp</td><td>prod</td><td>petitions, comms, platform</td></tr>
+    <tr><td>RABBITMQ_DSN, ELASTICSEARCH_API_KEY</td><td>Chưa dùng</td><td>—</td><td>—</td><td>chưa service nào khai</td></tr>
+  </table>
+  <div class="src">Nguồn: deploy/cau-hinh/README.md §1, .env.example, core/config/config.go</div>
+</section>
+
+<section class="slide" data-title="5.4 Env trong Deployment · cấu hình theo xã">
+  <p class="tags"><span class="tag t-sec">Cấu hình</span></p>
+  <h2>5.4 Biến viết thẳng trong Deployment · cấu hình theo xã</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Khoá</th><th>Giá trị base</th><th>Deployment</th></tr>
+        <tr><td>LISTEN_ADDR</td><td><code>:8080</code></td><td>comms, documents, finance, petitions, reporting</td></tr>
+        <tr><td>PLATFORM_GRPC_ADDR</td><td><code>platform:9090</code></td><td>6 service trừ platform</td></tr>
+        <tr><td>IDENTITY_GRPC_ADDR</td><td><code>identity:9090</code></td><td>documents, finance, petitions, comms, reporting, platform</td></tr>
+        <tr><td>IDENTITY_OPERATOR_GRPC_ADDR</td><td><code>identity:9093</code></td><td>platform</td></tr>
+        <tr><td>PETITIONS_GRPC_ADDR</td><td><code>petitions:9090</code></td><td>identity</td></tr>
+        <tr><td>DOCUMENTS_GRPC_ADDR</td><td><code>documents:9090</code></td><td>identity, petitions</td></tr>
+        <tr><td>COMMS_GRPC_ADDR</td><td><code>comms:9090</code></td><td>petitions, documents, finance, platform</td></tr>
+        <tr><td>CITIZEN_SESSION_BRIDGE_LISTEN_ADDR</td><td><code>:9091</code></td><td>identity (đi cặp với BRIDGE_KEYS)</td></tr>
+        <tr><td>OPERATOR_HOST</td><td><code>admin.vigov.vn</code></td><td>platform-admin; platform đặt tay</td></tr>
+        <tr><td>ZALO_BOT_WEBHOOK_HOST</td><td><code>bot.api.vigov.vn</code></td><td>comms</td></tr>
+        <tr><td>GOMEMLIMIT</td><td><code>300MiB</code></td><td>platform, comms, petitions</td></tr>
+        <tr><td>PLATFORM_HTTP_ADDR</td><td><code>http://platform:8080</code></td><td>platform-admin</td></tr>
+        <tr><td>PORT / HOSTNAME</td><td><code>3000</code> / <code>0.0.0.0</code></td><td>web-admin, platform-admin</td></tr>
+      </table>
+      <div class="warn">Trên cụm thật, địa chỉ dùng tên Deployment thật, ví dụ <code>DOCUMENTS_GRPC_ADDR=vigov-service-documents:9090</code>.</div>
+    </div>
+    <div>
+      <h3>Cấu hình riêng từng xã (CSDL, đọc lúc chạy)</h3>
+      <ul>
+        <li><b>platform</b>: tenant, tenant_domain, tenant_succession, mini_app, ho_so_hien_thi_xa, upload_policy, petition_field, commune_map_frame_default. Service khác đọc qua gRPC <code>ResolveHost</code>, <code>GetTenant</code>, <code>GetTenantProfile</code>, <code>ListUploadPolicies</code>, <code>ListPetitionFields</code>, <code>GetMapFrameDefault</code>, <code>ResolveMiniApp</code>; host→xã cache 30s.</li>
+        <li><b>identity</b>: lich_lam_viec, ngay_nghi_le, ngay_lam_bu, sla, citizen_letter_deadline_rule, automation_job_setting, quyen/vai_tro/vai_tro_quyen, mini_app_secret.</li>
+        <li><b>petitions</b>: petition_settings, nhan_linh_vuc. <b>finance</b>: cau_hinh_giai_ngan. <b>comms</b>: mail_settings (mật khẩu niêm bằng SECRET_ENCRYPTION_KEYS), zalo_channel_setting, portal_sync_settings, map_frame.</li>
+        <li>Nhập liệu qua web-admin → Cấu hình (2.8) hoặc platform-admin (2.9).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: deploy/base/*/deployment.yaml, deploy/Jenkinsfile, core/platformclient/*, core/tenant/cache.go</div>
+</section>
+
+<section class="slide" data-title="5.5 Service-to-service">
+  <p class="tags"><span class="tag t-be">Backend</span><span class="tag t-sec">Bảo mật</span></p>
+  <h2>5.5 Mô hình service-to-service</h2>
+  <div class="cols">
+    <div>
+      <h3>Ma trận gọi gRPC (bên gọi → bên bị gọi)</h3>
+      <table>
+        <tr><th>Bên gọi</th><th>platform</th><th>identity</th><th>id :9093</th><th>petitions</th><th>documents</th><th>comms</th></tr>
+        <tr><td>identity</td><td>✔</td><td>—</td><td>—</td><td>✔</td><td>✔</td><td>—</td></tr>
+        <tr><td>documents</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>✔</td></tr>
+        <tr><td>petitions</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>✔</td><td>✔</td></tr>
+        <tr><td>finance</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>✔</td></tr>
+        <tr><td>comms</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr><td>reporting</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>—</td><td>—</td></tr>
+        <tr><td>platform</td><td>—</td><td>✔</td><td>✔</td><td>—</td><td>—</td><td>✔</td></tr>
+        <tr><td>vihat-miniapp</td><td colspan="6">chỉ identity:9091 CitizenSessionBridge</td></tr>
+      </table>
+      <ul>
+        <li>Hợp đồng: <code>proto/vigov/&lt;svc&gt;/v1</code>; mã client trong <code>core/&lt;svc&gt;client</code>.</li>
+        <li>Metadata: <code>x-tenant-id</code> (đọc từ context ở client, đặt lại vào context ở server), <code>x-vigov-caller-key</code>. RPC được miễn mang xã: ResolveHost, ResolveCitizenSession, OpenCitizenSession, ResolveMiniApp, ZaloBotOperatorService. Chỉ có unary.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Kênh truyền</h3>
+      <ul>
+        <li>gRPC giữa service: <b>không TLS</b> (<code>insecure.NewCredentials</code>); bảo vệ bằng <code>GRPC_CALLER_KEY</code> + NetworkPolicy. Ghi nợ <code>plaintext-grpc</code> trong <code>tools/security_debt.json</code>, hạn 28/12/2026.</li>
+        <li>PostgreSQL: <code>sslmode=require</code> (mã hoá, chưa kiểm host; <code>verify-full</code> cần CA trong ảnh).</li>
+        <li>HTTPS ra ngoài (Zalo, Cổng TTĐT, SMTP): TLS ≥ 1.2.</li>
+      </ul>
+      <h3>Sự kiện</h3>
+      <ul>
+        <li>ADR 0010: Kafka cho sự kiện liên service, RabbitMQ cho việc nền có trễ. <b>Chưa có client broker trong mã.</b></li>
+        <li>Phong bì <code>core/events.Envelope</code> {id, name, tenant_id, at, payload}; tin không có xã bị từ chối.</li>
+        <li><code>petitions.status_changed.v1</code>, <code>petitions.merge_changed.v1</code>: petitions ghi outbox <code>su_kien_di</code> cùng giao dịch; relay chưa có; handler phía comms chưa nối.</li>
+        <li>Thông báo cán bộ không dùng sự kiện: <code>staff_notice_outbox</code> + relay gọi gRPC <code>DeliverStaffNotifications</code> (ADR 0086).</li>
+      </ul>
+      <h3>REST</h3>
+      <p>Web: Ingress → web-admin → service (giữ Host). Công dân: Ingress → <code>&lt;svc&gt;.api.vigov.vn</code>, Bearer, kiểm phiên qua gRPC <code>ResolveCitizenSession</code>.</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: core/grpcx/*, core/*client/*, deploy/base/mang/netpol.yaml, core/events/*, kb/30-indexes/event-flows.json, tools/security_debt.json</div>
+</section>
+
+<section class="slide" data-title="5.6 Đặt lịch">
+  <p class="tags"><span class="tag t-be">Backend</span></p>
+  <h2>5.6 Đặt lịch và việc nền</h2>
+  <p class="sub">Không có CronJob k8s cho ViGov. Mọi lịch chạy bằng ticker trong tiến trình; mỗi lượt lấy advisory lock PostgreSQL để chỉ một replica chạy, xử lý từng xã trong context của xã đó.</p>
+  <table>
+    <tr><th>Việc</th><th>Vị trí</th><th>Nhịp</th><th>Làm gì</th></tr>
+    <tr><td>AutomationRunner</td><td>petitions, documents</td><td>1 phút</td><td>Hỏi identity <code>ClaimDueAutomationRuns</code> cho các job sla_reminders, escalation, weekly_digest, scheduled_reports; chạy trên nhiệm vụ/phản ánh (petitions), văn bản đến/đơn thư (documents); ghi <code>RecordAutomationRunOutcome</code>; gửi thông báo qua comms</td></tr>
+    <tr><td>StaffNoticeRelay</td><td>petitions (20s), documents (15s)</td><td>15–20 giây</td><td>Đẩy <code>staff_notice_outbox</code> sang comms <code>DeliverStaffNotifications</code>, lô ≤ 100</td></tr>
+    <tr><td>PortalSyncRunner</td><td>comms</td><td>5 phút (xã đặt nhịp ≥ 1 giờ)</td><td>Đồng bộ tin từ Cổng TTĐT của xã; tối đa 2 lượt song song; lượt kẹt quá 1 giờ bị đóng thất bại</td></tr>
+    <tr><td>BodyImageSweep</td><td>comms</td><td>1 giờ</td><td>Xoá mềm ảnh thân bài của bài chưa từng lưu, quá 7 ngày</td></tr>
+    <tr><td>ZaloDispatcher</td><td>comms</td><td>30 giây</td><td>Gửi <code>zalo_delivery</code> đang chờ: giờ yên lặng, lease 10 phút, thử lại có lùi</td></tr>
+    <tr><td>Lịch theo xã</td><td>identity <code>automation_job_setting</code></td><td>sla_reminders: 5–10080 phút; escalation: hằng ngày theo giờ (Asia/Ho_Chi_Minh); weekly_digest: thứ + giờ</td><td>Cấu hình ở web-admin → Cấu hình → Tự động hoá. Dạng lịch của scheduled_reports: không xác định từ mã</td></tr>
+    <tr><td>freshclam</td><td>vigov-clamav</td><td>1 lần/ngày</td><td>Cập nhật chữ ký ClamAV</td></tr>
+    <tr><td>Migration</td><td>mỗi pod</td><td>lúc khởi động</td><td>Xem 4.2</td></tr>
+    <tr><td>Jenkins <code>vigov-gate</code></td><td>Jenkinsfile gốc</td><td><code>H 2 * * *</code></td><td>proto, npm ci, <code>make check</code>, <code>make vuln</code></td></tr>
+    <tr><td>CronJob vihat-miniapp</td><td>kho vihat-miniapp</td><td><code>15 3 * * *</code></td><td>Tạo phân mảnh và dọn nhật ký đăng nhập (Phần 6)</td></tr>
+  </table>
+  <div class="src">Nguồn: service-*/internal/app/*_runner.go, *_relay.go, *_sweep.go, zalo_dispatcher.go; service-identity/migrations/0017; deploy/cluster/clamav.yaml; Jenkinsfile</div>
+</section>
+
+<section class="slide" data-title="5.7 Bảo mật — xác thực">
+  <p class="tags"><span class="tag t-sec">Bảo mật</span></p>
+  <h2>5.7 Bảo mật — mật khẩu, phiên, khoá tài khoản, phân quyền</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Hạng mục</th><th>Giá trị trong mã</th></tr>
+        <tr><td>Băm mật khẩu</td><td>argon2id t=2, m=19 MiB, p=1, muối 16 byte, độ dài băm 32, định dạng PHC; so sánh hằng thời gian; tự băm lại khi tham số tăng</td></tr>
+        <tr><td>Độ dài tối thiểu</td><td>12 ký tự (<code>DaiToiThieu</code>). Quyết định #36 yêu cầu ≥ 14 ký tự và đủ 4 loại: <b>chưa hiện thực</b></td></tr>
+        <tr><td>Token cán bộ</td><td>HMAC-SHA256, tiền tố <code>v1</code>; claims chỉ <code>tenant_id</code>, <code>sid</code>, <code>exp</code>; khoá ≥ 32 byte, xoay vòng bằng danh sách</td></tr>
+        <tr><td>Phiên cán bộ</td><td>Hạn tuyệt đối 12 giờ; <code>sid</code> kiểm trên mọi request; thu hồi khi khoá tài khoản, đổi vai trò, đổi mật khẩu; refresh chỉ lưu SHA-256</td></tr>
+        <tr><td>Khoá khi không dùng</td><td>Cán bộ 60 phút; quản trị (<code>admin.user</code>) 60 phút (#38)</td></tr>
+        <tr><td>Khoá đăng nhập</td><td>5 lần sai liên tiếp → khoá 12 giờ (#39); quản trị viên xã mở sớm được</td></tr>
+        <tr><td>Khu vận hành</td><td>Phiên 8 giờ, idle 5 phút; 5 lần sai (mật khẩu + TOTP) → khoá 12 giờ; mật khẩu tạm 24 giờ; 10 mã khôi phục; TOTP mã hoá AES-256-GCM</td></tr>
+        <tr><td>MFA</td><td>Có TOTP cho vận hành viên. MFA cho quản trị xã (#37): <b>chưa hiện thực</b></td></tr>
+        <tr><td>Phiên công dân</td><td><code>phien_cong_dan</code>, TTL 720 giờ, Bearer</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Phân quyền</h3>
+      <ul>
+        <li>Bảng <code>quyen</code> (danh mục toàn nền tảng), <code>vai_tro</code>, <code>vai_tro_quyen</code> (theo xã).</li>
+        <li><code>core/authz</code>: khoá phẳng <code>"&lt;nhóm&gt;.&lt;việc&gt;"</code>, luôn xét trong một xã; không có vai trò vượt xã.</li>
+        <li>Tuyến không khai quyền thì mọi cán bộ gọi được — mỗi tuyến phải khai tường minh.</li>
+        <li>Khu vận hành: khoá <code>ops.*</code> (tenant, domain, profile, mini_app, upload_policy, qr.issue, petition_field, zalo_bot) cấp qua <code>operator_permission_grant</code>.</li>
+      </ul>
+      <h3>Che dữ liệu cá nhân (<code>core/privacy/mask.go</code>)</h3>
+      <p><code>MaskPhone</code> → <code>09****5678</code> · <code>MaskCccd</code> → <code>079*****789</code> · <code>MaskEmail</code> → <code>o***@domain</code> · <code>MaskName</code> → <code>Nguyễn V. A.</code></p>
+      <h3>Mã hoá bí mật từng xã (<code>core/crypto/envelope.go</code>)</h3>
+      <p>AES-256-GCM, mã hoá phong bì: KEK từ <code>SECRET_ENCRYPTION_KEYS</code>, mỗi xã một DEK (<code>data_encryption_key</code>); AAD gồm nhãn, phiên bản, <code>tenant_id</code>; <code>RewrapDEK</code> để xoay KEK.</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: core/password, core/token, service-identity/internal/{store/phien.go,domain/session_idle.go,domain/sign_in_lock.go,domain/operator.go}, core/authz, kb/00-foundation/open-questions.json #35–#39</div>
+</section>
+
+<section class="slide" data-title="5.8 Bảo mật — biên và giám sát">
+  <p class="tags"><span class="tag t-sec">Bảo mật</span></p>
+  <h2>5.8 Bảo mật — header, CORS, giới hạn tần suất, kiểm toán, quét lỗ hổng</h2>
+  <div class="cols">
+    <div>
+      <h3>Header web</h3>
+      <ul>
+        <li>platform-admin: CSP theo nonce (128 bit, <code>strict-dynamic</code>), HSTS 2 năm + includeSubDomains, nosniff, <code>Referrer-Policy: no-referrer</code>, <code>X-Frame-Options: DENY</code>.</li>
+        <li>web-admin: <b>chưa có header bảo mật</b> — nợ <code>missing-security-headers</code>, hạn 30/11/2026.</li>
+        <li>Cookie phiên: host-only, HttpOnly, Secure (không đặt cho miền cha <code>.vigov.vn</code>).</li>
+      </ul>
+      <h3>CORS (<code>core/httpx/cors.go</code>)</h3>
+      <p>Chỉ trên chuỗi công dân; trả lại đúng origin khớp allow-list; không bao giờ <code>*</code>, không <code>Allow-Credentials</code>; <code>Vary: Origin</code>; preflight 204, Max-Age 600. Tuyến cán bộ không gửi CORS.</p>
+      <h3>Giới hạn tần suất (Redis, <code>core/ratelimit</code>)</h3>
+      <table>
+        <tr><th>Chính sách</th><th>Ngưỡng</th><th>Chính sách</th><th>Ngưỡng</th></tr>
+        <tr><td>OperatorSignIn</td><td>20/15 phút/IP</td><td>CitizenPhotoUpload</td><td>30/15 phút</td></tr>
+        <tr><td>PublicNewsRead</td><td>120/phút (fail-open)</td><td>StaffImageFetch</td><td>30/giờ</td></tr>
+        <tr><td>PublicDisasterAlertsRead</td><td>1200/phút (fail-open)</td><td>ZaloBotPairing</td><td>5/giờ</td></tr>
+        <tr><td>PublicBasemapRead</td><td>6000/phút (fail-closed)</td><td>ZaloBotWebhook</td><td>600/phút</td></tr>
+        <tr><td>MiniAppIDLookup</td><td>30/phút</td><td>AccountlessSend</td><td>5/giờ</td></tr>
+        <tr><td>AccountlessLookup</td><td>30/giờ (fail-closed)</td><td>AccountlessFieldRead</td><td>120/phút</td></tr>
+      </table>
+      <p>Đăng nhập cán bộ: không có chính sách rate limit riêng (không xác định từ mã).</p>
+    </div>
+    <div>
+      <h3>Kiểm toán và nhật ký an ninh</h3>
+      <ul>
+        <li><code>audit_log</code>: tenant_id, actor_id (mã nghiệp vụ), actor_kind, actor_ip, action, subject, at, delta (đã che dữ liệu cá nhân); cùng giao dịch; chỉ ghi thêm; ≥ 12 tháng.</li>
+        <li>Nhật ký an ninh: slog JSON — staff.sign_in_locked, staff.account_locked/unlocked, staff.account_revoked, session.idle_expired, operator.login, operator.login_locked_out, operator.password_changed, operator.totp_enrolled…; không ghi mật khẩu, token, dữ liệu cá nhân.</li>
+      </ul>
+      <h3>Quét lỗ hổng và bí mật</h3>
+      <ul>
+        <li><code>make vuln</code>: govulncheck + npm audit (high/critical); chạy hằng đêm ở <code>vigov-gate</code>. <code>tools/vuln_exceptions.json</code>: trống.</li>
+        <li><code>tools/security_debt.json</code>: 5 khoản — gRPC không TLS ×2, kênh vận hành, <code>rand.IntN</code> trong malwarescan, header web-admin.</li>
+        <li>Hook chặn ghi bí mật (<code>secret_scan.py</code>), dữ liệu cá nhân (<code>pii_guard.py</code>), hợp đồng biến môi trường (<code>env_contract_guard.py</code>), mẫu mã cấm (<code>security_guard.py</code>).</li>
+      </ul>
+      <h3>Pod</h3>
+      <p>runAsNonRoot (65532; web 1000), readOnlyRootFilesystem, drop ALL, seccomp RuntimeDefault, <code>automountServiceAccountToken: false</code>. Mức áp dụng TCVN 14423:2026: tạm cấp 3; nhật ký an ninh lưu 6 tháng (#35).</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: platform-admin/next.config.ts, src/lib/csp.ts, web-admin/next.config.ts, core/httpx/cors.go, core/ratelimit/ratelimit.go, core/audit, tools/security_debt.json, .claude/rules/critical/13</div>
+</section>
+
+<!-- ======================================================= PHẦN 6 -->
+<section class="slide part" data-title="Phần 6 — Mini App">
+  <h1>Phần 6 — Mini App</h1>
+  <p><code>citizen-app</code> (một bản build cho App ViHAT và App xã) và <code>vihat-miniapp</code> (backend của App ViHAT, kho riêng): chức năng, cấu trúc, cấu hình, vận hành.</p>
+</section>
+
+<section class="slide" data-title="6.1 citizen-app — một bản build, ba đường vào">
+  <p class="tags"><span class="tag t-mv">App ViHAT</span><span class="tag t-mx">App xã</span></p>
+  <h2>6.1 <code>citizen-app</code> — một bản build, ba đường vào</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Điều kiện (App.tsx)</th><th>Vẽ</th><th>App với người dùng</th></tr>
+        <tr><td><code>XA_CO_DINH</code> có giá trị (nung lúc dựng bằng <code>deploy --domain=&lt;x&gt;</code>)</td><td><code>AppRieng</code> → <code>TrangXa</code></td><td>App xã — app riêng của xã (App ID riêng). Phiên mở thẳng tới identity (ADR 0066)</td></tr>
+        <tr><td>Tham số mở <code>?d=&lt;tên-miền&gt;&amp;src=qr|zns</code></td><td><code>QrCommuneApp</code> → <code>TrangXa</code></td><td>App xã mở bằng App ID của ViHAT. Thanh tiêu đề Zalo đổi thành tên xã; phiên qua vihat-miniapp</td></tr>
+        <tr><td>Còn lại</td><td><code>SharedAppIntro</code></td><td>App ViHAT — giới thiệu ViHAT Group</td></tr>
+      </table>
+      <ul>
+        <li>App ID không nung vào bundle: <code>readRuntimeAppId()</code> lúc chạy. Lúc đẩy, <code>deploy.mjs</code> hỏi platform <code>GET /api/v1/mini-app-ids?app=vihat|?host=&lt;tên-miền&gt;</code> (bảng <code>mini_app</code>).</li>
+        <li>Không có bộ chọn xã hay nút "Đổi xã" (ADR 0044).</li>
+        <li>Phiên chỉ nằm trong bộ nhớ; không ghi xuống máy.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Lệnh npm (<code>package.json</code>)</h3>
+      <table>
+        <tr><th>Lệnh</th><th>Làm gì</th></tr>
+        <tr><td><code>build</code></td><td><code>scripts/dung.mjs</code> (vite build)</td></tr>
+        <tr><td><code>zmp:deploy</code> / <code>zmp:phat-hanh</code></td><td><code>scripts/deploy.mjs</code> (thử nghiệm / phát hành)</td></tr>
+        <tr><td><code>qr</code></td><td>Sinh link và mã QR mở app cho một xã</td></tr>
+        <tr><td><code>ho-so</code></td><td>Sinh hồ sơ xin quyền Zalo cho hai app</td></tr>
+        <tr><td><code>test</code>, <code>typecheck</code></td><td>vitest, tsc</td></tr>
+      </table>
+      <h3>Biến lúc dựng</h3>
+      <ul>
+        <li><code>VIGOV_API_HOST</code>: địa chỉ vihat-miniapp, biến duy nhất được nung vào bundle (danh sách trắng ở <code>scripts/cau-hinh.mjs</code>). Thiếu → <code>deploy.mjs</code> thoát mã 2.</li>
+        <li><code>ZMP_TOKEN</code>: token zmp-cli; claim <code>appId</code> phải bằng App ID đích.</li>
+        <li>Địa chỉ ViGov của App xã: <code>cong-dan/api/service-hosts.gen.ts</code> (<code>https://&lt;svc&gt;.api.vigov.vn</code>).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: citizen-app/src/App.tsx, src/lib/xa-co-dinh.ts, src/lib/launch-params.ts, scripts/deploy.mjs, package.json</div>
+</section>
+
+<section class="slide" data-title="6.2 App ViHAT — màn hình">
+  <p class="tags"><span class="tag t-mv">Mini App – App ViHAT</span></p>
+  <h2>6.2 App ViHAT — màn hình và chức năng</h2>
+  <p class="sub">Thanh tiêu đề "ViHAT Group". 4 tab: Trang chủ · Giải pháp · Về ViHAT · Liên hệ. Nút nổi "Chat Zalo" (Official Account) trên mọi màn</p>
+  <table>
+    <tr><th style="width:18%">Màn</th><th>Chức năng</th></tr>
+    <tr><td>Trang chủ</td><td>Hero (tên, slogan, 4 chỉ số, số năm hoạt động); menu nhanh 6 ô (Giải pháp, Danh thiếp, Gợi ý, Tư vấn — gọi hotline, Văn phòng, Yêu cầu); nút "Tư vấn và báo giá"; Giải pháp nổi bật; Tin ViHAT; Nhận ưu đãi qua SMS (đăng ký / huỷ); Về tập đoàn, Chặng đường</td></tr>
+    <tr><td>Giải pháp</td><td>Hệ sinh thái giải pháp (eSMS, OMICall, Contact Center tích hợp CRM, danh thiếp số) → trang chi tiết (gọi hotline, email, website); đơn vị thành viên</td></tr>
+    <tr><td>Gợi ý giải pháp</td><td>Bộ chọn 3 bước chạy trên máy → giải pháp phù hợp; Xem chi tiết, Gửi yêu cầu tư vấn, Gọi hotline</td></tr>
+    <tr><td>Danh thiếp</td><td>Danh thiếp số của ViHAT Group (mã QR vCard, giữ màn hình sáng, tải <code>.vcf</code>); quét danh thiếp số của đối tác (gọi, email, mở liên kết)</td></tr>
+    <tr><td>Về ViHAT</td><td>Triết lý, tầm nhìn, sứ mệnh; chặng đường phát triển; chứng chỉ; văn phòng</td></tr>
+    <tr><td>Liên hệ</td><td>Gọi hotline, email, website; Chat với chuyên viên (gửi số điện thoại và tên Zalo nếu người dùng đồng ý); Đăng nhập bằng số Zalo; Văn phòng ViHAT Group + Chỉ đường; Quản lý quyền; Chính sách quyền riêng tư (v1.0, hiệu lực 11/10/2026)</td></tr>
+    <tr><td>Tư vấn và báo giá</td><td>Cần đăng nhập; chọn giải pháp quan tâm, quy mô, ghi chú; Gửi yêu cầu tư vấn / Đề nghị gọi lại (tối đa 3 lần/24 giờ)</td></tr>
+    <tr><td>Yêu cầu của tôi</td><td>Danh sách yêu cầu đã gửi và tình trạng (Đã tiếp nhận, Đang xử lý, Đã liên hệ, Đã hoàn tất)</td></tr>
+  </table>
+  <p><b>Quyền Zalo:</b> <code>getPhoneNumber</code>, <code>getAccessToken</code>, <code>getUserInfo</code> (tên — Chat với chuyên viên), <code>scanQRCode</code>, <code>keepScreen</code>, <code>downloadFile</code>, <code>vibrate</code>, <code>openPhone</code>, <code>openWebview</code>. <b>Gọi backend:</b> vihat-miniapp <code>POST /api/v1/sessions</code>, <code>POST|GET /api/v1/requests</code>, <code>POST /api/v1/client-errors</code>.</p>
+  <div class="src">Nguồn: citizen-app/src/features/{company-intro,tinh-nang,yeu-cau,dang-nhap,goi-y-giai-phap}/*, features/tinh-nang/zalo-api.ts (KHAI_BAO_LOI_GOI)</div>
+</section>
+
+<section class="slide" data-title="6.3 App xã — màn hình">
+  <p class="tags"><span class="tag t-mx">Mini App – App xã</span></p>
+  <h2>6.3 App xã — màn hình và chức năng</h2>
+  <p class="sub">4 tab: Trang chủ · Phản ánh · Tin tức · Cá nhân. Tên xã có trên mọi màn; nút thu nhỏ ứng dụng</p>
+  <table>
+    <tr><th style="width:18%">Màn</th><th>Chức năng</th></tr>
+    <tr><td>Trang chủ</td><td>Dải ảnh banner; băng cảnh báo thiên tai; "Xin chào, &lt;tên&gt;"; nhóm Chính quyền số (Gửi phản ánh, Tra cứu, Danh bạ, Bản đồ tiện ích); nhóm Thông tin – Truyền thông (Tin tức, Truyền thanh, Video, Sự kiện); Phản ánh của tôi; Tin mới; khối UBND xã (trụ sở, giờ làm việc, đường dây nóng)</td></tr>
+    <tr><td>Gửi phản ánh</td><td>Chọn lĩnh vực → tiêu đề, mô tả, nơi xảy ra, thôn/tổ dân phố (không bắt buộc); lấy vị trí + bản đồ; ảnh hiện trường ≤ 5 (chụp / chọn có sẵn); bản nháp trên máy theo xã; gửi kèm khoá chống gửi trùng. Có đường gửi không tài khoản (ADR 0083, tạm thời)</td></tr>
+    <tr><td>Phản ánh của tôi</td><td>Lọc theo trạng thái; chi tiết phiếu với dòng thời gian (Đã tiếp nhận → … → Đã đóng); ảnh trước và sau xử lý; đánh giá kết quả (sao + nhận xét)</td></tr>
+    <tr><td>Tra cứu</td><td>Tra cứu hồ sơ trên Cổng Dịch vụ công quốc gia; tra cứu phiếu của tôi; tra cứu không tài khoản</td></tr>
+    <tr><td>Tin tức – Sự kiện</td><td>Tin tức / Sự kiện / Thông báo, chuyên mục, chi tiết bài, tin liên quan, xem video, chia sẻ qua Zalo (app riêng)</td></tr>
+    <tr><td>Danh bạ</td><td>"Danh bạ chính quyền": cán bộ theo bộ phận, tìm kiếm</td></tr>
+    <tr><td>Truyền thanh · Video · Sự kiện · Bản đồ tiện ích · Cảnh báo thiên tai</td><td>Danh sách theo loại; bản đồ tiện ích của xã; cảnh báo (vùng nguy hiểm, điểm sơ tán, số khẩn cấp)</td></tr>
+    <tr><td>Cá nhân</td><td>Tên và ảnh Zalo; tiện ích của tôi; cỡ chữ lớn; Nhận thông báo; về ứng dụng; đăng xuất</td></tr>
+  </table>
+  <p><b>Quyền Zalo:</b> <code>getAccessToken</code>, <code>getPhoneNumber</code>, <code>getUserInfo</code>, <code>getLocation</code>, <code>requestCameraPermission</code>, <code>chooseImage</code>, <code>openMediaPicker</code>, <code>openWebview</code>, <code>minimizeApp</code>, <code>openShareSheet</code>; trên đường QR thêm <code>configAppView</code>. Chính sách quyền riêng tư riêng, đứng tên Ủy ban nhân dân xã (<code>content/commune-privacy.ts</code>).</p>
+  <div class="src">Nguồn: citizen-app/src/cong-dan/man/* (TrangXa.tsx, PhanAnhAppXa.tsx, TinTucAppXa.tsx, DanhBaXa.tsx, TienIchAppXa.tsx, disaster-alerts.tsx)</div>
+</section>
+
+<section class="slide" data-title="6.4 App xã — API và phiên">
+  <p class="tags"><span class="tag t-mx">Mini App – App xã</span></p>
+  <h2>6.4 App xã — API ViGov và mô hình phiên</h2>
+  <div class="cols">
+    <div>
+      <h3>Endpoint (<code>https://&lt;svc&gt;.api.vigov.vn</code>)</h3>
+      <table>
+        <tr><th>Service</th><th>Tuyến</th></tr>
+        <tr><td>identity</td><td><code>GET /communes?host=</code>, <code>/commune-profiles?host=</code>, <code>/commune-staff?host=</code>, <code>/my-residential-units</code>; <code>POST /citizen-sessions</code> (app riêng)</td></tr>
+        <tr><td>petitions</td><td><code>GET /my-citizen-report-fields</code>; <code>POST /my-citizen-reports</code> (Idempotency-Key); <code>GET /my-citizen-reports[/{ma}]</code>; <code>POST …/{ma}/rating</code>; <code>POST|GET …/{ma}/photos</code>; <code>GET …/{ma}/verification-photos</code>; <code>GET /public-citizen-report-fields?host=</code>; <code>POST /public-citizen-reports</code>, <code>GET /public-citizen-reports/{code}?host=</code></td></tr>
+        <tr><td>comms</td><td><code>GET /commune-news?host=&amp;type=</code>, <code>/commune-news/{id}</code>, <code>/commune-news/categories</code>, <code>/commune-disaster-alerts</code>, <code>/commune-map-frame</code>, <code>/commune-basemap</code>; <code>GET|PUT /my-notification-preferences</code></td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>Phiên</h3>
+      <ul>
+        <li><b>App riêng (ADR 0066):</b> <code>POST identity /api/v1/citizen-sessions</code> với <code>{accessToken, phoneToken?, appId}</code>; identity dùng secret của app (bảng <code>mini_app_secret</code>) để hỏi Zalo. Lỗi: 400/401/422 <code>app_not_ready</code>/429/502/503.</li>
+        <li><b>Đường QR (App ID của ViHAT):</b> <code>POST vihat-miniapp /api/v1/sessions</code> với <code>{accessToken, phoneToken?, communeHostHint, communeConfirmed: true}</code> → gRPC identity:9091 <code>OpenCitizenSession</code> → trả phiên ViGov; app chỉ giữ phiên nếu tên xã trả về trùng tên đang hiện.</li>
+        <li><b>Vị trí:</b> cả hai đường qua vihat-miniapp <code>POST /api/v1/location</code> (app riêng gửi kèm <code>appId</code>); toạ độ không được lưu ở đó.</li>
+        <li>Sau khi có phiên: gọi petitions/comms với Bearer; các service kiểm phiên bằng gRPC <code>ResolveCitizenSession</code>.</li>
+        <li>Phiên chỉ nằm trong bộ nhớ ứng dụng.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: citizen-app/src/cong-dan/api/{hop-dong-cong-khai,hop-dong-phan-anh,goi-vigov,mo-phien-vigov}.ts, features/dang-nhap/hop-dong.ts, cau-vigov.ts, current-location.ts</div>
+</section>
+
+<section class="slide" data-title="6.5 vihat-miniapp — API">
+  <p class="tags"><span class="tag t-mv">vihat-miniapp</span></p>
+  <h2>6.5 <code>vihat-miniapp</code> — chức năng và API</h2>
+  <p class="sub">Backend Go của App ViHAT (kho <code>../vihat-miniapp</code>): định danh bằng số Zalo, phiên, nhật ký đăng nhập, yêu cầu tư vấn/gọi lại/chat/SMS, đổi token vị trí, báo lỗi SDK, cầu phiên công dân sang ViGov</p>
+  <table>
+    <tr><th>Method</th><th>Path</th><th>Chức năng</th><th>Xác thực</th><th>Giới hạn</th></tr>
+    <tr><td>POST</td><td>/api/v1/sessions</td><td>Đổi accessToken + phoneToken lấy số điện thoại, phát phiên 7 ngày; hoặc chuyển sang cầu ViGov (app riêng, hoặc có <code>communeHostHint</code>)</td><td>công khai (token Zalo)</td><td>10/5 phút/IP</td></tr>
+    <tr><td>POST</td><td>/api/v1/location</td><td>Đổi locationToken lấy toạ độ; không lưu</td><td>công khai</td><td>10/5 phút/IP</td></tr>
+    <tr><td>POST</td><td>/api/v1/client-errors</td><td>Ghi một dòng WARN <code>[ZALO_SDK_ERROR]</code>, trả 204</td><td>công khai</td><td>30/giờ/IP</td></tr>
+    <tr><td>POST, GET</td><td>/api/v1/requests</td><td>Tạo yêu cầu <code>consult|callback|chat|sms_promo|sms_optout</code>; đọc yêu cầu của chính mình</td><td>Bearer</td><td>20/5 phút/IP; callback 3/24 giờ/người</td></tr>
+    <tr><td>GET, HEAD</td><td>/healthz</td><td>Ping CSDL; 200 hoặc 503</td><td>công khai</td><td>—</td></tr>
+    <tr><td>mọi</td><td>/webhooks/zalo</td><td>Trả 200 thân rỗng; không đọc, không ghi</td><td>công khai</td><td>—</td></tr>
+  </table>
+  <div class="cols">
+    <div>
+      <h3>Lời gọi ra ngoài</h3>
+      <ul>
+        <li>Zalo Graph <code>GET /v2.0/me/info</code> (đổi số điện thoại, vị trí; header <code>secret_key</code>); <code>GET /v2.0/me?fields=id</code>.</li>
+        <li>ZNS <code>POST business.openapi.zalo.me/message/template</code> (tuỳ chọn).</li>
+        <li>Tổng đài: <code>POST TONGDAI_CALLBACK_URL</code> <code>{phone, requestId}</code> (tuỳ chọn).</li>
+        <li>Webhook ra: <code>POST REQUEST_WEBHOOK_URL</code>, ký <code>X-Vihat-Signature: sha256=&lt;HMAC&gt;</code>, sự kiện <code>request.created</code>, tối đa 2 lượt, chỉ https (tuỳ chọn, tắt khi không đặt).</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Cầu gRPC sang ViGov</h3>
+      <ul>
+        <li><code>CitizenSessionBridgeService.OpenCitizenSession</code> trên identity:9091; metadata <code>x-vigov-bridge-key</code>; round_robin; hạn 8 giây, thử lại một lần khi <code>ABORTED</code>.</li>
+        <li>Mã lỗi: INVALID_ARGUMENT → 400, FAILED_PRECONDITION → 422, còn lại → 503.</li>
+        <li>Proto chép từ <code>vigov-v2/proto/vigov/identity/v1/citizen_session_bridge.proto</code>.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: vihat-miniapp/internal/httpapi/api.go, internal/zalo/*, internal/zns, internal/tongdai, internal/webhook, internal/vigovcau/client.go</div>
+</section>
+
+<section class="slide" data-title="6.6 vihat-miniapp — bảng · cấu hình">
+  <p class="tags"><span class="tag t-mv">vihat-miniapp</span></p>
+  <h2>6.6 <code>vihat-miniapp</code> — bảng và cấu hình</h2>
+  <div class="cols">
+    <div>
+      <table>
+        <tr><th>Bảng</th><th>Chức năng / cột chính</th></tr>
+        <tr><td>nguoi_dung</td><td>Định danh: id uuid, so_dien_thoai UNIQUE (dạng 84…)</td></tr>
+        <tr><td>phien</td><td>Phiên đăng nhập: nguoi_dung_id, token_bam (SHA-256), het_han_luc, thu_hoi_luc</td></tr>
+        <tr><td>nhat_ky_dang_nhap</td><td>Nhật ký mỗi lượt đăng nhập (kể cả thất bại): ket_qua, ly_do, dia_chi_ip, tao_luc; phân mảnh theo tuần; chỉ ghi thêm; dọn sau 90 ngày</td></tr>
+        <tr><td>nhat_ky_an_danh</td><td>Bằng chứng đã xử lý yêu cầu xoá (nguồn hotline/email); chỉ ghi thêm</td></tr>
+        <tr><td>yeu_cau</td><td>Yêu cầu: loai (tu_van, goi_lai, chat, nhan_uu_dai_sms, huy_uu_dai_sms), trang_thai (moi, dang_xu_ly, da_lien_he, dong), quan_tam[], quy_mo, ghi_chu ≤ 2000, ten_hien_thi ≤ 100 (chỉ chat), an_danh_luc</td></tr>
+        <tr><td>yeu_cau_lich_su</td><td>Lịch sử trạng thái yêu cầu; chỉ ghi thêm</td></tr>
+        <tr><td>zns_da_gui</td><td>Vết gửi ZNS; một lần thành công mỗi yêu cầu</td></tr>
+        <tr><td>vihat_miniapp_migrations</td><td>Sổ migration (do <code>deploy/migrate.sh</code> tạo)</td></tr>
+      </table>
+      <p>Hàm SQL: <code>nhat_ky_tao_phan_manh(12)</code>, <code>nhat_ky_don_qua_han(90)</code>, <code>an_danh_yeu_cau_qua_han('24 months')</code>.</p>
+    </div>
+    <div>
+      <table>
+        <tr><th>Khoá</th><th>Chức năng / định dạng</th><th>Bắt buộc</th><th>Nơi</th></tr>
+        <tr><td>DATABASE_DSN</td><td>Kết nối PostgreSQL nhiều host, <code>sslmode=verify-full</code></td><td>có</td><td>Secret</td></tr>
+        <tr><td>LISTEN_ADDR</td><td>mặc định <code>:8080</code></td><td>không</td><td>ConfigMap</td></tr>
+        <tr><td>ZALO_MINIAPP_APP_ID</td><td>App ID của App ViHAT</td><td>có</td><td>ConfigMap</td></tr>
+        <tr><td>ZALO_MINIAPP_SECRET_KEY</td><td>Secret của App ViHAT</td><td>có</td><td>Secret</td></tr>
+        <tr><td>CORS_ALLOWED_ORIGINS</td><td>Danh sách phẩy, cấm <code>*</code></td><td>có</td><td>ConfigMap</td></tr>
+        <tr><td>ZALO_ZNS_ACCESS_TOKEN / _TEMPLATE_ID</td><td>ZNS xác nhận (đi theo nhóm)</td><td>không</td><td>Secret / ConfigMap</td></tr>
+        <tr><td>TONGDAI_CALLBACK_URL / TONGDAI_API_KEY</td><td>Gọi lại qua tổng đài</td><td>không</td><td>ConfigMap / Secret</td></tr>
+        <tr><td>VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS</td><td><code>host:port,…</code> cổng cầu identity</td><td>đi cặp</td><td>ConfigMap</td></tr>
+        <tr><td>VIGOV_CITIZEN_SESSION_BRIDGE_KEY</td><td>≥ 32 byte; không bao giờ bằng GRPC_CALLER_KEY</td><td>đi cặp</td><td>Secret</td></tr>
+        <tr><td>ZALO_MINIAPP_COMMUNE_APP_SECRETS</td><td>Danh sách cặp App ID của xã = secret</td><td>không</td><td>Secret</td></tr>
+        <tr><td>REQUEST_WEBHOOK_URL / _SECRET</td><td>https / khoá HMAC ≥ 32 byte</td><td>đi cặp</td><td>ConfigMap / Secret</td></tr>
+      </table>
+      <p>ConfigMap <code>vihat-miniapp-cau-hinh</code>, Secret <code>vihat-miniapp-bi-mat</code>. TTL phiên 7 ngày là hằng trong mã.</p>
+    </div>
+  </div>
+  <div class="src">Nguồn: vihat-miniapp/migrations/0001–0004, internal/config/config.go, .env.example, deploy/*.example.yaml</div>
+</section>
+
+<section class="slide" data-title="6.7 Mini App — vận hành">
+  <p class="tags"><span class="tag t-mv">App ViHAT</span><span class="tag t-mx">App xã</span><span class="tag t-sec">Vận hành</span></p>
+  <h2>6.7 Mini App — build, phát hành, log</h2>
+  <div class="cols">
+    <div>
+      <h3>Đẩy citizen-app lên Zalo</h3>
+      <ul>
+        <li><code>node scripts/deploy.mjs --app=vihat</code> hoặc <code>--domain=&lt;tên-miền-xã&gt;</code>; <code>--phat-hanh</code> (phát hành, đếm ngược 5 giây); <code>--thu</code> (chỉ in kế hoạch); <code>--app-id=&lt;số&gt;</code> chỉ để đối chiếu.</li>
+        <li>Mạch: dựng → <code>zmp sync-config</code> → <code>zmp deploy -o dist -e -p -m "&lt;đích&gt; · app &lt;App ID&gt; · &lt;sha&gt; · &lt;ngày giờ&gt;"</code> (<code>-t</code> = thử nghiệm).</li>
+        <li>App riêng: tạm ẩn thanh tiêu đề trong <code>app-config.json</code> rồi trả lại; chép logo/banner của xã nếu có.</li>
+        <li>Jenkins <code>citizen-app/Jenkinsfile</code> (bấm tay): tham số <code>TARGET</code>, <code>APP_ID</code>, <code>PHAT_HANH</code>, <code>THU</code>, <code>XAC_NHAN</code>; credential <code>zmp-token-app-chung</code> / <code>zmp-token-&lt;tên-miền&gt;</code>, <code>citizen-app-vigov-api-host</code>; các bước: kiểm tham số → <code>npm ci</code>, typecheck, vitest → đẩy.</li>
+        <li>Mã QR: <code>npm run qr -- --domain=&lt;x&gt; [--version=&lt;n&gt;]</code> → <code>https://zalo.me/s/&lt;App ID chung&gt;/?d=&lt;x&gt;&amp;src=qr</code> (bản thử nghiệm thêm <code>env=TESTING&amp;version=&lt;n&gt;</code>). Bản Zalo đã duyệt khác bản đang phát hành.</li>
+        <li>Hồ sơ xin quyền: <code>npm run ho-so</code> → <code>tmp/xin-quyen-zalo/</code> (app xã: chính sách, điều khoản, bảng lời gọi) và <code>tmp/xin-quyen-zalo/app-chung-vihat/</code> (App ViHAT).</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Triển khai vihat-miniapp</h3>
+      <ul>
+        <li>Ảnh: golang 1.26 → <code>distroless/static-debian12:nonroot</code>, cổng 8080.</li>
+        <li>Deployment <code>vihat-zalo-miniapp</code> (ns <code>vigov-prod</code>): 2 replica, probe <code>/healthz</code>, 50m/64Mi → 500m/256Mi, rootfs chỉ đọc; Service ClusterIP 80.</li>
+        <li>Jenkins: <code>make check</code> → <code>harbor.omicrm.services/ci/vihat-miniapp:&lt;sha12&gt;</code> → <code>kubectl set image</code> + rollout; lỗi thì <code>rollout undo</code>.</li>
+        <li>Migration: <code>deploy/migrate.sh</code> chạy trong pod postgres theo sổ <code>vihat_miniapp_migrations</code>; gọi qua job <code>vigov-deploy</code> HANH_DONG=<code>di-tru-vihat-miniapp</code>. Jenkinsfile của vihat-miniapp chưa có bước chạy migration.</li>
+        <li>CronJob <code>15 3 * * *</code> (Asia/Ho_Chi_Minh): tạo phân mảnh và dọn <code>nhat_ky_dang_nhap</code> quá 90 ngày.</li>
+        <li>Ẩn danh hoá <code>yeu_cau</code> quá 24 tháng: hàm SQL có sẵn, <b>chưa có lịch gọi</b>. Ẩn danh theo yêu cầu: <code>make an-danh</code> (chạy tay).</li>
+      </ul>
+      <h3>Log vihat-miniapp (slog JSON)</h3>
+      <ul>
+        <li>Lúc khởi động: App ID, số origin, TTL, ZNS/tổng đài bật hay tắt, webhook, các app riêng, cầu phiên ViGov bật.</li>
+        <li><code>[ZALO_SDK_ERROR] &lt;capability&gt;</code>: capability, code, sdk_message, app_id, host.</li>
+        <li>CORS WARN khi từ chối origin không có trong <code>CORS_ALLOWED_ORIGINS</code>.</li>
+        <li>Lượt đăng nhập (kể cả bị giới hạn: <code>qua_nhieu_lan</code>) nằm trong bảng <code>nhat_ky_dang_nhap</code>.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="src">Nguồn: citizen-app/scripts/deploy.mjs, make-qr.mjs, ho-so-zalo.mjs, citizen-app/Jenkinsfile; vihat-miniapp/Dockerfile, Jenkinsfile, deploy/*, README.md</div>
+</section>
+
+<section class="slide" data-title="Ghi chú">
+  <h2>Ghi chú về độ tin cậy</h2>
+  <ul>
+    <li>Mọi dữ kiện đọc từ mã nguồn, manifest và migration ngày 12/10/2026. Khi mã đổi, tài liệu này không tự cập nhật: chỉ mục sinh tự động nằm ở <code>kb/30-indexes/</code> (<code>make kb</code>).</li>
+    <li>Cụm thật dựng tay trong Rancher; tên Deployment trên cụm (<code>vigov-service-&lt;svc&gt;</code>) khác tên trong <code>deploy/base</code>.</li>
+    <li>Những điểm mã ghi là chưa hoàn tất (nêu ở các slide): relay sự kiện và Kafka client; gRPC chưa TLS; header bảo mật web-admin; MFA quản trị xã; mật khẩu 14 ký tự; NetworkPolicy chưa áp lên cụm; lịch ẩn danh 24 tháng ở vihat-miniapp.</li>
+  </ul>
+  <p>Nguồn quyết định ("vì sao"): <code>kb/10-decisions/</code> · câu hỏi khách đã chốt: <code>kb/00-foundation/open-questions.json</code> · tiến độ theo module: <code>kb/90-ephemeral/tien-do.md</code>.</p>
+</section>
+
+<script>
+  (function(){
+    var slides = Array.prototype.slice.call(document.querySelectorAll('section.slide'));
+    var sel = document.getElementById('jump');
+    slides.forEach(function(s, i){
+      var n = document.createElement('div'); n.className='num'; n.textContent=(i+1)+' / '+slides.length; s.appendChild(n);
+      var o = document.createElement('option'); o.value=i; o.textContent=(i+1)+'. '+(s.getAttribute('data-title')||''); sel.appendChild(o);
+    });
+    sel.addEventListener('change', function(){ slides[+sel.value].scrollIntoView(); });
+    function current(){
+      var y = window.scrollY + 10, idx = 0;
+      slides.forEach(function(s,i){ if (s.offsetTop <= y) idx = i; });
+      return idx;
+    }
+    document.addEventListener('keydown', function(e){
+      if (e.target.tagName === 'SELECT') return;
+      var i = current();
+      if (['ArrowDown','PageDown',' '].indexOf(e.key) >= 0){ e.preventDefault(); slides[Math.min(i+1, slides.length-1)].scrollIntoView(); }
+      if (['ArrowUp','PageUp'].indexOf(e.key) >= 0){ e.preventDefault(); slides[Math.max(i-1, 0)].scrollIntoView(); }
+    });
+    window.addEventListener('scroll', function(){ sel.value = current(); });
+  })();
+</script>
+</body>
+</html>
