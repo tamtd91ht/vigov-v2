@@ -292,7 +292,7 @@
       "viết route xoá cán bộ",
       "viết route sửa ma trận phân quyền"
     ],
-    "decision": "CHẶN CỨNG. Hệ thống TỪ CHỐI thao tác làm xã mất người quản trị cuối cùng — cả ba đường: khoá, xoá, hạ vai trò. Lý do: ADR 0003 chốt VIHAT chỉ thao tác siêu dữ liệu, nên đây không phải sự cố có đường vá nóng mà là BẾ TẮC THỦ TỤC — xã sẽ gọi điện chứ không mở được ticket trong chính hệ thống họ bị khoá ra. KHÔNG mở đường khôi phục cho nhà cung cấp — lối ấy là mở rộng ADR 0003 và cần ADR riêng.",
+    "decision": "CHẶN CỨNG. Hệ thống TỪ CHỐI thao tác làm xã mất người quản trị cuối cùng — cả ba đường: khoá, xoá, hạ vai trò. Lý do: ADR 0003 chốt VIHAT chỉ thao tác siêu dữ liệu, nên đây không phải sự cố có đường vá nóng mà là BẾ TẮC THỦ TỤC — xã sẽ gọi điện chứ không mở được ticket trong chính hệ thống họ bị khoá ra. KHÔNG mở đường khôi phục cho nhà cung cấp — lối ấy là mở rộng ADR 0003 và cần ADR riêng. 13/10/2026: quyết định riêng ấy đã có — ADR 0048 §Sửa đổi 13/10/2026: chỉ owner (một tài khoản vận hành duy nhất) được tạo tài khoản quản trị xã và đặt lại mật khẩu cán bộ, luôn là mật khẩu tạm, có vết VH- trong nhật ký của xã. Phần CHẶN CỨNG ở trên giữ nguyên.",
     "decided_on": "2026-09-22"
   },
   {
