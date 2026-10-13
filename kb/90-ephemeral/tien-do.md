@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 1f1135eb
+derived_from_commit: 805fd8f2
 expires: 2027-01-11
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 186 |
 | chưa làm | 43 |
 | treo | 13 |
-| xong | 518 |
+| xong | 519 |
 
 ## Theo menu
 
@@ -444,6 +444,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `citizen-app` | `tach-app-vihat-app-xa-11-10` — App ViHAT và giao diện xã tách hẳn trong mắt người dùng (ADR 0044 §Đã quyết 11/10/2026). Phần giới thiệu ViHAT: Liên hệ hiện thẳng ba văn phòng + 'Chỉ đường', không xin vị trí; gỡ 'Chụp ảnh danh thiếp giấy' và 'Kiểm tra đường truyền'; bỏ ô 'Quản lý quyền' ở Trang chủ (vẫn ở Liên hệ); màn Quản lý quyền chỉ hiện lời gọi phần giới thiệu dùng (KHAI_BAO_LOI_GOI.intro_app). Chính sách ViHAT bỏ hết phần xã, gỡ mọi dấu CHỜ DUYỆT, NGAY_HIEU_LUC 11/10/2026. Chính sách mới của giao diện xã content/commune-privacy.ts đứng tên UBND xã, không nhắc ViHAT (cầu gọi 'đơn vị cung cấp nền tảng kỹ thuật'), khoá trung thực thân yêu cầu ⇄ bảng ⇄ văn bản dời sang commune-privacy.test.ts; hồ sơ nộp Zalo ghi hai bản riêng. App xã: câu xác nhận số không nhắc ViHAT. | xong | — | (1) Chưa có màn nào trong giao diện xã hiện chính sách của xã. (2) Hồ sơ app chung chỉ mang chính sách ViHAT nhưng App ID ấy vẫn chạy trang xã qua QR (máy ảnh, vị trí, phản ánh) — cần quyết có kèm chính sách xã không. (3) Chủ dự án xác nhận webhook chuyển tiếp yêu cầu (REQUEST_WEBHOOK_URL) có bật ở production không, ai nhận. (4) Nhật ký mở phiên là nhật ký kiểm tra chỉ ghi thêm — 'xoá khi yêu cầu' thực tế là ẩn danh hoá; có thể cần sửa câu. (5) Ảnh chụp màn cũ trong tmp/xin-quyen-zalo/app-chung-vihat/anh/ (đường truyền, số hoá thiếp, tìm văn phòng) phải chụp lại. |
 | `citizen-app` | `qr-xa-khong-hien-vihat-va-quyen-so-12-10` — (1) Mở app chung bằng QR xã: main.tsx xoá tiêu đề thanh Zalo + đổi màu đỏ của xã (clearSharedActionBar) TRƯỚC lần render đầu, tên xã điền sau như cũ — người dân không thấy 'ViHAT Group' trên thanh. Màn chờ tải của chính Zalo (tên đăng ký App ID) thì app không đổi được. (2) Quyền số điện thoại: trước getPhoneNumber gọi getSetting → authorize({scopes:['scope.userPhonenumber']}) (grantPhoneScope) để Zalo ghi nhớ quyền, mục quyền của Mini App hiện BẬT; từ chối = tu-choi, Zalo cũ không có authorize thì lùi về hộp của getPhoneNumber. Lệnh cấm authorize/getSetting trong phase1-collects-nothing.test.ts thu hẹp còn MỘT tệp zalo-api.ts; scope khác số điện thoại vẫn cấm tuyệt đối. Khai báo KHAI_BAO_LOI_GOI + hai chính sách quyền riêng tư. | xong | — | — |
 | `citizen-app` | `qr-ma-cong-khai-x-12-10` — Link QR app chung đọc mã công khai x= (12 hex) trước, tra GET /communes?code= một lần rồi chạy theo tên miền như cũ (CommuneByLaunchCode); không có x thì đọc d= (CHUYỂN TIẾP — bỏ ở bản sau); x sai khuôn không lùi về d. Báo lỗi client chỉ gửi tên miền đã tra. npm run qr vẫn --domain, ghi cả QR x và QR d-legacy. ADR 0047 §Sửa đổi 12/10/2026. | xong | — | — |
+| `citizen-app` | `npm-run-qr-chi-x-13-10` — npm run qr -- --domain=<xã> chỉ sinh QR x (một tệp qr/<tên-miền>.svg), bỏ QR d-legacy — chủ dự án 13/10/2026: bản live đã đọc x. Identity không trả launch_code thì DỪNG (không lùi về d), câu báo chỉ ra máy chủ chưa đúng bản. Không dựng nút cập nhật mã ở platform-admin vì tenant.launch_code NOT NULL, cấp khi tạo xã (migration 0024). ADR 0047 §Sửa đổi 13/10/2026, đoạn bổ sung. | xong | — | — |
 | `core` | `storage-publish-derivative` — core/storage: PublishDerivative / UnpublishDerivative — đẩy bản dẫn xuất đã duyệt private → public, gỡ khi gỡ đăng (ADR 0052 §1 bổ sung 30/09/2026) | xong | — | TestIntegrationPublishUnpublish CHƯA CHẠY với MinIO thật (thiếu VIGOV_TEST_MINIO_ENDPOINT). Gỡ đăng không thu hồi bản CDN/trình duyệt đã cache (immutable 1 năm) — cần xoá cache CDN khi có CDN. |
 | `platform-admin` | `the-qr-link-chuyen-tiep-12-10` — Thẻ Mã QR hiện nhãn link chuyển tiếp chung_ten_mien (?d=) cạnh link mã công khai (?x=), câu nói rõ link nào chạy với bản app nào; lỗi commune_launch_code_invalid. | xong | — | — |
 | `service-comms` | `tin-xa-cong-khai-mini-app` — Rìa công khai đầu tiên của comms: GET /api/v1/commune-news?host= và /{id} — tin đã đăng, văn bản thuần | xong | — | CẬP NHẬT 01/10/2026 (ADR 0067 §1, §5): giả định 'cả sáu loại đều ra danh sách' ĐÃ THAY — danh sách mặc định loại banner, banner chỉ ra ở ?type=banner (dải trang chủ); chi tiết thêm body_blocks (khối có định dạng) cạnh body văn bản thuần — xem mục noi-dung-mini-app-a-danh-muc-banner-rich-text. Phần cũ: Giả định cần chủ dự án xem: cả sáu loại nội dung (kể cả banner, video) đều ra danh sách; sắp theo tao_luc. Không đếm lượt xem, không ảnh. domain/ten_mien_xa.go là BẢN CHÉP HopLeTenMienXa của identity — nên chuyển vào core/ cùng helper xaTheoHost (đang lặp ở hai service). Chưa giới hạn tần suất. |
@@ -687,7 +688,7 @@ BA ĐIỀU LOG LỘ RA, chưa ai kiểm:
 
 ## `citizen-app`
 
-Cập nhật 2026-10-12 · 85 mục
+Cập nhật 2026-10-13 · 86 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -776,6 +777,7 @@ Cập nhật 2026-10-12 · 85 mục
 | `qr-xa-khong-hien-vihat-va-quyen-so-12-10` — (1) Mở app chung bằng QR xã: main.tsx xoá tiêu đề thanh Zalo + đổi màu đỏ của xã (clearSharedActionBar) TRƯỚC lần render đầu, tên xã điền sau như cũ — người dân không thấy 'ViHAT Group' trên thanh. Màn chờ tải của chính Zalo (tên đăng ký App ID) thì app không đổi được. (2) Quyền số điện thoại: trước getPhoneNumber gọi getSetting → authorize({scopes:['scope.userPhonenumber']}) (grantPhoneScope) để Zalo ghi nhớ quyền, mục quyền của Mini App hiện BẬT; từ chối = tu-choi, Zalo cũ không có authorize thì lùi về hộp của getPhoneNumber. Lệnh cấm authorize/getSetting trong phase1-collects-nothing.test.ts thu hẹp còn MỘT tệp zalo-api.ts; scope khác số điện thoại vẫn cấm tuyệt đối. Khai báo KHAI_BAO_LOI_GOI + hai chính sách quyền riêng tư. | xong | citizen-app: tsc sạch, vitest 73 tệp/1954 test xanh (sdk-failure.test.ts thêm 6 ca authorize). CHƯA thử trên điện thoại thật: thời điểm thanh Zalo đổi và công tắc quyền sau authorize. | — | — |
 | `bo-the-ten-va-man-giai-thich-gui-12-10` — App xã (ADR 0050 §Sửa đổi 12/10/2026): bỏ thẻ 'Điền sẵn họ tên khi gửi phản ánh' ở trang chủ (TrangXa NameCard + chuỗi name_card_*); bấm 'Gửi phản ánh' khi chưa có phiên thì hỏi Zalo ngay (commune-session.ts require: task submit → openAndFollow('ask')), không màn 'Cần xác nhận số điện thoại của bà con'; tên chưa có đi cùng bước số (nameAfterPhone đặt trong requireSession). Màn chờ/kết quả của cổng gửi mang tiêu đề 'Gửi phản ánh'. Các việc khác (Phản ánh của tôi, Tra cứu, đánh giá, Nhận thông báo) giữ màn giải thích. | xong | citizen-app: tsc sạch, vitest 73 tệp/1954 test xanh (typed-contact, accountless-petition, hieu-ung-khong-phien, name-at-entry sửa theo hành vi mới). CHƯA thử trên điện thoại thật. | — | — |
 | `qr-ma-cong-khai-x-12-10` — Link QR app chung đọc mã công khai x= (12 hex) trước, tra GET /communes?code= một lần rồi chạy theo tên miền như cũ (CommuneByLaunchCode); không có x thì đọc d= (CHUYỂN TIẾP — bỏ ở bản sau); x sai khuôn không lùi về d. Báo lỗi client chỉ gửi tên miền đã tra. npm run qr vẫn --domain, ghi cả QR x và QR d-legacy. ADR 0047 §Sửa đổi 12/10/2026. | xong | 9bdd8f5a — tsc sạch, vitest 74 tệp/1980 test xanh. CHƯA thử trên điện thoại thật. | — | — |
+| `npm-run-qr-chi-x-13-10` — npm run qr -- --domain=<xã> chỉ sinh QR x (một tệp qr/<tên-miền>.svg), bỏ QR d-legacy — chủ dự án 13/10/2026: bản live đã đọc x. Identity không trả launch_code thì DỪNG (không lùi về d), câu báo chỉ ra máy chủ chưa đúng bản. Không dựng nút cập nhật mã ở platform-admin vì tenant.launch_code NOT NULL, cấp khi tạo xã (migration 0024). ADR 0047 §Sửa đổi 13/10/2026, đoạn bổ sung. | xong | vitest scripts/commune-qr.test.mjs 17/17 xanh; chạy thật --domain=thangbinh-danang.vigov.vn ra ?x=e159d39646be&src=qr, identity ?code= trả đúng Xã Thăng Bình. CHƯA quét trên điện thoại. | — | — |
 
 ## `core`
 

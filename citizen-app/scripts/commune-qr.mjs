@@ -8,24 +8,19 @@
  * (`service-platform/internal/domain/shared_mini_app.go`, ADR 0070 §Sửa đổi 06/10/2026 #1):
  *
  *   mã mở app (x)   : https://zalo.me/s/<App ID app chung>/?x=<mã mở app>&src=qr
- *   cũ (d, legacy)  : https://zalo.me/s/<App ID app chung>/?d=<tên miền xã>&src=qr
- *   bản thử (-t)    : thêm `env=TESTING&version=<n>` vào ĐẦU chuỗi tham số, cho cả hai khuôn
+ *   bản thử (-t)    : thêm `env=TESTING&version=<n>` vào ĐẦU chuỗi tham số
  *
- * HAI TỆP TRONG THỜI GIAN CHUYỂN TIẾP (chủ dự án, 12/10/2026; ADR 0047 §Sửa đổi 12/10/2026): liên kết xã đổi từ
- * tên miền `d` sang mã mở app `x`. Bản app đang phát hành/chờ Zalo duyệt chỉ đọc `d`; `x` chạy từ bản kế tiếp.
- * Nên lệnh ghi CẢ HAI: `…-x.svg` (bản kế tiếp trở đi) và `…-d-legacy.svg` (bản đang live/đang duyệt). Khi bản
- * đọc `x` đã phát hành và `d` bị gỡ khỏi app, tệp legacy và nhánh của nó bỏ theo.
- *
- * ĐẦU VÀO VẪN LÀ `--domain` (chủ dự án, 12/10/2026: "chỉ QR thôi, còn lệnh npm vẫn dùng domain cho dễ nhớ").
- * Mã `x` lấy từ CHÍNH câu tra xã theo tên miền: `GET identity /api/v1/communes?host=` nay trả thêm `launch_code`.
- * Máy chủ chưa trả trường ấy (chưa triển khai) → vẫn ghi tệp legacy, cảnh báo đã bỏ qua tệp `x`; không dừng.
+ * CHỈ QR `x` (chủ dự án, 13/10/2026; ADR 0047 §Sửa đổi 13/10/2026): bản app đang phát hành đã đọc `x`, nên QR
+ * tên miền `d` không còn được sinh. Đầu vào VẪN LÀ `--domain` (chủ dự án, 12/10/2026: "lệnh npm vẫn dùng domain
+ * cho dễ nhớ"): mã `x` lấy từ CHÍNH câu tra xã theo tên miền, `GET identity /api/v1/communes?host=` trả `launch_code`.
+ * Mọi xã có mã từ lúc tạo (service-platform migration 0024, NOT NULL); identity không trả mã → DỪNG, không lùi về `d`.
  *
  * `env`/`version` là tham số NỀN TẢNG của Zalo (citizen-app/README.md §"Hai thứ đã kiểm"): thiếu chúng
  * thì Zalo chỉ mở bản đã phát hành, và app chưa phát hành trả "đang trong giai đoạn phát triển" trước khi
- * mã của ta chạy. `x`/`d` + `src=qr` là tham số của ta (`src/lib/launch-params.ts`, `thamSoXa`).
+ * mã của ta chạy. `x` + `src=qr` là tham số của ta (`src/lib/launch-params.ts`, `thamSoXa`).
  *
- * ⚠ THAM SỐ DẪN GIAO DIỆN, KHÔNG CẤP GÌ (ADR 0047 câu 3): `x`/`d` là dữ liệu client cung cấp; app hỏi
- * identity (`?code=` hoặc `?host=`) rồi mới hiện xã. Nên lệnh này hỏi identity trước khi in: tên miền identity
+ * ⚠ THAM SỐ DẪN GIAO DIỆN, KHÔNG CẤP GÌ (ADR 0047 câu 3): `x` là dữ liệu client cung cấp; app hỏi
+ * identity (`?code=`) rồi mới hiện xã. Nên lệnh này hỏi identity trước khi in: tên miền identity
  * không biết thì QR mở ra phần giới thiệu, không vào xã nào — một tấm QR in ra dán ở bảng tin xã sống nhiều
  * năm, phát hiện nó vô dụng lúc ấy là quá muộn.
  *
@@ -153,8 +148,8 @@ const LAUNCH_CODE = /^[0-9a-f]{12}$/;
  * hoặc ném. Thân `{ items: [{ name, province, launch_code? }] }`. Rỗng = identity không biết tên miền ấy: QR
  * sẽ mở phần giới thiệu, nên không in.
  *
- * `launch_code` vắng hoặc sai khuôn → `null` (máy chủ chưa triển khai trường ấy): người gọi vẫn ghi QR legacy
- * và cảnh báo — KHÔNG ném, vì QR `d` vẫn là QR đúng cho bản app đang live.
+ * `launch_code` vắng hoặc sai khuôn → DỪNG: không có mã thì không có QR nào mở được xã, và lệnh không tự cấp
+ * mã (mã do service-platform cấp lúc tạo xã).
  */
 export function communeFrom(domain, outcome) {
   if (outcome?.kind === "network") {
@@ -177,48 +172,36 @@ export function communeFrom(domain, outcome) {
   const { name, province } = items[0] ?? {};
   if (typeof name !== "string" || name === "") throw new Error("Không sinh QR: identity trả một xã không có tên.");
   const code = items[0]?.launch_code;
-  return {
-    name,
-    province: typeof province === "string" ? province : "",
-    launch_code: typeof code === "string" && LAUNCH_CODE.test(code) ? code : null,
-  };
+  if (typeof code !== "string" || !LAUNCH_CODE.test(code)) {
+    throw new Error(
+      `Không sinh QR: identity không trả mã mở app (x) cho ${name} (${domain}).\n` +
+        "  Mọi xã đều có mã từ lúc tạo (service-platform migration 0024), nên thiếu mã nghĩa là service-identity /\n" +
+        "  service-platform đang chạy chưa phải bản có mã mở app. Xem mã ở platform-admin → chi tiết xã → thẻ QR, rồi chạy lại.",
+    );
+  }
+  return { name, province: typeof province === "string" ? province : "", launch_code: code };
 }
 
-/** Thứ tự tham số: của Zalo (`env`, `version`) trước, của ta (`x`/`d`, `src`) sau — khuôn đã đo. */
-function linkWith(app_id, version, key, value) {
+/**
+ * `?x=<launch code>&src=qr`. Parameter order: Zalo's (`env`, `version`) first, ours (`x`, `src`) after — the
+ * measured shape.
+ */
+export function launchCodeLink({ app_id, launch_code, version = null }) {
+  if (!LAUNCH_CODE.test(String(launch_code))) throw new Error("Không sinh QR x: mã mở app không đúng 12 ký tự hex thường.");
   const q = new URLSearchParams();
   if (version !== null) {
     q.set("env", "TESTING");
     q.set("version", version);
   }
-  q.set(key, value);
+  q.set("x", launch_code);
   q.set("src", "qr");
   return `${ZALO_LINK_BASE}${app_id}/?${q.toString()}`;
 }
 
-/** The QR link from the next app version on: `?x=<launch code>&src=qr`. */
-export function launchCodeLink({ app_id, launch_code, version = null }) {
-  if (!LAUNCH_CODE.test(String(launch_code))) throw new Error("Không sinh QR x: mã mở app không đúng 12 ký tự hex thường.");
-  return linkWith(app_id, version, "x", launch_code);
-}
-
 /**
- * LEGACY — `?d=<domain>&src=qr`, for the app version now live / in Zalo review. TRANSITIONAL: removed together
- * with the app's `d` branch in a later release (owner 12/10/2026, ADR 0047 §Sửa đổi 12/10/2026).
- */
-export function sharedAppLink({ app_id, domain, version = null }) {
-  return linkWith(app_id, version, "d", domain);
-}
-
-/**
- * Tệp SVG mặc định: `qr/<tên-miền>[.test-v<n>]-<x|d-legacy>.svg`. Hai khuôn và bản thử không ghi đè nhau.
+ * Tệp SVG mặc định: `qr/<tên-miền>[.test-v<n>].svg`. Bản thử không ghi đè bản phát hành.
  * Tên tệp mang tên miền chứ không mang mã: đó là tệp cục bộ để in, không phải nội dung QR.
  */
-export function defaultQrFile(domain, version = null, shape = "x") {
-  return `qr/${domain}${version === null ? "" : `.test-v${version}`}-${shape}.svg`;
-}
-
-/** `--out=a/b.svg` → `a/b-x.svg` / `a/b-d-legacy.svg`: one `--out`, two files, neither overwrites the other. */
-export function outFileFor(out, shape) {
-  return out.replace(/(\.svg)$/i, `-${shape}$1`);
+export function defaultQrFile(domain, version = null) {
+  return `qr/${domain}${version === null ? "" : `.test-v${version}`}.svg`;
 }

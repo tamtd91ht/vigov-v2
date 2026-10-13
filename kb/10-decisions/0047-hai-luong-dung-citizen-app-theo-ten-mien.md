@@ -469,6 +469,14 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 `x=` in trước khi bản app ViHAT đọc `x` được **phát hành** trên Zalo sẽ mở app mà không có xã. Tại lúc
 quyết, trạng thái phát hành ấy **chưa xác nhận**.
 
+**Bổ sung cùng ngày — `npm run qr` cũng chỉ `x`.** Chủ dự án, 13/10/2026: *"bản live đọc x rồi"*; *"lệnh local
+thì truyền domain, qr sinh ra x"*. Câu *"`npm run qr` không thuộc quyết định này"* ở bảng trên hết hiệu lực:
+lệnh chỉ ghi một tệp QR `x`, không còn tệp `d-legacy`. Đầu vào vẫn là `--domain`. Identity không trả
+`launch_code` thì lệnh **dừng**, không lùi về `d`. Chủ dự án muốn xã thiếu mã thì cập nhật được ở
+platform-admin; mã hiện **không thể thiếu** (`tenant.launch_code` NOT NULL, cấp khi tạo xã, migration 0024,
+không xoay vòng), nên không dựng nút cập nhật. Câu báo lỗi chỉ ra máy chủ chưa đúng bản. Cái giá
+(1) ở trên nay không còn, vì bản đọc `x` đã phát hành.
+
 ## ĐIỀU KIỆN DỪNG
 
 <!-- Tiêu đề này bị mất ở 2c107cf2 (11/10/2026) khi chèn §Sửa đổi 11/10/2026; đặt lại 13/10/2026, nội dung danh sách không đổi. -->

@@ -5,10 +5,8 @@ import {
   defaultQrFile,
   identityOriginFrom,
   launchCodeLink,
-  outFileFor,
   parseQrFlags,
   sharedAppIdFrom,
-  sharedAppLink,
 } from "./commune-qr.mjs";
 
 /**
@@ -96,11 +94,11 @@ describe("communeFrom", () => {
     });
   });
 
-  it("máy chủ chưa trả `launch_code`, hoặc trả sai khuôn → `null`, KHÔNG dừng (tệp legacy vẫn ghi)", () => {
+  it("identity không trả `launch_code`, hoặc sai khuôn → DỪNG; không lùi về `d`", () => {
     for (const launch_code of [undefined, "", "0A1B2C3D4E5F", "0a1b2c3d4e5", 12, DOMAIN]) {
       const item = { name: "Xã Ví Dụ", province: "Tỉnh Mẫu" };
       if (launch_code !== undefined) item.launch_code = launch_code;
-      expect(communeFrom(DOMAIN, http(200, { items: [item] })).launch_code, String(launch_code)).toBeNull();
+      expect(() => communeFrom(DOMAIN, http(200, { items: [item] })), String(launch_code)).toThrow(/platform-admin/);
     }
   });
 
@@ -117,7 +115,7 @@ describe("communeFrom", () => {
   });
 });
 
-describe("launchCodeLink — QR mới, bản app kế tiếp trở đi", () => {
+describe("launchCodeLink", () => {
   it("bản phát hành: `?x=<mã>&src=qr`, không `d`", () => {
     expect(launchCodeLink({ app_id: APP_ID, launch_code: CODE })).toBe(`https://zalo.me/s/${APP_ID}/?x=${CODE}&src=qr`);
   });
@@ -135,31 +133,9 @@ describe("launchCodeLink — QR mới, bản app kế tiếp trở đi", () => {
   });
 });
 
-describe("sharedAppLink — QR cũ (d, legacy), bản app đang live trong thời gian chuyển tiếp", () => {
-  it("bản phát hành: đúng khuôn service-platform dựng", () => {
-    // Same string as service-platform/internal/domain/shared_mini_app_test.go pins for the platform-admin button.
-    expect(sharedAppLink({ app_id: "1234567890123456789", domain: "thangbinh-danang.vigov.vn" })).toBe(
-      "https://zalo.me/s/1234567890123456789/?d=thangbinh-danang.vigov.vn&src=qr",
-    );
-  });
-
-  it("bản thử: env/version của Zalo trước, d/src của ta sau", () => {
-    expect(sharedAppLink({ app_id: APP_ID, domain: DOMAIN, version: "7" })).toBe(
-      `https://zalo.me/s/${APP_ID}/?env=TESTING&version=7&d=${DOMAIN}&src=qr`,
-    );
-  });
-});
-
-describe("tên tệp — hai khuôn và bản thử không ghi đè nhau", () => {
-  it("mặc định: theo tên miền, hậu tố -x / -d-legacy", () => {
-    expect(defaultQrFile(DOMAIN, null, "x")).toBe(`qr/${DOMAIN}-x.svg`);
-    expect(defaultQrFile(DOMAIN, null, "d-legacy")).toBe(`qr/${DOMAIN}-d-legacy.svg`);
-    expect(defaultQrFile(DOMAIN, "7", "x")).toBe(`qr/${DOMAIN}.test-v7-x.svg`);
-    expect(defaultQrFile(DOMAIN, "7", "d-legacy")).toBe(`qr/${DOMAIN}.test-v7-d-legacy.svg`);
-  });
-
-  it("--out: một tên, hai tệp", () => {
-    expect(outFileFor("a/b.svg", "x")).toBe("a/b-x.svg");
-    expect(outFileFor("a/b.SVG", "d-legacy")).toBe("a/b-d-legacy.SVG");
+describe("tên tệp — bản thử không ghi đè bản phát hành", () => {
+  it("mặc định: theo tên miền", () => {
+    expect(defaultQrFile(DOMAIN)).toBe(`qr/${DOMAIN}.svg`);
+    expect(defaultQrFile(DOMAIN, "7")).toBe(`qr/${DOMAIN}.test-v7.svg`);
   });
 });

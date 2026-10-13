@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-10-12",
+  "cap_nhat": "2026-10-13",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -710,7 +710,7 @@
       "trang_thai": "xong",
       "viec": "Link QR app chung đọc mã công khai x= (12 hex) trước, tra GET /communes?code= một lần rồi chạy theo tên miền như cũ (CommuneByLaunchCode); không có x thì đọc d= (CHUYỂN TIẾP — bỏ ở bản sau); x sai khuôn không lùi về d. Báo lỗi client chỉ gửi tên miền đã tra. npm run qr vẫn --domain, ghi cả QR x và QR d-legacy. ADR 0047 §Sửa đổi 12/10/2026.",
       "bang_chung": "9bdd8f5a — tsc sạch, vitest 74 tệp/1980 test xanh. CHƯA thử trên điện thoại thật.",
-      "con_no": "Bản App ViHAT đọc x phải nộp Zalo duyệt (gộp với các thay đổi 12/10); chỉ in QR x sau khi bản ấy phát hành. Một bản sau bỏ đường d."
+      "con_no": "Bản đọc x đã phát hành (chủ dự án 13/10/2026). Còn: một bản sau bỏ đường d trong app."
     },
     {
       "id": "app-vihat-nang-cap-nop-zalo-12-10",
@@ -738,6 +738,14 @@
       "bang_chung": "Chưa commit (phiên chính commit). citizen-app/src/cong-dan/map/commune-basemap-style.ts (PLACES_FILE, PLACES_SOURCE_ID, PLACES_ATTRIBUTION, hai lớp overture-places-dot/-label, isOptionalBasemapSourceError — bản chép của web-admin/src/lib/basemap/style.ts); scene-map.tsx bỏ qua lỗi nguồn overture trước lần vẽ đầu; content/ket-xuat-ho-so.ts sửa 2 câu. 12/10/2026: npx tsc --noEmit sạch; npx vitest run src/cong-dan/map src/content 216/218 xanh — 2 ca đỏ thuộc việc dở của phiên song song (đếm 22 đường do dòng ảnh tư vấn mới; chinh-sach.test lưu giữ SMS), không thuộc thay đổi này; bundle-for-zalo.test.ts 33/33; vite build 2.764,85 kB thô / 736,89 kB gzip (gồm cả việc dở của phiên song song).",
       "no_confirm": [],
       "tiep_theo": "(1) Chờ tệp vn-places.pmtiles dựng thật bởi nen-ban-do và đặt cạnh vn-mainland.pmtiles. (2) Kiểm trên Zalo thật: chấm + nhãn hiện từ zoom 13; xoá/hỏng tệp địa điểm thì nền vẫn hiện; ghi nguồn hiện '© Overture Maps Foundation'. (3) Pháp chế ViHAT duyệt câu ghi nguồn và câu khai 'dữ liệu OpenStreetMap và Overture Maps' (ADR 0072 §Sửa đổi 12/10/2026, còn mở #1) — đổi chữ thì sửa ADR trước, rồi cả citizen-app lẫn web-admin."
+    },
+    {
+      "id": "npm-run-qr-chi-x-13-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "npm run qr -- --domain=<xã> chỉ sinh QR x (một tệp qr/<tên-miền>.svg), bỏ QR d-legacy — chủ dự án 13/10/2026: bản live đã đọc x. Identity không trả launch_code thì DỪNG (không lùi về d), câu báo chỉ ra máy chủ chưa đúng bản. Không dựng nút cập nhật mã ở platform-admin vì tenant.launch_code NOT NULL, cấp khi tạo xã (migration 0024). ADR 0047 §Sửa đổi 13/10/2026, đoạn bổ sung.",
+      "bang_chung": "vitest scripts/commune-qr.test.mjs 17/17 xanh; chạy thật --domain=thangbinh-danang.vigov.vn ra ?x=e159d39646be&src=qr, identity ?code= trả đúng Xã Thăng Bình. CHƯA quét trên điện thoại.",
+      "con_no": ""
     }
   ]
 }

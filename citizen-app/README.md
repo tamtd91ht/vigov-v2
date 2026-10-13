@@ -685,35 +685,31 @@ lệnh thử.
 
 Lệnh này **chỉ sinh QR**: không dựng, không đẩy, không cần `ZMP_TOKEN` hay `VIGOV_API_HOST`.
 
-**Thời gian chuyển tiếp (chủ dự án, 12/10/2026; ADR 0047 §Sửa đổi 12/10/2026).** Liên kết xã đổi từ tên miền
-`d` sang **mã mở app** `x` (12 ký tự hex). Bản app đang phát hành / đang chờ Zalo duyệt chỉ đọc `d`; `x` chạy
-từ bản kế tiếp. Nên lệnh ghi **hai tệp** cho mỗi lần chạy, và in rõ tệp nào dùng với bản nào. Đầu vào **vẫn là
-`--domain`**: mã `x` lấy từ câu tra xã theo tên miền. Khi bản đọc `x` đã phát hành, tệp `d-legacy` bỏ theo.
+**Chỉ QR `x` (chủ dự án, 13/10/2026; ADR 0047 §Sửa đổi 13/10/2026).** Liên kết xã mang **mã mở app** `x`
+(12 ký tự hex), không mang tên miền; bản app đang phát hành đã đọc `x`, nên QR tên miền `d` không còn được sinh.
+Đầu vào **vẫn là `--domain`**: mã `x` lấy từ câu tra xã theo tên miền.
 
-| Muốn | Lệnh | Liên kết trong QR mới (`-x.svg`) | Liên kết trong QR cũ (`-d-legacy.svg`) |
-|---|---|---|---|
-| QR mở **bản phát hành** | `npm run qr -- --domain=<tên-miền-xã>` | `https://zalo.me/s/<App ID app chung>/?x=<mã>&src=qr` | `https://zalo.me/s/<App ID app chung>/?d=<tên-miền-xã>&src=qr` |
-| QR mở **bản thử** Version `n` | `npm run qr -- --domain=<tên-miền-xã> --version=<n>` | `…/?env=TESTING&version=<n>&x=<mã>&src=qr` | `…/?env=TESTING&version=<n>&d=<tên-miền-xã>&src=qr` |
-| Ghi tệp ra chỗ khác | thêm `--out=<đường-dẫn>.svg` | `<đường-dẫn>-x.svg` | `<đường-dẫn>-d-legacy.svg` |
+| Muốn | Lệnh | Liên kết trong QR |
+|---|---|---|
+| QR mở **bản phát hành** | `npm run qr -- --domain=<tên-miền-xã>` | `https://zalo.me/s/<App ID app chung>/?x=<mã>&src=qr` |
+| QR mở **bản thử** Version `n` | `npm run qr -- --domain=<tên-miền-xã> --version=<n>` | `…/?env=TESTING&version=<n>&x=<mã>&src=qr` |
+| Ghi tệp ra chỗ khác | thêm `--out=<đường-dẫn>.svg` | (tệp ghi đúng đường dẫn ấy) |
 
-QR cũ trùng từng ký tự với nút **"Mở bằng app ViHAT"** ở platform-admin → chi tiết xã (do
-`service-platform/internal/domain/shared_mini_app.go` dựng); nút ấy chưa đổi sang `x`.
-
-Lệnh làm theo thứ tự sau, và **lỗi ở bước nào cũng dừng, không ghi tệp** — trừ một trường hợp ở bước 3:
+Lệnh làm theo thứ tự sau, và **lỗi ở bước nào cũng dừng, không ghi tệp**:
 
 1. Hỏi platform `GET /api/v1/mini-app-ids?app=vihat` để lấy App ID app chung (bảng `mini_app`). Kho này
    không chép App ID nào. Platform không trả lời thì dừng. Ở đây **không có** lối `--app-id`: một tấm QR
    in sai sống nhiều năm trên bảng tin xã.
 2. Hỏi identity `GET /api/v1/communes?host=<tên-miền-xã>` — tên xã và `launch_code` (mã `x`). Identity
-   không biết tên miền ấy thì **dừng**, vì QR ấy chỉ mở phần giới thiệu ViHAT, không vào xã nào.
-3. Ghi `qr/<tên-miền-xã>-d-legacy.svg` và `qr/<tên-miền-xã>-x.svg` (bản thử: `qr/<tên-miền-xã>.test-v<n>-…svg`).
-   Identity chưa trả `launch_code` (máy chủ chưa triển khai) thì **chỉ** ghi tệp legacy và cảnh báo rằng tệp
-   `x` đã bị bỏ qua — không dừng. In ra App ID, tên xã, loại bản, hai liên kết, rồi vẽ QR trên cửa sổ lệnh
-   (QR mới nếu có, không thì QR cũ) để quét thử ngay. Thư mục `qr/` không vào git: sinh lại lúc nào cũng được.
+   không biết tên miền ấy thì **dừng**, vì QR ấy chỉ mở phần giới thiệu ViHAT, không vào xã nào. Identity
+   không trả `launch_code` cũng **dừng**: mọi xã có mã từ lúc tạo (service-platform migration 0024), nên thiếu
+   mã nghĩa là máy chủ đang chạy chưa phải bản có mã mở app — mã của xã xem ở platform-admin → chi tiết xã.
+3. Ghi `qr/<tên-miền-xã>.svg` (bản thử: `qr/<tên-miền-xã>.test-v<n>.svg`). In ra App ID, tên xã, loại bản,
+   liên kết, rồi vẽ QR trên cửa sổ lệnh để quét thử ngay. Thư mục `qr/` không vào git: sinh lại lúc nào cũng được.
 
 `--version=<n>` là số **Version** của bản thử trên console Zalo. QR không kèm nó chỉ mở **bản đã phát
 hành**: app chung chưa phát hành thì Zalo báo *"ứng dụng đang trong giai đoạn phát triển"* (bảng "Hai thứ
-đã kiểm" bên dưới). Tham số `x`/`d`, `src` chỉ dẫn giao diện, không cấp quyền gì (ADR 0047 câu 3).
+đã kiểm" bên dưới). Tham số `x`, `src` chỉ dẫn giao diện, không cấp quyền gì (ADR 0047 câu 3).
 
 QR của **app riêng** một xã (`https://zalo.me/s/<App ID xã>/?src=qr`, không `x`/`d`) lệnh này không sinh:
 lấy ở platform-admin → chi tiết xã (ADR 0070 §Sửa đổi 06/10/2026 #2).
@@ -724,7 +720,7 @@ trên máy ấy. Nay:
 
 | Cờ | Đích | Tên miền xã vào bundle |
 |---|---|---|
-| `--app=vihat` | App ViHAT (app chung) | **Không bao giờ** (ADR 0044) — mở ra là màn giới thiệu ViHAT, vào xã bằng QR `x` (chuyển tiếp: cả `d`) |
+| `--app=vihat` | App ViHAT (app chung) | **Không bao giờ** (ADR 0044) — mở ra là màn giới thiệu ViHAT, vào xã bằng QR `x` |
 | `--domain=<tên-miền-xã>` | App ID riêng của xã ấy | **Luôn** — app mở thẳng vào kênh công dân của xã, ẩn thanh tiêu đề Zalo (ADR 0047 §6) |
 | không cờ đích | hỏi `vihat` hay tên miền xã (có người ngồi trước cửa sổ lệnh) — không có danh sách: platform cố ý không có lệnh liệt kê | — ; không có người (Jenkins, ống) thì **DỪNG** và nêu hai cờ |
 | `--app=vihat --domain=…` | **DỪNG** | QR mở App ViHAT vào một xã: `npm run qr -- --domain=…` (mục trên), hoặc **platform-admin** (chi tiết xã → "Mở bằng app ViHAT"). Không làm bằng một lần đẩy |
