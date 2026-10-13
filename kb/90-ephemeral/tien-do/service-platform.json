@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-12",
+  "cap_nhat": "2026-10-13",
   "muc": [
     {
       "id": "danh-muc-tham-chieu",
@@ -365,7 +365,15 @@
       "trang_thai": "xong",
       "viec": "tenant.launch_code (migration 0024: 12 hex CSPRNG, NOT NULL, UNIQUE, backfill có vết). Tạo xã sinh mã bằng crypto/rand, ghi vào delta tao_xa. ResolveHost nhận launch_code (proto ebe15783). Link vận hành: chung (?x=), chung_ten_mien (?d=, chuyển tiếp), rieng. ADR 0047 §Sửa đổi 12/10/2026.",
       "bang_chung": "7735ec93 — go build/vet/test xanh; 4 test PostgreSQL SKIP (không có VIGOV_TEST_DSN): migration 0024 CHƯA chạy trên PG thật.",
-      "con_no": "Chạy test PG trên máy có CSDL. deploy/Jenkinsfile stage tạo xã Thăng Bình (một lần) chưa ghi launch_code — chạy lại sẽ lỗi NOT NULL (an toàn, trong BEGIN). Bỏ link chung_ten_mien khi app bỏ d."
+      "con_no": "Chạy test PG trên máy có CSDL. deploy/Jenkinsfile stage tạo xã Thăng Bình (một lần) chưa ghi launch_code — chạy lại sẽ lỗi NOT NULL (an toàn, trong BEGIN). (Link chung_ten_mien đã bỏ 13/10 — 1e1b8461.)"
+    },
+    {
+      "id": "qr-xa-mot-link-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "QR mở Mini App của xã theo ADR 0070 §Sửa đổi 13/10/2026: tuyến mới GET /api/v1/commune-launch-link (admin.lookup, xã từ Host, store theo xã, {url, source}, không ghi vết); tuyến vận hành chỉ trả một link (app riêng đang sống, không thì app chung ?x=); bỏ d= / chung_ten_mien.",
+      "bang_chung": "1e1b8461 — go vet + go test ./... service-platform xanh; tools/ingress, tools/apidoc xanh; check_quyen, check_security PASS (báo cáo builder). TestPgCommuneLaunch / TestPgCommuneLaunchTarget SKIP (không có VIGOV_TEST_DSN).",
+      "con_no": "Chạy hai test PG trên máy có CSDL."
     }
   ]
 }

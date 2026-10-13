@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "platform-admin",
-  "cap_nhat": "2026-10-12",
+  "cap_nhat": "2026-10-13",
   "muc": [
     {
       "id": "ts-chua-tung-duoc-kiem",
@@ -97,7 +97,15 @@
       "trang_thai": "xong",
       "viec": "Thẻ Mã QR hiện nhãn link chuyển tiếp chung_ten_mien (?d=) cạnh link mã công khai (?x=), câu nói rõ link nào chạy với bản app nào; lỗi commune_launch_code_invalid.",
       "bang_chung": "dcdb796b — tsc sạch, vitest 11 tệp/251 test xanh. Chưa xem ảnh render thật.",
-      "con_no": "Bỏ nhãn/nhánh chung_ten_mien khi bỏ đường d."
+      "con_no": "Đã bỏ nhãn/nhánh chung_ten_mien 13/10 — bf1fa420."
+    },
+    {
+      "id": "the-qr-mot-ma-png-in-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Thẻ Mã QR chi tiết xã theo ADR 0070 §13/10: một QR, không thông tin app chung (bỏ nhãn nguồn, App ID, tên miền, chung_ten_mien); nút Tải ảnh PNG (canvas cùng ma trận uqr) và In / Lưu PDF (trang A4: tên xã, QR, câu hướng dẫn).",
+      "bang_chung": "bf1fa420 — typecheck + lint + vitest 255/255 + build xanh. CHƯA kiểm trình duyệt thật: chưa bấm tải PNG, chưa mở hộp in.",
+      "con_no": "Kiểm trên trình duyệt: tải PNG, bản in A4. Nhánh lỗi shared_mini_app_not_declared vẫn hiện chữ 'Mini App dùng chung' (lib/errors.ts) và URL zalo.me/s/<App ID> còn hiện trên thẻ — giữ cho người vận hành, đổi nếu chủ dự án muốn."
     }
   ]
 }
