@@ -81,6 +81,7 @@ describe("đọc thân 201 — hai phiên, hai khoá, không bao giờ lẫn", (
       ten_xa: "Xã Của Phiên",
       da_xac_thuc_so: false,
       ten_mien_xa: null,
+      masked_phone: null,
     });
   });
 
@@ -314,7 +315,7 @@ describe("mở lại phiên kèm `phoneToken` — thân, lời gọi, và không
     expect(
       toReopenWithPhoneResult({
         kieu: "xong",
-        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true, ten_mien_xa: TEN_MIEN },
+        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true, ten_mien_xa: TEN_MIEN, masked_phone: null },
       }),
     ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true });
     expect(toReopenWithPhoneResult({ kieu: "tu-choi" })).toEqual({ kieu: "tu-choi" });
@@ -329,13 +330,13 @@ describe("App.tsx dịch kết quả sang kiểu của nửa nhà nước — th
     expect(
       sangKieuCongDan({
         kieu: "xong",
-        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: false, ten_mien_xa: TEN_MIEN },
+        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: false, ten_mien_xa: TEN_MIEN, masked_phone: null },
       }),
     ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", ten_mien: TEN_MIEN, da_xac_thuc_so: false });
     expect(
       sangKieuCongDan({
         kieu: "xong",
-        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true, ten_mien_xa: null },
+        phien: { token: "t", het_han: "", ten_xa: "Xã Của Phiên", da_xac_thuc_so: true, ten_mien_xa: null, masked_phone: null },
       }),
     ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Của Phiên", ten_mien: null, da_xac_thuc_so: true });
   });

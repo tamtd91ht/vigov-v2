@@ -1308,6 +1308,7 @@ function AppCuaXa(props: {
         <CaNhanXa
           ho_ten={shownName}
           avatarUrl={avatarShown(props.name)}
+          maskedPhone={layPhienViGov()?.masked_phone ?? null}
           ten_xa={xa.ten}
           largeText={largeText}
           onLargeText={setLargeText}

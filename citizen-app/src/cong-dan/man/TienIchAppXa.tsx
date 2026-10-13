@@ -202,6 +202,11 @@ export function CaNhanXa(props: {
   avatarUrl?: string | null;
   ten_xa: string;
   /**
+   * The citizen's own number, MASKED by the server when this open verified it (`09****5678`, customer sheet mini-app
+   * 13/10/2026 row 6). Absent/`null` (no session yet, or one opened without a number): no line — never a guess.
+   */
+  maskedPhone?: string | null;
+  /**
    * "Cỡ chữ lớn" — the prototype's ONE switch (owner 11/10/2026): on = every text of the app 20% larger, never
    * below the 16px floor either way (`styles.css` `.xa-co-chu--lon`). In memory only: no `localStorage`.
    */
@@ -225,6 +230,12 @@ export function CaNhanXa(props: {
         <ProfileAvatar name={props.ho_ten} avatarUrl={props.avatarUrl ?? null} />
         <span className="xa-hang__chu">
           <strong className="xa-profile__name">{props.ho_ten ?? XA_TN.chua_co_ten}</strong>
+          {props.maskedPhone != null && props.maskedPhone !== "" && (
+            // A screen reader would spell the stars out: it hears the sentence instead.
+            <span className="xa-phu" aria-label={XA_TN.masked_phone_label(props.maskedPhone.slice(-4))}>
+              {props.maskedPhone}
+            </span>
+          )}
           <span className="xa-phu">{props.ten_xa}</span>
         </span>
       </div>

@@ -370,7 +370,19 @@ export type PhienViGovQuaCau = {
   ten_xa: string;
   da_xac_thuc_so: boolean;
   ten_mien_xa: string | null;
+  /** `maskedPhone` — the number verified at this open, ALREADY masked by the server; `null` when absent. */
+  masked_phone: string | null;
 };
+
+/**
+ * `maskedPhone` → the masked number, or `null`. Kept only in the masked SHAPE (digits with at least four `*`):
+ * a server that one day sent the full number would otherwise put it on screen — the client refuses to be the
+ * place a number gets unmasked (rule 3). Optional: an older server does not send it.
+ */
+export function readMaskedPhone(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  return /^[0-9*]{8,15}$/.test(v) && (v.match(/\*/g) ?? []).length >= 4 ? v : null;
+}
 
 /**
  * `communePrimaryHost` → tên miền đúng khuôn, hoặc `null`.
@@ -411,6 +423,7 @@ export function docTraLoiCauViGov(than: unknown): PhienViGovQuaCau | "khong-co-p
     ten_xa: v.tenantDisplayName,
     da_xac_thuc_so: v.phoneVerified,
     ten_mien_xa: docTenMienPhien(v.communePrimaryHost),
+    masked_phone: readMaskedPhone(v.maskedPhone),
   };
 }
 

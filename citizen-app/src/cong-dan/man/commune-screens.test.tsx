@@ -297,6 +297,26 @@ describe("Cá nhân (§6.6)", () => {
     expect(page).toContain('<span class="xa-avatar" aria-hidden="true">NH</span>');
     expect(page).toContain('<span class="xa-phu">Xã Thử</span>');
     expect(page).not.toMatch(/\b0\d{9}\b/);
+    expect(page).not.toContain(XA_TN.masked_phone_label("0000"));
+  });
+
+  it("the server's MASKED number under the name when the session verified one (sheet mini-app 13/10 row 6)", () => {
+    const page = html(
+      createElement(CaNhanXa, {
+        ho_ten: "Nguyễn Văn Hùng",
+        ten_xa: "Xã Thử",
+        maskedPhone: "09****0000",
+        largeText: false,
+        onLargeText: noop,
+        onMoPhanAnh: noop,
+        onMoTraCuu: noop,
+      }),
+    );
+    expect(page).toContain(`<span class="xa-phu" aria-label="${XA_TN.masked_phone_label("0000")}">09****0000</span>`);
+    // Name, then number, then commune.
+    expect(page.indexOf("09****0000")).toBeGreaterThan(page.indexOf("Nguyễn Văn Hùng"));
+    expect(page.indexOf("09****0000")).toBeLessThan(page.indexOf(">Xã Thử<"));
+    expect(page).not.toMatch(/\b0\d{9}\b/);
   });
 
   it("ONE 'Cỡ chữ lớn' switch (the prototype's); language is a statement; 'Của tôi' has Phản ánh · Hồ sơ đã tra cứu — no count, no Thông báo row", () => {

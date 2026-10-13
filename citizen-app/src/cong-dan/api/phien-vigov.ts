@@ -52,6 +52,11 @@ export type PhienViGov = {
    * decides what each route accepts.
    */
   readonly phone_verified: boolean;
+  /**
+   * The number verified when this session opened, MASKED by the server (`09****5678`) — shown to the citizen
+   * as their own on the commune app's Cá nhân card, nowhere else, never sent. Absent/`null`: none known.
+   */
+  readonly masked_phone?: string | null;
 };
 
 let phien_hien_tai: PhienViGov | null = null;

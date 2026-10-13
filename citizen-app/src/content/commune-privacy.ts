@@ -146,6 +146,7 @@ export function communePrivacy(values: CommuneTermsValues): CommunePrivacy {
         "Ở lượt ấy, máy chủ của đơn vị cung cấp nền tảng kỹ thuật KHÔNG lưu số điện thoại của bạn và không tạo tài khoản nào ở phía mình: số đi thẳng sang hệ thống của xã. Nếu lượt ấy không thành công, máy chủ ghi một dòng nhật ký — thời điểm, địa chỉ IP, kết quả và mã lý do, không có số điện thoại — và dòng ấy tự bị xoá chậm nhất sau 90 ngày.",
         `HỆ THỐNG CỦA XÃ LƯU: số điện thoại đã xác thực của bạn, làm danh tính của bạn khi làm việc với xã; mã tài khoản Zalo của bạn đối với ứng dụng này, cùng xã bạn làm việc gần nhất; bản ghi của từng phiên làm việc — thời điểm hết hạn, địa chỉ IP và thông tin trình duyệt lúc mở phiên, và một bản mã hoá một chiều của phiếu phiên; và một dòng nhật ký cho mỗi lần mở phiên, kèm địa chỉ IP. Những dữ liệu này được lưu ${SESSION_RETENTION}.`,
         "Phiếu phiên làm việc với xã chỉ nằm trong bộ nhớ của ứng dụng trên máy bạn: không ghi xuống máy, không hiện ra màn hình, và mất đi khi bạn đóng ứng dụng. Lần sau, ứng dụng hỏi lại bạn trước khi mở phiên mới.",
+        "Cùng phiếu phiên, hệ thống của xã trả về số điện thoại vừa xác thực của bạn ĐÃ CHE BỚT (ví dụ 09****5678) để hiện ở mục Cá nhân, cho bạn biết mình đang làm việc với xã bằng số nào. Số đầy đủ không bao giờ được trả về máy. Số đã che cũng chỉ nằm trong bộ nhớ, không ghi xuống máy, và mất đi khi bạn đóng ứng dụng.",
       ],
     },
     {

@@ -20,10 +20,33 @@ import {
   communeAppSessionBody,
   type CommuneAppSessionRequest,
   diaChiPhien,
+  docTraLoiCauViGov,
   DUONG_DAN_PHIEN,
   LOCATION_FIELDS,
   locationBody,
+  readMaskedPhone,
 } from "./hop-dong";
+
+describe("maskedPhone of the 201 — the Cá nhân card's number (sheet mini-app 13/10/2026 row 6)", () => {
+  const body = (extra: Record<string, unknown>) => ({
+    vigovSession: { token: "t", tenantDisplayName: "Xã Thử Nghiệm", phoneVerified: true, ...extra },
+  });
+
+  it("is read when the server sent it, masked", () => {
+    const s = docTraLoiCauViGov(body({ maskedPhone: "09****0000" }));
+    expect(s !== null && s !== "khong-co-phien" && s.masked_phone).toBe("09****0000");
+  });
+
+  it("absent (an older server, an open without a number) → null, and the session still opens", () => {
+    const s = docTraLoiCauViGov(body({}));
+    expect(s !== null && s !== "khong-co-phien" && s.masked_phone).toBeNull();
+  });
+
+  it("an UNMASKED number is never kept: the client refuses to be where a number gets shown in full", () => {
+    for (const v of ["0900000000", "84900000000", "09*0000000", "abc****", 900000000, ""]) expect(readMaskedPhone(v)).toBeNull();
+    expect(readMaskedPhone("09****0000")).toBe("09****0000");
+  });
+});
 
 /** A made-up identity host: the composer joins the path to whatever host the state half hands it. */
 const IDENTITY_HOST = "https://identity.vidu.example";
@@ -95,6 +118,7 @@ describe("the call — one branch per thing the citizen does next", () => {
         ten_xa: "Xã Thử Nghiệm",
         da_xac_thuc_so: true,
         ten_mien_xa: null,
+        masked_phone: null,
       },
     });
     expect(calls).toHaveLength(1);
@@ -268,13 +292,20 @@ describe("shell table — App.tsx `toCommuneAppSessionResult`", () => {
     expect(toCommuneAppSessionResult(input)).toEqual({ kieu });
   });
 
-  it("xong carries the ViGov bearer, commune name and phoneVerified — not the commune domain", () => {
+  it("xong carries the ViGov bearer, commune name, phoneVerified and the masked number — not the commune domain", () => {
     expect(
       toCommuneAppSessionResult({
         kieu: "xong",
-        phien: { token: "t", het_han: "", ten_xa: "Xã Thử Nghiệm", da_xac_thuc_so: true, ten_mien_xa: "xa.vigov.example" },
+        phien: {
+          token: "t",
+          het_han: "",
+          ten_xa: "Xã Thử Nghiệm",
+          da_xac_thuc_so: true,
+          ten_mien_xa: "xa.vigov.example",
+          masked_phone: "09****0000",
+        },
       }),
-    ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Thử Nghiệm", da_xac_thuc_so: true });
+    ).toEqual({ kieu: "xong", token: "t", ten_xa: "Xã Thử Nghiệm", da_xac_thuc_so: true, masked_phone: "09****0000" });
   });
 });
 

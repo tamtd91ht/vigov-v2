@@ -220,6 +220,8 @@ export type CommuneAppSessionResult =
       readonly ten_xa: string;
       /** `phoneVerified` của phiên, nguyên văn máy chủ trả. */
       readonly da_xac_thuc_so: boolean;
+      /** The number verified at this open, masked by the server (`maskedPhone`); absent/`null` = none. */
+      readonly masked_phone?: string | null;
     }
   /** Công dân bấm "Từ chối" trên hộp thoại xin số của Zalo — không lời gọi nào đi ra. */
   | { readonly kieu: "tu-choi" }
@@ -300,7 +302,12 @@ export async function openCommuneAppSession(
   if (result.kieu !== "xong") return result;
   if (result.token === "" || result.ten_xa.trim() === "") return { kieu: "chua-mo" };
   if (shownCommuneName.trim() === "" || result.ten_xa !== shownCommuneName) return { kieu: "khac-xa" };
-  datPhienViGov({ token: result.token, ten_xa: result.ten_xa, phone_verified: result.da_xac_thuc_so });
+  datPhienViGov({
+    token: result.token,
+    ten_xa: result.ten_xa,
+    phone_verified: result.da_xac_thuc_so,
+    ...(result.masked_phone ? { masked_phone: result.masked_phone } : {}),
+  });
   return result.da_xac_thuc_so ? { kieu: "da-mo" } : { kieu: "no-phone" };
 }
 

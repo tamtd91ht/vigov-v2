@@ -26,7 +26,7 @@ const SHOWN = "Xã Thử Nghiệm";
 
 const session = (ten_xa: string, da_xac_thuc_so = true): ReopenWithPhoneBridgeResult => ({
   kieu: "xong",
-  phien: { token: "tok-test", het_han: "", ten_xa, da_xac_thuc_so, ten_mien_xa: QR_HOST },
+  phien: { token: "tok-test", het_han: "", ten_xa, da_xac_thuc_so, ten_mien_xa: QR_HOST, masked_phone: null },
 });
 
 afterEach(() => {

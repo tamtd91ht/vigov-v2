@@ -396,8 +396,8 @@ const openCommuneVideo: OpenVideo = (url) => moRaNgoai("video", url);
 export function toCommuneAppSessionResult(result: CommuneAppLoginResult): CommuneAppSessionResult {
   switch (result.kieu) {
     case "xong": {
-      const { token, ten_xa, da_xac_thuc_so } = result.phien;
-      return { kieu: "xong", token, ten_xa, da_xac_thuc_so };
+      const { token, ten_xa, da_xac_thuc_so, masked_phone } = result.phien;
+      return { kieu: "xong", token, ten_xa, da_xac_thuc_so, ...(masked_phone !== null ? { masked_phone } : {}) };
     }
     case "tu-choi":
     case "ngoai-zalo":
