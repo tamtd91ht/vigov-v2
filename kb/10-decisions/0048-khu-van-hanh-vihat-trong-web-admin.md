@@ -3,7 +3,7 @@ id: 0048-khu-van-hanh-vihat-trong-web-admin
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 07bec99d
+derived_from_commit: 867e4756
 expires: null
 owns_facts:
   - "tài khoản vận hành ở service-identity, bảng riêng (operator_account, operator_session, operator_permission_grant), không tenant_id (chốt 28/09/2026)"
@@ -13,13 +13,17 @@ owns_facts:
   - "vì sao thay đổi cấu hình toàn nền tảng ghi vết ở platform_audit_log không tenant_id, còn thao tác nhắm một xã ghi ở audit_log của xã đích"
   - "khu vực vận hành ViHAT dựng trong app riêng platform-admin/ (sửa 27/09/2026, thay lựa chọn gộp vào web-admin), chạy trên host vận hành dành riêng"
   - "vì sao on-premise cho một xã không cần sửa mã khu vận hành: không triển khai platform-admin, hoặc triển khai cho người vận hành tại chỗ"
-  - "backend khu vận hành thuộc service-platform; người vận hành chỉ chạm siêu dữ liệu, mọi thao tác ghi ghi vết theo xã ĐÍCH"
+  - "backend khu vận hành thuộc service-platform; người vận hành chỉ chạm siêu dữ liệu, mọi thao tác ghi ghi vết theo xã ĐÍCH — trừ việc chỉ-owner trên tài khoản cán bộ (sửa 13/10/2026)"
   - "tài khoản vận hành ViHAT là một miền tài khoản tách khỏi tài khoản cán bộ xã, không mang tenant_id, không phải vai trò trong một xã"
   - "lần người vận hành liệt kê mọi xã không ghi vết — ngoại lệ của luật 6 bất biến 7, chỉ cho siêu dữ liệu xã (người dùng chốt 30/09/2026)"
   - "ho_so_hien_thi_xa: người ghi sau thắng giữa người vận hành và cán bộ xã; mã VH-/CB- trong vết nói miền"
   - "phát hành QR không ghi vết (người dùng chốt 30/09/2026)"
   - "on-premise do ViHAT vận hành từ xa"
-  - "tạo xã ở platform-admin không gieo cấu hình nội bộ của xã (vai trò, SLA, giờ làm việc, ngày lễ, cán bộ, phòng ban) — admin xã tự khai (chốt 01/10/2026)"
+  - "tạo xã ở platform-admin không gieo cấu hình nội bộ của xã (vai trò, SLA, giờ làm việc, ngày lễ, cán bộ, phòng ban) — admin xã tự khai (chốt 01/10/2026); tài khoản quản trị xã do owner tạo riêng sau đó (sửa 13/10/2026)"
+  - "đúng một owner trên operator_account, ràng buộc ở CSDL, chỉ định bằng job Jenkins prod chạy operatorctl set-owner, không biến môi trường, không màn nào gỡ/chuyển (chốt 13/10/2026)"
+  - "việc chỉ owner làm: màn Phân quyền (tạo tài khoản vận hành, cấp/thu hồi ops.*, đặt lại mật khẩu vận hành), tạo tài khoản quản trị xã, đặt lại mật khẩu mọi cán bộ, xoá xã; tài khoản vận hành mới không có khoá (chốt 13/10/2026)"
+  - "mật khẩu đặt qua platform-admin luôn là mật khẩu tạm: buộc đổi lần sau, thu hồi mọi phiên cùng giao dịch; vết cán bộ ở audit_log của xã đích với mã VH-, vết vận hành ở operator_audit_log (chốt 13/10/2026)"
+  - "xoá xã là xoá mềm, hai lớp kiểm (ngừng liên tục ≥ 7 ngày đo bằng cột mốc ngừng + gõ lại một tên miền), tên miền giữ chỗ vĩnh viễn, không bật lại từ màn hình (chốt 13/10/2026)"
   - "service-platform kiểm chữ ký token op1. tại chỗ rồi gọi RPC identity tra sổ phiên vận hành mỗi yêu cầu, không cache; RPC vận hành không xã nằm trong methodsWithoutTenant (chốt 01/10/2026)"
   - "giới hạn đăng nhập vận hành 20 lần / 15 phút / IP, cửa sổ cố định trong Redis, vượt → 429 (chốt 01/10/2026)"
   - "phạm vi đợt 1 và đợt 2 của platform-admin; sửa tên xã ở đợt 1 chỉ là sửa lỗi gõ, có lý do và vết (chốt 01/10/2026)"
@@ -43,7 +47,9 @@ của chủ dự án — 28/09/2026*); #8 trả lời bởi ADR 0052 · #6 chố
 #9, #11 chốt 30/09/2026** (§*Trả lời của người dùng — 30/09/2026*) · **đợt 1 `platform-admin` chốt
 01/10/2026** (§*Chốt của chủ dự án — 01/10/2026*) · **điều kiện lên sống của `OPERATOR_HOST`
 chốt 01/10/2026, sau khi dựng** (§*Chốt bổ sung — 01/10/2026, sau khi dựng*) · **lên sống ở `admin.vigov.vn`
-trước khi đủ điều kiện, chốt 01/10/2026** (§*Chốt triển khai — 01/10/2026*) · #12 là bước vận hành, chưa
+trước khi đủ điều kiện, chốt 01/10/2026** (§*Chốt triển khai — 01/10/2026*) · **owner duy nhất, tài
+khoản do ViHAT tạo, xoá mềm xã chốt 13/10/2026 — đảo §*Chốt 01/10* #1 (phần quản trị đầu tiên) và #6(a)**
+(§*Sửa đổi 13/10/2026 — owner, tài khoản do ViHAT tạo, xoá mềm xã*) · #12 là bước vận hành, chưa
 làm — mọi phần khác ghi *"đề xuất, chờ xác nhận"* **chưa được chốt** · **Nối tiếp** ADR 0003 và ADR 0046
 §*`admin.vigov.vn` — chưa dựng, và cần ADR riêng* · **Thay thế một phần** ADR 0003 §*Hệ quả* (chỉ
 điểm ở §*Thay thế gì*; thân ADR 0003 giữ nguyên, chỉ thêm một dòng trỏ có ngày)
@@ -304,6 +310,61 @@ nói rõ mức này vượt trần của TCVN.
 | Đã chốt | Vì sao · giá chủ dự án chấp nhận | Luật |
 |---|---|---|
 | Phiên vận hành tự hết sau **10 phút** không có request (thay **5 phút** ở §*Chốt bước 1*). Hạn tuyệt đối 8 giờ giữ nguyên | **Giá:** TCVN 14423 §5.5.2.2 gợi ý ≤ 5 phút cho phiên quản trị — không đáp ứng, chấp nhận có chủ ý. Token `op1.` bị lộ dùng được thêm tối đa 5 phút. Ghi ở câu mở #38 | Luật 13 cấm #4 |
+
+## Sửa đổi 13/10/2026 — owner, tài khoản do ViHAT tạo, xoá mềm xã
+
+Mục này ghi thêm, không sửa phần trên. Chủ dự án trả lời trong phiên chính 13/10/2026. **Chưa dựng
+gì**: mỗi dòng là điều phải đúng khi dựng. Trong mục này, **"owner"** là **một tài khoản vận hành**
+mang quyền cao nhất của `platform-admin` — không phải *"chủ dự án"* (người ra quyết định trong ADR).
+
+Câu gốc của chủ dự án:
+
+- *"khi tạo 1 xã mới trong platform admin thì cần phải tạo ra tài khoản quản trị cho nó. Có thể là 1
+  nút tạo tài khoản ở trong chi tiết xã, cho phép nhập user và password. Khi login web-admin vào sẽ
+  bắt đổi password. Cho nút đổi password của bất kỳ user nào trong hệ thống."*
+- *"1 khóa chung là đủ ... thêm bảng phân quyền trong platform admin ... owner ở đây là full quyền để
+  có thể quản lý các sub user phía dưới"*, rồi *"chỉ 1 owner duy nhất, hiện tại chưa định danh được
+  thì dùng seed từ service deploy để chỉ định owner này, tránh các rủi ro liên quan đến phi logic"*.
+- *"thêm chức năng xóa xã, yêu cầu validate 2 lớp, lớp 1 là xã phải ngừng hoạt động trong vòng 1
+  tuần. 2 là phải nhập lại đúng 1 trong 2 domain của xã để validate."*
+- *"cả 2 chức năng này chỉ áp dụng với quyền cao nhất của platform admin"*.
+
+### Đảo hai điều đã chốt
+
+| Điều cũ | Nay |
+|---|---|
+| §*Chốt 01/10/2026* #1: **không lấy** hành vi *"tạo admin đầu tiên kèm mật khẩu tạm"* của bản mẫu | **Đảo.** Owner tạo tài khoản quản trị của xã, nhập tên đăng nhập và mật khẩu tạm. Phần còn lại của #1 **giữ nguyên**: tạo xã không gieo vai trò, SLA, giờ làm việc, ngày lễ, phòng ban |
+| §*Chốt 01/10/2026* #6(a) và §*Chốt bước 1* dòng *Ai tạo, ai cấp quyền*: tài khoản vận hành **chỉ** quản lý bằng CLI, **không** màn quản lý | **Đảo.** Owner có màn *Phân quyền* trong `platform-admin`. CLI `operatorctl` vẫn còn |
+
+### Đã chốt
+
+| # | Đã chốt | Vì sao · giá chủ dự án chấp nhận | Luật |
+|---|---|---|---|
+| 1 | **Đúng MỘT owner**, ràng buộc ở CSDL (không phải kiểm ở mã), là một cờ trên `operator_account`. Chỉ định bằng **job Jenkins**, chỉ prod, xác nhận gõ `vigov-prod`, chạy `operatorctl set-owner --email …`. **Không** bằng biến môi trường. **Không màn nào** gỡ hay chuyển owner | Phương án *"tài khoản chưa cấu hình = full quyền"* bị **phiên chính từ chối** (mở khi thiếu cấu hình — trái *Closed by default*, luật 5 bất biến 2); chủ dự án chọn một owner. Biến môi trường đã bị bác ở §*Chốt bước 1* (một bí mật chung mở quyền trên mọi xã). **Giá:** ai chạy được job Jenkins prod là chỉ định được owner — cổng thật của quyền cao nhất là quyền vào Jenkins. Một owner là một điểm hỏng: owner mất TOTP thì `operatorctl reset-mfa`; owner rời đi thì chạy lại job | Luật 5 bất biến 2, cấm #2; luật 8 |
+| 2 | Owner có **mọi khoá `ops.*`** cộng các việc **chỉ owner làm**: màn *Phân quyền* (tạo tài khoản vận hành, cấp / thu hồi khoá `ops.*`, đặt lại mật khẩu người vận hành) · tạo tài khoản quản trị của xã · đặt lại mật khẩu **bất kỳ** tài khoản cán bộ · xoá xã. Tài khoản vận hành mới **không có khoá nào** cho tới khi owner cấp | Một khoá chung cho phần chỉ-owner là đủ (chủ dự án). Tài khoản mới không khoá là *Closed by default* | Luật 5 bất biến 1, 2 |
+| 3 | Tài khoản vận hành tạo ở màn *Phân quyền* đi **đúng đường lần đầu hôm nay**: mật khẩu tạm, lần đăng nhập đầu buộc đổi mật khẩu **và** đăng ký TOTP (§*Chốt bước 1*) | Màn mới không được là lối tắt qua MFA | Luật 8 |
+| 4 | **Mật khẩu đặt qua `platform-admin` luôn là mật khẩu TẠM** — cả lúc tạo lẫn lúc đặt lại. Lần đăng nhập sau buộc đổi: cán bộ qua `nguoi_dung.phai_doi_mat_khau`, người vận hành qua `operator_account.must_change_password`. **Cùng giao dịch:** thu hồi mọi phiên của tài khoản đích, ghi vết | Mật khẩu người khác biết không được sống quá một lần đăng nhập. Không thu hồi phiên thì người cầm phiên cũ vẫn dùng tiếp sau khi mật khẩu đổi | Luật 5 bất biến 4, 5; luật 6 bất biến 3 |
+| 5 | **Vết:** việc trên tài khoản **cán bộ** ghi ở `audit_log` **của xã đích** trong `service-identity`, chủ thể loại **người vận hành**, "ai" là mã `VH-…`. Việc trên tài khoản **vận hành** ghi ở `operator_audit_log` | Vết nằm trong nhật ký **của chính xã**, không ở sổ riêng của ViHAT — cùng tinh thần *"xã nhìn thấy được"* của ADR 0003 §*Nếu sau này cần hỗ trợ*. Tiền tố `VH-` / `CB-` nói miền trong cùng một cột (§*Trả lời 30/09* #7) | Luật 6 bất biến 2, 3, 8 |
+| 6 | Đặt lại mật khẩu người vận hành **giữ nguyên TOTP**. Mất TOTP vẫn đi `operatorctl reset-mfa` | **Mặc định của phiên chính, đã nêu, chủ dự án chưa phản đối** — chưa phải lời chốt tường minh. Lý do: owner đổi được cả mật khẩu lẫn TOTP thì một owner bị chiếm là chiếm được mọi tài khoản vận hành | Luật 8 |
+| 7 | **Xoá xã = xoá MỀM**: `deleted_at` / `deleted_by` / lý do; **giữ toàn bộ dữ liệu**. Hai lớp kiểm: **(a)** xã đã **ngừng hoạt động liên tục ≥ 7 ngày**; **(b)** người xoá gõ lại **đúng một trong các tên miền** của xã. Xã đã xoá: **biến khỏi** danh sách vận hành; tên miền **không phân giải** (cán bộ và công dân nhận 404); **không** bật lại được từ màn hình; tên miền **giữ chỗ vĩnh viễn**, không bao giờ cấp cho xã khác | Hồ sơ của xã là hồ sơ lưu trữ — xoá thật là huỷ hồ sơ (luật 7 cấm #1). Cấp lại tên miền thì QR in ra và đường dẫn cũ trỏ sang xã khác — rò giữa hai cơ quan (luật 1). **Giá:** tên miền của xã đã xoá mất vĩnh viễn; muốn dùng lại phải là quyết định riêng | Luật 7 bất biến 1, 6; luật 1 cấm #7 |
+| 8 | **Đo "ngừng ≥ 7 ngày"** bằng một **cột mới** trên sổ xã ghi lúc ngừng: đặt khi ngừng, xoá khi bật lại. Xã **đang ngừng sẵn** lúc nâng cấp: lấy mốc từ mục vết `ngung_hoat_dong_xa` mới nhất (`service-platform/internal/store/operator_writes.go:73`); không có mục vết thì lấy **ngày nâng cấp** | Đọc lại vết mỗi lần kiểm là suy trạng thái từ nhật ký — chậm và vỡ khi vết đổi hình. Lấy ngày nâng cấp khi thiếu vết là chọn phía **chặt**: xã ấy phải chờ đủ 7 ngày nữa | Luật 7 bất biến 5 |
+
+### Rủi ro và giá — nói thẳng
+
+| Điều | Hệ quả |
+|---|---|
+| Người của ViHAT **biết mật khẩu tạm** của quản trị xã, và đặt lại được mật khẩu **bất kỳ** cán bộ nào | Trong khoảng từ lúc đặt tới lúc cán bộ đổi, ViHAT đăng nhập được với tư cách cán bộ ấy — tức là **vào được dữ liệu nghiệp vụ của xã**. Đây là ranh giới ADR 0003 (bảng *Không được*) và ĐIỀU KIỆN DỪNG #2 ở dưới; chủ dự án **mở có chủ ý**, giới hạn ở owner, mỗi lần đều có vết `VH-` trong nhật ký của chính xã đó |
+| Câu mở #13 ghi *"KHÔNG mở đường khôi phục cho nhà cung cấp — lối ấy là mở rộng ADR 0003 và cần ADR riêng"* (`kb/00-foundation/open-questions.json:295`) | Đặt lại mật khẩu cán bộ **chính là** lối khôi phục ấy. Mục này là quyết định riêng mà câu #13 đòi |
+| Owner là quyền cao nhất mà **không màn nào** thu hồi được | Owner bị chiếm thì kẻ chiếm tạo được tài khoản vận hành, cấp khoá, đặt lại mật khẩu cán bộ mọi xã, xoá xã. Đường thu hồi duy nhất là job Jenkins + `operatorctl` |
+
+### Chưa chốt — không tự quyết khi dựng
+
+| Câu | Vì sao phải hỏi |
+|---|---|
+| Tài khoản quản trị xã do owner tạo nhận **vai trò nào**, khi xã vừa tạo **chưa có vai trò** (§*Chốt 01/10* #1 giữ nguyên) | Đường gieo của ADR 0046 §*Quyết định 2* tạo vai trò `quan-tri-he-thong` cùng giao dịch; dùng lại hình ấy hay không là quyết định, không phải chi tiết |
+| Đường gieo `admin` bằng `IDENTITY_ADMIN_SEED_PASSWORD` (ADR 0046 §*Quyết định 2*) **còn giữ** hay gỡ khi đã có nút tạo | Hai đường cùng tạo quản trị đầu tiên; đường gieo là một bí mật chung mở `admin` ở mọi xã chưa gieo |
+| Mật khẩu tạm của **cán bộ** có **hạn** không (mật khẩu tạm vận hành có hạn 24 giờ — §*Chốt bước 1*, sửa sau rà bảo mật) | Ngưỡng bảo mật — điều kiện dừng của luật 13 |
+| Xã đã xoá: dòng `mini_app` của app riêng, QR đã in, phiên cán bộ còn sống | Mục 7 chốt tên miền 404; App ID của app riêng phân giải xã qua `mini_app`, không qua tên miền |
 
 ## ĐIỀU KIỆN DỪNG
 

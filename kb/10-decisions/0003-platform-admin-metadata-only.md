@@ -3,7 +3,7 @@ id: 0003-platform-admin-metadata-only
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: null
+derived_from_commit: 867e4756
 expires: null
 owns_facts:
   - "quyền của quản trị viên nhà cung cấp và ranh giới đọc dữ liệu nghiệp vụ"
@@ -31,6 +31,10 @@ dữ liệu công dân cho nền tảng của bên thứ ba cần biết ranh gi
 | Hạn mức, gói dịch vụ, tình trạng hoạt động | Đọc dữ liệu cá nhân công dân |
 | Nhật ký hệ thống, sức khoẻ dịch vụ | Đọc nhật ký thao tác nghiệp vụ của xã |
 | Số đếm tổng hợp nhận **qua sự kiện** | Truy vấn thẳng vào CSDL nghiệp vụ |
+
+*13/10/2026 — ngoại lệ có ngày: một tài khoản vận hành duy nhất (owner) được tạo tài khoản quản trị
+xã và đặt lại mật khẩu cán bộ, luôn là mật khẩu tạm, có vết trong nhật ký của xã (ADR 0048 §Sửa đổi
+13/10/2026).*
 
 ## Cưỡng chế bằng kiến trúc, không bằng quyền
 
