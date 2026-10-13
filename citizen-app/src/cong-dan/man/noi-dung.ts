@@ -1285,10 +1285,10 @@ export const XA_TN = {
   language: "Ngôn ngữ",
   /** The only language the app has — a statement, not a setting (there is nothing to switch to). */
   language_value: "Tiếng Việt",
-  /** `label`: "<major>.<minor>" of package.json's version, injected at build time (`lib/build-label.ts`). */
   /** What a screen reader says for the masked number on the Cá nhân card (`09****5678`). */
   masked_phone_label: (lastFour: string) => `Số điện thoại, đã che, kết thúc bằng ${lastFour}`,
-  app_version: (label: string) =>`ViGov phiên bản ${label}`,
+  /** `label`: "<major>.<minor>" of package.json's version, injected at build time (`lib/build-label.ts`). */
+  app_version: (label: string) => `ViGov phiên bản ${label}`,
   /*
    * "NHẬN THÔNG BÁO" (ADR 0091 §4) — label and hint are the prototype's, verbatim (`ProfilePage.tsx:89-90`). The
    * rest is new wording: the prototype's switch was wired to nothing, this one reads and writes the citizen's own

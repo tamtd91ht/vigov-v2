@@ -754,6 +754,14 @@
       "viec": "Tra cứu hồ sơ: bỏ hai ô (số điện thoại, 4 số cuối) — chủ dự án 13/10/2026: nhập ở app rồi sang Cổng Dịch vụ công lại nhập lần nữa. Ô ở trang chủ và dòng ở Cá nhân nay hỏi rời app rồi mở thẳng vpcp.dichvucong.gov.vn (TrangXa go → useLeaveApp(openDossierPortal)). Điền sẵn sang cổng KHÔNG làm: số điện thoại trên URL là dữ liệu cá nhân trên URL (luật 3 cấm #4), và cổng không công bố tham số điền sẵn. Màn TraCuuHoSoXa chỉ còn câu + nút, chỉ hiện khi không có bộ mở.",
       "bang_chung": "tsc sạch; vitest citizen-app 86 tệp/2192 test xanh. CHƯA xem trên điện thoại.",
       "con_no": "Cần bản app mới (đẩy + phát hành) để người dân thấy. Câu chính sách riêng tư 'mở từ màn Tra cứu hồ sơ' (content/dich-ra-ngoai.ts) chưa đổi chữ 'màn'."
+    },
+    {
+      "id": "sheet-mini-app-13-10-back-ca-nhan",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Bảng lỗi mini-app-131026 (13/10/2026) dòng 3, 4, 5, 6, 7. Back từ chi tiết video/truyền thanh/sự kiện về đúng danh sách (ManXa bai.tu: ArticleOrigin); tab loại tin Tin tức · Sự kiện · Thông báo do AppCuaXa giữ nên Back về đúng tab (chip con vẫn về Tất cả). Cá nhân: bỏ dòng Thông báo và màn Thông báo rỗng, bỏ tên tỉnh, thêm số đã che máy chủ trả cùng phiên (maskedPhone, readMaskedPhone chỉ nhận khuôn đã che). Phiên bản = major.minor của package.json (nay 1.1.0) thay mã commit. Chính sách riêng tư app xã thêm câu về số đã che.",
+      "bang_chung": "5f2a9004, 2df9a1c8, và commit thẻ Cá nhân số đã che; tsc sạch; vitest citizen-app 86 tệp/2196 test xanh. CHƯA xem trên điện thoại.",
+      "con_no": "Cần bản app mới (đẩy + phát hành) để tester thấy. Nâng số phiên bản là bước phát hành: sửa version trong citizen-app/package.json trước zmp:deploy. Dòng 2 (tab danh mục Video): đã có sẵn từ 10ccee22, chỉ hiện khi có video đã đăng gắn danh mục — sheet ghi Reject kèm cách kiểm. Dòng 8 (ô SĐT 10 số, 7ca7943d) bị 188321e2 bỏ theo chủ dự án."
     }
   ]
 }

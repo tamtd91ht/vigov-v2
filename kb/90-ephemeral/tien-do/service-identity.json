@@ -660,6 +660,14 @@
       "viec": "ADR 0048 §Sửa đổi 13/10: operator_account.is_owner (migration 0030, một owner); 7 RPC chỉ owner (tài khoản vận hành; tài khoản cán bộ xã: liệt kê có vết, tạo quản trị xã, đặt lại mật khẩu) xác thực bằng phiên owner; operatorctl set-owner + Jenkins chi-dinh-owner; đặt lại mật khẩu vận hành giữ TOTP → đăng nhập mật khẩu tạm + TOTP, principal.must_change_password, lớp chặn thứ hai.",
       "bang_chung": "dee5ca5b, 42d5e734, f791db49 (proto b116c2d6, 87cbd5cf) — go vet + go test ./... (identity, core) xanh; check_audit_actor/security/quyen PASS. Test PG + migration 0030 CHƯA chạy.",
       "con_no": "Chạy test PG. Chạy job Jenkins chi-dinh-owner trên prod. core/audit/read.go:269 ẩn vết actor_kind=operator khỏi màn nhật ký của xã — ADR 0048 §13/10 #5 nói xã thấy được: chưa xử lý."
+    },
+    {
+      "id": "danh-ba-loai-admin-masked-phone-13-10",
+      "menu": "danh-ba-can-bo",
+      "trang_thai": "xong",
+      "viec": "Bảng lỗi mini-app-131026 (13/10/2026). Dòng 1: danh bạ công khai (locDanhBaCongKhai) luôn loại tài khoản đăng nhập `admin` mặc định ('Quản trị hệ thống'), lọc theo email đăng nhập, không theo vai trò; số đếm đã công khai (staff_counts) dùng chung vị từ. Dòng 6: POST /api/v1/citizen-sessions trả maskedPhone = privacy.MaskPhone của số VỪA xác thực ở lần mở (84… đổi về 0…); vắng khi không có số; không qua cầu gRPC, không vào phiên hay vết.",
+      "bang_chung": "5bc977cf, 810c259e; go test ./internal/store ./internal/app ./internal/http xanh. danh_ba_cong_khai_pg_test.go có ca mới 'quan-tri' nhưng CHƯA chạy (máy này không có VIGOV_TEST_DSN).",
+      "con_no": "Chạy test PG thật cho danh bạ. Deploy service-identity. openapi.json (tầng sinh) cần make kb để có maskedPhone."
     }
   ]
 }
