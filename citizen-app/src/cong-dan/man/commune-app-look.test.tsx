@@ -43,6 +43,23 @@ describe("tab Tin tức – Sự kiện: ba tab loại tin, không có 'Tất c�
     ]);
   });
 
+  it("shows the tab its parent holds — back from a Sự kiện article lands on Sự kiện (sheet mini-app 13/10 row 4)", () => {
+    const held = renderToStaticMarkup(
+      createElement(DanhSachTinXa, { ten_mien: "xa-thu.vigov.vn", onMo: () => {}, type: "su-kien", onType: () => {} }),
+    );
+    const selected = [...held.matchAll(/role="tab" aria-selected="(true|false)"[^>]*>([^<]*)</g)].map((m) => [m[2], m[1]]);
+    expect(selected).toEqual([
+      ["Tin tức", "false"],
+      ["Sự kiện", "true"],
+      ["Thông báo", "false"],
+    ]);
+    // And the parent holds it: `AppCuaXa` passes its own state, and each list screen names itself as the origin.
+    const src = Object.values(import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
+    expect(src).toMatch(/<DanhSachTinXa[\s\S]*?type=\{newsType\}[\s\S]*?onType=\{setNewsType\}/);
+    for (const origin of ["video", "truyen-thanh", "su-kien"]) expect(src).toContain(`datMan({ kieu: "bai", id, tu: "${origin}" })`);
+    expect(src).toContain("onQuayLai={() => backTo(man.tu)}");
+  });
+
   // The category chips (card D2) appear only once their route answers; a first render — before any load —
   // has none, so no empty row flashes up. Their markup is pinned in `news-category-chips.test.tsx`.
   it("has no 'Tất cả' tab, and no chip row before the categories have loaded", () => {

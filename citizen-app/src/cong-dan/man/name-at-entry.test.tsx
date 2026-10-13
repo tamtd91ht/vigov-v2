@@ -353,12 +353,10 @@ const personal = (name: string | null) =>
     createElement(CaNhanXa, {
       ho_ten: name,
       ten_xa: commune.ten,
-      tinh: commune.tinh,
       largeText: false,
       onLargeText: () => {},
       onMoPhanAnh: () => {},
       onMoTraCuu: () => {},
-      onOpenNotifications: () => {},
     }),
   );
 

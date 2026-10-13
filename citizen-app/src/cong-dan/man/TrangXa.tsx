@@ -39,7 +39,7 @@ import { type ReactNode, type Ref, useEffect, useMemo, useRef, useState } from "
 import { type KetQuaCongKhai, traXaTheoTenMien } from "../api/goi-vigov";
 import { myNotificationPreference, setMyNotificationPreference } from "../api/goi-vigov";
 import { communeBanners, type NewsReadResult } from "../api/goi-vigov";
-import type { XaTraDuoc } from "../api/hop-dong-cong-khai";
+import type { NewsType, XaTraDuoc } from "../api/hop-dong-cong-khai";
 import { type CommuneBannerItem, readHttpsLink } from "../api/hop-dong-cong-khai";
 import { communeAppReopen, dropCommuneAppSession, type OpenCommuneAppSession } from "../api/mo-phien-vigov";
 import { layPhienViGov } from "../api/phien-vigov";
@@ -135,11 +135,17 @@ export function xaTuKetQuaTra(
 
 export type TabXa = "trang-chu" | "phan-anh" | "tin-tuc" | "ca-nhan";
 
+/**
+ * Where an article's back arrow returns: the tab, or the list screen it was opened from — a video's back goes to the
+ * video list, not home (customer sheet mini-app 13/10/2026 row 3).
+ */
+export type ArticleOrigin = TabXa | "video" | "truyen-thanh" | "su-kien";
+
 type ManXa =
   | { readonly kieu: "tab"; readonly tab: TabXa }
   | { readonly kieu: "gui" }
   | { readonly kieu: "phieu"; readonly ma: string; readonly tu: TabXa }
-  | { readonly kieu: "bai"; readonly id: string; readonly tu: TabXa }
+  | { readonly kieu: "bai"; readonly id: string; readonly tu: ArticleOrigin }
   | { readonly kieu: "danh-ba" }
   | { readonly kieu: "tra-cuu" }
   /**
@@ -154,7 +160,6 @@ type ManXa =
   | { readonly kieu: "tra-cuu-khong-tai-khoan"; readonly ma: string }
   | { readonly kieu: "truyen-thanh" }
   | { readonly kieu: "video" }
-  | { readonly kieu: "thong-bao" }
   | { readonly kieu: "su-kien" }
   /** ADR 0091 §2: the alerts in force — from the home banner. */
   | { readonly kieu: "canh-bao" };
@@ -526,7 +531,7 @@ function TrangChuXa(props: {
     <>
       {/* Header theo prototype (`AppHeader.tsx`): quốc huy trái, tên xã giữa, lời chào dưới. Nó đứng NGOÀI vùng
           cuộn — chỉ phần giữa cuộn (§5.2). Góc phải để trống cho Zalo: chuông đã bỏ (quyết định 10, 30/09/2026),
-          "Thông báo" nay là một dòng ở Cá nhân › Của tôi. */}
+          dòng "Thông báo" ở Cá nhân cũng đã bỏ (bảng lỗi mini-app 13/10/2026 dòng 5). */}
       {/* The prototype's subtitle (`HomePage.tsx:41-47`, owner 11/10/2026): "Xin chào, <tên>" when the Zalo name is
           known — otherwise nothing, never the province in its place nor a "loading" line the app cannot back. */}
       <RootTabHeader
@@ -850,7 +855,11 @@ function AppCuaXa(props: {
   // The home strip's "leave the app?" question. An article asks through its own (`BaiTinXa`).
   const leave = useLeaveApp(props.openLink);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
-  const lop = largeText ? "xa-app xa-co-chu--lon" : "xa-app";
+  const backTo = (origin: ArticleOrigin) =>
+    origin === "video" || origin === "truyen-thanh" || origin === "su-kien" ? datMan({ kieu: origin }) : veTab(origin);
+  // The news tab's chosen type, held here: opening an article unmounts the list, and back must land on the same tab.
+  const [newsType, setNewsType] = useState<NewsType>("tin-tuc");
+  const lop =largeText ? "xa-app xa-co-chu--lon" : "xa-app";
 
   /*
    * THE ENTRY MOTION (owner, UI-1 02/10/2026). `entering` is decided DURING the render that changes the screen —
@@ -1050,7 +1059,7 @@ function AppCuaXa(props: {
           id={man.id}
           ds={tin.ds.muc}
           onMo={(id) => datMan({ kieu: "bai", id, tu: man.tu })}
-          onQuayLai={() => veTab(man.tu)}
+          onQuayLai={() => backTo(man.tu)}
           openVideo={props.openVideo}
           openLink={props.openLink}
           shareArticle={props.shareArticle}
@@ -1134,11 +1143,11 @@ function AppCuaXa(props: {
       break;
     case "truyen-thanh":
       // The prototype's library (owner 11/10/2026): day groups, play in place, the fixed bar (`media-screens.tsx`).
-      man_con = <BroadcastScreen ten_mien={ten_mien} onBack={ve} onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })} />;
+      man_con = <BroadcastScreen ten_mien={ten_mien} onBack={ve} onMo={(id) => datMan({ kieu: "bai", id, tu: "truyen-thanh" })} />;
       break;
     case "video":
       // The prototype's two-column grid (owner 11/10/2026); a tile opens the item, whose "Xem video" opens the link.
-      man_con = <VideoScreen ten_mien={ten_mien} onBack={ve} onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })} />;
+      man_con = <VideoScreen ten_mien={ten_mien} onBack={ve} onMo={(id) => datMan({ kieu: "bai", id, tu: "video" })} />;
       break;
     case "su-kien":
       // The items the commune published AS EVENTS — the server's `?type=su-kien` (comms b22bf76), no longer
@@ -1150,7 +1159,7 @@ function AppCuaXa(props: {
             <NewsOfType
               ten_mien={ten_mien}
               type="su-kien"
-              onMo={(id) => datMan({ kieu: "bai", id, tu: "trang-chu" })}
+              onMo={(id) => datMan({ kieu: "bai", id, tu: "su-kien" })}
               empty={XA_TN.su_kien_trong}
               hint={XA_TN.news_empty_hint}
             />
@@ -1161,19 +1170,6 @@ function AppCuaXa(props: {
     case "canh-bao":
       // ADR 0091 §2: a FRESH read of the alerts in force (not the home banner's), every one of them, newest first.
       man_con = <DisasterAlertScreen domain={ten_mien} communeName={xa.ten} onBack={ve} dial={props.dialStaff} />;
-      break;
-    case "thong-bao":
-      // Reached from Cá nhân › Của tôi (decision 10: no bell on the home header), so "Quay lại" goes back there.
-      // The hint is the sentence that stood in Cá nhân's old "Thông báo" section: where messages will come from.
-      man_con = (
-        <ManChuaCoDuLieu
-          tieu_de={XA_TN.thong_bao}
-          bieu_tuong="bell"
-          cau={XA_TN.thong_bao_trong}
-          hint={XA_TN.thong_bao_chua_co}
-          onQuayLai={() => veTab("ca-nhan")}
-        />
-      );
       break;
     default:
       break;
@@ -1275,7 +1271,12 @@ function AppCuaXa(props: {
         <DauTab tieu_de={XA_TN.news_tab_title} />
         {/* The list of the chosen type and chip registers itself (`useTinXa`); other tabs are not mounted, so not read. */}
         <PullToRefresh className="xa-trang xa-trang--tab">
-          <DanhSachTinXa ten_mien={ten_mien} onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })} />
+          <DanhSachTinXa
+            ten_mien={ten_mien}
+            type={newsType}
+            onType={setNewsType}
+            onMo={(id) => datMan({ kieu: "bai", id, tu: "tin-tuc" })}
+          />
         </PullToRefresh>
       </>
     );
@@ -1304,12 +1305,10 @@ function AppCuaXa(props: {
           ho_ten={shownName}
           avatarUrl={avatarShown(props.name)}
           ten_xa={xa.ten}
-          tinh={xa.tinh}
           largeText={largeText}
           onLargeText={setLargeText}
           onMoPhanAnh={() => veTab("phan-anh")}
           onMoTraCuu={() => datMan({ kieu: "tra-cuu" })}
-          onOpenNotifications={() => datMan({ kieu: "thong-bao" })}
           notification={{ state: notification.state, onPress: pressNotification }}
           onRefresh={refreshNotification}
         />

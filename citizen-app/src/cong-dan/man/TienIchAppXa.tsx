@@ -254,7 +254,6 @@ export function CaNhanXa(props: {
   /** The Zalo profile picture brought by the same name request, or `null` → the initials. */
   avatarUrl?: string | null;
   ten_xa: string;
-  tinh: string;
   /**
    * "Cỡ chữ lớn" — the prototype's ONE switch (owner 11/10/2026): on = every text of the app 20% larger, never
    * below the 16px floor either way (`styles.css` `.xa-co-chu--lon`). In memory only: no `localStorage`.
@@ -263,8 +262,6 @@ export function CaNhanXa(props: {
   onLargeText: (on: boolean) => void;
   onMoPhanAnh: () => void;
   onMoTraCuu: () => void;
-  /** "Thông báo" — the screen the home bell used to open (decision 10: the bell is gone from the header). */
-  onOpenNotifications: () => void;
   /**
    * The "Nhận thông báo" switch (ADR 0091 §4), held by `AppCuaXa` so it survives tab changes. Absent = no row
    * (tests that pin the rest of the screen).
@@ -276,15 +273,12 @@ export function CaNhanXa(props: {
   return (
     <PullToRefresh className="xa-trang xa-trang--tab" onRefresh={props.onRefresh}>
       {/* The profile card (§6.6): what this app KNOWS — the Zalo name (and picture) taken at entry and the commune of
-          the app. No hamlet and no phone line: the app holds neither, and a guessed line is a wrong one. */}
+          the app. No province (customer sheet mini-app 13/10/2026 row 6): the commune alone names whose app this is. */}
       <div className="xa-the xa-the--dem xa-profile">
         <ProfileAvatar name={props.ho_ten} avatarUrl={props.avatarUrl ?? null} />
         <span className="xa-hang__chu">
           <strong className="xa-profile__name">{props.ho_ten ?? XA_TN.chua_co_ten}</strong>
-          <span className="xa-phu">
-            {props.ten_xa}
-            {props.tinh !== "" ? ` · ${props.tinh}` : ""}
-          </span>
+          <span className="xa-phu">{props.ten_xa}</span>
         </span>
       </div>
 
@@ -330,11 +324,8 @@ export function CaNhanXa(props: {
           <SettingText icon="file-search" label={XA_TN.lich_su_tra_cuu} />
           <BieuTuong ten="chevron-right" co={22} />
         </button>
-        <div className="xa-ke xa-ke--sat" />
-        <button type="button" className="xa-hang" onClick={props.onOpenNotifications}>
-          <SettingText icon="bell" label={XA_TN.thong_bao} />
-          <BieuTuong ten="chevron-right" co={22} />
-        </button>
+        {/* No "Thông báo" row (customer sheet mini-app 13/10/2026 row 5): it opened an empty screen; the citizen's
+            messages arrive in Zalo, and the "Nhận thông báo" switch above is where they are turned on or off. */}
       </div>
 
       {BUILD_LABEL !== "" && (

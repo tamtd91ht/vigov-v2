@@ -407,12 +407,10 @@ describe("notification switch — the row on Cá nhân", () => {
     const base = {
       ho_ten: null, // vi-name-ok: existing prop of CaNhanXa
       ten_xa: COMMUNE, // vi-name-ok: existing prop of CaNhanXa
-      tinh: "",
       largeText: false,
       onLargeText: noop,
       onMoPhanAnh: noop,
       onMoTraCuu: noop,
-      onOpenNotifications: noop,
     };
     expect(html(createElement(CaNhanXa, base))).not.toContain("Nhận thông báo");
     const page = html(

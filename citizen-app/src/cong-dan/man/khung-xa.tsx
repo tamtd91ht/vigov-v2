@@ -86,7 +86,7 @@ export function NationalEmblem() {
 /**
  * The one header shape of the commune app (`PROTOTYPE.md` §5.3): a left slot, the title CENTRED between two
  * slots of equal width, a right slot. The right slot is Zalo's corner and stays empty on every screen: the
- * home bell left it in wave 1 (owner's decision 10, 30/09/2026) — "Thông báo" is a row in Cá nhân › Của tôi.
+ * home bell left it in wave 1 (owner's decision 10, 30/09/2026); the "Thông báo" row in Cá nhân went too (sheet mini-app 13/10/2026 row 5).
  */
 function HeaderShell(props: { className: string; left: ReactNode; right?: ReactNode; children: ReactNode }) {
   return (

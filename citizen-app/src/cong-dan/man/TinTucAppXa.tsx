@@ -364,9 +364,20 @@ export function tinLienQuan(ds: readonly TinXaTomTat[], dang_doc: TinXaTomTat | 
  * type's own server-filtered list (`NewsOfType`, keyed by type so each tab loads, pages and "Xem thêm"s on
  * its own). The tabs are `role="tab"` + `aria-selected`, and the chosen one carries a bar as well as a
  * colour — never colour alone.
+ *
+ * `type` / `onType`: the chosen tab held by the PARENT (`AppCuaXa`). An opened article unmounts this list, so a tab
+ * held here would be reset to "Tin tức" on the way back from a Sự kiện or Thông báo article (customer sheet mini-app
+ * 13/10/2026 row 4). Absent (tests) = held here.
  */
-export function DanhSachTinXa(props: { ten_mien: string; onMo: (id: string) => void }) {
-  const [type, setType] = useState<NewsType>("tin-tuc");
+export function DanhSachTinXa(props: {
+  ten_mien: string;
+  onMo: (id: string) => void;
+  type?: NewsType;
+  onType?: (type: NewsType) => void;
+}) {
+  const [ownType, setOwnType] = useState<NewsType>("tin-tuc");
+  const type = props.type ?? ownType;
+  const setType = props.onType ?? setOwnType;
   return (
     <>
       <div className="xa-tabs-tin" role="tablist" aria-label={XA_TN.loc_loai_tin}>

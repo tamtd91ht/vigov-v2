@@ -279,12 +279,10 @@ describe("Cá nhân (§6.6)", () => {
       createElement(CaNhanXa, {
         ho_ten: name,
         ten_xa: "Xã Thử",
-        tinh: "Tỉnh Mẫu",
         largeText: false,
         onLargeText: noop,
         onMoPhanAnh: noop,
         onMoTraCuu: noop,
-        onOpenNotifications: noop,
       }),
     );
 
@@ -294,14 +292,14 @@ describe("Cá nhân (§6.6)", () => {
     expect(initials("   ")).toBe("");
   });
 
-  it("the profile shows the name and '{xã} · {tỉnh}' — no hamlet, no phone line invented", () => {
+  it("the profile shows the name and the commune — no province (sheet mini-app 13/10 row 6), no phone line invented", () => {
     const page = personal("Nguyễn Văn Hùng");
     expect(page).toContain('<span class="xa-avatar" aria-hidden="true">NH</span>');
-    expect(page).toContain("Xã Thử · Tỉnh Mẫu");
+    expect(page).toContain('<span class="xa-phu">Xã Thử</span>');
     expect(page).not.toMatch(/\b0\d{9}\b/);
   });
 
-  it("ONE 'Cỡ chữ lớn' switch (the prototype's); language is a statement; 'Của tôi' has Phản ánh · Hồ sơ đã tra cứu · Thông báo — no count", () => {
+  it("ONE 'Cỡ chữ lớn' switch (the prototype's); language is a statement; 'Của tôi' has Phản ánh · Hồ sơ đã tra cứu — no count, no Thông báo row", () => {
     const page = personal(null);
     // owner 11/10/2026: the three levels became the prototype's one switch, with its hint. No `notification` prop
     // here, so no "Nhận thông báo" row (its states: `commune-new-apis.test.tsx`).
@@ -311,7 +309,9 @@ describe("Cá nhân (§6.6)", () => {
     expect(page).toContain("Phóng to toàn bộ chữ trong app thêm 20% cho dễ đọc");
     expect(page).not.toMatch(/type="checkbox"|Nhận thông báo/);
     expect(page).toContain(XA_TN.language_value);
-    for (const row of [XA_TN.of_mine, "Hồ sơ đã tra cứu", XA_TN.thong_bao]) expect(page).toContain(row);
+    for (const row of [XA_TN.of_mine, "Hồ sơ đã tra cứu"]) expect(page).toContain(row);
+    // sheet mini-app 13/10/2026 row 5: the "Thông báo" row is gone.
+    expect(page).not.toContain(`>${XA_TN.thong_bao}<`);
     expect(page).not.toMatch(/phiếu đã gửi|Bấm để xem phản ánh đã gửi/);
   });
 
@@ -321,12 +321,10 @@ describe("Cá nhân (§6.6)", () => {
         ho_ten: "Nguyễn Văn Hùng",
         avatarUrl: "https://s120-ava-talk.zadn.vn/a.jpg",
         ten_xa: "Xã Thử",
-        tinh: "",
         largeText: true,
         onLargeText: noop,
         onMoPhanAnh: noop,
         onMoTraCuu: noop,
-        onOpenNotifications: noop,
       }),
     );
     expect(withPicture).toContain('<img class="xa-avatar xa-avatar--image" src="https://s120-ava-talk.zadn.vn/a.jpg" alt=""');
@@ -336,12 +334,10 @@ describe("Cá nhân (§6.6)", () => {
         ho_ten: "Nguyễn Văn Hùng",
         avatarUrl: "http://example.invalid/a.jpg",
         ten_xa: "Xã Thử",
-        tinh: "",
         largeText: false,
         onLargeText: noop,
         onMoPhanAnh: noop,
         onMoTraCuu: noop,
-        onOpenNotifications: noop,
       }),
     );
     expect(notHttps).not.toContain("<img");

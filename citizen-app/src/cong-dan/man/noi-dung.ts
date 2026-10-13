@@ -1269,9 +1269,6 @@ export const XA_TN = {
   // `VideoPage.tsx:269-270`, verbatim.
   video_trong: "Chưa có video trong chủ đề này",
   video_empty_hint: "Bà con chọn chủ đề khác hoặc xem mục Tất cả.",
-  thong_bao_chua_co:
-    "Ứng dụng chưa gửi thông báo. Khi có, kết quả phản ánh và tin khẩn của xã sẽ gửi qua tin nhắn Zalo.",
-  thong_bao_trong: "Chưa có thông báo nào.",
   // Cá nhân
   tab_ca_nhan: "Cá nhân",
   ca_nhan_tieu_de: "Cá nhân",
