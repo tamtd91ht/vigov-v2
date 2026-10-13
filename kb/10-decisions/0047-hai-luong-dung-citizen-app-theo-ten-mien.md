@@ -3,7 +3,7 @@ id: 0047-hai-luong-dung-citizen-app-theo-ten-mien
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 6f01382
+derived_from_commit: 808b92a6
 expires: null
 owns_facts:
   - "một biến thể dựng citizen-app cho cả app chung và app riêng; 'demo' là cách nói về giai đoạn, không phải khái niệm kỹ thuật (trả lời 27/09/2026)"
@@ -13,7 +13,7 @@ owns_facts:
   - "lệnh đẩy lên Zalo chỉ chọn APP NÀO, luôn tường minh (--app=vihat không bao giờ nung xã · --domain=<x> luôn nung xã · không cờ thì menu, không người ngồi thì từ chối), không bao giờ suy đích từ citizen-app/.env; QR mang tham số xã do platform-admin sinh, không do lệnh đẩy (chủ dự án, 06/10/2026)"
   - "vì sao tệp ánh xạ tên miền → App ID ở citizen-app/scripts không vi phạm ADR 0044 điều kiện dừng #1, và vì sao nó không phải nguồn sự thật về xã của một App ID"
   - "tham số QR/URL của app chung mang TÊN MIỀN xã thay cho t=<ULID>; máy chủ phân giải; tên miền không bao giờ được lưu làm tham chiếu xã (THAY 12/10/2026: link mang mã công khai x=<launch_code>, d= chỉ còn chuyển tiếp — §Sửa đổi 12/10/2026)"
-  - "mã công khai của xã (tenant.launch_code): 12 hex ngẫu nhiên, cố định, không phải tenant_id; app tra một lần rồi chạy theo tên miền; app đọc x trước, không có x thì d, x sai khuôn không lùi về d; QR in cả hai trong giai đoạn chuyển tiếp (chủ dự án, 12/10/2026)"
+  - "mã công khai của xã (tenant.launch_code): 12 hex ngẫu nhiên, cố định, không phải tenant_id; app tra một lần rồi chạy theo tên miền; app đọc x trước, không có x thì d, x sai khuôn không lùi về d; QR in cả hai trong giai đoạn chuyển tiếp (chủ dự án, 12/10/2026; từ 13/10/2026 platform-admin và web-admin chỉ đưa x — ADR 0070 §Sửa đổi 13/10/2026, §Sửa đổi 13/10/2026 ở đây)"
   - "xã sáp nhập: trỏ tên miền cũ sang xã kế thừa, có vết, thay cho thông báo kế thừa qua t"
   - "vì sao phát hành app riêng được phép khi UNKNOWN #1 của ADR 0045 chưa đo, và cái giá của quyết định ấy"
   - "cờ --vao-thang: app riêng nung tên miền xã vào bundle và mở thẳng vào xã, không màn ViHAT, không bước xác nhận — ngoại lệ duy nhất của câu 1 (chủ dự án, 27/09/2026; tên cờ thay 06/10/2026 — --domain nay luôn nung, xem §Sửa đổi 06/10/2026 #5)"
@@ -35,7 +35,8 @@ chỉ chọn app nào, QR mang xã sinh ở platform-admin — §*Sửa đổi 0
 máy ảnh mặc định — §*Sửa đổi 08/10/2026*) ·
 **Sửa đổi 11/10/2026** (app xã theo prototype; thay mục (4), (7), (11), (12) và G2 của dòng *"Theo
 PROTOTYPE.md"* — ADR 0091, §*Sửa đổi 11/10/2026*) ·
-**Sửa đổi 12/10/2026** (link QR mang mã công khai `x`, `d` chỉ còn chuyển tiếp — §*Sửa đổi 12/10/2026*)
+**Sửa đổi 12/10/2026** (link QR mang mã công khai `x`, `d` chỉ còn chuyển tiếp — §*Sửa đổi 12/10/2026*) ·
+**Sửa đổi 13/10/2026** (platform-admin và web-admin không đưa link `d=` nữa — §*Sửa đổi 13/10/2026*)
 
 ## Bối cảnh
 
@@ -453,6 +454,24 @@ bản ấy phát hành. (2) Ai xem lưu lượng mạng của app vẫn thấy t
 tên miền. (3) Tuyến tra công khai chưa có giới hạn tần suất (`core/ratelimit` chưa có) — như hai tuyến
 công khai cùng nhóm.
 
+### Sửa đổi 13/10/2026 — thẻ QR không đưa link `d=` nữa
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+13/10/2026, chọn *"chỉ x="*. Nội dung đầy đủ (một QR mỗi bề mặt, cán bộ xã có QR của xã ở web-admin):
+**ADR 0070 §*Sửa đổi 13/10/2026*** — không chép ở đây.
+
+| Chỗ ở tệp này | Nay |
+|---|---|
+| §*Sửa đổi 12/10/2026* #4, vế *"Thẻ QR ở platform-admin … sinh cả hai link (`chung` = `x`, `chung_ten_mien` = `d`)"* | platform-admin **và** web-admin chỉ đưa link `x` (hoặc link app riêng). `npm run qr` **không** thuộc quyết định này — vẫn như #4 cho tới khi có quyết định khác |
+| Phần còn lại của #4 (app đọc `x` trước, lùi về `d`, `x` sai khuôn không lùi) | Đứng nguyên — QR `d=` đã in vẫn chạy cho tới khi bỏ đường chuyển tiếp |
+
+**Cái giá:** cái giá (1) của §*Sửa đổi 12/10/2026* nay không còn đường tránh trên hai bề mặt này — QR
+`x=` in trước khi bản app ViHAT đọc `x` được **phát hành** trên Zalo sẽ mở app mà không có xã. Tại lúc
+quyết, trạng thái phát hành ấy **chưa xác nhận**.
+
+## ĐIỀU KIỆN DỪNG
+
+<!-- Tiêu đề này bị mất ở 2c107cf2 (11/10/2026) khi chèn §Sửa đổi 11/10/2026; đặt lại 13/10/2026, nội dung danh sách không đổi. -->
 
 1. Đề xuất lưu **tên miền** làm tham chiếu xã ở bất kỳ đâu (phiên, xã đã nhớ, vết, bản ghi nghiệp vụ)
 2. Đề xuất tệp dựng hay bundle mang **giá trị theo xã** ngoài việc chọn App ID đích — trừ tên miền

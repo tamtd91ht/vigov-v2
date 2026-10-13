@@ -3,13 +3,16 @@ id: 0070-doi-go-app-id-mini-app-tu-platform-admin
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: ce5db182
+derived_from_commit: 808b92a6
 expires: null
 owns_facts:
   - "người vận hành ViHAT đổi App ID Mini App riêng của xã từ màn chi tiết xã ở platform-admin: một giao dịch gắn App ID mới và XOÁ MỀM dòng mini_app cũ (deleted_at/by/delete_reason), ghi nhật ký; xã chỉ có MỘT App ID tại một thời điểm (chốt 02/10/2026, sửa 05/10/2026 — xoá mềm thay cho tắt)"
   - "gỡ Mini App khỏi xã = XOÁ MỀM dòng mini_app, BẮT BUỘC lý do, có nhật ký; KHÔNG bật lại — dòng cũ chỉ còn là lịch sử + nhật ký; khoá chính app_id vẫn cấm dùng lại App ID cũ; không bao giờ chuyển App ID sang xã khác (chốt 02/10/2026, sửa 05/10/2026 — bỏ bật lại)"
   - "khoá bí mật App ID chỉ ghi, không bao giờ hiện lại; màn chỉ hiện 'đặt lúc … bởi …'; một RPC đọc mới của identity chỉ trả siêu dữ liệu trạng thái (chốt 05/10/2026)"
-  - "liên kết mở / QR của một xã: mọi xã đang hoạt động có QR app dùng chung https://zalo.me/s/<App ID app chung>/?d=<tên miền chính>&src=qr (phiên qua cầu của vihat-miniapp); xã có app riêng đang sống có THÊM QR app riêng https://zalo.me/s/<App ID xã>/?src=qr; người vận hành chọn in tấm nào, tuyến liên kết trả cả hai; QR từ đâu thì mở app từ đó; QR in trước vẫn chạy (chốt 05/10/2026, sửa 06/10/2026 — bỏ 'app riêng trước, app chung chỉ dự phòng')"
+  - "liên kết mở / QR của một xã: mọi xã đang hoạt động có QR app dùng chung https://zalo.me/s/<App ID app chung>/?d=<tên miền chính>&src=qr (phiên qua cầu của vihat-miniapp); xã có app riêng đang sống có THÊM QR app riêng https://zalo.me/s/<App ID xã>/?src=qr; người vận hành chọn in tấm nào, tuyến liên kết trả cả hai; QR từ đâu thì mở app từ đó; QR in trước vẫn chạy (chốt 05/10/2026, sửa 06/10/2026 — bỏ 'app riêng trước, app chung chỉ dự phòng'; THAY 13/10/2026 ở platform-admin và web-admin — §Sửa đổi 13/10/2026)"
+  - "mỗi bề mặt (chi tiết xã ở platform-admin, Cấu hình → Kênh Zalo ở web-admin) hiện ĐÚNG MỘT QR của xã: xã có app riêng đang sống → https://zalo.me/s/<App ID xã>/?src=qr; không có → app chung chỉ với mã công khai ?x=<mã công khai>&src=qr; không hiện thông tin app chung, không còn link d= (chủ dự án, 13/10/2026)"
+  - "cán bộ xã xem, tải PNG, in/lưu PDF QR mở Mini App của CHÍNH xã mình ở web-admin → Cấu hình → Kênh Zalo: tuyến GET /api/v1/commune-launch-link của service-platform, xã suy từ Host, quyền admin.lookup, chỉ đọc, KHÔNG ghi vết (chủ dự án, 13/10/2026)"
+  - "tải PNG và 'In / Lưu PDF' (in của trình duyệt, khổ A4: tên xã, QR, câu 'Quét mã bằng Zalo để mở ứng dụng của xã') có ở cả platform-admin lẫn web-admin (chủ dự án, 13/10/2026)"
   - "cấu hình Mini App riêng của xã (App ID ↔ xã, khoá bí mật) làm ở platform-admin; stage Jenkins doi-app-id-thang-binh / dat-secret-mini-app gỡ khi màn đã kiểm trên prod, bat-demo-mini-app / tat-demo-mini-app gỡ ngay (chốt 05/10/2026)"
   - "khoá bí mật Zalo của App ID nhập ngay trên màn chi tiết xã, lưu mã hoá ở service-identity (ADR 0066 dòng 4); đổi hoặc gỡ App ID thì khoá của App ID cũ tự thu hồi (chốt 02/10/2026)"
   - "đổi/gỡ App ID bảo vệ bằng hộp xác nhận hỏi đúng việc + lý do, quyền ops.mini_app.manage; không đòi nhập lại TOTP (chốt 02/10/2026)"
@@ -21,7 +24,8 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Sửa đổi 05/10/2026** (xoá mềm, bỏ bật lại, khoá chỉ ghi, QR theo app
 riêng — §*Sửa đổi 05/10/2026*) · **Sửa đổi 06/10/2026** (QR: cả app chung lẫn app riêng, người vận
-hành chọn — §*Sửa đổi 06/10/2026*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay** job
+hành chọn — §*Sửa đổi 06/10/2026*) · **Sửa đổi 13/10/2026** (cán bộ xã có QR của chính xã ở
+web-admin; mỗi bề mặt một QR, app chung chỉ `x=`; tải PNG, in A4 — §*Sửa đổi 13/10/2026*) · **Ngày:** 2026-10-02 · **Người quyết:** chủ dự án, 02/10/2026 · **Thay** job
 Jenkins một lần `doi-app-id-thang-binh` / `gan-mini-app-thang-binh` (gỡ khỏi job khi màn này đã kiểm
 trên prod — ADR 0048 §01/10 #6d).
 
@@ -136,3 +140,37 @@ riêng trước, thiếu thì app chung).
   "Phản ánh của tôi" của cửa kia hay không **chưa kiểm** — phụ thuộc ADR 0045 UNKNOWN #2, còn mở.
 - Credential đẩy bản dựng của app chung chạm **mọi xã** đang in QR app chung, nay gồm cả xã đã có app
   riêng (ADR 0047 §*Trả lời 27/09* mục 3).
+
+## Sửa đổi 13/10/2026 — cán bộ xã có QR của chính xã; mỗi bề mặt một QR
+
+Mục này ghi thêm, không sửa phần trên: mục này thắng khi nói khác. **Người quyết:** chủ dự án,
+13/10/2026, trong phiên chính: *"Trên web admin chỉ có QR app với params trỏ về xã thôi, không có thông
+tin app chung. trên platform admin cũng vậy nếu xem ở trong chi tiết từng xã."* Chọn *"chỉ x="* cho
+link app chung. **Chưa dựng** — mỗi dòng là điều phải đúng khi dựng.
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Cán bộ xã có QR của **chính xã** | web-admin → Cấu hình → tab **Kênh Zalo**: cán bộ xem, tải, in QR mở Mini App của xã mình. Tuyến `GET /api/v1/commune-launch-link` của **service-platform**; xã suy từ `Host` (luật 1 bất biến 3), không nhận xã từ client; quyền `admin.lookup` — khoá của chính tab ấy (ADR 0074 #6), không thêm khoá `quyen`; chỉ đọc. **Nới** #3 của §*Sửa đổi 06/10/2026*: người vận hành **không còn là người duy nhất** phát QR |
+| 2 | Một QR mỗi bề mặt | Chi tiết xã ở platform-admin và tab Kênh Zalo ở web-admin hiện **đúng một** QR. Xã có app riêng **đang sống** → `https://zalo.me/s/<App ID xã>/?src=qr`. Không có → app chung, **chỉ** mã công khai: `https://zalo.me/s/<App ID chung>/?x=<mã công khai>&src=qr` (dạng `x`: ADR 0047 §*Sửa đổi 12/10/2026* #1). **Không** hiện App ID hay thông tin nào khác của app chung. **Thay** #1–#3 của §*Sửa đổi 06/10/2026* (hai QR, người vận hành chọn) **cho hai bề mặt này**; #4 (không chuyển giữa hai app) giữ |
+| 3 | Bỏ link `d=` | platform-admin và web-admin **không** đưa link `d=` (`chung_ten_mien`) nữa. Sửa ADR 0047 §*Sửa đổi 12/10/2026* #4 ở vế *"thẻ QR ở platform-admin sinh cả hai"* — xem §*Sửa đổi 13/10/2026* của ADR 0047. `npm run qr` của `citizen-app` **không** thuộc quyết định này |
+| 4 | Tải PNG · In / Lưu PDF | Cả hai bề mặt có **tải PNG** và **"In / Lưu PDF"** (in của trình duyệt, khổ A4: tên xã, QR, câu *"Quét mã bằng Zalo để mở ứng dụng của xã"*). Đây là quyết định mà sổ tiến độ `platform-admin` ghi là còn thiếu (*"không có nút tải PNG … cần quyết định"*) |
+| 5 | Không ghi vết | Lần xem/tải/in của cán bộ **không** ghi vết — cùng cái giá ADR 0048 §*30/09* #9 đã chấp nhận cho người vận hành, nay áp thêm cho cán bộ xã |
+| 6 | Danh từ URL | `commune-launch-link` — chủ dự án chọn (luật 12). Ghi ở `kb/00-foundation/ubiquitous-language.md` |
+
+**Vì sao một QR:** chủ dự án chỉ nêu câu trích ở trên — màn của xã chỉ mang QR trỏ về xã, không mang
+thông tin app chung. Lý do nào khác **chưa ghi**; đừng suy thêm.
+
+**Giữ nguyên:** tham số QR chỉ dẫn giao diện, không cấp gì (ADR 0005, 0019, 0022; ADR 0047 câu 3); xã
+chỉ có một App ID riêng tại một thời điểm (§*Sửa đổi 05/10/2026* #2); tuyến vận hành
+`communes/{id}/mini-app-launch-link` vẫn dưới `ops.qr.issue`.
+
+**Cái giá:**
+
+- **QR `x=` in trước khi bản app ViHAT đọc `x` được PHÁT HÀNH trên Zalo mở app mà không có xã** (ADR
+  0047 §*Sửa đổi 12/10/2026* cái giá (1)). Bỏ `d=` khỏi cả hai bề mặt nghĩa là trong khoảng ấy **không
+  còn tấm in nào chạy đúng** cho xã chưa có app riêng. Tại lúc quyết, trạng thái phát hành bản đọc `x`
+  **chưa xác nhận**.
+- Cán bộ xã nào có `admin.lookup` cũng phát được QR của xã, không truy được ai đã in một tấm sai
+  (#5). Tấm sai vẫn chỉ trỏ về chính xã đó, vì xã lấy từ `Host`.
+- Xã có app riêng nay chỉ thấy QR app riêng trên hai bề mặt này: cửa app chung của xã ấy vẫn chạy với
+  QR đã in, nhưng không in thêm được từ đây.
