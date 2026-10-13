@@ -20,7 +20,9 @@ export const REASON_MAX = 500;
 export const TEMP_PASSWORD_HINT =
   "Máy chủ kiểm mật khẩu theo quy định độ dài của hệ thống; nếu chưa đạt, màn hình báo độ dài cần có. Mật khẩu tạm không hiện lại sau khi lưu.";
 
-export const OPERATOR_RESET_NOTE = "Người này phải đổi mật khẩu ở lần đăng nhập tới; mã TOTP giữ nguyên.";
+/** ADR 0048 §13/10 #6: the reset keeps the TOTP; the next sign-in is temporary password + own TOTP. */
+export const OPERATOR_RESET_NOTE =
+  "Lần đăng nhập tới người này dùng mật khẩu tạm và mã TOTP của chính họ, rồi phải đổi mật khẩu.";
 export const OPERATOR_CREATE_NOTE = "Lần đầu đăng nhập người này phải đổi mật khẩu và đăng ký TOTP.";
 export const COMMUNE_ADMIN_NOTE = "Người này phải đổi mật khẩu ở lần đăng nhập đầu tiên vào trang quản trị của xã.";
 export const STAFF_RESET_NOTE =

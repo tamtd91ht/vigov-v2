@@ -466,7 +466,7 @@ function PermissionsDialog({
   );
 }
 
-function ResetOperatorPasswordDialog({
+export function ResetOperatorPasswordDialog({
   account,
   onClose,
   onDone,

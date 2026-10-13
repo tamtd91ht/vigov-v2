@@ -1,4 +1,4 @@
-import { ApiError, type PasswordRejection } from "@/lib/api";
+import { ApiError, isPasswordChangeRequired, type PasswordRejection } from "@/lib/api";
 import { SIGN_IN_PATH } from "@/lib/route-access";
 
 /**
@@ -57,6 +57,7 @@ export function traceLine(err: unknown): string | null {
  * The common part of every GUARDED call's failure (rule: ADR 0048 §01/10 #2 — the server decides).
  *
  *   401 → the session is gone: go to sign-in, show nothing (returns null).
+ *   403 `password_change_required` → the shell shows the forced password change (returns null).
  *   403 `forbidden` → name the ACTION not permitted; the key list is the server's.
  *   503 → the auth service is down: say so, stay on the page.
  *   anything else → `specific(err)` if the screen knows the code, else the generic sentence.
@@ -73,6 +74,9 @@ export function handleGuardedError(
     return null;
   }
   if (err.status === 0) return NETWORK_ERROR;
+  // The restricted session (ADR 0048 §13/10 #6): `call` has already told the console shell, which
+  // replaces the screen with the forced password change. No sentence under a form about to vanish.
+  if (isPasswordChangeRequired(err)) return null;
   if (err.status === 403 && err.code === "forbidden") {
     return `Tài khoản vận hành của bạn không có quyền ${action}. Nếu cần, đề nghị người quản lý tài khoản vận hành cấp quyền.`;
   }

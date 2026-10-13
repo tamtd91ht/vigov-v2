@@ -52,7 +52,18 @@ export type EnrollmentCompleted = { operator_code: string; expires_at: string; r
  * decides which owner controls to SHOW; every owner-only route re-checks it (opauth.RequireOwner, and
  * identity again). Optional so an older server reads as "not the owner" — never as the owner.
  */
-export type CurrentOperator = { operator_code: string; permission_keys: string[]; is_owner?: boolean };
+export type CurrentOperator = {
+  operator_code: string;
+  permission_keys: string[];
+  is_owner?: boolean;
+  /**
+   * ADR 0048 §13/10 #6: the owner reset this operator's password and they signed in with the temporary
+   * one + their own TOTP. The session is RESTRICTED until they change it: every route but whoAmI,
+   * sign-out and the own-password change answers 403 `password_change_required`. Only `true` restricts
+   * the console; the server enforces it either way.
+   */
+  must_change_password?: boolean;
+};
 
 /** operator_sessions.go `operatorRecoveryCodesView`. */
 export type RecoveryCodes = { recovery_codes: string[] };
@@ -482,6 +493,31 @@ async function errorFrom(res: Response): Promise<ApiError> {
   );
 }
 
+/**
+ * 403 of every operator route while the session is restricted (ADR 0048 §13/10 #6). Not `forbidden`:
+ * the operator holds the key, they must change their password first.
+ */
+export const PASSWORD_CHANGE_REQUIRED = "password_change_required";
+
+export function isPasswordChangeRequired(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 403 && err.code === PASSWORD_CHANGE_REQUIRED;
+}
+
+const passwordChangeListeners = new Set<() => void>();
+
+/**
+ * Called whenever ANY call is refused with 403 `password_change_required`, so the console shell can
+ * switch to the forced password screen whichever screen made the call. Here, in `call`, rather than
+ * in each screen's error handling: a screen that formats its own refusals would otherwise leave the
+ * operator on a page every action of which fails. Returns the unsubscribe.
+ */
+export function onPasswordChangeRequired(listener: () => void): () => void {
+  passwordChangeListeners.add(listener);
+  return () => {
+    passwordChangeListeners.delete(listener);
+  };
+}
+
 type Method = "GET" | "POST" | "PUT" | "DELETE";
 
 /**
@@ -501,7 +537,11 @@ async function call<T>(method: Method, path: string, body?: unknown): Promise<T>
   } catch {
     throw new ApiError(0, "network_error", "", "");
   }
-  if (!res.ok) throw await errorFrom(res);
+  if (!res.ok) {
+    const err = await errorFrom(res);
+    if (isPasswordChangeRequired(err)) for (const listener of passwordChangeListeners) listener();
+    throw err;
+  }
   if (res.status === 204) return undefined as T;
   try {
     return (await res.json()) as T;

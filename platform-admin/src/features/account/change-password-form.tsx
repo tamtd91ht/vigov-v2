@@ -7,6 +7,7 @@ import { FormMessage, TextField } from "@/components/form-parts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
+import type { AfterPasswordChange } from "@/features/operator/operator-context";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import { changePassword } from "@/lib/api";
 import { passwordRejectionText } from "@/lib/errors";
@@ -48,8 +49,19 @@ export function ChangePasswordDone() {
   );
 }
 
-export function ChangePasswordForm() {
+/** The forced change succeeded but the session could not be re-read: never pretend it opened. */
+export const CHANGED_RELOAD_UNKNOWN =
+  "Đã đổi mật khẩu, nhưng chưa tải lại được thông tin tài khoản. Tải lại trang để tiếp tục; nếu trang đưa về màn đăng nhập, hãy đăng nhập bằng mật khẩu mới.";
+
+/**
+ * `onChanged`: given by the forced change screen (ADR 0048 §13/10 #6) — after a 204 it re-reads the
+ * session. `continue` = the console takes over and this form unmounts; `signed_out` = the server
+ * ended the session, so the same "sign in again" card as the ordinary page; `unknown` = say so.
+ * Without it the form behaves as the ordinary account page always did.
+ */
+export function ChangePasswordForm({ onChanged }: { onChanged?: () => Promise<AfterPasswordChange> } = {}) {
   const guarded = useGuardedError();
+  const [afterUnknown, setAfterUnknown] = useState(false);
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -76,7 +88,10 @@ export function ChangePasswordForm() {
       setCurrent("");
       setNext("");
       setConfirm("");
-      setDone(true);
+      // The ordinary page: identity revoked every session, this one included.
+      const outcome = onChanged ? await onChanged() : "signed_out";
+      if (outcome === "signed_out") setDone(true);
+      else if (outcome === "unknown") setAfterUnknown(true);
     } catch (err) {
       setCurrent("");
       setError(
@@ -92,13 +107,25 @@ export function ChangePasswordForm() {
   }
 
   if (done) return <ChangePasswordDone />;
+  if (afterUnknown) {
+    return (
+      <Card as="section" role="status">
+        <CardContent>
+          <p className="m-0 text-sm text-ink-700">{CHANGED_RELOAD_UNKNOWN}</p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card as="form" method="post" onSubmit={submit} noValidate>
       <CardContent className="flex flex-col gap-4">
-        <Notice tone="info">
-          <p>Sau khi đổi, mọi phiên đăng nhập của tài khoản sẽ kết thúc và bạn cần đăng nhập lại.</p>
-        </Notice>
+        {/* The forced screen states its own sentence; whether its session survives is the server's answer. */}
+        {onChanged ? null : (
+          <Notice tone="info">
+            <p>Sau khi đổi, mọi phiên đăng nhập của tài khoản sẽ kết thúc và bạn cần đăng nhập lại.</p>
+          </Notice>
+        )}
         <TextField
           label="Mật khẩu hiện tại"
           name="current_password"
