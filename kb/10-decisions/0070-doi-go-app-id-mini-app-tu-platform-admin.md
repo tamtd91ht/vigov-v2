@@ -12,6 +12,7 @@ owns_facts:
   - "liên kết mở / QR của một xã: mọi xã đang hoạt động có QR app dùng chung https://zalo.me/s/<App ID app chung>/?d=<tên miền chính>&src=qr (phiên qua cầu của vihat-miniapp); xã có app riêng đang sống có THÊM QR app riêng https://zalo.me/s/<App ID xã>/?src=qr; người vận hành chọn in tấm nào, tuyến liên kết trả cả hai; QR từ đâu thì mở app từ đó; QR in trước vẫn chạy (chốt 05/10/2026, sửa 06/10/2026 — bỏ 'app riêng trước, app chung chỉ dự phòng'; THAY 13/10/2026 ở platform-admin và web-admin — §Sửa đổi 13/10/2026)"
   - "mỗi bề mặt (chi tiết xã ở platform-admin, Cấu hình → Kênh Zalo ở web-admin) hiện ĐÚNG MỘT QR của xã: xã có app riêng đang sống → https://zalo.me/s/<App ID xã>/?src=qr; không có → app chung chỉ với mã công khai ?x=<mã công khai>&src=qr; không hiện thông tin app chung, không còn link d= (chủ dự án, 13/10/2026)"
   - "cán bộ xã xem, tải PNG, in/lưu PDF QR mở Mini App của CHÍNH xã mình ở web-admin → Cấu hình → Kênh Zalo: tuyến GET /api/v1/commune-launch-link của service-platform, xã suy từ Host, quyền admin.lookup, chỉ đọc, KHÔNG ghi vết (chủ dự án, 13/10/2026)"
+  - "QR app riêng chỉ khi người vận hành đã đánh dấu App ID ấy 'Đã phát hành trên Zalo' (cột mini_app.published_at/published_by, bật/tắt ở chi tiết xã của platform-admin, có ghi vết); chưa đánh dấu → QR app chung ?x= (chủ dự án, 13/10/2026)"
   - "tải PNG và 'In / Lưu PDF' (in của trình duyệt, khổ A4: tên xã, QR, câu 'Quét mã bằng Zalo để mở ứng dụng của xã') có ở cả platform-admin lẫn web-admin (chủ dự án, 13/10/2026)"
   - "cấu hình Mini App riêng của xã (App ID ↔ xã, khoá bí mật) làm ở platform-admin; stage Jenkins doi-app-id-thang-binh / dat-secret-mini-app gỡ khi màn đã kiểm trên prod, bat-demo-mini-app / tat-demo-mini-app gỡ ngay (chốt 05/10/2026)"
   - "khoá bí mật Zalo của App ID nhập ngay trên màn chi tiết xã, lưu mã hoá ở service-identity (ADR 0066 dòng 4); đổi hoặc gỡ App ID thì khoá của App ID cũ tự thu hồi (chốt 02/10/2026)"
@@ -175,3 +176,22 @@ chỉ có một App ID riêng tại một thời điểm (§*Sửa đổi 05/10/
   (#5). Tấm sai vẫn chỉ trỏ về chính xã đó, vì xã lấy từ `Host`.
 - Xã có app riêng nay chỉ thấy QR app riêng trên hai bề mặt này: cửa app chung của xã ấy vẫn chạy với
   QR đã in, nhưng không in thêm được từ đây.
+
+### Bổ sung 13/10/2026 — QR app riêng chỉ khi App ID đã phát hành trên Zalo
+
+**Người quyết:** chủ dự án, 13/10/2026. Sự cố: *"qr app tạo ra ở trên web-admin đang là bản trải nghiệm,
+tôi quét bằng tài khoản zalo thường (không phải admin develop) không vào được"*. Link
+`https://zalo.me/s/<App ID>/?src=qr` là link bản phát hành; App ID mà Zalo **chưa phát hành** chỉ mở
+được cho tài khoản quản trị/phát triển của app (bản trải nghiệm). Hệ thống không hỏi được Zalo trạng
+thái này, nên chủ dự án chọn **cờ do người vận hành bật**.
+
+| # | Chốt |
+|---|---|
+| 1 | Dòng `mini_app` chế độ `rieng` có thêm `published_at` / `published_by` (mã người vận hành). Trống = **chưa phát hành** |
+| 2 | Quy tắc chọn một QR (#2 ở trên) đổi thành: app riêng **đang sống VÀ đã đánh dấu phát hành** → QR app riêng; còn lại → QR app chung `?x=` |
+| 3 | Người vận hành bật/tắt cờ ở chi tiết xã (platform-admin), quyền `ops.mini_app.manage`, **ghi vết** cùng giao dịch (luật 6) — khác với việc xem QR, đây là một lần ghi |
+| 4 | Không điền sẵn: mọi App ID riêng hiện có bắt đầu ở **chưa phát hành**, nên QR các xã ấy quay về app chung tới khi có người xác nhận — sai theo hướng an toàn |
+
+**Cái giá:** cờ có thể lệch với Zalo (quên bật sau khi phát hành, hoặc Zalo gỡ bản phát hành mà không
+ai tắt cờ). Lệch kiểu thứ nhất chỉ làm xã in QR app chung — vẫn vào đúng xã; kiểu thứ hai lặp lại sự cố
+này cho tới khi có người tắt cờ.
