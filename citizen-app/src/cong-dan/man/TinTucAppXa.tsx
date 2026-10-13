@@ -432,30 +432,12 @@ export function groupCategories(list: readonly NewsCategory[]): CategoryRows {
 }
 
 /**
- * The id of the "Tin của xã" chip — the prototype's group for categories that belong to NO group
- * (`NewsPage.tsx:87-131`, `groupByCategory`: the unnamed group, first). Not a server id: those are ULIDs, so this
- * word can never name a real category.
- */
-export const OWN_GROUP_ID = "tin-cua-xa";
-
-/**
- * The prototype's two levels, from the server's tree. PURE.
- *   `own`     the roots with NO children — a category with no group of its own; together they are "Tin của xã"
- *   `groups`  the roots WITH children — each a group chip whose second row is its children
- */
-export function chipGroups(rows: CategoryRows): { own: NewsCategory[]; groups: NewsCategory[] } {
-  const own: NewsCategory[] = [];
-  const groups: NewsCategory[] = [];
-  for (const r of rows.roots) ((rows.children.get(r.id) ?? []).length > 0 ? groups : own).push(r);
-  return { own, groups };
-}
-
-/**
- * The two chip rows (prototype `NewsPage.tsx:76-131`, owner 11/10/2026). Row 1: "Tất cả", then "Tin của xã" FIRST
- * when some category has no group (the commune's own news before what came from elsewhere — the prototype's
- * reason), then each group. Row 2, once a chip of row 1 is chosen: "Tất cả mục này" + its categories, indented and
- * lighter so it reads as belonging to row 1. The chosen chip says so with `aria-pressed`, a fill and a heavier
- * weight — never colour alone. `null` or no categories → nothing at all, never a row of empty chips. PURE.
+ * The category chips above a type's list (owner 13/10/2026 — the prototype's "Tin của xã" group is gone: a commune
+ * that created one category saw it hidden behind a chip that named no category). Row 1: "Tất cả", then every root
+ * category in order, on one line that scrolls sideways however many there are (owner: no dropdown). Row 2, only when
+ * the chosen root has children: "Tất cả mục này" + those children, indented and lighter so it reads as belonging to
+ * row 1. The chosen chip says so with `aria-pressed`, a fill and a heavier weight — never colour alone. `null` or no
+ * categories → nothing at all, never a row of empty chips. PURE.
  */
 export function CategoryChips(props: {
   rows: CategoryRows | null;
@@ -466,13 +448,8 @@ export function CategoryChips(props: {
 }) {
   const { rows, root, child } = props;
   if (rows === null || rows.roots.length === 0) return null;
-  const { own, groups } = chipGroups(rows);
-  const row1: Array<{ id: string; name: string }> = [
-    ...(own.length > 0 ? [{ id: OWN_GROUP_ID, name: XA_TN.news_own_group }] : []),
-    ...groups.map((g) => ({ id: g.id, name: g.name })),
-  ];
-  const chosen = row1.find((r) => r.id === root) ?? null;
-  const kids = chosen === null ? [] : chosen.id === OWN_GROUP_ID ? own : (rows.children.get(chosen.id) ?? []);
+  const chosen = rows.roots.find((r) => r.id === root) ?? null;
+  const kids = chosen === null ? [] : (rows.children.get(chosen.id) ?? []);
   return (
     <>
       <div className="xa-chips" role="group" aria-label={XA_TN.news_category_filter}>
@@ -484,7 +461,7 @@ export function CategoryChips(props: {
         >
           {XA_TN.loc_tat_ca}
         </button>
-        {row1.map((r) => (
+        {rows.roots.map((r) => (
           <button
             key={r.id}
             type="button"
@@ -524,35 +501,15 @@ export function CategoryChips(props: {
 }
 
 /**
- * What the list shows for a chip choice. PURE.
- *   a category chip (row 2), or a group (row 1)  → the SERVER's filter by that id (a group includes its children)
- *   "Tin của xã" with no category of it chosen  → the type's whole list, kept to the items whose category is one of
- *                                                 the ungrouped ones — the server takes one category, and these are
- *                                                 several (the prototype filters the same way, `NewsPage.tsx:42-46`)
- *   "Tất cả"                                    → the whole list
- */
-export function chipFilter(
-  rows: CategoryRows | null,
-  root: string | null,
-  child: string | null,
-): { category: string | null; keep?: (t: TinXaTomTat) => boolean } {
-  if (child !== null) return { category: child };
-  if (root === null) return { category: null };
-  if (root !== OWN_GROUP_ID) return { category: root };
-  const names = new Set((rows === null ? [] : chipGroups(rows).own).map((c) => c.name));
-  return { category: null, keep: (t) => names.has(t.chuyen_muc) };
-}
-
-/**
- * One type tab's body: the category chips, then the list for (type, category). The list is keyed by the
- * chosen chip, so each selection is ONE fresh load through `useTinXa`'s StrictMode-safe ref guard, with
- * its own paging and "Xem thêm". Every empty list says the prototype's sentence (`NewsPage.tsx:142-143`).
+ * One type tab's body: the category chips, then the list for (type, category) — the deepest choice is the server's
+ * `?category=`, and a root includes its children there. The list is keyed by the choice, so each selection is ONE
+ * fresh load through `useTinXa`'s StrictMode-safe ref guard, with its own paging and "Xem thêm". Every empty list
+ * says the prototype's sentence (`NewsPage.tsx:142-143`).
  */
 function NewsTypePanel(props: { ten_mien: string; type: NewsType; onMo: (id: string) => void }) {
   const rows = useNewsCategories(props.ten_mien, props.type);
   const [root, setRoot] = useState<string | null>(null);
   const [child, setChild] = useState<string | null>(null);
-  const shown = chipFilter(rows, root, child);
   return (
     <>
       <CategoryChips
@@ -569,8 +526,7 @@ function NewsTypePanel(props: { ten_mien: string; type: NewsType; onMo: (id: str
         key={`${root ?? ""}:${child ?? ""}`}
         ten_mien={props.ten_mien}
         type={props.type}
-        category={shown.category}
-        keep={shown.keep}
+        category={child ?? root}
         onMo={props.onMo}
         empty={XA_TN.news_list_empty}
         hint={XA_TN.news_empty_hint}
@@ -619,8 +575,6 @@ export function NewsOfType(props: {
   empty: string;
   /** What to do next under `empty` (`KhoiTrangThai` `hint`), or none. */
   hint?: string;
-  /** Keep only these of each loaded page ("Tin của xã", `chipFilter`); absent = every item. */
-  keep?: (t: TinXaTomTat) => boolean;
 }) {
   const news = useTinXa(props.ten_mien, props.type, props.category ?? null);
   // The Video list carries no view count (owner, 02/10/2026).
@@ -632,7 +586,6 @@ export function NewsOfType(props: {
       empty={props.empty}
       hint={props.hint}
       showViews={props.type !== "video"}
-      keep={props.keep}
     />
   );
 }
@@ -645,12 +598,10 @@ export function NewsListBody(props: {
   empty: string;
   hint?: string;
   showViews?: boolean;
-  /** Keep only these of the loaded items; absent = all. */
-  keep?: (t: TinXaTomTat) => boolean;
 }) {
   const { ds } = props;
   const showViews = props.showViews ?? true;
-  const items = props.keep === undefined ? ds.muc : ds.muc.filter(props.keep);
+  const items = ds.muc;
   if (!ds.da_co_trang_dau && ds.dang_tai) {
     return <KhoiTrangThai bieu_tuong="news" cau={TIN_XA.dang_tai} dang_tai />;
   }
@@ -664,8 +615,7 @@ export function NewsListBody(props: {
       />
     );
   }
-  // Kept-to-a-group lists may have matches on a later page: "empty" only once nothing is left to load.
-  if (items.length === 0 && !(props.keep !== undefined && ds.con_nua)) {
+  if (items.length === 0) {
     return <KhoiTrangThai bieu_tuong="news" cau={props.empty} hint={props.hint} />;
   }
   return (

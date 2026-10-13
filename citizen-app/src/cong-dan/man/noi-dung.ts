@@ -1133,8 +1133,6 @@ export const XA_TN = {
    */
   /** Any news list with nothing in it — every type tab and every category (`NewsPage.tsx:142`). */
   news_list_empty: "Chưa có nội dung trong mục này",
-  /** The first category chip: the commune's own items, whose category belongs to no group (`NewsPage.tsx:100`). */
-  news_own_group: "Tin của xã",
   /** The header of an article that could not be opened (`NewsDetailPage.tsx:38`). */
   news_open_failed: "Không mở được tin",
   /** The share button under an article (`NewsDetailPage.tsx:135`, ADR 0047 G6). */
