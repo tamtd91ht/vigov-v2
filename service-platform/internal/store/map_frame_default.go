@@ -74,7 +74,7 @@ const operatorMapFrameDefaultStmt = `SELECT f.center_lat, f.center_lng, f.radius
 	f.created_at, f.created_by, f.updated_at, f.updated_by
 	FROM tenant t
 	LEFT JOIN commune_map_frame_default f ON f.tenant_id = $1
-	WHERE t.id = $1`
+	WHERE t.id = $1 AND t.deleted_at IS NULL`
 
 // OperatorMapFrameDefault is the operator console's read: the commune in ctx must exist
 // (ErrCommuneNotFound otherwise); ok=false when it has no default. An INACTIVE commune is read like any

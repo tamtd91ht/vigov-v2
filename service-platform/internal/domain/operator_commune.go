@@ -36,6 +36,35 @@ const (
 	MaxMiniAppIDLength  = 32
 )
 
+// CommuneDeletionMinInactiveDays is how long a commune must have been CONTINUOUSLY inactive
+// (tenant.deactivated_at, migration 0026) before it may be soft-deleted — layer (a) of the owner's two
+// checks (ADR 0048 §Sửa đổi 13/10/2026 #7, #8). Calendar days, counted by the database clock: this is a
+// cooling-off period on a registry act, not a deadline owed to a citizen (rule 10 is about the latter).
+// Changing it is the owner's decision, never a tidy-up.
+const CommuneDeletionMinInactiveDays = 7
+
+// ErrDeletionConfirmMismatch — layer (b): the domain the operator re-typed is none of the commune's.
+// Deliberately says nothing about WHICH domains the commune holds: the refusal must not become a way
+// to read them.
+var ErrDeletionConfirmMismatch = errors.New("tenant: tên miền xác nhận không khớp tên miền nào của xã")
+
+// ConfirmsCommuneHost reports whether typed names one of hosts — trimmed, case-insensitive, nothing
+// else forgiven (a port, a scheme or a trailing dot is not the domain the operator was asked to retype).
+// An empty input confirms nothing, even for a commune with no host: such a commune cannot be deleted
+// through this check, which is the safe direction for an irreversible-looking act.
+func ConfirmsCommuneHost(typed string, hosts []string) bool {
+	t := strings.TrimSpace(typed)
+	if t == "" {
+		return false
+	}
+	for _, h := range hosts {
+		if h != "" && strings.EqualFold(t, h) {
+			return true
+		}
+	}
+	return false
+}
+
 // ParseCommuneHost turns an operator's input into the host stored in tenant_domain.host.
 //
 // NORMALISED WITH NormaliseHost (the same function the edge applies to every Host header), so the

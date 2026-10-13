@@ -108,3 +108,24 @@ func TestIsReservedCommuneHost(t *testing.T) {
 		}
 	}
 }
+
+// Layer (b) of a commune deletion (ADR 0048 §Sửa đổi 13/10/2026 #7): any ONE of the commune's hosts,
+// trimmed and case-folded — and nothing looser.
+func TestConfirmsCommuneHost(t *testing.T) {
+	hosts := []string{"thangbinh-danang.vigov.vn", "thangbinh.example.gov.vn"}
+	for _, typed := range []string{"thangbinh-danang.vigov.vn", "  ThangBinh.Example.GOV.vn \n"} {
+		if !ConfirmsCommuneHost(typed, hosts) {
+			t.Errorf("%q must confirm", typed)
+		}
+	}
+	for _, typed := range []string{"", "   ", "thangbinh-danang.vigov.vn.", "thangbinh-danang.vigov.vn:443",
+		"https://thangbinh-danang.vigov.vn", "thangbinh", "vigov.vn", "khac.vigov.vn"} {
+		if ConfirmsCommuneHost(typed, hosts) {
+			t.Errorf("%q must not confirm", typed)
+		}
+	}
+	// A commune holding no host cannot be confirmed by anything — not even an empty string.
+	if ConfirmsCommuneHost("", nil) || ConfirmsCommuneHost("", []string{""}) {
+		t.Error("an empty input confirmed a commune with no host")
+	}
+}

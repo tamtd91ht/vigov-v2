@@ -212,7 +212,8 @@ func (s *Server) GetTenant(ctx context.Context, req *platformv1.GetTenantRequest
 	}
 	// A deactivated commune IS returned, with Active=false. Rule 7 keeps a merged commune's
 	// data and address; hiding it here would leave archival records referring to a commune
-	// nothing can name.
+	// nothing can name. A SOFT-DELETED commune is not (NOT_FOUND, through ErrKhongCoXa): see
+	// store.Directory.ByID for why.
 	//
 	// A PLATFORM ADDRESS IS NEVER A COMMUNE'S HOST, even when it is the row marked la_chinh — the
 	// deploy pipeline wrote admin.vigov.vn / admin-stg.vigov.vn as a real commune's domain, and

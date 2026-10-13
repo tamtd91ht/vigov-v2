@@ -95,12 +95,17 @@ func cotXa(host string) string {
 // The two statements. ByHost and ByHostErr share ONE string rather than two identical ones: they
 // answer the same question and differ only in what they do with a failure, so a WHERE clause that
 // drifted between them would make the operator-facing variant disagree with the hot path.
+//
+// ALL THREE EXCLUDE A SOFT-DELETED COMMUNE (`t.deleted_at IS NULL`, migration 0026; rule 7 invariant 2;
+// ADR 0048 §Sửa đổi 13/10/2026 #7): its hosts and its launch code resolve to NOTHING — the same answer
+// as an unknown one, not "inactive" — and ByID does not know it either. Its tenant_domain rows stay,
+// which is what keeps those hosts reserved (HostHeld and the registry's hostFree still see them).
 var (
 	truyVanTheoHost = `
 		SELECT ` + cotXa("d.host") + `
 		FROM tenant_domain d
 		JOIN tenant t ON t.id = d.tenant_id
-		WHERE d.host = $1`
+		WHERE d.host = $1 AND t.deleted_at IS NULL`
 
 	// The canonical host, so a caller building a link picks the same address every time; a
 	// commune may hold several hosts after a merger. LEFT JOIN because a commune that exists
@@ -110,7 +115,7 @@ var (
 		SELECT ` + cotXa("COALESCE(d.host, '')") + `
 		FROM tenant t
 		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
-		WHERE t.id = $1`
+		WHERE t.id = $1 AND t.deleted_at IS NULL`
 
 	// The commune holding a launch code (migration 0024), with its PRIMARY host — the same LEFT JOIN
 	// as truyVanTheoID and for the same reason: the code names the commune, not a host, so a commune
@@ -119,7 +124,7 @@ var (
 		SELECT ` + cotXa("COALESCE(d.host, '')") + `
 		FROM tenant t
 		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
-		WHERE t.launch_code = $1`
+		WHERE t.launch_code = $1 AND t.deleted_at IS NULL`
 )
 
 // Commune is the registry row the gRPC paths answer with: the shared tenant.Tenant plus the commune's
@@ -271,6 +276,12 @@ func (d *Directory) ByLaunchCodeErr(ctx context.Context, code string) (Commune, 
 // describable — rule 7 keeps its data and its codes, and something has to be able to render
 // the name attached to an archival record. The caller reads Active and decides; that is
 // exactly why the field exists rather than being folded into an error.
+//
+// A SOFT-DELETED commune IS ErrKhongCoXa (GetTenant: NOT_FOUND), unlike a merely inactive one. Its one
+// caller today, core/platformclient XaTrongNguCanh, asks about the commune a citizen session is about to
+// open in, and reads NOT_FOUND as "unknown commune" — refuse. Describing a deleted commune for its
+// archival records is a different question that no RPC answers yet; giving ByID that job would hand a
+// removed commune back to every path that only checks "found".
 //
 // It returns exactly one commune or an error. Like the rest of this type it never returns a
 // list, so there is no query here that could span communes.

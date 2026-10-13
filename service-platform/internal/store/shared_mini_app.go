@@ -222,7 +222,7 @@ func (s *SharedMiniAppStore) CommuneLaunchTarget(ctx context.Context, communeID 
 	err := s.db.QueryRowContext(ctx, `
 		SELECT t.dang_hoat_dong, t.launch_code, d.host
 		  FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
-		 WHERE t.id = $1`, communeID).Scan(&out.Active, &out.LaunchCode, &primary)
+		 WHERE t.id = $1 AND t.deleted_at IS NULL`, communeID).Scan(&out.Active, &out.LaunchCode, &primary)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return LaunchTarget{}, ErrCommuneNotFound

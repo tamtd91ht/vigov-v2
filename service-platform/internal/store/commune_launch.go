@@ -40,7 +40,7 @@ type CommuneLaunch struct {
 
 // tenant has no tenant_id column — its id IS the commune — so `t.id = $1` is the scope (QueryJoin's
 // contract: $1 is the commune).
-const communeLaunchStmt = `SELECT t.dang_hoat_dong, t.launch_code FROM tenant t WHERE t.id = $1`
+const communeLaunchStmt = `SELECT t.dang_hoat_dong, t.launch_code FROM tenant t WHERE t.id = $1 AND t.deleted_at IS NULL`
 
 // CommuneLaunch reads the commune in ctx. ErrCommuneNotFound when the registry has no row for it — not
 // reachable behind TenantMiddleware, which resolved it a moment ago, so it is a 500 to the caller, never

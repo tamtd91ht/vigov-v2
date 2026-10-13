@@ -43,7 +43,7 @@ func splitDomains(s string) []string {
 	return strings.Split(s, ",")
 }
 
-// ListCommunes is one page of every commune.
+// ListCommunes is one page of every commune that is not soft-deleted (rule 7 invariant 2).
 //
 // NOT AUDITED, by the user's decision of 2026-09-30 (ADR 0048 §30/09 #5): an explicit, bounded
 // exception to rule 6 invariant 7 that covers ONLY registry metadata. It still carries the mark.
@@ -61,7 +61,7 @@ func (r *OperatorRegistry) ListCommunes(ctx context.Context, req page.Request) (
 	}
 	q := `SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, t.tao_luc, ` + domainsAgg + `
 		FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id
-		WHERE ($1::timestamptz IS NULL OR (t.tao_luc, t.id) ` + cmp + ` ($1::timestamptz, $2))
+		WHERE t.deleted_at IS NULL AND ($1::timestamptz IS NULL OR (t.tao_luc, t.id) ` + cmp + ` ($1::timestamptz, $2))
 		GROUP BY t.id
 		ORDER BY t.tao_luc ` + ord + `, t.id ` + ord + `
 		LIMIT $3`
@@ -98,15 +98,17 @@ func (r *OperatorRegistry) ListCommunes(ctx context.Context, req page.Request) (
 	return out, nil
 }
 
-// ErrCommuneNotFound — no commune with this id.
+// ErrCommuneNotFound — no commune with this id, or a SOFT-DELETED one: the console answers both with
+// the same 404 (ADR 0048 §Sửa đổi 13/10/2026 #7, "biến khỏi danh sách vận hành").
 var ErrCommuneNotFound = errors.New("operator registry: không có xã với id này")
 
 // Commune reads one commune and its dedicated mini_app rows. The id comes from the path, already
-// checked to be ULID-shaped by the caller.
+// checked to be ULID-shaped by the caller. A soft-deleted commune is ErrCommuneNotFound — and since
+// every operator route on /communes/{id} starts here or at lockCommune, none of them reaches it.
 func (r *OperatorRegistry) Commune(ctx context.Context, id string) (domain.Commune, []domain.CommuneMiniApp, error) {
 	const q = `SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, t.tao_luc, ` + domainsAgg + `
 		FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id
-		WHERE t.id = $1
+		WHERE t.id = $1 AND t.deleted_at IS NULL
 		GROUP BY t.id`
 	var (
 		c       domain.Commune

@@ -17,6 +17,9 @@
 //	opauth.SignedIn(d.Auth, "<why any operator needs this>")  any live operator session
 //	opauth.Public("<why this has no session>")              sign-in steps only, always rate limited
 //
+// and one narrowing, never used alone: opauth.SignedIn(d.Auth, "OWNER ONLY — …")(opauth.RequireOwner()(h))
+// for the acts only the operator owner may do (ADR 0048 §Sửa đổi 13/10/2026 #2) — see RequireOwner.
+//
 // HYBRID, NOT CACHED (owner, 01/10 #2): the `op1.` signature is checked HERE first, so garbage, a
 // forgery or a staff `v1.` token is refused without a round trip; a well-signed token is then
 // resolved by identity on EVERY request — the only place revocation and the idle limit are
@@ -98,6 +101,10 @@ type Principal struct {
 	// OperatorCode, `VH-00001`, is "who" in every audit entry. Never empty on a principal in context.
 	OperatorCode string
 	Keys         []string
+	// IsOwner: this operator is THE operator owner (operator_account.is_owner, ADR 0048 §Sửa đổi
+	// 13/10/2026 #1–#2), read live from ResolveOperatorSession like the keys. False from an identity
+	// older than the field — and false is "not the owner": RequireOwner refuses.
+	IsOwner bool
 }
 
 // Has reports whether the principal holds k. For AnyKey: whether it holds at least one decided key.
@@ -217,7 +224,7 @@ func (a *Auth) authenticate(w http.ResponseWriter, r *http.Request) (Principal, 
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", msgUnauthorized, "")
 		return Principal{}, false
 	}
-	return Principal{OperatorID: p.OperatorID, OperatorCode: p.OperatorCode, Keys: p.PermissionKeys}, true
+	return Principal{OperatorID: p.OperatorID, OperatorCode: p.OperatorCode, Keys: p.PermissionKeys, IsOwner: p.IsOwner}, true
 }
 
 func (a *Auth) logger() *slog.Logger {
@@ -282,6 +289,41 @@ func SignedIn(a *Auth, reason string) func(http.Handler) http.Handler {
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(Into(r.Context(), p)))
+		})
+	}
+}
+
+// RequireOwner narrows a route to THE operator owner (ADR 0048 §Sửa đổi 13/10/2026 #2: "chỉ owner
+// làm" — deleting a commune, and the other owner-only acts). It is NOT a declaration on its own: it is
+// mounted INSIDE opauth.SignedIn, which authenticates and puts the principal in the context, and
+// SignedIn's reason states that the route is owner-only:
+//
+//	opauth.SignedIn(d.Auth, "OWNER ONLY — …")(opauth.RequireOwner()(h))
+//
+// WHY INSIDE SignedIn AND NOT A FOURTH DECLARATION: tools/apidoc and hooks/rbac_guard read exactly
+// RequireKey / SignedIn / Public; a route declared by a new name would be a route both readers call
+// undeclared. And why not under a key: the owner is a flag, not an `ops.*` key (§Sửa đổi #1) — no key
+// row means "the owner", and requiring one would refuse the owner on an identity that does not also
+// grant it that key.
+//
+// FAIL CLOSED BOTH WAYS: a principal whose IsOwner is false — including one from an identity too old
+// to send the field — is 403; NO principal in the context (the guard mounted without SignedIn
+// around it) is 403 too, logged, never a pass.
+func RequireOwner() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			p, ok := From(r.Context())
+			if !ok {
+				slog.Default().ErrorContext(r.Context(),
+					"opauth.RequireOwner gắn mà không có opauth.SignedIn bao ngoài — từ chối")
+				httpx.WriteError(w, http.StatusForbidden, "forbidden", msgForbidden, "")
+				return
+			}
+			if !p.IsOwner {
+				httpx.WriteError(w, http.StatusForbidden, "forbidden", msgForbidden, "")
+				return
+			}
+			next.ServeHTTP(w, r)
 		})
 	}
 }

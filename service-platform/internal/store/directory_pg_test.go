@@ -117,10 +117,14 @@ func testLaunchCode(t *testing.T) string {
 	return c
 }
 
+// themXa inserts a fixture commune. An INACTIVE one names deactivated_at too: migration 0026's
+// tenant_deactivated_iff_inactive refuses an inactive row without it (23514). now() means "inactive
+// since this instant" — a deletion test that needs an older date moves it explicitly.
 func themXa(t *testing.T, db *sql.DB, id, ten string, hoatDong bool) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong, launch_code) VALUES ($1,$2,$3,$4,$5)`,
+		`INSERT INTO tenant (id, ten, tinh_thanh, dang_hoat_dong, launch_code, deactivated_at)
+		 VALUES ($1,$2,$3,$4,$5, CASE WHEN $4::boolean THEN NULL ELSE now() END)`,
 		id, ten, "Thành phố Đà Nẵng", hoatDong, testLaunchCode(t))
 	if err != nil {
 		t.Fatalf("thêm xã %s: %v", ten, err)

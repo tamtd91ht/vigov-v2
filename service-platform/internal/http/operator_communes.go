@@ -35,6 +35,8 @@ type CommuneWriter interface {
 	SetPrimaryDomain(ctx context.Context, host string, by domain.OperatorActor) (bool, error)
 	CorrectName(ctx context.Context, name, reason string, by domain.OperatorActor) (bool, error)
 	SetActivation(ctx context.Context, active bool, reason string, by domain.OperatorActor) (bool, []string, error)
+	// DeleteCommune soft-deletes the commune in ctx (operator_commune_deletion.go); returns its hosts.
+	DeleteCommune(ctx context.Context, confirmDomain, reason string, by domain.OperatorActor) (domain.CommuneDeletion, []string, error)
 	AttachMiniApp(ctx context.Context, appID, note string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
 	ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, reason string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
 	RemoveMiniApp(ctx context.Context, appID, reason string, by domain.OperatorActor) (bool, error)

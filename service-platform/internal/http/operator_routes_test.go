@@ -54,11 +54,13 @@ const (
 // --- fakes -------------------------------------------------------------------------------------
 
 type identityFake struct {
-	mu        sync.Mutex
-	calls     int
-	down      bool
-	live      bool
-	keys      []string
+	mu    sync.Mutex
+	calls int
+	down  bool
+	live  bool
+	keys  []string
+	// owner: the resolved principal is THE operator owner (opauth.RequireOwner).
+	owner     bool
 	open      operatorclient.OpenResult
 	change    operatorclient.ChangePasswordResult
 	regen     operatorclient.RecoveryCodesResult
@@ -124,7 +126,7 @@ func (f *identityFake) Resolve(context.Context, secret.Secret) (operatorclient.P
 	if !f.live {
 		return operatorclient.Principal{}, false, nil
 	}
-	return operatorclient.Principal{OperatorID: "op-internal-1", OperatorCode: opCodeFake, PermissionKeys: f.keys}, true, nil
+	return operatorclient.Principal{OperatorID: "op-internal-1", OperatorCode: opCodeFake, PermissionKeys: f.keys, IsOwner: f.owner}, true, nil
 }
 
 func (f *identityFake) Open(_ context.Context, req operatorclient.OpenRequest) (operatorclient.OpenResult, error) {
@@ -242,6 +244,20 @@ type writerFake struct {
 	forwardTargets []tenant.ID
 	forwardActors  []domain.OperatorActor
 	forwardErr     error
+	// The deletion route: what was confirmed, how many calls.
+	lastConfirm string
+	deletions   int
+}
+
+func (w *writerFake) DeleteCommune(ctx context.Context, confirmDomain, reason string, by domain.OperatorActor) (domain.CommuneDeletion, []string, error) {
+	w.record(ctx, by)
+	w.lastConfirm, w.lastReason = confirmDomain, reason
+	w.deletions++
+	if w.err != nil {
+		return domain.CommuneDeletion{}, nil, w.err
+	}
+	return domain.CommuneDeletion{ID: string(w.target), Name: "Xã Thăng Bình", DeletedAt: nowFake, DeletedBy: by.Code},
+		[]string{"thangbinh-danang.vigov.vn"}, nil
 }
 
 func (w *writerFake) RecordMiniAppSecretForward(ctx context.Context, f domain.SecretForward, by domain.OperatorActor) error {

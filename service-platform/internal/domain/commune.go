@@ -39,6 +39,15 @@ type CommuneMiniApp struct {
 // Published reports whether an operator has marked this own app published on Zalo.
 func (a CommuneMiniApp) Published() bool { return a.PublishedAt != nil }
 
+// CommuneDeletion is what a soft delete of a commune wrote (ADR 0048 §Sửa đổi 13/10/2026 #7).
+type CommuneDeletion struct {
+	ID        string
+	Name      string
+	DeletedAt time.Time
+	// DeletedBy is the operator's business code (VH-…), never the internal id (rule 6, invariant 8).
+	DeletedBy string
+}
+
 // Province is one row of the tinh_thanh catalogue.
 type Province struct {
 	ID   string

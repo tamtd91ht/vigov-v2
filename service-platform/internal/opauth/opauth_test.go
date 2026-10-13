@@ -240,3 +240,54 @@ func TestCookieIsHostOnlyStrictAndBounded(t *testing.T) {
 		t.Error("cookie name must keep the __Host- prefix")
 	}
 }
+
+// RequireOwner (ADR 0048 §Sửa đổi 13/10/2026 #2): mounted inside SignedIn, it lets through ONLY a
+// principal identity marked as the owner. Every key held is irrelevant; IsOwner false — what an
+// identity older than the field sends — is 403; and mounted bare, with no principal, it refuses.
+func TestRequireOwner(t *testing.T) {
+	allKeys := []string{}
+	for k := range decidedKeys {
+		allKeys = append(allKeys, string(k))
+	}
+	notOwner := operatorclient.Principal{OperatorID: "op-1", OperatorCode: "VH-00001", PermissionKeys: allKeys}
+	owner := notOwner
+	owner.IsOwner = true
+
+	cases := []struct {
+		name   string
+		cookie func(*testing.T) string
+		res    resolverFake
+		want   int
+	}{
+		{"no cookie → 401", func(*testing.T) string { return "" }, resolverFake{}, 401},
+		{"staff v1 token → 401", staffToken, resolverFake{}, 401},
+		{"identity down → 503", opToken, resolverFake{err: errors.New("unavailable")}, 503},
+		{"every ops key, not the owner → 403", opToken, resolverFake{p: notOwner, live: true}, 403},
+		{"owner → 200", opToken, resolverFake{p: owner, live: true}, 200},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res := c.res
+			a := newAuth(t, &res)
+			h := SignedIn(a, "owner only")(RequireOwner()(okHandler))
+			if rec := serve(h, c.cookie(t)); rec.Code != c.want {
+				t.Errorf("status %d, want %d", rec.Code, c.want)
+			}
+		})
+	}
+
+	// Bare, no SignedIn around it: no principal in the context is a refusal, never a pass.
+	if rec := serve(RequireOwner()(okHandler), opToken(t)); rec.Code != 403 {
+		t.Errorf("RequireOwner without SignedIn: %d, want 403", rec.Code)
+	}
+	// The principal carries the flag through to the handler.
+	res := resolverFake{p: owner, live: true}
+	var saw Principal
+	h := SignedIn(newAuth(t, &res), "owner only")(RequireOwner()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		saw, _ = From(r.Context())
+	})))
+	serve(h, opToken(t))
+	if !saw.IsOwner || saw.OperatorCode != "VH-00001" {
+		t.Errorf("principal behind RequireOwner: %+v", saw)
+	}
+}

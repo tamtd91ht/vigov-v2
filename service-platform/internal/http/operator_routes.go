@@ -13,6 +13,8 @@ package http
 //	opauth.SignedIn(d.Auth, "<reason>")    any live operator session
 //	opauth.Public("<reason>")              the sign-in steps; always behind signInLimit
 //
+// plus one narrowing inside SignedIn for the owner-only acts: opauth.RequireOwner() (internal/opauth).
+//
 // NOT authz.*: those are the commune realm's guards, and an operator principal cannot satisfy them
 // (and the reverse). tools/apidoc reads `opauth.*` and keeps these routes OUT of
 // kb/20-contracts/openapi.json — the commune-facing contract from which the Ingress and web-admin's
@@ -293,6 +295,26 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 		opauth.RequireKey(h.d.Auth, opauth.KeyTenantManage)(
 			idem.KhongCan("setting the state it already has changes nothing and writes no entry")(
 				http.HandlerFunc(h.setActivation))))
+
+	// OWNER ONLY (ADR 0048 §Sửa đổi 13/10/2026 #2, #7): SignedIn authenticates, RequireOwner inside it
+	// refuses every operator that is not THE owner, whatever ops.* keys they hold (opauth.RequireOwner
+	// says why this is not a key and not a fourth declaration).
+	//
+	// @summary  Xoá MỀM một xã — CHỈ OWNER: xã phải ngừng hoạt động liên tục đủ 7 ngày và người xoá gõ lại đúng một tên miền của xã (bắt buộc lý do); ghi deleted_at/deleted_by/delete_reason, vết xoa_mem_xa ở audit_log của xã cùng giao dịch; xã biến khỏi danh sách, tên miền thôi phân giải nhưng giữ chỗ vĩnh viễn; không có đường khôi phục từ màn hình
+	// @request  communeDeletionBody
+	// @reply    201 communeDeletionView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    409 communeDeletionRefusalView commune_active commune_inactive_too_recent
+	// @reply    422 httpx.Error confirm_domain_mismatch invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("POST /api/v1/communes/{id}/deletion",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2, #7)")(
+			opauth.RequireOwner()(
+				idem.KhongCan("a repeat finds the commune already deleted and is answered commune_not_found; nothing is written twice")(
+					http.HandlerFunc(h.deleteCommune)))))
 
 	// @summary  Gắn Mini App riêng của xã (chế độ rieng)
 	// @request  attachMiniAppBody

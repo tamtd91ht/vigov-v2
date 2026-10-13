@@ -59,7 +59,27 @@ var (
 	// commune). Its own error, not ErrMiniAppTaken, so the operator reads WHY it can never be bound
 	// again (ADR 0070 §Sửa đổi 05/10/2026 #2: the key keeps removed App IDs). It names no commune.
 	ErrMiniAppRemoved = errors.New("operator registry: App ID đã bị gỡ trước đây, không gắn lại được")
+	// ErrCommuneActive — a deletion of a commune that is still active (ADR 0048 §Sửa đổi 13/10/2026 #7):
+	// an active commune still resolves hosts and receives citizens' petitions.
+	ErrCommuneActive = errors.New("operator registry: xã đang hoạt động — chỉ xoá được xã đã ngừng hoạt động")
+	// ErrCommuneInactiveTooRecent — a deletion before the commune has been inactive for
+	// domain.CommuneDeletionMinInactiveDays. Always wrapped in *InactiveTooRecentError, which carries
+	// the earliest moment the deletion becomes possible.
+	ErrCommuneInactiveTooRecent = errors.New("operator registry: xã ngừng hoạt động chưa đủ thời gian để xoá")
 )
+
+// InactiveTooRecentError is ErrCommuneInactiveTooRecent with WHEN the deletion becomes possible
+// (deactivated_at + CommuneDeletionMinInactiveDays, by the database clock), so the console can say so
+// instead of leaving the operator to guess.
+type InactiveTooRecentError struct {
+	EarliestAt time.Time
+}
+
+func (e *InactiveTooRecentError) Error() string {
+	return ErrCommuneInactiveTooRecent.Error() + " (sớm nhất: " + e.EarliestAt.UTC().Format(time.RFC3339) + ")"
+}
+
+func (e *InactiveTooRecentError) Unwrap() error { return ErrCommuneInactiveTooRecent }
 
 // Audit actions written to audit_log.action. VALUES ARE VIETNAMESE snake_case, as every commune
 // audit_log in this repository writes them (ADR 0011 for values; rule 12 covers identifiers). Two of
@@ -88,6 +108,9 @@ const (
 	// verbs, two of them so one query finds every marking (or every unmarking) without reading the delta.
 	ActionMarkMiniAppPublished   = "danh_dau_phat_hanh_mini_app"
 	ActionUnmarkMiniAppPublished = "bo_danh_dau_phat_hanh_mini_app"
+	// The soft delete of a commune (migration 0026, ADR 0048 §Sửa đổi 13/10/2026 #7). NEW verb; `mem`
+	// is in the name so nobody reading the trail takes it for the destruction of the records.
+	ActionSoftDeleteCommune = "xoa_mem_xa"
 )
 
 // nameLock serialises every write that can create a duplicate commune name. There is NO unique
@@ -260,6 +283,12 @@ func hostFree(ctx context.Context, raw *sql.Tx, host string) error {
 // nameFree refuses a name equal (domain.NameKey) to another commune's in the same province
 // (domain.ProvinceKey). exceptID is the commune being renamed, so a case-only correction of its own
 // name is not a duplicate of itself. Inactive communes count: a merged commune keeps its name.
+//
+// SOFT-DELETED COMMUNES COUNT TOO — the one read here that deliberately does NOT exclude them (rule 7
+// invariant 2 is about what is SHOWN or SERVED; this reads to refuse). The deleted row is still what
+// its archival records point at, and a new commune with the same name in the same province would make
+// those records ambiguous to the person reading them years later. Freeing a deleted commune's name is
+// the owner's decision, like freeing its domains (ADR 0048 §Sửa đổi 13/10/2026 #7).
 func nameFree(ctx context.Context, raw *sql.Tx, name, province, exceptID string) error {
 	// @cross-tenant: the duplicate-name check reads the name and province of every commune — registry
 	// metadata only, the same columns the operator list shows (ADR 0048 §30/09 #5).
@@ -290,10 +319,15 @@ type communeRow struct {
 	active         bool
 }
 
+// lockCommune is the entry of EVERY registry write on an existing commune. A SOFT-DELETED commune is
+// ErrCommuneNotFound here, exactly like an unknown id (rule 7 invariant 2; ADR 0048 §Sửa đổi
+// 13/10/2026 #7): no write — activation, domain, name, mini app, map frame, a second deletion — can
+// reach it, and the operator console has no way to tell it apart from an id that never existed. The
+// lock is taken on the live row only; a deleted row is never locked because nothing may change it.
 func lockCommune(ctx context.Context, tx *corestore.ScopedTx) (communeRow, error) {
 	var c communeRow
 	err := tx.Underlying().QueryRowContext(ctx,
-		`SELECT ten, tinh_thanh, dang_hoat_dong FROM tenant WHERE id = $1 FOR UPDATE`,
+		`SELECT ten, tinh_thanh, dang_hoat_dong FROM tenant WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`,
 		tx.TenantID().String()).Scan(&c.name, &c.province, &c.active)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
@@ -457,21 +491,8 @@ func (w *RegistryWriter) SetActivation(ctx context.Context, active bool, reason 
 		if err != nil {
 			return err
 		}
-		rows, err := tx.Underlying().QueryContext(ctx,
-			`SELECT host FROM tenant_domain WHERE tenant_id = $1 ORDER BY host`, tx.TenantID().String())
-		if err != nil {
-			return fmt.Errorf("operator registry: hosts: %w", err)
-		}
-		for rows.Next() {
-			var h string
-			if err := rows.Scan(&h); err != nil {
-				rows.Close()
-				return fmt.Errorf("operator registry: hosts: %w", err)
-			}
-			hosts = append(hosts, h)
-		}
-		if err := rows.Close(); err != nil {
-			return fmt.Errorf("operator registry: hosts: %w", err)
+		if hosts, err = communeHosts(ctx, tx); err != nil {
+			return err
 		}
 		if active {
 			// A MERGED OR SPLIT COMMUNE IS NEVER SWITCHED BACK ON HERE. tenant_succession naming this
@@ -496,8 +517,16 @@ func (w *RegistryWriter) SetActivation(ctx context.Context, active bool, reason 
 		if c.active == active {
 			return nil
 		}
+		// deactivated_at MOVES WITH dang_hoat_dong, in the same statement: migration 0026's CHECK
+		// tenant_deactivated_iff_inactive refuses any row where the two disagree (23514), so writing one
+		// without the other fails every switch. Set on deactivation (the start of the 7-day wait before
+		// a deletion, ADR 0048 §Sửa đổi 13/10/2026 #8), cleared on reactivation (the wait restarts from
+		// zero the next time).
 		if _, err := tx.Exec(ctx,
-			`UPDATE tenant SET dang_hoat_dong = $2, cap_nhat_luc = now() WHERE id = $1`,
+			`UPDATE tenant SET dang_hoat_dong = $2,
+			        deactivated_at = CASE WHEN $2::boolean THEN NULL ELSE now() END,
+			        cap_nhat_luc = now()
+			  WHERE id = $1 AND deleted_at IS NULL`,
 			tx.TenantID().String(), active); err != nil {
 			return fmt.Errorf("operator registry: update activation: %w", err)
 		}
@@ -516,6 +545,127 @@ func (w *RegistryWriter) SetActivation(ctx context.Context, active bool, reason 
 		})
 	})
 	return changed, hosts, err
+}
+
+// communeHosts lists every host of the commune in tx, primary or not, in host order.
+func communeHosts(ctx context.Context, tx *corestore.ScopedTx) ([]string, error) {
+	rows, err := tx.Underlying().QueryContext(ctx,
+		`SELECT host FROM tenant_domain WHERE tenant_id = $1 ORDER BY host`, tx.TenantID().String())
+	if err != nil {
+		return nil, fmt.Errorf("operator registry: hosts: %w", err)
+	}
+	var hosts []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("operator registry: hosts: %w", err)
+		}
+		hosts = append(hosts, h)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, fmt.Errorf("operator registry: hosts: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("operator registry: hosts: %w", err)
+	}
+	return hosts, nil
+}
+
+// DeleteCommune SOFT-DELETES the commune in ctx (ADR 0048 §Sửa đổi 13/10/2026 #7; migration 0026):
+// deleted_at = now(), deleted_by = the operator's VH- code (rule 6 invariant 8 — never the internal id),
+// delete_reason, and the `xoa_mem_xa` entry in THAT commune's audit_log — one transaction, under the row
+// lock, so no deactivation, reactivation or second deletion can interleave between the checks and the
+// write. It returns the commune's hosts so the caller can drop them from its cache.
+//
+// THE CHECKS, in this order, all against the LOCKED row and the database clock:
+//
+//	unknown or already deleted                         ErrCommuneNotFound (lockCommune)
+//	still active                                       ErrCommuneActive
+//	inactive for less than CommuneDeletionMinInactiveDays  *InactiveTooRecentError
+//	confirmDomain is none of its hosts                 domain.ErrDeletionConfirmMismatch
+//
+// The domain check comes LAST so that a refusal which reveals nothing (active, too recent) is given
+// before the one that tests the operator's knowledge of the commune.
+//
+// WHAT IT DOES NOT TOUCH: tenant_domain (a deleted commune's hosts stay RESERVED forever by its primary
+// key — hostFree still sees them), mini_app rows, the commune's data in every other service. Nothing is
+// deleted (rule 7). There is no undelete path: SetActivation and every other write refuse a deleted
+// commune through lockCommune.
+func (w *RegistryWriter) DeleteCommune(ctx context.Context, confirmDomain, reason string, by domain.OperatorActor) (domain.CommuneDeletion, []string, error) {
+	act, err := w.actor(by)
+	if err != nil {
+		return domain.CommuneDeletion{}, nil, err
+	}
+	s := w.db.For(ctx)
+	var (
+		out   domain.CommuneDeletion
+		hosts []string
+	)
+	err = s.Tx(ctx, func(tx *corestore.ScopedTx) error {
+		c, err := lockCommune(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if c.active {
+			return ErrCommuneActive
+		}
+		id := tx.TenantID().String()
+		raw := tx.Underlying()
+		var (
+			deactivatedAt, earliest sql.NullTime
+			oldEnough               sql.NullBool
+		)
+		if err := raw.QueryRowContext(ctx,
+			`SELECT deactivated_at,
+			        deactivated_at + make_interval(days => $2),
+			        deactivated_at + make_interval(days => $2) <= now()
+			   FROM tenant WHERE id = $1`,
+			id, domain.CommuneDeletionMinInactiveDays).Scan(&deactivatedAt, &earliest, &oldEnough); err != nil {
+			return fmt.Errorf("operator registry: deletion wait: %w", err)
+		}
+		if !deactivatedAt.Valid {
+			// Unreachable while 0026's tenant_deactivated_iff_inactive holds. If it is reached the
+			// schema and this code disagree, and "since when" is unknown: refuse, never assume long ago.
+			return fmt.Errorf("operator registry: inactive commune without deactivated_at")
+		}
+		if !oldEnough.Bool {
+			return &InactiveTooRecentError{EarliestAt: earliest.Time}
+		}
+		if hosts, err = communeHosts(ctx, tx); err != nil {
+			return err
+		}
+		if !domain.ConfirmsCommuneHost(confirmDomain, hosts) {
+			return domain.ErrDeletionConfirmMismatch
+		}
+		var deletedAt time.Time
+		if err := raw.QueryRowContext(ctx,
+			`UPDATE tenant SET deleted_at = now(), deleted_by = $2, delete_reason = $3, cap_nhat_luc = now()
+			  WHERE id = $1 AND deleted_at IS NULL AND NOT dang_hoat_dong
+			  RETURNING deleted_at`,
+			id, by.Code, reason).Scan(&deletedAt); err != nil {
+			return fmt.Errorf("operator registry: soft delete commune: %w", err)
+		}
+		out = domain.CommuneDeletion{ID: id, Name: c.name, DeletedAt: deletedAt, DeletedBy: by.Code}
+		// before/after of the registry state; the hosts are listed because they stay reserved, and the
+		// reason is the operator's. No personal data: a commune, an operator code, timestamps.
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor: act, Action: ActionSoftDeleteCommune, Subject: c.name,
+			Delta: delta(map[string]any{
+				"truoc": map[string]any{"da_xoa_mem": false, "dang_hoat_dong": false,
+					"ngung_hoat_dong_tu": deactivatedAt.Time.UTC().Format(time.RFC3339)},
+				"sau": map[string]any{"da_xoa_mem": true, "dang_hoat_dong": false,
+					"xoa_luc": deletedAt.UTC().Format(time.RFC3339), "xoa_boi": by.Code},
+				"ten_mien_giu_cho": hosts,
+				"ly_do":            reason,
+			}),
+		})
+	})
+	if err != nil {
+		return domain.CommuneDeletion{}, nil, err
+	}
+	return out, hosts, nil
 }
 
 // AttachMiniApp registers the commune's OWN Mini App (che_do 'rieng') — the Jenkins stage
