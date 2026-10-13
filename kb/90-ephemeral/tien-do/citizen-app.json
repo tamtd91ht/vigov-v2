@@ -710,7 +710,7 @@
       "trang_thai": "xong",
       "viec": "Link QR app chung đọc mã công khai x= (12 hex) trước, tra GET /communes?code= một lần rồi chạy theo tên miền như cũ (CommuneByLaunchCode); không có x thì đọc d= (CHUYỂN TIẾP — bỏ ở bản sau); x sai khuôn không lùi về d. Báo lỗi client chỉ gửi tên miền đã tra. npm run qr vẫn --domain, ghi cả QR x và QR d-legacy. ADR 0047 §Sửa đổi 12/10/2026.",
       "bang_chung": "9bdd8f5a — tsc sạch, vitest 74 tệp/1980 test xanh. CHƯA thử trên điện thoại thật.",
-      "con_no": "Bản đọc x đã phát hành (chủ dự án 13/10/2026). Còn: một bản sau bỏ đường d trong app."
+      "con_no": "Bản đọc x đã được Zalo duyệt, CHƯA phát hành (13/10/2026) — trước khi phát hành, QR x mở ra màn giới thiệu. Còn: phát hành bản ấy; một bản sau bỏ đường d trong app."
     },
     {
       "id": "app-vihat-nang-cap-nop-zalo-12-10",
@@ -743,7 +743,7 @@
       "id": "npm-run-qr-chi-x-13-10",
       "menu": "noi-dung-mini-app",
       "trang_thai": "xong",
-      "viec": "npm run qr -- --domain=<xã> chỉ sinh QR x (một tệp qr/<tên-miền>.svg), bỏ QR d-legacy — chủ dự án 13/10/2026: bản live đã đọc x. Identity không trả launch_code thì DỪNG (không lùi về d), câu báo chỉ ra máy chủ chưa đúng bản. Không dựng nút cập nhật mã ở platform-admin vì tenant.launch_code NOT NULL, cấp khi tạo xã (migration 0024). ADR 0047 §Sửa đổi 13/10/2026, đoạn bổ sung.",
+      "viec": "npm run qr -- --domain=<xã> chỉ sinh QR x (một tệp qr/<tên-miền>.svg), bỏ QR d-legacy — chủ dự án 13/10/2026 (bản đọc x đã duyệt, chờ phát hành). Identity không trả launch_code thì DỪNG (không lùi về d), câu báo chỉ ra máy chủ chưa đúng bản. Không dựng nút cập nhật mã ở platform-admin vì tenant.launch_code NOT NULL, cấp khi tạo xã (migration 0024). ADR 0047 §Sửa đổi 13/10/2026, đoạn bổ sung.",
       "bang_chung": "vitest scripts/commune-qr.test.mjs 17/17 xanh; chạy thật --domain=thangbinh-danang.vigov.vn ra ?x=e159d39646be&src=qr, identity ?code= trả đúng Xã Thăng Bình. CHƯA quét trên điện thoại.",
       "con_no": ""
     }

@@ -474,8 +474,9 @@ thì truyền domain, qr sinh ra x"*. Câu *"`npm run qr` không thuộc quyết
 lệnh chỉ ghi một tệp QR `x`, không còn tệp `d-legacy`. Đầu vào vẫn là `--domain`. Identity không trả
 `launch_code` thì lệnh **dừng**, không lùi về `d`. Chủ dự án muốn xã thiếu mã thì cập nhật được ở
 platform-admin; mã hiện **không thể thiếu** (`tenant.launch_code` NOT NULL, cấp khi tạo xã, migration 0024,
-không xoay vòng), nên không dựng nút cập nhật. Câu báo lỗi chỉ ra máy chủ chưa đúng bản. Cái giá
-(1) ở trên nay không còn, vì bản đọc `x` đã phát hành.
+không xoay vòng), nên không dựng nút cập nhật. Câu báo lỗi chỉ ra máy chủ chưa đúng bản. Đính chính
+cùng ngày: bản đọc `x` mới được Zalo **duyệt**, chưa **phát hành** — quét QR `x` trước khi phát hành vẫn ra màn
+giới thiệu (đã thấy trên điện thoại); cái giá (1) ở trên còn tới lúc phát hành.
 
 ## ĐIỀU KIỆN DỪNG
 
