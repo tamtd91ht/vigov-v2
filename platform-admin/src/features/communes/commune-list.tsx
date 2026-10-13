@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { FormMessage } from "@/components/form-parts";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardFooter } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -16,7 +16,7 @@ import { useGuardedError } from "@/features/operator/use-guarded-error";
 import { listCommunes, type CommuneSummary } from "@/lib/api";
 import { canCreateCommune } from "@/lib/permissions";
 
-import { StatusBadge } from "./commune-parts";
+import { CREATE_COMMUNE_LABEL, StatusBadge } from "./commune-parts";
 
 /**
  * `/xa` — the commune directory (ADR 0048 §01/10 #4). Registry metadata only: name, province,
@@ -33,13 +33,14 @@ export const PAGE_SIZE = 20;
 
 export const LIST_ACTION = "xem danh sách xã";
 
+
 export function CommuneListToolbar({ permissionKeys }: { permissionKeys: readonly string[] }) {
   // UI hint only: POST /communes is guarded by both keys on the server.
   if (!canCreateCommune(permissionKeys)) return null;
   return (
     <Link href="/xa/moi" className={buttonVariants({ variant: "primary" })}>
       <Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />
-      Tạo xã
+      {CREATE_COMMUNE_LABEL}
     </Link>
   );
 }
@@ -49,13 +50,10 @@ export function CommuneListActions() {
   return <CommuneListToolbar permissionKeys={usePermissionKeys()} />;
 }
 
+/** The table alone, no frame: `CommuneList` puts it in the card (web-admin list screens). */
 export function CommuneTable({ items }: { items: readonly CommuneSummary[] }) {
   if (items.length === 0) {
-    return (
-      <Card as="section">
-        <EmptyState icon={Landmark} title="Sổ xã chưa có xã nào." />
-      </Card>
-    );
+    return <EmptyState icon={Landmark} title="Sổ xã chưa có xã nào." />;
   }
   return (
     <TableScroll sticky aria-label="Danh sách xã">
@@ -67,7 +65,9 @@ export function CommuneTable({ items }: { items: readonly CommuneSummary[] }) {
             <th scope="col">Tỉnh, thành phố</th>
             <th scope="col">Trạng thái</th>
             <th scope="col">Tên miền chính</th>
-            <th scope="col">Tên miền khác</th>
+            <th scope="col" className="text-right">
+              Số tên miền khác
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -86,7 +86,7 @@ export function CommuneTable({ items }: { items: readonly CommuneSummary[] }) {
                 <StatusBadge active={c.active} />
               </td>
               <td className="font-mono text-[13px] text-ink-700">{c.domains[0] ?? "—"}</td>
-              <td className="text-ink-700">{c.domains.length > 1 ? c.domains.length - 1 : "Không có"}</td>
+              <td className="text-right text-ink-700">{Math.max(c.domains.length - 1, 0)}</td>
             </tr>
           ))}
         </tbody>
@@ -152,25 +152,28 @@ export function CommuneList() {
     );
   }
 
+  // One card, as web-admin's list screens draw it: the table flush inside, "Xem thêm" and a later
+  // page's error in the footer under it.
   return (
-    <div className="flex flex-col gap-4">
-      {loaded ? <CommuneTable items={items} /> : null}
-      {!loaded && loading ? (
-        <Card>
+    <Card as="section" aria-label="Danh sách xã">
+      {loaded ? (
+        <CommuneTable items={items} />
+      ) : (
+        <>
           <p role="status" className="sr-only">
             Đang tải danh sách xã…
           </p>
           <SkeletonRows rows={6} />
-        </Card>
-      ) : null}
-      {loaded ? <FormMessage text={error} /> : null}
+        </>
+      )}
+      {loaded ? <FormMessage text={error} className="mx-4 my-3" /> : null}
       {loaded && hasMore ? (
-        <div className="flex justify-center">
+        <CardFooter className="justify-center">
           <Button type="button" variant="secondary" onClick={loadMore} disabled={loading} aria-busy={loading}>
             {loading ? "Đang tải…" : "Xem thêm"}
           </Button>
-        </div>
+        </CardFooter>
       ) : null}
-    </div>
+    </Card>
   );
 }

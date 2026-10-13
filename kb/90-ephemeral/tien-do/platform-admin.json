@@ -4,6 +4,14 @@
   "cap_nhat": "2026-10-13",
   "muc": [
     {
+      "id": "giao-dien-dong-nhat-web-admin-13-10",
+      "viec": "Giao diện platform-admin đồng nhất web-admin (ADR 0068 lần 6): token spec 00, phông Inter, nút/badge/thẻ/bảng/ô nhập/hộp thoại, khung sidebar navy + header trắng; mọi màn rà lại bảng, tiêu đề, nhãn cột, nút",
+      "trang_thai": "xong",
+      "bang_chung": "Chủ dự án yêu cầu 13/10/2026, chốt phạm vi: toàn bộ màn; 'tên' = tiêu đề, nhãn cột, nút (không đổi tên menu); không đổi luồng/API/quyền. Thẻ 1 1f70667d (globals.css, layout, ui/*, sidebar, topbar, console-shell, đăng nhập; bỏ @fontsource/be-vietnam-pro). Thẻ 2: form-parts (ô h-8), dialog theo ModalDialog web-admin, 21 hộp thoại 'Huỷ' trước, bảng trong Card sát mép, cột số căn phải, bỏ màu cứng. Nhãn đổi: Tạo xã → Thêm xã; Tạo tài khoản vận hành/quản trị → Thêm …; 'Tên miền khác' → 'Số tên miền khác'; 'Cập nhật' → 'Cập nhật lần cuối'; 'Tên' → 'Tên hiển thị'; 'Họ tên' → 'Họ và tên'. KIỂM: typecheck, lint, vitest 306/306, build xanh (cả hai thẻ).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA xem ảnh render (máy này không dựng được màn) — chủ dự án build và xem bằng mắt, cả 320px. Lựa chọn chờ chủ dự án bác hoặc giữ: sidebar NAVY (web-admin hiện navy, không trắng); chữ thân 16px; bỏ giới hạn rộng main; nợ tương phản màu spec áp sang platform-admin; hộp thoại bỏ ô icon (kể cả hộp nguy hiểm); focus mở hộp vào tiêu đề; gợi ý ô vẫn hiện khi có lỗi; câu quyền vẫn viết 'tạo xã' cạnh nút 'Thêm xã'. npm install báo 7 lỗ hổng high (sharp, source-map-js) — có từ trước, chưa xử lý."
+    },
+    {
       "id": "ts-chua-tung-duoc-kiem",
       "viec": "Mã TypeScript của platform-admin ĐÃ đi qua cổng kiểm — và cổng thôi bỏ qua",
       "trang_thai": "xong",

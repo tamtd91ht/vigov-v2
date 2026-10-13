@@ -107,11 +107,11 @@ function CommuneDeletionDialog({ commune, onClose }: { commune: CommuneDetail; o
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "confirmDomain", "reason")} />
         <DialogActions>
-          <Button type="submit" variant="danger-solid" disabled={busy || !ready} aria-busy={busy}>
-            {busy ? "Đang xoá…" : DELETE_LABEL}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="danger-solid" disabled={busy || !ready} aria-busy={busy}>
+            {busy ? "Đang xoá…" : DELETE_LABEL}
           </Button>
         </DialogActions>
       </form>

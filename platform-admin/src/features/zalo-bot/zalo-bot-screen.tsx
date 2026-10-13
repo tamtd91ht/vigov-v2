@@ -536,6 +536,9 @@ function TokenDialog({
         <RelinkConfirmBody count={pending.count} />
         <FormMessage text={error?.text ?? null} />
         <DialogActions>
+          <Button type="button" variant="secondary" onClick={close} disabled={busy}>
+            Huỷ
+          </Button>
           <Button
             type="button"
             variant="danger-solid"
@@ -544,9 +547,6 @@ function TokenDialog({
             onClick={() => void send({ ...pending.change, expected_relink_count: pending.count })}
           >
             {busy ? "Đang lưu…" : "Tiếp tục đổi bot"}
-          </Button>
-          <Button type="button" variant="secondary" onClick={close} disabled={busy}>
-            Huỷ
           </Button>
         </DialogActions>
       </Dialog>
@@ -559,11 +559,11 @@ function TokenDialog({
         <p>Token mới có hiệu lực ngay khi lưu. Nếu token thuộc một tài khoản bot khác, hệ thống sẽ hỏi lại trước khi đổi.</p>
         <TokenFormFields draft={draft} onDraft={setDraft} busy={busy} error={error} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : "Lưu token"}
-          </Button>
           <Button type="button" variant="secondary" onClick={close} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : "Lưu token"}
           </Button>
         </DialogActions>
       </form>

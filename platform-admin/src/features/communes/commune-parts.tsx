@@ -6,6 +6,12 @@ import { Badge } from "@/components/ui/badge";
  */
 
 /**
+ * The add button on the list and the create page's title, in web-admin's wording ("Thêm …"). Here and
+ * not in the list (a client module) because the create page's server metadata reads it too.
+ */
+export const CREATE_COMMUNE_LABEL = "Thêm xã";
+
+/**
  * Text plus an icon of its own shape, never colour alone (skills/accessibility-elderly #6). The tone
  * follows the `active` flag the server sends, never the wording.
  */

@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { FormMessage, TextField } from "@/components/form-parts";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardFooter } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -53,10 +53,11 @@ function Change({ entry }: { entry: OperatorAuditEntry }) {
   );
 }
 
-/** The table alone; `showCommune` false on a commune's own page, where the column would repeat. */
+/** The table alone, no frame (the card around it is the caller's); `showCommune` false on a commune's
+ *  own page, where the column would repeat. */
 export function OperatorLogTable({ items, showCommune }: { items: readonly OperatorAuditEntry[]; showCommune: boolean }) {
   if (items.length === 0) {
-    return <EmptyState icon={ScrollText} tone="neutral" title="Không có thao tác nào trong khoảng thời gian này." className="py-6" />;
+    return <EmptyState icon={ScrollText} tone="neutral" title="Không có thao tác nào trong khoảng thời gian này." />;
   }
   return (
     <TableScroll aria-label="Nhật ký vận hành">
@@ -106,15 +107,15 @@ export function OperatorLogTable({ items, showCommune }: { items: readonly Opera
   );
 }
 
-/** "Xem thêm" only while the server says there is more. */
+/** "Xem thêm" only while the server says there is more — in the card's footer, under the table. */
 export function OperatorLogMore({ hasMore, loading, onMore }: { hasMore: boolean; loading: boolean; onMore: () => void }) {
   if (!hasMore) return null;
   return (
-    <div className="flex justify-center">
+    <CardFooter className="justify-center">
       <Button type="button" variant="secondary" onClick={onMore} disabled={loading} aria-busy={loading}>
         {loading ? "Đang tải…" : "Xem thêm"}
       </Button>
-    </div>
+    </CardFooter>
   );
 }
 
@@ -137,23 +138,37 @@ function Filters({
     onApply(r.range);
   }
 
+  // web-admin's Toolbar (spec §6.4): one filter row over the table, a hairline under it, labels above
+  // the 32px controls, bottoms aligned; it wraps onto further rows at narrow widths.
   return (
-    <form className="flex flex-col gap-2" method="get" onSubmit={submit} noValidate aria-label="Lọc nhật ký theo ngày">
-      <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-[minmax(0,12rem)_minmax(0,12rem)_auto]">
-        <TextField label="Từ ngày" name="from" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} disabled={disabled} />
-        <TextField label="Đến ngày" name="to" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} disabled={disabled} />
-        <div>
-          <Button type="submit" variant="secondary" disabled={disabled} icon={<Funnel aria-hidden="true" focusable="false" strokeWidth={1.8} />}>
-            Lọc
-          </Button>
+    <form
+      className="m-0 flex min-w-0 flex-col gap-2 border-b border-solid border-line px-4 py-3.5"
+      method="get"
+      onSubmit={submit}
+      noValidate
+      aria-label="Lọc nhật ký theo ngày"
+    >
+      <div className="flex min-w-0 flex-wrap items-end gap-3">
+        <div className="min-w-[160px] flex-[0_1_200px]">
+          <TextField label="Từ ngày" name="from" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} disabled={disabled} />
         </div>
+        <div className="min-w-[160px] flex-[0_1_200px]">
+          <TextField label="Đến ngày" name="to" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} disabled={disabled} />
+        </div>
+        <Button type="submit" variant="secondary" disabled={disabled} icon={<Funnel aria-hidden="true" focusable="false" strokeWidth={1.8} />}>
+          Lọc
+        </Button>
       </div>
       <FormMessage text={error} />
     </form>
   );
 }
 
-/** The whole log: filters, table, "Xem thêm". With `communeId`, that commune's acts only. */
+/**
+ * The whole log: filter strip, table, "Xem thêm" — drawn to sit FLUSH inside a card (web-admin's
+ * list layout): `/nhat-ky-van-hanh` puts it in a bare card, a commune's page in its section card.
+ * With `communeId`, that commune's acts only.
+ */
 export function OperatorLog({ communeId }: { communeId?: string }) {
   const guarded = useGuardedError();
   const [range, setRange] = useState<LogRange>({});
@@ -207,7 +222,7 @@ export function OperatorLog({ communeId }: { communeId?: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <>
       <Filters onApply={apply} disabled={loading} />
       {page === null && loading ? (
         <div>
@@ -223,18 +238,18 @@ export function OperatorLog({ communeId }: { communeId?: string }) {
       {page !== null ? (
         <>
           <OperatorLogTable items={page.items} showCommune={communeId === undefined} />
-          <FormMessage text={error} />
+          <FormMessage text={error} className="mx-4 my-3" />
           <OperatorLogMore hasMore={page.has_more} loading={loading} onMore={more} />
         </>
       ) : null}
-    </div>
+    </>
   );
 }
 
-/** `/nhat-ky-van-hanh`: the log of every commune plus the platform-wide changes, in a card. */
+/** `/nhat-ky-van-hanh`: the log of every commune plus the platform-wide changes, in one card. */
 export function OperatorLogScreen() {
   return (
-    <Card as="section" className="p-4">
+    <Card as="section" aria-label="Nhật ký vận hành">
       <OperatorLog />
     </Card>
   );

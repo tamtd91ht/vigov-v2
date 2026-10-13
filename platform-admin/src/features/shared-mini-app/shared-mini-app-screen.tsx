@@ -283,11 +283,11 @@ function DeclareSharedMiniAppDialog({
           error={error}
         />
         <DialogActions>
-          <Button type="submit" variant={replacing ? "danger-solid" : "primary"} disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : label}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant={replacing ? "danger-solid" : "primary"} disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : label}
           </Button>
         </DialogActions>
       </form>

@@ -2,16 +2,17 @@ import { Plus } from "lucide-react";
 
 import { BackLink } from "@/components/back-link";
 import { PageHeader } from "@/components/ui/page-header";
+import { CREATE_COMMUNE_LABEL } from "@/features/communes/commune-parts";
 import { CreateCommunePage } from "@/features/communes/create-commune-form";
 
-export const metadata = { title: "Tạo xã — ViGov Khu vận hành nền tảng" };
+export const metadata = { title: `${CREATE_COMMUNE_LABEL} — ViGov Khu vận hành nền tảng` };
 
 /** `/xa/moi` — create a commune (ADR 0048 §01/10 #1, #4). A form page: readable width (880px). */
 export default function NewCommunePage() {
   return (
     <div className="max-w-[880px] min-w-0">
       <BackLink href="/xa">Danh sách xã</BackLink>
-      <PageHeader icon={Plus} title="Tạo xã" />
+      <PageHeader icon={Plus} title={CREATE_COMMUNE_LABEL} subtitle="Tên xã, tỉnh, thành phố và tên miền chính. Xã mới được tạo ở trạng thái trống." />
       <CreateCommunePage />
     </div>
   );

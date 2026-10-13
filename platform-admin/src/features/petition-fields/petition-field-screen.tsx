@@ -4,10 +4,10 @@ import { Archive, ArchiveRestore, Pencil, Plus, Tags, TriangleAlert } from "luci
 import { useEffect, useId, useState, type FormEvent } from "react";
 
 import { Dialog, DialogActions } from "@/components/dialog";
-import { controlClass, FieldError, FormMessage, labelClass, TextAreaField, TextField } from "@/components/form-parts";
+import { FieldError, FormMessage, labelClass, SelectChevron, selectClass, TextAreaField, TextField } from "@/components/form-parts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -72,11 +72,7 @@ export function PetitionFieldTable({
   onToggle: (f: PetitionField) => void;
 }) {
   if (items.length === 0) {
-    return (
-      <Card as="section">
-        <EmptyState icon={Tags} title="Chưa có mã lĩnh vực nào." />
-      </Card>
-    );
+    return <EmptyState icon={Tags} title="Chưa có mã lĩnh vực nào." />;
   }
   return (
     <TableScroll sticky aria-label="Lĩnh vực phản ánh cấp 1">
@@ -86,12 +82,14 @@ export function PetitionFieldTable({
           <tr>
             <th scope="col">Mã</th>
             <th scope="col">Nhãn mặc định</th>
-            <th scope="col">Thứ tự</th>
+            <th scope="col" className="text-right">
+              Thứ tự
+            </th>
             <th scope="col">Biểu tượng</th>
             <th scope="col">Tông màu</th>
             <th scope="col">Trạng thái</th>
             {canManage ? (
-              <th scope="col">
+              <th scope="col" className="text-right">
                 <span className="sr-only">Thao tác</span>
               </th>
             ) : null}
@@ -102,13 +100,13 @@ export function PetitionFieldTable({
             <tr key={f.code}>
               <td className="font-mono text-[13px] text-ink-900">{f.code}</td>
               <td className="font-semibold text-ink-900">{f.default_label}</td>
-              <td className="text-ink-700">{f.sort_order}</td>
+              <td className="text-right text-ink-700">{f.sort_order}</td>
               <td className="font-mono text-[13px] text-ink-700">{f.icon || "—"}</td>
               <td className="text-ink-700">{toneLabel(f.tone)}</td>
               <td>{f.active ? <Badge tone="success">Đang dùng</Badge> : <Badge tone="neutral">Ngừng dùng</Badge>}</td>
               {canManage ? (
-                <td>
-                  <div className="flex flex-wrap gap-1">
+                <td className="text-right">
+                  <div className="flex justify-end gap-1">
                     <Button
                       type="button"
                       variant="ghost"
@@ -204,21 +202,30 @@ export function PetitionFieldScreen() {
     );
   }
 
+  // web-admin's list layout: the scope note above, then ONE card — its header names the list and holds
+  // the add action at the right, the table runs flush under it.
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-start gap-3">
-        <Notice tone="info" className="min-w-0 flex-1 basis-80">
-          Bộ mã dùng chung cho mọi xã. Nhãn, thứ tự và việc bật/tắt riêng của từng xã là cấu hình của xã, không sửa ở
-          đây.
-        </Notice>
-        <PetitionFieldActions canManage={canManage} onCreate={() => setOpen({ kind: "create" })} />
-      </div>
-      <PetitionFieldTable
-        items={list.items}
-        canManage={canManage}
-        onEdit={(f) => setOpen({ kind: "edit", field: f })}
-        onToggle={(f) => setOpen({ kind: "toggle", field: f })}
-      />
+      <Notice tone="info">
+        Bộ mã dùng chung cho mọi xã. Nhãn, thứ tự và việc bật/tắt riêng của từng xã là cấu hình của xã, không sửa ở
+        đây.
+      </Notice>
+      <Card as="section" aria-labelledby="petition-fields-title">
+        <CardHeader>
+          <Tags aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          <CardTitle id="petition-fields-title">Mã lĩnh vực cấp 1</CardTitle>
+          <span className="text-[13px] text-ink-muted">{`${list.items.length} mã`}</span>
+          <div className="ml-auto">
+            <PetitionFieldActions canManage={canManage} onCreate={() => setOpen({ kind: "create" })} />
+          </div>
+        </CardHeader>
+        <PetitionFieldTable
+          items={list.items}
+          canManage={canManage}
+          onEdit={(f) => setOpen({ kind: "edit", field: f })}
+          onToggle={(f) => setOpen({ kind: "toggle", field: f })}
+        />
+      </Card>
       {open?.kind === "create" ? <FieldDialog tones={list.tones} field={null} onClose={() => setOpen(null)} onSaved={saved} /> : null}
       {open?.kind === "edit" ? (
         <FieldDialog key={open.field.code} tones={list.tones} field={open.field} onClose={() => setOpen(null)} onSaved={saved} />
@@ -346,23 +353,26 @@ export function PetitionFieldFormFields({
         <label htmlFor={toneId} className={labelClass}>
           Tông màu
         </label>
-        <select
-          id={toneId}
-          name="tone"
-          className={controlClass}
-          value={form.tone}
-          onChange={(e) => set({ tone: e.target.value })}
-          disabled={busy}
-          aria-invalid={at("tone") ? true : undefined}
-          aria-describedby={at("tone") ? toneId + "-error" : undefined}
-        >
-          <option value="">{toneLabel("")}</option>
-          {tones.map((t) => (
-            <option key={t} value={t}>
-              {toneLabel(t)}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            id={toneId}
+            name="tone"
+            className={selectClass}
+            value={form.tone}
+            onChange={(e) => set({ tone: e.target.value })}
+            disabled={busy}
+            aria-invalid={at("tone") ? true : undefined}
+            aria-describedby={at("tone") ? toneId + "-error" : undefined}
+          >
+            <option value="">{toneLabel("")}</option>
+            {tones.map((t) => (
+              <option key={t} value={t}>
+                {toneLabel(t)}
+              </option>
+            ))}
+          </select>
+          <SelectChevron />
+        </div>
         {at("tone") ? <FieldError id={toneId + "-error"} text={at("tone") ?? ""} /> : null}
       </div>
       <TextAreaField
@@ -442,11 +452,11 @@ function FieldDialog({
       <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
         <PetitionFieldFormFields field={field} tones={tones} form={form} onChange={setForm} busy={busy} error={error} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : creating ? "Cấp mã lĩnh vực" : "Lưu thay đổi"}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : creating ? "Cấp mã lĩnh vực" : "Lưu thay đổi"}
           </Button>
         </DialogActions>
       </form>
@@ -517,11 +527,11 @@ function ActivationDialog({
         />
         <FormMessage text={error && error.field !== "reason" ? error.text : null} />
         <DialogActions>
-          <Button type="submit" variant={retiring ? "danger-solid" : "primary"} disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : label}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant={retiring ? "danger-solid" : "primary"} disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : label}
           </Button>
         </DialogActions>
       </form>

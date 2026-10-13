@@ -9,7 +9,7 @@ export const metadata = { title: "Đổi mật khẩu — ViGov Khu vận hành 
 export default function ChangePasswordPage() {
   return (
     <div className="mx-auto w-full max-w-[36rem] min-w-0">
-      <PageHeader icon={KeyRound} title="Đổi mật khẩu" />
+      <PageHeader icon={KeyRound} title="Đổi mật khẩu" subtitle="Mật khẩu đăng nhập khu vận hành của tài khoản bạn." />
       <ChangePasswordForm />
     </div>
   );

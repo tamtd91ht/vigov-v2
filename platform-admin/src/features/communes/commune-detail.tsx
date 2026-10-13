@@ -74,6 +74,9 @@ type Props = { communeId: string };
 export const DEACTIVATE_WARNING =
   "Sau khi ngừng hoạt động, các trang của xã trên mọi tên miền của xã sẽ ngừng hoạt động trong khoảng 30 giây. Dữ liệu của xã được giữ nguyên; có thể bật hoạt động trở lại.";
 
+/** The page header's one line: what this page holds, never a fact about the commune it could get wrong. */
+export const DETAIL_SUBTITLE = "Thông tin đăng ký, tên miền, Mini App và nhật ký vận hành của xã.";
+
 export const NAME_CORRECTION_NOTICE =
   "Chỉ dùng để sửa lỗi gõ khi nhập tên (sai chính tả, thiếu dấu, thừa ký tự). Đây không phải đổi tên đơn vị hành chính: đổi tên, sáp nhập hay chia tách xã không làm ở màn này. Lý do và tên trước, sau khi sửa được ghi vào nhật ký.";
 
@@ -107,7 +110,7 @@ export function CommuneDetailScreen({ communeId }: Props) {
   if (commune === null) {
     return (
       <>
-        <PageHeader icon={Landmark} title="Thông tin xã" />
+        <PageHeader icon={Landmark} title="Thông tin xã" subtitle={DETAIL_SUBTITLE} />
         {loadError === null ? (
           <Card>
             <p role="status" className="sr-only">
@@ -136,15 +139,22 @@ export function CommuneDetailScreen({ communeId }: Props) {
   );
 }
 
+/**
+ * One concern of the page as a web-admin card: icon + title in the header, then the body. `flush`
+ * leaves the body unpadded for a section that is a toolbar + table (the operator log), so the table
+ * runs edge to edge as on a list screen.
+ */
 function SectionCard({
   id,
   title,
   icon: Icon,
+  flush = false,
   children,
 }: {
   id: string;
   title: string;
   icon: typeof Globe;
+  flush?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -153,7 +163,7 @@ function SectionCard({
         <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
         <CardTitle id={id}>{title}</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">{children}</CardContent>
+      {flush ? children : <CardContent className="flex flex-col gap-4">{children}</CardContent>}
     </Card>
   );
 }
@@ -180,7 +190,7 @@ export function CommuneDetailBody({
 
   return (
     <div className="flex max-w-[1120px] min-w-0 flex-col gap-4">
-      <PageHeader icon={Landmark} title={commune.name} className="mb-1" />
+      <PageHeader icon={Landmark} title={commune.name} subtitle={DETAIL_SUBTITLE} className="mb-1" />
 
       <SectionCard id="commune-admin" title="Tên và trạng thái" icon={Landmark}>
         <dl className="m-0 grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
@@ -239,7 +249,7 @@ export function CommuneDetailBody({
         </SectionCard>
       ) : null}
 
-      <SectionCard id="commune-operator-log" title="Nhật ký vận hành của xã" icon={ScrollText}>
+      <SectionCard id="commune-operator-log" title="Nhật ký vận hành của xã" icon={ScrollText} flush>
         <OperatorLog communeId={commune.id} />
       </SectionCard>
 
@@ -291,9 +301,9 @@ function DomainList({
 
   return (
     <>
-      <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-xl border border-line p-0">
+      <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-lg border border-solid border-line p-0">
         {commune.domains.map((d, i) => (
-          <li key={d} className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2">
+          <li key={d} className="flex min-h-10 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5">
             <code className="min-w-0 font-mono text-[13px] break-all text-ink-900">{d}</code>
             {i === 0 ? (
               <Badge tone="info" icon={Star}>
@@ -325,11 +335,11 @@ function DomainList({
         </p>
         <FormMessage text={error} />
         <DialogActions>
-          <Button type="button" variant="primary" onClick={confirm} disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : "Đặt làm tên miền chính"}
-          </Button>
           <Button type="button" variant="secondary" onClick={() => setTarget(null)} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="button" variant="primary" onClick={confirm} disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : "Đặt làm tên miền chính"}
           </Button>
         </DialogActions>
       </Dialog>
@@ -477,11 +487,11 @@ function NameCorrection({ commune, onChanged }: { commune: CommuneDetail; onChan
           />
           <FormMessage text={error && error.field !== "name" && error.field !== "reason" ? error.text : null} />
           <DialogActions>
-            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-              {busy ? "Đang lưu…" : "Lưu tên đã sửa"}
-            </Button>
             <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={busy}>
               Huỷ
+            </Button>
+            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+              {busy ? "Đang lưu…" : "Lưu tên đã sửa"}
             </Button>
           </DialogActions>
         </form>
@@ -566,11 +576,11 @@ function ActivationToggle({ commune, onChanged }: { commune: CommuneDetail; onCh
           />
           <FormMessage text={error && error.field !== "reason" ? error.text : null} />
           <DialogActions>
-            <Button type="submit" variant={deactivating ? "danger-solid" : "primary"} disabled={busy} aria-busy={busy}>
-              {busy ? "Đang lưu…" : label}
-            </Button>
             <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={busy}>
               Huỷ
+            </Button>
+            <Button type="submit" variant={deactivating ? "danger-solid" : "primary"} disabled={busy} aria-busy={busy}>
+              {busy ? "Đang lưu…" : label}
             </Button>
           </DialogActions>
         </form>

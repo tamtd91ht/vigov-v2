@@ -43,7 +43,7 @@ import { at, formLevel, ReasonField, StatusChips, TemporaryPasswordFields, useOw
  * Every act lands in the COMMUNE's trail with the owner's VH- code (§Sửa đổi #5). The commune can see it.
  */
 
-export const CREATE_ADMIN_LABEL = "Tạo tài khoản quản trị";
+export const CREATE_ADMIN_LABEL = "Thêm tài khoản quản trị";
 export const CREATE_ADMIN_INACTIVE =
   "Xã đang ngừng hoạt động nên không tạo được tài khoản. Bật hoạt động trở lại trước, nếu việc đó đúng.";
 
@@ -65,11 +65,13 @@ export function StaffAccountTable({
         <thead>
           <tr>
             <th scope="col">Mã</th>
-            <th scope="col">Họ tên</th>
+            <th scope="col">Họ và tên</th>
             <th scope="col">Email</th>
             <th scope="col">Vai trò</th>
             <th scope="col">Trạng thái</th>
-            <th scope="col">Thao tác</th>
+            <th scope="col" className="text-right">
+              <span className="sr-only">Thao tác</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -87,9 +89,9 @@ export function StaffAccountTable({
               <td>
                 <StatusChips chips={staffStatus(a, now)} />
               </td>
-              <td>
+              <td className="text-right">
                 {/* A disabled account is the commune's decision; the owner does not hand it a password. */}
-                <div className="flex flex-col items-start gap-1">
+                <div className="flex flex-col items-end gap-1">
                   <Button
                     type="button"
                     size="sm"
@@ -99,7 +101,7 @@ export function StaffAccountTable({
                   >
                     Đặt lại mật khẩu
                   </Button>
-                  {a.disabled ? <span className="text-xs text-ink-500">{STAFF_DISABLED_RESET}</span> : null}
+                  {a.disabled ? <span className="text-xs text-ink-muted">{STAFF_DISABLED_RESET}</span> : null}
                 </div>
               </td>
             </tr>
@@ -258,7 +260,7 @@ function CreateCommuneAdminDialog({
   }
 
   return (
-    <Dialog open title={`Tạo tài khoản quản trị cho ${commune.name}`} icon={UserPlus} onClose={() => !busy && onClose()}>
+    <Dialog open title={`${CREATE_ADMIN_LABEL} cho ${commune.name}`} icon={UserPlus} onClose={() => !busy && onClose()}>
       <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
         <Notice tone="info">
           <p>{COMMUNE_ADMIN_NOTE}</p>
@@ -296,11 +298,11 @@ function CreateCommuneAdminDialog({
         />
         <FormMessage text={formLevel(error, "email", "name", "password", "confirm")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang tạo…" : CREATE_ADMIN_LABEL}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang thêm…" : CREATE_ADMIN_LABEL}
           </Button>
         </DialogActions>
       </form>
@@ -367,11 +369,11 @@ function ResetStaffPasswordDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "password", "confirm", "reason")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : "Đặt lại mật khẩu"}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : "Đặt lại mật khẩu"}
           </Button>
         </DialogActions>
       </form>

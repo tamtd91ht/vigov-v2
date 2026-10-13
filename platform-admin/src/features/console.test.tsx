@@ -105,12 +105,12 @@ describe("permission hints — denied cases first", () => {
     expect(canCreateCommune([TENANT, DOMAIN])).toBe(true);
   });
 
-  it("the list hides Tạo xã without both keys, and shows it with both", () => {
+  it("the list hides Thêm xã without both keys, and shows it with both", () => {
     for (const keys of [[], [TENANT], [DOMAIN], [MINI_APP]]) {
-      expect(renderToString(<CommuneListToolbar permissionKeys={keys} />)).not.toContain("Tạo xã");
+      expect(renderToString(<CommuneListToolbar permissionKeys={keys} />)).not.toContain("Thêm xã");
     }
     const html = renderToString(<CommuneListToolbar permissionKeys={[TENANT, DOMAIN]} />);
-    expect(html).toContain("Tạo xã");
+    expect(html).toContain("Thêm xã");
     expect(html).toContain('href="/xa/moi"');
   });
 

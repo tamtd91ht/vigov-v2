@@ -209,7 +209,7 @@ describe("commune detail — owner sections", () => {
     expect(inactive).not.toContain('disabled=""');
   });
 
-  it("Tạo tài khoản quản trị is disabled on an inactive commune, with the reason", () => {
+  it("Thêm tài khoản quản trị is disabled on an inactive commune, with the reason", () => {
     const off = renderToString(<CreateAdminControl active={false} onOpen={noop} />);
     expect(off).toContain(CREATE_ADMIN_INACTIVE);
     expect(off).toContain('disabled=""');

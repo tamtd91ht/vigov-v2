@@ -20,7 +20,12 @@ export default async function CommuneListPage({
   const deleted = (await searchParams).deleted === "1";
   return (
     <>
-      <PageHeader icon={Landmark} title="Danh sách xã" actions={<CommuneListActions />} />
+      <PageHeader
+        icon={Landmark}
+        title="Danh sách xã"
+        subtitle="Các xã trên nền tảng: tỉnh, thành phố, trạng thái và tên miền."
+        actions={<CommuneListActions />}
+      />
       {deleted ? (
         <Notice tone="info" role="status" className="mb-4">
           <p>{DELETED_NOTICE}</p>

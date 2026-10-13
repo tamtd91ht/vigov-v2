@@ -1,19 +1,20 @@
 "use client";
 
-import { ChevronDown, Plus, ShieldX } from "lucide-react";
+import { Plus, ShieldX } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useId, useState, type FormEvent } from "react";
 
-import { controlClass, FieldError, FormMessage, labelClass, TextField } from "@/components/form-parts";
+import { FieldError, FormMessage, labelClass, SelectChevron, selectClass, TextField } from "@/components/form-parts";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Notice } from "@/components/ui/notice";
 import { useOperator } from "@/features/operator/operator-context";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import { createCommune, listProvinces, type Province } from "@/lib/api";
-import { cn } from "@/lib/cn";
 import { communeError, type CommuneField } from "@/lib/errors";
 import { canCreateCommune } from "@/lib/permissions";
+
+import { CREATE_COMMUNE_LABEL } from "./commune-parts";
 
 /**
  * `/xa/moi` — create a commune: name, province from the `tinh_thanh` catalogue, primary domain
@@ -160,7 +161,7 @@ function CreateCommuneForm() {
                 disabled={submitting || provinces === null}
                 aria-invalid={errors.province ? true : undefined}
                 aria-describedby={errors.province ? provinceErrorId : undefined}
-                className={cn(controlClass, "cursor-pointer appearance-none pr-9")}
+                className={selectClass}
               >
                 <option value="">{provinces === null ? "Đang tải danh mục…" : "Chọn tỉnh, thành phố"}</option>
                 {(provinces ?? []).map((p) => (
@@ -169,12 +170,7 @@ function CreateCommuneForm() {
                   </option>
                 ))}
               </select>
-              <ChevronDown
-                aria-hidden="true"
-                focusable="false"
-                strokeWidth={1.8}
-                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-ink-500"
-              />
+              <SelectChevron />
             </div>
             {errors.province ? <FieldError id={provinceErrorId} text={errors.province} /> : null}
           </div>
@@ -203,7 +199,7 @@ function CreateCommuneForm() {
           aria-busy={submitting}
           icon={<Plus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
         >
-          {submitting ? "Đang tạo xã…" : "Tạo xã"}
+          {submitting ? "Đang thêm xã…" : CREATE_COMMUNE_LABEL}
         </Button>
       </CardFooter>
     </Card>

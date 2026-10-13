@@ -1,6 +1,6 @@
 "use client";
 
-import { CircleAlert, type LucideIcon } from "lucide-react";
+import { ChevronDown, CircleAlert, type LucideIcon } from "lucide-react";
 import { useId, type InputHTMLAttributes, type ReactNode, type TextareaHTMLAttributes } from "react";
 
 import { cn } from "@/lib/cn";
@@ -10,34 +10,55 @@ import { cn } from "@/lib/cn";
  * with it, and the form-level message. Labels are always above the input, never a placeholder
  * (skills/accessibility-elderly #4).
  *
- * LOOK: web-admin's control frame (`web-admin/src/components/ui/field.tsx` `controlClass`) — hairline,
- * `--r-control` radius, brand focus ring — at 44px instead of 40px: this console's inputs were 44px
- * touch targets before the redesign and stay so. 16px text below 768px, because iOS zooms the page
- * on focus into anything smaller.
+ * LOOK: web-admin's Field (`web-admin/src/components/ui/field.tsx`, spec 00 §5, ADR 0068 lần 6) —
+ * shadcn's Input: 32px, `rounded-lg`, the `input` hairline, focus = the `ring` border plus a 3px
+ * `ring/50` halo; the label navy 13px/600 above, the hint and the error 12px under the control.
+ * 32px so a control and the h-8 button beside it line up (until 13/10/2026 this console drew 44px
+ * inputs next to 32px buttons). 16px text below 768px, because iOS zooms the page on focus into
+ * anything smaller. Copied, not shared (no package yet): change both.
+ *
+ * DIFFERENCE FROM WEB-ADMIN: the hint stays visible while an error shows. web-admin hides it; here
+ * several hints carry the rule the error refers to (a password's length, a domain's shape), and the
+ * control's `aria-describedby` already names both.
  *
  * The native `<input>` / `<textarea>` keeps every prop the screen passes (`name`, `autoComplete`,
  * `inputMode`, `maxLength`, `value`, `onChange`): this file draws, it does not decide.
  */
 
-/** Frame shared by every native control on this console; exported for the one bare `<select>`. */
+/** Frame shared by every native control on this console; exported for the bare `<select>`s. */
 export const controlClass = cn(
-  "h-11 w-full min-w-0 rounded-control border border-line-strong bg-surface px-3 [font-family:inherit] text-base text-ink-900 md:text-sm",
-  "transition-[border-color,box-shadow] duration-150",
-  "placeholder:text-ink-500 hover:not-disabled:border-[#c3ccd9]",
-  "focus-visible:border-brand-500 focus-visible:shadow-[0_0_0_3px_var(--brand-100)] focus-visible:outline-none",
-  "disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-500",
-  // An invalid field is marked by a thicker border AND the sentence under it — never colour alone.
-  "aria-invalid:border-2 aria-invalid:border-danger-600",
+  "h-8 w-full min-w-0 rounded-lg border border-solid border-input bg-surface px-2.5 py-1 [font-family:inherit] text-base text-navy md:text-sm",
+  "transition-[border-color,box-shadow,background-color] duration-(--dur-fast) ease-(--ease) outline-none",
+  "placeholder:text-muted-foreground",
+  "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50",
+  "disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50",
+  // An invalid field is marked by the red border AND the sentence under it — never colour alone.
+  "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20",
 );
 
-export const labelClass = "text-[13px] leading-tight font-semibold text-ink-700";
+/** A `<select>` in the control frame: the native arrow hidden, `SelectChevron` drawn instead, so every
+ *  select looks alike across browsers (web-admin Field `kind="select"`). Wrap both in `relative`. */
+export const selectClass = cn(controlClass, "cursor-pointer appearance-none pr-8");
 
-export const hintClass = "m-0 text-[13px] text-ink-500";
+export function SelectChevron() {
+  return (
+    <ChevronDown
+      aria-hidden="true"
+      focusable="false"
+      strokeWidth={1.8}
+      className="pointer-events-none absolute top-1/2 right-2.5 size-4 -translate-y-1/2 text-ink-muted"
+    />
+  );
+}
+
+export const labelClass = "block text-[13px] leading-tight font-semibold text-navy";
+
+export const hintClass = "m-0 text-[12px] text-ink-muted";
 
 export function FieldError({ id, text }: { id: string; text: string }) {
   return (
-    <p id={id} className="m-0 flex items-start gap-1.5 text-[13px] font-semibold text-danger-600">
-      <CircleAlert aria-hidden="true" focusable="false" strokeWidth={2} className="mt-0.5 size-3.5 shrink-0" />
+    <p id={id} className="m-0 flex items-start gap-1 text-[12px] font-medium text-danger">
+      <CircleAlert aria-hidden="true" focusable="false" strokeWidth={2} className="mt-px size-3.5 shrink-0" />
       {text}
     </p>
   );
@@ -49,7 +70,7 @@ type FieldProps = Omit<InputHTMLAttributes<HTMLInputElement>, "id" | "aria-descr
   error?: string | null;
   /** Leading decorative icon inside the control (the sign-in card, like web-admin's). */
   icon?: LucideIcon;
-  /** 46px instead of 44px — the sign-in card's inputs (web-admin `.login-input`). */
+  /** 46px instead of 32px — the sign-in card's inputs (web-admin `.login-input`). */
   tall?: boolean;
 };
 
@@ -63,28 +84,31 @@ export function TextField({ label, hint, error, icon: Icon, tall = false, ...inp
       <label htmlFor={id} className={labelClass}>
         {label}
       </label>
-      {hint ? (
-        <p id={hintId} className={hintClass}>
-          {hint}
-        </p>
-      ) : null}
       <div className="relative">
         {Icon ? (
           <Icon
             aria-hidden="true"
             focusable="false"
             strokeWidth={1.8}
-            className="pointer-events-none absolute top-1/2 left-3.5 size-[18px] -translate-y-1/2 text-ink-500"
+            className={cn(
+              "pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-muted",
+              tall ? "left-3.5 size-[18px]" : "left-2.5 size-4",
+            )}
           />
         ) : null}
         <input
           id={id}
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
-          className={cn(controlClass, tall && "h-[46px]", Icon && "pl-11")}
+          className={cn(controlClass, tall && "h-[46px] px-3", Icon && (tall ? "pl-11" : "pl-8"))}
           {...input}
         />
       </div>
+      {hint ? (
+        <p id={hintId} className={hintClass}>
+          {hint}
+        </p>
+      ) : null}
       {error && errorId ? <FieldError id={errorId} text={error} /> : null}
     </div>
   );
@@ -106,18 +130,18 @@ export function TextAreaField({ label, hint, error, ...area }: AreaProps) {
       <label htmlFor={id} className={labelClass}>
         {label}
       </label>
+      <textarea
+        id={id}
+        aria-describedby={describedBy}
+        aria-invalid={error ? true : undefined}
+        className={cn(controlClass, "h-auto min-h-16 resize-y py-2 leading-normal")}
+        {...area}
+      />
       {hint ? (
         <p id={hintId} className={hintClass}>
           {hint}
         </p>
       ) : null}
-      <textarea
-        id={id}
-        aria-describedby={describedBy}
-        aria-invalid={error ? true : undefined}
-        className={cn(controlClass, "h-auto min-h-20 resize-y py-2.5 leading-normal")}
-        {...area}
-      />
       {error && errorId ? <FieldError id={errorId} text={error} /> : null}
     </div>
   );
@@ -125,16 +149,18 @@ export function TextAreaField({ label, hint, error, ...area }: AreaProps) {
 
 /**
  * Always in the DOM, even empty: a live region inserted after load is missed by some screen
- * readers, and adding it later shifts the form. Empty, it keeps only a small reserved height; with a
- * sentence it gains a soft red frame so it reads as a message, not stray red text (web-admin
- * `.thong-bao-loi`).
+ * readers, and adding it later shifts the form. Empty, it takes no height (`empty:hidden` would
+ * drop the region from the tree, so it is a zero-height box instead); with a sentence it gains a
+ * soft red frame so it reads as a message, not stray red text (web-admin `.thong-bao-loi`).
  */
-export function FormMessage({ text, trace }: { text: string | null; trace?: string | null }) {
+export function FormMessage({ text, trace, className }: { text: string | null; trace?: string | null; className?: string }) {
   return (
     <div
       className={cn(
-        "min-h-5 text-sm text-danger-600",
-        text ? "flex items-start gap-2 rounded-control border border-danger-200 bg-danger-50 px-3 py-2" : null,
+        "text-sm text-danger",
+        text ? "flex items-start gap-2 rounded-lg border border-solid border-danger/25 bg-danger/10 px-3 py-2" : null,
+        // Spacing only while there is a sentence: an empty region takes no room in a card.
+        text ? className : null,
       )}
       role="alert"
       aria-live="assertive"
@@ -145,7 +171,7 @@ export function FormMessage({ text, trace }: { text: string | null; trace?: stri
       {text ? (
         <div className="min-w-0">
           <p className="m-0">{text}</p>
-          {trace ? <p className="m-0 mt-1 text-[13px] text-ink-500">{trace}</p> : null}
+          {trace ? <p className="m-0 mt-1 text-[12px] text-ink-muted">{trace}</p> : null}
         </div>
       ) : null}
     </div>

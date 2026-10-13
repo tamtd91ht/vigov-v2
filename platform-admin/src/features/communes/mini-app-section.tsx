@@ -397,7 +397,11 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
             <th scope="col">Khoá bí mật</th>
             <th scope="col">Gắn lúc</th>
             <th scope="col">Người gắn</th>
-            {onAction ? <th scope="col">Thao tác</th> : null}
+            {onAction ? (
+              <th scope="col" className="text-right">
+                <span className="sr-only">Thao tác</span>
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
@@ -420,11 +424,11 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
               <td className="text-ink-700">{formatDateTime(a.created_at)}</td>
               <td className="text-ink-700">{a.created_by}</td>
               {onAction ? (
-                <td>
+                <td className="text-right">
                   {/* Only the running own app has controls. A removed App ID is never listed, and
                       there is nothing to do with one that is not running: no reactivation exists. */}
                   {a.mode === "rieng" && a.active ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex justify-end gap-2">
                       <Button type="button" size="sm" icon={icon(RefreshCw)} onClick={() => onAction({ kind: "replace", appId: a.app_id })}>
                         Đổi App ID
                       </Button>
@@ -686,11 +690,11 @@ function ReplaceDialog({
           <SecretField value={secret} onChange={setSecret} disabled={busy} error={error} />
           <FormMessage text={formLevel(error, "secret")} />
           <DialogActions>
-            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-              <BusyLabel busy={busy} label="Lưu khoá" busyLabel="Đang lưu…" />
-            </Button>
             <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
               Để sau
+            </Button>
+            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+              <BusyLabel busy={busy} label="Lưu khoá" busyLabel="Đang lưu…" />
             </Button>
           </DialogActions>
         </form>
@@ -725,11 +729,11 @@ function ReplaceDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "appId", "reason")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            <BusyLabel busy={busy} label="Đổi App ID" busyLabel="Đang đổi…" />
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label="Đổi App ID" busyLabel="Đang đổi…" />
           </Button>
         </DialogActions>
       </form>
@@ -794,11 +798,11 @@ function RemoveDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "reason")} />
         <DialogActions>
-          <Button type="submit" variant="danger-solid" disabled={busy} aria-busy={busy}>
-            <BusyLabel busy={busy} label="Gỡ App ID" busyLabel="Đang lưu…" />
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="danger-solid" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label="Gỡ App ID" busyLabel="Đang lưu…" />
           </Button>
         </DialogActions>
       </form>
@@ -848,11 +852,11 @@ function SecretDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "secret", "reason")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            <BusyLabel busy={busy} label="Lưu khoá" busyLabel="Đang lưu…" />
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label="Lưu khoá" busyLabel="Đang lưu…" />
           </Button>
         </DialogActions>
       </form>
@@ -924,11 +928,11 @@ function PublicationDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "reason")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            <BusyLabel busy={busy} label={label} busyLabel="Đang lưu…" />
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label={label} busyLabel="Đang lưu…" />
           </Button>
         </DialogActions>
       </form>
@@ -980,11 +984,11 @@ function RetireSecretDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "reason")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            <BusyLabel busy={busy} label="Thu hồi khoá" busyLabel="Đang thu hồi…" />
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label="Thu hồi khoá" busyLabel="Đang thu hồi…" />
           </Button>
         </DialogActions>
       </form>

@@ -6,7 +6,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Dialog, DialogActions } from "@/components/dialog";
 import { FormMessage, labelClass, TextField } from "@/components/form-parts";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -49,17 +49,25 @@ import { at, formLevel, ReasonField, StatusChips, TemporaryPasswordFields, useOw
 export const OWNER_ONLY_TEXT =
   "Chỉ tài khoản owner của khu vận hành quản lý được tài khoản vận hành và quyền. Tài khoản của bạn không phải owner.";
 export const OWNER_ROW_LABEL = "Owner — toàn quyền";
-export const CREATE_OPERATOR_LABEL = "Tạo tài khoản vận hành";
+export const CREATE_OPERATOR_LABEL = "Thêm tài khoản vận hành";
 
 type Action = { kind: "permissions" | "password"; account: OperatorAccount } | { kind: "create" };
 
-/** One key as a chip: the key itself, its meaning as the tooltip. A key outside the closed set shows as sent. */
+/**
+ * One key as a chip: the key itself, its meaning as the tooltip. A key outside the closed set shows as
+ * sent. Drawn as web-admin's neutral Badge (the `muted` fill, a hairline) without its status icon: a
+ * key is a value, not a status.
+ */
 function KeyChips({ keys }: { keys: readonly string[] }) {
-  if (keys.length === 0) return <span className="text-ink-500">Chưa có quyền</span>;
+  if (keys.length === 0) return <span className="text-ink-muted">Chưa có quyền</span>;
   return (
     <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
       {keys.map((k) => (
-        <li key={k} title={OPS_KEY_LABELS[k] ?? k} className="rounded-full bg-[#f1f4f8] px-2 py-0.5 font-mono text-xs text-ink-700">
+        <li
+          key={k}
+          title={OPS_KEY_LABELS[k] ?? k}
+          className="inline-flex h-5 items-center rounded-4xl border border-solid border-line bg-muted px-2 font-mono text-xs text-ink"
+        >
           {k}
         </li>
       ))}
@@ -77,7 +85,7 @@ export function OperatorAccountTable({
   onAction: (a: Action) => void;
 }) {
   if (accounts.length === 0) {
-    return <EmptyState icon={UsersRound} tone="neutral" title="Chưa có tài khoản vận hành nào." className="py-6" />;
+    return <EmptyState icon={UsersRound} tone="neutral" title="Chưa có tài khoản vận hành nào." />;
   }
   const icon = (I: typeof KeyRound) => <I aria-hidden="true" focusable="false" strokeWidth={1.8} />;
   return (
@@ -88,10 +96,12 @@ export function OperatorAccountTable({
           <tr>
             <th scope="col">Mã</th>
             <th scope="col">Email</th>
-            <th scope="col">Tên</th>
+            <th scope="col">Tên hiển thị</th>
             <th scope="col">Quyền</th>
             <th scope="col">Trạng thái</th>
-            <th scope="col">Thao tác</th>
+            <th scope="col" className="text-right">
+              <span className="sr-only">Thao tác</span>
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -104,11 +114,11 @@ export function OperatorAccountTable({
               <td>
                 <StatusChips chips={operatorStatus(a, now)} />
               </td>
-              <td>
+              <td className="text-right">
                 {a.is_owner ? (
-                  <span className="text-ink-500">{OWNER_ROW_LABEL}</span>
+                  <span className="text-ink-muted">{OWNER_ROW_LABEL}</span>
                 ) : (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex justify-end gap-2">
                     <Button type="button" size="sm" icon={icon(ShieldCheck)} onClick={() => onAction({ kind: "permissions", account: a })}>
                       Phân quyền
                     </Button>
@@ -240,52 +250,60 @@ function OperatorAccountsWorkspace() {
 
   const close = () => setAction(null);
 
+  // web-admin's list layout: ONE card — its header names the list, says the rule in one line and holds
+  // the add action at the right; the table (or its loading / error state) runs flush under it.
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="m-0 text-sm text-ink-700">
-          Tài khoản mới không có quyền nào cho tới khi được cấp. Owner không gỡ hay chuyển được từ màn này.
-        </p>
-        <Button
-          type="button"
-          variant="primary"
-          icon={<UserPlus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-          onClick={() => {
-            setDone(null);
-            setAction({ kind: "create" });
-          }}
-        >
-          {CREATE_OPERATOR_LABEL}
-        </Button>
-      </div>
-
       {done ? (
         <p role="status" className="m-0 text-sm font-medium text-success-600">
           {done}
         </p>
       ) : null}
 
-      {accounts !== null ? (
-        <OperatorAccountTable
-          accounts={accounts}
-          now={new Date()}
-          onAction={(a) => {
-            setDone(null);
-            setAction(a);
-          }}
-        />
-      ) : loadError !== null ? (
-        <Card as="section">
+      <Card as="section" aria-labelledby="operator-accounts-title">
+        <CardHeader>
+          <div className="min-w-0 flex-1 basis-64">
+            <CardTitle id="operator-accounts-title" className="flex items-center gap-2">
+              <UsersRound aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+              Tài khoản vận hành
+            </CardTitle>
+            <p className="m-0 mt-1 text-[13px] text-ink-muted">
+              Tài khoản mới không có quyền nào cho tới khi được cấp. Owner không gỡ hay chuyển được từ màn này.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="primary"
+            className="ml-auto"
+            icon={<UserPlus aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+            onClick={() => {
+              setDone(null);
+              setAction({ kind: "create" });
+            }}
+          >
+            {CREATE_OPERATOR_LABEL}
+          </Button>
+        </CardHeader>
+        {accounts !== null ? (
+          <OperatorAccountTable
+            accounts={accounts}
+            now={new Date()}
+            onAction={(a) => {
+              setDone(null);
+              setAction(a);
+            }}
+          />
+        ) : loadError !== null ? (
           <ErrorState role="alert" title="Chưa tải được danh sách tài khoản vận hành" message={loadError} />
-        </Card>
-      ) : (
-        <Card>
-          <p role="status" className="sr-only">
-            Đang tải tài khoản vận hành…
-          </p>
-          <SkeletonRows rows={4} />
-        </Card>
-      )}
+        ) : (
+          <>
+            <p role="status" className="sr-only">
+              Đang tải tài khoản vận hành…
+            </p>
+            <SkeletonRows rows={4} />
+          </>
+        )}
+      </Card>
 
       {action?.kind === "create" ? (
         <CreateOperatorDialog
@@ -395,11 +413,11 @@ function CreateOperatorDialog({ onClose, onDone }: { onClose: () => void; onDone
         <PermissionKeyChecklist selected={keys} onChange={setKeys} disabled={busy} legend="Quyền ban đầu (có thể để trống)" />
         <FormMessage text={formLevel(error, "email", "name", "password", "confirm")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang tạo…" : "Tạo tài khoản"}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang thêm…" : "Thêm tài khoản"}
           </Button>
         </DialogActions>
       </form>
@@ -454,11 +472,11 @@ function PermissionsDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "reason")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : "Lưu quyền"}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : "Lưu quyền"}
           </Button>
         </DialogActions>
       </form>
@@ -518,11 +536,11 @@ export function ResetOperatorPasswordDialog({
         <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
         <FormMessage text={formLevel(error, "password", "confirm", "reason")} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : "Đặt lại mật khẩu"}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : "Đặt lại mật khẩu"}
           </Button>
         </DialogActions>
       </form>

@@ -9,7 +9,11 @@ export const metadata = { title: "Tạo lại mã khôi phục — ViGov Khu v�
 export default function RecoveryCodesPage() {
   return (
     <div className="mx-auto w-full max-w-[40rem] min-w-0">
-      <PageHeader icon={LifeBuoy} title="Tạo lại mã khôi phục" />
+      <PageHeader
+        icon={LifeBuoy}
+        title="Tạo lại mã khôi phục"
+        subtitle="Mã dùng thay mã trên ứng dụng xác thực khi bạn không dùng được ứng dụng đó."
+      />
       <RegenerateRecoveryCodes />
     </div>
   );

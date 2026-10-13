@@ -270,10 +270,10 @@ function MapFrameDefaultDialog({
       <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
         <MapFrameDefaultFormFields hints={view} form={form} onChange={setForm} busy={busy} error={error} />
         <DialogActions>
-          <MapFrameDefaultSaveButton hints={view} form={form} busy={busy} />
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
           </Button>
+          <MapFrameDefaultSaveButton hints={view} form={form} busy={busy} />
         </DialogActions>
       </form>
     </Dialog>

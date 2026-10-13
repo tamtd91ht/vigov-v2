@@ -6,7 +6,7 @@ import { useEffect, useId, useState, type FormEvent } from "react";
 import { Dialog, DialogActions } from "@/components/dialog";
 import { FieldError, FormMessage, hintClass, labelClass, TextAreaField, TextField } from "@/components/form-parts";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { DATA_TABLE_CLASS, TableScroll } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -52,11 +52,7 @@ export function UploadPolicyTable({
   onEdit: (p: UploadPolicy) => void;
 }) {
   if (items.length === 0) {
-    return (
-      <Card as="section">
-        <EmptyState icon={FileUp} title="Chưa có giới hạn tải lên nào." />
-      </Card>
-    );
+    return <EmptyState icon={FileUp} title="Chưa có giới hạn tải lên nào." />;
   }
   return (
     <TableScroll sticky aria-label="Giới hạn tải lên">
@@ -65,12 +61,16 @@ export function UploadPolicyTable({
         <thead>
           <tr>
             <th scope="col">Mục đích</th>
-            <th scope="col">Dung lượng tối đa</th>
+            <th scope="col" className="text-right">
+              Dung lượng tối đa
+            </th>
             <th scope="col">Kiểu tệp</th>
-            <th scope="col">Số tệp tối đa mỗi bản ghi</th>
-            <th scope="col">Cập nhật</th>
+            <th scope="col" className="text-right">
+              Số tệp tối đa mỗi bản ghi
+            </th>
+            <th scope="col">Cập nhật lần cuối</th>
             {canEdit ? (
-              <th scope="col">
+              <th scope="col" className="text-right">
                 <span className="sr-only">Thao tác</span>
               </th>
             ) : null}
@@ -83,20 +83,20 @@ export function UploadPolicyTable({
                 <span className="block font-semibold text-ink-900">{purposeLabel(p.purpose)}</span>
                 <code className="font-mono text-xs text-ink-500">{p.purpose}</code>
               </td>
-              <td className="whitespace-nowrap text-ink-700">
+              <td className="text-right whitespace-nowrap text-ink-700">
                 {formatMegabytes(p.max_bytes)}
                 {p.max_bytes_cap > 0 ? (
                   <span className="block text-xs text-ink-500">Trần {formatMegabytes(p.max_bytes_cap)}</span>
                 ) : null}
               </td>
               <td className="text-ink-700">{p.allowed_mime_types.map(mimeLabel).join(", ") || "—"}</td>
-              <td className="text-ink-700">{p.max_files_per_subject === null ? UNLIMITED_LABEL : p.max_files_per_subject}</td>
+              <td className="text-right text-ink-700">{p.max_files_per_subject === null ? UNLIMITED_LABEL : p.max_files_per_subject}</td>
               <td className="text-[13px] text-ink-500">
                 {formatDateTime(p.updated_at)}
                 <span className="block font-mono">{p.updated_by}</span>
               </td>
               {canEdit ? (
-                <td>
+                <td className="text-right">
                   {p.mime_choices.length > 0 ? (
                     <Button
                       type="button"
@@ -159,7 +159,14 @@ export function UploadPolicyScreen() {
   return (
     <div className="flex flex-col gap-4">
       <Notice tone="info">{PROPAGATION_NOTICE}</Notice>
-      <UploadPolicyTable items={items} canEdit={canManageUploadPolicies(keys)} onEdit={setEditing} />
+      {/* One card, the table flush inside (web-admin list screens). */}
+      <Card as="section" aria-labelledby="upload-policies-title">
+        <CardHeader>
+          <FileUp aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0 text-brand-600" />
+          <CardTitle id="upload-policies-title">Giới hạn theo mục đích tải lên</CardTitle>
+        </CardHeader>
+        <UploadPolicyTable items={items} canEdit={canManageUploadPolicies(keys)} onEdit={setEditing} />
+      </Card>
       {editing !== null ? (
         <UploadPolicyDialog
           // A fresh form per purpose: the dialog's state never carries one purpose's values into another.
@@ -337,11 +344,11 @@ function UploadPolicyDialog({
       <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
         <UploadPolicyFormFields policy={policy} form={form} onChange={setForm} busy={busy} error={error} />
         <DialogActions>
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-            {busy ? "Đang lưu…" : "Lưu giới hạn"}
-          </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ
+          </Button>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            {busy ? "Đang lưu…" : "Lưu giới hạn"}
           </Button>
         </DialogActions>
       </form>
