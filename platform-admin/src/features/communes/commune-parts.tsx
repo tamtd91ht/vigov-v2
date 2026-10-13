@@ -30,6 +30,18 @@ export function formatDateTime(iso: string): string {
 }
 
 /**
+ * `dd/MM/yyyy HH:mm`, date first — vi-VN's own order puts the time first ("10:05 13/10/2026"), and the
+ * owner's wording for the published mark reads date first. Same zone as `formatDateTime`.
+ */
+export function formatDateFirst(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p: Record<string, string> = {};
+  for (const part of DATE_TIME.formatToParts(d)) p[part.type] = part.value;
+  return `${p.day}/${p.month}/${p.year} ${p.hour}:${p.minute}`;
+}
+
+/**
  * `mini_app.mode` (service-platform/internal/domain/mini_app.go `CheDo…`, ADR 0044). Only `rieng`
  * is ever bound to a commune; an unknown value is shown as it is, never guessed.
  */

@@ -20,9 +20,15 @@ import { CommuneDetailBody, DEACTIVATE_WARNING, NAME_CORRECTION_NOTICE } from ".
 import { CommuneListToolbar, CommuneTable } from "./communes/commune-list";
 import {
   MANUAL_STEPS,
+  MARK_PUBLISHED,
+  MARK_PUBLISHED_WARNING,
   MiniAppOutcomeNotices,
   MiniAppSection,
+  NOT_PUBLISHED_TEXT,
+  PublicationStatusText,
+  PublicationWarning,
   REMOVAL_IS_PERMANENT,
+  UNMARK_PUBLISHED,
   RemoveWarning,
   SECRET_NOT_RETIRED,
   SecretStatusText,
@@ -47,6 +53,8 @@ const APP: MiniApp = {
   active: true,
   created_at: "2026-10-01T03:00:00Z",
   created_by: "VH-00001",
+  published_at: null,
+  published_by: null,
   secret: { status: "da_dat", set_at: "2026-10-02T03:30:00Z", set_by: "VH-00002" },
 };
 
@@ -237,6 +245,63 @@ describe("Mini App change / remove / secret (ADR 0070, §Sửa đổi 05/10/2026
     expect(html).not.toContain(SECRET_NOT_RETIRED);
     expect(html).not.toContain("Thu hồi lại");
     expect(html).not.toContain("Đặt khoá bí mật cho App ID 8192");
+  });
+});
+
+describe("published on Zalo mark (ADR 0070 bổ sung 13/10/2026)", () => {
+  const PUBLISHED: CommuneDetail = {
+    ...COMMUNE,
+    mini_apps: [{ ...APP, published_at: "2026-10-13T03:05:00Z", published_by: "VH-00007" }],
+  };
+
+  it("not marked: says the QR uses the shared app", () => {
+    const html = renderToString(<PublicationStatusText app={APP} />);
+    expect(html).toContain(NOT_PUBLISHED_TEXT);
+    expect(html).not.toContain("Đã phát hành");
+  });
+
+  it("marked: date first in the business time zone, and the operator's code", () => {
+    const html = renderToString(<PublicationStatusText app={PUBLISHED.mini_apps[0]!} />);
+    // 03:05Z = 10:05 +07:00
+    expect(html).toContain("Đã phát hành trên Zalo — đánh dấu lúc 13/10/2026 10:05 bởi VH-00007");
+    expect(html).not.toContain(NOT_PUBLISHED_TEXT);
+  });
+
+  it("the status shows without the key, the button only with it", () => {
+    for (const keys of [[], [TENANT, DOMAIN]]) {
+      const html = renderToString(
+        <CommuneDetailBody commune={COMMUNE} permissionKeys={keys} onChanged={noop} onMiniAppAttached={noop} />,
+      );
+      expect(html).toContain(NOT_PUBLISHED_TEXT);
+      expect(html).not.toContain(MARK_PUBLISHED);
+      expect(html).not.toContain(UNMARK_PUBLISHED);
+    }
+    const allowed = renderToString(<MiniAppSection commune={COMMUNE} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    expect(allowed).toContain(MARK_PUBLISHED);
+    expect(allowed).not.toContain(UNMARK_PUBLISHED);
+    const marked = renderToString(<MiniAppSection commune={PUBLISHED} allowed onChanged={noop} onMiniAppAttached={noop} />);
+    expect(marked).toContain(UNMARK_PUBLISHED);
+  });
+
+  it("a row that is not the running own app carries neither the status nor the button", () => {
+    for (const commune of [INACTIVE_ROW, { ...COMMUNE, mini_apps: [{ ...APP, mode: "chung" }] }]) {
+      const html = renderToString(<MiniAppSection commune={commune} allowed onChanged={noop} onMiniAppAttached={noop} />);
+      expect(html).not.toContain(NOT_PUBLISHED_TEXT);
+      expect(html).not.toContain(MARK_PUBLISHED);
+    }
+  });
+
+  it("the marking dialog states the Zalo approval AND publish condition plainly", () => {
+    const html = renderToString(<PublicationWarning publish />);
+    expect(html).toContain(MARK_PUBLISHED_WARNING);
+    expect(html).toContain("đã được Zalo duyệt VÀ đã bấm phát hành");
+    expect(html).toContain("người dân quét QR sẽ không vào được");
+  });
+
+  it("the unmarking dialog says the QR goes back to the shared app", () => {
+    const html = renderToString(<PublicationWarning publish={false} />);
+    expect(html).toContain("chuyển về mở Mini App dùng chung");
+    expect(html).not.toContain(MARK_PUBLISHED_WARNING);
   });
 });
 

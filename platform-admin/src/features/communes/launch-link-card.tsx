@@ -8,6 +8,7 @@ import { createPortal, flushSync } from "react-dom";
 import { downloadQrPng, QrCode } from "@/components/qr-code";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
+import { Notice } from "@/components/ui/notice";
 import { SkeletonRows } from "@/components/ui/skeleton";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import { getLaunchLinks, type LaunchLink, type LaunchLinks, type LaunchLinkUnavailable } from "@/lib/api";
@@ -18,7 +19,9 @@ import { launchLinkError } from "@/lib/errors";
  * shows exactly ONE QR — the link the server picks for this commune — and NOTHING about which app it
  * opens: no App ID, no domain, no source label, no sentence about a shared or transitional app. The
  * people who print and scan it must see the commune's app as the commune's own. The server sends at
- * most one link; when it sends none, its reasons are shown instead of a silently empty card. The QR is
+ * most one link; when it sends none, its reasons are shown instead of a silently empty card. One
+ * exception, owner 13/10/2026 (ADR 0070 bổ sung): `own_mini_app_unpublished` is said under the QR,
+ * because this card is the operator's and the operator is who marks the app published. The QR is
  * drawn in the browser by `components/qr-code.tsx` (SVG, no third-party service). Shown only with
  * `ops.qr.issue`.
  *
@@ -39,6 +42,13 @@ export const SHARED_APP_PAGE = "/mini-app-dung-chung";
 export const QR_PRINT_CLASS = "qr-printing";
 
 export const SCAN_INSTRUCTION = "Quét mã bằng Zalo để mở ứng dụng của xã";
+
+/** operator_launch.go `codeOwnMiniAppUnpublished`. */
+export const OWN_MINI_APP_UNPUBLISHED = "own_mini_app_unpublished";
+
+/** Operator card only; never on the print sheet, which carries no app wording. */
+export const OWN_APP_UNPUBLISHED_NOTICE =
+  "Mini App riêng của xã chưa được đánh dấu đã phát hành trên Zalo, nên mã QR này đang mở Mini App dùng chung. Khi Zalo đã duyệt và đã phát hành app riêng, chọn “Đánh dấu đã phát hành” ở mục Mini App riêng của xã; mã QR sẽ chuyển sang app riêng và cần tải, in lại.";
 
 /** `qr-mini-app-<commune id>.png`. The id is an opaque ULID (rule 1 inv. 2): no personal data, and
  *  stable across a renamed commune. Anything outside [a-z0-9-] is dropped so no path or odd character
@@ -153,10 +163,21 @@ export function LaunchLinkView({
   // is not shown: two codes on the card is exactly the choice the owner took away.
   const link = state.links.links[0];
   const { unavailable } = state.links;
+  // The one reason shown BESIDE a link: the QR is the shared one because the commune's own app is not
+  // marked published (ADR 0070 bổ sung 13/10/2026). Only the operator route sends it, and only the
+  // operator can repair it — without the line the shared QR reads as a fault.
+  const unpublished = link !== undefined && unavailable.some((u) => u.code === OWN_MINI_APP_UNPUBLISHED);
   return (
     <div className="flex flex-col gap-3">
       {link !== undefined ? (
-        <LaunchLinkItem link={link} communeName={communeName} actions={actions} />
+        <>
+          <LaunchLinkItem link={link} communeName={communeName} actions={actions} />
+          {unpublished ? (
+            <Notice tone="info">
+              {OWN_APP_UNPUBLISHED_NOTICE}
+            </Notice>
+          ) : null}
+        </>
       ) : unavailable.length > 0 ? (
         <ul className="m-0 flex list-none flex-col gap-3 p-0">
           {unavailable.map((u) => (

@@ -25,6 +25,8 @@ const ACTION_LABELS: Record<string, string> = {
   bat_lai_mini_app: "Bật lại Mini App riêng",
   dat_khoa_mini_app: "Đặt khoá bí mật App ID",
   thu_hoi_khoa_mini_app: "Thu hồi khoá bí mật App ID",
+  danh_dau_phat_hanh_mini_app: "Đánh dấu Mini App đã phát hành",
+  bo_danh_dau_phat_hanh_mini_app: "Bỏ đánh dấu phát hành Mini App",
   "upload_policy.changed": "Sửa giới hạn tải lên",
   "upload_policy.seeded": "Khởi tạo giới hạn tải lên",
   "shared_mini_app.changed": "Khai báo / đổi Mini App dùng chung",

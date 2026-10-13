@@ -217,13 +217,13 @@ export function CommuneDetailBody({
           absent rather than a card that can only ever say "forbidden". */}
       {qrAllowed ? (
         <SectionCard id="commune-launch-link" title="Mã QR mở Mini App" icon={QrCodeIcon}>
-          {/* Which link the server picks depends on the running own App ID: keyed on it so a change
-              or a removal on this page fetches it again instead of leaving a QR that opens an App
-              ID the commune no longer runs. */}
+          {/* Which link the server picks depends on the running own App ID AND its published mark
+              (ADR 0070 bổ sung 13/10/2026): keyed on both so a change, a removal or a (un)marking
+              on this page fetches it again instead of leaving a QR that opens the wrong app. */}
           <LaunchLinkCard
             key={commune.mini_apps
               .filter((a) => a.mode === "rieng" && a.active)
-              .map((a) => a.app_id)
+              .map((a) => `${a.app_id}:${a.published_at ?? ""}`)
               .join(",")}
             communeId={commune.id}
             communeName={commune.name}

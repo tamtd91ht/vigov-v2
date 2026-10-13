@@ -18,6 +18,7 @@ import {
   regenerateRecoveryCodes,
   setActivation,
   setMapFrameDefault,
+  setMiniAppPublication,
   setPrimaryDomain,
   signIn,
   signOut,
@@ -160,6 +161,13 @@ describe("requests — path, method and exactly the documented body", () => {
       "POST",
       "/api/v1/communes/01HZZZ/mini-apps",
       { app_id: "123456789", note: "ghi chú" },
+    ],
+    [
+      "unmark a Mini App published — `published` is always sent, never left out",
+      () => setMiniAppPublication("01HZZZ", "4096", { published: false, reason: "chưa phát hành" }),
+      "PUT",
+      "/api/v1/communes/01HZZZ/mini-apps/4096/publication",
+      { published: false, reason: "chưa phát hành" },
     ],
     [
       "set the default map frame — a usual radius sends no acknowledged_unusual",

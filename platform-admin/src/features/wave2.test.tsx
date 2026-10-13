@@ -18,7 +18,15 @@ import {
 } from "@/lib/permissions";
 
 import { CommuneDetailBody } from "./communes/commune-detail";
-import { LaunchLinkView, QrPrintSheet, SCAN_INSTRUCTION, SHARED_APP_PAGE, qrFileName } from "./communes/launch-link-card";
+import {
+  LaunchLinkView,
+  OWN_APP_UNPUBLISHED_NOTICE,
+  OWN_MINI_APP_UNPUBLISHED,
+  QrPrintSheet,
+  SCAN_INSTRUCTION,
+  SHARED_APP_PAGE,
+  qrFileName,
+} from "./communes/launch-link-card";
 import { OperatorLogMore, OperatorLogTable, PLATFORM_WIDE } from "./operator-log/operator-log";
 import { actionLabel, compactValue, logRange, VALUE_MAX_CHARS } from "./operator-log/operator-log-model";
 import {
@@ -365,6 +373,18 @@ describe("launch link: every 409 is a Vietnamese next step", () => {
     expect(unknown).not.toMatch(/Nguồn không xác định|app riêng/);
   });
 
+  it("own_mini_app_unpublished is said under the one (shared) QR — the operator can repair it", () => {
+    const html = ready({
+      links: [SHARED_LINK],
+      unavailable: [{ source: "rieng", code: OWN_MINI_APP_UNPUBLISHED, message: "server text" }],
+    });
+    expect(html.match(/role="img"/g)?.length).toBe(1);
+    expect(html).toContain(OWN_APP_UNPUBLISHED_NOTICE);
+    expect(html).not.toContain("Chưa tạo được mã QR");
+    expect(html).not.toContain(OWN_MINI_APP_UNPUBLISHED);
+    expect(ready({ links: [SHARED_LINK], unavailable: [] })).not.toContain(OWN_APP_UNPUBLISHED_NOTICE);
+  });
+
   it("no link and no reason is never an empty card", () => {
     expect(ready({ links: [], unavailable: [] })).toContain("Chưa tạo được mã QR");
   });
@@ -446,6 +466,11 @@ describe("operator log", () => {
     expect(compactValue({ a: 1 })).toBe('{"a":1}');
     expect(compactValue("x".repeat(500))).toHaveLength(VALUE_MAX_CHARS);
     expect(actionLabel("something.else")).toBe("something.else");
+  });
+
+  it("the published-mark verbs read as the owner named them (operator_writes.go ActionMarkMiniAppPublished)", () => {
+    expect(actionLabel("danh_dau_phat_hanh_mini_app")).toBe("Đánh dấu Mini App đã phát hành");
+    expect(actionLabel("bo_danh_dau_phat_hanh_mini_app")).toBe("Bỏ đánh dấu phát hành Mini App");
   });
 });
 

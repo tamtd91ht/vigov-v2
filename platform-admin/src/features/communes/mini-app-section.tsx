@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Plus, RefreshCw, Smartphone, TriangleAlert, Unplug } from "lucide-react";
+import { BadgeCheck, CircleSlash, KeyRound, Plus, RefreshCw, Smartphone, TriangleAlert, Unplug } from "lucide-react";
 import { useState, type FormEvent, type ReactNode } from "react";
 
 import { Dialog, DialogActions } from "@/components/dialog";
@@ -16,6 +16,7 @@ import {
   removeMiniApp,
   replaceMiniApp,
   retireMiniAppSecret,
+  setMiniAppPublication,
   setMiniAppSecret,
   type CommuneDetail,
   type MiniAppChange,
@@ -25,7 +26,7 @@ import {
 import { cn } from "@/lib/cn";
 import { communeError, secretRetirementText, type CommuneField } from "@/lib/errors";
 
-import { formatDateTime, miniAppModeLabel, StatusBadge } from "./commune-parts";
+import { formatDateFirst, formatDateTime, miniAppModeLabel, StatusBadge } from "./commune-parts";
 
 /**
  * The commune's own Mini App: attach, change, remove, and its Zalo app secret (ADR 0070 with its
@@ -46,11 +47,17 @@ import { formatDateTime, miniAppModeLabel, StatusBadge } from "./commune-parts";
  * the answer, sent in a JSON body only (lib/api.ts). The screen shows only "đặt lúc … bởi …" — never
  * the value, never put into the outcome below, never logged, never in a URL.
  *
+ * PUBLISHED ON ZALO (ADR 0070 bổ sung 13/10/2026): the commune's QR opens its own app only once an
+ * operator has marked that App ID published. An unpublished App ID opens Zalo's trial build, which
+ * only the app's admin/dev accounts can enter — a QR to it would turn every citizen away. The mark is
+ * a statement by the operator, not something this console can check on Zalo; the marking dialog says
+ * exactly what must be true first.
+ *
  * Every control is a hint; service-platform checks `ops.mini_app.manage` on each call.
  */
 
 type App = CommuneDetail["mini_apps"][number];
-type ActionKind = "replace" | "remove" | "secret" | "retire";
+type ActionKind = "replace" | "remove" | "secret" | "retire" | "publish";
 type Action = { kind: ActionKind; appId: string };
 type FieldError = { field: CommuneField; text: string };
 
@@ -66,7 +73,27 @@ export type MiniAppOutcome = {
   retirementError?: string;
   /** Re-sent with "Thu hồi lại": the retirement belongs to the same act. */
   reason: string;
+  /** `publish` only: the mark as the server now holds it. */
+  published?: boolean;
 };
+
+export const NOT_PUBLISHED_TEXT = "Chưa đánh dấu phát hành — QR đang dùng app chung";
+export const MARK_PUBLISHED = "Đánh dấu đã phát hành";
+export const UNMARK_PUBLISHED = "Bỏ đánh dấu phát hành";
+export const MARK_PUBLISHED_WARNING =
+  "Chỉ đánh dấu khi bản Mini App này đã được Zalo duyệt VÀ đã bấm phát hành. Nếu chưa, người dân quét QR sẽ không vào được (chỉ tài khoản quản trị app mới mở được bản trải nghiệm).";
+export const UNMARK_PUBLISHED_NOTICE =
+  "Sau khi bỏ đánh dấu, mã QR của xã chuyển về mở Mini App dùng chung. Mã QR đã in trước đó cần tải và in lại.";
+
+/** The published mark in words (ADR 0070 bổ sung 13/10/2026). Shown with or without the key. */
+export function PublicationStatusText({ app }: { app: Pick<App, "published_at" | "published_by"> }) {
+  if (app.published_at === null) return <span className="text-ink-700">{NOT_PUBLISHED_TEXT}</span>;
+  return (
+    <span className="text-ink-700">
+      {`Đã phát hành trên Zalo — đánh dấu lúc ${formatDateFirst(app.published_at)} bởi ${app.published_by ?? "—"}`}
+    </span>
+  );
+}
 
 export const SECRET_STEP_FAILED = "Đã đổi App ID nhưng chưa đặt khoá — dân chưa đăng nhập được qua app mới.";
 export const SECRET_NOT_RETIRED = "Khoá của App ID cũ chưa thu hồi";
@@ -320,6 +347,22 @@ export function MiniAppSection({
           }}
         />
       ) : null}
+      {action?.kind === "publish" ? (
+        <PublicationDialog
+          key={"p" + action.appId}
+          commune={commune}
+          appId={action.appId}
+          // Read from the row at open: the dialog asks the one act that changes what is on screen.
+          publish={commune.mini_apps.find((a) => a.app_id === action.appId)?.published_at == null}
+          onClose={close}
+          onDone={(detail, published, reason) => {
+            // The answer is the commune as now held: the row's mark, and the QR card's key with it.
+            onChanged(detail);
+            setOutcome({ kind: "publish", appId: action.appId, published, reason });
+            close();
+          }}
+        />
+      ) : null}
       {action?.kind === "retire" ? (
         <RetireSecretDialog
           key={"k" + action.appId}
@@ -350,6 +393,7 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
             <th scope="col">App ID</th>
             <th scope="col">Chế độ</th>
             <th scope="col">Trạng thái</th>
+            <th scope="col">Phát hành trên Zalo</th>
             <th scope="col">Khoá bí mật</th>
             <th scope="col">Gắn lúc</th>
             <th scope="col">Người gắn</th>
@@ -367,6 +411,10 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
                 <StatusBadge active={a.active} />
               </td>
               <td>
+                {/* The mark decides the QR only for the running own app; on any other row it decides nothing. */}
+                {a.mode === "rieng" && a.active ? <PublicationStatusText app={a} /> : <span className="text-ink-500">—</span>}
+              </td>
+              <td>
                 <SecretStatusText secret={a.secret} />
               </td>
               <td className="text-ink-700">{formatDateTime(a.created_at)}</td>
@@ -382,6 +430,14 @@ export function MiniAppTable({ apps, onAction }: { apps: App[]; onAction?: (a: A
                       </Button>
                       <Button type="button" size="sm" icon={icon(KeyRound)} onClick={() => onAction({ kind: "secret", appId: a.app_id })}>
                         Đặt/đổi khoá bí mật
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        icon={icon(a.published_at === null ? BadgeCheck : CircleSlash)}
+                        onClick={() => onAction({ kind: "publish", appId: a.app_id })}
+                      >
+                        {a.published_at === null ? MARK_PUBLISHED : UNMARK_PUBLISHED}
                       </Button>
                       <Button
                         type="button"
@@ -531,6 +587,17 @@ export function MiniAppOutcomeNotices({
     blocks.push(
       <Notice key="secret" tone="info">
         <p>Đã lưu khoá bí mật cho App ID {outcome.appId}.</p>
+      </Notice>,
+    );
+  }
+  if (outcome.kind === "publish") {
+    blocks.push(
+      <Notice key="publish" tone="info">
+        <p>
+          {outcome.published
+            ? `Đã đánh dấu App ID ${outcome.appId} đã phát hành trên Zalo. Mã QR của xã từ nay mở app riêng; tải và in lại mã ở mục Mã QR mở Mini App.`
+            : `Đã bỏ đánh dấu phát hành App ID ${outcome.appId}. Mã QR của xã từ nay mở Mini App dùng chung; tải và in lại mã ở mục Mã QR mở Mini App.`}
+        </p>
       </Notice>,
     );
   }
@@ -783,6 +850,82 @@ function SecretDialog({
         <DialogActions>
           <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
             <BusyLabel busy={busy} label="Lưu khoá" busyLabel="Đang lưu…" />
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+            Huỷ
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
+  );
+}
+
+/** The marking dialog body, rendered alone in tests: its wording IS the behaviour. */
+export function PublicationWarning({ publish }: { publish: boolean }) {
+  return publish ? (
+    <Notice tone="legal" icon={TriangleAlert} title="Lưu ý:">
+      <p className="m-0">{MARK_PUBLISHED_WARNING}</p>
+    </Notice>
+  ) : (
+    <Notice tone="legal" icon={TriangleAlert} title="Lưu ý:">
+      <p className="m-0">{UNMARK_PUBLISHED_NOTICE}</p>
+    </Notice>
+  );
+}
+
+/** PUT …/publication. The same state again is a 200 with nothing written, so a double submit is harmless. */
+function PublicationDialog({
+  commune,
+  appId,
+  publish,
+  onClose,
+  onDone,
+}: {
+  commune: CommuneDetail;
+  appId: string;
+  publish: boolean;
+  onClose: () => void;
+  onDone: (detail: CommuneDetail, published: boolean, reason: string) => void;
+}) {
+  const toError = useFieldError();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<FieldError | null>(null);
+  const label = publish ? MARK_PUBLISHED : UNMARK_PUBLISHED;
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy) return;
+    if (reason.trim() === "") return setError({ field: "reason", text: "Hãy ghi lý do." });
+    setBusy(true);
+    setError(null);
+    try {
+      onDone(await setMiniAppPublication(commune.id, appId, { published: publish, reason }), publish, reason);
+    } catch (err) {
+      setError(toError(err, publish ? "đánh dấu Mini App đã phát hành" : "bỏ đánh dấu phát hành Mini App"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      title={
+        publish
+          ? `Đánh dấu App ID ${appId} của ${commune.name} đã phát hành trên Zalo?`
+          : `Bỏ đánh dấu phát hành App ID ${appId} của ${commune.name}?`
+      }
+      icon={publish ? BadgeCheck : CircleSlash}
+      onClose={() => !busy && onClose()}
+    >
+      <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
+        <PublicationWarning publish={publish} />
+        <ReasonField value={reason} onChange={setReason} disabled={busy} error={error} />
+        <FormMessage text={formLevel(error, "reason")} />
+        <DialogActions>
+          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+            <BusyLabel busy={busy} label={label} busyLabel="Đang lưu…" />
           </Button>
           <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
             Huỷ

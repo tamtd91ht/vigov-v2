@@ -106,6 +106,14 @@
       "viec": "Thẻ Mã QR chi tiết xã theo ADR 0070 §13/10: một QR, không thông tin app chung (bỏ nhãn nguồn, App ID, tên miền, chung_ten_mien); nút Tải ảnh PNG (canvas cùng ma trận uqr) và In / Lưu PDF (trang A4: tên xã, QR, câu hướng dẫn).",
       "bang_chung": "bf1fa420 — typecheck + lint + vitest 255/255 + build xanh. CHƯA kiểm trình duyệt thật: chưa bấm tải PNG, chưa mở hộp in.",
       "con_no": "Kiểm trên trình duyệt: tải PNG, bản in A4. Nhánh lỗi shared_mini_app_not_declared vẫn hiện chữ 'Mini App dùng chung' (lib/errors.ts) và URL zalo.me/s/<App ID> còn hiện trên thẻ — giữ cho người vận hành, đổi nếu chủ dự án muốn."
+    },
+    {
+      "id": "danh-dau-phat-hanh-mini-app-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Chi tiết xã: cột 'Phát hành trên Zalo' cho App ID riêng đang sống, nút Đánh dấu đã phát hành / Bỏ đánh dấu (hộp xác nhận + lý do, ops.mini_app.manage, câu cảnh báo bản trải nghiệm); thẻ QR hiện ghi chú khi app riêng chưa đánh dấu; nhãn nhật ký hai hành động mới.",
+      "bang_chung": "typecheck + lint + vitest 264/264 + build xanh. Chưa xem ảnh render thật.",
+      "con_no": "Kiểm trên trình duyệt: bật cờ cho App ID đã phát hành, QR chuyển sang app riêng; tài khoản Zalo thường quét được."
     }
   ]
 }

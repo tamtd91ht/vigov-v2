@@ -374,6 +374,14 @@
       "viec": "QR mở Mini App của xã theo ADR 0070 §Sửa đổi 13/10/2026: tuyến mới GET /api/v1/commune-launch-link (admin.lookup, xã từ Host, store theo xã, {url, source}, không ghi vết); tuyến vận hành chỉ trả một link (app riêng đang sống, không thì app chung ?x=); bỏ d= / chung_ten_mien.",
       "bang_chung": "1e1b8461 — go vet + go test ./... service-platform xanh; tools/ingress, tools/apidoc xanh; check_quyen, check_security PASS (báo cáo builder). TestPgCommuneLaunch / TestPgCommuneLaunchTarget SKIP (không có VIGOV_TEST_DSN).",
       "con_no": "Chạy hai test PG trên máy có CSDL."
+    },
+    {
+      "id": "qr-app-rieng-chi-khi-da-phat-hanh-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Sự cố 13/10: QR app riêng chưa phát hành trên Zalo chỉ mở bản trải nghiệm cho tài khoản quản trị. Migration 0025 mini_app.published_at/by; QR chọn app riêng chỉ khi đã đánh dấu phát hành, không thì app chung ?x=; PUT /api/v1/communes/{id}/mini-apps/{app_id}/publication (ops.mini_app.manage, vết audit_log cùng giao dịch). ADR 0070 §Bổ sung 13/10.",
+      "bang_chung": "f431a37b (migration), 289c052e — go vet + go test ./... xanh; check_quyen/security/audit_actor PASS. 4 test PG + migration 0025 CHƯA chạy trên PostgreSQL (không có VIGOV_TEST_DSN).",
+      "con_no": "Chạy test PG + migration 0025 trên CSDL thật. Hai app riêng đang sống mà chỉ một được đánh dấu → QR theo app đã đánh dấu (builder chọn, chưa chủ dự án xác nhận)."
     }
   ]
 }

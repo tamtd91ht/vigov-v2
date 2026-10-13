@@ -87,6 +87,12 @@ export type MiniApp = {
   active: boolean;
   created_at: string;
   created_by: string;
+  /**
+   * The operator's "published on Zalo" mark (migration 0025, ADR 0070 bổ sung 13/10/2026). Both null =
+   * not marked, and the commune's QR opens the shared app. `published_by` is the operator's VH- code.
+   */
+  published_at: string | null;
+  published_by: string | null;
   secret?: MiniAppSecretStatus;
 };
 
@@ -607,6 +613,23 @@ export function setMiniAppSecret(
 ): Promise<MiniAppSecretSet> {
   return call("PUT", `/communes/${id(communeId)}/mini-apps/${id(appId)}/secret`, {
     secret: input.secret,
+    reason: input.reason,
+  });
+}
+
+/**
+ * Marks (or unmarks) the running own App ID as published on Zalo (ADR 0070 bổ sung 13/10/2026). Only a
+ * marked App ID gets the commune's QR; an unmarked one opens Zalo's trial build to the app's admins
+ * only, so the QR stays on the shared app. Answers the commune detail; the same state again is a 200
+ * with nothing written.
+ */
+export function setMiniAppPublication(
+  communeId: string,
+  appId: string,
+  input: { published: boolean; reason: string },
+): Promise<CommuneDetail> {
+  return call("PUT", `/communes/${id(communeId)}/mini-apps/${id(appId)}/publication`, {
+    published: input.published,
     reason: input.reason,
   });
 }
