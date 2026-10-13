@@ -14,6 +14,7 @@ import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BUSY_SAVING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
+import { formatAmountInput } from "@/lib/amount-input";
 import { cn } from "@/lib/cn";
 import type {
   finance_budgetPeriodCloseOut,
@@ -512,6 +513,7 @@ export function FormGhiDot({
               type="text"
               inputMode="decimal"
               autoComplete="off"
+              onChange={formatAmountInput}
             />
           </div>
         ))}

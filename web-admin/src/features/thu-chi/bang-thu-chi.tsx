@@ -59,6 +59,7 @@ import {
   type LoaiBang,
   type SuaDongVao,
 } from "@/lib/api/thu-chi";
+import { formatAmountInput } from "@/lib/amount-input";
 import { cn } from "@/lib/cn";
 import { compactDong } from "@/lib/compact-dong";
 import { danhSachNam, namTheoDongHoMay } from "@/lib/nam";
@@ -1452,7 +1453,7 @@ function CellInput({
           "h-7 text-[12.5px] md:text-[12.5px]",
           numeric && "text-right tabular-nums",
         )}
-        onChange={(e) => onDraft(e.target.value)}
+        onChange={(e) => onDraft(numeric ? formatAmountInput(e) : e.target.value)}
         onKeyDown={(e) => {
           const intent = editKeyIntent(e.key);
           if (intent === null) return;

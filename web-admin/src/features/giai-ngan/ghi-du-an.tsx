@@ -20,6 +20,7 @@ import type {
   finance_projectAllocationOut,
   identity_boPhanRa,
 } from "@/lib/api/schema.gen";
+import { formatAmountInput, groupAmountDigits } from "@/lib/amount-input";
 import { cn } from "@/lib/cn";
 
 import { nhanTien, shortDongLabel } from "./nhan-du-an";
@@ -265,7 +266,7 @@ export function FormDuAn({
             autoComplete="off"
             placeholder="7.500.000.000"
             className="tabular-nums"
-            onChange={(e) => datGT({ ...gt, keHoachVon: e.target.value })}
+            onChange={(e) => datGT({ ...gt, keHoachVon: formatAmountInput(e) })}
           />
         </Field>
       </div>
@@ -326,7 +327,7 @@ export function FormDuAn({
             autoComplete="off"
             placeholder="11.500.000.000"
             className="tabular-nums"
-            onChange={(e) => datGT({ ...gt, tongMucDuyet: e.target.value })}
+            onChange={(e) => datGT({ ...gt, tongMucDuyet: formatAmountInput(e) })}
           />
         </Field>
 
@@ -630,9 +631,9 @@ function useFundingCatalogue(year: number): FundingCatalogue {
   return loaded !== null && loaded.year === year ? loaded.catalogue : { phase: "loading" };
 }
 
-/** Form rows from the project as read: raw amounts, for the same reason as `keHoachVon`. */
+/** Form rows from the project as read, amounts grouped as the box shows them (see `keHoachVon`). */
 function allocationRowsOf(allocations: readonly finance_projectAllocationOut[] | undefined): AllocationRow[] {
-  return (allocations ?? []).map((a, i) => ({ key: i, sourceId: a.funding_source_id, amount: String(a.amount) }));
+  return (allocations ?? []).map((a, i) => ({ key: i, sourceId: a.funding_source_id, amount: groupAmountDigits(String(a.amount)) }));
 }
 
 /**
@@ -772,7 +773,7 @@ export function FundingAllocationList({
                     autoComplete="off"
                     placeholder="Số tiền"
                     className="tabular-nums"
-                    onChange={(e) => replace(row.key, { amount: e.target.value })}
+                    onChange={(e) => replace(row.key, { amount: formatAmountInput(e) })}
                   />
                 </Field>
               </li>
@@ -1003,13 +1004,12 @@ export function giaTriTuDuAn(duAn: finance_duAnRa): GiaTriFormDuAn {
     hangMucID: duAn.category_id,
     ten: duAn.name,
     moTa: duAn.description ?? "",
-    // SỐ THÔ, KHÔNG ĐỊNH DẠNG: ô nhập phải chứa đúng con số máy chủ giữ, để một lần Lưu không đổi
-    // gì thật sự KHÔNG đổi gì. Đưa `100.000.000` vào ô rồi đọc lại vẫn ra đúng số ấy nhờ
-    // `docSoTien` bỏ dấu chấm, nhưng phép so "có đổi không" sẽ thấy khác và gửi đi một `PATCH`
-    // thừa — thứ có thể bóc chữ xác nhận của một chứng từ ở tuyến bên cạnh, và ở đây là một lần
-    // ghi vào hồ sơ lưu trữ không ai yêu cầu.
-    keHoachVon: String(duAn.planned_amount),
-    tongMucDuyet: String(duAn.approved_amount),
+    // ĐÚNG DẠNG Ô TỰ VẼ KHI GÕ (`groupAmountDigits`): the box regroups digits as they are typed, so
+    // a seed in another spelling would be rewritten by the first keystroke. A save that changed
+    // nothing must still send nothing — `thanSuaDuAn` compares by value (`sameAmount`) as the second
+    // guard, because an unwanted `PATCH` is a write to an archival record nobody asked for.
+    keHoachVon: groupAmountDigits(String(duAn.planned_amount)),
+    tongMucDuyet: groupAmountDigits(String(duAn.approved_amount)),
     ngayKhoiCong: duAn.start_date ?? "",
     ngayHoanThanh: duAn.completion_date ?? "",
     thoiHanGiaiNgan: duAn.disbursement_deadline,

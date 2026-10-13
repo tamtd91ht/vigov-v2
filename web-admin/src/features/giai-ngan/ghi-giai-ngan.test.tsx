@@ -14,6 +14,8 @@ import {
   FORM_CHUNG_TU_TRONG,
   FORM_DU_AN_TRONG,
   PHAN_CHUA_DUNG_GHI,
+  thanSuaChungTu,
+  thanSuaDuAn,
 } from "./nhan-ghi-giai-ngan";
 import { BangDanhSach } from "./bang-du-an";
 import type { ProjectPeople } from "./project-people";
@@ -464,10 +466,22 @@ describe("BIỂU MẪU DỰ ÁN", () => {
     );
   });
 
-  it("giá trị ban đầu của biểu mẫu SỬA là SỐ THÔ, không phải chuỗi đã định dạng", () => {
-    // `100.000.000` trong ô nhập làm phép so "có đổi không" thấy khác và gửi một `PATCH` thừa.
-    expect(giaTriTuDuAn(DU_AN).keHoachVon).toBe("100000000");
-    expect(giaTriTuChungTu(chungTu()).soTien).toBe("30000000");
+  it("giá trị ban đầu của biểu mẫu SỬA đúng dạng ô tự định dạng khi gõ", () => {
+    // Ô tiền nhóm hàng nghìn khi gõ (yêu cầu 13/10/2026): giá trị đổ vào phải cùng dạng ấy.
+    expect(giaTriTuDuAn(DU_AN).keHoachVon).toBe("100.000.000");
+    expect(giaTriTuChungTu(chungTu()).soTien).toBe("30.000.000");
+  });
+
+  it("cùng một số viết hai kiểu thì KHÔNG gửi trường tiền — PATCH thừa bóc xác nhận (ADR 0036)", () => {
+    const dau = giaTriTuChungTu(chungTu());
+    const moi = { ...dau, soTien: "30000000", noiDung: `${dau.noiDung} sửa` };
+    const r = thanSuaChungTu(dau, moi, []);
+    expect(r).toMatchObject({ ok: true });
+    expect(r.ok && "amount" in r.than).toBe(false);
+    const duAn = giaTriTuDuAn(DU_AN);
+    const r2 = thanSuaDuAn(duAn, { ...duAn, keHoachVon: "100000000", ten: "Tên mới" });
+    expect(r2).toMatchObject({ ok: true });
+    expect(r2.ok && "planned_amount" in r2.than).toBe(false);
   });
 });
 

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-12",
+  "cap_nhat": "2026-10-13",
   "muc": [
     {
       "id": "tam-viec-web-tu-hop-dong",
@@ -1384,6 +1384,18 @@
       "viec": "Lớp địa điểm Overture Maps trên mọi bản đồ web-admin (chủ dự án chốt 12/10/2026, ADR 0072 §Sửa đổi 12/10/2026): tệp thứ hai vn-places.pmtiles cạnh vn-mainland.pmtiles; chấm xám + nhãn xám từ zoom 13, dưới lớp tài sản của xã, không tìm kiếm, không đếm; chỉ lớp này lỗi thì bản đồ vẫn hiện.",
       "bang_chung": "web-admin/src/lib/basemap/assets.ts (PLACES_FILE trong danh sách đóng, cùng Content-Type/Cache-Control với tệp nền) · lib/basemap/style.ts (nguồn 'overture', hai lớp overture-places-dot/-label nối sau lớp Protomaps, isOptionalBasemapSourceError) · petition-map.tsx + economic-map.tsx bỏ qua lỗi nguồn 'overture' trước load. Kiểm 12/10: vitest src/lib/basemap src/lib/may-chu/basemap src/features/map-assets src/features/phan-anh src/proxy-basemap 28 tệp / 636 ca xanh; tsc --noEmit sạch; eslint các tệp sửa sạch. Chưa commit.",
       "tiep_theo": "Chờ tệp vn-places.pmtiles dựng thật (thẻ việc pipeline) và tải lên cùng tiền tố BASEMAP_URL; kiểm ảnh render ở zoom 13–15; pháp chế duyệt câu ghi nguồn '© Overture Maps Foundation' (hiện là đề xuất)."
+    },
+    {
+      "id": "o-tien-nhom-hang-nghin-13-10",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "menu": [
+        "giai-ngan",
+        "thu-chi-ngan-sach"
+      ],
+      "viec": "Ô nhập số tiền tự nhóm hàng nghìn khi gõ (người dùng yêu cầu 13/10/2026): 250000000 → 250.000.000. Dấu phân cách là DẤU CHẤM theo vi-VN như mọi chỗ hiện tiền trong app — dấu phẩy là dấu thập phân (docSoTien từ chối, docSoNhap đọc là phần lẻ), nhóm bằng dấu phẩy sẽ làm hỏng mọi số. Dấu chấm mơ hồ người dùng tự gõ/dán (1.5) giữ nguyên để bộ đọc báo lỗi như cũ.",
+      "bang_chung": "web-admin/src/lib/amount-input.ts (groupAmountDigits + formatAmountInput giữ con trỏ) gắn vào 8 ô: giai-ngan/ghi-du-an.tsx (số tiền bố trí năm, tổng mức duyệt, số tiền từng nguồn vốn) · chung-tu-du-an.tsx (số tiền chứng từ) · funding-source-dialogs.tsx (vốn được giao: sửa + thêm) · thu-chi/dot-thu-chi.tsx (ô tiền mỗi cột của đợt) · thu-chi/bang-thu-chi.tsx (CellInput ô số). Giá trị điền sẵn của biểu mẫu SỬA cũng nhóm cùng hàm; thanSuaChungTu/thanSuaDuAn so tiền theo GIÁ TRỊ (sameAmount) để không gửi PATCH thừa bóc xác nhận lãnh đạo (ADR 0036). Kiểm 13/10: web-admin tsc sạch, vitest 316 tệp/5905 ca xanh (export PPTX timeout khi chạy cả bộ, chạy lại riêng 16/16 xanh), check:api khớp, eslint sạch. make check đỏ do service-platform/platform-admin đang sửa dở của phiên song song (shared_mini_app.go 'errors' imported and not used; platform-admin wave2.test.tsx) — không thuộc việc này. Ô không phải tiền (thứ tự hiển thị, số ngày hạn, toạ độ, cổng SMTP) cố ý không đổi.",
+      "tiep_theo": "Người dùng kiểm trên trình duyệt thật: gõ, sửa giữa số, xoá, dán vào các ô trên — chưa kiểm ảnh/thao tác ở máy này."
     }
   ]
 }

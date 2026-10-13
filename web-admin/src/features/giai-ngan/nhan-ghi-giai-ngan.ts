@@ -70,6 +70,21 @@ export function docSoTien(nhap: string): SoTienDaDoc {
   return { loai: "so", dong: so };
 }
 
+/**
+ * Whether two typed amounts say the same thing — by VALUE, as `sameAllocations` compares its lines.
+ *
+ * The money boxes regroup digits while typing (`lib/amount-input`), so `30000000` and `30.000.000` are
+ * one amount spelt twice. Comparing the strings would send that field on a save that changed nothing —
+ * and on a voucher that extra `PATCH` strips the leader's confirmation (ADR 0036). An unreadable amount
+ * compares as typed, so editing it is still a change and the parser's sentence still reaches the screen.
+ */
+export function sameAmount(a: string, b: string): boolean {
+  const left = docSoTien(a);
+  const right = docSoTien(b);
+  if (left.loai === "so" && right.loai === "so") return left.dong === right.dong;
+  return a === b;
+}
+
 export const CAU_SO_TIEN_KHONG_DOC_DUOC =
   "Số tiền chỉ gồm chữ số, đơn vị là đồng. Được phép dùng dấu chấm phân cách hàng nghìn " +
   "(100.000.000), không nhận dấu phẩy và không nhận phần lẻ.";
@@ -407,7 +422,7 @@ export function thanSuaChungTu(
     than.payment_date = moi.ngayChi;
   }
 
-  if (moi.soTien !== dau.soTien) {
+  if (!sameAmount(moi.soTien, dau.soTien)) {
     const tien = docSoTien(moi.soTien);
     switch (tien.loai) {
       case "trong":
@@ -752,7 +767,7 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
   }
   if (moi.moTa.trim() !== dau.moTa.trim()) than.description = moi.moTa.trim();
 
-  if (moi.keHoachVon !== dau.keHoachVon) {
+  if (!sameAmount(moi.keHoachVon, dau.keHoachVon)) {
     const so = docSoTien(moi.keHoachVon);
     switch (so.loai) {
       case "trong":
@@ -766,7 +781,7 @@ export function thanSuaDuAn(dau: GiaTriFormDuAn, moi: GiaTriFormDuAn): ThanDung<
     }
   }
 
-  if (moi.tongMucDuyet !== dau.tongMucDuyet) {
+  if (!sameAmount(moi.tongMucDuyet, dau.tongMucDuyet)) {
     const so = docSoTien(moi.tongMucDuyet);
     switch (so.loai) {
       case "trong":

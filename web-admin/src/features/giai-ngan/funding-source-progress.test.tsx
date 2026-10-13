@@ -352,7 +352,7 @@ describe("Quản lý nguồn vốn — add and edit", () => {
     expect(dialog.textContent).toContain("Xã đang có 1 nguồn vốn");
     act(() => buttonByText(dialog, "Sửa")!.click());
     const input = dialog.querySelector<HTMLInputElement>("#von-duoc-giao-01JSRC1")!;
-    expect(input.value).toBe("9200000000");
+    expect(input.value).toBe("9.200.000.000");
     typeInto(input, "9.500.000.000");
     act(() => buttonByText(dialog, "Lưu")!.click());
     await settle();

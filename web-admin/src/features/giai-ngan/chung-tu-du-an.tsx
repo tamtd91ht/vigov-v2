@@ -14,6 +14,7 @@ import { Notice } from "@/components/ui/notice";
 import { Skeleton } from "@/components/ui/skeleton";
 import { BUSY_DELETING, BusyLabel } from "@/features/danh-ba/busy-label";
 import type { KetQua } from "@/lib/api/goi";
+import { formatAmountInput, groupAmountDigits } from "@/lib/amount-input";
 import { cn } from "@/lib/cn";
 import {
   goChungTu,
@@ -105,10 +106,10 @@ function VoucherField({
 export function giaTriTuChungTu(ct: finance_chungTuRa): GiaTriFormChungTu {
   return {
     ngayChi: ct.payment_date,
-    // SỐ THÔ, KHÔNG ĐỊNH DẠNG — xem lý lẽ ở `giaTriTuDuAn`: ô nhập phải chứa đúng con số máy chủ
-    // giữ, để phép so "có đổi không" không thấy khác ở một lần Lưu không sửa gì. Một `PATCH` thừa ở
-    // tuyến này bóc mất chữ xác nhận của lãnh đạo (ADR 0036).
-    soTien: String(ct.amount),
+    // Grouped as the box shows it — see `giaTriTuDuAn`. A save that changed nothing must send no
+    // `amount`: an extra `PATCH` here strips the leader's confirmation (ADR 0036), so
+    // `thanSuaChungTu` also compares by value (`sameAmount`).
+    soTien: groupAmountDigits(String(ct.amount)),
     noiDung: ct.description,
     doiTac: ct.counterparty ?? "",
     soChungTu: ct.voucher_no ?? "",
@@ -244,7 +245,7 @@ export function FormChungTu({
             autoComplete="off"
             placeholder="250.000.000"
             className={cn(VOUCHER_CONTROL, "tabular-nums")}
-            onChange={(e) => datGT({ ...gt, soTien: e.target.value })}
+            onChange={(e) => datGT({ ...gt, soTien: formatAmountInput(e) })}
           />
         </VoucherField>
 

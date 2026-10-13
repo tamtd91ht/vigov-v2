@@ -274,11 +274,11 @@ async function submit(el: HTMLElement): Promise<void> {
 }
 
 describe("§8 edit — funding_allocations in the PATCH", () => {
-  it("pre-fills one row per saved allocation, raw amounts", async () => {
+  it("pre-fills one row per saved allocation, amounts grouped as the box shows them", async () => {
     stubServer(OK_REPLY);
     const el = await mountEdit();
     expect(sourceSelects(el).map((s) => s.value)).toEqual(["S1", "S2"]);
-    expect(amountInputs(el).map((i) => i.value)).toEqual(["60000000", "30000000"]);
+    expect(amountInputs(el).map((i) => i.value)).toEqual(["60.000.000", "30.000.000"]);
     expect(summaryState(el)).toBe("short");
   });
 

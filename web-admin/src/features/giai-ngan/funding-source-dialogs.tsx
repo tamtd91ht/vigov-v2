@@ -21,6 +21,7 @@ import type {
   finance_fundingSourceOut,
   finance_fundingSourceProjectsOut,
 } from "@/lib/api/schema.gen";
+import { formatAmountInput, groupAmountDigits } from "@/lib/amount-input";
 import { cn } from "@/lib/cn";
 
 // vi-name-ok: existing formatters of nhan-du-an.ts, imported unchanged (rule 12, invariant 3)
@@ -357,8 +358,9 @@ function SourceRow({
   onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  // RAW digits, never the formatted figure: what the box holds must be exactly what the server holds.
-  const [typed, setTyped] = useState(String(source.granted_amount));
+  // The server's figure, grouped as the box regroups what is typed (`groupAmountDigits`); `readAmount`
+  // reads it back to exactly the same đồng.
+  const [typed, setTyped] = useState(() => groupAmountDigits(String(source.granted_amount)));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputId = `von-duoc-giao-${source.id}`;
@@ -396,7 +398,7 @@ function SourceRow({
           <button
             type="button"
             onClick={() => {
-              setTyped(String(source.granted_amount));
+              setTyped(groupAmountDigits(String(source.granted_amount)));
               setEditing(true);
             }}
             aria-label={`Sửa vốn được giao năm ${year} của ${source.name}`}
@@ -427,7 +429,7 @@ function SourceRow({
                 controlClass,
                 "h-8 min-w-0 flex-1 bg-white text-[12px] tabular-nums md:text-[12px]",
               )}
-              onChange={(e) => setTyped(e.target.value)}
+              onChange={(e) => setTyped(formatAmountInput(e))}
             />
             <Button
               type="submit"
@@ -587,7 +589,7 @@ function AddFundingSourceForm({
             autoComplete="off"
             placeholder="8.000.000.000"
             className="tabular-nums"
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => setAmount(formatAmountInput(e))}
           />
         </Field>
       </form>
