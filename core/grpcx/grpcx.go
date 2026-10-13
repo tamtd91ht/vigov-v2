@@ -248,6 +248,24 @@ const MethodResolveMiniApp = "/vigov.platform.v1.PlatformService/ResolveMiniApp"
 //	unlike ListZaloBotCommuneStats it takes no caller-declared actor: identity resolves the operator
 //	from the token, requires an `ops.*` key, and writes the operator-trail entry or answers nothing;
 //	the exemption is from the COMMUNE, not from the CALLER: the caller key is still required.
+//
+// THE FOUR OWNER-ONLY OperatorService RPCs ON OPERATOR ACCOUNTS — ListOperatorAccounts,
+// CreateOperatorAccount, SetOperatorPermissions, ResetOperatorPassword — WERE asked, and answered on
+// 2026-10-13: the owner said yes (ADR 0048, amendment of 13/10/2026). They pass ADR 0012's test with
+// the realm RPCs' structural no: they read and write operator_account, which has no tenant_id (ADR
+// 0048 §28/09 #1) — there is no commune to know at call time. What keeps them from widening the hole
+// (proto/vigov/identity/v1/operator.proto, service comment, "THE OWNER-ONLY RPCs"):
+//
+//	no request field names a commune, and no handler reads tenant.From;
+//	no response carries a commune's data — operator accounts only;
+//	they take NO caller-declared actor: identity resolves the operator from the `op1.` token and
+//	requires is_owner on the account it resolved, so the caller key alone unlocks nothing;
+//	the exemption is from the COMMUNE, not from the CALLER: the caller key is still required.
+//
+// Their three commune-scoped siblings — ListCommuneStaffAccounts, CreateCommuneAdminAccount,
+// ResetStaffPassword — are DELIBERATELY ABSENT and must stay so: they act on ONE commune's
+// `nguoi_dung` rows, which the caller knows at call time, so they carry "x-tenant-id" like
+// SetMiniAppSecret. The yes of 13/10 does not carry over to them or to any other RPC.
 var methodsWithoutTenant = map[string]struct{}{
 	MethodResolveHost:           {},
 	MethodResolveCitizenSession: {},
@@ -262,6 +280,10 @@ var methodsWithoutTenant = map[string]struct{}{
 	"/vigov.identity.v1.OperatorService/BeginOperatorEnrollment":         {},
 	"/vigov.identity.v1.OperatorService/CompleteOperatorEnrollment":      {},
 	"/vigov.identity.v1.OperatorService/ListActiveStaffCounts":           {},
+	"/vigov.identity.v1.OperatorService/ListOperatorAccounts":            {},
+	"/vigov.identity.v1.OperatorService/CreateOperatorAccount":           {},
+	"/vigov.identity.v1.OperatorService/SetOperatorPermissions":          {},
+	"/vigov.identity.v1.OperatorService/ResetOperatorPassword":           {},
 
 	"/vigov.comms.v1.ZaloBotOperatorService/SetSharedZaloBot":        {},
 	"/vigov.comms.v1.ZaloBotOperatorService/GetSharedZaloBot":        {},

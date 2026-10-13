@@ -7,8 +7,10 @@ import "google/protobuf/timestamp.proto";
 // OperatorService is the Vihat OPERATOR realm of service-identity, exposed to service-platform —
 // the only HTTP edge of the operator area, on OPERATOR_HOST (ADR 0048 §"Chốt của chủ dự án —
 // 28/09/2026" #2 + #4). The use cases behind it: service-identity/internal/app/operator_auth.go and
-// operator_enrollment.go. Accounts are created, granted, locked and reset by the server-side CLI
-// `operatorctl`, never through this service (ADR 0048 §"Chốt bước 1", row "Ai tạo, ai cấp quyền").
+// operator_enrollment.go. Accounts were created, granted, locked and reset ONLY by the server-side
+// CLI `operatorctl` (ADR 0048 §"Chốt bước 1", row "Ai tạo, ai cấp quyền"). Since the owner decisions
+// of 13/10/2026 the operator OWNER may also create, grant and reset through the owner-only RPCs below;
+// locking, unlocking, MFA reset and setting the owner stay with `operatorctl`.
 //
 // A SEPARATE SERVICE, NOT METHODS ON IdentityService, FOR THREE REASONS:
 //
@@ -68,6 +70,44 @@ import "google/protobuf/timestamp.proto";
 // ULID, no staff data; and, unlike the realm RPCs' exemption argument above, it still answers only to
 // a live `op1.` token whose operator holds an `ops.*` key, resolved HERE (see the RPC).
 //
+// THE OWNER-ONLY RPCs (owner decisions 13/10/2026, ADR 0048 amendment of that date). There is exactly
+// ONE operator OWNER (operator_account.is_owner, one row at most). Only the owner manages operator
+// accounts, creates a commune's administrator account and resets another person's password. Seven
+// RPCs, in two groups by THE COMMUNE THEY CARRY:
+//
+//   * NO COMMUNE — ListOperatorAccounts, CreateOperatorAccount, SetOperatorPermissions,
+//     ResetOperatorPassword. They read and write operator_account, which has no tenant_id (ADR 0048
+//     §28/09 #1): a structural no to ADR 0012 decision 1's test, the same as the realm RPCs. On
+//     core/grpcx.methodsWithoutTenant BY FULL NAME, owner's yes of 13/10/2026 — it does not carry over
+//     to any other RPC. No request field names a commune; no response carries a commune's data.
+//   * THE TARGET COMMUNE IN METADATA "x-tenant-id" — ListCommuneStaffAccounts,
+//     CreateCommuneAdminAccount, ResetStaffPassword. They read and write `nguoi_dung` rows of ONE
+//     commune, which the caller KNOWS at call time (the commune of the operator's URL), so they fail
+//     ADR 0012's test and are NEVER on methodsWithoutTenant — exactly as SetMiniAppSecret. No request
+//     has a commune field (rule 1, forbidden #2); the rows they touch are scoped by the metadata alone.
+//
+// THE ACTOR IS RESOLVED HERE, FROM `session_token` — NEVER A CODE THE CALLER NAMES. Every one of the
+// seven takes the `op1.` cookie verbatim; identity resolves it (refreshing the idle timer — call only
+// for a request a person made) and checks `is_owner` on the account IT resolved, in the same request.
+// An `actor_code` field was rejected: the caller key (ADR 0025) is shared by EVERY ViGov service, so a
+// caller-declared "who" would let any service holding it reset any password in any commune by naming
+// the owner's `VH-` code — and the argument that keeps the no-commune RPCs on the exemption list
+// ("none answers without a password, a second factor or a live `op1.` token") would become false for
+// the most powerful RPCs in the file. Not the owner → PERMISSION_DENIED, nothing read or written.
+//
+// TEMPORARY PASSWORDS travel in the REQUEST of the three create/reset RPCs that set one and in no
+// other message, ever: the owner types it, platform forwards it and keeps nothing, identity hashes it
+// (argon2id) and keeps only the hash. No response echoes it. Every set password is TEMPORARY:
+// must_change_password = true, so the person replaces it at the next sign-in and from then on the
+// owner no longer knows it (the reasoning of service-identity/internal/app/tai_khoan_can_bo.go, #9).
+//
+// EVERY WRITE of the seven: ONE transaction holding the change, the revocation of the target's
+// sessions where the RPC says so, and ONE trail entry (rule 6, invariant 3), actor = the RESOLVED
+// owner's `VH-` code (rule 6, invariant 8 — no fallback to operator_id), actor_kind "operator",
+// actor_ip = client_ip, `reason` in the delta where the request has one, NEVER a password or a hash.
+// Which trail table holds the entry of a commune-scoped write is the implementation's per the ADR
+// 0048 amendment; the same transaction is not negotiable.
+//
 // AUTHENTICATION IS HYBRID AND NOT CACHED (ADR 0048 §01/10 #2). service-platform verifies the `op1.`
 // signature locally (it holds OPERATOR_SESSION_SIGNING_KEYS too), then calls ResolveOperatorSession
 // on EVERY operator request. Signature-only was rejected: it cannot measure the 5-minute idle limit
@@ -84,8 +124,12 @@ import "google/protobuf/timestamp.proto";
 //                        on a session-bound RPC; both `totp_code` and `recovery_code` on
 //                        OpenOperatorSession; on the two Mini App secret RPCs also: no "x-tenant-id"
 //                        metadata (the commune interceptor), an `app_id` that is not 1-32 digits, an
-//                        `app_secret` outside its shape, a `reason` empty or over 500 runes. Nothing
-//                        was counted, nothing was written. The status MESSAGE never quotes a value.
+//                        `app_secret` outside its shape, a `reason` empty or over 500 runes. On the
+//                        owner-only RPCs also: no "x-tenant-id" on the three commune-scoped ones, an
+//                        empty `target_code` / `user_id`, an email or display name outside its shape,
+//                        a `permission_keys` entry outside the realm's closed `ops.*` list, a `reason`
+//                        empty or over 500 runes. Nothing was counted, nothing was written. The status
+//                        MESSAGE never quotes a value.
 //   FAILED_PRECONDITION  the operator realm is not configured in identity
 //                        (OPERATOR_SESSION_SIGNING_KEYS or OPERATOR_TOTP_ENCRYPTION_KEY absent —
 //                        app.ErrOperatorRealmNotConfigured). A deployment fault: the caller answers
@@ -93,9 +137,22 @@ import "google/protobuf/timestamp.proto";
 //                        ON SetMiniAppSecret ONLY, A SECOND MEANING: the platform does not bind this
 //                        App ID, live, to the target commune as its own app. See that RPC for why the
 //                        two meanings cannot be confused by a conforming caller.
-//   NOT_FOUND            RetireMiniAppSecret only: the App ID has no live settings in the target
-//                        commune. Never produced by the seven realm RPCs, nor by
-//                        ListMiniAppSecretStatuses (a commune with nothing set is an empty list).
+//                        ON CreateCommuneAdminAccount, THE SAME KIND OF SECOND MEANING: the target
+//                        commune is not a live commune on the platform. ON ResetStaffPassword: the
+//                        target account is administratively locked. Same argument as above.
+//   NOT_FOUND            RetireMiniAppSecret: the App ID has no live settings in the target commune.
+//                        SetOperatorPermissions / ResetOperatorPassword: no operator account has
+//                        `target_code`. ResetStaffPassword: the target commune has no live sign-in
+//                        account with `user_id` (another commune's id is simply "none here"). Answered
+//                        only AFTER the owner check, so a non-owner learns nothing about who exists.
+//                        Never produced by the seven realm RPCs, nor by any List RPC (nothing is an
+//                        empty list).
+//   ALREADY_EXISTS       CreateOperatorAccount: an operator account already has this email (compared
+//                        case-folded, the operator_account index). CreateCommuneAdminAccount: the target
+//                        commune already holds this sign-in email, under the SAME uniqueness rule
+//                        identity's staff directory already enforces on `nguoi_dung.email` — not a
+//                        second rule written for this RPC. Answered only AFTER the owner check.
+//                        Nothing written.
 //   UNAUTHENTICATED      NEVER produced by these RPCs. It belongs to the caller-key interceptor
 //                        (core/grpcx.UnaryServerCallerAuth, ADR 0025) and means the DEPLOYMENT is
 //                        misconfigured. Reusing it for "wrong password" would make a fleet-wide
@@ -121,7 +178,9 @@ import "google/protobuf/timestamp.proto";
 // is a no-op in protobuf-go v1.36.12, measured 2026-09-20). Requests carry passwords, TOTP codes,
 // recovery codes, bearer tokens and a commune's Zalo app secret; responses carry bearer tokens, TOTP
 // secrets and recovery codes (rule 8), and requests carry an operator's email (personal data, rule
-// 3). Log the fields you chose — the business code `VH-xxxxx`, the outcome — never the message.
+// 3). The owner-only RPCs add temporary passwords (requests) and the names and sign-in emails of
+// operators and of a commune's staff (responses — personal data, rule 3). Log the fields you chose —
+// the business code `VH-xxxxx` / `CB-xxxxx`, the outcome — never the message.
 //
 // Not batched (ADR 0012 decision 2 does not apply): every caller is ONE HTTP request holding ONE
 // credential, so a batched form is a shape no caller can fill.
@@ -372,6 +431,131 @@ service OperatorService {
   // A read: idempotent apart from the trail entry and the idle-timer refresh. Not paginated: one row
   // per commune, two scalars each.
   rpc ListActiveStaffCounts(ListActiveStaffCountsRequest) returns (ListActiveStaffCountsResponse);
+
+  // ---- OWNER ONLY, no commune: operator accounts (owner decisions 13/10/2026) ----
+  //
+  // On core/grpcx.methodsWithoutTenant by full name. Session resolved here, `is_owner` checked here
+  // (see the service comment). Common answers of the four:
+  //
+  //   OK + ACCEPTED          done; the response carries the account as it now stands.
+  //   OK + SESSION_NOT_LIVE  caller answers 401. Nothing read or written.
+  //   OK + PERMISSION_DENIED live session, operator is not the owner. Caller answers 403. Nothing
+  //                          read or written — the owner check comes before any account lookup.
+  //
+  // THE OWNER FLAG IS NOT SET BY ANY RPC. No request below has an `is_owner` field: there is exactly
+  // one owner, set outside this contract (migration / `operatorctl`), and a field that could grant it
+  // would make "exactly one" a promise the caller key could break.
+  //
+  // ACTING ON ONE'S OWN ACCOUNT (target_code = the resolved owner's code) is NOT decided by this
+  // contract: the staff side refuses it (customer decision #14, tai_khoan_can_bo.go); whether the
+  // operator side does is the ADR 0048 amendment's to state, and the implementation follows it.
+
+  // ListOperatorAccounts lists EVERY operator account, disabled ones included (the owner manages
+  // them), ordered by `code`. A read: no row written apart from the idle-timer refresh. Not
+  // paginated: a handful of ViHAT people.
+  //
+  // NOT AUDITED as a read, by the same reasoning as operatorctl's `list`: it reads no commune's data
+  // and no citizen's; the realm's own roster, by the one person who manages it. If the ADR 0048
+  // amendment states otherwise, the amendment wins.
+  rpc ListOperatorAccounts(ListOperatorAccountsRequest) returns (ListOperatorAccountsResponse);
+
+  // CreateOperatorAccount creates an operator account with a TEMPORARY password and the given
+  // `ops.*` keys, in ONE transaction with its trail entries (account created + one per key granted, as
+  // operatorctl writes them). The new account has must_change_password = true and NO second factor:
+  // its first sign-in goes through Begin/CompleteOperatorEnrollment, and the temporary password stops
+  // working after 24 hours unused (migration 0014) exactly as an `operatorctl create` one does.
+  // `code` (`VH-…`) is issued from the platform-wide sequence, never reissued (rule 7, invariant 3).
+  //
+  //   NEW_PASSWORD_REJECTED  `temporary_password` fails the password policy; `new_password_refusal`
+  //                          says which rule. Decided before any account read. Nothing written.
+  //   ALREADY_EXISTS         see the service table.
+  //
+  // NOT IDEMPOTENT: a retry after a lost response answers ALREADY_EXISTS — the account exists, the
+  // caller re-reads it with ListOperatorAccounts.
+  rpc CreateOperatorAccount(CreateOperatorAccountRequest) returns (CreateOperatorAccountResponse);
+
+  // SetOperatorPermissions makes `permission_keys` the COMPLETE set of keys of the target account:
+  // keys absent from it are revoked, keys new in it are granted, one transaction, one trail entry per
+  // key granted or revoked (the shape operatorctl's grant/revoke already writes). A change that
+  // removes any key revokes every session of the target (ADR 0048 §"Chốt bước 1": "đổi quyền → thu
+  // hồi mọi phiên"); the implementation may revoke on any change — never on none.
+  //
+  // FULL SET, NOT A DIFF: the screen shows checkboxes; sending what it shows makes a retry
+  // idempotent (the same set twice is no change and writes no entry) and makes a stale screen's
+  // answer visible in the response instead of two half-applied diffs.
+  //
+  //   NOT_FOUND  no account has `target_code` (after the owner check).
+  rpc SetOperatorPermissions(SetOperatorPermissionsRequest) returns (SetOperatorPermissionsResponse);
+
+  // ResetOperatorPassword gives the target account a new TEMPORARY password: must_change_password =
+  // true, the 24-hour expiry of a temporary password, every session of the target revoked — one
+  // transaction, one trail entry. Whether it also clears a failed-sign-in lockout (`locked_until`) is
+  // the ADR 0048 amendment's; `operatorctl unlock` stays the path that certainly does. THE SECOND FACTOR IS
+  // KEPT: the person signs in with the temporary password AND their own TOTP, then must set their own
+  // password. Replacing a lost second factor stays `operatorctl reset-mfa`.
+  //
+  //   NEW_PASSWORD_REJECTED  as CreateOperatorAccount. Nothing written.
+  //   NOT_FOUND              no account has `target_code`.
+  //
+  // NOT IDEMPOTENT, SAFE TO RETRY: a retry sets the same temporary password again and writes a
+  // second entry — two true entries, never a wrong state.
+  rpc ResetOperatorPassword(ResetOperatorPasswordRequest) returns (ResetOperatorPasswordResponse);
+
+  // ---- OWNER ONLY, THE TARGET COMMUNE in metadata "x-tenant-id": a commune's staff accounts ----
+  //
+  // NEVER on methodsWithoutTenant: the commune interceptor refuses them with INVALID_ARGUMENT when the
+  // metadata is absent. Rows are scoped to that commune, so nothing of another commune is reachable.
+  // Same SESSION_NOT_LIVE / PERMISSION_DENIED answers as the group above.
+  //
+  // WHY THIS IS NOT "VIHAT TOUCHING A COMMUNE'S BUSINESS DATA" (ADR 0048 stop condition #2, ADR 0003):
+  // a sign-in account is the commune's ACCESS to the system, not its records — no petition, document
+  // or citizen is read. The owner decided on 13/10/2026 that the owner may unblock a commune's access
+  // (create its administrator, reset a forgotten password). The responses still carry staff NAMES and
+  // EMAILS — personal data — so the list is the narrowest the screen needs (no phone, no unit, no
+  // position) and the read is AUDITED (rule 6, invariant 7) unless the ADR 0048 amendment carves an
+  // explicit exception.
+
+  // ListCommuneStaffAccounts lists the target commune's SIGN-IN ACCOUNTS — `nguoi_dung` rows with
+  // deleted_at IS NULL AND co_tai_khoan (directory-only rows are not accounts and are not listed;
+  // locked ones ARE, so a reset can be aimed at them). Ordered by `email`.
+  //
+  //   OK + ACCEPTED   `accounts`; EMPTY is a valid answer (a new commune before its first admin).
+  rpc ListCommuneStaffAccounts(ListCommuneStaffAccountsRequest) returns (ListCommuneStaffAccountsResponse);
+
+  // CreateCommuneAdminAccount creates ONE staff account in the target commune holding the commune's
+  // administrator role (`vai_tro.ma = 'quan-tri-he-thong'`), with a TEMPORARY password
+  // (phai_doi_mat_khau = true), a freshly issued staff business code, one transaction with its trail
+  // entry. It is how the owner unblocks a commune whose administrator cannot sign in.
+  //
+  // THE COMMUNE IS RE-READ LIVE FROM THE PLATFORM before writing (as SetMiniAppSecret re-reads its
+  // binding): a commune that does not exist or is inactive → FAILED_PRECONDITION, nothing written —
+  // an account under a tenant_id the platform does not serve would be an account nobody can reach.
+  //
+  // NOT DECIDED HERE: a commune with no `quan-tri-he-thong` role yet (it is created by the first
+  // `admin` sign-in, gieo_quan_tri.go). Whether this RPC creates the role or refuses is the ADR 0048
+  // amendment's; until it says, the RPC is not implemented.
+  //
+  //   NEW_PASSWORD_REJECTED  as CreateOperatorAccount. Nothing written.
+  //   ALREADY_EXISTS         see the service table.
+  //   FAILED_PRECONDITION    see above.
+  rpc CreateCommuneAdminAccount(CreateCommuneAdminAccountRequest) returns (CreateCommuneAdminAccountResponse);
+
+  // ResetStaffPassword gives one staff account of the target commune a new TEMPORARY password:
+  // phai_doi_mat_khau = true, every session of that account revoked — one transaction, one trail
+  // entry. The SAME ACT as a commune administrator's reset (TaiKhoanCanBo.DatLai) with the same
+  // refusals, performed by the owner with a password the owner typed instead of a minted one.
+  //
+  //   NEW_PASSWORD_REJECTED  as CreateOperatorAccount. Nothing written.
+  //   NOT_FOUND              see the service table — includes a directory-only row (no sign-in
+  //                          account: DatLai's ErrChuaCoTaiKhoan).
+  //   FAILED_PRECONDITION    the account is administratively locked (dang_hoat_dong = false:
+  //                          DatLai's ErrTaiKhoanDangKhoa — the sign-in read filters it, so the
+  //                          password would not work). That lock is the commune's decision; this RPC
+  //                          does not lift it. Nothing written. Not confusable with realm-not-
+  //                          configured, for the reason given on SetMiniAppSecret.
+  //
+  // NOT IDEMPOTENT, SAFE TO RETRY, as ResetOperatorPassword.
+  rpc ResetStaffPassword(ResetStaffPasswordRequest) returns (ResetStaffPasswordResponse);
 }
 
 // What an RPC of OperatorService decided. Each RPC's comment lists the subset it answers; a value
@@ -389,12 +573,16 @@ enum OperatorAuthOutcome {
   OPERATOR_AUTH_OUTCOME_ENROLLMENT_REQUIRED = 3;
   // Session-bound RPCs only: the token names no live session.
   OPERATOR_AUTH_OUTCOME_SESSION_NOT_LIVE = 4;
-  // ChangeOperatorPassword / CompleteOperatorEnrollment only: see `new_password_refusal`.
+  // ChangeOperatorPassword / CompleteOperatorEnrollment, and the owner-only RPCs that set a temporary
+  // password (CreateOperatorAccount, ResetOperatorPassword, CreateCommuneAdminAccount,
+  // ResetStaffPassword) — there it refuses `temporary_password`: see `new_password_refusal`.
   OPERATOR_AUTH_OUTCOME_NEW_PASSWORD_REJECTED = 5;
   // SetMiniAppSecret / RetireMiniAppSecret / ListMiniAppSecretStatuses / ListActiveStaffCounts only:
   // a live session whose operator lacks the key the act needs (`ops.mini_app.manage` for the two
   // writes, any `ops.*` key for the two reads). Nothing written. Never sent by the seven realm RPCs — none of them is guarded by
   // a key.
+  // ALSO the seven OWNER-ONLY RPCs: a live session whose operator is not the owner (is_owner false).
+  // Nothing read or written.
   OPERATOR_AUTH_OUTCOME_PERMISSION_DENIED = 6;
 }
 
@@ -523,6 +711,13 @@ message OperatorPrincipal {
   // The realm's OWN closed list — never a row of the per-commune `quyen` table (ADR 0048 §28/09 #3).
   // Ordered; the order carries no meaning.
   repeated string permission_keys = 3;
+
+  // True when this account is THE operator owner (operator_account.is_owner — exactly one account,
+  // owner decisions 13/10/2026), read live like the keys. It lets service-platform show and guard the
+  // owner-only screens; it decides nothing on its own — every owner-only RPC re-checks it in identity
+  // on the session it resolves. FALSE IS THE SAFE DEFAULT: an identity older than this field sends
+  // false, and the caller then treats the operator as not the owner (fail closed).
+  bool is_owner = 4;
 }
 
 message RevokeOperatorSessionRequest {
@@ -779,4 +974,220 @@ message CommuneActiveStaffCount {
   // `nguoi_dung` rows of this commune with deleted_at IS NULL AND co_tai_khoan AND dang_hoat_dong.
   // Always >= 1 in an entry.
   uint32 active_staff_count = 2;
+}
+
+// ---- Owner-only RPCs: operator accounts ----
+
+// One operator account as the owner's management screen shows it. NEVER a password hash, a TOTP
+// secret, a recovery code or a session — none of them is needed to manage an account, so none is
+// selected.
+//
+// DELIBERATELY ABSENT: operator_id (the internal id authorises; the screen and every request name the
+// account by `code`, the business code the trail records — rule 6, invariant 8).
+message OperatorAccount {
+  // The business code, `VH-00001`. Names the account in every request below. May be logged.
+  string code = 1;
+  // The sign-in email. PERSONAL DATA (rule 3): never logged.
+  string email = 2;
+  // operator_account.display_name. PERSONAL DATA (rule 3): never logged.
+  string display_name = 3;
+  // Every `ops.*` key granted, read live (operator_permission_grant). Ordered; no meaning in the order.
+  repeated string permission_keys = 4;
+  // THE owner (exactly one account). Read-only through this contract — no RPC sets it.
+  bool is_owner = 5;
+  // Administratively disabled (operator_account.disabled_at set). Disabled accounts are listed.
+  bool disabled = 6;
+  // A temporary password is in force (set at creation or by a reset): the person must set their own.
+  bool must_change_password = 7;
+  // The failed-sign-in lockout's end. ABSENT means not locked. Present but in the past also means not
+  // locked: the lock is DERIVED from this instant vs now (migration 0012), never a flag.
+  google.protobuf.Timestamp locked_until = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ListOperatorAccountsRequest {
+  // CREDENTIAL — as SetMiniAppSecretRequest.session_token. The owner is resolved from it; there is no
+  // actor field (see the service comment). Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+}
+
+message ListOperatorAccountsResponse {
+  // ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED.
+  OperatorAuthOutcome outcome = 1;
+  // Set only when ACCEPTED: every operator account, ordered by `code`. Never empty when ACCEPTED (the
+  // owner reading it is one of them).
+  repeated OperatorAccount accounts = 2;
+}
+
+message CreateOperatorAccountRequest {
+  // CREDENTIAL — the owner's `op1.` token. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // The new account's sign-in email. PERSONAL DATA (rule 3): never logged. Trimmed by identity;
+  // outside the email shape operatorctl accepts is INVALID_ARGUMENT.
+  string email = 2;
+  // PERSONAL DATA (rule 3). Trimmed, non-empty (operator_account_display_name_not_blank).
+  string display_name = 3;
+  // SECRET (rule 8) — WRITE-ONLY. Verbatim, never trimmed. Never logged at either end, at any level,
+  // nor this whole message (String() prints it); never echoed in any response, status message, trail
+  // entry or metric. Identity keeps only its argon2id hash. Checked against the password policy
+  // (NEW_PASSWORD_REJECTED).
+  string temporary_password = 4;
+  // The keys to grant, `ops.<group>.<action>`, each on the realm's closed list (else INVALID_ARGUMENT).
+  // May be empty: an account holding no key signs in and every guarded route answers 403. Duplicates
+  // are one key.
+  repeated string permission_keys = 5;
+  // As OpenOperatorSessionRequest.client_ip: stored as the trail entries' actor_ip. Decides nothing.
+  string client_ip = 6;
+}
+
+message CreateOperatorAccountResponse {
+  // ACCEPTED, SESSION_NOT_LIVE, PERMISSION_DENIED or NEW_PASSWORD_REJECTED.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when ACCEPTED: the account as created (its new `code` included). Never the password.
+  OperatorAccount account = 2;
+  // Set exactly when NEW_PASSWORD_REJECTED.
+  NewPasswordRefusal new_password_refusal = 3;
+}
+
+message SetOperatorPermissionsRequest {
+  // CREDENTIAL — the owner's `op1.` token. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // The account to change, `VH-00001`. Empty is INVALID_ARGUMENT; unknown is NOT_FOUND.
+  string target_code = 2;
+  // The COMPLETE desired set (see the RPC). Each on the realm's closed list (else INVALID_ARGUMENT).
+  // EMPTY IS MEANINGFUL: it revokes every key. Duplicates are one key.
+  repeated string permission_keys = 3;
+  // Why, as typed in the confirmation dialog. Required: trimmed, non-empty, at most 500 runes, valid
+  // UTF-8 (as SetMiniAppSecretRequest.reason). Not logged.
+  string reason = 4;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 5;
+}
+
+message SetOperatorPermissionsResponse {
+  // ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when ACCEPTED: the account as it now stands, its keys read back after the write.
+  OperatorAccount account = 2;
+}
+
+message ResetOperatorPasswordRequest {
+  // CREDENTIAL — the owner's `op1.` token. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // The account to reset, `VH-00001`. Empty is INVALID_ARGUMENT; unknown is NOT_FOUND.
+  string target_code = 2;
+  // SECRET (rule 8) — WRITE-ONLY, as CreateOperatorAccountRequest.temporary_password.
+  string temporary_password = 3;
+  // As SetOperatorPermissionsRequest.reason. Required.
+  string reason = 4;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 5;
+}
+
+message ResetOperatorPasswordResponse {
+  // ACCEPTED, SESSION_NOT_LIVE, PERMISSION_DENIED or NEW_PASSWORD_REJECTED.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when ACCEPTED: the account after the reset (must_change_password true). Never the
+  // password.
+  OperatorAccount account = 2;
+  // Set exactly when NEW_PASSWORD_REJECTED.
+  NewPasswordRefusal new_password_refusal = 3;
+}
+
+// ---- Owner-only RPCs: a commune's staff accounts (commune in metadata "x-tenant-id") ----
+
+// One sign-in account of the target commune, as the owner's screen shows it. The NARROWEST shape that
+// lets the owner find the person and act: no phone, no unit, no position, no last sign-in.
+//
+// DELIBERATELY ABSENT: tenant_id (the caller named it in metadata; echoing it is a second source).
+message CommuneStaffAccount {
+  // nguoi_dung.id (ULID). Names the account in ResetStaffPassword. Authorises nothing; never written
+  // into a trail as "who".
+  string user_id = 1;
+  // The staff business code (nguoi_dung.ma, `CB-…`) — what the commune's audit screen shows. May be
+  // logged.
+  string staff_code = 2;
+  // The SIGN-IN NAME: nguoi_dung.email, the column sign-in matches (store.CanBoStore.TheoEmail) — a
+  // work address, or the literal `admin` of a commune's seeded administrator. PERSONAL DATA (rule 3):
+  // never logged.
+  string email = 3;
+  // nguoi_dung.ho_ten. PERSONAL DATA (rule 3): never logged.
+  string full_name = 4;
+  // The account's role, `vai_tro.ma` and its display name. ONE role, not a list: a staff row holds
+  // one `vai_tro_id` (migration 0001). Both empty when the account holds no role.
+  string role_code = 5;
+  string role_name = 6;
+  // role_code == "quan-tri-he-thong" — the commune's administrator role. Stated by identity so the
+  // screen never holds its own copy of that literal.
+  bool is_admin = 7;
+  // Administratively locked: nguoi_dung.dang_hoat_dong = false (ResetStaffPassword refuses these).
+  bool disabled = 8;
+  // A temporary password is in force: nguoi_dung.phai_doi_mat_khau.
+  bool must_change_password = 9;
+  // The automatic failed-sign-in lock's end (nguoi_dung.sign_in_locked_until, migration 0020). ABSENT
+  // means not locked; present but past also means not locked — the lock is derived, never a flag.
+  google.protobuf.Timestamp sign_in_locked_until = 10;
+}
+
+message ListCommuneStaffAccountsRequest {
+  // CREDENTIAL — the owner's `op1.` token. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // As OpenOperatorSessionRequest.client_ip: stored as the read's trail entry's actor_ip.
+  string client_ip = 2;
+  // DELIBERATELY NO commune field: the commune is the "x-tenant-id" metadata (rule 1, forbidden #2).
+}
+
+message ListCommuneStaffAccountsResponse {
+  // ACCEPTED, SESSION_NOT_LIVE or PERMISSION_DENIED.
+  OperatorAuthOutcome outcome = 1;
+  // Set only when ACCEPTED, ordered by `email`. EMPTY is a valid answer.
+  repeated CommuneStaffAccount accounts = 2;
+}
+
+message CreateCommuneAdminAccountRequest {
+  // CREDENTIAL — the owner's `op1.` token. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // The SIGN-IN NAME of the new account — goes into nguoi_dung.email, the column sign-in matches (see
+  // CommuneStaffAccount.email). PERSONAL DATA (rule 3): never logged. Trimmed by identity; outside the
+  // shape the staff directory accepts is INVALID_ARGUMENT.
+  string email = 2;
+  // nguoi_dung.ho_ten. PERSONAL DATA (rule 3). Trimmed, non-empty.
+  string full_name = 3;
+  // SECRET (rule 8) — WRITE-ONLY, as CreateOperatorAccountRequest.temporary_password.
+  string temporary_password = 4;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 5;
+}
+
+message CreateCommuneAdminAccountResponse {
+  // ACCEPTED, SESSION_NOT_LIVE, PERMISSION_DENIED or NEW_PASSWORD_REJECTED.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when ACCEPTED: the account as created (is_admin true, must_change_password true).
+  CommuneStaffAccount account = 2;
+  // Set exactly when NEW_PASSWORD_REJECTED.
+  NewPasswordRefusal new_password_refusal = 3;
+}
+
+message ResetStaffPasswordRequest {
+  // CREDENTIAL — the owner's `op1.` token. Empty is INVALID_ARGUMENT.
+  string session_token = 1;
+  // CommuneStaffAccount.user_id of the target commune. Empty is INVALID_ARGUMENT; not a live sign-in
+  // account of THIS commune is NOT_FOUND.
+  string user_id = 2;
+  // SECRET (rule 8) — WRITE-ONLY, as CreateOperatorAccountRequest.temporary_password.
+  string temporary_password = 3;
+  // As SetOperatorPermissionsRequest.reason. Required.
+  string reason = 4;
+  // As OpenOperatorSessionRequest.client_ip.
+  string client_ip = 5;
+}
+
+message ResetStaffPasswordResponse {
+  // ACCEPTED, SESSION_NOT_LIVE, PERMISSION_DENIED or NEW_PASSWORD_REJECTED.
+  OperatorAuthOutcome outcome = 1;
+  // Set exactly when ACCEPTED: the account after the reset (must_change_password true). Never the
+  // password.
+  CommuneStaffAccount account = 2;
+  // Set exactly when NEW_PASSWORD_REJECTED.
+  NewPasswordRefusal new_password_refusal = 3;
 }

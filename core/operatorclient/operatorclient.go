@@ -124,6 +124,10 @@ type Principal struct {
 	OperatorCode string
 	// PermissionKeys are `ops.*` keys, read live. May be empty: signed in, holds nothing.
 	PermissionKeys []string
+	// IsOwner: this operator is THE owner (owner decisions 13/10/2026). For showing and guarding the
+	// owner-only screens; identity re-checks it on every owner-only RPC. False from an identity older
+	// than the field — fail closed.
+	IsOwner bool
 }
 
 // NewPasswordRefusal says which password rule refused the new value — the rule, never the value.

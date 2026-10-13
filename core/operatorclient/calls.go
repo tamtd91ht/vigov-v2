@@ -109,7 +109,7 @@ func (c *Client) Resolve(ctx context.Context, token secret.Secret) (Principal, b
 			keys = append(keys, k)
 		}
 	}
-	return Principal{OperatorID: p.GetOperatorId(), OperatorCode: p.GetOperatorCode(), PermissionKeys: keys}, true, nil
+	return Principal{OperatorID: p.GetOperatorId(), OperatorCode: p.GetOperatorCode(), PermissionKeys: keys, IsOwner: p.GetIsOwner()}, true, nil
 }
 
 // Revoke is RevokeOperatorSession: signs out the session NAMED BY THE TOKEN. ACCEPTED or

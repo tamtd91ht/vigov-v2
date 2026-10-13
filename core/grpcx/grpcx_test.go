@@ -123,6 +123,35 @@ func TestDanhSachMienLaTuongMinh(t *testing.T) {
 	} else if !grpcx.ExemptFromTenant(literal) {
 		t.Fatalf("%s must be exempt: it answers about every commune (owner, 2026-10-11)", literal)
 	}
+	// Owner's decision of 2026-10-13: the four owner-only RPCs on operator accounts — operator_account
+	// has no tenant_id. Literal strings checked against the generated names, as above.
+	ownerOperatorRPCs := map[string]string{
+		"/vigov.identity.v1.OperatorService/ListOperatorAccounts":   identityv1.OperatorService_ListOperatorAccounts_FullMethodName,
+		"/vigov.identity.v1.OperatorService/CreateOperatorAccount":  identityv1.OperatorService_CreateOperatorAccount_FullMethodName,
+		"/vigov.identity.v1.OperatorService/SetOperatorPermissions": identityv1.OperatorService_SetOperatorPermissions_FullMethodName,
+		"/vigov.identity.v1.OperatorService/ResetOperatorPassword":  identityv1.OperatorService_ResetOperatorPassword_FullMethodName,
+	}
+	for literal, generated := range ownerOperatorRPCs {
+		if literal != generated {
+			t.Fatalf("the proto renamed %s to %s — the exemption no longer names the real RPC", literal, generated)
+		}
+		if !grpcx.ExemptFromTenant(literal) {
+			t.Fatalf("%s must be exempt: operator accounts belong to no commune (owner, 2026-10-13)", literal)
+		}
+	}
+	// …and their three commune-scoped siblings must NOT be: they act on one commune's staff rows, so
+	// the commune travels in metadata like SetMiniAppSecret. Generated names, so a rename cannot make
+	// this pass vacuously.
+	for _, m := range []string{
+		identityv1.OperatorService_ListCommuneStaffAccounts_FullMethodName,
+		identityv1.OperatorService_CreateCommuneAdminAccount_FullMethodName,
+		identityv1.OperatorService_ResetStaffPassword_FullMethodName,
+		identityv1.OperatorService_SetMiniAppSecret_FullMethodName,
+	} {
+		if grpcx.ExemptFromTenant(m) {
+			t.Fatalf("%s is exempt — it acts on ONE commune's data and must carry x-tenant-id", m)
+		}
+	}
 	// Per RPC, never per service: CommsService stays commune-bound.
 	if grpcx.ExemptFromTenant("/vigov.comms.v1.CommsService/DeliverStaffNotifications") {
 		t.Fatal("a comms RPC outside ZaloBotOperatorService is exempt — exemption leaked by prefix")
