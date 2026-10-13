@@ -215,6 +215,13 @@ export const TEXTAREA_CLASS = cn(
  */
 export const ACT_CLASS = "form-danh-muc m-0 flex flex-col gap-3 rounded-none border-0 bg-transparent p-4";
 
+/**
+ * The card a drawer section's body sits in — the same frame as `Chuyển xử lý, không đổi trạng thái`.
+ * Without it a section's content runs flush to the drawer edge while its neighbours are inset (sheet
+ * web-admin-131026: photos, location, duplicates, staff rating).
+ */
+export const SECTION_CARD = "rounded-[10px] border border-solid border-line bg-white p-3";
+
 /** Label above a control, 12px/600 (spec §6.3). */
 export const LABEL_CLASS = "mb-1.5 block text-xs leading-tight font-semibold text-ink-700";
 

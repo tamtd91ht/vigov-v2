@@ -10,7 +10,7 @@ import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
 import { nhanThoiDiem, RATING_MAX_STARS } from "./nhan-phieu";
-import { buttonClass, Glyph, HINT_CLASS, TEXTAREA_CLASS } from "./petition-ui";
+import { buttonClass, Glyph, HINT_CLASS, SECTION_CARD, TEXTAREA_CLASS } from "./petition-ui";
 
 /**
  * `Ghi nhận đánh giá của người dân` — prototype `FeedbackDetailDrawer.tsx:516-540`, bug sheet row 60
@@ -138,8 +138,9 @@ export function StaffRecordedRatingSection({
           <p className="mt-1 text-[11.5px] text-ink-muted">{STAFF_RATING_CITIZEN_RATED}</p>
         </div>
       ) : (
+        // Inside the section card, as the neighbouring sections (sheet web-admin-131026).
         <form
-          className="m-0 flex flex-col gap-2.5"
+          className={cn("m-0 flex flex-col gap-2.5", SECTION_CARD)}
           onSubmit={(e) => {
             e.preventDefault();
             submit();

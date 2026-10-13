@@ -12,6 +12,7 @@ import type { KetQua } from "@/lib/api/goi";
 import type { petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
 import { congThaoTac } from "./nhan-phieu";
+import { SECTION_CARD } from "./petition-ui";
 import { ChiTietPhieu } from "./so-phan-anh";
 import {
   STAFF_RATING_CITIZEN_RATED,
@@ -148,6 +149,12 @@ describe("the drawer's gate — `feedback.resolve` (UX; the route checks the sam
 });
 
 describe("StaffRecordedRatingSection", () => {
+  // Sheet web-admin-131026: the form sat flush against the drawer edge; it is in the section card now.
+  it("the form sits inside the section card, as the other drawer sections do", () => {
+    const el = render(<StaffRecordedRatingSection petition={petition()} onRecorded={() => {}} />);
+    expect(el.querySelector("section > form")?.className).toContain(SECTION_CARD);
+  });
+
   it("never promises that a low rating reopens the petition", () => {
     const el = render(<StaffRecordedRatingSection petition={petition()} onRecorded={() => {}} />);
     expect(el.textContent).toContain(STAFF_RATING_HINT);

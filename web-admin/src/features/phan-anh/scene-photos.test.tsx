@@ -15,6 +15,7 @@ import {
   scenePhotoAlt,
   scenePhotoSrc,
 } from "./nhan-phieu";
+import { SECTION_CARD } from "./petition-ui";
 import { freshLinksFor, ScenePhotosView, scenePhotosState } from "./scene-photos";
 import { ChiTietPhieu } from "./so-phan-anh";
 
@@ -116,6 +117,13 @@ describe("ScenePhotosView — what the officer reads", () => {
     expect(html).not.toContain('loading="lazy"');
     // The signed link is an image source only — never a link an officer could copy into a chat.
     expect(html).not.toMatch(/<a [^>]*kho\.example\.test/);
+  });
+
+  // Sheet web-admin-131026: both columns sat flush against the drawer edge; they sit in the section card.
+  it("the two columns sit inside the section card, as the other drawer sections do", () => {
+    const html = renderToStaticMarkup(<ScenePhotosView lookupCode="PA-1" state={{ kind: "empty" }} />);
+    const after = html.slice(html.indexOf("</h3>") + "</h3>".length);
+    expect(after).toMatch(new RegExp(`^<div class="[^"]*${SECTION_CARD.replace(/[[\]]/g, "\\$&")}`));
   });
 
   it("empty state sentence", () => {

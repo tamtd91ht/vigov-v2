@@ -36,7 +36,7 @@ import {
   scenePhotoOpenLabel,
   scenePhotoSrc,
 } from "./nhan-phieu";
-import { buttonClass, Glyph } from "./petition-ui";
+import { buttonClass, Glyph, SECTION_CARD } from "./petition-ui";
 
 /**
  * §8.4 `Ảnh trước và sau khi xử lý` on the petition drawer — the "before" column is the photos the
@@ -270,7 +270,8 @@ export function ScenePhotosView({
       <h3 id={headingId} className="m-0 mb-2.5 text-[12.5px] font-bold text-navy">
         {SCENE_PHOTOS_TITLE}
       </h3>
-      <div className="grid grid-cols-2 gap-4">
+      {/* Inside the drawer's section card, as the neighbouring sections (sheet web-admin-131026). */}
+      <div className={cn(SECTION_CARD, "grid grid-cols-2 gap-4")}>
       <div className="flex min-w-0 flex-col gap-2 [&>p]:m-0">
       <h4 className={COLUMN_TITLE}>{SCENE_PHOTOS_BEFORE}</h4>
       {state.kind === "loading" && (

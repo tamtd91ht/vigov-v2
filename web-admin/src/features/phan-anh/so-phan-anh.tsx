@@ -176,7 +176,7 @@ import { NhatKyPhieu } from "./nhat-ky-phieu";
 import { usePetitionLogAttachments } from "./petition-log-attachments";
 import { PetitionHeatMap, PetitionMiniMap } from "./petition-map";
 import { PetitionReports } from "./petition-reports";
-import { DUPLICATES_TITLE, mergeSectionShown, PetitionMergeSection } from "./petition-merge";
+import { PetitionMergeSection } from "./petition-merge";
 import { PetitionTaskBlock } from "./petition-task";
 import {
   buttonClass,
@@ -185,6 +185,7 @@ import {
   LoadingBar,
   PetitionCardsSkeleton,
   PetitionStatusBadge,
+  SECTION_CARD,
   statusActiveClass,
   statusIcon,
   TEXTAREA_CLASS,
@@ -1851,33 +1852,32 @@ export function ChiTietPhieu({
                 <h3 id="tieu-de-vi-tri-phieu" className={SECTION_HEADING}>
                   {LOCATION_SECTION_TITLE}
                 </h3>
-                <PetitionMiniMap lat={phieu.lat} lng={phieu.lng} basemapAvailable={basemapAvailable} />
-                <p className="m-0 mt-1.5 flex items-center gap-1 text-[11.5px] text-ink-muted">
-                  <Glyph icon={MapPin} className="size-3 shrink-0" />
-                  {sceneAddressLine(phieu)}
-                </p>
-                <p className="m-0 mt-0.5 text-[11px] text-ink-muted">
-                  <span className="tabular-nums">{coordinates}</span> · {SCENE_COORDINATES_NOTE}
-                </p>
+                {/* The card is put here, not inside `PetitionMiniMap`: the heat map reuses that map. */}
+                <div className={SECTION_CARD}>
+                  <PetitionMiniMap lat={phieu.lat} lng={phieu.lng} basemapAvailable={basemapAvailable} />
+                  <p className="m-0 mt-1.5 flex items-center gap-1 text-[11.5px] text-ink-muted">
+                    <Glyph icon={MapPin} className="size-3 shrink-0" />
+                    {sceneAddressLine(phieu)}
+                  </p>
+                  <p className="m-0 mt-0.5 text-[11px] text-ink-muted">
+                    <span className="tabular-nums">{coordinates}</span> · {SCENE_COORDINATES_NOTE}
+                  </p>
+                </div>
               </section>
             )}
 
             {/* `Có thể trùng với phiếu khác` (`FeedbackDetailDrawer.tsx:408-439`, ADR 0087) — suspected
                 duplicates and the merge link. Behind `feedback.read` (the search route's key) and the
                 merge acts behind `feedback.classify` — UX only, the routes check both. A component of its
-                own: it reads the network (`useEffect`). */}
-            {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && mergeSectionShown(phieu) && (
-              <section aria-labelledby="tieu-de-phieu-trung" className={SECTION}>
-                <h3 id="tieu-de-phieu-trung" className={SECTION_HEADING}>
-                  {DUPLICATES_TITLE}
-                </h3>
-                <PetitionMergeSection
-                  petition={phieu}
-                  mayMerge={coQuyen(permissions, QUYEN_PHAN_LOAI_PHAN_ANH)}
-                  onChanged={onMergeChanged}
-                  onOpen={onOpenPetition}
-                />
-              </section>
+                own: it reads the network (`useEffect`), and it draws its own section and heading ONLY when
+                there is a link or a candidate (sheet web-admin-131026). */}
+            {coQuyen(permissions, QUYEN_XEM_PHAN_ANH) && (
+              <PetitionMergeSection
+                petition={phieu}
+                mayMerge={coQuyen(permissions, QUYEN_PHAN_LOAI_PHAN_ANH)}
+                onChanged={onMergeChanged}
+                onOpen={onOpenPetition}
+              />
             )}
 
             {/* `Đánh giá của người dân` — ONLY WHEN RATED (`FeedbackDetailDrawer.tsx:441-482`). */}

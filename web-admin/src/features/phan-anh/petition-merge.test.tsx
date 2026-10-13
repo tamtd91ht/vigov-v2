@@ -11,14 +11,12 @@ import type { KetQua } from "@/lib/api/goi";
 import type { petitions_duplicateCandidatesOut, petitions_phieuPhanAnhRa } from "@/lib/api/schema.gen";
 
 import {
-  DUPLICATES_NO_LOCATION,
+  DUPLICATES_TITLE,
   DUPLICATES_TRUNCATED,
-  duplicatesEmpty,
   MERGED_CHILDREN_LABEL,
   MERGED_INTO_UNKNOWN,
   mergeActionLabel,
   MERGE_REASON_ID,
-  mergeSectionShown,
   PetitionMergeSection,
   SHOW_MAIN_PETITION,
   UNMERGE_ACTION,
@@ -26,6 +24,7 @@ import {
   UNMERGE_REASON_ID,
   type MergeApi,
 } from "./petition-merge";
+import { SECTION_CARD } from "./petition-ui";
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
@@ -116,14 +115,70 @@ function type(el: HTMLTextAreaElement, value: string): void {
   });
 }
 
-describe("mergeSectionShown — where the section is drawn", () => {
-  it("open petitions (searchable), and any linked petition; not closed ones, not `can-bo`", () => {
-    expect(mergeSectionShown(petition())).toBe(true);
-    expect(mergeSectionShown(petition({ status: "da-dong" }))).toBe(false);
-    expect(mergeSectionShown(petition({ status: "da-xu-ly" }))).toBe(false);
-    expect(mergeSectionShown(petition({ field: "can-bo" }))).toBe(false);
-    expect(mergeSectionShown(petition({ status: "da-dong", merged_at: "2026-10-08T03:00:00Z" }))).toBe(true);
-    expect(mergeSectionShown(petition({ status: "da-dong", merged_petitions: ["PA-3"] }))).toBe(true);
+/** The section's `<h3>`, or null when nothing at all is drawn. */
+function heading(el: ParentNode): HTMLHeadingElement | null {
+  return el.querySelector<HTMLHeadingElement>("section > h3");
+}
+
+// Sheet web-admin-131026: "Cụm ... chỉ được hiển thị khi phiếu này trùng với phiếu khác". The prototype
+// draws the section only when `duplicates.length > 0` (`FeedbackDetailDrawer.tsx:408`).
+describe("the section is drawn ONLY when there is a duplicate or a link", () => {
+  it("open petition, search found nothing: nothing drawn — no heading, no sentence", async () => {
+    const a = api({ ok: true, duLieu: { items: [], radius_meters: 80, window_days: 5, truncated: false } });
+    const el = render(<PetitionMergeSection petition={petition()} mayMerge api={a} />);
+    await flush();
+    expect(a.list).toHaveBeenCalledWith("PA-2");
+    expect(el.innerHTML).toBe("");
+  });
+
+  it("while the search runs: nothing drawn", async () => {
+    const a = api(undefined, { list: vi.fn(() => new Promise<never>(() => {})) });
+    const el = render(<PetitionMergeSection petition={petition()} mayMerge api={a} />);
+    await flush();
+    expect(el.innerHTML).toBe("");
+  });
+
+  it("no location: nothing drawn, and the search is never called", async () => {
+    const a = api();
+    const el = render(<PetitionMergeSection petition={petition({ lat: null, lng: null })} mayMerge api={a} />);
+    await flush();
+    expect(el.innerHTML).toBe("");
+    expect(a.list).not.toHaveBeenCalled();
+  });
+
+  it("a refused search: nothing drawn (the section only ever announces duplicates)", async () => {
+    const el = render(
+      <PetitionMergeSection petition={petition()} mayMerge api={api({ ok: false, thongBao: "Máy chủ bận." })} />,
+    );
+    await flush();
+    expect(el.innerHTML).toBe("");
+  });
+
+  it.each([
+    ["closed", { status: "da-dong" }],
+    ["`can-bo`", { field: "can-bo" }],
+  ])("%s, not linked: nothing drawn, no search", async (_, change) => {
+    const a = api();
+    const el = render(<PetitionMergeSection petition={petition(change)} mayMerge api={a} />);
+    await flush();
+    expect(el.innerHTML).toBe("");
+    expect(a.list).not.toHaveBeenCalled();
+  });
+
+  it("candidates found: the heading, and the body inside the drawer's card (sheet: padding)", async () => {
+    const el = render(<PetitionMergeSection petition={petition()} mayMerge={false} api={api()} />);
+    await flush();
+    expect(heading(el)?.textContent).toBe(DUPLICATES_TITLE);
+    expect(heading(el)?.nextElementSibling?.className).toContain(SECTION_CARD);
+  });
+
+  it.each([
+    ["merged (even closed)", { status: "da-dong", merged_at: "2026-10-08T03:00:00Z" }],
+    ["a main petition (even closed)", { status: "da-dong", merged_petitions: ["PA-3"] }],
+  ])("%s: drawn without any search result", async (_, change) => {
+    const el = render(<PetitionMergeSection petition={petition(change)} mayMerge={false} api={api()} />);
+    await flush();
+    expect(heading(el)?.textContent).toBe(DUPLICATES_TITLE);
   });
 });
 
@@ -161,17 +216,7 @@ describe("candidates", () => {
     expect(onOpen).toHaveBeenCalledWith("PA-1");
   });
 
-  it("empty: the commune's own radius and window; truncated: a short note", async () => {
-    const empty = render(
-      <PetitionMergeSection
-        petition={petition()}
-        mayMerge
-        api={api({ ok: true, duLieu: { items: [], radius_meters: 80, window_days: 5, truncated: false } })}
-      />,
-    );
-    await flush();
-    expect(empty.textContent).toContain(duplicatesEmpty(80, 5));
-    act(() => root?.unmount());
+  it("truncated: a short note under the candidates", async () => {
     const many = render(
       <PetitionMergeSection
         petition={petition()}
@@ -181,23 +226,6 @@ describe("candidates", () => {
     );
     await flush();
     expect(many.textContent).toContain(DUPLICATES_TRUNCATED);
-  });
-
-  it("no location: says why, and never calls the search", async () => {
-    const a = api();
-    const el = render(<PetitionMergeSection petition={petition({ lat: null, lng: null })} mayMerge api={a} />);
-    await flush();
-    expect(el.textContent).toContain(DUPLICATES_NO_LOCATION);
-    expect(a.list).not.toHaveBeenCalled();
-  });
-
-  it("a refused search shows the server's sentence and a reload", async () => {
-    const el = render(
-      <PetitionMergeSection petition={petition()} mayMerge api={api({ ok: false, thongBao: "Máy chủ bận." })} />,
-    );
-    await flush();
-    expect(el.querySelector('[role="alert"]')?.textContent).toBe("Máy chủ bận.");
-    expect(buttonByText(el, "Tải lại")).toBeDefined();
   });
 });
 

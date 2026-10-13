@@ -61,6 +61,7 @@ import {
   ThePhieu,
 } from "./so-phan-anh";
 import { BieuMauGhiNhatKy, DanhSachNhatKy, NhatKyPhieu } from "./nhat-ky-phieu";
+import { SECTION_CARD } from "./petition-ui";
 import { PublicationBox } from "./citizen-report-blocks";
 
 const THU_MUC = fileURLToPath(new URL(".", import.meta.url));
@@ -1607,7 +1608,13 @@ describe("prototype composition — the drawer", () => {
   });
 
   it("sections in the prototype's order: content → location → duplicates → rating → hand-over → log", () => {
-    const html = veChiTietWith(ALL, phieu({ lat: 21.028511, lng: 105.804817, rating: 4 }), ["feedback.read"]);
+    // A main petition: the duplicates section is drawn only when there is a link or a candidate, and
+    // candidates arrive after mount — a static render has only the link.
+    const html = veChiTietWith(
+      ALL,
+      phieu({ lat: 21.028511, lng: 105.804817, rating: 4, merged_petitions: ["PA-2026-0022"] }),
+      ["feedback.read"],
+    );
     const order = [
       "Nội dung phản ánh",
       ">Vị trí</h3>",
@@ -1624,10 +1631,28 @@ describe("prototype composition — the drawer", () => {
   });
 
   it("the duplicates block: no '?' any more; drawn only behind `feedback.read`", () => {
-    expect(veChiTiet(ALL)).not.toContain("Có thể trùng với phiếu khác");
-    const html = veChiTietWith(ALL, phieu(), ["feedback.read"]);
+    const linked = phieu({ merged_petitions: ["PA-2026-0022"] });
+    expect(veChiTiet(ALL, linked)).not.toContain("Có thể trùng với phiếu khác");
+    const html = veChiTietWith(ALL, linked, ["feedback.read"]);
     expect(html).toContain("Có thể trùng với phiếu khác");
     expect(html).not.toContain("data-pending-marker");
+  });
+
+  // Sheet web-admin-131026: the section shows ONLY when this petition duplicates another. An open,
+  // unlinked petition has no candidate before the search answers — and none at all if it finds none.
+  it("the duplicates block: an open, unlinked petition draws no heading", () => {
+    const html = veChiTietWith(ALL, phieu({ lat: 21.028511, lng: 105.804817 }), ["feedback.read"]);
+    expect(html).not.toContain("Có thể trùng với phiếu khác");
+    expect(html).not.toContain("Đang tìm phiếu có thể trùng");
+    expect(html).not.toContain("không dò được");
+  });
+
+  // Sheet web-admin-131026: "Vị trí" sat flush against the drawer edge; its body is in the same card as
+  // the other sections.
+  it("`Vị trí`: map, address and coordinates sit inside the section card", () => {
+    const html = veChiTietWith(ALL, phieu({ lat: 21.028511, lng: 105.804817 }), ["feedback.read"]);
+    const after = html.slice(html.indexOf(">Vị trí</h3>") + ">Vị trí</h3>".length);
+    expect(after.startsWith(`<div class="${SECTION_CARD}`)).toBe(true);
   });
 });
 
