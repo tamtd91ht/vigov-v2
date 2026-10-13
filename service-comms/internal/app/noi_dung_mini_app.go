@@ -1016,6 +1016,15 @@ func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domai
 	// prefix the commune id, and the handler returns a refusal's own sentence).
 	var refusal error
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		// THE TREE LOCK BEFORE THE ROW LOCK, as Them takes it (tree, then the parent row FOR SHARE). Taken
+		// the other way round, renaming P while a child is added under P deadlocks: this holds row P and
+		// waits for the tree, Them holds the tree and waits for row P. Only a rename or a re-parent needs the
+		// tree; an order or hidden toggle stays row-locked only.
+		if clean.Ten != nil || clean.ChaID != nil {
+			if err := uc.kho.LockTree(ctx, tx); err != nil {
+				return err
+			}
+		}
 		before, err := uc.kho.ByIDForUpdate(ctx, tx, id)
 		if err != nil {
 			return err
@@ -1037,9 +1046,6 @@ func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domai
 		// A rename to another category's name is refused like a create (domain.ErrCategoryNameTaken); a
 		// rename that only changes case or spacing of its own name compares equal and needs no read.
 		if domain.CategoryNameKey(after.Ten) != domain.CategoryNameKey(before.Ten) {
-			if err := uc.kho.LockTree(ctx, tx); err != nil {
-				return err
-			}
 			live, err := uc.kho.LiveNames(ctx, tx)
 			if err != nil {
 				return err
@@ -1055,9 +1061,7 @@ func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domai
 				refusal = domain.ErrDanhMucTuLamCha
 				return refusal
 			}
-			if err := uc.kho.LockTree(ctx, tx); err != nil {
-				return err
-			}
+			// The tree is already locked (top of this transaction), so the walk below holds at commit.
 			live, err := uc.kho.ChaCoThat(ctx, tx, after.ChaID)
 			if err != nil {
 				return err

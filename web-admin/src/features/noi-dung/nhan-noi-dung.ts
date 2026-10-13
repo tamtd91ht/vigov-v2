@@ -1242,7 +1242,8 @@ export const categoryNameTakenWarning = (existing: string): string =>
  * Vietnamese precomposed, another decomposed), inner whitespace collapsed, lower-cased.
  */
 export function categoryNameKey(name: string): string {
-  return name.normalize("NFC").trim().split(/\s+/).join(" ").toLocaleLowerCase("vi");
+  // Format characters (zero-width space, BOM, joiners) dropped first, as the server does.
+  return name.replace(/\p{Cf}/gu, "").normalize("NFC").trim().split(/\s+/).join(" ").toLocaleLowerCase("vi");
 }
 
 /** The existing category `name` collides with — any live row of the list, hidden ones included — or null. */

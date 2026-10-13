@@ -7,7 +7,7 @@ import (
 
 func TestCategoryNameKeyFoldsCaseSpacingAndComposition(t *testing.T) {
 	want := CategoryNameKey("Đất đai")
-	for _, s := range []string{"ĐẤT ĐAI", "đất đai", "  Đất \t đai ", "Đất đai"} {
+	for _, s := range []string{"ĐẤT ĐAI", "đất đai", "  Đất \t đai ", "Đất đai", "Đất\u200b đai\ufeff"} {
 		if got := CategoryNameKey(s); got != want {
 			t.Errorf("CategoryNameKey(%q) = %q, want %q", s, got, want)
 		}

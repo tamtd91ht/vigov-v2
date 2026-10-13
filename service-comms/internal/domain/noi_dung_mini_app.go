@@ -513,8 +513,17 @@ type CategoryName struct{ ID, Ten string }
 // lower-cased. NFC because the same Vietnamese word arrives precomposed from one keyboard and decomposed
 // ("tổ hợp") from another — two byte strings a person reads as one name. Lower-casing in Go, not in SQL:
 // PostgreSQL's lower() under a C collation leaves "Đ" and every accented capital untouched.
+//
+// Format characters (Unicode Cf: zero-width space, BOM, joiners) are dropped first: pasted from a web page
+// they make "Nông nghiệp" a different string that renders identically.
 func CategoryNameKey(name string) string {
-	return strings.ToLower(strings.Join(strings.Fields(norm.NFC.String(name)), " "))
+	visible := strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, name)
+	return strings.ToLower(strings.Join(strings.Fields(norm.NFC.String(visible)), " "))
 }
 
 // CheckCategoryNameFree refuses `name` when a live category other than `selfID` ("" on a create) has the

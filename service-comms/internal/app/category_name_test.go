@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/service-comms/internal/domain"
@@ -48,6 +49,29 @@ func TestRenameCategoryToAnotherCategorysNameIsRefused(t *testing.T) {
 	}
 	if k.coCau("UPDATE danh_muc_mini_app") || k.coCau("INSERT INTO audit_log") || k.daCommit != 0 {
 		t.Error("a refused rename still wrote")
+	}
+}
+
+// The tree lock comes BEFORE the row lock on a rename, the order Them takes them in — the other order
+// deadlocks a rename of P against a child being added under P.
+func TestRenameCategoryLocksTheTreeBeforeTheRow(t *testing.T) {
+	k := &khoNDGia{category: categoryNow(), liveNames: []domain.CategoryName{{ID: "dm-1", Ten: categoryNow().Ten}}}
+	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
+	name := "Y tế cộng đồng"
+	if _, err := ucDM.Update(ctx, "dm-1", domain.ContentCategoryUpdate{Ten: &name}, nguoiSoanND()); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	tree, row := -1, -1
+	for i, l := range k.lenh {
+		if tree < 0 && strings.Contains(l.sql, "pg_advisory_xact_lock") {
+			tree = i
+		}
+		if row < 0 && strings.Contains(l.sql, "FOR UPDATE") {
+			row = i
+		}
+	}
+	if tree < 0 || row < 0 || tree > row {
+		t.Errorf("tree lock at %d, row lock at %d — the tree must come first", tree, row)
 	}
 }
 
