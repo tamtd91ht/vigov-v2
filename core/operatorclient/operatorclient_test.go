@@ -289,8 +289,18 @@ func TestResolveOutcomes(t *testing.T) {
 		OperatorId: "id", OperatorCode: "VH-00001", PermissionKeys: []string{"ops.tenant.manage", ""},
 	}}
 	p, ok, err := c.Resolve(ctx, tok)
-	if err != nil || !ok || p.OperatorCode != "VH-00001" || len(p.PermissionKeys) != 1 {
+	if err != nil || !ok || p.OperatorCode != "VH-00001" || len(p.PermissionKeys) != 1 || p.MustChangePassword {
 		t.Fatalf("live principal: %+v ok=%v err=%v", p, ok, err)
+	}
+
+	// A restricted session (temporary password not yet replaced) must reach the caller as such:
+	// dropping the flag would give the owner-set password full use of the account.
+	f.resolve = &identityv1.ResolveOperatorSessionResponse{Principal: &identityv1.OperatorPrincipal{
+		OperatorId: "id", OperatorCode: "VH-00001", MustChangePassword: true,
+	}}
+	p, ok, err = c.Resolve(ctx, tok)
+	if err != nil || !ok || !p.MustChangePassword {
+		t.Fatalf("restricted principal: %+v ok=%v err=%v", p, ok, err)
 	}
 }
 

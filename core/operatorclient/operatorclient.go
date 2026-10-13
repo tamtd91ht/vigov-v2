@@ -129,6 +129,11 @@ type Principal struct {
 	// owner-only screens; identity re-checks it on every owner-only RPC. False from an identity older
 	// than the field — fail closed.
 	IsOwner bool
+	// MustChangePassword: the session was opened with a temporary password not yet replaced. The
+	// caller allows ONLY who-am-I, sign-out and ChangePassword and answers every other operator route
+	// 403 `password_change_required` — skipping this check hands the owner-set temporary password full
+	// use of the account. False from an older identity is safe: it never opens such a session.
+	MustChangePassword bool
 }
 
 // NewPasswordRefusal says which password rule refused the new value — the rule, never the value.

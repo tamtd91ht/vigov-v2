@@ -199,7 +199,15 @@ service OperatorService {
   //                        (first sign-in, or after `operatorctl reset-mfa`). No session. The
   //                        caller sends the person to BeginOperatorEnrollment. Only ever answered
   //                        after the password verified, and never for a temporary password past its
-  //                        24 hours (that is REFUSED — the path no longer exists).
+  //                        24 hours (that is REFUSED — the path no longer exists). Decided by the
+  //                        ABSENCE OF A FACTOR ONLY, never by must_change_password.
+  //
+  // A TEMPORARY PASSWORD ON AN ACCOUNT THAT HAS A FACTOR (after ResetOperatorPassword, owner decision
+  // 13/10/2026) signs in NORMALLY: temporary password + the person's own TOTP (or a recovery code) →
+  // ACCEPTED with a session. That session is RESTRICTED: ResolveOperatorSession returns the principal
+  // with must_change_password = true until ChangeOperatorPassword succeeds. The factor is not reset so
+  // the owner, who typed the temporary password, cannot enrol an authenticator of their own and act
+  // as the target.
   //
   // Both factors in one request is INVALID_ARGUMENT (a property of the request, decided before any
   // lookup). Not idempotent: every ACCEPTED call opens a new session.
@@ -211,7 +219,9 @@ service OperatorService {
   // a background poll would hold a session open for 8 hours with nobody at the screen, which is the
   // 5-minute idle limit (TCVN 14423, ADR 0048 §"Chốt bước 1" security amendment) defeated silently.
   //
-  //   OK + principal      live session, account enabled. Keys read live, in this request.
+  //   OK + principal      live session, account enabled. Keys, is_owner and must_change_password
+  //                       read live, in this request. A principal with must_change_password = true
+  //                       IS signed in but restricted — see OperatorPrincipal.must_change_password.
   //   OK + no principal   not usable, for ANY reason: bad signature, other realm (a staff `v1.`
   //                       token), absolute expiry, idle expiry, revoked, account disabled. One
   //                       answer. The caller answers 401 and clears the cookie.
@@ -237,7 +247,12 @@ service OperatorService {
   // EVERY session of the account is revoked, the current one included (app.OperatorAuth.
   // ChangePassword); the caller clears the cookie and sends the person to sign in again.
   //
-  //   ACCEPTED               changed; every session revoked.
+  // THE ONE WAY OUT OF A RESTRICTED SESSION: on a session whose principal has must_change_password =
+  // true (a temporary password set by ResetOperatorPassword), `current_password` is that temporary
+  // password, and success CLEARS must_change_password (and the temporary password's 24-hour expiry) in
+  // the same transaction. The next sign-in is unrestricted.
+  //
+  //   ACCEPTED               changed; must_change_password cleared; every session revoked.
   //   NEW_PASSWORD_REJECTED  `new_password_refusal` says which rule. Decided from the new value
   //                          alone, before any account read — it says nothing about the account.
   //   REFUSED                current password or TOTP wrong, or the account is locked. COUNTED as a
@@ -491,8 +506,13 @@ service OperatorService {
   // true, the 24-hour expiry of a temporary password, every session of the target revoked — one
   // transaction, one trail entry. Whether it also clears a failed-sign-in lockout (`locked_until`) is
   // the ADR 0048 amendment's; `operatorctl unlock` stays the path that certainly does. THE SECOND FACTOR IS
-  // KEPT: the person signs in with the temporary password AND their own TOTP, then must set their own
-  // password. Replacing a lost second factor stays `operatorctl reset-mfa`.
+  // KEPT (owner decision 13/10/2026): the person signs in through OpenOperatorSession with the temporary
+  // password AND their own TOTP — ACCEPTED, not ENROLLMENT_REQUIRED — and gets a RESTRICTED session
+  // (OperatorPrincipal.must_change_password = true) whose only way forward is ChangeOperatorPassword.
+  // Resetting the factor too was rejected: the owner knows the temporary password, so an account with
+  // no factor could be enrolled with the OWNER's authenticator and the owner could act as the target.
+  // Replacing a lost second factor stays `operatorctl reset-mfa`. An account that never enrolled keeps
+  // going through Begin/CompleteOperatorEnrollment, as after CreateOperatorAccount.
   //
   //   NEW_PASSWORD_REJECTED  as CreateOperatorAccount. Nothing written.
   //   NOT_FOUND              no account has `target_code`.
@@ -718,6 +738,21 @@ message OperatorPrincipal {
   // on the session it resolves. FALSE IS THE SAFE DEFAULT: an identity older than this field sends
   // false, and the caller then treats the operator as not the owner (fail closed).
   bool is_owner = 4;
+
+  // True when the account holds a TEMPORARY password it has not replaced yet (operator_account
+  // must_change_password), read live like the keys — in practice a session opened with the password
+  // the owner set through ResetOperatorPassword plus the person's own TOTP (owner decision 13/10/2026).
+  //
+  // TRUE MEANS A RESTRICTED SESSION. The session may call ONLY: who-am-I (this principal), sign-out
+  // (RevokeOperatorSession) and ChangeOperatorPassword. service-platform answers EVERY OTHER operator
+  // route 403 `password_change_required`, whatever keys or is_owner say, and checks it on the principal
+  // of the same request — a restriction kept only in the console is a restriction any client skips
+  // (rule 5, forbidden #1). Cleared only by a successful ChangeOperatorPassword.
+  //
+  // FALSE AS THE DEFAULT IS SAFE HERE, unlike a permission: an identity older than this field never
+  // opens a session for an account with must_change_password set (its sign-in answers
+  // ENROLLMENT_REQUIRED or REFUSED), so "absent" cannot hide a restricted session.
+  bool must_change_password = 5;
 }
 
 message RevokeOperatorSessionRequest {
