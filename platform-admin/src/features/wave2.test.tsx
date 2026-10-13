@@ -18,7 +18,7 @@ import {
 } from "@/lib/permissions";
 
 import { CommuneDetailBody } from "./communes/commune-detail";
-import { LaunchLinkView, SHARED_APP_PAGE, launchSourceLabel } from "./communes/launch-link-card";
+import { LaunchLinkView, QrPrintSheet, SCAN_INSTRUCTION, SHARED_APP_PAGE, qrFileName } from "./communes/launch-link-card";
 import { OperatorLogMore, OperatorLogTable, PLATFORM_WIDE } from "./operator-log/operator-log";
 import { actionLabel, compactValue, logRange, VALUE_MAX_CHARS } from "./operator-log/operator-log-model";
 import {
@@ -301,79 +301,87 @@ describe("launch link: every 409 is a Vietnamese next step", () => {
     expect(text).not.toContain(code);
   });
 
+  const ACTIONS = { onCopy: noop, onDownload: noop, onPrint: noop };
+  const NAME = "Xã Mẫu";
+  const view = (state: Parameters<typeof LaunchLinkView>[0]["state"]) =>
+    renderToString(<LaunchLinkView state={state} communeName={NAME} actions={ACTIONS} notice="" />);
+
   it("not declared links to the shared-app page; the others do not", () => {
-    const html = renderToString(
-      <LaunchLinkView state={{ status: "error", message: "x", toSharedAppPage: true }} onCopy={noop} copyNotice="" />,
-    );
-    expect(html).toContain(`href="${SHARED_APP_PAGE}"`);
-    const other = renderToString(
-      <LaunchLinkView state={{ status: "error", message: "x", toSharedAppPage: false }} onCopy={noop} copyNotice="" />,
-    );
-    expect(other).not.toContain(`href="${SHARED_APP_PAGE}"`);
+    expect(view({ status: "error", message: "x", toSharedAppPage: true })).toContain(`href="${SHARED_APP_PAGE}"`);
+    expect(view({ status: "error", message: "x", toSharedAppPage: false })).not.toContain(`href="${SHARED_APP_PAGE}"`);
   });
 
   const SHARED_LINK = {
-    url: "https://zalo.me/s/1234567/?d=chinh.example.vn&src=qr",
+    url: "https://zalo.me/s/1234567/?src=qr&x=0123456789ab",
     domain: "chinh.example.vn",
     app_id: "1234567",
     source: "chung" as const,
   };
-  const OWN_LINK = { url: "https://zalo.me/s/4096/?src=qr", domain: "chinh.example.vn", app_id: "4096", source: "rieng" as const };
-  const ready = (links: LaunchLinks) => renderToString(<LaunchLinkView state={{ status: "ready", links }} onCopy={noop} copyNotice="" />);
+  const OWN_LINK = { url: "https://zalo.me/s/4096/?src=qr", domain: "", app_id: "4096", source: "rieng" as const };
+  const ready = (links: LaunchLinks) => view({ status: "ready", links });
+  // Owner 13/10/2026: nothing on the card may say which app the QR opens.
+  const APP_HINTS = /app chung|dùng chung|ViHAT|chuyển tiếp|App ID|Tên miền|tạm thời|app riêng/i;
 
-  it("a link renders as a QR, its URL and a copy button — no download", () => {
-    const html = ready({ links: [SHARED_LINK], unavailable: [] });
-    expect(html).toContain("<svg");
-    expect(html).toContain("https://zalo.me/s/1234567/?d=chinh.example.vn&amp;src=qr");
+  it.each([
+    ["shared", SHARED_LINK],
+    ["own", OWN_LINK],
+  ])("a %s link renders as ONE QR with PNG, print and copy, and nothing about which app (owner 13/10/2026)", (_, link) => {
+    const html = ready({ links: [link], unavailable: [] });
+    expect(html.match(/role="img"/g)?.length).toBe(1);
+    expect(html).toContain(`aria-label="Mã QR mở ứng dụng của ${NAME}"`);
+    expect(html).toContain("Tải ảnh PNG");
+    expect(html).toContain("In / Lưu PDF");
     expect(html).toContain("Chép liên kết");
-    expect(html).not.toMatch(/Tải về|PNG/);
+    expect(html).toContain(link.url.replace("&", "&amp;"));
+    expect(html).not.toMatch(APP_HINTS);
+    expect(html).not.toContain(`>${link.app_id}<`);
+    expect(html).not.toContain("chinh.example.vn");
   });
 
-  it("a shared-app link is labelled as the ViHAT app and shows the primary domain", () => {
-    const html = ready({ links: [SHARED_LINK], unavailable: [] });
-    expect(html).toContain("Mở bằng app ViHAT");
-    expect(html).toContain("App ID Mini App dùng chung");
-    expect(html).toContain("chinh.example.vn");
-    expect(html).not.toContain("Mở bằng app riêng của xã");
-  });
-
-  it("a commune with its own app gets TWO QR cards, shared first, each labelled and with its domain (owner 06/10/2026)", () => {
-    const html = ready({ links: [SHARED_LINK, OWN_LINK], unavailable: [] });
-    expect(html.match(/Mã QR: /g)?.length).toBe(2);
-    expect(html.match(/Chép liên kết/g)?.length).toBe(2);
-    const shared = html.indexOf("Mở bằng app ViHAT");
-    const own = html.indexOf("Mở bằng app riêng của xã");
-    expect(shared).toBeGreaterThan(-1);
-    expect(own).toBeGreaterThan(shared);
-    expect(html.match(/chinh\.example\.vn<\/dd>/g)?.length).toBe(2);
+  it("a second link from the server is not drawn: one QR only", () => {
+    const html = ready({ links: [OWN_LINK, SHARED_LINK], unavailable: [] });
+    expect(html.match(/role="img"/g)?.length).toBe(1);
     expect(html).toContain("https://zalo.me/s/4096/?src=qr");
-    expect(html).toContain("App ID Mini App riêng của xã");
+    expect(html).not.toContain("https://zalo.me/s/1234567/");
   });
 
-  it("an own-app link with an empty domain shows no domain row", () => {
-    const html = ready({ links: [{ ...OWN_LINK, domain: "" }], unavailable: [] });
-    expect(html).toContain("Mở bằng app riêng của xã");
-    expect(html).not.toContain("Tên miền chính của xã");
+  it("with a link, the reasons for other links are not shown", () => {
+    const html = ready({ links: [SHARED_LINK], unavailable: [{ source: "rieng", code: "own_mini_app_ambiguous", message: "x" }] });
+    expect(html).not.toContain(launchLinkError(err(409, "own_mini_app_ambiguous"))!.text);
   });
 
-  it("a link the server could not build is shown with its Vietnamese reason, never silently missing", () => {
+  it("no link: the server's reasons are shown in Vietnamese, with no QR and no actions", () => {
     const html = ready({
-      links: [OWN_LINK],
+      links: [],
       unavailable: [{ source: "chung", code: "shared_mini_app_not_declared", message: "server text" }],
     });
-    expect(html.match(/Mã QR: /g)?.length).toBe(1);
-    expect(html).toContain("Mở bằng app ViHAT");
+    expect(html).not.toContain('role="img"');
+    expect(html).not.toMatch(/Tải ảnh PNG|In \/ Lưu PDF/);
     expect(html).toContain(launchLinkError(err(409, "shared_mini_app_not_declared"))!.text);
     expect(html).toContain(`href="${SHARED_APP_PAGE}"`);
     expect(html).not.toContain("shared_mini_app_not_declared");
-    const unknown = ready({ links: [SHARED_LINK], unavailable: [{ source: "rieng", code: "mot_ma_moi", message: "Văn bản của máy chủ." }] });
+    const unknown = ready({ links: [], unavailable: [{ source: "rieng", code: "mot_ma_moi", message: "Văn bản của máy chủ." }] });
     expect(unknown).toContain("Văn bản của máy chủ.");
+    expect(unknown).not.toMatch(/Nguồn không xác định|app riêng/);
   });
 
-  it("an unknown source is shown as it is, never guessed", () => {
-    expect(launchSourceLabel("khac")).toBe("Nguồn không xác định: khac");
-    // The transitional `?d=` link (12/10/2026) is named, never shown as an unknown source.
-    expect(launchSourceLabel("chung_ten_mien")).toBe("Mở bằng app ViHAT (liên kết tên miền, tạm thời)");
+  it("no link and no reason is never an empty card", () => {
+    expect(ready({ links: [], unavailable: [] })).toContain("Chưa tạo được mã QR");
+  });
+
+  it("the print sheet carries the commune's name, the QR and the scan line, with no app wording", () => {
+    const html = renderToString(<QrPrintSheet communeName={NAME} url={SHARED_LINK.url} />);
+    expect(html).toContain(NAME);
+    expect(html).toContain(SCAN_INSTRUCTION);
+    expect(html.match(/role="img"/g)?.length).toBe(1);
+    expect(html).toContain("qr-print-sheet");
+    expect(html).not.toMatch(APP_HINTS);
+    expect(html).not.toContain("zalo.me");
+  });
+
+  it("the PNG file name holds the commune's opaque id only", () => {
+    expect(qrFileName("01J9ZK3M4N5P6Q7R8S9T0V1W2X")).toBe("qr-mini-app-01j9zk3m4n5p6q7r8s9t0v1w2x.png");
+    expect(qrFileName("../a b/C")).toBe("qr-mini-app-abc.png");
   });
 });
 
@@ -495,11 +503,26 @@ describe("the CSP holds: no wave-2 view draws a style attribute", () => {
       <PetitionFieldFormFields key="pf" field={null} tones={["green"]} form={FIELD_FORM} onChange={noop} busy={false} error={{ field: "tone", text: "x" }} />,
       <LaunchLinkView
         key="ll"
-        state={{ status: "ready", links: { links: [link, own], unavailable: [{ source: "chung", code: "commune_no_primary_domain", message: "x" }] } }}
-        onCopy={noop}
-        copyNotice=""
+        state={{ status: "ready", links: { links: [link, own], unavailable: [] } }}
+        communeName="Xã Mẫu"
+        actions={{ onCopy: noop, onDownload: noop, onPrint: noop }}
+        notice=""
       />,
-      <LaunchLinkView key="le" state={{ status: "error", message: "x", toSharedAppPage: true }} onCopy={noop} copyNotice="" />,
+      <LaunchLinkView
+        key="lu"
+        state={{ status: "ready", links: { links: [], unavailable: [{ source: "chung", code: "commune_no_primary_domain", message: "x" }] } }}
+        communeName="Xã Mẫu"
+        actions={{ onCopy: noop, onDownload: noop, onPrint: noop }}
+        notice=""
+      />,
+      <LaunchLinkView
+        key="le"
+        state={{ status: "error", message: "x", toSharedAppPage: true }}
+        communeName="Xã Mẫu"
+        actions={{ onCopy: noop, onDownload: noop, onPrint: noop }}
+        notice=""
+      />,
+      <QrPrintSheet key="qp" communeName="Xã Mẫu" url={link.url} />,
       <OperatorLogTable key="ol" items={ENTRIES} showCommune />,
       <OperatorLogTable key="oe" items={[]} showCommune />,
       <OperatorLogMore key="om" hasMore loading={false} onMore={noop} />,

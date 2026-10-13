@@ -1,7 +1,7 @@
 import { renderToString } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
-import { QrCode, qrPath } from "@/components/qr-code";
+import { drawQrModules, QrCode, qrMatrix, qrPath, qrPixelSize } from "@/components/qr-code";
 import { ApiError, type EnrollmentStart } from "@/lib/api";
 
 import { RECOVERY_CODES_SAVED_LABEL, RecoveryCodesOnce, recoveryCodesText } from "./recovery-codes-once";
@@ -154,5 +154,31 @@ describe("QR code", () => {
     expect(html).toMatch(/^<svg[^>]*role="img"/);
     expect(html).not.toContain("style=");
     expect(html).not.toContain("href");
+  });
+
+  it("the PNG is drawn at a whole number of pixels per module, never below the asked size", () => {
+    expect(qrPixelSize(29, 1024)).toBe(1044); // 36 px × 29 modules
+    expect(qrPixelSize(32, 1024)).toBe(1024);
+  });
+
+  it("the PNG paints the same matrix as the SVG: white ground, one black square per dark module", () => {
+    const calls: { fill: unknown; rect: number[] }[] = [];
+    const target = {
+      fillStyle: "" as string | CanvasGradient | CanvasPattern,
+      fillRect(x: number, y: number, w: number, h: number) {
+        calls.push({ fill: this.fillStyle, rect: [x, y, w, h] });
+      },
+    };
+    drawQrModules(target, [[true, false], [false, true]], 20);
+    expect(calls).toEqual([
+      { fill: "#fff", rect: [0, 0, 20, 20] },
+      { fill: "#000", rect: [0, 0, 10, 10] },
+      { fill: "#000", rect: [10, 10, 10, 10] },
+    ]);
+    const qr = qrMatrix("https://zalo.me/s/1/?src=qr");
+    const dark = qr.data.flat().filter(Boolean).length;
+    calls.length = 0;
+    drawQrModules(target, qr.data, qrPixelSize(qr.size, 1024));
+    expect(calls.length).toBe(dark + 1);
   });
 });

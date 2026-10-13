@@ -1,10 +1,11 @@
 "use client";
 
-import { Copy } from "lucide-react";
+import { Copy, Download, Printer } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { createPortal, flushSync } from "react-dom";
 
-import { QrCode } from "@/components/qr-code";
+import { downloadQrPng, QrCode } from "@/components/qr-code";
 import { Button } from "@/components/ui/button";
 import { ErrorState } from "@/components/ui/error-state";
 import { SkeletonRows } from "@/components/ui/skeleton";
@@ -13,39 +14,37 @@ import { getLaunchLinks, type LaunchLink, type LaunchLinks, type LaunchLinkUnava
 import { launchLinkError } from "@/lib/errors";
 
 /**
- * "Mã QR mở Mini App" on a commune's page (owner 04/10/2026, ADR 0073 #5; owner 06/10/2026: "QR từ
- * đâu thì mở app từ đó"): EVERY link the commune has, side by side, so the operator chooses which QR to
- * print — the shared ViHAT app's (for the commune's PRIMARY domain), which every active commune can
- * print while its own app waits for Zalo, and the commune's own running app's when it has one. The
- * server builds both; a link it could not build is listed with its reason instead of silently missing.
- * Each is drawn as a QR in the browser by the existing `components/qr-code.tsx` (SVG, no third-party
- * service). Shown only with `ops.qr.issue`.
+ * "Mã QR mở Mini App" on a commune's page (owner 04/10/2026, ADR 0073 #5). Owner 13/10/2026: the card
+ * shows exactly ONE QR — the link the server picks for this commune — and NOTHING about which app it
+ * opens: no App ID, no domain, no source label, no sentence about a shared or transitional app. The
+ * people who print and scan it must see the commune's app as the commune's own. The server sends at
+ * most one link; when it sends none, its reasons are shown instead of a silently empty card. The QR is
+ * drawn in the browser by `components/qr-code.tsx` (SVG, no third-party service). Shown only with
+ * `ops.qr.issue`.
  *
- * NOT TRAILED, by the owner's decision (ADR 0048 §30/09 #9): issuing a QR is not a write. The links
- * are fetched when the card mounts; the detail page remounts it when the running own App ID changes.
+ * NOT TRAILED, by the owner's decision (ADR 0048 §30/09 #9): issuing a QR is not a write. The link is
+ * fetched when the card mounts; the detail page remounts it when the running own App ID changes.
  *
- * NO "download PNG": the QR component draws SVG only and has no export; a download added here would
- * be a second QR path nobody reviewed. Each URL is shown with a copy button, so the link itself can
- * be handed to whoever prints.
+ * "Tải ảnh PNG" and "In / Lưu PDF" (owner 13/10/2026, reversing the earlier "copy the link only"):
+ * a commune prints this code on paper, and handing a printer a URL to turn into a QR again was a
+ * second, unreviewed encoder outside this console. Both actions draw from the one `qrMatrix` path in
+ * `qr-code.tsx`: the PNG on a canvas, the print sheet as the same SVG. The PNG's file name carries the
+ * commune's opaque id only — never a name or a domain a person could be read from.
  */
 
 export const SHARED_APP_PAGE = "/mini-app-dung-chung";
 
-/**
- * Which app a QR opens, from the server's `source`: `chung` = the shared ViHAT app, `rieng` = the
- * commune's own running app. An unknown value is shown as it is, never guessed.
- */
-export function launchSourceLabel(source: string): string {
-  switch (source) {
-    case "chung":
-      return "Mở bằng app ViHAT";
-    case "chung_ten_mien":
-      return "Mở bằng app ViHAT (liên kết tên miền, tạm thời)";
-    case "rieng":
-      return "Mở bằng app riêng của xã";
-    default:
-      return `Nguồn không xác định: ${source}`;
-  }
+/** `<html>` carries this class only while the print dialog is open; `globals.css` then prints the
+ *  QR sheet alone. Without it a plain Ctrl+P prints the page as it is. */
+export const QR_PRINT_CLASS = "qr-printing";
+
+export const SCAN_INSTRUCTION = "Quét mã bằng Zalo để mở ứng dụng của xã";
+
+/** `qr-mini-app-<commune id>.png`. The id is an opaque ULID (rule 1 inv. 2): no personal data, and
+ *  stable across a renamed commune. Anything outside [a-z0-9-] is dropped so no path or odd character
+ *  reaches the save dialog. */
+export function qrFileName(communeId: string): string {
+  return `qr-mini-app-${communeId.toLowerCase().replace(/[^a-z0-9-]/g, "")}.png`;
 }
 
 export type LaunchLinkState =
@@ -53,55 +52,61 @@ export type LaunchLinkState =
   | { status: "ready"; links: LaunchLinks }
   | { status: "error"; message: string; toSharedAppPage: boolean };
 
-function LaunchLinkItem({ link, onCopy }: { link: LaunchLink; onCopy: (url: string) => void }) {
-  const own = link.source === "rieng";
-  const label = launchSourceLabel(link.source);
+export type LaunchLinkActions = {
+  onCopy: (url: string) => void;
+  onDownload: (url: string) => void;
+  onPrint: (url: string) => void;
+};
+
+function LaunchLinkItem({ link, communeName, actions }: { link: LaunchLink; communeName: string; actions: LaunchLinkActions }) {
   return (
-    <li className="flex min-w-0 flex-1 flex-col gap-3 rounded-lg border border-line p-4">
-      <h3 className="m-0 text-sm font-semibold text-ink-900">{label}</h3>
-      <QrCode value={link.url} label={`Mã QR: ${label}`} />
-      <dl className="m-0 flex flex-col gap-3">
-        {/* A `rieng` link does not carry the domain (the own app has its commune built in), and the
-            server sends "" when the commune has no primary domain: show the row only when there is one. */}
-        {link.domain !== "" ? (
-          <div className="flex min-w-0 flex-col gap-1">
-            <dt className="text-xs font-medium text-ink-500">Tên miền chính của xã</dt>
-            <dd className="m-0 font-mono text-sm break-all text-ink-900">{link.domain}</dd>
-          </div>
-        ) : null}
-        <div className="flex min-w-0 flex-col gap-1">
-          <dt className="text-xs font-medium text-ink-500">{own ? "App ID Mini App riêng của xã" : "App ID Mini App dùng chung"}</dt>
-          <dd className="m-0 font-mono text-sm break-all text-ink-900">{link.app_id}</dd>
+    <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start">
+      <QrCode value={link.url} label={`Mã QR mở ứng dụng của ${communeName}`} />
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="primary" onClick={() => actions.onDownload(link.url)} icon={<Download aria-hidden="true" focusable="false" strokeWidth={1.8} />}>
+            Tải ảnh PNG
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => actions.onPrint(link.url)} icon={<Printer aria-hidden="true" focusable="false" strokeWidth={1.8} />}>
+            In / Lưu PDF
+          </Button>
+          <Button type="button" variant="secondary" onClick={() => actions.onCopy(link.url)} icon={<Copy aria-hidden="true" focusable="false" strokeWidth={1.8} />}>
+            Chép liên kết
+          </Button>
         </div>
-        <div className="flex min-w-0 flex-col gap-1">
+        <dl className="m-0 flex flex-col gap-1">
           <dt className="text-xs font-medium text-ink-500">Liên kết</dt>
           <dd className="m-0 font-mono text-[13px] break-all text-ink-900">{link.url}</dd>
-        </div>
-      </dl>
-      <div>
-        <Button type="button" variant="secondary" onClick={() => onCopy(link.url)} icon={<Copy aria-hidden="true" focusable="false" strokeWidth={1.8} />}>
-          Chép liên kết
-        </Button>
+        </dl>
+        <p className="m-0 text-[13px] text-ink-500">
+          Người dân quét mã bằng Zalo để mở ứng dụng của xã. Khi ứng dụng của xã thay đổi, mã đã in có thể không còn dùng được; khi đó cần tải và in lại mã trên trang này.
+        </p>
       </div>
-      <p className="m-0 text-[13px] text-ink-500">
-        {own
-          ? "Mã QR mở thẳng Mini App riêng của xã. Nếu xã đổi hoặc gỡ App ID này, mã đã in sẽ không còn dùng được và cần in lại."
-          : link.source === "chung_ten_mien"
-            ? "Liên kết cũ mang tên miền của xã, chỉ dùng trong giai đoạn chuyển tiếp: chạy với bản app ViHAT hiện tại. Khi bản app đọc mã công khai đã phát hành, in mã QR “Mở bằng app ViHAT” thay cho mã này; liên kết tên miền sẽ bị bỏ ở bản sau."
-            : "Mã QR mở app ViHAT (Mini App dùng chung) và đưa người dân vào đúng xã này. Nếu App ID dùng chung được đổi, mã đã in sẽ không còn dùng được và cần in lại."}
-      </p>
-    </li>
+    </div>
+  );
+}
+
+/** The A4 sheet `window.print()` prints: the commune's name as the page shows it, the QR, one line.
+ *  Mounted into `<body>` only while printing (see `LaunchLinkCard`); `hidden print:flex` keeps it off
+ *  the screen even for that moment. */
+export function QrPrintSheet({ communeName, url }: { communeName: string; url: string }) {
+  return (
+    <div className="qr-print-sheet hidden flex-col items-center gap-8 pt-[10mm] text-center text-black print:flex">
+      <h1 className="m-0 text-[22pt] leading-tight font-bold">{communeName}</h1>
+      <QrCode value={url} label={`Mã QR mở ứng dụng của ${communeName}`} className="w-[120mm] max-w-none rounded-none border-0" />
+      <p className="m-0 text-[16pt]">{SCAN_INSTRUCTION}</p>
+    </div>
   );
 }
 
 function UnavailableItem({ item }: { item: LaunchLinkUnavailable }) {
   // The server's code is mapped to the console's own Vietnamese next step; its message is the
-  // fallback for a code this console does not know yet.
+  // fallback for a code this console does not know yet. No source label (owner 13/10/2026). The
+  // link to the shared-app page stays: it is the operator's only way to fix that refusal.
   const known = launchLinkError({ code: item.code });
   return (
-    <li className="flex min-w-0 flex-1 flex-col gap-2 rounded-lg border border-dashed border-line p-4">
-      <h3 className="m-0 text-sm font-semibold text-ink-900">{launchSourceLabel(item.source)}</h3>
-      <p className="m-0 text-sm text-ink-700">Chưa tạo được mã QR này. {known?.text ?? item.message}</p>
+    <li className="flex min-w-0 flex-col gap-2 rounded-lg border border-dashed border-line p-4">
+      <p className="m-0 text-sm text-ink-700">Chưa tạo được mã QR. {known?.text ?? item.message}</p>
       {known?.toSharedAppPage ? (
         <Link href={SHARED_APP_PAGE} className="text-sm font-semibold text-brand-700 underline underline-offset-2">
           Mở trang Mini App dùng chung
@@ -113,12 +118,14 @@ function UnavailableItem({ item }: { item: LaunchLinkUnavailable }) {
 
 export function LaunchLinkView({
   state,
-  onCopy,
-  copyNotice,
+  communeName,
+  actions,
+  notice,
 }: {
   state: LaunchLinkState;
-  onCopy: (url: string) => void;
-  copyNotice: string;
+  communeName: string;
+  actions: LaunchLinkActions;
+  notice: string;
 }) {
   if (state.status === "loading") {
     return (
@@ -142,28 +149,35 @@ export function LaunchLinkView({
       </div>
     );
   }
-  const { links, unavailable } = state.links;
+  // One QR, the server's choice (owner 13/10/2026). A second entry, should a server ever send one,
+  // is not shown: two codes on the card is exactly the choice the owner took away.
+  const link = state.links.links[0];
+  const { unavailable } = state.links;
   return (
     <div className="flex flex-col gap-3">
-      <ul className="m-0 flex list-none flex-col gap-4 p-0 lg:flex-row lg:items-start">
-        {links.map((l) => (
-          <LaunchLinkItem key={l.source + l.app_id} link={l} onCopy={onCopy} />
-        ))}
-        {unavailable.map((u) => (
-          <UnavailableItem key={u.source} item={u} />
-        ))}
-      </ul>
+      {link !== undefined ? (
+        <LaunchLinkItem link={link} communeName={communeName} actions={actions} />
+      ) : unavailable.length > 0 ? (
+        <ul className="m-0 flex list-none flex-col gap-3 p-0">
+          {unavailable.map((u) => (
+            <UnavailableItem key={u.source + u.code} item={u} />
+          ))}
+        </ul>
+      ) : (
+        <p className="m-0 text-sm text-ink-700">Chưa tạo được mã QR. Máy chủ không trả về liên kết nào; báo nhóm nền tảng.</p>
+      )}
       <p className="m-0 min-h-5 text-[13px] text-ink-500" role="status" aria-live="polite">
-        {copyNotice}
+        {notice}
       </p>
     </div>
   );
 }
 
-export function LaunchLinkCard({ communeId }: { communeId: string }) {
+export function LaunchLinkCard({ communeId, communeName }: { communeId: string; communeName: string }) {
   const guarded = useGuardedError();
   const [state, setState] = useState<LaunchLinkState>({ status: "loading" });
-  const [copyNotice, setCopyNotice] = useState("");
+  const [notice, setNotice] = useState("");
+  const [printUrl, setPrintUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -190,11 +204,43 @@ export function LaunchLinkCard({ communeId }: { communeId: string }) {
   async function copy(url: string) {
     try {
       await navigator.clipboard.writeText(url);
-      setCopyNotice("Đã chép liên kết.");
+      setNotice("Đã chép liên kết.");
     } catch {
-      setCopyNotice("Trình duyệt không cho chép. Hãy chọn và chép liên kết bằng tay.");
+      setNotice("Trình duyệt không cho chép. Hãy chọn và chép liên kết bằng tay.");
     }
   }
 
-  return <LaunchLinkView state={state} onCopy={copy} copyNotice={copyNotice} />;
+  async function download(url: string) {
+    try {
+      await downloadQrPng(url, qrFileName(communeId));
+      setNotice("Đã tải ảnh mã QR.");
+    } catch {
+      setNotice("Trình duyệt không tạo được ảnh mã QR. Hãy dùng nút In / Lưu PDF.");
+    }
+  }
+
+  // From the click, not from an effect: an effect calling window.print() runs twice under React's
+  // development double-invoke and opens the dialog twice. flushSync mounts the sheet before the
+  // dialog snapshots the page; `afterprint` takes it down again whether the user printed or cancelled.
+  function print(url: string) {
+    flushSync(() => setPrintUrl(url));
+    const root = document.documentElement;
+    root.classList.add(QR_PRINT_CLASS);
+    window.addEventListener(
+      "afterprint",
+      () => {
+        root.classList.remove(QR_PRINT_CLASS);
+        setPrintUrl(null);
+      },
+      { once: true },
+    );
+    window.print();
+  }
+
+  return (
+    <>
+      <LaunchLinkView state={state} communeName={communeName} actions={{ onCopy: copy, onDownload: download, onPrint: print }} notice={notice} />
+      {printUrl !== null ? createPortal(<QrPrintSheet communeName={communeName} url={printUrl} />, document.body) : null}
+    </>
+  );
 }

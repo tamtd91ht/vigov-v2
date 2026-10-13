@@ -154,18 +154,18 @@ export type SharedMiniApp = { app_id: string; created_at: string; created_by: st
 
 /**
  * operator_launch.go `launchLinkView`. `source` says which app the link opens: `chung` = the shared
- * ViHAT app, `rieng` = the commune's own running app (`domain` may then be "").
+ * ViHAT app, `rieng` = the commune's own running app. The console never SHOWS `source`, `app_id` or
+ * `domain` (owner 13/10/2026: the commune's QR card says nothing about which app it is); they stay in
+ * the type because the server sends them.
  */
-// `chung_ten_mien` (12/10/2026): the shared app's TRANSITIONAL `?d=<domain>` link, printed only while the app
-// version that reads `?x=` is not yet live on Zalo (ADR 0047 §Sửa đổi 12/10/2026).
-export type LaunchLink = { url: string; domain: string; app_id: string; source: "rieng" | "chung" | "chung_ten_mien" };
+export type LaunchLink = { url: string; domain: string; app_id: string; source: "rieng" | "chung" };
 
 /** operator_launch.go `launchLinkUnavailable`: a link the commune cannot get now, and why. */
-export type LaunchLinkUnavailable = { source: "rieng" | "chung" | "chung_ten_mien"; code: string; message: string };
+export type LaunchLinkUnavailable = { source: "rieng" | "chung"; code: string; message: string };
 
 /**
- * operator_launch.go `launchLinksView` (owner 06/10/2026): every link the commune has, shared first,
- * so the operator chooses which QR to print. Both arrays are always present.
+ * operator_launch.go `launchLinksView` (owner 13/10/2026): at most ONE link — the one the server
+ * picks for the commune — and the reasons for any it could not build. Both arrays are always present.
  */
 export type LaunchLinks = { links: LaunchLink[]; unavailable: LaunchLinkUnavailable[] };
 

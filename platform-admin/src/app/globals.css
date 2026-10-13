@@ -5,7 +5,7 @@
  *   base    design tokens (`:root`), the font variable, reduced motion
  *   legacy  the document defaults this console had before the redesign (box model, body text,
  *           focus ring). Every screen is now drawn by utilities, so only those few rules remain
- *   components  the table helpers of `components/ui/data-table.tsx`
+ *   components  the table helpers of `components/ui/data-table.tsx`; the QR print sheet
  *   utilities   Tailwind
  *
  * WHY LAYERS AT ALL: unlayered CSS beats every layer, so a utility written on a component would
@@ -252,4 +252,31 @@
     z-index: 1;
     box-shadow: inset 0 -1px 0 var(--line);
   }
+
+  /* "In / Lưu PDF" of a commune's launch QR (`features/communes/launch-link-card.tsx`): while `<html>`
+   * carries `qr-printing`, the print is the QR sheet alone — every other child of `<body>` is dropped.
+   * Keyed on the class, not on `@media print` alone, so an ordinary Ctrl+P still prints the page.
+   * `!important` because utilities (a later layer) set `display` on those children; an important
+   * declaration in an earlier layer beats one in a later layer. */
+  @media print {
+    html.qr-printing body > :not(.qr-print-sheet) {
+      display: none !important;
+    }
+
+    html.qr-printing,
+    html.qr-printing body {
+      background: #fff;
+    }
+
+    .qr-print-sheet {
+      page: qr-sheet;
+    }
+  }
+}
+
+/* A4 for the QR sheet only (named page), so no other print of this console changes size. Outside the
+ * layers because `@page` is not a style rule a utility could fight over. */
+@page qr-sheet {
+  size: A4 portrait;
+  margin: 15mm;
 }
