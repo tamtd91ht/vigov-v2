@@ -187,6 +187,11 @@ const SCREEN_MARKUP = [
     id: "chi-tiet-giai-phap",
     markup: render(<ChiTietGiaiPhap giai_phap={SOLUTIONS[0]!} onQuayLai={() => {}} />),
   },
+  // As SolutionsScreen renders it in the app: with "Nhận tư vấn giải pháp này" (13/10/2026).
+  {
+    id: "chi-tiet-giai-phap-tu-van",
+    markup: render(<ChiTietGiaiPhap giai_phap={SOLUTIONS[0]!} onQuayLai={() => {}} onConsult={() => {}} />),
+  },
   {
     // Dòng giải pháp KHÔNG có tên sản phẩm và KHÔNG có câu phụ — nhánh vẽ khác hẳn nhánh trên,
     // và là nhánh dễ để lại một `<p>` rỗng nhất.

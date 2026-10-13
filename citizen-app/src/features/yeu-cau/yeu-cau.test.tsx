@@ -475,6 +475,23 @@ describe("đã đăng nhập: biểu mẫu hiện ra, và nó có ĐÚNG MỘT �
     }
   });
 
+  it("mở từ 'Nhận tư vấn giải pháp này' thì đúng dòng ấy đã chọn sẵn; mốc lạ thì không chọn gì", () => {
+    const gp = SOLUTIONS[1]!;
+    const withMoc = (moc: string) =>
+      ve(
+        <NhaCungCapPhien phien_ban_dau={{ token: "phieu-thu", het_han: "2026-09-29T03:00:00Z" }}>
+          <TuVanBaoGiaScreen moc={moc} />
+        </NhaCungCapPhien>,
+      );
+    const pressed = (markup: string) => (markup.match(/aria-pressed="true"/g) ?? []).length;
+    const markup = withMoc(gp.id);
+    expect(pressed(markup)).toBe(1);
+    const nut = /<button[^>]*aria-pressed="true"[^>]*>([\s\S]*?)<\/button>/.exec(markup)?.[1] ?? "";
+    expect(chuCua(nut)).toContain(gp.product ?? gp.headline);
+    expect(pressed(withMoc("khong-co-that"))).toBe(0);
+    expect(pressed(daDangNhap())).toBe(0);
+  });
+
   it("nói ra TRẦN GỌI LẠI ngay trên màn, không để người dùng gặp nó dưới dạng một câu từ chối", () => {
     expect(chuCua(daDangNhap())).toContain("Tối đa 3 lần đề nghị gọi lại trong 24 giờ");
   });

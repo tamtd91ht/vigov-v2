@@ -9,6 +9,7 @@ import {
 } from "../../content/company-profile";
 
 import { ChiTietGiaiPhap } from "./ChiTietGiaiPhap";
+import type { ThamSoMan } from "./dieu-huong";
 import { ExpandableText } from "./ExpandableText";
 import { BuildingGlyph, GridGlyph, KEYWORD_GLYPHS, SOLUTION_GLYPHS } from "./icons";
 
@@ -47,7 +48,7 @@ import { BuildingGlyph, GridGlyph, KEYWORD_GLYPHS, SOLUTION_GLYPHS } from "./ico
  *   Con số bốn là con số CÓ NGUỒN. Bản mẫu nói "15 giải pháp, 3 nhóm nghiệp vụ" và không trang nào
  *   công bố điều đó — xem khối chú thích của `SOLUTIONS` trong `company-profile.ts`.
  */
-export function SolutionsScreen() {
+export function SolutionsScreen({ onDi }: ThamSoMan = {}) {
   /**
    * Giải pháp đang mở, hoặc `null` cho danh sách.
    *
@@ -59,7 +60,10 @@ export function SolutionsScreen() {
   const giai_phap = SOLUTIONS.find((mot) => mot.id === dang_mo);
 
   if (giai_phap) {
-    return <ChiTietGiaiPhap giai_phap={giai_phap} onQuayLai={() => datDangMo(null)} />;
+    // "Nhận tư vấn giải pháp này" → Tư vấn và báo giá with this line pre-ticked; `moc` carries the solution id
+    // (TuVanBaoGiaScreen accepts it only when it names a line in SOLUTIONS).
+    const onConsult = onDi ? () => onDi({ man: "tu-van", moc: giai_phap.id }) : undefined;
+    return <ChiTietGiaiPhap giai_phap={giai_phap} onQuayLai={() => datDangMo(null)} onConsult={onConsult} />;
   }
 
   return (

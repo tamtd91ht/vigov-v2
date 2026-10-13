@@ -770,6 +770,14 @@
       "viec": "Tin tức app xã: bỏ chip 'Tin của xã' (nhóm của prototype cho danh mục không có con) — chủ dự án 13/10/2026: xã tạo một danh mục trên web-admin thì danh mục bị giấu sau chip 'Tin của xã'. Nay hàng 1 = 'Tất cả' + MỌI danh mục gốc theo thứ tự, một hàng cuộn ngang dù nhiều (chủ dự án: không dùng dropdown). Hàng 2 'Tất cả mục này' + con chỉ còn cho danh mục gốc có con. Bỏ bộ lọc phía máy (`keep`) chỉ dùng cho 'Tin của xã'; lọc luôn bằng ?category= của máy chủ (con ?? gốc).",
       "bang_chung": "tsc sạch; vitest citizen-app 86 tệp/2195 test xanh (news-category-chips.test.tsx viết lại). CHƯA xem trên điện thoại.",
       "con_no": "Cần bản app mới (đẩy + phát hành) để người dân thấy."
+    },
+    {
+      "id": "app-vihat-tu-van-tu-chi-tiet-giai-phap-13-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "App ViHAT: màn Chi tiết giải pháp có nút 'Nhận tư vấn giải pháp này' (nút chính; hotline lùi về kiểu thường) mở Tư vấn và báo giá với đúng dòng giải pháp ấy đã chọn sẵn — chủ dự án 13/10/2026 cần một điểm mới cho lượt nộp Zalo sau bản 22h 12/10. Mã giải pháp đi qua `moc` của điều hướng; màn tư vấn chỉ nhận mã có trong SOLUTIONS. Không thêm quyền, không thêm dữ liệu rời máy.",
+      "bang_chung": "ChiTietGiaiPhap.tsx (onConsult), SolutionsScreen.tsx (onDi), TuVanBaoGiaScreen.tsx (moc → chọn sẵn); ca mới yeu-cau.test.tsx + lượt quét screens.test.tsx có nhánh có nút. tsc sạch; vitest citizen-app 86 tệp/2196 test xanh. CHƯA xem trên điện thoại.",
+      "con_no": "Chưa đăng nhập thì màn tư vấn mời đăng nhập; đăng nhập xong quay lại tư vấn thì lựa chọn sẵn không còn (điều hướng không giữ mốc qua bước đăng nhập)."
     }
   ]
 }

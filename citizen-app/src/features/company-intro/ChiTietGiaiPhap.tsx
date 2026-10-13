@@ -3,7 +3,7 @@ import { COMPANY, CONTACT, type Solution } from "../../content/company-profile";
 import { HotlineLink } from "../tinh-nang/HotlineLink";
 
 import { ExpandableText } from "./ExpandableText";
-import { MailGlyph, PhoneGlyph, SOLUTION_GLYPHS } from "./icons";
+import { HandshakeGlyph, MailGlyph, PhoneGlyph, SOLUTION_GLYPHS } from "./icons";
 import { NutWebsite } from "./NutWebsite";
 
 /**
@@ -23,8 +23,12 @@ import { NutWebsite } from "./NutWebsite";
  * VÌ SAO BA ĐƯỜNG LIÊN HỆ LẶP LẠI Ở ĐÂY thay vì để người đọc tự sang tab Liên hệ: người vừa đọc
  * xong một giải pháp là người đang có câu hỏi về đúng giải pháp ấy. Bắt họ nhớ một tab rồi đi tìm
  * lại là chỗ người ta bỏ cuộc — và đây là ba neo chạy được ngay, không xin quyền gì.
+ *
+ * `onConsult` (13/10/2026): the same reasoning one step further — the reader of THIS solution lands on "Tư vấn và
+ * báo giá" with this line already ticked, instead of finding it again in a list of buttons. Absent → no button
+ * (a screen rendered without navigation must not draw a button that does nothing).
  */
-export function ChiTietGiaiPhap(props: { giai_phap: Solution; onQuayLai: () => void }) {
+export function ChiTietGiaiPhap(props: { giai_phap: Solution; onQuayLai: () => void; onConsult?: () => void }) {
   const { giai_phap } = props;
   const Glyph = SOLUTION_GLYPHS[giai_phap.id];
 
@@ -62,9 +66,22 @@ export function ChiTietGiaiPhap(props: { giai_phap: Solution; onQuayLai: () => v
 
       <h2 className="section-title">Hỏi thêm về giải pháp này</h2>
 
-      {/* `HotlineLink`: inside Zalo `tel:` does nothing; it dials through the platform (12/10/2026). */}
-      <HotlineLink className="action action--primary">
-        <span className="tile" aria-hidden="true">
+      {props.onConsult ? (
+        <button type="button" className="action action--primary action--mo" onClick={props.onConsult}>
+          <span className="tile" aria-hidden="true">
+            <HandshakeGlyph className="tile__glyph" />
+          </span>
+          <span>
+            <span className="action__label">Gửi yêu cầu, chúng tôi liên hệ lại</span>
+            <span className="action__value">Nhận tư vấn giải pháp này</span>
+          </span>
+        </button>
+      ) : null}
+
+      {/* `HotlineLink`: inside Zalo `tel:` does nothing; it dials through the platform (12/10/2026). One primary
+          action per screen: with the consult button above, the hotline steps down to the email's look. */}
+      <HotlineLink className={props.onConsult ? "action" : "action action--primary"}>
+        <span className={props.onConsult ? "tile tile--soft" : "tile"} aria-hidden="true">
           <PhoneGlyph className="tile__glyph" />
         </span>
         <span>

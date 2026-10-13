@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 
+derived_from_commit: 5a6668d0
 expires: 2027-01-11
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 186 |
 | chưa làm | 43 |
 | treo | 13 |
-| xong | 549 |
+| xong | 550 |
 
 ## Theo menu
 
@@ -451,6 +451,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `citizen-app` | `tra-cuu-ho-so-mo-thang-cong-13-10` — Tra cứu hồ sơ: bỏ hai ô (số điện thoại, 4 số cuối) — chủ dự án 13/10/2026: nhập ở app rồi sang Cổng Dịch vụ công lại nhập lần nữa. Ô ở trang chủ và dòng ở Cá nhân nay hỏi rời app rồi mở thẳng vpcp.dichvucong.gov.vn (TrangXa go → useLeaveApp(openDossierPortal)). Điền sẵn sang cổng KHÔNG làm: số điện thoại trên URL là dữ liệu cá nhân trên URL (luật 3 cấm #4), và cổng không công bố tham số điền sẵn. Màn TraCuuHoSoXa chỉ còn câu + nút, chỉ hiện khi không có bộ mở. | xong | — | — |
 | `citizen-app` | `sheet-mini-app-13-10-back-ca-nhan` — Bảng lỗi mini-app-131026 (13/10/2026) dòng 3, 4, 5, 6, 7. Back từ chi tiết video/truyền thanh/sự kiện về đúng danh sách (ManXa bai.tu: ArticleOrigin); tab loại tin Tin tức · Sự kiện · Thông báo do AppCuaXa giữ nên Back về đúng tab (chip con vẫn về Tất cả). Cá nhân: bỏ dòng Thông báo và màn Thông báo rỗng, bỏ tên tỉnh, thêm số đã che máy chủ trả cùng phiên (maskedPhone, readMaskedPhone chỉ nhận khuôn đã che). Phiên bản = major.minor của package.json (nay 1.1.0) thay mã commit. Chính sách riêng tư app xã thêm câu về số đã che. | xong | — | — |
 | `citizen-app` | `chip-danh-muc-tin-bo-tin-cua-xa-13-10` — Tin tức app xã: bỏ chip 'Tin của xã' (nhóm của prototype cho danh mục không có con) — chủ dự án 13/10/2026: xã tạo một danh mục trên web-admin thì danh mục bị giấu sau chip 'Tin của xã'. Nay hàng 1 = 'Tất cả' + MỌI danh mục gốc theo thứ tự, một hàng cuộn ngang dù nhiều (chủ dự án: không dùng dropdown). Hàng 2 'Tất cả mục này' + con chỉ còn cho danh mục gốc có con. Bỏ bộ lọc phía máy (`keep`) chỉ dùng cho 'Tin của xã'; lọc luôn bằng ?category= của máy chủ (con ?? gốc). | xong | — | — |
+| `citizen-app` | `app-vihat-tu-van-tu-chi-tiet-giai-phap-13-10` — App ViHAT: màn Chi tiết giải pháp có nút 'Nhận tư vấn giải pháp này' (nút chính; hotline lùi về kiểu thường) mở Tư vấn và báo giá với đúng dòng giải pháp ấy đã chọn sẵn — chủ dự án 13/10/2026 cần một điểm mới cho lượt nộp Zalo sau bản 22h 12/10. Mã giải pháp đi qua `moc` của điều hướng; màn tư vấn chỉ nhận mã có trong SOLUTIONS. Không thêm quyền, không thêm dữ liệu rời máy. | xong | — | — |
 | `core` | `storage-publish-derivative` — core/storage: PublishDerivative / UnpublishDerivative — đẩy bản dẫn xuất đã duyệt private → public, gỡ khi gỡ đăng (ADR 0052 §1 bổ sung 30/09/2026) | xong | — | TestIntegrationPublishUnpublish CHƯA CHẠY với MinIO thật (thiếu VIGOV_TEST_MINIO_ENDPOINT). Gỡ đăng không thu hồi bản CDN/trình duyệt đã cache (immutable 1 năm) — cần xoá cache CDN khi có CDN. |
 | `platform-admin` | `the-qr-link-chuyen-tiep-12-10` — Thẻ Mã QR hiện nhãn link chuyển tiếp chung_ten_mien (?d=) cạnh link mã công khai (?x=), câu nói rõ link nào chạy với bản app nào; lỗi commune_launch_code_invalid. | xong | — | — |
 | `service-comms` | `tin-xa-cong-khai-mini-app` — Rìa công khai đầu tiên của comms: GET /api/v1/commune-news?host= và /{id} — tin đã đăng, văn bản thuần | xong | — | CẬP NHẬT 01/10/2026 (ADR 0067 §1, §5): giả định 'cả sáu loại đều ra danh sách' ĐÃ THAY — danh sách mặc định loại banner, banner chỉ ra ở ?type=banner (dải trang chủ); chi tiết thêm body_blocks (khối có định dạng) cạnh body văn bản thuần — xem mục noi-dung-mini-app-a-danh-muc-banner-rich-text. Phần cũ: Giả định cần chủ dự án xem: cả sáu loại nội dung (kể cả banner, video) đều ra danh sách; sắp theo tao_luc. Không đếm lượt xem, không ảnh. domain/ten_mien_xa.go là BẢN CHÉP HopLeTenMienXa của identity — nên chuyển vào core/ cùng helper xaTheoHost (đang lặp ở hai service). Chưa giới hạn tần suất. |
@@ -715,7 +716,7 @@ BA ĐIỀU LOG LỘ RA, chưa ai kiểm:
 
 ## `citizen-app`
 
-Cập nhật 2026-10-13 · 89 mục
+Cập nhật 2026-10-13 · 90 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -808,6 +809,7 @@ Cập nhật 2026-10-13 · 89 mục
 | `tra-cuu-ho-so-mo-thang-cong-13-10` — Tra cứu hồ sơ: bỏ hai ô (số điện thoại, 4 số cuối) — chủ dự án 13/10/2026: nhập ở app rồi sang Cổng Dịch vụ công lại nhập lần nữa. Ô ở trang chủ và dòng ở Cá nhân nay hỏi rời app rồi mở thẳng vpcp.dichvucong.gov.vn (TrangXa go → useLeaveApp(openDossierPortal)). Điền sẵn sang cổng KHÔNG làm: số điện thoại trên URL là dữ liệu cá nhân trên URL (luật 3 cấm #4), và cổng không công bố tham số điền sẵn. Màn TraCuuHoSoXa chỉ còn câu + nút, chỉ hiện khi không có bộ mở. | xong | tsc sạch; vitest citizen-app 86 tệp/2192 test xanh. CHƯA xem trên điện thoại. | — | — |
 | `sheet-mini-app-13-10-back-ca-nhan` — Bảng lỗi mini-app-131026 (13/10/2026) dòng 3, 4, 5, 6, 7. Back từ chi tiết video/truyền thanh/sự kiện về đúng danh sách (ManXa bai.tu: ArticleOrigin); tab loại tin Tin tức · Sự kiện · Thông báo do AppCuaXa giữ nên Back về đúng tab (chip con vẫn về Tất cả). Cá nhân: bỏ dòng Thông báo và màn Thông báo rỗng, bỏ tên tỉnh, thêm số đã che máy chủ trả cùng phiên (maskedPhone, readMaskedPhone chỉ nhận khuôn đã che). Phiên bản = major.minor của package.json (nay 1.1.0) thay mã commit. Chính sách riêng tư app xã thêm câu về số đã che. | xong | 5f2a9004, 2df9a1c8, và commit thẻ Cá nhân số đã che; tsc sạch; vitest citizen-app 86 tệp/2196 test xanh. CHƯA xem trên điện thoại. | — | — |
 | `chip-danh-muc-tin-bo-tin-cua-xa-13-10` — Tin tức app xã: bỏ chip 'Tin của xã' (nhóm của prototype cho danh mục không có con) — chủ dự án 13/10/2026: xã tạo một danh mục trên web-admin thì danh mục bị giấu sau chip 'Tin của xã'. Nay hàng 1 = 'Tất cả' + MỌI danh mục gốc theo thứ tự, một hàng cuộn ngang dù nhiều (chủ dự án: không dùng dropdown). Hàng 2 'Tất cả mục này' + con chỉ còn cho danh mục gốc có con. Bỏ bộ lọc phía máy (`keep`) chỉ dùng cho 'Tin của xã'; lọc luôn bằng ?category= của máy chủ (con ?? gốc). | xong | tsc sạch; vitest citizen-app 86 tệp/2195 test xanh (news-category-chips.test.tsx viết lại). CHƯA xem trên điện thoại. | — | — |
+| `app-vihat-tu-van-tu-chi-tiet-giai-phap-13-10` — App ViHAT: màn Chi tiết giải pháp có nút 'Nhận tư vấn giải pháp này' (nút chính; hotline lùi về kiểu thường) mở Tư vấn và báo giá với đúng dòng giải pháp ấy đã chọn sẵn — chủ dự án 13/10/2026 cần một điểm mới cho lượt nộp Zalo sau bản 22h 12/10. Mã giải pháp đi qua `moc` của điều hướng; màn tư vấn chỉ nhận mã có trong SOLUTIONS. Không thêm quyền, không thêm dữ liệu rời máy. | xong | ChiTietGiaiPhap.tsx (onConsult), SolutionsScreen.tsx (onDi), TuVanBaoGiaScreen.tsx (moc → chọn sẵn); ca mới yeu-cau.test.tsx + lượt quét screens.test.tsx có nhánh có nút. tsc sạch; vitest citizen-app 86 tệp/2196 test xanh. CHƯA xem trên điện thoại. | — | — |
 
 ## `core`
 

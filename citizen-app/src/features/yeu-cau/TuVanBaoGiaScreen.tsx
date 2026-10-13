@@ -145,6 +145,7 @@ export function DaGuiXong({
 
 export function TuVanBaoGiaScreen({
   onDi,
+  moc,
   steps = LIVE_CONSULT_STEPS,
   picker = LIVE_PICKER,
 }: ThamSoMan & {
@@ -155,7 +156,10 @@ export function TuVanBaoGiaScreen({
   const di = onDi ?? (() => {});
   const { phien } = dungPhien();
 
-  const [quan_tam, datQuanTam] = useState<readonly string[]>([]);
+  // `moc` = the solution whose detail page sent the user here ("Nhận tư vấn giải pháp này", 13/10/2026): that
+  // line starts ticked. Only an id that IS in SOLUTIONS counts — anything else would be sent and answered 400.
+  const preset = SOLUTIONS.find((gp) => gp.id === moc);
+  const [quan_tam, datQuanTam] = useState<readonly string[]>(preset ? [preset.id] : []);
   const [quy_mo, datQuyMo] = useState("");
   const [ghi_chu, datGhiChu] = useState("");
   const [dang_gui, datDangGui] = useState(false);
