@@ -174,13 +174,19 @@ func (a *OperatorAuth) Login(ctx context.Context, in OperatorLoginRequest) (Oper
 		if !passwordOK {
 			return a.registerFailure(ctx, tx, acc, in.IP, now)
 		}
-		if acc.MustChangePassword || !acc.TOTPEnrolled() {
-			// A temporary password past its 24 hours is refused like any wrong credential — not
-			// counted (it is not a guess), and not "enrolment required", which would promise a path
-			// that no longer exists. Devops reissues with `operatorctl reset-mfa`.
-			if acc.TemporaryPasswordExpiredAt(now) {
-				return nil
-			}
+		// A temporary password past its 24 hours is refused like any wrong credential — not counted
+		// (it is not a guess), and not "enrolment required", which would promise a path that no
+		// longer exists. Devops reissues with `operatorctl reset-mfa`, the owner with a new reset.
+		if acc.TemporaryPasswordExpiredAt(now) {
+			return nil
+		}
+		// ENROLMENT IS DECIDED BY THE ABSENCE OF A FACTOR ONLY (owner decision 13/10/2026, ADR 0048
+		// §13/10 #6; operator.proto OpenOperatorSession). An account that HAS a factor and holds a
+		// temporary password — after ResetOperatorPassword, which keeps the TOTP so the owner cannot
+		// enrol an authenticator of their own — signs in below with that password and its own second
+		// factor, and gets a RESTRICTED session (OperatorPrincipal.MustChangePassword) whose only way
+		// forward is ChangePassword.
+		if !acc.TOTPEnrolled() {
 			decided = outcomeEnrollmentRequired
 			return nil
 		}
@@ -483,6 +489,11 @@ type OperatorPrincipal struct {
 	// IsOwner is operator_account.is_owner, read live with the keys in the same transaction. The
 	// owner-only RPCs gate on it (internal/grpc/operator_owner.go); nothing caches it.
 	IsOwner bool
+	// MustChangePassword marks a RESTRICTED session: the account holds a temporary password (set by
+	// ResetOperatorPassword) it has not replaced. Read live; cleared only by ChangePassword. Every
+	// operator RPC that acts or reads data refuses such a principal (internal/grpc, second layer
+	// behind service-platform's 403 password_change_required).
+	MustChangePassword bool
 }
 
 // Has reports whether the principal holds p. Exact match, the closed list's rule.
@@ -526,7 +537,7 @@ func (a *OperatorAuth) ResolveSession(ctx context.Context, token string) (Operat
 			return err
 		}
 		p = OperatorPrincipal{ID: acc.ID, Code: acc.Code, Permissions: perms, ExpiresAt: sess.ExpiresAt,
-			IsOwner: acc.IsOwner}
+			IsOwner: acc.IsOwner, MustChangePassword: acc.MustChangePassword}
 		decided = outcomeAccepted
 		return nil
 	})
@@ -559,6 +570,11 @@ func liveSession(ctx context.Context, tx OperatorTx, sid string, now time.Time) 
 		return operatorstore.OperatorSession{}, domain.OperatorAccount{}, false, err
 	}
 	if acc.Disabled() {
+		return operatorstore.OperatorSession{}, domain.OperatorAccount{}, false, nil
+	}
+	// A restricted session (temporary password, factor kept) dies with its temporary password: the
+	// 24-hour limit holds for the session opened with it too, not only for the next sign-in.
+	if acc.TemporaryPasswordExpiredAt(now) {
 		return operatorstore.OperatorSession{}, domain.OperatorAccount{}, false, nil
 	}
 	return sess, acc, true, nil
@@ -652,13 +668,16 @@ func (a *OperatorAuth) ChangePassword(ctx context.Context, in OperatorPasswordCh
 		if err != nil || v != totpAccepted {
 			return err
 		}
+		// mustChange = false: this is the ONE way out of a restricted session — must_change_password
+		// and temporary_password_expires_at are cleared by SetPassword in this transaction.
 		if err := tx.SetPassword(ctx, acc.ID, newHash, false, now); err != nil {
 			return err
 		}
 		if err := tx.AppendAudit(ctx, domain.OperatorAuditEntry{
 			OccurredAt: now, Actor: acc.Code, ActorIP: in.IP,
 			Action: domain.OperatorAuditPasswordChanged, Subject: acc.Code,
-			After: map[string]any{"sessions_revoked": true},
+			Before: map[string]any{"must_change_password": acc.MustChangePassword},
+			After:  map[string]any{"sessions_revoked": true, "must_change_password": false},
 		}); err != nil {
 			return err
 		}

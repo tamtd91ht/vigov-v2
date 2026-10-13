@@ -603,6 +603,10 @@ enum OperatorAuthOutcome {
   // a key.
   // ALSO the seven OWNER-ONLY RPCs: a live session whose operator is not the owner (is_owner false).
   // Nothing read or written.
+  // ALSO, on ALL ELEVEN of those RPCs (the four Mini App secret / staff-count RPCs and the seven
+  // owner-only ones): a RESTRICTED session — the principal has must_change_password = true — whatever
+  // its keys or is_owner say. Identity's second layer behind service-platform's 403
+  // `password_change_required`; the way out is ChangeOperatorPassword. Nothing read or written.
   OPERATOR_AUTH_OUTCOME_PERMISSION_DENIED = 6;
 }
 

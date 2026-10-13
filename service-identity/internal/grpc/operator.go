@@ -197,10 +197,11 @@ func (s *OperatorServer) ResolveOperatorSession(ctx context.Context, req *identi
 		keys = append(keys, string(k))
 	}
 	return &identityv1.ResolveOperatorSessionResponse{Principal: &identityv1.OperatorPrincipal{
-		OperatorId:     p.ID,
-		OperatorCode:   p.Code,
-		PermissionKeys: keys,
-		IsOwner:        p.IsOwner,
+		OperatorId:         p.ID,
+		OperatorCode:       p.Code,
+		PermissionKeys:     keys,
+		IsOwner:            p.IsOwner,
+		MustChangePassword: p.MustChangePassword,
 	}}, nil
 }
 
@@ -558,7 +559,10 @@ func (s *OperatorServer) miniAppOperator(ctx context.Context, rpc, token, ip str
 		s.log.ErrorContext(ctx, "CẢNH BÁO HỢP ĐỒNG: phiên vận hành không có operator_code", "rpc", rpc)
 		return app.MiniAppOperator{}, 0, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
-	if !allowed(p) {
+	// A RESTRICTED session (temporary password not yet replaced) acts on nothing and reads nothing,
+	// whatever its keys say — the second layer behind service-platform's 403
+	// password_change_required (operator.proto, OperatorPrincipal.must_change_password).
+	if p.MustChangePassword || !allowed(p) {
 		return app.MiniAppOperator{}, outDenied, nil
 	}
 	return app.MiniAppOperator{Code: p.Code, IP: ip}, outAccepted, nil

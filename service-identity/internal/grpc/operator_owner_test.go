@@ -388,6 +388,65 @@ func TestOwnerRPCsResponseShapes(t *testing.T) {
 	}
 }
 
+// A RESTRICTED session (must_change_password) is PERMISSION_DENIED on every acting or reading RPC —
+// the owner-only seven even for the owner, the Mini App / staff-count four even with every key — and
+// no use case runs (identity's second layer behind platform's 403 password_change_required).
+func TestRestrictedSessionIsDeniedEverywhere(t *testing.T) {
+	restrictedOwner := ownerPrincipal
+	restrictedOwner.MustChangePassword = true
+	for name, call := range ownerCalls(ownerTemp) {
+		r := newOwnerRig(restrictedOwner, nil)
+		out, err := call(r.s)
+		if err != nil || out != outDenied || r.useCaseCalls() != 0 {
+			t.Errorf("%s: outcome %v err %v calls %d, want PERMISSION_DENIED and no use case", name, out, err, r.useCaseCalls())
+		}
+	}
+
+	restricted := managerPrincipal()
+	restricted.Permissions = domain.OperatorPermissions()
+	restricted.MustChangePassword = true
+	r := newMARig(nil, nil, restricted)
+	r.s.WithActiveStaffCounts(&staffCountsNeverCalled{t: t})
+	set, err := r.s.SetMiniAppSecret(maCtx(), setReq())
+	if err != nil || set.GetOutcome() != outDenied {
+		t.Errorf("SetMiniAppSecret: %v %v", set.GetOutcome(), err)
+	}
+	ret, err := r.s.RetireMiniAppSecret(maCtx(), retireReq())
+	if err != nil || ret.GetOutcome() != outDenied {
+		t.Errorf("RetireMiniAppSecret: %v %v", ret.GetOutcome(), err)
+	}
+	list, err := r.s.ListMiniAppSecretStatuses(maCtx(), listReq())
+	if err != nil || list.GetOutcome() != outDenied {
+		t.Errorf("ListMiniAppSecretStatuses: %v %v", list.GetOutcome(), err)
+	}
+	counts, err := r.s.ListActiveStaffCounts(context.Background(), &identityv1.ListActiveStaffCountsRequest{SessionToken: "t"})
+	if err != nil || counts.GetOutcome() != outDenied {
+		t.Errorf("ListActiveStaffCounts: %v %v", counts.GetOutcome(), err)
+	}
+	if r.m.calls != 0 {
+		t.Errorf("mini app use case ran %d times for a restricted session", r.m.calls)
+	}
+}
+
+type staffCountsNeverCalled struct{ t *testing.T }
+
+func (s *staffCountsNeverCalled) ReadAsOperator(context.Context, app.MiniAppOperator) ([]app.CommuneActiveStaffCount, error) {
+	s.t.Error("staff counts read for a restricted session")
+	return nil, nil
+}
+
+func TestResolveOperatorSessionCarriesMustChangePassword(t *testing.T) {
+	for _, must := range []bool{true, false} {
+		p := nonOwnerPrincipal
+		p.MustChangePassword = must
+		s := NewOperatorServer(&operatorAuthFake{principal: p}, slog.Default())
+		resp, err := s.ResolveOperatorSession(context.Background(), &identityv1.ResolveOperatorSessionRequest{SessionToken: "t"})
+		if err != nil || resp.GetPrincipal().GetMustChangePassword() != must {
+			t.Fatalf("must_change_password = %v, want %v (err %v)", resp.GetPrincipal().GetMustChangePassword(), must, err)
+		}
+	}
+}
+
 func TestResolveOperatorSessionCarriesIsOwner(t *testing.T) {
 	for _, p := range []app.OperatorPrincipal{ownerPrincipal, nonOwnerPrincipal} {
 		s := NewOperatorServer(&operatorAuthFake{principal: p}, slog.Default())

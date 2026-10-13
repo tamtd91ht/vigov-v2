@@ -78,7 +78,9 @@ func (s *OperatorServer) resolveOwner(ctx context.Context, rpc, token string) (a
 		s.log.ErrorContext(ctx, "CẢNH BÁO HỢP ĐỒNG: phiên vận hành không có operator_id hoặc operator_code", "rpc", rpc)
 		return app.OperatorPrincipal{}, 0, status.Error(codes.Internal, "lỗi nội bộ, vui lòng thử lại")
 	}
-	if !p.IsOwner {
+	// The owner flag alone is not enough: an owner whose session is RESTRICTED (temporary password
+	// not yet replaced) is refused like anybody else — second layer behind service-platform.
+	if !p.IsOwner || p.MustChangePassword {
 		return app.OperatorPrincipal{}, outDenied, nil
 	}
 	return p, outAccepted, nil

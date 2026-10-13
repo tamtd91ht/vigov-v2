@@ -10,6 +10,7 @@ import (
 
 	"github.com/vihat/vigov/core/password"
 	"github.com/vihat/vigov/service-identity/internal/domain"
+	"github.com/vihat/vigov/service-identity/internal/operatorauth"
 )
 
 // Fake material: example.test addresses, a marker temporary password that must never reach a log.
@@ -337,6 +338,122 @@ func TestOwnerResetOperatorPassword(t *testing.T) {
 		t.Fatal("the reset committed without its entry")
 	}
 	f.noSecretsLogged(t)
+}
+
+// enrolSecond creates a second operator and completes its enrolment, so it holds an active TOTP.
+// Returns its code and its own password; the clock is moved one TOTP step on.
+func (f *ownerFixture) enrolSecond(t *testing.T) (string, string) {
+	t.Helper()
+	ctx := context.Background()
+	c, err := f.h.admin.CreateOperator(ctx, ownerTwoEmail, "Operator Two", "OPS-2")
+	if err != nil {
+		t.Fatal(err)
+	}
+	temp := string(c.TemporaryPassword.Lo())
+	if _, err := f.h.auth.BeginEnrollment(ctx, OperatorEnrollmentRequest{Email: ownerTwoEmail, TemporaryPassword: temp, IP: opIP}); err != nil {
+		t.Fatalf("begin: %v", err)
+	}
+	const own = "operator-two-own-password"
+	s := f.h.totpSecretOf(t, c.Code, true)
+	if _, err := f.h.auth.CompleteEnrollment(ctx, OperatorEnrollmentCompletion{Email: ownerTwoEmail, TemporaryPassword: temp,
+		NewPassword: own, TOTPCode: operatorauth.CodeAt(s, f.h.clock.t), IP: opIP, UserAgent: opUA}); err != nil {
+		t.Fatalf("complete: %v", err)
+	}
+	f.h.clock.t = f.h.clock.t.Add(operatorauth.TOTPPeriod)
+	return c.Code, own
+}
+
+// Owner decision 13/10/2026 (ADR 0048 §13/10 #6): reset keeps the TOTP; the person signs in with
+// the temporary password + their own TOTP, gets a RESTRICTED principal, changes the password, and
+// the next session is unrestricted.
+func TestResetKeepsTOTPAndRestrictsUntilPasswordChanged(t *testing.T) {
+	f := newOwnerFixture(t)
+	ctx := context.Background()
+	two, own := f.enrolSecond(t)
+	if _, err := f.owner.ResetPassword(ctx, f.actor, two, ownerTemp, "forgot"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := login(f.h, ownerTwoEmail, own, f.h.currentCode(t, two), ""); !errors.Is(err, ErrOperatorLoginFailed) {
+		t.Fatalf("the old password must stop working: %v", err)
+	}
+	f.h.clock.t = f.h.clock.t.Add(operatorauth.TOTPPeriod)
+
+	sess, err := login(f.h, ownerTwoEmail, ownerTemp, f.h.currentCode(t, two), "")
+	if err != nil {
+		t.Fatalf("temporary password + own TOTP must sign in (not ENROLLMENT_REQUIRED): %v", err)
+	}
+	p, err := f.h.auth.ResolveSession(ctx, sess.Token)
+	if err != nil || !p.MustChangePassword {
+		t.Fatalf("restricted principal expected: %+v %v", p, err)
+	}
+
+	f.h.clock.t = f.h.clock.t.Add(operatorauth.TOTPPeriod)
+	const fresh = "operator-two-fresh-password"
+	if err := f.h.auth.ChangePassword(ctx, OperatorPasswordChange{Token: sess.Token, CurrentPassword: ownerTemp,
+		NewPassword: fresh, TOTPCode: f.h.currentCode(t, two), IP: opIP}); err != nil {
+		t.Fatalf("change password: %v", err)
+	}
+	acc := f.h.store.account(t, two)
+	if acc.MustChangePassword || acc.TemporaryPasswordExpiresAt != nil || !acc.TOTPEnrolled() {
+		t.Fatalf("after change: %v expires %v", acc, acc.TemporaryPasswordExpiresAt)
+	}
+	if _, err := f.h.auth.ResolveSession(ctx, sess.Token); !errors.Is(err, ErrOperatorUnauthenticated) {
+		t.Fatalf("the restricted session must end with the change: %v", err)
+	}
+
+	f.h.clock.t = f.h.clock.t.Add(operatorauth.TOTPPeriod)
+	sess, err = login(f.h, ownerTwoEmail, fresh, f.h.currentCode(t, two), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p, err := f.h.auth.ResolveSession(ctx, sess.Token); err != nil || p.MustChangePassword {
+		t.Fatalf("the next session must be unrestricted: %+v %v", p, err)
+	}
+}
+
+func TestRestrictedSessionEndsWithTheTemporaryPassword(t *testing.T) {
+	f := newOwnerFixture(t)
+	ctx := context.Background()
+	two, _ := f.enrolSecond(t)
+	if _, err := f.owner.ResetPassword(ctx, f.actor, two, ownerTemp, "forgot"); err != nil {
+		t.Fatal(err)
+	}
+	sess, err := login(f.h, ownerTwoEmail, ownerTemp, f.h.currentCode(t, two), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The 24 hours run out while the session is still inside its idle window.
+	acc := f.h.store.account(t, two)
+	past := f.h.clock.t.Add(-time.Second)
+	acc.TemporaryPasswordExpiresAt = &past
+	f.h.store.state.accounts[acc.ID] = acc
+	if _, err := f.h.auth.ResolveSession(ctx, sess.Token); !errors.Is(err, ErrOperatorUnauthenticated) {
+		t.Fatalf("a restricted session must not outlive its temporary password: %v", err)
+	}
+	f.h.clock.t = f.h.clock.t.Add(operatorauth.TOTPPeriod)
+	if _, err := login(f.h, ownerTwoEmail, ownerTemp, f.h.currentCode(t, two), ""); !errors.Is(err, ErrOperatorLoginFailed) {
+		t.Fatalf("an expired temporary password must be REFUSED: %v", err)
+	}
+}
+
+func TestNeverEnrolledAccountStillNeedsEnrollment(t *testing.T) {
+	f := newOwnerFixture(t)
+	ctx := context.Background()
+	v, err := f.owner.CreateAccount(ctx, f.actor, NewOperatorByOwner{Email: ownerTwoEmail, DisplayName: "Two",
+		TemporaryPassword: ownerTemp})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := login(f.h, ownerTwoEmail, ownerTemp, "123456", ""); !errors.Is(err, ErrOperatorEnrollmentRequired) {
+		t.Fatalf("no factor yet: %v, want ErrOperatorEnrollmentRequired", err)
+	}
+	// Reset of a never-enrolled account: still the enrolment path.
+	if _, err := f.owner.ResetPassword(ctx, f.actor, v.Account.Code, ownerTemp+"-2", "lost it"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := login(f.h, ownerTwoEmail, ownerTemp+"-2", "", ""); !errors.Is(err, ErrOperatorEnrollmentRequired) {
+		t.Fatalf("after reset, no factor: %v, want ErrOperatorEnrollmentRequired", err)
+	}
 }
 
 func TestOwnerListAccountsIncludesDisabled(t *testing.T) {

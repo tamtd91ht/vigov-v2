@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
 // Migration 0030 against a real PostgreSQL: at most one owner (operator_account_single_owner), never a
@@ -28,6 +30,42 @@ func designateOwner(s *Store, id string) (string, error) {
 		return err
 	})
 	return prev, err
+}
+
+// ADR 0048 §13/10 #6 against the real schema: a temporary password set on an ENROLLED account keeps
+// the factor (no CHECK refuses must_change_password beside an active TOTP), carries the 24-hour expiry,
+// and the person's own change clears both must_change_password and the expiry.
+func TestPGTemporaryPasswordOnEnrolledAccountKeepsTOTPAndClearsOnChange(t *testing.T) {
+	s := pgStore(t)
+	ctx := context.Background()
+	a := mustCreate(t, s)
+	now := time.Now().UTC().Truncate(time.Microsecond)
+	// Stand-in for a completed enrolment: an active factor, own password, no temporary password.
+	if _, err := sharedDB.ExecContext(ctx, `UPDATE operator_account SET totp_secret_sealed = '\x01'::bytea,
+		totp_enrolled_at = $2, must_change_password = false, temporary_password_expires_at = NULL WHERE id = $1`, a.ID, now); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InTx(ctx, func(tx *Tx) error { return tx.SetPassword(ctx, a.ID, "temp-hash", true, now) }); err != nil {
+		t.Fatalf("temporary password on an enrolled account: %v", err)
+	}
+	got, err := s.ByID(ctx, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.MustChangePassword || !got.TOTPEnrolled() || got.TemporaryPasswordExpiresAt == nil ||
+		!got.TemporaryPasswordExpiresAt.Equal(now.Add(domain.TemporaryPasswordLifetime)) {
+		t.Fatalf("after reset: %v expires %v", got, got.TemporaryPasswordExpiresAt)
+	}
+	if err := s.InTx(ctx, func(tx *Tx) error { return tx.SetPassword(ctx, a.ID, "own-hash", false, now) }); err != nil {
+		t.Fatal(err)
+	}
+	got, err = s.ByID(ctx, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.MustChangePassword || got.TemporaryPasswordExpiresAt != nil || !got.TOTPEnrolled() {
+		t.Fatalf("after own change: %v expires %v", got, got.TemporaryPasswordExpiresAt)
+	}
 }
 
 func TestPGSetOwnerMovesTheSingleFlag(t *testing.T) {
