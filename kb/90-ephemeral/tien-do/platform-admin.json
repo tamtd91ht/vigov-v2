@@ -114,6 +114,14 @@
       "viec": "Chi tiết xã: cột 'Phát hành trên Zalo' cho App ID riêng đang sống, nút Đánh dấu đã phát hành / Bỏ đánh dấu (hộp xác nhận + lý do, ops.mini_app.manage, câu cảnh báo bản trải nghiệm); thẻ QR hiện ghi chú khi app riêng chưa đánh dấu; nhãn nhật ký hai hành động mới.",
       "bang_chung": "typecheck + lint + vitest 264/264 + build xanh. Chưa xem ảnh render thật.",
       "con_no": "Kiểm trên trình duyệt: bật cờ cho App ID đã phát hành, QR chuyển sang app riêng; tài khoản Zalo thường quét được."
+    },
+    {
+      "id": "owner-man-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Màn owner: /phan-quyen (tài khoản vận hành, phân quyền, đặt lại mật khẩu), Tài khoản cán bộ + Tạo quản trị xã trong chi tiết xã, Xoá xã (vùng nguy hiểm); màn bắt đổi mật khẩu khi phiên bị hạn chế.",
+      "bang_chung": "56f410be, 746c84e8 — typecheck + lint + vitest 306/306 + build xanh. Chưa xem ảnh render thật.",
+      "con_no": "Kiểm trình duyệt. Nhãn tiếng Việt của khoá ops.* (OPS_KEY_LABELS) chờ chủ dự án duyệt."
     }
   ]
 }

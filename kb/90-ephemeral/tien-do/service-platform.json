@@ -382,6 +382,14 @@
       "viec": "Sự cố 13/10: QR app riêng chưa phát hành trên Zalo chỉ mở bản trải nghiệm cho tài khoản quản trị. Migration 0025 mini_app.published_at/by; QR chọn app riêng chỉ khi đã đánh dấu phát hành, không thì app chung ?x=; PUT /api/v1/communes/{id}/mini-apps/{app_id}/publication (ops.mini_app.manage, vết audit_log cùng giao dịch). ADR 0070 §Bổ sung 13/10.",
       "bang_chung": "f431a37b (migration), 289c052e — go vet + go test ./... xanh; check_quyen/security/audit_actor PASS. 4 test PG + migration 0025 CHƯA chạy trên PostgreSQL (không có VIGOV_TEST_DSN).",
       "con_no": "Chạy test PG + migration 0025 trên CSDL thật. Hai app riêng đang sống mà chỉ một được đánh dấu → QR theo app đã đánh dấu (builder chọn, chưa chủ dự án xác nhận)."
+    },
+    {
+      "id": "owner-xoa-xa-tai-khoan-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "ADR 0048 §Sửa đổi 13/10: xoá mềm xã POST /communes/{id}/deletion (owner, ngừng ≥7 ngày theo tenant.deactivated_at, gõ lại tên miền, migration 0026); 7 tuyến owner (operator-accounts, staff-accounts, admin-accounts, đặt lại mật khẩu) chuyển session token cho identity; whoAmI is_owner/must_change_password; phiên phải đổi mật khẩu → 403 password_change_required trừ 3 tuyến.",
+      "bang_chung": "f5a3fbe2, 275197ae, d2b741ca — go vet + go test ./... xanh; apidoc/ingress; check_* PASS. Test PG + migration 0026 CHƯA chạy trên PostgreSQL.",
+      "con_no": "Chạy test PG + 0026 trên CSDL thật. Khoá bí mật Mini App của xã đã xoá không thu hồi được từ console (ADR 0048 §13/10 Chưa chốt #4)."
     }
   ]
 }

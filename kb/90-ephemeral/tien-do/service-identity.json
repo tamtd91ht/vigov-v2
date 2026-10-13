@@ -652,6 +652,14 @@
       "bang_chung": "service-identity/internal/domain/operator.go SessionIdleTimeout = 10*time.Minute; test domain/app/operatorstore cập nhật; ghi ở open-questions.json #38 và ADR 0048 §Sửa đổi 13/10/2026; bỏ con số khỏi comment core/operatortoken + service-platform/opauth. Kiểm 13/10: go vet + go test ./... service-identity xanh, core/operatortoken + service-platform/internal/opauth xanh, tools/check_security.py PASS.",
       "no_confirm": [],
       "tiep_theo": "Có hiệu lực khi ảnh identity mới lên cụm. Phiên đang mở không cần đăng nhập lại."
+    },
+    {
+      "id": "owner-tai-khoan-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "ADR 0048 §Sửa đổi 13/10: operator_account.is_owner (migration 0030, một owner); 7 RPC chỉ owner (tài khoản vận hành; tài khoản cán bộ xã: liệt kê có vết, tạo quản trị xã, đặt lại mật khẩu) xác thực bằng phiên owner; operatorctl set-owner + Jenkins chi-dinh-owner; đặt lại mật khẩu vận hành giữ TOTP → đăng nhập mật khẩu tạm + TOTP, principal.must_change_password, lớp chặn thứ hai.",
+      "bang_chung": "dee5ca5b, 42d5e734, f791db49 (proto b116c2d6, 87cbd5cf) — go vet + go test ./... (identity, core) xanh; check_audit_actor/security/quyen PASS. Test PG + migration 0030 CHƯA chạy.",
+      "con_no": "Chạy test PG. Chạy job Jenkins chi-dinh-owner trên prod. core/audit/read.go:269 ẩn vết actor_kind=operator khỏi màn nhật ký của xã — ADR 0048 §13/10 #5 nói xã thấy được: chưa xử lý."
     }
   ]
 }
