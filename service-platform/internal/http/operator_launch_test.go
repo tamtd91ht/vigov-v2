@@ -155,15 +155,14 @@ func decodeLaunchLinks(t *testing.T, body []byte) launchLinksView {
 }
 
 const (
-	sharedLinkFake       = "https://zalo.me/s/" + sharedAppIDFake + "/?src=qr&x=" + launchCodeFake
-	sharedLegacyLinkFake = "https://zalo.me/s/" + sharedAppIDFake + "/?d=thangbinh-danang.vigov.vn&src=qr"
-	ownLinkFake          = "https://zalo.me/s/3291993990104489440/?src=qr"
+	sharedLinkFake = "https://zalo.me/s/" + sharedAppIDFake + "/?src=qr&x=" + launchCodeFake
+	ownLinkFake    = "https://zalo.me/s/3291993990104489440/?src=qr"
 )
 
-// A commune WITHOUT a live own app: the shared app's two links — `x=<launch code>` first, then the
-// TRANSITIONAL `d=<primary host>` one (owner 12/10/2026). Both are the published-app form and both
-// round-trip through the citizen app's own parameter reader: the first as the commune's code, the
-// second as its primary host. No own app is an absence, not a refusal: nothing is unavailable.
+// ONE link per commune since 13/10/2026 (chooseLaunchLink). A commune WITHOUT a live own app gets the
+// shared app's `x=<launch code>` link — the published-app form, round-tripping through the citizen app's
+// own parameter reader as the commune's code. The `d=` form is withdrawn. No own app is an absence, not
+// a refusal: nothing is unavailable.
 func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 	h := newHarness(t)
 	h.id.keys = []string{"ops.qr.issue"}
@@ -173,43 +172,35 @@ func TestLaunchLinkRoundTripsThroughCitizenApp(t *testing.T) {
 		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
 	}
 	all := decodeLaunchLinks(t, rec.Body.Bytes())
-	if len(all.Links) != 2 || len(all.Unavailable) != 0 {
-		t.Fatalf("got %+v, want the two shared links only", all)
+	if len(all.Links) != 1 || len(all.Unavailable) != 0 {
+		t.Fatalf("got %+v, want the shared x link only", all)
 	}
-	for i, want := range []struct {
-		url, source string
-		hint        citizenHint
-	}{
-		{sharedLinkFake, "chung", citizenHint{"code", launchCodeFake}},
-		{sharedLegacyLinkFake, "chung_ten_mien", citizenHint{"host", "thangbinh-danang.vigov.vn"}},
-	} {
-		got := all.Links[i]
-		if got.URL != want.url || got.Domain != "thangbinh-danang.vigov.vn" || got.AppID != sharedAppIDFake || got.Source != want.source {
-			t.Fatalf("link %d: %+v, want url %s source %s", i, got, want.url, want.source)
-		}
-		u, err := url.Parse(got.URL)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if u.Scheme != "https" || u.Host != "zalo.me" || u.Path != "/s/"+sharedAppIDFake+"/" {
-			t.Errorf("not the published Zalo Mini App link: %s", got.URL)
-		}
-		if strings.Contains(u.RawQuery, "env=") || strings.Contains(u.RawQuery, "version=") {
-			t.Error("a QR must use the published-app link, never a TESTING build (owner 04/10/2026)")
-		}
-		if hint, ok := citizenAppAccepts(u.RawQuery); !ok || hint != want.hint {
-			t.Errorf("citizen-app would not read the commune from %q (got %+v, %v)", u.RawQuery, hint, ok)
-		}
+	got := all.Links[0]
+	if got.URL != sharedLinkFake || got.Domain != "thangbinh-danang.vigov.vn" || got.Source != "chung" {
+		t.Fatalf("link %+v, want url %s source chung", got, sharedLinkFake)
+	}
+	u, err := url.Parse(got.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if u.Scheme != "https" || u.Host != "zalo.me" || u.Path != "/s/"+sharedAppIDFake+"/" {
+		t.Errorf("not the published Zalo Mini App link: %s", got.URL)
+	}
+	if strings.Contains(u.RawQuery, "env=") || strings.Contains(u.RawQuery, "version=") {
+		t.Error("a QR must use the published-app link, never a TESTING build (owner 04/10/2026)")
+	}
+	if hint, ok := citizenAppAccepts(u.RawQuery); !ok || hint != (citizenHint{"code", launchCodeFake}) {
+		t.Errorf("citizen-app would not read the commune from %q (got %+v, %v)", u.RawQuery, hint, ok)
 	}
 	// The x link names no domain: the code alone carries the commune.
-	if strings.Contains(all.Links[0].URL, "d=") || strings.Contains(all.Links[0].URL, "vigov.vn") {
-		t.Errorf("the x link carries the domain: %s", all.Links[0].URL)
+	if strings.Contains(got.URL, "d=") || strings.Contains(got.URL, "vigov.vn") {
+		t.Errorf("the x link carries the domain: %s", got.URL)
 	}
 }
 
-// A commune WITH a live own app gets EVERY link, shared first (owner 06/10/2026: "QR từ đâu thì mở
-// app từ đó"): the shared app is borrowed while the own app waits for Zalo, so it must stay printable.
-func TestLaunchLinkGivesBothWhenOwnAppIsLive(t *testing.T) {
+// A commune WITH exactly one live own app gets that app's link ONLY (owner 13/10/2026: "rieng" wins
+// over "chung"), with no commune parameter.
+func TestLaunchLinkOwnAppWins(t *testing.T) {
 	h := newHarness(t)
 	h.id.keys = []string{"ops.qr.issue"}
 	// registryFake's default: 3291993990104489440 running, 3043188591857102858 switched off.
@@ -218,40 +209,32 @@ func TestLaunchLinkGivesBothWhenOwnAppIsLive(t *testing.T) {
 		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
 	}
 	all := decodeLaunchLinks(t, rec.Body.Bytes())
-	if len(all.Links) != 3 || len(all.Unavailable) != 0 {
-		t.Fatalf("got %+v, want three links", all)
+	if len(all.Links) != 1 || len(all.Unavailable) != 0 {
+		t.Fatalf("got %+v, want the own link only", all)
 	}
-	if s := all.Links[0]; s.Source != "chung" || s.URL != sharedLinkFake || s.AppID != sharedAppIDFake {
-		t.Errorf("first link %+v, want the shared app's x link", s)
-	}
-	if s := all.Links[1]; s.Source != "chung_ten_mien" || s.URL != sharedLegacyLinkFake || s.AppID != sharedAppIDFake {
-		t.Errorf("second link %+v, want the shared app's transitional d link", s)
-	}
-	o := all.Links[2]
+	o := all.Links[0]
 	if o.Source != "rieng" || o.URL != ownLinkFake || o.AppID != "3291993990104489440" || o.Domain != "thangbinh-danang.vigov.vn" {
-		t.Errorf("second link %+v, want the own app's", o)
+		t.Errorf("link %+v, want the own app's", o)
 	}
 	u, err := url.Parse(o.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if u.Query().Has("d") {
-		t.Error("an own-app link must not carry d=")
+	if u.Query().Has("d") || u.Query().Has("x") {
+		t.Error("an own-app link must carry no commune parameter")
 	}
 }
 
-// The shared link cannot be built, the own app is live: the own link alone, and the shared link's
-// reason — the same code the route refused with before — so the card explains the gap.
-func TestLaunchLinkOwnOnlyWhenSharedUnavailable(t *testing.T) {
+// The own app wins whatever state the shared app is in: it is not even a reason to list.
+func TestLaunchLinkOwnAppIgnoresSharedAppState(t *testing.T) {
 	for _, c := range []struct {
-		name   string
-		setup  func(f *sharedAppFake)
-		code   string
-		domain string
+		name  string
+		setup func(f *sharedAppFake)
 	}{
-		{"no shared app declared", func(f *sharedAppFake) { f.app = nil }, "shared_mini_app_not_declared", "thangbinh-danang.vigov.vn"},
-		{"two shared apps", func(f *sharedAppFake) { f.appErr = store.ErrSharedMiniAppAmbiguous }, "shared_mini_app_ambiguous", "thangbinh-danang.vigov.vn"},
-		{"no primary domain either", func(f *sharedAppFake) { f.app, f.host = nil, "" }, "shared_mini_app_not_declared", ""},
+		{"no shared app declared", func(f *sharedAppFake) { f.app = nil }},
+		{"two shared apps", func(f *sharedAppFake) { f.appErr = store.ErrSharedMiniAppAmbiguous }},
+		{"shared app read fails", func(f *sharedAppFake) { f.appErr = errors.New("connection reset") }},
+		{"no primary domain, bad code", func(f *sharedAppFake) { f.host, f.code = "", "" }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := newHarness(t)
@@ -262,70 +245,32 @@ func TestLaunchLinkOwnOnlyWhenSharedUnavailable(t *testing.T) {
 				t.Fatalf("status %d (%s)", rec.Code, rec.Body)
 			}
 			all := decodeLaunchLinks(t, rec.Body.Bytes())
-			if len(all.Links) != 1 || all.Links[0].Source != "rieng" || all.Links[0].URL != ownLinkFake || all.Links[0].Domain != c.domain {
-				t.Fatalf("links %+v, want the own link only", all.Links)
-			}
-			// ONE entry: the shared app's reason is the reason for both shared links, listed once.
-			if len(all.Unavailable) != 1 || all.Unavailable[0].Source != "chung" || all.Unavailable[0].Code != c.code || all.Unavailable[0].Message == "" {
-				t.Fatalf("unavailable %+v, want chung %s", all.Unavailable, c.code)
+			if len(all.Links) != 1 || all.Links[0].Source != "rieng" || all.Links[0].URL != ownLinkFake || len(all.Unavailable) != 0 {
+				t.Fatalf("got %+v, want the own link only", all)
 			}
 		})
 	}
 }
 
-// Since 12/10/2026 the shared app's main link needs no domain: a commune with no usable primary host
-// still gets its `x=` link. Only the TRANSITIONAL `d=` link is missing, listed with the reason.
-func TestLaunchLinkNoUsablePrimaryHostLosesOnlyTheLegacyLink(t *testing.T) {
-	for _, c := range []struct {
-		name, host string
-	}{
-		{"no primary domain", ""},
-		{"unparseable stored host", "Bad Host"},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			h := newHarness(t)
-			h.id.keys = []string{"ops.qr.issue"}
-			noLiveOwnApp(h)
-			h.shared.host = c.host
-			rec := h.do("GET", launchPath, "", opCookie(t))
-			if rec.Code != 200 {
-				t.Fatalf("status %d (%s)", rec.Code, rec.Body)
-			}
-			all := decodeLaunchLinks(t, rec.Body.Bytes())
-			if len(all.Links) != 1 || all.Links[0].Source != "chung" || all.Links[0].URL != sharedLinkFake || all.Links[0].Domain != c.host {
-				t.Fatalf("links %+v, want the x link only", all.Links)
-			}
-			if len(all.Unavailable) != 1 || all.Unavailable[0].Source != "chung_ten_mien" ||
-				all.Unavailable[0].Code != "commune_no_primary_domain" || all.Unavailable[0].Message == "" {
-				t.Fatalf("unavailable %+v, want chung_ten_mien commune_no_primary_domain", all.Unavailable)
-			}
-		})
-	}
-}
-
-// A stored code that is not the 0024 shape (only a hand-edited row can hold one): no `x=` link — a QR
-// the app would ignore is worse than none — and the reason is listed; the `d=` link still prints.
-func TestLaunchLinkMalformedStoredCode(t *testing.T) {
+// The shared link needs no domain: a commune with no primary host still gets it, with domain "".
+func TestLaunchLinkNeedsNoPrimaryHost(t *testing.T) {
 	h := newHarness(t)
 	h.id.keys = []string{"ops.qr.issue"}
 	noLiveOwnApp(h)
-	h.shared.code = "0A1B2C3D4E5F"
+	h.shared.host = ""
 	rec := h.do("GET", launchPath, "", opCookie(t))
 	if rec.Code != 200 {
 		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
 	}
 	all := decodeLaunchLinks(t, rec.Body.Bytes())
-	if len(all.Links) != 1 || all.Links[0].Source != "chung_ten_mien" || all.Links[0].URL != sharedLegacyLinkFake {
-		t.Fatalf("links %+v, want the d link only", all.Links)
-	}
-	if len(all.Unavailable) != 1 || all.Unavailable[0].Source != "chung" || all.Unavailable[0].Code != "commune_launch_code_invalid" {
-		t.Fatalf("unavailable %+v", all.Unavailable)
+	if len(all.Links) != 1 || all.Links[0].URL != sharedLinkFake || all.Links[0].Domain != "" || len(all.Unavailable) != 0 {
+		t.Fatalf("got %+v, want the x link with no domain", all)
 	}
 }
 
 // Two running own apps is a state ADR 0070 #1 forbids but no constraint prevents: never a QR for an
-// App ID nobody chose. It no longer hides the shared link; with no shared link either, the route
-// refuses with the own-app reason, as it did before 06/10/2026.
+// App ID nobody chose. The shared link is given and the ambiguity listed; with no shared link either,
+// the route refuses with the own-app reason.
 func TestLaunchLinkTwoLiveOwnApps(t *testing.T) {
 	setup := func(h *harness) {
 		h.id.keys = []string{"ops.qr.issue"}
@@ -342,8 +287,8 @@ func TestLaunchLinkTwoLiveOwnApps(t *testing.T) {
 		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
 	}
 	all := decodeLaunchLinks(t, rec.Body.Bytes())
-	if len(all.Links) != 2 || all.Links[0].Source != "chung" || all.Links[1].Source != "chung_ten_mien" {
-		t.Fatalf("links %+v, want the two shared links only", all.Links)
+	if len(all.Links) != 1 || all.Links[0].Source != "chung" || all.Links[0].URL != sharedLinkFake {
+		t.Fatalf("links %+v, want the shared link only", all.Links)
 	}
 	if len(all.Unavailable) != 1 || all.Unavailable[0].Source != "rieng" || all.Unavailable[0].Code != "own_mini_app_ambiguous" {
 		t.Fatalf("unavailable %+v", all.Unavailable)
@@ -359,7 +304,7 @@ func TestLaunchLinkTwoLiveOwnApps(t *testing.T) {
 }
 
 // Refusals of the whole commune hold whatever links it has: an inactive commune with a live own app
-// gets no QR, and a store failure on one link is an error, not a quietly half-empty card.
+// gets no QR, and a store failure is an error, not a quietly empty card.
 func TestLaunchLinkRefusesTheCommuneDespiteOwnApp(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -368,7 +313,6 @@ func TestLaunchLinkRefusesTheCommuneDespiteOwnApp(t *testing.T) {
 		code  string
 	}{
 		{"inactive commune", func(f *sharedAppFake) { f.active = false }, 409, "commune_inactive"},
-		{"shared app read fails", func(f *sharedAppFake) { f.appErr = errors.New("connection reset") }, 500, "internal"},
 		{"launch target read fails", func(f *sharedAppFake) { f.targetErr = errors.New("connection reset") }, 500, "internal"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -393,10 +337,11 @@ func TestLaunchLinkRefusals(t *testing.T) {
 	}{
 		{"no shared app", func(f *sharedAppFake) { f.app = nil }, launchPath, 409, "shared_mini_app_not_declared"},
 		{"two shared apps", func(f *sharedAppFake) { f.appErr = store.ErrSharedMiniAppAmbiguous }, launchPath, 409, "shared_mini_app_ambiguous"},
-		// No link at all — bad code AND no primary host — refuses with the x link's reason.
 		{"bad code, no primary domain", func(f *sharedAppFake) { f.code, f.host = "", "" }, launchPath, 409, "commune_launch_code_invalid"},
 		{"inactive commune", func(f *sharedAppFake) { f.active = false }, launchPath, 409, "commune_inactive"},
 		{"inactive with no primary", func(f *sharedAppFake) { f.active, f.host = false, "" }, launchPath, 409, "commune_inactive"},
+		{"malformed stored code", func(f *sharedAppFake) { f.code = "0A1B2C3D4E5F" }, launchPath, 409, "commune_launch_code_invalid"},
+		{"shared app read fails", func(f *sharedAppFake) { f.appErr = errors.New("connection reset") }, launchPath, 500, "internal"},
 		{"unknown commune", func(*sharedAppFake) {}, "/api/v1/communes/01JD8ZQK9M3NPXR7TVWYB2C4EZ/mini-app-launch-link", 404, "commune_not_found"},
 		{"malformed id", func(*sharedAppFake) {}, "/api/v1/communes/not-a-ulid/mini-app-launch-link", 404, "commune_not_found"},
 	} {

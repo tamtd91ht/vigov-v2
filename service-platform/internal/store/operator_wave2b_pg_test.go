@@ -115,8 +115,7 @@ func TestPgCommuneLaunchTarget(t *testing.T) {
 		got.LaunchCode != codeOf(ulidA) {
 		t.Errorf("got %+v %v, want the PRIMARY host and the stored code", got, err)
 	}
-	// No primary host is no longer an error: the `x=` link does not need one. Host "" tells the
-	// caller the transitional `d=` link cannot be built.
+	// No primary host is not an error: the `x=` link does not need one. Host "" is shown as is.
 	themXa(t, db, ulidB, "Xã Cũ", false)
 	themHost(t, db, "xacu.vigov.vn", ulidB, false)
 	if got, err := s.CommuneLaunchTarget(ctx, ulidB); err != nil || got.Active || got.Host != "" || got.LaunchCode != codeOf(ulidB) {

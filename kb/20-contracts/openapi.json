@@ -9947,6 +9947,80 @@
         }
       }
     },
+    "/api/v1/commune-launch-link": {
+      "get": {
+        "summary": "Liên kết mở Mini App duy nhất của xã để in mã QR (chủ dự án 13/10/2026): app riêng đang chạy nếu xã có đúng một, ngược lại app dùng chung với mã mở app x=; không trả App ID hay tên miền; không ghi vết",
+        "operationId": "platform_get_commune_launch_link",
+        "tags": [
+          "platform"
+        ],
+        "x-vigov-screen": "*(chưa có đặc tả — Cấu hình › mã QR mở Mini App)*",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.lookup"
+        },
+        "x-vigov-task": "15dad99b1fdb",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/platform.communeLaunchLinkOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "commune_inactive",
+              "commune_launch_code_invalid",
+              "own_mini_app_ambiguous",
+              "shared_mini_app_ambiguous",
+              "shared_mini_app_not_declared"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/commune-map-frame": {
       "get": {
         "summary": "Khung bản đồ đang áp của xã theo tên miền — khung giới hạn [kinh độ nhỏ, vĩ độ nhỏ, kinh độ lớn, vĩ độ lớn] để đặt maxBounds, tâm và bán kính — cho bản đồ màn Gửi phản ánh của Zalo Mini App; xã không có khung thì configured=false",
@@ -54459,6 +54533,22 @@
         "required": [
           "logo_public_url",
           "web_admin_banner_public_url"
+        ],
+        "additionalProperties": false
+      },
+      "platform.communeLaunchLinkOut": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "url"
         ],
         "additionalProperties": false
       },

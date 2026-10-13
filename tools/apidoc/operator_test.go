@@ -150,9 +150,14 @@ func TestRealContractCarriesNoOperatorRoute(t *testing.T) {
 				if tag == "platform" && p == "/api/v1/mini-app-ids" && strings.Contains(string(b), `"kind":"public"`) {
 					continue
 				}
+				// The third, by owner decision 13/10/2026: the commune's one QR link for staff, a read under
+				// admin.lookup (service-platform/internal/http/routes.go).
+				if tag == "platform" && p == "/api/v1/commune-launch-link" {
+					continue
+				}
 				if tag == "platform" && p != "/api/v1/commune-branding" &&
 					!strings.HasPrefix(p, "/api/v1/commune-branding/") {
-					t.Errorf("%s %s tagged platform in the commune contract — platform's only commune REST resource is /api/v1/commune-branding (ADR 0069)", m, p)
+					t.Errorf("%s %s tagged platform in the commune contract — platform's commune REST resources are /api/v1/commune-branding (ADR 0069) and /api/v1/commune-launch-link (owner 13/10/2026)", m, p)
 				}
 			}
 			if b, _ := json.Marshal(op.Permission); strings.Contains(string(b), "operator-") {

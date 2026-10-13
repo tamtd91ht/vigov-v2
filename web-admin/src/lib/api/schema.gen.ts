@@ -4421,6 +4421,11 @@ export type platform_brandingSettingsOut = {
   "updated_by"?: string;
 };
 
+export type platform_communeLaunchLinkOut = {
+  "url": string;
+  "source": string;
+};
+
 export type platform_miniAppIDOut = {
   "app_id": string;
   "source": string;
@@ -6522,6 +6527,27 @@ export type comms_get_commune_external_contacts = {
   };
   errorCodes: {
     429: "rate_limited";
+  };
+};
+
+/** GET /api/v1/commune-launch-link — Liên kết mở Mini App duy nhất của xã để in mã QR (chủ dự án 13/10/2026): app riêng đang chạy nếu xã có đúng một, ngược lại app dùng chung với mã mở app x=; không trả App ID hay tên miền; không ghi vết */
+export type platform_get_commune_launch_link = {
+  duongDan: "/api/v1/commune-launch-link";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: platform_communeLaunchLinkOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "commune_inactive" | "commune_launch_code_invalid" | "own_mini_app_ambiguous" | "shared_mini_app_ambiguous" | "shared_mini_app_not_declared";
   };
 };
 

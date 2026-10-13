@@ -40,9 +40,6 @@ var (
 	// store (every write holds sharedAppLock), so it is a row written by hand. Refused rather than
 	// guessed: a QR printed with the wrong one of two App IDs lives for years.
 	ErrSharedMiniAppAmbiguous = errors.New("shared mini app: có hơn một Mini App dùng chung đang chạy")
-	// ErrCommuneNoPrimaryHost — the commune holds no primary domain, so there is nothing for the
-	// transitional `d=` link (domain.LegacyDomainLaunchLink).
-	ErrCommuneNoPrimaryHost = errors.New("operator registry: xã chưa có tên miền chính")
 )
 
 // ActionSharedMiniAppChanged is the platform_audit_log verb of a declaration or a replacement of the
@@ -205,16 +202,16 @@ type LaunchTarget struct {
 	Active bool
 	// LaunchCode is tenant.launch_code (migration 0024) — what the shared app's `x=` link carries.
 	LaunchCode string
-	// Host is the PRIMARY host, "" when the commune holds none. Only the TRANSITIONAL `d=` link needs
-	// it (domain.LegacyDomainLaunchLink); the console also shows it beside every link.
+	// Host is the PRIMARY host, "" when the commune holds none. No link carries it any more (the `d=`
+	// form was withdrawn, owner 13/10/2026); the operator console shows it beside the link so the person
+	// printing the QR can read which commune it names.
 	Host string
 }
 
 // CommuneLaunchTarget reads what a QR link needs about one commune: whether it is active, its launch
 // code and its PRIMARY host. The id comes from the path, ULID-checked by the caller.
-// ErrCommuneNotFound for an unknown commune. A commune with no primary host is NOT an error here any
-// more: since 12/10/2026 the shared app's link names the launch code, and only the transitional `d=`
-// link needs a host — the caller reports that one link as unavailable (ErrCommuneNoPrimaryHost).
+// ErrCommuneNotFound for an unknown commune. A commune with no primary host is NOT an error: the
+// shared app's link names the launch code, the own app's link names nothing.
 //
 // The primary row only (la_chinh), never "the first host": after a merger a commune may hold the
 // absorbed commune's old host, and a QR naming that would suggest the wrong authority (ADR 0047

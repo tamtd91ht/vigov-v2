@@ -2159,6 +2159,26 @@
       "declared_in": "service-comms/internal/http/external_contacts.go"
     },
     {
+      "service": "platform",
+      "method": "GET",
+      "path": "/api/v1/commune-launch-link",
+      "operation_id": "platform_get_commune_launch_link",
+      "task_id": "15dad99b1fdb",
+      "summary": "Liên kết mở Mini App duy nhất của xã để in mã QR (chủ dự án 13/10/2026): app riêng đang chạy nếu xã có đúng một, ngược lại app dùng chung với mã mở app x=; không trả App ID hay tên miền; không ghi vết",
+      "screen": "*(chưa có đặc tả — Cấu hình › mã QR mở Mini App)*",
+      "permission_kind": "permission",
+      "permission": "admin.lookup",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "platform.communeLaunchLinkOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-platform/internal/http/routes.go"
+    },
+    {
       "service": "comms",
       "method": "GET",
       "path": "/api/v1/commune-map-frame",

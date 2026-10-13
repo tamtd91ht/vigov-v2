@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -22,6 +23,7 @@ import (
 	"github.com/vihat/vigov/service-platform/internal/app"
 	"github.com/vihat/vigov/service-platform/internal/domain"
 	svchttp "github.com/vihat/vigov/service-platform/internal/http"
+	svcstore "github.com/vihat/vigov/service-platform/internal/store"
 )
 
 type staffResolverFake struct {
@@ -67,11 +69,24 @@ type noURLs struct{}
 
 func (noURLs) PublicURL(string) string { return "" }
 
+// noLaunch / noSharedApp satisfy Register; the QR route's own suite is internal/http's launch_link_test.go.
+type noLaunch struct{}
+
+func (noLaunch) CommuneLaunch(context.Context) (svcstore.CommuneLaunch, error) {
+	return svcstore.CommuneLaunch{}, errors.New("not used")
+}
+
+type noSharedApp struct{}
+
+func (noSharedApp) SharedMiniApp(context.Context) (domain.SharedMiniApp, error) {
+	return domain.SharedMiniApp{}, errors.New("not used")
+}
+
 func communeEdgeForTest(res staffauth.Resolver, acts svchttp.BrandingActs) http.Handler {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{Checker: staffauth.Checker{}, Branding: acts, URLs: noURLs{},
-		Uploads: httpx.NewUploadSlots(httpx.UploadSlotsPerPod), Log: log})
+		Uploads: httpx.NewUploadSlots(httpx.UploadSlotsPerPod), Launch: noLaunch{}, SharedApp: noSharedApp{}, Log: log})
 	return buildCommuneEdge(mux, directoryOneCommune{}, res, nil, log)
 }
 

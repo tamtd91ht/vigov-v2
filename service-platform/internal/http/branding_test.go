@@ -178,7 +178,8 @@ func newBrServer(t *testing.T) *brServer {
 	log := slog.New(slog.NewTextHandler(logs, nil))
 	slots := httpx.NewUploadSlots(httpx.UploadSlotsPerPod)
 	mux := http.NewServeMux()
-	Register(mux, Deps{Checker: checker, Branding: acts, URLs: brURLs{}, Uploads: slots, Log: log})
+	Register(mux, Deps{Checker: checker, Branding: acts, URLs: brURLs{}, Uploads: slots,
+		Launch: &launchFake{}, SharedApp: &qlSharedFake{}, Log: log})
 
 	var h http.Handler = mux
 	// In place of core/staffauth: inject the principal WITHOUT copying the Host commune onto it, so the

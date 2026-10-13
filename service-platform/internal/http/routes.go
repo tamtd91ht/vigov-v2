@@ -39,7 +39,11 @@ type Deps struct {
 	// built once in cmd/server and shared by every upload route — a cap per route would multiply it.
 	// Required.
 	Uploads *httpx.UploadSlots
-	Log     *slog.Logger
+	// Launch reads the Host commune's launch facts (*store.CommuneLaunchStore). Required.
+	Launch CommuneLaunchReader
+	// SharedApp reads the platform's shared Mini App (*store.SharedMiniAppStore). Required.
+	SharedApp SharedAppReader
+	Log       *slog.Logger
 }
 
 // Register mounts the platform routes of the commune host.
@@ -47,10 +51,12 @@ type Deps struct {
 // It PANICS on a missing dependency, at startup: a nil Checker would make RequirePermission meet a nil
 // interface on the first request, and a nil use case a nil-pointer 500 nobody can explain.
 func Register(mux *http.ServeMux, d Deps) {
-	if d.Checker == nil || d.Branding == nil || d.URLs == nil || d.Uploads == nil || d.Log == nil {
-		panic("platform/http: Register thiếu phụ thuộc — Checker, Branding, URLs, Uploads và Log đều bắt buộc")
+	if d.Checker == nil || d.Branding == nil || d.URLs == nil || d.Uploads == nil || d.Launch == nil ||
+		d.SharedApp == nil || d.Log == nil {
+		panic("platform/http: Register thiếu phụ thuộc — Checker, Branding, URLs, Uploads, Launch, SharedApp và Log đều bắt buộc")
 	}
 	h := &brandingHandlers{acts: d.Branding, urls: d.URLs, slots: d.Uploads, log: d.Log}
+	ql := &communeLaunchHandlers{launch: d.Launch, shared: d.SharedApp, log: d.Log}
 
 	// --- the commune's identity images: logo and web-admin banner (ADR 0069) -----------------------------
 	//
@@ -175,4 +181,29 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.org")(
 			idem.KhongCan("gỡ ảnh chưa đặt không ghi gì và trả 204 như lần trước; dòng hồ sơ được khoá nên hai lượt gỡ cùng lúc chỉ ghi một vết")(
 				http.HandlerFunc(h.removeBanner))))
+
+	// --- the commune's QR link (owner 13/10/2026) -----------------------------------------------------
+	//
+	// ONE link, chosen by chooseLaunchLink (launch_link.go) — the same rule as the operator console's
+	// GET /api/v1/communes/{id}/mini-app-launch-link: the commune's own app when exactly one is live, else
+	// the shared app's `x=<launch code>` link. No App ID and no domain in the reply.
+	//
+	// `admin.lookup` — the owner's choice, 13/10/2026; seeded (service-identity/migrations/0001_init.sql:281).
+	// NO KEY WAS INVENTED (rule 5, invariant 3c). Read-only and NOT TRAILED, like the operator route
+	// (ADR 0048 §30/09 #9).
+	//
+	// `commune-launch-link` IS ITS OWN FIRST SEGMENT for the reason commune-branding is: tools/ingress
+	// routes by the first segment after /api/v1/. THE COMMUNE COMES FROM Host (rule 1, invariant 3); there
+	// is no id on the wire.
+	//
+	// @summary  Liên kết mở Mini App duy nhất của xã để in mã QR (chủ dự án 13/10/2026): app riêng đang chạy nếu xã có đúng một, ngược lại app dùng chung với mã mở app x=; không trả App ID hay tên miền; không ghi vết
+	// @screen   *(chưa có đặc tả — Cấu hình › mã QR mở Mini App)*
+	// @reply    200 communeLaunchLinkOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error commune_inactive commune_launch_code_invalid shared_mini_app_not_declared shared_mini_app_ambiguous own_mini_app_ambiguous
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/commune-launch-link",
+		authz.RequirePermission(d.Checker, "admin.lookup")(
+			http.HandlerFunc(ql.get)))
 }

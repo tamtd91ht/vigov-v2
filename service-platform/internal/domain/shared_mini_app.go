@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"errors"
 	"net/url"
 	"time"
 )
@@ -30,10 +29,6 @@ const zaloMiniAppLinkBase = "https://zalo.me/s/"
 // as if it had no parameter.
 const LaunchSourceQR = "qr"
 
-// ErrLaunchHostInvalid — the commune host is not a bare LDH host name, so the citizen app's own
-// check (laTenMien) would drop it and the QR would open the app with no commune suggestion.
-var ErrLaunchHostInvalid = errors.New("mini_app: tên miền xã không dùng được trong liên kết mở app")
-
 // MiniAppLaunchLink builds the shared app's QR link for one commune, by its LAUNCH CODE:
 //
 //	https://zalo.me/s/<shared app id>/?src=qr&x=<commune launch code>
@@ -55,33 +50,6 @@ func MiniAppLaunchLink(appID, launchCode string) (string, error) {
 	}
 	q := url.Values{}
 	q.Set("x", launchCode)
-	q.Set("src", LaunchSourceQR)
-	return zaloMiniAppLinkBase + appID + "/?" + q.Encode(), nil
-}
-
-// LegacyDomainLaunchLink builds the shared app's QR link the way it was built before 12/10/2026, by
-// the commune's PRIMARY host:
-//
-//	https://zalo.me/s/<shared app id>/?d=<commune primary host>&src=qr
-//
-// TRANSITIONAL (owner, 12/10/2026; ADR 0047 §Sửa đổi 12/10/2026): the shared-app version now in Zalo
-// review reads only `d`; the next one reads `x` first and falls back to `d`. Until every published
-// version reads `x`, the operator must be able to print this form too. REMOVED IN A LATER RELEASE,
-// together with citizen-app's `d` branch — not before, or the QRs printed for the reviewed version
-// stop naming a commune.
-//
-// The host is the registry's stored value (lower-case LDH, ParseCommuneHost); it is checked again
-// rather than trusted, because a host the app's parser refuses yields a QR that silently does
-// nothing. url.Values encodes with sorted keys, so the query is exactly `d=…&src=qr`.
-func LegacyDomainLaunchLink(appID, host string) (string, error) {
-	if err := ValidateMiniAppID(appID); err != nil {
-		return "", err
-	}
-	if h, err := ParseCommuneHost(host, ""); err != nil || h != host {
-		return "", ErrLaunchHostInvalid
-	}
-	q := url.Values{}
-	q.Set("d", host)
 	q.Set("src", LaunchSourceQR)
 	return zaloMiniAppLinkBase + appID + "/?" + q.Encode(), nil
 }

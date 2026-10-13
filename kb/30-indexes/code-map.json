@@ -6470,10 +6470,6 @@
       "kind": "func",
       "at": "service-identity/internal/domain/automation.go:240"
     },
-    "domain.LegacyDomainLaunchLink": {
-      "kind": "func",
-      "at": "service-platform/internal/domain/shared_mini_app.go:76"
-    },
     "domain.LetterAssignedNotice": {
       "kind": "func",
       "at": "service-documents/internal/domain/staff_notice.go:115"
@@ -6876,7 +6872,7 @@
     },
     "domain.MiniAppLaunchLink": {
       "kind": "func",
-      "at": "service-platform/internal/domain/shared_mini_app.go:49"
+      "at": "service-platform/internal/domain/shared_mini_app.go:44"
     },
     "domain.MocDatDuoc": {
       "kind": "type",
@@ -7368,7 +7364,7 @@
     },
     "domain.OwnMiniAppLaunchLink": {
       "kind": "func",
-      "at": "service-platform/internal/domain/shared_mini_app.go:97"
+      "at": "service-platform/internal/domain/shared_mini_app.go:65"
     },
     "domain.PairingCodeHash": {
       "kind": "func",
@@ -7996,7 +7992,7 @@
     },
     "domain.SharedMiniApp": {
       "kind": "type",
-      "at": "service-platform/internal/domain/shared_mini_app.go:15"
+      "at": "service-platform/internal/domain/shared_mini_app.go:14"
     },
     "domain.SharedZaloBot": {
       "kind": "type",
@@ -9650,6 +9646,10 @@
       "kind": "type",
       "at": "service-petitions/internal/http/petition_photo.go:45"
     },
+    "http.CommuneLaunchReader": {
+      "kind": "type",
+      "at": "service-platform/internal/http/launch_link.go:36"
+    },
     "http.CommuneProfiles": {
       "kind": "func",
       "at": "service-identity/internal/http/commune_profile.go:83"
@@ -11222,9 +11222,13 @@
       "kind": "func",
       "at": "service-petitions/internal/http/petition_publication.go:30"
     },
+    "http.SharedAppReader": {
+      "kind": "type",
+      "at": "service-platform/internal/http/launch_link.go:30"
+    },
     "http.SharedMiniAppEditor": {
       "kind": "type",
-      "at": "service-platform/internal/http/operator_launch.go:21"
+      "at": "service-platform/internal/http/operator_launch.go:22"
     },
     "http.SharedMiniAppReader": {
       "kind": "type",
@@ -12268,7 +12272,7 @@
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:511"
+      "at": "service-platform/cmd/server/main.go:515"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -14146,9 +14150,17 @@
       "kind": "type",
       "at": "service-comms/internal/store/zalo_commune_bot.go:41"
     },
+    "store.CommuneLaunch": {
+      "kind": "func",
+      "at": "service-platform/internal/store/commune_launch.go:45"
+    },
+    "store.CommuneLaunchStore": {
+      "kind": "type",
+      "at": "service-platform/internal/store/commune_launch.go:21"
+    },
     "store.CommuneLaunchTarget": {
       "kind": "func",
-      "at": "service-platform/internal/store/shared_mini_app.go:222"
+      "at": "service-platform/internal/store/shared_mini_app.go:219"
     },
     "store.ConTrucTiep": {
       "kind": "func",
@@ -14368,7 +14380,7 @@
     },
     "store.DeclareSharedMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/shared_mini_app.go:121"
+      "at": "service-platform/internal/store/shared_mini_app.go:118"
     },
     "store.DemChungTuConSong": {
       "kind": "func",
@@ -14852,7 +14864,7 @@
     },
     "store.LaunchTarget": {
       "kind": "type",
-      "at": "service-platform/internal/store/shared_mini_app.go:204"
+      "at": "service-platform/internal/store/shared_mini_app.go:201"
     },
     "store.LeadershipCodes": {
       "kind": "func",
@@ -15353,6 +15365,10 @@
     "store.NewCommune": {
       "kind": "type",
       "at": "service-platform/internal/store/operator_writes.go:140"
+    },
+    "store.NewCommuneLaunchStore": {
+      "kind": "func",
+      "at": "service-platform/internal/store/commune_launch.go:26"
     },
     "store.NewDanhMucMiniAppStore": {
       "kind": "func",
@@ -16192,7 +16208,7 @@
     },
     "store.SharedMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/shared_mini_app.go:100"
+      "at": "service-platform/internal/store/shared_mini_app.go:97"
     },
     "store.SharedMiniAppStore": {
       "kind": "type",

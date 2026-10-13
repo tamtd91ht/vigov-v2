@@ -474,7 +474,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("declaring the App ID that is already the running shared app changes nothing and writes no entry")(
 				http.HandlerFunc(h.declareSharedMiniApp))))
 
-	// @summary  Mọi liên kết mở Mini App của xã để in QR, người vận hành chọn mã nào in (chủ đầu tư 06/10/2026): app dùng chung với mã mở app x= (source=chung, chủ dự án 12/10/2026) trước, rồi app dùng chung dạng cũ d=<tên miền chính> (source=chung_ten_mien, CHUYỂN TIẾP — bỏ ở bản sau), rồi app riêng đang sống (source=rieng, không tham số xã); liên kết không tạo được nằm ở unavailable kèm mã lỗi; chỉ từ chối khi không có liên kết nào; không ghi vết (ADR 0048 §30/09 #9)
+	// @summary  Liên kết mở Mini App DUY NHẤT của xã để in QR (chủ dự án 13/10/2026), cùng quy tắc với GET /api/v1/commune-launch-link của cán bộ xã: app riêng đang chạy nếu xã có đúng một (source=rieng, không tham số xã), ngược lại app dùng chung với mã mở app x= (source=chung); bỏ dạng d=<tên miền>; links có tối đa một phần tử, unavailable nêu app riêng mơ hồ khi đã dùng app chung thay; chỉ từ chối khi không tạo được liên kết nào; không ghi vết (ADR 0048 §30/09 #9)
 	// @reply    200 launchLinksView
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden

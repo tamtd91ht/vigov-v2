@@ -46,7 +46,8 @@ var nhanDNS = regexp.MustCompile(`^[a-z]([-a-z0-9]{0,61}[a-z0-9])?$`)
 //	          only by an in-process Host comparison against OPERATOR_HOST. A public `/` rule would put
 //	          /api/v1/operator-sessions one spoofed Host (or one OPERATOR_HOST misconfiguration) away from
 //	          the internet — exactly what ADR 0048 #6(c) keeps off the generated Ingress. Its only commune
-//	          routes (ADR 0069, /api/v1/commune-branding) are staff routes, and staff reach them through
+//	          routes (ADR 0069 /api/v1/commune-branding; owner 13/10/2026 /api/v1/commune-launch-link)
+//	          are staff routes, and staff reach them through
 //	          web-admin in-cluster (PLATFORM_HTTP_ADDR); it has no citizen or public route at all.
 //
 // Adding a citizen/public route to platform is therefore a decision, not a generator run: it needs its

@@ -30,14 +30,28 @@ func TestOperatorRouteInContractStopsTheGenerator(t *testing.T) {
 	}
 }
 
-// platformCommunePrefix is the ONE commune-surface resource service-platform owns: the commune's own
-// logo and web-admin banner, staff routes under admin.org (ADR 0069, owner decision 02/10/2026 —
-// "service-platform lần đầu nhận tuyến ghi của cán bộ"). Until that decision platform served no commune
-// REST route at all and this test said so; it now admits exactly this prefix and still refuses any other
-// platform path — a second one is a decision to record in an ADR first, then here.
-const platformCommunePrefix = "/api/v1/commune-branding"
+// platformCommunePrefixes are the commune-surface resources service-platform owns, all staff routes
+// reached through web-admin's in-cluster gateway:
+//
+//	/api/v1/commune-branding     the commune's own logo and web-admin banner, admin.org (ADR 0069, owner
+//	                             decision 02/10/2026 — "service-platform lần đầu nhận tuyến ghi của cán bộ")
+//	/api/v1/commune-launch-link  the commune's one QR link, a read under admin.lookup (owner, 13/10/2026)
+//
+// Until 02/10/2026 platform served no commune REST route at all and this test said so; it admits exactly
+// these prefixes and still refuses any other platform path — another one is an owner decision first,
+// then here.
+var platformCommunePrefixes = []string{"/api/v1/commune-branding", "/api/v1/commune-launch-link"}
 
-// THE REAL CONTRACT AND THE REAL GENERATED FILES: nothing but platformCommunePrefix routes to
+func isPlatformCommuneRoute(path string) bool {
+	for _, p := range platformCommunePrefixes {
+		if path == p || strings.HasPrefix(path, p+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// THE REAL CONTRACT AND THE REAL GENERATED FILES: nothing but platformCommunePrefixes routes to
 // service-platform's REST port, and its operator routes are reached only on OPERATOR_HOST through
 // platform-admin — never in the Ingress or web-admin's gateway table.
 func TestRealTablesRouteNothingToPlatform(t *testing.T) {
@@ -57,10 +71,9 @@ func TestRealTablesRouteNothingToPlatform(t *testing.T) {
 		if _, public := pathScopedPublicRoutes["platform"][r.Duong]; public {
 			continue
 		}
-		if r.DichVu == "platform" && r.Duong != platformCommunePrefix &&
-			!strings.HasPrefix(r.Duong, platformCommunePrefix+"/") {
-			t.Errorf("contract routes %s to platform — only %s is a platform commune route (ADR 0069), "+
-				"plus the owner-approved public paths in pathScopedPublicRoutes", r.Duong, platformCommunePrefix)
+		if r.DichVu == "platform" && !isPlatformCommuneRoute(r.Duong) {
+			t.Errorf("contract routes %s to platform — only %v are platform commune routes, "+
+				"plus the owner-approved public paths in pathScopedPublicRoutes", r.Duong, platformCommunePrefixes)
 		}
 	}
 	for _, f := range []string{duongTepSinh, duongTepTS} {
@@ -74,12 +87,12 @@ func TestRealTablesRouteNothingToPlatform(t *testing.T) {
 			}
 		}
 	}
-	// The gateway table names platform only for commune-branding and the allow-listed public paths.
+	// The gateway table names platform only for platformCommunePrefixes and the allow-listed public paths.
 	ts, err := os.ReadFile(filepath.Join(root, duongTepTS))
 	if err != nil {
 		t.Fatal(err)
 	}
-	allowedTS := []string{platformCommunePrefix}
+	allowedTS := append([]string{}, platformCommunePrefixes...)
 	for p := range pathScopedPublicRoutes["platform"] {
 		allowedTS = append(allowedTS, p)
 	}

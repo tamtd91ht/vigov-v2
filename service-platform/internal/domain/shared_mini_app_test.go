@@ -22,24 +22,6 @@ func TestMiniAppLaunchLink(t *testing.T) {
 	}
 }
 
-// TRANSITIONAL — removed with LegacyDomainLaunchLink (owner 12/10/2026).
-func TestLegacyDomainLaunchLink(t *testing.T) {
-	got, err := LegacyDomainLaunchLink("1234567890123456789", "thangbinh-danang.vigov.vn")
-	if err != nil || got != "https://zalo.me/s/1234567890123456789/?d=thangbinh-danang.vigov.vn&src=qr" {
-		t.Fatalf("got %q, %v", got, err)
-	}
-	if _, err := LegacyDomainLaunchLink("12a", "xa.vigov.vn"); !errors.Is(err, ErrMiniAppIDInvalid) {
-		t.Errorf("a non-numeric App ID: %v", err)
-	}
-	// Each of these would make citizen-app's laTenMien drop `d`, so the QR would suggest no commune.
-	for _, bad := range []string{"", "xa", "XA.vigov.vn", "xa.vigov.vn:443", "xa.vigov.vn/x", " xa.vigov.vn",
-		"api.vigov.vn", "xa.vigov.vn."} {
-		if _, err := LegacyDomainLaunchLink("1", bad); !errors.Is(err, ErrLaunchHostInvalid) {
-			t.Errorf("host %q: %v, want ErrLaunchHostInvalid", bad, err)
-		}
-	}
-}
-
 // The own app's QR carries no commune host: the commune is the App ID's (ADR 0070 §Sửa đổi 05/10/2026 #4).
 func TestOwnMiniAppLaunchLink(t *testing.T) {
 	got, err := OwnMiniAppLaunchLink("3291993990104489440")

@@ -42,6 +42,7 @@ export const DINH_TUYEN_API: ReadonlyArray<{ readonly tienTo: string; readonly d
   { tienTo: "/api/v1/citizen-letter-types", dichVu: "documents" },
   { tienTo: "/api/v1/my-residential-units", dichVu: "identity" },
   { tienTo: "/api/v1/comms-audit-entries", dichVu: "comms" },
+  { tienTo: "/api/v1/commune-launch-link", dichVu: "platform" },
   { tienTo: "/api/v1/investment-projects", dichVu: "finance" },
   { tienTo: "/api/v1/staff-count-queries", dichVu: "identity" },
   { tienTo: "/api/v1/content-categories", dichVu: "comms" },
