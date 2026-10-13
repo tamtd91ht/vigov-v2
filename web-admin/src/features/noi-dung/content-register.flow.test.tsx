@@ -13,6 +13,7 @@ import type { comms_noiDungRa } from "@/lib/api/schema.gen"; // vi-name-ok: gene
 
 import {
   CATEGORY_ADDED_TOAST,
+  categoryNameTakenWarning,
   CATEGORY_DIALOG_DESCRIPTION,
   CREATED_DRAFT_TOAST,
   PUBLISH_TOGGLE_FAILED,
@@ -69,7 +70,7 @@ type Call = { path: string; method: string; body: unknown };
 
 function fakeServer(
   permissions: string[],
-  opts: { patch?: Response; post?: Response; hasMore?: boolean } = {},
+  opts: { patch?: Response; post?: Response; hasMore?: boolean; categories?: unknown[] } = {},
 ): () => Call[] {
   const f = vi.fn(async (path: string, init?: RequestInit): Promise<Response> => {
     const method = init?.method ?? "GET";
@@ -81,6 +82,9 @@ function fakeServer(
     if (method === "POST" && path === "/api/v1/content-items") return (opts.post ?? json(201, SHOWING)).clone();
     if (method === "POST" && path === "/api/v1/content-categories") {
       return json(201, { id: "01JDMN", name: "Nông nghiệp", slug: "nong-nghiep", parent_id: "", order: 0, created_at: "2026-10-09T02:00:00Z", hidden: false });
+    }
+    if (method === "GET" && path === "/api/v1/content-categories" && opts.categories !== undefined) {
+      return json(200, { items: opts.categories });
     }
     if (path.startsWith("/api/v1/content-categories") || path.startsWith("/api/v1/commune-staff")) {
       return json(200, { items: [] });
@@ -357,6 +361,28 @@ describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
     expect(CATEGORY_ADDED_TOAST).toBe("Đã thêm danh mục.");
     expect(host!.querySelector("dialog")).not.toBeNull();
     expect(host!.querySelector<HTMLInputElement>("#ten-danh-muc")!.value).toBe("");
+  });
+
+  // Owner 13/10/2026: a name the commune already has — any case — is warned AS IT IS TYPED, and never sent.
+  it("a taken name, any case: the warning names the existing category, `Thêm` is held, nothing is POSTed", async () => {
+    const calls = fakeServer(["content.read", "content.update"], {
+      categories: [{ id: "01JDMN", name: "Nông nghiệp", slug: "nong-nghiep", parent_id: "", order: 0, created_at: "2026-10-09T02:00:00Z", hidden: false }],
+    });
+    await mountScreen();
+    await openCategories();
+    const box = host!.querySelector<HTMLInputElement>("#ten-danh-muc")!;
+    typeInto(box, "NÔNG nghiệp");
+    expect(host!.querySelector("#ten-danh-muc-trung")!.textContent).toBe(categoryNameTakenWarning("Nông nghiệp"));
+    expect(box.getAttribute("aria-invalid")).toBe("true");
+    const submit = box.form!.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    expect(submit.disabled).toBe(true);
+    await act(async () => box.form!.requestSubmit());
+    await settle();
+    expect(calls().filter((c) => c.method === "POST" && c.path === "/api/v1/content-categories")).toHaveLength(0);
+
+    typeInto(box, "Nông nghiệp sạch");
+    expect(host!.querySelector("#ten-danh-muc-trung")).toBeNull();
+    expect(submit.disabled).toBe(false);
   });
 });
 

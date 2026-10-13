@@ -1018,6 +1018,16 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 	case errors.Is(err, app.ErrDanhMucChaKhongTonTai):
 		httpx.WriteError(w, http.StatusConflict, "parent_missing",
 			"Danh mục cha đã chọn không còn trong danh mục tin của xã. Hãy tải lại trang và chọn lại.", "")
+	case errors.Is(err, domain.ErrCategoryNameTaken):
+		// Names the existing category AS STORED, so "nông nghiệp" refused against "Nông nghiệp" reads as
+		// the same name rather than as a bug. A category name is the commune's label, not personal data.
+		existing := ""
+		var taken domain.CategoryNameTakenError
+		if errors.As(err, &taken) {
+			existing = " “" + taken.Existing + "”"
+		}
+		httpx.WriteError(w, http.StatusConflict, "name_taken",
+			"Xã đã có danh mục"+existing+" (tên danh mục không phân biệt chữ hoa, chữ thường). Hãy đặt tên khác.", "")
 	case errors.Is(err, commsstore.ErrSlugDanhMucDaTonTai):
 		// The message says WHY a slug that is nowhere on the screen is nonetheless taken: a
 		// soft-deleted row keeps its code forever. Without that sentence this reads as a bug.

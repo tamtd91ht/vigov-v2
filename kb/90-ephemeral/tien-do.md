@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: eafb1f06
+derived_from_commit: 
 expires: 2027-01-11
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 186 |
 | chưa làm | 43 |
 | treo | 13 |
-| xong | 547 |
+| xong | 549 |
 
 ## Theo menu
 
@@ -467,6 +467,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `service-comms` | `task-08-sua-sau-ra-soat-adr-0091` — Sửa theo rà soát cô lập + bảo mật của 093c7aea (ADR 0091): (1) CORS rìa công dân cho phép PUT (core/httpx/cors.go) — trước đó trình duyệt chặn preflight PUT /api/v1/my-notification-preferences; ca kiểm chuỗi công dân nay đòi PUT trong Access-Control-Allow-Methods. (2) Vết kiểm toán cảnh báo thiên tai: `level` là chữ tự do nên chỉ ghi has_level / level_changed, không ghi giá trị. (3) Trần thân yêu cầu riêng cho POST/PATCH /api/v1/disaster-alerts, tính từ giới hạn miền (≈0,9 MiB, 12 byte/ký tự cho cách viết JSON dài nhất); DELETE và các tuyến khác giữ 64 KiB. (4) Quyết định chủ dự án 11/10/2026: tuyến công khai GET /api/v1/commune-disaster-alerts có chính sách riêng ratelimit.PublicDisasterAlertsRead — 1200 lần/phút theo (tên miền, mạng máy gọi), sự kiện public_disaster_alerts.rate_limited, mở khi Redis hỏng như tin công khai — bộ giới hạn riêng trong main.go; bộ đệm danh sách đang hiệu lực theo xã 30 giây trong bộ nhớ (app.InForceAlertCache, khoá t:<tenant_id>, tối đa 4096 xã, lọc lại theo giờ khi trúng đệm, ghi của cán bộ xoá mục trên pod đó). (5) Test PostgreSQL cho công tắc nhận thông báo: hai xã cùng citizen_id, mỗi xã chỉ đọc/ghi dòng của mình. | xong | — | citizen_notification_preference_pg_test.go và disaster_alert_pg_test.go CHƯA chạy trên PostgreSQL 16 (máy này không có VIGOV_TEST_DSN). Bộ đệm 30 giây là theo pod: pod khác thấy cảnh báo mới chậm tối đa 30 giây (chủ dự án chấp nhận). |
 | `service-comms` | `bl131026-dem-danh-muc-thieu-tham-so` — Thêm danh mục tin tức trả 500 từ 24/09: DemDangSong không truyền $1 (tenant_id). Fake driver nay từ chối câu thiếu tham số như pgx (bảng lỗi dòng 6). | xong | — | — |
 | `service-comms` | `bl131026-xoa-noi-dung-ly-do-tuy-chon` — DELETE /api/v1/content-items/{id}: lý do tuỳ chọn, để trống ghi ContentItemDeleteDefaultReason, vẫn xoá mềm + nhật ký cùng giao dịch (bảng lỗi dòng 4). | xong | — | — |
+| `service-comms` | `danh-muc-tin-trung-ten-13-10` — Danh mục tin Mini App: một tên một danh mục (chủ dự án 13/10/2026). Thêm hoặc đổi tên trùng với danh mục ĐANG SỐNG khác của xã — không phân biệt chữ hoa/thường, khoảng trắng, kiểu gõ dấu dựng sẵn/tổ hợp (NFC) — trả 409 `name_taken`, câu nêu tên danh mục đã có. Phạm vi cả xã (không chỉ cùng cha) vì Mini App vẽ gốc và con cạnh nhau; danh mục ẩn vẫn tính; danh mục đã xoá trả lại tên (khác slug). So bằng Go (domain.CategoryNameKey) vì lower() của PG dưới collation C không hạ 'Đ'; đọc tên dưới khoá cây LockTree nên hai lần thêm đồng thời không lọt. Không có khoá UNIQUE ở CSDL — dữ liệu cũ có thể đã trùng, migration sẽ hỏng. | xong | — | — |
 | `service-identity` | `communes-theo-ma-cong-khai-12-10` — GET /api/v1/communes nhận ?code=<mã công khai 12 hex> → {name, province, host} (Mini App tra mã trên QR); ?host= trả thêm launch_code (cho npm run qr --domain). Đúng một trong hai tham số; mã lạ / xã ngừng → items [] y hệt. ADR 0047 §Sửa đổi 12/10/2026. | xong | — | — |
 | `service-platform` | `content-image-anh-bia-50mb` — Chính sách tải lên content-image (ảnh bìa tin Mini App): 50 MB, chỉ JPEG/PNG/WebP, không HEIC — người dùng chốt 01/10/2026 (ADR 0047 §6, e5674292) | xong | — | Ca PG (TestPgUploadPolicySeedAndRead, TestPgContentImageCoverKeepsOperatorEdit) SKIP — chạy với VIGOV_TEST_DSN trước khi phát hành. Sau khi áp: kiểm bằng hai câu SELECT ở khối CHECK AFTER APPLYING trong tệp. Bộ đệm uploadpolicy của comms giữ giá trị cũ tới khi hết hạn. |
 | `service-platform` | `upload-policy-content-body-image` — Mục đích tải lên content-body-image cho ảnh trong thân bài tin Mini App — chính sách 50 MB, JPG/PNG/WebP, tối đa 20 ảnh mỗi bài (ADR 0067 sửa đổi 03/10/2026, H7/K3) | xong | — | Chạy migration 0018 trên PostgreSQL (ca TestPgUploadPolicy*) trước khi phát hành. Phía comms đếm ảnh thân bài theo max_files_per_subject — thuộc mục service-comms anh-trong-than-bai. |
@@ -489,6 +490,7 @@ CÒN HỞ CÙNG HÌNH DẠNG, chưa soi: tuyến xuất Excel/PDF của phân h�
 | `web-admin` | `the-dong-bo-cong-thu-gon-13-10` — Thẻ 'Đồng bộ tin từ Cổng thông tin điện tử' có nút −/+ thu gọn về một dòng tiêu đề (chủ dự án 13/10/2026 — prototype không có): lỗi đồng bộ không còn chiếm chỗ mãi; thu gọn mà có lỗi thì cạnh tiêu đề còn dấu đỏ 'Có lỗi'; nhớ lựa chọn trong localStorage (vigov.portal-sync-collapsed). | xong | — | — |
 | `web-admin` | `bl131026-cancel-chon-tep` — Bấm Cancel ở hộp chọn tệp không đóng popup chứa nó: 4 khung dùng chung (OverlayDialog, ModalDialog, LargeDialog, NavSheet) chỉ đóng khi sự kiện cancel nhắm chính dialog (bảng lỗi dòng 5). | xong | — | — |
 | `web-admin` | `bl131026-xoa-noi-dung-khong-ly-do` — Popup Xoá nội dung bỏ ô lý do, rộng SMALL_DIALOG_CLASS (hết khoảng trắng phải) (bảng lỗi dòng 4). | xong | — | — |
+| `web-admin` | `danh-muc-tin-canh-bao-trung-ten-13-10` — Hộp ⊞ Danh mục tin, ô Thêm danh mục: gõ tên trùng danh mục đã có (không phân biệt hoa/thường, khoảng trắng, NFC) thì hiện ngay câu cảnh báo nêu tên danh mục đã có, ô đánh dấu aria-invalid, nút Thêm khoá — không gửi. Máy chủ vẫn là luật (409 name_taken, câu đi thẳng ra màn); đổi tên tại chỗ trong danh sách nhận câu 409 đó dưới dòng. | xong | — | — |
 
 ### `danh-ba-can-bo` — [docs/ui-ux/12-danh-ba-can-bo.md](../../docs/ui-ux/12-danh-ba-can-bo.md)
 
@@ -1011,7 +1013,7 @@ Cập nhật 2026-10-09 · 23 mục
 
 ## `service-comms`
 
-Cập nhật 2026-10-13 · 59 mục
+Cập nhật 2026-10-13 · 60 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1074,6 +1076,7 @@ Cập nhật 2026-10-13 · 59 mục
 | `task-08-sua-sau-ra-soat-adr-0091` — Sửa theo rà soát cô lập + bảo mật của 093c7aea (ADR 0091): (1) CORS rìa công dân cho phép PUT (core/httpx/cors.go) — trước đó trình duyệt chặn preflight PUT /api/v1/my-notification-preferences; ca kiểm chuỗi công dân nay đòi PUT trong Access-Control-Allow-Methods. (2) Vết kiểm toán cảnh báo thiên tai: `level` là chữ tự do nên chỉ ghi has_level / level_changed, không ghi giá trị. (3) Trần thân yêu cầu riêng cho POST/PATCH /api/v1/disaster-alerts, tính từ giới hạn miền (≈0,9 MiB, 12 byte/ký tự cho cách viết JSON dài nhất); DELETE và các tuyến khác giữ 64 KiB. (4) Quyết định chủ dự án 11/10/2026: tuyến công khai GET /api/v1/commune-disaster-alerts có chính sách riêng ratelimit.PublicDisasterAlertsRead — 1200 lần/phút theo (tên miền, mạng máy gọi), sự kiện public_disaster_alerts.rate_limited, mở khi Redis hỏng như tin công khai — bộ giới hạn riêng trong main.go; bộ đệm danh sách đang hiệu lực theo xã 30 giây trong bộ nhớ (app.InForceAlertCache, khoá t:<tenant_id>, tối đa 4096 xã, lọc lại theo giờ khi trúng đệm, ghi của cán bộ xoá mục trên pod đó). (5) Test PostgreSQL cho công tắc nhận thông báo: hai xã cùng citizen_id, mỗi xã chỉ đọc/ghi dòng của mình. | xong | core/httpx/cors.go + cors_test.go; core/ratelimit/ratelimit.go + ratelimit_test.go (TestPublicDisasterAlertsReadIs1200PerMinuteAndFailsOpen, …OwnBudgetAndLabel, …ServesWhenStoreDown); service-comms/cmd/server/main.go, citizen_chain_test.go; internal/app/disaster_alert.go (+WithAfterWrite), disaster_alert_public_cache.go + _test.go; internal/http/danh_muc_ghi.go (readBodyCapped), disaster_alerts.go (disasterAlertBodyMax) + _test.go (TestDisasterAlertMaximalValidBodyPassesTheCap, TestDisasterAlertOversizeBodyIsRefused, TestPublicDisasterAlertsThroughCache); internal/store/citizen_notification_preference_pg_test.go. go build + go vet + go test ./... xanh ở service-comms và core 11/10/2026 (GOCACHE=D:/gocache); make kb đã chạy. | — | citizen_notification_preference_pg_test.go và disaster_alert_pg_test.go CHƯA chạy trên PostgreSQL 16 (máy này không có VIGOV_TEST_DSN). Bộ đệm 30 giây là theo pod: pod khác thấy cảnh báo mới chậm tối đa 30 giây (chủ dự án chấp nhận). |
 | `bl131026-dem-danh-muc-thieu-tham-so` — Thêm danh mục tin tức trả 500 từ 24/09: DemDangSong không truyền $1 (tenant_id). Fake driver nay từ chối câu thiếu tham số như pgx (bảng lỗi dòng 6). | xong | d0ddfc52; go test comms 15 gói xanh. | — | — |
 | `bl131026-xoa-noi-dung-ly-do-tuy-chon` — DELETE /api/v1/content-items/{id}: lý do tuỳ chọn, để trống ghi ContentItemDeleteDefaultReason, vẫn xoá mềm + nhật ký cùng giao dịch (bảng lỗi dòng 4). | xong | b78424eb; go test comms xanh; openapi + schema.gen sinh lại. | — | — |
+| `danh-muc-tin-trung-ten-13-10` — Danh mục tin Mini App: một tên một danh mục (chủ dự án 13/10/2026). Thêm hoặc đổi tên trùng với danh mục ĐANG SỐNG khác của xã — không phân biệt chữ hoa/thường, khoảng trắng, kiểu gõ dấu dựng sẵn/tổ hợp (NFC) — trả 409 `name_taken`, câu nêu tên danh mục đã có. Phạm vi cả xã (không chỉ cùng cha) vì Mini App vẽ gốc và con cạnh nhau; danh mục ẩn vẫn tính; danh mục đã xoá trả lại tên (khác slug). So bằng Go (domain.CategoryNameKey) vì lower() của PG dưới collation C không hạ 'Đ'; đọc tên dưới khoá cây LockTree nên hai lần thêm đồng thời không lọt. Không có khoá UNIQUE ở CSDL — dữ liệu cũ có thể đã trùng, migration sẽ hỏng. | xong | go vet + go test ./... service-comms xanh (domain/category_name_test.go, app/category_name_test.go, http TestCreateCategoryWithTakenNameIs409NamingTheExistingOne). CHƯA chạy trên PostgreSQL thật. | — | — |
 
 ## `service-documents`
 
@@ -1520,7 +1523,7 @@ Cập nhật 2026-10-11 · 22 mục
 
 ## `web-admin`
 
-Cập nhật 2026-10-13 · 167 mục
+Cập nhật 2026-10-13 · 168 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1691,3 +1694,4 @@ Cập nhật 2026-10-13 · 167 mục
 | `bl131026-chuc-vu-header` — Header: dòng dưới tên = chức vụ, trống thì tên vai trò; bỏ luật ẩn khối chữ 768-1023px (bảng lỗi dòng 12). | xong | 7809b1d9; vitest components/app xanh. Chưa xem ảnh render thật. | — | — |
 | `bl131026-tong-quan-popup` — Tổng quan: bấm số tổng Văn bản (đến/đang xử lý/quá hạn), Phản ánh (4 ô), Giải ngân (Tỷ lệ, Dự án chậm) mở popup danh sách dùng chung khung DrillDialog với Nhiệm vụ (bảng lỗi dòng 13). | xong | 46d173fd; vitest dashboard 263 ca xanh (một lượt chạy trước có 1 ca đỏ không xác định, 3 lượt sau xanh). Chưa xem ảnh render thật. | — | — |
 | `bl131026-vai-tro-checkbox` — Popup Thêm/Sửa người dùng: Vai trò là checkbox (fieldset + legend, lưới 2 cột như prototype), gửi role_ids nhiều phần tử; dòng của chính mình khoá ô (#14); không có ô mật khẩu — giữ mật khẩu tạm (#9, #36) (ADR 0094; bảng lỗi web-admin-131026 dòng 10). | xong | 7bd767a2 (web) + 027a8e3d (identity); vitest toàn bộ 5965/5965, typecheck/lint sạch. Chưa xem ảnh render thật. | — | — |
+| `danh-muc-tin-canh-bao-trung-ten-13-10` — Hộp ⊞ Danh mục tin, ô Thêm danh mục: gõ tên trùng danh mục đã có (không phân biệt hoa/thường, khoảng trắng, NFC) thì hiện ngay câu cảnh báo nêu tên danh mục đã có, ô đánh dấu aria-invalid, nút Thêm khoá — không gửi. Máy chủ vẫn là luật (409 name_taken, câu đi thẳng ra màn); đổi tên tại chỗ trong danh sách nhận câu 409 đó dưới dòng. | xong | tsc sạch; vitest src/features/noi-dung 20 tệp/487 test xanh (flow test gõ 'NÔNG nghiệp' → cảnh báo, không POST). CHƯA kiểm bằng ảnh render. | — | — |

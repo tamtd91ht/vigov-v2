@@ -705,6 +705,23 @@ func TestThemDanhMucSlugTrungTra409VaNoiRoViSao(t *testing.T) {
 	}
 }
 
+// One name per category (owner 13/10/2026): 409 `name_taken`, naming the existing category as stored.
+func TestCreateCategoryWithTakenNameIs409NamingTheExistingOne(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	m.ghiDM.loi = domain.CategoryNameTakenError{Existing: "Nông nghiệp"}
+
+	w := m.goi(t, http.MethodPost, hostA, duongDanhMucND, thanThemDanhMucHopLe, canBo(xaA))
+	doiMa(t, w, http.StatusConflict)
+	e := loiTra(t, w)
+	if e.Code != "name_taken" {
+		t.Errorf("code = %q, want name_taken", e.Code)
+	}
+	if !strings.Contains(e.Message, "“Nông nghiệp”") || !strings.Contains(e.Message, "chữ hoa") {
+		t.Errorf("message = %q", e.Message)
+	}
+}
+
 // Bug sheet row 21 (owner decision 10/10/2026): the prototype's dialog sends no slug. The handler passes
 // "" on (the use case issues it) and answers 201 with the slug that was stored.
 func TestCreateCategoryWithoutSlugIs201WithTheIssuedSlug(t *testing.T) {

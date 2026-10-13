@@ -816,6 +816,31 @@ func (s *DanhMucMiniAppStore) DemDangSong(ctx context.Context, tx *store.ScopedT
 	return n, nil
 }
 
+// LiveNames reads every live category's id and name, for the duplicate-name check (domain.CheckCategoryNameFree).
+// The comparison is done in Go, not in a WHERE: lower() under a C collation does not fold Vietnamese
+// capitals. Bounded by TranDanhMucMiniApp. Callers hold LockTree, so no concurrent create slips between
+// this read and the INSERT.
+func (s *DanhMucMiniAppStore) LiveNames(ctx context.Context, tx *store.ScopedTx) ([]domain.CategoryName, error) {
+	const stmt = `SELECT id, ten FROM danh_muc_mini_app WHERE tenant_id = $1 AND deleted_at IS NULL`
+	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()))
+	if err != nil {
+		return nil, fmt.Errorf("danh_muc_mini_app: đọc tên danh mục: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.CategoryName
+	for rows.Next() {
+		var c domain.CategoryName
+		if err := rows.Scan(&c.ID, &c.Ten); err != nil {
+			return nil, fmt.Errorf("danh_muc_mini_app: đọc tên danh mục: %w", err)
+		}
+		out = append(out, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("danh_muc_mini_app: đọc tên danh mục: %w", err)
+	}
+	return out, nil
+}
+
 // ChaCoThat reports whether the parent id names a LIVE category of this commune.
 //
 // THE FOREIGN KEY DOES NOT COVER THIS CASE COMPLETELY: it refuses a parent that does not exist, but

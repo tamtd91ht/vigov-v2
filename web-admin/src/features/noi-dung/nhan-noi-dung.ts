@@ -1229,12 +1229,33 @@ export const CATEGORY_DELETE_BUTTON = "Xoá";
 export const CATEGORY_REASON_LABEL = "Lý do xoá *";
 
 /**
+ * Warned while typing in `Thêm danh mục` (owner 13/10/2026): the commune already has a category of this name,
+ * case and spacing ignored. Names the existing one as stored, so "nông nghiệp" against "Nông nghiệp" reads as
+ * the same name. The server refuses the same case with 409 `name_taken` (service-comms
+ * `domain.CheckCategoryNameFree`) — this is the early warning, the server is the rule.
+ */
+export const categoryNameTakenWarning = (existing: string): string =>
+  `Xã đã có danh mục “${existing}” (tên danh mục không phân biệt chữ hoa, chữ thường). Hãy đặt tên khác.`;
+
+/**
+ * The form two category names are compared in — the server's `CategoryNameKey`: NFC (one keyboard types
+ * Vietnamese precomposed, another decomposed), inner whitespace collapsed, lower-cased.
+ */
+export function categoryNameKey(name: string): string {
+  return name.normalize("NFC").trim().split(/\s+/).join(" ").toLocaleLowerCase("vi");
+}
+
+/** The existing category `name` collides with — any live row of the list, hidden ones included — or null. */
+export function takenCategoryName(name: string, ds: readonly comms_danhMucRa[]): string | null {
+  const key = categoryNameKey(name);
+  if (key === "") return null;
+  return ds.find((d) => categoryNameKey(d.name) === key)?.name ?? null;
+}
+
+/**
  * The dialog's list, grouped by parent (prototype `groupByParent`, `CategoryManagerDialog.tsx:319-338`):
  * the categories with no parent FIRST, under `CATEGORY_ROOT_GROUP`, then one group per parent, named by the
  * parent, in tree order. A category whose parent the list does not hold stands alone — never dropped.
- *
- * NOT FOR TIDINESS: two categories may share a name under different parents, and a flat list would show
- * two identical lines.
  */
 export function groupCategoriesByParent(
   ds: readonly comms_danhMucRa[],

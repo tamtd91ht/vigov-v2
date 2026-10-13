@@ -1006,6 +1006,11 @@ func Register(mux *http.ServeMux, d Deps) {
 	// included — rule 7, invariant 3), under the commune's tree lock so two racing creates of one name get
 	// two slugs rather than one 409. 409 `code_series_blocked` past -99. A sent slug is taken as typed.
 	//
+	// ONE NAME PER CATEGORY (owner 13/10/2026): a name equal to a LIVE category's of this commune — case,
+	// spacing and keyboard composition ignored (domain.CategoryNameKey) — is 409 `name_taken`, read under the
+	// same tree lock. That lock also closes the double-submit gap below for the name: the second request of
+	// a double submit now meets the first one's name and is refused.
+	//
 	// ⚠ WHAT THAT COSTS THE MoKhiHong ARGUMENT ABOVE: on the server-issued path the unique key no longer
 	// turns a double submit into a 409 — the second request simply gets `-2`. So during a Redis outage
 	// (MoKhiHong lets the request through) a double-submitted dialog can leave TWO categories of one
@@ -1035,7 +1040,8 @@ func Register(mux *http.ServeMux, d Deps) {
 	// PATCH: name, parent (`""` = root), order, hidden. `slug` is REFUSED when sent (400) — an issued
 	// code never changes. A new parent that is the category itself is 400; one of its descendants is 409
 	// `category_cycle` (the use case walks the ancestors under the commune's tree lock); a parent that is
-	// not a live category of this commune is 409 `parent_missing`.
+	// not a live category of this commune is 409 `parent_missing`. A new name equal to ANOTHER live
+	// category's, case ignored, is 409 `name_taken` (owner 13/10/2026).
 	//
 	// idem.KhongCan: app.DanhMucNoiDungMiniApp.Update writes and audits nothing when nothing moved, so the
 	// same request twice leaves one state and one entry.

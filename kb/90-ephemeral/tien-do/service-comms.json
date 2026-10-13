@@ -507,6 +507,14 @@
       "trang_thai": "xong",
       "viec": "DELETE /api/v1/content-items/{id}: lý do tuỳ chọn, để trống ghi ContentItemDeleteDefaultReason, vẫn xoá mềm + nhật ký cùng giao dịch (bảng lỗi dòng 4).",
       "bang_chung": "b78424eb; go test comms xanh; openapi + schema.gen sinh lại."
+    },
+    {
+      "id": "danh-muc-tin-trung-ten-13-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Danh mục tin Mini App: một tên một danh mục (chủ dự án 13/10/2026). Thêm hoặc đổi tên trùng với danh mục ĐANG SỐNG khác của xã — không phân biệt chữ hoa/thường, khoảng trắng, kiểu gõ dấu dựng sẵn/tổ hợp (NFC) — trả 409 `name_taken`, câu nêu tên danh mục đã có. Phạm vi cả xã (không chỉ cùng cha) vì Mini App vẽ gốc và con cạnh nhau; danh mục ẩn vẫn tính; danh mục đã xoá trả lại tên (khác slug). So bằng Go (domain.CategoryNameKey) vì lower() của PG dưới collation C không hạ 'Đ'; đọc tên dưới khoá cây LockTree nên hai lần thêm đồng thời không lọt. Không có khoá UNIQUE ở CSDL — dữ liệu cũ có thể đã trùng, migration sẽ hỏng.",
+      "bang_chung": "go vet + go test ./... service-comms xanh (domain/category_name_test.go, app/category_name_test.go, http TestCreateCategoryWithTakenNameIs409NamingTheExistingOne). CHƯA chạy trên PostgreSQL thật.",
+      "con_no": "Xã nào đã có hai danh mục trùng tên từ trước thì vẫn giữ nguyên; muốn dọn thì đổi tên/xoá tay trên web-admin."
     }
   ]
 }

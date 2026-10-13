@@ -89,6 +89,7 @@ import {
   CATEGORY_ADD_LABEL,
   CATEGORY_ADD_PLACEHOLDER,
   CATEGORY_ADDED_TOAST,
+  categoryNameTakenWarning,
   CATEGORY_DIALOG_DESCRIPTION,
   CATEGORY_DIALOG_TITLE,
   CATEGORY_NO_PARENT_OPTION,
@@ -142,6 +143,7 @@ import {
   saveToast,
   SO_RONG,
   SOURCE_PORTAL_SYNC,
+  takenCategoryName,
   STATUS_FILTER_OPTIONS,
   STATUS_PENDING_REVIEW,
   TEN_DANH_MUC_TOI_DA,
@@ -2123,7 +2125,9 @@ export function FormDanhMuc({
   const [khoaChongTrung] = useState(khoaChongTrungMoi);
 
   const tenGon = ten.trim();
-  const duDieuKien = tenGon !== "";
+  // Warned as it is typed, not after the click (owner 13/10/2026); the server refuses it anyway (409 name_taken).
+  const taken = takenCategoryName(tenGon, danhMuc);
+  const duDieuKien = tenGon !== "" && taken === null;
 
   function guiNgay(e: FormEvent) {
     e.preventDefault();
@@ -2144,6 +2148,8 @@ export function FormDanhMuc({
             maxLength={TEN_DANH_MUC_TOI_DA}
             autoComplete="off"
             placeholder={CATEGORY_ADD_PLACEHOLDER}
+            aria-invalid={taken !== null || undefined}
+            aria-describedby={taken !== null ? "ten-danh-muc-trung" : undefined}
             onChange={(e) => datTen(e.target.value)}
           />
         </Field>
@@ -2176,6 +2182,11 @@ export function FormDanhMuc({
         </Button>
       </div>
 
+      {taken !== null && (
+        <p id="ten-danh-muc-trung" className="m-0 text-[12px] font-medium text-danger" role="alert">
+          {categoryNameTakenWarning(taken)}
+        </p>
+      )}
       {loi !== null && (
         <p className="m-0 text-[12px] font-medium text-danger" role="alert">
           {loi}

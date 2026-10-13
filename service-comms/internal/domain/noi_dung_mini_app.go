@@ -30,6 +30,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // LoaiNoiDung is one of §5's six tabs. The codes are §5's own `Mã` column, character for character —
@@ -482,6 +484,49 @@ func ChuanHoaTenDanhMuc(ten string) (string, error) {
 		}
 	}
 	return ten, nil
+}
+
+// --- one name per category (owner 13/10/2026) -------------------------------------------------------
+
+// ErrCategoryNameTaken — another LIVE category of this commune already carries this name, compared by
+// CategoryNameKey. Returned wrapped in a CategoryNameTakenError, which names the category it collides with.
+//
+// LIVE ONLY, unlike the slug: a name is a label, not an issued code, so a deleted category gives its name
+// back. HIDDEN categories count — staff still see them on the list, and two "Nông nghiệp" rows there are
+// exactly the confusion this refuses. The WHOLE commune, not one parent: the Mini App draws roots and
+// children as chips side by side, where two equal names cannot be told apart.
+var ErrCategoryNameTaken = errors.New("danh_muc_mini_app: đã có danh mục cùng tên trong xã")
+
+// CategoryNameTakenError carries the colliding category's name AS STORED, so the refusal can show the
+// officer which row it is ("nông nghiệp" typed, "Nông nghiệp" exists).
+type CategoryNameTakenError struct{ Existing string }
+
+func (e CategoryNameTakenError) Error() string {
+	return ErrCategoryNameTaken.Error() + ": “" + e.Existing + "”"
+}
+func (e CategoryNameTakenError) Unwrap() error { return ErrCategoryNameTaken }
+
+// CategoryName is one live category as the name check reads it.
+type CategoryName struct{ ID, Ten string }
+
+// CategoryNameKey is the form two category names are compared in: NFC, inner whitespace collapsed,
+// lower-cased. NFC because the same Vietnamese word arrives precomposed from one keyboard and decomposed
+// ("tổ hợp") from another — two byte strings a person reads as one name. Lower-casing in Go, not in SQL:
+// PostgreSQL's lower() under a C collation leaves "Đ" and every accented capital untouched.
+func CategoryNameKey(name string) string {
+	return strings.ToLower(strings.Join(strings.Fields(norm.NFC.String(name)), " "))
+}
+
+// CheckCategoryNameFree refuses `name` when a live category other than `selfID` ("" on a create) has the
+// same key. Renaming a category to a different case of its own name is not a collision.
+func CheckCategoryNameFree(name string, live []CategoryName, selfID string) error {
+	key := CategoryNameKey(name)
+	for _, c := range live {
+		if c.ID != selfID && CategoryNameKey(c.Ten) == key {
+			return CategoryNameTakenError{Existing: c.Ten}
+		}
+	}
+	return nil
 }
 
 // ChuanHoaSlugDanhMuc trims and validates a category's business code.

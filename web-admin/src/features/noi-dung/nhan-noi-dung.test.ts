@@ -44,6 +44,7 @@ import {
   formatVietnamDateTime,
   giaTriTuHang,
   groupCategoriesByParent,
+  takenCategoryName,
   instantToLocalInput,
   isValidLinkTo,
   localInputToInstant,
@@ -1032,5 +1033,23 @@ describe("category groups", () => {
 
   it("an empty list draws no group, not an empty heading", () => {
     expect(groupCategoriesByParent([])).toEqual([]);
+  });
+});
+
+// One name per category (owner 13/10/2026) — the add box warns before the server's 409 name_taken.
+describe("takenCategoryName", () => {
+  const ds = [danhMuc({ id: "A", name: "Nông nghiệp" }), danhMuc({ id: "B", name: "Đất đai", hidden: true })];
+
+  it("case, spacing and keyboard composition are ignored; the existing name comes back as stored", () => {
+    for (const typed of ["nông nghiệp", "NÔNG NGHIỆP", "  nông   nghiệp ", "nông nghiệp"]) {
+      expect(takenCategoryName(typed, ds), typed).toBe("Nông nghiệp");
+    }
+    expect(takenCategoryName("đất ĐAI", ds), "a hidden category still holds its name").toBe("Đất đai");
+  });
+
+  it("a different name, a name without its diacritics, or an empty box is free", () => {
+    expect(takenCategoryName("Nông nghiệp sạch", ds)).toBeNull();
+    expect(takenCategoryName("Nong nghiep", ds)).toBeNull();
+    expect(takenCategoryName("   ", ds)).toBeNull();
   });
 });

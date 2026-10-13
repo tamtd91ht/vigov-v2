@@ -1481,6 +1481,14 @@
       "viec": "Popup Thêm/Sửa người dùng: Vai trò là checkbox (fieldset + legend, lưới 2 cột như prototype), gửi role_ids nhiều phần tử; dòng của chính mình khoá ô (#14); không có ô mật khẩu — giữ mật khẩu tạm (#9, #36) (ADR 0094; bảng lỗi web-admin-131026 dòng 10).",
       "bang_chung": "7bd767a2 (web) + 027a8e3d (identity); vitest toàn bộ 5965/5965, typecheck/lint sạch. Chưa xem ảnh render thật.",
       "con_no": "whoAmI roles[] chưa dùng ở header (vẫn hiện vai trò chính). Nhánh chọn một vai trò trong components/danh-ba/bieu-mau-ghi-can-bo.tsx không còn ai mở — gỡ là việc riêng."
+    },
+    {
+      "id": "danh-muc-tin-canh-bao-trung-ten-13-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Hộp ⊞ Danh mục tin, ô Thêm danh mục: gõ tên trùng danh mục đã có (không phân biệt hoa/thường, khoảng trắng, NFC) thì hiện ngay câu cảnh báo nêu tên danh mục đã có, ô đánh dấu aria-invalid, nút Thêm khoá — không gửi. Máy chủ vẫn là luật (409 name_taken, câu đi thẳng ra màn); đổi tên tại chỗ trong danh sách nhận câu 409 đó dưới dòng.",
+      "bang_chung": "tsc sạch; vitest src/features/noi-dung 20 tệp/487 test xanh (flow test gõ 'NÔNG nghiệp' → cảnh báo, không POST). CHƯA kiểm bằng ảnh render.",
+      "con_no": "Chưa kiểm bằng ảnh render."
     }
   ]
 }

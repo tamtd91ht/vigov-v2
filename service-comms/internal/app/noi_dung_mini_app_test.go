@@ -79,6 +79,9 @@ type khoNDGia struct {
 	category                *domain.DanhMucMiniApp
 	ancestors               []string
 	liveChildren, liveItems int64
+
+	// liveNames is what LiveNames reads — the commune's live categories, for the duplicate-name check.
+	liveNames []domain.CategoryName
 }
 
 func (k *khoNDGia) Connect(context.Context) (driver.Conn, error) { return &connNDGia{k: k}, nil }
@@ -127,6 +130,12 @@ func (c *connNDGia) QueryContext(_ context.Context, q string, args []driver.Name
 	c.k.lenh = append(c.k.lenh, lenhGhi{sql: q, args: gt})
 
 	switch {
+	case strings.Contains(q, "SELECT id, ten FROM danh_muc_mini_app"):
+		hang := make([][]driver.Value, 0, len(c.k.liveNames))
+		for _, n := range c.k.liveNames {
+			hang = append(hang, []driver.Value{n.ID, n.Ten})
+		}
+		return &rowsNDGia{cot: []string{"id", "ten"}, hang: hang}, nil
 	case strings.Contains(q, "count(*) FROM noi_dung_mini_app"):
 		return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.liveItems}}}, nil
 	case strings.Contains(q, "count(*)") && strings.Contains(q, "cha_id = $2"):

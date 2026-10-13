@@ -60,6 +60,7 @@ type KhoNoiDungMiniApp interface {
 type KhoDanhMucMiniApp interface {
 	SlugDaDung(ctx context.Context, tx *store.ScopedTx, slug string) (bool, error)
 	DemDangSong(ctx context.Context, tx *store.ScopedTx) (int, error)
+	LiveNames(ctx context.Context, tx *store.ScopedTx) ([]domain.CategoryName, error)
 	ChaCoThat(ctx context.Context, tx *store.ScopedTx, chaID string) (bool, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, dm domain.DanhMucMiniApp) error
 
@@ -863,10 +864,10 @@ func (uc *SoanNoiDungMiniApp) Delete(ctx context.Context, id, rawReason string, 
 
 // Them adds one category to the commune's filing tree — §6's `⊞ Danh mục tin`.
 //
-// ORDER OF THE THREE REFUSALS, and it is not arbitrary: the ceiling first (a condition of the whole
+// ORDER OF THE FOUR REFUSALS, and it is not arbitrary: the ceiling first (a condition of the whole
 // list, which the caller can act on without knowing anything about this value), then the duplicate
-// slug, then the parent. The parent last because it is the only one that depends on another row
-// being alive.
+// name (the one field the dialog always shows), then the duplicate slug, then the parent. The parent
+// last because it is the only one that depends on another row being alive.
 func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemDanhMuc,
 	nguoi audit.Actor) (domain.DanhMucMiniApp, error) {
 
@@ -900,14 +901,22 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 			return commsstore.ErrQuaNhieuDanhMucMiniApp
 		}
 
+		// THE TREE LOCK FIRST, on every create: two officers adding "Nông nghiệp" at the same moment would
+		// both find the name free (no unique key can hold a case-folded Vietnamese name — see LiveNames),
+		// and both find `nong-nghiep` free. Serialised per commune, the second one sees the first's row.
+		// The same advisory lock Update takes.
+		if err := uc.kho.LockTree(ctx, tx); err != nil {
+			return err
+		}
+		live, err := uc.kho.LiveNames(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := domain.CheckCategoryNameFree(moi.Ten, live, ""); err != nil {
+			return err
+		}
+
 		if sach.AutoSlug {
-			// THE TREE LOCK FIRST: two officers adding "Nông nghiệp" at the same moment would both
-			// find `nong-nghiep` free, and the second INSERT would hit `UNIQUE (tenant_id, slug)` and
-			// answer a 409 about a slug that person never typed. Serialised per commune, the second
-			// one sees the first's row and takes `nong-nghiep-2`. The same advisory lock Update takes.
-			if err := uc.kho.LockTree(ctx, tx); err != nil {
-				return err
-			}
 			if moi.Slug, err = uc.firstFreeSlug(ctx, tx, sach.Slug); err != nil {
 				return err
 			}
@@ -1023,6 +1032,22 @@ func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domai
 		}
 		if clean.Hidden != nil {
 			after.Hidden = *clean.Hidden
+		}
+
+		// A rename to another category's name is refused like a create (domain.ErrCategoryNameTaken); a
+		// rename that only changes case or spacing of its own name compares equal and needs no read.
+		if domain.CategoryNameKey(after.Ten) != domain.CategoryNameKey(before.Ten) {
+			if err := uc.kho.LockTree(ctx, tx); err != nil {
+				return err
+			}
+			live, err := uc.kho.LiveNames(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if err := domain.CheckCategoryNameFree(after.Ten, live, after.ID); err != nil {
+				refusal = err
+				return refusal
+			}
 		}
 
 		if after.ChaID != before.ChaID && after.ChaID != "" {
