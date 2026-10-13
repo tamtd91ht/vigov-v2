@@ -17,6 +17,7 @@ owns_facts:
   - "chuyên mục Cổng (chuyen_muc_cong) là bảng riêng, không gộp với danh mục của xã; không chép cây chuyên mục của Cổng — hỏi Cổng lúc mở cấu hình, chỉ lưu lựa chọn và ánh xạ loại (tin-tuc, su-kien, thong-bao)"
   - "ma_bao_mat của Cổng mã hoá theo xã (ADR 0009), chỉ ghi, hiện dạng che; đổi api_url buộc nhập lại mã"
   - "danh mục nội dung: sửa tên, cha, thứ tự; slug cố định; cờ ẩn/hiện; xoá mềm có lý do, từ chối khi còn nội dung hoặc danh mục con còn sống"
+  - "tên danh mục nội dung không trùng trong cùng mục cha (gốc so với gốc), không phân biệt hoa/thường và khoảng trắng nhưng phân biệt dấu; khác mục cha thì được trùng; 409 name_taken (chốt 13/10/2026)"
   - "truyền thanh: mp3/m4a, ≤ 30 MB, thời lượng cán bộ gõ, bucket private, link ký ngắn hạn, mục đích tải lên content-audio, người tải cần content.update"
   - "banner: ảnh bắt buộc, tiêu đề là alt, link_to tuỳ chọn, display_order tăng dần theo xã, không lịch, chỉ ở dải trang chủ Mini App, chỉ trả khi ?type=banner"
   - "ẩn danh mục chỉ gỡ chip lọc của nó và của danh mục con trên Mini App; bài vẫn hiện ở Tất cả (chốt 01/10/2026)"
@@ -157,6 +158,7 @@ Cấu hình đồng bộ là của `comms` (cạnh nội dung nó đổ vào), k
 | 2 | Thêm cờ **ẩn/hiện**: ẩn thay cho xoá |
 | 3 | Xoá **mềm**, **bắt buộc lý do** (luật 7); **từ chối** khi còn nội dung sống hoặc danh mục con sống — câu từ chối gợi ý ẩn |
 | 4 | Slug **không bao giờ cấp lại** — đã đúng ở khoá `0006:184-188` |
+| 5 | **Một tên một danh mục trong cùng mục cha** (chủ dự án chốt 13/10/2026). Thêm, đổi tên hay chuyển sang mục cha mới mà trùng tên một danh mục **đang sống** cùng mục cha (gốc so với gốc) → 409 `name_taken`, câu nêu tên đã có. So **không phân biệt hoa/thường, khoảng trắng, kiểu gõ dấu dựng sẵn/tổ hợp, ký tự vô hình**; **có** phân biệt dấu ("Nong nghiep" ≠ "Nông nghiệp"). Danh mục ẩn vẫn giữ tên; danh mục đã xoá trả lại tên. Cùng tên ở **hai mục cha khác nhau được phép** — như bản mẫu (Cổng Thăng Bình có hai "Chuyển đổi số"). Không có khoá UNIQUE ở CSDL: dữ liệu trùng có từ trước giữ nguyên, phép kiểm chạy dưới khoá cây của xã |
 
 **Vì sao từ chối xoá thay vì gỡ danh mục khỏi các bài:** gỡ hàng loạt là sửa âm thầm nhiều hồ sơ một
 lúc; ẩn đạt cùng mục đích mà không chạm bài nào.

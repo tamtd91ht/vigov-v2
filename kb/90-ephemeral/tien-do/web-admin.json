@@ -1486,8 +1486,8 @@
       "id": "danh-muc-tin-canh-bao-trung-ten-13-10",
       "menu": "noi-dung-mini-app",
       "trang_thai": "xong",
-      "viec": "Hộp ⊞ Danh mục tin, ô Thêm danh mục: gõ tên trùng danh mục đã có (không phân biệt hoa/thường, khoảng trắng, NFC) thì hiện ngay câu cảnh báo nêu tên danh mục đã có, ô đánh dấu aria-invalid, nút Thêm khoá — không gửi. Máy chủ vẫn là luật (409 name_taken, câu đi thẳng ra màn); đổi tên tại chỗ trong danh sách nhận câu 409 đó dưới dòng.",
-      "bang_chung": "tsc sạch; vitest src/features/noi-dung 20 tệp/487 test xanh (flow test gõ 'NÔNG nghiệp' → cảnh báo, không POST). CHƯA kiểm bằng ảnh render.",
+      "viec": "Hộp ⊞ Danh mục tin, ô Thêm danh mục: gõ tên trùng danh mục cùng mục cha đang chọn ở ô 'Thuộc mục' (không phân biệt hoa/thường, khoảng trắng, NFC; phân biệt dấu) thì hiện ngay câu cảnh báo nêu tên đã có, aria-invalid, nút Thêm khoá — không gửi. Khác mục cha thì không cảnh báo (chủ dự án 13/10/2026). Máy chủ vẫn là luật (409 name_taken); đổi tên tại chỗ nhận câu 409 dưới dòng.",
+      "bang_chung": "tsc sạch; vitest src/features/noi-dung 20 tệp/488 test xanh (flow test gõ 'NÔNG nghiệp' → cảnh báo, không POST; takenCategoryName anh em/khác cha). CHƯA kiểm bằng ảnh render.",
       "con_no": "Chưa kiểm bằng ảnh render."
     }
   ]

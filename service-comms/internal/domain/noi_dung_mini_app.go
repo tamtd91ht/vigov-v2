@@ -488,14 +488,15 @@ func ChuanHoaTenDanhMuc(ten string) (string, error) {
 
 // --- one name per category (owner 13/10/2026) -------------------------------------------------------
 
-// ErrCategoryNameTaken — another LIVE category of this commune already carries this name, compared by
-// CategoryNameKey. Returned wrapped in a CategoryNameTakenError, which names the category it collides with.
+// ErrCategoryNameTaken — another LIVE category UNDER THE SAME PARENT (roots: among the roots) already carries
+// this name, compared by CategoryNameKey. Returned wrapped in a CategoryNameTakenError, which names the
+// category it collides with.
 //
-// LIVE ONLY, unlike the slug: a name is a label, not an issued code, so a deleted category gives its name
-// back. HIDDEN categories count — staff still see them on the list, and two "Nông nghiệp" rows there are
-// exactly the confusion this refuses. The WHOLE commune, not one parent: the Mini App draws roots and
-// children as chips side by side, where two equal names cannot be told apart.
-var ErrCategoryNameTaken = errors.New("danh_muc_mini_app: đã có danh mục cùng tên trong xã")
+// SAME PARENT, not the whole commune (owner 13/10/2026, as the prototype allows): a portal may file two
+// "Chuyển đổi số" under two different parents, and the commune's tree may mirror that. LIVE ONLY, unlike the
+// slug: a name is a label, not an issued code, so a deleted category gives its name back. HIDDEN categories
+// count — staff still see them on the list. Diacritics are significant ("Nong nghiep" ≠ "Nông nghiệp", owner).
+var ErrCategoryNameTaken = errors.New("danh_muc_mini_app: mục cha này đã có danh mục cùng tên")
 
 // CategoryNameTakenError carries the colliding category's name AS STORED, so the refusal can show the
 // officer which row it is ("nông nghiệp" typed, "Nông nghiệp" exists).
@@ -506,8 +507,8 @@ func (e CategoryNameTakenError) Error() string {
 }
 func (e CategoryNameTakenError) Unwrap() error { return ErrCategoryNameTaken }
 
-// CategoryName is one live category as the name check reads it.
-type CategoryName struct{ ID, Ten string }
+// CategoryName is one live category as the name check reads it. ChaID "" = a root.
+type CategoryName struct{ ID, Ten, ChaID string }
 
 // CategoryNameKey is the form two category names are compared in: NFC, inner whitespace collapsed,
 // lower-cased. NFC because the same Vietnamese word arrives precomposed from one keyboard and decomposed
@@ -526,12 +527,13 @@ func CategoryNameKey(name string) string {
 	return strings.ToLower(strings.Join(strings.Fields(norm.NFC.String(visible)), " "))
 }
 
-// CheckCategoryNameFree refuses `name` when a live category other than `selfID` ("" on a create) has the
-// same key. Renaming a category to a different case of its own name is not a collision.
-func CheckCategoryNameFree(name string, live []CategoryName, selfID string) error {
+// CheckCategoryNameFree refuses `name` under `parentID` ("" = root) when a live category other than `selfID`
+// ("" on a create) under that same parent has the same key. Renaming a category to a different case of its
+// own name is not a collision.
+func CheckCategoryNameFree(name, parentID string, live []CategoryName, selfID string) error {
 	key := CategoryNameKey(name)
 	for _, c := range live {
-		if c.ID != selfID && CategoryNameKey(c.Ten) == key {
+		if c.ID != selfID && c.ChaID == parentID && CategoryNameKey(c.Ten) == key {
 			return CategoryNameTakenError{Existing: c.Ten}
 		}
 	}

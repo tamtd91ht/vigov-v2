@@ -52,6 +52,43 @@ func TestRenameCategoryToAnotherCategorysNameIsRefused(t *testing.T) {
 	}
 }
 
+// One name per PARENT (owner 13/10/2026): a sibling's name is refused, the same name under another parent
+// is not — the portal files two "Chuyển đổi số" under two parents, and the prototype allows it.
+func TestCreateCategoryNameIsCheckedAmongSiblingsOnly(t *testing.T) {
+	live := []domain.CategoryName{{ID: "p1", Ten: "Kinh tế"}, {ID: "p2", Ten: "Xã hội"}, {ID: "c1", Ten: "Chuyển đổi số", ChaID: "p1"}}
+
+	k := &khoNDGia{coDong: true, liveNames: live}
+	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
+	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "chuyển đổi số", ChaID: "p1"}, nguoiSoanND()); !errors.Is(err, domain.ErrCategoryNameTaken) {
+		t.Errorf("sibling: err = %v, want ErrCategoryNameTaken", err)
+	}
+
+	k = &khoNDGia{coDong: true, liveNames: live}
+	_, ucDM, ctx = dungUseCaseNoiDung(t, k)
+	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Chuyển đổi số", ChaID: "p2"}, nguoiSoanND()); err != nil {
+		t.Errorf("another parent: %v", err)
+	}
+	if !k.coCau("INSERT INTO danh_muc_mini_app") {
+		t.Error("the same name under another parent was not inserted")
+	}
+}
+
+// Moving a category under a parent that already has a child of its name is a collision too.
+func TestMoveCategoryUnderAParentWithTheSameNameIsRefused(t *testing.T) {
+	moving := categoryNow() // dm-1, a root
+	k := &khoNDGia{category: moving, coDong: true, ancestors: []string{"p1"}, liveNames: []domain.CategoryName{
+		{ID: "dm-1", Ten: moving.Ten}, {ID: "p1", Ten: "Kinh tế"}, {ID: "c1", Ten: moving.Ten, ChaID: "p1"},
+	}}
+	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
+	parent := "p1"
+	if _, err := ucDM.Update(ctx, "dm-1", domain.ContentCategoryUpdate{ChaID: &parent}, nguoiSoanND()); !errors.Is(err, domain.ErrCategoryNameTaken) {
+		t.Fatalf("err = %v, want ErrCategoryNameTaken", err)
+	}
+	if k.coCau("UPDATE danh_muc_mini_app") || k.daCommit != 0 {
+		t.Error("a refused move still wrote")
+	}
+}
+
 // The tree lock comes BEFORE the row lock on a rename, the order Them takes them in — the other order
 // deadlocks a rename of P against a child being added under P.
 func TestRenameCategoryLocksTheTreeBeforeTheRow(t *testing.T) {

@@ -2126,7 +2126,7 @@ export function FormDanhMuc({
 
   const tenGon = ten.trim();
   // Warned as it is typed, not after the click (owner 13/10/2026); the server refuses it anyway (409 name_taken).
-  const taken = takenCategoryName(tenGon, danhMuc);
+  const taken = takenCategoryName(tenGon, chaID, danhMuc);
   const duDieuKien = tenGon !== "" && taken === null;
 
   function guiNgay(e: FormEvent) {

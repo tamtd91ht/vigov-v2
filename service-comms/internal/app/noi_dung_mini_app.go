@@ -912,7 +912,7 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 		if err != nil {
 			return err
 		}
-		if err := domain.CheckCategoryNameFree(moi.Ten, live, ""); err != nil {
+		if err := domain.CheckCategoryNameFree(moi.Ten, moi.ChaID, live, ""); err != nil {
 			return err
 		}
 
@@ -1043,14 +1043,15 @@ func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domai
 			after.Hidden = *clean.Hidden
 		}
 
-		// A rename to another category's name is refused like a create (domain.ErrCategoryNameTaken); a
-		// rename that only changes case or spacing of its own name compares equal and needs no read.
-		if domain.CategoryNameKey(after.Ten) != domain.CategoryNameKey(before.Ten) {
+		// A rename to a sibling's name, or a move under a parent that already has this name, is refused like
+		// a create (domain.ErrCategoryNameTaken); a rename that only changes case or spacing of its own name,
+		// in place, compares equal and needs no read.
+		if domain.CategoryNameKey(after.Ten) != domain.CategoryNameKey(before.Ten) || after.ChaID != before.ChaID {
 			live, err := uc.kho.LiveNames(ctx, tx)
 			if err != nil {
 				return err
 			}
-			if err := domain.CheckCategoryNameFree(after.Ten, live, after.ID); err != nil {
+			if err := domain.CheckCategoryNameFree(after.Ten, after.ChaID, live, after.ID); err != nil {
 				refusal = err
 				return refusal
 			}

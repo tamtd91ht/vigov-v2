@@ -1037,19 +1037,29 @@ describe("category groups", () => {
 });
 
 // One name per category (owner 13/10/2026) — the add box warns before the server's 409 name_taken.
-describe("takenCategoryName", () => {
-  const ds = [danhMuc({ id: "A", name: "Nông nghiệp" }), danhMuc({ id: "B", name: "Đất đai", hidden: true })];
+describe("takenCategoryName — one name per parent", () => {
+  const ds = [
+    danhMuc({ id: "A", name: "Nông nghiệp" }),
+    danhMuc({ id: "B", name: "Đất đai", hidden: true }),
+    danhMuc({ id: "C", name: "Chuyển đổi số", parent_id: "A" }),
+  ];
 
   it("case, spacing and keyboard composition are ignored; the existing name comes back as stored", () => {
     for (const typed of ["nông nghiệp", "NÔNG NGHIỆP", "  nông   nghiệp ", "nông nghiệp"]) {
-      expect(takenCategoryName(typed, ds), typed).toBe("Nông nghiệp");
+      expect(takenCategoryName(typed, "", ds), typed).toBe("Nông nghiệp");
     }
-    expect(takenCategoryName("đất ĐAI", ds), "a hidden category still holds its name").toBe("Đất đai");
+    expect(takenCategoryName("đất ĐAI", "", ds), "a hidden category still holds its name").toBe("Đất đai");
+  });
+
+  it("siblings collide; the same name under another parent, or as a root, does not (owner 13/10/2026)", () => {
+    expect(takenCategoryName("chuyển đổi số", "A", ds)).toBe("Chuyển đổi số");
+    expect(takenCategoryName("Chuyển đổi số", "B", ds)).toBeNull();
+    expect(takenCategoryName("Chuyển đổi số", "", ds)).toBeNull();
   });
 
   it("a different name, a name without its diacritics, or an empty box is free", () => {
-    expect(takenCategoryName("Nông nghiệp sạch", ds)).toBeNull();
-    expect(takenCategoryName("Nong nghiep", ds)).toBeNull();
-    expect(takenCategoryName("   ", ds)).toBeNull();
+    expect(takenCategoryName("Nông nghiệp sạch", "", ds)).toBeNull();
+    expect(takenCategoryName("Nong nghiep", "", ds)).toBeNull();
+    expect(takenCategoryName("   ", "", ds)).toBeNull();
   });
 });

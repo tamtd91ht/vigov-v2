@@ -821,7 +821,7 @@ func (s *DanhMucMiniAppStore) DemDangSong(ctx context.Context, tx *store.ScopedT
 // capitals. Bounded by TranDanhMucMiniApp. Callers hold LockTree, so no concurrent create slips between
 // this read and the INSERT.
 func (s *DanhMucMiniAppStore) LiveNames(ctx context.Context, tx *store.ScopedTx) ([]domain.CategoryName, error) {
-	const stmt = `SELECT id, ten FROM danh_muc_mini_app WHERE tenant_id = $1 AND deleted_at IS NULL`
+	const stmt = `SELECT id, ten, COALESCE(cha_id, '') FROM danh_muc_mini_app WHERE tenant_id = $1 AND deleted_at IS NULL`
 	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()))
 	if err != nil {
 		return nil, fmt.Errorf("danh_muc_mini_app: đọc tên danh mục: %w", err)
@@ -830,7 +830,7 @@ func (s *DanhMucMiniAppStore) LiveNames(ctx context.Context, tx *store.ScopedTx)
 	var out []domain.CategoryName
 	for rows.Next() {
 		var c domain.CategoryName
-		if err := rows.Scan(&c.ID, &c.Ten); err != nil {
+		if err := rows.Scan(&c.ID, &c.Ten, &c.ChaID); err != nil {
 			return nil, fmt.Errorf("danh_muc_mini_app: đọc tên danh mục: %w", err)
 		}
 		out = append(out, c)

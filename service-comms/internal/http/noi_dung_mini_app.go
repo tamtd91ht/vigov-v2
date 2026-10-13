@@ -1027,7 +1027,7 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 			existing = " “" + taken.Existing + "”"
 		}
 		httpx.WriteError(w, http.StatusConflict, "name_taken",
-			"Xã đã có danh mục"+existing+" (tên danh mục không phân biệt chữ hoa, chữ thường). Hãy đặt tên khác.", "")
+			"Mục cha này đã có danh mục"+existing+" (tên danh mục không phân biệt chữ hoa, chữ thường). Hãy đặt tên khác.", "")
 	case errors.Is(err, commsstore.ErrSlugDanhMucDaTonTai):
 		// The message says WHY a slug that is nowhere on the screen is nonetheless taken: a
 		// soft-deleted row keeps its code forever. Without that sentence this reads as a bug.

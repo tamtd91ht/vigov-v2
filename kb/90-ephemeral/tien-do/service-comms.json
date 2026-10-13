@@ -512,8 +512,8 @@
       "id": "danh-muc-tin-trung-ten-13-10",
       "menu": "noi-dung-mini-app",
       "trang_thai": "xong",
-      "viec": "Danh mục tin Mini App: một tên một danh mục (chủ dự án 13/10/2026). Thêm hoặc đổi tên trùng với danh mục ĐANG SỐNG khác của xã — không phân biệt chữ hoa/thường, khoảng trắng, kiểu gõ dấu dựng sẵn/tổ hợp (NFC) — trả 409 `name_taken`, câu nêu tên danh mục đã có. Phạm vi cả xã (không chỉ cùng cha) vì Mini App vẽ gốc và con cạnh nhau; danh mục ẩn vẫn tính; danh mục đã xoá trả lại tên (khác slug). So bằng Go (domain.CategoryNameKey) vì lower() của PG dưới collation C không hạ 'Đ'; đọc tên dưới khoá cây LockTree nên hai lần thêm đồng thời không lọt. Không có khoá UNIQUE ở CSDL — dữ liệu cũ có thể đã trùng, migration sẽ hỏng.",
-      "bang_chung": "go vet + go test ./... service-comms xanh (domain/category_name_test.go, app/category_name_test.go, http TestCreateCategoryWithTakenNameIs409NamingTheExistingOne). CHƯA chạy trên PostgreSQL thật.",
+      "viec": "Danh mục tin Mini App: một tên một danh mục TRONG CÙNG MỤC CHA (chủ dự án 13/10/2026, như bản mẫu — khác mục cha được trùng; ADR 0067 §3 #5). Thêm, đổi tên hoặc chuyển cha mà trùng tên danh mục đang sống cùng mục cha — không phân biệt hoa/thường, khoảng trắng, NFC, ký tự vô hình Cf; CÓ phân biệt dấu (chủ dự án) — trả 409 `name_taken`, câu nêu tên đã có. Danh mục ẩn vẫn tính; đã xoá trả lại tên. So bằng Go (domain.CategoryNameKey) vì lower() của PG dưới collation C không hạ 'Đ'; đọc tên dưới khoá cây. Sửa danh mục lấy khoá cây TRƯỚC khoá dòng (như Thêm) — thứ tự ngược deadlock đổi tên P với thêm con dưới P (trinh sát soát lại tìm ra, 5a6668d0). Không khoá UNIQUE ở CSDL.",
+      "bang_chung": "go vet + go test ./... service-comms xanh (domain/category_name_test.go anh em/khác cha; app/category_name_test.go thêm, đổi tên, chuyển cha, thứ tự khoá; http TestCreateCategoryWithTakenNameIs409NamingTheExistingOne). CHƯA chạy trên PostgreSQL thật — deadlock suy từ chế độ khoá, chưa tái hiện.",
       "con_no": "Xã nào đã có hai danh mục trùng tên từ trước thì vẫn giữ nguyên; muốn dọn thì đổi tên/xoá tay trên web-admin."
     }
   ]
