@@ -57,6 +57,9 @@ func TestStaffCountsSharesBothPredicatesAndBindsCommune(t *testing.T) {
 	}
 	// Counts only: no personal column is selected.
 	cols := stmt.sql[strings.Index(stmt.sql, "SELECT"):strings.Index(stmt.sql, "FROM nguoi_dung")]
+	// The shared predicate sits inside a FILTER here and names `email` as a CONDITION (the seeded admin
+	// is not published), never as a selected column — strip it before looking for selected columns.
+	cols = strings.ReplaceAll(cols, locDanhBaCongKhai, "")
 	for _, banned := range []string{"ho_ten", "dien_thoai", "di_dong", "email", "nd.id", "nd.ma"} {
 		if strings.Contains(cols, banned) {
 			t.Errorf("câu lệnh đếm chọn cột %q: %s", banned, cols)

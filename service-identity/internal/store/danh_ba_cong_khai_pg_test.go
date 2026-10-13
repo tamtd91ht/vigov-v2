@@ -20,6 +20,7 @@ import (
 //	chua-cong-khai  not published                                drop `hien_tren_mini_app` → appears
 //	bi-khoa       published, consent, locked                     drop `dang_hoat_dong` → appears
 //	da-xoa        published, consent, soft-deleted               drop `deleted_at IS NULL` → appears
+//	quan-tri      published, consent, login `admin`              drop the `email` clause → appears
 //
 // "Published without consent" cannot be inserted at all — migration 0010 §3 refuses it, proven in
 // danh_ba_mini_app_pg_test.go — so the read's own consent clauses are covered by the statement test.
@@ -78,6 +79,13 @@ func TestDanhBaCongKhaiPg(t *testing.T) {
 	themCongKhaiPg(t, db, xaA, "bi-khoa", "u1", true, true, false, 0)
 	themCongKhaiPg(t, db, xaA, "da-xoa", "u1", true, false, true, 0)
 	themCongKhaiPg(t, db, xaB, "cua-xa-b", "u1", true, false, false, 0)
+	// The seeded `admin` login, published by mistake: drop the `email` clause → "quan-tri" appears
+	// (sheet mini-app 13/10/2026 row 1).
+	themCongKhaiPg(t, db, xaA, "quan-tri", "", true, false, false, 0)
+	if _, err := db.Exec(`UPDATE nguoi_dung SET email = $3 WHERE tenant_id = $1 AND id = $2`,
+		xaA, "quan-tri", EmailQuanTriMacDinh); err != nil {
+		t.Fatalf("đặt email admin: %v", err)
+	}
 
 	kho := NewCanBoStore(pkgstore.New(db))
 	doc := func(xa string) (string, string) {

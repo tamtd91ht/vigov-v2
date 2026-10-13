@@ -172,6 +172,8 @@ func TestDanhBaCongKhaiBuocXaTuNguCanhVaDuMenhDe(t *testing.T) {
 		"AND nd.hien_tren_mini_app\n",
 		"AND nd.dong_y_cong_khai_luc IS NOT NULL",
 		"AND nd.dong_y_cong_khai_ghi_boi <> ''",
+		// The seeded `admin` login never reaches the citizen's directory (sheet mini-app 13/10/2026 row 1).
+		"AND nd.email IS DISTINCT FROM 'admin'",
 		"ON bp.tenant_id = nd.tenant_id",
 		"AND bp.deleted_at IS NULL",
 		"ORDER BY nd.thu_tu_danh_ba ASC NULLS LAST, bp.ten ASC NULLS LAST",

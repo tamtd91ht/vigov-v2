@@ -95,11 +95,19 @@ LIMIT $2`
 
 // locDanhBaCongKhai is the publication predicate, kept as its own constant so the test can assert it
 // clause by clause against the statement that reached the driver.
+//
+// The last clause keeps the seeded `admin` account (EmailQuanTriMacDinh, display name "Quản trị hệ
+// thống") out whatever its flags say: it is a system login, not an official a citizen can call, and it
+// reached the citizen's directory once somebody ticked "Hiện trên Mini App" on it (customer sheet
+// mini-app 13/10/2026 row 1). Matched on the login, never on the role: a real person holding the
+// commune-admin role must stay in the directory. A literal, not a bound value: the predicate is shared
+// with staff_counts.go, whose "published" count must keep meaning exactly what this route serves.
 const locDanhBaCongKhai = `  AND nd.deleted_at IS NULL
   AND nd.dang_hoat_dong
   AND nd.hien_tren_mini_app
   AND nd.dong_y_cong_khai_luc IS NOT NULL
-  AND nd.dong_y_cong_khai_ghi_boi <> ''`
+  AND nd.dong_y_cong_khai_ghi_boi <> ''
+  AND nd.email IS DISTINCT FROM '` + EmailQuanTriMacDinh + `'`
 
 // DanhBaCongKhai reads the published directory of the commune in the context.
 //
