@@ -119,7 +119,7 @@ func requireOne(res sql.Result, op string, none error) error {
 const accountColumns = `id, code, email, display_name, must_change_password, totp_enrolled_at,
 	pending_totp_secret_sealed IS NOT NULL, failed_attempts, locked_until, disabled_at,
 	coalesce(disabled_by, ''), coalesce(disabled_reason, ''), created_at, created_by, updated_at,
-	temporary_password_expires_at, pending_totp_created_at`
+	temporary_password_expires_at, pending_totp_created_at, is_owner`
 
 const (
 	selectAccountByID    = `SELECT ` + accountColumns + ` FROM operator_account WHERE id = $1`
@@ -136,7 +136,7 @@ func scanAccountFrom(row scanner) (domain.OperatorAccount, error) {
 	var enrolled, locked, disabled, tempExpires, pendingCreated sql.NullTime
 	err := row.Scan(&a.ID, &a.Code, &a.Email, &a.DisplayName, &a.MustChangePassword, &enrolled,
 		&a.TOTPPending, &a.FailedAttempts, &locked, &disabled, &a.DisabledBy, &a.DisabledReason,
-		&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &tempExpires, &pendingCreated)
+		&a.CreatedAt, &a.CreatedBy, &a.UpdatedAt, &tempExpires, &pendingCreated, &a.IsOwner)
 	if err != nil {
 		return domain.OperatorAccount{}, err
 	}
@@ -675,6 +675,45 @@ func (t *Tx) Unlock(ctx context.Context, accountID string, now time.Time) error 
 		return fmt.Errorf("operatorstore: unlock: %w", err)
 	}
 	return requireOne(res, "unlock", ErrNotFound)
+}
+
+const (
+	clearOwner = `UPDATE operator_account SET is_owner = false, updated_at = $2
+	WHERE is_owner AND id <> $1
+	RETURNING code`
+	setOwner = `UPDATE operator_account SET is_owner = true, updated_at = $2
+	WHERE id = $1 AND disabled_at IS NULL AND NOT is_owner`
+)
+
+// SetOwner makes accountID THE operator owner (owner decisions 13/10/2026, `operatorctl set-owner`)
+// and returns the code of the account that held the flag before ("" when nobody did).
+//
+// CLEAR FIRST, THEN SET, in this transaction: operator_account_single_owner is a non-deferrable
+// unique index, so setting before clearing would collide with the outgoing owner. Zero rows on the
+// set means the account is disabled, unknown or already the owner — ErrStateConflict; the caller
+// read the row first and says which. A concurrent set-owner on another account waits on the row
+// lock of the old owner and then hits the unique index: the database decides, never Go.
+func (t *Tx) SetOwner(ctx context.Context, accountID string, now time.Time) (string, error) {
+	if accountID == "" {
+		return "", ErrMissingField
+	}
+	var previous string
+	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). At most one row — the
+	// current owner — by operator_account_single_owner.
+	err := t.tx.QueryRowContext(ctx, clearOwner, accountID, now).Scan(&previous)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return "", fmt.Errorf("operatorstore: clear owner: %w", err)
+	}
+	// @cross-tenant: operator realm has no commune (ADR 0048 §Chốt #1). One row, keyed on one
+	// account id.
+	res, err := t.tx.ExecContext(ctx, setOwner, accountID, now)
+	if err != nil {
+		return "", fmt.Errorf("operatorstore: set owner: %w", err)
+	}
+	if err := requireOne(res, "set owner", ErrStateConflict); err != nil {
+		return "", err
+	}
+	return previous, nil
 }
 
 const enableAccount = `UPDATE operator_account

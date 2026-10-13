@@ -93,7 +93,7 @@ pipeline {
                                   'bo-sung-cau-hinh-petitions',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
-                                  'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh',
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh', 'chi-dinh-owner',
                                   'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp', 'nen-ban-do'],
            description:'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
                         'di-tru-vihat-miniapp: chạy migration của kho vihat-miniapp (main) vào CSDL trong ' +
@@ -138,6 +138,9 @@ pipeline {
                         'cap-quyen-van-hanh: cấp QUYEN_VAN_HANH cho tài khoản ĐÃ CÓ (TAI_KHOAN_VAN_HANH = mã VH-xxxxx ' +
                         'hoặc email đăng nhập) — quyền đã có thì bỏ qua; xong thì người ấy đăng xuất rồi đăng nhập lại ' +
                         '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc) · ' +
+                        'chi-dinh-owner: operatorctl set-owner — tài khoản vận hành có EMAIL_VAN_HANH (đã có, đang bật) ' +
+                        'thành OWNER duy nhất; owner cũ (nếu có) mất cờ trong cùng giao dịch, có vết ' +
+                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc; ADR 0048 §Sửa đổi 13/10/2026 #1) · ' +
                         'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) + lớp địa điểm Overture (BAN_OVERTURE) trên máy build, ' +
                         'tải cả hai tệp lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
                         'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP_URL (kb/40-runbooks/basemap-pmtiles.md). ' +
@@ -151,7 +154,8 @@ pipeline {
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
-                        'tao-khoa-ma-hoa-identity / dat-secret-mini-app / di-tru-vihat-miniapp / bat-cau-phien-miniapp: gõ đúng vigov-prod. ' +
+                        'tao-khoa-ma-hoa-identity / dat-secret-mini-app / di-tru-vihat-miniapp / bat-cau-phien-miniapp / ' +
+                        'chi-dinh-owner: gõ đúng vigov-prod. ' +
                         'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / dung-clamav / nen-ban-do: gõ đúng namespace của MT ' +
                         '(vigov-prod hoặc vigov-staging).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
@@ -160,7 +164,7 @@ pipeline {
            description: 'Cho dat-secret-mini-app: App ID Zalo (chỉ chữ số) đã gắn cho xã ấy ' +
                         '(doi-app-id-thang-binh). Mặc định: app riêng của Xã Thăng Bình (App ID từ 01/10/2026).')
     string(name: 'TICKET', defaultValue: '',
-           description: 'Cho dat-secret-mini-app / tao-tai-khoan-van-hanh / cap-quyen-van-hanh: BẮT BUỘC — số phiếu yêu cầu, ' +
+           description: 'Cho dat-secret-mini-app / tao-tai-khoan-van-hanh / cap-quyen-van-hanh / chi-dinh-owner: BẮT BUỘC — số phiếu yêu cầu, ' +
                         'ghi vào vết kiểm toán (ticket:<số>). Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.')
     // A PLACEHOLDER, not a secret (rule 8): the stage refuses to run while the field still holds it,
     // so a press that forgot to paste the real value never seals a fake secret into prod.
@@ -169,7 +173,7 @@ pipeline {
                           'Xoá giá trị mặc định rồi dán secret thật — để nguyên mặc định thì job DỪNG, không ghi gì. ' +
                           'Không in ra log; vào pod qua một Secret k8s tạm, xoá ngay khi xong.')
     string(name: 'EMAIL_VAN_HANH', defaultValue: '',
-           description: 'Cho tao-tai-khoan-van-hanh: email đăng nhập platform-admin của người vận hành (ADR 0048 — ' +
+           description: 'Cho tao-tai-khoan-van-hanh / chi-dinh-owner: email đăng nhập platform-admin của người vận hành (ADR 0048 — ' +
                         'tên đăng nhập LÀ email). Là dữ liệu cá nhân: job không in nó ra log, nhưng Jenkins lưu tham số của lượt build.')
     string(name: 'TEN_VAN_HANH', defaultValue: '',
            description: 'Cho tao-tai-khoan-van-hanh: tên hiển thị (chữ cái, khoảng trắng, . \' -; tối đa 100 ký tự).')
@@ -222,7 +226,7 @@ pipeline {
                                   'bo-sung-cau-hinh-petitions',
                                   'kiem-tra-dang-nhap-app-rieng',
                                   'dat-secret-mini-app',
-                                  'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh',
+                                  'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh', 'chi-dinh-owner',
                                   'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp', 'nen-ban-do'])) {
             error("HANH_DONG '${params.HANH_DONG}' không còn trong job này (đã gỡ). " +
                   'Bấm "Build with Parameters" và chọn lại trong danh sách — đừng "Rebuild" một lượt cũ.')
@@ -1656,6 +1660,121 @@ EOF
             echo "CHƯA CẤP ĐƯỢC:$failed — tài khoản ĐÃ tạo; cấp nốt bằng operatorctl grant --code $CODE ..."
             exit 1
           fi
+        '''
+      }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    // CHỈ ĐỊNH OWNER — `operatorctl set-owner` (ADR 0048 §"Sửa đổi 13/10/2026 — owner, …" #1): đúng
+    // MỘT tài khoản vận hành mang cờ owner, ràng buộc ở CSDL (identity migration 0030). Chỉ định bằng
+    // job này, chỉ prod, gõ vigov-prod — KHÔNG bằng biến môi trường, KHÔNG màn nào gỡ hay chuyển owner.
+    // Giá chủ dự án đã chấp nhận: ai chạy được job prod này là chỉ định được owner.
+    //
+    // MỘT GIAO DỊCH trong identity: cờ rời owner cũ (nếu có), sang tài khoản có EMAIL_VAN_HANH; mỗi tài
+    // khoản đổi cờ một mục operator_audit_log, actor system, lý do ticket:<TICKET>. Tài khoản không có,
+    // đang bị khoá (disabled), hoặc đã là owner → operatorctl từ chối, không ghi gì.
+    //
+    // Cùng khuôn pod một lượt với 'Tạo tài khoản vận hành' (ảnh distroless, env của Deployment đọc từ
+    // cụm vào TỆP). EMAIL LÀ DỮ LIỆU CÁ NHÂN (luật 3): không echo; kết quả in MÃ VH-. Đọc `operatorctl
+    // list` trước và sau để log lượt build cho thấy cột OWNER đổi ở đâu (email đã che).
+    // ─────────────────────────────────────────────────────────────────────────────────────
+    stage('Chỉ định owner') {
+      when { expression { params.HANH_DONG == 'chi-dinh-owner' } }
+      steps {
+        script {
+          if (params.MT != 'prod') { error("chi-dinh-owner chỉ chạy với MT=prod (staging dùng chung CSDL).") }
+          if (params.XAC_NHAN != 'vigov-prod') {
+            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          }
+          if (!(params.EMAIL_VAN_HANH ==~ /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}$/)) {
+            error("EMAIL_VAN_HANH không đúng dạng email. Không ghi gì cả.")   // không in lại giá trị (luật 3)
+          }
+          if (!(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
+            error("TICKET bắt buộc, chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không ghi gì cả.")
+          }
+          env.OP_EMAIL = params.EMAIL_VAN_HANH
+          env.TICKET = params.TICKET
+          env.RUN_DETAIL = "chỉ định owner · ticket ${params.TICKET}"
+          currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NGUOI_BAM}"
+        }
+        sh '''
+          set -eu
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          DEP=vigov-service-identity
+          PODS=""
+          trap 'for p in $PODS; do kubectl -n vigov-prod delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+
+          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
+          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          IMG=$(get_field '{.spec.template.spec.containers[0].image}')
+          get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
+          get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
+          get_field '{.spec.template.spec.imagePullSecrets}' > "$TMP_DIR/pull"
+          for f in envfrom env pull; do [ -s "$TMP_DIR/$f" ] || printf '[]' > "$TMP_DIR/$f"; done
+          echo "── ảnh: $IMG"
+
+          # run_op <hậu tố pod> <mảng lệnh JSON> — như stage 'Tạo tài khoản vận hành'. Trả 0 khi pod
+          # Succeeded; log luôn ở $TMP_DIR/<hậu tố>.log.
+          run_op() {
+            pod="vigov-operatorctl-$BUILD_NUMBER-$1"
+            PODS="$PODS $pod"
+            {
+              printf '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"%s","labels":{"app.kubernetes.io/name":"identity-operatorctl"}},' "$pod"
+              printf '"spec":{"restartPolicy":"Never","imagePullSecrets":'; cat "$TMP_DIR/pull"
+              printf ',"containers":[{"name":"operatorctl","image":"%s","envFrom":' "$IMG"; cat "$TMP_DIR/envfrom"
+              printf ',"env":'; cat "$TMP_DIR/env"
+              printf ',"command":%s}]}}' "$2"
+            } > "$TMP_DIR/pod-$1.json"
+            kubectl -n vigov-prod create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            rm -f "$TMP_DIR/pod-$1.json"   # mang email — không để lại trên đĩa agent
+            phase=""; i=0
+            while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
+              phase=$(kubectl -n vigov-prod get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$phase" in Succeeded|Failed) break ;; esac
+              sleep 5; i=$((i+1))
+            done
+            kubectl -n vigov-prod logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            if [ "$phase" != "Succeeded" ]; then
+              cat "$TMP_DIR/$1.log"
+              echo "── pod $pod kết thúc ở pha '$phase' — sự kiện của pod:"
+              kubectl -n vigov-prod describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              return 1
+            fi
+            return 0
+          }
+
+          if ! run_op list-before "[\\"/operatorctl\\",\\"list\\"]"; then
+            echo "DỪNG: operatorctl list không chạy được ('no such file' /operatorctl = ảnh identity cũ). Không ghi gì."
+            exit 1
+          fi
+          if ! head -1 "$TMP_DIR/list-before.log" | grep -q 'OWNER'; then
+            cat "$TMP_DIR/list-before.log"
+            echo "DỪNG: ảnh identity đang chạy chưa có set-owner (danh sách không có cột OWNER). Triển khai"
+            echo "service-identity có migration 0030 + operatorctl set-owner trước. Không ghi gì."
+            exit 1
+          fi
+          echo "── trước:"
+          cat "$TMP_DIR/list-before.log"
+
+          echo "── operatorctl set-owner --email *** --ticket $TICKET"
+          if ! run_op set-owner "[\\"/operatorctl\\",\\"set-owner\\",\\"--email\\",\\"$OP_EMAIL\\",\\"--ticket\\",\\"$TICKET\\"]"; then
+            echo "Gợi ý: 'no operator account has this email' = sai email hoặc chưa tạo (tao-tai-khoan-van-hanh);"
+            echo "'disabled account cannot be the owner' = operatorctl enable trước; 'already the owner' = không cần làm gì."
+            echo "Không đổi gì: cờ owner giữ nguyên chỗ cũ."
+            exit 1
+          fi
+          grep 'is now the owner' "$TMP_DIR/set-owner.log" || { cat "$TMP_DIR/set-owner.log"; echo "DỪNG: không đọc được kết quả set-owner."; exit 1; }
+
+          if run_op list-after "[\\"/operatorctl\\",\\"list\\"]"; then
+            echo "── sau:"
+            cat "$TMP_DIR/list-after.log"
+          else
+            echo "(không đọc lại được danh sách — set-owner ĐÃ chạy xong; kiểm bằng operatorctl list)"
+          fi
+          echo ""
+          echo "Xong. Không cần đăng nhập lại: identity đọc cờ owner ở mỗi request của platform-admin."
         '''
       }
     }

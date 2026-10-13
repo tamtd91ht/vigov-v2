@@ -428,6 +428,26 @@ func (t *fakeOperatorTx) ResetMFA(_ context.Context, id string, _ time.Time) err
 	return nil
 }
 
+// SetOwner mirrors operatorstore's two statements: clear any other owner, then set this one only
+// while it is enabled and not already the owner.
+func (t *fakeOperatorTx) SetOwner(_ context.Context, id string, _ time.Time) (string, error) {
+	t.op("SetOwner")
+	var previous string
+	for k, a := range t.st.accounts {
+		if a.IsOwner && k != id {
+			a.IsOwner, previous = false, a.Code
+			t.st.accounts[k] = a
+		}
+	}
+	a, ok := t.st.accounts[id]
+	if !ok || a.Disabled() || a.IsOwner {
+		return "", operatorstore.ErrStateConflict
+	}
+	a.IsOwner = true
+	t.st.accounts[id] = a
+	return previous, nil
+}
+
 func (t *fakeOperatorTx) CreateSession(_ context.Context, sid, id, _, _ string, now time.Time) (time.Time, error) {
 	t.op("CreateSession")
 	exp := now.Add(domain.SessionLifetime)

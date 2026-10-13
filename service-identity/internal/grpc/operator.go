@@ -91,7 +91,10 @@ type OperatorServer struct {
 	uc          OperatorAuthenticator
 	miniApps    MiniAppSecretOperator // nil until WithMiniAppSecrets: the three RPCs answer Unimplemented
 	staffCounts ActiveStaffCounter    // nil until WithActiveStaffCounts: ListActiveStaffCounts answers Unimplemented
-	log         *slog.Logger
+	// nil until WithOwnerAdmin: the seven owner-only RPCs answer Unimplemented (operator_owner.go).
+	ownerOperators OwnerOperatorAdmin
+	ownerCommunes  OwnerCommuneAccounts
+	log            *slog.Logger
 }
 
 // WithMiniAppSecrets wires the three Mini App secret RPCs. Without it they answer Unimplemented — the
@@ -197,6 +200,7 @@ func (s *OperatorServer) ResolveOperatorSession(ctx context.Context, req *identi
 		OperatorId:     p.ID,
 		OperatorCode:   p.Code,
 		PermissionKeys: keys,
+		IsOwner:        p.IsOwner,
 	}}, nil
 }
 

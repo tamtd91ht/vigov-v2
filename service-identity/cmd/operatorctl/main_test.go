@@ -102,9 +102,49 @@ func (f *fakeAdmin) ResetMFA(_ context.Context, code, ticket string) (secret.Sec
 	f.calls = append(f.calls, "reset-mfa "+code+"|"+ticket)
 	return f.temp, nil
 }
+func (f *fakeAdmin) SetOwner(_ context.Context, email, ticket string) (string, error) {
+	f.calls = append(f.calls, "set-owner "+email+"|"+ticket)
+	return "VH-00002", nil
+}
 func (f *fakeAdmin) List(context.Context) ([]app.OperatorListing, error) {
 	return []app.OperatorListing{{Code: "VH-00001", MaskedEmail: "o***@example.test", DisplayName: "Operator One",
-		Status: app.OperatorStatusActive, Permissions: []domain.OperatorPermission{domain.OperatorPermissionQRIssue}}}, nil
+		Status: app.OperatorStatusActive, Permissions: []domain.OperatorPermission{domain.OperatorPermissionQRIssue},
+		Owner: true}}, nil
+}
+
+func TestSetOwnerParsesPrintsCodeNotEmailAndRequiresTicket(t *testing.T) {
+	if _, err := parseArgs([]string{"set-owner", "--email", "a@example.test"}); err == nil ||
+		!strings.Contains(err.Error(), "--ticket is required") {
+		t.Fatalf("set-owner without ticket: err = %v", err)
+	}
+	if _, err := parseArgs([]string{"set-owner", "--ticket", "OPS-9"}); err == nil ||
+		!strings.Contains(err.Error(), "--email is required") {
+		t.Fatalf("set-owner without email: err = %v", err)
+	}
+	c, err := parseArgs([]string{"set-owner", "--email", "a@example.test", "--ticket", "OPS-9"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := &fakeAdmin{}
+	var out bytes.Buffer
+	if err := execute(context.Background(), c, f, &out); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(f.calls, "") != "set-owner a@example.test|OPS-9" {
+		t.Fatalf("calls = %v", f.calls)
+	}
+	if !strings.Contains(out.String(), "VH-00002") || strings.Contains(out.String(), "a@example.test") {
+		t.Fatalf("stdout must name the code, never the email: %q", out.String())
+	}
+
+	out.Reset()
+	c, _ = parseArgs([]string{"list"})
+	if err := execute(context.Background(), c, f, &out); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out.String(), "OWNER") || !strings.Contains(out.String(), "owner") {
+		t.Fatalf("list must show the owner column: %q", out.String())
+	}
 }
 
 func TestExecutePassesArgumentsInPlaceAndPrintsSecretOnce(t *testing.T) {

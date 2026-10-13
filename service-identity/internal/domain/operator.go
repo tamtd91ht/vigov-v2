@@ -207,6 +207,11 @@ type OperatorAccount struct {
 	// MustChangePassword is. PendingTOTPCreatedAt is when BeginEnrollment stored the pending secret.
 	TemporaryPasswordExpiresAt *time.Time
 	PendingTOTPCreatedAt       *time.Time
+
+	// IsOwner marks THE operator owner (migration 0030, owner decisions 13/10/2026): at most one
+	// account, never a disabled one — both enforced by PostgreSQL. Set only by `operatorctl
+	// set-owner`; no RPC writes it.
+	IsOwner bool
 }
 
 // TemporaryPasswordExpiredAt reports whether the account's password is a temporary one that can no
@@ -242,7 +247,8 @@ func (a OperatorAccount) String() string {
 		" totp_pending:" + strconv.FormatBool(a.TOTPPending) +
 		" failed_attempts:" + strconv.Itoa(a.FailedAttempts) +
 		" locked:" + strconv.FormatBool(a.LockedUntil != nil) +
-		" disabled:" + strconv.FormatBool(a.Disabled()) + " personal_fields:withheld}"
+		" disabled:" + strconv.FormatBool(a.Disabled()) +
+		" owner:" + strconv.FormatBool(a.IsOwner) + " personal_fields:withheld}"
 }
 
 // GoString keeps %#v from printing the personal fields.
@@ -302,6 +308,14 @@ const (
 	// the reader's own code — the act is about no single operator, the column only admits a VH- code,
 	// and "what did this operator read" is the question an inspection asks of it.
 	OperatorAuditActiveStaffCountsRead OperatorAuditAction = "operator.active_staff_counts_read"
+	// Owner decisions 13/10/2026 (ADR 0048 amendment). OwnerDesignated / OwnerRemoved are written by
+	// `operatorctl set-owner` (actor system, ticket reason) — one entry per account whose flag moved.
+	// PasswordReset is the OWNER replacing another operator's password with a temporary one; kept
+	// apart from PasswordChanged (the person's own change, or the CLI's reset-mfa) because "somebody
+	// else now knows this password" is the window an inspection asks about.
+	OperatorAuditOwnerDesignated OperatorAuditAction = "operator.owner_designated"
+	OperatorAuditOwnerRemoved    OperatorAuditAction = "operator.owner_removed"
+	OperatorAuditPasswordReset   OperatorAuditAction = "operator.password_reset"
 )
 
 // Valid reports whether a is one of the declared actions. The database only checks the SHAPE of
@@ -313,7 +327,8 @@ func (a OperatorAuditAction) Valid() bool {
 		OperatorAuditPermissionGranted, OperatorAuditPermissionRevoked, OperatorAuditAccountDisabled,
 		OperatorAuditAccountEnabled, OperatorAuditMFAReset, OperatorAuditPasswordChanged,
 		OperatorAuditRecoveryCodesRegenerated, OperatorAuditUnlocked, OperatorAuditTOTPEnrollmentStarted,
-		OperatorAuditActiveStaffCountsRead:
+		OperatorAuditActiveStaffCountsRead, OperatorAuditOwnerDesignated, OperatorAuditOwnerRemoved,
+		OperatorAuditPasswordReset:
 		return true
 	}
 	return false

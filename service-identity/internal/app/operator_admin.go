@@ -277,6 +277,11 @@ func (o *OperatorAdmin) setDisabled(ctx context.Context, code, reason, ticket st
 			OccurredAt: now, Actor: domain.SystemActor, Subject: acc.Code, Reason: full,
 			Before: map[string]any{"disabled": acc.Disabled()},
 		}
+		if disable && acc.IsOwner {
+			// Migration 0030's operator_account_owner_not_disabled would refuse it anyway, as a raw
+			// 23514; said here in a sentence devops can act on.
+			return ErrOwnerCannotBeDisabled
+		}
 		if disable {
 			if err := tx.Disable(ctx, acc.ID, domain.SystemActor, full, now); err != nil {
 				if errors.Is(err, operatorstore.ErrStateConflict) {
@@ -394,6 +399,79 @@ func (o *OperatorAdmin) ResetMFA(ctx context.Context, code, ticket string) (secr
 	return temp, nil
 }
 
+// Refusals of SetOwner and of disabling the owner.
+var (
+	ErrOperatorEmailNotFound = errors.New("operator admin: no operator account has this email")
+	ErrOwnerMustBeEnabled    = errors.New("operator admin: a disabled account cannot be the owner — enable it first")
+	ErrOperatorAlreadyOwner  = errors.New("operator admin: this account is already the owner — nothing changed")
+	ErrOwnerCannotBeDisabled = errors.New("operator admin: the owner cannot be disabled — run set-owner on another account first")
+)
+
+// SetOwner makes the account signed in with email THE operator owner (owner decisions 13/10/2026,
+// ADR 0048 amendment #1): run by the prod-only Jenkins job `chi-dinh-owner`, never by a screen or
+// an environment variable. In ONE transaction: the flag leaves the previous owner (if any), lands on
+// this account, and one trail entry is written per account whose flag moved — actor system, reason
+// "ticket:<n>". The account is named by EMAIL because that is what the person running the job knows;
+// the email itself never enters the trail or the log (rule 3) — the code does.
+//
+// Refused: no such account, a disabled account (migration 0030 forbids a disabled owner), or the
+// account is already the owner — an entry for a change that did not happen would be false.
+func (o *OperatorAdmin) SetOwner(ctx context.Context, email, ticket string) (string, error) {
+	reason, err := ticketReason(ticket, "")
+	if err != nil {
+		return "", err
+	}
+	email = strings.TrimSpace(email)
+	if !validEmail(email) {
+		return "", ErrInvalidOperatorEmail
+	}
+	now := o.clock()
+	var code, previous string
+	err = o.store.InTx(ctx, func(tx OperatorTx) error {
+		acc, err := tx.ByEmailForUpdate(ctx, email)
+		if errors.Is(err, operatorstore.ErrNotFound) {
+			return ErrOperatorEmailNotFound
+		}
+		if err != nil {
+			return err
+		}
+		switch {
+		case acc.Disabled():
+			return ErrOwnerMustBeEnabled
+		case acc.IsOwner:
+			return ErrOperatorAlreadyOwner
+		}
+		code = acc.Code
+		previous, err = tx.SetOwner(ctx, acc.ID, now)
+		if err != nil {
+			return err
+		}
+		if previous != "" {
+			if err := tx.AppendAudit(ctx, domain.OperatorAuditEntry{
+				OccurredAt: now, Actor: domain.SystemActor, Action: domain.OperatorAuditOwnerRemoved,
+				Subject: previous, Before: map[string]any{"is_owner": true},
+				After: map[string]any{"is_owner": false, "new_owner": acc.Code}, Reason: reason,
+			}); err != nil {
+				return err
+			}
+		}
+		var prev any // JSON null when nobody held the flag
+		if previous != "" {
+			prev = previous
+		}
+		return tx.AppendAudit(ctx, domain.OperatorAuditEntry{
+			OccurredAt: now, Actor: domain.SystemActor, Action: domain.OperatorAuditOwnerDesignated,
+			Subject: acc.Code, Before: map[string]any{"is_owner": false, "previous_owner": prev},
+			After: map[string]any{"is_owner": true}, Reason: reason,
+		})
+	})
+	if err != nil {
+		return "", fmt.Errorf("operator.owner_designated: %w", err)
+	}
+	o.adminLog("operator.owner_designated", code, reason, "previous_owner", previous)
+	return code, nil
+}
+
 // Operator statuses shown by List, most severe first.
 const (
 	OperatorStatusDisabled           = "disabled"
@@ -412,6 +490,9 @@ type OperatorListing struct {
 	DisplayName string
 	Status      string
 	Permissions []domain.OperatorPermission
+	// Owner — THE operator owner (migration 0030); shown so devops can see who holds it before
+	// running set-owner.
+	Owner bool
 }
 
 // List reads every operator with its live permissions. A read: no audit entry, no ticket.
@@ -440,7 +521,7 @@ func (o *OperatorAdmin) List(ctx context.Context) ([]OperatorListing, error) {
 		}
 		out = append(out, OperatorListing{
 			Code: acc.Code, MaskedEmail: privacy.MaskEmail(acc.Email), DisplayName: acc.DisplayName,
-			Status: status, Permissions: perms,
+			Status: status, Permissions: perms, Owner: acc.IsOwner,
 		})
 	}
 	return out, nil

@@ -480,6 +480,9 @@ type OperatorPrincipal struct {
 	Code        string
 	Permissions []domain.OperatorPermission
 	ExpiresAt   time.Time
+	// IsOwner is operator_account.is_owner, read live with the keys in the same transaction. The
+	// owner-only RPCs gate on it (internal/grpc/operator_owner.go); nothing caches it.
+	IsOwner bool
 }
 
 // Has reports whether the principal holds p. Exact match, the closed list's rule.
@@ -522,7 +525,8 @@ func (a *OperatorAuth) ResolveSession(ctx context.Context, token string) (Operat
 			}
 			return err
 		}
-		p = OperatorPrincipal{ID: acc.ID, Code: acc.Code, Permissions: perms, ExpiresAt: sess.ExpiresAt}
+		p = OperatorPrincipal{ID: acc.ID, Code: acc.Code, Permissions: perms, ExpiresAt: sess.ExpiresAt,
+			IsOwner: acc.IsOwner}
 		decided = outcomeAccepted
 		return nil
 	})

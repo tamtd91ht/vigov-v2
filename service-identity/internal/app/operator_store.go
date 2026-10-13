@@ -37,6 +37,8 @@ type OperatorTx interface {
 	Disable(ctx context.Context, accountID, by, reason string, now time.Time) error
 	Enable(ctx context.Context, accountID string, now time.Time) error
 	ResetMFA(ctx context.Context, accountID string, now time.Time) error
+	// SetOwner moves the owner flag onto accountID; returns the previous owner's code ("" if none).
+	SetOwner(ctx context.Context, accountID string, now time.Time) (string, error)
 
 	CreateSession(ctx context.Context, sid, accountID, ip, userAgent string, now time.Time) (time.Time, error)
 	CheckSession(ctx context.Context, sid string, now time.Time) (operatorstore.OperatorSession, error)

@@ -766,9 +766,16 @@ func run(log *slog.Logger) error {
 	// commune to scope it to); its trail entry goes to operator_audit_log through the operator store.
 	activeStaffCounts := app.NewActiveStaffCounts(app.NewOperatorStore(operatorstore.New(db)),
 		crosstenant.NewActiveStaffCountStore(db), time.Now)
+	// The seven owner-only RPCs (owner decisions 13/10/2026, ADR 0048 amendment): operator accounts on
+	// the operator store (no commune); a commune's sign-in accounts on the scoped `kho` — the commune
+	// from x-tenant-id — reusing the staff credential path (taiKhoan) and reading the commune LIVE from
+	// the platform client itself, not the cached lookup: an administrator must not be created in a
+	// commune deactivated within the cache's TTL.
+	ownerAdmin := app.NewOwnerAdmin(app.NewOperatorStore(operatorstore.New(db)), time.Now, log)
+	communeAccounts := app.NewCommuneAccountsByOwner(kho, canBo, taiKhoan, nenTang)
 	opSrv := buildOperatorGRPCServer(cfg.GRPCCallerKey(),
 		svcgrpc.NewOperatorServer(operatorAuth, log).WithMiniAppSecrets(miniAppSecrets).
-			WithActiveStaffCounts(activeStaffCounts), log)
+			WithActiveStaffCounts(activeStaffCounts).WithOwnerAdmin(ownerAdmin, communeAccounts), log)
 	opLis, err := net.Listen("tcp", cfg.OperatorGRPCListenAddr())
 	if err != nil {
 		return fmt.Errorf("identity: không mở được cổng gRPC vận hành %q: %w", cfg.OperatorGRPCListenAddr(), err)

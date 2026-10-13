@@ -127,7 +127,7 @@ func TestUnlockClearsTheLockAndNothingElse(t *testing.T) {
 func TestAccountScanReadsExpiryColumns(t *testing.T) {
 	exp, pend := t0.Add(24*time.Hour), t0.Add(-time.Minute)
 	r := &recorder{queryRows: map[string][][]driver.Value{"WHERE id = $1": {{accountID, "VH-00001", "a@example.test",
-		"Name", true, nil, true, int64(0), nil, nil, "", "", t0, "system", t0, exp, pend}}}}
+		"Name", true, nil, true, int64(0), nil, nil, "", "", t0, "system", t0, exp, pend, false}}}}
 	db := sql.OpenDB(recConnector{r: r})
 	defer db.Close()
 	a, err := New(db).ByID(context.Background(), accountID)

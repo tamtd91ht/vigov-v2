@@ -670,12 +670,12 @@ func TestUpgradePasswordHashIsConditionalAndRevokesNothing(t *testing.T) {
 
 func TestListAccountsScansEveryRow(t *testing.T) {
 	enrolled := t0.Add(-time.Hour)
-	row := func(id, code string, disabled any) []driver.Value {
+	row := func(id, code string, disabled any, owner bool) []driver.Value {
 		return []driver.Value{id, code, "a@example.test", "Name", false, enrolled, false, int64(0), nil,
-			disabled, "", "", t0, "system", t0, nil, nil}
+			disabled, "", "", t0, "system", t0, nil, nil, owner}
 	}
 	r := &recorder{queryRows: map[string][][]driver.Value{"ORDER BY code": {
-		row(accountID, "VH-00001", nil), row("01JD9A00000000000000000002", "VH-00002", t0),
+		row(accountID, "VH-00001", nil, true), row("01JD9A00000000000000000002", "VH-00002", t0, false),
 	}}}
 	db := sql.OpenDB(recConnector{r: r})
 	defer db.Close()
@@ -684,7 +684,8 @@ func TestListAccountsScansEveryRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got) != 2 || got[0].Code != "VH-00001" || got[0].Disabled() || !got[1].Disabled() ||
-		got[0].TOTPEnrolledAt == nil || !got[0].TOTPEnrolledAt.Equal(enrolled) {
+		got[0].TOTPEnrolledAt == nil || !got[0].TOTPEnrolledAt.Equal(enrolled) ||
+		!got[0].IsOwner || got[1].IsOwner {
 		t.Fatalf("accounts = %+v", got)
 	}
 	if strings.Contains(r.stmts[0].query, "password_hash") || strings.Contains(r.stmts[0].query, "totp_secret_sealed,") {

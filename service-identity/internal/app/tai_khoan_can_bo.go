@@ -235,7 +235,7 @@ type KetQuaCapMatKhau struct {
 // off. A rule that fires on an operation which cannot cause the harm is a rule people learn to
 // route around.
 func (uc *TaiKhoanCanBo) Cap(ctx context.Context, id string, nguoi NguoiThucHien) (KetQuaCapMatKhau, error) {
-	return uc.mint(ctx, id, nguoi, true)
+	return uc.mint(ctx, id, nguoi, true, uc.sinhMatKhau, "")
 }
 
 // DatLai is the administrator resetting somebody else's password (#17).
@@ -252,7 +252,34 @@ func (uc *TaiKhoanCanBo) Cap(ctx context.Context, id string, nguoi NguoiThucHien
 // on this commune — there is always more than one — and #17 chose the administrator path precisely
 // because the self-service alternative depends on a mail server that may not exist.
 func (uc *TaiKhoanCanBo) DatLai(ctx context.Context, id string, nguoi NguoiThucHien) (KetQuaCapMatKhau, error) {
-	return uc.mint(ctx, id, nguoi, false)
+	return uc.mint(ctx, id, nguoi, false, uc.sinhMatKhau, "")
+}
+
+// ResetByOperator is DatLai performed by the platform OWNER (OperatorService.ResetStaffPassword,
+// ADR 0048 §"Sửa đổi 13/10/2026" #2, #4, #5): the SAME act — same refusals (directory-only row,
+// administratively locked), same session revocation, same `dat_lai_mat_khau_can_bo` verb in this
+// commune's audit_log — with three differences, each forced:
+//
+//	the password     typed by the owner (temporaryPassword), already checked against the policy by
+//	                 the caller; never minted, never returned
+//	the actor        audit.KindOperator with the owner's VH- code; operatorID (the operator's internal
+//	                 id) only fills NguoiThucHien.ID, which #14 compares against a STAFF id and so can
+//	                 never match — an operator has no account in this commune to reset
+//	the reason       the owner's text, in the delta as `ly_do` (there is no column for it)
+//
+// One verb, not a second one, so "every reset of this person's password" is one query; actor_kind
+// says who did it.
+func (uc *TaiKhoanCanBo) ResetByOperator(ctx context.Context, id, temporaryPassword, reason, operatorID string,
+	actor audit.Actor) (domain.CanBoTomTat, error) {
+	if actor.Kind != audit.KindOperator {
+		return domain.CanBoTomTat{}, errors.New("tai_khoan_can_bo: ResetByOperator needs an operator actor")
+	}
+	supplied := func() (string, error) { return temporaryPassword, nil }
+	kq, err := uc.mint(ctx, id, NguoiThucHien{ID: operatorID, Vet: actor}, false, supplied, reason)
+	if err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	return kq.CanBo, nil
 }
 
 // mint is both administrator paths. ONE FUNCTION because they differ in exactly one predicate —
@@ -262,8 +289,11 @@ func (uc *TaiKhoanCanBo) DatLai(ctx context.Context, id string, nguoi NguoiThucH
 // The BOOLEAN IS NOT A MODE FLAG ON A PUBLIC SURFACE: the two exported methods above are what
 // callers see, each with its own name, its own audit verb and its own reasoning. This is the shared
 // body, unexported.
+//
+// supply produces the plaintext (the minter for the two administrator paths, the owner's typed value
+// for ResetByOperator); reason, when not empty, is recorded as `ly_do` in the delta.
 func (uc *TaiKhoanCanBo) mint(ctx context.Context, id string, nguoi NguoiThucHien,
-	capMoi bool) (KetQuaCapMatKhau, error) {
+	capMoi bool, supply func() (string, error), reason string) (KetQuaCapMatKhau, error) {
 
 	if err := nguoi.hopLe(); err != nil {
 		return KetQuaCapMatKhau{}, err
@@ -276,7 +306,7 @@ func (uc *TaiKhoanCanBo) mint(ctx context.Context, id string, nguoi NguoiThucHie
 		return KetQuaCapMatKhau{}, ErrTuThaoTacChinhMinh
 	}
 
-	matKhau, err := uc.sinhMatKhau()
+	matKhau, err := supply()
 	if err != nil {
 		return KetQuaCapMatKhau{}, fmt.Errorf("tai_khoan_can_bo: sinh mật khẩu tạm: %w", err)
 	}
@@ -346,13 +376,22 @@ func (uc *TaiKhoanCanBo) mint(ctx context.Context, id string, nguoi NguoiThucHie
 		// select it, deliberately, because that is the read which also avoids the credential — so
 		// these two operations never learned what it was before. Writing a before-value here would
 		// be inventing one, in a record that is never deleted.
+		delta := deltaMatKhau(
+			map[string]any{"co_tai_khoan": truoc.CoTaiKhoan},
+			map[string]any{"co_tai_khoan": true, "phai_doi_mat_khau": true})
+		if reason != "" {
+			delta = deltaCanBo(map[string]any{
+				"truoc":      map[string]any{"co_tai_khoan": truoc.CoTaiKhoan},
+				"sau":        map[string]any{"co_tai_khoan": true, "phai_doi_mat_khau": true},
+				"cot_da_dat": []string{"mat_khau_hash"},
+				"ly_do":      reason,
+			})
+		}
 		return audit.Write(ctx, tx, audit.Entry{
 			Actor:   nguoi.Vet,
 			Action:  hanhVi,
 			Subject: truoc.Ma, // the business code of the person acted on, never the internal id
-			Delta: deltaMatKhau(
-				map[string]any{"co_tai_khoan": truoc.CoTaiKhoan},
-				map[string]any{"co_tai_khoan": true, "phai_doi_mat_khau": true}),
+			Delta:   delta,
 		})
 	})
 	if err != nil {

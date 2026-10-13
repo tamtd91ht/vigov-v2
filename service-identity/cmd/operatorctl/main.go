@@ -67,6 +67,7 @@ const usage = `operatorctl — operator accounts of the Vihat operator realm (AD
   operatorctl enable    --code VH-00001 --reason <text> --ticket <n>
   operatorctl unlock    --code VH-00001 --ticket <n>      lift a failure lockout (12 h) early
   operatorctl reset-mfa --code VH-00001 --ticket <n>      also reissues an expired temporary password
+  operatorctl set-owner --email <addr> --ticket <n>       make this account THE owner (moves the flag)
   operatorctl list
 
 A commune's own Zalo Mini App sign-in settings (ADR 0066):
@@ -151,6 +152,9 @@ func parseArgs(args []string) (command, error) {
 		fs.StringVar(&c.email, "email", "", "")
 		fs.StringVar(&c.displayName, "name", "", "")
 		required = []string{"email", "name", "ticket"}
+	case "set-owner":
+		fs.StringVar(&c.email, "email", "", "")
+		required = []string{"email", "ticket"}
 	case "grant", "revoke":
 		fs.StringVar(&c.code, "code", "", "")
 		fs.StringVar(&c.permission, "permission", "", "")
@@ -206,6 +210,7 @@ type admin interface {
 	Enable(ctx context.Context, code, reason, ticket string) error
 	Unlock(ctx context.Context, code, ticket string) error
 	ResetMFA(ctx context.Context, code, ticket string) (secret.Secret, error)
+	SetOwner(ctx context.Context, email, ticket string) (string, error)
 	List(ctx context.Context) ([]app.OperatorListing, error)
 }
 
@@ -251,6 +256,13 @@ func execute(ctx context.Context, c command, a admin, stdout io.Writer) error {
 		}
 		fmt.Fprintf(stdout, "MFA reset for %s — TOTP removed, recovery codes voided, sessions revoked\n", c.code)
 		printOnce(stdout, temp)
+	case "set-owner":
+		// The email is the operator's sign-in name — personal data (rule 3): stdout names the CODE.
+		code, err := a.SetOwner(ctx, c.email, c.ticket)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(stdout, "%s is now the owner — any previous owner lost the flag in the same transaction\n", code)
 	case "list":
 		// @cross-tenant: the operator register (ADR 0048 §Chốt #1) belongs to no commune; this
 		// lists Vihat operator accounts, joins no table that carries tenant_id, emails masked.
@@ -259,13 +271,18 @@ func execute(ctx context.Context, c command, a admin, stdout io.Writer) error {
 			return err
 		}
 		w := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-		fmt.Fprintln(w, "CODE\tEMAIL\tNAME\tSTATUS\tPERMISSIONS")
+		fmt.Fprintln(w, "CODE\tEMAIL\tNAME\tSTATUS\tOWNER\tPERMISSIONS")
 		for _, r := range rows {
 			perms := make([]string, 0, len(r.Permissions))
 			for _, p := range r.Permissions {
 				perms = append(perms, string(p))
 			}
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", r.Code, r.MaskedEmail, r.DisplayName, r.Status, strings.Join(perms, ","))
+			owner := "-"
+			if r.Owner {
+				owner = "owner"
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.Code, r.MaskedEmail, r.DisplayName, r.Status, owner,
+				strings.Join(perms, ","))
 		}
 		return w.Flush()
 	default:
