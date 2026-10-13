@@ -31,6 +31,13 @@ var writeRoutes = []struct{ method, path, body string }{
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/name", `{"name":"Xã Thăng Bình","reason":"Sửa lỗi gõ"}`},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/activation", `{"active":false,"reason":"Sáp nhập"}`},
 	{"POST", "/api/v1/communes/" + communeIDFake + "/mini-apps", `{"app_id":"3291993990104489440"}`},
+	// The owner-only account writes (operator_owner_accounts.go): a cross-site page must not reset a
+	// password with the owner's cookie.
+	{"POST", "/api/v1/operator-accounts", `{"email":"x@example.invalid","display_name":"A","temporary_password":"t"}`},
+	{"PUT", "/api/v1/operator-accounts/VH-00002/permissions", `{"permission_keys":[],"reason":"x"}`},
+	{"PUT", "/api/v1/operator-accounts/VH-00002/password", `{"temporary_password":"t","reason":"x"}`},
+	{"POST", "/api/v1/communes/" + communeIDFake + "/admin-accounts", `{"email":"admin","full_name":"A","temporary_password":"t"}`},
+	{"PUT", "/api/v1/communes/" + communeIDFake + "/staff-accounts/01JD8ZQK9M3NPXR7TVWYB2C4F0/password", `{"temporary_password":"t","reason":"x"}`},
 }
 
 func hdr(kv ...string) http.Header {

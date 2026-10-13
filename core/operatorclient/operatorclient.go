@@ -82,8 +82,9 @@ const (
 	OutcomeSessionNotLive
 	// OutcomeNewPasswordRejected: see the result's Refusal.
 	OutcomeNewPasswordRejected
-	// OutcomePermissionDenied: the Mini App secret RPCs only — a live session whose operator lacks
-	// `ops.mini_app.manage`. The caller answers 403. Nothing was written.
+	// OutcomePermissionDenied: a live session whose operator lacks what the RPC needs — the key of the
+	// Mini App secret / staff-count RPCs, or the owner flag of the owner-only RPCs (owner_accounts.go).
+	// The caller answers 403. Nothing was written.
 	OutcomePermissionDenied
 )
 

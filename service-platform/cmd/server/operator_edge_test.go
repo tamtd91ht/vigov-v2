@@ -32,6 +32,9 @@ import (
 
 const operatorHostTest = "admin.vigov.vn"
 
+// ownerOnlyPathsTest are the GET-able owner-only account routes (operator_owner_accounts.go).
+var ownerOnlyPathsTest = []string{"/api/v1/operator-accounts", "/api/v1/communes/" + string(ulidThu) + "/staff-accounts"}
+
 var opKeyTest = secret.Secret("operator-signing-key-FAKE-0123456789abcdef")
 
 // directoryOneCommune resolves hostThu (main_test.go) and nothing else — like the real directory,
@@ -129,8 +132,21 @@ func TestOperatorRoutesOnlyOnOperatorHost(t *testing.T) {
 	if got := get(outer, hostThu, "/api/v1/communes", cookie); got != http.StatusNotFound {
 		t.Errorf("commune host: %d, want 404", got)
 	}
+	// The owner-only account routes likewise exist on the operator host only (ADR 0048 §Sửa đổi
+	// 13/10/2026): a commune host answers 404 and never looks at the cookie.
+	for _, path := range ownerOnlyPathsTest {
+		if got := get(outer, hostThu, path, cookie); got != http.StatusNotFound {
+			t.Errorf("commune host %s: %d, want 404", path, got)
+		}
+	}
 	if res.calls != callsBefore {
 		t.Error("the commune chain asked identity about an operator cookie")
+	}
+	// On the operator host they are mounted — and refuse this principal, which is not the owner.
+	for _, path := range ownerOnlyPathsTest {
+		if got := get(outer, operatorHostTest, path, cookie); got != http.StatusForbidden {
+			t.Errorf("operator host %s, not owner: %d, want 403", path, got)
+		}
 	}
 	if got := get(outer, "unknown.example.vn", "/api/v1/communes", cookie); got != http.StatusNotFound {
 		t.Errorf("unknown host: %d, want 404", got)
@@ -146,7 +162,7 @@ func TestOperatorAreaOffIs404Everywhere(t *testing.T) {
 	outer := buildOuter(communeChain(), nil, "")
 	cookie := operatorCookieTest(t)
 	for _, host := range []string{operatorHostTest, hostThu} {
-		for _, path := range []string{"/api/v1/communes", "/api/v1/operator-sessions/current", "/api/v1/provinces"} {
+		for _, path := range append([]string{"/api/v1/communes", "/api/v1/operator-sessions/current", "/api/v1/provinces"}, ownerOnlyPathsTest...) {
 			if got := get(outer, host, path, cookie); got != http.StatusNotFound {
 				t.Errorf("%s%s with the area off: %d, want 404", host, path, got)
 			}

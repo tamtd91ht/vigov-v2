@@ -143,7 +143,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 
 	// --- the signed-in operator ----------------------------------------------------------------
 
-	// @summary  Người vận hành đang đăng nhập: mã VH- và các khoá ops.*
+	// @summary  Người vận hành đang đăng nhập: mã VH-, các khoá ops.* và is_owner (chỉ để hiển thị; mọi tuyến chỉ-owner tự kiểm lại)
 	// @reply    200 operatorWhoAmIView
 	// @reply    401 httpx.Error unauthorized
 	// @reply    503 httpx.Error operator_auth_unavailable
@@ -315,6 +315,113 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			opauth.RequireOwner()(
 				idem.KhongCan("a repeat finds the commune already deleted and is answered commune_not_found; nothing is written twice")(
 					http.HandlerFunc(h.deleteCommune)))))
+
+	// --- OWNER ONLY: accounts (ADR 0048 §Sửa đổi 13/10/2026 #2–#6; operator_owner_accounts.go) --------
+	//
+	// Same declaration as the deletion above: SignedIn authenticates, RequireOwner refuses every
+	// operator that is not THE owner whatever ops.* keys they hold, and identity re-checks the owner on
+	// the session it resolves. Platform is a relay: identity writes each act and its trail entry in one
+	// transaction. Every 422 on these routes uses passwordRejectionView's shape for new_password_rejected;
+	// invalid_reason is the plain httpx.Error (code, message, trace_id) — apidoc takes one body type per
+	// status. Temporary passwords travel in request bodies only and are never echoed.
+
+	// @summary  CHỈ OWNER — danh sách mọi tài khoản vận hành (kể cả tài khoản bị vô hiệu), theo mã VH-; không bao giờ trả mật khẩu, TOTP, mã khôi phục
+	// @reply    200 operatorAccountListView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    503 httpx.Error operator_auth_unavailable account_management_unavailable account_management_not_ready
+	mux.Handle("GET /api/v1/operator-accounts",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2)")(
+			opauth.RequireOwner()(
+				http.HandlerFunc(h.listOperatorAccounts))))
+
+	// @summary  CHỈ OWNER — tạo tài khoản vận hành với mật khẩu TẠM và các khoá ops.* (có thể rỗng); lần đăng nhập đầu buộc đổi mật khẩu và đăng ký TOTP; identity ghi vết operator_audit_log cùng giao dịch
+	// @request  operatorAccountBody
+	// @reply    201 operatorAccountView
+	// @reply    400 httpx.Error invalid_body invalid_account_input
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    409 httpx.Error account_email_taken
+	// @reply    422 passwordRejectionView new_password_rejected
+	// @reply    503 httpx.Error operator_auth_unavailable account_management_unavailable account_management_not_ready
+	mux.Handle("POST /api/v1/operator-accounts",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2)")(
+			opauth.RequireOwner()(
+				idem.KhongCan("a repeat is refused by identity with ALREADY_EXISTS on the email (operator_account index), nothing written twice (operator.proto); and no store may hold this body")(
+					http.HandlerFunc(h.createOperatorAccount)))))
+
+	// @summary  CHỈ OWNER — đặt TOÀN BỘ tập khoá ops.* của một tài khoản vận hành (rỗng = thu hồi hết; bắt buộc lý do); bớt khoá thì mọi phiên của tài khoản ấy bị thu hồi; identity ghi vết từng khoá cấp/thu hồi
+	// @request  operatorPermissionsBody
+	// @reply    200 operatorAccountView
+	// @reply    400 httpx.Error invalid_body invalid_account_input
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error operator_account_not_found
+	// @reply    422 httpx.Error invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable account_management_unavailable account_management_not_ready
+	mux.Handle("PUT /api/v1/operator-accounts/{code}/permissions",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2)")(
+			opauth.RequireOwner()(
+				idem.KhongCan("the body is the COMPLETE key set: the same set twice is no change and writes no entry (operator.proto)")(
+					http.HandlerFunc(h.setOperatorPermissions)))))
+
+	// @summary  CHỈ OWNER — đặt lại mật khẩu TẠM cho một tài khoản vận hành (bắt buộc lý do); giữ nguyên TOTP; buộc đổi ở lần đăng nhập sau; mọi phiên của tài khoản ấy bị thu hồi
+	// @request  temporaryPasswordBody
+	// @reply    200 operatorAccountView
+	// @reply    400 httpx.Error invalid_body invalid_account_input
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error operator_account_not_found
+	// @reply    422 passwordRejectionView new_password_rejected invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable account_management_unavailable account_management_not_ready
+	mux.Handle("PUT /api/v1/operator-accounts/{code}/password",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2)")(
+			opauth.RequireOwner()(
+				idem.KhongCan("a retry sets the same temporary password again and writes a second entry — two true entries, never a wrong state (operator.proto); and no store may hold this body")(
+					http.HandlerFunc(h.resetOperatorPassword)))))
+
+	// @summary  CHỈ OWNER — tài khoản đăng nhập của một xã (email đăng nhập, họ tên, vai trò, khoá, phải đổi mật khẩu); không số điện thoại, phòng ban, chức vụ; lượt đọc được identity ghi vết vào audit_log của xã
+	// @reply    200 staffAccountListView
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    503 httpx.Error operator_auth_unavailable account_management_unavailable account_management_not_ready
+	mux.Handle("GET /api/v1/communes/{id}/staff-accounts",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2)")(
+			opauth.RequireOwner()(
+				http.HandlerFunc(h.listCommuneStaffAccounts))))
+
+	// @summary  CHỈ OWNER — tạo tài khoản QUẢN TRỊ của một xã đang hoạt động: tên đăng nhập (email), họ tên, mật khẩu TẠM; buộc đổi ở lần đăng nhập đầu; identity ghi vết vào audit_log của xã, người làm là mã VH-
+	// @request  communeAdminAccountBody
+	// @reply    201 staffAccountView
+	// @reply    400 httpx.Error invalid_body invalid_account_input
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    409 httpx.Error account_email_taken commune_inactive
+	// @reply    422 passwordRejectionView new_password_rejected
+	// @reply    503 httpx.Error operator_auth_unavailable account_management_unavailable account_management_not_ready
+	mux.Handle("POST /api/v1/communes/{id}/admin-accounts",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2)")(
+			opauth.RequireOwner()(
+				idem.KhongCan("a repeat is refused by identity with ALREADY_EXISTS on the commune's sign-in email, nothing written twice (operator.proto); and no store may hold this body")(
+					http.HandlerFunc(h.createCommuneAdminAccount)))))
+
+	// @summary  CHỈ OWNER — đặt lại mật khẩu TẠM cho một tài khoản cán bộ của xã (bắt buộc lý do); buộc đổi ở lần đăng nhập sau; mọi phiên của tài khoản ấy bị thu hồi; tài khoản xã đang khoá thì từ chối
+	// @request  temporaryPasswordBody
+	// @reply    200 staffAccountView
+	// @reply    400 httpx.Error invalid_body invalid_account_input
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found staff_account_not_found
+	// @reply    409 httpx.Error staff_account_locked
+	// @reply    422 passwordRejectionView new_password_rejected invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable account_management_unavailable account_management_not_ready
+	mux.Handle("PUT /api/v1/communes/{id}/staff-accounts/{user_id}/password",
+		opauth.SignedIn(h.d.Auth, "OWNER ONLY — opauth.RequireOwner inside refuses every operator that is not the operator owner (ADR 0048 amendment 13/10/2026 #2)")(
+			opauth.RequireOwner()(
+				idem.KhongCan("a retry sets the same temporary password again and writes a second entry — two true entries, never a wrong state (operator.proto); and no store may hold this body")(
+					http.HandlerFunc(h.resetStaffPassword)))))
 
 	// @summary  Gắn Mini App riêng của xã (chế độ rieng)
 	// @request  attachMiniAppBody

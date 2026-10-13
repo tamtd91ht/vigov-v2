@@ -61,6 +61,8 @@ type fakeServer struct {
 	// ListActiveStaffCounts (staff_counts_test.go).
 	staffCounts    *identityv1.ListActiveStaffCountsResponse
 	sawStaffCounts *identityv1.ListActiveStaffCountsRequest
+	// The seven owner-only RPCs (owner_accounts_test.go).
+	owner ownerAnswers
 
 	calls     int
 	sawTenant [][]string

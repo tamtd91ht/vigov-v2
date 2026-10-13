@@ -35,6 +35,15 @@ type OperatorIdentity interface {
 	// Active staff accounts per commune, for the Zalo Bot communes table (operator_zalo_bot.go). No
 	// commune: it answers about every one, audited by identity.
 	ListActiveStaffCounts(ctx context.Context, token secret.Secret, clientIP string) (operatorclient.ListActiveStaffCountsResult, error)
+	// The seven OWNER-ONLY acts (operator_owner_accounts.go). The four operator-account ones carry no
+	// commune; the three staff-account ones act on the commune in ctx.
+	ListOperatorAccounts(ctx context.Context, token secret.Secret) (operatorclient.OperatorAccountsResult, error)
+	CreateOperatorAccount(ctx context.Context, req operatorclient.CreateOperatorAccountRequest) (operatorclient.OperatorAccountResult, error)
+	SetOperatorPermissions(ctx context.Context, req operatorclient.SetOperatorPermissionsRequest) (operatorclient.OperatorAccountResult, error)
+	ResetOperatorPassword(ctx context.Context, req operatorclient.ResetOperatorPasswordRequest) (operatorclient.OperatorAccountResult, error)
+	ListCommuneStaffAccounts(ctx context.Context, token secret.Secret, clientIP string) (operatorclient.StaffAccountsResult, error)
+	CreateCommuneAdminAccount(ctx context.Context, req operatorclient.CreateCommuneAdminAccountRequest) (operatorclient.StaffAccountResult, error)
+	ResetStaffPassword(ctx context.Context, req operatorclient.ResetStaffPasswordRequest) (operatorclient.StaffAccountResult, error)
 }
 
 type operatorHandlers struct{ d OperatorDeps }
@@ -160,6 +169,10 @@ type passwordRejectionView struct {
 type operatorWhoAmIView struct {
 	OperatorCode   string   `json:"operator_code"`
 	PermissionKeys []string `json:"permission_keys"`
+	// IsOwner: THE operator owner (ADR 0048 §Sửa đổi 13/10/2026 #1) — the console shows the
+	// owner-only screens on it. Display only: every owner-only route re-checks it (opauth.RequireOwner)
+	// and so does identity. False from an identity older than the field (fail closed).
+	IsOwner bool `json:"is_owner"`
 }
 
 type operatorPasswordBody struct {
@@ -316,7 +329,7 @@ func (h *operatorHandlers) whoAmI(w http.ResponseWriter, r *http.Request) {
 	if keys == nil {
 		keys = []string{}
 	}
-	writeJSON(w, http.StatusOK, operatorWhoAmIView{OperatorCode: p.OperatorCode, PermissionKeys: keys})
+	writeJSON(w, http.StatusOK, operatorWhoAmIView{OperatorCode: p.OperatorCode, PermissionKeys: keys, IsOwner: p.IsOwner})
 }
 
 // signOut revokes the session NAMED BY THE COOKIE — never a session id from a parameter. Either

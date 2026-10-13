@@ -93,6 +93,9 @@ type identityFake struct {
 	sawStaffToken []string
 	sawStaffIP    []string
 	sawStaffCtxT  []tenant.ID
+
+	// The seven owner-only account RPCs (operator_owner_accounts_test.go).
+	acct ownerAccountsFake
 }
 
 func (f *identityFake) ListActiveStaffCounts(ctx context.Context, tok secret.Secret, clientIP string) (operatorclient.ListActiveStaffCountsResult, error) {
@@ -164,6 +167,8 @@ type registryFake struct {
 	// pages, when set, is what ListCommunes answers page by page (the cursor is the page index) — the
 	// Zalo Bot communes table walks the whole list.
 	pages [][]domain.Commune
+	// inactive: Commune answers the commune switched off (operator_owner_accounts_test.go).
+	inactive bool
 }
 
 // deletedAppFake is an App ID communeIDFake held and removed.
@@ -192,7 +197,7 @@ func (f registryFake) Commune(_ context.Context, id string) (domain.Commune, []d
 	if id != communeIDFake && id != newIDFake {
 		return domain.Commune{}, nil, store.ErrCommuneNotFound
 	}
-	c := domain.Commune{ID: id, Name: "Xã Thăng Bình", Province: "Đà Nẵng", Active: true,
+	c := domain.Commune{ID: id, Name: "Xã Thăng Bình", Province: "Đà Nẵng", Active: !f.inactive,
 		Domains: []string{"thangbinh-danang.vigov.vn"}}
 	if f.setApps {
 		return c, f.apps, nil
