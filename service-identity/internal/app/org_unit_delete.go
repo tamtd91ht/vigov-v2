@@ -17,7 +17,8 @@ package app
 //  2. read the live unit and its two local counts — 404 before anybody else is asked; staff or
 //     child units held → 409 right here, so an outage in another service cannot mask it as a 503
 //  3. ask petitions, then documents — OUTSIDE and BEFORE the transaction, so no row lock is held
-//     across two network calls. ANY failure refuses the delete (503); it is NEVER read as zero,
+//     across two network calls. Not configured → 503, checked HERE and not earlier, so step 2's 409
+//     answers whatever the gRPC wiring. ANY failure refuses the delete (503); it is NEVER read as zero,
 //     because zero is the one answer that lets a delete through (fail closed)
 //  4. anything held → 409 naming every kind and its count ("yêu cầu chuyển trước")
 //  5. transaction: lock the unit, RE-COUNT staff and children under the lock, soft delete, audit
@@ -103,10 +104,6 @@ func (uc *SoDoToChuc) Remove(ctx context.Context, id, rawReason string, actor Ng
 	if err != nil {
 		return err
 	}
-	if uc.petitions == nil || uc.documents == nil {
-		return ErrOrgUnitDeleteNotConfigured
-	}
-
 	unit, held, err := uc.kho.LiveForDelete(ctx, id)
 	if err != nil {
 		return err
@@ -119,6 +116,14 @@ func (uc *SoDoToChuc) Remove(ctx context.Context, id, rawReason string, actor Ng
 	// next attempt asks the remote owners and names theirs.
 	if held.Staff > 0 || held.ChildUnits > 0 {
 		return &OrgUnitInUseError{Holdings: held}
+	}
+
+	// NOT CONFIGURED IS CHECKED ONLY NOW, after the local 409 (customer sheet web-admin-131026: "bộ phận
+	// còn cán bộ thì không cho xoá" must answer 409 on every deployment, wired to petitions/documents or
+	// not). Still before any delete: a unit with no local holdings and no way to ask the owners is
+	// refused with 503, never let through (fail closed).
+	if uc.petitions == nil || uc.documents == nil {
+		return ErrOrgUnitDeleteNotConfigured
 	}
 
 	// THE UNIT'S ID, AS READ — never the path value — is what is asked about.

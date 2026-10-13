@@ -319,8 +319,48 @@ func TestRemoveOrgUnitWithoutSourcesIsNotConfigured(t *testing.T) {
 	if err := uc.Remove(ctx, "bp-c", "sáp nhập", nguoiBoPhan()); !errors.Is(err, ErrOrgUnitDeleteNotConfigured) {
 		t.Fatalf("chỉ có petitions: lỗi = %v, muốn ErrOrgUnitDeleteNotConfigured", err)
 	}
-	if len(k.lenh) != 0 {
-		t.Error("chưa cấu hình mà vẫn đọc cơ sở dữ liệu")
+	// The local read now runs first (so the 409 below can answer), but nothing is ever written.
+	if k.batDau != 0 || len(k.cau("UPDATE")) != 0 || len(k.cau("INSERT")) != 0 {
+		t.Errorf("chưa cấu hình mà vẫn mở giao dịch (%d) hoặc ghi", k.batDau)
+	}
+}
+
+// Customer sheet web-admin-131026: "bộ phận còn cán bộ thì không cho xoá" answers 409 on EVERY
+// deployment — not a 503 because petitions/documents happen not to be wired. Local holdings decide
+// before the not-configured check.
+//
+// MUTATION THAT MUST TURN THIS RED: move the `uc.petitions == nil` check back above LiveForDelete.
+func TestRemoveOrgUnitLocalHoldingsAnswer409EvenWhenNotConfigured(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		setup func(k *khoBoPhanGia)
+		want  domain.OrgUnitHoldings
+	}{
+		{"staff", func(k *khoBoPhanGia) { k.staff = map[string]int{"bp-c": 2} }, domain.OrgUnitHoldings{Staff: 2}},
+		{"child unit", func(k *khoBoPhanGia) {
+			k.hang = append(k.hang, hangBoPhan{xa: xaBoPhan, id: "bp-d", ma: "to-con", ten: "TỔ CON", cha: "bp-c"})
+		}, domain.OrgUnitHoldings{ChildUnits: 1}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			k := &khoBoPhanGia{hang: cayBaTang()}
+			uc, ctx := dungUseCaseBoPhan(t, k) // no WithHoldingsSources: not configured
+			c.setup(k)
+
+			err := uc.Remove(ctx, "bp-c", "", nguoiBoPhan())
+			var inUse *OrgUnitInUseError
+			if !errors.As(err, &inUse) {
+				t.Fatalf("lỗi = %v, muốn *OrgUnitInUseError (409), không phải ErrOrgUnitDeleteNotConfigured", err)
+			}
+			if errors.Is(err, ErrOrgUnitDeleteNotConfigured) {
+				t.Errorf("lỗi 409 mang theo ErrOrgUnitDeleteNotConfigured: %v", err)
+			}
+			if inUse.Holdings != c.want {
+				t.Errorf("số còn giữ = %+v, muốn %+v", inUse.Holdings, c.want)
+			}
+			if k.batDau != 0 || len(k.cau("UPDATE")) != 0 || len(k.cau("INSERT")) != 0 {
+				t.Errorf("bị từ chối mà vẫn mở giao dịch (%d) hoặc ghi", k.batDau)
+			}
+		})
 	}
 }
 
