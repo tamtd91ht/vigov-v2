@@ -6,7 +6,7 @@
  *   GET   /api/v1/content-items/{id}                              content.read
  *   POST  /api/v1/content-items                                   content.update  + Idempotency-Key BẮT BUỘC
  *   PATCH /api/v1/content-items/{id}                              content.update  (không cần khoá chống trùng)
- *   DELETE /api/v1/content-items/{id}  {reason}                   content.update  → 204 (soft delete)
+ *   DELETE /api/v1/content-items/{id}  [{reason}]                 content.update  → 204 (soft delete)
  *   POST  /api/v1/content-items/cover-images                      content.update  + Idempotency-Key BẮT BUỘC (multipart)
  *   POST  /api/v1/content-items/body-images                       content.update  + Idempotency-Key BẮT BUỘC (multipart, ảnh thân bài)
  *   POST  /api/v1/content-items/body-images/from-url              content.update  + Idempotency-Key BẮT BUỘC
@@ -23,7 +23,7 @@
  * read for its COUNT only, for §4's card (`countPublishedStaff` below).
  *
  * DELETING ONE ITEM (§9's `DELETE`, the prototype's trash button — user's decision 02/10/2026) is a SOFT
- * delete with a MANDATORY reason (rule 7), `deleteContentItem`: the item leaves the Mini App and every
+ * delete (rule 7), reason optional since sheet web-admin-131026, `deleteContentItem`: the item leaves the Mini App and every
  * list, the record and its history stay. The REVERSIBLE way off the Mini App still exists and is still
  * `PATCH` with `publish: false`, as §7 describes its checkbox — the item stays in the register.
  *
@@ -57,7 +57,7 @@
  *   1. `body` VẮNG ở danh sách, CÓ ở chi tiết. Hợp đồng sinh ra `body?: string | null` đúng vì
  *      thế: `""` sẽ mang hai nghĩa — "bài này không có thân" và "bạn vừa hỏi một TRANG, mà trang
  *      thì không mang thân". Muốn toàn văn thì gọi `layMotNoiDung`, không suy từ danh sách.
- *   2. `DELETE` is a soft delete with a reason in the body — see above.
+ *   2. `DELETE` is a soft delete; a reason, when sent, goes in the body — see above.
  *   3. `status` DO MÁY CHỦ QUYẾT từ ô tích `publish` của §7. Không thân nào ở đây mang `status`:
  *      một client tự khai trạng thái là một client đăng vượt qua bước duyệt mà §10.2 dành cho
  *      lượt đồng bộ.
@@ -387,7 +387,11 @@ export function contentItemDeletePath(id: string): string {
 }
 
 /**
- * DELETE /api/v1/content-items/{id} with `{reason}` — a SOFT delete (rule 7). 204, no body.
+ * DELETE /api/v1/content-items/{id}, optionally with `{reason}` — a SOFT delete (rule 7). 204, no body.
+ *
+ * THE REASON IS OPTIONAL (sheet web-admin-131026, server b78424eb): the dialog no longer asks for one and
+ * calls this with the id alone, which sends NO body — the server then records its own default reason.
+ * A blank reason is the same as none.
  *
  * The server removes the item from the Mini App in the same write (unpublishes it, withdraws the public
  * cover copy) and audits it; the row and its history stay.
@@ -399,14 +403,14 @@ export function contentItemDeletePath(id: string): string {
  * else, or never in this commune — one answer, no leak) closes the dialog and reloads, while every other
  * refusal keeps the dialog open with the typed reason. The branch is on the status, never on `code`.
  */
-export async function deleteContentItem(id: string, reason: string): Promise<CallResult<null>> {
-  const sent: comms_deleteContentItemIn = { reason };
+export async function deleteContentItem(id: string, reason?: string): Promise<CallResult<null>> {
+  const trimmed = reason?.trim() ?? "";
+  const sent: comms_deleteContentItemIn | null = trimmed === "" ? null : { reason: trimmed };
   try {
     const res = await fetch(contentItemDeletePath(id), {
       ...CHUNG,
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(sent),
+      ...(sent === null ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(sent) }),
     });
     if (res.status !== 204) return { ok: false, status: res.status, message: await thongBaoLoi(res) };
     return { ok: true, data: null };

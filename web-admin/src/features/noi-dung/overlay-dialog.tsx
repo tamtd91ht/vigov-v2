@@ -24,6 +24,12 @@ import { cn } from "@/lib/cn";
  * jsdom has no `showModal` (the tests render to a string or into jsdom): the `open` attribute is the
  * fallback there, so the content is still in the document to assert on.
  */
+/**
+ * Width for a short confirm (title, one sentence, two buttons). `.overlay-dialog` defaults to 48rem for
+ * the forms; a confirm left at that width draws a white strip beside its content (sheet web-admin-131026).
+ */
+export const SMALL_DIALOG_CLASS = "w-[min(32rem,calc(100vw-1rem))]";
+
 export function OverlayDialog({
   titleId,
   onDismiss,

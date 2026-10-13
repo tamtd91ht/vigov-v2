@@ -2,7 +2,7 @@
 //
 // The whole screen (`SoNoiDung`), mounted, against a fake server: what the page does AROUND the delete
 // dialog — the button's gate, closing, reloading the same page, the line above the table. The dialog's
-// own rules (reason, counter, in-flight) are `content-delete-dialog.test.tsx`.
+// own rules (no reason box, in-flight) are `content-delete-dialog.test.tsx`.
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -95,7 +95,7 @@ function fakeServer(permissions: string[], pages: comms_noiDungRa[][], deleteAns
     deletes: () =>
       f.mock.calls
         .filter(([, i]) => i?.method === "DELETE")
-        .map(([p, i]) => ({ path: p, body: JSON.parse(String(i?.body)) as unknown })),
+        .map(([p, i]) => ({ path: p, body: i?.body === undefined ? undefined : (JSON.parse(String(i.body)) as unknown) })),
   };
 }
 
@@ -142,19 +142,13 @@ function byText(text: string): HTMLButtonElement {
   return b;
 }
 
-function typeReason(value: string): void {
-  const el = host!.querySelector<HTMLTextAreaElement>("#content-delete-reason")!;
-  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(el, value);
-  act(() => {
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-}
+const DIALOG_TITLE = "#content-delete-title";
 
-async function deleteRow(title: string, reason: string): Promise<void> {
+/** The bin, then `Xoá` straight away — the dialog asks for nothing (sheet web-admin-131026). */
+async function deleteRow(title: string): Promise<void> {
   await act(async () => {
     byLabel(contentDeleteAriaLabel(title))!.click();
   });
-  typeReason(reason);
   await act(async () => {
     byText(CONTENT_DELETE_SUBMIT).form!.requestSubmit();
   });
@@ -185,12 +179,10 @@ describe("after the server answered", () => {
     await mountScreen();
     expect(s.listReads()).toHaveLength(1);
 
-    await deleteRow(A.title, "  Đăng trùng với bài ngày 14/9  ");
+    await deleteRow(A.title);
 
-    expect(s.deletes()).toEqual([
-      { path: "/api/v1/content-items/01JNDA", body: { reason: "Đăng trùng với bài ngày 14/9" } },
-    ]);
-    expect(host!.querySelector("#content-delete-reason")).toBeNull();
+    expect(s.deletes()).toEqual([{ path: "/api/v1/content-items/01JNDA", body: undefined }]);
+    expect(host!.querySelector(DIALOG_TITLE)).toBeNull();
     expect(s.listReads()).toHaveLength(2);
     expect(s.listReads()[1]).toBe(s.listReads()[0]);
     expect(host!.textContent).not.toContain(A.title);
@@ -210,25 +202,25 @@ describe("after the server answered", () => {
     );
     await mountScreen();
 
-    await deleteRow(A.title, "Không còn phù hợp");
+    await deleteRow(A.title);
 
-    expect(host!.querySelector("#content-delete-reason")).toBeNull();
+    expect(host!.querySelector(DIALOG_TITLE)).toBeNull();
     expect(s.listReads()).toHaveLength(2);
     expect(T.info).toHaveBeenCalledWith(CONTENT_DELETE_GONE);
   });
 
-  it("400: the dialog stays with the reason and the server's sentence; the list is NOT read again", async () => {
-    const sentence = "Lý do xoá quá dài (tối đa 500 ký tự).";
+  it("403: the dialog stays with the server's sentence; the list is NOT read again", async () => {
+    const sentence = "Bạn không có quyền thực hiện thao tác này.";
     const s = fakeServer(
       ["content.read", "content.update"],
       [[A, B]],
-      json(400, { code: "invalid_request", message: sentence }),
+      json(403, { code: "forbidden", message: sentence }),
     );
     await mountScreen();
 
-    await deleteRow(A.title, "Đăng nhầm");
+    await deleteRow(A.title);
 
-    expect(host!.querySelector<HTMLTextAreaElement>("#content-delete-reason")?.value).toBe("Đăng nhầm");
+    expect(host!.querySelector(DIALOG_TITLE)).not.toBeNull();
     expect(host!.querySelector("dialog [role=\"alert\"]")?.textContent).toBe(sentence);
     expect(s.listReads()).toHaveLength(1);
     expect(T.success).not.toHaveBeenCalled();

@@ -12,7 +12,7 @@ import {
   deleteReasonReady,
   DELETE_REASON_MAX_CHARS,
 } from "@/features/noi-dung/nhan-noi-dung";
-import { OverlayDialog } from "@/features/noi-dung/overlay-dialog";
+import { OverlayDialog, SMALL_DIALOG_CLASS } from "@/features/noi-dung/overlay-dialog";
 import type { DisasterAlert } from "@/lib/api/disaster-alerts";
 import type { KetQua } from "@/lib/api/goi";
 import type { CallResult } from "@/lib/api/task-attachments";
@@ -33,7 +33,6 @@ import {
 const END_TITLE_ID = "disaster-alert-end-title";
 const DELETE_TITLE_ID = "disaster-alert-delete-title";
 const REASON_ID = "disaster-alert-delete-reason";
-const SMALL_DIALOG = "w-[min(32rem,calc(100vw-1rem))]";
 
 function AlertName({ alert }: { alert: DisasterAlert }) {
   return (
@@ -78,7 +77,7 @@ export function EndAlertDialog({
   }
 
   return (
-    <OverlayDialog titleId={END_TITLE_ID} onDismiss={dismiss} className={SMALL_DIALOG}>
+    <OverlayDialog titleId={END_TITLE_ID} onDismiss={dismiss} className={SMALL_DIALOG_CLASS}>
       <div className="flex flex-col gap-4">
         <div className="flex items-center gap-3 border-b border-line pb-3">
           <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-danger-50 text-danger-600">
@@ -167,7 +166,7 @@ export function DeleteAlertDialog({
   }
 
   return (
-    <OverlayDialog titleId={DELETE_TITLE_ID} onDismiss={dismiss} className={SMALL_DIALOG}>
+    <OverlayDialog titleId={DELETE_TITLE_ID} onDismiss={dismiss} className={SMALL_DIALOG_CLASS}>
       <form className="flex flex-col gap-4" onSubmit={submit} aria-labelledby={DELETE_TITLE_ID}>
         <div className="flex items-center gap-3 border-b border-line pb-3">
           <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-danger-50 text-danger-600">

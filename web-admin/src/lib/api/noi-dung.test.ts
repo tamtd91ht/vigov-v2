@@ -616,7 +616,19 @@ describe("category edit / delete (ADR 0067 §3)", () => {
     });
   }
 
-  it("item DELETE: the reason IN THE BODY, never in the URL; 204 is success", async () => {
+  it("item DELETE with no reason (the dialog's call): no body at all, no Content-Type; 204 is success", async () => {
+    const gia = batFetch(new Response(null, { status: 204 }));
+    const r = await deleteContentItem("01J/ND 1");
+    const { duongDan, tuyChon } = loiGoi(gia, 0);
+    expect(duongDan).toBe("/api/v1/content-items/01J%2FND%201");
+    expect(tuyChon.method).toBe("DELETE");
+    expect(tuyChon.credentials).toBe("same-origin");
+    expect(tuyChon.body).toBeUndefined();
+    expect(new Headers(tuyChon.headers).has("Content-Type")).toBe(false);
+    expect(r).toEqual({ ok: true, data: null });
+  });
+
+  it("item DELETE with a reason: the reason IN THE BODY, never in the URL; 204 is success", async () => {
     const gia = batFetch(new Response(null, { status: 204 }));
     const r = await deleteContentItem("01J/ND 1", "Đăng nhầm bài của thôn khác");
     const { duongDan, tuyChon } = loiGoi(gia, 0);
@@ -632,11 +644,6 @@ describe("category edit / delete (ADR 0067 §3)", () => {
   });
 
   const ITEM_DELETE_REFUSALS: { status: number; code: string; message: string }[] = [
-    {
-      status: 400,
-      code: "invalid_request",
-      message: "Hãy nhập lý do xoá. Nội dung đã đăng là hồ sơ lưu trữ, xoá phải ghi rõ vì sao.",
-    },
     { status: 400, code: "invalid_request", message: "Lý do xoá quá dài (tối đa 500 ký tự)." },
     { status: 404, code: "not_found", message: "Không tìm thấy nội dung này." },
     { status: 403, code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." },
@@ -645,14 +652,14 @@ describe("category edit / delete (ADR 0067 §3)", () => {
   for (const r of ITEM_DELETE_REFUSALS) {
     it(`item DELETE ${r.status} (${r.message.slice(0, 24)}…): status kept, server sentence verbatim`, async () => {
       batFetch(traJSON(r.status, { code: r.code, message: r.message, trace_id: "t-1" }));
-      const kq = await deleteContentItem("01JND1", "x");
+      const kq = await deleteContentItem("01JND1");
       expect(kq).toEqual({ ok: false, status: r.status, message: r.message });
     });
   }
 
   it("item DELETE with no answer at all: status 0 and the generic sentence", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new TypeError("network"))));
-    const kq = await deleteContentItem("01JND1", "x");
+    const kq = await deleteContentItem("01JND1");
     expect(kq.ok).toBe(false);
     if (!kq.ok) expect(kq.status).toBe(0);
   });
@@ -759,9 +766,10 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(luocDo?.required ?? []).not.toContain("body");
   });
 
-  it("an item and a category each have ONE `DELETE`, and both take a reason in the body", () => {
+  it("an item and a category each have ONE `DELETE`; the item's reason is OPTIONAL, in the body", () => {
     // Replaces the test that pinned the ABSENCE of the item's DELETE (it was written to go red the day
-    // the route landed, 5bb1d962). Both deletes are soft, with a mandatory reason (rule 7).
+    // the route landed, 5bb1d962). Both deletes are soft (rule 7); the item's reason became optional
+    // (sheet web-admin-131026, b78424eb) — the category's stays mandatory.
     const p = hopDong().paths;
     const methods = (path: string) => Object.keys(p[path] ?? {}).filter((k) => k !== "parameters").sort();
     expect(methods("/api/v1/content-items/{id}")).toEqual(["delete", "get", "patch"]);
@@ -769,6 +777,7 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     expect(Object.keys(p["/api/v1/content-items"] ?? {})).not.toContain("delete");
     expect(Object.keys(p["/api/v1/content-categories"] ?? {})).not.toContain("delete");
     expect(khoaCuaLuocDo("comms.deleteContentItemIn")).toEqual(["reason"]);
+    expect(hopDong().components.schemas["comms.deleteContentItemIn"]?.required ?? []).not.toContain("reason");
   });
 
   it("`deleteContentItem` sends EXACTLY the keys of `comms.deleteContentItemIn`", async () => {

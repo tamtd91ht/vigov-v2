@@ -214,11 +214,11 @@ export const CANH_BAO_HTML_THO =
   "bằng nút “Chèn ảnh”. Máy chủ làm sạch thân bài mỗi lần lưu — bảng, màu chữ và mọi định dạng khác " +
   "bị bỏ trước khi tới bà con.";
 
-/* ── Xoá một mục nội dung — soft delete with a mandatory reason (rule 7) ─────────────────────────
+/* ── Xoá một mục nội dung — soft delete (rule 7) ─────────────────────────────────────────────────
  *
  * The prototype's trash button (`vigov-require/.../ContentWorkspace.tsx:469-477`, user's decision
- * 02/10/2026), with one deviation rule 7 mandates: the prototype deletes on one click without a reason;
- * here a dialog asks for the reason first, and the server refuses a blank one anyway.
+ * 02/10/2026). A dialog confirms first; it asks NO reason (sheet web-admin-131026 — the server records
+ * its own default reason, b78424eb). The row and its history are kept either way.
  */
 
 /**
@@ -230,10 +230,9 @@ export const ACTIONS_COLUMN_LABEL = "Thao tác";
 export const CONTENT_DELETE_SYMBOL = "🗑";
 export const CONTENT_DELETE_TITLE = "Xoá nội dung";
 export const CONTENT_DELETE_SUBMIT = "Xoá";
-export const CONTENT_DELETE_REASON_LABEL = "Lý do xoá *";
-/** Said in the dialog, before the reason: what the act does and what it keeps. */
+/** Said in the dialog: what the act does and what it keeps. */
 export const CONTENT_DELETE_NOTE =
-  "Nội dung sẽ được gỡ khỏi Mini App và không còn trong danh sách. Hồ sơ, lý do xoá và lịch sử " +
+  "Nội dung sẽ được gỡ khỏi Mini App và không còn trong danh sách. Hồ sơ và lịch sử " +
   "thao tác vẫn được lưu lại. Nếu chỉ muốn tạm ẩn với bà con, hãy sửa nội dung và bỏ chọn “Đăng " +
   "lên Mini App”.";
 /** The toast after a 204 — the prototype's, verbatim (`ContentWorkspace.tsx:156`). The act stays a soft delete. */

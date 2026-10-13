@@ -232,8 +232,7 @@ import { RichTextEditor } from "./rich-text-editor";
  * ═══════════════════════════════════════════════════════════════════════════════════════════
  *
  * EACH ROW HAS A DELETE (`🗑`, the prototype's trash button, user's decision 02/10/2026): a SOFT delete
- * with a MANDATORY reason (rule 7) asked in `ContentDeleteDialog` — the prototype's one-click delete
- * minus the missing reason. The reversible way off the Mini App is the row's `Gỡ` (D1). (A CATEGORY has
+ * (rule 7) confirmed in `ContentDeleteDialog`, which asks no reason (sheet web-admin-131026). The reversible way off the Mini App is the row's `Gỡ` (D1). (A CATEGORY has
  * its own soft delete — `category-admin.tsx`, ADR 0067 §3.)
  *
  * WRITE CONTROLS FOLLOW `content.update` (`canEditContent`, as the prototype does): without it the screen
@@ -1154,7 +1153,7 @@ export function HangLocNoiDung({
  * row's signed `cover_image.preview_url`), Tiêu đề, Chuyên mục, Tệp đính kèm, Ngày đăng, Lượt xem, Trạng thái, and the
  * actions with no header text.
  *
- * THE ACTION COLUMN HOLDS `✎`, `Đăng`/`Gỡ` AND `🗑`. `🗑` only OPENS the dialog that asks for the reason —
+ * THE ACTION COLUMN HOLDS `✎`, `Đăng`/`Gỡ` AND `🗑`. `🗑` only OPENS the confirm dialog —
  * nothing is deleted on the click itself. The title is a button opening the same edit dialog as `✎`.
  *
  * KHÔNG CỘT NÀO DỰNG HTML. `title` và `summary` là văn bản thuần ở đây; thân bài không có mặt trong phản
