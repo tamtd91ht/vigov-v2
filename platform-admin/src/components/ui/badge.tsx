@@ -4,7 +4,9 @@ import type { ComponentProps, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /**
- * Status pill — copied from `web-admin/src/components/ui/badge.tsx` (change both).
+ * Status tag — copied from `web-admin/src/components/ui/badge.tsx` (change both): shadcn's Badge with
+ * the spec's chip colours (spec 00 §4–§5) — a 20px pill, 12px/500 word, 12px icon, the tone at 12%
+ * fill / full word / 25% border.
  *
  * ICON + WORD, NEVER COLOUR ALONE: every tone carries a default icon of its own shape and the caller
  * supplies the word.
@@ -12,11 +14,11 @@ import { cn } from "@/lib/cn";
 export type BadgeTone = "success" | "neutral" | "warning" | "danger" | "info";
 
 const TONE_CLASS: Record<BadgeTone, string> = {
-  success: "bg-success-50 text-success-600",
-  neutral: "bg-[#f1f4f8] text-ink-500",
-  warning: "bg-warning-50 text-warning-600",
-  danger: "bg-danger-50 text-danger-600",
-  info: "bg-brand-50 text-brand-700",
+  success: "border-leaf/25 bg-leaf/12 text-leaf",
+  neutral: "border-line bg-ink-muted/12 text-ink",
+  warning: "border-tangerine/25 bg-tangerine/12 text-tangerine",
+  danger: "border-danger/25 bg-danger/12 text-danger",
+  info: "border-brand/25 bg-brand/12 text-brand",
 };
 
 const TONE_ICON: Record<BadgeTone, LucideIcon> = {
@@ -39,13 +41,13 @@ export function Badge({ tone = "neutral", icon, className, children, ...props }:
   return (
     <span
       className={cn(
-        "inline-flex h-[26px] items-center gap-[5px] rounded-full px-2.5 text-xs leading-none font-semibold whitespace-nowrap",
+        "inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-4xl border border-solid px-2 py-0.5 text-xs leading-none font-medium whitespace-nowrap",
         TONE_CLASS[tone],
         className,
       )}
       {...props}
     >
-      <Icon aria-hidden="true" focusable="false" className="size-3.5 shrink-0" strokeWidth={2} />
+      <Icon aria-hidden="true" focusable="false" className="size-3 shrink-0" strokeWidth={2} />
       {children}
     </span>
   );

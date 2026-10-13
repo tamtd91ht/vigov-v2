@@ -4,14 +4,20 @@ import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 /**
- * Page header — copied from `web-admin/src/components/ui/page-header.tsx` (change both): a flat
- * 48px icon tile (no gradient, no shadow — ADR 0068 §11), the page `<h1>`, one optional subtitle
- * line, and the actions on the right of the same row. Actions wrap under the title at narrow widths.
+ * Page header — copied from `web-admin/src/components/ui/page-header.tsx` (change both; spec 02 §1 /
+ * 00 §3, ADR 0068 lần 6): the page `<h1>` (navy 22px/700), one optional subtitle line (ink-muted
+ * 13px), and the actions on the right of the same row, bottoms aligned. Actions wrap under the title
+ * at narrow widths.
+ *
+ * `icon` IS STILL ACCEPTED AND IGNORED, as in web-admin: the spec's header has no icon tile any more,
+ * and every screen here passes one — dropping it from each is a markup change in every screen for no
+ * visible gain.
  *
  * DIFFERENCE FROM WEB-ADMIN: no `meta` slot — nothing on this console carries "updated at / by".
  */
 export type PageHeaderProps = {
-  icon: LucideIcon;
+  /** Ignored since ADR 0068 lần 6 (no icon tile) — kept so existing callers compile. */
+  icon?: LucideIcon;
   title: ReactNode;
   subtitle?: ReactNode;
   actions?: ReactNode;
@@ -19,21 +25,17 @@ export type PageHeaderProps = {
   className?: string;
 };
 
-export function PageHeader({ icon: Icon, title, subtitle, actions, titleId, className }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, actions, titleId, className }: PageHeaderProps) {
   return (
-    <header className={cn("mb-5 flex flex-wrap items-center gap-x-4 gap-y-3", className)}>
-      <span
-        aria-hidden="true"
-        className="grid size-12 shrink-0 place-items-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600"
-      >
-        <Icon className="size-6" strokeWidth={1.8} focusable="false" />
-      </span>
+    <header className={cn("mb-3 flex flex-wrap items-end gap-4", className)}>
       <div className="min-w-0 flex-1 basis-60">
-        <h1 id={titleId} className="m-0 text-2xl leading-tight font-bold tracking-[-0.01em] [overflow-wrap:anywhere] text-ink-900">
+        <h1 id={titleId} className="m-0 text-[22px] leading-tight font-bold [overflow-wrap:anywhere] text-navy">
           {title}
         </h1>
         {subtitle !== undefined && (
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-500">{subtitle}</div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-muted [&_svg]:size-3.5 [&_svg]:shrink-0">
+            {subtitle}
+          </div>
         )}
       </div>
       {actions !== undefined && <div className="flex flex-wrap items-center gap-2 sm:ml-auto">{actions}</div>}

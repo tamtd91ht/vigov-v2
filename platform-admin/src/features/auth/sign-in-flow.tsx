@@ -43,17 +43,18 @@ import {
 export const CONSOLE_HOME = "/xa";
 
 /**
- * The sign-in card — web-admin's `.form-dang-nhap` look: 420px, 20px radius, a light shadow. `wide`
- * for the steps that hold a QR code or a grid of codes.
+ * The sign-in card — web-admin's `.form-dang-nhap` / `.tieu-de-form` look: white, hairline, 12px
+ * radius, 24px padding, `shadow-sm`, a navy 17px/700 title; 400px like web-admin's sign-in column.
+ * `wide` for the steps that hold a QR code or a grid of codes.
  */
 function cardClass(wide = false): string {
   return cn(
-    "flex w-full flex-col gap-4 rounded-hero border border-line bg-surface px-6 py-7 shadow-md md:p-8",
-    wide ? "max-w-[34rem]" : "max-w-[420px]",
+    "flex w-full flex-col gap-4 rounded-lg border border-solid border-line bg-surface p-6 shadow-sm",
+    wide ? "max-w-[34rem]" : "max-w-[25rem]",
   );
 }
 
-const titleClass = "m-0 text-[22px] leading-snug font-bold text-ink-900";
+const titleClass = "m-0 text-[17px] leading-snug font-bold text-navy";
 
 const loginIcon = <LogIn aria-hidden="true" focusable="false" strokeWidth={1.8} />;
 

@@ -24,8 +24,11 @@ import { cn } from "@/lib/cn";
 import { canManageZaloBot, canReadConsole } from "@/lib/permissions";
 
 /**
- * Console navigation — drawn like web-admin's sidebar (`web-admin/src/components/sidebar-view.tsx`):
- * white, 240px, an icon per item, the active item filled `--brand-50` with a 3px bar. Wave 1
+ * Console navigation — drawn like web-admin's sidebar (`web-admin/src/components/side-nav.tsx` and its
+ * `.side-nav*` rules; spec 01, ADR 0068 lần 6): NAVY (`--sidebar`), 240px / 64px collapsed, the brand
+ * block on top over a hairline, an icon per item, the active item on the `--sidebar-accent` fill with
+ * a 3px `--sidebar-primary` bar — "where am I" is never told by colour alone. Utilities here, not
+ * web-admin's class rules: this console has no legacy stylesheet to hold them. Wave 1
  * (ADR 0048 §01/10 #4) had one section; wave 2 (ADR 0073) adds the shared Mini App, tier-1 petition
  * fields, upload limits and the operator log. Plus the operator's own account pages, which need only
  * a session.
@@ -107,18 +110,20 @@ function NavGroup({
   collapsed: boolean;
 }) {
   return (
-    <div className="flex shrink-0 items-center gap-1 lg:block">
+    <div className="flex shrink-0 items-center gap-1 lg:mt-1 lg:block">
       {title !== null ? (
         <p
           className={cn(
-            "m-0 hidden px-2 pt-3.5 pb-1.5 text-[11px] font-semibold tracking-[0.06em] text-ink-500 uppercase lg:block",
+            "m-0 hidden px-3 pt-3 pb-1.5 text-[10.5px] leading-normal font-semibold tracking-[0.05em] text-sidebar-foreground/55 uppercase lg:block",
             collapsed && "lg:sr-only",
           )}
         >
           {title}
         </p>
       ) : null}
-      <ul className="m-0 flex list-none gap-1 p-0 lg:flex-col lg:gap-0.5">
+      {/* Collapsed, a heading becomes one hairline, as web-admin draws it. */}
+      {title !== null && collapsed ? <span aria-hidden="true" className="m-2 hidden border-t border-sidebar-border lg:block" /> : null}
+      <ul className="m-0 flex list-none gap-1 p-0 lg:flex-col lg:gap-0">
         {items.map((item) => {
           const current = isCurrent(item.href, pathname);
           const Icon = item.icon;
@@ -130,13 +135,20 @@ function NavGroup({
                 // A tooltip for the eye when the label is hidden; the label itself stays the name.
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "relative flex min-h-9 items-center gap-3 rounded-[8px] px-3 text-[13.5px] font-medium whitespace-nowrap text-ink-700 no-underline",
-                  "transition-[background-color,color] duration-150",
-                  "[&_svg]:size-[18px] [&_svg]:shrink-0 [&_svg]:text-ink-500",
+                  "relative flex items-center gap-3 rounded-[10px] px-3 py-2.5 text-[13.5px] leading-normal whitespace-nowrap text-sidebar-foreground no-underline",
+                  "transition-[background-color,color] duration-150 ease-(--ease)",
+                  "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-ring",
+                  "[&_svg]:size-[17px] [&_svg]:shrink-0",
+                  // The 3px bar sits in the nav's 12px gutter on the column; on the narrow strip, whose
+                  // scroller would clip it, it is drawn inside the item instead.
                   current
-                    ? "bg-brand-50 font-semibold text-brand-700 shadow-[inset_3px_0_0_var(--brand-600)] [&_svg]:text-brand-600"
-                    : "hover:bg-surface-muted hover:text-ink-900 hover:[&_svg]:text-brand-600",
-                  collapsed && "lg:justify-center lg:px-0",
+                    ? cn(
+                        "bg-sidebar-accent font-semibold text-sidebar-accent-foreground",
+                        "max-lg:shadow-[inset_3px_0_0_var(--sidebar-primary)]",
+                        "lg:before:absolute lg:before:inset-y-1.5 lg:before:-left-3 lg:before:w-[3px] lg:before:rounded-r-[3px] lg:before:bg-sidebar-primary lg:before:content-['']",
+                      )
+                    : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  collapsed && "lg:justify-center lg:gap-0 lg:px-0",
                 )}
               >
                 <Icon aria-hidden="true" focusable="false" strokeWidth={1.8} />
@@ -166,32 +178,41 @@ export function SidebarView({ permissionKeys, isOwner = false }: { permissionKey
     <nav
       aria-label="Điều hướng chính"
       className={cn(
-        "relative flex min-w-0 flex-col border-b border-line bg-surface text-ink-700",
-        "lg:sticky lg:top-0 lg:h-dvh lg:self-start lg:border-r lg:border-b-0",
-        "transition-[width] duration-250",
+        "relative flex min-w-0 flex-col bg-sidebar text-sidebar-foreground",
+        "lg:sticky lg:top-0 lg:z-30 lg:h-dvh lg:self-start",
+        "transition-[width] duration-150 ease-(--ease)",
         collapsed ? "lg:w-[var(--sidebar-w-collapsed)]" : "lg:w-[var(--sidebar-w)]",
       )}
     >
-      <div className={cn("flex items-center gap-3 px-4 pt-3.5 pb-2 lg:px-5 lg:pt-5 lg:pb-4", collapsed && "lg:justify-center lg:px-0")}>
-        <span
-          aria-hidden="true"
-          className="grid size-10 shrink-0 place-items-center rounded-xl border border-brand-100 bg-brand-50 text-brand-600"
-        >
-          <ServerCog className="size-[22px]" strokeWidth={1.8} focusable="false" />
+      {/* Brand block — web-admin's `.side-nav-brand`: a 36px `brand` tile, the name in white 17px/700,
+          the area in 10px upper case, a hairline under it. The tile keeps this console's own icon. */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-3 border-b border-sidebar-border px-4 py-3 lg:px-5 lg:py-4",
+          collapsed && "lg:justify-center lg:px-2",
+        )}
+      >
+        <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-brand text-white">
+          <ServerCog className="size-5" strokeWidth={1.8} focusable="false" />
         </span>
-        <span className={cn("flex min-w-0 flex-col", collapsed && "lg:sr-only")}>
-          <span className="text-[15px] leading-tight font-bold text-ink-900">ViGov</span>
-          <span className="text-xs leading-snug text-ink-500">Khu vận hành nền tảng</span>
+        <span className={cn("flex min-w-0 flex-col leading-tight", collapsed && "lg:sr-only")}>
+          <span className="text-[17px] font-bold text-white">ViGov</span>
+          <span className="text-[10px] font-medium tracking-[0.05em] text-sidebar-foreground uppercase">Khu vận hành nền tảng</span>
         </span>
       </div>
 
-      <div className="flex min-w-0 gap-1 overflow-x-auto px-3 pb-2 lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0 lg:overflow-x-hidden lg:overflow-y-auto lg:pb-3">
+      <div
+        className={cn(
+          "flex min-w-0 gap-1 overflow-x-auto px-3 py-2 lg:min-h-0 lg:flex-1 lg:flex-col lg:gap-0 lg:overflow-x-hidden lg:overflow-y-auto lg:overscroll-contain lg:py-4",
+          collapsed && "lg:px-2",
+        )}
+      >
         {navItems.length > 0 ? <NavGroup title={null} items={navItems} pathname={pathname} collapsed={collapsed} /> : null}
         <NavGroup title="Tài khoản" items={ACCOUNT_ITEMS} pathname={pathname} collapsed={collapsed} />
       </div>
 
       {/* Collapsing means nothing on the top strip, so its control exists from 1024px only. */}
-      <div className="hidden shrink-0 border-t border-line p-3 lg:block">
+      <div className={cn("hidden shrink-0 border-t border-sidebar-border px-3 py-3 lg:block", collapsed && "lg:px-2")}>
         <button
           type="button"
           onClick={() => setCollapsed((c) => !c)}
@@ -200,12 +221,14 @@ export function SidebarView({ permissionKeys, isOwner = false }: { permissionKey
           aria-label={toggleLabel}
           title={collapsed ? toggleLabel : undefined}
           className={cn(
-            "m-0 flex min-h-10 w-full cursor-pointer items-center gap-2.5 rounded-[8px] border-0 bg-transparent px-3 [font-family:inherit] text-[13px] text-ink-500",
-            "hover:bg-surface-muted hover:text-ink-900",
+            "m-0 flex min-h-10 w-full cursor-pointer items-center gap-3 rounded-[10px] border-0 bg-transparent px-3 [font-family:inherit] text-[13px] text-sidebar-foreground",
+            "transition-[background-color,color] duration-150 ease-(--ease)",
+            "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+            "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sidebar-ring",
             collapsed && "justify-center px-0",
           )}
         >
-          <ToggleIcon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-[18px] shrink-0" />
+          <ToggleIcon aria-hidden="true" focusable="false" strokeWidth={1.8} className="size-4 shrink-0" />
           <span className={cn(collapsed && "sr-only")}>{toggleLabel}</span>
         </button>
       </div>

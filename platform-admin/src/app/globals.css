@@ -21,6 +21,10 @@
  * injected `<style>` — the production policy has no 'unsafe-inline' for styles.
  *
  * Tokens are COPIED from `web-admin/src/app/globals.css` (no shared package yet). Change both.
+ * Since 13/10/2026 they are web-admin's spec 00 set (ADR 0068 §Sửa đổi 07/10/2026 lần 6): Inter, the
+ * navy/brand/leaf/tangerine/danger palette, shadcn's semantic variables and radius scale. Only what
+ * this console draws is copied — web-admin's Trình chiếu overlay, motion steps and legacy screen
+ * aliases are not.
  */
 @layer theme, base, legacy, components, utilities;
 
@@ -45,80 +49,187 @@
 
   --color-line: var(--line);
   --color-line-strong: var(--line-strong);
+  --color-line-hover: var(--line-hover);
   --color-canvas: var(--bg);
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-subtle-2: var(--surface-subtle-2);
 
-  /* Status colours: reserved for status, always paired with an icon and a word. */
+  /* Status colours: reserved for status, always paired with an icon and a word. As in web-admin,
+   * `-500` and `-600` carry the same spec colour (leaf / tangerine / danger). */
   --color-success-50: var(--green-50);
+  --color-success-500: var(--green-500);
   --color-success-600: var(--green-600);
   --color-warning-50: var(--amber-50);
+  --color-warning-500: var(--amber-500);
   --color-warning-600: var(--amber-600);
   --color-danger-50: var(--red-50);
   --color-danger-200: var(--red-200);
+  --color-danger-500: var(--red-500);
   --color-danger-600: var(--red-600);
+  --color-danger-solid: var(--red-solid);
 
   --color-legal-50: var(--gold-50);
   --color-legal-200: var(--gold-200);
   --color-legal-800: var(--gold-800);
 
-  --font-sans: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, Arial, sans-serif;
+  /* SPEC NAMES (spec 00 §2), as in web-admin: each POINTS AT the role token carrying the same value,
+   * so `text-navy`, `text-ink-muted`, `bg-brand/12` written from web-admin markup work here as written.
+   * `surface` is NOT re-declared: `bg-surface` is the WHITE card and `bg-canvas` the page. */
+  --color-navy: var(--ink-900);
+  --color-ink: var(--ink-700);
+  --color-ink-muted: var(--ink-500);
+  --color-brand: var(--brand-500);
+  --color-leaf: var(--green-600);
+  --color-tangerine: var(--amber-600);
+  --color-danger: var(--red-600);
+  --color-brand-soft: var(--brand-50);
+  --color-danger-soft: var(--red-50);
 
+  /* shadcn/ui semantic set (spec 00 §2), values in `:root` below. */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Inter (spec 00 §1), self-hosted — see `.font-inter` below. */
+  --font-sans: var(--font-inter), "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-heading: var(--font-sans);
+
+  --radius-xs: var(--r-xs);
   --radius-control: var(--r-control);
-  --radius-card: var(--r-lg);
+  --radius-popover: var(--r-md);
+  --radius-card: 0.75rem;
   --radius-hero: var(--r-xl);
+  --radius-pill: var(--r-pill);
+
+  /* shadcn's scale from one `--radius` (.75rem, spec 00 §2): rounded-lg = 12px, rounded-md = 9.6px —
+   * the values web-admin's components were written against. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* `lg` / `xl` capped at `md`: "bóng đổ rất nhẹ" only (ADR 0068 §11). */
+/* Shadows: Tailwind's own `sm` / `md` plus the spec's `shadow-card`. `lg` / `xl` stay capped at `md`,
+ * so a stronger utility written somewhere cannot bring back the floating-card look (ADR 0068 §11). */
 @theme {
-  --shadow-sm: 0 1px 2px rgba(15, 27, 45, 0.06);
-  --shadow-md: 0 4px 16px rgba(15, 27, 45, 0.06);
-  --shadow-lg: 0 4px 16px rgba(15, 27, 45, 0.08);
-  --shadow-xl: 0 4px 16px rgba(15, 27, 45, 0.08);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-card: 0 1px 3px #102b4314;
 }
 
 @layer base {
+  /* ROLE TOKENS — web-admin's values (spec 00 §2, ADR 0068 lần 6). The NAMES are this console's, so
+   * every existing class follows without being edited; each step keeps its ROLE:
+   *   ink 900 / 700 / 500   navy #102b43 (headings, figures) · ink #43607b (body) · ink-muted #8aa2b8
+   *   brand 600 / 700       the navy solid (primary button) and its hover (navy/80)
+   *   brand 500             the spec's `brand` #2fb1f9: accent, link, focus ring
+   *   brand 50 / 100        `brand-soft` #e8f5fe and one step deeper for its hairline
+   *   green / amber / red   leaf #86b940 · tangerine #ff7a1a · danger #e5484d
+   *
+   * CONTRAST DEBT, OWNER-ACCEPTED for web-admin (07/10/2026, ADR 0068 lần 6) and inherited here with
+   * the values: ink-muted ≈2.6:1 on white, brand ≈2.4:1, leaf ≈2.3:1, tangerine ≈2.6:1, danger
+   * ≈3.9:1 — below WCAG AA 4.5:1 for small text. Do not darken them in one app only. */
   :root {
-    --brand-700: #0b4fa8;
-    --brand-600: #1565c0;
-    --brand-500: #1e7be0;
-    --brand-100: #e3eefb;
-    --brand-50: #f1f6fd;
+    --brand-700: #405569;
+    --brand-600: #102b43;
+    --brand-500: #2fb1f9;
+    --brand-100: #cfeafd;
+    --brand-50: #e8f5fe;
 
-    --red-600: #c62828;
-    --red-200: #f3c5c5;
-    --red-50: #fdecec;
+    /* shadcn `hover:bg-muted/50` for a table row. */
+    --row-hover: rgb(237 243 248 / 0.5);
+
+    --red-600: #e5484d;
+    --red-solid: #e5484d;
+    --red-500: #e5484d;
+    --red-200: #f9d1d3;
+    --red-50: #fdedee;
     --gold-200: #f5e1a4;
     --gold-50: #fff8e1;
     --gold-800: #6b5200;
 
-    --green-600: #157034;
-    --green-50: #e7f6ec;
-    --amber-600: #8f5600;
-    --amber-50: #fff4e0;
+    /* `-50` = the colour at 12% over white (the spec's `bg-{c}/12` chip). */
+    --green-600: #86b940;
+    --green-500: #86b940;
+    --green-50: #f0f7e8;
+    --amber-600: #ff7a1a;
+    --amber-500: #ff7a1a;
+    --amber-50: #ffefe4;
 
-    /* `--ink-400` is 2.56:1 on white: disabled controls and decorative icons only, never text. */
-    --ink-900: #0f1b2d;
-    --ink-700: #34445c;
-    --ink-500: #5b6b82;
-    --ink-400: #94a3b8;
+    /* `--ink-400`: disabled controls and decorative icons only, never text. */
+    --ink-900: #102b43;
+    --ink-700: #43607b;
+    --ink-500: #8aa2b8;
+    --ink-400: #b4c4d3;
 
-    --line: #e5eaf1;
-    --line-strong: #d5dce6;
-    --bg: #f5f7fb;
+    /* One hairline for every border, controls included; `--line-hover` one step darker. */
+    --line: #dde7ef;
+    --line-strong: #dde7ef;
+    --line-hover: #c3d2de;
+    --bg: #f4f8fb;
     --surface: #ffffff;
-    --surface-muted: #f8fafc;
+    --surface-muted: #edf3f8;
+    --surface-subtle: rgb(16 43 67 / 0.05);
+    --surface-subtle-2: rgb(16 43 67 / 0.1);
 
+    --radius: 0.75rem;
+    --sidebar: #102b43;
+    --sidebar-foreground: #ffffffc7;
+    --sidebar-primary: #2fb1f9;
+    --sidebar-primary-foreground: #ffffff;
+    --sidebar-accent: #ffffff1f;
+    --sidebar-accent-foreground: #ffffff;
+    --sidebar-border: #ffffff1a;
+    --sidebar-ring: #2fb1f9;
+
+    --r-xs: 6px;
     --r-sm: 8px;
-    --r-control: 10px;
+    --r-control: 12px;
     --r-md: 12px;
-    --r-lg: 16px;
-    --r-xl: 20px;
+    --r-lg: 12px;
+    --r-xl: 16px;
+    --r-pill: 32px;
 
-    --row-h: 48px;
+    /* Body 16px (spec 00 §1); controls h-8; table rows ≈ a `p-2` cell, floored at the header's h-10. */
+    --font-size-base: 16px;
+    --row-h: 40px;
     --sidebar-w: 240px;
-    --sidebar-w-collapsed: 72px;
-    --topbar-h: 60px;
+    --sidebar-w-collapsed: 64px;
+    --topbar-h: 64px;
+
+    /* One duration for hover and the sidebar collapse (web-admin guide §9), zeroed under reduced motion. */
+    --dur-fast: 250ms;
+    --ease: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   /* Dark tokens: defined, deliberately NOT enabled — the same decision as web-admin (ADR 0068 §2). */
@@ -139,17 +250,45 @@
     color-scheme: dark;
   }
 
+  /* shadcn/ui semantic variables (spec 00 §2). They POINT AT the role tokens, so a value lives once;
+   * declared on every scope that re-themes the roles, because an alias resolves where it is declared. */
+  :root,
+  :root[data-theme="dark"] {
+    --background: var(--bg);
+    --foreground: var(--ink-700);
+    --card: var(--surface);
+    --card-foreground: var(--ink-700);
+    --popover: var(--surface);
+    --popover-foreground: var(--ink-700);
+    --primary: var(--brand-600);
+    --primary-foreground: #ffffff;
+    --secondary: var(--surface-muted);
+    --secondary-foreground: var(--ink-900);
+    --muted: var(--surface-muted);
+    --muted-foreground: var(--ink-500);
+    --accent: var(--brand-50);
+    --accent-foreground: var(--ink-900);
+    --destructive: var(--red-600);
+    --border: var(--line);
+    --input: var(--line-strong);
+    --ring: var(--brand-500);
+  }
+
   /*
    * The font variable, set by the class `src/app/layout.tsx` puts on `<html>`. The faces come from
-   * `@fontsource/be-vietnam-pro`, bundled and served from this host (`font-src 'self'`): no request
-   * leaves for a font CDN.
+   * `@fontsource/inter`, bundled and served from this host (`font-src 'self'`): no request leaves for
+   * a font CDN.
    */
-  .font-be-vietnam {
-    --font-be-vietnam: "Be Vietnam Pro";
+  .font-inter {
+    --font-inter: "Inter";
   }
 
   /* `!important` in an EARLY layer beats `!important` in every later one, so no utility re-enables motion. */
   @media (prefers-reduced-motion: reduce) {
+    :root {
+      --dur-fast: 0.01ms;
+    }
+
     *,
     *::before,
     *::after {
@@ -166,22 +305,24 @@
     box-sizing: border-box;
   }
 
-  /* `html` stays at 16px so `rem` keeps its meaning; body text is 14px like web-admin. Small
-   * screens first: 320px is the smallest supported width. */
+  /* `html` stays at 16px so `rem` keeps its meaning; the body takes `--font-size-base` (16px, spec 00
+   * §1) in the spec's `ink` — headings and figures say `ink-900` (navy) themselves. Small screens
+   * first: 320px is the smallest supported width. */
   html,
   body {
     margin: 0;
     padding: 0;
     background: var(--bg);
-    color: var(--ink-900);
-    font-family: var(--font-be-vietnam), system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: var(--ink-700);
+    font-family: var(--font-inter), "Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
     font-size: 16px;
     line-height: 1.5;
   }
 
   body {
-    font-size: 14px;
+    font-size: var(--font-size-base);
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   /* Focus is always visible. */
@@ -192,17 +333,29 @@
 }
 
 @layer components {
-  /* `ui/data-table.tsx`: only the table scrolls (never the page), framed as a card; body rows one
-   * `--row-h` tall; the header row sticks inside a capped scroller — the cap is what gives
-   * `position: sticky` something to stick to. Narrow screens scroll the table sideways instead of
-   * crushing it into cards, which would lose table semantics for screen readers. */
+  /* `ui/data-table.tsx`, web-admin's shadcn Table (spec 00 §5): 14px, header `h-10 px-2 font-medium`
+   * in the body ink on no fill, cells `p-2 align-middle whitespace-nowrap`, a hairline under each row,
+   * `hover:bg-muted/50`. Body rows floored at `--row-h` (40px). Figures in tabular digits so codes and
+   * counts line up column by column.
+   *
+   * ONLY the table scrolls (never the page). Standing alone on the page it is its own frame (white,
+   * hairline, 12px radius, no shadow — web-admin's `.bang-cuon`); INSIDE A CARD (`data-slot="card"`,
+   * `ui/card.tsx`) it is only the scroller, so the card is not drawn twice. Narrow screens scroll the
+   * table sideways instead of crushing it into cards, which would lose table semantics for screen
+   * readers. The header row sticks inside a capped scroller — the cap is what gives `position: sticky`
+   * something to stick to. */
   .table-scroll {
     max-width: 100%;
     overflow-x: auto;
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r-lg);
-    box-shadow: var(--shadow-sm);
+  }
+
+  :is([data-slot="card"], .shadow-card) .table-scroll {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
   }
 
   .table-scroll--sticky {
@@ -218,7 +371,6 @@
 
   .data-table th,
   .data-table td {
-    padding: 0.75rem 1rem;
     text-align: left;
     vertical-align: middle;
     white-space: nowrap;
@@ -227,29 +379,34 @@
   }
 
   .data-table thead th {
-    padding-block: 0.625rem;
-    background: var(--surface-muted);
+    height: 2.5rem;
+    padding: 0 0.5rem;
     color: var(--ink-700);
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-weight: 500;
   }
 
   .data-table tbody td {
     height: var(--row-h);
+    padding: 0.5rem;
   }
 
   .data-table tbody tr:last-child td {
     border-bottom: 0;
   }
 
-  .data-table tbody tr:hover td {
-    background: var(--surface-muted);
+  .data-table tbody tr {
+    transition: background-color var(--dur-fast) ease;
+  }
+
+  .data-table tbody tr:hover {
+    background: var(--row-hover);
   }
 
   .table-scroll--sticky .data-table thead th {
     position: sticky;
     top: 0;
     z-index: 1;
+    background: var(--surface);
     box-shadow: inset 0 -1px 0 var(--line);
   }
 

@@ -12,8 +12,10 @@ import { SIGN_IN_PATH } from "@/lib/route-access";
 import { Button } from "./ui/button";
 
 /**
- * The signed-in topbar — drawn like web-admin's (`web-admin/src/components/dau-trang.tsx`): 60px,
- * sticky, solid surface (no frosted glass, ADR 0068 §11), the person block and sign-out on the right.
+ * The signed-in topbar — drawn like web-admin's (`web-admin/src/components/dau-trang.tsx`, spec 01):
+ * 64px, sticky, white with a hairline under it, the person block and sign-out on the right. Solid
+ * white, NOT web-admin's `bg-white/95 backdrop-blur`: lần 6 #3 allowed the blur for web-admin's header
+ * alone, and nothing scrolls under this one that the blur would show.
  *
  * WHAT IT SHOWS ABOUT THE PERSON: the `VH-…` operator code, and nothing else — exactly what the
  * sidebar showed before the redesign. No name, no email: the session answer carries the code for
@@ -63,13 +65,15 @@ export function Topbar() {
   return (
     <header className="sticky top-0 z-30 flex min-h-[var(--topbar-h)] min-w-0 flex-wrap items-center justify-end gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2 md:px-7">
       <section aria-label="Tài khoản" className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
-        <p className="m-0 flex min-w-0 items-center gap-2.5">
-          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-100 text-brand-700">
+        {/* web-admin's person block (`.header-user`, `.topbar-avatar`): a 36px navy disc, the name
+            line 13px/600 navy, the role line 11.5px ink-muted. Here the "name" is the operator code. */}
+        <p className="m-0 flex min-w-0 items-center gap-2.5 leading-tight">
+          <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center rounded-full bg-navy text-white">
             <UserRound className="size-[18px]" strokeWidth={1.8} focusable="false" />
           </span>
           <span className="flex min-w-0 flex-col">
-            <span className="text-xs leading-tight text-ink-500">Người vận hành</span>
-            <span className="text-[13px] leading-tight font-semibold text-ink-900">{code}</span>
+            <span className="text-[13px] font-semibold text-navy">{code}</span>
+            <span className="text-[11.5px] text-ink-muted">Người vận hành</span>
           </span>
         </p>
         <span aria-hidden="true" className="hidden h-6 w-px bg-line sm:block" />

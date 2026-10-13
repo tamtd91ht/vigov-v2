@@ -4,8 +4,9 @@ import { cn } from "@/lib/cn";
 
 /**
  * Table helpers — copied from `web-admin/src/components/ui/data-table.tsx` (change both). ONLY the
- * table scrolls (never the page), header row sticky, body rows 48px. The CSS lives in
- * `globals.css`, layer `components`.
+ * table scrolls (never the page), header row sticky, shadcn's Table look (header `h-10`, body rows
+ * `--row-h` 40px). Inside a `Card` the scroller drops its own frame. The CSS lives in `globals.css`,
+ * layer `components`.
  *
  * CLASS NAMES, NOT A TABLE COMPONENT: each screen keeps its own `<table>`, `<caption>` and columns.
  * `TableScroll` is a focusable labelled region: a scroller a keyboard user cannot reach is a column

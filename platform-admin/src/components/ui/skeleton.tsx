@@ -25,7 +25,7 @@ export type SkeletonRowsProps = {
   className?: string;
 };
 
-/** Placeholder table/list rows, one `--row-h` (48px) each, hairlines between them. */
+/** Placeholder table/list rows, one `--row-h` (40px) each, hairlines between them. */
 export function SkeletonRows({ rows = 5, columns = 4, className }: SkeletonRowsProps) {
   const pattern = ROW_PATTERN.slice(0, columns);
   return (

@@ -62,14 +62,16 @@ export function ConsoleShellView({
     <div
       className={
         open
-          ? "grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[1fr]"
-          : "grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[1fr]"
+          ? "grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[auto_1fr] bg-canvas lg:grid-cols-[auto_minmax(0,1fr)] lg:grid-rows-[1fr]"
+          : "grid min-h-dvh grid-cols-[minmax(0,1fr)] grid-rows-[1fr] bg-canvas"
       }
     >
       {open ? <Sidebar /> : null}
       <div className="flex min-w-0 flex-col">
         <Topbar />
-        <main className="w-full min-w-0 max-w-[90rem] px-4 pt-6 pb-10 md:px-7">
+        {/* web-admin's `.than-trang`: 16px padding, 40px under the page; 28px all round from 768px.
+            No max width, as there: a data page uses the full column. */}
+        <main className="w-full min-w-0 px-4 pt-4 pb-10 md:p-7">
           {mustChangePassword ? (
             <ForcedPasswordChange />
           ) : state.status === "loading" ? (
