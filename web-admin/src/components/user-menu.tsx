@@ -34,9 +34,14 @@ export const PERSONAL_PAGE_PATH = "/ca-nhan";
  * - `Đổi mật khẩu` stays as a menu item: the prototype has no change-password screen at all, and this
  *   link is the only voluntary way into `/doi-mat-khau`.
  * The role pill stays inside the menu, so the person can still see which authority they act with.
+ *
+ * NO POSITION → THE ROLE under the name (sheet web-admin-131026): accounts created by an administrator
+ * or the operator carry no `position`, and the line was simply missing. The role name is the session's
+ * own (`sessionRoleName`, no fallback); with neither, there is no second line — never an invented title.
  */
 export function UserMenu({ fullName, position, roleName }: { fullName: string; position: string; roleName: string | null }) {
   const initials = userInitials(fullName);
+  const subtitle = position.trim() !== "" ? position : (roleName ?? "");
   return (
     <PopoverPrimitive.Root>
       <PopoverPrimitive.Trigger asChild>
@@ -48,7 +53,7 @@ export function UserMenu({ fullName, position, roleName }: { fullName: string; p
           )}
           <span className="header-user-text">
             <span className="ho-ten">{fullName}</span>
-            {position !== "" && <span className="header-user-role">{position}</span>}
+            {subtitle !== "" && <span className="header-user-role">{subtitle}</span>}
           </span>
         </button>
       </PopoverPrimitive.Trigger>

@@ -1092,18 +1092,10 @@ div.thong-bao-loi:not(:empty) {
   font-size: 11.5px;
 }
 
-/* 768–1023px: the name and position leave the eye (the avatar stays, the menu prints both), so the
- * commune's name and the search keep their room. They stay the button's accessible name. */
-@media (max-width: 1023px) {
-  .header-user-text {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-}
+/* No breakpoint hides the name and position: the prototype's topbar (`AppTopbar.tsx:79-86`) prints both
+ * wherever the block is shown (from 768px; below it the nav sheet carries the person). Sheet
+ * web-admin-131026 read their absence at 768–1023px as a missing position. `max-width: 16rem` above and
+ * the ellipsis keep a long name from crowding the commune's name and the search. */
 
 /* The person's menu — guide §8.8: white, radius 12, the popover shadow, items radius 8. */
 /* Radix focuses the panel itself on open; the global :focus-visible ring then framed the whole

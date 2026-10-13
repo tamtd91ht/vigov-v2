@@ -69,4 +69,27 @@ describe("UserMenu — Hồ sơ cá nhân", () => {
     act(() => trigger.click());
     expect(document.body.querySelector(".user-menu")!.textContent).toContain("Văn thư");
   });
+
+  // Sheet web-admin-131026: "Thiếu vị trí/chức vụ của user đang login". Accounts created by an
+  // administrator or operator carry no position; the line under the name then shows the role they hold.
+  function triggerOf(position: string, roleName: string | null): HTMLButtonElement {
+    host = document.createElement("div");
+    document.body.append(host);
+    const r = createRoot(host);
+    root = r;
+    act(() => r.render(<UserMenu fullName="Nguyễn Văn Hùng" position={position} roleName={roleName} />));
+    return host.querySelector<HTMLButtonElement>("button.header-user")!;
+  }
+
+  it("no position: the line under the name is the role the session holds", () => {
+    expect(triggerOf("", "Quản trị đơn vị").querySelector(".header-user-role")?.textContent).toBe("Quản trị đơn vị");
+  });
+
+  it("a blank position counts as none", () => {
+    expect(triggerOf("   ", "Văn thư").querySelector(".header-user-role")?.textContent).toBe("Văn thư");
+  });
+
+  it("neither position nor role: no second line at all — never an invented title", () => {
+    expect(triggerOf("", null).querySelector(".header-user-role")).toBeNull();
+  });
 });

@@ -206,6 +206,14 @@ describe("spec v2 shell", () => {
     }
   });
 
+  // Sheet web-admin-131026: the name and position under the avatar went missing at 768–1023px. The
+  // prototype's topbar (`AppTopbar.tsx:79-86`) prints both at every width the header block is shown.
+  it("header person block: no rule hides the name and position text", () => {
+    for (const r of RULES.filter((x) => x.selector === ".header-user-text")) {
+      expect(r.body, r.selector).not.toMatch(/clip-path|display:\s*none|width:\s*1px/);
+    }
+  });
+
   it("the old white text sidebar stays gone, and no shell rule draws a gradient", () => {
     expect(CSS).not.toMatch(/\.thanh-ben/);
     expect(CSS).not.toMatch(/\.header-modules/);
