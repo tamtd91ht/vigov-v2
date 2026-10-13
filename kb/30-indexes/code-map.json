@@ -708,7 +708,7 @@
     },
     "app.Delete": {
       "kind": "func",
-      "at": "service-comms/internal/app/noi_dung_mini_app.go:1118"
+      "at": "service-comms/internal/app/noi_dung_mini_app.go:1122"
     },
     "app.DeleteCustom": {
       "kind": "func",
@@ -4724,7 +4724,7 @@
     },
     "domain.CategoryNameKey": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:516"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:519"
     },
     "domain.CategoryNameTakenError": {
       "kind": "type",
@@ -4736,11 +4736,11 @@
     },
     "domain.CategorySlugCandidate": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:628"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:637"
     },
     "domain.CategorySlugFromName": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:608"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:617"
     },
     "domain.CheDoApp": {
       "kind": "type",
@@ -4792,7 +4792,7 @@
     },
     "domain.CheckCategoryNameFree": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:522"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:531"
     },
     "domain.CheckCitizenID": {
       "kind": "func",
@@ -4952,7 +4952,7 @@
     },
     "domain.CheckTypeFields": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:814"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:823"
     },
     "domain.CheckUnmerge": {
       "kind": "func",
@@ -5176,7 +5176,7 @@
     },
     "domain.ChuanHoaSlugDanhMuc": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:544"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:553"
     },
     "domain.ChuanHoaSoChungTu": {
       "kind": "func",
@@ -5384,7 +5384,7 @@
     },
     "domain.CoAnh": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:801"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:810"
     },
     "domain.CoCon": {
       "kind": "func",
@@ -5448,7 +5448,7 @@
     },
     "domain.ContentCategoryUpdate": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1236"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1245"
     },
     "domain.CotNganSach": {
       "kind": "type",
@@ -5516,7 +5516,7 @@
     },
     "domain.DanhMucMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:680"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:689"
     },
     "domain.DauVaoChonXa": {
       "kind": "type",
@@ -6032,7 +6032,7 @@
     },
     "domain.HienChoDan": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:809"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:818"
     },
     "domain.HienThiMot": {
       "kind": "func",
@@ -7112,7 +7112,7 @@
     },
     "domain.NoiDungMiniApp": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:710"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:719"
     },
     "domain.NormaliseAdjustmentReason": {
       "kind": "func",
@@ -7192,7 +7192,7 @@
     },
     "domain.NormalizeContentItemDeleteReason": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:669"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:678"
     },
     "domain.NormalizeCustomDeleteReason": {
       "kind": "func",
@@ -7896,7 +7896,7 @@
     },
     "domain.ReparentCreatesCycle": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1273"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1282"
     },
     "domain.ReportFigure": {
       "kind": "type",
@@ -8084,23 +8084,23 @@
     },
     "domain.SetsAudioField": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1034"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1043"
     },
     "domain.SetsBannerField": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1040"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1049"
     },
     "domain.SetsEventField": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1055"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1064"
     },
     "domain.SetsVideoDuration": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1065"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1074"
     },
     "domain.SetsVideoURL": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1062"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1071"
     },
     "domain.SharedMiniApp": {
       "kind": "type",
@@ -8924,7 +8924,7 @@
     },
     "domain.WithoutOtherTypeFields": {
       "kind": "func",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:832"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:841"
     },
     "domain.WorkingSpan": {
       "kind": "type",
@@ -8940,15 +8940,15 @@
     },
     "domain.YeuCauSuaNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:988"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:997"
     },
     "domain.YeuCauThemDanhMuc": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1183"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:1192"
     },
     "domain.YeuCauThemNoiDung": {
       "kind": "type",
-      "at": "service-comms/internal/domain/noi_dung_mini_app.go:873"
+      "at": "service-comms/internal/domain/noi_dung_mini_app.go:882"
     },
     "domain.ZaloBotAct": {
       "kind": "type",
