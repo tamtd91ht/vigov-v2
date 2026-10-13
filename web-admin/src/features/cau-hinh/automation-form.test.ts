@@ -164,14 +164,21 @@ describe("job names and scopes", () => {
     expect(jobWords("refresh_dashboards")).toEqual({ title: "refresh_dashboards", description: "" });
   });
 
-  it("scope DECIDED 29/09/2026 (ADR 0058, 0029 §Bổ sung): each job names the kinds of work it covers", () => {
-    const reminders = jobWords("sla_reminders").description;
-    for (const kind of ["nhiệm vụ", "văn bản đến", "phản ánh", "đơn thư"]) expect(reminders).toContain(kind);
-    const escalation = jobWords("escalation").description;
-    for (const kind of ["nhiệm vụ", "văn bản đến", "phản ánh"]) expect(escalation).toContain(kind);
-    // Petitions escalate against their RESOLVE deadline; đơn thư are reminded, not escalated.
-    expect(escalation).toMatch(/hạn xử lý xong/);
-    expect(escalation).not.toContain("đơn thư");
+  it("owner 13/10/2026: the prototype's sentences verbatim (automation.py:51-74), units corrected, nothing added", () => {
+    expect(jobWords("sla_reminders").description).toBe(
+      "Quét nhiệm vụ, văn bản và phản ánh; nhắc người phụ trách trước khi đến hạn và báo khi đã quá hạn. " +
+        "Cả việc bộ phận giữ mà chưa phân công ai.",
+    );
+    // Prototype: "số ngày" and "trễ gấp đôi". Corrected: working hours (ADR 0007) and a second milestone
+    // set on its own in Thời hạn xử lý (ADR 0029).
+    expect(jobWords("escalation").description).toBe(
+      "Việc trễ quá số giờ làm việc đã đặt thì báo lên trưởng bộ phận, trễ quá mốc thứ hai thì báo lên " +
+        "chủ tịch. Số giờ lấy từ Thời hạn xử lý.",
+    );
+    expect(jobWords("escalation").description).not.toMatch(/gấp đôi/);
+    expect(jobWords("weekly_digest").description).toBe(
+      "Tóm tắt việc tồn, việc trễ và phản ánh nóng của tuần trước.",
+    );
   });
 });
 

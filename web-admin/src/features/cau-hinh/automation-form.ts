@@ -36,40 +36,31 @@ export function hasWeekday(scheduleKind: string): boolean {
 }
 
 /**
- * The jobs, in §9's order. Descriptions follow §9 with two corrections the decisions force:
- * reminders sweep petitions (đơn thư) too (ADR 0058 §4), and escalation thresholds are WORKING HOURS
- * from the SLA tab (ADR 0029, ADR 0058 §5) — §9's "số ngày" would tell the administrator a unit the
- * software does not count in.
+ * The jobs, in §9's order.
  *
- * WHAT EACH JOB COVERS WAS DECIDED BY THE USER ON 29/09/2026 (ADR 0058, ADR 0029 §Bổ sung 29/09), and
- * both sentences name it so an administrator switching a job on knows what it touches: reminders cover
- * tasks, incoming documents, citizens' petitions and đơn thư; escalation covers tasks, petitions
- * (against their RESOLVE deadline, not the acknowledge one) and incoming documents — NOT đơn thư.
+ * OWNER DECISION 13/10/2026 (sheet web-admin-131026): the descriptions are the prototype's
+ * (`vigov-require/apps/api/app/modules/admin/automation.py:51-74`, §9 `14-cau-hinh.md:330-332`) VERBATIM,
+ * except the units, corrected to how the system counts: "số giờ làm việc" for "số ngày" (rule 10 / ADR
+ * 0007), and a "mốc thứ hai" for "trễ gấp đôi" — the Báo Chủ tịch threshold is set on its own in Thời
+ * hạn xử lý (ADR 0029). No explanatory sentences beyond those; the scope each job really covers (ADR
+ * 0058, ADR 0029 §Bổ sung 29/09) is decided there, not restated here.
  */
-// Bug sheet row 40: the sentences follow the prototype's (`automation.py:51-74`) word for word wherever
-// they are true here. Kept against it, on purpose: "văn bản đến" and "đơn thư" (the scope ADR 0058 §4
-// decided), "giờ làm việc" for "ngày" (rule 10 / ADR 0007 — the thresholds are working hours), and a
-// SECOND threshold of its own instead of "trễ gấp đôi" (the Báo Chủ tịch column is set separately, ADR
-// 0029), sent to "lãnh đạo trực tiếp" as that column is named.
 const JOBS: Readonly<Record<string, JobWords>> = {
   sla_reminders: {
     title: "Nhắc việc sắp đến hạn và đã quá hạn",
     description:
-      "Quét nhiệm vụ, văn bản đến, phản ánh và đơn thư; nhắc người phụ trách trước khi đến hạn và báo " +
-      "khi đã quá hạn. Cả việc bộ phận giữ mà chưa phân công ai. Mốc sắp đến hạn lấy từ Thời hạn xử lý.",
+      "Quét nhiệm vụ, văn bản và phản ánh; nhắc người phụ trách trước khi đến hạn và báo khi đã quá hạn. " +
+      "Cả việc bộ phận giữ mà chưa phân công ai.",
   },
   escalation: {
     title: "Leo thang việc trễ hạn",
     description:
-      "Việc trễ quá số giờ làm việc đã đặt thì báo lên lãnh đạo trực tiếp, trễ quá mốc thứ hai thì báo " +
-      "lên Chủ tịch. Số giờ lấy từ Thời hạn xử lý. Áp cho nhiệm vụ, văn bản đến và phản ánh (tính theo " +
-      "hạn xử lý xong).",
+      "Việc trễ quá số giờ làm việc đã đặt thì báo lên trưởng bộ phận, trễ quá mốc thứ hai thì báo lên " +
+      "chủ tịch. Số giờ lấy từ Thời hạn xử lý.",
   },
   weekly_digest: {
     title: "Bản tin đầu tuần cho lãnh đạo",
-    description:
-      "Tóm tắt việc tồn, việc trễ và phản ánh nóng của tuần trước. Phản ánh nóng là phiếu đã quá hạn " +
-      "hoặc bị người dân chấm 1–2 sao trong tuần.",
+    description: "Tóm tắt việc tồn, việc trễ và phản ánh nóng của tuần trước.",
   },
   // ADR 0086 B ("theo prototype"): label and description verbatim from the reference system
   // (`vigov-require/apps/api/app/modules/admin/automation.py:91-99`). "Đầu tuần" holds for the
