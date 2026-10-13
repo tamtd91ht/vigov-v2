@@ -110,7 +110,7 @@ describe("home: tiles and headers per §6.1, the bell gone (decision 10)", () =>
     const src = import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }) as Record<string, string>;
     const code = Object.values(src)[0]!.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\{\/\*[\s\S]*?\*\/\}/g, "");
     expect(code).not.toMatch(/xa-hero__chuong|right=\{/);
-    // …and "Thông báo" is reachable from Cá nhân instead (below).
+    // No "Thông báo" row in Cá nhân either since sheet mini-app 13/10/2026 row 5 (ADR 0047 §Sửa đổi 13/10, lần hai).
   });
 
   it("Truyền thanh and Video read the commune's published items by type — the prototype's two libraries, not a static empty screen", () => {

@@ -109,7 +109,7 @@ export default defineConfig(() => ({
   define: {
     __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()),
     __VIGOV_XA_CO_DINH__: JSON.stringify(xaCoDinh()),
-    // `__VIGOV_BUILD_LABEL__`: short commit + build date for the Cá nhân footer, "" without git — see
+    // `__VIGOV_BUILD_LABEL__`: "<major>.<minor>" of package.json for the Cá nhân footer, "" if malformed — see
     // `buildLabel` in scripts/cau-hinh.mjs and src/lib/build-label.ts.
     __VIGOV_BUILD_LABEL__: JSON.stringify(buildLabel()),
   },

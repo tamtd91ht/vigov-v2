@@ -478,6 +478,18 @@ không xoay vòng), nên không dựng nút cập nhật. Câu báo lỗi chỉ 
 cùng ngày: bản đọc `x` mới được Zalo **duyệt**, chưa **phát hành** — quét QR `x` trước khi phát hành vẫn ra màn
 giới thiệu (đã thấy trên điện thoại); cái giá (1) ở trên còn tới lúc phát hành.
 
+### Sửa đổi 13/10/2026 (lần hai) — màn Cá nhân theo bảng lỗi mini-app-131026
+
+Nguồn: bảng lỗi tester `mini-app-131026` dòng 5 và 7, người dùng duyệt hướng sửa trong phiên ngày 13/10/2026.
+Cả hai đi theo prototype (`vigov-require/apps/miniapp/src/pages/ProfilePage.tsx`).
+
+| Thay | Bằng |
+|---|---|
+| §*Trả lời 30/09/2026* (10), vế *"thành dòng 'Thông báo' ở Cá nhân"* | Cá nhân **không có** dòng "Thông báo", và màn Thông báo rỗng mà dòng ấy mở cũng bỏ. Bật/tắt nhận tin là công tắc "Nhận thông báo" (ADR 0091 §4). Vế chuông rời header vẫn đứng |
+| §*Trả lời 30/09/2026*, *"số phiên bản = nhãn bản dựng"* | Dòng phiên bản hiện `ViGov phiên bản <major>.<minor>` lấy từ `version` trong `citizen-app/package.json` (lúc ghi là 1.1.0), **không** hiện mã commit + ngày. Tester đọc mã commit như chữ vô nghĩa. Nâng số là một bước phát hành: sửa `version` trước `zmp:deploy`. Commit của bản dựng vẫn truy được qua nhãn riêng của `deploy.mjs` trên console Zalo |
+
+Mục (8) *"SĐT đã che từ phiên"* nay đã dựng: `maskedPhone` của `POST /api/v1/citizen-sessions`.
+
 ## ĐIỀU KIỆN DỪNG
 
 <!-- Tiêu đề này bị mất ở 2c107cf2 (11/10/2026) khi chèn §Sửa đổi 11/10/2026; đặt lại 13/10/2026, nội dung danh sách không đổi. -->
