@@ -545,6 +545,58 @@ func TestPgDanhSachDanhMucSapXepVaLocDongDaXoa(t *testing.T) {
 	}
 }
 
+// TestPgCategoryCreatePathCountsLiveRowsOfOneCommune runs the category create's store calls in the
+// order app.TaoDanhMuc makes them — ceiling count, slug probe, insert — against the real database.
+//
+// DemDangSong once sent `tenant_id = $1` with nothing bound: pgx refused it, and every
+// POST /api/v1/content-categories was a 500 (sheet web-admin-131026, reopened twice). The fake driver
+// now refuses that too; this is the half that proves the statement against real PostgreSQL.
+func TestPgCategoryCreatePathCountsLiveRowsOfOneCommune(t *testing.T) {
+	xa1, xa2 := xaRieng(t)
+	db := moKetNoi(t)
+	kho := khoDanhMucNDThat(t)
+	ctx := ctxXa(tenant.ID(xa1))
+
+	themDanhMucThat(t, xa1, "dm-a", "Mục A", "muc-a", "", 1)
+	themDanhMucThat(t, xa1, "dm-x", "Mục đã gỡ", "muc-da-go", "", 2)
+	// ANOTHER COMMUNE'S ROW MUST NOT BE COUNTED — the ceiling is per commune.
+	themDanhMucThat(t, xa2, "dm-b", "Mục B", "muc-b", "", 1)
+	if _, err := db.Exec(
+		`UPDATE danh_muc_mini_app SET deleted_at = now(), deleted_by = 'CB-1', delete_reason = 'gộp'
+		  WHERE tenant_id = $1 AND id = 'dm-x'`, xa1); err != nil {
+		t.Fatalf("xoá mềm: %v", err)
+	}
+
+	err := pkgstore.New(db).For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		n, err := kho.DemDangSong(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if n != 1 {
+			t.Errorf("đếm danh mục sống = %d, muốn 1 (bỏ dòng đã xoá mềm và dòng của xã khác)", n)
+		}
+		taken, err := kho.SlugDaDung(ctx, tx, "muc-moi")
+		if err != nil {
+			return err
+		}
+		if taken {
+			t.Error("slug mới mà báo đã dùng")
+		}
+		return kho.Chen(ctx, tx, domain.DanhMucMiniApp{ID: "dm-moi", Ten: "Mục mới", Slug: "muc-moi", ThuTu: 3})
+	})
+	if err != nil {
+		t.Fatalf("luồng tạo danh mục qua kho thật: %v", err)
+	}
+
+	ds, err := kho.DanhSach(ctx)
+	if err != nil {
+		t.Fatalf("đọc danh mục: %v", err)
+	}
+	if len(ds) != 2 {
+		t.Errorf("số danh mục sau khi tạo = %d, muốn 2", len(ds))
+	}
+}
+
 // --- (8) the write path, end to end ---------------------------------------------------------------
 
 func TestPgChenVaCapNhatQuaKhoThat(t *testing.T) {

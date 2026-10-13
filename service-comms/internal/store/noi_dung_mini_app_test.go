@@ -16,6 +16,9 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -201,6 +204,9 @@ func (txND) Rollback() error { return nil }
 
 func (c *connND) ExecContext(_ context.Context, q string, args []driver.NamedValue) (driver.Result, error) {
 	c.k.lenh = append(c.k.lenh, lenhGhi{sql: q, args: ghiArgs(args)})
+	if err := checkPlaceholderArity(q, args); err != nil {
+		return nil, err
+	}
 	if c.k.loi != nil {
 		return nil, c.k.loi
 	}
@@ -213,6 +219,9 @@ func (c *connND) ExecContext(_ context.Context, q string, args []driver.NamedVal
 
 func (c *connND) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	c.k.lenh = append(c.k.lenh, lenhGhi{sql: q, args: ghiArgs(args)})
+	if err := checkPlaceholderArity(q, args); err != nil {
+		return nil, err
+	}
 	if c.k.loi != nil {
 		return nil, c.k.loi
 	}
@@ -281,6 +290,32 @@ func (c *connND) QueryContext(_ context.Context, q string, args []driver.NamedVa
 		hang = append(hang, mot)
 	}
 	return &rowsGhiGia{cot: cot, hang: hang}, nil
+}
+
+// placeholderPattern matches one positional parameter, `$1` … `$n`.
+var placeholderPattern = regexp.MustCompile(`\$([0-9]+)`)
+
+// checkPlaceholderArity refuses a statement whose highest `$n` differs from the number of bound
+// arguments — exactly what pgx refuses on the real database ("expected 1 arguments, got 0").
+//
+// WITHOUT THIS THE FAKE AGREED WITH ANY ARGUMENT COUNT, and that is how DemDangSong shipped with
+// `tenant_id = $1` and nothing bound: every unit test green, every category create a 500 in the
+// customer's hands, reopened twice (sheet web-admin-131026). Every test over this fake now checks it.
+func checkPlaceholderArity(q string, args []driver.NamedValue) error {
+	highest := 0
+	for _, m := range placeholderPattern.FindAllStringSubmatch(q, -1) {
+		n, err := strconv.Atoi(m[1])
+		if err != nil {
+			return fmt.Errorf("driver giả: placeholder %q: %w", m[0], err)
+		}
+		if n > highest {
+			highest = n
+		}
+	}
+	if highest != len(args) {
+		return fmt.Errorf("driver giả: câu lệnh có $%d nhưng truyền %d tham số: %s", highest, len(args), q)
+	}
+	return nil
 }
 
 func khoNoiDung(t *testing.T, k *khoNDGia) (*NoiDungMiniAppStore, context.Context) {
@@ -911,6 +946,46 @@ func TestSlugDaDungDemCaDongDaXoaMem(t *testing.T) {
 	}
 	if !strings.Contains(cau, "tenant_id = $1") {
 		t.Errorf("câu kiểm slug thiếu `tenant_id = $1`: %s", cau)
+	}
+}
+
+func TestFakeDriverRefusesUnboundPlaceholder(t *testing.T) {
+	// The guard itself, against the exact statement that shipped broken: `$1` with nothing bound must
+	// be refused, as pgx refuses it, or TestDemDangSongBindsCommuneAndExcludesSoftDeleted proves nothing.
+	const shipped = `SELECT count(*) FROM danh_muc_mini_app WHERE tenant_id = $1 AND deleted_at IS NULL`
+	if err := checkPlaceholderArity(shipped, nil); err == nil {
+		t.Error("driver giả nhận câu có $1 mà không truyền tham số")
+	}
+	if err := checkPlaceholderArity(shipped, []driver.NamedValue{{Ordinal: 1, Value: "x"}}); err != nil {
+		t.Errorf("driver giả từ chối câu đúng số tham số: %v", err)
+	}
+	// `$10` is ten, not one followed by a zero.
+	if err := checkPlaceholderArity(`SELECT $10`, make([]driver.NamedValue, 10)); err != nil {
+		t.Errorf("$10: %v", err)
+	}
+}
+
+func TestDemDangSongBindsCommuneAndExcludesSoftDeleted(t *testing.T) {
+	// The category create's ceiling check runs FIRST, so an unbound `$1` here is a 500 on every
+	// POST /api/v1/content-categories (sheet web-admin-131026, "Thêm mới danh mục tin tức chưa hoạt động").
+	k := &khoNDGia{demTraVe: 3}
+	kho, ctx := khoDanhMucND(t, k)
+
+	n, err := chayTrongGiaoDichCoKetQua(t, k, ctx, func(tx *pkgstore.ScopedTx) (int, error) {
+		return kho.DemDangSong(ctx, tx)
+	})
+	if err != nil {
+		t.Fatalf("đếm danh mục lỗi: %v", err)
+	}
+	if n != 3 {
+		t.Errorf("đếm = %d, muốn 3", n)
+	}
+	cau := k.lenh[0].sql
+	if !strings.Contains(cau, "tenant_id = $1") || !strings.Contains(cau, "deleted_at IS NULL") {
+		t.Errorf("câu đếm danh mục = %s", cau)
+	}
+	if l := k.lenh[0].args; len(l) != 1 || l[0] != string(xaMotND) {
+		t.Errorf("tham số = %v, muốn [%s] — xã phải được gắn vào $1", l, xaMotND)
 	}
 }
 

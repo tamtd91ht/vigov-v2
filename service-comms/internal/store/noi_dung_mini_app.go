@@ -808,7 +808,9 @@ func (s *DanhMucMiniAppStore) DemDangSong(ctx context.Context, tx *store.ScopedT
 	const stmt = `SELECT count(*) FROM danh_muc_mini_app WHERE tenant_id = $1 AND deleted_at IS NULL`
 
 	var n int
-	if err := tx.Underlying().QueryRowContext(ctx, stmt).Scan(&n); err != nil {
+	// $1 MUST be bound: without it pgx refuses the statement ("expected 1 arguments, got 0") and every
+	// category create answered 500 — the ceiling check runs before anything else (customer sheet 13/10).
+	if err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID())).Scan(&n); err != nil {
 		return 0, fmt.Errorf("danh_muc_mini_app: đếm danh mục: %w", err)
 	}
 	return n, nil
