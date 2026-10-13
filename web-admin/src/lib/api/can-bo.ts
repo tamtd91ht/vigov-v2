@@ -519,8 +519,9 @@ function duongDanMotCanBo(mau: string, id: string): string {
  * trữ của người khác. `identity_themCanBoVao` sinh từ hợp đồng không có trường ấy, nên form
  * không vẽ ô Mã được kể cả khi ai đó muốn: `tsc` đỏ ngay.
  *
- * `role_ids` IS OPTIONAL, AT MOST ONE ID (owner decision 10/10/2026, bug sheet row 41). The server
- * holds one role per person and checks the #14 escalation rule on create, in the same transaction
+ * `role_ids` IS OPTIONAL (owner decision 10/10/2026, bug sheet row 41), and may carry SEVERAL ids
+ * since 13/10/2026 (a person holds several roles). The server checks the #14 escalation rule on
+ * create, per role, in the same transaction
  * (`app/danh_ba_can_bo.go`); its 400 `role_not_found` / 403 `permission_escalation` sentences reach
  * the form verbatim. Copied only when the caller set it, like `email`. Changing a role later is still
  * `PUT .../role`. NO PASSWORD: issuing a login is a separate flow (#9 — temporary password, changed
@@ -749,23 +750,27 @@ export function datKhoaCanBo(id: string, khoa: boolean): Promise<KetQua<identity
 }
 
 /**
- * PUT /api/v1/staff/{id}/role — đổi vai trò. 200, trả về dòng sau khi đổi.
+ * PUT /api/v1/staff/{id}/role — đặt CÁC vai trò của một cán bộ (chủ dự án 13/10/2026: một cán bộ giữ
+ * nhiều vai trò, quyền là hợp các vai trò). 200, trả về dòng sau khi đổi.
  *
- * `PUT` CHỨ KHÔNG `PATCH`, và thân mang TOÀN BỘ trạng thái của quan hệ chứ không một mệnh lệnh:
- * `role_id: ""` là "không giữ vai trò nào", một đích đến hợp lệ (`nguoi_dung.vai_tro_id` cho
- * NULL, và một người có thể ngồi trong sơ đồ tổ chức mà chưa cầm vai trò nào). Vì vậy hàm này
- * KHÔNG được có một nhánh "rỗng thì thôi không gửi" — nhánh ấy làm việc gỡ vai trò lặng lẽ không
- * xảy ra, mà màn hình vẫn báo đã lưu.
+ * `PUT` CHỨ KHÔNG `PATCH`, và thân mang TOÀN BỘ tập vai trò chứ không một mệnh lệnh "thêm/bớt": `[]` là
+ * "không giữ vai trò nào", một đích đến hợp lệ. Vì vậy hàm này KHÔNG được có một nhánh "rỗng thì thôi
+ * không gửi" — nhánh ấy làm việc gỡ vai trò lặng lẽ không xảy ra, mà màn hình vẫn báo đã lưu.
  *
- * ĐÂY LÀ TUYẾN MANG CẢ HAI RÀNG BUỘC CỦA #14 và đường thứ ba của #13 (hạ vai trò người quản trị
- * cuối cùng). Cả ba lần từ chối đều về đây dưới dạng một câu tiếng Việt do máy chủ viết.
+ * CHỈ `role_ids`, không kèm `role_id`: máy chủ từ chối 400 một thân mang cả hai (hai câu trả lời cho một
+ * câu hỏi). Phần tử đầu là vai trò chính, trừ khi vai trò chính hiện tại vẫn còn trong tập
+ * (`service-identity/internal/http/can_bo_ghi.go`, `datVaiTroVao`).
+ *
+ * ĐÂY LÀ TUYẾN MANG CẢ HAI RÀNG BUỘC CỦA #14 (kiểm theo TỪNG vai trò thêm vào) và đường thứ ba của #13
+ * (gỡ vai trò của người quản trị cuối cùng). Mọi lần từ chối về đây dưới dạng một câu tiếng Việt do máy
+ * chủ viết.
  */
 export function doiVaiTroCanBo(
   id: string,
-  vaiTroID: string,
+  roleIds: readonly string[],
 ): Promise<KetQua<identity_canBoTomTat>> {
   const mau: identity_put_staff_by_id_role["duongDan"] = "/api/v1/staff/{id}/role";
-  const thanGui: identity_datVaiTroVao = { role_id: vaiTroID };
+  const thanGui: identity_datVaiTroVao = { role_ids: [...roleIds] };
 
   return goiGhiCanBo(duongDanMotCanBo(mau, id), "PUT", thanGui, 200);
 }

@@ -712,7 +712,7 @@ describe("pager — hidden on a one-page list", () => {
   });
 });
 
-/* ---- 10. edit: role chosen in the dialog, PUT .../role AFTER the PATCH (user 09/10/2026) --------- */
+/* ---- 10. edit: roles ticked in the dialog, PUT .../role AFTER the PATCH (09/10 + 13/10/2026) ------- */
 
 /** Run the effects and promise chains of a flow with several awaits in a row. */
 async function settle(m: { ve: () => unknown }) {
@@ -735,13 +735,13 @@ describe("edit dialog — role change calls the role route AFTER the patch", () 
     return m;
   }
 
-  it("role changed → PATCH /staff/{id}, THEN PUT /staff/{id}/role {role_id}; dialog closes on success", async () => {
+  it("roles changed → PATCH /staff/{id}, THEN PUT /staff/{id}/role with the WHOLE set `role_ids`; dialog closes", async () => {
     writeAnswers[PATCH_A] = { status: 200, body: A };
-    writeAnswers[ROLE_A] = { status: 200, body: { ...A, role_id: "VT-2" } };
+    writeAnswers[ROLE_A] = { status: 200, body: { ...A, role_id: "VT-2", role_ids: ["VT-2", "VT-3"] } };
     const m = await openEdit();
-    expect(form(m).roleId).toBe("");
+    expect(form(m).roleIds).toEqual([]);
     expect(form(m).roleChoice).toBe("editable");
-    form(m).setRoleId("VT-2");
+    form(m).setRoleIds(["VT-2", "VT-3"]);
     m.ve();
     form(m).onSubmit();
     await settle(m);
@@ -749,8 +749,58 @@ describe("edit dialog — role change calls the role route AFTER the patch", () 
     const w = writes();
     expect(w.map((c) => `${c.method} ${c.url}`)).toEqual([PATCH_A, ROLE_A]);
     expect(w[0]?.than).not.toHaveProperty("role_id");
-    expect(w[1]?.than).toEqual({ role_id: "VT-2" });
+    expect(w[0]?.than).not.toHaveProperty("role_ids");
+    // ONE of the two spellings — both together is a 400 at the server.
+    expect(w[1]?.than).toEqual({ role_ids: ["VT-2", "VT-3"] });
     expect(tatCa(m.cay(), (p) => p.type === StaffAccountForm)).toHaveLength(0);
+  });
+
+  it("the dialog opens with EVERY held role ticked, from `role_ids` (primary first)", async () => {
+    const m = await moMan();
+    phaiCo(m.cay(), BangCanBo).thaoTac.sua({ ...A, role_id: "VT-1", role_ids: ["VT-1", "VT-3"] });
+    m.ve();
+    expect(form(m).roleIds).toEqual(["VT-1", "VT-3"]);
+  });
+
+  it("a row from a server without `role_ids` opens with its `role_id` ticked; no role at all → none", async () => {
+    const m = await moMan();
+    phaiCo(m.cay(), BangCanBo).thaoTac.sua({ ...A, role_id: "VT-1" });
+    m.ve();
+    expect(form(m).roleIds).toEqual(["VT-1"]);
+    form(m).onCancel();
+    m.ve();
+    phaiCo(m.cay(), BangCanBo).thaoTac.sua(A);
+    m.ve();
+    expect(form(m).roleIds).toEqual([]);
+  });
+
+  it("every role unticked → PUT carries `role_ids: []` (a real destination: no role), never skipped", async () => {
+    writeAnswers[ROLE_A] = { status: 200, body: { ...A, role_id: "" } };
+    const m = await moMan();
+    const row = { ...A, role_id: "VT-1", role_ids: ["VT-1", "VT-3"] };
+    phaiCo(m.cay(), BangCanBo).thaoTac.sua(row);
+    m.ve();
+    writeAnswers[PATCH_A] = { status: 200, body: row };
+    form(m).setRoleIds([]);
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+    const w = writes();
+    expect(w.map((c) => `${c.method} ${c.url}`)).toEqual([PATCH_A, ROLE_A]);
+    expect(w[1]?.than).toEqual({ role_ids: [] });
+  });
+
+  it("the same set ticked in another order → no role route (a set, not a list)", async () => {
+    const row = { ...A, role_id: "VT-1", role_ids: ["VT-1", "VT-3"] };
+    writeAnswers[PATCH_A] = { status: 200, body: row };
+    const m = await moMan();
+    phaiCo(m.cay(), BangCanBo).thaoTac.sua(row);
+    m.ve();
+    form(m).setRoleIds(["VT-3", "VT-1"]);
+    m.ve();
+    form(m).onSubmit();
+    await settle(m);
+    expect(writes().map((c) => `${c.method} ${c.url}`)).toEqual([PATCH_A]);
   });
 
   it("role unchanged → the PATCH alone, no role route", async () => {
@@ -768,7 +818,7 @@ describe("edit dialog — role change calls the role route AFTER the patch", () 
     writeAnswers[PATCH_A] = { status: 200, body: A };
     writeAnswers[ROLE_A] = { status: 409, body: { code: "last_admin", message: sentence } };
     const m = await openEdit();
-    form(m).setRoleId("VT-2");
+    form(m).setRoleIds(["VT-2"]);
     m.ve();
     form(m).onSubmit();
     await settle(m);
@@ -787,8 +837,8 @@ describe("edit dialog — role change calls the role route AFTER the patch", () 
     writeAnswers[PATCH_A] = { status: 200, body: A };
     const m = await openEdit({ selfCode: A.code });
     expect(form(m).roleChoice).toBe("own");
-    // Even if a value slipped through (the radios are disabled), the screen does not send it.
-    form(m).setRoleId("VT-2");
+    // Even if a value slipped through (the checkboxes are disabled), the screen does not send it.
+    form(m).setRoleIds(["VT-2"]);
     m.ve();
     form(m).onSubmit();
     await settle(m);
@@ -862,7 +912,7 @@ describe("add dialog — email filled chains the grant-account route", () => {
 
 /* ---- 12. add: the role rides the create body (bug sheet row 41, owner 10/10/2026) ---------------- */
 
-describe("add dialog — one role in `role_ids`, refusals in the dialog", () => {
+describe("add dialog — the ticked roles in `role_ids`, refusals in the dialog", () => {
   async function openAdd() {
     const m = await moMan();
     const add = tatCa(m.cay(), (p) => p.props.children === NUT_THEM_CAN_BO)[0];
@@ -871,20 +921,19 @@ describe("add dialog — one role in `role_ids`, refusals in the dialog", () => 
     return m;
   }
 
-  it("a role chosen → POST /staff carries `role_ids: [id]`, ONE id; no role route is called", async () => {
-    writeAnswers["POST /api/v1/staff"] = { status: 201, body: { ...B, email: "", role_id: "VT-2" } };
+  it("two roles ticked → POST /staff carries BOTH in `role_ids` (owner 13/10/2026); no role route is called", async () => {
+    writeAnswers["POST /api/v1/staff"] = { status: 201, body: { ...B, email: "", role_id: "VT-1" } };
     const m = await openAdd();
-    expect(form(m).roleId).toBe("");
+    expect(form(m).roleIds).toEqual([]);
     expect(form(m).roleChoice).toBe("editable");
     form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B" });
-    form(m).setRoleId("VT-1");
-    form(m).setRoleId("VT-2"); // radios: the second choice replaces the first
+    form(m).setRoleIds(["VT-1", "VT-2"]);
     m.ve();
     form(m).onSubmit();
     await settle(m);
     const w = writes();
     expect(w.map((c) => `${c.method} ${c.url}`)).toEqual(["POST /api/v1/staff"]);
-    expect(w[0]?.than?.role_ids).toEqual(["VT-2"]);
+    expect(w[0]?.than?.role_ids).toEqual(["VT-1", "VT-2"]);
   });
 
   it("no role → the body has NO `role_ids` key", async () => {
@@ -925,7 +974,7 @@ describe("add dialog — one role in `role_ids`, refusals in the dialog", () => 
       writeAnswers["POST /api/v1/staff"] = { status, body: { code, message } };
       const m = await openAdd();
       form(m).setDraft({ ...BAN_TRONG, hoTen: "Trần Thị B", email: "ttb@demo.invalid" });
-      form(m).setRoleId("VT-2");
+      form(m).setRoleIds(["VT-2"]);
       m.ve();
       form(m).onSubmit();
       await settle(m);

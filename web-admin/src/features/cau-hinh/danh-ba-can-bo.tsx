@@ -96,7 +96,7 @@ import {
   staffCountLine,
   unitCellLabel,
 } from "./nhan-can-bo";
-import { StaffAccountForm, type RoleChoice } from "./staff-account-form";
+import { heldRoleIds, sameRoleSet, StaffAccountForm, type RoleChoice } from "./staff-account-form";
 import { StaffImportDialog } from "./staff-import-dialog";
 import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra-danh-muc";
 
@@ -127,8 +127,9 @@ import { bangTraTuKetQua, traTen, type BangTraDanhMuc, type KetTra } from "./tra
  *   · Không ô mật khẩu (người dùng 09/10/2026, câu mở #9): mật khẩu tạm do máy chủ sinh, hiện một lần.
  *     Thêm có thư điện tử thì cấp tài khoản ngay sau khi thêm (`POST /staff/{id}/account`); quên mật
  *     khẩu là `Đặt lại mật khẩu` trong menu `⋯`.
- *   · MỘT vai trò, chọn trong hộp thoại Sửa và lưu bằng `PUT /staff/{id}/role` SAU lần PATCH hồ sơ —
- *     tuyến mang ràng buộc #13/#14. Không còn hộp thoại `Đổi vai trò` riêng.
+ *   · NHIỀU vai trò (chủ dự án 13/10/2026), tích trong hộp thoại Sửa và lưu cả tập `role_ids` bằng
+ *     `PUT /staff/{id}/role` SAU lần PATCH hồ sơ — tuyến mang ràng buộc #13/#14. Không còn hộp thoại
+ *     `Đổi vai trò` riêng.
  *   · `Khoá/Mở khoá` và `Cấp tài khoản`/`Đặt lại mật khẩu` gom vào menu `⋯` giữa Sửa và Xoá.
  *   · Xoá hỏi lý do (luật 7) và chỉ cho dòng KHÔNG có tài khoản (#10: nghỉ thì khoá, không xoá).
  *   · Tìm ở MÁY CHỦ, theo trang con trỏ: danh bạ một xã không đọc hết về trình duyệt để lọc. Nút trang
@@ -206,8 +207,8 @@ export function DanhBaCanBo({
 
   const [dangMo, datDangMo] = useState<DangMoGhi | null>(null);
   const [ban, datBan] = useState<BanNhapCanBo>(BAN_TRONG);
-  /** The role chosen in the edit dialog (`""` = no role). Sent through `PUT .../role`, never the PATCH. */
-  const [vaiTroID, datVaiTroID] = useState("");
+  /** The roles ticked in the dialog (`[]` = no role). Edit: `PUT .../role`, never the PATCH; add: the body. */
+  const [roleIds, setRoleIds] = useState<string[]>([]);
   /**
    * The row as the PATCH returned it, once the profile is saved and the role change that followed was
    * refused. A second Lưu then compares against THIS row: an unchanged profile is not PATCHed again
@@ -368,7 +369,7 @@ export function DanhBaCanBo({
   const moBieuMau = useCallback((m: DangMoGhi) => {
     datDangMo(m);
     datBan(m.kieu === "sua" ? banTuCanBo(m.canBo) : BAN_TRONG);
-    datVaiTroID(m.kieu === "sua" ? m.canBo.role_id : "");
+    setRoleIds(m.kieu === "sua" ? heldRoleIds(m.canBo) : []);
     setPatchedRow(null);
     datLoiMayChu("");
     setDeleting(null);
@@ -381,7 +382,7 @@ export function DanhBaCanBo({
   const dongBieuMau = useCallback(() => {
     datDangMo(null);
     datBan(BAN_TRONG);
-    datVaiTroID("");
+    setRoleIds([]);
     setPatchedRow(null);
     datLoiMayChu("");
   }, []);
@@ -393,7 +394,7 @@ export function DanhBaCanBo({
   const ghiXong = useCallback((cau: string) => {
     datDangMo(null);
     datBan(BAN_TRONG);
-    datVaiTroID("");
+    setRoleIds([]);
     setPatchedRow(null);
     datLoiMayChu("");
     setDeleting(null);
@@ -417,9 +418,10 @@ export function DanhBaCanBo({
   const addStaff = useCallback(
     async (idempotencyKey: string) => {
       const draft = ban;
-      // The role rides the create body (bug sheet row 41): one id, or no key at all for "no role".
+      // The roles ride the create body (bug sheet row 41; several since 13/10/2026), or no key at all for
+      // "no role" — absent and `[]` mean the same to the server, and absent is what it has always received.
       const kq = await themCanBo(
-        vaiTroID === "" ? thanThem(draft) : { ...thanThem(draft), role_ids: [vaiTroID] },
+        roleIds.length === 0 ? thanThem(draft) : { ...thanThem(draft), role_ids: roleIds },
         idempotencyKey,
       );
       if (!kq.ok) {
@@ -448,11 +450,11 @@ export function DanhBaCanBo({
       datMoTaiKhoan({ kieu: "cap", canBo: created });
       datLoiTaiKhoan(grant.ok ? CAU_PHAT_LAI_KHONG_CO_MAT_KHAU : grant.thongBao);
     },
-    [ban, ghiXong, vaiTroID],
+    [ban, ghiXong, roleIds],
   );
 
   /**
-   * EDIT. The profile PATCH first; then, only if the role choice differs and may be changed, the
+   * EDIT. The profile PATCH first; then, only if the ticked SET differs and may be changed, the
    * existing `PUT /staff/{id}/role` — so #13 and #14 still answer there, and their sentence reaches
    * this dialog. A refused role change leaves the dialog open with the profile already saved
    * (`patchedRow`); the list is re-read so the row shows what the server now holds.
@@ -461,7 +463,7 @@ export function DanhBaCanBo({
     async (cb: identity_canBoTomTat) => {
       const base = patchedRow ?? cb;
       const profileChanged = patchedRow === null || !sameDraft(banTuCanBo(base), ban);
-      const roleWanted = roleChoiceFor(cb) === "editable" && vaiTroID !== base.role_id;
+      const roleWanted = roleChoiceFor(cb) === "editable" && !sameRoleSet(roleIds, heldRoleIds(base));
       let saved = base;
       if (profileChanged) {
         const kq = await suaCanBo(cb.id, thanSua(ban, base));
@@ -475,7 +477,7 @@ export function DanhBaCanBo({
         ghiXong(ACCOUNT_SAVED);
         return;
       }
-      const role = await doiVaiTroCanBo(cb.id, vaiTroID);
+      const role = await doiVaiTroCanBo(cb.id, roleIds);
       if (role.ok) {
         ghiXong(ACCOUNT_SAVED);
         return;
@@ -486,7 +488,7 @@ export function DanhBaCanBo({
       }
       datLoiMayChu(roleChangeFailed(role.thongBao));
     },
-    [ban, ghiXong, patchedRow, roleChoiceFor, vaiTroID],
+    [ban, ghiXong, patchedRow, roleChoiceFor, roleIds],
   );
 
   const guiBieuMau = useCallback(() => {
@@ -690,8 +692,8 @@ export function DanhBaCanBo({
             open={dangMo}
             draft={ban}
             setDraft={datBan}
-            roleId={vaiTroID}
-            setRoleId={datVaiTroID}
+            roleIds={roleIds}
+            setRoleIds={setRoleIds}
             roleChoice={dangMo.kieu === "sua" ? roleChoiceFor(dangMo.canBo) : "editable"}
             units={mucBoPhan}
             roles={mucVaiTro}
@@ -711,8 +713,10 @@ export function DanhBaCanBo({
             dangMo={dangMo}
             ban={ban}
             datBan={datBan}
-            vaiTroID={vaiTroID}
-            datVaiTroID={datVaiTroID}
+            // The lock form reads no role; the shared component still takes the pair (its unreachable
+            // `vaiTro` form on this screen). Fixed values, so no role state leaks into a lock.
+            vaiTroID=""
+            datVaiTroID={() => {}}
             boPhan={mucBoPhan}
             vaiTro={mucVaiTro}
             loiMayChu={loiMayChu}

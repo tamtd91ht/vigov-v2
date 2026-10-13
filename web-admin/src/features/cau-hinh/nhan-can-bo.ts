@@ -261,16 +261,9 @@ export const ADD_GRANT_NOT_CHAINED =
 export const MOBILE_LABEL = "Điện thoại (di động)";
 export const OFFICE_PHONE_LABEL = "Máy bàn cơ quan";
 export const ROLE_LABEL = "Vai trò";
-/** `""` is a real value of `PUT .../role` — somebody can hold no role — so it is a choice of its own. */
-export const NO_ROLE_OPTION = "Không giữ vai trò nào";
+/** Label of a held role the catalogue no longer lists (and of such a unit): kept ticked, never dropped. */
 export const MISSING_ROLE_OPTION = "Giá trị đang lưu — không còn trong danh mục";
 export const NO_ROLES_YET = "Chưa có vai trò nào để gán.";
-/**
- * Under the role choice (bug sheet row 41): the prototype draws checkboxes, but the server holds ONE role
- * per person (`nguoi_dung.vai_tro_id`) and refuses two on create (`ErrOneRolePerStaff`) — so radios, and
- * this sentence says why the look allows only one.
- */
-export const ONE_ROLE_HINT = "Mỗi cán bộ giữ một vai trò.";
 /**
  * Where the prototype draws `Mật khẩu` on the add form (open question #9): no password is typed here —
  * the server issues a one-time password, changed at first sign-in.

@@ -763,25 +763,26 @@ describe("POST/DELETE /api/v1/staff/{id}/lockout — khoá và mở khoá", () =
   });
 });
 
-describe("PUT /api/v1/staff/{id}/role — đổi vai trò", () => {
-  it("gửi `role_id` trong thân, PUT chứ không PATCH", async () => {
+describe("PUT /api/v1/staff/{id}/role — đặt các vai trò", () => {
+  it("gửi CẢ TẬP `role_ids` trong thân (nhiều vai trò, chủ dự án 13/10/2026), không `role_id`; PUT chứ không PATCH", async () => {
     const gia = ghiGia(200, canBo(1, null));
-    await doiVaiTroCanBo("01JABC", "01JVAITRO");
+    await doiVaiTroCanBo("01JABC", ["01JVAITRO", "01JVAITRO2"]);
 
     const { duongDan, tuyChon } = loiGoi(gia, 0);
     expect(duongDan).toBe("/api/v1/staff/01JABC/role");
     expect(tuyChon.method).toBe("PUT");
-    expect(JSON.parse(String(tuyChon.body))).toEqual({ role_id: "01JVAITRO" });
+    // Gửi cả hai trường là 400 ở máy chủ — thân chỉ mang một.
+    expect(JSON.parse(String(tuyChon.body))).toEqual({ role_ids: ["01JVAITRO", "01JVAITRO2"] });
   });
 
-  it("gỡ vai trò VẪN gửi yêu cầu, với `role_id` rỗng", async () => {
-    // `""` là một đích đến hợp lệ ("không giữ vai trò nào"). Một nhánh "rỗng thì thôi không gửi"
+  it("gỡ hết vai trò VẪN gửi yêu cầu, với `role_ids: []`", async () => {
+    // `[]` là một đích đến hợp lệ ("không giữ vai trò nào"). Một nhánh "rỗng thì thôi không gửi"
     // làm việc gỡ vai trò lặng lẽ không xảy ra, mà màn hình vẫn báo đã lưu.
     const gia = ghiGia(200, canBo(1, null));
-    await doiVaiTroCanBo("01JABC", "");
+    await doiVaiTroCanBo("01JABC", []);
 
     expect(gia).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toEqual({ role_id: "" });
+    expect(JSON.parse(String(loiGoi(gia, 0).tuyChon.body))).toEqual({ role_ids: [] });
   });
 
   it("#14 — hai lần từ chối khác nhau cho ra HAI câu khác nhau", async () => {
@@ -789,7 +790,7 @@ describe("PUT /api/v1/staff/{id}/role — đổi vai trò", () => {
       "Không thao tác được lên chính tài khoản của mình. " +
       "Hãy nhờ một người quản trị khác của xã thực hiện.";
     ghiGia(403, { code: "self_target_forbidden", message: tuThaoTac, trace_id: "01JTRACE" });
-    expect(await doiVaiTroCanBo("01JABC", "01JVAITRO")).toEqual({
+    expect(await doiVaiTroCanBo("01JABC", ["01JVAITRO"])).toEqual({
       ok: false,
       thongBao: tuThaoTac,
     });
@@ -798,7 +799,7 @@ describe("PUT /api/v1/staff/{id}/role — đổi vai trò", () => {
       "Vai trò này mang quyền mà tài khoản của bạn không có, nên bạn không gán được: " +
       "admin.user. Hãy nhờ người có đủ quyền thực hiện.";
     ghiGia(403, { code: "permission_escalation", message: vuotQuyen, trace_id: "01JTRACE" });
-    expect(await doiVaiTroCanBo("01JABC", "01JVAITRO")).toEqual({
+    expect(await doiVaiTroCanBo("01JABC", ["01JVAITRO"])).toEqual({
       ok: false,
       thongBao: vuotQuyen,
     });

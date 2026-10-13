@@ -34,10 +34,8 @@ import {
   EMAIL_LOCKED_HINT,
   MISSING_ROLE_OPTION,
   MOBILE_LABEL,
-  NO_ROLE_OPTION,
   NO_ROLES_YET,
   OFFICE_PHONE_LABEL,
-  ONE_ROLE_HINT,
   OWN_ROLE_HINT,
   ROLE_LABEL,
   TEMP_PASSWORD_NOTE,
@@ -55,11 +53,12 @@ import { DIALOG_FOOTER_CLASS, DIALOG_LABEL_CLASS } from "./org-unit-dialog-class
  *     (open question #9): adding with an email chains `POST /staff/{id}/account` and shows that value
  *     once; a forgotten password is `Đặt lại mật khẩu` in the row's `⋯` menu. On ADD, the prototype's
  *     password cell holds `TEMP_PASSWORD_NOTE` instead (bug sheet row 41).
- *   · ONE ROLE, a radio group laid out like the prototype's checkbox grid, with `ONE_ROLE_HINT`. The
- *     server holds one role per person (`nguoi_dung.vai_tro_id`). On EDIT the choice is saved through
- *     `PUT /staff/{id}/role` AFTER the profile PATCH — the route that carries #13/#14 — never as a field
- *     of the PATCH. On ADD (owner 10/10/2026, bug sheet row 41) it rides the create body as
- *     `role_ids: [id]`, checked server-side against the same #14 escalation rule in the same transaction.
+ *   · SEVERAL ROLES, checkboxes in the prototype's grid (owner 13/10/2026, sheet web-admin-131026 row
+ *     10: a person's rights are the union of their roles). No role ticked is allowed, as in the
+ *     prototype: an empty set is "no role", a real state. On EDIT the set is saved through
+ *     `PUT /staff/{id}/role` as `role_ids` AFTER the profile PATCH — the route that carries #13/#14 —
+ *     never as a field of the PATCH. On ADD (owner 10/10/2026) it rides the create body as `role_ids`,
+ *     checked server-side against the #14 escalation rule, per added role, in the same transaction.
  *   · TWO PHONE FIELDS (#16), each label saying which kind: the mobile beside Chức danh, the office
  *     line under Bộ phận. The MOBILE is grouped as typed (`xxx xxx xxxx`) and capped at ten digits; the
  *     draft keeps digits only, so nothing with a space is ever sent. The office line is not: a landline
@@ -92,8 +91,31 @@ export function mobileDigits(typed: string): string {
   return typed.replace(/\D/g, "").slice(0, MOBILE_MAX_DIGITS);
 }
 
+/**
+ * The roles a row holds, as the form pre-ticks them. `role_ids` is optional in the contract (absent =
+ * none, `service-identity/internal/http/can_bo.go`); a row from a server written before 13/10/2026 has
+ * only `role_id`, which is then the whole set — dropping it would untick a role nobody touched, and the
+ * next Lưu would remove it.
+ */
+export function heldRoleIds(staff: identity_canBoTomTat): string[] {
+  if (staff.role_ids !== undefined) return [...staff.role_ids];
+  return staff.role_id === "" ? [] : [staff.role_id];
+}
+
+/** Whether two role sets are the same set. Order is not a change: the server keeps the primary itself. */
+export function sameRoleSet(a: readonly string[], b: readonly string[]): boolean {
+  const left = new Set(a);
+  const right = new Set(b);
+  return left.size === right.size && [...left].every((id) => right.has(id));
+}
+
+/** Tick or untick one role, keeping the order of the others (the first held role stays first). */
+export function toggleRole(roleIds: readonly string[], id: string): string[] {
+  return roleIds.includes(id) ? roleIds.filter((r) => r !== id) : [...roleIds, id];
+}
+
 export type RoleChoice =
-  /** The role radios are drawn and can be changed. */
+  /** The role checkboxes are drawn and can be changed. */
   | "editable"
   /** Drawn, disabled, with `OWN_ROLE_HINT` — the signed-in officer's own row (#14). */
   | "own";
@@ -102,8 +124,8 @@ export function StaffAccountForm({
   open,
   draft,
   setDraft,
-  roleId,
-  setRoleId,
+  roleIds,
+  setRoleIds,
   roleChoice,
   units,
   roles,
@@ -116,9 +138,9 @@ export function StaffAccountForm({
   open: Extract<DangMoGhi, { kieu: "them" } | { kieu: "sua" }>;
   draft: BanNhapCanBo;
   setDraft: (d: BanNhapCanBo) => void;
-  /** The role chosen; `""` = no role. Add: sent as `role_ids`; edit: through `PUT .../role`. */
-  roleId: string;
-  setRoleId: (id: string) => void;
+  /** The roles ticked; `[]` = no role. Add: sent as `role_ids`; edit: through `PUT .../role`. */
+  roleIds: readonly string[];
+  setRoleIds: (ids: string[]) => void;
   roleChoice: RoleChoice;
   units: readonly MucChon[];
   roles: readonly MucChon[];
@@ -134,7 +156,6 @@ export function StaffAccountForm({
   // so an email can be added now and the account issued later.
   const emailLocked = staff !== null && staff.has_account;
   const unitMissing = draft.boPhanID !== "" && !units.some((m) => m.id === draft.boPhanID);
-  const roleMissing = roleId !== "" && !roles.some((m) => m.id === roleId);
 
   return (
     <form
@@ -269,11 +290,10 @@ export function StaffAccountForm({
           </div>
           <div aria-hidden="true" />
 
-          <RoleRadios
-            roleId={roleId}
-            setRoleId={setRoleId}
+          <RoleCheckboxes
+            roleIds={roleIds}
+            setRoleIds={setRoleIds}
             roles={roles}
-            roleMissing={roleMissing}
             disabled={roleChoice === "own" || busy}
             own={roleChoice === "own"}
           />
@@ -327,70 +347,64 @@ export function StaffAccountForm({
 }
 
 /**
- * The role choice: native radios in the prototype's bordered two-column grid. `""` (no role) is the
- * first choice because it is a real destination of `PUT .../role`; a stored role the catalogue no
- * longer lists stays checked under its own label, so saving a phone number never moves anybody.
+ * The role choice: native checkboxes in the prototype's bordered two-column grid (`UserFormDialog`,
+ * owner 13/10/2026 — one person, several roles). A `<fieldset>` + `<legend>` so a screen reader announces
+ * "Vai trò" with every box; each box sits inside its own `<label>`, the role's name as its accessible name.
+ * No "no role" box: unticking every box IS no role, as in the prototype. A held role the catalogue no
+ * longer lists stays ticked under its own label, so saving a phone number never removes anybody's role.
  *
- * `border-solid` because preflight is off here: a bare `border` draws nothing.
+ * `border-solid` because preflight is off here: a bare `border` draws nothing — and for the same reason
+ * the fieldset and legend are reset by hand (`border-0 p-0`), or the browser's default frame shows.
  */
-function RoleRadios({
-  roleId,
-  setRoleId,
+function RoleCheckboxes({
+  roleIds,
+  setRoleIds,
   roles,
-  roleMissing,
   disabled,
   own,
 }: {
-  roleId: string;
-  setRoleId: (id: string) => void;
+  roleIds: readonly string[];
+  setRoleIds: (ids: string[]) => void;
   roles: readonly MucChon[];
-  roleMissing: boolean;
   disabled: boolean;
   own: boolean;
 }) {
-  const choices: readonly MucChon[] = [
-    { id: "", name: NO_ROLE_OPTION },
-    ...roles,
-    ...(roleMissing ? [{ id: roleId, name: MISSING_ROLE_OPTION }] : []),
-  ];
+  const missing = roleIds.filter((id) => !roles.some((m) => m.id === id));
+  const choices: readonly MucChon[] = [...roles, ...missing.map((id) => ({ id, name: MISSING_ROLE_OPTION }))];
   return (
-    <div className="col-span-2 block">
-      <span id="o-vai-tro-can-bo-nhan" className={DIALOG_LABEL_CLASS}>
-        {ROLE_LABEL}
-      </span>
-      <div
-        role="radiogroup"
-        aria-labelledby="o-vai-tro-can-bo-nhan"
-        aria-describedby="o-vai-tro-can-bo-mo-ta"
-        className="border-line mt-1.5 grid grid-cols-2 gap-2 rounded-[10px] border border-solid p-3"
-      >
-        {roles.length === 0 && !roleMissing && (
-          <p className="text-ink-muted col-span-2 m-0 text-[12.5px]">{NO_ROLES_YET}</p>
-        )}
+    <fieldset
+      className="col-span-2 m-0 block min-w-0 border-0 p-0"
+      aria-describedby={own ? "o-vai-tro-can-bo-mo-ta" : undefined}
+    >
+      <legend className={cn(DIALOG_LABEL_CLASS, "p-0")}>{ROLE_LABEL}</legend>
+      <div className="border-line mt-1.5 grid grid-cols-2 gap-2 rounded-[10px] border border-solid p-3">
+        {choices.length === 0 && <p className="text-ink-muted col-span-2 m-0 text-[12.5px]">{NO_ROLES_YET}</p>}
         {choices.map((r) => (
           <label
-            key={r.id === "" ? "-" : r.id}
+            key={r.id}
             className={cn(
-              "m-0 flex items-center gap-2 text-[12.5px]",
+              "m-0 flex min-w-0 items-center gap-2 text-[12.5px]",
               disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
             )}
           >
             <input
-              type="radio"
+              type="checkbox"
               name="o-vai-tro-can-bo"
               value={r.id}
-              checked={roleId === r.id}
+              checked={roleIds.includes(r.id)}
               disabled={disabled}
-              onChange={() => setRoleId(r.id)}
-              className="accent-brand m-0 size-3.5"
+              onChange={() => setRoleIds(toggleRole(roleIds, r.id))}
+              className="accent-brand m-0 size-3.5 shrink-0"
             />
             <span className="text-navy">{r.name}</span>
           </label>
         ))}
       </div>
-      <p id="o-vai-tro-can-bo-mo-ta" className="text-ink-muted m-0 mt-1 text-[11.5px]">
-        {own ? OWN_ROLE_HINT : ONE_ROLE_HINT}
-      </p>
-    </div>
+      {own && (
+        <p id="o-vai-tro-can-bo-mo-ta" className="text-ink-muted m-0 mt-1 text-[11.5px]">
+          {OWN_ROLE_HINT}
+        </p>
+      )}
+    </fieldset>
   );
 }

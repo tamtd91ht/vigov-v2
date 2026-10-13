@@ -15,7 +15,7 @@ import {
   EMAIL_LOCKED_HINT,
   EMPTY_STAFF_LIST,
   NO_EMAIL_SUBLINE,
-  ONE_ROLE_HINT,
+  MISSING_ROLE_OPTION,
   OWN_ROLE_HINT,
   staffCountLine,
   TEMP_PASSWORD_NOTE,
@@ -27,7 +27,8 @@ import type { BangTraDanhMuc } from "./tra-danh-muc";
 /**
  * `/nguoi-dung` against the prototype (`vigov-require/apps/admin/src/components/admin/UserTable.tsx`,
  * `UserFormDialog.tsx`), the owner's decisions of 08/10/2026 (fix-web-admin card A) and the user's of
- * 09/10/2026 (seven columns, one role in the edit dialog, no password field):
+ * 09/10/2026 (seven columns, roles in the edit dialog, no password field) and the owner's of 13/10/2026
+ * (a person holds SEVERAL roles — checkboxes, bug sheet web-admin-131026 row 10):
  *
  *   · the table's seven columns, in order;
  *   · `Trash2` per row only for `admin.user.delete`, disabled on a row holding a sign-in account;
@@ -310,15 +311,15 @@ const ROLES: readonly MucChon[] = [
 
 function accountForm(
   openForm: Extract<DangMoGhi, { kieu: "them" } | { kieu: "sua" }>,
-  opts: { draft?: BanNhapCanBo; roleId?: string; roleChoice?: RoleChoice } = {},
+  opts: { draft?: BanNhapCanBo; roleIds?: readonly string[]; roleChoice?: RoleChoice } = {},
 ): string {
   return renderToStaticMarkup(
     <StaffAccountForm
       open={openForm}
       draft={opts.draft ?? BAN_TRONG}
       setDraft={() => {}}
-      roleId={opts.roleId ?? ""}
-      setRoleId={() => {}}
+      roleIds={opts.roleIds ?? []}
+      setRoleIds={() => {}}
       roleChoice={opts.roleChoice ?? "editable"}
       units={UNITS}
       roles={ROLES}
@@ -328,6 +329,11 @@ function accountForm(
       onCancel={() => {}}
     />,
   );
+}
+
+/** The role checkboxes (`name="o-vai-tro-can-bo"`) — never the Zalo one. */
+function roleBoxes(html: string): string[] {
+  return [...html.matchAll(/<input[^>]*type="checkbox"[^>]*name="o-vai-tro-can-bo"[^>]*>/g)].map((m) => m[0]);
 }
 
 function input(html: string, id: string): string {
@@ -349,19 +355,22 @@ describe("StaffAccountForm — add (user 09/10/2026)", () => {
     expect(html).not.toContain("o-co-zalo-can-bo");
   });
 
-  it("Vai trò on add (bug sheet row 41): the prototype's bordered grid, RADIOS (one role), 'no role' checked, the hint", () => {
+  it("Vai trò on add (sheet 131026 row 10): a fieldset + legend, CHECKBOXES in the prototype's bordered 2-column grid, none ticked", () => {
     const html = accountForm(ADD);
-    expect(html).toContain('role="radiogroup"');
+    expect(html).not.toContain('type="radio"');
+    expect(html).not.toContain("radiogroup");
+    expect(html).toMatch(/<fieldset[^>]*>\s*<legend[^>]*>Vai trò<\/legend>/);
     expect(html).toContain("border-line mt-1.5 grid grid-cols-2 gap-2 rounded-[10px] border border-solid p-3");
-    const radios = [...html.matchAll(/<input[^>]*type="radio"[^>]*>/g)].map((m) => m[0]);
-    expect(radios).toHaveLength(3);
-    for (const r of radios) expect(r).toContain('name="o-vai-tro-can-bo"');
-    expect(radios.filter((r) => r.includes('checked=""'))).toEqual([radios[0]]);
-    expect(html).not.toContain('type="checkbox"');
-    expect(ONE_ROLE_HINT).toBe("Mỗi cán bộ giữ một vai trò.");
-    expect(html).toContain(`id="o-vai-tro-can-bo-mo-ta" class="text-ink-muted m-0 mt-1 text-[11.5px]">${ONE_ROLE_HINT}<`);
+    const boxes = roleBoxes(html);
+    // One per catalogue role — no "Không giữ vai trò nào" choice: an empty set IS no role (prototype).
+    expect(boxes).toHaveLength(2);
+    for (const r of boxes) expect(r).not.toContain('checked=""');
+    expect(html).not.toContain("Không giữ vai trò nào");
+    expect(html).not.toContain("Mỗi cán bộ giữ một vai trò");
+    // Each box is inside its own <label> with the role's name: the click target and the accessible name.
+    expect(html).toMatch(/<label[^>]*><input[^>]*type="checkbox"[^>]*value="VT1"[^>]*\/><span[^>]*>Chuyên viên chuyên môn<\/span><\/label>/);
     // Below Bộ phận, as the prototype draws it.
-    expect(html.indexOf('role="radiogroup"')).toBeGreaterThan(html.indexOf('for="o-bo-phan-can-bo"'));
+    expect(html.indexOf("<fieldset")).toBeGreaterThan(html.indexOf('for="o-bo-phan-can-bo"'));
   });
 
   it("mobile: shown grouped `xxx xxx xxxx`, numeric keypad; the draft keeps digits only", () => {
@@ -419,29 +428,36 @@ describe("StaffAccountForm — edit (user 09/10/2026)", () => {
     expect(html).not.toContain(EMAIL_LOCKED_HINT);
   });
 
-  it("ONE role: radios in the prototype's bordered 2-column grid, the stored role checked, 'no role' offered", () => {
-    const html = accountForm({ kieu: "sua", canBo: STAFF }, { draft: banTuCanBo(STAFF), roleId: "VT2" });
-    expect(html).toContain('role="radiogroup"');
-    expect(html).toContain("border-line mt-1.5 grid grid-cols-2 gap-2 rounded-[10px] border border-solid p-3");
-    const radios = [...html.matchAll(/<input[^>]*type="radio"[^>]*>/g)].map((m) => m[0]);
-    expect(radios).toHaveLength(3);
-    expect(radios.filter((r) => r.includes('checked=""'))).toHaveLength(1);
-    expect(radios.find((r) => r.includes('value="VT2"'))).toContain('checked=""');
-    expect(html).toContain(">Không giữ vai trò nào<");
-    expect(html).not.toContain('type="checkbox" name="o-vai-tro');
+  it("SEVERAL roles (owner 13/10/2026): every held role ticked, the others not", () => {
+    const html = accountForm({ kieu: "sua", canBo: STAFF }, { draft: banTuCanBo(STAFF), roleIds: ["VT1", "VT2"] });
+    const boxes = roleBoxes(html);
+    expect(boxes).toHaveLength(2);
+    for (const r of boxes) expect(r).toContain('checked=""');
+    const one = roleBoxes(accountForm({ kieu: "sua", canBo: STAFF }, { draft: banTuCanBo(STAFF), roleIds: ["VT2"] }));
+    expect(one.find((r) => r.includes('value="VT1"'))).not.toContain('checked=""');
+    expect(one.find((r) => r.includes('value="VT2"'))).toContain('checked=""');
   });
 
-  it("own row (#14): every role radio disabled, the reason under the group", () => {
+  it("a held role the catalogue no longer lists stays TICKED under its own label (saving moves nobody)", () => {
+    const html = accountForm({ kieu: "sua", canBo: STAFF }, { draft: banTuCanBo(STAFF), roleIds: ["VT1", "VT-GONE"] });
+    const boxes = roleBoxes(html);
+    expect(boxes).toHaveLength(3);
+    expect(boxes.find((r) => r.includes('value="VT-GONE"'))).toContain('checked=""');
+    expect(html).toContain(`>${MISSING_ROLE_OPTION}<`);
+  });
+
+  it("DENIED, own row (#14): every role checkbox disabled, the reason under the group", () => {
     const html = accountForm({ kieu: "sua", canBo: STAFF }, { draft: banTuCanBo(STAFF), roleChoice: "own" });
-    const radios = [...html.matchAll(/<input[^>]*type="radio"[^>]*>/g)].map((m) => m[0]);
-    expect(radios.length).toBeGreaterThan(0);
-    for (const r of radios) expect(r).toContain('disabled=""');
+    const boxes = roleBoxes(html);
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const r of boxes) expect(r).toContain('disabled=""');
     expect(html).toContain(OWN_ROLE_HINT);
+    expect(html).toMatch(/<fieldset[^>]*aria-describedby="o-vai-tro-can-bo-mo-ta"/);
   });
 
-  it("another row: radios enabled, no own-row hint", () => {
+  it("another row: checkboxes enabled, no own-row hint", () => {
     const html = accountForm({ kieu: "sua", canBo: STAFF }, { draft: banTuCanBo(STAFF) });
-    for (const m of html.matchAll(/<input[^>]*type="radio"[^>]*>/g)) expect(m[0]).not.toContain('disabled=""');
+    for (const r of roleBoxes(html)) expect(r).not.toContain('disabled=""');
     expect(html).not.toContain(OWN_ROLE_HINT);
   });
 
