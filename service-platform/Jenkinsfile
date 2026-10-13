@@ -3,10 +3,11 @@
 //   · build CÁI GÌ    — đúng một ảnh, vigov-service-platform
 //   · build KHI NÀO   — xem `duongKichHoat()` ở cuối tệp
 //   · đẩy ĐI ĐÂU      — hằng số REGISTRY/PROJECT trong khối `environment` ngay dưới
-//   · chạy lên ĐÂU    — hằng số KUBECONFIG/NS trong cùng khối
+//   · chạy lên ĐÂU    — KUBECONFIG trong cùng khối; namespace theo NHÁNH, xem
+//                       `namespaceForBranch()` cuối tệp (dev → vigov-dev, main → vigov-prod)
 //
-// BẤM TAY, KHÔNG TỰ CHẠY. Quy trình chủ dự án chốt 25/09/2026: viết mã → commit → push `main`
-// → người bấm job này → đóng ảnh → ĐẶT ẢNH LÊN CỤM ngay trong cùng lượt. Không còn job
+// BẤM TAY, KHÔNG TỰ CHẠY. Quy trình chủ dự án chốt 25/09/2026: viết mã → commit → push `dev`
+// (hoặc gộp vào `main` cho prod) → người bấm job của nhánh ấy → đóng ảnh → ĐẶT ẢNH LÊN CỤM ngay trong cùng lượt. Không còn job
 // `vigov-deploy` riêng: một lượt bấm là một dòng lịch sử trả lời cả "ảnh nào", "lên đâu" và
 // "ai bấm". Ở trang cấu hình job, mục Build Triggers KHÔNG tick gì.
 //
@@ -49,11 +50,9 @@ pipeline {
     // vào cụm của người khác, và `set image` trên một Deployment TRÙNG TÊN thì không đỏ.
     // Stage 'Chuẩn bị' in `current-context` ra log trước khi chạm gì.
     KUBECONFIG = '/u01/rancher/rancher-vigov.yaml'
-    // Một môi trường, là HẰNG SỐ: đổi môi trường là đổi mã, đi qua commit.
-    NS = 'vigov-prod'
     // Tên Deployment THẬT trên cụm, đo 25/09/2026 (`vigov-deploy` kiem-tra): cụm dựng tay trong
     // Rancher đặt `vigov-service-<dịch vụ>`, KHÔNG phải tên trần của `deploy/base`. Prod là bản
-    // nhân của staging (chủ dự án chọn cùng ngày).
+    // nhân của staging (chủ dự án chọn cùng ngày); vigov-dev dùng CÙNG tên.
     TEN_K8S = 'vigov-service-platform'
   }
 
@@ -61,6 +60,8 @@ pipeline {
 
     stage('Chuẩn bị') {
       steps {
+        // NAMESPACE TRƯỚC MỌI THỨ: mọi bước dưới đây đọc $NS — xem `namespaceForBranch()` cuối tệp.
+        script { env.NS = namespaceForBranch() }
         // `gcc` nằm trong danh sách vì một lý do không hiển nhiên: cổng kiểm chạy
         // `go test -race`, mà `-race` cần cgo, tức cần một trình biên dịch C. Thiếu nó thì
         // lỗi rơi vào giữa cổng kiểm dưới dạng "race is only supported ... with cgo" — một
@@ -350,4 +351,34 @@ String mocDaDongAnh() {
 // #[dung-chung] Tiền tố của mốc. Một HÀM chứ không phải biến mức script, cùng lý do với
 // `duongKichHoat()`: một biến mức script cần @Field kèm import, và một import bị quên là lỗi
 // lúc CHẠY chứ không phải lúc đọc.
-String nhanAnh() { return 'anh-tu-commit:' }
+//
+// MỐC THEO NAMESPACE: một job bấm được cả hai nhánh thì mốc chung sẽ để lượt prod đọc mốc
+// của lượt dev, kết luận "không có gì đổi" và KHÔNG đặt ảnh lên prod. Mốc cũ không có
+// namespace nên lượt đầu sau đổi này dựng lại — sai về phía dựng thừa, cố ý.
+String nhanAnh() { return "anh-tu-commit:${env.NS}:" }
+
+// NHÁNH QUYẾT ĐỊNH NAMESPACE (chủ dự án 13/10/2026): `dev` → vigov-dev, `main` → vigov-prod.
+// Phát triển trên `dev`; lên prod là gộp `dev` vào `main` rồi bấm job của `main`.
+//
+// Không phải `parameters {}` — cùng lý do REGISTRY không phải: "lượt này đặt lên đâu" phải đọc
+// được từ mã và từ nhánh, không từ một ô nhập không ai xem lại được.
+//
+// Nhánh lạ hoặc không đọc được nhánh → DỪNG, KHÔNG rơi về prod: một nhánh thử nghiệm lặng lẽ đặt
+// ảnh lên vigov-prod là đúng loại hỏng không có gì đỏ. Job Pipeline thường đặt GIT_BRANCH
+// (`origin/dev`); job multibranch đặt BRANCH_NAME (`dev`). Chỉ dùng startsWith/substring, không
+// regex: phương thức ngoài danh sách cho phép của sandbox Groovy là lỗi lúc CHẠY.
+String namespaceForBranch() {
+  String branch = (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').trim()
+  for (String prefix : ['refs/heads/', 'origin/']) {
+    if (branch.startsWith(prefix)) { branch = branch.substring(prefix.length()) }
+  }
+  String ns = ''
+  if (branch == 'dev') { ns = 'vigov-dev' }
+  if (branch == 'main') { ns = 'vigov-prod' }
+  if (!ns) {
+    error("Nhánh '${branch}' không gắn với môi trường nào — chỉ `dev` (vigov-dev) và `main` (vigov-prod) được triển khai.\n" +
+          'Kiểm Branch Specifier của job: */dev hoặc */main.')
+  }
+  echo "nhánh ${branch} → namespace ${ns}"
+  return ns
+}

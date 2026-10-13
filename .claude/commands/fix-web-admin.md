@@ -119,7 +119,7 @@ One card, owner `admin-web-builder` (ROUTING §3), regression test with `test-de
 3b. **UI defect — validate against the prototype (§5b) when a screenshot can be taken.** No PASS,
    no claim of "khớp prototype" — but the code is still committed and pushed (owner, 09/10/2026).
 4. Review the diff, commit by explicit path: `fix(web-admin): <menu> — <the defect, short>`, then
-   `git push origin main` at once (ROUTING §0.7). Not verified by screenshot → say so in the
+   `git push origin dev` at once (ROUTING §0.7). Not verified by screenshot → say so in the
    message and the ledger ("chưa kiểm bằng ảnh render").
 5. Ledger (skill §7): an item in the module's `kb/90-ephemeral/tien-do/<module>.json` with
    `"menu": "<slug>"`, the sha and the validation run in `bang_chung`; correct any `xong` item §1

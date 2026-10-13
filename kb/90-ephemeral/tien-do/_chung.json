@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "_chung",
-  "cap_nhat": "2026-10-12",
+  "cap_nhat": "2026-10-13",
   "muc": [
+    {
+      "id": "nhanh-dev-hai-moi-truong",
+      "viec": "Nhánh `dev` + Jenkinsfile dựng hai môi trường: dev → vigov-dev, main → vigov-prod",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án yêu cầu 13/10/2026. Đã tạo và push `origin/dev` từ main 757be252; phiên phát triển chuyển sang `dev` (CLAUDE.md mục GIT, ROUTING §0.7, commit_push_guard, session_start). 9 Jenkinsfile ảnh (7 service-* + web-admin + platform-admin): bỏ hằng `NS = 'vigov-prod'`, thêm `namespaceForBranch()` đọc BRANCH_NAME/GIT_BRANCH — `dev` → vigov-dev, `main` → vigov-prod, nhánh khác DỪNG (không rơi về prod); mốc 'anh-tu-commit:' gắn thêm namespace để lượt prod không đọc nhầm mốc của lượt dev. `tools/check_build.py` PASS, `tools/test_hooks.py` 316/316. CHƯA chạy trên Jenkins thật.",
+      "no_confirm": [],
+      "tiep_theo": "(1) Trên cụm: tạo namespace `vigov-dev` với Deployment CÙNG TÊN như vigov-prod (`vigov-service-<dv>`, `vigov-web-admin`, `vigov-platform-admin`), common-config, <service>-secrets, Ingress host dev — Jenkinsfile chỉ `set image`, không tạo. (2) Trên Jenkins: mỗi job ảnh cần bản cho `dev` (nhân job, Branch Specifier `*/dev`) hoặc chuyển sang multibranch. (3) Lượt prod đầu tiên sau đổi sẽ dựng lại mọi ảnh một lần (mốc cũ không có namespace) — cố ý. (4) Ngoài phạm vi lần này: `deploy/Jenkinsfile` (job vận hành, tham số MT=prod|staging) và `citizen-app/Jenkinsfile` (đẩy Zalo, không k8s) chưa biết vigov-dev."
+    },
     {
       "id": "luat-13-an-ninh-mang-dot-1",
       "viec": "Bộ não bám TCVN 14423:2026 — đợt 1: luật 13, hook, cổng toàn kho, make vuln, 2 skill, lệnh, agent, 5 câu hỏi mở",

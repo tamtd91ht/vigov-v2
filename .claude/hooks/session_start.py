@@ -13,7 +13,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import _common as c  # noqa: E402
 
-MAIN_BRANCHES = ("main", "master", "prod")
+# `dev` is where sessions work (CLAUDE.md, GIT section); `main` is the prod release branch.
+MAIN_BRANCHES = ("dev", "main", "master", "prod")
 
 # Flags that open a shortcut past real checks — must be off before production.
 # Only presence is tested; the value is NEVER read or printed.
@@ -74,7 +75,9 @@ def main() -> None:
 
     branch = git_branch(root)
     if branch and branch not in MAIN_BRANCHES:
-        lines.append(f"[ViGov] WARNING: on branch '{branch}', not main. This project uses main only.")
+        lines.append(f"[ViGov] WARNING: on branch '{branch}', not dev. This project develops on dev.")
+    elif branch == "main":
+        lines.append("[ViGov] WARNING: on 'main' (= vigov-prod). Code on dev: `git checkout dev`.")
 
     ok, why = kb_ready(root)
     if not ok:

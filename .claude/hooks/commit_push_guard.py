@@ -1,7 +1,7 @@
 """Stop — BLOCK ending the session while this session's work is uncommitted or unpushed.
 
 WHY THIS HOOK EXISTS: the work runs on several machines (CLAUDE.md, the sibling-repo section),
-and the owner builds and checks images from `origin/main`, not from this disk. Work that is
+and the owner builds and checks images from `origin/dev` / `origin/main`, not from this disk. Work that is
 finished but sits uncommitted — or committed but unpushed — does not exist for anybody else:
 the build machine cannot see it, the next session on another machine starts without it, and a
 parallel session on this disk can overwrite it. On 09/10/2026 a finished screen sat uncommitted
@@ -16,7 +16,7 @@ What it checks, at Stop:
 Why only THIS session's files: parallel sessions share the working tree, and their half-done
 files must never be swept into this session's commit (ROUTING §0.7, never `git add -A`). So A
 is limited to paths the transcripts prove this session wrote. B is branch-wide on purpose: an
-unpushed commit is unpushed whoever made it, and pushing it is never harmful on `main`.
+unpushed commit is unpushed whoever made it, and pushing it is never harmful on `dev`.
 
 Not a verification gate: `stop_verify_guard` decides whether the work was verified. This hook
 only says verified work must not stay local. A red check is reported and committed with the
@@ -181,18 +181,18 @@ def main() -> None:
         found,
         [
             "  Owner's standing order (09/10/2026): code xong là commit và push — mọi lúc.",
-            "  The build machine and every other session only see origin/main.",
+            "  The build machine and every other session only see origin/dev (and origin/main).",
             "",
             "  Do, in this order:",
             "    git add <each path above, explicitly>     # never `git add -A`: parallel sessions",
             "    git commit -m \"type(scope): …\"            # state any red check in the message",
-            "    git push origin main",
+            "    git push origin dev",
             "",
             "  A file above belongs to another session? Leave it, and say so in your reply.",
             "  Not verified with a screenshot/PostgreSQL? Commit + push anyway and SAY what is",
             "  unverified — never park finished code on disk.",
             "",
-            "  → CLAUDE.md, section 'GIT — main ONLY'",
+            "  → CLAUDE.md, section 'GIT — develop on `dev`, release through `main`'",
         ],
         tool="Stop",
         path="",

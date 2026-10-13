@@ -189,7 +189,7 @@ so and name it.
 
 ### 0.7 Commit — one per validated task, pushed at once
 
-Straight to `main` (GIT section of CLAUDE.md), then `git push origin main` **immediately** — owner's
+Straight to `dev` (GIT section of CLAUDE.md), then `git push origin dev` **immediately** — owner's
 order 09/10/2026: finished code never waits on disk. A step that could not run (screenshot,
 PostgreSQL) is stated in the commit message and the reply, not a reason to hold the commit.
 `hooks/commit_push_guard.py` blocks Stop while this session's files are dirty or the branch is
