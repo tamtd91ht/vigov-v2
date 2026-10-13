@@ -5,6 +5,7 @@ import { docDanhMucNghiepVu } from "@/lib/api/danh-muc-nghiep-vu";
 import {
   CODE_MAX_LENGTH,
   TASK_STATUS_GROUP,
+  PETITION_FIELD_GROUP,
   DEFAULT_ENTRY_COLOR,
   catalogueRows,
   codeFromLabel,
@@ -74,15 +75,19 @@ describe("catalogueRows — one table, group order then server order", () => {
     ]);
   });
 
-  it("filter buttons only for groups with rows; an emptied chosen group falls back to all (D22)", () => {
+  it("a catalogue group stays chosen even when empty; an empty CODE LIST falls back to all (D22)", () => {
     const all = catalogueRows(groups, statuses, null);
     expect([...groupsWithRows(all)].sort()).toEqual(
       ["loaiTaiNguyenBanDo", "mucUuTienNhiemVu", TASK_STATUS_GROUP].sort(),
     );
     expect(effectiveShownGroup(all, "mucUuTienNhiemVu")).toBe("mucUuTienNhiemVu");
-    expect(effectiveShownGroup(all, "loaiVanBan")).toBeNull();
+    // Sheet web-admin-131026: an empty catalogue group (Loại đơn thư ships empty) has a button and can
+    // be chosen — the table is then empty and "Thêm mục" adds to it.
+    expect(effectiveShownGroup(all, "loaiVanBan")).toBe("loaiVanBan");
+    expect(effectiveShownGroup(all, "citizenLetterType")).toBe("citizenLetterType");
     expect(effectiveShownGroup(all, null)).toBeNull();
     expect(effectiveShownGroup([], TASK_STATUS_GROUP)).toBeNull();
+    expect(effectiveShownGroup([], PETITION_FIELD_GROUP)).toBeNull();
   });
 
   it("filtered: only that group", () => {

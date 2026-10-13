@@ -221,21 +221,26 @@ function rowGroup(row: CatalogueRow): Exclude<ShownGroup, null> {
 }
 
 /**
- * The groups that get a filter button: those with at least one row, as the prototype derives its
- * buttons from the data (`LookupTable.tsx:68-71`; ADR 0079 "đúng prototype"). Adding stays possible to
- * every writable group through the add row's select, so an empty group is never un-addable.
+ * The rows present per filter key. Decides the buttons of the two CODE LISTS only (task statuses,
+ * petition fields): nothing is added to those here, so an empty one has nothing to show.
+ *
+ * The seven catalogue groups ALWAYS get a button (`CATALOGUE_GROUPS`), empty or not. The prototype
+ * derives its buttons from the data (`LookupTable.tsx:68-71`), but it ships seeded data; here
+ * `Loại đơn thư` ships empty, so a data-derived button never appeared (sheet web-admin-131026).
  */
 export function groupsWithRows(rows: readonly CatalogueRow[]): ReadonlySet<Exclude<ShownGroup, null>> {
   return new Set(rows.map(rowGroup));
 }
 
 /**
- * The filter actually applied: a chosen group that has no row any more (its last entry was just
- * deleted, or its read failed) falls back to "Tất cả" — its button is gone, and a table narrowed to a
- * group with no button would leave staff no visible way to know what is filtered.
+ * The filter actually applied. A catalogue group is kept even with no row — its button is always there,
+ * and its empty table is where "Thêm mục" starts. A chosen CODE LIST with no row (its read failed)
+ * falls back to "Tất cả": its button is gone, and a table narrowed to a group with no button would leave
+ * staff no visible way to know what is filtered.
  */
 export function effectiveShownGroup(rows: readonly CatalogueRow[], shown: ShownGroup): ShownGroup {
-  return shown !== null && !rows.some((r) => rowGroup(r) === shown) ? null : shown;
+  if (shown === null || CATALOGUE_GROUPS.some((g) => g.khoa === shown)) return shown;
+  return rows.some((r) => rowGroup(r) === shown) ? shown : null;
 }
 
 /** The add row's starting colour (spec 05 §2, `#2FB1F9`), lower-case as the server stores it. */

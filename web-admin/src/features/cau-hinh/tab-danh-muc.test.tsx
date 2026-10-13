@@ -14,7 +14,7 @@ import {
   giaiThichKhongThaoTac,
   nhanNhomRong,
 } from "@/features/cau-hinh/nhan-danh-muc";
-import { nhomDanhMuc, type KhoaNhom } from "@/features/cau-hinh/nhom-danh-muc";
+import { CATALOGUE_GROUPS, nhomDanhMuc, TASK_STATUS_GROUP, type KhoaNhom } from "@/features/cau-hinh/nhom-danh-muc";
 import {
   ADDED,
   CLEAR_COLOR,
@@ -161,14 +161,23 @@ describe("one table across groups (spec 05 §3)", () => {
     expect(html).not.toContain("justify-end gap-2 [&amp;&gt;div]:mb-0");
   });
 
-  it("D22 — a group with no row gets NO filter button (prototype derives them from the data)", () => {
-    // Failed before: every group always had a button.
+  // Sheet web-admin-131026: "Loại đơn thư" never appeared — its table ships empty, and a button derived
+  // from the data never rendered. Every catalogue group the screen writes has a button, empty or not.
+  it("every catalogue group has a filter button, EMPTY ones included (Loại đơn thư ships empty)", () => {
     const html = view({ loaiVanBan: [entry(TANG_DON_VI)] });
-    expect(html).toContain(">Loại văn bản</button>");
-    expect(html).not.toContain(">Mức ưu tiên nhiệm vụ</button>");
-    expect(html).not.toContain(">Loại tài nguyên bản đồ</button>");
+    for (const g of CATALOGUE_GROUPS) expect(html).toContain(`>${g.nhan}</button>`);
+    expect(html).toContain(">Loại đơn thư</button>");
+    // The two code lists are not added to here: they keep a button only when they have rows.
     expect(html).not.toContain(">Trạng thái nhiệm vụ</button>");
     expect(html).toContain(">Tất cả (1)</button>");
+  });
+
+  it("choosing an EMPTY catalogue group keeps it: its button pressed, the table empty, 'Thêm mục' there", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] }, { shownGroup: "citizenLetterType" });
+    expect(html).toMatch(/aria-pressed="true"[^>]*>Loại đơn thư<\/button>/);
+    expect(html).toMatch(/aria-pressed="false"[^>]*>Tất cả \(1\)<\/button>/);
+    expect(html).not.toContain(">cong-van<");
+    expect(html).toContain("Thêm mục");
   });
 
   it("D22 — the add row still lists EVERY writable group, empty ones included", () => {
@@ -181,8 +190,8 @@ describe("one table across groups (spec 05 §3)", () => {
     expect(html).toContain(">Loại đơn thư</option>");
   });
 
-  it("D22 — a chosen group that has become empty falls back to 'Tất cả'", () => {
-    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] }, { shownGroup: "loaiTaiNguyenBanDo" });
+  it("D22 — a chosen CODE LIST that has no row falls back to 'Tất cả' (it has no button then)", () => {
+    const html = view({ loaiVanBan: [entry(TANG_DON_VI)] }, { shownGroup: TASK_STATUS_GROUP });
     expect(html).toMatch(/aria-pressed="true"[^>]*>Tất cả \(1\)<\/button>/);
     expect(html).toContain(">cong-van<");
   });

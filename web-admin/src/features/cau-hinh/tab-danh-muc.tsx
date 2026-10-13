@@ -760,8 +760,10 @@ export function CatalogueView({
         <FilterButton pressed={shownGroup === null} onClick={() => onShowGroup(null)}>
           {`${ALL_GROUPS} (${total})`}
         </FilterButton>
-        {/* One button per group THAT HAS ROWS, as the prototype derives them (`LookupTable.tsx:68-71`). */}
-        {CATALOGUE_GROUPS.filter((g) => present.has(g.khoa)).map((g) => (
+        {/* One button per catalogue group, EMPTY ones included: `Loại đơn thư` ships empty and a button
+            derived from the data never appeared (sheet web-admin-131026). The two code lists below
+            keep a button only when they have rows — nothing is added to them here. */}
+        {CATALOGUE_GROUPS.map((g) => (
           <FilterButton key={g.khoa} pressed={shownGroup === g.khoa} onClick={() => onShowGroup(g.khoa)}>
             {g.nhan}
           </FilterButton>
