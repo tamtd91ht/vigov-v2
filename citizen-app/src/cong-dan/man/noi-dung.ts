@@ -1298,7 +1298,7 @@ export const XA_TN = {
   language: "Ngôn ngữ",
   /** The only language the app has — a statement, not a setting (there is nothing to switch to). */
   language_value: "Tiếng Việt",
-  /** `label`: the build's short commit and date, injected at build time (`lib/build-label.ts`). */
+  /** `label`: "<major>.<minor>" of package.json's version, injected at build time (`lib/build-label.ts`). */
   app_version: (label: string) => `ViGov phiên bản ${label}`,
   /*
    * "NHẬN THÔNG BÁO" (ADR 0091 §4) — label and hint are the prototype's, verbatim (`ProfilePage.tsx:89-90`). The

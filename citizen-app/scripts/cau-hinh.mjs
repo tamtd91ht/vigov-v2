@@ -18,8 +18,8 @@
  * thứ tự phải có: CI và một lần đẩy tay phải **đè được** tệp local, nếu không thì một tệp cũ
  * trên máy ai đó quyết định thứ đi lên Zalo.
  */
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { loadEnv } from "vite";
@@ -72,28 +72,22 @@ export function xaCoDinh(moi_truong = process.env) {
 
 /**
  * THE BUILD LABEL on the commune app's Cá nhân footer ("ViGov phiên bản <label>", `PROTOTYPE.md` §6.6):
- * the short commit this bundle was built from and the build date in Vietnam time — so a citizen reading
- * the line to the commune on the phone names an exact build, and support can tell two phones apart.
+ * `<major>.<minor>` of `package.json`'s `version` — "ViGov phiên bản 1.1". The short commit and date it
+ * showed before read as gibberish to a citizen (customer sheet mini-app 13/10/2026 row 7); raising the number
+ * is now a release step: bump `version` in `package.json` before `zmp:deploy`.
  *
- * Not a variable, not configuration: it is READ from git at build time. No git (a tarball, a CI image
- * without it, a directory that is not a checkout) → `""`, and the screen shows no version line at all —
- * never a made-up "0.1.0". Public by nature: a commit hash and a date, nothing secret (rule 8 #4).
+ * Not a variable, not configuration: READ at build time. A missing or malformed version → `""`, and the screen
+ * shows no version line at all — never an invented number. Public by nature (rule 8 #4).
  */
-export function buildLabel(cwd = GOC_GOI, now = new Date()) {
-  let commit = "";
+export function buildLabel(cwd = GOC_GOI) {
+  let version = "";
   try {
-    commit = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
-      cwd,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
+    version = JSON.parse(readFileSync(join(cwd, "package.json"), "utf8")).version;
   } catch {
     return "";
   }
-  if (!/^[0-9a-f]{4,40}$/.test(commit)) return "";
-  const vn = new Date(now.getTime() + 7 * 60 * 60 * 1000);
-  const two = (n) => String(n).padStart(2, "0");
-  return `${commit} · ${two(vn.getUTCDate())}/${two(vn.getUTCMonth() + 1)}/${vn.getUTCFullYear()}`;
+  const m = typeof version === "string" ? /^(\d+)\.(\d+)\.\d+$/.exec(version) : null;
+  return m === null ? "" : `${m[1]}.${m[2]}`;
 }
 
 /** Tệp cấu hình local của bước DỰNG. `.env` là tệp KHÁC, của `zmp-cli` — xem `kiemTenBien`. */

@@ -194,14 +194,17 @@ describe("xã cố định của bản dựng (app riêng của xã, `--domain`)
 });
 
 describe("the build label on the Cá nhân footer (`buildLabel`)", () => {
-  it("in this checkout: `<short commit> · dd/MM/yyyy`, the date in Vietnam time", () => {
-    // 2026-09-30 18:30 UTC is already 1 October in Vietnam.
-    const label = buildLabel(undefined, new Date(Date.UTC(2026, 8, 30, 18, 30)));
-    expect(label).toMatch(/^[0-9a-f]{4,40} · 01\/10\/2026$/);
+  it("`<major>.<minor>` of package.json's version — 'ViGov phiên bản 1.1', never a commit hash (sheet mini-app 13/10 row 7)", () => {
+    const { version } = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+    expect(buildLabel()).toBe(version.split(".").slice(0, 2).join("."));
+    expect(buildLabel()).toMatch(/^\d+\.\d+$/);
   });
 
-  it("outside a git checkout: empty — the screen then shows no version line, never an invented one", () => {
-    expect(buildLabel(mkdtempSync(join(tmpdir(), "vigov-no-git-")))).toBe("");
+  it("no package.json, or a malformed version: empty — the screen then shows no version line, never an invented one", () => {
+    expect(buildLabel(mkdtempSync(join(tmpdir(), "vigov-no-pkg-")))).toBe("");
+    const bad = mkdtempSync(join(tmpdir(), "vigov-bad-pkg-"));
+    writeFileSync(join(bad, "package.json"), JSON.stringify({ version: "beta" }));
+    expect(buildLabel(bad)).toBe("");
   });
 
   it("`vite.config.ts` bakes it through `define`", () => {
