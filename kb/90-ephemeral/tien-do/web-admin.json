@@ -1473,6 +1473,14 @@
       "viec": "Tổng quan: bấm số tổng Văn bản (đến/đang xử lý/quá hạn), Phản ánh (4 ô), Giải ngân (Tỷ lệ, Dự án chậm) mở popup danh sách dùng chung khung DrillDialog với Nhiệm vụ (bảng lỗi dòng 13).",
       "bang_chung": "46d173fd; vitest dashboard 263 ca xanh (một lượt chạy trước có 1 ca đỏ không xác định, 3 lượt sau xanh). Chưa xem ảnh render thật.",
       "con_no": "Chưa drill: 'Vướng mắc chưa gỡ' (đếm vướng mắc, không phải dự án), 'Đơn thư trong kỳ' (chưa có số). Văn bản/Dự án chưa có đường dẫn sâu tới đúng bản ghi; văn bản chưa có tuyến đếm."
+    },
+    {
+      "id": "bl131026-vai-tro-checkbox",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Popup Thêm/Sửa người dùng: Vai trò là checkbox (fieldset + legend, lưới 2 cột như prototype), gửi role_ids nhiều phần tử; dòng của chính mình khoá ô (#14); không có ô mật khẩu — giữ mật khẩu tạm (#9, #36) (ADR 0094; bảng lỗi web-admin-131026 dòng 10).",
+      "bang_chung": "7bd767a2 (web) + 027a8e3d (identity); vitest toàn bộ 5965/5965, typecheck/lint sạch. Chưa xem ảnh render thật.",
+      "con_no": "whoAmI roles[] chưa dùng ở header (vẫn hiện vai trò chính). Nhánh chọn một vai trò trong components/danh-ba/bieu-mau-ghi-can-bo.tsx không còn ai mở — gỡ là việc riêng."
     }
   ]
 }
