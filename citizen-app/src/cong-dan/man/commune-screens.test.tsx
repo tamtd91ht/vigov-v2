@@ -22,7 +22,7 @@ import {
   StepBar,
   stepsAhead,
 } from "./PhanAnhAppXa";
-import { CaNhanXa, DOSSIER_PORTAL_URL, dossierLookupReady, initials, lastFourDigits, TraCuuHoSoXa } from "./TienIchAppXa";
+import { CaNhanXa, DOSSIER_PORTAL_URL, dossierLookupReady, dossierPhoneDigits, initials, lastFourDigits, TraCuuHoSoXa } from "./TienIchAppXa";
 import {
   ArticleCover,
   BaiTinXa,
@@ -961,10 +961,11 @@ describe("Danh bạ (§6.9)", () => {
 });
 
 describe("Tra cứu hồ sơ (§6.8)", () => {
-  it("the button is enabled only with ≥9 phone digits and exactly 4 file digits", () => {
+  it("the button is enabled only with exactly 10 phone digits and exactly 4 file digits", () => {
     expect(dossierLookupReady("0900000000", "1007")).toBe(true);
     expect(dossierLookupReady("0900 000 000", " 1007 ")).toBe(true);
-    expect(dossierLookupReady("09000000", "1007")).toBe(false);
+    expect(dossierLookupReady("090000000", "1007")).toBe(false);
+    expect(dossierLookupReady("09000000001", "1007")).toBe(false);
     expect(dossierLookupReady("0900000000", "107")).toBe(false);
     expect(dossierLookupReady("0900000000", "10a7")).toBe(false);
     const page = html(createElement(TraCuuHoSoXa, { onQuayLai: noop, openPortal: async () => true }));
@@ -984,6 +985,11 @@ describe("Tra cứu hồ sơ (§6.8)", () => {
     // The four-digit box: numeric keypad, and only digits are kept.
     expect(page).toMatch(/id="xa-bon-so-cuoi"[^>]*inputMode="numeric"|inputMode="numeric"[^>]*id="xa-bon-so-cuoi"/);
     expect(lastFourDigits("1a0-07 9")).toBe("1007");
+    // The phone box: digits only, the 11th refused at the keystroke (customer sheet mini-app 13/10/2026 row 8).
+    expect(page).toMatch(/id="xa-sdt-ho-so"[^>]*maxLength="10"|maxLength="10"[^>]*id="xa-sdt-ho-so"/);
+    expect(dossierPhoneDigits("0900 000 000")).toBe("0900000000");
+    expect(dossierPhoneDigits("09000000001")).toBe("0900000000");
+    expect(dossierPhoneDigits("09a00")).toBe("0900");
     // No opener (tests, outside Zalo): no button that could only fail — the sentence still says where to look.
     const noOpener = html(createElement(TraCuuHoSoXa, { onQuayLai: noop }));
     expect(noOpener).not.toContain(`>${XA_TN.nut_tra_cuu}</button>`);

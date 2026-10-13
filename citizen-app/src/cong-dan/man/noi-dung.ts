@@ -1249,14 +1249,15 @@ export const XA_TN = {
   o_so_dien_thoai_ho_so: "Số điện thoại",
   goi_y_so_dien_thoai_ho_so: "Số bà con đã khai khi nộp hồ sơ tại Bộ phận Một cửa.",
   // The prototype's example is a real-looking number; examples carry the agreed fake one (rule 3 #5).
-  placeholder_so_dien_thoai_ho_so: "Ví dụ: 0900 000 000",
+  // No spaces: the box keeps digits only, ten at most (customer sheet mini-app 13/10/2026 row 8).
+  placeholder_so_dien_thoai_ho_so: "Ví dụ: 0900000000",
   o_bon_so_cuoi: "4 số cuối của số hồ sơ",
   goi_y_bon_so_cuoi:
     "Bốn số cuối in trên giấy biên nhận Bộ phận Một cửa đã đưa cho bà con. Cần cả số điện thoại và bốn số này để bảo vệ thông tin hồ sơ.",
   placeholder_bon_so_cuoi: "Ví dụ: 1007",
   nut_tra_cuu: "Tra cứu",
   // Kept beside the prototype's disabled button: a greyed button alone does not say what is missing.
-  tra_cuu_can_ma: "Bà con nhập đủ số điện thoại và 4 số cuối của số hồ sơ.",
+  tra_cuu_can_ma: "Bà con nhập đủ 10 số điện thoại và 4 số cuối của số hồ sơ.",
   /** NEW — no prototype wording: says where the lookup happens and that the two numbers are not sent. */
   tra_cuu_cong_dich_vu:
     "Hồ sơ một cửa được tra cứu trên Cổng Dịch vụ công quốc gia. Bấm “Tra cứu” để mở cổng ngay trong Zalo, rồi nhập lại hai thông tin trên ở đó. Ứng dụng không gửi số điện thoại hay bốn số này đi đâu.",

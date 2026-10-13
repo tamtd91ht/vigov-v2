@@ -34,12 +34,23 @@ import { PullToRefresh, type Refresher } from "./pull-to-refresh";
  */
 export const DOSSIER_PORTAL_URL = "https://vpcp.dichvucong.gov.vn/p/home/dvc-tra-cuu-ho-so.html";
 
+/** A Vietnamese mobile number: ten digits (customer sheet mini-app 13/10/2026 row 8). */
+export const DOSSIER_PHONE_DIGITS = 10;
+
 /**
- * Both fields filled the way the one-stop lookup needs them (`PROTOTYPE.md` §6.8, `DossierPage.tsx:71`): at least
- * 9 digits of phone (any spaces or dots typed are ignored), and exactly 4 digits of the file number. PURE.
+ * Both fields filled the way the one-stop lookup needs them (`PROTOTYPE.md` §6.8): exactly 10 digits of phone and
+ * exactly 4 digits of the file number. PURE.
  */
 export function dossierLookupReady(phone: string, lastFour: string): boolean {
-  return phone.replace(/\D/g, "").length >= 9 && /^\d{4}$/.test(lastFour.trim());
+  return phone.replace(/\D/g, "").length === DOSSIER_PHONE_DIGITS && /^\d{4}$/.test(lastFour.trim());
+}
+
+/**
+ * What the phone box keeps of what was typed: digits only, at most ten — the 11th is refused at the keystroke
+ * (customer sheet mini-app 13/10/2026 row 8), so a citizen never reaches the portal with a number it cannot match. PURE.
+ */
+export function dossierPhoneDigits(typed: string): string {
+  return typed.replace(/\D/g, "").slice(0, DOSSIER_PHONE_DIGITS);
 }
 
 /** What the 4-digit box keeps of what was typed: digits only, at most four (`DossierPage.tsx:107`). PURE. */
@@ -72,9 +83,9 @@ export function TraCuuHoSoXa({ onQuayLai, openPortal }: { onQuayLai: () => void;
             goi_y={XA_TN.goi_y_so_dien_thoai_ho_so}
             placeholder={XA_TN.placeholder_so_dien_thoai_ho_so}
             gia_tri={phone}
-            toi_da={20}
+            toi_da={DOSSIER_PHONE_DIGITS}
             kieu_ban_phim="tel"
-            onDoi={setPhone}
+            onDoi={(v) => setPhone(dossierPhoneDigits(v))}
           />
           <div className="xa-lookup-code">
             <ONhapDong
