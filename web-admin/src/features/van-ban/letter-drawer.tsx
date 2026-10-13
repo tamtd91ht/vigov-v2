@@ -97,13 +97,41 @@ export const RESULT_LOCKED_HINT = "Chỉ ghi kết quả giải quyết khi đơ
 export const RESULT_NOT_YOURS_HINT =
   "Chỉ cán bộ được giao xử lý đơn này hoặc người có quyền vào sổ đơn thư mới ghi được nội dung trả lời.";
 
+/*
+ * OWNER 13/10/2026 (sheet web-admin-131026): the box stays LOCKED before Thụ lý (TT 05/2021 order), but
+ * the hint names the control on THIS screen that gets there. The server's sentence names "Thụ lý" /
+ * "Đang giải quyết", statuses the screen never shows: all three of Đang xử lý đơn, Thụ lý and Đang giải
+ * quyết draw as the one "Đang xử lý" chip (ADR 0084 §2), so a letter reading "Đang xử lý" can still be
+ * locked. The words below are the strip's chip label, the composer's title (`ADMIT_LETTER_TITLE`) and
+ * its "Xác nhận" button — change them there and here together.
+ */
+/** Đang xử lý đơn: one press of the current chip admits the letter (C3: dang-xu-ly-don → thu-ly). */
+export const RESULT_ADMIT_FIRST_HINT =
+  "Đơn chưa thụ lý. Bấm ô “Đang xử lý” trên thanh trạng thái ở đầu khung rồi bấm Xác nhận để thụ lý đơn; " +
+  "sau đó mới ghi được nội dung trả lời.";
+/** Mới vào sổ: the chip moves it to Đang xử lý đơn first, then a second press admits it. */
+export const RESULT_START_THEN_ADMIT_HINT =
+  "Đơn chưa thụ lý. Bấm ô “Đang xử lý” trên thanh trạng thái ở đầu khung rồi bấm Xác nhận; bấm ô đó thêm " +
+  "lần nữa và Xác nhận để thụ lý đơn. Sau đó mới ghi được nội dung trả lời.";
+/** Every finishing status (C3 has no arrow out of it): nothing can reopen the box. */
+export const RESULT_FINISHED_HINT = "Đơn đã kết thúc xử lý nên không sửa được nội dung trả lời nữa.";
+
+/** C3's finishing statuses — `Finished()` in `service-documents/internal/domain/citizen_letter.go`. */
+const FINISHED_LETTER_STATUSES: readonly string[] = ["da-giai-quyet", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don", "dinh-chi"];
+
 /**
- * The sentence under a CLOSED reply box, for every viewer: the status rule first (it is the same for
- * everyone), then the permission rule. `null` when the box is open.
+ * The sentence under a CLOSED reply box. `null` when the box is open.
+ *
+ * A finished letter is said so to every viewer. Before Thụ lý, the steps are told only to a viewer who
+ * may work on the letter — the others have no status strip to press, so they get the permission rule.
+ * A status this screen does not know falls back to the server's own sentence, never a guess.
  */
 export function resultClosedHint(mayWork: boolean, status: string): string | null {
-  if (!RESULT_EDITABLE_STATUSES.includes(status)) return RESULT_LOCKED_HINT;
-  return mayWork ? null : RESULT_NOT_YOURS_HINT;
+  if (RESULT_EDITABLE_STATUSES.includes(status)) return mayWork ? null : RESULT_NOT_YOURS_HINT;
+  if (FINISHED_LETTER_STATUSES.includes(status)) return RESULT_FINISHED_HINT;
+  if (status === "moi-vao-so") return mayWork ? RESULT_START_THEN_ADMIT_HINT : RESULT_NOT_YOURS_HINT;
+  if (status === "dang-xu-ly-don") return mayWork ? RESULT_ADMIT_FIRST_HINT : RESULT_NOT_YOURS_HINT;
+  return RESULT_LOCKED_HINT;
 }
 const CLOSE_LABEL = "Đóng chi tiết đơn thư";
 /**

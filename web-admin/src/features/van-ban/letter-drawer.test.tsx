@@ -16,9 +16,13 @@ import {
   DEADLINE_EDIT_LABEL,
   DEADLINE_SAVED,
   LetterDrawer,
+  RESULT_ADMIT_FIRST_HINT,
+  RESULT_FINISHED_HINT,
   RESULT_LOCKED_HINT,
   RESULT_NOT_YOURS_HINT,
+  RESULT_START_THEN_ADMIT_HINT,
   letterDrawerTitle,
+  resultClosedHint,
 } from "./letter-drawer";
 import { NO_DEADLINE, WITHHELD_SENDER } from "./letter-display";
 
@@ -455,11 +459,48 @@ describe("letter drawer — reply “Nội dung trả lời công dân” (ADR 0
   };
   const resolving = { status: "dang-giai-quyet", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["da-giai-quyet", "dinh-chi"] };
 
-  it("locked outside Thụ lý / Đang giải quyết, with the server's sentence", () => {
-    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", next_statuses: ["thu-ly"] })));
+  // Owner 13/10/2026 (sheet web-admin-131026): the lock STAYS (TT 05/2021 order), but the hint must name
+  // the control on THIS screen that gets the letter to Thụ lý — the chip reads "Đang xử lý" for three
+  // TT 05 steps (ADR 0084 §2), so a status name the screen never shows tells the officer nothing.
+  it("Đang xử lý đơn: locked, and the hint names the chip and button that admit it — which really are there", async () => {
+    mount(drawer(letter({ status: "dang-xu-ly-don", status_group: "dang-xu-ly", holding_unit_id: "U1", next_statuses: ["thu-ly", "chuyen-don"] })));
     expect(dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!.disabled).toBe(true);
-    expect(dialog().textContent).toContain(RESULT_LOCKED_HINT);
+    expect(dialog().textContent).toContain(RESULT_ADMIT_FIRST_HINT);
+    expect(dialog().textContent).not.toContain(RESULT_LOCKED_HINT);
     expect(button("Lưu nội dung trả lời")).toBeUndefined();
+    // The words the hint uses are the words on screen: the chip, then the composer's title and button.
+    expect(RESULT_ADMIT_FIRST_HINT).toContain("“Đang xử lý”");
+    expect(RESULT_ADMIT_FIRST_HINT).toContain("Xác nhận");
+    const chip = chips().find((b) => b.firstChild?.textContent === "Đang xử lý")!;
+    expect(chip.disabled).toBe(false);
+    await act(async () => chip.click());
+    expect(dialog().textContent).toContain("Thụ lý đơn — bắt đầu tính hạn giải quyết");
+    expect(button("Xác nhận")).toBeDefined();
+  });
+
+  it("Mới vào sổ: locked, and the hint says the chip is pressed twice — first to Đang xử lý, then to admit", () => {
+    mount(drawer(letter()));
+    expect(dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!.disabled).toBe(true);
+    expect(dialog().textContent).toContain(RESULT_START_THEN_ADMIT_HINT);
+    expect(RESULT_START_THEN_ADMIT_HINT).toContain("“Đang xử lý”");
+    const chip = chips().find((b) => b.firstChild?.textContent === "Đang xử lý")!;
+    expect(chip.disabled).toBe(false);
+  });
+
+  it("per status: open in Thụ lý / Đang giải quyết; finished → can no longer be changed; unknown → the server's sentence", () => {
+    expect(resultClosedHint(true, "thu-ly")).toBeNull();
+    expect(resultClosedHint(true, "dang-giai-quyet")).toBeNull();
+    expect(resultClosedHint(false, "thu-ly")).toBe(RESULT_NOT_YOURS_HINT);
+    expect(resultClosedHint(true, "moi-vao-so")).toBe(RESULT_START_THEN_ADMIT_HINT);
+    expect(resultClosedHint(true, "dang-xu-ly-don")).toBe(RESULT_ADMIT_FIRST_HINT);
+    // A viewer who may not work on the letter has no status strip to press: tell them why instead.
+    expect(resultClosedHint(false, "moi-vao-so")).toBe(RESULT_NOT_YOURS_HINT);
+    expect(resultClosedHint(false, "dang-xu-ly-don")).toBe(RESULT_NOT_YOURS_HINT);
+    for (const finished of ["da-giai-quyet", "khong-thu-ly", "huong-dan", "chuyen-don", "luu-don", "dinh-chi"]) {
+      expect(resultClosedHint(true, finished)).toBe(RESULT_FINISHED_HINT);
+      expect(resultClosedHint(false, finished)).toBe(RESULT_FINISHED_HINT);
+    }
+    expect(resultClosedHint(true, "trang-thai-moi")).toBe(RESULT_LOCKED_HINT);
   });
 
   it("kiến nghị-phản ánh: ONE textarea with the prototype's placeholder, no document field, no “Tóm tắt kết quả”; PUT the summary alone", async () => {
@@ -516,7 +557,7 @@ describe("letter drawer — reply “Nội dung trả lời công dân” (ADR 0
     );
     expect(dialog().querySelector<HTMLTextAreaElement>("#ket-qua-tom-tat")!.value).toBe("Đã trả lời");
     // Closed by its status: the status sentence, said to this viewer too.
-    expect(dialog().textContent).toContain(RESULT_LOCKED_HINT);
+    expect(dialog().textContent).toContain(RESULT_FINISHED_HINT);
   });
 });
 
