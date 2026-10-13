@@ -146,7 +146,8 @@ riêng trước, thiếu thì app chung).
 Mục này ghi thêm, không sửa phần trên: mục này thắng khi nói khác. **Người quyết:** chủ dự án,
 13/10/2026, trong phiên chính: *"Trên web admin chỉ có QR app với params trỏ về xã thôi, không có thông
 tin app chung. trên platform admin cũng vậy nếu xem ở trong chi tiết từng xã."* Chọn *"chỉ x="* cho
-link app chung. **Chưa dựng** — mỗi dòng là điều phải đúng khi dựng.
+link app chung. **Đã dựng 13/10/2026** — `1e1b8461` (service-platform), `bf1fa420` (platform-admin),
+`2aa3a8fc` (web-admin); chưa kiểm trên trình duyệt thật.
 
 | # | Điểm | Chốt |
 |---|---|---|

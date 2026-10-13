@@ -1396,6 +1396,14 @@
       "viec": "Ô nhập số tiền tự nhóm hàng nghìn khi gõ (người dùng yêu cầu 13/10/2026): 250000000 → 250.000.000. Dấu phân cách là DẤU CHẤM theo vi-VN như mọi chỗ hiện tiền trong app — dấu phẩy là dấu thập phân (docSoTien từ chối, docSoNhap đọc là phần lẻ), nhóm bằng dấu phẩy sẽ làm hỏng mọi số. Dấu chấm mơ hồ người dùng tự gõ/dán (1.5) giữ nguyên để bộ đọc báo lỗi như cũ.",
       "bang_chung": "web-admin/src/lib/amount-input.ts (groupAmountDigits + formatAmountInput giữ con trỏ) gắn vào 8 ô: giai-ngan/ghi-du-an.tsx (số tiền bố trí năm, tổng mức duyệt, số tiền từng nguồn vốn) · chung-tu-du-an.tsx (số tiền chứng từ) · funding-source-dialogs.tsx (vốn được giao: sửa + thêm) · thu-chi/dot-thu-chi.tsx (ô tiền mỗi cột của đợt) · thu-chi/bang-thu-chi.tsx (CellInput ô số). Giá trị điền sẵn của biểu mẫu SỬA cũng nhóm cùng hàm; thanSuaChungTu/thanSuaDuAn so tiền theo GIÁ TRỊ (sameAmount) để không gửi PATCH thừa bóc xác nhận lãnh đạo (ADR 0036). Kiểm 13/10: web-admin tsc sạch, vitest 316 tệp/5905 ca xanh (export PPTX timeout khi chạy cả bộ, chạy lại riêng 16/16 xanh), check:api khớp, eslint sạch. make check đỏ do service-platform/platform-admin đang sửa dở của phiên song song (shared_mini_app.go 'errors' imported and not used; platform-admin wave2.test.tsx) — không thuộc việc này. Ô không phải tiền (thứ tự hiển thị, số ngày hạn, toạ độ, cổng SMTP) cố ý không đổi.",
       "tiep_theo": "Người dùng kiểm trên trình duyệt thật: gõ, sửa giữa số, xoá, dán vào các ô trên — chưa kiểm ảnh/thao tác ở máy này."
+    },
+    {
+      "id": "the-qr-mini-app-xa-kenh-zalo-13-10",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Cấu hình → Kênh Zalo: thẻ 'Mã QR mở Mini App của xã' (ADR 0070 §13/10) — một QR từ GET /api/v1/commune-launch-link, không thông tin app chung; Tải ảnh PNG, In / Lưu PDF (A4: tên xã, QR, câu hướng dẫn), Chép liên kết.",
+      "bang_chung": "2aa3a8fc — typecheck + lint + check:api + build xanh; vitest 317 tệp / 5918 ca. Chưa xem ảnh render thật.",
+      "con_no": "Kiểm trên trình duyệt: tải PNG, quét bằng Zalo, bản in A4, bề ngang nhỏ. Vị trí thẻ (cuối tab) do builder chọn — prototype không có. Nút Chép liên kết đưa URL có App ID vào clipboard — bỏ nếu chủ dự án muốn."
     }
   ]
 }
