@@ -18,6 +18,10 @@ const H = vi.hoisted(() => ({
 }));
 vi.mock("@/features/phien/phien-hien-tai", () => ({ usePhien: () => H.phien }));
 vi.mock("sonner", () => ({ toast: H.toast }));
+// The launch-QR section reads the commune's name from the server-passed config (no provider in a unit test).
+vi.mock("@/components/cau-hinh-xa", () => ({
+  useCauHinhXa: () => ({ displayName: "Xã Thử Nghiệm", parentAuthority: "", logoUrl: "", webAdminBannerUrl: "" }),
+}));
 
 const {
   buildBotChange,
@@ -195,6 +199,7 @@ beforeEach(() => {
       if (url === "/api/v1/zalo-links") return json(200, { items: LINKED });
       if (url === "/api/v1/staff-directory") return json(directoryAnswer.status, directoryAnswer.body);
       if (url === "/api/v1/org-units") return json(200, { items: UNITS });
+      if (url === "/api/v1/commune-launch-link") return json(200, { url: "https://zalo.me/s/1000/?src=qr", source: "rieng" });
       if (url.startsWith("/api/v1/zalo-group")) {
         if (method === "GET" && url === "/api/v1/zalo-groups") return json(groupsNow.status, groupsNow.body);
         const a = groupAnswers[`${method} ${url}`];
@@ -652,6 +657,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
     H.phien = session(["admin.lookup"]);
     const el = await mount();
     expect(calls.map((c) => c.url).sort()).toEqual([
+      "/api/v1/commune-launch-link",
       "/api/v1/org-units",
       "/api/v1/staff-directory",
       "/api/v1/zalo-bots/current",
@@ -659,6 +665,8 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
       "/api/v1/zalo-groups",
       "/api/v1/zalo-links",
     ]);
+    // ADR 0070 §13/10: the commune's launch QR, one code, inside the same admin.lookup gate.
+    expect(el.querySelectorAll('[data-launch-qr] svg[role="img"]')).toHaveLength(1);
     expect(el.textContent).toContain("Nguyễn Văn A");
     act(() => box(el, "digest.weekly").click());
     await settle();

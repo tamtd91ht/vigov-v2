@@ -457,6 +457,38 @@
   }
 }
 
+/*
+ * "In / Lưu PDF" of the commune's launch QR (`features/cau-hinh/commune-launch-qr.tsx`, ADR 0070
+ * §Sửa đổi 13/10/2026 #4): while `<html>` carries `qr-printing`, the print is the QR sheet alone —
+ * every other child of `<body>` is dropped. Keyed on the class, not on `@media print` alone, so an
+ * ordinary Ctrl+P still prints the page. In `components`, the layer the order line above declares
+ * before `utilities`; `!important` because utilities set `display` on those children, and an
+ * important declaration in an earlier layer beats one in a later layer.
+ */
+@layer components {
+  @media print {
+    html.qr-printing body > :not(.qr-print-sheet) {
+      display: none !important;
+    }
+
+    html.qr-printing,
+    html.qr-printing body {
+      background: #fff;
+    }
+
+    .qr-print-sheet {
+      page: qr-sheet;
+    }
+  }
+}
+
+/* A4 for the QR sheet only (named page), so no other print of this app changes size. Outside the
+ * layers because `@page` is not a style rule a utility could fight over. */
+@page qr-sheet {
+  size: A4 portrait;
+  margin: 15mm;
+}
+
 @layer legacy {
 
 /*

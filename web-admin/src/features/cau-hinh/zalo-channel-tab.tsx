@@ -45,6 +45,7 @@ import {
 
 // vi-name-ok: the existing org-chart tree helpers of cay-bo-phan.ts, imported, not new names
 import { dungCay, traiPhang } from "./cay-bo-phan";
+import { CommuneLaunchQrSection } from "./commune-launch-qr";
 import { ConfigDialog } from "./config-dialog";
 import { selectCls } from "./config-ui";
 import { zaloChannelTabDecision } from "./quyen-tab";
@@ -298,6 +299,7 @@ export function ZaloChannelTab() {
           units={units}
         />
       }
+      launchQrSection={<CommuneLaunchQrSection />}
     />
   );
 }
@@ -467,6 +469,7 @@ export function ZaloChannelView({
   people,
   botSection,
   groupSection = null,
+  launchQrSection = null,
 }: {
   draft: ZaloChannelDraft;
   /** The server's `supported_events`: the only kinds a box may be ticked for. */
@@ -483,6 +486,8 @@ export function ZaloChannelView({
   botSection: ReactNode;
   /** "Nhóm Zalo" (ADR 0092), stateful (`ZaloGroupsSection`) — a slot for the same reason. */
   groupSection?: ReactNode;
+  /** "Mã QR mở Mini App của xã" (ADR 0070 §13/10), stateful (`CommuneLaunchQrSection`) — a slot for the same reason. */
+  launchQrSection?: ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-5">
@@ -667,6 +672,8 @@ export function ZaloChannelView({
       {groupSection}
 
       <LinkedStaffSection people={people} />
+
+      {launchQrSection}
 
       {saving && (
         <p role="status" className="text-ink-muted m-0 flex items-center gap-1.5 text-[12px]">
