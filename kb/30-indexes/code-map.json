@@ -5314,6 +5314,10 @@
       "kind": "type",
       "at": "service-platform/internal/domain/commune.go:12"
     },
+    "domain.CommuneDeletion": {
+      "kind": "type",
+      "at": "service-platform/internal/domain/commune.go:43"
+    },
     "domain.CommuneMiniApp": {
       "kind": "type",
       "at": "service-platform/internal/domain/commune.go:24"
@@ -5341,6 +5345,10 @@
     "domain.ConTrucTiep": {
       "kind": "func",
       "at": "service-finance/internal/domain/thu_chi_ngan_sach.go:666"
+    },
+    "domain.ConfirmsCommuneHost": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/operator_commune.go:55"
     },
     "domain.ContactUnverified": {
       "kind": "func",
@@ -6076,7 +6084,7 @@
     },
     "domain.IsReservedCommuneHost": {
       "kind": "func",
-      "at": "service-platform/internal/domain/operator_commune.go:86"
+      "at": "service-platform/internal/domain/operator_commune.go:115"
     },
     "domain.IsStaffRatingInputError": {
       "kind": "func",
@@ -6888,7 +6896,7 @@
     },
     "domain.NameKey": {
       "kind": "func",
-      "at": "service-platform/internal/domain/operator_commune.go:157"
+      "at": "service-platform/internal/domain/operator_commune.go:186"
     },
     "domain.NarrowDueSoonItems": {
       "kind": "func",
@@ -7292,7 +7300,7 @@
     },
     "domain.OperatorActor": {
       "kind": "type",
-      "at": "service-platform/internal/domain/commune.go:50"
+      "at": "service-platform/internal/domain/commune.go:59"
     },
     "domain.OperatorAuditAction": {
       "kind": "type",
@@ -7384,7 +7392,7 @@
     },
     "domain.ParseCommuneHost": {
       "kind": "func",
-      "at": "service-platform/internal/domain/operator_commune.go:48"
+      "at": "service-platform/internal/domain/operator_commune.go:77"
     },
     "domain.ParseEventInstant": {
       "kind": "func",
@@ -7672,11 +7680,11 @@
     },
     "domain.Province": {
       "kind": "type",
-      "at": "service-platform/internal/domain/commune.go:43"
+      "at": "service-platform/internal/domain/commune.go:52"
     },
     "domain.ProvinceKey": {
       "kind": "func",
-      "at": "service-platform/internal/domain/operator_commune.go:169"
+      "at": "service-platform/internal/domain/operator_commune.go:198"
     },
     "domain.PublicationAfterClassification": {
       "kind": "func",
@@ -8668,7 +8676,7 @@
     },
     "domain.ValidateCommuneName": {
       "kind": "func",
-      "at": "service-platform/internal/domain/operator_commune.go:118"
+      "at": "service-platform/internal/domain/operator_commune.go:147"
     },
     "domain.ValidateCommuneZaloChatURL": {
       "kind": "func",
@@ -8692,7 +8700,7 @@
     },
     "domain.ValidateMiniAppID": {
       "kind": "func",
-      "at": "service-platform/internal/domain/operator_commune.go:185"
+      "at": "service-platform/internal/domain/operator_commune.go:214"
     },
     "domain.ValidatePetitionFieldCode": {
       "kind": "func",
@@ -8708,7 +8716,7 @@
     },
     "domain.ValidateReason": {
       "kind": "func",
-      "at": "service-platform/internal/domain/operator_commune.go:124"
+      "at": "service-platform/internal/domain/operator_commune.go:153"
     },
     "domain.ValidateZaloChatURL": {
       "kind": "func",
@@ -9396,7 +9404,7 @@
     },
     "grpcx.ExemptFromTenant": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:278"
+      "at": "core/grpcx/grpcx.go:300"
     },
     "grpcx.UnaryClientCallerAuth": {
       "kind": "func",
@@ -9404,7 +9412,7 @@
     },
     "grpcx.UnaryClientInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:294"
+      "at": "core/grpcx/grpcx.go:316"
     },
     "grpcx.UnaryServerBridgeKey": {
       "kind": "func",
@@ -9416,7 +9424,7 @@
     },
     "grpcx.UnaryServerInterceptor": {
       "kind": "func",
-      "at": "core/grpcx/grpcx.go:327"
+      "at": "core/grpcx/grpcx.go:349"
     },
     "http.AccountlessPetitionReader": {
       "kind": "type",
@@ -12496,7 +12504,7 @@
     },
     "operatorclient.Client": {
       "kind": "type",
-      "at": "core/operatorclient/operatorclient.go:148"
+      "at": "core/operatorclient/operatorclient.go:152"
     },
     "operatorclient.Close": {
       "kind": "func",
@@ -12548,15 +12556,15 @@
     },
     "operatorclient.New": {
       "kind": "func",
-      "at": "core/operatorclient/operatorclient.go:172"
+      "at": "core/operatorclient/operatorclient.go:176"
     },
     "operatorclient.NewFromConn": {
       "kind": "func",
-      "at": "core/operatorclient/operatorclient.go:167"
+      "at": "core/operatorclient/operatorclient.go:171"
     },
     "operatorclient.NewPasswordRefusal": {
       "kind": "type",
-      "at": "core/operatorclient/operatorclient.go:130"
+      "at": "core/operatorclient/operatorclient.go:134"
     },
     "operatorclient.Open": {
       "kind": "func",
@@ -12628,7 +12636,7 @@
     },
     "operatorclient.UnaryInterceptors": {
       "kind": "func",
-      "at": "core/operatorclient/operatorclient.go:162"
+      "at": "core/operatorclient/operatorclient.go:166"
     },
     "operatorstore.ActivateTOTP": {
       "kind": "func",
