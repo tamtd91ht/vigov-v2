@@ -485,6 +485,10 @@ func TestCauCoSoThiLienKetDinhDanhVaLanSauKhongCanSo(t *testing.T) {
 	if !coSo.DaCoSo || b.k.phien[1].congDan == "" {
 		t.Fatalf("có số đã xác thực mà phiên không gắn danh tính: %+v", coSo)
 	}
+	// The Cá nhân card's number (sheet mini-app 13/10/2026 row 6): domestic form, masked by the one rule.
+	if dau.MaskedPhone != "" || coSo.MaskedPhone != "09****0000" {
+		t.Fatalf("số đã che = %q / %q, muốn \"\" khi chưa có số và 09****0000 khi vừa xác thực", dau.MaskedPhone, coSo.MaskedPhone)
+	}
 	if len(b.vet(HanhDongLienKetDinhDanh)) != 1 {
 		t.Fatal("liên kết danh tính không có mục vết")
 	}
@@ -497,6 +501,9 @@ func TestCauCoSoThiLienKetDinhDanhVaLanSauKhongCanSo(t *testing.T) {
 	}
 	if !lanSau.DaCoSo || b.k.phien[2].congDan != b.k.phien[1].congDan {
 		t.Fatal("mở lại không số mà mất danh tính — trả lời CÒN MỞ #2: số xin MỘT lần")
+	}
+	if lanSau.MaskedPhone != "" {
+		t.Fatalf("mở lại không số mà trả số đã che %q — chỉ số VỪA xác thực mới được trả", lanSau.MaskedPhone)
 	}
 	if len(b.vet(HanhDongLienKetDinhDanh)) != 1 {
 		t.Fatal("mở lại mà ghi thêm vết liên kết dù danh tính không đổi")
@@ -798,6 +805,9 @@ func TestAccountOnlySessionNeverInheritsLinkedIdentity(t *testing.T) {
 	}
 	if kq.DaCoSo || b.k.phien[1].congDan != "" {
 		t.Fatalf("account-only session carries identity %q — it inherited the earlier link", b.k.phien[1].congDan)
+	}
+	if kq.MaskedPhone != "" {
+		t.Fatalf("account-only session returned a masked number %q", kq.MaskedPhone)
 	}
 	if b.k.taiKhoan[cauAppRieng+"|"+cauMaZalo].CongDanID != linked {
 		t.Fatal("the account's existing link was changed by an account-only open")

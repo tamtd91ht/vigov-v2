@@ -72,6 +72,9 @@ type citizenSessionOut struct {
 	TenantDisplayName  string `json:"tenantDisplayName"`
 	PhoneVerified      bool   `json:"phoneVerified"`
 	CommunePrimaryHost string `json:"communePrimaryHost"`
+	// MaskedPhone: the number verified at this open, masked (09****5678), for the citizen's own Cá nhân
+	// card. Absent when this open verified none — the app then shows no phone line.
+	MaskedPhone string `json:"maskedPhone,omitempty"`
 }
 
 // The citizen reads these. vihat-miniapp's sentences, so the two sign-in paths speak alike; never a
@@ -124,6 +127,7 @@ func (h *HandlerCongKhai) CitizenSessions(w http.ResponseWriter, r *http.Request
 		TenantDisplayName:  kq.TenXa,
 		PhoneVerified:      kq.DaCoSo,
 		CommunePrimaryHost: kq.TenMienChinh,
+		MaskedPhone:        kq.MaskedPhone,
 	}
 	if !kq.HetHan.IsZero() {
 		out.ExpiresAt = kq.HetHan.UTC().Format(time.RFC3339)

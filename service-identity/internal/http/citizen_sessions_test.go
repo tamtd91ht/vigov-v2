@@ -127,9 +127,13 @@ func (m *moFake) Mo(_ context.Context, yc app.YeuCauMoPhienCau) (app.KetQuaMoPhi
 	if m.err != nil {
 		return app.KetQuaMoPhienCau{}, m.err
 	}
-	return app.KetQuaMoPhienCau{Token: "VIGOV-TOKEN", Sid: "SID-1", HetHan: time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC),
+	kq := app.KetQuaMoPhienCau{Token: "VIGOV-TOKEN", Sid: "SID-1", HetHan: time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC),
 		Xa: yc.RequireOwnAppOf, TenXa: "Xã Thăng Bình", TenMienChinh: "thangbinh-danang.vigov.vn",
-		DaCoSo: yc.SoDaXacThuc != "", CheDo: domain.CheDoAppRieng}, nil
+		DaCoSo: yc.SoDaXacThuc != "", CheDo: domain.CheDoAppRieng}
+	if yc.SoDaXacThuc != "" {
+		kq.MaskedPhone = "09****0000" // the use case masks (cau_phien_cong_dan_test.go); this route only carries it
+	}
+	return kq, nil
 }
 
 // zaloFake answers the two Graph API calls; the phone exchange succeeds only with wantSecret.
@@ -277,7 +281,7 @@ func TestCitizenSessionsNormal201(t *testing.T) {
 		t.Fatalf("status = %d — %s", w.Code, w.Body.String())
 	}
 	// The exact wire of vihat-miniapp's phanHoiPhienViGov.
-	const want = `{"vigovSession":{"token":"VIGOV-TOKEN","expiresAt":"2026-10-31T00:00:00Z","tenantDisplayName":"Xã Thăng Bình","phoneVerified":true,"communePrimaryHost":"thangbinh-danang.vigov.vn"}}`
+	const want = `{"vigovSession":{"token":"VIGOV-TOKEN","expiresAt":"2026-10-31T00:00:00Z","tenantDisplayName":"Xã Thăng Bình","phoneVerified":true,"communePrimaryHost":"thangbinh-danang.vigov.vn","maskedPhone":"09****0000"}}`
 	if got := strings.TrimSpace(w.Body.String()); got != want {
 		t.Fatalf("body =\n%s\nwant\n%s", got, want)
 	}

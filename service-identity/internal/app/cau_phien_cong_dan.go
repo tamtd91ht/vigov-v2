@@ -13,6 +13,7 @@ import (
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/platformclient"
+	"github.com/vihat/vigov/core/privacy"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/domain"
@@ -172,6 +173,25 @@ type KetQuaMoPhienCau struct {
 	TenMienChinh string
 	DaCoSo       bool
 	CheDo        domain.CheDoApp
+	// MaskedPhone is the number verified AT THIS OPEN, masked (privacy.MaskPhone, domestic form
+	// 09****5678) — what the commune app's Cá nhân card shows the citizen as their own (customer sheet
+	// mini-app 13/10/2026 row 6). "" when this open verified no number (account-only, or a session
+	// opened without a phone token): the server holds no number it has just proven, and a card that
+	// says nothing is better than one that guesses. The full number never leaves this use case.
+	// Response only, like TenMienChinh: not on the gRPC bridge, in no session row, in no audit entry.
+	MaskedPhone string
+}
+
+// maskedVerifiedPhone renders the number Zalo just verified (normalised to `84…`, internal/zalo) in
+// the domestic form a citizen recognises, then masks it with the ONE masking rule (core/privacy).
+func maskedVerifiedPhone(so string) string {
+	if so == "" {
+		return ""
+	}
+	if strings.HasPrefix(so, "84") {
+		so = "0" + so[2:]
+	}
+	return privacy.MaskPhone(so)
 }
 
 // The error classes the gRPC handler maps to the contract's status table. Each message is generic:
@@ -397,6 +417,7 @@ func (uc *CauPhienCongDan) Mo(ctx context.Context, yc YeuCauMoPhienCau) (KetQuaM
 		kq = KetQuaMoPhienCau{
 			Token: token, Sid: sid, HetHan: hetHan,
 			Xa: xa, TenXa: t.Name, TenMienChinh: t.Host, DaCoSo: congDan != "", CheDo: cheDo,
+			MaskedPhone: maskedVerifiedPhone(yc.SoDaXacThuc),
 		}
 		return nil
 	})
