@@ -30842,7 +30842,7 @@
         }
       ],
       "put": {
-        "summary": "Đổi vai trò của một cán bộ — chuỗi rỗng nghĩa là gỡ vai trò",
+        "summary": "Đặt các vai trò của một cán bộ — role_ids là cả tập (rỗng là gỡ hết); role_id cũ vẫn nhận, nghĩa là tập một vai trò",
         "operationId": "identity_put_staff_by_id_role",
         "tags": [
           "identity"
@@ -47414,6 +47414,12 @@
           "role_id": {
             "type": "string"
           },
+          "role_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
           "phone": {
             "type": "string"
           },
@@ -48120,11 +48126,17 @@
         "properties": {
           "role_id": {
             "type": "string"
+          },
+          "role_ids": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "string"
+            }
           }
         },
-        "required": [
-          "role_id"
-        ],
         "additionalProperties": false
       },
       "identity.departmentCountOut": {
@@ -48742,6 +48754,12 @@
               }
             ]
           },
+          "roles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/identity.staffRoleOut"
+            }
+          },
           "permissions": {
             "type": "array",
             "items": {
@@ -49273,6 +49291,30 @@
           "errors",
           "message",
           "trace_id"
+        ],
+        "additionalProperties": false
+      },
+      "identity.staffRoleOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "is_leader": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "id",
+          "is_leader",
+          "name"
         ],
         "additionalProperties": false
       },

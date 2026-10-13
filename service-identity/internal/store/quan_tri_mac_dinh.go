@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/store"
 )
 
@@ -153,5 +154,14 @@ func (s *CanBoStore) ChenQuanTriMacDinh(ctx context.Context, tx *store.ScopedTx,
 	if err != nil {
 		return false, fmt.Errorf("quan_tri_mac_dinh: đếm dòng tài khoản: %w", err)
 	}
-	return n == 1, nil
+	if n != 1 {
+		return false, nil
+	}
+	// The role is HELD through staff_role_assignment (migration 0031); the column alone grants
+	// nothing. Same transaction, so the account never exists without its role. 'system': no person
+	// assigned it (rule 6, invariant 6 — the caller's audit entry names the system actor too).
+	if err := insertPrimaryRoleAssignment(ctx, tx, id, vaiTroID, audit.SystemActor); err != nil {
+		return false, err
+	}
+	return true, nil
 }

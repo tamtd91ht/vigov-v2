@@ -255,33 +255,45 @@ func KiemTraIDThamChieu(id string) error {
 	return nil
 }
 
-// ErrOneRolePerStaff — `role_ids` on the create form names more than one distinct role.
-var ErrOneRolePerStaff = errors.New("can_bo: mỗi cán bộ chỉ giữ một vai trò — hãy chọn đúng một vai trò")
+// MaxStaffRoles bounds `role_ids` on the wire. It is store.TranDanhMucVaiTro, the ceiling of a
+// commune's whole role catalogue: a set longer than the catalogue cannot name distinct live roles, so
+// refusing it refuses nothing legitimate — it refuses a payload. Each id must still exist in the
+// commune (checked inside the transaction), which is the real bound.
+const MaxStaffRoles = 100
 
-// NewStaffRole reduces the create form's `role_ids` to the one role the row may hold, "" = none.
+// ErrTooManyStaffRoles — `role_ids` is longer than any commune's role catalogue can be.
+var ErrTooManyStaffRoles = errors.New("can_bo: danh sách vai trò quá dài")
+
+// NewStaffRoles reduces a `role_ids` array to the SET of roles the person is to hold, in the order the
+// client sent them, empty = none.
 //
-// AN ARRAY ON THE WIRE, ONE ROLE IN THE ROW. `nguoi_dung.vai_tro_id` is a single column and "một vai
-// trò" is the owner's standing choice (08/10/2026, kept when the Người dùng screen followed the
-// prototype). The array is the shape the screen asked for (10/10/2026); more than one DISTINCT role is
-// REFUSED rather than trimmed to the first, because keeping one of two roles somebody picked is a
-// privilege decision made silently. Blank entries and repeats collapse; each id is bounded like every
-// other reference the client sends (KiemTraIDThamChieu).
-func NewStaffRole(ids []string) (string, error) {
-	role := ""
+// SEVERAL ROLES PER PERSON — owner decision 13/10/2026 (customer sheet web-admin-131026 row 10), which
+// REVERSES the "một vai trò" choice of 08/10/2026 that used to live here. A person's permissions are
+// the UNION of their live roles' grants (store.noiGiuQuyen). The first role of the set is also kept in
+// `nguoi_dung.vai_tro_id` as the PRIMARY role every display reader still uses (migration 0031).
+//
+// Blank entries and repeats collapse — the body is a set, and refusing `["a","a"]` would be a rule
+// that fires on a harmless client quirk. Each id is bounded like every other reference the client
+// sends (KiemTraIDThamChieu); whether it names a live role of this commune is the transaction's
+// question, where the answer cannot go stale.
+func NewStaffRoles(ids []string) ([]string, error) {
+	if len(ids) > MaxStaffRoles {
+		return nil, fmt.Errorf("%w (tối đa %d)", ErrTooManyStaffRoles, MaxStaffRoles)
+	}
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
 	for _, raw := range ids {
 		id := strings.TrimSpace(raw)
-		if id == "" || id == role {
+		if id == "" || seen[id] {
 			continue
 		}
 		if err := KiemTraIDThamChieu(id); err != nil {
-			return "", err
+			return nil, err
 		}
-		if role != "" {
-			return "", ErrOneRolePerStaff
-		}
-		role = id
+		seen[id] = true
+		out = append(out, id)
 	}
-	return role, nil
+	return out, nil
 }
 
 // thuTuDanhBaToiDa is the ceiling of `thu_tu_danh_ba`, which is a PostgreSQL INTEGER. It is the

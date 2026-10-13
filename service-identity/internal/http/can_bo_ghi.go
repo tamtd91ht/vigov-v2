@@ -11,7 +11,7 @@ package http
 //	PATCH  /api/v1/staff/{id}              correct the profile — no authority changes hands
 //	POST   /api/v1/staff/{id}/lockout      the person has retired or transferred (#10)
 //	DELETE /api/v1/staff/{id}/lockout      they are back
-//	PUT    /api/v1/staff/{id}/role         move them to a role (#13, #14)
+//	PUT    /api/v1/staff/{id}/role         set their roles — one or several (#13, #14)
 //	PUT    /api/v1/staff/{id}/publication  the Mini App directory (#12), `content.update`
 //	POST   /api/v1/staff/publications      the same, for many people at once — staff_bulk_publication.go
 //	DELETE /api/v1/staff/{id}              soft-delete a DUPLICATED row (#10), `admin.user.delete`
@@ -78,10 +78,12 @@ type themCanBoVao struct {
 	// Mobile — at most 10 digits once normalised, "+84" folded to "0" (domain.NormalizeMobile).
 	Mobile string `json:"mobile"`
 
-	// RoleIDs — OPTIONAL (owner decision 10/10/2026, bug sheet row 41): the role the new person is
+	// RoleIDs — OPTIONAL (owner decision 10/10/2026, bug sheet row 41): the roles the new person is
 	// given, assigned in the same transaction behind PUT /api/v1/staff/{id}/role's #14 guard
-	// (app.DanhBaCanBo.Them). AT MOST ONE distinct id — a person holds one role (domain.NewStaffRole);
-	// absent or [] = no role. `omitempty` marks it optional in the contract (tools/apidoc).
+	// (app.DanhBaCanBo.Them). ANY NUMBER of distinct ids since the owner decision of 13/10/2026 (sheet
+	// web-admin-131026 row 10) — the first is the primary role; each must be a live role of this
+	// commune and none may carry a key the caller lacks. Absent or [] = no role. `omitempty` marks it
+	// optional in the contract (tools/apidoc).
 	RoleIDs []string `json:"role_ids,omitempty"`
 }
 
@@ -133,11 +135,21 @@ type datCongKhaiVao struct {
 }
 
 // datVaiTroVao is the whole body of the role route. PUT, so it carries the WHOLE state of the
-// relationship rather than an instruction — `""` means "no role", which is a legitimate
-// destination (`nguoi_dung.vai_tro_id` is nullable, and a person can sit in the org chart holding
-// nothing).
+// relationship rather than an instruction.
+//
+// TWO SPELLINGS, EXACTLY ONE PER REQUEST (owner decision 13/10/2026: a person holds several roles):
+//
+//	role_ids  the NEW form — the whole role SET; [] = no role. The first is the primary role unless
+//	          the current primary is kept (app.orderStaffRoles).
+//	role_id   the ORIGINAL form, still accepted so no existing client breaks: one role becomes the
+//	          whole set (any other role the person held is removed — PUT carries the whole state);
+//	          "" = no role.
+//
+// Both are `omitempty` so the contract shows them optional (tools/apidoc); sending both is refused,
+// because a body that names two different answers has no single meaning.
 type datVaiTroVao struct {
-	RoleID string `json:"role_id"`
+	RoleID  string    `json:"role_id,omitempty"`
+	RoleIDs *[]string `json:"role_ids,omitempty"`
 }
 
 // xoaCanBoVao is the body of DELETE /api/v1/staff/{id}.
@@ -311,7 +323,7 @@ func (h *Handler) datKhoaCanBo(w http.ResponseWriter, r *http.Request, khoa bool
 	vietJSON(w, http.StatusOK, adminStaffView(cb, time.Now().UTC()))
 }
 
-// DoiVaiTroCanBo moves one person to a role. PUT /api/v1/staff/{id}/role
+// DoiVaiTroCanBo sets one person's roles. PUT /api/v1/staff/{id}/role
 func (h *Handler) DoiVaiTroCanBo(w http.ResponseWriter, r *http.Request) {
 	nguoi, ok := nguoiThucHienCanBo(r)
 	if !ok {
@@ -322,8 +334,17 @@ func (h *Handler) DoiVaiTroCanBo(w http.ResponseWriter, r *http.Request) {
 	if !docThanCanBo(w, r, &than) {
 		return
 	}
+	roleIDs := []string{than.RoleID}
+	if than.RoleIDs != nil {
+		if than.RoleID != "" {
+			httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+				"Chỉ gửi một trong hai trường: role_ids (danh sách vai trò) hoặc role_id (một vai trò).", "")
+			return
+		}
+		roleIDs = *than.RoleIDs
+	}
 
-	cb, err := h.d.GhiDanhBa.DoiVaiTro(r.Context(), r.PathValue("id"), than.RoleID, nguoi)
+	cb, err := h.d.GhiDanhBa.SetRoles(r.Context(), r.PathValue("id"), roleIDs, nguoi)
 	if err != nil {
 		h.traLoiLoiGhiCanBo(w, r, "đổi vai trò cán bộ", err)
 		return
@@ -525,7 +546,7 @@ func laLoiDauVaoCanBo(err error) bool {
 		domain.ErrThieuHoTen, domain.ErrHoTenQuaDai, domain.ErrChucVuQuaDai,
 		domain.ErrEmailSaiDinhDang, domain.ErrEmailQuaDai,
 		domain.ErrSoDienThoaiSai, domain.ErrSoDienThoaiQuaDai, domain.ErrMobileTooManyDigits,
-		domain.ErrIDThamChieuQuaDai, domain.ErrOneRolePerStaff,
+		domain.ErrIDThamChieuQuaDai, domain.ErrTooManyStaffRoles,
 		domain.ErrThuTuDanhBaAm, domain.ErrThuTuDanhBaQuaLon,
 		domain.ErrLyDoXoaQuaDai,
 		domain.ErrRevokeReasonMissing, domain.ErrRevokeReasonTooLong,

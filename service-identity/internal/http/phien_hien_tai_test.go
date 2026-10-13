@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/vihat/vigov/core/authz"
+	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/service-identity/internal/domain"
 )
 
 // WHAT THIS FILE IS FOR: GET /api/v1/sessions/current is the route every screen calls on load, and
@@ -212,6 +214,9 @@ func TestPhienHienTaiKhongTraTokenHashHayDuLieuCaNhan(t *testing.T) {
 	muonKhoa := map[string]bool{
 		"sid": true, "expires_at": true, "staff": true, "role": true,
 		"permissions": true, "must_change_password": true,
+		// `roles` (owner decision 13/10/2026): the caller's own roles — id, slug, name, is_leader —
+		// the same organisational facts as `role`, no personal data.
+		"roles": true,
 	}
 	for k := range goi {
 		if !muonKhoa[k] {
@@ -347,6 +352,39 @@ func TestPhienHienTaiChuaGanVaiTroThiTraNull(t *testing.T) {
 	// an absent key is a second response shape for the client to get wrong.
 	if !strings.Contains(w.Body.String(), `"role":null`) {
 		t.Errorf(`phải tuần tự hoá thành "role":null, nhận: %s`, w.Body.String())
+	}
+}
+
+// `roles` CARRIES EVERY ROLE THE CALLER HOLDS (owner decision 13/10/2026), primary first, with ids —
+// and `role` stays the primary one, so older clients read what they always read.
+//
+// MUTATION THAT MUST TURN THIS RED: fill `roles` from the primary role only.
+func TestCurrentSessionReturnsEveryRole(t *testing.T) {
+	m := dungMayChu(t)
+	m.vaiTro.vai[xaA][idNoiBo] = domain.VaiTro{ID: "vt-ct", Ma: "chu-tich-ubnd", Ten: "Chủ tịch UBND", LaLanhDao: true}
+	m.vaiTro.extraRoles = map[tenant.ID]map[string][]domain.VaiTro{
+		xaA: {idNoiBo: {{ID: "vt-qt", Ma: "quan-tri-he-thong", Ten: "Quản trị hệ thống"}}},
+	}
+
+	w := m.goi(t, "GET", hostA, duongPhienHienTai, "", m.tokenCho(t, xaA, sidA))
+	doiMa(t, w, http.StatusOK)
+	ra := docPhien(t, w.Body.Bytes())
+	if len(ra.Roles) != 2 || ra.Roles[0].ID != "vt-ct" || ra.Roles[1].ID != "vt-qt" || ra.Roles[1].Code != "quan-tri-he-thong" {
+		t.Fatalf("roles = %+v, muốn hai vai trò, vai trò chính đứng đầu", ra.Roles)
+	}
+	if ra.Role == nil || ra.Role.Code != "chu-tich-ubnd" {
+		t.Errorf("role (vai trò chính) = %+v", ra.Role)
+	}
+}
+
+// NO ROLE: `roles` is ABSENT (optional in the contract, read as []) — never null, never a list with
+// an empty role in it — beside `role: null`.
+func TestCurrentSessionWithoutRoleReturnsEmptyRoles(t *testing.T) {
+	m := dungMayChu(t)
+	w := m.goi(t, "GET", hostB, duongPhienHienTai, "", m.tokenCho(t, xaB, sidB))
+	doiMa(t, w, http.StatusOK)
+	if strings.Contains(w.Body.String(), `"roles"`) {
+		t.Errorf(`không vai trò thì không có "roles", nhận: %s`, w.Body.String())
 	}
 }
 

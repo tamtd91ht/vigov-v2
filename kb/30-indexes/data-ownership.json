@@ -614,6 +614,13 @@
       "source": "service-comms/migrations/0010_staff_notification.sql:92"
     },
     {
+      "entity": "StaffRoleAssignment",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "staff_role_assignment",
+      "source": "service-identity/migrations/0031_staff_role_assignment.sql:35"
+    },
+    {
       "entity": "SwapWorkingDay",
       "service": "identity",
       "scope": "tenant",

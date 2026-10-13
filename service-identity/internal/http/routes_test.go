@@ -146,8 +146,10 @@ func quyenMau() *quyenGia {
 // the whole point of the response shape is that a client can tell those apart.
 type vaiTroGia struct {
 	vai map[tenant.ID]map[string]domain.VaiTro
-	loi error
-	goi int
+	// extraRoles are roles held BESIDE the primary one (migration 0031), same keying.
+	extraRoles map[tenant.ID]map[string][]domain.VaiTro
+	loi        error
+	goi        int
 }
 
 func (v *vaiTroGia) VaiTroCuaCanBo(ctx context.Context, canBoID string) (domain.VaiTro, bool, error) {
@@ -157,6 +159,19 @@ func (v *vaiTroGia) VaiTroCuaCanBo(ctx context.Context, canBoID string) (domain.
 	}
 	vt, ok := v.vai[tenant.MustFrom(ctx)][canBoID]
 	return vt, ok, nil
+}
+
+// RolesOfStaff is the primary role (if any) followed by the extra ones, in the commune of ctx.
+func (v *vaiTroGia) RolesOfStaff(ctx context.Context, canBoID string) ([]domain.VaiTro, error) {
+	if v.loi != nil {
+		return nil, v.loi
+	}
+	xa := tenant.MustFrom(ctx)
+	out := []domain.VaiTro{}
+	if vt, ok := v.vai[xa][canBoID]; ok {
+		out = append(out, vt)
+	}
+	return append(out, v.extraRoles[xa][canBoID]...), nil
 }
 
 // vaiTroMau mirrors quyenMau: in commune A the account holds a LEADER role, in commune B the same

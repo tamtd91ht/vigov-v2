@@ -206,6 +206,7 @@ func (u *CommuneAccountsByOwner) CreateAdmin(ctx context.Context, owner MiniAppO
 			}
 			if err := u.accounts.InsertCommuneAdmin(ctx, tx, idstore.NewCommuneAdmin{
 				ID: accountID, Code: code, FullName: fullName, Email: email, PasswordHash: hash, RoleID: rid,
+				AssignedBy: actor.ID,
 			}); err != nil {
 				return err
 			}

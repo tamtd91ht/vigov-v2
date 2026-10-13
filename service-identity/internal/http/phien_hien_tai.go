@@ -48,6 +48,13 @@ type phienHienTaiRa struct {
 	// null cannot be mistaken for a role.
 	Role *vaiTroGon `json:"role"`
 
+	// Roles is EVERY role the caller holds (owner decision 13/10/2026: a member of staff may hold
+	// several), the primary one — the same as `role` above — first. ABSENT when the caller holds none
+	// (`role` is then null): `omitempty` makes the field OPTIONAL in the contract (tools/apidoc), so
+	// every client written before the change still type-checks. ADDITIVE: `role` stays. Like `role`,
+	// it describes and never decides; `permissions` below is already the union of these roles' grants.
+	Roles []staffRoleOut `json:"roles,omitempty"`
+
 	// Permissions is the caller's own permission keys.
 	//
 	// WHY IT IS RETURNED AT ALL: docs/ui-ux/15-phu-luc-giao-dien-chung.md §1 requires the check in
@@ -106,6 +113,15 @@ type vaiTroGon struct {
 	// one who is not the moment somebody edits a flag. Menus are hidden from `permissions` above,
 	// which is the list the server's own checks are made of.
 	IsLeader bool `json:"is_leader"`
+}
+
+// staffRoleOut is one entry of `roles`: vaiTroGon plus the role id, which is what the Người dùng form
+// and `role_ids` key on. Nothing here grants anything (see vaiTroGon.IsLeader).
+type staffRoleOut struct {
+	ID       string `json:"id"`
+	Code     string `json:"code"`
+	Name     string `json:"name"`
+	IsLeader bool   `json:"is_leader"`
 }
 
 // XemPhienHienTai serves the caller's own session. GET /api/v1/sessions/current
@@ -174,8 +190,19 @@ func (h *Handler) XemPhienHienTai(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Same 500-not-empty asymmetry as the role above: [] is a real answer ("no role").
+	roles, err := h.d.VaiTro.RolesOfStaff(ctx, p.ID)
+	if err != nil {
+		h.d.Log.Error("phiên hiện tại: không đọc được các vai trò",
+			"can_bo", ph.MaCanBo, "xa", string(tenant.MustFrom(ctx)), "err", err)
+		httpx.WriteError(w, http.StatusInternalServerError, "internal",
+			"Đã xảy ra lỗi. Vui lòng thử lại.", "")
+		return
+	}
+
 	// make(..., 0, ...) and not a nil slice: `permissions` must marshal as [] and never as null.
 	ra := phienHienTaiRa{
+		Roles:     make([]staffRoleOut, 0, len(roles)),
 		Sid:       ph.Sid,
 		ExpiresAt: ph.HetHanLuc,
 		Staff: canBoGon{
@@ -195,6 +222,9 @@ func (h *Handler) XemPhienHienTai(w http.ResponseWriter, r *http.Request) {
 			Name:     vaiTro.Ten,
 			IsLeader: vaiTro.LaLanhDao,
 		}
+	}
+	for _, v := range roles {
+		ra.Roles = append(ra.Roles, staffRoleOut{ID: v.ID, Code: v.Ma, Name: v.Ten, IsLeader: v.LaLanhDao})
 	}
 	for _, q := range quyen {
 		ra.Permissions = append(ra.Permissions, string(q))

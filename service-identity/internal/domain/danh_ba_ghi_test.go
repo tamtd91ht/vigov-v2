@@ -219,30 +219,33 @@ func TestNormalizeMobileTenDigitCeiling(t *testing.T) {
 	}
 }
 
-// role_ids CARRIES AT MOST ONE DISTINCT ROLE — `nguoi_dung.vai_tro_id` is one column, and keeping the
-// first of two picked roles would be a privilege decision made silently.
-func TestNewStaffRoleAtMostOne(t *testing.T) {
+// role_ids IS A SET OF ROLES (owner decision 13/10/2026): several distinct roles are KEPT, in the order
+// sent; blanks and repeats collapse; the length is bounded by the catalogue ceiling.
+//
+// MUTATION THAT MUST TURN THIS RED: put back the 08/10 "at most one" refusal, or trim to the first.
+func TestNewStaffRolesKeepsEveryDistinctRole(t *testing.T) {
 	cases := map[string]struct {
 		in   []string
-		want string
+		want []string
 	}{
-		"absent":        {nil, ""},
-		"empty":         {[]string{}, ""},
-		"blank entries": {[]string{"", "  "}, ""},
-		"one":           {[]string{"vt-1"}, "vt-1"},
-		"trimmed":       {[]string{" vt-1 "}, "vt-1"},
-		"repeated":      {[]string{"vt-1", "vt-1", ""}, "vt-1"},
+		"absent":        {nil, []string{}},
+		"empty":         {[]string{}, []string{}},
+		"blank entries": {[]string{"", "  "}, []string{}},
+		"one":           {[]string{"vt-1"}, []string{"vt-1"}},
+		"trimmed":       {[]string{" vt-1 "}, []string{"vt-1"}},
+		"repeated":      {[]string{"vt-1", "vt-1", ""}, []string{"vt-1"}},
+		"two, in order": {[]string{"vt-2", "vt-1", "vt-2"}, []string{"vt-2", "vt-1"}},
 	}
 	for name, c := range cases {
-		got, err := NewStaffRole(c.in)
-		if err != nil || got != c.want {
+		got, err := NewStaffRoles(c.in)
+		if err != nil || strings.Join(got, ",") != strings.Join(c.want, ",") || got == nil {
 			t.Errorf("%s: = %q, %v — muốn %q", name, got, err, c.want)
 		}
 	}
-	if _, err := NewStaffRole([]string{"vt-1", "vt-2"}); !errors.Is(err, ErrOneRolePerStaff) {
-		t.Errorf("hai vai trò: lỗi = %v, muốn ErrOneRolePerStaff", err)
-	}
-	if _, err := NewStaffRole([]string{strings.Repeat("a", tranIDThamChieu+1)}); !errors.Is(err, ErrIDThamChieuQuaDai) {
+	if _, err := NewStaffRoles([]string{strings.Repeat("a", tranIDThamChieu+1)}); !errors.Is(err, ErrIDThamChieuQuaDai) {
 		t.Errorf("id quá dài: lỗi = %v, muốn ErrIDThamChieuQuaDai", err)
+	}
+	if _, err := NewStaffRoles(make([]string, MaxStaffRoles+1)); !errors.Is(err, ErrTooManyStaffRoles) {
+		t.Errorf("quá trần: lỗi = %v, muốn ErrTooManyStaffRoles", err)
 	}
 }

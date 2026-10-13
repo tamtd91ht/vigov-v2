@@ -75,7 +75,10 @@ type KhoDanhBaCanBo interface {
 	// direction of DatKhoa only. See the note there.
 	SignInLockForUpdate(ctx context.Context, tx *store.ScopedTx, id string) (domain.SignInLock, error)
 	SetSignInLock(ctx context.Context, tx *store.ScopedTx, id string, l domain.SignInLock) error
-	DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error
+	// The person's role SET (migration 0031): read the live set, replace it whole. SetStaffRoles also
+	// keeps `nguoi_dung.vai_tro_id` equal to the first role — the one write path for both.
+	StaffRoleIDs(ctx context.Context, tx *store.ScopedTx, staffID string) ([]string, error)
+	SetStaffRoles(ctx context.Context, tx *store.ScopedTx, staffID string, roleIDs []string, by string) error
 	DatCongKhai(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
 	XoaMem(ctx context.Context, tx *store.ScopedTx, id, xoaBoi, lyDo string, luc time.Time) error
 	QuanTriDangHoatDong(ctx context.Context, tx *store.ScopedTx) ([]string, error)
@@ -268,8 +271,9 @@ func NewDanhBaCanBo(db *store.DB, kho KhoDanhBaCanBo, log *slog.Logger) *DanhBaC
 //
 // RoleIDs IS OPTIONAL, AND IT DOES NOT GO AROUND #14 (owner decision 10/10/2026, bug sheet row 41:
 // the add form picks the role). Them assigns it in the SAME transaction as the insert and runs the
-// guards of DoiVaiTro that can apply to a person who did not exist a moment ago — see Them. At most
-// one distinct role (domain.NewStaffRole). Empty = the person holds nothing until somebody grants it.
+// guards of SetRoles that can apply to a person who did not exist a moment ago — see Them. ANY NUMBER
+// of distinct roles (owner decision 13/10/2026, domain.NewStaffRoles); the first is the primary role.
+// Empty = the person holds nothing until somebody grants it.
 //
 // THERE IS NO ACCOUNT, NO PASSWORD AND NO `CoTaiKhoan` — #9/#17/#18, a different flow.
 type YeuCauThemCanBo struct {
@@ -296,7 +300,7 @@ func (uc *DanhBaCanBo) Them(ctx context.Context, yc YeuCauThemCanBo,
 	if err != nil {
 		return domain.CanBoTomTat{}, err
 	}
-	roleID, err := domain.NewStaffRole(yc.RoleIDs)
+	roleIDs, err := domain.NewStaffRoles(yc.RoleIDs)
 	if err != nil {
 		return domain.CanBoTomTat{}, err
 	}
@@ -309,34 +313,25 @@ func (uc *DanhBaCanBo) Them(ctx context.Context, yc YeuCauThemCanBo,
 			return domain.CanBoTomTat{}, fmt.Errorf("danh_ba_can_bo: sinh mã: %w", err)
 		}
 		moi.VaiTroID = ""
+		moi.RoleIDs = []string{}
 
 		err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
-			// THE ROLE IS CHECKED BEFORE ANYTHING IS WRITTEN, with DoiVaiTro's own reads, inside this
-			// transaction (see DoiVaiTro for why both halves must come from one moment):
+			// EVERY ROLE IS CHECKED BEFORE ANYTHING IS WRITTEN, with SetRoles's own reads, inside this
+			// transaction (see SetRoles for why both halves must come from one moment):
 			//
-			//	the role      QuyenCuaVaiTro is scoped by the transaction's commune and skips
+			//	each role     QuyenCuaVaiTro is scoped by the transaction's commune and skips
 			//	              soft-deleted roles — another commune's id, an invented one and a
 			//	              deleted one are all ErrVaiTroKhongTonTai (rule 1)
-			//	#14 second    the role may not carry a key the actor does not hold
+			//	#14 second    NO role of the set may carry a key the actor does not hold — the union
+			//	              is what the person will hold, so every role is checked, not the first
 			//	#14 first     not reachable: the target is created right here, never the actor
 			//	#13           not reachable: adding a person can only grow the administrator set
 			//
 			// The route's permission stays `admin.user`, the key PUT /api/v1/staff/{id}/role requires.
 			// No key is added (rule 5, invariant 3c).
-			if roleID != "" {
-				keys, exists, err := uc.kho.QuyenCuaVaiTro(ctx, tx, roleID)
-				if err != nil {
+			if len(roleIDs) > 0 {
+				if err := uc.checkGrantedRoles(ctx, tx, roleIDs, nguoi); err != nil {
 					return err
-				}
-				if !exists {
-					return ErrVaiTroKhongTonTai
-				}
-				held, err := uc.kho.QuyenDangGiu(ctx, tx, nguoi.ID)
-				if err != nil {
-					return err
-				}
-				if missing := khongCam(keys, held); len(missing) > 0 {
-					return &LoiTraoQuyenKhongCam{Thieu: missing}
 				}
 			}
 
@@ -355,14 +350,15 @@ func (uc *DanhBaCanBo) Them(ctx context.Context, yc YeuCauThemCanBo,
 			}); err != nil {
 				return err
 			}
-			if roleID == "" {
+			if len(roleIDs) == 0 {
 				return nil
 			}
 
-			if err := uc.kho.DatVaiTro(ctx, tx, moi.ID, roleID); err != nil {
+			if err := uc.kho.SetStaffRoles(ctx, tx, moi.ID, roleIDs, nguoi.Vet.ID); err != nil {
 				return err
 			}
-			moi.VaiTroID = roleID
+			moi.VaiTroID = roleIDs[0]
+			moi.RoleIDs = roleIDs
 			// A PRIVILEGE CHANGE, AUDITED AS ITS OWN ACT (rule 5, invariant 5) — the verb and the delta
 			// of PUT /api/v1/staff/{id}/role, so "who gave this person this role" is one query on the
 			// trail whichever form did it. The staff import writes the same pair.
@@ -370,10 +366,7 @@ func (uc *DanhBaCanBo) Them(ctx context.Context, yc YeuCauThemCanBo,
 				Actor:   nguoi.Vet,
 				Action:  HanhViDoiVaiTro,
 				Subject: moi.Ma,
-				Delta: deltaCanBo(map[string]any{
-					"truoc": map[string]any{"vai_tro_id": ""},
-					"sau":   map[string]any{"vai_tro_id": roleID},
-				}),
+				Delta:   roleChangeDelta("", nil, moi.VaiTroID, roleIDs, nil),
 			})
 		})
 		// A COLLISION IS RETRIED WITH A NEW CODE — never by hunting for a free one. Nothing was
@@ -823,7 +816,32 @@ func (uc *DanhBaCanBo) liftSignInLock(ctx context.Context, tx *store.ScopedTx,
 //	#13          moving the last administrator to a role without `admin.user` is the third of the
 //	             three paths to a commune with nobody who can administer it — and the one least
 //	             likely to look dangerous to whoever is doing it.
+//
+// THE SINGLE-ROLE FORM OF SetRoles, kept for the original body of PUT .../role (`role_id`): one role
+// becomes the WHOLE set — PUT carries the whole state — and "" empties it.
 func (uc *DanhBaCanBo) DoiVaiTro(ctx context.Context, id, vaiTroID string,
+	nguoi NguoiThucHien) (domain.CanBoTomTat, error) {
+
+	if err := domain.KiemTraIDThamChieu(vaiTroID); err != nil {
+		return domain.CanBoTomTat{}, err
+	}
+	return uc.SetRoles(ctx, id, []string{vaiTroID}, nguoi)
+}
+
+// SetRoles replaces one person's WHOLE role set (owner decision 13/10/2026: a member of staff may hold
+// several roles; their permissions are the union). `roleIDs` empty = no role at all.
+//
+// THE THREE DECISIONS OF DoiVaiTro, APPLIED TO A SET:
+//
+//	#14 first    the caller may not change THEIR OWN roles.
+//	#14 second   NO role ADDED by this change may carry a key the caller does not hold. Every added
+//	             role is checked — one strong role among weak ones is still a grant. A role the person
+//	             ALREADY holds is not re-checked: keeping it hands out nothing, and refusing to touch
+//	             a colleague's other roles because one of them is stronger than you would be a rule
+//	             that fires on a safe operation (a removal can only shrink what they hold).
+//	#13          if the person is the commune's last administrator and NO role of the new set carries
+//	             `admin.user`, the change is refused. Keeping any role that carries it is safe.
+func (uc *DanhBaCanBo) SetRoles(ctx context.Context, id string, roleIDs []string,
 	nguoi NguoiThucHien) (domain.CanBoTomTat, error) {
 
 	if err := nguoi.hopLe(); err != nil {
@@ -832,7 +850,8 @@ func (uc *DanhBaCanBo) DoiVaiTro(ctx context.Context, id, vaiTroID string,
 	if id == "" {
 		return domain.CanBoTomTat{}, idstore.ErrCanBoKhongTonTai
 	}
-	if err := domain.KiemTraIDThamChieu(vaiTroID); err != nil {
+	requested, err := domain.NewStaffRoles(roleIDs)
+	if err != nil {
 		return domain.CanBoTomTat{}, err
 	}
 	if id == nguoi.ID {
@@ -840,7 +859,7 @@ func (uc *DanhBaCanBo) DoiVaiTro(ctx context.Context, id, vaiTroID string,
 	}
 
 	var sau domain.CanBoTomTat
-	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		// Same lock order as DatKhoa: the administrator set first, in id order, then the target.
 		quanTri, err := uc.kho.QuanTriDangHoatDong(ctx, tx)
 		if err != nil {
@@ -850,44 +869,54 @@ func (uc *DanhBaCanBo) DoiVaiTro(ctx context.Context, id, vaiTroID string,
 		if err != nil {
 			return err
 		}
-		if truoc.VaiTroID == vaiTroID {
+		current, err := uc.kho.StaffRoleIDs(ctx, tx, truoc.ID)
+		if err != nil {
+			return err
+		}
+		next := orderStaffRoles(truoc.VaiTroID, requested)
+		if sameRoleSet(current, next) && (len(next) == 0 || next[0] == truoc.VaiTroID) {
 			sau = truoc
+			sau.RoleIDs = current
 			return nil
 		}
 
-		quyenMoi, coVaiTro, err := uc.kho.QuyenCuaVaiTro(ctx, tx, vaiTroID)
-		if err != nil {
-			return err
-		}
-		if !coVaiTro {
-			return ErrVaiTroKhongTonTai
-		}
-
-		// #14, SECOND CONSTRAINT. Both halves are read INSIDE this transaction: a comparison whose
-		// two sides come from two moments is a comparison of two different worlds, and the moment
-		// that matters is the one the write lands in.
-		quyenToi, err := uc.kho.QuyenDangGiu(ctx, tx, nguoi.ID)
-		if err != nil {
-			return err
-		}
-		if thieu := khongCam(quyenMoi, quyenToi); len(thieu) > 0 {
-			return &LoiTraoQuyenKhongCam{Thieu: thieu}
+		// #14, SECOND CONSTRAINT, on the ADDED roles. Both halves are read INSIDE this transaction: a
+		// comparison whose two sides come from two moments is a comparison of two different worlds.
+		if added := roleSetMinus(next, current); len(added) > 0 {
+			if err := uc.checkGrantedRoles(ctx, tx, added, nguoi); err != nil {
+				return err
+			}
 		}
 
-		// #13 — the role change must not take the commune's last administrator away. It is only a
-		// loss when the NEW role does not carry the key: moving the last administrator between two
-		// roles that both hold `admin.user` changes nothing about the commune's ability to
-		// administer itself, and refusing it would be a rule that fires on a safe operation.
-		if !coQuyen(quyenMoi, idstore.QuyenQuanTriNguoiDung) &&
-			laNguoiQuanTriCuoiCung(quanTri, truoc.ID) {
-			return ErrQuanTriCuoiCung
+		// #13 — the change must not take the commune's last administrator away. It is only a loss
+		// when NO role of the new set carries the key. A role read as absent (soft-deleted) grants
+		// nothing — the checker skips it too — so it counts as carrying nothing here.
+		if laNguoiQuanTriCuoiCung(quanTri, truoc.ID) {
+			keepsAdmin := false
+			for _, r := range next {
+				keys, exists, err := uc.kho.QuyenCuaVaiTro(ctx, tx, r)
+				if err != nil {
+					return err
+				}
+				if exists && coQuyen(keys, idstore.QuyenQuanTriNguoiDung) {
+					keepsAdmin = true
+					break
+				}
+			}
+			if !keepsAdmin {
+				return ErrQuanTriCuoiCung
+			}
 		}
 
-		if err := uc.kho.DatVaiTro(ctx, tx, truoc.ID, vaiTroID); err != nil {
+		if err := uc.kho.SetStaffRoles(ctx, tx, truoc.ID, next, nguoi.Vet.ID); err != nil {
 			return err
 		}
 		sau = truoc
-		sau.VaiTroID = vaiTroID
+		sau.VaiTroID = ""
+		if len(next) > 0 {
+			sau.VaiTroID = next[0]
+		}
+		sau.RoleIDs = next
 
 		// ROLE IDS, NOT ROLE NAMES, AND NO PERSONAL DATA. A name would need a join, and the name a
 		// role carries today is not the name it carried when the entry was written — the id is the
@@ -896,16 +925,108 @@ func (uc *DanhBaCanBo) DoiVaiTro(ctx context.Context, id, vaiTroID string,
 			Actor:   nguoi.Vet,
 			Action:  HanhViDoiVaiTro,
 			Subject: truoc.Ma,
-			Delta: deltaCanBo(map[string]any{
-				"truoc": map[string]any{"vai_tro_id": truoc.VaiTroID},
-				"sau":   map[string]any{"vai_tro_id": sau.VaiTroID},
-			}),
+			Delta:   roleChangeDelta(truoc.VaiTroID, current, sau.VaiTroID, next, nil),
 		})
 	})
 	if err != nil {
 		return domain.CanBoTomTat{}, err
 	}
 	return sau, nil
+}
+
+// checkGrantedRoles refuses a set of roles about to be GIVEN: any role that is not a live role of this
+// commune (ErrVaiTroKhongTonTai — another commune's id, an invented one, a soft-deleted one), and any
+// key the union carries that the actor does not hold (#14, second constraint).
+func (uc *DanhBaCanBo) checkGrantedRoles(ctx context.Context, tx *store.ScopedTx, roleIDs []string,
+	nguoi NguoiThucHien) error {
+
+	var union []string
+	for _, r := range roleIDs {
+		keys, exists, err := uc.kho.QuyenCuaVaiTro(ctx, tx, r)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return ErrVaiTroKhongTonTai
+		}
+		for _, k := range keys {
+			if !hasRole(union, k) {
+				union = append(union, k)
+			}
+		}
+	}
+	held, err := uc.kho.QuyenDangGiu(ctx, tx, nguoi.ID)
+	if err != nil {
+		return err
+	}
+	if missing := khongCam(union, held); len(missing) > 0 {
+		return &LoiTraoQuyenKhongCam{Thieu: missing}
+	}
+	return nil
+}
+
+// orderStaffRoles decides the order of the new set, i.e. which role is PRIMARY (`vai_tro_id`, the one
+// every display reader shows): the current primary stays primary while it is kept — a change that
+// only adds a second role must not silently relabel the person on every screen — otherwise the
+// first requested role leads.
+func orderStaffRoles(primary string, requested []string) []string {
+	out := make([]string, 0, len(requested))
+	if primary != "" && hasRole(requested, primary) {
+		out = append(out, primary)
+	}
+	for _, r := range requested {
+		if !hasRole(out, r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// hasRole reports whether v is in ds (a role id in a set, or a key in a union of grants).
+func hasRole(ds []string, v string) bool {
+	for _, d := range ds {
+		if d == v {
+			return true
+		}
+	}
+	return false
+}
+
+// roleSetMinus returns the roles of a that are not in b, in a's order.
+func roleSetMinus(a, b []string) []string {
+	var out []string
+	for _, r := range a {
+		if !hasRole(b, r) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func sameRoleSet(a, b []string) bool {
+	return len(roleSetMinus(a, b)) == 0 && len(roleSetMinus(b, a)) == 0
+}
+
+// roleChangeDelta is the delta of `doi_vai_tro_can_bo`: the PRIMARY role under its original key
+// `vai_tro_id` — every entry written before 13/10/2026 has that shape, and a query over the trail keeps
+// working — plus the WHOLE set before and after under `vai_tro_ids`. Ids only, no personal data.
+func roleChangeDelta(beforePrimary string, before []string, afterPrimary string, after []string,
+	extra map[string]any) json.RawMessage {
+
+	if before == nil {
+		before = []string{}
+	}
+	if after == nil {
+		after = []string{}
+	}
+	v := map[string]any{
+		"truoc": map[string]any{"vai_tro_id": beforePrimary, "vai_tro_ids": before},
+		"sau":   map[string]any{"vai_tro_id": afterPrimary, "vai_tro_ids": after},
+	}
+	for k, x := range extra {
+		v[k] = x
+	}
+	return deltaCanBo(v)
 }
 
 // YeuCauCongKhai is the WHOLE publication state of one person, as PUT carries it.

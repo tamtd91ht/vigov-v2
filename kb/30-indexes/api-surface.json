@@ -7123,7 +7123,7 @@
       "path": "/api/v1/staff/{id}/role",
       "operation_id": "identity_put_staff_by_id_role",
       "task_id": "7ebdf66d5c36",
-      "summary": "Đổi vai trò của một cán bộ — chuỗi rỗng nghĩa là gỡ vai trò",
+      "summary": "Đặt các vai trò của một cán bộ — role_ids là cả tập (rỗng là gỡ hết); role_id cũ vẫn nhận, nghĩa là tập một vai trò",
       "screen": "14-cau-hinh §3",
       "permission_kind": "permission",
       "permission": "admin.user",

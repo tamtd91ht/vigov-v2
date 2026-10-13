@@ -37,7 +37,8 @@ func TestCreateStaffForwardsRoleIDs(t *testing.T) {
 
 // EACH NEW REFUSAL REACHES THE CLIENT AS ITS OWN STATUS AND CODE.
 //
-//	400 invalid_request        two roles; a mobile past ten digits — the domain's own sentence
+//	400 invalid_request        a role list past the catalogue ceiling; a mobile past ten digits — the
+//	                           domain's own sentence (two roles are ALLOWED since 13/10/2026)
 //	400 role_not_found         a role that is not this commune's (another's, invented, deleted)
 //	403 permission_escalation  #14 second — the role carries a key the caller does not hold
 func TestCreateStaffRoleAndMobileRefusalsMapToStatus(t *testing.T) {
@@ -47,7 +48,7 @@ func TestCreateStaffRoleAndMobileRefusalsMapToStatus(t *testing.T) {
 		status int
 		code   string
 	}{
-		{"two roles", domain.ErrOneRolePerStaff, http.StatusBadRequest, "invalid_request"},
+		{"too many roles", domain.ErrTooManyStaffRoles, http.StatusBadRequest, "invalid_request"},
 		{"mobile over ten digits", domain.ErrMobileTooManyDigits, http.StatusBadRequest, "invalid_request"},
 		{"role not in commune", app.ErrVaiTroKhongTonTai, http.StatusBadRequest, "role_not_found"},
 		{"stronger role", &app.LoiTraoQuyenKhongCam{Thieu: []string{"budget.confirm"}}, http.StatusForbidden, "permission_escalation"},

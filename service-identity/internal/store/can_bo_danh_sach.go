@@ -198,7 +198,42 @@ const cotTomTat = `id, ma, ho_ten, coalesce(email,''), chuc_vu,
                    dang_nhap_gan_nhat, tao_luc,
                    co_zalo, thu_tu_danh_ba, hien_tren_mini_app,
                    dong_y_cong_khai_luc, dong_y_cong_khai_ghi_boi,
-                   sign_in_locked_until`
+                   sign_in_locked_until, ` + staffRoleIDsColumn
+
+// staffRoleIDsColumn is every LIVE role the person holds (migration 0031), primary first, as ONE
+// comma-joined string — role ids are ULIDs and never contain a comma — so the positional scan stays a
+// scan of plain values (roleIDList splits it). A correlated subquery rather than a join: the register
+// read walks ONE relation (core/store.QueryPage), and a join would multiply its rows.
+//
+// `nguoi_dung.` QUALIFIES THE OUTER ROW, a name both the plain table and staffSortRelation's derived
+// relations answer to. The assignment is bound to the commune by `$1` itself, like the department
+// EXISTS in menhDeLocCanBo: ids alone collide across communes (rule 1).
+const staffRoleIDsColumn = `coalesce((SELECT string_agg(sra.role_id, ',' ORDER BY
+                       (sra.role_id = nguoi_dung.vai_tro_id) IS TRUE DESC, sra.created_at, sra.role_id)
+                   FROM staff_role_assignment sra
+                   WHERE sra.tenant_id = $1 AND sra.staff_id = nguoi_dung.id AND sra.deleted_at IS NULL), '')`
+
+// roleIDList scans staffRoleIDsColumn into a []string: "" is the empty set, never [""].
+type roleIDList struct{ dst *[]string }
+
+func (r roleIDList) Scan(src any) error {
+	var s string
+	switch v := src.(type) {
+	case nil:
+	case string:
+		s = v
+	case []byte:
+		s = string(v)
+	default:
+		return fmt.Errorf("can_bo: vai trò: kiểu không đọc được %T", src)
+	}
+	out := []string{}
+	if s != "" {
+		out = strings.Split(s, ",")
+	}
+	*r.dst = out
+	return nil
+}
 
 // locTomTat is the ONE predicate both read paths share.
 //
@@ -462,5 +497,7 @@ func dichQuetTomTat(cb *domain.CanBoTomTat) []any {
 		&cb.DongYCongKhaiLuc, &cb.DongYCongKhaiGhiBoi,
 		// Migration 0020. **time.Time: NULL is "never auto-locked". Only the stored instant is read;
 		// whether it is in force is derived at the edge (domain.CanBoTomTat.SignInLockedAt).
-		&cb.SignInLockedUntil}
+		&cb.SignInLockedUntil,
+		// Migration 0031: every live role, primary first (staffRoleIDsColumn).
+		roleIDList{&cb.RoleIDs}}
 }

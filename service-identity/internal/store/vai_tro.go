@@ -119,6 +119,47 @@ func (s *VaiTroStore) VaiTroCuaCanBo(ctx context.Context, canBoID string) (domai
 	}, true, nil
 }
 
+// staffRolesQuery reads EVERY live role one person holds (migration 0031, owner decision 13/10/2026),
+// the primary one (`nguoi_dung.vai_tro_id`) first, then in catalogue order. Each table is bound to the
+// commune in its own clause (core/store.QueryJoin contract). Soft-deleted roles and removed
+// assignments are absent — the same "no role to name" reading VaiTroCuaCanBo gives a deleted role.
+const staffRolesQuery = `
+SELECT vt.id, vt.ma, vt.ten, vt.la_lanh_dao
+FROM nguoi_dung nd
+JOIN staff_role_assignment sra ON sra.tenant_id = nd.tenant_id AND sra.staff_id = nd.id
+                              AND sra.deleted_at IS NULL
+JOIN vai_tro vt ON vt.tenant_id = nd.tenant_id AND vt.id = sra.role_id AND vt.deleted_at IS NULL
+WHERE nd.tenant_id = $1
+  AND nd.id = $2
+  AND nd.deleted_at IS NULL
+ORDER BY (vt.id = nd.vai_tro_id) IS TRUE DESC, vt.thu_tu, vt.ten, vt.id`
+
+// RolesOfStaff lists the roles one staff member holds in the commune carried by ctx. An empty list
+// is a real answer ("holds no role"); a read failure is an error, never an empty list — the same
+// asymmetry as VaiTroCuaCanBo. A DESCRIPTION, never a decision: access is Checker's.
+func (s *VaiTroStore) RolesOfStaff(ctx context.Context, staffID string) ([]domain.VaiTro, error) {
+	if staffID == "" {
+		return nil, fmt.Errorf("vai_tro: %w", ErrCanBoKhongTonTai)
+	}
+	rows, err := s.db.For(ctx).QueryJoin(ctx, staffRolesQuery, staffID)
+	if err != nil {
+		return nil, fmt.Errorf("vai_tro: đọc các vai trò của cán bộ: %w", err)
+	}
+	defer rows.Close()
+	out := []domain.VaiTro{}
+	for rows.Next() {
+		var v domain.VaiTro
+		if err := rows.Scan(&v.ID, &v.Ma, &v.Ten, &v.LaLanhDao); err != nil {
+			return nil, fmt.Errorf("vai_tro: đọc dòng vai trò của cán bộ: %w", err)
+		}
+		out = append(out, v)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("vai_tro: duyệt vai trò của cán bộ: %w", err)
+	}
+	return out, nil
+}
+
 // TranDanhMucVaiTro is the hard upper bound on one commune's role catalogue.
 //
 // Same argument as TranDanhMucBoPhan, and deliberately a SMALLER number. The Phân quyền screen

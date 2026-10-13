@@ -89,6 +89,9 @@ type NewCommuneAdmin struct {
 	Email        string // already normalised by domain.ChuanHoaEmail
 	PasswordHash string // argon2id of the owner's temporary password — never the value
 	RoleID       string
+	// AssignedBy is `created_by` of the role assignment (migration 0031) — the operator's code, the
+	// same value CapMoiQuyen records as `cap_boi`. Required.
+	AssignedBy string
 }
 
 // InsertCommuneAdmin inserts the account with the SAME column shape as the seeded default
@@ -97,7 +100,8 @@ type NewCommuneAdmin struct {
 // as ErrEmailDaDung (ALREADY_EXISTS) under `UNIQUE (tenant_id, email)` — the directory's own rule —
 // and a taken code as ErrMaCanBoDaDung, which the caller retries with a new code.
 func (s *CanBoStore) InsertCommuneAdmin(ctx context.Context, tx *store.ScopedTx, in NewCommuneAdmin) error {
-	if in.ID == "" || in.Code == "" || in.FullName == "" || in.Email == "" || in.PasswordHash == "" || in.RoleID == "" {
+	if in.ID == "" || in.Code == "" || in.FullName == "" || in.Email == "" || in.PasswordHash == "" ||
+		in.RoleID == "" || in.AssignedBy == "" {
 		return errors.New("can_bo: insert commune admin: required field missing")
 	}
 	_, err := tx.Exec(ctx,
@@ -109,5 +113,7 @@ func (s *CanBoStore) InsertCommuneAdmin(ctx context.Context, tx *store.ScopedTx,
 	if err != nil {
 		return dichLoiGhiCanBo("tạo quản trị xã bởi vận hành", err)
 	}
-	return nil
+	// The role is HELD through staff_role_assignment (migration 0031); without this row the new
+	// administrator would sign in holding no permission at all.
+	return insertPrimaryRoleAssignment(ctx, tx, in.ID, in.RoleID, in.AssignedBy)
 }

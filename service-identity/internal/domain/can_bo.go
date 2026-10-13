@@ -82,6 +82,11 @@ type CanBoTomTat struct {
 	BoPhanID string
 	VaiTroID string
 
+	// RoleIDs is EVERY live role the person holds (migration 0031, owner decision 13/10/2026), the
+	// primary one (VaiTroID) first. Permissions are the union of these roles' grants. Empty, never nil
+	// on a read, when the person holds none.
+	RoleIDs []string
+
 	// TWO PHONE FIELDS, BECAUSE THEY ARE TWO KINDS OF DATA IN LAW. Open question #16, decided
 	// 2026-09-22. Merging them would force ONE masking, export and publication rule onto both,
 	// and the level that is right for one is always wrong for the other.

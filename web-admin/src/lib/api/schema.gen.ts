@@ -2553,6 +2553,7 @@ export type identity_canBoTomTat = {
   "position": string;
   "department_id": string;
   "role_id": string;
+  "role_ids"?: Array<string>;
   "phone": string;
   "mobile": string;
   "has_account": boolean;
@@ -2640,6 +2641,7 @@ export type identity_citizenSessionOut = {
   "tenantDisplayName": string;
   "phoneVerified": boolean;
   "communePrimaryHost": string;
+  "maskedPhone"?: string;
 };
 
 export type identity_citizenSessionsOut = {
@@ -2740,7 +2742,8 @@ export type identity_datCongKhaiVao = {
 };
 
 export type identity_datVaiTroVao = {
-  "role_id": string;
+  "role_id"?: string;
+  "role_ids"?: Array<string> | null;
 };
 
 export type identity_departmentCountOut = {
@@ -2921,6 +2924,7 @@ export type identity_phienHienTaiRa = {
   "expires_at": string;
   "staff": identity_canBoGon;
   "role": identity_vaiTroGon | null;
+  "roles"?: Array<identity_staffRoleOut>;
   "permissions": Array<string>;
   "must_change_password": boolean;
 };
@@ -3073,6 +3077,13 @@ export type identity_staffImportRejectedOut = {
   "message": string;
   "trace_id": string;
   "errors": Array<identity_staffImportErrorOut>;
+};
+
+export type identity_staffRoleOut = {
+  "id": string;
+  "code": string;
+  "name": string;
+  "is_leader": boolean;
 };
 
 export type identity_staffTallyOut = {
@@ -11232,7 +11243,7 @@ export type identity_put_staff_by_id_publication = {
   };
 };
 
-/** PUT /api/v1/staff/{id}/role — Đổi vai trò của một cán bộ — chuỗi rỗng nghĩa là gỡ vai trò */
+/** PUT /api/v1/staff/{id}/role — Đặt các vai trò của một cán bộ — role_ids là cả tập (rỗng là gỡ hết); role_id cũ vẫn nhận, nghĩa là tập một vai trò */
 export type identity_put_staff_by_id_role = {
   duongDan: "/api/v1/staff/{id}/role";
   phuongThuc: "PUT";

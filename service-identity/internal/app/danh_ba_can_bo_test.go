@@ -108,6 +108,12 @@ type khoGia struct {
 	// signInLock is the automatic lockout state of the row (#39). Zero = clean.
 	signInLock domain.SignInLock
 
+	// roles is the target's live role set (migration 0031); nil = [cb.VaiTroID]. setRoles / setRolesBy
+	// are what SetStaffRoles was handed; nil = never called.
+	roles      []string
+	setRoles   []string
+	setRolesBy string
+
 	loi error
 }
 
@@ -167,8 +173,27 @@ func (k *khoGia) SetSignInLock(ctx context.Context, tx *store.ScopedTx, id strin
 	return err
 }
 
-func (k *khoGia) DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error {
-	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET vai_tro_id", id, vaiTroID)
+// StaffRoleIDs answers the target's live role set: `roles` when a test set it, otherwise the one
+// primary role of the fixture row (the state migration 0031's backfill produces).
+func (k *khoGia) StaffRoleIDs(ctx context.Context, tx *store.ScopedTx, id string) ([]string, error) {
+	if _, err := tx.Exec(ctx, "SELECT role_id FROM staff_role_assignment", string(tx.TenantID()), id); err != nil {
+		return nil, err
+	}
+	if k.roles != nil {
+		return k.roles, nil
+	}
+	if k.cb.VaiTroID == "" {
+		return []string{}, nil
+	}
+	return []string{k.cb.VaiTroID}, nil
+}
+
+// SetStaffRoles records the set it was handed and runs a statement carrying `SET vai_tro_id`, so the
+// driver shows the role write landed in the use case's transaction.
+func (k *khoGia) SetStaffRoles(ctx context.Context, tx *store.ScopedTx, id string, roleIDs []string, by string) error {
+	k.setRoles = append([]string{}, roleIDs...)
+	k.setRolesBy = by
+	_, err := tx.Exec(ctx, "UPDATE nguoi_dung SET vai_tro_id", id, strings.Join(roleIDs, ","), by)
 	return err
 }
 
@@ -722,6 +747,101 @@ func TestDoiVaiTroSangChinhVaiTroDangCoThiKhongGhiGi(t *testing.T) {
 	}
 	if n := len(vetDaGhi(b.ghi)); n != 0 {
 		t.Errorf("gán đúng vai trò đang có mà vẫn ghi %d vết", n)
+	}
+}
+
+// --- SetRoles: several roles per person (owner decision 13/10/2026) -------------------------------
+
+// REMOVING THE ADMINISTRATOR ROLE FROM THE LAST ADMINISTRATOR IS REFUSED even while they keep another
+// role: #13 asks whether ANY role of the new set carries admin.user.
+//
+// MUTATION THAT MUST TURN THIS RED: judge #13 on the first role only, or on "still holds some role".
+func TestSetRolesRemovingAdminRoleFromLastAdminIsRefused(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	b.kho.cb.VaiTroID = vaiTroManh
+	b.kho.roles = []string{vaiTroManh, vaiTroYeu}
+	b.kho.quanTri = []string{idNguoiKhac}
+
+	_, err := b.uc.SetRoles(ctxXa(xaThu), idNguoiKhac, []string{vaiTroYeu}, nguoiThucHienGia())
+	if !errors.Is(err, ErrQuanTriCuoiCung) {
+		t.Fatalf("lỗi = %v, muốn ErrQuanTriCuoiCung", err)
+	}
+	if b.kho.setRoles != nil {
+		t.Error("đã ghi tập vai trò dù bị từ chối")
+	}
+	khongCoGhi(t, b.ghi)
+}
+
+// THE LAST ADMINISTRATOR MAY GAIN A SECOND ROLE while keeping the administrator one; the primary stays
+// the administrator role (adding must not relabel the person), and the entry carries both sets.
+func TestSetRolesAddingSecondRoleToLastAdminKeepsPrimary(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	b.kho.cb.VaiTroID = vaiTroManh
+	b.kho.quanTri = []string{idNguoiKhac}
+
+	cb, err := b.uc.SetRoles(ctxXa(xaThu), idNguoiKhac, []string{vaiTroYeu, vaiTroManh}, nguoiThucHienGia())
+	if err != nil {
+		t.Fatalf("SetRoles: %v", err)
+	}
+	if got := strings.Join(b.kho.setRoles, ","); got != vaiTroManh+","+vaiTroYeu {
+		t.Errorf("tập ghi = %q, muốn vai trò chính cũ đứng đầu", got)
+	}
+	if cb.VaiTroID != vaiTroManh {
+		t.Errorf("vai trò chính = %q, muốn giữ %q", cb.VaiTroID, vaiTroManh)
+	}
+	d := deltaCua(t, motVet(t, b.ghi))
+	truoc, _ := d["truoc"].(map[string]any)
+	sau, _ := d["sau"].(map[string]any)
+	if ids, _ := truoc["vai_tro_ids"].([]any); len(ids) != 1 {
+		t.Errorf("truoc.vai_tro_ids = %v", truoc["vai_tro_ids"])
+	}
+	if ids, _ := sau["vai_tro_ids"].([]any); len(ids) != 2 {
+		t.Errorf("sau.vai_tro_ids = %v", sau["vai_tro_ids"])
+	}
+}
+
+// #14 ON THE ADDED ROLES: adding a strong role the caller lacks is refused even when it rides beside
+// the weak one the person already holds.
+//
+// MUTATION THAT MUST TURN THIS RED: check only the first role of the new set.
+func TestSetRolesEscalationThroughAddedRoleIsRefused(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	b.kho.quyenToi = []string{"admin.user", "document.read"}
+
+	_, err := b.uc.SetRoles(ctxXa(xaThu), idNguoiKhac, []string{vaiTroYeu, vaiTroManh}, nguoiThucHienGia())
+	var missing *LoiTraoQuyenKhongCam
+	if !errors.As(err, &missing) || strings.Join(missing.Thieu, ",") != "budget.confirm" {
+		t.Fatalf("lỗi = %v, muốn LoiTraoQuyenKhongCam[budget.confirm]", err)
+	}
+	khongCoGhi(t, b.ghi)
+}
+
+// A ROLE THE PERSON ALREADY HOLDS IS NOT RE-CHECKED: a weaker administrator may remove a colleague's
+// weak role while the strong one stays — the change grants nothing.
+func TestSetRolesKeepingStrongerRoleIsNotEscalation(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	b.kho.quyenToi = []string{"admin.user", "document.read"}
+	b.kho.cb.VaiTroID = vaiTroManh
+	b.kho.roles = []string{vaiTroManh, vaiTroYeu}
+
+	if _, err := b.uc.SetRoles(ctxXa(xaThu), idNguoiKhac, []string{vaiTroManh}, nguoiThucHienGia()); err != nil {
+		t.Fatalf("gỡ vai trò yếu, giữ vai trò mạnh đang có, bị chặn: %v", err)
+	}
+	if got := strings.Join(b.kho.setRoles, ","); got != vaiTroManh {
+		t.Errorf("tập ghi = %q", got)
+	}
+}
+
+// THE SAME SET IN ANOTHER ORDER writes nothing — PUT is idempotent on the set.
+func TestSetRolesSameSetWritesNothing(t *testing.T) {
+	b := dungBanThuDanhBa(t)
+	b.kho.roles = []string{vaiTroYeu, vaiTroManh}
+
+	if _, err := b.uc.SetRoles(ctxXa(xaThu), idNguoiKhac, []string{vaiTroManh, vaiTroYeu}, nguoiThucHienGia()); err != nil {
+		t.Fatalf("SetRoles: %v", err)
+	}
+	if b.kho.setRoles != nil || len(vetDaGhi(b.ghi)) != 0 {
+		t.Error("cùng tập vai trò mà vẫn ghi")
 	}
 }
 

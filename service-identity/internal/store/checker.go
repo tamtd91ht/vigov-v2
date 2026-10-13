@@ -37,18 +37,34 @@ func NewChecker(db *store.DB, log *slog.Logger) *Checker {
 // was never given an account. Locked-out (`dang_hoat_dong = false`) is the other, separate case:
 // an account that exists and is currently shut. Both must hold, for the same fail-closed reason
 // stated at the top of this file — an error or an omission here widens access invisibly.
+//
+// DISTINCT because a person may hold SEVERAL roles (migration 0031) and two of them may grant the
+// same key; the list read must name it once.
 const truyVanQuyenGoc = `
-SELECT vq.quyen_ma` + noiGiuQuyen + `
+SELECT DISTINCT vq.quyen_ma` + noiGiuQuyen + `
   AND nd.id = $2` + dieuKienGiuQuyen
 
-// noiGiuQuyen is the person → role → grant join, bound to the commune at every table, lifted out of
-// truyVanQuyenGoc for exactly one other reader: the picker's `permission` filter
-// (can_bo_chon_nguoi.go locGiuQuyen), which must find the SAME holders this check admits. The
-// person is left for the caller to pick — `nd.id = $2` here, `nd.ma` there — because that is the
-// one thing the two readers key differently.
+// noiGiuQuyen is the person → role → grant join, bound to the commune at every table. It is THE one
+// spelling of "which roles does a person hold", shared by every reader that decides or counts who
+// holds a key: this check, the picker's `permission` filter (can_bo_chon_nguoi.go locGiuQuyen), the
+// notice recipients (notice_recipients.go holdersQuery) and the locked holder sets of open question
+// #13 (can_bo_ghi.go truyVanGiuQuyenDeGhiDau). The person is left for the caller to pick — `nd.id = $2`
+// here, `nd.ma` in the picker.
+//
+// THE ROLES COME FROM `staff_role_assignment`, NOT FROM `nguoi_dung.vai_tro_id` (owner decision
+// 13/10/2026: a person holds several roles; permission = the UNION of their live roles' grants). The
+// column is the PRIMARY role, kept for display only; reading grants off it would silently drop every
+// second role. Only LIVE assignments count (`sra.deleted_at IS NULL`).
+//
+// A JOIN AND NOT AN EXISTS, ON PURPOSE: the #13 queries add `FOR UPDATE`, which locks a row of every
+// table in the FROM list. Joined, the assignment row is locked too, so a concurrent removal of the
+// administrator role is waited for and then re-evaluated against its new version (deleted_at set) —
+// an EXISTS would be re-checked against the old snapshot and still count the removed administrator.
 const noiGiuQuyen = `
 FROM nguoi_dung nd
-JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = nd.vai_tro_id
+JOIN staff_role_assignment sra ON sra.tenant_id = nd.tenant_id AND sra.staff_id = nd.id
+                              AND sra.deleted_at IS NULL
+JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = sra.role_id
 JOIN vai_tro_quyen vq ON vq.tenant_id = nd.tenant_id AND vq.vai_tro_id = vt.id
 WHERE nd.tenant_id = $1`
 

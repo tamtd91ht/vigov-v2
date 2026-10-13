@@ -641,6 +641,10 @@ type hangND struct {
 	// Migration 0020 — the stored end of the automatic sign-in lock.
 	signInLockedUntil *time.Time
 
+	// roles is the person's LIVE role set (migration 0031), primary first. nil = the backfilled state:
+	// exactly [vaiTro] when the row has a role, none otherwise.
+	roles []string
+
 	// sortKey is the value of the COMPUTED sort column of the derived relation this statement reads
 	// (staffSortRelation), set per statement by dsChay. nil outside such a statement — and asking for
 	// a computed column then panics rather than pretending to be SQL NULL.
@@ -648,6 +652,21 @@ type hangND struct {
 }
 
 func dsSo(v int) *int { return &v }
+
+// dsRoleSet is the row's live role set (see hangND.roles).
+func (h hangND) dsRoleSet() []string {
+	if h.roles != nil {
+		return h.roles
+	}
+	if h.vaiTro == "" {
+		return nil
+	}
+	return []string{h.vaiTro}
+}
+
+// dsRoleIDsColumn is the name the fake gives staffRoleIDsColumn once dsChay has recognised the
+// store's own text: the correlated subquery is MODELLED (dsRoleSet), not parsed.
+const dsRoleIDsColumn = "role_ids_agg"
 
 func (h hangND) giaTri(cot string) driver.Value {
 	switch cot {
@@ -703,6 +722,8 @@ func (h hangND) giaTri(cot string) driver.Value {
 		return *h.signInLockedUntil
 	case "tenant_id":
 		return h.xa
+	case dsRoleIDsColumn:
+		return strings.Join(h.dsRoleSet(), ",")
 	case staffDepartmentSortColumn, staffLastLoginSortColumn, staffStatusSortColumn:
 		if h.sortKey == nil {
 			panic("driver giả: cột sắp xếp tính toán " + cot + " được đọc ngoài quan hệ dẫn xuất của nó")
@@ -769,8 +790,13 @@ var (
 	// evaluated against the rows, so `ma IN (SELECT nd.id …)` returns nobody. The commune bindings are
 	// literal — drop one and the clause no longer matches, and dsMenhDeLa refuses what is left. Each
 	// inner condition is modelled one by one (dsGiuQuyen), for the same reason as the outer ones.
+	//
+	// SINCE MIGRATION 0031 THE ROLE COMES THROUGH staff_role_assignment (a person holds a SET of roles);
+	// the live-assignment clause is literal, and the captured role column must be `sra.role_id`.
 	dsReGiuQuyen = regexp.MustCompile(`(?s) AND ([a-z_]+) IN \(SELECT nd\.([a-z_]+)\s+FROM nguoi_dung nd` +
-		`\s+JOIN vai_tro\s+vt ON vt\.tenant_id = nd\.tenant_id AND vt\.id\s+= nd\.([a-z_]+)` +
+		`\s+JOIN staff_role_assignment sra ON sra\.tenant_id = nd\.tenant_id AND sra\.staff_id = nd\.id` +
+		`\s+AND sra\.deleted_at IS NULL` +
+		`\s+JOIN vai_tro\s+vt ON vt\.tenant_id = nd\.tenant_id AND vt\.id\s+= ([a-z_.]+)` +
 		`\s+JOIN vai_tro_quyen vq ON vq\.tenant_id = nd\.tenant_id AND vq\.vai_tro_id = vt\.id` +
 		`\s+WHERE nd\.tenant_id = \$1((?:\s+AND [a-z_.]+(?: IS NULL)?)*?)` +
 		`\s+AND vq\.quyen_ma = \$(\d+)\)`)
@@ -785,6 +811,9 @@ var (
 // which is what makes a mutation in the store show up here as WRONG DATA instead of as a fake
 // somebody updated to match.
 func dsChay(q string, args []driver.Value) (driver.Rows, error) {
+	// The role-set column (migration 0031) is recognised by the store's OWN TEXT and modelled; a
+	// changed subquery no longer matches, and its WHERE then reaches dsMenhDeLa and is refused.
+	q = strings.Replace(q, staffRoleIDsColumn, dsRoleIDsColumn, 1)
 	cot, err := cotTrongCauLenh(q)
 	if err != nil {
 		return nil, err
@@ -1086,6 +1115,9 @@ func dsModelSortKey(param string, dir page.Dir) func(hangND) driver.Value {
 // inner key column over the people of commune $1 who hold key $n through a role of commune $1.
 func dsGiuQuyen(m []string, args []driver.Value) (map[driver.Value]bool, error) {
 	cotTrong, cotVaiTro := m[2], m[3]
+	if cotVaiTro != "sra.role_id" {
+		return nil, fmt.Errorf("driver giả: vai trò lấy từ %q, không phải từ bảng gán vai trò", cotVaiTro)
+	}
 	n, _ := strconv.Atoi(m[5])
 	khoa := args[n-1]
 	xa := args[0]
@@ -1136,11 +1168,14 @@ nguoi:
 				continue nguoi
 			}
 		}
-		vt := h.giaTri(cotVaiTro)
-		if vt == "" || !coVaiTro(vt) || !duocCap(vt) {
-			continue // an inner JOIN: no role (NULL), or no grant, means no row
+		// An inner JOIN over the role SET: any live role that exists and carries the key admits the
+		// person; no role, or no grant, means no row.
+		for _, vt := range h.dsRoleSet() {
+			if coVaiTro(vt) && duocCap(vt) {
+				ra[h.giaTri(cotTrong)] = true
+				break
+			}
 		}
-		ra[h.giaTri(cotTrong)] = true
 	}
 	return ra, nil
 }

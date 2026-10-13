@@ -49,6 +49,7 @@ func themNguoi(t *testing.T, db *sql.DB, tenantID, id, vaiTroID string) {
 	if err != nil {
 		t.Fatalf("thêm cán bộ: %v", err)
 	}
+	assignRolePg(t, db, tenantID, id, vaiTroID) // migration 0031: the role is held through the assignment
 }
 
 func dungVaiTroStore(db *sql.DB) *VaiTroStore { return NewVaiTroStore(pkgstore.New(db)) }

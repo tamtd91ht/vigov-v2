@@ -153,6 +153,12 @@ func dungXaPg(t *testing.T, db *sql.DB, xa, vaiTroID string, quyen []string, ngu
 			xa, id, "CB-2026-"+id, "Nguyễn Văn A", id+"@xa.danang.gov.vn", vaiTroID, bamGiaPg); err != nil {
 			t.Fatalf("thêm cán bộ %s: %v", id, err)
 		}
+		// Migration 0031: the role is HELD through staff_role_assignment, the column is the primary.
+		if _, err := db.Exec(
+			`INSERT INTO staff_role_assignment (tenant_id, staff_id, role_id, created_by) VALUES ($1,$2,$3,'system')`,
+			xa, id, vaiTroID); err != nil {
+			t.Fatalf("gán vai trò cho %s: %v", id, err)
+		}
 	}
 }
 
@@ -169,9 +175,11 @@ func demQuanTriConSong(t *testing.T, db *sql.DB, xa string) int {
 	t.Helper()
 	var n int
 	err := db.QueryRow(`
-		SELECT count(*)
+		SELECT count(DISTINCT nd.id)
 		  FROM nguoi_dung nd
-		  JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = nd.vai_tro_id
+		  JOIN staff_role_assignment sra ON sra.tenant_id = nd.tenant_id AND sra.staff_id = nd.id
+		                                AND sra.deleted_at IS NULL
+		  JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = sra.role_id
 		  JOIN vai_tro_quyen vq ON vq.tenant_id = nd.tenant_id AND vq.vai_tro_id = vt.id
 		 WHERE nd.tenant_id = $1 AND vq.quyen_ma = 'admin.user'
 		   AND nd.deleted_at IS NULL AND nd.co_tai_khoan AND nd.dang_hoat_dong

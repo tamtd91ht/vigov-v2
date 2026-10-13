@@ -42,7 +42,13 @@ type canBoTomTat struct {
 	// Ids, not labels. The screen already holds the department and role lists for its own filter
 	// boxes; resolving the label here would mean a join, and the paged read walks one table.
 	DepartmentID string `json:"department_id"`
-	RoleID       string `json:"role_id"`
+	// RoleID is the PRIMARY role — kept for every client written before 13/10/2026.
+	RoleID string `json:"role_id"`
+	// RoleIDs is EVERY role the person holds (owner decision 13/10/2026), primary first. ABSENT when
+	// the person holds none — `omitempty` is what makes the field OPTIONAL in the contract
+	// (tools/apidoc), so every client and fixture written before the change still type-checks. A
+	// client reads absent as []. What the Người dùng form pre-ticks.
+	RoleIDs []string `json:"role_ids,omitempty"`
 
 	// TWO NUMBERS, BECAUSE THEY ARE TWO KINDS OF DATA IN LAW (#16). Neither is masked on this
 	// surface, and the reason is #11 rather than convenience — see soRaManHinhNoiBo.
@@ -147,6 +153,7 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 		Position:     cb.ChucVu,
 		DepartmentID: cb.BoPhanID,
 		RoleID:       cb.VaiTroID,
+		RoleIDs:      staffRoleIDsOut(cb),
 		Phone:        soRaManHinhNoiBo(cb.DienThoaiCoQuan),
 		Mobile:       soRaManHinhNoiBo(cb.DiDongCaNhan),
 		HasAccount:   cb.CoTaiKhoan,
@@ -159,6 +166,19 @@ func raNgoai(cb domain.CanBoTomTat) canBoTomTat {
 		DisplayOrder:      cb.ThuTuDanhBa,
 		ConsentRecordedAt: cb.DongYCongKhaiLuc,
 	}
+}
+
+// staffRoleIDsOut is the role set for the wire: never null. A record built by a write path that did
+// not read the set (a profile edit, a lock) still carries its primary role, so the screen never shows
+// a person with a primary role and an empty set.
+func staffRoleIDsOut(cb domain.CanBoTomTat) []string {
+	if len(cb.RoleIDs) > 0 {
+		return cb.RoleIDs
+	}
+	if cb.VaiTroID != "" {
+		return []string{cb.VaiTroID}
+	}
+	return []string{}
 }
 
 // adminStaffView is raNgoai PLUS the account-security state only an `admin.user` holder is shown:

@@ -103,6 +103,12 @@ LIMIT $2`
 // out of this path entirely as well — nothing about a person is ever selected, so nothing about a
 // person can accidentally reach the response (rule 3).
 //
+// THE HOLDERS ARE READ THROUGH staff_role_assignment (migration 0031, owner decision 13/10/2026): a
+// person holding two roles is counted under BOTH columns, once each — the live unique key allows one
+// live row per (person, role). Reading `nd.vai_tro_id` would count them under their primary role only,
+// and the header would understate how far a tick reaches. The inner join in parentheses keeps the
+// deleted-person filter on the PERSON, so a role whose only holder was removed still appears with 0.
+//
 // count(nd.id) AND NOT count(*) — THE ONE LINE THAT IS WRONG IN A WAY NOTHING REPORTS. This is a
 // LEFT JOIN, so a role nobody holds still produces one row, with every `nd.*` column NULL.
 // count(*) counts that row and answers 1; count(nd.id) skips NULLs and answers 0. The screen would
@@ -134,10 +140,14 @@ SELECT vt.id, vt.ma, vt.ten, vt.la_lanh_dao,
        count(nd.id)                                                          AS so_can_bo,
        count(nd.id) FILTER (WHERE nd.co_tai_khoan AND nd.dang_hoat_dong)     AS so_tai_khoan_hoat_dong
 FROM vai_tro vt
-LEFT JOIN nguoi_dung nd
-       ON nd.tenant_id  = vt.tenant_id
-      AND nd.vai_tro_id = vt.id
-      AND nd.deleted_at IS NULL
+LEFT JOIN (staff_role_assignment sra
+           JOIN nguoi_dung nd
+             ON nd.tenant_id  = sra.tenant_id
+            AND nd.id         = sra.staff_id
+            AND nd.deleted_at IS NULL)
+       ON sra.tenant_id  = vt.tenant_id
+      AND sra.role_id    = vt.id
+      AND sra.deleted_at IS NULL
 WHERE vt.tenant_id = $1
   AND vt.deleted_at IS NULL
 GROUP BY vt.id, vt.ma, vt.ten, vt.la_lanh_dao, vt.thu_tu

@@ -51,16 +51,16 @@ import (
 type ghiDanhBaGia struct {
 	mu sync.Mutex
 
-	goi        int
-	nguoiCuoi  app.NguoiThucHien
-	xaCuoi     tenant.ID
-	idCuoi     string
-	khoaCuoi   bool
-	vaiTroCuoi string
-	themCuoi   app.YeuCauThemCanBo
-	suaCuoi    app.YeuCauSuaCanBo
-	congKhai   app.YeuCauCongKhai
-	lyDoXoa    string
+	goi       int
+	nguoiCuoi app.NguoiThucHien
+	xaCuoi    tenant.ID
+	idCuoi    string
+	khoaCuoi  bool
+	lastRoles []string // what SetRoles was handed; nil = never called
+	themCuoi  app.YeuCauThemCanBo
+	suaCuoi   app.YeuCauSuaCanBo
+	congKhai  app.YeuCauCongKhai
+	lyDoXoa   string
 
 	// bulkItems is what PublishMany was handed; bulkOutcomes is what it returns.
 	bulkItems    []app.BulkPublishItem
@@ -112,9 +112,9 @@ func (g *ghiDanhBaGia) DatKhoa(ctx context.Context, id string, khoa bool, nguoi 
 	return g.kq, g.loi
 }
 
-func (g *ghiDanhBaGia) DoiVaiTro(ctx context.Context, id, vaiTroID string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error) {
+func (g *ghiDanhBaGia) SetRoles(ctx context.Context, id string, roleIDs []string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error) {
 	g.ghiNhan(ctx, nguoi)
-	g.idCuoi, g.vaiTroCuoi = id, vaiTroID
+	g.idCuoi, g.lastRoles = id, roleIDs
 	return g.kq, g.loi
 }
 
@@ -214,6 +214,13 @@ func moiTuyenGhi() []tuyenGhi {
 		// above it, so 401 · 403 wrong key · 403 wrong commune · 201 are re-asserted for this body.
 		{"thêm cán bộ kèm vai trò", "POST", "/api/v1/staff",
 			`{"full_name":"Trần Thị B","position":"Công chức","mobile":"0900000000","role_ids":["vt-002"]}`,
+			http.StatusCreated},
+		// SEVERAL ROLES (owner decision 13/10/2026): the same two routes and the same key, so the four
+		// RBAC cases are re-asserted for the multi-role bodies too.
+		{"đặt nhiều vai trò", "PUT", "/api/v1/staff/" + idNoiBo + "/role",
+			`{"role_ids":["vt-002","vt-003"]}`, http.StatusOK},
+		{"thêm cán bộ kèm hai vai trò", "POST", "/api/v1/staff",
+			`{"full_name":"Trần Thị B","position":"Công chức","mobile":"0900000000","role_ids":["vt-002","vt-003"]}`,
 			http.StatusCreated},
 	}
 }
@@ -433,11 +440,58 @@ func TestDoiVaiTroChuoiRongLaGoVaiTro(t *testing.T) {
 	tg.than = `{"role_id":""}`
 	doiMa(t, m.goiGhi(t, tg, hostA, tok), http.StatusOK)
 
-	if m.ghiDanhBa.vaiTroCuoi != "" {
-		t.Errorf("vai trò gửi xuống = %q, muốn chuỗi rỗng", m.ghiDanhBa.vaiTroCuoi)
+	if strings.Join(m.ghiDanhBa.lastRoles, "") != "" {
+		t.Errorf("vai trò gửi xuống = %q, muốn tập rỗng", m.ghiDanhBa.lastRoles)
 	}
 	if m.ghiDanhBa.soLanGoi() != 1 {
 		t.Error("use case không được gọi")
+	}
+}
+
+// role_ids REACHES THE USE CASE AS THE WHOLE SET (owner decision 13/10/2026), and [] is "no role".
+//
+// MUTATION THAT MUST TURN THIS RED: read only role_id, or only the first element of role_ids.
+func TestSetRolesBodyCarriesTheWholeSet(t *testing.T) {
+	m := dungMayChu(t)
+	tok := m.tokenCho(t, xaA, sidA)
+
+	tg := moiTuyenGhi()[4]
+	tg.than = `{"role_ids":["vt-002","vt-003"]}`
+	doiMa(t, m.goiGhi(t, tg, hostA, tok), http.StatusOK)
+	if got := strings.Join(m.ghiDanhBa.lastRoles, ","); got != "vt-002,vt-003" {
+		t.Errorf("tập gửi xuống = %q, muốn vt-002,vt-003", got)
+	}
+
+	tg.than = `{"role_ids":[]}`
+	doiMa(t, m.goiGhi(t, tg, hostA, tok), http.StatusOK)
+	if m.ghiDanhBa.lastRoles == nil || len(m.ghiDanhBa.lastRoles) != 0 {
+		t.Errorf("role_ids [] phải tới use case là tập rỗng, được %v", m.ghiDanhBa.lastRoles)
+	}
+}
+
+// BOTH SPELLINGS IN ONE BODY ARE REFUSED with 400, before the use case runs: two answers in one PUT
+// have no single meaning.
+func TestSetRolesBothFieldsRefused(t *testing.T) {
+	m := dungMayChu(t)
+	tok := m.tokenCho(t, xaA, sidA)
+
+	tg := moiTuyenGhi()[4]
+	tg.than = `{"role_id":"vt-001","role_ids":["vt-002"]}`
+	doiMa(t, m.goiGhi(t, tg, hostA, tok), http.StatusBadRequest)
+	if m.ghiDanhBa.soLanGoi() != 0 {
+		t.Error("use case vẫn được gọi khi thân mang cả hai trường")
+	}
+}
+
+// THE STAFF VIEW CARRIES role_ids, never null: the set when the use case returned one, the primary
+// alone otherwise.
+func TestStaffViewCarriesRoleIDs(t *testing.T) {
+	v := raNgoai(domain.CanBoTomTat{VaiTroID: "vt-001", RoleIDs: []string{"vt-001", "vt-002"}})
+	if strings.Join(v.RoleIDs, ",") != "vt-001,vt-002" {
+		t.Errorf("role_ids = %v", v.RoleIDs)
+	}
+	if v := raNgoai(domain.CanBoTomTat{}); v.RoleIDs == nil || len(v.RoleIDs) != 0 {
+		t.Errorf("không vai trò: role_ids = %#v, muốn [] (không null)", v.RoleIDs)
 	}
 }
 

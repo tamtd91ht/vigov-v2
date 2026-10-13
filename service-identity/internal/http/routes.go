@@ -182,7 +182,8 @@ type (
 		Them(ctx context.Context, yc app.YeuCauThemCanBo, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 		Sua(ctx context.Context, id string, yc app.YeuCauSuaCanBo, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 		DatKhoa(ctx context.Context, id string, khoa bool, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
-		DoiVaiTro(ctx context.Context, id, vaiTroID string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
+		// SetRoles — the person's WHOLE role set (owner decision 13/10/2026), behind PUT .../role.
+		SetRoles(ctx context.Context, id string, roleIDs []string, nguoi app.NguoiThucHien) (domain.CanBoTomTat, error)
 		// DatCongKhai — the Mini App publication of ONE person (#12). On this interface because it
 		// is a use case over the same row with the same transaction-plus-audit shape; guarded by a
 		// DIFFERENT permission (`content.update`) at the route.
@@ -244,6 +245,8 @@ type (
 	// The bool is the second outcome and is not optional to handle — see VaiTroCuaCanBo.
 	VaiTroDoc interface {
 		VaiTroCuaCanBo(ctx context.Context, canBoID string) (domain.VaiTro, bool, error)
+		// RolesOfStaff — EVERY role the caller holds (owner decision 13/10/2026), primary first.
+		RolesOfStaff(ctx context.Context, staffID string) ([]domain.VaiTro, error)
 	}
 
 	// BoPhanDanhMuc is the commune's org chart, for GET /api/v1/org-units.
@@ -1264,13 +1267,14 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("mở khoá một tài khoản đang mở thì use case không ghi gì, nên lần gửi thứ hai cho cùng một trạng thái")(
 				http.HandlerFunc(h.MoKhoaCanBo))))
 
-	// Moving somebody to a role. PUT /api/v1/staff/{id}/role
+	// Setting somebody's roles. PUT /api/v1/staff/{id}/role
 	//
 	// PUT ON A SINGULAR SUB-RESOURCE, the same shape rest-api-design §3 gives
-	// `PUT /api/v1/tasks/{id}/assignment`: a person holds at most one role, so the body carries the
-	// WHOLE state of that relationship and `""` means "no role" — a legitimate destination, since
-	// `nguoi_dung.vai_tro_id` is nullable and somebody can sit in the org chart holding nothing.
-	// `role` singular and not `roles`: this is the one relationship, not a collection.
+	// `PUT /api/v1/tasks/{id}/assignment`: the body carries the WHOLE state of the relationship. Since
+	// the owner decision of 13/10/2026 a person may hold SEVERAL roles, so that state is a set —
+	// `role_ids` (`[]` = no role); the original `role_id` is still accepted and means a set of one
+	// (datVaiTroVao). The path stays `role`, not `roles`: renaming a published route breaks every
+	// client for a word, and the sub-resource is still the one relationship "the person's role(s)".
 	//
 	// THIS IS WHERE #13 AND #14 BOTH LAND, and it is why the role is not a field on the PATCH
 	// above:
@@ -1283,13 +1287,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	//	             holds only `admin.user` cannot assign a role carrying `budget.confirm`. That is
 	//	             what the customer chose — the alternative is a permission table that describes
 	//	             a flat model while one key stands above all of them (rule 5, forbidden #2).
-	//	#13          moving the last administrator to a role without `admin.user` answers 409.
+	//	#13          a set in which no role carries `admin.user`, for the last administrator, answers 409.
+	//	             #14 second applies to EVERY role the change adds.
 	//
-	// idem.KhongCan — assigning the role somebody already holds writes nothing and audits nothing.
+	// idem.KhongCan — assigning the role set somebody already holds writes nothing and audits nothing.
 	// PUT carries an absolute state rather than a step, so the second request cannot compound the
 	// first.
 	//
-	// @summary  Đổi vai trò của một cán bộ — chuỗi rỗng nghĩa là gỡ vai trò
+	// @summary  Đặt các vai trò của một cán bộ — role_ids là cả tập (rỗng là gỡ hết); role_id cũ vẫn nhận, nghĩa là tập một vai trò
 	// @screen   14-cau-hinh §3
 	// @request  datVaiTroVao
 	// @reply    200 canBoTomTat

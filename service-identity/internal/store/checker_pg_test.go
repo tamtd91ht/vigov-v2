@@ -165,6 +165,23 @@ func dungXa(t *testing.T, db *sql.DB, tenantID, vaiTroID, nguoiID string, quyen 
 	if err != nil {
 		t.Fatalf("thêm cán bộ: %v", err)
 	}
+	// Since migration 0031 a role is HELD through staff_role_assignment; the column is the primary
+	// role for display only. The state every write path (and the backfill) produces: both.
+	assignRolePg(t, db, tenantID, nguoiID, vaiTroID)
+}
+
+// assignRolePg gives one person one live role assignment (migration 0031). "" assigns nothing — the
+// fixtures' spelling of "no role".
+func assignRolePg(t *testing.T, db *sql.DB, tenantID, staffID, roleID string) {
+	t.Helper()
+	if roleID == "" {
+		return
+	}
+	if _, err := db.Exec(
+		`INSERT INTO staff_role_assignment (tenant_id, staff_id, role_id, created_by) VALUES ($1,$2,$3,'system')`,
+		tenantID, staffID, roleID); err != nil {
+		t.Fatalf("gán vai trò %s: %v", roleID, err)
+	}
 }
 
 func dungChecker(db *sql.DB) *Checker {

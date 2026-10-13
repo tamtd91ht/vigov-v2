@@ -48,6 +48,7 @@ func themNguoiDaXoa(t *testing.T, db *sql.DB, tenantID, id, vaiTroID string) {
 	if err != nil {
 		t.Fatalf("thêm cán bộ đã xoá: %v", err)
 	}
+	assignRolePg(t, db, tenantID, id, vaiTroID) // migration 0031: the role is held through the assignment
 }
 
 func capQuyenCho(t *testing.T, db *sql.DB, tenantID, vaiTroID, quyenMa string) {
@@ -151,6 +152,7 @@ func themNguoiKhoa(t *testing.T, db *sql.DB, tenantID, id, vaiTroID string, coTa
 	if err != nil {
 		t.Fatalf("thêm cán bộ không dùng được: %v", err)
 	}
+	assignRolePg(t, db, tenantID, id, vaiTroID) // migration 0031
 }
 
 func TestPgMaTranHaiSoDem(t *testing.T) {

@@ -10,7 +10,7 @@ package app
 //	         under the import lock, re-plan and write every row with its entries (rule 6, invariant 3)
 //
 // IT REUSES THE THREE SINGLE-PERSON PATHS' INTERNALS rather than restating them: the rows go through
-// domain.PlanStaffImport (the create form's shape rules); the writes are CanBoStore.Chen, DatVaiTro and
+// domain.PlanStaffImport (the create form's shape rules); the writes are CanBoStore.Chen, SetStaffRoles and
 // CapTaiKhoan — the statements behind POST /api/v1/staff, PUT /api/v1/staff/{id}/role and
 // POST /api/v1/staff/{id}/account; the entries carry the SAME THREE VERBS (them_can_bo,
 // doi_vai_tro_can_bo, cap_tai_khoan_can_bo) and the same delta shapes, plus the batch. What an
@@ -57,8 +57,10 @@ type StaffImportRepo interface {
 	QuyenCuaVaiTro(ctx context.Context, tx *store.ScopedTx, vaiTroID string) ([]string, bool, error) // vi-name-ok: existing CanBoStore method, reused by name
 	QuyenDangGiu(ctx context.Context, tx *store.ScopedTx, canBoID string) ([]string, error)          // vi-name-ok: existing CanBoStore method, reused by name
 	Chen(ctx context.Context, tx *store.ScopedTx, cb domain.CanBoTomTat) error
-	DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error // vi-name-ok: existing CanBoStore method, reused by name
-	CapTaiKhoan(ctx context.Context, tx *store.ScopedTx, id, bam string) error    // vi-name-ok: existing CanBoStore method, reused by name
+	// ONE role per imported row: the template has one Vai trò column, and a multi-role cell would be a
+	// format change (owner decision 13/10/2026 covers the form; the file keeps its shape).
+	SetStaffRoles(ctx context.Context, tx *store.ScopedTx, staffID string, roleIDs []string, by string) error
+	CapTaiKhoan(ctx context.Context, tx *store.ScopedTx, id, bam string) error // vi-name-ok: existing CanBoStore method, reused by name
 
 	// StaffTemplateChoices is the one read outside a transaction: the template's two dropdowns.
 	StaffTemplateChoices(ctx context.Context) ([]domain.StaffImportOrgUnitChoice, []domain.StaffImportRoleChoice, error)
@@ -330,17 +332,16 @@ func (uc *StaffImporter) write(ctx context.Context, rows []domain.StaffImportRow
 			}
 
 			if p.RoleID != "" {
-				if err := uc.repo.DatVaiTro(ctx, tx, cb.ID, p.RoleID); err != nil {
+				if err := uc.repo.SetStaffRoles(ctx, tx, cb.ID, []string{p.RoleID}, actor.Vet.ID); err != nil {
 					return err
 				}
 				cb.VaiTroID = p.RoleID
+				cb.RoleIDs = []string{p.RoleID}
 				// A privilege change, audited as its own act (rule 5, invariant 5) — the verb and the
 				// delta of PUT /api/v1/staff/{id}/role.
 				if err := audit.Write(ctx, tx, audit.Entry{
 					Actor: actor.Vet, Action: HanhViDoiVaiTro, Subject: cb.Ma,
-					Delta: deltaCanBo(map[string]any{
-						"truoc": map[string]any{"vai_tro_id": ""},
-						"sau":   map[string]any{"vai_tro_id": p.RoleID},
+					Delta: roleChangeDelta("", nil, p.RoleID, []string{p.RoleID}, map[string]any{
 						"nguon": staffImportSource, "lo_nhap": batch, "dong": p.Row,
 					}),
 				}); err != nil {

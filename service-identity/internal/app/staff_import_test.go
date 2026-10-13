@@ -81,9 +81,12 @@ func (f *staffRepoFake) Chen(_ context.Context, tx *store.ScopedTx, cb domain.Ca
 	return nil
 }
 
-func (f *staffRepoFake) DatVaiTro(_ context.Context, tx *store.ScopedTx, id, role string) error { // vi-name-ok: implements the existing store method
+func (f *staffRepoFake) SetStaffRoles(_ context.Context, tx *store.ScopedTx, id string, roles []string, by string) error {
 	f.txs[tx] = true
-	f.roles[id] = role
+	if len(roles) != 1 || by == "" {
+		return errors.New("staffRepoFake: the import assigns exactly one role, named by a staff code")
+	}
+	f.roles[id] = roles[0]
 	return nil
 }
 

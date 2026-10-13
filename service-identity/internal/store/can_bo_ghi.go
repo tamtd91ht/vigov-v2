@@ -255,16 +255,103 @@ func (s *CanBoStore) XoaMem(ctx context.Context, tx *store.ScopedTx, id, xoaBoi,
 	return doiMotDong(kq, "xoá mềm")
 }
 
-// DatVaiTro moves one person to a role, or to no role at all (”).
-func (s *CanBoStore) DatVaiTro(ctx context.Context, tx *store.ScopedTx, id, vaiTroID string) error {
-	const stmt = `UPDATE nguoi_dung SET vai_tro_id = nullif($3,''), cap_nhat_luc = now()
-	              WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+// StaffRoleRemovedReason is `delete_reason` on an assignment a role change took away. The act, the
+// actor and the before/after sets are in the audit entry written in the same transaction; this
+// sentence only says which kind of act ended the row.
+const StaffRoleRemovedReason = "Gỡ vai trò khi đổi vai trò của cán bộ"
 
-	kq, err := tx.Exec(ctx, stmt, string(tx.TenantID()), id, vaiTroID)
-	if err != nil {
-		return dichLoiGhiCanBo("đặt vai trò", err)
+// StaffRoleIDs lists the person's LIVE role ids, the primary one (`nguoi_dung.vai_tro_id`) first, then
+// in the order they were given. Read inside the transaction, after the caller has locked the person's
+// row (TheoIDDeGhi), so no concurrent role change can move the set between this read and the write.
+//
+// SOFT-DELETED ROLES ARE INCLUDED: an assignment to a role the commune later retired is still a row
+// the person holds, grants nothing (the checker filters `vt.deleted_at`), and a role change must be
+// able to remove it.
+func (s *CanBoStore) StaffRoleIDs(ctx context.Context, tx *store.ScopedTx, staffID string) ([]string, error) {
+	if staffID == "" {
+		return nil, ErrCanBoKhongTonTai
 	}
-	return doiMotDong(kq, "đặt vai trò")
+	const stmt = `SELECT sra.role_id
+	              FROM staff_role_assignment sra
+	              JOIN nguoi_dung nd ON nd.tenant_id = $1 AND nd.id = sra.staff_id
+	              WHERE sra.tenant_id = $1 AND sra.staff_id = $2 AND sra.deleted_at IS NULL
+	              ORDER BY (sra.role_id = nd.vai_tro_id) IS TRUE DESC, sra.created_at, sra.role_id`
+	ds, err := docCotChuoi(ctx, tx, stmt, staffID)
+	if err != nil {
+		return nil, fmt.Errorf("can_bo: đọc vai trò của cán bộ: %w", err)
+	}
+	return ds, nil
+}
+
+// SetStaffRoles makes `roleIDs` the person's WHOLE live role set, and its first entry the primary
+// role in `nguoi_dung.vai_tro_id` (NULL when the set is empty) — the one write path for both, so the
+// two can never disagree (migration 0031).
+//
+// THREE STATEMENTS, ONE TRANSACTION (the caller's — this opens none, and the caller writes the audit
+// entry beside it, rule 6 invariant 3):
+//
+//	soft-remove   live assignments not in the set: deleted_at / deleted_by / delete_reason, never a
+//	              DELETE (rule 7). `by` is the actor's STAFF CODE (rule 6, invariant 8).
+//	add           roles in the set with no live row. The composite foreign key refuses another
+//	              commune's role (ErrVaiTroKhongTonTai); the caller has already refused a soft-deleted
+//	              one, which the key would accept.
+//	primary       `vai_tro_id` = roleIDs[0]. doiMotDong reports a person who is not there.
+//
+// GRANTS NOTHING ON ITS OWN AUTHORITY: #13 and #14 are the caller's (app.DanhBaCanBo.SetRoles).
+func (s *CanBoStore) SetStaffRoles(ctx context.Context, tx *store.ScopedTx, staffID string, roleIDs []string, by string) error {
+	if staffID == "" {
+		return ErrCanBoKhongTonTai
+	}
+	if strings.TrimSpace(by) == "" {
+		// Fail closed: a removal or a grant nobody can be named for is what rule 6 forbids.
+		return errors.New("can_bo: đặt vai trò: thiếu mã người thực hiện")
+	}
+	if roleIDs == nil {
+		roleIDs = []string{}
+	}
+	xa := string(tx.TenantID())
+
+	const removeStmt = `UPDATE staff_role_assignment
+	                    SET deleted_at = now(), deleted_by = $4, delete_reason = $5
+	                    WHERE tenant_id = $1 AND staff_id = $2 AND deleted_at IS NULL
+	                      AND NOT (role_id = ANY($3::text[]))`
+	if _, err := tx.Exec(ctx, removeStmt, xa, staffID, roleIDs, by, StaffRoleRemovedReason); err != nil {
+		return dichLoiGhiCanBo("gỡ vai trò", err)
+	}
+
+	const addStmt = `INSERT INTO staff_role_assignment (tenant_id, staff_id, role_id, created_by)
+	                 SELECT $1, $2, r, $4 FROM unnest($3::text[]) AS r
+	                 WHERE NOT EXISTS (SELECT 1 FROM staff_role_assignment cur
+	                                   WHERE cur.tenant_id = $1 AND cur.staff_id = $2
+	                                     AND cur.role_id = r AND cur.deleted_at IS NULL)`
+	if _, err := tx.Exec(ctx, addStmt, xa, staffID, roleIDs, by); err != nil {
+		return dichLoiGhiCanBo("thêm vai trò", err)
+	}
+
+	primary := ""
+	if len(roleIDs) > 0 {
+		primary = roleIDs[0]
+	}
+	const primaryStmt = `UPDATE nguoi_dung SET vai_tro_id = nullif($3,''), cap_nhat_luc = now()
+	                     WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+	kq, err := tx.Exec(ctx, primaryStmt, xa, staffID, primary)
+	if err != nil {
+		return dichLoiGhiCanBo("đặt vai trò chính", err)
+	}
+	return doiMotDong(kq, "đặt vai trò chính")
+}
+
+// insertPrimaryRoleAssignment gives a person who was just INSERTED with `vai_tro_id` the matching
+// assignment row — the seeding paths (ChenQuanTriMacDinh, InsertCommuneAdmin) that create an account
+// already holding a role. Without it the account would sign in holding no permission at all, because
+// grants are read from staff_role_assignment (checker.go noiGiuQuyen), not from the column.
+func insertPrimaryRoleAssignment(ctx context.Context, tx *store.ScopedTx, staffID, roleID, by string) error {
+	const stmt = `INSERT INTO staff_role_assignment (tenant_id, staff_id, role_id, created_by)
+	              VALUES ($1, $2, $3, $4)`
+	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()), staffID, roleID, by); err != nil {
+		return dichLoiGhiCanBo("gán vai trò ban đầu", err)
+	}
+	return nil
 }
 
 // truyVanQuanTriDeGhi lists — and LOCKS — every account that currently holds `admin.user` in this
@@ -320,12 +407,12 @@ const truyVanQuanTriDeGhi = truyVanGiuQuyenDeGhiDau + QuyenQuanTriNguoiDung + tr
 // time from a parameter is exactly the "some caller counts the wrong key" shape the constant
 // exists to prevent.
 const (
+	// THE JOIN IS checker.go's noiGiuQuyen, BY CONSTANT — "who holds the key" for #13 and for the
+	// permission check must be one spelling, or the two drift (see dieuKienGiuQuyen). Since migration
+	// 0031 a person holding the key through TWO roles comes back as TWO rows; QuanTriDangHoatDong
+	// collapses them, the Phân quyền write needs them apart (domain.ConNguoiGiuSauKhiLuu).
 	truyVanGiuQuyenDeGhiDau = `
-SELECT nd.id, vt.id
-FROM nguoi_dung nd
-JOIN vai_tro       vt ON vt.tenant_id = nd.tenant_id AND vt.id         = nd.vai_tro_id
-JOIN vai_tro_quyen vq ON vq.tenant_id = nd.tenant_id AND vq.vai_tro_id = vt.id
-WHERE nd.tenant_id = $1
+SELECT nd.id, vt.id` + noiGiuQuyen + `
   AND vq.quyen_ma = '`
 	truyVanGiuQuyenDeGhiDuoi = `'` + dieuKienGiuQuyen + `
 ORDER BY nd.id
@@ -334,16 +421,30 @@ FOR UPDATE`
 
 // QuanTriDangHoatDong returns the internal ids of everybody who can exercise `admin.user` in this
 // commune right now, and holds every row the answer rests on until the transaction ends.
+//
+// EACH PERSON ONCE. Since migration 0031 one administrator may reach the key through two roles and so
+// appear in two rows; the callers count this list (`len(...) != 1` in app.laNguoiQuanTriCuoiCung), and
+// a duplicate would make the LAST administrator look like two — permitting exactly the lock-out #13
+// forbids. The rows stay locked whatever is collapsed here.
 func (s *CanBoStore) QuanTriDangHoatDong(ctx context.Context, tx *store.ScopedTx) ([]string, error) {
 	ds, err := docNguoiGiuDeGhi(ctx, tx, truyVanQuanTriDeGhi)
 	if err != nil {
 		return nil, fmt.Errorf("can_bo: đọc danh sách quản trị viên: %w", err)
 	}
-	ra := make([]string, 0, len(ds))
+	return distinctHolderIDs(ds), nil
+}
+
+// distinctHolderIDs keeps the first occurrence of each person, in the query's order.
+func distinctHolderIDs(ds []domain.NguoiGiuQuyen) []string {
+	seen := make(map[string]bool, len(ds))
+	out := make([]string, 0, len(ds))
 	for _, n := range ds {
-		ra = append(ra, n.CanBoID)
+		if !seen[n.CanBoID] {
+			seen[n.CanBoID] = true
+			out = append(out, n.CanBoID)
+		}
 	}
-	return ra, nil
+	return out
 }
 
 // docNguoiGiuDeGhi runs one of the locked holder queries and returns (person, role) pairs.

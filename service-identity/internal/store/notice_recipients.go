@@ -72,10 +72,16 @@ func (s *CanBoStore) OrgUnitPermissionHolders(ctx context.Context, unitIDs []str
 // `la_lanh_dao` DECIDES WHO IS TOLD HERE, NOT WHO MAY ACT — the contract (ResolveLeadershipStaff)
 // states why this is the one reading of the flag besides the default screen, and domain.VaiTro
 // forbids it from ever becoming an authority axis.
+//
+// ANY OF THE PERSON'S LIVE ROLES (migration 0031, owner decision 13/10/2026): somebody who holds a
+// leader role as their second role is leadership too. DISTINCT, because a person holding two leader
+// roles must be told once.
 const leadershipQuery = `
-SELECT nd.ma
+SELECT DISTINCT nd.ma
 FROM nguoi_dung nd
-JOIN vai_tro vt ON vt.tenant_id = nd.tenant_id AND vt.id = nd.vai_tro_id
+JOIN staff_role_assignment sra ON sra.tenant_id = nd.tenant_id AND sra.staff_id = nd.id
+                              AND sra.deleted_at IS NULL
+JOIN vai_tro vt ON vt.tenant_id = nd.tenant_id AND vt.id = sra.role_id
 WHERE nd.tenant_id = $1
   AND nd.deleted_at IS NULL
   AND nd.co_tai_khoan

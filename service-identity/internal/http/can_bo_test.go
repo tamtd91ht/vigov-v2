@@ -308,7 +308,13 @@ func TestCanBoTraDuTruongManHinhCan(t *testing.T) {
 		Phone: "0900000000", Mobile: "0900000011", HasAccount: true, Active: true,
 	}
 	ra.LastLoginAt, ra.CreatedAt = nil, time.Time{} // compared separately, below
-	if ra != muon {
+	// role_ids (owner decision 13/10/2026): the primary alone here, compared on its own because a
+	// struct holding a slice cannot be compared with !=.
+	if len(ra.RoleIDs) != 1 || ra.RoleIDs[0] != "vt-001" {
+		t.Errorf("role_ids = %v, muốn [vt-001]", ra.RoleIDs)
+	}
+	ra.RoleIDs = nil
+	if !reflect.DeepEqual(ra, muon) {
 		t.Errorf("chi tiết = %+v\nmuốn        %+v", ra, muon)
 	}
 }
