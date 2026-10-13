@@ -790,7 +790,9 @@ func (uc *SoanNoiDungMiniApp) Delete(ctx context.Context, id, rawReason string, 
 	if id == "" {
 		return commsstore.ErrNoiDungKhongTonTai
 	}
-	reason, err := domain.ChuanHoaLyDoXoa(rawReason)
+	// Blank → domain.ContentItemDeleteDefaultReason (customer sheet web-admin-131026), so `delete_reason`
+	// is never empty; the soft delete and its entry still share the one transaction below.
+	reason, err := domain.NormalizeContentItemDeleteReason(rawReason)
 	if err != nil {
 		return err
 	}

@@ -6,7 +6,7 @@ package http
 //	GET   /api/v1/content-items/{id}   content.read
 //	POST  /api/v1/content-items        content.update
 //	PATCH /api/v1/content-items/{id}   content.update
-//	DELETE /api/v1/content-items/{id}  content.update (soft delete, reason required)
+//	DELETE /api/v1/content-items/{id}  content.update (soft delete, reason optional)
 //	POST  /api/v1/content-items/cover-images                 content.update (content_cover.go)
 //	POST  /api/v1/content-items/cover-images/{id}/completion  content.update (content_cover.go)
 //	GET   /api/v1/content-categories   content.read
@@ -85,8 +85,10 @@ package http
 //	                    (`…/content-items/cover-images`); `image_url` stays the legacy link field.
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -802,11 +804,12 @@ func (h *Handler) SuaNoiDung(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusOK, noiDungRaNgoai(sau, true))
 }
 
-// deleteContentItemIn is the body of DELETE /api/v1/content-items/{id}. The reason is mandatory (rule
-// 7, invariant 1) and travels in the body, never the query string; trimmed and bounded by the use case
-// (domain.ChuanHoaLyDoXoa, 500 runes — the bound service-identity's staff delete uses).
+// deleteContentItemIn is the body of DELETE /api/v1/content-items/{id}. The reason is OPTIONAL (customer
+// sheet web-admin-131026: the Xoá dialog has no reason box any more): absent, blank, or no body at all →
+// `delete_reason` is domain.ContentItemDeleteDefaultReason. A reason that is given travels in the body,
+// never the query string, and is trimmed and bounded by the use case (500 runes).
 type deleteContentItemIn struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // DeleteContentItem soft-deletes one item. DELETE /api/v1/content-items/{id} → 204.
@@ -814,8 +817,13 @@ type deleteContentItemIn struct {
 // 204 AND NO BODY: the item is gone from every read path, so there is no row for §6 to redraw — the
 // answer DELETE /api/v1/staff/{id} and DELETE /api/v1/content-categories/{id} give.
 func (h *Handler) DeleteContentItem(w http.ResponseWriter, r *http.Request) {
+	// THE BODY ITSELF IS OPTIONAL — DeleteMapFieldSchema's shape for the same decision. io.EOF is "no
+	// body"; anything that IS sent must still be valid JSON within thanToiDa.
 	var in deleteContentItemIn
-	if !docThan(w, r, &in) {
+	r.Body = http.MaxBytesReader(w, r.Body, thanToiDa)
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil && !errors.Is(err, io.EOF) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Nội dung gửi lên không phải JSON hợp lệ hoặc quá lớn.", "")
 		return
 	}
 	actor, ok := nguoiThucHien(r)
@@ -833,13 +841,11 @@ func (h *Handler) DeleteContentItem(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// contentItemDeleteError gives the two reason refusals a sentence about THIS act — the shared domain
-// errors are worded for the catalogue (`danh_muc: …`) — then defers to the shared mapping (404, 500).
+// contentItemDeleteError gives the reason refusal a sentence about THIS act — the shared domain error is
+// worded for the catalogue (`danh_muc: …`) — then defers to the shared mapping (404, 500). A blank
+// reason is no longer a refusal (customer sheet web-admin-131026), so it has no case here.
 func (h *Handler) contentItemDeleteError(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
-	case errors.Is(err, domain.ErrThieuLyDoXoa):
-		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"Hãy nhập lý do xoá. Nội dung đã đăng là hồ sơ lưu trữ, xoá phải ghi rõ vì sao.", "")
 	case errors.Is(err, domain.ErrLyDoXoaQuaDai):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
 			fmt.Sprintf("Lý do xoá quá dài (tối đa %d ký tự).", domain.LyDoXoaToiDa), "")

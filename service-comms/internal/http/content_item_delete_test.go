@@ -38,9 +38,8 @@ func TestDeleteContentItemRefusals(t *testing.T) {
 		status int
 		code   string
 	}{
-		// The use case refuses blank / missing reasons (domain.ChuanHoaLyDoXoa); the handler answers 400.
-		"blank reason": {domain.ErrThieuLyDoXoa, http.StatusBadRequest, "invalid_request"},
-		"long reason":  {fmt.Errorf("%w (tối đa 500 ký tự)", domain.ErrLyDoXoaQuaDai), http.StatusBadRequest, "invalid_request"},
+		// A blank reason is accepted since sheet web-admin-131026; an over-long one is still a 400.
+		"long reason": {fmt.Errorf("%w (tối đa 500 ký tự)", domain.ErrLyDoXoaQuaDai), http.StatusBadRequest, "invalid_request"},
 		// Already deleted, another commune's id, invented — ONE answer (rule 4, forbidden #2). The use
 		// case wraps it with the commune; the handler still sees it with errors.Is and names no commune.
 		"second delete / other commune": {fmt.Errorf("noi_dung_mini_app: xoá cho xã X: %w", commsstore.ErrNoiDungKhongTonTai),
@@ -71,6 +70,30 @@ func TestDeleteContentItemNonJSONBodyIs400BeforeTheUseCase(t *testing.T) {
 	m := dungMayChuND(t)
 	m.capQuyen(xaA, QuyenSuaNoiDung)
 	w := m.goi(t, http.MethodDelete, hostA, duongNoiDung+"/nd-001", `lý do`, canBo(xaA))
+	doiMa(t, w, http.StatusBadRequest)
+	if m.ghi.deletes != 0 {
+		t.Error("thân hỏng mà vẫn gọi use case")
+	}
+}
+
+// Customer sheet web-admin-131026 ("Bỏ ô textbox nhập lý do"): the dialog has no reason box, so the body
+// — or the `reason` in it — may be absent. The handler passes "" on and the use case writes the fixed
+// sentence; a body that IS sent must still be JSON.
+func TestDeleteContentItemWithoutReasonIs204(t *testing.T) {
+	for name, body := range map[string]string{"no body": "", "empty object": `{}`, "blank reason": `{"reason":"  "}`} {
+		t.Run(name, func(t *testing.T) {
+			m := dungMayChuND(t)
+			m.capQuyen(xaA, QuyenSuaNoiDung)
+			w := m.goi(t, http.MethodDelete, hostA, duongNoiDung+"/nd-001", body, canBo(xaA))
+			doiMa(t, w, http.StatusNoContent)
+			if m.ghi.idCuoi != "nd-001" || strings.TrimSpace(m.ghi.lastReason) != "" || m.ghi.nguoi.ID != "CB-2026-7K3M9Q" {
+				t.Errorf("tới use case: id %q, lý do %q, chủ thể %q", m.ghi.idCuoi, m.ghi.lastReason, m.ghi.nguoi.ID)
+			}
+		})
+	}
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	w := m.goi(t, http.MethodDelete, hostA, duongNoiDung+"/nd-001", `{"reason":`, canBo(xaA))
 	doiMa(t, w, http.StatusBadRequest)
 	if m.ghi.deletes != 0 {
 		t.Error("thân hỏng mà vẫn gọi use case")

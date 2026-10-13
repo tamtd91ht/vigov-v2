@@ -38728,9 +38728,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "reason"
-        ],
         "additionalProperties": false
       },
       "comms.deleteDisasterAlertIn": {
@@ -47734,6 +47731,9 @@
             "type": "boolean"
           },
           "communePrimaryHost": {
+            "type": "string"
+          },
+          "maskedPhone": {
             "type": "string"
           }
         },

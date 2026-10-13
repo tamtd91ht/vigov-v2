@@ -385,3 +385,27 @@ func TestTypeFieldsBelongToTheirTypeAndTheWindowIsAWindow(t *testing.T) {
 		t.Errorf("an event lost its own fields: %+v", kept)
 	}
 }
+
+// Customer sheet web-admin-131026: blank → the fixed sentence; given → kept, trimmed and still bounded.
+// The shared ChuanHoaLyDoXoa is unchanged — categories and alerts still require a reason.
+func TestNormalizeContentItemDeleteReason(t *testing.T) {
+	for name, tc := range map[string]struct {
+		in, want string
+		err      error
+	}{
+		"empty":    {"", ContentItemDeleteDefaultReason, nil},
+		"blank":    {" 	 ", ContentItemDeleteDefaultReason, nil},
+		"given":    {"  Đăng nhầm bài ", "Đăng nhầm bài", nil},
+		"too long": {strings.Repeat("a", LyDoXoaToiDa+1), "", ErrLyDoXoaQuaDai},
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := NormalizeContentItemDeleteReason(tc.in)
+			if !errors.Is(err, tc.err) || got != tc.want {
+				t.Errorf("got %q, %v; want %q, %v", got, err, tc.want, tc.err)
+			}
+		})
+	}
+	if _, err := ChuanHoaLyDoXoa(" "); !errors.Is(err, ErrThieuLyDoXoa) {
+		t.Error("the shared reason rule must still refuse a blank reason")
+	}
+}

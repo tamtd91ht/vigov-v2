@@ -228,7 +228,7 @@ export type comms_deleteCategoryIn = {
 };
 
 export type comms_deleteContentItemIn = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type comms_deleteDisasterAlertIn = {

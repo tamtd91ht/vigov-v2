@@ -600,6 +600,34 @@ func KiemTraThuTuDanhMuc(thuTu int) error {
 	return nil
 }
 
+// --- deleting an item without a reason (customer sheet web-admin-131026) ------------------------------
+
+// ContentItemDeleteDefaultReason is `delete_reason` when the person deleting a content item gives none.
+//
+// THE REASON IS OPTIONAL ON THE WAY IN (customer sheet web-admin-131026: the Xoá dialog on the Nội dung
+// Mini App screen loses its reason box) AND STILL NEVER EMPTY IN THE ROW: rule 7, invariant 1 names
+// `delete_reason`, and an empty string would say nothing. The same decision the owner approved on
+// 10/10/2026 for map fields (MapFieldDeleteDefaultReason) and for identity's staff and org units. Who
+// deleted it and when are in `deleted_by`, `deleted_at` and the audit entry exactly as before.
+//
+// THE SENTENCE NAMES THE SCREEN for the reason MapFieldDeleteDefaultReason gives: years later "deleted
+// from this screen, no reason typed" is the honest answer to "why did this article disappear".
+const ContentItemDeleteDefaultReason = "Xoá từ màn Nội dung Mini App (không nhập lý do)"
+
+// NormalizeContentItemDeleteReason validates the reason recorded beside a content item's soft delete;
+// a blank one becomes ContentItemDeleteDefaultReason. A reason that IS given keeps ChuanHoaLyDoXoa's
+// rules (trimmed, bounded at LyDoXoaToiDa).
+//
+// A FUNCTION OF ITS OWN rather than a change to ChuanHoaLyDoXoa: the decision is about content ITEMS.
+// Categories, alerts, the asset-type catalogue, map assets and external contacts still share that
+// function and still require a reason.
+func NormalizeContentItemDeleteReason(reason string) (string, error) {
+	if strings.TrimSpace(reason) == "" {
+		return ContentItemDeleteDefaultReason, nil
+	}
+	return ChuanHoaLyDoXoa(reason)
+}
+
 // --- the records -------------------------------------------------------------------------------
 
 // DanhMucMiniApp is ONE category of the commune's own Mini App filing tree — the `ContentCategory`

@@ -78,13 +78,41 @@ func TestDeleteContentItemSoftDeletesUnpublishesAndAuditsInOneTransaction(t *tes
 	}
 }
 
-func TestDeleteContentItemNeedsAReasonAndAStaffCodeBeforeAnyTransaction(t *testing.T) {
+// Customer sheet web-admin-131026 ("Bỏ ô textbox nhập lý do"): a blank reason is no longer a refusal.
+// The row still gets deleted_at · deleted_by · a NON-EMPTY delete_reason, and the entry commits with it.
+func TestDeleteContentItemBlankReasonWritesTheFixedSentence(t *testing.T) {
+	for name, reason := range map[string]string{"empty": "", "blank": "   "} {
+		t.Run(name, func(t *testing.T) {
+			k := &khoNDGia{dongHienCo: draftRow()}
+			uc, _, ctx := dungUseCaseNoiDung(t, k)
+			if err := uc.Delete(ctx, draftRow().ID, reason, nguoiSoanND()); err != nil {
+				t.Fatalf("xoá lỗi: %v", err)
+			}
+			upd := k.cau("UPDATE noi_dung_mini_app")
+			if len(upd) != 1 || upd[0].args[2] != maCanBoSoanND || upd[0].args[3] != domain.ContentItemDeleteDefaultReason {
+				t.Fatalf("xoá mềm = %+v", upd)
+			}
+			delta := decodedAuditDelta(t, k, ActionDeleteContentItem)
+			if delta["do_dai_ly_do"] != float64(len([]rune(domain.ContentItemDeleteDefaultReason))) {
+				t.Errorf("do_dai_ly_do = %v", delta["do_dai_ly_do"])
+			}
+			if k.batDau != 1 || k.daCommit != 1 || k.daRollback != 0 {
+				t.Errorf("giao dịch: mở=%d chốt=%d huỷ=%d, muốn 1/1/0 — xoá mềm và vết cùng một giao dịch",
+					k.batDau, k.daCommit, k.daRollback)
+			}
+			if k.coCau("DELETE FROM") {
+				t.Fatal("xoá cứng")
+			}
+		})
+	}
+}
+
+func TestDeleteContentItemNeedsABoundedReasonAndAStaffCodeBeforeAnyTransaction(t *testing.T) {
 	for name, tc := range map[string]struct {
 		reason string
 		noCode bool
 		want   error
 	}{
-		"blank reason":  {reason: "   ", want: domain.ErrThieuLyDoXoa},
 		"long reason":   {reason: strings.Repeat("ệ", domain.LyDoXoaToiDa+1), want: domain.ErrLyDoXoaQuaDai},
 		"no staff code": {reason: "Đăng nhầm", noCode: true, want: ErrThieuNguoiTaoNoiDung},
 	} {
