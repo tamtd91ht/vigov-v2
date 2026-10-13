@@ -12,6 +12,7 @@ import {
   Smartphone,
   Star,
   TriangleAlert,
+  UsersRound,
 } from "lucide-react";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 
@@ -25,7 +26,9 @@ import { ErrorState } from "@/components/ui/error-state";
 import { Notice } from "@/components/ui/notice";
 import { PageHeader } from "@/components/ui/page-header";
 import { SkeletonRows } from "@/components/ui/skeleton";
-import { usePermissionKeys } from "@/features/operator/operator-context";
+import { useIsOwner, usePermissionKeys } from "@/features/operator/operator-context";
+import { CommuneDeletionSection } from "@/features/owner/commune-deletion";
+import { CommuneStaffAccountsSection } from "@/features/owner/commune-staff-accounts";
 import { useGuardedError } from "@/features/operator/use-guarded-error";
 import {
   addDomain,
@@ -81,6 +84,7 @@ function fieldError(err: ApiError): { field: CommuneField; text: string } | null
 export function CommuneDetailScreen({ communeId }: Props) {
   const guarded = useGuardedError();
   const keys = usePermissionKeys();
+  const isOwner = useIsOwner();
   const [commune, setCommune] = useState<CommuneDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -125,6 +129,7 @@ export function CommuneDetailScreen({ communeId }: Props) {
     <CommuneDetailBody
       commune={commune}
       permissionKeys={keys}
+      isOwner={isOwner}
       onChanged={setCommune}
       onMiniAppAttached={(app) => setCommune((c) => (c ? { ...c, mini_apps: [...c.mini_apps, app] } : c))}
     />
@@ -159,11 +164,14 @@ export function CommuneDetailBody({
   permissionKeys,
   onChanged,
   onMiniAppAttached,
+  isOwner = false,
 }: {
   commune: CommuneDetail;
   permissionKeys: readonly string[];
   onChanged: (c: CommuneDetail) => void;
   onMiniAppAttached: (app: CommuneDetail["mini_apps"][number]) => void;
+  /** `is_owner` from the server; absent = not the owner (fail closed). */
+  isOwner?: boolean;
 }) {
   const domainsAllowed = canManageDomains(permissionKeys);
   const communeAllowed = canManageCommune(permissionKeys);
@@ -234,6 +242,15 @@ export function CommuneDetailBody({
       <SectionCard id="commune-operator-log" title="Nhật ký vận hành của xã" icon={ScrollText}>
         <OperatorLog communeId={commune.id} />
       </SectionCard>
+
+      {/* OWNER ONLY (ADR 0048 §Sửa đổi 13/10/2026). Not mounted for anyone else: the staff list is an
+          audited read of personal data, so a non-owner's page must not even ask for it. */}
+      {isOwner ? (
+        <SectionCard id="commune-staff-accounts" title="Tài khoản cán bộ" icon={UsersRound}>
+          <CommuneStaffAccountsSection commune={commune} />
+        </SectionCard>
+      ) : null}
+      {isOwner ? <CommuneDeletionSection commune={commune} /> : null}
     </div>
   );
 }

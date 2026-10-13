@@ -58,3 +58,13 @@ export function usePermissionKeys(): readonly string[] {
   const state = useOperator();
   return state.status === "ready" ? state.operator.permission_keys : [];
 }
+
+/**
+ * Whether to SHOW the owner-only controls (ADR 0048 §Sửa đổi 13/10/2026). False until the server said
+ * `is_owner: true` — loading, an error, an absent field all read as "not the owner". The owner-only
+ * routes check it again on the server, so this is a hint like the keys.
+ */
+export function useIsOwner(): boolean {
+  const state = useOperator();
+  return state.status === "ready" && state.operator.is_owner === true;
+}

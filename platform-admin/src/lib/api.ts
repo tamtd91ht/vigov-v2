@@ -47,8 +47,12 @@ export type EnrollmentStart = { operator_code: string; provisioning_uri: string;
 /** operator_sessions.go `operatorEnrollmentCompletedView`. */
 export type EnrollmentCompleted = { operator_code: string; expires_at: string; recovery_codes: string[] };
 
-/** operator_sessions.go `operatorWhoAmIView`. */
-export type CurrentOperator = { operator_code: string; permission_keys: string[] };
+/**
+ * operator_sessions.go `operatorWhoAmIView`. `is_owner` (ADR 0048 §Sửa đổi 13/10/2026 #1–#2) only
+ * decides which owner controls to SHOW; every owner-only route re-checks it (opauth.RequireOwner, and
+ * identity again). Optional so an older server reads as "not the owner" — never as the owner.
+ */
+export type CurrentOperator = { operator_code: string; permission_keys: string[]; is_owner?: boolean };
 
 /** operator_sessions.go `operatorRecoveryCodesView`. */
 export type RecoveryCodes = { recovery_codes: string[] };
@@ -131,6 +135,60 @@ export const OPS_KEYS = {
 } as const;
 
 export const ALL_OPS_KEYS: readonly string[] = Object.values(OPS_KEYS);
+
+/**
+ * What each key lets its holder do, in words, for the owner's "Phân quyền" screen. Derived from the
+ * routes each key guards (`lib/permissions.ts`, operator_routes.go); the key itself is shown beside the
+ * label so the two can never be read as different things.
+ */
+export const OPS_KEY_LABELS: Readonly<Record<string, string>> = {
+  [OPS_KEYS.tenantManage]: "Quản lý xã: sửa lỗi gõ tên, ngừng / bật hoạt động, khung bản đồ mặc định",
+  [OPS_KEYS.domainManage]: "Quản lý tên miền của xã",
+  [OPS_KEYS.profileManage]: "Quản lý hồ sơ hiển thị của xã",
+  [OPS_KEYS.miniAppManage]: "Quản lý Mini App: Mini App riêng của xã và Mini App dùng chung",
+  [OPS_KEYS.uploadPolicyManage]: "Sửa giới hạn tải lên",
+  [OPS_KEYS.qrIssue]: "Phát hành mã QR mở Mini App",
+  [OPS_KEYS.petitionFieldManage]: "Quản lý lĩnh vực phản ánh cấp 1",
+  [OPS_KEYS.zaloBotManage]: "Quản lý Zalo Bot dùng chung",
+};
+
+// --- owner-only accounts and commune deletion (ADR 0048 §Sửa đổi 13/10/2026) -------------------
+
+/**
+ * operator_owner_accounts.go `operatorAccountView`. Never a password, TOTP or recovery code.
+ * `locked_until` null = not locked; a PAST instant also means not locked (compare with now).
+ */
+export type OperatorAccount = {
+  code: string;
+  email: string;
+  display_name: string;
+  permission_keys: string[];
+  is_owner: boolean;
+  disabled: boolean;
+  must_change_password: boolean;
+  locked_until: string | null;
+  created_at: string;
+};
+
+/**
+ * operator_owner_accounts.go `staffAccountView` — the narrowest shape the owner's screen needs.
+ * `user_id` names the account in the reset path only; the screen shows `staff_code`.
+ */
+export type StaffAccount = {
+  user_id: string;
+  staff_code: string;
+  email: string;
+  full_name: string;
+  role_code: string;
+  role_name: string;
+  is_admin: boolean;
+  disabled: boolean;
+  must_change_password: boolean;
+  sign_in_locked_until: string | null;
+};
+
+/** operator_commune_deletion.go `communeDeletionView`. `deleted_by` is a VH- code. */
+export type CommuneDeletion = { id: string; name: string; deleted_at: string; deleted_by: string };
 
 // --- wave 2 (ADR 0073) wire shapes ------------------------------------------------------------
 
@@ -360,6 +418,8 @@ export class ApiError extends Error {
     readonly relinkCount: number | null = null,
     /** 422 `token-khong-dung-duoc` of PUT /zalo-bots/shared: the class of Zalo's answer to the new token. */
     readonly zaloOutcome: string | null = null,
+    /** 409 `commune_inactive_too_recent` of POST …/deletion: RFC 3339 instant the deletion becomes possible. */
+    readonly earliestDeletionAt: string | null = null,
   ) {
     super(message);
     this.name = "ApiError";
@@ -408,6 +468,7 @@ async function errorFrom(res: Response): Promise<ApiError> {
       ? body.live_link_count
       : null;
   const zaloOutcome = code === "token-khong-dung-duoc" ? asString(body.outcome) || null : null;
+  const earliest = code === "commune_inactive_too_recent" ? asString(body.earliest_deletion_at) || null : null;
   return new ApiError(
     res.status,
     code,
@@ -417,6 +478,7 @@ async function errorFrom(res: Response): Promise<ApiError> {
     rejection,
     relink,
     zaloOutcome,
+    earliest,
   );
 }
 
@@ -765,4 +827,88 @@ function auditQueryString(q: OperatorAuditQuery): string {
 export function listOperatorAuditEntries(q: OperatorAuditQuery, communeId?: string): Promise<OperatorAuditPage> {
   const base = communeId === undefined ? "/operator-audit-entries" : `/communes/${id(communeId)}/operator-audit-entries`;
   return call("GET", base + auditQueryString(q));
+}
+
+// --- OWNER ONLY (ADR 0048 §Sửa đổi 13/10/2026) — every route below answers 403 to anyone else -----
+//
+// Temporary passwords go in the JSON body only, exactly like every other credential here, and are
+// never answered back (operator_owner_accounts.go header). Bodies are built key by key: the server
+// decodes with DisallowUnknownFields.
+
+export async function listOperatorAccounts(): Promise<OperatorAccount[]> {
+  const res = await call<{ items: OperatorAccount[] }>("GET", "/operator-accounts");
+  return res.items;
+}
+
+/** `permission_keys` is always sent, possibly empty: a new account holds no key until granted (§Sửa đổi #2). */
+export function createOperatorAccount(input: {
+  email: string;
+  displayName: string;
+  temporaryPassword: string;
+  permissionKeys: readonly string[];
+}): Promise<OperatorAccount> {
+  return call("POST", "/operator-accounts", {
+    email: input.email,
+    display_name: input.displayName,
+    temporary_password: input.temporaryPassword,
+    permission_keys: [...input.permissionKeys],
+  });
+}
+
+/** The COMPLETE key set: an empty list revokes every key. */
+export function setOperatorPermissions(
+  code: string,
+  input: { permissionKeys: readonly string[]; reason: string },
+): Promise<OperatorAccount> {
+  return call("PUT", `/operator-accounts/${id(code)}/permissions`, {
+    permission_keys: [...input.permissionKeys],
+    reason: input.reason,
+  });
+}
+
+/** TOTP is kept (§Sửa đổi #6); every session of the account is revoked. */
+export function resetOperatorPassword(
+  code: string,
+  input: { temporaryPassword: string; reason: string },
+): Promise<OperatorAccount> {
+  return call("PUT", `/operator-accounts/${id(code)}/password`, {
+    temporary_password: input.temporaryPassword,
+    reason: input.reason,
+  });
+}
+
+/** Each read is trailed by identity in the commune's own audit_log: called only on the owner's screen. */
+export async function listCommuneStaffAccounts(communeId: string): Promise<StaffAccount[]> {
+  const res = await call<{ items: StaffAccount[] }>("GET", `/communes/${id(communeId)}/staff-accounts`);
+  return res.items;
+}
+
+export function createCommuneAdminAccount(
+  communeId: string,
+  input: { email: string; fullName: string; temporaryPassword: string },
+): Promise<StaffAccount> {
+  return call("POST", `/communes/${id(communeId)}/admin-accounts`, {
+    email: input.email,
+    full_name: input.fullName,
+    temporary_password: input.temporaryPassword,
+  });
+}
+
+export function resetStaffPassword(
+  communeId: string,
+  userId: string,
+  input: { temporaryPassword: string; reason: string },
+): Promise<StaffAccount> {
+  return call("PUT", `/communes/${id(communeId)}/staff-accounts/${id(userId)}/password`, {
+    temporary_password: input.temporaryPassword,
+    reason: input.reason,
+  });
+}
+
+/** Soft delete (§Sửa đổi #7). Both layers — 7 days inactive, the re-typed domain — are the server's checks. */
+export function deleteCommune(communeId: string, input: { confirmDomain: string; reason: string }): Promise<CommuneDeletion> {
+  return call("POST", `/communes/${id(communeId)}/deletion`, {
+    confirm_domain: input.confirmDomain,
+    reason: input.reason,
+  });
 }

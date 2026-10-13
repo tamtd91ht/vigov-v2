@@ -12,13 +12,14 @@ import {
   ServerCog,
   Smartphone,
   Tags,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 
-import { usePermissionKeys } from "@/features/operator/operator-context";
+import { useIsOwner, usePermissionKeys } from "@/features/operator/operator-context";
 import { cn } from "@/lib/cn";
 import { canManageZaloBot, canReadConsole } from "@/lib/permissions";
 
@@ -64,14 +65,21 @@ export const NAV_ITEMS: readonly NavItem[] = [
  */
 export const ZALO_BOT_ITEM: NavItem = { label: "Zalo Bot", href: "/zalo-bot", icon: Bot };
 
+/**
+ * The owner's account screen (ADR 0048 §Sửa đổi 13/10/2026 #2). Follows `is_owner`, never a key: no
+ * `ops.*` key opens it, and every other operator would open it onto a 403.
+ */
+export const OWNER_ITEM: NavItem = { label: "Phân quyền", href: "/phan-quyen", icon: UsersRound };
+
 /** The sections to list for these keys — pure, so the denied case is tested without a session. */
-export function visibleNavItems(keys: readonly string[]): readonly NavItem[] {
+export function visibleNavItems(keys: readonly string[], isOwner = false): readonly NavItem[] {
   const items = canReadConsole(keys) ? [...NAV_ITEMS] : [];
   if (canManageZaloBot(keys)) {
     // Before the operator log, which stays last: the log reads across every section.
     const logAt = items.findIndex((i) => i.href === "/nhat-ky-van-hanh");
     items.splice(logAt === -1 ? items.length : logAt, 0, ZALO_BOT_ITEM);
   }
+  if (isOwner) items.push(OWNER_ITEM);
   return items;
 }
 
@@ -143,13 +151,13 @@ function NavGroup({
 }
 
 export function Sidebar() {
-  return <SidebarView permissionKeys={usePermissionKeys()} />;
+  return <SidebarView permissionKeys={usePermissionKeys()} isOwner={useIsOwner()} />;
 }
 
 /** The bar for a given key set; no context read, so tests render it per key. */
-export function SidebarView({ permissionKeys }: { permissionKeys: readonly string[] }) {
+export function SidebarView({ permissionKeys, isOwner = false }: { permissionKeys: readonly string[]; isOwner?: boolean }) {
   const pathname = usePathname() ?? "/";
-  const navItems = visibleNavItems(permissionKeys);
+  const navItems = visibleNavItems(permissionKeys, isOwner);
   const [collapsed, setCollapsed] = useState(false);
   const toggleLabel = collapsed ? EXPAND_LABEL : COLLAPSE_LABEL;
   const ToggleIcon = collapsed ? PanelLeftOpen : PanelLeftClose;
