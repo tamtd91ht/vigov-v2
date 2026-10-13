@@ -765,7 +765,7 @@
     },
     {
       "id": "chip-danh-muc-tin-bo-tin-cua-xa-13-10",
-      "menu": "tin-tuc",
+      "menu": "noi-dung-mini-app",
       "trang_thai": "xong",
       "viec": "Tin tức app xã: bỏ chip 'Tin của xã' (nhóm của prototype cho danh mục không có con) — chủ dự án 13/10/2026: xã tạo một danh mục trên web-admin thì danh mục bị giấu sau chip 'Tin của xã'. Nay hàng 1 = 'Tất cả' + MỌI danh mục gốc theo thứ tự, một hàng cuộn ngang dù nhiều (chủ dự án: không dùng dropdown). Hàng 2 'Tất cả mục này' + con chỉ còn cho danh mục gốc có con. Bỏ bộ lọc phía máy (`keep`) chỉ dùng cho 'Tin của xã'; lọc luôn bằng ?category= của máy chủ (con ?? gốc).",
       "bang_chung": "tsc sạch; vitest citizen-app 86 tệp/2195 test xanh (news-category-chips.test.tsx viết lại). CHƯA xem trên điện thoại.",
