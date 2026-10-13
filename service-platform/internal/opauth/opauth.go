@@ -19,7 +19,7 @@
 //
 // HYBRID, NOT CACHED (owner, 01/10 #2): the `op1.` signature is checked HERE first, so garbage, a
 // forgery or a staff `v1.` token is refused without a round trip; a well-signed token is then
-// resolved by identity on EVERY request — the only place revocation and the 5-minute idle limit are
+// resolved by identity on EVERY request — the only place revocation and the idle limit are
 // decided. Identity unreachable is 503, never 401: answering "signed out" for an outage would sign
 // every operator out through the service that is down.
 package opauth

@@ -98,8 +98,8 @@ func TestSecurityConstants(t *testing.T) {
 	if LockoutDuration != 12*time.Hour {
 		t.Errorf("LockoutDuration = %v, owner decided 12h (28/09/2026, TCVN 14423 §5.5.2.2)", LockoutDuration)
 	}
-	if SessionIdleTimeout != 5*time.Minute {
-		t.Errorf("SessionIdleTimeout = %v, owner decided 5m", SessionIdleTimeout)
+	if SessionIdleTimeout != 10*time.Minute {
+		t.Errorf("SessionIdleTimeout = %v, owner decided 10m (13/10/2026, #38)", SessionIdleTimeout)
 	}
 	if TemporaryPasswordLifetime != 24*time.Hour {
 		t.Errorf("TemporaryPasswordLifetime = %v, owner decided 24h", TemporaryPasswordLifetime)

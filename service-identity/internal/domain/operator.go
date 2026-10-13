@@ -154,12 +154,14 @@ const (
 	// which is exactly the human check an account that reaches every commune should get.
 	LockoutDuration = 12 * time.Hour
 
-	// SessionIdleTimeout — 5 MINUTES without a request ends the session (owner's decision
-	// 28/09/2026, TASK-04; TCVN 14423 caps an ADMINISTRATIVE session's idle time at 5 minutes). It
-	// sits UNDER SessionLifetime, never instead of it: activity keeps a session alive for at most 8
-	// hours in total. Enforced in operatorstore's checkSession SQL against last_seen_at, which every
-	// successful ResolveSession moves forward.
-	SessionIdleTimeout = 5 * time.Minute
+	// SessionIdleTimeout — 10 MINUTES without a request ends the session. Owner's decision 28/09/2026
+	// (TASK-04) set 5 minutes, the cap TCVN 14423 §5.5.2.2 suggests for an ADMINISTRATIVE session;
+	// CHANGED 13/10/2026 by the project owner to 10 minutes, knowingly past that cap (open question
+	// #38, ADR 0048 §Sửa đổi 13/10/2026). Loosening it further, or tightening it back, is a new
+	// decision, not a fix (rule 13, forbidden #4). It sits UNDER SessionLifetime, never instead of
+	// it: activity keeps a session alive for at most 8 hours in total. Enforced in operatorstore's
+	// checkSession SQL against last_seen_at, which every successful ResolveSession moves forward.
+	SessionIdleTimeout = 10 * time.Minute
 
 	// TemporaryPasswordLifetime — 24 HOURS from issue (CreateOperator, ResetMFA) for the operator to
 	// sign in, choose their own password and enrol TOTP (owner's decision 28/09/2026, TASK-04). A

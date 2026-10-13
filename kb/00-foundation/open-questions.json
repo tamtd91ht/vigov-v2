@@ -962,7 +962,7 @@
       "đổi thời hạn phiên công dân"
     ],
     "decided_on": "2026-10-07",
-    "decision": "Khoá phiên khi KHÔNG DÙNG: cán bộ 60 phút, phiên có quyền quản trị (admin.user) 60 phút, ở MỌI môi trường kể cả prod. SỬA 07/10/2026 từ 30/15 phút (chốt 30/09): chủ dự án nới vì khoá 15 phút của phiên quản trị cắt ngang việc dò lỗi. Lệch xa hơn mức gợi ý 15/5 của TCVN 14423 §5.5.2.2 — có chủ ý, do chủ dự án quyết. So với cột dung_gan_nhat. Phiên công dân Mini App KHÔNG áp (giữ CITIZEN_SESSION_TTL). Hạn tuyệt đối 12 giờ giữ nguyên. Phiên khu vận hành ViHAT (5 phút, ADR 0048) không đổi.",
+    "decision": "Khoá phiên khi KHÔNG DÙNG: cán bộ 60 phút, phiên có quyền quản trị (admin.user) 60 phút, ở MỌI môi trường kể cả prod. SỬA 07/10/2026 từ 30/15 phút (chốt 30/09): chủ dự án nới vì khoá 15 phút của phiên quản trị cắt ngang việc dò lỗi. Lệch xa hơn mức gợi ý 15/5 của TCVN 14423 §5.5.2.2 — có chủ ý, do chủ dự án quyết. So với cột dung_gan_nhat. Phiên công dân Mini App KHÔNG áp (giữ CITIZEN_SESSION_TTL). Hạn tuyệt đối 12 giờ giữ nguyên. Phiên khu vận hành ViHAT: 5 phút (ADR 0048), SỬA 13/10/2026 lên 10 phút — chủ dự án chọn, biết là vượt mức ≤ 5 phút của TCVN cho phiên quản trị (ADR 0048 §Sửa đổi 13/10/2026).",
     "decided_by": "NGƯỜI DÙNG (chủ dự án) chốt 30/09/2026 qua xác nhận từng câu; sửa 07/10/2026 khi được hỏi chọn giữa 'chỉ dev/staging' và 'đổi hẳn mọi môi trường' — chọn đổi hẳn"
   },
   {

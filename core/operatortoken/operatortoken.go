@@ -16,7 +16,7 @@
 //
 // WHAT IS DELIBERATELY NOT HERE: anything that decides whether a session is LIVE. A valid signature
 // says the token was issued by a holder of the key and has not passed its absolute expiry; it says
-// nothing about revocation or the 5-minute idle limit. Only identity's ResolveOperatorSession decides
+// nothing about revocation or the idle limit. Only identity's ResolveOperatorSession decides
 // those (operator.proto). A caller that treats Verify as "signed in" has rebuilt the hole the hybrid
 // check exists to close.
 //

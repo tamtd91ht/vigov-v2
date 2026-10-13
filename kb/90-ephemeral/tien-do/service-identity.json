@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-12",
+  "cap_nhat": "2026-10-13",
   "muc": [
     {
       "id": "store-crosstenant",
@@ -644,6 +644,14 @@
       "viec": "Xoá bộ phận còn cán bộ/bộ phận con trả 409 ngay, trước khi hỏi petitions/documents (bảng lỗi web admin S29 reopen).",
       "bang_chung": "72de0f73 · internal/app/org_unit_delete.go + TestRemoveOrgUnitLocalHoldingsAnswerBeforeOwners; go test ./... service-identity xanh.",
       "tiep_theo": "Nguyên nhân 503 'Chưa kiểm được hồ sơ bộ phận…' trên cụm khách CHƯA rõ — cần log identity dòng 'xoá bộ phận: không hỏi được phản ánh/văn bản' (mã gRPC). Nghi: GRPC_CALLER_KEY lệch, image petitions/documents cũ, migration documents 0010. Ngoài phạm vi: kiểm ErrOrgUnitDeleteNotConfigured vẫn chạy trước đếm tại chỗ."
+    },
+    {
+      "id": "phien-van-hanh-nhan-roi-10-phut-13-10",
+      "viec": "Phiên khu vận hành ViHAT (platform-admin) tự hết khi không dùng: 5 phút → 10 phút (chủ dự án yêu cầu 13/10/2026, sau khi được báo vượt mức ≤ 5 phút của TCVN 14423 §5.5.2.2 cho phiên quản trị). Hạn tuyệt đối 8 giờ, mã QR TOTP 10 phút giữ nguyên.",
+      "trang_thai": "xong",
+      "bang_chung": "service-identity/internal/domain/operator.go SessionIdleTimeout = 10*time.Minute; test domain/app/operatorstore cập nhật; ghi ở open-questions.json #38 và ADR 0048 §Sửa đổi 13/10/2026; bỏ con số khỏi comment core/operatortoken + service-platform/opauth. Kiểm 13/10: go vet + go test ./... service-identity xanh, core/operatortoken + service-platform/internal/opauth xanh, tools/check_security.py PASS.",
+      "no_confirm": [],
+      "tiep_theo": "Có hiệu lực khi ảnh identity mới lên cụm. Phiên đang mở không cần đăng nhập lại."
     }
   ]
 }

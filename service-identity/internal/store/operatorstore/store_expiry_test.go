@@ -88,7 +88,7 @@ func TestIdleTimeoutInSessionStatements(t *testing.T) {
 			t.Errorf("%s has no idle predicate: %s", name, norm(stmt))
 		}
 	}
-	cut := t0.Add(-5 * time.Minute)
+	cut := t0.Add(-10 * time.Minute)
 	r := &recorder{}
 	db := sql.OpenDB(recConnector{r: r})
 	defer db.Close()
@@ -99,7 +99,7 @@ func TestIdleTimeoutInSessionStatements(t *testing.T) {
 	})
 	for i, s := range r.stmts {
 		if len(s.args) != 3 || !s.args[2].(time.Time).Equal(cut) {
-			t.Errorf("statement %d: $3 = %#v, want now − 5 min", i, s.args)
+			t.Errorf("statement %d: $3 = %#v, want now − 10 min", i, s.args)
 		}
 	}
 }

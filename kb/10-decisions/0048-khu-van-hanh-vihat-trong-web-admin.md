@@ -296,6 +296,15 @@ không phải cổng cán bộ 9090), đặt ở **env của Deployment**, khôn
 (`core/config/config.go:65`, `:513-517`; `core/config/hints.go:212-218`;
 `service-platform/cmd/server/main.go:44-51`). Dòng cũ giữ làm lịch sử; đọc (d) theo tên mới.
 
+## Sửa đổi 13/10/2026 — phiên nhàn rỗi 10 phút
+
+Mục này ghi thêm, không sửa phần trên. Chủ dự án yêu cầu trong phiên chính 13/10/2026, sau khi được
+nói rõ mức này vượt trần của TCVN.
+
+| Đã chốt | Vì sao · giá chủ dự án chấp nhận | Luật |
+|---|---|---|
+| Phiên vận hành tự hết sau **10 phút** không có request (thay **5 phút** ở §*Chốt bước 1*). Hạn tuyệt đối 8 giờ giữ nguyên | **Giá:** TCVN 14423 §5.5.2.2 gợi ý ≤ 5 phút cho phiên quản trị — không đáp ứng, chấp nhận có chủ ý. Token `op1.` bị lộ dùng được thêm tối đa 5 phút. Ghi ở câu mở #38 | Luật 13 cấm #4 |
+
 ## ĐIỀU KIỆN DỪNG
 
 1. Một vai trò, hay tài khoản, có thẩm quyền **vượt một xã** — luật 5 điều kiện dừng #3. Chính

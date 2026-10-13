@@ -63,7 +63,7 @@ func TestOperatorLockoutTwelveHoursAndUnlock(t *testing.T) {
 	}
 }
 
-// Decision 2: 5 minutes idle ends a session; activity (ResolveSession) keeps it alive; the 8-hour
+// Decision 2: 10 minutes idle ends a session (5 until 13/10/2026, #38); activity (ResolveSession) keeps it alive; the 8-hour
 // absolute cap still holds.
 func TestOperatorSessionIdleTimeout(t *testing.T) {
 	h := newOpHarness(t)
@@ -80,7 +80,7 @@ func TestOperatorSessionIdleTimeout(t *testing.T) {
 	}
 	h.clock.t = h.clock.t.Add(domain.SessionIdleTimeout)
 	if _, err := h.auth.ResolveSession(ctx, tok); !errors.Is(err, ErrOperatorUnauthenticated) {
-		t.Fatalf("5 min idle: %v", err)
+		t.Fatalf("10 min idle: %v", err)
 	}
 
 	// Absolute cap: active every 4 minutes, still over at 8 hours.
