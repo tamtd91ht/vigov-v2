@@ -11,6 +11,7 @@ owns_facts:
   - "những dòng bảng lỗi 10/10/2026 bị từ chối vì va luật cứng: phiên 7 ngày, ô mật khẩu tự đặt, hiện đủ SĐT, nội dung phản ánh và số giờ trễ trên Tổng quan"
   - "xoá trên web-admin theo bảng lỗi 10/10/2026: ẩn ô lý do, máy chủ ghi câu cố định nói rõ người xoá không nhập lý do; vẫn xoá mềm và có vết cùng giao dịch — mở rộng tiền lệ ADR 0075 #4a / ADR 0077"
   - "quy ước đánh số dòng của bảng lỗi khách 10/10/2026 trong kb/ và trong chú thích mã"
+  - "chi tiết đơn thư theo bảng lỗi 13/10/2026: ô Trả lời công dân giữ khoá trước Thụ lý và sau khi kết thúc, câu gợi ý chỉ đúng nút trên màn; nút Sửa hạn xử lý giữ; số điện thoại vẫn che (§Sửa đổi 13/10/2026)"
 ---
 
 # 0090. Bảng lỗi của khách 10–11/10/2026: chuẩn là prototype, tính năng dư giữ khi là đường duy nhất
@@ -101,3 +102,14 @@ Chủ dự án chốt hai dòng khách mở lại:
 |---|---|---|
 | 28 (S27) | `/cau-hinh` chỉ còn 9 tab đúng prototype. Ba màn Lịch làm việc · Nhật ký hệ thống · Nhận diện xã **chuyển** sang mục menu "Hệ thống" (`/he-thong`, nhóm Quản trị, ngay sau Cấu hình). Không gỡ | Vẫn theo #2: là đường duy nhất tới ADR 0007 · 0054 · 0069. Chuyển chỗ thoả cả prototype lẫn #2. Cổng từng màn giữ nguyên; link `/cau-hinh?tab=` cũ tự chuyển (`moved-tabs.ts`) |
 | 36 (S35) | Câu mô tả Thời hạn xử lý dùng nguyên văn prototype "hồ sơ **tiếp nhận** sau thời điểm lưu" (thay "được đặt hạn" của 08/10). Câu cuối vẫn là "Mặc định {n} giờ." lấy từ dữ liệu xã | "tiếp nhận" hiểu theo ADR 0028 §(c). Con số "72 giờ, tức ba ngày" không viết cứng (luật 10 cấm #3; giờ làm việc ≠ ngày lịch) |
+
+## Sửa đổi 13/10/2026 — bảng lỗi web-admin-131026, chi tiết đơn thư
+
+Chủ dự án chốt 13/10/2026, lời do phiên chính chuyển lại. Số dòng là dòng của bảng lỗi 13/10. Bảng lỗi này
+cũng đổi Tự động hoá và Danh mục (ADR 0079 §*Sửa đổi 13/10/2026*) và vai trò cán bộ (ADR 0094).
+
+| Điểm | Quyết định | Commit |
+|---|---|---|
+| Ô "Trả lời công dân" | **Giữ khoá** trước Thụ lý và sau khi đơn kết thúc (thứ tự TT 05/2021, C3). Câu gợi ý chỉ đúng nút **có trên màn**: ô "Đang xử lý" trên thanh trạng thái rồi "Xác nhận" để thụ lý; đơn đã kết thúc thì nói không sửa được nữa. Lý do: ba trạng thái thật cùng vẽ thành một ô "Đang xử lý" (ADR 0084 §2), nên câu gọi tên "Thụ lý" làm cán bộ không tìm ra nút | `47f35a10` |
+| Nút "Sửa hạn xử lý" | **Giữ** — xác nhận lại dòng 43 ở §*Giữ dù bảng lỗi đòi gỡ* | — |
+| Số điện thoại người gửi | **Vẫn che** — xác nhận lại dòng 43 ở §*Từ chối vì va luật cứng* (luật 3) | — |

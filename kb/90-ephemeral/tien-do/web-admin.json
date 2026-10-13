@@ -1412,6 +1412,67 @@
       "viec": "Thẻ 'Đồng bộ tin từ Cổng thông tin điện tử' có nút −/+ thu gọn về một dòng tiêu đề (chủ dự án 13/10/2026 — prototype không có): lỗi đồng bộ không còn chiếm chỗ mãi; thu gọn mà có lỗi thì cạnh tiêu đề còn dấu đỏ 'Có lỗi'; nhớ lựa chọn trong localStorage (vigov.portal-sync-collapsed).",
       "bang_chung": "typecheck + eslint + vitest noi-dung 19 tệp / 484 ca xanh (4 ca thu gọn mới). Chưa xem ảnh render thật.",
       "con_no": "Kiểm trên trình duyệt: vị trí nút −, dòng thu gọn ở bề ngang nhỏ."
+    },
+    {
+      "id": "bl131026-phieu-trung-chi-khi-trung",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Chi tiết phản ánh: cụm 'Có thể trùng với phiếu khác' chỉ hiện khi có phiếu nghi trùng hoặc đã gộp/được gộp (prototype FeedbackDetailDrawer:408); 4 cụm Ảnh, Vị trí, Phiếu trùng, Ghi nhận đánh giá có khung đệm SECTION_CARD như các cụm khác (bảng lỗi web-admin-131026 dòng 2-3).",
+      "bang_chung": "b3bd9b7f; vitest phan-anh+cau-hinh 1567 ca xanh, typecheck/lint sạch. Chưa xem ảnh render thật.",
+      "con_no": "Tìm phiếu trùng lỗi thì cụm ẩn như không trùng — nếu khách muốn thấy lỗi thì thêm lại."
+    },
+    {
+      "id": "bl131026-cancel-chon-tep",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Bấm Cancel ở hộp chọn tệp không đóng popup chứa nó: 4 khung dùng chung (OverlayDialog, ModalDialog, LargeDialog, NavSheet) chỉ đóng khi sự kiện cancel nhắm chính dialog (bảng lỗi dòng 5).",
+      "bang_chung": "ddba3bef; test jsdom dialog-cancel/overlay-dialog/nav-sheet xanh.",
+      "con_no": "Thử hộp chọn tệp thật trên trình duyệt."
+    },
+    {
+      "id": "bl131026-xoa-noi-dung-khong-ly-do",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Popup Xoá nội dung bỏ ô lý do, rộng SMALL_DIALOG_CLASS (hết khoảng trắng phải) (bảng lỗi dòng 4).",
+      "bang_chung": "a2ce9dbe (web) + b78424eb (comms); vitest 2057 ca xanh. Chưa xem ảnh render thật.",
+      "con_no": "notice-confirm.tsx:99 và economic-map-screen.tsx:956 cũng là OverlayDialog không có class rộng — có thể cùng lỗi khoảng trắng."
+    },
+    {
+      "id": "bl131026-nhom-loai-don-thu",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Danh mục: nút nhóm cho mọi nhóm ghi được kể cả khi rỗng — 'Loại đơn thư' (bảng rỗng từ migration documents 0010) nay thấy được (bảng lỗi dòng 8).",
+      "bang_chung": "f402844a; vitest cau-hinh xanh. Chưa xem ảnh render thật.",
+      "con_no": "Xác nhận migration documents 0010 đã chạy trên cụm thật (8cb12506 ghi chưa chạy PG)."
+    },
+    {
+      "id": "bl131026-mo-ta-tu-dong-hoa",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Tự động hoá: câu mô tả 3 việc theo prototype, chỉ sửa đơn vị (giờ làm việc; mốc thứ hai thay 'gấp đôi') — chủ dự án chốt 13/10/2026 (bảng lỗi dòng 9).",
+      "bang_chung": "b2ffeeb4; automation-form.test 51/51."
+    },
+    {
+      "id": "bl131026-goi-y-tra-loi-cong-dan",
+      "menu": "van-ban-don-thu",
+      "trang_thai": "xong",
+      "viec": "Chi tiết đơn thư: giữ khoá 'Trả lời công dân' trước Thụ lý (chủ dự án 13/10/2026, TT 05/2021), câu gợi ý chỉ đúng ô 'Đang xử lý' → Xác nhận; đơn kết thúc báo không sửa được. SĐT giữ che (luật 3), nút Sửa hạn giữ (ADR 0090) (bảng lỗi dòng 11).",
+      "bang_chung": "47f35a10; letter-drawer.test xanh. Chưa xem ảnh render thật."
+    },
+    {
+      "id": "bl131026-chuc-vu-header",
+      "trang_thai": "xong",
+      "viec": "Header: dòng dưới tên = chức vụ, trống thì tên vai trò; bỏ luật ẩn khối chữ 768-1023px (bảng lỗi dòng 12).",
+      "bang_chung": "7809b1d9; vitest components/app xanh. Chưa xem ảnh render thật.",
+      "con_no": "Kiểm 768px có chen tên xã/ô tìm kiếm không."
+    },
+    {
+      "id": "bl131026-tong-quan-popup",
+      "menu": "tong-quan-dieu-hanh",
+      "trang_thai": "xong",
+      "viec": "Tổng quan: bấm số tổng Văn bản (đến/đang xử lý/quá hạn), Phản ánh (4 ô), Giải ngân (Tỷ lệ, Dự án chậm) mở popup danh sách dùng chung khung DrillDialog với Nhiệm vụ (bảng lỗi dòng 13).",
+      "bang_chung": "46d173fd; vitest dashboard 263 ca xanh (một lượt chạy trước có 1 ca đỏ không xác định, 3 lượt sau xanh). Chưa xem ảnh render thật.",
+      "con_no": "Chưa drill: 'Vướng mắc chưa gỡ' (đếm vướng mắc, không phải dự án), 'Đơn thư trong kỳ' (chưa có số). Văn bản/Dự án chưa có đường dẫn sâu tới đúng bản ghi; văn bản chưa có tuyến đếm."
     }
   ]
 }

@@ -33,6 +33,7 @@ owns_facts:
   - "lỗi đọc đảo cờ dang_dung/la_mac_dinh không sửa dữ liệu hàng loạt; xã tự kiểm/sửa cờ ở màn Danh mục (lô thứ năm Q17, 08/10/2026)"
   - "nhắc việc cho đơn thư làm theo prototype: dùng hạn đã lưu và dòng SLA mặc định của đơn thư, gửi bằng loại DOCUMENT_* (lô thứ năm Q18, 08/10/2026)"
   - "câu chữ menu Cấu hình: lời prototype thắng nguyên văn khi prototype có câu (lô thứ năm Q19, 08/10/2026)"
+  - "câu mô tả Tự động hoá: nguyên văn prototype, chỉ sửa đơn vị (giờ làm việc, mốc thứ hai); mọi nhóm Danh mục ghi được luôn có nút lọc kể cả khi rỗng (§Sửa đổi 13/10/2026)"
   - "ô 'Sắp đến hạn: nhắc trước' của Zalo có lựa chọn trống 'Theo chuông' (không thu hẹp); lời dẫn 'Nhắc khi nào' thay câu prototype bằng câu đúng với Q13; bật/tắt một dòng thành công thì không toast, như prototype; đăng ký webhook lỗi do mã bot dùng nguyên câu prototype, lỗi khác nói lý do thật (lô thứ sáu, 08/10/2026)"
 ---
 
@@ -337,3 +338,17 @@ chung và danh sách "giữ" ở ADR 0090. Số dòng là dòng của bảng l�
 
 **Cái giá của #3:** không migration nào gỡ hai trường Trưởng thôn và Thứ tự, nên máy chủ vẫn giữ
 chúng. Nhưng không màn nào hiện chúng nữa, nên dữ liệu đã nhập vào hai trường này không ai thấy.
+
+## Sửa đổi 13/10/2026 — bảng lỗi web-admin-131026
+
+Mục này thắng các mục trên khi nói khác. **Người quyết:** chủ dự án, 13/10/2026, lời do phiên chính chuyển
+lại. Số dòng là dòng của bảng lỗi 13/10.
+
+| # | Điểm cũ | Từ 13/10/2026 | Dòng | Commit |
+|---|---|---|---|---|
+| 1 | §*Sửa đổi 10–11/10* #10: câu mô tả Tự động hoá theo prototype, giữ phần giờ làm việc **và phạm vi** (văn bản đến, đơn thư) | Dùng **nguyên văn** câu prototype (`../vigov-require/apps/api/app/modules/admin/automation.py:51-74`). Chỉ sửa **đơn vị**: "số giờ làm việc" thay "số ngày" (luật 10, ADR 0007), "mốc thứ hai" thay "trễ gấp đôi" (mốc Báo Chủ tịch đặt riêng, ADR 0029). Không thêm câu giải thích | 9 | `b2ffeeb4` |
+| 2 | Nút lọc nhóm ở tab Danh mục chỉ hiện cho nhóm **có dòng**, suy từ dữ liệu như prototype (`LookupTable.tsx:68-71`) | **Mọi nhóm ghi được luôn có nút**, kể cả khi rỗng. Hai danh sách mã chỉ đọc vẫn ẩn khi rỗng. Lý do: prototype có dữ liệu gieo sẵn, còn ở đây Loại đơn thư ra đời rỗng, nên nút không bao giờ hiện và không ai thấy nhóm để thêm dòng | 8 | `f402844a` |
+
+**Cái giá của #1:** câu mô tả nay nói ít hơn việc thật chạy. Nhắc hạn vẫn quét cả đơn thư (ADR 0058 §4),
+leo thang tính phản ánh theo hạn xử lý xong (ADR 0058 §*Câu từng mở* #3), nhưng câu trên màn không nhắc.
+Phạm vi thật do ADR 0058 quyết, không do câu mô tả.

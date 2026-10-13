@@ -668,6 +668,22 @@
       "viec": "Bảng lỗi mini-app-131026 (13/10/2026). Dòng 1: danh bạ công khai (locDanhBaCongKhai) luôn loại tài khoản đăng nhập `admin` mặc định ('Quản trị hệ thống'), lọc theo email đăng nhập, không theo vai trò; số đếm đã công khai (staff_counts) dùng chung vị từ. Dòng 6: POST /api/v1/citizen-sessions trả maskedPhone = privacy.MaskPhone của số VỪA xác thực ở lần mở (84… đổi về 0…); vắng khi không có số; không qua cầu gRPC, không vào phiên hay vết.",
       "bang_chung": "5bc977cf, 810c259e; go test ./internal/store ./internal/app ./internal/http xanh. danh_ba_cong_khai_pg_test.go có ca mới 'quan-tri' nhưng CHƯA chạy (máy này không có VIGOV_TEST_DSN).",
       "con_no": "Chạy test PG thật cho danh bạ. Deploy service-identity. openapi.json (tầng sinh) cần make kb để có maskedPhone."
+    },
+    {
+      "id": "bl131026-xoa-bo-phan-409-truoc",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Xoá bộ phận còn cán bộ/bộ phận con luôn 409, kiểm 'chưa cấu hình gRPC' chỉ sau đó (bảng lỗi dòng 7).",
+      "bang_chung": "c0a56a27; go test identity app xanh.",
+      "con_no": "503 tester gặp là do môi trường: identity không gọi được petitions/documents gRPC 9090. Vận hành xem log 'xoá bộ phận: không hỏi được phản ánh/văn bản' (ma_loi), Service 9090, NetworkPolicy, GRPC_CALLER_KEY trên cụm Rancher."
+    },
+    {
+      "id": "bl131026-nhieu-vai-tro",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "viec": "Một cán bộ giữ nhiều vai trò, quyền = hợp (chủ dự án 13/10/2026, đảo quyết định 08/10): migration 0031 staff_role_assignment, checker + #13 chung vị từ, #14 với vai trò thêm, PUT /staff/{id}/role nhận role_ids, whoAmI roles[] (bảng lỗi dòng 10).",
+      "bang_chung": "027a8e3d; go test identity 13 gói xanh; make check exit 0.",
+      "con_no": "Test PG chưa chạy (không VIGOV_TEST_DSN). Nhập Excel vẫn một vai trò/dòng. Cần ADR ghi việc đảo quyết định 08/10."
     }
   ]
 }

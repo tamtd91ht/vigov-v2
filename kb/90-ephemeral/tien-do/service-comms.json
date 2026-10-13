@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-13",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -492,6 +492,21 @@
       "no_confirm": [],
       "bang_chung": "service-comms/internal/http/commune_basemap.go:77,83,118,401 (tên tệp, tập khớp đúng tên, tra cứu, Accept-Ranges); :252 @summary; :275 lý do Public. commune_basemap_test.go:129 (danh sách đóng), :167-168 (biến thể tên vn-places bị 404), TestPublicBasemapPlacesArchiveServesRange (206 + Content-Range + Accept-Ranges + khoá đối tượng riêng), TestPublicBasemapAcceptRangesOnBothArchives (kho bỏ Accept-Ranges, tuyến vẫn trả cho cả hai tệp, sprite không). go build ./... · go vet ./internal/http/... · go test ./internal/http/... -count=1 xanh 12/10/2026; chưa commit (thẻ TASK-04, phiên chính commit). Danh sách web-admin/src/lib/basemap/assets.ts do thẻ khác sửa — phải khớp.",
       "tiep_theo": "Chờ tệp vn-places.pmtiles dựng thật được tải lên dưới tiền tố BASEMAP_URL (trước đó tuyến trả 404 not_found cho tệp này). Đo số yêu cầu Range khi Mini App vẽ thêm lớp places so với trần 6.000/phút của ratelimit.PublicBasemapRead — hai tệp giờ chung một trần."
+    },
+    {
+      "id": "bl131026-dem-danh-muc-thieu-tham-so",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Thêm danh mục tin tức trả 500 từ 24/09: DemDangSong không truyền $1 (tenant_id). Fake driver nay từ chối câu thiếu tham số như pgx (bảng lỗi dòng 6).",
+      "bang_chung": "d0ddfc52; go test comms 15 gói xanh.",
+      "con_no": "Test PG TestPgCategoryCreatePathCountsLiveRowsOfOneCommune chưa chạy (không VIGOV_TEST_DSN)."
+    },
+    {
+      "id": "bl131026-xoa-noi-dung-ly-do-tuy-chon",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "DELETE /api/v1/content-items/{id}: lý do tuỳ chọn, để trống ghi ContentItemDeleteDefaultReason, vẫn xoá mềm + nhật ký cùng giao dịch (bảng lỗi dòng 4).",
+      "bang_chung": "b78424eb; go test comms xanh; openapi + schema.gen sinh lại."
     }
   ]
 }
