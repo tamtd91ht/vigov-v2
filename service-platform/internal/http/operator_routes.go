@@ -339,6 +339,21 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 			idem.KhongCan("removing an App ID already removed from this commune changes nothing and writes no entry; the repeat only retries the secret retirement")(
 				http.HandlerFunc(h.removeMiniApp))))
 
+	// @summary  Đánh dấu / bỏ đánh dấu Mini App riêng của xã ĐÃ PHÁT HÀNH trên Zalo (bắt buộc lý do; ADR 0070 bổ sung 13/10/2026): QR của xã chỉ dùng app riêng khi đã đánh dấu, ngược lại dùng app chung x=; vết danh_dau_phat_hanh_mini_app / bo_danh_dau_phat_hanh_mini_app ở audit_log của xã, cùng giao dịch; đặt đúng trạng thái đang có thì không ghi gì
+	// @request  miniAppPublicationBody
+	// @reply    200 communeDetailView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found mini_app_not_found
+	// @reply    409 httpx.Error commune_inactive mini_app_inactive
+	// @reply    422 httpx.Error invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("PUT /api/v1/communes/{id}/mini-apps/{app_id}/publication",
+		opauth.RequireKey(h.d.Auth, opauth.KeyMiniAppManage)(
+			idem.KhongCan("setting the mark it already has changes nothing and writes no entry")(
+				http.HandlerFunc(h.setMiniAppPublication))))
+
 	// THE TWO SECRET ROUTES below forward a commune's Zalo app secret to identity and keep nothing
 	// (operator_mini_app_secrets.go lists every place the value goes). KhongCan is also what keeps
 	// the body out of any idempotency store — and core/idem never stores a body in any mode.

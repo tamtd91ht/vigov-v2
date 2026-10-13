@@ -275,9 +275,10 @@ func TestLaunchLinkTwoLiveOwnApps(t *testing.T) {
 	setup := func(h *harness) {
 		h.id.keys = []string{"ops.qr.issue"}
 		h.reg.setApps = true
+		at := nowFake
 		h.reg.apps = []domain.CommuneMiniApp{
-			{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true},
-			{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: true},
+			{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true, PublishedAt: &at, PublishedBy: opCodeFake},
+			{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: true, PublishedAt: &at, PublishedBy: opCodeFake},
 		}
 	}
 	h := newHarness(t)
@@ -300,6 +301,55 @@ func TestLaunchLinkTwoLiveOwnApps(t *testing.T) {
 	rec = h.do("GET", launchPath, "", opCookie(t))
 	if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"code":"own_mini_app_ambiguous"`) {
 		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+}
+
+// ADR 0070 bổ sung 13/10/2026: a running own app NOT marked published on Zalo opens only for its Zalo
+// admins/developers, so the QR is the shared app's x= link — and the operator (only) is told why.
+func TestLaunchLinkUnpublishedOwnAppFallsBackToShared(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.qr.issue"}
+	h.reg.setApps = true
+	h.reg.apps = []domain.CommuneMiniApp{{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true}}
+	rec := h.do("GET", launchPath, "", opCookie(t))
+	if rec.Code != 200 {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
+	}
+	all := decodeLaunchLinks(t, rec.Body.Bytes())
+	if len(all.Links) != 1 || all.Links[0].Source != "chung" || all.Links[0].URL != sharedLinkFake {
+		t.Fatalf("links %+v, want the shared x link", all.Links)
+	}
+	if len(all.Unavailable) != 1 || all.Unavailable[0].Source != "rieng" || all.Unavailable[0].Code != "own_mini_app_unpublished" ||
+		all.Unavailable[0].Message == "" {
+		t.Fatalf("unavailable %+v, want own_mini_app_unpublished", all.Unavailable)
+	}
+	if strings.Contains(h.logs.String(), "own_mini_app_unpublished") || strings.Contains(h.logs.String(), "chưa được đánh dấu") {
+		t.Error("an unpublished own app is the operator's to fix, not a platform error: nothing logged")
+	}
+
+	// No shared app either: the unpublished own app is still never used, the refusal is the shared one.
+	h.shared.app = nil
+	rec = h.do("GET", launchPath, "", opCookie(t))
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"code":"shared_mini_app_not_declared"`) {
+		t.Fatalf("%d %s, want 409 shared_mini_app_not_declared", rec.Code, rec.Body)
+	}
+}
+
+// Of two running own apps only one marked published, the marked one is the QR — an operator chose it;
+// the unmarked one is not a second candidate, so there is no ambiguity and no notice.
+func TestLaunchLinkPublishedOwnAppAmongUnpublished(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.qr.issue"}
+	h.reg.setApps = true
+	at := nowFake
+	h.reg.apps = []domain.CommuneMiniApp{
+		{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: true},
+		{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true, PublishedAt: &at, PublishedBy: opCodeFake},
+	}
+	rec := h.do("GET", launchPath, "", opCookie(t))
+	all := decodeLaunchLinks(t, rec.Body.Bytes())
+	if rec.Code != 200 || len(all.Links) != 1 || all.Links[0].URL != ownLinkFake || len(all.Unavailable) != 0 {
+		t.Fatalf("%d %+v, want the published own link only", rec.Code, all)
 	}
 }
 

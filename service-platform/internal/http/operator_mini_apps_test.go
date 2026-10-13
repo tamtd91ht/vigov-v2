@@ -26,6 +26,10 @@ func miniAppActivationPath(commune, app string) string {
 	return "/api/v1/communes/" + commune + "/mini-apps/" + app + "/activation"
 }
 
+func miniAppPublicationPath(commune, app string) string {
+	return "/api/v1/communes/" + commune + "/mini-apps/" + app + "/publication"
+}
+
 func miniAppHarness(t *testing.T) *harness {
 	t.Helper()
 	h := newHarness(t)
@@ -165,6 +169,7 @@ func TestMiniAppRoutesNeedTheMiniAppKey(t *testing.T) {
 	for _, rt := range []struct{ method, path, body string }{
 		{"POST", replacementPath(communeIDFake, oldAppFake), `{"new_app_id":"` + newAppFake + `","reason":"x"}`},
 		{"PUT", miniAppActivationPath(communeIDFake, oldAppFake), `{"active":false,"reason":"x"}`},
+		{"PUT", miniAppPublicationPath(communeIDFake, oldAppFake), `{"published":true,"reason":"x"}`},
 	} {
 		h := newHarness(t)
 		h.id.keys = []string{"ops.tenant.manage", "ops.domain.manage"}
@@ -174,5 +179,77 @@ func TestMiniAppRoutesNeedTheMiniAppKey(t *testing.T) {
 		if h.w.target != "" {
 			t.Errorf("%s %s reached the writer without its key", rt.method, rt.path)
 		}
+	}
+}
+
+// The "published on Zalo" mark (ADR 0070 bổ sung 13/10/2026): commune AND App ID from the PATH, the
+// reason validated and trimmed, the actor the operator's business code, the answer the commune detail
+// carrying the mark. Both directions reach the store.
+func TestMiniAppPublicationTakesCommuneAndAppFromPath(t *testing.T) {
+	for _, published := range []bool{true, false} {
+		h := miniAppHarness(t)
+		body := `{"published":` + map[bool]string{true: "true", false: "false"}[published] + `,"reason":"  Zalo đã phát hành app  "}`
+		rec := h.do("PUT", miniAppPublicationPath(communeIDFake, oldAppFake), body, opCookie(t))
+		if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"mini_apps"`) ||
+			!strings.Contains(rec.Body.String(), `"published_at":"2026-10-01T08:00:00Z"`) ||
+			!strings.Contains(rec.Body.String(), `"published_by":"`+opCodeFake+`"`) {
+			t.Fatalf("published=%v: %d (%s)", published, rec.Code, rec.Body)
+		}
+		if h.w.target != communeIDFake || h.w.lastApp != oldAppFake || h.w.lastReason != "Zalo đã phát hành app" ||
+			h.w.lastPublished == nil || *h.w.lastPublished != published ||
+			h.w.actor.Code != opCodeFake || h.w.actor.IP == "" {
+			t.Errorf("published=%v: target %q app %q reason %q state %v actor %+v", published,
+				h.w.target, h.w.lastApp, h.w.lastReason, h.w.lastPublished, h.w.actor)
+		}
+	}
+}
+
+// An unmarked row reads as null/null in the detail — never "", never a zero time.
+func TestDetailUnpublishedMiniAppIsNull(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.qr.issue"}
+	rec := h.do("GET", "/api/v1/communes/"+communeIDFake, "", opCookie(t))
+	if rec.Code != 200 {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	// registryFake: 3043188591857102858 is unmarked.
+	if !strings.Contains(rec.Body.String(), `"app_id":"3043188591857102858","mode":"rieng","active":false,"created_at":"0001-01-01T00:00:00Z","created_by":"`+opCodeFake+`","published_at":null,"published_by":null`) {
+		t.Errorf("unmarked app must carry published_at/by null: %s", rec.Body)
+	}
+}
+
+func TestMiniAppPublicationRefusals(t *testing.T) {
+	path := miniAppPublicationPath(communeIDFake, oldAppFake)
+	on := `{"published":true,"reason":"Phát hành"}`
+	for _, c := range []struct {
+		name, path, body string
+		storeErr         error
+		want             int
+		code             string
+	}{
+		{"published absent", path, `{"reason":"x"}`, nil, 400, "invalid_body"},
+		{"published not a bool", path, `{"published":"yes","reason":"x"}`, nil, 400, "invalid_body"},
+		{"commune in body", path, `{"published":true,"reason":"x","tenant_id":"` + communeIDFake + `"}`, nil, 400, "invalid_body"},
+		{"reason missing", path, `{"published":true}`, nil, 422, "invalid_reason"},
+		{"reason blank", path, `{"published":false,"reason":"   "}`, nil, 422, "invalid_reason"},
+		{"App ID malformed", miniAppPublicationPath(communeIDFake, "x"), on, nil, 404, "mini_app_not_found"},
+		{"commune id malformed", miniAppPublicationPath("nope", oldAppFake), on, nil, 404, "commune_not_found"},
+		// Unknown, removed, another commune's and the shared `chinh` row: ONE answer (store comment).
+		{"App ID not this commune's own app", path, on, store.ErrMiniAppNotInCommune, 404, "mini_app_not_found"},
+		{"switched-off row", path, on, store.ErrMiniAppInactive, 409, "mini_app_inactive"},
+		{"commune inactive", path, on, store.ErrCommuneInactive, 409, "commune_inactive"},
+		{"unknown commune", path, on, store.ErrCommuneNotFound, 404, "commune_not_found"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := miniAppHarness(t)
+			h.w.err = c.storeErr
+			rec := h.do("PUT", c.path, c.body, opCookie(t))
+			if rec.Code != c.want || !strings.Contains(rec.Body.String(), `"code":"`+c.code+`"`) {
+				t.Fatalf("status %d body %s; want %d %s", rec.Code, rec.Body, c.want, c.code)
+			}
+			if c.storeErr == nil && h.w.publications != 0 {
+				t.Error("a request refused at the edge reached the writer")
+			}
+		})
 	}
 }

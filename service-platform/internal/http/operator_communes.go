@@ -38,6 +38,7 @@ type CommuneWriter interface {
 	AttachMiniApp(ctx context.Context, appID, note string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
 	ReplaceMiniApp(ctx context.Context, oldAppID, newAppID, reason string, by domain.OperatorActor) (domain.CommuneMiniApp, error)
 	RemoveMiniApp(ctx context.Context, appID, reason string, by domain.OperatorActor) (bool, error)
+	SetMiniAppPublication(ctx context.Context, appID string, published bool, reason string, by domain.OperatorActor) (bool, error)
 	// RecordMiniAppSecretForward writes the commune's trail row for a secret act identity ACCEPTED
 	// (operator_mini_app_secrets.go). Its own transaction: the act itself is identity's write.
 	RecordMiniAppSecretForward(ctx context.Context, f domain.SecretForward, by domain.OperatorActor) error
@@ -67,6 +68,11 @@ type miniAppView struct {
 	Active    bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
 	CreatedBy string    `json:"created_by"`
+	// PublishedAt / PublishedBy: the operator's "published on Zalo" mark (migration 0025, ADR 0070 bổ
+	// sung 13/10/2026). Both null = not marked, and the commune's QR uses the shared app. PublishedBy is
+	// the operator's VH- code. Operator console only: no commune-host route returns miniAppView.
+	PublishedAt *time.Time `json:"published_at"`
+	PublishedBy *string    `json:"published_by"`
 	// Secret is set on the commune detail (and on every answer that re-reads it); absent on the
 	// attach answer, which shows one row just created. See secretStatusView.
 	Secret *secretStatusView `json:"secret,omitempty"`
@@ -138,6 +144,14 @@ type miniAppActivationBody struct {
 	Reason string `json:"reason"`
 }
 
+// miniAppPublicationBody — the activation route's shape for the "published on Zalo" mark.
+type miniAppPublicationBody struct {
+	// A pointer so an absent field is a 400, never a silent `false` that turns a commune's QR back to
+	// the shared app.
+	Published *bool  `json:"published"`
+	Reason    string `json:"reason"`
+}
+
 func toCommuneView(c domain.Commune) communeView {
 	d := c.Domains
 	if d == nil {
@@ -147,8 +161,13 @@ func toCommuneView(c domain.Commune) communeView {
 }
 
 func toMiniAppView(a domain.CommuneMiniApp) miniAppView {
-	return miniAppView{AppID: a.AppID, Mode: string(a.Mode), Active: a.Active,
+	v := miniAppView{AppID: a.AppID, Mode: string(a.Mode), Active: a.Active,
 		CreatedAt: a.CreatedAt.UTC(), CreatedBy: a.CreatedBy}
+	if a.PublishedAt != nil {
+		at, by := a.PublishedAt.UTC(), a.PublishedBy
+		v.PublishedAt, v.PublishedBy = &at, &by
+	}
+	return v
 }
 
 func toDetailView(c domain.Commune, apps []domain.CommuneMiniApp, st secretStatuses) communeDetailView {
@@ -562,4 +581,37 @@ func (h *operatorHandlers) removeMiniApp(w http.ResponseWriter, r *http.Request)
 	// retried from the same dialog). Retired after the commit, as in replaceMiniApp.
 	retired, problem := h.retireAfterUnbind(ctx, r, appID, reason)
 	h.respondCommuneAfterChange(w, r, id, http.StatusOK, &retired, problem)
+}
+
+// setMiniAppPublication marks / unmarks one of the commune's own apps as PUBLISHED on Zalo (ADR 0070 bổ
+// sung 13/10/2026): the commune's one QR names the own app only while it is marked. The commune and the
+// App ID are the PATH's (rule 1); the reason is mandatory, like every registry write that changes what
+// citizens are sent to. Answers the commune detail as it now stands.
+func (h *operatorHandlers) setMiniAppPublication(w http.ResponseWriter, r *http.Request) {
+	ctx, id, ok := targetCommune(w, r)
+	if !ok {
+		return
+	}
+	appID, ok := h.pathMiniApp(w, r)
+	if !ok {
+		return
+	}
+	var b miniAppPublicationBody
+	if !decodeBody(w, r, &b) {
+		return
+	}
+	if b.Published == nil {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_body", msgInvalidBody, "")
+		return
+	}
+	reason, err := domain.ValidateReason(norm.NFC.String(b.Reason))
+	if err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	if _, err := h.d.Writer.SetMiniAppPublication(ctx, appID, *b.Published, reason, actorOf(r)); err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	h.respondCommune(w, r, id, http.StatusOK)
 }

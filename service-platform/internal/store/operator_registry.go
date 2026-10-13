@@ -124,7 +124,7 @@ func (r *OperatorRegistry) Commune(ctx context.Context, id string) (domain.Commu
 
 	// Soft-deleted rows are excluded (rule 7 invariant 2). The tenant_id filter is the commune of
 	// the path — one commune's rows, never a list across communes.
-	const qApps = `SELECT app_id, che_do, dang_hoat_dong, tao_luc, tao_boi
+	const qApps = `SELECT app_id, che_do, dang_hoat_dong, tao_luc, tao_boi, published_at, COALESCE(published_by, '')
 		FROM mini_app WHERE tenant_id = $1 AND deleted_at IS NULL
 		ORDER BY tao_luc, app_id`
 	rows, err := r.db.QueryContext(ctx, qApps, id)
@@ -135,13 +135,18 @@ func (r *OperatorRegistry) Commune(ctx context.Context, id string) (domain.Commu
 	apps := []domain.CommuneMiniApp{}
 	for rows.Next() {
 		var (
-			a    domain.CommuneMiniApp
-			mode string
+			a         domain.CommuneMiniApp
+			mode      string
+			published sql.NullTime
 		)
-		if err := rows.Scan(&a.AppID, &mode, &a.Active, &a.CreatedAt, &a.CreatedBy); err != nil {
+		if err := rows.Scan(&a.AppID, &mode, &a.Active, &a.CreatedAt, &a.CreatedBy, &published, &a.PublishedBy); err != nil {
 			return domain.Commune{}, nil, fmt.Errorf("operator registry: scan mini app: %w", err)
 		}
 		a.Mode = domain.CheDoMiniApp(mode)
+		if published.Valid {
+			t := published.Time
+			a.PublishedAt = &t
+		}
 		apps = append(apps, a)
 	}
 	if err := rows.Err(); err != nil {

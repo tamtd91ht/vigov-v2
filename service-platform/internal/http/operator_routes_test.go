@@ -196,9 +196,12 @@ func (f registryFake) Commune(_ context.Context, id string) (domain.Commune, []d
 		return c, f.apps, nil
 	}
 	// Two dedicated apps, one on and one off (a row from before 05/10/2026, when "gỡ" only switched
-	// off) — the secret routes answer 404 for any other App ID.
+	// off) — the secret routes answer 404 for any other App ID. The running one is MARKED PUBLISHED on
+	// Zalo (migration 0025), so the QR names it.
+	published := nowFake
 	return c, []domain.CommuneMiniApp{
-		{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true, CreatedBy: opCodeFake},
+		{AppID: "3291993990104489440", Mode: domain.CheDoRieng, Active: true, CreatedBy: opCodeFake,
+			PublishedAt: &published, PublishedBy: opCodeFake},
 		{AppID: "3043188591857102858", Mode: domain.CheDoRieng, Active: false, CreatedBy: opCodeFake},
 	}, nil
 }
@@ -231,6 +234,9 @@ type writerFake struct {
 	// The mini-app routes: the App ID of the path, the new one of a replacement, the reason.
 	lastApp, lastNewApp, lastReason string
 	removed                         int
+	// The publication route: what was asked, how many calls.
+	lastPublished *bool
+	publications  int
 	// The secret-forward display copies, with the commune each targeted and the actor.
 	forwards       []domain.SecretForward
 	forwardTargets []tenant.ID
@@ -297,6 +303,13 @@ func (w *writerFake) RemoveMiniApp(ctx context.Context, appID, reason string, by
 	w.lastApp, w.lastReason = appID, reason
 	w.removed++
 	return true, w.err
+}
+
+func (w *writerFake) SetMiniAppPublication(ctx context.Context, appID string, published bool, reason string, by domain.OperatorActor) (bool, error) {
+	w.record(ctx, by)
+	w.lastApp, w.lastReason, w.lastPublished = appID, reason, &published
+	w.publications++
+	return w.err == nil, w.err
 }
 
 // memCounter is Redis, absent: one fixed window per key.
@@ -463,6 +476,8 @@ var guarded = []guardedRoute{
 		`{"new_app_id":"3043188591857102858","reason":"Xã đổi App ID"}`, []string{"ops.mini_app.manage"}, 201, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/activation",
 		`{"active":false,"reason":"Xã ngừng dùng app riêng"}`, []string{"ops.mini_app.manage"}, 200, false},
+	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/publication",
+		`{"published":true,"reason":"Zalo đã phát hành app"}`, []string{"ops.mini_app.manage"}, 200, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/secret",
 		`{"secret":"zalo-app-secret-FAKE-NOT-REAL","reason":"Đặt khoá cho app riêng"}`, []string{"ops.mini_app.manage"}, 200, false},
 	{"DELETE", "/api/v1/communes/" + communeIDFake + "/mini-apps/3291993990104489440/secret",

@@ -202,7 +202,7 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 		h.writeRegistryError(w, r, store.ErrCommuneInactive)
 		return
 	}
-	live, err := h.liveOwnMiniApps(r.Context(), id)
+	live, unpublished, err := h.liveOwnMiniApps(r.Context(), id)
 	if err != nil {
 		h.writeSharedAppError(w, r, err)
 		return
@@ -221,26 +221,46 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 		logLaunchRefusal(r.Context(), h.d.Log, rf, ownErr)
 		out.Unavailable = append(out.Unavailable, launchLinkUnavailable{Source: launchSourceOwn, Code: rf.code, Message: rf.text})
 	}
+	// The commune HAS a running own app, but no operator has marked it published, so the shared link was
+	// given. Said to the OPERATOR only — the one who can mark it, and who would otherwise read the shared
+	// QR as a fault. The staff route never says it (owner 13/10/2026: staff see one link, nothing else).
+	// Not logged: it is a state the operator repairs, not the platform team.
+	if link.source == launchSourceShared && ownErr == nil && unpublished > 0 {
+		out.Unavailable = append(out.Unavailable, launchLinkUnavailable{Source: launchSourceOwn,
+			Code: codeOwnMiniAppUnpublished, Message: msgOwnMiniAppUnpublished})
+	}
 	writeJSON(w, http.StatusOK, out)
 }
+
+const (
+	codeOwnMiniAppUnpublished = "own_mini_app_unpublished"
+	msgOwnMiniAppUnpublished  = "Mini App riêng của xã chưa được đánh dấu đã phát hành trên Zalo, nên QR dùng app chung. " +
+		"Bản chưa phát hành chỉ mở được bằng tài khoản quản trị/phát triển của app. Đánh dấu đã phát hành khi Zalo đã phát hành app."
+)
 
 // errOwnMiniAppAmbiguous — the commune has more than one running own app. ADR 0070 #1 forbids it and
 // every write path refuses to create it, but no database constraint does (migration 0006 left it
 // open); choosing one would print a QR for an App ID nobody chose. Refused, like the shared-app case.
 var errOwnMiniAppAmbiguous = errors.New("launch link: more than one running own mini app")
 
-// liveOwnMiniApps is the commune's running, not-deleted `rieng` App IDs. Commune already excludes
-// soft-deleted rows; a switched-off row (written before 05/10/2026) is not live either.
-func (h *operatorHandlers) liveOwnMiniApps(ctx context.Context, id string) ([]string, error) {
+// liveOwnMiniApps is the commune's running, not-deleted `rieng` App IDs an operator has marked
+// PUBLISHED on Zalo — the same set store.CommuneLaunchStore gives the staff route (ADR 0070 bổ sung
+// 13/10/2026) — and how many running ones are NOT marked. Commune already excludes soft-deleted rows; a
+// switched-off row (written before 05/10/2026) is not live either.
+func (h *operatorHandlers) liveOwnMiniApps(ctx context.Context, id string) (live []string, unpublished int, err error) {
 	_, apps, err := h.d.Registry.Commune(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	var live []string
 	for _, a := range apps {
-		if a.Mode == domain.CheDoRieng && a.Active {
+		if a.Mode != domain.CheDoRieng || !a.Active {
+			continue
+		}
+		if a.Published() {
 			live = append(live, a.AppID)
+		} else {
+			unpublished++
 		}
 	}
-	return live, nil
+	return live, unpublished, nil
 }

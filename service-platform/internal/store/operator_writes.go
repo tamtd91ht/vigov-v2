@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -83,6 +84,10 @@ const (
 	// so the operator log screen sees the act. Metadata only — RecordMiniAppSecretForward.
 	ActionSetMiniAppSecret    = "dat_khoa_mini_app"
 	ActionRetireMiniAppSecret = "thu_hoi_khoa_mini_app"
+	// The "published on Zalo" mark of an own app (migration 0025, ADR 0070 bổ sung 13/10/2026). NEW
+	// verbs, two of them so one query finds every marking (or every unmarking) without reading the delta.
+	ActionMarkMiniAppPublished   = "danh_dau_phat_hanh_mini_app"
+	ActionUnmarkMiniAppPublished = "bo_danh_dau_phat_hanh_mini_app"
 )
 
 // nameLock serialises every write that can create a duplicate commune name. There is NO unique
@@ -612,6 +617,10 @@ func insertOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID, note, 
 type ownMiniAppRow struct {
 	active  bool
 	deleted bool
+	// publishedAt / publishedBy: the operator's "published on Zalo" mark (migration 0025); invalid / ""
+	// when not marked.
+	publishedAt sql.NullTime
+	publishedBy string
 }
 
 // lockOwnMiniApp reads and LOCKS one `rieng` row of the commune in tx — SOFT-DELETED ROWS INCLUDED,
@@ -621,10 +630,10 @@ type ownMiniAppRow struct {
 func lockOwnMiniApp(ctx context.Context, tx *corestore.ScopedTx, appID string) (ownMiniAppRow, error) {
 	var row ownMiniAppRow
 	err := tx.Underlying().QueryRowContext(ctx,
-		`SELECT dang_hoat_dong, deleted_at IS NOT NULL FROM mini_app
+		`SELECT dang_hoat_dong, deleted_at IS NOT NULL, published_at, COALESCE(published_by, '') FROM mini_app
 		  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng'
 		  FOR UPDATE`,
-		appID, tx.TenantID().String()).Scan(&row.active, &row.deleted)
+		appID, tx.TenantID().String()).Scan(&row.active, &row.deleted, &row.publishedAt, &row.publishedBy)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return ownMiniAppRow{}, ErrMiniAppNotInCommune
@@ -789,6 +798,109 @@ func (w *RegistryWriter) RemoveMiniApp(ctx context.Context, appID, reason string
 		})
 	})
 	return changed, err
+}
+
+// SetMiniAppPublication sets or clears the operator's "published on Zalo" mark on one of the commune's
+// own apps (migration 0025; ADR 0070 bổ sung 13/10/2026 #3): published_at = now() and published_by = the
+// operator's business code (rule 6 invariant 8 — never the internal id), or both NULL. The commune's QR
+// reads the mark (store.CommuneLaunchStore, operator getLaunchLink): marked → the own app's link, else
+// the shared app's `x=` link. One transaction, the `danh_dau_phat_hanh_mini_app` /
+// `bo_danh_dau_phat_hanh_mini_app` entry inside it, with before/after and the mandatory reason.
+//
+// changed=false when the row is already in the requested state — no write, no entry. Re-marking an app
+// already marked does NOT refresh published_at/by: the first statement stands; to restate it, unmark
+// then mark (two entries, each with its reason).
+//
+// Refused, writing nothing: commune unknown (ErrCommuneNotFound) or inactive (ErrCommuneInactive — rule
+// 7 invariant 6 keeps a merged commune's registry unchanged); App ID not a NOT-DELETED `rieng` row of
+// THIS commune (ErrMiniAppNotInCommune: unknown, removed, another commune's and the shared `chinh` row
+// are one answer, as everywhere in this file — the shared app is live by definition and carries no
+// mark, 0025's mini_app_published_own_app_only); marking a row switched off but not removed
+// (ErrMiniAppInactive, a pre-05/10/2026 state) — a QR never names it, so the mark would mean nothing.
+// CLEARING the mark on such a row is allowed: it only removes a statement.
+//
+// Takes effect on the next QR read: neither QR route caches.
+func (w *RegistryWriter) SetMiniAppPublication(ctx context.Context, appID string, published bool, reason string,
+	by domain.OperatorActor) (changed bool, err error) {
+	act, err := w.actor(by)
+	if err != nil {
+		return false, err
+	}
+	s := w.db.For(ctx)
+	err = s.Tx(ctx, func(tx *corestore.ScopedTx) error {
+		c, err := lockCommune(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if !c.active {
+			return ErrCommuneInactive
+		}
+		row, err := lockOwnMiniApp(ctx, tx, appID)
+		if err != nil {
+			return err
+		}
+		if row.deleted {
+			// Removed: the same answer as any App ID this commune does not hold now.
+			return ErrMiniAppNotInCommune
+		}
+		if row.publishedAt.Valid == published {
+			return nil
+		}
+		if published && !row.active {
+			return ErrMiniAppInactive
+		}
+		before := publicationState(row.publishedAt, row.publishedBy)
+		var after map[string]any
+		action := ActionUnmarkMiniAppPublished
+		if published {
+			action = ActionMarkMiniAppPublished
+			var at sql.NullTime
+			if err := tx.Underlying().QueryRowContext(ctx,
+				`UPDATE mini_app SET published_at = now(), published_by = $3, cap_nhat_luc = now(), cap_nhat_boi = $3
+				  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng' AND deleted_at IS NULL
+				  RETURNING published_at`,
+				appID, tx.TenantID().String(), by.Code).Scan(&at); err != nil {
+				return fmt.Errorf("operator registry: mark mini app published: %w", err)
+			}
+			after = publicationState(at, by.Code)
+		} else {
+			res, err := tx.Exec(ctx,
+				`UPDATE mini_app SET published_at = NULL, published_by = NULL, cap_nhat_luc = now(), cap_nhat_boi = $3
+				  WHERE app_id = $1 AND tenant_id = $2 AND che_do = 'rieng' AND deleted_at IS NULL`,
+				appID, tx.TenantID().String(), by.Code)
+			if err != nil {
+				return fmt.Errorf("operator registry: unmark mini app published: %w", err)
+			}
+			n, err := res.RowsAffected()
+			if err != nil {
+				return fmt.Errorf("operator registry: unmark mini app published: %w", err)
+			}
+			if n != 1 {
+				return fmt.Errorf("operator registry: unmark mini app published: %d rows changed, want 1", n)
+			}
+			after = publicationState(sql.NullTime{}, "")
+		}
+		changed = true
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor: act, Action: action, Subject: "MiniApp " + appID,
+			Delta: delta(map[string]any{
+				"app_id": appID, "xa": c.name,
+				"truoc": before, "sau": after,
+				"ly_do": reason,
+			}),
+		})
+	})
+	return changed, err
+}
+
+// publicationState is one side of the mark's before/after. The time is RFC 3339 UTC so the entry reads
+// the same whatever the session time zone; no personal data (an operator's business code).
+func publicationState(at sql.NullTime, by string) map[string]any {
+	if !at.Valid {
+		return map[string]any{"da_phat_hanh": false, "phat_hanh_luc": nil, "phat_hanh_boi": nil}
+	}
+	return map[string]any{"da_phat_hanh": true,
+		"phat_hanh_luc": at.Time.UTC().Format(time.RFC3339), "phat_hanh_boi": by}
 }
 
 // RecordMiniAppSecretForward writes the commune's audit_log row for a Mini App secret act identity

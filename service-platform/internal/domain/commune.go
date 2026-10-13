@@ -29,7 +29,15 @@ type CommuneMiniApp struct {
 	// CreatedBy is the business code that entered the row (`VH-…`, `CB-…`, or the legacy
 	// `van-hanh:<user>` of the Jenkins stage).
 	CreatedBy string
+	// PublishedAt / PublishedBy are an operator's statement that Zalo has PUBLISHED this own app
+	// (migration 0025, ADR 0070 bổ sung 13/10/2026). nil / "" = not published: the commune's QR uses the
+	// shared app. PublishedBy is the operator's business code (VH-…), set exactly when PublishedAt is.
+	PublishedAt *time.Time
+	PublishedBy string
 }
+
+// Published reports whether an operator has marked this own app published on Zalo.
+func (a CommuneMiniApp) Published() bool { return a.PublishedAt != nil }
 
 // Province is one row of the tinh_thanh catalogue.
 type Province struct {

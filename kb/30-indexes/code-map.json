@@ -5492,7 +5492,7 @@
     },
     "domain.Disabled": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:262"
+      "at": "service-identity/internal/domain/operator.go:264"
     },
     "domain.DisasterAlert": {
       "kind": "type",
@@ -5776,7 +5776,7 @@
     },
     "domain.Format": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:250"
+      "at": "service-identity/internal/domain/operator.go:252"
     },
     "domain.FormatClock": {
       "kind": "func",
@@ -5844,7 +5844,7 @@
     },
     "domain.GoString": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:247"
+      "at": "service-identity/internal/domain/operator.go:249"
     },
     "domain.GopNhanTrangThai": {
       "kind": "func",
@@ -6652,7 +6652,7 @@
     },
     "domain.LogValue": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:259"
+      "at": "service-identity/internal/domain/operator.go:261"
     },
     "domain.LoiBienBanConNhiemVu": {
       "kind": "func",
@@ -7288,19 +7288,19 @@
     },
     "domain.OperatorAccount": {
       "kind": "type",
-      "at": "service-identity/internal/domain/operator.go:187"
+      "at": "service-identity/internal/domain/operator.go:189"
     },
     "domain.OperatorActor": {
       "kind": "type",
-      "at": "service-platform/internal/domain/commune.go:42"
+      "at": "service-platform/internal/domain/commune.go:50"
     },
     "domain.OperatorAuditAction": {
       "kind": "type",
-      "at": "service-identity/internal/domain/operator.go:274"
+      "at": "service-identity/internal/domain/operator.go:276"
     },
     "domain.OperatorAuditEntry": {
       "kind": "type",
-      "at": "service-identity/internal/domain/operator.go:325"
+      "at": "service-identity/internal/domain/operator.go:327"
     },
     "domain.OperatorLogEntry": {
       "kind": "type",
@@ -7432,7 +7432,7 @@
     },
     "domain.PendingTOTPExpiredAt": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:223"
+      "at": "service-identity/internal/domain/operator.go:225"
     },
     "domain.PercentBasisPoints": {
       "kind": "func",
@@ -7672,7 +7672,7 @@
     },
     "domain.Province": {
       "kind": "type",
-      "at": "service-platform/internal/domain/commune.go:35"
+      "at": "service-platform/internal/domain/commune.go:43"
     },
     "domain.ProvinceKey": {
       "kind": "func",
@@ -7689,6 +7689,10 @@
     "domain.PublicationStatus": {
       "kind": "type",
       "at": "service-petitions/internal/domain/petition_publication.go:24"
+    },
+    "domain.Published": {
+      "kind": "func",
+      "at": "service-platform/internal/domain/commune.go:40"
     },
     "domain.QuaHan": {
       "kind": "func",
@@ -8184,7 +8188,7 @@
     },
     "domain.String": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:236"
+      "at": "service-identity/internal/domain/operator.go:238"
     },
     "domain.Subject": {
       "kind": "func",
@@ -8212,7 +8216,7 @@
     },
     "domain.TOTPEnrolled": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:271"
+      "at": "service-identity/internal/domain/operator.go:273"
     },
     "domain.Tang": {
       "kind": "func",
@@ -8316,7 +8320,7 @@
     },
     "domain.TemporaryPasswordExpiredAt": {
       "kind": "func",
-      "at": "service-identity/internal/domain/operator.go:214"
+      "at": "service-identity/internal/domain/operator.go:216"
     },
     "domain.TenCanBo": {
       "kind": "type",
@@ -9648,7 +9652,7 @@
     },
     "http.CommuneLaunchReader": {
       "kind": "type",
-      "at": "service-platform/internal/http/launch_link.go:36"
+      "at": "service-platform/internal/http/launch_link.go:39"
     },
     "http.CommuneProfiles": {
       "kind": "func",
@@ -11224,7 +11228,7 @@
     },
     "http.SharedAppReader": {
       "kind": "type",
-      "at": "service-platform/internal/http/launch_link.go:30"
+      "at": "service-platform/internal/http/launch_link.go:33"
     },
     "http.SharedMiniAppEditor": {
       "kind": "type",
@@ -13732,7 +13736,7 @@
     },
     "store.AddDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:304"
+      "at": "service-platform/internal/store/operator_writes.go:309"
     },
     "store.AddEntry": {
       "kind": "func",
@@ -13800,7 +13804,7 @@
     },
     "store.AttachMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:522"
+      "at": "service-platform/internal/store/operator_writes.go:527"
     },
     "store.AttachTreeFactsTx": {
       "kind": "func",
@@ -14152,7 +14156,7 @@
     },
     "store.CommuneLaunch": {
       "kind": "func",
-      "at": "service-platform/internal/store/commune_launch.go:45"
+      "at": "service-platform/internal/store/commune_launch.go:48"
     },
     "store.CommuneLaunchStore": {
       "kind": "type",
@@ -14180,7 +14184,7 @@
     },
     "store.CorrectName": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:397"
+      "at": "service-platform/internal/store/operator_writes.go:402"
     },
     "store.CotCuaBang": {
       "kind": "func",
@@ -14276,7 +14280,7 @@
     },
     "store.CreateCommune": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:171"
+      "at": "service-platform/internal/store/operator_writes.go:176"
     },
     "store.CreateDEK": {
       "kind": "func",
@@ -14664,7 +14668,7 @@
     },
     "store.HeldMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_registry.go:158"
+      "at": "service-platform/internal/store/operator_registry.go:163"
     },
     "store.HeldPermissions": {
       "kind": "func",
@@ -15364,7 +15368,7 @@
     },
     "store.NewCommune": {
       "kind": "type",
-      "at": "service-platform/internal/store/operator_writes.go:140"
+      "at": "service-platform/internal/store/operator_writes.go:145"
     },
     "store.NewCommuneLaunchStore": {
       "kind": "func",
@@ -15572,7 +15576,7 @@
     },
     "store.NewRegistryWriter": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:34"
+      "at": "service-platform/internal/store/operator_writes.go:35"
     },
     "store.NewRoleTemplateStore": {
       "kind": "func",
@@ -15912,7 +15916,7 @@
     },
     "store.Provinces": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_registry.go:174"
+      "at": "service-platform/internal/store/operator_registry.go:179"
     },
     "store.PublicBanners": {
       "kind": "func",
@@ -16008,7 +16012,7 @@
     },
     "store.RecordMiniAppSecretForward": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:806"
+      "at": "service-platform/internal/store/operator_writes.go:918"
     },
     "store.RecordRating": {
       "kind": "func",
@@ -16028,11 +16032,11 @@
     },
     "store.RegistryWriter": {
       "kind": "type",
-      "at": "service-platform/internal/store/operator_writes.go:29"
+      "at": "service-platform/internal/store/operator_writes.go:30"
     },
     "store.RemoveMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:760"
+      "at": "service-platform/internal/store/operator_writes.go:769"
     },
     "store.ReopenBudgetPeriodClose": {
       "kind": "func",
@@ -16048,7 +16052,7 @@
     },
     "store.ReplaceMiniApp": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:688"
+      "at": "service-platform/internal/store/operator_writes.go:697"
     },
     "store.ReportRows": {
       "kind": "func",
@@ -16144,7 +16148,7 @@
     },
     "store.SetActivation": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:444"
+      "at": "service-platform/internal/store/operator_writes.go:449"
     },
     "store.SetActive": {
       "kind": "func",
@@ -16162,6 +16166,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/map_frame_default.go:122"
     },
+    "store.SetMiniAppPublication": {
+      "kind": "func",
+      "at": "service-platform/internal/store/operator_writes.go:823"
+    },
     "store.SetPendingWebhookSecret": {
       "kind": "func",
       "at": "service-comms/internal/store/zalo_commune_bot.go:199"
@@ -16172,7 +16180,7 @@
     },
     "store.SetPrimaryDomain": {
       "kind": "func",
-      "at": "service-platform/internal/store/operator_writes.go:335"
+      "at": "service-platform/internal/store/operator_writes.go:340"
     },
     "store.SetPublicObjectKey": {
       "kind": "func",

@@ -30,8 +30,11 @@ type CommuneLaunch struct {
 	Active bool
 	// LaunchCode is tenant.launch_code (migration 0024) — what the shared app's `x=` link carries.
 	LaunchCode string
-	// LiveOwnAppIDs are the commune's running, not-deleted 'rieng' App IDs, at most TWO (the second only
-	// to see ambiguity: ADR 0070 #1 forbids it, no constraint prevents it).
+	// LiveOwnAppIDs are the commune's running, not-deleted 'rieng' App IDs THAT AN OPERATOR HAS MARKED
+	// PUBLISHED on Zalo (migration 0025, ADR 0070 bổ sung 13/10/2026), at most TWO (the second only to see
+	// ambiguity: ADR 0070 #1 forbids it, no constraint prevents it). An unpublished App ID opens only for
+	// its Zalo admins/developers, so a QR naming it would lock ordinary citizens out: it is not listed,
+	// and the QR falls back to the shared app.
 	LiveOwnAppIDs []string
 }
 
@@ -68,7 +71,8 @@ func (s *CommuneLaunchStore) CommuneLaunch(ctx context.Context) (CommuneLaunch, 
 	}
 
 	apps, err := scoped.Query(ctx, "app_id", "mini_app",
-		`AND che_do = 'rieng' AND dang_hoat_dong AND deleted_at IS NULL ORDER BY app_id LIMIT 2`)
+		`AND che_do = 'rieng' AND dang_hoat_dong AND deleted_at IS NULL AND published_at IS NOT NULL
+		 ORDER BY app_id LIMIT 2`)
 	if err != nil {
 		return CommuneLaunch{}, fmt.Errorf("commune launch: read own mini app: %w", err)
 	}

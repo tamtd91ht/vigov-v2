@@ -4,8 +4,11 @@ package http
 // the commune detail of platform-admin see exactly ONE link, chosen by ONE rule — chooseLaunchLink — so
 // the two screens can never print different QRs for the same commune:
 //
-//  1. the commune has exactly one live own app (mini_app che_do 'rieng', running, not deleted) →
-//     `https://zalo.me/s/<its App ID>/?src=qr` (domain.OwnMiniAppLaunchLink);
+//  1. the commune has exactly one live own app (mini_app che_do 'rieng', running, not deleted) THAT AN
+//     OPERATOR HAS MARKED PUBLISHED on Zalo (published_at, migration 0025; ADR 0070 bổ sung 13/10/2026)
+//     → `https://zalo.me/s/<its App ID>/?src=qr` (domain.OwnMiniAppLaunchLink). An unpublished App ID
+//     opens only for its Zalo admins/developers, so it is never put on a QR. Both callers filter on the
+//     mark BEFORE calling chooseLaunchLink: liveOwn below holds published App IDs only;
 //  2. otherwise → the shared app's `https://zalo.me/s/<shared App ID>/?src=qr&x=<launch code>`
 //     (domain.MiniAppLaunchLink).
 //
@@ -43,7 +46,7 @@ type chosenLaunchLink struct {
 }
 
 // chooseLaunchLink applies the owner's rule of 13/10/2026 (file comment). liveOwn is the commune's
-// running own App IDs (two or more = ambiguous); launchCode its tenant.launch_code.
+// running own App IDs marked published (two or more = ambiguous); launchCode its tenant.launch_code.
 //
 // ownErr is the own app's refusal that made the shared link the choice (errOwnMiniAppAmbiguous), nil
 // when there was none — the operator console lists it as unavailable, staff never see it. err refuses
