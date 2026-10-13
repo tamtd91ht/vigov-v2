@@ -13,7 +13,11 @@ package http
 //	opauth.SignedIn(d.Auth, "<reason>")    any live operator session
 //	opauth.Public("<reason>")              the sign-in steps; always behind signInLimit
 //
-// plus one narrowing inside SignedIn for the owner-only acts: opauth.RequireOwner() (internal/opauth).
+// plus one narrowing inside SignedIn for the owner-only acts: opauth.RequireOwner() (internal/opauth),
+// and one widening, directly inside SignedIn, for the ONLY three routes a session that must still
+// change its temporary password may call: opauth.AllowWhilePasswordChangeRequired() (ADR 0048 §13/10
+// #6). Every other route refuses that session with 403 password_change_required; adding the widening
+// to a fourth route fails TestPasswordChangeRequiredRouteTable.
 //
 // NOT authz.*: those are the commune realm's guards, and an operator principal cannot satisfy them
 // (and the reverse). tools/apidoc reads `opauth.*` and keeps these routes OUT of
@@ -143,24 +147,31 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 
 	// --- the signed-in operator ----------------------------------------------------------------
 
-	// @summary  Người vận hành đang đăng nhập: mã VH-, các khoá ops.* và is_owner (chỉ để hiển thị; mọi tuyến chỉ-owner tự kiểm lại)
+	// THE THREE ROUTES BELOW are the only ones a session with must_change_password may call (ADR 0048
+	// §13/10 #6): the console must learn it is restricted (who-am-I), the person must be able to leave
+	// (sign-out) and to do the one thing asked of them (change the password). Every other operator
+	// route answers that session 403 password_change_required.
+
+	// @summary  Người vận hành đang đăng nhập: mã VH-, các khoá ops.*, is_owner và must_change_password (chỉ để hiển thị; mọi tuyến chỉ-owner tự kiểm lại; phiên phải đổi mật khẩu vẫn gọi được tuyến này)
 	// @reply    200 operatorWhoAmIView
 	// @reply    401 httpx.Error unauthorized
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("GET /api/v1/operator-sessions/current",
 		opauth.SignedIn(h.d.Auth, "the console shows who is signed in and hides what the keys do not allow")(
-			http.HandlerFunc(h.whoAmI)))
+			opauth.AllowWhilePasswordChangeRequired()(
+				http.HandlerFunc(h.whoAmI))))
 
-	// @summary  Đăng xuất khu vận hành
+	// @summary  Đăng xuất khu vận hành (phiên phải đổi mật khẩu vẫn gọi được)
 	// @reply    204 -
 	// @reply    401 httpx.Error unauthorized
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("DELETE /api/v1/operator-sessions/current",
 		opauth.SignedIn(h.d.Auth, "every operator may end their own session")(
-			idem.KhongCan("revoking an already revoked session is the same outcome")(
-				http.HandlerFunc(h.signOut))))
+			opauth.AllowWhilePasswordChangeRequired()(
+				idem.KhongCan("revoking an already revoked session is the same outcome")(
+					http.HandlerFunc(h.signOut)))))
 
-	// @summary  Đổi mật khẩu người vận hành (cần mật khẩu hiện tại + TOTP); thu hồi mọi phiên
+	// @summary  Đổi mật khẩu người vận hành (cần mật khẩu hiện tại + TOTP); thu hồi mọi phiên; phiên phải đổi mật khẩu (mật khẩu tạm do owner đặt lại) gọi được tuyến này
 	// @request  operatorPasswordBody
 	// @reply    204 -
 	// @reply    400 httpx.Error invalid_body
@@ -171,8 +182,9 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    503 httpx.Error operator_auth_unavailable rate_limit_unavailable
 	mux.Handle("PUT /api/v1/operators/current/password", limit(
 		opauth.SignedIn(h.d.Auth, "every operator changes only their own password, re-proving it and a TOTP code")(
-			idem.KhongCan("a repeat carries the old password, which identity then refuses")(
-				http.HandlerFunc(h.changePassword)))))
+			opauth.AllowWhilePasswordChangeRequired()(
+				idem.KhongCan("a repeat carries the old password, which identity then refuses")(
+					http.HandlerFunc(h.changePassword))))))
 
 	// @summary  Tạo lại bộ mã khôi phục (cần TOTP); bộ cũ bị huỷ
 	// @request  operatorRecoveryCodesBody

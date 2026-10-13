@@ -60,15 +60,17 @@ type identityFake struct {
 	live  bool
 	keys  []string
 	// owner: the resolved principal is THE operator owner (opauth.RequireOwner).
-	owner     bool
-	open      operatorclient.OpenResult
-	change    operatorclient.ChangePasswordResult
-	regen     operatorclient.RecoveryCodesResult
-	begin     operatorclient.BeginEnrollmentResult
-	complete  operatorclient.CompleteEnrollmentResult
-	sawOpen   operatorclient.OpenRequest
-	revoked   int
-	errAnswer error
+	owner bool
+	// mustChange: the resolved session was opened with a temporary password (ADR 0048 §13/10 #6).
+	mustChange bool
+	open       operatorclient.OpenResult
+	change     operatorclient.ChangePasswordResult
+	regen      operatorclient.RecoveryCodesResult
+	begin      operatorclient.BeginEnrollmentResult
+	complete   operatorclient.CompleteEnrollmentResult
+	sawOpen    operatorclient.OpenRequest
+	revoked    int
+	errAnswer  error
 
 	// The two Mini App secret RPCs (operator_mini_app_secrets_test.go). A nil result answers
 	// ACCEPTED with complete metadata.
@@ -129,7 +131,8 @@ func (f *identityFake) Resolve(context.Context, secret.Secret) (operatorclient.P
 	if !f.live {
 		return operatorclient.Principal{}, false, nil
 	}
-	return operatorclient.Principal{OperatorID: "op-internal-1", OperatorCode: opCodeFake, PermissionKeys: f.keys, IsOwner: f.owner}, true, nil
+	return operatorclient.Principal{OperatorID: "op-internal-1", OperatorCode: opCodeFake, PermissionKeys: f.keys,
+		IsOwner: f.owner, MustChangePassword: f.mustChange}, true, nil
 }
 
 func (f *identityFake) Open(_ context.Context, req operatorclient.OpenRequest) (operatorclient.OpenResult, error) {

@@ -173,6 +173,9 @@ type operatorWhoAmIView struct {
 	// owner-only screens on it. Display only: every owner-only route re-checks it (opauth.RequireOwner)
 	// and so does identity. False from an identity older than the field (fail closed).
 	IsOwner bool `json:"is_owner"`
+	// MustChangePassword: this session was opened with a temporary password (ADR 0048 §13/10 #6) — the
+	// console shows only the change-password screen. Display only: opauth refuses every other route.
+	MustChangePassword bool `json:"must_change_password"`
 }
 
 type operatorPasswordBody struct {
@@ -329,7 +332,8 @@ func (h *operatorHandlers) whoAmI(w http.ResponseWriter, r *http.Request) {
 	if keys == nil {
 		keys = []string{}
 	}
-	writeJSON(w, http.StatusOK, operatorWhoAmIView{OperatorCode: p.OperatorCode, PermissionKeys: keys, IsOwner: p.IsOwner})
+	writeJSON(w, http.StatusOK, operatorWhoAmIView{OperatorCode: p.OperatorCode, PermissionKeys: keys,
+		IsOwner: p.IsOwner, MustChangePassword: p.MustChangePassword})
 }
 
 // signOut revokes the session NAMED BY THE COOKIE — never a session id from a parameter. Either

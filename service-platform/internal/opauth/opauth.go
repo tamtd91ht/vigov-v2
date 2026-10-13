@@ -20,6 +20,10 @@
 // and one narrowing, never used alone: opauth.SignedIn(d.Auth, "OWNER ONLY — …")(opauth.RequireOwner()(h))
 // for the acts only the operator owner may do (ADR 0048 §Sửa đổi 13/10/2026 #2) — see RequireOwner.
 //
+// A SESSION THAT MUST STILL CHANGE ITS PASSWORD (ADR 0048 §13/10 #6) is refused by SignedIn and
+// RequireKey with 403 password_change_required on every route, whatever its keys or owner flag, except
+// the three that declare opauth.SignedIn(…)(opauth.AllowWhilePasswordChangeRequired()(h)) — see there.
+//
 // HYBRID, NOT CACHED (owner, 01/10 #2): the `op1.` signature is checked HERE first, so garbage, a
 // forgery or a staff `v1.` token is refused without a round trip; a well-signed token is then
 // resolved by identity on EVERY request — the only place revocation and the idle limit are
@@ -105,6 +109,11 @@ type Principal struct {
 	// 13/10/2026 #1–#2), read live from ResolveOperatorSession like the keys. False from an identity
 	// older than the field — and false is "not the owner": RequireOwner refuses.
 	IsOwner bool
+	// MustChangePassword: the session was opened with a temporary password the owner set and the
+	// operator has not yet replaced (ADR 0048 §13/10 #6). SignedIn and RequireKey refuse such a session
+	// on every route except the three declared AllowWhilePasswordChangeRequired. False from an older
+	// identity is safe: such an identity never opens a restricted session.
+	MustChangePassword bool
 }
 
 // Has reports whether the principal holds k. For AnyKey: whether it holds at least one decided key.
@@ -176,6 +185,8 @@ const (
 	msgUnauthorized = "Phiên làm việc không hợp lệ hoặc đã kết thúc. Vui lòng đăng nhập lại."
 	msgForbidden    = "Tài khoản vận hành của bạn không có quyền thực hiện thao tác này."
 	msgUnavailable  = "Hệ thống tạm thời không xác thực được phiên vận hành. Vui lòng thử lại sau."
+	// msgPasswordChangeRequired: wording fixed by the task card for ADR 0048 §13/10 #6.
+	msgPasswordChangeRequired = "Bạn cần đổi mật khẩu trước khi tiếp tục."
 )
 
 // TokenFrom reads the operator cookie. ok is false when it is absent or empty.
@@ -224,7 +235,50 @@ func (a *Auth) authenticate(w http.ResponseWriter, r *http.Request) (Principal, 
 		httpx.WriteError(w, http.StatusUnauthorized, "unauthorized", msgUnauthorized, "")
 		return Principal{}, false
 	}
-	return Principal{OperatorID: p.OperatorID, OperatorCode: p.OperatorCode, Keys: p.PermissionKeys, IsOwner: p.IsOwner}, true
+	return Principal{OperatorID: p.OperatorID, OperatorCode: p.OperatorCode, Keys: p.PermissionKeys,
+		IsOwner: p.IsOwner, MustChangePassword: p.MustChangePassword}, true
+}
+
+// refusePasswordChange is the one answer a restricted session gets on every route it may not call.
+// Its own code, not "forbidden": the console must send the person to the change-password screen, and
+// "forbidden" would read as "you lack a key" — the keys are irrelevant here.
+func refusePasswordChange(w http.ResponseWriter) {
+	httpx.WriteError(w, http.StatusForbidden, "password_change_required", msgPasswordChangeRequired, "")
+}
+
+// passwordChangeExempt is the handler AllowWhilePasswordChangeRequired returns. SignedIn recognises
+// it by TYPE at wiring time, which is why it must be SignedIn's direct argument.
+type passwordChangeExempt struct{ next http.Handler }
+
+// ServeHTTP refuses when no guard put a principal in the context: mounted bare, the exemption would
+// be a route with no authentication at all.
+func (e passwordChangeExempt) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if _, ok := From(r.Context()); !ok {
+		slog.Default().ErrorContext(r.Context(),
+			"opauth.AllowWhilePasswordChangeRequired gắn mà không có opauth.SignedIn bao ngoài — từ chối")
+		httpx.WriteError(w, http.StatusForbidden, "forbidden", msgForbidden, "")
+		return
+	}
+	e.next.ServeHTTP(w, r)
+}
+
+// AllowWhilePasswordChangeRequired lets a session that must still change its password through ONE
+// route (ADR 0048 §13/10 #6). Exactly three routes carry it — who-am-I, sign-out, change own password
+// — and operator_routes_test.go fails if a fourth does. It is written as SignedIn's DIRECT argument:
+//
+//	opauth.SignedIn(d.Auth, "…")(opauth.AllowWhilePasswordChangeRequired()(h))
+//
+// WHY A DECLARATION AT THE ROUTE, NOT A PATH LIST IN HERE: a list of paths drifts from the mux the day
+// a path is renamed, and the renamed route silently becomes either unreachable or open. And why the
+// default is REFUSE: a route written tomorrow without thinking about this is closed to the temporary
+// password, which is the outcome the owner decided — the temporary password grants nothing but the
+// way to replace it.
+//
+// FAIL CLOSED: placed anywhere other than directly inside SignedIn, SignedIn does not see it and the
+// route stays refused; RequireKey panics on it (no keyed route belongs on the list); RequireOwner
+// refuses a restricted session regardless.
+func AllowWhilePasswordChangeRequired() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler { return passwordChangeExempt{next: next} }
 }
 
 func (a *Auth) logger() *slog.Logger {
@@ -257,9 +311,17 @@ func RequireKey(a *Auth, keys ...Key) func(http.Handler) http.Handler {
 		}
 	}
 	return func(next http.Handler) http.Handler {
+		if _, exempt := next.(passwordChangeExempt); exempt {
+			panic("opauth.RequireKey: AllowWhilePasswordChangeRequired belongs only on the three SignedIn routes (ADR 0048 §13/10 #6)")
+		}
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p, ok := a.authenticate(w, r)
 			if !ok {
+				return
+			}
+			// Before the keys, and whatever they are: a temporary password grants no key's work.
+			if p.MustChangePassword {
+				refusePasswordChange(w)
 				return
 			}
 			for _, k := range keys {
@@ -283,9 +345,15 @@ func SignedIn(a *Auth, reason string) func(http.Handler) http.Handler {
 		panic("opauth.SignedIn requires a reason")
 	}
 	return func(next http.Handler) http.Handler {
+		// Decided once, at wiring: only a route that declared the exemption in its own statement.
+		_, exempt := next.(passwordChangeExempt)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			p, ok := a.authenticate(w, r)
 			if !ok {
+				return
+			}
+			if p.MustChangePassword && !exempt {
+				refusePasswordChange(w)
 				return
 			}
 			next.ServeHTTP(w, r.WithContext(Into(r.Context(), p)))
@@ -317,6 +385,12 @@ func RequireOwner() func(http.Handler) http.Handler {
 				slog.Default().ErrorContext(r.Context(),
 					"opauth.RequireOwner gắn mà không có opauth.SignedIn bao ngoài — từ chối")
 				httpx.WriteError(w, http.StatusForbidden, "forbidden", msgForbidden, "")
+				return
+			}
+			// SignedIn already refused this unless the route was (wrongly) exempted; the owner's
+			// acts are never reachable with a temporary password, exemption or not.
+			if p.MustChangePassword {
+				refusePasswordChange(w)
 				return
 			}
 			if !p.IsOwner {

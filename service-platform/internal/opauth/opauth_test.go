@@ -291,3 +291,74 @@ func TestRequireOwner(t *testing.T) {
 		t.Errorf("principal behind RequireOwner: %+v", saw)
 	}
 }
+
+// ADR 0048 §13/10 #6: a session that must still change its temporary password is refused by every
+// guard — whatever its keys, owner or not — except where SignedIn's direct argument is
+// AllowWhilePasswordChangeRequired.
+func TestPasswordChangeRequired(t *testing.T) {
+	allKeys := []string{}
+	for k := range decidedKeys {
+		allKeys = append(allKeys, string(k))
+	}
+	restricted := operatorclient.Principal{OperatorID: "op-1", OperatorCode: "VH-00001",
+		PermissionKeys: allKeys, IsOwner: true, MustChangePassword: true}
+	open := restricted
+	open.MustChangePassword = false
+
+	refused := func(t *testing.T, name string, rec *httptest.ResponseRecorder) {
+		t.Helper()
+		if rec.Code != 403 || !strings.Contains(rec.Body.String(), `"code":"password_change_required"`) ||
+			!strings.Contains(rec.Body.String(), "Bạn cần đổi mật khẩu trước khi tiếp tục.") {
+			t.Errorf("%s: %d %s, want 403 password_change_required", name, rec.Code, rec.Body)
+		}
+	}
+	for name, mk := range map[string]func(*Auth) http.Handler{
+		"RequireKey":            func(a *Auth) http.Handler { return RequireKey(a, KeyTenantManage)(okHandler) },
+		"RequireKey AnyKey":     func(a *Auth) http.Handler { return RequireKey(a, AnyKey)(okHandler) },
+		"SignedIn":              func(a *Auth) http.Handler { return SignedIn(a, "test")(okHandler) },
+		"SignedIn+RequireOwner": func(a *Auth) http.Handler { return SignedIn(a, "owner only")(RequireOwner()(okHandler)) },
+		"exemption not direct": func(a *Auth) http.Handler {
+			return SignedIn(a, "test")(RequireOwner()(AllowWhilePasswordChangeRequired()(okHandler)))
+		},
+		"exempt around an owner": func(a *Auth) http.Handler {
+			return SignedIn(a, "test")(AllowWhilePasswordChangeRequired()(RequireOwner()(okHandler)))
+		},
+	} {
+		r := &resolverFake{p: restricted, live: true}
+		refused(t, name, serve(mk(newAuth(t, r)), opToken(t)))
+		// The same guard lets the same principal through once the password is changed.
+		r2 := &resolverFake{p: open, live: true}
+		if name != "exemption not direct" {
+			if rec := serve(mk(newAuth(t, r2)), opToken(t)); rec.Code != 200 {
+				t.Errorf("%s, not restricted: %d, want 200", name, rec.Code)
+			}
+		}
+	}
+
+	// The declared exemption: through, and the flag reaches the handler.
+	var saw Principal
+	h := SignedIn(newAuth(t, &resolverFake{p: restricted, live: true}), "who am I")(
+		AllowWhilePasswordChangeRequired()(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			saw, _ = From(r.Context())
+		})))
+	if rec := serve(h, opToken(t)); rec.Code != 200 || !saw.MustChangePassword {
+		t.Errorf("exempt route: %d, principal %+v", rec.Code, saw)
+	}
+	// Still authenticated: no cookie is 401, not a pass.
+	if rec := serve(h, ""); rec.Code != 401 {
+		t.Errorf("exempt route, no cookie: %d, want 401", rec.Code)
+	}
+	// Mounted bare, the exemption is no route without authentication.
+	if rec := serve(AllowWhilePasswordChangeRequired()(okHandler), opToken(t)); rec.Code != 403 {
+		t.Errorf("exemption without SignedIn: %d, want 403", rec.Code)
+	}
+	// Under RequireKey it is a wiring error.
+	func() {
+		defer func() {
+			if recover() == nil {
+				t.Error("RequireKey accepted AllowWhilePasswordChangeRequired")
+			}
+		}()
+		RequireKey(newAuth(t, &resolverFake{}), KeyTenantManage)(AllowWhilePasswordChangeRequired()(okHandler))
+	}()
+}
