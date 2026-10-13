@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Download, Printer } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { toast } from "sonner";
@@ -15,7 +15,8 @@ import { getCommuneLaunchLink } from "@/lib/api/commune-launch-link";
  * "Mã QR mở Mini App của xã" in Cấu hình → Kênh Zalo (owner 13/10/2026, ADR 0070 §Sửa đổi 13/10/2026):
  * exactly ONE QR — the link the server picks for this commune — and NOTHING about which app it opens:
  * no App ID, no raw link, no source label, no word about a shared app. The people who print and scan it
- * must see the commune's app as the commune's own.
+ * must see the commune's app as the commune's own. No "Chép liên kết" either (owner 13/10/2026): the
+ * link carries ViHAT's App ID; copying it is the operator console's action only.
  *
  * Mounted only inside `ZaloChannelTab`'s `admin.lookup` gate — the route's own key, so no second gate
  * (platform checks it again). NOT TRAILED (ADR 0070 §13/10 #5): viewing, downloading and printing are
@@ -45,7 +46,6 @@ export type LaunchQrState = { status: "loading" } | { status: "ready"; url: stri
 export type LaunchQrActions = {
   onDownload: (url: string) => void;
   onPrint: (url: string) => void;
-  onCopy: (url: string) => void;
 };
 
 /** Pure rendering, exported so the tests read the markup. */
@@ -98,15 +98,6 @@ export function CommuneLaunchQrView({
                 onClick={() => actions.onPrint(state.url)}
               >
                 In / Lưu PDF
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="bg-white"
-                icon={<Copy aria-hidden="true" focusable="false" />}
-                onClick={() => actions.onCopy(state.url)}
-              >
-                Chép liên kết
               </Button>
             </div>
             <p className="text-ink-muted m-0 text-[12px]">
@@ -161,17 +152,6 @@ export function CommuneLaunchQrSection() {
     }
   }
 
-  async function copy(url: string) {
-    const clip = typeof navigator === "undefined" ? undefined : navigator.clipboard;
-    try {
-      if (clip === undefined) throw new Error("no clipboard");
-      await clip.writeText(url);
-      toast.success("Đã chép liên kết.");
-    } catch {
-      toast.error("Trình duyệt không cho chép liên kết. Hãy dùng nút Tải ảnh PNG.");
-    }
-  }
-
   // From the click, not from an effect: an effect calling window.print() runs twice under React's
   // development double-invoke and opens the dialog twice. flushSync mounts the sheet before the dialog
   // snapshots the page; `afterprint` takes it down again whether the user printed or cancelled.
@@ -195,7 +175,7 @@ export function CommuneLaunchQrSection() {
       <CommuneLaunchQrView
         state={state}
         communeName={communeName}
-        actions={{ onDownload: (u) => void download(u), onPrint: print, onCopy: (u) => void copy(u) }}
+        actions={{ onDownload: (u) => void download(u), onPrint: print }}
       />
       {printUrl !== null ? createPortal(<QrPrintSheet communeName={communeName} url={printUrl} />, document.body) : null}
     </>

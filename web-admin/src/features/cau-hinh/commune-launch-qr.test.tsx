@@ -11,7 +11,7 @@ import { getCommuneLaunchLink, LAUNCH_QR_UNAVAILABLE } from "@/lib/api/commune-l
 import { CommuneLaunchQrView, QR_FILE_NAME, QrPrintSheet, SCAN_INSTRUCTION, type LaunchQrState } from "./commune-launch-qr";
 
 const URL_OWN = "https://zalo.me/s/1234567890123456789/?src=qr";
-const NO_ACTIONS = { onDownload: () => {}, onPrint: () => {}, onCopy: () => {} };
+const NO_ACTIONS = { onDownload: () => {}, onPrint: () => {} };
 /** What the owner ruled out on this screen (13/10/2026): any trace of which app the code opens. */
 const SHARED_APP_WORDING = /app chung|dùng chung|ViHAT|App ID/i;
 
@@ -32,7 +32,8 @@ describe("CommuneLaunchQrView", () => {
   it("ready: exactly one QR, Tải ảnh PNG and In / Lưu PDF, no shared-app wording, no raw link", () => {
     const el = render({ status: "ready", url: URL_OWN });
     expect(el.querySelectorAll('svg[role="img"]')).toHaveLength(1);
-    expect(buttonTexts(el)).toEqual(expect.arrayContaining(["Tải ảnh PNG", "In / Lưu PDF"]));
+    // Exactly these two: no "Chép liên kết" — the link carries ViHAT's App ID (owner 13/10/2026).
+    expect(buttonTexts(el)).toEqual(["Tải ảnh PNG", "In / Lưu PDF"]);
     expect(el.textContent).not.toMatch(SHARED_APP_WORDING);
     // The link carries the App ID: it is encoded in the QR, never printed as text or in an attribute.
     expect(el.innerHTML).not.toContain("1234567890123456789");
