@@ -250,8 +250,12 @@ describe("`content.update` gates the two write controls (prototype `ContentSourc
     await mount(fakes({ runs: page([RUNNING]) }), false);
     expect(has("Đồng bộ ngay")).toBe(false);
     expect(has("Cấu hình")).toBe(false);
-    // The only button left is the "?" of the category count — it explains, it writes nothing.
-    expect(Array.from(host!.querySelectorAll("button")).every((b) => b.hasAttribute("data-pending-marker"))).toBe(true);
+    // The only buttons left are the "?" of the category count and the fold toggle — neither writes anything.
+    expect(
+      Array.from(host!.querySelectorAll("button")).every(
+        (b) => b.hasAttribute("data-pending-marker") || b.getAttribute("aria-label") === "Thu gọn thẻ đồng bộ tin",
+      ),
+    ).toBe(true);
     expect(host!.querySelector("#portal-sync-run-blocked")).toBeNull();
     expect(host!.querySelector("dialog")).toBeNull();
     expect(chip()).toBe("Đang bật");
@@ -862,5 +866,47 @@ describe("Cấu hình — categories", () => {
     await click(button("Lưu cấu hình"));
     expect(api.saveSettings).not.toHaveBeenCalled();
     expect(box().querySelector('[role="alert"]')?.textContent).toBe(CATEGORIES_REQUIRED_TO_ENABLE);
+  });
+});
+
+describe("fold to the title row (owner 13/10/2026 — not in the prototype)", () => {
+  const toggle = (label: string) => {
+    const b = host!.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+    if (b === null) throw new Error(`no toggle "${label}"`);
+    return b;
+  };
+
+  beforeEach(() => window.localStorage.clear());
+
+  it("− folds the card to its title, keeps a red mark when the last run had errors, + opens it again", async () => {
+    await mount(fakes());
+    expect(host!.querySelector('[data-testid="portal-sync-run-errors"]')).not.toBeNull();
+    await click(toggle("Thu gọn thẻ đồng bộ tin"));
+    expect(host!.querySelector("[data-collapsed]")).not.toBeNull();
+    expect(host!.querySelector('[data-testid="portal-sync-run-errors"]')).toBeNull();
+    expect(has("Đồng bộ ngay")).toBe(false);
+    expect(host!.querySelector('[data-testid="portal-sync-collapsed-error"]')?.textContent).toBe("Có lỗi");
+    expect(window.localStorage.getItem("vigov.portal-sync-collapsed")).toBe("1");
+    await click(toggle("Mở rộng thẻ đồng bộ tin"));
+    expect(host!.querySelector("[data-collapsed]")).toBeNull();
+    expect(host!.querySelector('[data-testid="portal-sync-run-errors"]')).not.toBeNull();
+    expect(window.localStorage.getItem("vigov.portal-sync-collapsed")).toBe("0");
+  });
+
+  it("no error → no red mark when folded", async () => {
+    await mount(fakes({ runs: page([run({ error_summary: [] })]) }));
+    await click(toggle("Thu gọn thẻ đồng bộ tin"));
+    expect(host!.querySelector('[data-testid="portal-sync-collapsed-error"]')).toBeNull();
+  });
+
+  it("the choice is remembered: a folded card opens folded", async () => {
+    window.localStorage.setItem("vigov.portal-sync-collapsed", "1");
+    await mount(fakes());
+    expect(host!.querySelector("[data-collapsed]")).not.toBeNull();
+  });
+
+  it("the toggle is there without content.update too", async () => {
+    await mount(fakes(), false);
+    expect(toggle("Thu gọn thẻ đồng bộ tin")).toBeTruthy();
   });
 });

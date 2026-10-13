@@ -1404,6 +1404,14 @@
       "viec": "Cấu hình → Kênh Zalo: thẻ 'Mã QR mở Mini App của xã' (ADR 0070 §13/10) — một QR từ GET /api/v1/commune-launch-link, không thông tin app chung; Tải ảnh PNG, In / Lưu PDF (A4: tên xã, QR, câu hướng dẫn). Không có Chép liên kết (chủ dự án 13/10: link chứa App ID của ViHAT — chỉ platform-admin có).",
       "bang_chung": "2aa3a8fc — typecheck + lint + check:api + build xanh; vitest 317 tệp / 5918 ca. Chưa xem ảnh render thật.",
       "con_no": "Kiểm trên trình duyệt: tải PNG, quét bằng Zalo, bản in A4, bề ngang nhỏ. Vị trí thẻ (cuối tab) do builder chọn — prototype không có."
+    },
+    {
+      "id": "the-dong-bo-cong-thu-gon-13-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Thẻ 'Đồng bộ tin từ Cổng thông tin điện tử' có nút −/+ thu gọn về một dòng tiêu đề (chủ dự án 13/10/2026 — prototype không có): lỗi đồng bộ không còn chiếm chỗ mãi; thu gọn mà có lỗi thì cạnh tiêu đề còn dấu đỏ 'Có lỗi'; nhớ lựa chọn trong localStorage (vigov.portal-sync-collapsed).",
+      "bang_chung": "typecheck + eslint + vitest noi-dung 19 tệp / 484 ca xanh (4 ca thu gọn mới). Chưa xem ảnh render thật.",
+      "con_no": "Kiểm trên trình duyệt: vị trí nút −, dòng thu gọn ở bề ngang nhỏ."
     }
   ]
 }

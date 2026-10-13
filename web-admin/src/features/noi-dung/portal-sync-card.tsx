@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Link2, LoaderCircle, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { CheckCircle2, Link2, LoaderCircle, Minus, Plus, RefreshCw, TriangleAlert, X } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
 
@@ -159,6 +159,36 @@ const CONFIG_DIALOG_CLASS = "w-[min(46rem,calc(100vw-1rem))] p-5";
 
 /** The prototype's checkbox rows (`ContentSourcePanel.tsx:521`) and their native box. */
 const CHECK_ROW = "flex items-center gap-2.5 text-[12.5px]";
+
+/**
+ * The card folds to its title row (owner, 13/10/2026 — not in the prototype): a failed sync's red line
+ * otherwise sits on top of "Quản trị nội dung Mini App" for good, with nothing to put it away. Folding hides
+ * nothing silently — a folded card with an error still shows a red mark beside its title.
+ *
+ * REMEMBERED IN `localStorage`, like the sidebar (`components/sidebar-state.ts`): a layout preference, scoped
+ * by the browser to this commune's own host, no identity in it. Every access in try/catch — blocked storage
+ * still folds, it just forgets at the next load.
+ *
+ * Read in the state's initialiser, not an effect: the server and the first client render both draw the
+ * loading skeleton (settings arrive in an effect), so the stored choice never reaches a hydrated node.
+ */
+export const PORTAL_SYNC_COLLAPSED_KEY = "vigov.portal-sync-collapsed";
+
+function readCollapsed(): boolean {
+  try {
+    return typeof window !== "undefined" && window.localStorage.getItem(PORTAL_SYNC_COLLAPSED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeCollapsed(collapsed: boolean): void {
+  try {
+    window.localStorage.setItem(PORTAL_SYNC_COLLAPSED_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Storage blocked: the card still folds, the choice is just not remembered.
+  }
+}
 const CHECKBOX = "accent-brand m-0 size-3.5 shrink-0";
 
 export function PortalSyncCard({
@@ -175,6 +205,7 @@ export function PortalSyncCard({
   const [settings, setSettings] = useState<KetQua<comms_portalSyncSettingsOut> | null>(null);
   const [runs, setRuns] = useState<KetQua<page_Result_comms_portalRunOut> | null>(null);
   const [configOpen, setConfigOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
 
   // ONE KEY PER PRESS: a double click, or a retry after a lost answer, reuses it and `core/idem` turns
   // it into one run. Renewed only after a 202 — a refused attempt is released by the server.
@@ -253,13 +284,61 @@ export function PortalSyncCard({
   const connected = s !== null && s.configured;
   const blocked = s === null ? null : runNowBlockedReason(s, latest);
   const runDisabled = s === null || starting || blocked !== null || runs === null;
+  const hasError =
+    !settings.ok || (runs !== null && !runs.ok) || (latest !== undefined && latest.error_summary.length > 0);
+
+  function toggleCollapsed(): void {
+    const next = !collapsed;
+    setCollapsed(next);
+    writeCollapsed(next);
+  }
+
+  const collapseToggle = (
+    <IconButton
+      type="button"
+      label={collapsed ? "Mở rộng thẻ đồng bộ tin" : "Thu gọn thẻ đồng bộ tin"}
+      className="-my-1 min-h-0 shrink-0"
+      aria-expanded={!collapsed}
+      aria-controls="portal-sync-body"
+      onClick={toggleCollapsed}
+    >
+      {collapsed ? <Plus aria-hidden="true" focusable="false" /> : <Minus aria-hidden="true" focusable="false" />}
+    </IconButton>
+  );
+
+  if (collapsed) {
+    return (
+      <section
+        className="portal-sync-card mb-5 min-w-0 rounded-card border border-line bg-white px-4 py-2.5 shadow-card"
+        aria-labelledby="portal-sync-title"
+        data-collapsed=""
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <h2 id="portal-sync-title" className="m-0 flex min-w-0 flex-1 items-center gap-2 text-[13px] font-bold text-navy">
+            <Link2 aria-hidden="true" focusable="false" className="size-4 shrink-0" />
+            <span className="min-w-0 truncate">{PORTAL_SYNC_TITLE}</span>
+            {hasError && (
+              <span
+                className="flex shrink-0 items-center gap-1 text-[11.5px] font-semibold text-danger"
+                data-testid="portal-sync-collapsed-error"
+              >
+                <TriangleAlert aria-hidden="true" focusable="false" className="size-3.5" />
+                Có lỗi
+              </span>
+            )}
+          </h2>
+          {collapseToggle}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section
       className="portal-sync-card mb-5 min-w-0 rounded-card border border-line bg-white p-4 shadow-card"
       aria-labelledby="portal-sync-title"
     >
-      <div className="flex min-w-0 flex-wrap items-start gap-3">
+      <div className="flex min-w-0 flex-wrap items-start gap-3" id="portal-sync-body">
         <div className="min-w-0 flex-1 basis-72 [&_p]:m-0">
           <h2 id="portal-sync-title" className="m-0 flex items-center gap-2 text-[13px] font-bold text-navy">
             <Link2 aria-hidden="true" focusable="false" className="size-4 shrink-0" />
@@ -307,28 +386,28 @@ export function PortalSyncCard({
           )}
         </div>
 
-        {canEdit && (
-          <div className="flex items-center gap-2">
-            {connected && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                disabled={runDisabled}
-                aria-describedby={blocked !== null ? "portal-sync-run-blocked" : undefined}
-                title={blocked ?? undefined}
-                icon={
-                  starting ? (
-                    <LoaderCircle aria-hidden="true" focusable="false" className="size-3.5 animate-spin" />
-                  ) : (
-                    <RefreshCw aria-hidden="true" focusable="false" className="size-3.5" />
-                  )
-                }
-                onClick={runNow}
-              >
-                {RUN_NOW_LABEL}
-              </Button>
-            )}
+        <div className="flex items-center gap-2">
+          {canEdit && connected && (
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={runDisabled}
+              aria-describedby={blocked !== null ? "portal-sync-run-blocked" : undefined}
+              title={blocked ?? undefined}
+              icon={
+                starting ? (
+                  <LoaderCircle aria-hidden="true" focusable="false" className="size-3.5 animate-spin" />
+                ) : (
+                  <RefreshCw aria-hidden="true" focusable="false" className="size-3.5" />
+                )
+              }
+              onClick={runNow}
+            >
+              {RUN_NOW_LABEL}
+            </Button>
+          )}
+          {canEdit && (
             <Button
               type="button"
               variant="primary"
@@ -340,8 +419,9 @@ export function PortalSyncCard({
             >
               {connected ? CONFIGURE_LABEL : CONNECT_LABEL}
             </Button>
-          </div>
-        )}
+          )}
+          {collapseToggle}
+        </div>
       </div>
 
       {canEdit && configOpen && s !== null && (
