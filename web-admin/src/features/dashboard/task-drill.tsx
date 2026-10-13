@@ -1,10 +1,8 @@
 "use client";
 
-import { ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 
-import { Button } from "@/components/ui/button";
-import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 import { useDetailCatalogues } from "@/features/leader-notebook/leader-notebook";
 import {
   CHUA_PHAN_CONG,
@@ -16,7 +14,7 @@ import {
 } from "@/features/nhiem-vu/nhan-nhiem-vu";
 import { chuyenDrawer, type ViecDrawer } from "@/features/nhiem-vu/so-nhiem-vu"; // vi-name-ok: existing drawer reducer and type of the register
 import { TaskDetailHost, useTaskDetailRead, useTaskDetailState } from "@/features/nhiem-vu/task-detail-host";
-import { TABLE_CLASS, TABLE_FRAME_CLASS, TD_CLASS, TH_CLASS, withSpecLabels } from "@/features/nhiem-vu/task-spec";
+import { withSpecLabels } from "@/features/nhiem-vu/task-spec";
 import { usePhien } from "@/features/phien/phien-hien-tai"; // vi-name-ok: existing session hook
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi"; // vi-name-ok: existing staff-directory client
 import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing result type
@@ -27,11 +25,19 @@ import type {
   petitions_nhiemVuRa, // vi-name-ok: generated contract type
 } from "@/lib/api/schema.gen";
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu"; // vi-name-ok: existing status-label client
-import { cn } from "@/lib/cn";
 import { coQuyen, QUYEN_XEM_NHIEM_VU } from "@/lib/quyen";
 
-import { formatCount } from "./figures";
-import type { DashboardDrill, TaskDrillRequest } from "./view";
+import {
+  DRILL_LOADING,
+  DRILL_OPEN,
+  DRILL_OPEN_CLASS,
+  DRILL_PAGE_SIZE,
+  drillDescriptionOf,
+  DrillTableDialog,
+  type DrillBody,
+} from "./drill-dialog";
+import { RecordDrillDialog } from "./record-drill";
+import type { DashboardDrill, DrillRequest, TaskDrillRequest } from "./view";
 
 /**
  * Tổng quan's IN-PLACE task views (customer sheet rows 3 and 5, 10/10/2026):
@@ -51,13 +57,17 @@ import type { DashboardDrill, TaskDrillRequest } from "./view";
  *
  * A write in the drawer re-reads the dialog's rows in place; the page's figures are read again when the
  * drawer closes after a write, as the Sổ tay does — not under the officer while the drawer is open.
+ *
+ * THE SAME HOOK OPENS THE OTHER REGISTERS' LISTS (sheet web-admin-131026, TỔNG QUAN): a figure of Văn bản
+ * & Đơn thư, Phản ánh người dân or Giải ngân ngân sách sends a `DrillRequest` keyed by its register and
+ * gets `RecordDrillDialog` (`record-drill.tsx`) — the same frame, its own read-only route, `Mở` a link.
  */
 export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: DashboardDrill; overlay: ReactNode } {
   const session = usePhien();
   const sessionOk = session !== null && session.ok ? session.duLieu : null;
   const permissions = sessionOk?.permissions ?? null;
 
-  const [request, setRequest] = useState<TaskDrillRequest | null>(null);
+  const [request, setRequest] = useState<DrillRequest | null>(null);
   // Bumped after every write in the drawer: the dialog's rows re-read, kept on screen meanwhile.
   const [listRefresh, setListRefresh] = useState(0);
   const wroteSinceOpen = useRef(false);
@@ -69,8 +79,10 @@ export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: Dash
   useTaskDetailRead(drawer, dispatchDrawer);
   const detailState = useTaskDetailState();
 
-  // Read on first need only: a leader who never opens a list costs no extra call.
-  const wanted = request !== null || drawer !== null || opening !== null;
+  // Read on first need only: a leader who never opens a list costs no extra call. The task catalogues
+  // and status labels serve the TASK dialog and drawer only — another register's dialog reads its own
+  // unit and staff names (`record-drill.tsx`), so opening it does not call task routes.
+  const wanted = request?.list === "tasks" || drawer !== null || opening !== null;
   const catalogues = useDetailCatalogues(wanted);
   const [directoryResult, setDirectoryResult] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
   const [labelsResult, setLabelsResult] = useState<KetQua<petitions_danhSachTrangThaiNhiemVuRa> | null>(null);
@@ -91,7 +103,7 @@ export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: Dash
   const directory = useMemo(() => danhBaChoNhatKy(directoryResult), [directoryResult]);
   const statusLabels = withSpecLabels(docBangNhanTrangThai(labelsResult).bang);
 
-  const openTaskList = useCallback((r: TaskDrillRequest) => setRequest(r), []);
+  const openList = useCallback((r: DrillRequest) => setRequest(r), []);
 
   /** A row of "Cần xử lý ngay" names its task by code: read it (task.read + commune), then open. */
   const openTask = useCallback((code: string) => {
@@ -132,12 +144,15 @@ export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: Dash
     setListRefresh((n) => n + 1);
   }
 
-  const drill = useMemo<DashboardDrill>(() => ({ openTaskList, openTask }), [openTaskList, openTask]);
+  const drill = useMemo<DashboardDrill>(() => ({ openList, openTask }), [openList, openTask]);
   const shownCode = opening?.code ?? drawer?.nhiemVu.code ?? null;
 
   const overlay = (
     <>
-      {request !== null && (
+      {request !== null && request.list !== "tasks" && (
+        <RecordDrillDialog request={request} onClose={() => setRequest(null)} />
+      )}
+      {request !== null && request.list === "tasks" && (
         <TaskDrillDialog
           request={request}
           refresh={listRefresh}
@@ -174,18 +189,11 @@ export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: Dash
   return { drill, overlay };
 }
 
-/** Rows per read — the register's page size; `Xem thêm` reads the next page with the server's cursor. */
-const DRILL_PAGE_SIZE = 100;
-
-export const DRILL_TITLE_ID = "tieu-de-danh-sach-con-so";
-export const DRILL_LOADING = "Đang lấy danh sách…";
-export const DRILL_EMPTY = "Không có bản ghi nào.";
-export const DRILL_OPEN = "Mở";
-export const DRILL_MORE = "Xem thêm";
+export { DRILL_EMPTY, DRILL_LOADING, DRILL_MORE, DRILL_OPEN, DRILL_TITLE_ID } from "./drill-dialog";
 
 /** The prototype's description: `{n} nhiệm vụ đằng sau con số này.` — n from `/task-counts`. */
 export function drillDescription(count: number | null): string {
-  return count === null ? DRILL_LOADING : `${formatCount(count)} nhiệm vụ đằng sau con số này.`;
+  return drillDescriptionOf("nhiệm vụ", count);
 }
 
 type DrillPage = {
@@ -194,9 +202,9 @@ type DrillPage = {
 };
 
 /**
- * The rows behind one task figure — the prototype's `DrillDialog`, in the app's `ModalDialog` (native,
- * centred, Esc asks). The table alone scrolls; `Mở` opens the drawer ABOVE this dialog, so closing the
- * drawer comes back to the list.
+ * The rows behind one task figure — the prototype's `DrillDialog`, in the shared frame
+ * (`drill-dialog.tsx`). `Mở` opens the drawer ABOVE this dialog, so closing the drawer comes back to
+ * the list.
  */
 export function TaskDrillDialog({
   request,
@@ -264,89 +272,44 @@ export function TaskDrillDialog({
     });
   }
 
+  const body: DrillBody =
+    shown === null
+      ? { kind: "loading" }
+      : !shown.result.ok
+        ? { kind: "error", message: shown.result.thongBao }
+        : {
+            kind: "rows",
+            rows: rows.map((t) => ({
+              key: t.code,
+              code: t.code,
+              title: t.title,
+              unit: t.unit === "" ? "—" : (unitNames.get(t.unit) ?? "—"),
+              assignee: nhanCanBoNgan(t.assignee, directory, CHUA_PHAN_CONG),
+              due: nhanNgay(t.due_at),
+              open: (
+                <button
+                  type="button"
+                  className={DRILL_OPEN_CLASS}
+                  aria-label={`${DRILL_OPEN} ${t.code}`}
+                  aria-haspopup="dialog"
+                  onClick={() => onOpen(t)}
+                >
+                  {DRILL_OPEN}
+                  <ExternalLink aria-hidden="true" focusable="false" className="size-3" />
+                </button>
+              ),
+            })),
+          };
+
   return (
-    <ModalDialog titleId={DRILL_TITLE_ID} size="lg" className="max-w-5xl" onDismiss={onClose}>
-      <ModalDialogHeader
-        titleId={DRILL_TITLE_ID}
-        title={request.label}
-        description={shown === null ? DRILL_LOADING : drillDescription(shownCount)}
-      />
-      {shown === null ? (
-        <p role="status" className="text-ink-muted m-0 flex items-center gap-2 py-10 text-[13px]">
-          <Loader2 aria-hidden="true" focusable="false" className="size-4 animate-spin" />
-          {DRILL_LOADING}
-        </p>
-      ) : !shown.result.ok ? (
-        <p role="alert" className="thong-bao-loi m-0">
-          {shown.result.thongBao}
-        </p>
-      ) : (
-        <div
-          role="region"
-          aria-label={`Danh sách: ${request.label}`}
-          tabIndex={0}
-          className={cn(TABLE_FRAME_CLASS, "max-h-[56vh] min-h-0 overflow-auto")}
-        >
-          <table className={TABLE_CLASS}>
-            <thead>
-              <tr className="border-line border-b">
-                <th scope="col" className={TH_CLASS}>Mã</th>
-                <th scope="col" className={TH_CLASS}>Nội dung</th>
-                <th scope="col" className={TH_CLASS}>Bộ phận</th>
-                <th scope="col" className={TH_CLASS}>Người xử lý</th>
-                <th scope="col" className={TH_CLASS}>Hạn</th>
-                <th scope="col" className={TH_CLASS}>
-                  <span className="an-thi-giac">Thao tác</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="text-ink-muted py-10 text-center">
-                    {DRILL_EMPTY}
-                  </td>
-                </tr>
-              ) : (
-                rows.map((t) => (
-                  <tr key={t.code} className="border-line border-b last:border-b-0">
-                    <td className={TD_CLASS}>
-                      <code className="text-[11.5px]">{t.code === "" ? "—" : t.code}</code>
-                    </td>
-                    <td className={cn(TD_CLASS, "text-navy max-w-[26rem] font-medium whitespace-normal")}>
-                      <span className="line-clamp-2">{t.title}</span>
-                    </td>
-                    <td className={cn(TD_CLASS, "text-ink-muted")}>
-                      {t.unit === "" ? "—" : (unitNames.get(t.unit) ?? "—")}
-                    </td>
-                    <td className={cn(TD_CLASS, "text-ink-muted")}>{nhanCanBoNgan(t.assignee, directory, CHUA_PHAN_CONG)}</td>
-                    <td className={TD_CLASS}>{nhanNgay(t.due_at)}</td>
-                    <td className={TD_CLASS}>
-                      <button
-                        type="button"
-                        className="text-brand inline-flex cursor-pointer items-center gap-1 border-0 bg-transparent p-0 text-[12px] [font-family:inherit] focus-visible:outline-2 focus-visible:outline-brand-500"
-                        aria-label={`${DRILL_OPEN} ${t.code}`}
-                        aria-haspopup="dialog"
-                        onClick={() => onOpen(t)}
-                      >
-                        {DRILL_OPEN}
-                        <ExternalLink aria-hidden="true" focusable="false" className="size-3" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {hasMore && (
-        <div>
-          <Button type="button" variant="outline" size="sm" disabled={loadingMore} aria-busy={loadingMore || undefined} onClick={loadMore}>
-            {DRILL_MORE}
-          </Button>
-        </div>
-      )}
-    </ModalDialog>
+    <DrillTableDialog
+      title={request.label}
+      description={shown === null ? DRILL_LOADING : drillDescription(shownCount)}
+      body={body}
+      hasMore={hasMore}
+      loadingMore={loadingMore}
+      onMore={loadMore}
+      onClose={onClose}
+    />
   );
 }

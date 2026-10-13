@@ -46,7 +46,7 @@ import type {
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 import { compactDong, compactDongReport } from "@/lib/compact-dong";
-import type { TaskMetric } from "@/lib/drill-down";
+import type { CitizenReportMetric, IncomingDocumentMetric, TaskMetric } from "@/lib/drill-down";
 import {
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
@@ -174,10 +174,11 @@ type Figure = {
   /** the server's own count behind `display` — for the exported workbook only, never drawn */
   readonly raw?: number;
   /**
-   * The list behind the figure, as the drill-down link encodes it — kept so a TASK figure can open its
-   * rows in a dialog on this page instead (`DashboardDrill`, customer sheet row 3).
+   * The list behind the figure — kept so the figure can open its rows in a dialog on this page
+   * (`DashboardDrill`, customer sheet rows 3 and web-admin-131026). A register figure carries the
+   * drill-down link's target and period; a Giải ngân figure carries its budget year (`FigureDrill`).
    */
-  readonly drill?: { readonly target: DrillTarget; readonly period: { readonly from: string; readonly to: string } };
+  readonly drill?: FigureDrill;
   /** stock (the register now) or period (counted in the window) — what `/bao-cao`'s chart may plot */
   readonly kind?: FigureKind;
   /** which way is good — colours `/bao-cao`'s delta line and chart bar */
@@ -419,17 +420,72 @@ export type TaskDrillRequest = {
 };
 
 /**
- * What Tổng quan does IN PLACE instead of navigating (customer sheet rows 3 and 5): a task figure opens
- * its rows in a dialog, a task row of "Cần xử lý ngay" opens the task's drawer. Owned by the hook half
- * (`task-drill.tsx`) and handed down by context, so this file stays props-only.
+ * The Giải ngân figures that have a list behind them: `Tỷ lệ giải ngân` (every project of the budget
+ * year, the prototype's `budget_item` `all`) and `Dự án chậm` (`delayed_only`, the server's own rule
+ * behind `delayed_project_count`). `Vướng mắc chưa gỡ` has none on purpose: it counts ISSUES, and a
+ * list of projects could never have as many rows as that figure.
+ */
+export type ProjectDrillTarget = { readonly list: "projects"; readonly delayedOnly: boolean };
+
+type Period = { readonly from: string; readonly to: string };
+
+/** What a figure keeps of the list behind it. */
+export type FigureDrill =
+  | { readonly target: DrillTarget; readonly period: Period }
+  | { readonly target: ProjectDrillTarget; readonly year: number };
+
+/**
+ * The rows a figure asks for, keyed by REGISTER: each opens the same dialog frame
+ * (`drill-dialog.tsx`) with the list route's own filter — the predicate the figure was counted with.
+ */
+export type DrillRequest =
+  | ({ readonly list: "tasks" } & TaskDrillRequest)
+  | {
+      readonly list: "incoming-documents";
+      readonly metric: IncomingDocumentMetric;
+      readonly period: Period;
+      readonly label: string;
+    }
+  | {
+      readonly list: "citizen-reports";
+      readonly metric: CitizenReportMetric;
+      readonly period: Period;
+      readonly label: string;
+    }
+  | {
+      readonly list: "projects";
+      readonly year: number;
+      readonly delayedOnly: boolean;
+      readonly label: string;
+    };
+
+/** The request a figure's tile sends, or `null` for a figure with no list behind it. */
+export function drillRequestOf(drill: FigureDrill | undefined, label: string): DrillRequest | null {
+  if (drill === undefined) return null;
+  if ("year" in drill) return { list: "projects", year: drill.year, delayedOnly: drill.target.delayedOnly, label };
+  const t = drill.target;
+  switch (t.list) {
+    case "tasks":
+      return { list: "tasks", metric: t.metric, period: drill.period, label };
+    case "incoming-documents":
+      return { list: "incoming-documents", metric: t.metric, period: drill.period, label };
+    case "citizen-reports":
+      return { list: "citizen-reports", metric: t.metric, period: drill.period, label };
+  }
+}
+
+/**
+ * What Tổng quan does IN PLACE instead of navigating: a figure of Nhiệm vụ (sheet row 3), Văn bản &
+ * Đơn thư, Giải ngân ngân sách or Phản ánh người dân (sheet web-admin-131026, TỔNG QUAN) opens its
+ * rows in a dialog; a task row of "Cần xử lý ngay" opens the task's drawer (row 5). Owned by the hook
+ * half (`task-drill.tsx`) and handed down by context, so this file stays props-only.
  *
- * ABSENT (`/bao-cao`, every test that passes none) = the links as before. Only TASK figures and rows
- * use it: Phản ánh and Văn bản đến have no in-place detail on this page, so theirs stay links.
- * Gates unchanged: the tiles and rows exist only behind the keys they had; the list and detail routes
- * check `task.read` again (rule 5).
+ * ABSENT (`/bao-cao`, every test that passes none) = the links as before. Gates unchanged: the tiles
+ * and rows exist only behind the keys their block had; every list route checks its own read key again
+ * (`task.read`, `document.read`, `feedback.read`, `budget.read` — rule 5).
  */
 export type DashboardDrill = {
-  readonly openTaskList?: (request: TaskDrillRequest) => void;
+  readonly openList?: (request: DrillRequest) => void;
   readonly openTask?: (code: string) => void;
 };
 
@@ -721,10 +777,11 @@ function tileText(presenting: boolean): { value: string; label: string; note: st
 
 /**
  * One figure, in the order of the prototype's `MetricTile`: VALUE (large, bold) · label · note ·
- * delta line. Named `Xem danh sách đằng sau: {nhãn}` (spec §4, §9). A TASK figure, when the page hands
- * a `DashboardDrill`, is a BUTTON opening its rows in a dialog on this page — the prototype's
- * `DrillDialog`, asked for by the customer (sheet row 3, 10/10/2026; this departs from ADR 0053 §7's
- * link). Every other figure is a LINK to the pre-filtered list behind it (`?metric=…`).
+ * delta line. Named `Xem danh sách đằng sau: {nhãn}` (spec §4, §9). A figure with a list behind it
+ * (`drillRequestOf`), when the page hands a `DashboardDrill`, is a BUTTON opening its rows in a dialog on
+ * this page — the prototype's `DrillDialog`, asked for by the customer (sheet row 3, 10/10/2026, for
+ * Nhiệm vụ; web-admin-131026 for Văn bản, Giải ngân, Phản ánh; this departs from ADR 0053 §7's link).
+ * Every other figure is a LINK to the screen or pre-filtered list behind it (`?metric=…`).
  *
  * THE ACCESSIBLE NAME REPLACES THE VISIBLE TEXT, so the value is wired back with
  * `aria-describedby` — otherwise a screen-reader user hears where the link goes and never the
@@ -738,7 +795,7 @@ function tileText(presenting: boolean): { value: string; label: string; note: st
  */
 function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   const layout = useContext(BlockLayoutContext);
-  const { openTaskList } = useContext(DrillContext);
+  const { openList } = useContext(DrillContext);
   const valueId = `${figure.id}-value`;
   const alert = figure.alert === true;
   const sentence = figure.sentence === true;
@@ -750,11 +807,9 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
     alert ? "hover:bg-danger-50" : "hover:bg-accent-50",
     "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-500",
   );
-  // A TASK figure opens its rows in a dialog on this page (customer sheet row 3, the prototype's
-  // `DrillDialog`); every other figure keeps its link — no in-place list exists for it here.
-  const drill = figure.drill;
-  const metric: TaskMetric | null =
-    openTaskList !== undefined && drill !== undefined && drill.target.list === "tasks" ? drill.target.metric : null;
+  // A figure with a list behind it opens its rows in a dialog on this page (the prototype's
+  // `DrillDialog`); a figure without one (`Vướng mắc chưa gỡ`, the fiscal block) keeps its link.
+  const request = openList === undefined ? null : drillRequestOf(figure.drill, figure.label);
   const body = (
     <>
       <span
@@ -784,7 +839,7 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   );
   return (
     <li className={cn("@container min-w-0", sentence && "col-span-full")}>
-      {metric !== null && drill !== undefined ? (
+      {request !== null ? (
         <button
           type="button"
           title={figure.exact}
@@ -792,7 +847,7 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
           aria-describedby={valueId}
           aria-haspopup="dialog"
           className={cn(tileClass, "w-full cursor-pointer border-0 bg-transparent [font-family:inherit]")}
-          onClick={() => openTaskList?.({ metric, period: drill.period, label: figure.label })}
+          onClick={() => openList?.(request)}
         >
           {body}
         </button>
@@ -1189,6 +1244,20 @@ function budgetFigures(
 }
 
 /**
+ * The list behind a Giải ngân figure, for the two that have one (`ProjectDrillTarget`): the ratio opens
+ * every project of the budget year, `Dự án chậm` the delayed ones. Every other figure keeps its link.
+ */
+const PROJECT_DRILLS: Readonly<Record<string, ProjectDrillTarget>> = {
+  "budget-ratio": { list: "projects", delayedOnly: false },
+  "budget-delayed": { list: "projects", delayedOnly: true },
+};
+
+function withProjectDrill(f: Figure, year: number): Figure {
+  const target = PROJECT_DRILLS[f.id];
+  return target === undefined ? f : { ...f, drill: { target, year } };
+}
+
+/**
  * Khối GIẢI NGÂN NGÂN SÁCH — the prototype's five metrics (`DashboardWorkspace`, `budget.*`), filled from
  * the year summary `/giai-ngan` reads (customer sheet row 6). Each tile leads to `/giai-ngan`.
  *
@@ -1206,7 +1275,7 @@ export function BudgetBlock({
 }) {
   const layout = useContext(BlockLayoutContext);
   const report = layout === "report";
-  const figures = budgetFigures(result, layout, report).map((f) => figureFor(layout, f));
+  const figures = budgetFigures(result, layout, report).map((f) => withProjectDrill(figureFor(layout, f), year));
   const scope = budgetScope(year);
   return (
     <Panel

@@ -25,6 +25,7 @@ import {
   DashboardBlocks,
   DashboardHeader,
   DocumentBlock,
+  drillRequestOf,
   FiscalBlock,
   UrgentPanel,
 } from "./view";
@@ -790,7 +791,7 @@ describe("/tong-quan is untouched by /bao-cao's tile (owner 09/10/2026: D4 and D
 
 /* ── Customer sheet rows 3, 5, 6 (10/10/2026): in-place task views, the Giải ngân block ──────────── */
 
-const DRILL = { openTaskList: () => {}, openTask: () => {} };
+const DRILL = { openList: () => {}, openTask: () => {} };
 const URGENT_TASK: UrgentRow = {
   module: "task",
   code: "NV-0042",
@@ -828,27 +829,11 @@ describe("row 3 — a task figure opens its rows in a dialog on Tổng quan", ()
     expect(html).not.toContain('href="/nhiem-vu');
   });
 
-  it("other modules keep their LINK even with the drill (no in-place list exists for them)", () => {
-    const visible = blockVisibility(["report.read", "task.read", "feedback.read"]);
-    const reports: petitions_citizenReportSummaryOut = {
-      received: 2,
-      in_progress: 1,
-      on_time_sample: 0,
-      on_time: 0,
-      late: 0,
-      rating_sample: 0,
-      rating_sum: 0,
-    };
-    const html = drillPage({ citizenReports: { current: ok(reports), previous: ok(reports) } }, visible);
-    expect(html).toMatch(/<a[^>]*href="\/phan-anh\?metric=in_progress"/);
-  });
-
   it("DENIED: without task.read the task block, and so every task button, is absent", () => {
     const html = drillPage({ tasks: { current: ok(task), previous: ok(task) } }, DOCUMENT_KEYS);
     expect(html).not.toContain("tasks-overdue-value");
-    // The document tiles stay links; no figure is a dialog button.
-    expect(gridOf(html)).not.toMatch(/<button[^>]*aria-label="Xem danh sách đằng sau:/);
-    expect(gridOf(html)).toMatch(/<a[^>]*href="\/van-ban\?metric=/);
+    expect(gridOf(html)).not.toContain("Xem danh sách đằng sau: Quá hạn\"");
+    expect(html).not.toContain('href="/nhiem-vu');
   });
 
   it("without a drill (Báo cáo, any other host): the link as before", () => {
@@ -925,5 +910,137 @@ describe("row 6 — Khối Giải ngân ngân sách filled from the year summary
     const html = page({ budget: ok(summary) }, TASK_KEYS);
     expect(block(html)).toBe("");
     expect(html).not.toContain("Tỷ lệ giải ngân");
+  });
+});
+
+/* ── Sheet web-admin-131026, TỔNG QUAN: Văn bản & Đơn thư, Giải ngân, Phản ánh open their rows too ── */
+
+describe("web-admin-131026 — the other registers' figures open their rows in a dialog", () => {
+  const tileOf = (html: string, id: string) =>
+    new RegExp(`<(button|a)[^>]*aria-describedby="${id}-value"[^>]*>`).exec(html)?.[0] ?? "";
+  const isButton = (tile: string) => tile.startsWith("<button") && tile.includes('aria-haspopup="dialog"');
+
+  const doc: documents_incomingSummaryOut = {
+    from: "2026-09-01T00:00:00+07:00",
+    to: "2026-09-28T16:43:01+07:00",
+    as_of: "2026-09-28T09:43:00Z",
+    arrived: 5,
+    open: 6,
+    overdue: 4,
+  };
+  const reports: petitions_citizenReportSummaryOut = {
+    received: 2,
+    in_progress: 1,
+    on_time_sample: 1,
+    on_time: 1,
+    late: 1,
+    rating_sample: 0,
+    rating_sum: 0,
+  };
+  const BUDGET_KEYS = blockVisibility(["report.read", "budget.read"]);
+  const FEEDBACK_KEYS = blockVisibility(["report.read", "feedback.read"]);
+  const summary = {
+    year: 2026,
+    planned_total: 1_000,
+    project_count: 2,
+    disbursed_total: 500,
+    disbursed_ratio: 5000,
+    time_elapsed_ratio: 7096,
+    remaining_total: 500,
+    delay_threshold: 1000,
+    delay_threshold_source: "mac_dinh",
+    delayed_project_count: 1,
+    open_issue_count: 3,
+    monthly: [],
+    disbursed_after_year: 0,
+    by_category: [],
+    total: {} as never,
+  };
+
+  it("Văn bản & Đơn thư: arrived, open and overdue are dialog buttons; 'Đơn thư trong kỳ' stays a pending tile", () => {
+    const html = drillPage({ incomingDocuments: { current: ok(doc), previous: ok(doc) } }, DOCUMENT_KEYS);
+    for (const m of ["arrived", "open", "overdue"]) expect(isButton(tileOf(html, `incoming-documents-${m}`))).toBe(true);
+    expect(html).not.toContain('href="/van-ban?metric=');
+    expect(html).not.toMatch(/aria-label="Xem danh sách đằng sau: Đơn thư/);
+  });
+
+  it("Phản ánh người dân: received, in progress, on time and late are dialog buttons; the rating keeps its link", () => {
+    const html = drillPage({ citizenReports: { current: ok(reports), previous: ok(reports) } }, FEEDBACK_KEYS);
+    for (const m of ["received", "in_progress", "on_time", "late"]) {
+      expect(isButton(tileOf(html, `citizen-reports-${m}`))).toBe(true);
+    }
+    expect(tileOf(html, "citizen-reports-rating")).toMatch(/^<a[^>]*href="\/phan-anh\?metric=rating_sample"/);
+  });
+
+  it("Giải ngân: the ratio and 'Dự án chậm' are dialog buttons; 'Vướng mắc chưa gỡ' and the others keep /giai-ngan", () => {
+    const html = drillPage({ budget: ok(summary) }, BUDGET_KEYS);
+    expect(isButton(tileOf(html, "budget-ratio"))).toBe(true);
+    expect(isButton(tileOf(html, "budget-delayed"))).toBe(true);
+    for (const id of ["budget-issues", "budget-elapsed", "budget-disbursed"]) {
+      expect(tileOf(html, id)).toMatch(/^<a[^>]*href="\/giai-ngan"/);
+    }
+  });
+
+  it("without a drill (Báo cáo, any other host) every one of them is still a link", () => {
+    const html = drillPage(
+      { incomingDocuments: { current: ok(doc), previous: ok(doc) }, citizenReports: { current: ok(reports), previous: ok(reports) } },
+      blockVisibility(["report.read", "document.read", "feedback.read"]),
+      false,
+    );
+    expect(gridOf(html)).not.toMatch(/<button[^>]*aria-label="Xem danh sách đằng sau:/);
+    expect(html).toMatch(/<a[^>]*href="\/van-ban\?metric=open"/);
+    expect(html).toMatch(/<a[^>]*href="\/phan-anh\?metric=in_progress"/);
+  });
+
+  it("DENIED: without document.read, feedback.read or budget.read their blocks — and so their buttons — are absent", () => {
+    const html = drillPage(
+      {
+        incomingDocuments: { current: ok(doc), previous: ok(doc) },
+        citizenReports: { current: ok(reports), previous: ok(reports) },
+        budget: ok(summary),
+      },
+      TASK_KEYS,
+    );
+    expect(html).not.toContain("incoming-documents-open-value");
+    expect(html).not.toContain("citizen-reports-received-value");
+    expect(html).not.toContain("budget-ratio-value");
+  });
+});
+
+describe("drillRequestOf — the request a tile sends is its figure's own filter", () => {
+  const period = { from: "2026-09-01T00:00:00+07:00", to: "2026-09-28T16:43:01+07:00" };
+
+  it("a register figure carries its list, metric and period", () => {
+    expect(drillRequestOf({ target: { list: "incoming-documents", metric: "overdue" }, period }, "Quá hạn xử lý")).toEqual({
+      list: "incoming-documents",
+      metric: "overdue",
+      period,
+      label: "Quá hạn xử lý",
+    });
+    expect(drillRequestOf({ target: { list: "citizen-reports", metric: "late" }, period }, "Trễ hạn")).toEqual({
+      list: "citizen-reports",
+      metric: "late",
+      period,
+      label: "Trễ hạn",
+    });
+    expect(drillRequestOf({ target: { list: "tasks", metric: "overdue" }, period }, "Quá hạn")).toEqual({
+      list: "tasks",
+      metric: "overdue",
+      period,
+      label: "Quá hạn",
+    });
+  });
+
+  it("a Giải ngân figure carries its budget year, never the period", () => {
+    expect(drillRequestOf({ target: { list: "projects", delayedOnly: true }, year: 2026 }, "Dự án chậm")).toEqual({
+      list: "projects",
+      year: 2026,
+      delayedOnly: true,
+      label: "Dự án chậm",
+    });
+  });
+
+  it("no drill, no request", () => {
+    expect(drillRequestOf(undefined, "Vướng mắc chưa gỡ")).toBeNull();
   });
 });

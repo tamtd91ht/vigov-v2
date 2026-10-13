@@ -134,6 +134,13 @@ function DashboardOverview() {
   const { drill, overlay } = useDashboardTaskDrill(() =>
     setRequest((r) => ({ kind: r.kind, at: new Date().getTime() })),
   );
+  // Without `task.read` the task drawer is withheld (its reads would only be refused), but the other
+  // registers' figures still open their own lists — each tile exists only behind its block's keys.
+  const tasksVisible = visible.tasks;
+  const pageDrill = useMemo(
+    () => (tasksVisible ? drill : { openList: drill.openList }),
+    [tasksVisible, drill],
+  );
 
   return (
     <DashboardView
@@ -145,7 +152,7 @@ function DashboardOverview() {
         canExport: coQuyen(permissions, REPORT_EXPORT_PERMISSION),
       }}
       presentation={{ on: presenting, onChange: setPresenting }}
-      drill={visible.tasks ? drill : undefined}
+      drill={pageDrill}
       overlay={overlay}
     />
   );
