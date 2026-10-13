@@ -102,6 +102,9 @@ function NavSheetDialog({ onClose, ...view }: NavSheetProps & { onClose: () => v
       aria-labelledby="nav-sheet-title"
       aria-modal="true"
       onCancel={(e) => {
+        // Only Esc — `cancel` AT the dialog. A file input fires a BUBBLING `cancel` when its picker is
+        // dismissed; taken for Esc it closed the whole form (sheet web-admin-131026).
+        if (e.target !== e.currentTarget) return;
         e.preventDefault();
         onClose();
       }}

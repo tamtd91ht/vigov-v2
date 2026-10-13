@@ -3,7 +3,7 @@
 // jsdom: the sheet must OPEN from the header's menu button, show every permitted item with its WORD,
 // and close when a link is followed.
 
-import type { AnchorHTMLAttributes } from "react";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -176,6 +176,38 @@ describe("nav sheet — opening and closing", () => {
     const el = mount(["task.read"]);
     act(() => el.querySelector<HTMLButtonElement>(`button[aria-label="${NAV_SHEET_OPEN_LABEL}"]`)!.click());
     act(() => el.querySelector<HTMLButtonElement>(`button[aria-label="${NAV_SHEET_CLOSE_LABEL}"]`)!.click());
+    expect(el.querySelector("dialog")).toBeNull();
+  });
+
+  // Sheet web-admin-131026: a control inside that fires a BUBBLING `cancel` (a file input whose picker
+  // was dismissed) must not close the sheet; Esc — `cancel` on the dialog itself — still does.
+  function mountWith(child: ReactNode) {
+    host = document.createElement("div");
+    document.body.append(host);
+    const r = createRoot(host);
+    root = r;
+    act(() =>
+      r.render(
+        <NavSheet groups={locMenu(NHOM_MENU, ["task.read"])} pathname="/nhiem-vu" person={PERSON} roleName={null} search={child} />,
+      ),
+    );
+    act(() => host!.querySelector<HTMLButtonElement>(`button[aria-label="${NAV_SHEET_OPEN_LABEL}"]`)!.click());
+    return host;
+  }
+
+  it("a bubbling `cancel` from a control inside does NOT close it", () => {
+    const el = mountWith(<input type="file" />);
+    act(() => {
+      el.querySelector('dialog input[type="file"]')!.dispatchEvent(new Event("cancel", { bubbles: true, cancelable: true }));
+    });
+    expect(el.querySelector("dialog")).not.toBeNull();
+  });
+
+  it("Esc (`cancel` on the dialog itself) closes it", () => {
+    const el = mountWith(null);
+    act(() => {
+      el.querySelector("dialog")!.dispatchEvent(new Event("cancel", { bubbles: false, cancelable: true }));
+    });
     expect(el.querySelector("dialog")).toBeNull();
   });
 });
