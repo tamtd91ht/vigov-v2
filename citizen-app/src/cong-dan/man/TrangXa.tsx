@@ -94,7 +94,7 @@ import {
 import { BroadcastScreen, VideoScreen } from "./media-screens";
 import { MinimiseBubble } from "./minimise-bubble";
 import { PullToRefresh, type Refresher, runRefreshers } from "./pull-to-refresh";
-import { CaNhanXa, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
+import { CaNhanXa, DOSSIER_PORTAL_URL, ManChuaCoDuLieu, TraCuuHoSoXa } from "./TienIchAppXa";
 import {
   BaiTinXa,
   DanhSachTinXa,
@@ -854,6 +854,9 @@ function AppCuaXa(props: {
   const { items: banners, refresh: refreshBanners } = useCommuneBanners(ten_mien);
   // The home strip's "leave the app?" question. An article asks through its own (`BaiTinXa`).
   const leave = useLeaveApp(props.openLink);
+  // "Tra cứu hồ sơ" (owner 13/10/2026): the tile and the Cá nhân row go STRAIGHT to the leave question for the
+  // national portal — no screen of fields in between, since the portal asks for both numbers again anyway.
+  const portal = useLeaveApp(props.openDossierPortal);
   const veTab = (tab: TabXa) => datMan({ kieu: "tab", tab });
   const backTo = (origin: ArticleOrigin) =>
     origin === "video" || origin === "truyen-thanh" || origin === "su-kien" ? datMan({ kieu: origin }) : veTab(origin);
@@ -1045,7 +1048,8 @@ function AppCuaXa(props: {
       // Kept for the gate's accountless offer: leaving the gate for the public lookup carries the code typed.
       pendingLookupCode.current = m.ma;
       requireSession("lookup", () => datMan(m), false, TAPPED);
-    } else datMan(m);
+    } else if (m.kieu === "tra-cuu" && portal.ask !== undefined) portal.ask(DOSSIER_PORTAL_URL);
+    else datMan(m);
   }
 
   const ve = () => veTab("trang-chu");
@@ -1308,7 +1312,7 @@ function AppCuaXa(props: {
           largeText={largeText}
           onLargeText={setLargeText}
           onMoPhanAnh={() => veTab("phan-anh")}
-          onMoTraCuu={() => datMan({ kieu: "tra-cuu" })}
+          onMoTraCuu={() => go({ kieu: "tra-cuu" })}
           notification={{ state: notification.state, onPress: pressNotification }}
           onRefresh={refreshNotification}
         />
@@ -1321,6 +1325,7 @@ function AppCuaXa(props: {
       <main id="main">{than}</main>
       <ThanhTabXa tab={tab} onChon={veTab} />
       {tab === "trang-chu" && leave.dialog}
+      {portal.dialog}
     </>,
   );
 }

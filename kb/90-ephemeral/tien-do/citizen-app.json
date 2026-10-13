@@ -746,6 +746,14 @@
       "viec": "npm run qr -- --domain=<xã> chỉ sinh QR x (một tệp qr/<tên-miền>.svg), bỏ QR d-legacy — chủ dự án 13/10/2026 (bản đọc x đã duyệt, chờ phát hành). Identity không trả launch_code thì DỪNG (không lùi về d), câu báo chỉ ra máy chủ chưa đúng bản. Không dựng nút cập nhật mã ở platform-admin vì tenant.launch_code NOT NULL, cấp khi tạo xã (migration 0024). ADR 0047 §Sửa đổi 13/10/2026, đoạn bổ sung.",
       "bang_chung": "vitest scripts/commune-qr.test.mjs 17/17 xanh; chạy thật --domain=thangbinh-danang.vigov.vn ra ?x=e159d39646be&src=qr, identity ?code= trả đúng Xã Thăng Bình. CHƯA quét trên điện thoại.",
       "con_no": ""
+    },
+    {
+      "id": "tra-cuu-ho-so-mo-thang-cong-13-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Tra cứu hồ sơ: bỏ hai ô (số điện thoại, 4 số cuối) — chủ dự án 13/10/2026: nhập ở app rồi sang Cổng Dịch vụ công lại nhập lần nữa. Ô ở trang chủ và dòng ở Cá nhân nay hỏi rời app rồi mở thẳng vpcp.dichvucong.gov.vn (TrangXa go → useLeaveApp(openDossierPortal)). Điền sẵn sang cổng KHÔNG làm: số điện thoại trên URL là dữ liệu cá nhân trên URL (luật 3 cấm #4), và cổng không công bố tham số điền sẵn. Màn TraCuuHoSoXa chỉ còn câu + nút, chỉ hiện khi không có bộ mở.",
+      "bang_chung": "tsc sạch; vitest citizen-app 86 tệp/2192 test xanh. CHƯA xem trên điện thoại.",
+      "con_no": "Cần bản app mới (đẩy + phát hành) để người dân thấy. Câu chính sách riêng tư 'mở từ màn Tra cứu hồ sơ' (content/dich-ra-ngoai.ts) chưa đổi chữ 'màn'."
     }
   ]
 }

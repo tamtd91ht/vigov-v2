@@ -22,7 +22,7 @@ import {
   StepBar,
   stepsAhead,
 } from "./PhanAnhAppXa";
-import { CaNhanXa, DOSSIER_PORTAL_URL, dossierLookupReady, dossierPhoneDigits, initials, lastFourDigits, TraCuuHoSoXa } from "./TienIchAppXa";
+import { CaNhanXa, DOSSIER_PORTAL_URL, initials, TraCuuHoSoXa } from "./TienIchAppXa";
 import {
   ArticleCover,
   BaiTinXa,
@@ -957,42 +957,24 @@ describe("Danh bạ (§6.9)", () => {
 });
 
 describe("Tra cứu hồ sơ (§6.8)", () => {
-  it("the button is enabled only with exactly 10 phone digits and exactly 4 file digits", () => {
-    expect(dossierLookupReady("0900000000", "1007")).toBe(true);
-    expect(dossierLookupReady("0900 000 000", " 1007 ")).toBe(true);
-    expect(dossierLookupReady("090000000", "1007")).toBe(false);
-    expect(dossierLookupReady("09000000001", "1007")).toBe(false);
-    expect(dossierLookupReady("0900000000", "107")).toBe(false);
-    expect(dossierLookupReady("0900000000", "10a7")).toBe(false);
-    const page = html(createElement(TraCuuHoSoXa, { onQuayLai: noop, openPortal: async () => true }));
-    expect(page).toMatch(/<button type="button" class="xa-nut" disabled="">/);
-    // A disabled button alone does not say why: the missing part is in words under it.
-    expect(page).toContain(XA_TN.tra_cuu_can_ma);
-  });
-
-  it("the prototype's screen; 'Tra cứu' opens the national portal after the leave-app question, and NOTHING typed goes anywhere", () => {
+  it("no fields (owner 13/10/2026): the portal asks for both numbers itself, so nothing is typed here", () => {
     // owner 11/10/2026: the one-stop-shop data is not in ViGov — the portal does the lookup.
     expect(DOSSIER_PORTAL_URL).toBe("https://vpcp.dichvucong.gov.vn/p/home/dvc-tra-cuu-ho-so.html");
     const page = html(createElement(TraCuuHoSoXa, { onQuayLai: noop, openPortal: async () => true }));
     expect(page).toContain(`<h1 class="xa-dau-con__tieu-de">Tra cứu hồ sơ</h1>`);
-    for (const words of ["Số điện thoại", "Số bà con đã khai khi nộp hồ sơ tại Bộ phận Một cửa.", "4 số cuối của số hồ sơ", "Ví dụ: 1007"]) {
-      expect(page).toContain(words);
-    }
-    // The four-digit box: numeric keypad, and only digits are kept.
-    expect(page).toMatch(/id="xa-bon-so-cuoi"[^>]*inputMode="numeric"|inputMode="numeric"[^>]*id="xa-bon-so-cuoi"/);
-    expect(lastFourDigits("1a0-07 9")).toBe("1007");
-    // The phone box: digits only, the 11th refused at the keystroke (customer sheet mini-app 13/10/2026 row 8).
-    expect(page).toMatch(/id="xa-sdt-ho-so"[^>]*maxLength="10"|maxLength="10"[^>]*id="xa-sdt-ho-so"/);
-    expect(dossierPhoneDigits("0900 000 000")).toBe("0900000000");
-    expect(dossierPhoneDigits("09000000001")).toBe("0900000000");
-    expect(dossierPhoneDigits("09a00")).toBe("0900");
+    expect(page).not.toContain("<input");
+    expect(page).toContain(`<button type="button" class="xa-nut">`);
+    expect(page).toContain(XA_TN.nut_tra_cuu);
     // No opener (tests, outside Zalo): no button that could only fail — the sentence still says where to look.
     const noOpener = html(createElement(TraCuuHoSoXa, { onQuayLai: noop }));
-    expect(noOpener).not.toContain(`>${XA_TN.nut_tra_cuu}</button>`);
+    expect(noOpener).not.toContain(XA_TN.nut_tra_cuu);
     expect(noOpener).toContain(XA_TN.tra_cuu_cong_dich_vu);
-    // The source never puts the typed values into the portal's address.
-    const src = Object.values(import.meta.glob("./TienIchAppXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
-    expect(src).toContain("leave.ask?.(DOSSIER_PORTAL_URL)");
-    expect(src).not.toMatch(/DOSSIER_PORTAL_URL\s*\+|`\$\{DOSSIER_PORTAL_URL\}/);
+  });
+
+  it("the tile and the Cá nhân row go straight to the leave question for the portal, not to a screen", () => {
+    const src = Object.values(import.meta.glob("./TrangXa.tsx", { query: "?raw", import: "default", eager: true }))[0] as string;
+    expect(src).toContain('m.kieu === "tra-cuu" && portal.ask !== undefined) portal.ask(DOSSIER_PORTAL_URL)');
+    expect(src).toContain('onMoTraCuu={() => go({ kieu: "tra-cuu" })}');
+    expect(src).toContain("{portal.dialog}");
   });
 });

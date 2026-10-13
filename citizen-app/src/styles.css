@@ -5361,12 +5361,6 @@ button.xa-o-nhanh {
   background: var(--xa-red-50);
 }
 
-/* Tra cứu hồ sơ (§6.8): the 4-digit box is narrow and spaced, so each digit reads on its own. */
-.xa-lookup-code .cd-o__nhap {
-  max-width: 10rem;
-  letter-spacing: 0.25em;
-  font-variant-numeric: tabular-nums;
-}
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════
  * THE COMMUNE APP AFTER "LÀM HẾT THEO PROTOTYPE" (owner 11/10/2026) — the customer prototype's send form, detail,

@@ -21,7 +21,6 @@ import { DauManCon, KhoiTrangThai, TrangCon } from "./khung-xa";
 import { type OpenExternal, useLeaveApp } from "./leave-app";
 import { CUA_TOI, XA_TN } from "./noi-dung";
 import type { NotificationPreferenceState } from "./notification-preference";
-import { ONhapDong } from "./o-nhap";
 import { PullToRefresh, type Refresher } from "./pull-to-refresh";
 
 /* ═══════════════════════════════ TRA CỨU HỒ SƠ ═══════════════════════════════ */
@@ -34,79 +33,27 @@ import { PullToRefresh, type Refresher } from "./pull-to-refresh";
  */
 export const DOSSIER_PORTAL_URL = "https://vpcp.dichvucong.gov.vn/p/home/dvc-tra-cuu-ho-so.html";
 
-/** A Vietnamese mobile number: ten digits (customer sheet mini-app 13/10/2026 row 8). */
-export const DOSSIER_PHONE_DIGITS = 10;
-
 /**
- * Both fields filled the way the one-stop lookup needs them (`PROTOTYPE.md` §6.8): exactly 10 digits of phone and
- * exactly 4 digits of the file number. PURE.
- */
-export function dossierLookupReady(phone: string, lastFour: string): boolean {
-  return phone.replace(/\D/g, "").length === DOSSIER_PHONE_DIGITS && /^\d{4}$/.test(lastFour.trim());
-}
-
-/**
- * What the phone box keeps of what was typed: digits only, at most ten — the 11th is refused at the keystroke
- * (customer sheet mini-app 13/10/2026 row 8), so a citizen never reaches the portal with a number it cannot match. PURE.
- */
-export function dossierPhoneDigits(typed: string): string {
-  return typed.replace(/\D/g, "").slice(0, DOSSIER_PHONE_DIGITS);
-}
-
-/** What the 4-digit box keeps of what was typed: digits only, at most four (`DossierPage.tsx:107`). PURE. */
-export function lastFourDigits(typed: string): string {
-  return typed.replace(/\D/g, "").slice(0, 4);
-}
-
-/**
- * Tra cứu hồ sơ — the prototype's screen (`DossierPage.tsx`, owner 11/10/2026): title, the two labelled fields with
- * their hints and examples, "Tra cứu" once both are complete. The lookup itself happens on the national portal:
- * "Tra cứu" asks before leaving (`leave-app.tsx`) and opens the portal. ⚠ THE TWO FIELDS NEVER LEAVE THE PHONE —
- * not in the URL, not in any request: the portal has no way to receive them, and a phone number in a URL would be
- * personal data in a URL (rule 3 forbidden #4). They stay in this screen's state and die with it.
- *
- * `openPortal` absent (tests, outside Zalo): no button — the sentence still says where the lookup is done.
+ * Tra cứu hồ sơ — WITHOUT the prototype's two fields (owner 13/10/2026): the portal asks for the phone number and
+ * the file number itself and cannot receive them from here (a phone number in a URL is personal data in a URL —
+ * rule 3 forbidden #4), so typing them here first only made the citizen type them twice. The tile and the Cá nhân
+ * row raise the leave question at once (`TrangXa` `go`); this screen is reached only when no opener was injected
+ * (tests, outside Zalo), and then says where the lookup is done. With an opener it offers the same button.
  */
 export function TraCuuHoSoXa({ onQuayLai, openPortal }: { onQuayLai: () => void; openPortal?: OpenExternal }) {
-  const [phone, setPhone] = useState("");
-  const [lastFour, setLastFour] = useState("");
   const leave = useLeaveApp(openPortal);
-  const complete = dossierLookupReady(phone, lastFour);
   return (
     <>
       <DauManCon tieu_de={XA_TN.tra_cuu_tieu_de} onQuayLai={onQuayLai} />
       <TrangCon>
         <div className="xa-the xa-the--dem xa-khoi">
-          <ONhapDong
-            id="xa-sdt-ho-so"
-            nhan={XA_TN.o_so_dien_thoai_ho_so}
-            goi_y={XA_TN.goi_y_so_dien_thoai_ho_so}
-            placeholder={XA_TN.placeholder_so_dien_thoai_ho_so}
-            gia_tri={phone}
-            toi_da={DOSSIER_PHONE_DIGITS}
-            kieu_ban_phim="tel"
-            onDoi={(v) => setPhone(dossierPhoneDigits(v))}
-          />
-          <div className="xa-lookup-code">
-            <ONhapDong
-              id="xa-bon-so-cuoi"
-              nhan={XA_TN.o_bon_so_cuoi}
-              goi_y={XA_TN.goi_y_bon_so_cuoi}
-              placeholder={XA_TN.placeholder_bon_so_cuoi}
-              gia_tri={lastFour}
-              toi_da={4}
-              kieu_ban_phim="numeric"
-              onDoi={(v) => setLastFour(lastFourDigits(v))}
-            />
-          </div>
+          <p className="xa-phu">{XA_TN.tra_cuu_cong_dich_vu}</p>
           {leave.ask !== undefined && (
-            <button type="button" className="xa-nut" disabled={!complete} onClick={() => leave.ask?.(DOSSIER_PORTAL_URL)}>
+            <button type="button" className="xa-nut" onClick={() => leave.ask?.(DOSSIER_PORTAL_URL)}>
               <BieuTuong ten="search" co={20} />
               {XA_TN.nut_tra_cuu}
             </button>
           )}
-          {leave.ask !== undefined && !complete && <p className="xa-phu">{XA_TN.tra_cuu_can_ma}</p>}
-          <p className="xa-phu">{XA_TN.tra_cuu_cong_dich_vu}</p>
         </div>
       </TrangCon>
       {leave.dialog}
