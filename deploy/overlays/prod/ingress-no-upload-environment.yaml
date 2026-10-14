@@ -9,8 +9,9 @@
 # Mỗi `replace` đi sau một `test` trên giá trị của base: base sinh lại với một dịch vụ mới làm
 # lệch chỉ số thì `kustomize build` ĐỔ, thay vì vá nhầm host của dịch vụ bên cạnh.
 #
-# Host web `*.vigov.vn` và host API `*.api.vigov.vn` — ký tự đại diện khớp ĐÚNG MỘT nhãn, nên
-# không host nào của môi trường này rơi vào quy tắc của môi trường khác.
+# Host web `*.vigov.vn` và host API `<dịch vụ>.api.vigov.vn` — ký tự đại diện khớp ĐÚNG MỘT
+# nhãn, host API là host cụ thể, nên không host nào của môi trường này rơi vào quy tắc của
+# môi trường khác.
 - op: test
   path: /spec/rules/0/host
   value: "documents.api.vigov.vn"

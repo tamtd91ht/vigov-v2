@@ -7,24 +7,30 @@ import (
 	"strings"
 )
 
-// moiTruong is the host shape of one environment. Owner decision, 2026-09-26:
+// moiTruong is the host shape of one environment. Owner decisions, 2026-09-26 and 2026-10-14:
 //
 //	<xa>.vigov.vn               prod web (web-admin; it proxies /api/v1/* itself — ADR 0043)
-//	<xa>.stg.vigov.vn           staging web
+//	<xa>.dev.vigov.vn           dev web
 //	<service>.api.vigov.vn      prod service API
-//	<service>.api-stg.vigov.vn  staging service API
+//	<service>-dev.api.vigov.vn  dev service API (same `*.api.vigov.vn` certificate as prod)
 //
 // A wildcard in an Ingress host, a TLS SAN and a DNS record matches EXACTLY ONE label. That is
-// what keeps the four families apart: `*.vigov.vn` never matches `x.stg.vigov.vn` nor
-// `identity.api.vigov.vn`, so a staging commune never lands on a prod rule and a service API
-// host never reaches web-admin. `TestKhongMoiTruongNaoKhopHostCuaMoiTruongKhac` pins that.
+// what keeps the web families apart: `*.vigov.vn` never matches `x.dev.vigov.vn` nor
+// `identity.api.vigov.vn`, so a dev commune never lands on a prod rule and a service API host
+// never reaches web-admin. The two API families share a suffix, so they are kept apart by the
+// label instead — `comms` vs `comms-dev`, exact hosts, never a wildcard rule.
+// `TestKhongMoiTruongNaoKhopHostCuaMoiTruongKhac` pins both.
 type moiTruong struct {
 	Ten     string // overlay directory name: deploy/overlays/<Ten>/
 	HostWeb string // wildcard host of the commune web, one label per commune
-	DuoiAPI string // suffix of the service API hosts: <service>.<DuoiAPI>
+	DuoiAPI string // suffix of the service API hosts: <service><NhanAPI>.<DuoiAPI>
+	NhanAPI string // api_label_suffix: "" (prod) or e.g. "-dev"
 	TLSWeb  string // TLS Secret covering HostWeb — created outside this repository
 	TLSAPI  string // TLS Secret covering *.<DuoiAPI> — created outside this repository
 }
+
+// apiHost is the public host of one service in this environment.
+func (m moiTruong) apiHost(service string) string { return service + m.NhanAPI + "." + m.DuoiAPI }
 
 // The environments are read from deploy/hosts.yaml (hosts.go), never typed here. The first entry
 // is also what base carries (see sinhYAML). Every overlay still patches every host, prod to the
@@ -332,13 +338,13 @@ func sinhYAML(tuyens []tuyenHopDong, luats []luatIngress, base moiTruong) ([]byt
 	b.WriteString(fmt.Sprintf("#\n# 1 host web + %d host dịch vụ.\n", hostCount))
 	for _, o := range objs {
 		b.WriteString("---\n")
-		writeIngress(&b, o, web, base.DuoiAPI, base.HostWeb)
+		writeIngress(&b, o, web, base)
 	}
 	return []byte(b.String()), nil
 }
 
 // writeIngress renders one Ingress object of the generated file.
-func writeIngress(b *strings.Builder, o ingressObject, web luatIngress, apiSuffix, webHost string) {
+func writeIngress(b *strings.Builder, o ingressObject, web luatIngress, base moiTruong) {
 	b.WriteString("apiVersion: networking.k8s.io/v1\n")
 	b.WriteString("kind: Ingress\n")
 	b.WriteString("metadata:\n")
@@ -381,13 +387,13 @@ func writeIngress(b *strings.Builder, o ingressObject, web luatIngress, apiSuffi
 	b.WriteString("  # `replace`, nên overlay lệch chỉ số là `kustomize build` ĐỔ chứ không vá nhầm host.\n")
 	b.WriteString("  rules:\n")
 	if o.Web {
-		writeWebHost(b, web, webHost)
+		writeWebHost(b, web, base.HostWeb)
 	}
 	for i, h := range o.Hosts {
 		if o.Web || i > 0 {
 			b.WriteString("    #\n")
 		}
-		writeServiceHost(b, h, apiSuffix)
+		writeServiceHost(b, h, base)
 	}
 }
 
@@ -397,8 +403,9 @@ func writeWebHost(b *strings.Builder, web luatIngress, webHost string) {
 	b.WriteString("    # xã ở rìa ngoài cùng. Host không khớp xã nào ⇒ 404, không bao giờ một xã mặc định\n")
 	b.WriteString("    # (luật 1, bất biến 3). Thêm một xã = thêm DNS + một hàng trong sổ xã của `platform`.\n")
 	b.WriteString("    #\n")
-	b.WriteString("    # Nhãn đầu `admin` · `admin-stg` · `api` · `api-stg` · `stg` · `www` khớp ký tự đại diện này\n")
-	b.WriteString("    # nhưng là nhãn DÀNH RIÊNG: `platform` từ chối gán chúng cho một xã, nên chúng nhận 404.\n")
+	b.WriteString("    # Nhãn đầu `admin` · `admin-dev` · `admin-stg` · `api` · `api-stg` · `dev` · `stg` · `www` khớp\n")
+	b.WriteString("    # ký tự đại diện này nhưng là nhãn DÀNH RIÊNG: `platform` từ chối gán chúng cho một xã, nên\n")
+	b.WriteString("    # chúng nhận 404.\n")
 	b.WriteString(fmt.Sprintf("    - host: %q\n", webHost))
 	b.WriteString("      http:\n")
 	b.WriteString("        paths:\n")
@@ -407,8 +414,8 @@ func writeWebHost(b *strings.Builder, web luatIngress, webHost string) {
 	viet1Path(b, web.DichVu, web.Cong)
 }
 
-func writeServiceHost(b *strings.Builder, h hostDichVu, apiSuffix string) {
-	host := h.DichVu + "." + apiSuffix
+func writeServiceHost(b *strings.Builder, h hostDichVu, base moiTruong) {
+	host := base.apiHost(h.DichVu)
 	if len(h.Exact) > 0 {
 		b.WriteString(fmt.Sprintf("    # %s — CHỈ %d đường dẫn công khai, khớp ĐÚNG (Exact), không `/`: cổng REST của\n", h.DichVu, len(h.Exact)))
 		b.WriteString("    # dịch vụ này còn phục vụ miền vận hành (ADR 0048), nên chỉ tuyến được chủ dự án mở mới\n")
@@ -446,7 +453,7 @@ func writePath(b *strings.Builder, path, pathType, dichVu, cong string) {
 // duongOverlay is where the environment patch of one Ingress object lives in one overlay. The
 // overlay's kustomization.yaml must name it with `target: … name: <object>` —
 // TestOverlayKustomizationPatchesEveryIngress checks that, because a missing entry leaves that
-// object carrying PROD hosts in the staging namespace.
+// object carrying PROD hosts in the dev namespace.
 func duongOverlay(mt, patch string) string {
 	return "deploy/overlays/" + mt + "/" + patch
 }
@@ -454,8 +461,8 @@ func duongOverlay(mt, patch string) string {
 // sinhOverlay renders the JSON6902 patch of one environment: every host of base, by index,
 // and the TLS block. Generated for the same reason the Ingress is: the service hosts follow
 // the contract, so a hand-written patch would be a hand list of services that goes stale —
-// and a stale index-based patch rewrites the WRONG host, which on staging means a staging pod
-// answering under a prod name.
+// and a stale index-based patch rewrites the WRONG host, which on dev means a dev pod answering
+// under a prod name.
 //
 // Each `replace` is preceded by a `test` on the base value. A base regenerated with a new
 // service shifts the indices; with the `test` the overlay then fails at build time instead of
@@ -476,8 +483,9 @@ func sinhOverlay(mt, goc moiTruong, o ingressObject) []byte {
 	b.WriteString("# Mỗi `replace` đi sau một `test` trên giá trị của base: base sinh lại với một dịch vụ mới làm\n")
 	b.WriteString("# lệch chỉ số thì `kustomize build` ĐỔ, thay vì vá nhầm host của dịch vụ bên cạnh.\n")
 	b.WriteString("#\n")
-	b.WriteString(fmt.Sprintf("# Host web `%s` và host API `*.%s` — ký tự đại diện khớp ĐÚNG MỘT nhãn, nên\n", mt.HostWeb, mt.DuoiAPI))
-	b.WriteString("# không host nào của môi trường này rơi vào quy tắc của môi trường khác.\n")
+	b.WriteString(fmt.Sprintf("# Host web `%s` và host API `<dịch vụ>%s.%s` — ký tự đại diện khớp ĐÚNG MỘT\n", mt.HostWeb, mt.NhanAPI, mt.DuoiAPI))
+	b.WriteString("# nhãn, host API là host cụ thể, nên không host nào của môi trường này rơi vào quy tắc của\n")
+	b.WriteString("# môi trường khác.\n")
 	vaHost := func(i int, cu, moi string) {
 		b.WriteString(fmt.Sprintf("- op: test\n  path: /spec/rules/%d/host\n  value: %q\n", i, cu))
 		b.WriteString(fmt.Sprintf("- op: replace\n  path: /spec/rules/%d/host\n  value: %q\n", i, moi))
@@ -488,7 +496,7 @@ func sinhOverlay(mt, goc moiTruong, o ingressObject) []byte {
 		first = 1
 	}
 	for i, h := range o.Hosts {
-		vaHost(i+first, h.DichVu+"."+goc.DuoiAPI, h.DichVu+"."+mt.DuoiAPI)
+		vaHost(i+first, goc.apiHost(h.DichVu), mt.apiHost(h.DichVu))
 	}
 	b.WriteString("\n")
 	b.WriteString("# `add` chứ không `replace`: base cố ý KHÔNG khai `tls`, và `replace` đổ khi đường dẫn chưa có.\n")

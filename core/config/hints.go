@@ -181,7 +181,7 @@ var envHints = map[string]envHint{
 		meaning: "Tiền tố tên bucket của môi trường này — bucket thật là <tiền tố>-private, -public, -temp.",
 		source:  "Theo môi trường; chữ thường, số và dấu gạch ngang.",
 		place:   inConfigMap,
-		shape:   "vigov-prod (staging: vigov-stg)",
+		shape:   "vigov-prod (dev: vigov-dev)",
 	},
 	"OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL": {
 		meaning: "URL gốc công khai của bucket media công khai, cho ảnh và tệp Mini App hiển thị.",
@@ -260,7 +260,7 @@ var envHints = map[string]envHint{
 		meaning: "Tiền tố tên index của môi trường này.",
 		source:  "Theo môi trường.",
 		place:   inConfigMap,
-		shape:   "vigov-prod (staging: vigov-stg)",
+		shape:   "vigov-prod (dev: vigov-dev)",
 	},
 }
 

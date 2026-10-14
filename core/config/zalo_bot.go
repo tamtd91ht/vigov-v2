@@ -30,7 +30,7 @@ var ErrZaloBotWebhookHostInvalid = errors.New("config: ZALO_BOT_WEBHOOK_HOST is 
 //
 // THE SHAPE OF OPERATOR_HOST (checkBareHost), and the same "refused, never repaired" rule. One extra
 // refusal for the same reason OPERATOR_HOST has its own: a host directly under a platform web root
-// (`<xa>.vigov.vn`, `<xa>.stg.vigov.vn`) is a commune's web host or a candidate for one (ADR 0046).
+// (`<xa>.vigov.vn`, `<xa>.dev.vigov.vn`) is a commune's web host or a candidate for one (ADR 0046).
 // Pointing the shared bot there would hand every commune's staff updates to one commune's surface. The
 // root itself is refused too. Hosts deeper than one label (`bot.api.vigov.vn`) and hosts outside the
 // platform's domains are not judged further: there is no rule in this repository for them.

@@ -30,8 +30,11 @@ export type OperatorHostResult =
   | { ok: true; host: string }
   | { ok: false; reason: "unset" | "malformed"; detail: string };
 
-/** `admin` / `admin-stg` — the labels ADR 0046 reserves for the vendor console (`operatorConsoleLabels`). */
-const CONSOLE_LABELS = new Set(["admin", "admin-stg"]);
+/**
+ * `admin` (prod) / `admin-dev` (dev, owner 14/10/2026) — the console labels, the same set as
+ * `operatorConsoleLabels`. `admin-stg` left with staging; it stays reserved for no commune to take.
+ */
+const CONSOLE_LABELS = new Set(["admin", "admin-dev"]);
 // The platform's web roots are GENERATED from deploy/hosts.yaml (owner, 01/10/2026) — the same
 // source and order core/config's `platformWebRoots` is generated with, so the two sides cannot
 // disagree about which domains are the platform's own.
@@ -65,7 +68,7 @@ export function operatorHost(): OperatorHostResult {
   if (!labels.every((l) => LABEL.test(l))) return malformed("có nhãn không hợp lệ");
 
   if (PLATFORM_WEB_ROOTS.includes(h)) return malformed("là tên miền gốc của nền tảng");
-  // Most specific root first (the generated order): "admin.stg.vigov.vn" also ends in ".vigov.vn".
+  // Most specific root first (the generated order): "admin.dev.vigov.vn" also ends in ".vigov.vn".
   for (const root of PLATFORM_WEB_ROOTS) {
     const suffix = `.${root}`;
     if (h.endsWith(suffix)) {

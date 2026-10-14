@@ -50,6 +50,8 @@ func TestZaloBotWebhookHostRefused(t *testing.T) {
 		"stg.vigov.vn",                             // the staging root
 		"thangbinh-danang.vigov.vn",                // a commune's web host
 		"thangbinh.stg.vigov.vn",                   // a commune's staging host
+		"dev.vigov.vn",                             // the dev root
+		"thangbinh.dev.vigov.vn",                   // a commune's dev host
 		"bot..vigov.vn",                            // empty label
 	} {
 		clean(t, EnvDev, map[string]string{"ZALO_BOT_WEBHOOK_HOST": h})

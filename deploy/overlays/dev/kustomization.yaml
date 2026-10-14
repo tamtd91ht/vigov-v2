@@ -1,0 +1,69 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+# Môi trường dev (nhánh `dev`) — chủ dự án chốt 14/10/2026. Thay cho staging (đã gỡ). Dev có CSDL
+# RIÊNG, không dùng chung CSDL của prod. Host: deploy/hosts.yaml.
+namespace: vigov-dev
+
+resources:
+  - ../../base
+  # Bàn điều khiển vận hành chạy cả ở dev (chủ dự án chốt 14/10/2026), giống prod. Ingress của nó
+  # (admin-dev.vigov.vn) dựng tay trong Rancher, không ở đây.
+  - ../../base/platform-admin
+
+commonLabels:
+  vigov.vn/env: dev
+
+configMapGenerator:
+  - name: common-config
+    literals:
+      - ENV=dev
+
+# Cùng 3 node với prod, nên dev chạy 1 replica mỗi thứ. Đây là đánh đổi có ý thức: dev KHÔNG
+# chứng minh được hành vi rolling update maxUnavailable:0. Muốn chứng minh điều đó thì phải nâng
+# lên 2 — và chấp nhận dev ăn tài nguyên của prod.
+replicas:
+  - { name: platform,  count: 1 }
+  - { name: identity,  count: 1 }
+  - { name: web-admin, count: 1 }
+
+# PDB minAvailable:2 của platform là KHÔNG THOẢ ĐƯỢC khi chỉ có 1 replica — nó sẽ chặn mọi
+# lần rút node. Hạ xuống 1 ở dev.
+patches:
+  - target: { kind: PodDisruptionBudget, name: platform }
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 1
+
+  # Host + TLS của dev. Bảng định tuyến KHÔNG ở đây — xem `ingress-moi-truong.yaml`.
+  - path: ingress-moi-truong.yaml
+    target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov }
+  # The 25 MB Ingress (hosts that take no upload — ADR 0052 §Sửa đổi 09/10/2026). Missing this entry
+  # does NOT fail kustomize: the object keeps base's PROD hosts on the controller dev shares.
+  - path: ingress-no-upload-environment.yaml
+    target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov-no-upload }
+
+# THẺ ẢNH — CHỈ DÙNG CHO LẦN CÀI ĐẦU, không phản ánh thẻ đang chạy. Lý do đầy đủ ở khối
+# cùng tên trong `overlays/prod/kustomization.yaml`.
+images:
+  - name: harbor.omicrm.services/ci/vigov-service-platform
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-identity
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-web-admin
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  # MỖI ẢNH TRONG `base/` PHẢI CÓ MỘT DÒNG Ở ĐÂY. Thiếu một dòng thì `kustomize` KHÔNG báo
+  # lỗi — nó giữ nguyên `CHUA-GHIM-THE` của base, và lượt deploy đỏ ở ImagePullBackOff, cách
+  # xa nguyên nhân.
+  - name: harbor.omicrm.services/ci/vigov-service-comms
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-documents
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-finance
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-petitions
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-service-reporting
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO
+  - name: harbor.omicrm.services/ci/vigov-platform-admin
+    newTag: CHUA-TRIEN-KHAI-LAN-NAO

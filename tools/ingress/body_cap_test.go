@@ -125,7 +125,7 @@ func TestIngressObjectsRefusesStaleUploadList(t *testing.T) {
 
 // The overlays bind each patch to its object in kustomization.yaml — a hand-written file this
 // generator does not own. A missing entry is not a build error: kustomize simply leaves that
-// Ingress with base's PROD hosts, so staging would claim prod hostnames on the shared controller.
+// Ingress with base's PROD hosts, so dev would claim prod hostnames on the shared controller.
 // Hence a check on the real files.
 func TestOverlayKustomizationPatchesEveryIngress(t *testing.T) {
 	root := goc(t)

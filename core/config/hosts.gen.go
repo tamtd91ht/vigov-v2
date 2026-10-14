@@ -6,7 +6,7 @@ package config
 
 // platformWebRoots are the parents of each environment's commune web hosts (`*.<root>`),
 // most specific first: a host is cut by the first root it ends with.
-var platformWebRoots = []string{"stg.vigov.vn", "vigov.vn"}
+var platformWebRoots = []string{"dev.vigov.vn", "stg.vigov.vn", "vigov.vn"}
 
 // platformRoot is the web root of the first environment — what deploy/base carries.
 const platformRoot = "vigov.vn"

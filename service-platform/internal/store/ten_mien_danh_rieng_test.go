@@ -16,6 +16,7 @@ func TestTenMienDanhRiengKhongChamCSDL(t *testing.T) {
 	for _, h := range []string{
 		"admin.vigov.vn", "ADMIN.vigov.vn.", "admin-stg.vigov.vn:443", "vigov.vn",
 		"identity.api.vigov.vn", "petitions.api-stg.vigov.vn", "api.stg.vigov.vn",
+		"dev.vigov.vn", "admin-dev.vigov.vn", "admin.dev.vigov.vn", "comms-dev.api.vigov.vn",
 	} {
 		if _, ok := d.ByHost(context.Background(), h); ok {
 			t.Errorf("ByHost(%q) = true, muốn false", h)

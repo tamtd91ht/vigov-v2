@@ -3,8 +3,8 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 5a6668d0
-expires: 2027-01-11
+derived_from_commit: b6fe4c7e
+expires: 2027-01-12
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
 ---
@@ -17,7 +17,7 @@ không dòng nào viết tay (luật 9, bất biến 1).
 Trục ở đây là **phân hệ sản phẩm**. Trục theo **module kho mã** nằm ở `kb/90-ephemeral/tien-do.md`;
 hai tệp trả lời hai câu khác nhau và không chép của nhau.
 
-Sinh ngày **2026-10-13** · hết hạn **2027-01-11**.
+Sinh ngày **2026-10-14** · hết hạn **2027-01-12**.
 
 ## 1 · Theo chương đặc tả
 
@@ -120,7 +120,7 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 
 | Module | xong | đang làm | chưa làm | treo |
 |---|---|---|---|---|
-| `_chung` | 22 | 4 | 8 | 6 |
+| `_chung` | 22 | 5 | 8 | 6 |
 | `citizen-app` | 57 | 29 | 4 | 0 |
 | `core` | 41 | 3 | 1 | 1 |
 | `deploy` | 22 | 16 | 1 | 0 |
@@ -134,5 +134,5 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-platform` | 22 | 20 | 5 | 1 |
 | `service-reporting` | 5 | 0 | 1 | 0 |
 | `tools` | 22 | 0 | 0 | 0 |
-| `web-admin` | 121 | 42 | 4 | 1 |
+| `web-admin` | 124 | 42 | 4 | 2 |
 

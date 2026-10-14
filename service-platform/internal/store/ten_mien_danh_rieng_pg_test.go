@@ -16,7 +16,9 @@ import (
 )
 
 // Migration 0007 against a real PostgreSQL: what the CHECK refuses, and that the rows it was
-// written NOT to touch are still there afterwards. Skipped without VIGOV_TEST_DSN (moKetNoi).
+// written NOT to touch are still there afterwards. The final step runs every later migration too,
+// so the CHECK it checks is 0027's redefinition — the frozen rows must survive that as well.
+// Skipped without VIGOV_TEST_DSN (moKetNoi).
 
 const tep0007 = "0007_tenant_domain_khong_danh_rieng.sql"
 
@@ -94,6 +96,8 @@ func TestPg0007GiuDongCuVaChanDongMoi(t *testing.T) {
 	for _, h := range []string{
 		"www.vigov.vn", "vigov.vn", "stg.vigov.vn", "api.vigov.vn", "admin.stg.vigov.vn",
 		"identity.api.vigov.vn", "petitions.api-stg.vigov.vn", "admin.vigov.vn.",
+		// 0027: the dev environment's platform hosts.
+		"dev.vigov.vn", "admin-dev.vigov.vn", "admin.dev.vigov.vn", "comms-dev.api.vigov.vn",
 	} {
 		_, err := db.ExecContext(ctx,
 			`INSERT INTO tenant_domain (host, tenant_id, la_chinh) VALUES ($1,$2,false)`, h, ulidA)
@@ -110,7 +114,8 @@ func TestPg0007GiuDongCuVaChanDongMoi(t *testing.T) {
 	}
 
 	// 7. Commune hosts, including ones merely containing a reserved word, are still accepted.
-	for _, h := range []string{"thangbinh-danang.vigov.vn", "thangbinh-danang.stg.vigov.vn", "apixa.vigov.vn"} {
+	for _, h := range []string{"thangbinh-danang.vigov.vn", "thangbinh-danang.stg.vigov.vn",
+		"thangbinh-danang.dev.vigov.vn", "apixa.vigov.vn"} {
 		themHost(t, db, h, ulidA, false)
 	}
 	if _, ok := d.ByHost(ctx, "thangbinh-danang.vigov.vn"); !ok {

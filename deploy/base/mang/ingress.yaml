@@ -61,8 +61,9 @@ spec:
     # xã ở rìa ngoài cùng. Host không khớp xã nào ⇒ 404, không bao giờ một xã mặc định
     # (luật 1, bất biến 3). Thêm một xã = thêm DNS + một hàng trong sổ xã của `platform`.
     #
-    # Nhãn đầu `admin` · `admin-stg` · `api` · `api-stg` · `stg` · `www` khớp ký tự đại diện này
-    # nhưng là nhãn DÀNH RIÊNG: `platform` từ chối gán chúng cho một xã, nên chúng nhận 404.
+    # Nhãn đầu `admin` · `admin-dev` · `admin-stg` · `api` · `api-stg` · `dev` · `stg` · `www` khớp
+    # ký tự đại diện này nhưng là nhãn DÀNH RIÊNG: `platform` từ chối gán chúng cho một xã, nên
+    # chúng nhận 404.
     - host: "*.vigov.vn"
       http:
         paths:

@@ -3,7 +3,7 @@ package domain
 import "testing"
 
 // bangTenMienDanhRieng is the ONE table of hosts both halves of the rule are judged against: the Go
-// function (TestLaTenMienDanhRieng) and the CHECK patterns parsed out of migration 0007
+// function (TestLaTenMienDanhRieng) and the CHECK patterns parsed out of the latest migration defining it
 // (TestLuatTenMienDanhRiengGoVaSQLKhop). One table, because two would be two that drift.
 //
 // Every entry is in the stored shape the CHECK sees (no port, no surrounding space); the Go-only
@@ -16,10 +16,13 @@ var bangTenMienDanhRieng = []struct {
 	{"admin.vigov.vn", true},
 	{"ADMIN.vigov.vn.", true},
 	{"admin-stg.vigov.vn", true},
+	{"admin-dev.vigov.vn", true},
 	// Reserved: the remaining first labels under vigov.vn.
 	{"api.vigov.vn", true},
 	{"api-stg.vigov.vn", true},
 	{"stg.vigov.vn", true},
+	{"dev.vigov.vn", true},
+	{"DEV.vigov.vn.", true},
 	{"www.vigov.vn", true},
 	// Reserved: the apex.
 	{"vigov.vn", true},
@@ -28,15 +31,27 @@ var bangTenMienDanhRieng = []struct {
 	{"identity.api.vigov.vn", true},
 	{"petitions.api-stg.vigov.vn", true},
 	{"a.b.api.vigov.vn", true},
+	// Reserved: dev service API hosts share prod's suffix (owner, 2026-10-14).
+	{"comms-dev.api.vigov.vn", true},
 	// Reserved: the same labels under stg.vigov.vn.
 	{"admin.stg.vigov.vn", true},
 	{"api.stg.vigov.vn", true},
 	{"www.stg.vigov.vn", true},
 	{"stg.stg.vigov.vn", true},
 	{"admin-stg.stg.vigov.vn", true},
+	// Reserved: the same labels under dev.vigov.vn, and each environment root under the other.
+	{"admin.dev.vigov.vn", true},
+	{"api.dev.vigov.vn", true},
+	{"www.dev.vigov.vn", true},
+	{"dev.dev.vigov.vn", true},
+	{"admin-dev.dev.vigov.vn", true},
+	{"stg.dev.vigov.vn", true},
+	{"dev.stg.vigov.vn", true},
 
 	// Allowed: commune hosts, prod and staging.
 	{"thangbinh-danang.vigov.vn", false},
+	{"thangbinh-danang.dev.vigov.vn", false},
+	// ...and under the retired staging root, where prod's database still holds one such row.
 	{"thangbinh-danang.stg.vigov.vn", false},
 	{"tanphu.vigov.vn", false},
 	// Allowed: a commune label that merely CONTAINS a reserved word is still a commune.
@@ -45,6 +60,11 @@ var bangTenMienDanhRieng = []struct {
 	{"adminxa.vigov.vn", false},
 	{"wwwxa.stg.vigov.vn", false},
 	{"stgxa.vigov.vn", false},
+	{"devxa.vigov.vn", false},
+	{"xa-dev.vigov.vn", false},
+	{"adminxa.dev.vigov.vn", false},
+	// Allowed: `api-dev` names no surface — dev's API hosts live under api.vigov.vn (nhanDanhRieng).
+	{"api-dev.vigov.vn", false},
 	// Allowed: suffix look-alikes that are not the .api./.api-stg. zones.
 	{"xa.myapi.vigov.vn", false},
 	{"api.vigov.vn.example.com", false},

@@ -298,14 +298,14 @@ func TestPgPrimarySwitchOffFrozenRowIsReserved(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)
 	themXa(t, db, ulidA, "Xã Thăng Bình", true)
-	// 0007 is NOT VALID: the frozen row predates it. Re-create that state the way it arose.
+	// 0007 (redefined by 0027) is NOT VALID: the frozen row predates it. Re-create that state the way it arose.
 	if _, err := db.Exec(`ALTER TABLE tenant_domain DROP CONSTRAINT tenant_domain_khong_danh_rieng`); err != nil {
 		t.Fatal(err)
 	}
 	themHost(t, db, "admin.vigov.vn", ulidA, true)
 	themHost(t, db, "thangbinh.vigov.vn", ulidA, false)
 	if _, err := db.Exec(`ALTER TABLE tenant_domain ADD CONSTRAINT tenant_domain_khong_danh_rieng CHECK (
-		host !~* '^((admin|admin-stg|api|api-stg|stg|www)\.)?(stg\.)?vigov\.vn\.*$'
+		host !~* '^((admin|admin-dev|admin-stg|api|api-stg|dev|stg|www)\.)?((dev|stg)\.)?vigov\.vn\.*$'
 		AND host !~* '\.(api|api-stg)\.vigov\.vn\.*$') NOT VALID`); err != nil {
 		t.Fatal(err)
 	}

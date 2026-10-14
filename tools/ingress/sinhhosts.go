@@ -32,14 +32,14 @@ const (
 const generatedHeader = "GENERATED — do not edit, source deploy/hosts.yaml. Regenerate: `go run ./tools/ingress` (or `make kb`)."
 
 // webRootsMostSpecificFirst returns the web roots ordered so a root that is a suffix of another
-// ("vigov.vn" of "stg.vigov.vn") comes AFTER it. The consumers cut a host by the first root that
-// matches; tried in the other order, "admin.stg.vigov.vn" would yield the label "admin.stg" under
+// ("vigov.vn" of "dev.vigov.vn") comes AFTER it. The consumers cut a host by the first root that
+// matches; tried in the other order, "admin.dev.vigov.vn" would yield the label "admin.dev" under
 // vigov.vn and miss the reserved-label table. More labels first is enough for that; ties keep
-// the file's order.
+// the file's order. Retired environments are included: their roots stay reserved.
 func webRootsMostSpecificFirst(plan hostPlan) []string {
-	roots := make([]string, 0, len(plan.Environments))
-	for _, m := range plan.Environments {
-		roots = append(roots, m.webRoot())
+	var roots []string
+	for _, m := range plan.allEnvironments() {
+		roots = appendUnique(roots, m.webRoot())
 	}
 	sort.SliceStable(roots, func(i, j int) bool {
 		return strings.Count(roots[i], ".") > strings.Count(roots[j], ".")
@@ -47,12 +47,22 @@ func webRootsMostSpecificFirst(plan hostPlan) []string {
 	return roots
 }
 
+// apiSuffixes — every API suffix, live and retired, once each: dev shares prod's (owner, 14/10/2026).
 func apiSuffixes(plan hostPlan) []string {
-	out := make([]string, 0, len(plan.Environments))
-	for _, m := range plan.Environments {
-		out = append(out, m.DuoiAPI)
+	var out []string
+	for _, m := range plan.allEnvironments() {
+		out = appendUnique(out, m.DuoiAPI)
 	}
 	return out
+}
+
+func appendUnique(xs []string, x string) []string {
+	for _, y := range xs {
+		if y == x {
+			return xs
+		}
+	}
+	return append(xs, x)
 }
 
 func goStringList(xs []string) string {
@@ -92,14 +102,14 @@ func renderDomainHosts(plan hostPlan) ([]byte, error) {
 	b.WriteString("// " + generatedHeader + "\n")
 	b.WriteString("//\n")
 	b.WriteString("// A changed value here changes which commune domains are reserved, and the SQL CHECK in\n")
-	b.WriteString("// migrations/0007_tenant_domain_khong_danh_rieng.sql cannot follow it: it needs a NEW migration,\n")
+	b.WriteString("// migrations/0027_reserve_dev_hosts.sql cannot follow it: it needs a NEW migration,\n")
 	b.WriteString("// and TestLuatTenMienDanhRiengGoVaSQLKhop is red until it exists.\n\n")
 	b.WriteString("package domain\n\n")
 	b.WriteString("// platformWebRoots are the parents of each environment's commune web hosts (`*.<root>`),\n")
 	b.WriteString("// most specific first: a host is cut by the first root it ends with.\n")
 	b.WriteString("var platformWebRoots = " + goStringList(webRootsMostSpecificFirst(plan)) + "\n\n")
-	b.WriteString("// platformAPISuffixes are the per-environment suffixes of the service API hosts,\n")
-	b.WriteString("// `<service>.<suffix>`, in deploy/hosts.yaml order.\n")
+	b.WriteString("// platformAPISuffixes are the suffixes of the service API hosts, `<service>[-<env>].<suffix>`,\n")
+	b.WriteString("// in deploy/hosts.yaml order, each once, retired environments included.\n")
 	b.WriteString("var platformAPISuffixes = " + goStringList(apiSuffixes(plan)) + "\n")
 	return gofmtSource(domainHostsPath, b.String())
 }
@@ -167,10 +177,10 @@ func renderCitizenHosts(plan hostPlan, services []string, hosts []hostDichVu) ([
 	b.WriteString("export const SERVICE_API_HOSTS = {\n")
 	for _, s := range services {
 		if !served[s] {
-			return nil, fmt.Errorf("%s: DichVuViGov có %q nhưng Ingress không có host %s.%s — dịch vụ ấy không có tuyến REST",
-				citizenServicesPath, s, s, plan.MiniApp.DuoiAPI)
+			return nil, fmt.Errorf("%s: DichVuViGov có %q nhưng Ingress không có host %s — dịch vụ ấy không có tuyến REST",
+				citizenServicesPath, s, plan.MiniApp.apiHost(s))
 		}
-		b.WriteString(fmt.Sprintf("  %s: \"https://%s.%s\",\n", s, s, plan.MiniApp.DuoiAPI))
+		b.WriteString(fmt.Sprintf("  %s: \"https://%s\",\n", s, plan.MiniApp.apiHost(s)))
 	}
 	b.WriteString("} as const;\n")
 	return []byte(b.String()), nil

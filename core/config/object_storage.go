@@ -71,7 +71,7 @@ type ObjectStorage struct {
 
 	// BucketPrefix is OBJECT_STORAGE_BUCKET_PREFIX: the three bucket names are
 	// `{prefix}-private`, `{prefix}-public`, `{prefix}-temp` (ADR 0052 §2 — `vigov-prod`,
-	// `vigov-stg`). k8s CONFIGMAP. One variable and not three bucket names, because ADR 0052 fixes
+	// `vigov-dev`). k8s CONFIGMAP. One variable and not three bucket names, because ADR 0052 fixes
 	// the suffixes; three variables would allow a deployment where "private" points at the public
 	// bucket.
 	BucketPrefix string

@@ -165,6 +165,9 @@ describe("forwardToPlatform — the upstream Host is OPERATOR_HOST, never the cl
     ["the platform root", "vigov.vn"],
     ["a commune host under vigov.vn", "xa-a.vigov.vn"],
     ["a commune host under stg.vigov.vn", "xa-a.stg.vigov.vn"],
+    ["a commune host under dev.vigov.vn", "xa-a.dev.vigov.vn"],
+    ["the dev root", "dev.vigov.vn"],
+    ["the retired staging console (14/10/2026)", "admin-stg.vigov.vn"],
   ])("malformed OPERATOR_HOST (%s) → 503, no call, log names the variable and never the value", async (_why, value) => {
     const error = quiet();
     process.env[PLATFORM_ORIGIN_VAR] = upstream;
@@ -180,7 +183,7 @@ describe("forwardToPlatform — the upstream Host is OPERATOR_HOST, never the cl
     expect(JSON.stringify(await res.json())).not.toContain(OPERATOR_HOST_VAR);
   });
 
-  it.each(["admin.vigov.vn", "admin-stg.vigov.vn", "admin.stg.vigov.vn"])(
+  it.each(["admin.vigov.vn", "admin-dev.vigov.vn", "admin.dev.vigov.vn"])(
     "accepts the reserved console host %s",
     async (value) => {
       quiet();

@@ -12,9 +12,18 @@
 # ⚠ HOSTS ARE PLATFORM-WIDE, NEVER PER COMMUNE (rule 1, invariant 10): a commune is told apart by its own
 #   label under `web_host`, and by the session on the citizen channel — never by a host listed here.
 # ⚠ Changing an `api_suffix` or a `web_host` root also changes which commune domains are reserved: the
-#   SQL CHECK in service-platform/migrations/0007_tenant_domain_khong_danh_rieng.sql cannot read this
-#   file, so it needs a NEW migration — `TestLuatTenMienDanhRiengGoVaSQLKhop` turns red until it has one.
-# ⚠ A wildcard matches EXACTLY ONE label: the four families must not overlap (tools/ingress tests).
+#   SQL CHECK `tenant_domain_khong_danh_rieng` (service-platform/migrations, latest: 0027) cannot read
+#   this file, so it needs a NEW migration — `TestLuatTenMienDanhRiengGoVaSQLKhop` turns red until it has one.
+# ⚠ A wildcard matches EXACTLY ONE label: the host families must not overlap (tools/ingress tests).
+#
+# ENVIRONMENTS (owner, 14/10/2026): `vigov-prod` and `vigov-dev` (branch dev). Dev has its OWN
+# database. Staging (`vigov-staging`) is removed — see the `retired` entry below.
+#
+# `api_label_suffix` (optional, default empty): appended to the service name in the API host,
+# `<service><api_label_suffix>.<api_suffix>`. It lets dev share prod's `api_suffix`, and so prod's
+# `*.api.vigov.vn` certificate, while no dev host equals a prod host (comms.api.vigov.vn vs
+# comms-dev.api.vigov.vn). Two environments on one `api_suffix` must differ here; the generator refuses
+# otherwise. deploy/Jenkinsfile reads this key by name — do not rename it.
 
 environments:
   # The first entry is also what deploy/base carries.
@@ -23,12 +32,25 @@ environments:
     api_suffix: "api.vigov.vn"        # service API: <service>.api.vigov.vn
     web_tls_secret: vigov-wildcard-tls
     api_tls_secret: vigov-api-wildcard-tls
+  - name: dev
+    web_host: "*.dev.vigov.vn"        # <xa>.dev.vigov.vn
+    api_suffix: "api.vigov.vn"        # same wildcard certificate as prod ...
+    api_label_suffix: "-dev"          # ... hosts <service>-dev.api.vigov.vn
+    web_tls_secret: vigov-dev-wildcard-tls
+    # Same NAME as prod's on purpose: Secrets are per namespace, and this is a copy of the same
+    # `*.api.vigov.vn` certificate in vigov-dev. Allowed only because both share `api_suffix`.
+    api_tls_secret: vigov-api-wildcard-tls
+  # RETIRED (owner, 14/10/2026): no overlay, no Ingress, no TLS Secret. The entry stays because its
+  # roots stay RESERVED — prod's database still holds a `<xa>.stg.vigov.vn` tenant_domain row from when
+  # staging shared it, and no commune may ever claim `stg`, `admin-stg`, `api-stg`, `stg.vigov.vn` or
+  # `*.api-stg.vigov.vn`. A flag rather than a second list, so the reserved hosts keep ONE source and
+  # the same validation (shape, no overlap) as the live ones. Listed last: deploy/Jenkinsfile reads
+  # the live entries.
   - name: staging
+    retired: true
     web_host: "*.stg.vigov.vn"
     api_suffix: "api-stg.vigov.vn"
-    web_tls_secret: vigov-staging-tls
-    api_tls_secret: vigov-api-staging-tls
 
 # The environment whose API hosts the citizen Mini App is built with. Prod only (owner, 01/10/2026):
-# staging shares prod's database (ADR 0046), and a second value is a second bundle (ADR 0047).
+# a second value is a second bundle (ADR 0047).
 mini_app_environment: prod

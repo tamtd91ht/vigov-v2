@@ -60,7 +60,7 @@ func TestTepSinhRaKhopVoiHopDong(t *testing.T) {
 	}
 }
 
-// Literal copies of the owner's decision of 2026-09-26, deliberately NOT read from
+// Literal copies of the owner's decisions of 2026-09-26 and 2026-10-14, deliberately NOT read from
 // deploy/hosts.yaml: a test that took its expectation from the file it checks would pass
 // whatever that file said.
 //
@@ -69,20 +69,28 @@ func TestTepSinhRaKhopVoiHopDong(t *testing.T) {
 // the Mini App at once. Red here makes that edit a conscious act: change the file, see this
 // test fail, then update these literals in the same commit — never delete the guard to get green.
 const (
-	webProd    = "*.vigov.vn"
-	apiProd    = "api.vigov.vn"
-	webStaging = "*.stg.vigov.vn"
-	apiStaging = "api-stg.vigov.vn"
+	webProd = "*.vigov.vn"
+	apiProd = "api.vigov.vn"
+	webDev  = "*.dev.vigov.vn"
+	apiDev  = "api.vigov.vn" // shared with prod (owner, 14/10/2026) ...
+	nhanDev = "-dev"         // ... told apart by the label: <service>-dev.api.vigov.vn
 )
 
-var moHinhChot = map[string][2]string{"prod": {webProd, apiProd}, "staging": {webStaging, apiStaging}}
+// moHinhChot: environment → web host, API suffix, API label suffix.
+var moHinhChot = map[string][3]string{"prod": {webProd, apiProd, ""}, "dev": {webDev, apiDev, nhanDev}}
 
-// pinnedTLSSecrets — the Secret names the cluster already holds (web: in use before 2026-09-26;
-// API: introduced with the API hosts). A rename in deploy/hosts.yaml without creating the Secret
-// is an Ingress that serves no certificate, so it is pinned the same way.
+// retiredChot — environments that serve nothing but whose hosts stay reserved (owner, 14/10/2026:
+// staging removed; prod's database still holds one of its commune rows).
+var retiredChot = map[string][2]string{"staging": {"*.stg.vigov.vn", "api-stg.vigov.vn"}}
+
+// pinnedTLSSecrets — the Secret names the cluster holds (web: in use before 2026-09-26; API:
+// introduced with the API hosts; dev: owner, 14/10/2026). A rename in deploy/hosts.yaml without
+// creating the Secret is an Ingress that serves no certificate, so it is pinned the same way.
+// dev's API Secret has prod's NAME on purpose: a copy of the same `*.api.vigov.vn` certificate in
+// the vigov-dev namespace.
 var pinnedTLSSecrets = map[string][2]string{
-	"prod":    {"vigov-wildcard-tls", "vigov-api-wildcard-tls"},
-	"staging": {"vigov-staging-tls", "vigov-api-staging-tls"},
+	"prod": {"vigov-wildcard-tls", "vigov-api-wildcard-tls"},
+	"dev":  {"vigov-dev-wildcard-tls", "vigov-api-wildcard-tls"},
 }
 
 func TestMoHinhTenMienDungQuyetDinhChuDuAn(t *testing.T) {
@@ -92,7 +100,7 @@ func TestMoHinhTenMienDungQuyetDinhChuDuAn(t *testing.T) {
 	}
 	envs := plan.Environments
 	if len(envs) != len(moHinhChot) {
-		t.Fatalf("%s có %d môi trường, quyết định 26/09/2026 có %d", hostsFilePath, len(envs), len(moHinhChot))
+		t.Fatalf("%s có %d môi trường đang chạy, quyết định 14/10/2026 có %d", hostsFilePath, len(envs), len(moHinhChot))
 	}
 	if envs[0].Ten != "prod" {
 		t.Errorf("môi trường đầu (thứ base mang) là %q, mong prod", envs[0].Ten)
@@ -108,20 +116,40 @@ func TestMoHinhTenMienDungQuyetDinhChuDuAn(t *testing.T) {
 			t.Errorf("môi trường lạ %q", mt.Ten)
 			continue
 		}
-		if mt.HostWeb != m[0] || mt.DuoiAPI != m[1] {
-			t.Errorf("%s: web %q · api %q — quyết định là %q · %q", mt.Ten, mt.HostWeb, mt.DuoiAPI, m[0], m[1])
+		if mt.HostWeb != m[0] || mt.DuoiAPI != m[1] || mt.NhanAPI != m[2] {
+			t.Errorf("%s: web %q · api %q · nhãn %q — quyết định là %q · %q · %q",
+				mt.Ten, mt.HostWeb, mt.DuoiAPI, mt.NhanAPI, m[0], m[1], m[2])
 		}
 		if s := pinnedTLSSecrets[mt.Ten]; mt.TLSWeb != s[0] || mt.TLSAPI != s[1] {
 			t.Errorf("%s: Secret TLS %q · %q — trên cụm là %q · %q", mt.Ten, mt.TLSWeb, mt.TLSAPI, s[0], s[1])
 		}
+		// A web Secret is never shared; the API Secret only between environments on one api_suffix.
 		for _, s := range []string{mt.TLSWeb, mt.TLSAPI} {
 			if s == "" {
 				t.Errorf("%s: tên Secret TLS rỗng", mt.Ten)
 			}
-			if cu, co := tlsDaDung[s]; co {
+			if cu, co := tlsDaDung[s]; co && !(s == mt.TLSAPI && moHinhChot[cu][1] == mt.DuoiAPI && pinnedTLSSecrets[cu][1] == s) {
 				t.Errorf("Secret TLS %q dùng hai lần (%s và %s)", s, cu, mt.Ten)
 			}
 			tlsDaDung[s] = mt.Ten
+		}
+	}
+	if len(plan.Retired) != len(retiredChot) {
+		t.Fatalf("%s có %d môi trường nghỉ hưu, mong %d", hostsFilePath, len(plan.Retired), len(retiredChot))
+	}
+	for _, mt := range plan.Retired {
+		if r, co := retiredChot[mt.Ten]; !co || mt.HostWeb != r[0] || mt.DuoiAPI != r[1] {
+			t.Errorf("môi trường nghỉ hưu %s: web %q · api %q — mong %v", mt.Ten, mt.HostWeb, mt.DuoiAPI, r)
+		}
+	}
+}
+
+// The retired environment leaves nothing deployable behind: an overlay directory under its name
+// would be a manifest set somebody could still apply.
+func TestRetiredEnvironmentHasNoOverlay(t *testing.T) {
+	for mt := range retiredChot {
+		if _, err := os.Stat(filepath.Join(goc(t), "deploy", "overlays", mt)); !os.IsNotExist(err) {
+			t.Errorf("deploy/overlays/%s còn tồn tại (err=%v) — môi trường đã nghỉ hưu (14/10/2026)", mt, err)
 		}
 	}
 }
@@ -312,7 +340,7 @@ func checkOverlayOfObject(t *testing.T, obj ingressTep) {
 			muonHost := m[0]
 			if i > 0 || !hasWeb {
 				ten, _, _ := strings.Cut(r.Host, ".")
-				muonHost = ten + "." + m[1]
+				muonHost = ten + m[2] + "." + m[1]
 			}
 			var test, thay string
 			for _, op := range ops {
@@ -378,7 +406,9 @@ func TestKhopHostMotNhan(t *testing.T) {
 		{"*.vigov.vn", "thangbinh-danang.stg.vigov.vn", false},
 		{"*.vigov.vn", "identity.api.vigov.vn", false},
 		{"*.vigov.vn", "vigov.vn", false},
-		{"*.stg.vigov.vn", "thangbinh-danang.stg.vigov.vn", true},
+		{"*.dev.vigov.vn", "thangbinh-danang.dev.vigov.vn", true},
+		{"*.vigov.vn", "thangbinh-danang.dev.vigov.vn", false},
+		{"*.api.vigov.vn", "comms-dev.api.vigov.vn", true},
 		{"identity.api.vigov.vn", "identity.api.vigov.vn", true},
 	} {
 		if got := khopHost(c.mau, c.host); got != c.muon {
@@ -388,7 +418,8 @@ func TestKhopHostMotNhan(t *testing.T) {
 }
 
 // TestKhongMoiTruongNaoKhopHostCuaMoiTruongKhac — the isolation property the domain model rests
-// on: no rule of one environment matches a host of the other, and no web wildcard swallows a
+// on: no rule of one environment matches a host of the other (prod and dev share the API suffix,
+// so this is what proves `comms` and `comms-dev` never meet), and no web wildcard swallows a
 // service API host. Checked on the overlay files as written, with a real commune host of each
 // environment as a probe.
 func TestKhongMoiTruongNaoKhopHostCuaMoiTruongKhac(t *testing.T) {
@@ -407,7 +438,7 @@ func TestKhongMoiTruongNaoKhopHostCuaMoiTruongKhac(t *testing.T) {
 			t.Fatalf("overlay %s vá %d host", mt, len(hostCua[mt]))
 		}
 	}
-	xa := map[string]string{"prod": "thangbinh-danang.vigov.vn", "staging": "thangbinh-danang.stg.vigov.vn"}
+	xa := map[string]string{"prod": "thangbinh-danang.vigov.vn", "dev": "thangbinh-danang.dev.vigov.vn"}
 	for mt, hs := range hostCua {
 		for khac, hk := range hostCua {
 			if khac == mt {

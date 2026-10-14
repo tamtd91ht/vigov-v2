@@ -47,11 +47,12 @@ var (
 // platform's own domains (platformWebRoots).
 //
 // WHY ANY OTHER LABEL THERE IS REFUSED: under vigov.vn every other first label is a commune's web
-// host or a candidate for one (ADR 0046: `<xa>.vigov.vn`, `<xa>.stg.vigov.vn`), or a service API
+// host or a candidate for one (ADR 0046: `<xa>.vigov.vn`, `<xa>.dev.vigov.vn`), or a service API
 // host (`<service>.api.vigov.vn`). Pointing the operator area at one of those makes a commune's
 // surface and the vendor's cross-commune surface the same surface — ADR 0048 stop condition #6 and
-// the boundary ADR 0003 draws. `admin` / `admin-stg` are the labels ADR 0046 reserves for the
-// vendor console.
+// the boundary ADR 0003 draws. `admin` (prod) / `admin-dev` (dev, owner 14/10/2026) are the labels
+// reserved for the vendor console. `admin-stg` is no longer accepted — staging is removed — but stays
+// RESERVED in nhanDanhRieng, so no commune can claim it either.
 //
 // A SUBSET COPY of service-platform/internal/domain/ten_mien_danh_rieng.go (nhanDanhRieng), which
 // core cannot import (rule 2, forbidden #1). It only ever needs to be NARROWER than that list: a
@@ -59,7 +60,7 @@ var (
 //
 // A host OUTSIDE vigov.vn (a deployment on another domain) is not judged here: there is no rule in
 // this repository for what a commune host looks like on a domain it does not know.
-var operatorConsoleLabels = map[string]bool{"admin": true, "admin-stg": true}
+var operatorConsoleLabels = map[string]bool{"admin": true, "admin-dev": true}
 
 // platformWebRoots and platformRoot are GENERATED into hosts.gen.go from deploy/hosts.yaml, the one
 // place public hostnames are written (owner, 01/10/2026) — the same source service-platform's
@@ -89,14 +90,14 @@ func parseOperatorHost(raw, trimmed string) (string, error) {
 	if slices.Contains(platformWebRoots, h) {
 		return "", fmt.Errorf("%w: %q is the platform's root domain, not the operator console", ErrOperatorHostInvalid, h)
 	}
-	// Most specific root first (the generated order): "admin.stg.vigov.vn" also ends in
-	// ".vigov.vn", and its label under vigov.vn ("admin.stg") would miss the table.
+	// Most specific root first (the generated order): "admin.dev.vigov.vn" also ends in
+	// ".vigov.vn", and its label under vigov.vn ("admin.dev") would miss the table.
 	for _, root := range platformWebRoots {
 		if under, ok := strings.CutSuffix(h, "."+root); ok {
 			if !operatorConsoleLabels[under] {
 				return "", fmt.Errorf("%w: %q is shaped like a commune or service host under %s — "+
 					"the operator area must never share a host with a commune (ADR 0048 stop condition #6); "+
-					"use admin.%s or admin-stg.%s", ErrOperatorHostInvalid, h, root, platformRoot, platformRoot)
+					"use admin.%s or admin-dev.%s", ErrOperatorHostInvalid, h, root, platformRoot, platformRoot)
 			}
 			break
 		}

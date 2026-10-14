@@ -3,15 +3,15 @@
 // GENERATED — do not edit, source deploy/hosts.yaml. Regenerate: `go run ./tools/ingress` (or `make kb`).
 //
 // A changed value here changes which commune domains are reserved, and the SQL CHECK in
-// migrations/0007_tenant_domain_khong_danh_rieng.sql cannot follow it: it needs a NEW migration,
+// migrations/0027_reserve_dev_hosts.sql cannot follow it: it needs a NEW migration,
 // and TestLuatTenMienDanhRiengGoVaSQLKhop is red until it exists.
 
 package domain
 
 // platformWebRoots are the parents of each environment's commune web hosts (`*.<root>`),
 // most specific first: a host is cut by the first root it ends with.
-var platformWebRoots = []string{"stg.vigov.vn", "vigov.vn"}
+var platformWebRoots = []string{"dev.vigov.vn", "stg.vigov.vn", "vigov.vn"}
 
-// platformAPISuffixes are the per-environment suffixes of the service API hosts,
-// `<service>.<suffix>`, in deploy/hosts.yaml order.
+// platformAPISuffixes are the suffixes of the service API hosts, `<service>[-<env>].<suffix>`,
+// in deploy/hosts.yaml order, each once, retired environments included.
 var platformAPISuffixes = []string{"api.vigov.vn", "api-stg.vigov.vn"}

@@ -6,10 +6,11 @@ import (
 	"testing"
 )
 
-// tepMigrationDanhRieng is the migration that carries the SQL half of the rule. Read from disk by a
+// tepMigrationDanhRieng is the LATEST migration that (re)defines the CHECK — the SQL half of the rule
+// as a database migrated today holds it (0007 first; 0027 adds the dev hosts). Read from disk by a
 // relative path rather than through the embedded migrations package: domain/ imports nothing but
 // the standard library, tests included, and the file on disk IS what gets embedded.
-const tepMigrationDanhRieng = "../../migrations/0007_tenant_domain_khong_danh_rieng.sql"
+const tepMigrationDanhRieng = "../../migrations/0027_reserve_dev_hosts.sql"
 
 // khoiRangBuoc captures the body of the CHECK, and mauKhongKhop every `host !~* '<pattern>'` in it.
 var (

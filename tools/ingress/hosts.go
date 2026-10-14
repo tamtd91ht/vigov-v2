@@ -28,18 +28,30 @@ type hostsFile struct {
 }
 
 type hostsEnvironment struct {
-	Name         string `yaml:"name"`
-	WebHost      string `yaml:"web_host"`
-	APISuffix    string `yaml:"api_suffix"`
-	WebTLSSecret string `yaml:"web_tls_secret"`
-	APITLSSecret string `yaml:"api_tls_secret"`
+	Name           string `yaml:"name"`
+	WebHost        string `yaml:"web_host"`
+	APISuffix      string `yaml:"api_suffix"`
+	APILabelSuffix string `yaml:"api_label_suffix"`
+	WebTLSSecret   string `yaml:"web_tls_secret"`
+	APITLSSecret   string `yaml:"api_tls_secret"`
+	Retired        bool   `yaml:"retired"`
 }
 
 // hostPlan is deploy/hosts.yaml after validation. Environments keeps the file's order: the first
 // entry is what deploy/base carries.
+//
+// Retired holds the environments that no longer run (owner, 14/10/2026: staging). They get no
+// overlay, but their roots and suffixes stay in the reserved-domain constants: a host a retired
+// environment once served must never become a commune's.
 type hostPlan struct {
 	Environments []moiTruong
+	Retired      []moiTruong
 	MiniApp      moiTruong
+}
+
+// allEnvironments is live then retired — every host family the reserved-domain rule must cover.
+func (p hostPlan) allEnvironments() []moiTruong {
+	return append(append([]moiTruong{}, p.Environments...), p.Retired...)
 }
 
 // webRoot is the parent of an environment's commune web hosts: "*.vigov.vn" → "vigov.vn".
@@ -50,6 +62,9 @@ var (
 	envNameRe = regexp.MustCompile(`^[a-z][a-z0-9-]{0,62}$`)
 	// k8sNameRe — a TLS Secret name (DNS-1123 label; the existing names fit, nothing looser is needed).
 	k8sNameRe = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
+	// apiLabelSuffixRe — appended to a service name inside ONE DNS label, so it starts with the
+	// separator and carries nothing a label cannot.
+	apiLabelSuffixRe = regexp.MustCompile(`^-[a-z0-9]+$`)
 )
 
 // loadHostPlan reads and validates deploy/hosts.yaml under root.
@@ -62,8 +77,8 @@ func loadHostPlan(root string) (hostPlan, error) {
 }
 
 // parseHostPlan is FAIL CLOSED end to end: an unknown key, a missing or empty field, a duplicate
-// environment, a host that is not a plain lower-case DNS name, or a mini_app_environment the list
-// does not hold stops the generator, and nothing is written. Every value here becomes an Ingress
+// environment, a host that is not a plain lower-case DNS name, two environments building the same
+// API host, or a mini_app_environment the live list does not hold stops the generator, and nothing is written. Every value here becomes an Ingress
 // host, a TLS SAN or a reserved-domain rule; "probably meant" is not a value any of them can take.
 func parseHostPlan(raw []byte) (hostPlan, error) {
 	dec := yaml.NewDecoder(bytes.NewReader(raw))
@@ -83,15 +98,31 @@ func parseHostPlan(raw []byte) (hostPlan, error) {
 
 	var plan hostPlan
 	seenName := map[string]bool{}
-	seenSecret := map[string]string{}
+	// seenSecret: a TLS Secret name → where it was first used. seenAPIHost: api_suffix +
+	// api_label_suffix → the environment owning that API host family.
+	type secretUse struct{ env, kind, apiSuffix string }
+	seenSecret := map[string]secretUse{}
+	seenAPIHost := map[string]string{}
 	for i, e := range f.Environments {
 		where := fmt.Sprintf("%s: environments[%d]", hostsFilePath, i)
-		for _, fld := range []struct{ key, val string }{
-			{"name", e.Name}, {"web_host", e.WebHost}, {"api_suffix", e.APISuffix},
-			{"web_tls_secret", e.WebTLSSecret}, {"api_tls_secret", e.APITLSSecret},
-		} {
+		required := []struct{ key, val string }{{"name", e.Name}, {"web_host", e.WebHost}, {"api_suffix", e.APISuffix}}
+		if !e.Retired {
+			required = append(required, struct{ key, val string }{"web_tls_secret", e.WebTLSSecret},
+				struct{ key, val string }{"api_tls_secret", e.APITLSSecret})
+		}
+		for _, fld := range required {
 			if strings.TrimSpace(fld.val) == "" {
 				return hostPlan{}, fmt.Errorf("%s: thiếu hoặc rỗng `%s`", where, fld.key)
+			}
+		}
+		if e.Retired {
+			// A retired entry serves nothing. A TLS Secret or label suffix on it means somebody thinks
+			// it still runs — refuse rather than guess which of the two they meant.
+			if e.WebTLSSecret != "" || e.APITLSSecret != "" || e.APILabelSuffix != "" {
+				return hostPlan{}, fmt.Errorf("%s: môi trường nghỉ hưu %q không được có web_tls_secret/api_tls_secret/api_label_suffix", where, e.Name)
+			}
+			if i == 0 {
+				return hostPlan{}, fmt.Errorf("%s: môi trường đầu là thứ base mang — không được là môi trường nghỉ hưu", where)
 			}
 		}
 		if !envNameRe.MatchString(e.Name) {
@@ -108,20 +139,45 @@ func parseHostPlan(raw []byte) (hostPlan, error) {
 		if !isPlainHost(e.APISuffix) {
 			return hostPlan{}, fmt.Errorf("%s: api_suffix %q không phải tên miền thường, viết thường", where, e.APISuffix)
 		}
-		for _, s := range []string{e.WebTLSSecret, e.APITLSSecret} {
-			if !k8sNameRe.MatchString(s) {
-				return hostPlan{}, fmt.Errorf("%s: tên Secret TLS %q không hợp lệ", where, s)
+		if e.APILabelSuffix != "" && !apiLabelSuffixRe.MatchString(e.APILabelSuffix) {
+			return hostPlan{}, fmt.Errorf("%s: api_label_suffix %q phải rỗng hoặc có dạng `-[a-z0-9]+`", where, e.APILabelSuffix)
+		}
+		// Two environments on one api_suffix with one label suffix would build the SAME host for
+		// every service — one environment's pods answering under the other's name.
+		apiKey := e.APILabelSuffix + "." + e.APISuffix
+		if prev, dup := seenAPIHost[apiKey]; dup {
+			return hostPlan{}, fmt.Errorf("%s: host API `<dịch vụ>%s.%s` trùng với môi trường %s — đặt api_label_suffix khác",
+				where, e.APILabelSuffix, e.APISuffix, prev)
+		}
+		seenAPIHost[apiKey] = e.Name
+		for _, u := range []struct{ name, kind string }{{e.WebTLSSecret, "web"}, {e.APITLSSecret, "api"}} {
+			if u.name == "" { // retired, checked above
+				continue
+			}
+			if !k8sNameRe.MatchString(u.name) {
+				return hostPlan{}, fmt.Errorf("%s: tên Secret TLS %q không hợp lệ", where, u.name)
 			}
 			// One Secret for two wildcards means one of them is served a certificate that does not
-			// cover it — HTTPS breaks on that family and nothing else does.
-			if prev, dup := seenSecret[s]; dup {
-				return hostPlan{}, fmt.Errorf("%s: Secret TLS %q đã dùng ở %s", where, s, prev)
+			// cover it — HTTPS breaks on that family and nothing else does. The one exception: two
+			// API Secrets for the SAME api_suffix hold the same `*.<api_suffix>` certificate (each
+			// namespace keeps its own copy under one name — owner, 14/10/2026).
+			prev, dup := seenSecret[u.name]
+			if dup && !(prev.kind == "api" && u.kind == "api" && prev.apiSuffix == e.APISuffix) {
+				return hostPlan{}, fmt.Errorf("%s: Secret TLS %q đã dùng ở %s", where, u.name, prev.env)
 			}
-			seenSecret[s] = e.Name
+			if !dup {
+				seenSecret[u.name] = secretUse{env: e.Name, kind: u.kind, apiSuffix: e.APISuffix}
+			}
 		}
-		plan.Environments = append(plan.Environments, moiTruong{
-			Ten: e.Name, HostWeb: e.WebHost, DuoiAPI: e.APISuffix, TLSWeb: e.WebTLSSecret, TLSAPI: e.APITLSSecret,
-		})
+		m := moiTruong{
+			Ten: e.Name, HostWeb: e.WebHost, DuoiAPI: e.APISuffix, NhanAPI: e.APILabelSuffix,
+			TLSWeb: e.WebTLSSecret, TLSAPI: e.APITLSSecret,
+		}
+		if e.Retired {
+			plan.Retired = append(plan.Retired, m)
+		} else {
+			plan.Environments = append(plan.Environments, m)
+		}
 	}
 
 	if f.MiniAppEnvironment == "" {
@@ -134,7 +190,7 @@ func parseHostPlan(raw []byte) (hostPlan, error) {
 		}
 	}
 	if !found {
-		return hostPlan{}, fmt.Errorf("%s: mini_app_environment %q không có trong `environments`", hostsFilePath, f.MiniAppEnvironment)
+		return hostPlan{}, fmt.Errorf("%s: mini_app_environment %q không có trong `environments` (hoặc đã nghỉ hưu)", hostsFilePath, f.MiniAppEnvironment)
 	}
 	return plan, nil
 }

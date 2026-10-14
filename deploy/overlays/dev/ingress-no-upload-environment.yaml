@@ -1,0 +1,46 @@
+# TỆP NÀY ĐƯỢC SINH RA bởi tools/ingress (`go run ./tools/ingress`, hoặc `make kb`). KHÔNG SỬA
+# TAY. Phần MÔI TRƯỜNG `dev` của Ingress `vigov-no-upload` — host và TLS, và CHỈ hai thứ ấy. Bảng định
+# tuyến ở `deploy/base/mang/ingress.yaml`, giống nhau ở mọi môi trường.
+#
+# VÌ SAO LÀ BẢN VÁ JSON6902 CHỨ KHÔNG PHẢI MỘT `Ingress` ĐẦY ĐỦ: `spec.rules` là danh sách KHÔNG
+# có khoá trộn, nên một strategic-merge patch chỉ cần NHẮC TỚI `rules` là THAY CẢ DANH SÁCH —
+# và kustomize không kêu một tiếng. JSON6902 chạm đúng từng trường `host`.
+#
+# Mỗi `replace` đi sau một `test` trên giá trị của base: base sinh lại với một dịch vụ mới làm
+# lệch chỉ số thì `kustomize build` ĐỔ, thay vì vá nhầm host của dịch vụ bên cạnh.
+#
+# Host web `*.dev.vigov.vn` và host API `<dịch vụ>-dev.api.vigov.vn` — ký tự đại diện khớp ĐÚNG MỘT
+# nhãn, host API là host cụ thể, nên không host nào của môi trường này rơi vào quy tắc của
+# môi trường khác.
+- op: test
+  path: /spec/rules/0/host
+  value: "documents.api.vigov.vn"
+- op: replace
+  path: /spec/rules/0/host
+  value: "documents-dev.api.vigov.vn"
+- op: test
+  path: /spec/rules/1/host
+  value: "finance.api.vigov.vn"
+- op: replace
+  path: /spec/rules/1/host
+  value: "finance-dev.api.vigov.vn"
+- op: test
+  path: /spec/rules/2/host
+  value: "identity.api.vigov.vn"
+- op: replace
+  path: /spec/rules/2/host
+  value: "identity-dev.api.vigov.vn"
+- op: test
+  path: /spec/rules/3/host
+  value: "reporting.api.vigov.vn"
+- op: replace
+  path: /spec/rules/3/host
+  value: "reporting-dev.api.vigov.vn"
+
+# `add` chứ không `replace`: base cố ý KHÔNG khai `tls`, và `replace` đổ khi đường dẫn chưa có.
+# Secret TLS tạo NGOÀI kho này — KHÔNG BAO GIỜ commit khoá. Tên: deploy/cau-hinh/README.md.
+- op: add
+  path: /spec/tls
+  value:
+    - hosts: ["*.api.vigov.vn"]
+      secretName: vigov-api-wildcard-tls
