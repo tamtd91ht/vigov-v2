@@ -83,6 +83,12 @@ var configUses = config.Uses(
 )
 
 func main() {
+	// `-migrate-only`: apply this binary's embedded migrations and exit, no server (Jenkins
+	// `tao-bang` one-shot pod, ADR 0013 path two). The name must match migrate.Chay below: lock key.
+	if len(os.Args) > 1 && os.Args[1] == "-migrate-only" {
+		os.Exit(migrate.RunMigrateOnly("comms", migrations.FS))
+	}
+
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
 	// Steps 1 to 4 of the wiring list are below and are no longer a skeleton: config, the pool, the

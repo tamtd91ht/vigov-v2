@@ -58,6 +58,11 @@ type luuTru struct {
 	soLanKhoa      int
 	soLanNha       int
 	nhaKhiChuaKhoa int // unlock without a matching lock — a defect, not a hang
+
+	// Answers for migrate-only's ledger-state query (only.go): whether schema_migration exists
+	// (also set by the runner's CREATE TABLE) and how many other base tables the schema holds.
+	coBangTienDo bool
+	soBangKhac   int64
 }
 
 func moDB(t *testing.T, soKetNoi int) (*sql.DB, *luuTru) {
@@ -215,6 +220,11 @@ func (c *connGia) ExecContext(_ context.Context, q string, args []driver.NamedVa
 		c.g.soLanKhoa++
 		c.g.mu.Unlock()
 
+	case strings.Contains(q, "CREATE TABLE IF NOT EXISTS "+BangTienDo):
+		c.g.mu.Lock()
+		c.g.coBangTienDo = true
+		c.g.mu.Unlock()
+
 	case strings.Contains(q, "INSERT INTO "+BangTienDo):
 		h := hangTienDo{ten: chuoi(v, 0), checksum: chuoi(v, 1)}
 		if c.tx != 0 {
@@ -229,6 +239,12 @@ func (c *connGia) ExecContext(_ context.Context, q string, args []driver.NamedVa
 func (c *connGia) QueryContext(_ context.Context, q string, args []driver.NamedValue) (driver.Rows, error) {
 	if err := c.g.ghi(lenhGhi{sql: q, args: giaTri(args), tx: c.tx}); err != nil {
 		return nil, err
+	}
+	if strings.Contains(q, "to_regclass") {
+		c.g.mu.Lock()
+		dong := []driver.Value{c.g.coBangTienDo, c.g.soBangKhac}
+		c.g.mu.Unlock()
+		return &rowsGia{cot: []string{"has_ledger", "tables"}, hang: [][]driver.Value{dong}}, nil
 	}
 	if !strings.Contains(q, "FROM "+BangTienDo) {
 		return &rowsGia{}, nil
