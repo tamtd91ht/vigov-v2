@@ -68,7 +68,14 @@ func (noiDungCongKhaiThu) CongKhaiTheoID(ctx context.Context, id string) (domain
 type danhMucThu struct{}
 
 func (danhMucThu) DanhSach(context.Context) ([]domain.DanhMucMiniApp, error) {
-	return []domain.DanhMucMiniApp{{ID: "dm-a", Ten: "Y tế"}}, nil
+	return []domain.DanhMucMiniApp{{ID: "dm-a", Ten: "Y tế", Type: domain.LoaiTinTuc}}, nil
+}
+
+func (danhMucThu) ListByType(_ context.Context, typ domain.LoaiNoiDung) ([]domain.DanhMucMiniApp, error) {
+	if typ != domain.LoaiTinTuc {
+		return nil, nil
+	}
+	return []domain.DanhMucMiniApp{{ID: "dm-a", Ten: "Y tế", Type: domain.LoaiTinTuc}}, nil
 }
 
 // dungCongKhaiThu is the real public chain around the real public routes, with fake reads.

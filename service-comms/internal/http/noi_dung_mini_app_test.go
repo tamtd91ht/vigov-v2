@@ -140,10 +140,26 @@ type soDanhMucNDGia struct {
 	xa  tenant.ID
 	ra  []domain.DanhMucMiniApp
 	loi error
+
+	// lastType is the tree ListByType was asked for (migration 0030); allTrees counts DanhSach calls,
+	// which the staff route must never make.
+	lastType domain.LoaiNoiDung
+	allTrees int
 }
 
 func (s *soDanhMucNDGia) DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, error) {
 	s.goi++
+	s.allTrees++
+	s.xa = tenant.MustFrom(ctx)
+	if s.loi != nil {
+		return nil, s.loi
+	}
+	return s.ra, nil
+}
+
+func (s *soDanhMucNDGia) ListByType(ctx context.Context, typ domain.LoaiNoiDung) ([]domain.DanhMucMiniApp, error) {
+	s.goi++
+	s.lastType = typ
 	s.xa = tenant.MustFrom(ctx)
 	if s.loi != nil {
 		return nil, s.loi
@@ -344,7 +360,10 @@ func noiDungMau() domain.NoiDungMiniApp {
 const (
 	thanThemNoiDungHopLe = `{"type":"tin-tuc","title":"Xã Thăng Bình khai giảng năm học mới","summary":"Sáng nay…","publish":true}`
 	thanSuaNoiDungHopLe  = `{"title":"Tiêu đề đã sửa"}`
-	thanThemDanhMucHopLe = `{"name":"Chuyển đổi số","slug":"chuyen-doi-so","order":2}`
+	thanThemDanhMucHopLe = `{"name":"Chuyển đổi số","slug":"chuyen-doi-so","order":2,"type":"tin-tuc"}`
+
+	// duongDanhMucNDTinTuc is the staff tree read as every client must now send it: one type (migration 0030).
+	duongDanhMucNDTinTuc = duongDanhMucND + "?type=tin-tuc"
 )
 
 // --- rule 5, invariant 7: the four cases, on all six routes ----------------------------------
@@ -389,7 +408,7 @@ func cacTuyenND() []tuyenND {
 			func(m *mayChuND) bool { return m.ghi.suaGoi > 0 }},
 		{"xoá nội dung", http.MethodDelete, duongNoiDung + "/nd-001", sua, doc, `{"reason":"Đăng nhầm bài"}`,
 			http.StatusNoContent, func(m *mayChuND) bool { return m.ghi.deletes > 0 }},
-		{"đọc danh mục", http.MethodGet, duongDanhMucND, doc, sua, "", http.StatusOK,
+		{"đọc danh mục", http.MethodGet, duongDanhMucNDTinTuc, doc, sua, "", http.StatusOK,
 			func(m *mayChuND) bool { return m.soDM.goi > 0 }},
 		{"thêm danh mục", http.MethodPost, duongDanhMucND, sua, doc, thanThemDanhMucHopLe, http.StatusCreated,
 			func(m *mayChuND) bool { return m.ghiDM.goi > 0 }},
@@ -796,12 +815,20 @@ func TestDocDanhMucNoiDungTraCayPhangVaTruongLaName(t *testing.T) {
 	m := dungMayChuND(t)
 	m.capQuyen(xaA, QuyenDocNoiDung)
 	m.soDM.ra = []domain.DanhMucMiniApp{
-		{ID: "dm-goc", Ten: "Danh mục", Slug: "danh-muc", ThuTu: 1, TaoLuc: lucMauND},
-		{ID: "dm-001", Ten: "Chuyển đổi số", Slug: "chuyen-doi-so", ChaID: "dm-goc", ThuTu: 2, TaoLuc: lucMauND},
+		{ID: "dm-goc", Ten: "Danh mục", Slug: "danh-muc", ThuTu: 1, TaoLuc: lucMauND, Type: domain.LoaiSuKien},
+		{ID: "dm-001", Ten: "Chuyển đổi số", Slug: "chuyen-doi-so", ChaID: "dm-goc", ThuTu: 2, TaoLuc: lucMauND,
+			Type: domain.LoaiSuKien},
 	}
 
-	w := m.goi(t, http.MethodGet, hostA, duongDanhMucND, "", canBo(xaA))
+	w := m.goi(t, http.MethodGet, hostA, duongDanhMucND+"?type=su-kien", "", canBo(xaA))
 	doiMa(t, w, http.StatusOK)
+	// Migration 0030: ONE type's tree is read — never every tree — and each row says which tree it is.
+	if m.soDM.lastType != domain.LoaiSuKien || m.soDM.allTrees != 0 {
+		t.Errorf("read type %q, all-trees reads %d; want su-kien, 0", m.soDM.lastType, m.soDM.allTrees)
+	}
+	if !strings.Contains(w.Body.String(), `"type":"su-kien"`) {
+		t.Errorf("each category must carry its `type`: %s", w.Body.String())
+	}
 
 	var ra danhSachDanhMucRa
 	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
@@ -829,8 +856,121 @@ func TestDocDanhMucVuotTranTra500ChuKhongCatBot(t *testing.T) {
 	m.capQuyen(xaA, QuyenDocNoiDung)
 	m.soDM.loi = commsstore.ErrQuaNhieuDanhMucMiniApp
 
-	doiMa(t, m.goi(t, http.MethodGet, hostA, duongDanhMucND, "", canBo(xaA)),
+	doiMa(t, m.goi(t, http.MethodGet, hostA, duongDanhMucNDTinTuc, "", canBo(xaA)),
 		http.StatusInternalServerError)
+}
+
+// --- migration 0030: one category tree per content type -------------------------------------------
+
+// FAIL CLOSED: the staff tree read without a type — or with `banner`, which has no tree, or an unknown
+// code — is a 400, and the store is never asked. Answering every tree would put another type's
+// categories back into §7's select.
+func TestCategoryListWithoutAValidTypeIs400(t *testing.T) {
+	for _, q := range []string{"", "?type=", "?type=banner", "?type=tin_tuc", "?type=TIN-TUC", "?loai=tin-tuc"} {
+		t.Run(q, func(t *testing.T) {
+			m := dungMayChuND(t)
+			m.capQuyen(xaA, QuyenDocNoiDung)
+			w := m.goi(t, http.MethodGet, hostA, duongDanhMucND+q, "", canBo(xaA))
+			doiMa(t, w, http.StatusBadRequest)
+			if loiTra(t, w).Code != "invalid_request" {
+				t.Errorf("code = %q, want invalid_request", loiTra(t, w).Code)
+			}
+			if m.soDM.goi != 0 {
+				t.Error("a request with no valid type still reached the store")
+			}
+		})
+	}
+}
+
+func TestCategoryListAcceptsEveryTypeThatHasATree(t *testing.T) {
+	for _, typ := range []domain.LoaiNoiDung{domain.LoaiTinTuc, domain.LoaiSuKien, domain.LoaiThongBao,
+		domain.LoaiTruyenThanh, domain.LoaiVideo} {
+		m := dungMayChuND(t)
+		m.capQuyen(xaA, QuyenDocNoiDung)
+		doiMa(t, m.goi(t, http.MethodGet, hostA, duongDanhMucND+"?type="+string(typ), "", canBo(xaA)), http.StatusOK)
+		if m.soDM.lastType != typ {
+			t.Errorf("%s: store asked for %q", typ, m.soDM.lastType)
+		}
+	}
+}
+
+// The create carries `type` through to the use case and the reply names it.
+func TestCreateCategoryPassesTheTypeAndRepliesWithIt(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	m.ghiDM.ra = domain.DanhMucMiniApp{ID: "dm-009", Ten: "Lễ hội", Slug: "le-hoi", Type: domain.LoaiSuKien}
+
+	w := m.goi(t, http.MethodPost, hostA, duongDanhMucND, `{"name":"Lễ hội","type":"su-kien"}`, canBo(xaA))
+	doiMa(t, w, http.StatusCreated)
+	if m.ghiDM.ycCuoi.Type != "su-kien" {
+		t.Errorf("use case got type %q", m.ghiDM.ycCuoi.Type)
+	}
+	if !strings.Contains(w.Body.String(), `"type":"su-kien"`) {
+		t.Errorf("reply: %s", w.Body.String())
+	}
+}
+
+// A create with no or an invalid type: the domain's refusal, mapped to 400 with its sentence.
+func TestCreateCategoryWithoutTypeIs400(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	m.ghiDM.loi = domain.ErrCategoryTypeInvalid
+	w := m.goi(t, http.MethodPost, hostA, duongDanhMucND, `{"name":"Lễ hội"}`, canBo(xaA))
+	doiMa(t, w, http.StatusBadRequest)
+	if e := loiTra(t, w); e.Code != "invalid_request" || !strings.Contains(e.Message, "`type`") {
+		t.Errorf("error = %+v", e)
+	}
+}
+
+// `type` on the category edit is refused like `slug`, before the use case is reached.
+func TestUpdateCategoryRefusesType(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	w := m.goi(t, http.MethodPatch, hostA, duongDanhMucND+"/dm-001", `{"name":"Y tế","type":"su-kien"}`, canBo(xaA))
+	doiMa(t, w, http.StatusBadRequest)
+	if m.ghiDM.updates != 0 {
+		t.Error("a PATCH naming `type` still reached the use case")
+	}
+}
+
+// A category (or parent) of another type's tree: 409 `category_type_mismatch` on every route that files.
+func TestCategoryTypeMismatchIs409(t *testing.T) {
+	for _, c := range []struct {
+		name, method, path, body string
+		arm                      func(*mayChuND)
+	}{
+		{"item create", http.MethodPost, duongNoiDung, `{"type":"su-kien","title":"T","category_id":"dm-001"}`,
+			func(m *mayChuND) { m.ghi.loi = domain.ErrCategoryTypeMismatch }},
+		{"item edit", http.MethodPatch, duongNoiDung + "/nd-001", `{"category_id":"dm-001"}`,
+			func(m *mayChuND) { m.ghi.loi = domain.ErrCategoryTypeMismatch }},
+		{"category create", http.MethodPost, duongDanhMucND, `{"name":"Con","type":"video","parent_id":"dm-001"}`,
+			func(m *mayChuND) { m.ghiDM.loi = domain.ErrCategoryTypeMismatch }},
+		{"category move", http.MethodPatch, duongDanhMucND + "/dm-002", `{"parent_id":"dm-001"}`,
+			func(m *mayChuND) { m.ghiDM.loi = domain.ErrCategoryTypeMismatch }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			m := dungMayChuND(t)
+			m.capQuyen(xaA, QuyenSuaNoiDung)
+			c.arm(m)
+			w := m.goi(t, c.method, hostA, c.path, c.body, canBo(xaA))
+			doiMa(t, w, http.StatusConflict)
+			if loiTra(t, w).Code != "category_type_mismatch" {
+				t.Errorf("code = %q, want category_type_mismatch", loiTra(t, w).Code)
+			}
+		})
+	}
+}
+
+// A banner with a category: 422 `banner_has_no_category`, like the other banner rules.
+func TestBannerWithCategoryIs422(t *testing.T) {
+	m := dungMayChuND(t)
+	m.capQuyen(xaA, QuyenSuaNoiDung)
+	m.ghi.loi = domain.ErrBannerHasNoCategory
+	w := m.goi(t, http.MethodPost, hostA, duongNoiDung, `{"type":"banner","title":"B","category_id":"dm-001"}`, canBo(xaA))
+	doiMa(t, w, http.StatusUnprocessableEntity)
+	if loiTra(t, w).Code != "banner_has_no_category" {
+		t.Errorf("code = %q, want banner_has_no_category", loiTra(t, w).Code)
+	}
 }
 
 func TestThemNoiDungThieuIdempotencyKeyBiTuChoi(t *testing.T) {

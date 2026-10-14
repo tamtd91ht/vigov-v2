@@ -15,7 +15,7 @@ func TestCreateCategoryWithTakenNameIsRefusedWhateverTheCase(t *testing.T) {
 	for _, typed := range []string{"Nông nghiệp", "nông nghiệp", "NÔNG NGHIỆP", "  nông   nghiệp ", "nông nghiệp"} {
 		k := &khoNDGia{liveNames: []domain.CategoryName{{ID: "dm-1", Ten: "Nông nghiệp"}}}
 		_, ucDM, ctx := dungUseCaseNoiDung(t, k)
-		_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: typed}, nguoiSoanND())
+		_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: typed}, nguoiSoanND())
 		var taken domain.CategoryNameTakenError
 		if !errors.As(err, &taken) || taken.Existing != "Nông nghiệp" {
 			t.Errorf("%q: err = %v, want CategoryNameTakenError naming “Nông nghiệp”", typed, err)
@@ -29,7 +29,7 @@ func TestCreateCategoryWithTakenNameIsRefusedWhateverTheCase(t *testing.T) {
 func TestCreateCategoryWithFreeNameStillWorks(t *testing.T) {
 	k := &khoNDGia{liveNames: []domain.CategoryName{{ID: "dm-1", Ten: "Nông nghiệp"}}}
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
-	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Nông nghiệp sạch"}, nguoiSoanND()); err != nil {
+	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Nông nghiệp sạch"}, nguoiSoanND()); err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if !k.coCau("INSERT INTO danh_muc_mini_app") {
@@ -59,13 +59,13 @@ func TestCreateCategoryNameIsCheckedAmongSiblingsOnly(t *testing.T) {
 
 	k := &khoNDGia{coDong: true, liveNames: live}
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
-	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "chuyển đổi số", ChaID: "p1"}, nguoiSoanND()); !errors.Is(err, domain.ErrCategoryNameTaken) {
+	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "chuyển đổi số", ChaID: "p1"}, nguoiSoanND()); !errors.Is(err, domain.ErrCategoryNameTaken) {
 		t.Errorf("sibling: err = %v, want ErrCategoryNameTaken", err)
 	}
 
 	k = &khoNDGia{coDong: true, liveNames: live}
 	_, ucDM, ctx = dungUseCaseNoiDung(t, k)
-	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Chuyển đổi số", ChaID: "p2"}, nguoiSoanND()); err != nil {
+	if _, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Chuyển đổi số", ChaID: "p2"}, nguoiSoanND()); err != nil {
 		t.Errorf("another parent: %v", err)
 	}
 	if !k.coCau("INSERT INTO danh_muc_mini_app") {

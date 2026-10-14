@@ -63,6 +63,18 @@ func LoaiNoiDungHopLe(l string) bool {
 	return false
 }
 
+// ValidCategoryType reports whether a string is one of the FIVE types that carry a category tree — §5's
+// six minus `banner` (owner, 14/10/2026: one tree per content type, and a banner has no category). The
+// same list as migration 0030's CHECK `danh_muc_mini_app_type_known`, in Go so the refusal names the
+// field instead of surfacing a PostgreSQL exception. A switch for LoaiNoiDungHopLe's reason.
+func ValidCategoryType(l string) bool {
+	switch LoaiNoiDung(l) {
+	case LoaiTinTuc, LoaiSuKien, LoaiThongBao, LoaiTruyenThanh, LoaiVideo:
+		return true
+	}
+	return false
+}
+
 // TrangThaiNoiDung is §6's chip.
 //
 // `TrangThaiChoDuyet` HAS ONE WRITER, the portal sync in `chờ duyệt` mode (§10.2,
@@ -181,6 +193,29 @@ var (
 	// ErrDanhMucTuLamCha — §8's tree. Refused here so the caller gets a sentence rather than the
 	// CHECK constraint's exception.
 	ErrDanhMucTuLamCha = errors.New("danh_muc_mini_app: một danh mục không thể là cha của chính nó")
+
+	// One category tree per content type (owner, 14/10/2026; migration 0030).
+	//
+	// ErrCategoryTypeInvalid — a category create with no `type`, or one outside the five that carry a
+	// tree. NO DEFAULT: a create that never named its tree would be filed under `tin-tuc` silently, the
+	// guess migration 0030 refuses to make with a column DEFAULT.
+	ErrCategoryTypeInvalid = errors.New(
+		"danh_muc_mini_app: `type` là bắt buộc và phải là một trong năm loại có danh mục: tin-tuc, su-kien, thong-bao, truyen-thanh, video")
+
+	// ErrCategoryTypeImmutable — a category's type is fixed at creation. Moving a category to another
+	// tree would leave every article filed under it in a tree of another type. Refused when SENT, like
+	// the slug, so a client learns it is not editable rather than watching the field vanish.
+	ErrCategoryTypeImmutable = errors.New(
+		"danh_muc_mini_app: `type` của danh mục không đổi được — tạo danh mục mới ở loại kia")
+
+	// ErrCategoryTypeMismatch — a category placed under a parent of another type, or an item filed under a
+	// category of another type. Each type is its own tree; crossing them is what the owner's decision removes.
+	ErrCategoryTypeMismatch = errors.New(
+		"danh_muc_mini_app: danh mục đã chọn thuộc loại nội dung khác — mỗi loại nội dung có cây danh mục riêng")
+
+	// ErrBannerHasNoCategory — a banner sent with a category (owner, 14/10/2026: a banner has no category).
+	// Refused, never dropped: an author who picked a category believes the banner is filed there.
+	ErrBannerHasNoCategory = errors.New("noi_dung_mini_app: banner không xếp vào danh mục — bỏ `category_id`")
 
 	// The per-type fields of migration 0011 (ADR 0047 §6). Each refusal mirrors one CHECK there, so a
 	// member of staff reads a sentence naming the field instead of a PostgreSQL exception and a 500.
@@ -710,6 +745,10 @@ type DanhMucMiniApp struct {
 	// stay public, but residents are not offered it as a filter chip (owner, 01/10/2026). NOT a soft
 	// delete — staff keep filing under it.
 	Hidden bool
+
+	// Type is migration 0030's `loai`: the content type whose tree this category belongs to — one of the
+	// five ValidCategoryType accepts, never `banner`. Set at creation and never changed (ErrCategoryTypeImmutable).
+	Type LoaiNoiDung
 }
 
 // NoiDungMiniApp is ONE item of content — the `ContentItem` entity of migration 0006.
@@ -947,6 +986,11 @@ func (y YeuCauThemNoiDung) KiemTra() (YeuCauThemNoiDung, error) {
 	ra.DanhMucID = strings.TrimSpace(y.DanhMucID)
 	if len(ra.DanhMucID) > MaCanBoToiDa {
 		return YeuCauThemNoiDung{}, fmt.Errorf("%w (tối đa %d ký tự)", ErrMaCanBoQuaDai, MaCanBoToiDa)
+	}
+	// A banner has no category (owner, 14/10/2026). Whether a category of ANOTHER type was named needs the
+	// row, so it is the use case's question (ErrCategoryTypeMismatch), asked in its transaction.
+	if LoaiNoiDung(ra.Loai) == LoaiBanner && ra.DanhMucID != "" {
+		return YeuCauThemNoiDung{}, ErrBannerHasNoCategory
 	}
 
 	if ra.EventPlace, err = NormalizeEventPlace(y.EventPlace); err != nil {
@@ -1198,6 +1242,10 @@ type YeuCauThemDanhMuc struct {
 	ChaID string
 	ThuTu int
 
+	// Type is the content type whose tree the category joins (migration 0030) — REQUIRED, one of the five
+	// ValidCategoryType accepts. No default (ErrCategoryTypeInvalid says why).
+	Type string
+
 	// AutoSlug is SET BY KiemTra, never by a caller: true when Slug was blank and KiemTra replaced it
 	// with CategorySlugFromName(Ten) — the BASE of a series the use case still has to step through.
 	AutoSlug bool
@@ -1208,6 +1256,11 @@ func (y YeuCauThemDanhMuc) KiemTra() (YeuCauThemDanhMuc, error) {
 	var ra YeuCauThemDanhMuc
 	var err error
 
+	// The type first: it names the tree every later check (name among siblings, parent) is asked in.
+	if !ValidCategoryType(y.Type) {
+		return YeuCauThemDanhMuc{}, ErrCategoryTypeInvalid
+	}
+	ra.Type = y.Type
 	if ra.Ten, err = ChuanHoaTenDanhMuc(y.Ten); err != nil {
 		return YeuCauThemDanhMuc{}, err
 	}
@@ -1243,7 +1296,8 @@ var (
 )
 
 // ContentCategoryUpdate is a PARTIAL edit of a category: nil = leave alone. ChaID "" = move to the root.
-// There is no slug field (ErrSlugImmutable).
+// There is no slug field (ErrSlugImmutable) and no type field (ErrCategoryTypeImmutable): a new parent
+// must be of the category's own type.
 type ContentCategoryUpdate struct {
 	Ten    *string
 	ChaID  *string

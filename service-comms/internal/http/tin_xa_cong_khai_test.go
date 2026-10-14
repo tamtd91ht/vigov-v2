@@ -234,6 +234,7 @@ type ckDanhMuc struct {
 	theoXa map[tenant.ID][]domain.DanhMucMiniApp
 	loi    error
 	goi    int
+	types  []domain.LoaiNoiDung // every ListByType call, in order ("" never appears: DanhSach is the all-trees read)
 }
 
 func (d *ckDanhMuc) DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, error) {
@@ -242,6 +243,23 @@ func (d *ckDanhMuc) DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, erro
 		return nil, d.loi
 	}
 	return d.theoXa[tenant.MustFrom(ctx)], nil
+}
+
+// ListByType is the real store's filter over the same rows: one type's tree (migration 0030). It records
+// the type asked for, so a test can tell which read the handler made.
+func (d *ckDanhMuc) ListByType(ctx context.Context, typ domain.LoaiNoiDung) ([]domain.DanhMucMiniApp, error) {
+	d.goi++
+	d.types = append(d.types, typ)
+	if d.loi != nil {
+		return nil, d.loi
+	}
+	var out []domain.DanhMucMiniApp
+	for _, c := range d.theoXa[tenant.MustFrom(ctx)] {
+		if c.Type == typ {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 const ckScript = `<p>Lịch tiêm chủng</p><script>alert("xã")</script><p>Bà con &amp; các cháu</p>` +
@@ -758,21 +776,29 @@ func TestRegisterCongKhaiThieuKhoThiPanic(t *testing.T) {
 // chipData is commune A holding every case the chip row must separate, and commune B holding the SAME
 // category id under another name, so anything that crossed communes shows up.
 //
-//	A: r-health (no item of its own) ─ c-vacc (a-vacc, tin-tuc) ─ g-kids (a-kids, su-kien)
-//	   r-econ   (only a DRAFT)                                    → hidden
-//	   r-html   ("<b>Văn hoá</b>", a-culture)                     → name as plain text
+// ONE TREE PER CONTENT TYPE (migration 0030), so the fixture holds two trees in commune A:
+//
+//	A, tin-tuc: r-health (no item of its own) ─ c-vacc (a-vacc) ─ g-kids (a-kids)
+//	            r-econ   (only a DRAFT)                            → hidden
+//	            r-html   ("<b>Văn hoá</b>", a-culture)             → name as plain text
+//	A, su-kien: e-fest   (no item of its own) ─ e-child (a-fest)
+//	   a-legacy, a su-kien item 0030 left filed under r-html (a tin-tuc category) — never makes r-html a
+//	   chip of the su-kien tab
 //	   items filed under r-gone (soft-deleted: absent from the live tree) → never a chip, empty list
 //	B: r-health ("CỦA XÃ B", b-health)
 func chipData() (*ckNoiDung, *ckDanhMuc) {
+	news, event := domain.LoaiTinTuc, domain.LoaiSuKien
 	dm := &ckDanhMuc{theoXa: map[tenant.ID][]domain.DanhMucMiniApp{
 		xaA: {
-			{ID: "r-health", Ten: "Y tế", Slug: "y-te", ThuTu: 1},
-			{ID: "c-vacc", Ten: "Tiêm chủng", Slug: "tiem-chung", ChaID: "r-health", ThuTu: 1},
-			{ID: "g-kids", Ten: "Trẻ em", Slug: "tre-em", ChaID: "c-vacc", ThuTu: 2},
-			{ID: "r-econ", Ten: "Kinh tế", Slug: "kinh-te", ThuTu: 2},
-			{ID: "r-html", Ten: "<b>Văn hoá</b>", Slug: "van-hoa", ThuTu: 3},
+			{ID: "r-health", Ten: "Y tế", Slug: "y-te", ThuTu: 1, Type: news},
+			{ID: "c-vacc", Ten: "Tiêm chủng", Slug: "tiem-chung", ChaID: "r-health", ThuTu: 1, Type: news},
+			{ID: "g-kids", Ten: "Trẻ em", Slug: "tre-em", ChaID: "c-vacc", ThuTu: 2, Type: news},
+			{ID: "r-econ", Ten: "Kinh tế", Slug: "kinh-te", ThuTu: 2, Type: news},
+			{ID: "r-html", Ten: "<b>Văn hoá</b>", Slug: "van-hoa", ThuTu: 3, Type: news},
+			{ID: "e-fest", Ten: "Lễ hội", Slug: "le-hoi", ThuTu: 1, Type: event},
+			{ID: "e-child", Ten: "Thiếu nhi", Slug: "thieu-nhi", ChaID: "e-fest", ThuTu: 1, Type: event},
 		},
-		xaB: {{ID: "r-health", Ten: "CỦA XÃ B", Slug: "y-te"}},
+		xaB: {{ID: "r-health", Ten: "CỦA XÃ B", Slug: "y-te", Type: news}},
 	}}
 	pub := func(id, cat string, typ domain.LoaiNoiDung) domain.NoiDungMiniApp {
 		return domain.NoiDungMiniApp{ID: id, Loai: typ, DanhMucID: cat, TieuDe: "Tiêu đề " + id,
@@ -783,11 +809,13 @@ func chipData() (*ckNoiDung, *ckDanhMuc) {
 	nd := &ckNoiDung{tree: dm, theoXa: map[tenant.ID][]domain.NoiDungMiniApp{
 		xaA: {
 			pub("a-vacc", "c-vacc", domain.LoaiTinTuc),
-			pub("a-kids", "g-kids", domain.LoaiSuKien),
+			pub("a-kids", "g-kids", domain.LoaiTinTuc),
 			draft,
 			pub("a-culture", "r-html", domain.LoaiTinTuc),
 			pub("a-gone", "r-gone", domain.LoaiTinTuc),
 			pub("a-nowhere", "", domain.LoaiTinTuc),
+			pub("a-fest", "e-child", domain.LoaiSuKien),
+			pub("a-legacy", "r-html", domain.LoaiSuKien),
 		},
 		xaB: {pub("b-health", "r-health", domain.LoaiTinTuc)},
 	}}
@@ -805,12 +833,18 @@ func TestPublicNewsCategoriesShowsOnlyCategoriesWithPublishedItems(t *testing.T)
 	ckKhongCoHTML(t, w)
 	// MUTATIONS THAT MUST TURN THIS RED: a parent with no item of its own dropped (r-health); an empty
 	// category kept (r-econ, draft only); a soft-deleted category resurrected (r-gone); the name sent
-	// with markup; `parent_id` sent on a root; the slug or the commune leaking.
+	// with markup; `parent_id` sent on a root; the slug or the commune leaking. NO `type`: every tree
+	// (migration 0030 keeps that answer), so the su-kien tree is there too.
 	want := `{"items":[` +
 		`{"id":"r-health","name":"Y tế","order":1},` +
 		`{"id":"c-vacc","name":"Tiêm chủng","parent_id":"r-health","order":1},` +
 		`{"id":"g-kids","name":"Trẻ em","parent_id":"c-vacc","order":2},` +
-		`{"id":"r-html","name":"Văn hoá","order":3}]}`
+		`{"id":"r-html","name":"Văn hoá","order":3},` +
+		`{"id":"e-fest","name":"Lễ hội","order":1},` +
+		`{"id":"e-child","name":"Thiếu nhi","parent_id":"e-fest","order":1}]}`
+	if len(dm.types) != 0 {
+		t.Errorf("no `type` must read every tree (DanhSach), not one: ListByType(%v)", dm.types)
+	}
 	if got := strings.TrimSpace(w.Body.String()); got != want {
 		t.Fatalf("chip xã A =\n%s\nmuốn\n%s", got, want)
 	}
@@ -832,32 +866,51 @@ func TestPublicNewsCategoriesTypeFilter(t *testing.T) {
 	nd, dm := chipData()
 	h := ckMayChu(t, &ckNenTang{}, nd, dm, nil)
 
-	w := ckGoi(h, chipPath, ckHostA, "&type=su-kien")
-	doiMa(t, w, http.StatusOK)
+	chips := func(typ string) string {
+		t.Helper()
+		w := ckGoi(h, chipPath, ckHostA, "&type="+typ)
+		doiMa(t, w, http.StatusOK)
+		var ra struct {
+			Items []map[string]any `json:"items"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
+			t.Fatalf("thân không phải JSON: %q", w.Body.String())
+		}
+		var ids []string
+		for _, it := range ra.Items {
+			ids = append(ids, it["id"].(string))
+		}
+		return strings.Join(ids, ",")
+	}
+
+	// ONE TREE PER TYPE (migration 0030): only the su-kien tree is read, and only its branch holding a
+	// published su-kien item. r-html holds a su-kien item too (a-legacy, filed across trees before 0030)
+	// but is a tin-tuc category — never a chip of this tab.
+	if got := chips("su-kien"); got != "e-fest,e-child" {
+		t.Fatalf("chip su-kien = %s", got)
+	}
 	if nd.lastType != domain.LoaiSuKien {
 		t.Fatalf("kho nhận type = %q", nd.lastType)
 	}
-	var ra struct {
-		Items []map[string]any `json:"items"`
+	if len(dm.types) != 1 || dm.types[0] != domain.LoaiSuKien {
+		t.Fatalf("cây đọc theo loại = %v, muốn [su-kien]", dm.types)
 	}
-	if err := json.Unmarshal(w.Body.Bytes(), &ra); err != nil {
-		t.Fatalf("thân không phải JSON: %q", w.Body.String())
-	}
-	var ids []string
-	for _, it := range ra.Items {
-		ids = append(ids, it["id"].(string))
-	}
-	// Only g-kids holds a su-kien; its ancestors come with it. r-html (tin-tuc only) is hidden.
-	if got := strings.Join(ids, ","); got != "r-health,c-vacc,g-kids" {
-		t.Fatalf("chip su-kien = %s", got)
+	if got := chips("tin-tuc"); got != "r-health,c-vacc,g-kids,r-html" {
+		t.Fatalf("chip tin-tuc = %s", got)
 	}
 
 	// A type nothing is published under: an empty row, and the tree is not even read.
 	goiTruoc := dm.goi
-	w = ckGoi(h, chipPath, ckHostA, "&type=video")
+	if got := chips("video"); got != "" || dm.goi != goiTruoc {
+		t.Fatalf("type=video: %s, cây bị đọc %d lần", got, dm.goi-goiTruoc)
+	}
+
+	// `banner` has no tree: the empty row, and neither store is asked.
+	ndTruoc := nd.goi
+	w := ckGoi(h, chipPath, ckHostA, "&type=banner")
 	doiMa(t, w, http.StatusOK)
-	if strings.TrimSpace(w.Body.String()) != `{"items":[]}` || dm.goi != goiTruoc {
-		t.Fatalf("type=video: %s, cây bị đọc %d lần", w.Body.String(), dm.goi-goiTruoc)
+	if strings.TrimSpace(w.Body.String()) != `{"items":[]}` || dm.goi != goiTruoc || nd.goi != ndTruoc {
+		t.Fatalf("type=banner: %s, kho nội dung %d, cây %d lần", w.Body.String(), nd.goi-ndTruoc, dm.goi-goiTruoc)
 	}
 }
 
@@ -880,10 +933,15 @@ func TestPublicNewsCategoryFilterIncludesDescendantsAndAndsWithType(t *testing.T
 		"&category=r-health":              "a-kids,a-vacc", // the parent includes child and grandchild
 		"&category=c-vacc":                "a-kids,a-vacc",
 		"&category=g-kids":                "a-kids",
-		"&category=r-health&type=tin-tuc": "a-vacc", // AND, not OR
-		"&category=r-health&type=su-kien": "a-kids",
-		"&category=g-kids&type=tin-tuc":   "",
-		"&category=":                      "a-culture,a-gone,a-kids,a-nowhere,a-vacc", // empty = no filter
+		"&category=r-health&type=tin-tuc": "a-kids,a-vacc", // one tree per type: the subtree is one type
+		"&category=r-health&type=su-kien": "",              // AND, not OR
+		"&category=e-fest":                "a-fest",
+		"&category=e-fest&type=su-kien":   "a-fest",
+		"&category=e-fest&type=tin-tuc":   "",
+		// A row 0030 left filed across trees is still listed under its category — refiling it is not a
+		// read's job (migration 0030, question 4); the chip row above never offers r-html on su-kien.
+		"&category=r-html&type=su-kien": "a-legacy",
+		"&category=":                    "a-culture,a-fest,a-gone,a-kids,a-legacy,a-nowhere,a-vacc", // empty = no filter
 	} {
 		if got := ids(extra); got != want {
 			t.Errorf("%s: %q, muốn %q", extra, got, want)

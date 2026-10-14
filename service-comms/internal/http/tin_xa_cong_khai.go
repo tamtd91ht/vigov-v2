@@ -813,7 +813,8 @@ type publicCategoriesOut struct {
 // GET /api/v1/commune-news/categories?host=[&type=]
 //
 // A CATEGORY IS LISTED IF IT, OR ANY LIVE DESCENDANT, HOLDS AT LEAST ONE PUBLISHED, NOT-DELETED ITEM (of
-// `type`, when given). Soft-deleted categories never appear, nor does a live category cut off from the
+// `type`, when given — and then only categories OF THAT TYPE'S TREE, migration 0030; `type=banner` is
+// always empty, a banner has no category). Soft-deleted categories never appear, nor does a live category cut off from the
 // roots by a deleted parent (domain.CategoriesWithPublishedItems). So every chip, when chosen, lists at
 // least one item on GET /api/v1/commune-news?category=<id>&type=<same>.
 //
@@ -850,6 +851,12 @@ func (h *HandlerCongKhai) PublicNewsCategories(w http.ResponseWriter, r *http.Re
 	}
 
 	ctx := tenant.Into(r.Context(), xa.ID)
+	if itemType == domain.LoaiBanner {
+		// A banner has no category tree (owner, 14/10/2026): the answer is the empty list, not a 400 —
+		// `banner` is still one of the six codes this parameter accepts on the list next door.
+		vietJSON(w, http.StatusOK, ra)
+		return
+	}
 	withItems, err := h.d.NoiDung.PublishedCategoryIDs(ctx, itemType)
 	if err != nil {
 		h.categoryError(ctx, w, err)
@@ -860,7 +867,15 @@ func (h *HandlerCongKhai) PublicNewsCategories(w http.ResponseWriter, r *http.Re
 		vietJSON(w, http.StatusOK, ra)
 		return
 	}
-	live, err := h.d.DanhMuc.DanhSach(ctx)
+	// ONE TREE PER TYPE (migration 0030): with `type`, only that type's tree is read, so a category of
+	// another tree never becomes a chip of this tab even when an item 0030 left filed across trees points
+	// at it. Without `type`, every tree — today's answer, unchanged.
+	var live []domain.DanhMucMiniApp
+	if itemType != "" {
+		live, err = h.d.DanhMuc.ListByType(ctx, itemType)
+	} else {
+		live, err = h.d.DanhMuc.DanhSach(ctx)
+	}
 	if err != nil {
 		h.categoryError(ctx, w, err)
 		return

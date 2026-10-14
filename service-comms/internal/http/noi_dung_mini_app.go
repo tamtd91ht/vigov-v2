@@ -323,6 +323,10 @@ type danhMucRa struct {
 	// Hidden (migration 0012): residents are not offered this category as a filter chip; its items stay
 	// public. Staff keep filing under it.
 	Hidden bool `json:"hidden"`
+
+	// Type is the content type whose tree the category belongs to (migration 0030): `tin-tuc` · `su-kien`
+	// · `thong-bao` · `truyen-thanh` · `video` — never `banner`. Fixed at creation.
+	Type string `json:"type"`
 }
 
 // danhSachDanhMucRa wraps the whole tree. AN OBJECT AND NOT A BARE ARRAY, for the reason
@@ -341,6 +345,7 @@ func danhMucRaNgoai(dm domain.DanhMucMiniApp) danhMucRa {
 		Order:     dm.ThuTu,
 		CreatedAt: dm.TaoLuc,
 		Hidden:    dm.Hidden,
+		Type:      string(dm.Type),
 	}
 }
 
@@ -523,10 +528,22 @@ func (h *Handler) MotNoiDung(w http.ResponseWriter, r *http.Request) {
 // everybody who is not an administrator. This tree appears on exactly one screen, the one §10.5
 // already gates with `content.read`. Using the key the specification names costs nothing here and
 // keeps the two routes of this module answering the same question the same way.
+//
+// `type` IS REQUIRED AND THE CHECK IS INLINE ON PURPOSE (migration 0030: one tree per content type): a
+// variable read from the query inside the condition of a 400 branch is what tools/apidoc publishes as
+// `required: true`. Missing or unknown is a 400, never "every tree" — FAIL CLOSED.
 func (h *Handler) DanhSachDanhMucNoiDung(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	ds, err := h.d.DanhMucNoiDung.DanhSach(ctx)
+	typ := thamSoLoc(r.URL.Query(), "type")
+	if !domain.ValidCategoryType(typ) {
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Tham số `type` là bắt buộc và phải là một trong năm loại có danh mục: tin-tuc, su-kien, "+
+				"thong-bao, truyen-thanh, video.", "")
+		return
+	}
+
+	ds, err := h.d.DanhMucNoiDung.ListByType(ctx, domain.LoaiNoiDung(typ))
 	if err != nil {
 		if errors.Is(err, commsstore.ErrQuaNhieuDanhMucMiniApp) {
 			// REFUSED RATHER THAN TRUNCATED, and 500 is the honest status: nothing the caller sent is
@@ -864,9 +881,15 @@ type themDanhMucVao struct {
 	// 409 `code_taken` when already used. Either way the reply's `slug` is the one stored.
 	Slug string `json:"slug,omitempty"`
 
-	// ParentID is "" or absent for a root category.
+	// ParentID is "" or absent for a root category. A parent must be of the same `type` (409
+	// `category_type_mismatch`).
 	ParentID string `json:"parent_id,omitempty"`
 	Order    int    `json:"order,omitempty"`
+
+	// Type is REQUIRED (migration 0030: one tree per content type): `tin-tuc` · `su-kien` · `thong-bao` ·
+	// `truyen-thanh` · `video`. Absent or anything else — `banner` included, it has no category — is 400.
+	// No default: a dialog that never named the tree must not have one chosen for it.
+	Type string `json:"type"`
 }
 
 // ThemDanhMucNoiDung adds one category. POST /api/v1/content-categories
@@ -890,6 +913,7 @@ func (h *Handler) ThemDanhMucNoiDung(w http.ResponseWriter, r *http.Request) {
 		Slug:  vao.Slug,
 		ChaID: vao.ParentID,
 		ThuTu: vao.Order,
+		Type:  vao.Type,
 	}, nguoi)
 	if err != nil {
 		h.traLoiLoiNoiDung(w, r, "thêm danh mục", err)
@@ -915,6 +939,10 @@ type updateCategoryIn struct {
 	Hidden   *bool   `json:"hidden,omitempty"`
 
 	Slug *string `json:"slug,omitempty"`
+
+	// Type is REFUSED, NOT IGNORED (400), for Slug's reason: a category's tree is fixed at creation
+	// (migration 0030). Declared only so a body carrying it can be told so.
+	Type *string `json:"type,omitempty"`
 }
 
 // deleteCategoryIn is the body of DELETE /api/v1/content-categories/{id}. The reason is mandatory
@@ -931,6 +959,10 @@ func (h *Handler) UpdateContentCategory(w http.ResponseWriter, r *http.Request) 
 	}
 	if in.Slug != nil {
 		h.traLoiLoiNoiDung(w, r, "sửa danh mục", domain.ErrSlugImmutable)
+		return
+	}
+	if in.Type != nil {
+		h.traLoiLoiNoiDung(w, r, "sửa danh mục", domain.ErrCategoryTypeImmutable)
 		return
 	}
 	actor, ok := nguoiThucHien(r)
@@ -1018,6 +1050,15 @@ func (h *Handler) traLoiLoiNoiDung(w http.ResponseWriter, r *http.Request, viec 
 	case errors.Is(err, app.ErrDanhMucChaKhongTonTai):
 		httpx.WriteError(w, http.StatusConflict, "parent_missing",
 			"Danh mục cha đã chọn không còn trong danh mục tin của xã. Hãy tải lại trang và chọn lại.", "")
+	case errors.Is(err, domain.ErrCategoryTypeMismatch):
+		// 409 like `category_missing`: the body is well-formed; this category (or parent) is refused against
+		// the state of the data — it sits in another type's tree (migration 0030).
+		httpx.WriteError(w, http.StatusConflict, "category_type_mismatch",
+			"Danh mục đã chọn thuộc loại nội dung khác. Mỗi loại nội dung có cây danh mục riêng — "+
+				"hãy chọn danh mục của đúng loại này.", "")
+	case errors.Is(err, domain.ErrBannerHasNoCategory):
+		// 422 like the other banner rules (`banner_fields_only_for_banner`): the value breaks a rule of the type.
+		httpx.WriteError(w, http.StatusUnprocessableEntity, "banner_has_no_category", err.Error(), "")
 	case errors.Is(err, domain.ErrCategoryNameTaken):
 		// Names the existing category AS STORED, so "nông nghiệp" refused against "Nông nghiệp" reads as
 		// the same name rather than as a bug. A category name is the commune's label, not personal data.
@@ -1142,6 +1183,8 @@ func laLoiDauVaoNoiDung(err error) bool {
 		domain.ErrCoverFileIDInvalid, domain.ErrAudioFileIDInvalid,
 		// ADR 0067 §3: the category edit and delete.
 		domain.ErrSlugImmutable, domain.ErrThieuLyDoXoa, domain.ErrLyDoXoaQuaDai,
+		// Migration 0030: the category's type — required on the create, fixed afterwards.
+		domain.ErrCategoryTypeInvalid, domain.ErrCategoryTypeImmutable,
 	} {
 		if errors.Is(err, mot) {
 			return true

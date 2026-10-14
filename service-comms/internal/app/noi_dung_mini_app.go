@@ -48,7 +48,7 @@ import (
 // test that needs infrastructure is a test that stops being run.
 type KhoNoiDungMiniApp interface {
 	TheoIDDeSua(ctx context.Context, tx *store.ScopedTx, id string) (domain.NoiDungMiniApp, error)
-	DanhMucCoThat(ctx context.Context, tx *store.ScopedTx, id string) (bool, error)
+	DanhMucCoThat(ctx context.Context, tx *store.ScopedTx, id string) (domain.LoaiNoiDung, bool, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, n domain.NoiDungMiniApp) error
 	CapNhat(ctx context.Context, tx *store.ScopedTx, n domain.NoiDungMiniApp) error
 	SoftDelete(ctx context.Context, tx *store.ScopedTx, id, deletedBy, reason string, at time.Time) error
@@ -60,8 +60,8 @@ type KhoNoiDungMiniApp interface {
 type KhoDanhMucMiniApp interface {
 	SlugDaDung(ctx context.Context, tx *store.ScopedTx, slug string) (bool, error)
 	DemDangSong(ctx context.Context, tx *store.ScopedTx) (int, error)
-	LiveNames(ctx context.Context, tx *store.ScopedTx) ([]domain.CategoryName, error)
-	ChaCoThat(ctx context.Context, tx *store.ScopedTx, chaID string) (bool, error)
+	LiveNames(ctx context.Context, tx *store.ScopedTx, typ domain.LoaiNoiDung) ([]domain.CategoryName, error)
+	ChaCoThat(ctx context.Context, tx *store.ScopedTx, chaID string) (domain.LoaiNoiDung, bool, error)
 	Chen(ctx context.Context, tx *store.ScopedTx, dm domain.DanhMucMiniApp) error
 
 	// The edit and the soft delete (ADR 0067 §3).
@@ -330,12 +330,9 @@ func (uc *SoanNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemNoiD
 	var cover settlement
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		if moi.DanhMucID != "" {
-			co, err := uc.kho.DanhMucCoThat(ctx, tx, moi.DanhMucID)
-			if err != nil {
+			// A banner with a category never gets here (domain KiemTra: ErrBannerHasNoCategory).
+			if err := uc.checkItemCategory(ctx, tx, moi.DanhMucID, moi.Loai); err != nil {
 				return err
-			}
-			if !co {
-				return commsstore.ErrDanhMucKhongTonTaiMiniApp
 			}
 		}
 		if fromUpload {
@@ -441,6 +438,30 @@ func coverRefusal(ctx context.Context, viec string, err error) error {
 		}
 	}
 	return bocNoiDung(ctx, viec, err)
+}
+
+// checkItemCategory refuses filing an item of type `itemType` under category `categoryID` unless that
+// category is LIVE in this commune (commsstore.ErrDanhMucKhongTonTaiMiniApp, 409 `category_missing`) AND
+// belongs to the item's own type's tree (domain.ErrCategoryTypeMismatch, 409 `category_type_mismatch`).
+//
+// NO TREE LOCK, and that is a decision rather than an omission: the probe share-locks the category row,
+// which holds off its soft delete, and a category's type is never written after its INSERT — so the
+// answer cannot change before commit. The tree lock would serialise every article save in the commune
+// behind every category edit for no property it adds.
+func (uc *SoanNoiDungMiniApp) checkItemCategory(ctx context.Context, tx *store.ScopedTx, categoryID string,
+	itemType domain.LoaiNoiDung) error {
+
+	typ, live, err := uc.kho.DanhMucCoThat(ctx, tx, categoryID)
+	if err != nil {
+		return err
+	}
+	if !live {
+		return commsstore.ErrDanhMucKhongTonTaiMiniApp
+	}
+	if typ != itemType {
+		return domain.ErrCategoryTypeMismatch
+	}
+	return nil
 }
 
 // Sua applies a partial edit — §6's `✎` reopening §7's modal.
@@ -565,6 +586,15 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			sau.AudioDurationSeconds = *sach.AudioDurationSeconds
 		}
 
+		// ONE CATEGORY TREE PER TYPE (owner, 14/10/2026; migration 0030). A type change that does not also
+		// name a category leaves the item UNFILED, in this same UPDATE: the category it sat in belongs to
+		// the old type's tree, and keeping it would file the item in a tree of another type. The audit delta
+		// shows `danh_muc_id` before and after (tomTatDoiNoiDungMiniApp). A request that DOES name a category
+		// with the type change has it checked against the new type below.
+		if sau.Loai != truoc.Loai && sach.DanhMucID == nil {
+			sau.DanhMucID = ""
+		}
+
 		// THE PER-TYPE FIELDS OF MIGRATION 0011, decided on the MERGED row because the type after the
 		// edit may come from the request or from the stored row.
 		//
@@ -606,16 +636,18 @@ func (uc *SoanNoiDungMiniApp) Sua(ctx context.Context, id string, yc domain.YeuC
 			return refusal
 		}
 
-		// THE CATEGORY IS CHECKED ONLY WHEN IT MOVED. Re-sending the category a row already has must
-		// not fail because that category was retired in the meantime — the article is already filed
-		// there, and refusing the save would make every other field uneditable.
-		if sau.DanhMucID != truoc.DanhMucID && sau.DanhMucID != "" {
-			co, err := uc.kho.DanhMucCoThat(ctx, tx, sau.DanhMucID)
-			if err != nil {
-				return err
+		// THE CATEGORY IS CHECKED ONLY WHEN IT MOVED OR THE TYPE DID. Re-sending the category a row already
+		// has must not fail because that category was retired in the meantime — the article is already
+		// filed there, and refusing the save would make every other field uneditable. The same holds for a
+		// row migration 0030 left filed across trees (a banner under a category, an item under another
+		// type's category): an edit that touches neither the type nor the category is not refused for it.
+		if sau.DanhMucID != "" && (sau.DanhMucID != truoc.DanhMucID || sau.Loai != truoc.Loai) {
+			if sau.Loai == domain.LoaiBanner {
+				refusal = domain.ErrBannerHasNoCategory
+				return refusal
 			}
-			if !co {
-				return commsstore.ErrDanhMucKhongTonTaiMiniApp
+			if err := uc.checkItemCategory(ctx, tx, sau.DanhMucID, sau.Loai); err != nil {
+				return err
 			}
 		}
 
@@ -890,9 +922,11 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 		Slug:  sach.Slug,
 		ChaID: sach.ChaID,
 		ThuTu: sach.ThuTu,
+		Type:  domain.LoaiNoiDung(sach.Type),
 	}
 
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		// The ceiling stays PER COMMUNE, every type's tree counted together (owner, 14/10/2026).
 		n, err := uc.kho.DemDangSong(ctx, tx)
 		if err != nil {
 			return err
@@ -904,11 +938,13 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 		// THE TREE LOCK FIRST, on every create: two officers adding "Nông nghiệp" at the same moment would
 		// both find the name free (no unique key can hold a case-folded Vietnamese name — see LiveNames),
 		// and both find `nong-nghiep` free. Serialised per commune, the second one sees the first's row.
-		// The same advisory lock Update takes.
+		// The same advisory lock Update takes — still ONE PER COMMUNE, not per type: the slug series is
+		// commune-wide, so two creates in two trees can still race for the same slug.
 		if err := uc.kho.LockTree(ctx, tx); err != nil {
 			return err
 		}
-		live, err := uc.kho.LiveNames(ctx, tx)
+		// Names are unique per (type, parent): only this type's tree is read.
+		live, err := uc.kho.LiveNames(ctx, tx, moi.Type)
 		if err != nil {
 			return err
 		}
@@ -931,12 +967,16 @@ func (uc *DanhMucNoiDungMiniApp) Them(ctx context.Context, yc domain.YeuCauThemD
 		}
 
 		if moi.ChaID != "" {
-			co, err := uc.kho.ChaCoThat(ctx, tx, moi.ChaID)
+			parentType, co, err := uc.kho.ChaCoThat(ctx, tx, moi.ChaID)
 			if err != nil {
 				return err
 			}
 			if !co {
 				return ErrDanhMucChaKhongTonTai
+			}
+			// A child sits in its parent's tree (migration 0030).
+			if parentType != moi.Type {
+				return domain.ErrCategoryTypeMismatch
 			}
 			// NO CYCLE CHECK IS NEEDED ON A CREATE AND THAT IS WORTH SAYING OUT LOUD: `moi.ID` is a
 			// freshly minted ULID, so no existing row can already have it as an ancestor. The
@@ -1047,7 +1087,8 @@ func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domai
 		// a create (domain.ErrCategoryNameTaken); a rename that only changes case or spacing of its own name,
 		// in place, compares equal and needs no read.
 		if domain.CategoryNameKey(after.Ten) != domain.CategoryNameKey(before.Ten) || after.ChaID != before.ChaID {
-			live, err := uc.kho.LiveNames(ctx, tx)
+			// The category's own tree (its type never changes, so before.Type is after.Type).
+			live, err := uc.kho.LiveNames(ctx, tx, before.Type)
 			if err != nil {
 				return err
 			}
@@ -1063,12 +1104,18 @@ func (uc *DanhMucNoiDungMiniApp) Update(ctx context.Context, id string, yc domai
 				return refusal
 			}
 			// The tree is already locked (top of this transaction), so the walk below holds at commit.
-			live, err := uc.kho.ChaCoThat(ctx, tx, after.ChaID)
+			parentType, live, err := uc.kho.ChaCoThat(ctx, tx, after.ChaID)
 			if err != nil {
 				return err
 			}
 			if !live {
 				refusal = ErrDanhMucChaKhongTonTai
+				return refusal
+			}
+			// Moving is within one tree only (migration 0030). Asked only when the parent CHANGES, so a
+			// child 0030 left under a parent of another type is still editable in place.
+			if parentType != before.Type {
+				refusal = domain.ErrCategoryTypeMismatch
 				return refusal
 			}
 			chain, err := uc.kho.AncestorChain(ctx, tx, after.ChaID)
@@ -1375,6 +1422,9 @@ func tomTatDanhMucMiniApp(dm domain.DanhMucMiniApp) map[string]any {
 		"cha_id": dm.ChaID,
 		"thu_tu": dm.ThuTu,
 		"hidden": dm.Hidden,
+		// Migration 0030: the tree the category belongs to. Same key and value as the migration's own
+		// backfill entries, so its REVERSAL query (`delta->'sau' ? 'loai'`) finds every staff-created row.
+		"loai": string(dm.Type),
 	}
 }
 

@@ -213,6 +213,7 @@ export type comms_danhMucRa = {
   "order": number;
   "created_at": string;
   "hidden": boolean;
+  "type": string;
 };
 
 export type comms_danhSachDanhMucRa = {
@@ -799,6 +800,7 @@ export type comms_themDanhMucVao = {
   "slug"?: string;
   "parent_id"?: string;
   "order"?: number;
+  "type": string;
 };
 
 export type comms_themLoaiTaiNguyenVao = {
@@ -880,6 +882,7 @@ export type comms_updateCategoryIn = {
   "order"?: number | null;
   "hidden"?: boolean | null;
   "slug"?: string | null;
+  "type"?: string | null;
 };
 
 export type comms_updateDisasterAlertIn = {
@@ -6758,17 +6761,19 @@ export type identity_get_communes_current = {
   };
 };
 
-/** GET /api/v1/content-categories — Danh mục tin nội bộ của Mini App — cây phẳng, dùng cho ô chọn ở §7 và bộ lọc ở §6 */
+/** GET /api/v1/content-categories — Cây danh mục của MỘT loại nội dung Mini App — cây phẳng, dùng cho ô chọn ở §7 và bộ lọc ở §6 */
 export type comms_get_content_categories = {
   duongDan: "/api/v1/content-categories";
   phuongThuc: "GET";
   thamSo: {
   };
   truyVan: {
+    "type": string;
   };
   than: never;
   phanHoi: {
     200: comms_danhSachDanhMucRa;
+    400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;

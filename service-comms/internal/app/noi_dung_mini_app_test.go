@@ -81,7 +81,15 @@ type khoNDGia struct {
 	liveChildren, liveItems int64
 
 	// liveNames is what LiveNames reads — the commune's live categories, for the duplicate-name check.
-	liveNames []domain.CategoryName
+	// liveNamesByType, when set, answers PER TYPE ($2) instead (migration 0030: names are unique per
+	// (type, parent)), so a test can prove the other tree is never read.
+	liveNames       []domain.CategoryName
+	liveNamesByType map[domain.LoaiNoiDung][]domain.CategoryName
+
+	// categoryTypes answers the share-locked probe (`SELECT loai …`) per id ($2): the TYPE of a live
+	// category (migration 0030). An id absent from it falls back to coDong, typed `tin-tuc` — the type of
+	// ycThemMau and of most fixtures here.
+	categoryTypes map[string]domain.LoaiNoiDung
 }
 
 func (k *khoNDGia) Connect(context.Context) (driver.Conn, error) { return &connNDGia{k: k}, nil }
@@ -131,11 +139,25 @@ func (c *connNDGia) QueryContext(_ context.Context, q string, args []driver.Name
 
 	switch {
 	case strings.Contains(q, "SELECT id, ten, COALESCE(cha_id, '') FROM danh_muc_mini_app"):
-		hang := make([][]driver.Value, 0, len(c.k.liveNames))
-		for _, n := range c.k.liveNames {
+		names := c.k.liveNames
+		if c.k.liveNamesByType != nil {
+			typ, _ := gt[1].(string)
+			names = c.k.liveNamesByType[domain.LoaiNoiDung(typ)]
+		}
+		hang := make([][]driver.Value, 0, len(names))
+		for _, n := range names {
 			hang = append(hang, []driver.Value{n.ID, n.Ten, n.ChaID})
 		}
 		return &rowsNDGia{cot: []string{"id", "ten", "cha_id"}, hang: hang}, nil
+	case strings.Contains(q, "SELECT loai FROM danh_muc_mini_app"):
+		id, _ := gt[1].(string)
+		if typ, ok := c.k.categoryTypes[id]; ok {
+			return &rowsNDGia{cot: []string{"loai"}, hang: [][]driver.Value{{string(typ)}}}, nil
+		}
+		if !c.k.coDong {
+			return &rowsNDGia{cot: []string{"loai"}}, nil
+		}
+		return &rowsNDGia{cot: []string{"loai"}, hang: [][]driver.Value{{string(domain.LoaiTinTuc)}}}, nil
 	case strings.Contains(q, "count(*) FROM noi_dung_mini_app"):
 		return &rowsNDGia{cot: []string{"count"}, hang: [][]driver.Value{{c.k.liveItems}}}, nil
 	case strings.Contains(q, "count(*)") && strings.Contains(q, "cha_id = $2"):
@@ -147,7 +169,7 @@ func (c *connNDGia) QueryContext(_ context.Context, q string, args []driver.Name
 		}
 		return &rowsNDGia{cot: []string{"id"}, hang: hang}, nil
 	case strings.Contains(q, "FROM danh_muc_mini_app") && strings.Contains(q, "FOR UPDATE"):
-		cot := []string{"id", "ten", "slug", "cha_id", "thu_tu", "tao_luc", "hidden"}
+		cot := []string{"id", "ten", "slug", "cha_id", "thu_tu", "tao_luc", "hidden", "loai"}
 		if c.k.category == nil {
 			return &rowsNDGia{cot: cot}, nil
 		}
@@ -156,8 +178,12 @@ func (c *connNDGia) QueryContext(_ context.Context, q string, args []driver.Name
 		if dm.ChaID != "" {
 			cha = dm.ChaID
 		}
+		typ := dm.Type
+		if typ == "" {
+			typ = domain.LoaiTinTuc
+		}
 		return &rowsNDGia{cot: cot, hang: [][]driver.Value{{dm.ID, dm.Ten, dm.Slug, cha,
-			int64(dm.ThuTu), lucNDPinned, dm.Hidden}}}, nil
+			int64(dm.ThuTu), lucNDPinned, dm.Hidden, string(typ)}}}, nil
 	case strings.Contains(q, "count(*)") && strings.Contains(q, "slug = $2"):
 		if c.k.slugsTaken != nil {
 			n := int64(0)
@@ -952,7 +978,7 @@ func TestThemDanhMucChuDeVetLaSlug(t *testing.T) {
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
 
 	moi, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{
-		Ten: "Chuyển đổi số", Slug: "chuyen-doi-so", ThuTu: 2,
+		Ten: "Chuyển đổi số", Slug: "chuyen-doi-so", ThuTu: 2, Type: "tin-tuc",
 	}, nguoiSoanND())
 	if err != nil {
 		t.Fatalf("thêm danh mục lỗi: %v", err)
@@ -981,7 +1007,7 @@ func TestThemDanhMucSlugTrungBiTuChoi(t *testing.T) {
 	k := &khoNDGia{demSlug: 1}
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
 
-	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Chuyển đổi số", Slug: "chuyen-doi-so"},
+	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Chuyển đổi số", Slug: "chuyen-doi-so"},
 		nguoiSoanND())
 	if !errors.Is(err, commsstore.ErrSlugDanhMucDaTonTai) {
 		t.Fatalf("lỗi = %v, muốn ErrSlugDanhMucDaTonTai", err)
@@ -998,7 +1024,7 @@ func TestCreateCategoryWithoutSlugDerivesItFromName(t *testing.T) {
 	k := &khoNDGia{slugsTaken: map[string]bool{"nong-nghiep-dat-dai": true, "nong-nghiep-dat-dai-2": true}}
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
 
-	created, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Nông nghiệp – Đất đai"}, nguoiSoanND())
+	created, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Nông nghiệp – Đất đai"}, nguoiSoanND())
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -1042,7 +1068,7 @@ func TestCreateCategorySlugSeriesExhaustedIsRefused(t *testing.T) {
 	k := &khoNDGia{slugsTaken: taken}
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
 
-	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Tin tức"}, nguoiSoanND())
+	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Tin tức"}, nguoiSoanND())
 	if !errors.Is(err, domain.ErrCategorySlugSeriesBlocked) {
 		t.Fatalf("err = %v, want ErrCategorySlugSeriesBlocked", err)
 	}
@@ -1055,7 +1081,7 @@ func TestCreateCategorySlugSeriesExhaustedIsRefused(t *testing.T) {
 func TestCreateCategorySentSlugStillRefusedWhenTaken(t *testing.T) {
 	k := &khoNDGia{slugsTaken: map[string]bool{"tin-tuc": true}}
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
-	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Tin tức", Slug: "tin-tuc"}, nguoiSoanND())
+	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Tin tức", Slug: "tin-tuc"}, nguoiSoanND())
 	if !errors.Is(err, commsstore.ErrSlugDanhMucDaTonTai) {
 		t.Fatalf("err = %v, want ErrSlugDanhMucDaTonTai", err)
 	}
@@ -1068,7 +1094,7 @@ func TestThemDanhMucVuotTranBiTuChoiTruocKhiKiemSlug(t *testing.T) {
 	k := &khoNDGia{dem: int64(commsstore.TranDanhMucMiniApp)}
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
 
-	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Ten: "Mục mới", Slug: "muc-moi"}, nguoiSoanND())
+	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Mục mới", Slug: "muc-moi"}, nguoiSoanND())
 	if !errors.Is(err, commsstore.ErrQuaNhieuDanhMucMiniApp) {
 		t.Fatalf("lỗi = %v, muốn ErrQuaNhieuDanhMucMiniApp", err)
 	}
@@ -1082,7 +1108,7 @@ func TestThemDanhMucChaKhongCoThiTuChoi(t *testing.T) {
 	_, ucDM, ctx := dungUseCaseNoiDung(t, k)
 
 	_, err := ucDM.Them(ctx, domain.YeuCauThemDanhMuc{
-		Ten: "Mục con", Slug: "muc-con", ChaID: "dm-da-xoa",
+		Ten: "Mục con", Slug: "muc-con", ChaID: "dm-da-xoa", Type: "tin-tuc",
 	}, nguoiSoanND())
 	if !errors.Is(err, ErrDanhMucChaKhongTonTai) {
 		t.Fatalf("lỗi = %v, muốn ErrDanhMucChaKhongTonTai", err)

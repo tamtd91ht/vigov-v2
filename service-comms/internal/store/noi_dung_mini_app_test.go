@@ -136,10 +136,16 @@ type dongDMMiniApp struct {
 	thuTu         int64
 	taoLuc        time.Time
 	hidden        bool
+	loai          string // migration 0030; "" reads as "tin-tuc", the tree most fixtures here describe
 }
 
 func (d dongDMMiniApp) giaTri(cot string) driver.Value {
 	switch cot {
+	case "loai":
+		if d.loai == "" {
+			return "tin-tuc"
+		}
+		return d.loai
 	case "id":
 		return d.id
 	case "ten":
@@ -852,12 +858,16 @@ func TestDanhMucCoThatLocDongDaXoaMem(t *testing.T) {
 	// THE FOREIGN KEY DOES NOT COVER THIS CASE: a soft-deleted category is still a row, so the
 	// constraint accepts it. Filing a new article under a category the commune retired last week is a
 	// mistake only this predicate catches.
-	k := &khoNDGia{coDong: true}
+	k := &khoNDGia{}
 	kho, ctx := khoNoiDung(t, k)
 
-	_, err := chayTrongGiaoDichCoKetQua(t, k, ctx, func(tx *pkgstore.ScopedTx) (bool, error) {
+	// No row in the fake: the probe answers "not live", never an error.
+	_, live, err := probeCategory(t, k, ctx, func(tx *pkgstore.ScopedTx) (domain.LoaiNoiDung, bool, error) {
 		return kho.DanhMucCoThat(ctx, tx, "dm-001")
 	})
+	if live {
+		t.Error("a category the fake does not hold read as live")
+	}
 	if err != nil {
 		t.Fatalf("kiểm danh mục lỗi: %v", err)
 	}

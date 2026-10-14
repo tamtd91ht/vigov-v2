@@ -521,19 +521,31 @@ func (s *NoiDungMiniAppStore) TheoIDDeSua(ctx context.Context, tx *store.ScopedT
 // FOR UPDATE and refuses while live items are filed under it. Without the share lock an article could
 // be filed under it between that count and that commit — and a deleted category would hold a live
 // article. With it, this probe waits for the delete, re-reads the row, and finds it gone.
-func (s *NoiDungMiniAppStore) DanhMucCoThat(ctx context.Context, tx *store.ScopedTx, id string) (bool, error) {
-	const stmt = `SELECT 1 FROM danh_muc_mini_app ` +
+//
+// IT RETURNS THE CATEGORY'S TYPE (migration 0030) so the caller can refuse an item filed under another
+// type's tree. The share lock is enough to keep that answer true until commit: a category's type is never
+// written after its INSERT (updateCategoryStmt does not name `loai`).
+func (s *NoiDungMiniAppStore) DanhMucCoThat(ctx context.Context, tx *store.ScopedTx, id string) (
+	domain.LoaiNoiDung, bool, error) {
+
+	return liveCategoryType(ctx, tx, id, "kiểm tra danh mục")
+}
+
+// liveCategoryType is the one probe both existence checks make: the `loai` of a LIVE category of this
+// commune, share-locked. ("", false, nil) when there is none.
+func liveCategoryType(ctx context.Context, tx *store.ScopedTx, id, op string) (domain.LoaiNoiDung, bool, error) {
+	const stmt = `SELECT loai FROM danh_muc_mini_app ` +
 		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
 
-	var mot int
-	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id).Scan(&mot)
+	var typ string
+	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), id).Scan(&typ)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+		return "", false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("danh_muc_mini_app: kiểm tra danh mục: %w", err)
+		return "", false, fmt.Errorf("danh_muc_mini_app: %s: %w", op, err)
 	}
-	return true, nil
+	return domain.LoaiNoiDung(typ), true, nil
 }
 
 // chenNoiDungMiniApp records one item.
@@ -720,10 +732,32 @@ func NewDanhMucMiniAppStore(db *store.DB) *DanhMucMiniAppStore {
 // columns and `id` and `cha_id` are two more: swapping either pair compiles, runs, and produces a
 // tree whose every node is its own parent or whose every label is a slug.
 //
-// `hidden` (migration 0012) is at the tail.
-const cotDanhMucMiniApp = `id, ten, slug, cha_id, thu_tu, tao_luc, hidden`
+// `hidden` (migration 0012) and then `loai` (migration 0030) are at the tail.
+const cotDanhMucMiniApp = `id, ten, slug, cha_id, thu_tu, tao_luc, hidden, loai`
 
-// DanhSach reads the commune's WHOLE category tree, ordered.
+// ListByType reads ONE type's category tree (migration 0030: one tree per content type), ordered and
+// bounded exactly as DanhSach. The staff route always names a type; the public chip row does when the
+// Mini App sends one. Served by the index `danh_muc_mini_app_tree_by_type`.
+//
+// The ceiling stays PER COMMUNE (TranDanhMucMiniApp counts every tree together, DemDangSong), so one type's
+// tree can never exceed it either; the LIMIT is the same ceiling plus one, for DanhSach's reason.
+func (s *DanhMucMiniAppStore) ListByType(ctx context.Context, typ domain.LoaiNoiDung) (
+	[]domain.DanhMucMiniApp, error) {
+
+	// FAIL CLOSED: an empty or unknown type would read no tree at all and answer an empty list that looks
+	// like "this type has no categories". The handler validates first; this is the second wall.
+	if !domain.ValidCategoryType(string(typ)) {
+		return nil, domain.ErrCategoryTypeInvalid
+	}
+	return s.readTree(ctx, `AND deleted_at IS NULL AND loai = $2 ORDER BY thu_tu, slug LIMIT $3`,
+		string(typ), TranDanhMucMiniApp+1)
+}
+
+// DanhSach reads the commune's WHOLE category tree — EVERY type's tree together — ordered.
+//
+// Since migration 0030 the staff screen reads one type at a time (ListByType). This stays for the two
+// public reads that need every tree: the category NAME of each listed item, and the chip row when the
+// Mini App names no type.
 //
 // NOT PAGINATED, AND THAT IS A DECISION. The same three reasons hold as for the map-asset-type
 // catalogue next door: it is a closed filing tree of tens of rows, its consumers (§7's select, §6's
@@ -742,8 +776,14 @@ func (s *DanhMucMiniAppStore) DanhSach(ctx context.Context) ([]domain.DanhMucMin
 	// Selecting exactly the ceiling would return a full page indistinguishable from a complete list
 	// of exactly that size — the truncation this route refuses to perform, performed by the bound
 	// meant to prevent it.
-	rows, err := s.db.For(ctx).Query(ctx, cotDanhMucMiniApp, "danh_muc_mini_app",
-		`AND deleted_at IS NULL ORDER BY thu_tu, slug LIMIT $2`, TranDanhMucMiniApp+1)
+	return s.readTree(ctx, `AND deleted_at IS NULL ORDER BY thu_tu, slug LIMIT $2`, TranDanhMucMiniApp+1)
+}
+
+// readTree runs one scoped tree read (tenant_id = $1, bound by store.Scoped) and refuses past the ceiling.
+func (s *DanhMucMiniAppStore) readTree(ctx context.Context, tail string, args ...any) (
+	[]domain.DanhMucMiniApp, error) {
+
+	rows, err := s.db.For(ctx).Query(ctx, cotDanhMucMiniApp, "danh_muc_mini_app", tail, args...)
 	if err != nil {
 		return nil, fmt.Errorf("danh_muc_mini_app: đọc danh mục: %w", err)
 	}
@@ -773,11 +813,14 @@ func quetDanhMucMiniApp(r quetMotDongNoiDung) (domain.DanhMucMiniApp, error) {
 	var (
 		dm  domain.DanhMucMiniApp
 		cha sql.NullString
+		typ string
 	)
-	if err := r.Scan(&dm.ID, &dm.Ten, &dm.Slug, &cha, &dm.ThuTu, &dm.TaoLuc, &dm.Hidden); err != nil {
+	if err := r.Scan(&dm.ID, &dm.Ten, &dm.Slug, &cha, &dm.ThuTu, &dm.TaoLuc, &dm.Hidden, &typ); err != nil {
+		// %w keeps sql.ErrNoRows visible to ByIDForUpdate.
 		return domain.DanhMucMiniApp{}, fmt.Errorf("danh_muc_mini_app: đọc dòng: %w", err)
 	}
 	dm.ChaID = cha.String
+	dm.Type = domain.LoaiNoiDung(typ)
 	return dm, nil
 }
 
@@ -816,13 +859,18 @@ func (s *DanhMucMiniAppStore) DemDangSong(ctx context.Context, tx *store.ScopedT
 	return n, nil
 }
 
-// LiveNames reads every live category's id and name, for the duplicate-name check (domain.CheckCategoryNameFree).
+// LiveNames reads the id and name of every live category OF ONE TYPE'S TREE, for the duplicate-name check
+// (domain.CheckCategoryNameFree): names are unique per (type, parent) since migration 0030 (owner,
+// 14/10/2026), so a news category and an event category may share a name under the same-named parent.
 // The comparison is done in Go, not in a WHERE: lower() under a C collation does not fold Vietnamese
 // capitals. Bounded by TranDanhMucMiniApp. Callers hold LockTree, so no concurrent create slips between
 // this read and the INSERT.
-func (s *DanhMucMiniAppStore) LiveNames(ctx context.Context, tx *store.ScopedTx) ([]domain.CategoryName, error) {
-	const stmt = `SELECT id, ten, COALESCE(cha_id, '') FROM danh_muc_mini_app WHERE tenant_id = $1 AND deleted_at IS NULL`
-	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()))
+func (s *DanhMucMiniAppStore) LiveNames(ctx context.Context, tx *store.ScopedTx, typ domain.LoaiNoiDung) (
+	[]domain.CategoryName, error) {
+
+	const stmt = `SELECT id, ten, COALESCE(cha_id, '') FROM danh_muc_mini_app ` +
+		`WHERE tenant_id = $1 AND loai = $2 AND deleted_at IS NULL`
+	rows, err := tx.Underlying().QueryContext(ctx, stmt, string(tx.TenantID()), string(typ))
 	if err != nil {
 		return nil, fmt.Errorf("danh_muc_mini_app: đọc tên danh mục: %w", err)
 	}
@@ -850,34 +898,29 @@ func (s *DanhMucMiniAppStore) LiveNames(ctx context.Context, tx *store.ScopedTx)
 //
 // `FOR SHARE`, for the reason DanhMucCoThat gives: a delete refusing "live children exist" must not be
 // raced by a child created under the row it is deleting.
-func (s *DanhMucMiniAppStore) ChaCoThat(ctx context.Context, tx *store.ScopedTx, chaID string) (bool, error) {
-	const stmt = `SELECT 1 FROM danh_muc_mini_app ` +
-		`WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
+//
+// IT RETURNS THE PARENT'S TYPE (migration 0030): a child must sit in its parent's tree.
+func (s *DanhMucMiniAppStore) ChaCoThat(ctx context.Context, tx *store.ScopedTx, chaID string) (
+	domain.LoaiNoiDung, bool, error) {
 
-	var mot int
-	err := tx.Underlying().QueryRowContext(ctx, stmt, string(tx.TenantID()), chaID).Scan(&mot)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("danh_muc_mini_app: kiểm tra danh mục cha: %w", err)
-	}
-	return true, nil
+	return liveCategoryType(ctx, tx, chaID, "kiểm tra danh mục cha")
 }
 
 // chenDanhMucMiniApp records one category.
 //
-// THE SOFT-DELETE COLUMNS APPEAR NOWHERE: a category is not born deleted.
+// THE SOFT-DELETE COLUMNS APPEAR NOWHERE: a category is not born deleted. `loai` ($7, migration 0030) is
+// bound from the request the use case validated; there is no DEFAULT behind it, so a writer that forgot it
+// is refused by NOT NULL rather than filed under a tree it never chose.
 const chenDanhMucMiniApp = `INSERT INTO danh_muc_mini_app
-	(tenant_id, id, ten, slug, cha_id, thu_tu)
-	VALUES ($1,$2,$3,$4,$5,$6)`
+	(tenant_id, id, ten, slug, cha_id, thu_tu, loai)
+	VALUES ($1,$2,$3,$4,$5,$6,$7)`
 
 // Chen writes one category. The caller owns the transaction and the audit entry inside it.
 func (s *DanhMucMiniAppStore) Chen(ctx context.Context, tx *store.ScopedTx,
 	dm domain.DanhMucMiniApp) error {
 
 	if _, err := tx.Exec(ctx, chenDanhMucMiniApp, string(tx.TenantID()), dm.ID,
-		dm.Ten, dm.Slug, rongThanhNull(dm.ChaID), dm.ThuTu); err != nil {
+		dm.Ten, dm.Slug, rongThanhNull(dm.ChaID), dm.ThuTu, string(dm.Type)); err != nil {
 		return fmt.Errorf("danh_muc_mini_app: chèn: %w", err)
 	}
 	return nil
@@ -972,8 +1015,9 @@ func (s *DanhMucMiniAppStore) CountLiveItems(ctx context.Context, tx *store.Scop
 	return n, nil
 }
 
-// updateCategoryStmt — `slug`, `tao_luc` and the soft-delete columns appear nowhere: the slug is
-// immutable (rule 7, invariant 3) and a row is not deleted by an edit.
+// updateCategoryStmt — `slug`, `loai`, `tao_luc` and the soft-delete columns appear nowhere: the slug is
+// immutable (rule 7, invariant 3), the type is fixed at creation (domain.ErrCategoryTypeImmutable — and
+// the probes' FOR SHARE relies on it), and a row is not deleted by an edit.
 const updateCategoryStmt = `UPDATE danh_muc_mini_app
 	SET ten = $3, cha_id = $4, thu_tu = $5, hidden = $6, cap_nhat_luc = now()
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`

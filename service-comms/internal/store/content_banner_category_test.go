@@ -6,6 +6,7 @@ package store
 // the cover trigger, the advisory lock, the recursion) is the pg suite's.
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -138,22 +139,25 @@ func TestPublicBannersReadsPublishedBannersWithCoverInStripOrder(t *testing.T) {
 
 func TestCategoryProbesTakeAShareLock(t *testing.T) {
 	// A soft delete counting "no live items / children" must not be raced by a write filing under the row.
-	k := &khoNDGia{coDong: true}
+	k := &khoNDGia{danhMuc: []dongDMMiniApp{{id: "dm-001", loai: "su-kien"}}}
 	repo, ctx := khoNoiDung(t, k)
-	if _, err := chayTrongGiaoDichCoKetQua(t, k, ctx, func(tx *pkgstore.ScopedTx) (bool, error) {
+	typ, live, err := probeCategory(t, k, ctx, func(tx *pkgstore.ScopedTx) (domain.LoaiNoiDung, bool, error) {
 		return repo.DanhMucCoThat(ctx, tx, "dm-001")
-	}); err != nil {
-		t.Fatal(err)
+	})
+	// Migration 0030: the probe answers the category's TYPE, so the use case can refuse another tree.
+	if err != nil || !live || typ != domain.LoaiSuKien {
+		t.Fatalf("DanhMucCoThat = %q, %v, %v; want su-kien, true", typ, live, err)
 	}
 	categories, ctx2 := khoDanhMucND(t, k)
-	if _, err := chayTrongGiaoDichCoKetQua(t, k, ctx2, func(tx *pkgstore.ScopedTx) (bool, error) {
+	typ, live, err = probeCategory(t, k, ctx2, func(tx *pkgstore.ScopedTx) (domain.LoaiNoiDung, bool, error) {
 		return categories.ChaCoThat(ctx2, tx, "dm-001")
-	}); err != nil {
-		t.Fatal(err)
+	})
+	if err != nil || !live || typ != domain.LoaiSuKien {
+		t.Fatalf("ChaCoThat = %q, %v, %v; want su-kien, true", typ, live, err)
 	}
 	probes := 0
 	for _, l := range k.lenh {
-		if strings.Contains(l.sql, "SELECT 1 FROM danh_muc_mini_app") {
+		if strings.Contains(l.sql, "SELECT loai FROM danh_muc_mini_app") {
 			probes++
 			if !strings.HasSuffix(l.sql, "FOR SHARE") {
 				t.Errorf("thăm dò danh mục thiếu FOR SHARE: %s", l.sql)
@@ -163,6 +167,22 @@ func TestCategoryProbesTakeAShareLock(t *testing.T) {
 	if probes != 2 {
 		t.Errorf("số câu thăm dò = %d, muốn 2", probes)
 	}
+}
+
+// probeCategory runs one category probe in a transaction and hands back its three results.
+func probeCategory(t *testing.T, k *khoNDGia, ctx context.Context,
+	fn func(tx *pkgstore.ScopedTx) (domain.LoaiNoiDung, bool, error)) (domain.LoaiNoiDung, bool, error) {
+	t.Helper()
+	var (
+		typ  domain.LoaiNoiDung
+		live bool
+	)
+	err := chayTrongGiaoDich(t, k, ctx, func(tx *pkgstore.ScopedTx) error {
+		var err error
+		typ, live, err = fn(tx)
+		return err
+	})
+	return typ, live, err
 }
 
 func TestCategoryUpdateNeverTouchesSlugOrDeletion(t *testing.T) {
@@ -259,6 +279,66 @@ func TestCategoryAncestorWalkIsScopedAndIncludesDeletedRows(t *testing.T) {
 	}
 	if !strings.Contains(items, "danh_muc_id = $2 AND deleted_at IS NULL") || strings.Contains(items, "trang_thai") {
 		t.Errorf("đếm nội dung phải tính MỌI trạng thái còn sống: %s", items)
+	}
+}
+
+// --- migration 0030: one tree per content type -------------------------------------------------------
+
+func TestCategoryInsertBindsItsType(t *testing.T) {
+	k := &khoNDGia{}
+	repo, ctx := khoDanhMucND(t, k)
+	err := chayTrongGiaoDich(t, k, ctx, func(tx *pkgstore.ScopedTx) error {
+		return repo.Chen(ctx, tx, domain.DanhMucMiniApp{ID: "dm-1", Ten: "Lễ hội", Slug: "le-hoi", Type: domain.LoaiSuKien})
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	l := k.lenh[0]
+	if !strings.Contains(l.sql, "loai)") || !strings.Contains(l.sql, "$7") || l.args[6] != "su-kien" {
+		t.Errorf("INSERT = %s %v", l.sql, l.args)
+	}
+}
+
+func TestListByTypeReadsOneTreeBoundedLikeTheWholeTree(t *testing.T) {
+	k := &khoNDGia{danhMuc: []dongDMMiniApp{{id: "dm-1", ten: "Lễ hội", slug: "le-hoi", taoLuc: lucMauND, loai: "su-kien"}}}
+	repo, ctx := khoDanhMucND(t, k)
+	list, err := repo.ListByType(ctx, domain.LoaiSuKien)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].Type != domain.LoaiSuKien {
+		t.Errorf("list = %+v — the type must be read back by name", list)
+	}
+	l := k.lenh[0]
+	for _, want := range []string{"tenant_id = $1", "deleted_at IS NULL", "loai = $2", "ORDER BY thu_tu, slug", "LIMIT $3"} {
+		if !strings.Contains(l.sql, want) {
+			t.Errorf("ListByType lacks %q: %s", want, l.sql)
+		}
+	}
+	if len(l.args) != 3 || l.args[0] != string(xaMotND) || l.args[1] != "su-kien" || l.args[2] != int64(TranDanhMucMiniApp+1) {
+		t.Errorf("args = %v", l.args)
+	}
+
+	// FAIL CLOSED: no type, or `banner`, never reaches the database.
+	for _, bad := range []domain.LoaiNoiDung{"", domain.LoaiBanner, "x"} {
+		k := &khoNDGia{}
+		repo, ctx := khoDanhMucND(t, k)
+		if _, err := repo.ListByType(ctx, bad); !errors.Is(err, domain.ErrCategoryTypeInvalid) || len(k.lenh) != 0 {
+			t.Errorf("type %q: err = %v, statements = %d", bad, err, len(k.lenh))
+		}
+	}
+}
+
+func TestLiveNamesReadsOneTypesTree(t *testing.T) {
+	k := &khoNDGia{}
+	repo, ctx := khoDanhMucND(t, k)
+	_ = chayTrongGiaoDich(t, k, ctx, func(tx *pkgstore.ScopedTx) error {
+		_, err := repo.LiveNames(ctx, tx, domain.LoaiVideo)
+		return err
+	})
+	l := k.lenh[0]
+	if !strings.Contains(l.sql, "loai = $2") || !strings.Contains(l.sql, "deleted_at IS NULL") || l.args[1] != "video" {
+		t.Errorf("LiveNames = %s %v", l.sql, l.args)
 	}
 }
 

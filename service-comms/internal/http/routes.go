@@ -148,8 +148,13 @@ type GhiNoiDungMiniApp interface {
 // DanhMucMiniAppDoc is the READ half of the commune's Mini App category tree. NO page.Request
 // PARAMETER: this route returns the whole tree on purpose, and the bound that replaces the missing
 // `limit` is store.TranDanhMucMiniApp.
+//
+// TWO READS SINCE MIGRATION 0030 (one tree per content type): ListByType is ONE type's tree — the staff
+// route, and the public chip row when it names a type; DanhSach is every tree together — the public reads
+// that need every category's name, or the chip row with no type.
 type DanhMucMiniAppDoc interface {
 	DanhSach(ctx context.Context) ([]domain.DanhMucMiniApp, error)
+	ListByType(ctx context.Context, typ domain.LoaiNoiDung) ([]domain.DanhMucMiniApp, error)
 }
 
 // GhiDanhMucMiniApp is the WRITE half of the category tree: add, edit (name, parent, order, hidden —
@@ -653,6 +658,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// with a control character, an instant that is not RFC 3339 with an offset, a non-http(s) link.
 	// 409 is `category_missing`. `published_at` is never a request field: `publish: true` fixes it (G1).
 	//
+	// ONE CATEGORY TREE PER TYPE (owner 14/10/2026, migration 0030): `category_id` must name a category
+	// of the item's own `type` — 409 `category_type_mismatch` otherwise. A `banner` takes no category:
+	// 422 `banner_has_no_category`.
+	//
 	// `cover_image_file_id` (optional): a completed cover upload issued without `content_item_id`; the
 	// item takes the id that upload reserved. 409 `cover_not_usable` for any other file. Published with a
 	// cover, the derivative is copied to the public bucket in the same transaction; the copy failing is
@@ -701,6 +710,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `su-kien` / `video` clears that type's fields in the same UPDATE instead of refusing. 404 is
 	// `not_found`, 409 `category_missing`. The edit that first moves the item into `dang-hien` fixes
 	// `published_at` (G1); no edit changes it afterwards.
+	//
+	// ONE CATEGORY TREE PER TYPE (migration 0030): a `type` change WITHOUT `category_id` leaves the item
+	// unfiled (`category_id` cleared in the same UPDATE, before/after in the audit entry); with one, it
+	// must be a category of the NEW type. A category of another type is 409 `category_type_mismatch`, a
+	// category on a banner 422 `banner_has_no_category` — both asked only when the type or the category
+	// moves, so an existing row filed across trees stays editable.
 	//
 	// `cover_image_file_id`: "" detaches, an id attaches a completed upload issued for THIS item (409
 	// `cover_not_usable` otherwise). The cover's public copy follows the item: published with a cover →
@@ -977,9 +992,15 @@ func Register(mux *http.ServeMux, d Deps) {
 	// with a 500 rather than truncating: a silently short tree is a category that has disappeared from
 	// §7's select, so articles get filed under the wrong one and the screen looks entirely normal.
 	//
-	// @summary  Danh mục tin nội bộ của Mini App — cây phẳng, dùng cho ô chọn ở §7 và bộ lọc ở §6
+	// `type` IS REQUIRED (owner 14/10/2026, migration 0030: one tree per content type): one of
+	// `tin-tuc`, `su-kien`, `thong-bao`, `truyen-thanh`, `video`. Absent, empty, `banner` (which has no
+	// category) or anything else is 400 — FAIL CLOSED: a route that answered every tree when the type is
+	// missing would hand §7's select another type's categories, the mix the decision removes.
+	//
+	// @summary  Cây danh mục của MỘT loại nội dung Mini App — cây phẳng, dùng cho ô chọn ở §7 và bộ lọc ở §6
 	// @screen   11-noi-dung-mini-app §6
 	// @reply    200 danhSachDanhMucRa
+	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
@@ -1010,6 +1031,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// roots; case, spacing and keyboard composition ignored, diacritics not (domain.CategoryNameKey) — is 409
 	// `name_taken`, read under the same tree lock. That lock also closes the double-submit gap below for the name: the second request of
 	// a double submit now meets the first one's name and is refused.
+	//
+	// ONE TREE PER CONTENT TYPE (owner 14/10/2026, migration 0030): `type` is REQUIRED — one of
+	// `tin-tuc`, `su-kien`, `thong-bao`, `truyen-thanh`, `video` (400 otherwise; `banner` has no
+	// category). Names are unique per (type, parent): the same name in two types is two categories. A
+	// `parent_id` of another type is 409 `category_type_mismatch`. The slug stays unique per COMMUNE across
+	// every tree (the series above), the ceiling counts every tree together, the tree lock stays per commune.
 	//
 	// ⚠ WHAT THAT COSTS THE MoKhiHong ARGUMENT ABOVE: on the server-issued path the unique key no longer
 	// turns a double submit into a 409 — the second request simply gets `-2`. So during a Redis outage
@@ -1042,6 +1069,10 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `category_cycle` (the use case walks the ancestors under the commune's tree lock); a parent that is
 	// not a live category of this commune is 409 `parent_missing`. A name (new, or carried under a new
 	// parent) equal to a live sibling's, case ignored, is 409 `name_taken` (owner 13/10/2026).
+	//
+	// `type` IS REFUSED when sent (400), like `slug`: a category's tree is fixed at creation (migration
+	// 0030). A new parent of another type is 409 `category_type_mismatch`; siblings for `name_taken` are
+	// read in the category's own tree only.
 	//
 	// idem.KhongCan: app.DanhMucNoiDungMiniApp.Update writes and audits nothing when nothing moved, so the
 	// same request twice leaves one state and one entry.

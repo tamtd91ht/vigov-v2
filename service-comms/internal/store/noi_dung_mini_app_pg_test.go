@@ -56,16 +56,24 @@ import (
 // column is always its default".
 func themDanhMucThat(t *testing.T, tenantID, id, ten, slug, chaID string, thuTu int) {
 	t.Helper()
-	db := moKetNoi(t)
 
 	var cha any
 	if chaID != "" {
 		cha = chaID
 	}
+	// `loai` (migration 0030, NOT NULL, no default): every helper-made category is a news category, the
+	// tree these tests describe. insertCategoryOfType files one in another tree.
+	insertCategoryOfType(t, tenantID, id, ten, slug, cha, thuTu, "tin-tuc")
+}
+
+// insertCategoryOfType inserts one category of the given type (migration 0030) directly.
+func insertCategoryOfType(t *testing.T, tenantID, id, name, slug string, parent any, order int, typ string) {
+	t.Helper()
+	db := moKetNoi(t)
 	_, err := db.Exec(
-		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, cha_id, thu_tu)
-		 VALUES ($1,$2,$3,$4,$5,$6)`,
-		tenantID, id, ten, slug, cha, thuTu)
+		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, cha_id, thu_tu, loai)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		tenantID, id, name, slug, parent, order, typ)
 	if err != nil {
 		t.Fatalf("thêm danh mục %q: %v", id, err)
 	}
@@ -406,8 +414,8 @@ func TestPgSlugDanhMucDuyNhatTrongMotXaVaKhongCapLai(t *testing.T) {
 
 	// TWICE IN ONE COMMUNE IS REFUSED.
 	if _, err := db.Exec(
-		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, thu_tu)
-		 VALUES ($1,'dm-3','Chuyển đổi số (2)','chuyen-doi-so',2)`, xa1); err == nil {
+		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, thu_tu, loai)
+		 VALUES ($1,'dm-3','Chuyển đổi số (2)','chuyen-doi-so',2,'tin-tuc')`, xa1); err == nil {
 		t.Error("slug trùng trong một xã mà vẫn chèn được")
 	}
 
@@ -419,8 +427,8 @@ func TestPgSlugDanhMucDuyNhatTrongMotXaVaKhongCapLai(t *testing.T) {
 		t.Fatalf("xoá mềm danh mục: %v", err)
 	}
 	if _, err := db.Exec(
-		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, thu_tu)
-		 VALUES ($1,'dm-4','Chuyển đổi số (mới)','chuyen-doi-so',3)`, xa1); err == nil {
+		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, thu_tu, loai)
+		 VALUES ($1,'dm-4','Chuyển đổi số (mới)','chuyen-doi-so',3,'tin-tuc')`, xa1); err == nil {
 		t.Error("slug đã cấp được cấp lại sau khi xoá mềm (luật 7, bất biến 3)")
 	}
 }
@@ -434,16 +442,16 @@ func TestPgKhoaNgoaiCayDanhMucVaKhongTuLamCha(t *testing.T) {
 
 	// A PARENT THAT DOES NOT EXIST IS REFUSED.
 	if _, err := db.Exec(
-		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, cha_id, thu_tu)
-		 VALUES ($1,'dm-x','Mục lạ','muc-la','dm-khong-co',1)`, xa1); err == nil {
+		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, cha_id, thu_tu, loai)
+		 VALUES ($1,'dm-x','Mục lạ','muc-la','dm-khong-co',1,'tin-tuc')`, xa1); err == nil {
 		t.Error("cha không tồn tại mà vẫn chèn được")
 	}
 	// A PARENT IN ANOTHER COMMUNE IS REFUSED — the key is composed with `tenant_id`, so a child
 	// cannot reach across authorities even if two ids ever collided.
 	themDanhMucThat(t, xa2, "dm-cua-xa-2", "Mục của xã 2", "muc-cua-xa-2", "", 1)
 	if _, err := db.Exec(
-		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, cha_id, thu_tu)
-		 VALUES ($1,'dm-y','Mục lạ','muc-la-2','dm-cua-xa-2',1)`, xa1); err == nil {
+		`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, cha_id, thu_tu, loai)
+		 VALUES ($1,'dm-y','Mục lạ','muc-la-2','dm-cua-xa-2',1,'tin-tuc')`, xa1); err == nil {
 		t.Error("cha thuộc xã khác mà vẫn chèn được — CÁCH LY (luật 1) hỏng ở khoá ngoại")
 	}
 	// A CATEGORY CANNOT BE ITS OWN PARENT. This CHECK catches the one-node cycle only; a cycle through
@@ -582,7 +590,8 @@ func TestPgCategoryCreatePathCountsLiveRowsOfOneCommune(t *testing.T) {
 		if taken {
 			t.Error("slug mới mà báo đã dùng")
 		}
-		return kho.Chen(ctx, tx, domain.DanhMucMiniApp{ID: "dm-moi", Ten: "Mục mới", Slug: "muc-moi", ThuTu: 3})
+		return kho.Chen(ctx, tx, domain.DanhMucMiniApp{ID: "dm-moi", Ten: "Mục mới", Slug: "muc-moi", ThuTu: 3,
+			Type: domain.LoaiTinTuc})
 	})
 	if err != nil {
 		t.Fatalf("luồng tạo danh mục qua kho thật: %v", err)
@@ -594,6 +603,59 @@ func TestPgCategoryCreatePathCountsLiveRowsOfOneCommune(t *testing.T) {
 	}
 	if len(ds) != 2 {
 		t.Errorf("số danh mục sau khi tạo = %d, muốn 2", len(ds))
+	}
+}
+
+// TestPgCategoryTreePerType — migration 0030 against the real schema: `loai` refuses `banner` and NULL,
+// ListByType reads one type's live tree, LiveNames one type's names, the probes return the type, and the
+// slug stays unique PER COMMUNE across trees.
+func TestPgCategoryTreePerType(t *testing.T) {
+	xa1, _ := xaRieng(t)
+	db := moKetNoi(t)
+	kho := khoDanhMucNDThat(t)
+	ctx := ctxXa(tenant.ID(xa1))
+
+	insertCategoryOfType(t, xa1, "dm-news", "Nông nghiệp", "nong-nghiep", nil, 1, "tin-tuc")
+	insertCategoryOfType(t, xa1, "dm-ev", "Nông nghiệp", "nong-nghiep-2", nil, 1, "su-kien")
+
+	for _, bad := range []any{"banner", nil, "khong-co"} {
+		if _, err := db.Exec(`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, thu_tu, loai)
+			 VALUES ($1,'dm-bad','X','x-bad',1,$2)`, xa1, bad); err == nil {
+			t.Errorf("loai %v accepted by the schema", bad)
+		}
+	}
+	// The slug key is untouched by 0030: the same slug in another tree of the same commune is refused.
+	if _, err := db.Exec(`INSERT INTO danh_muc_mini_app (tenant_id, id, ten, slug, thu_tu, loai)
+		 VALUES ($1,'dm-vid','Nông nghiệp','nong-nghiep',1,'video')`, xa1); err == nil {
+		t.Error("a slug was issued twice in one commune across two trees")
+	}
+
+	ev, err := kho.ListByType(ctx, domain.LoaiSuKien)
+	if err != nil {
+		t.Fatalf("ListByType: %v", err)
+	}
+	if len(ev) != 1 || ev[0].ID != "dm-ev" || ev[0].Type != domain.LoaiSuKien {
+		t.Errorf("su-kien tree = %+v", ev)
+	}
+	err = pkgstore.New(db).For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+		names, err := kho.LiveNames(ctx, tx, domain.LoaiTinTuc)
+		if err != nil {
+			return err
+		}
+		if len(names) != 1 || names[0].ID != "dm-news" {
+			t.Errorf("tin-tuc names = %+v", names)
+		}
+		typ, live, err := kho.ChaCoThat(ctx, tx, "dm-ev")
+		if err != nil {
+			return err
+		}
+		if !live || typ != domain.LoaiSuKien {
+			t.Errorf("ChaCoThat = %q, %v", typ, live)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("tx: %v", err)
 	}
 }
 

@@ -221,16 +221,16 @@ func TestCoAnhVaHienChoDanSuyRaChuKhongLuu(t *testing.T) {
 }
 
 func TestKiemTraThemDanhMucChanThuTuAmVaTenRong(t *testing.T) {
-	if _, err := (YeuCauThemDanhMuc{Ten: " ", Slug: "a"}).KiemTra(); !errors.Is(err, ErrTenDanhMucTrong) {
+	if _, err := (YeuCauThemDanhMuc{Type: "tin-tuc", Ten: " ", Slug: "a"}).KiemTra(); !errors.Is(err, ErrTenDanhMucTrong) {
 		t.Error("tên danh mục rỗng mà vẫn qua")
 	}
-	if _, err := (YeuCauThemDanhMuc{Ten: "Chuyển đổi số", Slug: "chuyen-doi-so", ThuTu: -1}).
+	if _, err := (YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Chuyển đổi số", Slug: "chuyen-doi-so", ThuTu: -1}).
 		KiemTra(); !errors.Is(err, ErrThuTuDanhMucNgoaiKhoang) {
 		// NEGATIVE IS REFUSED, NOT CLAMPED: -1 to mean "first" works until somebody sends -2, and the
 		// order a commune arranged its own tree in then depends on who edited last.
 		t.Error("thứ tự âm mà vẫn qua")
 	}
-	sach, err := (YeuCauThemDanhMuc{Ten: " Chuyển đổi số ", Slug: " chuyen-doi-so ", ThuTu: 3}).KiemTra()
+	sach, err := (YeuCauThemDanhMuc{Type: "tin-tuc", Ten: " Chuyển đổi số ", Slug: " chuyen-doi-so ", ThuTu: 3}).KiemTra()
 	if err != nil {
 		t.Fatalf("danh mục hợp lệ bị từ chối: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestCategorySlugCandidateStaysWithinTheBound(t *testing.T) {
 
 func TestCreateCategoryRequestWithoutSlugIsServerIssued(t *testing.T) {
 	for _, slug := range []string{"", "   "} {
-		got, err := (YeuCauThemDanhMuc{Ten: " Chuyển đổi số ", Slug: slug}).KiemTra()
+		got, err := (YeuCauThemDanhMuc{Type: "tin-tuc", Ten: " Chuyển đổi số ", Slug: slug}).KiemTra()
 		if err != nil {
 			t.Fatalf("slug %q: %v", slug, err)
 		}
@@ -292,7 +292,7 @@ func TestCreateCategoryRequestWithoutSlugIsServerIssued(t *testing.T) {
 		}
 	}
 	// A slug that IS sent keeps the old rule: refused, never lower-cased.
-	if _, err := (YeuCauThemDanhMuc{Ten: "Tin", Slug: "Tin-Tuc"}).KiemTra(); !errors.Is(err, ErrSlugDanhMucSaiDinhDang) {
+	if _, err := (YeuCauThemDanhMuc{Type: "tin-tuc", Ten: "Tin", Slug: "Tin-Tuc"}).KiemTra(); !errors.Is(err, ErrSlugDanhMucSaiDinhDang) {
 		t.Errorf("a malformed sent slug passed: %v", err)
 	}
 }
