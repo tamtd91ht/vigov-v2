@@ -1,12 +1,13 @@
 "use client";
 
-import { Check, Loader2, Lock, Minus, ShieldQuestion } from "lucide-react";
+import { Check, Loader2, Lock, Minus, Pencil, Plus, ShieldQuestion, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
+import { IconButton } from "@/components/ui/icon-button";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import type { KetQua } from "@/lib/api/goi";
@@ -17,7 +18,13 @@ import type {
   identity_vaiTroCotRa,
 } from "@/lib/api/schema.gen";
 
-import { oDaCap, orderRoleColumns, trangThaiMaTran, type BangDaCap } from "./ma-tran-quyen";
+import {
+  SYSTEM_ADMIN_ROLE_CODE,
+  oDaCap,
+  orderRoleColumns,
+  trangThaiMaTran,
+  type BangDaCap,
+} from "./ma-tran-quyen";
 import {
   CHU_THICH_BANG_SUA,
   CHU_THICH_BANG_XEM,
@@ -44,6 +51,25 @@ import {
   ketThucLuu,
   type BanSua,
 } from "./sua-phan-quyen";
+import {
+  ADD_ROLE_BUTTON,
+  ADD_TEMPLATE_ROLES_BUTTON,
+  EDITS_PENDING_HINT,
+  deleteRoleLabel,
+  renameRoleLabel,
+  roleCreatedToast,
+  roleDeletedToast,
+  roleRenamedToast,
+  seedResultMessage,
+} from "./role-catalogue";
+import { DeleteRoleDialog, RoleFormDialog, SeedRolesDialog } from "./role-dialogs";
+
+/** Which role dialog is open. One at a time: each reloads the matrix when it succeeds. */
+type RoleDialog =
+  | { kind: "seed" }
+  | { kind: "create" }
+  | { kind: "rename"; role: identity_vaiTroCotRa }
+  | { kind: "delete"; role: identity_vaiTroCotRa };
 
 /**
  * Ma trận phân quyền — `/nguoi-dung/phan-quyen`, theo prototype `vigov-require/apps/admin/src/
@@ -74,6 +100,12 @@ import {
  *
  * Owner decision 08/10/2026: the "Tạo tám vai trò mẫu" panel and the ADR 0055 unheld-permission
  * warning are NOT on this page any more — the prototype has neither.
+ *
+ * Owner decision 15/10/2026: the commune administrator manages the ROLE LIST here too — "Thêm vai trò"
+ * and "Thêm vai trò mẫu" above the matrix, "Đổi tên" / "Xoá vai trò" in each column header
+ * (`role-dialogs.tsx`). Same `choSua` decision as the cells; the server checks `admin.role` on every
+ * route. After a change the matrix is READ AGAIN rather than patched: the column set, its order and the
+ * grants come back from the server in one answer, as on first load.
  */
 export function MaTranPhanQuyen({
   choSua,
@@ -97,6 +129,9 @@ export function MaTranPhanQuyen({
    * giữ nó lại, trong một tiến trình phục vụ nhiều tên miền, là đúng hình dạng của một lần bảng
    * phân quyền xã này hiện trên màn hình xã khác (luật 1, cấm #1).
    */
+  // `reloadKey` re-reads after a role is added, renamed or deleted. The matrix on screen stays until
+  // the new answer arrives — no skeleton flash between a dialog closing and the column appearing.
+  const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     let bo = false;
     layMaTranQuyen().then((kq) => {
@@ -105,7 +140,10 @@ export function MaTranPhanQuyen({
     return () => {
       bo = true;
     };
-  }, []);
+  }, [reloadKey]);
+  const reload = () => setReloadKey((k) => k + 1);
+
+  const [dialog, setDialog] = useState<RoleDialog | null>(null);
 
   const trangThai = useMemo(() => trangThaiMaTran(phanHoi), [phanHoi]);
 
@@ -140,6 +178,11 @@ export function MaTranPhanQuyen({
     }
   }
 
+  // A reload rebuilds the edit state from the server (above), so unsaved ticks would vanish silently.
+  // While any column is edited or saving, the role actions wait — disabled, with the reason.
+  const editsPending = banSua !== null && (banSua.sua.size > 0 || banSua.dangLuu.size > 0);
+  const showRoleActions = choSua && (trangThai.pha === "coDuLieu" || trangThai.pha === "chuaCauHinh");
+
   return (
     // The prototype's composition: under the page header, one hint line, then the bordered matrix,
     // `space-y-3`. The section keeps its accessible name from the page `<h1>`'s words.
@@ -171,11 +214,38 @@ export function MaTranPhanQuyen({
         <EmptyState icon={ShieldQuestion} title={nhanChuaCauHinh(trangThai.thieu)} />
       )}
 
-      {/* The hint only when the account can edit (prototype :127-132); read-only prints nothing. */}
-      {trangThai.pha === "coDuLieu" && choSua && (
-        <p className="text-ink-muted text-[12px]">
-          Bấm vào ô để bật hoặc tắt quyền, sau đó bấm <b>Lưu</b> ở đầu cột của vai trò đó.
-        </p>
+      {/* The hint only when the account can edit (prototype :127-132); read-only prints nothing. The
+          role actions share its row, at the right end, and wrap under it at narrow widths. They also
+          show on an empty matrix: a commune with no role yet is exactly where they are needed. */}
+      {showRoleActions && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {trangThai.pha === "coDuLieu" && (
+            <p className="text-ink-muted text-[12px]">
+              Bấm vào ô để bật hoặc tắt quyền, sau đó bấm <b>Lưu</b> ở đầu cột của vai trò đó.
+            </p>
+          )}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={editsPending}
+              title={editsPending ? EDITS_PENDING_HINT : undefined}
+              onClick={() => setDialog({ kind: "seed" })}
+            >
+              {ADD_TEMPLATE_ROLES_BUTTON}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={editsPending}
+              title={editsPending ? EDITS_PENDING_HINT : undefined}
+              onClick={() => setDialog({ kind: "create" })}
+            >
+              <Plus aria-hidden="true" focusable="false" className="size-4" />
+              {ADD_ROLE_BUTTON}
+            </Button>
+          </div>
+        </div>
       )}
 
       {trangThai.pha === "coDuLieu" &&
@@ -192,10 +262,48 @@ export function MaTranPhanQuyen({
               luu: (vaiTroId) => void luuCot(vaiTroId),
               huy: (vaiTroId) => datBanSua((x) => (x === null ? x : huyCot(x, vaiTroId))),
             }}
+            roleActions={{
+              disabled: editsPending,
+              rename: (role) => setDialog({ kind: "rename", role }),
+              remove: (role) => setDialog({ kind: "delete", role }),
+            }}
           />
         ) : (
           <BangMaTran nhom={trangThai.nhom} vaiTro={trangThai.vaiTro} daCap={trangThai.daCap} />
         ))}
+
+      {dialog?.kind === "seed" && (
+        <SeedRolesDialog
+          onCancel={() => setDialog(null)}
+          onDone={(out) => {
+            setDialog(null);
+            toast.success(seedResultMessage(out));
+            reload();
+          }}
+        />
+      )}
+      {(dialog?.kind === "create" || dialog?.kind === "rename") && (
+        <RoleFormDialog
+          role={dialog.kind === "rename" ? dialog.role : undefined}
+          onCancel={() => setDialog(null)}
+          onSaved={(name) => {
+            setDialog(null);
+            toast.success(dialog.kind === "rename" ? roleRenamedToast(name) : roleCreatedToast(name));
+            reload();
+          }}
+        />
+      )}
+      {dialog?.kind === "delete" && (
+        <DeleteRoleDialog
+          role={dialog.role}
+          onCancel={() => setDialog(null)}
+          onDeleted={() => {
+            setDialog(null);
+            toast.success(roleDeletedToast(dialog.role.name));
+            reload();
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -235,17 +343,30 @@ export type ChinhSuaMaTran = {
   huy: (vaiTroId: string) => void;
 };
 
+/**
+ * The role's own actions in its column header — "Đổi tên", "Xoá vai trò" (owner 15/10/2026). Absent =
+ * none drawn. Never drawn for the system-administrator role: the server refuses both (409 `system_role`).
+ */
+export type RoleColumnActions = {
+  /** Unsaved ticks pending: a reload after the change would drop them. */
+  disabled: boolean;
+  rename: (role: identity_vaiTroCotRa) => void;
+  remove: (role: identity_vaiTroCotRa) => void;
+};
+
 export function BangMaTran({
   nhom,
   vaiTro,
   daCap,
   chinhSua,
+  roleActions,
 }: {
   nhom: readonly identity_nhomQuyenRa[];
   vaiTro: readonly identity_vaiTroCotRa[];
   /** Thứ bảng HIỆN RA ở từng ô — ở chế độ sửa, bên gọi truyền `bangHienThi(banSua)`. */
   daCap: BangDaCap;
   chinhSua?: ChinhSuaMaTran;
+  roleActions?: RoleColumnActions;
 }) {
   // DISPLAY ORDER ONLY (user 09/10/2026): by name A→Z, the system-administrator role last
   // (`orderRoleColumns`). The data, the saves and the server's order are untouched.
@@ -291,6 +412,9 @@ export function BangMaTran({
                   <span className="inline-flex h-5 w-fit shrink-0 items-center justify-center overflow-hidden rounded-4xl border border-solid px-2 py-0.5 leading-none font-medium whitespace-nowrap bg-violet/12 text-violet border-violet/25 mt-1.5 text-[9.5px]">
                     {NHAN_LANH_DAO}
                   </span>
+                )}
+                {roleActions !== undefined && vt.code !== SYSTEM_ADMIN_ROLE_CODE && (
+                  <RoleColumnButtons role={vt} actions={roleActions} />
                 )}
                 {chinhSua !== undefined && <DauCotSua vt={vt} chinhSua={chinhSua} />}
               </th>
@@ -351,6 +475,33 @@ export function BangMaTran({
           </tbody>
         ))}
       </table>
+    </div>
+  );
+}
+
+/** Two icon buttons under the role's name — icons only, to keep the header within its 110px (user 09/10/2026). */
+function RoleColumnButtons({ role, actions }: { role: identity_vaiTroCotRa; actions: RoleColumnActions }) {
+  return (
+    <div className="mt-1.5 flex justify-center gap-0.5">
+      <IconButton
+        type="button"
+        variant="ghost"
+        label={renameRoleLabel(role.name)}
+        disabled={actions.disabled}
+        onClick={() => actions.rename(role)}
+      >
+        <Pencil aria-hidden="true" focusable="false" className="size-3.5" />
+      </IconButton>
+      <IconButton
+        type="button"
+        variant="ghost"
+        label={deleteRoleLabel(role.name)}
+        disabled={actions.disabled}
+        className="text-danger"
+        onClick={() => actions.remove(role)}
+      >
+        <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
+      </IconButton>
     </div>
   );
 }

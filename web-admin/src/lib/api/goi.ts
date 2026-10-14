@@ -39,7 +39,8 @@ export type KetQua<T> =
        * another screen, and matching the WORDING would break silently the day the sentence changes; and
        * the Zalo channel tab draws `due_soon_days_out_of_range` under its own select (`zalo.ts`), and
        * its "Nhóm Zalo" section draws each group refusal under the field it is about (scope, kinds,
-       * reason — `zalo-groups-form.ts` GROUP_REFUSALS).
+       * reason — `zalo-groups-form.ts` GROUP_REFUSALS); and the Phân quyền role dialogs draw a name
+       * refusal under "Tên vai trò" and a reason refusal under "Lý do xoá" (`role-dialogs.tsx`).
        * The sentence shown is still `thongBao`, verbatim; every other screen ignores this field.
        */
       code?: string;
@@ -222,7 +223,11 @@ export async function goiGhi(
   duongDan: string,
   phuongThuc: "POST" | "PATCH" | "PUT" | "DELETE",
   than: unknown | undefined,
-  maMongDoi: number,
+  /**
+   * The success status. A list only where the contract itself names more than one (role deletion:
+   * "200 or 201", `roles.ts`) — never to loosen a route that has one.
+   */
+  maMongDoi: number | readonly number[],
   headerThem?: Readonly<Record<string, string>>,
   /** `withCode`: also return the server's `code` on a refusal — documented callers only, see `KetQua`. */
   options?: { readonly withCode?: boolean },
@@ -242,7 +247,8 @@ export async function goiGhi(
     return { ok: false, thongBao: LOI_KHONG_RO };
   }
 
-  if (phanHoi.status !== maMongDoi) {
+  const expected = typeof maMongDoi === "number" ? [maMongDoi] : maMongDoi;
+  if (!expected.includes(phanHoi.status)) {
     return options?.withCode === true ? refusedWrite(phanHoi) : { ok: false, thongBao: await thongBaoLoi(phanHoi) };
   }
   return { ok: true, duLieu: phanHoi };
