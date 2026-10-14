@@ -313,6 +313,147 @@ pipeline {
       }
     }
 
+    // Owner 14/10/2026: `kiem-tra` also reports each service's OWN database — reachable, table count,
+    // and the `schema_migration` ledger against the migration files of this checkout. A separate stage
+    // with a `when`, because 'Kiểm tra' above runs before EVERY action and seven pods would slow them all.
+    //
+    // Read-only by its SQL (the DSN owns its tables and could write — nothing here does). The DSN never
+    // enters a shell variable or the log: each pod reads it from `<service>-secrets` via envFrom, and a
+    // failed connection is reported as a CATEGORY, never psql's message (it names host and user).
+    //
+    // The checksum is hex SHA-256 of the raw file, the same as core/migrate (migrate.go). A file applied
+    // and later edited shows as LỆCH here before it stops a service at startup — the 0001 platform/
+    // identity comment edit in the ledger (`migration-0001-da-ap-bi-sua-chu-thich`) is that case.
+    // The comparison is against THIS JOB'S CHECKOUT (main); vigov-dev runs images built from `dev`, so
+    // for MT=dev "chưa áp" may just mean dev is ahead of main — the commit is printed for that reason.
+    stage('Kiểm CSDL') {
+      when { expression { params.HANH_DONG == 'kiem-tra' } }
+      steps {
+        sh '''
+          set +x
+          set -u
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          PODS=""
+          trap 'for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -rf "$TMP_DIR"' EXIT
+
+          # Runs INSIDE the pod. Line 1: OK|<db>|<tables>|<t|f ledger exists> or ERR|<category>; then
+          # L|<file> <checksum> per ledger row. No backslash anywhere: this text sits in a Groovy string.
+          cat > "$TMP_DIR/probe.sh" <<'PROBE'
+set -u
+q="SELECT current_database() || '|' || (SELECT count(*) FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema')) || '|' || (to_regclass('public.schema_migration') IS NOT NULL)"
+if out=$(psql "$DATABASE_DSN" -X -At -v ON_ERROR_STOP=1 -c "$q" 2>/tmp/err); then
+  echo "OK|$out"
+  case "$out" in
+    *'|t') psql "$DATABASE_DSN" -X -At -F ' ' -c "SELECT ten, checksum FROM schema_migration ORDER BY ten" 2>/dev/null | while read -r l; do echo "L|$l"; done ;;
+  esac
+else
+  e=$(cat /tmp/err)
+  case "$e" in
+    *'database "'*'does not exist'*) c=csdl-chua-tao ;;
+    *'password authentication failed'*|*'role "'*'does not exist'*|*'no pg_hba.conf entry'*) c=sai-tai-khoan-hoac-chua-cap-quyen ;;
+    *'could not translate host'*|*'Connection refused'*|*'timeout'*|*'timed out'*|*'No route'*) c=khong-toi-duoc-may-chu ;;
+    *SSL*|*ssl*|*certificate*) c=loi-tls ;;
+    *) c=loi-ket-noi-khac ;;
+  esac
+  echo "ERR|$c"
+fi
+PROBE
+          PROBE_B64=$(base64 -w0 "$TMP_DIR/probe.sh")
+
+          SERVICES="platform identity comms documents finance petitions reporting"
+          for s in $SERVICES; do
+            sec="$s-secrets"
+            has=$(kubectl -n "$NS" get secret "$sec" \\
+                    -o go-template='{{range $k, $v := .data}}{{if eq $k "DATABASE_DSN"}}yes{{end}}{{end}}' 2>/dev/null || true)
+            if [ -z "$has" ]; then
+              echo "ERR|thieu-secret-$sec-hoac-key-DATABASE_DSN" > "$TMP_DIR/$s.log"
+              continue
+            fi
+            pod="kiem-csdl-$s-$BUILD_NUMBER"
+            printf '%s' '{"apiVersion":"v1","spec":{"restartPolicy":"Never",
+              "imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+              "containers":[{"name":"psql","image":"postgres:16-alpine",
+                "envFrom":[{"secretRef":{"name":"'"$sec"'"}}],
+                "env":[{"name":"PROBE_B64","value":"'"$PROBE_B64"'"}],
+                "command":["sh","-c","echo \\"$PROBE_B64\\" | base64 -d > /tmp/probe.sh && sh /tmp/probe.sh"]}]}}' \\
+              > "$TMP_DIR/$s.json"
+            if kubectl -n "$NS" run "$pod" --restart=Never --image=postgres:16-alpine \\
+                 --overrides="$(cat "$TMP_DIR/$s.json")" --quiet >/dev/null 2>&1; then
+              PODS="$PODS $pod"
+            else
+              echo "ERR|khong-dung-duoc-pod" > "$TMP_DIR/$s.log"
+            fi
+          done
+
+          # All seven run at once; wait up to 5 minutes for the slowest.
+          n=0
+          while [ $n -lt 60 ]; do
+            left=0
+            for p in $PODS; do
+              pha=$(kubectl -n "$NS" get pod "$p" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$pha" in Succeeded|Failed) ;; *) left=$((left + 1)) ;; esac
+            done
+            [ $left -eq 0 ] && break
+            sleep 5; n=$((n + 1))
+          done
+          for s in $SERVICES; do
+            p="kiem-csdl-$s-$BUILD_NUMBER"
+            case " $PODS " in *" $p "*) ;; *) continue ;; esac
+            pha=$(kubectl -n "$NS" get pod "$p" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            if [ "$pha" = "Succeeded" ]; then
+              kubectl -n "$NS" logs "$p" > "$TMP_DIR/$s.log" 2>/dev/null || echo "ERR|khong-doc-duoc-log" > "$TMP_DIR/$s.log"
+            else
+              echo "ERR|pod-dung-o-pha-${pha:-khong-ro}" > "$TMP_DIR/$s.log"
+              kubectl -n "$NS" describe pod "$p" 2>/dev/null | sed -n '/^Events:/,$p' | tail -8 || true
+            fi
+          done
+
+          echo "── CSDL của từng dịch vụ trong $NS · so với migration của kho @ $(git rev-parse --short=12 HEAD)"
+          printf '   %-10s %-22s %6s  %s\\n' "DỊCH VỤ" "CSDL" "BẢNG" "MIGRATION"
+          canh=0
+          for s in $SERVICES; do
+            head1=$(head -n 1 "$TMP_DIR/$s.log" 2>/dev/null || echo "ERR|khong-co-ket-qua")
+            case "$head1" in
+              OK\\|*) ;;
+              *) printf '   %-10s %s\\n' "$s" "✗ ${head1#ERR|}"; canh=1; continue ;;
+            esac
+            db=$(echo "$head1" | cut -d'|' -f2)
+            tables=$(echo "$head1" | cut -d'|' -f3)
+            ledger=$(echo "$head1" | cut -d'|' -f4)
+            grep '^L|' "$TMP_DIR/$s.log" | cut -c3- | sort > "$TMP_DIR/$s.ledger" || true
+            for f in service-$s/migrations/*.sql; do
+              [ -f "$f" ] && printf '%s %s\\n' "${f##*/}" "$(sha256sum "$f" | cut -d' ' -f1)"
+            done | sort > "$TMP_DIR/$s.repo"
+            if [ "$ledger" != "t" ]; then
+              if [ "$tables" = "0" ]; then
+                ket="CSDL rỗng — chưa áp migration nào ($(wc -l < "$TMP_DIR/$s.repo") tệp chờ)"
+              else
+                ket="⚠ CÓ $tables BẢNG mà KHÔNG có sổ schema_migration — dịch vụ sẽ dừng khi khởi động"; canh=1
+              fi
+            else
+              ket=$(awk 'NR==FNR { r[$1] = $2; next }
+                         { l[$1] = $2; n++; last = $1 }
+                         END {
+                           for (k in r) if (!(k in l)) pend++
+                           for (k in l) { if (!(k in r)) extra++; else if (l[k] != r[k]) { bad++; badn = badn " " k } }
+                           printf "đã áp %d (cuối: %s) · chưa áp %d", n, (n ? last : "-"), pend
+                           if (extra) printf " · ⚠ CSDL có %d tệp kho KHÔNG có (ảnh mới hơn kho?)", extra
+                           if (bad) printf " · ⚠ LỆCH checksum:%s", badn
+                         }' "$TMP_DIR/$s.repo" "$TMP_DIR/$s.ledger")
+              case "$ket" in *⚠*) canh=1 ;; esac
+            fi
+            printf '   %-10s %-22s %6s  %s\\n' "$s" "$db" "$tables" "$ket"
+          done
+          if [ $canh -ne 0 ]; then
+            echo "⚠ Có dịch vụ cần xử lý (dòng ✗/⚠ ở trên). Việc này chỉ ĐỌC — không đổi gì."
+          else
+            echo "✓ Bảy CSDL nối được, sổ migration khớp kho."
+          fi
+        '''
+      }
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────────────
     // CHƯA TỪNG GHI ĐƯỢC — đo lượt #20 (26/09/2026): sổ xã của vigov_platform trống, không một
     // dòng vết `tao_xa`. Lượt trước "chạy" bằng `kubectl run -i`, cách đã treo ở #17/#18, nên
