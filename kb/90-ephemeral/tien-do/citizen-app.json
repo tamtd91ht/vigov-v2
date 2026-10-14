@@ -785,6 +785,13 @@
       "trang_thai": "dang_lam",
       "bang_chung": "Mã: src/lib/runtime-profile.ts (digest SHA-256, quyết một lần trước lượt vẽ đầu ở main.tsx, lỗi nào cũng prod) · cong-dan/api/dia-chi-vigov.ts + api/dia-chi.ts chọn bảng theo activeProfile() · tools/ingress sinh SERVICE_API_HOSTS_DEV từ mini_app_dev_environment · scripts/commune-qr.mjs + make-qr.mjs cờ --profile=dev (tra platform-dev/identity-dev, từ chối mã không khớp digest) · VIGOV_API_HOST_DEV (cau-hinh.mjs, deploy.mjs chặn đẩy khi thiếu, Jenkinsfile credential citizen-app-vigov-api-host-dev). Test: src/lib/runtime-profile.test.ts, scripts/commune-qr.test.mjs, tools/ingress hosts_test.go; npm test 87 tệp xanh. Chạy thật: --profile=dev đọc mã, platform-dev trả App ID, identity-dev trả lời.",
       "con_lai": "(1) Tạo credential Jenkins 'citizen-app-vigov-api-host-dev' = địa chỉ vihat-miniapp dev — thiếu thì job đẩy citizen-app đỏ. (2) Đẩy một bản app chung mới lên Zalo (bundle đổi). (3) Kiểm trên máy thật: crypto.subtle có trong webview Zalo không — không có thì QR dev lặng lẽ mở prod. (4) Mã pf chỉ nằm ở citizen-app/.env.qr.local trên máy tạo ra nó — chép sang máy khác chạy npm run qr. (5) Chưa có tên miền xã nào ở dev để sinh QR dev thật. (6) vihat-miniapp dev: nhánh dev + Jenkinsfile đa nhánh (đang làm)."
+    },
+    {
+      "id": "app-vihat-1-2-0-ux-14-10",
+      "viec": "App ViHAT bản 1.2.0 — sửa lỗi trải nghiệm + giao diện sinh động hơn để nộp duyệt Zalo (chủ dự án 14/10/2026)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "f7b4cfbd (cuộn về đầu khi đổi màn, ô Hotline / Văn phòng gần tôi, thẻ Giải pháp nổi bật bấm được, thẻ lỗi Chat đóng được, tin 14/10, version 1.2.0) · 7ade60f6 (401 quên phiên + câu đúng + nút quay về, báo lỗi chỉ sau khi bấm gửi, đăng nhập không trùng, lỗi máy chủ tách lỗi mạng, bộ đếm ghi chú) · commit CSS (nút khoá rõ, phản hồi chạm, hiệu ứng vào màn trong prefers-reduced-motion, vạch xanh tab, không gradient/blur). vitest 90/90 tệp, 2260 ca.",
+      "con_lai": "(1) Xem ảnh render trên máy build/Zalo: nút khoá, gạch xanh sau đầu mục ở 320px, vạch chờ, hiệu ứng vào màn. (2) Đẩy bản 1.2.0 lên Zalo duyệt (cần VIGOV_API_HOST_DEV). (3) Nút back của Zalo đóng cả app khi form có dữ liệu — chủ dự án để sau. (4) mailto: trong webview Zalo chưa thử trên máy thật. (5) Biểu mẫu Tư vấn không giữ lại sau khi đăng nhập lại (cần đưa trạng thái lên App/context)."
     }
   ]
 }

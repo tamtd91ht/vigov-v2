@@ -143,6 +143,9 @@ describe("text and targets stay usable for an ageing eye", () => {
     // 20px tall; and the busy band of the pull to refresh, which holds the "Đang tải lại…" sentence.
     expect(styles).toMatch(/\.vh-more\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
     expect(styles).toMatch(/\.vh-pull--busy\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
+
+    // 14/10/2026: each featured solution on the home screen is now one `<button>` (`HomeScreen.tsx`).
+    expect(styles).toMatch(/\.gp-noi-bat__nut\s*\{[^}]*min-height:\s*var\(--tap-min\)/);
   });
 
   it("kênh công dân: mọi đích chạm và ô nhập cao ít nhất 48px", () => {
@@ -254,7 +257,7 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["secondary text on the green wash", token("ink-muted"), token("surface-tint-green")],
     ["section titles on the washes", token("navy"), token("surface-tint")],
 
-    // The navy surfaces — the home hero, the primary action, the disabled/waiting button. Flat since
+    // The navy surfaces — the home hero, the primary action, a pressed primary button. Flat since
     // 12/10/2026, so one pair per text colour is the whole check.
     ["panel text on navy", "#ffffff", token("navy")],
     ["panel text on the deep navy", "#ffffff", token("navy-deep")],
@@ -284,7 +287,12 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
     ["the feature lead line", token("ink-muted"), token("surface")],
     ["the reason the app needs this permission", token("ink"), token("surface")],
     ["the permission button label", "#ffffff", token("navy")],
-    ["the permission button label while waiting", "#ffffff", token("navy-deep")],
+    // Until 14/10/2026 the waiting button was deep navy; it is the PRESSED primary button now (`.tn__nut:active`,
+    // `.action--primary:active`). The waiting/disabled look is the pair right below it.
+    ["the permission button label while pressed", "#ffffff", token("navy-deep")],
+    ["a disabled or waiting button's label (fix C, 14/10/2026)", token("ink-muted"), token("vh-grey-50")],
+    ["the label line of the primary contact action while pressed", token("on-panel"), token("navy-deep")],
+    ["an outlined button's label while pressed", token("navy"), token("vh-blue-50")],
     ["the scan-again button label", token("navy"), token("surface")],
     ["a call / mail / directions button label", token("navy"), token("surface")],
     ["the 'token received' line", token("navy"), token("surface")],
@@ -397,6 +405,9 @@ describe("every colour pair the app actually renders clears 4.5:1", () => {
 
     ["a featured product name on the home screen", token("navy"), token("surface")],
     ["a featured solution line on the home screen", token("ink"), token("surface")],
+    // 14/10/2026: each featured row is a button; pressed, it takes the green tint.
+    ["a featured product name while pressed", token("navy"), token("vh-green-50")],
+    ["a featured solution line while pressed", token("ink"), token("vh-green-50")],
 
     ["the publication date of a news item", token("ink-muted"), token("surface")],
     ["the headline of a news item", token("navy"), token("surface")],
@@ -586,6 +597,73 @@ describe("nền của phần giới thiệu ViHAT là màu phẳng đã đo", ()
         /background:\s*linear-gradient/,
       );
     }
+  });
+});
+
+/**
+ * FIX C (14/10/2026): A DISABLED BUTTON MUST LOOK DISABLED, AND NOT BY FADING.
+ *
+ *   `.tn__nut:disabled` used to swap navy for a deeper navy — the same live-looking button in daylight, so the
+ *   citizen presses again and concludes the app is broken. `.tn__nut-phu` had no disabled rule at all. The cases
+ *   below pin that each disabled rule exists, changes SHAPE (dashed border) and INK, and never uses `opacity`,
+ *   which would drag the label under 4.5:1 exactly while it reads "Đang chờ…".
+ */
+describe("nút bị khoá trông khác hẳn nút bấm được (fix C)", () => {
+  /** The body of the FIRST rule whose selector is exactly `selector`. */
+  function body(selector: string): string {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const match = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(styles);
+    expect(match, `stylesheet no longer declares ${selector}`).not.toBeNull();
+    return match![1]!;
+  }
+
+  const value = (rule: string, property: string): string | undefined =>
+    new RegExp(`(?:^|;|\\n)\\s*${property}:\\s*([^;]+);`).exec(rule)?.[1]?.trim();
+
+  for (const button of [".tn__nut", ".tn__nut-phu"]) {
+    it(`${button}:disabled đổi viền, đổi màu chữ, đổi nền — không dùng opacity`, () => {
+      const enabled = body(button);
+      const disabled = body(`${button}:disabled`);
+      expect(disabled, `${button}:disabled fades the label instead of changing it`).not.toMatch(/opacity\s*:/);
+      expect(disabled, `${button}:disabled keeps a solid border — the shape no longer says "unavailable"`).toMatch(
+        /border(?:-style)?:[^;]*dashed/,
+      );
+      expect(value(disabled, "color")).toBe("var(--ink-muted)");
+      expect(value(disabled, "background")).toBe("var(--vh-grey-50)");
+      expect(value(disabled, "cursor")).toBe("not-allowed");
+      expect(value(disabled, "color"), "the disabled label has the enabled label's colour").not.toBe(
+        value(enabled, "color"),
+      );
+      expect(value(disabled, "background"), "the disabled fill is the enabled fill").not.toBe(
+        value(enabled, "background"),
+      );
+    });
+  }
+
+  it("must-still-catch: the old deep-navy-only rule would fail these cases", () => {
+    const old = "background: var(--navy-deep);\n  border-color: var(--navy-deep);\n";
+    expect(old).not.toMatch(/border(?:-style)?:[^;]*dashed/);
+    expect(value(old, "color")).toBeUndefined();
+  });
+});
+
+describe("chuyển động của phần giới thiệu ViHAT (14/10/2026)", () => {
+  const opener = "@media (prefers-reduced-motion: no-preference) {";
+  const guard = styles.slice(styles.indexOf(opener));
+
+  it("mỗi màn mới hiện lên bằng xa-enter, trên các khối con — không trên khung cuộn", () => {
+    expect(guard).toMatch(/\.app-main > :not\(\.hien-len\)\s*\{\s*animation:\s*xa-enter 180ms ease-out backwards;/);
+    // A transform on the scroller itself would jump its scroll position and trap fixed children.
+    expect(styles).not.toMatch(/(?:^|\n)\s*\.app-main\s*\{[^}]*animation/);
+  });
+
+  it("nút đang chờ có vạch xanh, và vạch chỉ thở trong vùng bảo vệ chuyển động", () => {
+    expect(styles).toMatch(/\.tn__nut\[aria-busy="true"\]::after\s*\{[^}]*background:\s*var\(--brand-green\)/);
+    expect(guard).toMatch(/\.tn__nut\[aria-busy="true"\]::after\s*\{\s*animation:/);
+  });
+
+  it("số liệu dùng chữ số đều bề rộng", () => {
+    expect(styles).toMatch(/\.stat__value\s*\{[^}]*font-variant-numeric:\s*tabular-nums/);
   });
 });
 

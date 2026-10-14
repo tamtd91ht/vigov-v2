@@ -460,6 +460,17 @@ body {
   height: 20px;
 }
 
+/* A short ViHAT-green dash after the heading words (14/10/2026): the brand accent, under no text. `flex: none`
+   so a long heading wraps its words instead of squeezing the dash; 30px in all, so 320px still fits. */
+.section-title::after {
+  content: "";
+  flex: none;
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--brand-green);
+}
+
 
 /* ---------- cards ---------- */
 /* The intro's card: white, a hairline in the page's own line colour, 16px radius, one soft
@@ -573,6 +584,8 @@ body {
   font-weight: 700;
   line-height: 1.2;
   color: #ffffff;
+  /* Figures line up digit for digit: "100K+" and "15" read as a column of numbers, not as words. */
+  font-variant-numeric: tabular-nums;
 }
 
 .stat--wide .stat__value {
@@ -824,6 +837,24 @@ body {
   word-break: break-word;
 }
 
+/* PRESSED, for everyone (14/10/2026). The shadow deepens to the existing `--bong-noi` and the outlined buttons
+   take the light blue tint (navy on it is measured). Neither is motion, so neither waits for the reduced-motion
+   guard; the scale that goes with them lives inside it. */
+.action:active {
+  box-shadow: var(--bong-noi);
+}
+
+.action--primary:active {
+  background: var(--navy-deep);
+  border-color: var(--navy-deep);
+}
+
+.tn-hanh-dong:active,
+.tn__nut-phu:active:not(:disabled),
+.tn__nut-giu:active {
+  background: var(--vh-blue-50);
+}
+
 /* ---------- tab bar ---------- */
 /* 76px tall, as the commune app's bar (`--vh-tab-h`): an icon over a word, each tab a full-height
    target. Four tabs at 320px leave 80px each. */
@@ -882,11 +913,13 @@ body {
 }
 
 /* The active tab is marked FOUR ways at once — weight, a top rule, a filled icon pill and
-   aria-current — so it never depends on colour to be readable. Navy on `--vh-blue-50` is measured. */
+   aria-current — so it never depends on colour to be readable. Navy on `--vh-blue-50` is measured.
+   The top rule is the ViHAT green since 14/10/2026: it answers the green seam under the header, and it is
+   decoration over no text — the navy bold label and the filled pill still say "current" on their own. */
 .tabbar__item[aria-current="page"] {
   color: var(--navy);
   font-weight: 700;
-  border-top-color: var(--navy);
+  border-top-color: var(--brand-green);
 }
 
 .tabbar__item[aria-current="page"] .tabbar__glyph {
@@ -932,15 +965,29 @@ body {
 
   /* The ViHAT intro's press feedback (12/10/2026), the commune app's rule below in ViHAT's classes:
      a tap pushes the control down a little, so a finger knows it landed. Transform only. */
+  /* 14/10/2026 ("sinh động, phù hợp với tech công nghệ hơn"): the same press reaches every tappable thing of the
+     intro, and the colour/shadow changes that come with a press ease in over 160ms instead of snapping. Colour and
+     shadow transitions are not layout, so they cost a repaint of one control, not of the page. `.quay-lai` is not
+     here: the commune channel's screens share it, and this pass restyles the ViHAT surface only. */
   .action,
   .menu-nhanh__nut,
   .solution--mo,
   .tabbar__item,
   .tn__nut,
   .tn__nut-phu,
+  .tn__nut-giu,
   .tn-hanh-dong,
-  .vh-more {
-    transition: transform 120ms ease-out;
+  .vh-more,
+  .gp-noi-bat__nut,
+  .hang-tieu-de__them,
+  .nut-chat,
+  .vh-photo-tile--add {
+    transition:
+      transform 140ms ease-out,
+      box-shadow 160ms ease-out,
+      background-color 160ms ease-out,
+      border-color 160ms ease-out,
+      color 160ms ease-out;
   }
 
   .action:active,
@@ -949,9 +996,36 @@ body {
   .tabbar__item:active,
   .tn__nut:active:not(:disabled),
   .tn__nut-phu:active:not(:disabled),
+  .tn__nut-giu:active,
   .tn-hanh-dong:active,
-  .vh-more:active {
+  .vh-more:active,
+  .gp-noi-bat__nut:active,
+  .hang-tieu-de__them:active,
+  .nut-chat:active,
+  .vh-photo-tile--add:active:not(:disabled) {
     transform: scale(0.98);
+  }
+
+  /*
+   * SCREEN ENTRY of the intro: each screen's top-level blocks fade in and rise 8px (180ms), the commune app's
+   * `xa-enter`. Every navigation re-mounts the screen (`App.tsx` keys it by screen, anchor and count), so it plays
+   * once per move and never while the user stays put. NOT `.app-main` itself — the scroller keeps its place and no
+   * transform sits on it; and not on a block that already has its own staggered `.hien-len`. `backwards`, so no
+   * transform is left behind once it ends. Nothing `position: fixed` lives inside `.app-main` (the chat button and
+   * the tab bar are its siblings).
+   */
+  .app-main > :not(.hien-len) {
+    animation: xa-enter 180ms ease-out backwards;
+  }
+
+  /* The "chỉ mở được trong Zalo" box above the chat button opens in place, like every box of the app. */
+  .chat-noi__loi {
+    animation: xa-enter 180ms ease-out backwards;
+  }
+
+  /* The waiting button's green bar breathes — opacity of a decoration with no text on it, so no pair dips. */
+  .tn__nut[aria-busy="true"]::after {
+    animation: skel-pulse 0.9s ease-in-out infinite alternate;
   }
 
   /* The pull band of "Yêu cầu của tôi" fades in — the same 180ms box-open motion as the commune app. */
@@ -1312,12 +1386,44 @@ body {
   color: #ffffff;
 }
 
-/* ĐANG CHỜ: đổi nền sang navy đậm hơn, KHÔNG giảm độ mờ. `opacity` kéo tương phản chữ xuống dưới
-   ngưỡng 4,5:1 đúng lúc màn hình đang nói một điều người dùng cần đọc. Trạng thái nói bằng CHỮ
-   trên chính nút ("Đang chờ bạn trả lời trên Zalo…"). */
+/*
+ * DISABLED / WAITING (fix C, 14/10/2026). Until now this only swapped navy for a slightly deeper navy, which on a
+ * phone in daylight reads as the same live button — a citizen presses it again and nothing happens. It now changes
+ * SHAPE and INK: a dashed border, muted ink on the grey tint, and the not-allowed cursor. Never `opacity`: fading
+ * the label drags it under 4.5:1 at the very moment it says something the user must read ("Đang chờ bạn trả lời
+ * trên Zalo…"). `--ink-muted` on `--vh-grey-50` is measured in `accessibility.test.ts`.
+ */
 .tn__nut:disabled {
+  background: var(--vh-grey-50);
+  border: 1px dashed var(--ink-muted);
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+/* Pressed: the deeper navy (white on it is measured). Colour only, so it stays outside the motion guard. */
+.tn__nut:active:not(:disabled) {
   background: var(--navy-deep);
   border-color: var(--navy-deep);
+}
+
+/*
+ * BUSY: a thin brand-green bar along the bottom of the waiting button. Decoration under no text, so it adds no
+ * colour pair; it stands still under "reduce motion" and only breathes (opacity) inside the guard below. The
+ * words on the button still say what is happening — the bar is the second signal, never the only one.
+ */
+.tn__nut[aria-busy="true"] {
+  position: relative;
+}
+
+.tn__nut[aria-busy="true"]::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 5px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--brand-green);
 }
 
 /* Nút phụ: "Quét mã khác". Viền, không nền đặc — nó không được cạnh tranh với nút chính. */
@@ -1334,6 +1440,15 @@ body {
   font-size: var(--text-body);
   font-weight: 600;
   color: var(--navy);
+}
+
+/* Same disabled language as the primary button: dashed border, muted ink on the grey tint, not-allowed cursor. */
+.tn__nut-phu:disabled {
+  background: var(--vh-grey-50);
+  border-style: dashed;
+  border-color: var(--ink-muted);
+  color: var(--ink-muted);
+  cursor: not-allowed;
 }
 
 .tn__nut:focus-visible {
@@ -1958,6 +2073,7 @@ body {
   color: var(--navy);
   font-weight: 700;
   display: block;
+  font-variant-numeric: tabular-nums;
 }
 
 .moc__viec {
@@ -2156,13 +2272,46 @@ body {
   list-style: none;
 }
 
+/* The row carries only the divider; the button inside carries the padding, so the whole row is the target. */
 .gp-noi-bat__mot {
   border-top: 1px solid var(--vh-line);
-  padding: 12px 0;
+  padding: 0;
 }
 
 .gp-noi-bat__mot:first-child {
   border-top: none;
+}
+
+/* Each featured solution is one real `<button>` (owner 14/10/2026, `HomeScreen.tsx`): full width, at least
+   `--tap-min` tall. Pressed = the measured green tint (navy and ink on it are in the pair list). */
+.gp-noi-bat__nut {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--tap-min);
+  padding: 12px 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gp-noi-bat__nut:focus-visible {
+  outline: 3px solid var(--navy);
+  outline-offset: 2px;
+}
+
+.gp-noi-bat__nut:active {
+  background: var(--nen-the-luc);
+}
+
+.gp-noi-bat__chu {
+  flex: auto;
+  min-width: 0;
 }
 
 .gp-noi-bat__ten {
@@ -2202,6 +2351,7 @@ body {
   color: var(--ink-muted);
   font-weight: 600;
   display: block;
+  font-variant-numeric: tabular-nums;
 }
 
 .tin__tieu-de {
@@ -2255,6 +2405,16 @@ body {
   pointer-events: auto;
   max-width: 260px;
   box-shadow: var(--bong-noi);
+}
+
+/* The sentence and its "Đóng" button inside that box (`NutChatOA.tsx`). `.chat-noi__dong` is declared after
+   `.tn__nut-phu`, so its margin wins over the button's own 14px. */
+.chat-noi__cau {
+  margin: 0;
+}
+
+.chat-noi__dong {
+  margin: 10px 0 0;
 }
 
 .nut-chat {
@@ -2412,6 +2572,8 @@ body {
   font-size: var(--text-small);
   color: var(--ink-muted);
   margin: 6px 0 0;
+  /* The counter changes on every key: fixed-width digits keep it from jittering while the user types. */
+  font-variant-numeric: tabular-nums;
 }
 
 /* Vượt trần: chữ ĐỔI HẲN NỘI DUNG (xem `OGhiChu.tsx`), và màu chỉ là lớp nhấn thêm. `--navy`

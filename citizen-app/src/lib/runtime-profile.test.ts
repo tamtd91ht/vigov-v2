@@ -9,6 +9,9 @@ import { activeProfile, DEV_PROFILE_CODE_SHA256, profileFor, resetRuntimeProfile
  * The dev profile is the one switch that sends a launch to another backend. Every case below is the failure that
  * matters: a citizen landing on dev by accident, or a dev link silently testing prod.
  */
+declare const __VIGOV_API_HOST__: string | undefined;
+declare const __VIGOV_API_HOST_DEV__: string | undefined;
+
 const sha256Hex = async (s: string): Promise<string> => {
   const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
   return Array.from(new Uint8Array(d), (b) => b.toString(16).padStart(2, "0")).join("");
@@ -53,9 +56,14 @@ describe("host tables follow the profile of the launch", () => {
     }
   });
 
-  it("dev without a dev vihat-miniapp host: empty (fail closed), never prod's login host", () => {
+  it("dev uses the dev vihat-miniapp host — or nothing — never prod's login host", () => {
+    // Vitest shares vite.config's `define`, so a machine whose `.env.local` sets the hosts bakes them into this run
+    // too (same trap as dang-nhap.test.tsx). The assertion holds either way: dev host when set, empty when not.
+    const prodHost = typeof __VIGOV_API_HOST__ === "string" ? __VIGOV_API_HOST__.replace(/\/+$/, "") : "";
+    const devHost = typeof __VIGOV_API_HOST_DEV__ === "string" ? __VIGOV_API_HOST_DEV__.replace(/\/+$/, "") : "";
     resetRuntimeProfileForTest("dev");
-    // Vitest builds no `__VIGOV_API_HOST_DEV__`, so the dev login host is empty here: the call must not go anywhere.
-    expect(diaChiApi("/api/v1/sessions")).toBe("");
+    const url = diaChiApi("/api/v1/sessions");
+    expect(url).toBe(devHost === "" ? "" : `${devHost}/api/v1/sessions`);
+    if (prodHost !== "" && prodHost !== devHost) expect(url.startsWith(prodHost)).toBe(false);
   });
 });
