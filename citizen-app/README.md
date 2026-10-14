@@ -693,7 +693,15 @@ Lệnh này **chỉ sinh QR**: không dựng, không đẩy, không cần `ZMP_T
 |---|---|---|
 | QR mở **bản phát hành** | `npm run qr -- --domain=<tên-miền-xã>` | `https://zalo.me/s/<App ID app chung>/?x=<mã>&src=qr` |
 | QR mở **bản thử** Version `n` | `npm run qr -- --domain=<tên-miền-xã> --version=<n>` | `…/?env=TESTING&version=<n>&x=<mã>&src=qr` |
+| QR mở app vào **máy chủ dev** | thêm `--profile=dev` (kết hợp được với `--version`) | `…&x=<mã>&src=qr&pf=<mã profile dev>` |
 | Ghi tệp ra chỗ khác | thêm `--out=<đường-dẫn>.svg` | (tệp ghi đúng đường dẫn ấy) |
+
+**`--profile=dev` (chủ dự án, 14/10/2026; ADR 0046 §Sửa đổi 14/10/2026 #9).** App dùng bảng host dev và
+`vihat-miniapp` dev **trong lượt mở bằng QR ấy**; mở lại không có liên kết là prod. Bước 1–2 bên dưới hỏi
+platform/identity **dev** (mã `x` của xã ở dev khác prod). Mã `pf` đọc từ biến shell `VIGOV_DEV_PROFILE_CODE`, hoặc
+dòng `VIGOV_DEV_PROFILE_CODE=<mã>` trong `citizen-app/.env.qr.local` (git bỏ qua); mã không khớp digest trong
+`src/lib/runtime-profile.ts` thì **dừng** — QR ấy sẽ mở prod. Tệp ghi ra `qr/<tên-miền-xã>.dev[.test-v<n>].svg`.
+Mã không dán vào chat, commit hay tài liệu.
 
 Lệnh làm theo thứ tự sau, và **lỗi ở bước nào cũng dừng, không ghi tệp**:
 

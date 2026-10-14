@@ -159,10 +159,12 @@ func readCitizenServices(root string) ([]string, error) {
 	return out, nil
 }
 
-// renderCitizenHosts — the per-service API hosts of `mini_app_environment` for the citizen Mini App
-// (citizen-app/src/cong-dan/api/dia-chi-vigov.ts). A service the citizen channel names but the
-// Ingress gives no host would be a call to a name nothing answers: refused here, at generation,
-// instead of as a DNS failure on a citizen's phone.
+// renderCitizenHosts — the per-service API hosts for the citizen Mini App
+// (citizen-app/src/cong-dan/api/dia-chi-vigov.ts): `mini_app_environment` as SERVICE_API_HOSTS and
+// `mini_app_dev_environment` as SERVICE_API_HOSTS_DEV. Both tables ship in the one bundle; the second
+// is used only for a launch whose link carries the dev profile code (owner, 14/10/2026). A service the
+// citizen channel names but the Ingress gives no host would be a call to a name nothing answers:
+// refused here, at generation, instead of as a DNS failure on a citizen's phone.
 func renderCitizenHosts(plan hostPlan, services []string, hosts []hostDichVu) ([]byte, error) {
 	served := map[string]bool{}
 	for _, h := range hosts {
@@ -171,18 +173,27 @@ func renderCitizenHosts(plan hostPlan, services []string, hosts []hostDichVu) ([
 	var b strings.Builder
 	b.WriteString("// " + generatedHeader + "\n")
 	b.WriteString("//\n")
-	b.WriteString(fmt.Sprintf("// API hosts of environment `%s` (`mini_app_environment`) for exactly the services\n", plan.MiniApp.Ten))
-	b.WriteString("// `DichVuViGov` in dia-chi-vigov.ts lists. The Mini App is built with prod hosts only (owner,\n")
-	b.WriteString("// 01/10/2026).\n")
-	b.WriteString("export const SERVICE_API_HOSTS = {\n")
-	for _, s := range services {
-		if !served[s] {
-			return nil, fmt.Errorf("%s: DichVuViGov có %q nhưng Ingress không có host %s — dịch vụ ấy không có tuyến REST",
-				citizenServicesPath, s, plan.MiniApp.apiHost(s))
+	b.WriteString("// API hosts for exactly the services `DichVuViGov` in dia-chi-vigov.ts lists. One bundle carries\n")
+	b.WriteString("// both tables; the second is chosen only by a launch link carrying the dev profile code\n")
+	b.WriteString("// (src/lib/runtime-profile.ts, owner 14/10/2026).\n")
+	for _, t := range []struct {
+		name, key string
+		env       moiTruong
+	}{
+		{"SERVICE_API_HOSTS", "mini_app_environment", plan.MiniApp},
+		{"SERVICE_API_HOSTS_DEV", "mini_app_dev_environment", plan.MiniAppDev},
+	} {
+		b.WriteString(fmt.Sprintf("\n// Environment `%s` (`%s`).\n", t.env.Ten, t.key))
+		b.WriteString("export const " + t.name + " = {\n")
+		for _, s := range services {
+			if !served[s] {
+				return nil, fmt.Errorf("%s: DichVuViGov có %q nhưng Ingress không có host %s — dịch vụ ấy không có tuyến REST",
+					citizenServicesPath, s, t.env.apiHost(s))
+			}
+			b.WriteString(fmt.Sprintf("  %s: \"https://%s\",\n", s, t.env.apiHost(s)))
 		}
-		b.WriteString(fmt.Sprintf("  %s: \"https://%s\",\n", s, plan.MiniApp.apiHost(s)))
+		b.WriteString("} as const;\n")
 	}
-	b.WriteString("} as const;\n")
 	return []byte(b.String()), nil
 }
 

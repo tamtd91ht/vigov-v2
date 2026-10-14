@@ -3,7 +3,8 @@
 # Everything else READS or is GENERATED from this file; nothing retypes a host:
 #   tools/ingress        → deploy/base/mang/ingress.yaml, deploy/overlays/<env>/ingress-moi-truong.yaml
 #                          and the generated host constants the reserved-domain checks use
-#   citizen-app (build)  → the per-service API hosts of `mini_app_environment`, baked in at build time
+#   citizen-app (build)  → the per-service API hosts of `mini_app_environment` and
+#                          `mini_app_dev_environment`, baked in at build time
 #
 # Change a value here, then: `make kb` (regenerates and tests), rebuild the Mini App, and re-import the
 # Ingress into Rancher from `kubectl kustomize deploy/overlays/<env>` (the cluster's Ingress is built by
@@ -51,6 +52,10 @@ environments:
     web_host: "*.stg.vigov.vn"
     api_suffix: "api-stg.vigov.vn"
 
-# The environment whose API hosts the citizen Mini App is built with. Prod only (owner, 01/10/2026):
-# a second value is a second bundle (ADR 0047).
+# The environment whose API hosts the citizen Mini App calls by default — every launch, unless the
+# link carries the dev profile code.
 mini_app_environment: prod
+# The SECOND host table in the same bundle (owner, 14/10/2026, ADR 0046 §Sửa đổi 14/10/2026 #9): used
+# only for a launch whose link carries `pf=<code>` and whose SHA-256 matches the one in
+# citizen-app/src/lib/runtime-profile.ts. Not a second bundle, not a second App ID.
+mini_app_dev_environment: dev

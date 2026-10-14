@@ -33,7 +33,7 @@ function thuMucCo(noi_dung) {
 describe("danh sách trắng: tên nào được phép nằm trong .env.local", () => {
   it("tên duy nhất của bước dựng thì QUA", () => {
     // ĐÚNG MỘT TÊN (27/09/2026). `VIGOV_BIEN_THE` rời danh sách cùng hai biến thể bản dựng.
-    expect(TEN_BIEN_CHO_PHEP).toEqual(["VIGOV_API_HOST"]);
+    expect(TEN_BIEN_CHO_PHEP).toEqual(["VIGOV_API_HOST", "VIGOV_API_HOST_DEV"]);
     expect(() => kiemTenBien("# ghi chú\nVIGOV_API_HOST=https://vidu.test\n\n")).not.toThrow();
   });
 
@@ -80,7 +80,7 @@ describe("đọc cấu hình: tệp local, biến shell, và không gì khác", 
     // `process.env`, chỉ `loadEnv` mới đọc các tệp `.env*`.
     const goc = thuMucCo("VIGOV_API_HOST=https://tu-tep.test\n");
     expect(process.env.VIGOV_API_HOST, "môi trường test đang có sẵn biến này").toBeUndefined();
-    expect(docCauHinh(goc)).toEqual({ VIGOV_API_HOST: "https://tu-tep.test" });
+    expect(docCauHinh(goc)).toEqual({ VIGOV_API_HOST: "https://tu-tep.test", VIGOV_API_HOST_DEV: "" });
   });
 
   it("biến shell THẮNG tệp — CI và một lần đẩy tay phải đè được tệp local", () => {

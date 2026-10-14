@@ -236,7 +236,9 @@ pipeline {
         // là câu trả lời quan trọng nhất nó có thể đưa ra.
         withCredentials([
           string(credentialsId: env.CRED_ZMP, variable: 'ZMP_TOKEN'),
-          string(credentialsId: 'citizen-app-vigov-api-host', variable: 'VIGOV_API_HOST')
+          string(credentialsId: 'citizen-app-vigov-api-host', variable: 'VIGOV_API_HOST'),
+          // The dev profile's vihat-miniapp host (owner, 14/10/2026; src/lib/runtime-profile.ts). Same kind as above.
+          string(credentialsId: 'citizen-app-vigov-api-host-dev', variable: 'VIGOV_API_HOST_DEV')
         ]) {
           // NHÁY ĐƠN: không một biến bí mật nào đi qua nội suy của Groovy. Cờ dựng từ biến môi trường
           // không bí mật (SHARED_APP · DOMAIN_XA · TARGET_APP_ID · PHAT_HANH_CO · THU_CO) ngay trong shell.

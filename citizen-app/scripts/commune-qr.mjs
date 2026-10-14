@@ -38,14 +38,14 @@ export const COMMUNES_PATH = "/api/v1/communes";
 /** Gốc liên kết Mini App, đúng hằng `zaloMiniAppLinkBase` của service-platform. */
 const ZALO_LINK_BASE = "https://zalo.me/s/";
 
-const VALID_FLAGS = "--domain=<tên-miền-xã> · --version=<số bản thử> · --out=<tệp .svg>";
+const VALID_FLAGS = "--domain=<tên-miền-xã> · --version=<số bản thử> · --profile=dev · --out=<tệp .svg>";
 
 /**
  * Đọc cờ. Cờ lạ thì DỪNG (gõ nhầm `--domian` mà bị bỏ qua là một QR không ai muốn).
- * `--domain` bắt buộc; `--version` vắng = bản phát hành.
+ * `--domain` bắt buộc; `--version` vắng = bản phát hành; `--profile` vắng = prod (chủ dự án, 14/10/2026).
  */
 export function parseQrFlags(argv) {
-  const flags = { domain: null, version: null, out: null };
+  const flags = { domain: null, version: null, out: null, profile: "prod" };
   for (const c of argv) {
     if (c.startsWith("--domain=")) {
       const v = c.slice("--domain=".length);
@@ -63,6 +63,10 @@ export function parseQrFlags(argv) {
       const v = c.slice("--out=".length);
       if (!v.toLowerCase().endsWith(".svg")) throw new Error(`--out="${v}" phải là một tệp .svg.`);
       flags.out = v;
+    } else if (c.startsWith("--profile=")) {
+      const v = c.slice("--profile=".length);
+      if (v !== "dev" && v !== "prod") throw new Error(`--profile="${v}" không có. Chỉ nhận dev (bỏ cờ = prod).`);
+      flags.profile = v;
     } else if (c === "--app=vihat" || c.startsWith("--app-id=") || c === "--phat-hanh" || c === "--thu") {
       throw new Error(
         `Cờ "${c}" là của npm run zmp:deploy. Lệnh QR luôn dùng ${SHARED_APP_NAME}, App ID do platform trả; ` +
@@ -83,8 +87,11 @@ export function parseQrFlags(argv) {
  * `deploy/hosts.yaml`, nơi duy nhất viết host công khai. Đọc chuỗi chứ không gõ lại host: gõ lại là
  * nơi thứ hai, và nó lệch ngày đổi host. Khuôn tệp đổi mà không đọc được thì DỪNG, không đoán.
  */
-export function identityOriginFrom(generated) {
-  const m = /\bidentity:\s*"([^"]*)"/.exec(String(generated ?? ""));
+export function identityOriginFrom(generated, profile = "prod") {
+  // Inside the table of the chosen profile only: the file holds two, and the first `identity:` is prod's.
+  const table = profile === "dev" ? "SERVICE_API_HOSTS_DEV" : "SERVICE_API_HOSTS";
+  const block = new RegExp(`export const ${table} = \\{([^}]*)\\}`).exec(String(generated ?? ""))?.[1] ?? "";
+  const m = /\bidentity:\s*"([^"]*)"/.exec(block);
   const v = m?.[1] ?? "";
   let url = null;
   try {
@@ -186,7 +193,7 @@ export function communeFrom(domain, outcome) {
  * `?x=<launch code>&src=qr`. Parameter order: Zalo's (`env`, `version`) first, ours (`x`, `src`) after — the
  * measured shape.
  */
-export function launchCodeLink({ app_id, launch_code, version = null }) {
+export function launchCodeLink({ app_id, launch_code, version = null, profile_code = null }) {
   if (!LAUNCH_CODE.test(String(launch_code))) throw new Error("Không sinh QR x: mã mở app không đúng 12 ký tự hex thường.");
   const q = new URLSearchParams();
   if (version !== null) {
@@ -195,13 +202,64 @@ export function launchCodeLink({ app_id, launch_code, version = null }) {
   }
   q.set("x", launch_code);
   q.set("src", "qr");
+  // `pf` — the dev profile code (src/lib/runtime-profile.ts). Absent = prod. Never Zalo's own `env`: that one picks
+  // the Zalo build (TESTING) and a link has room for one.
+  if (profile_code !== null) q.set("pf", profile_code);
   return `${ZALO_LINK_BASE}${app_id}/?${q.toString()}`;
 }
 
 /**
- * Tệp SVG mặc định: `qr/<tên-miền>[.test-v<n>].svg`. Bản thử không ghi đè bản phát hành.
+ * Tệp SVG mặc định: `qr/<tên-miền>[.dev][.test-v<n>].svg`. Bản thử và profile dev không ghi đè bản phát hành.
  * Tên tệp mang tên miền chứ không mang mã: đó là tệp cục bộ để in, không phải nội dung QR.
  */
-export function defaultQrFile(domain, version = null) {
-  return `qr/${domain}${version === null ? "" : `.test-v${version}`}.svg`;
+export function defaultQrFile(domain, version = null, profile = "prod") {
+  return `qr/${domain}${profile === "dev" ? ".dev" : ""}${version === null ? "" : `.test-v${version}`}.svg`;
+}
+
+/** Name of the variable holding the dev profile code — shell first, then `.env.qr.local` (gitignored). */
+export const DEV_PROFILE_CODE_VAR = "VIGOV_DEV_PROFILE_CODE";
+export const DEV_PROFILE_CODE_FILE = ".env.qr.local";
+
+/** URL-safe, long enough that its SHA-256 in the bundle cannot be brute-forced. */
+const DEV_PROFILE_CODE = /^[A-Za-z0-9_-]{20,128}$/;
+
+/** The digest the app compares against, read from `src/lib/runtime-profile.ts` — not retyped here. */
+export function devProfileDigestFrom(source) {
+  const m = /DEV_PROFILE_CODE_SHA256\s*=\s*"([0-9a-f]{64})"/.exec(String(source ?? ""));
+  if (m === null) {
+    throw new Error("Không sinh QR dev: không đọc được DEV_PROFILE_CODE_SHA256 (64 hex) trong src/lib/runtime-profile.ts.");
+  }
+  return m[1];
+}
+
+/**
+ * The dev profile code, or throw. Shell variable wins over the file (same order as `.env.local`). The code must hash
+ * to the digest the app carries: a QR with a code the app does not know opens PROD silently — printed, it would look
+ * like a dev QR that "does not work", and nobody would know why.
+ *
+ * `sha256Hex` is injected so this stays pure.
+ */
+export function devProfileCodeFrom({ env, fileText, expectedSha256, sha256Hex }) {
+  let code = (env?.[DEV_PROFILE_CODE_VAR] ?? "").trim();
+  if (code === "" && typeof fileText === "string") {
+    const m = new RegExp(`^[ \\t]*${DEV_PROFILE_CODE_VAR}[ \\t]*=[ \\t]*(\\S*)[ \\t]*$`, "m").exec(fileText);
+    code = m?.[1] ?? "";
+  }
+  if (code === "") {
+    throw new Error(
+      `Không sinh QR dev: thiếu ${DEV_PROFILE_CODE_VAR}.\n` +
+        `  Đặt trong citizen-app/${DEV_PROFILE_CODE_FILE} (dòng ${DEV_PROFILE_CODE_VAR}=<mã>) hoặc biến shell. Mã do người giữ\n` +
+        "  profile dev cấp; KHÔNG commit, KHÔNG dán vào chat hay tài liệu.",
+    );
+  }
+  if (!DEV_PROFILE_CODE.test(code)) {
+    throw new Error(`Không sinh QR dev: ${DEV_PROFILE_CODE_VAR} sai khuôn (20–128 ký tự A-Z a-z 0-9 - _).`);
+  }
+  if (sha256Hex(code) !== expectedSha256) {
+    throw new Error(
+      `Không sinh QR dev: ${DEV_PROFILE_CODE_VAR} không khớp DEV_PROFILE_CODE_SHA256 trong src/lib/runtime-profile.ts.\n` +
+        "  QR ấy sẽ mở PROD, không phải dev. Lấy đúng mã, hoặc xoay mã (mã mới + digest mới + bản app mới).",
+    );
+  }
+  return code;
 }

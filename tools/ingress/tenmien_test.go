@@ -105,9 +105,13 @@ func TestMoHinhTenMienDungQuyetDinhChuDuAn(t *testing.T) {
 	if envs[0].Ten != "prod" {
 		t.Errorf("môi trường đầu (thứ base mang) là %q, mong prod", envs[0].Ten)
 	}
-	// Owner, 01/10/2026: the Mini App is built with prod hosts only.
+	// Owner, 01/10/2026: the Mini App calls prod hosts by default. Owner, 14/10/2026: dev is the
+	// second table, reached only with the dev profile code.
 	if plan.MiniApp.Ten != "prod" {
 		t.Errorf("mini_app_environment là %q, chủ dự án chốt prod (01/10/2026)", plan.MiniApp.Ten)
+	}
+	if plan.MiniAppDev.Ten != "dev" {
+		t.Errorf("mini_app_dev_environment là %q, chủ dự án chốt dev (14/10/2026)", plan.MiniAppDev.Ten)
 	}
 	tlsDaDung := map[string]string{}
 	for _, mt := range envs {

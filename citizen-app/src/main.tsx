@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App, COMMUNE_HEADER_TOP_COLOR } from "./App";
 import { clearSharedActionBar } from "./features/tinh-nang/zalo-api";
 import { thamSoMoApp, thamSoXa } from "./lib/launch-params";
+import { resolveRuntimeProfile } from "./lib/runtime-profile";
 import { XA_CO_DINH } from "./lib/xa-co-dinh";
 import "./styles.css";
 
@@ -29,8 +30,12 @@ if (!container) {
   throw new Error("Root element #app is missing from index.html");
 }
 
-createRoot(container).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-);
+// The backend of this launch is decided BEFORE the first render, so no call — and no session — can start on
+// one host table and continue on the other (src/lib/runtime-profile.ts). It never rejects: any failure is prod.
+void resolveRuntimeProfile().then(() => {
+  createRoot(container).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
+});

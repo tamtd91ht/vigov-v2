@@ -36,7 +36,9 @@ export const GOC_GOI = fileURLToPath(new URL("..", import.meta.url));
  * đang tin rằng nó chọn được nội dung bản dựng, và điều đó không còn đúng — `TEN_DA_BO` ở dưới
  * cho thông báo nói đúng việc cần làm.
  */
-export const TEN_BIEN_CHO_PHEP = ["VIGOV_API_HOST"];
+// `VIGOV_API_HOST_DEV` (owner, 14/10/2026): the `vihat-miniapp` host of the dev profile — public like the first,
+// used only by a launch carrying the dev profile code (`src/lib/runtime-profile.ts`).
+export const TEN_BIEN_CHO_PHEP = ["VIGOV_API_HOST", "VIGOV_API_HOST_DEV"];
 
 /** Tên từng hợp lệ, nay đã bỏ — kèm câu nói phải làm gì. Không phải một lối cho qua. */
 const TEN_DA_BO = {

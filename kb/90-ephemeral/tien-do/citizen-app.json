@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "citizen-app",
-  "cap_nhat": "2026-10-13",
+  "cap_nhat": "2026-10-14",
   "_luu_y_lan_ghi_nay": "GHI 22/09/2026 LAN BA (HO SO XIN QUYEN ZALO). `make kb` KHONG chay (co phien khac dang lam do). Muc moi `ho-so-zalo-khoi-roi-khoi-may`. CANH BAO: HAI CAU SAI DA NAM TRONG HO SO PHAP LY VA DA DUOC GO — doc muc ay truoc khi sua `content/ket-xuat-ho-so.ts` hoac `scripts/ho-so-zalo.mjs`. --- GHI 22/09/2026 LAN HAI (GIAI DOAN B - be mat yeu cau, noi tuyen may chu). `make kb` KHONG chay trong luot nay (phien chinh chay o cuoi). Muc moi `be-mat-yeu-cau-tu-van-bao-gia`. ⚠ DOC MUC AY TRUOC KHI SUA `phase1-collects-nothing.test.ts`: hai day bay vua duoc THU HEP lan dau tien ke tu khi chung ra doi, va `chi_trong` doi tu mot CHUOI sang mot DANH SACH TEP. --- GHI 22/09/2026 (GIAI ĐOẠN A của việc thiết kế lại màn chủ) — `make kb` KHÔNG chạy trong lượt này (phiên chính sẽ chạy ở cuối), nên `kb/90-ephemeral/tien-do.md` còn là bản sinh của lần trước. Mục mới `man-chu-viec-cua-khach-khong-phai-quyen`. Không mục nào bị xoá, không `trang_thai` nào bị hạ. --- BỔ SUNG 21/09/2026 (khuya): mục `man-chu-khop-hero-tab-ban-mau` mới, và `make kb` CŨNG KHÔNG chạy trong lượt ấy (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vẫn là bản sinh của lần trước. Mục mới ấy khai một SỰ CỐ MẤT MÃ NGUỒN đã khôi phục: đọc `tiep_theo` của nó trước khi tin bất cứ dòng chú thích nào trong citizen-app/src/styles.css. --- Ghi chiều 21/09/2026. `make kb` CHƯA chạy trong phiên này (người dùng yêu cầu không chạy) — `kb/90-ephemeral/tien-do.md` vì thế còn là bản sinh của lần trước. Hai lần ghi tối 21/09 (mục `ho-so-zalo-sinh-tu-nguon` và `man-chu-theo-ban-mau-pm`) cũng KHÔNG chạy `make kb`. Lần ghi cuối còn dọn một chỗ sai lược đồ có SẴN: `no_confirm` của `ho-so-zalo-sinh-tu-nguon` chứa văn xuôi thay vì số hiệu câu hỏi, và `progress_guard` chặn mọi lần ghi vào tệp này cho tới khi nó được dọn; hai đoạn văn ấy CHUYỂN NGUYÊN VĂN xuống `tiep_theo` của chính mục đó, không xoá chữ nào.",
   "muc": [
     {
@@ -778,6 +778,13 @@
       "viec": "App ViHAT: màn Chi tiết giải pháp có nút 'Nhận tư vấn giải pháp này' (nút chính; hotline lùi về kiểu thường) mở Tư vấn và báo giá với đúng dòng giải pháp ấy đã chọn sẵn — chủ dự án 13/10/2026 cần một điểm mới cho lượt nộp Zalo sau bản 22h 12/10. Mã giải pháp đi qua `moc` của điều hướng; màn tư vấn chỉ nhận mã có trong SOLUTIONS. Không thêm quyền, không thêm dữ liệu rời máy.",
       "bang_chung": "ChiTietGiaiPhap.tsx (onConsult), SolutionsScreen.tsx (onDi), TuVanBaoGiaScreen.tsx (moc → chọn sẵn); ca mới yeu-cau.test.tsx + lượt quét screens.test.tsx có nhánh có nút. tsc sạch; vitest citizen-app 86 tệp/2196 test xanh. CHƯA xem trên điện thoại.",
       "con_no": "Chưa đăng nhập thì màn tư vấn mời đăng nhập; đăng nhập xong quay lại tư vấn thì lựa chọn sẵn không còn (điều hướng không giữ mốc qua bước đăng nhập)."
+    },
+    {
+      "id": "profile-dev-theo-ma-pf",
+      "viec": "Profile dev theo lượt mở: QR mang pf=<mã>, app dùng bảng host dev + vihat-miniapp dev (chủ dự án 14/10/2026, ADR 0046 §Sửa đổi 14/10/2026 #9)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Mã: src/lib/runtime-profile.ts (digest SHA-256, quyết một lần trước lượt vẽ đầu ở main.tsx, lỗi nào cũng prod) · cong-dan/api/dia-chi-vigov.ts + api/dia-chi.ts chọn bảng theo activeProfile() · tools/ingress sinh SERVICE_API_HOSTS_DEV từ mini_app_dev_environment · scripts/commune-qr.mjs + make-qr.mjs cờ --profile=dev (tra platform-dev/identity-dev, từ chối mã không khớp digest) · VIGOV_API_HOST_DEV (cau-hinh.mjs, deploy.mjs chặn đẩy khi thiếu, Jenkinsfile credential citizen-app-vigov-api-host-dev). Test: src/lib/runtime-profile.test.ts, scripts/commune-qr.test.mjs, tools/ingress hosts_test.go; npm test 87 tệp xanh. Chạy thật: --profile=dev đọc mã, platform-dev trả App ID, identity-dev trả lời.",
+      "con_lai": "(1) Tạo credential Jenkins 'citizen-app-vigov-api-host-dev' = địa chỉ vihat-miniapp dev — thiếu thì job đẩy citizen-app đỏ. (2) Đẩy một bản app chung mới lên Zalo (bundle đổi). (3) Kiểm trên máy thật: crypto.subtle có trong webview Zalo không — không có thì QR dev lặng lẽ mở prod. (4) Mã pf chỉ nằm ở citizen-app/.env.qr.local trên máy tạo ra nó — chép sang máy khác chạy npm run qr. (5) Chưa có tên miền xã nào ở dev để sinh QR dev thật. (6) vihat-miniapp dev: nhánh dev + Jenkinsfile đa nhánh (đang làm)."
     }
   ]
 }

@@ -7,10 +7,13 @@
  *
  * HOST KHÔNG CÒN GÕ Ở ĐÂY (chủ dự án, 01/10/2026): `service-hosts.gen.ts` SINH từ
  * `deploy/hosts.yaml` — nơi DUY NHẤT viết host công khai — bằng `tools/ingress` (`make kb`), cho
- * ĐÚNG các dịch vụ kiểu `DichVuViGov` dưới đây liệt kê (bộ sinh đọc dòng ấy). Mini App chỉ dựng với
- * host của `mini_app_environment` = prod (chủ dự án, 01/10/2026): staging dùng chung CSDL với prod
- * (ADR 0046), và giá trị thứ hai là bundle thứ hai (ADR 0047). Đổi môi trường là sửa tệp ấy, không
- * phải tệp này. Thêm một dịch vụ vào `DichVuViGov` mà Ingress không có host cho nó thì bộ sinh DỪNG.
+ * ĐÚNG các dịch vụ kiểu `DichVuViGov` dưới đây liệt kê (bộ sinh đọc dòng ấy). Thêm một dịch vụ vào
+ * `DichVuViGov` mà Ingress không có host cho nó thì bộ sinh DỪNG.
+ *
+ * HAI BẢNG, MỘT BUNDLE (chủ dự án, 14/10/2026 — thay "chỉ host prod" của 01/10/2026): bảng prod mọi lượt
+ * mở, bảng dev CHỈ khi liên kết mở app mang đúng mã profile (`src/lib/runtime-profile.ts`). Profile cố định
+ * trước lượt vẽ đầu (`main.tsx`) và không đổi giữa chừng, nên phiên mở ở môi trường này không bao giờ bị
+ * gửi sang host của môi trường kia.
  *
  * BA DỊCH VỤ, MỖI DÒNG CÓ TUYẾN GỌI TỚI (27/09/2026) — một host không có tuyến nào gọi tới là một
  * host không ai kiểm được nó đúng hay sai:
@@ -45,7 +48,8 @@
  * Chuỗi RỖNG vẫn là tín hiệu dừng (`chua-cau-hinh`) mà `goi-vigov.ts` đọc trước mọi lời gọi: một
  * dòng để trống, hoặc một tên dịch vụ không có trong bảng, là KHÔNG gọi — không bao giờ là đoán.
  */
-import { SERVICE_API_HOSTS } from "./service-hosts.gen";
+import { activeProfile } from "../../lib/runtime-profile";
+import { SERVICE_API_HOSTS, SERVICE_API_HOSTS_DEV } from "./service-hosts.gen";
 
 // Đọc bởi `tools/ingress` (sinhhosts.go): giữ đúng MỘT dòng, dạng `"a" | "b"` — dạng khác thì bộ sinh dừng.
 export type DichVuViGov = "petitions" | "identity" | "comms";
@@ -53,12 +57,15 @@ export type DichVuViGov = "petitions" | "identity" | "comms";
 // Kiểu `Record<DichVuViGov, …>` bắt chiều thiếu: một dịch vụ trong `DichVuViGov` mà tệp sinh không có
 // thì `tsc` đỏ.
 const MAY_CHU_THEO_DICH_VU: Readonly<Record<DichVuViGov, string>> = SERVICE_API_HOSTS;
+const DEV_HOSTS_BY_SERVICE: Readonly<Record<DichVuViGov, string>> = SERVICE_API_HOSTS_DEV;
 
 /** Địa chỉ đầy đủ của một tuyến ViGov trên host của dịch vụ sở hữu nó, hoặc chuỗi RỖNG. */
 export function diaChiViGov(dich_vu: DichVuViGov, duong_dan: string): string {
+  // Chosen per call, not at load: the profile is settled before the first render, after this module loads.
+  const table = activeProfile() === "dev" ? DEV_HOSTS_BY_SERVICE : MAY_CHU_THEO_DICH_VU;
   // `hasOwnProperty` chứ không đọc thẳng: một tên lạ lọt qua kiểu (chuỗi dựng lúc chạy) phải ra
   // RỖNG, không ra `undefined/api/...` hay một khoá kế thừa của `Object.prototype`.
-  if (!Object.prototype.hasOwnProperty.call(MAY_CHU_THEO_DICH_VU, dich_vu)) return "";
-  const goc = MAY_CHU_THEO_DICH_VU[dich_vu];
+  if (!Object.prototype.hasOwnProperty.call(table, dich_vu)) return "";
+  const goc = table[dich_vu];
   return goc === "" ? "" : `${goc}${duong_dan}`;
 }

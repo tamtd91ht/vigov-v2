@@ -58,7 +58,7 @@ function diaChiMayChu(): string {
 let nho: { khoa: string; gia_tri: ReturnType<typeof docCauHinh> } | null = null;
 
 function cauHinh(): ReturnType<typeof docCauHinh> {
-  const khoa = process.env.VIGOV_API_HOST ?? "";
+  const khoa = `${process.env.VIGOV_API_HOST ?? ""}|${process.env.VIGOV_API_HOST_DEV ?? ""}`;
   if (nho === null || nho.khoa !== khoa) nho = { khoa, gia_tri: docCauHinh() };
   return nho.gia_tri;
 }
@@ -108,6 +108,8 @@ export default defineConfig(() => ({
   // `xaCoDinh` trong scripts/cau-hinh.mjs và src/lib/xa-co-dinh.ts.
   define: {
     __VIGOV_API_HOST__: JSON.stringify(diaChiMayChu()),
+    // The dev profile's `vihat-miniapp` host — see src/api/dia-chi.ts and src/lib/runtime-profile.ts.
+    __VIGOV_API_HOST_DEV__: JSON.stringify(cauHinh().VIGOV_API_HOST_DEV),
     __VIGOV_XA_CO_DINH__: JSON.stringify(xaCoDinh()),
     // `__VIGOV_BUILD_LABEL__`: "<major>.<minor>" of package.json for the Cá nhân footer, "" if malformed — see
     // `buildLabel` in scripts/cau-hinh.mjs and src/lib/build-label.ts.

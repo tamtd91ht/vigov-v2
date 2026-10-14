@@ -23,10 +23,18 @@
  * ⚠ KHÔNG CÓ HOST MẶC ĐỊNH, VÀ ĐÓ LÀ FAIL-CLOSED: đoán một địa chỉ là gửi dữ liệu của một người
  * thật tới một máy chủ không ai chọn. `scripts/deploy.mjs` chặn đường đẩy khi biến chưa khai.
  */
+import { activeProfile } from "../lib/runtime-profile";
+
 declare const __VIGOV_API_HOST__: string | undefined;
+// The `vihat-miniapp` deployment of the DEV profile (`VIGOV_API_HOST_DEV`, owner 14/10/2026), used only by a launch
+// whose link carries the dev profile code (`lib/runtime-profile.ts`). Its session bridge reaches dev identity, so a
+// dev launch holds a dev session. Empty → that launch has no login host — never a fall back to prod's.
+declare const __VIGOV_API_HOST_DEV__: string | undefined;
 
 const API_HOST: string =
   typeof __VIGOV_API_HOST__ === "string" ? __VIGOV_API_HOST__.replace(/\/+$/, "") : "";
+const API_HOST_DEV: string =
+  typeof __VIGOV_API_HOST_DEV__ === "string" ? __VIGOV_API_HOST_DEV__.replace(/\/+$/, "") : "";
 
 /**
  * Địa chỉ đầy đủ của một tuyến, hoặc chuỗi RỖNG khi chưa khai host.
@@ -36,5 +44,6 @@ const API_HOST: string =
  * chuỗi rỗng thì nhánh ấy là một dòng `if` giống nhau ở mọi nơi.
  */
 export function diaChiApi(duong_dan: string): string {
-  return API_HOST === "" ? "" : `${API_HOST}${duong_dan}`;
+  const host = activeProfile() === "dev" ? API_HOST_DEV : API_HOST;
+  return host === "" ? "" : `${host}${duong_dan}`;
 }

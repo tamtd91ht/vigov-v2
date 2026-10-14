@@ -25,6 +25,10 @@ const hostsFilePath = "deploy/hosts.yaml"
 type hostsFile struct {
 	Environments       []hostsEnvironment `yaml:"environments"`
 	MiniAppEnvironment string             `yaml:"mini_app_environment"`
+	// MiniAppDevEnvironment is the SECOND host table baked into the one Mini App bundle, chosen at
+	// run time only by a launch link carrying the dev profile code (owner, 14/10/2026). Required:
+	// a bundle without it would turn that code into a silent no-op on prod hosts.
+	MiniAppDevEnvironment string `yaml:"mini_app_dev_environment"`
 }
 
 type hostsEnvironment struct {
@@ -47,6 +51,7 @@ type hostPlan struct {
 	Environments []moiTruong
 	Retired      []moiTruong
 	MiniApp      moiTruong
+	MiniAppDev   moiTruong
 }
 
 // allEnvironments is live then retired — every host family the reserved-domain rule must cover.
@@ -191,6 +196,24 @@ func parseHostPlan(raw []byte) (hostPlan, error) {
 	}
 	if !found {
 		return hostPlan{}, fmt.Errorf("%s: mini_app_environment %q không có trong `environments` (hoặc đã nghỉ hưu)", hostsFilePath, f.MiniAppEnvironment)
+	}
+
+	if f.MiniAppDevEnvironment == "" {
+		return hostPlan{}, fmt.Errorf("%s: thiếu `mini_app_dev_environment`", hostsFilePath)
+	}
+	// The same environment twice would make the dev profile code a switch to the hosts the app
+	// already calls — a test link that silently tests prod.
+	if f.MiniAppDevEnvironment == f.MiniAppEnvironment {
+		return hostPlan{}, fmt.Errorf("%s: mini_app_dev_environment trùng mini_app_environment (%q)", hostsFilePath, f.MiniAppEnvironment)
+	}
+	found = false
+	for _, m := range plan.Environments {
+		if m.Ten == f.MiniAppDevEnvironment {
+			plan.MiniAppDev, found = m, true
+		}
+	}
+	if !found {
+		return hostPlan{}, fmt.Errorf("%s: mini_app_dev_environment %q không có trong `environments` (hoặc đã nghỉ hưu)", hostsFilePath, f.MiniAppDevEnvironment)
 	}
 	return plan, nil
 }

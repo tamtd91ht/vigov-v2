@@ -11,7 +11,8 @@ owns_facts:
   - "vì sao hai dòng tenant_domain admin.vigov.vn / admin-stg.vigov.vn được giữ mà không phân giải, và vì sao không VALIDATE ràng buộc 0007"
   - "vì sao web cán bộ không gọi thẳng <service>.api.vigov.vn"
   - "vì sao người quản trị đầu tiên của xã được gieo ở lần đăng nhập admin đầu tiên bằng IDENTITY_ADMIN_SEED_PASSWORD, và nó căng với ADR 0003 ở đâu"
-  - "vì sao tên miền công khai có một nguồn duy nhất là tệp deploy/hosts.yaml chứ không phải ConfigMap, vì sao Mini App chỉ dựng với host prod, và vì sao Ingress trên cụm vẫn dựng tay (01/10/2026)"
+  - "vì sao tên miền công khai có một nguồn duy nhất là tệp deploy/hosts.yaml chứ không phải ConfigMap, vì sao Mini App chỉ dựng với host prod (thay 14/10/2026 bởi #9), và vì sao Ingress trên cụm vẫn dựng tay (01/10/2026)"
+  - "vì sao Mini App mang hai bảng host prod/dev trong một bundle, chọn theo mã profile pf= trên liên kết (chỉ digest SHA-256 trong bundle, theo lượt mở), và vì sao tham số không tên env (14/10/2026, #9)"
   - "hai môi trường vigov-dev / vigov-prod thay staging, dev có CSDL và khoá riêng, mô hình host dev (*.dev.vigov.vn, <service>-dev.api.vigov.vn, admin.dev.vigov.vn), TLS dev, vì sao nhãn stg vẫn dành riêng, và rủi ro ENV=dev chủ dự án chấp nhận (14/10/2026)"
 ---
 
@@ -195,7 +196,7 @@ Chủ dự án chốt 14/10/2026, cả tám điều. Dựng ở `825ab024` (name
 | 4 | TLS: web dev dùng Secret riêng `vigov-dev-wildcard-tls`. API dev dùng **cùng chứng chỉ** `*.api.vigov.vn`, Secret **cùng tên** `vigov-api-wildcard-tls` (một bản sao trong `vigov-dev`) | `deploy/hosts.yaml` mục `dev`; `tools/ingress` chỉ cho trùng Secret TLS API khi hai môi trường cùng `api_suffix` |
 | 5 | Nhãn `stg`, `admin-stg`, `api-stg` và gốc `stg.vigov.vn`, `*.api-stg.vigov.vn` **giữ dành riêng**: CSDL prod còn hàng `<xa>.stg.vigov.vn` từ thời dùng chung | `deploy/hosts.yaml` mục `staging` `retired: true`; `service-platform/internal/domain/ten_mien_danh_rieng.go:51-60`; migration `service-platform/migrations/0027_reserve_dev_hosts.sql` |
 | 6 | Cụm `vigov-dev` chạy **`ENV=dev`**. Chủ dự án **chấp nhận** ba rủi ro ở bảng dưới | `deploy/overlays/dev/kustomization.yaml:19` |
-| 7 | Mini App vẫn **chỉ dựng với host prod** (`mini_app_environment: prod`) | `deploy/hosts.yaml`, dòng cuối |
+| 7 | ~~Mini App vẫn **chỉ dựng với host prod**~~ — **thay bởi #9 cùng ngày** (hai bảng host, chọn theo mã profile) | `deploy/hosts.yaml`, hai dòng cuối |
 | 8 | Job vận hành: `SECRET_ENCRYPTION_KEYS` và `CITIZEN_SESSION_BRIDGE_KEYS` **sinh riêng mỗi namespace**, không bao giờ chép prod → dev. Tạo tài khoản vận hành, chỉ định owner, cấp quyền, đặt secret Mini App chạy được với `MT=dev` | `deploy/Jenkinsfile:158` (`MT` = `prod` \| `dev`), `:734-737`, `:956-960`; kiểm `MT` ở `:1394`, `:1507`, `:1633`, `:1748` |
 
 **Rủi ro của `ENV=dev` trên cụm thật — chủ dự án chấp nhận:**
@@ -230,6 +231,27 @@ nay bị `OPERATOR_HOST` từ chối nhưng nhãn `admin-dev` **vẫn dành riê
 và gỡ một nhãn dành riêng chỉ nới thêm chỗ cho dòng của xã. Còn lại: `admin.stg.vigov.vn` vẫn qua phép
 kiểm `OPERATOR_HOST` vì gốc `stg.vigov.vn` còn trong danh sách gốc dành riêng; không xã nào giữ được
 host ấy nên không rò, chỉ là một giá trị cấu hình sai không bị chặn lúc khởi động.
+
+## Sửa đổi 14/10/2026 (#9) — Mini App mang hai bảng host, chọn theo mã profile trên liên kết
+
+Chủ dự án, 14/10/2026: *"ở hàm gen qr hãy thêm 1 params … để ứng dụng biết lấy data theo profile nào"*, rồi
+*"dùng 1 chữ ký đi đừng lộ dev ra … chỉ mã này mới vào được dev"*, *"chỉ trong lượt mở đó"*, *"cùng App ID"*.
+**Thay #2 (01/10) và #7 (14/10)** — Mini App không còn "chỉ dựng với host prod".
+
+| # | Quyết định | Nơi trong mã |
+|---|---|---|
+| 9a | **Một bundle, một App ID, hai bảng host**: `mini_app_environment: prod` (mặc định) và `mini_app_dev_environment: dev`. Không phải bundle thứ hai | `deploy/hosts.yaml`; `tools/ingress/sinhhosts.go` `renderCitizenHosts` → `SERVICE_API_HOSTS` / `SERVICE_API_HOSTS_DEV` |
+| 9b | Bảng dev chỉ dùng khi liên kết mở app mang `pf=<mã>` và SHA-256 của mã **khớp** digest trong bundle. Không `pf`, sai mã, lỗi băm, webview thiếu `crypto.subtle` → **prod**. Tên tham số không nói "dev"; bundle chỉ chứa digest, không chứa mã | `citizen-app/src/lib/runtime-profile.ts` |
+| 9c | Profile quyết **một lần, trước lượt vẽ đầu**, không đổi trong lượt mở và **không lưu** — mở lại không có liên kết là prod | `citizen-app/src/main.tsx`; `resolveRuntimeProfile` |
+| 9d | App chung lấy phiên dev từ `vihat-miniapp` **dev** (`VIGOV_API_HOST_DEV`), cầu phiên của nó trỏ identity dev. Thiếu biến thì lượt mở dev **không có** máy chủ đăng nhập — không lùi về host prod; `deploy.mjs` chặn đẩy khi thiếu | `citizen-app/src/api/dia-chi.ts`; `scripts/cau-hinh.mjs`; Jenkins credential `citizen-app-vigov-api-host-dev` |
+| 9e | `npm run qr -- --profile=dev` thêm `pf`, tra App ID và mã `x` ở platform/identity **dev**, và từ chối mã không khớp digest. Mã nằm ở `citizen-app/.env.qr.local` (gitignore) hoặc biến shell `VIGOV_DEV_PROFILE_CODE` | `citizen-app/scripts/commune-qr.mjs`, `make-qr.mjs` |
+
+**Không dùng tên `env`** (đề xuất ban đầu `env=dev`): `env` là tham số của Zalo (`env=TESTING` chọn bản thử),
+một liên kết chỉ có một `env`, nên QR bản thử + dev sẽ không dựng được.
+
+**Rủi ro chủ dự án chấp nhận:** host dev (`*-dev.api.vigov.vn`, máy chủ vihat-miniapp dev) **nằm trong bundle** —
+bảng host không giấu được khỏi máy gọi nó; chỉ mã là không suy ra được. Ai cầm QR dev (in ra là mã ở dạng rõ) đều
+vào dev; cụm dev chạy `ENV=dev` (#6). Xoay mã = mã mới + digest mới + bản app mới.
 
 ## Liên quan
 

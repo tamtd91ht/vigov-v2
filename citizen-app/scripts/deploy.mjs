@@ -229,6 +229,16 @@ if (api_host === "" && !chi_thu) {
   );
   process.exit(2);
 }
+// Same reason for the dev profile's host (owner, 14/10/2026): a pushed bundle without it turns every dev QR into a
+// login button that cannot log in — found by the tester, not here.
+if (docCauHinh().VIGOV_API_HOST_DEV === "" && !chi_thu) {
+  console.error(
+    "\nVIGOV_API_HOST_DEV chưa được đặt.\n" +
+      "  Địa chỉ vihat-miniapp của profile dev — app dùng nó khi mở bằng QR mang mã profile dev (pf=).\n" +
+      "  Đặt trong `.env.local` (xem `.env.local.example`), hoặc ở Jenkins: credential `citizen-app-vigov-api-host-dev`.\n",
+  );
+  process.exit(2);
+}
 
 // 1. ĐÍCH. Cờ, hoặc hỏi. Không cờ và không ai để hỏi thì TỪ CHỐI — không bao giờ một đích mặc định.
 // Không có menu các xã: platform cố ý không có lệnh liệt kê.

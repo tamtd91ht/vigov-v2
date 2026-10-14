@@ -22,6 +22,7 @@ const validHosts = `environments:
     web_host: "*.stg.vigov.vn"
     api_suffix: "api-stg.vigov.vn"
 mini_app_environment: prod
+mini_app_dev_environment: dev
 `
 
 func TestParseHostPlanAcceptsTheShape(t *testing.T) {
@@ -29,7 +30,7 @@ func TestParseHostPlanAcceptsTheShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(plan.Environments) != 2 || plan.Environments[0].Ten != "prod" || plan.MiniApp.DuoiAPI != "api.vigov.vn" {
+	if len(plan.Environments) != 2 || plan.Environments[0].Ten != "prod" || plan.MiniApp.DuoiAPI != "api.vigov.vn" || plan.MiniAppDev.Ten != "dev" {
 		t.Fatalf("plan = %+v", plan)
 	}
 	if len(plan.Retired) != 1 || plan.Retired[0].Ten != "staging" {
@@ -81,6 +82,10 @@ func TestParseHostPlanFailsClosed(t *testing.T) {
 		{"retired with TLS", strings.Replace(validHosts, "    retired: true\n", "    retired: true\n    web_tls_secret: e-tls\n", 1), "nghỉ hưu"},
 		{"retired with label suffix", strings.Replace(validHosts, "    retired: true\n", "    retired: true\n    api_label_suffix: \"-stg\"\n", 1), "nghỉ hưu"},
 		{"retired mini app", strings.Replace(validHosts, "mini_app_environment: prod", "mini_app_environment: staging", 1), "mini_app_environment"},
+		{"dev mini app missing", strings.Replace(validHosts, "mini_app_dev_environment: dev\n", "", 1), "mini_app_dev_environment"},
+		{"dev mini app not listed", strings.Replace(validHosts, "mini_app_dev_environment: dev", "mini_app_dev_environment: qa", 1), "mini_app_dev_environment"},
+		{"dev mini app retired", strings.Replace(validHosts, "mini_app_dev_environment: dev", "mini_app_dev_environment: staging", 1), "mini_app_dev_environment"},
+		{"dev mini app is prod", strings.Replace(validHosts, "mini_app_dev_environment: dev", "mini_app_dev_environment: prod", 1), "trùng"},
 		{"retired first", strings.Replace(validHosts, "  - name: prod\n", "  - name: prod\n    retired: true\n", 1), "nghỉ hưu"},
 		{"live without TLS", strings.Replace(validHosts, "    web_tls_secret: c-tls\n", "", 1), "web_tls_secret"},
 		{"second document", validHosts + "---\nenvironments: []\n", "MỘT"},
