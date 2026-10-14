@@ -1489,6 +1489,38 @@
       "viec": "Hộp ⊞ Danh mục tin, ô Thêm danh mục: gõ tên trùng danh mục cùng mục cha đang chọn ở ô 'Thuộc mục' (không phân biệt hoa/thường, khoảng trắng, NFC; phân biệt dấu) thì hiện ngay câu cảnh báo nêu tên đã có, aria-invalid, nút Thêm khoá — không gửi. Khác mục cha thì không cảnh báo (chủ dự án 13/10/2026). Máy chủ vẫn là luật (409 name_taken); đổi tên tại chỗ nhận câu 409 dưới dòng.",
       "bang_chung": "tsc sạch; vitest src/features/noi-dung 20 tệp/488 test xanh (flow test gõ 'NÔNG nghiệp' → cảnh báo, không POST; takenCategoryName anh em/khác cha). CHƯA kiểm bằng ảnh render.",
       "con_no": "Chưa kiểm bằng ảnh render."
+    },
+    {
+      "id": "bl141026-bo-tao-nhiem-vu-phan-anh",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Chi tiết phản ánh: bỏ nút 'Tạo nhiệm vụ' — ngăn chi tiết của prototype (FeedbackDetailDrawer.tsx) không có nút này (bảng lỗi web-admin-141026 dòng 1). Gỡ luôn thành phần petition-task.tsx và nhãn chỉ nó dùng; tuyến POST …/tasks ở service-petitions giữ nguyên, nhật ký cũ 'tao-nhiem-vu' vẫn đọc được.",
+      "bang_chung": "tsc + eslint sạch; vitest src/features/phan-anh + van-ban 40 tệp/759 xanh. Chưa xem ảnh render.",
+      "con_no": "Tuyến POST /citizen-reports/{code}/tasks ở service-petitions nay không màn nào gọi — gỡ hay giữ là việc riêng."
+    },
+    {
+      "id": "bl141026-marker-vi-tri-phan-anh",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "viec": "Chi tiết phản ánh, cụm Vị trí: marker đỏ không thấy vì trang /phan-anh không nạp maplibre-gl.css (chỉ /ban-do nạp) — phần tử marker không được định vị tuyệt đối nên rơi ra ngoài khung bản đồ. Nạp stylesheet ở src/app/phan-anh/page.tsx (bảng lỗi web-admin-141026 dòng 2).",
+      "bang_chung": "petition-map.tsx:181 đã thêm Marker màu #E5484D từ trước; thiếu CSS là nguyên nhân. tsc/eslint sạch. Chưa xem ảnh render.",
+      "con_no": "Chưa kiểm trên trình duyệt với phiếu có toạ độ."
+    },
+    {
+      "id": "bl141026-co-chu-nut-van-ban",
+      "menu": "van-ban-don-thu",
+      "trang_thai": "xong",
+      "viec": "Chi tiết văn bản đến và chi tiết đơn thư: nút 'Chuyển và ghi vết' và 'Chuyển thành nhiệm vụ' dùng size sm (0.8rem) như mọi nút khác trong ngăn; trước để mặc định md 14px nên to hơn (bảng lỗi web-admin-141026 dòng 4).",
+      "bang_chung": "ngan-van-ban-den.tsx, letter-drawer.tsx, letter-task.tsx, document-pending.tsx; vitest van-ban xanh. Chưa xem ảnh render.",
+      "con_no": "Chưa xem ảnh render."
+    },
+    {
+      "id": "bl141026-danh-muc-tin-theo-loai",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "treo",
+      "viec": "Bảng lỗi web-admin-141026 dòng 3: mỗi loại nội dung (Tin tức, Sự kiện, Video, Truyền thanh, Thông báo) có cây danh mục riêng. Prototype (content/models.py:294-336, CategoryManagerDialog.tsx) và đặc tả docs/ui-ux/11-noi-dung-mini-app.md:157 đều MỘT cây chung cho xã — yêu cầu mới, cần migration bảng danh_muc_mini_app đã có dữ liệu.",
+      "bang_chung": "Trinh sát 14/10/2026: danh_muc_mini_app (service-comms migrations 0006:153-206) không có cột loại; web-admin layDanhMucNoiDung() (lib/api/noi-dung.ts:601) không nhận loại; Mini App đã lọc chip theo ?type=.",
+      "tiep_theo": "Chờ chủ dự án chốt: banner có cây riêng không; danh mục đang có gán loại thế nào; đổi loại bài thì danh mục xử lý ra sao; tên trùng tính theo (loại, mục cha)."
     }
   ]
 }
