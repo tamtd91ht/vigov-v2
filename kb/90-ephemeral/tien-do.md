@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: aa248b52
+derived_from_commit: 3bd6d5cd
 expires: 2027-01-12
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 189 |
 | chưa làm | 43 |
 | treo | 14 |
-| xong | 553 |
+| xong | 554 |
 
 ## Theo menu
 
@@ -871,7 +871,7 @@ Cập nhật 2026-10-11 · 46 mục
 
 ## `deploy`
 
-Cập nhật 2026-10-14 · 41 mục
+Cập nhật 2026-10-14 · 42 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -966,6 +966,7 @@ SỐ SECRET `bi-mat-*` LÀ SÁU, KHÔNG PHẢI BẢY: web-admin không đọc bi
 | `tai-len-qua-service-ingress-55mb` — ADR 0052 §Sửa đổi 09/10/2026 thẻ C: ingress tách hai đối tượng — 'vigov' (web, comms, petitions, platform) proxy-body-size 55m + proxy-request-buffering off; 'vigov-no-upload' (documents, finance, identity, reporting) 25m; vá overlay prod/staging cho đối tượng mới; GOMEMLIMIT=300MiB cho petitions + comms; tools/apidoc khai @multipart | xong | (commit này) — tools/ingress (uploadHosts, body_cap_test.go kể cả TestOverlayKustomizationPatchesEveryIngress), tools/apidoc (@multipart, multipart_test.go); go vet + go test tools/ingress, tools/apidoc xanh; kubectl kustomize deploy/overlays/prod tách đúng host 55m/25m. CHƯA áp lên cụm thật | — | proxy-read-timeout của ingress-nginx mặc định 60 s chưa đổi — quét mã độc/mã hoá lại lâu hơn 60 s sau khi nhận thân sẽ 504. web-admin gen-api-types.mjs chưa hiểu multipart (ra 'than: never'). Ingress MinIO storage-api.vigov.vn chỉ GET/HEAD/OPTIONS: việc vận hành ngoài kho. |
 | `job-van-hanh-active-choices-10-10` — Job vận hành mới deploy/van-hanh/Jenkinsfile (ADR 0089, chủ dự án 10/10/2026): form Active Choices 4 vùng (ngữ cảnh đọc cụm · nhóm→việc · thông số đọc từ cụm · an toàn), các việc: tổng quan, xem log, trạng thái migration, kiểm kết nối, sửa ConfigMap, sửa/khôi phục Secret (sao lưu Secret riêng), CSDL mới (tạo DB+user, migration bằng pod một lần, kiểm lược đồ, đặt DSN, khởi động lại), chạy migration, sửa tài nguyên, khởi động lại, lùi bản trước, tạo tài khoản vận hành; Xã/tenant để chỗ (thuộc platform-admin). Logic ở ops.py + 35 ca test; check_build kiểm job; job cũ deploy/Jenkinsfile giữ nguyên. | xong | commit 'feat(deploy): job vận hành mới'. make check thoát 0 (builder); unittest ops 35/35; check_build PASS (10 ca tự chấm); ops.py catalog --check PASS (41 khoá). CHƯA chạy trên Jenkins thật và cụm thật. THAY THẾ 11/10/2026: chủ dự án cho bỏ mọi việc của job này và dựng lại chỉ việc đổi hạ tầng (ADR 0089 §Sửa đổi 11/10/2026) — việc tiếp theo ở mục job-van-hanh-ha-tang-11-10; các bước (1)–(5) dưới không còn áp dụng. | — | (1) Cài plugin Active Choices (uno-choice) trên Jenkins dùng chung, tạo job vigov-van-hanh (Script Path deploy/van-hanh/Jenkinsfile, không lightweight checkout, không shallow clone), bấm Build 1 lần để học tham số, duyệt 6+2 script ở In-process Script Approval. (2) Chạy theo README: tong-quan, kiem-ket-noi, trang-thai-migration, rồi chạy thử csdl-moi. (3) Chủ dự án: mẫu tài nguyên nho/vua/lon, tên DB vigov_<svc>_prod, sslmode chỉ require dùng được (chưa có CA trong ảnh), quyền kubeconfig thật rộng hơn deploy/cluster/rbac-jenkins.yaml. (4) Mâu thuẫn luật 11 về cách viết khoá (envFrom cần gạch dưới) — chưa quyết. (5) Bảng job ở deploy/README.md §2 thêm dòng sau khi job chạy thật. |
 | `job-van-hanh-ha-tang-11-10` — Dựng lại job vigov-van-hanh (chủ dự án 11/10/2026: 'đập đi xây lại', chỉ job này): bỏ 14 việc cũ, còn MỘT việc đổi hạ tầng — PostgreSQL (máy chủ/sslmode chung; CSDL/tài khoản/mật khẩu từng dịch vụ, giữ phần không gõ), MinIO (5 khoá common-config, cặp khoá riêng từng dịch vụ, tự dựng PUBLIC_MEDIA_BASE_URL khi public endpoint/tiền tố đổi), Redis (một host:port, db, redis/rediss, mật khẩu), ClamAV. Form Active Choices: MT → HA_TANG → chỉ ô của hạ tầng ấy cạnh giá trị đang chạy, ô trống = giữ; mật khẩu qua BI_MAT_1..7. Trước khi ghi: pod kiểm cổng + đăng nhập thử từng DSN PostgreSQL mới; sao lưu Secret riêng; đọc lại so khớp; khởi động lại platform → identity → còn lại. | xong | commit 'feat(deploy): vigov-van-hanh dựng lại — một việc đổi hạ tầng'. unittest deploy/van-hanh 36 OK (12 ca hạ tầng + 3 ca hợp đồng; đột biến bỏ kiểm sslmode / in DSN làm đỏ 3 ca); ops.py catalog --check PASS (41 khoá, 4 hạ tầng); check_build PASS (10 ca tự chấm van-hanh); make check — xem commit. CHƯA chạy trên Jenkins thật, chưa có Active Choices trên controller, chưa xem form render. GỠ 12/10/2026 theo lời chủ dự án ('kém quá, gỡ ra đi'): deploy/van-hanh xoá hết (ADR 0089 §Gỡ); nen-ban-do chuyển thân sang deploy/basemap. Các bước tiếp theo dưới không còn áp dụng. | — | Người vận hành: xoá job vigov-van-hanh trên Jenkins (Delete Pipeline). Không cài Active Choices nữa — không job nào cần. |
+| `prod-postgresql-sslmode-disable-chap-nhan-14-10` — Chủ dự án 14/10/2026 (tamtd), được hỏi với 3 phương án: cụm PostgreSQL 2 của prod (192.168.3.238-240) KHÔNG bật TLS; chọn 'Để disable vĩnh viễn (mạng nội bộ)' thay vì bật TLS hoặc nợ có hạn. 7 DATABASE_DSN của vigov-prod dùng sslmode=disable — lệch luật 13 bất biến 1 / TCVN 14423 (kênh tới kho dữ liệu phải mã hoá) và forbidden #1 (`sslmode=disable`), CHẤP NHẬN có người chịu trách nhiệm, chỉ cho giá trị trong Secret của cụm, KHÔNG cho mã nguồn. | xong | Lượt tao-tai-khoan-van-hanh 12:28 14/10/2026 với sslmode=require: 'tls error: server refused TLS connection' ở cả 3 node. Câu trả lời của chủ dự án trong phiên cùng ngày. | — | Rủi ro đã nêu khi hỏi: mật khẩu PostgreSQL và dữ liệu công dân đi không mã hoá trong mạng nội bộ giữa cụm k8s và cụm PG. Mã nguồn KHÔNG đổi: core/config và check_security vẫn coi sslmode=disable là vi phạm trong mã/mẫu; quyết định này chỉ là cấu hình cụm. Xem lại khi cụm PG bật được TLS, hoặc trước kỳ đánh giá an toàn thông tin cấp độ. |
 
 ## `platform-admin`
 

@@ -398,7 +398,7 @@ có** (luật 8, bất biến 1): một mẫu trông như cấu hình chạy đ�
 | tài khoản | riêng cho **từng dịch vụ**, không dùng chung, không phải `postgres` |
 | máy chủ + cổng | **cụm-hình-dạng ngay từ dòng đầu**: nhiều node thì `h1:5432,h2:5432` — `pgx` hiểu danh sách. Đừng cắt bớt để giữ một host (luật 11, cấm #5) |
 | tên CSDL | **RIÊNG của từng dịch vụ** — xem cảnh báo ngay dưới |
-| `sslmode` | `require` trở lên. `disable` là mật khẩu và dữ liệu công dân đi trần trên dây |
+| `sslmode` | `require` trở lên. `disable` là mật khẩu và dữ liệu công dân đi trần trên dây. **Ngoại lệ đã chấp nhận:** cụm PostgreSQL của `vigov-prod` (từ 14/10/2026) không bật TLS — chủ dự án chọn `disable` vĩnh viễn, mục `prod-postgresql-sslmode-disable-chap-nhan-14-10` trong sổ `deploy`. Đặt `require` ở đó thì mọi dịch vụ chết với `server refused TLS connection` |
 
 ⚠ **BẢY DỊCH VỤ PHẢI CÓ BẢY CSDL KHÁC NHAU, và dùng chung thì KHÔNG CÓ GÌ BÁO.** Cả bảy dịch
 vụ đều chạy `CREATE TABLE IF NOT EXISTS audit_log` trong `migrations/0001_init.sql` của chính

@@ -333,6 +333,13 @@
       "trang_thai": "dang_lam",
       "bang_chung": "Log build tao-bang 12:08-12:13 14/10/2026 do chủ dự án dán: 7 × 'ĐÃ TẠO', 5 × 'ok applied=N skipped=0'; comms/documents 'migration xong'. Trước đó (11:55) cả 7 DSN trỏ vigov_comms — chủ dự án cấu hình nhầm, đã sửa.",
       "tiep_theo": "(1) DSN cụm 2 đang sslmode=disable (log documents) — đổi require nếu cụm bật TLS (luật 13). (2) Lên ảnh mới comms + documents (pod cũ 19h của hai dịch vụ này vẫn nối CỤM 1 — nay là của dev). (3) kiem-tra MT=prod: 7 CSDL nối được, 'chưa áp 0'. (4) Dựng lại dữ liệu vận hành trên CSDL trắng: tao-tai-khoan-van-hanh → chi-dinh-owner → platform-admin (Deployment đang 0/0) 'Thêm xã' Thăng Bình + tên miền + App ID → dat-secret-mini-app với TENANT_ID MỚI (mặc định của tham số là id xã CŨ 01M3CS7HHK72V71CGRRJHGR8E8 — không còn tồn tại) → quản trị xã đăng nhập lần đầu bằng IDENTITY_ADMIN_SEED_PASSWORD. KHÔNG dùng tao-xa-thang-binh/doi-ten-mien/gan-mini-app/doi-app-id: viết cho CSDL cũ, CHECK của platform 0007 từ chối. (5) vihat-miniapp-bi-mat DSN (vigov_comms) vẫn trỏ cụm nào thì chưa biết — đổi sang cụm 2 rồi di-tru-vihat-miniapp, đọc kỹ nếu nó dừng vì vigov_comms đã có bảng. (6) Cụm 1 cho dev: Secret của vigov-dev trỏ cụm 1; dữ liệu thử của prod cũ đi theo."
+    },
+    {
+      "id": "prod-postgresql-sslmode-disable-chap-nhan-14-10",
+      "viec": "Chủ dự án 14/10/2026 (tamtd), được hỏi với 3 phương án: cụm PostgreSQL 2 của prod (192.168.3.238-240) KHÔNG bật TLS; chọn 'Để disable vĩnh viễn (mạng nội bộ)' thay vì bật TLS hoặc nợ có hạn. 7 DATABASE_DSN của vigov-prod dùng sslmode=disable — lệch luật 13 bất biến 1 / TCVN 14423 (kênh tới kho dữ liệu phải mã hoá) và forbidden #1 (`sslmode=disable`), CHẤP NHẬN có người chịu trách nhiệm, chỉ cho giá trị trong Secret của cụm, KHÔNG cho mã nguồn.",
+      "trang_thai": "xong",
+      "bang_chung": "Lượt tao-tai-khoan-van-hanh 12:28 14/10/2026 với sslmode=require: 'tls error: server refused TLS connection' ở cả 3 node. Câu trả lời của chủ dự án trong phiên cùng ngày.",
+      "tiep_theo": "Rủi ro đã nêu khi hỏi: mật khẩu PostgreSQL và dữ liệu công dân đi không mã hoá trong mạng nội bộ giữa cụm k8s và cụm PG. Mã nguồn KHÔNG đổi: core/config và check_security vẫn coi sslmode=disable là vi phạm trong mã/mẫu; quyết định này chỉ là cấu hình cụm. Xem lại khi cụm PG bật được TLS, hoặc trước kỳ đánh giá an toàn thông tin cấp độ."
     }
   ]
 }
