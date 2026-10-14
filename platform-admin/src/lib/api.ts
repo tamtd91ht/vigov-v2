@@ -640,6 +640,21 @@ export function addDomain(communeId: string, domain: string): Promise<CommuneDet
   return call("POST", `/communes/${id(communeId)}/domains`, { domain });
 }
 
+/**
+ * Soft-removes one NON-primary domain (owner 14/10/2026). `confirmDomain` is the operator's re-typed
+ * copy — the server compares it, the console only forwards it. The answer is the commune as it now is.
+ */
+export function removeDomain(
+  communeId: string,
+  input: { domain: string; confirmDomain: string; reason: string },
+): Promise<CommuneDetail> {
+  return call("POST", `/communes/${id(communeId)}/domain-removals`, {
+    domain: input.domain,
+    confirm_domain: input.confirmDomain,
+    reason: input.reason,
+  });
+}
+
 export function setPrimaryDomain(communeId: string, domain: string): Promise<CommuneDetail> {
   return call("PUT", `/communes/${id(communeId)}/primary-domain`, { domain });
 }

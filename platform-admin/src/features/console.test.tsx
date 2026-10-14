@@ -126,7 +126,7 @@ describe("permission hints — denied cases first", () => {
     );
     expect(html).toContain("chinh.example.vn");
     expect(html).toContain("4096");
-    for (const control of ["Sửa lỗi gõ", "Ngừng hoạt động xã", "Thêm tên miền", "Đặt làm tên miền chính", "Gắn Mini App"]) {
+    for (const control of ["Sửa lỗi gõ", "Ngừng hoạt động xã", "Thêm tên miền", "Đặt làm tên miền chính", "Gỡ tên miền", "Gắn Mini App"]) {
       expect(html).not.toContain(control);
     }
   });
@@ -145,14 +145,35 @@ describe("permission hints — denied cases first", () => {
     expect(domainsOnly).not.toContain("Gắn Mini App");
   });
 
-  it("with every key: all wave-1 controls, and still no remove / repoint domain", () => {
+  it("with every key: all wave-1 controls, removal of NON-primary domains only, and still no repoint", () => {
     const html = renderToString(
       <CommuneDetailBody commune={NO_RUNNING_APP} permissionKeys={ALL} onChanged={noop} onMiniAppAttached={noop} />,
     );
     for (const control of ["Sửa lỗi gõ trong tên xã", "Ngừng hoạt động xã", "Thêm tên miền", "Đặt làm tên miền chính", "Gắn Mini App"]) {
       expect(html).toContain(control);
     }
-    expect(html).not.toMatch(/Gỡ tên miền|Xoá tên miền|Xóa tên miền|Trỏ tên miền|Chuyển tên miền/);
+    // Owner 14/10/2026: a non-primary domain can be removed; the primary never (move it first).
+    expect(html).toContain("Gỡ tên miền phu.example.vn");
+    expect(html).not.toContain("Gỡ tên miền chinh.example.vn");
+    expect(html).not.toMatch(/Trỏ tên miền|Chuyển tên miền/);
+  });
+
+  it("removal is a domains control: ops.domain.manage alone shows it, the other keys do not", () => {
+    const withKey = renderToString(
+      <CommuneDetailBody commune={COMMUNE} permissionKeys={[DOMAIN]} onChanged={noop} onMiniAppAttached={noop} />,
+    );
+    expect(withKey).toContain("Gỡ tên miền phu.example.vn");
+    const without = renderToString(
+      <CommuneDetailBody commune={COMMUNE} permissionKeys={[TENANT, MINI_APP]} onChanged={noop} onMiniAppAttached={noop} />,
+    );
+    expect(without).not.toContain("Gỡ tên miền");
+  });
+
+  it("a commune with only its primary domain offers no removal at all", () => {
+    const html = renderToString(
+      <CommuneDetailBody commune={{ ...COMMUNE, domains: ["chinh.example.vn"] }} permissionKeys={ALL} onChanged={noop} onMiniAppAttached={noop} />,
+    );
+    expect(html).not.toContain("Gỡ tên miền");
   });
 
   it("an inactive commune offers re-activation, not deactivation", () => {

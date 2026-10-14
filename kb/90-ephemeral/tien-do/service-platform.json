@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-13",
+  "cap_nhat": "2026-10-14",
   "muc": [
+    {
+      "id": "go-ten-mien-xa-14-10",
+      "viec": "Gỡ (xoá mềm) một tên miền KHÔNG chính của xã qua khu vận hành; tên miền đã gỡ xã khác dùng lại được sau 5 phút",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án yêu cầu 14/10/2026 ('web platform admin bổ sung chức năng xóa tên miền trong cấu hình xã'), chọn 3 câu: xã khác dùng lại được; không gỡ tên miền chính; gõ lại tên miền + lý do. ADR 0048 §Sửa đổi 14/10/2026 (đảo §01/10 #5). Migration 0028_tenant_domain_soft_remove.sql: removed_at/removed_by/remove_reason, khoá chính host → chỉ mục duy nhất tenant_domain_live_host (WHERE removed_at IS NULL), CHECK tenant_domain_removed_complete (dòng gỡ không bao giờ la_chinh). Mọi đường đọc tenant_domain lọc removed_at IS NULL: directory.go (ByHost, ByID, launch code, HostHeld), operator_registry.go (danh sách, chi tiết), shared_mini_app.go, operator_writes.go (hostFree, SetPrimaryDomain, communeHosts). RegistryWriter.RemoveDomain (vết go_ten_mien cùng giao dịch); hostFree chặn xã KHÁC 5 phút (domain.DomainReuseCooldown). POST /api/v1/communes/{id}/domain-removals, ops.domain.manage, 409 domain_is_primary / domain_recently_removed, 422 confirm_domain_mismatch. KIỂM: go build/vet, go test internal/http (TestRemoveDomainAccepted, TestRemoveDomainRefusals 9 ca, TestAddDomainRecentlyRemoved, bảng TestGuardedRoutes 401/403/503/201), domain, store, cmd/server xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA CHẠY VỚI POSTGRESQL: TestPgRemoveDomain (vòng đời đầy đủ, CHECK của 0028, dùng lại sau cooldown) bị SKIP vì máy này không có VIGOV_TEST_DSN; migration 0028 chưa áp lên CSDL thật — áp khi ảnh service-platform mới lên ở vigov-dev trước, rồi vigov-prod. Sau 0028, `ON CONFLICT (host)` ở stage Jenkins doi-ten-mien-thang-binh (đã chạy, tự chặn khi chạy lại) không còn suy ra được chỉ mục. Thời gian chờ 5 phút là phiên làm việc chọn (biên trên TENANT_CACHE_TTL 30 giây), chủ dự án đổi được."
+    },
     {
       "id": "danh-muc-tham-chieu",
       "viec": "Tám bảng danh mục tham chiếu",

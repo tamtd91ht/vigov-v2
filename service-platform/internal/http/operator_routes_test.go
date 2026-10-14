@@ -293,6 +293,13 @@ func (w *writerFake) AddDomain(ctx context.Context, host string, by domain.Opera
 	return w.err
 }
 
+func (w *writerFake) RemoveDomain(ctx context.Context, host, reason string, by domain.OperatorActor) error {
+	w.record(ctx, by)
+	w.lastHost, w.lastReason = host, reason
+	w.removed++
+	return w.err
+}
+
 func (w *writerFake) SetPrimaryDomain(ctx context.Context, host string, by domain.OperatorActor) (bool, error) {
 	w.record(ctx, by)
 	w.lastHost = host
@@ -490,6 +497,9 @@ var guarded = []guardedRoute{
 		[]string{"ops.domain.manage"}, 201, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/primary-domain", `{"domain":"thangbinh-danang.vigov.vn"}`,
 		[]string{"ops.domain.manage"}, 200, false},
+	{"POST", "/api/v1/communes/" + communeIDFake + "/domain-removals",
+		`{"domain":"thangbinh.example.gov.vn","confirm_domain":"thangbinh.example.gov.vn","reason":"Gắn nhầm"}`,
+		[]string{"ops.domain.manage"}, 201, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/name", `{"name":"Xã Thăng Bình","reason":"Sửa lỗi gõ"}`,
 		[]string{"ops.tenant.manage"}, 200, false},
 	{"PUT", "/api/v1/communes/" + communeIDFake + "/activation", `{"active":false,"reason":"Sáp nhập theo NQ"}`,
@@ -628,6 +638,83 @@ func TestWritesAuditActorAndPathTarget(t *testing.T) {
 	}
 }
 
+// The removal targets the commune of the PATH, passes the normalised host and the trimmed reason, and
+// drops the host from this process's cache — only once the store accepted it.
+func TestRemoveDomainAccepted(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.domain.manage"}
+	rec := h.do("POST", "/api/v1/communes/"+communeIDFake+"/domain-removals",
+		`{"domain":" ThangBinh.example.gov.vn ","confirm_domain":"thangbinh.example.gov.vn","reason":"  Gắn nhầm tên miền  "}`,
+		opCookie(t))
+	if rec.Code != 201 {
+		t.Fatalf("status %d (%s)", rec.Code, rec.Body)
+	}
+	if h.w.target != communeIDFake || h.w.actor.Code != opCodeFake {
+		t.Errorf("target %q actor %+v", h.w.target, h.w.actor)
+	}
+	if h.w.lastHost != "thangbinh.example.gov.vn" || h.w.lastReason != "Gắn nhầm tên miền" {
+		t.Errorf("host %q reason %q", h.w.lastHost, h.w.lastReason)
+	}
+	if len(h.forgot) != 1 || h.forgot[0] != "thangbinh.example.gov.vn" {
+		t.Errorf("cache not told about the removed host: %v", h.forgot)
+	}
+}
+
+// Every refusal the handler owns answers BEFORE the store runs; every one the store owns keeps its code;
+// no refusal forgets a host from the cache.
+func TestRemoveDomainRefusals(t *testing.T) {
+	const host = "thangbinh.example.gov.vn"
+	body := func(domain, confirm, reason string) string {
+		return `{"domain":"` + domain + `","confirm_domain":"` + confirm + `","reason":"` + reason + `"}`
+	}
+	cases := []struct {
+		name, body string
+		storeErr   error
+		want       int
+		code       string
+		reachStore bool
+	}{
+		{"confirmation differs", body(host, "thangbinh2.example.gov.vn", "Gắn nhầm"), nil, 422, "confirm_domain_mismatch", false},
+		{"confirmation empty", body(host, "", "Gắn nhầm"), nil, 422, "confirm_domain_mismatch", false},
+		{"reason blank", body(host, host, "   "), nil, 422, "invalid_reason", false},
+		{"reserved host", body("admin.vigov.vn", "admin.vigov.vn", "Gỡ"), nil, 422, "reserved_domain", false},
+		{"not a host", body("http://x", "http://x", "Gỡ"), nil, 422, "invalid_domain", false},
+		{"primary", body(host, host, "Gỡ"), store.ErrDomainIsPrimary, 409, "domain_is_primary", true},
+		{"not the commune's", body(host, host, "Gỡ"), store.ErrDomainNotInCommune, 422, "domain_not_in_commune", true},
+		{"inactive commune", body(host, host, "Gỡ"), store.ErrCommuneInactive, 409, "commune_inactive", true},
+		{"unknown commune", body(host, host, "Gỡ"), store.ErrCommuneNotFound, 404, "commune_not_found", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.id.keys = []string{"ops.domain.manage"}
+			h.w.err = c.storeErr
+			rec := h.do("POST", "/api/v1/communes/"+communeIDFake+"/domain-removals", c.body, opCookie(t))
+			if rec.Code != c.want || !strings.Contains(rec.Body.String(), `"`+c.code+`"`) {
+				t.Fatalf("status %d body %s, want %d %s", rec.Code, rec.Body, c.want, c.code)
+			}
+			if got := h.w.removed > 0; got != c.reachStore {
+				t.Errorf("store reached = %v, want %v", got, c.reachStore)
+			}
+			if len(h.forgot) != 0 {
+				t.Errorf("a refused removal forgot %v", h.forgot)
+			}
+		})
+	}
+}
+
+// A host removed from another commune moments ago is answered with its own code, so the operator reads
+// "wait", not "taken".
+func TestAddDomainRecentlyRemoved(t *testing.T) {
+	h := newHarness(t)
+	h.id.keys = []string{"ops.domain.manage"}
+	h.w.err = store.ErrDomainRecentlyRemoved
+	rec := h.do("POST", "/api/v1/communes/"+communeIDFake+"/domains", `{"domain":"thangbinh.example.gov.vn"}`, opCookie(t))
+	if rec.Code != 409 || !strings.Contains(rec.Body.String(), `"domain_recently_removed"`) {
+		t.Fatalf("status %d body %s", rec.Code, rec.Body)
+	}
+}
+
 func TestCreateCommuneRefusals(t *testing.T) {
 	body := func(name, domain string) string {
 		return `{"name":"` + name + `","province_id":"66QW36RCJ7GVW79W8GJRYH3ZNR","primary_domain":"` + domain + `"}`
@@ -700,7 +787,9 @@ func TestUnknownCommuneIs404(t *testing.T) {
 	}
 }
 
-// No route removes a domain or moves it (ADR 0048 §01/10 #5): those methods must not exist.
+// No route MOVES a domain to another commune in one act, and no route DELETES a registry row (ADR 0048
+// §01/10 #5; rule 7). A domain is removed only softly, through POST …/domain-removals (owner 14/10/2026),
+// so the DELETE spelling of that act must still not exist.
 func TestNoDomainRemovalOrRepoint(t *testing.T) {
 	h := newHarness(t)
 	h.id.keys = []string{"ops.domain.manage", "ops.tenant.manage"}

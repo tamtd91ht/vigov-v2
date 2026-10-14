@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/text/unicode/norm"
@@ -33,6 +34,8 @@ type CommuneWriter interface {
 	CreateCommune(ctx context.Context, in store.NewCommune, by domain.OperatorActor) (domain.Commune, error)
 	AddDomain(ctx context.Context, host string, by domain.OperatorActor) error
 	SetPrimaryDomain(ctx context.Context, host string, by domain.OperatorActor) (bool, error)
+	// RemoveDomain soft-removes a non-primary host (migration 0028); the host becomes free.
+	RemoveDomain(ctx context.Context, host, reason string, by domain.OperatorActor) error
 	CorrectName(ctx context.Context, name, reason string, by domain.OperatorActor) (bool, error)
 	SetActivation(ctx context.Context, active bool, reason string, by domain.OperatorActor) (bool, []string, error)
 	// DeleteCommune soft-deletes the commune in ctx (operator_commune_deletion.go); returns its hosts.
@@ -115,6 +118,14 @@ type addDomainBody struct {
 
 type primaryDomainBody struct {
 	Domain string `json:"domain"`
+}
+
+// domainRemovalBody — the domain to remove, the same domain re-typed by the operator, and the reason
+// (owner 14/10/2026). The re-type is checked here, the rest in one transaction by the store.
+type domainRemovalBody struct {
+	Domain        string `json:"domain"`
+	ConfirmDomain string `json:"confirm_domain"`
+	Reason        string `json:"reason"`
 }
 
 type correctNameBody struct {
@@ -217,7 +228,13 @@ func (h *operatorHandlers) writeRegistryError(w http.ResponseWriter, r *http.Req
 		store.ErrDuplicateName:      {http.StatusConflict, "duplicate_name", "Đã có xã cùng tên trong tỉnh này."},
 		store.ErrCommuneInactive:    {http.StatusConflict, "commune_inactive", "Xã đã ngừng hoạt động."},
 		store.ErrDomainNotInCommune: {http.StatusUnprocessableEntity, "domain_not_in_commune", "Tên miền không thuộc xã này."},
-		store.ErrMiniAppTaken:       {http.StatusConflict, "mini_app_taken", "App ID đã có trong sổ Mini App."},
+		store.ErrDomainIsPrimary: {http.StatusConflict, "domain_is_primary",
+			"Đây là tên miền chính của xã. Đặt một tên miền khác làm tên miền chính trước rồi mới gỡ."},
+		store.ErrDomainRecentlyRemoved: {http.StatusConflict, "domain_recently_removed",
+			"Tên miền này vừa được gỡ khỏi một xã khác. Chờ 5 phút rồi thử lại."},
+		domain.ErrDomainRemovalConfirmMismatch: {http.StatusUnprocessableEntity, "confirm_domain_mismatch",
+			"Tên miền gõ lại không khớp với tên miền cần gỡ."},
+		store.ErrMiniAppTaken: {http.StatusConflict, "mini_app_taken", "App ID đã có trong sổ Mini App."},
 		store.ErrMiniAppNotInCommune: {http.StatusNotFound, "mini_app_not_found",
 			"Không tìm thấy Mini App riêng này ở xã."},
 		store.ErrMiniAppInactive: {http.StatusConflict, "mini_app_inactive", "App ID này đã tắt."},
@@ -408,6 +425,47 @@ func (h *operatorHandlers) setPrimaryDomain(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	h.respondCommune(w, r, id, http.StatusOK)
+}
+
+// removeDomain soft-removes one NON-primary domain of the commune (owner 14/10/2026).
+//
+// The host is normalised and checked against the reserved list BEFORE the write, for setPrimaryDomain's
+// reason: the two frozen admin*.vigov.vn rows ARE some commune's rows, and freeing one would hand a
+// platform address to whoever asks next (the CHECK of 0007 would also refuse the UPDATE — this answers
+// first, with the right code).
+func (h *operatorHandlers) removeDomain(w http.ResponseWriter, r *http.Request) {
+	ctx, id, ok := targetCommune(w, r)
+	if !ok {
+		return
+	}
+	var b domainRemovalBody
+	if !decodeBody(w, r, &b) {
+		return
+	}
+	host, err := domain.NormaliseHost(strings.ToLower(strings.TrimSpace(b.Domain)))
+	if err != nil {
+		h.writeRegistryError(w, r, domain.ErrCommuneHostInvalid)
+		return
+	}
+	if domain.IsReservedCommuneHost(host, h.d.OperatorHost) {
+		h.writeRegistryError(w, r, domain.ErrCommuneHostReserved)
+		return
+	}
+	if !domain.ConfirmsCommuneHost(b.ConfirmDomain, []string{host}) {
+		h.writeRegistryError(w, r, domain.ErrDomainRemovalConfirmMismatch)
+		return
+	}
+	reason, err := domain.ValidateReason(norm.NFC.String(b.Reason))
+	if err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	if err := h.d.Writer.RemoveDomain(ctx, host, reason, actorOf(r)); err != nil {
+		h.writeRegistryError(w, r, err)
+		return
+	}
+	h.d.Forget(host)
+	h.respondCommune(w, r, id, http.StatusCreated)
 }
 
 func (h *operatorHandlers) correctName(w http.ResponseWriter, r *http.Request) {

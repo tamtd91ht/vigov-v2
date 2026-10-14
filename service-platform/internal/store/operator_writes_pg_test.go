@@ -233,6 +233,95 @@ func TestPgDomainsNameActivationMiniApp(t *testing.T) {
 	}
 }
 
+// The soft removal of a domain (migration 0028, owner 14/10/2026), end to end against the database:
+// the primary is refused, the removal and its entry commit together, the host stops resolving at once,
+// ANOTHER commune waits out the cooldown while the SAME commune may take it back, and a re-used host
+// resolves only to the commune that holds it now.
+func TestPgRemoveDomain(t *testing.T) {
+	db, _ := moKetNoi(t)
+	chayMigration(t, db)
+	themXa(t, db, ulidA, "Xã Thăng Bình", true)
+	themHost(t, db, "thangbinh.vigov.vn", ulidA, true)
+	themHost(t, db, "thangbinh.example.gov.vn", ulidA, false)
+	themXa(t, db, ulidB, "Xã Tân Phú", true)
+	themHost(t, db, "tanphu.vigov.vn", ulidB, true)
+	w := NewRegistryWriter(corestore.New(db))
+	dir := NewDirectory(db, "")
+	ctxA := inCommune(ulidA)
+
+	if err := w.RemoveDomain(ctxA, "thangbinh.vigov.vn", "Gỡ thử", operatorFake); !errors.Is(err, ErrDomainIsPrimary) {
+		t.Fatalf("primary removed: %v", err)
+	}
+	if err := w.RemoveDomain(ctxA, "tanphu.vigov.vn", "Gỡ thử", operatorFake); !errors.Is(err, ErrDomainNotInCommune) {
+		t.Fatalf("another commune's host removed: %v", err)
+	}
+	if err := w.RemoveDomain(ctxA, "thangbinh.example.gov.vn", "Gắn nhầm", operatorFake); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.RemoveDomain(ctxA, "thangbinh.example.gov.vn", "Gắn nhầm", operatorFake); !errors.Is(err, ErrDomainNotInCommune) {
+		t.Errorf("second removal of the same host: %v", err)
+	}
+	if n := count(t, db, `SELECT count(*) FROM tenant_domain WHERE host = 'thangbinh.example.gov.vn'
+		AND removed_at IS NOT NULL AND removed_by = 'VH-00001' AND remove_reason = 'Gắn nhầm'`); n != 1 {
+		t.Fatalf("removed rows = %d, want 1 (the row is kept, marked)", n)
+	}
+	a := auditRows(t, db, ulidA)
+	if len(a) != 1 || a[0].action != ActionRemoveDomain || a[0].subject != "thangbinh.example.gov.vn" ||
+		a[0].delta["ly_do"] != "Gắn nhầm" || a[0].delta["da_xoa_mem"] != true {
+		t.Fatalf("audit = %+v", a)
+	}
+	if _, ok := dir.ByHost(context.Background(), "thangbinh.example.gov.vn"); ok {
+		t.Error("a removed host still resolves")
+	}
+	if held, err := dir.HostHeld(context.Background(), "thangbinh.example.gov.vn"); err != nil || held {
+		t.Errorf("a removed host still counts as held: %v %v", held, err)
+	}
+	c, _, err := NewOperatorRegistry(db).Commune(context.Background(), ulidA)
+	if err != nil || len(c.Domains) != 1 || c.Domains[0] != "thangbinh.vigov.vn" {
+		t.Errorf("commune still lists the removed host: %+v %v", c.Domains, err)
+	}
+
+	// Another commune: refused during the cooldown, accepted once it has passed.
+	if err := w.AddDomain(inCommune(ulidB), "thangbinh.example.gov.vn", operatorFake); !errors.Is(err, ErrDomainRecentlyRemoved) {
+		t.Fatalf("another commune took the host inside the cooldown: %v", err)
+	}
+	if _, err := db.Exec(`UPDATE tenant_domain SET removed_at = now() - interval '1 hour'
+		WHERE host = 'thangbinh.example.gov.vn' AND removed_at IS NOT NULL`); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddDomain(inCommune(ulidB), "thangbinh.example.gov.vn", operatorFake); err != nil {
+		t.Fatalf("host not free after the cooldown: %v", err)
+	}
+	if got, ok := dir.ByHost(context.Background(), "thangbinh.example.gov.vn"); !ok || string(got.ID) != ulidB {
+		t.Fatalf("re-used host resolves to %v %v, want commune B only", got.ID, ok)
+	}
+	// The same host, now live in B, is taken for A — the live row wins over A's removed one.
+	if err := w.AddDomain(ctxA, "thangbinh.example.gov.vn", operatorFake); !errors.Is(err, ErrDomainTaken) {
+		t.Errorf("host live in B added to A: %v", err)
+	}
+
+	// The same commune may take back a host it removed, with no wait.
+	if err := w.AddDomain(ctxA, "thangbinh2.example.gov.vn", operatorFake); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.RemoveDomain(ctxA, "thangbinh2.example.gov.vn", "Gỡ nhầm", operatorFake); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.AddDomain(ctxA, "thangbinh2.example.gov.vn", operatorFake); err != nil {
+		t.Errorf("the same commune could not take its own host back: %v", err)
+	}
+
+	// The database's own copy of "never the primary".
+	if _, err := db.Exec(`UPDATE tenant_domain SET removed_at = now(), removed_by = 'VH-00001', remove_reason = 'x'
+		WHERE host = 'thangbinh.vigov.vn'`); err == nil {
+		t.Error("0028's CHECK let a primary row be removed")
+	}
+	// A removed row with no actor or no reason.
+	if _, err := db.Exec(`UPDATE tenant_domain SET removed_at = now() WHERE host = 'tanphu.vigov.vn'`); err == nil {
+		t.Error("0028's CHECK let a removal without actor and reason through")
+	}
+}
+
 func TestPgOperatorRegistryReads(t *testing.T) {
 	db, _ := moKetNoi(t)
 	chayMigration(t, db)

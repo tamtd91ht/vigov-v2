@@ -11,6 +11,7 @@ import {
   ScrollText,
   Smartphone,
   Star,
+  Trash2,
   TriangleAlert,
   UsersRound,
 } from "lucide-react";
@@ -35,6 +36,7 @@ import {
   ApiError,
   correctName,
   getCommune,
+  removeDomain,
   setActivation,
   setPrimaryDomain,
   type CommuneDetail,
@@ -51,10 +53,14 @@ import { MiniAppSection } from "./mini-app-section";
 /**
  * `/xa/[id]` — one commune's registry record and the wave-1 writes on it (ADR 0048 §01/10 #4, #5).
  *
- * WHAT IS DELIBERATELY ABSENT: removing a domain, or pointing a domain at another commune. Neither
- * exists by decision (§01/10 #5): repointing is the merger path and goes with merger
- * (`skills/admin-unit-merge`), a separate batch. Renaming an administrative unit is not here
- * either — the name dialog corrects a TYPING MISTAKE, and its wording says so.
+ * A NON-primary domain can be REMOVED (owner 14/10/2026, reversing §01/10 #5's "no removal"): the
+ * operator re-types it and gives a reason; the server marks the row, and the host may later be given
+ * to another commune. The primary is never removed — the operator moves the primary first.
+ *
+ * WHAT IS DELIBERATELY ABSENT: pointing a LIVE domain at another commune in one act — that is the
+ * merger path and goes with merger (`skills/admin-unit-merge`), a separate batch. Renaming an
+ * administrative unit is not here either — the name dialog corrects a TYPING MISTAKE, and its wording
+ * says so.
  *
  * Every control is shown by the operator's `ops.*` keys (`lib/permissions.ts`) — a hint; the
  * server checks each call. Every write answers the commune as the registry now holds it, and that
@@ -278,6 +284,7 @@ function DomainList({
 }) {
   const guarded = useGuardedError();
   const [target, setTarget] = useState<string | null>(null);
+  const [removing, setRemoving] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -311,23 +318,45 @@ function DomainList({
               </Badge>
             ) : null}
             {i > 0 && allowed ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="ml-auto"
-                icon={<Star aria-hidden="true" focusable="false" strokeWidth={1.8} />}
-                onClick={() => {
-                  setError(null);
-                  setTarget(d);
-                }}
-              >
-                Đặt làm tên miền chính
-              </Button>
+              <span className="ml-auto flex flex-wrap gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  icon={<Star aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                  onClick={() => {
+                    setError(null);
+                    setTarget(d);
+                  }}
+                >
+                  Đặt làm tên miền chính
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Gỡ tên miền ${d}`}
+                  icon={<Trash2 aria-hidden="true" focusable="false" strokeWidth={1.8} />}
+                  onClick={() => setRemoving(d)}
+                >
+                  Gỡ
+                </Button>
+              </span>
             ) : null}
           </li>
         ))}
       </ul>
+      {removing !== null ? (
+        <RemoveDomainDialog
+          commune={commune}
+          domain={removing}
+          onClose={() => setRemoving(null)}
+          onRemoved={(c) => {
+            setRemoving(null);
+            onChanged(c);
+          }}
+        />
+      ) : null}
       <Dialog open={target !== null} title="Đặt tên miền chính" icon={Star} onClose={() => !busy && setTarget(null)}>
         <p>
           Đặt <code className="font-mono text-[13px] break-all text-ink-900">{target}</code> làm tên miền chính của{" "}
@@ -344,6 +373,100 @@ function DomainList({
         </DialogActions>
       </Dialog>
     </>
+  );
+}
+
+export const REMOVE_DOMAIN_NOTICE =
+  "Sau khi gỡ, các trang của xã trên tên miền này sẽ ngừng hoạt động trong khoảng 30 giây. Các tên miền khác của xã không bị ảnh hưởng. Tên miền đã gỡ có thể được gắn lại cho xã này, hoặc cho xã khác sau 5 phút. Lý do và người gỡ được ghi vào nhật ký.";
+
+/**
+ * The removal dialog. The confirmation field is never pre-filled: typing the domain again IS the
+ * confirmation (the commune-deletion precedent). The submit stays disabled until it matches, so a
+ * slip is caught here; the server compares again and is the gate (rule 5 forbidden #1).
+ */
+function RemoveDomainDialog({
+  commune,
+  domain,
+  onClose,
+  onRemoved,
+}: {
+  commune: CommuneDetail;
+  domain: string;
+  onClose: () => void;
+  onRemoved: (c: CommuneDetail) => void;
+}) {
+  const guarded = useGuardedError();
+  const [confirmDomain, setConfirmDomain] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<{ field: CommuneField; text: string } | null>(null);
+  const matches = confirmDomain.trim().toLowerCase() === domain.toLowerCase();
+  const ready = matches && reason.trim() !== "";
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || !ready) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onRemoved(await removeDomain(commune.id, { domain, confirmDomain: confirmDomain.trim(), reason: reason.trim() }));
+    } catch (err) {
+      let field: CommuneField = "form";
+      const text = guarded(err, "gỡ tên miền", (e) => {
+        const known = fieldError(e);
+        if (known) field = known.field;
+        return known?.text ?? null;
+      });
+      if (text !== null) setError({ field, text });
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Dialog open title="Gỡ tên miền" tone="danger" icon={TriangleAlert} onClose={() => !busy && onClose()}>
+      <form className="flex flex-col gap-4" method="post" onSubmit={submit} noValidate>
+        <p className="m-0">
+          Gỡ <code className="font-mono text-[13px] break-all text-ink-900">{domain}</code> khỏi {commune.name}?
+        </p>
+        <Notice tone="legal" icon={TriangleAlert} title="Lưu ý:">
+          <p>{REMOVE_DOMAIN_NOTICE}</p>
+        </Notice>
+        <TextField
+          label="Gõ lại tên miền để xác nhận"
+          hint="Gõ đúng tên miền cần gỡ, không kèm https:// hay đường dẫn."
+          name="confirm_domain"
+          type="text"
+          inputMode="url"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          value={confirmDomain}
+          onChange={(e) => setConfirmDomain(e.target.value)}
+          disabled={busy}
+          error={error?.field === "confirmDomain" ? error.text : null}
+        />
+        <TextAreaField
+          label="Lý do gỡ"
+          hint="Ví dụ: gắn nhầm tên miền khi tạo xã. Tối đa 500 ký tự."
+          name="reason"
+          rows={3}
+          maxLength={500}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          disabled={busy}
+          error={error?.field === "reason" ? error.text : null}
+        />
+        <FormMessage text={error && error.field !== "confirmDomain" && error.field !== "reason" ? error.text : null} />
+        <DialogActions>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+            Huỷ
+          </Button>
+          <Button type="submit" variant="danger-solid" disabled={busy || !ready} aria-busy={busy}>
+            {busy ? "Đang gỡ…" : "Gỡ tên miền"}
+          </Button>
+        </DialogActions>
+      </form>
+    </Dialog>
   );
 }
 
@@ -382,7 +505,7 @@ function AddDomainForm({ commune, onChanged }: { commune: CommuneDetail; onChang
     <form className="flex max-w-xl flex-col gap-3 border-t border-line pt-4" method="post" onSubmit={submit} noValidate>
       <TextField
         label="Thêm tên miền"
-        hint="Tên miền trần, không kèm https:// hay đường dẫn. Tên miền đã thêm không gỡ được ở màn này."
+        hint="Tên miền trần, không kèm https:// hay đường dẫn."
         name="domain"
         type="text"
         inputMode="url"

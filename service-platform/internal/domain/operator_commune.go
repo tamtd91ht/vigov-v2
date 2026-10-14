@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -42,6 +43,17 @@ const (
 // cooling-off period on a registry act, not a deadline owed to a citizen (rule 10 is about the latter).
 // Changing it is the owner's decision, never a tidy-up.
 const CommuneDeletionMinInactiveDays = 7
+
+// DomainReuseCooldown is how long a host removed from one commune stays unavailable to ANOTHER
+// commune (store.hostFree). Not a business rule — a safety margin over the 30 s TENANT_CACHE_TTL
+// every other service caches "host → commune" for (core/tenant.CachedDirectory), so no cache can
+// still name the old commune when the new one starts answering on the host. Shortening it below
+// that TTL reopens the window it exists to close.
+const DomainReuseCooldown = 5 * time.Minute
+
+// ErrDomainRemovalConfirmMismatch — the domain the operator re-typed to confirm a removal is not the
+// domain being removed. It names neither.
+var ErrDomainRemovalConfirmMismatch = errors.New("tenant: tên miền xác nhận không khớp tên miền cần gỡ")
 
 // ErrDeletionConfirmMismatch — layer (b): the domain the operator re-typed is none of the commune's.
 // Deliberately says nothing about WHICH domains the commune holds: the refusal must not become a way

@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "platform-admin",
-  "cap_nhat": "2026-10-13",
+  "cap_nhat": "2026-10-14",
   "muc": [
+    {
+      "id": "go-ten-mien-xa-14-10",
+      "viec": "Màn chi tiết xã: nút 'Gỡ' cạnh mỗi tên miền KHÔNG chính, hộp thoại gõ lại tên miền + lý do",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án yêu cầu 14/10/2026; ADR 0048 §Sửa đổi 14/10/2026. src/lib/api.ts removeDomain → POST /communes/{id}/domain-removals {domain, confirm_domain, reason}; src/lib/errors.ts thêm domain_is_primary, domain_recently_removed, confirm_domain_mismatch (trường confirmDomain); src/features/communes/commune-detail.tsx: nút 'Gỡ' (aria-label 'Gỡ tên miền <host>') chỉ cho tên miền không chính và chỉ khi có ops.domain.manage; RemoveDomainDialog: ô xác nhận không điền sẵn, nút gỡ khoá tới khi gõ khớp và có lý do; bỏ câu 'Tên miền đã thêm không gỡ được ở màn này'. KIỂM: tsc, eslint sạch; vitest 312/312 (console.test.tsx: không khoá → không nút gỡ; ops.domain.manage → có cho phu, không cho chinh; xã chỉ có tên miền chính → không nút; api.test.ts: đúng đường, đúng ba khoá body).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA xem ảnh render của nút và hộp thoại (máy này không dựng được màn) — chủ dự án build, mở /xa/<id> trên admin.dev.vigov.vn và gỡ thử một tên miền phụ. Cần ảnh service-platform có migration 0028 chạy trước, không thì tuyến trả 404."
+    },
     {
       "id": "giao-dien-dong-nhat-web-admin-13-10",
       "viec": "Giao diện platform-admin đồng nhất web-admin (ADR 0068 lần 6): token spec 00, phông Inter, nút/badge/thẻ/bảng/ô nhập/hộp thoại, khung sidebar navy + header trắng; mọi màn rà lại bảng, tiêu đề, nhãn cột, nút",

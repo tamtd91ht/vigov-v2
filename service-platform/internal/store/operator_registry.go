@@ -31,7 +31,8 @@ func NewOperatorRegistry(db *sql.DB) *OperatorRegistry { return &OperatorRegistr
 // installations (the tinh_thanh migration's argument).
 var CommuneOrder = page.NewAllowlist(page.Asc, page.Col("created_at", "tao_luc", page.KindTime))
 
-// domainsAgg lists a commune's hosts, primary first. string_agg, not array_agg: a host is LDH-only
+// domainsAgg lists a commune's hosts, primary first. Every query using it joins only LIVE rows
+// (`d.removed_at IS NULL`, migration 0028): a removed host is not one of the commune's hosts. string_agg, not array_agg: a host is LDH-only
 // (domain.ParseCommuneHost, migration 0001's lower-case CHECK), so it never contains a comma, and
 // a text column scans through database/sql without a driver-specific array type.
 const domainsAgg = `COALESCE(string_agg(d.host, ',' ORDER BY d.la_chinh DESC, d.host), '')`
@@ -60,7 +61,7 @@ func (r *OperatorRegistry) ListCommunes(ctx context.Context, req page.Request) (
 		afterAt, afterID = a.Key.Time(), a.ID
 	}
 	q := `SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, t.tao_luc, ` + domainsAgg + `
-		FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id
+		FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.removed_at IS NULL
 		WHERE t.deleted_at IS NULL AND ($1::timestamptz IS NULL OR (t.tao_luc, t.id) ` + cmp + ` ($1::timestamptz, $2))
 		GROUP BY t.id
 		ORDER BY t.tao_luc ` + ord + `, t.id ` + ord + `
@@ -107,7 +108,7 @@ var ErrCommuneNotFound = errors.New("operator registry: không có xã với id 
 // every operator route on /communes/{id} starts here or at lockCommune, none of them reaches it.
 func (r *OperatorRegistry) Commune(ctx context.Context, id string) (domain.Commune, []domain.CommuneMiniApp, error) {
 	const q = `SELECT t.id, t.ten, t.tinh_thanh, t.dang_hoat_dong, t.tao_luc, ` + domainsAgg + `
-		FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id
+		FROM tenant t LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.removed_at IS NULL
 		WHERE t.id = $1 AND t.deleted_at IS NULL
 		GROUP BY t.id`
 	var (

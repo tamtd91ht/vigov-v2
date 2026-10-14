@@ -92,7 +92,16 @@ export function handleGuardedError(
  * Commune-registry refusals (operator_communes.go `writeRegistryError`), each with the next step.
  * `field` says which input the sentence belongs under, so a form shows it there.
  */
-export type CommuneField = "name" | "province" | "domain" | "reason" | "appId" | "note" | "secret" | "form";
+export type CommuneField =
+  | "name"
+  | "province"
+  | "domain"
+  | "confirmDomain"
+  | "reason"
+  | "appId"
+  | "note"
+  | "secret"
+  | "form";
 
 const COMMUNE_ERRORS: Record<string, { field: CommuneField; text: string }> = {
   commune_not_found: { field: "form", text: "Không tìm thấy xã. Quay lại danh sách xã và chọn lại." },
@@ -109,6 +118,19 @@ const COMMUNE_ERRORS: Record<string, { field: CommuneField; text: string }> = {
   reserved_domain: { field: "domain", text: "Tên miền này dành riêng cho nền tảng, không gắn được cho xã." },
   domain_taken: { field: "domain", text: "Tên miền này đã được gắn cho một xã. Mỗi tên miền chỉ thuộc một xã." },
   domain_not_in_commune: { field: "domain", text: "Tên miền này không thuộc xã. Chọn trong các tên miền xã đang có." },
+  // The removal of a domain (owner 14/10/2026).
+  domain_is_primary: {
+    field: "form",
+    text: "Đây là tên miền chính của xã nên chưa gỡ được. Đặt một tên miền khác làm tên miền chính trước rồi gỡ.",
+  },
+  domain_recently_removed: {
+    field: "domain",
+    text: "Tên miền này vừa được gỡ khỏi một xã khác. Chờ 5 phút rồi thêm lại.",
+  },
+  confirm_domain_mismatch: {
+    field: "confirmDomain",
+    text: "Tên miền gõ lại không khớp với tên miền cần gỡ. Gõ lại đúng tên miền.",
+  },
   commune_inactive: {
     field: "form",
     text: "Xã đang ngừng hoạt động nên không thay đổi được. Bật hoạt động trở lại trước, nếu việc đó đúng.",

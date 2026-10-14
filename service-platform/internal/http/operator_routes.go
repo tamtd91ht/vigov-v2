@@ -240,7 +240,7 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    400 httpx.Error invalid_body
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
-	// @reply    409 httpx.Error domain_taken duplicate_name
+	// @reply    409 httpx.Error domain_taken domain_recently_removed duplicate_name
 	// @reply    422 httpx.Error invalid_name invalid_domain reserved_domain unknown_province
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("POST /api/v1/communes",
@@ -255,13 +255,28 @@ func registerOperator(mux *http.ServeMux, d OperatorDeps) {
 	// @reply    401 httpx.Error unauthorized
 	// @reply    403 httpx.Error forbidden
 	// @reply    404 httpx.Error commune_not_found
-	// @reply    409 httpx.Error domain_taken commune_inactive
+	// @reply    409 httpx.Error domain_taken domain_recently_removed commune_inactive
 	// @reply    422 httpx.Error invalid_domain reserved_domain
 	// @reply    503 httpx.Error operator_auth_unavailable
 	mux.Handle("POST /api/v1/communes/{id}/domains",
 		opauth.RequireKey(h.d.Auth, opauth.KeyDomainManage)(
 			idem.KhongCan("a repeat is refused by tenant_domain.host, the primary key")(
 				http.HandlerFunc(h.addDomain))))
+
+	// @summary  Gỡ MỀM một tên miền KHÔNG chính của xã: gõ lại đúng tên miền, bắt buộc lý do; ghi removed_at/removed_by/remove_reason và vết go_ten_mien cùng giao dịch; tên miền thôi phân giải ngay, xã khác dùng lại được sau 5 phút (chủ dự án 14/10/2026)
+	// @request  domainRemovalBody
+	// @reply    201 communeDetailView
+	// @reply    400 httpx.Error invalid_body
+	// @reply    401 httpx.Error unauthorized
+	// @reply    403 httpx.Error forbidden
+	// @reply    404 httpx.Error commune_not_found
+	// @reply    409 httpx.Error domain_is_primary commune_inactive
+	// @reply    422 httpx.Error domain_not_in_commune confirm_domain_mismatch invalid_domain reserved_domain invalid_reason
+	// @reply    503 httpx.Error operator_auth_unavailable
+	mux.Handle("POST /api/v1/communes/{id}/domain-removals",
+		opauth.RequireKey(h.d.Auth, opauth.KeyDomainManage)(
+			idem.KhongCan("a repeat finds the domain no longer live in the commune and is answered domain_not_in_commune; nothing is written twice")(
+				http.HandlerFunc(h.removeDomain))))
 
 	// @summary  Đặt tên miền chính của một xã (trong các tên miền xã đang giữ)
 	// @request  primaryDomainBody

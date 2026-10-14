@@ -25,8 +25,10 @@ import (
 // the path — or the new ULID of a create — into ctx with tenant.Into, and corestore.For reads it from
 // there. It is never taken from a body or a header.
 //
-// NOTHING HERE DELETES, and every UPDATE names its row (rule 7). No route removes a domain or moves
-// one to another commune (ADR 0048 §01/10 #5) — there is no method for either.
+// NOTHING HERE DELETES, and every UPDATE names its row (rule 7). A domain is REMOVED softly
+// (RemoveDomain, migration 0028 — owner 14/10/2026, reversing ADR 0048 §01/10 #5): the row is marked
+// and stays; the host becomes free for another commune. Nothing MOVES a live domain from one commune
+// to another in one act — that is still the merger path (rule 1 stop condition #3).
 type RegistryWriter struct {
 	db *corestore.DB
 }
@@ -40,7 +42,14 @@ var (
 	ErrDuplicateName      = errors.New("operator registry: đã có xã trùng tên trong tỉnh")
 	ErrCommuneInactive    = errors.New("operator registry: xã đã ngừng hoạt động")
 	ErrDomainNotInCommune = errors.New("operator registry: tên miền không thuộc xã này")
-	ErrMiniAppTaken       = errors.New("operator registry: App ID đã có trong sổ mini_app")
+	// ErrDomainIsPrimary — a removal of the commune's primary host. The operator moves the primary to
+	// another host first (owner 14/10/2026), so a commune is never left without a canonical address.
+	ErrDomainIsPrimary = errors.New("operator registry: tên miền đang là tên miền chính của xã")
+	// ErrDomainRecentlyRemoved — the host was removed from ANOTHER commune less than
+	// domain.DomainReuseCooldown ago (see hostFree). Its own error so the operator reads "wait", not
+	// "taken".
+	ErrDomainRecentlyRemoved = errors.New("operator registry: tên miền vừa được gỡ khỏi một xã khác")
+	ErrMiniAppTaken          = errors.New("operator registry: App ID đã có trong sổ mini_app")
 	// ErrCommuneSucceeded — reactivation refused: tenant_succession names this commune as a
 	// predecessor (a merged or split unit). See SetActivation.
 	ErrCommuneSucceeded = errors.New("operator registry: xã đã được kế thừa bởi đơn vị khác — không mở lại")
@@ -86,8 +95,11 @@ func (e *InactiveTooRecentError) Unwrap() error { return ErrCommuneInactiveTooRe
 // them are not new: `tao_xa` and `gan_mini_app` are what the Jenkins stages wrote for the same acts
 // (deploy/Jenkinsfile), so one query finds every creation whichever channel did it.
 const (
-	ActionCreateCommune    = "tao_xa"
-	ActionAddDomain        = "them_ten_mien"
+	ActionCreateCommune = "tao_xa"
+	ActionAddDomain     = "them_ten_mien"
+	// NEW verb (migration 0028, owner 14/10/2026). The act is a SOFT removal — the row is marked, not
+	// deleted — and the delta says so (`da_xoa_mem`), as `tat_mini_app`'s does.
+	ActionRemoveDomain     = "go_ten_mien"
 	ActionSetPrimaryDomain = "dat_ten_mien_chinh"
 	ActionCorrectName      = "sua_ten_xa"
 	ActionDeactivate       = "ngung_hoat_dong_xa"
@@ -232,7 +244,7 @@ func (w *RegistryWriter) createCommune(ctx context.Context, in NewCommune, act a
 		case err != nil:
 			return fmt.Errorf("operator registry: province: %w", err)
 		}
-		if err := hostFree(ctx, raw, in.Host); err != nil {
+		if err := hostFree(ctx, raw, in.Host, id); err != nil {
 			return err
 		}
 		if err := nameFree(ctx, raw, in.Name, province, ""); err != nil {
@@ -264,20 +276,37 @@ func (w *RegistryWriter) createCommune(ctx context.Context, in NewCommune, act a
 	return domain.Commune{ID: id, Name: in.Name, Province: province, Active: true, Domains: []string{in.Host}}, nil
 }
 
-// hostFree refuses a host any commune already holds — active, inactive, or the two frozen
-// admin*.vigov.vn rows (rule 7 keeps them; ParseCommuneHost already refuses those names).
-func hostFree(ctx context.Context, raw *sql.Tx, host string) error {
-	var one int
-	// @cross-tenant: tenant_domain.host is globally unique by design (migration 0001) — "is this host
-	// held by ANY commune" is the only question that keeps one host from naming two communes.
-	err := raw.QueryRowContext(ctx, `SELECT 1 FROM tenant_domain WHERE host = $1`, host).Scan(&one)
+// hostFree refuses a host any commune already holds — active, inactive, soft-deleted, or the two
+// frozen admin*.vigov.vn rows (rule 7 keeps them; ParseCommuneHost already refuses those names). A
+// REMOVED row does not hold its host (migration 0028), with one exception below. tenantID is the
+// commune about to receive the host.
+//
+// THE COOLDOWN: a host removed from ANOTHER commune less than domain.DomainReuseCooldown ago is refused
+// (ErrDomainRecentlyRemoved). Every other service caches "host → commune" for one TENANT_CACHE_TTL
+// (core/tenant.CachedDirectory) and only this process forgets on removal; given away at once, the host
+// would keep naming the OLD commune in those caches for up to that long, under the new commune's name.
+// The same commune taking its own host back has no such window, so it is not refused.
+func hostFree(ctx context.Context, raw *sql.Tx, host, tenantID string) error {
+	var live bool
+	// @cross-tenant: a live tenant_domain.host is globally unique by design (migrations 0001, 0028) —
+	// "is this host held by ANY commune" is the only question that keeps one host from naming two
+	// communes. The answer is one bit about the host, never which commune.
+	err := raw.QueryRowContext(ctx, `
+		SELECT removed_at IS NULL FROM tenant_domain
+		 WHERE host = $1
+		   AND (removed_at IS NULL
+		        OR (tenant_id <> $2 AND removed_at > now() - make_interval(secs => $3)))
+		 ORDER BY removed_at IS NULL DESC
+		 LIMIT 1`, host, tenantID, domain.DomainReuseCooldown.Seconds()).Scan(&live)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return nil
 	case err != nil:
 		return fmt.Errorf("operator registry: host lookup: %w", err)
+	case live:
+		return ErrDomainTaken
 	}
-	return ErrDomainTaken
+	return ErrDomainRecentlyRemoved
 }
 
 // nameFree refuses a name equal (domain.NameKey) to another commune's in the same province
@@ -354,7 +383,7 @@ func (w *RegistryWriter) AddDomain(ctx context.Context, host string, by domain.O
 		if !c.active {
 			return ErrCommuneInactive
 		}
-		if err := hostFree(ctx, tx.Underlying(), host); err != nil {
+		if err := hostFree(ctx, tx.Underlying(), host, tx.TenantID().String()); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx,
@@ -388,7 +417,7 @@ func (w *RegistryWriter) SetPrimaryDomain(ctx context.Context, host string, by d
 		raw := tx.Underlying()
 		var isPrimary bool
 		err = raw.QueryRowContext(ctx,
-			`SELECT la_chinh FROM tenant_domain WHERE tenant_id = $1 AND host = $2`,
+			`SELECT la_chinh FROM tenant_domain WHERE tenant_id = $1 AND host = $2 AND removed_at IS NULL`,
 			tx.TenantID().String(), host).Scan(&isPrimary)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
@@ -401,7 +430,7 @@ func (w *RegistryWriter) SetPrimaryDomain(ctx context.Context, host string, by d
 		}
 		var before sql.NullString
 		if err := raw.QueryRowContext(ctx,
-			`SELECT host FROM tenant_domain WHERE tenant_id = $1 AND la_chinh`,
+			`SELECT host FROM tenant_domain WHERE tenant_id = $1 AND la_chinh AND removed_at IS NULL`,
 			tx.TenantID().String()).Scan(&before); err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("operator registry: primary lookup: %w", err)
 		}
@@ -413,7 +442,7 @@ func (w *RegistryWriter) SetPrimaryDomain(ctx context.Context, host string, by d
 			return domainWriteError(err, "clear primary")
 		}
 		if _, err := tx.Exec(ctx,
-			`UPDATE tenant_domain SET la_chinh = true WHERE tenant_id = $1 AND host = $2`,
+			`UPDATE tenant_domain SET la_chinh = true WHERE tenant_id = $1 AND host = $2 AND removed_at IS NULL`,
 			tx.TenantID().String(), host); err != nil {
 			return domainWriteError(err, "set primary")
 		}
@@ -427,6 +456,60 @@ func (w *RegistryWriter) SetPrimaryDomain(ctx context.Context, host string, by d
 		})
 	})
 	return changed, err
+}
+
+// RemoveDomain SOFT-removes a NON-primary host of the commune in ctx (migration 0028; owner 14/10/2026):
+// removed_at = now(), removed_by = the operator's VH- code (rule 6 invariant 8), remove_reason, and the
+// `go_ten_mien` entry in that commune's audit_log — one transaction, under the commune's row lock. The
+// caller has already checked the shape of host and the operator's re-typed confirmation.
+//
+//	unknown or deleted commune                ErrCommuneNotFound (lockCommune)
+//	inactive commune                          ErrCommuneInactive — rule 7 invariant 6, as AddDomain
+//	host is none of its LIVE hosts            ErrDomainNotInCommune
+//	host is its primary                       ErrDomainIsPrimary — move the primary first
+//
+// From the commit of this transaction ByHost no longer finds the host (`removed_at IS NULL`); the caller
+// forgets it from this process's cache, and every other service's cache lets go within one
+// TENANT_CACHE_TTL. Another commune may take the host after domain.DomainReuseCooldown (hostFree).
+func (w *RegistryWriter) RemoveDomain(ctx context.Context, host, reason string, by domain.OperatorActor) error {
+	act, err := w.actor(by)
+	if err != nil {
+		return err
+	}
+	s := w.db.For(ctx)
+	return s.Tx(ctx, func(tx *corestore.ScopedTx) error {
+		c, err := lockCommune(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if !c.active {
+			return ErrCommuneInactive
+		}
+		var isPrimary bool
+		err = tx.Underlying().QueryRowContext(ctx,
+			`SELECT la_chinh FROM tenant_domain
+			  WHERE tenant_id = $1 AND host = $2 AND removed_at IS NULL FOR UPDATE`,
+			tx.TenantID().String(), host).Scan(&isPrimary)
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+			return ErrDomainNotInCommune
+		case err != nil:
+			return fmt.Errorf("operator registry: domain lookup: %w", err)
+		}
+		if isPrimary {
+			return ErrDomainIsPrimary
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE tenant_domain SET removed_at = now(), removed_by = $3, remove_reason = $4
+			  WHERE tenant_id = $1 AND host = $2 AND removed_at IS NULL`,
+			tx.TenantID().String(), host, act.ID, reason); err != nil {
+			return domainWriteError(err, "remove domain")
+		}
+		return audit.Write(ctx, tx, audit.Entry{
+			Actor: act, Action: ActionRemoveDomain, Subject: host,
+			Delta: delta(map[string]any{"ten_mien": host, "xa": c.name, "ly_do": reason, "da_xoa_mem": true}),
+		})
+	})
 }
 
 // CorrectName fixes a TYPO in the commune's name (ADR 0048 §01/10 #5). The reason is mandatory and
@@ -547,10 +630,13 @@ func (w *RegistryWriter) SetActivation(ctx context.Context, active bool, reason 
 	return changed, hosts, err
 }
 
-// communeHosts lists every host of the commune in tx, primary or not, in host order.
+// communeHosts lists every LIVE host of the commune in tx, primary or not, in host order. A removed
+// host (migration 0028) is not the commune's: it is neither forgotten from a cache on its behalf (the
+// removal already did that) nor accepted as the domain that confirms a commune's deletion.
 func communeHosts(ctx context.Context, tx *corestore.ScopedTx) ([]string, error) {
 	rows, err := tx.Underlying().QueryContext(ctx,
-		`SELECT host FROM tenant_domain WHERE tenant_id = $1 ORDER BY host`, tx.TenantID().String())
+		`SELECT host FROM tenant_domain WHERE tenant_id = $1 AND removed_at IS NULL ORDER BY host`,
+		tx.TenantID().String())
 	if err != nil {
 		return nil, fmt.Errorf("operator registry: hosts: %w", err)
 	}
@@ -589,8 +675,9 @@ func communeHosts(ctx context.Context, tx *corestore.ScopedTx) ([]string, error)
 // The domain check comes LAST so that a refusal which reveals nothing (active, too recent) is given
 // before the one that tests the operator's knowledge of the commune.
 //
-// WHAT IT DOES NOT TOUCH: tenant_domain (a deleted commune's hosts stay RESERVED forever by its primary
-// key — hostFree still sees them), mini_app rows, the commune's data in every other service. Nothing is
+// WHAT IT DOES NOT TOUCH: tenant_domain (a deleted commune's hosts stay RESERVED forever — its rows
+// stay live, so tenant_domain_live_host and hostFree still see them; only RemoveDomain frees a host,
+// and it refuses a deleted commune through lockCommune), mini_app rows, the commune's data in every other service. Nothing is
 // deleted (rule 7). There is no undelete path: SetActivation and every other write refuse a deleted
 // commune through lockCommune.
 func (w *RegistryWriter) DeleteCommune(ctx context.Context, confirmDomain, reason string, by domain.OperatorActor) (domain.CommuneDeletion, []string, error) {

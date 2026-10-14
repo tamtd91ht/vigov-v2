@@ -56,17 +56,20 @@ func NewDirectory(db *sql.DB, operatorHost string) *Directory {
 //
 // INACTIVE COUNTS: a merged commune keeps its rows (rule 7 invariant 6), and reactivating it would
 // put the vendor's host back on a commune. The comparison is lower-cased and ignores trailing dots,
-// so a row spelled differently from the variable cannot hide.
+// so a row spelled differently from the variable cannot hide. A REMOVED row does not count (migration
+// 0028): it names no commune any more, and nothing can bring it back — a host is only ever re-added
+// as a new row, which this check would then see.
 func (d *Directory) HostHeld(ctx context.Context, host string) (bool, error) {
 	h, err := domain.NormaliseHost(host)
 	if err != nil {
 		return false, fmt.Errorf("directory: %w", err)
 	}
 	var one int
-	// @cross-tenant: "is this host held by ANY commune" — tenant_domain.host is globally unique by
-	// design (migration 0001); the answer is one bit, never a commune.
+	// @cross-tenant: "is this host held by ANY commune" — a live tenant_domain.host is globally unique
+	// by design (migrations 0001, 0028); the answer is one bit, never a commune.
 	err = d.db.QueryRowContext(ctx,
-		`SELECT 1 FROM tenant_domain WHERE rtrim(lower(host), '.') = rtrim($1, '.') LIMIT 1`, h).Scan(&one)
+		`SELECT 1 FROM tenant_domain WHERE rtrim(lower(host), '.') = rtrim($1, '.') AND removed_at IS NULL LIMIT 1`,
+		h).Scan(&one)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return false, nil
@@ -100,12 +103,18 @@ func cotXa(host string) string {
 // ADR 0048 §Sửa đổi 13/10/2026 #7): its hosts and its launch code resolve to NOTHING — the same answer
 // as an unknown one, not "inactive" — and ByID does not know it either. Its tenant_domain rows stay,
 // which is what keeps those hosts reserved (HostHeld and the registry's hostFree still see them).
+//
+// ALL THREE EXCLUDE A REMOVED DOMAIN (`d.removed_at IS NULL`, migration 0028; owner 14/10/2026). On the
+// host lookup this is the isolation line, not a tidy-up: a removed host may since have been given to
+// another commune, so the same host can have one live row and any number of removed ones — only the
+// live row names a commune. The two la_chinh joins carry it too although a removed row is never primary
+// (0028's CHECK): the filter is the rule, the CHECK is the backstop.
 var (
 	truyVanTheoHost = `
 		SELECT ` + cotXa("d.host") + `
 		FROM tenant_domain d
 		JOIN tenant t ON t.id = d.tenant_id
-		WHERE d.host = $1 AND t.deleted_at IS NULL`
+		WHERE d.host = $1 AND d.removed_at IS NULL AND t.deleted_at IS NULL`
 
 	// The canonical host, so a caller building a link picks the same address every time; a
 	// commune may hold several hosts after a merger. LEFT JOIN because a commune that exists
@@ -114,7 +123,7 @@ var (
 	truyVanTheoID = `
 		SELECT ` + cotXa("COALESCE(d.host, '')") + `
 		FROM tenant t
-		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
+		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh AND d.removed_at IS NULL
 		WHERE t.id = $1 AND t.deleted_at IS NULL`
 
 	// The commune holding a launch code (migration 0024), with its PRIMARY host — the same LEFT JOIN
@@ -123,7 +132,7 @@ var (
 	queryByLaunchCode = `
 		SELECT ` + cotXa("COALESCE(d.host, '')") + `
 		FROM tenant t
-		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh
+		LEFT JOIN tenant_domain d ON d.tenant_id = t.id AND d.la_chinh AND d.removed_at IS NULL
 		WHERE t.launch_code = $1 AND t.deleted_at IS NULL`
 )
 

@@ -16,6 +16,7 @@ import {
   listProvinces,
   parseRetryAfter,
   regenerateRecoveryCodes,
+  removeDomain,
   setActivation,
   setMapFrameDefault,
   setMiniAppPublication,
@@ -126,6 +127,13 @@ describe("requests — path, method and exactly the documented body", () => {
       "POST",
       "/api/v1/communes/01HZZZ/domains",
       { domain: "khac.example.vn" },
+    ],
+    [
+      "remove a domain — the re-typed copy and the reason travel as typed",
+      () => removeDomain("01HZZZ", { domain: "khac.example.vn", confirmDomain: "khac.example.vn", reason: "gắn nhầm" }),
+      "POST",
+      "/api/v1/communes/01HZZZ/domain-removals",
+      { domain: "khac.example.vn", confirm_domain: "khac.example.vn", reason: "gắn nhầm" },
     ],
     [
       "set the primary domain",
