@@ -235,8 +235,10 @@ export function KhungApp(props: {
 
       {/* NÚT CHAT NỔI BIẾN MẤT CÙNG LÚC VỚI THANH TAB, CÙNG MỘT LÝ DO (xem `khamPha` ở trên):
           màn xác nhận xã là màn mỗi-màn-một-việc, và việc ấy là xác nhận đúng xã. Một nút nổi mời
-          trò chuyện với một doanh nghiệp giữa lúc ấy là một đường rẽ sai chỗ. */}
-      {!props.khamPha && <NutChatOA />}
+          trò chuyện với một doanh nghiệp giữa lúc ấy là một đường rẽ sai chỗ.
+          `key` theo màn: đổi màn là dựng lại nút, nên câu "không mở được" của màn trước không đi theo
+          người dùng sang màn sau (lỗi F, 14/10/2026). */}
+      {!props.khamPha && <NutChatOA key={props.man} />}
 
       {!props.khamPha && <TabBar current={props.man} onSelect={props.onChonMan} />}
     </div>
@@ -563,8 +565,10 @@ function SharedAppIntro() {
    * Cuộn tới mỏ neo SAU KHI màn mới đã vẽ xong — đó là lý do việc này nằm trong `useEffect` chứ
    * không nằm trong hàm `di` ở trên: lúc `di` chạy, phần tử mang `id` ấy chưa tồn tại.
    *
-   * `moc` là tên một màn CON (`MOC_QUAN_LY_QUYEN`) thì không có gì để cuộn tới, và `cuonToiMoc`
-   * không làm gì — màn cha mới là chỗ đọc nó. Xem `features/company-intro/dieu-huong.ts`.
+   * Không có `moc` (bấm một tab), hoặc `moc` là tên một màn CON (`MOC_QUAN_LY_QUYEN`, mã một giải
+   * pháp) → `cuonToiMoc` đưa `.app-main` về ĐẦU. `.app-main` không được dựng lại khi đổi màn, nên
+   * không có bước này thì màn mới mở ra ở vị trí cuộn của màn cũ (lỗi B, 14/10/2026).
+   * Xem `features/company-intro/dieu-huong.ts`.
    */
   useEffect(() => {
     cuonToiMoc(vi_tri.moc);

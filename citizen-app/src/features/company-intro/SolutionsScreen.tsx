@@ -8,6 +8,8 @@ import {
   TECH_KEYWORDS,
 } from "../../content/company-profile";
 
+import { scrollMainToTop } from "../../lib/cuon-toi";
+
 import { ChiTietGiaiPhap } from "./ChiTietGiaiPhap";
 import type { ThamSoMan } from "./dieu-huong";
 import { ExpandableText } from "./ExpandableText";
@@ -48,22 +50,40 @@ import { BuildingGlyph, GridGlyph, KEYWORD_GLYPHS, SOLUTION_GLYPHS } from "./ico
  *   Con số bốn là con số CÓ NGUỒN. Bản mẫu nói "15 giải pháp, 3 nhóm nghiệp vụ" và không trang nào
  *   công bố điều đó — xem khối chú thích của `SOLUTIONS` trong `company-profile.ts`.
  */
-export function SolutionsScreen({ onDi }: ThamSoMan = {}) {
+/** `moc` → the solution it names, or `null`. Only an id that exists in `SOLUTIONS` opens a detail page. */
+function solutionIdFrom(moc: string | undefined): SolutionId | null {
+  return SOLUTIONS.find((one) => one.id === moc)?.id ?? null;
+}
+
+export function SolutionsScreen({ moc, onDi }: ThamSoMan = {}) {
   /**
    * Giải pháp đang mở, hoặc `null` cho danh sách.
    *
    * Trạng thái giao diện thuần, sống trong `useState`: không ghi xuống máy, không vào URL, không
    * gửi đi đâu (`ranh-gioi-hai-nua.test.ts` §3b canh vế thứ nhất). Đóng app là mất, và đó là
    * đúng: không có gì ở đây đáng để sống lâu hơn một lần mở app.
+   *
+   * Giá trị ban đầu đọc từ `moc` khi nó là mã một giải pháp: thẻ "Giải pháp nổi bật" trên màn chủ
+   * (14/10/2026) mở thẳng trang chi tiết bằng đường này. Mọi `moc` khác → danh sách. Vỏ app dựng lại
+   * màn mỗi lần điều hướng (`key` trong `App.tsx`), nên giá trị ban đầu được đọc lại mỗi lần.
    */
-  const [dang_mo, datDangMo] = useState<SolutionId | null>(null);
+  const [dang_mo, datDangMo] = useState<SolutionId | null>(() => solutionIdFrom(moc));
   const giai_phap = SOLUTIONS.find((mot) => mot.id === dang_mo);
+
+  /**
+   * Mở / đóng trang chi tiết. `.app-main` là khung cuộn và không đổi khi màn con đổi, nên không đưa về đầu thì
+   * trang chi tiết mở ra ở giữa, nút "Tất cả giải pháp" khuất phía trên (lỗi B, 14/10/2026).
+   */
+  function show(id: SolutionId | null) {
+    scrollMainToTop();
+    datDangMo(id);
+  }
 
   if (giai_phap) {
     // "Nhận tư vấn giải pháp này" → Tư vấn và báo giá with this line pre-ticked; `moc` carries the solution id
     // (TuVanBaoGiaScreen accepts it only when it names a line in SOLUTIONS).
     const onConsult = onDi ? () => onDi({ man: "tu-van", moc: giai_phap.id }) : undefined;
-    return <ChiTietGiaiPhap giai_phap={giai_phap} onQuayLai={() => datDangMo(null)} onConsult={onConsult} />;
+    return <ChiTietGiaiPhap giai_phap={giai_phap} onQuayLai={() => show(null)} onConsult={onConsult} />;
   }
 
   return (
@@ -111,7 +131,7 @@ export function SolutionsScreen({ onDi }: ThamSoMan = {}) {
               <button
                 type="button"
                 className="solution--mo"
-                onClick={() => datDangMo(solution.id)}
+                onClick={() => show(solution.id)}
               >
                 <span className="tile" aria-hidden="true">
                   <Glyph className="tile__glyph" />

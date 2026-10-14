@@ -6,9 +6,9 @@
  *   Cách "đúng" theo phản xạ là gọi `vihatgroup.com/wp-json/wp/v2/posts` lúc chạy để tin luôn
  *   mới. Ứng dụng này KHÔNG được làm thế, và lý do thứ hai mới là lý do thật:
  *
- *   1. Giai đoạn 1 có ĐÚNG MỘT đích mạng — tuyến phát hành phiên đăng nhập — và dây bẫy trong
- *      `phase1-collects-nothing.test.ts` miễn lệnh cấm `fetch` cho ĐÚNG MỘT tệp
- *      (`features/dang-nhap/goi-may-chu.ts`). Thêm một lời gọi là nới đúng dây bẫy ấy.
+ *   1. Dây bẫy trong `phase1-collects-nothing.test.ts` chỉ miễn lệnh cấm `fetch` cho các tệp kê
+ *      trong `TEP_GOI_MANG` — lời gọi tới máy chủ của app và của ViGov, không tới trang tin. Thêm
+ *      một lời gọi tới trang tin là nới đúng dây bẫy ấy.
  *   2. **Thêm một đích mạng là SỬA MỘT LỜI KHAI TRONG CHÍNH SÁCH QUYỀN RIÊNG TƯ** — văn bản đang
  *      nói ứng dụng chỉ gửi đi đúng một việc, và một lời gọi tới máy chủ của trang tin để lộ địa
  *      chỉ IP của người dùng cho một bên nữa, ngay khi họ mở màn hình chủ, mà họ không bấm gì.
@@ -35,32 +35,37 @@ export type BaiViet = {
   ngay: string;
   /** Tiêu đề NGUYÊN VĂN như trang tin đăng. */
   tieu_de: string;
-  /** Đoạn trích NGUYÊN VĂN, kết thúc bằng "…" vì nó là một đoạn bị cắt. */
+  /** Đoạn trích NGUYÊN VĂN. Kết thúc bằng "…" khi trang tin cắt nó; trang tin đăng trọn câu thì giữ trọn câu. */
   trich: string;
   /** Đường dẫn bài viết. Mở qua `moRaNgoai("tin-tuc", …)`, xem `content/dich-ra-ngoai.ts`. */
   duong_dan: string;
 };
 
 /** Ngày đọc trang tin. Hiện LÊN MÀN HÌNH — người đọc phải tự biết chỗ này cũ hay mới. */
-export const NGAY_CHUP_TIN = "21/09/2026";
+export const NGAY_CHUP_TIN = "14/10/2026";
 
+/*
+ * Bản chụp 14/10/2026: `GET https://vihatgroup.com/wp-json/wp/v2/posts?per_page=4` — hai bài mới nhất đăng
+ * 08/10 và 07/10/2026. Tiêu đề và đoạn trích chép nguyên văn từ `title.rendered` / `excerpt.rendered`; trang
+ * tin cắt đoạn trích của bài 07/10 bằng "[…]", ở đây là "…". Đoạn trích bài 08/10 trang tin đăng trọn câu, nên
+ * không có "…".
+ */
 export const TIN_VIHAT: readonly BaiViet[] = [
   {
-    ma: "ha-noi-8-nam",
-    ngay: "2026-07-20",
-    tieu_de: "ViHAT Hà Nội mừng 8 năm thành lập – Tri ân khách hàng với loạt ưu đãi đặc biệt",
+    ma: "omi-buber-connect-lao",
+    ngay: "2026-10-08",
+    tieu_de: "ViHAT Group mở rộng sang Lào: OMI JSC hợp tác Buber Connect, được VnExpress đưa tin",
     trich:
-      "Nhân dịp kỷ niệm 8 năm thành lập, ViHAT Hà Nội triển khai chương trình khuyến mãi đặc biệt dành cho khách hàng đăng ký, gia hạn hoặc nạp tiền sử dụng các sản phẩm, giải pháp do Chi nhánh ViHAT Hà Nội…",
-    duong_dan:
-      "https://vihatgroup.com/tin-uu-dai/vihat-ha-noi-mung-8-nam-thanh-lap-tri-an-khach-hang-voi-loat-uu-dai-dac-biet/",
+      "VnExpress đưa tin OMI JSC – thành viên ViHAT Group – hợp tác Buber Connect, đưa tổng đài đám mây OMICall đến Lào. Thêm một bước trên hành trình Đông Nam Á của hệ sinh thái ViHAT.",
+    duong_dan: "https://vihatgroup.com/hoat-dong/vihat-group-omi-jsc-hop-tac-buber-connect-lao/",
   },
   {
-    ma: "open-days",
-    ngay: "2026-06-02",
-    tieu_de: "OPEN DAYS – KHI CHÚNG TA KHÔNG CHỈ LÀ ĐỒNG NGHIỆP",
+    ma: "chuyen-doi-so-xa-thang-binh",
+    ngay: "2026-10-07",
+    tieu_de: "ViHAT Group đồng hành cùng xã Thăng Bình trên lộ trình chuyển đổi số cơ sở",
     trich:
-      "Với định hướng xây dựng một môi trường làm việc gắn kết, tích cực và lấy con người làm trung tâm, ViHAT Group chính thức triển khai chương trình nội bộ Open Days trên toàn hệ thống từ tháng 6/2026…",
-    duong_dan: "https://vihatgroup.com/hoat-dong/open-days-khi-chung-ta-khong-chi-la-dong-nghiep/",
+      "Chiều ngày 21/08/2026, đoàn công tác ViHAT Group đã có buổi làm việc với lãnh đạo xã Thăng Bình, TP. Đà Nẵng, nhằm giới thiệu giải pháp công nghệ và khảo sát thực trạng chuyển đổi số tại địa phương. Buổi trao đổi tập trung vào hai trụ cột hành chính số và công dân…",
+    duong_dan: "https://vihatgroup.com/hoat-dong/vihat-group-chuyen-doi-so-xa-thang-binh/",
   },
 ];
 

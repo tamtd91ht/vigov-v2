@@ -130,8 +130,8 @@ export function HomeScreen({ onDi }: ThamSoMan) {
         hero, và một khối chen vào giữa làm thẻ trắng trùm lên nó mà không phép kiểm nào thấy.
 
         Nó nói ra TRẠNG THÁI CỦA VIỆC, không chỉ tên việc: "Gửi yêu cầu, chúng tôi gọi lại" cho
-        biết sau cú bấm là gì. Một nút tên "Tư vấn" đứng cạnh một ô menu cũng tên "Tư vấn" (hotline)
-        là hai thứ người dùng phải đoán xem khác nhau chỗ nào — nên nhãn ở đây khác hẳn.
+        biết sau cú bấm là gì. Ô menu quay số mang tên "Hotline" (14/10/2026) chứ không còn là "Tư
+        vấn": hai nút cùng một chữ mà một quay số, một mở biểu mẫu là hai thứ người dùng phải đoán.
       */}
       <button type="button" className="action action--primary action--mo" onClick={() => di({ man: "tu-van" })}>
         <span className="tile" aria-hidden="true">
@@ -144,12 +144,15 @@ export function HomeScreen({ onDi }: ThamSoMan) {
       </button>
 
       {/*
-        GIẢI PHÁP NỔI BẬT — DANH SÁCH ĐỌC, KHÔNG PHẢI THẺ BẤM ĐƯỢC, và đó là chủ đích.
+        GIẢI PHÁP NỔI BẬT — MỖI THẺ BẤM ĐƯỢC, MỞ TRANG CHI TIẾT CỦA ĐÚNG GIẢI PHÁP ẤY (chủ dự án
+        14/10/2026; bản mẫu của PM vẽ chúng là thẻ bấm được). Người đọc thấy một giải pháp mình quan
+        tâm thì bấm ngay vào nó, không phải sang tab Giải pháp rồi tìm lại.
 
-        Thẻ bấm được sống ở tab Giải pháp, nơi mỗi thẻ mở ra một trang chi tiết. Dựng lại chúng ở
-        đây thành những nút dẫn tới cùng chỗ là hai đường tới một nơi, và là hai chỗ sẽ lệch nhau
-        khi danh sách đổi. Ở đây chúng là một bản xem trước có nguồn, cộng ĐÚNG MỘT nút dẫn sang
-        chỗ đầy đủ — nút "Xem tất cả" của bản mẫu.
+        KHÔNG CÓ TRANG CHI TIẾT THỨ HAI: thẻ đi `{ man: "solutions", moc: <mã giải pháp> }`, và
+        `SolutionsScreen` mở `ChiTietGiaiPhap` của mã ấy — cùng một màn, cùng một nút "Tất cả giải
+        pháp" để quay về. Danh sách đọc từ cùng `SOLUTIONS`, nên hai nơi không lệch nhau được.
+        Mỗi thẻ là một `<button>` thật: tên đọc lên là tên sản phẩm cộng câu giới thiệu, chiều cao
+        tối thiểu do lớp `.gp-noi-bat__nut` đặt.
       */}
       {/* ĐẦU MỤC VÀ NÚT "Xem tất cả" TRÊN CÙNG MỘT HÀNG (bản mẫu). Nút vẫn là một `<button>` thật
           với chiều cao `--tap-min`, không phải một dòng chữ xanh bấm được: một đích chạm 20px cao
@@ -171,10 +174,21 @@ export function HomeScreen({ onDi }: ThamSoMan) {
       <ul className="gp-noi-bat">
         {SOLUTIONS.map((giai_phap) => (
           <li className="gp-noi-bat__mot" key={giai_phap.id}>
-            {giai_phap.product ? (
-              <strong className="gp-noi-bat__ten">{giai_phap.product}</strong>
-            ) : null}
-            <span className="gp-noi-bat__cau">{giai_phap.headline}</span>
+            <button
+              type="button"
+              className="gp-noi-bat__nut"
+              onClick={() => di({ man: "solutions", moc: giai_phap.id })}
+            >
+              <span className="gp-noi-bat__chu">
+                {giai_phap.product ? (
+                  <strong className="gp-noi-bat__ten">{giai_phap.product}</strong>
+                ) : null}
+                <span className="gp-noi-bat__cau">{giai_phap.headline}</span>
+              </span>
+              <span className="solution__mui" aria-hidden="true">
+                ›
+              </span>
+            </button>
           </li>
         ))}
       </ul>

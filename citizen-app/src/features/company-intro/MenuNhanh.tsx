@@ -25,8 +25,8 @@ import {
  *   | Giải pháp | dựng nguyên nhãn bản mẫu |
  *   | **Quét QR Lead** + **Chụp danh thiếp** | **GỘP LÀM MỘT**: "Danh thiếp". Xem khối riêng dưới |
  *   | **Quyền ứng dụng** | **KHÔNG CÒN Ở ĐÂY** (22/09/2026). Xem khối riêng dưới |
- *   | **Văn phòng gần tôi** | dựng, nhưng nhãn rút thành "Văn phòng" — tính năng chưa xếp theo khoảng cách, xem dưới |
- *   | **Đặt lịch tư vấn** | **KHÔNG DỰNG** — là một biểu mẫu thu dữ liệu (xem dưới). Thay bằng một mục "Tư vấn" gọi hotline |
+ *   | **Văn phòng gần tôi** | dựng nguyên nhãn bản mẫu (14/10/2026) — khối đích xếp ba văn phòng theo khoảng cách |
+ *   | **Đặt lịch tư vấn** | **KHÔNG DỰNG ở menu** — biểu mẫu "Tư vấn và báo giá" là một nút riêng dưới thẻ này (`HomeScreen`). Ô ở đây là "Hotline" |
  *   | **Tải brochure** | **KHÔNG DỰNG** — trong kho không có một tệp PDF nào để tải |
  *   | **Hỗ trợ 24/7** | **KHÔNG DỰNG** — xem dưới |
  *
@@ -34,7 +34,7 @@ import {
  *   vào đầu tiên — và là thứ người dùng lớn tuổi bấm rồi kết luận rằng app hỏng. Ba cái tên ấy
  *   quay lại được bất cứ lúc nào sau khi có người nói chúng mở ra cái gì.
  *
- * ⚠ "HỖ TRỢ 24/7" GỘP VÀO "TƯ VẤN", VÀ KHÔNG ĐƯỢC ĐỔI TÊN THÀNH "24/7" — HAI PHẦN, HAI LÝ DO.
+ * ⚠ "HỖ TRỢ 24/7" GỘP VÀO "HOTLINE", VÀ KHÔNG ĐƯỢC ĐỔI TÊN THÀNH "24/7" — HAI PHẦN, HAI LÝ DO.
  *
  *   Đích trung thực duy nhất sau cái tên ấy là hotline, mà hotline đã có một ô rồi. Hai ô cạnh
  *   nhau cùng quay một số là hai ô mà người dùng phải đoán xem chúng khác gì nhau.
@@ -43,20 +43,20 @@ import {
  *   hotline trực 24/7. In "24/7" lên màn là một cam kết về giờ phục vụ, đứng tên một pháp nhân
  *   có thật, mà chưa ai cam kết — và người phát hiện ra là người gọi lúc 11 giờ đêm.
  *
- * ⚠ "TƯ VẤN" LÀ MỘT CUỘC GỌI, KHÔNG PHẢI MỘT BIỂU MẪU — và nó nói ra điều đó NGAY TRÊN NÚT.
+ * ⚠ Ô "HOTLINE" LÀ MỘT CUỘC GỌI, KHÔNG PHẢI MỘT BIỂU MẪU — và nhãn nói ra điều đó (14/10/2026).
  *
- *   Bản mẫu có một mục "Đặt lịch tư vấn". Nó không được dựng, theo yêu cầu, và không ai quyết một
- *   biểu mẫu sẽ gửi dữ liệu đi đâu; hơn nữa `phase1-collects-nothing.test.ts` cấm
- *   `<form|input|textarea|select>` ở mọi tệp, nên một ô nhập ở đây là một dây bẫy bị nới.
+ *   Biểu mẫu tư vấn có thật là màn "Tư vấn và báo giá", mở từ nút riêng ngay dưới thẻ này
+ *   (`HomeScreen`). Ô này từng tên "Tư vấn": hai nút cùng một chữ, một nút quay số, một nút mở
+ *   biểu mẫu — người dùng phải đoán. Nên ô mang tên đúng thứ nó làm.
  *
- *   Thứ CÓ THẬT và chạy được ngay là hotline. Nên mục này là một `HotlineLink`
+ *   Mục này là một `HotlineLink`
  *   (`features/tinh-nang/HotlineLink.tsx`, 12/10/2026): trong Zalo nó gọi qua `openPhone` — webview
  *   của Mini App bỏ qua `tel:`, nên neo trần cũ bấm không ra gì — và ngoài Zalo nó vẫn là neo `tel:`.
  *   Dòng `openPhone` của bảng khai (`zalo-api.ts`) đã kể việc gọi hotline, nên màn Quản lý quyền
  *   nói đúng thứ app làm.
  *
- *   Dòng phụ "Gọi hotline" là phần bắt buộc: một nút tên "Tư vấn" mà mở thẳng màn quay số là một
- *   bất ngờ, và với người lớn tuổi thì một bất ngờ là một lần bấm nhầm.
+ *   Dòng phụ "Gọi tư vấn" nói cuộc gọi để làm gì; chữ "Hotline" đã nói bấm vào là quay số, nên
+ *   không có bất ngờ — với người lớn tuổi, một bất ngờ là một lần bấm nhầm.
  *
  * ⚠ BA CỘT CHỨ KHÔNG PHẢI BỐN — và đó là một phép đo, không phải một khẩu vị.
  *
@@ -65,7 +65,7 @@ import {
  *
  *   Bề rộng cũng chỉ đủ cho ba: ở 320px, thẻ này rộng 320 − 32 (lề trang) = 288, trừ 28 đệm thẻ
  *   còn 260. Chia ba, trừ khe 10: ~80px mỗi ô. Chia bốn thì còn ~58px, mà từ dài nhất trong sáu
- *   nhãn ("phòng", "thiếp", "dụng" …) đã cần ~50px ở cỡ 16px — hết chỗ, và nhãn bị cắt đuôi.
+ *   nhãn ("Hotline", 7 ký tự ≈ 69px ở cỡ 16px) không lọt — hết chỗ, và nhãn bị cắt đuôi.
  *
  * ⚠ MỘT MỤC "DANH THIẾP", KHÔNG PHẢI HAI — 22/09/2026, yêu cầu của chủ dự án.
  *
@@ -134,18 +134,22 @@ export const MUC_MENU_NHANH: readonly MucMenu[] = [
     di: { man: "goi-y" },
   },
   {
-    ma: "tu-van",
-    nhan: "Tư vấn",
-    phu: "Gọi hotline",
+    // "HOTLINE", NOT "TƯ VẤN" (14/10/2026, fix E): "Tư vấn và báo giá" under this card opens a form; a tile also
+    // called "Tư vấn" that opens the dialler made two buttons with one name and two behaviours. The tile now says
+    // what it does.
+    ma: "hotline",
+    nhan: "Hotline",
+    phu: "Gọi tư vấn",
     glyph: PhoneGlyph,
     kieu: "goi",
     so: CONTACT.hotlineDialable,
   },
   {
-    // ⚠ NHÃN BẢN MẪU LÀ "Văn phòng gần tôi", VÀ Ở ĐÂY NÓ KHÔNG ĐƯỢC DÙNG: khối đích liệt kê ba văn
-    //   phòng theo thứ tự cố định và không xin vị trí — "gần tôi" là một lời hứa nó không giữ.
+    // "VĂN PHÒNG GẦN TÔI" — the prototype's label, kept since 14/10/2026 (fix J): the block this lands on
+    // (`TimVanPhong`, commit 41d1d97f) asks for the location after a purpose sentence and sorts the three
+    // offices by distance, so "gần tôi" is now a promise the block keeps. Declining keeps the fixed order.
     ma: "van-phong",
-    nhan: "Văn phòng",
+    nhan: "Văn phòng gần tôi",
     phu: "Ba địa chỉ",
     glyph: PinGlyph,
     kieu: "man",
