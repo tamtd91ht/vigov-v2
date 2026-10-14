@@ -160,6 +160,15 @@ describe("wiring (source)", () => {
     expect(DIALOG).toContain("saveFile(r.duLieu, IMPORT_TEMPLATE_SAVE_NAME);");
   });
 
+  it("the template link gathers the dropdown codes AT THE CLICK, from the page's lists first", () => {
+    expect(DIALOG).toContain("const r = await fetchTaskTemplate(choices);");
+    // The page hands over CODES of what the task form offers: units, the assignee picker's
+    // directory, active blocs — never labels.
+    expect(PAGE).toContain("orgUnitCodes: danhMuc.boPhan.map((b) => b.code),");
+    expect(PAGE).toContain("staffCodes: kqDanhBa?.ok ? kqDanhBa.duLieu.items.map((c) => c.code) : undefined,");
+    expect(PAGE).toContain("blocCodes: danhMuc.khoi.filter((k) => k.active).map((k) => k.code),");
+  });
+
   it("the button sits under `task.create` next to `+ Giao việc mới`; a success reloads the register", () => {
     expect(PAGE).toContain("{IMPORT_OPEN_BUTTON}");
     expect(PAGE).toContain("{importOpen && quyen.giaoViec && (");

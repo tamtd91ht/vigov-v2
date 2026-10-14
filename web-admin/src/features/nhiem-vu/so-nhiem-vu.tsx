@@ -1537,6 +1537,13 @@ export function SoNhiemVu({
           }}
           // The new rows are read from the server, never spliced in: the register reloads.
           onImported={() => datLanTai((n) => n + 1)}
+          // The template's dropdowns: CODES of what the task form offers, from the lists this page
+          // already read. A list missing here is read again at the click (`gatherTaskTemplateChoices`).
+          choices={{
+            orgUnitCodes: danhMuc.boPhan.map((b) => b.code),
+            staffCodes: kqDanhBa?.ok ? kqDanhBa.duLieu.items.map((c) => c.code) : undefined,
+            blocCodes: danhMuc.khoi.filter((k) => k.active).map((k) => k.code),
+          }}
         />
       )}
 

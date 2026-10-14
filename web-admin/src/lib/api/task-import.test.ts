@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { TEMPLATE_CHOICE_CAP } from "./excel-import";
 import { LOI_KHONG_RO, stripTechnicalPrefix } from "./goi";
 import {
   TASK_IMPORT_FILE_FIELD,
   TASK_IMPORT_TOO_LARGE,
   downloadTaskImportTemplate,
   submitTaskImport,
+  taskImportTemplatePath,
 } from "./task-import";
 
 /**
@@ -110,5 +112,38 @@ describe("GET /api/v1/tasks/import-template", () => {
     vi.unstubAllGlobals();
     stub(json({ code: "forbidden", message: "Không có quyền.", trace_id: "t" }, 403));
     expect(await downloadTaskImportTemplate()).toEqual({ ok: false, thongBao: "Không có quyền." });
+  });
+
+  it("the choice lists: `org_unit`, `staff`, `bloc` REPEATED, in the order given, codes only", async () => {
+    const fake = stub(new Response(new Uint8Array([80, 75]), { status: 200 }));
+    await downloadTaskImportTemplate({
+      orgUnitCodes: ["van-phong", "tu-phap"],
+      staffCodes: ["CB-00002", "CB-00001"],
+      blocCodes: ["khoi-uy-ban"],
+    });
+    expect(fake.mock.calls[0]?.[0]).toBe(
+      "/api/v1/tasks/import-template?org_unit=van-phong&org_unit=tu-phap&staff=CB-00002&staff=CB-00001&bloc=khoi-uy-ban",
+    );
+  });
+
+  it("blanks skipped, duplicates dropped (first place kept), each list capped at TEMPLATE_CHOICE_CAP", () => {
+    expect(taskImportTemplatePath({ staffCodes: ["CB-1", " ", "", "CB-2", "CB-1", " CB-2 "] })).toBe(
+      "/api/v1/tasks/import-template?staff=CB-1&staff=CB-2",
+    );
+    const many = Array.from({ length: TEMPLATE_CHOICE_CAP + 5 }, (_, i) => `u${i}`);
+    const q = new URLSearchParams(taskImportTemplatePath({ orgUnitCodes: many, blocCodes: ["k"] }).split("?")[1]);
+    expect(TEMPLATE_CHOICE_CAP).toBe(2000);
+    expect(q.getAll("org_unit")).toHaveLength(TEMPLATE_CHOICE_CAP);
+    expect(q.getAll("org_unit").at(-1)).toBe(`u${TEMPLATE_CHOICE_CAP - 1}`);
+    // The cap is per list: the bloc list after a full unit list is still sent.
+    expect(q.getAll("bloc")).toEqual(["k"]);
+  });
+
+  it("empty or absent lists: the param is not sent at all — no `?`, no `org_unit=`", () => {
+    expect(taskImportTemplatePath()).toBe("/api/v1/tasks/import-template");
+    expect(taskImportTemplatePath({ orgUnitCodes: [], staffCodes: [""], blocCodes: undefined })).toBe(
+      "/api/v1/tasks/import-template",
+    );
+    expect(taskImportTemplatePath({ blocCodes: ["k"] })).toBe("/api/v1/tasks/import-template?bloc=k");
   });
 });

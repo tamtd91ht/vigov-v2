@@ -15,7 +15,7 @@
  * logged — the preview rows and the file are the commune's register as staff typed it (rule 3).
  */
 
-import type { ImportRoutes } from "./excel-import";
+import { appendTemplateChoices, downloadImportTemplate, type ImportRoutes } from "./excel-import";
 import {
   CHUNG, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   LOI_KHONG_RO, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
@@ -44,6 +44,22 @@ export const LETTER_ROWS_FIELD = "letters" satisfies keyof documents_letterImpor
 
 /** The template's saved name — the server's own (`citizen_letter_import.go`, `mau-so-don-thu.xlsx`). */
 export const LETTER_TEMPLATE_FILE_NAME = "mau-so-don-thu.xlsx";
+
+/**
+ * The template's query: the commune's live org units by `code`, `org_unit` repeated (owner 14/10/2026 —
+ * the client sends the codes it holds, the server prints identity's names). ⚠ CONTRACT GAP: the generated
+ * route declares no query yet; the name is written by hand until the contract is regenerated.
+ */
+export function letterTemplateQuery(orgUnitCodes: readonly string[] | undefined): URLSearchParams {
+  const query = new URLSearchParams();
+  appendTemplateChoices(query, "org_unit", orgUnitCodes);
+  return query;
+}
+
+/** GET the letter template, with its org-unit dropdown when the caller has the codes. */
+export function downloadLetterImportTemplate(orgUnitCodes?: readonly string[]): Promise<KetQua<Blob>> {
+  return downloadImportTemplate(LETTER_IMPORT_ROUTES, letterTemplateQuery(orgUnitCodes));
+}
 
 /* ---- the report export -------------------------------------------------------------------- */
 

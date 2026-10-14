@@ -6,7 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
-import { downloadTaskImportTemplate, submitTaskImport } from "@/lib/api/task-import";
+import { submitTaskImport, type TaskTemplateChoices } from "@/lib/api/task-import";
 import type { petitions_taskImportResultOut } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
 
@@ -30,6 +30,7 @@ import {
   replayedText,
   sortedImportErrors,
 } from "./task-import";
+import { fetchTaskTemplate } from "./task-template-choices";
 
 /** Id of the import dialog's heading — its accessible name. */
 export const IMPORT_TITLE_ID = "tieu-de-nhap-excel";
@@ -55,10 +56,16 @@ const FILE_INPUT_ID = "tep-nhap-nhiem-vu";
 export function TaskImportDialog({
   onClose,
   onImported,
+  choices,
 }: {
   onClose: () => void;
   /** 201 (or a replayed 201): the register must be read again — the new rows are not spliced in. */
   onImported: () => void;
+  /**
+   * The template's dropdown codes the screen already holds. Any list missing here is read when the
+   * template link is clicked (`fetchTaskTemplate`).
+   */
+  choices?: TaskTemplateChoices;
 }) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -124,7 +131,8 @@ export function TaskImportDialog({
 
   async function template() {
     setBusy("template");
-    const r = await downloadTaskImportTemplate();
+    // Gathered at the click, not when the dialog opened: the lists are the ones of this moment.
+    const r = await fetchTaskTemplate(choices);
     setBusy("");
     if (!r.ok) {
       toast.error(r.thongBao);

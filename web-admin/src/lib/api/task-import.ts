@@ -16,6 +16,7 @@
  * NO `tenant_id`, RELATIVE PATHS, `credentials: same-origin` — `goi.ts`'s three rules, via `CHUNG`.
  */
 
+import { appendTemplateChoices, withQuery } from "./excel-import";
 import {
   CHUNG, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
   LOI_KHONG_RO, // vi-name-ok: existing export of goi.ts, imported not declared (rule 12 inv 3)
@@ -50,11 +51,38 @@ async function refusal(res: Response): Promise<string> {
   return m === LOI_KHONG_RO && res.status === 413 ? TASK_IMPORT_TOO_LARGE : m;
 }
 
+/**
+ * The codes the template's dropdowns are built from — the lists `identity` owns, sent by the client
+ * because it already holds them (owner 14/10/2026). Each one optional: a list the screen could not read
+ * is simply left out, and that column of the template has no dropdown.
+ */
+export type TaskTemplateChoices = {
+  /** Live org units, by `code` (the slug the import's unit column holds — never the ULID). */
+  readonly orgUnitCodes?: readonly string[];
+  /** Assignable staff, by business code (`CB-…`). */
+  readonly staffCodes?: readonly string[];
+  /** Task blocs in use, by `code`. */
+  readonly blocCodes?: readonly string[];
+};
+
+/**
+ * The template path with its choice lists: `org_unit`, `staff`, `bloc`, each repeated.
+ * ⚠ CONTRACT GAP: the generated route declares no query yet (backend built in parallel, owner
+ * 14/10/2026); the three names are written by hand until the contract is regenerated.
+ */
+export function taskImportTemplatePath(choices: TaskTemplateChoices = {}): string {
+  const query = new URLSearchParams();
+  appendTemplateChoices(query, "org_unit", choices.orgUnitCodes);
+  appendTemplateChoices(query, "staff", choices.staffCodes);
+  appendTemplateChoices(query, "bloc", choices.blocCodes);
+  return withQuery(TEMPLATE_PATH, query);
+}
+
 /** GET the template. `no-store` (`CHUNG`): fetched fresh, never kept. */
-export async function downloadTaskImportTemplate(): Promise<KetQua<Blob>> {
+export async function downloadTaskImportTemplate(choices: TaskTemplateChoices = {}): Promise<KetQua<Blob>> {
   let res: Response;
   try {
-    res = await fetch(TEMPLATE_PATH, { ...CHUNG, method: "GET" });
+    res = await fetch(taskImportTemplatePath(choices), { ...CHUNG, method: "GET" });
   } catch {
     return { ok: false, thongBao: LOI_KHONG_RO };
   }

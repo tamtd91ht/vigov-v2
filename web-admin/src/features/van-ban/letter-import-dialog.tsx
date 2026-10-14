@@ -13,13 +13,17 @@ import {
   importKeyFor,
 } from "@/features/nhiem-vu/task-import";
 import { TaskImportView, type ImportViewWords } from "@/features/nhiem-vu/task-import-dialog";
+import { readChoiceCodes } from "@/features/nhiem-vu/task-template-choices";
 import {
   LETTER_IMPORT_ROUTES,
   LETTER_ROWS_FIELD,
   LETTER_TEMPLATE_FILE_NAME,
+  downloadLetterImportTemplate,
   type LetterImportRow,
 } from "@/lib/api/citizen-letter-import";
-import { commitImport, downloadImportTemplate, previewImport } from "@/lib/api/excel-import";
+import { layDanhMucBoPhan } from "@/lib/api/danh-muc";
+import { commitImport, previewImport } from "@/lib/api/excel-import";
+import type { KetQua } from "@/lib/api/goi"; // vi-name-ok: existing type of goi.ts, imported not declared (rule 12 inv 3)
 
 import {
   LETTER_IMPORT_FILE_INPUT_ID,
@@ -33,6 +37,15 @@ import {
 } from "./letter-import";
 
 export const LETTER_IMPORT_TITLE_ID = "tieu-de-nhap-don-thu";
+
+/**
+ * The template with its org-unit dropdown (owner 14/10/2026): the commune's live units by CODE, read at
+ * the click — the registers hold the units only as an id → name table, never the codes. A failed read
+ * sends no list and the template still downloads; only the template's own refusal reaches the user.
+ */
+export async function fetchLetterTemplate(loadOrgUnits: typeof layDanhMucBoPhan = layDanhMucBoPhan): Promise<KetQua<Blob>> {
+  return downloadLetterImportTemplate(await readChoiceCodes(loadOrgUnits));
+}
 
 const WORDS: ImportViewWords = {
   templateButton: LETTER_IMPORT_TEMPLATE_BUTTON,
@@ -121,7 +134,7 @@ export function LetterImportDialog({
 
   async function template() {
     setBusy("template");
-    const r = await downloadImportTemplate(LETTER_IMPORT_ROUTES);
+    const r = await fetchLetterTemplate();
     setBusy("");
     if (!r.ok) {
       toast.error(r.thongBao);

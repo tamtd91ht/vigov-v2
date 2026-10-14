@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   LETTER_IMPORT_ROUTES,
   LETTER_ROWS_FIELD,
+  downloadLetterImportTemplate,
   downloadLetterReport,
   letterReportExportPath,
+  letterTemplateQuery,
 } from "./citizen-letter-import";
-import { commitImport, previewImport } from "./excel-import";
+import { TEMPLATE_CHOICE_CAP, commitImport, previewImport } from "./excel-import";
 import { LOI_KHONG_RO } from "./goi";
 
 /**
@@ -54,6 +56,31 @@ describe("citizen-letter import routes", () => {
     expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/citizen-letters/imports");
     expect((fake.mock.calls[0]?.[1]?.headers as Record<string, string>)["Idempotency-Key"]).toBe("khoa-1");
     expect(r).toEqual({ ok: false, message: "Tệp có lỗi nên chưa đơn nào được vào sổ.", errors });
+  });
+});
+
+describe("GET /api/v1/citizen-letters/import-template — the org-unit dropdown", () => {
+  it("`org_unit` repeated in order, blanks and duplicates dropped, codes only", async () => {
+    const fake = stub(new Response(new Blob(["PK"]), { status: 200 }));
+    const r = await downloadLetterImportTemplate(["van-phong", "", "tu-phap", "van-phong"]);
+    expect(r.ok).toBe(true);
+    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/citizen-letters/import-template?org_unit=van-phong&org_unit=tu-phap");
+    expect(fake.mock.calls[0]?.[1]?.method).toBe("GET");
+  });
+
+  it("no codes (none held, or the read failed): the bare path — exactly the template as before", async () => {
+    const fake = stub(new Response(new Blob(["PK"]), { status: 200 }));
+    await downloadLetterImportTemplate();
+    await downloadLetterImportTemplate([]);
+    expect(fake.mock.calls.map((c) => c[0])).toEqual([
+      "/api/v1/citizen-letters/import-template",
+      "/api/v1/citizen-letters/import-template",
+    ]);
+  });
+
+  it("capped at TEMPLATE_CHOICE_CAP — more would be 400 `too_many_choices` and no file at all", () => {
+    const many = Array.from({ length: TEMPLATE_CHOICE_CAP + 1 }, (_, i) => `u${i}`);
+    expect(letterTemplateQuery(many).getAll("org_unit")).toHaveLength(TEMPLATE_CHOICE_CAP);
   });
 });
 

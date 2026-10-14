@@ -89,13 +89,49 @@ function formWith(file: Blob, fileName: string): FormData {
 }
 
 /**
+ * The server's cap on ONE choice list of a template (owner 14/10/2026): more codes than this and the
+ * route answers 400 `too_many_choices` — no file at all. Capped here too, so a commune that outgrows it
+ * still gets a template (with a shorter dropdown) instead of a refusal.
+ */
+export const TEMPLATE_CHOICE_CAP = 2000;
+
+/**
+ * Append one dropdown list to a template query: the param REPEATED once per code, in the order given,
+ * blanks skipped, duplicates dropped, at most `TEMPLATE_CHOICE_CAP`.
+ *
+ * CODES ONLY, NEVER NAMES (owner 14/10/2026): the server re-checks every code with `identity` and prints
+ * identity's own names — text from the browser never reaches the file. It also drops an unknown code
+ * silently, so nothing is pre-filtered here beyond what keeps the URL inside the cap.
+ */
+export function appendTemplateChoices(query: URLSearchParams, name: string, codes: readonly string[] | undefined): void {
+  if (codes === undefined) return;
+  const seen = new Set<string>();
+  for (const raw of codes) {
+    const code = raw.trim();
+    if (code === "" || seen.has(code)) continue;
+    if (seen.size >= TEMPLATE_CHOICE_CAP) break;
+    seen.add(code);
+    query.append(name, code);
+  }
+}
+
+/** `path`, plus `?query` only when the query holds something — an empty `?` is never sent. */
+export function withQuery(path: string, query: URLSearchParams | undefined): string {
+  const s = query?.toString() ?? "";
+  return s === "" ? path : `${path}?${s}`;
+}
+
+/**
  * GET the template. Some templates list this commune's live rows as choices (the org chart's parent
  * column), so it is fetched fresh each time (`no-store` in `CHUNG`) and never kept.
+ *
+ * `query` carries the dropdown lists of a template whose lists the CLIENT supplies (the citizen-letter
+ * template's org units). Absent or empty: the bare path, exactly as before — every other import sends none.
  */
-export async function downloadImportTemplate(routes: ImportRoutes): Promise<KetQua<Blob>> {
+export async function downloadImportTemplate(routes: ImportRoutes, query?: URLSearchParams): Promise<KetQua<Blob>> {
   let res: Response;
   try {
-    res = await fetch(routes.template, { ...CHUNG, method: "GET" });
+    res = await fetch(withQuery(routes.template, query), { ...CHUNG, method: "GET" });
   } catch {
     return { ok: false, thongBao: LOI_KHONG_RO };
   }
