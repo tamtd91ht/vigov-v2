@@ -10,7 +10,7 @@
 // `service-platform/Jenkinsfile`): push `dev` (hoặc `main` cho prod) → người bấm → đóng ảnh → đặt ảnh lên cụm.
 //
 // Từng CHỈ PROD (chủ dự án chốt 01/10/2026). Từ 13/10/2026 namespace theo nhánh như mọi ảnh khác
-// (`namespaceForBranch()`); nhánh `dev` cần Deployment này dựng sẵn trong vigov-dev. Host công khai `admin.vigov.vn` và Ingress của nó DỰNG TAY trong Rancher — không
+// (`namespaceForBranch()`); nhánh `dev` cần Deployment này dựng sẵn trong vigov-dev. Host công khai `admin.vigov.vn` (dev: `admin-dev.vigov.vn`) và Ingress của nó DỰNG TAY trong Rancher — không
 // nằm trong `deploy/hosts.yaml` hay `tools/ingress` (deploy/README.md, mục "platform-admin lần đầu").
 
 pipeline {
@@ -168,7 +168,7 @@ pipeline {
         // bàn điều khiển lên lúc ấy là đưa ra một màn hình chỉ trả 404. Dừng và nói rõ.
         //
         // Phép kiểm hình dạng dưới đây cố ý HẸP hơn `operator-host.ts`: nhãn đầu phải là `admin`
-        // hoặc `admin-stg` (ADR 0046). Ứng dụng vẫn tự kiểm đầy đủ lúc chạy (503 nêu tên biến).
+        // (prod) hoặc `admin-dev` (dev, chủ dự án 14/10/2026 — `admin-stg` đã bỏ cùng staging; ADR 0046). Ứng dụng vẫn tự kiểm đầy đủ lúc chạy (503 nêu tên biến).
         // Đứng TRƯỚC `DA_DAT = 'roi'`: đỏ ở đây là đỏ trước khi chạm cụm, không có gì để rút lại.
         script {
           env.OPERATOR_HOST_TU_PLATFORM = sh(returnStdout: true, script: '''
@@ -186,14 +186,14 @@ pipeline {
               "")              loi="deploy/$TEN_K8S_PLATFORM CHƯA ĐẶT OPERATOR_HOST (hoặc đặt qua valueFrom/envFrom — job chỉ đọc được giá trị env ghi thẳng). Khu vận hành đang TẮT." ;;
               *[!a-z0-9.-]*)   loi="OPERATOR_HOST của deploy/$TEN_K8S_PLATFORM chứa ký tự ngoài a-z 0-9 . - (khoảng trắng, scheme, cổng, chữ hoa, hay hai container mang hai giá trị)." ;;
               .*|*.|*..*|*-.*|*.-*) loi="OPERATOR_HOST của deploy/$TEN_K8S_PLATFORM không phải tên host hợp lệ." ;;
-              admin.*.*|admin-stg.*.*) ;;
-              *)               loi="OPERATOR_HOST của deploy/$TEN_K8S_PLATFORM không phải host của bàn điều khiển (nhãn đầu phải là admin hoặc admin-stg)." ;;
+              admin.*.*|admin-dev.*.*) ;;
+              *)               loi="OPERATOR_HOST của deploy/$TEN_K8S_PLATFORM không phải host của bàn điều khiển (nhãn đầu phải là admin hoặc admin-dev)." ;;
             esac
             if [ -n "$loi" ]; then
               echo "" >&2
               echo "TỪ CHỐI TRIỂN KHAI: $loi" >&2
               echo "Bàn điều khiển phải mang ĐÚNG OPERATOR_HOST của platform, nên job này không tự điền giá trị nào." >&2
-              echo "Đặt OPERATOR_HOST=admin.vigov.vn trên $TEN_K8S_PLATFORM trước (deploy/README.md, mục 'platform-admin lần đầu'), rồi bấm lại." >&2
+              echo "Đặt OPERATOR_HOST trên $TEN_K8S_PLATFORM trước (prod: admin.vigov.vn · dev: admin-dev.vigov.vn) (deploy/README.md, mục 'platform-admin lần đầu'), rồi bấm lại." >&2
               exit 1
             fi
             printf '%s' "$op"

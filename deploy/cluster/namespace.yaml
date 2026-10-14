@@ -1,4 +1,5 @@
-# Hai namespace, một cụm. KHÔNG phải một namespace cho mỗi xã.
+# Hai namespace, một cụm: `vigov-dev` (nhánh dev) và `vigov-prod` (nhánh main) — chủ dự án
+# 13–14/10/2026; `vigov-staging` đã bỏ, dev có CSDL RIÊNG. KHÔNG phải một namespace cho mỗi xã.
 #
 # Xã được phân giải TỪ `Host` bên trong từng request (luật 1, bất biến 3) — cùng một pod
 # phục vụ mọi xã. Một namespace cho mỗi xã nghĩa là 200+ bản sao của mọi thứ, và nó còn phá
@@ -13,6 +14,6 @@ metadata:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: vigov-staging
+  name: vigov-dev
   labels:
-    vigov.vn/env: staging
+    vigov.vn/env: dev

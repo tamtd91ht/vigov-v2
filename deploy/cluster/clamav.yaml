@@ -2,12 +2,13 @@
 #
 # VÌ SAO: petitions quét MỌI tệp trước khi chép từ vùng tạm sang kho riêng (core/malwarescan,
 # lệnh INSTREAM qua TCP 3310). Thiếu máy quét là ĐÓNG KÍN: mọi lượt tải lên bị từ chối, không bao
-# giờ lưu tệp chưa quét. Ở staging/prod, ảnh petitions có `config.Uses(MalwareScan)` còn TỪ CHỐI
-# KHỞI ĐỘNG nếu `MALWARE_SCANNER_ADDRESS` trống (ADR 0057). Giá trị cho Service dưới đây:
+# giờ lưu tệp chưa quét. Ở prod (ENV=prod), ảnh petitions có `config.Uses(MalwareScan)` còn TỪ CHỐI
+# KHỞI ĐỘNG nếu `MALWARE_SCANNER_ADDRESS` trống (ADR 0057); ở vigov-dev (ENV=dev, chủ dự án chấp nhận
+# 14/10/2026) pod vẫn khởi động và chỉ từ chối lúc tải lên. Giá trị cho Service dưới đây:
 # `vigov-clamav:3310` — không `tcp://`; nhiều bản sao thì danh sách `host:port` cách dấu phẩy.
 #
 # ÁP BẰNG job `vigov-deploy`, việc `dung-clamav` (deploy/Jenkinsfile). KHÔNG ghi namespace ở đây:
-# cùng một tệp áp cho vigov-prod và vigov-staging qua `kubectl -n <ns> apply -f`.
+# cùng một tệp áp cho vigov-prod và vigov-dev qua `kubectl -n <ns> apply -f`.
 #
 # RAM: cơ sở dữ liệu chữ ký nạp vào bộ nhớ ~1–1,5 GB mỗi clamd; lúc freshclam tải bản mới, clamd
 # nạp bản mới TRƯỚC rồi mới bỏ bản cũ (ConcurrentDatabaseReload mặc định bật) — đỉnh gần gấp đôi.

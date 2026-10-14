@@ -55,19 +55,19 @@ roleRef:
   kind: Role
   name: trien-khai
 ---
-# Bản sao cho staging. Hai namespace, hai RoleBinding — KHÔNG một ClusterRoleBinding:
+# Bản sao cho dev (`vigov-dev`, thay staging từ 14/10/2026). Hai namespace, hai RoleBinding — KHÔNG một ClusterRoleBinding:
 # một ràng buộc cấp cụm là một quyền không ai đọc được giới hạn từ chỗ nó được cấp.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: jenkins-trien-khai
-  namespace: vigov-staging
+  namespace: vigov-dev
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: trien-khai
-  namespace: vigov-staging
+  namespace: vigov-dev
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments", "deployments/status", "replicasets"]
@@ -92,11 +92,11 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: jenkins-trien-khai
-  namespace: vigov-staging
+  namespace: vigov-dev
 subjects:
   - kind: ServiceAccount
     name: jenkins-trien-khai
-    namespace: vigov-staging
+    namespace: vigov-dev
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role

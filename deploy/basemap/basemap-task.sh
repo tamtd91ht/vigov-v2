@@ -8,7 +8,7 @@
 # is web-admin/scripts/build-basemap.sh.
 #
 # Environment (set by the calling job, never by a person):
-#   NS          vigov-prod | vigov-staging
+#   NS          vigov-prod | vigov-dev
 #   NGAY_NEN    YYYYMMDD of a Protomaps daily build (validated by basemap.py before any use)
 #   BAN_OVERTURE  Overture release of the places archive, e.g. 2026-09-23.1 (validated by basemap.py)
 #   GHI         1 = do it; anything else = dry run (print the plan, change nothing)
@@ -28,7 +28,7 @@ set -eu
 umask 077
 
 : "${NS:?}" "${NGAY_NEN?}" "${BAN_OVERTURE?}" "${WORKSPACE:?}" "${KUBECONFIG:?}"
-case "$NS" in vigov-prod|vigov-staging) ;; *) echo "DỪNG: NS '$NS' không hợp lệ."; exit 1 ;; esac
+case "$NS" in vigov-prod|vigov-dev) ;; *) echo "DỪNG: NS '$NS' không hợp lệ."; exit 1 ;; esac
 
 TMP_DIR=$(mktemp -d)
 cleanup() {
@@ -192,8 +192,8 @@ cat "$DIR/BUILD-INFO.txt"
 echo "── Giá trị BASEMAP_URL (job KHÔNG đặt):"
 echo "   $BM_URL"
 echo "════ BƯỚC TIẾP ═══════════════════════════════════════════════════════════════"
-echo "1. STAGING: đặt BASEMAP_URL=$BM_URL trong common-config của vigov-staging (runbook, mục"
-echo "   'Đưa vào dùng'), khởi động lại vigov-web-admin và vigov-service-comms."
-echo "   (Nếu bucket/endpoint của staging khác prod: tải lên lại bằng việc này với MT=staging.)"
-echo "2. Kiểm chủ quyền có ký trên staging — kb/40-runbooks/basemap-pmtiles.md. Một dòng không đạt: DỪNG."
+echo "1. DEV: đặt BASEMAP_URL trong common-config của vigov-dev (runbook, mục 'Đưa vào dùng'), khởi"
+echo "   động lại vigov-web-admin và vigov-service-comms. URL trên là của $NS: dev có MinIO/bucket riêng"
+echo "   thì chạy lại việc này với MT=dev để tải lên bucket của dev, rồi dùng URL lượt ấy in ra."
+echo "2. Kiểm chủ quyền có ký trên dev — kb/40-runbooks/basemap-pmtiles.md. Một dòng không đạt: DỪNG."
 echo "3. Chỉ sau khi đã ký: cùng giá trị ở vigov-prod. Không xoá tiền tố cũ (đường quay lui)."
