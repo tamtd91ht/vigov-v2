@@ -329,6 +329,9 @@ func run(log *slog.Logger) error {
 	// commune, never called at sign-in; it takes the same two locks as the column save above, in the
 	// same order, so the two cannot deadlock against each other.
 	roleTemplates := app.NewRoleTemplateSeeder(kho, idstore.NewRoleTemplateStore(kho))
+	// The commune's own roles: create, rename, soft-delete (owner decision 15/10/2026). A use case over
+	// its own store; every write takes the commune's role-catalogue lock, then the row.
+	roles := app.NewRoleCatalogue(kho, idstore.NewRoleWriteStore(kho))
 	// The WRITE surface of the org chart: POST and PATCH /api/v1/org-units, under `admin.org` (user
 	// decision 2026-09-24). Given the SAME *idstore.BoPhanStore as the read field: the move's cycle
 	// check reads the rows it then writes, under locks, inside one transaction.
@@ -490,6 +493,8 @@ func run(log *slog.Logger) error {
 		// Gieo 8 vai trò mẫu (§4.1) theo một thao tác tường minh của người quản trị — xem
 		// app/role_template.go.
 		RoleTemplates: roleTemplates,
+		// Xã tự tạo, đổi tên, xoá mềm vai trò của mình (chủ dự án chốt 15/10/2026) — xem app/role_write.go.
+		Roles: roles,
 		// Ba tuyến đọc tham chiếu của migration 0005. Hai danh mục (loại đơn vị dân cư, khối nhiệm
 		// vụ) có thêm tuyến GHI dưới khoá `admin.lookup` — người dùng quyết 24/09/2026: danh mục đầy đủ.
 		ThonToDanPho: thonToDanPho,
@@ -778,7 +783,9 @@ func run(log *slog.Logger) error {
 	// the platform client itself, not the cached lookup: an administrator must not be created in a
 	// commune deactivated within the cache's TTL.
 	ownerAdmin := app.NewOwnerAdmin(app.NewOperatorStore(operatorstore.New(db)), time.Now, log)
-	communeAccounts := app.NewCommuneAccountsByOwner(kho, canBo, taiKhoan, nenTang)
+	// The template store too: a brand-new commune gets the eight template roles in the same transaction
+	// that creates its administrator role (owner decision 15/10/2026).
+	communeAccounts := app.NewCommuneAccountsByOwner(kho, canBo, taiKhoan, nenTang, idstore.NewRoleTemplateStore(kho))
 	opSrv := buildOperatorGRPCServer(cfg.GRPCCallerKey(),
 		svcgrpc.NewOperatorServer(operatorAuth, log).WithMiniAppSecrets(miniAppSecrets).
 			WithActiveStaffCounts(activeStaffCounts).WithOwnerAdmin(ownerAdmin, communeAccounts), log)

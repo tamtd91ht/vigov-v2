@@ -2988,10 +2988,31 @@ export type identity_revokeAccountIn = {
   "reason": string;
 };
 
+export type identity_roleDeletionIn = {
+  /** lý do xoá, bắt buộc, tối đa 500 ký tự */
+  "reason": string;
+};
+
+export type identity_roleDeletionOut = {
+  "id": string;
+  "code": string;
+  "name": string;
+  "deleted_at": string;
+  /** mã cán bộ người xoá */
+  "deleted_by": string;
+};
+
 export type identity_roleTemplateRefOut = {
   /** vai_tro.ma, e.g. "chu-tich-ubnd" */
   "code": string;
   "name": string;
+};
+
+export type identity_roleWriteIn = {
+  /** tên vai trò, 1–100 ký tự */
+  "name": string | null;
+  /** vai trò lãnh đạo — chỉ chọn màn hình mở đầu, không cấp quyền gì */
+  "is_leader": boolean | null;
 };
 
 export type identity_seedRoleTemplatesOut = {
@@ -10624,6 +10645,31 @@ export type identity_get_roles = {
   };
 };
 
+/** POST /api/v1/roles — Tạo một vai trò mới của xã (chức danh) — mã tự sinh từ tên, chưa có quyền nào */
+export type identity_post_roles = {
+  duongDan: "/api/v1/roles";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_roleWriteIn;
+  phanHoi: {
+    201: identity_vaiTroMucRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    409: "duplicate_name" | "role_code_taken" | "role_limit_reached";
+    422: "invalid_name";
+  };
+};
+
 /** POST /api/v1/roles/defaults — Gieo 8 vai trò mẫu (14-cau-hinh §4.1) cho xã — vai trò đã có hay đã xoá thì giữ nguyên, không bù quyền */
 export type identity_post_roles_defaults = {
   duongDan: "/api/v1/roles/defaults";
@@ -10639,6 +10685,62 @@ export type identity_post_roles_defaults = {
     403: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** PUT /api/v1/roles/{id} — Đổi tên vai trò hoặc cờ lãnh đạo — mã vai trò giữ nguyên; vai trò Quản trị hệ thống không sửa được */
+export type identity_put_roles_by_id = {
+  duongDan: "/api/v1/roles/{id}";
+  phuongThuc: "PUT";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_roleWriteIn;
+  phanHoi: {
+    200: identity_vaiTroMucRa;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "role_not_found";
+    409: "duplicate_name" | "system_role";
+    422: "invalid_name";
+  };
+};
+
+/** POST /api/v1/roles/{id}/deletion — Xoá mềm một vai trò, kèm lý do bắt buộc — từ chối khi còn cán bộ giữ vai trò hoặc là vai trò Quản trị hệ thống */
+export type identity_post_roles_by_id_deletion = {
+  duongDan: "/api/v1/roles/{id}/deletion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_roleDeletionIn;
+  phanHoi: {
+    201: identity_roleDeletionOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "role_not_found";
+    409: "role_in_use" | "system_role";
+    422: "invalid_reason";
   };
 };
 

@@ -362,6 +362,15 @@ type (
 		SeedDefaults(ctx context.Context, actor app.NguoiThucHien) (app.RoleTemplateResult, error)
 	}
 
+	// RoleWriting creates, renames and soft-deletes the commune's OWN roles, for POST /api/v1/roles,
+	// PUT /api/v1/roles/{id} and POST /api/v1/roles/{id}/deletion (owner decision 15/10/2026). A USE
+	// CASE, NOT A STORE: every method opens the transaction its audit entry shares (app.RoleCatalogue).
+	RoleWriting interface {
+		Add(ctx context.Context, in app.RoleInput, actor app.NguoiThucHien) (domain.VaiTro, error)
+		Edit(ctx context.Context, id string, in app.RoleInput, actor app.NguoiThucHien) (domain.VaiTro, error)
+		Remove(ctx context.Context, id, reason string, actor app.NguoiThucHien) (app.RoleDeletion, error)
+	}
+
 	// The three reference reads of migration 0005 (ADR 0024). THREE INTERFACES AND NOT ONE WIDE
 	// READER, although all three have the identical method signature and two of them are satisfied
 	// by stores built the same way.
@@ -532,6 +541,8 @@ type Deps struct {
 	GhiPhanQuyen PhanQuyenGhi
 	// RoleTemplates — the template-role seed behind POST /api/v1/roles/defaults. See RoleTemplateSeeding.
 	RoleTemplates RoleTemplateSeeding
+	// Roles — the commune's own role writes (create, rename, soft-delete). See RoleWriting.
+	Roles RoleWriting
 	// The three reference reads of migration 0005. Three fields, three interfaces — see the note
 	// above them.
 	ThonToDanPho ThonToDanPhoDanhSach
@@ -669,6 +680,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu use case lưu phân quyền — PUT /api/v1/roles/{id}/permissions sẽ panic khi có người gọi")
 	case d.RoleTemplates == nil:
 		panic("identity/http: thiếu use case gieo vai trò mẫu — POST /api/v1/roles/defaults sẽ panic khi có người gọi")
+	case d.Roles == nil:
+		panic("identity/http: thiếu use case ghi vai trò — POST /api/v1/roles, PUT /api/v1/roles/{id} và POST /api/v1/roles/{id}/deletion sẽ panic khi có người gọi")
 	case d.ThonToDanPho == nil:
 		panic("identity/http: thiếu kho thôn/tổ dân phố — GET /api/v1/residential-units sẽ panic khi có người gọi")
 	case d.ResidentialUnits == nil:
@@ -1964,9 +1977,10 @@ func Register(mux *http.ServeMux, d Deps) {
 
 	// Seeding the eight template roles of §4.1. POST /api/v1/roles/defaults
 	//
-	// USER DECISION 2026-09-28: there is no "create role" route; a commune gets its working roles by
-	// this one explicit act, on the precedent of POST /api/v1/sla/defaults. NEVER called
-	// automatically — not at the first `admin` sign-in.
+	// USER DECISION 2026-09-28: one explicit act, on the precedent of POST /api/v1/sla/defaults. Since
+	// OWNER DECISION 15/10/2026 a commune also creates its own roles (the three routes below), and a
+	// brand-new commune receives these templates inside the owner's CreateCommuneAdminAccount; this
+	// route stays for communes created before that, and is never called at the first `admin` sign-in.
 	//
 	// `roles/defaults` — the literal cannot shadow `roles/{id}/permissions` (different depth) and
 	// mirrors `sla/defaults`, so the two seed buttons of Cấu hình share one shape.
@@ -1994,6 +2008,99 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.role")(
 			idem.KhongCan("bộ gieo chỉ CHÈN vai trò mẫu mà xã chưa có mã, quyết định bên trong đúng giao dịch ghi, và khoá duy nhất (tenant_id, ma) chặn dòng thứ hai — nên lần bấm thứ hai không tạo gì, không cấp thêm quyền nào và không để vết")(
 				http.HandlerFunc(h.SeedRoleTemplates))))
+
+	// --- the commune's OWN roles: create, rename, soft-delete. THREE ROUTES, ALL `admin.role` -------
+	//
+	// OWNER DECISION 15/10/2026: a "vai trò" is a staff job title carrying a permission set (Chủ tịch
+	// UBND, Phó Chủ tịch, Bí thư…), and the commune manages its own on the Phân quyền screen. The rules
+	// are on app.RoleCatalogue; not restated here (rule 9).
+	//
+	// RequirePermission("admin.role") — "Phân quyền", the key the matrix read, the column save and the
+	// template seed already declare, so the whole screen sits on one key; none invented (rule 5,
+	// invariant 3c). #14 ("không trao quyền mình không cầm") is not engaged: a new role holds NO key,
+	// rename and deletion touch none — keys are ticked afterwards through
+	// PUT /api/v1/roles/{id}/permissions, which carries #14 in full.
+	//
+	// THE COMMUNE ADMINISTRATOR ROLE (`quan-tri-he-thong`) is refused on rename and deletion with 409
+	// `system_role`: the system finds it by its code and treats it as the role holding every key.
+
+	// Creating a role. POST /api/v1/roles
+	//
+	// The code (`vai_tro.ma`) is derived server-side from the name — the org chart's slug, suffixed
+	// -2, -3 … past every code the commune ever issued (deleted roles included), never
+	// `quan-tri-he-thong`. The new role holds no permission and comes last on the matrix.
+	//
+	// idem.KhongCan, AND THE PROTECTION IS THE NAME CHECK: a second identical request finds the name
+	// taken by the first (case-insensitive, under the commune's advisory lock) and is refused with
+	// 409 `duplicate_name` — it never creates a second role.
+	//
+	// @summary  Tạo một vai trò mới của xã (chức danh) — mã tự sinh từ tên, chưa có quyền nào
+	// @screen   14-cau-hinh §4
+	// @request  roleWriteIn
+	// @reply    201 vaiTroMucRa
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error duplicate_name role_limit_reached role_code_taken
+	// @reply    422 httpx.Error invalid_name
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/roles",
+		authz.RequirePermission(d.Checker, "admin.role")(
+			idem.KhongCan("lần gửi thứ hai cùng tên bị từ chối 409 duplicate_name — tên được kiểm trong giao dịch dưới khoá tư vấn của xã — nên không bao giờ tạo vai trò thứ hai")(
+				http.HandlerFunc(h.AddRole))))
+
+	// Renaming a role or changing its leader flag. PUT /api/v1/roles/{id}
+	//
+	// PUT with both fields — `is_leader` absent is 400, never read as false. The code never changes.
+	// 404 `role_not_found` is one answer for an invented id, a soft-deleted role and another commune's.
+	//
+	// idem.KhongCan — PUT carries the whole state: the second identical request finds the role already
+	// as asked, so the use case writes nothing and audits nothing.
+	//
+	// @summary  Đổi tên vai trò hoặc cờ lãnh đạo — mã vai trò giữ nguyên; vai trò Quản trị hệ thống không sửa được
+	// @screen   14-cau-hinh §4
+	// @request  roleWriteIn
+	// @reply    200 vaiTroMucRa
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error role_not_found
+	// @reply    409 httpx.Error system_role duplicate_name
+	// @reply    422 httpx.Error invalid_name
+	// @reply    500 httpx.Error
+	mux.Handle("PUT /api/v1/roles/{id}",
+		authz.RequirePermission(d.Checker, "admin.role")(
+			idem.KhongCan("PUT mang toàn bộ trạng thái: gửi lại đúng tên và cờ đang có thì use case không ghi gì và không để vết")(
+				http.HandlerFunc(h.EditRole))))
+
+	// Soft-deleting a role. POST /api/v1/roles/{id}/deletion
+	//
+	// A NOMINALISED SUB-RESOURCE carrying a mandatory reason (skills/rest-api-design §3), on the
+	// precedent of POST /api/v1/communes/{id}/deletion (service-platform): 201 with the record of the
+	// act. `deleted_at`, `deleted_by` (the remover's staff code), `delete_reason` (rule 7, invariant 1);
+	// the code stays taken; the role's grant rows are kept and stop counting.
+	//
+	// 409 `role_in_use` while ANY live member of staff holds the role (an assignment or the primary-role
+	// column) — the message carries the count; reassign them on the Người dùng screen first.
+	//
+	// idem.KhongCan — the read and the UPDATE both carry `deleted_at IS NULL`, so a second request
+	// answers 404 and cannot overwrite who deleted the role or why.
+	//
+	// @summary  Xoá mềm một vai trò, kèm lý do bắt buộc — từ chối khi còn cán bộ giữ vai trò hoặc là vai trò Quản trị hệ thống
+	// @screen   14-cau-hinh §4
+	// @request  roleDeletionIn
+	// @reply    201 roleDeletionOut
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error role_not_found
+	// @reply    409 httpx.Error system_role role_in_use
+	// @reply    422 httpx.Error invalid_reason
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/roles/{id}/deletion",
+		authz.RequirePermission(d.Checker, "admin.role")(
+			idem.KhongCan("xoá một vai trò đã xoá cho cùng một kết quả: lượt khoá dòng và câu UPDATE đều mang `deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do")(
+				http.HandlerFunc(h.RemoveRole))))
 
 	// --- the three reference reads of migration 0005 ---------------------------------------------
 	//

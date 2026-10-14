@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-13",
+  "cap_nhat": "2026-10-15",
   "muc": [
+    {
+      "id": "xa-tu-quan-ly-vai-tro-15-10",
+      "viec": "Xã tự tạo / đổi tên / xoá mềm vai trò; xã mới có sẵn 8 vai trò mẫu khi owner tạo quản trị đầu tiên (ADR 0095)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án 15/10/2026: 'vai trò = chức danh (chủ tịch, phó chủ tịch, bí thư…)', chọn 'Cả hai', Bí thư xã tự tạo. POST /api/v1/roles {name,is_leader} → 201 (mã sinh từ tên, -2/-3…, không bao giờ quan-tri-he-thong; 409 duplicate_name/role_limit_reached/role_code_taken; 422 invalid_name). PUT /api/v1/roles/{id} → 200 (409 system_role). POST /api/v1/roles/{id}/deletion {reason} → 201 xoá mềm (409 role_in_use đếm cán bộ còn giữ qua staff_role_assignment hoặc nguoi_dung.vai_tro_id; 409 system_role). Quyền admin.role; vết them_vai_tro / sua_vai_tro / xoa_vai_tro cùng giao dịch, actor CB-. CreateAdmin: khi tạo mới quan-tri-he-thong thì gieo 8 mẫu cùng giao dịch (writeRoleTemplates tách từ SeedDefaults), vết gieo_vai_tro_mau actor VH-. store/can_bo_ghi.go QuyenCuaVaiTro thêm FOR SHARE chặn gán vai trò đang bị xoá. Không migration (vai_tro đã có deleted_*). KIỂM: go vet, go test ./... service-identity xanh; check_quyen, check_audit_actor, check_security PASS.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA chạy *_pg_test.go (role_write_pg_test.go, commune_accounts_owner_pg_test.go) — không có VIGOV_TEST_DSN. Xã đã có quản trị trước 15/10 không tự gieo: dùng nút 'Thêm vai trò mẫu'. Tuyến seed HTTP không lấy advisory lock của danh mục vai trò — chạy song song với tạo vai trò trùng mã thì một bên 409."
+    },
     {
       "id": "store-crosstenant",
       "viec": "Gói đọc chéo xã — nơi duy nhất được phép đọc qua ranh giới xã",

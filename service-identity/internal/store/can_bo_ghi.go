@@ -484,8 +484,13 @@ func (s *CanBoStore) QuyenCuaVaiTro(ctx context.Context, tx *store.ScopedTx, vai
 		return nil, true, nil
 	}
 
+	// FOR SHARE (owner decision 15/10/2026, roles can now be deleted): held until commit, so a
+	// concurrent POST /api/v1/roles/{id}/deletion — which locks the row FOR UPDATE before counting the
+	// role's holders (RoleWriteStore.LockRole) — either waits for this assignment and counts it, or
+	// commits first and this read re-checks `deleted_at` and answers "no such role". Without it the
+	// foreign key alone would let a person be given a role deleted a millisecond earlier.
 	const stmtTonTai = `SELECT 1 FROM vai_tro
-	                    WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL`
+	                    WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR SHARE`
 	var mot int
 	err := tx.Underlying().QueryRowContext(ctx, stmtTonTai, string(tx.TenantID()), vaiTroID).Scan(&mot)
 	if errors.Is(err, sql.ErrNoRows) {

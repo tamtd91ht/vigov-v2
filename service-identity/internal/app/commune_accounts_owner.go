@@ -72,6 +72,9 @@ type CommuneAccountsByOwner struct {
 	accounts CommuneAccountStore
 	resetter StaffPasswordResetter
 	communes tenant.CommuneLookup // UNCACHED: "re-read live from the platform" (operator.proto)
+	// templates writes the eight template roles into a brand-new commune (owner decision 15/10/2026)
+	// — *idstore.RoleTemplateStore, the store POST /api/v1/roles/defaults writes through.
+	templates RoleTemplateWriter
 
 	// Injected so a test can pin them. Production: ulid.Moi, domain.SinhMaCanBo, password.Bam.
 	newID   func() (string, error)
@@ -81,12 +84,13 @@ type CommuneAccountsByOwner struct {
 }
 
 func NewCommuneAccountsByOwner(db *store.DB, accounts CommuneAccountStore, resetter StaffPasswordResetter,
-	communes tenant.CommuneLookup) *CommuneAccountsByOwner {
-	if db == nil || accounts == nil || resetter == nil || communes == nil {
-		panic("app.NewCommuneAccountsByOwner: db, accounts, resetter and communes are required")
+	communes tenant.CommuneLookup, templates RoleTemplateWriter) *CommuneAccountsByOwner {
+	if db == nil || accounts == nil || resetter == nil || communes == nil || templates == nil {
+		panic("app.NewCommuneAccountsByOwner: db, accounts, resetter, communes and templates are required")
 	}
 	return &CommuneAccountsByOwner{db: db, accounts: accounts, resetter: resetter, communes: communes,
-		newID: ulid.Moi, newCode: domain.SinhMaCanBo, hash: password.Bam,
+		templates: templates,
+		newID:     ulid.Moi, newCode: domain.SinhMaCanBo, hash: password.Bam,
 		now: func() time.Time { return time.Now().UTC() }}
 }
 
@@ -151,6 +155,8 @@ func (u *CommuneAccountsByOwner) List(ctx context.Context, owner MiniAppOperator
 // granted (store.CapMoiQuyen, cap_boi = the owner's VH- code) ONLY WHEN THE ROLE IS CREATED HERE. An
 // EXISTING role is used as the commune left it: re-filling it would silently undo a grant the commune's
 // own administrator withdrew, which is the vendor deciding a commune's authorisation (ADR 0003).
+// When — and only when — the role is created here, the eight template roles are written too, in the
+// same transaction (owner decision 15/10/2026; the reasoning is at the call).
 //
 // THE CODE: domain.SinhMaCanBo, retried on a collision exactly as DanhBaCanBo.Them and the seed do.
 func (u *CommuneAccountsByOwner) CreateAdmin(ctx context.Context, owner MiniAppOperator, email, fullName,
@@ -199,8 +205,27 @@ func (u *CommuneAccountsByOwner) CreateAdmin(ctx context.Context, owner MiniAppO
 				return err
 			}
 			var granted int64
+			var seeded RoleTemplateResult
 			if roleCreated {
 				if granted, err = u.accounts.CapMoiQuyen(ctx, tx, rid, actor.ID); err != nil {
+					return err
+				}
+				// A BRAND-NEW COMMUNE GETS THE EIGHT TEMPLATE ROLES IN THIS SAME TRANSACTION (owner
+				// decision 15/10/2026) — through the code POST /api/v1/roles/defaults writes with, so
+				// existing roles stay untouched and deleted ones are not revived. "Brand-new" is read as
+				// "this act just created `quan-tri-he-thong`": a commune that already has an
+				// administrator role was set up before and owns its catalogue.
+				//
+				// NOT THE HTTP ROUTE'S #14 CHECK ("the caller must hold every key the templates grant")
+				// AND NOT ITS GRANTOR LOCKS: the owner is not a staff member holding keys, and this same
+				// act has just granted EVERY `quyen` key to the administrator role it creates — every key
+				// a template grants is a subset of what this act already hands out. There is no holder
+				// to lock in a commune with no administrator yet; a concurrent seed would collide on
+				// `UNIQUE (tenant_id, ma)` and roll this whole transaction back (ErrRoleCodeTaken).
+				//
+				// Each template role leaves its own gieo_vai_tro_mau entry, actor = the owner's VH- code
+				// (actor_kind operator); the count goes into this act's entry below.
+				if seeded, err = writeRoleTemplates(ctx, tx, u.templates, u.newID, actor); err != nil {
 					return err
 				}
 			}
@@ -217,9 +242,10 @@ func (u *CommuneAccountsByOwner) CreateAdmin(ctx context.Context, owner MiniAppO
 			return audit.Write(ctx, tx, audit.Entry{
 				Actor: actor, Action: ActionCommuneAdminCreatedByOperator, Subject: code,
 				Delta: deltaCanBo(map[string]any{
-					"vai_tro":           idstore.MaVaiTroQuanTriMacDinh,
-					"vai_tro_tao_moi":   roleCreated,
-					"so_quyen_cap_them": granted,
+					"vai_tro":            idstore.MaVaiTroQuanTriMacDinh,
+					"vai_tro_tao_moi":    roleCreated,
+					"so_quyen_cap_them":  granted,
+					"so_vai_tro_mau_tao": len(seeded.Created),
 					"sau": map[string]any{
 						"co_tai_khoan": true, "dang_hoat_dong": true, "phai_doi_mat_khau": true,
 					},

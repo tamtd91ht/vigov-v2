@@ -36,7 +36,7 @@ func (f communeLookupFake) Current(ctx context.Context) (tenant.Tenant, bool, er
 
 func ownerCommunePg(db *sql.DB, lookup tenant.CommuneLookup) *CommuneAccountsByOwner {
 	kho := pkgstore.New(db)
-	return NewCommuneAccountsByOwner(kho, idstore.NewCanBoStore(kho), ucTaiKhoanThat(db), lookup)
+	return NewCommuneAccountsByOwner(kho, idstore.NewCanBoStore(kho), ucTaiKhoanThat(db), lookup, idstore.NewRoleTemplateStore(kho))
 }
 
 // operatorTrailPg returns "actor_kind|actor_id|action|subject|delta" for every row of one action.
@@ -113,6 +113,23 @@ func TestPgOwnerCreatesCommuneAdminWithRoleGrantsAndTrail(t *testing.T) {
 		}
 	}
 
+	// Owner decision 15/10/2026: a brand-new commune receives the eight template roles in the same
+	// transaction, each with its own entry under the owner's VH- code, granted by that code.
+	if n := countPg(t, db, `SELECT count(*) FROM vai_tro WHERE tenant_id = $1 AND deleted_at IS NULL`, xa); n != 1+len(domain.RoleTemplates()) {
+		t.Fatalf("live roles = %d, want the administrator role + %d templates", n, len(domain.RoleTemplates()))
+	}
+	seeds := operatorTrailPg(t, db, xa, ActionSeedRoleTemplate)
+	if len(seeds) != len(domain.RoleTemplates()) || !strings.HasPrefix(seeds[0], "operator|"+ownerPgCode+"|") {
+		t.Fatalf("template entries = %v", seeds)
+	}
+	if n := countPg(t, db, `SELECT count(*) FROM vai_tro_quyen vq JOIN vai_tro vt ON vt.tenant_id = vq.tenant_id
+		AND vt.id = vq.vai_tro_id WHERE vq.tenant_id = $1 AND vt.ma = 'ke-toan' AND vq.cap_boi = $2`, xa, ownerPgCode); n == 0 {
+		t.Fatal("the Kế toán template holds no key granted by the owner's code")
+	}
+	if !strings.Contains(trail[0], `"so_vai_tro_mau_tao": 8`) {
+		t.Fatalf("the act's entry does not count the templates: %s", trail[0])
+	}
+
 	// The same email again (another case): ALREADY_EXISTS, nothing written.
 	if _, err := uc.CreateAdmin(ctx, ownerPgActor, "QUAN.TRI@xa.example.test", "Khác", ownerPgTemp); !errors.Is(err, ErrCommuneAdminEmailTaken) {
 		t.Fatalf("duplicate email: %v", err)
@@ -153,6 +170,10 @@ func TestPgOwnerCreateAdminRefusesInactiveCommuneAndKeepsExistingRole(t *testing
 	}
 	if n := countPg(t, db, `SELECT count(*) FROM vai_tro_quyen WHERE tenant_id = $1`, xa); n != 0 {
 		t.Fatalf("the existing role was re-filled with %d keys", n)
+	}
+	// An existing administrator role means a commune set up before: no template is seeded into it.
+	if n := countPg(t, db, `SELECT count(*) FROM vai_tro WHERE tenant_id = $1`, xa); n != 1 {
+		t.Fatalf("roles = %d — templates were seeded into a commune that already had an administrator role", n)
 	}
 	if trail := operatorTrailPg(t, db, xa, ActionCommuneAdminCreatedByOperator); len(trail) != 1 ||
 		!strings.Contains(trail[0], `"vai_tro_tao_moi": false`) {

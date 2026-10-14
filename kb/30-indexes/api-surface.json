@@ -6451,6 +6451,30 @@
     {
       "service": "identity",
       "method": "POST",
+      "path": "/api/v1/roles",
+      "operation_id": "identity_post_roles",
+      "task_id": "7f429e608b3a",
+      "summary": "Tạo một vai trò mới của xã (chức danh) — mã tự sinh từ tên, chưa có quyền nào",
+      "screen": "14-cau-hinh §4",
+      "permission_kind": "permission",
+      "permission": "admin.role",
+      "idempotency": "khong-can",
+      "idempotency_reason": "lần gửi thứ hai cùng tên bị từ chối 409 duplicate_name — tên được kiểm trong giao dịch dưới khoá tư vấn của xã — nên không bao giờ tạo vai trò thứ hai",
+      "request_schema": "identity.roleWriteIn",
+      "reply_schemas": {
+        "201": "identity.vaiTroMucRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
       "path": "/api/v1/roles/defaults",
       "operation_id": "identity_post_roles_defaults",
       "task_id": "c6dd84e90381",
@@ -6465,6 +6489,56 @@
         "401": "httpx.Error",
         "403": "httpx.Error",
         "409": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "PUT",
+      "path": "/api/v1/roles/{id}",
+      "operation_id": "identity_put_roles_by_id",
+      "task_id": "eef890e7a9c4",
+      "summary": "Đổi tên vai trò hoặc cờ lãnh đạo — mã vai trò giữ nguyên; vai trò Quản trị hệ thống không sửa được",
+      "screen": "14-cau-hinh §4",
+      "permission_kind": "permission",
+      "permission": "admin.role",
+      "idempotency": "khong-can",
+      "idempotency_reason": "PUT mang toàn bộ trạng thái: gửi lại đúng tên và cờ đang có thì use case không ghi gì và không để vết",
+      "request_schema": "identity.roleWriteIn",
+      "reply_schemas": {
+        "200": "identity.vaiTroMucRa",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-identity/internal/http/routes.go"
+    },
+    {
+      "service": "identity",
+      "method": "POST",
+      "path": "/api/v1/roles/{id}/deletion",
+      "operation_id": "identity_post_roles_by_id_deletion",
+      "task_id": "cbd003a7a75f",
+      "summary": "Xoá mềm một vai trò, kèm lý do bắt buộc — từ chối khi còn cán bộ giữ vai trò hoặc là vai trò Quản trị hệ thống",
+      "screen": "14-cau-hinh §4",
+      "permission_kind": "permission",
+      "permission": "admin.role",
+      "idempotency": "khong-can",
+      "idempotency_reason": "xoá một vai trò đã xoá cho cùng một kết quả: lượt khoá dòng và câu UPDATE đều mang `deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người xoá và lý do",
+      "request_schema": "identity.roleDeletionIn",
+      "reply_schemas": {
+        "201": "identity.roleDeletionOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
         "500": "httpx.Error"
       },
       "declared_in": "service-identity/internal/http/routes.go"

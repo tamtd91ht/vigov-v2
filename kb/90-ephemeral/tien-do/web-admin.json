@@ -4,6 +4,14 @@
   "cap_nhat": "2026-10-15",
   "muc": [
     {
+      "id": "phan-quyen-quan-ly-vai-tro-15-10",
+      "viec": "Màn Phân quyền: Thêm vai trò mẫu, Thêm vai trò, Đổi tên, Xoá vai trò (ADR 0095)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit 44a80b5f. lib/api/roles.ts (createRole/updateRole/deleteRole), features/cau-hinh/role-dialogs.tsx, role-catalogue.ts, ma-tran-phan-quyen.tsx: hai nút ở thanh trên ma trận, biểu tượng Đổi tên/Xoá ở đầu cột (không cho Quản trị hệ thống), chỉ khi có admin.role; khoá thao tác vai trò khi còn ô tích chưa lưu. KIỂM: tsc sạch, vitest cau-hinh + lib/api 1947/1947.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA xem ảnh render (đầu cột có vừa hai biểu tượng không, 320px). ROLE_TEMPLATE_NAMES chép tay 8 tên mẫu từ service-identity/internal/domain/role_template.go — thêm mẫu ở server phải sửa tay. Câu ma trận rỗng vẫn ghi 'Liên hệ quản trị hệ thống…'. schema.gen.ts sinh lại thì thay kiểu RoleWriteIn/RoleDeletionIn viết tay."
+    },
+    {
       "id": "tai-mau-gui-ma-dropdown-14-10",
       "viec": "Tải mẫu nhập nhiệm vụ / sổ đơn thư gửi kèm MÃ bộ phận, cán bộ, khối để server dựng dropdown",
       "trang_thai": "dang_lam",

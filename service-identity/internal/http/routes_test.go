@@ -697,6 +697,8 @@ type mayChu struct {
 	ghiPhanQuyen *phanQuyenGhiGia
 	// roleTemplates is the template-role seed — see roleTemplatesFake in role_template_test.go.
 	roleTemplates *roleTemplatesFake
+	// roles is the commune's own role writes — see rolesFake in role_write_test.go.
+	roles *rolesFake
 	// The three reference reads of migration 0005.
 	thonToDanPho *thonToDanPhoGia
 	// The residential units' write surface and Excel import — residential_unit_test.go.
@@ -775,6 +777,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	maTran := maTranMau()
 	ghiPhanQuyen := phanQuyenGhiMau()
 	roleTemplates := roleTemplatesSample()
+	roles := rolesSample()
 	thonToDanPho := thonToDanPhoMau()
 	residentialUnits := residentialUnitsSample()
 	residentialUnitImports := residentialUnitImportsSample()
@@ -816,6 +819,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		GhiPhanQuyen: ghiPhanQuyen,
 		// The template-role seed. Register panics without it.
 		RoleTemplates: roleTemplates,
+		// The three role write routes. Register panics without it.
+		Roles: roles,
 		// Three fields, three fakes — Register panics if any of them is missing, which is how an
 		// unwired route is caught at construction rather than by the first person to call it.
 		ThonToDanPho: thonToDanPho,
@@ -917,6 +922,7 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		ghiPhanQuyen:  ghiPhanQuyen,
 		roleTemplates: roleTemplates,
+		roles:         roles,
 
 		thonToDanPho:   thonToDanPho,
 		loaiDonViDanCu: loaiDonViDanCu,

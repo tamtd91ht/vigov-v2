@@ -1,14 +1,18 @@
 package domain
 
-// The EIGHT TEMPLATE ROLES of docs/ui-ux/14-cau-hinh.md §4.1 — the set POST /api/v1/roles/defaults
-// writes into a commune's `vai_tro` / `vai_tro_quyen` when an administrator asks for it.
+// The EIGHT TEMPLATE ROLES of docs/ui-ux/14-cau-hinh.md §4.1 — the set written into a commune's
+// `vai_tro` / `vai_tro_quyen` by POST /api/v1/roles/defaults when an administrator asks for it, and
+// AUTOMATICALLY into a brand-new commune by the owner's CreateCommuneAdminAccount (the transaction that
+// creates its `quan-tri-he-thong` role — app/commune_accounts_owner.go).
 //
-// USER DECISION 2026-09-28: there is no "create role" route. A commune gets its working roles by
-// ONE explicit, idempotent, per-commune act, on the precedent of POST /api/v1/sla/defaults
-// (sla_gieo.go). The same argument that keeps sla_gieo.go clear of rule 10 forbidden #3 holds here:
-// these rows are written ONCE into the commune's OWN tables by a deliberate act, after which the
-// commune owns them and edits them on the Phân quyền screen. Nothing on an authorisation path ever
-// reads this table — store.Checker reads `vai_tro_quyen`, and only that.
+// USER DECISION 2026-09-28 said "there is no create-role route"; OWNER DECISION 15/10/2026 REVERSED
+// IT: a "vai trò" is a staff job title carrying a permission set, and the commune creates, renames and
+// soft-deletes its own (POST /api/v1/roles, PUT /api/v1/roles/{id},
+// POST /api/v1/roles/{id}/deletion — app/role_write.go). "Bí thư" is deliberately NOT a template: a
+// commune that has one creates it. What still holds from 28/09: these rows are written ONCE into the
+// commune's OWN tables, after which the commune owns them — the argument that keeps sla_gieo.go clear
+// of rule 10 forbidden #3. Nothing on an authorisation path ever reads this list — store.Checker
+// reads `vai_tro_quyen`, and only that.
 //
 // =================================================================================================
 // EVERY KEY IS WRITTEN OUT. THERE IS NO WILDCARD, NO "task.*", NO "every key in `quyen`".

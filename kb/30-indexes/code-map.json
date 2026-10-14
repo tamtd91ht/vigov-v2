@@ -42,6 +42,10 @@
       "kind": "func",
       "at": "service-petitions/internal/app/gui_phan_anh.go:99"
     },
+    "app.Add": {
+      "kind": "func",
+      "at": "service-identity/internal/app/role_write.go:140"
+    },
     "app.AddComment": {
       "kind": "func",
       "at": "service-finance/internal/app/project_discussion.go:337"
@@ -324,7 +328,7 @@
     },
     "app.CheckCommuneAdminShape": {
       "kind": "func",
-      "at": "service-identity/internal/app/commune_accounts_owner.go:104"
+      "at": "service-identity/internal/app/commune_accounts_owner.go:108"
     },
     "app.CheckMiniAppRetireShape": {
       "kind": "func",
@@ -596,7 +600,7 @@
     },
     "app.CreateAdmin": {
       "kind": "func",
-      "at": "service-identity/internal/app/commune_accounts_owner.go:156"
+      "at": "service-identity/internal/app/commune_accounts_owner.go:162"
     },
     "app.CreateCitizenLetterDeadlineRuleRequest": {
       "kind": "type",
@@ -1716,7 +1720,7 @@
     },
     "app.NewCommuneAccountsByOwner": {
       "kind": "func",
-      "at": "service-identity/internal/app/commune_accounts_owner.go:83"
+      "at": "service-identity/internal/app/commune_accounts_owner.go:86"
     },
     "app.NewCommuneZaloBots": {
       "kind": "func",
@@ -1942,9 +1946,13 @@
       "kind": "func",
       "at": "service-identity/internal/app/residential_unit.go:67"
     },
+    "app.NewRoleCatalogue": {
+      "kind": "func",
+      "at": "service-identity/internal/app/role_write.go:102"
+    },
     "app.NewRoleTemplateSeeder": {
       "kind": "func",
-      "at": "service-identity/internal/app/role_template.go:79"
+      "at": "service-identity/internal/app/role_template.go:82"
     },
     "app.NewSLA": {
       "kind": "func",
@@ -2650,21 +2658,45 @@
       "kind": "func",
       "at": "service-reporting/internal/app/system_message.go:103"
     },
+    "app.RoleCatalogue": {
+      "kind": "type",
+      "at": "service-identity/internal/app/role_write.go:94"
+    },
+    "app.RoleDeletion": {
+      "kind": "type",
+      "at": "service-identity/internal/app/role_write.go:87"
+    },
+    "app.RoleInUseError": {
+      "kind": "type",
+      "at": "service-identity/internal/app/role_write.go:73"
+    },
+    "app.RoleInput": {
+      "kind": "type",
+      "at": "service-identity/internal/app/role_write.go:81"
+    },
     "app.RoleTemplateRef": {
       "kind": "type",
-      "at": "service-identity/internal/app/role_template.go:56"
+      "at": "service-identity/internal/app/role_template.go:59"
     },
     "app.RoleTemplateRepo": {
       "kind": "type",
-      "at": "service-identity/internal/app/role_template.go:43"
+      "at": "service-identity/internal/app/role_template.go:46"
     },
     "app.RoleTemplateResult": {
       "kind": "type",
-      "at": "service-identity/internal/app/role_template.go:64"
+      "at": "service-identity/internal/app/role_template.go:67"
     },
     "app.RoleTemplateSeeder": {
       "kind": "type",
-      "at": "service-identity/internal/app/role_template.go:71"
+      "at": "service-identity/internal/app/role_template.go:74"
+    },
+    "app.RoleTemplateWriter": {
+      "kind": "type",
+      "at": "service-identity/internal/app/role_template.go:126"
+    },
+    "app.RoleWriteRepo": {
+      "kind": "type",
+      "at": "service-identity/internal/app/role_write.go:43"
     },
     "app.Route": {
       "kind": "func",
@@ -2720,7 +2752,7 @@
     },
     "app.SeedDefaults": {
       "kind": "func",
-      "at": "service-identity/internal/app/role_template.go:89"
+      "at": "service-identity/internal/app/role_template.go:92"
     },
     "app.SendTestMessage": {
       "kind": "func",
@@ -4930,6 +4962,10 @@
       "kind": "func",
       "at": "service-documents/internal/domain/citizen_letter.go:779"
     },
+    "domain.CheckRoleNameFree": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/role_write.go:90"
+    },
     "domain.CheckSLAKindTakesFieldRows": {
       "kind": "func",
       "at": "service-identity/internal/domain/sla_field_rule.go:82"
@@ -5830,6 +5866,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/residential_unit_import.go:92"
     },
+    "domain.ExistingRole": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/role_write.go:55"
+    },
     "domain.ExpandZaloKinds": {
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_link.go:294"
@@ -6197,6 +6237,10 @@
     "domain.IsStaffRatingInputError": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_staff_recorded_rating.go:116"
+    },
+    "domain.IsSystemRole": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/role_write.go:66"
     },
     "domain.IsUnusualRadius": {
       "kind": "func",
@@ -7026,6 +7070,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/danh_ba_ghi.go:279"
     },
+    "domain.NextRoleOrder": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/role_write.go:137"
+    },
     "domain.NextSiblingOrder": {
       "kind": "func",
       "at": "service-identity/internal/domain/bo_phan_ghi.go:239"
@@ -7350,6 +7398,14 @@
       "kind": "func",
       "at": "service-identity/internal/domain/account_revoke.go:28"
     },
+    "domain.NormalizeRoleDeleteReason": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/role_write.go:148"
+    },
+    "domain.NormalizeRoleName": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/role_write.go:72"
+    },
     "domain.NormalizeSLADeleteReason": {
       "kind": "func",
       "at": "service-identity/internal/domain/sla_field_rule.go:102"
@@ -7641,6 +7697,10 @@
     "domain.PhotoUploadOpen": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_photo.go:22"
+    },
+    "domain.PickRoleCode": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/role_write.go:121"
     },
     "domain.PlanAllocationReplacement": {
       "kind": "func",
@@ -7982,17 +8042,21 @@
       "kind": "func",
       "at": "service-finance/internal/domain/project_discussion.go:141"
     },
+    "domain.RoleCodeBase": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/role_write.go:103"
+    },
     "domain.RoleTemplate": {
       "kind": "type",
-      "at": "service-identity/internal/domain/role_template.go:43"
+      "at": "service-identity/internal/domain/role_template.go:47"
     },
     "domain.RoleTemplatePermissions": {
       "kind": "func",
-      "at": "service-identity/internal/domain/role_template.go:174"
+      "at": "service-identity/internal/domain/role_template.go:178"
     },
     "domain.RoleTemplates": {
       "kind": "func",
-      "at": "service-identity/internal/domain/role_template.go:67"
+      "at": "service-identity/internal/domain/role_template.go:71"
     },
     "domain.Rule": {
       "kind": "func",
@@ -9606,6 +9670,10 @@
       "kind": "func",
       "at": "service-finance/internal/http/project_discussion.go:260"
     },
+    "http.AddRole": {
+      "kind": "func",
+      "at": "service-identity/internal/http/role_write.go:68"
+    },
     "http.AddSLAFieldRow": {
       "kind": "func",
       "at": "service-identity/internal/http/sla.go:434"
@@ -9924,7 +9992,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:510"
+      "at": "service-identity/internal/http/routes.go:519"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -9932,7 +10000,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:514"
+      "at": "service-identity/internal/http/routes.go:523"
     },
     "http.DanhBaChonNguoi": {
       "kind": "type",
@@ -10056,7 +10124,7 @@
     },
     "http.DanhSachVaiTro": {
       "kind": "func",
-      "at": "service-identity/internal/http/vai_tro.go:62"
+      "at": "service-identity/internal/http/vai_tro.go:63"
     },
     "http.DanhSachVanBanDen": {
       "kind": "func",
@@ -10237,6 +10305,10 @@
     "http.EditGroup": {
       "kind": "func",
       "at": "service-comms/internal/http/zalo_groups.go:250"
+    },
+    "http.EditRole": {
+      "kind": "func",
+      "at": "service-identity/internal/http/role_write.go:87"
     },
     "http.EndDisasterAlert": {
       "kind": "func",
@@ -10544,11 +10616,11 @@
     },
     "http.KhoiNhiemVuDanhMuc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:402"
+      "at": "service-identity/internal/http/routes.go:411"
     },
     "http.KhoiNhiemVuGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:419"
+      "at": "service-identity/internal/http/routes.go:428"
     },
     "http.KhongTiepNhanPhieu": {
       "kind": "func",
@@ -10560,11 +10632,11 @@
     },
     "http.LichLamViecDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:446"
+      "at": "service-identity/internal/http/routes.go:455"
     },
     "http.LichLamViecGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:482"
+      "at": "service-identity/internal/http/routes.go:491"
     },
     "http.LichSuChuyenVanBanDen": {
       "kind": "func",
@@ -10688,11 +10760,11 @@
     },
     "http.LoaiDonViDanCuDanhMuc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:393"
+      "at": "service-identity/internal/http/routes.go:402"
     },
     "http.LoaiDonViDanCuGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:413"
+      "at": "service-identity/internal/http/routes.go:422"
     },
     "http.LoaiNhiemVuDanhMuc": {
       "kind": "type",
@@ -10840,19 +10912,19 @@
     },
     "http.NgayLamBuDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:466"
+      "at": "service-identity/internal/http/routes.go:475"
     },
     "http.NgayLamBuGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:502"
+      "at": "service-identity/internal/http/routes.go:511"
     },
     "http.NgayNghiLeDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:456"
+      "at": "service-identity/internal/http/routes.go:465"
     },
     "http.NgayNghiLeGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:492"
+      "at": "service-identity/internal/http/routes.go:501"
     },
     "http.NguongCham": {
       "kind": "type",
@@ -11286,6 +11358,10 @@
       "kind": "func",
       "at": "service-petitions/internal/http/citizen_report_figures.go:300"
     },
+    "http.RemoveRole": {
+      "kind": "func",
+      "at": "service-identity/internal/http/role_write.go:106"
+    },
     "http.RemoveSLAFieldRow": {
       "kind": "func",
       "at": "service-identity/internal/http/sla.go:475"
@@ -11341,6 +11417,10 @@
     "http.RoleTemplateSeeding": {
       "kind": "type",
       "at": "service-identity/internal/http/routes.go:361"
+    },
+    "http.RoleWriting": {
+      "kind": "type",
+      "at": "service-identity/internal/http/routes.go:368"
     },
     "http.RouteCitizenLetter": {
       "kind": "func",
@@ -11720,7 +11800,7 @@
     },
     "http.ThonToDanPhoDanhSach": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:382"
+      "at": "service-identity/internal/http/routes.go:391"
     },
     "http.ThongBaoDanhSach": {
       "kind": "type",
@@ -14406,6 +14486,10 @@
       "kind": "func",
       "at": "service-documents/internal/store/citizen_letter_type.go:80"
     },
+    "store.CodesWithBase": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:85"
+    },
     "store.CommentsOfProject": {
       "kind": "func",
       "at": "service-finance/internal/store/project_discussion.go:221"
@@ -14477,6 +14561,10 @@
     "store.CountForSubjectTx": {
       "kind": "func",
       "at": "service-petitions/internal/store/stored_file.go:418"
+    },
+    "store.CountHolders": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:181"
     },
     "store.CountIncomingSummary": {
       "kind": "func",
@@ -15040,7 +15128,7 @@
     },
     "store.InsertRole": {
       "kind": "func",
-      "at": "service-identity/internal/store/role_template.go:111"
+      "at": "service-identity/internal/store/role_write.go:111"
     },
     "store.InsertRun": {
       "kind": "func",
@@ -15306,6 +15394,10 @@
       "kind": "func",
       "at": "service-finance/internal/store/project_discussion.go:327"
     },
+    "store.LiveRoles": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:54"
+    },
     "store.LiveSheetsForUpdate": {
       "kind": "func",
       "at": "service-finance/internal/store/budget_import.go:20"
@@ -15382,6 +15474,10 @@
       "kind": "func",
       "at": "service-finance/internal/store/budget_period_close.go:50"
     },
+    "store.LockCatalogue": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:44"
+    },
     "store.LockCatalogueForSeed": {
       "kind": "func",
       "at": "service-comms/internal/store/map_asset_type_defaults.go:24"
@@ -15437,6 +15533,10 @@
     "store.LockRegister": {
       "kind": "func",
       "at": "service-identity/internal/store/residential_unit_write.go:75"
+    },
+    "store.LockRole": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:129"
     },
     "store.LockStaffImport": {
       "kind": "func",
@@ -15869,6 +15969,10 @@
     "store.NewRoleTemplateStore": {
       "kind": "func",
       "at": "service-identity/internal/store/role_template.go:43"
+    },
+    "store.NewRoleWriteStore": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:34"
     },
     "store.NewSLAStore": {
       "kind": "func",
@@ -16402,6 +16506,10 @@
       "kind": "type",
       "at": "service-identity/internal/store/role_template.go:41"
     },
+    "store.RoleWriteStore": {
+      "kind": "type",
+      "at": "service-identity/internal/store/role_write.go:32"
+    },
     "store.RolesOfStaff": {
       "kind": "func",
       "at": "service-identity/internal/store/vai_tro.go:140"
@@ -16573,6 +16681,10 @@
     "store.SoftDeleteCustom": {
       "kind": "func",
       "at": "service-petitions/internal/store/system_message_custom.go:152"
+    },
+    "store.SoftDeleteRole": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:204"
     },
     "store.SourceForUpdate": {
       "kind": "func",
@@ -16925,6 +17037,10 @@
     "store.UpdateResult": {
       "kind": "func",
       "at": "service-documents/internal/store/citizen_letter.go:435"
+    },
+    "store.UpdateRole": {
+      "kind": "func",
+      "at": "service-identity/internal/store/role_write.go:152"
     },
     "store.UpdateSender": {
       "kind": "func",

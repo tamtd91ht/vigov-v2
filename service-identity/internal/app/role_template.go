@@ -3,10 +3,13 @@ package app
 // The use case behind POST /api/v1/roles/defaults — writing the eight template roles of
 // docs/ui-ux/14-cau-hinh.md §4.1 (domain.RoleTemplates) into the request's commune.
 //
-// USER DECISION 2026-09-28: no "create role" route; a commune gets its working roles by this ONE
-// explicit, idempotent, per-commune act, on the precedent of POST /api/v1/sla/defaults (app/sla.go).
-// IT IS NEVER CALLED AUTOMATICALLY — not at the first `admin` sign-in (app/gieo_quan_tri.go), not at
-// startup. Somebody holding the authority presses it.
+// USER DECISION 2026-09-28 made this explicit, idempotent, per-commune act the ONLY way a commune got
+// its working roles (precedent: POST /api/v1/sla/defaults, app/sla.go). OWNER DECISION 15/10/2026
+// changed two things: a commune now also creates, renames and soft-deletes its own roles
+// (app/role_write.go), and a BRAND-NEW commune receives the templates automatically — inside the
+// owner's CreateCommuneAdminAccount transaction, when that act creates the administrator role
+// (app/commune_accounts_owner.go, through writeRoleTemplates below). Nothing else calls it
+// automatically — not the first `admin` sign-in (app/gieo_quan_tri.go), not startup.
 //
 // =================================================================================================
 // THE FOUR RULES IT RUNS ON, and each one is a refusal a plausible implementation would skip:
@@ -91,12 +94,6 @@ func (uc *RoleTemplateSeeder) SeedDefaults(ctx context.Context, actor NguoiThucH
 		return RoleTemplateResult{}, err
 	}
 
-	templates := domain.RoleTemplates()
-	codes := make([]string, 0, len(templates))
-	for _, t := range templates {
-		codes = append(codes, t.Code)
-	}
-
 	var res RoleTemplateResult
 	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		// Reset on every attempt: a result surviving into a retried closure would report a total.
@@ -115,64 +112,92 @@ func (uc *RoleTemplateSeeder) SeedDefaults(ctx context.Context, actor NguoiThucH
 			return &LoiTraoQuyenKhongCam{Thieu: missing}
 		}
 
-		states, err := uc.repo.RoleCodeStates(ctx, tx, codes)
-		if err != nil {
-			return err
-		}
-
-		for _, t := range templates {
-			ref := RoleTemplateRef{Code: t.Code, Name: t.Name}
-			if deleted, exists := states[t.Code]; exists {
-				if deleted {
-					res.SkippedDeleted = append(res.SkippedDeleted, ref)
-				} else {
-					res.SkippedExisting = append(res.SkippedExisting, ref)
-				}
-				continue
-			}
-
-			id, err := uc.newID()
-			if err != nil {
-				return fmt.Errorf("vai_tro_mau: sinh id vai trò %s: %w", t.Code, err)
-			}
-			if err := uc.repo.InsertRole(ctx, tx, id, t); err != nil {
-				return err
-			}
-			if err := uc.repo.GrantPermissions(ctx, tx, id, t.Permissions, actor.Vet.ID); err != nil {
-				return err
-			}
-
-			// ONE ENTRY PER ROLE CREATED, IN THIS SAME TRANSACTION (rule 6, invariant 3). Unlike the
-			// SLA seed's single entry, each role is its own authority-bearing record with its own
-			// grants, and PUT /api/v1/roles/{id}/permissions audits the same role under the same
-			// subject later — so an inspection following one role reads one continuous history.
-			//
-			// SUBJECT IS THE ROLE ID, as HanhViLuuPhanQuyenVaiTro uses: the code and the name are in
-			// the delta, and the name can be edited. Nothing here is personal data.
-			delta, err := json.Marshal(map[string]any{
-				"ma":          t.Code,
-				"ten":         t.Name,
-				"la_lanh_dao": t.IsLeader,
-				"thu_tu":      t.Order,
-				"quyen":       t.Permissions,
-			})
-			if err != nil {
-				return fmt.Errorf("vai_tro_mau: dựng delta: %w", err)
-			}
-			if err := audit.Write(ctx, tx, audit.Entry{
-				Actor:   actor.Vet,
-				Action:  ActionSeedRoleTemplate,
-				Subject: id,
-				Delta:   delta,
-			}); err != nil {
-				return err
-			}
-			res.Created = append(res.Created, ref)
-		}
-		return nil
+		res, err = writeRoleTemplates(ctx, tx, uc.repo, uc.newID, actor.Vet)
+		return err
 	})
 	if err != nil {
 		return RoleTemplateResult{}, err
+	}
+	return res, nil
+}
+
+// RoleTemplateWriter is the write half of RoleTemplateRepo — what writeRoleTemplates needs, and all
+// the owner's CreateCommuneAdminAccount path is given (it takes no grantor locks and checks no #14).
+type RoleTemplateWriter interface {
+	RoleCodeStates(ctx context.Context, tx *store.ScopedTx, codes []string) (map[string]bool, error)
+	InsertRole(ctx context.Context, tx *store.ScopedTx, id string, t domain.RoleTemplate) error
+	GrantPermissions(ctx context.Context, tx *store.ScopedTx, roleID string, keys []string, grantedBy string) error
+}
+
+// writeRoleTemplates writes, inside the CALLER'S transaction, every template the commune has no row
+// for (live or soft-deleted), with its grants and one audit entry each. EXISTING MEANS UNTOUCHED and
+// DELETED MEANS DECIDED hold here; the locks and #14 are the caller's (SeedDefaults takes both; the
+// owner's brand-new-commune path needs neither — commune_accounts_owner.go says why).
+//
+// `actor.ID` is the business code that goes into `cap_boi` and `audit_log.actor_id` (rule 6,
+// invariant 8): a staff CB- code from the HTTP route, the owner's VH- code from the operator path.
+func writeRoleTemplates(ctx context.Context, tx *store.ScopedTx, repo RoleTemplateWriter,
+	newID func() (string, error), actor audit.Actor) (RoleTemplateResult, error) {
+
+	var res RoleTemplateResult
+	templates := domain.RoleTemplates()
+	codes := make([]string, 0, len(templates))
+	for _, t := range templates {
+		codes = append(codes, t.Code)
+	}
+	states, err := repo.RoleCodeStates(ctx, tx, codes)
+	if err != nil {
+		return RoleTemplateResult{}, err
+	}
+
+	for _, t := range templates {
+		ref := RoleTemplateRef{Code: t.Code, Name: t.Name}
+		if deleted, exists := states[t.Code]; exists {
+			if deleted {
+				res.SkippedDeleted = append(res.SkippedDeleted, ref)
+			} else {
+				res.SkippedExisting = append(res.SkippedExisting, ref)
+			}
+			continue
+		}
+
+		id, err := newID()
+		if err != nil {
+			return RoleTemplateResult{}, fmt.Errorf("vai_tro_mau: sinh id vai trò %s: %w", t.Code, err)
+		}
+		if err := repo.InsertRole(ctx, tx, id, t); err != nil {
+			return RoleTemplateResult{}, err
+		}
+		if err := repo.GrantPermissions(ctx, tx, id, t.Permissions, actor.ID); err != nil {
+			return RoleTemplateResult{}, err
+		}
+
+		// ONE ENTRY PER ROLE CREATED, IN THIS SAME TRANSACTION (rule 6, invariant 3). Unlike the
+		// SLA seed's single entry, each role is its own authority-bearing record with its own
+		// grants, and PUT /api/v1/roles/{id}/permissions audits the same role under the same
+		// subject later — so an inspection following one role reads one continuous history.
+		//
+		// SUBJECT IS THE ROLE ID, as HanhViLuuPhanQuyenVaiTro uses: the code and the name are in
+		// the delta, and the name can be edited. Nothing here is personal data.
+		delta, err := json.Marshal(map[string]any{
+			"ma":          t.Code,
+			"ten":         t.Name,
+			"la_lanh_dao": t.IsLeader,
+			"thu_tu":      t.Order,
+			"quyen":       t.Permissions,
+		})
+		if err != nil {
+			return RoleTemplateResult{}, fmt.Errorf("vai_tro_mau: dựng delta: %w", err)
+		}
+		if err := audit.Write(ctx, tx, audit.Entry{
+			Actor:   actor,
+			Action:  ActionSeedRoleTemplate,
+			Subject: id,
+			Delta:   delta,
+		}); err != nil {
+			return RoleTemplateResult{}, err
+		}
+		res.Created = append(res.Created, ref)
 	}
 	return res, nil
 }

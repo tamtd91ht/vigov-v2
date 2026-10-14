@@ -13,9 +13,10 @@ import (
 // The read route behind the commune's role catalogue. GET /api/v1/roles
 //
 // GRANTING A ROLE PERMISSIONS IS PUT /api/v1/roles/{id}/permissions (internal/http/quyen.go), built
-// once #13 and #14 were decided (2026-09-22). CREATING, RENAMING OR REMOVING a role has no route:
-// what happens to the people holding a role that is removed has not been asked, and a half-written
-// write path looks like a decision somebody made.
+// once #13 and #14 were decided (2026-09-22). CREATING, RENAMING AND SOFT-DELETING a role are
+// POST /api/v1/roles, PUT /api/v1/roles/{id} and POST /api/v1/roles/{id}/deletion (owner decision
+// 15/10/2026, role_write.go) — a role still held by anybody is refused, not taken from them. Both
+// writes answer with one item of this list (vaiTroMucRa).
 
 // vaiTroMucRa is one role as it leaves the catalogue.
 //
