@@ -186,6 +186,13 @@ func (c Config) BasemapURL() string {
 	return c.basemapURL
 }
 
+// MiniAppProfileCode is MINI_APP_PROFILE_CODE, validated — the `pf=` code platform appends to the
+// commune QR links. Empty means no `pf` (the prod link); Load never returns it set in staging/prod.
+func (c Config) MiniAppProfileCode() secret.Secret {
+	c.require("MiniAppProfileCode", MiniAppProfile)
+	return c.miniAppProfileCode
+}
+
 // RabbitMQDSN is RABBITMQ_DSN.
 func (c Config) RabbitMQDSN() secret.DSN {
 	c.require("RabbitMQDSN", RabbitMQ)
@@ -258,6 +265,7 @@ type configView struct {
 	IdentityOperatorGRPCAddr       string
 	ZaloBotWebhookHost             string
 	BasemapURL                     string
+	MiniAppProfileCode             secret.Secret
 	RabbitMQDSN                    secret.DSN
 	RabbitMQExchange               string
 	ElasticsearchAddrs             []string
@@ -303,6 +311,7 @@ func (c Config) view() configView {
 		IdentityOperatorGRPCAddr:       c.identityOperatorGRPCAddr,
 		ZaloBotWebhookHost:             c.zaloBotWebhookHost,
 		BasemapURL:                     c.basemapURL,
+		MiniAppProfileCode:             c.miniAppProfileCode,
 		RabbitMQDSN:                    c.rabbitMQDSN,
 		RabbitMQExchange:               c.rabbitMQExchange,
 		ElasticsearchAddrs:             c.elasticsearchAddrs,

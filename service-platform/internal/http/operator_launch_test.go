@@ -12,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/service-platform/internal/domain"
 	"github.com/vihat/vigov/service-platform/internal/store"
 )
@@ -222,6 +223,49 @@ func TestLaunchLinkOwnAppWins(t *testing.T) {
 	}
 	if u.Query().Has("d") || u.Query().Has("x") {
 		t.Error("an own-app link must carry no commune parameter")
+	}
+}
+
+// In the dev cluster (MINI_APP_PROFILE_CODE set) the operator's link carries `pf` on both forms —
+// exactly the URL the commune-host route returns (ADR 0046 §Sửa đổi 14/10/2026 #9).
+func TestLaunchLinkCarriesProfileCodeWhenConfigured(t *testing.T) {
+	const pf = "AbCdEfGhIjKlMnOpQrStUvWx" // fake
+	for _, c := range []struct {
+		name   string
+		setup  func(h *harness)
+		url    string
+		source string
+	}{
+		{"own app", func(*harness) {}, "https://zalo.me/s/3291993990104489440/?pf=" + pf + "&src=qr", "rieng"},
+		{"shared app", noLiveOwnApp, "https://zalo.me/s/" + sharedAppIDFake + "/?pf=" + pf + "&src=qr&x=" + launchCodeFake, "chung"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarnessWithProfile(t, secret.Secret(pf))
+			h.id.keys = []string{"ops.qr.issue"}
+			c.setup(h)
+			rec := h.do("GET", launchPath, "", opCookie(t))
+			if rec.Code != 200 {
+				t.Fatalf("status %d (%s)", rec.Code, rec.Body)
+			}
+			all := decodeLaunchLinks(t, rec.Body.Bytes())
+			if len(all.Links) != 1 || all.Links[0].URL != c.url || all.Links[0].Source != c.source {
+				t.Fatalf("got %+v, want %s %s", all, c.url, c.source)
+			}
+			// The commune is still read from x, and pf is not mistaken for a commune parameter.
+			u, err := url.Parse(all.Links[0].URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.source == "chung" {
+				if hint, ok := citizenAppAccepts(u.RawQuery); !ok || hint != (citizenHint{"code", launchCodeFake}) {
+					t.Errorf("citizen-app would not read the commune from %q (got %+v, %v)", u.RawQuery, hint, ok)
+				}
+			}
+			// The code is never logged.
+			if strings.Contains(h.logs.String(), pf) {
+				t.Error("the profile code reached the log")
+			}
+		})
 	}
 }
 

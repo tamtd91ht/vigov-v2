@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "core",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-14",
   "muc": [
     {
       "id": "ghim-go-toolchain-1-26-6",
@@ -371,6 +371,12 @@
       "bang_chung": "dd5547f8 — chỉ core/malwarescan/malwarescan_test.go: thêm closedAddrs(t, n) giữ mọi listener mở tới khi lấy đủ n cổng rồi mới đóng. Gọi closedAddr hai lần trên Linux nhận lại đúng cổng vừa giải phóng, hai địa chỉ trùng, cấu hình từ chối địa chỉ trùng trước khi quét nên ca đỏ ngẫu nhiên. Thân commit: go test -count=3 ./core/malwarescan xanh. Mã sản phẩm không đổi.",
       "no_confirm": [],
       "tiep_theo": "Chưa thấy lượt Jenkins vigov-svc-comms xanh sau commit này — cần xem lại job."
+    },
+    {
+      "id": "config-mini-app-profile-code",
+      "viec": "core/config: nhóm MiniAppProfile, biến MINI_APP_PROFILE_CODE (secret, không bắt buộc; có giá trị ở staging/prod thì từ chối khởi động) — cho QR xã ở dev (chủ dự án 14/10/2026)",
+      "trang_thai": "xong",
+      "bang_chung": "core/config/mini_app_profile.go + mini_app_profile_test.go; uses.go nhóm nối cuối iota; accessors.go MiniAppProfileCode(); .env.example; deploy/cau-hinh/README.md. go test ./core/config xanh; check_env_map PASS."
     }
   ]
 }

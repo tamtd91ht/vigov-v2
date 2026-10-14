@@ -26,6 +26,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/secret"
 )
 
 // Deps are everything the routes need. Kept explicit so wiring stays in cmd/server.
@@ -43,7 +44,10 @@ type Deps struct {
 	Launch CommuneLaunchReader
 	// SharedApp reads the platform's shared Mini App (*store.SharedMiniAppStore). Required.
 	SharedApp SharedAppReader
-	Log       *slog.Logger
+	// MiniAppProfileCode is MINI_APP_PROFILE_CODE (cfg.MiniAppProfileCode()): appended as `pf` to the QR
+	// link in the dev cluster. Optional — empty (every environment but dev) means no `pf`.
+	MiniAppProfileCode secret.Secret
+	Log                *slog.Logger
 }
 
 // Register mounts the platform routes of the commune host.
@@ -56,7 +60,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("platform/http: Register thiếu phụ thuộc — Checker, Branding, URLs, Uploads, Launch, SharedApp và Log đều bắt buộc")
 	}
 	h := &brandingHandlers{acts: d.Branding, urls: d.URLs, slots: d.Uploads, log: d.Log}
-	ql := &communeLaunchHandlers{launch: d.Launch, shared: d.SharedApp, log: d.Log}
+	ql := &communeLaunchHandlers{launch: d.Launch, shared: d.SharedApp, profileCode: d.MiniAppProfileCode, log: d.Log}
 
 	// --- the commune's identity images: logo and web-admin banner (ADR 0069) -----------------------------
 	//

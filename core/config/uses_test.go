@@ -26,6 +26,7 @@ var allGroupVars = []string{
 	"OPERATOR_GRPC_LISTEN_ADDR", "IDENTITY_OPERATOR_GRPC_ADDR", "ZALO_BOT_WEBHOOK_HOST",
 	"RABBITMQ_DSN", "RABBITMQ_EXCHANGE", "ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY",
 	"ELASTICSEARCH_INDEX_PREFIX", "DANGEROUS_AUTH_BYPASS", "BASEMAP_URL",
+	"MINI_APP_PROFILE_CODE",
 }
 
 func clean(t *testing.T, env string, set map[string]string) {
@@ -72,6 +73,8 @@ var prodRequired = map[Group][]string{
 	DocumentsClient: {"GRPC_CALLER_KEY", "DOCUMENTS_GRPC_ADDR"},
 	// BASEMAP_URL is deliberately absent: set only after the signed sovereignty check (basemap.go).
 	Basemap: nil,
+	// MINI_APP_PROFILE_CODE is never required: empty is the prod link (mini_app_profile.go).
+	MiniAppProfile: nil,
 }
 
 func TestEveryGroupHasAProdDecision(t *testing.T) {

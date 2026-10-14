@@ -384,6 +384,12 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWithProfile(t, nil)
+}
+
+// newHarnessWithProfile is newHarness with MINI_APP_PROFILE_CODE set (the dev cluster).
+func newHarnessWithProfile(t *testing.T, profileCode secret.Secret) *harness {
+	t.Helper()
 	h := &harness{reg: &registryFake{}, id: &identityFake{live: true}, w: &writerFake{}, pol: newPolicyFake(), oplog: &opLogFake{},
 		shared: newSharedAppFake(), fields: newFieldsFake(), frames: newMapFramesFake(), zalo: &zaloBotFake{},
 		zlog: &zaloLogFake{}, counter: &memCounter{}, logs: &bytes.Buffer{}}
@@ -397,23 +403,24 @@ func newHarness(t *testing.T) *harness {
 	}
 	log := slog.New(slog.NewJSONHandler(h.logs, nil))
 	h.mux = OperatorHandler(OperatorDeps{
-		Auth:         opauth.NewAuth(signer, h.id, log).WithClock(func() time.Time { return nowFake }),
-		Identity:     h.id,
-		Limiter:      lim,
-		Registry:     h.reg,
-		Writer:       h.w,
-		Policies:     h.pol,
-		OperatorLog:  h.oplog,
-		SharedApp:    h.shared,
-		Fields:       h.fields,
-		MapFrames:    h.frames,
-		ZaloBot:      h.zalo,
-		ZaloBotLog:   h.zlog,
-		OperatorHost: operatorHostFake,
-		NewID:        func() (string, error) { return newIDFake, nil },
-		Forget:       func(host string) { h.forgot = append(h.forgot, host) },
-		Now:          func() time.Time { return nowFake },
-		Log:          log,
+		Auth:               opauth.NewAuth(signer, h.id, log).WithClock(func() time.Time { return nowFake }),
+		Identity:           h.id,
+		Limiter:            lim,
+		Registry:           h.reg,
+		Writer:             h.w,
+		Policies:           h.pol,
+		OperatorLog:        h.oplog,
+		SharedApp:          h.shared,
+		MiniAppProfileCode: profileCode,
+		Fields:             h.fields,
+		MapFrames:          h.frames,
+		ZaloBot:            h.zalo,
+		ZaloBotLog:         h.zlog,
+		OperatorHost:       operatorHostFake,
+		NewID:              func() (string, error) { return newIDFake, nil },
+		Forget:             func(host string) { h.forgot = append(h.forgot, host) },
+		Now:                func() time.Time { return nowFake },
+		Log:                log,
 	})
 	return h
 }

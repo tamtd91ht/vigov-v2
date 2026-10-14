@@ -175,7 +175,8 @@ func (h *operatorHandlers) declareSharedMiniApp(w http.ResponseWriter, r *http.R
 // same rule the commune's own staff see on web-admin (GET /api/v1/commune-launch-link), so the two
 // screens never print different QRs for one commune: the own app's link when exactly one is live, else
 // the shared app's `x=<launch code>` link. The `d=<domain>` form is gone. This replaces "every link,
-// the operator chooses" of 06/10/2026.
+// the operator chooses" of 06/10/2026. In the dev cluster either link also carries `pf=<profile code>`
+// (MINI_APP_PROFILE_CODE, ADR 0046 §Sửa đổi 14/10/2026 #9; launch_link.go).
 //
 // `links` holds that one link (the array is the console's existing shape). `unavailable` lists the own
 // app's ambiguity when it is what made the shared link the choice. No link at all is refused, with the
@@ -207,7 +208,7 @@ func (h *operatorHandlers) getLaunchLink(w http.ResponseWriter, r *http.Request)
 		h.writeSharedAppError(w, r, err)
 		return
 	}
-	link, ownErr, err := chooseLaunchLink(r.Context(), h.d.SharedApp, live, target.LaunchCode)
+	link, ownErr, err := chooseLaunchLink(r.Context(), h.d.SharedApp, live, target.LaunchCode, h.d.MiniAppProfileCode)
 	if err != nil {
 		h.writeSharedAppError(w, r, err)
 		return

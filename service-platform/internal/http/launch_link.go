@@ -14,6 +14,13 @@ package http
 //
 // The `d=<domain>` form is withdrawn from both routes by the same decision.
 //
+// THE DEV CLUSTER'S LINKS CARRY `pf` (owner 14/10/2026, ADR 0046 §Sửa đổi 14/10/2026 #9): when
+// MINI_APP_PROFILE_CODE is set — vigov-dev only; core/config refuses it in staging/prod — both forms gain
+// `pf=<code>`, so the QR opens the Mini App against the dev hosts exactly as `npm run qr -- --profile=dev`
+// does. The real queries, keys sorted by url.Values: own `?pf=<code>&src=qr`, shared
+// `?pf=<code>&src=qr&x=<launch code>`. Unset (prod) = the two forms above, unchanged. Both routes go
+// through chooseLaunchLink, so both screens get the same `pf` or none.
+//
 // NOT TRAILED, either route (ADR 0048 §30/09 #9): building a link writes nothing. The price, stated
 // there: a misprinted QR cannot be traced to whoever generated it.
 
@@ -23,6 +30,7 @@ import (
 	"net/http"
 
 	"github.com/vihat/vigov/core/httpx"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-platform/internal/domain"
 	"github.com/vihat/vigov/service-platform/internal/store"
@@ -46,7 +54,8 @@ type chosenLaunchLink struct {
 }
 
 // chooseLaunchLink applies the owner's rule of 13/10/2026 (file comment). liveOwn is the commune's
-// running own App IDs marked published (two or more = ambiguous); launchCode its tenant.launch_code.
+// running own App IDs marked published (two or more = ambiguous); launchCode its tenant.launch_code;
+// profileCode MINI_APP_PROFILE_CODE (empty outside the dev cluster), appended as `pf` to either link.
 //
 // ownErr is the own app's refusal that made the shared link the choice (errOwnMiniAppAmbiguous), nil
 // when there was none — the operator console lists it as unavailable, staff never see it. err refuses
@@ -57,13 +66,15 @@ type chosenLaunchLink struct {
 // TWO OWN APPS NEVER FALL BACK SILENTLY TO NOTHING: the shared link is still given — a citizen can open
 // the commune through it — and the ambiguity is reported. Choosing one of the two App IDs would print a
 // QR for an app nobody chose (ADR 0070 #1).
-func chooseLaunchLink(ctx context.Context, shared SharedAppReader, liveOwn []string, launchCode string) (
-	link chosenLaunchLink, ownErr, err error) {
+func chooseLaunchLink(ctx context.Context, shared SharedAppReader, liveOwn []string, launchCode string,
+	profileCode secret.Secret) (link chosenLaunchLink, ownErr, err error) {
 
+	// The ONE place the code leaves secret.Secret: the URL it is printed into (staff see it on the QR).
+	pf := string(profileCode.Lo())
 	switch len(liveOwn) {
 	case 0:
 	case 1:
-		u, err := domain.OwnMiniAppLaunchLink(liveOwn[0])
+		u, err := domain.OwnMiniAppLaunchLink(liveOwn[0], pf)
 		if err != nil {
 			return chosenLaunchLink{}, nil, err
 		}
@@ -74,7 +85,7 @@ func chooseLaunchLink(ctx context.Context, shared SharedAppReader, liveOwn []str
 	app, err := shared.SharedMiniApp(ctx)
 	if err == nil {
 		var u string
-		if u, err = domain.MiniAppLaunchLink(app.AppID, launchCode); err == nil {
+		if u, err = domain.MiniAppLaunchLink(app.AppID, launchCode, pf); err == nil {
 			return chosenLaunchLink{url: u, appID: app.AppID, source: launchSourceShared}, ownErr, nil
 		}
 	}
@@ -94,9 +105,10 @@ type communeLaunchLinkOut struct {
 }
 
 type communeLaunchHandlers struct {
-	launch CommuneLaunchReader
-	shared SharedAppReader
-	log    *slog.Logger
+	launch      CommuneLaunchReader
+	shared      SharedAppReader
+	profileCode secret.Secret
+	log         *slog.Logger
 }
 
 // get answers GET /api/v1/commune-launch-link for the commune of the Host. Read-only, not trailed.
@@ -114,7 +126,7 @@ func (h *communeLaunchHandlers) get(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusConflict, "commune_inactive", "Xã đã ngừng hoạt động.", "")
 		return
 	}
-	link, _, err := chooseLaunchLink(ctx, h.shared, c.LiveOwnAppIDs, c.LaunchCode)
+	link, _, err := chooseLaunchLink(ctx, h.shared, c.LiveOwnAppIDs, c.LaunchCode, h.profileCode)
 	if err != nil {
 		if rf, ok := launchRefusalOf(err); ok {
 			logLaunchRefusal(ctx, h.log, rf, err)

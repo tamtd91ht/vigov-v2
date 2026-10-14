@@ -66,6 +66,7 @@
 //	IDENTITY_OPERATOR_GRPC_ADDR           Deploy env OperatorEdge           refused in staging/prod; dev: refused at Dial when OPERATOR_HOST is set
 //	ZALO_BOT_WEBHOOK_HOST                 Deploy env ZaloBotWebhook         refused in staging/prod; dev: "Trỏ webhook" refused by name
 //	BASEMAP_URL                           ConfigMap  Basemap                off, in EVERY environment: the basemap route answers 503
+//	MINI_APP_PROFILE_CODE                 Secret     MiniAppProfile         off (QR links carry no pf); SET is refused in staging/prod
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ              refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
@@ -546,6 +547,11 @@ type Config struct {
 	// BasemapURL is the self-hosted basemap's storage prefix (BASEMAP_URL, basemap.go), validated and
 	// ending in "/"; "" = not configured. Group Basemap, comms only.
 	basemapURL string
+
+	// MiniAppProfileCode is MINI_APP_PROFILE_CODE (mini_app_profile.go): the `pf=` code platform appends
+	// to the commune QR links in the dev cluster. Empty = no `pf` (the prod link). Group MiniAppProfile,
+	// platform only. k8s SECRET; validated; refused when set in staging/prod.
+	miniAppProfileCode secret.Secret
 }
 
 // ThoiHanPhienCongDanMacDinh is CITIZEN_SESSION_TTL when the variable is unset — 30 days, the
@@ -721,6 +727,11 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// 503 with one sentence; the rest of comms is untouched. Why not "used ⇒ required": basemap.go.
 	basemapRaw := r.read("BASEMAP_URL", os.Getenv("BASEMAP_URL"), optional, Basemap)
 
+	// ---- MiniAppProfile (ADR 0046 §Sửa đổi 14/10/2026 #9; platform only) ---------------------
+	// Optional IN EVERY ENVIRONMENT: empty = QR links carry no pf, which is the prod link. The opposite
+	// of "used ⇒ required" — SET is what staging/prod refuse, below (mini_app_profile.go).
+	profileRaw := r.read("MINI_APP_PROFILE_CODE", os.Getenv("MINI_APP_PROFILE_CODE"), optional, MiniAppProfile)
+
 	// ---- RabbitMQ / Elasticsearch (ADR 0010; no service declares them yet) ----------------
 	// Required in prod once declared — the service that declares one is the one that connects to
 	// it. An Elasticsearch without an API key would hold petition contents unguarded (rule 3).
@@ -816,6 +827,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Set in staging/prod is fatal (every printed QR would open the dev cluster); malformed is fatal.
+	miniAppProfileCode, err := parseMiniAppProfileCode(profileRaw, env, serviceName)
+	if err != nil {
+		return Config{}, err
+	}
+
 	// Malformed is fatal: a skipped entry is a KEK that silently cannot unwrap the DEKs it wrapped.
 	secretEncryptionKeys, err := parseAES256KeyList(secretKeysRaw, ErrSecretEncryptionKeysInvalid)
 	if err != nil {
@@ -860,6 +877,7 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		identityOperatorGRPCAddr:   opIdentityAddr,
 		zaloBotWebhookHost:         zaloBotWebhookHost,
 		basemapURL:                 basemapURL,
+		miniAppProfileCode:         miniAppProfileCode,
 
 		rabbitMQDSN:              secret.DSN(rabbitDSN),
 		rabbitMQExchange:         rabbitExchange,

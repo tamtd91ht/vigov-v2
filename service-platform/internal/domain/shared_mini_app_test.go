@@ -6,30 +6,58 @@ import (
 	"testing"
 )
 
+// profileCodeFake is a fake MINI_APP_PROFILE_CODE (never the real dev code).
+const profileCodeFake = "AbCdEfGhIjKlMnOpQrStUvWx"
+
 func TestMiniAppLaunchLink(t *testing.T) {
-	got, err := MiniAppLaunchLink("1234567890123456789", "0a1b2c3d4e5f")
+	got, err := MiniAppLaunchLink("1234567890123456789", "0a1b2c3d4e5f", "")
 	if err != nil || got != "https://zalo.me/s/1234567890123456789/?src=qr&x=0a1b2c3d4e5f" {
 		t.Fatalf("got %q, %v", got, err)
 	}
-	if _, err := MiniAppLaunchLink("12a", "0a1b2c3d4e5f"); !errors.Is(err, ErrMiniAppIDInvalid) {
+	if _, err := MiniAppLaunchLink("12a", "0a1b2c3d4e5f", ""); !errors.Is(err, ErrMiniAppIDInvalid) {
 		t.Errorf("a non-numeric App ID: %v", err)
 	}
 	// Each of these would make citizen-app's isLaunchCode refuse `x`, so the QR would open no commune.
 	for _, bad := range []string{"", "0A1B2C3D4E5F", "0a1b2c3d4e5", "0a1b2c3d4e5f0", "xa.vigov.vn", " 0a1b2c3d4e5f"} {
-		if _, err := MiniAppLaunchLink("1", bad); !errors.Is(err, ErrLaunchCodeInvalid) {
+		if _, err := MiniAppLaunchLink("1", bad, profileCodeFake); !errors.Is(err, ErrLaunchCodeInvalid) {
 			t.Errorf("code %q: %v, want ErrLaunchCodeInvalid", bad, err)
 		}
 	}
 }
 
+// With a profile code (dev cluster, ADR 0046 §Sửa đổi 14/10/2026 #9) the link carries `pf`; keys sorted.
+func TestMiniAppLaunchLinkWithProfileCode(t *testing.T) {
+	got, err := MiniAppLaunchLink("1234567890123456789", "0a1b2c3d4e5f", profileCodeFake)
+	want := "https://zalo.me/s/1234567890123456789/?pf=" + profileCodeFake + "&src=qr&x=0a1b2c3d4e5f"
+	if err != nil || got != want {
+		t.Fatalf("got %q, %v; want %q", got, err, want)
+	}
+}
+
 // The own app's QR carries no commune host: the commune is the App ID's (ADR 0070 §Sửa đổi 05/10/2026 #4).
 func TestOwnMiniAppLaunchLink(t *testing.T) {
-	got, err := OwnMiniAppLaunchLink("3291993990104489440")
+	got, err := OwnMiniAppLaunchLink("3291993990104489440", "")
 	if err != nil || got != "https://zalo.me/s/3291993990104489440/?src=qr" {
 		t.Fatalf("got %q, %v", got, err)
 	}
-	if _, err := OwnMiniAppLaunchLink("12a"); !errors.Is(err, ErrMiniAppIDInvalid) {
+	if _, err := OwnMiniAppLaunchLink("12a", profileCodeFake); !errors.Is(err, ErrMiniAppIDInvalid) {
 		t.Errorf("a non-numeric App ID: %v", err)
+	}
+}
+
+func TestOwnMiniAppLaunchLinkWithProfileCode(t *testing.T) {
+	got, err := OwnMiniAppLaunchLink("3291993990104489440", profileCodeFake)
+	want := "https://zalo.me/s/3291993990104489440/?pf=" + profileCodeFake + "&src=qr"
+	if err != nil || got != want {
+		t.Fatalf("got %q, %v; want %q", got, err, want)
+	}
+}
+
+// Whatever reaches the builder, it stays inside `pf`: no second parameter can be smuggled in.
+func TestLaunchProfileCodeIsEscaped(t *testing.T) {
+	got, err := OwnMiniAppLaunchLink("3291993990104489440", "a&x=0a1b2c3d4e5f")
+	if err != nil || strings.Contains(got, "&x=") {
+		t.Fatalf("got %q, %v — the code broke out of its parameter", got, err)
 	}
 }
 

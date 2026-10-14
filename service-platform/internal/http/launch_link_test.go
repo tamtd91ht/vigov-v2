@@ -18,6 +18,7 @@ import (
 	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-platform/internal/domain"
 	"github.com/vihat/vigov/service-platform/internal/store"
@@ -78,6 +79,12 @@ type qlServer struct {
 
 func newQlServer(t *testing.T) *qlServer {
 	t.Helper()
+	return newQlServerWithProfile(t, nil)
+}
+
+// newQlServerWithProfile is newQlServer with MINI_APP_PROFILE_CODE set (the dev cluster).
+func newQlServerWithProfile(t *testing.T, profileCode secret.Secret) *qlServer {
+	t.Helper()
 	launch := &launchFake{communes: map[tenant.ID]store.CommuneLaunch{
 		brCommuneA: {Active: true, LaunchCode: qlCodeA},
 		brCommuneB: {Active: true, LaunchCode: qlCodeB},
@@ -87,7 +94,8 @@ func newQlServer(t *testing.T) *qlServer {
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	mux := http.NewServeMux()
 	Register(mux, Deps{Checker: checker, Branding: &brActs{}, URLs: brURLs{},
-		Uploads: httpx.NewUploadSlots(httpx.UploadSlotsPerPod), Launch: launch, SharedApp: shared, Log: log})
+		Uploads: httpx.NewUploadSlots(httpx.UploadSlotsPerPod), Launch: launch, SharedApp: shared,
+		MiniAppProfileCode: profileCode, Log: log})
 
 	var h http.Handler = mux
 	// In place of core/staffauth, as in branding_test.go: the principal is NOT copied from the Host.
@@ -218,6 +226,48 @@ func TestCommuneLaunchLinkChoosesOneLink(t *testing.T) {
 				t.Errorf("the d= form is withdrawn (owner 13/10/2026): %s", got.URL)
 			}
 		})
+	}
+}
+
+// qlProfileFake is a fake MINI_APP_PROFILE_CODE (never the real dev code).
+const qlProfileFake = "AbCdEfGhIjKlMnOpQrStUvWx"
+
+// In the dev cluster (MINI_APP_PROFILE_CODE set) BOTH forms carry `pf` — the structure `npm run qr --
+// --profile=dev` prints (ADR 0046 §Sửa đổi 14/10/2026 #9) — and the reply shape does not change.
+func TestCommuneLaunchLinkCarriesProfileCodeWhenConfigured(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		own    []string
+		url    string
+		source string
+	}{
+		{"own app", []string{qlOwnApp}, "https://zalo.me/s/" + qlOwnApp + "/?pf=" + qlProfileFake + "&src=qr", "rieng"},
+		{"shared app", nil, "https://zalo.me/s/" + qlSharedID + "/?pf=" + qlProfileFake + "&src=qr&x=" + qlCodeA, "chung"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := newQlServerWithProfile(t, secret.Secret(qlProfileFake))
+			s.grant(brCommuneA, "admin.lookup")
+			s.launch.communes[brCommuneA] = store.CommuneLaunch{Active: true, LaunchCode: qlCodeA, LiveOwnAppIDs: c.own}
+			w := s.get(brHostA, brStaff(brCommuneA))
+			brWant(t, w, http.StatusOK)
+			if got := decodeCommuneLaunch(t, w); got.URL != c.url || got.Source != c.source {
+				t.Errorf("got %+v, want %s %s", got, c.url, c.source)
+			}
+		})
+	}
+}
+
+// Unset (prod): no `pf` on either form.
+func TestCommuneLaunchLinkHasNoProfileCodeWhenUnset(t *testing.T) {
+	for _, own := range [][]string{{qlOwnApp}, nil} {
+		s := newQlServer(t)
+		s.grant(brCommuneA, "admin.lookup")
+		s.launch.communes[brCommuneA] = store.CommuneLaunch{Active: true, LaunchCode: qlCodeA, LiveOwnAppIDs: own}
+		w := s.get(brHostA, brStaff(brCommuneA))
+		brWant(t, w, http.StatusOK)
+		if got := decodeCommuneLaunch(t, w); strings.Contains(got.URL, "pf=") {
+			t.Errorf("a prod link carries pf: %s", got.URL)
+		}
 	}
 }
 

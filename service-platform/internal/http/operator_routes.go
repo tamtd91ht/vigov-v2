@@ -38,6 +38,7 @@ import (
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
 	"github.com/vihat/vigov/core/ratelimit"
+	"github.com/vihat/vigov/core/secret"
 	"github.com/vihat/vigov/service-platform/internal/opauth"
 )
 
@@ -57,7 +58,10 @@ type OperatorDeps struct {
 	// SharedApp is the shared Mini App + QR link source (owner 04/10/2026); Fields the tier-1 petition
 	// field codes (ADR 0073 #3).
 	SharedApp SharedMiniAppEditor
-	Fields    PetitionFieldEditor
+	// MiniAppProfileCode is MINI_APP_PROFILE_CODE, appended as `pf` to the commune QR link in the dev
+	// cluster — the same value the commune-host Deps carry, so both screens print the same link.
+	MiniAppProfileCode secret.Secret
+	Fields             PetitionFieldEditor
 	// MapFrames is a commune's default map frame (ADR 0072 amendment 2, K1).
 	MapFrames MapFrameDefaultEditor
 	// ZaloBot is comms' ZaloBotOperatorService (ADR 0074; *commsclient.ZaloBotOperatorClient). nil only

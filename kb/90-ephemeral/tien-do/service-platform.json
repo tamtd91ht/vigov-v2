@@ -398,6 +398,13 @@
       "viec": "ADR 0048 §Sửa đổi 13/10: xoá mềm xã POST /communes/{id}/deletion (owner, ngừng ≥7 ngày theo tenant.deactivated_at, gõ lại tên miền, migration 0026); 7 tuyến owner (operator-accounts, staff-accounts, admin-accounts, đặt lại mật khẩu) chuyển session token cho identity; whoAmI is_owner/must_change_password; phiên phải đổi mật khẩu → 403 password_change_required trừ 3 tuyến.",
       "bang_chung": "f5a3fbe2, 275197ae, d2b741ca — go vet + go test ./... xanh; apidoc/ingress; check_* PASS. Test PG + migration 0026 CHƯA chạy trên PostgreSQL.",
       "con_no": "Chạy test PG + 0026 trên CSDL thật. Khoá bí mật Mini App của xã đã xoá không thu hồi được từ console (ADR 0048 §13/10 Chưa chốt #4)."
+    },
+    {
+      "id": "qr-xa-mang-pf-o-dev",
+      "viec": "Liên kết QR của xã (platform-admin chi tiết xã + web-admin Cấu hình) mang pf=<mã profile dev> khi chạy ở vigov-dev (chủ dự án 14/10/2026, ADR 0046 §Sửa đổi 14/10/2026 #9f)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "domain.MiniAppLaunchLink / OwnMiniAppLaunchLink nhận profileCode; chooseLaunchLink là chỗ duy nhất đọc secret; Deps/OperatorDeps.MiniAppProfileCode; cmd/server khai config.MiniAppProfile. Test domain + http (TestCommuneLaunchLinkCarriesProfileCodeWhenConfigured, TestLaunchLinkCarriesProfileCodeWhenConfigured, ...HasNoProfileCodeWhenUnset). go test ./service-platform/... xanh.",
+      "con_lai": "(1) Đặt MINI_APP_PROFILE_CODE = mã VIGOV_DEV_PROFILE_CODE vào platform-secrets CHỈ ở vigov-dev, rồi rollout restart service-platform dev. (2) Build lại pod service-platform (dev và prod). (3) Xem QR trên hai trang ở dev có pf=, ở prod không có. (4) Go không so mã với digest của app — đặt sai mã thì QR dev mở prod mà không báo."
     }
   ]
 }

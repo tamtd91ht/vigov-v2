@@ -73,6 +73,12 @@ import (
 //
 //	CommsClient      COMMS_GRPC_ADDR (+ GRPC_CALLER_KEY): comms' inter-service port. Prod-required for
 //	                 platform from this image on — used ⇒ required (ADR 0057, owner rule)
+//
+// SINCE 14/10/2026 (ADR 0046 §Sửa đổi 14/10/2026 #9) the commune QR links carry the Mini App's runtime
+// profile code in the dev cluster, so platform declares
+//
+//	MiniAppProfile   MINI_APP_PROFILE_CODE: appended as `pf` to both QR routes' links. NEVER required;
+//	                 empty = no `pf` (the prod link). SET in staging/prod = refused at Load
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -84,6 +90,7 @@ var configUses = config.Uses(
 	config.PublicMedia,
 	config.MalwareScan,
 	config.CommsClient,
+	config.MiniAppProfile,
 )
 
 func main() {
@@ -245,6 +252,12 @@ func run(log *slog.Logger) error {
 
 	mux := http.NewServeMux()
 
+	// Said at startup, never the code itself: whether this cluster's QR links open the dev hosts.
+	if !cfg.MiniAppProfileCode().Rong() {
+		log.Info("liên kết QR Mini App mang tham số pf — QR in từ cụm này mở app với máy chủ dev",
+			"service", "platform")
+	}
+
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:  staffauth.Checker{},
 		Branding: branding,
@@ -254,9 +267,10 @@ func run(log *slog.Logger) error {
 		Uploads: httpx.NewUploadSlots(httpx.UploadSlotsPerPod),
 		// The commune's one QR link (owner 13/10/2026): the commune's facts through the SCOPED store (the
 		// commune is the Host's), the shared app through the store the operator console declares it with.
-		Launch:    svcstore.NewCommuneLaunchStore(kho),
-		SharedApp: svcstore.NewSharedMiniAppStore(db),
-		Log:       log,
+		Launch:             svcstore.NewCommuneLaunchStore(kho),
+		SharedApp:          svcstore.NewSharedMiniAppStore(db),
+		MiniAppProfileCode: cfg.MiniAppProfileCode(),
+		Log:                log,
 	})
 
 	// The commune-host edge chain — buildCommuneEdge, below, says why each layer sits where it does.

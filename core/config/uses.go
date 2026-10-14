@@ -97,6 +97,11 @@ const (
 	// basemap route (ADR 0072 §"Sửa đổi 11/10/2026 (Mini App)" M1). OPTIONAL even in prod: see
 	// basemap.go for why its absence must not stop the service. APPENDED.
 	Basemap
+	// MiniAppProfile: MINI_APP_PROFILE_CODE — the profile code service-platform appends as `pf=` to the
+	// commune QR links it builds, so a QR printed from the dev cluster opens the Mini App against the
+	// dev hosts (ADR 0046 §Sửa đổi 14/10/2026 #9). service-platform only. NEVER REQUIRED, and REFUSED
+	// when set in staging/prod: see mini_app_profile.go. APPENDED.
+	MiniAppProfile
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -125,6 +130,7 @@ var groupNames = map[Group]string{
 	ZaloBotWebhook:      "ZaloBotWebhook",
 	DocumentsClient:     "DocumentsClient",
 	Basemap:             "Basemap",
+	MiniAppProfile:      "MiniAppProfile",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

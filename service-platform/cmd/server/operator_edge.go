@@ -155,6 +155,8 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 	// comms' inter-service port, where ZaloBotOperatorService answers the Zalo Bot screen (ADR 0074).
 	commsAddr := cfg.CommsGRPCAddr()
 	redisDSN := cfg.RedisDSN()
+	// The QR link's `pf` in the dev cluster — the same value the commune-host route gets (main.go).
+	profileCode := cfg.MiniAppProfileCode()
 	if host == "" {
 		log.Info("khu vận hành TẮT — OPERATOR_HOST trống, không gắn tuyến vận hành nào")
 		return operatorWiring{close: func() {}}, nil
@@ -215,22 +217,23 @@ func wireOperatorEdge(cfg config.Config, reg svchttp.CommuneReader, w svchttp.Co
 	}
 
 	h := buildOperatorEdge(svchttp.OperatorDeps{
-		Auth:         opauth.NewAuth(verifier, identity, log),
-		Identity:     identity,
-		Limiter:      limiter,
-		Registry:     reg,
-		Writer:       w,
-		Policies:     policies,
-		OperatorLog:  oplog,
-		SharedApp:    shared,
-		Fields:       fields,
-		MapFrames:    mapFrames,
-		ZaloBot:      zaloBot,
-		ZaloBotLog:   zaloBotLog,
-		OperatorHost: host,
-		NewID:        ulid.Moi,
-		Forget:       forget,
-		Log:          log,
+		Auth:               opauth.NewAuth(verifier, identity, log),
+		Identity:           identity,
+		Limiter:            limiter,
+		Registry:           reg,
+		Writer:             w,
+		Policies:           policies,
+		OperatorLog:        oplog,
+		SharedApp:          shared,
+		MiniAppProfileCode: profileCode,
+		Fields:             fields,
+		MapFrames:          mapFrames,
+		ZaloBot:            zaloBot,
+		ZaloBotLog:         zaloBotLog,
+		OperatorHost:       host,
+		NewID:              ulid.Moi,
+		Forget:             forget,
+		Log:                log,
 	})
 	log.Info("khu vận hành BẬT", "host", host)
 	return operatorWiring{handler: h, close: func() { _ = identity.Close(); closeZalo(); closeCounter() }}, nil
