@@ -433,7 +433,7 @@ PROBE
               if [ "$tables" = "0" ]; then
                 ket="CSDL rỗng — chưa áp migration nào ($(wc -l < "$TMP_DIR/$s.repo") tệp chờ)"
               else
-                ket="⚠ CÓ $tables BẢNG mà KHÔNG có sổ schema_migration — dịch vụ sẽ dừng khi khởi động"; canh=1
+                ket="⚠ CÓ $tables BẢNG mà KHÔNG có sổ schema_migration — tao-bang sẽ DỪNG ở đây; khởi động dịch vụ thì KHÔNG dừng mà áp lại từ 0001 (ADR 0013 §Sửa đổi 14/10/2026). Người quyết, đừng khởi động trước"; canh=1
               fi
             else
               ket=$(awk 'NR==FNR { r[$1] = $2; next }
@@ -467,6 +467,8 @@ PROBE
     // "Already there → skip, no error" is the ledger's existing behaviour. A MISMATCH (tables without a
     // ledger, an applied file edited, a database ahead of the image) STOPS that service with nothing
     // applied — owner's choice, and ADR 0013: archival records wait for a person, never an auto-fix.
+    // "Tables without a ledger" is checked by the -migrate-only path ONLY (core/migrate/only.go); the
+    // startup path still creates the ledger and re-applies 0001 — a known gap, ADR 0013 §Sửa đổi.
     //
     // An image built before this mode ignores the argument and starts the real server (which also migrates
     // at startup, but then serves): no `migrate-only:` marker within 60 s means old image → pod deleted,
