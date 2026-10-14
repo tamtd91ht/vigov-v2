@@ -3,7 +3,7 @@ id: 0067-mini-app-content-part-a
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: cf82fde6
+derived_from_commit: bf1e2c88
 expires: null
 owns_facts:
   - "thân bài nội dung Mini App là HTML đã làm sạch ở máy chủ lúc ghi theo danh sách cho phép (p, br, strong, em, ul, ol, li, h2, h3, a chỉ href https); Mini App dựng từ body_blocks có cấu trúc, không bao giờ dựng HTML; body văn bản thuần giữ cho bản app cũ — thay quyết định 27/09/2026 'không HTML nào tới dân'. Từ 03/10/2026 danh sách ấy là chính sách ghi của đường Cổng; bài cán bộ soạn và đường đọc theo chính sách cán bộ (§Sửa đổi 03/10/2026, K1, K7)"
@@ -16,11 +16,12 @@ owns_facts:
   - "đồng bộ Cổng TTĐT: chỉ API cổng dùng chung của Đà Nẵng; https và host đuôi .gov.vn; ảnh chỉ cùng host với api_url; mặc định chờ duyệt; không ghi đè tin đã có, không nhập lại tin đã xoá mềm; 90 ngày và 100 tin/lượt là mặc định và TRẦN (1..90, 1..100), trần 30 chuyên mục được chọn mỗi xã, dòng vượt trần bị kẹp lúc đọc/chạy chứ không viết lại (chốt 02/10/2026, D1); 3 chuyên mục và 6 ảnh song song, nhịp 0–24 giờ mặc định 6"
   - "chuyên mục Cổng (chuyen_muc_cong) là bảng riêng, không gộp với danh mục của xã; không chép cây chuyên mục của Cổng — hỏi Cổng lúc mở cấu hình, chỉ lưu lựa chọn và ánh xạ loại (tin-tuc, su-kien, thong-bao)"
   - "ma_bao_mat của Cổng mã hoá theo xã (ADR 0009), chỉ ghi, hiện dạng che; đổi api_url buộc nhập lại mã"
-  - "danh mục nội dung: sửa tên, cha, thứ tự; slug cố định; cờ ẩn/hiện; xoá mềm có lý do, từ chối khi còn nội dung hoặc danh mục con còn sống"
-  - "tên danh mục nội dung không trùng trong cùng mục cha (gốc so với gốc), không phân biệt hoa/thường và khoảng trắng nhưng phân biệt dấu; khác mục cha thì được trùng; 409 name_taken (chốt 13/10/2026)"
+  - "danh mục nội dung: MỖI LOẠI MỘT CÂY — tin-tuc, su-kien, video, truyen-thanh, thong-bao mỗi loại một cây riêng; banner KHÔNG có danh mục; loại của danh mục cố định từ lúc tạo; cha phải cùng loại, bài phải vào danh mục cùng loại; đổi loại bài mà không chọn danh mục mới thì bài bỏ trống danh mục — thay 'một cây cho cả xã' (chốt 14/10/2026, §Sửa đổi 14/10/2026)"
+  - "danh mục nội dung: sửa tên, cha (cùng loại), thứ tự; slug cố định, duy nhất theo xã, không cấp lại; cờ ẩn/hiện; xoá mềm có lý do, từ chối khi còn nội dung hoặc danh mục con còn sống; trần 500 danh mục sống mỗi xã tính chung mọi loại"
+  - "tên danh mục nội dung không trùng trong cùng (loại, mục cha) (gốc so với gốc của cùng loại), không phân biệt hoa/thường và khoảng trắng nhưng phân biệt dấu; khác loại hoặc khác mục cha thì được trùng; 409 name_taken (chốt 13/10/2026, phạm vi theo loại 14/10/2026)"
   - "truyền thanh: mp3/m4a, ≤ 30 MB, thời lượng cán bộ gõ, bucket private, link ký ngắn hạn, mục đích tải lên content-audio, người tải cần content.update"
   - "banner: ảnh bắt buộc, tiêu đề là alt, link_to tuỳ chọn, display_order tăng dần theo xã, không lịch, chỉ ở dải trang chủ Mini App, chỉ trả khi ?type=banner"
-  - "ẩn danh mục chỉ gỡ chip lọc của nó và của danh mục con trên Mini App; bài vẫn hiện ở Tất cả (chốt 01/10/2026)"
+  - "ẩn danh mục chỉ gỡ chip lọc của nó và của danh mục con trong cây của LOẠI ấy trên Mini App; bài vẫn hiện ở Tất cả (chốt 01/10/2026, phạm vi theo loại 14/10/2026)"
   - "Cổng chuyển hướng: tối đa 3 lần, mỗi đích qua cùng phép kiểm của api_url VÀ ở lại đúng host của api_url — cho cả lời gọi API lẫn ảnh (chốt 02/10/2026, D4, hẹp lại A2 của 01/10)"
   - "tuyến đọc tin công khai Mini App: 120 yêu cầu/phút mỗi (host, mạng khách — IPv4 hoặc IPv6 /64), 429 + Retry-After; Redis không hỏi được thì CHO QUA (ngoại lệ riêng của chính sách này), đăng nhập vận hành vẫn đóng (chốt 02/10/2026, D2)"
   - "xem cây chuyên mục Cổng trực tiếp cần content.update, không phải content.read (chốt 02/10/2026, D3)"
@@ -150,15 +151,19 @@ thống** cho vết (luật 6 bất biến 6), `tenant_id` nằm **trong đơn v
 Cấu hình đồng bộ là của `comms` (cạnh nội dung nó đổ vào), không phải của bảng cấu hình việc nền ở
 `identity` mà ADR 0058 §2 dành cho tab Tự động hoá.
 
-## 3. Danh mục nội dung của xã
+## 3. Danh mục nội dung của xã — từ 14/10/2026 mỗi loại nội dung một cây (§Sửa đổi 14/10/2026)
 
 | # | Điều |
 |---|---|
-| 1 | Sửa **tên, danh mục cha, thứ tự**. **Slug cố định**. Đổi cha tạo vòng → **từ chối** |
+| 1 | Sửa **tên, danh mục cha, thứ tự**. **Slug cố định**. Đổi cha tạo vòng → **từ chối** · *Sửa 14/10/2026: cha phải **cùng loại** (M3)* |
 | 2 | Thêm cờ **ẩn/hiện**: ẩn thay cho xoá |
-| 3 | Xoá **mềm**, **bắt buộc lý do** (luật 7); **từ chối** khi còn nội dung sống hoặc danh mục con sống — câu từ chối gợi ý ẩn |
+| 3 | Xoá **mềm**, **bắt buộc lý do** (luật 7); **từ chối** khi còn nội dung sống hoặc danh mục con sống — câu từ chối gợi ý ẩn · *Sửa 14/10/2026: từ nay chỉ bài **cùng loại** mới được xếp vào danh mục (M3); điều từ chối xoá giữ nguyên* |
 | 4 | Slug **không bao giờ cấp lại** — đã đúng ở khoá `0006:184-188` |
-| 5 | **Một tên một danh mục trong cùng mục cha** (chủ dự án chốt 13/10/2026). Thêm, đổi tên hay chuyển sang mục cha mới mà trùng tên một danh mục **đang sống** cùng mục cha (gốc so với gốc) → 409 `name_taken`, câu nêu tên đã có. So **không phân biệt hoa/thường, khoảng trắng, kiểu gõ dấu dựng sẵn/tổ hợp, ký tự vô hình**; **có** phân biệt dấu ("Nong nghiep" ≠ "Nông nghiệp"). Danh mục ẩn vẫn giữ tên; danh mục đã xoá trả lại tên. Cùng tên ở **hai mục cha khác nhau được phép** — như bản mẫu (Cổng Thăng Bình có hai "Chuyển đổi số"). Không có khoá UNIQUE ở CSDL: dữ liệu trùng có từ trước giữ nguyên, phép kiểm chạy dưới khoá cây của xã |
+| 5 | **Một tên một danh mục trong cùng mục cha** (chủ dự án chốt 13/10/2026). Thêm, đổi tên hay chuyển sang mục cha mới mà trùng tên một danh mục **đang sống** cùng mục cha (gốc so với gốc) → 409 `name_taken`, câu nêu tên đã có. So **không phân biệt hoa/thường, khoảng trắng, kiểu gõ dấu dựng sẵn/tổ hợp, ký tự vô hình**; **có** phân biệt dấu ("Nong nghiep" ≠ "Nông nghiệp"). Danh mục ẩn vẫn giữ tên; danh mục đã xoá trả lại tên. Cùng tên ở **hai mục cha khác nhau được phép** — như bản mẫu (Cổng Thăng Bình có hai "Chuyển đổi số"). Không có khoá UNIQUE ở CSDL: dữ liệu trùng có từ trước giữ nguyên, phép kiểm chạy dưới khoá cây của xã · *Sửa 14/10/2026: phạm vi là **(loại, mục cha)** — gốc so với gốc **của cùng loại**; khác loại thì được trùng (M4)* |
+
+> **Đã sửa 14/10/2026** — §3 viết cho **một cây cho cả xã**. Từ 14/10/2026 mỗi loại nội dung có một
+> cây riêng và banner không có danh mục: xem §Sửa đổi 14/10/2026. Chữ của bảng trên giữ nguyên làm hồ
+> sơ; chỗ nói khác, mục ấy thắng.
 
 **Vì sao từ chối xoá thay vì gỡ danh mục khỏi các bài:** gỡ hàng loạt là sửa âm thầm nhiều hồ sơ một
 lúc; ẩn đạt cùng mục đích mà không chạm bài nào.
@@ -245,7 +250,7 @@ Dựng ở `abf0ca1d`, `026ae398`, `cce556ec`, `07bec99d`, `75ea3b5c`, `2fca3658
 
 | # | Câu hỏi (Còn mở) | Chốt | Ở mã |
 |---|---|---|---|
-| A1 | #4 — ẩn danh mục | Ẩn **chỉ gỡ chip lọc** của danh mục ấy và của mọi danh mục con trên Mini App. Bài vẫn hiện ở "Tất cả" và vẫn mở được từng bài | `service-comms/internal/domain/public_category.go:50-55` |
+| A1 | #4 — ẩn danh mục | Ẩn **chỉ gỡ chip lọc** của danh mục ấy và của mọi danh mục con trên Mini App. Bài vẫn hiện ở "Tất cả" và vẫn mở được từng bài · *Sửa 14/10/2026: "mọi danh mục con" là con **trong cây của loại ấy** — cha và con luôn cùng loại (M3), nên ẩn không chạm cây loại khác* | `service-comms/internal/domain/public_category.go:50-55` |
 | A2 | #5 — Cổng chuyển hướng | Theo **tối đa 3** lần; mỗi đích phải qua **đúng phép kiểm của `api_url`** (https, host đuôi `.gov.vn`, cổng 443, IP công khai lúc quay số). Trái điều nào → lượt chạy ghi lỗi | `service-comms/internal/portal/client.go:48-50`, `:152-161` |
 | A3 | #6 — liên kết trong thân bài | Bấm → hỏi *"Bạn sắp rời ứng dụng để mở <tên miền>"* → mở trong **trình duyệt trong Zalo** (`openWebview`). Chính sách quyền riêng tư thêm một câu | `citizen-app/src/cong-dan/man/leave-app.tsx:49`; `citizen-app/src/features/tinh-nang/zalo-api.ts:573-582`; `citizen-app/src/content/chinh-sach-rieng-tu.ts:471` |
 
@@ -417,3 +422,62 @@ dưới đây trỏ tới chỗ sẽ phải đổi hoặc chỗ làm lý do.
 4. Máy chủ trả ra URL ảnh **do client gửi**, hoặc đổi mã tệp không thuộc đúng xã / đúng bài / đúng mục đích
 5. Mini App tải ảnh thân bài từ host **không phải** kho công khai của ViGov (H5)
 6. Hệ thống tự điền tên cán bộ vào dòng tác giả, hoặc đường Cổng đọc `TacGia` (H9, luật 3)
+
+## Sửa đổi 14/10/2026 — mỗi loại nội dung một cây danh mục
+
+Phần trên, kể cả các mục sửa đổi trước, giữ nguyên chữ. PM yêu cầu (bảng lỗi `web-admin-141026` dòng
+3), chủ dự án chốt trong phiên 14/10/2026 — **đảo lại** cách làm "một cây cho cả xã" mà §3 đã viết và
+kho đã dựng. Dựng ở `149bf72c` (migration 0030) và `bf1e2c88` (service-comms); phần web-admin ở commit
+TASK-03 kế tiếp. Mục này **thay**:
+
+| Chỗ bị thay | Thay bằng |
+|---|---|
+| §3 — một cây danh mục cho cả xã | M1, M2 |
+| §3 điều 1 — đổi cha (mọi danh mục) | M3: cha phải cùng loại |
+| §3 điều 5 — tên duy nhất trong cùng mục cha | M4: trong cùng **(loại, mục cha)** |
+| A1 — ẩn gỡ chip của "mọi danh mục con" | Không đổi điều; phạm vi là cây của loại ấy (M3) |
+
+### Vì sao đảo lại — hai phía của một mâu thuẫn trong bản mẫu
+
+| Phía | Bằng chứng |
+|---|---|
+| **Một cây cho xã** (cách §3 và đặc tả cũ đọc) | Bảng `content_categories` của bản mẫu **không có cột loại** (`../vigov-require/apps/api/app/modules/content/models.py:294-336`); đặc tả `docs/ui-ux/11-noi-dung-mini-app.md` §8 cũng chỉ có `id, ten, slug, cha_id, thu_tu` |
+| **Mỗi loại một danh sách** | Chính bản mẫu ghi các loại *"draw from three different lists"* — chuyên mục tin, chủ đề video, loại bản tin truyền thanh (`models.py:102-104`); kịch bản demo cho Truyền thanh một bộ chuyên mục riêng: bản tin hằng ngày, thông báo UBND, pháp luật, nông nghiệp… (`../vigov-require/docs/miniapp-demo-script.md:106-111`) |
+
+Bản mẫu tự mâu thuẫn; PM chọn phía thứ hai, chủ dự án chốt. Đây là **CONFLICT với bản mẫu, đã được
+chủ dự án giải** — không phải chỗ ViGov tự chọn khác (§6).
+
+### M. Chủ dự án chốt, 14/10/2026
+
+| # | Chốt | Vì sao / cái giá | Ở mã |
+|---|---|---|---|
+| M1 | **Tin tức, Sự kiện, Video, Truyền thanh, Thông báo mỗi loại một cây** danh mục riêng. Danh mục mang loại, `NOT NULL`, chỉ năm giá trị ấy | Danh mục tin không còn hiện khi xếp một sự kiện. Cái giá: một chủ đề dùng cho hai loại phải tạo hai lần | `service-comms/migrations/0030_content_category_per_type.sql:226-234` |
+| M2 | **Banner không có danh mục.** Banner kèm danh mục → 422 `banner_has_no_category`; tuyến công khai hỏi cây của banner nhận danh sách rỗng | Banner chỉ ở dải trang chủ (§5 điều 4), không có chip lọc nào để xếp — một "cây banner" là cây không bài nào được vào (cách đọc của người viết migration, `0030:7-8`) | `service-comms/internal/domain/noi_dung_mini_app.go:216-218`; `service-comms/internal/http/tin_xa_cong_khai.go:854-858` |
+| M3 | Loại của danh mục **cố định từ lúc tạo** (PATCH gửi loại → 400). Cha phải **cùng loại**; bài phải vào danh mục **cùng loại** → 409 `category_type_mismatch` | Cố định thì câu "danh mục này thuộc cây nào" không đổi sau khi bài đã xếp vào — đổi được là chuyển cả nhánh và mọi bài trong nó sang cây khác, tức sửa hàng loạt hồ sơ, đúng điều §3 đã từ chối (cách đọc của người viết ADR) | `service-comms/internal/domain/noi_dung_mini_app.go:211-213`; `service-comms/internal/http/noi_dung_mini_app.go:1056-1061` |
+| M4 | Tên duy nhất trong **(loại, mục cha)**, cùng cách chuẩn hoá §3 điều 5. **Slug vẫn duy nhất theo xã** và không bao giờ cấp lại; **trần 500** danh mục sống vẫn **theo xã**, tính chung mọi loại; **khoá cây vẫn một khoá mỗi xã** | Slug là mã nghiệp vụ mọi bài trong danh mục mang theo; thu hẹp xuống (xã, loại, slug) thì hai cây cấp trùng một mã (`0030:13-15`). Khoá cây theo xã vì chuỗi slug là của xã: hai lượt tạo ở hai cây vẫn tranh cùng một slug. Cái giá: một loại dùng nhiều thì lấn chỗ của loại khác dưới cùng một trần | `service-comms/internal/app/noi_dung_mini_app.go:929-951` |
+| M5 | **Đổi loại bài mà không chọn danh mục mới → bài bỏ trống danh mục** trong **cùng câu UPDATE**, có vết (`danh_muc_id` trước/sau). Form web-admin báo trước *"Danh mục sẽ bỏ trống"* | Giữ danh mục cũ là xếp bài vào cây của loại khác; từ chối thì đổi loại thành hai bước. Cái giá: cán bộ phải xếp lại bài sau khi đổi loại | `service-comms/internal/app/noi_dung_mini_app.go:589-596` |
+| M6 | **Chưa có dữ liệu danh mục ở môi trường nào** (lời chủ dự án). Migration 0030 **vẫn không dựa vào câu ấy**: danh mục mà các bài sống, không phải banner, xếp trong nó có đúng một loại → loại ấy; còn lại → `tin-tuc`. Mỗi dòng gán có vết chủ thể hệ thống trong cùng câu; **không sửa bài nào** | Lời nói về dữ liệu không kiểm được từ kho; gán loại tất định và có vết thì đúng cả khi câu ấy sai. `tin-tuc` vì màn duy nhất từng tạo danh mục gọi nó là "Danh mục tin" (`0030:97-99`). Bài lệch loại có từ trước chỉ được **đếm** (NOTICE), không viết lại (luật 7) | `0030:90-95`, `:101-102`, `:186-215` |
+
+### N. Cách làm — điều đáng giữ là lý do
+
+| # | Điều | Vì sao | Ở mã |
+|---|---|---|---|
+| N1 | Bài ghi kiểm loại danh mục bằng **dò dòng `FOR SHARE`**, **không** khoá cây | Dò khoá chia sẻ giữ dòng danh mục khỏi bị xoá mềm, và loại của danh mục không bao giờ được ghi sau INSERT (M3), nên câu trả lời không đổi trước COMMIT. Khoá cây sẽ xếp hàng mọi lượt lưu bài của xã sau mọi lượt sửa danh mục mà không thêm tính chất nào. Chú thích `0030:29-30` còn nói "dưới khoá cây" — migration đã commit, mã là nguồn sự thật | `service-comms/internal/app/noi_dung_mini_app.go:443-450` |
+| N2 | Phép kiểm loại **chỉ chạy khi loại hoặc danh mục của bài đổi** | Dòng lệch loại mà 0030 để lại (banner trong danh mục, bài trong cây loại khác) vẫn sửa được các ô khác; từ chối thì cả bài thành không sửa được vì một điều cán bộ không gây ra | `service-comms/internal/app/noi_dung_mini_app.go:639-652` |
+| N3 | **Không** khoá ngoại tổ hợp bài → (danh mục, loại) | Loại của bài sửa được; khoá ấy buộc CSDL từ chối lượt đổi loại bằng một câu không ai trên màn hình hành động được — M5 làm việc ấy ở tầng ứng dụng, có lời | `0030:24-31` |
+| N4 | `GET /api/v1/content-categories` **bắt buộc** `?type=`; thiếu, sai hoặc `banner` → 400 | Đóng khi thiếu: không có loại thì không trả "mọi cây" | `service-comms/internal/http/noi_dung_mini_app.go:532-544` |
+| N5 | Tuyến công khai không có `type` **giữ như cũ** | Hợp đồng công khai chỉ được thêm (luật 2 cấm #4); index cây cũ giữ cho đúng các lượt đọc ấy, gỡ ở migration sau khi không còn câu hỏi nào thiếu loại (`0030:66-67`) | `service-comms/internal/http/tin_xa_cong_khai.go:837-841` |
+
+### Còn mở
+
+| # | Việc | Của ai |
+|---|---|---|
+| P1 | Chưa chạy trên PostgreSQL thật: bộ kiểm PG `SKIP` (không có `VIGOV_TEST_DSN`), `TestPgCategoryTreePerType` chưa chạy; 0030 chưa áp lên CSDL thật nào | Kỹ thuật / vận hành |
+| P2 | Web-admin gửi loại ở mọi chỗ đọc/tạo danh mục, nút và bộ lọc theo tab — commit TASK-03; chưa kiểm ảnh render | Kỹ thuật |
+| P3 | Gỡ index cây cũ `danh_muc_mini_app_cay` khi không còn câu hỏi nào thiếu loại (`0030:66-67`) | Kỹ thuật |
+
+### Điều kiện dừng — thêm
+
+1. Cho đổi loại của một danh mục, hoặc cho banner vào danh mục (M2, M3)
+2. Gộp lại thành một cây cho cả xã, hoặc thu hẹp slug xuống theo loại (M4)
+3. Viết lại hàng loạt bài đang lệch loại mà 0030 để lại (luật 7) — dọn thì cán bộ làm từng bài

@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-comms",
-  "cap_nhat": "2026-10-13",
+  "cap_nhat": "2026-10-14",
   "muc": [
     {
       "id": "so-thong-bao-gui-cong-dan",
@@ -515,6 +515,14 @@
       "viec": "Danh mục tin Mini App: một tên một danh mục TRONG CÙNG MỤC CHA (chủ dự án 13/10/2026, như bản mẫu — khác mục cha được trùng; ADR 0067 §3 #5). Thêm, đổi tên hoặc chuyển cha mà trùng tên danh mục đang sống cùng mục cha — không phân biệt hoa/thường, khoảng trắng, NFC, ký tự vô hình Cf; CÓ phân biệt dấu (chủ dự án) — trả 409 `name_taken`, câu nêu tên đã có. Danh mục ẩn vẫn tính; đã xoá trả lại tên. So bằng Go (domain.CategoryNameKey) vì lower() của PG dưới collation C không hạ 'Đ'; đọc tên dưới khoá cây. Sửa danh mục lấy khoá cây TRƯỚC khoá dòng (như Thêm) — thứ tự ngược deadlock đổi tên P với thêm con dưới P (trinh sát soát lại tìm ra, 5a6668d0). Không khoá UNIQUE ở CSDL.",
       "bang_chung": "go vet + go test ./... service-comms xanh (domain/category_name_test.go anh em/khác cha; app/category_name_test.go thêm, đổi tên, chuyển cha, thứ tự khoá; http TestCreateCategoryWithTakenNameIs409NamingTheExistingOne). CHƯA chạy trên PostgreSQL thật — deadlock suy từ chế độ khoá, chưa tái hiện.",
       "con_no": "Xã nào đã có hai danh mục trùng tên từ trước thì vẫn giữ nguyên; muốn dọn thì đổi tên/xoá tay trên web-admin."
+    },
+    {
+      "id": "danh-muc-noi-dung-theo-loai-14-10",
+      "menu": "noi-dung-mini-app",
+      "trang_thai": "xong",
+      "viec": "Danh mục nội dung Mini App: mỗi loại (tin-tuc, su-kien, video, truyen-thanh, thong-bao) một cây; banner không có danh mục (chủ dự án 14/10/2026, yêu cầu PM, bảng lỗi web-admin-141026 dòng 3). CONFLICT với bản mẫu, chủ dự án đã giải: content_categories của bản mẫu không có cột loại (../vigov-require/apps/api/app/modules/content/models.py:294-336), nhưng chính bản mẫu ghi các loại lấy từ ba danh sách khác nhau (models.py:102-104) và kịch bản demo cho Truyền thanh chuyên mục riêng (../vigov-require/docs/miniapp-demo-script.md:106-111). Migration 0030 thêm cột loai NOT NULL + CHECK 5 loại, gán loại phòng thủ (một loại bài duy nhất, còn lại tin-tuc), có vết, không sửa bài. Cha cùng loại, bài vào danh mục cùng loại → 409 category_type_mismatch; banner kèm danh mục → 422 banner_has_no_category; loại danh mục không đổi được; đổi loại bài không chọn danh mục → bỏ trống trong cùng UPDATE, có vết; tên duy nhất theo (loại, mục cha); slug, trần 500, khoá cây vẫn theo xã. Lý do: ADR 0067 §Sửa đổi 14/10/2026.",
+      "bang_chung": "149bf72c (service-comms/migrations/0030_content_category_per_type.sql); bf1e2c88 (service-comms/internal/app/noi_dung_mini_app.go:443-450 dò FOR SHARE, :589-596 bỏ trống khi đổi loại, :639-652 chỉ kiểm khi loại/danh mục đổi; internal/http/noi_dung_mini_app.go:532-544 ?type= bắt buộc). Theo commit bf1e2c88: go build/vet/test service-comms xanh. Phần web-admin ở commit web-admin TASK-03 tiếp theo.",
+      "con_no": "Bộ kiểm PostgreSQL SKIP (không có VIGOV_TEST_DSN) — TestPgCategoryTreePerType chưa chạy; migration 0030 chưa áp lên CSDL thật nào."
     }
   ]
 }

@@ -27,8 +27,9 @@ Card 1 — Đồng bộ tin từ Cổng thông tin điện tử
 Card 2 — Danh bạ chính quyền  (link sang /danh-ba)
 
 Tabs loại nội dung: [Tin tức][Sự kiện][Thông báo][Truyền thanh][Video][Banner]
-  [🔍 Tìm theo tiêu đề…]  [Tất cả danh mục ▾]        [⊞ Danh mục tin]
+  [🔍 Tìm theo tiêu đề…]  [Tất cả danh mục ▾]        [⊞ Danh mục …]  ← cây của tab đang chọn
   Bảng nội dung
+  (tab Banner: không có bộ lọc danh mục, không có nút danh mục)
 ```
 
 ---
@@ -106,8 +107,9 @@ Link tới `/danh-ba`.
 | Trạng thái | chip `Đang hiện` (xanh) / `Chờ duyệt` (cam) / `Ẩn` (xám) |
 | *(hành động)* | `✎` sửa |
 
-Bộ lọc: ô `Tìm theo tiêu đề…` + select `Tất cả danh mục`.
-Nút `⊞ Danh mục tin` — quản lý danh mục nội bộ của Mini App.
+Bộ lọc: ô `Tìm theo tiêu đề…` + select `Tất cả danh mục` — chỉ liệt kê cây danh mục của **tab đang chọn**.
+Nút `⊞ Danh mục …` (nhãn theo tab) — quản lý cây danh mục **của loại đang chọn**, không phải một cây chung.
+**Mỗi loại nội dung một cây danh mục** (Tin tức, Sự kiện, Thông báo, Truyền thanh, Video); **Banner không có danh mục** — tab Banner không có bộ lọc và nút này. Chủ dự án chốt 14/10/2026 theo yêu cầu PM (bảng lỗi web-admin-141026 dòng 3); lý do và quy tắc: ADR 0067 §Sửa đổi 14/10/2026.
 
 ---
 
@@ -119,7 +121,7 @@ Mô tả: *"Chưa bật "Đăng lên Mini App" thì bà con chưa thấy — so�
 | Trường | Kiểu | Bắt buộc | Ghi chú |
 |---|---|---|---|
 | Loại nội dung | select 6 loại | | mặc định `Tin tức` |
-| Danh mục | select | | `— Chưa xếp danh mục —` |
+| Danh mục | select | | `— Chưa xếp danh mục —`; chỉ liệt kê cây của **loại đang chọn**; ẩn khi loại là `Banner`. Đổi loại mà danh mục đang chọn thuộc loại cũ → báo `Danh mục sẽ bỏ trống` (máy chủ bỏ trống danh mục khi đổi loại mà không chọn danh mục mới) |
 | Tiêu đề | text | ✔ | |
 | Tóm tắt | textarea | | |
 | Nội dung | textarea (rich text khi dựng lại) | | |
@@ -154,7 +156,7 @@ Nút: `Huỷ` · `Lưu`
 | `nguon_id_ngoai` | text null | id bài trên cổng — dùng khử trùng |
 | `nguoi_tao_id`, `tao_luc`, `cap_nhat_luc` | | |
 
-**`danh_muc_mini_app`**: `id, ten, slug, cha_id, thu_tu`
+**`danh_muc_mini_app`**: `id, loai, ten, slug, cha_id, thu_tu` — `loai` là một trong 5 mã mục 5 **trừ `banner`**, cố định từ lúc tạo; cha cùng `loai`; bài chỉ xếp vào danh mục cùng `loai` (từ 14/10/2026, migration `service-comms/migrations/0030_content_category_per_type.sql`)
 
 **`cau_hinh_dong_bo_cong`**
 
