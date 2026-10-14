@@ -1119,6 +1119,9 @@ SQL
           }
         }
         sh '''
+          # No xtrace: Jenkins runs sh with -x, which printed the operator's email (PII, rule 3) on prod 14/10/2026 —
+          # and would print any key or secret this block handles.
+          set +x
           set -eu
           umask 077
           TMP_DIR=$(mktemp -d)
@@ -1433,6 +1436,9 @@ YAML
           }
         }
         sh '''
+          # No xtrace: Jenkins runs sh with -x, which printed the operator's email (PII, rule 3) on prod 14/10/2026 —
+          # and would print any key or secret this block handles.
+          set +x
           set -eu
           umask 077
           TMP_DIR=$(mktemp -d)
@@ -1779,6 +1785,9 @@ EOF
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${params.APP_ID} · ${env.NGUOI_BAM}"
         }
         sh '''
+          # No xtrace: Jenkins runs sh with -x, which printed the operator's email (PII, rule 3) on prod 14/10/2026 —
+          # and would print any key or secret this block handles.
+          set +x
           set -eu
           umask 077
           # Read in the shell, not in Groovy: a password parameter reaches `sh` as plain env, and is masked
@@ -1895,6 +1904,9 @@ EOF
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NGUOI_BAM}"
         }
         sh '''
+          # No xtrace: Jenkins runs sh with -x, which printed the operator's email (PII, rule 3) on prod 14/10/2026 —
+          # and would print any key or secret this block handles.
+          set +x
           set -eu
           umask 077
           TMP_DIR=$(mktemp -d)
@@ -2015,6 +2027,9 @@ EOF
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NGUOI_BAM}"
         }
         sh '''
+          # No xtrace: Jenkins runs sh with -x, which printed the operator's email (PII, rule 3) on prod 14/10/2026 —
+          # and would print any key or secret this block handles.
+          set +x
           set -eu
           umask 077
           TMP_DIR=$(mktemp -d)
@@ -2154,6 +2169,9 @@ EOF
           currentBuild.displayName = "#${env.BUILD_NUMBER} ${params.HANH_DONG} · ${env.NGUOI_BAM}"
         }
         sh '''
+          # No xtrace: Jenkins runs sh with -x, which printed the operator's email (PII, rule 3) on prod 14/10/2026 —
+          # and would print any key or secret this block handles.
+          set +x
           set -eu
           umask 077
           TMP_DIR=$(mktemp -d)
@@ -2506,6 +2524,9 @@ EOF
         }
         sh '''
           set +x   # khoá cầu đi qua tệp và ống; không trace để không lệnh nào lỡ in nó
+          # No xtrace: Jenkins runs sh with -x, which printed the operator's email (PII, rule 3) on prod 14/10/2026 —
+          # and would print any key or secret this block handles.
+          set +x
           set -eu
           umask 077
           TMP_DIR=$(mktemp -d)
