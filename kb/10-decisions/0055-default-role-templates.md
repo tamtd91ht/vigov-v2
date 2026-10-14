@@ -6,7 +6,7 @@ owner: architecture
 derived_from_commit: 45f4f11
 expires: null
 owns_facts:
-  - "vì sao v2 không có chức năng tạo vai trò mới, và tám vai trò mẫu đi vào xã bằng hành động của quản trị xã"
+  - "vì sao gieo tám vai trò mẫu là idempotent, người bấm phải cầm mọi khoá sẽ cấp, và vai trò đã xoá không hồi sinh"
   - "tám vai trò mẫu: mã, tên, cờ lãnh đạo, thứ tự, số khoá — và luật ánh xạ khoá từ kho yêu cầu sang v2"
   - "vì sao gieo vai trò mẫu không bao giờ cấp lại khoá cho vai trò đã có"
   - "vì sao không vai trò mẫu nào giữ feedback.classify, feedback.unmask, admin.user.delete"
@@ -20,6 +20,10 @@ là **chưa được khách xác nhận** · Phạm vi: menu `/cau-hinh`, tab Ph
 (`docs/ui-ux/14-cau-hinh.md` §4) · **Trả lời** dòng *"Ai được tạo vai trò mới"* của ADR 0046
 §*Việc còn mở* · **Thay** mục *"Thêm vai trò mới ở tab Phân quyền (§4)"*
 (`web-admin/src/features/cau-hinh/nhan-cau-hinh.ts:70`).
+
+> **15/10/2026:** §1 (không tạo vai trò) và dòng *"Ai kích"* của §2 đã **đảo** — xã tự tạo / đổi tên / xoá
+> mềm vai trò, xã mới tự có tám vai trò mẫu khi owner tạo quản trị đầu tiên. Xem
+> [ADR 0095](0095-xa-tu-quan-ly-vai-tro.md). §3–§5 giữ nguyên.
 
 ## Bối cảnh
 
