@@ -85,8 +85,8 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 | dev | `vigov-dev-wildcard-tls` (`*.dev.vigov.vn`) | `vigov-api-wildcard-tls` — **cùng tên, cùng chứng chỉ** `*.api.vigov.vn` với prod, một bản sao trong `vigov-dev` (host `<dịch vụ>-dev.api.vigov.vn`) |
 | prod | `vigov-wildcard-tls` (`*.vigov.vn`) | `vigov-api-wildcard-tls` (`*.api.vigov.vn`) |
 
-Staging (`vigov-staging-tls`, `vigov-api-staging-tls`) đã bỏ 14/10/2026. `admin-dev.vigov.vn` **không** khớp
-`*.dev.vigov.vn`: Ingress dựng tay của nó cần chứng chỉ `*.vigov.vn` trong `vigov-dev` — chưa ai chốt Secret nào.
+Staging (`vigov-staging-tls`, `vigov-api-staging-tls`) đã bỏ 14/10/2026. Bàn điều khiển dev
+`admin.dev.vigov.vn` khớp `*.dev.vigov.vn`: Ingress dựng tay của nó dùng `vigov-dev-wildcard-tls`.
 
 ## 2. ConfigMap `common-config` — dùng chung cho 7 pod Go
 
@@ -140,7 +140,7 @@ ADR 0093) — không có bước ánh xạ riêng nào.
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + `9090` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity, petitions | `vigov-service-identity`, `vigov-service-petitions` | gRPC của documents. identity: như trên. petitions: hỏi đơn thư trước khi chuyển thành nhiệm vụ (`ResolveCitizenLetterForTask`, ADR 0085) — thiếu ở dev thì `POST /api/v1/citizen-letter-tasks` trả 503. Tên Service + `9090` | `documents:9090` |
 | `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents, finance, platform | `vigov-service-petitions`, `vigov-service-documents`, `vigov-service-finance`, `vigov-service-platform` | gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058); finance: thông báo nhắc tên trong trao đổi dự án (ADR 0081 #5); platform: màn Zalo Bot của khu vận hành (bot dùng chung, ADR 0074) — thiếu ở dev thì các tuyến `zalo-bots/shared…` trả 503. Tên Service + `9090` | `comms:9090` |
-| `OPERATOR_HOST` | không — kể cả prod; vắng là khu vận hành **tắt**, mọi tuyến vận hành trả 404 (ADR 0048) | `vigov-service-platform` **chỉ nơi này** | Host duy nhất của khu vận hành ViHAT. Chỉ đặt khi host đã có DNS + TLS + Ingress, và sau khi xong còn mở #12 của ADR 0048 | tên host trần, chữ thường, không giao thức / cổng / đường dẫn, vd `admin.vigov.vn` (dev: `admin-dev.vigov.vn`). Host dạng xã dưới `vigov.vn` → platform **không khởi động** |
+| `OPERATOR_HOST` | không — kể cả prod; vắng là khu vận hành **tắt**, mọi tuyến vận hành trả 404 (ADR 0048) | `vigov-service-platform` **chỉ nơi này** | Host duy nhất của khu vận hành ViHAT. Chỉ đặt khi host đã có DNS + TLS + Ingress, và sau khi xong còn mở #12 của ADR 0048 | tên host trần, chữ thường, không giao thức / cổng / đường dẫn, vd `admin.vigov.vn` (dev: `admin.dev.vigov.vn`). Host dạng xã dưới `vigov.vn` → platform **không khởi động** |
 | `ZALO_BOT_WEBHOOK_HOST` | **có (prod)** — comms | `vigov-service-comms` **chỉ nơi này** | Host mà Zalo gửi tin của bot dùng chung tới; comms tự dựng `https://<host>/api/v1/zalo-bot-updates` khi trỏ webhook (ADR 0074 #5). Chỉ đặt khi host đã có DNS + TLS + Ingress vào comms | tên host trần, chữ thường, không giao thức / cổng / đường dẫn: `bot.api.vigov.vn` ở prod. Host dạng xã (`<xa>.vigov.vn`) → comms **không khởi động** |
 | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | **có (prod)** — identity | `vigov-service-identity` **chỉ nơi này** | Cổng cầu phiên công dân, chỉ `vihat-miniapp` gọi (ADR 0045). Chốt `9091` ngày 30/09/2026; manifest `deploy/base/identity` đã đặt sẵn | `:9091` — khớp cổng `bridge` của Deployment/Service identity và quy tắc 8 của `deploy/base/mang/netpol.yaml`; phía `vihat-miniapp` đặt `VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS=identity:9091`. Chỉ đặt khi đã có `CITIZEN_SESSION_BRIDGE_KEYS`: có một mà thiếu cái kia thì pod **không khởi động** — vì vậy **không** đặt vào `common-config` |
 

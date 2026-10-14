@@ -4008,7 +4008,7 @@
     },
     "config.OperatorRealmConfigured": {
       "kind": "func",
-      "at": "core/config/operator.go:237"
+      "at": "core/config/operator.go:238"
     },
     "config.OperatorSessionSigningKeys": {
       "kind": "func",
@@ -6560,7 +6560,7 @@
     },
     "domain.LaTenMienDanhRieng": {
       "kind": "func",
-      "at": "service-platform/internal/domain/ten_mien_danh_rieng.go:72"
+      "at": "service-platform/internal/domain/ten_mien_danh_rieng.go:77"
     },
     "domain.LaTraLaiLamTiep": {
       "kind": "func",

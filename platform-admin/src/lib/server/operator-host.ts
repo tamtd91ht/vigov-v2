@@ -31,10 +31,11 @@ export type OperatorHostResult =
   | { ok: false; reason: "unset" | "malformed"; detail: string };
 
 /**
- * `admin` (prod) / `admin-dev` (dev, owner 14/10/2026) — the console labels, the same set as
- * `operatorConsoleLabels`. `admin-stg` left with staging; it stays reserved for no commune to take.
+ * `admin` under each environment's root — `admin.vigov.vn` (prod), `admin.dev.vigov.vn` (dev, owner
+ * 14/10/2026) — the same set as `operatorConsoleLabels`. `admin-dev` / `admin-stg` are no longer
+ * consoles; both stay reserved for no commune to take.
  */
-const CONSOLE_LABELS = new Set(["admin", "admin-dev"]);
+const CONSOLE_LABELS = new Set(["admin"]);
 // The platform's web roots are GENERATED from deploy/hosts.yaml (owner, 01/10/2026) — the same
 // source and order core/config's `platformWebRoots` is generated with, so the two sides cannot
 // disagree about which domains are the platform's own.

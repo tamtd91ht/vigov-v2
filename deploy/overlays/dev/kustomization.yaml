@@ -7,7 +7,7 @@ namespace: vigov-dev
 resources:
   - ../../base
   # Bàn điều khiển vận hành chạy cả ở dev (chủ dự án chốt 14/10/2026), giống prod. Ingress của nó
-  # (admin-dev.vigov.vn) dựng tay trong Rancher, không ở đây.
+  # (admin.dev.vigov.vn, TLS `vigov-dev-wildcard-tls`) dựng tay trong Rancher, không ở đây.
   - ../../base/platform-admin
 
 commonLabels:
@@ -42,6 +42,14 @@ patches:
   # does NOT fail kustomize: the object keeps base's PROD hosts on the controller dev shares.
   - path: ingress-no-upload-environment.yaml
     target: { group: networking.k8s.io, version: v1, kind: Ingress, name: vigov-no-upload }
+  # OPERATOR_HOST của bàn điều khiển dev. Base ghi giá trị prod (admin.vigov.vn); thiếu bản vá này
+  # thì gateway gửi Host của prod, platform dev đưa mọi lời gọi vào chuỗi của xã → mọi tuyến vận hành
+  # 404. Phải bằng OPERATOR_HOST đặt trên Deployment platform của vigov-dev.
+  - target: { kind: Deployment, name: platform-admin }
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3
+        value: { name: OPERATOR_HOST, value: "admin.dev.vigov.vn" }
 
 # THẺ ẢNH — CHỈ DÙNG CHO LẦN CÀI ĐẦU, không phản ánh thẻ đang chạy. Lý do đầy đủ ở khối
 # cùng tên trong `overlays/prod/kustomization.yaml`.

@@ -12,7 +12,7 @@ owns_facts:
   - "vì sao web cán bộ không gọi thẳng <service>.api.vigov.vn"
   - "vì sao người quản trị đầu tiên của xã được gieo ở lần đăng nhập admin đầu tiên bằng IDENTITY_ADMIN_SEED_PASSWORD, và nó căng với ADR 0003 ở đâu"
   - "vì sao tên miền công khai có một nguồn duy nhất là tệp deploy/hosts.yaml chứ không phải ConfigMap, vì sao Mini App chỉ dựng với host prod, và vì sao Ingress trên cụm vẫn dựng tay (01/10/2026)"
-  - "hai môi trường vigov-dev / vigov-prod thay staging, dev có CSDL và khoá riêng, mô hình host dev (*.dev.vigov.vn, <service>-dev.api.vigov.vn, admin-dev.vigov.vn), TLS dev, vì sao nhãn stg vẫn dành riêng, và rủi ro ENV=dev chủ dự án chấp nhận (14/10/2026)"
+  - "hai môi trường vigov-dev / vigov-prod thay staging, dev có CSDL và khoá riêng, mô hình host dev (*.dev.vigov.vn, <service>-dev.api.vigov.vn, admin.dev.vigov.vn), TLS dev, vì sao nhãn stg vẫn dành riêng, và rủi ro ENV=dev chủ dự án chấp nhận (14/10/2026)"
 ---
 
 # 0046. Quy hoạch tên miền, và người quản trị đầu tiên của xã
@@ -191,7 +191,7 @@ Chủ dự án chốt 14/10/2026, cả tám điều. Dựng ở `825ab024` (name
 |---|---|---|
 | 1 | Hai môi trường: `vigov-dev` (nhánh `dev`) và `vigov-prod` (nhánh `main`). **`vigov-staging` bỏ** | `deploy/cluster/namespace.yaml`, `rbac-jenkins.yaml`; `namespaceForBranch()` trong Jenkinsfile của từng dịch vụ (`web-admin/Jenkinsfile:367-373`); `deploy/overlays/staging/` gỡ ở `b6fe4c7e` |
 | 2 | Dev có **CSDL riêng** — không còn "staging dùng chung CSDL với prod" | `deploy/overlays/dev/kustomization.yaml:3-5`; `deploy/Jenkinsfile:23-26` |
-| 3 | Host dev: web `<xa>.dev.vigov.vn`; API `<service>-dev.api.vigov.vn` (`comms.api.vigov.vn` → `comms-dev.api.vigov.vn`); bàn điều khiển `admin-dev.vigov.vn` | `deploy/hosts.yaml` mục `dev` (`api_label_suffix: "-dev"`); `core/config/operator.go:63`; `platform-admin/src/lib/server/operator-host.ts:37` |
+| 3 | Host dev: web `<xa>.dev.vigov.vn`; API `<service>-dev.api.vigov.vn` (`comms.api.vigov.vn` → `comms-dev.api.vigov.vn`); bàn điều khiển **`admin.dev.vigov.vn`** (chủ dự án sửa cùng ngày, thay `admin-dev.vigov.vn` chọn lúc đầu — xem dưới bảng rủi ro) | `deploy/hosts.yaml` mục `dev` (`api_label_suffix: "-dev"`); `core/config/operator.go:64` (nhãn chỉ còn `admin`); `platform-admin/src/lib/server/operator-host.ts:38`; `deploy/overlays/dev/kustomization.yaml` vá `OPERATOR_HOST` của platform-admin |
 | 4 | TLS: web dev dùng Secret riêng `vigov-dev-wildcard-tls`. API dev dùng **cùng chứng chỉ** `*.api.vigov.vn`, Secret **cùng tên** `vigov-api-wildcard-tls` (một bản sao trong `vigov-dev`) | `deploy/hosts.yaml` mục `dev`; `tools/ingress` chỉ cho trùng Secret TLS API khi hai môi trường cùng `api_suffix` |
 | 5 | Nhãn `stg`, `admin-stg`, `api-stg` và gốc `stg.vigov.vn`, `*.api-stg.vigov.vn` **giữ dành riêng**: CSDL prod còn hàng `<xa>.stg.vigov.vn` từ thời dùng chung | `deploy/hosts.yaml` mục `staging` `retired: true`; `service-platform/internal/domain/ten_mien_danh_rieng.go:51-60`; migration `service-platform/migrations/0027_reserve_dev_hosts.sql` |
 | 6 | Cụm `vigov-dev` chạy **`ENV=dev`**. Chủ dự án **chấp nhận** ba rủi ro ở bảng dưới | `deploy/overlays/dev/kustomization.yaml:19` |
@@ -218,13 +218,18 @@ Chủ dự án chốt 14/10/2026, cả tám điều. Dựng ở `825ab024` (name
 | 180 | Lý do của #2 (Sửa đổi 01/10): "Staging dùng chung CSDL với prod" | Lý do ấy hết đúng. Quyết định giữ nguyên theo #7; lý do còn lại là một giá trị thêm là một bundle thêm (ADR 0047) |
 
 Không đổi: luật một nguồn `deploy/hosts.yaml`, Ingress trên cụm dựng tay (#4 của Sửa đổi 01/10), host
-`admin-dev.vigov.vn` cũng **không** có trong `deploy/hosts.yaml` (cùng ngoại lệ của ADR 0048 cho
+`admin.dev.vigov.vn` cũng **không** có trong `deploy/hosts.yaml` (cùng ngoại lệ của ADR 0048 cho
 `admin.vigov.vn`). Bàn điều khiển chạy ở dev nên ADR 0048 §*Chốt triển khai 01/10/2026* #1 ("chỉ prod")
 cũng hết đúng: `deploy/overlays/dev/kustomization.yaml:11` kéo `base/platform-admin`.
 
-**Chưa ai quyết — nêu để chủ dự án chọn:** `admin-dev.vigov.vn` không khớp `*.dev.vigov.vn` (khác
-nhãn), mà khớp `*.vigov.vn`. Ingress của nó trong `vigov-dev` vì thế cần một Secret TLS mang chứng chỉ
-`*.vigov.vn` trong namespace ấy — `vigov-dev-wildcard-tls` không phủ nó.
+**Host bàn điều khiển dev — sửa cùng ngày 14/10/2026.** Chọn lúc đầu là `admin-dev.vigov.vn`; chủ dự
+án đổi sang **`admin.dev.vigov.vn`** (đã dựng trên cụm). Hệ quả: host khớp `*.dev.vigov.vn`, nên
+Ingress của nó dùng luôn `vigov-dev-wildcard-tls` — câu hỏi "Secret `*.vigov.vn` trong `vigov-dev`"
+không còn. Nhãn bàn điều khiển chỉ còn `admin` (dưới gốc của từng môi trường); `admin-dev.vigov.vn`
+nay bị `OPERATOR_HOST` từ chối nhưng nhãn `admin-dev` **vẫn dành riêng** — migration 0027 đã mang nó,
+và gỡ một nhãn dành riêng chỉ nới thêm chỗ cho dòng của xã. Còn lại: `admin.stg.vigov.vn` vẫn qua phép
+kiểm `OPERATOR_HOST` vì gốc `stg.vigov.vn` còn trong danh sách gốc dành riêng; không xã nào giữ được
+host ấy nên không rò, chỉ là một giá trị cấu hình sai không bị chặn lúc khởi động.
 
 ## Liên quan
 

@@ -50,9 +50,10 @@ var (
 // host or a candidate for one (ADR 0046: `<xa>.vigov.vn`, `<xa>.dev.vigov.vn`), or a service API
 // host (`<service>.api.vigov.vn`). Pointing the operator area at one of those makes a commune's
 // surface and the vendor's cross-commune surface the same surface — ADR 0048 stop condition #6 and
-// the boundary ADR 0003 draws. `admin` (prod) / `admin-dev` (dev, owner 14/10/2026) are the labels
-// reserved for the vendor console. `admin-stg` is no longer accepted — staging is removed — but stays
-// RESERVED in nhanDanhRieng, so no commune can claim it either.
+// the boundary ADR 0003 draws. `admin` is the one label reserved for the vendor console, under each
+// environment's root: `admin.vigov.vn` (prod), `admin.dev.vigov.vn` (dev, owner 14/10/2026).
+// `admin-dev` / `admin-stg` are no longer accepted — the dev console moved under the dev root, and
+// staging is removed — but both stay RESERVED in nhanDanhRieng, so no commune can claim them either.
 //
 // A SUBSET COPY of service-platform/internal/domain/ten_mien_danh_rieng.go (nhanDanhRieng), which
 // core cannot import (rule 2, forbidden #1). It only ever needs to be NARROWER than that list: a
@@ -60,7 +61,7 @@ var (
 //
 // A host OUTSIDE vigov.vn (a deployment on another domain) is not judged here: there is no rule in
 // this repository for what a commune host looks like on a domain it does not know.
-var operatorConsoleLabels = map[string]bool{"admin": true, "admin-dev": true}
+var operatorConsoleLabels = map[string]bool{"admin": true}
 
 // platformWebRoots and platformRoot are GENERATED into hosts.gen.go from deploy/hosts.yaml, the one
 // place public hostnames are written (owner, 01/10/2026) — the same source service-platform's
@@ -97,7 +98,7 @@ func parseOperatorHost(raw, trimmed string) (string, error) {
 			if !operatorConsoleLabels[under] {
 				return "", fmt.Errorf("%w: %q is shaped like a commune or service host under %s — "+
 					"the operator area must never share a host with a commune (ADR 0048 stop condition #6); "+
-					"use admin.%s or admin-dev.%s", ErrOperatorHostInvalid, h, root, platformRoot, platformRoot)
+					"use admin.%s", ErrOperatorHostInvalid, h, root, root)
 			}
 			break
 		}

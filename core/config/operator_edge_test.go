@@ -79,8 +79,7 @@ func TestOperatorEdgeSigningKeySharedWithStaffIsRefused(t *testing.T) {
 func TestOperatorHostAccepted(t *testing.T) {
 	for _, h := range []string{
 		"admin.vigov.vn",
-		"admin-dev.vigov.vn", // the dev console (owner, 14/10/2026)
-		"admin.dev.vigov.vn",
+		"admin.dev.vigov.vn",    // the dev console (owner, 14/10/2026)
 		" admin.vigov.vn\n",     // trimmed like every variable
 		"ops.vihat.example.com", // outside vigov.vn: not judged
 	} {
@@ -115,7 +114,7 @@ func TestOperatorHostRefused(t *testing.T) {
 		"stg.vigov.vn",              // the retired staging root
 		"dev.vigov.vn",              // the dev root
 		"admin-stg.vigov.vn",        // staging removed (14/10/2026): still reserved, no longer a console
-		"thangbinh.dev.vigov.vn",    // a commune's dev host
+		"admin-dev.vigov.vn",        // dev console is admin.dev.vigov.vn (14/10/2026): reserved, not a console		"thangbinh.dev.vigov.vn",    // a commune's dev host
 		"comms-dev.api.vigov.vn",    // a dev service API host
 		"thangbinh-danang.vigov.vn", // a commune's web host
 		"thangbinh.stg.vigov.vn",    // a commune's staging host

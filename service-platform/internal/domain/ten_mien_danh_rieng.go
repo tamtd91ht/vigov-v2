@@ -14,7 +14,12 @@ import (
 //	<service>.api.vigov.vn      prod API of one service
 //	<service>-dev.api.vigov.vn  dev API of one service (covered by the `.api.vigov.vn` suffix)
 //	admin.vigov.vn              the vendor's cross-commune console — NOT a commune host
-//	admin-dev.vigov.vn          its dev twin
+//	admin.dev.vigov.vn          its dev twin (`admin` under the dev root)
+//
+// `admin-dev.vigov.vn` was the first name chosen for the dev console (14/10/2026) and was replaced
+// the same day by `admin.dev.vigov.vn`, which the dev wildcard certificate covers. Its label stays
+// reserved below: 0027 already ships it, and releasing a reserved label only ever widens what a
+// commune row may claim.
 //
 // RETIRED, STILL RESERVED (owner, 2026-10-14): staging — `stg.vigov.vn`, `admin-stg`, `api-stg`,
 // `*.api-stg.vigov.vn`. Prod's database still holds a `<xa>.stg.vigov.vn` row from when staging
@@ -47,7 +52,7 @@ import (
 // console of that environment. `api-stg` because `api-stg.vigov.vn` was staging's API root. There is
 // no `api-dev`: dev's API hosts live under `api.vigov.vn` (`<service>-dev.api.vigov.vn`), whose
 // label `api` is already here — reserving a label no surface uses would only shrink the commune
-// namespace.
+// namespace. (`admin-dev` is such a label now, and is kept for the reason given at the top.)
 var nhanDanhRieng = map[string]bool{
 	"admin":     true,
 	"admin-dev": true,

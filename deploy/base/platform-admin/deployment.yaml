@@ -1,9 +1,9 @@
 # Bàn điều khiển vận hành ViHAT (ADR 0048) — Next.js standalone, `node server.js`, cổng 3000.
 #
-# CHỈ PROD (chủ dự án chốt 01/10/2026): đơn vị này được `overlays/prod` kéo vào, KHÔNG nằm trong
-# `deploy/base/kustomization.yaml` — staging không có bàn điều khiển. Host công khai `admin.vigov.vn`
-# và Ingress của nó DỰNG TAY trong Rancher, không sinh từ `deploy/hosts.yaml` (deploy/README.md, mục
-# "platform-admin lần đầu").
+# PROD VÀ DEV (chủ dự án 01/10 và 14/10/2026): `overlays/prod` và `overlays/dev` kéo đơn vị này vào; nó
+# KHÔNG nằm trong `deploy/base/kustomization.yaml`. Host công khai `admin.vigov.vn` (dev:
+# `admin.dev.vigov.vn`, overlay dev vá OPERATOR_HOST bên dưới) và Ingress của nó DỰNG TAY trong
+# Rancher, không sinh từ `deploy/hosts.yaml` (deploy/README.md, mục "platform-admin lần đầu").
 #
 # KHÔNG có client nào tới dịch vụ nghiệp vụ (ADR 0003): đường ra duy nhất là REST 8080 của platform
 # (`deploy/base/mang/netpol.yaml`, quy tắc 12). Không `NEXT_PUBLIC_*`, không bí mật.
