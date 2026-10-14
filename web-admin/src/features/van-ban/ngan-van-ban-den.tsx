@@ -593,6 +593,7 @@ export function KhoiChuyenXuLy({
         <div>
           <Button
             type="submit"
+            size="sm"
             variant="primary"
             icon={<Glyph icon={Send} />}
             disabled={dangGui}

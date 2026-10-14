@@ -230,7 +230,7 @@ export function IncomingRowLinks({ year }: { year: number }) {
  */
 export function RaiseTaskButton() {
   return (
-    <PendingButton info={pendingPart("Chuyển thành nhiệm vụ")} variant="primary" icon={<ListChecks aria-hidden="true" />} />
+    <PendingButton info={pendingPart("Chuyển thành nhiệm vụ")} variant="primary" size="sm" icon={<ListChecks aria-hidden="true" />} />
   );
 }
 

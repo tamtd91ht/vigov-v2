@@ -147,6 +147,7 @@ export function LetterTaskBlock({
     <div className="mt-4">
       <Button
         type="button"
+        size="sm"
         variant="primary"
         icon={<Glyph icon={ListChecks} />}
         aria-haspopup="dialog"

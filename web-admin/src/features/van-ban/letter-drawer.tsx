@@ -1077,7 +1077,7 @@ function RoutingBox({
           </p>
         )}
         <div>
-          <Button type="submit" variant="primary" icon={<Glyph icon={Send} />} disabled={sending} aria-busy={sending || undefined}>
+          <Button type="submit" size="sm" variant="primary" icon={<Glyph icon={Send} />} disabled={sending} aria-busy={sending || undefined}>
             <BusyLabel busy={sending} label="Chuyển và ghi vết" busyText="Đang chuyển…" />
           </Button>
         </div>
