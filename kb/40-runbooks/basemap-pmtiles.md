@@ -3,7 +3,7 @@ id: basemap-pmtiles
 tier: T4
 source: CURATED
 owner: web-admin
-derived_from_commit: ae3218c4
+derived_from_commit: 02a0b01a
 expires: null
 owns_facts:
   - "quy trình dựng, tải lên, kiểm chủ quyền có ký và đưa vào dùng tệp nền PMTiles của bản đồ phản ánh và Bản đồ kinh tế số (/ban-do)"
@@ -101,7 +101,7 @@ thông). Muốn bucket riêng có khoá thì web-admin phải giữ khoá MinIO 
 ## Kiểm chủ quyền — BẮT BUỘC sau MỖI lần làm mới
 
 ADR 0072 §Trả lời 09/10/2026: kiểm tay + danh mục kiểm **có ký**, mọi lần, không ngoại lệ. Kiểm trên
-**staging** đã trỏ `BASEMAP_URL` vào tiền tố mới (mục "Đưa vào dùng", bước 1), bằng màn bản đồ phản ánh
+**dev** (`vigov-dev`) đã trỏ `BASEMAP_URL` vào tiền tố mới (mục "Đưa vào dùng", bước 1), bằng màn bản đồ phản ánh
 thật, ở các xã có khung chạm biển và biên giới.
 
 | # | Kiểm | Đạt khi |
@@ -137,11 +137,18 @@ khung để "cho qua" — đó là điểm dừng của ADR 0072.
 
 ## Đưa vào dùng và quay lui
 
-1. Staging: đặt key `BASEMAP_URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/config/map/<YYYYMMDD>` trong
-   `common-config` của `vigov-staging` — `kubectl -n vigov-staging edit configmap common-config` — rồi
-   `kubectl -n vigov-staging rollout restart deploy/vigov-web-admin`: key trùng tên biến, tới pod qua
-   `envFrom`, mà `envFrom` chỉ đọc lúc pod khởi động (ADR 0093). Kiểm, ký.
-2. Prod: cùng giá trị ở `vigov-prod`, rồi `rollout restart` như bước 1.
+Từ 14/10/2026 môi trường đi trước prod là **dev** (`vigov-dev`, staging đã bỏ — ADR 0046 §Sửa đổi
+14/10/2026). Dev có MinIO/bucket riêng (tiền tố `vigov-dev`): tệp phải được tải lên bằng lượt `nen-ban-do`
+với `MT=dev`, rồi tải lên prod bằng lượt `MT=prod` (`deploy/basemap/basemap-task.sh:195-199`).
+
+1. Dev: đặt key `BASEMAP_URL` = `https://<MinIO nội bộ>:<cổng>/<bucket>/config/map/<YYYYMMDD>` trong
+   `common-config` của `vigov-dev` — `kubectl -n vigov-dev edit configmap common-config` — rồi
+   `kubectl -n vigov-dev rollout restart deploy/vigov-web-admin deploy/vigov-service-comms`: key trùng tên
+   biến, tới pod qua `envFrom`, mà `envFrom` chỉ đọc lúc pod khởi động (ADR 0093). Kiểm, ký.
+2. Prod: giá trị `BASEMAP_URL` mà lượt `MT=prod` in ra, đặt ở `vigov-prod`, rồi `rollout restart` như bước 1.
+   Lượt prod là một lần dựng khác: `SHA256SUMS` trên MinIO của prod phải khớp dòng SHA-256 trong danh mục
+   đã ký. Khác thì **dừng**, không đặt key, báo chủ dự án — tệp ấy chưa ai kiểm. (Hai lần dựng cùng
+   ngày có ra cùng SHA-256 không: chưa kiểm.)
 3. **Quay lui:** đặt lại giá trị cũ, `rollout restart` lại. Vì vậy **không xoá** tiền tố cũ ngay — giữ ít nhất tới
    lần làm mới sau.
 

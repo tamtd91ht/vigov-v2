@@ -288,6 +288,8 @@ Mục này ghi thêm, không sửa phần trên. Chủ dự án trả lời tron
 | 3 | Quy tắc Ingress công khai của `admin.vigov.vn` **dựng tay trong Rancher**, **không** nằm trong `deploy/hosts.yaml` / `tools/ingress` | **Ngoại lệ có chủ ý** của [ADR 0046 §*Sửa đổi 01/10/2026*](0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md#sửa-đổi-01102026--một-nguồn-cho-tên-miền-công-khai). **Giá:** host này là quy tắc Ingress duy nhất kho không render — đổi nó là việc tay, không phép kiểm nào thấy | ADR 0046 |
 | 4 | **Lên sống NGAY**, trước khi đủ bốn điều kiện của §*Chốt bổ sung* #2 (chủ dự án: *"làm và mở luôn"*) | Bảng dưới ghi điều nào chưa đạt và giá | Luật 13 bất biến 1 |
 
+> **14/10/2026:** staging bỏ, dev có CSDL riêng; bàn điều khiển chạy cả ở dev (`admin-dev.vigov.vn`), nên hàng #1 "chỉ prod" hết đúng — xem [ADR 0046 §Sửa đổi 14/10/2026](0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md#sửa-đổi-14102026--hai-môi-trường-dev-và-prod-staging-bỏ).
+
 | Điều kiện | Trạng thái 01/10/2026 | Bằng chứng | Giá chấp nhận |
 |---|---|---|---|
 | (a) quy tắc 3 hẹp theo cặp gọi | Đã sửa trong kho, sổ ghi `dang_lam` | `kb/90-ephemeral/tien-do/deploy.json:177-182` (`netpol-grpc-theo-cap-goi`) | — |

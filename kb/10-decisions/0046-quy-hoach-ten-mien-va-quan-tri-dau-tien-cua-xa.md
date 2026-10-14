@@ -12,6 +12,7 @@ owns_facts:
   - "vì sao web cán bộ không gọi thẳng <service>.api.vigov.vn"
   - "vì sao người quản trị đầu tiên của xã được gieo ở lần đăng nhập admin đầu tiên bằng IDENTITY_ADMIN_SEED_PASSWORD, và nó căng với ADR 0003 ở đâu"
   - "vì sao tên miền công khai có một nguồn duy nhất là tệp deploy/hosts.yaml chứ không phải ConfigMap, vì sao Mini App chỉ dựng với host prod, và vì sao Ingress trên cụm vẫn dựng tay (01/10/2026)"
+  - "hai môi trường vigov-dev / vigov-prod thay staging, dev có CSDL và khoá riêng, mô hình host dev (*.dev.vigov.vn, <service>-dev.api.vigov.vn, admin-dev.vigov.vn), TLS dev, vì sao nhãn stg vẫn dành riêng, và rủi ro ENV=dev chủ dự án chấp nhận (14/10/2026)"
 ---
 
 # 0046. Quy hoạch tên miền, và người quản trị đầu tiên của xã
@@ -44,6 +45,9 @@ người quản trị cho xã nào.
 
 > 01/10/2026 — chủ dự án chốt **nơi viết các host này**: một nguồn duy nhất `deploy/hosts.yaml`,
 > giá trị không đổi. Xem [Sửa đổi 01/10/2026](#sửa-đổi-01102026--một-nguồn-cho-tên-miền-công-khai).
+>
+> 14/10/2026 — staging **bỏ**, thay bằng dev; hàng `<xa>.stg.vigov.vn` và `<service>.api-stg.vigov.vn`
+> không còn đúng. Xem [Sửa đổi 14/10/2026](#sửa-đổi-14102026--hai-môi-trường-dev-và-prod-staging-bỏ).
 
 ### Vì sao bốn dạng không chồng nhau
 
@@ -177,6 +181,50 @@ Chủ dự án chốt; giá trị host **không đổi** so với mô hình 26/0
 | 3 | Luật tên miền dành riêng theo cùng nguồn, **cùng một lượt** | CHECK SQL ở `service-platform/migrations/0007_tenant_domain_khong_danh_rieng.sql` không đọc được tệp: đổi `api_suffix` hay gốc `web_host` phải kèm **migration MỚI**; `TestLuatTenMienDanhRiengGoVaSQLKhop` (`service-platform/internal/domain/ten_mien_danh_rieng_sql_test.go:30`) đỏ tới khi có |
 | 4 | Ingress trên cụm vẫn **dựng tay trong Rancher**; kho chỉ render (`kubectl kustomize deploy/overlays/<env>`) để nhập vào. **Không** có job Jenkins apply. DNS và Secret TLS nằm **ngoài** kho | Giữ nguyên cách vận hành cụm hiện có; kho là bản mẫu, không phải nơi ra lệnh cho cụm |
 | 5 | Chủ dự án nói *"cấu hình hết vào ConfigMap cho linh động"*; dựng thành **tệp trong kho** | Không bên tiêu thụ nào đọc được ConfigMap của cụm: Mini App là bundle tĩnh trên Zalo, và host của Ingress không tham chiếu được ConfigMap |
+
+## Sửa đổi 14/10/2026 — hai môi trường dev và prod, staging bỏ
+
+Chủ dự án chốt 14/10/2026, cả tám điều. Dựng ở `825ab024` (namespace, RBAC Jenkins, bàn điều khiển),
+`b6fe4c7e` (job `vigov-deploy`) và `02a0b01a` (host, `tools/ingress`, luật tên miền dành riêng).
+
+| # | Quyết định | Dựng ở |
+|---|---|---|
+| 1 | Hai môi trường: `vigov-dev` (nhánh `dev`) và `vigov-prod` (nhánh `main`). **`vigov-staging` bỏ** | `deploy/cluster/namespace.yaml`, `rbac-jenkins.yaml`; `namespaceForBranch()` trong Jenkinsfile của từng dịch vụ (`web-admin/Jenkinsfile:367-373`); `deploy/overlays/staging/` gỡ ở `b6fe4c7e` |
+| 2 | Dev có **CSDL riêng** — không còn "staging dùng chung CSDL với prod" | `deploy/overlays/dev/kustomization.yaml:3-5`; `deploy/Jenkinsfile:23-26` |
+| 3 | Host dev: web `<xa>.dev.vigov.vn`; API `<service>-dev.api.vigov.vn` (`comms.api.vigov.vn` → `comms-dev.api.vigov.vn`); bàn điều khiển `admin-dev.vigov.vn` | `deploy/hosts.yaml` mục `dev` (`api_label_suffix: "-dev"`); `core/config/operator.go:63`; `platform-admin/src/lib/server/operator-host.ts:37` |
+| 4 | TLS: web dev dùng Secret riêng `vigov-dev-wildcard-tls`. API dev dùng **cùng chứng chỉ** `*.api.vigov.vn`, Secret **cùng tên** `vigov-api-wildcard-tls` (một bản sao trong `vigov-dev`) | `deploy/hosts.yaml` mục `dev`; `tools/ingress` chỉ cho trùng Secret TLS API khi hai môi trường cùng `api_suffix` |
+| 5 | Nhãn `stg`, `admin-stg`, `api-stg` và gốc `stg.vigov.vn`, `*.api-stg.vigov.vn` **giữ dành riêng**: CSDL prod còn hàng `<xa>.stg.vigov.vn` từ thời dùng chung | `deploy/hosts.yaml` mục `staging` `retired: true`; `service-platform/internal/domain/ten_mien_danh_rieng.go:51-60`; migration `service-platform/migrations/0027_reserve_dev_hosts.sql` |
+| 6 | Cụm `vigov-dev` chạy **`ENV=dev`**. Chủ dự án **chấp nhận** ba rủi ro ở bảng dưới | `deploy/overlays/dev/kustomization.yaml:19` |
+| 7 | Mini App vẫn **chỉ dựng với host prod** (`mini_app_environment: prod`) | `deploy/hosts.yaml`, dòng cuối |
+| 8 | Job vận hành: `SECRET_ENCRYPTION_KEYS` và `CITIZEN_SESSION_BRIDGE_KEYS` **sinh riêng mỗi namespace**, không bao giờ chép prod → dev. Tạo tài khoản vận hành, chỉ định owner, cấp quyền, đặt secret Mini App chạy được với `MT=dev` | `deploy/Jenkinsfile:158` (`MT` = `prod` \| `dev`), `:734-737`, `:956-960`; kiểm `MT` ở `:1394`, `:1507`, `:1633`, `:1748` |
+
+**Rủi ro của `ENV=dev` trên cụm thật — chủ dự án chấp nhận:**
+
+| Rủi ro | Mã |
+|---|---|
+| `config.Load` không chặt: thiếu biến của nhóm dịch vụ khai **không** chặn khởi động, chỉ từ chối lúc dùng. Luật "dùng thì bắt buộc" của ADR 0057 không áp ở dev | `core/config/config.go:604` (chặt chỉ khi `staging` hoặc `prod`) |
+| `DANGEROUS_AUTH_BYPASS=true` **không** bị từ chối — chỉ còn dòng cảnh báo lúc khởi động | `core/config/config.go:875` (từ chối chỉ khi `prod`), `:894-896` |
+| `OBJECT_STORAGE_PUBLIC_ENDPOINT` dạng `http://` được phép, không cả cảnh báo: presigned URL đi không mã hoá | `core/config/config.go:919` |
+
+**Những dòng của ADR này nay không còn đúng** (số dòng theo bản đã có mục này):
+
+| Dòng | Nội dung cũ | Nay |
+|---|---|---|
+| 41 | `<xa>.stg.vigov.vn` — web cán bộ staging | Web cán bộ dev là `<xa>.dev.vigov.vn`. Gốc `stg.vigov.vn` chỉ còn là gốc dành riêng (#5) |
+| 43 | `<service>.api-stg.vigov.vn` — API staging | API dev là `<service>-dev.api.vigov.vn`, dưới cùng `api.vigov.vn` với prod |
+| 56-57, 149 | "4 bản ghi DNS wildcard + 4 chứng chỉ wildcard" | Môi trường đang chạy cần 3 wildcard: `*.vigov.vn`, `*.api.vigov.vn` (prod và dev chung), `*.dev.vigov.vn`. `comms-dev.api.vigov.vn` khớp `*.api.vigov.vn` vì `comms-dev` là đúng một nhãn |
+| 157 | Việc còn mở: staging và prod dùng chung CSDL, Redis, khoá ký phiên | Đã trả lời bằng #2 và #8. Redis của dev là giá trị Secret trên cụm — kho không kiểm được dev có Redis riêng hay chưa |
+| 170 | "Chấp nhận tạm" việc dùng chung CSDL/Redis/khoá | Thay bằng #2 và #8 |
+| 180 | Lý do của #2 (Sửa đổi 01/10): "Staging dùng chung CSDL với prod" | Lý do ấy hết đúng. Quyết định giữ nguyên theo #7; lý do còn lại là một giá trị thêm là một bundle thêm (ADR 0047) |
+
+Không đổi: luật một nguồn `deploy/hosts.yaml`, Ingress trên cụm dựng tay (#4 của Sửa đổi 01/10), host
+`admin-dev.vigov.vn` cũng **không** có trong `deploy/hosts.yaml` (cùng ngoại lệ của ADR 0048 cho
+`admin.vigov.vn`). Bàn điều khiển chạy ở dev nên ADR 0048 §*Chốt triển khai 01/10/2026* #1 ("chỉ prod")
+cũng hết đúng: `deploy/overlays/dev/kustomization.yaml:11` kéo `base/platform-admin`.
+
+**Chưa ai quyết — nêu để chủ dự án chọn:** `admin-dev.vigov.vn` không khớp `*.dev.vigov.vn` (khác
+nhãn), mà khớp `*.vigov.vn`. Ingress của nó trong `vigov-dev` vì thế cần một Secret TLS mang chứng chỉ
+`*.vigov.vn` trong namespace ấy — `vigov-dev-wildcard-tls` không phủ nó.
 
 ## Liên quan
 

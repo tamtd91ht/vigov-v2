@@ -67,6 +67,8 @@ service đã khai là dùng thì thiếu biến nghĩa là một phần việc c
 - `dev` giữ cách cũ: **từ chối lúc dùng** (thao tác cần biến thì từ chối, nêu tên biến), để máy lập
   trình không phải khai đủ mọi phụ thuộc.
 
+> **14/10/2026:** staging bỏ; cụm `vigov-dev` chạy `ENV=dev`, nên "dùng thì bắt buộc" chỉ còn áp ở prod — chủ dự án chấp nhận rủi ro — xem [ADR 0046 §Sửa đổi 14/10/2026](0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md#sửa-đổi-14102026--hai-môi-trường-dev-và-prod-staging-bỏ).
+
 ### 3. Công tắc khởi tạo một lần không bắt buộc ở prod
 
 `IDENTITY_ADMIN_SEED_PASSWORD` chỉ dùng để gieo tài khoản quản trị đầu tiên và **được gỡ** sau khi

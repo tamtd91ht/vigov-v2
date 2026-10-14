@@ -102,6 +102,8 @@ truyền), kích thước, kiểu, ETag, phiên bản để service ghi `stored_
 giờ chạm prod. Khoá trong `upload/` lặp lại đúng dạng khoá đích (§3) sau tiền tố, để phạm vi IAM
 theo service áp được cả ở temp.
 
+> **14/10/2026:** `env` = `prod` | `dev` (tiền tố `vigov-dev`, MinIO/bucket riêng của dev); `stg` không còn dùng — xem [ADR 0046 §Sửa đổi 14/10/2026](0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md#sửa-đổi-14102026--hai-môi-trường-dev-và-prod-staging-bỏ).
+
 Bucket public là **khai báo công khai tường minh**, đúng nguyên tắc *Closed by default*: chỉ bản
 dẫn xuất đã qua duyệt vào đây; bản gốc luôn ở private.
 

@@ -2,6 +2,10 @@
 
 Đọc từ trên xuống, làm theo thứ tự.
 
+> **Từ 14/10/2026 (chủ dự án): hai namespace `vigov-dev` (nhánh `dev`, CSDL và khoá riêng) và `vigov-prod`
+> (nhánh `main`). `vigov-staging` đã bỏ** — ADR 0046 §Sửa đổi 14/10/2026. Đoạn ⚠ dưới đây là **lịch sử** lần dựng
+> đầu; `vigov-dev` dựng cùng tên tài nguyên như vậy.
+>
 > ⚠ **CỤM THẬT KHÔNG DỰNG TỪ `base/` + `overlays/` — đo 25/09/2026.** `vigov-staging` được dựng
 > TAY trong Rancher: Deployment `vigov-service-<dịch vụ>` / `vigov-web-admin`, Secret
 > `<dịch vụ>-secrets`, ConfigMap `common-config`, mỗi dịch vụ một Ingress HTTP (đo 25/09 trên
@@ -14,14 +18,15 @@
 > nó tạo bộ Deployment thứ hai và giành tên miền với Ingress đang chạy. Lệch này là nợ, theo dõi
 > ở sổ `deploy/bo-vigov-deploy-job-dich-vu-tu-dat-anh`.
 
-**Quy trình từ 25/09/2026 (chủ dự án chốt):** viết mã → commit → push `main` → **vào Jenkins
-bấm job của dịch vụ cần đưa lên** → job đóng ảnh rồi **đặt ảnh lên cụm ngay trong cùng lượt**
+**Quy trình từ 25/09/2026 (chủ dự án chốt; nhánh theo 13/10/2026):** viết mã → commit → push `dev`
+(bản dev) hoặc merge `dev` vào `main` (bản prod) → **vào Jenkins bấm job của dịch vụ cần đưa lên** → job đóng ảnh rồi **đặt ảnh lên cụm ngay trong cùng lượt**
 (`kubectl set image` + `rollout status`, đỏ thì tự `rollout undo`). Không job nào tự chạy;
 manifest (NetworkPolicy, Service, cấu hình) áp bằng job hạ tầng `vigov-deploy`, việc
 `ap-manifest` — nó giữ nguyên thẻ ảnh đang chạy nên không kéo dịch vụ nào về `ImagePullBackOff`.
 
 Một số đoạn phía dưới còn nhắc `vigov-deploy` với các ô `DICH_VU`/`THE` để đặt ảnh — việc đặt
-ảnh nay là của "job của dịch vụ ấy". Namespace là hằng số `NS` trong từng Jenkinsfile, hiện là `vigov-prod`.
+ảnh nay là của "job của dịch vụ ấy". Namespace theo nhánh của lượt build: `namespaceForBranch()` trong
+từng Jenkinsfile — `dev` → `vigov-dev`, `main` → `vigov-prod`, nhánh khác thì job dừng.
 
 | Thư mục | Nội dung |
 |---|---|
@@ -38,28 +43,31 @@ Một số đoạn phía dưới còn nhắc `vigov-deploy` với các ô `DICH_
 server thật, `deploy/Jenkinsfile` chưa được Jenkins phân tích cú pháp lần nào. Danh sách đầy
 đủ ở **mục 10** — đọc trước, không phải sau.
 
-**Đi staging trước prod, không ngoại lệ.** Phép kiểm cách ly hai xã (luật 1) là phép kiểm mà
-staging tồn tại để chạy; một lượt deploy prod không chứng minh lại được nó.
+**Đi dev trước prod, không ngoại lệ.** Phép kiểm cách ly hai xã (luật 1) là phép kiểm mà
+dev tồn tại để chạy (staging làm việc này tới 14/10/2026); một lượt deploy prod không chứng minh lại được nó.
 
 **Ba thứ phải có sẵn:** cụm k8s · wildcard DNS · chứng thư TLS. Chủ dự án xác nhận đã có
 ngày 22/09/2026.
 
 ## 1. Cấu trúc git
 
-**Một nhánh `main`.** Nhánh không quyết định môi trường — tham số `MT` của job triển khai
-quyết định. Khác mẫu `omicrm` (`dev`/`stg`/`master`) vì đây là **monorepo 8 ảnh**: một nhánh
-môi trường sẽ đóng lại cả 8 ảnh cho một thay đổi chạm một dịch vụ.
+**Hai nhánh, mỗi nhánh một namespace** (chủ dự án 13/10/2026): `dev` → `vigov-dev`, `main` →
+`vigov-prod`, qua `namespaceForBranch()` của từng Jenkinsfile. Job `vigov-deploy` (hạ tầng) vẫn chọn
+môi trường bằng tham số `MT` = `prod` | `dev`.
+
+*Lịch sử (tới 13/10/2026):* một nhánh `main`, tham số `MT` quyết định môi trường; khác mẫu `omicrm`
+(`dev`/`stg`/`master`) vì đây là monorepo 8 ảnh.
 
 | Câu hỏi | Trả lời ở đâu |
 |---|---|
-| Ảnh này sinh từ mã nào | **thẻ ảnh = commit 12 ký tự** của `main`. Thẻ di động (`latest`, `main`) bị cấm |
+| Ảnh này sinh từ mã nào | **thẻ ảnh = commit 12 ký tự** của nhánh được dựng. Thẻ di động (`latest`, `main`) bị cấm |
 | Bản nào đang chạy trên cụm | `kubectl -n vigov-<mt> get deploy -o wide` — **hỏi cụm**, không hỏi git |
-| Ai đưa bản đó lên, lúc nào | **lịch sử build của job dịch vụ ấy** (tên lượt build: `#N <thẻ> → vigov-prod · <người bấm>`) |
+| Ai đưa bản đó lên, lúc nào | **lịch sử build của job dịch vụ ấy** (tên lượt build: `#N <thẻ> → <namespace> · <người bấm>`) |
 
 ⚠ **Nhật ký triển khai bị cắt sau 200 lượt** (`buildDiscarder`). Đó là cái giá của việc bỏ
 commit ghim thẻ. Muốn giữ vĩnh viễn thì phải có một sổ ngoài Jenkins — quyết định chưa ai đưa ra.
 
-Mã nguồn đi thẳng vào `main`, không nhánh phụ. Nhánh chỉ mở khi chủ dự án quyết.
+Mã nguồn đi vào `dev`; `main` chỉ nhận merge từ `dev` khi phát hành. Nhánh khác chỉ mở khi chủ dự án quyết.
 
 ## 2. Dựng 11 job trên Jenkins
 
@@ -77,9 +85,9 @@ Jenkins **không tự tìm ra** mười một `Jenkinsfile` nằm rải trong kh
 | `vigov-svc-platform` | `service-platform/Jenkinsfile` | ″ |
 | `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | ″ |
 | `vigov-web-admin` | `web-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh |
-| `vigov-platform-admin` | `platform-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh. **Chỉ prod**; lần đầu xem mục 12 |
+| `vigov-platform-admin` | `platform-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh. prod và dev (từ 14/10/2026); lần đầu xem mục 12 |
 
-| `vigov-deploy` | `deploy/Jenkinsfile` | **bấm tay** — job HẠ TẦNG, không đặt ảnh: `kiem-tra` · `ap-manifest` (giữ thẻ đang chạy) · `xem-log` · `sao-chep-tu-staging` (một lần) |
+| `vigov-deploy` | `deploy/Jenkinsfile` | **bấm tay** — job HẠ TẦNG, không đặt ảnh: `kiem-tra` · `xem-log` · các việc vận hành theo `HANH_DONG` (danh sách ở ô chọn đầu `deploy/Jenkinsfile`), `MT` = `prod` \| `dev` |
 
 `vigov-deploy` từ 25/09/2026 là job **hạ tầng** thay cho việc SSH vào máy chủ: kiểm cụm, áp
 manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy trình tay ở mục 7), xem log. Nó
@@ -105,8 +113,8 @@ Nhập lại một `NGAY_NEN` **đã có** thì job **ghi đè** tiền tố ng�
 nếu đó là tiền tố `BASEMAP_URL` đang đọc thì kiểm chủ quyền và ký lại sau lượt chạy
 (`kb/40-runbooks/basemap-pmtiles.md`, bước 3).
 
-Mỗi lần làm mới: chạy thử `MT=staging` → chạy thật (in SHA-256, `BUILD-INFO.txt`, giá trị `BASEMAP_URL`) →
-đặt `BASEMAP_URL` staging theo runbook mục "Đưa vào dùng" → kiểm chủ quyền có ký → prod. `$WORKSPACE/basemap`,
+Mỗi lần làm mới: chạy thử `MT=dev` → chạy thật (in SHA-256, `BUILD-INFO.txt`, giá trị `BASEMAP_URL`) →
+đặt `BASEMAP_URL` của dev theo runbook mục "Đưa vào dùng" → kiểm chủ quyền có ký → prod. `$WORKSPACE/basemap`,
 `.tools`, `.mc` luôn bị xoá cuối lượt.
 
 Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → năm dịch vụ còn lại →
@@ -265,7 +273,7 @@ số viết thẳng trong `deployment.yaml`.
 | # | Câu hỏi | Nếu ĐÚNG |
 |---|---|---|
 | 1 | In ra một dòng log thì **có đau không**? | **Secret** |
-| 2 | Giá trị **khác nhau giữa staging và prod** không? | **ConfigMap** |
+| 2 | Giá trị **khác nhau giữa dev và prod** không? | **ConfigMap** |
 | 3 | Không cả hai | **Không vào ConfigMap/Secret.** Hằng số của manifest (`env: value:`), hoặc để `config.Load` lấy mặc định |
 
 Câu 1 không phải "có nhạy cảm không": một DSN có mật khẩu là **Secret** dù nó trông như một
@@ -325,10 +333,12 @@ Bảng tên đối tượng + key: **`deploy/cau-hinh/README.md` mục 1**. Conf
 kustomize sinh kèm hậu tố băm (`common-config-679b259276`) để đổi giá trị là đổi tên, ép pod
 khởi động lại — vì thế không tạo tay.
 
-⚠ **Hai môi trường dùng tên Secret TLS KHÁC NHAU, mỗi môi trường HAI cái** (web + API) — khối
-`tls` cuối `overlays/<mt>/ingress-moi-truong.yaml` (tệp sinh ra). Chép lệnh của prod sang staging
-là Ingress lên bình thường và **chỉ HTTPS đứt**. Host cũng khác: `*.stg.vigov.vn` +
-`*.api-stg.vigov.vn` với `*.vigov.vn` + `*.api.vigov.vn`.
+⚠ **Mỗi môi trường HAI Secret TLS (web + API); Secret web KHÁC tên, Secret API CÙNG tên** — khối
+`tls` cuối `overlays/<mt>/ingress-moi-truong.yaml` (tệp sinh ra). Web: `vigov-wildcard-tls` (prod,
+`*.vigov.vn`) · `vigov-dev-wildcard-tls` (dev, `*.dev.vigov.vn`). API: `vigov-api-wildcard-tls` ở cả hai
+namespace — cùng chứng chỉ `*.api.vigov.vn`, mỗi namespace một bản sao, vì host API dev là
+`<dịch vụ>-dev.api.vigov.vn` (ADR 0046 §Sửa đổi 14/10/2026). Chép lệnh web của prod sang dev là Ingress lên
+bình thường và **chỉ HTTPS đứt**.
 
 ⚠ **KEY PHẢI VIẾT GẠCH DƯỚI, KHÔNG PHẢI GẠCH NGANG — vì manifest dùng `envFrom`.**
 `envFrom` lấy **chính key làm tên biến**. Một key `DATABASE-DSN` không phải định danh shell hợp
@@ -398,6 +408,8 @@ sách và đẩy khoá cũ nhất ra khỏi danh sách, không phải thay tại
 ```
 
 **`ENV`** — đúng một trong ba chuỗi: `dev` · `staging` · `prod`. Khác đi là `config.Load` từ chối.
+Cụm `vigov-dev` chạy `ENV=dev` (`overlays/dev/kustomization.yaml`): thiếu biến không chặn khởi động,
+`DANGEROUS_AUTH_BYPASS` không bị từ chối — chủ dự án chấp nhận, ADR 0046 §Sửa đổi 14/10/2026.
 
 **Secret TLS** — tạo từ tệp chứng thư, không phải từ chuỗi:
 
@@ -435,7 +447,7 @@ Các bảng biến ở `deploy/cau-hinh/README.md` mục 1–4 được `tools/c
 
 ## 4. Cài lần đầu lên cụm
 
-Chạy cho **`vigov-staging` trước**, rồi lặp lại y hệt cho `vigov-prod`.
+Chạy cho **`vigov-dev` trước** (`overlays/dev`), rồi lặp lại y hệt cho `vigov-prod`.
 
 ```sh
 kubectl apply -f deploy/cluster/namespace.yaml
@@ -460,7 +472,7 @@ cổng gRPC không có khoá gọi là một cổng trả lời **bất kỳ ai*
 `ImagePullBackOff`** — đúng như thiết kế, không phải lỗi. Mục 5 đặt thẻ thật.
 
 **Xanh khi:** `kubectl -n vigov-prod get secret` liệt kê đủ `harbor-vigov`, `vigov-wildcard-tls`
-(staging: `vigov-staging-tls`), và `bi-mat-{platform,identity,comms,documents,finance,petitions,reporting}` — **bảy**, không phải tám: `web-admin`
+và `vigov-api-wildcard-tls` (dev: `vigov-dev-wildcard-tls` + `vigov-api-wildcard-tls`), và `bi-mat-{platform,identity,comms,documents,finance,petitions,reporting}` — **bảy**, không phải tám: `web-admin`
 không đọc biến nào nên không có Secret của riêng nó.
 
 Ba thứ dễ sót, cả ba đều hỏng ở chỗ cách xa nguyên nhân:
@@ -495,8 +507,8 @@ Thứ tự không phải thói quen — nó là thứ tự phụ thuộc lúc ch
 Tổng **82 tuyến REST**, đếm từ `kb/20-contracts/openapi.json` ngày 23/09/2026 — không từ cảm giác.
 
 Không có manifest, **có cân nhắc**: `citizen-app` (chạy trong Zalo Mini App, không thành pod).
-`platform-admin` có manifest (`base/platform-admin/`) nhưng **chỉ `overlays/prod`** kéo vào, và
-đi theo mục 12, không theo bảng trên.
+`platform-admin` có manifest (`base/platform-admin/`), `overlays/prod` và `overlays/dev` kéo vào (dev từ
+14/10/2026), và đi theo mục 12, không theo bảng trên.
 
 ## 6. Kiểm sau khi lên
 
@@ -504,7 +516,7 @@ Không có manifest, **có cân nhắc**: `citizen-app` (chạy trong Zalo Mini 
 |---|---|
 | `kubectl -n vigov-<mt> get deploy` | 8 Deployment `READY` |
 | Gọi một tuyến qua Ingress bằng `Host` của một xã thật | chuỗi Ingress → pod → phân giải xã chạy hết. Xã ấy phải có bản ghi DNS **và** một hàng trong sổ đăng ký của `platform` |
-| **Hai `Host` khác nhau, cùng một tuyến** | dữ liệu trả về **không giao nhau** — phép kiểm cách ly hai xã, luật 1. **Chạy ở staging, trước khi đụng prod** |
+| **Hai `Host` khác nhau, cùng một tuyến** | dữ liệu trả về **không giao nhau** — phép kiểm cách ly hai xã, luật 1. **Chạy ở dev, trước khi đụng prod** |
 
 `/healthz` xanh **không** phải điều kiện xanh: nó nằm ngoài chuỗi phân giải xã có chủ ý, nên
 vẫn xanh khi CSDL hoặc `platform` hỏng — mục 8.
@@ -583,7 +595,7 @@ nào ở đây, có chủ ý. Cổng nằm trong `base/<đơn vị>/service.yaml
 | **Không bao giờ đưa cổng `grpc` (9090) ra Ingress** | gRPC nội cụm không TLS, không xác thực. NetworkPolicy là biên duy nhất (mục 8). Một luật Ingress tới 9090 là mở danh bạ xã của toàn hệ thống ra Internet |
 | **Không viết lại `Host`** (không `upstream-vhost`, không rewrite host) | Xã được phân giải từ `Host` ở rìa ngoài cùng (luật 1). Host bị đổi thì mọi yêu cầu nhận 404, hoặc tệ hơn, rơi vào đúng MỘT xã |
 | **Một luật ký tự đại diện cho mọi xã**, không một luật mỗi xã | Thêm xã là thêm DNS + một hàng ở `platform`, không sửa Ingress (mục 8) |
-| **Secret TLS theo đúng môi trường** | `vigov-staging-tls` cho staging, `vigov-wildcard-tls` cho prod (mục 4). Nhầm tên thì Ingress vẫn lên, chỉ HTTPS đứt |
+| **Secret TLS theo đúng môi trường** | web: `vigov-dev-wildcard-tls` cho dev, `vigov-wildcard-tls` cho prod; API: `vigov-api-wildcard-tls` ở cả hai (mục 3). Nhầm tên thì Ingress vẫn lên, chỉ HTTPS đứt |
 | **`platform` không có luật nào** | Nó có cổng `rest` nhưng hợp đồng chưa có tuyến công khai nào của nó. Thêm luật cho nó là mở một cổng không ai khai |
 
 Đơn vị chưa có manifest thì cũng chưa có gì để add, xem cuối mục 5.
@@ -611,7 +623,7 @@ bước, hoặc vì giao diện làm gãy một thứ vốn đúng khi đi bằn
 Giả định: Rancher v2.6 trở lên (giao diện Cluster Explorer). Chưa ai kiểm cụm thật đang chạy bản
 nào, nên tên menu có thể lệch đôi chút. Các lệnh `kubectl` bên dưới thì không phụ thuộc bản.
 
-**Làm cho `vigov-staging` trước, rồi lặp lại cho `vigov-prod`** (mục 0).
+**Làm cho `vigov-dev` trước, rồi lặp lại cho `vigov-prod`** (mục 0).
 
 ### 11.0 Ba điều phải kiểm TRƯỚC khi nhập bất cứ thứ gì
 
@@ -663,7 +675,7 @@ quyền cluster-admin và không cho quyền trên `secrets`.
 
 ```sh
 KUBECONFIG=/u01/rancher/rancher-vigov.yaml kubectl auth whoami            # k8s 1.27+
-KUBECONFIG=/u01/rancher/rancher-vigov.yaml kubectl auth can-i get secrets -n vigov-staging
+KUBECONFIG=/u01/rancher/rancher-vigov.yaml kubectl auth can-i get secrets -n vigov-dev
 ```
 
 Nếu `can-i get secrets` trả `yes` thì kubeconfig đang **rộng hơn thiết kế**.
@@ -684,7 +696,7 @@ dung tệp → **Import**.
 
 | Thứ tự | Tệp | Ghi chú |
 |---|---|---|
-| 1 | `cluster/namespace.yaml` | Tạo `vigov-staging` và `vigov-prod` |
+| 1 | `cluster/namespace.yaml` | Tạo `vigov-dev` và `vigov-prod` |
 | 2 | `cluster/rbac-jenkins.yaml` | ServiceAccount + Role + RoleBinding ở cả hai namespace |
 
 **Project của Rancher.** Namespace nhập bằng YAML rơi vào mục **Not in a Project**. Nếu đội dùng
@@ -712,11 +724,10 @@ không dựa vào bộ lọc namespace trên thanh trên cùng.
 |---|---|---|
 | `harbor-vigov` | **Registry** → Custom → `harbor.omicrm.services` | Tên phải đúng từng ký tự: cả 8 Deployment tham chiếu nó trong `imagePullSecrets` |
 | `bi-mat-<dịch vụ>` × 7 | **Opaque** | Mỗi dòng Key/Value là một biến. **Key viết GẠCH DƯỚI** (`DATABASE_DSN`), vì manifest dùng `envFrom`. Key gạch ngang bị k8s bỏ qua im lặng (mục 3) |
-| TLS | **TLS Certificate** | Dán `fullchain.pem` vào Certificate, `privkey.pem` vào Private Key. **Tên theo môi trường**: `vigov-staging-tls` hoặc `vigov-wildcard-tls` |
+| TLS | **TLS Certificate** | Dán `fullchain.pem` vào Certificate, `privkey.pem` vào Private Key. **Tên theo môi trường**: web `vigov-dev-wildcard-tls` (dev) hoặc `vigov-wildcard-tls` (prod); API `vigov-api-wildcard-tls` ở cả hai |
 
 - **KHÔNG tạo ConfigMap `common-config`.** Kustomize sinh nó kèm hậu tố băm
-  (`common-config-8t59tmkhc4` ở staging, `common-config-679b259276` ở prod, tính ngày
-  24/09/2026). Một ConfigMap tạo tay trùng tên là một đối tượng không Deployment nào đọc.
+  (`common-config-679b259276` ở prod, tính ngày 24/09/2026). Một ConfigMap tạo tay trùng tên là một đối tượng không Deployment nào đọc.
 - Người có quyền xem Secret trong Rancher **đọc được giá trị** bằng nút hiện. Giới hạn ai có
   quyền ấy trên hai namespace này. Trong đó có DSN CSDL chứa dữ liệu công dân (Nghị định 13).
 - Thay giá trị một Secret **không** khởi động lại pod. Pod chỉ đọc `envFrom` lúc khởi động, nên
@@ -729,17 +740,17 @@ không dựa vào bộ lọc namespace trên thanh trên cùng.
 
 ### 11.3 Nhập manifest — render trước, KHÔNG nhập thư mục kho
 
-**Import YAML của Rancher không chạy kustomize.** Dán `overlays/staging/kustomization.yaml`
+**Import YAML của Rancher không chạy kustomize.** Dán `overlays/dev/kustomization.yaml`
 vào đó là nhập một tệp chỉ dẫn, không phải tài nguyên. Render ở máy trạm trước:
 
 ```sh
-kubectl kustomize deploy/overlays/staging > vigov-staging.yaml
+kubectl kustomize deploy/overlays/dev     > vigov-dev.yaml
 kubectl kustomize deploy/overlays/prod    > vigov-prod.yaml
 ```
 
-Đã chạy thử ngày 01/10/2026: staging ra **45 đối tượng** — 8 Deployment · 8 Service · 1 ConfigMap ·
-1 Ingress · 25 NetworkPolicy · 2 PodDisruptionBudget; prod ra **47**, thêm Deployment + Service
-`platform-admin` (chỉ prod, mục 12). Số khác đi là overlay đã đổi; hãy đọc lại overlay trước khi nhập.
+Đã chạy thử ngày 14/10/2026: dev và prod cùng ra **53 đối tượng** — 9 Deployment · 9 Service · 1 ConfigMap ·
+2 Ingress · 30 NetworkPolicy · 2 PodDisruptionBudget (cả hai có `platform-admin`, mục 12). Số khác đi là
+overlay đã đổi; hãy đọc lại overlay trước khi nhập.
 
 - **Không commit tệp render.** Nó sinh ra từ overlay, nên một bản nằm trong kho là bản sao sẽ lệch.
 - **Không sửa tệp render.** Có gì phải khác (dải mạng CSDL trong luật `allow-egress` của
@@ -750,7 +761,7 @@ kubectl kustomize deploy/overlays/prod    > vigov-prod.yaml
   kế. Khi biết dải thật, thay `0.0.0.0/0` bằng dải ấy, render lại, rồi áp **chỉ NetworkPolicy**
   (`kubectl apply -f` phần NetworkPolicy của bản render). Áp cả bản render là rơi vào bẫy ở mục 11.5.
 
-Rancher → **Import YAML** → chọn namespace `vigov-staging` → dán `vigov-staging.yaml` → **Import**.
+Rancher → **Import YAML** → chọn namespace `vigov-dev` → dán `vigov-dev.yaml` → **Import**.
 
 **Kết quả đúng:** tám pod ở trạng thái **`ImagePullBackOff`**, vì thẻ ảnh là
 `CHUA-TRIEN-KHAI-LAN-NAO`. **Đó là thiết kế, không phải lỗi** (mục 4). Thẻ thật
@@ -787,7 +798,7 @@ Ngoại lệ duy nhất là **Secret**: chúng sống trong cụm, không trong 
 (luật 8).
 
 Kiểm sau khi lên: mục 6. Riêng phép kiểm **hai `Host` khác nhau, cùng một tuyến,
-dữ liệu không giao nhau** là phép kiểm cách ly hai xã. Chạy nó ở staging trước khi đụng prod.
+dữ liệu không giao nhau** là phép kiểm cách ly hai xã. Chạy nó ở dev trước khi đụng prod.
 
 ---
 
@@ -810,8 +821,9 @@ dữ liệu không giao nhau** là phép kiểm cách ly hai xã. Chạy nó ở
 
 ## 12. `platform-admin` lần đầu — bàn điều khiển vận hành ViHAT
 
-Chủ dự án chốt 01/10/2026: host **`admin.vigov.vn`**, **chỉ prod** (`vigov-prod`, không có bàn điều
-khiển staging), **không** allow-list IP / VPN — chỉ MFA và giới hạn đăng nhập sẵn có của platform
+Chủ dự án chốt 01/10/2026: host **`admin.vigov.vn`** (`vigov-prod`); từ 14/10/2026 thêm **`admin-dev.vigov.vn`**
+ở `vigov-dev` (ADR 0046 §Sửa đổi 14/10/2026) — làm cùng các bước dưới với namespace và host của dev. **Không**
+allow-list IP / VPN — chỉ MFA và giới hạn đăng nhập sẵn có của platform
 (20 lần / 15 phút / IP). Ingress công khai của host này **dựng tay trong Rancher**: không thêm vào
 `deploy/hosts.yaml`, không thêm vào `tools/ingress`, không sửa `base/mang/ingress.yaml` (tệp sinh).
 
@@ -825,9 +837,9 @@ Làm đúng thứ tự — mỗi bước sau dựa vào bước trước:
 | 4 | **Ingress dựng tay** trong Rancher: host `admin.vigov.vn`, đường `/` → Service bước 2 cổng 3000, TLS `vigov-wildcard-tls`, annotation `nginx.ingress.kubernetes.io/enable-cors: "false"` (bàn điều khiển gọi API cùng origin; không origin nào khác được phép). **Kiểm trước** rằng không Ingress nào khác còn giữ `admin.vigov.vn` — tới 25/09/2026 host này từng trỏ vào web quản trị xã (đầu tệp này) | `https://admin.vigov.vn/healthz` trả `ok` sau bước 7 |
 | 5 | **`OPERATOR_HOST=admin.vigov.vn`** trên `vigov-service-platform` — biến env ghi thẳng trên Deployment (không `valueFrom`, không ConfigMap), vì job ở bước 7 **đọc nó từ đó**. Điều kiện chặn của ADR 0048 (NetworkPolicy 9093, mục #12) và bảng biến: `deploy/cau-hinh/README.md` | platform khởi động lại, không log `OPERATOR_HOST` không hợp lệ |
 | 6 | **`TRUSTED_PROXY_CIDRS`** (common-config) phải **bao dải IP pod của `platform-admin`**. Gateway của bàn điều khiển chuyển tiếp `X-Forwarded-For`; platform chỉ tin nó khi trạm trước nằm trong dải ấy. Thiếu thì **mọi người vận hành chung một IP** — IP pod platform-admin — cho giới hạn 20/15 phút (một người gõ sai khoá cả nhóm) và cho cột IP của vết kiểm toán. Đặt cả dải pod của cụm (vd `10.42.0.0/16`) đã bao sẵn | vết kiểm toán của một lần đăng nhập thử ghi IP máy người thử, không phải IP pod |
-| 7 | **Bấm job `vigov-platform-admin`**. Job đặt `PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080` và chép `OPERATOR_HOST` từ `vigov-service-platform` đang chạy — platform chưa có, hay có giá trị không phải host bàn điều khiển (`admin.*` / `admin-stg.*`), thì job **dừng trước khi chạm cụm** và nói rõ; nó không tự điền giá trị nào | `rollout status` xanh; `https://admin.vigov.vn/` chuyển về `/dang-nhap` |
+| 7 | **Bấm job `vigov-platform-admin`**. Job đặt `PLATFORM_HTTP_ADDR=http://vigov-service-platform:8080` và chép `OPERATOR_HOST` từ `vigov-service-platform` đang chạy — platform chưa có, hay có giá trị không phải host bàn điều khiển (`admin.*` / `admin-dev.*`), thì job **dừng trước khi chạm cụm** và nói rõ; nó không tự điền giá trị nào | `rollout status` xanh; `https://admin.vigov.vn/` chuyển về `/dang-nhap` |
 | 8 | **Người vận hành đầu tiên**: `operatorctl create --email <địa chỉ> --name <tên> --ticket <số phiếu>` trong một pod một lượt từ **ảnh identity đang chạy** (cùng `envFrom` của identity — cách job `vigov-deploy` chạy `operatorctl` ở việc `dat-secret-mini-app`), rồi `operatorctl grant --code VH-… --permission ops.<key> --ticket <n>`. Mật khẩu tạm in ra một lần — không chép vào phiếu, log hay chat | đăng nhập được, bị buộc đặt MFA |
-| 9 | **Chỉ định owner** (ADR 0048 §*Sửa đổi 13/10/2026 — owner, …* #1): job `vigov-deploy`, `HANH_DONG=chi-dinh-owner`, `MT=prod`, `XAC_NHAN=vigov-prod`, `EMAIL_VAN_HANH` = email đăng nhập của tài khoản vận hành **đã có, đang bật** (bước 8), `TICKET` = số phiếu. Job chạy `operatorctl set-owner --email … --ticket …` trong pod một lượt như bước 8: một giao dịch, cờ rời owner cũ (nếu có) sang tài khoản ấy, mỗi tài khoản đổi cờ một mục `operator_audit_log` (actor `system`, `ticket:<số>`). Đúng **một** owner, CSDL chặn cái thứ hai (identity migration 0030); không màn nào gỡ hay chuyển owner — chuyển là chạy lại job với email khác. Cần ảnh identity có migration 0030: job dừng trước khi ghi nếu `operatorctl list` chưa có cột `OWNER` | log lượt build in `VH-… is now the owner` và bảng `list` sau có `owner` đúng dòng ấy |
+| 9 | **Chỉ định owner** (ADR 0048 §*Sửa đổi 13/10/2026 — owner, …* #1): job `vigov-deploy`, `HANH_DONG=chi-dinh-owner`, `MT=prod`, `XAC_NHAN=vigov-prod` (dev: `MT=dev`, `XAC_NHAN=vigov-dev`), `EMAIL_VAN_HANH` = email đăng nhập của tài khoản vận hành **đã có, đang bật** (bước 8), `TICKET` = số phiếu. Job chạy `operatorctl set-owner --email … --ticket …` trong pod một lượt như bước 8: một giao dịch, cờ rời owner cũ (nếu có) sang tài khoản ấy, mỗi tài khoản đổi cờ một mục `operator_audit_log` (actor `system`, `ticket:<số>`). Đúng **một** owner, CSDL chặn cái thứ hai (identity migration 0030); không màn nào gỡ hay chuyển owner — chuyển là chạy lại job với email khác. Cần ảnh identity có migration 0030: job dừng trước khi ghi nếu `operatorctl list` chưa có cột `OWNER` | log lượt build in `VH-… is now the owner` và bảng `list` sau có `owner` đúng dòng ấy |
 
 **NetworkPolicy:** `base/mang/netpol.yaml` quy tắc 12 mở đúng một cặp — `platform-admin` → `platform`
 REST 8080 — và không gì khác (ADR 0003: bàn điều khiển không có đường tới dịch vụ nghiệp vụ). Hai luật

@@ -1,6 +1,7 @@
 # Secret và ConfigMap của ViGov
 
-Tên đối tượng theo **cụm đang chạy** (dựng tay trong Rancher, namespace `vigov-prod`). Giá trị dưới
+Tên đối tượng theo **cụm đang chạy** (dựng tay trong Rancher, namespace `vigov-prod`; `vigov-dev` dựng cùng
+tên, CSDL và khoá riêng — ADR 0046 §Sửa đổi 14/10/2026). Giá trị dưới
 đây là **hình dạng**, anh tự điền giá trị thật. Key viết **gạch dưới** (`DATABASE_DSN`), không gạch
 ngang — manifest dùng `envFrom`, key sai dạng bị bỏ qua im lặng.
 
@@ -13,7 +14,8 @@ Thêm hay sửa key xong: `kubectl -n vigov-prod rollout restart deploy/vigov-se
 "Là gì · lấy giá trị" dưới đây là bản tóm tắt của cùng bảng đó — lệch nhau thì `hints.go` đúng.
 
 **Cột "Bắt buộc":** `có` — thiếu thì pod của các dịch vụ ghi sau dấu — **không khởi động**, mọi môi
-trường. `có (prod)` — như vậy ở **staging và prod**; dev cho thiếu (tính năng tắt). `không` — có mặc
+trường. `có (prod)` — như vậy ở **prod** (và `ENV=staging`); `ENV=dev` cho thiếu (tính năng tắt) — cụm
+`vigov-dev` chạy `ENV=dev`, chủ dự án chấp nhận (ADR 0046 §Sửa đổi 14/10/2026). `không` — có mặc
 định hoặc tắt là đúng thiết kế. Dịch vụ không dùng một key thì **bỏ qua** key đó dù nó có trong
 `common-config`.
 
@@ -31,10 +33,10 @@ pod sẽ dừng và gọi tên key thiếu. Dễ sót nhất: `TRUSTED_PROXY_CID
 
 **Trước khi rollout petitions có "chuyển đơn thư thành nhiệm vụ" (ADR 0085, 09/10/2026):** petitions
 nay khai thêm `DocumentsClient`, nên thiếu `DOCUMENTS_GRPC_ADDR` trong `env:` của
-`vigov-service-petitions` là pod petitions **không khởi động** ở staging/prod. Cụm dựng tay không nhận
+`vigov-service-petitions` là pod petitions **không khởi động** ở prod (dev: khởi động, tính năng tắt). Cụm dựng tay không nhận
 dòng mới của `deploy/base/petitions` — đặt tay trước khi đổi ảnh:
 `kubectl -n <namespace> set env deploy/vigov-service-petitions DOCUMENTS_GRPC_ADDR=<tên Service của documents>:9090`.
-Cách làm sẵn: job vận hành `deploy/Jenkinsfile`, `HANH_DONG=bo-sung-cau-hinh-petitions` (MT=prod, rồi MT=staging;
+Cách làm sẵn: job vận hành `deploy/Jenkinsfile`, `HANH_DONG=bo-sung-cau-hinh-petitions` (MT=dev, rồi MT=prod;
 `XAC_NHAN` = namespace) — chỉ thêm biến khi thiếu, rồi khởi động lại petitions.
 Cùng lúc áp hai luật mạng mới (petitions → documents 9090, quy tắc 3d + 4b của
 `deploy/base/mang/netpol.yaml`) — thiếu thì pod vẫn chạy nhưng tuyến ấy treo tới hết hạn rồi trả 503.
@@ -80,20 +82,23 @@ Server `harbor.omicrm.services`, tài khoản + mật khẩu Harbor. Cả 8 pod 
 
 | Môi trường | Web | API |
 |---|---|---|
-| staging | `vigov-staging-tls` (`*.stg.vigov.vn`) | `vigov-api-staging-tls` (`*.api-stg.vigov.vn`) |
+| dev | `vigov-dev-wildcard-tls` (`*.dev.vigov.vn`) | `vigov-api-wildcard-tls` — **cùng tên, cùng chứng chỉ** `*.api.vigov.vn` với prod, một bản sao trong `vigov-dev` (host `<dịch vụ>-dev.api.vigov.vn`) |
 | prod | `vigov-wildcard-tls` (`*.vigov.vn`) | `vigov-api-wildcard-tls` (`*.api.vigov.vn`) |
+
+Staging (`vigov-staging-tls`, `vigov-api-staging-tls`) đã bỏ 14/10/2026. `admin-dev.vigov.vn` **không** khớp
+`*.dev.vigov.vn`: Ingress dựng tay của nó cần chứng chỉ `*.vigov.vn` trong `vigov-dev` — chưa ai chốt Secret nào.
 
 ## 2. ConfigMap `common-config` — dùng chung cho 7 pod Go
 
 | Key | Bắt buộc | Là gì · lấy giá trị | Value |
 |---|---|---|---|
-| `ENV` | **có** — mọi dịch vụ | Môi trường chạy | `prod` (staging: `staging`) |
+| `ENV` | **có** — mọi dịch vụ | Môi trường chạy | `prod` (dev: `dev` — overlay sinh sẵn) |
 | `TRUSTED_PROXY_CIDRS` | **có (prod)** — mọi dịch vụ | Dải IP Pod của ingress-nginx và web-admin — trạm được tin khi báo IP người dùng qua `X-Forwarded-For`; thiếu thì vết kiểm toán ghi IP pod thay vì IP người thao tác. Cách lấy: ngay dưới bảng | dải IP pod ingress-nginx và web-admin, vd `10.42.0.0/16` |
 | `CITIZEN_CORS_ALLOWED_ORIGINS` | **có (prod)** — identity, petitions, comms | Miền Zalo Mini App được gọi API công dân (CORS). Chép đúng giá trị bên phải | `https://h5.zdn.vn,https://zalo.me,https://*.zdn.vn,https://*.zalo.me` |
 | `CITIZEN_SESSION_TTL` | không — mặc định `720h` | Thời hạn phiên công dân | `720h` |
 | `OBJECT_STORAGE_ENDPOINT` | **có (prod)** — petitions, comms, platform | MinIO nội bộ lưu tệp đính kèm, ảnh bìa tin, logo/banner xã (ADR 0052, ADR 0069). Người vận hành MinIO | `https://<minio nội bộ>:<cổng>` — đúng một host |
 | `OBJECT_STORAGE_PUBLIC_ENDPOINT` | **có (prod)** — petitions, comms, platform | **Cổng S3 API** của CÙNG MinIO với `OBJECT_STORAGE_ENDPOINT` mà điện thoại thấy. Từ 09/10/2026 **chỉ** dùng để ký đường dẫn **xem/tải về** (presigned GET) — thiết bị **không còn tải lên** vào đây, mọi lượt tải lên đi qua dịch vụ (ADR 0052 §Sửa đổi 09/10/2026). **Không phải MinIO Console** (giao diện web): Console không phục vụ S3, đường dẫn ký cho nó không mở ra tệp (09/10/2026 nó đã trả 200 cho lệnh tải lên mà không lưu gì). Không có địa chỉ nội bộ riêng thì đặt bằng `OBJECT_STORAGE_ENDPOINT` | `https://storage-api.vigov.vn` (prod) |
-| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | **có (prod)** — comms (từ 01/10/2026), platform (từ 02/10/2026) | URL gốc bucket media công khai — `image_url` của tin Mini App và `logo_public_url` / `web_admin_banner_public_url` của xã dựng từ đây. Thiếu thì comms và platform **không khởi động** ở prod/staging. Người vận hành MinIO: tạo bucket `<tiền tố>-public` trong MinIO đang có, chỉ `GetObject` ẩn danh — lệnh ở mục 6, "Bucket media công khai" | `<OBJECT_STORAGE_PUBLIC_ENDPOINT>/vigov-prod-public` — **không** phải `OBJECT_STORAGE_ENDPOINT` |
+| `OBJECT_STORAGE_PUBLIC_MEDIA_BASE_URL` | **có (prod)** — comms (từ 01/10/2026), platform (từ 02/10/2026) | URL gốc bucket media công khai — `image_url` của tin Mini App và `logo_public_url` / `web_admin_banner_public_url` của xã dựng từ đây. Thiếu thì comms và platform **không khởi động** ở prod. Người vận hành MinIO: tạo bucket `<tiền tố>-public` trong MinIO đang có, chỉ `GetObject` ẩn danh — lệnh ở mục 6, "Bucket media công khai" | `<OBJECT_STORAGE_PUBLIC_ENDPOINT>/vigov-prod-public` — **không** phải `OBJECT_STORAGE_ENDPOINT` |
 | `OBJECT_STORAGE_REGION` | không — mặc định `us-east-1` | Region của MinIO | `us-east-1` (phải trùng region của MinIO) |
 | `OBJECT_STORAGE_BUCKET_PREFIX` | **có (prod)** — petitions, comms, platform | Tiền tố bucket: `<tiền tố>-private` · `-public` · `-temp` | `vigov-prod` |
 | `MALWARE_SCANNER_ADDRESS` | **có (prod)** — petitions, comms, platform | clamd quét mã độc tệp tải lên (ADR 0052 §9). Tên Service ClamAV + `3310`, không `tcp://`. Dựng clamd và đặt key: mục 6, việc `dung-clamav` | `vigov-clamav:3310` (Service của [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml)) |
@@ -135,7 +140,7 @@ ADR 0093) — không có bước ánh xạ riêng nào.
 | `PETITIONS_GRPC_ADDR` | **có (prod)** — identity | `vigov-service-identity` | gRPC của petitions — hỏi trước khi xoá mềm đơn vị. Tên Service + `9090` | `petitions:9090` |
 | `DOCUMENTS_GRPC_ADDR` | **có (prod)** — identity, petitions | `vigov-service-identity`, `vigov-service-petitions` | gRPC của documents. identity: như trên. petitions: hỏi đơn thư trước khi chuyển thành nhiệm vụ (`ResolveCitizenLetterForTask`, ADR 0085) — thiếu ở dev thì `POST /api/v1/citizen-letter-tasks` trả 503. Tên Service + `9090` | `documents:9090` |
 | `COMMS_GRPC_ADDR` | **có (prod)** — petitions, documents, finance, platform | `vigov-service-petitions`, `vigov-service-documents`, `vigov-service-finance`, `vigov-service-platform` | gRPC của comms — hộp nhắc việc của bộ chạy tự động hoá (ADR 0058); finance: thông báo nhắc tên trong trao đổi dự án (ADR 0081 #5); platform: màn Zalo Bot của khu vận hành (bot dùng chung, ADR 0074) — thiếu ở dev thì các tuyến `zalo-bots/shared…` trả 503. Tên Service + `9090` | `comms:9090` |
-| `OPERATOR_HOST` | không — kể cả prod; vắng là khu vận hành **tắt**, mọi tuyến vận hành trả 404 (ADR 0048) | `vigov-service-platform` **chỉ nơi này** | Host duy nhất của khu vận hành ViHAT. Chỉ đặt khi host đã có DNS + TLS + Ingress, và sau khi xong còn mở #12 của ADR 0048 | tên host trần, chữ thường, không giao thức / cổng / đường dẫn, vd `admin.vigov.vn` (staging: `admin-stg.vigov.vn`). Host dạng xã dưới `vigov.vn` → platform **không khởi động** |
+| `OPERATOR_HOST` | không — kể cả prod; vắng là khu vận hành **tắt**, mọi tuyến vận hành trả 404 (ADR 0048) | `vigov-service-platform` **chỉ nơi này** | Host duy nhất của khu vận hành ViHAT. Chỉ đặt khi host đã có DNS + TLS + Ingress, và sau khi xong còn mở #12 của ADR 0048 | tên host trần, chữ thường, không giao thức / cổng / đường dẫn, vd `admin.vigov.vn` (dev: `admin-dev.vigov.vn`). Host dạng xã dưới `vigov.vn` → platform **không khởi động** |
 | `ZALO_BOT_WEBHOOK_HOST` | **có (prod)** — comms | `vigov-service-comms` **chỉ nơi này** | Host mà Zalo gửi tin của bot dùng chung tới; comms tự dựng `https://<host>/api/v1/zalo-bot-updates` khi trỏ webhook (ADR 0074 #5). Chỉ đặt khi host đã có DNS + TLS + Ingress vào comms | tên host trần, chữ thường, không giao thức / cổng / đường dẫn: `bot.api.vigov.vn` ở prod. Host dạng xã (`<xa>.vigov.vn`) → comms **không khởi động** |
 | `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` | **có (prod)** — identity | `vigov-service-identity` **chỉ nơi này** | Cổng cầu phiên công dân, chỉ `vihat-miniapp` gọi (ADR 0045). Chốt `9091` ngày 30/09/2026; manifest `deploy/base/identity` đã đặt sẵn | `:9091` — khớp cổng `bridge` của Deployment/Service identity và quy tắc 8 của `deploy/base/mang/netpol.yaml`; phía `vihat-miniapp` đặt `VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS=identity:9091`. Chỉ đặt khi đã có `CITIZEN_SESSION_BRIDGE_KEYS`: có một mà thiếu cái kia thì pod **không khởi động** — vì vậy **không** đặt vào `common-config` |
 
@@ -162,17 +167,17 @@ ghi sai dịch vụ, là đỏ. Vì sao từng biến nằm ở Secret hay Confi
 
 ## 5. Tên miền — việc của người vận hành
 
-Mô hình bốn dạng host, nhãn dành riêng (`admin` · `admin-stg` · `api` · `api-stg` · `stg` ·
-`www`), vì sao chúng không chồng nhau và bẫy DNS nút trung gian rỗng: **ADR 0046**
+Mô hình host (prod + dev từ 14/10/2026), nhãn dành riêng (`admin` · `admin-dev` · `admin-stg` · `api` ·
+`api-stg` · `dev` · `stg` · `www`; nhãn `stg` giữ dành riêng dù staging đã bỏ), vì sao chúng không chồng nhau và bẫy DNS nút trung gian rỗng: **ADR 0046**
 (`kb/10-decisions/0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md`). Ở đây chỉ có việc phải làm.
 
 | Việc | Ở đâu |
 |---|---|
-| 4 bản ghi DNS wildcard + 4 chứng chỉ wildcard (2 Secret TLS mỗi môi trường, tên ở mục 1) | ngoài kho |
+| 3 bản ghi DNS wildcard (`*.vigov.vn`, `*.api.vigov.vn`, `*.dev.vigov.vn`) + 3 chứng chỉ wildcard (2 Secret TLS mỗi môi trường, tên ở mục 1) | ngoài kho |
 | Host của Ingress | `deploy/base/mang/ingress.yaml` + `overlays/<mt>/ingress-moi-truong.yaml` — **SINH RA** (`go run ./tools/ingress`). Cụm thật dựng tay trong Rancher (`deploy/README.md` đầu tệp) thì chép host theo hai tệp ấy, không theo trí nhớ |
-| Tên miền của một xã | một hàng `tenant_domain` của `platform` — không bao giờ một nhãn dành riêng, không bao giờ dưới `.api(-stg).vigov.vn` (platform từ chối) |
+| Tên miền của một xã | một hàng `tenant_domain` của `platform` — không bao giờ một nhãn dành riêng, không bao giờ dưới `.api.vigov.vn` hay `.api-stg.vigov.vn` (platform từ chối) |
 
-**Thứ tự đổi tên miền Xã Thăng Bình** — sai thứ tự là xã mất đăng nhập hoặc bước 2 không chạy được:
+**Thứ tự đổi tên miền Xã Thăng Bình** (lịch sử — viết cho mô hình 26/09/2026, thời còn staging) — sai thứ tự là xã mất đăng nhập hoặc bước 2 không chạy được:
 
 1. DNS + TLS + Ingress cho `thangbinh-danang.vigov.vn` và `thangbinh-danang.stg.vigov.vn` chạy thật.
 2. Job `vigov-deploy`, việc `doi-ten-mien-thang-binh` (`MT=prod`, `XAC_NHAN=vigov-prod`).
@@ -185,28 +190,30 @@ Mọi bước là job `vigov-deploy` (`deploy/Jenkinsfile`, cùng thứ tự ở
 "Tạo khoá mã hoá identity" — sửa một thì sửa cả hai), trừ bước 4 và bước cuối. Key và dạng giá trị:
 bảng mục 1 và mục 3.
 
-1. `tao-khoa-ma-hoa-identity` (`MT=prod`, `XAC_NHAN=vigov-prod`) — sinh `SECRET_ENCRYPTION_KEYS` vào
-   `identity-secrets` của `vigov-prod` và **cùng giá trị** vào `vigov-staging` (chung CSDL). Đã có ở
-   prod thì **dừng, không đổi prod**; staging có giá trị khác thì dừng. Không in giá trị — log in lệnh
-   sao lưu; **sao lưu ngay**, tách khỏi bản sao lưu CSDL.
-2. `mo-netpol-identity-zalo` (`MT=prod`, rồi `MT=staging`; `XAC_NHAN` = namespace) — mở 443 cho pod
+Từ 14/10/2026 mỗi bước chạy **riêng cho từng `MT`** (`dev`, `prod`; `XAC_NHAN` = namespace): hai namespace,
+hai CSDL, hai bộ khoá. Job **không bao giờ** chép khoá giữa hai namespace.
+
+1. `tao-khoa-ma-hoa-identity` (`MT`) — **sinh riêng** `SECRET_ENCRYPTION_KEYS` vào `identity-secrets` của
+   namespace ấy. Đã có thì **dừng, không đổi**. Không in giá trị — log in lệnh sao lưu; **sao lưu ngay**,
+   tách khỏi bản sao lưu CSDL.
+2. `mo-netpol-identity-zalo` (`MT`) — mở 443 cho pod
    identity **chỉ khi** đường ra của nó đang bị NetworkPolicy hạn chế; không thì không làm gì.
-3. `bo-sung-cau-hinh-identity` (`MT=prod`, rồi `MT=staging`; `XAC_NHAN` = namespace) — bốn biến ảnh
+3. `bo-sung-cau-hinh-identity` (`MT`) — bốn biến ảnh
    identity mới đòi (thiếu là crash-loop, sự cố 01/10/2026); dạng và chỗ đặt: hàng
    `CITIZEN_SESSION_BRIDGE_KEYS` ở mục 1, hàng `PETITIONS_GRPC_ADDR` · `DOCUMENTS_GRPC_ADDR` ·
    `CITIZEN_SESSION_BRIDGE_LISTEN_ADDR` ở mục 3. Ba biến env **chỉ thêm khi chưa có**, có rồi thì giữ
    nguyên và in giá trị; tên Service petitions/documents không đúng thì dừng. Khoá: cùng bảng quyết định
-   với bước 1 (prod có thì giữ, staging khác thì dừng, chỉ lượt `MT=prod` sinh khoá). Đủ cả bốn mới
+   với bước 1 (namespace có thì giữ, chưa có thì sinh riêng). Đủ cả bốn mới
    khởi động lại identity của `MT` và đợi 3 phút; hỏng thì in 60 dòng log. Service petitions/documents
    thiếu cổng `9090` chỉ bị **cảnh báo**: identity chạy được, nhưng xoá mềm đơn vị hỏng tới khi người
-   vận hành mở cổng ấy. Log in lệnh đọc khoá ra tệp để đặt vào Secret của `vihat-miniapp`.
+   vận hành mở cổng ấy. Log in lệnh đọc khoá ra tệp để đặt vào Secret của `vihat-miniapp` — chỉ khoá của prod: `vihat-miniapp` chỉ chạy ở `vigov-prod`.
    Ảnh mới đã triển khai và đang crash-loop thì bước này tự đưa nó lên — không cần chạy lại bước 4.
 4. Job `service-identity` — ảnh có migration 0021 và `/operatorctl`, khởi động lại pod để đọc khoá.
-   Rồi `kiem-tra-dang-nhap-app-rieng` (chỉ đọc): key, ảnh, Ingress `identity.api.vigov.vn`, và
+   Rồi `kiem-tra-dang-nhap-app-rieng` (chỉ đọc): key, ảnh, Ingress `identity.api.vigov.vn` (dev: `identity-dev.api.vigov.vn`), và
    `POST /api/v1/citizen-sessions` thân `{}` phải trả `400 invalid_body` (`404` = ảnh cũ hoặc Ingress sai).
 5. Đặt App Secret của App ID xã (lấy ở developers.zalo.me → app → Cài đặt → App Secret): platform-admin,
-   chi tiết xã, nút "Đặt/đổi khoá bí mật"; hoặc job `vigov-deploy`, việc `dat-secret-mini-app` (`MT=prod`,
-   `XAC_NHAN=vigov-prod`, `TENANT_ID`, `APP_ID`, `TICKET`, `APP_SECRET` bắt buộc). Thiếu khoá thì
+   chi tiết xã, nút "Đặt/đổi khoá bí mật"; hoặc job `vigov-deploy`, việc `dat-secret-mini-app` (`MT`,
+   `XAC_NHAN` = namespace, `TENANT_ID`, `APP_ID`, `TICKET`, `APP_SECRET` bắt buộc). Thiếu khoá thì
    `POST /api/v1/citizen-sessions` trả `422 app_not_ready`.
 6. `cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn` — **không**
    `--demo`: danh tính demo đã gỡ 05/10/2026 (ADR 0066 §Sửa đổi 05/10/2026); **không** `--vao-thang`:
@@ -215,10 +222,10 @@ bảng mục 1 và mục 3.
 
 ### ClamAV cho petitions — TRƯỚC job `service-petitions`
 
-Độc lập với sáu bước trên. Ảnh petitions có `config.Uses` **không khởi động** ở staging/prod khi
+Độc lập với sáu bước trên. Ảnh petitions có `config.Uses` **không khởi động** ở prod khi
 `MALWARE_SCANNER_ADDRESS` trống (ADR 0052 §9, ADR 0057).
 
-1. Job `vigov-deploy`, việc `dung-clamav` (`MT=prod`, rồi `MT=staging`; `XAC_NHAN` = namespace) — áp
+1. Job `vigov-deploy`, việc `dung-clamav` (`MT=dev`, rồi `MT=prod`; `XAC_NHAN` = namespace) — áp
    [`deploy/cluster/clamav.yaml`](../cluster/clamav.yaml) (Deployment + Service `vigov-clamav`, cổng
    3310, không Ingress), đợi sẵn sàng tối đa 10 phút (lần đầu tải chữ ký), thử `PING`→`PONG` qua
    Service, rồi đặt `MALWARE_SCANNER_ADDRESS=vigov-clamav:3310` vào `common-config` **chỉ khi chưa có**
@@ -243,7 +250,7 @@ bucket private — sai một ký tự trong policy ấy là lộ hồ sơ của 
 đã gỡ đăng vẫn còn bản cũ.
 
 ```sh
-# <alias> = alias mc của MinIO; <tiền tố> = OBJECT_STORAGE_BUCKET_PREFIX (prod: vigov-prod, staging: vigov-stg)
+# <alias> = alias mc của MinIO; <tiền tố> = OBJECT_STORAGE_BUCKET_PREFIX (prod: vigov-prod, dev: vigov-dev)
 mc mb <alias>/<tiền tố>-public                       # versioning để TẮT (mặc định)
 mc anonymous set download <alias>/<tiền tố>-public   # ẩn danh CHỈ GetObject, không liệt kê, không ghi
 mc anonymous get <alias>/<tiền tố>-public            # phải in: download

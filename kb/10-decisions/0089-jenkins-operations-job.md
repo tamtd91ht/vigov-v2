@@ -101,6 +101,8 @@ tới khi chủ dự án cho nghỉ — không gỡ, không chuyển việc cũ 
 | 8 | Nhóm **Triển khai** (đặt thẻ, quay lui) và job của từng dịch vụ: ai giữ lịch sử "ai đưa bản nào lên"? | Hôm nay lịch sử ấy nằm ở job dịch vụ (`deploy/README.md` mục 1–2). Hai job cùng đặt ảnh là hai nơi ghi một sự kiện |
 | 9 | Mẫu tài nguyên đặt sẵn | Chỉ là **đề xuất**; con số do chủ dự án chọn |
 
+> **14/10/2026:** hệ quả #1 và câu mở #5 đã được trả lời — staging bỏ, `vigov-dev` có CSDL và khoá riêng — xem [ADR 0046 §Sửa đổi 14/10/2026](0046-quy-hoach-ten-mien-va-quan-tri-dau-tien-cua-xa.md#sửa-đổi-14102026--hai-môi-trường-dev-và-prod-staging-bỏ).
+
 Ingress vẫn dựng tay trong Rancher — job mới **không** áp Ingress (ADR 0046 #4).
 
 ## Sửa đổi 11/10/2026 — dựng lại chỉ cho "đổi hạ tầng"
