@@ -539,9 +539,18 @@ PROBE
             kubectl -n "$NS" logs "$pod" > "$TMP_DIR/$s.log" 2>&1 || true
             kubectl -n "$NS" delete pod "$pod" --ignore-not-found --wait=false >/dev/null 2>&1 || true
 
+            # No marker at all = an image built before -migrate-only, WHATEVER the phase. Measured on prod
+            # 14/10/2026 (run with images 757be2524d28): the old server ignores the argument, starts, and
+            # its pod ends Failed within ~6 s — the first version of this check waited for 60 s of Running
+            # and so reported all seven as "sổ lệch" while hiding the real log. Show the tail instead.
+            if [ -z "$old" ] && ! grep -q '^migrate-only:' "$TMP_DIR/$s.log"; then
+              old=yes
+            fi
             if [ -n "$old" ]; then
-              echo "   ⚠ ảnh này CHƯA có chế độ -migrate-only (chạy 60 giây mà không in dòng mốc) — đã gỡ pod."
-              echo "     Bấm job service-$s để lên ảnh mới rồi chạy lại tao-bang. Dịch vụ vẫn tự áp migration khi khởi động."
+              echo "   ⚠ ẢNH CŨ — chưa có chế độ -migrate-only (không in dòng mốc 'migrate-only:'); pod ở pha '${phase:-không rõ}', đã gỡ."
+              echo "     CHƯA tạo bảng nào cho $s. Bấm job service-$s để lên ảnh từ commit có -migrate-only rồi chạy lại tao-bang."
+              echo "     20 dòng cuối log của server cũ trong pod (để thấy vì sao nó dừng):"
+              tail -n 20 "$TMP_DIR/$s.log" | cut -c1-400 | sed 's/^/       │ /'
               skipped="$skipped $s"; continue
             fi
             # Only the runner's own lines: they carry file names and counts, never the DSN (core/migrate).
@@ -557,10 +566,11 @@ PROBE
 
           echo ""
           echo "── xong:${ok:- (không)}"
-          [ -z "$skipped" ] || echo "── ảnh cũ, bỏ qua:$skipped"
+          [ -z "$skipped" ] || echo "── ẢNH CŨ, CHƯA tạo bảng:$skipped — lên ảnh mới cho các dịch vụ này trước"
           [ -z "$failed" ] || echo "── HỎNG:$failed"
           echo "Kiểm lại: HANH_DONG=kiem-tra cùng MT — phần CSDL phải báo 'chưa áp 0' cho các dịch vụ trên."
-          [ -z "$failed" ]
+          # Red while any service is left without its tables: a green run must mean "tables are there".
+          [ -z "$failed" ] && [ -z "$skipped" ]
         '''
       }
     }
