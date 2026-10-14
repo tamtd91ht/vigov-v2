@@ -101,6 +101,12 @@ SET temp_directory = '/work/tmp';
 INSTALL httpfs; LOAD httpfs; INSTALL spatial; LOAD spatial;
 SET s3_region = '${OVERTURE_REGION}';
 SET s3_endpoint = 's3.${OVERTURE_REGION}.amazonaws.com';
+-- The cut reads ~100 parquet parts over a few minutes; one failed lookup or reset among them used to
+-- end the whole run ("Could not resolve hostname", prod 14/10/2026 at part 14). DuckDB's default is 3
+-- retries over ~2 s; this rides out ~4 minutes (1+2+4+…+128 s) before giving up on one request.
+SET http_retries = 8;
+SET http_retry_wait_ms = 1000;
+SET http_retry_backoff = 2;
 
 -- Vietnam as the SAME release draws it (land + maritime rows of the country).
 CREATE TABLE vn AS
@@ -183,8 +189,20 @@ build_places() {
   rm -rf "$work"; mkdir -p "$work/tmp"
   places_sql > "$work/places.sql"
   # The DuckDB container needs the network (S3 + signed extensions); tippecanoe never does.
-  docker run --rm -i --user "$uid:$gid" -e HOME=/work -v "$work:/work:z" "$DUCKDB_IMAGE" \
-    /duckdb -bail < "$work/places.sql"
+  # WHOLE-CUT RETRY on top of DuckDB's per-request one (places_sql): an outage longer than those ~4
+  # minutes, or an error DuckDB does not retry, reruns the cut from the start — the outputs are
+  # removed first, so a half-written file of a failed attempt is never read as a result.
+  local attempt
+  for attempt in 1 2 3; do
+    rm -f "$work/places.count" "$work/places.geojsonl"
+    if docker run --rm -i --user "$uid:$gid" -e HOME=/work -v "$work:/work:z" "$DUCKDB_IMAGE" \
+        /duckdb -bail < "$work/places.sql"; then
+      break
+    fi
+    [ "$attempt" -lt 3 ] || die "DuckDB lỗi cả 3 lần (thường là mạng tới ${OVERTURE_HTTPS}) — xem lỗi ở trên"
+    echo "DuckDB lỗi ở lần ${attempt}/3 — chờ 60 giây rồi chạy lại bước cắt địa điểm"
+    sleep 60
+  done
   [ -s "$work/places.count" ] && [ -s "$work/places.geojsonl" ] || die "DuckDB dừng giữa chừng — xem lỗi ở trên"
   n="$(tr -dc '0-9' < "$work/places.count")"
   [ "${n:-0}" -ge "$PLACES_MIN_FEATURES" ] || die "chỉ ${n:-0} điểm — dưới ngưỡng ${PLACES_MIN_FEATURES}"
