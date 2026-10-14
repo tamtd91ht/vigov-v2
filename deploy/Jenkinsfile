@@ -94,7 +94,7 @@ pipeline {
     // `bat-demo-mini-app` / `tat-demo-mini-app` removed 05/10/2026 (ADR 0066 §Sửa đổi 05/10/2026):
     // demo identity is retired. "Rebuild" of an old run naming them is refused by the guard in
     // 'Kiểm công cụ' — that is the guard's purpose.
-    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
+    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'tao-bang', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'bo-sung-cau-hinh-petitions',
@@ -102,7 +102,11 @@ pipeline {
                                   'dat-secret-mini-app',
                                   'dung-clamav', 'tao-tai-khoan-van-hanh', 'cap-quyen-van-hanh', 'chi-dinh-owner',
                                   'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp', 'nen-ban-do'],
-           description:'kiem-tra: chỉ đọc · xem-log: log + sự kiện của DICH_VU · ' +
+           description:'kiem-tra: chỉ đọc — k8s, rồi CSDL của 7 dịch vụ: nối được không, số bảng, sổ migration so với kho · ' +
+                        'xem-log: log + sự kiện của DICH_VU · ' +
+                        'tao-bang: tạo bảng TRƯỚC — chạy ảnh Deployment đang chạy của từng dịch vụ với `/server -migrate-only` ' +
+                        '(áp migration còn thiếu rồi thoát; tệp đã có trong sổ thì bỏ qua; sổ lệch thì DỪNG, không áp gì). ' +
+                        'Cần ảnh có chế độ này (từ 14/10/2026); ảnh cũ thì báo và bỏ qua dịch vụ ấy (MT=prod|dev, XAC_NHAN = namespace của MT) · ' +
                         'di-tru-vihat-miniapp: chạy migration của kho vihat-miniapp (main) vào CSDL trong ' +
                         'vihat-miniapp-bi-mat, chỉ những tệp chưa có trong sổ vihat_miniapp_migrations (MT=prod, XAC_NHAN=vigov-prod) · ' +
                         'bat-cau-phien-miniapp: chép khoá đầu của CITIZEN_SESSION_BRIDGE_KEYS (identity-secrets) sang ' +
@@ -164,7 +168,7 @@ pipeline {
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
                         'di-tru-vihat-miniapp / bat-cau-phien-miniapp (chỉ prod): gõ đúng vigov-prod. ' +
-                        'Cho tao-khoa-ma-hoa-identity / mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / ' +
+                        'Cho tao-bang / tao-khoa-ma-hoa-identity / mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / ' +
                         'dat-secret-mini-app / tao-tai-khoan-van-hanh / cap-quyen-van-hanh / chi-dinh-owner / dung-clamav / nen-ban-do: ' +
                         'gõ đúng namespace của MT (vigov-prod hoặc vigov-dev).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
@@ -231,7 +235,7 @@ pipeline {
           // THIS LIST MUST EQUAL `choices` OF HANH_DONG ABOVE, item for item. On 02/10/2026
           // `tao-tai-khoan-van-hanh` was added to `choices` but not here, so the job refused the one
           // action it had just offered ("không còn trong job này"). Add/remove an action in BOTH places.
-          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
+          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'tao-bang', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'bo-sung-cau-hinh-petitions',
@@ -450,6 +454,111 @@ PROBE
           else
             echo "✓ Bảy CSDL nối được, sổ migration khớp kho."
           fi
+        '''
+      }
+    }
+
+    // Owner 14/10/2026: create each service's tables AHEAD of the service, so a fresh database (vigov-dev's
+    // own, ADR 0046 §Sửa đổi 14/10/2026) is not first touched by a starting pod. It runs the SAME runner as
+    // startup — `/server -migrate-only` in the Deployment's CURRENT image (owner's choice: the schema then
+    // matches the code that serves it) — so the ledger, checksums and advisory lock are core/migrate's
+    // own; there is no second migration runner to drift from the first (ADR 0013 §Sửa đổi 14/10/2026).
+    //
+    // "Already there → skip, no error" is the ledger's existing behaviour. A MISMATCH (tables without a
+    // ledger, an applied file edited, a database ahead of the image) STOPS that service with nothing
+    // applied — owner's choice, and ADR 0013: archival records wait for a person, never an auto-fix.
+    //
+    // An image built before this mode ignores the argument and starts the real server (which also migrates
+    // at startup, but then serves): no `migrate-only:` marker within 60 s means old image → pod deleted,
+    // service reported, nothing else assumed. The pod carries its own label, NOT the Deployment's, so the
+    // Service never routes traffic to it — if a NetworkPolicy then blocks its database egress, the log says so.
+    stage('Tạo bảng') {
+      when { expression { params.HANH_DONG == 'tao-bang' } }
+      steps {
+        script {
+          if (!(params.MT in ['prod', 'dev'])) { error("tao-bang: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không làm gì cả.")
+          }
+        }
+        sh '''
+          set +x
+          set -u
+          umask 077
+          TMP_DIR=$(mktemp -d)
+          PODS=""
+          trap 'for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -rf "$TMP_DIR"' EXIT
+
+          # Order of deploy/README.md: platform, then identity, then the rest. Each database is its own, so
+          # one service failing does not stop the next — every result is reported, and the job ends red.
+          ok=""; skipped=""; failed=""
+          for s in platform identity comms documents finance petitions reporting; do
+            DEP="vigov-service-$s"
+            echo "════ $s"
+            if ! kubectl -n "$NS" get deploy "$DEP" >/dev/null 2>&1; then
+              echo "   ✗ chưa có deploy/$DEP trong $NS — bấm job dịch vụ trước (tao-bang dùng ảnh của Deployment)."
+              failed="$failed $s"; continue
+            fi
+            n=$(kubectl -n "$NS" get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+            if [ "$n" != "1" ]; then
+              echo "   ✗ deploy/$DEP có $n container — không biết lấy ảnh nào."; failed="$failed $s"; continue
+            fi
+            get_field() { kubectl -n "$NS" get deploy "$DEP" -o jsonpath="$1"; }
+            IMG=$(get_field '{.spec.template.spec.containers[0].image}')
+            get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
+            get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
+            get_field '{.spec.template.spec.imagePullSecrets}' > "$TMP_DIR/pull"
+            for f in envfrom env pull; do [ -s "$TMP_DIR/$f" ] || printf '[]' > "$TMP_DIR/$f"; done
+            echo "   ảnh: $IMG"
+
+            pod="vigov-migrate-$s-$BUILD_NUMBER"
+            PODS="$PODS $pod"
+            {
+              printf '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"%s","labels":{"app.kubernetes.io/name":"vigov-migrate-only"}},' "$pod"
+              printf '"spec":{"restartPolicy":"Never","imagePullSecrets":'; cat "$TMP_DIR/pull"
+              printf ',"containers":[{"name":"migrate","image":"%s","envFrom":' "$IMG"; cat "$TMP_DIR/envfrom"
+              printf ',"env":'; cat "$TMP_DIR/env"
+              printf ',"command":["/server","-migrate-only"]}]}}'
+            } > "$TMP_DIR/pod.json"
+            if ! kubectl -n "$NS" create -f "$TMP_DIR/pod.json" >/dev/null; then
+              echo "   ✗ không tạo được pod."; failed="$failed $s"; continue
+            fi
+
+            phase=""; i=0; old=""
+            while [ $i -lt 60 ]; do   # 60 × 5 s = 5 minutes, the runner's own budget
+              phase=$(kubectl -n "$NS" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$phase" in Succeeded|Failed) break ;; esac
+              if [ "$phase" = "Running" ] && [ $i -ge 12 ] && \\
+                 ! kubectl -n "$NS" logs "$pod" 2>/dev/null | grep -q '^migrate-only:'; then
+                old=yes; break
+              fi
+              sleep 5; i=$((i+1))
+            done
+            kubectl -n "$NS" logs "$pod" > "$TMP_DIR/$s.log" 2>&1 || true
+            kubectl -n "$NS" delete pod "$pod" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+
+            if [ -n "$old" ]; then
+              echo "   ⚠ ảnh này CHƯA có chế độ -migrate-only (chạy 60 giây mà không in dòng mốc) — đã gỡ pod."
+              echo "     Bấm job service-$s để lên ảnh mới rồi chạy lại tao-bang. Dịch vụ vẫn tự áp migration khi khởi động."
+              skipped="$skipped $s"; continue
+            fi
+            # Only the runner's own lines: they carry file names and counts, never the DSN (core/migrate).
+            grep '^migrate-only:\\|^ *[0-9][0-9][0-9][0-9]_.*[.]sql$' "$TMP_DIR/$s.log" | sed 's/^/   /' || true
+            if [ "$phase" = "Succeeded" ] && grep -q "^migrate-only: $s ok" "$TMP_DIR/$s.log"; then
+              ok="$ok $s"
+            else
+              echo "   ✗ dừng ở pha '${phase:-không rõ}' — không áp tiếp dịch vụ này. Đọc dòng migrate-only ở trên;"
+              echo "     sổ lệch (checksum / CSDL mới hơn ảnh / có bảng không có sổ) là việc của NGƯỜI, không tự sửa."
+              failed="$failed $s"
+            fi
+          done
+
+          echo ""
+          echo "── xong:${ok:- (không)}"
+          [ -z "$skipped" ] || echo "── ảnh cũ, bỏ qua:$skipped"
+          [ -z "$failed" ] || echo "── HỎNG:$failed"
+          echo "Kiểm lại: HANH_DONG=kiem-tra cùng MT — phần CSDL phải báo 'chưa áp 0' cho các dịch vụ trên."
+          [ -z "$failed" ]
         '''
       }
     }
