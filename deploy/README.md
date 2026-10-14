@@ -142,9 +142,11 @@ chép ảnh, `envFrom`, `env`, `imagePullSecrets` của Deployment, nhưng mang 
 
 | Điều kiện / dòng in ra | Nghĩa | Làm gì |
 |---|---|---|
-| Trước khi bấm | Cần Deployment đã có, Secret đã có DSN, CSDL và tài khoản đã cấp. Job **không** tạo CSDL hay tài khoản (mục 3) | Chạy `kiem-tra` trước, đọc phần CSDL |
+| Trước khi bấm | Cần Deployment đã có, Secret đã có DSN, tài khoản PostgreSQL đã cấp. Job **không** tạo tài khoản (mục 3); CSDL thì tạo được nếu tick `TAO_CSDL` (dòng dưới) | Chạy `kiem-tra` trước, đọc phần CSDL |
+| Tick `TAO_CSDL` (chủ dự án 14/10/2026) | Trước mọi thao tác: đọc **tên** CSDL trong DSN của cả 7 dịch vụ, **dừng nếu hai dịch vụ trùng tên** (prod 14/10/2026: cả 7 trỏ `vigov_comms`). Rồi từng dịch vụ: nối CSDL `postgres` bằng chính tài khoản trong DSN, `CREATE DATABASE` nếu chưa có — tài khoản ấy thành chủ CSDL | In `CSDL <tên>: đã có — bỏ qua` / `ĐÃ TẠO` / `✗ …`. `khong-co-quyen-CREATEDB`: cấp quyền cho tài khoản, hoặc người quản trị PostgreSQL tạo trước. Tên chỉ nhận chữ thường, số, `_` |
+| `✗ KHÔNG NỐI ĐƯỢC CSDL / thiếu cấu hình` | `FAILED: cannot reach the database` / `open database` / `configuration` — không phải sổ lệch. Chưa áp gì | CSDL chưa có: chạy lại với `TAO_CSDL`; sai DSN: sửa `DATABASE_DSN` trong `<dv>-secrets` |
 | `✗ chưa có deploy/vigov-service-<dv>` | Job dịch vụ chưa chạy lần nào ở namespace này | Bấm job dịch vụ trước |
-| `⚠ ảnh này CHƯA có chế độ -migrate-only` | Ảnh đang chạy dựng trước 14/10/2026: 60 giây không in dòng `migrate-only:`. Pod đã gỡ, dịch vụ bị bỏ qua | Bấm job dịch vụ để lên ảnh mới, rồi chạy lại `tao-bang`. Dịch vụ vẫn tự áp migration khi khởi động |
+| `⚠ ẢNH CŨ — chưa có chế độ -migrate-only` | Ảnh đang chạy dựng trước 14/10/2026: log không có dòng `migrate-only:` (pha nào cũng vậy — server cũ bỏ qua tham số, thường chết sau vài giây). Job in 20 dòng cuối log của nó. Pod đã gỡ, dịch vụ bị bỏ qua, job đỏ | Bấm job dịch vụ để lên ảnh mới, rồi chạy lại `tao-bang`. Dịch vụ vẫn tự áp migration khi khởi động |
 | `migrate-only: <dv> applied <tệp>` · `ok applied=N skipped=M` | Đã áp N tệp; M tệp có sẵn trong sổ, bỏ qua không báo lỗi | Không cần gì. Kiểm lại bằng `kiem-tra` |
 | `FAILED: database has <n> tables but no schema_migration ledger — not adopting` | CSDL có bảng mà chưa có sổ. Không áp gì | Như dòng `⚠ CÓ n BẢNG mà KHÔNG có sổ` ở bảng `kiem-tra`: người quyết, đừng khởi động dịch vụ trước |
 | `migrate-only: <dv> FAILED: …` (khác) | Dịch vụ ấy dừng. Checksum lệch hay CSDL mới hơn ảnh thì **không tệp nào được áp**; một tệp hỏng thì các tệp in `applied` trước đó đã vào | **Người quyết** — không sửa tệp đã áp, không chèn tay vào sổ. ADR 0013 §Sửa đổi 14/10/2026 |

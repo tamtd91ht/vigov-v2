@@ -104,7 +104,7 @@ pipeline {
                                   'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp', 'nen-ban-do'],
            description:'kiem-tra: chỉ đọc — k8s, rồi CSDL của 7 dịch vụ: nối được không, số bảng, sổ migration so với kho · ' +
                         'xem-log: log + sự kiện của DICH_VU · ' +
-                        'tao-bang: tạo bảng TRƯỚC — chạy ảnh Deployment đang chạy của từng dịch vụ với `/server -migrate-only` ' +
+                        'tao-bang: (tick TAO_CSDL để tạo CSDL còn thiếu trước) tạo bảng TRƯỚC — chạy ảnh Deployment đang chạy của từng dịch vụ với `/server -migrate-only` ' +
                         '(áp migration còn thiếu rồi thoát; tệp đã có trong sổ thì bỏ qua; sổ lệch thì DỪNG, không áp gì). ' +
                         'Cần ảnh có chế độ này (từ 14/10/2026); ảnh cũ thì báo và bỏ qua dịch vụ ấy (MT=prod|dev, XAC_NHAN = namespace của MT) · ' +
                         'di-tru-vihat-miniapp: chạy migration của kho vihat-miniapp (main) vào CSDL trong ' +
@@ -209,6 +209,10 @@ pipeline {
                         'Overture chỉ giữ vài bản gần nhất — danh sách: https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/?list-type=2&prefix=release/&delimiter=/')
     booleanParam(name: 'CHAY_THU', defaultValue: true,
                  description: 'Cho nen-ban-do: CHẠY THỬ — in bucket, đích, giá trị BASEMAP_URL sẽ là; không tải, không ghi gì. Bỏ tick để làm thật.')
+    booleanParam(name: 'TAO_CSDL', defaultValue: false,
+                 description: 'Cho tao-bang: TẠO CSDL trước khi tạo bảng — tên CSDL lấy từ DATABASE_DSN của từng dịch vụ; ' +
+                              'đã có thì bỏ qua. DỪNG trước mọi thao tác nếu hai dịch vụ trùng tên CSDL (mỗi dịch vụ một CSDL — ' +
+                              'deploy/README.md). Tài khoản trong DSN phải có quyền CREATEDB.')
   }
 
   environment {
@@ -482,6 +486,8 @@ PROBE
           if (params.XAC_NHAN != env.NS) {
             error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không làm gì cả.")
           }
+          // null on the first run after this parameter was added — treated as unticked.
+          env.TAO_CSDL = (params.TAO_CSDL == true) ? 'yes' : ''
         }
         sh '''
           set +x
@@ -490,11 +496,104 @@ PROBE
           TMP_DIR=$(mktemp -d)
           PODS=""
           trap 'for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -rf "$TMP_DIR"' EXIT
+          SERVICES="platform identity comms documents finance petitions reporting"
+
+          # ── TAO_CSDL (owner 14/10/2026): create the database a DSN names when it is missing.
+          # Step 0 runs BEFORE anything is created, for all seven: read each database NAME (only the name,
+          # filtered inside the pipe — the DSN never enters a variable) and refuse if two services share one.
+          # Measured on prod the same day: all seven DSNs named `vigov_comms`. Creating it would have let the
+          # first service own the ledger and stopped the other six on a checksum mismatch — and mixed seven
+          # audit trails into one table if any got through (deploy/README.md, "bảy CSDL khác nhau").
+          if [ -n "${TAO_CSDL:-}" ]; then
+            echo "── TAO_CSDL: tên CSDL trong DATABASE_DSN của từng dịch vụ"
+            : > "$TMP_DIR/dbnames"
+            bad=""
+            for s in $SERVICES; do
+              name=$(kubectl -n "$NS" get secret "$s-secrets" -o go-template='{{index .data "DATABASE_DSN"}}' 2>/dev/null \\
+                       | base64 -d 2>/dev/null | sed -e 's/[?].*//' -e 's#.*/##' -e 's/.*dbname=\\([^ ]*\\).*/\\1/' \\
+                       | grep -xE '[a-z_][a-z0-9_]{0,62}' || true)
+              if [ -z "$name" ]; then
+                echo "   ✗ $s: không đọc được tên CSDL (thiếu secret/$s-secrets, thiếu DATABASE_DSN, hoặc tên có chữ HOA/ký tự lạ)"
+                bad=yes; continue
+              fi
+              printf '   %-10s %s\\n' "$s" "$name"
+              echo "$name $s" >> "$TMP_DIR/dbnames"
+            done
+            dup=$(cut -d' ' -f1 "$TMP_DIR/dbnames" | sort | uniq -d)
+            if [ -n "$dup" ]; then
+              for d in $dup; do
+                echo "   ✗ CSDL '$d' bị dùng chung bởi:$(grep "^$d " "$TMP_DIR/dbnames" | cut -d' ' -f2 | tr '\\n' ' ')"
+              done
+              bad=yes
+            fi
+            if [ -n "$bad" ]; then
+              echo "DỪNG — chưa tạo gì. Mỗi dịch vụ phải có CSDL RIÊNG: sửa DATABASE_DSN trong <dịch vụ>-secrets rồi chạy lại."
+              exit 1
+            fi
+          fi
+
+          # Runs INSIDE a postgres:16-alpine pod: connects with the SAME credentials to the `postgres`
+          # maintenance database, creates $DB_NAME if pg_database lacks it. The creator is the DSN's own
+          # account, so the service owns its database and core/migrate can create its tables. $DB_NAME is
+          # lowercase [a-z0-9_] (checked above), so it needs no quoting. Prints CO-SAN · DA-TAO · ERR|<label>.
+          cat > "$TMP_DIR/createdb.sh" <<'CREATEDB'
+set -u
+case "$DATABASE_DSN" in
+  *://*) admin=$(printf '%s' "$DATABASE_DSN" | sed -E 's#^([^:]+://[^/]+)/[^?]*#\\1/postgres#') ;;
+  *) admin=$(printf '%s' "$DATABASE_DSN" | sed -E 's/(^|[[:space:]])dbname=[^[:space:]]*/\\1dbname=postgres/') ;;
+esac
+label() {
+  e=$(cat /tmp/err)
+  case "$e" in
+    *'permission denied to create database'*) echo khong-co-quyen-CREATEDB ;;
+    *'password authentication failed'*|*'role "'*'does not exist'*|*'no pg_hba.conf entry'*) echo sai-tai-khoan-hoac-chua-cap-quyen ;;
+    *'could not translate host'*|*'Connection refused'*|*'timeout'*|*'timed out'*|*'No route'*) echo khong-toi-duoc-may-chu ;;
+    *'database "postgres" does not exist'*) echo khong-vao-duoc-csdl-postgres ;;
+    *SSL*|*ssl*|*certificate*) echo loi-tls ;;
+    *) echo loi-khac ;;
+  esac
+}
+if ! have=$(psql "$admin" -X -At -v ON_ERROR_STOP=1 -c "SELECT 1 FROM pg_database WHERE datname = '$DB_NAME'" 2>/tmp/err); then
+  echo "ERR|$(label)"; exit 0
+fi
+if [ "$have" = "1" ]; then echo CO-SAN; exit 0; fi
+if psql "$admin" -X -q -v ON_ERROR_STOP=1 -c "CREATE DATABASE $DB_NAME" 2>/tmp/err; then echo DA-TAO; else echo "ERR|$(label)"; fi
+CREATEDB
+          CREATEDB_B64=$(base64 -w0 "$TMP_DIR/createdb.sh")
+
+          # ensure_db <service> — 0 when the database exists (already, or created now).
+          ensure_db() {
+            db=$(grep " $1\\$" "$TMP_DIR/dbnames" | cut -d' ' -f1)
+            cpod="vigov-createdb-$1-$BUILD_NUMBER"
+            PODS="$PODS $cpod"
+            printf '%s' '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"'"$cpod"'","labels":{"app.kubernetes.io/name":"vigov-createdb"}},
+              "spec":{"restartPolicy":"Never","imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+              "containers":[{"name":"psql","image":"postgres:16-alpine",
+                "envFrom":[{"secretRef":{"name":"'"$1"'-secrets"}}],
+                "env":[{"name":"DB_NAME","value":"'"$db"'"},{"name":"CREATEDB_B64","value":"'"$CREATEDB_B64"'"}],
+                "command":["sh","-c","echo \\"$CREATEDB_B64\\" | base64 -d > /tmp/c.sh && sh /tmp/c.sh"]}]}}' \\
+              > "$TMP_DIR/cpod.json"
+            kubectl -n "$NS" create -f "$TMP_DIR/cpod.json" >/dev/null || { echo "   ✗ CSDL $db: không tạo được pod."; return 1; }
+            cph=""; j=0
+            while [ $j -lt 24 ]; do   # 2 minutes
+              cph=$(kubectl -n "$NS" get pod "$cpod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$cph" in Succeeded|Failed) break ;; esac
+              sleep 5; j=$((j+1))
+            done
+            res=$(kubectl -n "$NS" logs "$cpod" 2>/dev/null | tail -n 1)
+            kubectl -n "$NS" delete pod "$cpod" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+            case "$res" in
+              CO-SAN) echo "   CSDL $db: đã có — bỏ qua"; return 0 ;;
+              DA-TAO) echo "   CSDL $db: ĐÃ TẠO"; return 0 ;;
+              ERR\\|*) echo "   ✗ CSDL $db: ${res#ERR|}"; return 1 ;;
+              *) echo "   ✗ CSDL $db: pod dừng ở pha '${cph:-không rõ}', không có kết quả"; return 1 ;;
+            esac
+          }
 
           # Order of deploy/README.md: platform, then identity, then the rest. Each database is its own, so
           # one service failing does not stop the next — every result is reported, and the job ends red.
           ok=""; skipped=""; failed=""
-          for s in platform identity comms documents finance petitions reporting; do
+          for s in $SERVICES; do
             DEP="vigov-service-$s"
             echo "════ $s"
             if ! kubectl -n "$NS" get deploy "$DEP" >/dev/null 2>&1; then
@@ -512,6 +611,9 @@ PROBE
             get_field '{.spec.template.spec.imagePullSecrets}' > "$TMP_DIR/pull"
             for f in envfrom env pull; do [ -s "$TMP_DIR/$f" ] || printf '[]' > "$TMP_DIR/$f"; done
             echo "   ảnh: $IMG"
+            if [ -n "${TAO_CSDL:-}" ] && ! ensure_db "$s"; then
+              echo "     Không tạo bảng cho $s khi chưa có CSDL."; failed="$failed $s"; continue
+            fi
 
             pod="vigov-migrate-$s-$BUILD_NUMBER"
             PODS="$PODS $pod"
@@ -557,6 +659,11 @@ PROBE
             grep '^migrate-only:\\|^ *[0-9][0-9][0-9][0-9]_.*[.]sql$' "$TMP_DIR/$s.log" | sed 's/^/   /' || true
             if [ "$phase" = "Succeeded" ] && grep -q "^migrate-only: $s ok" "$TMP_DIR/$s.log"; then
               ok="$ok $s"
+            elif grep -q "^migrate-only: $s FAILED: \\(cannot reach the database\\|open database\\|configuration\\)" "$TMP_DIR/$s.log"; then
+              # Not a ledger problem — say what it is (prod 14/10/2026 printed "sổ lệch" for a missing database).
+              echo "   ✗ KHÔNG NỐI ĐƯỢC CSDL / thiếu cấu hình — đọc dòng FAILED ở trên. CSDL chưa có: chạy lại với TAO_CSDL;"
+              echo "     sai DSN: sửa DATABASE_DSN trong $s-secrets. Chưa áp gì."
+              failed="$failed $s"
             else
               echo "   ✗ dừng ở pha '${phase:-không rõ}' — không áp tiếp dịch vụ này. Đọc dòng migrate-only ở trên;"
               echo "     sổ lệch (checksum / CSDL mới hơn ảnh / có bảng không có sổ) là việc của NGƯỜI, không tự sửa."
