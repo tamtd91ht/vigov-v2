@@ -1565,13 +1565,13 @@ EOF
           DEP=vigov-service-identity
           POD="vigov-operatorctl-$BUILD_NUMBER"
           SEC="vigov-app-secret-$BUILD_NUMBER"
-          trap 'kubectl -n "$NS" deletepod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true
-                kubectl -n "$NS" deletesecret "$SEC" --ignore-not-found >/dev/null 2>&1 || true
+          trap 'kubectl -n "$NS" delete pod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+                kubectl -n "$NS" delete secret "$SEC" --ignore-not-found >/dev/null 2>&1 || true
                 rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n "$NS" getdeploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS" get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n "$NS" getdeploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS" get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1581,7 +1581,7 @@ EOF
           echo "── lệnh: /operatorctl mini-app-secret set --tenant $TENANT_ID --app-id $APP_ID --ticket $TICKET --secret-file /run/app-secret/value"
 
           printf '%s' "$APP_SECRET" > "$TMP_DIR/value"
-          kubectl -n "$NS" createsecret generic "$SEC" --from-file=value="$TMP_DIR/value" >/dev/null
+          kubectl -n "$NS" create secret generic "$SEC" --from-file=value="$TMP_DIR/value" >/dev/null
           rm -f "$TMP_DIR/value"
 
           {
@@ -1596,19 +1596,19 @@ EOF
             printf ',"command":["/operatorctl","mini-app-secret","set","--tenant","%s","--app-id","%s","--ticket","%s","--secret-file","/run/app-secret/value"]}]}}' \
               "$TENANT_ID" "$APP_ID" "$TICKET"
           } > "$TMP_DIR/pod.json"
-          kubectl -n "$NS" create-f "$TMP_DIR/pod.json" >/dev/null
+          kubectl -n "$NS" create -f "$TMP_DIR/pod.json" >/dev/null
 
           phase=""; i=0
           while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-            phase=$(kubectl -n "$NS" getpod "$POD" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            phase=$(kubectl -n "$NS" get pod "$POD" -o jsonpath='{.status.phase}' 2>/dev/null || true)
             case "$phase" in Succeeded|Failed) break ;; esac
             sleep 5; i=$((i+1))
           done
           echo "── log của operatorctl"
-          kubectl -n "$NS" logs"$POD" 2>&1 || true
+          kubectl -n "$NS" logs "$POD" 2>&1 || true
           if [ "$phase" != "Succeeded" ]; then
             echo "── pod $POD kết thúc ở pha '$phase' — sự kiện của pod:"
-            kubectl -n "$NS" describepod "$POD" 2>/dev/null | sed -n '/^Events:/,$p' || true
+            kubectl -n "$NS" describe pod "$POD" 2>/dev/null | sed -n '/^Events:/,$p' || true
             echo "Gợi ý: 'flag provided but not defined: -secret-file' = ảnh identity cũ — chạy job service-identity trước;"
             echo "'not bound' / App ID chưa gắn xã = chạy HANH_DONG=doi-app-id-thang-binh trước;"
             echo "SECRET_ENCRYPTION_KEYS rỗng = HANH_DONG=tao-khoa-ma-hoa-identity."
@@ -1672,11 +1672,11 @@ EOF
           TMP_DIR=$(mktemp -d)
           DEP=vigov-service-identity
           PODS=""
-          trap 'for p in $PODS; do kubectl -n "$NS" deletepod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          trap 'for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n "$NS" getdeploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS" get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n "$NS" getdeploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS" get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1698,19 +1698,19 @@ EOF
             } > "$TMP_DIR/pod-$1.json"
             # `|| return 1`: run_op chạy trong `if`, nơi `set -e` không có tác dụng — thiếu nó thì một
             # lần create hỏng vẫn đợi đủ 5 phút cho một pod không tồn tại.
-            kubectl -n "$NS" create-f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            kubectl -n "$NS" create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
             rm -f "$TMP_DIR/pod-$1.json"   # mang email — không để lại trên đĩa agent
             phase=""; i=0
             while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              phase=$(kubectl -n "$NS" getpod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              phase=$(kubectl -n "$NS" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
               case "$phase" in Succeeded|Failed) break ;; esac
               sleep 5; i=$((i+1))
             done
-            kubectl -n "$NS" logs"$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            kubectl -n "$NS" logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
             if [ "$phase" != "Succeeded" ]; then
               cat "$TMP_DIR/$1.log"
               echo "── pod $pod kết thúc ở pha '$phase' — sự kiện của pod:"
-              kubectl -n "$NS" describepod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              kubectl -n "$NS" describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
               return 1
             fi
             return 0
@@ -1792,11 +1792,11 @@ EOF
           TMP_DIR=$(mktemp -d)
           DEP=vigov-service-identity
           PODS=""
-          trap 'for p in $PODS; do kubectl -n "$NS" deletepod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          trap 'for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n "$NS" getdeploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS" get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n "$NS" getdeploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS" get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1816,19 +1816,19 @@ EOF
               printf ',"env":'; cat "$TMP_DIR/env"
               printf ',"command":%s}]}}' "$2"
             } > "$TMP_DIR/pod-$1.json"
-            kubectl -n "$NS" create-f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            kubectl -n "$NS" create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
             rm -f "$TMP_DIR/pod-$1.json"   # mang email — không để lại trên đĩa agent
             phase=""; i=0
             while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              phase=$(kubectl -n "$NS" getpod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              phase=$(kubectl -n "$NS" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
               case "$phase" in Succeeded|Failed) break ;; esac
               sleep 5; i=$((i+1))
             done
-            kubectl -n "$NS" logs"$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            kubectl -n "$NS" logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
             if [ "$phase" != "Succeeded" ]; then
               cat "$TMP_DIR/$1.log"
               echo "── pod $pod kết thúc ở pha '$phase' — sự kiện của pod:"
-              kubectl -n "$NS" describepod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              kubectl -n "$NS" describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
               return 1
             fi
             return 0
@@ -1931,11 +1931,11 @@ EOF
           TMP_DIR=$(mktemp -d)
           DEP=vigov-service-identity
           PODS=""
-          trap 'for p in $PODS; do kubectl -n "$NS" deletepod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          trap 'for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n "$NS" getdeploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS" get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n "$NS" getdeploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS" get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1955,15 +1955,15 @@ EOF
               printf ',"env":'; cat "$TMP_DIR/env"
               printf ',"command":%s}]}}' "$2"
             } > "$TMP_DIR/pod-$1.json"
-            kubectl -n "$NS" create-f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            kubectl -n "$NS" create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
             rm -f "$TMP_DIR/pod-$1.json"
             phase=""; i=0
             while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              phase=$(kubectl -n "$NS" getpod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              phase=$(kubectl -n "$NS" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
               case "$phase" in Succeeded|Failed) break ;; esac
               sleep 5; i=$((i+1))
             done
-            kubectl -n "$NS" logs"$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            kubectl -n "$NS" logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
             [ "$phase" = "Succeeded" ]
           }
 
