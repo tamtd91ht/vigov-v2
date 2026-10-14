@@ -139,7 +139,6 @@ import {
   pageRangeLabel,
   PHAM_VI_GIAO_CHO_TOI,
   PHAM_VI_TOAN_XA,
-  petitionTaskOffered,
   PUBLISHED_TOAST,
   RATING_MAX_STARS,
   RATING_TITLE,
@@ -177,7 +176,6 @@ import { usePetitionLogAttachments } from "./petition-log-attachments";
 import { PetitionHeatMap, PetitionMiniMap } from "./petition-map";
 import { PetitionReports } from "./petition-reports";
 import { PetitionMergeSection } from "./petition-merge";
-import { PetitionTaskBlock } from "./petition-task";
 import {
   buttonClass,
   Glyph,
@@ -725,9 +723,6 @@ export function SoPhanAnh({
           basemapAvailable={basemapAvailable}
           thon={daTaiThon}
           classifyRefusal={classifyRefusal}
-          // A task booked from the petition wrote a `tao-nhiem-vu` row: bump the same counter so the
-          // log re-reads it. The petition itself is unchanged by the act, so `dangMo` stays.
-          onTaskCreated={() => datLanTai((n) => n + 1)}
           // Merge / unmerge (ADR 0087): the 200 body replaces the open petition, the list and the log
           // re-read (both petitions got a `gop-phieu` / `tach-phieu` row). The toast is the dialog's.
           onMergeChanged={(p) => {
@@ -1259,7 +1254,6 @@ export function ChiTietPhieu({
   sessionStaffCode = "",
   basemapAvailable = false,
   thon = [],
-  onTaskCreated,
   onMergeChanged,
   onStaffRatingRecorded,
   onOpenPetition,
@@ -1290,7 +1284,7 @@ export function ChiTietPhieu({
   /** Tăng sau mỗi thao tác thành công, để nhật ký đọc lại dòng máy chủ vừa ghi. */
   lanLamMoiNhatKy?: number;
   /**
-   * The session's permission keys — ONLY to decide whether `Tạo nhiệm vụ` and the photos are drawn.
+   * The session's permission keys — ONLY to decide which acts and the photos are drawn.
    * Empty by default: an unknown session holds no key (rule 1, forbidden #1).
    */
   permissions?: readonly string[];
@@ -1300,8 +1294,6 @@ export function ChiTietPhieu({
   basemapAvailable?: boolean;
   /** The commune's residential units (ALL, in-use and retired) — the classify act offers the in-use ones. */
   thon?: readonly identity_thonToDanPhoRa[];
-  /** Called after POST …/tasks answered 201. Absent = the block is not drawn (no write path). */
-  onTaskCreated?: () => void;
   /** The 200 body of a merge / unmerge (ADR 0087). Absent = no merge action is drawn (no write path). */
   onMergeChanged?: (p: petitions_phieuPhanAnhRa) => void;
   /**
@@ -1953,13 +1945,8 @@ export function ChiTietPhieu({
             {onStaffRatingRecorded !== undefined && coQuyen(permissions, QUYEN_DONG_PHAN_ANH) && (
               <StaffRecordedRatingSection petition={phieu} onRecorded={onStaffRatingRecorded} />
             )}
-
-            {/* `Tạo nhiệm vụ` (§13, owner decision D5) — `task.create` AND `feedback.read`; UX only. */}
-            {onTaskCreated !== undefined && petitionTaskOffered(permissions, phieu) && (
-              <div className={SECTION}>
-                <PetitionTaskBlock lookupCode={phieu.code} danhBa={danhBa} onCreated={onTaskCreated} />
-              </div>
-            )}
+            {/* No `Tạo nhiệm vụ` here: the prototype's drawer (`FeedbackDetailDrawer.tsx`) has none, and
+                the tester flagged it as extra (bug sheet web-admin-141026 row 1). */}
           </div>
 
           {/* ── NHẬT KÝ XỬ LÝ (§8.7) — the right column, 26rem, as in the prototype. Under the left column

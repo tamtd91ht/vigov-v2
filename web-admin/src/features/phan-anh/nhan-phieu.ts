@@ -9,7 +9,6 @@ import type {
   identity_canBoChonNguoiRa,
   petitions_phieuPhanAnhRa,
 } from "@/lib/api/schema.gen";
-import { coQuyen, QUYEN_TAO_NHIEM_VU, QUYEN_XEM_PHAN_ANH } from "@/lib/quyen";
 
 /**
  * Giờ Việt Nam, GHIM chứ không theo cài đặt của máy cán bộ.
@@ -1433,87 +1432,6 @@ export const NHAN_NGUOI_THUC_HIEN = "Người thực hiện";
 export const NHAN_O_GHI_CHU_NOI_BO = "Nội dung cập nhật";
 export const UPDATE_NOTE_PLACEHOLDER = "Đã làm gì, ai làm, còn vướng gì… (không bắt buộc)";
 export const UPDATE_NOTE_INTERNAL = "không gửi người dân";
-
-/* ══════════════════════════════════════════════════════════════════════════════════════════
- * "TẠO NHIỆM VỤ" FROM A PETITION (§13) — POST …/tasks
- * ══════════════════════════════════════════════════════════════════════════════════════════ */
-
-/**
- * The statuses the button is OFFERED on — the four where the petition has been classified and handed
- * to a unit, the server's rule (`domain.PetitionAcceptsTask`). An ALLOW list, so a status code the
- * screen does not know hides the button (fail closed, as the server does).
- *
- * The server refuses the rest by name: `da-tiep-nhan` / `dang-phan-loai` → 409 `petition_not_classified`,
- * the three terminal statuses → 409 `petition_state`. Its sentence reaches the screen verbatim should
- * the two lists ever disagree.
- */
-const PETITION_TASK_STATUSES: readonly string[] = [
-  "da-chuyen-xu-ly",
-  "dang-xu-ly",
-  "da-xu-ly",
-  "cho-dan-xac-nhan",
-];
-
-/**
- * Whether the drawer OFFERS `Tạo nhiệm vụ`. UX ONLY — the route checks `task.create` AND
- * `feedback.read` and the petition's state on every call (rule 5, forbidden #1).
- *
- * TWO KEYS, BOTH REQUIRED, neither implied by the other (rule 5, invariant 3b): reading petitions is
- * not booking tasks, and booking tasks is not reading petitions.
- *
- * `can-bo` IS HIDDEN: a staff-conduct report is handled by the leadership on the petition itself, and
- * the server refuses it with 409 `restricted_field_no_task`. A holder of `feedback.restricted` is the
- * only one who ever sees such a petition here, so hiding the button reveals nothing.
- */
-export function petitionTaskOffered(
-  permissions: readonly string[],
-  petition: Pick<petitions_phieuPhanAnhRa, "status" | "field">,
-): boolean {
-  return (
-    coQuyen(permissions, QUYEN_TAO_NHIEM_VU) &&
-    coQuyen(permissions, QUYEN_XEM_PHAN_ANH) &&
-    PETITION_TASK_STATUSES.includes(petition.status) &&
-    // No settled field is refused by the server too (`petition_not_classified`).
-    petition.field !== "" &&
-    petition.field !== STAFF_CONDUCT_FIELD
-  );
-}
-
-export const PETITION_TASK_BUTTON = "Tạo nhiệm vụ";
-
-/**
- * The prototype's `TaskFromRecordDialog` heading and submit words. Its description ("Hạn xử lý kế thừa
- * từ hồ sơ…") is NOT copied: this route does not inherit the petition's deadline, and the line would
- * promise something the server does not do. Only its first sentence is kept.
- */
-export const PETITION_TASK_DIALOG_TITLE = "Tạo nhiệm vụ từ hồ sơ này";
-export const PETITION_TASK_DIALOG_DESCRIPTION = "Xem lại rồi mới tạo.";
-
-/**
- * The title the form opens with. ONLY the lookup code — never the petition's content or the reporter:
- * a task title is read by every officer who can read tasks, and petition content is personal data
- * (rule 3). The clerk rewrites it into a sentence of work.
- */
-export function petitionTaskTitle(lookupCode: string): string {
-  return `Xử lý phản ánh ${lookupCode}`;
-}
-
-/** A sentence, not a disabled select: nothing is sent — the server takes the petition in the path. */
-export function petitionTaskSourceNote(lookupCode: string): string {
-  return `Nguồn giao: Từ phản ánh ${lookupCode} — máy chủ gắn theo phiếu, không sửa được.`;
-}
-
-/** Carries the register number the server just issued — something the clerk cannot know beforehand. */
-export function petitionTaskCreated(taskCode: string): string {
-  return `Đã tạo nhiệm vụ ${taskCode}.`;
-}
-
-/**
- * The task register. There is no deep link to one task by code (`/nhiem-vu` reads no such parameter),
- * so the link opens the register and the sentence beside it names the code.
- */
-export const TASK_REGISTER_HREF = "/nhiem-vu";
-export const TASK_REGISTER_LINK_LABEL = "Mở sổ Nhiệm vụ";
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * "NHẬP HỘ PHẢN ÁNH" (§11) — POST /api/v1/citizen-reports, `feedback.create`
