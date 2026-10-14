@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { stripTechnicalPrefix } from "./goi";
 
 import {
+  contentCategoriesPath,
   contentCategoryPath,
   countPublishedStaff,
   publishedStaffPath,
@@ -142,6 +143,7 @@ const THEM_DANH_MUC_DAY_DU: ThemDanhMucVao = {
   slug: "chuyen-doi-so",
   parent_id: "01JDM0",
   order: 3,
+  type: "tin-tuc",
 };
 
 describe("GET /api/v1/content-items — đường dẫn và bộ lọc §6", () => {
@@ -271,7 +273,12 @@ describe("POST /api/v1/content-items — soạn", () => {
   it("mang `Idempotency-Key` đúng khoá truyền vào, và lần gửi lại dùng LẠI khoá ấy", async () => {
     // Lần gửi đầu CÓ THỂ đã tới máy chủ và đã đăng một bài lên Mini App của cả xã. Sinh khoá mới ở
     // lần bấm lại là bỏ đúng cái chống trùng sinh ra để chặn.
-    const gia = batFetch(traJSON(500, { code: "internal", message: "Đã xảy ra lỗi." }));
+    // A fresh reply per call: the item writes read the refusal's `code` too, so one Response object cannot
+    // serve two calls.
+    const gia = vi.fn(async (_duongDan: string, _tuyChon?: RequestInit) =>
+      traJSON(500, { code: "internal", message: "Đã xảy ra lỗi." }),
+    );
+    vi.stubGlobal("fetch", gia);
 
     await themNoiDung(THEM_DAY_DU, "k-co-dinh");
     await themNoiDung(THEM_DAY_DU, "k-co-dinh");
@@ -491,10 +498,18 @@ describe("the cover on the article", () => {
 });
 
 describe("danh mục tin §6", () => {
-  it("GET đúng tuyến, không tham số nào", async () => {
+  // One tree per content type (owner 14/10/2026): `type` is REQUIRED by the route (missing → 400).
+  it("GET đúng tuyến, mang ĐÚNG MỘT tham số `type` — cây của một loại", async () => {
     const gia = batFetch(traJSON(200, { items: [] }));
-    await layDanhMucNoiDung();
-    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/content-categories");
+    await layDanhMucNoiDung("su-kien");
+    expect(loiGoi(gia, 0).duongDan).toBe("/api/v1/content-categories?type=su-kien");
+    expect(contentCategoriesPath("truyen-thanh")).toBe("/api/v1/content-categories?type=truyen-thanh");
+  });
+
+  it("POST carries the tree's `type`", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    await themDanhMucNoiDung({ name: "Lễ hội", type: "su-kien" }, "k");
+    expect(thanDaGui(gia, 0)).toEqual({ name: "Lễ hội", type: "su-kien" });
   });
 
   it("POST mang `Idempotency-Key` và giữ nguyên khoá khi gửi lại", async () => {
@@ -673,6 +688,24 @@ describe("category edit / delete (ADR 0067 §3)", () => {
     if (!kq.ok) expect(kq.thongBao).toBe("Banner phải có ảnh bìa — tải ảnh lên trước khi lưu, và không gỡ ảnh khỏi banner");
   });
 
+  // A banner takes no category (owner 14/10/2026): 422 `banner_has_no_category` otherwise.
+  it("POST never sends `category_id` for a banner; other types keep it", async () => {
+    const gia = batFetch(traJSON(201, {}));
+    await themNoiDung(BANNER_FULL, "k");
+    await themNoiDung({ ...BANNER_FULL, type: "tin-tuc" }, "k");
+    expect(thanDaGui(gia, 0)).not.toHaveProperty("category_id");
+    expect(thanDaGui(gia, 1)).toMatchObject({ category_id: "01JDM1" });
+  });
+
+  it("item writes keep the server's `code` on a refusal (the form names two of them)", async () => {
+    batFetch(traJSON(409, { code: "category_type_mismatch", message: "Danh mục đã chọn thuộc loại nội dung khác." }));
+    const created = await themNoiDung(THEM_DAY_DU, "k");
+    expect(created.ok ? "" : created.code).toBe("category_type_mismatch");
+    batFetch(traJSON(422, { code: "banner_has_no_category", message: "x" }));
+    const edited = await suaNoiDung("01JND1", { category_id: "01JDM1" });
+    expect(edited.ok ? "" : edited.code).toBe("banner_has_no_category");
+  });
+
   it("POST sends the banner fields for a banner only", async () => {
     const gia = batFetch(traJSON(201, {}));
     await themNoiDung(BANNER_FULL, "k");
@@ -793,8 +826,9 @@ describe("thân yêu cầu khớp hợp đồng", () => {
     await updateContentCategory("01JDM1", { name: "A", parent_id: "", order: 1, hidden: true });
     const sent = Object.keys(thanDaGui(gia, 0)).sort();
     expect(sent).toEqual(["hidden", "name", "order", "parent_id"]);
-    // The contract still lists `slug` — only so the server can REFUSE it (400). Every other key matches.
-    expect(cuaHopDong.filter((k) => k !== "slug").sort()).toEqual(sent);
+    // The contract still lists `slug` and `type` — only so the server can REFUSE them (400: an issued code
+    // never changes, and a category's tree is fixed at birth, 14/10/2026). Every other key matches.
+    expect(cuaHopDong.filter((k) => k !== "slug" && k !== "type").sort()).toEqual(sent);
   });
 
   it("`deleteContentCategory` sends EXACTLY the keys of `comms.deleteCategoryIn`", async () => {

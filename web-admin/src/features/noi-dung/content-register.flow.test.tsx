@@ -12,9 +12,12 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai"; // vi-name-ok: 
 import type { comms_noiDungRa } from "@/lib/api/schema.gen"; // vi-name-ok: generated contract type
 
 import {
+  BANNER_HAS_NO_CATEGORY,
   CATEGORY_ADDED_TOAST,
+  CATEGORY_CLEARED_BY_TYPE_CHANGE,
   categoryNameTakenWarning,
   CATEGORY_DIALOG_DESCRIPTION,
+  CATEGORY_TYPE_MISMATCH_TEXT,
   CREATED_DRAFT_TOAST,
   PUBLISH_TOGGLE_FAILED,
   PUBLISHED_TOAST,
@@ -70,7 +73,8 @@ type Call = { path: string; method: string; body: unknown };
 
 function fakeServer(
   permissions: string[],
-  opts: { patch?: Response; post?: Response; hasMore?: boolean; categories?: unknown[] } = {},
+  // `categories`: each type's tree, by type code (one tree per content type, 14/10/2026).
+  opts: { patch?: Response; post?: Response; hasMore?: boolean; categories?: Readonly<Record<string, unknown[]>> } = {},
 ): () => Call[] {
   const f = vi.fn(async (path: string, init?: RequestInit): Promise<Response> => {
     const method = init?.method ?? "GET";
@@ -81,12 +85,16 @@ function fakeServer(
     if (method === "PATCH") return (opts.patch ?? json(200, SHOWING)).clone();
     if (method === "POST" && path === "/api/v1/content-items") return (opts.post ?? json(201, SHOWING)).clone();
     if (method === "POST" && path === "/api/v1/content-categories") {
-      return json(201, { id: "01JDMN", name: "Nông nghiệp", slug: "nong-nghiep", parent_id: "", order: 0, created_at: "2026-10-09T02:00:00Z", hidden: false });
+      const type = (JSON.parse(String(init?.body)) as { type: string }).type;
+      return json(201, { id: "01JDMN", name: "Nông nghiệp", slug: "nong-nghiep", parent_id: "", order: 0, created_at: "2026-10-09T02:00:00Z", hidden: false, type });
     }
-    if (method === "GET" && path === "/api/v1/content-categories" && opts.categories !== undefined) {
-      return json(200, { items: opts.categories });
+    // As the server: `type` is REQUIRED, and `banner` has no tree — both 400.
+    if (method === "GET" && path.startsWith("/api/v1/content-categories")) {
+      const type = new URL(path, "http://x").searchParams.get("type") ?? "";
+      if (type === "" || type === "banner") return json(400, { code: "invalid_request", message: "Thiếu loại nội dung." });
+      return json(200, { items: opts.categories?.[type] ?? [] });
     }
-    if (path.startsWith("/api/v1/content-categories") || path.startsWith("/api/v1/commune-staff")) {
+    if (path.startsWith("/api/v1/commune-staff")) {
       return json(200, { items: [] });
     }
     return json(404, { code: "not_found", message: "Không có." });
@@ -136,6 +144,20 @@ async function mountScreen(): Promise<void> {
 
 const listReads = (calls: Call[]) =>
   calls.filter((c) => c.method === "GET" && c.path.startsWith("/api/v1/content-items")).map((c) => c.path);
+
+const categoryReads = (calls: Call[]) =>
+  calls.filter((c) => c.method === "GET" && c.path.startsWith("/api/v1/content-categories")).map((c) => c.path);
+
+function category(id: string, name: string, type: string, parentId = ""): unknown {
+  return { id, name, slug: id.toLowerCase(), parent_id: parentId, order: 0, created_at: "2026-10-09T02:00:00Z", hidden: false, type };
+}
+
+function choose(el: HTMLSelectElement, value: string): void {
+  Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(el, value);
+  act(() => {
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
 
 function byLabel(label: string): HTMLButtonElement | undefined {
   return Array.from(host!.querySelectorAll("button")).find((b) => b.getAttribute("aria-label") === label);
@@ -320,9 +342,9 @@ describe("Thêm nội dung", () => {
   });
 });
 
-describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
-  async function openCategories(): Promise<void> {
-    await act(async () => byText("Danh mục tin").click());
+describe("Danh mục — <loại>: the prototype's `CategoryManagerDialog`, one tree per type", () => {
+  async function openCategories(label = "Danh mục — Tin tức"): Promise<void> {
+    await act(async () => byText(label).click());
     await settle();
   }
 
@@ -333,7 +355,7 @@ describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
     const dialog = host!.querySelector("dialog")!;
     expect(dialog.className).toContain("w-[min(44rem,calc(100vw-1rem))]");
     const title = dialog.querySelector("h3")!;
-    expect(title.textContent).toBe("Danh mục tin");
+    expect(title.textContent).toBe("Danh mục — Tin tức");
     expect(title.querySelector("svg")).toBeNull();
     expect(dialog.textContent).toContain(CATEGORY_DIALOG_DESCRIPTION);
     expect(CATEGORY_DIALOG_DESCRIPTION).toBe("Bà con lọc tin theo danh mục này trên Mini App.");
@@ -344,7 +366,7 @@ describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
     expect(at("Thêm danh mục")).toBeLessThan(at("Chưa có danh mục nào. Thêm ở trên."));
   });
 
-  it("`Thêm`: POST name/parent — no slug (the server issues it), no order — the toast, and the dialog STAYS open", async () => {
+  it("`Thêm`: POST name/parent/type — no slug (the server issues it), no order — the toast, and the dialog STAYS open", async () => {
     const calls = fakeServer(["content.read", "content.update"]);
     await mountScreen();
     await openCategories();
@@ -356,7 +378,7 @@ describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
     await settle();
     const post = calls().filter((c) => c.method === "POST" && c.path === "/api/v1/content-categories");
     expect(post).toHaveLength(1);
-    expect(post[0]!.body).toEqual({ name: "Nông nghiệp", parent_id: "" });
+    expect(post[0]!.body).toEqual({ name: "Nông nghiệp", parent_id: "", type: "tin-tuc" });
     expect(T.success).toHaveBeenCalledWith(CATEGORY_ADDED_TOAST);
     expect(CATEGORY_ADDED_TOAST).toBe("Đã thêm danh mục.");
     expect(host!.querySelector("dialog")).not.toBeNull();
@@ -366,7 +388,7 @@ describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
   // Owner 13/10/2026: a name the commune already has — any case — is warned AS IT IS TYPED, and never sent.
   it("a taken name, any case: the warning names the existing category, `Thêm` is held, nothing is POSTed", async () => {
     const calls = fakeServer(["content.read", "content.update"], {
-      categories: [{ id: "01JDMN", name: "Nông nghiệp", slug: "nong-nghiep", parent_id: "", order: 0, created_at: "2026-10-09T02:00:00Z", hidden: false }],
+      categories: { "tin-tuc": [category("01JDMN", "Nông nghiệp", "tin-tuc")] },
     });
     await mountScreen();
     await openCategories();
@@ -383,6 +405,157 @@ describe("Danh mục tin — the prototype's `CategoryManagerDialog`", () => {
     typeInto(box, "Nông nghiệp sạch");
     expect(host!.querySelector("#ten-danh-muc-trung")).toBeNull();
     expect(submit.disabled).toBe(false);
+  });
+
+  // Names are unique per (type, parent): `Nông nghiệp` of Tin tức does not block `Nông nghiệp` of Sự kiện.
+  it("the same name in ANOTHER type's tree: no warning, and the POST joins the open tab's tree", async () => {
+    const calls = fakeServer(["content.read", "content.update"], {
+      categories: { "tin-tuc": [category("01JDMN", "Nông nghiệp", "tin-tuc")] },
+    });
+    await mountScreen();
+    await act(async () => byText("Sự kiện").click());
+    await settle();
+    await openCategories("Danh mục — Sự kiện");
+    expect(host!.querySelector("dialog h3")!.textContent).toBe("Danh mục — Sự kiện");
+    const box = host!.querySelector<HTMLInputElement>("#ten-danh-muc")!;
+    typeInto(box, "Nông nghiệp");
+    expect(host!.querySelector("#ten-danh-muc-trung")).toBeNull();
+    await act(async () => box.form!.requestSubmit());
+    await settle();
+    const post = calls().filter((c) => c.method === "POST" && c.path === "/api/v1/content-categories");
+    expect(post.map((c) => c.body)).toEqual([{ name: "Nông nghiệp", parent_id: "", type: "su-kien" }]);
+    // The written tree is read again — that type's, not the other.
+    expect(categoryReads(calls()).at(-1)).toBe("/api/v1/content-categories?type=su-kien");
+  });
+});
+
+describe("one category tree per content type (owner 14/10/2026)", () => {
+  it("the open tab's tree is read WITH its type; never a read without one", async () => {
+    const calls = fakeServer(["content.read"]);
+    await mountScreen();
+    expect(categoryReads(calls())).toEqual(["/api/v1/content-categories?type=tin-tuc"]);
+  });
+
+  it("a tab change reads that type's tree once, and resets the category filter", async () => {
+    const calls = fakeServer(["content.read"], {
+      categories: {
+        "tin-tuc": [category("01JDMA", "Chuyển đổi số", "tin-tuc")],
+        "su-kien": [category("01JDMB", "Lễ hội", "su-kien")],
+      },
+    });
+    await mountScreen();
+    choose(host!.querySelector<HTMLSelectElement>("#loc-danh-muc")!, "01JDMA");
+    await settle();
+    expect(listReads(calls()).at(-1)).toBe("/api/v1/content-items?type=tin-tuc&category=01JDMA&limit=25");
+
+    await act(async () => byText("Sự kiện").click());
+    await settle();
+    expect(listReads(calls()).at(-1)).toBe("/api/v1/content-items?type=su-kien&limit=25");
+    expect(categoryReads(calls())).toEqual([
+      "/api/v1/content-categories?type=tin-tuc",
+      "/api/v1/content-categories?type=su-kien",
+    ]);
+    const filter = host!.querySelector<HTMLSelectElement>("#loc-danh-muc")!;
+    expect(filter.value).toBe("");
+    expect(Array.from(filter.options).map((o) => o.textContent)).toEqual(["Tất cả danh mục", "Lễ hội"]);
+
+    // Back to a tab already read: its tree is kept, not read again.
+    await act(async () => byText("Tin tức").click());
+    await settle();
+    expect(categoryReads(calls())).toHaveLength(2);
+  });
+
+  it("the Banner tab reads no tree: the filter and the button are disabled, saying why", async () => {
+    const calls = fakeServer(["content.read", "content.update"]);
+    await mountScreen();
+    await act(async () => byText("Banner").click());
+    await settle();
+    expect(categoryReads(calls()).some((p) => p.includes("banner"))).toBe(false);
+    const filter = host!.querySelector<HTMLSelectElement>("#loc-danh-muc")!;
+    expect(filter.disabled).toBe(true);
+    expect(filter.textContent).toBe(BANNER_HAS_NO_CATEGORY);
+    const button = byText("Danh mục");
+    expect(button.disabled).toBe(true);
+    expect(button.title).toBe(BANNER_HAS_NO_CATEGORY);
+  });
+
+  async function openAddWithCategory(calls: () => Call[]): Promise<HTMLSelectElement> {
+    await act(async () => byText("Thêm nội dung").click());
+    await settle();
+    const select = host!.querySelector<HTMLSelectElement>("#danh-muc-noi-dung")!;
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["", "01JDMA"]);
+    choose(select, "01JDMA");
+    expect(calls().length).toBeGreaterThan(0);
+    return select;
+  }
+
+  it("the form lists the tree of its CHOSEN type; changing the type clears the category and says so", async () => {
+    const calls = fakeServer(["content.read", "content.update"], {
+      categories: {
+        "tin-tuc": [category("01JDMA", "Chuyển đổi số", "tin-tuc")],
+        "su-kien": [category("01JDMB", "Lễ hội", "su-kien")],
+      },
+    });
+    await mountScreen();
+    await openAddWithCategory(calls);
+    expect(host!.querySelector("dialog")!.textContent).not.toContain(CATEGORY_CLEARED_BY_TYPE_CHANGE);
+
+    choose(host!.querySelector<HTMLSelectElement>("#loai-noi-dung")!, "su-kien");
+    await settle();
+    expect(categoryReads(calls()).at(-1)).toBe("/api/v1/content-categories?type=su-kien");
+    const select = host!.querySelector<HTMLSelectElement>("#danh-muc-noi-dung")!;
+    expect(select.value).toBe("");
+    expect(Array.from(select.options).map((o) => o.value)).toEqual(["", "01JDMB"]);
+    expect(host!.querySelector("#danh-muc-bo-trong")!.textContent).toBe(CATEGORY_CLEARED_BY_TYPE_CHANGE);
+    expect(select.getAttribute("aria-describedby")).toBe("danh-muc-bo-trong");
+
+    typeInto(host!.querySelector<HTMLInputElement>("#tieu-de-noi-dung")!, "Lễ hội đình làng");
+    await act(async () => host!.querySelector<HTMLFormElement>("dialog form")!.requestSubmit());
+    await settle();
+    const post = calls().filter((c) => c.method === "POST" && c.path === "/api/v1/content-items");
+    expect(post).toHaveLength(1);
+    expect(post[0]!.body).toMatchObject({ type: "su-kien", category_id: "" });
+  });
+
+  it("picking a category of the new type takes the note away", async () => {
+    const calls = fakeServer(["content.read", "content.update"], {
+      categories: {
+        "tin-tuc": [category("01JDMA", "Chuyển đổi số", "tin-tuc")],
+        "su-kien": [category("01JDMB", "Lễ hội", "su-kien")],
+      },
+    });
+    await mountScreen();
+    await openAddWithCategory(calls);
+    choose(host!.querySelector<HTMLSelectElement>("#loai-noi-dung")!, "su-kien");
+    await settle();
+    choose(host!.querySelector<HTMLSelectElement>("#danh-muc-noi-dung")!, "01JDMB");
+    expect(host!.querySelector("#danh-muc-bo-trong")).toBeNull();
+  });
+
+  it("changed to Banner: no category field, the note says the category goes, and no tree is read", async () => {
+    const calls = fakeServer(["content.read", "content.update"], {
+      categories: { "tin-tuc": [category("01JDMA", "Chuyển đổi số", "tin-tuc")] },
+    });
+    await mountScreen();
+    await openAddWithCategory(calls);
+    choose(host!.querySelector<HTMLSelectElement>("#loai-noi-dung")!, "banner");
+    await settle();
+    expect(host!.querySelector("#danh-muc-noi-dung")).toBeNull();
+    expect(host!.querySelector("#danh-muc-bo-trong")!.textContent).toBe(CATEGORY_CLEARED_BY_TYPE_CHANGE);
+    expect(categoryReads(calls()).some((p) => p.includes("banner"))).toBe(false);
+  });
+
+  it("409 `category_type_mismatch`: the form's own sentence, inline", async () => {
+    fakeServer(["content.read", "content.update"], {
+      post: json(409, { code: "category_type_mismatch", message: "Danh mục đã chọn thuộc loại nội dung khác." }),
+    });
+    await mountScreen();
+    await act(async () => byText("Thêm nội dung").click());
+    await settle();
+    typeInto(host!.querySelector<HTMLInputElement>("#tieu-de-noi-dung")!, "Lịch tiếp dân");
+    await act(async () => host!.querySelector<HTMLFormElement>("dialog form")!.requestSubmit());
+    await settle();
+    expect(host!.querySelector("dialog")!.textContent).toContain(CATEGORY_TYPE_MISMATCH_TEXT);
   });
 });
 

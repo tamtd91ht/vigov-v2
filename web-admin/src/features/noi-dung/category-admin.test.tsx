@@ -41,6 +41,7 @@ function dm(over: Partial<comms_danhMucRa>): comms_danhMucRa {
     slug: "tin-xa",
     parent_id: "",
     order: 0,
+    type: "tin-tuc",
     created_at: "2026-09-01T02:00:00Z",
     hidden: false,
     ...over,

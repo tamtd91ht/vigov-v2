@@ -122,7 +122,7 @@ describe("the banner box on the form", () => {
           display_order: String(row.display_order ?? ""),
         },
         hang: row,
-        danhMuc: [],
+        categoriesOf: () => [],
         dangGui: false,
         loi: null,
         huy: () => {},

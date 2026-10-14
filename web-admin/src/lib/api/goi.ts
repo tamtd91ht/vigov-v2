@@ -40,8 +40,11 @@ export type KetQua<T> =
        * the Zalo channel tab draws `due_soon_days_out_of_range` under its own select (`zalo.ts`), and
        * its "Nhóm Zalo" section draws each group refusal under the field it is about (scope, kinds,
        * reason — `zalo-groups-form.ts` GROUP_REFUSALS); and the Phân quyền role dialogs draw a name
-       * refusal under "Tên vai trò" and a reason refusal under "Lý do xoá" (`role-dialogs.tsx`).
-       * The sentence shown is still `thongBao`, verbatim; every other screen ignores this field.
+       * refusal under "Tên vai trò" and a reason refusal under "Lý do xoá" (`role-dialogs.tsx`); and the
+       * Nội dung Mini App form names `category_type_mismatch` / `banner_has_no_category` in its own words
+       * (`contentRefusalText`, one category tree per content type since 14/10/2026).
+       * Apart from that last form, the sentence shown is still `thongBao`, verbatim; every other screen
+       * ignores this field.
        */
       code?: string;
     };

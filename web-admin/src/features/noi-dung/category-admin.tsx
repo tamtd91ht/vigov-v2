@@ -34,8 +34,9 @@ import {
 } from "./nhan-noi-dung";
 
 /**
- * `⊞ Danh mục tin` — the list of the prototype's `CategoryManagerDialog` (`CategoryManagerDialog.tsx:168-316`),
- * grouped by parent, the categories with no parent first. Each row: the name, editable IN PLACE (Enter or
+ * `⊞ Danh mục — <loại>` — the list of the prototype's `CategoryManagerDialog` (`CategoryManagerDialog.tsx:168-316`),
+ * for ONE content type's tree (one tree per type, owner 14/10/2026 — the parent hands in that tree only, and no
+ * write here sends `type`: a category's tree is fixed at birth and the PATCH refuses it), grouped by parent, the categories with no parent first. Each row: the name, editable IN PLACE (Enter or
  * leaving the box saves, Esc puts the old name back) · `{n} bài` and `Từ Cổng` as disabled "?" (no route
  * serves either, owner D4 09/10/2026) · `Tắt` / `Bật` · the bin, which opens the soft delete with a reason
  * (rule 7 — the prototype's two-step `Xoá hẳn` is a hard delete this system does not have).

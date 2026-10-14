@@ -122,7 +122,7 @@ async function mountForm(initial: GiaTriFormNoiDung, saved?: comms_noiDungRa, on
         moTa="mô tả"
         giaTriDau={initial}
         hang={saved}
-        danhMuc={[]}
+        categoriesOf={() => []}
         dangGui={false}
         loi={null}
         huy={() => {}}

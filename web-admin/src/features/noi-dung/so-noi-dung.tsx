@@ -29,7 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { createElement, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { createElement, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
@@ -91,7 +91,14 @@ import {
   CATEGORY_ADDED_TOAST,
   categoryNameTakenWarning,
   CATEGORY_DIALOG_DESCRIPTION,
-  CATEGORY_DIALOG_TITLE,
+  categoryButtonLabel,
+  CATEGORY_BUTTON_NO_TREE,
+  categoryDialogTitle,
+  CATEGORY_CLEARED_BY_TYPE_CHANGE,
+  BANNER_HAS_NO_CATEGORY,
+  hasCategoryTree,
+  PICK_TYPE_FOR_CATEGORIES,
+  withContentType,
   CATEGORY_NO_PARENT_OPTION,
   CATEGORY_PARENT_LABEL,
   CHUA_XEP_DANH_MUC,
@@ -117,9 +124,8 @@ import {
   MO_TA_MAN,
   MOI_DANH_MUC,
   NO_CATEGORY_FILTER_HINT,
-  NO_CATEGORY_FILTER_TITLE,
+  noCategoryFilterTitle,
   MOI_LOAI,
-  NHAN_NUT_DANH_MUC,
   NHAN_NUT_HUY,
   NHAN_NUT_LUU,
   NHAN_NUT_SUA,
@@ -320,11 +326,17 @@ export function SoNoiDung() {
     kq: KetQua<page_Result_comms_noiDungRa>;
   } | null>(null);
 
-  const [danhMuc, datDanhMuc] = useState<KetQua<comms_danhSachDanhMucRa> | null>(null);
-  const [lanTaiDanhMuc, datLanTaiDanhMuc] = useState(0);
+  // ONE CATEGORY TREE PER CONTENT TYPE (owner 14/10/2026): each type's tree, read the first time a tab or
+  // the form asks for it and kept for the session (`loadCategoryTree`). A type absent here is not read yet.
+  const [categoryTrees, setCategoryTrees] = useState<Readonly<Record<string, KetQua<comms_danhSachDanhMucRa>>>>({});
+  // The latest read asked per type: a reply that is not the latest for its type is dropped, so a slow
+  // first read cannot overwrite the re-read after a write. One counter for all types — never reused.
+  const categoryRequests = useRef<Record<string, number>>({});
+  const categoryRequestSeq = useRef(0);
 
   const [dangMoThem, datDangMoThem] = useState(false);
-  const [dangMoDanhMuc, datDangMoDanhMuc] = useState(false);
+  // The type whose tree the category manager edits — the tab it was opened from; `null` = closed.
+  const [categoryDialogType, setCategoryDialogType] = useState<string | null>(null);
   const [dangGui, datDangGui] = useState(false);
   const [loiForm, datLoiForm] = useState<string | null>(null);
   // Đếm số lần GHI THÀNH CÔNG. Nó đi vào `key` của biểu mẫu, nên một lần ghi xong là một lần biểu
@@ -383,15 +395,28 @@ export function SoNoiDung() {
     return () => clearTimeout(t);
   }, [tim, loc.tim]);
 
-  useEffect(() => {
-    let bo = false;
-    layDanhMucNoiDung().then((kq) => {
-      if (!bo) datDanhMuc(kq);
+  /**
+   * Reads `type`'s category tree — once, unless `force` (after a write to it). NEVER WITHOUT A TYPE, and never
+   * for `banner`: the route requires `type` and refuses `banner` (400), so a type with no tree asks nothing.
+   * A failed read is forgotten, so the next visit to that tab asks again.
+   */
+  const loadCategoryTree = useCallback((type: string, force = false): void => {
+    if (!hasCategoryTree(type)) return;
+    if (!force && categoryRequests.current[type] !== undefined) return;
+    categoryRequestSeq.current += 1;
+    const mine = categoryRequestSeq.current;
+    categoryRequests.current[type] = mine;
+    void layDanhMucNoiDung(type).then((kq) => {
+      if (categoryRequests.current[type] !== mine) return;
+      if (!kq.ok) delete categoryRequests.current[type];
+      setCategoryTrees((trees) => ({ ...trees, [type]: kq }));
     });
-    return () => {
-      bo = true;
-    };
-  }, [lanTaiDanhMuc]);
+  }, []);
+
+  // The open tab's tree, for the filter row, the table's category cells and the manager.
+  useEffect(() => {
+    loadCategoryTree(loc.loai);
+  }, [loc.loai, loadCategoryTree]);
 
   const khoaChiTiet = `${dangSuaID ?? ""}|${lanGhiXong}`;
 
@@ -428,8 +453,15 @@ export function SoNoiDung() {
   const canEdit = canEditContent(session);
 
   const so = taiTu(daTai, khoaSo);
-  const dsDanhMuc: readonly comms_danhMucRa[] =
-    danhMuc !== null && danhMuc.ok ? danhMuc.duLieu.items : [];
+  /** `type`'s tree as read so far — `[]` while loading, after a failure, and for `banner`. */
+  function categoriesOf(type: string): readonly comms_danhMucRa[] {
+    const tree = categoryTrees[type];
+    return tree !== undefined && tree.ok ? tree.duLieu.items : [];
+  }
+  // The open tab's read: `null` while loading — and for a type with no tree, which reads nothing.
+  const danhMuc = hasCategoryTree(loc.loai) ? (categoryTrees[loc.loai] ?? null) : null;
+  const dsDanhMuc = categoriesOf(loc.loai);
+  const dialogTree = categoryDialogType === null ? undefined : categoryTrees[categoryDialogType];
   const chiTiet = dangSuaID === null ? null : taiTu(daTaiChiTiet, khoaChiTiet);
 
   /** Sau mỗi lần ghi xong: về trang đầu và đọc lại sổ. */
@@ -446,7 +478,7 @@ export function SoNoiDung() {
 
   function dongMoiBieuMau(): void {
     datDangMoThem(false);
-    datDangMoDanhMuc(false);
+    setCategoryDialogType(null);
     datDangSuaID(null);
     datLoiForm(null);
     setDeleting(null);
@@ -516,7 +548,7 @@ export function SoNoiDung() {
         // The prototype's toast says it failed; the server's sentence stays INLINE, VERBATIM — its 400
         // names the field and the rule, and rewriting it here would be a second copy of a business rule.
         toast.error(SAVE_FAILED_TOAST);
-        datLoiForm(contentRefusalText(kq.thongBao));
+        datLoiForm(contentRefusalText(kq.thongBao, kq.code));
         return;
       }
       uploadHeldAudio(kq.duLieu.id, audio, () => {
@@ -569,7 +601,7 @@ export function SoNoiDung() {
       if (!kq.ok) {
         datDangGui(false);
         toast.error(SAVE_FAILED_TOAST);
-        datLoiForm(contentRefusalText(kq.thongBao));
+        datLoiForm(contentRefusalText(kq.thongBao, kq.code));
         return;
       }
       thenUpload();
@@ -601,10 +633,11 @@ export function SoNoiDung() {
    * `order` is optional (0 when absent — what this form used to send by default). NO `slug` either: the
    * server issues it from the name (bug sheet row 21). The dialog STAYS OPEN
    * (prototype `CategoryManagerDialog.tsx:73-86`): the new row appears in the list below, the box empties.
+   * The new category joins `type`'s tree — the tab the manager was opened from (one tree per type).
    */
-  function themDanhMuc(ten: string, chaID: string, khoa: string): void {
+  function themDanhMuc(type: string, ten: string, chaID: string, khoa: string): void {
     datDangGui(true);
-    themDanhMucNoiDung({ name: ten, parent_id: chaID }, khoa).then((kq) => {
+    themDanhMucNoiDung({ name: ten, parent_id: chaID, type }, khoa).then((kq) => {
       datDangGui(false);
       if (!kq.ok) {
         datLoiForm(kq.thongBao);
@@ -613,7 +646,7 @@ export function SoNoiDung() {
       toast.success(CATEGORY_ADDED_TOAST);
       datLoiForm(null);
       datLanGhiXong((n) => n + 1);
-      datLanTaiDanhMuc((n) => n + 1);
+      loadCategoryTree(type, true);
     });
   }
 
@@ -650,7 +683,8 @@ export function SoNoiDung() {
             moTa={MO_TA_FORM_THEM}
             // The new item's type is the tab being looked at (prototype `defaultKind={kind}`).
             giaTriDau={{ ...FORM_TRONG, type: loc.loai }}
-            danhMuc={dsDanhMuc}
+            categoriesOf={categoriesOf}
+            loadCategories={loadCategoryTree}
             dangGui={dangGui}
             uploading={audioUploading}
             loi={loiForm}
@@ -660,14 +694,14 @@ export function SoNoiDung() {
         </OverlayDialog>
       )}
 
-      {canEdit && dangMoDanhMuc && (
+      {canEdit && categoryDialogType !== null && (
         // The prototype's `CategoryManagerDialog` (`sm:max-w-[44rem]`): plain title + one sentence, the
         // portal-import box, the add row, then the grouped list.
         <OverlayDialog titleId="tieu-de-hop-danh-muc" onDismiss={dismissOverlay} className={CATEGORY_DIALOG_CLASS}>
           <div className="mb-4 flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <h3 id="tieu-de-hop-danh-muc" className="m-0 text-lg leading-snug font-semibold text-navy">
-                {CATEGORY_DIALOG_TITLE}
+                {categoryDialogTitle(categoryDialogType)}
               </h3>
               <p className="m-0 mt-1 text-[13px] text-ink-muted">{CATEGORY_DIALOG_DESCRIPTION}</p>
             </div>
@@ -678,24 +712,25 @@ export function SoNoiDung() {
           <div className="flex flex-col gap-4">
             <CategoryImportPending />
             <FormDanhMuc
-              key={`danh-muc|${lanGhiXong}`}
-              danhMuc={dsDanhMuc}
+              key={`danh-muc|${categoryDialogType}|${lanGhiXong}`}
+              type={categoryDialogType}
+              danhMuc={categoriesOf(categoryDialogType)}
               dangGui={dangGui}
               loi={loiForm}
-              luu={themDanhMuc}
+              luu={(ten, chaID, khoa) => themDanhMuc(categoryDialogType, ten, chaID, khoa)}
             />
-            {danhMuc === null ? (
+            {dialogTree === undefined ? (
               <Skeleton className="h-40 w-full" />
-            ) : !danhMuc.ok ? (
+            ) : !dialogTree.ok ? (
               <p className="m-0 text-[12px] font-medium text-danger" role="alert">
-                {danhMuc.thongBao}
+                {dialogTree.thongBao}
               </p>
             ) : (
               <CategoryAdmin
-                categories={dsDanhMuc}
+                categories={dialogTree.duLieu.items}
                 update={updateContentCategory}
                 remove={deleteContentCategory}
-                changed={() => datLanTaiDanhMuc((n) => n + 1)}
+                changed={() => loadCategoryTree(categoryDialogType, true)}
               />
             )}
           </div>
@@ -716,7 +751,8 @@ export function SoNoiDung() {
               moTa={MO_TA_FORM_THEM}
               giaTriDau={giaTriTuHang(chiTiet.duLieu)}
               hang={chiTiet.duLieu}
-              danhMuc={dsDanhMuc}
+              categoriesOf={categoriesOf}
+              loadCategories={loadCategoryTree}
               dangGui={dangGui}
               uploading={audioUploading}
               loi={loiForm}
@@ -778,7 +814,11 @@ export function SoNoiDung() {
         <h2 id="tieu-de-so-noi-dung" className="an-thi-giac">
           Sổ nội dung Mini App
         </h2>
-        <ThanhTabLoai loai={loc.loai} datLoai={(l) => setFilter({ loai: l })} />
+        {/* A new tab is a new tree: the old tab's category filter names a category that is not in it. */}
+        <ThanhTabLoai
+          loai={loc.loai}
+          datLoai={(l) => setFilter(l === loc.loai ? { loai: l } : { loai: l, danhMucID: "" })}
+        />
 
         <div
           role="tabpanel"
@@ -790,6 +830,7 @@ export function SoNoiDung() {
           className="min-w-0"
         >
           <HangLocNoiDung
+            type={loc.loai}
             danhMucID={loc.danhMucID}
             datDanhMucID={(id) => setFilter({ danhMucID: id })}
             tim={tim}
@@ -797,24 +838,18 @@ export function SoNoiDung() {
             danhMuc={dsDanhMuc}
             status={loc.status}
             setStatus={(st) => setFilter({ status: st })}
-            // `Danh mục tin` closes the filter row. `content.update` only — it opens the tree's
-            // edit/hide/delete and the add form, nothing to read in it that the filter does not show.
+            // `Danh mục — <loại>` closes the filter row. `content.update` only — it opens the tree's
+            // edit/hide/delete and the add form, nothing to read in it that the filter does not show. On a
+            // type with no tree (`banner`) it stays in the row, disabled, saying why.
             extra={
               canEdit ? (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  className="ml-auto"
-                  aria-haspopup="dialog"
-                  icon={<FolderTree aria-hidden="true" focusable="false" className="size-4" />}
-                  onClick={() => {
+                <CategoryManagerButton
+                  type={loc.loai}
+                  open={() => {
                     dongMoiBieuMau();
-                    datDangMoDanhMuc(true);
+                    setCategoryDialogType(loc.loai);
                   }}
-                >
-                  {withoutLeadingGlyph(NHAN_NUT_DANH_MUC)}
-                </Button>
+                />
               ) : null
             }
           />
@@ -1035,6 +1070,32 @@ function typeTabIcon(type: string): LucideIcon {
   return Newspaper;
 }
 
+/** Why a type offers no category: a banner files under none; no single type means no tree to read. */
+function noCategoryTypeHint(type: string): string {
+  return type === CONTENT_TYPE_BANNER ? BANNER_HAS_NO_CATEGORY : PICK_TYPE_FOR_CATEGORIES;
+}
+
+/**
+ * The button that opens the category manager of the open tab's tree, naming the type (`Danh mục — Tin tức`).
+ * On a type with no tree it stays in the row DISABLED, its reason as its title — a button that vanished on
+ * one tab would read as a missing feature (the lesson of bug sheet row 20, kept for the filter select too).
+ */
+export function CategoryManagerButton({ type, open }: { type: string; open: () => void }) {
+  const icon = <FolderTree aria-hidden="true" focusable="false" className="size-4" />;
+  if (!hasCategoryTree(type)) {
+    return (
+      <Button type="button" variant="secondary" size="sm" className="ml-auto" disabled title={noCategoryTypeHint(type)} icon={icon}>
+        {CATEGORY_BUTTON_NO_TREE}
+      </Button>
+    );
+  }
+  return (
+    <Button type="button" variant="secondary" size="sm" className="ml-auto" aria-haspopup="dialog" icon={icon} onClick={open}>
+      {withoutLeadingGlyph(categoryButtonLabel(type))}
+    </Button>
+  );
+}
+
 /**
  * Hàng lọc §6 — the prototype's row (`ContentWorkspace.tsx:231-283`): the search box, the category select
  * (always present — disabled with a hint while the commune has no visible category), then (owner D1) the status select, and what closes the row
@@ -1047,6 +1108,7 @@ function typeTabIcon(type: string): LucideIcon {
  * client-side filter would hide every `Chờ duyệt` item on the other pages.
  */
 export function HangLocNoiDung({
+  type,
   danhMucID,
   datDanhMucID,
   tim,
@@ -1056,6 +1118,8 @@ export function HangLocNoiDung({
   setStatus,
   extra,
 }: {
+  /** The open tab's type — whose tree `danhMuc` is. A type with no tree (`banner`) gets no category filter. */
+  type: string;
   danhMucID: string;
   datDanhMucID: (id: string) => void;
   tim: string;
@@ -1111,7 +1175,12 @@ export function HangLocNoiDung({
         <label htmlFor="loc-danh-muc" className="an-thi-giac">
           Lọc theo danh mục
         </label>
-        {visible.length > 0 || danhMucID !== "" ? (
+        {!hasCategoryTree(type) ? (
+          // One tree per type (owner 14/10/2026): a banner files under no category; no type means no tree.
+          <select id="loc-danh-muc" className={FILTER_SELECT_CLASS} value="" disabled title={noCategoryTypeHint(type)}>
+            <option value="">{noCategoryTypeHint(type)}</option>
+          </select>
+        ) : visible.length > 0 || danhMucID !== "" ? (
           <select
             id="loc-danh-muc"
             className={FILTER_SELECT_CLASS}
@@ -1126,7 +1195,7 @@ export function HangLocNoiDung({
             ))}
           </select>
         ) : (
-          <select id="loc-danh-muc" className={FILTER_SELECT_CLASS} value="" disabled title={NO_CATEGORY_FILTER_TITLE}>
+          <select id="loc-danh-muc" className={FILTER_SELECT_CLASS} value="" disabled title={noCategoryFilterTitle(type)}>
             <option value="">{NO_CATEGORY_FILTER_HINT}</option>
           </select>
         )}
@@ -1500,7 +1569,8 @@ export function FormNoiDung({
   moTa,
   giaTriDau,
   hang,
-  danhMuc,
+  categoriesOf,
+  loadCategories,
   dangGui,
   uploading = false,
   loi,
@@ -1516,7 +1586,13 @@ export function FormNoiDung({
   giaTriDau: GiaTriFormNoiDung;
   /** Hàng gốc, chỉ có khi đang SỬA. */
   hang?: comms_noiDungRa;
-  danhMuc: readonly comms_danhMucRa[];
+  /**
+   * The category tree of a type, as read so far. The select lists the tree of the type CURRENTLY chosen in
+   * the form — one tree per content type (owner 14/10/2026) — never the tab's.
+   */
+  categoriesOf: (type: string) => readonly comms_danhMucRa[];
+  /** Asks for a type's tree; the form calls it whenever its type changes. Absent where the tree is given. */
+  loadCategories?: (type: string) => void;
   dangGui: boolean;
   /** The saved item's held audio file is being uploaded — Lưu says `Đang tải tệp…`. */
   uploading?: boolean;
@@ -1562,6 +1638,14 @@ export function FormNoiDung({
   // A held upload that did not finish after the save: its outcome, and `Hoàn tất lại` when the bytes are
   // already in the store (a new upload would meet 409 `audio_limit` while that file holds the one slot).
   const [audioState, setAudioState] = useState<AudioUploadState>(initialAudioState ?? { kind: "idle" });
+  // The officer changed the type of an item that had a category: the category was cleared (it sat in the
+  // old type's tree) and the form says so until another category is picked.
+  const [categoryCleared, setCategoryCleared] = useState(false);
+
+  // The tree of the type chosen NOW: asked whenever the type changes (`loadCategories` reads each type once).
+  useEffect(() => {
+    loadCategories?.(gt.type);
+  }, [gt.type, loadCategories]);
 
   const editing = hang !== undefined;
   const tieuDeGon = gt.title.trim();
@@ -1587,6 +1671,7 @@ export function FormNoiDung({
   const isBanner = gt.type === CONTENT_TYPE_BANNER;
   // Non-hidden categories only (prototype `ContentItemForm.tsx:253-255`), plus the item's OWN category when
   // it is hidden: dropping it would show `— Chưa xếp danh mục —` and the first Lưu would move the item.
+  const danhMuc = categoriesOf(gt.type);
   const formCategories = danhMuc.filter((d) => !d.hidden || d.id === giaTriDau.category_id);
 
   // Each state report; a `ready` one makes its id the form's cover. Functional update: the upload
@@ -1709,7 +1794,11 @@ export function FormNoiDung({
               id="loai-noi-dung"
               value={gt.type === "" ? LOAI_MAC_DINH : gt.type}
               disabled={editing}
-              onChange={(e) => datGT({ ...gt, type: e.target.value })}
+              onChange={(e) => {
+                const next = withContentType(gt, e.target.value);
+                if (gt.category_id !== "" && next.category_id === "") setCategoryCleared(true);
+                datGT(next);
+              }}
             >
               {MOI_LOAI.map((ma) => (
                 <option key={ma} value={ma}>
@@ -1741,7 +1830,11 @@ export function FormNoiDung({
               <select
                 id="danh-muc-noi-dung"
                 value={gt.category_id}
-                onChange={(e) => datGT({ ...gt, category_id: e.target.value })}
+                aria-describedby={categoryCleared ? "danh-muc-bo-trong" : undefined}
+                onChange={(e) => {
+                  setCategoryCleared(false);
+                  datGT({ ...gt, category_id: e.target.value });
+                }}
               >
                 <option value="">{CHUA_XEP_DANH_MUC}</option>
                 {dungCayDanhMuc(formCategories).map((m) => (
@@ -1753,6 +1846,11 @@ export function FormNoiDung({
             </Field>
           )}
         </div>
+        {categoryCleared && (
+          <p id="danh-muc-bo-trong" className="m-0 -mt-2 text-[12px] text-ink-muted" role="status">
+            {CATEGORY_CLEARED_BY_TYPE_CHANGE}
+          </p>
+        )}
 
         <Field label="Tiêu đề" htmlFor="tieu-de-noi-dung" required error={titleError} grow="auto">
           <input
@@ -2100,7 +2198,7 @@ export function CoverImageField({
 }
 
 /**
- * The add row of `⊞ Danh mục tin` — the prototype's `flex items-end gap-2` row (`CategoryManagerDialog.tsx:127-166`):
+ * The add row of the category manager (`Danh mục — <loại>`) — the prototype's `flex items-end gap-2` row (`CategoryManagerDialog.tsx:127-166`):
  * `Thêm danh mục` · `Thuộc mục (nếu có)` · `Thêm`, Enter submits. Rename, `Tắt`/`Bật` and delete live in
  * `CategoryAdmin` (`category-admin.tsx`, ADR 0067 §3), drawn below this row.
  *
@@ -2110,11 +2208,15 @@ export function CoverImageField({
  * text: the server takes a `parent_id`.
  */
 export function FormDanhMuc({
+  type,
   danhMuc,
   dangGui,
   loi,
   luu,
 }: {
+  /** The tree this row adds to — one per content type (owner 14/10/2026). */
+  type: string;
+  /** `type`'s tree: the parents offered, and the siblings a name is checked against. */
   danhMuc: readonly comms_danhMucRa[];
   dangGui: boolean;
   loi: string | null;
@@ -2126,7 +2228,8 @@ export function FormDanhMuc({
 
   const tenGon = ten.trim();
   // Warned as it is typed, not after the click (owner 13/10/2026); the server refuses it anyway (409 name_taken).
-  const taken = takenCategoryName(tenGon, chaID, danhMuc);
+  // Within `type`'s tree only: the same name in another type's tree is allowed (unique per type and parent).
+  const taken = takenCategoryName(tenGon, chaID, type, danhMuc);
   const duDieuKien = tenGon !== "" && taken === null;
 
   function guiNgay(e: FormEvent) {

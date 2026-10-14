@@ -14,7 +14,7 @@
  *
  * The three `…/{id}/completion` routes are GONE (ADR 0052 §Sửa đổi 09/10/2026): each upload is ONE
  * multipart POST through `lib/api/upload.ts`.
- *   GET   /api/v1/content-categories                              content.read
+ *   GET   /api/v1/content-categories?type=                        content.read    (type BẮT BUỘC, một cây mỗi loại)
  *   POST  /api/v1/content-categories                              content.update  + Idempotency-Key BẮT BUỘC
  *   PATCH /api/v1/content-categories/{id}                         content.update  (ADR 0067 §3)
  *   DELETE /api/v1/content-categories/{id}  {reason}              content.update  → 204 (soft delete)
@@ -299,7 +299,9 @@ export function themNoiDung(
   const thanGui: ThemNoiDungVao = {
     type: than.type,
     title: than.title,
-    category_id: than.category_id,
+    // A banner takes no category (14/10/2026): the server answers one with 422 `banner_has_no_category`,
+    // so the key is left out rather than sent empty.
+    category_id: than.type === CONTENT_TYPE_BANNER ? undefined : than.category_id,
     summary: than.summary,
     body: than.body,
     image_url: than.image_url,
@@ -313,7 +315,8 @@ export function themNoiDung(
   // in a request: ticking `publish` fixes it at the first publication and it never moves after.
   addTypeFieldsForCreate(thanGui, than);
 
-  return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(
+  // `withCode`: the form names two refusals by code (`contentRefusalText`) — see `KetQua`.
+  return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }, { withCode: true }).then(
     docThanKetQua<comms_noiDungRa>,
   );
 }
@@ -375,7 +378,7 @@ export function suaNoiDung(id: string, than: SuaNoiDungVao): Promise<KetQua<comm
     audio_duration_seconds: than.audio_duration_seconds,
   };
 
-  return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined).then(
+  return goiGhi(duongDanMotNoiDung(id), "PATCH", thanGui, 200, undefined, { withCode: true }).then(
     docThanKetQua<comms_noiDungRa>,
   );
 }
@@ -590,7 +593,22 @@ export function removeContentAudio(id: string): Promise<KetQua<comms_noiDungRa>>
 /* ── Danh mục tin §6 ───────────────────────────────────────────────────────────────────────── */
 
 /**
- * GET /api/v1/content-categories — cả cây danh mục của xã, PHẲNG.
+ * The path of `GET /api/v1/content-categories?type=` for one content type. Split from the call so a test
+ * reads the exact URL without replacing `fetch`.
+ */
+export function contentCategoriesPath(type: string): string {
+  const path: comms_get_content_categories["duongDan"] = "/api/v1/content-categories";
+  const query = new URLSearchParams();
+  thamSoTheoHopDong<comms_get_content_categories["truyVan"]>(query)("type", type);
+  return `${path}?${query.toString()}`;
+}
+
+/**
+ * GET /api/v1/content-categories?type= — cây danh mục của MỘT loại nội dung, PHẲNG.
+ *
+ * MỖI LOẠI MỘT CÂY (chủ dự án 14/10/2026, migration 0030 của service-comms): `type` BẮT BUỘC — vắng,
+ * lạ hay `banner` (banner không xếp danh mục) đều là 400. Không có lời gọi "cả xã": màn hình luôn hỏi
+ * đúng cây của loại đang xem, nên bộ lọc, hộp quản lý và ô chọn của biểu mẫu không thể trộn hai cây.
  *
  * KHÔNG PHÂN TRANG, có chủ ý ở máy chủ: §7 vẽ một ô chọn và §3 vẽ một danh sách thụt đầu dòng, cả
  * hai cần trọn cây. Trần thay cho `limit` là `store.TranDanhMucMiniApp`.
@@ -598,9 +616,8 @@ export function removeContentAudio(id: string): Promise<KetQua<comms_noiDungRa>>
  * `parent_id` RỖNG LÀ GỐC. Cây trả về phẳng vì hai màn muốn hai hình dạng khác nhau của cùng một
  * bộ hàng — dựng cây là việc của bên hiển thị, không phải của tuyến.
  */
-export function layDanhMucNoiDung(): Promise<KetQua<comms_danhSachDanhMucRa>> {
-  const duongDan: comms_get_content_categories["duongDan"] = "/api/v1/content-categories";
-  return docJSON<comms_danhSachDanhMucRa>(duongDan);
+export function layDanhMucNoiDung(type: string): Promise<KetQua<comms_danhSachDanhMucRa>> {
+  return docJSON<comms_danhSachDanhMucRa>(contentCategoriesPath(type));
 }
 
 /** Thân của `POST /api/v1/content-categories`. Bí danh của kiểu SINH RA. */
@@ -622,11 +639,14 @@ export function themDanhMucNoiDung(
 ): Promise<KetQua<comms_danhMucRa>> {
   const duongDan: comms_get_content_categories["duongDan"] = "/api/v1/content-categories";
 
+  // `type` names the tree the category joins (one tree per content type, 14/10/2026); it is fixed at
+  // birth — the PATCH refuses it (400), so `updateContentCategory` never copies it.
   const thanGui: ThemDanhMucVao = {
     name: than.name,
     slug: than.slug,
     parent_id: than.parent_id,
     order: than.order,
+    type: than.type,
   };
 
   return goiGhi(duongDan, "POST", thanGui, 201, { "Idempotency-Key": khoaChongTrung }).then(

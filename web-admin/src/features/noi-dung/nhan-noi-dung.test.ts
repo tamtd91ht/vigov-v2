@@ -45,6 +45,13 @@ import {
   giaTriTuHang,
   groupCategoriesByParent,
   takenCategoryName,
+  BANNER_HAS_NO_CATEGORY,
+  CATEGORY_TYPE_MISMATCH_TEXT,
+  categoryButtonLabel,
+  categoryDialogTitle,
+  contentRefusalText,
+  hasCategoryTree,
+  withContentType,
   instantToLocalInput,
   isValidLinkTo,
   localInputToInstant,
@@ -89,6 +96,7 @@ function danhMuc(sua: Partial<comms_danhMucRa> = {}): comms_danhMucRa {
     order: 0,
     created_at: "2026-09-01T02:00:00Z",
     hidden: false,
+    type: "tin-tuc",
     ...sua,
   };
 }
@@ -1046,20 +1054,72 @@ describe("takenCategoryName — one name per parent", () => {
 
   it("case, spacing and keyboard composition are ignored; the existing name comes back as stored", () => {
     for (const typed of ["nông nghiệp", "NÔNG NGHIỆP", "  nông   nghiệp ", "nông nghiệp"]) {
-      expect(takenCategoryName(typed, "", ds), typed).toBe("Nông nghiệp");
+      expect(takenCategoryName(typed, "", "tin-tuc", ds), typed).toBe("Nông nghiệp");
     }
-    expect(takenCategoryName("đất ĐAI", "", ds), "a hidden category still holds its name").toBe("Đất đai");
+    expect(takenCategoryName("đất ĐAI", "", "tin-tuc", ds), "a hidden category still holds its name").toBe("Đất đai");
   });
 
   it("siblings collide; the same name under another parent, or as a root, does not (owner 13/10/2026)", () => {
-    expect(takenCategoryName("chuyển đổi số", "A", ds)).toBe("Chuyển đổi số");
-    expect(takenCategoryName("Chuyển đổi số", "B", ds)).toBeNull();
-    expect(takenCategoryName("Chuyển đổi số", "", ds)).toBeNull();
+    expect(takenCategoryName("chuyển đổi số", "A", "tin-tuc", ds)).toBe("Chuyển đổi số");
+    expect(takenCategoryName("Chuyển đổi số", "B", "tin-tuc", ds)).toBeNull();
+    expect(takenCategoryName("Chuyển đổi số", "", "tin-tuc", ds)).toBeNull();
   });
 
   it("a different name, a name without its diacritics, or an empty box is free", () => {
-    expect(takenCategoryName("Nông nghiệp sạch", "", ds)).toBeNull();
-    expect(takenCategoryName("Nong nghiep", "", ds)).toBeNull();
-    expect(takenCategoryName("   ", "", ds)).toBeNull();
+    expect(takenCategoryName("Nông nghiệp sạch", "", "tin-tuc", ds)).toBeNull();
+    expect(takenCategoryName("Nong nghiep", "", "tin-tuc", ds)).toBeNull();
+    expect(takenCategoryName("   ", "", "tin-tuc", ds)).toBeNull();
+  });
+
+  // One tree per content type (owner 14/10/2026): names are unique per (type, parent), not per commune.
+  it("the same name in ANOTHER type's tree is free, even when a caller passes a mixed list", () => {
+    const mixed = [...ds, danhMuc({ id: "E", name: "Lễ hội", type: "su-kien" })];
+    expect(takenCategoryName("Nông nghiệp", "", "su-kien", mixed)).toBeNull();
+    expect(takenCategoryName("lễ hội", "", "su-kien", mixed)).toBe("Lễ hội");
+    expect(takenCategoryName("Lễ hội", "", "tin-tuc", mixed)).toBeNull();
+  });
+});
+
+describe("one category tree per content type (owner 14/10/2026)", () => {
+  it("five types have a tree; `banner`, an empty and an unknown code do not", () => {
+    expect(["tin-tuc", "su-kien", "thong-bao", "truyen-thanh", "video"].every(hasCategoryTree)).toBe(true);
+    expect(hasCategoryTree("banner")).toBe(false);
+    expect(hasCategoryTree("")).toBe(false);
+    expect(hasCategoryTree("tin_tuc")).toBe(false);
+  });
+
+  it("the manager's button and title name the type", () => {
+    expect(categoryButtonLabel("tin-tuc")).toBe("⊞ Danh mục — Tin tức");
+    expect(categoryDialogTitle("truyen-thanh")).toBe("Danh mục — Truyền thanh");
+  });
+
+  it("a new type clears the category; the same type keeps it", () => {
+    const gt = { ...FORM_TRONG, type: "tin-tuc", category_id: "01JDM1", title: "T" };
+    expect(withContentType(gt, "su-kien")).toEqual({ ...gt, type: "su-kien", category_id: "" });
+    expect(withContentType(gt, "tin-tuc")).toBe(gt);
+  });
+
+  it("the two refusals the rule adds are named by CODE in the form's words; any other code keeps the server's", () => {
+    expect(contentRefusalText("anything", "category_type_mismatch")).toBe(CATEGORY_TYPE_MISMATCH_TEXT);
+    expect(CATEGORY_TYPE_MISMATCH_TEXT).toBe("Danh mục này thuộc loại nội dung khác. Hãy chọn danh mục của đúng loại.");
+    expect(contentRefusalText("anything", "banner_has_no_category")).toBe(BANNER_HAS_NO_CATEGORY);
+    expect(BANNER_HAS_NO_CATEGORY).toBe("Banner không xếp vào danh mục.");
+    expect(contentRefusalText("Danh mục đã chọn không còn.", "category_missing")).toBe("Danh mục đã chọn không còn.");
+  });
+
+  it("a banner's POST never carries `category_id`, not even empty", () => {
+    expect(thanThem({ ...FORM_TRONG, type: "banner", category_id: "01JDM1" })).not.toHaveProperty("category_id");
+    expect(thanThem({ ...FORM_TRONG, type: "banner" })).not.toHaveProperty("category_id");
+  });
+
+  it("a PATCH moving an item to `banner` leaves `category_id` out — the server clears it with the type", () => {
+    const was = { ...FORM_TRONG, type: "tin-tuc", category_id: "01JDM1", title: "T" };
+    const than = thanSua(was, withContentType(was, "banner"));
+    expect(than).toEqual({ type: "banner" });
+  });
+
+  it("a PATCH moving between two trees sends the cleared category as `\"\"`", () => {
+    const was = { ...FORM_TRONG, type: "tin-tuc", category_id: "01JDM1", title: "T" };
+    expect(thanSua(was, withContentType(was, "video"))).toEqual({ type: "video", category_id: "" });
   });
 });

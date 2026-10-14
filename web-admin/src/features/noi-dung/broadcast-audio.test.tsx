@@ -369,7 +369,7 @@ describe("the §7 form and the audio boxes", () => {
         moTa=""
         giaTriDau={gt}
         hang={hang}
-        danhMuc={[]}
+        categoriesOf={() => []}
         dangGui={false}
         loi={null}
         huy={() => {}}

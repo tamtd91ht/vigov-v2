@@ -87,7 +87,18 @@ export const MO_TA_MAN =
   "Mini App.";
 
 export const NHAN_NUT_THEM = "+ Thêm nội dung";
-export const NHAN_NUT_DANH_MUC = "⊞ Danh mục tin";
+/**
+ * The category manager's button, naming the open tab's type: `⊞ Danh mục — Tin tức`. ONE CATEGORY TREE PER
+ * CONTENT TYPE (owner 14/10/2026, PM requirement; migration 0030 of service-comms): the prototype's
+ * `⊞ Danh mục tin` named the only tree there was, and the same words on every tab would let an officer
+ * believe the `Sự kiện` tab edits the news tree.
+ */
+export function categoryButtonLabel(type: string): string {
+  return `⊞ ${categoryDialogTitle(type)}`;
+}
+
+/** The same button, disabled, on a type with no tree (`banner`) — it names no type it could not open. */
+export const CATEGORY_BUTTON_NO_TREE = "Danh mục";
 /**
  * The FIRST sentence under the prototype's `Danh mục tin` dialog title (`CategoryManagerDialog.tsx`).
  * Its second sentence ("categories fetched from the portal update themselves on every sync") is left
@@ -123,7 +134,44 @@ export const MOI_DANH_MUC = "Tất cả danh mục";
  * (bug sheet row 20: the customer reads a missing select as a missing feature), disabled, saying why.
  */
 export const NO_CATEGORY_FILTER_HINT = "Chưa có danh mục";
-export const NO_CATEGORY_FILTER_TITLE = "Xã chưa có danh mục tin nào đang hiện. Thêm ở nút “Danh mục tin”.";
+export function noCategoryFilterTitle(type: string): string {
+  return `Loại ${nhanLoai(type)} chưa có danh mục nào đang hiện. Thêm ở nút “${categoryDialogTitle(type)}”.`;
+}
+
+/**
+ * Said by the category filter and the category button on the `Banner` tab: a banner takes no category
+ * (owner 14/10/2026), so there is no tree to read — `GET /api/v1/content-categories?type=banner` is a 400.
+ * The same words name the server's 422 `banner_has_no_category` (`contentRefusalText`).
+ */
+export const BANNER_HAS_NO_CATEGORY = "Banner không xếp vào danh mục.";
+
+/**
+ * Said by the category filter and button where no single type is selected. The screen has no such view today
+ * (every tab IS one type, `LOC_TRONG`); kept so a future `Tất cả` view says why instead of reading every tree.
+ */
+export const PICK_TYPE_FOR_CATEGORIES = "Chọn một loại nội dung để dùng danh mục";
+
+/**
+ * Under the form's category select after the officer changed the type of an item that had a category: the
+ * category belonged to the OLD type's tree (one tree per type), so the selection is cleared rather than sent
+ * into a 409 `category_type_mismatch`.
+ */
+export const CATEGORY_CLEARED_BY_TYPE_CHANGE = "Danh mục sẽ bỏ trống vì loại nội dung đã đổi.";
+
+/** The type has a category tree to read: one of the five types that file under a category — never `banner`. */
+export function hasCategoryTree(type: string): boolean {
+  return type !== CONTENT_TYPE_BANNER && (MOI_LOAI as readonly string[]).includes(type);
+}
+
+/**
+ * The form after the officer picked `type`. A category chosen under the previous type is CLEARED: it sits in
+ * that type's tree, and the server refuses it under any other (409 `category_type_mismatch`). Same type = the
+ * same values.
+ */
+export function withContentType(gt: GiaTriFormNoiDung, type: string): GiaTriFormNoiDung {
+  if (type === gt.type) return gt;
+  return { ...gt, type, category_id: "" };
+}
 
 /** §6 — placeholder ô tìm, nguyên văn kể cả dấu ba chấm. */
 export const TIM_PLACEHOLDER = "Tìm theo tiêu đề…";
@@ -876,10 +924,18 @@ export function formatVideoDuration(seconds: number | null | undefined): string 
  * (422 `invalid_video_duration` / `video_duration_only_for_video`) — replaced by the box's label. ONLY the
  * token changes: the rule in the sentence stays the server's. A sentence without it comes back unchanged.
  */
-export function contentRefusalText(message: string): string {
+export function contentRefusalText(message: string, code?: string): string {
+  // One category tree per content type (owner 14/10/2026): the two refusals that rule adds are named in the
+  // form's own words, by CODE — matching the server's wording would break silently the day it changes.
+  if (code === "category_type_mismatch") return CATEGORY_TYPE_MISMATCH_TEXT;
+  if (code === "banner_has_no_category") return BANNER_HAS_NO_CATEGORY;
   const out = message.split("`video_duration_seconds`").join(VIDEO_DURATION_LABEL);
   return out.charAt(0).toLocaleUpperCase("vi") + out.slice(1);
 }
+
+/** 409 `category_type_mismatch`: the chosen category sits in another content type's tree. */
+export const CATEGORY_TYPE_MISMATCH_TEXT =
+  "Danh mục này thuộc loại nội dung khác. Hãy chọn danh mục của đúng loại.";
 
 export const ERR_LINK_TO_INVALID =
   "Liên kết khi bấm phải là đường trong Mini App (bắt đầu bằng một dấu /) hoặc địa chỉ https://, " +
@@ -1088,11 +1144,12 @@ export function thanThem(gt: GiaTriFormNoiDung): comms_themNoiDungVao {
   const ra: comms_themNoiDungVao = {
     type: gt.type,
     title: gt.title.trim(),
-    category_id: gt.category_id,
     summary: gt.summary.trim(),
     body: gt.body,
     publish: gt.publish,
   };
+  // A banner takes no category (owner 14/10/2026): never sent, not even empty — 422 `banner_has_no_category`.
+  if (gt.type !== CONTENT_TYPE_BANNER) ra.category_id = gt.category_id;
   if (gt.cover_image_file_id !== "") ra.cover_image_file_id = gt.cover_image_file_id;
   if (gt.type === CONTENT_TYPE_EVENT) {
     const start = localInputToInstant(gt.event_starts_local);
@@ -1142,7 +1199,9 @@ export function thanSua(
   const ra: comms_suaNoiDungVao = {};
 
   if (moi.type !== dau.type) ra.type = moi.type;
-  if (moi.category_id !== dau.category_id) ra.category_id = moi.category_id;
+  // A banner takes no category (owner 14/10/2026): never sent. Moving an item TO banner leaves the key out
+  // and the server clears the old category with the type change; sending one would be a 422.
+  if (moi.type !== CONTENT_TYPE_BANNER && moi.category_id !== dau.category_id) ra.category_id = moi.category_id;
   if (moi.title.trim() !== dau.title) ra.title = moi.title.trim();
   if (moi.summary.trim() !== dau.summary) ra.summary = moi.summary.trim();
   if (moi.body !== dau.body) ra.body = moi.body;
@@ -1202,8 +1261,15 @@ export const KHONG_CO_GI_DOI = "Chưa có ô nào thay đổi, nên không có g
 
 /* ── `⊞ Danh mục tin`: the prototype's `CategoryManagerDialog` (ADR 0067 §3) ─────────────────────── */
 
+/**
+ * The category manager's title, naming the tree it edits: `Danh mục — Tin tức` (one tree per content type,
+ * owner 14/10/2026). The prototype's `Danh mục tin` (`CategoryManagerDialog.tsx:92`) named the only tree.
+ */
+export function categoryDialogTitle(type: string): string {
+  return `Danh mục — ${nhanLoai(type)}`;
+}
+
 /** Verbatim, prototype `CategoryManagerDialog.tsx:92-185`. */
-export const CATEGORY_DIALOG_TITLE = "Danh mục tin";
 export const CATEGORY_IMPORT_NOTE =
   "Lấy đủ cây chuyên mục của Cổng về đây. Chỉ danh mục, không kéo theo bản tin nào — chọn chuyên mục " +
   "nào lấy tin vẫn ở phần Nguồn tin.";
@@ -1248,13 +1314,20 @@ export function categoryNameKey(name: string): string {
 }
 
 /**
- * The sibling `name` collides with under `parentId` ("" = the roots) — any live row of the list, hidden ones
- * included — or null.
+ * The sibling `name` collides with under `parentId` ("" = the roots) IN `type`'S TREE — any live row of the
+ * list, hidden ones included — or null. Names are unique per (type, parent) at the server (migration 0030):
+ * `Nông nghiệp` under `Tin tức` does not block `Nông nghiệp` under `Sự kiện`, so a row of another type is
+ * never a collision, even if a caller passes a mixed list.
  */
-export function takenCategoryName(name: string, parentId: string, ds: readonly comms_danhMucRa[]): string | null {
+export function takenCategoryName(
+  name: string,
+  parentId: string,
+  type: string,
+  ds: readonly comms_danhMucRa[],
+): string | null {
   const key = categoryNameKey(name);
   if (key === "") return null;
-  return ds.find((d) => d.parent_id === parentId && categoryNameKey(d.name) === key)?.name ?? null;
+  return ds.find((d) => d.type === type && d.parent_id === parentId && categoryNameKey(d.name) === key)?.name ?? null;
 }
 
 /**

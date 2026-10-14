@@ -9,6 +9,8 @@ import type { comms_danhMucRa, comms_noiDungRa } from "@/lib/api/schema.gen";
 
 import {
   BANNER_COVER_NOTICE,
+  BANNER_HAS_NO_CATEGORY,
+  PICK_TYPE_FOR_CATEGORIES,
   CANH_BAO_HTML_THO,
   CATEGORY_ROOT_GROUP,
   CHUA_XEP_DANH_MUC,
@@ -27,7 +29,7 @@ import {
   MO_TA_THE_DANH_BA,
   MOI_DANH_MUC,
   NO_CATEGORY_FILTER_HINT,
-  NHAN_NUT_DANH_MUC,
+  categoryButtonLabel,
   NHAN_NUT_SUA,
   NHAN_NUT_THEM,
   NHAN_O_DANG,
@@ -63,6 +65,7 @@ import {
   contentTabId,
   FormDanhMuc,
   FormNoiDung,
+  CategoryManagerButton,
   HangLocNoiDung,
   HeaderActions,
   ThanhTabLoai,
@@ -106,6 +109,7 @@ function danhMuc(sua: Partial<comms_danhMucRa> = {}): comms_danhMucRa {
     order: 0,
     created_at: "2026-09-01T02:00:00Z",
     hidden: false,
+    type: "tin-tuc",
     ...sua,
   };
 }
@@ -159,7 +163,7 @@ function veForm(
       moTa={MO_TA_FORM_THEM}
       giaTriDau={gt}
       hang={h}
-      danhMuc={dm}
+      categoriesOf={() => dm}
       dangGui={false}
       loi={null}
       huy={() => {}}
@@ -173,6 +177,7 @@ function veForm(
 function filterRow(over: Partial<Parameters<typeof HangLocNoiDung>[0]> = {}) {
   return renderToStaticMarkup(
     <HangLocNoiDung
+      type="tin-tuc"
       danhMucID=""
       datDanhMucID={() => {}}
       tim=""
@@ -470,8 +475,8 @@ describe("`content.update` gates the table's write controls", () => {
 
   it("the filter row draws what it is given at its end, and nothing when given nothing", () => {
     const row = (extra?: ReactNode) => filterRow({ extra });
-    expect(row()).not.toContain(NHAN_NUT_DANH_MUC);
-    expect(row(<button type="button">{NHAN_NUT_DANH_MUC}</button>)).toContain(NHAN_NUT_DANH_MUC);
+    expect(row()).not.toContain(categoryButtonLabel("tin-tuc"));
+    expect(row(<button type="button">{categoryButtonLabel("tin-tuc")}</button>)).toContain(categoryButtonLabel("tin-tuc"));
   });
 });
 
@@ -572,6 +577,33 @@ describe("biểu mẫu nội dung §7", () => {
     expect(html).toContain('<option value="C">Tin hoạt động › Chuyển đổi số</option>');
   });
 
+  // One tree per content type (owner 14/10/2026): the select lists the FORM's type's tree, not the tab's.
+  it("the category select lists the tree of the form's chosen type", () => {
+    const trees: Record<string, readonly comms_danhMucRa[]> = {
+      "tin-tuc": [danhMuc({ id: "N", name: "Tin xã" })],
+      video: [danhMuc({ id: "V", name: "Phóng sự", type: "video" })],
+    };
+    const asked: string[] = [];
+    const html = renderToStaticMarkup(
+      <FormNoiDung
+        tieuDeForm="T"
+        moTa=""
+        giaTriDau={{ ...FORM_TRONG, type: "video" }}
+        categoriesOf={(type) => {
+          asked.push(type);
+          return trees[type] ?? [];
+        }}
+        dangGui={false}
+        loi={null}
+        huy={() => {}}
+        luu={() => {}}
+      />,
+    );
+    expect(asked.every((t) => t === "video")).toBe(true);
+    expect(html).toContain('<option value="V">Phóng sự</option>');
+    expect(html).not.toContain("Tin xã");
+  });
+
   it("`Đăng lên Mini App` is a plain tick box and words — no bordered box", () => {
     const html = veForm();
     expect(html).toMatch(/<label for="dang-len-mini-app" class="flex cursor-pointer items-center gap-2.5 text-\[12.5px\] text-navy">/);
@@ -589,7 +621,7 @@ describe("biểu mẫu nội dung §7", () => {
         tieuDeForm="T"
         moTa=""
         giaTriDau={{ ...FORM_TRONG, title: "Có tiêu đề" }}
-        danhMuc={[]}
+        categoriesOf={() => []}
         dangGui
         loi={null}
         huy={() => {}}
@@ -610,7 +642,7 @@ describe("biểu mẫu nội dung §7", () => {
         tieuDeForm="T"
         moTa=""
         giaTriDau={{ ...FORM_TRONG, title: "Có tiêu đề", type: "truyen-thanh" }}
-        danhMuc={[]}
+        categoriesOf={() => []}
         dangGui
         uploading
         loi={null}
@@ -755,7 +787,7 @@ describe("per-type boxes of §7 :131 (ADR 0047 §6)", () => {
         tieuDeForm="x"
         moTa="x"
         giaTriDau={{ ...FORM_TRONG, title: "T" }}
-        danhMuc={[]}
+        categoriesOf={() => []}
         dangGui={false}
         loi={loi}
         huy={() => {}}
@@ -843,6 +875,40 @@ describe("hàng lọc §6", () => {
   it("a category still the active filter keeps its select, even if hidden since", () => {
     expect(filterRow({ danhMucID: "X" })).toContain('id="loc-danh-muc"');
   });
+
+  // One tree per content type (owner 14/10/2026): a banner files under no category; no type, no tree.
+  it("a type with no tree: the select stays in the row, disabled, saying why — whatever it is handed", () => {
+    const banner = filterRow({ type: "banner", danhMuc: [danhMuc()], danhMucID: "01JDM1" });
+    expect(banner).toMatch(/<select id="loc-danh-muc"[^>]*disabled/);
+    expect(banner).toContain(`>${BANNER_HAS_NO_CATEGORY}</option>`);
+    expect(banner).not.toContain("Chuyển đổi số");
+    const none = filterRow({ type: "" });
+    expect(none).toMatch(/<select id="loc-danh-muc"[^>]*disabled/);
+    expect(none).toContain(`>${PICK_TYPE_FOR_CATEGORIES}</option>`);
+  });
+
+  it("the empty hint names the open type and its button", () => {
+    expect(filterRow({ type: "su-kien" })).toContain(
+      nhuTrongHTML("Loại Sự kiện chưa có danh mục nào đang hiện. Thêm ở nút “Danh mục — Sự kiện”."),
+    );
+  });
+});
+
+describe("the category manager's button names the open type", () => {
+  it("`Danh mục — <loại>` on a type with a tree, opening a dialog", () => {
+    const html = renderToStaticMarkup(<CategoryManagerButton type="video" open={() => {}} />);
+    expect(html).toContain("Danh mục — Video");
+    expect(html).toContain('aria-haspopup="dialog"');
+    expect(html).not.toContain('disabled=""');
+  });
+
+  it("DENIED by type (`banner`): disabled, opening nothing, the reason as its title", () => {
+    const html = renderToStaticMarkup(<CategoryManagerButton type="banner" open={() => {}} />);
+    expect(html).toMatch(/<button[^>]*disabled=""/);
+    expect(html).toContain(`title="${BANNER_HAS_NO_CATEGORY}"`);
+    expect(html).not.toContain("aria-haspopup");
+    expect(html).not.toContain("Danh mục — Banner");
+  });
 });
 
 describe("§6 status filter (kept, owner D1)", () => {
@@ -905,7 +971,7 @@ describe("thẻ Danh bạ chính quyền §4", () => {
 
 describe("biểu mẫu danh mục tin — the prototype's add row (`CategoryManagerDialog.tsx:127-166`)", () => {
   const ve = (ds: readonly comms_danhMucRa[], loi: string | null = null) =>
-    renderToStaticMarkup(<FormDanhMuc danhMuc={ds} dangGui={false} loi={loi} luu={() => {}} />);
+    renderToStaticMarkup(<FormDanhMuc type="tin-tuc" danhMuc={ds} dangGui={false} loi={loi} luu={() => {}} />);
 
   it("one row: `Thêm danh mục` (placeholder Nông nghiệp) · `Thuộc mục (nếu có)` · `+ Thêm` — no Slug, no Huỷ/Lưu, no order", () => {
     const html = ve([danhMuc()]);
