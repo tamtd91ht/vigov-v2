@@ -20,6 +20,11 @@
 // trị nào nhập vào — chỉ chép theo TÊN, dữ liệu đi qua ống, không in ra log.
 // ─────────────────────────────────────────────────────────────────────────────────────────
 //
+// TỪ 14/10/2026 (chủ dự án): `vigov-staging` ĐÃ BỎ. Hai namespace là `vigov-dev` (nhánh dev) và
+// `vigov-prod` (nhánh main); vigov-dev có CSDL, MinIO và khoá RIÊNG — không còn "dùng chung CSDL với
+// prod". Đoạn MÔ HÌNH ở trên là LỊCH SỬ của lần dựng đầu; tên tài nguyên trên cụm vẫn như vậy, và
+// vigov-dev dựng cùng tên. Mọi việc dưới đây chạy theo MT (prod|dev), trừ các việc chỉ prod ghi rõ.
+//
 // MÁY CHỦ BUILD CẦN: kubectl. Stage đầu kiểm.
 
 // Hàm shell `chay_psql <tên pod> <tệp .sql>` dùng chung cho các việc một lần ghi vào CSDL của
@@ -42,20 +47,22 @@ def CHAY_PSQL = '''
             ten="$1"
             tep="$2"
             OVR=$(printf '%s' "$MAU" | sed "s|@SQL@|$(base64 -w0 "$tep")|")
-            kubectl -n vigov-prod run "$ten" --restart=Never \
+            # Namespace của MT ($NS, đặt ở 'Kiểm công cụ') — không gắn cứng: mọi việc gọi hàm này đều
+            # tự chặn MT trước (các việc Thăng Bình chỉ MT=prod), nên với chúng $NS luôn là vigov-prod.
+            kubectl -n "$NS" run "$ten" --restart=Never \
                 --image=postgres:16-alpine --overrides="$OVR" --quiet
             pha=""; i=0
             while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              pha=$(kubectl -n vigov-prod get pod "$ten" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              pha=$(kubectl -n "$NS" get pod "$ten" -o jsonpath='{.status.phase}' 2>/dev/null || true)
               case "$pha" in Succeeded|Failed) break ;; esac
               sleep 5; i=$((i+1))
             done
-            kubectl -n vigov-prod logs "$ten" 2>&1 || true
+            kubectl -n "$NS" logs "$ten" 2>&1 || true
             if [ "$pha" != "Succeeded" ]; then
               echo "── pod $ten kết thúc ở pha '$pha' — sự kiện của pod:"
-              kubectl -n vigov-prod describe pod "$ten" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              kubectl -n "$NS" describe pod "$ten" 2>/dev/null | sed -n '/^Events:/,$p' || true
             fi
-            kubectl -n vigov-prod delete pod "$ten" --ignore-not-found --wait=false || true
+            kubectl -n "$NS" delete pod "$ten" --ignore-not-found --wait=false || true
             [ "$pha" = "Succeeded" ]
           }
 '''
@@ -103,14 +110,14 @@ pipeline {
                         '(vihat-miniapp-cau-hinh), mở cổng 9091 trên Service identity nếu thiếu, gắn hai biến vào deploy ' +
                         'vihat-zalo-miniapp, khởi động lại và kiểm log "cầu phiên ViGov" bat=true (MT=prod, XAC_NHAN=vigov-prod) · ' +
                         'tao-khoa-ma-hoa-identity: (app riêng, bước 1) sinh SECRET_ENCRYPTION_KEYS vào identity-secrets ' +
-                        'của vigov-prod VÀ cùng giá trị vào vigov-staging (chung CSDL); đã có thì DỪNG, không đổi gì ' +
-                        '(MT=prod; chạy TRƯỚC job service-identity) · ' +
+                        'của namespace MT — khoá RIÊNG từng namespace, không bao giờ chép từ namespace khác; đã có thì ' +
+                        'DỪNG, không đổi gì (MT=prod|dev, XAC_NHAN = namespace của MT; chạy TRƯỚC job service-identity) · ' +
                         'mo-netpol-identity-zalo: (bước 2) mở đường ra 443 cho pod identity nếu namespace MT có NetworkPolicy ' +
                         '(không có cái nào = không cần, không đổi gì) · ' +
                         'bo-sung-cau-hinh-identity: (bước 3, TRƯỚC job service-identity) thêm PETITIONS_GRPC_ADDR / ' +
                         'DOCUMENTS_GRPC_ADDR / CITIZEN_SESSION_BRIDGE_LISTEN_ADDR vào env của deploy identity nếu chưa có ' +
-                        '(có rồi thì giữ nguyên), CITIZEN_SESSION_BRIDGE_KEYS vào identity-secrets (cùng giá trị prod + ' +
-                        'staging; đã có thì giữ), rồi khởi động lại identity của MT · ' +
+                        '(có rồi thì giữ nguyên), CITIZEN_SESSION_BRIDGE_KEYS vào identity-secrets (khoá riêng của ' +
+                        'namespace MT; đã có thì giữ), rồi khởi động lại identity của MT · ' +
                         'bo-sung-cau-hinh-petitions: (TRƯỚC job service-petitions, từ ảnh 09/10/2026) thêm ' +
                         'DOCUMENTS_GRPC_ADDR=vigov-service-documents:9090 vào env của deploy petitions nếu chưa có (có rồi ' +
                         'thì giữ nguyên), rồi khởi động lại petitions của MT — thiếu biến này ảnh petitions mới từ chối khởi động · ' +
@@ -118,7 +125,8 @@ pipeline {
                         'thử POST /api/v1/citizen-sessions · ' +
                         'dat-secret-mini-app: (bước 5) operatorctl mini-app-secret set cho TENANT_ID + APP_ID bằng APP_SECRET ' +
                         '(App Secret của app trên developers.zalo.me) — app riêng đăng nhập công dân THẬT (có xác minh số); ' +
-                        'MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc; App ID phải đã gắn xã (doi-app-id-thang-binh) · ' +
+                        'MT=prod|dev, XAC_NHAN = namespace của MT, TICKET bắt buộc; App ID phải đã gắn xã trong CSDL của MT ' +
+                        '(prod: doi-app-id-thang-binh; dev có CSDL riêng — gõ TENANT_ID/APP_ID của dev, mặc định là của prod) · ' +
                         'doi-ten-mien-thang-binh: đặt thangbinh-danang.vigov.vn làm tên miền chính của Xã Thăng Bình ' +
                         '+ thangbinh-danang.stg.vigov.vn (MT=prod; chạy SAU khi DNS/TLS/Ingress của hai host chạy, ' +
                         'TRƯỚC job service-platform có migration 0007) · ' +
@@ -132,21 +140,22 @@ pipeline {
                         'thử PING/PONG, rồi đặt MALWARE_SCANNER_ADDRESS=vigov-clamav:3310 vào common-config NẾU CHƯA CÓ ' +
                         '(có rồi thì giữ nguyên); không khởi động lại dịch vụ nào (chạy TRƯỚC job service-petitions) · ' +
                         'tao-tai-khoan-van-hanh: operatorctl create cho EMAIL_VAN_HANH + TEN_VAN_HANH rồi cấp đủ 8 quyền ops.* ' +
-                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc). ⚠ MẬT KHẨU TẠM IN VÀO LOG LƯỢT BUILD NÀY ' +
+                        '(MT=prod|dev, XAC_NHAN = namespace của MT, TICKET bắt buộc). ⚠ MẬT KHẨU TẠM IN VÀO LOG LƯỢT BUILD NÀY ' +
                         '(chủ dự án chấp nhận 02/10/2026): đăng nhập platform-admin, đổi mật khẩu + đăng ký TOTP NGAY; ' +
                         'mật khẩu tạm tự hết hạn sau 24 giờ · ' +
                         'cap-quyen-van-hanh: cấp QUYEN_VAN_HANH cho tài khoản ĐÃ CÓ (TAI_KHOAN_VAN_HANH = mã VH-xxxxx ' +
                         'hoặc email đăng nhập) — quyền đã có thì bỏ qua; xong thì người ấy đăng xuất rồi đăng nhập lại ' +
-                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc) · ' +
+                        '(MT=prod|dev, XAC_NHAN = namespace của MT, TICKET bắt buộc) · ' +
                         'chi-dinh-owner: operatorctl set-owner — tài khoản vận hành có EMAIL_VAN_HANH (đã có, đang bật) ' +
                         'thành OWNER duy nhất; owner cũ (nếu có) mất cờ trong cùng giao dịch, có vết ' +
-                        '(MT=prod, XAC_NHAN=vigov-prod, TICKET bắt buộc; ADR 0048 §Sửa đổi 13/10/2026 #1) · ' +
+                        '(MT=prod|dev, XAC_NHAN = namespace của MT, TICKET bắt buộc; ADR 0048 §Sửa đổi 13/10/2026 #1) · ' +
                         'nen-ban-do: dựng nền bản đồ PMTiles (NGAY_NEN) + lớp địa điểm Overture (BAN_OVERTURE) trên máy build, ' +
                         'tải cả hai tệp lên MinIO <tiền tố>-public/config/map/<ngày>/ ' +
                         'bằng khoá có sẵn của comms-secrets; KHÔNG đổi BASEMAP_URL (kb/40-runbooks/basemap-pmtiles.md). ' +
                         'CHAY_THU bật = chỉ in kế hoạch; làm thật: bỏ tick, XAC_NHAN = namespace của MT, TICKET nếu prod. ' +
                         'Thân việc: deploy/basemap/basemap-task.sh')
-    choice(name: 'MT', choices: ['prod', 'staging'], description: 'Môi trường')
+    // dev = vigov-dev (nhánh dev, CSDL RIÊNG), prod = vigov-prod. `staging` đã bỏ 14/10/2026.
+    choice(name: 'MT', choices: ['prod', 'dev'], description: 'Môi trường (namespace vigov-<MT>)')
     choice(name: 'DICH_VU',
            choices: ['vigov-service-platform', 'vigov-service-identity', 'vigov-service-comms',
                      'vigov-service-documents', 'vigov-service-finance', 'vigov-service-petitions',
@@ -154,15 +163,17 @@ pipeline {
            description: 'Chỉ dùng cho xem-log')
     string(name: 'XAC_NHAN', defaultValue: '',
            description: 'Cho doi-ten-mien-thang-binh / tao-xa-thang-binh / gan-mini-app-thang-binh / doi-app-id-thang-binh / ' +
-                        'tao-khoa-ma-hoa-identity / dat-secret-mini-app / di-tru-vihat-miniapp / bat-cau-phien-miniapp / ' +
-                        'chi-dinh-owner: gõ đúng vigov-prod. ' +
-                        'Cho mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / dung-clamav / nen-ban-do: gõ đúng namespace của MT ' +
-                        '(vigov-prod hoặc vigov-staging).')
+                        'di-tru-vihat-miniapp / bat-cau-phien-miniapp (chỉ prod): gõ đúng vigov-prod. ' +
+                        'Cho tao-khoa-ma-hoa-identity / mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / ' +
+                        'dat-secret-mini-app / tao-tai-khoan-van-hanh / cap-quyen-van-hanh / chi-dinh-owner / dung-clamav / nen-ban-do: ' +
+                        'gõ đúng namespace của MT (vigov-prod hoặc vigov-dev).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
-           description: 'Cho dat-secret-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình.')
+           description: 'Cho dat-secret-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình trong CSDL PROD — ' +
+                        'MT=dev có CSDL riêng, gõ id xã của dev.')
     string(name: 'APP_ID', defaultValue: '3043188591857102858',
            description: 'Cho dat-secret-mini-app: App ID Zalo (chỉ chữ số) đã gắn cho xã ấy ' +
-                        '(doi-app-id-thang-binh). Mặc định: app riêng của Xã Thăng Bình (App ID từ 01/10/2026).')
+                        '(doi-app-id-thang-binh). Mặc định: app riêng của Xã Thăng Bình (App ID từ 01/10/2026) — ' +
+                        'MT=dev: gõ App ID đã gắn xã trong CSDL dev.')
     string(name: 'TICKET', defaultValue: '',
            description: 'Cho dat-secret-mini-app / tao-tai-khoan-van-hanh / cap-quyen-van-hanh / chi-dinh-owner: BẮT BUỘC — số phiếu yêu cầu, ' +
                         'ghi vào vết kiểm toán (ticket:<số>). Chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự.')
@@ -687,21 +698,22 @@ SQL
     // ─────────────────────────────────────────────────────────────────────────────────────
     // ĐĂNG NHẬP APP RIÊNG CỦA XÃ (ADR 0066) — đưa lên cụm thật. THỨ TỰ BẮT BUỘC:
     //
-    //   1. tao-khoa-ma-hoa-identity      (MT=prod)   SECRET_ENCRYPTION_KEYS vào identity-secrets
-    //                                                 của vigov-prod + vigov-staging, cùng giá trị.
-    //                                                 Thiếu nó thì ảnh identity mới TỪ CHỐI khởi động.
-    //   2. mo-netpol-identity-zalo       (MT=prod, rồi MT=staging)   đường ra 443 tới Zalo, nếu cần.
-    //   3. bo-sung-cau-hinh-identity     (MT=prod, rồi MT=staging)   PETITIONS_GRPC_ADDR ·
-    //                                                 DOCUMENTS_GRPC_ADDR · CITIZEN_SESSION_BRIDGE_LISTEN_ADDR
-    //                                                 vào env của deploy identity, CITIZEN_SESSION_BRIDGE_KEYS
-    //                                                 vào identity-secrets (cùng giá trị hai namespace).
-    //                                                 Thiếu chúng thì ảnh identity mới TỪ CHỐI khởi động
-    //                                                 (sự cố 01/10/2026).
+    //   Mỗi bước chạy RIÊNG cho từng MT (prod, dev) — hai namespace, hai CSDL, hai bộ khoá (14/10/2026).
+    //   1. tao-khoa-ma-hoa-identity      (MT)   SECRET_ENCRYPTION_KEYS vào identity-secrets của
+    //                                           namespace MT, khoá SINH RIÊNG cho namespace ấy.
+    //                                           Thiếu nó thì ảnh identity mới TỪ CHỐI khởi động.
+    //   2. mo-netpol-identity-zalo       (MT)   đường ra 443 tới Zalo, nếu cần.
+    //   3. bo-sung-cau-hinh-identity     (MT)   PETITIONS_GRPC_ADDR · DOCUMENTS_GRPC_ADDR ·
+    //                                           CITIZEN_SESSION_BRIDGE_LISTEN_ADDR vào env của deploy
+    //                                           identity, CITIZEN_SESSION_BRIDGE_KEYS vào identity-secrets
+    //                                           (giá trị riêng của namespace MT).
+    //                                           Thiếu chúng thì ảnh identity mới TỪ CHỐI khởi động
+    //                                           (sự cố 01/10/2026).
     //   4. job `service-identity` (service-identity/Jenkinsfile) — ảnh có migration 0021 +
     //      /operatorctl, và khởi động lại pod để đọc khoá ở bước 1. KHÔNG làm lại ở đây.
     //      rồi kiem-tra-dang-nhap-app-rieng (chỉ đọc) — tuyến mới có sống chưa.
     //   5. đặt App Secret của App ID xã: platform-admin "Đặt/đổi khoá bí mật", hoặc
-    //      dat-secret-mini-app (MT=prod).
+    //      dat-secret-mini-app (MT).
     //   rồi: cd citizen-app && npm run zmp:deploy -- --domain=thangbinh-danang.vigov.vn
     //   (không có --demo: danh tính demo đã gỡ 05/10/2026, ADR 0066 §Sửa đổi; không có --vao-thang:
     //   bỏ 06/10/2026, --domain nay luôn nung tên miền — ADR 0047 §Sửa đổi 06/10/2026 #5; deploy.mjs
@@ -716,25 +728,25 @@ SQL
     // /dev/urandom (CSPRNG của nhân), base64 chuẩn — đúng dạng core/config/secret_encryption.go
     // đòi (danh sách `<mới>,<cũ>`, một phần tử là đủ).
     //
-    // KHÔNG BAO GIỜ GHI ĐÈ: prod đã có key → DỪNG, prod không bị đụng. Ghi đè là mọi khoá dữ liệu
+    // KHÔNG BAO GIỜ GHI ĐÈ: namespace đã có key → DỪNG, không bị đụng. Ghi đè là mọi khoá dữ liệu
     // đã niêm bằng khoá cũ — và mọi secret Zalo của mọi xã — không mở lại được nữa.
     //
-    // CÙNG MỘT GIÁ TRỊ Ở STAGING: hai môi trường dùng CHUNG CSDL (xem trên), nên khoá dữ liệu
-    // staging niêm thì prod phải mở được và ngược lại. Staging có một giá trị KHÁC → DỪNG, báo.
-    // Prod có mà staging thiếu (lượt trước ghi được prod, hỏng ở staging) → chỉ CHÉP prod sang
-    // staging — không ghi đè gì, prod không bị đụng.
+    // MỖI NAMESPACE MỘT KHOÁ RIÊNG, chỉ ghi namespace của MT (14/10/2026). Trước đây khoá prod được
+    // CHÉP sang staging vì hai bên dùng chung CSDL; staging đã bỏ, vigov-dev có CSDL RIÊNG. Việc này
+    // KHÔNG BAO GIỜ đọc namespace kia: một cụm thứ hai giữ khoá mở được dữ liệu prod là đúng loại rò
+    // bí mật luật 8 cấm — và dev không cần nó, vì dev không đọc một hàng nào prod đã niêm.
     //
     // GIÁ TRỊ KHÔNG BAO GIỜ VÀO LOG HAY DÒNG LỆNH: sinh thẳng vào tệp trong thư mục tạm (umask
     // 077, xoá khi thoát), bản vá đi qua `--patch-file` (không qua `-p`, vì argv hiện trong `ps`),
-    // staging chép THEO TÊN từ prod qua tệp, so khớp bằng `cmp -s`. Không `set -x`.
+    // đọc lại so khớp bằng `cmp -s`. Không `set -x`.
     // ─────────────────────────────────────────────────────────────────────────────────────
     stage('Tạo khoá mã hoá identity') {
       when { expression { params.HANH_DONG == 'tao-khoa-ma-hoa-identity' } }
       steps {
         script {
-          if (params.MT != 'prod') { error('tao-khoa-ma-hoa-identity chỉ chạy với MT=prod (nó ghi cả prod lẫn staging).') }
-          if (params.XAC_NHAN != 'vigov-prod') {
-            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          if (!(params.MT in ['prod', 'dev'])) { error("tao-khoa-ma-hoa-identity: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
         }
         sh '''
@@ -745,84 +757,46 @@ SQL
           kubectl patch --help 2>/dev/null | grep -q -- '--patch-file' || {
             echo "DỪNG: kubectl của máy chủ build không có 'patch --patch-file' — giá trị sẽ phải đi qua dòng lệnh. Không đổi gì."
             exit 1; }
-          for ns in vigov-prod vigov-staging; do
-            kubectl -n "$ns" get secret identity-secrets >/dev/null 2>&1 || {
-              echo "DỪNG: không thấy secret/identity-secrets trong $ns — không đổi gì."; exit 1; }
-          done
+          kubectl -n "$NS" get secret identity-secrets >/dev/null 2>&1 || {
+            echo "DỪNG: không thấy secret/identity-secrets trong $NS — không đổi gì."; exit 1; }
           # CHỈ TÊN KEY: duyệt khoá của .data, không chạm giá trị.
           has_key() {
-            kubectl -n "$1" get secret identity-secrets \
+            kubectl -n "$NS" get secret identity-secrets \
               -o go-template='{{range $k, $v := .data}}{{if eq $k "SECRET_ENCRYPTION_KEYS"}}yes{{end}}{{end}}'
           }
           # Giá trị (dạng base64 của .data) đi THẲNG vào tệp — không bao giờ ra stdout của job.
           read_key() {
-            kubectl -n "$1" get secret identity-secrets \
-              -o go-template='{{index .data "SECRET_ENCRYPTION_KEYS"}}' > "$2"
+            kubectl -n "$NS" get secret identity-secrets \
+              -o go-template='{{index .data "SECRET_ENCRYPTION_KEYS"}}' > "$1"
           }
           # Bản vá merge chỉ MỘT key; tệp vào là dạng base64 của .data.
           write_patch() {
             { printf '{"data":{"SECRET_ENCRYPTION_KEYS":"'; tr -d '\\n' < "$1"; printf '"}}'; } > "$2"
           }
-          copy_prod_to_staging() {
-            read_key vigov-prod "$TMP_DIR/prod"
-            write_patch "$TMP_DIR/prod" "$TMP_DIR/patch-staging.json"
-            kubectl -n vigov-staging patch secret identity-secrets --type=merge \
-                --patch-file "$TMP_DIR/patch-staging.json" >/dev/null || {
-              echo "⚠ prod ĐÃ CÓ khoá, staging CHƯA ghi được — chạy lại việc này (nó chỉ chép prod sang staging)."
-              exit 1; }
-            read_key vigov-staging "$TMP_DIR/staging"
-            cmp -s "$TMP_DIR/prod" "$TMP_DIR/staging" || {
-              echo "⚠ sau khi ghi, giá trị ở vigov-staging KHÁC vigov-prod — dừng, kiểm tay (không in giá trị)."; exit 1; }
-            echo "✓ vigov-staging: identity-secrets có SECRET_ENCRYPTION_KEYS, CÙNG giá trị với prod (so bằng cmp, không in)"
-          }
           # Cách sao lưu — LỆNH, không giá trị.
           print_next_steps() {
-            cat <<'EOF'
+            cat <<EOF
 
 SAO LƯU NGAY — TRƯỚC KHI LƯU SECRET ZALO ĐẦU TIÊN. Mất khoá này là mất mọi secret đã niêm (ADR 0009).
 Từ một máy tin cậy có kubeconfig ViGov (KHÔNG phải máy chủ build), không in ra màn hình:
 
-  kubectl -n vigov-prod get secret identity-secrets \\
+  kubectl -n $NS get secret identity-secrets \\\\
     -o go-template='{{index .data "SECRET_ENCRYPTION_KEYS"}}' | base64 -d > <tệp trong kho bí mật>
 
 Cất TÁCH khỏi bản sao lưu CSDL identity: một bản sao lưu chứa cả hai là bản chứa bản rõ.
+Mỗi namespace một khoá: sao lưu riêng khoá của $NS, không thay khoá namespace kia.
 
-identity đọc biến lúc KHỞI ĐỘNG: pod đang chạy chưa thấy khoá này. Bước kế:
-  2. job này, HANH_DONG=mo-netpol-identity-zalo (MT=prod, rồi MT=staging)
-  3. job này, HANH_DONG=bo-sung-cau-hinh-identity (MT=prod, rồi MT=staging)
+identity đọc biến lúc KHỞI ĐỘNG: pod đang chạy chưa thấy khoá này. Bước kế (cùng MT):
+  2. job này, HANH_DONG=mo-netpol-identity-zalo
+  3. job này, HANH_DONG=bo-sung-cau-hinh-identity
   4. job service-identity — triển khai ảnh mới và khởi động lại pod
 EOF
           }
 
-          in_prod=$(has_key vigov-prod)
-          in_staging=$(has_key vigov-staging)
-
-          if [ -n "$in_prod" ]; then
-            echo "identity-secrets của vigov-prod ĐÃ CÓ SECRET_ENCRYPTION_KEYS — prod KHÔNG bị đổi."
+          if [ -n "$(has_key)" ]; then
+            echo "identity-secrets của $NS ĐÃ CÓ SECRET_ENCRYPTION_KEYS — KHÔNG đổi gì."
             echo "(Ghi đè là mọi secret đã niêm bằng khoá ấy không mở lại được nữa.)"
-            if [ -z "$in_staging" ]; then
-              echo "vigov-staging còn THIẾU — chép giá trị của prod sang (không ghi đè gì):"
-              copy_prod_to_staging
-              print_next_steps
-              exit 0
-            fi
-            read_key vigov-prod "$TMP_DIR/prod"
-            read_key vigov-staging "$TMP_DIR/staging"
-            if cmp -s "$TMP_DIR/prod" "$TMP_DIR/staging"; then
-              echo "✓ vigov-staging cũng có, CÙNG giá trị — bước 1 đã xong ở cả hai. Không đổi gì."
-              exit 0
-            fi
-            echo "DỪNG: vigov-staging có SECRET_ENCRYPTION_KEYS KHÁC prod. Hai môi trường dùng CHUNG CSDL, nên"
-            echo "khoá dữ liệu một bên niêm thì bên kia không mở được. Không đổi gì — người vận hành phải xác định"
-            echo "bên nào đã niêm secret (bảng data_encryption_key của identity) trước khi chọn giữ giá trị nào."
-            exit 1
-          fi
-
-          if [ -n "$in_staging" ]; then
-            echo "DỪNG: vigov-prod CHƯA có SECRET_ENCRYPTION_KEYS nhưng vigov-staging ĐÃ CÓ — mọi khoá sinh mới đều"
-            echo "KHÁC giá trị ấy, mà hai môi trường dùng CHUNG CSDL. Không đổi gì. Nếu staging đã niêm secret bằng"
-            echo "khoá của nó thì prod phải dùng ĐÚNG giá trị ấy — chép tay theo tên, qua ống, không in ra."
-            exit 1
+            exit 0
           fi
 
           head -c 32 /dev/urandom | base64 -w0 > "$TMP_DIR/key"
@@ -830,14 +804,13 @@ EOF
             echo "DỪNG: khoá sinh ra không đủ 32 byte — không đổi gì."; exit 1; }
           # .data là base64 của GIÁ TRỊ, mà giá trị lại là base64 của khoá — nên mã hoá thêm một lần.
           base64 -w0 < "$TMP_DIR/key" > "$TMP_DIR/key.data"
-          write_patch "$TMP_DIR/key.data" "$TMP_DIR/patch-prod.json"
-          kubectl -n vigov-prod patch secret identity-secrets --type=merge \
-              --patch-file "$TMP_DIR/patch-prod.json" >/dev/null
-          read_key vigov-prod "$TMP_DIR/prod"
-          cmp -s "$TMP_DIR/key.data" "$TMP_DIR/prod" || {
-            echo "⚠ đọc lại từ cụm, giá trị ở vigov-prod không khớp giá trị vừa sinh — dừng, kiểm tay."; exit 1; }
-          echo "✓ vigov-prod: đã thêm SECRET_ENCRYPTION_KEYS vào identity-secrets (một khoá, 32 byte; giá trị không in)"
-          copy_prod_to_staging
+          write_patch "$TMP_DIR/key.data" "$TMP_DIR/patch.json"
+          kubectl -n "$NS" patch secret identity-secrets --type=merge \
+              --patch-file "$TMP_DIR/patch.json" >/dev/null
+          read_key "$TMP_DIR/doc-lai"
+          cmp -s "$TMP_DIR/key.data" "$TMP_DIR/doc-lai" || {
+            echo "⚠ đọc lại từ cụm, giá trị ở $NS không khớp giá trị vừa sinh — dừng, kiểm tay."; exit 1; }
+          echo "✓ $NS: đã thêm SECRET_ENCRYPTION_KEYS vào identity-secrets (một khoá riêng, 32 byte; giá trị không in)"
           print_next_steps
         '''
       }
@@ -970,7 +943,8 @@ YAML
     }
 
     // ─────────────────────────────────────────────────────────────────────────────────────
-    // BƯỚC 3 — bốn biến mà ảnh identity từ `config.Uses` (29/09/2026) đòi ở staging/prod. Sự cố
+    // BƯỚC 3 — bốn biến mà ảnh identity từ `config.Uses` (29/09/2026) đòi ở prod (ENV=prod; vigov-dev
+    // chạy ENV=dev, pod khởi động được khi thiếu nhưng tính năng tắt — vẫn chạy việc này cho dev). Sự cố
     // 01/10/2026: ảnh mới crash-loop ở vigov-prod, "thiếu biến môi trường bắt buộc: PETITIONS_GRPC_ADDR,
     // DOCUMENTS_GRPC_ADDR, CITIZEN_SESSION_BRIDGE_LISTEN_ADDR, CITIZEN_SESSION_BRIDGE_KEYS". Chỗ đặt
     // và dạng giá trị: core/config/hints.go + deploy/cau-hinh/README.md mục 1 và 3.
@@ -980,11 +954,10 @@ YAML
     //   khởi động). CHỈ THÊM cái còn thiếu; cái đã có — dù khác giá trị ở đây — GIỮ NGUYÊN và in ra:
     //   một giá trị ai đó đã đặt tay là quyết định của người ấy, không phải của job này.
     //   CITIZEN_SESSION_BRIDGE_KEYS → identity-secrets: 48 byte /dev/urandom, base64 (đúng
-    //   `openssl rand -base64 48` của hints.go), MỘT khoá. Bảng quyết định Y HỆT bước 1 (đã có ở prod
-    //   → giữ; staging thiếu → chép prod sang; staging KHÁC → DỪNG trước khi ghi gì; chỉ lượt MT=prod
-    //   được SINH khoá — lượt MT=staging thấy prod chưa có thì DỪNG). Cùng giá trị ở
-    //   hai namespace cho đồng bộ với bước 1: người vận hành chỉ phải chép MỘT giá trị sang Secret
-    //   của vihat-miniapp, và hai môi trường không lệch nhau một cách không ai ghi lại.
+    //   `openssl rand -base64 48` của hints.go), MỘT khoá. Bảng quyết định Y HỆT bước 1: namespace MT
+    //   đã có → giữ; chưa có → SINH khoá riêng cho namespace ấy. Không bao giờ đọc hay chép khoá của
+    //   namespace kia (14/10/2026: dev có CSDL riêng; trước đó prod chép sang staging vì chung CSDL).
+    //   vihat-miniapp chỉ chạy ở vigov-prod, nên chỉ khoá của prod được chép sang Secret của nó.
     //
     // THỨ TỰ: mọi phép ĐỌC trước, rồi khoá, rồi env. `kubectl set env` đổi pod template = BẮT ĐẦU
     // rollout; làm nó sau khoá thì rollout ấy đã thấy khoá, và một DỪNG ở bước khoá để Deployment
@@ -1000,8 +973,8 @@ YAML
     // ─────────────────────────────────────────────────────────────────────────────────────
     // ─────────────────────────────────────────────────────────────────────────────────────
     // BỔ SUNG CẤU HÌNH PETITIONS — ảnh petitions từ 09/10/2026 khai nhóm biến `config.DocumentsClient`
-    // (chuyển đơn thư thành nhiệm vụ, ADR 0085: petitions hỏi documents qua gRPC). Ở staging/prod thiếu
-    // DOCUMENTS_GRPC_ADDR = ảnh mới TỪ CHỐI KHỞI ĐỘNG (crash-loop) — cùng loại sự cố identity 01/10/2026.
+    // (chuyển đơn thư thành nhiệm vụ, ADR 0085: petitions hỏi documents qua gRPC). Ở prod thiếu
+    // DOCUMENTS_GRPC_ADDR = ảnh mới TỪ CHỐI KHỞI ĐỘNG (crash-loop; ở dev ENV=dev thì khởi động nhưng tính năng tắt) — cùng loại sự cố identity 01/10/2026.
     // Cụm thật dựng tay, không đọc deploy/base, nên biến phải được đặt TRƯỚC khi ảnh mới lên.
     //
     // Biến không bí mật → `env:` của deploy petitions (KHÔNG common-config: địa chỉ gRPC ở env của
@@ -1015,7 +988,7 @@ YAML
       when { expression { params.HANH_DONG == 'bo-sung-cau-hinh-petitions' } }
       steps {
         script {
-          if (!(params.MT in ['prod', 'staging'])) { error("bo-sung-cau-hinh-petitions: MT '${params.MT}' không hợp lệ.") }
+          if (!(params.MT in ['prod', 'dev'])) { error("bo-sung-cau-hinh-petitions: MT '${params.MT}' không hợp lệ.") }
           if (params.XAC_NHAN != env.NS) {
             error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
@@ -1085,7 +1058,7 @@ YAML
       when { expression { params.HANH_DONG == 'bo-sung-cau-hinh-identity' } }
       steps {
         script {
-          if (!(params.MT in ['prod', 'staging'])) { error("bo-sung-cau-hinh-identity: MT '${params.MT}' không hợp lệ.") }
+          if (!(params.MT in ['prod', 'dev'])) { error("bo-sung-cau-hinh-identity: MT '${params.MT}' không hợp lệ.") }
           if (params.XAC_NHAN != env.NS) {
             error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
@@ -1120,10 +1093,8 @@ YAML
             kubectl -n "$NS" get svc -o go-template='{{range .items}}   {{.metadata.name}} ·{{range .spec.ports}} {{.port}}/{{.protocol}}{{end}}{{"\\n"}}{{end}}' || true
             exit 1
           fi
-          for ns in vigov-prod vigov-staging; do
-            kubectl -n "$ns" get secret identity-secrets >/dev/null 2>&1 || {
-              echo "DỪNG: không thấy secret/identity-secrets trong $ns — không đổi gì."; exit 1; }
-          done
+          kubectl -n "$NS" get secret identity-secrets >/dev/null 2>&1 || {
+            echo "DỪNG: không thấy secret/identity-secrets trong $NS — không đổi gì."; exit 1; }
 
           svc_ports() { kubectl -n "$NS" get svc "$1" -o go-template='{{range .spec.ports}} {{.port}}/{{.protocol}}{{end}}'; }
           dep_ports() { kubectl -n "$NS" get deploy "$1" -o go-template='{{range (index .spec.template.spec.containers 0).ports}} {{.containerPort}}{{end}}'; }
@@ -1176,78 +1147,39 @@ EOF
                echo "  vihat-miniapp chỉ gọi được cầu khi Service + containerPort có 9091 (deploy/base/identity, netpol quy tắc 8–9)." ;;
           esac
 
-          # ── 3. KHOÁ — bảng quyết định của bước 1, đổi tên key. Không in giá trị.
+          # ── 3. KHOÁ — chỉ Secret của namespace MT, khoá SINH RIÊNG cho namespace ấy (14/10/2026: dev có
+          #    CSDL riêng; không bao giờ đọc hay chép khoá của namespace kia). Không in giá trị.
           has_key() {
-            kubectl -n "$1" get secret identity-secrets \
+            kubectl -n "$NS" get secret identity-secrets \
               -o go-template='{{range $k, $v := .data}}{{if eq $k "CITIZEN_SESSION_BRIDGE_KEYS"}}yes{{end}}{{end}}'
           }
           read_key() {
-            kubectl -n "$1" get secret identity-secrets \
-              -o go-template='{{index .data "CITIZEN_SESSION_BRIDGE_KEYS"}}' > "$2"
+            kubectl -n "$NS" get secret identity-secrets \
+              -o go-template='{{index .data "CITIZEN_SESSION_BRIDGE_KEYS"}}' > "$1"
           }
           write_patch() {
             { printf '{"data":{"CITIZEN_SESSION_BRIDGE_KEYS":"'; tr -d '\\n' < "$1"; printf '"}}'; } > "$2"
           }
-          copy_prod_to_staging() {
-            read_key vigov-prod "$TMP_DIR/prod"
-            write_patch "$TMP_DIR/prod" "$TMP_DIR/patch-staging.json"
-            kubectl -n vigov-staging patch secret identity-secrets --type=merge \
-                --patch-file "$TMP_DIR/patch-staging.json" >/dev/null || {
-              echo "⚠ prod ĐÃ CÓ $KEY, staging CHƯA ghi được — chạy lại việc này (nó chỉ chép prod sang staging)."
-              exit 1; }
-            read_key vigov-staging "$TMP_DIR/staging"
-            cmp -s "$TMP_DIR/prod" "$TMP_DIR/staging" || {
-              echo "⚠ sau khi ghi, $KEY ở vigov-staging KHÁC vigov-prod — dừng, kiểm tay (không in giá trị)."; exit 1; }
-            echo "✓ vigov-staging: identity-secrets có $KEY, CÙNG giá trị với prod (so bằng cmp, không in)"
-          }
           ensure_key() {
-            in_prod=$(has_key vigov-prod)
-            in_staging=$(has_key vigov-staging)
-            if [ -n "$in_prod" ]; then
-              echo "identity-secrets của vigov-prod ĐÃ CÓ $KEY — giữ nguyên (đổi nó là cắt vihat-miniapp đang dùng khoá ấy)."
-              if [ -z "$in_staging" ]; then
-                echo "vigov-staging còn THIẾU — chép giá trị của prod sang (không ghi đè gì):"
-                copy_prod_to_staging
-                return 0
-              fi
-              read_key vigov-prod "$TMP_DIR/prod"
-              read_key vigov-staging "$TMP_DIR/staging"
-              if cmp -s "$TMP_DIR/prod" "$TMP_DIR/staging"; then
-                echo "✓ vigov-staging cũng có, CÙNG giá trị. Không đổi Secret nào."
-                return 0
-              fi
-              echo "DỪNG: vigov-staging có $KEY KHÁC prod. Không đổi gì (env của deploy cũng chưa đổi) — người vận"
-              echo "hành xác định vihat-miniapp đang gửi khoá nào trước khi chọn giữ giá trị nào."
-              exit 1
-            fi
-            if [ -n "$in_staging" ]; then
-              echo "DỪNG: vigov-prod CHƯA có $KEY nhưng vigov-staging ĐÃ CÓ — khoá sinh mới sẽ KHÁC giá trị ấy."
-              echo "Không đổi gì. Nếu vihat-miniapp đã dùng khoá của staging thì prod phải dùng ĐÚNG giá trị ấy —"
-              echo "chép tay theo tên, qua tệp, không in ra."
-              exit 1
-            fi
-            # Lượt MT=staging chỉ được xác nhận cho vigov-staging — nó không là lượt sinh khoá cho prod.
-            if [ "$NS" != "vigov-prod" ]; then
-              echo "DỪNG: cả hai namespace đều chưa có $KEY. Khoá sinh ở prod rồi chép sang staging — chạy việc"
-              echo "này với MT=prod (XAC_NHAN=vigov-prod) trước. Không đổi gì."
-              exit 1
+            if [ -n "$(has_key)" ]; then
+              echo "identity-secrets của $NS ĐÃ CÓ $KEY — giữ nguyên (đổi nó là cắt vihat-miniapp đang dùng khoá ấy)."
+              return 0
             fi
             head -c 48 /dev/urandom | base64 -w0 > "$TMP_DIR/key"
             [ "$(base64 -d < "$TMP_DIR/key" | wc -c)" -eq 48 ] || {
               echo "DỪNG: khoá sinh ra không đủ 48 byte — không đổi gì."; exit 1; }
             # .data là base64 của GIÁ TRỊ, mà giá trị là base64 của khoá — mã hoá thêm một lần.
             base64 -w0 < "$TMP_DIR/key" > "$TMP_DIR/key.data"
-            write_patch "$TMP_DIR/key.data" "$TMP_DIR/patch-prod.json"
-            kubectl -n vigov-prod patch secret identity-secrets --type=merge \
-                --patch-file "$TMP_DIR/patch-prod.json" >/dev/null
-            read_key vigov-prod "$TMP_DIR/prod"
-            cmp -s "$TMP_DIR/key.data" "$TMP_DIR/prod" || {
-              echo "⚠ đọc lại từ cụm, $KEY ở vigov-prod không khớp giá trị vừa sinh — dừng, kiểm tay."; exit 1; }
-            echo "✓ vigov-prod: đã thêm $KEY vào identity-secrets (một khoá, 48 byte; giá trị không in)"
-            copy_prod_to_staging
+            write_patch "$TMP_DIR/key.data" "$TMP_DIR/patch.json"
+            kubectl -n "$NS" patch secret identity-secrets --type=merge \
+                --patch-file "$TMP_DIR/patch.json" >/dev/null
+            read_key "$TMP_DIR/doc-lai"
+            cmp -s "$TMP_DIR/key.data" "$TMP_DIR/doc-lai" || {
+              echo "⚠ đọc lại từ cụm, $KEY ở $NS không khớp giá trị vừa sinh — dừng, kiểm tay."; exit 1; }
+            echo "✓ $NS: đã thêm $KEY vào identity-secrets (một khoá riêng, 48 byte; giá trị không in)"
           }
           echo ""
-          echo "── $KEY trong identity-secrets (vigov-prod + vigov-staging)"
+          echo "── $KEY trong identity-secrets ($NS)"
           ensure_key
 
           # ── 1. ENV — chỉ thêm cái còn thiếu, không đổi cái đã có.
@@ -1276,7 +1208,7 @@ EOF
           for name in PETITIONS_GRPC_ADDR DOCUMENTS_GRPC_ADDR CITIZEN_SESSION_BRIDGE_LISTEN_ADDR; do
             [ -n "$(env_value "$DEP" "$name")" ] || missing="$missing $name"
           done
-          [ -n "$(has_key "$NS")" ] || missing="$missing $KEY"
+          [ -n "$(has_key)" ] || missing="$missing $KEY"
           if [ -n "$missing" ]; then
             echo "DỪNG: đọc lại vẫn thiếu (hoặc rỗng):$missing — KHÔNG khởi động lại. Sửa tay rồi chạy lại việc này."
             exit 1
@@ -1298,24 +1230,20 @@ EOF
           fi
           echo "✓ deploy/$DEP trong $NS đã sẵn sàng."
 
-          cat <<'EOF'
+          cat <<EOF
 
 CÙNG GIÁ TRỊ CITIZEN_SESSION_BRIDGE_KEYS PHẢI VÀO Secret của vihat-miniapp khi cầu của app chung được
 triển khai (ADR 0045; phía ấy đặt VIGOV_CITIZEN_SESSION_BRIDGE_ADDRESS trỏ tới cổng 9091 của identity).
+vihat-miniapp chỉ chạy ở vigov-prod: khoá của namespace khác KHÔNG vào đó.
 Từ một máy tin cậy có kubeconfig ViGov (KHÔNG phải máy chủ build), vào tệp được bảo vệ, không in ra:
 
   umask 077
-  kubectl -n vigov-prod get secret identity-secrets \\
+  kubectl -n $NS get secret identity-secrets \\\\
     -o go-template='{{index .data "CITIZEN_SESSION_BRIDGE_KEYS"}}' | base64 -d > <tệp trong kho bí mật>
 
 Chép theo tệp, xoá tệp khi xong. Không dán vào chat, ticket hay dòng lệnh.
 EOF
-          if [ "$NS" = "vigov-prod" ]; then
-            echo "Bước kế: chạy lại việc này với MT=staging (XAC_NHAN=vigov-staging) — Secret staging đã có khoá,"
-            echo "nhưng env + khởi động lại của deploy identity ở staging là lượt riêng. Rồi job service-identity."
-          else
-            echo "Bước kế: job service-identity (nếu ảnh mới chưa triển khai), rồi HANH_DONG=kiem-tra-dang-nhap-app-rieng."
-          fi
+          echo "Bước kế: job service-identity (nếu ảnh mới chưa triển khai), rồi HANH_DONG=kiem-tra-dang-nhap-app-rieng."
         '''
       }
     }
@@ -1334,25 +1262,42 @@ EOF
           // Host đọc từ deploy/hosts.yaml — nơi DUY NHẤT viết host công khai (chủ dự án, 01/10/2026),
           // không gõ lại ở đây. Pipeline này không dùng readYaml (pipeline-utility-steps) ở đâu khác,
           // nên đọc bằng awk: đúng MỘT `api_suffix` dưới mục `name: <MT>` của `environments`, đúng dạng
-          // tên miền. Không thấy, thấy hai, hay sai dạng → DỪNG lượt; không bao giờ đoán host.
-          def suffix = ''
+          // tên miền, cùng `api_label_suffix` (tuỳ chọn, rỗng ở prod; "-dev" ở dev — host API dev là
+          // `<dịch vụ>-dev.api.vigov.vn`, chủ dự án 14/10/2026). Mục mang `retired: true` (staging đã
+          // bỏ, chỉ còn giữ nhãn dành riêng) không phải môi trường triển khai — bỏ qua. Không thấy,
+          // thấy hai, hay sai dạng → DỪNG lượt; không bao giờ đoán host.
+          def host = ''
           withEnv(["MT=${params.MT}"]) {
-            suffix = sh(returnStdout: true, script: '''
+            host = sh(returnStdout: true, script: '''
               set -eu
               [ -r deploy/hosts.yaml ] || { echo "DỪNG: không đọc được deploy/hosts.yaml" >&2; exit 1; }
+              # Mỗi mục kết thúc ở `- name:` kế tiếp hoặc dòng không thụt lề; in "<suffix> <label>" của
+              # mục MT nếu mục ấy không retired. `label` vắng mặt → "-" (giữ đủ hai cột cho phép đếm).
               v=$(awk -v want="$MT" '
-                /^[^ #]/ { inenv = ($0 ~ /^environments:/); name = ""; next }
-                inenv && /^  - name:/ { name = $3; gsub(/"/, "", name); next }
-                inenv && /^    api_suffix:/ && name == want { s = $2; gsub(/"/, "", s); print s }
+                function flush() {
+                  if (name == want && !retired && suffix != "") print suffix, (label == "" ? "-" : label)
+                  name = ""; suffix = ""; label = ""; retired = 0
+                }
+                /^[^ #]/ { flush(); inenv = ($0 ~ /^environments:/); next }
+                inenv && /^  - name:/ { flush(); name = $3; gsub(/"/, "", name); next }
+                inenv && /^    api_suffix:/ { suffix = $2; gsub(/"/, "", suffix); next }
+                inenv && /^    api_label_suffix:/ { label = $2; gsub(/"/, "", label); next }
+                inenv && /^    retired:[ ]*true[ ]*$/ { retired = 1; next }
+                END { flush() }
               ' deploy/hosts.yaml)
               n=$(printf '%s\\n' "$v" | grep -c . || true)
-              [ "$n" = "1" ] || { echo "DỪNG: deploy/hosts.yaml có $n api_suffix cho MT=$MT, cần đúng 1" >&2; exit 1; }
-              printf '%s' "$v" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$' \
+              [ "$n" = "1" ] || { echo "DỪNG: deploy/hosts.yaml có $n mục (không retired) cho MT=$MT, cần đúng 1" >&2; exit 1; }
+              suffix=${v%% *}
+              label=${v#* }
+              [ "$label" = "-" ] && label=""
+              printf '%s' "$suffix" | grep -Eq '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$' \
                 || { echo "DỪNG: api_suffix của MT=$MT trong deploy/hosts.yaml không phải tên miền" >&2; exit 1; }
-              printf '%s' "$v"
+              [ -z "$label" ] || printf '%s' "$label" | grep -Eq '^-[a-z0-9]+$' \
+                || { echo "DỪNG: api_label_suffix của MT=$MT trong deploy/hosts.yaml phải dạng -[a-z0-9]+" >&2; exit 1; }
+              printf 'identity%s.%s' "$label" "$suffix"
             ''').trim()
           }
-          env.API_HOST = "identity.${suffix}"
+          env.API_HOST = host
         }
         sh '''
           set -u
@@ -1431,7 +1376,8 @@ EOF
     // một pod không nghe cổng nào. Nên nếu NetworkPolicy hạn chế đường ra theo nhãn ấy, pod này có
     // thể không tới CSDL / platform — log sẽ nói.
     //
-    // MT=prod CHỈ: staging dùng chung CSDL. Vết kiểm toán ghi ở xã đích, chủ thể system, lý do
+    // MT=prod|dev, mỗi lượt ghi CSDL identity của ĐÚNG namespace MT (dev có CSDL riêng từ 14/10/2026 —
+    // trước đó chỉ prod vì staging dùng chung CSDL). Vết kiểm toán ghi ở xã đích, chủ thể system, lý do
     // ticket:<TICKET> (operatorctl); người bấm nằm trong tên lượt build.
     //
     // ĐƯỜNG CỦA SECRET: ảnh distroless không có shell để chuyển stdin, và job không attach được
@@ -1445,9 +1391,9 @@ EOF
       when { expression { params.HANH_DONG == 'dat-secret-mini-app' } }
       steps {
         script {
-          if (params.MT != 'prod') { error('dat-secret-mini-app chỉ chạy với MT=prod (staging dùng chung CSDL).') }
-          if (params.XAC_NHAN != 'vigov-prod') {
-            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          if (!(params.MT in ['prod', 'dev'])) { error("dat-secret-mini-app: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
           if (!(params.TENANT_ID ==~ /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/)) {
             error("TENANT_ID '${params.TENANT_ID}' không phải ULID (26 ký tự Crockford base32, chữ hoa). Không ghi gì cả.")
@@ -1478,13 +1424,13 @@ EOF
           DEP=vigov-service-identity
           POD="vigov-operatorctl-$BUILD_NUMBER"
           SEC="vigov-app-secret-$BUILD_NUMBER"
-          trap 'kubectl -n vigov-prod delete pod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true
-                kubectl -n vigov-prod delete secret "$SEC" --ignore-not-found >/dev/null 2>&1 || true
+          trap 'kubectl -n "$NS"delete pod "$POD" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+                kubectl -n "$NS"delete secret "$SEC" --ignore-not-found >/dev/null 2>&1 || true
                 rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS"get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS"get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1494,7 +1440,7 @@ EOF
           echo "── lệnh: /operatorctl mini-app-secret set --tenant $TENANT_ID --app-id $APP_ID --ticket $TICKET --secret-file /run/app-secret/value"
 
           printf '%s' "$APP_SECRET" > "$TMP_DIR/value"
-          kubectl -n vigov-prod create secret generic "$SEC" --from-file=value="$TMP_DIR/value" >/dev/null
+          kubectl -n "$NS"create secret generic "$SEC" --from-file=value="$TMP_DIR/value" >/dev/null
           rm -f "$TMP_DIR/value"
 
           {
@@ -1509,26 +1455,27 @@ EOF
             printf ',"command":["/operatorctl","mini-app-secret","set","--tenant","%s","--app-id","%s","--ticket","%s","--secret-file","/run/app-secret/value"]}]}}' \
               "$TENANT_ID" "$APP_ID" "$TICKET"
           } > "$TMP_DIR/pod.json"
-          kubectl -n vigov-prod create -f "$TMP_DIR/pod.json" >/dev/null
+          kubectl -n "$NS"create -f "$TMP_DIR/pod.json" >/dev/null
 
           phase=""; i=0
           while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-            phase=$(kubectl -n vigov-prod get pod "$POD" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+            phase=$(kubectl -n "$NS"get pod "$POD" -o jsonpath='{.status.phase}' 2>/dev/null || true)
             case "$phase" in Succeeded|Failed) break ;; esac
             sleep 5; i=$((i+1))
           done
           echo "── log của operatorctl"
-          kubectl -n vigov-prod logs "$POD" 2>&1 || true
+          kubectl -n "$NS"logs "$POD" 2>&1 || true
           if [ "$phase" != "Succeeded" ]; then
             echo "── pod $POD kết thúc ở pha '$phase' — sự kiện của pod:"
-            kubectl -n vigov-prod describe pod "$POD" 2>/dev/null | sed -n '/^Events:/,$p' || true
+            kubectl -n "$NS"describe pod "$POD" 2>/dev/null | sed -n '/^Events:/,$p' || true
             echo "Gợi ý: 'flag provided but not defined: -secret-file' = ảnh identity cũ — chạy job service-identity trước;"
             echo "'not bound' / App ID chưa gắn xã = chạy HANH_DONG=doi-app-id-thang-binh trước;"
             echo "SECRET_ENCRYPTION_KEYS rỗng = HANH_DONG=tao-khoa-ma-hoa-identity."
             exit 1
           fi
           echo ""
-          echo "Xong. Kiểm: POST https://identity.api.vigov.vn/api/v1/citizen-sessions với token giả phải trả 401 (không còn 422)."
+          echo "Xong. Kiểm: HANH_DONG=kiem-tra-dang-nhap-app-rieng cùng MT — POST /api/v1/citizen-sessions trên host identity của MT"
+          echo "(prod identity.api.vigov.vn · dev identity-dev.api.vigov.vn, deploy/hosts.yaml) với token giả phải trả 401 (không còn 422)."
         '''
       }
     }
@@ -1550,16 +1497,16 @@ EOF
     // pod (`kubectl describe` thấy) và Jenkins lưu tham số — pod bị xoá khi kết thúc.
     //
     // Cùng khuôn pod một lượt của bước 5 ở trên (ảnh distroless, không shell → mỗi lệnh một pod; env
-    // của Deployment đọc từ cụm, viết vào TỆP, không lên dòng lệnh). MT=prod chỉ: sổ vận hành nằm trong
-    // CSDL identity, staging dùng chung CSDL.
+    // của Deployment đọc từ cụm, viết vào TỆP, không lên dòng lệnh). MT=prod|dev: sổ vận hành nằm trong
+    // CSDL identity của từng namespace — dev có CSDL riêng nên tài khoản dev là tài khoản RIÊNG (14/10/2026).
     // ─────────────────────────────────────────────────────────────────────────────────────
     stage('Tạo tài khoản vận hành') {
       when { expression { params.HANH_DONG == 'tao-tai-khoan-van-hanh' } }
       steps {
         script {
-          if (params.MT != 'prod') { error("tao-tai-khoan-van-hanh chỉ chạy với MT=prod (staging dùng chung CSDL).") }
-          if (params.XAC_NHAN != 'vigov-prod') {
-            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          if (!(params.MT in ['prod', 'dev'])) { error("tao-tai-khoan-van-hanh: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
           // Các giá trị đi vào manifest JSON của pod — chỉ nhận đúng dạng, không ký tự nào phải thoát
           // (không " \ hay ký tự điều khiển), trước mọi lệnh kubectl.
@@ -1584,11 +1531,11 @@ EOF
           TMP_DIR=$(mktemp -d)
           DEP=vigov-service-identity
           PODS=""
-          trap 'for p in $PODS; do kubectl -n vigov-prod delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          trap 'for p in $PODS; do kubectl -n "$NS"delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS"get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS"get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1610,19 +1557,19 @@ EOF
             } > "$TMP_DIR/pod-$1.json"
             # `|| return 1`: run_op chạy trong `if`, nơi `set -e` không có tác dụng — thiếu nó thì một
             # lần create hỏng vẫn đợi đủ 5 phút cho một pod không tồn tại.
-            kubectl -n vigov-prod create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            kubectl -n "$NS"create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
             rm -f "$TMP_DIR/pod-$1.json"   # mang email — không để lại trên đĩa agent
             phase=""; i=0
             while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              phase=$(kubectl -n vigov-prod get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              phase=$(kubectl -n "$NS"get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
               case "$phase" in Succeeded|Failed) break ;; esac
               sleep 5; i=$((i+1))
             done
-            kubectl -n vigov-prod logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            kubectl -n "$NS"logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
             if [ "$phase" != "Succeeded" ]; then
               cat "$TMP_DIR/$1.log"
               echo "── pod $pod kết thúc ở pha '$phase' — sự kiện của pod:"
-              kubectl -n vigov-prod describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              kubectl -n "$NS"describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
               return 1
             fi
             return 0
@@ -1667,8 +1614,9 @@ EOF
     // ─────────────────────────────────────────────────────────────────────────────────────
     // CHỈ ĐỊNH OWNER — `operatorctl set-owner` (ADR 0048 §"Sửa đổi 13/10/2026 — owner, …" #1): đúng
     // MỘT tài khoản vận hành mang cờ owner, ràng buộc ở CSDL (identity migration 0030). Chỉ định bằng
-    // job này, chỉ prod, gõ vigov-prod — KHÔNG bằng biến môi trường, KHÔNG màn nào gỡ hay chuyển owner.
-    // Giá chủ dự án đã chấp nhận: ai chạy được job prod này là chỉ định được owner.
+    // job này, theo MT, gõ đúng namespace — KHÔNG bằng biến môi trường, KHÔNG màn nào gỡ hay chuyển owner.
+    // Mỗi namespace một CSDL identity, nên mỗi namespace một owner riêng (dev từ 14/10/2026).
+    // Giá chủ dự án đã chấp nhận: ai chạy được job này là chỉ định được owner.
     //
     // MỘT GIAO DỊCH trong identity: cờ rời owner cũ (nếu có), sang tài khoản có EMAIL_VAN_HANH; mỗi tài
     // khoản đổi cờ một mục operator_audit_log, actor system, lý do ticket:<TICKET>. Tài khoản không có,
@@ -1682,9 +1630,9 @@ EOF
       when { expression { params.HANH_DONG == 'chi-dinh-owner' } }
       steps {
         script {
-          if (params.MT != 'prod') { error("chi-dinh-owner chỉ chạy với MT=prod (staging dùng chung CSDL).") }
-          if (params.XAC_NHAN != 'vigov-prod') {
-            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          if (!(params.MT in ['prod', 'dev'])) { error("chi-dinh-owner: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
           if (!(params.EMAIL_VAN_HANH ==~ /^[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,24}$/)) {
             error("EMAIL_VAN_HANH không đúng dạng email. Không ghi gì cả.")   // không in lại giá trị (luật 3)
@@ -1703,11 +1651,11 @@ EOF
           TMP_DIR=$(mktemp -d)
           DEP=vigov-service-identity
           PODS=""
-          trap 'for p in $PODS; do kubectl -n vigov-prod delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          trap 'for p in $PODS; do kubectl -n "$NS"delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS"get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS"get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1727,19 +1675,19 @@ EOF
               printf ',"env":'; cat "$TMP_DIR/env"
               printf ',"command":%s}]}}' "$2"
             } > "$TMP_DIR/pod-$1.json"
-            kubectl -n vigov-prod create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            kubectl -n "$NS"create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
             rm -f "$TMP_DIR/pod-$1.json"   # mang email — không để lại trên đĩa agent
             phase=""; i=0
             while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              phase=$(kubectl -n vigov-prod get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              phase=$(kubectl -n "$NS"get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
               case "$phase" in Succeeded|Failed) break ;; esac
               sleep 5; i=$((i+1))
             done
-            kubectl -n vigov-prod logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            kubectl -n "$NS"logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
             if [ "$phase" != "Succeeded" ]; then
               cat "$TMP_DIR/$1.log"
               echo "── pod $pod kết thúc ở pha '$phase' — sự kiện của pod:"
-              kubectl -n vigov-prod describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
+              kubectl -n "$NS"describe pod "$pod" 2>/dev/null | sed -n '/^Events:/,$p' || true
               return 1
             fi
             return 0
@@ -1797,9 +1745,9 @@ EOF
       when { expression { params.HANH_DONG == 'cap-quyen-van-hanh' } }
       steps {
         script {
-          if (params.MT != 'prod') { error("cap-quyen-van-hanh chỉ chạy với MT=prod (staging dùng chung CSDL).") }
-          if (params.XAC_NHAN != 'vigov-prod') {
-            error("XAC_NHAN phải là đúng 'vigov-prod'. Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
+          if (!(params.MT in ['prod', 'dev'])) { error("cap-quyen-van-hanh: MT '${params.MT}' không hợp lệ.") }
+          if (params.XAC_NHAN != env.NS) {
+            error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
           if (!(params.TICKET ==~ /^[A-Za-z0-9._-]{1,64}$/)) {
             error("TICKET bắt buộc, chỉ A-Z a-z 0-9 . _ -, tối đa 64 ký tự. Nhận được: '${params.TICKET}'. Không ghi gì cả.")
@@ -1842,11 +1790,11 @@ EOF
           TMP_DIR=$(mktemp -d)
           DEP=vigov-service-identity
           PODS=""
-          trap 'for p in $PODS; do kubectl -n vigov-prod delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
+          trap 'for p in $PODS; do kubectl -n "$NS"delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -f "$TMP_DIR"/*; rmdir "$TMP_DIR"' EXIT
 
-          n=$(kubectl -n vigov-prod get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
+          n=$(kubectl -n "$NS"get deploy "$DEP" -o go-template='{{len .spec.template.spec.containers}}')
           [ "$n" = "1" ] || { echo "DỪNG: deploy/$DEP có $n container — không biết lấy ảnh nào. Không ghi gì."; exit 1; }
-          get_field() { kubectl -n vigov-prod get deploy "$DEP" -o jsonpath="$1"; }
+          get_field() { kubectl -n "$NS"get deploy "$DEP" -o jsonpath="$1"; }
           IMG=$(get_field '{.spec.template.spec.containers[0].image}')
           get_field '{.spec.template.spec.containers[0].envFrom}' > "$TMP_DIR/envfrom"
           get_field '{.spec.template.spec.containers[0].env}' > "$TMP_DIR/env"
@@ -1866,15 +1814,15 @@ EOF
               printf ',"env":'; cat "$TMP_DIR/env"
               printf ',"command":%s}]}}' "$2"
             } > "$TMP_DIR/pod-$1.json"
-            kubectl -n vigov-prod create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
+            kubectl -n "$NS"create -f "$TMP_DIR/pod-$1.json" >/dev/null || { rm -f "$TMP_DIR/pod-$1.json"; return 1; }
             rm -f "$TMP_DIR/pod-$1.json"
             phase=""; i=0
             while [ $i -lt 60 ]; do   # 60 × 5 giây = 5 phút
-              phase=$(kubectl -n vigov-prod get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              phase=$(kubectl -n "$NS"get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
               case "$phase" in Succeeded|Failed) break ;; esac
               sleep 5; i=$((i+1))
             done
-            kubectl -n vigov-prod logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
+            kubectl -n "$NS"logs "$pod" > "$TMP_DIR/$1.log" 2>&1 || true
             [ "$phase" = "Succeeded" ]
           }
 
@@ -1938,7 +1886,7 @@ EOF
     // ─────────────────────────────────────────────────────────────────────────────────────
     // DỰNG CLAMAV (clamd) — máy quét mã độc tệp tải lên của petitions (ADR 0052 §9). Manifest và
     // lý do từng lựa chọn (RAM, đường ra freshclam, StreamMaxLength, không Ingress): đầu tệp
-    // deploy/cluster/clamav.yaml. Chạy MT=prod và MT=staging riêng — mỗi namespace một clamd.
+    // deploy/cluster/clamav.yaml. Chạy MT=prod và MT=dev riêng — mỗi namespace một clamd.
     //
     // THỨ TỰ: ĐỌC trước (common-config có không, NetworkPolicy nào đang có) → `apply` (chạy lại
     // không sinh bản thứ hai) → đợi sẵn sàng → THỬ THẬT bằng PING/PONG từ một pod khác qua Service
@@ -1961,7 +1909,7 @@ EOF
       when { expression { params.HANH_DONG == 'dung-clamav' } }
       steps {
         script {
-          if (!(params.MT in ['prod', 'staging'])) { error("dung-clamav: MT '${params.MT}' không hợp lệ.") }
+          if (!(params.MT in ['prod', 'dev'])) { error("dung-clamav: MT '${params.MT}' không hợp lệ.") }
           if (params.XAC_NHAN != env.NS) {
             error("XAC_NHAN phải là đúng '${env.NS}' (namespace của MT). Nhận được: '${params.XAC_NHAN}'. Không ghi gì cả.")
           }
