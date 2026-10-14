@@ -1,3 +1,8 @@
+// MapLibre's own stylesheet — the `Vị trí` mini-map and `Bản đồ nhiệt` need it exactly as `/ban-do`
+// does: without it the marker element is not absolutely positioned and falls outside the map box, so
+// the citizen's pin is never seen (bug sheet web-admin-141026 row 2). Bundled by Next, no third-party host.
+import "maplibre-gl/dist/maplibre-gl.css";
+
 import { CauHinhXaProvider } from "@/components/cau-hinh-xa";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
