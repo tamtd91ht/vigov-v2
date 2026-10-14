@@ -2751,9 +2751,7 @@ describe("the filter row — ONE row in the prototype's order, no `Bộ lọc` p
     // `+ Thêm việc con` opens the SAME dialog (stacked over the detail panel).
     const host = readFileSync(fileURLToPath(new URL("./task-detail-host.tsx", import.meta.url)), "utf8");
     expect(host).toContain("key={task.code}\n                  dialog");
-    // Phản ánh `Tạo nhiệm vụ` opens the SAME form as the prototype's dialog too (06/10/2026).
-    const petition = readFileSync(fileURLToPath(new URL("../phan-anh/petition-task.tsx", import.meta.url)), "utf8");
-    expect(petition).toMatch(/<FormGiaoViec\s+dialog/);
+    // Phản ánh no longer has `Tạo nhiệm vụ` (prototype FeedbackDetailDrawer has none; 1a3bb88e).
     // Biên bản `Tách thành nhiệm vụ` opens the SAME form as the prototype's dialog (06/10/2026).
     const meeting = readFileSync(fileURLToPath(new URL("../bien-ban/so-bien-ban.tsx", import.meta.url)), "utf8");
     expect(meeting).toMatch(/<FormGiaoViec\s+dialog/);

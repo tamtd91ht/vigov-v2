@@ -82,8 +82,7 @@ const EMPTY_CATALOGUE: DanhMucNhiemVu = { loai: [], mucUuTien: [], khoi: [], boP
  * "Chuyển thành nhiệm vụ" of the citizen-letter drawer (prototype `PetitionDetailDrawer.tsx:590-627`) —
  * POST /api/v1/citizen-letter-tasks (ADR 0085 A).
  *
- * THE SAME FORM AS `+ Giao việc mới`, as Phản ánh's `Tạo nhiệm vụ` (`features/phan-anh/petition-task.tsx`)
- * reuses it for the same prototype dialog: `FormGiaoViec` with the prototype's title/description/submit,
+ * THE SAME FORM AS `+ Giao việc mới`, reused for the same prototype dialog: `FormGiaoViec` with the prototype's title/description/submit,
  * the title pre-filled from the summary (ADR 0085 A7: typed, confirmed by a person), unit and assignee
  * from the letter's holding unit and assignee — all editable — and the deadline READ-ONLY (`inheritedDue`):
  * the server sets it and refuses a `due_at` (A6).
