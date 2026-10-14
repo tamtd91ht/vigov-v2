@@ -5,8 +5,10 @@ package http
 //
 // THE KEYS ARE THE ONES THE VOUCHER REGISTER ALREADY DECLARES (routes.go), none invented (rule 5,
 // invariant 3c): `budget.update` for the preview and the import — an import IS entering payments, the
-// act POST /api/v1/disbursements guards — and `budget.read` for the template, which holds no data of
-// the commune (an empty sheet with one fake example row). All three are seeded at
+// act POST /api/v1/disbursements guards — and `budget.read` for the template. Since 14/10/2026 (owner)
+// the template carries the commune's live project codes and names and its funding-source names as
+// dropdowns: exactly what `budget.read` already shows on the project and source screens, so the key
+// still fits — no voucher, no amount. All three are seeded at
 // service-identity/migrations/0001_init.sql:282-284.
 //
 // THREE ROUTES AND NOT `POST …/imports?mode=dry-run|commit`: the catalogue import's reason
@@ -26,7 +28,10 @@ import (
 )
 
 func registerDisbursementImportRoutes(mux *http.ServeMux, d Deps, h *Handler) {
-	// @summary  Tải tệp Excel mẫu để nhập chứng từ giải ngân
+	// Per commune: dropdowns of the commune's live projects (Mã dự án) and funding-source names (Nguồn
+	// vốn); no-store. A failed read of the lists serves the file without dropdowns.
+	//
+	// @summary  Tải tệp Excel mẫu để nhập chứng từ giải ngân — có danh sách chọn Mã dự án và Nguồn vốn của xã
 	// @screen   06-giai-ngan §10
 	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
 	//

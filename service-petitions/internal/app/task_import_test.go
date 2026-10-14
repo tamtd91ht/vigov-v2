@@ -375,6 +375,77 @@ func TestTaskImportCatalogueByDisplayName(t *testing.T) {
 	khongGhiGi(t, k)
 }
 
+// TestTaskImportAcceptsDropdownValues — the template's dropdowns (owner 14/10/2026) write
+// "code · label" (xlsx.ChoiceValue) into the six coded columns; the import reads the code and checks it
+// exactly as a typed code. A bare code still imports, and a code in dropdown shape that names nothing is
+// still refused — without echoing the cell.
+func TestTaskImportAcceptsDropdownValues(t *testing.T) {
+	k := khoNVMau()
+	ti, ctx := newTaskImportLabelled(t, k)
+	res, err := ti.Import(ctx, importSheet(
+		importLine("Việc chọn từ danh sách", "dia-chinh · Địa chính", "CB-00311 · Cán bộ Mẫu", map[int]string{
+			4: "khan · Khẩn", 6: "co-ban · Cơ bản", 7: "khoi-uy-ban · Khối Uỷ ban", 11: "x", 12: "x"}),
+		importLine("Việc gõ mã", "van-phong", "CB-00412", map[int]string{4: "cao", 6: "theo-van-ban", 7: "khoi-uy-ban"}),
+	), false, canBoThu())
+	if err != nil || !res.Committed || len(res.Errors) != 0 {
+		t.Fatalf("kết quả = %+v, %v", res, err)
+	}
+	inserts := k.cau("INSERT INTO nhiem_vu (")
+	if len(inserts) != 2 {
+		t.Fatalf("%d câu INSERT nhiệm vụ, muốn 2", len(inserts))
+	}
+	// $4 loai, $9 muc_uu_tien, $12 bo_phan_id, $13 nguoi_thuc_hien_ma (store/nhiem_vu_ghi.go).
+	for i, want := range [][4]string{
+		{"co-ban", "khan", "bp-dia-chinh", "CB-00311"},
+		{"theo-van-ban", "cao", "bp-van-phong", "CB-00412"},
+	} {
+		a := inserts[i].args
+		if fmt.Sprint(a[3]) != want[0] || fmt.Sprint(a[8]) != want[1] || fmt.Sprint(a[11]) != want[2] || fmt.Sprint(a[12]) != want[3] {
+			t.Errorf("dòng %d ghi %v %v %v %v — muốn %v", i+1, a[3], a[8], a[11], a[12], want)
+		}
+	}
+
+	k = khoNVMau()
+	ti, ctx = newTaskImportLabelled(t, k)
+	res, err = ti.Import(ctx, importSheet(
+		importLine("Việc", "khong-co · Bộ phận lạ", "CB-99999 · Người lạ", map[int]string{
+			4: "khong-co · Lạ", 6: "da-tat · Đã tắt", 7: "khoi-cu · Khối cũ"}),
+	), false, canBoThu())
+	if err != nil || res.Committed || len(res.Errors) != 5 {
+		t.Fatalf("kết quả = %+v, %v", res, err)
+	}
+	for _, e := range res.Errors {
+		if strings.Contains(e.Message, "khong-co") || strings.Contains(e.Message, "Người lạ") {
+			t.Errorf("thông báo nhắc lại giá trị ô: %q", e.Message)
+		}
+	}
+	khongGhiGi(t, k)
+}
+
+// TestImportChoiceCellsKeepsLabelsWithTheSeparator — a type/priority cell is cut at " · " only when what
+// precedes it IS a catalogue code; otherwise the whole cell goes on to the label match, so a label a
+// commune wrote with " · " in it still resolves. Unit, staff and bloc are always cut.
+func TestImportChoiceCellsKeepsLabelsWithTheSeparator(t *testing.T) {
+	types := []importCatalogueEntry{{code: "co-ban", label: "Cơ bản", inUse: true}}
+	priorities := []importCatalogueEntry{{code: "khan", label: "Khẩn · gấp", inUse: true}}
+	in := importLine("Việc", " dia-chinh · Địa chính ", "CB-00311 · Cán bộ Mẫu", map[int]string{
+		4: "Khẩn · gấp", 6: "CO-BAN · Cơ bản", 7: "khoi-uy-ban · Khối Uỷ ban"})
+	out := importChoiceCells(in, types, priorities)
+	for col, want := range map[int]string{2: "dia-chinh", 3: "CB-00311", 4: "Khẩn · gấp", 6: "co-ban", 7: "khoi-uy-ban"} {
+		if out[col] != want {
+			t.Errorf("cột %d = %q, muốn %q", col, out[col], want)
+		}
+	}
+	if in[2] != " dia-chinh · Địa chính " {
+		t.Error("importChoiceCells sửa vào bảng tính của bên gọi")
+	}
+	if code, problem := resolveImportCatalogue(strings.ToLower(out[4]), priorities, "mức ưu tiên"); code != "khan" || problem != "" {
+		t.Errorf("tên có dấu phân cách không khớp: %q %q", code, problem)
+	}
+	// A row shorter than the template (Excel drops trailing empty cells) is not an index panic.
+	_ = importChoiceCells([]string{"Việc", "", "dia-chinh · Địa chính"}, types, priorities)
+}
+
 // TestTaskImportHeadingBelowTitleRowsKeepsSheetRowNumbers — title rows above the heading are not
 // tasks, and every refusal still names the row number the clerk sees in Excel.
 func TestTaskImportHeadingBelowTitleRowsKeepsSheetRowNumbers(t *testing.T) {

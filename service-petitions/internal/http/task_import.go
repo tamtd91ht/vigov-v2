@@ -3,7 +3,8 @@ package http
 // The spreadsheet import of tasks (docs/ui-ux/02-nhiem-vu.md §8):
 //
 //	POST /api/v1/tasks/imports          multipart `file`, optional `dry_run=true`   task.create
-//	GET  /api/v1/tasks/import-template  the empty template with one example row    task.create
+//	GET  /api/v1/tasks/import-template  the empty template: one example row, dropdowns    task.create
+//	                                    (optional repeated `org_unit`, `staff`, `bloc` codes)
 //
 // THIS FILE DECODES THE UPLOAD, AND THE UPLOAD IS HOSTILE UNTIL PROVEN OTHERWISE. An .xlsx is a zip of
 // XML parts; every limit below is one this service controls, applied BEFORE excelize parses a byte of
@@ -25,18 +26,25 @@ package http
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/xuri/excelize/v2"
 
+	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/tenant"
+	"github.com/vihat/vigov/core/xlsx"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
@@ -379,11 +387,50 @@ func importDueCellText(raw string, clock, date1904 bool) string {
 	return t.Round(time.Minute).Format("2006-01-02 15:04")
 }
 
+// The query parameters of GET /api/v1/tasks/import-template naming the codes the client wants offered
+// in three dropdowns, each repeated once per code (`?org_unit=van-phong&org_unit=dia-chinh`). The
+// owner's decision of 14/10/2026: the screen that offers the download already holds these lists.
+const (
+	choiceParamOrgUnit = "org_unit" // org-unit business codes (`bo_phan.ma`)
+	choiceParamStaff   = "staff"    // staff business codes (`CB-…`)
+	choiceParamBloc    = "bloc"     // task-bloc codes (`khoi_nhiem_vu.ma`)
+)
+
+// taskImportChoiceCap bounds each list a client may send. One commune's units, staff and blocs are tens
+// to a few hundred; 2000 is far above any of them and still bounds the identity calls one GET can cause
+// (2000 staff codes are 40 assignability calls of 50). Above it the request is refused, never truncated:
+// a list silently cut short would offer some staff and not others with nothing saying why.
+const taskImportChoiceCap = 2000
+
+// taskImportChoiceCodeMax drops a query value longer than any code — the import's own bound on a code
+// cell (domain importCodeMax), so a value that could never be imported is never sent on to identity.
+const taskImportChoiceCodeMax = 100
+
 // ImportTemplate serves GET /api/v1/tasks/import-template.
+//
+// THE CLIENT'S LISTS ARE NOT TRUSTED (rule 1, forbidden #2). They only say WHICH codes to look up: the
+// file offers a code only when identity confirms it for the commune the Host resolved — a live unit, an
+// assignable member of staff, a live bloc — and prints identity's name for it, never text the client
+// sent. A code of another commune is absent from identity's answer and so absent from the file, with
+// no sign it was asked for. The dropdowns grant nothing either way: the import re-checks every code.
 func (h *Handler) ImportTemplate(w http.ResponseWriter, r *http.Request) {
-	b, err := renderImportTemplate()
+	ctx := r.Context()
+	q := r.URL.Query()
+	asked := make(map[string][]string, 3)
+	for _, name := range []string{choiceParamOrgUnit, choiceParamStaff, choiceParamBloc} {
+		codes, ok := importChoiceCodesFromQuery(q[name])
+		if !ok {
+			httpx.WriteError(w, http.StatusBadRequest, "too_many_choices", fmt.Sprintf(
+				"Mỗi danh sách chọn của mẫu nhận tối đa %d mã (tham số `%s`).", taskImportChoiceCap, name), "")
+			return
+		}
+		asked[name] = codes
+	}
+
+	choices := h.importTemplateChoices(ctx, asked[choiceParamOrgUnit], asked[choiceParamStaff], asked[choiceParamBloc])
+	b, err := renderImportTemplate(choices)
 	if err != nil {
-		h.d.Log.Error("mẫu nhập nhiệm vụ: lỗi dựng tệp", "xa", string(tenant.MustFrom(r.Context())), "err", err)
+		h.d.Log.Error("mẫu nhập nhiệm vụ: lỗi dựng tệp", "xa", string(tenant.MustFrom(ctx)), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
 		return
 	}
@@ -392,6 +439,174 @@ func (h *Handler) ImportTemplate(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(b)
+}
+
+// importChoiceCodesFromQuery trims, drops blanks and over-long values, and removes duplicates, keeping
+// the client's order (the order its screen shows). ok is false when more than taskImportChoiceCap values
+// were sent — counted before anything is dropped, so the bound is on what the request carried.
+func importChoiceCodesFromQuery(raw []string) ([]string, bool) {
+	if len(raw) > taskImportChoiceCap {
+		return nil, false
+	}
+	seen := make(map[string]struct{}, len(raw))
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		v = strings.TrimSpace(v)
+		if v == "" || utf8.RuneCountInString(v) > taskImportChoiceCodeMax {
+			continue
+		}
+		if _, dup := seen[v]; dup {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out, true
+}
+
+// importTemplateChoices builds the dropdowns. A list that comes out empty gives its column no dropdown.
+//
+// NEVER FAILS THE DOWNLOAD: a dropdown is a convenience, and the template without it is the template
+// every commune used until 14/10/2026. A catalogue that cannot be read drops its own dropdown; identity
+// unreachable (or not wired) drops all three of its dropdowns together — never a list built from half
+// the answers. The warnings name the commune and the error only: no code list, no name (rule 3).
+func (h *Handler) importTemplateChoices(ctx context.Context, units, staff, blocs []string) map[int]xlsx.Choices {
+	xa := string(tenant.MustFrom(ctx))
+	out := make(map[int]xlsx.Choices, 7)
+
+	// This service's own two catalogues, IN-USE rows only — what the import accepts.
+	if types, err := h.d.LoaiNhiemVu.DanhSach(ctx); err != nil {
+		h.d.Log.Warn("mẫu nhập nhiệm vụ: không đọc được danh mục loại nhiệm vụ — mẫu không có danh sách chọn cột này",
+			"xa", xa, "err", err)
+	} else {
+		var values []string
+		for _, t := range types {
+			if t.DangDung {
+				values = append(values, xlsx.ChoiceValue(t.Ma, t.Nhan))
+			}
+		}
+		out[domain.TaskImportColType] = xlsx.Choices{Values: values, Title: "Loại nhiệm vụ",
+			Message: "Giá trị này không có trong danh mục loại nhiệm vụ đang dùng của xã. Khi nhập, hệ thống sẽ kiểm lại."}
+	}
+	if levels, err := h.d.MucUuTien.DanhSach(ctx); err != nil {
+		h.d.Log.Warn("mẫu nhập nhiệm vụ: không đọc được danh mục mức ưu tiên — mẫu không có danh sách chọn cột này",
+			"xa", xa, "err", err)
+	} else {
+		var values []string
+		for _, l := range levels {
+			if l.DangDung {
+				values = append(values, xlsx.ChoiceValue(l.Ma, l.Nhan))
+			}
+		}
+		out[domain.TaskImportColPriority] = xlsx.Choices{Values: values, Title: "Mức ưu tiên",
+			Message: "Giá trị này không có trong danh mục mức ưu tiên đang dùng của xã. Khi nhập, hệ thống sẽ kiểm lại."}
+	}
+
+	mark := xlsx.Choices{Values: []string{"x"}, Strict: true, Title: "Chỉ ghi \"x\"",
+		Message: "Ghi \"x\" khi đã duyệt, để trống khi chưa."}
+	out[domain.TaskImportColLeaderApproved] = mark
+	out[domain.TaskImportColSuperiorAcknowledged] = mark
+
+	if len(units)+len(staff)+len(blocs) == 0 {
+		return out
+	}
+	if h.d.TaskImportChoices == nil {
+		h.d.Log.Warn("mẫu nhập nhiệm vụ: chưa nối identity — mẫu không có danh sách chọn bộ phận, cán bộ, khối", "xa", xa)
+		return out
+	}
+	unitValues, staffValues, blocValues, err := h.identityChoices(ctx, units, staff, blocs)
+	if err != nil {
+		h.d.Log.Warn("CẢNH BÁO: mẫu nhập nhiệm vụ: không tra được identity — mẫu không có danh sách chọn bộ phận, cán bộ, khối",
+			"xa", xa, "err", err)
+		return out
+	}
+	out[domain.TaskImportColUnit] = xlsx.Choices{Values: unitValues, Title: "Đơn vị thực hiện",
+		Message: "Giá trị này không có trong danh sách bộ phận của xã. Khi nhập, hệ thống sẽ kiểm lại."}
+	out[domain.TaskImportColAssignee] = xlsx.Choices{Values: staffValues, Title: "Người thực hiện",
+		Message: "Giá trị này không có trong danh sách cán bộ nhận việc của xã. Khi nhập, hệ thống sẽ kiểm lại."}
+	out[domain.TaskImportColBloc] = xlsx.Choices{Values: blocValues, Title: "Khối nhiệm vụ",
+		Message: "Giá trị này không có trong danh mục khối nhiệm vụ đang dùng của xã. Khi nhập, hệ thống sẽ kiểm lại."}
+	return out
+}
+
+// identityChoices asks identity which of the client's codes are this commune's, with the predicate the
+// import itself applies to each column (app.TaskImport), and returns the dropdown values in the client's
+// order. Any failure returns an error and no list.
+func (h *Handler) identityChoices(ctx context.Context, units, staff, blocs []string) (
+	unitValues, staffValues, blocValues []string, err error) {
+
+	id := h.d.TaskImportChoices
+
+	// Units: LIVE units of this commune by code, then their names.
+	unitIDs, err := lookupInChunks(ctx, units, identityclient.MaxLookupKeysPerCall, id.LiveOrgUnitIDsByCode)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("bộ phận theo mã: %w", err)
+	}
+	ids := make([]string, 0, len(unitIDs))
+	for _, code := range units {
+		if v, ok := unitIDs[code]; ok {
+			ids = append(ids, v)
+		}
+	}
+	unitNames, err := lookupInChunks(ctx, ids, identityclient.MaxLookupKeysPerCall, id.OrgUnitNames)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("tên bộ phận: %w", err)
+	}
+	for _, code := range units {
+		if v, ok := unitIDs[code]; ok {
+			unitValues = append(unitValues, xlsx.ChoiceValue(code, unitNames[v].Name))
+		}
+	}
+
+	// Staff: those who may be handed work in this commune (the import's own check), then their names.
+	assignable, err := lookupInChunks(ctx, staff, identityclient.TranMaGiaoViecMotLo, id.CanBoGiaoViecDuoc)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("cán bộ nhận việc: %w", err)
+	}
+	confirmed := make([]string, 0, len(assignable))
+	for _, code := range staff {
+		if _, ok := assignable[code]; ok {
+			confirmed = append(confirmed, code)
+		}
+	}
+	staffNames, err := lookupInChunks(ctx, confirmed, identityclient.TranMaMotLo, id.TenCanBoTheoMa)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("tên cán bộ: %w", err)
+	}
+	for _, code := range confirmed {
+		staffValues = append(staffValues, xlsx.ChoiceValue(code, staffNames[code].HoTen))
+	}
+
+	// Blocs: TaskBlocLabels answers removed codes too (flagged), so LIVE is filtered here — the import
+	// refuses a removed bloc, and the file must not offer one.
+	labels, err := lookupInChunks(ctx, blocs, identityclient.MaxLookupKeysPerCall, id.TaskBlocLabels)
+	if err != nil {
+		return nil, nil, nil, fmt.Errorf("khối nhiệm vụ: %w", err)
+	}
+	for _, code := range blocs {
+		if l, ok := labels[code]; ok && l.Standing == identityv1.RecordStanding_RECORD_STANDING_LIVE {
+			blocValues = append(blocValues, xlsx.ChoiceValue(code, l.Label))
+		}
+	}
+	return unitValues, staffValues, blocValues, nil
+}
+
+// lookupInChunks calls an identity lookup over keys (already de-duplicated) in batches of `size` — each
+// lookup refuses a larger batch rather than truncating it — and merges the answers.
+func lookupInChunks[V any](ctx context.Context, keys []string, size int,
+	call func(context.Context, []string) (map[string]V, error)) (map[string]V, error) {
+
+	out := make(map[string]V, len(keys))
+	for start := 0; start < len(keys); start += size {
+		got, err := call(ctx, keys[start:min(start+size, len(keys))])
+		if err != nil {
+			return nil, err
+		}
+		for k, v := range got {
+			out[k] = v
+		}
+	}
+	return out, nil
 }
 
 // importTemplateExample is the one filled row, so the format is obvious without a manual. EVERY VALUE
@@ -414,40 +629,21 @@ var importTemplateExample = []string{
 	"Ghi chú mẫu — xoá dòng này trước khi nhập",
 }
 
-// renderImportTemplate builds the template: the heading row and one example row, as text cells.
-func renderImportTemplate() ([]byte, error) {
-	f := excelize.NewFile()
-	defer f.Close()
-	const sheet = "Nhiem vu"
-	if err := f.SetSheetName("Sheet1", sheet); err != nil {
-		return nil, err
-	}
-	head, err := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true},
-		Alignment: &excelize.Alignment{WrapText: true, Vertical: "center"}})
+// taskImportSheetName is the data sheet's tab — the FIRST sheet, the one readImportSheet reads.
+const taskImportSheetName = "Nhiem vu"
+
+// renderImportTemplate builds the template through core/xlsx: the heading row, the example row as text
+// cells, and the dropdowns in `choices` (columns with no entry have none). The heading stays at row 1,
+// where the reader looks first.
+func renderImportTemplate(choices map[int]xlsx.Choices) ([]byte, error) {
+	b, err := xlsx.Template(xlsx.TemplateSpec{
+		SheetName: taskImportSheetName,
+		Header:    domain.TaskImportHeadings,
+		Examples:  [][]string{importTemplateExample},
+		Choices:   choices,
+	})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mẫu nhập nhiệm vụ: %w", err)
 	}
-	for i, title := range domain.TaskImportHeadings {
-		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
-		if err := f.SetCellStr(sheet, cell, title); err != nil {
-			return nil, err
-		}
-		ex, _ := excelize.CoordinatesToCellName(i+1, 2)
-		if err := f.SetCellStr(sheet, ex, importTemplateExample[i]); err != nil {
-			return nil, err
-		}
-		col, _ := excelize.ColumnNumberToName(i + 1)
-		if err := f.SetColWidth(sheet, col, col, 26); err != nil {
-			return nil, err
-		}
-	}
-	last, _ := excelize.CoordinatesToCellName(len(domain.TaskImportHeadings), 1)
-	if err := f.SetCellStyle(sheet, "A1", last, head); err != nil {
-		return nil, err
-	}
-	var buf bytes.Buffer
-	if err := f.Write(&buf); err != nil {
-		return nil, err
-	}
-	return buf.Bytes(), nil
+	return b, nil
 }

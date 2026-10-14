@@ -4392,7 +4392,7 @@
     },
     "/api/v1/citizen-letters/import-template": {
       "get": {
-        "summary": "Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã))",
+        "summary": "Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã)) — có danh sách chọn Loại đơn và Bộ phận xử lý của xã",
         "operationId": "documents_get_citizen_letters_import_template",
         "tags": [
           "documents"
@@ -4403,9 +4403,29 @@
           "key": "petition.create"
         },
         "x-vigov-task": "f20e712adebf",
+        "parameters": [
+          {
+            "name": "org_unit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized",
@@ -13091,7 +13111,7 @@
     },
     "/api/v1/disbursements/import-template": {
       "get": {
-        "summary": "Tải tệp Excel mẫu để nhập chứng từ giải ngân",
+        "summary": "Tải tệp Excel mẫu để nhập chứng từ giải ngân — có danh sách chọn Mã dự án và Nguồn vốn của xã",
         "operationId": "finance_get_disbursements_import_template",
         "tags": [
           "finance"
@@ -34207,7 +34227,7 @@
     },
     "/api/v1/tasks/import-template": {
       "get": {
-        "summary": "Tải tệp Excel mẫu để nhập nhiệm vụ",
+        "summary": "Tải tệp Excel mẫu để nhập nhiệm vụ, có danh sách chọn (tham số tuỳ chọn org_unit, staff, bloc — mỗi loại tối đa 2000 mã)",
         "operationId": "petitions_get_tasks_import_template",
         "tags": [
           "petitions"
@@ -34221,6 +34241,19 @@
         "responses": {
           "200": {
             "description": "OK"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "too_many_choices"
+            ]
           },
           "401": {
             "description": "Unauthorized",

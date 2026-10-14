@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/httpx"
@@ -32,6 +33,7 @@ import (
 type DisbursementImporting interface {
 	Preview(ctx context.Context, rows []domain.VoucherImportRow) (app.VoucherImportResult, error)
 	Import(ctx context.Context, rows []domain.VoucherImportRow, actor audit.Actor) (app.VoucherImportResult, error)
+	TemplateChoices(ctx context.Context) (app.VoucherTemplateChoices, error)
 }
 
 const (
@@ -83,10 +85,18 @@ func writeDisbursementFileTooLarge(w http.ResponseWriter) {
 
 // disbursementImportTemplateSpec builds the template: the header, ONE example row of fake data whose
 // project code can never be a real one (domain.VoucherImportExampleProjectCode — left in place, it
-// refuses the file rather than becoming a payment), and a guide sheet. No dropdown: the source names are
-// the commune's and a GET template is the same file for every commune; the server re-validates anyway.
-func disbursementImportTemplateSpec() xlsx.TemplateSpec {
-	return xlsx.TemplateSpec{
+// refuses the file rather than becoming a payment), and a guide sheet.
+//
+// THE FILE IS PER COMMUNE (owner, 14/10/2026, reversing "one file for every commune, no dropdown"): it
+// carries two WARN-only dropdowns read for the commune in the context (app TemplateChoices) —
+//
+//	Mã dự án    "code · name" of every live project; the reader keeps the code (xlsx.ChoiceCode)
+//	Nguồn vốn   plain catalogue NAMES, because the planner resolves a source by name
+//
+// Warn, not refuse: a project created after the download must still be typeable, and the valid sources
+// of a row depend on that row's project, which a dropdown cannot follow. The planner re-checks both.
+func disbursementImportTemplateSpec(choices app.VoucherTemplateChoices) xlsx.TemplateSpec {
+	spec := xlsx.TemplateSpec{
 		SheetName: disbursementImportSheet,
 		Header:    domain.VoucherImportColumns(),
 		Examples: [][]string{{
@@ -96,7 +106,7 @@ func disbursementImportTemplateSpec() xlsx.TemplateSpec {
 		Guide: []string{
 			"Mỗi dòng dưới dòng tiêu đề là MỘT chứng từ giải ngân mới. Không sửa, không đổi thứ tự dòng tiêu đề.",
 			"Dòng 2 là DÒNG VÍ DỤ — hãy xoá nó trước khi nhập; để nguyên thì cả tệp bị từ chối.",
-			"Mã dự án: bắt buộc, đúng mã dự án đang có của xã (ví dụ DA01).",
+			"Mã dự án: bắt buộc — chọn trong danh sách (dạng \"mã · tên dự án\") hoặc ghi đúng mã dự án đang có của xã (ví dụ DA01).",
 			"Ngày chi: dd/mm/yyyy (ví dụ 15/03/2026) hoặc ô định dạng ngày của Excel; năm từ 2000 đến 2100.",
 			"Số tiền (đồng): số nguyên lớn hơn 0, viết liền (250000000) hoặc tách nghìn (250.000.000). Không nhập số âm.",
 			"Nội dung chi: bắt buộc, tối đa 1000 ký tự. Đơn vị thụ hưởng (tối đa 300 ký tự) và Số chứng từ (tối đa 100 ký tự): không bắt buộc.",
@@ -105,12 +115,52 @@ func disbursementImportTemplateSpec() xlsx.TemplateSpec {
 			"Tệp được nhập TOÀN BỘ HOẶC KHÔNG GÌ CẢ: còn một dòng sai thì không dòng nào được nhận. Hãy bấm Kiểm tra trước khi Nhập.",
 		},
 		DropdownRows: domain.MaxVoucherImportRows,
+		Choices:      map[int]xlsx.Choices{},
+	}
+	if len(choices.Projects) > 0 {
+		values := make([]string, 0, len(choices.Projects))
+		for _, p := range choices.Projects {
+			values = append(values, xlsx.ChoiceValue(p.Code, p.Name))
+		}
+		spec.Choices[voucherImportColumn(domain.VoucherImportColProject)] = xlsx.Choices{Values: values, Strict: false,
+			Title: "Mã dự án", Message: "Chọn một dự án trong danh sách hoặc ghi đúng mã dự án của xã."}
+	}
+	if len(choices.Sources) > 0 {
+		spec.Choices[voucherImportColumn(domain.VoucherImportColSource)] = xlsx.Choices{Values: choices.Sources, Strict: false,
+			Title: "Nguồn vốn", Message: "Chọn một nguồn vốn đã phân bổ cho dự án của dòng này; dự án chưa gắn nguồn vốn thì để trống."}
+	}
+	return spec
+}
+
+// voucherImportColumn is the 0-based index of a template column.
+func voucherImportColumn(name string) int {
+	return slices.Index(domain.VoucherImportColumns(), name)
+}
+
+// projectCellsToCodes reduces every data row's `Mã dự án` cell to its code: the dropdown writes
+// "code · name", a hand-typed cell holds the bare code, and both mean the code (xlsx.ChoiceCode). HERE,
+// NOT IN THE DOMAIN READER: domain/ is standard library only and the separator belongs to core/xlsx.
+// The code is then matched exactly as a typed one; the name part is never matched.
+func projectCellsToCodes(cells [][]string) {
+	col := voucherImportColumn(domain.VoucherImportColProject)
+	for i := 1; i < len(cells); i++ {
+		if col < len(cells[i]) {
+			cells[i][col] = xlsx.ChoiceCode(cells[i][col])
+		}
 	}
 }
 
-// DisbursementImportTemplate serves GET /api/v1/disbursements/import-template.
+// DisbursementImportTemplate serves GET /api/v1/disbursements/import-template — per commune (the
+// dropdowns are the commune's in the context), no-store. A failed read of the lists never fails the
+// download: the template is served without dropdowns and the planner checks every cell anyway.
 func (h *Handler) DisbursementImportTemplate(w http.ResponseWriter, r *http.Request) {
-	b, err := xlsx.Template(disbursementImportTemplateSpec())
+	choices, err := h.d.DisbursementImports.TemplateChoices(r.Context())
+	if err != nil {
+		h.d.Log.Warn("mẫu nhập giải ngân: không đọc được danh sách chọn, tệp mẫu không có danh sách chọn",
+			"xa", string(tenant.MustFrom(r.Context())), "err", err)
+		choices = app.VoucherTemplateChoices{}
+	}
+	b, err := xlsx.Template(disbursementImportTemplateSpec(choices))
 	if err != nil {
 		h.d.Log.Error("mẫu nhập giải ngân: dựng tệp lỗi", "xa", string(tenant.MustFrom(r.Context())), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
@@ -133,6 +183,7 @@ func (h *Handler) readVoucherRows(w http.ResponseWriter, r *http.Request) ([]dom
 	if !ok {
 		return nil, nil, false
 	}
+	projectCellsToCodes(cells)
 	rows, errs := domain.VoucherRowsFromSheet(cells)
 	return rows, errs, true
 }

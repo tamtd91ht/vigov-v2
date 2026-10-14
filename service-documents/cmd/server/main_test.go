@@ -145,7 +145,7 @@ func dungMayChu(t *testing.T, pg *phanGiaiGia) *mayChu {
 		// The citizen-letter register — same reason, equally unused here; its own suite is in
 		// internal/http and internal/app.
 		CitizenLetters:      app.NewCitizenLetters(nil, nil, nil, nil, nil),
-		CitizenLetterImport: app.NewCitizenLetterImport(nil, nil),
+		CitizenLetterImport: app.NewCitizenLetterImport(nil, nil, nil),
 		CitizenLetterExport: app.NewCitizenLetterReportExport(nil, nil),
 		// "Loại đơn thư" — same reason, equally unused here (suite: internal/http).
 		CitizenLetterTypeList: docstore.NewCitizenLetterTypeStore(nil),

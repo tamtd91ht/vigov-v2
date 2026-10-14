@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-13",
+  "cap_nhat": "2026-10-15",
   "muc": [
+    {
+      "id": "tai-mau-gui-ma-dropdown-14-10",
+      "viec": "Tải mẫu nhập nhiệm vụ / sổ đơn thư gửi kèm MÃ bộ phận, cán bộ, khối để server dựng dropdown",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit 4681f4f6 (đã lên dev và main). lib/api/excel-import.ts appendTemplateChoices (lặp tham số, khử trùng, trần 2000); task-template-choices.ts lấy danh sách màn Nhiệm vụ đã nạp, thiếu thì đọc lúc bấm; đơn thư đọc danh mục bộ phận lúc bấm. Chỉ gửi mã. KIỂM: tsc sạch, vitest 1754/1754. Phía server: petitions, documents ở commit tiếp theo.",
+      "no_confirm": [],
+      "tiep_theo": "schema.gen.ts chưa khai tham số org_unit/staff/bloc (apidoc không có @query) — đang viết chuỗi tay. Chưa bấm thử trên trình duyệt."
+    },
     {
       "id": "tam-viec-web-tu-hop-dong",
       "viec": "Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận",

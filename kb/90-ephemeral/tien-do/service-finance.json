@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-finance",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-15",
   "muc": [
+    {
+      "id": "mau-nhap-giai-ngan-dropdown-14-10",
+      "viec": "Mẫu nhập giải ngân thành mẫu RIÊNG từng xã: dropdown 'Mã dự án' (mã · tên) và 'Nguồn vốn' (tên), chỉ cảnh báo",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án 14/10/2026 chọn 'Thêm, chỉ cảnh báo' (đảo lựa chọn cũ 'một tệp chung mọi xã'). store.ProjectChoicesForVoucherTemplate (dự án chưa xoá mềm, mọi năm, theo mã; >2000 → bỏ dropdown, không cắt); nguồn vốn = SourcesForVoucherImport (đúng tập importer khớp tên). app.TemplateChoices một tx đọc theo xã trong ctx. Lớp http cắt 'mã · tên' ở cột dự án. Lỗi đọc → vẫn tải mẫu, bỏ dropdown. KIỂM: go vet, go test ./... service-finance xanh (driver giả).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA chạy SQL mới trên PostgreSQL thật (chỉ driver giả); chưa mở file trong Excel. Danh sách nguồn vốn là cả danh mục — tập hợp lệ còn tuỳ dự án ở cùng dòng, server kiểm lại khi nhập."
+    },
     {
       "id": "hang-muc-ke-hoach-von-tuyen-doc",
       "viec": "GET /api/v1/capital-plan-categories — tuyến ĐỌC danh mục hạng mục kế hoạch vốn",

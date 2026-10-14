@@ -63,6 +63,20 @@ const (
 	importColNote
 )
 
+// The columns the template offers a dropdown on (http renderImportTemplate) and whose dropdown value
+// "code · label" the use case turns back into the code before the row rules read it. Exported so the
+// template and the import name the SAME positions: a dropdown on the wrong column would offer unit
+// codes under "Người thực hiện", and the clerk would pick them.
+const (
+	TaskImportColUnit                 = importColUnit
+	TaskImportColAssignee             = importColAssignee
+	TaskImportColPriority             = importColPriority
+	TaskImportColType                 = importColType
+	TaskImportColBloc                 = importColBloc
+	TaskImportColLeaderApproved       = importColLeaderApproved
+	TaskImportColSuperiorAcknowledged = importColSuperiorAcknowledged
+)
+
 // TaskImportRowCap bounds one file: 500 data rows, refused above it (never truncated). One commune's
 // batch of assignments from a meeting or a directive is tens of rows; the cap keeps one request from
 // holding the register's transaction open for thousands of inserts.

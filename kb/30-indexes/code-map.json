@@ -412,7 +412,7 @@
     },
     "app.CitizenLetterImport": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter_import.go:89"
+      "at": "service-documents/internal/app/citizen_letter_import.go:90"
     },
     "app.CitizenLetterRepo": {
       "kind": "type",
@@ -752,7 +752,7 @@
     },
     "app.DisbursementImporter": {
       "kind": "type",
-      "at": "service-finance/internal/app/disbursement_import.go:86"
+      "at": "service-finance/internal/app/disbursement_import.go:132"
     },
     "app.DocHanXuLyXong": {
       "kind": "type",
@@ -1036,7 +1036,7 @@
     },
     "app.Import": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_import.go:135"
+      "at": "service-petitions/internal/app/task_import.go:136"
     },
     "app.ImportBudgetWorkbook": {
       "kind": "func",
@@ -1052,7 +1052,7 @@
     },
     "app.ImportedLetter": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter_import.go:70"
+      "at": "service-documents/internal/app/citizen_letter_import.go:71"
     },
     "app.ImportedStaff": {
       "kind": "type",
@@ -1060,7 +1060,7 @@
     },
     "app.ImportedVoucher": {
       "kind": "type",
-      "at": "service-finance/internal/app/disbursement_import.go:70"
+      "at": "service-finance/internal/app/disbursement_import.go:116"
     },
     "app.InForce": {
       "kind": "func",
@@ -1348,11 +1348,11 @@
     },
     "app.LetterImportRejected": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter_import.go:53"
+      "at": "service-documents/internal/app/citizen_letter_import.go:54"
     },
     "app.LetterImportResult": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter_import.go:83"
+      "at": "service-documents/internal/app/citizen_letter_import.go:84"
     },
     "app.LetterListQuery": {
       "kind": "type",
@@ -1370,9 +1370,13 @@
       "kind": "type",
       "at": "service-documents/internal/app/citizen_letter.go:175"
     },
+    "app.LetterUnitChoice": {
+      "kind": "type",
+      "at": "service-documents/internal/app/citizen_letter_import.go:101"
+    },
     "app.LetterUnitCodes": {
       "kind": "type",
-      "at": "service-documents/internal/app/citizen_letter_import.go:64"
+      "at": "service-documents/internal/app/citizen_letter_import.go:65"
     },
     "app.LetterUnitNames": {
       "kind": "type",
@@ -1412,7 +1416,7 @@
     },
     "app.LiveOrgUnits": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter_import.go:308"
+      "at": "service-documents/internal/app/citizen_letter_import.go:373"
     },
     "app.LiveStatuses": {
       "kind": "func",
@@ -1672,7 +1676,7 @@
     },
     "app.NewCitizenLetterImport": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter_import.go:94"
+      "at": "service-documents/internal/app/citizen_letter_import.go:96"
     },
     "app.NewCitizenLetterReportExport": {
       "kind": "func",
@@ -1784,7 +1788,7 @@
     },
     "app.NewDisbursementImporter": {
       "kind": "func",
-      "at": "service-finance/internal/app/disbursement_import.go:95"
+      "at": "service-finance/internal/app/disbursement_import.go:141"
     },
     "app.NewDuAn": {
       "kind": "func",
@@ -2020,7 +2024,7 @@
     },
     "app.NewTaskImport": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_import.go:111"
+      "at": "service-petitions/internal/app/task_import.go:112"
     },
     "app.NewTaskPriorityImporter": {
       "kind": "func",
@@ -2600,7 +2604,7 @@
     },
     "app.ResolveCitizenLetterDeadline": {
       "kind": "func",
-      "at": "service-documents/internal/app/citizen_letter_import.go:332"
+      "at": "service-documents/internal/app/citizen_letter_import.go:397"
     },
     "app.ResolveDeadlineReader": {
       "kind": "type",
@@ -3056,19 +3060,19 @@
     },
     "app.TaskImport": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:104"
+      "at": "service-petitions/internal/app/task_import.go:105"
     },
     "app.TaskImportLayoutError": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:76"
+      "at": "service-petitions/internal/app/task_import.go:77"
     },
     "app.TaskImportLookups": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:84"
+      "at": "service-petitions/internal/app/task_import.go:85"
     },
     "app.TaskImportResult": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:118"
+      "at": "service-petitions/internal/app/task_import.go:119"
     },
     "app.TaskOverdueReader": {
       "kind": "type",
@@ -3076,7 +3080,7 @@
     },
     "app.TaskPriorityCatalogue": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:98"
+      "at": "service-petitions/internal/app/task_import.go:99"
     },
     "app.TaskPrioritySource": {
       "kind": "type",
@@ -3100,7 +3104,7 @@
     },
     "app.TaskTypeCatalogue": {
       "kind": "type",
-      "at": "service-petitions/internal/app/task_import.go:93"
+      "at": "service-petitions/internal/app/task_import.go:94"
     },
     "app.TaskUpdateRight": {
       "kind": "type",
@@ -3166,6 +3170,10 @@
       "kind": "type",
       "at": "service-identity/internal/app/sla.go:145"
     },
+    "app.UnitChoices": {
+      "kind": "func",
+      "at": "service-documents/internal/app/citizen_letter_import.go:118"
+    },
     "app.Unlink": {
       "kind": "func",
       "at": "service-comms/internal/app/zalo_links.go:224"
@@ -3184,7 +3192,7 @@
     },
     "app.Unwrap": {
       "kind": "func",
-      "at": "service-petitions/internal/app/task_import.go:81"
+      "at": "service-petitions/internal/app/task_import.go:82"
     },
     "app.Update": {
       "kind": "func",
@@ -3264,7 +3272,7 @@
     },
     "app.VoucherImportRejected": {
       "kind": "type",
-      "at": "service-finance/internal/app/disbursement_import.go:52"
+      "at": "service-finance/internal/app/disbursement_import.go:98"
     },
     "app.VoucherImportRepo": {
       "kind": "type",
@@ -3272,7 +3280,11 @@
     },
     "app.VoucherImportResult": {
       "kind": "type",
-      "at": "service-finance/internal/app/disbursement_import.go:61"
+      "at": "service-finance/internal/app/disbursement_import.go:107"
+    },
+    "app.VoucherTemplateChoices": {
+      "kind": "type",
+      "at": "service-finance/internal/app/disbursement_import.go:55"
     },
     "app.Wait": {
       "kind": "func",
@@ -4948,7 +4960,7 @@
     },
     "domain.CheckTaskImportHeadings": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:176"
+      "at": "service-petitions/internal/domain/task_import.go:190"
     },
     "domain.CheckTypeFields": {
       "kind": "func",
@@ -5576,7 +5588,7 @@
     },
     "domain.DiagnoseTaskImportHeadings": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:223"
+      "at": "service-petitions/internal/domain/task_import.go:237"
     },
     "domain.DiemCham": {
       "kind": "func",
@@ -6740,7 +6752,7 @@
     },
     "domain.LocateTaskImportHeadings": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:205"
+      "at": "service-petitions/internal/domain/task_import.go:219"
     },
     "domain.LockConfirmsToo": {
       "kind": "func",
@@ -7136,7 +7148,7 @@
     },
     "domain.NormaliseImportText": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:170"
+      "at": "service-petitions/internal/domain/task_import.go:184"
     },
     "domain.NormaliseIssueOwnerCode": {
       "kind": "func",
@@ -7500,7 +7512,7 @@
     },
     "domain.ParseImportDeadline": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:381"
+      "at": "service-petitions/internal/domain/task_import.go:395"
     },
     "domain.ParseIncomingMetric": {
       "kind": "func",
@@ -7512,15 +7524,15 @@
     },
     "domain.ParseTaskImportRow": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:278"
+      "at": "service-petitions/internal/domain/task_import.go:292"
     },
     "domain.ParseVoucherImportAmount": {
       "kind": "func",
-      "at": "service-finance/internal/domain/disbursement_import.go:430"
+      "at": "service-finance/internal/domain/disbursement_import.go:437"
     },
     "domain.ParseVoucherImportDate": {
       "kind": "func",
-      "at": "service-finance/internal/domain/disbursement_import.go:384"
+      "at": "service-finance/internal/domain/disbursement_import.go:391"
     },
     "domain.ParseZaloCommand": {
       "kind": "func",
@@ -7660,7 +7672,7 @@
     },
     "domain.PlanVoucherImport": {
       "kind": "func",
-      "at": "service-finance/internal/domain/disbursement_import.go:219"
+      "at": "service-finance/internal/domain/disbursement_import.go:226"
     },
     "domain.PlannedCatalogueEntry": {
       "kind": "type",
@@ -7688,7 +7700,7 @@
     },
     "domain.PlannedVoucher": {
       "kind": "type",
-      "at": "service-finance/internal/domain/disbursement_import.go:125"
+      "at": "service-finance/internal/domain/disbursement_import.go:132"
     },
     "domain.PortalAPIURLChanged": {
       "kind": "func",
@@ -8072,7 +8084,7 @@
     },
     "domain.Sentence": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:244"
+      "at": "service-petitions/internal/domain/task_import.go:258"
     },
     "domain.SessionIdleExpired": {
       "kind": "func",
@@ -8372,23 +8384,23 @@
     },
     "domain.TaskImportCarriesRetiredColumns": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:142"
+      "at": "service-petitions/internal/domain/task_import.go:156"
     },
     "domain.TaskImportError": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/task_import.go:101"
+      "at": "service-petitions/internal/domain/task_import.go:115"
     },
     "domain.TaskImportLayoutProblem": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/task_import.go:217"
+      "at": "service-petitions/internal/domain/task_import.go:231"
     },
     "domain.TaskImportRow": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/task_import.go:109"
+      "at": "service-petitions/internal/domain/task_import.go:123"
     },
     "domain.TaskImportRowBlank": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/task_import.go:267"
+      "at": "service-petitions/internal/domain/task_import.go:281"
     },
     "domain.TaskLeaderOrCreator": {
       "kind": "func",
@@ -8892,7 +8904,7 @@
     },
     "domain.VoucherImportPlan": {
       "kind": "type",
-      "at": "service-finance/internal/domain/disbursement_import.go:141"
+      "at": "service-finance/internal/domain/disbursement_import.go:148"
     },
     "domain.VoucherImportProject": {
       "kind": "type",
@@ -8900,7 +8912,7 @@
     },
     "domain.VoucherImportProjectCodes": {
       "kind": "func",
-      "at": "service-finance/internal/domain/disbursement_import.go:202"
+      "at": "service-finance/internal/domain/disbursement_import.go:209"
     },
     "domain.VoucherImportRow": {
       "kind": "type",
@@ -8908,11 +8920,15 @@
     },
     "domain.VoucherImportSource": {
       "kind": "type",
-      "at": "service-finance/internal/domain/disbursement_import.go:119"
+      "at": "service-finance/internal/domain/disbursement_import.go:126"
     },
     "domain.VoucherRowsFromSheet": {
       "kind": "func",
-      "at": "service-finance/internal/domain/disbursement_import.go:150"
+      "at": "service-finance/internal/domain/disbursement_import.go:157"
+    },
+    "domain.VoucherTemplateProject": {
+      "kind": "type",
+      "at": "service-finance/internal/domain/disbursement_import.go:120"
     },
     "domain.WeeklyDigestKey": {
       "kind": "func",
@@ -9608,7 +9624,7 @@
     },
     "http.BienBanDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:318"
+      "at": "service-petitions/internal/http/routes.go:333"
     },
     "http.BoDanhDauKhongPhatSinh": {
       "kind": "func",
@@ -9712,7 +9728,7 @@
     },
     "http.CitizenLetterImportTemplate": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter_import.go:116"
+      "at": "service-documents/internal/http/citizen_letter_import.go:173"
     },
     "http.CitizenLetterImporter": {
       "kind": "type",
@@ -9728,7 +9744,7 @@
     },
     "http.CitizenLetterReportExporter": {
       "kind": "type",
-      "at": "service-documents/internal/http/routes.go:184"
+      "at": "service-documents/internal/http/routes.go:186"
     },
     "http.CitizenLetterService": {
       "kind": "type",
@@ -9740,11 +9756,11 @@
     },
     "http.CitizenLetterTypeLister": {
       "kind": "type",
-      "at": "service-documents/internal/http/routes.go:190"
+      "at": "service-documents/internal/http/routes.go:192"
     },
     "http.CitizenLetterTypeWriter": {
       "kind": "type",
-      "at": "service-documents/internal/http/routes.go:196"
+      "at": "service-documents/internal/http/routes.go:198"
     },
     "http.CitizenNotificationPreferenceUseCase": {
       "kind": "type",
@@ -10064,7 +10080,7 @@
     },
     "http.DeNghiLuiHanChoDuyetDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:220"
+      "at": "service-petitions/internal/http/routes.go:235"
     },
     "http.DeNghiLuiHanNhiemVu": {
       "kind": "func",
@@ -10140,11 +10156,11 @@
     },
     "http.DisbursementImportTemplate": {
       "kind": "func",
-      "at": "service-finance/internal/http/disbursement_import.go:112"
+      "at": "service-finance/internal/http/disbursement_import.go:156"
     },
     "http.DisbursementImporting": {
       "kind": "type",
-      "at": "service-finance/internal/http/disbursement_import.go:32"
+      "at": "service-finance/internal/http/disbursement_import.go:33"
     },
     "http.DocBangNganSach": {
       "kind": "func",
@@ -10304,7 +10320,7 @@
     },
     "http.GhiBienBanUseCase": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:341"
+      "at": "service-petitions/internal/http/routes.go:356"
     },
     "http.GhiChuPhieu": {
       "kind": "func",
@@ -10332,7 +10348,7 @@
     },
     "http.GhiLoaiNhiemVu": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:465"
+      "at": "service-petitions/internal/http/routes.go:480"
     },
     "http.GhiLoaiTaiNguyen": {
       "kind": "type",
@@ -10344,7 +10360,7 @@
     },
     "http.GhiMucUuTien": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:471"
+      "at": "service-petitions/internal/http/routes.go:486"
     },
     "http.GhiNganSach": {
       "kind": "type",
@@ -10352,7 +10368,7 @@
     },
     "http.GhiNhiemVuUseCase": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:255"
+      "at": "service-petitions/internal/http/routes.go:270"
     },
     "http.GhiNoiDungMiniApp": {
       "kind": "type",
@@ -10364,7 +10380,7 @@
     },
     "http.GhiTrangThaiNhiemVu": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:479"
+      "at": "service-petitions/internal/http/routes.go:494"
     },
     "http.GhiVanBanDen": {
       "kind": "type",
@@ -10456,11 +10472,11 @@
     },
     "http.ImportCitizenLetters": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter_import.go:184"
+      "at": "service-documents/internal/http/citizen_letter_import.go:271"
     },
     "http.ImportDisbursements": {
       "kind": "func",
-      "at": "service-finance/internal/http/disbursement_import.go:167"
+      "at": "service-finance/internal/http/disbursement_import.go:218"
     },
     "http.ImportDocumentTypes": {
       "kind": "func",
@@ -10500,11 +10516,11 @@
     },
     "http.ImportTasks": {
       "kind": "func",
-      "at": "service-petitions/internal/http/task_import.go:75"
+      "at": "service-petitions/internal/http/task_import.go:83"
     },
     "http.ImportTemplate": {
       "kind": "func",
-      "at": "service-petitions/internal/http/task_import.go:383"
+      "at": "service-petitions/internal/http/task_import.go:416"
     },
     "http.IncomingDocumentOverdueQueue": {
       "kind": "func",
@@ -10680,7 +10696,7 @@
     },
     "http.LoaiNhiemVuDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:60"
+      "at": "service-petitions/internal/http/routes.go:61"
     },
     "http.LoaiTaiNguyenDanhMuc": {
       "kind": "type",
@@ -10804,7 +10820,7 @@
     },
     "http.MucUuTienDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:73"
+      "at": "service-petitions/internal/http/routes.go:74"
     },
     "http.NewBasemapClient": {
       "kind": "func",
@@ -10844,11 +10860,11 @@
     },
     "http.NhanLinhVucDanhMuc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:115"
+      "at": "service-petitions/internal/http/routes.go:116"
     },
     "http.NhatKyPhieuDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:429"
+      "at": "service-petitions/internal/http/routes.go:444"
     },
     "http.NhiemVuCuaKetLuan": {
       "kind": "func",
@@ -10856,11 +10872,11 @@
     },
     "http.NhiemVuDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:167"
+      "at": "service-petitions/internal/http/routes.go:168"
     },
     "http.NhiemVuDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:140"
+      "at": "service-petitions/internal/http/routes.go:141"
     },
     "http.NoiDungCongKhaiDoc": {
       "kind": "type",
@@ -10976,11 +10992,11 @@
     },
     "http.PhieuPhanAnhDanhSach": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:125"
+      "at": "service-petitions/internal/http/routes.go:126"
     },
     "http.PhieuPhanAnhDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:91"
+      "at": "service-petitions/internal/http/routes.go:92"
     },
     "http.PortalSyncReader": {
       "kind": "type",
@@ -11008,11 +11024,11 @@
     },
     "http.PreviewCitizenLetterImport": {
       "kind": "func",
-      "at": "service-documents/internal/http/citizen_letter_import.go:161"
+      "at": "service-documents/internal/http/citizen_letter_import.go:248"
     },
     "http.PreviewDisbursementImport": {
       "kind": "func",
-      "at": "service-finance/internal/http/disbursement_import.go:142"
+      "at": "service-finance/internal/http/disbursement_import.go:193"
     },
     "http.PreviewDocumentTypeImport": {
       "kind": "func",
@@ -11560,7 +11576,7 @@
     },
     "http.TaskAttachmentActs": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:290"
+      "at": "service-petitions/internal/http/routes.go:305"
     },
     "http.TaskAttachmentDownload": {
       "kind": "func",
@@ -11584,15 +11600,19 @@
     },
     "http.TaskFilterIdentity": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:193"
+      "at": "service-petitions/internal/http/routes.go:194"
+    },
+    "http.TaskImportChoiceLookups": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/routes.go:219"
     },
     "http.TaskImporter": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:210"
+      "at": "service-petitions/internal/http/routes.go:211"
     },
     "http.TaskLogAttachmentReader": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:300"
+      "at": "service-petitions/internal/http/routes.go:315"
     },
     "http.TaskPriorityImportTemplate": {
       "kind": "func",
@@ -11600,7 +11620,7 @@
     },
     "http.TaskRegisterExporter": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:202"
+      "at": "service-petitions/internal/http/routes.go:203"
     },
     "http.TaskSummary": {
       "kind": "func",
@@ -11724,7 +11744,7 @@
     },
     "http.TrangThaiNhiemVuDoc": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:80"
+      "at": "service-petitions/internal/http/routes.go:81"
     },
     "http.UnlinkCurrentZalo": {
       "kind": "func",
@@ -11824,7 +11844,7 @@
     },
     "http.VetXemNguoiGui": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:106"
+      "at": "service-petitions/internal/http/routes.go:107"
     },
     "http.XacNhanChungTu": {
       "kind": "func",
@@ -11900,7 +11920,7 @@
     },
     "http.XuLyPhieuPhanAnh": {
       "kind": "type",
-      "at": "service-petitions/internal/http/routes.go:381"
+      "at": "service-petitions/internal/http/routes.go:396"
     },
     "http.ZaloBotActRecorder": {
       "kind": "type",
@@ -16162,6 +16182,10 @@
       "kind": "func",
       "at": "service-platform/internal/store/branding.go:39"
     },
+    "store.ProjectChoicesForVoucherTemplate": {
+      "kind": "func",
+      "at": "service-finance/internal/store/disbursement_import.go:134"
+    },
     "store.ProjectDiscussionStore": {
       "kind": "type",
       "at": "service-finance/internal/store/project_discussion.go:50"
@@ -16176,7 +16200,7 @@
     },
     "store.ProjectsForVoucherImport": {
       "kind": "func",
-      "at": "service-finance/internal/store/disbursement_import.go:44"
+      "at": "service-finance/internal/store/disbursement_import.go:46"
     },
     "store.PromotePendingWebhookSecret": {
       "kind": "func",
@@ -16560,7 +16584,7 @@
     },
     "store.SourcesForVoucherImport": {
       "kind": "func",
-      "at": "service-finance/internal/store/disbursement_import.go:124"
+      "at": "service-finance/internal/store/disbursement_import.go:168"
     },
     "store.StaffCounts": {
       "kind": "func",
@@ -17209,6 +17233,14 @@
     "uploadpolicy.Reader": {
       "kind": "type",
       "at": "core/platformclient/uploadpolicy/uploadpolicy.go:88"
+    },
+    "xlsx.ChoiceCode": {
+      "kind": "func",
+      "at": "core/xlsx/choice.go:26"
+    },
+    "xlsx.ChoiceValue": {
+      "kind": "func",
+      "at": "core/xlsx/choice.go:16"
     },
     "xlsx.Choices": {
       "kind": "type",

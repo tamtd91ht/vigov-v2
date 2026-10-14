@@ -21,6 +21,7 @@ import (
 	"github.com/vihat/vigov/core/xlsx"
 	"github.com/vihat/vigov/service-documents/internal/app"
 	"github.com/vihat/vigov/service-documents/internal/domain"
+	"github.com/xuri/excelize/v2"
 )
 
 // THE CITIZEN-LETTER EXCEL IMPORT AND THE REPORT EXPORT — four routes. What these tests defend:
@@ -44,6 +45,31 @@ type letterImportFake struct {
 	lastCaller        app.LetterCaller
 	lastRows          []domain.LetterImportRow
 	err               error
+
+	// The template's unit dropdown: liveUnits[commune][code] = name is what identity would confirm.
+	liveUnits  map[tenant.ID]map[string]string
+	unitErr    error
+	unitAsked  []string
+	unitCalls  int
+	unitTenant tenant.ID
+}
+
+// UnitChoices stands in for identity's confirmation: only the context commune's live codes survive.
+func (f *letterImportFake) UnitChoices(ctx context.Context, codes []string) ([]app.LetterUnitChoice, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.unitCalls++
+	f.unitAsked, f.unitTenant = codes, tenant.MustFrom(ctx)
+	if f.unitErr != nil {
+		return nil, f.unitErr
+	}
+	var out []app.LetterUnitChoice
+	for _, c := range codes {
+		if name, ok := f.liveUnits[f.unitTenant][c]; ok {
+			out = append(out, app.LetterUnitChoice{Code: c, Name: name})
+		}
+	}
+	return out, nil
 }
 
 func (f *letterImportFake) note(ctx context.Context, rows []domain.LetterImportRow, c app.LetterCaller) {
@@ -281,6 +307,144 @@ func TestLetterImport_TemplateRoundTrip(t *testing.T) {
 	if !out.Valid || len(out.Letters) != 1 || out.Letters[0].Row != 2 ||
 		out.Letters[0].LetterType != string(domain.LetterTypeFeedback) || out.Letters[0].ReceivedDate != "2026-09-10" {
 		t.Fatalf("tệp mẫu tải về không nhập lại được: %+v", out)
+	}
+}
+
+// --- (2b) the template's dropdowns -----------------------------------------------------------------------
+
+// templateDropdowns opens a served template: the data columns carrying a dropdown (by letter) and every
+// value on the hidden choices sheet.
+func templateDropdowns(t *testing.T, b []byte) (map[string]bool, string) {
+	t.Helper()
+	f, err := excelize.OpenReader(bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("mở tệp mẫu: %v", err)
+	}
+	defer f.Close()
+	dvs, err := f.GetDataValidations(letterImportSheetName)
+	if err != nil {
+		t.Fatalf("đọc danh sách chọn: %v", err)
+	}
+	cols := map[string]bool{}
+	for _, dv := range dvs {
+		cols[strings.TrimRight(strings.SplitN(dv.Sqref, ":", 2)[0], "0123456789")] = true
+	}
+	var sb strings.Builder
+	if rows, err := f.GetRows(xlsx.SheetChoices); err == nil {
+		for _, r := range rows {
+			sb.WriteString(strings.Join(r, "|") + "\n")
+		}
+	}
+	if visible, err := f.GetSheetVisible(xlsx.SheetChoices); err == nil && visible {
+		t.Error("trang danh sách chọn phải ẩn")
+	}
+	return cols, sb.String()
+}
+
+func TestLetterImport_TemplateUnitDropdownKeepsOnlyThisCommunesConfirmedUnits(t *testing.T) {
+	m := dungMayChuCoIdem(t)
+	m.capQuyen(xaA, "petition.create")
+	m.letterImport.liveUnits = map[tenant.ID]map[string]string{
+		xaA: {"tu-phap": "Tư pháp - Hộ tịch", "dia-chinh": "Địa chính"},
+		xaB: {"bp-xa-b": "Văn phòng xã B"},
+	}
+	w := m.goi(t, http.MethodGet, hostA,
+		pathLetterTemplate+"?org_unit=tu-phap&org_unit=bp-xa-b&org_unit=+tu-phap+&org_unit=&org_unit=dia-chinh&org_unit=bia-dat",
+		canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	if w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("tệp mẫu theo xã phải no-store")
+	}
+	if m.letterImport.unitTenant != xaA {
+		t.Fatalf("hỏi bộ phận ở xã %q, muốn %q", m.letterImport.unitTenant, xaA)
+	}
+	if got := strings.Join(m.letterImport.unitAsked, ","); got != "tu-phap,bp-xa-b,dia-chinh,bia-dat" {
+		t.Fatalf("mã gửi đi xác nhận = %q — muốn đã bỏ trống, bỏ trùng, giữ thứ tự", got)
+	}
+	cols, values := templateDropdowns(t, w.Body.Bytes())
+	if !cols["E"] || !cols["G"] {
+		t.Fatalf("cột có danh sách chọn = %v, muốn E (Loại đơn) và G (Bộ phận)", cols)
+	}
+	for _, want := range []string{"tu-phap · Tư pháp - Hộ tịch", "dia-chinh · Địa chính", "kiến nghị"} {
+		if !strings.Contains(values, want) {
+			t.Errorf("danh sách chọn thiếu %q: %q", want, values)
+		}
+	}
+	for _, foreign := range []string{"bp-xa-b", "Văn phòng xã B", "bia-dat"} {
+		if strings.Contains(values, foreign) {
+			t.Errorf("danh sách chọn chứa %q — mã máy khách gửi mà identity không xác nhận ở xã này", foreign)
+		}
+	}
+}
+
+func TestLetterImport_TemplateWithoutUnitsHasNoUnitDropdownAndAsksNobody(t *testing.T) {
+	m := dungMayChuCoIdem(t)
+	m.capQuyen(xaA, "petition.create")
+	w := m.goi(t, http.MethodGet, hostA, pathLetterTemplate, canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	if m.letterImport.unitCalls != 0 {
+		t.Fatal("không gửi mã nào mà vẫn hỏi identity")
+	}
+	if cols, _ := templateDropdowns(t, w.Body.Bytes()); !cols["E"] || cols["G"] {
+		t.Fatalf("cột có danh sách chọn = %v, muốn chỉ E", cols)
+	}
+}
+
+func TestLetterImport_TemplateTooManyUnitsIs400(t *testing.T) {
+	m := dungMayChuCoIdem(t)
+	m.capQuyen(xaA, "petition.create")
+	var q strings.Builder
+	for i := 0; i <= maxLetterTemplateUnits; i++ {
+		fmt.Fprintf(&q, "&org_unit=bp-%d", i)
+	}
+	w := m.goi(t, http.MethodGet, hostA, pathLetterTemplate+"?"+q.String()[1:], canBoCua(xaA))
+	doiMa(t, w, http.StatusBadRequest)
+	if !strings.Contains(w.Body.String(), "too_many_choices") {
+		t.Fatalf("mã lỗi: %s", w.Body.String())
+	}
+	if m.letterImport.unitCalls != 0 {
+		t.Fatal("vượt trần mà vẫn hỏi identity")
+	}
+	// Exactly the cap, plus duplicates, is served: the cap counts DISTINCT codes.
+	var atCap strings.Builder
+	for i := 0; i < maxLetterTemplateUnits; i++ {
+		fmt.Fprintf(&atCap, "&org_unit=bp-%d", i)
+	}
+	m2 := dungMayChuCoIdem(t)
+	m2.capQuyen(xaA, "petition.create")
+	doiMa(t, m2.goi(t, http.MethodGet, hostA, pathLetterTemplate+"?"+atCap.String()[1:]+"&org_unit=bp-0", canBoCua(xaA)),
+		http.StatusOK)
+	if len(m2.letterImport.unitAsked) != maxLetterTemplateUnits {
+		t.Fatalf("%d mã gửi xác nhận, muốn %d", len(m2.letterImport.unitAsked), maxLetterTemplateUnits)
+	}
+}
+
+func TestLetterImport_TemplateIdentityDownServesTheFileWithoutTheUnitDropdown(t *testing.T) {
+	m := dungMayChuCoIdem(t)
+	m.capQuyen(xaA, "petition.create")
+	m.letterImport.unitErr = errors.New("identity unreachable")
+	w := m.goi(t, http.MethodGet, hostA, pathLetterTemplate+"?org_unit=tu-phap", canBoCua(xaA))
+	doiMa(t, w, http.StatusOK)
+	cols, _ := templateDropdowns(t, w.Body.Bytes())
+	if !cols["E"] || cols["G"] {
+		t.Fatalf("cột có danh sách chọn = %v, muốn chỉ E khi identity không trả lời", cols)
+	}
+}
+
+// The dropdown writes "code · name"; a hand-typed cell holds the bare code. Both reach the use case as
+// the code alone — the name part is never what gets resolved.
+func TestLetterImport_UnitCellAcceptsDropdownValueAndBareCode(t *testing.T) {
+	m := dungMayChuCoIdem(t)
+	m.capQuyen(xaA, "petition.create")
+	data := workbook(t, letterHeader(),
+		[]string{"2026-09-10", ordinaryName, "", "", "kiến nghị", ordinarySummary, xlsx.ChoiceValue("dia-chinh", "Địa chính - Xây dựng")},
+		[]string{"2026-09-10", ordinaryName, "", "", "kiến nghị", ordinarySummary, "tu-phap"},
+		[]string{"2026-09-10", ordinaryName, "", "", "kiến nghị", ordinarySummary, ""},
+	)
+	doiMa(t, uploadLetters(t, m, pathLetterPreview, hostA, canBoCua(xaA), data, "01JLETTERUNITCHOICE000000"), http.StatusOK)
+	rows := m.letterImport.lastRows
+	if len(rows) != 3 || rows[0].UnitCode != "dia-chinh" || rows[1].UnitCode != "tu-phap" || rows[2].UnitCode != "" {
+		t.Fatalf("mã bộ phận tới use case: %+v", rows)
 	}
 }
 

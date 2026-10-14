@@ -14,7 +14,10 @@ package http
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/vihat/vigov/core/httpx"
@@ -84,11 +87,21 @@ func letterImportRowsOut(in []app.ImportedLetter) []letterImportRowOut {
 	return out
 }
 
+// maxLetterTemplateUnits bounds the repeated `org_unit` query parameter — the unit codes the
+// template's `Bộ phận xử lý (mã)` dropdown may offer (owner, 14/10/2026: the screen already holds the
+// commune's units, so it sends their codes). One request may not make this route ask identity for an
+// unbounded list: 2000 is ten calls of identityclient.MaxLookupKeysPerCall.
+const maxLetterTemplateUnits = 2000
+
 // letterImportTemplateSpec is the template: header, one example, a guide. The example uses the agreed
 // fake number (rule 3, invariant 5) and an invented sender. The type column carries a WARN-only
 // dropdown: the reader also accepts the code and "phản ánh", and re-validates whatever arrives.
-func letterImportTemplateSpec() xlsx.TemplateSpec {
-	return xlsx.TemplateSpec{
+//
+// units, when non-empty, is a second WARN-only dropdown on the unit column: "code · name" entries
+// identity confirmed (app.CitizenLetterImport.UnitChoices). Warn, not refuse: a unit created after the
+// download must still be typeable, and the import re-checks every code against identity anyway.
+func letterImportTemplateSpec(units []app.LetterUnitChoice) xlsx.TemplateSpec {
+	spec := xlsx.TemplateSpec{
 		SheetName: letterImportSheetName,
 		Header:    domain.LetterImportColumns(),
 		Examples: [][]string{{"2026-09-10", "Nguyễn Văn A", "Thôn 1", "0900000000", "kiến nghị",
@@ -104,17 +117,76 @@ func letterImportTemplateSpec() xlsx.TemplateSpec {
 			"Địa chỉ, Số điện thoại: không bắt buộc. Số điện thoại chỉ gồm chữ số, dấu cách, dấu +, -, . và ngoặc.",
 			"Loại đơn: bắt buộc — khiếu nại, tố cáo, kiến nghị (phản ánh) hoặc đề nghị. Đơn tố cáo được che danh tính người gửi trên mọi danh sách.",
 			"Nội dung đơn: bắt buộc, tối đa 2000 ký tự.",
-			"Bộ phận xử lý (mã): không bắt buộc. Ghi MÃ bộ phận (không ghi tên); để trống thì đơn ở trạng thái Mới vào sổ.",
+			"Bộ phận xử lý (mã): không bắt buộc. Chọn trong danh sách (dạng \"mã · tên\") hoặc ghi MÃ bộ phận (không ghi riêng tên); để trống thì đơn ở trạng thái Mới vào sổ.",
 			"Số vào sổ do hệ thống cấp theo dãy số của xã trong năm; hạn xử lý tự tính theo cấu hình thời hạn đơn thư của xã — tệp không có hai cột này.",
 			"Tệp được nhập TOÀN BỘ hoặc KHÔNG dòng nào: một dòng lỗi thì chưa đơn nào được vào sổ và chưa số nào được cấp. Hãy bấm Kiểm tra trước khi Nhập.",
 			"Tối đa 200 dòng mỗi lần nhập.",
 		},
 	}
+	if len(units) > 0 {
+		values := make([]string, 0, len(units))
+		for _, u := range units {
+			values = append(values, xlsx.ChoiceValue(u.Code, u.Name))
+		}
+		spec.Choices[letterImportUnitColumn()] = xlsx.Choices{Values: values, Strict: false,
+			Title: "Bộ phận xử lý", Message: "Chọn một bộ phận trong danh sách, ghi mã bộ phận, hoặc để trống."}
+	}
+	return spec
 }
 
-// CitizenLetterImportTemplate serves GET /api/v1/citizen-letters/import-template.
+// letterImportUnitColumn is the 0-based index of `Bộ phận xử lý (mã)` in the template.
+func letterImportUnitColumn() int {
+	return slices.Index(domain.LetterImportColumns(), domain.LetterImportColUnit)
+}
+
+// letterTemplateUnitCodes reads the `org_unit` list: trimmed, blanks and duplicates dropped, first
+// occurrence's order kept. A code longer than the reader accepts could never be imported, so it is
+// dropped too. Over maxLetterTemplateUnits distinct codes answers 400 here (ok false).
+func letterTemplateUnitCodes(w http.ResponseWriter, r *http.Request) ([]string, bool) {
+	// The name stays a literal: tools/apidoc reads query parameters from this expression.
+	raw := r.URL.Query()["org_unit"]
+	seen := make(map[string]bool, len(raw))
+	codes := make([]string, 0, len(raw))
+	for _, c := range raw {
+		c = strings.TrimSpace(c)
+		if c == "" || seen[c] || len([]rune(c)) > domain.MaxLetterImportUnitCode {
+			continue
+		}
+		seen[c] = true
+		codes = append(codes, c)
+	}
+	if len(codes) > maxLetterTemplateUnits {
+		httpx.WriteError(w, http.StatusBadRequest, "too_many_choices",
+			fmt.Sprintf("Danh sách bộ phận gửi kèm quá dài (tối đa %d mã).", maxLetterTemplateUnits), "")
+		return nil, false
+	}
+	return codes, true
+}
+
+// CitizenLetterImportTemplate serves GET /api/v1/citizen-letters/import-template[?org_unit=<mã>...].
+//
+// THE FILE IS PER COMMUNE once it carries a unit dropdown — no-store (writeXLSXFile), and the list is
+// identity's answer for the commune in the context, never the client's list as sent.
+//
+// IDENTITY DOWN NEVER FAILS THE DOWNLOAD: the dropdown is a convenience, the import re-checks every
+// code, so the template is served without it and the person can still type codes.
 func (h *Handler) CitizenLetterImportTemplate(w http.ResponseWriter, r *http.Request) {
-	b, err := xlsx.Template(letterImportTemplateSpec())
+	codes, ok := letterTemplateUnitCodes(w, r)
+	if !ok {
+		return
+	}
+	var units []app.LetterUnitChoice
+	if len(codes) > 0 {
+		got, err := h.d.CitizenLetterImport.UnitChoices(r.Context(), codes)
+		if err != nil {
+			// The commune and a count — codes are not personal data, but the log needs none of them.
+			h.d.Log.Warn("mẫu nhập đơn thư: không xác nhận được bộ phận, tệp mẫu không có danh sách chọn bộ phận",
+				"xa", string(tenant.MustFrom(r.Context())), "so_ma", len(codes), "err", err)
+		} else {
+			units = got
+		}
+	}
+	b, err := xlsx.Template(letterImportTemplateSpec(units))
 	if err != nil {
 		h.d.Log.Error("mẫu nhập đơn thư: dựng tệp lỗi", "xa", string(tenant.MustFrom(r.Context())), "err", err)
 		httpx.WriteError(w, http.StatusInternalServerError, "internal", "Đã xảy ra lỗi. Vui lòng thử lại.", "")
@@ -152,8 +224,23 @@ func (h *Handler) readLetterUpload(w http.ResponseWriter, r *http.Request) (
 	if !ok {
 		return app.LetterCaller{}, nil, nil, false
 	}
+	unitCellsToCodes(sheet)
 	rows, errs := domain.ReadLetterImportSheet(sheet, h.now())
 	return caller, rows, errs, true
+}
+
+// unitCellsToCodes reduces every data row's `Bộ phận xử lý (mã)` cell to its code: the dropdown
+// writes "code · name", a hand-typed cell holds the bare code, and both mean the code (xlsx.ChoiceCode).
+// HERE, NOT IN THE DOMAIN READER: domain/ is standard library only, and the separator belongs to
+// core/xlsx. The code is then length-checked and resolved against identity exactly as a typed one —
+// the name part is never matched (domain/citizen_letter_import.go header: names repeat).
+func unitCellsToCodes(sheet [][]string) {
+	col := letterImportUnitColumn()
+	for i := 1; i < len(sheet); i++ {
+		if col < len(sheet[i]) {
+			sheet[i][col] = xlsx.ChoiceCode(sheet[i][col])
+		}
+	}
 }
 
 // PreviewCitizenLetterImport serves POST /api/v1/citizen-letters/import-previews. 200 whether or not

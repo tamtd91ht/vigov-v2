@@ -115,6 +115,13 @@ type VoucherImportProject struct {
 	Allocated []string // funding source ids; empty = the project declared no source
 }
 
+// VoucherTemplateProject is one entry of the template's `Mã dự án` dropdown: a LIVE project of the
+// commune — the set the planner accepts a code from — with the name a person recognises it by.
+type VoucherTemplateProject struct {
+	Code string
+	Name string
+}
+
 // VoucherImportSource is one LIVE funding source of the commune's catalogue.
 type VoucherImportSource struct {
 	ID   string

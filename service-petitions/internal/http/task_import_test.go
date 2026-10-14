@@ -320,7 +320,7 @@ func TestTaskImportTemplate(t *testing.T) {
 // the workbook the way Excel would, and returns the bytes.
 func filledTemplate(t *testing.T, edit func(f *excelize.File, sheet string)) []byte {
 	t.Helper()
-	b, err := renderImportTemplate()
+	b, err := renderImportTemplate(nil)
 	if err != nil {
 		t.Fatal(err)
 	}

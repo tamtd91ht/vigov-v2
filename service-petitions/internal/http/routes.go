@@ -36,6 +36,7 @@ import (
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/httpx"
 	"github.com/vihat/vigov/core/idem"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/page"
 	"github.com/vihat/vigov/service-petitions/internal/app"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
@@ -209,6 +210,20 @@ type (
 	// transaction, so it is its own interface.
 	TaskImporter interface {
 		Import(ctx context.Context, sheet [][]string, dryRun bool, actor audit.Actor) (app.TaskImportResult, error)
+	}
+
+	// TaskImportChoiceLookups is what the import TEMPLATE asks identity about the codes a client asked
+	// to see in its dropdowns, for GET /api/v1/tasks/import-template. *identityclient.Client satisfies
+	// it. Every method answers for the commune the context carries only, so a code of another commune is
+	// simply absent from the answer — the property that lets the route take its lists from the client.
+	TaskImportChoiceLookups interface {
+		LiveOrgUnitIDsByCode(ctx context.Context, codes []string) (map[string]string, error)
+		OrgUnitNames(ctx context.Context, ids []string) (map[string]identityclient.OrgUnitName, error)
+		// vi-name-ok: the method names of the existing core/identityclient.Client this interface must match
+		CanBoGiaoViecDuoc(ctx context.Context, ma []string) (map[string]struct{}, error)
+		// vi-name-ok: the method names of the existing core/identityclient.Client this interface must match
+		TenCanBoTheoMa(ctx context.Context, ma []string) (map[string]identityclient.TenCanBo, error)
+		TaskBlocLabels(ctx context.Context, codes []string) (map[string]identityclient.TaskBlocLabel, error)
 	}
 
 	// DeNghiLuiHanChoDuyetDoc is the approval queue of extension requests (§5.8), for
@@ -541,6 +556,12 @@ type Deps struct {
 
 	// The spreadsheet import — checks every row, then books them all in one transaction (app.TaskImport).
 	TaskImport TaskImporter
+
+	// TaskImportChoices confirms the unit, staff and bloc codes the template's dropdowns may offer, and
+	// names them (task_import.go, importTemplateChoices) — *identityclient.Client in production. nil is
+	// NOT refused at construction: the template is then served without those three dropdowns, exactly as
+	// when identity is unreachable, because a dropdown is a convenience and the download must not fail.
+	TaskImportChoices TaskImportChoiceLookups
 
 	// The approval queue of extension requests (§5.8) — a read over `de_nghi_lui_han` joined to its
 	// task. The two extension WRITES stay on GhiNhiemVu below.
@@ -1744,12 +1765,20 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.Required(idem.DongKhiHong)(
 				http.HandlerFunc(h.ImportTasks))))
 
-	// MẪU NHẬP (§8, "⬇ Tải mẫu nhiệm vụ") — the heading row and one invented example row. `task.create`,
-	// the import's own key: the template is only useful to somebody who may import. A GET; no idem.*.
+	// MẪU NHẬP (§8, "⬇ Tải mẫu nhiệm vụ") — the heading row, one invented example row, and DROPDOWNS
+	// (owner 14/10/2026). `task.create`, the import's own key: the template is only useful to somebody
+	// who may import. A GET; no idem.*.
 	//
-	// @summary  Tải tệp Excel mẫu để nhập nhiệm vụ
+	// Dropdowns: type and priority from this service's catalogues (in-use rows); the two "(x)" columns
+	// offer "x". Unit, assignee and bloc offer the codes the client names in the optional, repeatable
+	// query parameters `org_unit`, `staff`, `bloc` — at most 2000 values each, more is 400
+	// `too_many_choices`. The server keeps only the codes identity confirms for THIS commune and prints
+	// identity's names (task_import.go, ImportTemplate). Identity unreachable: 200 without those three.
+	//
+	// @summary  Tải tệp Excel mẫu để nhập nhiệm vụ, có danh sách chọn (tham số tuỳ chọn org_unit, staff, bloc — mỗi loại tối đa 2000 mã)
 	// @screen   02-nhiem-vu §8
 	// @reply    200 -
+	// @reply    400 httpx.Error too_many_choices
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error

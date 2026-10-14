@@ -34,11 +34,17 @@ import (
 func registerCitizenLetterImportRoutes(mux *http.ServeMux, d Deps, h *Handler) {
 	// The file exists only to feed the import, so the import's key. NO idem.*: a GET changes no state.
 	//
-	// @summary  Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã))
+	// Optional repeated `org_unit=<mã bộ phận>` (owner, 14/10/2026): the units the `Bộ phận xử lý (mã)`
+	// dropdown may offer. The client's list is NOT trusted (rule 1, forbidden #2) — only codes identity
+	// confirms live in this commune are kept, labelled with identity's names. Over 2000 distinct codes
+	// is 400 `too_many_choices`; identity unreachable serves the file without that dropdown.
+	//
+	// @summary  Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã)) — có danh sách chọn Loại đơn và Bộ phận xử lý của xã
 	// @screen   05-van-ban-don-thu §3.1
 	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
 	//
 	// @reply    200 -
+	// @reply    400 httpx.Error
 	// @reply    401 httpx.Error
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error

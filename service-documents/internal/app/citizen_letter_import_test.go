@@ -12,6 +12,7 @@ package app
 import (
 	"context"
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -57,7 +58,7 @@ func letterImportRows() []domain.LetterImportRow {
 func buildImport(t *testing.T, k *khoVBGia, repo *letterRepoFake, dir *directoryFake, units *unitCodesFake) (
 	*CitizenLetterImport, context.Context) {
 	uc, ctx := buildLetters(t, k, repo, dir)
-	return NewCitizenLetterImport(uc, units), ctx
+	return NewCitizenLetterImport(uc, units, &unitNamesFake{}), ctx
 }
 
 func liveUnitCodes() *unitCodesFake {
@@ -220,6 +221,61 @@ func TestImportRefusesWithoutAnActor(t *testing.T) {
 	}
 	if k.batDau != 0 {
 		t.Fatal("đã mở giao dịch")
+	}
+}
+
+// --- template unit dropdown -----------------------------------------------------------------------------
+
+// The browser lists the codes; only the ones identity confirms LIVE in THIS commune survive, in the
+// browser's order, labelled with identity's name — never the client's.
+func TestUnitChoicesKeepsOnlyCodesIdentityConfirms(t *testing.T) {
+	units := &unitCodesFake{byCode: map[string]string{"dia-chinh": "bp-dia-chinh", "tu-phap": "bp-tu-phap", "go": "bp-go"}}
+	uc, ctx := buildLetters(t, khoVBMau(), newLetterRepo(), liveDirectory())
+	imp := NewCitizenLetterImport(uc, units, &unitNamesFake{names: map[string]identityclient.OrgUnitName{
+		"bp-dia-chinh": {Name: "Địa chính", Standing: identityv1.RecordStanding_RECORD_STANDING_LIVE},
+		"bp-tu-phap":   {Name: "Tư pháp", Standing: identityv1.RecordStanding_RECORD_STANDING_LIVE},
+		"bp-go":        {Name: "Đã gỡ", Standing: identityv1.RecordStanding_RECORD_STANDING_REMOVED},
+	}})
+	got, err := imp.UnitChoices(ctx, []string{"tu-phap", "xa-khac", "dia-chinh", "go"})
+	if err != nil {
+		t.Fatalf("UnitChoices: %v", err)
+	}
+	want := []LetterUnitChoice{{Code: "tu-phap", Name: "Tư pháp"}, {Code: "dia-chinh", Name: "Địa chính"}}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("= %+v, muốn %+v — mã xã khác / đã gỡ phải bị bỏ, giữ thứ tự", got, want)
+	}
+	if units.tenant != xaA {
+		t.Fatalf("hỏi identity ở xã %q, muốn %q", units.tenant, xaA)
+	}
+}
+
+func TestUnitChoicesChunksAtTheClientCeiling(t *testing.T) {
+	units := &unitCodesFake{byCode: map[string]string{}}
+	codes := make([]string, 450)
+	for i := range codes {
+		codes[i] = "bp-" + strconv.Itoa(i)
+	}
+	uc, ctx := buildLetters(t, khoVBMau(), newLetterRepo(), liveDirectory())
+	imp := NewCitizenLetterImport(uc, units, &unitNamesFake{})
+	if _, err := imp.UnitChoices(ctx, codes); err != nil {
+		t.Fatalf("UnitChoices: %v", err)
+	}
+	if len(units.asked) != 3 {
+		t.Fatalf("%d lần gọi, muốn 3 (200 + 200 + 50)", len(units.asked))
+	}
+	for _, a := range units.asked {
+		if len(a) > identityclient.MaxLookupKeysPerCall {
+			t.Fatalf("một lô %d mã, vượt trần", len(a))
+		}
+	}
+}
+
+func TestUnitChoicesIdentityDownIsAnError(t *testing.T) {
+	units := &unitCodesFake{err: identityclient.ErrIdentityUnavailable}
+	uc, ctx := buildLetters(t, khoVBMau(), newLetterRepo(), liveDirectory())
+	imp := NewCitizenLetterImport(uc, units, &unitNamesFake{})
+	if got, err := imp.UnitChoices(ctx, []string{"dia-chinh"}); err == nil || got != nil {
+		t.Fatalf("identity không trả lời mà vẫn có danh sách: %+v, %v", got, err)
 	}
 }
 

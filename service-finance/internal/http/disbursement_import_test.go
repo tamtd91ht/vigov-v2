@@ -40,6 +40,17 @@ type disbursementImportFake struct {
 
 	res app.VoucherImportResult
 	err error
+
+	choices     app.VoucherTemplateChoices
+	choicesErr  error
+	choiceCalls int
+	choicesTen  tenant.ID
+}
+
+func (f *disbursementImportFake) TemplateChoices(ctx context.Context) (app.VoucherTemplateChoices, error) {
+	f.choiceCalls++
+	f.choicesTen = tenant.MustFrom(ctx)
+	return f.choices, f.choicesErr
 }
 
 func (f *disbursementImportFake) Preview(ctx context.Context, rows []domain.VoucherImportRow) (app.VoucherImportResult, error) {
@@ -185,8 +196,8 @@ func TestDisbursementImports_401WithoutPrincipal(t *testing.T) {
 			t.Errorf("%s: code = %d, want 401", rt.name, w.Code)
 		}
 	}
-	if m.fake.calls != 0 {
-		t.Errorf("not signed in, yet the use case ran %d times", m.fake.calls)
+	if m.fake.calls != 0 || m.fake.choiceCalls != 0 {
+		t.Errorf("not signed in, yet the use case ran %d times (lists read %d)", m.fake.calls, m.fake.choiceCalls)
 	}
 }
 
@@ -218,7 +229,7 @@ func TestDisbursementImports_403RightPermissionWrongCommune(t *testing.T) {
 		if w := m.call(t, rt, hostB, canBoGhi(xaB)); w.Code != http.StatusForbidden {
 			t.Errorf("%s: code = %d, want 403", rt.name, w.Code)
 		}
-		if m.fake.calls != 0 {
+		if m.fake.calls != 0 || m.fake.choiceCalls != 0 {
 			t.Errorf("%s: wrong commune, yet the use case ran", rt.name)
 		}
 		if got := m.checker.hoiKhoaCuoi(); got != authz.Perm(rt.perm) {
@@ -300,6 +311,93 @@ func TestDisbursementImports_TemplateContent(t *testing.T) {
 	doiMa(t, w, http.StatusOK)
 	if got := m.fake.lastRows; len(got) != 1 || got[0].ProjectCode != domain.VoucherImportExampleProjectCode || got[0].Row != 2 {
 		t.Errorf("rows reaching the use case %+v", got)
+	}
+}
+
+// templateDropdowns opens a served template: the data columns carrying a dropdown (by letter) and every
+// value on the hidden choices sheet.
+func templateDropdowns(t *testing.T, b []byte) (map[string]bool, string) {
+	t.Helper()
+	f, err := excelize.OpenReader(bytes.NewReader(b))
+	if err != nil {
+		t.Fatalf("open template: %v", err)
+	}
+	defer f.Close()
+	dvs, err := f.GetDataValidations(disbursementImportSheet)
+	if err != nil {
+		t.Fatalf("read dropdowns: %v", err)
+	}
+	cols := map[string]bool{}
+	for _, dv := range dvs {
+		cols[strings.TrimRight(strings.SplitN(dv.Sqref, ":", 2)[0], "0123456789")] = true
+	}
+	var sb strings.Builder
+	if rows, err := f.GetRows(xlsx.SheetChoices); err == nil {
+		for _, r := range rows {
+			sb.WriteString(strings.Join(r, "|") + "\n")
+		}
+	}
+	if visible, err := f.GetSheetVisible(xlsx.SheetChoices); err == nil && visible {
+		t.Error("the choices sheet must be hidden")
+	}
+	return cols, sb.String()
+}
+
+// THE TEMPLATE IS PER COMMUNE: the dropdowns are read for the Host's commune, "code · name" for the
+// project, the plain name for the source.
+func TestDisbursementImports_TemplateDropdownsAreTheCommunes(t *testing.T) {
+	m := newDisbursementImportHarness(t)
+	m.grant()
+	m.fake.choices = app.VoucherTemplateChoices{
+		Projects: []domain.VoucherTemplateProject{{Code: "DA01", Name: "Đường thôn 1"}, {Code: "DA02", Name: "Nhà văn hoá"}},
+		Sources:  []string{"Ngân sách tỉnh", "Ngân sách xã"},
+	}
+	w := m.send(t, "GET", hostA, disbursementImportBase+"/import-template", nil, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	if w.Header().Get("Cache-Control") != "no-store" {
+		t.Error("a per-commune template must be no-store")
+	}
+	if m.fake.choiceCalls != 1 || m.fake.choicesTen != xaA {
+		t.Fatalf("lists read %d times, commune %q — want once, %q", m.fake.choiceCalls, m.fake.choicesTen, xaA)
+	}
+	cols, values := templateDropdowns(t, w.Body.Bytes())
+	if !cols["A"] || !cols["G"] || len(cols) != 2 {
+		t.Fatalf("dropdown columns = %v, want A (Mã dự án) and G (Nguồn vốn)", cols)
+	}
+	for _, want := range []string{"DA01 · Đường thôn 1", "DA02 · Nhà văn hoá", "Ngân sách tỉnh", "Ngân sách xã"} {
+		if !strings.Contains(values, want) {
+			t.Errorf("choices miss %q: %q", want, values)
+		}
+	}
+	if strings.Contains(values, "Ngân sách tỉnh ·") || strings.Contains(values, " · Ngân sách") {
+		t.Errorf("source entries are plain names, the planner matches by name: %q", values)
+	}
+}
+
+func TestDisbursementImports_TemplateWithoutListsWhenTheReadFails(t *testing.T) {
+	m := newDisbursementImportHarness(t)
+	m.grant()
+	m.fake.choicesErr = errors.New("database down")
+	w := m.send(t, "GET", hostA, disbursementImportBase+"/import-template", nil, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	if cols, _ := templateDropdowns(t, w.Body.Bytes()); len(cols) != 0 {
+		t.Fatalf("dropdown columns = %v, want none", cols)
+	}
+}
+
+// The dropdown writes "code · name"; a hand-typed cell holds the bare code. Both reach the planner as
+// the code alone. The source cell is left exactly as typed.
+func TestDisbursementImports_ProjectCellAcceptsDropdownValueAndBareCode(t *testing.T) {
+	m := newDisbursementImportHarness(t)
+	m.grant()
+	file := catalogueWorkbook(t, domain.VoucherImportColumns(),
+		[]string{xlsx.ChoiceValue("DA01", "Đường thôn 1"), "15/03/2026", "1.000.000", "Đợt 1", "", "", "Ngân sách tỉnh"},
+		[]string{"DA02", "15/03/2026", "2000000", "Đợt 2"})
+	w := m.send(t, "POST", hostA, disbursementImportBase+"/import-previews", file, canBoGhi(xaA), "")
+	doiMa(t, w, http.StatusOK)
+	rows := m.fake.lastRows
+	if len(rows) != 2 || rows[0].ProjectCode != "DA01" || rows[1].ProjectCode != "DA02" || rows[0].Source != "Ngân sách tỉnh" {
+		t.Fatalf("rows reaching the use case: %+v", rows)
 	}
 }
 

@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-documents",
-  "cap_nhat": "2026-10-11",
+  "cap_nhat": "2026-10-15",
   "muc": [
+    {
+      "id": "mau-nhap-don-thu-dropdown-bo-phan-14-10",
+      "viec": "Mẫu nhập sổ đơn thư: dropdown cột 'Bộ phận xử lý (mã)' từ mã client gửi, server đối chiếu identity",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án 14/10/2026. GET /citizen-letters/import-template?org_unit=… (trần 2000 → 400 too_many_choices). app.UnitChoices: LiveOrgUnitIDsByCode + OrgUnitNames theo lô 200, chỉ giữ mã sống của xã, theo thứ tự client. Giá trị 'mã · tên', chỉ cảnh báo; identity lỗi → vẫn tải mẫu, bỏ dropdown. Lớp http cắt 'mã · tên' (xlsx.ChoiceCode) trước parser miền. Dropdown Loại đơn giữ nguyên. KIỂM: go vet, go test ./... service-documents xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA thử trên cụm, chưa mở file trong Excel."
+    },
     {
       "id": "loai-van-ban-tuyen-doc",
       "viec": "GET /api/v1/document-types — tuyến ĐỌC danh mục loại văn bản",

@@ -178,6 +178,8 @@ type CitizenLetterService interface {
 type CitizenLetterImporter interface {
 	Preview(ctx context.Context, rows []domain.LetterImportRow, caller app.LetterCaller) (app.LetterImportResult, error)
 	Import(ctx context.Context, rows []domain.LetterImportRow, caller app.LetterCaller) (app.LetterImportResult, error)
+	// UnitChoices keeps the client-listed unit codes identity confirms live in the context's commune.
+	UnitChoices(ctx context.Context, codes []string) ([]app.LetterUnitChoice, error)
 }
 
 // CitizenLetterReportExporter is `Xuất Excel` of the report. *app.CitizenLetterReportExport satisfies it.

@@ -438,6 +438,9 @@ func chay(log *slog.Logger) error {
 		// imported and a task typed in are booked by one implementation. The identity client answers
 		// the unit-code, bloc and assignable-staff checks; the two catalogue stores the type/priority.
 		TaskImport: app.NewTaskImport(ghiNhiemVu, dinhDanh, loaiNhiemVu, mucUuTien),
+		// The import TEMPLATE's unit, staff and bloc dropdowns: the same identity client confirms the
+		// codes the client asked for, with the same predicates the import applies.
+		TaskImportChoices: dinhDanh,
 		// The approval queue of extension requests (§5.8) — the SAME store the two extension acts
 		// write through, so the queue lists exactly the rows those acts leave pending.
 		DeNghiChoDuyet: deNghiLuiHan,

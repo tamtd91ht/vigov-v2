@@ -1,8 +1,16 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-petitions",
-  "cap_nhat": "2026-10-12",
+  "cap_nhat": "2026-10-15",
   "muc": [
+    {
+      "id": "mau-nhap-nhiem-vu-dropdown-14-10",
+      "viec": "Mẫu nhập nhiệm vụ (.xlsx) có dropdown cho 7 cột có tập giá trị biết trước; nhập nhận cả 'mã · tên' lẫn mã trần",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Chủ dự án 14/10/2026: cột có mẫu sẵn thì cho chọn; danh sách thuộc identity (bộ phận, cán bộ, khối) do CLIENT gửi MÃ qua tham số GET org_unit/staff/bloc, server chỉ giữ mã identity xác nhận thuộc xã (LiveOrgUnitIDsByCode+OrgUnitNames, CanBoGiaoViecDuoc+TenCanBoTheoMa, TaskBlocLabels lọc LIVE) và in tên của identity; trần 2000/tham số → 400 too_many_choices. Loại nhiệm vụ, Mức ưu tiên đọc danh mục của chính petitions (DangDung). Hai cột (x) dropdown 'x' chặn. internal/http/task_import.go: renderImportTemplate chuyển sang core/xlsx.Template (tên sheet, tiêu đề, dòng ví dụ, tên tệp giữ nguyên); app/task_import.go importChoiceCells cắt 'mã · tên' (core/xlsx.ChoiceCode). identity lỗi/không nối → vẫn 200, bỏ 3 dropdown đó, log không nêu mã/tên. KIỂM: go vet, go test ./... service-petitions xanh (task_import_template_test.go mới).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA thử với cụm thật và chưa mở file trong Excel. Đầu đề không còn xuống dòng, độ rộng cột theo chữ (12–60) thay cho 26 cố định. RỦI RO độ dài URL: GET mang ~15 byte/mã; vài trăm cán bộ ~ vài KB — ingress-nginx mặc định large_client_header_buffers 8k sẽ trả 414 nếu xã rất đông; khi gặp thì nâng bộ đệm hoặc chuyển sang POST."
+    },
     {
       "id": "so-tay-lanh-dao-bo-loc-may-chu",
       "viec": "Sổ tay lãnh đạo (ADR 0071) — bộ lọc phía máy chủ: phạm vi 'việc tôi đã giao' (người tạo HOẶC lãnh đạo giao việc = tôi, lấy từ phiên) + bộ lọc 'chưa hoàn thành' (≠ hoan-thanh) dùng chung cho danh sách, /task-counts và xuất sổ; số đếm hàng chờ lùi hạn approver=me",

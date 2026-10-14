@@ -47,6 +47,7 @@ import (
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
 	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/store"
+	"github.com/vihat/vigov/core/xlsx"
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
@@ -150,6 +151,29 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 		return TaskImportResult{}, &TaskImportLayoutError{Sentence: domain.DiagnoseTaskImportHeadings(sheet).Sentence()}
 	}
 
+	// 0. THIS SERVICE'S OWN CATALOGUES, read before the row rules: a type/priority dropdown value
+	// "code · label" is turned back into its code only when that code is the catalogue's
+	// (importChoiceCells), and that needs the catalogue.
+	types, err := uc.types.DanhSach(ctx)
+	if err != nil {
+		return TaskImportResult{}, fmt.Errorf("nhiem_vu: đọc danh mục loại nhiệm vụ cho tệp nhập: %w", err)
+	}
+	priorities, err := uc.priorities.DanhSach(ctx)
+	if err != nil {
+		return TaskImportResult{}, fmt.Errorf("nhiem_vu: đọc danh mục mức ưu tiên cho tệp nhập: %w", err)
+	}
+	typeEntries, defaultType := make([]importCatalogueEntry, 0, len(types)), ""
+	for _, t := range types {
+		typeEntries = append(typeEntries, importCatalogueEntry{code: t.Ma, label: t.Nhan, inUse: t.DangDung})
+		if t.DangDung && t.LaMacDinh {
+			defaultType = t.Ma
+		}
+	}
+	priorityEntries := make([]importCatalogueEntry, 0, len(priorities))
+	for _, p := range priorities {
+		priorityEntries = append(priorityEntries, importCatalogueEntry{code: p.Ma, label: p.Nhan, inUse: p.DangDung})
+	}
+
 	// 1. THE ROW RULES.
 	var (
 		rows []domain.TaskImportRow
@@ -163,7 +187,7 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 			return TaskImportResult{}, ErrTaskImportTooManyRows
 		}
 		// The SPREADSHEET row number the clerk sees: sheet[0] is row 1, the first data row is head+2.
-		r, rowErrs := domain.ParseTaskImportRow(head+i+2, cells)
+		r, rowErrs := domain.ParseTaskImportRow(head+i+2, importChoiceCells(cells, typeEntries, priorityEntries))
 		errs = append(errs, rowErrs...)
 		rows = append(rows, r)
 	}
@@ -191,25 +215,6 @@ func (uc *TaskImport) Import(ctx context.Context, sheet [][]string, dryRun bool,
 	staff, err := lookupChunkedAt(ctx, staffCodes, identityclient.TranMaGiaoViecMotLo, uc.lookups.CanBoGiaoViecDuoc)
 	if err != nil {
 		return TaskImportResult{}, fmt.Errorf("%w: %w", ErrTaskImportUnchecked, err)
-	}
-	types, err := uc.types.DanhSach(ctx)
-	if err != nil {
-		return TaskImportResult{}, fmt.Errorf("nhiem_vu: đọc danh mục loại nhiệm vụ cho tệp nhập: %w", err)
-	}
-	priorities, err := uc.priorities.DanhSach(ctx)
-	if err != nil {
-		return TaskImportResult{}, fmt.Errorf("nhiem_vu: đọc danh mục mức ưu tiên cho tệp nhập: %w", err)
-	}
-	typeEntries, defaultType := make([]importCatalogueEntry, 0, len(types)), ""
-	for _, t := range types {
-		typeEntries = append(typeEntries, importCatalogueEntry{code: t.Ma, label: t.Nhan, inUse: t.DangDung})
-		if t.DangDung && t.LaMacDinh {
-			defaultType = t.Ma
-		}
-	}
-	priorityEntries := make([]importCatalogueEntry, 0, len(priorities))
-	for _, p := range priorities {
-		priorityEntries = append(priorityEntries, importCatalogueEntry{code: p.Ma, label: p.Nhan, inUse: p.DangDung})
 	}
 
 	// 3. EACH ROW AGAINST THE ANSWERS, then the create path's own normalisation. Every row's refusals
@@ -391,6 +396,45 @@ func resolveImportCatalogue(typed string, entries []importCatalogueEntry, what s
 		return "", what + " mang tên này đã tắt trong danh mục của xã"
 	}
 	return "", "không có " + what + " đang dùng mang mã hoặc tên này trong danh mục của xã"
+}
+
+// importChoiceCells returns a copy of one data row with the template's dropdown values ("code ·
+// label", xlsx.ChoiceValue) turned back into the bare code the row rules read. A bare code typed by
+// hand passes unchanged, so files filled before the template had dropdowns still import.
+//
+//	unit · assignee · bloc   always the part before the separator: none of these codes can carry it
+//	                         (unit and bloc are slugs, staff codes `CB-…`), and what remains is checked
+//	                         against identity exactly as a typed code is
+//	type · priority          only when the part before the separator IS a code of the catalogue. These
+//	                         two also accept a unique LABEL (resolveImportCatalogue), and a label a
+//	                         commune wrote with " · " in it must still reach that match whole
+//
+// The cell is never trusted for having come from a dropdown: Excel's list is a convenience a person can
+// type past, and every code still goes through the same lookups below.
+func importChoiceCells(cells []string, types, priorities []importCatalogueEntry) []string {
+	out := append([]string(nil), cells...)
+	for _, col := range []int{domain.TaskImportColUnit, domain.TaskImportColAssignee, domain.TaskImportColBloc} {
+		if col < len(out) {
+			out[col] = xlsx.ChoiceCode(out[col])
+		}
+	}
+	for _, c := range []struct {
+		col     int
+		entries []importCatalogueEntry
+	}{{domain.TaskImportColType, types}, {domain.TaskImportColPriority, priorities}} {
+		if c.col >= len(out) || !strings.Contains(out[c.col], xlsx.ChoiceSeparator) {
+			continue
+		}
+		// Lower-cased as the row rules fold these codes (domain.ParseTaskImportRow).
+		code := strings.ToLower(xlsx.ChoiceCode(out[c.col]))
+		for _, e := range c.entries {
+			if e.code == code {
+				out[c.col] = code
+				break
+			}
+		}
+	}
+	return out
 }
 
 // lookupChunkedAt is lookupChunked with an explicit ceiling — ResolveAssignableStaff's is 50, not the

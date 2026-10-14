@@ -247,7 +247,7 @@ func run(log *slog.Logger) error {
 		// Its Excel import books every row through the SAME use case (and so the same counter and
 		// identity client); unit codes are resolved by identity. The report export names units through
 		// identity as well — removed units included.
-		CitizenLetterImport: app.NewCitizenLetterImport(citizenLetters, dinhDanh),
+		CitizenLetterImport: app.NewCitizenLetterImport(citizenLetters, dinhDanh, dinhDanh),
 		CitizenLetterExport: app.NewCitizenLetterReportExport(citizenLetters, dinhDanh),
 		// "Loại đơn thư" on the Danh mục screen: one store for the read, the use case for the writes.
 		CitizenLetterTypeList: citizenLetterTypes,

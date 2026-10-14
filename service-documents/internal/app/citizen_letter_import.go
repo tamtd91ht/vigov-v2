@@ -38,6 +38,7 @@ import (
 
 	"github.com/vihat/vigov/core/audit"
 	identityv1 "github.com/vihat/vigov/core/gen/vigov/identity/v1"
+	"github.com/vihat/vigov/core/identityclient"
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-documents/internal/domain"
 )
@@ -89,10 +90,74 @@ type LetterImportResult struct {
 type CitizenLetterImport struct {
 	letters *CitizenLetters
 	units   LetterUnitCodes
+	names   LetterUnitNames // only the template's unit dropdown asks it
 }
 
-func NewCitizenLetterImport(letters *CitizenLetters, units LetterUnitCodes) *CitizenLetterImport {
-	return &CitizenLetterImport{letters: letters, units: units}
+func NewCitizenLetterImport(letters *CitizenLetters, units LetterUnitCodes, names LetterUnitNames) *CitizenLetterImport {
+	return &CitizenLetterImport{letters: letters, units: units, names: names}
+}
+
+// LetterUnitChoice is one entry of the template's `Bộ phận xử lý (mã)` dropdown.
+type LetterUnitChoice struct {
+	Code string // `bo_phan.ma`, what the reader resolves
+	Name string // identity's current name; "" when identity named nothing (the entry is then the bare code)
+}
+
+// UnitChoices turns the unit codes the BROWSER listed for the template's dropdown into the entries the
+// file may offer (owner, 14/10/2026: the list comes from the client).
+//
+// THE CLIENT NAMED THEM, SO IDENTITY DECIDES WHICH SURVIVE (rule 1, forbidden #2): a code is kept only
+// when LiveOrgUnitIDsByCode confirms a LIVE unit of the commune in the context carries it — another
+// commune's code, a removed unit's and an invented one are one answer, and all three are dropped
+// silently, so the template cannot be used to probe another commune's org chart. The label is
+// identity's name for that unit, never anything the client sent.
+//
+// The input order is kept (the screen's order), duplicates are the caller's to remove. Calls are
+// chunked at identityclient.MaxLookupKeysPerCall, never truncated. An error means identity was not
+// asked to the end: the caller serves the template WITHOUT the dropdown — nothing is partly offered.
+func (uc *CitizenLetterImport) UnitChoices(ctx context.Context, codes []string) ([]LetterUnitChoice, error) {
+	idByCode := make(map[string]string, len(codes))
+	for start := 0; start < len(codes); start += identityclient.MaxLookupKeysPerCall {
+		end := min(start+identityclient.MaxLookupKeysPerCall, len(codes))
+		got, err := uc.units.LiveOrgUnitIDsByCode(ctx, codes[start:end])
+		if err != nil {
+			return nil, fmt.Errorf("don_thu: xác nhận bộ phận cho tệp mẫu: %w", err)
+		}
+		for c, id := range got {
+			idByCode[c] = id
+		}
+	}
+	ids := make([]string, 0, len(idByCode))
+	for _, c := range codes {
+		if id, ok := idByCode[c]; ok {
+			ids = append(ids, id)
+		}
+	}
+	names := make(map[string]identityclient.OrgUnitName, len(ids))
+	for start := 0; start < len(ids); start += identityclient.MaxLookupKeysPerCall {
+		end := min(start+identityclient.MaxLookupKeysPerCall, len(ids))
+		got, err := uc.names.OrgUnitNames(ctx, ids[start:end])
+		if err != nil {
+			return nil, fmt.Errorf("don_thu: tra tên bộ phận cho tệp mẫu: %w", err)
+		}
+		for id, n := range got {
+			names[id] = n
+		}
+	}
+	out := make([]LetterUnitChoice, 0, len(ids))
+	for _, c := range codes {
+		id, ok := idByCode[c]
+		if !ok {
+			continue
+		}
+		n := names[id]
+		if n.Standing == identityv1.RecordStanding_RECORD_STANDING_REMOVED {
+			// Removed between the two calls: no longer a unit a letter may be held by.
+			continue
+		}
+		out = append(out, LetterUnitChoice{Code: c, Name: n.Name})
+	}
+	return out, nil
 }
 
 // Preview prepares every row exactly as Import would and reports. WRITES NOTHING, AUDITS NOTHING, takes

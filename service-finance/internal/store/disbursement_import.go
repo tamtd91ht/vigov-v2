@@ -1,6 +1,7 @@
 package store
 
-// The two reads the Excel import of disbursement vouchers plans against (app/disbursement_import.go).
+// The two reads the Excel import of disbursement vouchers plans against (app/disbursement_import.go),
+// and the template's project dropdown read (ProjectChoicesForVoucherTemplate).
 // The writes are the form's own statements on this store — ProjectForVoucherWrite, NguonVonConSong,
 // Chen — so the import cannot write a row the form could not.
 //
@@ -9,6 +10,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/vihat/vigov/core/store"
@@ -108,6 +110,48 @@ func (s *ChungTuGiaiNganStore) ProjectsForVoucherImport(ctx context.Context, tx 
 	}
 	if n > ceiling {
 		return nil, ErrQuaNhieuPhanBo
+	}
+	return out, nil
+}
+
+// MaxVoucherTemplateProjects bounds the template's `Mã dự án` dropdown. Over it the template is served
+// WITHOUT that dropdown (ErrTooManyTemplateProjects) — never with a truncated list, which would read as
+// "the projects missing from it cannot take a payment".
+const MaxVoucherTemplateProjects = 2000
+
+// ErrTooManyTemplateProjects — the commune has more live projects than one dropdown carries.
+var ErrTooManyTemplateProjects = errors.New("chung_tu_giai_ngan: quá nhiều dự án cho danh sách chọn của tệp mẫu")
+
+// liveProjectsForVoucherTemplate is the set projectsForVoucherImport matches a code against — every LIVE
+// project of the commune, whatever its year (the planner does not check the year either) — with its
+// name. No FOR SHARE: the template writes nothing, and the import re-reads under its own lock.
+const liveProjectsForVoucherTemplate = `SELECT ma, ten FROM du_an
+	WHERE tenant_id = $1 AND deleted_at IS NULL
+	ORDER BY ma
+	LIMIT $2`
+
+// ProjectChoicesForVoucherTemplate reads the commune's live projects for the template's dropdown.
+func (s *ChungTuGiaiNganStore) ProjectChoicesForVoucherTemplate(ctx context.Context, tx *store.ScopedTx) (
+	[]domain.VoucherTemplateProject, error) {
+	rows, err := tx.Underlying().QueryContext(ctx, liveProjectsForVoucherTemplate, string(tx.TenantID()),
+		MaxVoucherTemplateProjects+1)
+	if err != nil {
+		return nil, fmt.Errorf("chung_tu_giai_ngan: đọc dự án cho tệp mẫu: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.VoucherTemplateProject
+	for rows.Next() {
+		var p domain.VoucherTemplateProject
+		if err := rows.Scan(&p.Code, &p.Name); err != nil {
+			return nil, fmt.Errorf("chung_tu_giai_ngan: đọc dòng dự án cho tệp mẫu: %w", err)
+		}
+		out = append(out, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("chung_tu_giai_ngan: duyệt dự án cho tệp mẫu: %w", err)
+	}
+	if len(out) > MaxVoucherTemplateProjects {
+		return nil, ErrTooManyTemplateProjects
 	}
 	return out, nil
 }

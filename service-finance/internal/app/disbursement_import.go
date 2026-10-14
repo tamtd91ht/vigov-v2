@@ -45,7 +45,53 @@ type VoucherImportRepo interface {
 	ProjectsForVoucherImport(ctx context.Context, tx *store.ScopedTx, codes []string) ([]domain.VoucherImportProject, error)
 	// SourcesForVoucherImport reads the commune's LIVE funding source catalogue.
 	SourcesForVoucherImport(ctx context.Context, tx *store.ScopedTx) ([]domain.VoucherImportSource, error)
+	// ProjectChoicesForVoucherTemplate reads the commune's LIVE projects with their names, for the
+	// template's dropdown; fistore.ErrTooManyTemplateProjects over its ceiling.
+	ProjectChoicesForVoucherTemplate(ctx context.Context, tx *store.ScopedTx) ([]domain.VoucherTemplateProject, error)
 	voucherInserter
+}
+
+// VoucherTemplateChoices are the template's two dropdowns. A nil list = no dropdown on that column.
+type VoucherTemplateChoices struct {
+	Projects []domain.VoucherTemplateProject
+	Sources  []string // catalogue names, as the planner matches them
+}
+
+// TemplateChoices reads, for the commune in the context, what the template's dropdowns offer — THE SETS
+// THE PLANNER ACCEPTS FROM: every live project (projectsForVoucherImport's predicate) and the live
+// funding-source catalogue (SourcesForVoucherImport, the very read the planner resolves names against).
+// The sources are the whole catalogue, not the row's project's allocation: which ones a row may name
+// depends on the project in that row, which a dropdown cannot follow, and the planner re-checks it.
+//
+// A list over its ceiling is left out (that column has no dropdown), never truncated. Any other error
+// is returned; the caller serves the template without dropdowns.
+func (uc *DisbursementImporter) TemplateChoices(ctx context.Context) (VoucherTemplateChoices, error) {
+	var out VoucherTemplateChoices
+	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+		projects, err := uc.repo.ProjectChoicesForVoucherTemplate(ctx, tx)
+		switch {
+		case errors.Is(err, fistore.ErrTooManyTemplateProjects):
+			projects = nil
+		case err != nil:
+			return err
+		}
+		sources, err := uc.repo.SourcesForVoucherImport(ctx, tx)
+		switch {
+		case errors.Is(err, fistore.ErrQuaNhieuNguonVon):
+			sources = nil
+		case err != nil:
+			return err
+		}
+		out.Projects = projects
+		for _, s := range sources {
+			out.Sources = append(out.Sources, s.Name)
+		}
+		return nil
+	})
+	if err != nil {
+		return VoucherTemplateChoices{}, bocChungTu(ctx, "đọc danh sách chọn cho tệp mẫu nhập giải ngân", err)
+	}
+	return out, nil
 }
 
 // VoucherImportRejected carries every error of a file that was refused. Nothing was written.

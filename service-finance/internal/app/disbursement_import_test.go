@@ -6,6 +6,7 @@ import (
 	"database/sql/driver"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -25,6 +26,7 @@ import (
 
 type voucherImportProject struct {
 	id        string
+	name      string
 	allocated []string
 }
 
@@ -138,6 +140,22 @@ func (c *voucherImportConn) QueryContext(_ context.Context, q string, args []dri
 			}
 		}
 		return out, nil
+	case strings.Contains(q, "SELECT ma, ten FROM du_an"):
+		// The template's list: every live project of the commune bound at $1, up to the LIMIT at $2.
+		out := &rowsGia{cot: []string{"ma", "ten"}}
+		limit, _ := arg(1).(int64)
+		codes := make([]string, 0, len(c.k.projects))
+		for code := range c.k.projects {
+			codes = append(codes, code)
+		}
+		sort.Strings(codes)
+		for _, code := range codes {
+			if int64(len(out.hang)) == limit {
+				break
+			}
+			out.hang = append(out.hang, []driver.Value{code, c.k.projects[code].name})
+		}
+		return out, nil
 	case strings.Contains(q, "FROM phan_bo_nguon_von") && strings.Contains(q, "ANY($2)"):
 		out := &rowsGia{cot: []string{"du_an_id", "nguon_von_id"}}
 		ids, _ := arg(1).([]string)
@@ -211,8 +229,8 @@ const (
 func sampleImportDB() *voucherImportDB {
 	return &voucherImportDB{
 		projects: map[string]voucherImportProject{
-			"DA01": {id: projectWithSourceID, allocated: []string{provinceSourceID}},
-			"DA02": {id: projectNoSourceID},
+			"DA01": {id: projectWithSourceID, name: "Đường thôn 1", allocated: []string{provinceSourceID}},
+			"DA02": {id: projectNoSourceID, name: "Nhà văn hoá"},
 		},
 		sources: map[string]string{provinceSourceID: "Ngân sách tỉnh", communeSourceID: "Ngân sách xã"},
 	}
@@ -395,5 +413,61 @@ func TestVoucherImport_NoStaffCodeIsRefusedBeforeAnyTransaction(t *testing.T) {
 	}
 	if k.begun != 0 {
 		t.Error("no actor, yet a transaction was opened")
+	}
+}
+
+// --- the template's dropdowns ------------------------------------------------------------------------
+
+// The lists are the sets the planner accepts from — every live project with its name, the live
+// catalogue's names — read for the commune in the context, writing nothing.
+func TestVoucherTemplateChoices_AreTheCommunesLiveProjectsAndSources(t *testing.T) {
+	k := sampleImportDB()
+	uc, ctx := newImporterOver(t, k)
+	got, err := uc.TemplateChoices(ctx)
+	if err != nil {
+		t.Fatalf("TemplateChoices: %v", err)
+	}
+	if len(got.Projects) != 2 || got.Projects[0] != (domain.VoucherTemplateProject{Code: "DA01", Name: "Đường thôn 1"}) ||
+		got.Projects[1] != (domain.VoucherTemplateProject{Code: "DA02", Name: "Nhà văn hoá"}) {
+		t.Fatalf("projects = %+v", got.Projects)
+	}
+	sources := append([]string(nil), got.Sources...)
+	sort.Strings(sources)
+	if strings.Join(sources, "|") != "Ngân sách tỉnh|Ngân sách xã" {
+		t.Fatalf("sources = %v", got.Sources)
+	}
+	for _, sub := range []string{"SELECT ma, ten FROM du_an", "SELECT id, ten FROM nguon_von"} {
+		st := k.matching(sub)
+		if len(st) != 1 || len(st[0].args) == 0 || st[0].args[0] != string(xaA) {
+			t.Fatalf("%q: %+v — want one statement bound to commune %q", sub, st, xaA)
+		}
+	}
+	if len(k.matching("INSERT")) != 0 || len(k.matching("audit_log")) != 0 {
+		t.Fatal("reading the template's lists wrote something")
+	}
+}
+
+// Over the ceiling the project list is LEFT OUT, never truncated; the source list still comes.
+func TestVoucherTemplateChoices_TooManyProjectsLeavesThatDropdownOut(t *testing.T) {
+	k := sampleImportDB()
+	for i := 0; i < fistore.MaxVoucherTemplateProjects; i++ {
+		k.projects[fmt.Sprintf("X%05d", i)] = voucherImportProject{id: fmt.Sprintf("p-%d", i), name: "Dự án"}
+	}
+	uc, ctx := newImporterOver(t, k)
+	got, err := uc.TemplateChoices(ctx)
+	if err != nil {
+		t.Fatalf("TemplateChoices: %v", err)
+	}
+	if got.Projects != nil || len(got.Sources) != 2 {
+		t.Fatalf("projects %d, sources %d — want none and 2", len(got.Projects), len(got.Sources))
+	}
+}
+
+func TestVoucherTemplateChoices_ReadFailureIsAnError(t *testing.T) {
+	k := sampleImportDB()
+	k.failOn = "SELECT ma, ten FROM du_an"
+	uc, ctx := newImporterOver(t, k)
+	if _, err := uc.TemplateChoices(ctx); err == nil {
+		t.Fatal("a failed read must be reported, the handler then serves the file without lists")
 	}
 }

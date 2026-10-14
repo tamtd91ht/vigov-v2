@@ -216,6 +216,8 @@ func readLetterImportRow(rowNo int, raw []string, width int, now time.Time) (Let
 		r.Summary = s
 	}
 
+	// A dropdown cell ("code · name") reaches here already cut to its code — the HTTP adapter does it
+	// (internal/http unitCellsToCodes), because the separator is core/xlsx's and this file is stdlib only.
 	if code := cell(6); len([]rune(code)) > MaxLetterImportUnitCode {
 		fail(LetterImportColUnit, fmt.Sprintf("Mã bộ phận dài quá %d ký tự.", MaxLetterImportUnitCode))
 	} else {

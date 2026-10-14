@@ -5392,17 +5392,19 @@ export type documents_post_citizen_letters_import_previews = {
   };
 };
 
-/** GET /api/v1/citizen-letters/import-template — Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã)) */
+/** GET /api/v1/citizen-letters/import-template — Tải tệp Excel mẫu để nhập sổ đơn thư (Ngày đến, Họ tên người gửi, Địa chỉ, Số điện thoại, Loại đơn, Nội dung đơn, Bộ phận xử lý (mã)) — có danh sách chọn Loại đơn và Bộ phận xử lý của xã */
 export type documents_get_citizen_letters_import_template = {
   duongDan: "/api/v1/citizen-letters/import-template";
   phuongThuc: "GET";
   thamSo: {
   };
   truyVan: {
+    "org_unit": string;
   };
   than: never;
   phanHoi: {
     200: void;
+    400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
@@ -7218,7 +7220,7 @@ export type finance_post_disbursements_import_previews = {
   };
 };
 
-/** GET /api/v1/disbursements/import-template — Tải tệp Excel mẫu để nhập chứng từ giải ngân */
+/** GET /api/v1/disbursements/import-template — Tải tệp Excel mẫu để nhập chứng từ giải ngân — có danh sách chọn Mã dự án và Nguồn vốn của xã */
 export type finance_get_disbursements_import_template = {
   duongDan: "/api/v1/disbursements/import-template";
   phuongThuc: "GET";
@@ -11966,7 +11968,7 @@ export type petitions_post_tasks = {
   };
 };
 
-/** GET /api/v1/tasks/import-template — Tải tệp Excel mẫu để nhập nhiệm vụ */
+/** GET /api/v1/tasks/import-template — Tải tệp Excel mẫu để nhập nhiệm vụ, có danh sách chọn (tham số tuỳ chọn org_unit, staff, bloc — mỗi loại tối đa 2000 mã) */
 export type petitions_get_tasks_import_template = {
   duongDan: "/api/v1/tasks/import-template";
   phuongThuc: "GET";
@@ -11977,9 +11979,13 @@ export type petitions_get_tasks_import_template = {
   than: never;
   phanHoi: {
     200: void;
+    400: httpx_Error;
     401: httpx_Error;
     403: httpx_Error;
     500: httpx_Error;
+  };
+  errorCodes: {
+    400: "too_many_choices";
   };
 };
 
