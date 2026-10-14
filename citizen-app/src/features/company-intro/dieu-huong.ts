@@ -82,3 +82,24 @@ export const MOC_TIM_VAN_PHONG = "tn-van-phong";
  * hai giữ một quy ước, và chỗ thứ hai là chỗ sẽ lệch.
  */
 export const MOC_DANG_NHAP = mocTinhNang("dang-nhap");
+
+/**
+ * LOGIN WITH A WAY BACK (owner-approved fix, 14/10/2026). "Đăng nhập" on Tư vấn and on Yêu cầu của tôi leads to the
+ * login block on Liên hệ; once logged in, the person had no button back to where they were going, and had to find
+ * the screen again through the home menu.
+ *
+ * The way back rides in `moc` — the one field a `DiemDen` already carries to a screen — so the shell
+ * (`App.tsx`) needs no new field: each value below is ALSO a real `id` in the DOM (the login slot of
+ * `ConnectWithVihat` carries it), so the shell's scroll to `moc` still lands on the login block.
+ *
+ * It grants nothing: it only chooses which button the connected state shows. An unknown value is "no way back".
+ */
+export const LOGIN_FROM_CONSULT = `${MOC_DANG_NHAP}-from-consult`;
+export const LOGIN_FROM_REQUESTS = `${MOC_DANG_NHAP}-from-requests`;
+
+/** The screen to go back to after logging in, or `null` when the login was not opened from a request screen. */
+export function loginReturnScreen(moc: string | undefined): "tu-van" | "yeu-cau" | null {
+  if (moc === LOGIN_FROM_CONSULT) return "tu-van";
+  if (moc === LOGIN_FROM_REQUESTS) return "yeu-cau";
+  return null;
+}

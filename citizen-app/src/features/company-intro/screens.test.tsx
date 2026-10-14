@@ -504,7 +504,7 @@ describe("màn chủ dẫn đi đâu, và có dẫn tới nơi thật không", (
       if (muc.kieu === "man") {
         expect(() => findScreen(muc.di.man), `mục ${muc.ma} trỏ vào một màn không có`).not.toThrow();
       } else {
-        // "Tư vấn" là một cuộc gọi tới ĐÚNG số hotline đã công bố, không phải một biểu mẫu.
+        // "Hotline" là một cuộc gọi tới ĐÚNG số hotline đã công bố, không phải một biểu mẫu.
         expect(muc.so).toBe(CONTACT.hotlineDialable);
       }
     }

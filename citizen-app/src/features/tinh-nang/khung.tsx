@@ -61,10 +61,17 @@ export function KhungTinhNang<T>({
   truoc_nut,
   veKetQua,
   duoi_cung,
+  busy = false,
 }: {
   ma: MaTinhNang;
   trang_thai: TrangThai<T>;
   onBam: () => void;
+  /**
+   * The RESULT is still working after Zalo answered — the login's server exchange (`PhatHanhPhien`). The button
+   * stays disabled and says "đang chờ" until it settles (14/10/2026): re-enabled early, a second tap asked Zalo for a
+   * new token while the first exchange was still running.
+   */
+  busy?: boolean;
   /**
    * `h3` (12/10/2026) = one action inside the "Kết nối với ViHAT" card on Liên hệ: the card holds the `h2`, and
    * the frame is dropped (`tn--muc`) so the action does not read as a card inside a card.
@@ -86,7 +93,7 @@ export function KhungTinhNang<T>({
   duoi_cung?: ReactNode;
 }) {
   const nd = noiDung(ma);
-  const dang_cho = trang_thai.kieu === "dang-cho";
+  const dang_cho = trang_thai.kieu === "dang-cho" || busy;
   const TieuDe = cap_tieu_de;
 
   return (
@@ -139,6 +146,7 @@ export function TinhNangCoTrangThai<T>({
   truoc_nut,
   veKetQua,
   duoi_cung,
+  busy = false,
 }: {
   ma: MaTinhNang;
   xin: () => Promise<KetQuaXin<T>>;
@@ -147,10 +155,14 @@ export function TinhNangCoTrangThai<T>({
   truoc_nut?: ReactNode;
   veKetQua: (du_lieu: T) => ReactNode;
   duoi_cung?: ReactNode;
+  /** See `KhungTinhNang`'s `busy`. */
+  busy?: boolean;
 }) {
   const [trang_thai, datTrangThai] = useState<TrangThai<T>>({ kieu: "chua-goi" });
 
   async function bam() {
+    // Second guard behind the disabled button: a tap that slips through while busy asks Zalo for nothing.
+    if (trang_thai.kieu === "dang-cho" || busy) return;
     datTrangThai({ kieu: "dang-cho" });
     // `xin` không bao giờ ném — mọi đường đã quy về bốn nhánh trong `zalo-api.ts`. Không có
     // `catch` ở đây vì một `catch` thừa sẽ che mất lỗi lập trình thật của chính màn này.
@@ -167,6 +179,7 @@ export function TinhNangCoTrangThai<T>({
       truoc_nut={truoc_nut}
       veKetQua={veKetQua}
       duoi_cung={duoi_cung}
+      busy={busy}
     />
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { TIEU_DE_CHINH_SACH } from "../../content/chinh-sach-rieng-tu";
 import { CONTACT } from "../../content/company-profile";
+import { scrollMainToTop } from "../../lib/cuon-toi";
 import { HotlineLink, TimVanPhong } from "../tinh-nang/index";
 
 import { ConnectWithVihat } from "./ConnectWithVihat";
@@ -25,7 +26,8 @@ import { QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
  *      đích đứng trước nút của nó: đăng nhập bằng số Zalo (`getPhoneNumber`, một lần chạm, không
  *      mã sáu số — ADR 0020), chat với chuyên viên, nhận ưu đãi qua SMS. Hai đường liên hệ chạy
  *      được ngay vẫn nằm ngay dưới nút đăng nhập, cho người từ chối chia sẻ số.
- *   3. Văn phòng — ba văn phòng và nút chỉ đường luôn hiện; không xin vị trí (11/10/2026).
+ *   3. Văn phòng — ba văn phòng và nút chỉ đường luôn hiện; "Tìm văn phòng gần tôi" xin vị trí sau
+ *      một câu mục đích và xếp ba văn phòng theo khoảng cách (12/10/2026, `TimVanPhong`).
  *
  *   Đặt hai tính năng cần quyền lên trước ba đường liên hệ chạy được là bắt một khách hàng đang
  *   cần gọi phải đi qua hai lời xin quyền trước đã. Không ai làm thế với một khách hàng.
@@ -56,7 +58,7 @@ import { QuanLyQuyenScreen } from "./QuanLyQuyenScreen";
  */
 type ContactView = "contact" | "permissions" | "policy-from-contact" | "policy-from-permissions";
 
-export function ContactScreen({ moc }: ThamSoMan) {
+export function ContactScreen({ moc, onDi }: ThamSoMan) {
   /**
    * Màn con đang mở. Trạng thái giao diện thuần, không ghi xuống máy.
    *
@@ -67,11 +69,22 @@ export function ContactScreen({ moc }: ThamSoMan) {
    */
   const [view, setView] = useState<ContactView>(moc === MOC_QUAN_LY_QUYEN ? "permissions" : "contact");
 
+  /**
+   * Every sub-screen change goes through here. `.app-main` is the scroll container and survives the change, so
+   * without this the sub-screen opens at the old scroll position with its back button off-screen (fix B,
+   * 14/10/2026). Going back lands on the top of Liên hệ too — the row that was pressed sits low on the page, and
+   * remembering where it was is a feature nobody asked for.
+   */
+  function show(next: ContactView) {
+    scrollMainToTop();
+    setView(next);
+  }
+
   if (view === "permissions") {
     return (
       <QuanLyQuyenScreen
-        onQuayLai={() => setView("contact")}
-        onOpenPolicy={() => setView("policy-from-permissions")}
+        onQuayLai={() => show("contact")}
+        onOpenPolicy={() => show("policy-from-permissions")}
       />
     );
   }
@@ -81,7 +94,7 @@ export function ContactScreen({ moc }: ThamSoMan) {
     return (
       <PrivacyPolicyScreen
         backLabel={fromPermissions ? "Quay lại Quản lý quyền" : "Quay lại Liên hệ"}
-        onBack={() => setView(fromPermissions ? "permissions" : "contact")}
+        onBack={() => show(fromPermissions ? "permissions" : "contact")}
       />
     );
   }
@@ -120,7 +133,8 @@ export function ContactScreen({ moc }: ThamSoMan) {
       {/* EVERY ASK OF THE PHONE NUMBER, IN ONE CARD (12/10/2026): log in, chat with a specialist, SMS offers — each
           its own action with its own purpose sentence before its button (`ConnectWithVihat.tsx`). Below the three
           contacts that need nothing, by the rule at the top of this file. The floating "Chat Zalo" stays as is. */}
-      <ConnectWithVihat />
+      {/* `moc`/`onDi` carry the way back to Tư vấn / Yêu cầu của tôi after logging in (14/10/2026). */}
+      <ConnectWithVihat moc={moc} onDi={onDi} />
 
       <TimVanPhong />
 
@@ -128,7 +142,7 @@ export function ContactScreen({ moc }: ThamSoMan) {
           nửa của cùng một câu hỏi — "app này lấy gì của tôi": màn quyền nói app GỌI những gì của
           nền tảng, chính sách nói dữ liệu ĐI ĐÂU. Để chúng cạnh nhau thì người đọc không phải tìm
           nửa còn lại. */}
-      <button type="button" className="action action--mo" onClick={() => setView("permissions")}>
+      <button type="button" className="action action--mo" onClick={() => show("permissions")}>
         <span className="tile tile--soft" aria-hidden="true">
           <ShieldGlyph className="tile__glyph" />
         </span>
@@ -141,7 +155,7 @@ export function ContactScreen({ moc }: ThamSoMan) {
       {/* THE POLICY IS ONE ROW HERE, ITS TEXT ON ITS OWN SCREEN (owner 12/10/2026: no text walls). The row stays
           on Liên hệ — where people and the Zalo reviewer look for legal information — right under Quản lý quyền,
           the other half of "what does this app take from me". */}
-      <button type="button" className="action action--mo" onClick={() => setView("policy-from-contact")}>
+      <button type="button" className="action action--mo" onClick={() => show("policy-from-contact")}>
         <span className="tile tile--soft" aria-hidden="true">
           <DocumentGlyph className="tile__glyph" />
         </span>

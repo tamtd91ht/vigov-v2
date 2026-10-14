@@ -39,9 +39,9 @@ import type { KetQuaGui } from "../../api/goi-may-chu";
 import { KHOA_CHIEN_DICH, maChienDichHopLe } from "../../content/chien-dich";
 import { SOLUTIONS } from "../../content/company-profile";
 import { thamSo, thamSoMoApp } from "../../lib/launch-params";
-import { MOC_DANG_NHAP, type ThamSoMan } from "../company-intro/dieu-huong";
+import { LOGIN_FROM_CONSULT, type ThamSoMan } from "../company-intro/dieu-huong";
 import { HandshakeGlyph } from "../company-intro/icons";
-import { bearerCua, dungPhien } from "../dang-nhap/kho-phien";
+import { bearerCua, dungPhien, forgetSessionOn401 } from "../dang-nhap/kho-phien";
 import { QUY_MO } from "../goi-y-giai-phap/anh-xa";
 
 import {
@@ -107,6 +107,25 @@ export function HangChon({
   );
 }
 
+/**
+ * The login invitation's words. `expired` = the server just answered 401 to a send from this screen, and the
+ * session was forgotten: the card then says WHY the form is gone and that nothing was sent. PURE.
+ */
+export function consultLoginInvite(expired: boolean): { title: string; reason: string } {
+  return expired
+    ? { title: TU_VAN.session_expired_title, reason: TU_VAN.phien_het_han }
+    : { title: TU_VAN.can_dang_nhap_tieu_de, reason: TU_VAN.can_dang_nhap };
+}
+
+/**
+ * The line above the send button when no solution is picked: a neutral hint until the person has tapped send,
+ * the red sentence only after (14/10/2026). `null` when something is picked. PURE.
+ */
+export function pickOneMessage(nothingPicked: boolean, triedToSend: boolean): { text: string; isError: boolean } | null {
+  if (!nothingPicked) return null;
+  return triedToSend ? { text: TU_VAN.chua_chon_gi, isError: true } : { text: TU_VAN.pick_one_hint, isError: false };
+}
+
 /** Màn kết quả sau khi gửi xong, THUẦN — nhận mã yêu cầu qua tham số. */
 export function DaGuiXong({
   ma_yeu_cau,
@@ -154,7 +173,7 @@ export function TuVanBaoGiaScreen({
   picker?: PhotoPicker;
 }) {
   const di = onDi ?? (() => {});
-  const { phien } = dungPhien();
+  const { phien, datPhien } = dungPhien();
 
   // `moc` = the solution whose detail page sent the user here ("Nhận tư vấn giải pháp này", 13/10/2026): that
   // line starts ticked. Only an id that IS in SOLUTIONS counts — anything else would be sent and answered 400.
@@ -167,6 +186,10 @@ export function TuVanBaoGiaScreen({
   const [photos, setPhotos] = useState<readonly ConsultPhoto[]>([]);
   const [uploads, setUploads] = useState<readonly PhotoUpload[]>([]);
   const picking = useConsultPhotoPicking(picker, photos, setPhotos);
+  /** The server answered 401 to a send: the session was forgotten, and the login card says why. Memory only. */
+  const [expired, setExpired] = useState(false);
+  /** Send was tapped with nothing picked — from then on the "pick one" line is an error, not a hint. */
+  const [triedEmpty, setTriedEmpty] = useState(false);
 
   /**
    * `source` CHỈ ĐƯỢC GỬI KHI MÃ KHỚP MỘT DÒNG CÓ THẬT trong `content/chien-dich.ts`.
@@ -177,15 +200,19 @@ export function TuVanBaoGiaScreen({
    */
   const nguon = maChienDichHopLe(thamSo(thamSoMoApp())[KHOA_CHIEN_DICH] ?? "");
 
+  // `LOGIN_FROM_CONSULT`, not the bare login anchor: once logged in, Liên hệ offers "Tiếp tục gửi yêu cầu" back here.
+  const toLogin = () => di({ man: "contact", moc: LOGIN_FROM_CONSULT });
+
   if (phien === null) {
+    const invite = consultLoginInvite(expired);
     return (
       <>
         <BangTieuDe />
         <MoiDangNhap
-          tieu_de={TU_VAN.can_dang_nhap_tieu_de}
-          li_do={TU_VAN.can_dang_nhap}
+          tieu_de={invite.title}
+          li_do={invite.reason}
           nhan_nut={TU_VAN.nut_toi_dang_nhap}
-          onDangNhap={() => di({ man: "contact", moc: MOC_DANG_NHAP })}
+          onDangNhap={toLogin}
         />
       </>
     );
@@ -227,9 +254,16 @@ export function TuVanBaoGiaScreen({
   const qua_nhieu = quan_tam.length > SO_QUAN_TAM_TOI_DA;
   const chua_chon = quan_tam.length === 0;
   // A pick still in flight holds the send: a photo arriving after the tap would silently miss the request.
-  const chan_gui = dang_gui || qua_dai || qua_nhieu || chua_chon || picking.picking;
+  // "Nothing picked" does NOT disable the buttons (14/10/2026): the tap is what turns the hint into the error, and a
+  // greyed button that says nothing is the one an older person presses three times and gives up on.
+  const chan_gui = dang_gui || qua_dai || qua_nhieu || picking.picking;
+  const pickOne = pickOneMessage(chua_chon, triedEmpty);
 
   async function gui(loai: LoaiYeuCau) {
+    if (chua_chon) {
+      setTriedEmpty(true);
+      return;
+    }
     datDangGui(true);
     const yc: YeuCauMoi = { loai, quan_tam, quy_mo, ghi_chu, nguon };
     // `bearerCua` chứ không `phien.token`: một chỗ quyết định "phiếu nào gửi được", xem
@@ -239,6 +273,12 @@ export function TuVanBaoGiaScreen({
     await sendConsultation(steps, bearerCua(phien), yc, photos, (sent) => {
       datKetQua(sent);
       datDangGui(false);
+      // 401: the held session is dead. Forget it, so Liên hệ stops saying "Đã kết nối" and offers the login
+      // again; this screen then shows the login card saying the request was NOT sent (`consultLoginInvite`).
+      forgetSessionOn401(sent, () => {
+        setExpired(true);
+        datPhien(null);
+      });
     }, setUploads);
   }
 
@@ -286,7 +326,9 @@ export function TuVanBaoGiaScreen({
 
       {/* BA CÂU CHẶN, MỖI CÂU NÓI VIỆC PHẢI LÀM TIẾP — không phải một nút xám không giải thích.
           Một nút bị vô hiệu mà không nói vì sao là thứ người lớn tuổi bấm ba lần rồi bỏ đi. */}
-      {chua_chon && <p className="tn__loi">{TU_VAN.chua_chon_gi}</p>}
+      <div role="status">
+        {pickOne !== null && <p className={pickOne.isError ? "tn__loi" : "tn__giai-thich"}>{pickOne.text}</p>}
+      </div>
       {qua_nhieu && <p className="tn__loi">{TU_VAN.qua_nhieu(SO_QUAN_TAM_TOI_DA)}</p>}
 
       <button
@@ -315,7 +357,7 @@ export function TuVanBaoGiaScreen({
       </button>
 
       <div className="tn__ket-qua" role="status">
-        <CauTraLoi ket_qua={ket_qua} onDangNhapLai={() => di({ man: "contact", moc: MOC_DANG_NHAP })} />
+        <CauTraLoi ket_qua={ket_qua} onDangNhapLai={toLogin} onXemDanhSach={() => di({ man: "yeu-cau" })} />
       </div>
     </>
   );
@@ -346,9 +388,12 @@ function BangTieuDe() {
 export function CauTraLoi({
   ket_qua,
   onDangNhapLai,
+  onXemDanhSach,
 }: {
   ket_qua: KetQuaGui | null;
   onDangNhapLai: () => void;
+  /** "Xem yêu cầu của tôi" under an unconfirmed send — check before sending again. Absent = no button. */
+  onXemDanhSach?: () => void;
 }) {
   if (ket_qua === null || ket_qua.kieu === "xong") return null;
 
@@ -367,9 +412,24 @@ export function CauTraLoi({
     return <p className="tn__loi">{ket_qua.cau === "" ? TU_VAN.cau_lui_tu_choi : ket_qua.cau}</p>;
   }
 
-  const CAU: Record<"chua-khai-host" | "khong-goi-duoc", string> = {
+  if (ket_qua.kieu === "unconfirmed") {
+    return (
+      <>
+        <p className="tn__loi">{TU_VAN.unconfirmed}</p>
+        {onXemDanhSach !== undefined && (
+          <button type="button" className="tn__nut-phu" onClick={onXemDanhSach}>
+            {TU_VAN.nut_xem_yeu_cau}
+          </button>
+        )}
+      </>
+    );
+  }
+
+  // Network vs server: two different next steps (check the phone's network / wait for the server), so two sentences.
+  const CAU: Record<"chua-khai-host" | "khong-goi-duoc" | "server-error", string> = {
     "chua-khai-host": TU_VAN.chua_khai_host,
     "khong-goi-duoc": TU_VAN.khong_goi_duoc,
+    "server-error": TU_VAN.server_error,
   };
   return <p className="tn__loi">{CAU[ket_qua.kieu]}</p>;
 }

@@ -80,3 +80,15 @@ export function dungPhien(): KhoPhien {
 export function bearerCua(phien: Phien | null): string {
   return phien === null ? "" : phien.token;
 }
+
+/**
+ * The server's answer, after forgetting the session when it said 401 (`chua-dang-nhap`) — 14/10/2026.
+ *
+ * Without this the dead bearer stayed held after Tư vấn or Yêu cầu của tôi got a 401: the screen said "đăng nhập
+ * lại" while Liên hệ still said "Đã kết nối với ViHAT", and every later call failed the same way. `forget` is the
+ * caller's (it also records WHY, for the login card); this only decides WHEN. Returns the answer unchanged.
+ */
+export function forgetSessionOn401<T extends { kieu: string }>(answer: T, forget: () => void): T {
+  if (answer.kieu === "chua-dang-nhap") forget();
+  return answer;
+}

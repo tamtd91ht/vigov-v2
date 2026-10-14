@@ -18,7 +18,7 @@
  *
  * → ADR 0020 (một chạm, không OTP) · `hop-dong.ts` (khuôn của dây) · README §"Một bản dựng"
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type { MaDangNhap } from "../tinh-nang/zalo-api";
 
@@ -66,7 +66,17 @@ const CHU_PHIEN = {
  * một dòng nào ở đây được dựng trên giả định "đăng nhập một lần rồi giữ mãi" — trạng thái sống
  * đúng bằng đời của khối này trên màn hình, và mất khi rời màn.
  */
-export function PhatHanhPhien({ ma }: { ma: MaDangNhap }) {
+export function PhatHanhPhien({
+  ma,
+  onBusyChange,
+}: {
+  ma: MaDangNhap;
+  /**
+   * `true` while the exchange runs, `false` once it settled (or this block left the screen). The login block keeps
+   * its button disabled on it (14/10/2026) — a second tap mid-exchange asked Zalo for a second token.
+   */
+  onBusyChange?: (busy: boolean) => void;
+}) {
   const [trang_thai, datTrangThai] = useState<KetQuaPhien | { kieu: "dang-gui" }>({
     kieu: "dang-gui",
   });
@@ -80,14 +90,19 @@ export function PhatHanhPhien({ ma }: { ma: MaDangNhap }) {
    *   một tệp nào, kể cả tệp này và kể cả `kho-phien.tsx`.
    */
   const { datPhien } = dungPhien();
+  // A ref, not an effect dependency: a parent passing a new function each render must not restart the exchange.
+  const busyChange = useRef(onBusyChange);
+  busyChange.current = onBusyChange;
 
   useEffect(() => {
     // `con_tren_man`: màn hình có thể bị gỡ trước khi câu trả lời về. Đặt trạng thái cho một
     // component đã rời màn là một cảnh báo của React — không phải lỗi người dùng thấy, nhưng
     // là thứ che mất những cảnh báo thật.
     let con_tren_man = true;
+    busyChange.current?.(true);
     void phatHanhPhien(ma).then((ket_qua) => {
       if (!con_tren_man) return;
+      busyChange.current?.(false);
       datTrangThai(ket_qua);
       // CHỈ ĐẶT KHI XONG. Một nhánh lỗi KHÔNG được xoá phiên đang có: người dùng có thể bấm lại
       // nút đăng nhập trong lúc đang có một phiên còn hiệu lực, và một lần bấm hỏng mà làm mất
@@ -96,6 +111,8 @@ export function PhatHanhPhien({ ma }: { ma: MaDangNhap }) {
     });
     return () => {
       con_tren_man = false;
+      // Leaving mid-exchange must not leave the login button disabled for good.
+      busyChange.current?.(false);
     };
   }, [ma, datPhien]);
 

@@ -46,7 +46,7 @@ import {
 } from "./hop-dong-yeu-cau";
 
 /**
- * SÁU NHÁNH, mỗi nhánh một VIỆC NGƯỜI DÙNG PHẢI LÀM khác nhau — tiêu chí duy nhất để tách nhánh.
+ * BẢY NHÁNH, mỗi nhánh một VIỆC NGƯỜI DÙNG PHẢI LÀM khác nhau — tiêu chí duy nhất để tách nhánh.
  *
  *   `xong`             201, có mã yêu cầu để đọc lại.
  *   `chua-dang-nhap`   401 → mời đăng nhập lại; bấm gửi lần nữa cũng hỏng y như vậy.
@@ -54,7 +54,12 @@ import {
  *                      cả ba mã. Gộp làm một nhánh là đúng, vì việc cần làm nằm trong CÂU, không
  *                      nằm trong mã — và client không được viết lại câu ấy.
  *   `chua-khai-host`   bản dựng quên `VIGOV_API_HOST`; câu nói với NGƯỜI DỰNG BẢN.
- *   `khong-goi-duoc`   mất mạng, quá hạn chờ, thân không phải JSON → chờ một lát rồi thử lại.
+ *   `khong-goi-duoc`   the request never reached the server (no network) → check the network, try again.
+ *   `server-error`     the server answered with a failure the contract does not name (5xx, 409, 413…) →
+ *                      the person's network is fine; telling them to check it sends them after the wrong fault.
+ *   `unconfirmed`      sent, but no readable answer came back (our timeout, or a 2xx body we cannot read) →
+ *                      the request MAY already be recorded; a blind resend makes a duplicate, so the screen
+ *                      points at "Yêu cầu của tôi" first (owner-approved fix, 14/10/2026).
  *
  * `tu-choi` mang theo `cau` — NGUYÊN VĂN của máy chủ. Nó có thể rỗng khi máy chủ không nói gì,
  * và màn hình có câu lui cho đúng ca ấy.
@@ -64,13 +69,17 @@ export type KetQuaGui =
   | { kieu: "chua-dang-nhap" }
   | { kieu: "tu-choi"; cau: string }
   | { kieu: "chua-khai-host" }
-  | { kieu: "khong-goi-duoc" };
+  | { kieu: "khong-goi-duoc" }
+  | { kieu: "server-error" }
+  | { kieu: "unconfirmed" };
 
+/** A read has no "unconfirmed": reading twice records nothing, so a timeout is simply "try again". */
 export type KetQuaDoc =
   | { kieu: "xong"; danh_sach: readonly YeuCauDaGui[] }
   | { kieu: "chua-dang-nhap" }
   | { kieu: "chua-khai-host" }
-  | { kieu: "khong-goi-duoc" };
+  | { kieu: "khong-goi-duoc" }
+  | { kieu: "server-error" };
 
 /** Quá hạn chờ máy chủ. Người dùng đang cầm máy đứng chờ, nên thà nói "thử lại" sớm. */
 const HAN_CHO_MS = 15_000;
@@ -83,7 +92,7 @@ function tieuDe(phien_token: string): Record<string, string> {
 /**
  * Gửi một yêu cầu.
  *
- * KHÔNG NÉM RA NGOÀI: mọi đường đã quy về năm nhánh trên. Một `Promise` bị từ chối ở đây là một
+ * KHÔNG NÉM RA NGOÀI: mọi đường đã quy về bảy nhánh trên. Một `Promise` bị từ chối ở đây là một
  * màn hình đứng im mãi ở trạng thái "đang gửi", sau khi người dùng vừa gõ xong một đoạn ghi chú.
  *
  * FAIL CLOSED KHI CHƯA CÓ PHIÊN: không gửi một yêu cầu không thuộc về ai. Màn hình đã chặn trước
@@ -106,14 +115,22 @@ export async function guiYeuCau(
   const bo_dieu_khien = new AbortController();
   const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
 
+  let tra_loi: Response;
   try {
-    const tra_loi = await fetch(dia_chi, {
+    tra_loi = await fetch(dia_chi, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...tieuDe(phien_token) },
       body: thanYeuCau(yc),
       signal: bo_dieu_khien.signal,
     });
+  } catch {
+    clearTimeout(dong_ho);
+    // OUR TIMEOUT FIRED: the body may have reached the server and been recorded — only the answer is missing.
+    // Any other throw is the network refusing before anything was answered.
+    return bo_dieu_khien.signal.aborted ? { kieu: "unconfirmed" } : { kieu: "khong-goi-duoc" };
+  }
 
+  try {
     if (tra_loi.status === 401) return { kieu: "chua-dang-nhap" };
 
     // BA MÃ CÓ HỢP ĐỒNG, MỘT NHÁNH: 400 sai khuôn · 429 vượt trần · 503 gọi lại chưa cấu hình.
@@ -129,12 +146,15 @@ export async function guiYeuCau(
       return { kieu: "tu-choi", cau };
     }
 
-    if (!tra_loi.ok) return { kieu: "khong-goi-duoc" };
+    if (!tra_loi.ok) return { kieu: "server-error" };
 
+    // A 2xx means the server accepted the request. A body we cannot read does not undo that.
     const ma = docMaYeuCau(await tra_loi.json());
-    return ma === null ? { kieu: "khong-goi-duoc" } : { kieu: "xong", ma_yeu_cau: ma };
+    return ma === null ? { kieu: "unconfirmed" } : { kieu: "xong", ma_yeu_cau: ma };
   } catch {
-    return { kieu: "khong-goi-duoc" };
+    // Reached only after a status arrived: the body was cut off or is not JSON. On a 2xx that is
+    // "accepted, code unreadable" — said as unconfirmed, never as "check your network".
+    return tra_loi.ok ? { kieu: "unconfirmed" } : { kieu: "server-error" };
   } finally {
     clearTimeout(dong_ho);
   }
@@ -157,19 +177,26 @@ export async function docYeuCauCuaToi(
   const bo_dieu_khien = new AbortController();
   const dong_ho = setTimeout(() => bo_dieu_khien.abort(), HAN_CHO_MS);
 
+  let tra_loi: Response;
   try {
-    const tra_loi = await fetch(dia_chi, {
+    tra_loi = await fetch(dia_chi, {
       method: "GET",
       headers: tieuDe(phien_token),
       signal: bo_dieu_khien.signal,
     });
+  } catch {
+    clearTimeout(dong_ho);
+    return { kieu: "khong-goi-duoc" };
+  }
 
+  try {
     if (tra_loi.status === 401) return { kieu: "chua-dang-nhap" };
-    if (!tra_loi.ok) return { kieu: "khong-goi-duoc" };
+    if (!tra_loi.ok) return { kieu: "server-error" };
 
     return { kieu: "xong", danh_sach: docDanhSach(await tra_loi.json()) };
   } catch {
-    return { kieu: "khong-goi-duoc" };
+    // A status arrived but its body did not parse: the server's fault, not the person's network.
+    return { kieu: "server-error" };
   } finally {
     clearTimeout(dong_ho);
   }

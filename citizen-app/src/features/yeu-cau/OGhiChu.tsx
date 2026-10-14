@@ -66,17 +66,26 @@ export function OGhiChu({
       />
       {/* TRẠNG THÁI NÓI BẰNG CHỮ, KHÔNG BẰNG RIÊNG MÀU. Khi vượt trần, dòng này đổi hẳn nội dung
           chứ không chỉ đổi sang màu đỏ — người mù màu và người đọc ngoài nắng vẫn phải biết.
-          `role="status"` để nó được đọc ra khi đổi. */}
-      <p
-        id={`${id}-dem`}
-        className={qua_dai ? "o-ghi-chu__dem o-ghi-chu__dem--qua" : "o-ghi-chu__dem"}
-        role="status"
-      >
-        {qua_dai ? TU_VAN.qua_dai(-con_lai) : TU_VAN.con_lai(con_lai)}
-      </p>
-      {/* Trần đọc được bằng chữ, cho người muốn biết trước khi gõ. Đọc từ hằng của hợp đồng,
-          không gõ số vào JSX: hai chỗ giữ một con số là hai chỗ sẽ lệch. */}
-      <p className="o-ghi-chu__tran">Tối đa {TRAN_GHI_CHU} ký tự.</p>
+
+          ⚠ ONE LINE, AND IT IS NOT A LIVE REGION WHILE UNDER THE CAP (14/10/2026). It used to be
+          `role="status"`: a screen reader read "Còn 999 ký tự", "Còn 998 ký tự"… over every keystroke,
+          and a second line repeated the cap. Under the cap the count is reached through
+          `aria-describedby` only, when the person asks for it. Over the cap the line moves INTO the
+          `role="alert"` wrapper below, so crossing the cap is announced — the one change that needs it.
+          The wrapper is always rendered: a live region added together with its text is often not read. */}
+      <div role="alert">
+        {qua_dai && (
+          <p id={`${id}-dem`} className="o-ghi-chu__dem o-ghi-chu__dem--qua">
+            {TU_VAN.qua_dai(-con_lai, TRAN_GHI_CHU)}
+          </p>
+        )}
+      </div>
+      {/* The cap is read from the contract's constant, never typed into JSX: two places holding one number drift. */}
+      {!qua_dai && (
+        <p id={`${id}-dem`} className="o-ghi-chu__dem">
+          {TU_VAN.con_lai(con_lai, TRAN_GHI_CHU)}
+        </p>
+      )}
     </div>
   );
 }

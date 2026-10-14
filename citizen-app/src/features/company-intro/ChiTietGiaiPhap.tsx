@@ -7,7 +7,8 @@ import { HandshakeGlyph, MailGlyph, PhoneGlyph, SOLUTION_GLYPHS } from "./icons"
 import { NutWebsite } from "./NutWebsite";
 
 /**
- * Trang riêng của MỘT giải pháp — mở ra từ thẻ trên màn Giải pháp.
+ * Trang riêng của MỘT giải pháp — mở ra từ thẻ trên màn Giải pháp, hoặc từ thẻ "Giải pháp nổi bật" trên màn
+ * chủ (14/10/2026; màn chủ đi qua `SolutionsScreen` với `moc` là mã giải pháp, nên chỉ có một trang này).
  *
  * ⚠ MÀN NÀY KHÔNG BIẾT GÌ HƠN MÀN DANH SÁCH, VÀ ĐÓ LÀ CHỦ ĐÍCH.
  *

@@ -214,9 +214,9 @@ function DuongLienHeNgay() {
  * (`MA_RONG` nói ra điều đó). Gửi một mã rỗng đi thì máy chủ từ chối, và người đọc nhận một câu
  * "mã đã quá hạn" — một câu SAI, chỉ ra một việc phải làm không giải quyết được gì.
  */
-export function KetQuaDangNhap({ ma }: { ma: MaDangNhap }) {
+export function KetQuaDangNhap({ ma, onBusyChange }: { ma: MaDangNhap; onBusyChange?: (busy: boolean) => void }) {
   if (ma.ma_so_dien_thoai === "") return <p className="tn__loi">{MA_RONG}</p>;
-  return <PhatHanhPhien ma={ma} />;
+  return <PhatHanhPhien ma={ma} onBusyChange={onBusyChange} />;
 }
 
 /**
@@ -230,13 +230,16 @@ export function KetQuaDangNhap({ ma }: { ma: MaDangNhap }) {
  * `company-intro/ConnectWithVihat.tsx`), which shows it only while no session is held.
  */
 export function KhoiDangNhap({ heading = "h2" }: { heading?: "h2" | "h3" }) {
+  // Zalo answering is half of the login; the server exchange is the other half. The button waits for both.
+  const [exchanging, setExchanging] = useState(false);
   return (
     <TinhNangCoTrangThai
       ma="dang-nhap"
       xin={xinMaDangNhap}
       cap_tieu_de={heading}
       glyph={<HandshakeGlyph className="tn__glyph" />}
-      veKetQua={(ma) => <KetQuaDangNhap ma={ma} />}
+      busy={exchanging}
+      veKetQua={(ma) => <KetQuaDangNhap ma={ma} onBusyChange={setExchanging} />}
       duoi_cung={<DuongLienHeNgay />}
     />
   );

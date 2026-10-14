@@ -19,9 +19,9 @@ import { useEffect, useRef, useState } from "react";
 
 import { docYeuCauCuaToi, type KetQuaDoc } from "../../api/goi-may-chu";
 import type { MaTrangThai, YeuCauDaGui } from "../../api/hop-dong-yeu-cau";
-import { MOC_DANG_NHAP, type ThamSoMan } from "../company-intro/dieu-huong";
+import { LOGIN_FROM_REQUESTS, type ThamSoMan } from "../company-intro/dieu-huong";
 import { AlertGlyph, CheckGlyph, ClockGlyph, GridGlyph, HandshakeGlyph, InboxGlyph } from "../company-intro/icons";
-import { bearerCua, dungPhien } from "../dang-nhap/kho-phien";
+import { bearerCua, dungPhien, forgetSessionOn401 } from "../dang-nhap/kho-phien";
 
 import { IntroPullToRefresh } from "./intro-pull-to-refresh";
 import { MoiDangNhap } from "./MoiDangNhap";
@@ -135,14 +135,21 @@ export function ThanDanhSach({
     );
   }
 
-  if (ket_qua.kieu === "chua-khai-host" || ket_qua.kieu === "khong-goi-duoc") {
+  if (ket_qua.kieu === "chua-khai-host" || ket_qua.kieu === "khong-goi-duoc" || ket_qua.kieu === "server-error") {
+    // Three failures, three next steps: the build (say "gián đoạn"), the phone's network, the server (wait).
+    const sentence =
+      ket_qua.kieu === "chua-khai-host"
+        ? YEU_CAU_CUA_TOI.chua_khai_host
+        : ket_qua.kieu === "server-error"
+          ? YEU_CAU_CUA_TOI.server_error
+          : YEU_CAU_CUA_TOI.khong_doc_duoc;
     return (
       <div className="vh-state vh-state--error" role="alert">
         <span className="vh-state__circle" aria-hidden="true">
           <AlertGlyph />
         </span>
         <p className="vh-state__title">{YEU_CAU_CUA_TOI.tieu_de_loi}</p>
-        <p>{ket_qua.kieu === "chua-khai-host" ? YEU_CAU_CUA_TOI.chua_khai_host : YEU_CAU_CUA_TOI.khong_doc_duoc}</p>
+        <p>{sentence}</p>
         {onThuLai !== undefined && (
           <button type="button" className="tn__nut-phu" onClick={onThuLai}>
             {YEU_CAU_CUA_TOI.nut_thu_lai}
@@ -177,6 +184,15 @@ export function ThanDanhSach({
 }
 
 /**
+ * The login invitation's words; `expired` = a read just answered 401 and the session was forgotten. PURE.
+ */
+export function requestsLoginInvite(expired: boolean): { title: string; reason: string } {
+  return expired
+    ? { title: YEU_CAU_CUA_TOI.session_expired_title, reason: YEU_CAU_CUA_TOI.phien_het_han }
+    : { title: YEU_CAU_CUA_TOI.can_dang_nhap_tieu_de, reason: YEU_CAU_CUA_TOI.can_dang_nhap };
+}
+
+/**
  * WHAT A PULL DOES TO WHAT IS ON SCREEN. PURE.
  *
  *   fresh list, or "signed out"        → shown, and the pull succeeded (a signed-out session must be said)
@@ -191,10 +207,16 @@ export function afterPullRefresh(shown: KetQuaDoc | null, fresh: KetQuaDoc): { s
 
 export function YeuCauCuaToiScreen({ onDi }: ThamSoMan) {
   const di = onDi ?? (() => {});
-  const { phien } = dungPhien();
+  const { phien, datPhien } = dungPhien();
   const bearer = bearerCua(phien);
 
   const [ket_qua, datKetQua] = useState<KetQuaDoc | null>(null);
+  /** A read answered 401 and the session was forgotten — the login card then says it expired. Memory only. */
+  const [expired, setExpired] = useState(false);
+  const forget = () => {
+    setExpired(true);
+    datPhien(null);
+  };
   /** Đếm số lần bấm "đọc lại" — không có nó thì bấm hai lần liên tiếp chỉ đọc một lần. */
   const [lan_doc, datLanDoc] = useState(0);
 
@@ -203,11 +225,13 @@ export function YeuCauCuaToiScreen({ onDi }: ThamSoMan) {
     let con_tren_man = true;
     datKetQua(null);
     void docYeuCauCuaToi(bearer).then((ra) => {
-      if (con_tren_man) datKetQua(ra);
+      if (con_tren_man) datKetQua(forgetSessionOn401(ra, forget));
     });
     return () => {
       con_tren_man = false;
     };
+    // `forget` is left out on purpose: it is a new function every render, and listing it would re-read the list
+    // on every render. It only calls two state setters, which React keeps stable.
   }, [bearer, lan_doc]);
 
   /**
@@ -220,7 +244,7 @@ export function YeuCauCuaToiScreen({ onDi }: ThamSoMan) {
   /** The pull: re-read WITHOUT blanking the list into a skeleton; `afterPullRefresh` decides what stays. */
   async function pullRefresh(): Promise<boolean> {
     if (bearer === "") return true;
-    const next = afterPullRefresh(shown.current, await docYeuCauCuaToi(bearer));
+    const next = afterPullRefresh(shown.current, forgetSessionOn401(await docYeuCauCuaToi(bearer), forget));
     datKetQua(next.shown);
     return next.ok;
   }
@@ -236,15 +260,19 @@ export function YeuCauCuaToiScreen({ onDi }: ThamSoMan) {
     </section>
   );
 
+  // `LOGIN_FROM_REQUESTS`: once logged in, Liên hệ offers "Quay lại Yêu cầu của tôi" back here.
+  const toLogin = () => di({ man: "contact", moc: LOGIN_FROM_REQUESTS });
+
   if (phien === null) {
+    const invite = requestsLoginInvite(expired);
     return (
       <>
         {banner}
         <MoiDangNhap
-          tieu_de={YEU_CAU_CUA_TOI.can_dang_nhap_tieu_de}
-          li_do={YEU_CAU_CUA_TOI.can_dang_nhap}
+          tieu_de={invite.title}
+          li_do={invite.reason}
           nhan_nut={YEU_CAU_CUA_TOI.nut_toi_dang_nhap}
-          onDangNhap={() => di({ man: "contact", moc: MOC_DANG_NHAP })}
+          onDangNhap={toLogin}
         />
       </>
     );
@@ -256,7 +284,7 @@ export function YeuCauCuaToiScreen({ onDi }: ThamSoMan) {
       <p className="screen-lead">{YEU_CAU_CUA_TOI.dan_nhap}</p>
       <ThanDanhSach
         ket_qua={ket_qua}
-        onDangNhapLai={() => di({ man: "contact", moc: MOC_DANG_NHAP })}
+        onDangNhapLai={toLogin}
         onGuiMoi={() => di({ man: "tu-van" })}
         onThuLai={() => datLanDoc((n) => n + 1)}
       />

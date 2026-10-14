@@ -41,9 +41,15 @@ export const TU_VAN = {
   goi_y_ghi_chu: "Số máy nhánh cần dùng, thời gian thuận tiện để liên hệ…",
 
   // ĐẾM NGƯỢC THEO KÝ TỰ, KHÔNG THEO BYTE — xem `TRAN_GHI_CHU` trong hợp đồng.
-  con_lai: (con: number) => `Còn ${con} ký tự`,
-  qua_dai: (qua: number) => `Vượt quá ${qua} ký tự so với giới hạn.`,
+  // One line carries both the count and the cap (14/10/2026): a second "Tối đa N ký tự." line said the same
+  // number twice to a screen reader.
+  con_lai: (con: number, tran: number) => `Còn ${con} ký tự (tối đa ${tran} ký tự).`,
+  qua_dai: (qua: number, tran: number) =>
+    `Vượt quá ${qua} ký tự so với giới hạn ${tran} ký tự. Vui lòng rút gọn ghi chú.`,
 
+  // NEUTRAL BEFORE THE FIRST TAP, RED ONLY AFTER IT (14/10/2026): an error on a form nobody has touched yet reads
+  // as "you already did something wrong" to the person who just opened it.
+  pick_one_hint: "Chọn ít nhất một giải pháp ở trên để gửi yêu cầu.",
   chua_chon_gi: "Vui lòng chọn ít nhất một giải pháp.",
   qua_nhieu: (toi_da: number) =>
     `Chọn tối đa ${toi_da} giải pháp cho mỗi yêu cầu.`,
@@ -64,12 +70,22 @@ export const TU_VAN = {
   nut_xem_yeu_cau: "Xem yêu cầu của tôi",
   nut_gui_tiep: "Gửi yêu cầu khác",
 
+  // ⚠ NO PROMISE THAT THE FORM IS KEPT (14/10/2026). Logging in again happens on Liên hệ, which unmounts this
+  //   screen, and the form lives only in memory — drafts are deliberately never written to the device
+  //   (`phase1-collects-nothing.test.ts`). The old sentence said "vẫn được giữ"; the person found out otherwise.
+  session_expired_title: "Phiên đăng nhập đã hết hạn",
   phien_het_han:
-    "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để gửi — nội dung bạn đã nhập vẫn được giữ.",
+    "Yêu cầu chưa được gửi vì phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại, sau đó chọn lại nội dung và gửi yêu cầu.",
   cau_lui_tu_choi:
     "Chưa gửi được yêu cầu. Vui lòng thử lại hoặc gọi hotline.",
   khong_goi_duoc:
     "Không kết nối được. Vui lòng kiểm tra mạng và thử lại.",
+  // The server answered with a failure: the person's network is fine, so "kiểm tra mạng" would be wrong advice.
+  server_error: "Máy chủ ViHAT đang gặp sự cố. Vui lòng thử lại sau ít phút.",
+  // No answer in time, or an answer we could not read: the request may be recorded already. Resending blindly
+  // makes a duplicate the specialist then has to sort out — so the list comes first.
+  unconfirmed:
+    "Chưa nhận được phản hồi từ máy chủ, nhưng yêu cầu có thể đã được ghi nhận. Vui lòng xem mục Yêu cầu của tôi trước khi gửi lại.",
   chua_khai_host:
     "Hệ thống đang gián đoạn. Vui lòng thử lại sau.",
 } as const;
@@ -175,10 +191,12 @@ export const YEU_CAU_CUA_TOI = {
   dang_tai_lai: "Đang tải lại…",
   tai_lai_hong: "Chưa tải được dữ liệu mới. Danh sách dưới đây là lần tải trước — kéo xuống để thử lại.",
 
+  session_expired_title: "Phiên đăng nhập đã hết hạn",
   phien_het_han:
-    "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.",
+    "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại để xem các yêu cầu bạn đã gửi.",
   khong_doc_duoc:
     "Không tải được danh sách. Vui lòng kiểm tra mạng và thử lại.",
+  server_error: "Máy chủ ViHAT đang gặp sự cố. Vui lòng thử lại sau ít phút.",
   chua_khai_host:
     "Hệ thống đang gián đoạn. Vui lòng thử lại sau.",
 
@@ -202,9 +220,13 @@ export const CONNECT_VIHAT = {
   title: "Kết nối với ViHAT",
   lead: "Ba việc riêng, mỗi việc nói rõ để làm gì. Zalo chỉ hỏi quyền khi chính bạn bấm.",
   connected: "Đã kết nối với ViHAT bằng số Zalo của bạn.",
-  // A session can expire on the server while the app still holds it (nothing clears it), so a way to log in
-  // again always stays; it opens the login action with its purpose sentence, it does not call Zalo by itself.
+  // A session can expire on the server while the app still holds it, so a way to log in again always stays; it
+  // opens the login action with its purpose sentence, it does not call Zalo by itself. (Since 14/10/2026 a 401 on
+  // Tư vấn or Yêu cầu của tôi forgets the session, so this card no longer says "connected" after one.)
   relogin: "Đăng nhập lại",
+  // The way back after "Đăng nhập" was pressed on one of the two request screens (14/10/2026).
+  back_to_consult: "Tiếp tục gửi yêu cầu",
+  back_to_requests: "Quay lại Yêu cầu của tôi",
 } as const;
 
 /**
@@ -258,4 +280,9 @@ export const SMS_OFFERS = {
   expired:
     "Phiên đăng nhập đã hết hạn. Vui lòng thử lại.",
   network: "Không kết nối được. Vui lòng kiểm tra mạng và thử lại.",
+  server_error: "Máy chủ ViHAT đang gặp sự cố. Vui lòng thử lại sau ít phút.",
+  // No answer in time: the choice may be recorded. Opening Liên hệ again re-reads the server's own list
+  // (`SmsOffers`, `deriveSmsSubscription`), so the buttons then show what the server holds before a second tap.
+  unconfirmed:
+    "Chưa nhận được phản hồi từ máy chủ, nhưng lựa chọn của bạn có thể đã được ghi nhận. Vui lòng mở lại mục này sau ít phút để xem trạng thái trước khi bấm lại.",
 } as const;

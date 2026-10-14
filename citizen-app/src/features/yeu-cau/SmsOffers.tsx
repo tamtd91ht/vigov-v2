@@ -64,6 +64,10 @@ function outcomeSentence(choice: SmsKind, outcome: SmsOutcome): { text: string; 
           return { text: TU_VAN.chua_khai_host, done: false };
         case "khong-goi-duoc":
           return { text: SMS_OFFERS.network, done: false };
+        case "server-error":
+          return { text: SMS_OFFERS.server_error, done: false };
+        case "unconfirmed":
+          return { text: SMS_OFFERS.unconfirmed, done: false };
       }
   }
 }
