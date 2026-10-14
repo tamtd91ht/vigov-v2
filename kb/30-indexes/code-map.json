@@ -12428,7 +12428,7 @@
     },
     "main.ListUploadPolicies": {
       "kind": "func",
-      "at": "service-platform/cmd/server/main.go:515"
+      "at": "service-platform/cmd/server/main.go:521"
     },
     "main.MarshalJSON": {
       "kind": "func",
@@ -12473,6 +12473,10 @@
     "migrate.KetQua": {
       "kind": "type",
       "at": "core/migrate/migrate.go:88"
+    },
+    "migrate.RunMigrateOnly": {
+      "kind": "func",
+      "at": "core/migrate/only.go:42"
     },
     "opauth.AllowWhilePasswordChangeRequired": {
       "kind": "func",

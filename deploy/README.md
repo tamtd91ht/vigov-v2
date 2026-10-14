@@ -86,8 +86,7 @@ Jenkins **không tự tìm ra** mười một `Jenkinsfile` nằm rải trong kh
 | `vigov-svc-reporting` | `service-reporting/Jenkinsfile` | ″ |
 | `vigov-web-admin` | `web-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh |
 | `vigov-platform-admin` | `platform-admin/Jenkinsfile` | **bấm tay** — đóng ảnh + đặt ảnh. prod và dev (từ 14/10/2026); lần đầu xem mục 12 |
-
-| `vigov-deploy` | `deploy/Jenkinsfile` | **bấm tay** — job HẠ TẦNG, không đặt ảnh: `kiem-tra` · `xem-log` · các việc vận hành theo `HANH_DONG` (danh sách ở ô chọn đầu `deploy/Jenkinsfile`), `MT` = `prod` \| `dev` |
+| `vigov-deploy` | `deploy/Jenkinsfile` | **bấm tay** — job HẠ TẦNG, không đặt ảnh: `kiem-tra` · `xem-log` · `tao-bang` · các việc vận hành theo `HANH_DONG` (danh sách ở ô chọn đầu `deploy/Jenkinsfile`), `MT` = `prod` \| `dev` |
 
 `vigov-deploy` từ 25/09/2026 là job **hạ tầng** thay cho việc SSH vào máy chủ: kiểm cụm, áp
 manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy trình tay ở mục 7), xem log. Nó
@@ -95,6 +94,8 @@ manifest (lần cài đầu và mỗi lần `deploy/` đổi — thay cho quy tr
 
 | Việc | Tham số | Làm gì |
 |---|---|---|
+| `kiem-tra` | `MT` | Chỉ đọc. Kiểm cụm, rồi CSDL của bảy dịch vụ: nối được không, số bảng, sổ `schema_migration` so với tệp migration của kho. Đọc kết quả: bảng "`kiem-tra` — phần CSDL" ngay dưới |
+| `tao-bang` | `MT` = `prod` \| `dev`, `XAC_NHAN` = namespace của `MT` | Tạo bảng **trước** khi dịch vụ khởi động: với từng dịch vụ, chạy pod một lần bằng ảnh của Deployment đang chạy, lệnh `/server -migrate-only`. Đọc kết quả: bảng "`tao-bang`" ngay dưới. Lý do và giới hạn: ADR 0013 §Sửa đổi 14/10/2026 |
 | `nen-ban-do` | `MT`, `NGAY_NEN` (YYYYMMDD), `BAN_OVERTURE` (mã bản phát hành Overture, dạng `2026-09-23.1`; Overture chỉ giữ vài bản gần nhất — danh sách ở `https://stac.overturemaps.org/catalog.json`), `CHAY_THU` (bật = chỉ in kế hoạch); làm thật: bỏ `CHAY_THU`, `XAC_NHAN` = namespace của `MT`, `TICKET` nếu prod | Dựng **hai** tệp PMTiles trên máy build — `vn-mainland.pmtiles` (Protomaps) và `vn-places.pmtiles` (địa điểm Overture, ADR 0072 §Sửa đổi 12/10/2026) — tải lên **cùng** tiền tố MinIO `<tiền tố>-public/config/map/<ngày>/` bằng khoá có sẵn của `comms-secrets`; **không** đổi `BASEMAP_URL`. Hạn 180 phút (việc khác giữ 20) |
 
 Thân việc: `deploy/basemap/basemap-task.sh`; quyết định có test ở `deploy/basemap/basemap.py`. Quy trình
@@ -116,6 +117,38 @@ nếu đó là tiền tố `BASEMAP_URL` đang đọc thì kiểm chủ quyền 
 Mỗi lần làm mới: chạy thử `MT=dev` → chạy thật (in SHA-256, `BUILD-INFO.txt`, giá trị `BASEMAP_URL`) →
 đặt `BASEMAP_URL` của dev theo runbook mục "Đưa vào dùng" → kiểm chủ quyền có ký → prod. `$WORKSPACE/basemap`,
 `.tools`, `.mc` luôn bị xoá cuối lượt.
+
+**`kiem-tra` — phần CSDL.** Bảy pod `postgres:16-alpine` chạy song song, mỗi pod đọc DSN từ
+`<dịch vụ>-secrets` của chính nó. Không SQL nào ghi. Lỗi nối chỉ in **nhãn loại**, không in thông báo
+của `psql` (nó nêu máy chủ và tài khoản). Cột MIGRATION so với tệp của commit job checkout — là `main`,
+nên với `MT=dev` "chưa áp" có thể chỉ là `dev` đi trước `main` (`deploy/Jenkinsfile:331-332`).
+
+| Dòng in ra | Nghĩa | Làm gì |
+|---|---|---|
+| `✗ csdl-chua-tao` | CSDL trong DSN chưa tồn tại | Tạo CSDL ở khâu cấp phát (mục 3, "Mẫu giá trị"). Job không tạo CSDL |
+| `✗ sai-tai-khoan-hoac-chua-cap-quyen` | Sai mật khẩu, tài khoản chưa có, hoặc `pg_hba.conf` chưa cho | Sửa ở máy chủ CSDL hoặc ở Secret `<dịch vụ>-secrets` |
+| `✗ khong-toi-duoc-may-chu` | Không phân giải được tên, bị từ chối, hoặc hết giờ | Kiểm host trong DSN và đường ra 5432 (`deploy/base/mang/netpol.yaml`, quy tắc 4) |
+| `✗ loi-tls` | Bắt tay TLS hỏng | Kiểm `sslmode` và chứng chỉ máy chủ CSDL |
+| `✗ thieu-secret-…` · `khong-dung-duoc-pod` · `pod-dung-o-pha-…` | Lỗi phía k8s, chưa chạm CSDL | Đọc phần `Events` in ngay trên bảng |
+| `CSDL rỗng — chưa áp migration nào` | Chưa có bảng nào | Bình thường cho CSDL mới. Chạy `tao-bang`, hoặc để dịch vụ tự áp khi khởi động |
+| `⚠ CÓ n BẢNG mà KHÔNG có sổ schema_migration` | Bảng tạo bằng đường khác, không ai biết tới tệp nào | **Dừng, người quyết.** `tao-bang` sẽ dừng ở dịch vụ này, không áp gì. Dịch vụ khởi động thì **không** dừng mà tạo sổ và áp lại từ 0001 — nên **đừng khởi động nó trước**. ADR 0013 §Sửa đổi 14/10/2026, mục "Có bảng mà không có sổ" |
+| `⚠ LỆCH checksum: <tệp>` | Một tệp đã áp bị sửa sau đó | Dịch vụ sẽ từ chối khởi động. Không sửa sổ, không sửa tệp cũ cho khớp — ADR 0013 |
+| `⚠ CSDL có n tệp kho KHÔNG có` | CSDL đã áp tệp mà commit của job không có: ảnh mới hơn `main`, hoặc tệp bị xoá khỏi kho | Ở `MT=dev` thường là `dev` đi trước `main`. Ở `MT=prod`: người kiểm trước khi làm gì |
+
+**`tao-bang`.** Lần lượt `platform` → `identity` → năm dịch vụ còn lại (thứ tự ở đoạn ngay dưới). Mỗi dịch
+vụ một CSDL, nên một dịch vụ hỏng **không** dừng dịch vụ sau; job đỏ nếu có dịch vụ hỏng. Pod một lần
+chép ảnh, `envFrom`, `env`, `imagePullSecrets` của Deployment, nhưng mang nhãn riêng
+`app.kubernetes.io/name=vigov-migrate-only` để Service không chuyển yêu cầu vào nó.
+
+| Điều kiện / dòng in ra | Nghĩa | Làm gì |
+|---|---|---|
+| Trước khi bấm | Cần Deployment đã có, Secret đã có DSN, CSDL và tài khoản đã cấp. Job **không** tạo CSDL hay tài khoản (mục 3) | Chạy `kiem-tra` trước, đọc phần CSDL |
+| `✗ chưa có deploy/vigov-service-<dv>` | Job dịch vụ chưa chạy lần nào ở namespace này | Bấm job dịch vụ trước |
+| `⚠ ảnh này CHƯA có chế độ -migrate-only` | Ảnh đang chạy dựng trước 14/10/2026: 60 giây không in dòng `migrate-only:`. Pod đã gỡ, dịch vụ bị bỏ qua | Bấm job dịch vụ để lên ảnh mới, rồi chạy lại `tao-bang`. Dịch vụ vẫn tự áp migration khi khởi động |
+| `migrate-only: <dv> applied <tệp>` · `ok applied=N skipped=M` | Đã áp N tệp; M tệp có sẵn trong sổ, bỏ qua không báo lỗi | Không cần gì. Kiểm lại bằng `kiem-tra` |
+| `FAILED: database has <n> tables but no schema_migration ledger — not adopting` | CSDL có bảng mà chưa có sổ. Không áp gì | Như dòng `⚠ CÓ n BẢNG mà KHÔNG có sổ` ở bảng `kiem-tra`: người quyết, đừng khởi động dịch vụ trước |
+| `migrate-only: <dv> FAILED: …` (khác) | Dịch vụ ấy dừng. Checksum lệch hay CSDL mới hơn ảnh thì **không tệp nào được áp**; một tệp hỏng thì các tệp in `applied` trước đó đã vào | **Người quyết** — không sửa tệp đã áp, không chèn tay vào sổ. ADR 0013 §Sửa đổi 14/10/2026 |
+| `FAILED: cannot reach the database` | Pod không tới được CSDL | Như `khong-toi-duoc-may-chu` ở trên. Đường ra mạng của pod này chưa từng được kiểm trên cụm |
 
 Thứ tự khi đưa nhiều dịch vụ cùng lúc: `platform` → `identity` → năm dịch vụ còn lại →
 `web-admin`. `platform-admin` chỉ cần `platform` (và `identity` cho đăng nhập vận hành) đã lên. Bấm lại một job khi không có gì đổi kể từ ảnh đang chạy thì job không dựng, không

@@ -319,6 +319,13 @@
       "bang_chung": "commit 'feat(deploy): vigov-van-hanh dựng lại — một việc đổi hạ tầng'. unittest deploy/van-hanh 36 OK (12 ca hạ tầng + 3 ca hợp đồng; đột biến bỏ kiểm sslmode / in DSN làm đỏ 3 ca); ops.py catalog --check PASS (41 khoá, 4 hạ tầng); check_build PASS (10 ca tự chấm van-hanh); make check — xem commit. CHƯA chạy trên Jenkins thật, chưa có Active Choices trên controller, chưa xem form render. GỠ 12/10/2026 theo lời chủ dự án ('kém quá, gỡ ra đi'): deploy/van-hanh xoá hết (ADR 0089 §Gỡ); nen-ban-do chuyển thân sang deploy/basemap. Các bước tiếp theo dưới không còn áp dụng.",
       "tiep_theo": "Người vận hành: xoá job vigov-van-hanh trên Jenkins (Delete Pipeline). Không cài Active Choices nữa — không job nào cần.",
       "no_confirm": []
+    },
+    {
+      "id": "kiem-tra-csdl-va-tao-bang-14-10",
+      "viec": "Chủ dự án 14/10/2026: kiem-tra phải báo các CSDL của dịch vụ đã tạo chưa, có bảng chưa; thêm việc tạo bảng TRƯỚC, đã có thì bỏ qua không báo lỗi. Chốt: (1) kiem-tra báo từng dịch vụ — nối được không, số bảng, sổ schema_migration so với kho; (2) tao-bang chạy `/server -migrate-only` bằng ẢNH Deployment ĐANG CHẠY; (3) đã có trong sổ → bỏ qua; lệch (có bảng không sổ / checksum / CSDL mới hơn ảnh) → DỪNG, không áp gì.",
+      "trang_thai": "dang_lam",
+      "bang_chung": "db849c25 stage 'Kiểm CSDL' (7 pod postgres:16-alpine song song, DSN không vào biến/log, lỗi kết nối chỉ in nhãn; thử psql giả 5 ca + so sổ 2 ca). f510b746 stage 'Tạo bảng'. 0122d554 core/migrate/only.go + nhánh -migrate-only ở 7 main.go (make brain..test rc=0, 97 gói; 9/9 test MigrateOnly). Kèm: 36f8f87a/9a9fa86c sửa 29 lệnh kubectl `\"$NS\"get` (b6fe4c7e) — 36f8f87a tự làm hỏng thành `getdeploy`, 9a9fa86c sửa đúng; cả hai đã lên main. ADR 0013 §Sửa đổi 14/10/2026 + deploy/README.md (commit tài liệu cùng phiên). CHƯA chạy trên Jenkins/cụm, CHƯA với PostgreSQL thật.",
+      "tiep_theo": "(1) Lên main + bấm job 7 dịch vụ để ảnh có -migrate-only (trước đó tao-bang báo 'ảnh cũ'). (2) Bấm vigov-deploy HANH_DONG=kiem-tra MT=dev rồi MT=prod — đọc phần CSDL: CSDL vigov-dev đã tạo chưa (csdl-chua-tao = khâu cấp phát, job KHÔNG tạo CSDL/tài khoản), có LỆCH checksum 0001 platform/identity không (mục _chung migration-0001-da-ap-bi-sua-chu-thich). (3) tao-bang MT=dev XAC_NHAN=vigov-dev. (4) Chưa kiểm trên cụm: NetworkPolicy có cho pod nhãn vigov-migrate-only ra 5432 không (manifest allow-egress podSelector {} nói có); imagePullSecrets dockerhub-omicrm có ở vigov-dev không. (5) Khoảng hở do PHIÊN chọn (không phải chủ dự án): đường KHỞI ĐỘNG vẫn áp lại từ 0001 trên CSDL có bảng mà không có sổ — chỉ -migrate-only dừng; đưa chủ dự án quyết có chặn cả đường khởi động không. (6) golangci-lint chưa cài trên máy này."
     }
   ]
 }
