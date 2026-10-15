@@ -702,6 +702,9 @@ CREATEDB
     // Per service, one transaction: DROP SCHEMA public CASCADE; CREATE SCHEMA public. The migrations
     // create everything in `public` and nothing else — no extension, no event trigger, no other schema
     // (checked 15/10/2026). lock_timeout 30 s: a session holding a lock makes it fail closed, not hang.
+    // GRANT USAGE … TO PUBLIC restores what PostgreSQL's own `public` schema carries; a bare CREATE SCHEMA
+    // does not, and an account other than the DSN's — a read-only login — would then be refused the whole
+    // schema. Grants that roles held on the OLD tables are gone with them either way.
     // Refuses before touching anything when two services share one database name (prod, 14/10/2026):
     // wiping one would silently wipe another's ledger. vihat-miniapp's database is not among the seven.
     stage('Làm mới CSDL') {
@@ -761,7 +764,7 @@ ledger=-
 case "$info" in *'|t') ledger=$(psql "$DATABASE_DSN" -X -At -c "SELECT count(*) FROM schema_migration" 2>/dev/null || echo '?') ;; esac
 echo "INFO|${info%|*}|$ledger"
 [ "$CHE_DO" = "that" ] || exit 0
-if psql "$DATABASE_DSN" -X -q -v ON_ERROR_STOP=1 -1 -c "SET LOCAL lock_timeout = '30s'" -c "DROP SCHEMA public CASCADE" -c "CREATE SCHEMA public" 2>/tmp/err; then
+if psql "$DATABASE_DSN" -X -q -v ON_ERROR_STOP=1 -1 -c "SET LOCAL lock_timeout = '30s'" -c "DROP SCHEMA public CASCADE" -c "CREATE SCHEMA public" -c "GRANT USAGE ON SCHEMA public TO PUBLIC" 2>/tmp/err; then
   left=$(psql "$DATABASE_DSN" -X -At -c "SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace" 2>/dev/null || echo '?')
   echo "DONE|$left"
 else
