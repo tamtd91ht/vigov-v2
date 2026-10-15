@@ -1597,11 +1597,11 @@
     {
       "id": "bl141026-nhap-ho-chon-kenh-dinh-anh-web",
       "menu": "phan-anh-nguoi-dan",
-      "trang_thai": "dang_lam",
+      "trang_thai": "xong",
       "no_confirm": [],
       "viec": "Modal nhập hộ phản ánh trên web-admin: ô 'Tiếp nhận qua kênh' (can-bo-nhap-ho mặc định · tong-dai 'Tổng đài điện thoại' · web-xa · zalo-oa) và đính ảnh hiện trường sau khi vào sổ (tối đa 5) — máy chủ đã có ở 7c739880 (ADR 0028 §Sửa đổi 15/10/2026).",
-      "bang_chung": "Agent khác đang làm: web-admin/src/lib/api/phieu-phan-anh.ts có thay đổi chưa commit lúc ghi (git diff --stat, 15/10/2026). Chưa commit.",
-      "tiep_theo": "Agent đang làm cập nhật CHÍNH mục này (đổi trang_thai, thêm sha) — không thêm mục mới. Nhãn 'Tổng đài điện thoại' phải có ở nhanKenh/MOI_KENH (features/phan-anh/nhan-phieu.ts) theo ghi chú migration 0045."
+      "bang_chung": "84de4675 (web) trên 7c739880 (máy chủ): ô chọn kênh 4 lựa chọn, nhãn tong-dai 'Tổng đài điện thoại', web-xa 'Trang thông tin của xã', ảnh ≤ 5 tải sau khi vào sổ, mỗi ảnh một Idempotency-Key; mục intakePhotos rời PHAN_CHUA_DUNG. tsc 0, eslint sạch, vitest phan-anh + lib/api 1291/1291 (15/10/2026). Chưa kiểm bằng ảnh render, chưa thử với máy chủ thật.",
+      "tiep_theo": "Người dùng build + kiểm ảnh. docs/ui-ux/09-phan-anh-nguoi-dan.md:141 còn ghi 'Web của xã' (bản sao yêu cầu, không sửa ở kho này). Danh sách/bộ lọc vẫn gọi can-bo-nhap-ho là 'Cán bộ nhập hộ'."
     }
   ]
 }
