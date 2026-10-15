@@ -3891,6 +3891,9 @@ export type petitions_nhiemVuRa = {
   "unit": string;
   "assignee": string;
   "assigner": string;
+  "unit_name"?: string;
+  "assignee_name"?: string;
+  "assigner_name"?: string;
   "due_at": string | null;
   "original_due_at": string | null;
   "completed_at": string | null;
@@ -3991,7 +3994,7 @@ export type petitions_phanLoaiVao = {
 
 export type petitions_phieuCuaToiRa = {
   "code": string;
-  /** `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` */
+  /** `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` | `tong-dai` */
   "channel": string;
   /** one of the nine (ADR 0027) */
   "status": string;
@@ -4035,7 +4038,7 @@ export type petitions_phieuCuaToiTomTatRa = {
 
 export type petitions_phieuPhanAnhRa = {
   "code": string;
-  /** `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` */
+  /** `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` | `tong-dai` */
   "channel": string;
   /** one of the nine (ADR 0027) */
   "status": string;
@@ -4127,10 +4130,10 @@ export type petitions_staffIntakeIn = {
   "anonymous"?: boolean;
   "clock_from"?: string | null;
   "residential_unit_id"?: string;
+  "channel"?: string | null;
   "citizen_id"?: string | null;
   "cong_dan_id"?: string | null;
   "linh_vuc"?: string | null;
-  "channel"?: string | null;
   "code"?: string | null;
   "status"?: string | null;
   "acknowledge_due"?: string | null;
@@ -4438,7 +4441,7 @@ export type petitions_xoaMucUuTienVao = {
 };
 
 export type petitions_xoaNhiemVuVao = {
-  "reason": string;
+  "reason"?: string;
 };
 
 export type platform_brandingFileOut = {
@@ -5828,7 +5831,7 @@ export type petitions_get_citizen_reports = {
   };
 };
 
-/** POST /api/v1/citizen-reports — Cán bộ nhập hộ một phản ánh của người dân (gọi điện, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu */
+/** POST /api/v1/citizen-reports — Cán bộ nhập hộ một phản ánh của người dân (gọi điện, tổng đài, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, chọn kênh tiếp nhận (mặc định cán bộ nhập hộ, kênh không đổi cách đặt hạn), hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu */
 export type petitions_post_citizen_reports = {
   duongDan: "/api/v1/citizen-reports";
   phuongThuc: "POST";
@@ -6111,6 +6114,38 @@ export type petitions_get_citizen_reports_by_maTraCuu_photos = {
     401: httpx_Error;
     403: httpx_Error;
     404: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-reports/{maTraCuu}/photos — Cán bộ đính MỘT ảnh hiện trường cho phiếu mình vừa nhập hộ (multipart) — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu kho riêng tư như ảnh người dân gửi */
+export type petitions_post_citizen_reports_by_maTraCuu_photos = {
+  duongDan: "/api/v1/citizen-reports/{maTraCuu}/photos";
+  phuongThuc: "POST";
+  thamSo: {
+    "maTraCuu": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  multipart: {
+    "size": string;
+    "content_type"?: string;
+    "file": Blob;
+  };
+  multipartParts: readonly ["size", "content_type", "file"];
+  phanHoi: {
+    201: petitions_photoOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    408: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    422: httpx_Error;
     500: httpx_Error;
     503: httpx_Error;
   };
@@ -8617,7 +8652,7 @@ export type comms_delete_map_asset_types_by_id = {
   };
 };
 
-/** GET /api/v1/map-assets — Sổ địa điểm của xã — một trang, xếp theo nhóm rồi tên; người đại diện và số điện thoại luôn che */
+/** GET /api/v1/map-assets — Sổ địa điểm của xã — một trang, xếp theo nhóm, trong nhóm mới thêm trước; người đại diện và số điện thoại luôn che */
 export type comms_get_map_assets = {
   duongDan: "/api/v1/map-assets";
   phuongThuc: "GET";
@@ -8626,7 +8661,7 @@ export type comms_get_map_assets = {
   truyVan: {
     "limit"?: number;
     "cursor"?: string;
-    "sort"?: "asset_type_code";
+    "sort"?: "asset_type_code" | "created_at";
     "order"?: "asc" | "desc";
     "asset_type_code"?: string;
     "industry_code"?: string;
@@ -10926,7 +10961,7 @@ export type identity_get_staff = {
   truyVan: {
     "limit"?: number;
     "cursor"?: string;
-    "sort"?: "code" | "created_at" | "full_name" | "position" | "department" | "phone" | "last_login_at" | "status";
+    "sort"?: "created_at" | "code" | "full_name" | "position" | "department" | "phone" | "last_login_at" | "status";
     "order"?: "asc" | "desc";
     "published"?: string;
     "unit"?: string;
@@ -12199,7 +12234,7 @@ export type petitions_patch_tasks_by_ma = {
   };
 };
 
-/** DELETE /api/v1/tasks/{ma} — Xoá mềm một nhiệm vụ khỏi sổ, kèm lý do bắt buộc — từ chối khi còn việc con chưa xoá */
+/** DELETE /api/v1/tasks/{ma} — Xoá mềm một nhiệm vụ khỏi sổ, lý do tuỳ chọn (bỏ trống thì ghi câu cố định) — từ chối khi còn việc con chưa xoá */
 export type petitions_delete_tasks_by_ma = {
   duongDan: "/api/v1/tasks/{ma}";
   phuongThuc: "DELETE";

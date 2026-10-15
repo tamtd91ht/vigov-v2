@@ -104,15 +104,16 @@ describe("order — children before parents, within the selection", () => {
 });
 
 describe("the run — one call per task, one at a time, never stopping at a refusal", () => {
-  it("sequential: never two calls in flight; same reason on every call; results per task", async () => {
+  it("sequential: never two calls in flight; NO reason on any call; results per task", async () => {
     let inFlight = 0;
     let maxInFlight = 0;
-    const calls: Array<[string, string]> = [];
+    const calls: unknown[][] = [];
     const progress: number[] = [];
-    const softDelete = async (code: string, reason: string): Promise<KetQua<void>> => {
+    const softDelete = async (...args: [string]): Promise<KetQua<void>> => {
+      const [code] = args;
       inFlight += 1;
       maxInFlight = Math.max(maxInFlight, inFlight);
-      calls.push([code, reason]);
+      calls.push(args);
       await new Promise((r) => setTimeout(r, 1));
       inFlight -= 1;
       return code === "NV10" ? { ok: false, thongBao: REFUSAL } : { ok: true, duLieu: undefined };
@@ -123,16 +124,12 @@ describe("the run — one call per task, one at a time, never stopping at a refu
         picked("NV20"),
         picked("NV30"),
       ],
-      "Nhập trùng",
       softDelete,
       (d) => progress.push(d),
     );
     expect(maxInFlight).toBe(1);
-    expect(calls).toEqual([
-      ["NV10", "Nhập trùng"],
-      ["NV20", "Nhập trùng"],
-      ["NV30", "Nhập trùng"],
-    ]);
+    // Bug sheet web-admin-141026: the code alone — the server writes its default reason.
+    expect(calls).toEqual([["NV10"], ["NV20"], ["NV30"]]);
     expect(progress).toEqual([1, 2, 3]);
     // The refusal is VERBATIM, and the two after it still ran.
     expect(results).toEqual([
@@ -166,24 +163,33 @@ describe("the confirm dialog (spec 02 §4)", () => {
   const render = (p: Partial<Parameters<typeof BatchDeleteDialog>[0]> = {}) =>
     renderToStaticMarkup(<BatchDeleteDialog tasks={ROWS} progress={null} onRun={() => {}} onClose={() => {}} {...p} />);
 
-  it("the question, the consequence, every task listed (title + assignee), the MANDATORY reason, Huỷ / red `Xoá N nhiệm vụ`", () => {
+  it("the question, the consequence, every task listed (title + assignee), NO reason box, Huỷ / red `Xoá N nhiệm vụ`", () => {
     const html = render();
     expect(html).toContain(">Xoá 2 nhiệm vụ khỏi sổ?</h2>");
     expect(html).toContain(BATCH_NOTE);
     expect(html).toContain("Rà soát hộ nghèo</span>");
     expect(html).toContain("Cán bộ B</span>");
     expect(html).toContain("Kiểm kê tài sản</span>");
-    expect(html).toMatch(/<input id="ly-do-xoa-da-chon"[^>]*required=""/);
+    // Bug sheet web-admin-141026 (owner 15/10/2026): no reason field at all.
+    expect(html).not.toContain("<input");
+    expect(html).not.toContain("Lý do");
     expect(html.indexOf(">Huỷ</button>")).toBeLessThan(html.indexOf(">Xoá 2 nhiệm vụ</button>"));
-    // Presentation pin (ADR 0068 §5): the confirm is solid red, off until the reason has text.
-    expect(html).toMatch(/<button class="[^"]*bg-danger[^"]*text-white[^"]*" type="submit" disabled=""><svg[^>]*>.*?<[/]svg>Xoá 2 nhiệm vụ<[/]button>/);
+    // Presentation pin (ADR 0068 §5): the confirm is solid red, and enabled from the start.
+    expect(html).toMatch(/<button class="[^"]*bg-danger[^"]*text-white[^"]*" type="submit"><svg[^>]*>.*?<[/]svg>Xoá 2 nhiệm vụ<[/]button>/);
   });
 
   it("running: progress in the live region, every control off", () => {
     const html = render({ progress: { done: 1, total: 2 } });
     expect(html).toContain(batchProgressText(1, 2));
-    expect(html).toMatch(/<input id="ly-do-xoa-da-chon"[^>]*disabled=""/);
+    expect(html).toMatch(/type="submit" disabled=""[^>]*aria-busy="true"/);
     expect(html).toMatch(/<button class="[^"]*" type="button" disabled="">Huỷ<[/]button>/);
+  });
+});
+
+describe("selection keeps the server's assignee name", () => {
+  it("a ticked row carries `assignee_name`, so the dialog can name a row no longer on screen", () => {
+    const sel = toggleSelected(EMPTY_SELECTION, { ...picked("NV19"), assignee: "CB-00123", assignee_name: "Nguyễn Văn A" });
+    expect(sel.get("NV19")?.assignee_name).toBe("Nguyễn Văn A");
   });
 });
 
@@ -341,12 +347,13 @@ describe("page wiring (source) and PHAN_CHUA_DUNG", () => {
   const SRC = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
 
   it("the run uses the ONE soft-delete call, keeps failed selected, refreshes after; gate is `task.delete`", () => {
-    expect(SRC).toContain("await runBatchDelete(tasks, reason, xoaNhiemVu,");
+    expect(SRC).toContain("await runBatchDelete(tasks, xoaNhiemVu,");
+    // The dialog's holder line prefers the server's name (bug sheet web-admin-141026).
+    expect(SRC).toContain("holder: nhanCanBoNgan(t.assignee, danhBaMa, CHUA_PHAN_CONG, t.assignee_name),");
     expect(SRC).toContain("setSelection((s) => keepFailed(s, results));");
     expect(SRC).toContain("datLanTai((n) => n + 1);\n  }");
     expect(SRC).toContain("const taskSelection: TaskSelection | null = quyen.xoa");
-    // 06/10/2026 (prototype): `Đã chọn N · Xoá đã chọn` sits in the filter row; the reason — still
-    // MANDATORY (rule 7) — is asked in the dialog it opens.
+    // 06/10/2026 (prototype): `Đã chọn N · Xoá đã chọn` sits in the filter row and opens the dialog.
     expect(SRC).toContain("const selectionOn = quyen.xoa && selection.size > 0;");
     expect(SRC).toContain("{quyen.xoa && batchOpen && (");
     expect(SRC).toMatch(/<BatchDeleteDialog\s+tasks=\{\[\.\.\.selection\.values\(\)\]/);

@@ -808,7 +808,11 @@ export function reassignTask(
 }
 
 /**
- * DELETE /api/v1/tasks/{ma} — xoá MỀM, kèm lý do bắt buộc. **204 không thân.**
+ * DELETE /api/v1/tasks/{ma} — xoá MỀM. **204 không thân.**
+ *
+ * KHÔNG GỬI LÝ DO (chủ dự án 15/10/2026, bảng lỗi web-admin-141026: hai hộp xác nhận xoá nhiệm vụ bỏ
+ * ô lý do). Thân là `{}`; máy chủ tự ghi câu mặc định cố định vào `delete_reason`
+ * (`domain.TaskDeleteDefaultReason`), nên dòng đã xoá vẫn luôn có lý do (luật 7, bất biến 1).
  *
  * TRẢ VỀ `KetQua<void>` CHỨ KHÔNG ĐỌC THÂN: một hàm luôn gọi `.json()` sẽ biến lần xoá thành
  * công thành "không đọc được".
@@ -816,9 +820,9 @@ export function reassignTask(
  * ⚠ 409 KHI CÒN VIỆC CON CHƯA XOÁ (ADR 0037 quyết định 3), và câu từ chối MANG SỐ VIỆC CON. Con
  * số ấy là toàn bộ phần có ích: từ chối mà không nói còn vướng gì là bắt cán bộ đi tìm.
  */
-export function xoaNhiemVu(ma: string, lyDo: string): Promise<KetQua<void>> {
+export function xoaNhiemVu(ma: string): Promise<KetQua<void>> {
   const mau: petitions_delete_tasks_by_ma["duongDan"] = "/api/v1/tasks/{ma}";
-  const than: petitions_xoaNhiemVuVao = { reason: lyDo };
+  const than: petitions_xoaNhiemVuVao = {};
   return goiGhi(duongDanNhiemVu(mau, ma), "DELETE", than, 204).then((kq) =>
     kq.ok ? ({ ok: true, duLieu: undefined } as KetQua<void>) : kq,
   );

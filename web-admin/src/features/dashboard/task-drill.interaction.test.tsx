@@ -151,6 +151,21 @@ describe("TaskDrillDialog — the rows behind a task figure (customer sheet row 
     expect(second.textContent).toContain("Chưa phân công");
   });
 
+  it("bug sheet web-admin-141026: the server's `assignee_name` / `unit_name` win; absent → catalogue, then code", async () => {
+    stub([
+      task("NV-1", { unit: "01JGONE", unit_name: "Tổ đã giải thể", assignee: "CB-0009", assignee_name: "Hồ Văn Chín" }),
+      task("NV-2"),
+    ]);
+    const el = mount(dialog());
+    await settle();
+    const [first, second] = [...el.querySelectorAll("tbody tr")];
+    expect(first!.textContent).toContain("Tổ đã giải thể");
+    expect(first!.textContent).toContain("Hồ Văn Chín");
+    expect(first!.textContent).not.toContain("CB-0009");
+    expect(second!.textContent).toContain("Văn phòng UBND");
+    expect(second!.textContent).toContain("CB-0001");
+  });
+
   it("`Mở` hands the row to the drawer — no navigation", async () => {
     stub([task("NV-1")]);
     const opened: string[] = [];

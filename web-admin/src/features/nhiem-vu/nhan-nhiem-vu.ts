@@ -707,11 +707,37 @@ export function danhBaChoNhatKy(kq: KetQua<identity_danhBaChonNguoiRa> | null): 
  * `TaskDetailDrawer.tsx:407-417`, `TaskActivityPanel.tsx:302`; main session 07/10/2026). Luật 6 bất
  * biến 8 canh KHO nhật ký (mã `CB-…` lưu ở máy chủ), không canh chữ hiện ra. `nhanCanBoDrawer` /
  * `nhanNguoiNhatKy` (`Họ tên (CB-…)`) còn cho hàng chờ duyệt lùi hạn của Sổ tay lãnh đạo.
+ *
+ * `serverName` — `assignee_name` / `assigner_name` of the task row, resolved by the server through
+ * identity (bug sheet web-admin-141026: the card, the list and the confirm showed a bare code). It
+ * wins over the directory because the directory holds ACTIVE accounts only, while the server also
+ * names a locked or removed officer. Absent (identity unreachable) → the directory, then the code.
  */
-export function nhanCanBoNgan(ma: string, danhBa: DanhBaTheoMa | null, rong: string): string {
+export function nhanCanBoNgan(
+  ma: string,
+  danhBa: DanhBaTheoMa | null,
+  rong: string,
+  serverName?: string,
+): string {
   if (ma === "") return rong;
+  if (serverName !== undefined && serverName.trim() !== "") return serverName;
   const cb = danhBa?.get(ma);
   return cb === undefined || cb.full_name === "" ? ma : cb.full_name;
+}
+
+/**
+ * The implementing unit of a task: `unit_name` from the server (it also names a deleted unit), else
+ * the screen's unit catalogue, else the id. No unit → `empty`. Same order as `nhanCanBoNgan`.
+ */
+export function taskUnitName(
+  id: string,
+  serverName: string | undefined,
+  unitNames: ReadonlyMap<string, string>,
+  empty: string,
+): string {
+  if (id === "") return empty;
+  if (serverName !== undefined && serverName.trim() !== "") return serverName;
+  return unitNames.get(id) ?? id;
 }
 
 /**
@@ -745,14 +771,14 @@ export function taskStaffOptionLabel(cb: identity_canBoChonNguoiRa): string {
  * still owed the work. A unit missing from the catalogue shows its id, as in the timeline.
  */
 export function cardHolderText(
-  task: Pick<petitions_nhiemVuRa, "assignee" | "unit">,
+  task: Pick<petitions_nhiemVuRa, "assignee" | "unit" | "assignee_name" | "unit_name">,
   danhBa: DanhBaTheoMa | null,
   unitNames: ReadonlyMap<string, string>,
 ): string {
   if (task.assignee !== "" || task.unit === "") {
-    return nhanCanBoNgan(task.assignee, danhBa, CHUA_PHAN_CONG);
+    return nhanCanBoNgan(task.assignee, danhBa, CHUA_PHAN_CONG, task.assignee_name);
   }
-  return `${unitNames.get(task.unit) ?? task.unit} · ${CHUA_PHAN_CONG}`;
+  return `${taskUnitName(task.unit, task.unit_name, unitNames, task.unit)} · ${CHUA_PHAN_CONG}`;
 }
 
 /**

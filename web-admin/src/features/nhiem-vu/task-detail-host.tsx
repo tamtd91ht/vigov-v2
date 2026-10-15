@@ -238,10 +238,10 @@ function TaskDetailBody({
         });
         return call;
       }}
-      xoa={(reason) => {
+      xoa={() => {
         const code = task.code;
         state.setSending(true);
-        return xoaNhiemVu(code, reason).then((kq) => {
+        return xoaNhiemVu(code).then((kq) => {
           state.setSending(false);
           // A refusal ("còn 3 việc con chưa xoá…", ADR 0037 decision 3) goes back to the confirm
           // dialog, which shows it verbatim and stays open.

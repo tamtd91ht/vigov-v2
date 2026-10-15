@@ -11,6 +11,7 @@ import { EMPTY_SELECTION, toggleSelected } from "./batch-delete";
 import { BANG_NHAN_MAC_DINH, REGISTER_EMPTY, TRANG_THAI_CHINH, kanbanSharedError } from "./nhan-nhiem-vu";
 import {
   BangKanban,
+  BangNhiemVu,
   BangSoTheoDoi,
   type CotKanban, // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
   type DanhMucNhiemVu, // vi-name-ok: existing type, imported not declared (rule 12 inv 3)
@@ -300,5 +301,78 @@ describe("page wiring (source)", () => {
     expect(SRC).toContain("downloadTaskRegister({ ...viewLoc, sapXep: sx.cot, chieu: sx.chieu })");
     expect(SRC).toContain("toast.error(`${REGISTER_EXPORT_REFUSED} ${r.thongBao}`);");
     expect(SRC).toContain("saveFile(r.duLieu.blob, r.duLieu.fileName);");
+  });
+});
+
+describe("names from the server (bug sheet web-admin-141026) — Kanban card, list, register", () => {
+  // An officer locked since, and a unit deleted since: neither is in the screen's directory/catalogue.
+  const NAMED: petitions_nhiemVuRa = {
+    ...ROW,
+    unit: "01JUNITGONE",
+    unit_name: "Tổ công tác đã giải thể",
+    assignee: "CB-2026-NGHI",
+    assignee_name: "Đỗ Thị Đã Nghỉ",
+  };
+  const NOW = new Date("2026-09-15T03:00:00Z");
+
+  function card(row: petitions_nhiemVuRa): string {
+    const cot: CotKanban[] = TRANG_THAI_CHINH.map((ma) => ({
+      ma,
+      tai: { pha: "xong" as const, duLieu: { items: ma === row.status ? [row] : [], next_cursor: "", has_more: false } },
+    }));
+    return renderToStaticMarkup(
+      <BangKanban
+        cot={cot}
+        danhMuc={CATALOGUES}
+        danhBa={DIRECTORY}
+        unitNames={UNITS}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        bayGio={NOW}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+        counts={{ pha: "dangTai" }}
+      />,
+    );
+  }
+
+  function list(row: petitions_nhiemVuRa): string {
+    return renderToStaticMarkup(
+      <BangNhiemVu
+        nhiemVu={[row]}
+        danhMuc={CATALOGUES}
+        danhBa={DIRECTORY}
+        nhanTT={BANG_NHAN_MAC_DINH}
+        tenBoPhan={UNITS}
+        bayGio={NOW}
+        maDangMo={null}
+        moNhiemVu={() => {}}
+        sapXep={{ cot: "created_at", chieu: "desc" }}
+        doiSapXep={() => {}}
+      />,
+    );
+  }
+
+  it("each view shows `assignee_name` / `unit_name`, never the raw code or id", () => {
+    for (const html of [card(NAMED), list(NAMED), table([NAMED])]) {
+      expect(html).toContain("Đỗ Thị Đã Nghỉ");
+      expect(html).not.toContain(">CB-2026-NGHI<");
+    }
+    for (const html of [list(NAMED), table([NAMED])]) {
+      expect(html).toContain("Tổ công tác đã giải thể");
+      expect(html).not.toContain("01JUNITGONE");
+    }
+  });
+
+  it("FALLBACK: names absent (identity unreachable) → the directory and catalogue, as before", () => {
+    const html = table([ROW]);
+    expect(html).toContain("Nguyễn Văn Giả");
+    expect(html).toContain("BỘ PHẬN GIẢ THỰC HIỆN");
+    expect(list(ROW)).toContain("Nguyễn Văn Giả");
+    expect(card(ROW)).toContain("Nguyễn Văn Giả");
+  });
+
+  it("FALLBACK: names absent and unknown to the directory → the code, never a blank", () => {
+    const html = table([{ ...ROW, assignee: "CB-2026-LA" }]);
+    expect(html).toContain("CB-2026-LA");
   });
 });

@@ -90,6 +90,7 @@ import {
   mucUuTienMacDinh,
   nhanCanBoDrawer,
   nhanCanBoNgan,
+  taskUnitName,
   SAP_XEP_MAC_DINH,
   ariaSapXep,
   bamCotSapXep,
@@ -1410,6 +1411,26 @@ describe("tên cán bộ ở ô chật — họ tên, mã lạ là mã, rỗng l
     expect(nhanCanBoNgan("CB-9", DANH_BA, CHUA_PHAN_CONG)).toBe("CB-9");
     expect(nhanCanBoNgan("CB-1", null, CHUA_PHAN_CONG)).toBe("CB-1");
     expect(nhanCanBoNgan("", DANH_BA, CHUA_PHAN_CONG)).toBe(CHUA_PHAN_CONG);
+  });
+
+  it("bảng lỗi web-admin-141026: tên máy chủ trả (`assignee_name`) đứng trước danh bạ; thiếu/rỗng thì về danh bạ rồi mã", () => {
+    // Người đã khoá/nghỉ không còn trong danh bạ — máy chủ vẫn gọi được tên.
+    expect(nhanCanBoNgan("CB-9", DANH_BA, CHUA_PHAN_CONG, "Phạm Thị Chín")).toBe("Phạm Thị Chín");
+    expect(nhanCanBoNgan("CB-1", DANH_BA, CHUA_PHAN_CONG, "Lê Văn Một (máy chủ)")).toBe("Lê Văn Một (máy chủ)");
+    expect(nhanCanBoNgan("CB-1", DANH_BA, CHUA_PHAN_CONG, undefined)).toBe("Lê Văn Một");
+    expect(nhanCanBoNgan("CB-1", DANH_BA, CHUA_PHAN_CONG, "  ")).toBe("Lê Văn Một");
+    expect(nhanCanBoNgan("CB-9", null, CHUA_PHAN_CONG, "")).toBe("CB-9");
+    // Không có mã thì không có người, dù máy chủ gửi gì.
+    expect(nhanCanBoNgan("", DANH_BA, CHUA_PHAN_CONG, "Ai đó")).toBe(CHUA_PHAN_CONG);
+  });
+
+  it("đơn vị thực hiện: `unit_name` trước, rồi danh mục, rồi id; không đơn vị là câu của ô", () => {
+    const UNITS = new Map([["01JU1", "Văn phòng"]]);
+    expect(taskUnitName("01JU1", "Văn phòng HĐND-UBND", UNITS, O_TRONG)).toBe("Văn phòng HĐND-UBND");
+    expect(taskUnitName("01JUX", "Tổ đã giải thể", UNITS, O_TRONG)).toBe("Tổ đã giải thể");
+    expect(taskUnitName("01JU1", undefined, UNITS, O_TRONG)).toBe("Văn phòng");
+    expect(taskUnitName("01JUX", "", UNITS, O_TRONG)).toBe("01JUX");
+    expect(taskUnitName("", "Văn phòng", UNITS, O_TRONG)).toBe(O_TRONG);
   });
 
   it("drawer giữ MÃ cạnh họ tên — chỗ đối chiếu hồ sơ", () => {

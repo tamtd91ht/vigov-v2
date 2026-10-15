@@ -316,8 +316,8 @@ export function TaskDrillDialog({
               key: t.code,
               code: t.code,
               title: t.title,
-              unit: t.unit === "" ? "—" : (unitNames.get(t.unit) ?? "—"),
-              assignee: nhanCanBoNgan(t.assignee, directory, CHUA_PHAN_CONG),
+              unit: t.unit === "" ? "—" : (t.unit_name || unitNames.get(t.unit) || "—"),
+              assignee: nhanCanBoNgan(t.assignee, directory, CHUA_PHAN_CONG, t.assignee_name),
               due: nhanNgay(t.due_at),
               open: (
                 <button

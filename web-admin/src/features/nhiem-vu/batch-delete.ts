@@ -2,8 +2,9 @@
  * `🗑 Xoá đã chọn` (§2) — pure half: selection, order, the sequential run, and the words.
  *
  * THERE IS NO BATCH ROUTE, AND THAT IS THE DESIGN (require a037b76, user decision 28/09/2026): the
- * screen sends ONE soft-delete call (`xoaNhiemVu`, `DELETE /api/v1/tasks/{ma}` with a reason) per
- * selected task, one after another, each with the SAME reason. Each call is its own soft delete and
+ * screen sends ONE soft-delete call (`xoaNhiemVu`, `DELETE /api/v1/tasks/{ma}`, no reason typed — the
+ * server records its fixed default sentence, bug sheet web-admin-141026) per selected task, one after
+ * another. Each call is its own soft delete and
  * its own audit entry (rule 6), and each is refused or accepted on its own — so the result is
  * reported PER TASK, never as "đã xoá 5 nhiệm vụ" when two of the five were refused.
  *
@@ -19,7 +20,7 @@ import type { petitions_nhiemVuRa } from "@/lib/api/schema.gen";
  * title + assignee the confirm dialog lists (spec 02 §4: "Mỗi dòng gồm tên nhiệm vụ và tên người
  * thực hiện") — kept with the tick, because the row may be on a page no longer on screen.
  */
-export type SelectedTask = Pick<petitions_nhiemVuRa, "code" | "parent" | "title" | "assignee">;
+export type SelectedTask = Pick<petitions_nhiemVuRa, "code" | "parent" | "title" | "assignee" | "assignee_name">;
 
 /** Selection keyed by register code. A `ReadonlyMap` so a render can never mutate it in place. */
 export type TaskSelectionState = ReadonlyMap<string, SelectedTask>;
@@ -49,9 +50,15 @@ export function toggleSelected(sel: TaskSelectionState, task: SelectedTask): Tas
   return new Map([...sel, [task.code, keptOf(task)]]);
 }
 
-/** Only the four fields — never the whole row object, which would pin a page's answer in memory. */
+/** Only these fields — never the whole row object, which would pin a page's answer in memory. */
 function keptOf(task: SelectedTask): SelectedTask {
-  return { code: task.code, parent: task.parent, title: task.title, assignee: task.assignee };
+  return {
+    code: task.code,
+    parent: task.parent,
+    title: task.title,
+    assignee: task.assignee,
+    assignee_name: task.assignee_name,
+  };
 }
 
 /** The header box: all shown rows ticked → untick them; otherwise tick every shown row. */
@@ -109,12 +116,6 @@ export function deleteOrder(tasks: readonly SelectedTask[]): SelectedTask[] {
     .map((x) => x.t);
 }
 
-/** The shared reason, trimmed as the server trims it; `null` disables the button. */
-export function batchReason(text: string): string | null {
-  const s = text.trim();
-  return s === "" ? null : s;
-}
-
 export type BatchDeleteResult =
   | { readonly code: string; readonly ok: true }
   | { readonly code: string; readonly ok: false; readonly message: string };
@@ -129,13 +130,12 @@ export type BatchDeleteResult =
  */
 export async function runBatchDelete(
   tasks: readonly SelectedTask[],
-  reason: string,
-  softDelete: (code: string, reason: string) => Promise<KetQua<void>>,
+  softDelete: (code: string) => Promise<KetQua<void>>,
   onProgress?: (done: number) => void,
 ): Promise<BatchDeleteResult[]> {
   const results: BatchDeleteResult[] = [];
   for (const t of deleteOrder(tasks)) {
-    const r = await softDelete(t.code, reason);
+    const r = await softDelete(t.code);
     results.push(r.ok ? { code: t.code, ok: true } : { code: t.code, ok: false, message: r.thongBao });
     onProgress?.(results.length);
   }
@@ -146,7 +146,6 @@ export async function runBatchDelete(
 
 /** The spec's `🗑` is drawn as a lucide `Trash2` beside the word (ADR 0068). */
 export const BATCH_DELETE_BUTTON = "Xoá đã chọn";
-export const BATCH_REASON_LABEL = "Lý do xoá (bắt buộc, dùng chung cho mọi nhiệm vụ đã chọn)";
 /** Spec 02 §4 — the dialog's description, verbatim. */
 export const BATCH_NOTE =
   "Những nhiệm vụ này sẽ khuất khỏi sổ theo dõi và khỏi báo cáo. Bản ghi và nhật ký vẫn được giữ trong " +

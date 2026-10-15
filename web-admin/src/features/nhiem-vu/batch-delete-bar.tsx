@@ -1,20 +1,16 @@
 "use client";
 
 import { Loader2, Trash2 } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ModalDialog, ModalDialogHeader } from "@/components/ui/modal-dialog";
 
 import {
   BATCH_NOTE,
-  BATCH_REASON_LABEL,
   batchDeleteConfirmLabel,
   batchDeleteTitle,
   batchProgressText,
-  batchReason,
 } from "./batch-delete";
-import { INPUT_CLASS, LABEL_CLASS } from "./task-spec";
 
 /** Id of the dialog's title — its accessible name. */
 export const BATCH_DELETE_TITLE_ID = "tieu-de-xoa-da-chon";
@@ -27,8 +23,9 @@ export type BatchDeleteRow = { readonly code: string; readonly title: string; re
  * consequence, every selected task in ONE bordered list (title + assignee), then `[Huỷ] [Xoá N nhiệm
  * vụ]` with the delete button solid red.
  *
- * ONE DIFFERENCE, A HARD RULE (rule 7, ADR 0076 lần 2 #10): the mandatory reason, ONE for all — every
- * soft delete records who deleted it and why. The button stays off until the reason has text.
+ * NO REASON BOX since 15/10/2026 (owner, bug sheet web-admin-141026 — this reverses ADR 0076 lần 2 #10
+ * for this dialog only). Every soft delete still records who deleted it and a reason: the server writes
+ * its fixed default sentence when none is sent (rule 7, invariant 1).
  *
  * The run is the page's (`runBatchDelete`, one call per task, children first); when it ends the page
  * closes this dialog and reports by toast. While it runs, Esc and the ✕ do nothing — the answer must
@@ -43,11 +40,9 @@ export function BatchDeleteDialog({
   tasks: readonly BatchDeleteRow[];
   /** `{ done, total }` while running, else `null`. */
   progress: { readonly done: number; readonly total: number } | null;
-  onRun: (reason: string) => void;
+  onRun: () => void;
   onClose: () => void;
 }) {
-  const [text, setText] = useState("");
-  const reason = batchReason(text);
   const running = progress !== null;
   const n = tasks.length;
 
@@ -58,7 +53,7 @@ export function BatchDeleteDialog({
         className="m-0 flex min-h-0 flex-col gap-4"
         onSubmit={(e) => {
           e.preventDefault();
-          if (reason !== null && !running && n > 0) onRun(reason);
+          if (!running && n > 0) onRun();
         }}
       >
         <ul
@@ -72,22 +67,6 @@ export function BatchDeleteDialog({
             </li>
           ))}
         </ul>
-
-        <div>
-          <label htmlFor="ly-do-xoa-da-chon" className={LABEL_CLASS}>
-            {BATCH_REASON_LABEL}
-          </label>
-          <input
-            id="ly-do-xoa-da-chon"
-            name="ly-do-xoa-da-chon"
-            value={text}
-            required
-            autoComplete="off"
-            disabled={running}
-            className={INPUT_CLASS}
-            onChange={(e) => setText(e.target.value)}
-          />
-        </div>
 
         {/* ALWAYS IN THE DOM: a live region inserted later is one not every screen reader announces. */}
         <p role="status" className="text-ink-muted m-0 text-[12px] empty:hidden">
@@ -109,7 +88,7 @@ export function BatchDeleteDialog({
                 <Trash2 aria-hidden="true" focusable="false" className="size-4" />
               )
             }
-            disabled={running || reason === null || n === 0}
+            disabled={running || n === 0}
             aria-busy={running || undefined}
           >
             {batchDeleteConfirmLabel(n)}

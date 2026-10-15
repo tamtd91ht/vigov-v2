@@ -108,7 +108,7 @@ const NOT_CALLED = (): Promise<KetQua<never>> => Promise.resolve({ ok: false, th
 
 type Writes = {
   move?: (target: string, note?: string) => Promise<KetQua<petitions_nhiemVuRa>>;
-  remove?: (reason: string) => Promise<KetQua<unknown>>;
+  remove?: () => Promise<KetQua<unknown>>;
   save?: (body: petitions_suaNhiemVuVao) => Promise<KetQua<petitions_nhiemVuRa>>;
 };
 
@@ -599,7 +599,7 @@ describe("information block — inline `✎ Sửa` (task.update)", () => {
   });
 });
 
-describe("delete — the header's button behind `task.delete`, the existing confirm with a mandatory reason", () => {
+describe("delete — the header's button behind `task.delete`, a confirm with NO reason box (bug sheet web-admin-141026)", () => {
   const ALL = quyenNhiemVu(ALL_KEYS);
 
   it("DENIED: without `task.delete` there is no delete button and no delete form", () => {
@@ -608,10 +608,10 @@ describe("delete — the header's button behind `task.delete`, the existing conf
     expect(html).not.toContain('id="ly-do-xoa-nhiem-vu"');
   });
 
-  it("ALLOWED: the header button opens the confirm; `Xoá` disabled until a reason; a refusal shows in the dialog", async () => {
+  it("ALLOWED: the header button opens the confirm; no reason box; `Xoá` sends no reason; a refusal shows in the dialog", async () => {
     stubQuietServer();
     const remove = vi
-      .fn<(reason: string) => Promise<KetQua<unknown>>>()
+      .fn<() => Promise<KetQua<unknown>>>()
       .mockResolvedValue({ ok: false, thongBao: "còn 2 việc con chưa xoá — xử lý hoặc xoá các việc con trước" });
     mount(detail(ALL, {}, { remove }));
     await settle();
@@ -623,17 +623,41 @@ describe("delete — the header's button behind `task.delete`, the existing conf
     expect(document.getElementById(dialog.getAttribute("aria-labelledby")!)?.textContent).toBe(
       "Xoá nhiệm vụ NV19 khỏi sổ?",
     );
-    const reason = dialog.querySelector<HTMLInputElement>("#ly-do-xoa-nhiem-vu")!;
+    expect(dialog.querySelector("#ly-do-xoa-nhiem-vu")).toBeNull();
+    expect(dialog.querySelector("input, textarea")).toBeNull();
+    expect(dialog.textContent).not.toContain("Lý do");
     const confirm = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-    expect(confirm.disabled).toBe(true);
-    typeInto(reason, "   ");
-    expect(confirm.disabled).toBe(true);
-    typeInto(reason, "  Nhập trùng  ");
     expect(confirm.disabled).toBe(false);
     await act(async () => confirm.click());
     await settle();
-    expect(remove).toHaveBeenCalledWith("Nhập trùng");
+    expect(remove).toHaveBeenCalledTimes(1);
+    expect(remove.mock.calls[0]).toEqual([]);
     expect(dialog.querySelector('[role="alert"]')?.textContent).toContain("còn 2 việc con chưa xoá");
+  });
+});
+
+describe("names — the server's `*_name` first (bug sheet web-admin-141026)", () => {
+  const ALL = quyenNhiemVu(ALL_KEYS);
+
+  it("header, facts and info block show `assignee_name` / `unit_name` / `assigner_name`, never the raw ids", () => {
+    const html = detailHtml(ALL, {
+      unit: "01JUNITVANHOA0000000000000",
+      unit_name: "Phòng Văn hoá",
+      assignee: "CB-2026-AB12CD",
+      assignee_name: "Trần Thị Bình",
+      assigner_name: "Lê Văn Cường",
+      pending_extension: true,
+    });
+    expect(html).toContain("Phòng Văn hoá · Trần Thị Bình");
+    expect(html).toContain("đã gửi tới Lê Văn Cường");
+    expect(html).toContain("Lãnh đạo giao việc: Lê Văn Cường");
+    expect(html).not.toContain("01JUNITVANHOA0000000000000");
+    expect(html).not.toContain(">CB-2026-AB12CD<");
+  });
+
+  it("fallback: no server name and no directory entry → the code, still never blank", () => {
+    const html = detailHtml(ALL, { unit: "", assignee: "CB-2026-AB12CD" });
+    expect(html).toContain("CB-2026-AB12CD");
   });
 });
 

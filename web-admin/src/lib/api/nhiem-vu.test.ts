@@ -394,14 +394,14 @@ describe("thân của sáu tuyến ghi", () => {
     expect(than(gia)).toEqual({ status: "dang-thuc-hien", note: "Thiếu biên bản nghiệm thu" });
   });
 
-  it("xoá: DELETE có THÂN mang lý do, và 204 không thân vẫn là thành công", async () => {
-    // Lý do bắt buộc (luật 7, bất biến 1). Đưa nó vào query string sẽ đẩy chữ tự do về một hồ sơ
-    // của cơ quan nhà nước vào mọi log truy cập.
+  it("xoá: DELETE KHÔNG mang lý do, và 204 không thân vẫn là thành công", async () => {
+    // Bảng lỗi web-admin-141026 (chủ dự án 15/10/2026): hộp xác nhận bỏ ô lý do; máy chủ tự ghi câu
+    // mặc định vào `delete_reason` (luật 7, bất biến 1). Thân rỗng `{}` — không một khoá `reason`.
     const gia = batFetch(new Response(null, { status: 204 }));
-    const kq = await xoaNhiemVu("NV19", "trùng với NV18");
+    const kq = await xoaNhiemVu("NV19");
 
     expect(gia.mock.calls[0]?.[1]?.method).toBe("DELETE");
-    expect(than(gia)).toEqual({ reason: "trùng với NV18" });
+    expect(than(gia)).toEqual({});
     // Một hàm luôn gọi `.json()` sẽ biến lần xoá thành công này thành "không đọc được".
     expect(kq.ok).toBe(true);
   });
@@ -477,7 +477,7 @@ describe("câu từ chối của máy chủ đi NGUYÊN VĂN ra ngoài", () => {
       }),
     );
 
-    expect(await xoaNhiemVu("NV19", "nhập trùng")).toEqual({ ok: false, thongBao: cau });
+    expect(await xoaNhiemVu("NV19")).toEqual({ ok: false, thongBao: cau });
   });
 
   it("403 ADR 0038 — không phải lãnh đạo giao việc: câu của máy chủ ra thẳng màn hình", async () => {

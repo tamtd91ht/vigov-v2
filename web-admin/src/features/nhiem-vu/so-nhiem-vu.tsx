@@ -221,6 +221,7 @@ import {
   mucUuTienMacDinh,
   nhanBoDem,
   nhanCanBoNgan,
+  taskUnitName,
   nhanHanThe,
   nhanHoanThanhTreHan,
   nhanNgay,
@@ -1295,15 +1296,15 @@ export function SoNhiemVu({
   }
 
   /**
-   * One soft-delete call per selected task, sequentially, one shared reason (`runBatchDelete`). NO
+   * One soft-delete call per selected task, sequentially, no reason (`runBatchDelete`). NO
    * OPTIMISTIC REMOVAL: rows leave the board only when the register is read again after the last
    * answer. Failed tasks stay selected; the outcome is told by toasts (spec 02 §4).
    */
-  async function runBatch(reason: string): Promise<void> {
+  async function runBatch(): Promise<void> {
     const tasks = [...selection.values()];
     if (tasks.length === 0 || batchProgress !== null) return;
     setBatchProgress({ done: 0, total: tasks.length });
-    const results = await runBatchDelete(tasks, reason, xoaNhiemVu, (done) =>
+    const results = await runBatchDelete(tasks, xoaNhiemVu, (done) =>
       setBatchProgress({ done, total: tasks.length }),
     );
     setBatchProgress(null);
@@ -1578,17 +1579,17 @@ export function SoNhiemVu({
         />
       )}
 
-      {/* `Xoá đã chọn` — the prototype's confirm dialog, with OUR mandatory shared reason (rule 7:
-          a soft delete always says why). The outcome is a toast; failed tasks stay selected. */}
+      {/* `Xoá đã chọn` — the prototype's confirm dialog, no reason box (bug sheet web-admin-141026;
+          the server records its default sentence). The outcome is a toast; failed tasks stay selected. */}
       {quyen.xoa && batchOpen && (
         <BatchDeleteDialog
           tasks={[...selection.values()].map((t) => ({
             code: t.code,
             title: t.title,
-            holder: nhanCanBoNgan(t.assignee, danhBaMa, CHUA_PHAN_CONG),
+            holder: nhanCanBoNgan(t.assignee, danhBaMa, CHUA_PHAN_CONG, t.assignee_name),
           }))}
           progress={batchProgress}
-          onRun={(reason) => void runBatch(reason)}
+          onRun={() => void runBatch()}
           onClose={() => {
             if (batchProgress === null) setBatchOpen(false);
           }}
@@ -2659,7 +2660,6 @@ export function BangSoTheoDoi({
   empty?: ReactNode;
 }) {
   if (nhiemVu.length === 0) return empty ?? <EmptyState icon={ClipboardList} title={SO_RONG} />;
-  const unit = (id: string) => (id === "" ? O_TRONG : (tenBoPhan.get(id) ?? id));
 
   return (
     <div className={TABLE_FRAME_CLASS}>
@@ -2684,7 +2684,8 @@ export function BangSoTheoDoi({
               const late = isOverdueNow(n, bayGio);
               const docs = registerRowDocuments(n);
               const state = taskDisplayState(n, nhanTT, bayGio);
-              const assignee = nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG);
+              const assignee = nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG, n.assignee_name);
+              const unit = taskUnitName(n.unit, n.unit_name, tenBoPhan, O_TRONG);
               return (
                 <tr
                   key={n.code}
@@ -2720,10 +2721,10 @@ export function BangSoTheoDoi({
                       <div className="text-ink-muted mt-1 text-[11px]">{nhanDanhMuc(danhMuc.khoi, n.bloc)}</div>
                     )}
                   </td>
-                  <td className={cn(TD_CLASS, REGISTER_TD)}>{unit(n.unit)}</td>
+                  <td className={cn(TD_CLASS, REGISTER_TD)}>{unit}</td>
                   <td className={cn(TD_CLASS, REGISTER_TD)}>{assignee}</td>
                   <td className={cn(TD_CLASS, REGISTER_TD)}>
-                    {unit(n.unit)}
+                    {unit}
                     <div className="text-ink-muted text-[11.5px]">{assignee}</div>
                   </td>
                   {(["cap-tren-giao", "chi-dao-dang-uy"] as const).map((g, gi) => (
@@ -3106,7 +3107,7 @@ export function TheNhiemVu({
           </span>
         </span>
         <span className="text-ink-muted mt-2 block truncate text-[11px]">
-          {nhanCanBoNgan(nhiemVu.assignee, danhBa, CHUA_PHAN_CONG)}
+          {nhanCanBoNgan(nhiemVu.assignee, danhBa, CHUA_PHAN_CONG, nhiemVu.assignee_name)}
         </span>
       </div>
     </article>
@@ -3263,8 +3264,8 @@ export function BangNhiemVu({
                       {extensions !== null && ` · ${extensions}`}
                     </span>
                   </td>
-                  <td className={TD_CLASS}>{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG)}</td>
-                  <td className={TD_CLASS}>{n.unit === "" ? O_TRONG : (tenBoPhan.get(n.unit) ?? n.unit)}</td>
+                  <td className={TD_CLASS}>{nhanCanBoNgan(n.assignee, danhBa, CHUA_PHAN_CONG, n.assignee_name)}</td>
+                  <td className={TD_CLASS}>{taskUnitName(n.unit, n.unit_name, tenBoPhan, O_TRONG)}</td>
                   <td className={TD_CLASS}>{nhanDanhMuc(danhMuc.mucUuTien, n.priority)}</td>
                   <td className={cn(TD_CLASS, late && "text-danger font-semibold")}>
                     {nhanNgay(n.due_at)}
@@ -3440,8 +3441,11 @@ export function ChiTietNhiemVu({
     ghiChu?: string,
     extra?: StatusMoveExtras,
   ) => Promise<KetQua<petitions_nhiemVuRa>>;
-  /** Soft delete with its mandatory reason. The answer comes back so the confirm can show a refusal. */
-  xoa: (lyDo: string) => Promise<KetQua<unknown>>;
+  /**
+   * Soft delete, no reason typed (bug sheet web-admin-141026 — the server records its fixed default
+   * sentence). The answer comes back so the confirm can show a refusal.
+   */
+  xoa: () => Promise<KetQua<unknown>>;
   guiDeNghiLuiHan: (hanMoiISO: string, lyDo: string) => Promise<KetQua<petitions_deNghiLuiHanRa>>;
   quyetDinh: (
     deNghiID: string,
@@ -3475,7 +3479,8 @@ export function ChiTietNhiemVu({
   const late = isOverdueNow(nhiemVu, bayGio);
   const extensions = extensionCountText(nhiemVu.extension_count);
 
-  const unitName = nhiemVu.unit === "" ? null : (tenBoPhan.get(nhiemVu.unit) ?? nhiemVu.unit);
+  const unitName = nhiemVu.unit === "" ? null : taskUnitName(nhiemVu.unit, nhiemVu.unit_name, tenBoPhan, O_TRONG);
+  const assigneeName = nhanCanBoNgan(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG, nhiemVu.assignee_name);
   const assigneeEmail = maskedEmailOf(nhiemVu.assignee, danhBaMa);
   const meetingLink =
     cauTuKetLuan(nhiemVu) !== null && nhiemVu.meeting_id !== undefined
@@ -3502,11 +3507,11 @@ export function ChiTietNhiemVu({
             </h2>
           </div>
           <p className="text-ink-muted m-0 mt-1 text-[11.5px]">
-            {unitName ?? O_TRONG} · {nhanCanBoNgan(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}
+            {unitName ?? O_TRONG} · {assigneeName}
           </p>
         </div>
         {/* §11.5 soft delete — `task.delete`. The button only OPENS the confirm; the act is its red
-            button, after a mandatory reason (rule 7). */}
+            button. */}
         {quyen.xoa && (
           <Button
             type="button"
@@ -3550,7 +3555,7 @@ export function ChiTietNhiemVu({
           >
             <CalendarClock aria-hidden="true" focusable="false" className="size-4 shrink-0" />
             {/* No assigner: the prototype's `nameOf(null)` word (`TaskWorkspace.tsx:107`). */}
-            Chờ duyệt lùi hạn — đã gửi tới {nhanCanBoNgan(nhiemVu.assigner, danhBaMa, CHUA_PHAN_CONG)}
+            Chờ duyệt lùi hạn — đã gửi tới {nhanCanBoNgan(nhiemVu.assigner, danhBaMa, CHUA_PHAN_CONG, nhiemVu.assigner_name)}
           </p>
         )}
 
@@ -3585,12 +3590,12 @@ export function ChiTietNhiemVu({
               line>` (`:412-415`) — here the MASKED address with `Xem`; no address (or an assignee the
               directory does not know) keeps the assigner line. */}
           <Fact label="Người thực hiện (chuyên viên tham mưu)">
-            <p className="text-navy m-0 text-[12.5px]">{nhanCanBoNgan(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}</p>
+            <p className="text-navy m-0 text-[12.5px]">{assigneeName}</p>
             <p className="text-ink-muted m-0 mt-0.5 text-[11px]">
               {assigneeEmail !== null ? (
                 <StaffEmailReveal key={nhiemVu.assignee} code={nhiemVu.assignee} masked={assigneeEmail} canReveal={canRevealEmail} />
               ) : nhiemVu.assigner !== "" ? (
-                `Lãnh đạo giao việc: ${nhanCanBoNgan(nhiemVu.assigner, danhBaMa, O_TRONG)}`
+                `Lãnh đạo giao việc: ${nhanCanBoNgan(nhiemVu.assigner, danhBaMa, O_TRONG, nhiemVu.assigner_name)}`
               ) : (
                 "Chưa chỉ định người thực hiện"
               )}
@@ -3612,7 +3617,7 @@ export function ChiTietNhiemVu({
               types={danhMuc.loai}
               documents={vanBan}
               unitName={unitName ?? O_TRONG}
-              assigneeName={nhanCanBoNgan(nhiemVu.assignee, danhBaMa, CHUA_PHAN_CONG)}
+              assigneeName={assigneeName}
               canEdit={quyen.capNhat}
               meetingLink={meetingLink}
               save={suaKhoiVanBan}
@@ -3747,12 +3752,13 @@ export function ChiTietNhiemVu({
 }
 
 /**
- * Xoá mềm §11.5 — a centred confirm stacked over the detail, with the MANDATORY reason (rule 7: the
- * row stays with who deleted it and why; an issued code is never reissued). Same route, same body.
+ * Xoá mềm §11.5 — a centred confirm stacked over the detail. NO REASON BOX since 15/10/2026 (owner,
+ * bug sheet web-admin-141026): the row still keeps who deleted it and a reason — the server's fixed
+ * default sentence (rule 7, invariant 1) — and an issued code is never reissued.
  *
  * A refusal ("còn 3 việc con chưa xoá…", ADR 0037 decision 3) shows HERE, verbatim, and the dialog
- * stays open with the reason kept. On success the caller toasts and drops the record's tab, which
- * unmounts the whole detail.
+ * stays open. On success the caller toasts and drops the record's tab, which unmounts the whole
+ * detail.
  */
 function TaskDeleteDialog({
   code,
@@ -3762,24 +3768,18 @@ function TaskDeleteDialog({
 }: {
   code: string;
   sending: boolean;
-  remove: (reason: string) => Promise<KetQua<unknown>>;
+  remove: () => Promise<KetQua<unknown>>;
   close: () => void;
 }) {
-  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    document.getElementById("ly-do-xoa-nhiem-vu")?.focus();
-  }, []);
-
   function submit(e: FormEvent<HTMLFormElement>): void {
     e.preventDefault();
-    const text = reason.trim();
-    if (text === "" || busy) return;
+    if (busy) return;
     setBusy(true);
     setError(null);
-    remove(text).then((r) => {
+    remove().then((r) => {
       setBusy(false);
       if (!r.ok) setError(r.thongBao);
     });
@@ -3790,23 +3790,9 @@ function TaskDeleteDialog({
       <ModalDialogHeader
         titleId={TASK_DELETE_TITLE_ID}
         title={`Xoá nhiệm vụ ${code} khỏi sổ?`}
-        description="Xoá mềm: dòng ở lại cùng người xoá và lý do, mã sổ đã cấp thì không bao giờ cấp lại. Nhiệm vụ còn việc con chưa xoá thì máy chủ từ chối và nói rõ còn mấy việc."
+        description="Xoá mềm: dòng ở lại cùng người xoá, mã sổ đã cấp thì không bao giờ cấp lại. Nhiệm vụ còn việc con chưa xoá thì máy chủ từ chối và nói rõ còn mấy việc."
       />
       <form className="m-0 flex flex-col gap-4" onSubmit={submit}>
-        <div>
-          <label htmlFor="ly-do-xoa-nhiem-vu" className={LABEL_CLASS}>
-            Lý do xoá (bắt buộc)
-          </label>
-          <input
-            id="ly-do-xoa-nhiem-vu"
-            name="ly-do-xoa-nhiem-vu"
-            value={reason}
-            autoComplete="off"
-            required
-            className={INPUT_CLASS}
-            onChange={(e) => setReason(e.target.value)}
-          />
-        </div>
         {error !== null && (
           <p className="thong-bao-loi m-0" role="alert">
             {error}
@@ -3827,7 +3813,7 @@ function TaskDeleteDialog({
                 <Trash2 aria-hidden="true" focusable="false" className="size-4" />
               )
             }
-            disabled={busy || sending || reason.trim() === ""}
+            disabled={busy || sending}
           >
             {TASK_DELETE_BUTTON}
           </Button>
