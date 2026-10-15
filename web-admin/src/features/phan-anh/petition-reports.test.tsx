@@ -84,6 +84,18 @@ describe("Báo cáo — what each section shows (ADR 0053 §Sửa đổi 09/10/2
     expect(html).toContain("Điểm đen là nơi vừa nhiều phản ánh vừa xử lý không kịp.");
   });
 
+  it("table lines: one thin line under each row, no column lines (bug sheet; prototype FeedbackReports.tsx:187,197)", () => {
+    // No preflight in this app: a row with `border-solid` but no `border-0` draws its other three sides
+    // at the browser's `medium` width. Every row resets them first.
+    const rows = html.match(/<tr class="[^"]*"/g) ?? [];
+    expect(rows.length).toBeGreaterThan(0);
+    for (const tr of rows) {
+      expect(tr).toMatch(/\bborder-0 border-b border-solid border-line\b/);
+    }
+    // Cells carry no border at all.
+    expect(html).not.toMatch(/<t[dh][^>]*class="[^"]*\bborder/);
+  });
+
   it("an empty sample shows `—`, never 0%; no bar", () => {
     const empty = renderToStaticMarkup(
       <PetitionReportsView

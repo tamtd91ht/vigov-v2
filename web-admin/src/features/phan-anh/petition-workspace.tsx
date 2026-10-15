@@ -11,7 +11,6 @@ import { coQuyen, QUYEN_XEM_PHAN_ANH } from "@/lib/quyen";
 import { PETITION_INTAKE_PERMISSION, PETITION_PAGE_SUBTITLE, PETITION_PAGE_TITLE } from "./nhan-phieu";
 import { SoPhanAnh } from "./so-phan-anh";
 import { StaffIntakeButton } from "./staff-intake";
-import { TraCuuPhieu } from "./tra-cuu-phieu";
 
 /** What an account without `feedback.read` is told, naming the key it lacks. */
 export const PETITION_READ_DENIED =
@@ -67,7 +66,8 @@ export function PetitionWorkspace({
         }
       />
       <CongQuyen khoa={QUYEN_XEM_PHAN_ANH} cauThieuQuyen={PETITION_READ_DENIED}>
-        {/* One spacing between the register and the lookup (spec §6.9). */}
+        {/* NO "Tra cứu phiếu phản ánh" block under the register (bug sheet; prototype
+            `FeedbackWorkspace.tsx` has none). A lookup code still opens its petition through `?id=`. */}
         <div className="flex min-w-0 flex-col gap-6">
           <SoPhanAnh
             key={drillDownKey(drillDown)}
@@ -76,7 +76,6 @@ export function PetitionWorkspace({
             openCode={openCode}
             basemapAvailable={basemapAvailable}
           />
-          <TraCuuPhieu />
         </div>
       </CongQuyen>
     </>

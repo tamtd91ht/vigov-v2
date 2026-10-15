@@ -68,14 +68,11 @@ import {
   petitionDeepLinkCode,
   afterPhotoType,
   afterPhotoUploadOpen,
-  clockFromBounds,
-  clockFromRfc3339,
   INTAKE_DESCRIPTION,
   intakeContentError,
   onTimePercent,
   PETITION_INTAKE_PERMISSION,
   ratingAverage,
-  toLocalInputValue,
 } from "./nhan-phieu";
 import {
   cardPlaceLabel,
@@ -967,12 +964,11 @@ describe("status strip — which chips are pressable (D1)", () => {
   });
 });
 
-describe("staff intake — the words and the clock (§11)", () => {
+describe("staff intake — the words (§11)", () => {
   it("the modal's description is the sentence the owner approved on 30/09/2026, verbatim", () => {
     expect(INTAKE_DESCRIPTION).toBe(
       "Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập ở đây đi " +
-        "cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được ấn định luôn — hãy " +
-        "ghi đúng thời điểm người dân phản ánh.",
+        "cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được ấn định luôn.",
     );
     // The old sentence (ADR 0028 E/F made it false) never comes back.
     expect(INTAKE_DESCRIPTION).not.toContain("cùng thời hạn");
@@ -980,23 +976,6 @@ describe("staff intake — the words and the clock (§11)", () => {
 
   it("the key is the seeded `feedback.create`", () => {
     expect(PETITION_INTAKE_PERMISSION).toBe("feedback.create");
-  });
-
-  it("`Dân phản ánh lúc` is read on the COMMUNE'S clock (+07:00), whatever the browser's zone", () => {
-    expect(clockFromRfc3339("2026-10-02T08:30")).toBe("2026-10-02T08:30:00+07:00");
-    expect(clockFromRfc3339("2026-10-02T08:30:15")).toBe("2026-10-02T08:30:15+07:00");
-    expect(clockFromRfc3339("")).toBe("");
-    expect(clockFromRfc3339("   ")).toBe("");
-    // Not the input's shape: refused, never guessed.
-    expect(clockFromRfc3339("02/10/2026 08:30")).toBeNull();
-    expect(clockFromRfc3339("2026-10-02T08:30Z")).toBeNull();
-  });
-
-  it("the picker's bounds are seven days back to now, in Vietnam time (tests run under TZ=UTC)", () => {
-    const now = new Date("2026-10-02T01:30:00Z"); // 08:30 in Hà Nội
-    expect(toLocalInputValue(now)).toBe("2026-10-02T08:30");
-    expect(toLocalInputValue(new Date("2026-10-01T17:05:00Z"))).toBe("2026-10-02T00:05");
-    expect(clockFromBounds(now)).toEqual({ min: "2026-09-25T08:30", max: "2026-10-02T08:30" });
   });
 
   it("content is required: blank or spaces refuse before sending", () => {

@@ -86,6 +86,13 @@ describe("the page frame — `feedback.read`", () => {
     );
     expect(html).not.toContain("lucide-message-square-warning");
   });
+
+  it("no `Tra cứu phiếu phản ánh` block under the register (bug sheet; the prototype has none)", () => {
+    session.permissions = ["feedback.read", "report.read"];
+    const html = render();
+    expect(html).not.toContain("Tra cứu phiếu phản ánh");
+    expect(html).not.toContain('id="ma-tra-cuu"');
+  });
 });
 
 /**

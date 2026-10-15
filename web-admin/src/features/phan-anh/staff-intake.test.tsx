@@ -51,7 +51,6 @@ const FIELDS: KetQua<petitions_citizenFieldListOut> = {
 
 const EMPTY_VALUES = {
   field: "",
-  clockLocal: "",
   content: "",
   address: "",
   reporterName: "",
@@ -142,13 +141,17 @@ describe("the modal's shape (§11) — what is on it and what is NOT", () => {
     expect(html).toContain(INTAKE_TITLE);
     expect(html).toContain(INTAKE_DESCRIPTION.replace(/&/g, "&amp;"));
     expect(html).toContain("— Chọn lĩnh vực —");
-    expect(html).toContain("Dân phản ánh lúc");
-    expect(html).toContain('type="datetime-local"');
     expect(html).toContain("Ghi lại lời người dân: sự việc gì, ở đâu, từ khi nào.");
     expect(html).toContain("Đầu ngõ thôn Hà Lam");
     expect(html).toContain("Người dân đề nghị gửi ẩn danh");
     expect(html).toContain("Vào sổ phản ánh");
     expect(html).toContain("Huỷ");
+  });
+
+  it("NO `Dân phản ánh lúc` box (bug sheet; prototype FeedbackEntryForm.tsx has none)", () => {
+    expect(html).not.toContain("Dân phản ánh lúc");
+    expect(html).not.toContain('type="datetime-local"');
+    expect(html).not.toContain("nhap-ho-luc");
   });
 
   it("prototype marks: required fields carry `*`, not “(bắt buộc)”; content is 3 rows; no reminder line", () => {
@@ -249,12 +252,11 @@ describe("the button — UX only, `feedback.create`", () => {
 describe("booking — the flow", () => {
   function fill(h: HTMLElement) {
     type(q<HTMLSelectElement>(h, "#nhap-ho-linh-vuc"), "rac-thai");
-    type(q<HTMLInputElement>(h, "#nhap-ho-luc"), "2026-10-02T08:30");
     type(q<HTMLTextAreaElement>(h, "#nhap-ho-noi-dung"), "Rác tồn đọng ở đầu ngõ.");
     type(q<HTMLInputElement>(h, "#nhap-ho-so-dien-thoai"), "0900000000");
   }
 
-  it("sends the typed values, the clock in +07:00, and ONE key; success shows the LOOKUP CODE and the sentence", async () => {
+  it("sends the typed values, NO clock (the server counts from booking), and ONE key; success shows the LOOKUP CODE and the sentence", async () => {
     const book = vi.fn(async (_i: StaffIntakeInput, _k: string) => ({ ok: true as const, duLieu: { code: "PA-2026-0042" } }));
     const onBooked = vi.fn();
     const h = mount(book, onBooked);
@@ -272,7 +274,8 @@ describe("booking — the flow", () => {
       reporterName: "",
       reporterPhone: "0900000000",
       anonymous: false,
-      clockFrom: "2026-10-02T08:30:00+07:00",
+      // No `Dân phản ánh lúc` on the form: `""`, which `staffIntakeBody` leaves out of the body.
+      clockFrom: "",
       // No hamlet picked: `""`, which `staffIntakeBody` leaves out of the body.
       residentialUnitId: "",
     });
@@ -284,9 +287,8 @@ describe("booking — the flow", () => {
     expect(h.querySelector('[role="status"]')?.textContent).toContain("PA-2026-0042");
   });
 
-  it("400 `clock_from_out_of_range`: the server's sentence; the retry REUSES the key; success renews it", async () => {
-    const cau =
-      "Thời điểm người dân phản ánh không được sớm hơn 7 ngày trước lúc vào sổ, và không được muộn hơn lúc vào sổ. Hãy kiểm tra lại ô \"Dân phản ánh lúc\".";
+  it("a 400 refusal: the server's sentence; the retry REUSES the key; success renews it", async () => {
+    const cau = "Lĩnh vực này xã chưa bật. Hãy chọn lĩnh vực khác.";
     const book = vi
       .fn<(i: StaffIntakeInput, k: string) => Promise<KetQua<{ code: string }>>>()
       .mockResolvedValueOnce({ ok: false, thongBao: cau })
@@ -351,16 +353,5 @@ describe("booking — the flow", () => {
     expect(q(h, '[role="alert"]').textContent).toBe(cau);
     // The choice stays for a correction.
     expect(q<HTMLSelectElement>(h, "#nhap-ho-thon").value).toBe("01JTHON2");
-  });
-
-  it("a blank clock sends NO `clock_from` — the server takes the booking instant", async () => {
-    const book = vi.fn(async (_i: StaffIntakeInput, _k: string) => ({ ok: true as const, duLieu: { code: "x" } }));
-    const h = mount(book);
-    await flush();
-    fill(h);
-    type(q<HTMLInputElement>(h, "#nhap-ho-luc"), "");
-    submit(h);
-    await flush();
-    expect(book.mock.calls[0]?.[0].clockFrom).toBe("");
   });
 });

@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  CalendarClock,
   CircleCheck,
   CloudOff,
   House,
@@ -36,8 +35,6 @@ import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen } from "@/lib/quyen";
 
 import {
-  clockFromBounds,
-  clockFromRfc3339,
   HAMLET_NONE,
   INTAKE_ADDRESS_LABEL,
   INTAKE_ADDRESS_PLACEHOLDER,
@@ -45,8 +42,6 @@ import {
   INTAKE_BUTTON,
   INTAKE_CANCEL,
   INTAKE_CHANNEL_NOTE,
-  INTAKE_CLOCK_HINT,
-  INTAKE_CLOCK_LABEL,
   INTAKE_CONTENT_LABEL,
   INTAKE_CONTENT_PLACEHOLDER,
   INTAKE_DESCRIPTION,
@@ -141,7 +136,6 @@ function StaffIntakeDialog({ onClose, onBooked }: { onClose: () => void; onBooke
 
 type FormValues = {
   field: string;
-  clockLocal: string;
   content: string;
   address: string;
   reporterName: string;
@@ -153,7 +147,6 @@ type FormValues = {
 
 const EMPTY: FormValues = {
   field: "",
-  clockLocal: "",
   content: "",
   address: "",
   reporterName: "",
@@ -186,7 +179,6 @@ export function StaffIntakeForm({
   const [sending, setSending] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [bookedCode, setBookedCode] = useState<string | null>(null);
-  const [bounds] = useState(() => clockFromBounds(new Date()));
   const [units, setUnits] = useState<KetQua<identity_danhSachThonToDanPhoRa> | null>(null);
 
   // The commune's units, read once per opening. A failure leaves the select with its empty choice only
@@ -214,8 +206,7 @@ export function StaffIntakeForm({
   const currentFields = fields !== null && fields.key === fieldsReloads ? fields.result : null;
 
   function send(): void {
-    const clockFrom = clockFromRfc3339(values.clockLocal);
-    if (clockFrom === null || values.field === "" || intakeContentError(values.content) !== null || sending) return;
+    if (values.field === "" || intakeContentError(values.content) !== null || sending) return;
     setSending(true);
     onSendingChange?.(true);
     book(
@@ -229,7 +220,10 @@ export function StaffIntakeForm({
         reporterName: values.anonymous ? "" : values.reporterName,
         reporterPhone: values.anonymous ? "" : values.reporterPhone,
         anonymous: values.anonymous,
-        clockFrom,
+        // NO `Dân phản ánh lúc` ON THE FORM (bug sheet: the box was removed; prototype
+        // `FeedbackEntryForm.tsx` has none). `""` leaves `clock_from` out of the body, and the server
+        // then counts the deadline from the booking instant (`staff_intake.go`, `ClockFrom`).
+        clockFrom: "",
         residentialUnitId: values.residentialUnitId,
       },
       key,
@@ -268,7 +262,6 @@ export function StaffIntakeForm({
       units={units}
       values={values}
       setValues={setValues}
-      bounds={bounds}
       sending={sending}
       refusal={refusal}
       onSubmit={send}
@@ -284,7 +277,6 @@ export function StaffIntakeFormView({
   units = null,
   values,
   setValues = () => {},
-  bounds,
   sending = false,
   refusal = null,
   onSubmit = () => {},
@@ -296,7 +288,6 @@ export function StaffIntakeFormView({
   units?: KetQua<identity_danhSachThonToDanPhoRa> | null;
   values: FormValues;
   setValues?: (v: FormValues) => void;
-  bounds?: { readonly min: string; readonly max: string };
   sending?: boolean;
   refusal?: string | null;
   onSubmit?: () => void;
@@ -305,18 +296,17 @@ export function StaffIntakeFormView({
 }) {
   const set = <K extends keyof FormValues>(k: K, v: FormValues[K]) => setValues({ ...values, [k]: v });
   const contentError = intakeContentError(values.content);
-  const clockBad = clockFromRfc3339(values.clockLocal) === null;
   const items = fields !== null && fields.ok ? fields.duLieu.items : [];
   const fieldsReady = fields !== null && fields.ok && items.length > 0;
   // A NEW record: only units in use — the same predicate the server applies to the id it receives.
   const unitChoices = units !== null && units.ok ? pickableResidentialUnits(units.duLieu.items) : [];
-  const canSend = fieldsReady && values.field !== "" && contentError === null && !clockBad && !sending;
+  const canSend = fieldsReady && values.field !== "" && contentError === null && !sending;
 
   return (
     // The prototype's dialog body (`FeedbackEntryForm.tsx:132-286`): header, then the fields in its
     // order — Lĩnh vực · Nội dung · [Địa chỉ | Thôn] · [Người gửi | Số điện thoại] · ẩn danh · kênh ·
-    // ảnh — then Huỷ / Vào sổ phản ánh. `Dân phản ánh lúc` is ours (the deadline's starting point, ADR
-    // 0028) and sits under the field it times. The header and the buttons stay in sight; the fields
+    // ảnh — then Huỷ / Vào sổ phản ánh. No `Dân phản ánh lúc` box (bug sheet, as the prototype): the
+    // deadline counts from the booking instant. The header and the buttons stay in sight; the fields
     // scroll between them.
     <form
       className="form-danh-muc m-0 flex min-h-0 flex-col gap-4 border-0 bg-transparent p-0"
@@ -383,28 +373,6 @@ export function StaffIntakeFormView({
           ))}
         </select>
       </Field>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field
-          label={INTAKE_CLOCK_LABEL}
-          htmlFor="nhap-ho-luc"
-          icon={CalendarClock}
-          grow="auto"
-          hint={<span id="nhap-ho-luc-goi-y">{INTAKE_CLOCK_HINT}</span>}
-        >
-          <input
-            id="nhap-ho-luc"
-            name="nhap-ho-luc"
-            type="datetime-local"
-            value={values.clockLocal}
-            min={bounds?.min}
-            max={bounds?.max}
-            disabled={sending}
-            aria-describedby="nhap-ho-luc-goi-y"
-            onChange={(e) => set("clockLocal", e.target.value)}
-          />
-        </Field>
-      </div>
-
       {/* Prototype `FeedbackEntryForm.tsx:164-175`: `*` after the label, 3 rows, no line under it. */}
       <div>
         <label htmlFor="nhap-ho-noi-dung" className={LABEL_CLASS}>

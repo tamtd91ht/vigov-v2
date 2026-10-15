@@ -1445,16 +1445,12 @@ export const INTAKE_TITLE = "Nhập hộ phản ánh của người dân";
 /** Spec §11, approved by the owner 30/09/2026 (spec 09:248-249) — verbatim. */
 export const INTAKE_DESCRIPTION =
   "Dùng khi người dân gọi điện, ghé trụ sở, hoặc gặp trưởng thôn ngoài địa bàn. Phiếu nhập ở đây đi " +
-  "cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được ấn định luôn — hãy " +
-  "ghi đúng thời điểm người dân phản ánh.";
+  "cùng quy trình với phiếu gửi từ Zalo. Vì đã biết lĩnh vực ngay, hạn xử lý được ấn định luôn.";
 export const INTAKE_FIELD_LABEL = "Lĩnh vực";
 export const INTAKE_FIELD_PLACEHOLDER = "— Chọn lĩnh vực —";
 export const INTAKE_FIELDS_LOADING = "Đang tải danh sách lĩnh vực…";
 export const INTAKE_FIELDS_EMPTY =
   "Xã chưa bật lĩnh vực phản ánh nào, nên chưa nhập hộ được. Hãy bật lĩnh vực ở màn hình Cấu hình.";
-export const INTAKE_CLOCK_LABEL = "Dân phản ánh lúc";
-export const INTAKE_CLOCK_HINT =
-  "Để trống thì lấy lúc vào sổ. Không được sớm hơn 7 ngày trước lúc vào sổ, và không được muộn hơn lúc vào sổ.";
 export const INTAKE_CONTENT_LABEL = "Nội dung phản ánh";
 export const INTAKE_CONTENT_PLACEHOLDER = "Ghi lại lời người dân: sự việc gì, ở đâu, từ khi nào.";
 export const INTAKE_ADDRESS_LABEL = "Địa chỉ, vị trí";
@@ -1487,57 +1483,6 @@ export const INTAKE_DONE_ANOTHER = "Nhập phiếu khác";
 /** The content is required, and the server refuses a blank one — say so before sending. */
 export function intakeContentError(content: string): string | null {
   return demKyTu(content) === 0 ? "Cần ghi nội dung phản ánh." : null;
-}
-
-/**
- * The commune's administrative clock — a PLATFORM constant, not per commune: Vietnam has one zone and
- * no daylight saving (same pin as `nhanThoiDiem`, `lib/drill-down.ts`).
- */
-const ADMINISTRATIVE_OFFSET = "+07:00";
-
-/**
- * `<input type="datetime-local">` (`2026-10-02T08:30`) → RFC 3339 WITH a zone
- * (`2026-10-02T08:30:00+07:00`), or `""` when blank.
- *
- * THE VALUE IS READ AS VIETNAM TIME, NOT AS THE BROWSER'S ZONE: the officer types the hour the citizen
- * called, on the commune's clock. A laptop set to another zone would otherwise move the deadline's
- * starting point by hours — and the deadline is a commitment counted from that point (rule 10). A
- * string that is not the input's shape returns `null`: refused here, never guessed.
- */
-export function clockFromRfc3339(local: string): string | null {
-  const v = local.trim();
-  if (v === "") return "";
-  const m = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(v);
-  if (m === null) return null;
-  return `${m[1]}T${m[2]}:${m[3]}:${m[4] ?? "00"}${ADMINISTRATIVE_OFFSET}`;
-}
-
-const LOCAL_INPUT_PARTS = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Asia/Ho_Chi_Minh",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-  hour: "2-digit",
-  minute: "2-digit",
-  hour12: false,
-});
-
-/** An instant as a `datetime-local` value on the commune's clock — for the input's `min`/`max`. */
-export function toLocalInputValue(at: Date): string {
-  const parts = LOCAL_INPUT_PARTS.formatToParts(at);
-  const get = (t: Intl.DateTimeFormatPartTypes) => parts.find((p) => p.type === t)?.value ?? "";
-  // `en-GB` writes midnight as `24` in some engines; the input wants `00`.
-  const hour = get("hour") === "24" ? "00" : get("hour");
-  return `${get("year")}-${get("month")}-${get("day")}T${hour}:${get("minute")}`;
-}
-
-/**
- * The input's `min` / `max` — a HINT to the picker only. The server decides against the BOOKING
- * instant, which is a few seconds after this; its 400 `clock_from_out_of_range` sentence is the answer.
- */
-export function clockFromBounds(now: Date): { readonly min: string; readonly max: string } {
-  const sevenDays = 7 * 24 * 60 * 60 * 1000;
-  return { min: toLocalInputValue(new Date(now.getTime() - sevenDays)), max: toLocalInputValue(now) };
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════

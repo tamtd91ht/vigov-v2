@@ -272,11 +272,15 @@ function ReportTable({
   empty: string;
 }) {
   if (rows.length === 0) return <p className="m-0 text-[12.5px] text-ink-muted">{empty}</p>;
+  // ROWS CARRY `border-0` (prototype `FeedbackReports.tsx:187,197`: one thin line under each row, no
+  // column lines). This app has no Tailwind preflight (globals.css:14), so `border-solid` alone made the
+  // other three sides solid at the browser's default `medium` width: thick lines between rows and
+  // vertical ones at the table's edges (bug sheet). Same fix as `van-ban/letter-report.tsx` HEAD_ROW.
   return (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-[12.5px]">
         <thead>
-          <tr className="border-b border-solid border-line text-left text-[11px] text-ink-muted uppercase">
+          <tr className="border-0 border-b border-solid border-line text-left text-[11px] text-ink-muted uppercase">
             {headers.map((h) => (
               <th key={h} scope="col" className="py-2 pr-4 font-semibold">
                 {h}
@@ -286,7 +290,7 @@ function ReportTable({
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-b border-solid border-line last:border-b-0">
+            <tr key={i} className="border-0 border-b border-solid border-line last:border-b-0">
               {row.map((cell, j) => (
                 <td key={j} className={cn("py-2 pr-4 tabular-nums", j === 0 ? "font-semibold text-navy" : "text-ink")}>
                   {cell}
