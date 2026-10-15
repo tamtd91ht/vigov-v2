@@ -249,15 +249,7 @@ CREATE TABLE IF NOT EXISTS hang_muc_ke_hoach_von (
     -- never seen.
     CONSTRAINT hang_muc_ke_hoach_von_re_nhanh_thi_he_thong
         CHECK (NOT ma_nguon_re_nhanh OR nguon = 'he-thong')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS hang_muc_ke_hoach_von_p%s PARTITION OF hang_muc_ke_hoach_von '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The catalogue screen lists every row of one commune in display order, rows out of use
 -- included (they carry a "Đã tắt" chip); only soft-deleted rows drop out — everywhere, always
@@ -280,7 +272,7 @@ CREATE TRIGGER hang_muc_ke_hoach_von_ba_tang
 -- REVERSAL (migration question 3). Every object here is new, and while the table is still empty
 -- the reversal is complete and loses nothing: drop the table, then the trigger function, and in
 -- the same transaction remove this file's row from `schema_migration`, otherwise the runner
--- still believes the schema is in place. The 32 partitions and the trigger go with the parent
+-- still believes the schema is in place. The trigger goes with the
 -- table.
 --
 -- ONCE A COMMUNE HAS ROWS HERE, THAT IS NO LONGER A REVERSAL — it is the destruction of commune
@@ -313,7 +305,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

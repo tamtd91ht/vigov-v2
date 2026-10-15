@@ -253,15 +253,7 @@ CREATE TABLE IF NOT EXISTS budget_period_closes (
     CONSTRAINT budget_period_closes_reopen_reason_max CHECK (char_length(reopen_reason) <= 500),
     -- A reopen before its close is a clock or a forged row, never an act.
     CONSTRAINT budget_period_closes_reopen_after_close CHECK (reopened_at >= closed_at)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS budget_period_closes_p%s PARTITION OF budget_period_closes '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- At most one ACTIVE close per (tenant, year, month-or-year), and the index the write-path check
 -- reads. See the header block for every reason.
@@ -295,7 +287,7 @@ CREATE TRIGGER budget_period_closes_immutable
 --        SELECT count(*) FROM budget_period_closes;                              -- must be 0
 --        SELECT count(*) FROM dot_thu_chi WHERE adjustment_reason IS NOT NULL;   -- must be 0
 --      If either is not zero, STOP: see below.
---   2. DROP TABLE budget_period_closes;   (32 partitions, two indexes, two triggers go with it)
+--   2. DROP TABLE budget_period_closes;   (two indexes, two triggers go with it)
 --      DROP FUNCTION budget_period_close_immutable();
 --      ho_so_luu_tru_cam_xoa_cung STAYS — it is 0004's and other tables are attached to it.
 --   3. ALTER TABLE dot_thu_chi DROP CONSTRAINT dot_thu_chi_adjustment_reason_not_blank,
@@ -328,7 +320,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

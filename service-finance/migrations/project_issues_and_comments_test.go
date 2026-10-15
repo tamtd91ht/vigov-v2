@@ -11,16 +11,17 @@ import (
 
 const file0015 = "0015_project_issues_and_comments.sql"
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a key without tenant_id, dropping the partitions, dropping
+// THE MUTATIONS THAT MUST TURN THIS RED: a key without tenant_id, dropping project_comments' partitions or
+// partitioning project_issues (ADR 0096), dropping
 // the hard-delete triggers, dropping the immutability guards, losing the soft-delete columns.
 func TestMigration0015Shape(t *testing.T) {
 	sql := maChay(t, file0015)
+	requirePlainTable(t, file0015, sql, "project_issues")
+	requireHashPartitionedBy8(t, file0015, sql, "project_comments")
 	for _, c := range []struct{ want, why string }{
 		{"create table if not exists project_issues (", "bảng vướng mắc"},
 		{"create table if not exists project_comments (", "bảng trao đổi"},
 		{"primary key (tenant_id, id),", "khoá hợp thành với tenant_id"},
-		{") partition by hash (tenant_id);", "phân vùng theo xã"},
-		{"for values with (modulus 32, remainder %s)", "32 phân vùng"},
 		{"deleted_at timestamptz, deleted_by text, delete_reason text,", "cột xoá mềm (luật 7)"},
 		{"tracking_task_id text,", "chỗ cho nhiệm vụ theo dõi về sau"},
 		{"check ((resolved_at is null) = (resolved_by is null))", "gỡ thì phải có người gỡ"},

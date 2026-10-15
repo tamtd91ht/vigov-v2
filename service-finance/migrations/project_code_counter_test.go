@@ -12,16 +12,15 @@ import (
 const file0014 = "0014_project_code_counter.sql"
 
 // THE MUTATIONS THAT MUST TURN THIS RED: a key without tenant_id (one series shared by every
-// commune — commune B's DA07 would skip because commune A issued it), dropping the partitions,
+// commune — commune B's DA07 would skip because commune A issued it), partitioning it (ADR 0096),
 // dropping the hard-delete trigger.
 func TestMigration0014CounterShape(t *testing.T) {
 	sql := maChay(t, file0014)
+	requirePlainTable(t, file0014, sql, "project_code_counters")
 	for _, c := range []struct{ want, why string }{
 		{"create table if not exists project_code_counters (", "bảng bộ đếm"},
 		{"primary key (tenant_id),", "một dãy mỗi xã — khoá theo tenant_id"},
 		{"constraint project_code_counters_next_number_positive check (next_number >= 1)", "số bắt đầu từ 1"},
-		{") partition by hash (tenant_id);", "phân vùng theo xã"},
-		{"for values with (modulus 32, remainder %s)", "32 phân vùng"},
 		{"create trigger project_code_counters_no_hard_delete before delete on project_code_counters " +
 			"for each row execute function ho_so_luu_tru_cam_xoa_cung();", "không xoá cứng bộ đếm"},
 	} {

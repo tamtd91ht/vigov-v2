@@ -158,15 +158,7 @@ CREATE TABLE IF NOT EXISTS custom_system_message (
                AND (deleted_at IS NULL) = (delete_reason IS NULL)
                AND (deleted_by IS NULL OR (btrim(deleted_by) <> '' AND char_length(deleted_by) <= 64))
                AND (delete_reason IS NULL OR (btrim(delete_reason) <> '' AND char_length(delete_reason) <= 200)))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS custom_system_message_p%s PARTITION OF custom_system_message '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 CREATE INDEX IF NOT EXISTS custom_system_message_list
     ON custom_system_message (tenant_id, group_code, message_key) WHERE deleted_at IS NULL;
@@ -221,7 +213,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

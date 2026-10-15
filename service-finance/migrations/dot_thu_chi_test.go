@@ -112,22 +112,22 @@ func TestMigration0008DoiRangBuocCoCanh(t *testing.T) {
 	}
 }
 
-// TestMigration0008BangDotVaGiaTri — keys composite with tenant_id, partitioned like the siblings,
+// TestMigration0008BangDotVaGiaTri — keys composite with tenant_id, plain tables (ADR 0096),
 // the caps, the all-or-none soft delete, and the three triggers.
 //
-// THE MUTATIONS THAT MUST TURN THIS RED: drop tenant_id from a primary key; remove a partition loop;
+// THE MUTATIONS THAT MUST TURN THIS RED: drop tenant_id from a primary key; partition either table again;
 // drop the `IS NOT NULL` guards from the soft-delete CHECK (a CHECK treats NULL as passed); remove
 // any trigger; turn the whole-row comparison back into a column list.
 func TestMigration0008BangDotVaGiaTri(t *testing.T) {
 	sql := maChay(t, tep0008)
+	requirePlainTable(t, tep0008, sql, "dot_thu_chi")
+	requirePlainTable(t, tep0008, sql, "gia_tri_dot")
 
 	for _, c := range []struct{ can, vi string }{
 		{"create table if not exists dot_thu_chi (", "bảng đợt"},
 		{"create table if not exists gia_tri_dot (", "bảng giá trị đợt"},
 		{"primary key (tenant_id, id)", "khoá chính đợt hợp thành với tenant_id (luật 1 bất biến 6)"},
 		{"primary key (tenant_id, dot_id, cot_id)", "khoá chính giá trị hợp thành với tenant_id"},
-		{"partition of dot_thu_chi ' 'for values with (modulus 32, remainder %s)", "32 mảnh cho dot_thu_chi"},
-		{"partition of gia_tri_dot ' 'for values with (modulus 32, remainder %s)", "32 mảnh cho gia_tri_dot"},
 		{"ngay date not null", "ngày bắt buộc"},
 		{"noi_dung text not null", "nội dung bắt buộc"},
 		{"don_vi_ca_nhan text,", "đơn vị, cá nhân NULLABLE"},

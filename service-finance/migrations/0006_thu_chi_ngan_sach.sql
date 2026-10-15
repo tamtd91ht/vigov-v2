@@ -88,8 +88,8 @@
 --   3. HOW IT IS REVERSED: see REVERSAL at the bottom.
 --   4. WHICH READ PATHS CHANGE MEANING WHILE IT IS HALF-APPLIED: none. This file only ADDS. No
 --      existing table, column, index, constraint, trigger or function is touched.
---   5. WHAT IT COSTS ON THE LARGEST COMMUNE: nothing measurable. Empty tables, 128 empty
---      partitions, five indexes over no rows.
+--   5. WHAT IT COSTS ON THE LARGEST COMMUNE: nothing measurable. Empty plain tables,
+--      five indexes over no rows.
 --
 -- ---------------------------------------------------------------------------
 -- WHAT THIS FILE DELIBERATELY DOES NOT CREATE, so the absence reads as a decision:
@@ -191,15 +191,7 @@ CREATE TABLE IF NOT EXISTS bang_ngan_sach (
     -- first question asked when a figure is disputed.
     CONSTRAINT bang_ngan_sach_nguon_tep_du
         CHECK ((nguon_tep IS NULL) = (nap_luc IS NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS bang_ngan_sach_p%s PARTITION OF bang_ngan_sach '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The only read shape there is: one commune, one year, one kind, newest revision first.
 CREATE INDEX IF NOT EXISTS bang_ngan_sach_theo_nam_loai
@@ -280,15 +272,7 @@ CREATE TABLE IF NOT EXISTS cot_ngan_sach (
     -- A role on a percentage column would make an indicator read a figure that is itself a ratio.
     CONSTRAINT cot_ngan_sach_vai_tro_chi_tren_cot_so
         CHECK (vai_tro IS NULL OR kieu = 'so')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS cot_ngan_sach_p%s PARTITION OF cot_ngan_sach '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 CREATE INDEX IF NOT EXISTS cot_ngan_sach_theo_bang
     ON cot_ngan_sach (tenant_id, bang_id, thu_tu) WHERE deleted_at IS NULL;
@@ -347,15 +331,7 @@ CREATE TABLE IF NOT EXISTS khoan_muc_ngan_sach (
     -- A line cannot be its own parent. The only self-reference cycle a single row can express, and
     -- the only one checkable without a recursive query.
     CONSTRAINT khoan_muc_ngan_sach_khong_tu_lam_cha CHECK (cha_id IS DISTINCT FROM id)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS khoan_muc_ngan_sach_p%s PARTITION OF khoan_muc_ngan_sach '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The whole tree of one sheet, in display order, is the only read there is (§4 draws all 59 rows).
 CREATE INDEX IF NOT EXISTS khoan_muc_ngan_sach_theo_bang
@@ -393,15 +369,7 @@ CREATE TABLE IF NOT EXISTS gia_tri_khoan_muc (
     -- The composite primary key IS the uniqueness this table needs: one cell per (line, column),
     -- inside one commune (rule 1, invariant 6).
     PRIMARY KEY (tenant_id, khoan_muc_id, cot_id)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS gia_tri_khoan_muc_p%s PARTITION OF gia_tri_khoan_muc '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS gia_tri_khoan_muc_cam_xoa_cung ON gia_tri_khoan_muc;
 CREATE TRIGGER gia_tri_khoan_muc_cam_xoa_cung
@@ -417,7 +385,7 @@ CREATE TRIGGER gia_tri_khoan_muc_cam_xoa_cung
 -- REVERSAL (migration question 3). Every object here is new, and while all four tables are still
 -- empty the reversal is complete and loses nothing: drop gia_tri_khoan_muc, khoan_muc_ngan_sach,
 -- cot_ngan_sach, bang_ngan_sach, and in the same transaction remove this file's row from
--- `schema_migration`. The 128 partitions and the four triggers go with their parent tables. The two
+-- `schema_migration`. The four triggers go with their tables. The two
 -- trigger FUNCTIONS are 0004's and must NOT be dropped — chung_tu_giai_ngan still uses them.
 --
 -- ONCE A COMMUNE HAS ROWS HERE, THAT IS NO LONGER A REVERSAL — it is the destruction of budget
@@ -445,7 +413,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

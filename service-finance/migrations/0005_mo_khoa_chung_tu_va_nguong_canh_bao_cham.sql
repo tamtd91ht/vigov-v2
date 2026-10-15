@@ -80,7 +80,7 @@
 --      statement here.
 --   5. WHAT IT COSTS ON THE LARGEST COMMUNE: nothing measurable. ADD COLUMN with a constant
 --      DEFAULT does not rewrite a table on PostgreSQL 11 and newer, and the table is empty in any
---      case. The new table is 32 empty partitions.
+--      case. The new table is an empty plain table.
 -- ---------------------------------------------------------------------------
 
 -- PostgreSQL 13 is the floor, for the same reason 0004 states: BEFORE ... FOR EACH ROW triggers on
@@ -255,21 +255,13 @@ CREATE TABLE IF NOT EXISTS cau_hinh_giai_ngan (
         CHECK (nguong_canh_bao_cham BETWEEN 0 AND 10000),
     CONSTRAINT cau_hinh_giai_ngan_nam_hop_le
         CHECK (nam BETWEEN 2000 AND 2100)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS cau_hinh_giai_ngan_p%s PARTITION OF cau_hinh_giai_ngan '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- ---------------------------------------------------------------------------
 -- REVERSAL (migration question 3).
 --
 -- PART 2 reverses completely and loses nothing while no commune has written a threshold: drop
--- cau_hinh_giai_ngan (the 32 partitions go with it). Once a commune HAS set one, dropping the
+-- cau_hinh_giai_ngan. Once a commune HAS set one, dropping the
 -- table silently returns that commune to 10 points — which is a change to a reported figure, not a
 -- schema tidy-up, so it needs the user.
 --
@@ -316,7 +308,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

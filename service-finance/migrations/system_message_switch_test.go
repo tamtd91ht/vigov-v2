@@ -27,8 +27,6 @@ func TestMigration0017(t *testing.T) {
 			"all three delete facts or none, both directions — no half-delete, no blank who/why"},
 		{"check (btrim(created_by) <> '' and char_length(created_by) <= 64 and btrim(updated_by) <> '' and char_length(updated_by) <= 64)",
 			"actors present and bounded (rule 6, invariant 8)"},
-		{") partition by hash (tenant_id);", "partitioned by commune (ADR 0010)"},
-		{"partition of custom_system_message ' 'for values with (modulus 32, remainder %s)", "32 partitions"},
 		{"before update or delete on custom_system_message for each row execute function custom_system_message_guard()",
 			"guard attached"},
 		{"if new.message_key is distinct from old.message_key or new.group_code is distinct from old.group_code then raise exception",

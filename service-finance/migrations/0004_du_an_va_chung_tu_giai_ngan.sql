@@ -56,8 +56,8 @@
 --      existing table, column, index, constraint or trigger is touched, so every query that runs
 --      today returns exactly what it returned before. hang_muc_ke_hoach_von is READ by the new
 --      tables' logical reference but is not altered — see the note on du_an.hang_muc_id.
---   5. WHAT IT COSTS ON THE LARGEST COMMUNE: nothing measurable. Empty tables, 64 empty
---      partitions, four indexes over no rows.
+--   5. WHAT IT COSTS ON THE LARGEST COMMUNE: nothing measurable. Empty tables, 8 empty
+--      partitions (chung_tu_giai_ngan), four indexes over no rows.
 --
 -- ---------------------------------------------------------------------------
 -- WHAT THIS FILE DELIBERATELY DOES NOT CREATE, so the absence reads as a decision:
@@ -231,15 +231,7 @@ CREATE TABLE IF NOT EXISTS du_an (
     -- A budget year outside this window is a typo (1026, 20226) that would make a project
     -- invisible on every screen while sitting in the table looking healthy.
     CONSTRAINT du_an_nam_hop_le CHECK (nam BETWEEN 2000 AND 2100)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS du_an_p%s PARTITION OF du_an '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The list screen is always one commune, one budget year, ordered by code (§7).
 CREATE INDEX IF NOT EXISTS du_an_danh_sach
@@ -310,10 +302,10 @@ CREATE TABLE IF NOT EXISTS chung_tu_giai_ngan (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS chung_tu_giai_ngan_p%s PARTITION OF chung_tu_giai_ngan '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -341,8 +333,8 @@ CREATE TRIGGER chung_tu_giai_ngan_da_khoa
 -- REVERSAL (migration question 3). Every object here is new, and while both tables are still empty
 -- the reversal is complete and loses nothing: drop chung_tu_giai_ngan, then du_an, then the two
 -- trigger functions, and in the same transaction remove this file's row from `schema_migration`,
--- otherwise the runner still believes the schema is in place. The 64 partitions and the triggers
--- go with their parent tables.
+-- otherwise the runner still believes the schema is in place. The 8 partitions and the triggers
+-- go with their tables.
 --
 -- ONCE A COMMUNE HAS ROWS HERE, THAT IS NO LONGER A REVERSAL — it is the destruction of
 -- disbursement records, which is rule 7's first stop condition and needs the user, not a command.
@@ -372,7 +364,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

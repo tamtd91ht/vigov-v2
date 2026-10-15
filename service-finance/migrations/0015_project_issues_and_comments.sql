@@ -74,15 +74,7 @@ CREATE TABLE IF NOT EXISTS project_issues (
     -- Who and when are one fact: a resolution with no author is one nobody can account for.
     CONSTRAINT project_issues_resolution_whole
         CHECK ((resolved_at IS NULL) = (resolved_by IS NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS project_issues_p%s PARTITION OF project_issues '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- §8.1's timeline (one project, newest first) and §7.2's "latest issue" per project.
 CREATE INDEX IF NOT EXISTS project_issues_by_project
@@ -172,10 +164,10 @@ CREATE TABLE IF NOT EXISTS project_comments (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS project_comments_p%s PARTITION OF project_comments '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -216,7 +208,7 @@ CREATE TRIGGER project_comments_guard
 -- (ADR 0013).
 --
 --   1. Roll back the Go code that reads and writes them first.
---   2. DROP TABLE project_comments; DROP TABLE project_issues;   (partitions and triggers go with them)
+--   2. DROP TABLE project_comments; DROP TABLE project_issues;   (project_comments' partitions and the triggers go with them)
 --      DROP FUNCTION project_comment_guard(); DROP FUNCTION project_issue_guard();
 --      ho_so_luu_tru_cam_xoa_cung STAYS — it is 0004's and other tables are attached to it.
 --   3. Remove this file's row from `schema_migration`, otherwise the runner still believes it has run.
@@ -240,7 +232,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

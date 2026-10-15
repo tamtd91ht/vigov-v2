@@ -93,7 +93,7 @@
 --      reader until this slice's store is deployed. The one behaviour that DOES change is a
 --      refusal, not a result: see the trigger note below.
 --   5. WHAT IT COSTS ON THE LARGEST COMMUNE: nothing measurable. ADD COLUMN with no DEFAULT does
---      not rewrite a table on any supported PostgreSQL; the two new tables are 64 empty partitions
+--      not rewrite a table on any supported PostgreSQL; the two new tables are empty plain tables
 --      and four indexes over no rows.
 --
 -- ---------------------------------------------------------------------------
@@ -173,15 +173,7 @@ CREATE TABLE IF NOT EXISTS nguon_von (
     -- A budget year outside this window is a typo (1026, 20226) that would hide the source from
     -- every screen while it sits in the table looking healthy.
     CONSTRAINT nguon_von_nam_hop_le CHECK (nam BETWEEN 2000 AND 2100)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS nguon_von_p%s PARTITION OF nguon_von '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- §6 lists one commune's sources for one budget year, in the commune's own display order.
 CREATE INDEX IF NOT EXISTS nguon_von_danh_sach
@@ -231,15 +223,7 @@ CREATE TABLE IF NOT EXISTS phan_bo_nguon_von (
     -- every future write path.
     CONSTRAINT phan_bo_nguon_von_du_an_co_that CHECK (btrim(du_an_id) <> ''),
     CONSTRAINT phan_bo_nguon_von_nguon_co_that CHECK (btrim(nguon_von_id) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS phan_bo_nguon_von_p%s PARTITION OF phan_bo_nguon_von '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- TWO READ SHAPES, both within one commune, and both are needed because §6 and §7 read this table
 -- from opposite ends: the chip on a project row lists that project's sources, while a source card
@@ -360,8 +344,8 @@ END $$;
 --      reversing it means restating it; 0004 is where the previous text lives.
 --   2. DROP INDEX chung_tu_giai_ngan_theo_nguon_von; ALTER TABLE chung_tu_giai_ngan DROP CONSTRAINT
 --      chung_tu_giai_ngan_nguon_von_khong_rong, DROP COLUMN nguon_von_id.
---   3. DROP TABLE phan_bo_nguon_von, then nguon_von. The 64 partitions, the four indexes and the
---      two triggers go with their parent tables. ho_so_luu_tru_cam_xoa_cung STAYS — it is 0004's
+--   3. DROP TABLE phan_bo_nguon_von, then nguon_von. The four indexes and the
+--      two triggers go with their tables. ho_so_luu_tru_cam_xoa_cung STAYS — it is 0004's
 --      function and other tables are attached to it.
 --   4. In the same transaction, remove this file's row from `schema_migration`, otherwise the
 --      runner still believes the schema is in place.
@@ -400,7 +384,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

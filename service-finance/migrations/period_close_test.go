@@ -9,7 +9,7 @@ import (
 //
 // WHAT THIS IS AND IS NOT — the same caveat as dot_thu_chi_test.go. It reads the SQL this binary
 // embeds and asserts the keys, CHECKs and triggers are WRITTEN. It does NOT prove PostgreSQL accepts
-// the file — in particular the partial NULLS NOT DISTINCT unique index on a partitioned table, the
+// the file — in particular the partial NULLS NOT DISTINCT unique index (on a plain table since ADR 0096), the
 // first of its kind in this service. That is internal/store/budget_period_close_pg_test.go, which
 // needs VIGOV_TEST_DSN. This half always runs, so a loosened key or a removed trigger goes red.
 
@@ -24,6 +24,7 @@ const file0012 = "0012_budget_period_close.sql"
 // partial predicate (a period can never be closed again after a reopen).
 func TestMigration0012OneActiveClose(t *testing.T) {
 	sql := maChay(t, file0012)
+	requirePlainTable(t, file0012, sql, "budget_period_closes")
 
 	for _, c := range []struct{ want, why string }{
 		{"create unique index if not exists budget_period_closes_one_active on budget_period_closes " +
@@ -36,8 +37,6 @@ func TestMigration0012OneActiveClose(t *testing.T) {
 		{"unique (tenant_id, code),", "mã nghiệp vụ không cấp lại — KHÔNG từng phần"},
 		{"current_setting('server_version_num')::int < 150000",
 			"NULLS NOT DISTINCT cần PostgreSQL 15"},
-		{") partition by hash (tenant_id);", "phân vùng theo xã"},
-		{"for values with (modulus 32, remainder %s)", "32 phân vùng"},
 	} {
 		if !strings.Contains(sql, c.want) {
 			t.Errorf("0012 thiếu %q — %s", c.want, c.why)

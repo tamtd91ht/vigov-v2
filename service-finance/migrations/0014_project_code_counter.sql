@@ -61,15 +61,7 @@ CREATE TABLE IF NOT EXISTS project_code_counters (
     -- One series per commune (rule 1, invariant 6: keyed by tenant_id, which is the partition key).
     PRIMARY KEY (tenant_id),
     CONSTRAINT project_code_counters_next_number_positive CHECK (next_number >= 1)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS project_code_counters_p%s PARTITION OF project_code_counters '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- A reset series is not a reissue (header), but it is still nobody's to do from the application.
 DROP TRIGGER IF EXISTS project_code_counters_no_hard_delete ON project_code_counters;
@@ -82,7 +74,7 @@ CREATE TRIGGER project_code_counters_no_hard_delete
 -- rollback (ADR 0013).
 --
 --   1. Roll back the Go code that reads it first (an auto-coded create would otherwise fail).
---   2. DROP TABLE project_code_counters;   (32 partitions and the trigger go with it)
+--   2. DROP TABLE project_code_counters;   (the trigger goes with it)
 --      ho_so_luu_tru_cam_xoa_cung STAYS — it is 0004's and other tables are attached to it.
 --   3. Remove this file's row from `schema_migration`, otherwise the runner still believes it has run.
 --
@@ -108,7 +100,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

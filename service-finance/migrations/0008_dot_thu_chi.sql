@@ -298,15 +298,7 @@ CREATE TABLE IF NOT EXISTS dot_thu_chi (
             AND deleted_by IS NOT NULL AND btrim(deleted_by) <> ''
             AND delete_reason IS NOT NULL AND btrim(delete_reason) <> '')),
     CONSTRAINT dot_thu_chi_ly_do_xoa_toi_da CHECK (char_length(delete_reason) <= 500)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS dot_thu_chi_p%s PARTITION OF dot_thu_chi '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The two reads there are, both within one commune and one line: §5's list of batches (newest
 -- first) and the per-line sum an `entries` line shows. Partial on deleted_at like every index in
@@ -347,15 +339,7 @@ CREATE TABLE IF NOT EXISTS gia_tri_dot (
     PRIMARY KEY (tenant_id, dot_id, cot_id),
     CONSTRAINT gia_tri_dot_dot_co_that CHECK (btrim(dot_id) <> ''),
     CONSTRAINT gia_tri_dot_cot_co_that CHECK (btrim(cot_id) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS gia_tri_dot_p%s PARTITION OF gia_tri_dot '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- No extra index: every read reaches amounts through their batch, and the primary key
 -- (tenant_id, dot_id, cot_id) already serves "all amounts of these batches".
@@ -378,7 +362,7 @@ CREATE TRIGGER gia_tri_dot_bat_bien
 --        SELECT count(*) FROM dot_thu_chi;                                        -- must be 0
 --      If either is not zero, STOP: see below.
 --   2. DROP TABLE gia_tri_dot; DROP TABLE dot_thu_chi;
---      (their 64 partitions, one index and three triggers go with them)
+--      (their one index and three triggers go with them)
 --   3. DROP FUNCTION gia_tri_dot_bat_bien(); DROP FUNCTION dot_thu_chi_bat_bien();
 --      ho_so_luu_tru_cam_xoa_cung STAYS — it is 0004's and other tables are attached to it.
 --   4. ALTER TABLE khoan_muc_ngan_sach DROP CONSTRAINT khoan_muc_ngan_sach_cach_tinh_hop_le;
@@ -420,7 +404,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

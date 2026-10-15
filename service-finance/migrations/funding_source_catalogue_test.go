@@ -59,7 +59,6 @@ func TestMigration0013UniqueKeys(t *testing.T) {
 			"vốn được giao không âm"},
 		{"constraint funding_source_annual_amounts_year_valid check (year between 2000 and 2100)",
 			"cùng khung năm với du_an.nam"},
-		{") partition by hash (tenant_id);", "phân vùng theo xã"},
 		{"before delete on funding_source_annual_amounts for each row execute function " +
 			"ho_so_luu_tru_cam_xoa_cung();", "không xoá cứng số vốn được giao"},
 	} {

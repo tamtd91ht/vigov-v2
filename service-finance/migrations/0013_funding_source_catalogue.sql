@@ -226,15 +226,7 @@ CREATE TABLE IF NOT EXISTS funding_source_annual_amounts (
     -- Zero is a real state (the source is known before its figure is decided); negative is a sign
     -- error that would drag the year's headline capital below the truth.
     CONSTRAINT funding_source_annual_amounts_amount_not_negative CHECK (granted_amount >= 0)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS funding_source_annual_amounts_p%s PARTITION OF funding_source_annual_amounts '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- §6 reads one commune's amounts for one year. (The unique key above serves the per-source lookup.)
 CREATE INDEX IF NOT EXISTS funding_source_annual_amounts_by_year
@@ -253,7 +245,7 @@ CREATE TRIGGER funding_source_annual_amounts_no_hard_delete
 --        SELECT count(*) FROM funding_source_annual_amounts;   -- must be 0
 --        SELECT count(*) FROM nguon_von;                       -- must be 0
 --      If either is not zero, STOP: see below.
---   2. Remove the new table funding_source_annual_amounts (its 32 partitions, index, unique key and
+--   2. Remove the new table funding_source_annual_amounts (its index, unique key and
 --      trigger go with it). ho_so_luu_tru_cam_xoa_cung STAYS — it is 0004's.
 --   3. Remove the indexes phan_bo_nguon_von_one_line_per_source, nguon_von_name_unique and
 --      nguon_von_catalogue_order, and the constraint nguon_von_name_trimmed.
@@ -292,7 +284,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;
