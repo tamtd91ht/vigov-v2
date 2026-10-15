@@ -317,10 +317,12 @@ func (s *ZaloLinkStore) LiveLink(ctx context.Context, staffCode string) (domain.
 		"AND staff_code = $2 AND unlinked_at IS NULL", staffCode))
 }
 
-// LiveLinks lists the commune's live links, oldest first. Refuses past MaxZaloLinksListed.
+// LiveLinks lists the commune's live links, NEWEST first — the member of staff linked last is the
+// first row (owner decision 15/10/2026, tester sheet web-admin-141026). `id DESC` breaks a tie on
+// linked_at so the order is total. Refuses past MaxZaloLinksListed.
 func (s *ZaloLinkStore) LiveLinks(ctx context.Context) ([]domain.ZaloLink, error) {
 	rows, err := s.db.For(ctx).Query(ctx, zaloLinkColumns, "zalo_link",
-		"AND unlinked_at IS NULL ORDER BY linked_at, id LIMIT $2", MaxZaloLinksListed+1)
+		"AND unlinked_at IS NULL ORDER BY linked_at DESC, id DESC LIMIT $2", MaxZaloLinksListed+1)
 	if err != nil {
 		return nil, fmt.Errorf("zalo_link: list: %w", err)
 	}

@@ -39,11 +39,13 @@ import (
 //	           (a cursor from another sort or direction is 400 invalid_cursor).
 //	sort       optional, SINCE 08/10/2026 (owner decision) — the SAME allowlist as GET's `?sort=`
 //	           (store.SapXepCanBo): code · created_at · full_name · position · department · phone ·
-//	           last_login_at · status. Absent/"" = `code`. Anything else is 400 invalid_sort.
-//	order      optional — `asc` | `desc`. Absent/"" = `asc`. Anything else is 400 invalid_sort.
+//	           last_login_at · status. Absent/"" = `created_at` (newest first, owner 15/10/2026).
+//	           Anything else is 400 invalid_sort.
+//	order      optional — `asc` | `desc`. Absent/"" = `desc` (the allowlist's one default direction,
+//	           for every column). Anything else is 400 invalid_sort.
 //
 // `sort` AND `order` CARRY `omitempty` so the generated contract marks them optional: a client written
-// before them sends neither and keeps today's order. They are in the BODY, not the URL, only because
+// before them sends neither and gets the default order. They are in the BODY, not the URL, only because
 // the rest of this request is; neither is personal data.
 type timCanBoVao struct {
 	Q         string `json:"q"`

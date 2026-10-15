@@ -167,9 +167,13 @@ var ErrThieuNamNganSach = errors.New("du_an: thiếu năm ngân sách")
 // subquery behind the join. Joining on id alone would match another commune's rows wherever ids
 // collide, and no test of a single commune would ever show it (rule 1).
 //
-// ORDER BY da.ma: the project code is unique per commune (UNIQUE (tenant_id, ma)), so the order is
-// TOTAL and two calls cannot swap two rows. An unstable order makes a client-side diff flicker on
-// every reload and makes any test of this compare sets by accident.
+// ORDER BY da.tao_luc DESC, da.id DESC: the project added last comes first (owner decision 15/10/2026,
+// tester sheet web-admin-141026: "data được thêm sau thì hiển thị đầu danh sách"). It used to be
+// `da.ma`, which put a new project wherever its code fell. tao_luc alone is NOT a total order — rows
+// inserted in one transaction share now(), PostgreSQL's transaction-start instant — so
+// the id (unique per commune, PRIMARY KEY (tenant_id, id)) breaks the tie. Without a total order two
+// calls can swap two rows: a client-side diff flickers on every reload and any test of this compares
+// sets by accident.
 func (s *DuAnStore) DanhSach(ctx context.Context, loc LocDuAn) ([]domain.TienDoDuAn, error) {
 	if loc.Nam == 0 {
 		return nil, ErrThieuNamNganSach
@@ -186,7 +190,7 @@ func (s *DuAnStore) DanhSach(ctx context.Context, loc LocDuAn) ([]domain.TienDoD
 		WHERE da.tenant_id = $1 AND da.deleted_at IS NULL AND da.nam = $2
 		  AND ($3 = '' OR da.hang_muc_id = $3)
 		  AND ($4 = '' OR da.implementing_unit = $4)
-		ORDER BY da.ma
+		ORDER BY da.tao_luc DESC, da.id DESC
 		LIMIT $5`
 
 	rows, err := s.db.For(ctx).QueryJoin(ctx, stmt, loc.Nam, loc.HangMucID, loc.ImplementingUnit,

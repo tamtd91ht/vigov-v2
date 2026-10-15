@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +38,8 @@ var duongCanBo = []string{"/api/v1/staff", "/api/v1/staff/" + idNoiBo}
 
 // --- fixtures -----------------------------------------------------------------------------
 
-// The register of commune A. Ordered by `ma` ascending, which is SapXepCanBo's default.
+// The register of commune A, written OLDEST FIRST (TaoLuc rises row by row). SapXepCanBo's default is
+// created_at DESCENDING (owner 15/10/2026), so the register reads these rows in REVERSE.
 //
 // The set is deliberately mixed: CB-001 is an account, CB-002 is a directory-only person who has
 // never signed in, CB-003 is a locked account. A fixture of three identical rows cannot tell a
@@ -95,7 +97,7 @@ func danhBaMau() *danhBaGia {
 // same way *store.Scoped does. Keying it any other way would make every isolation case below
 // pass without proving anything.
 //
-// IT PAGES ONLY BY THE DEFAULT SORT (`ma` ascending); any other sort is recorded and answered with an
+// IT PAGES ONLY BY THE DEFAULT SORT (`created_at` descending, id descending on a tie); any other sort is recorded and answered with an
 // empty page rather than rows in a pretended order. The keyset walk itself — the part where a missing tie-break silently skips a
 // record — is proven against the REAL SQL in
 // identity/internal/store/can_bo_danh_sach_test.go. What is proven here is that the
@@ -129,7 +131,7 @@ func (d *danhBaGia) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.R
 	if d.loi != nil {
 		return kq, d.loi
 	}
-	if yc.Column().Param != "code" {
+	if yc.Column().Param != "created_at" || yc.Dir() != page.Desc {
 		// ANOTHER SORT IS RECORDED AND ANSWERED WITH AN EMPTY PAGE — never with rows in a made-up
 		// order. The order itself is proven against the real keyset in
 		// store/staff_register_sort_test.go; what a handler test proves is that the sort and direction
@@ -137,7 +139,13 @@ func (d *danhBaGia) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.R
 		return kq, nil
 	}
 
-	ds := d.theo[tenant.MustFrom(ctx)]
+	ds := slices.Clone(d.theo[tenant.MustFrom(ctx)])
+	slices.SortFunc(ds, func(a, b domain.CanBoTomTat) int {
+		if c := b.TaoLuc.Compare(a.TaoLuc); c != 0 {
+			return c
+		}
+		return strings.Compare(b.ID, a.ID)
+	})
 	if a, ok := yc.After(); ok {
 		i := 0
 		for i < len(ds) && !sauMoc(ds[i], a) {
@@ -151,7 +159,7 @@ func (d *danhBaGia) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.R
 		if len(kq.Items) == yc.Limit() {
 			kq.HasMore = true
 			kq.NextCursor = page.Encode(yc.Column(), yc.Dir(),
-				page.Anchor{Key: page.TextKey(cuoi.Ma), ID: cuoi.ID})
+				page.Anchor{Key: page.TimeKey(cuoi.TaoLuc), ID: cuoi.ID})
 			break
 		}
 		kq.Items = append(kq.Items, cb)
@@ -160,14 +168,14 @@ func (d *danhBaGia) DanhSach(ctx context.Context, loc domain.LocCanBo, yc page.R
 	return kq, nil
 }
 
-// sauMoc is `(ma, id) > (key, id)` — the row comparison pkg/store builds, INCLUDING the id
-// tie-break. Without the second half two people sharing a code would straddle a page boundary
-// and one of them would never be shown.
+// sauMoc is `(tao_luc, id) < (key, id)` — the DESCENDING row comparison pkg/store builds, INCLUDING the
+// id tie-break. Without the second half two people created in the same instant would straddle a page
+// boundary and one of them would never be shown.
 func sauMoc(cb domain.CanBoTomTat, a page.Anchor) bool {
-	if cb.Ma != a.Key.Text() {
-		return cb.Ma > a.Key.Text()
+	if !cb.TaoLuc.Equal(a.Key.Time()) {
+		return cb.TaoLuc.Before(a.Key.Time())
 	}
-	return cb.ID > a.ID
+	return cb.ID < a.ID
 }
 
 func (d *danhBaGia) ChiTiet(ctx context.Context, id string) (domain.CanBoTomTat, error) {
@@ -457,8 +465,9 @@ func TestCanBoPhanTrangNoiDungChoKhongLapKhongSot(t *testing.T) {
 		conTro = trang.NextCursor
 	}
 
+	// NEWEST FIRST: the fixture is written oldest first, so the walk must read it in reverse.
 	var muon []string
-	for _, cb := range danhBaXaA() {
+	for _, cb := range slices.Backward(danhBaXaA()) {
 		muon = append(muon, cb.ID)
 	}
 	if !reflect.DeepEqual(thay, muon) {

@@ -914,7 +914,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// row, a second code or a second audit entry — it simply reads again.
 	//
 	// SORT/ORDER IN THE BODY SINCE 08/10/2026 (owner decision): the same allowlist as GET's `?sort=`
-	// (idstore.SapXepCanBo), optional, absent = `code` ascending — see timCanBoVao. No `@page` here: it
+	// (idstore.SapXepCanBo), optional, absent = `created_at` descending — see timCanBoVao. No `@page` here: it
 	// would publish them as QUERY parameters, which this route does not read.
 	//
 	// @summary  Tìm cán bộ trong danh bạ của xã theo họ tên, chức vụ, số điện thoại, thư điện tử hoặc tên bộ phận — từ khoá đi trong THÂN, không lên URL

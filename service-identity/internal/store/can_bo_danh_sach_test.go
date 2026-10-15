@@ -320,6 +320,33 @@ func TestDanhSachSapXepGiamCungDiHetDuoc(t *testing.T) {
 	}
 }
 
+// THE DEFAULT ORDER IS NEWEST FIRST (owner decision 15/10/2026): no `sort`, no `order` = tao_luc
+// DESCENDING, id descending on a tie. nd-02 and nd-03 share tao_luc and straddle the limit=2 boundary,
+// so the tie-break is walked too. The expected sequence differs from code order, so a default left on
+// `code` turns this red.
+func TestStaffRegisterDefaultIsNewestFirst(t *testing.T) {
+	b := moBanThuDS(t)
+
+	want := []string{"nd-05", "nd-03", "nd-02", "nd-01"}
+	for _, query := range []string{"limit=2", "limit=100"} {
+		if got := b.duyetHet(t, xaMau, query); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("%s: default order %v, want %v (tao_luc desc, id desc)", query, got, want)
+		}
+	}
+	req := yeuCauTrang(t, "")
+	if req.Column().Param != "created_at" || req.Dir() != page.Desc {
+		t.Errorf("default = %s %s, want created_at desc", req.Column().Param, req.Dir())
+	}
+	// An explicit column with `order` absent takes the list's ONE default direction — descending.
+	if req := yeuCauTrang(t, "sort=code"); req.Dir() != page.Desc {
+		t.Errorf("sort=code without order = %s, want desc", req.Dir())
+	}
+	// And the explicit ascending code order still works.
+	if got := b.duyetHet(t, xaMau, "limit=2&sort=code&order=asc"); strings.Join(got, ",") != strings.Join(idCuaXaMau, ",") {
+		t.Errorf("sort=code&order=asc gave %v, want %v", got, idCuaXaMau)
+	}
+}
+
 // --- rule 7: a soft-deleted person is on no screen ----------------------------------------------
 
 func TestDanhSachKhongTraDongDaXoaMem(t *testing.T) {

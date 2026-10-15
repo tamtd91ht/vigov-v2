@@ -79,7 +79,7 @@ func TestTimCanBo_200VaChuyenDungLoc(t *testing.T) {
 		d.locCuoi.CongKhai == nil || *d.locCuoi.CongKhai {
 		t.Errorf("bộ lọc tới kho = %+v", d.locCuoi)
 	}
-	if d.yeuCauCuoi.Limit() != 2 || d.yeuCauCuoi.Column().Param != "code" {
+	if d.yeuCauCuoi.Limit() != 2 || d.yeuCauCuoi.Column().Param != "created_at" || d.yeuCauCuoi.Dir() != page.Desc {
 		t.Errorf("trang tới kho: limit=%d sort=%q", d.yeuCauCuoi.Limit(), d.yeuCauCuoi.Column().Param)
 	}
 
@@ -171,7 +171,8 @@ func TestTimCanBoKhongGhiTuKhoaVaoLog(t *testing.T) {
 // --- sort/order in the search body (owner decision 08/10/2026) ------------------------------------
 
 // The search sorts by the SAME allowlist as GET /api/v1/staff, so the register keeps its column sort
-// while a search is typed. Absent = today's default (`code` ascending).
+// while a search is typed. Absent = the default, `created_at` DESCENDING — newest first (owner
+// 15/10/2026); `order` absent is descending for EVERY column, the allowlist's one default direction.
 func TestStaffSearchSortAndOrderReachTheStore(t *testing.T) {
 	m := dungMayChu(t)
 	tok := m.tokenCho(t, xaA, sidA)
@@ -181,11 +182,12 @@ func TestStaffSearchSortAndOrderReachTheStore(t *testing.T) {
 		wantParam string
 		wantDir   page.Dir
 	}{
-		{`{"q":"Nguyễn"}`, "code", page.Asc},
+		{`{"q":"Nguyễn"}`, "created_at", page.Desc},
 		{`{"q":"Nguyễn","sort":"full_name","order":"desc"}`, "full_name", page.Desc},
-		{`{"q":"Nguyễn","sort":"last_login_at"}`, "last_login_at", page.Asc},
+		{`{"q":"Nguyễn","sort":"last_login_at"}`, "last_login_at", page.Desc},
+		{`{"q":"Nguyễn","sort":"code","order":"asc"}`, "code", page.Asc},
 		{`{"q":"Nguyễn","sort":"department","order":"asc"}`, "department", page.Asc},
-		{`{"q":"Nguyễn","order":"desc"}`, "code", page.Desc},
+		{`{"q":"Nguyễn","order":"asc"}`, "created_at", page.Asc},
 	} {
 		doiMa(t, m.goi(t, "POST", hostA, duongTim, tc.body, tok), http.StatusOK)
 		yc := m.danhBa.yeuCauCuoi
@@ -202,7 +204,12 @@ func TestStaffSearchBadSortIs400AndNeverReachesTheStore(t *testing.T) {
 	m := dungMayChu(t)
 	tok := m.tokenCho(t, xaA, sidA)
 
-	codeCol := idstore.SapXepCanBo.Columns()[0]
+	var codeCol page.Column
+	for _, c := range idstore.SapXepCanBo.Columns() {
+		if c.Param == "code" {
+			codeCol = c
+		}
+	}
 	codeCursor := page.Encode(codeCol, page.Asc, page.Anchor{Key: page.TextKey(maCanBo), ID: idNoiBo})
 
 	for name, tc := range map[string]struct{ body, code string }{
@@ -211,7 +218,7 @@ func TestStaffSearchBadSortIs400AndNeverReachesTheStore(t *testing.T) {
 		"sql column":      {`{"q":"Nguyễn","sort":"ho_ten"}`, "invalid_sort"},
 		"direction":       {`{"q":"Nguyễn","sort":"full_name","order":"sideways"}`, "invalid_sort"},
 		"foreign cursor":  {`{"q":"Nguyễn","sort":"full_name","cursor":"` + codeCursor + `"}`, "invalid_cursor"},
-		"reversed cursor": {`{"q":"Nguyễn","order":"desc","cursor":"` + codeCursor + `"}`, "invalid_cursor"},
+		"reversed cursor": {`{"q":"Nguyễn","sort":"code","order":"desc","cursor":"` + codeCursor + `"}`, "invalid_cursor"},
 	} {
 		w := m.goi(t, "POST", hostA, duongTim, tc.body, tok)
 		if w.Code != http.StatusBadRequest {

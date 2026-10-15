@@ -191,11 +191,13 @@ func splitKinds(s string) []string {
 	return strings.Split(s, ",")
 }
 
-// LiveGroupLinks lists the commune's live group links, oldest first. Refuses past MaxZaloGroupsListed.
+// LiveGroupLinks lists the commune's live group links, NEWEST first — the group linked last is the
+// first row (owner decision 15/10/2026, tester sheet web-admin-141026). `id DESC` breaks a tie on
+// linked_at so the order is total. Refuses past MaxZaloGroupsListed.
 func (s *ZaloGroupStore) LiveGroupLinks(ctx context.Context) ([]domain.ZaloGroupLink, error) {
 	// Scoped.Query adds `WHERE tenant_id = $1` and binds the context's commune.
 	rows, err := s.db.For(ctx).Query(ctx, zaloGroupLinkColumns, "zalo_group_link",
-		"AND unlinked_at IS NULL ORDER BY linked_at, id LIMIT $2", MaxZaloGroupsListed+1)
+		"AND unlinked_at IS NULL ORDER BY linked_at DESC, id DESC LIMIT $2", MaxZaloGroupsListed+1)
 	if err != nil {
 		return nil, fmt.Errorf("zalo_group_link: list: %w", err)
 	}

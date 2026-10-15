@@ -173,7 +173,8 @@ func TestDanhSachDuAnDoiXaOCAHAIVEcuaPhepNoi(t *testing.T) {
 		"ct.deleted_at IS NULL",       // rule 7, invariant 2 — the vouchers
 		"SUM(ct.so_tien)",             // the total is DERIVED, never a stored column
 		"chung_tu_giai_ngan",          // ... from the vouchers, not from anywhere else
-		"ORDER BY da.ma",              // total order: `ma` is unique per commune
+		// Newest first (owner 15/10/2026), id as the tie-break so the order is total.
+		"ORDER BY da.tao_luc DESC, da.id DESC",
 	} {
 		if !strings.Contains(q, phai) {
 			t.Fatalf("câu lệnh thiếu %q:\n%s", phai, q)

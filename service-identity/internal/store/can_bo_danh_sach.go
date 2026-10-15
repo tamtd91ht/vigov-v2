@@ -31,9 +31,16 @@ import (
 // Declared here, next to the SQL, because it names real columns of `nguoi_dung` — only store/ knows
 // column names. tools/apidoc reads it (`@page idstore.SapXepCanBo`) to publish the `sort` enum.
 //
-// `code` IS THE DEFAULT, ascending: it is stable, unique within the commune (UNIQUE (tenant_id,
-// ma), migration 0001), and it is the value the audit trail quotes, so "the third row on page 2"
-// means the same thing to the screen and to whoever later reads the trail.
+// `created_at` (tao_luc) IS THE DEFAULT, DESCENDING — the person added last is the first row (owner
+// decision 15/10/2026, tester sheet web-admin-141026: "data được thêm sau thì hiển thị đầu danh
+// sách"). An administrator who has just added somebody looks for them at the top; under the old
+// default (`code` ascending) the new row sat on whichever page its code fell on. tao_luc is NOT NULL
+// (migration 0001) and QueryPage breaks ties on id, so the order stays TOTAL and a cursor stays valid.
+//
+// THE DEFAULT DIRECTION IS PER LIST, NOT PER COLUMN (core/page.NewAllowlist): `sort=<column>` sent
+// WITHOUT `order` now reads descending too. web-admin always sends `order` with `sort`. A cursor issued
+// under the old default (code, asc) is refused once with 400 — core/page binds a cursor to its (column,
+// direction) — and the screen restarts from page 1.
 //
 // THE SIX SCREEN COLUMNS ARE SORTABLE SINCE 08/10/2026 (owner decision; prototype UserTable.tsx). This
 // list used to refuse all six, for two reasons that core/page states; each is now answered by a shape
@@ -63,9 +70,9 @@ import (
 // THE ANCHOR OF A COMPUTED KEY IS THE SCANNED KEY, never re-derived in Go: the statement selects the
 // computed column at the tail and staffPageRow carries it, so the sentinel in the cursor is the very
 // value the SQL compared. One spelling of each sentinel, not two that could drift by a second.
-var SapXepCanBo = page.NewAllowlist(page.Asc,
-	page.Col("code", "ma", page.KindText),
+var SapXepCanBo = page.NewAllowlist(page.Desc,
 	page.Col("created_at", "tao_luc", page.KindTime),
+	page.Col("code", "ma", page.KindText),
 	page.Col("full_name", "ho_ten", page.KindRef),
 	page.Col("position", "chuc_vu", page.KindRef),
 	page.Col("department", staffDepartmentSortColumn, page.KindText),
