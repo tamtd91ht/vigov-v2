@@ -47,12 +47,41 @@ func NewMapAssetStore(db *store.DB) *MapAssetStore {
 // commune past it narrows the filter (by group) and is told so.
 const MapAssetPointsCeiling = 5000
 
-// MapAssetListSort is the ONE order of the `Sổ địa điểm` table (spec §7: grouped by type): group, then
-// name, then id as the tie-break. KindRef because the name of a household business is often its
-// owner's name, and a cursor carrying it would put personal data in a URL (rule 3, forbidden #4) — the
-// cursor carries only the anchor row's id and the key is looked up server-side.
+// MapAssetListSort is the two orders of the `Sổ địa điểm` table:
+//
+//	asset_type_code   THE DEFAULT, ascending: grouped by type (spec §7 — the table draws one header per
+//	                  group, web-admin register-table.tsx groupRows), and INSIDE a group the place added
+//	                  last comes first — created_at DESC, id DESC (owner decision 15/10/2026, tester sheet
+//	                  web-admin-141026: "data được thêm sau thì hiển thị đầu danh sách"). Until then the
+//	                  order inside a group was by name.
+//	created_at        explicit only: the whole register by creation time, id as the tie-break. Costs one
+//	                  entry in mapAssetListKeys; `sort=created_at&order=desc` is "newest first" ungrouped.
+//
+// created_at is NOT NULL (migration 0015) and never rewritten after the insert.
+//
+// BOTH ARE KindRef. For asset_type_code because the cursor would otherwise have to carry the anchor's
+// keys, and before 15/10/2026 one of them was the name — often a household business owner's name, which
+// must not ride in a URL (rule 3, forbidden #4). For created_at so List has ONE keyset construction: the
+// cursor carries only the anchor row's id and every key is looked up server-side.
 var MapAssetListSort = page.NewAllowlist(page.Asc,
-	page.Col("asset_type_code", "asset_type_code", page.KindRef))
+	page.Col("asset_type_code", "asset_type_code", page.KindRef),
+	page.Col("created_at", "created_at", page.KindRef))
+
+// mapAssetSortKey is one column of a keyset. reverse = this column runs AGAINST the request's direction:
+// the group order is asset_type_code ASC but created_at DESC inside it, which one row-value comparison
+// `(a, b, id) > (…)` cannot express — every member of a row value compares in the same direction.
+type mapAssetSortKey struct {
+	col     string
+	reverse bool
+}
+
+// mapAssetListKeys is the full keyset of each MapAssetListSort order, id LAST so the order is total. A
+// sort with no entry here is refused by List — the allowlist and this map are two lists of one fact,
+// pinned together by a test. The column names here are the ONLY ones List writes into SQL.
+var mapAssetListKeys = map[string][]mapAssetSortKey{
+	"asset_type_code": {{"asset_type_code", false}, {"created_at", true}, {"id", true}},
+	"created_at":      {{"created_at", false}, {"id", false}},
+}
 
 var (
 	// ErrMapAssetNotFound — no LIVE row with that id in THIS commune: one answer for "another commune's
@@ -190,35 +219,82 @@ func scanMapAsset(scan func(...any) error) (domain.MapAsset, error) {
 	return a, nil
 }
 
-// List reads one page of the `Sổ địa điểm` table: live assets of the filter, ordered by group, name
-// and id (MapAssetListSort).
+// List reads one page of the `Sổ địa điểm` table: live assets of the filter, in the order the request
+// chose from MapAssetListSort (default: by type, newest first inside each type).
 //
 // NOT store.QueryPage, AND THE REASON IS THE ORDER: QueryPage pages on ONE sort column plus the id, and
-// the table is grouped by type THEN sorted by name inside the group (spec §7). The keyset here is the
-// same construction with three columns — `(asset_type_code, name, id) > (anchor's own values)` — the
-// anchor looked up from its row in the same statement and the same commune ($1), exactly QueryPage's
-// KindRef branch. A forged cursor naming another commune's row reads NULL and returns an empty page.
+// the group order is three columns in MIXED directions. The keyset is built from mapAssetListKeys as
+// runs of same-direction columns, each run one row-value comparison, joined lexicographically:
+//
+//	asset_type_code > A OR (asset_type_code = A AND (created_at, id) < (C, I))
+//
+// with A, C looked up from the anchor row in the same statement and the same commune ($1), exactly
+// QueryPage's KindRef branch, and I the anchor id. A forged cursor naming another commune's row reads
+// NULL and returns an empty page. `order=desc` flips every column.
 func (s *MapAssetStore) List(ctx context.Context, f domain.MapAssetFilter, req page.Request) (page.Result[domain.MapAsset], error) {
 	out := page.NewResult[domain.MapAsset]()
 	col := req.Column()
-	if col.Param != "asset_type_code" {
+	keys, ok := mapAssetListKeys[col.Param]
+	if !ok {
 		return out, fmt.Errorf("map_asset: yêu cầu phân trang chưa qua page.Parse với MapAssetListSort")
 	}
+	// descending reports whether key k runs descending under this request.
+	descending := func(k mapAssetSortKey) bool { return k.reverse != (req.Dir() == page.Desc) }
 
 	tail, args := mapAssetFilterSQL(f, 2)
-	op, dir := ">", "ASC"
-	if req.Dir() == page.Desc {
-		op, dir = "<", "DESC"
-	}
 	if a, ok := req.After(); ok {
 		args = append(args, a.ID)
 		n := len(args) + 1
-		tail += fmt.Sprintf(" AND (asset_type_code, name, id) %s ("+
-			"(SELECT r.asset_type_code FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $%d), "+
-			"(SELECT r.name FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $%d), $%d)", op, n, n, n)
+		anchor := func(k mapAssetSortKey) string {
+			if k.col == "id" {
+				return fmt.Sprintf("$%d", n)
+			}
+			return fmt.Sprintf("(SELECT r.%s FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $%d)", k.col, n)
+		}
+		// Runs of consecutive keys sharing one direction.
+		type run struct {
+			cols, anchors []string
+			desc          bool
+		}
+		var runs []run
+		for _, k := range keys {
+			if len(runs) == 0 || runs[len(runs)-1].desc != descending(k) {
+				runs = append(runs, run{desc: descending(k)})
+			}
+			r := &runs[len(runs)-1]
+			r.cols = append(r.cols, k.col)
+			r.anchors = append(r.anchors, anchor(k))
+		}
+		tuple := func(xs []string) string { return "(" + strings.Join(xs, ", ") + ")" }
+		var alts []string
+		for i, r := range runs {
+			op := ">"
+			if r.desc {
+				op = "<"
+			}
+			parts := make([]string, 0, i+1)
+			for _, prev := range runs[:i] {
+				parts = append(parts, tuple(prev.cols)+" = "+tuple(prev.anchors))
+			}
+			parts = append(parts, tuple(r.cols)+" "+op+" "+tuple(r.anchors))
+			alts = append(alts, strings.Join(parts, " AND "))
+		}
+		if len(alts) == 1 {
+			tail += " AND " + alts[0]
+		} else {
+			tail += " AND ((" + strings.Join(alts, ") OR (") + "))"
+		}
 	}
 	args = append(args, req.Limit()+1)
-	tail += fmt.Sprintf(" ORDER BY asset_type_code %s, name %s, id %s LIMIT $%d", dir, dir, dir, len(args)+1)
+	order := make([]string, 0, len(keys))
+	for _, k := range keys {
+		dir := "ASC"
+		if descending(k) {
+			dir = "DESC"
+		}
+		order = append(order, k.col+" "+dir)
+	}
+	tail += fmt.Sprintf(" ORDER BY %s LIMIT $%d", strings.Join(order, ", "), len(args)+1)
 
 	rows, err := s.db.For(ctx).Query(ctx, mapAssetColumns, "map_asset", tail, args...)
 	if err != nil {

@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/vihat/vigov/core/page"
@@ -216,5 +217,73 @@ func TestPgMapAssetTypeSeedRowsAreTierTwo(t *testing.T) {
 		return nil
 	}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// THE DEFAULT ORDER, evaluated by PostgreSQL: grouped by type ascending, and inside a type newest first
+// with id DESC on a tie (owner decision 15/10/2026). limit=2 puts page boundaries INSIDE a group and
+// INSIDE the created_at tie, so the mixed-direction keyset is walked at both joints. Names run against
+// the expected order, so a group still sorted by name turns this red.
+func TestPgMapAssetListByTypeThenNewestAcrossPages(t *testing.T) {
+	db := moKetNoi(t)
+	c1, _ := xaRieng(t)
+	themLoai(t, db, c1, "t-dn", "doanh-nghiep", "Doanh nghiệp", 1, false, true)
+	themLoai(t, db, c1, "t-cho", "cho", "Chợ", 2, false, true)
+
+	h := pkgstore.New(db)
+	s := NewMapAssetStore(h)
+	ctx := ctxXa(tenant.ID(c1))
+	rows := []struct{ id, typ, name, at string }{
+		{"o1", "cho", "A", "2026-01-01T00:00:00Z"},
+		{"o2", "cho", "B", "2026-02-01T00:00:00Z"}, // tie with o3
+		{"o3", "cho", "C", "2026-02-01T00:00:00Z"},
+		{"o4", "doanh-nghiep", "D", "2026-01-15T00:00:00Z"},
+		{"o5", "doanh-nghiep", "E", "2026-03-01T00:00:00Z"},
+	}
+	for _, r := range rows {
+		if err := h.For(ctx).Tx(ctx, func(tx *pkgstore.ScopedTx) error {
+			_, err := s.Insert(ctx, tx, domain.MapAsset{ID: r.id, AssetTypeCode: r.typ, Name: r.name, Lat: 1, Lng: 2,
+				Status: domain.MapAssetStatusActive}, "CB-00123")
+			return err
+		}); err != nil {
+			t.Fatalf("insert %s: %v", r.id, err)
+		}
+		if _, err := db.ExecContext(context.Background(),
+			`UPDATE map_asset SET created_at = $3::timestamptz WHERE tenant_id = $1 AND id = $2`, c1, r.id, r.at); err != nil {
+			t.Fatalf("set created_at %s: %v", r.id, err)
+		}
+	}
+
+	walk := func(sort, order string) []string {
+		var got []string
+		cursor := ""
+		for i := 0; i < 10; i++ {
+			req, err := page.New(MapAssetListSort, sort, order, "2", cursor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			res, err := s.List(ctx, domain.MapAssetFilter{}, req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, a := range res.Items {
+				got = append(got, a.ID)
+			}
+			if !res.HasMore {
+				return got
+			}
+			cursor = res.NextCursor
+		}
+		t.Fatalf("%s %s: the cursor does not advance", sort, order)
+		return nil
+	}
+	for _, tc := range []struct{ sort, order, want string }{
+		{"", "", "o3,o2,o1,o5,o4"},               // default: type ASC, created_at DESC, id DESC
+		{"", "desc", "o4,o5,o1,o2,o3"},           // every column flipped
+		{"created_at", "desc", "o5,o3,o2,o4,o1"}, // explicit, ungrouped
+	} {
+		if got := strings.Join(walk(tc.sort, tc.order), ","); got != tc.want {
+			t.Errorf("sort=%q order=%q: %s, want %s", tc.sort, tc.order, got, tc.want)
+		}
 	}
 }

@@ -189,7 +189,10 @@ func assetRow(id, name string) []driver.Value {
 		int64(12), at, nil, []byte(`{"legal_form":"tnhh"}`), at, at}
 }
 
-func TestMapAssetListOrderAnchorAndScan(t *testing.T) {
+// THE DEFAULT ORDER (owner decision 15/10/2026): grouped by type ascending, and inside a type newest
+// first — created_at DESC, id DESC. Mixed directions, so the next page's keyset is two alternatives, the
+// anchor's own values looked up in the same commune.
+func TestMapAssetListDefaultIsByTypeThenNewest(t *testing.T) {
 	d := &assetDriver{answer: func(string) ([]string, [][]driver.Value) {
 		return assetCols, [][]driver.Value{assetRow("a1", "A"), assetRow("a2", "B"), assetRow("a3", "C")}
 	}}
@@ -212,10 +215,10 @@ func TestMapAssetListOrderAnchorAndScan(t *testing.T) {
 	}
 	st := d.last("FROM map_asset")
 	if !strings.Contains(st.sql, "AND deleted_at IS NULL") ||
-		!strings.Contains(st.sql, "ORDER BY asset_type_code ASC, name ASC, id ASC LIMIT $2") {
+		!strings.Contains(st.sql, "ORDER BY asset_type_code ASC, created_at DESC, id DESC LIMIT $2") {
 		t.Errorf("list SQL:\n%s", st.sql)
 	}
-	// THE CURSOR CARRIES NO NAME (KindRef): decoding it yields only the anchor id.
+	// THE CURSOR CARRIES NO KEY (KindRef): decoding it yields only the anchor id.
 	next, err := page.New(MapAssetListSort, "", "", "2", res.NextCursor)
 	if err != nil {
 		t.Fatal(err)
@@ -224,11 +227,78 @@ func TestMapAssetListOrderAnchorAndScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	st = d.last("FROM map_asset")
-	if !strings.Contains(st.sql, "(asset_type_code, name, id) > ((SELECT r.asset_type_code FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $2), (SELECT r.name FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $2), $2)") {
-		t.Errorf("anchor not looked up in the same commune:\n%s", st.sql)
+	const typ = "(SELECT r.asset_type_code FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $2)"
+	const created = "(SELECT r.created_at FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $2)"
+	want := " AND (((asset_type_code) > (" + typ + ")) OR ((asset_type_code) = (" + typ + ") AND (created_at, id) < (" + created + ", $2)))"
+	if !strings.Contains(st.sql, want) {
+		t.Errorf("keyset not as expected:\n got %s\n want %s", st.sql, want)
 	}
 	if st.args[1] != "a2" {
 		t.Errorf("anchor id = %v, want a2", st.args[1])
+	}
+	// order=desc flips EVERY column, including the reversed ones.
+	rev, err := page.New(MapAssetListSort, "", "desc", "2", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.List(ctx, domain.MapAssetFilter{}, rev); err != nil {
+		t.Fatal(err)
+	}
+	if st := d.last("FROM map_asset"); !strings.Contains(st.sql, "ORDER BY asset_type_code DESC, created_at ASC, id ASC") {
+		t.Errorf("order=desc SQL:\n%s", st.sql)
+	}
+}
+
+// Every order the allowlist offers has a keyset in List, every keyset ends on id (a total order), and no
+// keyset is left without an order: a column added to one list and not the other is a 500 on the first
+// request that names it.
+func TestMapAssetListKeysMatchTheAllowlist(t *testing.T) {
+	cols := MapAssetListSort.Columns()
+	if len(cols) != len(mapAssetListKeys) {
+		t.Fatalf("allowlist has %d columns, mapAssetListKeys %d", len(cols), len(mapAssetListKeys))
+	}
+	for _, c := range cols {
+		keys, ok := mapAssetListKeys[c.Param]
+		if !ok {
+			t.Errorf("sort %q has no keyset in mapAssetListKeys", c.Param)
+			continue
+		}
+		if keys[len(keys)-1].col != "id" {
+			t.Errorf("sort %q does not end on id — not a total order", c.Param)
+		}
+	}
+	if cols[0].Param != "asset_type_code" {
+		t.Errorf("default sort = %q, want asset_type_code (spec §7 grouping)", cols[0].Param)
+	}
+}
+
+// The explicit created_at order: one direction, one row-value comparison.
+func TestMapAssetListByCreatedAt(t *testing.T) {
+	d := &assetDriver{answer: func(string) ([]string, [][]driver.Value) {
+		return assetCols, [][]driver.Value{assetRow("a1", "A"), assetRow("a2", "B"), assetRow("a3", "C")}
+	}}
+	s, _, ctx := openAssetStore(t, d)
+	req, err := page.New(MapAssetListSort, "created_at", "desc", "2", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.List(ctx, domain.MapAssetFilter{}, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := d.last("FROM map_asset"); !strings.Contains(st.sql, "ORDER BY created_at DESC, id DESC LIMIT $2") {
+		t.Errorf("list SQL:\n%s", st.sql)
+	}
+	next, err := page.New(MapAssetListSort, "created_at", "desc", "2", res.NextCursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.List(ctx, domain.MapAssetFilter{}, next); err != nil {
+		t.Fatal(err)
+	}
+	if st := d.last("FROM map_asset"); !strings.Contains(st.sql,
+		" AND (created_at, id) < ((SELECT r.created_at FROM map_asset r WHERE r.tenant_id = $1 AND r.id = $2), $2)") {
+		t.Errorf("anchor not looked up in the same commune:\n%s", st.sql)
 	}
 }
 

@@ -329,11 +329,11 @@ func RegisterMapAssets(mux *http.ServeMux, d MapAssetDeps) {
 		authz.RequirePermission(d.Checker, "asset.read")(
 			http.HandlerFunc(h.MapAssetPoints)))
 
-	// THE `Sổ địa điểm` TABLE (spec §7): one page, ordered by group, then name, then id — the cursor
-	// carries only the anchor's id (the name may be a person's). Same filters as the points.
-	// `representative` and `phone` ALWAYS MASKED here.
+	// THE `Sổ địa điểm` TABLE (spec §7): one page, grouped by type and, inside a type, NEWEST FIRST
+	// (owner 15/10/2026) — id last; `sort=created_at` orders by creation time alone. The cursor carries
+	// only the anchor's id. Same filters as the points. `representative` and `phone` ALWAYS MASKED here.
 	//
-	// @summary  Sổ địa điểm của xã — một trang, xếp theo nhóm rồi tên; người đại diện và số điện thoại luôn che
+	// @summary  Sổ địa điểm của xã — một trang, xếp theo nhóm, trong nhóm mới thêm trước; người đại diện và số điện thoại luôn che
 	// @screen   10-ban-do-kinh-te-so §7
 	// @reply    200 page.Result[mapAssetRowOut]
 	// @reply    400 httpx.Error invalid_filter invalid_cursor invalid_sort invalid_limit
