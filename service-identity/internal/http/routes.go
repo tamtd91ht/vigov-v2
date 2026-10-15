@@ -280,7 +280,7 @@ type (
 	}
 
 	// ResidentialUnitWriting is the write surface of the residential units: POST and PATCH
-	// /api/v1/residential-units, under `admin.residential_unit` (owner decision 15/10/2026; the routes
+	// /api/v1/residential-units, under `admin.village` (owner decision 15/10/2026; the routes
 	// were `admin.org` from ADR 0059 §2 until then). A USE CASE:
 	// every write opens the transaction its audit entry shares (app.ResidentialUnits).
 	ResidentialUnitWriting interface {
@@ -289,7 +289,7 @@ type (
 	}
 
 	// ResidentialUnitImporting is the Excel import of the same list — the template, the preview and the
-	// all-or-nothing import, under `admin.residential_unit` (app.ResidentialUnitImporter).
+	// all-or-nothing import, under `admin.village` (app.ResidentialUnitImporter).
 	ResidentialUnitImporting interface {
 		TemplateChoices(ctx context.Context) ([]domain.ResidentialUnitTypeChoice, []domain.HeadStaffChoice, error)
 		Preview(ctx context.Context, rows []domain.ResidentialUnitImportRow) (app.ResidentialUnitImportResult, error)
@@ -308,7 +308,7 @@ type (
 
 	// CatalogueImporting is the Excel import of ONE of the two catalogues — the preview and the
 	// all-or-nothing import (app.CatalogueImporter, ADR 0059 §3) — residential-unit types under
-	// `admin.residential_unit`, task blocs under `admin.lookup` (owner decision 15/10/2026). Two Deps
+	// `admin.village`, task blocs under `admin.lookup` (owner decision 15/10/2026). Two Deps
 	// fields, one per catalogue: the route decides the table, never the file.
 	CatalogueImporting interface {
 		Preview(ctx context.Context, rows []domain.CatalogueImportRow) (app.CatalogueImportResult, error)
@@ -416,7 +416,7 @@ type (
 
 	// LoaiDonViDanCuGhi and KhoiNhiemVuGhi are the WRITE surfaces of the two catalogues above —
 	// POST / PATCH / DELETE (user decision 2026-09-24: both are full catalogues) — residential-unit
-	// types under `admin.residential_unit`, task blocs under `admin.lookup` (owner decision 15/10/2026).
+	// types under `admin.village`, task blocs under `admin.lookup` (owner decision 15/10/2026).
 	//
 	// USE CASES, NOT STORES, and separate from the read interfaces for the reason CanBoGhiDanhBa is
 	// separate from CanBoDanhBa: every method opens the transaction its audit entry shares (rule 6,
@@ -2122,7 +2122,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// 2026-09-29 (ADR 0059 §2) — mounted right after its read, below.
 	//
 	// THE KEYS (owner decision 15/10/2026, tester bug sheet web-admin-141026 row 22): every write of the
-	// Thôn/Tổ dân phố tab — the units AND their types — is `admin.residential_unit` ("Cấu hình thôn/tổ
+	// Thôn/Tổ dân phố tab — the units AND their types — is `admin.village` ("Cấu hình thôn/tổ
 	// dân phố", seeded by migration 0032). Task blocs stay `admin.lookup`: they sit on the Danh mục tab.
 	//
 	// ALL THREE READS ARE AnyAuthenticated, SAME CALL AND SAME REASON AS /org-units AND /roles ABOVE.
@@ -2158,10 +2158,10 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.AnyAuthenticated("tên thôn/tổ dân phố xuất hiện ở ô chọn địa bàn của phản ánh, hồ sơ hộ và mọi bộ lọc theo địa bàn — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh sách địa bàn lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachThonToDanPho)))
 
-	// --- the residential units, WRITE and IMPORT. FIVE ROUTES, ALL `admin.residential_unit` ---------
+	// --- the residential units, WRITE and IMPORT. FIVE ROUTES, ALL `admin.village` ---------
 	//
 	// USER DECISION 2026-09-29 (ADR 0059 §2): create, edit, take out of use (soft), and an Excel import.
-	// THE KEY: `admin.residential_unit` — "Cấu hình thôn/tổ dân phố" — by the owner's decision of
+	// THE KEY: `admin.village` — "Cấu hình thôn/tổ dân phố" — by the owner's decision of
 	// 15/10/2026 (tester bug sheet web-admin-141026 row 22): the Thôn/Tổ dân phố tab gets its own key
 	// instead of riding on `admin.org` (the org chart's key, which ADR 0059 §2 reused). Seeded by
 	// service-identity migration 0032, which pre-granted it to every live role holding `admin.org` or
@@ -2197,7 +2197,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/residential-units",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.Required(idem.DongKhiHong)(
 				http.HandlerFunc(h.CreateResidentialUnit))))
 
@@ -2219,13 +2219,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/residential-units/{id}",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì và không để vết khi mọi trường gửi lên đều bằng đúng dòng vừa đọc, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.UpdateResidentialUnit))))
 
 	// The template. GET /api/v1/residential-units/import-template
 	//
-	// `admin.residential_unit` AND NOT AnyAuthenticated: the file exists only to feed the import, and its
+	// `admin.village` AND NOT AnyAuthenticated: the file exists only to feed the import, and its
 	// head dropdown lists the commune's staff (code + name, as the staff picker shows them).
 	//
 	// NO idem.* DECLARATION: a GET changes no state.
@@ -2239,7 +2239,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/residential-units/import-template",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			http.HandlerFunc(h.ResidentialUnitImportTemplate)))
 
 	// Checking a filled file. POST /api/v1/residential-units/import-previews
@@ -2258,7 +2258,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    415 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/residential-units/import-previews",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.KhongCan("xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh sách")(
 				http.HandlerFunc(h.PreviewResidentialUnitImport))))
 
@@ -2280,7 +2280,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    415 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/residential-units/imports",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.Required(idem.DongKhiHong)(
 				http.HandlerFunc(h.ImportResidentialUnits))))
 
@@ -2313,7 +2313,7 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.AnyAuthenticated("nhãn khối nhiệm vụ xuất hiện ở ô chọn khối trên biểu mẫu nhiệm vụ, ở nhãn dòng và ở bộ lọc danh sách nhiệm vụ — đòi một quyền cấu hình sẽ làm hỏng những màn hình đó cho mọi tài khoản không phải quản trị; đánh đổi đã chấp nhận: danh mục lộ cho mọi tài khoản đã đăng nhập CỦA CHÍNH XÃ ĐÓ, không chéo xã vì Scoped buộc tenant_id")(
 			http.HandlerFunc(h.DanhSachKhoiNhiemVu)))
 
-	// --- the two catalogues, WRITE. SIX ROUTES: types `admin.residential_unit`, blocs `admin.lookup` -
+	// --- the two catalogues, WRITE. SIX ROUTES: types `admin.village`, blocs `admin.lookup` -
 	//
 	// USER DECISION 2026-09-24: both are FULL catalogues — add, relabel, reorder, disable/enable,
 	// soft-delete commune-added rows — the same shape as the five catalogues already writable in
@@ -2324,7 +2324,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// TWO KEYS, ONE PER TAB (owner decision 15/10/2026, tester bug sheet web-admin-141026 row 22). The
 	// residential-unit types are edited on the Thôn/Tổ dân phố tab, so they take that tab's key,
-	// `admin.residential_unit` (migration 0032). The task blocs stay on the Danh mục tab under
+	// `admin.village` (migration 0032). The task blocs stay on the Danh mục tab under
 	// `admin.lookup` — "Quản lý danh mục", seeded at migration 0001:281 and the key every sibling
 	// catalogue declares. Both are in `quyen` (rule 5, invariant 3c). The READS stay AnyAuthenticated.
 	//
@@ -2348,7 +2348,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/residential-unit-types",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.ThemLoaiDonViDanCu))))
 
@@ -2363,7 +2363,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/residential-unit-types/{id}",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SuaLoaiDonViDanCu))))
 
@@ -2378,7 +2378,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/residential-unit-types/{id}",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaLoaiDonViDanCu))))
 
@@ -2426,7 +2426,7 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.KhongCan("xoá một dòng đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.XoaKhoiNhiemVu))))
 
-	// --- the two catalogues, IMPORT FROM EXCEL. SIX ROUTES: types `admin.residential_unit`, blocs
+	// --- the two catalogues, IMPORT FROM EXCEL. SIX ROUTES: types `admin.village`, blocs
 	// `admin.lookup` ------------------------------------------------------------------------------
 	//
 	// USER DECISION 2026-09-29 (ADR 0059 §3): one import route PER OWNING SERVICE AND PER CATALOGUE —
@@ -2449,7 +2449,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/residential-unit-types/import-template",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			http.HandlerFunc(h.ResidentialUnitTypeImportTemplate)))
 
 	// multipart/form-data, one part `file` (.xlsx, ≤ 2 MB, ≤ 100 data rows). 200 WHETHER OR NOT THE FILE
@@ -2465,7 +2465,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    415 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/residential-unit-types/import-previews",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.KhongCan("xem trước không ghi gì và không kiểm toán gì — gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh mục")(
 				http.HandlerFunc(h.PreviewResidentialUnitTypeImport))))
 
@@ -2483,7 +2483,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    415 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/residential-unit-types/imports",
-		authz.RequirePermission(d.Checker, "admin.residential_unit")(
+		authz.RequirePermission(d.Checker, "admin.village")(
 			idem.Required(idem.DongKhiHong)(
 				http.HandlerFunc(h.ImportResidentialUnitTypes))))
 

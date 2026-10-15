@@ -2,7 +2,7 @@ package app
 
 // The use case behind "⬆ Nhập từ Excel" on the residential-unit-type and task-bloc catalogues
 // (14-cau-hinh.md §5; user decision 2026-09-29, ADR 0059 §3): create only, ALL OR NOTHING, under
-// the key each catalogue's create route declares (`admin.residential_unit` / `admin.lookup`).
+// the key each catalogue's create route declares (`admin.village` / `admin.lookup`).
 //
 //	Preview  plan the file against the catalogue and report — WRITES NOTHING, audits nothing
 //	Import   the same plan under the import lock; any error = nothing written; else every row, one

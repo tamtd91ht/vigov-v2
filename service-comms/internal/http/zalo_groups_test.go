@@ -25,7 +25,7 @@ import (
 // The four Zalo GROUP routes (ADR 0092) on the staff harness. The fake records WHICH commune and WHICH
 // actor reached it; the transactions and entries are internal/app's tests.
 //
-//	admin.zalo_channel: 401 no session · 403 wrong key · 403 right key other commune · 200/201/204
+//	admin.zalo: 401 no session · 403 wrong key · 403 right key other commune · 200/201/204
 
 const testGroupUnit = "01JBPHAN00000000000000000A"
 
@@ -137,10 +137,10 @@ const (
 // zaloGroupRoutes — the wrong keys are real and adjacent: a content reader, and asset.update.
 func zaloGroupRoutes() []mapAssetRoute {
 	return []mapAssetRoute{
-		{"issue code", http.MethodPost, "/api/v1/zalo-group-pairing-codes", groupCodeBody, "admin.zalo_channel", "content.read", http.StatusCreated},
-		{"list", http.MethodGet, "/api/v1/zalo-groups", "", "admin.zalo_channel", "content.read", http.StatusOK},
-		{"edit", http.MethodPatch, "/api/v1/zalo-groups/g1", groupPatchBody, "admin.zalo_channel", "asset.update", http.StatusNoContent},
-		{"unlink", http.MethodDelete, "/api/v1/zalo-groups/g1", groupUnlinkBody, "admin.zalo_channel", "asset.update", http.StatusNoContent},
+		{"issue code", http.MethodPost, "/api/v1/zalo-group-pairing-codes", groupCodeBody, "admin.zalo", "content.read", http.StatusCreated},
+		{"list", http.MethodGet, "/api/v1/zalo-groups", "", "admin.zalo", "content.read", http.StatusOK},
+		{"edit", http.MethodPatch, "/api/v1/zalo-groups/g1", groupPatchBody, "admin.zalo", "asset.update", http.StatusNoContent},
+		{"unlink", http.MethodDelete, "/api/v1/zalo-groups/g1", groupUnlinkBody, "admin.zalo", "asset.update", http.StatusNoContent},
 	}
 }
 
@@ -183,7 +183,7 @@ func TestZaloGroupRoutes_403WrongPermission(t *testing.T) {
 }
 
 // 403 WITH `admin.lookup` ALONE — the key these routes declared until the owner's decision of
-// 15/10/2026 gave the Kênh Zalo tab its own, `admin.zalo_channel` (service-identity migration 0032, which
+// 15/10/2026 gave the Kênh Zalo tab its own, `admin.zalo` (service-identity migration 0032, which
 // pre-granted it to every role holding `admin.lookup`). Quản lý danh mục no longer opens this tab.
 //
 // MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on any of these routes.
@@ -231,7 +231,7 @@ func TestZaloGroupRoutes_200RightPermissionRightCommune(t *testing.T) {
 
 func TestZaloGroupShapes(t *testing.T) {
 	s := newZaloGroupServer(t)
-	s.grant(xaA, "admin.zalo_channel")
+	s.grant(xaA, "admin.zalo")
 	w := s.call(t, http.MethodPost, "/api/v1/zalo-group-pairing-codes", hostA, canBoGhi(xaA),
 		`{"org_unit_id":"`+testGroupUnit+`","kinds":["nhiem-vu.giao-moi"]}`)
 	doiMa(t, w, http.StatusCreated)
@@ -267,7 +267,7 @@ func TestZaloGroupShapes(t *testing.T) {
 // is a shape tools/apidoc cannot describe).
 func TestZaloGroupPatchReadsEmptyAndAbsent(t *testing.T) {
 	s := newZaloGroupServer(t)
-	s.grant(xaA, "admin.zalo_channel")
+	s.grant(xaA, "admin.zalo")
 	patch := func(body string) *httptest.ResponseRecorder {
 		return s.call(t, http.MethodPatch, "/api/v1/zalo-groups/g1", hostA, canBoGhi(xaA), body)
 	}
@@ -304,7 +304,7 @@ func TestZaloGroupErrorMapping(t *testing.T) {
 	}
 	for _, c := range cases {
 		s := newZaloGroupServer(t)
-		s.grant(xaA, "admin.zalo_channel")
+		s.grant(xaA, "admin.zalo")
 		s.fake.err = c.err
 		w := s.call(t, http.MethodPatch, "/api/v1/zalo-groups/g1", hostA, canBoGhi(xaA), groupPatchBody)
 		doiMa(t, w, c.status)

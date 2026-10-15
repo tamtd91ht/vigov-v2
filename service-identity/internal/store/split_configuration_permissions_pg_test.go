@@ -30,7 +30,7 @@ func TestPgMigration0032PreGrantsByHeldKey(t *testing.T) {
 	// Already holds one of the four: gains only the other three, and its entry says so.
 	themVaiTro(t, db, xa, "vt-partial", "vt-partial", "Đã có một khoá", false)
 	capQuyenCho(t, db, xa, "vt-partial", "admin.lookup")
-	capQuyenCho(t, db, xa, "vt-partial", "admin.mail_server")
+	capQuyenCho(t, db, xa, "vt-partial", "admin.mail")
 	// Soft-deleted: the commune's decision, untouched.
 	themVaiTro(t, db, xa, "vt-deleted", "vt-deleted", "Đã xoá", false)
 	capQuyenCho(t, db, xa, "vt-deleted", "admin.lookup")
@@ -76,10 +76,10 @@ func TestPgMigration0032PreGrantsByHeldKey(t *testing.T) {
 		return out
 	}
 	for role, want := range map[string][]string{
-		"vt-lookup":  {"admin.lookup", "admin.mail_server", "admin.residential_unit", "admin.system_message", "admin.zalo_channel"},
-		"vt-org":     {"admin.org", "admin.residential_unit"},
+		"vt-lookup":  {"admin.lookup", "admin.mail", "admin.village", "admin.message", "admin.zalo"},
+		"vt-org":     {"admin.org", "admin.village"},
 		"vt-none":    {"task.read"},
-		"vt-partial": {"admin.lookup", "admin.mail_server", "admin.residential_unit", "admin.system_message", "admin.zalo_channel"},
+		"vt-partial": {"admin.lookup", "admin.mail", "admin.village", "admin.message", "admin.zalo"},
 		"vt-deleted": {"admin.lookup"},
 	} {
 		if got := held(role); strings.Join(got, ",") != strings.Join(want, ",") {
@@ -89,7 +89,7 @@ func TestPgMigration0032PreGrantsByHeldKey(t *testing.T) {
 
 	var by string
 	if err := db.QueryRow(`SELECT cap_boi FROM vai_tro_quyen
-	                        WHERE tenant_id = $1 AND vai_tro_id = 'vt-org' AND quyen_ma = 'admin.residential_unit'`, xa).
+	                        WHERE tenant_id = $1 AND vai_tro_id = 'vt-org' AND quyen_ma = 'admin.village'`, xa).
 		Scan(&by); err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestPgMigration0032PreGrantsByHeldKey(t *testing.T) {
 	if len(entries) != 3 {
 		t.Fatalf("có %d vết cấp sẵn, muốn 3 (vt-lookup, vt-org, vt-partial): %v", len(entries), entries)
 	}
-	if got := entries["vt-partial"]; got != `["admin.residential_unit", "admin.system_message", "admin.zalo_channel"]` {
+	if got := entries["vt-partial"]; got != `["admin.village", "admin.message", "admin.zalo"]` {
 		t.Errorf("vết vt-partial ghi them = %s, muốn đúng ba khoá chưa có", got)
 	}
 }

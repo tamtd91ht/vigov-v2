@@ -6,7 +6,7 @@ package app
 //	                                                        (AnyAuthenticated, ADR 0074 #6) — the person
 //	                                                        is actor.ID, the session's business code, and
 //	                                                        there is no parameter naming anybody else
-//	LinkedStaff / Settings / SaveSettings                   the commune's administration (admin.zalo_channel)
+//	LinkedStaff / Settings / SaveSettings                   the commune's administration (admin.zalo)
 //
 // Every write and its audit entry share ONE transaction (rule 6, invariant 3). No entry, no error, no log
 // line carries a pairing code, a chat_id or a message text.

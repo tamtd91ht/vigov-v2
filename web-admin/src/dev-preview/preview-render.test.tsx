@@ -387,10 +387,10 @@ describe("preview — Cấu hình", () => {
     "admin.sla",
     "asset.read",
     "admin.audit",
-    "admin.residential_unit",
-    "admin.system_message",
-    "admin.mail_server",
-    "admin.zalo_channel",
+    "admin.village",
+    "admin.message",
+    "admin.mail",
+    "admin.zalo",
   ];
 
   it("the real tab frame on the fixture: the three-level org tree, no network", async () => {

@@ -69,7 +69,7 @@ export type MucMenu = {
  *
  * BỐN KHOÁ VÀO NGÀY 15/10/2026 (chủ dự án, bảng lỗi web-admin-141026 dòng 22): Thôn / Tổ dân phố, Lời
  * hệ thống, Máy chủ thư, Kênh Zalo rời `admin.lookup` / `admin.org` sang khoá riêng. Thiếu chúng ở đây thì
- * người chỉ giữ, ví dụ, `admin.mail_server` không thấy lối vào tab duy nhất khoá ấy mở.
+ * người chỉ giữ, ví dụ, `admin.mail` không thấy lối vào tab duy nhất khoá ấy mở.
  *
  * Ẩn mục menu là tiện dụng, không phải biện pháp: mọi tuyến sau các tab tự kiểm khoá (luật 5, cấm #1).
  */

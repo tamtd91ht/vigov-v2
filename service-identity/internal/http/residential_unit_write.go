@@ -12,7 +12,7 @@ import (
 )
 
 // The WRITE routes of the commune's residential units (user decision 2026-09-29, ADR 0059 §2), both
-// `admin.residential_unit` — the Thôn/Tổ dân phố tab's own key (owner decision 15/10/2026, migration
+// `admin.village` — the Thôn/Tổ dân phố tab's own key (owner decision 15/10/2026, migration
 // 0032; `admin.org` before):
 //
 //	POST  /api/v1/residential-units        add a unit
@@ -178,7 +178,7 @@ func (h *Handler) UpdateResidentialUnit(w http.ResponseWriter, r *http.Request) 
 // writeResidentialUnitError maps one use-case failure onto a status and a sentence. One function for
 // both routes, so the two cannot drift apart.
 //
-// 409 AND NOT 403 FOR THE STATE REFUSALS: the caller holds `admin.residential_unit`; what is refused is the
+// 409 AND NOT 403 FOR THE STATE REFUSALS: the caller holds `admin.village`; what is refused is the
 // operation against the current state of the commune's list.
 func (h *Handler) writeResidentialUnitError(w http.ResponseWriter, r *http.Request, op string, err error) {
 	switch {

@@ -461,24 +461,24 @@ export const AUDIT_READ_PERMISSION = "admin.audit";
  */
 
 /**
- * `admin.residential_unit` — "Cấu hình thôn/tổ dân phố". The WRITE key of the hamlets themselves
+ * `admin.village` — "Cấu hình thôn/tổ dân phố". The WRITE key of the hamlets themselves
  * (`POST/PATCH /api/v1/residential-units`, its three import routes) AND of the "Loại đơn vị dân cư"
  * catalogue (`POST/PATCH/DELETE /api/v1/residential-unit-types`, its three import routes). The reads stay
  * any-authenticated (hamlet names sit in every petition filter), so the Thôn tab never hides on it.
  */
-export const RESIDENTIAL_UNIT_PERMISSION = "admin.residential_unit";
+export const RESIDENTIAL_UNIT_PERMISSION = "admin.village";
 
-/** `admin.system_message` — "Cấu hình lời hệ thống". Every route of the tab, read included. */
-export const SYSTEM_MESSAGE_PERMISSION = "admin.system_message";
+/** `admin.message` — "Cấu hình lời hệ thống". Every route of the tab, read included. */
+export const SYSTEM_MESSAGE_PERMISSION = "admin.message";
 
-/** `admin.mail_server` — "Cấu hình máy chủ thư". GET · PUT mail-settings and POST test-messages. */
-export const MAIL_SERVER_PERMISSION = "admin.mail_server";
+/** `admin.mail` — "Cấu hình máy chủ thư". GET · PUT mail-settings and POST test-messages. */
+export const MAIL_SERVER_PERMISSION = "admin.mail";
 
 /**
- * `admin.zalo_channel` — "Cấu hình kênh Zalo". Every route of the Kênh Zalo tab, reads included —
+ * `admin.zalo` — "Cấu hình kênh Zalo". Every route of the Kênh Zalo tab, reads included —
  * the settings, the linked staff, the commune's bot, the Zalo groups and the launch-link QR.
  */
-export const ZALO_CHANNEL_PERMISSION = "admin.zalo_channel";
+export const ZALO_CHANNEL_PERMISSION = "admin.zalo";
 
 /**
  * `feedback.unmask` — "Xem đầy đủ họ tên và số điện thoại người gửi"

@@ -96,7 +96,7 @@ import { THU_TU_KHONG_PHAI_SO, TIEU_DE_NHOM_TRANG_THAI, thanSuaTrangThai } from 
  *
  * 3. HIDING A BUTTON IS CONVENIENCE, NOT A CONTROL. Every write route declares
  *    `RequirePermission("admin.lookup")` — except "Loại đơn vị dân cư", whose routes declare
- *    `admin.residential_unit` since 15/10/2026 (`RESIDENTIAL_UNIT_TYPE_GROUP`) — and checks it on EVERY
+ *    `admin.village` since 15/10/2026 (`RESIDENTIAL_UNIT_TYPE_GROUP`) — and checks it on EVERY
  *    request (rule 5, forbidden #1). Each row's buttons follow ITS group's key.
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  *
@@ -629,7 +629,7 @@ export type CatalogueActions = {
 
 /**
  * The one catalogue group whose writes are NOT `admin.lookup`: "Loại đơn vị dân cư" (the hamlet types)
- * moved to `admin.residential_unit` with the hamlets themselves (owner 15/10/2026, bug sheet
+ * moved to `admin.village` with the hamlets themselves (owner 15/10/2026, bug sheet
  * web-admin-141026 row 22). Its read stays any-authenticated, so the rows show for everyone.
  */
 export const RESIDENTIAL_UNIT_TYPE_GROUP = "loaiDonViDanCu";
@@ -714,7 +714,7 @@ export function CatalogueView({
   onShowGroup: (g: ShownGroup) => void;
   /** `admin.lookup` — every group's writes but "Loại đơn vị dân cư", and the two code lists. */
   canWrite: boolean;
-  /** `admin.residential_unit` — the writes of "Loại đơn vị dân cư" only. Absent = no (fail closed). */
+  /** `admin.village` — the writes of "Loại đơn vị dân cư" only. Absent = no (fail closed). */
   canWriteResidentialUnitTypes?: boolean;
   /** The session could not be read: its sentence, and no write button. */
   sessionError: string;

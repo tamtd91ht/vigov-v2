@@ -1,17 +1,17 @@
 -- 0032 — four configuration permission keys split out of `admin.lookup` / `admin.org`, and their
 -- pre-grant to every live role that already reaches those screens through the old keys.
 --
---   admin.residential_unit   Cấu hình thôn/tổ dân phố
---   admin.system_message     Cấu hình lời hệ thống
---   admin.mail_server        Cấu hình máy chủ thư
---   admin.zalo_channel       Cấu hình kênh Zalo
+--   admin.village   Cấu hình thôn/tổ dân phố
+--   admin.message     Cấu hình lời hệ thống
+--   admin.mail        Cấu hình máy chủ thư
+--   admin.zalo       Cấu hình kênh Zalo
 --
 -- OWNER DECISION 15/10/2026 (tester bug sheet web-admin-141026, row 22): the four Cấu hình tabs get
 -- their own keys instead of riding on `admin.lookup` (Quản lý danh mục) / `admin.org` (Quản lý sơ đồ
 -- tổ chức). Same decision, second answer: "cấp sẵn" — nobody loses a screen they can open today.
 -- Hence the grant rule, which mirrors what guards those screens TODAY:
 --   a live role holding `admin.lookup`                 gets all four keys;
---   a live role holding `admin.org` (without lookup)   gets `admin.residential_unit` only
+--   a live role holding `admin.org` (without lookup)   gets `admin.village` only
 --   (the thôn/tổ dân phố screen is reached under both keys today — ADR 0059 §2, 0018).
 --
 -- THIS FILE CHANGES NO ROUTE. Every route still checks admin.lookup / admin.org until the follow-up
@@ -95,10 +95,10 @@
 -- ORDER BY — no authorisation, no export, no template reads it.
 -- ---------------------------------------------------------------------------
 INSERT INTO quyen (ma, nhom, nhan, thu_tu) VALUES
-    ('admin.residential_unit', 'QUẢN TRỊ', 'Cấu hình thôn/tổ dân phố', 44),
-    ('admin.system_message',   'QUẢN TRỊ', 'Cấu hình lời hệ thống',    45),
-    ('admin.mail_server',      'QUẢN TRỊ', 'Cấu hình máy chủ thư',     46),
-    ('admin.zalo_channel',     'QUẢN TRỊ', 'Cấu hình kênh Zalo',       47)
+    ('admin.village', 'QUẢN TRỊ', 'Cấu hình thôn/tổ dân phố', 44),
+    ('admin.message',   'QUẢN TRỊ', 'Cấu hình lời hệ thống',    45),
+    ('admin.mail',      'QUẢN TRỊ', 'Cấu hình máy chủ thư',     46),
+    ('admin.zalo',     'QUẢN TRỊ', 'Cấu hình kênh Zalo',       47)
 ON CONFLICT (ma) DO UPDATE SET
     nhom   = EXCLUDED.nhom,
     nhan   = EXCLUDED.nhan,
@@ -134,11 +134,11 @@ ON CONFLICT (ma) DO UPDATE SET
 -- personal. Actor 'system' / kind 'system' (rule 6, invariant 6; domain.SystemActor).
 -- ---------------------------------------------------------------------------
 WITH grant_rule (held, granted) AS (
-    VALUES ('admin.lookup', 'admin.residential_unit'),
-           ('admin.lookup', 'admin.system_message'),
-           ('admin.lookup', 'admin.mail_server'),
-           ('admin.lookup', 'admin.zalo_channel'),
-           ('admin.org',    'admin.residential_unit')
+    VALUES ('admin.lookup', 'admin.village'),
+           ('admin.lookup', 'admin.message'),
+           ('admin.lookup', 'admin.mail'),
+           ('admin.lookup', 'admin.zalo'),
+           ('admin.org',    'admin.village')
 ), target AS (
     SELECT DISTINCT vq.tenant_id, vq.vai_tro_id, r.granted
     FROM vai_tro_quyen vq

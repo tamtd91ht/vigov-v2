@@ -2,7 +2,7 @@ package http
 
 // The WRITE routes of this service's two reference catalogues — `residential-unit-types` and
 // `task-blocs` — POST · PATCH · DELETE (user decision 2026-09-24). The types are under
-// `admin.residential_unit` (the Thôn/Tổ dân phố tab's key), the blocs under `admin.lookup` — owner
+// `admin.village` (the Thôn/Tổ dân phố tab's key), the blocs under `admin.lookup` — owner
 // decision 15/10/2026.
 //
 // THE CONTRACT IS THE SIBLINGS', FIELD FOR FIELD AND STATUS FOR STATUS

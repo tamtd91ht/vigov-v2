@@ -9,14 +9,14 @@
  *
  * TAB NÀO HIỆN ĐI ĐÚNG THEO CỔNG ĐÃ CÓ, không theo một luật mới đặt ở đây. Các tab có cổng —
  * Trường bản đồ (`asset.read`, khoá tuyến ĐỌC
- * `GET /map-field-schemas`), Lời hệ thống (`admin.system_message`), Máy chủ thư (`admin.mail_server`) và
- * Kênh Zalo (`admin.zalo_channel`) — mỗi khoá khoá mọi tuyến của tab ấy, cả tuyến đọc (chủ dự án
+ * `GET /map-field-schemas`), Lời hệ thống (`admin.message`), Máy chủ thư (`admin.mail`) và
+ * Kênh Zalo (`admin.zalo`) — mỗi khoá khoá mọi tuyến của tab ấy, cả tuyến đọc (chủ dự án
  * 15/10/2026, trước đó cả ba đi theo `admin.lookup`), Tự động hoá (`admin.sla`, khoá cả ba tuyến `automation-jobs`) và Nhật ký
  * hệ thống (`admin.audit`, khoá năm tuyến `*-audit-entries`), Nhận diện xã (`admin.org`), Thời hạn
  * xử lý (`admin.sla`, khoá của `GET /sla` — ADR 0079 D1) — gọi đúng hàm của `quyen-tab.ts` mà chính
  * tab ấy gọi, để chỉ có MỘT nguồn quyết định. Bốn tab kia (Sơ đồ tổ chức, Thôn / Tổ dân phố, Danh
  * mục, Lịch làm việc) KHÔNG có cổng (`cong: null`) vì tuyến đọc của chúng mở cho mọi tài khoản đã
- * đăng nhập (Lịch làm việc nay ở `/he-thong`); khoá ghi của Thôn / Tổ dân phố (`admin.residential_unit`)
+ * đăng nhập (Lịch làm việc nay ở `/he-thong`); khoá ghi của Thôn / Tổ dân phố (`admin.village`)
  * chỉ quyết nút ghi trong tab, không ẩn tab. Thêm cổng cho bốn tab này là để GIAO DIỆN từ chối điều máy chủ không từ chối — luật 5,
  * cấm #1.
  *
@@ -70,7 +70,7 @@ export type MoTaTab<M extends string = MaTabCauHinh> = {
  *
  * "Kênh Zalo" (ADR 0074 #6, 05/10/2026) is not in §0; it sits right after "Máy chủ thư" — the other
  * outbound channel of the commune. Since 15/10/2026 each of the two has its own key
- * (`admin.mail_server`, `admin.zalo_channel`) instead of sharing `admin.lookup`.
+ * (`admin.mail`, `admin.zalo`) instead of sharing `admin.lookup`.
  *
  * OWNER DECISION 08/10/2026 (ADR 0079 D1): "Thời hạn xử lý" is gated on `admin.sla` like the prototype,
  * and its three calendar tables moved to a tab of their own, "Lịch làm việc".

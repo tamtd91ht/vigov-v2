@@ -1,7 +1,7 @@
 package app
 
 // The use cases behind the WRITE surface of this service's two reference catalogues —
-// `residential-unit-types` (loai_don_vi_dan_cu, under `admin.residential_unit`) and `task-blocs`
+// `residential-unit-types` (loai_don_vi_dan_cu, under `admin.village`) and `task-blocs`
 // (khoi_nhiem_vu, under `admin.lookup`) — owner decision 15/10/2026. User decision 2026-09-24: both are FULL catalogues (add, relabel, reorder,
 // disable/enable, soft-delete commune-added rows) — the same shape as the five catalogues already
 // writable in documents, finance, comms and petitions. The rules below are theirs, copied, so the web

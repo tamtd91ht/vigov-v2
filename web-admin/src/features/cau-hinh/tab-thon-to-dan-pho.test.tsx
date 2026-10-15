@@ -23,7 +23,7 @@ import type { ResidentialUnitActions } from "./tab-thon-to-dan-pho";
 
 /**
  * The Thôn / Tổ dân phố tab reaches the page as decided: spec `04-thon-to-dan-pho.md` in the shared
- * table pattern (`config-ui.tsx`), write buttons only with `admin.residential_unit` (allowed AND denied), the
+ * table pattern (`config-ui.tsx`), write buttons only with `admin.village` (allowed AND denied), the
  * prototype's columns (no Trưởng thôn, no Thứ tự), "Xoá" (= deactivate) asking once with no reason box,
  * inactive units hidden by default behind one switch, no code box, and the server's refusal shown in
  * place (bug sheet row 31). `react-dom/server` in Node, no jsdom.
@@ -95,20 +95,20 @@ function sessionWith(permissions: readonly string[]): PhienDaDoc {
  * The tab as mounted, session → gate (owner 15/10/2026, bug sheet web-admin-141026 row 22). Server
  * render runs no effect, so the list is still loading: the import row is the write control that shows.
  */
-describe("TabThonToDanPho — write gate is admin.residential_unit, the tab itself is open to all", () => {
+describe("TabThonToDanPho — write gate is admin.village, the tab itself is open to all", () => {
   afterEach(() => {
     S.phien = null;
   });
 
-  it("ALLOWED: admin.residential_unit draws the import row", () => {
-    S.phien = sessionWith(["admin.residential_unit"]);
+  it("ALLOWED: admin.village draws the import row", () => {
+    S.phien = sessionWith(["admin.village"]);
     const html = renderToStaticMarkup(<TabThonToDanPho />);
     expect(html).toContain("Thôn / Tổ dân phố");
     expect(html).toContain("Nhập từ Excel");
   });
 
   it("DENIED: admin.org and admin.lookup (the keys before 15/10/2026) draw NO write control, the tab still shows", () => {
-    S.phien = sessionWith(["admin.org", "admin.lookup", "admin.system_message", "admin.residential_units"]);
+    S.phien = sessionWith(["admin.org", "admin.lookup", "admin.message", "admin.villages"]);
     const html = renderToStaticMarkup(<TabThonToDanPho />);
     expect(html).toContain('id="tieu-de-thon"');
     expect(html).toContain("Đang tải danh sách địa bàn");
@@ -134,7 +134,7 @@ describe("TabThonToDanPho — write gate is admin.residential_unit, the tab itse
 });
 
 describe("list and write buttons", () => {
-  it("with admin.residential_unit: import, add, edit and Xoá on the active row; the inactive one hidden by default", () => {
+  it("with admin.village: import, add, edit and Xoá on the active row; the inactive one hidden by default", () => {
     const html = view(true);
     expect(html).toContain(ADD_BUTTON);
     expect(html).toContain("Nhập từ Excel");
@@ -170,7 +170,7 @@ describe("list and write buttons", () => {
     expect(row).toContain(ADD_BUTTON);
   });
 
-  it("DENIED (no admin.residential_unit): the list is still there, NO write button, and no read-only notice", () => {
+  it("DENIED (no admin.village): the list is still there, NO write button, and no read-only notice", () => {
     const html = view(false);
     expect(html).toContain("Thôn Bình An");
     expect(html).not.toContain(ADD_BUTTON);
@@ -228,7 +228,7 @@ describe("list and write buttons", () => {
     expect(html).not.toContain("<table");
   });
 
-  it("loading with admin.residential_unit: the import row stays, the add button waits (prototype ConfigWorkspace.tsx:99)", () => {
+  it("loading with admin.village: the import row stays, the add button waits (prototype ConfigWorkspace.tsx:99)", () => {
     const html = renderToStaticMarkup(
       <ResidentialUnitsView
         load={{ phase: "loading" }}

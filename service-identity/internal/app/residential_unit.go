@@ -1,7 +1,7 @@
 package app
 
 // The use cases behind the WRITE surface of the commune's residential units (thôn / tổ dân phố),
-// under `admin.residential_unit` (owner decision 15/10/2026; `admin.org` before) — user decision 2026-09-29, ADR 0059 §2:
+// under `admin.village` (owner decision 15/10/2026; `admin.org` before) — user decision 2026-09-29, ADR 0059 §2:
 //
 //	Create   add a unit; a blank code is derived from the name
 //	Update   rename, reclassify, change head / counts / rank, and TAKE OUT OF USE or back into use

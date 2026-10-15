@@ -17,10 +17,10 @@ const migration0032 = "0032_split_configuration_permissions.sql"
 func TestMigration0032SeedsTheFourKeysAfterLookup(t *testing.T) {
 	sql := maChay(t, migration0032)
 	for _, want := range []string{
-		"('admin.residential_unit', 'quản trị', 'cấu hình thôn/tổ dân phố', 44)",
-		"('admin.system_message', 'quản trị', 'cấu hình lời hệ thống', 45)",
-		"('admin.mail_server', 'quản trị', 'cấu hình máy chủ thư', 46)",
-		"('admin.zalo_channel', 'quản trị', 'cấu hình kênh zalo', 47)",
+		"('admin.village', 'quản trị', 'cấu hình thôn/tổ dân phố', 44)",
+		"('admin.message', 'quản trị', 'cấu hình lời hệ thống', 45)",
+		"('admin.mail', 'quản trị', 'cấu hình máy chủ thư', 46)",
+		"('admin.zalo', 'quản trị', 'cấu hình kênh zalo', 47)",
 		"('admin.org', 'quản trị', 'quản lý sơ đồ tổ chức', 48)",
 		"('admin.role', 'quản trị', 'phân quyền', 49)",
 		"('admin.sla', 'quản trị', 'cấu hình thời hạn xử lý', 50)",
@@ -38,9 +38,9 @@ func TestMigration0032SeedsTheFourKeysAfterLookup(t *testing.T) {
 func TestMigration0032GrantsByHeldKeyWithAudit(t *testing.T) {
 	sql := maChay(t, migration0032)
 	for _, c := range []struct{ want, why string }{
-		{"values ('admin.lookup', 'admin.residential_unit'), ('admin.lookup', 'admin.system_message'), " +
-			"('admin.lookup', 'admin.mail_server'), ('admin.lookup', 'admin.zalo_channel'), " +
-			"('admin.org', 'admin.residential_unit')",
+		{"values ('admin.lookup', 'admin.village'), ('admin.lookup', 'admin.message'), " +
+			"('admin.lookup', 'admin.mail'), ('admin.lookup', 'admin.zalo'), " +
+			"('admin.org', 'admin.village')",
 			"the owner's grant rule (15/10/2026): lookup ⇒ four keys, org ⇒ residential_unit only"},
 		{"where vt.deleted_at is null", "live roles only — a soft-deleted role is the commune's decision"},
 		{"on conflict (tenant_id, vai_tro_id, quyen_ma) do nothing returning tenant_id, vai_tro_id, quyen_ma",

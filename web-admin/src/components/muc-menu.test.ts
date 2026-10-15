@@ -204,10 +204,10 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     "admin.lookup",
     "admin.sla",
     // Four keys split out on 15/10/2026 (bug sheet web-admin-141026 row 22): each opens one tab here.
-    "admin.residential_unit",
-    "admin.system_message",
-    "admin.mail_server",
-    "admin.zalo_channel",
+    "admin.village",
+    "admin.message",
+    "admin.mail",
+    "admin.zalo",
   ])(
     "chỉ có `%s`: thấy mục Cấu hình",
     (khoa) => {
@@ -217,7 +217,7 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
 
   it("bốn khoá tách 15/10/2026 KHÔNG mở mục Hệ thống — không tab nào ở /he-thong đi theo chúng", () => {
     const ten = tenMuc(
-      locMenu(NHOM_MENU, ["admin.residential_unit", "admin.system_message", "admin.mail_server", "admin.zalo_channel"]),
+      locMenu(NHOM_MENU, ["admin.village", "admin.message", "admin.mail", "admin.zalo"]),
     );
     expect(ten).toEqual(["Cấu hình"]);
   });
@@ -231,7 +231,7 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
 
   it("chuỗi gần giống không mở được mục", () => {
     const ten = tenMuc(
-      locMenu(NHOM_MENU, ["admin.slas", "ADMIN.SLA", "admin.sla.read", "admin", "admin.mail_servers", "admin.zalo"]),
+      locMenu(NHOM_MENU, ["admin.slas", "ADMIN.SLA", "admin.sla.read", "admin", "admin.mails", "admin.zalos", "ADMIN.ZALO"]),
     );
     expect(ten).not.toContain("Cấu hình");
   });

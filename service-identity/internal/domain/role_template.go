@@ -44,7 +44,7 @@ package domain
 // too — see 0028 question 4.
 //
 // OWNER DECISION 15/10/2026 (bug sheet web-admin-141026 row 22): the four configuration keys of
-// migration 0032 (admin.residential_unit, admin.system_message, admin.mail_server, admin.zalo_channel)
+// migration 0032 (admin.village, admin.message, admin.mail, admin.zalo)
 // are split out of admin.lookup / admin.org and PRE-GRANTED to whoever reaches those tabs today. So
 // every template holding admin.lookup — Chủ tịch UBND and Chánh Văn phòng — holds all four; no
 // template holds admin.org without admin.lookup. 0032 applies the same rule to existing roles, so a
@@ -98,7 +98,7 @@ func RoleTemplates() []RoleTemplate {
 				"dossier.import", "dossier.read", "dossier.update",
 				"notice.send",
 				// Migration 0032, owner decision 15/10/2026 (file comment).
-				"admin.residential_unit", "admin.system_message", "admin.mail_server", "admin.zalo_channel",
+				"admin.village", "admin.message", "admin.mail", "admin.zalo",
 			},
 		},
 		{
@@ -129,7 +129,7 @@ func RoleTemplates() []RoleTemplate {
 				"report.read", "report.export",
 				"admin.lookup",
 				// Migration 0032, owner decision 15/10/2026 (file comment): holds admin.lookup, so holds the four.
-				"admin.residential_unit", "admin.system_message", "admin.mail_server", "admin.zalo_channel",
+				"admin.village", "admin.message", "admin.mail", "admin.zalo",
 				"content.read", "content.update",
 				"announcement.create",
 			},

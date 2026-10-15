@@ -181,10 +181,10 @@ describe("ẩn/hiện tab Phân quyền theo quyền", () => {
 
 describe("bốn khoá cấu hình tách khỏi `admin.lookup` / `admin.org` (chủ dự án 15/10/2026)", () => {
   const DECISIONS = [
-    ["admin.mail_server", mailServerTabDecision],
-    ["admin.zalo_channel", zaloChannelTabDecision],
-    ["admin.system_message", systemMessagesTabDecision],
-    ["admin.residential_unit", residentialUnitWriteDecision],
+    ["admin.mail", mailServerTabDecision],
+    ["admin.zalo", zaloChannelTabDecision],
+    ["admin.message", systemMessagesTabDecision],
+    ["admin.village", residentialUnitWriteDecision],
   ] as const;
 
   it.each(DECISIONS)("có `%s` thì mở", async (key, decide) => {

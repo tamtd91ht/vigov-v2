@@ -163,19 +163,19 @@ describe("Danh mục — which group offers the import, to whom", () => {
     expect([...Object.keys(CATALOGUE_IMPORTS)].sort()).toEqual([...importable].sort());
     expect(catalogueImportFor("citizenLetterType", session(["admin.lookup"]))).toBeNull();
     for (const g of importable) {
-      // Loại đơn vị dân cư writes on `admin.residential_unit` since 15/10/2026 (bug sheet web-admin-141026 row 22).
-      const key = g === "loaiDonViDanCu" ? "admin.residential_unit" : "admin.lookup";
+      // Loại đơn vị dân cư writes on `admin.village` since 15/10/2026 (bug sheet web-admin-141026 row 22).
+      const key = g === "loaiDonViDanCu" ? "admin.village" : "admin.lookup";
       expect(CATALOGUE_IMPORTS[g]?.permission).toBe(key);
       expect(catalogueImportFor(g, session([key]))).not.toBeNull();
-      expect(catalogueImportFor(g, session(["admin.org", "admin.lookups", "admin.residential_units"]))).toBeNull();
+      expect(catalogueImportFor(g, session(["admin.org", "admin.lookups", "admin.villages"]))).toBeNull();
     }
   });
 
-  it("Loại đơn vị dân cư: `admin.residential_unit` opens its import; DENIED with `admin.lookup` / `admin.org` alone", () => {
-    expect(catalogueImportFor("loaiDonViDanCu", session(["admin.residential_unit"]))).not.toBeNull();
+  it("Loại đơn vị dân cư: `admin.village` opens its import; DENIED with `admin.lookup` / `admin.org` alone", () => {
+    expect(catalogueImportFor("loaiDonViDanCu", session(["admin.village"]))).not.toBeNull();
     expect(catalogueImportFor("loaiDonViDanCu", session(["admin.lookup", "admin.org"]))).toBeNull();
     // And the other way: the residential key opens no other group's import.
-    expect(catalogueImportFor("loaiVanBan", session(["admin.residential_unit"]))).toBeNull();
+    expect(catalogueImportFor("loaiVanBan", session(["admin.village"]))).toBeNull();
   });
 
   it("allowed: `admin.lookup` on the group that has an import", () => {
@@ -211,10 +211,10 @@ describe("Danh mục — which group offers the import, to whom", () => {
     expect(importGroupFor(null, "loaiTaiNguyenBanDo", session(["admin.lookup"]))).toBeNull();
   });
 
-  it("the tab's import button on Loại đơn vị dân cư follows `admin.residential_unit`, not `admin.lookup`", () => {
-    expect(importGroupFor(groups, "loaiDonViDanCu", session(["admin.residential_unit"]))).toBe("loaiDonViDanCu");
+  it("the tab's import button on Loại đơn vị dân cư follows `admin.village`, not `admin.lookup`", () => {
+    expect(importGroupFor(groups, "loaiDonViDanCu", session(["admin.village"]))).toBe("loaiDonViDanCu");
     expect(importGroupFor(groups, "loaiDonViDanCu", session(["admin.lookup"]))).toBeNull();
-    expect(importGroupFor(groups, "loaiVanBan", session(["admin.residential_unit"]))).toBeNull();
+    expect(importGroupFor(groups, "loaiVanBan", session(["admin.village"]))).toBeNull();
   });
 
   it("the button reaches the page: '⬆ Nhập từ Excel' rendered above the filter row", () => {
@@ -375,7 +375,7 @@ describe("the six lookupImportTarget groups — registered in CATALOGUE_IMPORTS"
   ];
 
   for (const c of cases) {
-    const key = c.group === "loaiDonViDanCu" ? "admin.residential_unit" : "admin.lookup";
+    const key = c.group === "loaiDonViDanCu" ? "admin.village" : "admin.lookup";
     it(`${c.noun}: its owner's three routes, rows in \`${c.field}\`, gated on ${key} (allowed and DENIED)`, () => {
       expect(c.target.routes).toEqual({
         template: `${c.base}/import-template`,

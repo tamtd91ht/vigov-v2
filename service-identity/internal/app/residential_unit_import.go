@@ -1,7 +1,7 @@
 package app
 
 // The use case behind "⬆ Nhập từ Excel" on the residential-unit tab (14-cau-hinh.md §2; user decision
-// 2026-09-29, ADR 0059 §2): create only, ALL OR NOTHING, under `admin.residential_unit` (owner decision 15/10/2026).
+// 2026-09-29, ADR 0059 §2): create only, ALL OR NOTHING, under `admin.village` (owner decision 15/10/2026).
 //
 //	Preview  plan the file against the commune and report — WRITES NOTHING, audits nothing
 //	Import   the same plan; any error = nothing written; else every unit, one audit entry per unit,

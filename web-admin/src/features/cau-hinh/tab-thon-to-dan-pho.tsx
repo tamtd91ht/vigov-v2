@@ -89,7 +89,7 @@ import {
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  * DANH SÁCH HIỆN CHO MỌI TÀI KHOẢN, CHỈ NÚT GHI MỚI ẨN — cùng khuôn tab Sơ đồ tổ chức, và vì cùng một
  * lý do ở máy chủ: `GET /api/v1/residential-units` khai `any-authenticated` (tên địa bàn có ở bộ lọc
- * phản ánh), còn hai tuyến ghi và ba tuyến nhập khai `RequirePermission("admin.residential_unit")` (chủ
+ * phản ánh), còn hai tuyến ghi và ba tuyến nhập khai `RequirePermission("admin.village")` (chủ
  * dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22; trước đó `admin.org`). Ẩn nút là TIỆN
  * DỤNG, không phải biện pháp: máy chủ kiểm khoá trên TỪNG yêu cầu (luật 5, cấm #1).
  *
@@ -336,7 +336,7 @@ function countCell(n: number | null): string {
 /**
  * The tab's body: import, add, the open form, the list. PURE PRESENTATION and EXPORTED so the test
  * renders the allowed AND the denied case with `react-dom/server` — "no write button without
- * `admin.residential_unit`" is a fact of this JSX, not of a pure function.
+ * `admin.village`" is a fact of this JSX, not of a pure function.
  */
 export function ResidentialUnitsView({
   load,

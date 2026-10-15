@@ -102,7 +102,7 @@ export function mapFieldWriteDecision(ketQua: KetQua<identity_phienHienTaiRa>): 
 }
 
 /**
- * Tab "Máy chủ thư" — `admin.mail_server` (owner 15/10/2026, bug sheet web-admin-141026 row 22; was
+ * Tab "Máy chủ thư" — `admin.mail` (owner 15/10/2026, bug sheet web-admin-141026 row 22; was
  * `admin.lookup`). ONE key for read AND write: all three routes (GET · PUT mail-settings, POST
  * test-messages) declare it, the read included, so the tab hides as a whole. `admin.lookup` alone no
  * longer opens it.
@@ -112,7 +112,7 @@ export function mailServerTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): 
 }
 
 /**
- * Tab "Kênh Zalo" — `admin.zalo_channel` (owner 15/10/2026; was `admin.lookup`, ADR 0074 #6): the key of
+ * Tab "Kênh Zalo" — `admin.zalo` (owner 15/10/2026; was `admin.lookup`, ADR 0074 #6): the key of
  * every route the tab reads and writes — settings, linked staff, the commune's bot, Zalo groups and the
  * launch-link QR — reads included, so the tab hides as a whole without it.
  */
@@ -121,7 +121,7 @@ export function zaloChannelTabDecision(ketQua: KetQua<identity_phienHienTaiRa>):
 }
 
 /**
- * Tab "Lời hệ thống" — `admin.system_message` (owner 15/10/2026; was `admin.lookup`). The key of every
+ * Tab "Lời hệ thống" — `admin.message` (owner 15/10/2026; was `admin.lookup`). The key of every
  * system-message route of petitions, finance and reporting, read included, so the tab hides as a whole.
  */
 export function systemMessagesTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
@@ -129,7 +129,7 @@ export function systemMessagesTabDecision(ketQua: KetQua<identity_phienHienTaiRa
 }
 
 /**
- * Write half of "Thôn / Tổ dân phố" — `admin.residential_unit` (owner 15/10/2026; was `admin.org`): the
+ * Write half of "Thôn / Tổ dân phố" — `admin.village` (owner 15/10/2026; was `admin.org`): the
  * key of the hamlet write and import routes. The tab itself has no gate (its read is any-authenticated);
  * this only decides whether Nhập từ Excel · Thêm · Sửa · Xoá · Dùng lại are drawn.
  */

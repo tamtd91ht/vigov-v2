@@ -183,8 +183,8 @@ func TestMailRoutesAskForSeededKey(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
 			s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body)
-			if got := s.checker.hoiKhoaCuoi(); got != "admin.mail_server" {
-				t.Fatalf("route asked for %q, want admin.mail_server", got)
+			if got := s.checker.hoiKhoaCuoi(); got != "admin.mail" {
+				t.Fatalf("route asked for %q, want admin.mail", got)
 			}
 		})
 	}
@@ -194,7 +194,7 @@ func TestMailRoutes_401NoSession(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(xaA, "admin.mail_server")
+			s.grant(xaA, "admin.mail")
 			doiMa(t, s.call(t, tc.method, hostA, tc.path, nil, tc.body), http.StatusUnauthorized)
 			if s.fake.calls != 0 {
 				t.Error("no session and the use case still ran")
@@ -217,7 +217,7 @@ func TestMailRoutes_403WrongPermission(t *testing.T) {
 }
 
 // 403 WITH `admin.lookup` ALONE — the key these routes declared until the owner's decision of
-// 15/10/2026 gave the Máy chủ thư tab its own, `admin.mail_server` (service-identity migration 0032, which
+// 15/10/2026 gave the Máy chủ thư tab its own, `admin.mail` (service-identity migration 0032, which
 // pre-granted it to every role holding `admin.lookup`). Quản lý danh mục no longer opens this tab.
 //
 // MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on any of these routes.
@@ -240,7 +240,7 @@ func TestMailRoutes_403RightPermissionWrongCommune(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(xaA, "admin.mail_server")
+			s.grant(xaA, "admin.mail")
 			doiMa(t, s.call(t, tc.method, hostB, tc.path, canBoGhi(xaB), tc.body), http.StatusForbidden)
 			if s.fake.calls != 0 {
 				t.Error("a grant in another commune was enough")
@@ -253,8 +253,8 @@ func TestMailRoutes_401SessionOfAnotherCommune(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(xaA, "admin.mail_server")
-			s.grant(xaB, "admin.mail_server")
+			s.grant(xaA, "admin.mail")
+			s.grant(xaB, "admin.mail")
 			doiMa(t, s.call(t, tc.method, hostB, tc.path, canBoGhi(xaA), tc.body), http.StatusUnauthorized)
 			if s.fake.calls != 0 {
 				t.Error("a session of another commune still reached the use case")
@@ -267,7 +267,7 @@ func TestMailRoutes_RightPermissionRightCommune(t *testing.T) {
 	for _, tc := range threeRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(xaA, "admin.mail_server")
+			s.grant(xaA, "admin.mail")
 			doiMa(t, s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body), tc.ok)
 			if s.fake.calls != 1 || s.fake.lastCommune != xaA {
 				t.Fatalf("use case ran %d times in commune %q, want once in %q", s.fake.calls, s.fake.lastCommune, xaA)
@@ -285,7 +285,7 @@ func TestMailRoutes_RightPermissionRightCommune(t *testing.T) {
 
 func TestGetMailSettingsNeverCarriesThePassword(t *testing.T) {
 	s := newMailServer(t)
-	s.grant(xaA, "admin.mail_server")
+	s.grant(xaA, "admin.mail")
 	w := s.call(t, http.MethodGet, hostA, mailPath, canBoGhi(xaA), "")
 	doiMa(t, w, http.StatusOK)
 	body := w.Body.String()
@@ -300,7 +300,7 @@ func TestGetMailSettingsNeverCarriesThePassword(t *testing.T) {
 
 func TestPutMailSettingsPassesPasswordAsSecretAndDoesNotEchoIt(t *testing.T) {
 	s := newMailServer(t)
-	s.grant(xaA, "admin.mail_server")
+	s.grant(xaA, "admin.mail")
 	w := s.call(t, http.MethodPut, hostA, mailPath, canBoGhi(xaA), putMailBody)
 	doiMa(t, w, http.StatusOK)
 	if s.fake.lastPassword != testPassword {
@@ -320,7 +320,7 @@ func TestPutMailSettingsPassesPasswordAsSecretAndDoesNotEchoIt(t *testing.T) {
 
 func TestPutMailSettingsBlankPasswordReachesUseCaseAsEmpty(t *testing.T) {
 	s := newMailServer(t)
-	s.grant(xaA, "admin.mail_server")
+	s.grant(xaA, "admin.mail")
 	body := strings.Replace(putMailBody, `,"password":"`+testPassword+`"`, "", 1)
 	doiMa(t, s.call(t, http.MethodPut, hostA, mailPath, canBoGhi(xaA), body), http.StatusOK)
 	if len(s.fake.lastSave.Password) != 0 {
@@ -353,7 +353,7 @@ func TestMailErrorsMapToStatuses(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(xaA, "admin.mail_server")
+			s.grant(xaA, "admin.mail")
 			s.fake.err = tc.err
 			w := s.call(t, tc.method, hostA, tc.path, canBoGhi(xaA), tc.body)
 			doiMa(t, w, tc.code)
@@ -375,7 +375,7 @@ func TestMailRefusalsAnswerFixedSentences(t *testing.T) {
 	for _, row := range mailSettingsRefusals {
 		t.Run(row.err.Error(), func(t *testing.T) {
 			s := newMailServer(t)
-			s.grant(xaA, "admin.mail_server")
+			s.grant(xaA, "admin.mail")
 			// Wrapped the way a use case wraps it: the detail after the sentinel must not travel either.
 			s.fake.err = fmt.Errorf("máy chủ thư: lưu cho xã %s: %w", xaA, row.err)
 			w := s.call(t, http.MethodPut, hostA, mailPath, canBoGhi(xaA), putMailBody)
@@ -405,7 +405,7 @@ func assertNoInternalWording(t *testing.T, msg string) {
 
 func TestGetMailSettingsLastTestShape(t *testing.T) {
 	s := newMailServer(t)
-	s.grant(xaA, "admin.mail_server")
+	s.grant(xaA, "admin.mail")
 	w := s.call(t, http.MethodGet, hostA, mailPath, canBoGhi(xaA), "")
 	doiMa(t, w, http.StatusOK)
 	if !strings.Contains(w.Body.String(), `"last_test":null`) {

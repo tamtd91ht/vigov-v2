@@ -1216,7 +1216,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `mail-settings` IS VENDOR-CHOSEN: ubiquitous-language.md §Tên tài nguyên trên URL has no row for
 	// it. See internal/http/mail_settings.go.
 	//
-	// `admin.mail_server` — "Cấu hình máy chủ thư" — ON ALL THREE, READ INCLUDED, by the owner's decision
+	// `admin.mail` — "Cấu hình máy chủ thư" — ON ALL THREE, READ INCLUDED, by the owner's decision
 	// of 15/10/2026 (tester bug sheet web-admin-141026 row 22): the Máy chủ thư tab gets its own key
 	// instead of `admin.lookup` (the requirement repository's key, ../vigov-require/docs/spec/04-api.md:33-35).
 	// Seeded by service-identity migration 0032 and pre-granted there to every live role holding
@@ -1233,7 +1233,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/mail-settings",
-		authz.RequirePermission(d.Checker, "admin.mail_server")(
+		authz.RequirePermission(d.Checker, "admin.mail")(
 			http.HandlerFunc(h.GetMailSettings)))
 
 	// PUT AND NOT PATCH: §10 is one form saved whole (`💾 Lưu cấu hình`), and every field is sent. The
@@ -1257,7 +1257,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    503 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PUT /api/v1/mail-settings",
-		authz.RequirePermission(d.Checker, "admin.mail_server")(
+		authz.RequirePermission(d.Checker, "admin.mail")(
 			idem.KhongCan("lưu là ghi đè cả cấu hình bằng trạng thái trong thân; không đổi gì và không kèm mật khẩu thì không ghi và không có vết, kèm mật khẩu thì lần thứ hai chỉ niêm lại cùng mật khẩu và ghi đúng một vết nói điều đó")(
 				http.HandlerFunc(h.PutMailSettings))))
 
@@ -1288,7 +1288,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    503 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/mail-settings/test-messages",
-		authz.RequirePermission(d.Checker, "admin.mail_server")(
+		authz.RequirePermission(d.Checker, "admin.mail")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.SendTestMail))))
 

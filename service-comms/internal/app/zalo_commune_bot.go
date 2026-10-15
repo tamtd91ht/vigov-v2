@@ -1,7 +1,7 @@
 package app
 
 // A COMMUNE'S OWN ZALO BOT (migration 0022; ADR 0079 #4 and §Q1 #1–#5) — the administration of it
-// (CommuneZaloBots, behind /api/v1/zalo-bots/current, admin.zalo_channel) and the one answer every sender needs:
+// (CommuneZaloBots, behind /api/v1/zalo-bots/current, admin.zalo) and the one answer every sender needs:
 // WHICH bot serves this commune now (ZaloBotRouter).
 //
 // THE COMMUNE IS THE CONTEXT'S, always (rule 1, invariant 4): the routes resolve it from Host; nothing

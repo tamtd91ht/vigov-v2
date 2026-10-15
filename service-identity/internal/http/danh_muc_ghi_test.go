@@ -19,7 +19,7 @@ import (
 // THE SIX WRITE ROUTES OF THE TWO CATALOGUES — POST · PATCH · DELETE on residential-unit-types and
 // task-blocs. TABLE-DRIVEN OVER BOTH CATALOGUES, so no assertion is made on whichever one was written
 // first. Since the owner's decision of 15/10/2026 they declare DIFFERENT keys — residential-unit types
-// `admin.residential_unit` (Thôn/Tổ dân phố tab), task blocs `admin.lookup` (Danh mục tab) — and
+// `admin.village` (Thôn/Tổ dân phố tab), task blocs `admin.lookup` (Danh mục tab) — and
 // TestDanhMucGhi_403KhoaCuaDanhMucKia proves neither key opens the other catalogue.
 //
 // What is asserted here is what the HANDLER owns: the permission, the status, the wire mapping, the
@@ -193,7 +193,7 @@ func TestDanhMucGhi_403SaiQuyen(t *testing.T) {
 
 // 403 WITH THE OTHER CATALOGUE'S KEY ONLY (owner decision 15/10/2026). The case that matters: a role
 // holding ONLY `admin.lookup` — every role that reached these screens before migration 0032 — no
-// longer writes residential-unit types; and `admin.residential_unit` does not open the task blocs.
+// longer writes residential-unit types; and `admin.village` does not open the task blocs.
 //
 // MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on POST /api/v1/residential-unit-types.
 func TestCatalogueWrites_403OtherCatalogueKey(t *testing.T) {

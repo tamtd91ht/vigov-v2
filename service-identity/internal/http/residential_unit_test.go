@@ -19,7 +19,7 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// THE FIVE WRITE / IMPORT ROUTES OF THE RESIDENTIAL UNITS, all `admin.residential_unit` (owner decision
+// THE FIVE WRITE / IMPORT ROUTES OF THE RESIDENTIAL UNITS, all `admin.village` (owner decision
 // 15/10/2026; `admin.org` before, ADR 0059 §2). What is asserted here is
 // what the HANDLER owns: the permission, the wire mapping, the upload reader, the template, and which
 // identifier reaches the trail. The rules are proved in domain/residential_unit_import_test.go, the
@@ -28,7 +28,7 @@ import (
 const pathResidentialUnits = "/api/v1/residential-units"
 
 // residentialUnitKey is the Thôn/Tổ dân phố tab's key (service-identity migration 0032).
-const residentialUnitKey authz.Perm = "admin.residential_unit"
+const residentialUnitKey authz.Perm = "admin.village"
 
 // residentialUnitsFake stands in for *app.ResidentialUnits.
 type residentialUnitsFake struct {
@@ -182,7 +182,7 @@ func TestResidentialUnits_401WithoutToken(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.user` — a real key, not `admin.residential_unit`.
+// 403 WITH `admin.user` — a real key, not `admin.village`.
 func TestResidentialUnits_403WrongPermission(t *testing.T) {
 	m := dungMayChu(t)
 	tok := m.tokenCho(t, xaA, sidA)
@@ -216,7 +216,7 @@ func TestResidentialUnits_403OldKeysAlone(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.residential_unit` HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3).
+// 403 WITH `admin.village` HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3).
 func TestResidentialUnits_403RightPermissionWrongCommune(t *testing.T) {
 	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaB, sidB)

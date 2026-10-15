@@ -244,7 +244,7 @@ func TestSystemMessages_401WithoutSession(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newHarness(t)
-			s.checker.grant(communeA, "admin.system_message")
+			s.checker.grant(communeA, "admin.message")
 			wantStatus(t, call(s.h, rt.method, hostA, rt.path, nil, rt.body), http.StatusUnauthorized)
 			if s.svc.calls != 0 {
 				t.Error("use case ran with no session")
@@ -265,12 +265,12 @@ func TestSystemMessages_403WrongPermission(t *testing.T) {
 			s.checker.grant(communeA, "report.read", "report.export", "admin.audit", "admin.lookup")
 			wantStatus(t, call(s.h, rt.method, hostA, rt.path, staffOf(communeA), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
-				t.Error("use case ran without admin.system_message")
+				t.Error("use case ran without admin.message")
 			}
 			// The key the ROUTE asked for, against a literal: a fake checker grants any string, so
 			// only this catches a key the `quyen` table lacks (rule 5, invariant 3c).
-			if got := s.checker.lastAsked(); got != "admin.system_message" {
-				t.Errorf("route asked for %q, want admin.system_message", got)
+			if got := s.checker.lastAsked(); got != "admin.message" {
+				t.Errorf("route asked for %q, want admin.message", got)
 			}
 		})
 	}
@@ -281,7 +281,7 @@ func TestSystemMessages_403RightPermissionWrongCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newHarness(t)
-			s.checker.grant(communeA, "admin.system_message")
+			s.checker.grant(communeA, "admin.message")
 			wantStatus(t, call(s.h, rt.method, hostB, rt.path, staffOf(communeB), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
 				t.Error("commune A's grant let commune B configure its sentences")
@@ -296,8 +296,8 @@ func TestSystemMessages_TokenOfAnotherCommuneIsRefused(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newHarness(t)
-			s.checker.grant(communeA, "admin.system_message")
-			s.checker.grant(communeB, "admin.system_message")
+			s.checker.grant(communeA, "admin.message")
+			s.checker.grant(communeB, "admin.message")
 			w := call(s.h, rt.method, hostB, rt.path, staffOf(communeA), rt.body)
 			if w.Code != http.StatusUnauthorized && w.Code != http.StatusForbidden {
 				t.Fatalf("status = %d, want 401 or 403", w.Code)
@@ -313,7 +313,7 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newHarness(t)
-			s.checker.grant(communeA, "admin.system_message")
+			s.checker.grant(communeA, "admin.message")
 			wantStatus(t, call(s.h, rt.method, hostA, rt.path, staffOf(communeA), rt.body), rt.ok)
 			if s.svc.calls != 1 || s.svc.commune != communeA {
 				t.Fatalf("calls=%d commune=%q, want one call in the Host's commune", s.svc.calls, s.svc.commune)
@@ -337,7 +337,7 @@ func TestListSystemMessagesAll38WithDefaultsThroughTheRealUseCase(t *testing.T) 
 	// The REAL use case over a store holding nothing — every commune today. What the web tab
 	// receives is the whole catalogue, each key on its shipped default.
 	h, checker := newHarnessWith(t, app.NewSystemMessages(pkgstore.New(nil), emptyOverrideStore{}))
-	checker.grant(communeA, "admin.system_message")
+	checker.grant(communeA, "admin.message")
 	w := call(h, http.MethodGet, hostA, systemMessagesPath, staffOf(communeA), "")
 	wantStatus(t, w, http.StatusOK)
 
@@ -365,7 +365,7 @@ func TestListSystemMessagesAll38WithDefaultsThroughTheRealUseCase(t *testing.T) 
 
 func TestListSystemMessagesShape(t *testing.T) {
 	s := newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	at := time.Date(2026, 9, 29, 3, 0, 0, 0, time.UTC)
 	s.svc.list = []domain.SystemMessage{{
 		Key: titleKey, Description: "d", DefaultText: "Báo cáo điều hành",
@@ -394,7 +394,7 @@ func TestListSystemMessagesShape(t *testing.T) {
 
 func TestRewordSystemMessagePassesTextAndReturnsMessage(t *testing.T) {
 	s := newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	s.svc.result = domain.SystemMessage{Key: titleKey, CurrentText: "Báo cáo của xã.", Overridden: true}
 	w := call(s.h, http.MethodPut, hostA, overridePath(titleKey), staffOf(communeA), `{"text":"Báo cáo của xã."}`)
 	wantStatus(t, w, http.StatusOK)
@@ -410,7 +410,7 @@ func TestRewordSystemMessagePassesTextAndReturnsMessage(t *testing.T) {
 
 func TestRestoreSystemMessageIs204AndCallsRestore(t *testing.T) {
 	s := newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	w := call(s.h, http.MethodDelete, hostA, overridePath("report.metric.fiscal.balance"), staffOf(communeA), "")
 	wantStatus(t, w, http.StatusNoContent)
 	if s.svc.op != "restore" || s.svc.key != "report.metric.fiscal.balance" || w.Body.Len() != 0 {
@@ -431,7 +431,7 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newHarness(t)
-			s.checker.grant(communeA, "admin.system_message")
+			s.checker.grant(communeA, "admin.message")
 			s.svc.err = c.err
 			w := call(s.h, http.MethodPut, hostA, overridePath(titleKey), staffOf(communeA), `{"text":""}`)
 			wantStatus(t, w, c.want)
@@ -445,7 +445,7 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 
 func TestEmptyTextNamesTheRestoreAction(t *testing.T) {
 	s := newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	s.svc.err = domain.ErrMessageTextEmpty
 	w := call(s.h, http.MethodPut, hostA, overridePath(titleKey), staffOf(communeA), `{"text":"  "}`)
 	wantStatus(t, w, http.StatusBadRequest)
@@ -461,7 +461,7 @@ func TestUnknownKeyIs404OnBothWritesThroughTheRealUseCase(t *testing.T) {
 		for _, method := range []string{http.MethodPut, http.MethodDelete} {
 			t.Run(method+" "+key, func(t *testing.T) {
 				h, checker := newHarnessWith(t, app.NewSystemMessages(pkgstore.New(nil), emptyOverrideStore{}))
-				checker.grant(communeA, "admin.system_message")
+				checker.grant(communeA, "admin.message")
 				body := ""
 				if method == http.MethodPut {
 					body = `{"text":"x"}`
@@ -478,7 +478,7 @@ func TestUnknownKeyIs404OnBothWritesThroughTheRealUseCase(t *testing.T) {
 
 func TestRewordBadJSONIs400AndCallsNothing(t *testing.T) {
 	s := newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	wantStatus(t, call(s.h, http.MethodPut, hostA, overridePath(titleKey), staffOf(communeA), `{"text":`),
 		http.StatusBadRequest)
 	if s.svc.calls != 0 {
@@ -491,7 +491,7 @@ func TestSystemMessageWriteWithoutBusinessCodeIs500(t *testing.T) {
 	for _, rt := range systemMessageRoutes()[1:] {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newHarness(t)
-			s.checker.grant(communeA, "admin.system_message")
+			s.checker.grant(communeA, "admin.message")
 			wantStatus(t, call(s.h, rt.method, hostA, rt.path, staffWithoutCode(communeA), rt.body),
 				http.StatusInternalServerError)
 			if s.svc.calls != 0 {
@@ -551,7 +551,7 @@ func (emptyOverrideStore) SetActive(context.Context, *pkgstore.ScopedTx, string,
 
 func TestSwitchPassesStateRequiresItAndMapsRefusal(t *testing.T) {
 	s := newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	w := call(s.h, http.MethodPatch, hostA, overridePath(titleKey), staffOf(communeA), `{"is_active":true}`)
 	wantStatus(t, w, http.StatusOK)
 	if s.svc.active == nil || !*s.svc.active || s.svc.op != "switch" || s.svc.key != titleKey {
@@ -559,7 +559,7 @@ func TestSwitchPassesStateRequiresItAndMapsRefusal(t *testing.T) {
 	}
 
 	s = newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	wantStatus(t, call(s.h, http.MethodPatch, hostA, overridePath(titleKey), staffOf(communeA), `{}`), http.StatusBadRequest)
 	if s.svc.calls != 0 {
 		t.Error("a PATCH with no state reached the use case")
@@ -568,7 +568,7 @@ func TestSwitchPassesStateRequiresItAndMapsRefusal(t *testing.T) {
 
 func TestListCarriesGroupOriginAndSwitch(t *testing.T) {
 	s := newHarness(t)
-	s.checker.grant(communeA, "admin.system_message")
+	s.checker.grant(communeA, "admin.message")
 	s.svc.list = []domain.SystemMessage{{Key: titleKey, Group: domain.GroupReport, Origin: domain.OriginShipped,
 		DefaultText: "M.", CurrentText: "M.", OverrideText: "Của xã.", Overridden: true, Active: false}}
 	w := call(s.h, http.MethodGet, hostA, systemMessagesPath, staffOf(communeA), "")

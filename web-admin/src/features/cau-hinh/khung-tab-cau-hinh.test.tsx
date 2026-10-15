@@ -21,7 +21,7 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }))
 const { KhungTabCauHinh, SystemTabFrame } = await import("./khung-tab-cau-hinh");
 
 /** The four split-out configuration keys (owner 15/10/2026, migration identity 0032). */
-const SPLIT_KEYS = ["admin.residential_unit", "admin.system_message", "admin.mail_server", "admin.zalo_channel"];
+const SPLIT_KEYS = ["admin.village", "admin.message", "admin.mail", "admin.zalo"];
 const ALL_KEYS = ["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read", ...SPLIT_KEYS];
 const tabOrder = (html: string) => [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
 /** Id of the selected tab button (`aria-selected` renders before `id`). */
@@ -109,9 +109,9 @@ describe("khung tab màn Cấu hình", () => {
   });
 
   it.each([
-    ["admin.system_message", "Lời hệ thống", "loi-he-thong"],
-    ["admin.mail_server", "Máy chủ thư", "may-chu-thu"],
-    ["admin.zalo_channel", "Kênh Zalo", "kenh-zalo"],
+    ["admin.message", "Lời hệ thống", "loi-he-thong"],
+    ["admin.mail", "Máy chủ thư", "may-chu-thu"],
+    ["admin.zalo", "Kênh Zalo", "kenh-zalo"],
   ])("chỉ `%s` → đúng tab %s cộng ba tab không cổng; hai tab khoá tách kia vẫn ẩn", (key, label, id) => {
     phienGia = phienCo([key]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
@@ -119,8 +119,8 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).toContain(`panel-cau-hinh-${id}`);
   });
 
-  it("`admin.residential_unit` không thêm tab nào — Thôn / Tổ dân phố vốn hiện cho mọi tài khoản", () => {
-    phienGia = phienCo(["admin.residential_unit"]);
+  it("`admin.village` không thêm tab nào — Thôn / Tổ dân phố vốn hiện cho mọi tài khoản", () => {
+    phienGia = phienCo(["admin.village"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(tabOrder(html)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục"]);
   });

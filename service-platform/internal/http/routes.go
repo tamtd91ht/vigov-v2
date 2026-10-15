@@ -192,7 +192,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// GET /api/v1/communes/{id}/mini-app-launch-link: the commune's own app when exactly one is live, else
 	// the shared app's `x=<launch code>` link. No App ID and no domain in the reply.
 	//
-	// `admin.zalo_channel` — "Cấu hình kênh Zalo" — by the owner's decision of 15/10/2026 (tester bug sheet
+	// `admin.zalo` — "Cấu hình kênh Zalo" — by the owner's decision of 15/10/2026 (tester bug sheet
 	// web-admin-141026 row 22): the QR is shown on the Kênh Zalo tab (web-admin CommuneLaunchQrSection in
 	// zalo-channel-tab.tsx and nowhere else), so it takes that tab's key instead of the `admin.lookup` chosen
 	// on 13/10/2026. Seeded by service-identity migration 0032 and pre-granted there to every live role
@@ -211,6 +211,6 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error commune_inactive commune_launch_code_invalid shared_mini_app_not_declared shared_mini_app_ambiguous own_mini_app_ambiguous
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/commune-launch-link",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			http.HandlerFunc(ql.get)))
 }

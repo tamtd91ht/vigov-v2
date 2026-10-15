@@ -10156,7 +10156,7 @@
         "x-vigov-screen": "*(chưa có đặc tả — Cấu hình › mã QR mở Mini App)*",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "15dad99b1fdb",
         "responses": {
@@ -15134,7 +15134,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "53b57e74f70a",
         "responses": {
@@ -15189,7 +15189,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "f5e003e702d5",
         "x-vigov-idempotency": {
@@ -15302,7 +15302,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "4c39fda639d4",
         "requestBody": {
@@ -15390,7 +15390,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "d8e9397eaf4e",
         "requestBody": {
@@ -15497,7 +15497,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "f7be014f3f42",
         "responses": {
@@ -15555,7 +15555,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "f0cfcb337845",
         "requestBody": {
@@ -15640,7 +15640,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "99a6593bd150",
         "requestBody": {
@@ -18309,7 +18309,7 @@
         "x-vigov-screen": "14-cau-hinh §10",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.mail_server"
+          "key": "admin.mail"
         },
         "x-vigov-task": "3926a21d32ec",
         "responses": {
@@ -18364,7 +18364,7 @@
         "x-vigov-screen": "14-cau-hinh §10",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.mail_server"
+          "key": "admin.mail"
         },
         "x-vigov-task": "b68a04fb4d9d",
         "requestBody": {
@@ -18451,7 +18451,7 @@
         "x-vigov-screen": "14-cau-hinh §10",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.mail_server"
+          "key": "admin.mail"
         },
         "x-vigov-task": "a4a5701f056d",
         "x-vigov-idempotency": {
@@ -25000,7 +25000,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "78e4355ec38b",
         "responses": {
@@ -25055,7 +25055,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "1794e89465d8",
         "x-vigov-idempotency": {
@@ -25168,7 +25168,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "4b8394b8c733",
         "requestBody": {
@@ -25256,7 +25256,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "6886994f2cb1",
         "requestBody": {
@@ -25363,7 +25363,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "34c0bf672688",
         "responses": {
@@ -25421,7 +25421,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "82a09b78371b",
         "requestBody": {
@@ -25506,7 +25506,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "3c5641ccdbdb",
         "requestBody": {
@@ -26941,7 +26941,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "6080b8a538c3",
         "responses": {
@@ -27008,7 +27008,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "23358df9df9d",
         "responses": {
@@ -27066,7 +27066,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "a7fea7e356ce",
         "requestBody": {
@@ -27151,7 +27151,7 @@
         "x-vigov-screen": "14-cau-hinh §7",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.system_message"
+          "key": "admin.message"
         },
         "x-vigov-task": "a6ee0a6d43f8",
         "requestBody": {
@@ -27283,7 +27283,7 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "6dd9858c9d78",
         "x-vigov-idempotency": {
@@ -27386,7 +27386,7 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "3e15b4544104",
         "responses": {
@@ -27473,7 +27473,7 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "d136c7518644",
         "responses": {
@@ -27523,7 +27523,7 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "1c2867223c73",
         "x-vigov-idempotency": {
@@ -27646,7 +27646,7 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "e68cffad7668",
         "requestBody": {
@@ -27734,7 +27734,7 @@
         "x-vigov-screen": "14-cau-hinh §5",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "ffe578a15601",
         "requestBody": {
@@ -27876,7 +27876,7 @@
         "x-vigov-screen": "14-cau-hinh §2",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "b5f8c6346d28",
         "x-vigov-idempotency": {
@@ -27979,7 +27979,7 @@
         "x-vigov-screen": "14-cau-hinh §2",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "a94a34e65bc0",
         "responses": {
@@ -28066,7 +28066,7 @@
         "x-vigov-screen": "14-cau-hinh §2",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "af9d91c1814f",
         "responses": {
@@ -28116,7 +28116,7 @@
         "x-vigov-screen": "14-cau-hinh §2",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "d65153f6c319",
         "x-vigov-idempotency": {
@@ -28239,7 +28239,7 @@
         "x-vigov-screen": "14-cau-hinh §2",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.residential_unit"
+          "key": "admin.village"
         },
         "x-vigov-task": "b2bf22bd6c40",
         "requestBody": {
@@ -37172,7 +37172,7 @@
         "x-vigov-screen": "ADR 0079 Q1 #4 #5 — Cấu hình → tab Kênh Zalo (spec 11 §3 \"Quay về bot chung\")",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "b2d5489922c1",
         "requestBody": {
@@ -37250,7 +37250,7 @@
         "x-vigov-screen": "ADR 0079 Q1 #5 — Cấu hình → tab Kênh Zalo (spec 11 §3)",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "fb363d33b3b1",
         "responses": {
@@ -37305,7 +37305,7 @@
         "x-vigov-screen": "ADR 0079 Q1 #1 #4 — Cấu hình → tab Kênh Zalo (spec 11 §3 \"Lưu con bot\")",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "0f38ff99071e",
         "requestBody": {
@@ -37438,7 +37438,7 @@
         "x-vigov-screen": "Cấu hình → tab Kênh Zalo (spec 11 §3 \"Kiểm tra kết nối\")",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "d574dea34be4",
         "responses": {
@@ -37522,7 +37522,7 @@
         "x-vigov-screen": "ADR 0079 Q1 #2 #3 — Cấu hình → tab Kênh Zalo (spec 11 §3 \"Đăng ký webhook\")",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "ff4dc111b591",
         "responses": {
@@ -37607,7 +37607,7 @@
         "x-vigov-screen": "ADR 0074 — Cấu hình → tab Kênh Zalo",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "304fe5a9aad2",
         "responses": {
@@ -37662,7 +37662,7 @@
         "x-vigov-screen": "ADR 0074 — Cấu hình → tab Kênh Zalo",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "b093bab7120c",
         "requestBody": {
@@ -37763,7 +37763,7 @@
         "x-vigov-screen": "ADR 0092 #3 — Cấu hình → tab Kênh Zalo",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "df67ce0f6412",
         "requestBody": {
@@ -37887,7 +37887,7 @@
         "x-vigov-screen": "ADR 0092 #1 — Cấu hình → tab Kênh Zalo",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "00980d5a3f8b",
         "responses": {
@@ -37968,7 +37968,7 @@
         "x-vigov-screen": "ADR 0092 #8 — Cấu hình → tab Kênh Zalo",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "80438ac8727b",
         "requestBody": {
@@ -38065,7 +38065,7 @@
         "x-vigov-screen": "ADR 0092 #1 #2 — Cấu hình → tab Kênh Zalo",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "ce67c7d989a3",
         "requestBody": {
@@ -38195,7 +38195,7 @@
         "x-vigov-screen": "ADR 0074 — Cấu hình → tab Kênh Zalo",
         "x-vigov-permission": {
           "kind": "permission",
-          "key": "admin.zalo_channel"
+          "key": "admin.zalo"
         },
         "x-vigov-task": "cd6fd2ad5a03",
         "responses": {

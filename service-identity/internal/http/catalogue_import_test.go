@@ -19,7 +19,7 @@ import (
 )
 
 // THE SIX IMPORT ROUTES OF THE TWO CATALOGUES (ADR 0059 §3) — residential-unit types under
-// `admin.residential_unit`, task blocs under `admin.lookup` (owner decision 15/10/2026). What is asserted here
+// `admin.village`, task blocs under `admin.lookup` (owner decision 15/10/2026). What is asserted here
 // is what the HANDLER owns: the permission, the upload, the wire mapping, and which identifier reaches
 // the trail. The rules are proved in domain/catalogue_import_test.go, the transaction in
 // app/catalogue_import_test.go.
@@ -127,7 +127,7 @@ func TestCatalogueImports_403WrongPermission(t *testing.T) {
 }
 
 // 403 WITH THE OTHER CATALOGUE'S KEY ONLY (owner decision 15/10/2026): a role holding ONLY
-// `admin.lookup` no longer imports residential-unit types, and `admin.residential_unit` does not open
+// `admin.lookup` no longer imports residential-unit types, and `admin.village` does not open
 // the task-bloc import.
 func TestCatalogueImports_403OtherCatalogueKey(t *testing.T) {
 	for _, rt := range catalogueImportRoutes() {

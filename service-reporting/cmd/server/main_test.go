@@ -137,11 +137,11 @@ func wantStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	}
 }
 
-// adminOfA holds `admin.system_message`, the key the routes declare since the owner's decision of
+// adminOfA holds `admin.message`, the key the routes declare since the owner's decision of
 // 15/10/2026 — a row of `quyen` (service-identity/migrations/0032_split_configuration_permissions.sql).
 func adminOfA() *resolverFake {
 	return &resolverFake{found: true, out: staffauth.StaffPrincipal{
-		StaffID: staffInternalID, PermissionKeys: []authz.Perm{"admin.system_message"},
+		StaffID: staffInternalID, PermissionKeys: []authz.Perm{"admin.message"},
 	}}
 }
 
@@ -167,7 +167,7 @@ func TestSignedInWithoutSystemMessageKeyIs403(t *testing.T) {
 	}})
 	wantStatus(t, s.get(hostA, route, fakeCookie), http.StatusForbidden)
 	if s.store.reads != 0 {
-		t.Error("store read without admin.system_message")
+		t.Error("store read without admin.message")
 	}
 }
 

@@ -71,7 +71,7 @@ import {
 
 /**
  * "Cấu hình → Lời hệ thống" — spec `07-loi-he-thong.md`, prototype `MessageTemplateTable.tsx`
- * (ADR 0079 Q2/Q5). One key, `admin.system_message` (since 15/10/2026; was `admin.lookup`), on every route — the tab hides as a whole without it
+ * (ADR 0079 Q2/Q5). One key, `admin.message` (since 15/10/2026; was `admin.lookup`), on every route — the tab hides as a whole without it
  * (convenience; the server refuses).
  *
  * WHAT A CARD OFFERS FOLLOWS ITS ORIGIN (ADR 0079 Q2; the switch on EVERY card since the owner's

@@ -1,14 +1,14 @@
 package http
 
 // ZALO GROUP CHATS, COMMUNE SIDE (ADR 0092 #1–#3, #8) — Cấu hình → Kênh Zalo, the same key as the rest of
-// the tab: `admin.zalo_channel` — "Cấu hình kênh Zalo" — by the owner's decision of 15/10/2026 (tester bug
+// the tab: `admin.zalo` — "Cấu hình kênh Zalo" — by the owner's decision of 15/10/2026 (tester bug
 // sheet web-admin-141026 row 22), replacing the `admin.lookup` of ADR 0074 #6 / ADR 0092 #3; seeded by
 // service-identity migration 0032 and pre-granted there to every live role holding `admin.lookup`:
 //
-//	POST   /api/v1/zalo-group-pairing-codes  admin.zalo_channel  a one-time code for one scope (201, shown once)
-//	GET    /api/v1/zalo-groups               admin.zalo_channel  the commune's live groups
-//	PATCH  /api/v1/zalo-groups/{id}          admin.zalo_channel  edit a group's scope and/or kinds
-//	DELETE /api/v1/zalo-groups/{id}          admin.zalo_channel  unlink a group, with a reason (the ONLY way)
+//	POST   /api/v1/zalo-group-pairing-codes  admin.zalo  a one-time code for one scope (201, shown once)
+//	GET    /api/v1/zalo-groups               admin.zalo  the commune's live groups
+//	PATCH  /api/v1/zalo-groups/{id}          admin.zalo  edit a group's scope and/or kinds
+//	DELETE /api/v1/zalo-groups/{id}          admin.zalo  unlink a group, with a reason (the ONLY way)
 //
 // NO chat_id LEAVES HERE (ADR 0092 §Hệ quả): no type below has a field for it.
 
@@ -128,7 +128,7 @@ func RegisterZaloGroups(mux *http.ServeMux, d ZaloGroupDeps) {
 	// @reply    503 httpx.Error org_units_unavailable
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/zalo-group-pairing-codes",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("lần gửi thứ hai cấp thêm một mã gắn nhóm cho cùng phạm vi; mỗi mã sống 10 phút và chỉ dùng một lần, nên cái giá là một mã bỏ không; lưu câu trả lời để phát lại là giữ một mã còn sống trong bộ đệm")(
 				http.HandlerFunc(h.CreateGroupPairingCode))))
 
@@ -144,7 +144,7 @@ func RegisterZaloGroups(mux *http.ServeMux, d ZaloGroupDeps) {
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error org_units_unavailable staff_names_unavailable
 	mux.Handle("GET /api/v1/zalo-groups",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			http.HandlerFunc(h.ListGroups)))
 
 	// PATCH AND NOT PUT: an edit of the kinds alone must not move the scope. idem.KhongCan: an edit equal to
@@ -165,7 +165,7 @@ func RegisterZaloGroups(mux *http.ServeMux, d ZaloGroupDeps) {
 	// @reply    503 httpx.Error org_units_unavailable
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/zalo-groups/{id}",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("sửa là ghi đè phạm vi và loại tin bằng đúng giá trị trong thân; trùng giá trị đang lưu thì không ghi và không có vết, nên lần gửi thứ hai để lại đúng một vết")(
 				http.HandlerFunc(h.EditGroup))))
 
@@ -183,7 +183,7 @@ func RegisterZaloGroups(mux *http.ServeMux, d ZaloGroupDeps) {
 	// @reply    400 httpx.Error invalid_request
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/zalo-groups/{id}",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("lần gỡ thứ hai không còn nhóm đang gắn nên trả 404, không ghi gì và không có vết")(
 				http.HandlerFunc(h.UnlinkGroup))))
 }

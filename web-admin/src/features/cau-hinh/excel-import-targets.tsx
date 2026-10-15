@@ -88,7 +88,7 @@ export const ORG_UNIT_IMPORT_TARGET: ImportTarget<identity_orgUnitImportUnitOut>
 };
 
 /**
- * Thôn / Tổ dân phố (§2) — `admin.residential_unit` (since 15/10/2026), gated by `tab-thon-to-dan-pho.tsx`. NOT a catalogue group (a
+ * Thôn / Tổ dân phố (§2) — `admin.village` (since 15/10/2026), gated by `tab-thon-to-dan-pho.tsx`. NOT a catalogue group (a
  * unit has a name, households, a head), so it is its own target like the org chart and has no entry in
  * `CATALOGUE_IMPORTS`.
  *
@@ -260,7 +260,7 @@ function lookupImportTarget<R extends LookupImportRow>(spec: {
   };
 }
 
-/** Danh mục → Loại đơn vị dân cư (§5) — `admin.residential_unit` (since 15/10/2026), owner `service-identity`. */
+/** Danh mục → Loại đơn vị dân cư (§5) — `admin.village` (since 15/10/2026), owner `service-identity`. */
 export const RESIDENTIAL_UNIT_TYPE_IMPORT_TARGET = lookupImportTarget<IdentityCatalogueImportRow>({
   id: "loai-don-vi-dan-cu",
   noun: "loại đơn vị dân cư",
@@ -343,7 +343,7 @@ export const CATALOGUE_IMPORTS: Partial<Record<KhoaDanhMucGhi, CatalogueImport>>
     permission: QUYEN_QUAN_LY_DANH_MUC,
     panel: (p) => <ExcelImportPanel target={DOCUMENT_TYPE_IMPORT_TARGET} {...p} />,
   },
-  // `admin.residential_unit`, not `admin.lookup` (owner 15/10/2026, bug sheet web-admin-141026 row 22):
+  // `admin.village`, not `admin.lookup` (owner 15/10/2026, bug sheet web-admin-141026 row 22):
   // the hamlet types belong to the Thôn / Tổ dân phố configuration key, like the hamlets themselves.
   loaiDonViDanCu: {
     permission: RESIDENTIAL_UNIT_PERMISSION,

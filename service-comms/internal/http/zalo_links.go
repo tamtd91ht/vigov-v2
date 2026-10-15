@@ -6,15 +6,15 @@ package http
 //	DELETE /api/v1/zalo-links/current                AnyAuthenticated  end it (soft, audited)
 //	POST   /api/v1/zalo-links/current/pairing-codes  AnyAuthenticated  a one-time code (201)
 //	POST   /api/v1/zalo-links/current/test-messages  AnyAuthenticated  one fixed test message
-//	GET    /api/v1/zalo-links                        admin.zalo_channel  who in the commune is linked
-//	GET    /api/v1/zalo-channel-settings             admin.zalo_channel  the commune's channel settings
-//	PUT    /api/v1/zalo-channel-settings             admin.zalo_channel  save them
+//	GET    /api/v1/zalo-links                        admin.zalo  who in the commune is linked
+//	GET    /api/v1/zalo-channel-settings             admin.zalo  the commune's channel settings
+//	PUT    /api/v1/zalo-channel-settings             admin.zalo  save them
 //
 // `zalo-links/current` HAS THE SHAPE OF `sessions/current` (ADR 0074): the person is the SESSION's
 // business code and nothing else — no path segment, query or body field names a member of staff, so
 // "every signed-in account" can touch exactly ONE link, its own (ADR 0074 #6, the bell's argument in
 // routes_staff_notification.go). The `quyen` table has no key for "my own Zalo link" and none is invented
-// (rule 5, 3c). The THREE COMMUNE-LEVEL routes are `admin.zalo_channel` — "Cấu hình kênh Zalo" — by the
+// (rule 5, 3c). The THREE COMMUNE-LEVEL routes are `admin.zalo` — "Cấu hình kênh Zalo" — by the
 // owner's decision of 15/10/2026 (tester bug sheet web-admin-141026 row 22), replacing the `admin.lookup`
 // ADR 0074 #6 named; seeded by service-identity migration 0032 and pre-granted there to every live role
 // holding `admin.lookup`. The four `current` routes are a member of staff's OWN link and stay
@@ -248,7 +248,7 @@ func RegisterZaloLinks(mux *http.ServeMux, d ZaloLinkDeps) {
 	// @reply    500 httpx.Error
 	// @reply    503 httpx.Error staff_names_unavailable
 	mux.Handle("GET /api/v1/zalo-links",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			http.HandlerFunc(h.ListZaloLinks)))
 
 	// NO idem.* DECLARATION: a GET. No row = is_enabled false with the defaults.
@@ -260,7 +260,7 @@ func RegisterZaloLinks(mux *http.ServeMux, d ZaloLinkDeps) {
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/zalo-channel-settings",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			http.HandlerFunc(h.GetZaloChannelSettings)))
 
 	// PUT AND NOT PATCH: one form saved whole. idem.KhongCan: a save equal to what is stored writes and
@@ -279,7 +279,7 @@ func RegisterZaloLinks(mux *http.ServeMux, d ZaloLinkDeps) {
 	// @reply    422 httpx.Error unknown_kind enabled_without_kind invalid_quiet_time empty_quiet_window overdue_cadence_incomplete overdue_cadence_required overdue_start_out_of_range overdue_repeat_out_of_range due_soon_days_out_of_range
 	// @reply    500 httpx.Error
 	mux.Handle("PUT /api/v1/zalo-channel-settings",
-		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
+		authz.RequirePermission(d.Checker, "admin.zalo")(
 			idem.KhongCan("lưu là ghi đè cấu hình bằng đúng giá trị trong thân; trùng giá trị đang lưu thì không ghi và không có vết, nên lần gửi thứ hai để lại đúng một vết")(
 				http.HandlerFunc(h.PutZaloChannelSettings))))
 }

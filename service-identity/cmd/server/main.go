@@ -385,7 +385,7 @@ func run(log *slog.Logger) error {
 	// unit is inserted and its parent locked by the very statements the form uses.
 	orgUnitImports := app.NewOrgUnitImporter(kho, boPhan)
 	// The WRITE surfaces of the two reference catalogues: POST / PATCH / DELETE on
-	// /api/v1/residential-unit-types (`admin.residential_unit`) and /api/v1/task-blocs (`admin.lookup`)
+	// /api/v1/residential-unit-types (`admin.village`) and /api/v1/task-blocs (`admin.lookup`)
 	// (user decision 2026-09-24: full catalogues; keys by the owner's decision of 15/10/2026). Given the SAME stores as the read fields; each use case locks the
 	// row, derives its tier, and writes the change and its audit entry in one transaction.
 	ghiLoaiDonViDanCu := app.NewDanhMucLoaiDonViDanCu(kho, loaiDonViDanCu)
@@ -496,11 +496,11 @@ func run(log *slog.Logger) error {
 		// Xã tự tạo, đổi tên, xoá mềm vai trò của mình (chủ dự án chốt 15/10/2026) — xem app/role_write.go.
 		Roles: roles,
 		// Ba tuyến đọc tham chiếu của migration 0005. Hai danh mục (loại đơn vị dân cư, khối nhiệm
-		// vụ) có thêm tuyến GHI — người dùng quyết 24/09/2026: danh mục đầy đủ; khoá `admin.residential_unit`
+		// vụ) có thêm tuyến GHI — người dùng quyết 24/09/2026: danh mục đầy đủ; khoá `admin.village`
 		// cho loại đơn vị dân cư, `admin.lookup` cho khối nhiệm vụ (chủ dự án 15/10/2026).
 		ThonToDanPho: thonToDanPho,
 		// Thôn/tổ dân phố: tạo, sửa, ngưng dùng và nhập Excel (ADR 0059 §2) dưới khoá
-		// `admin.residential_unit` (chủ dự án 15/10/2026; trước đó `admin.org`).
+		// `admin.village` (chủ dự án 15/10/2026; trước đó `admin.org`).
 		ResidentialUnits:       residentialUnits,
 		ResidentialUnitImports: residentialUnitImports,
 		LoaiDonViDanCu:         loaiDonViDanCu,
