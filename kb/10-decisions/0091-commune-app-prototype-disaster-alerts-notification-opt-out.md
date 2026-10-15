@@ -3,7 +3,7 @@ id: 0091-commune-app-prototype-disaster-alerts-notification-opt-out
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 99749b50
+derived_from_commit: 7c739880
 expires: null
 owns_facts:
   - "app xã (citizen-app, src/cong-dan) làm hết theo prototype ../vigov-require/apps/miniapp nhánh feat/m8-multitenant-foundation; luật cứng thắng prototype; sàn chữ 16px giữ, công tắc cỡ chữ thành một công tắc 'Cỡ chữ lớn' (chủ dự án, 11/10/2026)"
@@ -57,6 +57,9 @@ Nguồn prototype: `../vigov-require/apps/miniapp`, nhánh `feat/m8-multitenant-
 | Đẩy ZNS khi đăng | **Chưa** |
 | Họ tên + số khẩn cấp | **Công khai** trên tuyến không xác thực, như prototype. Form web-admin ghi cạnh ô: "Số này hiện công khai cho mọi người dân — nên dùng số trực, đường dây nóng hoặc số cơ quan." Chủ dự án chốt 11/10/2026 (luật 3 điều kiện dừng #1) |
 | Giới hạn tần suất | **Ngân sách riêng 1.200 lượt/phút** mỗi (tên miền, mạng máy gọi), tách khỏi tin công khai, kèm **cache 30 giây mỗi xã** phía máy chủ. Cảnh báo mới tới dân chậm tối đa 30 giây. Chủ dự án chốt 11/10/2026 (luật 13, ngưỡng) — thay dòng "như tin công khai" ở trên |
+
+> 15/10/2026 — tester (bảng lỗi `web-admin-141026`) đòi gỡ tab "Cảnh báo thiên tai"; chủ dự án **bác, giữ tab**: đó là
+> màn duy nhất đăng cảnh báo thiên tai. §2 giữ nguyên (ADR 0090 §*Sửa đổi 15/10/2026*).
 
 ### 3. Tra cứu hồ sơ một cửa — mở trang của Cổng Dịch vụ công
 

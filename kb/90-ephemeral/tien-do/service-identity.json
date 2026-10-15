@@ -651,7 +651,7 @@
       "no_confirm": [],
       "viec": "Xoá bộ phận còn cán bộ/bộ phận con trả 409 ngay, trước khi hỏi petitions/documents (bảng lỗi web admin S29 reopen).",
       "bang_chung": "72de0f73 · internal/app/org_unit_delete.go + TestRemoveOrgUnitLocalHoldingsAnswerBeforeOwners; go test ./... service-identity xanh.",
-      "tiep_theo": "Nguyên nhân 503 'Chưa kiểm được hồ sơ bộ phận…' trên cụm khách CHƯA rõ — cần log identity dòng 'xoá bộ phận: không hỏi được phản ánh/văn bản' (mã gRPC). Nghi: GRPC_CALLER_KEY lệch, image petitions/documents cũ, migration documents 0010. Ngoài phạm vi: kiểm ErrOrgUnitDeleteNotConfigured vẫn chạy trước đếm tại chỗ."
+      "tiep_theo": "Nguyên nhân 503 'Chưa kiểm được hồ sơ bộ phận…' trên cụm khách CHƯA rõ — cần log identity dòng 'xoá bộ phận: không hỏi được phản ánh/văn bản' (mã gRPC). Nghi: GRPC_CALLER_KEY lệch, image petitions/documents cũ, migration documents 0010. Ngoài phạm vi: kiểm ErrOrgUnitDeleteNotConfigured vẫn chạy trước đếm tại chỗ. 15/10/2026: tester mở lại lần nữa (bảng lỗi web-admin-141026) — vẫn là lỗi gRPC 9090 trên cụm, không phải mã; chờ log identity của cụm để biết mã gRPC."
     },
     {
       "id": "phien-van-hanh-nhan-roi-10-phut-13-10",
@@ -692,6 +692,24 @@
       "viec": "Một cán bộ giữ nhiều vai trò, quyền = hợp (chủ dự án 13/10/2026, đảo quyết định 08/10): migration 0031 staff_role_assignment, checker + #13 chung vị từ, #14 với vai trò thêm, PUT /staff/{id}/role nhận role_ids, whoAmI roles[] (bảng lỗi dòng 10).",
       "bang_chung": "027a8e3d; go test identity 13 gói xanh; make check exit 0.",
       "con_no": "Test PG chưa chạy (không VIGOV_TEST_DSN). Nhập Excel vẫn một vai trò/dòng. Cần ADR ghi việc đảo quyết định 08/10."
+    },
+    {
+      "id": "bl141026-nguoi-dung-moi-len-dau",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "GET /api/v1/staff, POST /api/v1/staff/searches: mặc định created_at giảm dần (trước: mã cán bộ tăng dần); 8 cột sắp xếp giữ; con trỏ của mặc định cũ trả 400 một lần (chủ dự án 15/10/2026, ADR 0090 §Sửa đổi 15/10/2026).",
+      "bang_chung": "7737d780 · internal/store/can_bo_danh_sach.go:34-35, internal/http/can_bo_tim.go. Commit ghi: go vet + go test -p 1 ./... xanh. Chưa chạy trên PostgreSQL thật (ca PG SKIP, không VIGOV_TEST_DSN).",
+      "tiep_theo": "Chạy ca PG mới khi có VIGOV_TEST_DSN."
+    },
+    {
+      "id": "bl141026-khoa-quyen-rieng-cau-hinh",
+      "menu": "cau-hinh",
+      "trang_thai": "treo",
+      "no_confirm": [],
+      "viec": "Tester (bảng lỗi web-admin-141026) đòi khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo trên màn Phân quyền. Chủ dự án 15/10/2026: 'tạm bỏ qua, back lại sau' — CHƯA quyết.",
+      "bang_chung": "Lời chủ dự án do phiên chính chuyển lại, 15/10/2026. Không có mã.",
+      "tiep_theo": "Không làm tới khi chủ dự án mở lại. Khi mở: khoá mới phải qua câu mở #27 (đã DECIDED: chỉ nạp khoá có tuyến thật cần) và luật 5 bất biến 3c — không tự INSERT INTO quyen. Ghi chéo ở ADR 0090 §Sửa đổi 15/10/2026."
     }
   ]
 }

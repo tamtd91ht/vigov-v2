@@ -371,6 +371,15 @@
       "viec": "Nạp Excel bảng thu/chi: cột % tự ghép tử/mẫu theo luật prototype khi luật một-cột-dự-toán không quyết được — mẫu Thu mặc định nay ra NSNN ÷ TP giao thay vì 'không tính được' (bảng lỗi khách 10/10, phần dữ liệu Thu - Chi).",
       "bang_chung": "982ab9ad — domain/budget_import.go guessPercentOperands hai bước: (1) đúng một cột dự toán + một cột số khác → khác ÷ dự toán (như cũ); (2) còn lại: mẫu = cột dự toán/kế hoạch đầu tiên, tử = cột số khác đầu tiên có tiêu đề chứa 'thực hiện'/'ngân sách'/'đã' (isActualHeading, theo vigov-require fiscal_import.py `_role_of`). Lý do: luật chủ dự án 11/10/2026 'chuẩn là prototype'. Không khớp → vẫn 'không tính được'; % trong tệp vẫn không đọc. domain/budget_import_test.go thêm ca. Thân commit: go vet/test ./... xanh service-finance; chỉ đổi đường nạp, bảng đã lưu không đụng.",
       "tiep_theo": "Luật chuỗi con 'đã' chép nguyên prototype nên có thể khớp tiêu đề ngoài ý; ghép sai chỉ đổi tỷ lệ, sửa tệp rồi nạp lại. Bảng đã nạp trước commit không tự tính lại. Web: sổ web-admin, mục `con-lai-10-11`."
+    },
+    {
+      "id": "bl141026-du-an-moi-len-dau",
+      "menu": "giai-ngan",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "GET /api/v1/investment-projects: ORDER BY tao_luc DESC, id DESC (trước: theo mã) (chủ dự án 15/10/2026, ADR 0090 §Sửa đổi 15/10/2026).",
+      "bang_chung": "7737d780 · internal/store/du_an.go:170-193, project_list_order_pg_test.go. Commit ghi: go vet + go test -p 1 ./... xanh. Chưa chạy trên PostgreSQL thật (ca PG SKIP, không VIGOV_TEST_DSN).",
+      "tiep_theo": "Chạy project_list_order_pg_test khi có VIGOV_TEST_DSN."
     }
   ]
 }

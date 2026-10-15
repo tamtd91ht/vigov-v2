@@ -3,10 +3,10 @@ id: 0076-ngan-chi-tiet-nhiem-vu-theo-prototype
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 3421992a
+derived_from_commit: 7c739880
 expires: null
 owns_facts:
-  - "ngăn chi tiết nhiệm vụ KHÔNG còn 3 tab thao tác Xem chi tiết · Chỉnh sửa · Xoá: sửa tại chỗ bằng '✎ Sửa' trong khối thông tin, Xoá (xoá mềm, có lý do) ở cột thao tác; ngăn phải + tab bản ghi giữ (chốt 07/10/2026) — vế 'Xoá ở cột thao tác' THAY bởi §Sửa đổi 07/10/2026 (lần 2) #15: không còn cột thao tác, Xoá ở đầu ngăn"
+  - "ngăn chi tiết nhiệm vụ KHÔNG còn 3 tab thao tác Xem chi tiết · Chỉnh sửa · Xoá: sửa tại chỗ bằng '✎ Sửa' trong khối thông tin, Xoá (xoá mềm, có lý do) ở cột thao tác; ngăn phải + tab bản ghi giữ (chốt 07/10/2026) — vế 'Xoá ở cột thao tác' THAY bởi §Sửa đổi 07/10/2026 (lần 2) #15: không còn cột thao tác, Xoá ở đầu ngăn; vế 'có lý do' THAY bởi §Sửa đổi 15/10/2026: lý do tuỳ chọn"
   - "ô tick + trọng số việc con vẽ như prototype nhưng là control vô hiệu dấu '?' tới khi máy chủ có trọng số (chốt 07/10/2026)"
   - "hai ô phê duyệt nhiệm vụ (lãnh đạo xã phê duyệt hoàn thành · cấp trên công nhận) khoá bằng task.update ở cả máy chủ và giao diện, tick thẳng ở chế độ xem, mỗi lần đổi có vết trước/sau + một dòng nhật ký (chốt 07/10/2026)"
   - "gỡ tệp đính kèm nhiệm vụ: người tải lên hoặc task.update; gỡ được cả tệp đã gắn nhật ký; lý do bắt buộc; xoá mềm; tệp giữ pháp lý → 409; dòng nhật ký 'đã gỡ' KHÔNG chép tên tệp (chốt 07/10/2026)"
@@ -19,12 +19,13 @@ owns_facts:
   - "phần spec Nhiệm vụ cần máy chủ (extension_count/pending_extension trên dòng, collaborator_ids, trọng số việc con, tổng danh sách, sắp xếp máy chủ theo người/bộ phận/trạng thái, nguồn recurring, tệp chưa gắn, email trong ô chọn cán bộ, requires_directive) = control '?' + BACKEND DEPENDENCY; không thêm react-hook-form/zod/@tanstack/react-table/@dnd-kit/sortable (07/10/2026 lần 2)"
   - "menu Nhiệm vụ GIỮ ba thứ prototype không có — menu 'Chuyển sang cột…' trên thẻ Kanban, nút 'Xuất Excel' Sổ theo dõi, phân trang máy chủ + 'Xem thêm' — vẽ lại theo UI chung (chốt 07/10/2026 lần 2 #13)"
   - "ngăn chi tiết nhiệm vụ KHÔNG có ô 'Việc cha' và không có liên kết lên việc cha, như prototype; API PATCH {parent}, luật cây ADR 0037 và '+ Thêm việc con' trong ngăn của việc cha giữ (chốt 07/10/2026 lần 2 #14)"
-  - "ngăn chi tiết nhiệm vụ không có cột thao tác bên phải; Xoá (xoá mềm, có lý do) ở đầu ngăn; dòng 'Tạo bởi …' bỏ nếu prototype không có (chốt 07/10/2026 lần 2 #15)"
+  - "ngăn chi tiết nhiệm vụ không có cột thao tác bên phải; Xoá (xoá mềm, có lý do) ở đầu ngăn; dòng 'Tạo bởi …' bỏ nếu prototype không có (chốt 07/10/2026 lần 2 #15) — vế 'có lý do' THAY bởi §Sửa đổi 15/10/2026"
   - "Sổ theo dõi nhiệm vụ vẽ đủ 13 cột prototype, ngăn chi tiết có ô 'Cơ quan chủ trì tham mưu' và 'Chuyên viên VP tham mưu/theo dõi' — hiện CÙNG dữ liệu với Đơn vị thực hiện / Người thực hiện; chỉ trình bày, mô hình dữ liệu ADR 0065 NV5 giữ (chốt 07/10/2026 lần 2 #16)"
   - "hộp 'Giao việc mới' rộng 500px, 800px khi loại 'Theo văn bản' (spec 06) — thay chốt 07/10/2026 'luôn 800px' vốn chỉ nằm ở sổ tiến độ và mã (chốt 07/10/2026 lần 2 #17)"
   - "bảng lỗi khách 10–11/10/2026: #13 (Xuất Excel) và #14 (+ Thêm việc con) giữ; ĐÃ LÀM (f33dd452 + 3421992a) — chuyen-tiep trở lại làm đích rẽ nhánh từ moi-giao/da-tiep-nhan/dang-thuc-hien; giao việc đổi người giữ CÓ lý do chuyển thì vào chuyen-tiep, KHÔNG lý do thì giữ trạng thái — đảo quyết định 28/09/2026 'đổi người giữ thì về moi-giao' cho cả POST /assignment (§Sửa đổi 10–11/10/2026)"
   - "thẻ Kanban Nhiệm vụ (chủ dự án 12/10/2026): menu nổi 'Chuyển sang cột…' theo CỠ CHỮ CỦA THẺ — 12.8px, dòng 32px, rộng tối đa 15rem — NGOẠI LỆ của 'UI chung' #13 (menu chung 36px/14px); nền hover chỉ phủ hàng 'Chọn' chứa nút ⇄, không phủ mã + tiêu đề, theo prototype TaskCard.tsx:53 — thay cách làm dòng 12 bảng lỗi 10/10 (§Sửa đổi 12/10/2026)"
   - "menu Nhiệm vụ: trạng thái trống/lỗi của danh sách giữ cách xử lý hiện có; số liệu chỉ đọc cần máy chủ (vd 'đã gia hạn n lần') = control vô hiệu '?' đúng vị trí prototype (mặc định phiên 07/10/2026 lần 2 #18–#19)"
+  - "xoá nhiệm vụ (một và hàng loạt): lý do TUỲ CHỌN, không có ô lý do trên màn; trống thì máy chủ ghi câu cố định domain.TaskDeleteDefaultReason; vẫn xoá mềm + vết cùng giao dịch; lý do gỡ tệp đính kèm (#4b) VẪN bắt buộc (chủ dự án 15/10/2026)"
 ---
 
 # 0076. Ngăn chi tiết nhiệm vụ theo prototype và bốn thao tác máy chủ
@@ -60,6 +61,9 @@ quyết. Chủ dự án quyết từng điểm ngày 07/10/2026.
 | 4b | Gỡ tệp đính kèm | Người **tải lên** hoặc người giữ **`task.update`**. Gỡ được cả tệp **đã gắn nhật ký**. **Lý do bắt buộc**. **Xoá mềm**. Tệp đang giữ pháp lý → **409**. Nhật ký thêm dòng "đã gỡ" **không chép tên tệp** | Chép tên tệp vào dòng nhật ký |
 | 4c | "Cập nhật và giao việc" trong một lần chuyển trạng thái | **Theo prototype**: nhiệm vụ về **đúng trạng thái đã chọn**, **không** về `moi-giao`. Ai được làm: người giữ `task.assign` **hoặc** người đang thực hiện được giao. **Chỉ** đường gộp này; `POST /api/v1/tasks/{ma}/assignment` riêng **giữ luật 28/09** | Áp luật 28/09 ("đổi người giữ thì về `moi-giao`") cho cả đường gộp |
 | 5 | Luật prototype "≥1 tệp trước khi sang Chờ duyệt" | **Không áp dụng** — chưa ai chốt | Dựng theo prototype |
+
+> 15/10/2026 — vế "có lý do" của #1 **bị thay**: lý do xoá nhiệm vụ nay tuỳ chọn (§*Sửa đổi 15/10/2026*).
+> Lý do gỡ tệp của #4b **giữ bắt buộc**.
 
 **Vì sao #1 thắng chữ "05/10 #3" trong lần 5 #4:** điều chủ dự án muốn giữ ở lần 5 #4 là **hình thức
 ngăn phải + tab bản ghi** — quyết định nghe được trực tiếp ngày 05/10. Thanh tab thao tác chỉ là cách
@@ -164,6 +168,9 @@ Câu trả lời của chủ dự án (chọn trong câu hỏi của phiên, ngu
 | 11 | Không thêm thư viện (`react-hook-form`, `zod`, `@tanstack/react-table`, `@dnd-kit/sortable`): hành vi đã dựng; sắp xếp **phải ở máy chủ** vì danh sách phân trang bằng con trỏ | — (lựa chọn kỹ thuật của phiên) |
 | 12 | Phần spec cần máy chủ → control vô hiệu dấu "?" + **BACKEND DEPENDENCY** (ADR 0068 *lần 6* #9): `extension_count` / `pending_extension` trên dòng danh sách · `collaborator_ids` · trọng số việc con · tổng của danh sách (số đếm vẫn lấy từ `/task-counts`) · sắp xếp ở máy chủ theo người thực hiện / bộ phận / trạng thái · nguồn `recurring` · danh sách tệp chưa gắn · email trong ô chọn cán bộ · thuộc tính `requires_directive` của loại nhiệm vụ | ADR 0068 *lần 5* #5 · *lần 6* #9 |
 
+> 15/10/2026 — **#9 bị thay**: xoá hàng loạt **không** còn ô lý do chung (§*Sửa đổi 15/10/2026*). #8
+> (gỡ tệp phải có lý do) **giữ**.
+
 **Còn mở / hệ quả** (chủ dự án **không nêu** lý do cho bốn lựa chọn trên — đừng suy thêm):
 
 | # | Điểm | Thực tế |
@@ -187,6 +194,9 @@ Cùng người quyết, cùng phiên. Nguyên văn lựa chọn của chủ dự
 | 15 | Spec 07 không có cột nút tròn bên phải; #1 trên đặt Xoá ở "cột thao tác" | **"Bỏ cột, Xoá vào đầu ngăn"** | Không còn cột thao tác; Xoá ở **đầu ngăn**, vẫn xoá mềm có lý do (luật 7). Dòng "Tạo bởi …" bỏ nếu prototype không có. **Thay** vế "Xoá ở cột thao tác" của #1 |
 | 16 | Sổ theo dõi và ngăn chi tiết prototype có "Cơ quan chủ trì tham mưu" và "Chuyên viên VP tham mưu/theo dõi"; ADR 0065 NV5 đã gộp hai vai này vào "Đơn vị thực hiện" / "Người thực hiện" (dữ liệu như nhau) | **"Theo đúng prototype"** | Sổ theo dõi vẽ đủ **13 cột**, ngăn có hai ô ấy; hai ô thêm hiện **CÙNG dữ liệu** với Đơn vị thực hiện / Người thực hiện. **Chỉ trình bày** — mô hình dữ liệu NV5 không đổi. **Thay** mặc định #5 trên ("Sổ theo dõi giữ 11 cột"). Hệ quả (i) |
 | 17 | Hộp "Giao việc mới" hiện luôn rộng 800px (chốt 07/10, chỉ ghi ở sổ tiến độ và mã, chưa có ADR); spec 06: 500px bình thường, 800px khi loại "Theo văn bản" | **"Theo spec 500/800"** | Rộng **500px**; **800px** khi loại nhiệm vụ là "Theo văn bản". Chốt "luôn 800px" **hết hiệu lực** |
+
+> 15/10/2026 — vế "vẫn xoá mềm có lý do" của **#15 bị thay**: vẫn xoá mềm, lý do tuỳ chọn
+> (§*Sửa đổi 15/10/2026*). Chỗ đặt nút Xoá ở đầu ngăn giữ.
 
 **Mặc định phiên nêu, chủ dự án không phản đối:**
 
@@ -252,3 +262,23 @@ Mục này ghi thêm, không sửa phần trên. **Người quyết:** chủ d�
 
 Dòng menu 32px vẫn trên ngưỡng 24px của WCAG 2.5.8 nhưng dưới chiều cao control 36px của ADR 0068 §5 —
 đánh đổi chủ dự án đã chọn cho riêng menu này.
+
+## Sửa đổi 15/10/2026 — xoá nhiệm vụ không bắt nhập lý do
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án, 15/10/2026,
+khi xử lý bảng lỗi `web-admin-141026` (lời do phiên chính chuyển lại). Đã dựng: máy chủ `0d78dc0b`,
+web-admin `a5f78fd0`.
+
+| # | Trước | Nay |
+|---|---|---|
+| G5 | Xoá một nhiệm vụ: xoá mềm, **có lý do** (#1, lần 2 #15) | Hộp xoá **không** có ô lý do; `DELETE /api/v1/tasks/{ma}` nhận thân tuỳ chọn. Trống thì máy chủ ghi câu cố định `domain.TaskDeleteDefaultReason` (`service-petitions/internal/domain/nhiem_vu_ghi.go:261`) vào `delete_reason`. **Vẫn** xoá mềm (`deleted_at`, `deleted_by` = mã cán bộ) và vết kiểm toán cùng giao dịch (luật 6, 7) |
+| G6 | Xoá hàng loạt cần **một** lý do chung (lần 2 #9) | Thanh xoá hàng loạt **không** còn ô lý do; mỗi nhiệm vụ nhận câu cố định như G5 |
+| — | Gỡ tệp đính kèm phải có lý do (#4b, lần 2 #8) | **Giữ nguyên, vẫn bắt buộc.** Mục này chỉ đổi lý do **xoá nhiệm vụ** |
+
+**Không phải luật mới.** Đây là áp ADR 0090 #4 (bảng lỗi 10/10/2026: ẩn ô lý do, máy chủ ghi câu cố định
+nói rõ người xoá không nhập lý do) cho menu Nhiệm vụ — trước ngày này menu Nhiệm vụ còn giữ ô lý do theo
+#1 và lần 2 #9, #15.
+
+**Cái giá:** như ADR 0090 §*Hệ quả* — `delete_reason` của nhiệm vụ không còn phân biệt được lý do khi người
+xoá để trống; người tra vết biết *ai* và *khi nào*, không biết *vì sao*. Ai cần lý do vẫn gửi được
+`reason` qua API.

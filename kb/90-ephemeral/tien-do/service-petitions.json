@@ -836,6 +836,38 @@
       "viec": "GET /api/v1/citizen-reports mang cover_photo tuỳ chọn: link ký ≤15 phút ảnh hiện trường đầu tiên, một truy vấn ANY cho cả trang, một vết xem_anh_hien_truong (chủ thể danh-sach-phan-anh/anh-bia, delta chỉ tep_id) mỗi trang; can-bo thiếu feedback.restricted bỏ qua; ghi vết lỗi → 500. Danh sách luôn no-store. Chủ dự án chốt 12/10/2026.",
       "bang_chung": "d816ecc0 · app/petition_photo.go Covers + staffMayOpenPhotos · store/petition_photo.go · http/list_cover_test.go (401/403/403 sai xã/200). go test ./... xanh.",
       "tiep_theo": "Truy vấn ANY($3) CHƯA chạy trên PostgreSQL thật (VIGOV_TEST_DSN). Chỉ mục dùng: stored_file_by_subject_uploader (0021)."
+    },
+    {
+      "id": "bl141026-xoa-nhiem-vu-ly-do-tuy-chon",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "DELETE /api/v1/tasks/{id}: thân tuỳ chọn; lý do trống → domain.TaskDeleteDefaultReason. Vẫn xoá mềm (deleted_at, deleted_by = mã cán bộ, delete_reason) + vết cùng giao dịch; lý do > 1000 ký tự vẫn 400 (chủ dự án 15/10/2026, ADR 0076 §Sửa đổi 15/10/2026).",
+      "bang_chung": "0d78dc0b · internal/domain/nhiem_vu_ghi.go:261, internal/http/nhiem_vu_ghi.go:303-311. Commit ghi: go vet + go test -p 1 ./... xanh.",
+      "tiep_theo": "Lý do gỡ tệp đính kèm nhiệm vụ VẪN bắt buộc (ADR 0076 #4b) — đừng nới theo."
+    },
+    {
+      "id": "bl141026-nhiem-vu-tra-ten-identity",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Mọi phản hồi nhiệm vụ (nhiemVuRa) thêm assignee_name, assigner_name, unit_name tuỳ chọn, tra qua gRPC identity ResolveStaffNames/ResolveOrgUnitNames — có cả người bị khoá/đã gỡ, bộ phận đã xoá; một lượt mỗi loại mỗi phản hồi, lô 200; identity lỗi → vẫn 200, chỉ mã (chủ dự án 15/10/2026).",
+      "bang_chung": "0d78dc0b · internal/http/task_names.go + task_names_test.go. Commit ghi: go vet + go test -p 1 ./... xanh.",
+      "tiep_theo": "Dòng nhật ký nhiệm vụ chưa trả tên (web vẫn tra qua danh bạ) — làm cùng cách task_names.go nếu cần."
+    },
+    {
+      "id": "bl141026-nhap-ho-chon-kenh-tong-dai",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "POST /api/v1/citizen-reports (nhập hộ) nhận channel tuỳ chọn: can-bo-nhap-ho (mặc định) · tong-dai (mới, domain.ChannelSwitchboard) · web-xa · zalo-oa; zalo-mini-app/khác → 400. Kênh nào cũng đặt hạn như nhập hộ; migration 0045 thêm 'tong-dai' vào CHECK kênh và hai CHECK hình dạng hạn nhập hộ (chủ dự án 15/10/2026, ADR 0028 §Sửa đổi 15/10/2026).",
+      "bang_chung": "7c739880 · internal/domain/phieu_phan_anh.go:137-237, internal/app/staff_intake.go, migrations/0045_petition_channel_switchboard.sql. Commit ghi: go vet + go test -p 1 -count=1 ./... xanh; check_quyen, check_audit_actor PASS; make check exit 0 (không có golangci-lint).",
+      "tiep_theo": "Migration 0045 CHƯA chạy trên PostgreSQL thật — chạy trên cụm dev, đếm trước theo câu SELECT ở đầu tệp. web-xa/zalo-oa ghi hộ: hình dạng hạn chỉ do use case giữ, không có CHECK (0045:17-23)."
+    },
+    {
+      "id": "bl141026-can-bo-dinh-anh-hien-truong",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "POST /api/v1/citizen-reports/{maTraCuu}/photos: cán bộ (feedback.create, Idempotency-Key, multipart) đính ảnh hiện trường cho phiếu nhập hộ còn da-tiep-nhan, tối đa 5 ảnh, dùng lại pipeline ảnh người dân (clamd, bỏ EXIF, t_<tenant>); GET ảnh hiện trường gồm cả ảnh cán bộ tải (chủ dự án 15/10/2026).",
+      "bang_chung": "7c739880 · internal/app/staff_scene_photo.go + staff_scene_photo_test.go, internal/http/routes.go. Commit ghi: go test ./... xanh.",
+      "tiep_theo": "Giới hạn 5 ảnh chỉ đếm ở use case, CHƯA có sàn trong cơ sở dữ liệu — hai yêu cầu song song có thể vượt 5. Chưa chạy PostgreSQL thật."
     }
   ]
 }

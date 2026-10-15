@@ -3,7 +3,7 @@ id: 0028-moc-dat-han-hai-dong-ho
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 3d43fa1
+derived_from_commit: 7c739880
 expires: null
 owns_facts:
   - "hai đồng hồ hạn của phiếu phản ánh được ĐẶT ở hai thời điểm khác nhau, chung một gốc đếm"
@@ -12,11 +12,13 @@ owns_facts:
   - "vì sao hạn tiếp nhận của phiếu nhập hộ ghi NULL chứ không ghi 0 giờ"
   - "nghĩa của chữ 'lúc tiếp nhận' trong luật 10 bất biến 2 khi một phiếu có hai đồng hồ"
   - "phiếu nhập hộ không gắn tài khoản Zalo nào, không hiện ở 'Phản ánh của tôi'; cán bộ đưa mã tra cứu (chủ dự án, 02/10/2026)"
+  - "phiếu nhập hộ chọn kênh tiếp nhận (can-bo-nhap-ho mặc định · tong-dai · web-xa · zalo-oa); kênh nào cũng đặt hạn như nhập hộ, kênh chỉ là nguồn ghi nhận; tong-dai là giá trị thứ năm của kenh_tiep_nhan; cán bộ đính tối đa 5 ảnh hiện trường cho phiếu nhập hộ còn da-tiep-nhan (chủ dự án, 15/10/2026)"
 ---
 
 # 0028. Hai đồng hồ đặt ở HAI thời điểm — và mốc đếm của phiếu nhập hộ
 
-**Trạng thái:** đã chốt · **Ngày:** 2026-09-20 · **Đóng câu mở #23 và #24** · **Nối tiếp ADR 0027**
+**Trạng thái:** đã chốt · **Ngày:** 2026-09-20 · **Đóng câu mở #23 và #24** · **Nối tiếp ADR 0027** ·
+**Sửa đổi 15/10/2026** (kênh của phiếu nhập hộ, `tong-dai`, ảnh hiện trường — §*Sửa đổi 15/10/2026*)
 
 **Cả hai quyết định dưới đây là QUYẾT THEO UỶ QUYỀN, không phải khách tự chọn.** Với #23
 khách nói *"theo rule chung của hành chính xã, bên bạn quyết"*; với #24 khách nói *"bạn đề
@@ -61,6 +63,9 @@ thứ năm không phải sửa lại luật:
 
 Hôm nay `kenh_tiep_nhan` có bốn giá trị (`09 §12`): `can-bo-nhap-ho` rơi vào vế đầu,
 `zalo-mini-app` · `zalo-oa` · `web-xa` rơi vào vế sau.
+
+> 15/10/2026 — câu trên **hết đúng**: `kenh_tiep_nhan` có **năm** giá trị (thêm `tong-dai`), và `zalo-oa` ·
+> `web-xa` do cán bộ ghi trên modal nhập hộ thì rơi vào vế đầu. Xem §*Sửa đổi 15/10/2026*.
 
 ### Vì sao lệ hành chính cho ra đúng mốc này
 
@@ -155,6 +160,12 @@ một con số.
 | 4 | Mọi giá trị khác mặc định (tức mọi lần cán bộ tự gõ mốc) đều **GHI VẾT, có trước/sau** (luật 6 bất biến 5) |
 | 5 | `han_tiep_nhan` của phiếu nhập hộ ghi **`NULL`** kèm lý do "không áp dụng". **Tuyệt đối không ghi 0 giờ** |
 
+> 15/10/2026 — **dòng 1, vế modal:** web-admin đã gỡ ô "Dân phản ánh lúc" (`98cb4c93`, bảng lỗi
+> `web-admin-141026`). Máy chủ vẫn nhận `clock_from` tuỳ chọn và vẫn từ chối ngoài khoảng 7 ngày
+> (`service-petitions/internal/http/staff_intake.go:59-63`); từ màn hình, mốc đếm nay luôn là lúc vào sổ
+> (dòng 2). Căn cứ: chủ dự án giao sửa bảng lỗi này ngày 15/10/2026, áp luật chung ADR 0090 #1 —
+> prototype không có ô này (`FeedbackEntryForm.tsx:141-270` của `../vigov-require/apps/admin`). Dòng 3–5 không đổi.
+
 **Vì sao phải chặn hai đầu.** Một mốc quá khứ tuỳ ý là quyền **chế ra một phiếu đã quá hạn**
 cho người khác, hoặc **giấu một phiếu đã trễ** bằng cách lùi mốc — cả hai đều là sửa số liệu
 bằng một ô nhập liệu, không cần lỗi phần mềm nào. Bảy ngày là khoảng còn nhớ được: dân gọi
@@ -224,6 +235,11 @@ phan-anh-nguoi-dan`, câu trả lời: *"Không — cán bộ đưa mã tra cứ
 | 6 | Lúc nhập hộ ghi **một dòng nhật ký xử lý** của phiếu ("cán bộ X nhập hộ"), ngoài vết kiểm toán (cùng ngày) |
 | 7 | Phiếu nhập hộ bắt đầu ở **`da-tiep-nhan`**, đi cùng quy trình như phiếu từ Zalo, vẫn qua bước phân loại (cùng ngày) |
 
+> 15/10/2026 — **dòng 5 bị thay** bởi §*Sửa đổi 15/10/2026* (S1–S2): modal có ô chọn kênh, và chọn kênh
+> **không** còn là chọn cách đặt hạn. **Dòng 1** giữ, nhưng chữ `can-bo-nhap-ho` trong ngoặc nay không
+> còn đồng nghĩa với "phiếu nhập hộ": phiếu nhập hộ là phiếu không chủ mang một trong bốn kênh cán bộ
+> được chọn (S5).
+
 **Vì sao không ghép theo số điện thoại cán bộ gõ.** Số ấy là thứ một người gõ lại từ cuộc gọi hay
 tờ giấy. Gõ sai một chữ số thì phiếu — nội dung, nơi xảy ra, họ tên người phản ánh — hiện ra trong app của
 **một người dân khác**. Đó là đúng thứ luật 4 bất biến 1 cấm, và không lỗi phần mềm nào cần có:
@@ -240,6 +256,35 @@ nhập liệu của cán bộ.
   cán bộ gõ hay không là câu riêng.
 - Người dân dùng mã tra cứu ở đâu: tra cứu **không cần phiên** là luật 4 điều kiện dừng #2 — hỏi
   khi dựng.
+
+## Sửa đổi 15/10/2026 — phiếu nhập hộ chọn kênh tiếp nhận, cán bộ đính ảnh hiện trường
+
+**Trạng thái:** đã chốt · **Người quyết:** chủ dự án, 15/10/2026, khi xử lý bảng lỗi
+`web-admin-141026` (lời do phiên chính chuyển lại; kho không có phiếu hỏi để đối chiếu nguyên văn) ·
+**Đã dựng ở máy chủ:** `7c739880`. Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác.
+
+| # | Quyết định | Thay chỗ nào ở trên |
+|---|---|---|
+| S1 | Modal nhập hộ có ô **"Tiếp nhận qua kênh"**, bốn lựa chọn: `can-bo-nhap-ho` (mặc định; không gửi = giá trị này) · `tong-dai` "Tổng đài điện thoại" (**mới**) · `web-xa` "Trang thông tin của xã" · `zalo-oa` "Zalo OA". `zalo-mini-app` hay giá trị khác → 400 | Dòng 5 của *Bổ sung 2026-10-02* |
+| S2 | **Kênh nào cũng đặt hạn y như nhập hộ hiện nay:** lĩnh vực bắt buộc lúc vào sổ, `han_xu_ly_xong` ấn định ngay, `han_tiep_nhan` = `NULL` "không áp dụng" (quyết định F #5). Kênh chỉ là **nguồn ghi nhận** cho thống kê | Vế "chọn kênh là chọn cách đặt hạn" của dòng 5 ấy |
+| S3 | `tong-dai` là giá trị **thứ năm** của `kenh_tiep_nhan` (migration `service-petitions` `0045`). Trả lời điều kiện dừng #6: chỉ cán bộ vào sổ, trên biểu mẫu có lĩnh vực → vế đầu của quy tắc chung ở quyết định E | Câu "`kenh_tiep_nhan` có bốn giá trị" |
+| S4 | Cán bộ đính **ảnh hiện trường** cho phiếu nhập hộ: `POST /api/v1/citizen-reports/{maTraCuu}/photos`, quyền `feedback.create`; chỉ phiếu nhập hộ còn `da-tiep-nhan`; **tối đa 5 ảnh**; dùng lại đường xử lý ảnh của người dân | — |
+| S5 | "Phiếu nhập hộ" từ nay = phiếu **không chủ** (không công dân, không tài khoản Zalo) mang một trong bốn kênh ở S1 — suy ra từ cột, không có cột cờ (`service-petitions/internal/domain/phieu_phan_anh.go:190-197`). Dòng 1–4, 6–7 của *Bổ sung 2026-10-02* áp cho cả bốn kênh | Chữ `can-bo-nhap-ho` trong dòng 1 ấy |
+
+**Vì sao hành vi quyết định hạn, không phải nhãn kênh.** Lời chủ dự án chỉ có: kênh là nguồn ghi nhận.
+Phần sau là cách đọc của người ghi, khớp với quy tắc chung của quyết định E (viết theo **hình dạng biểu
+mẫu**): cán bộ ghi một phiếu "Zalo OA" trên modal nhập hộ thì biểu mẫu ấy vẫn có lĩnh vực, và người đọc
+phiếu vẫn là chính cán bộ, nên đồng hồ Tiếp nhận vẫn không có nghĩa (F #5). Để nhãn quyết định thì cùng
+một hành vi cho hai cách đặt hạn chỉ vì cán bộ chọn ô khác.
+
+**Cái giá — đừng giấu:**
+
+| # | Điểm | Thực tế |
+|---|---|---|
+| a | `web-xa` / `zalo-oa` mang **hai nghĩa** | Phiếu dân tự gửi qua biểu mẫu riêng của kênh ấy (chưa dựng; vế sau của E, hạn xử lý hoãn tới phân loại) và phiếu cán bộ ghi hộ (hình dạng nhập hộ). Hai CHECK hình dạng hạn trong cơ sở dữ liệu chỉ phủ `can-bo-nhap-ho` và `tong-dai` (`service-petitions/migrations/0045_petition_channel_switchboard.sql:67-73`); với `web-xa`/`zalo-oa` ghi hộ, chỉ use case giữ hình dạng. Ngày một đường khác ghi phiếu không chủ trên hai kênh ấy, cách phân biệt ở S5 phải xem lại |
+| b | Báo cáo theo kênh (§*Phải trả*, trả sau) | Phiếu `zalo-oa` ghi hộ có `han_tiep_nhan` `NULL`. Báo cáo thời gian tiếp nhận tách theo kênh phải **loại** `NULL` (F #5), nếu không kênh ấy trông như tiếp nhận tức thì |
+| c | Giới hạn 5 ảnh | Chỉ đếm ở use case, chưa có sàn trong cơ sở dữ liệu |
+| d | Migration `0045` | Chưa chạy trên PostgreSQL thật lúc ghi |
 
 ## Phải trả
 
@@ -266,7 +311,8 @@ nhập liệu của cán bộ.
 5. Cho dân chọn lĩnh vực lúc gửi — #23 đã đóng theo hướng ngược lại, và lý do là một lỗ khai
    thác, không phải sở thích
 6. Thêm một `kenh_tiep_nhan` thứ năm mà **không** trả lời trước: biểu mẫu của kênh ấy có
-   lĩnh vực lúc vào sổ hay không
+   lĩnh vực lúc vào sổ hay không — *15/10/2026: đã trả lời cho `tong-dai` (S3 ở §Sửa đổi
+   15/10/2026). Điều kiện dừng vẫn sống cho kênh thứ sáu.*
 
 → ADR 0027 (chín trạng thái, quyết định C và D, và cái trần mà ADR này tháo): `kb/10-decisions/0027-trang-thai-va-dong-ho-phieu-phan-anh.md`
 → ADR 0007 (giờ làm việc, điểm bắt đầu đếm khi gửi ngoài giờ, và lệ "từ chối chứ không đoán"): `kb/10-decisions/0007-sla-working-hours.md`

@@ -1537,6 +1537,71 @@
       "viec": "Bảng lỗi web-admin-141026 dòng 3: mỗi loại nội dung (Tin tức, Sự kiện, Video, Truyền thanh, Thông báo) một cây danh mục; Banner không có danh mục (chủ dự án chốt 14/10/2026 theo yêu cầu PM). CONFLICT với bản mẫu, chủ dự án đã giải: bảng content_categories của bản mẫu không có cột loại (../vigov-require/apps/api/app/modules/content/models.py:294-336) — nhưng chính bản mẫu ghi các loại lấy từ ba danh sách khác nhau (models.py:102-104) và kịch bản demo cho Truyền thanh bộ chuyên mục riêng (../vigov-require/docs/miniapp-demo-script.md:106-111); PM chọn theo loại. Web-admin: bộ lọc và nút danh mục theo tab, form chỉ liệt kê cây của loại đang chọn, đổi loại báo 'Danh mục sẽ bỏ trống'. Quy tắc và lý do: ADR 0067 §Sửa đổi 14/10/2026; đặc tả docs/ui-ux/11-noi-dung-mini-app.md §2, §6, §7, §8.",
       "bang_chung": "149bf72c (migration 0030), bf1e2c88 (service-comms: ?type= bắt buộc, 409 category_type_mismatch, 422 banner_has_no_category); phần web-admin ở commit web-admin TASK-03 tiếp theo.",
       "con_no": "Chưa chạy trên PostgreSQL thật; chưa kiểm ảnh render màn Nội dung Mini App."
+    },
+    {
+      "id": "bl141026-phan-anh-bo-o-dan-phan-anh-luc",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Phản ánh (bảng lỗi web-admin-141026): modal nhập hộ bỏ ô 'Dân phản ánh lúc' (máy chủ vẫn nhận clock_from tuỳ chọn, thiếu thì lấy lúc vào sổ); bảng tab Báo cáo chỉ kẻ ngang mảnh; bỏ cụm Tra cứu phiếu dưới sổ (prototype không có; ?id= vẫn mở phiếu).",
+      "bang_chung": "98cb4c93 · staff-intake.tsx, nhan-phieu.ts, petition-reports.tsx, petition-workspace.tsx. Commit ghi: vitest phan-anh xanh, eslint sạch. Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "Bỏ ô ấy chạm ADR 0028 quyết định F #1 — đã ghi chú trong ADR; chưa rõ là lời chủ dự án hay áp ADR 0090 #1, chờ phiên chính xác nhận."
+    },
+    {
+      "id": "bl141026-menu-trai-giu-vi-tri-cuon",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Khung web-admin (bảng lỗi web-admin-141026): menu trái giữ vị trí cuộn và quyền của màn trước khi chuyển màn (nhớ trong trình duyệt, xoá khi tải lại cả trang).",
+      "bang_chung": "6785594f · components/sidebar-state.ts, side-nav.tsx, dau-trang.tsx, sidebar-persist.test.tsx. Commit ghi: vitest components xanh, eslint sạch. Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "VIỆC CÒN LẠI: mỗi page.tsx vẫn tự dựng khung nên SideNav dựng lại mỗi lần chuyển màn; cách gốc là dời khung vào layout chung (đụng ~20 page.tsx) — chưa làm."
+    },
+    {
+      "id": "bl141026-nguoi-dung-het-cuon-ngang",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Người dùng (bảng lỗi web-admin-141026): hết thanh cuộn ngang — khung overflow-x-auto của ConfigTable thêm `relative` để chữ ẩn .an-thi-giac (absolute) không thoát khung, như prototype components/ui/table.tsx.",
+      "bang_chung": "6785594f · features/cau-hinh/config-ui.tsx + config-ui.test.tsx. Commit ghi: vitest config-ui xanh. Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "Không còn việc mã; chờ ảnh render."
+    },
+    {
+      "id": "bl141026-bien-ban-theo-prototype",
+      "menu": "bien-ban-hop",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Biên bản họp (bảng lỗi web-admin-141026): form thêm mới/bổ sung chỉ 4 ô (Tên, Ngày họp, Số hiệu, Nội dung — 6 ô bỏ đều tuỳ chọn ở máy chủ; form Sửa giữ đủ ô); thẻ bỏ Xem, Ký, chip Dự thảo; Sửa/Gỡ là nút icon lề phải; bỏ 'Đánh dấu không phát sinh nhiệm vụ' (giữ 'Bỏ dấu' cho kết luận đã đánh dấu). HỆ QUẢ: giao diện KHÔNG còn thao tác ký biên bản.",
+      "bang_chung": "b8f600fa · features/bien-ban/so-bien-ban.tsx, meeting-ui.tsx. Commit ghi: tsc 0, vitest bien-ban 128/128, eslint sạch. Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "Ký biên bản chỉ còn qua API. Khách cần ký trên web thì hỏi chủ dự án — không tự đưa nút Ký lại."
+    },
+    {
+      "id": "bl141026-tong-quan-popup-mo-tai-cho",
+      "menu": "tong-quan-dieu-hanh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Tổng quan (bảng lỗi web-admin-141026): popup số liệu Văn bản/Phản ánh/Giải ngân mở ngăn chi tiết của module ngay trên Tổng quan (cổng quyền từng module giữ; văn bản đến ở đây không có Sửa/Gỡ); ô Thu - Chi chỉ hiện số, không link; trình chiếu giữ nền sáng.",
+      "bang_chung": "8846b4ca · features/dashboard/record-detail.tsx, record-drill.tsx, presentation.tsx, app/globals.css. Commit ghi: tsc 0, vitest dashboard + giai-ngan + map-assets 765/765, eslint sạch. Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "VIỆC CÒN LẠI: thao tác phản ánh trong features/dashboard/record-detail.tsx là BẢN SAO của features/phan-anh/so-phan-anh.tsx:703-823 — phải gộp về một chỗ, nếu không hai bản sẽ lệch."
+    },
+    {
+      "id": "bl141026-nhiem-vu-ten-tu-may-chu-bo-ly-do-xoa",
+      "menu": [
+        "nhiem-vu",
+        "tong-quan-dieu-hanh"
+      ],
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Nhiệm vụ (bảng lỗi web-admin-141026, chủ dự án 15/10/2026): Kanban, Danh sách, Sổ theo dõi, ngăn chi tiết, popup 'Xoá đã chọn', drill Tổng quan dùng assignee_name/assigner_name/unit_name của máy chủ (thiếu thì danh bạ, rồi mã); hộp xoá một nhiệm vụ và thanh xoá hàng loạt bỏ ô lý do, DELETE gửi {} (ADR 0076 §Sửa đổi 15/10/2026).",
+      "bang_chung": "a5f78fd0 · features/nhiem-vu/nhan-nhiem-vu.ts, so-nhiem-vu.tsx, batch-delete.ts, batch-delete-bar.tsx, lib/api/nhiem-vu.ts. Commit ghi: tsc 0, eslint sạch, vitest 960/960. Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "VIỆC CÒN LẠI: dòng nhật ký nhiệm vụ vẫn tra tên qua danh bạ — máy chủ chưa trả tên trên dòng nhật ký (service-petitions)."
+    },
+    {
+      "id": "bl141026-nhap-ho-chon-kenh-dinh-anh-web",
+      "menu": "phan-anh-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Modal nhập hộ phản ánh trên web-admin: ô 'Tiếp nhận qua kênh' (can-bo-nhap-ho mặc định · tong-dai 'Tổng đài điện thoại' · web-xa · zalo-oa) và đính ảnh hiện trường sau khi vào sổ (tối đa 5) — máy chủ đã có ở 7c739880 (ADR 0028 §Sửa đổi 15/10/2026).",
+      "bang_chung": "Agent khác đang làm: web-admin/src/lib/api/phieu-phan-anh.ts có thay đổi chưa commit lúc ghi (git diff --stat, 15/10/2026). Chưa commit.",
+      "tiep_theo": "Agent đang làm cập nhật CHÍNH mục này (đổi trang_thai, thêm sha) — không thêm mục mới. Nhãn 'Tổng đài điện thoại' phải có ở nhanKenh/MOI_KENH (features/phan-anh/nhan-phieu.ts) theo ghi chú migration 0045."
     }
   ]
 }

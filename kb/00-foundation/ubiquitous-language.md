@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: 808b92a6
+derived_from_commit: 7c739880
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -24,6 +24,7 @@ owns_facts:
   - "vì sao hợp đồng danh mục trả trường label còn thực thể có tên riêng trả name"
   - "quy tắc: tên theo khái niệm, quyền sở hữu theo nhịp đổi"
   - "tên tiếng Anh của Cảnh báo thiên tai (DisasterAlert) và Lựa chọn nhận thông báo (CitizenNotificationPreference)"
+  - "tên của kênh tiếp nhận phiếu phản ánh và tên tiếng Anh của Tổng đài điện thoại (tong-dai, ChannelSwitchboard)"
 ---
 
 # Ngôn ngữ chung
@@ -81,6 +82,8 @@ Vòng đời đầy đủ ở `skills/petition-lifecycle`; bảng này chỉ ch�
 | Quá hạn | — | **Suy ra**, không có cột. Xem luật 10 |
 | Gộp phiếu (phiếu trùng) | `merged_into` · `merged_at` · `merged_by` (`phieu_phan_anh`) · lịch sử `petition_merge_event` · Go: `merge` | **Liên kết**, không phải trạng thái (ADR 0087). **Phiếu chính** = phiếu được trỏ tới; **phiếu phụ** = phiếu mang `merged_into`. Không dùng `duplicate_of`, `parent`, `master` |
 | Tách phiếu | `unmerge` · `hanh_vi`/`kind` = `tach-phieu` (gộp: `gop-phieu`) | Bỏ liên kết, lý do bắt buộc. Giá trị enum theo ADR 0011, cùng chuỗi ở `petition_merge_event.kind` và `nhat_ky_phan_anh.hanh_vi` |
+| Kênh tiếp nhận | `kenh_tiep_nhan` · Go: `domain.KenhTiepNhan` | Năm giá trị enum (ADR 0011, không dịch): `zalo-mini-app` · `zalo-oa` · `web-xa` · `can-bo-nhap-ho` · **`tong-dai`**. Cán bộ nhập hộ chọn được bốn giá trị, trừ `zalo-mini-app`; kênh chỉ là nguồn ghi nhận, không quyết cách đặt hạn (ADR 0028 §*Sửa đổi 15/10/2026*) |
+| Tổng đài điện thoại | giá trị `tong-dai` · Go: **`ChannelSwitchboard`** | Dân gọi tổng đài của xã, cán bộ vào sổ (chủ dự án 15/10/2026). Hằng Go mới đặt tiếng Anh (luật 12); bốn hằng cũ `Kenh*` giữ tên. Không dùng `hotline`, `phone`, `call_center` |
 | Phiếu nghi trùng | `duplicate candidates` | Chỉ **gợi ý** cho cán bộ, theo ngưỡng của xã (migration 0038) — không gộp gì |
 | Vị trí do người dân chỉnh | **`citizen-adjusted location`** — cờ trên phiếu, cột `location_citizen_adjusted` (`service-petitions/migrations/0044_petition_location_citizen_adjusted.sql:63`) | Người dân kéo ghim hoặc chạm bản đồ ở Mini App để đặt chỗ xảy ra; cờ cho cán bộ phân biệt với toạ độ GPS (chủ dự án, 11/10/2026 — ADR 0072 §Sửa đổi 11/10/2026 (Mini App), M3). Cờ nói **cách toạ độ được tạo**, không nói toạ độ đúng hay sai. Không dùng `manual_location`, `user_location`, `pin_moved` |
 

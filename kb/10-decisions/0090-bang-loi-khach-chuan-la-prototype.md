@@ -3,7 +3,7 @@ id: 0090-bang-loi-khach-chuan-la-prototype
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 3421992a
+derived_from_commit: 7c739880
 expires: null
 owns_facts:
   - "luật xử lý bảng lỗi của khách 10–11/10/2026: chuẩn là prototype — mọi tính năng prototype có thì web-admin phải có; tính năng prototype không có mà bảng lỗi đòi gỡ thì GIỮ khi nó là đường duy nhất tới một khả năng; luật cứng thắng cả bảng lỗi lẫn prototype (chủ dự án 10–11/10/2026)"
@@ -12,6 +12,7 @@ owns_facts:
   - "xoá trên web-admin theo bảng lỗi 10/10/2026: ẩn ô lý do, máy chủ ghi câu cố định nói rõ người xoá không nhập lý do; vẫn xoá mềm và có vết cùng giao dịch — mở rộng tiền lệ ADR 0075 #4a / ADR 0077"
   - "quy ước đánh số dòng của bảng lỗi khách 10/10/2026 trong kb/ và trong chú thích mã"
   - "chi tiết đơn thư theo bảng lỗi 13/10/2026: ô Trả lời công dân giữ khoá trước Thụ lý và sau khi kết thúc, câu gợi ý chỉ đúng nút trên màn; nút Sửa hạn xử lý giữ; số điện thoại vẫn che (§Sửa đổi 13/10/2026)"
+  - "thứ tự mặc định 'mới thêm lên đầu' của danh sách Người dùng, Dự án giải ngân, nhóm/liên kết Zalo, Sổ địa điểm (trong nhóm loại), và các danh sách CỐ Ý giữ thứ tự khác (chủ dự án 15/10/2026, §Sửa đổi 15/10/2026)"
 ---
 
 # 0090. Bảng lỗi của khách 10–11/10/2026: chuẩn là prototype, tính năng dư giữ khi là đường duy nhất
@@ -113,3 +114,41 @@ cũng đổi Tự động hoá và Danh mục (ADR 0079 §*Sửa đổi 13/10/20
 | Ô "Trả lời công dân" | **Giữ khoá** trước Thụ lý và sau khi đơn kết thúc (thứ tự TT 05/2021, C3). Câu gợi ý chỉ đúng nút **có trên màn**: ô "Đang xử lý" trên thanh trạng thái rồi "Xác nhận" để thụ lý; đơn đã kết thúc thì nói không sửa được nữa. Lý do: ba trạng thái thật cùng vẽ thành một ô "Đang xử lý" (ADR 0084 §2), nên câu gọi tên "Thụ lý" làm cán bộ không tìm ra nút | `47f35a10` |
 | Nút "Sửa hạn xử lý" | **Giữ** — xác nhận lại dòng 43 ở §*Giữ dù bảng lỗi đòi gỡ* | — |
 | Số điện thoại người gửi | **Vẫn che** — xác nhận lại dòng 43 ở §*Từ chối vì va luật cứng* (luật 3) | — |
+
+## Sửa đổi 15/10/2026 — bảng lỗi web-admin-141026
+
+Chủ dự án chốt 15/10/2026, lời do phiên chính chuyển lại. Bảng lỗi này cũng đổi phiếu nhập hộ (ADR 0028
+§*Sửa đổi 15/10/2026*) và lý do xoá nhiệm vụ (ADR 0076 §*Sửa đổi 15/10/2026* — áp #4 ở trên cho menu
+Nhiệm vụ).
+
+### Thứ tự mặc định: mới thêm lên đầu
+
+| Danh sách | Mặc định nay | Trước | Commit |
+|---|---|---|---|
+| Người dùng — `GET /api/v1/staff`, `POST /api/v1/staff/searches` | `created_at` giảm dần | Mã cán bộ tăng dần | `7737d780` |
+| Dự án giải ngân — `GET /api/v1/investment-projects` | `tao_luc` giảm dần | Theo mã | `7737d780` |
+| Nhóm Zalo, liên kết Zalo — `GET /api/v1/zalo-groups`, `/zalo-links` | `linked_at` giảm dần | — | `7737d780` |
+| Sổ địa điểm — `GET /api/v1/map-assets` | **Vẫn gom theo loại** (mã loại tăng dần), **trong nhóm** `created_at` giảm dần | Nhóm rồi tên | `99c99592` |
+
+Sổ địa điểm giữ gom nhóm vì bảng web gom các dòng liền nhau cùng loại thành một nhóm
+(`service-comms/internal/store/map_asset.go:54-71`); sắp thuần theo ngày thì một loại vỡ thành nhiều
+nhóm rời.
+
+**Cố ý KHÔNG đổi** — đừng "sửa" theo lời bảng lỗi:
+
+| Danh sách | Thứ tự giữ | Vì sao |
+|---|---|---|
+| Danh mục có cột Thứ tự (`thu_tu`) | Theo `thu_tu` | Xã tự sắp; "mới lên đầu" sẽ phá thứ tự xã đã đặt |
+| Cây tổ chức (bộ phận) | Theo cây | Thứ tự là cấp bậc, không phải ngày tạo |
+| Hàng chờ gia hạn, quá hạn | Theo hạn | Việc gấp nhất phải ở đầu |
+| Danh bạ cán bộ | Theo `thu_tu_danh_ba` | Thứ tự do xã đặt |
+
+Cột "Vì sao" là cách đọc của người ghi từ tên cột; chủ dự án chỉ liệt kê các danh sách giữ, không nêu lý
+do từng dòng.
+
+### Hai dòng khác
+
+| Điểm | Chốt | Chủ sở hữu |
+|---|---|---|
+| Tab "Cảnh báo thiên tai" trong Nội dung Mini App — bảng lỗi đòi gỡ | **Giữ.** Đây là màn duy nhất đăng cảnh báo thiên tai (#2 ở trên) | ADR 0091 §2 |
+| Khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo — bảng lỗi đòi | **Chưa quyết.** Chủ dự án: *"tạm bỏ qua, back lại sau"*. Khoá mới nào cũng phải qua câu mở #27 và luật 5 bất biến 3c | Sổ `kb/90-ephemeral/tien-do/service-identity.json`, mục `bl141026-khoa-quyen-rieng-cau-hinh` |

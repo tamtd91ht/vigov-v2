@@ -3,7 +3,7 @@ id: 0068-web-admin-ui-redesign
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: b91b2827
+derived_from_commit: 7c739880
 expires: null
 owns_facts:
   - "làm mới giao diện web-admin chỉ đổi phần trình bày: không đổi đường dẫn, lời gọi API, state, logic lọc/phân trang/phân quyền, tên trường, name/id ô nhập, handler, thứ tự bước nghiệp vụ; không thêm tính năng 'cho hiện đại' (chốt 02/10/2026) — NGOẠI LỆ DUY NHẤT 05/10/2026: URL theo hộp chi tiết lớn (?task=<mã>)"
@@ -13,7 +13,7 @@ owns_facts:
   - "web-admin không có nút nổi (FAB) chat/gọi; không có tên hay logo OMICALL/ViHAT trên màn cán bộ — chỉ mượn ngôn ngữ hình ảnh (chốt 05/10/2026 lần 2)"
   - "'sống động hơn' (chủ dự án 05/10/2026) = điểm nhấn màu + thẻ trắng bo góc trên nền xám nhạt + icon/ảnh đại diện + phản hồi khi tương tác; vẫn không blur/gradient/hình trang trí (§11 giữ) — vế không blur bị bỏ ở §Sửa đổi 07/10/2026 (lần 6) #3"
   - "mọi màn chi tiết web-admin mở dạng HỘP LỚN đè lên trang danh sách, mỗi đợt một màn, Nhiệm vụ thí điểm trước (rồi Đơn thư, Phản ánh): thanh tab thao tác trên (Xem chi tiết · Chỉnh sửa · Xoá) + 'Tạo bởi … lúc …' bên phải; khối trạng thái nổi bật; thân hai cột (thông tin trái, nhật ký/trao đổi phải); dải nút tròn bên phải CHỈ cho thao tác phụ, mỗi nút có tooltip; thao tác chính giữ nút có chữ; chip bước không bấm để chuyển trạng thái ngoài allowed_transitions (chốt 05/10/2026) — riêng Nhiệm vụ: thanh tab thao tác THAY bởi ADR 0076 #1; dải nút tròn bên phải THAY bởi ADR 0076 §Sửa đổi 07/10/2026 (lần 2) #1 (ngăn theo spec 07, không cột icon dọc)"
-  - "tab 'Xoá' của hộp chi tiết mở đúng luồng xoá mềm kèm lý do đang có (quyền task.delete), chỉ hiện khi có quyền (chốt 05/10/2026)"
+  - "tab 'Xoá' của hộp chi tiết mở đúng luồng xoá mềm kèm lý do đang có (quyền task.delete), chỉ hiện khi có quyền (chốt 05/10/2026) — vế 'kèm lý do' THAY bởi ADR 0076 §Sửa đổi 15/10/2026: lý do xoá nhiệm vụ tuỳ chọn"
   - "URL theo hộp chi tiết: mở hộp đẩy MỘT mục lịch sử /nhiem-vu?task=<mã>, Back đóng hộp về danh sách cùng bộ lọc; đi tới việc cha/con trong hộp THAY mục lịch sử; đổi bộ lọc giữ ?task= (chốt 05/10/2026) — vế 'việc cha' THAY bởi ADR 0076 §Sửa đổi 07/10/2026 (lần 2) #14: ngăn không còn liên kết lên việc cha; đi tới việc con giữ"
   - "tab nhiều bản ghi trong ngăn chi tiết: mở bản ghi mới thêm tab và chuyển sang nó, đóng ngăn giữ tab, ✕ đóng từng tab, 'Đóng tất cả'; giữ trong phiên trình duyệt theo xã + người dùng, tối đa 8 (cũ nhất tự đóng); ?task= = tab đang xem, đổi tab thay mục lịch sử (chốt 05/10/2026, làm ngay — thay 'hoãn')"
   - "globals.css cũ nằm trong cascade layer `legacy` để tiện ích Tailwind thắng; preflight của Tailwind KHÔNG bật ở đợt 1"
@@ -604,3 +604,9 @@ giao diện 3:1:
 | f | ADR 0069 nói khác | ADR 0069 #5 (dải banner dưới topbar ở mọi trang) và dòng "logo xã dùng chung: thanh bên" của ADR ấy nay trái #8 (khối brand VG thay logo xã ở thanh bên). ADR 0069 đã có dòng trỏ sang đây (07/10/2026). **Câu hỏi cho chủ dự án:** ảnh banner xã vẫn tải lên được ở Cấu hình › Nhận diện xã nhưng không còn chỗ hiện trên web-admin — giữ ô tải lên hay gỡ nó? Chưa ai chốt |
 
 **Vì sao:** ngoài các lựa chọn trên, chủ dự án **không nêu** lý do — đừng suy thêm.
+
+## Sửa đổi 15/10/2026 — lý do xoá nhiệm vụ
+
+Mục này ghi thêm, không sửa phần trên. *Sửa đổi 05/10/2026* #4 ("Tab Xoá mở luồng **xoá mềm kèm lý do**")
+nay chỉ đúng vế **xoá mềm**: lý do xoá nhiệm vụ là **tuỳ chọn**, trống thì máy chủ ghi câu cố định (chủ dự
+án 15/10/2026, bảng lỗi `web-admin-141026`). Quyết định, lý do và cái giá: ADR 0076 §*Sửa đổi 15/10/2026*.

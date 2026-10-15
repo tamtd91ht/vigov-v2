@@ -192,7 +192,7 @@
     },
     "app.Book": {
       "kind": "func",
-      "at": "service-petitions/internal/app/staff_intake.go:153"
+      "at": "service-petitions/internal/app/staff_intake.go:161"
     },
     "app.BookLetterRequest": {
       "kind": "type",
@@ -588,7 +588,7 @@
     },
     "app.Covers": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_photo.go:1150"
+      "at": "service-petitions/internal/app/petition_photo.go:1153"
     },
     "app.Create": {
       "kind": "func",
@@ -708,7 +708,7 @@
     },
     "app.DeNghiLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1787"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1790"
     },
     "app.Delete": {
       "kind": "func",
@@ -1124,7 +1124,7 @@
     },
     "app.IsStaffIntakeInputError": {
       "kind": "func",
-      "at": "service-petitions/internal/app/staff_intake.go:349"
+      "at": "service-petitions/internal/app/staff_intake.go:359"
     },
     "app.IssueGroupPairingCode": {
       "kind": "func",
@@ -1992,7 +1992,7 @@
     },
     "app.NewStaffIntake": {
       "kind": "func",
-      "at": "service-petitions/internal/app/staff_intake.go:133"
+      "at": "service-petitions/internal/app/staff_intake.go:141"
     },
     "app.NewStaffNoticeRelay": {
       "kind": "func",
@@ -2004,11 +2004,15 @@
     },
     "app.NewStaffPetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/app/petition_photo.go:1059"
+      "at": "service-petitions/internal/app/petition_photo.go:1062"
     },
     "app.NewStaffRecordedRatings": {
       "kind": "func",
       "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:69"
+    },
+    "app.NewStaffScenePhotos": {
+      "kind": "func",
+      "at": "service-petitions/internal/app/staff_scene_photo.go:91"
     },
     "app.NewStaffVerificationPhotos": {
       "kind": "func",
@@ -2468,7 +2472,7 @@
     },
     "app.QuyetDinhLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1915"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1918"
     },
     "app.Rate": {
       "kind": "func",
@@ -2616,7 +2620,7 @@
     },
     "app.ResolveDeadlineReader": {
       "kind": "type",
-      "at": "service-petitions/internal/app/staff_intake.go:61"
+      "at": "service-petitions/internal/app/staff_intake.go:69"
     },
     "app.ResolveIssue": {
       "kind": "func",
@@ -2900,7 +2904,7 @@
     },
     "app.StaffIntake": {
       "kind": "type",
-      "at": "service-petitions/internal/app/staff_intake.go:112"
+      "at": "service-petitions/internal/app/staff_intake.go:120"
     },
     "app.StaffIntakeCatalogue": {
       "kind": "func",
@@ -2908,15 +2912,15 @@
     },
     "app.StaffIntakeFields": {
       "kind": "type",
-      "at": "service-petitions/internal/app/staff_intake.go:77"
+      "at": "service-petitions/internal/app/staff_intake.go:85"
     },
     "app.StaffIntakePetitions": {
       "kind": "type",
-      "at": "service-petitions/internal/app/staff_intake.go:70"
+      "at": "service-petitions/internal/app/staff_intake.go:78"
     },
     "app.StaffIntakeRequest": {
       "kind": "type",
-      "at": "service-petitions/internal/app/staff_intake.go:93"
+      "at": "service-petitions/internal/app/staff_intake.go:96"
     },
     "app.StaffNames": {
       "kind": "type",
@@ -2952,15 +2956,15 @@
     },
     "app.StaffPetitionPhotos": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:1050"
+      "at": "service-petitions/internal/app/petition_photo.go:1053"
     },
     "app.StaffPhotoFiles": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:1044"
+      "at": "service-petitions/internal/app/petition_photo.go:1046"
     },
     "app.StaffPhotoPetitions": {
       "kind": "type",
-      "at": "service-petitions/internal/app/petition_photo.go:1036"
+      "at": "service-petitions/internal/app/petition_photo.go:1038"
     },
     "app.StaffRatingPetitions": {
       "kind": "type",
@@ -2977,6 +2981,14 @@
     "app.StaffRecordedRatings": {
       "kind": "type",
       "at": "service-petitions/internal/app/petition_staff_recorded_rating.go:60"
+    },
+    "app.StaffScenePhotoPetitions": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/staff_scene_photo.go:63"
+    },
+    "app.StaffScenePhotos": {
+      "kind": "type",
+      "at": "service-petitions/internal/app/staff_scene_photo.go:71"
     },
     "app.StaffVerificationPhotos": {
       "kind": "type",
@@ -3404,7 +3416,7 @@
     },
     "app.Xoa": {
       "kind": "func",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1712"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1715"
     },
     "app.XoaBienBan": {
       "kind": "func",
@@ -3456,7 +3468,7 @@
     },
     "app.YeuCauDeNghiLuiHan": {
       "kind": "type",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1772"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1775"
     },
     "app.YeuCauDoiMatKhau": {
       "kind": "type",
@@ -3492,7 +3504,7 @@
     },
     "app.YeuCauQuyetDinhLuiHan": {
       "kind": "type",
-      "at": "service-petitions/internal/app/nhiem_vu.go:1889"
+      "at": "service-petitions/internal/app/nhiem_vu.go:1892"
     },
     "app.YeuCauSuaBang": {
       "kind": "type",
@@ -4630,6 +4642,10 @@
       "kind": "type",
       "at": "service-identity/internal/domain/bo_phan.go:10"
     },
+    "domain.BookedByStaff": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:195"
+    },
     "domain.Bounds": {
       "kind": "func",
       "at": "service-platform/internal/domain/map_frame_default.go:131"
@@ -4944,7 +4960,7 @@
     },
     "domain.CheckReopenReason": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:567"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:578"
     },
     "domain.CheckRequiredCustomValues": {
       "kind": "func",
@@ -4992,7 +5008,7 @@
     },
     "domain.CheckStatusTarget": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:491"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:502"
     },
     "domain.CheckTaskAssignment": {
       "kind": "func",
@@ -5076,7 +5092,7 @@
     },
     "domain.ChuaChotHanXuLy": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:363"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:424"
     },
     "domain.ChuaPhanCong": {
       "kind": "func",
@@ -5320,7 +5336,7 @@
     },
     "domain.ChuyenTrangThaiDuoc": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:621"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:632"
     },
     "domain.ChuyenVanBan": {
       "kind": "type",
@@ -5448,7 +5464,7 @@
     },
     "domain.CoLinhVucLucVaoSo": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:163"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:221"
     },
     "domain.Columns": {
       "kind": "func",
@@ -5476,7 +5492,7 @@
     },
     "domain.ConChuaXong": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:460"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:471"
     },
     "domain.ConNguoiGiuSauKhiLuu": {
       "kind": "func",
@@ -5580,11 +5596,11 @@
     },
     "domain.DeNghiLuiHan": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:657"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:668"
     },
     "domain.DeNghiLuiHanChoDuyet": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:693"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:704"
     },
     "domain.DeadlineKind": {
       "kind": "type",
@@ -5788,11 +5804,11 @@
     },
     "domain.DuocDeNghiLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:833"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:844"
     },
     "domain.DuocDuyetLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:870"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:881"
     },
     "domain.DuplicateCandidate": {
       "kind": "type",
@@ -5824,7 +5840,7 @@
     },
     "domain.Error": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:416"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:427"
     },
     "domain.Escalation": {
       "kind": "func",
@@ -5880,11 +5896,11 @@
     },
     "domain.ExtensionDecisionLogText": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:807"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:818"
     },
     "domain.ExtensionRequestLogText": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:800"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:811"
     },
     "domain.ExternalContact": {
       "kind": "type",
@@ -6024,15 +6040,15 @@
     },
     "domain.HanSomHon": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:446"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:507"
     },
     "domain.HanTiepNhanApDung": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:174"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:235"
     },
     "domain.HanTiepNhanKhongApDung": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:354"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:415"
     },
     "domain.HandEntriesConflict": {
       "kind": "type",
@@ -6112,7 +6128,7 @@
     },
     "domain.HopLe": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:138"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:144"
     },
     "domain.HopLeTenMienXa": {
       "kind": "func",
@@ -6176,7 +6192,7 @@
     },
     "domain.Is": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:419"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:430"
     },
     "domain.IsAccountless": {
       "kind": "func",
@@ -6237,6 +6253,10 @@
     "domain.IsReservedCommuneHost": {
       "kind": "func",
       "at": "service-platform/internal/domain/operator_commune.go:127"
+    },
+    "domain.IsScenePhotoOf": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/petition_photo.go:38"
     },
     "domain.IsStaffRatingInputError": {
       "kind": "func",
@@ -6356,7 +6376,7 @@
     },
     "domain.KiemGocDemHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:487"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:548"
     },
     "domain.KiemKetQua": {
       "kind": "func",
@@ -6372,11 +6392,11 @@
     },
     "domain.KiemLyDoLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:771"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:782"
     },
     "domain.KiemLyDoTraLai": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:551"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:562"
     },
     "domain.KiemLyDoXoaBienBan": {
       "kind": "func",
@@ -6384,7 +6404,7 @@
     },
     "domain.KiemLyDoXoaNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:254"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:265"
     },
     "domain.KiemMaNhiemVu": {
       "kind": "func",
@@ -6408,7 +6428,7 @@
     },
     "domain.KiemNoiDungNhatKy": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:535"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:546"
     },
     "domain.KiemPhanCong": {
       "kind": "func",
@@ -6612,7 +6632,7 @@
     },
     "domain.LaLoiThamQuyenLuiHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:897"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:908"
     },
     "domain.LaLoiXuLyPhanAnh": {
       "kind": "func",
@@ -6828,11 +6848,11 @@
     },
     "domain.LoiConChuaXoa": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:399"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:410"
     },
     "domain.LoiConChuaXong": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:430"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:441"
     },
     "domain.LoiConNhiemVu": {
       "kind": "type",
@@ -6852,7 +6872,7 @@
     },
     "domain.LoiKemChiTiet": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:411"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:422"
     },
     "domain.LoiKhongTinhDuocHan": {
       "kind": "type",
@@ -6868,7 +6888,7 @@
     },
     "domain.LoiThamQuyenLuiHanGoc": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:902"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:913"
     },
     "domain.LookupShippedMessage": {
       "kind": "func",
@@ -6884,7 +6904,7 @@
     },
     "domain.MaNhiemVuTiepTheo": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:308"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:319"
     },
     "domain.MaTranQuyen": {
       "kind": "type",
@@ -7148,7 +7168,7 @@
     },
     "domain.NhatKyNhiemVu": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:507"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:518"
     },
     "domain.NhatKyPhanAnh": {
       "kind": "type",
@@ -7160,7 +7180,7 @@
     },
     "domain.NhiemVuTomTat": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:321"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:332"
     },
     "domain.NhiemVuVanBan": {
       "kind": "type",
@@ -7172,7 +7192,7 @@
     },
     "domain.NoiDungChuyenTrangThai": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:589"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:600"
     },
     "domain.NoiDungMiniApp": {
       "kind": "type",
@@ -7696,7 +7716,7 @@
     },
     "domain.PhieuPhanAnh": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:192"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:253"
     },
     "domain.PhotoUploadOpen": {
       "kind": "func",
@@ -7880,15 +7900,15 @@
     },
     "domain.QuaHan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:378"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:439"
     },
     "domain.QuaHanPhanLoai": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:421"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:482"
     },
     "domain.QuaHanTiepNhan": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:395"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:456"
     },
     "domain.QuanHeCongDanXa": {
       "kind": "type",
@@ -7960,7 +7980,7 @@
     },
     "domain.ReopenLogText": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:605"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:616"
     },
     "domain.ReopenNextStep": {
       "kind": "func",
@@ -7968,7 +7988,7 @@
     },
     "domain.ReopenParentCompletedError": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:389"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:400"
     },
     "domain.ReparentCreatesCycle": {
       "kind": "func",
@@ -8224,7 +8244,7 @@
     },
     "domain.SinhMaTraCuu": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:543"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:604"
     },
     "domain.SinhMatKhauTam": {
       "kind": "func",
@@ -8256,7 +8276,7 @@
     },
     "domain.SoTrongMaNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:275"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:286"
     },
     "domain.SortedKinds": {
       "kind": "func",
@@ -8317,6 +8337,14 @@
     "domain.StaffIntakeCatalogue": {
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_field.go:141"
+    },
+    "domain.StaffIntakeChannel": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:179"
+    },
+    "domain.StaffMayRecord": {
+      "kind": "func",
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:164"
     },
     "domain.StaffNotice": {
       "kind": "type",
@@ -8608,7 +8636,7 @@
     },
     "domain.TranPhanLoaiKhongApDung": {
       "kind": "func",
-      "at": "service-petitions/internal/domain/phieu_phan_anh.go:408"
+      "at": "service-petitions/internal/domain/phieu_phan_anh.go:469"
     },
     "domain.TrangThai": {
       "kind": "type",
@@ -8620,7 +8648,7 @@
     },
     "domain.TrangThaiDeNghi": {
       "kind": "type",
-      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:635"
+      "at": "service-petitions/internal/domain/nhiem_vu_ghi.go:646"
     },
     "domain.TrangThaiGanNguon": {
       "kind": "type",
@@ -9720,7 +9748,7 @@
     },
     "http.BookStaffIntake": {
       "kind": "func",
-      "at": "service-petitions/internal/http/staff_intake.go:106"
+      "at": "service-petitions/internal/http/staff_intake.go:116"
     },
     "http.BrandingActs": {
       "kind": "type",
@@ -10096,7 +10124,7 @@
     },
     "http.DanhSachNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu.go:455"
+      "at": "service-petitions/internal/http/nhiem_vu.go:468"
     },
     "http.DanhSachNoiDung": {
       "kind": "func",
@@ -10160,7 +10188,7 @@
     },
     "http.DeNghiLuiHanNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:755"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:761"
     },
     "http.DeleteContentCategory": {
       "kind": "func",
@@ -10268,7 +10296,7 @@
     },
     "http.DocNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu.go:886"
+      "at": "service-petitions/internal/http/nhiem_vu.go:899"
     },
     "http.DocPhieuPhanAnh": {
       "kind": "func",
@@ -10284,7 +10312,7 @@
     },
     "http.DoiTrangThaiNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:635"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:640"
     },
     "http.DoiVaiTroCanBo": {
       "kind": "func",
@@ -11252,7 +11280,7 @@
     },
     "http.QuyetDinhLuiHanNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:783"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:789"
     },
     "http.RatePetition": {
       "kind": "func",
@@ -11520,7 +11548,7 @@
     },
     "http.StaffIntakeBooker": {
       "kind": "type",
-      "at": "service-petitions/internal/http/staff_intake.go:32"
+      "at": "service-petitions/internal/http/staff_intake.go:36"
     },
     "http.StaffPetitionPhotos": {
       "kind": "type",
@@ -11529,6 +11557,10 @@
     "http.StaffRecordedRatingActs": {
       "kind": "type",
       "at": "service-petitions/internal/http/petition_staff_recorded_rating.go:23"
+    },
+    "http.StaffScenePhotoActs": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/staff_scene_photo.go:26"
     },
     "http.StaffVerificationPhotoActs": {
       "kind": "type",
@@ -11612,7 +11644,7 @@
     },
     "http.SuaNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:582"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:587"
     },
     "http.SuaNoiDung": {
       "kind": "func",
@@ -11660,7 +11692,7 @@
     },
     "http.TaoNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:508"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:513"
     },
     "http.TaskAttachmentActs": {
       "kind": "type",
@@ -11701,6 +11733,10 @@
     "http.TaskLogAttachmentReader": {
       "kind": "type",
       "at": "service-petitions/internal/http/routes.go:315"
+    },
+    "http.TaskNameLookups": {
+      "kind": "type",
+      "at": "service-petitions/internal/http/task_names.go:29"
     },
     "http.TaskPriorityImportTemplate": {
       "kind": "func",
@@ -11824,7 +11860,7 @@
     },
     "http.TimCanBo": {
       "kind": "func",
-      "at": "service-identity/internal/http/can_bo_tim.go:67"
+      "at": "service-identity/internal/http/can_bo_tim.go:69"
     },
     "http.TraXaTheoHost": {
       "kind": "type",
@@ -11905,6 +11941,10 @@
     "http.UploadPolicyEditor": {
       "kind": "type",
       "at": "service-platform/internal/http/operator_platform.go:24"
+    },
+    "http.UploadStaffScenePhoto": {
+      "kind": "func",
+      "at": "service-petitions/internal/http/staff_scene_photo.go:35"
     },
     "http.UploadTaskAttachment": {
       "kind": "func",
@@ -12004,7 +12044,7 @@
     },
     "http.XoaNhiemVu": {
       "kind": "func",
-      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:736"
+      "at": "service-petitions/internal/http/nhiem_vu_ghi.go:741"
     },
     "http.XuLyPhieuPhanAnh": {
       "kind": "type",
@@ -14108,11 +14148,11 @@
     },
     "store.AllocationsOfProject": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an.go:483"
+      "at": "service-finance/internal/store/du_an.go:487"
     },
     "store.AllocationsOfYear": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an.go:338"
+      "at": "service-finance/internal/store/du_an.go:342"
     },
     "store.Allows": {
       "kind": "func",
@@ -14144,7 +14184,7 @@
     },
     "store.AssetTypeAvailable": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_asset.go:304"
+      "at": "service-comms/internal/store/map_asset.go:380"
     },
     "store.AssetTypeLive": {
       "kind": "func",
@@ -14372,7 +14412,7 @@
     },
     "store.ChiTiet": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo_danh_sach.go:419"
+      "at": "service-identity/internal/store/can_bo_danh_sach.go:426"
     },
     "store.ChoDuyet": {
       "kind": "func",
@@ -14452,11 +14492,11 @@
     },
     "store.ClaimDueDeliveries": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:651"
+      "at": "service-comms/internal/store/zalo_link.go:653"
     },
     "store.ClaimDueGroupDeliveries": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:462"
+      "at": "service-comms/internal/store/zalo_group.go:464"
     },
     "store.ClaimScope": {
       "kind": "func",
@@ -14596,7 +14636,7 @@
     },
     "store.CountLiveGroupLinksOfBot": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:343"
+      "at": "service-comms/internal/store/zalo_group.go:345"
     },
     "store.CountLiveItems": {
       "kind": "func",
@@ -14604,7 +14644,7 @@
     },
     "store.CountLiveLinksOfBot": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:360"
+      "at": "service-comms/internal/store/zalo_link.go:362"
     },
     "store.CountLiveOfPurpose": {
       "kind": "func",
@@ -14612,7 +14652,7 @@
     },
     "store.CountMatching": {
       "kind": "func",
-      "at": "service-identity/internal/store/can_bo_danh_sach.go:320"
+      "at": "service-identity/internal/store/can_bo_danh_sach.go:327"
     },
     "store.CountOpenHeldByOrgUnit": {
       "kind": "func",
@@ -14772,7 +14812,7 @@
     },
     "store.DisbursedByMonth": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an.go:542"
+      "at": "service-finance/internal/store/du_an.go:546"
     },
     "store.Doc": {
       "kind": "func",
@@ -14816,11 +14856,11 @@
     },
     "store.DueZaloDelivery": {
       "kind": "type",
-      "at": "service-comms/internal/store/zalo_link.go:623"
+      "at": "service-comms/internal/store/zalo_link.go:625"
     },
     "store.DueZaloGroupDelivery": {
       "kind": "type",
-      "at": "service-comms/internal/store/zalo_group.go:434"
+      "at": "service-comms/internal/store/zalo_group.go:436"
     },
     "store.Dung": {
       "kind": "func",
@@ -14856,27 +14896,27 @@
     },
     "store.EndGroupLink": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:316"
+      "at": "service-comms/internal/store/zalo_group.go:318"
     },
     "store.EndLink": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:405"
+      "at": "service-comms/internal/store/zalo_link.go:407"
     },
     "store.EndLiveGroupLinksOfBot": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:328"
+      "at": "service-comms/internal/store/zalo_group.go:330"
     },
     "store.EndLiveLinksOfBot": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:387"
+      "at": "service-comms/internal/store/zalo_link.go:389"
     },
     "store.EnqueueGroupDeliveries": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:384"
+      "at": "service-comms/internal/store/zalo_group.go:386"
     },
     "store.EnqueueZaloDeliveries": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:526"
+      "at": "service-comms/internal/store/zalo_link.go:528"
     },
     "store.EnsureProfile": {
       "kind": "func",
@@ -14900,11 +14940,11 @@
     },
     "store.FailDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:736"
+      "at": "service-comms/internal/store/zalo_link.go:738"
     },
     "store.FailGroupDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:544"
+      "at": "service-comms/internal/store/zalo_group.go:546"
     },
     "store.FieldCodeState": {
       "kind": "func",
@@ -14912,7 +14952,7 @@
     },
     "store.FieldsOfType": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_asset.go:321"
+      "at": "service-comms/internal/store/map_asset.go:397"
     },
     "store.FinishRun": {
       "kind": "func",
@@ -15000,7 +15040,7 @@
     },
     "store.GroupDeliveryRow": {
       "kind": "type",
-      "at": "service-comms/internal/store/zalo_group.go:365"
+      "at": "service-comms/internal/store/zalo_group.go:367"
     },
     "store.GroupPairingCode": {
       "kind": "type",
@@ -15052,7 +15092,7 @@
     },
     "store.ImplementingUnitsOfYear": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an.go:273"
+      "at": "service-finance/internal/store/du_an.go:277"
     },
     "store.ImportSnapshot": {
       "kind": "func",
@@ -15100,7 +15140,7 @@
     },
     "store.InsertGroupLink": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:278"
+      "at": "service-comms/internal/store/zalo_group.go:280"
     },
     "store.InsertGroupPairingCode": {
       "kind": "func",
@@ -15116,7 +15156,7 @@
     },
     "store.InsertLink": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:416"
+      "at": "service-comms/internal/store/zalo_link.go:418"
     },
     "store.InsertLive": {
       "kind": "func",
@@ -15160,7 +15200,7 @@
     },
     "store.InsertTestDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:611"
+      "at": "service-comms/internal/store/zalo_link.go:613"
     },
     "store.InsertUnit": {
       "kind": "func",
@@ -15268,7 +15308,7 @@
     },
     "store.LinkedChat": {
       "kind": "type",
-      "at": "service-comms/internal/store/zalo_link.go:427"
+      "at": "service-comms/internal/store/zalo_link.go:429"
     },
     "store.LinkedLogEntry": {
       "kind": "func",
@@ -15344,7 +15384,7 @@
     },
     "store.LiveChatsOf": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:434"
+      "at": "service-comms/internal/store/zalo_link.go:436"
     },
     "store.LiveForDelete": {
       "kind": "func",
@@ -15360,15 +15400,15 @@
     },
     "store.LiveGroupLinkOfChat": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:255"
+      "at": "service-comms/internal/store/zalo_group.go:257"
     },
     "store.LiveGroupLinks": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:195"
+      "at": "service-comms/internal/store/zalo_group.go:197"
     },
     "store.LiveGroupTargets": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:207"
+      "at": "service-comms/internal/store/zalo_group.go:209"
     },
     "store.LiveIDs": {
       "kind": "func",
@@ -15384,7 +15424,7 @@
     },
     "store.LiveLinks": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:321"
+      "at": "service-comms/internal/store/zalo_link.go:323"
     },
     "store.LiveNames": {
       "kind": "func",
@@ -15516,15 +15556,15 @@
     },
     "store.LockLiveGroupLink": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:236"
+      "at": "service-comms/internal/store/zalo_group.go:238"
     },
     "store.LockLiveLinkOfChat": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:349"
+      "at": "service-comms/internal/store/zalo_link.go:351"
     },
     "store.LockLiveLinkOfStaff": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:338"
+      "at": "service-comms/internal/store/zalo_link.go:340"
     },
     "store.LockOpenGroupPairingCode": {
       "kind": "func",
@@ -15632,7 +15672,7 @@
     },
     "store.MarkDeliverySent": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:722"
+      "at": "service-comms/internal/store/zalo_link.go:724"
     },
     "store.MarkFailed": {
       "kind": "func",
@@ -15640,7 +15680,7 @@
     },
     "store.MarkGroupDeliverySent": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:529"
+      "at": "service-comms/internal/store/zalo_group.go:531"
     },
     "store.MarkGroupPairingCodeUsed": {
       "kind": "func",
@@ -16216,7 +16256,7 @@
     },
     "store.PetitionCoverPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/store/petition_photo.go:71"
+      "at": "service-petitions/internal/store/petition_photo.go:78"
     },
     "store.PetitionFieldStore": {
       "kind": "type",
@@ -16228,7 +16268,7 @@
     },
     "store.PetitionPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/store/petition_photo.go:31"
+      "at": "service-petitions/internal/store/petition_photo.go:38"
     },
     "store.PetitionSettingsStore": {
       "kind": "type",
@@ -16280,7 +16320,7 @@
     },
     "store.Points": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_asset.go:121"
+      "at": "service-comms/internal/store/map_asset.go:150"
     },
     "store.PortalSyncStore": {
       "kind": "type",
@@ -16288,11 +16328,11 @@
     },
     "store.PostponeDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:706"
+      "at": "service-comms/internal/store/zalo_link.go:708"
     },
     "store.PostponeGroupDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:516"
+      "at": "service-comms/internal/store/zalo_group.go:518"
     },
     "store.ProfileForUpdate": {
       "kind": "func",
@@ -16488,11 +16528,11 @@
     },
     "store.RetryDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:728"
+      "at": "service-comms/internal/store/zalo_link.go:730"
     },
     "store.RetryGroupDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:535"
+      "at": "service-comms/internal/store/zalo_group.go:537"
     },
     "store.ReviveAllocation": {
       "kind": "func",
@@ -16580,7 +16620,7 @@
     },
     "store.SetConfirmation": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_asset.go:443"
+      "at": "service-comms/internal/store/map_asset.go:519"
     },
     "store.SetMapFrameDefault": {
       "kind": "func",
@@ -16656,11 +16696,11 @@
     },
     "store.SkipDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:700"
+      "at": "service-comms/internal/store/zalo_link.go:702"
     },
     "store.SkipGroupDelivery": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:510"
+      "at": "service-comms/internal/store/zalo_group.go:512"
     },
     "store.SlugDaDung": {
       "kind": "func",
@@ -16740,11 +16780,11 @@
     },
     "store.StartAttempt": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_link.go:714"
+      "at": "service-comms/internal/store/zalo_link.go:716"
     },
     "store.StartGroupAttempt": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:523"
+      "at": "service-comms/internal/store/zalo_group.go:525"
     },
     "store.StatesByCode": {
       "kind": "func",
@@ -16788,7 +16828,7 @@
     },
     "store.Summary": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_asset.go:274"
+      "at": "service-comms/internal/store/map_asset.go:350"
     },
     "store.SystemMessageOverrideStore": {
       "kind": "type",
@@ -16836,7 +16876,7 @@
     },
     "store.TaxCodeTaken": {
       "kind": "func",
-      "at": "service-comms/internal/store/map_asset.go:351"
+      "at": "service-comms/internal/store/map_asset.go:427"
     },
     "store.TemplateChoices": {
       "kind": "func",
@@ -17036,7 +17076,7 @@
     },
     "store.UpdateGroupLinkScope": {
       "kind": "func",
-      "at": "service-comms/internal/store/zalo_group.go:305"
+      "at": "service-comms/internal/store/zalo_group.go:307"
     },
     "store.UpdateHolder": {
       "kind": "func",
@@ -17148,7 +17188,7 @@
     },
     "store.VerificationPhotos": {
       "kind": "func",
-      "at": "service-petitions/internal/store/petition_photo.go:115"
+      "at": "service-petitions/internal/store/petition_photo.go:122"
     },
     "store.VoucherCountBySource": {
       "kind": "func",
@@ -17156,7 +17196,7 @@
     },
     "store.VouchersOfProject": {
       "kind": "func",
-      "at": "service-finance/internal/store/du_an.go:434"
+      "at": "service-finance/internal/store/du_an.go:438"
     },
     "store.XacNhan": {
       "kind": "func",
