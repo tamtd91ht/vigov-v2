@@ -28,8 +28,8 @@ import (
 //	NOT PROVED    anything PostgreSQL does with that statement: that UNIQUE (tenant_id,
 //	              loai_viec, linh_vuc_khoa) really admits one default row per commune, that
 //	              sla_linh_vuc_khong_rong really refuses '', that sla_gio_phai_duong refuses 0,
-//	              that the generated column frees its slot on soft delete, that the partition
-//	              routing works. That needs a real server, and sla_pg_test.go next door — which
+//	              that the generated column frees its slot on soft delete.
+//	              That needs a real server, and sla_pg_test.go next door — which
 //	              SKIPS without VIGOV_TEST_DSN — is where it belongs.
 //
 // THE DEFECT THIS FILE EXISTS FOR: `sla` carries FIVE ADJACENT INTEGER COLUMNS. Swap any two of

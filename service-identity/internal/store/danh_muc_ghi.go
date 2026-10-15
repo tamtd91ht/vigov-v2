@@ -182,9 +182,10 @@ func doiMotDongDanhMuc(kq sql.Result, bang, viec string) error {
 // when it refuses first — so a race past the application check still reaches the caller as 409 and
 // not as 500.
 //
-// SUBSTRING MATCHES, for the reason dichLoiGhiBoPhan gives: both tables are PARTITION BY HASH, so
-// PostgreSQL names the partition's copy of the key (`khoi_nhiem_vu_p07_tenant_id_ma_key`) and the
-// trigger reports the leaf partition in TG_TABLE_NAME. The trigger phrases are the migration's own
+// SUBSTRING MATCHES, for the reason dichLoiGhiBoPhan gives: both tables are plain since ADR 0096, so
+// PostgreSQL names the table's own key (`khoi_nhiem_vu_tenant_id_ma_key`); while they were PARTITION
+// BY HASH it named the partition's copy (`khoi_nhiem_vu_p07_tenant_id_ma_key`) and the trigger
+// reported the leaf partition in TG_TABLE_NAME. The tail matches both. The trigger phrases are the migration's own
 // RAISE texts (0005:190-203). Anything unrecognised is wrapped and passed on, never flattened into a
 // business refusal.
 func dichLoiGhiDanhMuc(bang, viec string, err error) error {

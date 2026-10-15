@@ -115,7 +115,7 @@ func staffTimestamptzLiteral(t time.Time) string {
 //	                            both shapes. One predicate builder, no second copy.
 //	`nguoi_dung.tenant_id = $1` INSIDE as well as outside: QueryPage binds only the outer relation; the
 //	                            inner one keeps the commune bound in the subquery's own text (rule 1,
-//	                            invariant 5) and the partition pruned.
+//	                            invariant 5).
 //	department                  LEFT JOIN bo_phan bound to the SAME commune in its ON clause (rule 1) and
 //	                            to LIVE units only: the screen resolves names from the live unit list
 //	                            and shows "—" for a deleted one, so a deleted unit sorts as "no
@@ -378,8 +378,8 @@ var thoatLike = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 //	                 staffSortRelation answer to.
 //
 // NO INDEX SERVES ANY OF THIS, and that is stated rather than hoped about: `ILIKE '%x%'` and a
-// `regexp_replace` on the column both force a scan. The scan is of ONE commune's register — the
-// partition and `tenant_id = $1` bound it — which is tens to a few hundred rows (the customer's own
+// `regexp_replace` on the column both force a scan. The scan is of ONE commune's register —
+// `tenant_id = $1` bounds it — which is tens to a few hundred rows (the customer's own
 // directory lists 26, 12-danh-ba-can-bo.md §7). If a commune ever holds thousands, the answer is a
 // trigram index added by a migration, not a change here.
 //

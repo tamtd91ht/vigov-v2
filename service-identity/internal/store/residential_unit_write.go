@@ -351,8 +351,8 @@ func (s *ThonToDanPhoStore) UpdateUnit(ctx context.Context, tx *store.ScopedTx, 
 }
 
 // translateResidentialUnitWrite turns a constraint violation into a sentinel. SUBSTRING match on the
-// constraint name, because the table is PARTITION BY HASH and PostgreSQL may name the partition's copy
-// (dichLoiGhiBoPhan). Anything unrecognised is wrapped and passed on, never flattened into a refusal.
+// constraint name: the plain table names its own key, and while it was PARTITION BY HASH (before
+// ADR 0096) PostgreSQL named the partition's copy; the tail matches both (dichLoiGhiBoPhan). Anything unrecognised is wrapped and passed on, never flattened into a refusal.
 func translateResidentialUnitWrite(op string, err error) error {
 	switch raw := err.Error(); {
 	case strings.Contains(raw, "tenant_id_ma_key"):

@@ -568,11 +568,11 @@ func doiMotDong(kq sql.Result, viec string) error {
 
 // dichLoiGhiCanBo turns a constraint violation into a sentinel the use case can decide on.
 //
-// IT MATCHES ON THE CONSTRAINT NAME AS A SUBSTRING, DELIBERATELY. `nguoi_dung` is PARTITION BY
-// HASH with 32 partitions (ADR 0010), so the server names the PARTITION's copy of the key in the
-// message — `nguoi_dung_p16_tenant_id_ma_key`, not `nguoi_dung_tenant_id_ma_key`. Matching the
-// full parent name would compile, pass every unit test, and never once fire on a real server;
-// matching the stable tail fires on both. Pinned against a real PostgreSQL in
+// IT MATCHES ON THE CONSTRAINT NAME AS A SUBSTRING, DELIBERATELY. `nguoi_dung` is a plain table
+// since ADR 0096, so the server names the table's own key — `nguoi_dung_tenant_id_ma_key`; while it
+// was PARTITION BY HASH (ADR 0010, before ADR 0096) it named the PARTITION's copy —
+// `nguoi_dung_p16_tenant_id_ma_key`. Matching one full name would compile, pass every unit test,
+// and miss the other form; matching the stable tail fires on both. Pinned against a real PostgreSQL in
 // can_bo_ghi_pg_test.go, which is the only place this can be proven.
 //
 // ANYTHING UNRECOGNISED IS WRAPPED AND PASSED ON, never flattened into one of the sentinels. A

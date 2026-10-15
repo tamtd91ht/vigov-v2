@@ -19,7 +19,7 @@ import (
 
 // THE CASES ONLY A REAL POSTGRESQL CAN DECIDE for the default-administrator seed:
 //
-//	`ON CONFLICT (tenant_id, email|ma)` on a table PARTITIONED BY HASH really resolves
+//	`ON CONFLICT (tenant_id, email|ma)` on `nguoi_dung` really resolves
 //	`INSERT … SELECT … FROM quyen` really passes the FK to the catalogue for every key
 //	the CHECK of migration 0009 §3 accepts the row (account with a non-empty hash)
 //	TWO CONCURRENT FIRST SIGN-INS end with exactly one account — the property the fake driver can

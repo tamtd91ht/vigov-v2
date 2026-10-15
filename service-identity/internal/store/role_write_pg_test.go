@@ -13,7 +13,7 @@ import (
 
 // Integration tests for RoleWriteStore (owner decision 15/10/2026) against a real PostgreSQL, sharing
 // the harness in checker_pg_test.go (moKetNoi, xaRieng, ctxXa) and vai_tro_pg_test.go (themVaiTro,
-// themNguoi). Every property here belongs to the SQL — the partition constraint name, the commune on
+// themNguoi). Every property here belongs to the SQL — the constraint name, the commune on
 // every statement, `deleted_at` in the right places, the row locks — so a fake could only agree with
 // whatever the statements already do.
 //

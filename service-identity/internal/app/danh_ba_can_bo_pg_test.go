@@ -33,9 +33,10 @@ import (
 //	#15 THE CODE       "a code, once issued, is never issued again, INCLUDING after a soft delete"
 //	                   lives in `UNIQUE (tenant_id, ma)` — which is deliberately NOT partial — and
 //	                   in the retry that answers it. The retry only works if the store recognises
-//	                   the violation, and `nguoi_dung` is PARTITION BY HASH, so the server names the
-//	                   PARTITION's copy of the key (`nguoi_dung_p16_tenant_id_ma_key`). Matching the
-//	                   parent's name would compile, pass every unit test, and never fire.
+//	                   the violation: the plain table names `nguoi_dung_tenant_id_ma_key`, and
+//	                   while it was PARTITION BY HASH (before ADR 0096) the server named the
+//	                   PARTITION's copy (`nguoi_dung_p16_tenant_id_ma_key`). Matching one full name
+//	                   would compile, pass every unit test, and miss the other form.
 //
 // Skipped unless VIGOV_TEST_DSN is set. The DSN carries a password and lives only in the
 // environment (rule 8).
@@ -318,12 +319,13 @@ func TestPgHaVaiTroQuanTriCuoiCungBiTuChoi(t *testing.T) {
 //
 // WHAT THIS PROVES THAT store/ma_can_bo_pg_test.go DOES NOT: that the WRITE PATH survives the
 // refusal. The unique key firing is only half the mechanism; the other half is the use case
-// recognising it and minting another code. `nguoi_dung` is PARTITION BY HASH, so the server names
-// the PARTITION's copy of the key — a matcher written against the parent's name would compile,
-// pass every unit test, and never once fire here.
+// recognising it and minting another code. While `nguoi_dung` was PARTITION BY HASH (before ADR
+// 0096) the server named the PARTITION's copy of the key, so a matcher written against the parent's
+// name would never have fired; the plain table now names its own key.
 //
-// MUTATION THAT MUST TURN THIS RED: change `tenant_id_ma_key` in dichLoiGhiCanBo to
-// `nguoi_dung_tenant_id_ma_key`, the name the parent table carries.
+// MUTATION THAT MUST TURN THIS RED: remove the `tenant_id_ma_key` case from dichLoiGhiCanBo.
+// (Changing it to `nguoi_dung_tenant_id_ma_key` no longer does since ADR 0096 — that is now the
+// exact name the plain table reports.)
 func TestPgMaCuaNguoiDaXoaMemKhongCapLaiDuocVaDuongGhiTuSinhMaKhac(t *testing.T) {
 	db := moPool(t)
 	xa := xaRiengPg(t)
@@ -473,8 +475,8 @@ func TestPgThemCanBoGhiVetThatTrenBangAppendOnly(t *testing.T) {
 	}
 }
 
-// THE TWO OTHER CONSTRAINT NAMES THIS LAYER TRANSLATES, against the partitioned tables that
-// actually carry them.
+// THE TWO OTHER CONSTRAINT NAMES THIS LAYER TRANSLATES, against the tables that actually carry
+// them.
 func TestPgEmailTrungVaBoPhanLaBiDichThanhLoiDocDuoc(t *testing.T) {
 	db := moPool(t)
 	xa := xaRiengPg(t)

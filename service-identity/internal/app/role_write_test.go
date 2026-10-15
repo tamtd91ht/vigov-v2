@@ -22,7 +22,7 @@ import (
 // transaction" is an assertion about what actually ran.
 //
 // WHAT IT CANNOT PROVE: the advisory lock serialising two creations, FOR UPDATE / FOR SHARE ordering
-// against a concurrent assignment, the partition constraint names, and the SQL itself — those are in
+// against a concurrent assignment, the constraint names, and the SQL itself — those are in
 // store/role_write_pg_test.go (VIGOV_TEST_DSN).
 
 type roleRow struct {

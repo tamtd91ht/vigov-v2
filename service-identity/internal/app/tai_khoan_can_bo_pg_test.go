@@ -21,7 +21,7 @@ import (
 //	only way to check it is to SELECT it. A fake agrees with whatever the code passed it.
 //	THE CHECK CONSTRAINT of migration 0009 §3 — `NOT co_tai_khoan OR mat_khau_hash <> ''` — is
 //	enforced by the server and by nothing in Go.
-//	THE PARTITIONED UPDATE really matches (`nguoi_dung` is PARTITION BY HASH, 32 ways), and the
+//	THE UPDATE really matches (`nguoi_dung` is a plain table since ADR 0096), and the
 //	`AND NOT co_tai_khoan` / `AND co_tai_khoan` predicates really refuse.
 //	THE ARGON2 HASH really verifies the value the administrator was handed, which is what "the
 //	person can sign in with what was read out to them" actually means.

@@ -24,8 +24,8 @@ import (
 //	              fires at ceiling+1 and returns NO rows · the positional Scan lines up with the
 //	              column list BY NAME · a driver failure is wrapped rather than swallowed.
 //	NOT PROVED    anything PostgreSQL does with that statement: that `date_part('epoch', …)` really
-//	              yields seconds since midnight, that the CHECK constraints refuse what they say,
-//	              that the partition routing works. That needs a real server, and the *_pg_test.go
+//	              yields seconds since midnight, that the CHECK constraints refuse what they say.
+//	              That needs a real server, and the *_pg_test.go
 //	              files next door — which SKIP without VIGOV_TEST_DSN — are where it belongs.
 //
 // THE DEFECT THIS FILE EXISTS FOR: `bat_dau` and `ket_thuc` are two adjacent columns of ONE type.

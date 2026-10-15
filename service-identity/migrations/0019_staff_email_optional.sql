@@ -31,9 +31,9 @@
 --      COALESCE, so '' and NULL read identically.
 --   5. RETENTION: nothing is removed. '' and NULL both mean "no address"; the conversion loses no fact.
 --
--- LOCKS. `ALTER COLUMN … DROP NOT NULL` takes ACCESS EXCLUSIVE on the parent and its 32 partitions
--- (ADR 0010) and rewrites nothing — a catalogue change, released at COMMIT. `ADD CONSTRAINT … CHECK`
--- takes the same lock and SCANS every partition once to validate: tens of rows per commune (the
+-- LOCKS. `ALTER COLUMN … DROP NOT NULL` takes ACCESS EXCLUSIVE on the table
+-- and rewrites nothing — a catalogue change, released at COMMIT. `ADD CONSTRAINT … CHECK`
+-- takes the same lock and SCANS the table once to validate: tens of rows per commune (the
 -- customer's own seed is 26), so milliseconds. Sign-in reads this table, so it waits for that long.
 -- ---------------------------------------------------------------------------
 

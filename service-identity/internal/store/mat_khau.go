@@ -103,7 +103,7 @@ func (s *CanBoStore) CapTaiKhoan(ctx context.Context, tx *store.ScopedTx, id, ba
 	if bam == "" {
 		// The CHECK constraint `nguoi_dung_co_tai_khoan_co_mat_khau` (migration 0009 §3) refuses
 		// this too, and refusing here as well is deliberate: the server's message names a
-		// constraint on a partition, which tells nobody which flow produced an account with no
+		// constraint, which tells nobody which flow produced an account with no
 		// credential.
 		return errors.New("can_bo: cấp tài khoản với chuỗi băm rỗng")
 	}

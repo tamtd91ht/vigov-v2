@@ -18,8 +18,8 @@ import (
 // a machine without PostgreSQL, which is every machine this has been built on so far.
 //
 // THE REST NEED A REAL PostgreSQL (VIGOV_TEST_DSN; harness in checker_pg_test.go) and skip without
-// one: the non-partial unique key, the foreign key on the parent, the partition-named constraint the
-// error translation matches, and the counts themselves.
+// one: the non-partial unique key, the foreign key on the table, the constraint name the error
+// translation matches, and the counts themselves.
 
 func TestTruyVanBoPhanDemDungCach(t *testing.T) {
 	q := truyVanBoPhanKemSoCanBo

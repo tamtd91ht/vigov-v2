@@ -550,11 +550,11 @@ func doiMotDongLich(kq sql.Result, khongCo error, viec string) error {
 // dichLoiGhiLich turns a unique-key violation into a sentinel the use case can decide on.
 //
 // IT MATCHES ON THE CONSTRAINT NAME AS A SUBSTRING, following dichLoiGhiSLA, AND IT MATCHES TWO
-// SPELLINGS OF EACH KEY. All three tables are PARTITION BY HASH, so the violation PostgreSQL
-// reports names the PARTITION's index (`lich_lam_viec_p07_tenant_id_thu_bat_dau_key`) rather than
-// the parent constraint (`lich_lam_viec_khong_trung_gio_mo`) — a match on the parent name alone
-// would therefore never fire on any real database while passing every test that does not have one.
-// Both are listed so neither spelling can slip past.
+// SPELLINGS OF EACH KEY. All three tables are plain since ADR 0096, so the violation PostgreSQL
+// reports names the constraint itself (`lich_lam_viec_khong_trung_gio_mo`); while they were
+// PARTITION BY HASH it named the PARTITION's index (`lich_lam_viec_p07_tenant_id_thu_bat_dau_key`)
+// instead — a match on one name alone would miss the other form while passing every test that does
+// not have a real database. Both are listed so neither spelling can slip past.
 //
 // THE UNRECOGNISED ERROR IS RETURNED UNCHANGED, never swallowed into a sentinel that reads as a
 // business refusal: a connection failure reported as "this commune already has that row" sends an

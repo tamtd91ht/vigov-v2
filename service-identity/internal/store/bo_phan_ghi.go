@@ -191,8 +191,9 @@ func (s *BoPhanStore) CapNhat(ctx context.Context, tx *store.ScopedTx, bp domain
 }
 
 // dichLoiGhiBoPhan turns a constraint violation into a sentinel. SUBSTRING match on the constraint
-// name, because `bo_phan` is PARTITION BY HASH and PostgreSQL names the partition's copy
-// (`bo_phan_p07_tenant_id_ma_key`) — see dichLoiGhiCanBo. Anything unrecognised is wrapped and
+// name: the key is `bo_phan_tenant_id_ma_key` on the plain table, and was the partition's copy
+// (`bo_phan_p07_tenant_id_ma_key`) while it was PARTITION BY HASH (before ADR 0096); the tail
+// matches both — see dichLoiGhiCanBo. Anything unrecognised is wrapped and
 // passed on, never flattened into a business refusal.
 func dichLoiGhiBoPhan(viec string, err error) error {
 	switch tho := err.Error(); {

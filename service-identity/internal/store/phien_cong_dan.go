@@ -42,7 +42,7 @@ import (
 // discover from a test.
 //
 // SO THE ORDER IS: measure first, then cache with a real invalidation channel. The measurement
-// is written down already — the lookup probes one child index per partition, 32 of them, on a
+// is written down already — the lookup probes one child index per partition, 8 of them, on a
 // table that is empty today (see phien_cong_dan_theo_token in
 // service-identity/migrations/0004_kenh_cong_dan.sql). A cache added before there is anything
 // to measure, and before revocation can reach every replica, buys latency nobody has complained

@@ -138,8 +138,9 @@ func (s *RoleTemplateStore) GrantPermissions(ctx context.Context, tx *store.Scop
 
 // translateRoleInsertError turns the `(tenant_id, ma)` unique violation into ErrRoleCodeTaken.
 //
-// A SUBSTRING MATCH ON BOTH HALVES, following dichLoiGhiSLA: `vai_tro` is PARTITION BY HASH, so
-// PostgreSQL names the PARTITION's constraint (`vai_tro_p07_tenant_id_ma_key`). `tenant_id_ma_key`
+// A SUBSTRING MATCH ON BOTH HALVES, following dichLoiGhiSLA: the key is `vai_tro_tenant_id_ma_key` on
+// the plain table, and was the PARTITION's (`vai_tro_p07_tenant_id_ma_key`) while `vai_tro` was
+// PARTITION BY HASH (before ADR 0096); both carry the prefix and the tail. `tenant_id_ma_key`
 // alone would also match `nguoi_dung`'s staff-code key, hence the table prefix. Anything else is
 // returned wrapped and unchanged — a connection failure must never read as "this role exists".
 func translateRoleInsertError(err error) error {

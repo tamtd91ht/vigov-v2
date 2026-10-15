@@ -51,7 +51,7 @@
 --   5. RETENTION: nothing dropped, retyped or emptied. The colour's history is the audit entry of the
 --      catalogue edit that sets it (rule 6), written by Go.
 --
--- THE LOCK: ACCESS EXCLUSIVE on both tables and their 32 partitions each, until COMMIT. Small tables.
+-- THE LOCK: ACCESS EXCLUSIVE on both tables until COMMIT. Small tables.
 -- PERSONAL DATA (rule 3): none. PG FLOOR: 13 (0005). Cluster: 16.
 -- ---------------------------------------------------------------------------
 

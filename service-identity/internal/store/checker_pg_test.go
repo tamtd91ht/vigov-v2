@@ -30,8 +30,9 @@ import (
 
 // The schema is built ONCE for the whole package, not per test.
 //
-// WHY: the migration creates five partitioned tables with 32 partitions each — 160 CREATE
-// TABLE statements. Running that per test cost 17 seconds each, and a suite slow enough to
+// WHY: the migrations create every table of the service, the growing ones with 8 partitions each
+// (ADR 0096). Running that per test cost 17 seconds each when it was measured (then 32 partitions
+// per partitioned table, before ADR 0096), and a suite slow enough to
 // skip is a suite that stops being run. Each test isolates itself by using its own commune
 // ids instead, which is also closer to how the data really looks.
 var (

@@ -2,7 +2,7 @@ package domain
 
 // VaiTro is the role a staff member holds inside ONE commune.
 //
-// A role belongs to a commune the same way everything else here does: `vai_tro` is partitioned by
+// A role belongs to a commune the same way everything else here does: `vai_tro` carries
 // `tenant_id` and every key on it is composite (migration 0001). Two communes may both have a role
 // called "Chủ tịch UBND" and they are two different rows with two different grants.
 //

@@ -62,7 +62,7 @@ var ErrQuaNhieuNgayNghiLe = errors.New("ngay_nghi_le: vượt trần ngày ngh�
 //	                       rows nobody entered. `ngay_nghi_le` needs no such guard on the other
 //	                       side — UNIQUE (tenant_id, ngay) means one row per date there.
 //	tenant_id = $1 inside  the derived table is constrained to this commune BEFORE the join, so no
-//	                       partition of another commune is ever scanned.
+//	                       row of another commune ever enters the join.
 //	lb.tenant_id = nl.tenant_id
 //	                       AND THE JOIN ITSELF IS CONSTRAINED TO THE SAME COMMUNE. Joining on the
 //	                       date alone would let another commune's swap day flag this commune's

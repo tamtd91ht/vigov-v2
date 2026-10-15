@@ -9,8 +9,9 @@
 -- 1. THE THREE `job` CHECKS ADMIT `scheduled_reports`.
 --
 -- Replaced, not widened in place: PostgreSQL has no ALTER for a CHECK expression. Drop and add run in
--- this file's one transaction, so no instant leaves a column unconstrained; dropping the parent's
--- constraint drops the 32 partitions' inherited copies with it (the shape of 0016).
+-- this file's one transaction, so no instant leaves a column unconstrained (the shape of 0016). Of the
+-- three tables only `automation_run` is partitioned (ADR 0096): dropping its parent's constraint drops
+-- the 8 partitions' inherited copies with it.
 --
 -- ---------------------------------------------------------------------------
 -- 2. ITS CADENCE HAS THE SHAPE OF `weekly_digest`: weekday + HH:MM, no interval.

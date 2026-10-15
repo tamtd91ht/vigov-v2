@@ -14,7 +14,7 @@ import (
 	idstore "github.com/vihat/vigov/service-identity/internal/store"
 )
 
-// The owner's three commune-scoped acts against a real PostgreSQL: the partitioned `nguoi_dung`
+// The owner's three commune-scoped acts against a real PostgreSQL: the `nguoi_dung`
 // unique keys, the `quyen` catalogue grant, the session registry and the append-only audit_log only
 // exist there. Skipped unless VIGOV_TEST_DSN is set (TestMain in danh_ba_can_bo_pg_test.go).
 

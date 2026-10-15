@@ -214,9 +214,10 @@ func exactlyOneCitizenLetterRule(res sql.Result, what string) error {
 
 // translateCitizenLetterRuleWriteError turns the live-unique violation into a sentinel.
 //
-// A SUBSTRING MATCH, for the reason dichLoiGhiSLA gives: the table is PARTITION BY HASH, so PostgreSQL
-// reports the PARTITION's index (`citizen_letter_deadline_rule_p07_tenant_id_letter_type_deadline_kind_live_key_key`
-// — truncated to 63 bytes) rather than the parent's constraint name. Both spellings are matched; an
+// A SUBSTRING MATCH, for the reason dichLoiGhiSLA gives: the table is plain since ADR 0096, so
+// PostgreSQL reports the table's own constraint name; while it was PARTITION BY HASH it reported the
+// PARTITION's index (`citizen_letter_deadline_rule_p07_tenant_id_letter_type_deadline_kind_live_key_key`
+// — truncated to 63 bytes). Both spellings are matched; an
 // unrecognised error is returned unchanged.
 func translateCitizenLetterRuleWriteError(err error) error {
 	msg := err.Error()

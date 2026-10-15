@@ -217,7 +217,7 @@ func (s *QuanHeCongDanXaStore) HangChoXacThuc(ctx context.Context, gioiHan int) 
 	}
 
 	// LIMIT IS gioiHan + 1: the extra row is how ConNua is known without counting rows over a
-	// 32-way partitioned table. It is never returned.
+	// 8-way partitioned table. It is never returned.
 	rows, err := s.db.For(ctx).Query(ctx, cotQuanHe, "quan_he_cong_dan_xa",
 		locQuanHe+` AND trang_thai_xac_thuc = $2 ORDER BY khai_luc, cong_dan_id LIMIT $3`,
 		string(domain.ChoXacThuc), gioiHan+1)

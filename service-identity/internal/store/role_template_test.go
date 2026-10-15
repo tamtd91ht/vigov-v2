@@ -5,8 +5,9 @@ import (
 	"testing"
 )
 
-// The unique-violation mapping is matched on the PARTITION's constraint name, which is the only name
-// PostgreSQL reports for a hash-partitioned table (see translateRoleInsertError). The staff-code key
+// The unique-violation mapping is matched on the prefix and tail of the constraint name, which hold
+// for the plain table's own name and for the PARTITION's name PostgreSQL reported while `vai_tro` was
+// hash-partitioned (before ADR 0096; see translateRoleInsertError). The staff-code key
 // of `nguoi_dung` shares the suffix and must NOT map to ErrRoleCodeTaken; any other error must pass
 // through wrapped, never become a business refusal.
 func TestTranslateRoleInsertError(t *testing.T) {

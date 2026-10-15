@@ -37,7 +37,7 @@ import (
 // WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there:
 // nothing PostgreSQL does with these statements. Not `UNIQUE (tenant_id, thu, bat_dau)`, not
 // `CHECK (ket_thuc > bat_dau)`, not `make_time` rejecting an hour of 25, not `FOR UPDATE` actually
-// serialising two administrators, not the partition routing. That half needs a real server —
+// serialising two administrators. That half needs a real server —
 // VIGOV_TEST_DSN is unset here, so the pg suites skip without running a statement — and it is the
 // FLOOR under everything asserted below. The refusals tested here are the SENTENCE, not the
 // enforcement.

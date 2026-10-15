@@ -218,7 +218,8 @@ func TestCreateCitizenLetterRuleAuditFailureRollsBack(t *testing.T) {
 	}
 }
 
-// The partition's unique-index name, as PostgreSQL reports it, is the 409 sentinel.
+// The partition's unique-index name — the form PostgreSQL reported while the table was
+// hash-partitioned (before ADR 0096), still matched — is the 409 sentinel.
 func TestCreateCitizenLetterRuleDuplicateIsExists(t *testing.T) {
 	f := &ruleDBFake{failOn: "INSERT INTO citizen_letter_deadline_rule",
 		failWith: errors.New(`ERROR: duplicate key value violates unique constraint "citizen_letter_deadline_rule_p07_tenant_id_letter_type_deadline_kind_live_k" (SQLSTATE 23505)`)}

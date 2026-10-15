@@ -27,7 +27,7 @@ import (
 // A FAKE DRIVER OF ITS OWN, not the one in dang_nhap_giao_dich_test.go: that one answers every
 // `nguoi_dung` read with the same row, and the property under test here is a STATE CHANGE — no
 // account before the seed transaction commits, the seeded account after it, and nothing at all
-// when it rolls back. The real SQL (ON CONFLICT on a partitioned table, the FK to `quyen`, the
+// when it rolls back. The real SQL (ON CONFLICT on `nguoi_dung`, the FK to `quyen`, the
 // CHECK of migration 0009 §3, two concurrent first sign-ins) is in gieo_quan_tri_pg_test.go.
 
 // matKhauGieoGia is a fake seed password; the text says so (rule 8, forbidden #1).

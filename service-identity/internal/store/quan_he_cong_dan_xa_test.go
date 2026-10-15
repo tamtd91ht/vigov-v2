@@ -354,7 +354,7 @@ func TestHangChoXacThucLocDungTrangThaiVaSapXepOnDinh(t *testing.T) {
 		t.Errorf("$2 = %v, muốn %q", l.args[1], domain.ChoXacThuc)
 	}
 	// The bound is the caller's limit PLUS ONE — the extra row is the only way ConNua can be
-	// known without counting rows over a 32-way partitioned table.
+	// known without counting rows over an 8-way partitioned table.
 	if l.args[2] != int64(11) {
 		t.Errorf("LIMIT = %v, muốn 11 (giới hạn + 1)", l.args[2])
 	}

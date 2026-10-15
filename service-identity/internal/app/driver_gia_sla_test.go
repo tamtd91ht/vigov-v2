@@ -37,7 +37,7 @@ import (
 // WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there:
 // nothing PostgreSQL does with these statements. Not `UNIQUE (tenant_id, loai_viec, linh_vuc_khoa)`,
 // not the `linh_vuc_khoa` GENERATED column, not `CHECK (sla_gio_phai_duong)`, not `FOR UPDATE`
-// actually serialising two administrators, not the partition routing. That half needs a real server
+// actually serialising two administrators. That half needs a real server
 // — VIGOV_TEST_DSN is unset here, so the pg suites skip without running a statement — and it is the
 // FLOOR under everything asserted below. The refusals tested here are the SENTENCE, not the
 // enforcement.

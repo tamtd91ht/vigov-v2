@@ -33,11 +33,11 @@
 --   5. RETENTION: nothing is removed. The history of every lock and unlock is in audit_log, not
 --      here; these two columns are the CURRENT state only.
 --
--- TENANT SCOPE. `nguoi_dung` is already keyed (tenant_id, id) and partitioned by tenant (0001); a
--- column added to the parent is added to all 32 partitions. No new key, so no new composite key.
+-- TENANT SCOPE. `nguoi_dung` is already keyed (tenant_id, id) (0001). No new key, so no new
+-- composite key.
 --
--- LOCKS. ACCESS EXCLUSIVE on the parent and its partitions for the catalogue change, released at
--- COMMIT; the CHECK scans every partition once — tens of rows per commune. Sign-in waits that long.
+-- LOCKS. ACCESS EXCLUSIVE on the table for the catalogue change, released at
+-- COMMIT; the CHECK scans the table once — tens of rows per commune. Sign-in waits that long.
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE nguoi_dung ADD COLUMN IF NOT EXISTS failed_sign_in_count INT NOT NULL DEFAULT 0;

@@ -22,8 +22,9 @@ import (
 //   - an UNRECOGNISED error gets flattened into a business refusal → a real outage reads as "code
 //     already used", and the administrator retries a different code forever.
 //
-// Partition names are the realistic input: both tables are PARTITION BY HASH, and PostgreSQL reports
-// the leaf partition's copy of the key.
+// Partition names are the harder input: while both tables were PARTITION BY HASH (before ADR 0096)
+// PostgreSQL reported the leaf partition's copy of the key; the plain tables now report their own
+// name, which carries the same tail.
 
 func TestDichLoiGhiDanhMucNhanDangVaKhongNuotLoiLa(t *testing.T) {
 	cases := []struct {

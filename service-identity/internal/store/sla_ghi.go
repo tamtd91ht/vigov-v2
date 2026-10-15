@@ -289,11 +289,11 @@ func doiMotDongSLA(kq sql.Result, viec string) error {
 
 // dichLoiGhiSLA turns a constraint violation into a sentinel the use case can decide on.
 //
-// IT MATCHES ON THE CONSTRAINT NAME AS A SUBSTRING, following dichLoiGhiCanBo. `sla` is PARTITION
-// BY HASH, so the violation PostgreSQL reports names the PARTITION's constraint
-// (`sla_p07_tenant_id_loai_viec_linh_vuc_khoa_key`) rather than the parent's — a match on the exact
-// parent name would therefore never fire, on any real database, while passing every test that does
-// not have one.
+// IT MATCHES ON THE CONSTRAINT NAME AS A SUBSTRING, following dichLoiGhiCanBo. `sla` is a plain
+// table since ADR 0096, so the violation names the table's own constraint; while it was PARTITION BY
+// HASH it named the PARTITION's (`sla_p07_tenant_id_loai_viec_linh_vuc_khoa_key`). A match on one
+// exact name would miss the other form, on a real database, while passing every test that does not
+// have one; the shared tail matches both.
 //
 // THE UNRECOGNISED ERROR IS RETURNED UNCHANGED, never swallowed into a sentinel that reads as a
 // business refusal: a connection failure reported as "this commune already has that row" sends an

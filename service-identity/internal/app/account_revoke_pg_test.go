@@ -17,7 +17,7 @@ import (
 // VIGOV_TEST_DSN is set (TestMain in danh_ba_can_bo_pg_test.go).
 //
 // What only a real server decides: 0009 §3's CHECK accepts `co_tai_khoan = false` with an empty
-// hash; the partitioned UPDATE matches; the session rows are really marked revoked; the trail is
+// hash; the UPDATE matches; the session rows are really marked revoked; the trail is
 // read back from `audit_log`; and the two follow-on acts the decision names — re-issue through
 // POST .../account and the soft delete of the now account-less row — really work on the row this
 // statement leaves.

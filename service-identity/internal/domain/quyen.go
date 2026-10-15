@@ -4,7 +4,7 @@ package domain
 // commune's roles, a ticked cell is a grant.
 //
 // THREE TABLES MEET HERE AND ONLY TWO OF THEM BELONG TO A COMMUNE. `vai_tro` and `vai_tro_quyen`
-// carry `tenant_id` and are partitioned by it; `quyen` carries none. That asymmetry is the single
+// carry `tenant_id`; `quyen` carries none. That asymmetry is the single
 // thing a reader has to understand before touching any of this, so it is stated on Quyen below
 // rather than left to be inferred from the schema.
 
@@ -14,7 +14,7 @@ package domain
 // exists in this shape (service-identity/migrations/0001_init.sql:44). The set of rights the
 // software can ENFORCE is a property of the SOFTWARE: every key here corresponds to a string some
 // route passes to authz.RequirePermission. A commune decides which of its roles holds which key
-// (`vai_tro_quyen`, per commune, partitioned); it cannot invent a key, because a key no route
+// (`vai_tro_quyen`, per commune); it cannot invent a key, because a key no route
 // checks grants nothing and would only mislead the administrator ticking it.
 //
 // So this type is NOT a commune's business data and reading it is not a cross-commune read. What is

@@ -16,7 +16,7 @@
 --
 -- The CHECK is replaced, not widened in place: PostgreSQL has no ALTER for a CHECK expression. Both
 -- statements run in this file's one transaction, so there is no instant at which the column is
--- unconstrained. Dropping the parent's constraint drops the 32 partitions' inherited copies with it.
+-- unconstrained.
 --
 -- ---------------------------------------------------------------------------
 -- 2. `unassigned_hold_hours` — working hours a unit may hold work with NOBODY assigned before the
@@ -41,7 +41,7 @@
 -- DEADLINE THE RECORD MISSED (grpc ResolveEscalationInstants). The user also decided that the chairman
 -- threshold may not be below the unit head's (Y >= X). THAT RULE IS ENFORCED IN domain.KiemTraDongSLA
 -- AND NOT AS A CHECK HERE, deliberately: a row already holding Y < X would make an ADD CONSTRAINT fail
--- at startup and stop the service, and `NOT VALID` on a CHECK of a partitioned table cannot be verified
+-- at startup and stop the service, and `NOT VALID` on a CHECK cannot be verified
 -- from this repository (no PostgreSQL reachable, VIGOV_TEST_DSN unset). The edit path validates the
 -- whole resulting row, so a bad row cannot be saved again untouched.
 --

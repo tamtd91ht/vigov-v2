@@ -20,7 +20,7 @@ import (
 // writes run a REAL statement through the transaction they were handed, so "every role, every grant
 // and every audit entry share one transaction" is an assertion about what actually ran.
 //
-// WHAT IT CANNOT PROVE: `UNIQUE (tenant_id, ma)` refusing a concurrent run, the partition constraint
+// WHAT IT CANNOT PROVE: `UNIQUE (tenant_id, ma)` refusing a concurrent run, the constraint
 // name store.translateRoleInsertError matches on, or the lock order actually serialising against
 // PUT /api/v1/roles/{id}/permissions. Those need a PostgreSQL; VIGOV_TEST_DSN is unset here.
 

@@ -86,8 +86,9 @@ func (s *AutomationStore) SettingForUpdate(ctx context.Context, tx *store.Scoped
 // InsertSetting writes a job's FIRST row. No ON CONFLICT: a lost race arrives as
 // ErrAutomationSettingExists and the caller answers 409 rather than overwriting the winner.
 //
-// The constraint is matched as a SUBSTRING of the error, following dichLoiGhiSLA: the table is
-// PARTITION BY HASH, so PostgreSQL names the partition's key (`automation_job_setting_p07_pkey`).
+// The constraint is matched as a SUBSTRING of the error, following dichLoiGhiSLA: the key is
+// `automation_job_setting_pkey` on the plain table, and was the partition's
+// (`automation_job_setting_p07_pkey`) while it was PARTITION BY HASH (before ADR 0096).
 func (s *AutomationStore) InsertSetting(ctx context.Context, tx *store.ScopedTx, st domain.AutomationSetting) error {
 	const stmt = `INSERT INTO automation_job_setting
 			(tenant_id, job, enabled, interval_minutes, run_hour, run_minute, weekday,

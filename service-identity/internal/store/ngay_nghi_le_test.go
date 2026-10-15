@@ -76,7 +76,7 @@ func TestNgayNghiLeBuocXaVaoThamSoMotTuContext(t *testing.T) {
 		t.Errorf("bảng chính không lọc theo xã: %q", l.sql)
 	}
 	// THE JOINED TABLE IS CONSTRAINED TWICE, AND BOTH HALVES MATTER. The derived table filters on
-	// $1 so no other commune's partition is scanned; the ON clause ties the two rows to the SAME
+	// $1 so no other commune's row enters the join; the ON clause ties the two rows to the SAME
 	// commune, because 02/09 is a holiday in every commune in the country and joining on the date
 	// alone would let another authority's swap day flag this one's holiday. No single-commune test
 	// would ever show that.

@@ -111,7 +111,8 @@ func TestAddFieldRuleAuditFailureRollsBack(t *testing.T) {
 }
 
 // THE LIVE UNIQUE KEY REFUSING IS ErrSLAFieldRowExists — what the handler turns into 409
-// `sla_rule_exists`. The error text is the partition's constraint name, as PostgreSQL reports it.
+// `sla_rule_exists`. The error text is the partition's constraint name, as PostgreSQL
+// reported it while `sla` was hash-partitioned (before ADR 0096) — the form the matcher still accepts.
 func TestAddFieldRuleDuplicateIsRowExists(t *testing.T) {
 	k := &khoSLAGia{loiSau: "INSERT INTO sla",
 		loiSauLa: errors.New(`duplicate key value violates unique constraint "sla_p07_tenant_id_loai_viec_linh_vuc_khoa_key"`)}

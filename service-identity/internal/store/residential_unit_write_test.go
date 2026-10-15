@@ -5,8 +5,9 @@ import (
 	"testing"
 )
 
-// The partition's copy of a constraint is what PostgreSQL names in the error; the substring match
-// must recognise it, and must never flatten an unknown failure into a business refusal.
+// PostgreSQL names the plain table's own constraint in the error, and named the partition's copy
+// while the table was hash-partitioned (before ADR 0096); the substring match must recognise both,
+// and must never flatten an unknown failure into a business refusal.
 func TestTranslateResidentialUnitWrite(t *testing.T) {
 	for raw, want := range map[string]error{
 		`duplicate key value violates unique constraint "thon_to_dan_pho_p07_tenant_id_ma_key"`:                                 ErrResidentialUnitCodeTaken,
