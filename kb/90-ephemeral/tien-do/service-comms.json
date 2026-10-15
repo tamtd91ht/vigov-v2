@@ -4,6 +4,14 @@
   "cap_nhat": "2026-10-15",
   "muc": [
     {
+      "id": "chu-thich-0001-init-15-10",
+      "viec": "Chú thích trích dòng gieo quyền 0001_init.sql trỏ đúng dòng (lệch +32)",
+      "trang_thai": "xong",
+      "bang_chung": "Commit 76907a58: 25 dòng chú thích, 12 tệp; go build + go vet xanh.",
+      "no_confirm": [],
+      "tiep_theo": "migrations/0006_noi_dung_mini_app.sql:11 còn trích :292-293 (đúng 260-261) — KHÔNG sửa: đổi migration là đổi checksum. thong_bao_noi_bo.go:260 ghi NguoiSoanMa: nguoi.ID — nghi lệch luật 6 bất biến 8, chưa kiểm."
+    },
+    {
       "id": "so-thong-bao-gui-cong-dan",
       "viec": "Sổ thông báo gửi công dân — bảng, kho có phạm vi xã, ca sử dụng ghi sổ bất biến theo số lần",
       "trang_thai": "xong",

@@ -4,6 +4,30 @@
   "cap_nhat": "2026-10-15",
   "muc": [
     {
+      "id": "tong-quan-don-thu-kinh-te-15-10",
+      "viec": "Tổng quan + Báo cáo: nối 'Đơn thư trong kỳ' (citizen-letter-counts, có so kỳ trước) và 'Kinh tế & Tài nguyên' (map-asset-summary: Doanh nghiệp, Hộ kinh doanh, Tổng tài nguyên)",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit b9a3c3a8. dashboard/overview.tsx, view.tsx (letterFigure, EconomyBlock), period.ts toDateRange (received_to bao gồm: service-documents/internal/store/citizen_letter.go:273-278). Khoá: đơn thư cần petition.read; khối kinh tế cần report.read + asset.read (trước đây ô giữ chỗ hiện với mọi report.read). KIỂM: tsc, eslint, vitest dashboard+report 348/348.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA xem ảnh render. 'Thành lập mới' còn '?': map-asset-summary không đếm theo ngày thêm (cần tuyến comms). Spec 01 §4.6 ghi mã enterprise/household_business, dữ liệu thật dùng doanh-nghiep/ho-kinh-doanh — spec cần sửa. Nhánh ExportBlock.pending không còn ai dùng (export-model.ts:74, export-files.ts)."
+    },
+    {
+      "id": "email-che-phan-anh-thong-bao-15-10",
+      "viec": "Email đã che (email_masked, ADR 0082) ở ô chọn cán bộ + 'Đang giao cho' + dòng thời gian Phản ánh và ô chọn người nhận Thông báo; câu cảnh báo thư Thông báo thu hẹp",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Commit 3c75cbee, ad52d674. nhan-phieu.ts staffOptionLabelWithEmail, assigneeWithMaskedEmail; nhat-ky-phieu.tsx; nhan-thong-bao.ts. KIỂM: vitest 196 tệp / 3976 ca xanh.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA xem ảnh render (dòng option dài hơn ở bề rộng hẹp)."
+    },
+    {
+      "id": "phan-chua-dung-ra-soat-15-10",
+      "viec": "Rà 43 mục PHAN_CHUA_DUNG với mã: 36 còn thiếu thật, 5 lý do lỗi thời (đã sửa/nối), 2 là quyết định không làm",
+      "trang_thai": "xong",
+      "bang_chung": "Commit 3c75cbee: overdueDays rời mảng thành OVERDUE_DAYS_NOT_SHOWN (ADR 0007 10a); lý do Mật độ theo thôn, Số chuyên mục đang đồng bộ viết lại; chú thích 0001_init.sql trỏ đúng dòng (ad52d674).",
+      "no_confirm": [],
+      "tiep_theo": "Ký biên bản không còn đường mở từ 15/10 (so-bien-ban.tsx: không ai gọi moHop(…,'ky')) → 'Ghi số Thông báo kết luận', 'Lập biên bản bổ sung' không bao giờ tới được với biên bản mới — chờ người dùng chọn hướng. Thông báo: đọc danh sách vẫn cần announcement.create (không có khoá chỉ đọc). 'Ghim lên đầu cả sổ' có thể là quyết định bố cục chứ không phải chưa dựng — chưa kiểm."
+    },
+    {
       "id": "phan-quyen-quan-ly-vai-tro-15-10",
       "viec": "Màn Phân quyền: Thêm vai trò mẫu, Thêm vai trò, Đổi tên, Xoá vai trò (ADR 0095)",
       "trang_thai": "dang_lam",
