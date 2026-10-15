@@ -95,3 +95,7 @@ __pycache__
 
 # Log pod kéo về máy để chẩn đoán — có thể chứa dữ liệu cá nhân (luật 3): không vào ảnh.
 k8s-logs
+
+# Báo cáo nỗ lực / ngoài giờ (Excel) của người làm dự án, để trên máy trạm, ngoài git — không phải
+# mã, không chạy ở đâu; không loại thì nó đi theo ngữ cảnh build của cả bảy dịch vụ.
+efforce
