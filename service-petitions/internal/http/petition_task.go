@@ -159,5 +159,5 @@ func (h *Handler) CreateTaskFromPetition(w http.ResponseWriter, r *http.Request)
 		}
 		return
 	}
-	vietJSON(w, http.StatusCreated, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusCreated, h.namedTask(r.Context(), n))
 }

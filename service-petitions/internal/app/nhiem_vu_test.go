@@ -1145,6 +1145,25 @@ func TestXoa_KhongConConThiXoaMemVaGhiVet(t *testing.T) {
 	chiGhiTrongGiaoDich(t, k)
 }
 
+// NO REASON TYPED (owner decision 15/10/2026): still a soft delete, still audited in the same
+// transaction, and `delete_reason` holds the fixed sentence — never an empty cell (rule 7, invariant 1).
+func TestTaskDeleteWithoutReasonWritesDefaultSentence(t *testing.T) {
+	k := khoNVMau()
+	uc, ctx := dungGhiNhiemVu(t, k)
+
+	if err := uc.Xoa(ctx, maNVGoc, "   ", canBoThu()); err != nil {
+		t.Fatalf("xoá nhiệm vụ không lý do: %v", err)
+	}
+	doi := k.cau("UPDATE nhiem_vu")
+	if len(doi) != 1 {
+		t.Fatalf("chạy %d câu xoá, muốn 1", len(doi))
+	}
+	if doi[0].args[3] != maCanBoThu || doi[0].args[4] != domain.TaskDeleteDefaultReason {
+		t.Errorf("tham số xoá mềm = %v — muốn MÃ CÁN BỘ và câu cố định", doi[0].args)
+	}
+	chiGhiTrongGiaoDich(t, k)
+}
+
 // --- 5 & 6. lùi hạn, ADR 0038 -------------------------------------------------------------------------
 
 func TestDeNghiLuiHan_GhiDeNghiVaVetTrongMotGiaoDich(t *testing.T) {

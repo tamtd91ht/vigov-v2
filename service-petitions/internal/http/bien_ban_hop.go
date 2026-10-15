@@ -419,10 +419,7 @@ func (h *Handler) NhiemVuCuaKetLuan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// make(…, 0, …): a conclusion nobody has split answers `"items":[]`, never null.
-	ra := nhiemVuKetLuanRa{Items: make([]nhiemVuRa, 0, len(ds))}
-	for _, n := range ds {
-		ra.Items = append(ra.Items, nhiemVuRaNgoai(n))
-	}
-	vietJSON(w, http.StatusOK, ra)
+	// namedTasks makes a non-nil slice: a conclusion nobody has split answers `"items":[]`, never null.
+	// The names come from ONE batched lookup for the list (task_names.go).
+	vietJSON(w, http.StatusOK, nhiemVuKetLuanRa{Items: h.namedTasks(ctx, ds)})
 }

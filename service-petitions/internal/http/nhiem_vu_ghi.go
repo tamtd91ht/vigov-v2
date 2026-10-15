@@ -299,11 +299,16 @@ type doiTrangThaiVao struct {
 
 // xoaNhiemVuVao is the body of DELETE /api/v1/tasks/{ma}.
 //
-// A BODY ON A DELETE, AND THE ALTERNATIVE WAS WORSE: the reason is mandatory (rule 7, invariant 1),
-// and the query string would put free text about a government record into every access log and
-// proxy cache.
+// OPTIONAL SINCE 15/10/2026 (owner decision, bug sheet web-admin-141026 — the one-task and "Xoá đã
+// chọn" confirmations drop the reason box): absent, "" or no body at all = the fixed sentence
+// domain.TaskDeleteDefaultReason, so `delete_reason` is never empty (rule 7, invariant 1). Trimmed and
+// bounded in the domain (domain.KiemLyDoXoaNhiemVu), so the rule has one owner — the shape of
+// service-identity's DELETE /api/v1/org-units/{id}.
+//
+// A BODY ON A DELETE AND NOT A QUERY STRING: a typed reason is free text about a government record,
+// and the query string would put it into every access log and proxy cache.
 type xoaNhiemVuVao struct {
-	Reason string `json:"reason"`
+	Reason string `json:"reason,omitempty"`
 }
 
 // deNghiLuiHanVao is the body of POST /api/v1/tasks/{ma}/extensions — §5.8's two fields.
@@ -575,7 +580,7 @@ func (h *Handler) TaoNhiemVu(w http.ResponseWriter, r *http.Request) {
 	}
 	// 201 AND THE RECORD, because the caller's next act is on the same row and the MINTED NUMBER is
 	// the one thing they cannot have known before asking.
-	vietJSON(w, http.StatusCreated, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusCreated, h.namedTask(r.Context(), n))
 }
 
 // SuaNhiemVu edits the descriptive fields. PATCH /api/v1/tasks/{ma}
@@ -623,7 +628,7 @@ func (h *Handler) SuaNhiemVu(w http.ResponseWriter, r *http.Request) {
 		h.traLoiLoiNhiemVu(w, r, "sửa nhiệm vụ", err)
 		return
 	}
-	vietJSON(w, http.StatusOK, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusOK, h.namedTask(r.Context(), n))
 }
 
 // DoiTrangThaiNhiemVu moves the task along §6. POST /api/v1/tasks/{ma}/status
@@ -666,7 +671,7 @@ func (h *Handler) DoiTrangThaiNhiemVu(w http.ResponseWriter, r *http.Request) {
 		h.writeStatusError(w, r, err)
 		return
 	}
-	vietJSON(w, http.StatusOK, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusOK, h.namedTask(r.Context(), n))
 }
 
 // decodeStatusBody decodes the status body and refuses `lead_unit` / `monitor` INSIDE `handover`, the
@@ -735,7 +740,8 @@ const PermTaskAssign authz.Perm = "task.assign"
 // caller is asking for.
 func (h *Handler) XoaNhiemVu(w http.ResponseWriter, r *http.Request) {
 	var vao xoaNhiemVuVao
-	if !docThan(w, r, &vao) {
+	// docThanTuyChon: an empty body is the "no reason typed" case, not a malformed request.
+	if !docThanTuyChon(w, r, &vao) {
 		return
 	}
 	nguoi, ok := nguoiThucHien(r)

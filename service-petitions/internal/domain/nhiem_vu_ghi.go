@@ -119,8 +119,8 @@ var (
 	ErrTienDoNgoaiKhoang = fmt.Errorf(
 		"nhiệm vụ: tiến độ phải nằm trong khoảng 0–%d", TienDoToiDa)
 
-	ErrThieuLyDoXoaNhiemVu = errors.New(
-		"nhiệm vụ: thiếu lý do xoá — sổ nhiệm vụ là hồ sơ lưu trữ, xoá mềm phải ghi ai xoá và vì sao")
+	// No "missing delete reason" sentinel since 15/10/2026: a blank reason becomes
+	// TaskDeleteDefaultReason (KiemLyDoXoaNhiemVu), so nothing can raise one.
 	ErrLyDoNhiemVuQuaDai = fmt.Errorf(
 		"nhiệm vụ: lý do quá dài (tối đa %d ký tự)", LyDoNhiemVuToiDa)
 
@@ -166,7 +166,7 @@ func LoiDauVaoNhiemVuGoc(err error) error {
 		ErrCitizenLetterSourceNotDirect,
 		ErrMaNhiemVuSaiDinhDang, ErrMaNhiemVuQuaDai,
 		ErrTienDoNgoaiKhoang,
-		ErrThieuLyDoXoaNhiemVu, ErrLyDoNhiemVuQuaDai,
+		ErrLyDoNhiemVuQuaDai,
 		ErrThieuNoiDungNhatKy, ErrNoiDungNhatKyQuaDai, ErrThieuLyDoTraLai, ErrReopenReasonMissing,
 		ErrTomTatKetQuaQuaDai, ErrGhiChuNhiemVuQuaDai,
 		ErrTrangThaiNhiemVuKhongBiet, ErrThieuLyDoLuiHan, ErrHanMoiKhongLui,
@@ -250,12 +250,23 @@ func KiemTienDo(n int) error {
 	return nil
 }
 
-// KiemLyDoXoaNhiemVu refuses a soft delete that records no reason (rule 7, invariant 1).
+// TaskDeleteDefaultReason is `delete_reason` when the person deleting a task types none.
+//
+// OPTIONAL ON THE WAY IN (owner decision 15/10/2026, bug sheet web-admin-141026: the "Xoá nhiệm vụ"
+// confirmations — one task and "Xoá đã chọn" — drop the reason box), NEVER EMPTY IN THE ROW: rule 7,
+// invariant 1 names `delete_reason`, and an empty cell there reads as "nobody said" years later. The
+// shape service-identity's org-unit delete took on 10/10/2026 (domain.OrgUnitDeleteDefaultReason).
+// WHO deleted and WHEN are still on the row and in the audit entry; the sentence only says where the
+// act came from.
+const TaskDeleteDefaultReason = "Xoá từ màn hình Nhiệm vụ (người xoá không nhập lý do)"
+
+// KiemLyDoXoaNhiemVu trims and bounds the delete reason; a blank one becomes TaskDeleteDefaultReason
+// (owner decision 15/10/2026). Only an over-long reason is refused.
 func KiemLyDoXoaNhiemVu(s string) (string, error) {
 	s = strings.TrimSpace(s)
 	switch {
 	case s == "":
-		return "", ErrThieuLyDoXoaNhiemVu
+		return TaskDeleteDefaultReason, nil
 	case len([]rune(s)) > LyDoNhiemVuToiDa:
 		return "", ErrLyDoNhiemVuQuaDai
 	}

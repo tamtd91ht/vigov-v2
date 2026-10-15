@@ -710,6 +710,47 @@ func TestXoaNhiemVu_LyDoDiNguyenVenXuongUseCase(t *testing.T) {
 	}
 }
 
+// THE BODY IS OPTIONAL SINCE 15/10/2026: no body, `{}` and `{"reason":""}` all reach the use case as
+// an empty reason (the domain turns it into domain.TaskDeleteDefaultReason) — never a 400.
+func TestTaskDeleteBodyOptional(t *testing.T) {
+	for name, body := range map[string]any{
+		"no body":      nil,
+		"empty object": json.RawMessage(`{}`),
+		"empty reason": xoaNhiemVuVao{},
+	} {
+		t.Run(name, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, authz.Perm("task.delete"))
+			m.ghiNhiemVu.lyDoXoa = "sentinel"
+
+			doiMa(t, m.goiGhiNV(t, http.MethodDelete, hostA, duongNV(maNVThu), canBoCuaXa(xaA), body),
+				http.StatusNoContent)
+			if m.ghiNhiemVu.lyDoXoa != "" {
+				t.Errorf("lý do xoá = %q, muốn rỗng đi xuống use case", m.ghiNhiemVu.lyDoXoa)
+			}
+		})
+	}
+}
+
+// A BODY THAT IS NOT JSON IS STILL REFUSED — optional is not "anything goes".
+func TestTaskDeleteMalformedBodyRefused(t *testing.T) {
+	m := dungMayChu(t)
+	m.capQuyen(t, authz.Perm("task.delete"))
+
+	// Built by hand: goiGhiNV marshals its body, and json.RawMessage refuses to marshal broken JSON.
+	r := httptest.NewRequest(http.MethodDelete, "https://"+hostA+duongNV(maNVThu), strings.NewReader(`{"reason":`))
+	r.Host = hostA
+	r.RemoteAddr = "10.0.0.7:51000"
+	r.Header.Set("Content-Type", "application/json")
+	r = r.WithContext(authz.Into(r.Context(), *canBoCuaXa(xaA)))
+	w := httptest.NewRecorder()
+	m.h.ServeHTTP(w, r)
+	doiMa(t, w, http.StatusBadRequest)
+	if m.ghiNhiemVu.goi != 0 {
+		t.Error("gọi use case với thân hỏng")
+	}
+}
+
 func TestQuyetDinhLuiHan_MaDeNghiTrenDuongDanDiXuongUseCase(t *testing.T) {
 	m := dungMayChu(t)
 	m.capQuyen(t, authz.Perm("task.extend"))
@@ -784,7 +825,7 @@ func TestLoiNhiemVuAnhXaDungMa(t *testing.T) {
 
 		// About WHAT WAS SENT.
 		{"thiếu tiêu đề", domain.ErrThieuTieuDeNhiemVu, http.StatusBadRequest},
-		{"thiếu lý do xoá", domain.ErrThieuLyDoXoaNhiemVu, http.StatusBadRequest},
+		{"lý do quá dài", domain.ErrLyDoNhiemVuQuaDai, http.StatusBadRequest},
 		{"thiếu lý do trả lại", domain.ErrThieuLyDoTraLai, http.StatusBadRequest},
 
 		// A FAILURE IS NOT THE CLIENT'S FAULT. Answering 400 for a database outage makes a client

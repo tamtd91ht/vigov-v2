@@ -481,9 +481,26 @@ func TestKiemTienDoTrongKhoang(t *testing.T) {
 	}
 }
 
-func TestKiemLyDoXoaBatBuoc(t *testing.T) {
-	if _, err := KiemLyDoXoaNhiemVu("  "); !errors.Is(err, ErrThieuLyDoXoaNhiemVu) {
-		t.Fatalf("lỗi = %v, muốn ErrThieuLyDoXoaNhiemVu — xoá mềm phải ghi vì sao (luật 7)", err)
+// THE REASON IS OPTIONAL SINCE 15/10/2026, AND THE ROW NEVER GETS AN EMPTY ONE: blank becomes the
+// fixed sentence (rule 7, invariant 1 still names `delete_reason`). Only the ceiling still refuses.
+func TestTaskDeleteReasonBlankBecomesDefault(t *testing.T) {
+	for _, raw := range []string{"", "  ", "\n\t"} {
+		if got, err := KiemLyDoXoaNhiemVu(raw); err != nil || got != TaskDeleteDefaultReason {
+			t.Errorf("%q: = %q, %v — muốn câu cố định TaskDeleteDefaultReason", raw, got, err)
+		}
+	}
+	if n := len([]rune(TaskDeleteDefaultReason)); n == 0 || n > LyDoNhiemVuToiDa {
+		t.Errorf("câu cố định dài %d ký tự — phải khác rỗng và trong trần", n)
+	}
+	if got, err := KiemLyDoXoaNhiemVu("  Trùng với NV05.  "); err != nil || got != "Trùng với NV05." {
+		t.Errorf("lý do có nhập: = %q, %v — muốn bản đã cắt khoảng trắng", got, err)
+	}
+	// Counted in runes: 1000 accented letters are 3000 bytes and must pass.
+	if _, err := KiemLyDoXoaNhiemVu(strings.Repeat("ệ", LyDoNhiemVuToiDa)); err != nil {
+		t.Errorf("%d ký tự có dấu bị từ chối: %v", LyDoNhiemVuToiDa, err)
+	}
+	if _, err := KiemLyDoXoaNhiemVu(strings.Repeat("ệ", LyDoNhiemVuToiDa+1)); !errors.Is(err, ErrLyDoNhiemVuQuaDai) {
+		t.Errorf("%d ký tự: lỗi = %v, muốn ErrLyDoNhiemVuQuaDai", LyDoNhiemVuToiDa+1, err)
 	}
 }
 

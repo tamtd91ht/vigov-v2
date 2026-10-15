@@ -551,6 +551,12 @@ type Deps struct {
 	// Identity's two answers behind `soon=true` and `scope=related` on the task list and counts.
 	TaskFilterIdentity TaskFilterIdentity
 
+	// TaskNames resolves the display names on every task response (assignee_name, assigner_name,
+	// unit_name — task_names.go) — *identityclient.Client in production. nil is NOT refused at
+	// construction: the responses then carry codes only, exactly as when identity is unreachable,
+	// because a name is a convenience over the code and the task register must not fail for it.
+	TaskNames TaskNameLookups
+
 	// The Sổ theo dõi export — reads, resolves names, renders, and audits (app.TaskRegisterExport).
 	TaskRegisterExport TaskRegisterExporter
 
@@ -2199,13 +2205,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	// ⚠ IT ANSWERS 409 WHILE THE TASK STILL HAS LIVE CHILDREN. That is ADR 0037 decision 3, and the
 	// body says how many — refusing without saying what is in the way sends an officer hunting.
 	//
-	// A BODY ON A DELETE, and the alternative was worse: the reason is mandatory, and the query
-	// string would put free text about a government record into every access log and proxy cache.
+	// THE BODY IS OPTIONAL SINCE 15/10/2026 (owner decision): no reason typed = the fixed sentence
+	// domain.TaskDeleteDefaultReason in `delete_reason`. A typed reason travels in the body, never the
+	// query string, which would put free text about a government record into every access log.
 	//
 	// idem.KhongCan — deleting an already-deleted task is a 404 either way, and the second request
 	// cannot overwrite who deleted it or why: the UPDATE carries `AND deleted_at IS NULL`.
 	//
-	// @summary  Xoá mềm một nhiệm vụ khỏi sổ, kèm lý do bắt buộc — từ chối khi còn việc con chưa xoá
+	// @summary  Xoá mềm một nhiệm vụ khỏi sổ, lý do tuỳ chọn (bỏ trống thì ghi câu cố định) — từ chối khi còn việc con chưa xoá
 	// @screen   02-nhiem-vu §11
 	// @request  xoaNhiemVuVao
 	// @reply    204 -

@@ -430,6 +430,9 @@ func chay(log *slog.Logger) error {
 		// `soon=true` and `scope=related` on the task list and counts ask identity — the SAME client
 		// every other identity question here uses, so they agree about identity's health.
 		TaskFilterIdentity: dinhDanh,
+		// The display names on every task response (assignee_name, assigner_name, unit_name) — the SAME
+		// two lookups the Sổ theo dõi export uses, over the SAME client.
+		TaskNames: dinhDanh,
 		// The Sổ theo dõi export: the SAME task store the list reads (one filter, one sort, one keyset),
 		// the same identity client for the three name lookups, and *store.DB because it opens the
 		// transaction its audit entry is written in.

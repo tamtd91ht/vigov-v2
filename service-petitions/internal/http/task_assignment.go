@@ -60,7 +60,7 @@ func (h *Handler) ReassignTask(w http.ResponseWriter, r *http.Request) {
 		h.writeAssignmentError(w, r, err)
 		return
 	}
-	vietJSON(w, http.StatusOK, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusOK, h.namedTask(r.Context(), n))
 }
 
 // writeAssignmentError maps the refusals only this act raises, then falls through to the register's

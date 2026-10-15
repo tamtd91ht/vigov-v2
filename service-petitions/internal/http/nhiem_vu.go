@@ -138,6 +138,19 @@ type nhiemVuRa struct {
 	Assignee string `json:"assignee"`
 	Assigner string `json:"assigner"`
 
+	// UnitName, AssigneeName and AssignerName are the display names behind Unit, Assignee and Assigner,
+	// resolved server-side from identity in ONE batched lookup per response (task_names.go) —
+	// INCLUDING locked or removed staff, staff with no account, and removed units, which the screen's
+	// own directory cannot name. ADDED 15/10/2026 (owner decision), additive to a published reply.
+	//
+	// ⚠ ABSENT IS NOT "NO NAME": the code is unknown to identity, or identity could not be asked — the
+	// response is still served (owner decision), and the screen shows the code instead. Never decide
+	// anything from a name; it may resolve precisely because the person or unit was removed.
+	// Staff personal data (rule 3): staff routes only, never logged.
+	UnitName     string `json:"unit_name,omitempty"`
+	AssigneeName string `json:"assignee_name,omitempty"`
+	AssignerName string `json:"assigner_name,omitempty"`
+
 	// DueAt is the CURRENT commitment; OriginalDueAt is the commitment as FIRST made and never
 	// moves (migration 0006 refuses it with a trigger).
 	//
@@ -542,13 +555,13 @@ func (h *Handler) DanhSachNhiemVu(w http.ResponseWriter, r *http.Request) {
 	// make(..., 0, ...) and not a nil slice: `items` must marshal as [] on a commune whose register
 	// is empty, never as null. A newly onboarded commune has exactly that, and a client that has to
 	// handle both shapes handles one of them wrong.
+	//
+	// The names (assignee_name, assigner_name, unit_name): ONE batched lookup per kind for the whole
+	// page; identity unreachable = the page without names, never a failed list (task_names.go).
 	ra := page.Result[nhiemVuRa]{
-		Items:      make([]nhiemVuRa, 0, len(kq.Items)),
+		Items:      h.namedTasks(ctx, kq.Items),
 		NextCursor: kq.NextCursor,
 		HasMore:    kq.HasMore,
-	}
-	for _, n := range kq.Items {
-		ra.Items = append(ra.Items, nhiemVuRaNgoai(n))
 	}
 	vietJSON(w, http.StatusOK, ra)
 }
@@ -922,7 +935,7 @@ func (h *Handler) DocNhiemVu(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	vietJSON(w, http.StatusOK, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusOK, h.namedTask(ctx, n))
 }
 
 // khongTimThayNhiemVu is the ONE answer for "no such number", "another commune's number" and "soft

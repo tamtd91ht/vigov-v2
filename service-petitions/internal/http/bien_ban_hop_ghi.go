@@ -394,7 +394,7 @@ func (h *Handler) TachKetLuanThanhNhiemVu(w http.ResponseWriter, r *http.Request
 		h.traLoiLoiNhiemVu(w, r, "tách kết luận thành nhiệm vụ", err)
 		return
 	}
-	vietJSON(w, http.StatusCreated, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusCreated, h.namedTask(r.Context(), n))
 }
 
 // --- shared ----------------------------------------------------------------------------------------

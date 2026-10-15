@@ -120,7 +120,7 @@ func (h *Handler) CreateTaskFromCitizenLetter(w http.ResponseWriter, r *http.Req
 	// `tao_nhiem_vu_tu_don_thu`: "trả lại đúng nhiệm vụ đã tạo"), not left with a bare 409 while its task
 	// sits in the register. The code, never the body (core/idem.RecordCode).
 	idem.RecordCode(r.Context(), n.Ma)
-	vietJSON(w, http.StatusCreated, nhiemVuRaNgoai(n))
+	vietJSON(w, http.StatusCreated, h.namedTask(r.Context(), n))
 }
 
 // writeCitizenLetterTaskError maps the refusals only this door raises, then hands every other one to the

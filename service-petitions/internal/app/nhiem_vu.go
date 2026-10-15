@@ -1698,6 +1698,9 @@ func (uc *GhiNhiemVu) DoiTrangThai(ctx context.Context, ma string, yc YeuCauDoiT
 
 // Xoa removes the task from every read path and keeps the record. Permission: `task.delete`.
 //
+// THE REASON IS OPTIONAL (owner decision 15/10/2026): blank = domain.TaskDeleteDefaultReason, checked
+// before the transaction opens, so `delete_reason` is never empty (rule 7, invariant 1).
+//
 // # IT REFUSES WHILE CHILDREN LIVE, AND SAYS HOW MANY
 //
 // ADR 0037 decision 3 chose refusal over the two alternatives and wrote down what each costs:
