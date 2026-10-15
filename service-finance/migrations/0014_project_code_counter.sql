@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS project_code_counters (
     next_number  BIGINT      NOT NULL,
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- One series per commune (rule 1, invariant 6: keyed by tenant_id, which is the partition key).
+    -- One series per commune (rule 1, invariant 6: keyed by tenant_id).
     PRIMARY KEY (tenant_id),
     CONSTRAINT project_code_counters_next_number_positive CHECK (next_number >= 1)
 );

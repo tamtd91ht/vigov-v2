@@ -36,7 +36,7 @@ import (
 // WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there:
 // nothing PostgreSQL does with these statements. Not `ho_so_luu_tru_cam_xoa_cung`, not the CHECK
 // constraints on `loai` / `kieu` / `vai_tro` / `cach_tinh`, not `UNIQUE (tenant_id, nam, loai, lan)`,
-// not `ON CONFLICT` actually conflicting, and not the partition routing. That half needs a real
+// and not `ON CONFLICT` actually conflicting. That half needs a real
 // server (VIGOV_TEST_DSN is unset here and Docker is not running), and it is the FLOOR under
 // everything this file asserts — the application refusals tested below are the SENTENCE, not the
 // enforcement.

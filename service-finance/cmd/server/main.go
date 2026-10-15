@@ -342,7 +342,7 @@ func traceID(context.Context) string { return "" }
 func moCSDL(log *slog.Logger) (config.Config, *sql.DB, error) {
 	// Platform-wide constants only. Per-commune values are read at RUNTIME (rule 1, invariant
 	// 10) — there is nothing per-commune on this path in any case: the schema is shared by every
-	// commune the process serves, partitioned by tenant_id rather than split per commune.
+	// commune the process serves, keyed by tenant_id rather than split per commune.
 	cfg, err := config.Load("finance", configUses)
 	if err != nil {
 		return config.Config{}, nil, err

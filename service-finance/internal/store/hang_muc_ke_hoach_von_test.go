@@ -32,7 +32,7 @@ import (
 //	NOT PROVED    anything PostgreSQL does with that statement. THE SHARPEST LIMIT IS THIS: the
 //	              fake builds its rows FROM THE COLUMN LIST THE STORE ITSELF HANDS IT, so a column
 //	              named here that does not exist in the real table passes cleanly. A typo in
-//	              cotHangMuc, a column renamed by a later migration, the partition routing, the
+//	              cotHangMuc, a column renamed by a later migration, the
 //	              index, the `danh_muc_ba_tang` trigger — none of that is reachable from here.
 //	              That is why the pg suite stays: it is the only thing that will ever check the
 //	              statement against a real schema, and it becomes valuable the day a DSN exists.

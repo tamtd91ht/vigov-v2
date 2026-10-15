@@ -153,13 +153,13 @@ ALTER TABLE nguon_von DROP COLUMN IF EXISTS nam;
 CREATE INDEX IF NOT EXISTS nguon_von_catalogue_order
     ON nguon_von (tenant_id, thu_tu) WHERE deleted_at IS NULL;
 
--- Decision 3(a). NOT partial — see the header. Composite with tenant_id, which is also the partition
--- key: the condition PostgreSQL sets for a unique index on a partitioned table (rule 1, invariant 6).
+-- Decision 3(a). NOT partial — see the header. Composite with tenant_id (rule 1, invariant 6).
 CREATE UNIQUE INDEX IF NOT EXISTS nguon_von_name_unique
     ON nguon_von (tenant_id, ten);
 
--- The space that would defeat the key above. Pinned to the PARENT (`conrelid`), as 0008/0011/0012
--- do: partitions inherit a CHECK under the same name, so `conname` alone matches 33 rows.
+-- The space that would defeat the key above. Pinned to the table (`conrelid`), as 0008/0011/0012
+-- do: while it was hash-partitioned (before ADR 0096) partitions inherited a CHECK under the same
+-- name, so `conname` alone matched every copy; the pin is right either way.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint
                    WHERE conrelid = 'nguon_von'::regclass

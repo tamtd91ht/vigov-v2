@@ -285,7 +285,7 @@ func (s *FundingSourceWriteStore) InsertSource(ctx context.Context, tx *store.Sc
 	return order, nil
 }
 
-// sourceForUpdate — FOR UPDATE on the parent of a partitioned table locks the row in its partition.
+// sourceForUpdate — FOR UPDATE locks the commune's live funding-source row.
 const sourceForUpdate = `SELECT id, ten, thu_tu FROM nguon_von
 	WHERE tenant_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE`
 

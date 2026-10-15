@@ -26,7 +26,7 @@ import (
 //               INVERTED into Inactive and written back as !Inactive · every read but the key check
 //               excludes soft-deleted rows, and the key check does NOT · the editable columns are the
 //               only ones an UPDATE names · a unique violation on INSERT is ErrMessageCodeTaken.
-// NOT PROVED    anything PostgreSQL does — the CHECKs, the guard trigger, the partitions.
+// NOT PROVED    anything PostgreSQL does — the CHECKs, the guard trigger.
 
 type smStmt struct {
 	sql  string

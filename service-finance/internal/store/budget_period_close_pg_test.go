@@ -8,7 +8,7 @@ import (
 // Integration tests for migration 0012 — budget period closes and `dot_thu_chi.adjustment_reason` —
 // against a real PostgreSQL. What they exist to prove is what the text tests in
 // migrations/period_close_test.go CANNOT: that the server accepts the partial NULLS NOT DISTINCT
-// unique index on a partitioned table, and that it refuses what it claims to.
+// unique index, and that it refuses what it claims to.
 //
 // SKIPPED UNLESS VIGOV_TEST_DSN IS SET. On a machine without it every test here SKIPS while the
 // package prints `ok` — a green run means the code COMPILES, nothing more. TestMain, moKetNoi and

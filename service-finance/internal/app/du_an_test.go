@@ -7,8 +7,8 @@ package app
 // hand-written fake store would erase exactly those.
 //
 // WHAT IS NOT PROVED HERE, so nobody reads more into a green run than is there: nothing PostgreSQL
-// does. `UNIQUE (tenant_id, ma)`, `ho_so_luu_tru_cam_xoa_cung`, `CHECK (ke_hoach_von_nam >= 0)` and
-// the partition routing are the FLOOR under all of this, and they need a real server.
+// does. `UNIQUE (tenant_id, ma)`, `ho_so_luu_tru_cam_xoa_cung` and `CHECK (ke_hoach_von_nam >= 0)`
+// are the FLOOR under all of this, and they need a real server.
 
 import (
 	"encoding/json"

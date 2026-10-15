@@ -12,18 +12,19 @@ import (
 //
 // WHAT THIS IS AND IS NOT — the same caveat as dot_thu_chi_test.go. It reads the SQL this binary
 // embeds and asserts the constraints and the backfill guards are WRITTEN. It does NOT prove
-// PostgreSQL accepts the file, that the CHECKs recurse into the 32 partitions, or that the backfill
+// PostgreSQL accepts the file, that the CHECKs validate the existing rows, or that the backfill
 // resolves what it claims to — that is internal/store/percent_operands_pg_test.go, which needs
 // VIGOV_TEST_DSN. This half always runs, so a loosened CHECK or a removed guard goes red somewhere.
 
 const file0011 = "0011_budget_percent_operands.sql"
 
 // TestMigration0011ColumnsAndChecks — the two columns, the four CHECKs, each guarded by a lookup
-// pinned to the PARENT table.
+// pinned to the table (`conrelid`).
 //
 // THE MUTATIONS THAT MUST TURN THIS RED: drop any CHECK; turn both-or-neither into "at least one";
 // let a `so` column carry operands; drop the self-reference half of the distinctness CHECK; look the
-// constraint up by name alone (33 matches, one per partition plus the parent).
+// constraint up by name alone (a constraint name is not unique across tables; while the table was
+// hash-partitioned, before ADR 0096, it also matched one copy per partition).
 func TestMigration0011ColumnsAndChecks(t *testing.T) {
 	sql := maChay(t, file0011)
 

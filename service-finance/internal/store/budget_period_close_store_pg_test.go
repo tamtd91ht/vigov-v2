@@ -12,7 +12,7 @@ import (
 
 // The store half of budget period close (budget_period_close.go) against a real PostgreSQL: the
 // advisory lock statement the server must accept (hashtextextended, the casts), the NULL-month revision
-// sequence, the unique violation mapped to ErrPeriodAlreadyClosed THROUGH A PARTITION'S INDEX, and the
+// sequence, the unique violation mapped to ErrPeriodAlreadyClosed THROUGH THE UNIQUE INDEX, and the
 // one-time reopen fill. SKIPPED UNLESS VIGOV_TEST_DSN IS SET (see budget_period_close_pg_test.go).
 func TestBudgetPeriodCloseStore(t *testing.T) {
 	db := moKetNoi(t)

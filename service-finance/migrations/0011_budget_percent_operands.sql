@@ -118,10 +118,10 @@
 ALTER TABLE cot_ngan_sach ADD COLUMN IF NOT EXISTS numerator_column_id   TEXT;
 ALTER TABLE cot_ngan_sach ADD COLUMN IF NOT EXISTS denominator_column_id TEXT;
 
--- Guarded by a lookup of their own name pinned to the PARENT table (`conrelid`), as 0008 does:
--- partitions inherit a CHECK under the same name, so `conname` alone matches 33 rows. The ADD
--- validates every existing row — all of which have both columns NULL at this point, which every one
--- of these four admits — and recurses into the 32 partitions.
+-- Guarded by a lookup of their own name pinned to the table (`conrelid`), as 0008 does: while the
+-- table was hash-partitioned (before ADR 0096) its partitions inherited a CHECK under the same name,
+-- so `conname` alone matched every copy; the pin is right either way. The ADD validates every existing
+-- row — all of which have both columns NULL at this point, which every one of these four admits.
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_constraint
                    WHERE conrelid = 'cot_ngan_sach'::regclass

@@ -22,7 +22,7 @@ import (
 // statement" are properties of the SQL and the transaction boundaries, and a fake store erases them.
 //
 // WHAT IT DOES NOT PROVE: anything PostgreSQL does — `nguon_von_name_unique`, the trimmed-name CHECK,
-// the partition routing, FOR UPDATE actually blocking. That half is in store/funding_source_pg_test.go
+// FOR UPDATE actually blocking. That half is in store/funding_source_pg_test.go
 // and runs only with VIGOV_TEST_DSN.
 
 type fakeFundingSourceDB struct {

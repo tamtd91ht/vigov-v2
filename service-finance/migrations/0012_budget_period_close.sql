@@ -66,8 +66,8 @@
 --   (Not quoted as SQL here: tools/check_khoa_duy_nhat.py scans unique-index statements inside
 --   comments too, and would count this prose as a declaration.)
 --
---   * composite with tenant_id, which is also the partition key — the condition PostgreSQL sets for
---     a unique index on a partitioned table (rule 1, invariant 6);
+--   * composite with tenant_id (rule 1, invariant 6) — once also the condition PostgreSQL set for a
+--     unique index while the table was hash-partitioned (before ADR 0096);
 --   * NULLS NOT DISTINCT is what makes the YEAR close (month NULL) unique at all. Without it two
 --     rows (T, 2026, NULL) are "distinct" and both pass — two active year closes, no error. It needs
 --     PostgreSQL 15; the real cluster is 16 (floor check below);
@@ -82,8 +82,8 @@
 --   form that cannot race. The domain maps the violation to a 409 ("kỳ này đã chốt").
 --
 --   ⚠ NOT VERIFIED AGAINST A SERVER HERE (VIGOV_TEST_DSN unset). It is the first partial /
---   NULLS NOT DISTINCT unique index on a partitioned table in this service; 0006 declined a partial
---   unique index for exactly that reason. It is taken here because the domain-only alternative races
+--   NULLS NOT DISTINCT unique index in this service; 0006 declined a partial unique index on what was
+--   then a partitioned table for exactly that reason. It is taken here because the domain-only alternative races
 --   (above), and internal/store/budget_period_close_pg_test.go exercises it the first time a DSN is
 --   set. If the server refuses it, this file fails at startup inside its transaction and changes
 --   nothing — the fail-closed outcome.
@@ -148,9 +148,9 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- dot_thu_chi.adjustment_reason — see the header. Nullable; when set, not blank and bounded
 -- (500 = domain.LyDoXoaNganSachToiDa, the bound every reason on this sheet already meets).
--- Guarded by a lookup pinned to the PARENT table (`conrelid`), as 0008/0011 do: partitions inherit a
--- CHECK under the same name, so `conname` alone matches 33 rows. Every existing row has NULL, which
--- both CHECKs admit.
+-- Guarded by a lookup pinned to the table (`conrelid`), as 0008/0011 do: while it was hash-partitioned
+-- (before ADR 0096) partitions inherited a CHECK under the same name, so `conname` alone matched every
+-- copy; the pin is right either way. Every existing row has NULL, which both CHECKs admit.
 -- ---------------------------------------------------------------------------
 ALTER TABLE dot_thu_chi ADD COLUMN IF NOT EXISTS adjustment_reason TEXT;
 

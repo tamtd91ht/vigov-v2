@@ -63,8 +63,8 @@ var (
 	//
 	// WHY THE APPLICATION HAS TO ASK AT ALL: migration 0004 declares NO foreign key from
 	// `du_an.hang_muc_id` to `hang_muc_ke_hoach_von`, and it says so outright rather than leaving
-	// the absence to be discovered (0004:182-190) — a real FK between two HASH-partitioned tables is
-	// accepted by PostgreSQL 13, but no PostgreSQL is reachable from this repository's build
+	// the absence to be discovered (0004:182-190) — a real FK between the two tables (both
+	// HASH-partitioned when 0004 was written, plain since ADR 0096) is accepted by PostgreSQL 13, but no PostgreSQL is reachable from this repository's build
 	// environment and a migration that fails at startup stops the service.
 	//
 	// SO THIS CHECK IS THE ONLY ONE THERE IS, AND IT GUARDS TWO DIFFERENT FAILURES AT ONCE:

@@ -195,8 +195,8 @@ ALTER TABLE hang_muc_ke_hoach_von
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
--- BACKSTOP: every partitioned table in this schema must actually have partitions — repeated because
--- this file declares a new PARTITION BY table.
+-- BACKSTOP: every partitioned table in this schema must actually have partitions — repeated at the
+-- end of every migration (0002, §BACKSTOP).
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE missing_partitions text;

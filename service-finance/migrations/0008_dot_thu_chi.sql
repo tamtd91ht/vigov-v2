@@ -146,14 +146,14 @@ END $$;
 -- are ANDed, so a new wider one next to 0006's narrower one would still refuse `entries`. The name
 -- is kept because internal/domain and this directory's tests refer to it.
 --
--- THE GUARD: `conrelid` pins the lookup to the PARENT table. Partitions inherit the CHECK under the
--- same name, so a lookup by `conname` alone matches 33 rows. `pg_get_constraintdef` tells a retry
+-- THE GUARD: `conrelid` pins the lookup to the table. While it was hash-partitioned (before ADR 0096)
+-- partitions inherited the CHECK under the same name, so `conname` alone matched every copy. `pg_get_constraintdef` tells a retry
 -- apart from a first run: once the definition already names `entries`, the block does nothing.
 -- If the constraint is ABSENT (somebody dropped it by hand), the block adds it — the fail-closed
 -- outcome: the floor is restored, and any row outside the three values stops this file.
 --
--- NOT VALID IS DELIBERATELY NOT USED: it is not a form the partitioned-table path accepts on every
--- supported PostgreSQL, and validation over a table this size costs nothing.
+-- NOT VALID IS DELIBERATELY NOT USED: validation over a table this size costs nothing (it was also not
+-- a form the partitioned-table path accepts on every supported PostgreSQL, before ADR 0096).
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE dinh_nghia text;

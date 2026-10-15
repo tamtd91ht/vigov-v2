@@ -56,8 +56,8 @@
 -- lý do, không đặt mặc định").
 --
 -- WHY THERE IS NO `UNIQUE … WHERE is_headline` HERE, though that is exactly the constraint this
--- property wants: `khoan_muc_ngan_sach` is PARTITIONED BY HASH, and a PARTIAL unique index on a
--- partitioned table is a form no PostgreSQL is reachable here to verify (VIGOV_TEST_DSN is unset;
+-- property wants: `khoan_muc_ngan_sach` was PARTITIONED BY HASH then (plain since ADR 0096), and a PARTIAL
+-- unique index on a partitioned table was a form no PostgreSQL was reachable here to verify (VIGOV_TEST_DSN is unset;
 -- Docker is off). 0004 set the precedent for exactly this situation with the foreign key it did not
 -- declare: the form that needs no verification wins, and the cost is stated rather than discovered.
 -- THE COST: nothing in the database stops a second marked row. What replaces it is two halves in

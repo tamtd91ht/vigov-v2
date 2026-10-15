@@ -31,7 +31,7 @@ import (
 //
 //	NOT PROVED    anything PostgreSQL does with that statement. The fake returns whatever rows the
 //	              test supplies whatever the column list says, so a typo in cotDuAn passes cleanly
-//	              here. Partition routing, the CHECK constraints, the hard-delete trigger and the
+//	              here. The CHECK constraints, the hard-delete trigger and the
 //	              locked-voucher trigger are all unreachable from this file — they need a real
 //	              server, and none is reachable from this build environment.
 

@@ -15,7 +15,7 @@ import (
 //
 // WHAT THIS IS AND IS NOT. It reads the SQL this binary embeds and asserts the constraints and
 // triggers are WRITTEN. It does NOT prove PostgreSQL accepts the file, that the DROP/ADD of the
-// CHECK recurses into the 32 partitions, or that the triggers refuse what they claim to — that needs
+// CHECK lands on the table, or that the triggers refuse what they claim to — that needs
 // VIGOV_TEST_DSN. It exists so that a widened or deleted CHECK, or a removed trigger, goes red
 // somewhere that always runs. It is the weaker half, and it is written down as the weaker half.
 
@@ -91,13 +91,13 @@ func TestMigration0008MoRongCachTinhKhongMatGiaTri(t *testing.T) {
 }
 
 // TestMigration0008DoiRangBuocCoCanh — the DROP of the old CHECK happens only inside the guarded
-// block, pinned to the PARENT table, and is immediately followed by the ADD in the same block.
+// block, pinned to the table (`conrelid`), and is immediately followed by the ADD in the same block.
 func TestMigration0008DoiRangBuocCoCanh(t *testing.T) {
 	sql := maChay(t, tep0008)
 
 	for _, c := range []struct{ can, vi string }{
 		{"where conrelid = 'khoan_muc_ngan_sach'::regclass and conname = 'khoan_muc_ngan_sach_cach_tinh_hop_le'",
-			"tra cứu ràng buộc phải ghim vào bảng CHA — tên trùng ở 32 mảnh con"},
+			"tra cứu ràng buộc phải ghim vào bảng (conrelid) — tên ràng buộc không riêng một bảng"},
 		{"if dinh_nghia is null or position('entries' in dinh_nghia) = 0 then if dinh_nghia is not null then " +
 			"alter table khoan_muc_ngan_sach drop constraint khoan_muc_ngan_sach_cach_tinh_hop_le; end if; " +
 			"alter table khoan_muc_ngan_sach add constraint khoan_muc_ngan_sach_cach_tinh_hop_le",

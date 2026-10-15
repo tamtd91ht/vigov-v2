@@ -216,8 +216,9 @@ func monthOrNil(month int) any {
 	return month
 }
 
-// isUniqueViolation — SQLSTATE 23505. The constraint name is NOT compared: on a partitioned table the
-// server reports the PARTITION's index name (`budget_period_closes_p03_…`), not the parent's.
+// isUniqueViolation — SQLSTATE 23505. The constraint name is NOT compared: while the table was
+// hash-partitioned (before ADR 0096) the server reported the PARTITION's index name
+// (`budget_period_closes_p03_…`), not the parent's, and the SQLSTATE holds for either form.
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"

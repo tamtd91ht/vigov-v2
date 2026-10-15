@@ -20,9 +20,8 @@
 -- WHY A NEW FILE: 0001..0015 have been applied and core/migrate compares the checksum of every applied
 -- file at startup (ErrChecksumLech).
 --
--- RULE 1: tenant_id, both primary keys and the HASH (tenant_id) partitioning of `du_an` and
--- `project_issues` are untouched. No key and no index is added, so invariants 6/7 have nothing new to
--- satisfy. A column added to a partitioned parent is added to every partition by PostgreSQL itself.
+-- RULE 1: tenant_id and both primary keys of `du_an` and `project_issues` (plain tables, ADR 0096)
+-- are untouched. No key and no index is added, so invariants 6/7 have nothing new to satisfy.
 --
 -- RULE 3: `du_an.implementing_unit` is FREE TEXT and may name a company or, by a clerk's choice, a
 -- person — the same exposure class as `chung_tu_giai_ngan.doi_tac` (0004). The Go code never logs it.
@@ -37,8 +36,8 @@
 --      deciding a business fact.
 --   2. IF IT STOPS HALF-WAY: it cannot land half-applied — one file, one transaction (core/migrate),
 --      with the progress row. Every statement is ADD COLUMN IF NOT EXISTS, a constraint guarded by a
---      lookup pinned to the PARENT table (`conrelid`, as 0008/0011/0012 do — partitions inherit a CHECK
---      under the same name, so `conname` alone matches 33 rows), or CREATE OR REPLACE. A retry costs
+--      lookup pinned to the table (`conrelid`, as 0008/0011/0012 do — a CHECK name alone is not
+--      pinned to one table), or CREATE OR REPLACE. A retry costs
 --      nothing.
 --   3. HOW IT IS REVERSED: see REVERSAL at the bottom.
 --   4. WHICH READ PATHS CHANGE MEANING WHILE IT IS HALF-APPLIED: none can see it half-applied (one

@@ -33,7 +33,7 @@ import (
 //
 // WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there:
 // nothing PostgreSQL does with these statements. Not the `danh_muc_ba_tang` trigger, not
-// `UNIQUE (tenant_id, ma)`, not the partition routing. That half needs a real server; the pg suites
+// `UNIQUE (tenant_id, ma)`. That half needs a real server; the pg suites
 // next door are where it lands the day a DSN exists.
 
 var (
@@ -85,7 +85,7 @@ type khoGia struct {
 	takenCodes map[string]bool
 
 	// insertConflicts makes the next N catalogue INSERTs fail the way PostgreSQL reports
-	// `UNIQUE (tenant_id, ma)` through a hash partition, and marks that code taken: the shape of a
+	// `UNIQUE (tenant_id, ma)`, and marks that code taken: the shape of a
 	// concurrent create that committed the same code between our check and our insert.
 	insertConflicts int
 }

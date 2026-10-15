@@ -37,7 +37,7 @@ import (
 //
 // WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there:
 // nothing PostgreSQL does with these statements. Not `UNIQUE (tenant_id, ma)`, not
-// `ho_so_luu_tru_cam_xoa_cung`, not `CHECK (ke_hoach_von_nam >= 0)`, not the partition routing. That
+// `ho_so_luu_tru_cam_xoa_cung`, not `CHECK (ke_hoach_von_nam >= 0)`. That
 // half needs a real server (VIGOV_TEST_DSN is unset here), and it is the FLOOR under everything this
 // file asserts — the application refusals tested below are the SENTENCE, not the enforcement.
 

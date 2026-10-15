@@ -224,8 +224,9 @@ const chenHangMuc = `INSERT INTO hang_muc_ke_hoach_von
 //
 // `UNIQUE (tenant_id, ma)` REFUSING THE INSERT COMES BACK AS ErrMaDaTonTai, so the caller can tell
 // "another request took this code between the check and the insert" from a broken database: the
-// auto-code path retries on it, the typed-code path answers 409 instead of 500. On the hash
-// partitions PostgreSQL names the constraint `hang_muc_ke_hoach_von_pNN_tenant_id_ma_key`, so the
+// auto-code path retries on it, the typed-code path answers 409 instead of 500. The plain
+// table names the constraint `hang_muc_ke_hoach_von_tenant_id_ma_key`; while it was hash-partitioned
+// (before ADR 0096) PostgreSQL named it `hang_muc_ke_hoach_von_pNN_tenant_id_ma_key`, so the
 // suffix is matched — the default-row key (`…_moc_mac_dinh_key`) is deliberately NOT this error.
 // The transaction is dead after it either way (PostgreSQL aborts it); only a new one can retry.
 func (s *HangMucKeHoachVonStore) Chen(ctx context.Context, tx *store.ScopedTx, hm domain.HangMucKeHoachVon) error {

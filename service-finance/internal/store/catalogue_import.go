@@ -61,8 +61,9 @@ func (s *HangMucKeHoachVonStore) ImportSnapshot(ctx context.Context, tx *store.S
 // InsertImported runs the form's INSERT (Chen) and turns the unique key refusing a code into
 // ErrMaDaTonTai. That can only happen when a FORM took the code between the snapshot and the insert
 // (the form does not take the import lock); the whole file rolls back and the handler answers 409
-// `catalogue_changed`. The constraint is UNIQUE (tenant_id, ma) of migration 0003; on the hash
-// partitions PostgreSQL names it `hang_muc_ke_hoach_von_pNN_tenant_id_ma_key` — the suffix is the same.
+// `catalogue_changed`. The constraint is UNIQUE (tenant_id, ma) of migration 0003, named
+// `hang_muc_ke_hoach_von_tenant_id_ma_key` on the plain table; while it was hash-partitioned (before
+// ADR 0096) PostgreSQL named it `hang_muc_ke_hoach_von_pNN_tenant_id_ma_key` — the suffix is the same.
 func (s *HangMucKeHoachVonStore) InsertImported(ctx context.Context, tx *store.ScopedTx, hm domain.HangMucKeHoachVon) error {
 	err := s.Chen(ctx, tx, hm)
 	if errors.Is(err, ErrMaDaTonTai) {

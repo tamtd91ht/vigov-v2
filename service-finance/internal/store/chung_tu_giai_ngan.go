@@ -68,7 +68,8 @@ var (
 	//
 	// WHY THE APPLICATION HAS TO ASK AT ALL: migration 0007 declares NO foreign key from
 	// `chung_tu_giai_ngan.nguon_von_id` to `nguon_von`, and it says so outright rather than leaving
-	// the absence to be discovered — a real FK between two HASH-partitioned tables is accepted by
+	// the absence to be discovered — a real FK between the two tables (both HASH-partitioned when
+	// 0007 was written; since ADR 0096 only `chung_tu_giai_ngan` is) is accepted by
 	// PostgreSQL 13, but no PostgreSQL is reachable from this repository's build environment and a
 	// migration that fails at startup stops the service (0007:102-113, following 0004:182-190).
 	//

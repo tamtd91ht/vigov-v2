@@ -13,9 +13,8 @@
 -- WHY A NEW FILE: 0001..0017 have been applied and core/migrate compares the checksum of every applied
 -- file at startup (ErrChecksumLech).
 --
--- RULE 1: tenant_id, the primary key and the HASH (tenant_id) partitioning of `du_an` are untouched. No
--- key and no index is added, so invariants 6/7 have nothing new to satisfy. A column added to a
--- partitioned parent is added to every partition by PostgreSQL itself.
+-- RULE 1: tenant_id and the primary key of `du_an` (a plain table, ADR 0096) are untouched. No
+-- key and no index is added, so invariants 6/7 have nothing new to satisfy.
 --
 -- RULE 3: a boolean about a public project. Not personal data.
 --
