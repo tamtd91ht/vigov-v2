@@ -27,7 +27,7 @@ import (
 // internal/app's and the store's PG tests'.
 //
 //	AnyAuthenticated (own link):  401 no session · 401 session of another commune · 403 non-staff · 200
-//	admin.lookup (administration): 401 · 403 wrong key · 403 right key other commune · 200
+//	admin.zalo_channel (administration): 401 · 403 wrong key · 403 right key other commune · 200
 
 type fakeZaloLinks struct {
 	calls       int
@@ -168,9 +168,9 @@ func zaloOwnRoutes() []zaloOwnRoute {
 // elsewhere on the same screens) must not configure the commune's channel.
 func zaloAdminRoutes() []mapAssetRoute {
 	return []mapAssetRoute{
-		{"linked staff", http.MethodGet, "/api/v1/zalo-links", "", "admin.lookup", "content.read", http.StatusOK},
-		{"get settings", http.MethodGet, "/api/v1/zalo-channel-settings", "", "admin.lookup", "content.read", http.StatusOK},
-		{"put settings", http.MethodPut, "/api/v1/zalo-channel-settings", zaloSettingsBody, "admin.lookup", "asset.update", http.StatusOK},
+		{"linked staff", http.MethodGet, "/api/v1/zalo-links", "", "admin.zalo_channel", "content.read", http.StatusOK},
+		{"get settings", http.MethodGet, "/api/v1/zalo-channel-settings", "", "admin.zalo_channel", "content.read", http.StatusOK},
+		{"put settings", http.MethodPut, "/api/v1/zalo-channel-settings", zaloSettingsBody, "admin.zalo_channel", "asset.update", http.StatusOK},
 	}
 }
 
@@ -239,7 +239,7 @@ func TestZaloOwnRoutes_200TheSessionsOwnCode(t *testing.T) {
 	}
 }
 
-// --- the commune's administration: admin.lookup --------------------------------------------------
+// --- the commune's administration: admin.zalo_channel --------------------------------------------------
 
 func TestZaloAdminRoutesAskForSeededKey(t *testing.T) {
 	for _, tc := range zaloAdminRoutes() {
@@ -247,7 +247,7 @@ func TestZaloAdminRoutesAskForSeededKey(t *testing.T) {
 			s := newZaloLinkServer(t)
 			s.call(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body)
 			if len(s.checker.hoiGi) == 0 || s.checker.hoiGi[0] != tc.perm {
-				t.Fatalf("asked for %v, want %q (seeded at service-identity/migrations/0001_init.sql:281)", s.checker.hoiGi, tc.perm)
+				t.Fatalf("asked for %v, want %q (seeded at service-identity/migrations/0032_split_configuration_permissions.sql)", s.checker.hoiGi, tc.perm)
 			}
 		})
 	}
@@ -274,6 +274,24 @@ func TestZaloAdminRoutes_403WrongPermission(t *testing.T) {
 			doiMa(t, s.call(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body), http.StatusForbidden)
 			if s.fake.calls != 0 {
 				t.Error("wrong permission and the use case ran")
+			}
+		})
+	}
+}
+
+// 403 WITH `admin.lookup` ALONE — the key these routes declared until the owner's decision of
+// 15/10/2026 gave the Kênh Zalo tab its own, `admin.zalo_channel` (service-identity migration 0032, which
+// pre-granted it to every role holding `admin.lookup`). Quản lý danh mục no longer opens this tab.
+//
+// MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on any of these routes.
+func TestZaloAdminRoutes_403OldKeyAdminLookupAlone(t *testing.T) {
+	for _, tc := range zaloAdminRoutes() {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newZaloLinkServer(t)
+			s.grant(xaA, "admin.lookup")
+			doiMa(t, s.call(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body), http.StatusForbidden)
+			if s.fake.calls != 0 {
+				t.Error("admin.lookup alone and the use case ran")
 			}
 		})
 	}
@@ -309,7 +327,7 @@ func TestZaloAdminRoutes_200RightPermissionRightCommune(t *testing.T) {
 
 func TestZaloShapesMatchTheWebContract(t *testing.T) {
 	s := newZaloLinkServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	checkKeys := func(path, method string, want ...string) map[string]any {
 		t.Helper()
 		w := s.call(t, method, path, hostA, canBoGhi(xaA), "")
@@ -371,7 +389,7 @@ func TestZaloPairingCodeIsNotCacheable(t *testing.T) {
 
 func TestZaloSettingsPutValidation(t *testing.T) {
 	s := newZaloLinkServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	put := func(body string) *httptest.ResponseRecorder {
 		return s.call(t, http.MethodPut, "/api/v1/zalo-channel-settings", hostA, canBoGhi(xaA), body)
 	}
@@ -405,7 +423,7 @@ func TestZaloSettingsPutValidation(t *testing.T) {
 // ADR 0079 lô 5 Q13: the Zalo lead is 1–14 days or null, carried both ways.
 func TestZaloSettingsPutDueSoonDays(t *testing.T) {
 	s := newZaloLinkServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	body := func(v string) string {
 		return `{"is_enabled":true,"kinds":["nhiem-vu.sap-den-han"],"quiet_start":"21:00","quiet_end":"06:00",` +
 			`"due_soon_days":` + v + `}`
@@ -455,7 +473,7 @@ func TestZaloErrorMapping(t *testing.T) {
 		}
 	}
 	s := newZaloLinkServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	s.fake.err = fmt.Errorf("%w: down", app.ErrStaffNamesUnavailable)
 	w := s.call(t, http.MethodGet, "/api/v1/zalo-links", hostA, canBoGhi(xaA), "")
 	doiMa(t, w, http.StatusServiceUnavailable)

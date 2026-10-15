@@ -13,7 +13,8 @@ import (
 )
 
 // "⬆ Nhập từ Excel" on two catalogues of Cấu hình → Danh mục (14-cau-hinh.md §5; user decision
-// 2026-09-29, ADR 0059 §3) — three routes each, all `admin.lookup`, the key their create routes declare:
+// 2026-09-29, ADR 0059 §3) — three routes each, under the key their create routes declare
+// (`admin.residential_unit` for the types, `admin.lookup` for the blocs; owner decision 15/10/2026):
 //
 //	GET  /api/v1/{residential-unit-types|task-blocs}/import-template  the .xlsx to fill in
 //	POST /api/v1/{residential-unit-types|task-blocs}/import-previews  check a filled file — WRITES NOTHING

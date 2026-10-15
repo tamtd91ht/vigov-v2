@@ -1,6 +1,6 @@
 package app
 
-// THE STAFF SIDE OF ZALO GROUP CHATS (ADR 0092 #1–#3, #8) — behind the commune's admin.lookup routes
+// THE STAFF SIDE OF ZALO GROUP CHATS (ADR 0092 #1–#3, #8) — behind the commune's admin.zalo_channel routes
 // (Cấu hình → Kênh Zalo, ADR 0074 #6; no new `quyen` key):
 //
 //	IssueGroupPairingCode  a one-time code for ONE scope (an org unit, or the whole commune) and its kinds

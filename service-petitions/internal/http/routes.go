@@ -3100,11 +3100,13 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `override` IS A SUB-RESOURCE: the commune's own wording is a state PUT sets and DELETE removes,
 	// and the message itself survives both — a shipped key cannot be deleted (14-cau-hinh §7).
 	//
-	// `admin.lookup` — "Quản lý danh mục" — ON ALL THREE, the key the requirement repository guards
-	// this screen with (../vigov-require/docs/spec/04-api.md:41-44), seeded at
-	// service-identity/migrations/0001_init.sql:274, and the key finance's half uses. NO KEY INVENTED
-	// (rule 5, invariant 3c). READ IS NOT AnyAuthenticated: this list is the configuration screen; an
-	// officer being refused gets the sentence inside the refusal, not from here.
+	// `admin.system_message` — "Cấu hình lời hệ thống" — ON ALL THREE, by the owner's decision of
+	// 15/10/2026 (tester bug sheet web-admin-141026 row 22): the Lời hệ thống tab gets its own key
+	// instead of `admin.lookup` (Quản lý danh mục, which the requirement repository's
+	// ../vigov-require/docs/spec/04-api.md:41-44 named). Seeded by service-identity migration 0032 and
+	// pre-granted there to every live role holding `admin.lookup`; finance's and reporting's halves
+	// declare the same key (rule 5, invariant 3c). READ IS NOT AnyAuthenticated: this list is the
+	// configuration screen; an officer being refused gets the sentence inside the refusal, not from here.
 
 	// NO idem.* DECLARATION: a GET changes no state.
 	//
@@ -3115,7 +3117,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/petitions-system-messages",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.system_message")(
 			http.HandlerFunc(h.ListSystemMessages)))
 
 	// PUT, a full replacement of the one field this resource has. Empty `text` is 400 and names the
@@ -3134,7 +3136,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PUT /api/v1/petitions-system-messages/{code}/override",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.system_message")(
 			idem.KhongCan("đặt lại đúng câu đang dùng không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.RewordSystemMessage))))
 
@@ -3152,14 +3154,14 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/petitions-system-messages/{code}/override",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.system_message")(
 			idem.KhongCan("khôi phục khi xã đã dùng câu mặc định thì không còn dòng nào để gỡ và không ghi gì")(
 				http.HandlerFunc(h.RestoreSystemMessage))))
 
 	// --- ADR 0079 Q2 ("Làm đúng prototype", migration 0033) — the switch and the commune's sentences ---
 	//
-	// SAME KEY, `admin.lookup`, on all four: the same screen and the same act of administering the
-	// commune's configuration as the three routes above (rule 5, invariant 3c — no key invented).
+	// SAME KEY, `admin.system_message`, on all four: the same screen and the same act of administering
+	// the commune's configuration as the three routes above (owner decision 15/10/2026).
 
 	// "Tắt / Bật" of a SHIPPED key, reworded or not (user decision 09/10/2026, which retired the 409
 	// `no_commune_wording`): a PATCH of the override sub-resource's one other field. A switched-off
@@ -3179,7 +3181,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    404 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/petitions-system-messages/{code}/override",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.system_message")(
 			idem.KhongCan("đặt lại đúng trạng thái đang có không ghi gì và không để vết, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.SwitchSystemMessage))))
 
@@ -3200,7 +3202,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/petitions-system-messages",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.system_message")(
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.CreateCustomMessage))))
 
@@ -3220,7 +3222,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("PATCH /api/v1/petitions-system-messages/{code}",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.system_message")(
 			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; app.EditCustom không ghi gì khi không có trường nào đổi, nên lần gửi thứ hai để lại đúng một dòng và đúng một vết")(
 				http.HandlerFunc(h.EditCustomMessage))))
 
@@ -3241,7 +3243,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// @reply    409 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/petitions-system-messages/{code}",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.system_message")(
 			idem.KhongCan("xoá một câu đã xoá cho cùng một kết quả: câu UPDATE mang `AND deleted_at IS NULL` nên lần thứ hai không ghi đè được người xoá và lý do")(
 				http.HandlerFunc(h.DeleteCustomMessage))))
 }

@@ -215,7 +215,7 @@ func TestSystemMessages_401WithoutSession(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			doiMa(t, s.call(rt.method, hostA, rt.path, nil, rt.body), http.StatusUnauthorized)
 			if s.svc.calls != 0 {
 				t.Error("use case ran with no session")
@@ -227,17 +227,20 @@ func TestSystemMessages_401WithoutSession(t *testing.T) {
 func TestSystemMessages_403WrongPermission(t *testing.T) {
 	// Real, adjacent keys and deliberately not enough: working petitions, or reading the trail, is not
 	// administering the commune's configuration.
+	// `admin.lookup` is among them on purpose: it guarded these routes until the owner's decision of
+	// 15/10/2026 gave the Lời hệ thống tab its own key (migration 0032). Quản lý danh mục alone no
+	// longer opens it. MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on any route.
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesServer(t)
-			s.grant(xaA, "feedback.read", "feedback.classify", "admin.audit")
+			s.grant(xaA, "feedback.read", "feedback.classify", "admin.audit", "admin.lookup")
 			doiMa(t, s.call(rt.method, hostA, rt.path, canBoCuaXa(xaA), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
-				t.Error("use case ran without admin.lookup")
+				t.Error("use case ran without admin.system_message")
 			}
 			// Against a LITERAL: a fake checker grants any string (rule 5, invariant 3c).
-			if got := s.checker.hoiKhoaCuoi(); got != "admin.lookup" {
-				t.Errorf("route asked for %q, want admin.lookup", got)
+			if got := s.checker.hoiKhoaCuoi(); got != "admin.system_message" {
+				t.Errorf("route asked for %q, want admin.system_message", got)
 			}
 		})
 	}
@@ -248,7 +251,7 @@ func TestSystemMessages_403RightPermissionWrongCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			doiMa(t, s.call(rt.method, hostB, rt.path, canBoCuaXa(xaB), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
 				t.Error("commune A's grant let commune B configure its sentences")
@@ -261,7 +264,7 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			doiMa(t, s.call(rt.method, hostA, rt.path, canBoCuaXa(xaA), rt.body), rt.ok)
 			if s.svc.calls != 1 || s.svc.commune != xaA {
 				t.Fatalf("calls=%d commune=%q, want one call in the Host's commune", s.svc.calls, s.svc.commune)
@@ -281,7 +284,7 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 
 func TestListSystemMessagesShape(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	at := time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)
 	s.svc.list = []domain.SystemMessage{{
 		Key: domain.KeyFeedbackNeverPublic, Description: "d", DefaultText: "Mặc định.",
@@ -314,7 +317,7 @@ func TestListSystemMessagesShape(t *testing.T) {
 
 func TestListSystemMessagesOnDefaultOmitsWhoAndWhen(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.svc.list = []domain.SystemMessage{{Key: domain.KeyFeedbackReasonRequired, DefaultText: "M.", CurrentText: "M."}}
 	w := s.call(http.MethodGet, hostA, systemMessagesPath, canBoCuaXa(xaA), "")
 	doiMa(t, w, http.StatusOK)
@@ -325,7 +328,7 @@ func TestListSystemMessagesOnDefaultOmitsWhoAndWhen(t *testing.T) {
 
 func TestRewordSystemMessagePassesTextAndReturnsMessage(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.svc.result = domain.SystemMessage{Key: domain.KeyFeedbackReasonRequired, CurrentText: "Câu của xã.", Overridden: true}
 	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyFeedbackReasonRequired), canBoCuaXa(xaA), `{"text":"Câu của xã."}`)
 	doiMa(t, w, http.StatusOK)
@@ -352,7 +355,7 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newSystemMessagesServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			s.svc.err = c.err
 			w := s.call(http.MethodPut, hostA, overridePath(domain.KeyFeedbackReasonRequired), canBoCuaXa(xaA), `{"text":""}`)
 			doiMa(t, w, c.want)
@@ -366,7 +369,7 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 
 func TestEmptyTextNamesTheRestoreAction(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.svc.err = domain.ErrMessageTextEmpty
 	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyFeedbackReasonRequired), canBoCuaXa(xaA), `{"text":"  "}`)
 	doiMa(t, w, http.StatusBadRequest)
@@ -379,7 +382,7 @@ func TestUnknownKeyIs404OnBothWrites(t *testing.T) {
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
 			s := newSystemMessagesServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			s.svc.err = domain.ErrUnknownMessageKey
 			body := ""
 			if method == http.MethodPut {
@@ -398,7 +401,7 @@ func TestUnknownKeyIs404ThroughTheRealUseCase(t *testing.T) {
 	// The fake above is told to refuse; this one is not a fake: the real use case refuses a key outside
 	// the catalogue BEFORE it touches a store, so a nil store is enough.
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.m.dungLai(t, func(d *Deps) { d.SystemMessages = app.NewSystemMessages(nil, nil) })
 	doiMa(t, s.call(http.MethodPut, hostA, overridePath("budget.scope_notice"), canBoCuaXa(xaA), `{"text":"x"}`),
 		http.StatusNotFound)
@@ -408,7 +411,7 @@ func TestUnknownKeyIs404ThroughTheRealUseCase(t *testing.T) {
 
 func TestRewordBadJSONIs400AndCallsNothing(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	doiMa(t, s.call(http.MethodPut, hostA, overridePath(domain.KeyFeedbackReasonRequired), canBoCuaXa(xaA), `{"text":`),
 		http.StatusBadRequest)
 	if s.svc.calls != 0 {
@@ -419,7 +422,7 @@ func TestRewordBadJSONIs400AndCallsNothing(t *testing.T) {
 func TestSystemMessageWriteWithoutBusinessCodeIs500(t *testing.T) {
 	// No `Ma`: the trail could not name who acted, so nothing is written.
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	p := &authz.Principal{ID: idCanBo, Kind: "staff", TenantID: xaA}
 	for _, rt := range systemMessageRoutes() {
 		if rt.method == http.MethodGet {

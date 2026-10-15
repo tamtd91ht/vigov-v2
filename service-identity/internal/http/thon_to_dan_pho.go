@@ -14,7 +14,7 @@ import (
 //
 // THE WRITE ROUTES are in residential_unit_write.go and residential_unit_import.go (user decision
 // 2026-09-29, ADR 0059 §2): create, edit, take out of use (`active: false`), and the Excel import,
-// under `admin.org`. Taking a unit out of use changes no record pointing at it — which is why this
+// under `admin.residential_unit` (owner decision 15/10/2026). Taking a unit out of use changes no record pointing at it — which is why this
 // list keeps returning such units, with `active: false`. There is deliberately no merge and no split.
 
 // thonToDanPhoRa is one residential unit as it leaves the API.

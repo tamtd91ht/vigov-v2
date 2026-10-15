@@ -98,7 +98,7 @@ func main() {
 
 	// 4. identity — session cookie -> staff principal, over gRPC, once per staff request, no cache.
 	// Deps.Checker is staffauth.Checker: it decides from the permission set the middleware obtained
-	// for THIS request (`admin.lookup` on the three "Lời hệ thống" routes).
+	// for THIS request (`admin.system_message` on the "Lời hệ thống" routes).
 	identity, err := identityclient.Dial(cfg.IdentityGRPCAddr(), cfg.GRPCCallerKey(), log)
 	if err != nil {
 		log.Error("không nối được dịch vụ định danh", "service", "reporting", "err", err)

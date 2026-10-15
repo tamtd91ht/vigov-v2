@@ -154,9 +154,23 @@ func TestCommuneLaunchLinkWrongPermissionIs403(t *testing.T) {
 	}
 }
 
-func TestCommuneLaunchLinkRightPermissionWrongCommuneIs403(t *testing.T) {
+// 403 WITH `admin.lookup` ALONE — the key this route declared from 13/10/2026 until the owner's decision of
+// 15/10/2026 moved the QR, with the rest of the Kênh Zalo tab, to `admin.zalo_channel` (service-identity
+// migration 0032, which pre-granted it to every role holding `admin.lookup`).
+//
+// MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on GET /api/v1/commune-launch-link.
+func TestCommuneLaunchLinkOldKeyAdminLookupAloneIs403(t *testing.T) {
 	s := newQlServer(t)
 	s.grant(brCommuneA, "admin.lookup")
+	brWant(t, s.get(brHostA, brStaff(brCommuneA)), http.StatusForbidden)
+	if s.launch.calls != 0 {
+		t.Error("reached the store with admin.lookup alone")
+	}
+}
+
+func TestCommuneLaunchLinkRightPermissionWrongCommuneIs403(t *testing.T) {
+	s := newQlServer(t)
+	s.grant(brCommuneA, "admin.zalo_channel")
 	// (1) granted in A; a principal of B at B's host.
 	brWant(t, s.get(brHostB, brStaff(brCommuneB)), http.StatusForbidden)
 	// (2) A's principal presented at B's host — the token's commune is not the Host's: 401 (rule 1
@@ -169,7 +183,7 @@ func TestCommuneLaunchLinkRightPermissionWrongCommuneIs403(t *testing.T) {
 
 func TestCommuneLaunchLinkRightPermissionRightCommuneIs200InThatCommune(t *testing.T) {
 	s := newQlServer(t)
-	s.grant(brCommuneB, "admin.lookup")
+	s.grant(brCommuneB, "admin.zalo_channel")
 	w := s.get(brHostB, brStaff(brCommuneB))
 	brWant(t, w, http.StatusOK)
 	if s.launch.calls != 1 || s.launch.sawTenant != brCommuneB {
@@ -214,7 +228,7 @@ func TestCommuneLaunchLinkChoosesOneLink(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := newQlServer(t)
-			s.grant(brCommuneA, "admin.lookup")
+			s.grant(brCommuneA, "admin.zalo_channel")
 			s.launch.communes[brCommuneA] = store.CommuneLaunch{Active: true, LaunchCode: qlCodeA, LiveOwnAppIDs: c.own}
 			w := s.get(brHostA, brStaff(brCommuneA))
 			brWant(t, w, http.StatusOK)
@@ -246,7 +260,7 @@ func TestCommuneLaunchLinkCarriesProfileCodeWhenConfigured(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := newQlServerWithProfile(t, secret.Secret(qlProfileFake))
-			s.grant(brCommuneA, "admin.lookup")
+			s.grant(brCommuneA, "admin.zalo_channel")
 			s.launch.communes[brCommuneA] = store.CommuneLaunch{Active: true, LaunchCode: qlCodeA, LiveOwnAppIDs: c.own}
 			w := s.get(brHostA, brStaff(brCommuneA))
 			brWant(t, w, http.StatusOK)
@@ -261,7 +275,7 @@ func TestCommuneLaunchLinkCarriesProfileCodeWhenConfigured(t *testing.T) {
 func TestCommuneLaunchLinkHasNoProfileCodeWhenUnset(t *testing.T) {
 	for _, own := range [][]string{{qlOwnApp}, nil} {
 		s := newQlServer(t)
-		s.grant(brCommuneA, "admin.lookup")
+		s.grant(brCommuneA, "admin.zalo_channel")
 		s.launch.communes[brCommuneA] = store.CommuneLaunch{Active: true, LaunchCode: qlCodeA, LiveOwnAppIDs: own}
 		w := s.get(brHostA, brStaff(brCommuneA))
 		brWant(t, w, http.StatusOK)
@@ -274,7 +288,7 @@ func TestCommuneLaunchLinkHasNoProfileCodeWhenUnset(t *testing.T) {
 // The own app wins even when the shared app cannot be read: the shared app is not consulted at all.
 func TestCommuneLaunchLinkOwnAppNeedsNoSharedApp(t *testing.T) {
 	s := newQlServer(t)
-	s.grant(brCommuneA, "admin.lookup")
+	s.grant(brCommuneA, "admin.zalo_channel")
 	s.launch.communes[brCommuneA] = store.CommuneLaunch{Active: true, LaunchCode: qlCodeA, LiveOwnAppIDs: []string{qlOwnApp}}
 	s.shared.err = errors.New("connection reset")
 	w := s.get(brHostA, brStaff(brCommuneA))
@@ -312,7 +326,7 @@ func TestCommuneLaunchLinkRefusals(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s := newQlServer(t)
-			s.grant(brCommuneA, "admin.lookup")
+			s.grant(brCommuneA, "admin.zalo_channel")
 			c.setup(s)
 			w := s.get(brHostA, brStaff(brCommuneA))
 			brWant(t, w, c.want)
@@ -329,7 +343,7 @@ func TestCommuneLaunchLinkRefusals(t *testing.T) {
 // The commune is never read from the request: a header or query naming another commune changes nothing.
 func TestCommuneLaunchLinkIgnoresAClientNamedCommune(t *testing.T) {
 	s := newQlServer(t)
-	s.grant(brCommuneA, "admin.lookup")
+	s.grant(brCommuneA, "admin.zalo_channel")
 	r := httptest.NewRequest(http.MethodGet, "https://"+brHostA+qlPath+"?tenant_id="+string(brCommuneB), nil)
 	r.Host = brHostA
 	r.Header.Set("X-Tenant-ID", string(brCommuneB))

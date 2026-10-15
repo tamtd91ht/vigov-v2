@@ -137,11 +137,11 @@ func wantStatus(t *testing.T, w *httptest.ResponseRecorder, want int) {
 	}
 }
 
-// adminOfA holds `admin.lookup`, the key the three routes declare — a row of `quyen`
-// (service-identity/migrations/0001_init.sql:281).
+// adminOfA holds `admin.system_message`, the key the routes declare since the owner's decision of
+// 15/10/2026 — a row of `quyen` (service-identity/migrations/0032_split_configuration_permissions.sql).
 func adminOfA() *resolverFake {
 	return &resolverFake{found: true, out: staffauth.StaffPrincipal{
-		StaffID: staffInternalID, PermissionKeys: []authz.Perm{"admin.lookup"},
+		StaffID: staffInternalID, PermissionKeys: []authz.Perm{"admin.system_message"},
 	}}
 }
 
@@ -160,13 +160,14 @@ func TestAdminAtOwnHostListsThe38Messages(t *testing.T) {
 	}
 }
 
-func TestSignedInWithoutAdminLookupIs403(t *testing.T) {
+// `admin.lookup` is held on purpose: it guarded this route until 15/10/2026, and alone it no longer opens it.
+func TestSignedInWithoutSystemMessageKeyIs403(t *testing.T) {
 	s := newServer(t, &resolverFake{found: true, out: staffauth.StaffPrincipal{
-		StaffID: staffInternalID, PermissionKeys: []authz.Perm{"report.read"},
+		StaffID: staffInternalID, PermissionKeys: []authz.Perm{"report.read", "admin.lookup"},
 	}})
 	wantStatus(t, s.get(hostA, route, fakeCookie), http.StatusForbidden)
 	if s.store.reads != 0 {
-		t.Error("store read without admin.lookup")
+		t.Error("store read without admin.system_message")
 	}
 }
 

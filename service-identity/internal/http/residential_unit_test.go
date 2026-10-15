@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/core/xlsx"
 	"github.com/vihat/vigov/service-identity/internal/app"
@@ -18,12 +19,16 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// THE FIVE WRITE / IMPORT ROUTES OF THE RESIDENTIAL UNITS, all `admin.org`. What is asserted here is
+// THE FIVE WRITE / IMPORT ROUTES OF THE RESIDENTIAL UNITS, all `admin.residential_unit` (owner decision
+// 15/10/2026; `admin.org` before, ADR 0059 §2). What is asserted here is
 // what the HANDLER owns: the permission, the wire mapping, the upload reader, the template, and which
 // identifier reaches the trail. The rules are proved in domain/residential_unit_import_test.go, the
 // transaction and "deactivate keeps references" in app/residential_unit_test.go.
 
 const pathResidentialUnits = "/api/v1/residential-units"
+
+// residentialUnitKey is the Thôn/Tổ dân phố tab's key (service-identity migration 0032).
+const residentialUnitKey authz.Perm = "admin.residential_unit"
 
 // residentialUnitsFake stands in for *app.ResidentialUnits.
 type residentialUnitsFake struct {
@@ -166,7 +171,7 @@ func (m *mayChu) residentialUnitCalls() int {
 // --- rule 5, invariant 7: the four cases, for each of the five routes -----------------------------
 
 func TestResidentialUnits_401WithoutToken(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	for _, rt := range residentialUnitRoutes() {
 		if w := m.callResidentialUnitRoute(t, rt, hostA, ""); w.Code != http.StatusUnauthorized {
 			t.Errorf("%s: mã = %d, muốn 401 — %s", rt.name, w.Code, w.Body.String())
@@ -177,7 +182,7 @@ func TestResidentialUnits_401WithoutToken(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.user` — a real key, not `admin.org`.
+// 403 WITH `admin.user` — a real key, not `admin.residential_unit`.
 func TestResidentialUnits_403WrongPermission(t *testing.T) {
 	m := dungMayChu(t)
 	tok := m.tokenCho(t, xaA, sidA)
@@ -191,9 +196,29 @@ func TestResidentialUnits_403WrongPermission(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.org` HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3).
+// 403 WITH ONLY THE TWO KEYS THAT GUARDED THIS SCREEN BEFORE 15/10/2026. `admin.org` (the org chart's
+// key, which ADR 0059 §2 reused) and `admin.lookup` (Quản lý danh mục) are each refused alone: the tab
+// has its own key now, and migration 0032 pre-granted it to every role that held either.
+//
+// MUTATION THAT MUST TURN THIS RED: put `admin.org` back on any of the five routes.
+func TestResidentialUnits_403OldKeysAlone(t *testing.T) {
+	for _, old := range []authz.Perm{"admin.org", "admin.lookup"} {
+		m := serverGranting(t, old)
+		tok := m.tokenCho(t, xaA, sidA)
+		for _, rt := range residentialUnitRoutes() {
+			if w := m.callResidentialUnitRoute(t, rt, hostA, tok); w.Code != http.StatusForbidden {
+				t.Errorf("%s: chỉ giữ %q mà mã = %d, muốn 403 — %s", rt.name, old, w.Code, w.Body.String())
+			}
+		}
+		if n := m.residentialUnitCalls(); n != 0 {
+			t.Errorf("chỉ giữ %q mà use case đã chạy %d lần", old, n)
+		}
+	}
+}
+
+// 403 WITH `admin.residential_unit` HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3).
 func TestResidentialUnits_403RightPermissionWrongCommune(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaB, sidB)
 	for _, rt := range residentialUnitRoutes() {
 		if w := m.callResidentialUnitRoute(t, rt, hostB, tok); w.Code != http.StatusForbidden {
@@ -207,7 +232,7 @@ func TestResidentialUnits_403RightPermissionWrongCommune(t *testing.T) {
 
 // 2xx, THE COMMUNE OF THE HOST REACHES THE USE CASE, AND THE TRAIL GETS THE STAFF CODE.
 func TestResidentialUnits_2xxCommuneAndStaffCode(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	for _, rt := range residentialUnitRoutes() {
 		w := m.callResidentialUnitRoute(t, rt, hostA, tok)
@@ -231,7 +256,7 @@ func TestResidentialUnits_2xxCommuneAndStaffCode(t *testing.T) {
 // --- the write wire -------------------------------------------------------------------------------
 
 func TestResidentialUnits_CreateWire(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	w := m.goiIdem(t, "POST", hostA, pathResidentialUnits,
 		`{"name":"Thôn Hoà Bình","code":"thon-hb","type_code":"thon","head_staff_code":"CB-2026-AAAAAA","household_count":0,"order":2}`, tok)
@@ -264,7 +289,7 @@ func TestResidentialUnits_CreateWire(t *testing.T) {
 }
 
 func TestResidentialUnits_UpdateWire(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	path := pathResidentialUnits + "/tt-1"
 
@@ -311,7 +336,7 @@ func TestResidentialUnits_WriteStatusMapping(t *testing.T) {
 		{domain.ErrResidentialUnitCountRange, http.StatusBadRequest, "invalid_request"},
 		{errors.New("cơ sở dữ liệu không phản hồi"), http.StatusInternalServerError, "internal"},
 	} {
-		m := dungMayChuSoDo(t)
+		m := serverGranting(t, residentialUnitKey)
 		m.residentialUnits.err = c.err
 		w := m.goi(t, "PATCH", hostA, pathResidentialUnits+"/tt-1", `{"active":false}`, m.tokenCho(t, xaA, sidA))
 		if got := loiTra(t, w).Code; w.Code != c.code || got != c.id {
@@ -340,7 +365,7 @@ func TestResidentialUnits_ListCarriesHeadAndOrder(t *testing.T) {
 // THE TEMPLATE ROUND TRIP: download, fill one row with the dropdown values, upload to the preview —
 // the rows reaching the use case are what the person picked, through the real core/xlsx reader.
 func TestResidentialUnits_TemplateRoundTrip(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	w := m.goi(t, "GET", hostA, pathResidentialUnits+"/import-template", "", tok)
 	doiMa(t, w, http.StatusOK)
@@ -399,7 +424,7 @@ func TestResidentialUnits_TemplateRoundTrip(t *testing.T) {
 // FILE ERRORS NEVER ECHO CELL TEXT: a wrong header full of personal data answers with a fixed sentence.
 func TestResidentialUnits_FileErrorsNeverEchoCells(t *testing.T) {
 	const secret = "0900000000 Nguyễn Văn Bí Mật"
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	data := residentialUnitWorkbook(t, []string{secret, "Số điện thoại"}, []any{secret})
 	for _, c := range []struct {
@@ -420,7 +445,7 @@ func TestResidentialUnits_FileErrorsNeverEchoCells(t *testing.T) {
 }
 
 func TestResidentialUnits_UploadRefusals(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	for _, c := range []struct {
 		name string
@@ -442,7 +467,7 @@ func TestResidentialUnits_UploadRefusals(t *testing.T) {
 }
 
 func TestResidentialUnits_ImportStatusMapping(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	m.residentialUnitImports.err = &app.ResidentialUnitImportRejected{Errors: []domain.ResidentialUnitImportError{
 		{Row: 3, Column: domain.ResidentialUnitImportColHouseholds, Message: "Phải là số nguyên"},
@@ -481,7 +506,7 @@ func TestResidentialUnits_ImportStatusMapping(t *testing.T) {
 
 // THE IMPORT REQUIRES AN Idempotency-Key; the preview, which writes nothing, does not.
 func TestResidentialUnits_ImportNeedsIdempotencyKey(t *testing.T) {
-	m := dungMayChuSoDo(t)
+	m := serverGranting(t, residentialUnitKey)
 	tok := m.tokenCho(t, xaA, sidA)
 	for _, c := range []struct {
 		path string

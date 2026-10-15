@@ -15,7 +15,7 @@ import (
 
 func TestListSystemMessagesCarriesOriginGroupAndSwitch(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	at := time.Date(2026, 10, 8, 3, 0, 0, 0, time.UTC)
 	s.svc.list = []domain.SystemMessage{
 		{Key: domain.KeyFeedbackNeverPublic, Group: domain.GroupFeedback, Origin: domain.OriginShipped,
@@ -51,7 +51,7 @@ func TestListSystemMessagesCarriesOriginGroupAndSwitch(t *testing.T) {
 
 func TestSwitchPassesStateAndRequiresIt(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	doiMa(t, s.call(http.MethodPatch, hostA, overridePath(domain.KeyFeedbackNeverPublic), canBoCuaXa(xaA), `{"is_active":true}`), http.StatusOK)
 	if s.svc.active == nil || !*s.svc.active || s.svc.op != "switch" {
 		t.Errorf("active=%v op=%q", s.svc.active, s.svc.op)
@@ -65,7 +65,7 @@ func TestSwitchPassesStateAndRequiresIt(t *testing.T) {
 
 func TestCreateCustomPassesFields(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.svc.result = domain.SystemMessage{Key: customCode, Group: "chung", Origin: domain.OriginCommune, CurrentText: "Xin chào.", Active: true}
 	w := s.call(http.MethodPost, hostA, systemMessagesPath, canBoCuaXa(xaA),
 		`{"group_code":"chung","code":"chung.loi-chao","text":"Xin chào.","description":"Lời chào"}`)
@@ -79,7 +79,7 @@ func TestCreateCustomPassesFields(t *testing.T) {
 // PATCH `description`: absent = leave (nil change); null = clear; a string = set.
 func TestEditCustomDescriptionThreeStates(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	path := systemMessagesPath + "/" + customCode
 	s.call(http.MethodPatch, hostA, path, canBoCuaXa(xaA), `{"text":"x"}`)
 	if s.svc.edited.Description != nil || s.svc.edited.Text == nil {
@@ -97,7 +97,7 @@ func TestEditCustomDescriptionThreeStates(t *testing.T) {
 
 func TestDeleteCustomPassesReason(t *testing.T) {
 	s := newSystemMessagesServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	doiMa(t, s.call(http.MethodDelete, hostA, systemMessagesPath+"/"+customCode, canBoCuaXa(xaA), `{"reason":"Không dùng"}`), http.StatusNoContent)
 	if s.svc.reason != "Không dùng" || s.svc.key != customCode {
 		t.Errorf("reason=%q key=%q", s.svc.reason, s.svc.key)
@@ -123,7 +123,7 @@ func TestCustomMessageRefusalsMapped(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newSystemMessagesServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			s.svc.err = c.err
 			w := s.call(http.MethodDelete, hostA, systemMessagesPath+"/"+customCode, canBoCuaXa(xaA), `{"reason":"x"}`)
 			doiMa(t, w, c.status)

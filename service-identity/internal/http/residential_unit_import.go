@@ -14,7 +14,7 @@ import (
 )
 
 // "⬆ Nhập từ Excel" on the residential-unit tab (14-cau-hinh.md §2; user decision 2026-09-29, ADR 0059
-// §2) — three routes, all `admin.org`, the key the create route declares:
+// §2) — three routes, all `admin.residential_unit`, the key the create route declares:
 //
 //	GET  /api/v1/residential-units/import-template  the .xlsx to fill in, with two dropdowns
 //	POST /api/v1/residential-units/import-previews  check a filled file — WRITES NOTHING
@@ -94,7 +94,7 @@ func residentialUnitUnitsOut(in []domain.PlannedResidentialUnit) []residentialUn
 // place by a busy clerk is imported as a real hamlet with a permanent code. The examples are sentences
 // on the guide sheet instead.
 //
-// THE HEAD DROPDOWN HOLDS STAFF NAMES. The file is served only to `admin.org`, and carries exactly the
+// THE HEAD DROPDOWN HOLDS STAFF NAMES. The file is served only to `admin.residential_unit`, and carries exactly the
 // code and name GET /api/v1/staff-directory already shows every account of the commune — no phone
 // number, no email (rule 3). Both dropdowns WARN rather than refuse (Strict false): a type may also be
 // typed by its code, and the server re-validates every cell anyway.

@@ -29,7 +29,7 @@ import (
 // The fake records WHICH commune and WHICH actor reached it; the transactions, the sealing and the entries
 // are internal/app's tests.
 //
-//	admin.lookup: 401 no session · 403 wrong key · 403 right key other commune · 200
+//	admin.zalo_channel: 401 no session · 403 wrong key · 403 right key other commune · 200
 
 // testBotToken is a fixture, not a credential.
 const testBotToken = "123456789:FAKE-commune-bot-token-NOT-REAL"
@@ -164,11 +164,11 @@ const (
 // elsewhere on the same screens) must not configure the commune's bot.
 func communeBotRoutes() []mapAssetRoute {
 	return []mapAssetRoute{
-		{"get", http.MethodGet, communeBotPath, "", "admin.lookup", "content.read", http.StatusOK},
-		{"put", http.MethodPut, communeBotPath, putBotBody, "admin.lookup", "asset.update", http.StatusOK},
-		{"check", http.MethodPost, communeBotPath + "/check", "", "admin.lookup", "content.read", http.StatusOK},
-		{"webhook", http.MethodPost, communeBotPath + "/webhook", "", "admin.lookup", "asset.update", http.StatusOK},
-		{"delete", http.MethodDelete, communeBotPath, retireBotBody, "admin.lookup", "admin.audit", http.StatusOK},
+		{"get", http.MethodGet, communeBotPath, "", "admin.zalo_channel", "content.read", http.StatusOK},
+		{"put", http.MethodPut, communeBotPath, putBotBody, "admin.zalo_channel", "asset.update", http.StatusOK},
+		{"check", http.MethodPost, communeBotPath + "/check", "", "admin.zalo_channel", "content.read", http.StatusOK},
+		{"webhook", http.MethodPost, communeBotPath + "/webhook", "", "admin.zalo_channel", "asset.update", http.StatusOK},
+		{"delete", http.MethodDelete, communeBotPath, retireBotBody, "admin.zalo_channel", "admin.audit", http.StatusOK},
 	}
 }
 
@@ -178,8 +178,8 @@ func TestCommuneBotRoutesAskForSeededKey(t *testing.T) {
 			s := newCommuneBotServer(t)
 			s.call(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body)
 			// Compared with a LITERAL: a fake checker grants any string (rule 5, invariant 3c).
-			if len(s.checker.hoiGi) == 0 || s.checker.hoiGi[0] != "admin.lookup" {
-				t.Fatalf("asked for %v, want admin.lookup (seeded at service-identity/migrations/0001_init.sql:281)", s.checker.hoiGi)
+			if len(s.checker.hoiGi) == 0 || s.checker.hoiGi[0] != "admin.zalo_channel" {
+				t.Fatalf("asked for %v, want admin.zalo_channel (seeded at service-identity/migrations/0032_split_configuration_permissions.sql)", s.checker.hoiGi)
 			}
 		})
 	}
@@ -206,6 +206,24 @@ func TestCommuneBotRoutes_403WrongPermission(t *testing.T) {
 			doiMa(t, s.call(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body), http.StatusForbidden)
 			if s.fake.calls != 0 {
 				t.Error("wrong permission and the use case ran")
+			}
+		})
+	}
+}
+
+// 403 WITH `admin.lookup` ALONE — the key these routes declared until the owner's decision of
+// 15/10/2026 gave the Kênh Zalo tab its own, `admin.zalo_channel` (service-identity migration 0032, which
+// pre-granted it to every role holding `admin.lookup`). Quản lý danh mục no longer opens this tab.
+//
+// MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on any of these routes.
+func TestCommuneBotRoutes_403OldKeyAdminLookupAlone(t *testing.T) {
+	for _, tc := range communeBotRoutes() {
+		t.Run(tc.name, func(t *testing.T) {
+			s := newCommuneBotServer(t)
+			s.grant(xaA, "admin.lookup")
+			doiMa(t, s.call(t, tc.method, tc.path, hostA, canBoGhi(xaA), tc.body), http.StatusForbidden)
+			if s.fake.calls != 0 {
+				t.Error("admin.lookup alone and the use case ran")
 			}
 		})
 	}
@@ -261,7 +279,7 @@ func TestCommuneBotRoutes_200RightPermissionRightCommune(t *testing.T) {
 
 func TestCommuneBotGetCarriesNoSecretAndTheContractFields(t *testing.T) {
 	s := newCommuneBotServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	w := s.call(t, http.MethodGet, communeBotPath, hostA, canBoGhi(xaA), "")
 	doiMa(t, w, http.StatusOK)
 	body := w.Body.String()
@@ -296,7 +314,7 @@ func TestCommuneBotGetCarriesNoSecretAndTheContractFields(t *testing.T) {
 
 func TestCommuneBotPutPassesTheTokenAsASecretAndNeverEchoesIt(t *testing.T) {
 	s := newCommuneBotServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	s.fake.setOut = app.SetCommuneZaloBotOutput{Adopted: true, EndedLinkCount: 4, RetiredPrevious: true}
 	w := s.call(t, http.MethodPut, communeBotPath, hostA, canBoGhi(xaA), putBotBody)
 	doiMa(t, w, http.StatusOK)
@@ -318,7 +336,7 @@ func TestCommuneBotPutPassesTheTokenAsASecretAndNeverEchoesIt(t *testing.T) {
 
 func TestCommuneBotWebhookShowsTheSecretOnceUncached(t *testing.T) {
 	s := newCommuneBotServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	w := s.call(t, http.MethodPost, communeBotPath+"/webhook", hostA, canBoGhi(xaA), "")
 	doiMa(t, w, http.StatusOK)
 	if w.Header().Get("Cache-Control") != "no-store" {
@@ -336,7 +354,7 @@ func TestCommuneBotWebhookShowsTheSecretOnceUncached(t *testing.T) {
 
 func TestCommuneBotDeleteCarriesTheReasonAndTheRevokeNotice(t *testing.T) {
 	s := newCommuneBotServer(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.zalo_channel")
 	w := s.call(t, http.MethodDelete, communeBotPath, hostA, canBoGhi(xaA), retireBotBody)
 	doiMa(t, w, http.StatusOK)
 	if s.fake.lastReason != "Xã không dùng bot riêng nữa" {
@@ -373,7 +391,7 @@ func TestCommuneBotErrorMapping(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			s := newCommuneBotServer(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.zalo_channel")
 			s.fake.err = c.err
 			w := s.call(t, http.MethodPut, communeBotPath, hostA, canBoGhi(xaA), putBotBody)
 			doiMa(t, w, c.status)

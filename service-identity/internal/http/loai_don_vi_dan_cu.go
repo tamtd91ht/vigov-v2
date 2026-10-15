@@ -13,8 +13,9 @@ import (
 // The read route behind the commune's residential-unit-type catalogue.
 // GET /api/v1/residential-unit-types
 //
-// THE WRITE ROUTES ARE IN danh_muc_ghi.go (POST / PATCH / DELETE, `admin.lookup`) — user decision
-// 2026-09-24: a full catalogue, with the same contract as the five sibling catalogues.
+// THE WRITE ROUTES ARE IN danh_muc_ghi.go (POST / PATCH / DELETE, `admin.residential_unit` since the
+// owner's decision of 15/10/2026) — user decision 2026-09-24: a full catalogue, with the same contract
+// as the five sibling catalogues.
 
 // loaiDonViDanCuRa is one catalogue entry as it leaves the API.
 //

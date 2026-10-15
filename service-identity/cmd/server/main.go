@@ -385,12 +385,12 @@ func run(log *slog.Logger) error {
 	// unit is inserted and its parent locked by the very statements the form uses.
 	orgUnitImports := app.NewOrgUnitImporter(kho, boPhan)
 	// The WRITE surfaces of the two reference catalogues: POST / PATCH / DELETE on
-	// /api/v1/residential-unit-types and /api/v1/task-blocs, under `admin.lookup` (user decision
-	// 2026-09-24: full catalogues). Given the SAME stores as the read fields; each use case locks the
+	// /api/v1/residential-unit-types (`admin.residential_unit`) and /api/v1/task-blocs (`admin.lookup`)
+	// (user decision 2026-09-24: full catalogues; keys by the owner's decision of 15/10/2026). Given the SAME stores as the read fields; each use case locks the
 	// row, derives its tier, and writes the change and its audit entry in one transaction.
 	ghiLoaiDonViDanCu := app.NewDanhMucLoaiDonViDanCu(kho, loaiDonViDanCu)
 	ghiKhoiNhiemVu := app.NewDanhMucKhoiNhiemVu(kho, khoiNhiemVu)
-	// Their Excel imports (user decision 2026-09-29, ADR 0059 §3), under `admin.lookup`: the SAME
+	// Their Excel imports (user decision 2026-09-29, ADR 0059 §3), under the same keys: the SAME
 	// stores, so an imported row is inserted by the statement the create form runs.
 	residentialUnitTypeImports := app.NewResidentialUnitTypeImporter(kho, loaiDonViDanCu)
 	taskBlocImports := app.NewTaskBlocImporter(kho, khoiNhiemVu)
@@ -496,16 +496,18 @@ func run(log *slog.Logger) error {
 		// Xã tự tạo, đổi tên, xoá mềm vai trò của mình (chủ dự án chốt 15/10/2026) — xem app/role_write.go.
 		Roles: roles,
 		// Ba tuyến đọc tham chiếu của migration 0005. Hai danh mục (loại đơn vị dân cư, khối nhiệm
-		// vụ) có thêm tuyến GHI dưới khoá `admin.lookup` — người dùng quyết 24/09/2026: danh mục đầy đủ.
+		// vụ) có thêm tuyến GHI — người dùng quyết 24/09/2026: danh mục đầy đủ; khoá `admin.residential_unit`
+		// cho loại đơn vị dân cư, `admin.lookup` cho khối nhiệm vụ (chủ dự án 15/10/2026).
 		ThonToDanPho: thonToDanPho,
-		// Thôn/tổ dân phố: tạo, sửa, ngưng dùng và nhập Excel dưới khoá `admin.org` (ADR 0059 §2).
+		// Thôn/tổ dân phố: tạo, sửa, ngưng dùng và nhập Excel (ADR 0059 §2) dưới khoá
+		// `admin.residential_unit` (chủ dự án 15/10/2026; trước đó `admin.org`).
 		ResidentialUnits:       residentialUnits,
 		ResidentialUnitImports: residentialUnitImports,
 		LoaiDonViDanCu:         loaiDonViDanCu,
 		KhoiNhiemVu:            khoiNhiemVu,
 		GhiLoaiDonViDanCu:      ghiLoaiDonViDanCu,
 		GhiKhoiNhiemVu:         ghiKhoiNhiemVu,
-		// Nhập Excel hai danh mục trên, mỗi danh mục một tuyến, khoá `admin.lookup` (ADR 0059 §3).
+		// Nhập Excel hai danh mục trên, mỗi danh mục một tuyến, cùng khoá với tuyến thêm của nó (ADR 0059 §3).
 		ResidentialUnitTypeImports: residentialUnitTypeImports,
 		TaskBlocImports:            taskBlocImports,
 		// Lịch làm việc của xã (migration 0006) — BA KHO ĐỌC và MỘT USE CASE GHI đứng sau ba trường

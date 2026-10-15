@@ -494,7 +494,7 @@ func main() {
 	})
 
 	// The Zalo Bot channel's staff routes (ADR 0074 §"Tài nguyên URL") — the caller's own link
-	// (AnyAuthenticated) and the commune's administration (admin.lookup), on the SAME staff mux. Staff names
+	// (AnyAuthenticated) and the commune's administration (admin.zalo_channel), on the SAME staff mux. Staff names
 	// for the linked list come from identity's ResolveStaffNames over the client the edge already holds.
 	zaloLinkActs := commsapp.NewZaloLinks(kho, zaloLinks, zaloRouter, zaloClient, dinhDanh, log)
 	svchttp.RegisterZaloLinks(mux, svchttp.ZaloLinkDeps{
@@ -503,14 +503,14 @@ func main() {
 		Writer:  zaloLinkActs,
 		Log:     log,
 	})
-	// The commune's own bot (ADR 0079 Q1 #5) — five admin.lookup routes on the SAME staff mux. `nenTang`
+	// The commune's own bot (ADR 0079 Q1 #5) — five admin.zalo_channel routes on the SAME staff mux. `nenTang`
 	// gives the commune's host, which the webhook URL registered with Zalo is built on.
 	svchttp.RegisterZaloCommuneBot(mux, svchttp.ZaloCommuneBotDeps{
 		Checker: staffauth.Checker{},
 		Bots:    commsapp.NewCommuneZaloBots(kho, zaloCommuneBots, zaloLinks, envelope, zaloClient, nenTang, log),
 		Log:     log,
 	})
-	// Zalo GROUP chats (ADR 0092) — four admin.lookup routes on the SAME staff mux. Identity answers whether
+	// Zalo GROUP chats (ADR 0092) — four admin.zalo_channel routes on the SAME staff mux. Identity answers whether
 	// a unit is live and the unit and staff names, over the client the edge already holds.
 	svchttp.RegisterZaloGroups(mux, svchttp.ZaloGroupDeps{
 		Checker: staffauth.Checker{},

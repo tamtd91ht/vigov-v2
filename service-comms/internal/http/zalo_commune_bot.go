@@ -3,14 +3,16 @@ package http
 // A COMMUNE'S OWN ZALO BOT (ADR 0079 Q1 #5, "zalo-bots/current … song song zalo-bots/shared"; migration
 // 0022) — spec Cấu hình 11 §3 "Con bot của xã":
 //
-//	GET    /api/v1/zalo-bots/current           admin.lookup  the live own bot, or has_own_bot false
-//	PUT    /api/v1/zalo-bots/current           admin.lookup  "Lưu con bot" — adopt, replace, or edit it
-//	POST   /api/v1/zalo-bots/current/check     admin.lookup  "Kiểm tra kết nối" — getMe, result recorded
-//	POST   /api/v1/zalo-bots/current/webhook   admin.lookup  "Đăng ký webhook" — the secret shown ONCE
-//	DELETE /api/v1/zalo-bots/current           admin.lookup  "Quay về bot chung" — retire, with a reason
+//	GET    /api/v1/zalo-bots/current           admin.zalo_channel  the live own bot, or has_own_bot false
+//	PUT    /api/v1/zalo-bots/current           admin.zalo_channel  "Lưu con bot" — adopt, replace, or edit it
+//	POST   /api/v1/zalo-bots/current/check     admin.zalo_channel  "Kiểm tra kết nối" — getMe, result recorded
+//	POST   /api/v1/zalo-bots/current/webhook   admin.zalo_channel  "Đăng ký webhook" — the secret shown ONCE
+//	DELETE /api/v1/zalo-bots/current           admin.zalo_channel  "Quay về bot chung" — retire, with a reason
 //
-// `admin.lookup` is the key ADR 0074 #6 names for the Kênh Zalo tab (seeded at
-// service-identity/migrations/0001_init.sql:281) — the same as zalo-channel-settings and mail-settings.
+// `admin.zalo_channel` — "Cấu hình kênh Zalo" — is the Kênh Zalo tab's key by the owner's decision of
+// 15/10/2026 (tester bug sheet web-admin-141026 row 22), replacing the `admin.lookup` ADR 0074 #6 named;
+// seeded by service-identity migration 0032 — the same key as zalo-channel-settings and zalo-groups.
+// `current` here is the COMMUNE's bot, not a member of staff's own — unlike zalo-links/current.
 //
 // NOTHING SECRET LEAVES HERE except the webhook secret, once, in the reply of the call that generated it
 // (ADR 0079 Q1 #3), with Cache-Control: no-store. The token is write-only: no type below has a field for
@@ -182,7 +184,7 @@ func RegisterZaloCommuneBot(mux *http.ServeMux, d ZaloCommuneBotDeps) {
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("GET /api/v1/zalo-bots/current",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
 			http.HandlerFunc(h.GetCurrent)))
 
 	// PUT: the commune's bot saved whole. idem.KhongCan: the same body twice leaves the same bot live —
@@ -209,7 +211,7 @@ func RegisterZaloCommuneBot(mux *http.ServeMux, d ZaloCommuneBotDeps) {
 	// @reply    503 httpx.Error encryption_not_configured
 	// @reply    500 httpx.Error
 	mux.Handle("PUT /api/v1/zalo-bots/current",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
 			idem.KhongCan("lưu là ghi đè bot của xã bằng đúng giá trị trong thân; cùng mã bot thì vẫn là con bot đang sống, cập nhật tại chỗ, không sinh bot thứ hai — lần gửi lại chỉ thêm một vết ghi nhận đặt lại mã")(
 				http.HandlerFunc(h.PutCurrent))))
 
@@ -226,7 +228,7 @@ func RegisterZaloCommuneBot(mux *http.ServeMux, d ZaloCommuneBotDeps) {
 	// @reply    503 httpx.Error encryption_not_configured
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/zalo-bots/current/check",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
 			idem.KhongCan("kiểm tra chỉ hỏi Zalo rồi ghi kết quả mới nhất; lần thứ hai là một lần kiểm khác, không đổi gì khác")(
 				http.HandlerFunc(h.PostCheck))))
 
@@ -245,7 +247,7 @@ func RegisterZaloCommuneBot(mux *http.ServeMux, d ZaloCommuneBotDeps) {
 	// @reply    503 httpx.Error encryption_not_configured commune_host_unavailable
 	// @reply    500 httpx.Error
 	mux.Handle("POST /api/v1/zalo-bots/current/webhook",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
 			idem.KhongCan("secret đang chờ thì dùng lại và không hiện lần nữa, secret đã xác nhận thì giữ nguyên; lần gửi thứ hai không bao giờ để lại một secret đăng ký dở")(
 				http.HandlerFunc(h.PostWebhook))))
 
@@ -262,7 +264,7 @@ func RegisterZaloCommuneBot(mux *http.ServeMux, d ZaloCommuneBotDeps) {
 	// @reply    403 httpx.Error
 	// @reply    500 httpx.Error
 	mux.Handle("DELETE /api/v1/zalo-bots/current",
-		authz.RequirePermission(d.Checker, "admin.lookup")(
+		authz.RequirePermission(d.Checker, "admin.zalo_channel")(
 			idem.KhongCan("lần thứ hai không còn bot riêng nào đang sống nên không ghi gì và không có vết")(
 				http.HandlerFunc(h.DeleteCurrent))))
 }

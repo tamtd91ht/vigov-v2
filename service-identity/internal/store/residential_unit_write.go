@@ -12,7 +12,7 @@ import (
 )
 
 // The WRITE paths of the residential units (user decision 2026-09-29, ADR 0059 §2): create, edit, take
-// out of use, and the Excel import — under `admin.org`. There is NO merge and NO split (rule 1, stop
+// out of use, and the Excel import — under `admin.residential_unit`. There is NO merge and NO split (rule 1, stop
 // condition #3), and NO statement here writes `deleted_at`: taking a unit out of use is `dang_dung =
 // false`, so the unit keeps labelling the records that point at it.
 //

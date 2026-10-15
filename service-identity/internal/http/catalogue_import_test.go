@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vihat/vigov/core/authz"
 	"github.com/vihat/vigov/core/tenant"
 	"github.com/vihat/vigov/service-identity/internal/app"
 	"github.com/vihat/vigov/service-identity/internal/domain"
@@ -17,7 +18,8 @@ import (
 	"github.com/xuri/excelize/v2"
 )
 
-// THE SIX IMPORT ROUTES OF THE TWO CATALOGUES, all `admin.lookup` (ADR 0059 §3). What is asserted here
+// THE SIX IMPORT ROUTES OF THE TWO CATALOGUES (ADR 0059 §3) — residential-unit types under
+// `admin.residential_unit`, task blocs under `admin.lookup` (owner decision 15/10/2026). What is asserted here
 // is what the HANDLER owns: the permission, the upload, the wire mapping, and which identifier reaches
 // the trail. The rules are proved in domain/catalogue_import_test.go, the transaction in
 // app/catalogue_import_test.go.
@@ -61,22 +63,24 @@ func sampleCatalogueWorkbook(t *testing.T) []byte {
 type catalogueImportRoute struct {
 	name, method, path string
 	ok                 int
+	key, otherKey      authz.Perm
 	fake               func(m *mayChu) *catalogueImportsFake
 }
 
 func catalogueImportRoutes() []catalogueImportRoute {
 	var out []catalogueImportRoute
 	for _, c := range []struct {
-		base string
-		fake func(m *mayChu) *catalogueImportsFake
+		base          string
+		key, otherKey authz.Perm
+		fake          func(m *mayChu) *catalogueImportsFake
 	}{
-		{duongLoaiDonViDanCu, func(m *mayChu) *catalogueImportsFake { return m.residentialUnitTypeImports }},
-		{duongKhoiNhiemVu, func(m *mayChu) *catalogueImportsFake { return m.taskBlocImports }},
+		{duongLoaiDonViDanCu, residentialUnitTypeKey, taskBlocKey, func(m *mayChu) *catalogueImportsFake { return m.residentialUnitTypeImports }},
+		{duongKhoiNhiemVu, taskBlocKey, residentialUnitTypeKey, func(m *mayChu) *catalogueImportsFake { return m.taskBlocImports }},
 	} {
 		out = append(out,
-			catalogueImportRoute{c.base + " mẫu", "GET", c.base + "/import-template", http.StatusOK, c.fake},
-			catalogueImportRoute{c.base + " xem trước", "POST", c.base + "/import-previews", http.StatusOK, c.fake},
-			catalogueImportRoute{c.base + " nhập", "POST", c.base + "/imports", http.StatusCreated, c.fake},
+			catalogueImportRoute{c.base + " mẫu", "GET", c.base + "/import-template", http.StatusOK, c.key, c.otherKey, c.fake},
+			catalogueImportRoute{c.base + " xem trước", "POST", c.base + "/import-previews", http.StatusOK, c.key, c.otherKey, c.fake},
+			catalogueImportRoute{c.base + " nhập", "POST", c.base + "/imports", http.StatusCreated, c.key, c.otherKey, c.fake},
 		)
 	}
 	return out
@@ -108,7 +112,7 @@ func TestCatalogueImports_401WithoutToken(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.user` — the harness default, a real key that is not `admin.lookup`.
+// 403 WITH `admin.user` — the harness default, a real key that is neither catalogue's.
 func TestCatalogueImports_403WrongPermission(t *testing.T) {
 	m := dungMayChu(t)
 	tok := m.tokenCho(t, xaA, sidA)
@@ -122,7 +126,22 @@ func TestCatalogueImports_403WrongPermission(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.lookup` HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3).
+// 403 WITH THE OTHER CATALOGUE'S KEY ONLY (owner decision 15/10/2026): a role holding ONLY
+// `admin.lookup` no longer imports residential-unit types, and `admin.residential_unit` does not open
+// the task-bloc import.
+func TestCatalogueImports_403OtherCatalogueKey(t *testing.T) {
+	for _, rt := range catalogueImportRoutes() {
+		m := serverGranting(t, rt.otherKey)
+		if w := m.callCatalogueImportRoute(t, rt, hostA, m.tokenCho(t, xaA, sidA)); w.Code != http.StatusForbidden {
+			t.Errorf("%s: chỉ giữ %q mà mã = %d, muốn 403", rt.name, rt.otherKey, w.Code)
+		}
+		if n := m.catalogueImportCalls(); n != 0 {
+			t.Errorf("%s: khoá của danh mục kia mà use case đã chạy %d lần", rt.name, n)
+		}
+	}
+}
+
+// 403 WITH BOTH KEYS HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3).
 func TestCatalogueImports_403RightPermissionWrongCommune(t *testing.T) {
 	m := dungMayChuDanhMuc(t)
 	tok := m.tokenCho(t, xaB, sidB)
@@ -137,9 +156,10 @@ func TestCatalogueImports_403RightPermissionWrongCommune(t *testing.T) {
 }
 
 // 2xx, THE ROUTE PICKS THE CATALOGUE, THE HOST PICKS THE COMMUNE, AND THE TRAIL GETS THE STAFF CODE.
+// Each route is called holding ITS OWN catalogue's key and nothing else.
 func TestCatalogueImports_2xxRightCatalogueCommuneAndStaffCode(t *testing.T) {
 	for _, rt := range catalogueImportRoutes() {
-		m := dungMayChuDanhMuc(t)
+		m := serverGranting(t, rt.key)
 		tok := m.tokenCho(t, xaA, sidA)
 		w := m.callCatalogueImportRoute(t, rt, hostA, tok)
 		if w.Code != rt.ok {

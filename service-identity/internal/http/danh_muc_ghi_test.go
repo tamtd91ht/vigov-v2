@@ -17,8 +17,10 @@ import (
 )
 
 // THE SIX WRITE ROUTES OF THE TWO CATALOGUES — POST · PATCH · DELETE on residential-unit-types and
-// task-blocs, all `admin.lookup`. TABLE-DRIVEN OVER BOTH CATALOGUES, so no assertion is made on
-// whichever one was written first.
+// task-blocs. TABLE-DRIVEN OVER BOTH CATALOGUES, so no assertion is made on whichever one was written
+// first. Since the owner's decision of 15/10/2026 they declare DIFFERENT keys — residential-unit types
+// `admin.residential_unit` (Thôn/Tổ dân phố tab), task blocs `admin.lookup` (Danh mục tab) — and
+// TestDanhMucGhi_403KhoaCuaDanhMucKia proves neither key opens the other catalogue.
 //
 // What is asserted here is what the HANDLER owns: the permission, the status, the wire mapping, the
 // refusal of `source`/`tier`/`code` before the use case, and which of a principal's two identifiers
@@ -71,36 +73,57 @@ func ghiKhoiNhiemVuMau() *ghiDanhMucGia[domain.KhoiNhiemVu] {
 	}}
 }
 
-// dungMayChuDanhMuc grants `admin.lookup` in commune A and nothing in commune B. The harness default
-// grants `admin.user` — a real key that is not this one — which is the "wrong permission" case.
+// The two catalogues' keys, owner decision 15/10/2026 (service-identity migration 0032). The types
+// take the residential units' own key: they are edited on the same Thôn/Tổ dân phố tab.
+const (
+	residentialUnitTypeKey            = residentialUnitKey
+	taskBlocKey            authz.Perm = "admin.lookup"
+)
+
+// dungMayChuDanhMuc grants BOTH catalogues' keys in commune A and nothing in commune B, so the tests
+// that are about the wire, not the key, run over both catalogues. The harness default grants
+// `admin.user` — a real key that is neither — which is the "wrong permission" case.
 func dungMayChuDanhMuc(t *testing.T) *mayChu {
 	t.Helper()
+	return serverGranting(t, residentialUnitTypeKey, taskBlocKey)
+}
+
+// serverGranting grants EXACTLY the given keys in commune A and nothing in commune B.
+func serverGranting(t *testing.T, keys ...authz.Perm) *mayChu {
+	t.Helper()
+	held := map[authz.Perm]bool{}
+	for _, k := range keys {
+		held[k] = true
+	}
 	m := dungMayChu(t)
 	m.dungLai(t, func(d *Deps) {
 		d.Checker = checkerGia{quyen: map[tenant.ID]map[string]map[authz.Perm]bool{
-			xaA: {idNoiBo: {authz.Perm("admin.lookup"): true}},
+			xaA: {idNoiBo: held},
 			xaB: {},
 		}}
 	})
 	return m
 }
 
-// danhMucThu is one catalogue as the tests see it: its path, and the counters of its fake.
+// danhMucThu is one catalogue as the tests see it: its path, its key, the other catalogue's key, and
+// the counters of its fake.
 type danhMucThu struct {
-	ten   string
-	duong string
-	goi   func(m *mayChu) int
-	xa    func(m *mayChu) tenant.ID
-	nguoi func(m *mayChu) app.NguoiThucHien
+	ten      string
+	duong    string
+	key      authz.Perm
+	otherKey authz.Perm
+	goi      func(m *mayChu) int
+	xa       func(m *mayChu) tenant.ID
+	nguoi    func(m *mayChu) app.NguoiThucHien
 }
 
 func haiDanhMuc() []danhMucThu {
 	return []danhMucThu{
-		{"loại đơn vị dân cư", duongLoaiDonViDanCu,
+		{"loại đơn vị dân cư", duongLoaiDonViDanCu, residentialUnitTypeKey, taskBlocKey,
 			func(m *mayChu) int { return m.ghiLoaiDonViDanCu.tong() },
 			func(m *mayChu) tenant.ID { return m.ghiLoaiDonViDanCu.xaCuoi },
 			func(m *mayChu) app.NguoiThucHien { return m.ghiLoaiDonViDanCu.nguoiCuoi }},
-		{"khối nhiệm vụ", duongKhoiNhiemVu,
+		{"khối nhiệm vụ", duongKhoiNhiemVu, taskBlocKey, residentialUnitTypeKey,
 			func(m *mayChu) int { return m.ghiKhoiNhiemVu.tong() },
 			func(m *mayChu) tenant.ID { return m.ghiKhoiNhiemVu.xaCuoi },
 			func(m *mayChu) app.NguoiThucHien { return m.ghiKhoiNhiemVu.nguoiCuoi }},
@@ -154,7 +177,7 @@ func TestDanhMucGhi_401KhongToken(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.user` — a real key, which is not `admin.lookup`.
+// 403 WITH `admin.user` — a real key, which is neither catalogue's.
 func TestDanhMucGhi_403SaiQuyen(t *testing.T) {
 	for _, c := range moiTuyenDanhMuc() {
 		m := dungMayChu(t)
@@ -168,7 +191,25 @@ func TestDanhMucGhi_403SaiQuyen(t *testing.T) {
 	}
 }
 
-// 403 WITH `admin.lookup` HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3):
+// 403 WITH THE OTHER CATALOGUE'S KEY ONLY (owner decision 15/10/2026). The case that matters: a role
+// holding ONLY `admin.lookup` — every role that reached these screens before migration 0032 — no
+// longer writes residential-unit types; and `admin.residential_unit` does not open the task blocs.
+//
+// MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on POST /api/v1/residential-unit-types.
+func TestCatalogueWrites_403OtherCatalogueKey(t *testing.T) {
+	for _, c := range moiTuyenDanhMuc() {
+		m := serverGranting(t, c.dm.otherKey)
+		w := m.goiIdem(t, c.tg.method, hostA, c.tg.duong, c.tg.than, m.tokenCho(t, xaA, sidA))
+		if w.Code != http.StatusForbidden {
+			t.Errorf("%s: chỉ giữ %q mà mã = %d, muốn 403 — %s", c.tg.ten, c.dm.otherKey, w.Code, w.Body.String())
+		}
+		if c.dm.goi(m) != 0 {
+			t.Errorf("%s: khoá của danh mục kia mà use case đã chạy", c.tg.ten)
+		}
+	}
+}
+
+// 403 WITH BOTH KEYS HELD IN COMMUNE A, signed in properly at commune B (rule 5, invariant 3):
 // the session is valid; the authority is absent in THIS commune.
 func TestDanhMucGhi_403DungQuyenSaiXa(t *testing.T) {
 	for _, c := range moiTuyenDanhMuc() {
@@ -186,9 +227,11 @@ func TestDanhMucGhi_403DungQuyenSaiXa(t *testing.T) {
 // 2xx, THE COMMUNE OF THE HOST REACHES THE USE CASE, AND THE TRAIL GETS THE STAFF CODE.
 //
 // MUTATION THAT MUST TURN THIS RED: build audit.Actor from p.ID in nguoiThucHienCanBo.
+//
+// EACH ROUTE IS CALLED WITH ITS OWN CATALOGUE'S KEY AND NOTHING ELSE: the route's key alone suffices.
 func TestDanhMucGhi_2xxVaChuTheVetLaMaCanBo(t *testing.T) {
 	for _, c := range moiTuyenDanhMuc() {
-		m := dungMayChuDanhMuc(t)
+		m := serverGranting(t, c.dm.key)
 		w := m.goiIdem(t, c.tg.method, hostA, c.tg.duong, c.tg.than, m.tokenCho(t, xaA, sidA))
 		if w.Code != c.tg.ok {
 			t.Fatalf("%s: mã = %d, muốn %d — %s", c.tg.ten, w.Code, c.tg.ok, w.Body.String())
@@ -376,7 +419,7 @@ func TestDanhMucGhiKhoaChongGuiLap(t *testing.T) {
 	}
 }
 
-// THE READS STAY AnyAuthenticated: adding writes under `admin.lookup` must not have tightened them.
+// THE READS STAY AnyAuthenticated: adding writes under their keys must not have tightened them.
 func TestDanhMucDocVanKhongCanQuyen(t *testing.T) {
 	m := dungMayChu(t)
 	m.dungLai(t, func(d *Deps) { d.Checker = checkerGia{} })

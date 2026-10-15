@@ -1,7 +1,9 @@
 package http
 
 // The WRITE routes of this service's two reference catalogues — `residential-unit-types` and
-// `task-blocs` — POST · PATCH · DELETE, all under `admin.lookup` (user decision 2026-09-24).
+// `task-blocs` — POST · PATCH · DELETE (user decision 2026-09-24). The types are under
+// `admin.residential_unit` (the Thôn/Tổ dân phố tab's key), the blocs under `admin.lookup` — owner
+// decision 15/10/2026.
 //
 // THE CONTRACT IS THE SIBLINGS', FIELD FOR FIELD AND STATUS FOR STATUS
 // (service-petitions/internal/http/loai_nhiem_vu.go + danh_muc_ghi.go, and the same shape in
@@ -252,7 +254,7 @@ func xoaDanhMuc(h *Handler, w http.ResponseWriter, r *http.Request, ten string,
 // traLoiLoiGhiDanhMuc maps one use-case failure onto a status and a sentence — the SAME codes the
 // sibling catalogues answer (service-petitions/internal/http/danh_muc_ghi.go traLoiLoiGhi).
 //
-// 409 AND NOT 403 FOR A TIER REFUSAL: the caller holds `admin.lookup`; what is refused is this
+// 409 AND NOT 403 FOR A TIER REFUSAL: the caller holds the route's key; what is refused is this
 // operation on THIS row, and a 403 would send an administrator to the Phân quyền screen for nothing.
 func (h *Handler) traLoiLoiGhiDanhMuc(w http.ResponseWriter, r *http.Request, ten, viec string, err error) {
 	switch {

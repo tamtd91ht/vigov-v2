@@ -232,7 +232,7 @@ func TestSystemMessages_401WithoutSession(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			doiMa(t, s.call(rt.method, hostA, rt.path, nil, rt.body), http.StatusUnauthorized)
 			if s.svc.calls != 0 {
 				t.Error("use case ran with no session")
@@ -244,18 +244,21 @@ func TestSystemMessages_401WithoutSession(t *testing.T) {
 func TestSystemMessages_403WrongPermission(t *testing.T) {
 	// `budget.read` and `admin.audit` are real keys and deliberately not enough: reading the
 	// budget, or reading the trail, is not administering the commune's configuration.
+	// `admin.lookup` is among them on purpose: it guarded these routes until the owner's decision of
+	// 15/10/2026 gave the Lời hệ thống tab its own key (migration 0032). Quản lý danh mục alone no
+	// longer opens it. MUTATION THAT MUST TURN THIS RED: put `admin.lookup` back on any route.
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "budget.read", "budget.confirm", "admin.audit")
+			s.grant(xaA, "budget.read", "budget.confirm", "admin.audit", "admin.lookup")
 			doiMa(t, s.call(rt.method, hostA, rt.path, canBoGhi(xaA), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
-				t.Error("use case ran without admin.lookup")
+				t.Error("use case ran without admin.system_message")
 			}
 			// The key the ROUTE asked for, against a literal: a fake checker grants any string, so
 			// only this catches a key the `quyen` table lacks (rule 5, invariant 3c).
-			if got := s.checker.hoiKhoaCuoi(); got != "admin.lookup" {
-				t.Errorf("route asked for %q, want admin.lookup", got)
+			if got := s.checker.hoiKhoaCuoi(); got != "admin.system_message" {
+				t.Errorf("route asked for %q, want admin.system_message", got)
 			}
 		})
 	}
@@ -266,7 +269,7 @@ func TestSystemMessages_403RightPermissionWrongCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			doiMa(t, s.call(rt.method, hostB, rt.path, canBoGhi(xaB), rt.body), http.StatusForbidden)
 			if s.svc.calls != 0 {
 				t.Error("commune A's grant let commune B configure its sentences")
@@ -279,7 +282,7 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 	for _, rt := range systemMessageRoutes() {
 		t.Run(rt.name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			doiMa(t, s.call(rt.method, hostA, rt.path, canBoGhi(xaA), rt.body), rt.ok)
 			if s.svc.calls != 1 || s.svc.commune != xaA {
 				t.Fatalf("calls=%d commune=%q, want one call in the Host's commune", s.svc.calls, s.svc.commune)
@@ -301,7 +304,7 @@ func TestSystemMessages_200RightPermissionRightCommune(t *testing.T) {
 
 func TestListSystemMessagesShape(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	at := time.Date(2026, 9, 28, 3, 0, 0, 0, time.UTC)
 	s.svc.list = []domain.SystemMessage{{
 		Key: domain.KeyBudgetScopeNotice, Description: "d", DefaultText: "Mặc định.",
@@ -331,7 +334,7 @@ func TestListSystemMessagesShape(t *testing.T) {
 
 func TestListSystemMessagesOnDefaultOmitsWhoAndWhen(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.svc.list = []domain.SystemMessage{{Key: domain.KeyBudgetScopeNotice, DefaultText: "M.", CurrentText: "M."}}
 	w := s.call(http.MethodGet, hostA, systemMessagesPath, canBoGhi(xaA), "")
 	doiMa(t, w, http.StatusOK)
@@ -342,7 +345,7 @@ func TestListSystemMessagesOnDefaultOmitsWhoAndWhen(t *testing.T) {
 
 func TestRewordSystemMessagePassesTextAndReturnsMessage(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.svc.result = domain.SystemMessage{Key: domain.KeyBudgetScopeNotice, CurrentText: "Câu của xã.", Overridden: true}
 	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":"Câu của xã."}`)
 	doiMa(t, w, http.StatusOK)
@@ -369,7 +372,7 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			s.svc.err = c.err
 			w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":""}`)
 			doiMa(t, w, c.want)
@@ -384,7 +387,7 @@ func TestSystemMessageRefusalsMapped(t *testing.T) {
 func TestEmptyTextNamesTheRestoreAction(t *testing.T) {
 	// 400 on empty text must tell the administrator what to do instead.
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	s.svc.err = domain.ErrMessageTextEmpty
 	w := s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":"  "}`)
 	doiMa(t, w, http.StatusBadRequest)
@@ -397,7 +400,7 @@ func TestUnknownKeyIs404OnBothWrites(t *testing.T) {
 	for _, method := range []string{http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
 			s := newSystemMessagesHarness(t)
-			s.grant(xaA, "admin.lookup")
+			s.grant(xaA, "admin.system_message")
 			s.svc.err = domain.ErrUnknownMessageKey
 			body := ""
 			if method == http.MethodPut {
@@ -414,7 +417,7 @@ func TestUnknownKeyIs404OnBothWrites(t *testing.T) {
 
 func TestRewordBadJSONIs400AndCallsNothing(t *testing.T) {
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	doiMa(t, s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":`),
 		http.StatusBadRequest)
 	if s.svc.calls != 0 {
@@ -425,7 +428,7 @@ func TestRewordBadJSONIs400AndCallsNothing(t *testing.T) {
 func TestSystemMessageWriteWithoutBusinessCodeIs500(t *testing.T) {
 	// canBoCua carries no `Ma`: the trail could not name who acted, so nothing is written.
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	doiMa(t, s.call(http.MethodDelete, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoCua(xaA), ""),
 		http.StatusInternalServerError)
 	if s.svc.calls != 0 {
@@ -437,7 +440,7 @@ func TestSystemMessageWritesNeedNoIdempotencyKey(t *testing.T) {
 	// Both writes declare idem.KhongCan; the harness sends no Idempotency-Key at all, so a 200/204
 	// here is the declaration under test. Making them Required would break the Lưu button.
 	s := newSystemMessagesHarness(t)
-	s.grant(xaA, "admin.lookup")
+	s.grant(xaA, "admin.system_message")
 	doiMa(t, s.call(http.MethodPut, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), `{"text":"x"}`), http.StatusOK)
 	doiMa(t, s.call(http.MethodDelete, hostA, overridePath(domain.KeyBudgetScopeNotice), canBoGhi(xaA), ""), http.StatusNoContent)
 }
