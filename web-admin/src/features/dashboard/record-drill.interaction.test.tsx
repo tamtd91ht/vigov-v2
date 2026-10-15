@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 //
 // jsdom: what this pins — each register read with the figure's own filter, the rows and their `Mở`
-// links, the description's n from the server, paging — are effects and clicks.
+// buttons (the record opens ON Tổng quan, tester bug sheet), the description's n from the server,
+// paging — are effects and clicks.
 
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -11,6 +12,7 @@ import type { documents_vanBanDenRa, finance_duAnRa, petitions_phieuPhanAnhRa } 
 
 import { DRILL_EMPTY, drillDescriptionOf } from "./drill-dialog";
 import { PROJECT_HEADERS, RecordDrillDialog } from "./record-drill";
+import type { RecordDetailTarget } from "./record-detail";
 import type { DrillRequest } from "./view";
 
 beforeAll(() => {
@@ -68,8 +70,20 @@ function stub(routes: (url: string) => Response | null): string[] {
   return seen;
 }
 
+let opened: RecordDetailTarget[] = [];
+
 function dialog(request: Exclude<DrillRequest, { list: "tasks" }>): ReactNode {
-  return <RecordDrillDialog request={request} onClose={() => {}} />;
+  opened = [];
+  return <RecordDrillDialog request={request} onOpen={(t) => opened.push(t)} onClose={() => {}} />;
+}
+
+/** `Mở <code>` — a BUTTON that opens the record on this page; no link leaves Tổng quan. */
+function openButton(row: Element, code: string): HTMLButtonElement {
+  expect(row.querySelector("a")).toBeNull();
+  const b = row.querySelector<HTMLButtonElement>(`button[aria-label="Mở ${code}"]`);
+  expect(b).not.toBeNull();
+  expect(b!.getAttribute("aria-haspopup")).toBe("dialog");
+  return b!;
 }
 
 function document_(id: string, patch: Partial<documents_vanBanDenRa> = {}): documents_vanBanDenRa {
@@ -155,8 +169,8 @@ describe("RecordDrillDialog — Văn bản & Đơn thư", () => {
     expect(first.textContent).toContain("Văn phòng UBND");
     expect(first.textContent).toContain("Nguyễn Văn An");
     expect(first.textContent).toContain("20/9/2026");
-    // No per-document deep link exists: `Mở` opens the same filtered register the figure linked to.
-    expect(first.querySelector('a[aria-label="Mở 12/2026"]')?.getAttribute("href")).toBe("/van-ban?metric=overdue");
+    act(() => openButton(first, "12/2026").click());
+    expect(opened).toEqual([{ kind: "incoming-document", id: "A" }]);
     expect(el.textContent).toContain(drillDescriptionOf("văn bản", 1));
   });
 
@@ -217,7 +231,8 @@ describe("RecordDrillDialog — Phản ánh người dân", () => {
     }
     expect(el.textContent).toContain(drillDescriptionOf("phản ánh", 1));
     const first = rows(el)[0]!;
-    expect(first.querySelector('a[aria-label="Mở PA-7F3K-9QXR-MNPT"]')?.getAttribute("href")).toBe("/phan-anh?id=PA-7F3K-9QXR-MNPT");
+    act(() => openButton(first, "PA-7F3K-9QXR-MNPT").click());
+    expect(opened).toEqual([{ kind: "citizen-report", code: "PA-7F3K-9QXR-MNPT" }]);
     expect(first.textContent).toContain("21/9/2026");
     expect(first.textContent).toContain("Chưa phân công");
   });
@@ -251,7 +266,8 @@ describe("RecordDrillDialog — Giải ngân ngân sách", () => {
     expect(first.textContent).toContain("Văn phòng UBND");
     expect(first.textContent).toContain("Nguyễn Văn An");
     expect(first.textContent).toContain("15/12/2026");
-    expect(first.querySelector('a[aria-label="Mở DA-1"]')?.getAttribute("href")).toBe("/giai-ngan");
+    act(() => openButton(first, "DA-1").click());
+    expect(opened).toEqual([{ kind: "project", id: "1" }]);
     expect(el.textContent).toContain(drillDescriptionOf("dự án", 1));
     expect(el.textContent).not.toContain("Xem thêm");
   });

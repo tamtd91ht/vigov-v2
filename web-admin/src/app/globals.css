@@ -86,8 +86,7 @@
   /* SPEC NAMES (owner's Giải ngân spec 00 §2, ADR 0068 lần 6), so markup copied from the prototype
    * (`text-navy`, `text-ink-muted`, `bg-brand/6`, `bg-danger/12`) works as written. Each one POINTS
    * AT the role token that already carries the same value, rather than repeating a hex: one value
-   * per colour, and the Trình chiếu overlay (`[data-presentation="on"]`), which re-themes the role
-   * tokens, re-themes these too. Tailwind v4 lets `bg-brand` sit next to `bg-brand-500`.
+   * per colour, and a scope that re-themes the role tokens re-themes these too. Tailwind v4 lets `bg-brand` sit next to `bg-brand-500`.
    * `surface` is NOT re-declared: in this app `bg-surface` is the WHITE card and `bg-canvas` the
    * page — the spec's `bg-surface` (page) is written `bg-canvas` here. */
   --color-navy: var(--ink-900);
@@ -334,63 +333,21 @@
   }
 
   /*
-   * TRÌNH CHIẾU — Tổng quan's meeting-room overlay (`features/dashboard/presentation.tsx`, user decision
-   * 07/10/2026: "nền tối"). The dark tokens above, SCOPED TO THE OVERLAY ELEMENT: the app-wide dark
-   * theme stays off (owner 02/10/2026) and nothing here sets `data-theme`. Utilities read these through
-   * `@theme inline`, so everything drawn inside the overlay re-themes; portals on `<body>` (a "?"
-   * description) stay light.
-   *
-   * THE DARK SET ALONE IS NOT ENOUGH HERE, so a few roles get their own dark values, each measured
-   * (WCAG 2.x) against `--surface` #162033, the card behind every figure:
-   *   status text  the light reds/greens/ambers are 2.6–2.9:1 on it. #ff8a80 7.14 (6.61 on its tint) ·
-   *                #7ee2a0 10.30 (8.84) · #f6b955 9.30 (7.90)
-   *   alarm frame  `--red-200` #c4606a 4.06 (a non-text border, 3:1 needed)
-   *   brand 600    the dark set's #4c8fe6 carries white at 3.29 — the selected period button and the
-   *                pressed toggle are white text on it. #2f6fc4: white 5.01; hover #275a9f 6.89
-   *   brand 500    focus ring / current block ring #38bdf8: 7.61 on the card, 8.44 on `--bg`
-   *   accent       hover tints = the dark brand tints; `--accent-700` (link text) #7cc8f8 8.90
-   *   subtle fills navy 5% vanishes on navy: the secondary buttons get light 8% / 16% (text 10.88)
+   * TRÌNH CHIẾU (`features/dashboard/presentation.tsx`) TAKES NO TOKENS OF ITS OWN: it stays in the
+   * normal light theme. Its overlay once re-themed itself dark here ("nền tối", spec 01 §2); the tester
+   * refused that (Tổng quan bug sheet: "Không chuyển sang darkmode, vẫn là light mode bình thường"), and
+   * the prototype's overlay is the light page surface (`DashboardWorkspace.tsx:114-115`). A dark scope
+   * on `[data-presentation]` brings the bug back — `presentation.interaction.test.tsx` reads this file.
    */
-  [data-presentation="on"] {
-    --bg: #0e1626;
-    --surface: #162033;
-    --surface-muted: #1a2639;
-    --line: #24314a;
-    --line-strong: #33425e;
-    --ink-900: #e6edf7;
-    --ink-700: #c3cfdf;
-    --ink-500: #aebbcc;
-    --ink-400: #8ea0b8;
-    --brand-50: #16294a;
-    --brand-100: #1d3560;
-    --brand-600: #2f6fc4;
-    --brand-700: #275a9f;
-    --brand-500: #38bdf8;
-    --accent-50: #16294a;
-    --accent-100: #1d3560;
-    --accent-700: #7cc8f8;
-    --surface-subtle: rgba(230, 237, 247, 0.08);
-    --surface-subtle-2: rgba(230, 237, 247, 0.16);
-    --red-600: #ff8a80;
-    --red-200: #c4606a;
-    --red-50: #3b1d27;
-    --green-600: #7ee2a0;
-    --green-50: #12321f;
-    --amber-600: #f6b955;
-    --amber-50: #3a2a10;
-    color-scheme: dark;
-  }
 
   /*
    * shadcn/ui semantic variables (spec 00 §2). They POINT AT the role tokens, so a value lives once.
    * DECLARED AGAIN ON EVERY SCOPE THAT RE-THEMES THE ROLES, not on `:root` alone: a custom property
    * holding `var(--x)` is resolved where it is declared and inherited as that resolved colour, so an
-   * alias set only on `:root` would keep the LIGHT navy inside the Trình chiếu overlay while the role
-   * tokens around it turned dark.
+   * alias set only on `:root` would keep the LIGHT values under a dark scope.
    */
   :root,
-  :root[data-theme="dark"],
-  [data-presentation="on"] {
+  :root[data-theme="dark"] {
     --background: var(--bg);
     --foreground: var(--ink-700);
     --card: var(--surface);

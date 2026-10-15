@@ -260,15 +260,41 @@ describe("FiscalBlock — ADR 0035 §A: the reason sentence instead of a figure"
     revenue_totals: [],
   };
 
-  it("shows the server's sentence, the temporary balance label, and links to Thu - Chi", () => {
+  it("shows the server's sentence and the temporary balance label", () => {
     const html = renderToStaticMarkup(<FiscalBlock result={ok(indicators)} year={2026} />);
     expect(html).toContain("Bảng thu năm 2026 chưa đánh dấu dòng tổng.");
     expect(html).toContain("Chưa có bảng chi năm 2026.");
     expect(html).toContain("91,30%");
     expect(html).toContain(NHAN_CHENH_LECH);
-    expect(html).toContain('href="/giai-ngan/thu-chi"');
     expect(html).toContain("Luỹ kế năm 2026, không so với kỳ trước.");
     expect(html).not.toContain("so với kỳ trước<");
+  });
+
+  // Tester bug sheet, Tổng quan: "Bỏ chức năng click vào từng con số báo cáo. Chỉ cần hiển thị con số thôi".
+  it("every figure is display-only: no link, no button, no tab stop — loaded, with totals, and failed", () => {
+    const withTotals: finance_chiSoNamRa = {
+      ...indicators,
+      revenue_achievement: { name: "Thu đạt dự toán", basis_points: 10810 },
+      balance: { amount: 9_640_000_000 },
+      revenue_totals: [{ column_id: "c1", name: "Thu xã hưởng", value: 4_317_000_000 }],
+    };
+    for (const html of [
+      renderToStaticMarkup(<FiscalBlock result={ok(indicators)} year={2026} />),
+      renderToStaticMarkup(<FiscalBlock result={ok(withTotals)} year={2026} />),
+      renderToStaticMarkup(<FiscalBlock result={failed("Mạng hỏng.")} year={2026} />),
+      renderToStaticMarkup(<FiscalBlock result={null} year={2026} />),
+    ]) {
+      const tiles = /<ul[^>]*>.*<\/ul>/s.exec(html)?.[0] ?? "";
+      expect(tiles).not.toBe("");
+      expect(tiles).not.toContain("<a ");
+      expect(tiles).not.toContain("<button");
+      expect(tiles).not.toContain("href=");
+      expect(tiles).not.toContain("aria-haspopup");
+    }
+    // still shown: the figures themselves
+    const html = renderToStaticMarkup(<FiscalBlock result={ok(withTotals)} year={2026} />);
+    expect(html).toContain("108,10%");
+    expect(html).toContain("Thu xã hưởng");
   });
 
   it("a failed call shows '—' and the error line", () => {

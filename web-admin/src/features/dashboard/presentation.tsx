@@ -8,9 +8,13 @@ import { Button } from "@/components/ui/button";
 
 /**
  * "Trình chiếu" — the meeting-room mode of Tổng quan (spec 01 §2: "Ẩn sidebar + header, phóng to chữ,
- * nền tối, điều hướng bằng phím"; prototype `DashboardWorkspace.tsx:110-130,196-208`). BUILT on the
- * user's decision of 07/10/2026, overriding ADR 0053 / ADR 0068 "giai đoạn 2" for this one control —
- * the same precedent as the export (ae894ce4).
+ * điều hướng bằng phím"; prototype `DashboardWorkspace.tsx:110-130,196-208`). BUILT on the user's
+ * decision of 07/10/2026, overriding ADR 0053 / ADR 0068 "giai đoạn 2" for this one control — the same
+ * precedent as the export (ae894ce4).
+ *
+ * LIGHT, NOT DARK: the spec's "nền tối" is NOT drawn. The tester refused the dark overlay (Tổng quan bug
+ * sheet: "Không chuyển sang darkmode, vẫn là light mode bình thường"), and the prototype's overlay is the
+ * light page surface (`bg-surface`, `DashboardWorkspace.tsx:114-115` = our `bg-canvas`).
  *
  * A PAGE OVERLAY, NOT THE BROWSER'S FULLSCREEN API — as `/ban-do`'s map (`map-expand.tsx`): the "?"
  * descriptions open in portals on `<body>`, which a fullscreen element would hide. The projector's
@@ -112,9 +116,8 @@ export function inertOutside(frame: HTMLElement): HTMLElement[] {
 
 /**
  * The frame around the WHOLE page body — header, grid, the "kỳ trước" note. Off: a plain wrapper,
- * nothing else. On: `fixed inset-0` over the shell, dark tokens scoped to it (`[data-presentation]` in
- * `globals.css` — the app-wide dark theme stays OFF, owner 02/10/2026), the page behind locked and
- * inert, and the keyboard stops.
+ * nothing else. On: `fixed inset-0` over the shell on the normal light page background (no token scope
+ * of its own — `globals.css`), the page behind locked and inert, and the keyboard stops.
  *
  * THE SAME ELEMENT IN BOTH STATES: switching only its attributes keeps the toggle — which lives inside
  * it, in the page header — the very element that had focus, so a mouse click never loses focus.

@@ -817,7 +817,7 @@ export function EconomicMapScreen({ basemapAvailable }: { basemapAvailable: bool
     // `app/ban-do/page.tsx`), no card; from lg the screen is exactly the window under the 4rem topbar, so
     // the left column scrolls inside and the map runs to the right and bottom edges. Stacked below lg.
     // "Trình chiếu" turns THIS element into the overlay (same element, so the map is never rebuilt).
-    // `data-map-presentation`, never `data-presentation`: that one switches on Tổng quan's dark tokens.
+    // `data-map-presentation`, never `data-presentation`: that one names Tổng quan's overlay frame.
     <div
       ref={rootRef}
       className={

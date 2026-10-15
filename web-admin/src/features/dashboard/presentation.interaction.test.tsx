@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 //
 // jsdom: "Trình chiếu" (spec 01 §2, user decision 07/10/2026) is a MODE of the page — a full-screen
-// dark overlay, larger type, keyboard stops per block. What breaks silently is the plumbing around it:
+// LIGHT overlay (tester bug sheet, Tổng quan: no dark mode), larger type, keyboard stops per block. What breaks silently is the plumbing around it:
 // the page behind still scrolling or still reachable by Tab, Esc swallowed from an open "?", the
 // body left locked after a drill-down navigates away. Each is pinned here on the mounted page.
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -124,7 +127,7 @@ describe("Trình chiếu — the toggle", () => {
     expect(frame(el)).toBeNull();
   });
 
-  it("pressing it opens the dark full-screen overlay; the shell behind is locked and unreachable", async () => {
+  it("pressing it opens the full-screen overlay; the shell behind is locked and unreachable", async () => {
     const el = await mountPage();
     act(() => toggle(el).click());
     expect(toggle(el).getAttribute("aria-pressed")).toBe("true");
@@ -261,7 +264,22 @@ function taskTiles(html: string): string {
 }
 
 describe("Trình chiếu — what it draws", () => {
-  it("the overlay carries the dark token scope and every tile grid is 2 columns", () => {
+  it("the overlay stays LIGHT: the page's own background, and no stylesheet rule re-themes it", () => {
+    const html = render(data({ current: ok(ZERO), previous: ok(ZERO) }), true);
+    const overlay = /<div[^>]*data-presentation="on"[^>]*>/.exec(html)?.[0] ?? "";
+    expect(overlay).toContain("bg-canvas");
+    expect(overlay).not.toMatch(/\bdark\b|data-theme/);
+    // The bug was a token scope in globals.css, not a class: any rule selecting `[data-presentation`
+    // re-themes the overlay. Comments are cut first — the file explains why the rule is gone.
+    // `process.cwd()` = `web-admin/` (vitest's root); jsdom's `import.meta.url` is not a file URL.
+    const css = readFileSync(join(process.cwd(), "src", "app", "globals.css"), "utf8").replace(
+      /\/\*[\s\S]*?\*\//g,
+      "",
+    );
+    expect(css).not.toContain("[data-presentation");
+  });
+
+  it("every tile grid is 2 columns in the mode", () => {
     const html = render(data({ current: ok(ZERO), previous: ok(ZERO) }), true);
     expect(html).toContain('data-presentation="on"');
     // tasks has five figures: 3 columns normally, ALWAYS 2 here (prototype DashboardWorkspace:230-236)

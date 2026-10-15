@@ -53,7 +53,18 @@ type TrangThaiChiTiet =
   | { pha: "loi"; thongBao: string }
   | { pha: "xong"; duAn: finance_duAnRa };
 
-export function ChiTietDuAn({ id }: { id: string }) {
+export function ChiTietDuAn({
+  id,
+  backLink = true,
+}: {
+  id: string;
+  /**
+   * The `← Theo dõi giải ngân` link. `false` when the detail is hosted IN PLACE on another screen (Tổng
+   * quan's dialog, `features/dashboard/record-detail.tsx`): there the way back is the dialog's ✕, and a
+   * link to `/giai-ngan` is exactly the jump to the module's menu the tester refused.
+   */
+  backLink?: boolean;
+}) {
   /**
    * KẾT QUẢ LƯU KÈM KHOÁ ĐÃ SINH RA NÓ, và "đang tải" SUY RA từ chỗ hai khoá lệch nhau — cùng
    * khuôn `bang-du-an.tsx`, và cùng lý do: một `setState` thẳng trong thân effect vừa là thứ React
@@ -113,13 +124,15 @@ export function ChiTietDuAn({ id }: { id: string }) {
 
   return (
     <section className="flex min-w-0 flex-col" aria-label="Chi tiết dự án">
-      <Link
-        href="/giai-ngan"
-        className="text-ink-muted hover:text-navy mb-3 inline-flex w-fit items-center gap-1.5 text-[12.5px] no-underline"
-      >
-        <Glyph icon={ArrowLeft} className="size-3.5 shrink-0" />
-        Theo dõi giải ngân
-      </Link>
+      {backLink && (
+        <Link
+          href="/giai-ngan"
+          className="text-ink-muted hover:text-navy mb-3 inline-flex w-fit items-center gap-1.5 text-[12.5px] no-underline"
+        >
+          <Glyph icon={ArrowLeft} className="size-3.5 shrink-0" />
+          Theo dõi giải ngân
+        </Link>
+      )}
 
       {/* No scope notice here (spec 07, row D2): the list page carries it. */}
 

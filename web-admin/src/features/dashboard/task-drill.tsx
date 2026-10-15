@@ -36,6 +36,7 @@ import {
   DrillTableDialog,
   type DrillBody,
 } from "./drill-dialog";
+import { RecordDetail, type RecordDetailTarget } from "./record-detail";
 import { RecordDrillDialog } from "./record-drill";
 import type { DashboardDrill, DrillRequest, TaskDrillRequest } from "./view";
 
@@ -60,7 +61,9 @@ import type { DashboardDrill, DrillRequest, TaskDrillRequest } from "./view";
  *
  * THE SAME HOOK OPENS THE OTHER REGISTERS' LISTS (sheet web-admin-131026, TỔNG QUAN): a figure of Văn bản
  * & Đơn thư, Phản ánh người dân or Giải ngân ngân sách sends a `DrillRequest` keyed by its register and
- * gets `RecordDrillDialog` (`record-drill.tsx`) — the same frame, its own read-only route, `Mở` a link.
+ * gets `RecordDrillDialog` (`record-drill.tsx`) — the same frame, its own list route. Its `Mở` opens the
+ * record's own detail HERE (`record-detail.tsx`, tester bug sheet Tổng quan), above the dialog, exactly
+ * as a task row opens the task drawer; a write there re-reads the rows, and the figures once it closes.
  */
 export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: DashboardDrill; overlay: ReactNode } {
   const session = usePhien();
@@ -71,6 +74,22 @@ export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: Dash
   // Bumped after every write in the drawer: the dialog's rows re-read, kept on screen meanwhile.
   const [listRefresh, setListRefresh] = useState(0);
   const wroteSinceOpen = useRef(false);
+
+  // ── One record of another register, opened from its list (`record-detail.tsx`) ──
+  const [record, setRecord] = useState<RecordDetailTarget | null>(null);
+  const [recordListRefresh, setRecordListRefresh] = useState(0);
+  const recordWrote = useRef(false);
+  const closeRecord = useCallback(() => {
+    setRecord(null);
+    if (recordWrote.current) {
+      recordWrote.current = false;
+      setRecordListRefresh((n) => n + 1);
+      onTasksChanged();
+    }
+  }, [onTasksChanged]);
+  const recordChanged = useCallback(() => {
+    recordWrote.current = true;
+  }, []);
 
   // ── The drawer: ONE at a time, the register's reducer without record tabs (as `leader-notebook.tsx`) ──
   const [drawer, dispatchDrawer] = useReducer(chuyenDrawer, null);
@@ -150,7 +169,21 @@ export function useDashboardTaskDrill(onTasksChanged: () => void): { drill: Dash
   const overlay = (
     <>
       {request !== null && request.list !== "tasks" && (
-        <RecordDrillDialog request={request} onClose={() => setRequest(null)} />
+        <RecordDrillDialog
+          request={request}
+          refresh={recordListRefresh}
+          onOpen={setRecord}
+          onClose={() => setRequest(null)}
+        />
+      )}
+      {record !== null && (
+        <RecordDetail
+          // Keyed by the record: opening another one is a fresh detail, no draft carried over.
+          key={record.kind === "citizen-report" ? `p:${record.code}` : `${record.kind}:${record.id}`}
+          target={record}
+          onClose={closeRecord}
+          onChanged={recordChanged}
+        />
       )}
       {request !== null && request.list === "tasks" && (
         <TaskDrillDialog

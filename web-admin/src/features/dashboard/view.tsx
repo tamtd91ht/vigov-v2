@@ -179,6 +179,12 @@ type Figure = {
    * drill-down link's target and period; a Giải ngân figure carries its budget year (`FigureDrill`).
    */
   readonly drill?: FigureDrill;
+  /**
+   * The figure is SHOWN, never pressed: no link, no dialog, no hover fill. The Thu - Chi block (tester
+   * bug sheet, Tổng quan: "Bỏ chức năng click vào từng con số báo cáo. Chỉ cần hiển thị con số thôi").
+   * `href` stays for the exported files only.
+   */
+  readonly displayOnly?: boolean;
   /** stock (the register now) or period (counted in the window) — what `/bao-cao`'s chart may plot */
   readonly kind?: FigureKind;
   /** which way is good — colours `/bao-cao`'s delta line and chart bar */
@@ -839,7 +845,12 @@ function FigureTile({ figure, value }: { figure: Figure; value?: ReactNode }) {
   );
   return (
     <li className={cn("@container min-w-0", sentence && "col-span-full")}>
-      {request !== null ? (
+      {figure.displayOnly === true ? (
+        // Text only — no role, no tab stop: the value and its label are read in order.
+        <div title={figure.exact} className={TILE_BODY}>
+          {body}
+        </div>
+      ) : request !== null ? (
         <button
           type="button"
           title={figure.exact}
@@ -1461,7 +1472,9 @@ function indicatorFigure(id: string, c: finance_chiSoRa, onePlace = false): Figu
         : nhanChiSo(c),
     href: FISCAL_SCREEN_PATH,
     comparison: null,
-    sentence: c.basis_points === null,  };
+    sentence: c.basis_points === null,
+    displayOnly: true,
+  };
 }
 
 /**
@@ -1497,7 +1510,7 @@ export function FiscalBlock({
     const tile = (label: string, i: number) => (
       <FigureTile
         key={label}
-        figure={{ id: `fiscal-${i}`, label, display: shown, href: FISCAL_SCREEN_PATH, comparison: null }}
+        figure={{ id: `fiscal-${i}`, label, display: shown, href: FISCAL_SCREEN_PATH, comparison: null, displayOnly: true }}
       />
     );
     return (
@@ -1530,7 +1543,9 @@ export function FiscalBlock({
           exact: total.exact,
           href: FISCAL_SCREEN_PATH,
           comparison: null,
-          sentence: total.reason !== null,        }}
+          sentence: total.reason !== null,
+          displayOnly: true,
+        }}
         value={<OTien chu={total.shown} lyDo={total.reason} hienLyDo />}
       />
     );
@@ -1631,6 +1646,7 @@ function balanceFigure(d: finance_chiSoNamRa, layout: BlockLayout = "dashboard")
     href: FISCAL_SCREEN_PATH,
     comparison: null,
     sentence: d.balance.amount === null,
+    displayOnly: true,
     raw: safeAmount(d.balance.amount) ? d.balance.amount : undefined,
   };
 }

@@ -1,11 +1,9 @@
 "use client";
 
 import { ExternalLink } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 import { CHUA_PHAN_CONG, danhBaChoNhatKy, nhanCanBoNgan, nhanNgay } from "@/features/nhiem-vu/nhan-nhiem-vu"; // vi-name-ok: existing formatters of the register, imported not declared
-import { petitionHref } from "@/features/phan-anh/petition-merge";
 import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi"; // vi-name-ok: existing staff-directory client
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc"; // vi-name-ok: existing org-unit client
 import { layDanhSachDuAn } from "@/lib/api/du-an"; // vi-name-ok: existing project-list client
@@ -32,8 +30,9 @@ import {
   type DrillHeaders,
   type DrillRow,
 } from "./drill-dialog";
-import { drillHref, formatCount } from "./figures";
-import { BUDGET_SCREEN_PATH, type DrillRequest } from "./view";
+import { formatCount } from "./figures";
+import type { RecordDetailTarget } from "./record-detail";
+import type { DrillRequest } from "./view";
 
 /**
  * Tổng quan's rows behind a figure of Văn bản & Đơn thư, Phản ánh người dân and Giải ngân ngân sách
@@ -50,18 +49,25 @@ import { BUDGET_SCREEN_PATH, type DrillRequest } from "./view";
  * is unpaged (all or a refusal); the incoming register has no count route, so n is said only once every
  * page is read — never the length of one page dressed up as the total.
  *
- * `Mở` is a LINK to the register's screen: a petition opens by its `?id=` deep link (`petitionHref`);
- * `/van-ban` and `/giai-ngan` have no per-record deep link, so theirs open the same filtered list the
- * figure's link led to before (`/van-ban?metric=…`) and the Giải ngân screen.
+ * `Mở` OPENS THE RECORD'S DETAIL ON THIS PAGE (`record-detail.tsx`), above this dialog — never a jump to
+ * the register's screen (tester bug sheet, Tổng quan: "mở chi tiết item đó ngay màn hình Tổng quan,
+ * không được mở ra màn hình menu chức năng"). Closing the detail comes back to this list; after a write
+ * in it the list is read again (`refresh`).
  *
  * Rule 3: a petition's content and a document's summary are free text that can name a citizen. They go
  * into a table cell as text — never an attribute, a title, a URL or a log. `Mở` is named by the CODE.
  */
 export function RecordDrillDialog({
   request,
+  refresh = 0,
+  onOpen,
   onClose,
 }: {
   request: Exclude<DrillRequest, { list: "tasks" }>;
+  /** A newer number = read the rows again (a write happened in an opened record). */
+  refresh?: number;
+  /** `Mở` of one row: the record's detail, on this page. */
+  onOpen: (target: RecordDetailTarget) => void;
   onClose: () => void;
 }) {
   // Names for the unit and staff columns: both `any-authenticated` reads of this commune, read once.
@@ -86,10 +92,9 @@ export function RecordDrillDialog({
   switch (request.list) {
     case "incoming-documents": {
       const { metric, period } = request;
-      const listHref = drillHref({ list: "incoming-documents", metric }, period);
       return (
         <PagedDrill<documents_vanBanDenRa>
-          readKey={`incoming-documents|${metric}|${period.from}|${period.to}`}
+          readKey={`incoming-documents|${metric}|${period.from}|${period.to}|${refresh}`}
           title={request.label}
           noun="văn bản"
           read={(cursor) =>
@@ -105,7 +110,7 @@ export function RecordDrillDialog({
               unit: unit(d.holding_unit),
               assignee: person(d.assignee),
               due: nhanNgay(d.due_at),
-              open: <OpenLink href={listHref} code={code} />,
+              open: <OpenButton code={code} onOpen={() => onOpen({ kind: "incoming-document", id: d.id })} />,
             };
           }}
           onClose={onClose}
@@ -117,7 +122,7 @@ export function RecordDrillDialog({
       const filter = { metric, from: period.from, to: period.to };
       return (
         <PagedDrill<petitions_phieuPhanAnhRa>
-          readKey={`citizen-reports|${metric}|${period.from}|${period.to}`}
+          readKey={`citizen-reports|${metric}|${period.from}|${period.to}|${refresh}`}
           title={request.label}
           noun="phản ánh"
           read={(cursor) => laySoPhanAnh({ ...filter, limit: DRILL_PAGE_SIZE, cursor })}
@@ -131,7 +136,7 @@ export function RecordDrillDialog({
             // The commitment the register prints as "Hạn" (`so-phan-anh.tsx`): the resolve deadline,
             // "—" until classification fixes it (rule 10, inv. 2).
             due: nhanNgay(p.resolve_due),
-            open: <OpenLink href={petitionHref(p.code)} code={p.code} />,
+            open: <OpenButton code={p.code} onOpen={() => onOpen({ kind: "citizen-report", code: p.code })} />,
           })}
           onClose={onClose}
         />
@@ -141,7 +146,7 @@ export function RecordDrillDialog({
       const { year, delayedOnly } = request;
       return (
         <PagedDrill<finance_duAnRa>
-          readKey={`projects|${year}|${delayedOnly}`}
+          readKey={`projects|${year}|${delayedOnly}|${refresh}`}
           title={request.label}
           noun="dự án"
           headers={PROJECT_HEADERS}
@@ -160,7 +165,7 @@ export function RecordDrillDialog({
             unit: unit(p.org_unit_id),
             assignee: person(p.assignee_id),
             due: nhanNgay(p.disbursement_deadline),
-            open: <OpenLink href={BUDGET_SCREEN_PATH} code={p.code} />,
+            open: <OpenButton code={p.code} onOpen={() => onOpen({ kind: "project", id: p.id })} />,
           })}
           onClose={onClose}
         />
@@ -172,12 +177,19 @@ export function RecordDrillDialog({
 /** Giải ngân's columns: a project has a name, an officer in charge and a disbursement deadline. */
 export const PROJECT_HEADERS: DrillHeaders = ["Mã", "Tên", "Bộ phận", "Người phụ trách", "Hạn giải ngân"];
 
-function OpenLink({ href, code }: { href: string; code: string }) {
+/** `Mở` — the same button the task dialog draws (`task-drill.tsx`), named by the record's CODE (rule 3). */
+function OpenButton({ code, onOpen }: { code: string; onOpen: () => void }) {
   return (
-    <Link href={href} className={DRILL_OPEN_CLASS} aria-label={`${DRILL_OPEN} ${code}`}>
+    <button
+      type="button"
+      className={DRILL_OPEN_CLASS}
+      aria-label={`${DRILL_OPEN} ${code}`}
+      aria-haspopup="dialog"
+      onClick={onOpen}
+    >
       {DRILL_OPEN}
       <ExternalLink aria-hidden="true" focusable="false" className="size-3" />
-    </Link>
+    </button>
   );
 }
 
