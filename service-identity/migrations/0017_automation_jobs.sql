@@ -99,15 +99,7 @@ CREATE TABLE IF NOT EXISTS automation_job_setting (
     CONSTRAINT automation_job_setting_request_has_actor
         CHECK ((run_requested_at IS NULL) = (run_requested_by IS NULL)),
     CONSTRAINT automation_job_setting_updated_by_not_blank CHECK (btrim(updated_by) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS automation_job_setting_p%s PARTITION OF automation_job_setting '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- @entity: AutomationRunScope
 -- @scope:  tenant
@@ -130,15 +122,7 @@ CREATE TABLE IF NOT EXISTS automation_run_scope (
     CONSTRAINT automation_run_scope_kind_known
         CHECK (work_kind IN ('van-ban-den', 'phan-anh', 'nhiem-vu', 'don-thu')),
     CONSTRAINT automation_run_scope_run_id_ulid CHECK (length(last_run_id) = 26)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS automation_run_scope_p%s PARTITION OF automation_run_scope '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- @entity: AutomationRun
 -- @scope:  tenant
@@ -177,16 +161,16 @@ CREATE TABLE IF NOT EXISTS automation_run (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS automation_run_p%s PARTITION OF automation_run '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
 -- ---------------------------------------------------------------------------
 -- REVERSAL (rule 7, invariant 4). By hand. BEFORE ANY COMMUNE SWITCHED A JOB ON the three tables are
--- empty and dropping them (partitions go with the parents) plus removing this file's schema_migration
+-- empty and dropping them (automation_run's partitions go with it) plus removing this file's schema_migration
 -- row loses nothing. AFTER: the runs are the record of what jobs did to a commune's staff — rule 7 stop
 -- condition #2, a decision for the user with a verified backup. Prose, not a runnable line.
 -- ---------------------------------------------------------------------------
@@ -210,7 +194,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -265,10 +265,10 @@ CREATE TABLE IF NOT EXISTS quan_he_cong_dan_xa (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS quan_he_cong_dan_xa_p%s PARTITION OF quan_he_cong_dan_xa '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -295,8 +295,8 @@ CREATE INDEX IF NOT EXISTS quan_he_cong_dan_xa_hang_cho
 -- the list. The Go query behind it is a cross-commune read within the service ADR 0002 allows
 -- one: it belongs in service-identity/internal/store/crosstenant/ (ADR 0021) and it still needs
 -- its own `// @cross-tenant: <reason>` (rule 1, forbidden #6). The index is declared on the
--- parent, so PostgreSQL maintains one child index per partition and the lookup touches 32 of
--- them. That cost is accepted here because the alternative is a full scan of all 32.
+-- parent, so PostgreSQL maintains one child index per partition and the lookup touches 8 of
+-- them. That cost is accepted here because the alternative is a full scan of all 8.
 CREATE INDEX IF NOT EXISTS quan_he_cong_dan_xa_theo_cong_dan
     ON quan_he_cong_dan_xa (cong_dan_id)
     WHERE deleted_at IS NULL;
@@ -376,10 +376,10 @@ CREATE TABLE IF NOT EXISTS phien_cong_dan (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS phien_cong_dan_p%s PARTITION OF phien_cong_dan '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -391,7 +391,7 @@ END $$;
 -- commune from something the client sent — is precisely what rule 1 forbidden #2 closes.
 --
 -- WHAT IT COSTS, stated rather than discovered later: the lookup probes one child index per
--- partition, 32 of them, on every single citizen request. ADR 0022 already says this path must
+-- partition, 8 of them, on every single citizen request. ADR 0022 already says this path must
 -- be treated as hot from the start (short-TTL cache, invalidated on revocation), and this is
 -- the measurement behind that sentence.
 --
@@ -500,10 +500,10 @@ CREATE TABLE IF NOT EXISTS ghep_phien (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS ghep_phien_p%s PARTITION OF ghep_phien '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -518,7 +518,7 @@ END $$;
 -- That read crosses communes and must be written as such: inside
 -- service-identity/internal/store/crosstenant/ (ADR 0021), carrying its own
 -- `// @cross-tenant: <reason>` (rule 1, forbidden #6). The table holds at most a couple of
--- minutes of pairing codes, so 32 index probes on it are cheap.
+-- minutes of pairing codes, so 8 index probes on it are cheap.
 CREATE INDEX IF NOT EXISTS ghep_phien_theo_ma
     ON ghep_phien (bam_ma);
 
@@ -533,7 +533,7 @@ CREATE INDEX IF NOT EXISTS ghep_phien_theo_ma
 --
 --   BEFORE THE FIRST CITIZEN SIGNS IN — all four tables are empty. Reversal is exact and loses
 --   nothing: drop them in dependency order (ghep_phien, phien_cong_dan, quan_he_cong_dan_xa,
---   dinh_danh_cong_dan; the 128 partitions go with their parents), then remove this file's
+--   dinh_danh_cong_dan; the partitions go with their parents), then remove this file's
 --   progress row from the schema_migration table, keyed on ten = '0004_kenh_cong_dan.sql', so
 --   the runner will apply it again. Written as prose and not as a runnable line because a
 --   runnable line is a line that gets run.
@@ -575,7 +575,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

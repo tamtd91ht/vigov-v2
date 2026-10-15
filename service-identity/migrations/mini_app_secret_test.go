@@ -15,6 +15,9 @@ const file0021 = "0021_mini_app_secret.sql"
 
 func TestMigration0021Constraints(t *testing.T) {
 	sql := maChay(t, file0021)
+	// One row per commune or a handful of versions: plain tables (ADR 0096).
+	requirePlainTable(t, file0021, sql, "mini_app_secret")
+	requirePlainTable(t, file0021, sql, "data_encryption_key")
 	for _, c := range []struct{ want, why string }{
 		{"demo_identity_enabled boolean not null default false",
 			"--demo identity must be OFF unless an operator turns it on (ADR 0066)"},
@@ -46,10 +49,6 @@ func TestMigration0021Constraints(t *testing.T) {
 			"one DEK per commune"},
 		{"before update or delete on data_encryption_key for each row execute function data_encryption_key_guard()",
 			"a deleted DEK destroys every secret of that commune"},
-		{"create table if not exists mini_app_secret_p%s partition of mini_app_secret",
-			"HASH ×32 (ADR 0010)"},
-		{"create table if not exists data_encryption_key_p%s partition of data_encryption_key",
-			"HASH ×32 (ADR 0010)"},
 	} {
 		if !strings.Contains(sql, c.want) {
 			t.Errorf("0021 NO LONGER contains %q — %s", c.want, c.why)

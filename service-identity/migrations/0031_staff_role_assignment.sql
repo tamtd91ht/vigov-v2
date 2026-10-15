@@ -71,15 +71,7 @@ CREATE TABLE IF NOT EXISTS staff_role_assignment (
         CHECK ((deleted_at IS NULL AND deleted_by IS NULL AND delete_reason IS NULL)
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND btrim(deleted_by) <> ''
                 AND delete_reason IS NOT NULL AND btrim(delete_reason) <> ''))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS staff_role_assignment_p%s PARTITION OF staff_role_assignment '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 COMMENT ON TABLE staff_role_assignment IS
     'Vai tro cua can bo — mot can bo giu nhieu vai tro (chu dau tu chot 13/10/2026). Quyen = hop cac '
@@ -128,7 +120,7 @@ FROM per_commune;
 -- runnable line, because a runnable line gets run.
 --
 --   WHILE NOBODY HOLDS A SECOND ROLE — check first that no (tenant_id, staff_id) has more than one
---   live row; then drop staff_role_assignment (partitions and indexes go with it) and remove this
+--   live row; then drop staff_role_assignment (its indexes go with it) and remove this
 --   file's row from schema_migration. `nguoi_dung.vai_tro_id` still names each person's one role,
 --   because every write kept it equal to the first role. The backfill's audit entries stay (rule 6).
 --
@@ -157,7 +149,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

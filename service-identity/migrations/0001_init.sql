@@ -7,7 +7,7 @@
 --   * large tables are PARTITIONED by tenant from the start: adding partitioning later is a
 --     migration over archival records, out of hours, with real risk. Now it costs nothing.
 --
--- MODULUS 32 everywhere (ADR 0010).
+-- MODULUS 8, and only for tables that grow with time or with citizens (ADR 0096).
 --
 -- Migrations run PER COMMUNE, are resumable, and record progress.
 
@@ -30,10 +30,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS audit_log_p%s PARTITION OF audit_log '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -85,15 +85,7 @@ CREATE TABLE IF NOT EXISTS bo_phan (
     PRIMARY KEY (tenant_id, id),
     UNIQUE (tenant_id, ma),
     FOREIGN KEY (tenant_id, cha_id) REFERENCES bo_phan (tenant_id, id)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS bo_phan_p%s PARTITION OF bo_phan '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 CREATE INDEX IF NOT EXISTS bo_phan_cay ON bo_phan (tenant_id, cha_id, thu_tu);
 
@@ -118,15 +110,7 @@ CREATE TABLE IF NOT EXISTS vai_tro (
     cap_nhat_luc  TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (tenant_id, id),
     UNIQUE (tenant_id, ma)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS vai_tro_p%s PARTITION OF vai_tro '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- ---------------------------------------------------------------------------
 -- vai_tro_quyen — which role holds which permission, WITHIN one commune.
@@ -147,15 +131,7 @@ CREATE TABLE IF NOT EXISTS vai_tro_quyen (
     cap_boi     TEXT        NOT NULL DEFAULT '',
     PRIMARY KEY (tenant_id, vai_tro_id, quyen_ma),
     FOREIGN KEY (tenant_id, vai_tro_id) REFERENCES vai_tro (tenant_id, id)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS vai_tro_quyen_p%s PARTITION OF vai_tro_quyen '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- ---------------------------------------------------------------------------
 -- nguoi_dung — staff accounts.
@@ -192,15 +168,7 @@ CREATE TABLE IF NOT EXISTS nguoi_dung (
     UNIQUE (tenant_id, email),
     FOREIGN KEY (tenant_id, bo_phan_id) REFERENCES bo_phan (tenant_id, id),
     FOREIGN KEY (tenant_id, vai_tro_id) REFERENCES vai_tro (tenant_id, id)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS nguoi_dung_p%s PARTITION OF nguoi_dung '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- Every read path filters deleted rows, so the index carries that condition too.
 CREATE INDEX IF NOT EXISTS nguoi_dung_theo_bo_phan
@@ -246,10 +214,10 @@ CREATE TABLE IF NOT EXISTS phien (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS phien_p%s PARTITION OF phien '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 

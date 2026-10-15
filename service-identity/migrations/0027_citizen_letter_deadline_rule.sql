@@ -143,15 +143,7 @@ CREATE TABLE IF NOT EXISTS citizen_letter_deadline_rule (
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND btrim(deleted_by) <> ''
                 AND delete_reason IS NOT NULL AND btrim(delete_reason) <> ''
                 AND char_length(delete_reason) <= 500))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS citizen_letter_deadline_rule_p%s PARTITION OF citizen_letter_deadline_rule '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 COMMENT ON TABLE citizen_letter_deadline_rule IS
     'Han don thu theo loai don cua xa (ADR 0084 #3, ADR 0085). Mot dong = (loai don, han nao, so, '
@@ -173,7 +165,7 @@ CREATE INDEX IF NOT EXISTS citizen_letter_deadline_rule_list
 -- rollback (ADR 0013). Written as prose, not a runnable line, because a runnable line gets run.
 --
 --   WHILE NO COMMUNE HAS A RULE — check first that `SELECT count(*)` on the table returns 0; then
---   drop citizen_letter_deadline_rule (its 32 partitions and index go with it) and remove this file's
+--   drop citizen_letter_deadline_rule (its index goes with it) and remove this file's
 --   row from schema_migration. Exact; loses nothing.
 --
 --   ONCE A RULE EXISTS — no reversal. Deadlines stored on letters were computed from it; dropping it
@@ -200,7 +192,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -243,15 +243,7 @@ CREATE TABLE IF NOT EXISTS sla (
     CONSTRAINT sla_gio_phai_duong
         CHECK (gio_tiep_nhan > 0 AND gio_xu_ly_xong > 0 AND gio_sap_den_han > 0
                AND gio_bao_lanh_dao > 0 AND gio_bao_chu_tich > 0)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS sla_p%s PARTITION OF sla '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 COMMENT ON TABLE sla IS
     'Thoi han xu ly cua xa, dem bang GIO LAM VIEC (ADR 0007, ADR 0029). Bang nay cap CON SO; '
@@ -288,7 +280,7 @@ CREATE INDEX IF NOT EXISTS sla_danh_sach
 -- process decides at 3am. So the reverse is written here, to be run by hand.
 --
 --   BEFORE ANY COMMUNE HAS AN SLA ROW — the table is empty. Reversal is exact and loses
---   nothing: drop sla (the 32 partitions go with the parent), then remove this file's progress
+--   nothing: drop sla (its indexes go with it), then remove this file's progress
 --   row from schema_migration, keyed on ten = '0008_sla.sql', so the runner applies it again.
 --   Written as prose and not as a runnable line because a runnable line is a line that gets run.
 --
@@ -327,7 +319,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

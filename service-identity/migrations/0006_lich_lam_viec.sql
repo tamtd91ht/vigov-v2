@@ -147,15 +147,7 @@ CREATE TABLE IF NOT EXISTS lich_lam_viec (
     -- Two sessions cannot START at the same minute on the same weekday. This is weaker than
     -- "cannot overlap" — see the block above for why the stronger form is not here.
     CONSTRAINT lich_lam_viec_khong_trung_gio_mo UNIQUE (tenant_id, thu, bat_dau)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS lich_lam_viec_p%s PARTITION OF lich_lam_viec '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 COMMENT ON TABLE lich_lam_viec IS
     'Tuan lam viec thong thuong cua xa. MOT DONG LA MOT CA LAM VIEC, khong phai mot ngay: '
@@ -213,15 +205,7 @@ CREATE TABLE IF NOT EXISTS ngay_nghi_le (
     -- One date, one row, per commune. A date listed twice would be counted once and look
     -- correct — the duplicate only ever surfaces as a confusing configuration screen.
     CONSTRAINT ngay_nghi_le_mot_dong_moi_ngay UNIQUE (tenant_id, ngay)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS ngay_nghi_le_p%s PARTITION OF ngay_nghi_le '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 COMMENT ON TABLE ngay_nghi_le IS
     'Ngay xa KHONG lam viec, du lich tuan noi gi. Theo tung xa, gom ca le quoc gia lan le dia '
@@ -281,15 +265,7 @@ CREATE TABLE IF NOT EXISTS ngay_lam_bu (
     CONSTRAINT ngay_lam_bu_co_ten CHECK (btrim(ten) <> ''),
     CONSTRAINT ngay_lam_bu_co_do_dai CHECK (ket_thuc > bat_dau),
     CONSTRAINT ngay_lam_bu_khong_trung_gio_mo UNIQUE (tenant_id, ngay, bat_dau)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS ngay_lam_bu_p%s PARTITION OF ngay_lam_bu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 COMMENT ON TABLE ngay_lam_bu IS
     'Ngay xa CO lam viec du lich tuan noi khong — lam bu theo thong bao hang nam cua Thu tuong. '
@@ -307,8 +283,8 @@ CREATE INDEX IF NOT EXISTS ngay_lam_bu_theo_ngay
 -- process decides at 3am. So the reverse is written here, to be run by hand.
 --
 --   BEFORE ANY COMMUNE HAS A CALENDAR — all three tables are empty. Reversal is exact and loses
---   nothing: drop lich_lam_viec, ngay_nghi_le and ngay_lam_bu (the 96 partitions go with their
---   parents), then remove this file's progress row from schema_migration, keyed on
+--   nothing: drop lich_lam_viec, ngay_nghi_le and ngay_lam_bu (their indexes go with
+--   them), then remove this file's progress row from schema_migration, keyed on
 --   ten = '0006_lich_lam_viec.sql', so the runner applies it again. Written as prose and not as
 --   a runnable line because a runnable line is a line that gets run.
 --
@@ -331,7 +307,7 @@ CREATE INDEX IF NOT EXISTS ngay_lam_bu_theo_ngay
 -- the first real write — and because the audit entry shares the business transaction (rule 6,
 -- invariant 3), that first write rolls back entirely. The check only describes the state after
 -- the NEWEST migration that carries it, so every new file ends with it. This file declares
--- three partitioned tables, so it has real work to do here.
+-- no partitioned table since ADR 0096; the check still runs, for the reason above.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE missing_partitions text;
@@ -348,7 +324,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -51,7 +51,7 @@ func TestMigration0027ClosedLists(t *testing.T) {
 // Keys, live-row uniqueness, partitioning and the row-shape CHECKs.
 //
 // THE MUTATIONS THAT MUST TURN THIS RED: a key without tenant_id; uniqueness that counts removed rows
-// (or none at all); dropping the partition loop; letting `giai-quyet` attach to a non-statutory type;
+// (or none at all); partitioning it again (ADR 0096: a rule table is plain); letting `giai-quyet` attach to a non-statutory type;
 // allowing amount 0; a soft delete that is not all-three-or-none.
 func TestMigration0027KeysAndConstraints(t *testing.T) {
 	sql := maChay(t, file0027)
@@ -69,8 +69,6 @@ func TestMigration0027KeysAndConstraints(t *testing.T) {
 		{"constraint citizen_letter_deadline_rule_amount_positive check (amount > 0),", "zero is refused"},
 		{"check ((deleted_at is null and deleted_by is null and delete_reason is null) or (deleted_at is not null and deleted_by is not null",
 			"soft delete all-three-or-none (rule 7 inv 1)"},
-		{") partition by hash (tenant_id);", "hash-partitioned by tenant_id (ADR 0010)"},
-		{"partition of citizen_letter_deadline_rule ' 'for values with (modulus 32, remainder %s)", "32 partitions"},
 		{"on citizen_letter_deadline_rule (tenant_id, letter_type, deadline_kind) where deleted_at is null;",
 			"the read index starts with tenant_id and drops removed rows"},
 		{"where c.relkind = 'p' and n.nspname = current_schema() and not exists (select 1 from pg_inherits where inhparent = c.oid);",
@@ -80,9 +78,10 @@ func TestMigration0027KeysAndConstraints(t *testing.T) {
 			t.Errorf("0027 is missing %q — %s", c.want, c.why)
 		}
 	}
+	requirePlainTable(t, file0027, sql, "citizen_letter_deadline_rule")
 	// The unit-per-type table is a DOMAIN rule (legal table unverified, ADR 0064): a CHECK tying unit
 	// to letter_type would have to be replaced by a migration the day the legal review moves a cell.
-	ddl := sql[:strings.Index(sql, ") partition by hash (tenant_id);")+1]
+	ddl := createTableStatement(t, file0027, sql, "citizen_letter_deadline_rule")
 	constraints := strings.Split(ddl, "constraint ")
 	if len(constraints) < 9 {
 		t.Fatalf("found %d constraint clauses — the parser went blind", len(constraints)-1)

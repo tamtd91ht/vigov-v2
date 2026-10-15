@@ -59,7 +59,7 @@ END $$;
 -- ---------------------------------------------------------------------------
 -- UPDATE and DELETE — trigger on the PARENT, row level.
 --
--- audit_log is PARTITION BY HASH (tenant_id), MODULUS 32 (ADR 0010), so WHERE this trigger is
+-- audit_log is PARTITION BY HASH (tenant_id), MODULUS 8 (ADR 0096), so WHERE this trigger is
 -- attached decides whether it does anything at all:
 --
 --   * A row-level trigger created on the parent is CLONED onto every existing partition, and
@@ -96,8 +96,8 @@ CREATE TRIGGER audit_log_no_update_delete
 -- covers the parent as well.
 --
 -- THE GAP THIS LEAVES, stated instead of hidden: a partition created AFTER this migration gets
--- the UPDATE/DELETE clone automatically but NOT this TRUNCATE trigger. MODULUS 32 is fixed for
--- the life of the system (ADR 0010), so no new partition is expected; if one is ever added,
+-- the UPDATE/DELETE clone automatically but NOT this TRUNCATE trigger. MODULUS 8 (ADR 0096) grows
+-- only by splitting a leaf, so no new partition is expected casually; if one is ever added,
 -- re-run this file — which is why it is written to be re-runnable.
 -- ---------------------------------------------------------------------------
 DO $$
@@ -140,11 +140,11 @@ END $$;
 -- knowledge does not go missing:
 --
 --      REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM <app_role>;
---      REVOKE UPDATE, DELETE, TRUNCATE ON audit_log_p00, ... , audit_log_p31 FROM <app_role>;
+--      REVOKE UPDATE, DELETE, TRUNCATE ON audit_log_p00, ... , audit_log_p07 FROM <app_role>;
 --
 -- The second line is not redundant. Privileges are checked against the relation NAMED in the
 -- statement and are not inherited from the parent, so `UPDATE audit_log_p07` is checked
--- against p07's own ACL. A REVOKE on the parent alone leaves all 32 partitions open — the same
+-- against p07's own ACL. A REVOKE on the parent alone leaves all 8 partitions open — the same
 -- trap as putting the trigger in the wrong place, in the privilege layer.
 --
 -- The trigger above covers what REVOKE cannot reach in any case: the owner and the superuser,
@@ -197,7 +197,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

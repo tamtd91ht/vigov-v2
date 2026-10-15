@@ -181,7 +181,7 @@ COMMENT ON COLUMN phien_cong_dan.tai_khoan_zalo_id IS
 -- immediately" answer (ADR 0045, owner's answer to CÒN MỞ #3). NOT prefixed with tenant_id, on
 -- purpose: the old session is in the OLD commune, which is exactly the one the request is leaving.
 -- The Go statement behind it carries its own `// @cross-tenant:` and is keyed on one account, never
--- on a commune (store/phien_cong_dan.go, ThuHoiCuaTaiKhoanZalo). Declared on the parent, so it is 32
+-- on a commune (store/phien_cong_dan.go, ThuHoiCuaTaiKhoanZalo). Declared on the parent, so it is 8
 -- child index probes, on a predicate that keeps only live bridge sessions in the index.
 CREATE INDEX IF NOT EXISTS phien_cong_dan_theo_tai_khoan_zalo
     ON phien_cong_dan (tai_khoan_zalo_id)
@@ -238,7 +238,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

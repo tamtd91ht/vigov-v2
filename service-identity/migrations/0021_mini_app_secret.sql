@@ -31,7 +31,7 @@
 --   5. RETENTION: nothing is ever removed. Both guards refuse DELETE; mini_app_secret keeps every
 --      superseded version as a soft-deleted row (see "REPLACING" below).
 --
--- TENANT SCOPE. Both tables are keyed by tenant_id first and HASH-partitioned ×32 on it (ADR 0010).
+-- TENANT SCOPE. Both tables are keyed by tenant_id first; plain tables, not partitioned (ADR 0096).
 -- The App ID → commune binding is NOT decided here: service-platform's `mini_app` (platform scope,
 -- app_id PRIMARY KEY) is the one place that says which commune an App ID belongs to. The sign-in
 -- path resolves the commune there first and reads this table only inside that commune's context —
@@ -91,15 +91,7 @@ CREATE TABLE IF NOT EXISTS data_encryption_key (
     CONSTRAINT data_encryption_key_kek_id_shape CHECK (kek_id ~ '^[0-9a-f]{8}$'),
     -- 1 + 4 + 12 + 32 + 16: the version-1 wrapped format. A row of any other length cannot open.
     CONSTRAINT data_encryption_key_wrapped_length CHECK (octet_length(wrapped) = 65)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS data_encryption_key_p%s PARTITION OF data_encryption_key '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS data_encryption_key_guard ON data_encryption_key;
 CREATE TRIGGER data_encryption_key_guard
@@ -236,15 +228,7 @@ CREATE TABLE IF NOT EXISTS mini_app_secret (
             OR (deleted_at IS NOT NULL
                 AND btrim(deleted_by) <> '' AND char_length(deleted_by) <= 64
                 AND btrim(delete_reason) <> ''))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS mini_app_secret_p%s PARTITION OF mini_app_secret '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS mini_app_secret_guard ON mini_app_secret;
 CREATE TRIGGER mini_app_secret_guard
@@ -267,7 +251,7 @@ COMMENT ON COLUMN mini_app_secret.demo_identity_enabled IS
 -- tables has been rolled back:
 --
 --   WHILE BOTH TABLES ARE EMPTY — exact and loses nothing: drop mini_app_secret, then
---   data_encryption_key (partitions and triggers go with them), then the functions
+--   data_encryption_key (their triggers go with them), then the functions
 --   mini_app_secret_guard and data_encryption_key_guard, and remove this file's row from
 --   schema_migration so the runner applies it again.
 --
@@ -297,7 +281,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

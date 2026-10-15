@@ -15,16 +15,17 @@ const migration0031 = "0031_staff_role_assignment.sql"
 // THE KEYS THAT CARRY RULE 1 AND RULE 7.
 //
 // MUTATIONS THAT MUST TURN THIS RED: a foreign key on the id alone (another commune's role accepted),
-// a unique key without live_key (a removed role blocks its own re-grant), a missing soft-delete CHECK.
+// a unique key without live_key (a removed role blocks its own re-grant), a missing soft-delete CHECK,
+// the table partitioned again (ADR 0096: a role table is plain).
 func TestMigration0031KeysAreCompositeWithTheCommune(t *testing.T) {
 	sql := maChay(t, migration0031)
+	requirePlainTable(t, migration0031, sql, "staff_role_assignment")
 	for _, c := range []struct{ want, why string }{
 		{"primary key (tenant_id, staff_id, role_id, created_at)", "composite with tenant_id; a re-grant is a new row"},
 		{"unique (tenant_id, staff_id, role_id, live_key)", "one LIVE row per person and role"},
 		{"foreign key (tenant_id, staff_id) references nguoi_dung (tenant_id, id)", "the person, in THIS commune"},
 		{"foreign key (tenant_id, role_id) references vai_tro (tenant_id, id)", "the role, in THIS commune"},
 		{"live_key boolean generated always as (case when deleted_at is null then true end) stored", "live_key is NULL once removed"},
-		{"partition by hash (tenant_id)", "partitioned like every business table (ADR 0010)"},
 	} {
 		if !strings.Contains(sql, c.want) {
 			t.Errorf("0031 does not contain %q — %s", c.want, c.why)

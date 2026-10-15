@@ -270,15 +270,7 @@ CREATE TABLE IF NOT EXISTS loai_don_vi_dan_cu (
     -- never seen.
     CONSTRAINT loai_don_vi_dan_cu_re_nhanh_thi_he_thong
         CHECK (NOT ma_nguon_re_nhanh OR nguon = 'he-thong')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS loai_don_vi_dan_cu_p%s PARTITION OF loai_don_vi_dan_cu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The catalogue screen lists every row of one commune in display order, rows out of use
 -- included (they carry a "Đã tắt" chip); only soft-deleted rows drop out — everywhere, always
@@ -338,15 +330,7 @@ CREATE TABLE IF NOT EXISTS khoi_nhiem_vu (
         CHECK (nguon IN ('he-thong', 'don-vi')),
     CONSTRAINT khoi_nhiem_vu_re_nhanh_thi_he_thong
         CHECK (NOT ma_nguon_re_nhanh OR nguon = 'he-thong')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS khoi_nhiem_vu_p%s PARTITION OF khoi_nhiem_vu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 CREATE INDEX IF NOT EXISTS khoi_nhiem_vu_danh_sach
     ON khoi_nhiem_vu (tenant_id, thu_tu) WHERE deleted_at IS NULL;
@@ -402,15 +386,7 @@ CREATE TABLE IF NOT EXISTS thon_to_dan_pho (
     FOREIGN KEY (tenant_id, loai) REFERENCES loai_don_vi_dan_cu (tenant_id, ma),
     CONSTRAINT thon_to_dan_pho_so_lieu_khong_am
         CHECK ((so_ho IS NULL OR so_ho >= 0) AND (nhan_khau IS NULL OR nhan_khau >= 0))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS thon_to_dan_pho_p%s PARTITION OF thon_to_dan_pho '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 CREATE INDEX IF NOT EXISTS thon_to_dan_pho_danh_sach
     ON thon_to_dan_pho (tenant_id, ten) WHERE deleted_at IS NULL;
@@ -461,8 +437,8 @@ CREATE TRIGGER thon_to_dan_pho_giu
 -- empty the reversal is complete and loses nothing: drop the three tables in dependency order
 -- (thon_to_dan_pho first — it holds the foreign key), then the two trigger functions, and in
 -- the same transaction remove this file's row from `schema_migration`, otherwise the runner
--- still believes the schema is in place. The 32 partitions and the triggers go with their
--- parent tables.
+-- still believes the schema is in place. The triggers go with their
+-- tables.
 --
 -- ONCE A COMMUNE HAS ROWS HERE, THAT IS NO LONGER A REVERSAL — it is the destruction of commune
 -- records, which is rule 7's first stop condition and needs the user, not a command. From that
@@ -495,7 +471,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

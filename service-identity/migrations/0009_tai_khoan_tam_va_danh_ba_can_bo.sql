@@ -102,9 +102,7 @@
 -- constrained to false in that case, because a constraint coupling the two would have to be
 -- dropped and re-added on every transition between them for no benefit.
 --
--- ON A PARTITIONED TABLE: `nguoi_dung` is PARTITION BY HASH (tenant_id), MODULUS 32 (ADR 0010).
--- ALTER TABLE on the parent recurses into all 32 partitions, and a column may not be added to a
--- partition on its own, so the parent is the only place this can be written. A constant DEFAULT
+-- `nguoi_dung` is a plain table, not partitioned (ADR 0096). A constant DEFAULT
 -- has needed no table rewrite since PostgreSQL 11, so the ACCESS EXCLUSIVE lock is taken and
 -- released immediately.
 -- ---------------------------------------------------------------------------
@@ -174,7 +172,7 @@ COMMENT ON COLUMN nguoi_dung.phai_doi_mat_khau IS
 -- data plus every query, export and screen that names the column.
 --
 -- IDEMPOTENT BY GUARD, not by `IF EXISTS` — PostgreSQL has no `RENAME COLUMN IF EXISTS`. The
--- rename recurses into all 32 partitions on its own, exactly like ADD COLUMN above.
+-- rename touches one plain table (ADR 0096), exactly like ADD COLUMN above.
 DO $$
 BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.columns
@@ -241,8 +239,8 @@ COMMENT ON COLUMN nguoi_dung.dien_thoai_co_quan IS
 -- are not victims of the constraint; they were seeding an account that could never sign in and
 -- calling it an account, which is the very confusion 0003 existed to end.
 --
--- ON A PARTITIONED TABLE: ADD CONSTRAINT ... CHECK on the parent recurses into all 32 partitions
--- and validates each. With zero rows that is instant.
+-- ADD CONSTRAINT ... CHECK validates every row of the plain table (ADR 0096). With zero rows that
+-- is instant.
 --
 -- Guarded by pg_constraint rather than written with IF NOT EXISTS, which ADD CONSTRAINT does not
 -- offer: the integration suites apply this file into a fresh schema every run, but a hand re-run
@@ -254,7 +252,7 @@ DECLARE
     r       record;
 BEGIN
     -- PER-COMMUNE REPORT BEFORE THE ATTEMPT. `ALTER TABLE` on a bad row gives one SQLSTATE 23514
-    -- naming a partition — `nguoi_dung_p16` — which tells an operator nothing about WHICH commune
+    -- naming only the table and the constraint, which tells an operator nothing about WHICH commune
     -- to look at. Counting first means the failure names the communes. Counts and tenant ids
     -- only: never a name, an e-mail or a number (rule 3).
     SELECT count(*) INTO vi_pham
@@ -406,7 +404,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

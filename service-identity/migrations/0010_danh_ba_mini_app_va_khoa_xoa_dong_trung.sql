@@ -151,8 +151,8 @@ COMMENT ON COLUMN nguoi_dung.dong_y_cong_khai_ghi_boi IS
 -- A SOFT-DELETED ROW is not exempt. Soft-deleting a published person does not have to unpublish
 -- them (the read paths exclude deleted rows), but whatever state it keeps must still be coherent.
 --
--- ON A PARTITIONED TABLE: ADD CONSTRAINT ... CHECK on the parent recurses into all 32 partitions
--- and validates each. Tens of rows per commune: instant.
+-- ADD CONSTRAINT ... CHECK validates every row of the plain table (ADR 0096). Tens of rows per
+-- commune: instant.
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE
@@ -161,7 +161,7 @@ DECLARE
 BEGIN
     -- PER-COMMUNE REPORT BEFORE THE ATTEMPT. On a first apply every row holds the defaults and
     -- this finds nothing. It exists for a re-apply after the REVERSAL below: `ALTER TABLE` on a bad
-    -- row gives one SQLSTATE 23514 naming a partition, which tells an operator nothing about which
+    -- row gives one SQLSTATE 23514 naming only the table, which tells an operator nothing about which
     -- commune to look at. Counts and tenant ids only — never a name or a number (rule 3).
     SELECT count(*) INTO vi_pham
       FROM nguoi_dung
@@ -235,10 +235,10 @@ END $$;
 --   filter by unit (bo_phan_id)   served by `nguoi_dung_theo_bo_phan`
 --                                 ON (tenant_id, bo_phan_id) WHERE deleted_at IS NULL (0001).
 --   filter by published           tens of rows per commune. The PRIMARY KEY (tenant_id, id)
---   / the public Mini App list    already narrows to one commune inside one hash partition; the
+--   / the public Mini App list    already narrows to one commune; the
 --                                 remaining filter and the sort by thu_tu_danh_ba run over a few
---                                 dozen rows. A partial index here would cost 32 partition-level
---                                 indexes and a write on every publish for no measurable read gain.
+--                                 dozen rows. A partial index here would cost one more
+--                                 index and a write on every publish for no measurable read gain.
 --
 -- Revisit only with a measured slow query. Any index added then must start with tenant_id and
 -- carry `WHERE deleted_at IS NULL` like its two neighbours.
@@ -328,7 +328,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

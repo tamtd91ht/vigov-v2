@@ -58,9 +58,7 @@
 -- ADD COLUMN IF NOT EXISTS so the file can be applied to a database that already has it — the
 -- integration suites apply migrations more than once, and 0001/0002 are both written this way.
 --
--- ON A PARTITIONED TABLE: nguoi_dung is PARTITION BY HASH (tenant_id), MODULUS 32 (ADR 0010).
--- ALTER TABLE on the parent recurses into all 32 partitions; a column may not be added to a
--- partition on its own, so the parent is not merely the convenient place, it is the only one.
+-- nguoi_dung is a plain table, not partitioned (ADR 0096).
 -- A constant DEFAULT has needed no table rewrite since PostgreSQL 11 (0002 already sets 13 as
 -- the floor), so the ACCESS EXCLUSIVE lock here is taken and released immediately.
 -- ---------------------------------------------------------------------------
@@ -100,7 +98,7 @@ COMMENT ON COLUMN nguoi_dung.dang_hoat_dong IS
 -- WHY THIS IS ONE STATEMENT AND NOT A RESUMABLE PER-COMMUNE LOOP (rule 7, invariant 5): the
 -- runner gives each file ONE transaction, so a per-commune loop inside it could not be resumed
 -- either — an interruption rolls the whole file back regardless. What it would add is lock
--- churn on 32 partitions for a table that holds tens of rows per commune. The genuinely
+-- churn for a table that holds tens of rows per commune. The genuinely
 -- resumable per-commune backfill mechanism does not exist yet and is named as missing in the
 -- core/migrate package comment; the threshold for needing it is a statement whose lock time is
 -- noticeable, which this is not. If `nguoi_dung` ever grows to where that changes, the backfill
@@ -147,13 +145,10 @@ END $$;
 -- A partial index's predicate cannot be altered in place, so it is dropped and recreated. That
 -- is atomic here: core/migrate wraps each file in a single transaction, so there is no window in
 -- which the table has no index at all. CREATE INDEX CONCURRENTLY is not an option and is not
--- wanted — it cannot run inside a transaction, and PostgreSQL does not support it on a
--- partitioned table in any case.
+-- wanted — it cannot run inside a transaction.
 --
--- DROP ON THE PARENT ONLY. An index on a partitioned parent has a child index on each of the 32
--- partitions, attached to it; PostgreSQL refuses to drop a child on its own ("cannot drop index
--- ... because index ... requires it"). Dropping the parent takes the children with it, and the
--- CREATE below recreates all 33 relations. Nothing here should ever be written per partition.
+-- ONE INDEX ON ONE TABLE: nguoi_dung is a plain table (ADR 0096), so the statements below each
+-- touch exactly one relation.
 --
 -- QUESTION 4 — WHAT CHANGES MEANING WHILE THIS IS HALF-APPLIED, i.e. after this migration and
 -- before the Go change lands:
@@ -278,7 +273,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;
