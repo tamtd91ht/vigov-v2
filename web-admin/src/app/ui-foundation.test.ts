@@ -390,10 +390,10 @@ describe("kanban board carries the prototype's layout values", () => {
     expect(card).not.toContain("border-left");
   });
 
-  it("a card title is clamped to 3 lines AND reserves 3 lines, so cards line up across columns", () => {
+  it("a card title is clamped to 3 lines and reserves NO height — no blank line before the deadline (owner 15/10/2026)", () => {
     const title = ruleBody(".tieu-de-the");
     expect(title).toContain("-webkit-line-clamp: 3;");
-    expect(title).toContain("min-height: calc(3 * 1.375em);");
+    expect(title).not.toContain("min-height");
   });
 });
 

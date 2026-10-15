@@ -3055,9 +3055,9 @@ export function TheNhiemVu({
           {nhiemVu.code !== "" && (
             <span className="text-ink-muted mb-0.5 block text-[10.5px] font-semibold">{nhiemVu.code}</span>
           )}
-          {/* At most three lines, always THREE LINES TALL (`.tieu-de-the`): a title's length must not set
-              the card's height, or the cards of two columns stop lining up row by row. The full title is
-              the hover text, so the clamp hides nothing a mouse user cannot read. */}
+          {/* At most three lines (`.tieu-de-the`), as tall as the title itself — no blank-line reserve
+              (owner 15/10/2026, prototype `TaskCard.tsx:74`). The full title is the hover text, so the
+              clamp hides nothing a mouse user cannot read. */}
           <span
             id={overlay ? undefined : titleId}
             className="tieu-de-the text-navy text-[12.8px] leading-snug font-semibold"
@@ -3074,9 +3074,9 @@ export function TheNhiemVu({
       <div className="cursor-pointer px-3 pb-3" onClick={() => moNhiemVu(nhiemVu)}>
         {/* Spec 03 / prototype `TaskCard.tsx:78-91`: `n việc con` · `đã gia hạn n lần`, each only when
             its figure is above zero. The card draws no pending-extension marker (prototype). */}
-        {/* `min-h-4` keeps the row's height when both figures are zero, so a card without them is
-            exactly as tall as one with them (row alignment across columns). */}
-        <span className="text-ink-muted mt-2 flex min-h-4 flex-wrap items-center gap-2 text-[10.5px]">
+        {/* No `min-h-4`: with both figures zero the row collapses to its 8px margin, as in the prototype
+            (`TaskCard.tsx:78`) — owner 15/10/2026 asked to close the gap between title and deadline. */}
+        <span className="text-ink-muted mt-2 flex flex-wrap items-center gap-2 text-[10.5px]">
           {children !== null && (
             <span className="flex items-center gap-1">
               <GitBranch aria-hidden="true" focusable="false" className="size-3" />

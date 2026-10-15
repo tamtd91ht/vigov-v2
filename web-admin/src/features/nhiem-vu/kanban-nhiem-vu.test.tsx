@@ -327,6 +327,10 @@ describe("thẻ nhiệm vụ §4.1", () => {
     expect(html).toContain('class="tieu-de-the text-navy text-[12.8px] leading-snug font-semibold"');
     // `extension_count` 0: no extension chip (prototype `TaskCard.tsx:85`).
     expect(html).not.toContain("đã gia hạn");
+    // Owner 15/10/2026: no height reserve between title and deadline — the figures row is the
+    // prototype's `mt-2 flex …` (`TaskCard.tsx:78`), collapsing to its margin when empty.
+    expect(html).toContain('class="text-ink-muted mt-2 flex flex-wrap items-center gap-2 text-[10.5px]"');
+    expect(html).not.toContain("min-h-4");
   });
 
   // ADR 0082 #6 (08/10/2026): the commune's catalogue colour first, else by CODE as the prototype
