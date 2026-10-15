@@ -58,6 +58,54 @@ function getServerSnapshot(): boolean {
   return false;
 }
 
+/*
+ * WHAT SURVIVES A MOVE BETWEEN SCREENS (bug sheet 15/10/2026: after opening "Phản ánh người dân" the
+ * menu jumped back to its top and the items below had to be scrolled to again).
+ *
+ * WHY A MOVE LOSES THEM AT ALL: every screen draws its own shell (`page.tsx` → `.khung-trang` →
+ * `DauTrang`), because each page resolves the commune from `Host` itself and 404s there (see
+ * `app/layout.tsx`). A `<Link>` therefore swaps the WHOLE page subtree, sidebar included: the new
+ * sidebar is a new element at scrollTop 0, and the new page's `PhienProvider` starts unread, so for a
+ * moment only the items needing no key are listed — the menu visibly empties and refills.
+ *
+ * The two values below carry the previous screen's sidebar into the next one. MODULE state, so it lives
+ * exactly as long as this tab's JavaScript: a full reload (sign-in, sign-out, forced password change all
+ * navigate with `location.assign`) starts from nothing. Each commune is its own host, hence its own
+ * JavaScript realm — one commune's values never reach another's page. Both are written ONLY from the
+ * browser (a scroll event, an effect): this module is also evaluated on the server, where a write would
+ * be shared by every request of every commune.
+ */
+let navScrollTop = 0;
+let menuPermissions: readonly string[] | null = null;
+
+/** `onScroll` of the sidebar's list: remember how far down it is. */
+export function rememberNavScroll(event: { currentTarget: HTMLElement }): void {
+  navScrollTop = event.currentTarget.scrollTop;
+}
+
+/**
+ * Ref callback of the sidebar's list: put it back where the previous screen left it. A ref runs while
+ * the new DOM is committed, before the browser paints, so the list never shows at the top first.
+ * Module-level (stable identity), so React calls it once per mount — never on a re-render.
+ */
+export function restoreNavScroll(element: HTMLElement | null): void {
+  if (element !== null) element.scrollTop = navScrollTop;
+}
+
+/**
+ * Permissions the previous screen's session read answered with, or `null` before any read finished in
+ * this tab. ONLY for drawing the menu while this screen's own read is in flight: listing an item is UX,
+ * and every route still checks its key on the server (rule 5, forbidden #1). The moment this screen's
+ * read answers, its answer replaces this one.
+ */
+export function rememberedMenuPermissions(): readonly string[] | null {
+  return menuPermissions;
+}
+
+export function rememberMenuPermissions(permissions: readonly string[]): void {
+  menuPermissions = permissions;
+}
+
 export function useSidebarCollapsed(): { collapsed: boolean; toggle: () => void } {
   const collapsed = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const toggle = useCallback(() => {

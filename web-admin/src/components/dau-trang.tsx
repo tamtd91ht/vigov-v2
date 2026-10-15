@@ -2,6 +2,7 @@
 
 import { Search } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 
 import { NutDangXuat } from "@/features/auth/nut-dang-xuat";
 import { khoiNguoiDung } from "@/features/phien/khoi-nguoi-dung";
@@ -18,7 +19,7 @@ import { controlClass } from "./ui/field";
 import { PendingMarker, type PendingFeatureInfo } from "./ui/pending-feature";
 import { sessionRoleName } from "./role-pill";
 import { SideNav } from "./side-nav";
-import { useSidebarCollapsed } from "./sidebar-state";
+import { rememberedMenuPermissions, rememberMenuPermissions, useSidebarCollapsed } from "./sidebar-state";
 import { UserMenu } from "./user-menu";
 
 /**
@@ -68,7 +69,14 @@ export function DauTrang({ navigation = true, menuPath }: { navigation?: boolean
   const nguoi = khoiNguoiDung(phien);
   const roleName = sessionRoleName(phien);
 
-  const permissions = phien === null ? null : phien.ok ? phien.duLieu.permissions : [];
+  const readPermissions = phien === null ? null : phien.ok ? phien.duLieu.permissions : [];
+  useEffect(() => {
+    if (phien !== null) rememberMenuPermissions(phien.ok ? phien.duLieu.permissions : []);
+  }, [phien]);
+  // While THIS screen's session read is in flight, the menu is drawn from the previous screen's answer
+  // (`sidebar-state.ts`), so moving between screens does not empty and refill it — and the restored
+  // scroll position lands on the same list it was taken from. `null` only on the first screen of a tab.
+  const permissions = readPermissions ?? rememberedMenuPermissions();
   const groups = navigation ? locMenu(NHOM_MENU, permissions) : [];
   const sidebar = useSidebarCollapsed();
 

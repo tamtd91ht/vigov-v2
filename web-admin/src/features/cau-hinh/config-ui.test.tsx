@@ -75,6 +75,22 @@ describe("config-ui pieces leave the parent's space-y gap alone", () => {
   });
 });
 
+// Bug sheet 15/10/2026, `/nguoi-dung`: "Bị hiển thị thêm thanh scroll phía dưới màn hình". The hidden
+// words in the cells are `position: absolute`; without a positioned scroller they escape its clipping and
+// widen the window.
+describe("ConfigTable is the containing block of its hidden words", () => {
+  it("the scroll frame is `relative` as well as `overflow-x-auto`", () => {
+    const html = renderToStaticMarkup(
+      <ConfigTable label="t">
+        <tbody />
+      </ConfigTable>,
+    );
+    const frame = rootClasses(html);
+    expect(frame).toContain("relative");
+    expect(frame).toContain("overflow-x-auto");
+  });
+});
+
 describe("StatusBadge (user decision 09/10/2026)", () => {
   it("text-only like the prototype — no tone icon on either chip, the word tells them apart", () => {
     const on = renderToStaticMarkup(<StatusBadge active />);

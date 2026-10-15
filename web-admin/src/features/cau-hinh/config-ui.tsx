@@ -103,6 +103,13 @@ export function ConfigField({
  * `hover:bg-muted/50`) is `DATA_TABLE_CLASS`'s, shared with every other table of the app; cells add
  * shadcn's `whitespace-nowrap`. The frame itself scrolls sideways, as a labelled focusable region: a
  * scroller a keyboard user cannot reach is a column they cannot read.
+ *
+ * `relative` (the prototype's `components/ui/table.tsx` container: `relative w-full overflow-x-auto`):
+ * the cells hold visually hidden words (`.an-thi-giac`, `position: absolute`) — the "Hành động" head,
+ * the reasons behind disabled row buttons. With no positioned ancestor their containing block is the
+ * WINDOW, which this scroller does not clip, so a table wider than its frame pushed the whole page
+ * sideways and the window grew a horizontal scrollbar (bug sheet 15/10/2026, `/nguoi-dung`). Positioned
+ * here, they are clipped with the table and only the frame scrolls.
  */
 export function ConfigTable({
   label,
@@ -120,7 +127,7 @@ export function ConfigTable({
       role="region"
       tabIndex={0}
       aria-label={label}
-      className="border-line min-w-0 overflow-x-auto rounded-[10px] border border-solid"
+      className="border-line relative min-w-0 overflow-x-auto rounded-[10px] border border-solid"
     >
       <table className={cn(DATA_TABLE_CLASS, "w-full text-sm [&_td]:whitespace-nowrap")}>
         {caption !== undefined && <caption className="an-thi-giac">{caption}</caption>}

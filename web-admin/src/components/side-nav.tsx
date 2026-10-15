@@ -7,6 +7,7 @@ import { PENDING_HOVER_TEXT } from "@/components/ui/pending-feature";
 import { Tooltip } from "@/components/ui/tooltip";
 
 import { MenuIcon } from "./menu-icons";
+import { rememberNavScroll, restoreNavScroll } from "./sidebar-state";
 import {
   activeChildRoute,
   activeMenuRoute,
@@ -48,7 +49,9 @@ import {
  * sheet with the same items and words (`nav-sheet.tsx`).
  *
  * PURE FUNCTION OF ITS PROPS (no session, no router, no storage), so every branch renders in a plain
- * Node test. The collapse state is `sidebar-state.ts`'s, read by the shell (`dau-trang.tsx`).
+ * Node test. The collapse state is `sidebar-state.ts`'s, read by the shell (`dau-trang.tsx`). The one
+ * exception is the list's scroll position, remembered across screens by a ref and a scroll handler from
+ * the same file — neither runs in a server render.
  */
 export const SIDEBAR_COLLAPSE_LABEL = "Thu gọn menu";
 export const SIDEBAR_EXPAND_LABEL = "Mở rộng menu";
@@ -105,7 +108,8 @@ export function SideNav({ groups, pathname, collapsed, onToggle }: SideNavProps)
       <SidebarBrand collapsed={collapsed}>{collapsed ? null : toggle}</SidebarBrand>
       {collapsed && toggle}
       {groups.length > 0 && (
-        <nav className="side-nav-nav" aria-label={SIDE_NAV_LABEL}>
+        // The list keeps its scroll position from one screen to the next (`sidebar-state.ts`).
+        <nav className="side-nav-nav" aria-label={SIDE_NAV_LABEL} ref={restoreNavScroll} onScroll={rememberNavScroll}>
           {groups.map((g, i) => (
             <div key={g.ten === "" ? `untitled-${i}` : g.ten} className="side-nav-group">
               {collapsed || g.ten === "" ? (
