@@ -29,8 +29,8 @@ import (
 //	NOT PROVED    ANYTHING PostgreSQL DOES WITH THE STATEMENT. The fake builds each row from the
 //	              column list THE STORE ITSELF HANDED IT, so a column that does not exist in the real
 //	              table passes here without a murmur; so does a table name that does not exist. It
-//	              cannot execute a LATERAL join, cannot aggregate, and knows nothing of hash partition
-//	              routing, the foreign key, the unique key on (tenant_id, bien_ban_id, thu_tu) or the
+//	              cannot execute a LATERAL join, cannot aggregate, and knows nothing of the
+//	              foreign key, the unique key on (tenant_id, bien_ban_id, thu_tu) or the
 //	              hard-delete trigger. Those need a DSN, and bien_ban_hop_pg_test.go is where they
 //	              live — SKIPPED in this environment.
 

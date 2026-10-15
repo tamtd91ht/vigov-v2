@@ -66,8 +66,8 @@ type LocDeNghiChoDuyet struct {
 //
 // # THE COMMUNE IS $1 ON BOTH TABLES (rule 1, invariant 5; store.Scoped.QueryJoin's contract)
 //
-//	d.tenant_id = $1   the request rows of this commune — and the partition key, so PostgreSQL
-//	                   prunes to one of the 32 partitions
+//	d.tenant_id = $1   the request rows of this commune — and the leading column of the table's
+//	                   keys, so the index scan stays inside this commune
 //	n.tenant_id = $1   IN THE ON CLAUSE. Joining on `nhiem_vu_id` alone would attach ANOTHER
 //	                   COMMUNE'S task wherever two internal ids collide — a leak no single-commune
 //	                   test could show

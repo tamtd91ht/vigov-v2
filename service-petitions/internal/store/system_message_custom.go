@@ -36,9 +36,9 @@ func scanCustom(scan func(...any) error) (domain.CustomMessage, error) {
 	return c, err
 }
 
-// isCustomKeyUniqueViolation — SQLSTATE 23505. The constraint name is not compared: on a partitioned
-// table PostgreSQL reports the PARTITION's index name (custom_system_message_p07_…), which differs by
-// commune.
+// isCustomKeyUniqueViolation — SQLSTATE 23505. The constraint name is not compared: it is no stable
+// contract — it changed once already, when ADR 0096 turned this hash-partitioned table into a plain
+// one (`custom_system_message_p07_…`, which differed by commune, became the table's own name).
 func isCustomKeyUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"

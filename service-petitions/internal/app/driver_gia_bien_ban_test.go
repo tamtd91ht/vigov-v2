@@ -16,9 +16,8 @@ package app
 // # WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there
 //
 // Nothing PostgreSQL does with these statements: not `UNIQUE (tenant_id, bien_ban_id, thu_tu)`, not
-// the foreign key from a conclusion to its minutes, not the CHECK constraints of migration 0007, not
-// `ho_so_luu_tru_cam_xoa_cung` (the trigger that refuses a hard delete), and not the hash partition
-// routing. That half needs a real server — VIGOV_TEST_DSN is unset here — and it is the FLOOR under
+// the foreign key from a conclusion to its minutes, not the CHECK constraints of migration 0007, and
+// not `ho_so_luu_tru_cam_xoa_cung` (the trigger that refuses a hard delete). That half needs a real server — VIGOV_TEST_DSN is unset here — and it is the FLOOR under
 // everything asserted in bien_ban_hop_test.go: the refusals tested there are the SENTENCE, not the
 // enforcement.
 

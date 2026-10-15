@@ -33,7 +33,7 @@ import (
 //
 // WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there:
 // nothing PostgreSQL does with these statements. Not the `danh_muc_ba_tang` trigger, not
-// `UNIQUE (tenant_id, ma)`, not the partition routing. That half needs a real server; the pg suites
+// `UNIQUE (tenant_id, ma)`. That half needs a real server; the pg suites
 // next door are where it lands the day a DSN exists.
 
 var (

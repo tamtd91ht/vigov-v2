@@ -37,7 +37,7 @@
 -- to every partition attached later. It takes a SHARE lock on the parent and each partition: READS
 -- PROCEED, WRITES WAIT — and every business write in this service writes `audit_log` in its own
 -- transaction (rule 6, invariant 3), so EVERY write of this service waits — petition intake from
--- citizens included — until COMMIT of the sum of the 32 builds.
+-- citizens included — until COMMIT of the sum of the 8 builds.
 --
 -- ACCEPTABLE AT CURRENT SIZES — AN ASSUMPTION ABOUT PRODUCTION, NOT A MEASUREMENT. The operator
 -- applying it checks first:

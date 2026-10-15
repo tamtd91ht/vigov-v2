@@ -72,8 +72,9 @@ func catalogueImportSnapshot(ctx context.Context, tx *store.ScopedTx, table stri
 // translateImportInsert turns the unique key refusing a code into ErrMaDaTonTai. It can only happen
 // when a FORM took the code between the snapshot and the insert (the forms do not take the import
 // lock); the whole file rolls back and the handler answers 409 `catalogue_changed`. The constraint is
-// UNIQUE (tenant_id, ma) of migration 0003; on the hash partitions PostgreSQL names it
-// `<table>_pNN_tenant_id_ma_key`, on the parent `<table>_tenant_id_ma_key` — both end the same way.
+// UNIQUE (tenant_id, ma) of migration 0003, which PostgreSQL names `<table>_tenant_id_ma_key` — a
+// plain table since ADR 0096; while it was hash-partitioned the name was `<table>_pNN_tenant_id_ma_key`.
+// Matching the tail covers both.
 func translateImportInsert(table string, err error) error {
 	if err == nil {
 		return nil
