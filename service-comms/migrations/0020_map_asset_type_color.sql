@@ -38,7 +38,7 @@
 --   5. RETENTION: nothing dropped, retyped or emptied. The colour's history is the audit entry of the
 --      catalogue edit that sets it (rule 6), written by Go.
 --
--- THE LOCK: ACCESS EXCLUSIVE on loai_tai_nguyen_ban_do and its 32 partitions until COMMIT. Small table.
+-- THE LOCK: ACCESS EXCLUSIVE on loai_tai_nguyen_ban_do until COMMIT. Small table.
 -- PERSONAL DATA (rule 3): none. PG FLOOR: 13 (0003). Cluster: 16.
 -- ---------------------------------------------------------------------------
 

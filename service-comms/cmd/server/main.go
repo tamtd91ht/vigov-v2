@@ -116,7 +116,7 @@ func main() {
 
 	// 1. config — platform-wide constants only. Per-commune values are read at RUNTIME (rule 1,
 	// invariant 10); there is nothing per-commune on this path in any case, because the schema is
-	// shared by every commune the process serves and partitioned by tenant_id.
+	// shared by every commune the process serves and keyed by tenant_id.
 	cfg, err := config.Load("comms", configUses)
 	if err != nil {
 		log.Error("cấu hình không nạp được", "service", "comms", "err", err)

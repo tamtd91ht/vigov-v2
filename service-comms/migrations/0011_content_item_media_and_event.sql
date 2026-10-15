@@ -340,8 +340,8 @@ ALTER TABLE noi_dung_mini_app ADD COLUMN IF NOT EXISTS video_url           TEXT;
 --   * Every value the validation reads is NULL — the columns were created three statements up — so
 --     every CHECK passes on every existing row by construction.
 --
--- Lookup by name pinned to the PARENT (`conrelid`): partitions inherit the name, so `conname` alone
--- matches 33 rows (0008:149-150). ADD CONSTRAINT has no IF NOT EXISTS; a retry must cost nothing.
+-- Lookup by name pinned to the table (`conrelid`), as finance 0008:149-150 does (partitioned before ADR
+-- 0096, partitions inherited the name). ADD CONSTRAINT has no IF NOT EXISTS; a retry must cost nothing.
 --
 -- `loai` REMAINS EDITABLE (0006:454). The per-type CHECKs therefore mean: a write that changes an
 -- article away from `su-kien` / `video` must clear that type's columns IN THE SAME UPDATE, or it is
@@ -351,7 +351,7 @@ DO $$
 DECLARE parent oid := 'noi_dung_mini_app'::regclass;
 BEGIN
     -- SAME SERVICE, SAME SCHEMA, composite with tenant_id: a cover cannot be another commune's file.
-    -- Both sides are hash-partitioned on tenant_id; the referenced pair is stored_file's primary key.
+    -- stored_file is hash-partitioned on tenant_id (ADR 0096); the referenced pair is its primary key.
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = parent
                    AND conname = 'noi_dung_mini_app_cover_image_file_fk') THEN
         ALTER TABLE noi_dung_mini_app ADD CONSTRAINT noi_dung_mini_app_cover_image_file_fk

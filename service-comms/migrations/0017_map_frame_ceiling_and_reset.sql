@@ -73,15 +73,13 @@
 --
 -- WHY THE NEW CHECK IS VALIDATED, not `NOT VALID`: it only WIDENS. Every value 0016's CHECK admitted
 -- (1.0 ≤ r ≤ 30.0) satisfies `r > 0 AND r <= 50`, so the validating scan cannot fail on any row that
--- exists — there is nothing for NOT VALID to defer. It would also be the wrong tool here: NOT VALID on
--- a partitioned table is not portable across PG versions (0011:332-341), and there is no lock to save
--- — ADD COLUMN already holds ACCESS EXCLUSIVE until COMMIT.
+-- exists — there is nothing for NOT VALID to defer. It would also be the wrong tool here: there is no
+-- lock to save — ADD COLUMN already holds ACCESS EXCLUSIVE until COMMIT.
 --
 -- ORDER: the new CHECK is ADDED BEFORE the old one is DROPPED, so at no statement inside the
--- transaction is the radius unbounded. A constraint dropped on the partitioned parent is dropped from
--- its 32 partitions with it (they inherit it; none was declared locally — 0016's loop uses PARTITION OF).
+-- transaction is the radius unbounded.
 --
--- THE LOCK: ACCESS EXCLUSIVE on map_frame and its 32 partitions until COMMIT. Table size is at most one
+-- THE LOCK: ACCESS EXCLUSIVE on map_frame until COMMIT. Table size is at most one
 -- row per commune.
 --
 -- PERSONAL DATA (rule 3): none. PG FLOOR: 13 (0016). Cluster: 16.

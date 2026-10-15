@@ -198,8 +198,8 @@ type LocNoiDung struct {
 	//
 	// NO INDEX LEADS WITH IT, stated rather than hoped about: the page walks `noi_dung_mini_app_so`
 	// (tenant_id, tao_luc DESC, id) newest first and filters, so a filter matching few rows of a large
-	// register reads further down the commune's live rows before a page fills — bounded by the commune
-	// partition, and by the page size when matches are dense. An index (tenant_id, trang_thai, tao_luc
+	// register reads further down the commune's live rows before a page fills — bounded by the commune's
+	// rows, and by the page size when matches are dense. An index (tenant_id, trang_thai, tao_luc
 	// DESC, id) WHERE deleted_at IS NULL is the answer if it becomes slow — a migration on a populated
 	// table, the data-migration owner's.
 	TrangThai string
@@ -227,7 +227,7 @@ var thoatLike = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 //
 // THE TITLE SEARCH CANNOT USE AN INDEX AND THAT IS STATED RATHER THAN HOPED ABOUT: `ILIKE '%x%'` is
 // a leading wildcard, so it is a scan of the commune's live rows however the columns are indexed.
-// The partition restricts it to one commune and TuKhoaTimToiDa bounds the pattern; if a commune's
+// `tenant_id = $1` restricts it to one commune and TuKhoaTimToiDa bounds the pattern; if a commune's
 // register ever makes that too slow, the answer is a trigram index or a text-search column in a new
 // migration, not a silently truncated result here.
 func (l LocNoiDung) menhDe() (string, []any) {

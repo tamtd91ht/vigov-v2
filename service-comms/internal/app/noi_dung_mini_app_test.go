@@ -19,8 +19,8 @@ package app
 //
 // WHAT IT STILL DOES NOT PROVE, said plainly so nobody reads more into a green run than is there:
 // nothing PostgreSQL does with these statements. Not the CHECK constraints, not the immutability
-// trigger of migration 0006, not the foreign key, not the unique key on `nguon_id_ngoai`, not
-// partition routing. That half needs a real server; the pg suite in internal/store is where it lands
+// trigger of migration 0006, not the foreign key, not the unique key on `nguon_id_ngoai`.
+// That half needs a real server; the pg suite in internal/store is where it lands
 // the day a DSN exists.
 
 import (

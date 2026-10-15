@@ -69,8 +69,8 @@
 --      renumbered; the slug key is untouched; no item is refiled. The only rows written are new values
 --      in a column created here, each with its audit entry (rule 6, invariant 6: system principal).
 --
--- THE LOCK: ADD COLUMN, SET NOT NULL and ADD CONSTRAINT take ACCESS EXCLUSIVE on `danh_muc_mini_app` and
--- its 32 partitions until COMMIT; SET NOT NULL and the CHECK each scan the table once. `noi_dung_mini_app`
+-- THE LOCK: ADD COLUMN, SET NOT NULL and ADD CONSTRAINT take ACCESS EXCLUSIVE on `danh_muc_mini_app`
+-- until COMMIT; SET NOT NULL and the CHECK each scan the table once. `noi_dung_mini_app`
 -- is only READ (by the backfill). Acceptable at ~60 rows per commune — AN ASSUMPTION, NOT A MEASUREMENT:
 --   SELECT count(*), pg_size_pretty(pg_total_relation_size('danh_muc_mini_app')) FROM danh_muc_mini_app;
 --

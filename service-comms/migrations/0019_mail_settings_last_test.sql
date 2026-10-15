@@ -63,7 +63,7 @@
 --   5. RETENTION: nothing dropped, retyped or emptied. The four columns are overwritten by the next
 --      test; the durable record of each test is its audit entry (rule 6).
 --
--- THE LOCK: ACCESS EXCLUSIVE on mail_settings and its 32 partitions until COMMIT. One row per commune.
+-- THE LOCK: ACCESS EXCLUSIVE on mail_settings until COMMIT. One row per commune.
 -- PERSONAL DATA (rule 3): a MASKED address only. PG FLOOR: 13 (0003). Cluster: 16.
 -- ---------------------------------------------------------------------------
 

@@ -29,8 +29,8 @@ import (
 // holds no secret — live in the SQL, the transaction boundaries and the envelope; fakes of any of the
 // three would erase them.
 //
-// WHAT IT DOES NOT PROVE: anything PostgreSQL does — the CHECK constraints, the triggers, the
-// partition routing (VIGOV_TEST_DSN is unset here).
+// WHAT IT DOES NOT PROVE: anything PostgreSQL does — the CHECK constraints, the triggers
+// (VIGOV_TEST_DSN is unset here).
 
 // testMailPassword is a fixture; no server accepts it.
 const testMailPassword = "fixture-not-a-real-password-7Q"

@@ -27,8 +27,8 @@ import (
 // A fake database/sql driver under the REAL MapFrameStore — mail_settings_test.go's approach: the
 // properties worth proving (one transaction for the write and its entry, the commune as $1, nothing
 // written when nothing moved, a refusal runs no statement) live in the SQL and the transaction
-// boundaries. WHAT IT DOES NOT PROVE: anything PostgreSQL does — the CHECKs, the trigger, the partition
-// routing: internal/store/map_frame_pg_test.go.
+// boundaries. WHAT IT DOES NOT PROVE: anything PostgreSQL does — the CHECKs, the trigger:
+// internal/store/map_frame_pg_test.go.
 
 type frameStmt struct {
 	sql  string

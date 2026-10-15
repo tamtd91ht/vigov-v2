@@ -17,7 +17,7 @@ const file0017 = "0017_map_frame_ceiling_and_reset.sql"
 // old CHECK dropped BEFORE the new one exists; a nullable or false-by-default `is_enabled` (the first
 // changes the meaning of every older row, the second switches every saved frame off at deploy); a
 // cleared_at / notice_version copy of what the audit trail records; a backfill, a delete, a drop of
-// anything but the replaced CHECK; NOT VALID on the partitioned table; the mainland box touched.
+// anything but the replaced CHECK; NOT VALID on the table; the mainland box touched.
 func TestMigration0017MapFrameCeilingAndReset(t *testing.T) {
 	sql := executableSQL(t, file0017)
 	for _, c := range []struct{ want, why string }{

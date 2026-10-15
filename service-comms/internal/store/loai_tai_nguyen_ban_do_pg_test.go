@@ -48,8 +48,9 @@ import (
 //
 // The DSN carries a password and lives only in the environment (rule 8).
 
-// The schema is built ONCE for the whole package, not per test: migration 0003 creates a
-// partitioned table with 32 partitions, and a suite slow enough to skip is a suite that stops being
+// The schema is built ONCE for the whole package, not per test: the migrations create every table
+// of the service, the growing ones with 8 partitions each (ADR 0096), and a suite slow enough to
+// skip is a suite that stops being
 // run. Each test isolates itself with its own commune ids instead, which is also closer to how the
 // data really looks.
 var dbChung *sql.DB

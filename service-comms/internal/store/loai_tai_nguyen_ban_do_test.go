@@ -25,8 +25,8 @@ import (
 //	              tie-break are in the statement · the LIMIT really is the ceiling PLUS ONE · the
 //	              refusal fires at ceiling+1 and returns NO rows · the positional Scan lines up
 //	              with the column list, by NAME · a driver failure is wrapped, not swallowed.
-//	NOT PROVED    anything PostgreSQL does with that statement — that the index is used, that the
-//	              partition routing works, that the trigger refuses what it says it refuses. That
+//	NOT PROVED    anything PostgreSQL does with that statement — that the index is used,
+//	              that the trigger refuses what it says it refuses. That
 //	              needs a real server, and there is none on this machine.
 //
 // The column-name check is the one worth explaining: the driver builds each row BY COLUMN NAME out
