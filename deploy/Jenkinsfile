@@ -104,7 +104,9 @@ pipeline {
                                   'di-tru-vihat-miniapp', 'bat-cau-phien-miniapp', 'nen-ban-do'],
            description:'kiem-tra: chỉ đọc — k8s, rồi CSDL của 7 dịch vụ: nối được không, số bảng, sổ migration so với kho · ' +
                         'xem-log: log + sự kiện của DICH_VU · ' +
-                        'tao-bang: (tick TAO_CSDL để tạo CSDL còn thiếu trước) tạo bảng TRƯỚC — chạy ảnh Deployment đang chạy của từng dịch vụ với `/server -migrate-only` ' +
+                        'tao-bang: dựng cấu trúc cho cả 7 CSDL, thiếu thì tạo, có rồi thì bỏ qua — (tick TAO_CSDL) CSDL thiếu thì tạo; ' +
+                        'schema public thiếu thì tạo, kèm quyền USAGE mặc định; ảnh trong Deployment phải mang ĐÚNG migration của commit ' +
+                        'đang checkout (lệch = ảnh cũ/đã rollback → DỪNG dịch vụ ấy, bấm job dịch vụ trước); rồi chạy ảnh đó với `/server -migrate-only` ' +
                         '(áp migration còn thiếu rồi thoát; tệp đã có trong sổ thì bỏ qua; sổ lệch thì DỪNG, không áp gì). ' +
                         'Cần ảnh có chế độ này (từ 14/10/2026); ảnh cũ thì báo và bỏ qua dịch vụ ấy (MT=prod|dev, XAC_NHAN = namespace của MT) · ' +
                         'lam-moi-csdl: XOÁ SẠCH bảng của 7 dịch vụ (schema public của từng CSDL) để tao-bang dựng lại từ đầu — ' +
@@ -597,6 +599,62 @@ CREATEDB
             esac
           }
 
+          # Runs INSIDE a postgres:16-alpine pod with the service's own DSN: `public` missing (a database just
+          # created, or wiped by lam-moi-csdl) → create it; present → leave it. Then restore the USAGE grant to
+          # PUBLIC that PostgreSQL's own `public` carries and a bare CREATE SCHEMA does not — without it any
+          # account but the DSN's is refused the whole schema. Not the owner → the grant is skipped, not fatal.
+          # Prints DA-TAO|… · CO-SAN|… · ERR|<label>, never psql's message (it names host and user).
+          cat > "$TMP_DIR/schema.sh" <<'SCHEMA'
+set -u
+if ! have=$(psql "$DATABASE_DSN" -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pg_namespace WHERE nspname = 'public'" 2>/tmp/err); then
+  e=$(cat /tmp/err)
+  case "$e" in
+    *'database "'*'does not exist'*) echo "ERR|csdl-chua-co--tick-TAO_CSDL" ;;
+    *) echo "ERR|khong-noi-duoc-csdl" ;;
+  esac
+  exit 0
+fi
+made=CO-SAN
+if [ "$have" = "0" ]; then
+  psql "$DATABASE_DSN" -X -q -v ON_ERROR_STOP=1 -c "CREATE SCHEMA public" 2>/dev/null || { echo "ERR|khong-tao-duoc-schema-public"; exit 0; }
+  made=DA-TAO
+fi
+if psql "$DATABASE_DSN" -X -q -v ON_ERROR_STOP=1 -c "GRANT USAGE ON SCHEMA public TO PUBLIC" 2>/dev/null; then
+  echo "$made|da-cap-USAGE-cho-PUBLIC"
+else
+  echo "$made|khong-cap-duoc-quyen--tai-khoan-DSN-khong-so-huu-schema"
+fi
+SCHEMA
+          SCHEMA_B64=$(base64 -w0 "$TMP_DIR/schema.sh")
+
+          # ensure_schema <service> — 0 when `public` exists in the service's database (already, or created now).
+          ensure_schema() {
+            spod="vigov-schema-$1-$BUILD_NUMBER"
+            PODS="$PODS $spod"
+            printf '%s' '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"'"$spod"'","labels":{"app.kubernetes.io/name":"vigov-schema"}},
+              "spec":{"restartPolicy":"Never","imagePullSecrets":[{"name":"dockerhub-omicrm"}],
+              "containers":[{"name":"psql","image":"postgres:16-alpine",
+                "envFrom":[{"secretRef":{"name":"'"$1"'-secrets"}}],
+                "env":[{"name":"SCHEMA_B64","value":"'"$SCHEMA_B64"'"}],
+                "command":["sh","-c","echo \\"$SCHEMA_B64\\" | base64 -d > /tmp/s.sh && sh /tmp/s.sh"]}]}}' \\
+              > "$TMP_DIR/spod.json"
+            kubectl -n "$NS" create -f "$TMP_DIR/spod.json" >/dev/null || { echo "   ✗ schema public: không tạo được pod."; return 1; }
+            sph=""; j=0
+            while [ $j -lt 24 ]; do   # 2 minutes
+              sph=$(kubectl -n "$NS" get pod "$spod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
+              case "$sph" in Succeeded|Failed) break ;; esac
+              sleep 5; j=$((j+1))
+            done
+            res=$(kubectl -n "$NS" logs "$spod" 2>/dev/null | tail -n 1)
+            kubectl -n "$NS" delete pod "$spod" --ignore-not-found --wait=false >/dev/null 2>&1 || true
+            case "$res" in
+              DA-TAO\\|*) echo "   schema public: ĐÃ TẠO · ${res#*|}"; return 0 ;;
+              CO-SAN\\|*) echo "   schema public: đã có — bỏ qua · ${res#*|}"; return 0 ;;
+              ERR\\|*) echo "   ✗ schema public: ${res#ERR|}"; return 1 ;;
+              *) echo "   ✗ schema public: pod dừng ở pha '${sph:-không rõ}', không có kết quả"; return 1 ;;
+            esac
+          }
+
           # Order of deploy/README.md: platform, then identity, then the rest. Each database is its own, so
           # one service failing does not stop the next — every result is reported, and the job ends red.
           ok=""; skipped=""; failed=""
@@ -618,8 +676,28 @@ CREATEDB
             get_field '{.spec.template.spec.imagePullSecrets}' > "$TMP_DIR/pull"
             for f in envfrom env pull; do [ -s "$TMP_DIR/$f" ] || printf '[]' > "$TMP_DIR/$f"; done
             echo "   ảnh: $IMG"
+            # Tables are built from THIS checkout's migrations, never an older set (owner, 15/10/2026). The
+            # image tag is the commit a service job built at, and a job builds only when its service changed —
+            # so an image tagged exactly HEAD usually does not exist. What must match is the migrations
+            # directory: a Deployment still on an old image (or rolled back by its job when the new one could
+            # not start) would otherwise lay down the OLD structure on an empty database, silently.
+            HEAD12=$(git rev-parse --short=12 HEAD)
+            TAG=${IMG##*:}
+            if ! git cat-file -e "$TAG^{commit}" 2>/dev/null; then
+              echo "   ✗ tag ảnh '$TAG' không phải một commit của kho — không đối chiếu được migration."
+              echo "     Bấm job service-$s rồi chạy lại."; failed="$failed $s"; continue
+            fi
+            if ! git diff --quiet "$TAG" HEAD -- "service-$s/migrations"; then
+              echo "   ✗ ảnh $TAG mang migration KHÁC kho @ $HEAD12 — Deployment đang chạy ảnh cũ hoặc đã bị rollback."
+              echo "     Không dựng bảng bằng ảnh này (sẽ ra cấu trúc cũ). Bấm job service-$s cho tới khi Deployment"
+              echo "     mang ảnh mới, rồi chạy lại."; failed="$failed $s"; continue
+            fi
+            echo "   migration của ảnh $TAG khớp kho @ $HEAD12"
             if [ -n "${TAO_CSDL:-}" ] && ! ensure_db "$s"; then
               echo "     Không tạo bảng cho $s khi chưa có CSDL."; failed="$failed $s"; continue
+            fi
+            if ! ensure_schema "$s"; then
+              echo "     Không tạo bảng cho $s khi chưa có schema public."; failed="$failed $s"; continue
             fi
 
             pod="vigov-migrate-$s-$BUILD_NUMBER"
@@ -702,9 +780,8 @@ CREATEDB
     // Per service, one transaction: DROP SCHEMA public CASCADE; CREATE SCHEMA public. The migrations
     // create everything in `public` and nothing else — no extension, no event trigger, no other schema
     // (checked 15/10/2026). lock_timeout 30 s: a session holding a lock makes it fail closed, not hang.
-    // GRANT USAGE … TO PUBLIC restores what PostgreSQL's own `public` schema carries; a bare CREATE SCHEMA
-    // does not, and an account other than the DSN's — a read-only login — would then be refused the whole
-    // schema. Grants that roles held on the OLD tables are gone with them either way.
+    // This action only wipes (owner, 15/10/2026). The schema's default USAGE grant, which a bare CREATE
+    // SCHEMA does not carry, is restored by `tao-bang` — the one action that builds structure.
     // Refuses before touching anything when two services share one database name (prod, 14/10/2026):
     // wiping one would silently wipe another's ledger. vihat-miniapp's database is not among the seven.
     stage('Làm mới CSDL') {
@@ -764,7 +841,7 @@ ledger=-
 case "$info" in *'|t') ledger=$(psql "$DATABASE_DSN" -X -At -c "SELECT count(*) FROM schema_migration" 2>/dev/null || echo '?') ;; esac
 echo "INFO|${info%|*}|$ledger"
 [ "$CHE_DO" = "that" ] || exit 0
-if psql "$DATABASE_DSN" -X -q -v ON_ERROR_STOP=1 -1 -c "SET LOCAL lock_timeout = '30s'" -c "DROP SCHEMA public CASCADE" -c "CREATE SCHEMA public" -c "GRANT USAGE ON SCHEMA public TO PUBLIC" 2>/tmp/err; then
+if psql "$DATABASE_DSN" -X -q -v ON_ERROR_STOP=1 -1 -c "SET LOCAL lock_timeout = '30s'" -c "DROP SCHEMA public CASCADE" -c "CREATE SCHEMA public" 2>/tmp/err; then
   left=$(psql "$DATABASE_DSN" -X -At -c "SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace" 2>/dev/null || echo '?')
   echo "DONE|$left"
 else
