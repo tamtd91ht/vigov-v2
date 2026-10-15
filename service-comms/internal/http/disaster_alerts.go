@@ -17,7 +17,7 @@ package http
 // nominalised act (skills/rest-api-design §3) — what a GET of the row's `ended_at`/`ended_by` answers.
 //
 // THE KEYS ARE THE OWNER'S AND BOTH EXIST: `content.read` / `content.update`,
-// service-identity/migrations/0001_init.sql:292-293 (ADR 0091 §2). NO KEY WAS INVENTED (rule 5, 3c).
+// service-identity/migrations/0001_init.sql:260-261 (ADR 0091 §2). NO KEY WAS INVENTED (rule 5, 3c).
 //
 // PERSONAL DATA (rule 3). The contact names and the phones in the two lists may be an officer's own
 // (0026): never logged, never in an error, masked in the audit delta (app/disaster_alert.go). Returned

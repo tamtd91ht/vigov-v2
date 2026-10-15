@@ -10,7 +10,7 @@ package http
 // entities are 0013's `PortalSyncSettings`, `PortalCategory`, `PortalSyncRun`.
 //
 // `content.read` / `content.update` — §10.5's own keys for this screen, seeded at
-// service-identity/migrations/0001_init.sql:292-293. NO KEY WAS INVENTED (rule 5, invariant 3c). Reads
+// service-identity/migrations/0001_init.sql:260-261. NO KEY WAS INVENTED (rule 5, invariant 3c). Reads
 // are `content.read`; every write — the configuration, the selection, starting a run — is
 // `content.update`, the key that already publishes to every resident: the sync publishes too. ONE READ
 // IS `content.update` AS WELL — the live category tree, because it USES the commune's secret (owner,

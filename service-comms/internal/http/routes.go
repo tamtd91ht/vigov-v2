@@ -89,7 +89,7 @@ type GhiLoaiTaiNguyen interface {
 // SCREEN, checked rather than assumed: docs/ui-ux/14-cau-hinh.md:109 lists it in the permission
 // matrix, and §5 of that same file (:148-182) is the `Danh mục` tab these routes serve — the one
 // with `+ Thêm mục`, the `✎` / `Tắt` / `🗑` actions and the `Nguồn` column. The key is seeded at
-// service-identity/migrations/0001_init.sql:281, so a commune administrator can actually tick it.
+// service-identity/migrations/0001_init.sql:249, so a commune administrator can actually tick it.
 //
 // NO NEW KEY WAS INVENTED, and that is rule 5, invariant 3c: a key no migration seeds is a right
 // nobody can grant, so the route would answer 403 to every account forever while the tests stayed
@@ -544,7 +544,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// --- the commune issues an announcement to named staff ---------------------------------------
 	//
 	// `announcement.create` IS THE KEY THE SPECIFICATION ITSELF NAMES — §9.1, "Quyền soạn & phát
-	// hành: announcement.create" — and it is seeded at service-identity/migrations/0001_init.sql:286,
+	// hành: announcement.create" — and it is seeded at service-identity/migrations/0001_init.sql:254,
 	// so a commune administrator can actually tick it. NO NEW KEY WAS INVENTED (rule 5, invariant
 	// 3c): a key no migration seeds is a right nobody can grant, so the route would answer 403 to
 	// every account forever while the tests stayed green.
@@ -586,7 +586,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `/api/mini-app/noi-dung` and `/api/cong/…` sketches cannot ship at all.
 	//
 	// `content.read` AND `content.update` ARE THE SPECIFICATION'S OWN KEYS (§10.5) AND BOTH EXIST —
-	// service-identity/migrations/0001_init.sql:292-293, group `NỘI DUNG MINI APP`. NO NEW KEY WAS
+	// service-identity/migrations/0001_init.sql:260-261, group `NỘI DUNG MINI APP`. NO NEW KEY WAS
 	// INVENTED, and that is rule 5, invariant 3c: a key no migration seeds is a right nobody can
 	// grant, so the route would answer 403 to every account forever while the tests stayed green.
 	// There is no `content.create` in the table and none was added — composing and editing are both
@@ -752,7 +752,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// DELETE /api/v1/staff/{id}'s in service-identity: a body `{ "reason": "…" }`, 204, no body back.
 	//
 	// `content.update`, THE KEY THE PROTOTYPE USES and the one every write of this screen carries; seeded
-	// at service-identity/migrations/0001_init.sql:293. No key invented (rule 5, invariant 3c).
+	// at service-identity/migrations/0001_init.sql:261. No key invented (rule 5, invariant 3c).
 	//
 	// THE ITEM LEAVES THE MINI APP IN THE SAME UPDATE (`trang_thai = 'an'` as a literal), and its cover's
 	// public copy is withdrawn after commit, the way an unpublish withdraws it (app.SoanNoiDungMiniApp.Delete).
@@ -788,7 +788,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// internal/app/content_cover.go has the whole flow; internal/http/content_cover.go says why the noun
 	// is `cover-images` and why it sits at collection level; internal/http/upload.go the envelope.
 	// `content.update`: uploading a cover is composing the article (§10.5 divides the screen into read and
-	// update, nothing else). The key is seeded (service-identity/migrations/0001_init.sql:293); NO KEY WAS
+	// update, nothing else). The key is seeded (service-identity/migrations/0001_init.sql:261); NO KEY WAS
 	// INVENTED (rule 5, invariant 3c). The presigned POST and `…/{id}/completion` are gone (owner, 09/10).
 	//
 	// BODY: multipart/form-data, text fields FIRST, then exactly one part named `file`, then nothing:
@@ -845,7 +845,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// `content-body-image`: sniff, ClamAV, `thumb-1280` derivative without EXIF, published and withdrawn
 	// with the article. Answers 201 with the stored image and, once ready, its preview link.
 	// `content.update` — K8 names it, the key the cover route uses, seeded
-	// (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c). No rate
+	// (service-identity/migrations/0001_init.sql:261); NO KEY WAS INVENTED (rule 5, invariant 3c). No rate
 	// limit of its own (K8): authenticated, audited, bounded by the pod's upload slots and by the
 	// per-article count of platform's policy (H7, 20 on 03/10/2026 — read per request, never a constant).
 	//
@@ -882,7 +882,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// (skills/rest-api-design §3), so it sits under `body-images`.
 	//
 	// `content.update` — K8 names this route too; the cover routes' key, seeded
-	// (service-identity/migrations/0001_init.sql:293); NO KEY WAS INVENTED (rule 5, invariant 3c).
+	// (service-identity/migrations/0001_init.sql:261); NO KEY WAS INVENTED (rule 5, invariant 3c).
 	//
 	// RATE LIMIT (owner, 03/10/2026, ADR 0067 K10 — replacing K8's "none of its own" for THIS route):
 	// ratelimit.StaffImageFetch, 30 attempts per hour per officer, keyed `t:<tenant>:rl:body-image-fetch:
@@ -927,7 +927,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// the officer typed), and nothing of it is ever public — residents get a short-lived presigned GET.
 	//
 	// `content.update`: ADR 0067 §4.3 names it ("người tải cần content.update"); it is the key the cover
-	// route uses and is seeded (service-identity/migrations/0001_init.sql:293). NO KEY WAS INVENTED (rule 5,
+	// route uses and is seeded (service-identity/migrations/0001_init.sql:261). NO KEY WAS INVENTED (rule 5,
 	// invariant 3c). The presigned POST and `…/{id}/completion` are gone (owner, 09/10).
 	//
 	// BODY: multipart/form-data, text fields FIRST, then exactly one part named `file`, then nothing:
@@ -1062,7 +1062,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// `content.update`, THE SAME KEY AS THE CREATE above: managing the tree is composing the commune's
 	// Mini App (§10.5 divides the screen into read and update, nothing else). Seeded at
-	// service-identity/migrations/0001_init.sql:293; no key invented (rule 5, invariant 3c).
+	// service-identity/migrations/0001_init.sql:261; no key invented (rule 5, invariant 3c).
 	//
 	// PATCH: name, parent (`""` = root), order, hidden. `slug` is REFUSED when sent (400) — an issued
 	// code never changes. A new parent that is the category itself is 400; one of its descendants is 409
@@ -1125,7 +1125,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	//
 	// THE KEYS ARE THE ONES ../vigov-require GIVES THESE FOUR ROUTES (docs/spec/04-api.md:58-61):
 	// `asset.read` to read, `admin.lookup` to change. Both are seeded at
-	// service-identity/migrations/0001_init.sql (:281, :287); no key was invented (rule 5, 3c).
+	// service-identity/migrations/0001_init.sql (:249, :255); no key was invented (rule 5, 3c).
 	//
 	// `asset.read` AND NOT AnyAuthenticated, unlike GET /map-asset-types: a type's LABEL is shown on
 	// every map screen, while a form's field definitions are only needed by whoever reads or edits
@@ -1298,7 +1298,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// §6). The noun carries the service name because tools/ingress routes by the first path segment
 	// and five owners for one `audit-entries` segment is a STOP there (ADR 0054 §3).
 	//
-	// `admin.audit` — "Xem nhật ký hệ thống" — seeded at service-identity/migrations/0001_init.sql:280;
+	// `admin.audit` — "Xem nhật ký hệ thống" — seeded at service-identity/migrations/0001_init.sql:248;
 	// no key invented (rule 5, invariant 3c). Staff of the request's commune only; there is no operator
 	// variant (ADR 0054 §2, ADR 0003:32).
 	//

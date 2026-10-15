@@ -191,7 +191,7 @@ func doiMa(t *testing.T, w *httptest.ResponseRecorder, muon int) {
 //
 // WHAT STOOD HERE UNTIL TODAY: `PermissionKeys: []authz.Perm{"map.read"}`. `map.read` is a string
 // that appears in no migration and in no route in this repository — the seeded catalogue calls
-// that subsystem `asset.*` (service-identity/migrations/0001_init.sql:280-281). A key absent from
+// that subsystem `asset.*` (service-identity/migrations/0001_init.sql:255-256). A key absent from
 // `quyen` is a key no administrator can grant on the Phân quyền screen, so a route guarded by it
 // could never be reached by anybody (rule 5, invariant 3b).
 //

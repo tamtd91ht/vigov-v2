@@ -275,7 +275,7 @@ func mapAssetRoutes() []mapAssetRoute {
 func TestMapAssetRoutesAskForSeededKeys(t *testing.T) {
 	// LITERALS: a fake checker grants any string, so a key the `quyen` table lacks would stay green here
 	// while answering 403 to every account (rule 5, invariant 3c). asset.read / asset.update are seeded at
-	// service-identity/migrations/0001_init.sql:287-288, admin.lookup at :281.
+	// service-identity/migrations/0001_init.sql:255-256, admin.lookup at :249.
 	for _, tc := range mapAssetRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapAssetServer(t)

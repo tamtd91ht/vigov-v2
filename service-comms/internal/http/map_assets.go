@@ -14,7 +14,7 @@ package http
 //	POST   /api/v1/map-assets/{id}/confirmation  asset.update  set / clear `verified`
 //
 // THE KEYS EXIST AND NONE WAS INVENTED (rule 5, invariant 3c): `asset.read` / `asset.update` are the
-// spec's own (§12.5) and are seeded at service-identity/migrations/0001_init.sql:287-288; `admin.lookup`
+// spec's own (§12.5) and are seeded at service-identity/migrations/0001_init.sql:255-256; `admin.lookup`
 // is the key every write of the type catalogue already declares (routes.go, POST /api/v1/map-asset-types).
 //
 // THE NOUN IS `asset` (kb/00-foundation/ubiquitous-language.md, row `MapAssetType`): the permissions

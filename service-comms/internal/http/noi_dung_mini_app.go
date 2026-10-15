@@ -45,7 +45,7 @@ package http
 // # THE PERMISSIONS ARE THE SPECIFICATION'S OWN AND BOTH EXIST
 //
 // §10.5 names them: `content.read` ("xem nội dung và danh bạ Mini App") and `content.update`
-// ("sửa"). BOTH ARE SEEDED — service-identity/migrations/0001_init.sql:292-293, group
+// ("sửa"). BOTH ARE SEEDED — service-identity/migrations/0001_init.sql:260-261, group
 // `NỘI DUNG MINI APP` — so a commune administrator can actually tick them, and no key was invented
 // (rule 5, invariant 3c).
 //

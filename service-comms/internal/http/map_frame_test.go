@@ -200,7 +200,7 @@ func mapFrameRoutes() []mapAssetRoute {
 
 func TestMapFrameRoutesAskForSeededKeys(t *testing.T) {
 	// LITERALS: a fake checker grants any string (rule 5, invariant 3c). asset.read is seeded at
-	// service-identity/migrations/0001_init.sql:287, admin.lookup at :281.
+	// service-identity/migrations/0001_init.sql:255, admin.lookup at :249.
 	for _, tc := range mapFrameRoutes() {
 		t.Run(tc.name, func(t *testing.T) {
 			s := newMapFrameServer(t)
@@ -215,7 +215,7 @@ func TestMapFrameRoutesAskForSeededKeys(t *testing.T) {
 // TestMapFrameGetAsksForExactlyTheTwoKeys pins the OR: the GET asks for asset.read and feedback.read
 // and nothing else — a third key slipping in would widen the read, a missing one would lock the
 // petition maps out. The writes still ask for admin.lookup alone (the decision opened the READ only).
-// feedback.read is seeded at service-identity/migrations/0001_init.sql:299.
+// feedback.read is seeded at service-identity/migrations/0001_init.sql:267.
 func TestMapFrameGetAsksForExactlyTheTwoKeys(t *testing.T) {
 	s := newMapFrameServer(t)
 	doiMa(t, s.call(t, http.MethodGet, hostA, canBoGhi(xaA), ""), http.StatusForbidden)

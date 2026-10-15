@@ -18,8 +18,8 @@ package http
 // some proxy, cache or client library will one day act on as written.
 //
 // THE KEYS EXIST AND NONE WAS INVENTED (rule 5, invariant 3c): `asset.read` is the key of every read of
-// the economic map (map_assets.go), seeded at service-identity/migrations/0001_init.sql:287; `feedback.read`
-// is the key of every staff read of petitions, seeded at :299; `admin.lookup` is the key H3 and K4 name
+// the economic map (map_assets.go), seeded at service-identity/migrations/0001_init.sql:255; `feedback.read`
+// is the key of every staff read of petitions, seeded at :267; `admin.lookup` is the key H3 and K4 name
 // ("Ai đặt", "Ai đổi"), seeded at :281.
 //
 // NOT SET IS 200 {"configured": false, …hints}, NOT 404 — the repository's convention for a singleton not

@@ -15,7 +15,7 @@ package http
 // the public read — the same split as `content-items` / `commune-news`.
 //
 // THE KEYS ARE THE USER'S TOO, and both exist: `content.read` / `content.update` are seeded at
-// service-identity/migrations/0001_init.sql:292-293 — "Xem / Sửa nội dung và danh bạ Mini App", which
+// service-identity/migrations/0001_init.sql:260-261 — "Xem / Sửa nội dung và danh bạ Mini App", which
 // names exactly this list. NO KEY WAS INVENTED (rule 5, invariant 3c). The DELETE carries
 // `content.update` because that is what DELETE /api/v1/content-items/{id} carries; there is no
 // separate delete key in the `quyen` table for this group.
