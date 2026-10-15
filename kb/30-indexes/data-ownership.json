@@ -23,7 +23,7 @@
       "service": "comms",
       "scope": "tenant",
       "table": "thong_bao_nguoi_nhan",
-      "source": "service-comms/migrations/0005_thong_bao_noi_bo.sql:417"
+      "source": "service-comms/migrations/0005_thong_bao_noi_bo.sql:409"
     },
     {
       "entity": "AutomationJobSetting",
@@ -37,21 +37,21 @@
       "service": "identity",
       "scope": "tenant",
       "table": "automation_run",
-      "source": "service-identity/migrations/0017_automation_jobs.sql:143"
+      "source": "service-identity/migrations/0017_automation_jobs.sql:127"
     },
     {
       "entity": "AutomationRunScope",
       "service": "identity",
       "scope": "tenant",
       "table": "automation_run_scope",
-      "source": "service-identity/migrations/0017_automation_jobs.sql:112"
+      "source": "service-identity/migrations/0017_automation_jobs.sql:104"
     },
     {
       "entity": "BudgetColumn",
       "service": "finance",
       "scope": "tenant",
       "table": "cot_ngan_sach",
-      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:214"
+      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:206"
     },
     {
       "entity": "BudgetEntry",
@@ -65,21 +65,21 @@
       "service": "finance",
       "scope": "tenant",
       "table": "gia_tri_dot",
-      "source": "service-finance/migrations/0008_dot_thu_chi.sql:328"
+      "source": "service-finance/migrations/0008_dot_thu_chi.sql:320"
     },
     {
       "entity": "BudgetLine",
       "service": "finance",
       "scope": "tenant",
       "table": "khoan_muc_ngan_sach",
-      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:302"
+      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:286"
     },
     {
       "entity": "BudgetLineValue",
       "service": "finance",
       "scope": "tenant",
       "table": "gia_tri_khoan_muc",
-      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:370"
+      "source": "service-finance/migrations/0006_thu_chi_ngan_sach.sql:346"
     },
     {
       "entity": "BudgetPeriodClose",
@@ -191,7 +191,7 @@
       "service": "comms",
       "scope": "tenant",
       "table": "noi_dung_mini_app",
-      "source": "service-comms/migrations/0006_noi_dung_mini_app.sql:236"
+      "source": "service-comms/migrations/0006_noi_dung_mini_app.sql:228"
     },
     {
       "entity": "DataEncryptionKey",
@@ -219,7 +219,7 @@
       "service": "finance",
       "scope": "tenant",
       "table": "chung_tu_giai_ngan",
-      "source": "service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:258"
+      "source": "service-finance/migrations/0004_du_an_va_chung_tu_giai_ngan.sql:250"
     },
     {
       "entity": "DocumentNumberSeries",
@@ -233,7 +233,7 @@
       "service": "documents",
       "scope": "tenant",
       "table": "lich_su_chuyen_van_ban",
-      "source": "service-documents/migrations/0004_so_van_ban.sql:480"
+      "source": "service-documents/migrations/0004_so_van_ban.sql:472"
     },
     {
       "entity": "DocumentType",
@@ -261,7 +261,7 @@
       "service": "finance",
       "scope": "tenant",
       "table": "phan_bo_nguon_von",
-      "source": "service-finance/migrations/0007_nguon_von.sql:196"
+      "source": "service-finance/migrations/0007_nguon_von.sql:188"
     },
     {
       "entity": "FundingSource",
@@ -289,14 +289,14 @@
       "service": "documents",
       "scope": "tenant",
       "table": "van_ban_den",
-      "source": "service-documents/migrations/0004_so_van_ban.sql:290"
+      "source": "service-documents/migrations/0004_so_van_ban.sql:282"
     },
     {
       "entity": "MailSettings",
       "service": "comms",
       "scope": "tenant",
       "table": "mail_settings",
-      "source": "service-comms/migrations/0008_mail_settings.sql:115"
+      "source": "service-comms/migrations/0008_mail_settings.sql:107"
     },
     {
       "entity": "MapAsset",
@@ -338,7 +338,7 @@
       "service": "petitions",
       "scope": "tenant",
       "table": "ket_luan_hop",
-      "source": "service-petitions/migrations/0007_bien_ban.sql:270"
+      "source": "service-petitions/migrations/0007_bien_ban.sql:262"
     },
     {
       "entity": "MiniApp",
@@ -352,7 +352,7 @@
       "service": "identity",
       "scope": "tenant",
       "table": "mini_app_secret",
-      "source": "service-identity/migrations/0021_mini_app_secret.sql:184"
+      "source": "service-identity/migrations/0021_mini_app_secret.sql:176"
     },
     {
       "entity": "OperatorAccount",
@@ -401,14 +401,14 @@
       "service": "documents",
       "scope": "tenant",
       "table": "van_ban_di",
-      "source": "service-documents/migrations/0004_so_van_ban.sql:406"
+      "source": "service-documents/migrations/0004_so_van_ban.sql:398"
     },
     {
       "entity": "Petition",
       "service": "petitions",
       "scope": "tenant",
       "table": "phieu_phan_anh",
-      "source": "service-petitions/migrations/0004_phieu_phan_anh.sql:214"
+      "source": "service-petitions/migrations/0004_phieu_phan_anh.sql:206"
     },
     {
       "entity": "PetitionField",
@@ -492,14 +492,14 @@
       "service": "comms",
       "scope": "platform",
       "table": "platform_data_encryption_key",
-      "source": "service-comms/migrations/0018_zalo_bot.sql:614"
+      "source": "service-comms/migrations/0018_zalo_bot.sql:598"
     },
     {
       "entity": "PlatformOperatorAuditEntry",
       "service": "comms",
       "scope": "platform",
       "table": "platform_operator_audit_log",
-      "source": "service-comms/migrations/0018_zalo_bot.sql:835"
+      "source": "service-comms/migrations/0018_zalo_bot.sql:819"
     },
     {
       "entity": "PlatformStoredFile",
@@ -513,14 +513,14 @@
       "service": "comms",
       "scope": "tenant",
       "table": "portal_categories",
-      "source": "service-comms/migrations/0013_portal_sync.sql:210"
+      "source": "service-comms/migrations/0013_portal_sync.sql:202"
     },
     {
       "entity": "PortalSyncRun",
       "service": "comms",
       "scope": "tenant",
       "table": "portal_sync_runs",
-      "source": "service-comms/migrations/0013_portal_sync.sql:311"
+      "source": "service-comms/migrations/0013_portal_sync.sql:295"
     },
     {
       "entity": "PortalSyncSettings",
@@ -555,7 +555,7 @@
       "service": "finance",
       "scope": "tenant",
       "table": "project_comments",
-      "source": "service-finance/migrations/0015_project_issues_and_comments.sql:136"
+      "source": "service-finance/migrations/0015_project_issues_and_comments.sql:128"
     },
     {
       "entity": "ProjectIssue",
@@ -576,7 +576,7 @@
       "service": "identity",
       "scope": "tenant",
       "table": "ngay_nghi_le",
-      "source": "service-identity/migrations/0006_lich_lam_viec.sql:192"
+      "source": "service-identity/migrations/0006_lich_lam_viec.sql:184"
     },
     {
       "entity": "ReportingSystemMessageOverride",
@@ -590,7 +590,7 @@
       "service": "identity",
       "scope": "tenant",
       "table": "thon_to_dan_pho",
-      "source": "service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:360"
+      "source": "service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:344"
     },
     {
       "entity": "ResidentialUnitType",
@@ -625,7 +625,7 @@
       "service": "identity",
       "scope": "tenant",
       "table": "ngay_lam_bu",
-      "source": "service-identity/migrations/0006_lich_lam_viec.sql:259"
+      "source": "service-identity/migrations/0006_lich_lam_viec.sql:243"
     },
     {
       "entity": "SystemMessageOverride",
@@ -646,7 +646,7 @@
       "service": "identity",
       "scope": "tenant",
       "table": "khoi_nhiem_vu",
-      "source": "service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:295"
+      "source": "service-identity/migrations/0005_don_vi_dan_cu_va_danh_muc.sql:287"
     },
     {
       "entity": "TaskDocument",
@@ -688,7 +688,7 @@
       "service": "petitions",
       "scope": "tenant",
       "table": "muc_uu_tien_nhiem_vu",
-      "source": "service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:284"
+      "source": "service-petitions/migrations/0003_danh_muc_nhiem_vu.sql:276"
     },
     {
       "entity": "TaskStatusLabel",
@@ -744,7 +744,7 @@
       "service": "comms",
       "scope": "platform",
       "table": "zalo_bot_shared",
-      "source": "service-comms/migrations/0018_zalo_bot.sql:690"
+      "source": "service-comms/migrations/0018_zalo_bot.sql:674"
     },
     {
       "entity": "ZaloChannelSetting",
@@ -765,21 +765,21 @@
       "service": "comms",
       "scope": "tenant",
       "table": "zalo_delivery",
-      "source": "service-comms/migrations/0018_zalo_bot.sql:471"
+      "source": "service-comms/migrations/0018_zalo_bot.sql:455"
     },
     {
       "entity": "ZaloGroupDelivery",
       "service": "comms",
       "scope": "tenant",
       "table": "zalo_group_delivery",
-      "source": "service-comms/migrations/0029_zalo_group_link.sql:596"
+      "source": "service-comms/migrations/0029_zalo_group_link.sql:588"
     },
     {
       "entity": "ZaloGroupLink",
       "service": "comms",
       "scope": "tenant",
       "table": "zalo_group_link",
-      "source": "service-comms/migrations/0029_zalo_group_link.sql:312"
+      "source": "service-comms/migrations/0029_zalo_group_link.sql:304"
     },
     {
       "entity": "ZaloGroupPairingCode",
@@ -793,14 +793,14 @@
       "service": "comms",
       "scope": "tenant",
       "table": "zalo_link",
-      "source": "service-comms/migrations/0018_zalo_bot.sql:327"
+      "source": "service-comms/migrations/0018_zalo_bot.sql:311"
     },
     {
       "entity": "ZaloPairingCode",
       "service": "comms",
       "scope": "tenant",
       "table": "zalo_pairing_code",
-      "source": "service-comms/migrations/0018_zalo_bot.sql:221"
+      "source": "service-comms/migrations/0018_zalo_bot.sql:213"
     }
   ]
 }

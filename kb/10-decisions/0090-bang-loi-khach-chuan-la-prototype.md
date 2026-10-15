@@ -187,13 +187,15 @@ này không có điều "quyết định tường minh của chủ dự án th�
 chủ dự án cho dòng 22, không phải luật mới. Ai đối chiếu màn Phân quyền với prototype sẽ thấy nhóm Quản
 trị có 10 khoá thay vì 6 — đó là chủ ý.
 
-**Còn treo:**
+**Tên khoá — đã gỡ.** Bản đầu đặt `admin.residential_unit`, `admin.system_message`, `admin.mail_server`,
+`admin.zalo_channel`, trái quy ước `nhóm.mộttừ` (ADR 0030 điều kiện dừng #2). Chủ dự án 15/10/2026 đổi
+sang tên bốn khoá ở bảng trên (`95c4f50c`), sửa thẳng migration 0032 vì nó **chưa chạy ở cụm nào** (chủ
+dự án xác nhận). Nhãn trên màn Phân quyền giữ nguyên. Gặp lại bốn tên cũ ở đâu: đó là tên đã bỏ.
 
-| Điểm | Vì sao treo |
+| Điểm | Trạng thái |
 |---|---|
-| Tên khoá có gạch dưới ở vế sau | Trái quy ước `nhóm.mộttừ` và điều kiện dừng #2 của ADR 0030. Kho chưa ghi chủ dự án đã duyệt **tên** khoá. Đổi tên sau khi xã đã tick là migration trên dữ liệu phân quyền đang chạy (ADR 0030 §Quy ước) |
-| Cấp sẵn trong migration | ADR 0030 điều kiện dừng #3 cấm gán khoá cho vai trò trong migration hạt giống. Ở đây chủ dự án chọn cấp sẵn (thân commit `54bb094f`), theo khuôn migration 0028 |
-| Migration 0032 | **Chưa chạy** trên PostgreSQL thật (thân commit `54bb094f`, `f81168fe`) |
+| Cấp sẵn trong migration | **Chủ dự án chọn tường minh** (thân commit `54bb094f`), theo khuôn migration 0028. Đây là ngoại lệ cho riêng 4 khoá này với ADR 0030 điều kiện dừng #3 — ghi ở ADR 0030 §*Sửa đổi 15/10/2026*; luật #3 vẫn đứng cho khoá khác |
+| Migration 0032 | **Chưa chạy** trên PostgreSQL thật (thân commit `54bb094f`, `f81168fe`, `95c4f50c`) |
 
-Commit: `54bb094f` (khoá + cấp sẵn) · `f81168fe` (45 tuyến) · `336f4b25` (web-admin). Câu mở #27 ghi
-thêm dòng 15/10/2026.
+Commit: `54bb094f` (khoá + cấp sẵn) · `f81168fe` (45 tuyến) · `336f4b25` (web-admin) · `95c4f50c` (đổi tên
+4 khoá). Câu mở #27 ghi thêm dòng 15/10/2026.

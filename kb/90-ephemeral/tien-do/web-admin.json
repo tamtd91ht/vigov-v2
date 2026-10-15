@@ -1602,6 +1602,15 @@
       "viec": "Modal nhập hộ phản ánh trên web-admin: ô 'Tiếp nhận qua kênh' (can-bo-nhap-ho mặc định · tong-dai 'Tổng đài điện thoại' · web-xa · zalo-oa) và đính ảnh hiện trường sau khi vào sổ (tối đa 5) — máy chủ đã có ở 7c739880 (ADR 0028 §Sửa đổi 15/10/2026).",
       "bang_chung": "84de4675 (web) trên 7c739880 (máy chủ): ô chọn kênh 4 lựa chọn, nhãn tong-dai 'Tổng đài điện thoại', web-xa 'Trang thông tin của xã', ảnh ≤ 5 tải sau khi vào sổ, mỗi ảnh một Idempotency-Key; mục intakePhotos rời PHAN_CHUA_DUNG. tsc 0, eslint sạch, vitest phan-anh + lib/api 1291/1291 (15/10/2026). Chưa kiểm bằng ảnh render, chưa thử với máy chủ thật.",
       "tiep_theo": "Người dùng build + kiểm ảnh. docs/ui-ux/09-phan-anh-nguoi-dan.md:141 còn ghi 'Web của xã' (bản sao yêu cầu, không sửa ở kho này). Danh sách/bộ lọc vẫn gọi can-bo-nhap-ho là 'Cán bộ nhập hộ'."
+    },
+    {
+      "id": "bl141026-cau-hinh-4-khoa-rieng",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Cấu hình: tab Lời hệ thống → admin.message, Máy chủ thư → admin.mail, Kênh Zalo (kể cả QR mở Mini App) → admin.zalo; admin.lookup không còn mở ba tab này. Tab Thôn/TDP hiện cho mọi cán bộ, nút ghi + nhập Excel → admin.village (trước admin.org); nhóm Danh mục 'Loại đơn vị dân cư' → admin.village, quyết từng dòng theo khoá của nhóm, các nhóm khác giữ admin.lookup. Menu Cấu hình mở với 4 khoá mới. Ma trận Phân quyền đọc khoá từ máy chủ — không sửa mã (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
+      "bang_chung": "336f4b25 · src/lib/quyen.ts, features/cau-hinh/quyen-tab.ts, thanh-tab-cau-hinh.ts, tab-thon-to-dan-pho.tsx, tab-danh-muc.tsx, excel-import-targets.tsx, components/muc-menu.ts: tsc 0, eslint sạch, vitest 325 tệp / 6087 test, check_quyen PASS. 95c4f50c đổi tên khoá: tsc 0; vitest cau-hinh + components + nguoi-dung 1569/1569. Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "Người dùng build + kiểm ảnh: cán bộ chỉ có admin.lookup không còn thấy 3 tab Lời hệ thống · Máy chủ thư · Kênh Zalo. Migration identity 0032 CHƯA chạy trên PostgreSQL thật. Mã lên cụm trước 0032 thì khoá chưa có trong quyen, tuyến này 403 với mọi tài khoản (suy theo luật 5 bất biến 3c, chưa chạy) — chạy 0032 cùng lần triển khai."
     }
   ]
 }

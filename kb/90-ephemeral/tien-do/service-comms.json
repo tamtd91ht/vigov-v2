@@ -541,6 +541,15 @@
       "viec": "GET /api/v1/map-assets mặc định: asset_type_code ASC, created_at DESC, id DESC (trước: nhóm rồi tên) — giữ gom nhóm vì bảng web gom dòng liền nhau theo loại; thêm sort=created_at tường minh (chủ dự án 15/10/2026, ADR 0090 §Sửa đổi 15/10/2026).",
       "bang_chung": "99c99592 · internal/store/map_asset.go:54-71, map_asset_pg_test.go. Commit ghi: go vet + go test -count=1 -p 1 ./... xanh. Chưa chạy trên PostgreSQL thật (ca PG SKIP, không VIGOV_TEST_DSN).",
       "tiep_theo": "Chạy map_asset_pg_test khi có VIGOV_TEST_DSN (keyset ghép đoạn hai chiều chưa thử trên PG thật)."
+    },
+    {
+      "id": "bl141026-khoa-may-chu-thu-kenh-zalo",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Tuyến tab Máy chủ thư → admin.mail (GET·PUT mail-settings, POST mail-settings/test-messages); tuyến tab Kênh Zalo → admin.zalo (zalo-channel-settings, GET zalo-links, zalo-groups, zalo-group-pairing-codes, zalo-bots/current và /check, /webhook) — trước là admin.lookup. zalo-links/current (cán bộ tự ghép) giữ AnyAuthenticated (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
+      "bang_chung": "f81168fe · internal/http/routes.go, zalo_links.go, zalo_groups.go, zalo_commune_bot.go, cmd/server/main.go; test luật 5 bất biến 7 thêm ca 'chỉ giữ admin.lookup → 403'. 95c4f50c đổi tên khoá. Commit ghi: go vet + go test -p 1 ./... xanh ở 6 dịch vụ; check_quyen PASS (f81168fe, 95c4f50c).",
+      "tiep_theo": "Migration identity 0032 CHƯA chạy trên PostgreSQL thật. Mã lên cụm trước 0032 thì khoá chưa có trong quyen, tuyến này 403 với mọi tài khoản (suy theo luật 5 bất biến 3c, chưa chạy) — chạy 0032 cùng lần triển khai."
     }
   ]
 }

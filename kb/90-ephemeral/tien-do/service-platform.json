@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-platform",
-  "cap_nhat": "2026-10-14",
+  "cap_nhat": "2026-10-15",
   "muc": [
     {
       "id": "go-ten-mien-xa-14-10",
@@ -405,6 +405,15 @@
       "trang_thai": "dang_lam",
       "bang_chung": "domain.MiniAppLaunchLink / OwnMiniAppLaunchLink nhận profileCode; chooseLaunchLink là chỗ duy nhất đọc secret; Deps/OperatorDeps.MiniAppProfileCode; cmd/server khai config.MiniAppProfile. Test domain + http (TestCommuneLaunchLinkCarriesProfileCodeWhenConfigured, TestLaunchLinkCarriesProfileCodeWhenConfigured, ...HasNoProfileCodeWhenUnset). go test ./service-platform/... xanh.",
       "con_lai": "(1) Đặt MINI_APP_PROFILE_CODE = mã VIGOV_DEV_PROFILE_CODE vào platform-secrets CHỈ ở vigov-dev, rồi rollout restart service-platform dev. (2) Build lại pod service-platform (dev và prod). (3) Xem QR trên hai trang ở dev có pf=, ở prod không có. (4) Go không so mã với digest của app — đặt sai mã thì QR dev mở prod mà không báo."
+    },
+    {
+      "id": "bl141026-khoa-qr-xa-kenh-zalo",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "GET /api/v1/commune-launch-link (QR mở Mini App của xã) → admin.zalo (trước admin.lookup) — QR chỉ dựng trong tab Kênh Zalo (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng; ADR 0070 §Sửa đổi 15/10/2026).",
+      "bang_chung": "f81168fe · internal/http/routes.go, launch_link_test.go. 95c4f50c đổi tên khoá. Commit ghi: go vet + go test -p 1 ./... xanh ở 6 dịch vụ; check_quyen PASS (f81168fe, 95c4f50c).",
+      "tiep_theo": "Migration identity 0032 CHƯA chạy trên PostgreSQL thật. Mã lên cụm trước 0032 thì khoá chưa có trong quyen, tuyến này 403 với mọi tài khoản (suy theo luật 5 bất biến 3c, chưa chạy) — chạy 0032 cùng lần triển khai."
     }
   ]
 }

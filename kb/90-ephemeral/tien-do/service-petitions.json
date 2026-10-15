@@ -868,6 +868,15 @@
       "viec": "POST /api/v1/citizen-reports/{maTraCuu}/photos: cán bộ (feedback.create, Idempotency-Key, multipart) đính ảnh hiện trường cho phiếu nhập hộ còn da-tiep-nhan, tối đa 5 ảnh, dùng lại pipeline ảnh người dân (clamd, bỏ EXIF, t_<tenant>); GET ảnh hiện trường gồm cả ảnh cán bộ tải (chủ dự án 15/10/2026).",
       "bang_chung": "7c739880 · internal/app/staff_scene_photo.go + staff_scene_photo_test.go, internal/http/routes.go. Commit ghi: go test ./... xanh.",
       "tiep_theo": "Giới hạn 5 ảnh chỉ đếm ở use case, CHƯA có sàn trong cơ sở dữ liệu — hai yêu cầu song song có thể vượt 5. Chưa chạy PostgreSQL thật."
+    },
+    {
+      "id": "bl141026-khoa-loi-he-thong",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "7 tuyến /api/v1/petitions-system-messages → admin.message (trước admin.lookup), kể cả đọc (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
+      "bang_chung": "f81168fe · internal/http/routes.go, system_messages_test.go, system_messages_custom_test.go. 95c4f50c đổi tên khoá. Commit ghi: go vet + go test -p 1 ./... xanh ở 6 dịch vụ; check_quyen PASS (f81168fe, 95c4f50c).",
+      "tiep_theo": "Migration identity 0032 CHƯA chạy trên PostgreSQL thật. Mã lên cụm trước 0032 thì khoá chưa có trong quyen, tuyến này 403 với mọi tài khoản (suy theo luật 5 bất biến 3c, chưa chạy) — chạy 0032 cùng lần triển khai."
     }
   ]
 }

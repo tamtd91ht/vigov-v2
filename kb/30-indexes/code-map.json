@@ -8072,15 +8072,15 @@
     },
     "domain.RoleTemplate": {
       "kind": "type",
-      "at": "service-identity/internal/domain/role_template.go:47"
+      "at": "service-identity/internal/domain/role_template.go:55"
     },
     "domain.RoleTemplatePermissions": {
       "kind": "func",
-      "at": "service-identity/internal/domain/role_template.go:178"
+      "at": "service-identity/internal/domain/role_template.go:190"
     },
     "domain.RoleTemplates": {
       "kind": "func",
-      "at": "service-identity/internal/domain/role_template.go:71"
+      "at": "service-identity/internal/domain/role_template.go:79"
     },
     "domain.Rule": {
       "kind": "func",
@@ -9940,7 +9940,7 @@
     },
     "http.CommuneZaloBotAdmin": {
       "kind": "type",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:40"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:42"
     },
     "http.CommuneZaloBotUpdates": {
       "kind": "type",
@@ -9996,7 +9996,7 @@
     },
     "http.CreateGroupPairingCode": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_groups.go:202"
+      "at": "service-comms/internal/http/zalo_groups.go:203"
     },
     "http.CreateMapAsset": {
       "kind": "func",
@@ -10008,11 +10008,11 @@
     },
     "http.CreatePairingCode": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:338"
+      "at": "service-comms/internal/http/zalo_links.go:341"
     },
     "http.CreateResidentialUnit": {
       "kind": "func",
-      "at": "service-identity/internal/http/residential_unit_write.go:108"
+      "at": "service-identity/internal/http/residential_unit_write.go:109"
     },
     "http.CreateTaskFromCitizenLetter": {
       "kind": "func",
@@ -10028,7 +10028,7 @@
     },
     "http.DangNhapUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:519"
+      "at": "service-identity/internal/http/routes.go:522"
     },
     "http.DangXuat": {
       "kind": "func",
@@ -10036,7 +10036,7 @@
     },
     "http.DangXuatUC": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:523"
+      "at": "service-identity/internal/http/routes.go:526"
     },
     "http.DanhBaChonNguoi": {
       "kind": "type",
@@ -10100,7 +10100,7 @@
     },
     "http.DanhSachLoaiDonViDanCu": {
       "kind": "func",
-      "at": "service-identity/internal/http/loai_don_vi_dan_cu.go:105"
+      "at": "service-identity/internal/http/loai_don_vi_dan_cu.go:106"
     },
     "http.DanhSachLoaiNhiemVu": {
       "kind": "func",
@@ -10200,7 +10200,7 @@
     },
     "http.DeleteCurrent": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:361"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:363"
     },
     "http.DeleteCustomMessage": {
       "kind": "func",
@@ -10340,7 +10340,7 @@
     },
     "http.EditGroup": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_groups.go:250"
+      "at": "service-comms/internal/http/zalo_groups.go:251"
     },
     "http.EditRole": {
       "kind": "func",
@@ -10388,11 +10388,11 @@
     },
     "http.GetCurrent": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:282"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:284"
     },
     "http.GetCurrentZaloLink": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:306"
+      "at": "service-comms/internal/http/zalo_links.go:309"
     },
     "http.GetDisasterAlert": {
       "kind": "func",
@@ -10424,7 +10424,7 @@
     },
     "http.GetZaloChannelSettings": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:381"
+      "at": "service-comms/internal/http/zalo_links.go:384"
     },
     "http.GhiBienBanUseCase": {
       "kind": "type",
@@ -10600,7 +10600,7 @@
     },
     "http.ImportResidentialUnitTypes": {
       "kind": "func",
-      "at": "service-identity/internal/http/catalogue_import.go:224"
+      "at": "service-identity/internal/http/catalogue_import.go:225"
     },
     "http.ImportResidentialUnits": {
       "kind": "func",
@@ -10612,7 +10612,7 @@
     },
     "http.ImportTaskBlocs": {
       "kind": "func",
-      "at": "service-identity/internal/http/catalogue_import.go:239"
+      "at": "service-identity/internal/http/catalogue_import.go:240"
     },
     "http.ImportTaskPriorities": {
       "kind": "func",
@@ -10652,11 +10652,11 @@
     },
     "http.KhoiNhiemVuDanhMuc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:411"
+      "at": "service-identity/internal/http/routes.go:413"
     },
     "http.KhoiNhiemVuGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:428"
+      "at": "service-identity/internal/http/routes.go:431"
     },
     "http.KhongTiepNhanPhieu": {
       "kind": "func",
@@ -10668,11 +10668,11 @@
     },
     "http.LichLamViecDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:455"
+      "at": "service-identity/internal/http/routes.go:458"
     },
     "http.LichLamViecGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:491"
+      "at": "service-identity/internal/http/routes.go:494"
     },
     "http.LichSuChuyenVanBanDen": {
       "kind": "func",
@@ -10728,7 +10728,7 @@
     },
     "http.ListGroups": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_groups.go:226"
+      "at": "service-comms/internal/http/zalo_groups.go:227"
     },
     "http.ListMapAssets": {
       "kind": "func",
@@ -10792,15 +10792,15 @@
     },
     "http.ListZaloLinks": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:367"
+      "at": "service-comms/internal/http/zalo_links.go:370"
     },
     "http.LoaiDonViDanCuDanhMuc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:402"
+      "at": "service-identity/internal/http/routes.go:404"
     },
     "http.LoaiDonViDanCuGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:422"
+      "at": "service-identity/internal/http/routes.go:425"
     },
     "http.LoaiNhiemVuDanhMuc": {
       "kind": "type",
@@ -10828,7 +10828,7 @@
     },
     "http.MaTranQuyenDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:344"
+      "at": "service-identity/internal/http/routes.go:346"
     },
     "http.MailSettingsReader": {
       "kind": "type",
@@ -10948,19 +10948,19 @@
     },
     "http.NgayLamBuDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:475"
+      "at": "service-identity/internal/http/routes.go:478"
     },
     "http.NgayLamBuGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:511"
+      "at": "service-identity/internal/http/routes.go:514"
     },
     "http.NgayNghiLeDoc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:465"
+      "at": "service-identity/internal/http/routes.go:468"
     },
     "http.NgayNghiLeGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:501"
+      "at": "service-identity/internal/http/routes.go:504"
     },
     "http.NguongCham": {
       "kind": "type",
@@ -11072,7 +11072,7 @@
     },
     "http.PhanQuyenGhi": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:353"
+      "at": "service-identity/internal/http/routes.go:355"
     },
     "http.PhatHanhThongBao": {
       "kind": "func",
@@ -11116,11 +11116,11 @@
     },
     "http.PostCheck": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:325"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:327"
     },
     "http.PostWebhook": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:339"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:341"
     },
     "http.PreviewBudgetImport": {
       "kind": "func",
@@ -11156,7 +11156,7 @@
     },
     "http.PreviewResidentialUnitTypeImport": {
       "kind": "func",
-      "at": "service-identity/internal/http/catalogue_import.go:219"
+      "at": "service-identity/internal/http/catalogue_import.go:220"
     },
     "http.PreviewStaffImport": {
       "kind": "func",
@@ -11164,7 +11164,7 @@
     },
     "http.PreviewTaskBlocImport": {
       "kind": "func",
-      "at": "service-identity/internal/http/catalogue_import.go:234"
+      "at": "service-identity/internal/http/catalogue_import.go:235"
     },
     "http.PreviewTaskPriorityImport": {
       "kind": "func",
@@ -11248,7 +11248,7 @@
     },
     "http.PutCurrent": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:297"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:299"
     },
     "http.PutMailSettings": {
       "kind": "func",
@@ -11272,7 +11272,7 @@
     },
     "http.PutZaloChannelSettings": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:398"
+      "at": "service-comms/internal/http/zalo_links.go:401"
     },
     "http.QuyenDoc": {
       "kind": "type",
@@ -11372,15 +11372,15 @@
     },
     "http.RegisterZaloCommuneBot": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:163"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:165"
     },
     "http.RegisterZaloGroups": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_groups.go:97"
+      "at": "service-comms/internal/http/zalo_groups.go:98"
     },
     "http.RegisterZaloLinks": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:155"
+      "at": "service-comms/internal/http/zalo_links.go:158"
     },
     "http.RemoveCitizenLetterDeadlineRule": {
       "kind": "func",
@@ -11420,15 +11420,15 @@
     },
     "http.ResidentialUnitImporting": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:292"
+      "at": "service-identity/internal/http/routes.go:293"
     },
     "http.ResidentialUnitTypeImportTemplate": {
       "kind": "func",
-      "at": "service-identity/internal/http/catalogue_import.go:214"
+      "at": "service-identity/internal/http/catalogue_import.go:215"
     },
     "http.ResidentialUnitWriting": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:285"
+      "at": "service-identity/internal/http/routes.go:286"
     },
     "http.ResolveProjectIssue": {
       "kind": "func",
@@ -11452,11 +11452,11 @@
     },
     "http.RoleTemplateSeeding": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:361"
+      "at": "service-identity/internal/http/routes.go:363"
     },
     "http.RoleWriting": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:368"
+      "at": "service-identity/internal/http/routes.go:370"
     },
     "http.RouteCitizenLetter": {
       "kind": "func",
@@ -11492,7 +11492,7 @@
     },
     "http.SendZaloTestMessage": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:354"
+      "at": "service-comms/internal/http/zalo_links.go:357"
     },
     "http.SetCitizenLetterDeadline": {
       "kind": "func",
@@ -11536,7 +11536,7 @@
     },
     "http.StaffImporting": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:302"
+      "at": "service-identity/internal/http/routes.go:303"
     },
     "http.StaffInboxReader": {
       "kind": "type",
@@ -11612,11 +11612,11 @@
     },
     "http.SuaKhoiNhiemVu": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_ghi.go:153"
+      "at": "service-identity/internal/http/danh_muc_ghi.go:155"
     },
     "http.SuaLoaiDonViDanCu": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_ghi.go:136"
+      "at": "service-identity/internal/http/danh_muc_ghi.go:138"
     },
     "http.SuaLoaiNhiemVu": {
       "kind": "func",
@@ -11704,7 +11704,7 @@
     },
     "http.TaskBlocImportTemplate": {
       "kind": "func",
-      "at": "service-identity/internal/http/catalogue_import.go:229"
+      "at": "service-identity/internal/http/catalogue_import.go:230"
     },
     "http.TaskCounts": {
       "kind": "func",
@@ -11804,11 +11804,11 @@
     },
     "http.ThemKhoiNhiemVu": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_ghi.go:147"
+      "at": "service-identity/internal/http/danh_muc_ghi.go:149"
     },
     "http.ThemLoaiDonViDanCu": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_ghi.go:130"
+      "at": "service-identity/internal/http/danh_muc_ghi.go:132"
     },
     "http.ThemLoaiNhiemVu": {
       "kind": "func",
@@ -11844,7 +11844,7 @@
     },
     "http.ThonToDanPhoDanhSach": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:391"
+      "at": "service-identity/internal/http/routes.go:393"
     },
     "http.ThongBaoDanhSach": {
       "kind": "type",
@@ -11872,11 +11872,11 @@
     },
     "http.UnlinkCurrentZalo": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_links.go:325"
+      "at": "service-comms/internal/http/zalo_links.go:328"
     },
     "http.UnlinkGroup": {
       "kind": "func",
-      "at": "service-comms/internal/http/zalo_groups.go:272"
+      "at": "service-comms/internal/http/zalo_groups.go:273"
     },
     "http.UnmarshalJSON": {
       "kind": "func",
@@ -11916,7 +11916,7 @@
     },
     "http.UpdateResidentialUnit": {
       "kind": "func",
-      "at": "service-identity/internal/http/residential_unit_write.go:141"
+      "at": "service-identity/internal/http/residential_unit_write.go:142"
     },
     "http.UploadAudio": {
       "kind": "func",
@@ -11956,7 +11956,7 @@
     },
     "http.VaiTroDanhMuc": {
       "kind": "type",
-      "at": "service-identity/internal/http/routes.go:323"
+      "at": "service-identity/internal/http/routes.go:325"
     },
     "http.VaiTroDoc": {
       "kind": "type",
@@ -12012,11 +12012,11 @@
     },
     "http.XoaKhoiNhiemVu": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_ghi.go:159"
+      "at": "service-identity/internal/http/danh_muc_ghi.go:161"
     },
     "http.XoaLoaiDonViDanCu": {
       "kind": "func",
-      "at": "service-identity/internal/http/danh_muc_ghi.go:142"
+      "at": "service-identity/internal/http/danh_muc_ghi.go:144"
     },
     "http.XoaLoaiNhiemVu": {
       "kind": "func",
@@ -12064,27 +12064,27 @@
     },
     "http.ZaloCommuneBotDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/zalo_commune_bot.go:49"
+      "at": "service-comms/internal/http/zalo_commune_bot.go:51"
     },
     "http.ZaloGroupAdmin": {
       "kind": "type",
-      "at": "service-comms/internal/http/zalo_groups.go:33"
+      "at": "service-comms/internal/http/zalo_groups.go:34"
     },
     "http.ZaloGroupDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/zalo_groups.go:41"
+      "at": "service-comms/internal/http/zalo_groups.go:42"
     },
     "http.ZaloLinkDeps": {
       "kind": "type",
-      "at": "service-comms/internal/http/zalo_links.go:58"
+      "at": "service-comms/internal/http/zalo_links.go:61"
     },
     "http.ZaloLinkReader": {
       "kind": "type",
-      "at": "service-comms/internal/http/zalo_links.go:40"
+      "at": "service-comms/internal/http/zalo_links.go:43"
     },
     "http.ZaloLinkWriter": {
       "kind": "type",
-      "at": "service-comms/internal/http/zalo_links.go:50"
+      "at": "service-comms/internal/http/zalo_links.go:53"
     },
     "httpx.Acquire": {
       "kind": "func",
@@ -15096,7 +15096,7 @@
     },
     "store.ImportSnapshot": {
       "kind": "func",
-      "at": "service-petitions/internal/store/catalogue_import.go:108"
+      "at": "service-petitions/internal/store/catalogue_import.go:109"
     },
     "store.InForce": {
       "kind": "func",
@@ -15148,7 +15148,7 @@
     },
     "store.InsertImported": {
       "kind": "func",
-      "at": "service-petitions/internal/store/catalogue_import.go:113"
+      "at": "service-petitions/internal/store/catalogue_import.go:114"
     },
     "store.InsertIssue": {
       "kind": "func",
@@ -15548,7 +15548,7 @@
     },
     "store.LockImport": {
       "kind": "func",
-      "at": "service-petitions/internal/store/catalogue_import.go:103"
+      "at": "service-petitions/internal/store/catalogue_import.go:104"
     },
     "store.LockLive": {
       "kind": "func",

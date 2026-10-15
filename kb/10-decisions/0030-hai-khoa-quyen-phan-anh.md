@@ -3,7 +3,7 @@ id: 0030-hai-khoa-quyen-phan-anh
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 0960b2a
+derived_from_commit: 95c4f50c
 expires: null
 owns_facts:
   - "vì sao phân loại phiếu cần khoá riêng chứ không dùng lại feedback.assign"
@@ -110,6 +110,13 @@ vào nó.
    Đề-các
 3. **Gán khoá cho một vai trò** trong migration hạt giống
 4. **Trả dữ liệu cá nhân đầy đủ mà không ghi vết**, ở bất kỳ tuyến nào — kể cả tuyến xuất Excel
+
+## Sửa đổi 15/10/2026 — một ngoại lệ, luật trên không đổi
+
+Chủ dự án thêm 4 khoá `admin.village`, `admin.message`, `admin.mail`, `admin.zalo` (đã đặt lại theo quy
+ước `nhóm.mộttừ` ở trên, `95c4f50c`) và **chọn tường minh cấp sẵn** chúng cho vai trò trong migration
+identity 0032 — ngoại lệ cho riêng 4 khoá này với điều kiện dừng #3. Lý do và phạm vi: ADR 0090 §*Sửa
+đổi 15/10/2026* — *Bốn khoá cấu hình riêng*.
 
 → ADR 0028 (vì sao phân loại là hành vi ấn định hạn): `kb/10-decisions/0028-moc-dat-han-hai-dong-ho.md`
 → ADR 0013 (vì sao migration đã chạy thì không sửa, nên hai khoá đi bằng migration riêng): `kb/10-decisions/0013-schema-migration-and-append-only.md`

@@ -380,6 +380,15 @@
       "viec": "GET /api/v1/investment-projects: ORDER BY tao_luc DESC, id DESC (trước: theo mã) (chủ dự án 15/10/2026, ADR 0090 §Sửa đổi 15/10/2026).",
       "bang_chung": "7737d780 · internal/store/du_an.go:170-193, project_list_order_pg_test.go. Commit ghi: go vet + go test -p 1 ./... xanh. Chưa chạy trên PostgreSQL thật (ca PG SKIP, không VIGOV_TEST_DSN).",
       "tiep_theo": "Chạy project_list_order_pg_test khi có VIGOV_TEST_DSN."
+    },
+    {
+      "id": "bl141026-khoa-loi-he-thong",
+      "menu": "cau-hinh",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "7 tuyến /api/v1/finance-system-messages → admin.message (trước admin.lookup), kể cả đọc (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
+      "bang_chung": "f81168fe · internal/http/routes.go, system_messages_test.go, system_messages_custom_test.go. 95c4f50c đổi tên khoá. Commit ghi: go vet + go test -p 1 ./... xanh ở 6 dịch vụ; check_quyen PASS (f81168fe, 95c4f50c).",
+      "tiep_theo": "Migration identity 0032 CHƯA chạy trên PostgreSQL thật. Mã lên cụm trước 0032 thì khoá chưa có trong quyen, tuyến này 403 với mọi tài khoản (suy theo luật 5 bất biến 3c, chưa chạy) — chạy 0032 cùng lần triển khai."
     }
   ]
 }

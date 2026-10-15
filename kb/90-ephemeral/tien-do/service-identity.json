@@ -707,9 +707,9 @@
       "menu": "cau-hinh",
       "trang_thai": "xong",
       "no_confirm": [],
-      "viec": "Tester (bảng lỗi web-admin-141026) đòi khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo trên màn Phân quyền. Chủ dự án 15/10/2026 cho đối chiếu prototype → Reject: không thêm khoá.",
-      "bang_chung": "Prototype https://vigov-admin-production.up.railway.app/nguoi-dung/phan-quyen (xem 15/10/2026): nhóm QUẢN TRỊ chỉ có admin.audit, admin.lookup, admin.org, admin.role, admin.sla, admin.user; ConfigWorkspace.tsx:37 mở các tab cấu hình bằng admin.lookup. Mã hiện tại khớp: 4 tab dùng admin.lookup, ghi thôn dùng admin.org. Sheet dòng 22 ghi Reject.",
-      "tiep_theo": "Không còn việc. Mở lại chỉ khi chủ dự án đổi ý; khoá mới vẫn phải qua câu #27 và luật 5 bất biến 3c."
+      "viec": "Bảng lỗi web-admin-141026 dòng 22: thêm 4 khoá nhóm QUẢN TRỊ — admin.village 'Cấu hình thôn/tổ dân phố', admin.message 'Cấu hình lời hệ thống', admin.mail 'Cấu hình máy chủ thư', admin.zalo 'Cấu hình kênh Zalo' (thu_tu 44–47; admin.org/role/sla/user dời 48–51). Cấp sẵn: vai trò đang dùng có admin.lookup → cả 4, có admin.org → admin.village, mỗi vai trò một dòng audit_log (system); vai trò mẫu Chủ tịch UBND, Chánh Văn phòng thêm 4 khoá. 11 tuyến ghi + nhập Excel thôn/TDP và loại thôn → admin.village (đọc giữ AnyAuthenticated). Lần chốt đầu 15/10 là Reject 'theo prototype'; chủ dự án đảo cùng ngày: \"tôi thấy tách ra thêm 4 mục trên là hợp lý đó, làm đi\". Tên ban đầu có gạch dưới, đổi theo ADR 0030 trước khi 0032 chạy ở đâu (ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
+      "bang_chung": "54bb094f (migration 0032 + vai trò mẫu): go vet + go test -p 1 ./... service-identity xanh; check_quyen PASS (47 khoá); ca PG SKIP. f81168fe (tuyến identity: internal/http/routes.go, residential_unit_write.go, residential_unit_import.go, loai_don_vi_dan_cu.go, catalogue_import.go): go vet + go test -p 1 ./... xanh 6 dịch vụ; make check xanh tới web. 95c4f50c (đổi tên 4 khoá, sửa thẳng 0032): go vet + go test xanh 6 dịch vụ; check_quyen PASS (0 khoá lạ). Migration 0032 CHƯA chạy trên PostgreSQL thật.",
+      "tiep_theo": "Chạy migration 0032 trên cụm dev rồi prod; kiểm vai trò giữ admin.lookup/admin.org đã nhận khoá mới và có dòng audit_log. Sheet dòng 22: đổi Reject → Fixed."
     }
   ]
 }
