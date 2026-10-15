@@ -7,9 +7,9 @@
 --   * large tables are PARTITIONED by tenant from the start: adding partitioning later is a
 --     migration over archival records, out of hours, with real risk. Now it costs nothing.
 --
--- MODULUS 32 everywhere (ADR 0010). At 200+ communes that is ~6 communes per partition.
--- Changing the modulus after real data exists rewrites the whole table, so it is fixed here
--- and never tuned per table.
+-- MODULUS 8 for every partitioned table (ADR 0096). At 200+ communes that is ~25 communes per
+-- partition. Only tables that grow with time or citizens are partitioned; a hot partition is
+-- split on its own (ADR 0096 §Vì sao 8), never tuned per table.
 --
 -- Migrations run PER COMMUNE, are resumable, and record progress.
 
@@ -34,10 +34,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- A partitioned table with no partitions accepts no rows: every insert fails with "no
 -- partition of relation found". The parent declaration above is only half the statement.
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS audit_log_p%s PARTITION OF audit_log '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
