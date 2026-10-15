@@ -3,13 +3,13 @@ id: 0059-excel-import-staff-and-catalogues
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 1796286
+derived_from_commit: f81168fe
 expires: null
 owns_facts:
   - "nhập cán bộ từ Excel tạo dòng cán bộ, gán vai trò và cấp tài khoản trong cùng một lượt"
   - "N mật khẩu tạm của lượt nhập chỉ trả MỘT LẦN trong phản hồi ghi, không lưu bản trần, không vào log, không vào delta của vết"
   - "nhập cán bộ là tất cả hoặc không; cột Vai trò không trống thì cần thêm admin.role; email trống lưu NULL — người dùng 29/09/2026"
-  - "đơn vị dân cư có tuyến tạo, sửa, ngưng dùng (mềm) dưới admin.org; gộp và tách cố ý không hỗ trợ"
+  - "đơn vị dân cư có tuyến tạo, sửa, ngưng dùng (mềm) dưới admin.org; gộp và tách cố ý không hỗ trợ — từ 15/10/2026 ghi và nhập Excel thôn/TDP dưới admin.village (§Sửa đổi 15/10/2026)"
   - "đơn vị dân cư có tuyến nhập Excel; ngưng dùng không bị chặn khi còn hồ sơ trỏ tới — người dùng 29/09/2026"
   - "nhập danh mục từ Excel: mỗi service sở hữu một tuyến nhập cho nhóm của mình, không có tuyến nhập danh mục chung"
   - "nhập cán bộ chỉ cấp tài khoản cho dòng có email; tạo một cán bộ vẫn bắt buộc email — nợ so với §Hệ quả"
@@ -158,6 +158,14 @@ mặc định ẩn thôn đã xoá. Chi tiết trình bày ở ADR 0079 §*Sửa
 
 **Vì sao chỉ đổi chữ:** khách muốn thấy một thao tác xoá như prototype. Xoá thật một thôn là xoá dòng
 mà hồ sơ lưu trữ đang trỏ tới (luật 7, luật 1 cấm #7).
+
+## Sửa đổi 15/10/2026 — khoá ghi thôn
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. Câu "dưới `admin.org`" ở §2 và ở
+§*Bổ sung 29/09/2026* đã cũ: tạo, sửa, ngưng dùng và nhập Excel thôn/TDP, cùng ghi và nhập Loại đơn vị
+dân cư, nay dưới khoá **`admin.village`** (chủ dự án 15/10/2026, `f81168fe`). Tuyến đọc vẫn
+`AnyAuthenticated`. §2 về gộp/tách và không có `DELETE` giữ nguyên. Quyết định và lý do: ADR 0090
+§*Sửa đổi 15/10/2026* — *Bốn khoá cấu hình riêng*.
 
 → Câu mở #9 · #15 · #16: `kb/00-foundation/open-questions.json`
 → ADR 0024 (chủ sở hữu từng nhóm danh mục) · 0056 (chặn xoá bộ phận)

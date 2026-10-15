@@ -3,7 +3,7 @@ id: 0070-doi-go-app-id-mini-app-tu-platform-admin
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 808b92a6
+derived_from_commit: f81168fe
 expires: null
 owns_facts:
   - "người vận hành ViHAT đổi App ID Mini App riêng của xã từ màn chi tiết xã ở platform-admin: một giao dịch gắn App ID mới và XOÁ MỀM dòng mini_app cũ (deleted_at/by/delete_reason), ghi nhật ký; xã chỉ có MỘT App ID tại một thời điểm (chốt 02/10/2026, sửa 05/10/2026 — xoá mềm thay cho tắt)"
@@ -11,7 +11,7 @@ owns_facts:
   - "khoá bí mật App ID chỉ ghi, không bao giờ hiện lại; màn chỉ hiện 'đặt lúc … bởi …'; một RPC đọc mới của identity chỉ trả siêu dữ liệu trạng thái (chốt 05/10/2026)"
   - "liên kết mở / QR của một xã: mọi xã đang hoạt động có QR app dùng chung https://zalo.me/s/<App ID app chung>/?d=<tên miền chính>&src=qr (phiên qua cầu của vihat-miniapp); xã có app riêng đang sống có THÊM QR app riêng https://zalo.me/s/<App ID xã>/?src=qr; người vận hành chọn in tấm nào, tuyến liên kết trả cả hai; QR từ đâu thì mở app từ đó; QR in trước vẫn chạy (chốt 05/10/2026, sửa 06/10/2026 — bỏ 'app riêng trước, app chung chỉ dự phòng'; THAY 13/10/2026 ở platform-admin và web-admin — §Sửa đổi 13/10/2026)"
   - "mỗi bề mặt (chi tiết xã ở platform-admin, Cấu hình → Kênh Zalo ở web-admin) hiện ĐÚNG MỘT QR của xã: xã có app riêng đang sống → https://zalo.me/s/<App ID xã>/?src=qr; không có → app chung chỉ với mã công khai ?x=<mã công khai>&src=qr; không hiện thông tin app chung, không còn link d= (chủ dự án, 13/10/2026)"
-  - "cán bộ xã xem, tải PNG, in/lưu PDF QR mở Mini App của CHÍNH xã mình ở web-admin → Cấu hình → Kênh Zalo: tuyến GET /api/v1/commune-launch-link của service-platform, xã suy từ Host, quyền admin.lookup, chỉ đọc, KHÔNG ghi vết (chủ dự án, 13/10/2026)"
+  - "cán bộ xã xem, tải PNG, in/lưu PDF QR mở Mini App của CHÍNH xã mình ở web-admin → Cấu hình → Kênh Zalo: tuyến GET /api/v1/commune-launch-link của service-platform, xã suy từ Host, quyền admin.lookup, chỉ đọc, KHÔNG ghi vết (chủ dự án, 13/10/2026) — quyền đổi sang admin.zalo từ 15/10/2026 (§Sửa đổi 15/10/2026)"
   - "QR app riêng chỉ khi người vận hành đã đánh dấu App ID ấy 'Đã phát hành trên Zalo' (cột mini_app.published_at/published_by, bật/tắt ở chi tiết xã của platform-admin, có ghi vết); chưa đánh dấu → QR app chung ?x= (chủ dự án, 13/10/2026)"
   - "tải PNG và 'In / Lưu PDF' (in của trình duyệt, khổ A4: tên xã, QR, câu 'Quét mã bằng Zalo để mở ứng dụng của xã') có ở cả platform-admin lẫn web-admin (chủ dự án, 13/10/2026)"
   - "cấu hình Mini App riêng của xã (App ID ↔ xã, khoá bí mật) làm ở platform-admin; stage Jenkins doi-app-id-thang-binh / dat-secret-mini-app gỡ khi màn đã kiểm trên prod, bat-demo-mini-app / tat-demo-mini-app gỡ ngay (chốt 05/10/2026)"
@@ -195,3 +195,17 @@ thái này, nên chủ dự án chọn **cờ do người vận hành bật**.
 **Cái giá:** cờ có thể lệch với Zalo (quên bật sau khi phát hành, hoặc Zalo gỡ bản phát hành mà không
 ai tắt cờ). Lệch kiểu thứ nhất chỉ làm xã in QR app chung — vẫn vào đúng xã; kiểu thứ hai lặp lại sự cố
 này cho tới khi có người tắt cờ.
+
+## Sửa đổi 15/10/2026 — QR của xã dưới khoá Kênh Zalo
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. `GET /api/v1/commune-launch-link`
+nay dưới khoá **`admin.zalo`**, không còn `admin.lookup` (chủ dự án 15/10/2026, `f81168fe`;
+web `336f4b25`). Hai câu đã cũ:
+
+| Chỗ | Câu cũ | Nay |
+|---|---|---|
+| §*Sửa đổi 13/10/2026* #1 | quyền `admin.lookup`, *"không thêm khoá `quyen`"* | `admin.zalo` — khoá mới của chính tab Kênh Zalo |
+| §*Sửa đổi 13/10/2026* *Cái giá* | *"Cán bộ xã nào có `admin.lookup` cũng phát được QR"* | Cán bộ có `admin.zalo`. Cái giá giữ nguyên: lần xem/tải/in vẫn không ghi vết (#5) |
+
+Phần còn lại của §*Sửa đổi 13/10/2026* giữ. Quyết định và lý do: ADR 0090 §*Sửa đổi 15/10/2026* — *Bốn
+khoá cấu hình riêng*.

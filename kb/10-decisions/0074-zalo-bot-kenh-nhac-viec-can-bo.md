@@ -3,7 +3,7 @@ id: 0074-zalo-bot-kenh-nhac-viec-can-bo
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 285aecfd
+derived_from_commit: f81168fe
 expires: null
 owns_facts:
   - "Zalo Bot là kênh nhắc việc CHO CÁN BỘ, kênh thêm bên cạnh chuông — không phải kênh công dân; đợt 1 chỉ MỘT bot dùng chung của nền tảng, bot riêng của xã để sau (schema chừa chỗ, khi làm thì cấu hình ở platform-admin) (chốt 05/10/2026)"
@@ -11,7 +11,7 @@ owns_facts:
   - "khoá vận hành thứ tám ops.zalo_bot.manage canh màn Zalo Bot ở platform-admin (chốt 05/10/2026)"
   - "token bot dùng chung niêm bằng khoá dữ liệu CẤP NỀN TẢNG — một hàm niêm riêng trong core/crypto, không giả làm một xã; token chỉ ghi, không bao giờ hiện lại (chốt 05/10/2026)"
   - "webhook Zalo Bot ở host bot.api.vigov.vn trỏ vào service-comms (chủ dự án trỏ DNS); tuyến công khai, xác thực bằng X-Bot-Api-Secret-Token so thời gian hằng, sai khoá 403 không đọc thân, có giới hạn tần suất (chốt 05/10/2026)"
-  - "quyền phía xã: cán bộ ghép/gỡ Zalo của chính mình = AnyAuthenticated lọc theo mã cán bộ của phiên; màn Cấu hình → Kênh Zalo = admin.lookup; không thêm khoá quyen (chốt 05/10/2026)"
+  - "quyền phía xã: cán bộ ghép/gỡ Zalo của chính mình = AnyAuthenticated lọc theo mã cán bộ của phiên; màn Cấu hình → Kênh Zalo = admin.lookup; không thêm khoá quyen (chốt 05/10/2026) — THAY 15/10/2026: Kênh Zalo dưới khoá mới admin.zalo; ghép/gỡ của chính mình giữ AnyAuthenticated (§Sửa đổi 15/10/2026)"
   - "nội dung tin Zalo: chủ dự án NỚI luật 3 điểm dừng #2 (được gửi dữ liệu cá nhân sang Zalo), sẽ chặn lại sau; đợt 1 không dùng tới vì tin = tiêu đề + nội dung thông báo chuông, mà comms.proto cấm dữ liệu cá nhân ở đó (chốt 05/10/2026)"
   - "đợt 1 câu chữ tin Zalo là mẫu cố định trong mã; cho xã sửa mẫu để sau (chốt 05/10/2026)"
   - "sáu RPC vận hành Zalo Bot của comms (ZaloBotOperatorService) được gọi KHÔNG cần xã — vào core/grpcx methodsWithoutTenant, kể cả ListZaloBotCommuneStats trả ULID mọi xã cho riêng platform (người dùng chốt 05/10/2026)"
@@ -80,3 +80,18 @@ không xuất.
 - Phải mở mạng: platform → comms gRPC; comms → `bot-api.zaloplatforms.com:443`.
 - Lấy mã ghép theo chat là đọc **chéo xã** theo bản chất → kho `// @cross-tenant` riêng.
 - Hạn mức Zalo chưa biết → hỏi Zalo trước khi bật cho nhiều xã.
+
+## Sửa đổi 15/10/2026 — khoá riêng cho Kênh Zalo
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. Chủ dự án 15/10/2026 tách khoá
+**`admin.zalo`** khỏi `admin.lookup` (`f81168fe`, web `336f4b25`). Quyết định và lý do: ADR 0090
+§*Sửa đổi 15/10/2026* — *Bốn khoá cấu hình riêng*.
+
+| Chỗ | Câu cũ | Nay |
+|---|---|---|
+| #6 | Cấu hình kênh của xã: `admin.lookup` (như tab Máy chủ thư) | `admin.zalo`. Tab Máy chủ thư cũng có khoá riêng, `admin.mail` |
+| §*Tài nguyên URL*, dòng "Xã — quản trị" | `GET zalo-links` · `GET·PUT zalo-channel-settings` — `admin.lookup` | `admin.zalo`; cùng khoá ấy canh `zalo-groups`, mã gắn nhóm (ADR 0092) và `zalo-bots/current` (bot riêng của xã, ADR 0079) |
+| owns_facts *"không thêm khoá quyen"* | — | Đã thêm một khoá, theo quyết định tường minh của chủ dự án |
+
+**Giữ:** dòng "Xã — của chính mình" (`zalo-links/current` và các tuyến con) vẫn `AnyAuthenticated`, lọc
+theo mã cán bộ của phiên.

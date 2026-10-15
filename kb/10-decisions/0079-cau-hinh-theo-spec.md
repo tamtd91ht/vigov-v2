@@ -3,7 +3,7 @@ id: 0079-cau-hinh-theo-spec
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: e98f2c4d
+derived_from_commit: f81168fe
 expires: null
 owns_facts:
   - "từ 08/10/2026 menu Cấu hình web-admin theo spec Cấu hình 02–12 của chủ dự án (tmp/web/cau-hinh/vigov-cau-hinh-spec/, ngoài git, viết từ prototype ../vigov-require/apps/admin/src/components/admin/ConfigWorkspace.tsx); luật cứng và các điểm 'Giữ bất kể spec' của ADR này thắng spec"
@@ -29,7 +29,7 @@ owns_facts:
   - "'Sắp đến hạn: nhắc trước' của Zalo chỉ THU HẸP tin Zalo sắp đến hạn về các hồ sơ có hạn đã lưu nằm trong số ngày ấy; chuông và danh sách giữ cột SLA; comms lọc theo due_soon_items {code, deadline} do bên phát gửi, không tính hay đổi hạn — làm rõ lô thứ tư Q10 (lô thứ năm Q13, 08/10/2026)"
   - "nút 'Gieo thời hạn mặc định' khi bảng thời hạn đã có dòng chỉ hiện khi máy chủ báo thiếu dòng mặc định (lô thứ năm Q14, 08/10/2026)"
   - "ngưỡng webhook Zalo 600 lần/phút mỗi xã là con số của chủ dự án, không còn tạm (lô thứ năm Q15, 08/10/2026)"
-  - "quyền thay bot của xã giữ admin.lookup (lô thứ năm Q16, 08/10/2026)"
+  - "quyền thay bot của xã giữ admin.lookup (lô thứ năm Q16, 08/10/2026) — THAY 15/10/2026: admin.zalo (§Sửa đổi 15/10/2026)"
   - "lỗi đọc đảo cờ dang_dung/la_mac_dinh không sửa dữ liệu hàng loạt; xã tự kiểm/sửa cờ ở màn Danh mục (lô thứ năm Q17, 08/10/2026)"
   - "nhắc việc cho đơn thư làm theo prototype: dùng hạn đã lưu và dòng SLA mặc định của đơn thư, gửi bằng loại DOCUMENT_* (lô thứ năm Q18, 08/10/2026)"
   - "câu chữ menu Cấu hình: lời prototype thắng nguyên văn khi prototype có câu (lô thứ năm Q19, 08/10/2026)"
@@ -352,3 +352,20 @@ lại. Số dòng là dòng của bảng lỗi 13/10.
 **Cái giá của #1:** câu mô tả nay nói ít hơn việc thật chạy. Nhắc hạn vẫn quét cả đơn thư (ADR 0058 §4),
 leo thang tính phản ánh theo hạn xử lý xong (ADR 0058 §*Câu từng mở* #3), nhưng câu trên màn không nhắc.
 Phạm vi thật do ADR 0058 quyết, không do câu mô tả.
+
+## Sửa đổi 15/10/2026 — bốn khoá cấu hình riêng
+
+Mục này thắng các mục trên khi nói khác. **Người quyết:** chủ dự án, 15/10/2026 (bảng lỗi
+web-admin-141026 dòng 22). Quyết định, lý do và chỗ lệch prototype: ADR 0090 §*Sửa đổi 15/10/2026* —
+*Bốn khoá cấu hình riêng*. Ở đây chỉ ghi câu nào của ADR này đã cũ.
+
+| Chỗ | Câu cũ | Từ 15/10/2026 | Commit |
+|---|---|---|---|
+| §*Giữ bất kể spec*, dòng "Khoá `admin.user` cho Sơ đồ/Thôn" | `admin.org` cho cả Sơ đồ lẫn Thôn | Sơ đồ tổ chức giữ `admin.org`. Ghi thôn/TDP → `admin.village` | `f81168fe` |
+| Lô thứ năm Q16 | Quyền thay bot của xã: **"Giữ admin.lookup"** | `admin.zalo` (`zalo-bots/current`) | `f81168fe` |
+| Tab Lời hệ thống · Máy chủ thư · Kênh Zalo | Mở bằng `admin.lookup`, như prototype | Mỗi tab một khoá: `admin.message` · `admin.mail` · `admin.zalo`. Khoá canh mọi tuyến của tab, kể cả đọc | `f81168fe` · web `336f4b25` |
+| Tab Danh mục, nhóm Loại đơn vị dân cư | `admin.lookup` | `admin.village`, quyết từng dòng theo khoá của nhóm; các nhóm khác giữ `admin.lookup` | `f81168fe` · web `336f4b25` |
+| Tab Thôn/TDP | Nút ghi theo `admin.org` | Tab hiện cho mọi cán bộ; nút ghi theo `admin.village` | web `336f4b25` |
+
+**Luật thường trực "phải tham khảo prototype" (lô thứ năm) không bị bỏ.** Đây là lần chủ dự án tự quyết
+lệch prototype cho một điểm cụ thể.

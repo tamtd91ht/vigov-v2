@@ -3,7 +3,7 @@ id: 0090-bang-loi-khach-chuan-la-prototype
 tier: T1
 source: CURATED
 owner: domain
-derived_from_commit: 7c739880
+derived_from_commit: f81168fe
 expires: null
 owns_facts:
   - "luật xử lý bảng lỗi của khách 10–11/10/2026: chuẩn là prototype — mọi tính năng prototype có thì web-admin phải có; tính năng prototype không có mà bảng lỗi đòi gỡ thì GIỮ khi nó là đường duy nhất tới một khả năng; luật cứng thắng cả bảng lỗi lẫn prototype (chủ dự án 10–11/10/2026)"
@@ -13,6 +13,7 @@ owns_facts:
   - "quy ước đánh số dòng của bảng lỗi khách 10/10/2026 trong kb/ và trong chú thích mã"
   - "chi tiết đơn thư theo bảng lỗi 13/10/2026: ô Trả lời công dân giữ khoá trước Thụ lý và sau khi kết thúc, câu gợi ý chỉ đúng nút trên màn; nút Sửa hạn xử lý giữ; số điện thoại vẫn che (§Sửa đổi 13/10/2026)"
   - "thứ tự mặc định 'mới thêm lên đầu' của danh sách Người dùng, Dự án giải ngân, nhóm/liên kết Zalo, Sổ địa điểm (trong nhóm loại), và các danh sách CỐ Ý giữ thứ tự khác (chủ dự án 15/10/2026, §Sửa đổi 15/10/2026)"
+  - "bốn khoá cấu hình riêng nhóm Quản trị — admin.village, admin.message, admin.mail, admin.zalo — tách khỏi admin.lookup / admin.org, cấp sẵn theo khoá cũ; lệch prototype có chủ ý; đảo lần chốt 'không thêm khoá' cùng ngày (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, §Sửa đổi 15/10/2026)"
 ---
 
 # 0090. Bảng lỗi của khách 10–11/10/2026: chuẩn là prototype, tính năng dư giữ khi là đường duy nhất
@@ -151,4 +152,48 @@ do từng dòng.
 | Điểm | Chốt | Chủ sở hữu |
 |---|---|---|
 | Tab "Cảnh báo thiên tai" trong Nội dung Mini App — bảng lỗi đòi gỡ | **Giữ.** Đây là màn duy nhất đăng cảnh báo thiên tai (#2 ở trên) | ADR 0091 §2 |
-| Khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo — bảng lỗi đòi | **Không thêm khoá** (chủ dự án 15/10/2026, theo prototype: nhóm Quản trị chỉ 6 khoá; 4 tab thuộc `admin.lookup`, ghi thôn thuộc `admin.org`). Khoá mới nào sau này vẫn phải qua câu mở #27 và luật 5 bất biến 3c | Sổ `kb/90-ephemeral/tien-do/service-identity.json`, mục `bl141026-khoa-quyen-rieng-cau-hinh` |
+| Khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo — dòng 22 đòi | **Thêm 4 khoá**, nhóm Quản trị, cấp sẵn — §*Bốn khoá cấu hình riêng* ngay dưới. Lần chốt đầu cùng ngày là "không thêm khoá, theo prototype"; chủ dự án đảo trong ngày | §dưới · sổ `service-identity`, mục `bl141026-khoa-quyen-rieng-cau-hinh` |
+
+### Bốn khoá cấu hình riêng — dòng 22, đảo cùng ngày
+
+**Người quyết:** chủ dự án, 15/10/2026, lời do phiên chính chuyển lại. Lần đầu chủ dự án cho đối chiếu
+prototype và chốt **không thêm khoá** (prototype: nhóm Quản trị chỉ 6 khoá, mọi tab Cấu hình mở bằng
+`admin.lookup`). Sau đó, cùng ngày: *"tôi thấy tách ra thêm 4 mục trên là hợp lý đó, làm đi"*, chọn nhóm
+**QUẢN TRỊ** và **cấp sẵn**. Mục này thay lần chốt đầu.
+
+| Khoá | Tên trên màn Phân quyền | Thay khoá cũ | Canh |
+|---|---|---|---|
+| `admin.village` | Cấu hình thôn/tổ dân phố | `admin.org` (thôn) · `admin.lookup` (loại thôn) | Ghi và nhập Excel thôn/TDP và Loại đơn vị dân cư. Tuyến đọc vẫn `AnyAuthenticated` |
+| `admin.message` | Cấu hình lời hệ thống | `admin.lookup` | Mọi tuyến `*-system-messages` của petitions, finance, reporting, kể cả đọc |
+| `admin.mail` | Cấu hình máy chủ thư | `admin.lookup` | `mail-settings` và gửi thư thử |
+| `admin.zalo` | Cấu hình kênh Zalo | `admin.lookup` | `zalo-channel-settings`, `zalo-links` (danh sách của xã), `zalo-groups`, mã gắn nhóm, `zalo-bots/current`, và `GET commune-launch-link` của platform (QR chỉ dựng trong tab Kênh Zalo) |
+
+Danh sách tuyến đầy đủ theo khoá: `kb/30-indexes/api-surface.json` (sinh từ mã).
+
+**Không đổi:** `zalo-links/current` (cán bộ tự ghép Zalo của mình) giữ `AnyAuthenticated`. Danh mục
+khối nhiệm vụ (`task-blocs`) và các nhóm danh mục khác giữ `admin.lookup`. Ghi Sơ đồ tổ chức giữ
+`admin.org`.
+
+**Cấp sẵn** (migration identity 0032): vai trò đang dùng có `admin.lookup` nhận cả 4 khoá; có
+`admin.org` nhận `admin.village`. Mỗi vai trò được thêm có một dòng `audit_log`, chủ thể
+`system`. Vai trò mẫu Chủ tịch UBND và Chánh Văn phòng có thêm 4 khoá. Trên ma trận, 4 khoá đứng ngay
+sau `admin.lookup` (`thu_tu` 44–47; `admin.org`/`role`/`sla`/`user` dời xuống 48–51).
+
+Nhận xét của người ghi, không phải lời chủ dự án: không cấp sẵn thì lúc tuyến đổi khoá, mọi cán bộ đang
+dùng 4 tab này nhận 403 cho tới khi quản trị xã tick lại từng vai trò.
+
+**Lệch prototype, có chủ ý.** Prototype mở mọi tab Cấu hình bằng `admin.lookup`. Luật #1–#3 của ADR
+này không có điều "quyết định tường minh của chủ dự án thắng prototype"; đây là một lựa chọn riêng của
+chủ dự án cho dòng 22, không phải luật mới. Ai đối chiếu màn Phân quyền với prototype sẽ thấy nhóm Quản
+trị có 10 khoá thay vì 6 — đó là chủ ý.
+
+**Còn treo:**
+
+| Điểm | Vì sao treo |
+|---|---|
+| Tên khoá có gạch dưới ở vế sau | Trái quy ước `nhóm.mộttừ` và điều kiện dừng #2 của ADR 0030. Kho chưa ghi chủ dự án đã duyệt **tên** khoá. Đổi tên sau khi xã đã tick là migration trên dữ liệu phân quyền đang chạy (ADR 0030 §Quy ước) |
+| Cấp sẵn trong migration | ADR 0030 điều kiện dừng #3 cấm gán khoá cho vai trò trong migration hạt giống. Ở đây chủ dự án chọn cấp sẵn (thân commit `54bb094f`), theo khuôn migration 0028 |
+| Migration 0032 | **Chưa chạy** trên PostgreSQL thật (thân commit `54bb094f`, `f81168fe`) |
+
+Commit: `54bb094f` (khoá + cấp sẵn) · `f81168fe` (45 tuyến) · `336f4b25` (web-admin). Câu mở #27 ghi
+thêm dòng 15/10/2026.

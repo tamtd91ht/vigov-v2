@@ -659,7 +659,7 @@
     "open_gap": "Khách đã chốt ĐÚNG HAI khoá cần ngay (feedback.classify, feedback.unmask) và CỐ Ý để lại phần còn thiếu. Đừng bịa tám khoá kia cho đủ số 43.",
     "decided_on": "2026-09-22",
     "decided_by": "ĐỀ XUẤT NHÀ CUNG CẤP (chủ dự án giao quyền quyết 22/09/2026) — không phải trả lời của khách",
-    "decision": "CHỈ NẠP KHOÁ NÀO CÓ TUYẾN THẬT CẦN, không bịa đủ tám: `citizen.verify` (#20) · `admin.user.delete` (#10) · `admin.user.revoke`. Con số 43 trong tiêu đề coi như CHƯA GIẢI THÍCH ĐƯỢC, ghi đúng như thế thay vì lấp đầy."
+    "decision": "CHỈ NẠP KHOÁ NÀO CÓ TUYẾN THẬT CẦN, không bịa đủ tám: `citizen.verify` (#20) · `admin.user.delete` (#10) · `admin.user.revoke`. Con số 43 trong tiêu đề coi như CHƯA GIẢI THÍCH ĐƯỢC, ghi đúng như thế thay vì lấp đầy. 15/10/2026: chủ dự án quyết tường minh thêm 4 khoá nhóm Quản trị cho 4 tab Cấu hình, vì các tuyến ấy cần khoá riêng — admin.village, admin.message, admin.mail, admin.zalo (migration identity 0032, cấp sẵn theo admin.lookup / admin.org), ADR 0090 §Sửa đổi 15/10/2026. Không phải lấp số 43. Tên 4 khoá lệch quy ước nhóm.mộttừ của ADR 0030 — còn treo ở ADR 0090."
   },
   {
     "id": 28,

@@ -3,13 +3,13 @@ id: 0092-zalo-bot-gui-tin-vao-nhom
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: ee8dff33
+derived_from_commit: f81168fe
 expires: null
 owns_facts:
   - "Zalo Bot gửi tin vào NHÓM Zalo đã thêm bot là yêu cầu MỚI của chủ dự án 11/10/2026 — ../vigov-require không có gì về nhóm"
   - "một xã gắn được NHIỀU nhóm Zalo; phạm vi mỗi nhóm = một bộ phận (bo_phan) HOẶC cả xã (để trống); tin nhóm đi qua bot xã đang dùng — bot riêng nếu có, không thì bot chung (chủ dự án chốt 11/10/2026)"
   - "loại tin vào nhóm cấu hình theo từng nhóm, là tập con các loại xã đang bật ở Kênh Zalo; loại mang tính cá nhân (nhắc tên, đề nghị lùi hạn, bản tin sắp đến hạn/bản tin tuần theo người) không bao giờ vào nhóm (chủ dự án chốt 11/10/2026)"
-  - "gắn nhóm bằng MÃ GẮN NHÓM tạo ở web-admin Cấu hình → Kênh Zalo, quyền admin.lookup, không thêm khoá quyen; gõ mã vào nhóm, chấp nhận dạng '@Bot MÃ' (chủ dự án chốt 11/10/2026)"
+  - "gắn nhóm bằng MÃ GẮN NHÓM tạo ở web-admin Cấu hình → Kênh Zalo, quyền admin.lookup, không thêm khoá quyen; gõ mã vào nhóm, chấp nhận dạng '@Bot MÃ' (chủ dự án chốt 11/10/2026) — quyền THAY 15/10/2026 bằng admin.zalo (§Sửa đổi 15/10/2026)"
   - "mã ghép nối CÁ NHÂN gõ trong nhóm bị TỪ CHỐI, bot nhắn hướng dẫn nhắn riêng, mã không bị tiêu (chủ dự án chốt 11/10/2026)"
   - "nội dung tin nhóm như tin riêng (tiêu đề + thân + liên kết) — chủ dự án nới luật 3 cho nhóm có thể có người ngoài cán bộ, nhận rủi ro; một việc = một tin nhóm, gộp theo idempotency_key (chủ dự án chốt 11/10/2026)"
   - "việc thuộc diện hạn chế (phản ánh lĩnh vực can-bo, ADR 0030) KHÔNG vào nhóm — ràng buộc bảo mật do phiên chính giữ, chủ dự án có thể đổi (11/10/2026)"
@@ -86,3 +86,11 @@ của xã khác bằng một mã. Xã A gỡ trước, có vết, rồi xã B m�
 | 1 | Bot trong nhóm nhận mọi tin hay chỉ tin @nhắc bot — kiểm thật sau thẻ A | phiên làm thẻ A |
 | 2 | Bổ sung `kb/30-indexes/transaction-boundaries.json` (qua nguồn sinh, `make kb`) cho **gắn nhóm** và **gửi nhóm** | contract-designer |
 | 3 | Hạn mức gửi của Zalo khi bật tin nhóm cho nhiều xã | hỏi Zalo |
+
+## Sửa đổi 15/10/2026 — khoá của mã gắn nhóm
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. #3 ghi *"quyền `admin.lookup` như ADR
+0074 #6 — không thêm khoá `quyen`"*. Từ 15/10/2026 tạo mã gắn nhóm (`zalo-group-pairing-codes`), xem,
+sửa và gỡ nhóm (`zalo-groups`) dưới khoá **`admin.zalo`** (chủ dự án 15/10/2026, `f81168fe`),
+cùng khoá với cả tab Kênh Zalo (ADR 0074 §*Sửa đổi 15/10/2026*). Phần còn lại của #3 (gõ mã vào nhóm,
+dạng `@Bot MÃ`) giữ. Quyết định và lý do: ADR 0090 §*Sửa đổi 15/10/2026* — *Bốn khoá cấu hình riêng*.
