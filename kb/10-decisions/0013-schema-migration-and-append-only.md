@@ -18,6 +18,10 @@ owns_facts:
 
 **Trạng thái:** đã chốt · **Ngày:** 2026-09-17
 
+> 15/10/2026 → ADR 0096: chỉ bảng lớn phân mảnh, `MODULUS 8`. Quyết định #4 (tạo mảnh cùng tệp) vẫn
+> đúng cho bảng phân mảnh; chỗ nào dưới đây nói "32 mảnh" hay ngụ ý mọi bảng nghiệp vụ đều phân mảnh
+> thì đọc theo ADR 0096 (`kb/10-decisions/0096-partition-only-growing-tables-modulus-8.md`).
+
 ## Bối cảnh
 
 Ba sự việc xảy ra cùng một chỗ và có cùng một hình dạng: **một thứ trông như biện pháp

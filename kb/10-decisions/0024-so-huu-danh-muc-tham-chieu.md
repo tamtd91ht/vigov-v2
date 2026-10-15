@@ -113,6 +113,9 @@ Hệ quả cụ thể của việc mang `tenant_id`, không được bỏ dòng 
 | 3 | Bảng phân mảnh theo `tenant_id` như mọi bảng nghiệp vụ khác (ADR 0004), **nhớ tạo đủ mảnh** |
 | 4 | Xoá là xoá mềm; mục `nguon = 'he-thong'` chỉ tắt, không xoá (luật 7) |
 
+> 15/10/2026 → ADR 0096: dòng 3 bị thay — bảng danh mục là **bảng thường**, không phân mảnh; dòng 1, 2,
+> 4 giữ nguyên (`kb/10-decisions/0096-partition-only-growing-tables-modulus-8.md`).
+
 ## Cái giá của dòng `Khối nhiệm vụ`, nói thẳng
 
 > Quy tắc chung đứng sau dòng này — **tên đi theo khái niệm, quyền sở hữu đi theo nhịp đổi**,

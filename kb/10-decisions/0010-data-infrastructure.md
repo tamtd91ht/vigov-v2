@@ -8,7 +8,7 @@ expires: null
 owns_facts:
   - "chọn PostgreSQL làm CSDL nghiệp vụ duy nhất và vì sao không dùng MongoDB"
   - "vai trò của Redis, Kafka, RabbitMQ, Elasticsearch"
-  - "số partition và chiến lược phân mảnh vật lý theo tenant"
+  - "lý do ban đầu (16/09/2026) của phân mảnh vật lý theo tenant — số mảnh và bảng nào phân mảnh hiện hành: ADR 0096"
 ---
 
 # 0010. Hạ tầng dữ liệu
@@ -26,6 +26,11 @@ owns_facts:
 > tiến trình của service sở hữu dữ liệu, **không** qua RabbitMQ — dòng RabbitMQ ở §Quyết định và
 > bảng §Vì sao tách Kafka và RabbitMQ không còn áp cho các việc ấy
 > (`kb/10-decisions/0058-automation-jobs-in-owning-service.md`).
+
+> 15/10/2026 → ADR 0096: §Phân mảnh vật lý theo tenant **bị thay một phần** — chỉ bảng tăng theo thời
+> gian/số công dân mới phân mảnh, và phân `MODULUS 8`, không 32; câu "đổi số này là viết lại toàn bộ
+> bảng" nói quá (tách được từng mảnh)
+> (`kb/10-decisions/0096-partition-only-growing-tables-modulus-8.md`).
 
 ## Bối cảnh
 
@@ -98,6 +103,9 @@ Không trùng lặp — hai thứ khác nhau:
 triển khai chứ không phải sửa kiến trúc.
 
 ## Phân mảnh vật lý theo tenant
+
+> Mục này **bị thay một phần** bởi ADR 0096 (15/10/2026): `MODULUS 8`, chỉ bảng lớn; xem §*Thay thế
+> gì của ADR cũ* ở đó. Thân mục dưới giữ nguyên văn ngày 16/09.
 
 ADR 0004 chốt `PARTITION BY HASH (tenant_id)` nhưng chưa chốt **số partition**. Đổi số này
 sau khi có dữ liệu là viết lại toàn bộ bảng, nên chốt ngay:

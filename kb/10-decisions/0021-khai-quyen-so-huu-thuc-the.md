@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS cong_dan ( ... );
 | 3 | `@scope: cross-tenant` ngoài `identity` và `platform` → bộ sinh **đỏ** | ADR 0002 chốt hai service đó là ngoại lệ duy nhất. Service thứ ba tự cho mình vùng xuyên xã phải dừng ở cổng kiểm, không ở vòng rà soát |
 | 4 | Chỉ mục ghi **những gì đang có**, không ghi dự định | Một chỉ mục liệt kê thực thể chưa có bảng là một lời hứa, và người đọc sau sẽ hành động theo nó |
 
+> 15/10/2026 → ADR 0096: số mảnh là 8, không 32 — con số ở dòng 1 cũ đi, lý lẽ không đổi
+> (`kb/10-decisions/0096-partition-only-growing-tables-modulus-8.md`).
+
 ### Trước khi bảng ra đời thì quyền sở hữu nằm ở đâu
 
 **Ở ADR đã quyết, và chỉ ở đó.** Không có mục nào trong `data-ownership.json` cho một thực thể

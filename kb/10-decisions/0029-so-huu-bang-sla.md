@@ -92,6 +92,9 @@ quả của ADR 0024 §"Vì sao MỌI bảng ở đây mang `tenant_id`" áp ngu
 | 3 | Phân mảnh theo `tenant_id` (ADR 0004) |
 | 4 | Xoá là xoá mềm (luật 7) |
 
+> 15/10/2026 → ADR 0096: dòng 3 bị thay — bảng SLA là **bảng thường**, không phân mảnh
+> (`kb/10-decisions/0096-partition-only-growing-tables-modulus-8.md`).
+
 **`linh_vuc` giữ dưới dạng GIÁ TRỊ, không khoá ngoại.** Mã lĩnh vực là bộ mã tầng nền tảng ở
 service `platform` (ADR 0026), nên một khoá ngoại ở đây là khoá ngoại xuyên service — luật 2
 cấm. Cạm bẫy đã có bằng chứng sẵn trong chính bản mẫu: `14-cau-hinh.md:308` còn một dòng SLA

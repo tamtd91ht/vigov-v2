@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "_chung",
-  "cap_nhat": "2026-10-14",
+  "cap_nhat": "2026-10-15",
   "muc": [
     {
       "id": "nhanh-dev-hai-moi-truong",
@@ -332,6 +332,14 @@
       "bang_chung": "commit 'docs(brain): skill writing-reports'. make brain / hooks — xem commit. Runbook basemap-pmtiles theo khung mới (khối khi nào dùng/điều cấm + sơ đồ Mermaid, đã đối chiếu 4 tệp có thật). Áp dụng lần đầu: docs/van-hanh-vigov.html viết lại (e2c07e85 + commit chỉnh bảng bìa) — 4 agent kiểm 50 slide với mã, sửa 16 slide sai (130 bảng, vigov-van-hanh đã gỡ, đăng nhập cán bộ chưa giới hạn tần suất…), thêm trang tra nhanh + slide nợ; đã xem render trên Chrome 1500px các slide 1, 4, 29, 50.",
       "tiep_theo": "(1) Theo dõi vài phiên: báo cáo cuối lượt có kết luận ở dòng 1 và bằng chứng không. (2) Nếu vẫn trôi: thêm rào advisory quét cụm từ ở bảng §5 trong kb/*.md và commit message (chưa làm — skill không cần hook theo bất biến brain). (3) Ngân sách always-loaded vẫn quá 28039/28000 từ trước — lần này không tăng.",
       "no_confirm": []
+    },
+    {
+      "id": "giam-phan-manh-modulus-8",
+      "viec": "Giảm phân mảnh (chủ dự án 15/10/2026): chỉ bảng tăng theo thời gian/số công dân mới PARTITION BY HASH (tenant_id), MODULUS 8 (38 bảng); bảng danh mục/cấu hình/quyền/thiết lập/bộ đếm thành bảng thường. Hiện ~110 bảng × 32 ≈ 3.520 lá trên 7 CSDL → 304 lá",
+      "trang_thai": "dang_lam",
+      "bang_chung": "Đã chốt và ghi: ADR 0096 (kb/10-decisions/0096-partition-only-growing-tables-modulus-8.md) — tiêu chí, 38 bảng giữ, vì sao 8, cách dựng lại (chép đủ, kiểm số dòng cùng giao dịch, rồi gỡ cấu trúc cũ — chủ dự án cho phép, kể cả audit_log). Dòng trỏ có ngày thêm vào ADR 0010, 0013, 0021, 0024, 0029. Chưa có dòng mã hay migration nào đổi.",
+      "no_confirm": [],
+      "tiep_theo": "(1) Migration dựng lại bảng, mỗi dịch vụ một tệp mới (không sửa tệp đã áp); audit_log dựng lại kèm trigger append-only trên bảng cha và trigger chặn cắt bảng ở 8 lá mới; khoá ngoại không NOT VALID (PG 16). (2) Đổi MODULUS 32 → 8 ở tenant_scope_guard.py, core/migrate/phan_manh_test.go, tools/test_hooks.py, khối DO chặn thiếu mảnh và các _test.go migration khẳng định modulus 32. (3) Giữ tên ràng buộc khi đổi tên bảng (store khớp đuôi tên ràng buộc, ví dụ service-identity/internal/store/can_bo_ghi.go). (4) make check xanh; báo vận hành số bảng kiem-tra sẽ giảm ~3.000."
     }
   ]
 }
