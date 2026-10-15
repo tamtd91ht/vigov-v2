@@ -24,6 +24,7 @@ import {
   danhBaTheoMa,
   nhanThoiDiem,
   staffNameWithCode,
+  staffOptionLabelWithEmail,
   type DanhBaTheoMa,
 } from "@/features/phan-anh/nhan-phieu";
 import type { KetQua } from "@/lib/api/goi";
@@ -756,13 +757,12 @@ export function maskedEmailOf(code: string, directory: DanhBaTheoMa | null): str
  * `HandoverFields.tsx:87-92` with the address masked (ADR 0082 #10 — an `<option>` holds no button).
  * No address → `nhanLuaChonCanBo`'s `Họ tên · Chức danh`, unchanged.
  *
- * NHIỆM VỤ ONLY, ON PURPOSE: `nhanLuaChonCanBo` is shared by Phản ánh, Biên bản, Thông báo and the
- * staff combobox; changing it would put addresses on screens nobody decided on.
+ * The body is `staffOptionLabelWithEmail` (moved to `nhan-phieu.ts` when Phản ánh §8.5 and Thông báo
+ * §5 took the same line). `nhanLuaChonCanBo` stays address-free: Biên bản and the staff combobox
+ * share it, and their specs draw no address.
  */
 export function taskStaffOptionLabel(cb: identity_canBoChonNguoiRa): string {
-  const name = cb.full_name === "" ? cb.code : cb.full_name;
-  const email = cb.email_masked === null || cb.email_masked === "" ? "" : ` — ${cb.email_masked}`;
-  return cb.position === "" ? `${name}${email}` : `${name}${email} · ${cb.position}`;
+  return staffOptionLabelWithEmail(cb);
 }
 
 /**

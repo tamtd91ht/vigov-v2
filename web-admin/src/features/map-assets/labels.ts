@@ -277,7 +277,7 @@ export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
   {
     ten: "Mật độ theo thôn",
     viSao:
-      "Bảng số cơ sở và số phản ánh theo từng thôn. Chưa làm: cần đọc số phản ánh từ phân hệ phản ánh, hợp đồng hiện tại chưa có (ADR 0072 §4).",
+      "Bảng số cơ sở và số phản ánh theo từng thôn. Số phản ánh theo thôn đã có (báo cáo của màn Phản ánh), nhưng hệ thống chưa đếm được số đối tượng trên bản đồ theo từng thôn, nên chưa ghép được bảng này.",
   },
 ];
 

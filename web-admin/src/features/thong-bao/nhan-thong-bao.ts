@@ -6,7 +6,7 @@
  * cơ quan nhà nước là một chữ có người phải trả lời.
  */
 
-import { nhanLuaChonCanBo } from "@/features/phan-anh/nhan-phieu";
+import { staffOptionLabelWithEmail } from "@/features/phan-anh/nhan-phieu";
 import type { comms_thongBaoRa, identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
 
 /* ── Trần độ dài, đúng bằng trần máy chủ ────────────────────────────────────────────────────
@@ -136,15 +136,17 @@ export function cauLoiDanhBa(thongBao: string): string {
 }
 
 /**
- * Một dòng của ô chọn: `Họ tên · Chức vụ — MÃ`.
+ * Một dòng của ô chọn: `Họ tên — email · Chức vụ — MÃ`.
  *
- * KHÔNG CÓ EMAIL như đặc tả §5 vẽ (`Họ tên — email`): danh bạ chọn người
- * (`GET /api/v1/staff-directory`) cố ý không trả email — cùng cách ô chọn cán bộ của màn Phản ánh
- * (`nhanLuaChonCanBo`). MÃ đứng cuối vì hai người trùng họ tên và chức vụ là chuyện có thật ở một
- * xã, và mã là thứ thật sự được gửi đi.
+ * §5 vẽ `Họ tên — email`; email là `email_masked` của danh bạ chọn người
+ * (`GET /api/v1/staff-directory`, ADR 0082 §3) — luôn ở dạng CHE, danh bạ không bao giờ mang địa chỉ
+ * đầy đủ (luật 3). Cùng một dòng với ô chọn cán bộ của màn Phản ánh (`staffOptionLabelWithEmail`).
+ * Không có email thì dòng là `Họ tên · Chức vụ — MÃ` như trước. MÃ đứng cuối vì hai người trùng họ
+ * tên và chức vụ là chuyện có thật ở một xã — địa chỉ che không đủ phân biệt — và mã là thứ thật sự
+ * được gửi đi.
  */
 export function nhanLuaChonNguoiNhan(cb: identity_canBoChonNguoiRa): string {
-  return `${nhanLuaChonCanBo(cb)} — ${cb.code}`;
+  return `${staffOptionLabelWithEmail(cb)} — ${cb.code}`;
 }
 
 /**
@@ -283,8 +285,10 @@ export function coChipTrangThai(ma: string): boolean {
 /**
  * Nhãn chip trạng thái thư §3 — `null` nghĩa là KHÔNG VẼ CHIP NÀO.
  *
- * ⚠ HÔM NAY HÀM NÀY LUÔN TRẢ `null`, và đó là sự thật đáng nói ra chứ không phải mã chết: kho
- * không có bộ gửi thư nào, nên `trang_thai_thu` ở MỌI hàng là `chua-gui`
+ * ⚠ HÔM NAY HÀM NÀY LUÔN TRẢ `null`, và đó là sự thật đáng nói ra chứ không phải mã chết: thông báo
+ * chưa được gửi thư. Kho CÓ bộ gửi thư SMTP (`service-comms/internal/mail/sender.go`, nối ở
+ * `cmd/server/main.go`), nhưng hôm nay nó chỉ mang thư thử của `Cấu hình → Máy chủ thư`; không đường
+ * ghi nào của thông báo gọi nó, nên `trang_thai_thu` ở MỌI hàng là `chua-gui`
  * (`service-comms/internal/domain/thong_bao_noi_bo.go`, `TrangThaiThuThongBao`). Ba nhãn còn lại
  * được viết ra đúng chữ đặc tả để ngày có bộ gửi thư, chỗ này không phải nghĩ lại — và §3 KHÔNG có
  * nhãn nào cho `chua-gui`, nên `null` là câu trả lời đúng chứ không phải một chỗ còn thiếu.
@@ -390,9 +394,9 @@ export function tachMaNguoiNhan(chu: string): string[] {
  * ở giữa không được làm dấu "?" của nút này mở mô tả của nút khác.
  *
  * Mục KHÔNG có chỗ giữ trên màn nhưng vẫn ở đây (`tools/tien_do_san_pham.py` đếm mảng này cho báo
- * cáo tiến độ): thư điện tử trong ô chọn người nhận (chưa nằm trong bảng vị trí đã duyệt), ghim cả
- * sổ (ADR 0068 §14: lựa chọn bố cục, không có gì để giữ chỗ). Biểu mẫu soạn đã là hộp thoại
- * (ADR 0068 lần 5), nên mục "lớp phủ" đã xoá.
+ * cáo tiến độ): ghim cả sổ (ADR 0068 §14: lựa chọn bố cục, không có gì để giữ chỗ). Biểu mẫu soạn đã
+ * là hộp thoại (ADR 0068 lần 5), nên mục "lớp phủ" đã xoá. Thư điện tử trong ô chọn người nhận đã
+ * dựng (15/10/2026, `email_masked` của danh bạ chọn người, ADR 0082 §3), nên mục ấy đã xoá.
  *
  * MỖI MỤC PHẢI ĐÚNG VÀO NGÀY NÓ CÒN Ở ĐÂY. Dựng xong phần nào thì xoá mục ấy trong cùng lượt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
@@ -416,16 +420,6 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
     viSao:
       "Hệ thống chưa lấy được danh sách cán bộ của từng bộ phận, nên chưa gửi thông báo theo bộ " +
       "phận được. Hãy chọn từng người ở mục “Gửi thêm đích danh”.",
-  },
-  {
-    id: "emailInPicker",
-    ten: "Thư điện tử trong ô chọn người nhận `Họ tên — email` (§5)",
-    viSao:
-      "Ô chọn theo họ tên ĐÃ DỰNG, trên danh bạ chọn người `GET /api/v1/staff-directory` — mọi cán " +
-      "bộ đã đăng nhập của xã đọc được, không cần `admin.user`. Danh bạ ấy cố ý chỉ trả mã, họ tên, " +
-      "chức vụ và bộ phận — không số điện thoại, không email — nên mỗi dòng hiện `Họ tên · Chức vụ " +
-      "— mã` thay vì `Họ tên — email`. Hiện email ở đây nghĩa là mở một tuyến trả email cho mọi " +
-      "cán bộ, một thay đổi hợp đồng chứ không phải một việc của màn hình.",
   },
   // §5 `Lưu nháp`. No route creates a draft: status `nhap` exists in the schema (§6) but no write
   // path produces it — an announcement that exists is an issued one. Drawing the button and letting
@@ -476,9 +470,10 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "Chưa ghi được việc bạn xác nhận đã đọc thông báo, và hệ thống chưa cho biết bạn đã xác " +
       "nhận hay chưa — chỉ có tổng số người đã xác nhận.",
   },
-  // §3 e-mail status chip. The repository has no mail sender, so `trang_thai_thu` is `chua-gui` on
-  // EVERY row (service-comms/internal/domain/thong_bao_noi_bo.go; no write path sets the other three,
-  // re-read 02/10/2026). The `Gửi thư điện tử` box is still drawn: `gui_thu_dien_tu` records what was
+  // §3 e-mail status chip. An SMTP sender exists (service-comms/internal/mail/sender.go) but carries
+  // only the mail-server test message; no announcement path calls it, so `trang_thai_thu` is
+  // `chua-gui` on EVERY row (service-comms/internal/domain/thong_bao_noi_bo.go; no write path sets
+  // the other three, re-read 15/10/2026). The `Gửi thư điện tử` box is still drawn: `gui_thu_dien_tu` records what was
   // REQUESTED, a different fact from "mail went out".
   {
     id: "emailStatus",

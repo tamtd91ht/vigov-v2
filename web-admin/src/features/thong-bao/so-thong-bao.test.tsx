@@ -387,6 +387,7 @@ describe("ô chọn người nhận — danh bạ chọn người, không phải
       items: [
         { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "01JBP", email_masked: null },
         { code: "CB-00124", full_name: "Lê Văn C", position: "", department_id: "", email_masked: null },
+        { code: "CB-00125", full_name: "Phạm Thị D", position: "Văn thư", department_id: "", email_masked: "p***@example.vn" },
       ],
     },
   };
@@ -403,6 +404,18 @@ describe("ô chọn người nhận — danh bạ chọn người, không phải
     expect(html).toContain('value="CB-00123"');
     expect(html).toContain("Trần Thị B · Công chức — CB-00123");
     expect(html).toContain("Lê Văn C — CB-00124");
+  });
+
+  it("§5 `Họ tên — email`: the MASKED address from the directory, then position and code", () => {
+    const html = veForm(DANH_BA);
+    expect(html).toContain("Phạm Thị D — p***@example.vn · Văn thư — CB-00125");
+    // The directory never carries a full address; nothing on the form may look like one.
+    expect(html).not.toMatch(/[a-z0-9.]+@example\.vn/);
+  });
+
+  it("the e-mail entry left the unbuilt list (built 15/10/2026, ADR 0082 §3)", () => {
+    expect(() => pendingPart("emailInPicker")).toThrow();
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ")).not.toContain("Họ tên — email");
   });
 
   it("đang tải: nói ra, không vẽ ô chọn rỗng", () => {

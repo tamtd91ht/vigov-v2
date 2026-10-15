@@ -126,11 +126,11 @@ import {
   NHAN_O_KET_QUA,
   NHAN_O_LY_DO,
   nhanBoPhan,
-  nhanCanBoXuLy,
+  assigneeWithMaskedEmail,
   nhanHan,
   nhanKenh,
   nhanLinhVuc,
-  nhanLuaChonCanBo,
+  staffOptionLabelWithEmail,
   nhanNguoiGui,
   nhanThoiDiem,
   nhanTrangThai,
@@ -1445,7 +1445,7 @@ export function ChiTietPhieu({
             <option value="">{DE_BO_PHAN_PHAN_CONG}</option>
             {canBoCuaBoPhan.map((cb) => (
               <option key={cb.code} value={cb.code}>
-                {nhanLuaChonCanBo(cb)}
+                {staffOptionLabelWithEmail(cb)}
               </option>
             ))}
           </select>
@@ -1747,7 +1747,7 @@ export function ChiTietPhieu({
               {phieu.unit === "" ? NO_UNIT_YET : nhanBoPhan(phieu.unit, tenBoPhan)}
             </p>
             <p className="m-0 mt-0.5 text-[11px] text-ink-muted">
-              {phieu.assignee === "" ? NO_ASSIGNEE_YET : nhanCanBoXuLy(phieu.assignee, bangDanhBa)}
+              {phieu.assignee === "" ? NO_ASSIGNEE_YET : assigneeWithMaskedEmail(phieu.assignee, bangDanhBa)}
             </p>
           </Fact>
 

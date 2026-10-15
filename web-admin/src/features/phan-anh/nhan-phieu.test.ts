@@ -40,6 +40,9 @@ import {
   nhanLinhVuc,
   nhanLuaChonCanBo,
   nhanNguoiGui,
+  assigneeWithMaskedEmail,
+  OVERDUE_DAYS_NOT_SHOWN,
+  staffOptionLabelWithEmail,
   isContactUnverified,
   nhanThoiDiem,
   nhanTrangThai,
@@ -543,6 +546,36 @@ describe("bộ phận (ULID) và cán bộ (MÃ CÁN BỘ) đang giữ phiếu �
       nhanLuaChonCanBo({ code: "CB-00123", full_name: "Trần Thị B", position: "", department_id: "", email_masked: null }),
     ).toBe("Trần Thị B");
   });
+
+  // §8.3 / §8.5 draw `Họ tên — email`. The directory carries only the MASKED address (ADR 0082 §3).
+  const MASKED = "t***@example.vn";
+  const DIRECTORY_WITH_EMAIL = danhBaTheoMa([
+    { code: "CB-00123", full_name: "Trần Thị B", position: "Công chức", department_id: "", email_masked: MASKED },
+    { code: "CB-00125", full_name: "Lê Văn C", position: "", department_id: "", email_masked: null },
+    { code: "CB-00126", full_name: "Phạm Văn D", position: "", department_id: "", email_masked: "" },
+  ]);
+
+  it("ô chọn cán bộ §8.5: `Họ tên — email che · Chức danh`; không email thì như cũ", () => {
+    expect(staffOptionLabelWithEmail(DIRECTORY_WITH_EMAIL.get("CB-00123")!)).toBe(`Trần Thị B — ${MASKED} · Công chức`);
+    expect(staffOptionLabelWithEmail(DIRECTORY_WITH_EMAIL.get("CB-00125")!)).toBe("Lê Văn C");
+    expect(staffOptionLabelWithEmail(DIRECTORY_WITH_EMAIL.get("CB-00126")!)).toBe("Phạm Văn D");
+  });
+
+  it("`Đang giao cho` §8.3: `Họ tên — email che`; các ca không email giữ nguyên dòng cũ", () => {
+    expect(assigneeWithMaskedEmail("CB-00123", DIRECTORY_WITH_EMAIL)).toBe(`Trần Thị B — ${MASKED}`);
+    expect(assigneeWithMaskedEmail("CB-00125", DIRECTORY_WITH_EMAIL)).toBe("Lê Văn C");
+    expect(assigneeWithMaskedEmail("CB-00126", DIRECTORY_WITH_EMAIL)).toBe("Phạm Văn D");
+    expect(assigneeWithMaskedEmail("CB-00123", null)).toBe("CB-00123");
+    expect(assigneeWithMaskedEmail("", DIRECTORY_WITH_EMAIL)).toBe("Chưa phân công cán bộ cụ thể");
+    expect(assigneeWithMaskedEmail("CB-00999", DIRECTORY_WITH_EMAIL)).toBe(
+      nhanCanBoXuLy("CB-00999", DIRECTORY_WITH_EMAIL),
+    );
+  });
+
+  it("dòng không email (`nhanLuaChonCanBo`, `nhanCanBoXuLy`) không bao giờ mang địa chỉ", () => {
+    expect(nhanLuaChonCanBo(DIRECTORY_WITH_EMAIL.get("CB-00123")!)).not.toContain("@");
+    expect(nhanCanBoXuLy("CB-00123", DIRECTORY_WITH_EMAIL)).not.toContain("@");
+  });
 });
 
 describe("phần chưa dựng được — không còn liệt kê những gì ĐÃ dựng", () => {
@@ -794,8 +827,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // the duplicates block was built (ADR 0087, backend b97a6379 / 49b689a4). FOUR once `scope=related`
     // was served (bug sheet row 57, a06a12ab). THREE once the staff-recorded rating was built (bug sheet
     // row 60, backend f33dd452). TWO once the intake's scene photos were built (backend 7c739880, bug
-    // sheet web-admin-141026).
-    expect(PHAN_CHUA_DUNG.length).toBe(2);
+    // sheet web-admin-141026). ZERO on 15/10/2026: the officer's masked e-mail was built (ADR 0082 §3) and
+    // the overdue number left as a DECISION, not an unbuilt part (`OVERDUE_DAYS_NOT_SHOWN`, ADR 0007 10a).
+    expect(PHAN_CHUA_DUNG.length).toBe(0);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -833,13 +867,23 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     expect(() => petitionPendingPart("duplicates")).toThrow();
     // The intake's scene photos left the list on 15/10/2026 (backend 7c739880).
     expect(() => petitionPendingPart("intakePhotos")).toThrow();
-    expect(ten).toEqual([
-      "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
-      "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
-    ]);
-    // The overdue NUMBER stays unbuilt on purpose (ADR 0007 decision 10a): the entry still says why.
-    const tre = PHAN_CHUA_DUNG.find((p) => p.ten.startsWith("`⚠ Quá hạn 3 ngày`"));
-    expect(tre?.viSao).toContain("giờ làm việc");
+    // 15/10/2026: the officer's e-mail is built (masked, ADR 0082 §3); the overdue number is decided.
+    expect(ten).toEqual([]);
+    expect(() => petitionPendingPart("staffEmail")).toThrow();
+    expect(() => petitionPendingPart("overdueDays")).toThrow();
+  });
+
+  it("the overdue NUMBER is a decision, not an unbuilt part (ADR 0007 decision 10a)", () => {
+    expect(PHAN_CHUA_DUNG.some((p) => p.id === OVERDUE_DAYS_NOT_SHOWN.id)).toBe(false);
+    expect(OVERDUE_DAYS_NOT_SHOWN.viSao).toContain("quyết định 10a");
+    expect(OVERDUE_DAYS_NOT_SHOWN.viSao).toContain("giờ làm việc");
+    expect(OVERDUE_DAYS_NOT_SHOWN.viSao).not.toMatch(/chưa dựng|chưa làm/i);
+  });
+
+  it("the empty block keeps the `[` … `\\n];` shape the progress tool reads (never `= [];`)", () => {
+    const src = readFileSync(fileURLToPath(new URL("./nhan-phieu.ts", import.meta.url)), "utf8");
+    // tools/tien_do_san_pham.py MAU_KHOI_CHUA_DUNG — a one-line `= [];` reads as "not declared".
+    expect(src).toMatch(/const\s+PHAN_CHUA_DUNG\w*\b[^=]*=\s*\[([\s\S]*?)\n\];/);
   });
 });
 

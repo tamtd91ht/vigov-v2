@@ -334,7 +334,7 @@ export const QUYEN_DUYET_HOAN_THANH_NHIEM_VU = QUYEN_KY_BIEN_BAN;
 
 /**
  * Khoá quyền của sổ Thông báo nội bộ — `announcement.create`, "Soạn và gửi thông báo"
- * (`service-identity/migrations/0001_init.sql:286`).
+ * (`service-identity/migrations/0001_init.sql:254`).
  *
  * TÊN HẰNG NÓI `SOẠN` NHƯNG NÓ CŨNG CANH ĐƯỜNG ĐỌC, và điều ấy KHÔNG phải lỗi lặp lại của mục
  * `Văn bản & Đơn thư`. Ở đó mục menu từng canh bằng `document.route` trong khi tuyến đọc đòi

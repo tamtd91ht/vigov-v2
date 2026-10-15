@@ -1288,7 +1288,8 @@ export function staffNameWithCode(code: string, directory: DanhBaTheoMa | null):
  *                                đang hoạt động, nên người đã khoá tài khoản (nghỉ hưu, chuyển công
  *                                tác) rơi vào ca này — và phiếu cũ của họ vẫn phải đọc được
  *
- * KHÔNG CÓ EMAIL như đặc tả vẽ (`Họ tên — email`): danh bạ chọn người cố ý không trả email.
+ * No address here: the timeline (`nhat-ky-phieu.tsx`) shares this line. The `ĐANG GIAO CHO` box adds
+ * the masked address through `assigneeWithMaskedEmail`.
  */
 export function nhanCanBoXuLy(assignee: string, danhBa: DanhBaTheoMa | null): string {
   if (assignee === "") return "Chưa phân công cán bộ cụ thể";
@@ -1299,12 +1300,40 @@ export function nhanCanBoXuLy(assignee: string, danhBa: DanhBaTheoMa | null): st
 }
 
 /**
- * Một dòng của ô chọn `Cán bộ xử lý` (§8.5). Đặc tả vẽ `Họ tên — email · Chức danh`; danh bạ không
- * có email nên dòng là `Họ tên · Chức danh`, hoặc chỉ họ tên khi chưa có chức danh.
+ * The officer half of §8.3 `ĐANG GIAO CHO`: `Họ tên — email`, the address MASKED (`email_masked`,
+ * ADR 0082 #3/#12). The staff directory never carries the full address, so nothing here can show it
+ * (rule 3); the reveal button lives in the Nhiệm vụ drawer only (ADR 0082 #10). No address, directory
+ * not loaded, or the code not in it → `nhanCanBoXuLy`'s line, unchanged.
+ */
+export function assigneeWithMaskedEmail(assignee: string, danhBa: DanhBaTheoMa | null): string {
+  const line = nhanCanBoXuLy(assignee, danhBa);
+  if (assignee === "") return line;
+  const masked = danhBa?.get(assignee)?.email_masked;
+  return masked === undefined || masked === null || masked === "" ? line : `${line} — ${masked}`;
+}
+
+/**
+ * `Họ tên · Chức danh`, hoặc chỉ họ tên khi chưa có chức danh — dòng KHÔNG có email, dùng chung cho
+ * Biên bản và ô chọn cán bộ dùng chung (`o-chon-can-bo.tsx`), nơi đặc tả không vẽ email.
  */
 export function nhanLuaChonCanBo(cb: identity_canBoChonNguoiRa): string {
   const ten = cb.full_name === "" ? cb.code : cb.full_name;
   return cb.position === "" ? ten : `${ten} · ${cb.position}`;
+}
+
+/**
+ * One option line WITH the masked address: `Họ tên — email_masked · Chức danh` — the prototype's
+ * `HandoverFields.tsx:87-92` (also §8.5 `Cán bộ xử lý`), the address masked (ADR 0082 #3, #10 — an
+ * `<option>` holds no reveal button). No address → `nhanLuaChonCanBo`'s line, unchanged.
+ *
+ * Used where the spec draws the address: the Phản ánh officer picker (§8.5), the Nhiệm vụ handover
+ * select (`taskStaffOptionLabel`) and the Thông báo recipient picker (08 §5). Lives here, not in
+ * Nhiệm vụ, because `nhan-nhiem-vu.ts` already imports this file — the reverse import would be a cycle.
+ */
+export function staffOptionLabelWithEmail(cb: identity_canBoChonNguoiRa): string {
+  const name = cb.full_name === "" ? cb.code : cb.full_name;
+  const email = cb.email_masked === null || cb.email_masked === "" ? "" : ` — ${cb.email_masked}`;
+  return cb.position === "" ? `${name}${email}` : `${name}${email} · ${cb.position}`;
 }
 
 /** Nhãn và lựa chọn mặc định của ô chọn cán bộ — nguyên văn §8.5. */
@@ -1673,10 +1702,12 @@ export function inProgressCaption(n: number): string {
  *
  * `id` là khoá để màn lấy đúng mục (`petitionPendingPart`), không lấy theo vị trí trong mảng.
  *
- * Mục KHÔNG có chỗ giữ trên màn nhưng vẫn ở đây, vì `tools/tien_do_san_pham.py` đếm mảng này cho
- * báo cáo tiến độ: email cán bộ và số ngày quá hạn (chưa nằm trong bảng vị trí đã duyệt, ADR 0068 §14).
- * `Ghi nhận đánh giá của người dân` (§8.6) đã rời mảng: dựng xong theo bảng lỗi dòng 60
- * (`staff-recorded-rating.tsx`).
+ * `tools/tien_do_san_pham.py` đếm mảng này cho báo cáo tiến độ, nên một mục ĐÃ CHỐT KHÔNG DỰNG không
+ * nằm ở đây (xem `OVERDUE_DAYS_NOT_SHOWN` ngay dưới). Mảng rỗng vẫn giữ dạng `[` … `\n];`: viết gọn
+ * `= [];` thì công cụ đọc thành "màn không khai", không phải "không còn gì chưa dựng".
+ * Đã rời mảng: `Ghi nhận đánh giá của người dân` (§8.6, bảng lỗi dòng 60, `staff-recorded-rating.tsx`);
+ * email cán bộ ở `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5 — `email_masked` của danh bạ chọn người,
+ * ADR 0082 §3, 15/10/2026).
  *
  * MỖI MỤC PHẢI ĐÚNG VÀO NGÀY NÓ CÒN Ở ĐÂY. Dựng xong phần nào thì xoá mục ấy trong cùng lượt.
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
@@ -1689,26 +1720,28 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  {
-    id: "staffEmail",
-    ten: "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
-    viSao:
-      "Danh bạ chọn người (`GET /api/v1/staff-directory`) cố ý chỉ trả mã, tên, chức vụ và bộ " +
-      "phận — không email, không số điện thoại — để mọi cán bộ đăng nhập đọc được nó. Màn hình vì " +
-      "thế hiện `Họ tên · Chức danh` thay cho `Họ tên — email · Chức danh`.",
-  },
-  // §11 scene photos of the intake modal left this array on 15/10/2026: built on
-  // POST …/{maTraCuu}/photos (backend 7c739880, `staff-intake.tsx`).
-  {
-    id: "overdueDays",
-    ten: "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
-    viSao:
-      "Hạn đếm bằng **giờ làm việc** của chính xã, cần lịch làm việc, ngày nghỉ lễ và ngày làm bù " +
-      "— ba bảng do `identity` sở hữu (ADR 0007). Đếm bằng giờ treo tường ở trình duyệt sẽ ra một " +
-      "con số khác con số của máy chủ vào đúng dịp lễ. Màn hình vì thế nói `Quá hạn` kèm mốc hạn " +
-      "cuối, không nói mấy ngày.",
-  },
+  // Empty since 15/10/2026: every part of the spec left on this screen is built, or decided against
+  // (`OVERDUE_DAYS_NOT_SHOWN`). §11 scene photos of the intake modal left on 15/10/2026 (POST
+  // …/{maTraCuu}/photos, backend 7c739880, `staff-intake.tsx`).
 ];
+
+/**
+ * §8.3/§7 `⚠ Quá hạn 3 ngày` — DECIDED NOT TO BE SHOWN, so it is not counted as unbuilt.
+ *
+ * ADR 0007 decision 10a (owner, 02/10/2026; `kb/10-decisions/0007-sla-working-hours.md:160`): the staff
+ * screen shows "Quá hạn" and the deadline, never the number of hours/days overdue. The prototype turned
+ * `remaining_hours / 24` into days by the wall clock; deadlines here count WORKING hours from the
+ * commune's own calendar (rule 10, forbidden #2), so a clock-day figure would contradict the deadline
+ * it sits next to. Kept as a constant, not deleted, so the reason stays next to the code that obeys it.
+ */
+export const OVERDUE_DAYS_NOT_SHOWN: PhanChuaDung = {
+  id: "overdueDays",
+  ten: "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
+  viSao:
+    "Màn hình hiện “Quá hạn” kèm hạn cuối, không hiện số giờ hay số ngày quá hạn — đây là quyết định " +
+    "đã chốt (ADR 0007, quyết định 10a). Hạn tính bằng giờ làm việc theo lịch của xã, nên đổi ra số " +
+    "ngày theo lịch thường sẽ lệch với chính cách tính hạn.",
+};
 
 /**
  * The entry behind one "?" on this screen. THROWS on an unknown `id`: a renamed entry must turn the

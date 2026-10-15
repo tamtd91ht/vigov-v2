@@ -1376,16 +1376,19 @@ export type PhanChuaDung = {
 };
 
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
-  // §3 `{n} chuyên mục` on the card's meta line. The category list is never copied (ADR 0067 §2): every
-  // read is an outbound call to the commune's portal, so counting on the card would call the portal on
-  // every open of this screen. Drawn as a "?" on the portal-sync card (`portal-sync-card.tsx`, MA-02).
+  // §3 `{n} chuyên mục` on the card's meta line. The SELECTION is stored (service-comms
+  // `PortalSyncStore.Categories`, rows served as `portalStoredCategoryOut`), but the only route that
+  // returns it, GET /api/v1/portal-sync/categories, first reads the portal's LIVE tree
+  // (`PortalSyncAdmin`, app/portal_sync_admin.go) — and the settings response carries no count. Counting
+  // on the card would call the portal on every open of this screen. Missing: a route (or a settings
+  // field) giving the stored count without the live call. Drawn as a "?" on the card (MA-02).
   {
     ten: "Số chuyên mục đang đồng bộ",
     viSao:
-      "Thẻ chưa hiện số chuyên mục đang đồng bộ: danh sách chuyên mục được hỏi thẳng Cổng thông tin " +
-      "của xã mỗi lần cần, không lưu lại, nên đếm trên thẻ là hỏi Cổng mỗi lần mở màn này. Số chuyên " +
-      "mục đã chọn xem ở mục “Cấu hình” của thẻ, dạng “đã chọn n/tổng số chuyên mục” (mỗi xã chọn tối " +
-      "đa 30 chuyên mục).",
+      "Thẻ chưa hiện số chuyên mục đang đồng bộ: các chuyên mục đã chọn có lưu trên máy chủ, nhưng " +
+      "hiện chỉ đọc được chúng cùng lúc với việc hỏi Cổng thông tin của xã, nên đếm trên thẻ là hỏi " +
+      "Cổng mỗi lần mở màn này. Số chuyên mục đã chọn xem ở mục “Cấu hình” của thẻ, dạng “đã chọn " +
+      "n/tổng số chuyên mục” (mỗi xã chọn tối đa 30 chuyên mục).",
   },
   // The prototype's `Tải ảnh về kho của xã` checkbox in the `Cấu hình` dialog (`ContentSourcePanel.tsx:535`).
   // The settings contract (`comms_portalSyncSettingsIn`) has no such field: drawn disabled with a "?"
