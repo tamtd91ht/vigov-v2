@@ -94,7 +94,7 @@ pipeline {
     // `bat-demo-mini-app` / `tat-demo-mini-app` removed 05/10/2026 (ADR 0066 §Sửa đổi 05/10/2026):
     // demo identity is retired. "Rebuild" of an old run naming them is refused by the guard in
     // 'Kiểm công cụ' — that is the guard's purpose.
-    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'tao-bang', 'lam-moi-csdl', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
+    choice(name: 'HANH_DONG', choices: ['kiem-tra', 'xem-log', 'tao-bang', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'bo-sung-cau-hinh-petitions',
@@ -109,9 +109,6 @@ pipeline {
                         'đang checkout (lệch = ảnh cũ/đã rollback → DỪNG dịch vụ ấy, bấm job dịch vụ trước); rồi chạy ảnh đó với `/server -migrate-only` ' +
                         '(áp migration còn thiếu rồi thoát; tệp đã có trong sổ thì bỏ qua; sổ lệch thì DỪNG, không áp gì). ' +
                         'Cần ảnh có chế độ này (từ 14/10/2026); ảnh cũ thì báo và bỏ qua dịch vụ ấy (MT=prod|dev, XAC_NHAN = namespace của MT) · ' +
-                        'lam-moi-csdl: XOÁ SẠCH bảng của 7 dịch vụ (schema public của từng CSDL) để tao-bang dựng lại từ đầu — ' +
-                        'ADR 0096, chủ dự án 15/10/2026, chỉ khi CSDL CHỈ CÓ DỮ LIỆU THỬ. CHAY_THU bật = chỉ in CSDL, số bảng, số tệp đã áp; ' +
-                        'làm thật: bỏ tick, XAC_NHAN = xoa-sach-<namespace của MT> (vd. xoa-sach-vigov-dev). Sau đó: tao-bang, rồi dựng lại xã/tài khoản/khoá · ' +
                         'di-tru-vihat-miniapp: chạy migration của kho vihat-miniapp (main) vào CSDL trong ' +
                         'vihat-miniapp-bi-mat, chỉ những tệp chưa có trong sổ vihat_miniapp_migrations (MT=prod, XAC_NHAN=vigov-prod) · ' +
                         'bat-cau-phien-miniapp: chép khoá đầu của CITIZEN_SESSION_BRIDGE_KEYS (identity-secrets) sang ' +
@@ -175,8 +172,7 @@ pipeline {
                         'di-tru-vihat-miniapp / bat-cau-phien-miniapp (chỉ prod): gõ đúng vigov-prod. ' +
                         'Cho tao-bang / tao-khoa-ma-hoa-identity / mo-netpol-identity-zalo / bo-sung-cau-hinh-identity / bo-sung-cau-hinh-petitions / ' +
                         'dat-secret-mini-app / tao-tai-khoan-van-hanh / cap-quyen-van-hanh / chi-dinh-owner / dung-clamav / nen-ban-do: ' +
-                        'gõ đúng namespace của MT (vigov-prod hoặc vigov-dev). ' +
-                        'Cho lam-moi-csdl (làm thật): gõ đúng xoa-sach-<namespace của MT>.')
+                        'gõ đúng namespace của MT (vigov-prod hoặc vigov-dev).')
     string(name: 'TENANT_ID', defaultValue: '01M3CS7HHK72V71CGRRJHGR8E8',
            description: 'Cho dat-secret-mini-app: id xã (ULID 26 ký tự). Mặc định: Xã Thăng Bình trong CSDL PROD — ' +
                         'MT=dev có CSDL riêng, gõ id xã của dev.')
@@ -214,8 +210,7 @@ pipeline {
            description: 'Cho nen-ban-do: bản phát hành Overture Maps cho lớp địa điểm (vn-places.pmtiles), dạng 2026-09-23.1. ' +
                         'Overture chỉ giữ vài bản gần nhất — danh sách: https://overturemaps-us-west-2.s3.us-west-2.amazonaws.com/?list-type=2&prefix=release/&delimiter=/')
     booleanParam(name: 'CHAY_THU', defaultValue: true,
-                 description: 'Cho nen-ban-do: CHẠY THỬ — in bucket, đích, giá trị BASEMAP_URL sẽ là; không tải, không ghi gì. ' +
-                              'Cho lam-moi-csdl: chỉ in CSDL, số bảng, số tệp migration đã áp; không xoá gì. Bỏ tick để làm thật.')
+                 description: 'Cho nen-ban-do: CHẠY THỬ — in bucket, đích, giá trị BASEMAP_URL sẽ là; không tải, không ghi gì. Bỏ tick để làm thật.')
     booleanParam(name: 'TAO_CSDL', defaultValue: false,
                  description: 'Cho tao-bang: TẠO CSDL trước khi tạo bảng — tên CSDL lấy từ DATABASE_DSN của từng dịch vụ; ' +
                               'đã có thì bỏ qua. DỪNG trước mọi thao tác nếu hai dịch vụ trùng tên CSDL (mỗi dịch vụ một CSDL — ' +
@@ -246,7 +241,7 @@ pipeline {
           // THIS LIST MUST EQUAL `choices` OF HANH_DONG ABOVE, item for item. On 02/10/2026
           // `tao-tai-khoan-van-hanh` was added to `choices` but not here, so the job refused the one
           // action it had just offered ("không còn trong job này"). Add/remove an action in BOTH places.
-          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'tao-bang', 'lam-moi-csdl', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
+          if (!(params.HANH_DONG in ['kiem-tra', 'xem-log', 'tao-bang', 'doi-ten-mien-thang-binh', 'tao-xa-thang-binh',
                                   'gan-mini-app-thang-binh', 'doi-app-id-thang-binh',
                                   'tao-khoa-ma-hoa-identity', 'mo-netpol-identity-zalo', 'bo-sung-cau-hinh-identity',
                                   'bo-sung-cau-hinh-petitions',
@@ -600,7 +595,7 @@ CREATEDB
           }
 
           # Runs INSIDE a postgres:16-alpine pod with the service's own DSN: `public` missing (a database just
-          # created, or wiped by lam-moi-csdl) → create it; present → leave it. Then restore the USAGE grant to
+          # created, or emptied by hand) → create it; present → leave it. Then restore the USAGE grant to
           # PUBLIC that PostgreSQL's own `public` carries and a bare CREATE SCHEMA does not — without it any
           # account but the DSN's is refused the whole schema. Not the owner → the grant is skipped, not fatal.
           # Prints DA-TAO|… · CO-SAN|… · ERR|<label>, never psql's message (it names host and user).
@@ -763,143 +758,6 @@ SCHEMA
           echo "Kiểm lại: HANH_DONG=kiem-tra cùng MT — phần CSDL phải báo 'chưa áp 0' cho các dịch vụ trên."
           # Red while any service is left without its tables: a green run must mean "tables are there".
           [ -z "$failed" ] && [ -z "$skipped" ]
-        '''
-      }
-    }
-
-    // Owner 15/10/2026 (ADR 0096): wipe every service's tables so `tao-bang` rebuilds them from the
-    // migrations as they now stand. Needed because ADR 0096 rewrote ALREADY-APPLIED migration files
-    // (partition reduction): every existing ledger now mismatches its checksums and core/migrate refuses
-    // to start the service (ADR 0013 #5). Allowed only while a namespace holds TEST data — once a
-    // commune's real records live there this action destroys archival records (rule 7) and must go.
-    //
-    // ORDER MATTERS. Run it AFTER the seven service jobs have deployed images built from the rewritten
-    // migrations (those pods crash-loop on the checksum until now). A pod of an OLD image restarting
-    // after the wipe would happily re-create the OLD schema, and the new image would then stop on it.
-    //
-    // Per service, one transaction: DROP SCHEMA public CASCADE; CREATE SCHEMA public. The migrations
-    // create everything in `public` and nothing else — no extension, no event trigger, no other schema
-    // (checked 15/10/2026). lock_timeout 30 s: a session holding a lock makes it fail closed, not hang.
-    // This action only wipes (owner, 15/10/2026). The schema's default USAGE grant, which a bare CREATE
-    // SCHEMA does not carry, is restored by `tao-bang` — the one action that builds structure.
-    // Refuses before touching anything when two services share one database name (prod, 14/10/2026):
-    // wiping one would silently wipe another's ledger. vihat-miniapp's database is not among the seven.
-    stage('Làm mới CSDL') {
-      when { expression { params.HANH_DONG == 'lam-moi-csdl' } }
-      steps {
-        script {
-          if (!(params.MT in ['prod', 'dev'])) { error("lam-moi-csdl: MT '${params.MT}' không hợp lệ.") }
-          // null on the first run after CHAY_THU gained this meaning — treated as a dry run.
-          env.CHE_DO = (params.CHAY_THU == false) ? 'that' : 'thu'
-          if (env.CHE_DO == 'that' && params.XAC_NHAN != "xoa-sach-${env.NS}") {
-            error("Làm thật cần XAC_NHAN đúng 'xoa-sach-${env.NS}'. Nhận được: '${params.XAC_NHAN}'. Không xoá gì.")
-          }
-        }
-        sh '''
-          set +x
-          set -u
-          umask 077
-          TMP_DIR=$(mktemp -d)
-          PODS=""
-          trap 'for p in $PODS; do kubectl -n "$NS" delete pod "$p" --ignore-not-found --wait=false >/dev/null 2>&1 || true; done; rm -rf "$TMP_DIR"' EXIT
-          SERVICES="platform identity comms documents finance petitions reporting"
-          if [ "$CHE_DO" = "that" ]; then echo "══ LÀM THẬT — xoá sạch bảng của 7 dịch vụ trong $NS"; else echo "══ CHẠY THỬ — chỉ đọc, không xoá gì"; fi
-
-          # Step 0, before anything is touched: each database NAME (filtered inside the pipe — the DSN never
-          # enters a variable), refusing when two services share one. Same filter as 'Tạo bảng'.
-          echo "── tên CSDL trong DATABASE_DSN của từng dịch vụ"
-          : > "$TMP_DIR/dbnames"
-          bad=""
-          for s in $SERVICES; do
-            name=$(kubectl -n "$NS" get secret "$s-secrets" -o go-template='{{index .data "DATABASE_DSN"}}' 2>/dev/null \\
-                     | base64 -d 2>/dev/null | sed -e 's/[?].*//' -e 's#.*/##' -e 's/.*dbname=\\([^ ]*\\).*/\\1/' \\
-                     | grep -xE '[a-z_][a-z0-9_]{0,62}' || true)
-            if [ -z "$name" ]; then
-              echo "   ✗ $s: không đọc được tên CSDL (thiếu secret/$s-secrets, thiếu DATABASE_DSN, hoặc tên có chữ HOA/ký tự lạ)"
-              bad=yes; continue
-            fi
-            echo "$name $s" >> "$TMP_DIR/dbnames"
-          done
-          dup=$(cut -d' ' -f1 "$TMP_DIR/dbnames" | sort | uniq -d)
-          for d in $dup; do
-            echo "   ✗ CSDL '$d' bị dùng chung bởi:$(grep "^$d " "$TMP_DIR/dbnames" | cut -d' ' -f2 | tr '\\n' ' ')"
-            bad=yes
-          done
-          if [ -n "$bad" ]; then
-            echo "DỪNG — chưa xoá gì. Mỗi dịch vụ phải có CSDL RIÊNG (deploy/README.md)."
-            exit 1
-          fi
-
-          # Runs INSIDE a postgres:16-alpine pod. Prints INFO|<db>|<tables>|<ledger rows or ->, then, when
-          # CHE_DO=that, DONE|<relations left> or ERR|<category> — never psql's message (it names host/user).
-          cat > "$TMP_DIR/wipe.sh" <<'WIPE'
-set -u
-if ! info=$(psql "$DATABASE_DSN" -X -At -v ON_ERROR_STOP=1 -c "SELECT current_database() || '|' || (SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')) || '|' || (CASE WHEN to_regclass('public.schema_migration') IS NULL THEN 'f' ELSE 't' END)" 2>/tmp/err); then
-  echo "ERR|khong-noi-duoc-csdl"; exit 0
-fi
-ledger=-
-case "$info" in *'|t') ledger=$(psql "$DATABASE_DSN" -X -At -c "SELECT count(*) FROM schema_migration" 2>/dev/null || echo '?') ;; esac
-echo "INFO|${info%|*}|$ledger"
-[ "$CHE_DO" = "that" ] || exit 0
-if psql "$DATABASE_DSN" -X -q -v ON_ERROR_STOP=1 -1 -c "SET LOCAL lock_timeout = '30s'" -c "DROP SCHEMA public CASCADE" -c "CREATE SCHEMA public" 2>/tmp/err; then
-  left=$(psql "$DATABASE_DSN" -X -At -c "SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace" 2>/dev/null || echo '?')
-  echo "DONE|$left"
-else
-  e=$(cat /tmp/err)
-  case "$e" in
-    *'must be owner'*) echo "ERR|tai-khoan-trong-DSN-khong-so-huu-schema-public" ;;
-    *'lock timeout'*) echo "ERR|co-phien-dang-giu-khoa-bang--chay-lai-sau" ;;
-    *) echo "ERR|xoa-khong-duoc" ;;
-  esac
-fi
-WIPE
-          WIPE_B64=$(base64 -w0 "$TMP_DIR/wipe.sh")
-
-          ok=""; failed=""
-          printf '   %-10s %-22s %7s %8s  %s\\n' "DỊCH VỤ" "CSDL" "BẢNG" "ĐÃ ÁP" "KẾT QUẢ"
-          for s in $SERVICES; do
-            pod="vigov-lam-moi-$s-$BUILD_NUMBER"
-            PODS="$PODS $pod"
-            printf '%s' '{"apiVersion":"v1","kind":"Pod","metadata":{"name":"'"$pod"'","labels":{"app.kubernetes.io/name":"vigov-lam-moi-csdl"}},
-              "spec":{"restartPolicy":"Never","imagePullSecrets":[{"name":"dockerhub-omicrm"}],
-              "containers":[{"name":"psql","image":"postgres:16-alpine",
-                "envFrom":[{"secretRef":{"name":"'"$s"'-secrets"}}],
-                "env":[{"name":"CHE_DO","value":"'"$CHE_DO"'"},{"name":"WIPE_B64","value":"'"$WIPE_B64"'"}],
-                "command":["sh","-c","echo \\"$WIPE_B64\\" | base64 -d > /tmp/w.sh && sh /tmp/w.sh"]}]}}' \\
-              > "$TMP_DIR/pod.json"
-            if ! kubectl -n "$NS" create -f "$TMP_DIR/pod.json" >/dev/null; then
-              printf '   %-10s ✗ không tạo được pod\\n' "$s"; failed="$failed $s"; continue
-            fi
-            ph=""; i=0
-            while [ $i -lt 60 ]; do   # 5 minutes — dropping ~3 400 relations is not instant
-              ph=$(kubectl -n "$NS" get pod "$pod" -o jsonpath='{.status.phase}' 2>/dev/null || true)
-              case "$ph" in Succeeded|Failed) break ;; esac
-              sleep 5; i=$((i+1))
-            done
-            kubectl -n "$NS" logs "$pod" > "$TMP_DIR/$s.log" 2>/dev/null || true
-            kubectl -n "$NS" delete pod "$pod" --ignore-not-found --wait=false >/dev/null 2>&1 || true
-            info=$(grep '^INFO|' "$TMP_DIR/$s.log" | head -n 1)
-            res=$(grep '^DONE|\\|^ERR|' "$TMP_DIR/$s.log" | tail -n 1)
-            db=$(echo "$info" | cut -d'|' -f2); tables=$(echo "$info" | cut -d'|' -f3); ledger=$(echo "$info" | cut -d'|' -f4)
-            case "$res" in
-              DONE\\|*) ket="✓ đã xoá sạch (còn ${res#DONE|} quan hệ)"; ok="$ok $s" ;;
-              ERR\\|*) ket="✗ ${res#ERR|}"; failed="$failed $s" ;;
-              *) if [ "$CHE_DO" = "thu" ] && [ -n "$info" ]; then ket="(chạy thử — chưa xoá)"; ok="$ok $s"
-                 else ket="✗ pod dừng ở pha '${ph:-không rõ}', không có kết quả"; failed="$failed $s"; fi ;;
-            esac
-            printf '   %-10s %-22s %7s %8s  %s\\n' "$s" "${db:--}" "${tables:--}" "${ledger:--}" "$ket"
-          done
-
-          echo ""
-          [ -z "$failed" ] || echo "── HỎNG:$failed — dịch vụ ấy CHƯA bị xoá (mỗi CSDL một giao dịch). Đọc nhãn lỗi ở trên rồi chạy lại."
-          if [ "$CHE_DO" = "that" ] && [ -n "$ok" ]; then
-            echo "Bước kế:"
-            echo "  1. tao-bang cùng MT (TAO_CSDL không cần) — dựng lại bảng bằng ảnh đang chạy; ảnh phải có migration của ADR 0096."
-            echo "  2. kiem-tra cùng MT — 7 CSDL phải báo 'chưa áp 0', số bảng nhỏ hơn trước khoảng 3 000 là ĐÚNG (bớt mảnh)."
-            echo "  3. Dựng lại dữ liệu vận hành đã mất: tài khoản vận hành (tao-tai-khoan-van-hanh, chi-dinh-owner), xã + tên miền +"
-            echo "     App ID (platform-admin), secret Mini App (dat-secret-mini-app). Khoá trong <dịch vụ>-secrets KHÔNG bị đụng."
-          fi
-          [ -z "$failed" ]
         '''
       }
     }
