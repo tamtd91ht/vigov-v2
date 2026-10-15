@@ -42,6 +42,14 @@ package domain
 // key by key, for the reason above: it is a person's decision, not an expansion over the catalogue.
 // Consequence for #14 (app/role_template.go): the caller of a template run must now hold these six
 // too — see 0028 question 4.
+//
+// OWNER DECISION 15/10/2026 (bug sheet web-admin-141026 row 22): the four configuration keys of
+// migration 0032 (admin.residential_unit, admin.system_message, admin.mail_server, admin.zalo_channel)
+// are split out of admin.lookup / admin.org and PRE-GRANTED to whoever reaches those tabs today. So
+// every template holding admin.lookup — Chủ tịch UBND and Chánh Văn phòng — holds all four; no
+// template holds admin.org without admin.lookup. 0032 applies the same rule to existing roles, so a
+// commune seeded after 0032 and one seeded before end in the same state. The caller of a template
+// run must hold these four too (#14); 0032 grants them to every administrator role that predates it.
 
 // RoleTemplate is one template role.
 type RoleTemplate struct {
@@ -89,6 +97,8 @@ func RoleTemplates() []RoleTemplate {
 				"citizen.read", "citizen.update",
 				"dossier.import", "dossier.read", "dossier.update",
 				"notice.send",
+				// Migration 0032, owner decision 15/10/2026 (file comment).
+				"admin.residential_unit", "admin.system_message", "admin.mail_server", "admin.zalo_channel",
 			},
 		},
 		{
@@ -118,6 +128,8 @@ func RoleTemplates() []RoleTemplate {
 				"petition.create", "petition.read",
 				"report.read", "report.export",
 				"admin.lookup",
+				// Migration 0032, owner decision 15/10/2026 (file comment): holds admin.lookup, so holds the four.
+				"admin.residential_unit", "admin.system_message", "admin.mail_server", "admin.zalo_channel",
 				"content.read", "content.update",
 				"announcement.create",
 			},

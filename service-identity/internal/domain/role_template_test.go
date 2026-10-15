@@ -66,9 +66,9 @@ func TestRoleTemplatesAreTheEightOfSpec41WithTheirCounts(t *testing.T) {
 		isLeader bool
 		count    int
 	}{
-		{1, "chu-tich-ubnd", "Chủ tịch UBND", true, 39},
+		{1, "chu-tich-ubnd", "Chủ tịch UBND", true, 43},
 		{2, "pho-chu-tich-ubnd", "Phó Chủ tịch UBND", true, 29},
-		{3, "chanh-van-phong", "Chánh Văn phòng", false, 16},
+		{3, "chanh-van-phong", "Chánh Văn phòng", false, 20},
 		{4, "truong-bo-phan", "Trưởng bộ phận", false, 12},
 		{5, "chuyen-vien", "Chuyên viên chuyên môn", false, 8},
 		{6, "ke-toan", "Kế toán", false, 6},
@@ -120,8 +120,9 @@ func TestRoleTemplateKeysAllExistInQuyen(t *testing.T) {
 	}
 }
 
-// CHỦ TỊCH HOLDS EXACTLY THE 33 KEYS OF MIGRATION 0001 PLUS THE SIX OF 0028 — not the catalogue.
-// The six were added by user decision 2026-10-09 (role_template.go file comment); a seventh key
+// CHỦ TỊCH HOLDS EXACTLY THE 33 KEYS OF MIGRATION 0001 PLUS THE SIX OF 0028 AND THE FOUR OF 0032 —
+// not the catalogue. The six were added by user decision 2026-10-09, the four by owner decision
+// 15/10/2026 (role_template.go file comment); another key
 // arriving here without a person deciding it must turn this red.
 func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 	of0001 := seededKeys(t, filepath.Join("..", "..", "migrations", "0001_init.sql"))
@@ -134,6 +135,19 @@ func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 	}
 	for k := range of0028 {
 		of0001[k] = true
+	}
+	// Migration 0032 (owner decision 15/10/2026): four NEW configuration keys. Its INSERTs also
+	// re-rank admin.org/role/sla/user, which 0001 already seeds — so count only what 0001 lacks.
+	of0032 := seededKeys(t, filepath.Join("..", "..", "migrations", "0032_split_configuration_permissions.sql"))
+	added0032 := 0
+	for k := range of0032 {
+		if !of0001[k] {
+			added0032++
+			of0001[k] = true
+		}
+	}
+	if added0032 != 4 {
+		t.Fatalf("migration 0032 thêm %d khoá mới, phép kiểm này viết cho 4 — đọc lại quyết định trước khi sửa", added0032)
 	}
 	chair := RoleTemplates()[0]
 	got := map[string]bool{}
@@ -154,7 +168,7 @@ func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 	sort.Strings(missing)
 	sort.Strings(extra)
 	if len(missing) > 0 || len(extra) > 0 {
-		t.Errorf("Chủ tịch UBND: thiếu %v, thừa %v so với 33 khoá của 0001 + 6 khoá của 0028", missing, extra)
+		t.Errorf("Chủ tịch UBND: thiếu %v, thừa %v so với 33 khoá của 0001 + 6 khoá của 0028 + 4 khoá của 0032", missing, extra)
 	}
 }
 
@@ -178,12 +192,12 @@ func TestRoleTemplatesNeverGrantTheNarrowKeysNorTheAdminRole(t *testing.T) {
 	}
 }
 
-// THE UNION IS WHAT THE CALLER MUST HOLD — and, because Chủ tịch holds all 39 (0001's 33 + 0028's
-// six), it is exactly those 39.
+// THE UNION IS WHAT THE CALLER MUST HOLD — and, because Chủ tịch holds all 43 (0001's 33 + 0028's
+// six + 0032's four), it is exactly those 43.
 func TestRoleTemplatePermissionsIsTheUnion(t *testing.T) {
 	u := RoleTemplatePermissions()
-	if len(u) != 39 {
-		t.Fatalf("hợp các quyền của bộ mẫu có %d khoá, muốn 39", len(u))
+	if len(u) != 43 {
+		t.Fatalf("hợp các quyền của bộ mẫu có %d khoá, muốn 43", len(u))
 	}
 	in := map[string]bool{}
 	for _, k := range u {
