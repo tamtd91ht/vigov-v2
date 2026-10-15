@@ -354,7 +354,9 @@ pipeline {
           # L|<file> <checksum> per ledger row. No backslash anywhere: this text sits in a Groovy string.
           cat > "$TMP_DIR/probe.sh" <<'PROBE'
 set -u
-q="SELECT current_database() || '|' || (SELECT count(*) FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema')) || '|' || (to_regclass('public.schema_migration') IS NOT NULL)"
+# CASE, not a bare boolean: text || boolean renders 'true'/'false', never 't' — until 15/10/2026 every
+# database with tables was reported as having NO ledger, while seven services ran on theirs.
+q="SELECT current_database() || '|' || (SELECT count(*) FROM information_schema.tables WHERE table_type = 'BASE TABLE' AND table_schema NOT IN ('pg_catalog', 'information_schema')) || '|' || (CASE WHEN to_regclass('public.schema_migration') IS NULL THEN 'f' ELSE 't' END)"
 if out=$(psql "$DATABASE_DSN" -X -At -v ON_ERROR_STOP=1 -c "$q" 2>/tmp/err); then
   echo "OK|$out"
   case "$out" in
@@ -752,7 +754,7 @@ CREATEDB
           # CHE_DO=that, DONE|<relations left> or ERR|<category> — never psql's message (it names host/user).
           cat > "$TMP_DIR/wipe.sh" <<'WIPE'
 set -u
-if ! info=$(psql "$DATABASE_DSN" -X -At -v ON_ERROR_STOP=1 -c "SELECT current_database() || '|' || (SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')) || '|' || (to_regclass('public.schema_migration') IS NOT NULL)" 2>/tmp/err); then
+if ! info=$(psql "$DATABASE_DSN" -X -At -v ON_ERROR_STOP=1 -c "SELECT current_database() || '|' || (SELECT count(*) FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relkind IN ('r', 'p')) || '|' || (CASE WHEN to_regclass('public.schema_migration') IS NULL THEN 'f' ELSE 't' END)" 2>/tmp/err); then
   echo "ERR|khong-noi-duoc-csdl"; exit 0
 fi
 ledger=-
