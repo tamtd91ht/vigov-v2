@@ -38,7 +38,7 @@
 --      inside it. Every statement is IF NOT EXISTS, so a retry costs nothing.
 --   3. HOW IT IS REVERSED: see REVERSAL at the bottom.
 --   4. READ PATHS THAT CHANGE MEANING WHILE HALF-APPLIED: none. No existing table is touched.
---   5. COST ON THE LARGEST COMMUNE: nothing. 32 empty partitions.
+--   5. COST ON THE LARGEST COMMUNE: nothing. One empty table.
 -- ---------------------------------------------------------------------------
 
 CREATE TABLE IF NOT EXISTS system_message_override (
@@ -91,19 +91,11 @@ CREATE TABLE IF NOT EXISTS system_message_override (
     CONSTRAINT system_message_override_delete_complete
         CHECK (deleted_at IS NULL
                OR (deleted_by IS NOT NULL AND btrim(delete_reason) <> ''))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS system_message_override_p%s PARTITION OF system_message_override '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- ---------------------------------------------------------------------------
 -- REVERSAL. Lossless while no commune has reworded anything: DROP TABLE system_message_override
--- (the partitions go with it) and remove this file's row from `schema_migration`. Once a commune
+-- and remove this file's row from `schema_migration`. Once a commune
 -- HAS a row, dropping the table silently puts that commune back on the software's sentence — on a
 -- report its leadership signs — and destroys the history of its wording. That needs the user
 -- (rule 7, stop condition 2), not a command. `audit_log` keeps every before/after text either way.
@@ -128,7 +120,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;
