@@ -43,6 +43,7 @@ import {
 } from "./excel-import-targets";
 import { LABEL_NEEDS_ALNUM } from "./map-field-form";
 import { PHAN_CHUA_DUNG } from "./nhan-cau-hinh";
+import { residentialUnitWriteDecision } from "./quyen-tab";
 import {
   CANH_BAO_XOA,
   NUT_HUY,
@@ -94,7 +95,9 @@ import { THU_TU_KHONG_PHAI_SO, TIEU_DE_NHOM_TRANG_THAI, thanSuaTrangThai } from 
  *    field by field in `lib/api/danh-muc.ts`.
  *
  * 3. HIDING A BUTTON IS CONVENIENCE, NOT A CONTROL. Every write route declares
- *    `RequirePermission("admin.lookup")` and checks it on EVERY request (rule 5, forbidden #1).
+ *    `RequirePermission("admin.lookup")` — except "Loại đơn vị dân cư", whose routes declare
+ *    `admin.residential_unit` since 15/10/2026 (`RESIDENTIAL_UNIT_TYPE_GROUP`) — and checks it on EVERY
+ *    request (rule 5, forbidden #1). Each row's buttons follow ITS group's key.
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  *
  * THE TABLE SHOWS FOR EVERY ACCOUNT, ONLY THE WRITES ARE GATED: the read routes are
@@ -130,6 +133,9 @@ export function TabDanhMuc() {
   // "allowed" nor as "refused".
   const writeDecision = session === null ? null : quyetDinhTheoKhoa(session, QUYEN_QUAN_LY_DANH_MUC);
   const canWrite = writeDecision !== null && writeDecision.hien;
+  // "Loại đơn vị dân cư" writes on its own key (`RESIDENTIAL_UNIT_TYPE_GROUP`); same three states.
+  const typeWriteDecision = session === null ? null : residentialUnitWriteDecision(session);
+  const canWriteResidentialUnitTypes = typeWriteDecision !== null && typeWriteDecision.hien;
   const sessionError =
     writeDecision !== null && !writeDecision.hien && writeDecision.vi === "khong-doc-duoc" ? writeDecision.thongBao : "";
 
@@ -179,7 +185,10 @@ export function TabDanhMuc() {
           ),
     [groups, taskStatuses, shownPetitionFields],
   );
-  const writable = useMemo(() => writableGroups(groups), [groups]);
+  const writable = useMemo(
+    () => writableGroups(groups, canWrite, canWriteResidentialUnitTypes),
+    [groups, canWrite, canWriteResidentialUnitTypes],
+  );
   const shownGroup = effectiveShownGroup(allRows, chosenGroup);
 
   const close = useCallback(() => {
@@ -376,9 +385,12 @@ export function TabDanhMuc() {
       shownGroup={shownGroup}
       onShowGroup={setChosenGroup}
       canWrite={canWrite}
+      canWriteResidentialUnitTypes={canWriteResidentialUnitTypes}
       sessionError={sessionError}
       importButton={catalogueImportButton(
-        canWrite,
+        // Without `admin.lookup`, only a working import of a group this account may write — never the
+        // tab-wide "?" button, which announces catalogue writes the account cannot make.
+        canWrite || importGroup !== null,
         importGroup,
         () => setReads((n) => n + 1),
         shownGroup === PETITION_FIELD_GROUP,
@@ -615,8 +627,26 @@ export type CatalogueActions = {
   readonly cancel: () => void;
 };
 
-function writableGroups(groups: readonly NhomDanhMuc[] | null): readonly NhomDanhMuc[] {
-  return groups === null ? [] : groups.filter((g) => g.ghi !== null);
+/**
+ * The one catalogue group whose writes are NOT `admin.lookup`: "Loại đơn vị dân cư" (the hamlet types)
+ * moved to `admin.residential_unit` with the hamlets themselves (owner 15/10/2026, bug sheet
+ * web-admin-141026 row 22). Its read stays any-authenticated, so the rows show for everyone.
+ */
+export const RESIDENTIAL_UNIT_TYPE_GROUP = "loaiDonViDanCu";
+
+/** Whether this account may write entries of `group` — the group's own key, never inferred from another. */
+export function canWriteGroup(group: string, canWrite: boolean, canWriteResidentialUnitTypes: boolean): boolean {
+  return group === RESIDENTIAL_UNIT_TYPE_GROUP ? canWriteResidentialUnitTypes : canWrite;
+}
+
+function writableGroups(
+  groups: readonly NhomDanhMuc[] | null,
+  canWrite: boolean,
+  canWriteResidentialUnitTypes: boolean,
+): readonly NhomDanhMuc[] {
+  return groups === null
+    ? []
+    : groups.filter((g) => g.ghi !== null && canWriteGroup(g.khoa, canWrite, canWriteResidentialUnitTypes));
 }
 
 /**
@@ -630,7 +660,8 @@ export function importGroupFor(
   shown: ShownGroup,
   session: Parameters<typeof catalogueImportFor>[1],
 ): KhoaDanhMucGhi | null {
-  const group = writableGroups(groups).find((g) => g.khoa === shown);
+  // Every group with a write route; the KEY is checked once, by `catalogueImportFor`, per group.
+  const group = writableGroups(groups, true, true).find((g) => g.khoa === shown);
   if (group === undefined || group.ghi === null) return null;
   return catalogueImportFor(group.ghi.khoa, session) === null ? null : group.ghi.khoa;
 }
@@ -664,6 +695,7 @@ export function CatalogueView({
   shownGroup: chosenGroup,
   onShowGroup,
   canWrite,
+  canWriteResidentialUnitTypes = false,
   sessionError,
   importButton,
   open,
@@ -680,7 +712,10 @@ export function CatalogueView({
   petitionFields?: KetQua<petitions_petitionFieldListOut> | null;
   shownGroup: ShownGroup;
   onShowGroup: (g: ShownGroup) => void;
+  /** `admin.lookup` — every group's writes but "Loại đơn vị dân cư", and the two code lists. */
   canWrite: boolean;
+  /** `admin.residential_unit` — the writes of "Loại đơn vị dân cư" only. Absent = no (fail closed). */
+  canWriteResidentialUnitTypes?: boolean;
   /** The session could not be read: its sentence, and no write button. */
   sessionError: string;
   importButton: ReactNode;
@@ -702,7 +737,11 @@ export function CatalogueView({
   const rows = groups === null ? [] : catalogueRows(groups, taskItems, shownGroup, fieldItems);
   const total = allRows.length;
   const present = groupsWithRows(allRows);
-  const writable = writableGroups(groups);
+  const writable = writableGroups(groups, canWrite, canWriteResidentialUnitTypes);
+  // The actions column exists when ANY row may be written; each row then asks its own group's key.
+  const anyWrite = canWrite || canWriteResidentialUnitTypes;
+  const rowWritable = (row: CatalogueRow) =>
+    row.kind === "lookup" ? canWriteGroup(row.group.khoa, canWrite, canWriteResidentialUnitTypes) : canWrite;
 
   // A group that could not be read says so ABOVE the table, in the server's words: its rows are absent
   // for a reason, never "the commune has no entries".
@@ -721,7 +760,7 @@ export function CatalogueView({
 
   // Not while loading, as before: the add button belongs to the loaded workspace.
   const addButton =
-    !loading && canWrite && writable.length > 0 ? (
+    !loading && anyWrite && writable.length > 0 ? (
       <Button
         type="button"
         variant="primary"
@@ -783,7 +822,7 @@ export function CatalogueView({
 
       {sessionError !== "" && <InlineError>{sessionError}</InlineError>}
 
-      {!loading && canWrite && open !== null && open.kind === "add" && (
+      {!loading && anyWrite && open !== null && open.kind === "add" && (
         <AddRow
           groups={writable}
           letterCodesTaken={letterCodesTaken(groups)}
@@ -817,7 +856,7 @@ export function CatalogueView({
                   <th scope="col">{O_THU_TU}</th>
                   <th scope="col">Nguồn</th>
                   <th scope="col">Trạng thái</th>
-                  {canWrite && (
+                  {anyWrite && (
                     <th scope="col">
                       <span className="an-thi-giac">Thao tác</span>
                     </th>
@@ -831,7 +870,8 @@ export function CatalogueView({
                   <CatalogueTableRow
                     key={row.key}
                     row={row}
-                    canWrite={canWrite}
+                    canWrite={rowWritable(row)}
+                    actionsColumn={anyWrite}
                     mode={open !== null && open.kind !== "add" && open.rowKey === row.key ? open.kind : "view"}
                     draft={draft}
                     setDraft={setDraft}
@@ -1037,6 +1077,7 @@ function SourceText({ source }: { source: string | null }) {
 export function CatalogueTableRow({
   row,
   canWrite,
+  actionsColumn = canWrite,
   mode,
   draft,
   setDraft,
@@ -1046,7 +1087,13 @@ export function CatalogueTableRow({
   actions,
 }: {
   row: CatalogueRow;
+  /** This row's own group key is held — its buttons are drawn. */
   canWrite: boolean;
+  /**
+   * The table has an actions column (some OTHER group may be writable). A row that may not be written
+   * then draws an EMPTY cell, so the columns stay aligned. Default: the column exists iff this row writes.
+   */
+  actionsColumn?: boolean;
   mode: "view" | "edit" | "delete";
   draft: CatalogueDraft;
   setDraft: (d: CatalogueDraft) => void;
@@ -1145,6 +1192,7 @@ export function CatalogueTableRow({
       <td>
         <StatusBadge active={active} />
       </td>
+      {actionsColumn && !canWrite && <td />}
       {canWrite && (
         <td>
           {editing ? (

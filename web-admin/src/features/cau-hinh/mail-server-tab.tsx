@@ -54,7 +54,7 @@ import { mailServerTabDecision } from "./quyen-tab";
 const SAVE_FORM_ID = "form-may-chu-thu";
 
 /**
- * "Cấu hình → Máy chủ thư" (spec 10). One key, `admin.lookup`, for read and write — the server declares
+ * "Cấu hình → Máy chủ thư" (spec 10). One key, `admin.mail_server` (since 15/10/2026; was `admin.lookup`), for read and write — the server declares
  * it on all three routes, so the tab hides as a whole without it (convenience; the server refuses).
  *
  * AFTER A SAVE THE FORM IS REBUILT FROM THE SERVER'S ANSWER, password box emptied: the answer is the

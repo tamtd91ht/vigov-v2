@@ -4,7 +4,14 @@ import { layDanhSachCanBo } from "@/lib/api/can-bo";
 import { layMaTranQuyen } from "@/lib/api/phan-quyen";
 import { layPhienHienTai } from "@/lib/api/phien";
 
-import { quyetDinhTabNguoiDung, quyetDinhTabPhanQuyen } from "./quyen-tab";
+import {
+  mailServerTabDecision,
+  quyetDinhTabNguoiDung,
+  quyetDinhTabPhanQuyen,
+  residentialUnitWriteDecision,
+  systemMessagesTabDecision,
+  zaloChannelTabDecision,
+} from "./quyen-tab";
 
 /**
  * Kiểm cả đường: phản hồi HTTP của `GET /api/v1/sessions/current` → quyết định ẩn/hiện.
@@ -169,6 +176,46 @@ describe("ẩn/hiện tab Phân quyền theo quyền", () => {
       }),
     );
     expect(quyetDinhTabPhanQuyen(await layPhienHienTai()).hien).toBe(false);
+  });
+});
+
+describe("bốn khoá cấu hình tách khỏi `admin.lookup` / `admin.org` (chủ dự án 15/10/2026)", () => {
+  const DECISIONS = [
+    ["admin.mail_server", mailServerTabDecision],
+    ["admin.zalo_channel", zaloChannelTabDecision],
+    ["admin.system_message", systemMessagesTabDecision],
+    ["admin.residential_unit", residentialUnitWriteDecision],
+  ] as const;
+
+  it.each(DECISIONS)("có `%s` thì mở", async (key, decide) => {
+    batFetch(phanHoiPhien([key]));
+    expect(decide(await layPhienHienTai())).toEqual({ hien: true });
+  });
+
+  it.each(DECISIONS)("CA BỊ TỪ CHỐI: khoá cũ `admin.lookup` + `admin.org` không mở cổng của `%s`", async (_key, decide) => {
+    batFetch(phanHoiPhien(["admin.lookup", "admin.org", "admin.sla", "admin.audit"]));
+    expect(decide(await layPhienHienTai())).toEqual({ hien: false, vi: "khong-du-quyen" });
+  });
+
+  it("CA BỊ TỪ CHỐI: một khoá tách không mở cổng của ba khoá kia", async () => {
+    for (const [key] of DECISIONS) {
+      batFetch(phanHoiPhien([key]));
+      const phien = await layPhienHienTai();
+      for (const [other, decide] of DECISIONS) {
+        expect(decide(phien).hien).toBe(other === key);
+      }
+    }
+  });
+
+  it("phiên hết hạn (401): cả bốn cổng đóng", async () => {
+    batFetch(
+      new Response(JSON.stringify({ code: "unauthenticated", message: "Phiên đã hết hạn" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    const phien = await layPhienHienTai();
+    for (const [, decide] of DECISIONS) expect(decide(phien).hien).toBe(false);
   });
 });
 

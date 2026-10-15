@@ -118,8 +118,16 @@ async function submitSave(el: HTMLElement) {
 }
 
 describe("denied case", () => {
-  it("without admin.lookup: the tab's own sentence, and NOTHING is fetched", async () => {
+  it("without admin.mail_server: the tab's own sentence, and NOTHING is fetched", async () => {
     H.phien = session(["task.read"]);
+    const el = await mount();
+    expect(el.textContent).toContain("Tài khoản của bạn không có quyền cấu hình máy chủ thư");
+    expect(el.querySelector("form")).toBeNull();
+    expect(calls).toEqual([]);
+  });
+
+  it("DENIED: admin.lookup alone no longer opens it (owner 15/10/2026), nor do the other three split keys", async () => {
+    H.phien = session(["admin.lookup", "admin.org", "admin.system_message", "admin.zalo_channel", "admin.mail_servers"]);
     const el = await mount();
     expect(el.textContent).toContain("Tài khoản của bạn không có quyền cấu hình máy chủ thư");
     expect(el.querySelector("form")).toBeNull();
@@ -129,7 +137,7 @@ describe("denied case", () => {
 
 describe("security boxes — one choice, never neither (rule 13)", () => {
   it("ticking TLS unticks STARTTLS; un-ticking the ticked one is not possible; the PUT carries one value", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     const el = await mount();
     expect(box(el, "security-starttls").checked).toBe(true);
     expect(box(el, "security-tls").checked).toBe(false);
@@ -152,7 +160,7 @@ describe("security boxes — one choice, never neither (rule 13)", () => {
 
 describe("save", () => {
   it("success → toast 'Đã lưu cấu hình máy chủ thư.', nothing in place", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     const el = await mount();
     await submitSave(el);
     expect(T.success).toHaveBeenCalledWith("Đã lưu cấu hình máy chủ thư.");
@@ -160,7 +168,7 @@ describe("save", () => {
   });
 
   it("400 password_required_for_new_host → §10's sentence IN PLACE, no toast", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     putReply = {
       status: 400,
       body: { code: "password_required_for_new_host", message: "Đã đổi máy chủ… (câu của máy chủ)", trace_id: "t" },
@@ -177,7 +185,7 @@ describe("save", () => {
   });
 
   it("any other refusal → the server's own sentence in place", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     putReply = { status: 400, body: { code: "invalid_request", message: "Cổng phải là 587, 465, 25 hoặc 2525.", trace_id: "t" } };
     const el = await mount();
     await submitSave(el);
@@ -195,7 +203,7 @@ describe("test send", () => {
   }
 
   it("ok → toast 'Đã gửi. Kiểm tra hộp thư.' and a leaf line", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     const el = await mount();
     await sendTo(el, "a@b.vn");
     expect(T.success).toHaveBeenCalledWith("Đã gửi. Kiểm tra hộp thư.");
@@ -203,7 +211,7 @@ describe("test send", () => {
   });
 
   it("refused by the commune's server → toast 'Không gửi được: {error}' and a danger line", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     testReply = { status: 502, body: { code: "smtp_auth", message: "Máy chủ thư từ chối đăng nhập.", trace_id: "t" } };
     const el = await mount();
     await sendTo(el, "a@b.vn");
@@ -213,7 +221,7 @@ describe("test send", () => {
 
   it("after a send the settings are READ AGAIN: the stored last test replaces the session line", async () => {
     // Failed before: no GET followed the send, and the stored line was a "?".
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     const el = await mount();
     getReply = {
       status: 200,
@@ -231,7 +239,7 @@ describe("test send", () => {
   });
 
   it("nothing saved yet → the box is locked and says 'Lưu cấu hình trước khi gửi thử.' (user 09/10/2026)", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     getReply = { status: 200, body: { ...SAVED, configured: false } };
     const el = await mount();
     const recipient = box(el, "recipient");
@@ -242,14 +250,14 @@ describe("test send", () => {
   });
 
   it("saved → the box is open and the hint is gone", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     const el = await mount();
     expect(box(el, "recipient").disabled).toBe(false);
     expect(el.textContent).not.toContain("Lưu cấu hình trước khi gửi thử.");
   });
 
   it("network failure → 'Không gọi được máy chủ.'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.mail_server"]);
     testReply = "network";
     const el = await mount();
     await sendTo(el, "a@b.vn");

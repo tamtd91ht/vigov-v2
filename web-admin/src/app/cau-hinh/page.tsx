@@ -64,7 +64,8 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *   | Sơ đồ tổ chức   | `admin.org`    | chỉ nút ghi — tuyến đọc `any-authenticated`           |
  *   | Danh mục        | `admin.lookup` | chỉ nút ghi — cùng lý do                              |
  *   | Thời hạn xử lý  | `admin.sla`    | cả tab — `GET /sla` đòi khoá (ADR 0079 D1)             |
- *   | Thôn/Tổ dân phố | —              | không cổng — phần chỉ xem, tuyến `any-authenticated`  |
+ *   | Thôn/Tổ dân phố | `admin.residential_unit` | chỉ nút ghi — tuyến đọc `any-authenticated` (15/10/2026) |
+ *   | Lời hệ thống · Máy chủ thư · Kênh Zalo | `admin.system_message` · `admin.mail_server` · `admin.zalo_channel` | cả tab (15/10/2026) |
  *
  * Ẩn cả một phần mà máy chủ vẫn phục vụ là để GIAO DIỆN quyết định điều máy chủ không từ chối —
  * đúng hình dạng luật 5 cấm #1. Lý lẽ đầy đủ ở `features/cau-hinh/tab-danh-muc.tsx`.

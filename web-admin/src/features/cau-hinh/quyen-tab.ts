@@ -20,6 +20,10 @@ import type { identity_phienHienTaiRa } from "@/lib/api/schema.gen";
 import {
   ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
+  MAIL_SERVER_PERMISSION,
+  RESIDENTIAL_UNIT_PERMISSION,
+  SYSTEM_MESSAGE_PERMISSION,
+  ZALO_CHANNEL_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
   QUYEN_PHAN_QUYEN,
   QUYEN_QUAN_LY_DANH_MUC,
@@ -98,30 +102,39 @@ export function mapFieldWriteDecision(ketQua: KetQua<identity_phienHienTaiRa>): 
 }
 
 /**
- * Tab "Máy chủ thư" — `admin.lookup`. ONE key for read AND write, because the server declares that
- * key on all three routes (GET · PUT mail-settings, POST test-messages): unlike Danh mục, the read
- * is not open to every account, so the tab hides as a whole.
+ * Tab "Máy chủ thư" — `admin.mail_server` (owner 15/10/2026, bug sheet web-admin-141026 row 22; was
+ * `admin.lookup`). ONE key for read AND write: all three routes (GET · PUT mail-settings, POST
+ * test-messages) declare it, the read included, so the tab hides as a whole. `admin.lookup` alone no
+ * longer opens it.
  */
 export function mailServerTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
-  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+  return theoKhoaQuyen(ketQua, MAIL_SERVER_PERMISSION);
 }
 
 /**
- * Tab "Kênh Zalo" — `admin.lookup` (ADR 0074 #6, "như tab Máy chủ thư"): the key comms declares on
- * `GET · PUT zalo-channel-settings` and `GET zalo-links`, the reads included, so the tab hides as a
- * whole without it. Same key as Máy chủ thư; a separate function so the tab names its own gate.
+ * Tab "Kênh Zalo" — `admin.zalo_channel` (owner 15/10/2026; was `admin.lookup`, ADR 0074 #6): the key of
+ * every route the tab reads and writes — settings, linked staff, the commune's bot, Zalo groups and the
+ * launch-link QR — reads included, so the tab hides as a whole without it.
  */
 export function zaloChannelTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
-  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+  return theoKhoaQuyen(ketQua, ZALO_CHANNEL_PERMISSION);
 }
 
 /**
- * Tab "Lời hệ thống" — `admin.lookup`. The server declares that key on all nine routes (GET list ·
- * PUT override · DELETE override, for petitions, finance and reporting alike), read included, so the tab hides
- * as a whole without it. Same key as Máy chủ thư, a separate function so each tab names its own gate.
+ * Tab "Lời hệ thống" — `admin.system_message` (owner 15/10/2026; was `admin.lookup`). The key of every
+ * system-message route of petitions, finance and reporting, read included, so the tab hides as a whole.
  */
 export function systemMessagesTabDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
-  return theoKhoaQuyen(ketQua, QUYEN_QUAN_LY_DANH_MUC);
+  return theoKhoaQuyen(ketQua, SYSTEM_MESSAGE_PERMISSION);
+}
+
+/**
+ * Write half of "Thôn / Tổ dân phố" — `admin.residential_unit` (owner 15/10/2026; was `admin.org`): the
+ * key of the hamlet write and import routes. The tab itself has no gate (its read is any-authenticated);
+ * this only decides whether Nhập từ Excel · Thêm · Sửa · Xoá · Dùng lại are drawn.
+ */
+export function residentialUnitWriteDecision(ketQua: KetQua<identity_phienHienTaiRa>): QuyetDinhTab {
+  return theoKhoaQuyen(ketQua, RESIDENTIAL_UNIT_PERMISSION);
 }
 
 /**

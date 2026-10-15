@@ -134,7 +134,7 @@ type Units = KetQua<identity_danhSachBoPhanRa>;
 
 /**
  * "Cấu hình → Kênh Zalo" (ADR 0074 #6), laid out by spec 11 and the prototype's `ZaloChannelPanel`
- * (ADR 0079). One key, `admin.lookup`, for read and write (like Máy chủ thư), so the tab hides as a
+ * (ADR 0079). One key, `admin.zalo_channel` (since 15/10/2026; was `admin.lookup`), for read and write, so the tab hides as a
  * whole without it (convenience; comms refuses).
  *
  * EVERY CHANGE SAVES AT ONCE (spec 11): the whole settings row is PUT — the server's PUT replaces the
@@ -1313,7 +1313,7 @@ function scopeOptions(units: Units | null): ScopeOption[] {
 
 /**
  * "Nhóm Zalo" — ADR 0092 #1–#3, #8, against `zalo-groups` and `zalo-group-pairing-codes`. Its own reads
- * and writes, like `CommuneBotSection`; never the settings autosave. Same key as the tab (`admin.lookup`),
+ * and writes, like `CommuneBotSection`; never the settings autosave. Same key as the tab (`admin.zalo_channel`),
  * so it is only mounted inside the gate; comms checks it again.
  *
  * THE CODE IS A CREDENTIAL: it lives in the create dialog's state only, from the 201 until the dialog

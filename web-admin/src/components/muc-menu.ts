@@ -4,6 +4,10 @@ import { coQuyen } from "@/lib/quyen";
 import {
   ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
+  MAIL_SERVER_PERMISSION,
+  RESIDENTIAL_UNIT_PERMISSION,
+  SYSTEM_MESSAGE_PERMISSION,
+  ZALO_CHANNEL_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN,
   QUYEN_PHAN_QUYEN,
   QUYEN_QUAN_LY_DANH_MUC,
@@ -63,12 +67,20 @@ export type MucMenu = {
  * Giữ lại thì người chỉ có `admin.user` thấy mục Cấu hình dẫn tới một màn không còn phần nào khoá ấy
  * mở ra — lối vào việc của họ nay là mục `Người dùng`.
  *
+ * BỐN KHOÁ VÀO NGÀY 15/10/2026 (chủ dự án, bảng lỗi web-admin-141026 dòng 22): Thôn / Tổ dân phố, Lời
+ * hệ thống, Máy chủ thư, Kênh Zalo rời `admin.lookup` / `admin.org` sang khoá riêng. Thiếu chúng ở đây thì
+ * người chỉ giữ, ví dụ, `admin.mail_server` không thấy lối vào tab duy nhất khoá ấy mở.
+ *
  * Ẩn mục menu là tiện dụng, không phải biện pháp: mọi tuyến sau các tab tự kiểm khoá (luật 5, cấm #1).
  */
 export const KHOA_MO_CAU_HINH: readonly string[] = [
   QUYEN_QUAN_LY_SO_DO, // Sơ đồ tổ chức — nút ghi
+  RESIDENTIAL_UNIT_PERMISSION, // Thôn / Tổ dân phố + Loại đơn vị dân cư — nút ghi (15/10/2026)
   QUYEN_QUAN_LY_DANH_MUC, // Danh mục — nút ghi
+  SYSTEM_MESSAGE_PERMISSION, // Lời hệ thống — cả tab (15/10/2026)
   QUYEN_CAU_HINH_THOI_HAN, // Thời hạn xử lý — bảng thời hạn và mọi nút ghi
+  MAIL_SERVER_PERMISSION, // Máy chủ thư — cả tab (15/10/2026)
+  ZALO_CHANNEL_PERMISSION, // Kênh Zalo — cả tab (15/10/2026)
 ];
 
 /**

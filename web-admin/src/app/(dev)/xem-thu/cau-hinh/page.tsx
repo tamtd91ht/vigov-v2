@@ -11,6 +11,10 @@ import {
 import {
   ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
+  MAIL_SERVER_PERMISSION,
+  RESIDENTIAL_UNIT_PERMISSION,
+  SYSTEM_MESSAGE_PERMISSION,
+  ZALO_CHANNEL_PERMISSION,
   QUYEN_CAU_HINH_THOI_HAN, // vi-name-ok: existing constant of lib/quyen.ts, imported not declared
   QUYEN_QUAN_LY_DANH_MUC, // vi-name-ok: existing constant of lib/quyen.ts, imported not declared
   QUYEN_QUAN_LY_SO_DO, // vi-name-ok: existing constant of lib/quyen.ts, imported not declared
@@ -44,6 +48,11 @@ const SETTINGS_PERMISSIONS: readonly string[] = [
   QUYEN_CAU_HINH_THOI_HAN,
   ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
+  // The four keys split out of admin.lookup / admin.org on 15/10/2026 (migration identity 0032).
+  RESIDENTIAL_UNIT_PERMISSION,
+  SYSTEM_MESSAGE_PERMISSION,
+  MAIL_SERVER_PERMISSION,
+  ZALO_CHANNEL_PERMISSION,
 ];
 
 /** `?quyen=none`: an officer with ordinary work keys and no configuration key at all. */

@@ -99,7 +99,7 @@ export function nhanSoDem(so: number | null): string {
 
 /**
  * Trạng thái rỗng của tab §2 — nói đúng một điều: đơn vị chưa có địa bàn nào. Không phải lỗi. Việc
- * thêm được hay không là câu của NÚT (có `admin.org` thì có nút, không thì câu `NO_WRITE_PERMISSION`
+ * thêm được hay không là câu của NÚT (có `admin.residential_unit` thì có nút, không thì câu `NO_WRITE_PERMISSION`
  * ở `residential-unit-form.ts`), nên câu này không nói thay.
  *
  * "Địa bàn" chứ không phải "bản ghi": người đọc màn hình này là cán bộ, không phải người lập trình.

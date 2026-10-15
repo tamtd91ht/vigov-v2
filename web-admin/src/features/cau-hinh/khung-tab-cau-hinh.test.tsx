@@ -20,7 +20,9 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }))
 
 const { KhungTabCauHinh, SystemTabFrame } = await import("./khung-tab-cau-hinh");
 
-const ALL_KEYS = ["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read"];
+/** The four split-out configuration keys (owner 15/10/2026, migration identity 0032). */
+const SPLIT_KEYS = ["admin.residential_unit", "admin.system_message", "admin.mail_server", "admin.zalo_channel"];
+const ALL_KEYS = ["admin.user", "admin.role", "admin.org", "admin.lookup", "admin.sla", "admin.audit", "asset.read", ...SPLIT_KEYS];
 const tabOrder = (html: string) => [...html.matchAll(/role="tab"[^>]*>([^<]+)<\/button>/g)].map((m) => m[1]);
 /** Id of the selected tab button (`aria-selected` renders before `id`). */
 const selectedTab = (html: string) => html.match(/role="tab" aria-selected="true"[^>]*\sid="([^"]+)"/)?.[1];
@@ -54,7 +56,7 @@ describe("khung tab màn Cấu hình", () => {
   });
 
   it("đủ quyền trừ `admin.sla` → thanh bảy tab (không Thời hạn xử lý, Tự động hoá); tab đầu được chọn và là tab duy nhất có tabindex=0", () => {
-    phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit", "admin.org"]);
+    phienGia = phienCo(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.audit", "admin.org", ...SPLIT_KEYS]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
     expect(html).toContain('role="tablist"');
     expect(html).toContain('aria-label="Các phần cấu hình"');
@@ -91,12 +93,36 @@ describe("khung tab màn Cấu hình", () => {
     expect(html).not.toContain("panel-cau-hinh-nhat-ky-he-thong");
   });
 
-  it("CA BỊ TỪ CHỐI: `admin.lookup` mà thiếu `asset.read` → có Máy chủ thư, không có Trường bản đồ", () => {
+  it("CA BỊ TỪ CHỐI: chỉ `admin.lookup` → KHÔNG Lời hệ thống, Máy chủ thư, Kênh Zalo (khoá riêng từ 15/10/2026), không Trường bản đồ", () => {
     phienGia = phienCo(["admin.lookup"]);
     const html = renderToStaticMarkup(<KhungTabCauHinh />);
-    expect(html).toContain(">Máy chủ thư</button>");
+    expect(html).not.toContain(">Máy chủ thư</button>");
+    expect(html).not.toContain(">Lời hệ thống</button>");
+    expect(html).not.toContain(">Kênh Zalo</button>");
+    expect(html).not.toContain("panel-cau-hinh-may-chu-thu");
+    expect(html).not.toContain("panel-cau-hinh-loi-he-thong");
+    expect(html).not.toContain("panel-cau-hinh-kenh-zalo");
     expect(html).not.toContain(">Trường bản đồ</button>");
     expect(html).not.toContain("panel-cau-hinh-truong-ban-do");
+    // Only the three ungated tabs.
+    expect(soNutTab(html)).toBe(3);
+  });
+
+  it.each([
+    ["admin.system_message", "Lời hệ thống", "loi-he-thong"],
+    ["admin.mail_server", "Máy chủ thư", "may-chu-thu"],
+    ["admin.zalo_channel", "Kênh Zalo", "kenh-zalo"],
+  ])("chỉ `%s` → đúng tab %s cộng ba tab không cổng; hai tab khoá tách kia vẫn ẩn", (key, label, id) => {
+    phienGia = phienCo([key]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(tabOrder(html)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục", label]);
+    expect(html).toContain(`panel-cau-hinh-${id}`);
+  });
+
+  it("`admin.residential_unit` không thêm tab nào — Thôn / Tổ dân phố vốn hiện cho mọi tài khoản", () => {
+    phienGia = phienCo(["admin.residential_unit"]);
+    const html = renderToStaticMarkup(<KhungTabCauHinh />);
+    expect(tabOrder(html)).toEqual(["Sơ đồ tổ chức", "Thôn / Tổ dân phố", "Danh mục"]);
   });
 
   it("CA BỊ TỪ CHỐI: `admin.org` không còn mở Nhận diện xã ở đây — tab ấy đã sang /he-thong (12/10/2026)", () => {

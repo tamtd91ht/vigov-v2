@@ -148,7 +148,7 @@ function session(permissions: readonly string[]): KetQua<identity_phienHienTaiRa
 }
 
 describe("Danh mục — which group offers the import, to whom", () => {
-  it("all seven lookup groups have an import (one route per owning service, ADR 0059 §3), each on admin.lookup — Loại đơn thư has none", () => {
+  it("all seven lookup groups have an import (one route per owning service, ADR 0059 §3), each on its write key — Loại đơn thư has none", () => {
     expect(Object.keys(CATALOGUE_IMPORTS)).toEqual([
       "loaiTaiNguyenBanDo",
       "loaiVanBan",
@@ -163,10 +163,19 @@ describe("Danh mục — which group offers the import, to whom", () => {
     expect([...Object.keys(CATALOGUE_IMPORTS)].sort()).toEqual([...importable].sort());
     expect(catalogueImportFor("citizenLetterType", session(["admin.lookup"]))).toBeNull();
     for (const g of importable) {
-      expect(CATALOGUE_IMPORTS[g]?.permission).toBe("admin.lookup");
-      expect(catalogueImportFor(g, session(["admin.lookup"]))).not.toBeNull();
-      expect(catalogueImportFor(g, session(["admin.org", "admin.lookups"]))).toBeNull();
+      // Loại đơn vị dân cư writes on `admin.residential_unit` since 15/10/2026 (bug sheet web-admin-141026 row 22).
+      const key = g === "loaiDonViDanCu" ? "admin.residential_unit" : "admin.lookup";
+      expect(CATALOGUE_IMPORTS[g]?.permission).toBe(key);
+      expect(catalogueImportFor(g, session([key]))).not.toBeNull();
+      expect(catalogueImportFor(g, session(["admin.org", "admin.lookups", "admin.residential_units"]))).toBeNull();
     }
+  });
+
+  it("Loại đơn vị dân cư: `admin.residential_unit` opens its import; DENIED with `admin.lookup` / `admin.org` alone", () => {
+    expect(catalogueImportFor("loaiDonViDanCu", session(["admin.residential_unit"]))).not.toBeNull();
+    expect(catalogueImportFor("loaiDonViDanCu", session(["admin.lookup", "admin.org"]))).toBeNull();
+    // And the other way: the residential key opens no other group's import.
+    expect(catalogueImportFor("loaiVanBan", session(["admin.residential_unit"]))).toBeNull();
   });
 
   it("allowed: `admin.lookup` on the group that has an import", () => {
@@ -200,6 +209,12 @@ describe("Danh mục — which group offers the import, to whom", () => {
     expect(importGroupFor(groups, "loaiTaiNguyenBanDo", session(["admin.lookups"]))).toBeNull();
     expect(importGroupFor(groups, "loaiTaiNguyenBanDo", null)).toBeNull();
     expect(importGroupFor(null, "loaiTaiNguyenBanDo", session(["admin.lookup"]))).toBeNull();
+  });
+
+  it("the tab's import button on Loại đơn vị dân cư follows `admin.residential_unit`, not `admin.lookup`", () => {
+    expect(importGroupFor(groups, "loaiDonViDanCu", session(["admin.residential_unit"]))).toBe("loaiDonViDanCu");
+    expect(importGroupFor(groups, "loaiDonViDanCu", session(["admin.lookup"]))).toBeNull();
+    expect(importGroupFor(groups, "loaiVanBan", session(["admin.residential_unit"]))).toBeNull();
   });
 
   it("the button reaches the page: '⬆ Nhập từ Excel' rendered above the filter row", () => {
@@ -360,15 +375,16 @@ describe("the six lookupImportTarget groups — registered in CATALOGUE_IMPORTS"
   ];
 
   for (const c of cases) {
-    it(`${c.noun}: its owner's three routes, rows in \`${c.field}\`, gated on admin.lookup (allowed and DENIED)`, () => {
+    const key = c.group === "loaiDonViDanCu" ? "admin.residential_unit" : "admin.lookup";
+    it(`${c.noun}: its owner's three routes, rows in \`${c.field}\`, gated on ${key} (allowed and DENIED)`, () => {
       expect(c.target.routes).toEqual({
         template: `${c.base}/import-template`,
         previews: `${c.base}/import-previews`,
         imports: `${c.base}/imports`,
       });
       expect(c.target.rowsField).toBe(c.field);
-      expect(CATALOGUE_IMPORTS[c.group]?.permission).toBe("admin.lookup");
-      expect(catalogueImportFor(c.group, session(["admin.lookup"]))).not.toBeNull();
+      expect(CATALOGUE_IMPORTS[c.group]?.permission).toBe(key);
+      expect(catalogueImportFor(c.group, session([key]))).not.toBeNull();
       expect(catalogueImportFor(c.group, session(["admin.org", "admin.user"]))).toBeNull();
       expect(catalogueImportFor(c.group, null)).toBeNull();
     });

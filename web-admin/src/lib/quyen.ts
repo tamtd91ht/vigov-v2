@@ -450,6 +450,36 @@ export const ASSET_READ_PERMISSION = "asset.read";
  */
 export const AUDIT_READ_PERMISSION = "admin.audit";
 
+/*
+ * FOUR CONFIGURATION KEYS SPLIT OUT OF `admin.lookup` / `admin.org` (owner decision 15/10/2026, tester bug
+ * sheet web-admin-141026 row 22), seeded by `service-identity/migrations/0032_split_configuration_permissions.sql`
+ * in group QUẢN TRỊ. Each is the key of ONE Cấu hình tab; none implies `admin.lookup` or `admin.org`, and
+ * neither of those implies any of them (rule 5, invariant 3b). The migration pre-granted them to every
+ * role that already reached these tabs, so nobody loses a screen on the day the gates move.
+ *
+ * HIDING IS CONVENIENCE, NOT PROTECTION — the owning service checks the key on every call (rule 5, #1).
+ */
+
+/**
+ * `admin.residential_unit` — "Cấu hình thôn/tổ dân phố". The WRITE key of the hamlets themselves
+ * (`POST/PATCH /api/v1/residential-units`, its three import routes) AND of the "Loại đơn vị dân cư"
+ * catalogue (`POST/PATCH/DELETE /api/v1/residential-unit-types`, its three import routes). The reads stay
+ * any-authenticated (hamlet names sit in every petition filter), so the Thôn tab never hides on it.
+ */
+export const RESIDENTIAL_UNIT_PERMISSION = "admin.residential_unit";
+
+/** `admin.system_message` — "Cấu hình lời hệ thống". Every route of the tab, read included. */
+export const SYSTEM_MESSAGE_PERMISSION = "admin.system_message";
+
+/** `admin.mail_server` — "Cấu hình máy chủ thư". GET · PUT mail-settings and POST test-messages. */
+export const MAIL_SERVER_PERMISSION = "admin.mail_server";
+
+/**
+ * `admin.zalo_channel` — "Cấu hình kênh Zalo". Every route of the Kênh Zalo tab, reads included —
+ * the settings, the linked staff, the commune's bot, the Zalo groups and the launch-link QR.
+ */
+export const ZALO_CHANNEL_PERMISSION = "admin.zalo_channel";
+
 /**
  * `feedback.unmask` — "Xem đầy đủ họ tên và số điện thoại người gửi"
  * (`service-identity/migrations/0007_quyen_phan_loai_va_xem_day_du.sql:59`). No screen gates on it

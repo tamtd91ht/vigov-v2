@@ -18,8 +18,8 @@ import { getCommuneLaunchLink } from "@/lib/api/commune-launch-link";
  * must see the commune's app as the commune's own. No "Chép liên kết" either (owner 13/10/2026): the
  * link carries ViHAT's App ID; copying it is the operator console's action only.
  *
- * Mounted only inside `ZaloChannelTab`'s `admin.lookup` gate — the route's own key, so no second gate
- * (platform checks it again). NOT TRAILED (ADR 0070 §13/10 #5): viewing, downloading and printing are
+ * Mounted only inside `ZaloChannelTab`'s `admin.zalo_channel` gate (since 15/10/2026; was `admin.lookup`),
+ * so no second gate; platform checks the route's own key again. NOT TRAILED (ADR 0070 §13/10 #5): viewing, downloading and printing are
  * not writes.
  *
  * Mirrors `platform-admin/src/features/communes/launch-link-card.tsx` (bf1fa420) for the PNG and the

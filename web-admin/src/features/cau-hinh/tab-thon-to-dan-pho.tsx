@@ -14,7 +14,6 @@ import { layLoaiDonViDanCu } from "@/lib/api/danh-muc-nghiep-vu";
 import type { KetQua } from "@/lib/api/goi";
 import type { identity_danhSachLoaiDonViDanCuRa, identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
-import { QUYEN_QUAN_LY_SO_DO, quyetDinhTheoKhoa } from "@/lib/quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 
 import { ConfigDialog } from "./config-dialog";
@@ -34,6 +33,7 @@ import { RESIDENTIAL_UNIT_IMPORT_TARGET } from "./excel-import-targets";
 import { DIALOG_FOOTER_CLASS } from "./org-unit-dialog-classes";
 import { NUT_HUY, NUT_LUU } from "./nhan-so-do";
 import { THON_RONG, loaiDonVi, nhanLoaiDonVi } from "./nhan-thon";
+import { residentialUnitWriteDecision } from "./quyen-tab";
 import {
   ADD_BUTTON,
   CONFIRM_RETIRE_BUTTON,
@@ -89,7 +89,8 @@ import {
  * ─────────────────────────────────────────────────────────────────────────────────────────────
  * DANH SÁCH HIỆN CHO MỌI TÀI KHOẢN, CHỈ NÚT GHI MỚI ẨN — cùng khuôn tab Sơ đồ tổ chức, và vì cùng một
  * lý do ở máy chủ: `GET /api/v1/residential-units` khai `any-authenticated` (tên địa bàn có ở bộ lọc
- * phản ánh), còn hai tuyến ghi và ba tuyến nhập khai `RequirePermission("admin.org")`. Ẩn nút là TIỆN
+ * phản ánh), còn hai tuyến ghi và ba tuyến nhập khai `RequirePermission("admin.residential_unit")` (chủ
+ * dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22; trước đó `admin.org`). Ẩn nút là TIỆN
  * DỤNG, không phải biện pháp: máy chủ kiểm khoá trên TỪNG yêu cầu (luật 5, cấm #1).
  *
  * "XOÁ" IS `active: false` (ADR 0059 §2; bug sheet row 31). The prototype's Trash2 reads "Xoá" and asks
@@ -144,7 +145,7 @@ export function TabThonToDanPho() {
 
   const phien = usePhien();
   /** Ba trạng thái: chưa đọc xong phiên thì chưa vẽ nút ghi nào. */
-  const decision = phien === null ? null : quyetDinhTheoKhoa(phien, QUYEN_QUAN_LY_SO_DO);
+  const decision = phien === null ? null : residentialUnitWriteDecision(phien);
   const canWrite = decision !== null && decision.hien;
 
   /**
@@ -335,7 +336,7 @@ function countCell(n: number | null): string {
 /**
  * The tab's body: import, add, the open form, the list. PURE PRESENTATION and EXPORTED so the test
  * renders the allowed AND the denied case with `react-dom/server` — "no write button without
- * `admin.org`" is a fact of this JSX, not of a pure function.
+ * `admin.residential_unit`" is a fact of this JSX, not of a pure function.
  */
 export function ResidentialUnitsView({
   load,

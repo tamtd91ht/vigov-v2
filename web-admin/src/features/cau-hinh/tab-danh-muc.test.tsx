@@ -183,7 +183,12 @@ describe("one table across groups (spec 05 §3)", () => {
   it("D22 — the add row still lists EVERY writable group, empty ones included", () => {
     const html = view(
       { loaiVanBan: [entry(TANG_DON_VI)] },
-      { open: { kind: "add", idempotencyKey: "k" }, draft: { ...EMPTY_DRAFT, group: "loaiVanBan" } },
+      // Both write keys (Loại đơn vị dân cư is `admin.residential_unit` since 15/10/2026).
+      {
+        open: { kind: "add", idempotencyKey: "k" },
+        draft: { ...EMPTY_DRAFT, group: "loaiVanBan" },
+        canWriteResidentialUnitTypes: true,
+      },
     );
     expect(count(html, "<option ")).toBe(8);
     expect(html).toContain(">Mức ưu tiên nhiệm vụ</option>");
@@ -428,7 +433,8 @@ describe("the add row (spec 05 §2)", () => {
   }
 
   it("group select of the writable groups · label · a WORKING 'Màu' · Thêm / Huỷ — no 'Mã' field", () => {
-    const html = addRow({ draft: { ...EMPTY_DRAFT, group: "loaiVanBan", color: "#2fb1f9" } });
+    // Both write keys: every group with a write route is offered.
+    const html = addRow({ canWriteResidentialUnitTypes: true, draft: { ...EMPTY_DRAFT, group: "loaiVanBan", color: "#2fb1f9" } });
     expect(html).toContain("sm:grid-cols-[16rem_1fr_6rem_auto]");
     expect(html).toContain(">Nhóm danh mục</label>");
     expect(count(html, "<option ")).toBe(8);
@@ -617,5 +623,66 @@ describe("the add row's own refusals use the prototype's words (ADR 0079 lô 5 Q
       label: "Chợ và thương mại",
       code: "cho-va-thuong-mai",
     });
+  });
+});
+
+/**
+ * "Loại đơn vị dân cư" writes on `admin.residential_unit`, every other group on `admin.lookup` (owner
+ * 15/10/2026, bug sheet web-admin-141026 row 22). Each row's buttons follow ITS group's key; the rows
+ * themselves show for every account (the reads are any-authenticated).
+ */
+describe("per-group write key — Loại đơn vị dân cư on admin.residential_unit", () => {
+  const ITEMS: Items = {
+    loaiVanBan: [entry(TANG_DON_VI, { id: "vb", label: "Công văn" })],
+    loaiDonViDanCu: [entry(TANG_DON_VI, { id: "dv", code: "thon", label: "Thôn" })],
+  };
+  const groupOptions = (html: string) =>
+    [...(html.match(/<select id="catalogue-add-group"[^>]*>(.*?)<\/select>/)?.[1] ?? "").matchAll(/>([^<]+)<\/option>/g)].map(
+      (m) => m[1],
+    );
+
+  it("ONLY admin.lookup: Loại văn bản writable; Loại đơn vị dân cư shows with an EMPTY actions cell (DENIED)", () => {
+    const html = view(ITEMS, { canWrite: true, canWriteResidentialUnitTypes: false });
+    expect(html).toContain(editLabel("Công văn"));
+    expect(html).toContain(">Thôn<");
+    expect(html).not.toContain(editLabel("Thôn"));
+    expect(html).not.toContain(deleteLabel("Thôn"));
+    // Columns stay aligned: the actions head exists, the residential row has an empty cell under it.
+    expect(html).toContain("<td></td>");
+  });
+
+  it("ONLY admin.residential_unit: Loại đơn vị dân cư writable; Loại văn bản read-only (DENIED); Thêm mục shown", () => {
+    const html = view(ITEMS, { canWrite: false, canWriteResidentialUnitTypes: true });
+    expect(html).toContain(editLabel("Thôn"));
+    expect(html).toContain(deleteLabel("Thôn"));
+    expect(html).not.toContain(editLabel("Công văn"));
+    expect(html).not.toContain(deleteLabel("Công văn"));
+    expect(html).toContain("Thêm mục");
+  });
+
+  it("the add row offers only the groups this account may write", () => {
+    const open = { open: { kind: "add", idempotencyKey: "k" } as const };
+    const lookupOnly = groupOptions(
+      view({}, { ...open, canWrite: true, canWriteResidentialUnitTypes: false, draft: { ...EMPTY_DRAFT, group: "loaiVanBan" } }),
+    );
+    expect(lookupOnly).toHaveLength(7);
+    expect(lookupOnly).not.toContain("Loại đơn vị dân cư");
+    const residentialOnly = groupOptions(
+      view({}, { ...open, canWrite: false, canWriteResidentialUnitTypes: true, draft: { ...EMPTY_DRAFT, group: "loaiDonViDanCu" } }),
+    );
+    expect(residentialOnly).toEqual(["Loại đơn vị dân cư"]);
+  });
+
+  it("DENIED: neither key — no Thêm mục, no actions column, the rows still show", () => {
+    const html = view(ITEMS, { canWrite: false, canWriteResidentialUnitTypes: false });
+    expect(html).toContain(">Thôn<");
+    expect(html).toContain(">Công văn<");
+    expect(html).not.toContain("Thêm mục");
+    expect(html).not.toContain("Thao tác");
+  });
+
+  it("the prop is fail closed: absent = admin.lookup alone does NOT write Loại đơn vị dân cư", () => {
+    const html = view(ITEMS, { canWrite: true });
+    expect(html).not.toContain(editLabel("Thôn"));
   });
 });

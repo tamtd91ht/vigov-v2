@@ -638,11 +638,19 @@ describe("Ai đã ghép nối — directory joined with links by staff code", ()
   });
 });
 
-describe("ZaloChannelTab — admin.lookup, denied case first", () => {
-  it("DENIED: without admin.lookup the tab says so and requests NOTHING — the bot route included", async () => {
-    H.phien = session(["admin.user", "admin.sla", "admin.lookups"]);
+describe("ZaloChannelTab — admin.zalo_channel, denied case first", () => {
+  it("DENIED: without admin.zalo_channel the tab says so and requests NOTHING — the bot route included", async () => {
+    H.phien = session(["admin.user", "admin.sla", "admin.zalo_channels"]);
     const el = await mount();
     expect(el.textContent).toContain("không có quyền cấu hình kênh Zalo");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("DENIED: admin.lookup (its key before 15/10/2026) no longer opens it — no request, no launch QR", async () => {
+    H.phien = session(["admin.lookup", "admin.mail_server", "admin.system_message"]);
+    const el = await mount();
+    expect(el.textContent).toContain("không có quyền cấu hình kênh Zalo");
+    expect(el.querySelector("[data-launch-qr]")).toBeNull();
     expect(calls).toHaveLength(0);
   });
 
@@ -654,7 +662,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("ALLOWED: one tick saves at once — the WHOLE row is PUT, then 'Đã lưu.'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     const el = await mount();
     expect(calls.map((c) => c.url).sort()).toEqual([
       "/api/v1/commune-launch-link",
@@ -665,7 +673,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
       "/api/v1/zalo-groups",
       "/api/v1/zalo-links",
     ]);
-    // ADR 0070 §13/10: the commune's launch QR, one code, inside the same admin.lookup gate.
+    // ADR 0070 §13/10: the commune's launch QR, one code, inside the same admin.zalo_channel gate.
     expect(el.querySelectorAll('[data-launch-qr] svg[role="img"]')).toHaveLength(1);
     expect(el.textContent).toContain("Nguyễn Văn A");
     act(() => box(el, "digest.weekly").click());
@@ -698,7 +706,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   }
 
   it("'nhắc trước' saves at once with the WHOLE row; the saved value is what the select then shows", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     const el = await mount();
     pickDueSoon(el, "7");
     await settle();
@@ -716,7 +724,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("'Theo chuông' (empty) → due_soon_days: null, sent as a key, not left out", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     const el = await mount();
     pickDueSoon(el, "");
     await settle();
@@ -726,7 +734,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("422 due_soon_days_out_of_range → the server's sentence UNDER the select, no toast, value back to stored", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     putAnswer = {
       status: 422,
       body: { code: "due_soon_days_out_of_range", message: "Số ngày nhắc trước khi đến hạn phải từ 1 đến 14, hoặc để trống." },
@@ -752,7 +760,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("another 422 on the same PUT stays a toast — only due_soon_days_out_of_range belongs to the field", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     putAnswer = { status: 422, body: { code: "unknown_kind", message: "Có loại nhắc việc không được hỗ trợ." } };
     const el = await mount();
     pickDueSoon(el, "9");
@@ -762,7 +770,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("'Văn bản, đơn thư quá hạn' switches qua-han + chua-cu-nguoi + leo-thang TOGETHER, on and off", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     // Half-state stored: chua-cu-nguoi alone → unchecked; one tick sets all three.
     stored = { ...SETTINGS, kinds: ["nhiem-vu.sap-den-han", "nhiem-vu.qua-han", "van-ban.chua-cu-nguoi"] };
     const el = await mount();
@@ -786,7 +794,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("a refusal from the server is shown in its words and the screen goes back to what is stored", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     putAnswer = { status: 422, body: { code: "overdue_cadence_required", message: "Đã chọn nhắc việc quá hạn thì phải đặt nhịp nhắc." } };
     const el = await mount();
     act(() => box(el, "digest.weekly").click());
@@ -796,7 +804,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("'Chỉ người chưa ghép nối' filters to the unlinked, and saves nothing", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     const el = await mount();
     expect(el.querySelector('[data-staff-code="CB-00123"]')).not.toBeNull();
     act(() => el.querySelector<HTMLInputElement>('input[name="only_missing"]')!.click());
@@ -807,7 +815,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("REGRESSION: filter on and nobody unlinked → the empty list, no invented sentence", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     directoryAnswer = { status: 200, body: { items: [DIRECTORY[0]] } };
     const el = await mount();
     act(() => el.querySelector<HTMLInputElement>('input[name="only_missing"]')!.click());
@@ -820,7 +828,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("directory refused (500) → the tab still works on the linked list and says why", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     directoryAnswer = { status: 500, body: { code: "internal", message: "Máy chủ bận" } };
     const el = await mount();
     expect(el.textContent).toContain("Chưa đọc được danh bạ cán bộ");
@@ -828,7 +836,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("switching ON with no kind is refused on the spot: nothing is sent, the switch stays off", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = OFF;
     const el = await mount();
     const sw = el.querySelector<HTMLButtonElement>('button[role="switch"]')!;
@@ -840,7 +848,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
   });
 
   it("REGRESSION: an autosave does not erase the §0 warning (the PUT reply has no platform_ready)", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = { ...SETTINGS, platform_ready: false };
     const el = await mount();
     expect(el.textContent).toContain("Chưa có con bot nào phục vụ xã");
@@ -853,7 +861,7 @@ describe("ZaloChannelTab — admin.lookup, denied case first", () => {
 
 describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   it("shared bot: pill 'Bot chung', shared description, empty token; check / webhook / retire HIDDEN; no '?'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     const el = await mount();
     const sec = botSection(el);
     expect(sec.querySelector("[data-bot-pill]")!.textContent).toBe("Bot chung");
@@ -876,7 +884,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("own bot: pill 'Bot riêng · {tên}', token stays EMPTY with '••••••••', last check and webhook lines", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     const el = await mount();
     const sec = botSection(el);
@@ -894,7 +902,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("the bot read failing is said inside §3 and does not take the rest of the tab down", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = null;
     const el = await mount();
     expect(botSection(el).textContent).toContain("Máy chủ bận");
@@ -903,7 +911,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("ADOPT: nothing is sent before the confirmation naming live_link_count; then the token goes up and is cleared", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botAnswers["PUT /api/v1/zalo-bots/current"] = {
       status: 200,
       body: { bot: OWN_BOT.bot, adopted: true, ended_link_count: 2 },
@@ -934,7 +942,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("CANCEL the switch: nothing is sent", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     const el = await mount();
     const sec = botSection(el);
     typeInto(sec.querySelector<HTMLInputElement>("#zalo-bot-token")!, TOKEN_FAKE);
@@ -949,7 +957,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("own bot, name/link only (no token): saved at once, no confirmation, no token key", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["PUT /api/v1/zalo-bots/current"] = { status: 200, body: { bot: OWN_BOT.bot, adopted: false, ended_link_count: 0 } };
     const el = await mount();
@@ -963,7 +971,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("own bot + NEW token = possible replace → confirmed with the count first", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     const el = await mount();
     const sec = botSection(el);
@@ -977,7 +985,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("a name not starting with 'Bot' is refused on the spot; nothing is sent", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     const el = await mount();
     const sec = botSection(el);
@@ -989,7 +997,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("server refusal on save is shown in its words (422 zalo_token_rejected)", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["PUT /api/v1/zalo-bots/current"] = {
       status: 422,
@@ -1004,7 +1012,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("Kiểm tra kết nối: POST check, the outcome's sentence as a toast", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["POST /api/v1/zalo-bots/current/check"] = {
       status: 200,
@@ -1018,7 +1026,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("Q19 wording: an unexplained failure says the prototype's sentence — check 'Không kiểm tra được.', save 'Chưa lưu được…'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     // A body that is not httpx.Error (a proxy page) = no server sentence = LOI_KHONG_RO underneath.
     botAnswers["POST /api/v1/zalo-bots/current/check"] = { status: 502, body: {} };
@@ -1034,7 +1042,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("Đăng ký webhook: the secret is shown ONCE with its sentence, and gone for good after 'Tôi đã chép, đóng'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["POST /api/v1/zalo-bots/current/webhook"] = {
       status: 200,
@@ -1062,7 +1070,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("webhook refused by Zalo: no secret box, 'Chưa đăng ký được.'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["POST /api/v1/zalo-bots/current/webhook"] = {
       status: 200,
@@ -1076,7 +1084,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("webhook refused for another reason: 'Chưa đăng ký được.' + the real reason, never 'Kiểm tra lại mã bot.'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["POST /api/v1/zalo-bots/current/webhook"] = {
       status: 200,
@@ -1091,7 +1099,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("webhook request refused by comms (409): 'Chưa đăng ký được.' + comms' sentence", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["POST /api/v1/zalo-bots/current/webhook"] = {
       status: 409,
@@ -1106,7 +1114,7 @@ describe("§3 Con bot của xã — zalo-bots/current (ADR 0079 Q1)", () => {
   });
 
   it("Quay về bot chung: count shown, reason REQUIRED, DELETE {reason}, revoke_notice shown", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = OWN_BOT;
     botAnswers["DELETE /api/v1/zalo-bots/current"] = {
       status: 200,
@@ -1221,7 +1229,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("empty list: the one how-it-works sentence; 'Tạo mã gắn nhóm' enabled", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     const el = await mount();
     const sec = groupsSection(el);
     expect(sec.querySelector("[data-groups-empty]")!.textContent).toBe(GROUPS_HOW_IT_WORKS);
@@ -1230,7 +1238,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("list: commune-wide, a unit, a removed unit (warned); kinds count + §2 names; linked at · by; no chat id", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     groupsNow = { status: 200, body: { items: [COMMUNE_GROUP, UNIT_GROUP, REMOVED_GROUP], supported_kinds: GROUP_KINDS } };
     const el = await mount();
     const rows = Array.from(groupsSection(el).querySelectorAll<HTMLElement>("li[data-group-id]"));
@@ -1246,7 +1254,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("the list read failing is said inside the section; the rest of the tab stays", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     groupsNow = { status: 503, body: { code: "staff_names_unavailable", message: "Tạm thời không tải được họ tên cán bộ." } };
     const el = await mount();
     expect(groupsSection(el).querySelector('[role="alert"]')!.textContent).toBe("Tạm thời không tải được họ tên cán bộ.");
@@ -1254,7 +1262,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("DISABLED with the reason when the channel is off", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = OFF;
     const el = await mount();
     expect(button(groupsSection(el), "Tạo mã gắn nhóm").disabled).toBe(true);
@@ -1262,7 +1270,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("DISABLED with the reason when no bot serves the commune (platform_ready false)", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = { ...WITH_GROUP_KINDS, platform_ready: false };
     const el = await mount();
     expect(button(groupsSection(el), "Tạo mã gắn nhóm").disabled).toBe(true);
@@ -1270,7 +1278,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("CREATE: boxes = supported_kinds ∩ the commune's enabled kinds; none ticked → refused on the spot; payload; code once", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = WITH_GROUP_KINDS;
     groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = {
       status: 201,
@@ -1316,7 +1324,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("CREATE 'Toàn xã' sends org_unit_id: null as a key", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = WITH_GROUP_KINDS;
     groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = {
       status: 201,
@@ -1328,7 +1336,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("an expired code says so and cannot be copied", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = WITH_GROUP_KINDS;
     groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = {
       status: 201,
@@ -1346,7 +1354,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
     ["zalo_channel_disabled", 409, "form"],
     ["zalo_bot_not_configured", 409, "form"],
   ] as const)("CREATE refused %s (%i) → drawn under '%s'", async (code, status, field) => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = WITH_GROUP_KINDS;
     groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = { status, body: { code, message: "câu của máy chủ" } };
     const el = await mount();
@@ -1357,7 +1365,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("CREATE refused with an UNKNOWN code: the server's own sentence, at form level", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = WITH_GROUP_KINDS;
     groupAnswers["POST /api/v1/zalo-group-pairing-codes"] = { status: 403, body: { code: "forbidden", message: "Bạn không có quyền." } };
     const el = await mount();
@@ -1366,7 +1374,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("EDIT: unchanged → nothing sent; scope-only change sends only org_unit_id (\"\" = Toàn xã)", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = WITH_GROUP_KINDS;
     groupsNow = { status: 200, body: { items: [UNIT_GROUP], supported_kinds: GROUP_KINDS } };
     groupAnswers[`PATCH /api/v1/zalo-groups/${UNIT_GROUP.id}`] = { status: 204, body: null };
@@ -1390,7 +1398,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("EDIT a group on a removed unit: warned in the dialog; the removed unit is shown but not selectable", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     stored = { ...WITH_GROUP_KINDS, kinds: [...WITH_GROUP_KINDS.kinds, "phan-anh.phan-cong"] };
     groupsNow = { status: 200, body: { items: [REMOVED_GROUP], supported_kinds: GROUP_KINDS } };
     const el = await mount();
@@ -1403,7 +1411,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("UNLINK: the reason is REQUIRED — nothing sent without it; then DELETE {reason}, list read again", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     groupsNow = { status: 200, body: { items: [COMMUNE_GROUP], supported_kinds: GROUP_KINDS } };
     groupAnswers[`DELETE /api/v1/zalo-groups/${COMMUNE_GROUP.id}`] = { status: 204, body: null };
     const el = await mount();
@@ -1426,7 +1434,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("BOT SWITCH: the confirmation names the groups that must be linked again; the toast the groups that ended; list re-read", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = { ...SHARED_BOT, live_group_count: 3 } as comms_communeZaloBotCurrentOut;
     botAnswers["PUT /api/v1/zalo-bots/current"] = {
       status: 200,
@@ -1450,7 +1458,7 @@ describe("Nhóm Zalo — zalo-groups (ADR 0092)", () => {
   });
 
   it("'Quay về bot chung' names the groups too", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.zalo_channel"]);
     botNow = { ...OWN_BOT, live_group_count: 1 } as comms_communeZaloBotCurrentOut;
     const el = await mount();
     act(() => button(botSection(el), "Quay về bot chung").click());

@@ -57,7 +57,18 @@ afterEach(() => {
 describe("tab nào của màn Cấu hình được hiện", () => {
   it("mọi khoá → đúng chín tab của prototype, đúng thứ tự — không còn ba tab dư (chủ dự án 12/10/2026, S27)", async () => {
     const phien = await phienVoi(
-      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.lookup", "admin.sla", "admin.audit", "admin.org"]),
+      phanHoiPhien([
+        "admin.user",
+        "admin.role",
+        "asset.read",
+        "admin.lookup",
+        "admin.sla",
+        "admin.audit",
+        "admin.org",
+        "admin.system_message",
+        "admin.mail_server",
+        "admin.zalo_channel",
+      ]),
     );
     const hien = cacTabHien(TAB_CAU_HINH, phien);
     expect(nhan(hien)).toEqual(PROTOTYPE_NINE);
@@ -81,12 +92,25 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Thời hạn xử lý");
   });
 
-  it("Kênh Zalo đi theo `admin.lookup` (ADR 0074 #6) — ca bị từ chối trước", async () => {
+  it("Kênh Zalo đi theo `admin.zalo_channel` (chủ dự án 15/10/2026) — ca bị từ chối trước, kể cả `admin.lookup`", async () => {
     const denied = await phienVoi(
-      phanHoiPhien(["admin.user", "admin.role", "asset.read", "admin.sla", "admin.audit", "admin.org", "admin.lookups", "ADMIN.LOOKUP"]),
+      phanHoiPhien([
+        "admin.user",
+        "admin.role",
+        "asset.read",
+        "admin.sla",
+        "admin.audit",
+        "admin.org",
+        "admin.lookup",
+        "admin.mail_server",
+        "admin.system_message",
+        "admin.residential_unit",
+        "admin.zalo_channels",
+        "ADMIN.ZALO_CHANNEL",
+      ]),
     );
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Kênh Zalo");
-    const holder = await phienVoi(phanHoiPhien(["admin.lookup"]));
+    const holder = await phienVoi(phanHoiPhien(["admin.zalo_channel"]));
     expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Kênh Zalo");
   });
 
@@ -107,18 +131,26 @@ describe("tab nào của màn Cấu hình được hiện", () => {
     expect(nhan(cacTabHien(TAB_CAU_HINH, readOnly))).toContain("Trường bản đồ");
   });
 
-  it("Máy chủ thư đi theo `admin.lookup` — khoá của cả ba tuyến mail-settings", async () => {
-    const holder = await phienVoi(phanHoiPhien(["admin.lookup"]));
+  it("Máy chủ thư đi theo `admin.mail_server` (15/10/2026) — ca bị từ chối: `admin.lookup` không còn mở", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.mail_server"]));
     expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Máy chủ thư");
-    const denied = await phienVoi(phanHoiPhien(["asset.read", "admin.org", "admin.sla"]));
+    const denied = await phienVoi(
+      phanHoiPhien(["asset.read", "admin.org", "admin.sla", "admin.lookup", "admin.zalo_channel", "admin.mail_servers"]),
+    );
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Máy chủ thư");
   });
 
-  it("Lời hệ thống đi theo `admin.lookup` — khoá của cả sáu tuyến system-messages", async () => {
-    const holder = await phienVoi(phanHoiPhien(["admin.lookup"]));
+  it("Lời hệ thống đi theo `admin.system_message` (15/10/2026) — ca bị từ chối: `admin.lookup` không còn mở", async () => {
+    const holder = await phienVoi(phanHoiPhien(["admin.system_message"]));
     expect(nhan(cacTabHien(TAB_CAU_HINH, holder))).toContain("Lời hệ thống");
-    const denied = await phienVoi(phanHoiPhien(["admin.audit", "admin.org", "admin.sla", "asset.read"]));
+    const denied = await phienVoi(
+      phanHoiPhien(["admin.audit", "admin.org", "admin.sla", "asset.read", "admin.lookup", "admin.mail_server"]),
+    );
     expect(nhan(cacTabHien(TAB_CAU_HINH, denied))).not.toContain("Lời hệ thống");
+  });
+
+  it("Thôn / Tổ dân phố vẫn không cổng: `admin.residential_unit` chỉ là khoá nút ghi trong tab", () => {
+    expect(TAB_CAU_HINH.find((t) => t.ma === "thon-to-dan-pho")?.cong).toBeNull();
   });
 
   it("`admin.audit` không mở tab có cổng nào ở /cau-hinh (luật 5, bất biến 3b)", async () => {

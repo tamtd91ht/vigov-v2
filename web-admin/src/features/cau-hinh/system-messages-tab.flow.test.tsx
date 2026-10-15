@@ -134,18 +134,25 @@ const writes = () => calls.filter((c) => c.method !== "GET");
 const gets = (module: string) => calls.filter((c) => c.method === "GET" && c.url.includes(`/${module}-system-messages`));
 
 describe("denied case", () => {
-  it("without admin.lookup: the tab's sentence, NO request at all, no add button", async () => {
+  it("without admin.system_message: the tab's sentence, NO request at all, no add button", async () => {
     H.phien = session(["task.read"]);
     const el = await mount();
     expect(el.textContent).toContain("không có quyền sửa lời hệ thống");
     expect(el.textContent).not.toContain("Thêm câu mới");
     expect(calls).toEqual([]);
   });
+
+  it("DENIED: admin.lookup alone (its key before 15/10/2026) sends no request either", async () => {
+    H.phien = session(["admin.lookup"]);
+    const el = await mount();
+    expect(el.textContent).toContain("không có quyền sửa lời hệ thống");
+    expect(calls).toEqual([]);
+  });
 });
 
 describe("sections", () => {
   it("'Dùng chung' appears when petitions lists a `chung` sentence, sorted between Báo cáo and Giải ngân", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     const titles = [...el.querySelectorAll("h3")].map((h) => h.textContent);
     expect(titles).toEqual(["Báo cáo điều hành", "Dùng chung", "Theo dõi giải ngân", "Phản ánh của người dân"]);
@@ -156,7 +163,7 @@ describe("sections", () => {
 
   it("no `chung` sentence → no 'Dùng chung' section", async () => {
     lists.petitions = [SHIPPED];
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     expect([...el.querySelectorAll("h3")].map((h) => h.textContent)).not.toContain("Dùng chung");
   });
@@ -164,7 +171,7 @@ describe("sections", () => {
 
 describe("Thêm câu mới", () => {
   it("opens the form; empty → spec 07's sentence in place and NOTHING sent; filled → POST with Idempotency-Key, toast, form closes, petitions re-read", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     expect(el.querySelector('form[aria-label="Thêm câu hệ thống của xã"]')).toBeNull();
     act(() => button(el, "Thêm câu mới").click());
@@ -194,7 +201,7 @@ describe("Thêm câu mới", () => {
   });
 
   it("a code without a known prefix: the prefix sentence in place, nothing sent; no group select exists", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     act(() => button(el, "Thêm câu mới").click());
     const formEl = () => el.querySelector('form[aria-label="Thêm câu hệ thống của xã"]')!;
@@ -208,7 +215,7 @@ describe("Thêm câu mới", () => {
   });
 
   it("a retry after a refusal reuses the SAME Idempotency-Key; a 'giai-ngan.' code goes to finance", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     act(() => button(el, "Thêm câu mới").click());
     expect(el.querySelector<HTMLInputElement>("#loi-he-thong-them-ma")!.placeholder).toBe("chung.loi-chao");
@@ -230,7 +237,7 @@ describe("Thêm câu mới", () => {
 
 describe("Tắt / Bật lại", () => {
   it("a commune sentence: PATCH …/{code} { is_active: false }; the card turns 'Bật lại', dimmed, 'Đang tắt'", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     writeReply = { status: 200, body: { ...SHARED, is_active: false } };
     act(() => button(cardOf(el, "chung.loi-chao"), "Tắt").click());
@@ -250,7 +257,7 @@ describe("Tắt / Bật lại", () => {
   });
 
   it("a refused switch: the server's sentence on the card, the card unchanged, no success toast", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     writeReply = { status: 403, body: { code: "forbidden", message: "Bạn không có quyền thực hiện thao tác này." } };
     act(() => button(cardOf(el, "chung.loi-chao"), "Tắt").click());
@@ -262,7 +269,7 @@ describe("Tắt / Bật lại", () => {
   });
 
   it("a reworded shipped sentence: PATCH …/{code}/override; the box keeps the commune's words", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     writeReply = {
       status: 200,
@@ -292,7 +299,7 @@ describe("Tắt / Bật lại", () => {
       is_active: true,
     };
     lists.finance = [notice];
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
 
     writeReply = { status: 200, body: { ...notice, is_active: false } };
@@ -327,7 +334,7 @@ describe("Tắt / Bật lại", () => {
 
 describe("Xoá (câu xã tự thêm)", () => {
   it("asks for a REASON; empty → refused in place, nothing sent; given → DELETE with { reason }, toast, finance re-read", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     act(() => button(cardOf(el, "giai-ngan.nhac"), "Xoá").click());
     const step = () => cardOf(el, "giai-ngan.nhac").querySelector<HTMLFormElement>('form[aria-label="Xoá câu giai-ngan.nhac"]')!;
@@ -353,7 +360,7 @@ describe("Xoá (câu xã tự thêm)", () => {
   });
 
   it("Huỷ closes the step without sending anything", async () => {
-    H.phien = session(["admin.lookup"]);
+    H.phien = session(["admin.system_message"]);
     const el = await mount();
     act(() => button(cardOf(el, "giai-ngan.nhac"), "Xoá").click());
     act(() => button(cardOf(el, "giai-ngan.nhac"), "Huỷ").click());

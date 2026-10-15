@@ -105,7 +105,7 @@ afterEach(() => {
 });
 
 describe("tab Lời hệ thống — cổng quyền", () => {
-  it("CA BỊ TỪ CHỐI: thiếu `admin.lookup` → câu từ chối, không gọi tuyến nào, không có nút nào", () => {
+  it("CA BỊ TỪ CHỐI: thiếu `admin.system_message` → câu từ chối, không gọi tuyến nào, không có nút nào", () => {
     const fake = vi.fn();
     vi.stubGlobal("fetch", fake);
     fakeSession = sessionWith(["admin.audit", "admin.user", "asset.read"]);
@@ -116,8 +116,18 @@ describe("tab Lời hệ thống — cổng quyền", () => {
     expect(fake).not.toHaveBeenCalled();
   });
 
-  it("có `admin.lookup` → ba nhóm theo spec 07: Phản ánh của người dân, Theo dõi giải ngân, Báo cáo điều hành", () => {
-    fakeSession = sessionWith(["admin.lookup"]);
+  it("CA BỊ TỪ CHỐI: chỉ `admin.lookup` (khoá cũ, trước 15/10/2026) và ba khoá tách kia KHÔNG mở tab này", () => {
+    const fake = vi.fn();
+    vi.stubGlobal("fetch", fake);
+    fakeSession = sessionWith(["admin.lookup", "admin.mail_server", "admin.zalo_channel", "admin.residential_unit"]);
+    const html = renderToStaticMarkup(<SystemMessagesTab />);
+    expect(html).toContain("không có quyền sửa lời hệ thống");
+    expect(html).not.toContain("Thêm câu mới");
+    expect(fake).not.toHaveBeenCalled();
+  });
+
+  it("có `admin.system_message` → ba nhóm theo spec 07: Phản ánh của người dân, Theo dõi giải ngân, Báo cáo điều hành", () => {
+    fakeSession = sessionWith(["admin.system_message"]);
     const html = renderToStaticMarkup(<SystemMessagesTab />);
     expect(html).toMatch(/<h3[^>]*class="text-navy m-0 mb-2.5 text-\[12.5px\] font-bold"[^>]*>Phản ánh của người dân<\/h3>/);
     expect(html).toContain(">Theo dõi giải ngân</h3>");
@@ -125,7 +135,7 @@ describe("tab Lời hệ thống — cổng quyền", () => {
   });
 
   it("thứ tự nhóm theo mã nhóm tăng dần, như prototype: bao-cao, chung, giai-ngan, phan-anh", () => {
-    fakeSession = sessionWith(["admin.lookup"]);
+    fakeSession = sessionWith(["admin.system_message"]);
     expect(form.SYSTEM_MESSAGE_SECTIONS.map((s) => s.group)).toEqual(["bao-cao", "chung", "giai-ngan", "phan-anh"]);
     // While loading, "Dùng chung" is not drawn: it appears only when it holds sentences.
     const titles = [...renderToStaticMarkup(<SystemMessagesTab />).matchAll(/<h3[^>]*>([^<]*)<\/h3>/g)].map((x) => x[1]);
@@ -153,7 +163,7 @@ describe("tab Lời hệ thống — cổng quyền", () => {
   });
 
   it("câu hướng dẫn: nguyên văn câu chủ đầu tư chốt 08/10 (spec, bỏ phần Mini App), kiểu chữ của spec", () => {
-    fakeSession = sessionWith(["admin.lookup"]);
+    fakeSession = sessionWith(["admin.system_message"]);
     const sentence =
       "Những câu dưới đây là lời hệ thống hiện ra trên trang quản trị. Câu đi kèm phần mềm có thể sửa lời " +
       "nhưng không xoá được — xoá đi thì lúc từ chối, hệ thống không còn gì để nói.";
@@ -164,7 +174,7 @@ describe("tab Lời hệ thống — cổng quyền", () => {
   });
 
   it("đang tải: khung ba thanh dùng chung (ConfigLoading) ở mỗi nhóm", () => {
-    fakeSession = sessionWith(["admin.lookup"]);
+    fakeSession = sessionWith(["admin.system_message"]);
     vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
     const html = renderToStaticMarkup(<SystemMessagesTab />);
     expect(html).toContain("Đang tải lời hệ thống…");
@@ -172,13 +182,13 @@ describe("tab Lời hệ thống — cổng quyền", () => {
   });
 
   it("KHÔNG còn ghi chú của nhóm Báo cáo (chủ đầu tư 08/10: 'Bỏ hết, đúng prototype')", () => {
-    fakeSession = sessionWith(["admin.lookup"]);
+    fakeSession = sessionWith(["admin.system_message"]);
     const html = renderToStaticMarkup(<SystemMessagesTab />);
     expect(html).not.toMatch(/chưa hiện ở đâu|Màn Báo cáo chưa xuất tệp/);
   });
 
   it("`Thêm câu mới`: nút THẬT cỡ thường (không còn '?'), ml-auto, mở/đóng form", () => {
-    fakeSession = sessionWith(["admin.lookup"]);
+    fakeSession = sessionWith(["admin.system_message"]);
     const html = renderToStaticMarkup(<SystemMessagesTab />);
     const button = buttonOf(html, "Thêm câu mới");
     expect(button).not.toContain(DISABLED_ATTR);

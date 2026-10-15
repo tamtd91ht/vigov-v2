@@ -381,7 +381,17 @@ describe("preview — Văn bản & Đơn thư", () => {
 });
 
 describe("preview — Cấu hình", () => {
-  const keys = ["admin.org", "admin.lookup", "admin.sla", "asset.read", "admin.audit"];
+  const keys = [
+    "admin.org",
+    "admin.lookup",
+    "admin.sla",
+    "asset.read",
+    "admin.audit",
+    "admin.residential_unit",
+    "admin.system_message",
+    "admin.mail_server",
+    "admin.zalo_channel",
+  ];
 
   it("the real tab frame on the fixture: the three-level org tree, no network", async () => {
     const el = await mount("/xem-thu/cau-hinh", <SettingsPreview tab={null} />, false, "", keys, "lanh-dao");
