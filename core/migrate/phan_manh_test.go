@@ -70,7 +70,7 @@ func TestMoiBangPhanManhDeuCoManh(t *testing.T) {
 				"  Bảng phân mảnh không có mảnh TỪ CHỐI MỌI INSERT. Vết đi cùng giao dịch với\n"+
 				"  dữ liệu nghiệp vụ (luật 6 bất biến 3), nên bản ghi nghiệp vụ đầu tiên rollback\n"+
 				"  toàn bộ — thao tác không thực hiện được, không phải chỉ thiếu vết.\n"+
-				"  Tạo mảnh trong CÙNG tệp, MODULUS 32 theo ADR 0010.",
+				"  Tạo mảnh trong CÙNG tệp, MODULUS 8 theo ADR 0096.",
 				filepath.ToSlash(f), bang)
 		}
 	}

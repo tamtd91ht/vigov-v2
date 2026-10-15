@@ -24,7 +24,7 @@ thêm dòng trỏ có ngày)
 ADR 0010 chốt `PARTITION BY HASH (tenant_id)` với `MODULUS 32`. ADR 0013 #4 chốt "khai bảng phân
 mảnh thì tạo mảnh trong cùng tệp". Hai câu đó đúng, nhưng khi áp, **mọi** bảng có `tenant_id` đều
 được khai phân mảnh — kể cả bảng quyền, cấu hình, danh mục. Đếm trong phiên 15/10/2026: khoảng
-**110 bảng × 32 = ~3.520 bảng lá** trên 7 CSDL dịch vụ, cộng 32 bản sao của mỗi chỉ mục. Lệnh đếm lại:
+**106 bảng × 32 = 3.392 bảng lá** trên 7 CSDL dịch vụ, cộng 32 bản sao của mỗi chỉ mục. Lệnh đếm lại:
 `grep -ciE 'PARTITION BY HASH ?\(tenant_id\)' service-*/migrations/*.sql` (số dòng gồm cả chú thích,
 nên cao hơn số bảng).
 
@@ -40,7 +40,7 @@ là cách áp đã đi xa hơn ADR 0004; ADR này kéo về đúng ý ban đầu
 |---|---|---|
 | Giữ `MODULUS 32` cho mọi bảng (hiện trạng) | Không phải di trú | ~3.520 lá; mỗi chỉ mục ×32; planner, `pg_class`, autovacuum, sao lưu đều trả theo số lá |
 | Bỏ phân mảnh bảng nhỏ, giữ 32 cho bảng lớn | Bảng nhỏ gọn | 38 × 32 ≈ **1.200 lá** — vẫn nhiều, mà 200 xã / 32 ≈ 6 xã mỗi mảnh là mịn hơn nhu cầu hiện có |
-| **Bỏ phân mảnh bảng nhỏ, bảng lớn `MODULUS 8`** — chọn | 38 × 8 = **304 lá**; ≈25 xã mỗi mảnh ở 200 xã, pruning còn bỏ được 7/8 dữ liệu | Phải dựng lại ~110 bảng đang chạy; bảng nhỏ mất lớp chặn thứ hai (xem §*Cách ly không đổi*) |
+| **Bỏ phân mảnh bảng nhỏ, bảng lớn `MODULUS 8`** — chọn | 38 × 8 = **304 lá**; ≈25 xã mỗi mảnh ở 200 xã, pruning còn bỏ được 7/8 dữ liệu | Phải dựng lại 106 bảng đang chạy; bảng nhỏ mất lớp chặn thứ hai (xem §*Cách ly không đổi*) |
 | `MODULUS 4` | Ít lá hơn nữa | ≈50 xã mỗi mảnh — pruning gần như vô ích |
 | Bảng nhỏ "tối đa 5 mảnh" (ý đầu tiên của chủ dự án) | — | 5 mảnh trên vài trăm dòng không cho gì, vẫn nhân mọi chỉ mục ×5; 5 không chia hết vào 8/16/32 nên không đi chung bậc tách mảnh |
 
@@ -68,7 +68,7 @@ từ đây; bảng mới theo tiêu chí #1.
 | identity | `phien`, `phien_cong_dan`, `ghep_phien`, `quan_he_cong_dan_xa`, `automation_run` |
 | finance | `chung_tu_giai_ngan`, `project_comments` |
 
-Mọi bảng đang phân mảnh khác (~72) thành bảng thường. Trong đó có 15 bảng nằm sát ranh giới mà chủ
+Mọi bảng đang phân mảnh khác (68) thành bảng thường. Trong đó có 15 bảng nằm sát ranh giới mà chủ
 dự án **chọn rõ** bỏ phân mảnh: `de_nghi_lui_han`, `nhiem_vu_van_ban`, `task_issued_code`,
 `petition_staff_recorded_rating`, `bien_ban_hop`, `ket_luan_hop`, `thong_bao_bo_phan`,
 `noi_dung_mini_app`, `map_asset`, `disaster_alerts`, `citizen_notification_preferences`, `du_an`,
@@ -148,7 +148,7 @@ bảng cha, `TRUNCATE` theo lá (ADR 0013 #1–#3). Migration đã áp là bất
 - **Dễ hơn:** ~3.520 lá còn 304; bảng nhỏ đọc, sao lưu, `\d` như bảng thường; thêm bảng cấu hình mới
   không phải viết vòng tạo mảnh
 - **Khó hơn:** mỗi bảng mới phải được xếp vào một bên của tiêu chí #1. Không rõ bên nào thì hỏi —
-  đừng mặc định phân mảnh "cho an toàn", đó đúng là cách 110 bảng ra đời
+  đừng mặc định phân mảnh "cho an toàn", đó đúng là cách 106 bảng ra đời
 - **Phải trả ngay (việc khác làm, không thuộc tệp này):**
 
 | Việc | Ở đâu |
