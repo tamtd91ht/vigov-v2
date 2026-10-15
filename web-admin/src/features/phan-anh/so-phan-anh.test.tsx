@@ -1494,9 +1494,11 @@ describe("prototype composition — list cards", () => {
     expect(card(phieu())).not.toContain("data-tre-han");
   });
 
-  it("not rated: the channel sits in the corner instead of stars; `web-xa` reads “Web của xã”", () => {
+  it("not rated: the channel sits in the corner instead of stars; the owner's wording (bug sheet web-admin-141026)", () => {
     expect(card(phieu())).toContain("Zalo Mini App");
-    expect(card(phieu({ channel: "web-xa" }))).toContain("Web của xã");
+    expect(card(phieu({ channel: "web-xa" }))).toContain("Trang thông tin của xã");
+    expect(card(phieu({ channel: "web-xa" }))).not.toContain("Web của xã");
+    expect(card(phieu({ channel: "tong-dai" }))).toContain("Tổng đài điện thoại");
   });
 
   it("the prototype's card (`FeedbackCard`, rows 19-28): shadow, code chip, brand field chip, no open ring", () => {

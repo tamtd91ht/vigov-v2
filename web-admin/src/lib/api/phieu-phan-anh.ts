@@ -25,6 +25,10 @@
  *   GET  …/{maTraCuu}/verification-photos                   feedback.read (audited, ≤ 15 min)
  *   POST …/{maTraCuu}/verification-photos                   feedback.resolve, Idempotency-Key (multipart)
  *
+ * Added 15/10/2026 (backend 7c739880, tester bug sheet web-admin-141026):
+ *
+ *   POST …/{maTraCuu}/photos                                feedback.create, Idempotency-Key (multipart)
+ *
  * The two `…/{id}/completion` routes are GONE (ADR 0052 §Sửa đổi 09/10/2026): each upload is ONE
  * multipart POST through `lib/api/upload.ts`.
  *
@@ -107,6 +111,7 @@ import type {
   petitions_photoOut,
   petitions_post_citizen_reports,
   petitions_post_citizen_reports_by_maTraCuu_log_attachments,
+  petitions_post_citizen_reports_by_maTraCuu_photos,
   petitions_post_citizen_reports_by_maTraCuu_verification_photos,
   petitions_staffIntakeIn,
   petitions_taskAttachmentDownloadOut,
@@ -1013,16 +1018,23 @@ export type StaffIntakeInput = {
    * `residential_unit_not_offered` / 503 otherwise — verbatim on the form.
    */
   readonly residentialUnitId?: string;
+  /**
+   * "Tiếp nhận qua kênh" — `""` / absent = the officer left the select on its default, and the body then
+   * carries NO `channel` (the server applies `can-bo-nhap-ho`). The server records whether the channel
+   * was chosen (`channel_chosen` on the trail), so "left as is" and "picked" stay two statements.
+   */
+  readonly channel?: string;
 };
 
 /**
  * The body of POST /api/v1/citizen-reports, BUILT FIELD BY FIELD.
  *
- * `petitions_staffIntakeIn` also lists `citizen_id`, `channel`, `code`, `status`, the two deadlines,
- * `lat`/`lng` and their Vietnamese spellings — and the server answers 400 to EVERY one of
- * them (`service-petitions/internal/http/staff_intake.go`, `notTheClients` / `notAcceptedYet`): the
- * channel is always `can-bo-nhap-ho` and the petition is linked to no citizen (ADR 0028 Bổ sung
- * 2026-10-02 rows 1, 5). None of them can be set from here, whatever the caller passes.
+ * `petitions_staffIntakeIn` also lists `citizen_id`, `code`, `status`, the two deadlines, `lat`/`lng`
+ * and their Vietnamese spellings — and the server answers 400 to EVERY one of them
+ * (`service-petitions/internal/http/staff_intake.go`, `notTheClients` / `notAcceptedYet`): the petition
+ * is linked to no citizen (ADR 0028 Bổ sung 2026-10-02 row 1). None of them can be set from here.
+ * `channel` IS accepted since 15/10/2026 (owner, bug sheet web-admin-141026): one of `can-bo-nhap-ho`,
+ * `tong-dai`, `web-xa`, `zalo-oa` (`domain.StaffMayRecord`); anything else is the server's 400.
  *
  * Optional strings that are blank are ABSENT, not `""`; `anonymous` is sent only when ticked. Every
  * string is trimmed — the server counts lengths on the trimmed string, and a stray space must not be
@@ -1041,6 +1053,7 @@ export function staffIntakeBody(input: StaffIntakeInput): petitions_staffIntakeI
   if (input.residentialUnitId !== undefined && input.residentialUnitId !== "") {
     body.residential_unit_id = input.residentialUnitId;
   }
+  if (input.channel !== undefined && input.channel !== "") body.channel = input.channel;
   return body;
 }
 
@@ -1203,6 +1216,41 @@ export function uploadVerificationPhoto(
     file,
     // The route has no use for a name (it never reads one), and a phone's file name can carry a person's
     // name: a neutral one goes in the part header instead (rule 3, only the fields actually needed).
+    fileName: "photo",
+    idempotencyKey,
+    ...progress,
+  });
+}
+
+type StaffScenePhotoUpload = petitions_post_citizen_reports_by_maTraCuu_photos;
+/** The contract's order — `tsc` turns red here the day it changes. */
+const STAFF_SCENE_PHOTO_PARTS: StaffScenePhotoUpload["multipartParts"] = ["size", "content_type", "file"];
+
+/**
+ * POST …/{maTraCuu}/photos — the officer attaches ONE scene photo to the petition they have just booked
+ * (`feedback.create`), ONE multipart request, the same shape as `uploadVerificationPhoto`. 201 is the
+ * photo scanned, re-encoded without EXIF and stored. ONE KEY PER ATTEMPT (minted by the caller).
+ *
+ * The server alone decides whether this petition takes one (`staff_scene_photo.go`): only a petition the
+ * staff intake booked, still `da-tiep-nhan`, at most five — 409 `petition_not_staff_booked` /
+ * `petition_state` / `photo_limit`, 413/415/422 `photo_rejected`, 503 when storage or the scanner is not
+ * reachable. Every refusal is its sentence verbatim.
+ */
+export function uploadStaffScenePhoto(
+  maTraCuu: string,
+  file: File,
+  contentType: string,
+  idempotencyKey: string,
+  progress: UploadProgress = {},
+): Promise<UploadResult<petitions_photoOut>> {
+  const template: StaffScenePhotoUpload["duongDan"] = "/api/v1/citizen-reports/{maTraCuu}/photos";
+  return sendUpload<StaffScenePhotoUpload, petitions_photoOut>({
+    path: filePath(template, maTraCuu),
+    parts: STAFF_SCENE_PHOTO_PARTS,
+    // `""` leaves the part out (`uploadFormData`): the server sniffs the bytes either way.
+    fields: { content_type: contentType },
+    file,
+    // A phone's file name can carry a person's name; the route never reads one (rule 3).
     fileName: "photo",
     idempotencyKey,
     ...progress,

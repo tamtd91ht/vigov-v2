@@ -66,8 +66,11 @@ const NHAN_TRANG_THAI: Readonly<Record<string, string>> = {
 const NHAN_KENH: Readonly<Record<string, string>> = {
   "zalo-mini-app": "Zalo Mini App",
   "zalo-oa": "Zalo OA",
-  // Prototype `feedback-display.ts:61` (`CHANNEL_LABEL.web`), verbatim.
-  "web-xa": "Web của xã",
+  // The owner's wording (tester bug sheet web-admin-141026, 15/10/2026) — replaces the prototype's
+  // "Web của xã" everywhere a channel is shown.
+  "web-xa": "Trang thông tin của xã",
+  // Added 15/10/2026 (backend 7c739880): a call to the commune's switchboard, booked by an officer.
+  "tong-dai": "Tổng đài điện thoại",
   "can-bo-nhap-ho": "Cán bộ nhập hộ",
 };
 
@@ -748,8 +751,8 @@ export const RE_NHANH: readonly string[] = ["khong-tiep-nhan", "chuyen-cap-tren"
 /** Chín mã, đúng thứ tự ô chọn `Tất cả trạng thái` của §4. */
 export const MOI_TRANG_THAI: readonly string[] = [...LUONG_CHINH, ...RE_NHANH];
 
-/** Bốn kênh tiếp nhận (§7, §12), cho ô lọc. */
-export const MOI_KENH: readonly string[] = ["zalo-mini-app", "zalo-oa", "web-xa", "can-bo-nhap-ho"];
+/** Năm kênh tiếp nhận (§7, §12; `tong-dai` thêm 15/10/2026), cho ô lọc. */
+export const MOI_KENH: readonly string[] = ["zalo-mini-app", "zalo-oa", "web-xa", "tong-dai", "can-bo-nhap-ho"];
 
 /** Một ô của StatusStepper §8.2. */
 export type OBuoc = {
@@ -958,13 +961,19 @@ export const CANH_BAO_RE_NHANH =
  * một phiếu `zalo-mini-app` mà không có tài khoản là chuyện có thật, và máy chủ cho đóng nó ở
  * `da-xu-ly`.
  *
- * CỜ VẮNG (`undefined`/`null` — máy chủ cũ, hay tuyến chưa trả) THÌ QUAY VỀ LUẬT KÊNH CŨ: kênh
- * `can-bo-nhap-ho` là phiếu cán bộ vào sổ thay dân, nên không có công dân. Sai lệch của luật ấy chỉ
- * theo một chiều an toàn: thiếu nút mà máy chủ vẫn cho, không bao giờ có nút máy chủ từ chối.
+ * CỜ VẮNG (`undefined`/`null` — máy chủ cũ, hay tuyến chưa trả) THÌ QUAY VỀ LUẬT KÊNH: chỉ những
+ * kênh CHỈ cán bộ ghi được mới coi là không có công dân — `can-bo-nhap-ho` và `tong-dai` (máy chủ:
+ * `CoLinhVucLucVaoSo`, "booked only by staff"). Từ 15/10/2026 cán bộ nhập hộ còn ghi được `web-xa` /
+ * `zalo-oa`, nhưng hai kênh ấy cũng là kênh của chính người dân, nên chỉ nhìn kênh thì KHÔNG biết
+ * phiếu có công dân hay không — vắng cờ thì coi là CÓ. Sai lệch vì thế chỉ theo một chiều an toàn:
+ * thiếu nút `Đóng phiếu` ở `da-xu-ly` mà máy chủ vẫn cho (cán bộ chờ cờ, hoặc máy chủ mới), không bao
+ * giờ có nút máy chủ từ chối.
  */
+const STAFF_ONLY_CHANNELS: readonly string[] = ["can-bo-nhap-ho", "tong-dai"];
+
 export function coCongDanXacNhan(phieu: petitions_phieuPhanAnhRa): boolean {
   if (typeof phieu.has_citizen === "boolean") return phieu.has_citizen;
-  return phieu.channel !== "can-bo-nhap-ho";
+  return !STAFF_ONLY_CHANNELS.includes(phieu.channel);
 }
 
 /**
@@ -1464,7 +1473,34 @@ export const INTAKE_PHONE_LABEL = "Số điện thoại";
 export const INTAKE_ANONYMOUS_LABEL = "Người dân đề nghị gửi ẩn danh";
 export const INTAKE_SUBMIT = "Vào sổ phản ánh";
 export const INTAKE_CANCEL = "Huỷ";
-export const INTAKE_CHANNEL_NOTE = "Kênh tiếp nhận: Cán bộ, trưởng thôn nhập hộ.";
+/**
+ * "Tiếp nhận qua kênh" (prototype `FeedbackEntryForm.tsx:232`) — the tester's list, in the tester's
+ * order and wording (bug sheet web-admin-141026, 15/10/2026); exactly the server's `StaffMayRecord`.
+ * The default's label is the form's own sentence ("Cán bộ, trưởng thôn nhập hộ"); lists and filters
+ * keep `nhanKenh`'s shorter "Cán bộ nhập hộ" — the tester asked for no change there.
+ */
+export const INTAKE_CHANNEL_LABEL = "Tiếp nhận qua kênh";
+export const INTAKE_CHANNEL_DEFAULT = "can-bo-nhap-ho";
+export const INTAKE_CHANNEL_OPTIONS: readonly { readonly value: string; readonly label: string }[] = [
+  { value: INTAKE_CHANNEL_DEFAULT, label: "Cán bộ, trưởng thôn nhập hộ" },
+  { value: "tong-dai", label: nhanKenh("tong-dai") },
+  { value: "web-xa", label: nhanKenh("web-xa") },
+  { value: "zalo-oa", label: nhanKenh("zalo-oa") },
+];
+
+/** §11 `⬆ Đính ảnh hiện trường` — the server takes at most 5 per petition (`photo_limit`). */
+export const INTAKE_PHOTO_BUTTON = "Đính ảnh hiện trường";
+export const INTAKE_PHOTO_MAX = 5;
+export const INTAKE_PHOTO_NOTE =
+  "Tối đa 5 ảnh. Ảnh được tải lên ngay sau khi phiếu vào sổ; ảnh lỗi không làm mất phiếu.";
+export function intakePhotosDropped(n: number): string {
+  return `Chỉ đính được tối đa ${INTAKE_PHOTO_MAX} ảnh — đã bỏ ${n} ảnh chọn thêm.`;
+}
+export const INTAKE_PHOTOS_TITLE = "Ảnh hiện trường";
+export const INTAKE_PHOTO_RETRY = "Gửi lại";
+export const INTAKE_PHOTOS_SOME_FAILED =
+  "Phiếu đã vào sổ, nhưng có ảnh chưa đính được. Ảnh nào báo “Chưa gửi được” thì bấm Gửi lại; ảnh bị " +
+  "từ chối thì không gửi lại được.";
 
 export const INTAKE_DONE_TITLE = "Đã vào sổ phản ánh";
 export const INTAKE_DONE_CODE_LABEL = "Mã tra cứu";
@@ -1661,15 +1697,8 @@ export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
       "phận — không email, không số điện thoại — để mọi cán bộ đăng nhập đọc được nó. Màn hình vì " +
       "thế hiện `Họ tên · Chức danh` thay cho `Họ tên — email · Chức danh`.",
   },
-  // §11 scene photos of the intake modal. The intake body has no attachment, and the scene-photo
-  // upload is bound to the CITIZEN's session (Mini App), not to an officer's.
-  {
-    id: "intakePhotos",
-    ten: "Đính ảnh hiện trường",
-    viSao:
-      "Phiếu nhập hộ chưa đính được ảnh hiện trường: hiện chỉ người dân gửi ảnh được, từ Zalo Mini " +
-      "App.",
-  },
+  // §11 scene photos of the intake modal left this array on 15/10/2026: built on
+  // POST …/{maTraCuu}/photos (backend 7c739880, `staff-intake.tsx`).
   {
     id: "overdueDays",
     ten: "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",

@@ -14,8 +14,11 @@ import type { identity_danhSachThonToDanPhoRa, petitions_citizenFieldListOut } f
 
 import { pendingMarkerLabel } from "@/components/ui/pending-feature";
 
-import { INTAKE_DESCRIPTION, INTAKE_DONE_SENTENCE, INTAKE_TITLE, petitionPendingPart } from "./nhan-phieu";
-import { StaffIntakeButton, StaffIntakeForm, StaffIntakeFormView } from "./staff-intake";
+import type { UploadResult } from "@/lib/api/upload";
+import type { petitions_photoOut } from "@/lib/api/schema.gen";
+
+import { INTAKE_DESCRIPTION, INTAKE_DONE_SENTENCE, INTAKE_PHOTOS_SOME_FAILED, INTAKE_TITLE } from "./nhan-phieu";
+import { addIntakePhotos, StaffIntakeButton, StaffIntakeForm, StaffIntakeFormView } from "./staff-intake";
 
 beforeAll(() => {
   (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -57,6 +60,7 @@ const EMPTY_VALUES = {
   reporterPhone: "",
   anonymous: false,
   residentialUnitId: "",
+  channel: "",
 };
 
 function unit(id: string, name: string, active: boolean) {
@@ -99,10 +103,18 @@ function type(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, va
   });
 }
 
+type Upload = (code: string, file: File, contentType: string, key: string) => Promise<UploadResult<petitions_photoOut>>;
+
+const STORED: UploadResult<petitions_photoOut> = {
+  ok: true,
+  data: { id: "01JP", content_type: "image/jpeg", size_bytes: 3, status: "stored", created_at: "x" } as petitions_photoOut,
+};
+
 function mount(
   book: (i: StaffIntakeInput, k: string) => Promise<KetQua<{ code: string }>>,
   onBooked = vi.fn(),
   units: KetQua<identity_danhSachThonToDanPhoRa> = UNITS,
+  uploadPhoto: Upload = vi.fn(async () => STORED),
 ) {
   host = document.createElement("div");
   document.body.append(host);
@@ -116,6 +128,7 @@ function mount(
         loadFields={async () => FIELDS}
         loadUnits={async () => units}
         book={book}
+        uploadPhoto={uploadPhoto}
       />,
     ),
   );
@@ -167,16 +180,35 @@ describe("the modal's shape (§11) — what is on it and what is NOT", () => {
     expect(html).toContain('<option value="can-bo">Thái độ / tác phong cán bộ</option>');
   });
 
-  it("NO channel select; photos are a DISABLED placeholder (ADR 0028 row 5, ADR 0068 §14; server refuses)", () => {
-    expect(html).not.toContain("Tiếp nhận qua kênh");
-    // No file can be chosen: the photo picker is a disabled button, never a file input.
-    expect(html).not.toContain('type="file"');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Đính ảnh hiện trường<\/button>/s);
-    expect(html).toContain(pendingMarkerLabel("Đính ảnh hiện trường"));
+  it("`Tiếp nhận qua kênh` is a SELECT: the tester's four channels, in order, the default selected (bug sheet web-admin-141026)", () => {
+    expect(html).toContain("Tiếp nhận qua kênh");
+    const select = html.match(/<select id="nhap-ho-kenh"[\s\S]*?<\/select>/)?.[0] ?? "";
+    const options = [...select.matchAll(/<option value="([^"]+)"( selected="")?>([^<]+)<\/option>/g)].map((m) => [
+      m[1],
+      m[3],
+      m[2] !== undefined,
+    ]);
+    expect(options).toEqual([
+      ["can-bo-nhap-ho", "Cán bộ, trưởng thôn nhập hộ", true],
+      ["tong-dai", "Tổng đài điện thoại", false],
+      ["web-xa", "Trang thông tin của xã", false],
+      ["zalo-oa", "Zalo OA", false],
+    ]);
+    // Never the citizen's own channel (server: `StaffMayRecord`).
+    expect(select).not.toContain("zalo-mini-app");
+    expect(html).not.toContain("Kênh tiếp nhận: Cán bộ, trưởng thôn nhập hộ.");
+  });
+
+  it("`Đính ảnh hiện trường` is LIVE: a real image file input, no '?' (backend 7c739880)", () => {
+    expect(html).toMatch(/<input id="nhap-ho-anh"[^>]*type="file"[^>]*multiple=""[^>]*accept="image\/\*"/);
+    expect(html).not.toMatch(/<input id="nhap-ho-anh"[^>]*disabled=""/);
+    expect(html).toContain("Đính ảnh hiện trường");
+    expect(html).not.toContain(pendingMarkerLabel("Đính ảnh hiện trường"));
   });
 
   it("the hamlet select is LIVE (ADR 0088 §1): only units IN USE, the empty choice first, no '?'", () => {
-    expect(html.match(/<select/g)?.length).toBe(2);
+    // Lĩnh vực · Thôn · Kênh.
+    expect(html.match(/<select/g)?.length).toBe(3);
     expect(html).not.toMatch(/<select id="nhap-ho-thon"[^>]*disabled=""/);
     expect(html).toContain("Thôn, tổ dân phố");
     expect(html).not.toContain(pendingMarkerLabel("Thôn, tổ dân phố"));
@@ -197,21 +229,6 @@ describe("the modal's shape (§11) — what is on it and what is NOT", () => {
     expect(h).toContain(cau);
     const tag = (x: string) => (x.match(/<button[^>]*type="submit"[^>]*>/)?.[0] ?? "").replace(/\sclass="[^"]*"/, "");
     expect(tag(h)).not.toContain("disabled");
-  });
-
-  it("pressing the photos '?' opens its description and reaches no network; the body gains no key", () => {
-    const fetchSpy = vi.fn();
-    vi.stubGlobal("fetch", fetchSpy);
-    const h = mount(vi.fn());
-    for (const id of ["intakePhotos"]) {
-      const info = petitionPendingPart(id);
-      const b = q<HTMLButtonElement>(h, `button[aria-label="${pendingMarkerLabel(info.ten)}"]`);
-      act(() => b.click());
-      expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain(info.viSao);
-      act(() => b.click());
-    }
-    expect(fetchSpy).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
   });
 
   it("503 on the field list: the server's sentence and Tải lại, the select disabled", () => {
@@ -278,6 +295,8 @@ describe("booking — the flow", () => {
       clockFrom: "",
       // No hamlet picked: `""`, which `staffIntakeBody` leaves out of the body.
       residentialUnitId: "",
+      // The channel select left on its default: `""`, which `staffIntakeBody` leaves out of the body.
+      channel: "",
     });
     expect(key).toMatch(/^[0-9a-f-]{36}$/);
     expect(onBooked).toHaveBeenCalledTimes(1);
@@ -353,5 +372,173 @@ describe("booking — the flow", () => {
     expect(q(h, '[role="alert"]').textContent).toBe(cau);
     // The choice stays for a correction.
     expect(q<HTMLSelectElement>(h, "#nhap-ho-thon").value).toBe("01JTHON2");
+  });
+});
+
+async function settle() {
+  for (let i = 0; i < 10; i++) {
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+  }
+}
+
+function image(name: string): File {
+  return new File([new Uint8Array([0xff, 0xd8, 0xff])], name, { type: "image/jpeg" });
+}
+
+/** Choose files on the hidden input the way the browser does: `files` set, then `change`. */
+function pick(h: HTMLElement, files: File[]) {
+  const input = q<HTMLInputElement>(h, "#nhap-ho-anh");
+  Object.defineProperty(input, "files", { value: files, configurable: true });
+  act(() => {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function fillMinimal(h: HTMLElement) {
+  type(q<HTMLSelectElement>(h, "#nhap-ho-linh-vuc"), "rac-thai");
+  type(q<HTMLTextAreaElement>(h, "#nhap-ho-noi-dung"), "Rác tồn đọng ở đầu ngõ.");
+}
+
+function booked(code: string) {
+  return vi.fn(async (_i: StaffIntakeInput, _k: string) => ({ ok: true as const, duLieu: { code } }));
+}
+
+describe("Tiếp nhận qua kênh — what the select sends", () => {
+  it("a picked channel is sent as `channel`; `Tổng đài điện thoại` is on screen", async () => {
+    const book = booked("PA-1");
+    const h = mount(book);
+    await flush();
+    expect(q<HTMLSelectElement>(h, "#nhap-ho-kenh").value).toBe("can-bo-nhap-ho");
+    expect(h.textContent).toContain("Tổng đài điện thoại");
+    fillMinimal(h);
+    type(q<HTMLSelectElement>(h, "#nhap-ho-kenh"), "tong-dai");
+    submit(h);
+    await flush();
+    expect(book.mock.calls[0]?.[0].channel).toBe("tong-dai");
+  });
+
+  it("left on the default: `channel` is empty (no key in the body; the server applies can-bo-nhap-ho)", async () => {
+    const book = booked("PA-1");
+    const h = mount(book);
+    await flush();
+    fillMinimal(h);
+    submit(h);
+    await flush();
+    expect(book.mock.calls[0]?.[0].channel).toBe("");
+  });
+
+  it("picked back to the default: sent explicitly as `can-bo-nhap-ho` (the officer chose it)", async () => {
+    const book = booked("PA-1");
+    const h = mount(book);
+    await flush();
+    fillMinimal(h);
+    type(q<HTMLSelectElement>(h, "#nhap-ho-kenh"), "web-xa");
+    type(q<HTMLSelectElement>(h, "#nhap-ho-kenh"), "can-bo-nhap-ho");
+    submit(h);
+    await flush();
+    expect(book.mock.calls[0]?.[0].channel).toBe("can-bo-nhap-ho");
+  });
+});
+
+describe("Đính ảnh hiện trường — chosen on the form, uploaded AFTER the booking", () => {
+  it("at most five: the extra ones are left out and COUNTED, never dropped silently", () => {
+    let n = 0;
+    const mint = (file: File) => ({ key: `k${++n}`, file, preview: null });
+    const four = addIntakePhotos([], [1, 2, 3, 4].map((i) => image(`${i}.jpg`)), mint);
+    expect(four.dropped).toBe(0);
+    const next = addIntakePhotos(four.photos, [image("5.jpg"), image("6.jpg"), image("7.jpg")], mint);
+    expect(next.photos).toHaveLength(5);
+    expect(next.dropped).toBe(2);
+  });
+
+  it("nothing is uploaded before the 201; then each photo, IN ORDER, to the new code, each with its OWN key", async () => {
+    const order: string[] = [];
+    const book = vi.fn(async (_i: StaffIntakeInput, _k: string) => {
+      order.push("book");
+      return { ok: true as const, duLieu: { code: "PA-2026-0050" } };
+    });
+    const upload = vi.fn<Upload>(async (code, file) => {
+      order.push(`upload ${code} ${file.name}`);
+      return STORED;
+    });
+    const h = mount(book, vi.fn(), UNITS, upload);
+    await flush();
+    fillMinimal(h);
+    pick(h, [image("a.jpg"), image("b.jpg")]);
+    expect(upload).not.toHaveBeenCalled();
+    // The chosen photos show before sending, each with its ×.
+    expect(h.querySelectorAll('ul[aria-label="Ảnh hiện trường đã chọn"] li')).toHaveLength(2);
+    submit(h);
+    await settle();
+
+    expect(order).toEqual(["book", "upload PA-2026-0050 a.jpg", "upload PA-2026-0050 b.jpg"]);
+    const keys = upload.mock.calls.map((c) => c[3]);
+    expect(keys[0]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(new Set(keys).size).toBe(2);
+    expect(keys).not.toContain(book.mock.calls[0]?.[1]);
+    expect(upload.mock.calls[0]?.[2]).toBe("image/jpeg");
+    expect(h.textContent).toContain("PA-2026-0050");
+    expect(h.textContent).toContain("Đã đính vào phiếu.");
+  });
+
+  it("a removed photo is not uploaded", async () => {
+    const upload = vi.fn<Upload>(async () => STORED);
+    const h = mount(booked("PA-1"), vi.fn(), UNITS, upload);
+    await flush();
+    fillMinimal(h);
+    pick(h, [image("a.jpg"), image("b.jpg")]);
+    act(() => q<HTMLButtonElement>(h, 'button[aria-label="Bỏ ảnh đã chọn 1/2"]').click());
+    submit(h);
+    await settle();
+    expect(upload).toHaveBeenCalledTimes(1);
+    expect(upload.mock.calls[0]?.[1].name).toBe("b.jpg");
+  });
+
+  it("a photo that FAILS leaves the booked code on screen, names the photo, and offers Gửi lại (new key) for a refusal of the moment", async () => {
+    const cau = "Chưa quét được mã độc. Vui lòng thử lại sau ít phút.";
+    const upload = vi
+      .fn<Upload>()
+      .mockResolvedValueOnce(STORED)
+      .mockResolvedValueOnce({ ok: false, status: 503, code: "malware_scan_unavailable", message: cau })
+      .mockResolvedValueOnce({ ok: false, status: 415, code: "photo_rejected", message: "Không phải ảnh." })
+      .mockResolvedValueOnce(STORED);
+    const onBooked = vi.fn();
+    const h = mount(booked("PA-2026-0051"), onBooked, UNITS, upload);
+    await flush();
+    fillMinimal(h);
+    pick(h, [image("a.jpg"), image("b.jpg"), image("c.jpg")]);
+    submit(h);
+    await settle();
+
+    expect(onBooked).toHaveBeenCalledTimes(1);
+    expect(h.querySelector('[role="status"]')?.textContent).toContain("PA-2026-0051");
+    expect(h.textContent).toContain(INTAKE_PHOTOS_SOME_FAILED);
+    const alerts = [...h.querySelectorAll('[role="alert"]')].map((e) => e.textContent);
+    expect(alerts).toEqual([`Chưa gửi được: ${cau}`, "Bị từ chối: Không phải ảnh."]);
+    // Gửi lại only where nothing was stored and the cause is the moment (503) — not on the 415.
+    const retry = [...h.querySelectorAll("button")].filter((b) => b.textContent === "Gửi lại");
+    expect(retry).toHaveLength(1);
+
+    act(() => retry[0]?.click());
+    await settle();
+    expect(upload).toHaveBeenCalledTimes(4);
+    expect(upload.mock.calls[3]?.[0]).toBe("PA-2026-0051");
+    expect(upload.mock.calls[3]?.[3]).not.toBe(upload.mock.calls[1]?.[3]);
+    expect(h.textContent).toContain("PA-2026-0051");
+    expect([...h.querySelectorAll('[role="alert"]')].map((e) => e.textContent)).toEqual(["Bị từ chối: Không phải ảnh."]);
+  });
+
+  it("the booking itself refused: no photo is uploaded, the chosen ones stay for the retry", async () => {
+    const upload = vi.fn<Upload>(async () => STORED);
+    const h = mount(async () => ({ ok: false, thongBao: "Lĩnh vực này xã chưa bật." }), vi.fn(), UNITS, upload);
+    await flush();
+    fillMinimal(h);
+    pick(h, [image("a.jpg")]);
+    submit(h);
+    await settle();
+    expect(upload).not.toHaveBeenCalled();
+    expect(h.querySelectorAll('ul[aria-label="Ảnh hiện trường đã chọn"] li')).toHaveLength(1);
   });
 });

@@ -11,6 +11,7 @@ import {
   listVerificationPhotos,
   logAttachmentDownloadLink,
   uploadLogAttachment,
+  uploadStaffScenePhoto,
   uploadVerificationPhoto,
   staffIntakeBody,
   type StaffIntakeInput,
@@ -937,6 +938,13 @@ describe("POST /api/v1/citizen-reports — staff intake", () => {
     expect(Object.keys(staffIntakeBody(INTAKE))).not.toContain("anonymous");
   });
 
+  it("`channel` (bug sheet web-admin-141026): sent when picked, ABSENT when left on the default", () => {
+    expect(staffIntakeBody({ ...INTAKE, channel: "tong-dai" }).channel).toBe("tong-dai");
+    expect(staffIntakeBody({ ...INTAKE, channel: "can-bo-nhap-ho" }).channel).toBe("can-bo-nhap-ho");
+    expect("channel" in staffIntakeBody({ ...INTAKE, channel: "" })).toBe(false);
+    expect("channel" in staffIntakeBody(INTAKE)).toBe(false);
+  });
+
   it("a replay of the same key answers `{code, replayed}` — the code is still read", async () => {
     answer(201, { code: "PA-2026-0042", replayed: true });
     expect(await bookStaffIntake(INTAKE, "khoa-1")).toEqual({
@@ -1059,6 +1067,38 @@ describe("verification photos — list · one multipart upload", () => {
   ])("upload 409 `%s`: status and the server's sentence", async (code, message) => {
     installFakeUploadXHR(() => ({ status: 409, body: { code, message, trace_id: "t" } }));
     expect(await uploadVerificationPhoto("PA-1", jpg(), "image/png", "k")).toEqual({ ok: false, status: 409, code, message });
+  });
+});
+
+describe("staff scene photos — POST …/{maTraCuu}/photos, one multipart upload", () => {
+  const jpg = () => new File([new Uint8Array([0xff, 0xd8, 0xff])], "Nguyen Van A - nha.jpg", { type: "image/jpeg" });
+
+  it("POST, Idempotency-Key, parts size · content_type · file — and the file's own name NOT sent", async () => {
+    const PHOTO = { id: "01JP", content_type: "image/jpeg", size_bytes: 3, status: "stored", created_at: "x" };
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: PHOTO }));
+    const r = await uploadStaffScenePhoto("PA 1", jpg(), "image/jpeg", "k-7");
+    expect(sent[0]?.url).toBe("/api/v1/citizen-reports/PA%201/photos");
+    expect(sent[0]?.headers["Idempotency-Key"]).toBe("k-7");
+    expect(partNames(sent[0])).toEqual(["size", "content_type", "file"]);
+    expect(partValue(sent[0], "size")).toBe("3");
+    expect(JSON.stringify(sent[0]?.parts)).not.toContain("Nguyen");
+    expect(r).toEqual({ ok: true, data: PHOTO });
+  });
+
+  it("no content type known: the part is LEFT OUT (the server sniffs), never sent empty", async () => {
+    const sent = installFakeUploadXHR(() => ({ status: 201, body: { id: "x", status: "stored" } }));
+    await uploadStaffScenePhoto("PA-1", jpg(), "", "k");
+    expect(partNames(sent[0])).toEqual(["size", "file"]);
+  });
+
+  it.each([
+    [409, "petition_not_staff_booked", "Cán bộ chỉ đính ảnh cho phiếu mình nhập hộ."],
+    [409, "photo_limit", "Phiếu đã có đủ 5 ảnh hiện trường."],
+    [415, "photo_rejected", "Chỉ nhận ảnh JPG, PNG hoặc WebP."],
+    [503, "malware_scan_unavailable", "Chưa quét được mã độc. Vui lòng thử lại sau ít phút."],
+  ])("%i `%s`: status, code and the server's sentence", async (status, code, message) => {
+    installFakeUploadXHR(() => ({ status, body: { code, message, trace_id: "t" } }));
+    expect(await uploadStaffScenePhoto("PA-1", jpg(), "image/jpeg", "k")).toEqual({ ok: false, status, code, message });
   });
 });
 

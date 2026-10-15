@@ -141,6 +141,10 @@ describe("nhãn trạng thái và kênh", () => {
   it("bốn kênh đều có nhãn", () => {
     expect(nhanKenh("zalo-mini-app")).toBe("Zalo Mini App");
     expect(nhanKenh("can-bo-nhap-ho")).toBe("Cán bộ nhập hộ");
+    // Bug sheet web-admin-141026 (15/10/2026): the switchboard channel, and the owner's wording for web-xa.
+    expect(nhanKenh("tong-dai")).toBe("Tổng đài điện thoại");
+    expect(nhanKenh("web-xa")).toBe("Trang thông tin của xã");
+    expect(MOI_KENH).toContain("tong-dai");
   });
 
   it("mã LẠ hiện nguyên mã VÀ nói rõ nó chưa có nhãn — không im lặng, không ô trống", () => {
@@ -613,9 +617,9 @@ describe("Đóng phiếu — hai điểm đóng, điểm `da-xu-ly` suy từ kê
     for (const k of MOI_KENH) expect(dongDuocTrenManHinh(p("cho-dan-xac-nhan", k)), k).toBe(true);
   });
 
-  it("`da-xu-ly` chỉ đóng được khi kênh là `can-bo-nhap-ho`", () => {
+  it("`da-xu-ly` chỉ đóng được khi kênh là kênh CHỈ cán bộ ghi (`can-bo-nhap-ho`, `tong-dai`)", () => {
     for (const k of MOI_KENH) {
-      expect(dongDuocTrenManHinh(p("da-xu-ly", k)), k).toBe(k === "can-bo-nhap-ho");
+      expect(dongDuocTrenManHinh(p("da-xu-ly", k)), k).toBe(k === "can-bo-nhap-ho" || k === "tong-dai");
     }
   });
 
@@ -653,10 +657,13 @@ describe("`has_citizen` QUYẾT ĐỊNH khi có mặt; vắng thì quay về lu�
     }
   });
 
-  it("cờ vắng (`undefined` hoặc `null`): luật kênh `can-bo-nhap-ho` như trước", () => {
+  it("cờ vắng (`undefined` hoặc `null`): chỉ `can-bo-nhap-ho` / `tong-dai` coi là không có công dân", () => {
+    // `web-xa` / `zalo-oa` cán bộ nhập hộ ghi được từ 15/10/2026, nhưng cũng là kênh của người dân:
+    // vắng cờ thì không biết, nên coi là CÓ công dân — thiếu nút, không bao giờ thừa nút.
     for (const co of [undefined, null]) {
       for (const k of MOI_KENH) {
-        expect(dongDuocTrenManHinh(p("da-xu-ly", k, co)), `${k}/${co}`).toBe(k === "can-bo-nhap-ho");
+        const staffOnly = k === "can-bo-nhap-ho" || k === "tong-dai";
+        expect(dongDuocTrenManHinh(p("da-xu-ly", k, co)), `${k}/${co}`).toBe(staffOnly);
       }
     }
   });
@@ -786,8 +793,9 @@ describe("phần chưa dựng được — nhật ký xử lý đã rời danh s
     // the log was decided always internal (ADR 0041 §Sửa đổi 09/10/2026, 0053 §C, 0072, 0088). FIVE once
     // the duplicates block was built (ADR 0087, backend b97a6379 / 49b689a4). FOUR once `scope=related`
     // was served (bug sheet row 57, a06a12ab). THREE once the staff-recorded rating was built (bug sheet
-    // row 60, backend f33dd452).
-    expect(PHAN_CHUA_DUNG.length).toBe(3);
+    // row 60, backend f33dd452). TWO once the intake's scene photos were built (backend 7c739880, bug
+    // sheet web-admin-141026).
+    expect(PHAN_CHUA_DUNG.length).toBe(2);
     // Both photo halves are built now (ADR 0047: the "after" row replaces G8).
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.startsWith("Ảnh sau khi xử lý"))).toBe(false);
     expect(PHAN_CHUA_DUNG.some((p) => p.ten.includes("Ảnh trước"))).toBe(false);
@@ -823,9 +831,10 @@ describe("phần chưa dựng được — đánh giá và kiểm duyệt công 
     // The duplicates block left the list when the merge UI was built (ADR 0087).
     expect(ten).not.toContain("Có thể trùng với phiếu khác");
     expect(() => petitionPendingPart("duplicates")).toThrow();
+    // The intake's scene photos left the list on 15/10/2026 (backend 7c739880).
+    expect(() => petitionPendingPart("intakePhotos")).toThrow();
     expect(ten).toEqual([
       "Email của cán bộ trong ô `Đang giao cho` và ô chọn cán bộ (§8.3, §8.5)",
-      "Đính ảnh hiện trường",
       "`⚠ Quá hạn 3 ngày` — số ngày trễ (§8.3, §7)",
     ]);
     // The overdue NUMBER stays unbuilt on purpose (ADR 0007 decision 10a): the entry still says why.
