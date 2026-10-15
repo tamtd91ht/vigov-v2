@@ -3,13 +3,14 @@ id: 0096-partition-only-growing-tables-modulus-8
 tier: T1
 source: CURATED
 owner: architecture
-derived_from_commit: 54bb094f
+derived_from_commit: a9b0c50b
 expires: null
 owns_facts:
   - "tiêu chí bảng nào được phân mảnh: chỉ bảng có số dòng tăng theo thời gian hoặc theo số công dân; bảng danh mục/cấu hình/quyền/thiết lập/bộ đếm là bảng thường (chủ dự án, 15/10/2026)"
   - "số mảnh hiện hành MODULUS 8, và vì sao 8 chứ không 32, 4 hay 5"
   - "đổi số mảnh về sau không phải viết lại toàn bộ bảng: tách từng mảnh sang MODULUS 16/32"
-  - "cách dựng lại bảng đang chạy (chép đủ dòng, kiểm số dòng trong cùng giao dịch, rồi DROP cấu trúc cũ) và việc chủ dự án cho phép DROP ấy, kể cả audit_log (15/10/2026)"
+  - "cách đưa thay đổi vào CSDL đang chạy: sửa thẳng tệp migration đã áp rồi xoá sạch và dựng lại mọi CSDL (đường A), vì sao bỏ migration chuyển đổi, và ngoại lệ một lần với ADR 0013 'migration đã áp là bất biến' (chủ dự án, 15/10/2026)"
+  - "chủ dự án chấp nhận mất toàn bộ dữ liệu thử ở vigov-dev và vigov-prod (15/10/2026); thứ tự vận hành ảnh mới → lam-moi-csdl → tao-bang → kiem-tra → dựng lại dữ liệu vận hành"
 ---
 
 # 0096. Chỉ bảng lớn mới phân mảnh, và phân `MODULUS 8`
@@ -18,6 +19,11 @@ owns_facts:
 điểm một, trong phiên 15/10/2026 · **Thay thế một phần** ADR 0010 §*Phân mảnh vật lý theo tenant*
 và ADR 0013 quyết định #4 (chỉ các điểm ở §*Thay thế gì*; thân hai ADR ấy giữ nguyên từng chữ, chỉ
 thêm dòng trỏ có ngày)
+
+> **Sửa cùng ngày, 15/10/2026 (chủ dự án):** bản đầu của ADR này (5d9aabf6, b34b3e92) chốt dựng lại
+> bảng bằng **migration chuyển đổi** (chép dòng, kiểm số dòng, DROP cấu trúc cũ). Chủ dự án đổi sang
+> **đường A**: sửa thẳng tệp migration đã áp, xoá sạch và dựng lại mọi CSDL. Quyết định #4, #5 và
+> §*Đưa thay đổi vào CSDL đang chạy* dưới đây là bản sau; lý do bỏ bản đầu ở chính mục ấy.
 
 ## Bối cảnh
 
@@ -40,7 +46,7 @@ là cách áp đã đi xa hơn ADR 0004; ADR này kéo về đúng ý ban đầu
 |---|---|---|
 | Giữ `MODULUS 32` cho mọi bảng (hiện trạng) | Không phải di trú | ~3.520 lá; mỗi chỉ mục ×32; planner, `pg_class`, autovacuum, sao lưu đều trả theo số lá |
 | Bỏ phân mảnh bảng nhỏ, giữ 32 cho bảng lớn | Bảng nhỏ gọn | 38 × 32 ≈ **1.200 lá** — vẫn nhiều, mà 200 xã / 32 ≈ 6 xã mỗi mảnh là mịn hơn nhu cầu hiện có |
-| **Bỏ phân mảnh bảng nhỏ, bảng lớn `MODULUS 8`** — chọn | 38 × 8 = **304 lá**; ≈25 xã mỗi mảnh ở 200 xã, pruning còn bỏ được 7/8 dữ liệu | Phải dựng lại 106 bảng đang chạy; bảng nhỏ mất lớp chặn thứ hai (xem §*Cách ly không đổi*) |
+| **Bỏ phân mảnh bảng nhỏ, bảng lớn `MODULUS 8`** — chọn | 38 × 8 = **304 lá**; ≈25 xã mỗi mảnh ở 200 xã, pruning còn bỏ được 7/8 dữ liệu | Phải dựng lại 106 bảng đang chạy (cách làm: §*Đưa thay đổi vào CSDL đang chạy*); bảng nhỏ mất lớp chặn thứ hai (xem §*Cách ly không đổi*) |
 | `MODULUS 4` | Ít lá hơn nữa | ≈50 xã mỗi mảnh — pruning gần như vô ích |
 | Bảng nhỏ "tối đa 5 mảnh" (ý đầu tiên của chủ dự án) | — | 5 mảnh trên vài trăm dòng không cho gì, vẫn nhân mọi chỉ mục ×5; 5 không chia hết vào 8/16/32 nên không đi chung bậc tách mảnh |
 
@@ -51,8 +57,8 @@ là cách áp đã đi xa hơn ADR 0004; ADR này kéo về đúng ý ban đầu
 | 1 | Chỉ phân mảnh bảng có số dòng **tăng theo thời gian hoặc theo số công dân** (sổ, nhật ký, phiếu, phiên, lượt gửi, tệp, vết kiểm toán) |
 | 2 | Bảng phân mảnh dùng **`PARTITION BY HASH (tenant_id)`, `MODULUS 8`** |
 | 3 | Bảng danh mục, cấu hình, quyền, thiết lập, bộ đếm (vài chục – vài trăm dòng mỗi xã, không tăng theo thời gian) là **bảng thường** |
-| 4 | Bảng đã chạy được **dựng lại** bằng migration mới của từng dịch vụ — không sửa migration đã áp (ADR 0013) |
-| 5 | Chủ dự án **cho phép DROP** cấu trúc cũ sau khi chép đủ dòng, **kể cả `audit_log`** |
+| 4 | **Sửa thẳng tệp migration gốc đã áp** (đường A) — không có tệp migration chuyển đổi nào. Đây là **ngoại lệ một lần** với ADR 0013 "migration đã áp là bất biến" |
+| 5 | Mọi CSDL đang có của 7 dịch vụ, ở **cả `vigov-dev` lẫn `vigov-prod`**, bị **xoá sạch và dựng lại**; chủ dự án chấp nhận mất toàn bộ dữ liệu thử: *"chấp nhận xóa hết để bắt đầu lại"* |
 
 ### 38 bảng giữ phân mảnh (`MODULUS 8`) ngày 15/10/2026
 
@@ -98,32 +104,65 @@ Cái mất đi là **lớp chặn thứ hai về hiệu năng** ADR 0010 nêu ("
 Trên bảng vài trăm dòng mỗi xã, quên `tenant_id` cũng không chậm thấy được, nên lớp đó vốn không có
 tác dụng ở đây. Lớp chặn thật vẫn là `tenant_scope_guard` và repository có phạm vi.
 
-## Dựng lại bảng đang chạy
+## Đưa thay đổi vào CSDL đang chạy
 
 CSDL dev và prod đều đã có bảng. Prod lúc này **chỉ chứa dữ liệu thử** (chủ dự án xác nhận
-15/10/2026), nhưng thủ tục viết như thể là dữ liệu thật — migration này sẽ chạy y nguyên trên mọi CSDL.
+15/10/2026).
 
-Mỗi bảng bị ảnh hưởng, trong **một giao dịch** (một tệp migration, ADR 0013 #5):
+### Đường A — đã chọn: sửa tệp gốc, xoá sạch, dựng lại
 
-| Bước | Việc |
+| Trong tệp migration gốc đã áp | Sửa thành |
 |---|---|
-| 1 | Tạo bảng mới (thường, hoặc `MODULUS 8` kèm vòng tạo 8 mảnh trong cùng tệp — ADR 0013 #4 vẫn đúng) |
-| 2 | Chép **toàn bộ** dòng |
-| 3 | **Kiểm số dòng hai bảng bằng nhau**; lệch thì `RAISE EXCEPTION` — giao dịch rollback, service không khởi động, không mất gì |
-| 4 | Dựng lại ràng buộc, chỉ mục, trigger, khoá ngoại; đặt lại sequence về giá trị lớn nhất đã cấp (luật 7 #3: mã đã cấp không cấp lại) |
-| 5 | Đổi tên: bảng mới mang tên cũ; **tên ràng buộc giữ đúng như cũ** (xem §Hệ quả, mục mã đọc tên ràng buộc) |
-| 6 | `DROP` bảng phân mảnh cũ |
+| Khai 38 bảng giữ phân mảnh | Vòng tạo mảnh `0..7`, `MODULUS 8` — vẫn trong cùng tệp (ADR 0013 #4) |
+| Khai 68 bảng còn lại | Bỏ `PARTITION BY` và vòng tạo mảnh — bảng thường |
+| Trigger chặn `TRUNCATE` theo lá (ADR 0013 #3) của bảng nay thành bảng thường | Gắn **thẳng lên bảng** — bảng thường không có lá; bỏ sót là mất chặn `TRUNCATE` mà không triệu chứng nào |
 
-**Vì sao DROP được phép ở đây.** Luật 7 cấm `DROP` trên dữ liệu nghiệp vụ vì nó huỷ hồ sơ. Ở đây
-không dòng nào bị huỷ: bước 3 chứng minh bảng mới có đủ dòng trước khi bước 6 chạy, và cả hai nằm
-trong cùng giao dịch. Cái bị DROP là **cấu trúc**, không phải hồ sơ. Chủ dự án cho phép rõ ràng ngày
-15/10/2026; ngoài loạt migration này, luật 7 vẫn nguyên.
+Sửa tệp đã áp làm **checksum của mọi tệp ấy lệch** sổ `schema_migration`. Runner tiền-kiểm checksum
+nên dịch vụ **từ chối khởi động** trên mọi CSDL cũ (ADR 0013, dòng *Tiền-kiểm*). Vì vậy mọi CSDL
+đang có phải **xoá sạch rồi dựng lại** từ tệp mới — không sửa sổ, không chèn tay checksum.
 
-**`audit_log` cũng được dựng lại** sang `MODULUS 8` bằng cách chép đủ. Luật 6 có điều kiện dừng về
-sửa/xoá vết; chủ dự án đã được hỏi và cho phép. Không vết nào bị sửa hay mất. Trên bảng mới phải dựng
-lại đúng như ADR 0013 #1–#3: trigger chặn UPDATE/DELETE mức dòng trên bảng **cha**, và trigger chặn
-`TRUNCATE` trên **từng lá trong 8 lá mới**. Thiếu trigger `TRUNCATE` ở lá mới là lỗi không triệu
-chứng — 0013 đã giải thích vì sao.
+**Ngoại lệ một lần với ADR 0013 "migration đã áp là bất biến".** Chủ dự án cho phép rõ ràng ngày
+15/10/2026, chỉ cho loạt tệp của ADR này. Ngoại lệ đứng được **chỉ vì** chưa CSDL nào giữ hồ sơ thật
+của một xã: xoá CSDL có hồ sơ thật là huỷ hồ sơ (luật 7), dù ai cho phép. Ngoài loạt này, ADR 0013
+nguyên vẹn.
+
+**Việc `lam-moi-csdl` của `vigov-deploy`** (`deploy/Jenkinsfile`, stage *Làm mới CSDL*, commit
+a9b0c50b): từng dịch vụ một giao dịch xoá rồi tạo lại schema `public`, `lock_timeout` 30 s; mặc định
+chạy thử (`CHAY_THU`) chỉ in CSDL, số bảng, số tệp đã áp; làm thật cần `XAC_NHAN` =
+`xoa-sach-<namespace>`; dừng trước khi đụng gì nếu hai dịch vụ dùng chung một CSDL. Chạy được cho
+`MT=dev` và `MT=prod` (chủ dự án chọn cả hai, có xác nhận). CSDL của `vihat-miniapp` không thuộc 7
+CSDL ấy; Secret (khoá) không bị đụng. **Phải gỡ việc này** ngay khi bất kỳ namespace nào giữ hồ sơ
+thật của một xã (luật 7).
+
+### Thứ tự vận hành
+
+| Bước | Việc | Ghi chú |
+|---|---|---|
+| 1 | Lên ảnh dựng từ migration đã sửa cho 7 dịch vụ | Chúng crash-loop vì lệch checksum cho tới bước 2 — **đúng như dự kiến** |
+| 2 | `lam-moi-csdl` (chạy thử, rồi làm thật) | |
+| 3 | `tao-bang` | |
+| 4 | `kiem-tra` | Số bảng giảm khoảng 3.000 là **đúng** — bớt lá, không phải mất bảng |
+| 5 | Dựng lại dữ liệu vận hành đã mất | Tài khoản vận hành (`tao-tai-khoan-van-hanh`, `chi-dinh-owner`); xã + tên miền + App ID qua `platform-admin`; secret Mini App (`dat-secret-mini-app`). Việc lịch sử `tao-xa-thang-binh` **không dùng lại được** sau platform 0007 |
+
+Job `vigov-deploy` checkout **`main`**, nên `lam-moi-csdl` chỉ hiện trong Jenkins sau khi `dev` được
+gộp vào `main` — việc chỉ làm khi chủ dự án bảo.
+
+### Phương án bị bỏ: migration chuyển đổi
+
+Bản đầu cùng ngày chốt: mỗi dịch vụ một tệp mới, trong một giao dịch tạo bảng mới → chép đủ dòng →
+kiểm số dòng (lệch thì `RAISE EXCEPTION`) → dựng lại ràng buộc/chỉ mục/trigger/sequence → đổi tên →
+gỡ bảng cũ. Được: giữ dữ liệu thử. Bỏ vì:
+
+| Lý do | Chi tiết |
+|---|---|
+| Khối lượng | 7 tệp phức tạp |
+| 5 cái bẫy | Trigger INSERT nổ trong lúc chép; khoá ngoại trỏ vào bảng đang đổi, kể cả từ bảng không đổi; tên ràng buộc và tên lá mà mã Go phụ thuộc; sequence `BIGSERIAL` của `audit_log`; cột sinh (generated column) |
+| Không kiểm được ở đây | Máy làm việc không có PostgreSQL; lỗi chỉ lộ trên cụm |
+| Cài mới vẫn trả giá | Mọi CSDL mới vẫn dựng 3.392 lá theo tệp cũ rồi tháo ra ở tệp chuyển đổi |
+| Thứ được giữ | Chỉ là dữ liệu thử |
+
+Cái giá của đường A, nói thẳng: mất toàn bộ dữ liệu thử ở cả hai namespace, phải dựng lại dữ liệu vận
+hành (bước 5), và một ngoại lệ có ngày với ADR 0013.
 
 ## Thay thế gì của ADR cũ
 
@@ -141,7 +180,8 @@ chứng — 0013 đã giải thích vì sao.
 **Khẳng định lại:** ADR 0004 #3 — chỉ bảng lớn phân mảnh. ADR này đưa cách áp về đúng câu ấy.
 
 **Không thay:** `tenant_id` là shard key và cột đầu mọi chỉ mục (ADR 0004). Trigger append-only trên
-bảng cha, `TRUNCATE` theo lá (ADR 0013 #1–#3). Migration đã áp là bất biến (ADR 0013).
+bảng cha, `TRUNCATE` theo lá (ADR 0013 #1–#3; bảng thường thì gắn thẳng lên bảng). Migration đã áp
+là bất biến (ADR 0013) — trừ **ngoại lệ một lần** của chính ADR này, §*Đưa thay đổi vào CSDL đang chạy*.
 
 ## Hệ quả
 
@@ -149,18 +189,22 @@ bảng cha, `TRUNCATE` theo lá (ADR 0013 #1–#3). Migration đã áp là bất
   không phải viết vòng tạo mảnh
 - **Khó hơn:** mỗi bảng mới phải được xếp vào một bên của tiêu chí #1. Không rõ bên nào thì hỏi —
   đừng mặc định phân mảnh "cho an toàn", đó đúng là cách 106 bảng ra đời
+- **Mất:** toàn bộ dữ liệu thử của 7 dịch vụ ở `vigov-dev` và `vigov-prod`; dữ liệu vận hành (tài
+  khoản vận hành, xã, tên miền, App ID, secret Mini App) phải dựng lại tay
+- **Rủi ro còn lại:** `lam-moi-csdl` là một nút xoá sạch CSDL nằm trong job vận hành. Nó chỉ đúng khi
+  chưa có hồ sơ thật — phải gỡ trước ngày đầu một xã dùng thật
 - **Phải trả ngay (việc khác làm, không thuộc tệp này):**
 
 | Việc | Ở đâu |
 |---|---|
-| Migration dựng lại bảng, mỗi dịch vụ một tệp | `service-*/migrations/` |
-| Hook nhắc `MODULUS 32` trong thông báo chặn | `.claude/hooks/tenant_scope_guard.py` (thông báo quanh `:338-344`) |
-| Test nhắc `MODULUS 32` | `core/migrate/phan_manh_test.go:73`; `tools/test_hooks.py:149` |
-| Khoá ngoại trên bảng phân mảnh dựng lại ở bước 4 phải kiểm ngay, không `NOT VALID` | PostgreSQL trước 18 từ chối `ADD CONSTRAINT … NOT VALID` trên bảng phân vùng; cụm thật là PG 16 (`kb/90-ephemeral/ban-giao-phien.md:157`) |
-| Báo người vận hành: số bảng `kiem-tra` in ra sẽ giảm khoảng 3.000 | `deploy/Jenkinsfile:352` đếm mọi `BASE TABLE`, tức đếm cả lá. Số tụt sau loạt migration này là **đúng**, không phải mất bảng |
-| Khối `DO $$` chặn thiếu mảnh cuối các migration, thông báo nhắc vòng 32 | ví dụ `service-identity/migrations/0002_audit_log_append_only.sql:200` — tệp đã áp không sửa; khối mới mang số 8 |
+| Sửa thẳng tệp migration gốc (vòng `0..7` / bỏ phân mảnh / trigger `TRUNCATE` gắn thẳng lên bảng thường) | `service-*/migrations/` |
+| Hook nhắc `MODULUS 32` trong thông báo chặn | `.claude/hooks/tenant_scope_guard.py` — đã đổi ở b34b3e92 |
+| Test nhắc `MODULUS 32` | `core/migrate/phan_manh_test.go` — đã đổi ở b34b3e92; `tools/test_hooks.py:149` vẫn là `MODULUS 32` (mẫu đầu vào của test hook — xem có cần đổi không) |
+| Việc `lam-moi-csdl` | `deploy/Jenkinsfile` — đã có ở a9b0c50b; người vận hành: `deploy/README.md` |
+| Báo người vận hành: số bảng `kiem-tra` in ra sẽ giảm khoảng 3.000 | `kiem-tra` đếm mọi bảng, tức đếm cả lá. Số tụt là **đúng**, không phải mất bảng |
+| Khối `DO $$` chặn thiếu mảnh cuối các migration, thông báo nhắc vòng 32 | ví dụ `service-identity/migrations/0002_audit_log_append_only.sql` — sửa trong tệp gốc cùng lượt |
 | Test migration khẳng định `modulus 32` từng bảng | tìm bằng `grep -rl "modulus 32" service-*/migrations/*_test.go` (không liệt kê tay — luật 9) |
-| Mã đọc **tên ràng buộc** trong lỗi từ CSDL | ví dụ `service-identity/internal/store/can_bo_ghi.go:571-586` khớp **đuôi** tên ràng buộc vì bảng phân mảnh báo tên của lá. Khớp đuôi vẫn chạy trên bảng thường, **nếu** bước 5 giữ đúng tên ràng buộc; tìm hết chỗ khớp tên ràng buộc trước khi đổi tên |
+| Mã đọc **tên ràng buộc** trong lỗi từ CSDL | ví dụ `service-identity/internal/store/can_bo_ghi.go` khớp **đuôi** tên ràng buộc vì bảng phân mảnh báo tên của lá. Bảng thường báo đúng tên ràng buộc, nên khớp đuôi vẫn chạy — **nếu** tệp sửa giữ nguyên tên ràng buộc |
 | Chú thích nhắc "32 partitions" trong mã và test | tìm chuỗi `32 partitions` và `32 mảnh` trong `*.go` |
 | `make check` xanh sau tất cả | — |
 

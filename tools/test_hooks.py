@@ -144,9 +144,9 @@ CASES = [
      w("petitions/migrations/0001_init.sql",
        "CREATE TABLE IF NOT EXISTS audit_log (\n"
        "  tenant_id text NOT NULL,\n  id BIGSERIAL\n) PARTITION BY HASH (tenant_id);\n"
-       "DO $$ BEGIN FOR i IN 0..31 LOOP EXECUTE format(\n"
+       "DO $$ BEGIN FOR i IN 0..7 LOOP EXECUTE format(\n"
        "  'CREATE TABLE IF NOT EXISTS %I PARTITION OF audit_log "
-       "FOR VALUES WITH (MODULUS 32, REMAINDER %s)',\n"
+       "FOR VALUES WITH (MODULUS 8, REMAINDER %s)',\n"
        "  'audit_log_p' || lpad(i::text,2,'0'), i); END LOOP; END $$;")),
     # The skeleton template shows the declaration in a comment. Flagging the very comment that
     # teaches the shape would be a guard nobody keeps.

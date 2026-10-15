@@ -21,6 +21,10 @@ owns_facts:
 > 15/10/2026 → ADR 0096: chỉ bảng lớn phân mảnh, `MODULUS 8`. Quyết định #4 (tạo mảnh cùng tệp) vẫn
 > đúng cho bảng phân mảnh; chỗ nào dưới đây nói "32 mảnh" hay ngụ ý mọi bảng nghiệp vụ đều phân mảnh
 > thì đọc theo ADR 0096 (`kb/10-decisions/0096-partition-only-growing-tables-modulus-8.md`).
+>
+> 15/10/2026 → ADR 0096 §*Đưa thay đổi vào CSDL đang chạy*: **ngoại lệ một lần** với "migration đã áp
+> là bất biến" (#5, dòng *Tiền-kiểm*) — chủ dự án cho sửa thẳng tệp đã áp và xoá sạch, dựng lại mọi CSDL
+> dev/prod (chỉ có dữ liệu thử). Ngoài loạt tệp ấy, quy tắc dưới đây nguyên vẹn.
 
 ## Bối cảnh
 
