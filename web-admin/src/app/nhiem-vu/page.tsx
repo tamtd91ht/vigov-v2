@@ -12,7 +12,7 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  * chương.
  *
  * KHÔNG CÓ `<CongQuyen>` Ở ĐÂY, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT QUYẾT ĐỊNH CHỨ KHÔNG PHẢI MỘT LẦN BỎ QUA.
- * Hằng `QUYEN_XEM_NHIEM_VU` (`task.read`, `service-identity/migrations/0001_init.sql:311`) CÓ trong
+ * Hằng `QUYEN_XEM_NHIEM_VU` (`task.read`, `service-identity/migrations/0001_init.sql:279`) CÓ trong
  * `lib/quyen.ts`, và nó được dùng đúng một chỗ: canh MỤC MENU (`components/muc-menu.ts`). Thân màn
  * cố ý không bọc cổng, cùng khuôn `document.read` của hai quyển sổ văn bản (lý do ghi ở chú thích
  * của chính hằng ấy): tài khoản thiếu khoá nhận **403 ngay ở lượt đọc** và màn hình hiện NGUYÊN câu

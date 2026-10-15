@@ -869,6 +869,20 @@ describe("nhật ký xử lý — khối, nút ghi, các dòng", () => {
     expect(NHAN_BO_PHAN_PHU_TRACH).toBe("Bộ phận / Phụ trách");
   });
 
+  it("dòng `phan-cong`: “Phụ trách: Họ tên — email” with the MASKED address only (spec 09 §8.x, ADR 0082)", () => {
+    const masked = "t***@example.vn";
+    const html = renderToStaticMarkup(
+      <DanhSachNhatKy
+        dong={[dong({ action: "phan-cong", unit: "01JBOPHAN", assignee: "CB-00123" })]}
+        tenBoPhan={TB}
+        danhBa={danhBaTheoMa([
+          { code: "CB-00123", full_name: "Trần Thị B", position: "", department_id: "01JBOPHAN", email_masked: masked },
+        ])}
+      />,
+    );
+    expect(html).toMatch(/Phụ trách: (<!-- -->)?<\/span><b[^>]*>Trần Thị B — t\*\*\*@example\.vn<\/b>/);
+  });
+
   it("ghi chú: chữ được THOÁT (không HTML nào chạy), xuống dòng giữ bằng lớp CSS", () => {
     const html = renderToStaticMarkup(
       <DanhSachNhatKy

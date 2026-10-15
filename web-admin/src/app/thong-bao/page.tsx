@@ -11,7 +11,7 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *
  * KHÔNG CÓ `<CongQuyen>` Ở ĐÂY, VÀ SỰ VẮNG MẶT ẤY LÀ MỘT QUYẾT ĐỊNH CHỨ KHÔNG PHẢI MỘT LẦN BỎ QUA.
  * Cả hai tuyến đứng sau `announcement.create` thật — khoá có trong bảng `quyen`
- * (`service-identity/migrations/0001_init.sql:286`, nhóm `THÔNG BÁO`, "Soạn và gửi thông báo" —
+ * (`service-identity/migrations/0001_init.sql:254`, nhóm `THÔNG BÁO`, "Soạn và gửi thông báo" —
  * ĐỌC LẠI NGÀY 23/09/2026: chú thích ở `service-comms/internal/http/thong_bao_noi_bo.go` ghi dòng
  * 279, số ấy đã cũ) và tuyến khai nó trên từng yêu cầu.
  *

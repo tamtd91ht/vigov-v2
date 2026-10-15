@@ -18,6 +18,7 @@ import type {
 } from "@/lib/api/schema.gen";
 
 import {
+  assigneeWithMaskedEmail,
   DANG_TAI_NHAT_KY,
   dateTimeLabel,
   GOI_Y_GHI_NHAT_KY,
@@ -32,7 +33,6 @@ import {
   NHAN_XEM_THEM_NHAT_KY,
   NHAT_KY_RONG,
   nhanBoPhan,
-  nhanCanBoXuLy,
   nhanThaoTacNhatKy,
   nhanTrangThai,
   TIEU_DE_NHAT_KY,
@@ -368,7 +368,7 @@ export function DanhSachNhatKy({
                       <Glyph icon={UserCheck} className="mt-0.5 size-3 shrink-0 text-ink-muted" />
                       <span>
                         <span className="text-ink-muted">Phụ trách: </span>
-                        <b className="font-semibold">{nhanCanBoXuLy(d.assignee, danhBa)}</b>
+                        <b className="font-semibold">{assigneeWithMaskedEmail(d.assignee, danhBa)}</b>
                       </span>
                     </p>
                   )}

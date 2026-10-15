@@ -103,9 +103,14 @@ export function recipientsTitle(count: number): string {
  * Ô tick VẪN ĐƯỢC VẼ và vẫn mặc định bật, đúng §5, vì cột `gui_thu_dien_tu` ghi lại ĐIỀU ĐÃ ĐƯỢC
  * YÊU CẦU — một sự thật riêng, khác hẳn với việc thư đã gửi hay chưa. Nhưng để nó đứng một mình là
  * hứa với cán bộ một lá thư sẽ không bao giờ đi; câu này đứng cạnh nó, không nằm trong chú thích mã.
+ *
+ * Câu nói riêng về THÔNG BÁO, không nói về cả hệ thống: máy chủ đã có bộ gửi thư
+ * (`service-comms/internal/mail/sender.go`), nhưng chỉ dùng cho thư thử của "Máy chủ thư"; lượt phát
+ * hành thông báo vẫn ghi `chua-gui` bất kể ô tick (`service-comms/internal/app/thong_bao_noi_bo.go:259`).
+ * Khi thông báo được gửi thư thật, câu này phải đổi cùng lượt.
  */
 export const CANH_BAO_CHUA_GUI_THU =
-  "Hệ thống chưa gửi được thư điện tử — ô này chỉ ghi lại yêu cầu, chưa có thư nào rời khỏi máy chủ.";
+  "Thông báo chưa được gửi qua thư điện tử — ô này chỉ ghi lại yêu cầu.";
 
 /** Câu đứng ngay dưới ô tick "Ghim" của §5 — nói đúng phạm vi của việc ghim hôm nay. */
 export const CANH_BAO_GHIM_TRONG_TRANG =

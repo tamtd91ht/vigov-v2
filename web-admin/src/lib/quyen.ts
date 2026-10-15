@@ -115,7 +115,7 @@ export const QUYEN_DONG_PHAN_ANH = "feedback.resolve";
  * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên cả mười lăm tuyến ghi danh mục
  * (`x-vigov-permission.key` của `POST/PATCH/DELETE` năm danh mục trong `kb/20-contracts/
  * openapi.json`), và đúng chuỗi migration gieo vào bảng `quyen`
- * (`service-identity/migrations/0001_init.sql:274` — "Quản lý danh mục"). Một khoá bảng `quyen`
+ * (`service-identity/migrations/0001_init.sql:249` — "Quản lý danh mục"). Một khoá bảng `quyen`
  * không có là một khoá không quản trị viên nào cấp được, tức tuyến ấy 403 với MỌI tài khoản
  * (luật 5, bất biến 3c).
  *
@@ -131,7 +131,7 @@ export const QUYEN_QUAN_LY_DANH_MUC = "admin.lookup";
  *
  * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên `POST /api/v1/org-units` và
  * `PATCH /api/v1/org-units/{id}` (`x-vigov-permission.key` trong `kb/20-contracts/openapi.json`),
- * và đúng chuỗi migration gieo vào bảng `quyen` (`service-identity/migrations/0001_init.sql:282`).
+ * và đúng chuỗi migration gieo vào bảng `quyen` (`service-identity/migrations/0001_init.sql:250`).
  *
  * KHOÁ NÀY KHÔNG CHE PHẦN ĐỌC — cùng bất đối xứng với `admin.lookup` ngay trên, và cũng do máy chủ
  * đặt: `GET /api/v1/org-units` khai `any-authenticated` vì tên bộ phận có ở ô phân công và bộ lọc
@@ -148,7 +148,7 @@ export const QUYEN_QUAN_LY_SO_DO = "admin.org";
  *
  * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên cả mười bốn tuyến ghi
  * (`x-vigov-permission.key` trong `kb/20-contracts/openapi.json`) và đúng chuỗi migration gieo vào
- * bảng `quyen` (`service-identity/migrations/0001_init.sql:277`).
+ * bảng `quyen` (`service-identity/migrations/0001_init.sql:252`).
  *
  * MỘT KHOÁ CHO CẢ BẢNG THỜI HẠN LẪN BA BẢNG LỊCH, và đó là quyết định của MÁY CHỦ chứ không phải
  * một lần gộp cho gọn ở đây: lịch làm việc là thứ số giờ trong bảng thời hạn được ĐẾM THEO, nên
@@ -168,7 +168,7 @@ export const QUYEN_CAU_HINH_THOI_HAN = "admin.sla";
  * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên cả sáu tuyến ghi của hai sổ
  * (`x-vigov-permission.key` của `POST/PATCH/DELETE` hai bộ tuyến trong `kb/20-contracts/
  * openapi.json`) và đúng chuỗi migration gieo vào bảng `quyen`
- * (`service-identity/migrations/0001_init.sql:287`). Một khoá bảng `quyen` không có là một khoá
+ * (`service-identity/migrations/0001_init.sql:262`). Một khoá bảng `quyen` không có là một khoá
  * không quản trị viên nào cấp được, tức tuyến ấy 403 với MỌI tài khoản (luật 5, bất biến 3c).
  *
  * MỘT KHOÁ CHO CẢ SÁU TUYẾN, KỂ CẢ HAI TUYẾN GỠ, VÀ ĐÓ LÀ MỘT PHÁT HIỆN ĐÃ ĐƯỢC GHI Ở MÁY CHỦ
@@ -192,7 +192,7 @@ export const QUYEN_CHUYEN_VAN_BAN = "document.route";
 
 /**
  * Khoá quyền XEM hai quyển sổ văn bản — `document.read`, "Xem văn bản"
- * (`service-identity/migrations/0001_init.sql:295`), đúng chuỗi `x-vigov-permission.key` của
+ * (`service-identity/migrations/0001_init.sql:263`), đúng chuỗi `x-vigov-permission.key` của
  * `GET /api/v1/incoming-documents` và `GET /api/v1/outgoing-documents` trong
  * `kb/20-contracts/openapi.json`.
  *
@@ -210,7 +210,7 @@ export const QUYEN_CHUYEN_VAN_BAN = "document.route";
 export const QUYEN_XEM_VAN_BAN = "document.read";
 
 /**
- * `petition.create` — "Tiếp nhận đơn thư" (`service-identity/migrations/0001_init.sql:302`). The key of
+ * `petition.create` — "Tiếp nhận đơn thư" (`service-identity/migrations/0001_init.sql:270`). The key of
  * three citizen-letter routes (`service-documents/internal/http/routes_citizen_letter.go`): book a
  * letter, route it, correct its sender — and of the duplicate check that serves the booking form.
  * It ALSO opens the status / result / log routes for a letter assigned to somebody else (C13/C14):
@@ -221,7 +221,7 @@ export const QUYEN_XEM_VAN_BAN = "document.read";
 export const PETITION_CREATE_PERMISSION = "petition.create";
 
 /**
- * `petition.read` — "Xem đơn thư" (`0001_init.sql:303`). The key of every citizen-letter READ (list,
+ * `petition.read` — "Xem đơn thư" (`0001_init.sql:271`). The key of every citizen-letter READ (list,
  * detail, log, report) and the route-level half of status / result / log-entries; the other half —
  * "the letter's assignee OR `petition.create`" — is decided by the server on the row.
  */
@@ -229,7 +229,7 @@ export const PETITION_READ_PERMISSION = "petition.read";
 
 /**
  * Khoá quyền XEM sổ nhiệm vụ — `task.read`, "Xem nhiệm vụ"
- * (`service-identity/migrations/0001_init.sql:311`).
+ * (`service-identity/migrations/0001_init.sql:279`).
  *
  * MỘT HẰNG CHO MỘT KHOÁ ĐỌC — CÙNG KHUÔN `QUYEN_XEM_VAN_BAN` NGAY TRÊN: không cổng trong
  * THÂN MÀN, chỉ canh mục menu. Hằng này không dùng cho thân màn: `/nhiem-vu` và
@@ -255,7 +255,7 @@ export const PETITION_READ_PERMISSION = "petition.read";
 export const QUYEN_XEM_NHIEM_VU = "task.read";
 
 /**
- * `task.create` — "Tạo nhiệm vụ" (`0001_init.sql:308`). Cổng của nút `+ Giao việc mới`.
+ * `task.create` — "Tạo nhiệm vụ" (`0001_init.sql:276`). Cổng của nút `+ Giao việc mới`.
  *
  * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên `POST /api/v1/tasks` (`x-vigov-permission.key`
  * trong `kb/20-contracts/openapi.json`). Cũng là khoá của mọi tuyến ghi biên bản họp trừ tuyến ký.
@@ -265,7 +265,7 @@ export const QUYEN_XEM_NHIEM_VU = "task.read";
 export const QUYEN_TAO_NHIEM_VU = "task.create";
 
 /**
- * `task.update` — "Cập nhật tiến độ" (`0001_init.sql:312`). Máy chủ khai nó trên BA tuyến:
+ * `task.update` — "Cập nhật tiến độ" (`0001_init.sql:280`). Máy chủ khai nó trên BA tuyến:
  * `PATCH /api/v1/tasks/{ma}` (nút `✎ Sửa`), `POST …/status` (khối Chuyển trạng thái) và
  * `POST …/extensions` (GỬI đề nghị lùi hạn).
  *
@@ -275,13 +275,13 @@ export const QUYEN_TAO_NHIEM_VU = "task.create";
 export const QUYEN_CAP_NHAT_NHIEM_VU = "task.update";
 
 /**
- * `task.delete` — "Xoá nhiệm vụ khỏi sổ" (`0001_init.sql:309`), khoá của `DELETE /api/v1/tasks/{ma}`.
+ * `task.delete` — "Xoá nhiệm vụ khỏi sổ" (`0001_init.sql:277`), khoá của `DELETE /api/v1/tasks/{ma}`.
  * Xoá mềm, kèm lý do bắt buộc; mã sổ đã cấp không bao giờ cấp lại (luật 7).
  */
 export const QUYEN_XOA_NHIEM_VU = "task.delete";
 
 /**
- * `task.extend` — "Duyệt gia hạn" (`0001_init.sql:310`), khoá của
+ * `task.extend` — "Duyệt gia hạn" (`0001_init.sql:278`), khoá của
  * `POST /api/v1/tasks/{ma}/extensions/{deNghiID}/decision`.
  *
  * ⚠ KHOÁ NÀY MỚI LÀ LỚP MỘT. Có khoá chưa có nghĩa là duyệt được một đề nghị cụ thể: lớp hai của
@@ -292,7 +292,7 @@ export const QUYEN_XOA_NHIEM_VU = "task.delete";
 export const QUYEN_DUYET_GIA_HAN = "task.extend";
 
 /**
- * `task.assign` (`service-identity/migrations/0001_init.sql:307`) — the key of
+ * `task.assign` (`service-identity/migrations/0001_init.sql:275`) — the key of
  * `POST /api/v1/tasks/{ma}/assignment` (764bb92): hand the SAME task to another unit or person
  * ("Chuyển tiếp", owner decision 28/09/2026) and edit lead unit / monitor. Gate of the drawer's
  * §5.7 block `Giao việc, chuyển việc`.
@@ -308,7 +308,7 @@ export const QUYEN_DUYET_GIA_HAN = "task.extend";
 export const TASK_ASSIGN_PERMISSION = "task.assign";
 
 /**
- * `task.approve` — "Duyệt hoàn thành" (`0001_init.sql:306`). HAI chỗ dùng, cùng một nghĩa: hành vi
+ * `task.approve` — "Duyệt hoàn thành" (`0001_init.sql:274`). HAI chỗ dùng, cùng một nghĩa: hành vi
  * làm một hồ sơ trở thành CUỐI CÙNG.
  *
  *   `POST /api/v1/meetings/{id}/signature`           nút `Ký biên bản` — khoá của chính tuyến
@@ -352,8 +352,8 @@ export const QUYEN_DUYET_HOAN_THANH_NHIEM_VU = QUYEN_KY_BIEN_BAN;
 export const QUYEN_SOAN_THONG_BAO = "announcement.create";
 
 /**
- * Khoá quyền XEM sổ Nội dung Mini App — `content.read`, "Xem nội dung Mini App"
- * (`service-identity/migrations/0001_init.sql:292`).
+ * Khoá quyền XEM sổ Nội dung Mini App — `content.read`, "Xem nội dung và danh bạ Mini App"
+ * (`service-identity/migrations/0001_init.sql:260`).
  *
  * ĐÚNG khoá tuyến đọc khai, không phải một khoá gần đúng — cùng lập luận với `QUYEN_XEM_NHIEM_VU`
  * ngay trên. Dùng ở đúng MỘT chỗ: mục menu. Màn `/noi-dung` không bọc `<CongQuyen>`, tài khoản
@@ -369,7 +369,7 @@ export const QUYEN_XEM_NOI_DUNG = "content.read";
  *
  * KHÔNG GÕ TAY TỪ ĐẶC TẢ: đúng chuỗi máy chủ khai trên `PUT /api/v1/staff/{id}/publication`
  * (`x-vigov-permission.key` trong `kb/20-contracts/openapi.json`) và đúng chuỗi migration gieo vào
- * bảng `quyen` (`service-identity/migrations/0001_init.sql:293`).
+ * bảng `quyen` (`service-identity/migrations/0001_init.sql:261`).
  *
  * KHÔNG PHẢI `admin.user`, dù màn `/danh-ba` mở bằng `admin.user`: người sửa hồ sơ cán bộ chưa chắc
  * được đưa số di động cá nhân của ai ra kênh công khai, và câu mở #12 đặt việc ấy dưới khoá nội
@@ -399,7 +399,7 @@ export const QUYEN_CONG_KHAI_DANH_BA = "content.update";
 export const QUYEN_XOA_DONG_DANH_BA = "admin.user.delete";
 
 /**
- * `report.read` — "Xem báo cáo" (`service-identity/migrations/0001_init.sql:305`). The gate of the
+ * `report.read` — "Xem báo cáo" (`service-identity/migrations/0001_init.sql:273`). The gate of the
  * leadership overview `/tong-quan`, its menu item, and HALF of every block's gate on that page.
  *
  * HALF, NOT ALL: each figure route checks `report.read` AND the read key of the module it counts —
@@ -415,7 +415,7 @@ export const QUYEN_XOA_DONG_DANH_BA = "admin.user.delete";
 export const REPORT_READ_PERMISSION = "report.read";
 
 /**
- * `report.export` — "Xuất báo cáo" (`service-identity/migrations/0001_init.sql:304`). `/bao-cao`
+ * `report.export` — "Xuất báo cáo" (`service-identity/migrations/0001_init.sql:272`). `/bao-cao`
  * draws its export buttons only for an account holding it (spec 13 §9.4); its export is not built
  * (ADR 0053, amendment 04/10/2026, B4), so there the key reveals three disabled buttons.
  *
@@ -426,7 +426,7 @@ export const REPORT_READ_PERMISSION = "report.read";
 export const REPORT_EXPORT_PERMISSION = "report.export";
 
 /**
- * `asset.read` — "Xem bản đồ tài nguyên" (`service-identity/migrations/0001_init.sql:287`). The READ
+ * `asset.read` — "Xem bản đồ tài nguyên" (`service-identity/migrations/0001_init.sql:255`). The READ
  * key of `GET /api/v1/map-field-schemas` (`x-vigov-permission` in `kb/20-contracts/openapi.json`),
  * and so the gate of the whole "Trường bản đồ" tab: without it the list answers 403 and the tab has
  * nothing to show.
@@ -438,7 +438,7 @@ export const REPORT_EXPORT_PERMISSION = "report.export";
 export const ASSET_READ_PERMISSION = "asset.read";
 
 /**
- * `admin.audit` — "Xem nhật ký hệ thống" (`service-identity/migrations/0001_init.sql:280`). The key
+ * `admin.audit` — "Xem nhật ký hệ thống" (`service-identity/migrations/0001_init.sql:248`). The key
  * of all five `GET /api/v1/<service>-audit-entries` routes (`x-vigov-permission` in
  * `kb/20-contracts/openapi.json`, ADR 0054 §1), and so the gate of the whole "Nhật ký hệ thống" tab:
  * without it every read answers 403 and the tab has nothing to show.

@@ -161,7 +161,7 @@ function senderPair(phieu: petitions_phieuPhanAnhRa): string {
 }
 
 /**
- * The account key that opens the `can-bo` field (seeded `service-identity/migrations/0001_init.sql:301`).
+ * The account key that opens the `can-bo` field (seeded `service-identity/migrations/0001_init.sql:269`).
  * Read ONLY to decide whether the restricted-flow note is drawn — UX; the server filters the petitions.
  */
 export const RESTRICTED_FEEDBACK_PERMISSION = "feedback.restricted";
@@ -1288,8 +1288,9 @@ export function staffNameWithCode(code: string, directory: DanhBaTheoMa | null):
  *                                đang hoạt động, nên người đã khoá tài khoản (nghỉ hưu, chuyển công
  *                                tác) rơi vào ca này — và phiếu cũ của họ vẫn phải đọc được
  *
- * No address here: the timeline (`nhat-ky-phieu.tsx`) shares this line. The `ĐANG GIAO CHO` box adds
- * the masked address through `assigneeWithMaskedEmail`.
+ * No address here. Both places spec 09 draws `Họ tên — email` — the `ĐANG GIAO CHO` box (§8.3) and the
+ * timeline's `Phụ trách:` line (§8.x, `nhat-ky-phieu.tsx`) — add the masked address through
+ * `assigneeWithMaskedEmail`.
  */
 export function nhanCanBoXuLy(assignee: string, danhBa: DanhBaTheoMa | null): string {
   if (assignee === "") return "Chưa phân công cán bộ cụ thể";
@@ -1475,7 +1476,7 @@ export const UPDATE_NOTE_INTERNAL = "không gửi người dân";
  * "NHẬP HỘ PHẢN ÁNH" (§11) — POST /api/v1/citizen-reports, `feedback.create`
  * ══════════════════════════════════════════════════════════════════════════════════════════ */
 
-/** "Tiếp nhận phản ánh" — seeded at `service-identity/migrations/0001_init.sql:298`, spec §14.6. */
+/** "Tiếp nhận phản ánh" — seeded at `service-identity/migrations/0001_init.sql:266`, spec §14.6. */
 export const PETITION_INTAKE_PERMISSION = "feedback.create";
 
 export const INTAKE_BUTTON = "Nhập hộ phản ánh";

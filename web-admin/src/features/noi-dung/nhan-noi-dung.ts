@@ -212,7 +212,7 @@ export function publishedStaffText(count: KetQua<number> | null): {
 
 /**
  * `content.update` — the key every write route of this screen declares (`lib/api/noi-dung.ts` header,
- * `lib/api/portal-sync.ts` header; seeded at `service-identity/migrations/0001_init.sql:293`, "Sửa nội
+ * `lib/api/portal-sync.ts` header; seeded at `service-identity/migrations/0001_init.sql:261`, "Sửa nội
  * dung và danh bạ Mini App").
  *
  * AN ALIAS, NOT A SECOND LITERAL: `lib/quyen.ts` already holds this string as `QUYEN_CONG_KHAI_DANH_BA`

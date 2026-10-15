@@ -187,7 +187,7 @@ export function coTheSuaPhanQuyen(ketQua: KetQua<identity_phienHienTaiRa>): bool
  * Mã vai trò (`vai_tro.ma`) của người đang đăng nhập, hoặc `null`.
  *
  * Phiên không phát id vai trò, chỉ phát `role.code`. Mã ấy là `UNIQUE (tenant_id, ma)`
- * (`service-identity/migrations/0001_init.sql:120`) và phiên với ma trận là của cùng một xã, nên
+ * (`service-identity/migrations/0001_init.sql:112`) và phiên với ma trận là của cùng một xã, nên
  * so mã với `code` của cột là so đúng một vai trò, không phải đoán. Dùng để khoá sẵn cột của chính
  * mình (#14) — máy chủ vẫn là bên từ chối (403 `self_target_forbidden`).
  */

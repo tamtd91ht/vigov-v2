@@ -5,7 +5,7 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
  * sentence: the screen and its tests read them from here (rule 9, forbidden #2).
  */
 
-/** `asset.update` — "Cập nhật bản đồ tài nguyên" (`service-identity/migrations/0001_init.sql:288`). Write key of every asset route. */
+/** `asset.update` — "Cập nhật tài nguyên" (`service-identity/migrations/0001_init.sql:256`). Write key of every asset route. */
 export const ASSET_UPDATE_PERMISSION = "asset.update";
 
 export const PAGE_TITLE = "Bản đồ phát triển kinh tế số";
