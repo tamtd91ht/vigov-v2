@@ -38,7 +38,7 @@
 --      while `thong_bao_nguoi_nhan` is the one that grows: §10's sample notices have 7, 8 and 12
 --      recipients, and a commune has a few dozen staff, so the ceiling is roughly (announcements
 --      per year) × (staff). Low thousands of rows a year. That is why the recipient table is
---      partitioned like everything else and why its primary key starts with the pair the counter
+--      partitioned (ADR 0096) and why its primary key starts with the pair the counter
 --      query groups by.
 --   2. IF IT STOPS HALF-WAY: it cannot land half-applied. One file, one transaction, with the
 --      progress row written inside it. Every statement is IF NOT EXISTS or CREATE OR REPLACE, so
@@ -248,10 +248,10 @@ CREATE TABLE IF NOT EXISTS thong_bao (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS thong_bao_p%s PARTITION OF thong_bao '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -390,20 +390,12 @@ CREATE TABLE IF NOT EXISTS thong_bao_bo_phan (
     -- ON CONFLICT DO NOTHING turns that into the correct no-op rather than an error.
     PRIMARY KEY (tenant_id, thong_bao_id, bo_phan_id),
 
-    -- SAME SERVICE, SAME SCHEMA — this key crosses nothing. Both sides are partitioned by hash on
-    -- `tenant_id` and the referenced pair is the parent's primary key, which is the shape
+    -- SAME SERVICE, SAME SCHEMA — this key crosses nothing. The referenced table is partitioned by hash on
+    -- `tenant_id` and the referenced pair is its primary key, which is the shape
     -- service-petitions proved out in its 0007. Composite with `tenant_id`, so a row here cannot
     -- reach another commune's announcement even if two ids ever collided.
     FOREIGN KEY (tenant_id, thong_bao_id) REFERENCES thong_bao (tenant_id, id)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS thong_bao_bo_phan_p%s PARTITION OF thong_bao_bo_phan '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- NO SEPARATE INDEX. The primary key is `(tenant_id, thong_bao_id, bo_phan_id)` and the only read
 -- is "the departments of these announcements", which is that key's leading pair.
@@ -476,10 +468,10 @@ CREATE TABLE IF NOT EXISTS thong_bao_nguoi_nhan (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS thong_bao_nguoi_nhan_p%s PARTITION OF thong_bao_nguoi_nhan '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -552,8 +544,8 @@ CREATE TRIGGER thong_bao_nguoi_nhan_bat_bien
 -- REVERSAL (migration question 3). Every object here is new, and while the three tables are still
 -- empty — which they are in every environment today — the reversal is complete and loses nothing:
 --
---   DROP TABLE thong_bao_nguoi_nhan;    -- its 32 partitions, its index and its triggers go with it
---   DROP TABLE thong_bao_bo_phan;       -- same
+--   DROP TABLE thong_bao_nguoi_nhan;    -- its 8 partitions, its index and its triggers go with it
+--   DROP TABLE thong_bao_bo_phan;       -- same (a plain table: no partitions)
 --   DROP TABLE thong_bao;               -- LAST: both foreign keys point at it
 --   DROP FUNCTION thong_bao_nguoi_nhan_bat_bien();
 --   DROP FUNCTION thong_bao_bat_bien();
@@ -595,7 +587,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

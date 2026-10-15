@@ -179,15 +179,7 @@ CREATE TABLE IF NOT EXISTS map_field_schema (
     CONSTRAINT map_field_schema_soft_delete_complete
         CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)
                AND (deleted_at IS NULL) = (delete_reason IS NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS map_field_schema_p%s PARTITION OF map_field_schema '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The configuration tab lists one commune's fields per group in display order, disabled rows
 -- included; only soft-deleted rows drop out (rule 7, invariant 2).
@@ -204,7 +196,7 @@ CREATE TRIGGER map_field_schema_guard
 -- ADR 0013 draw.
 --
 -- REVERSAL (question 3). While the table is empty the reversal is complete and loses nothing:
--- drop the table (partitions, trigger and foreign key go with it), then the function, and in the
+-- drop the table (trigger and foreign key go with it), then the function, and in the
 -- same transaction remove this file's row from `schema_migration`. Once a commune has rows here
 -- that is no longer a reversal but the destruction of commune records — rule 7's first stop
 -- condition, which needs the user, not a command.
@@ -228,7 +220,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

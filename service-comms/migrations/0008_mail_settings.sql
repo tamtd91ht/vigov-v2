@@ -72,15 +72,7 @@ CREATE TABLE IF NOT EXISTS data_encryption_key (
     CONSTRAINT data_encryption_key_kek_id_shape CHECK (kek_id ~ '^[0-9a-f]{8}$'),
     -- 1 + 4 + 12 + 32 + 16: the version-1 wrapped format. A row of any other length cannot open.
     CONSTRAINT data_encryption_key_wrapped_length CHECK (octet_length(wrapped) = 65)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS data_encryption_key_p%s PARTITION OF data_encryption_key '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS data_encryption_key_guard ON data_encryption_key;
 CREATE TRIGGER data_encryption_key_guard
@@ -149,15 +141,7 @@ CREATE TABLE IF NOT EXISTS mail_settings (
     CONSTRAINT mail_settings_from_name_length CHECK (char_length(from_name) <= 100),
     -- 1 + 12 + 16 bytes of envelope overhead, plus at least one byte of password.
     CONSTRAINT mail_settings_password_sealed_length CHECK (octet_length(password_sealed) > 29)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS mail_settings_p%s PARTITION OF mail_settings '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS mail_settings_guard ON mail_settings;
 CREATE TRIGGER mail_settings_guard
@@ -169,7 +153,7 @@ CREATE TRIGGER mail_settings_guard
 -- ADR 0013 draw.
 --
 -- REVERSAL (question 3). While both tables are empty the reversal is complete and loses nothing:
--- drop both tables (partitions and triggers go with them), then both functions, and in the same
+-- drop both tables (triggers go with them), then both functions, and in the same
 -- transaction remove this file's row from `schema_migration`. Once a commune has a row in
 -- data_encryption_key, dropping it DESTROYS that commune's stored secrets permanently — that is
 -- not a reversal, it is rule 7's first stop condition and needs the user.
@@ -193,7 +177,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

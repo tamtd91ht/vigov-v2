@@ -33,10 +33,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- that is not a missing trail — it is the first business write in this service rolling back in
 -- full, with nothing in the schema looking wrong.
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS audit_log_p%s PARTITION OF audit_log '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -46,7 +46,8 @@ CREATE INDEX IF NOT EXISTS audit_log_lookup
 -- TODO(skeleton): business tables for comms.
 -- Declared entities (see README): articles, radio_bulletins, videos, map_layers, map_pins, gov_contacts, notifications
 --
--- Shape every one of them must follow:
+-- Shape every one of them must follow (the PARTITION BY half only for a table that grows with
+-- time or with citizens — every other table is plain, ADR 0096):
 --
 --   CREATE TABLE example (
 --       tenant_id  TEXT NOT NULL,
@@ -65,10 +66,10 @@ CREATE INDEX IF NOT EXISTS audit_log_lookup
 --   -- partitions in this service — a table copied from a template inherits the template's
 --   -- omissions, silently, in every table written after it.
 --   DO $$ BEGIN
---       FOR i IN 0..31 LOOP
+--       FOR i IN 0..7 LOOP
 --           EXECUTE format(
 --               'CREATE TABLE IF NOT EXISTS example_p%s PARTITION OF example '
---               'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+--               'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
 --       END LOOP;
 --   END $$;
 --

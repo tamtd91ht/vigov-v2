@@ -203,15 +203,7 @@ CREATE TABLE IF NOT EXISTS danh_muc_mini_app (
     CONSTRAINT danh_muc_mini_app_xoa_mem_day_du
         CHECK ((deleted_at IS NULL AND deleted_by IS NULL AND delete_reason IS NULL)
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND delete_reason IS NOT NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS danh_muc_mini_app_p%s PARTITION OF danh_muc_mini_app '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The tree read: children of one parent, in the commune's own order. NOT UNIQUE, so the partial
 -- predicate here is legitimate — it decides how many rows are read, not whether an issued code can
@@ -358,7 +350,7 @@ CREATE TABLE IF NOT EXISTS noi_dung_mini_app (
     UNIQUE (tenant_id, nguon_id_ngoai),
 
     -- SAME SERVICE, SAME SCHEMA, composite with `tenant_id`: an article cannot be filed under
-    -- another commune's category even if two ids ever collided. Both sides are partitioned by hash
+    -- another commune's category even if two ids ever collided. Both sides are plain tables (ADR 0096)
     -- on `tenant_id` and the referenced pair is the parent's primary key.
     FOREIGN KEY (tenant_id, danh_muc_id) REFERENCES danh_muc_mini_app (tenant_id, id),
 
@@ -392,15 +384,7 @@ CREATE TABLE IF NOT EXISTS noi_dung_mini_app (
     CONSTRAINT noi_dung_mini_app_xoa_mem_day_du
         CHECK ((deleted_at IS NULL AND deleted_by IS NULL AND delete_reason IS NULL)
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND delete_reason IS NOT NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS noi_dung_mini_app_p%s PARTITION OF noi_dung_mini_app '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The page of §6's table, newest first, and the tie-break the cursor pages on (core/store.QueryPage
 -- orders by `(sort, id)`). Soft-deleted rows excluded EVERYWHERE, ALWAYS (rule 7, invariant 2).
@@ -513,7 +497,7 @@ CREATE TRIGGER noi_dung_mini_app_bat_bien
 -- REVERSAL (migration question 3). Every object here is new, and while the two tables are still
 -- empty — which they are in every environment today — the reversal is complete and loses nothing:
 --
---   DROP TABLE noi_dung_mini_app;    -- its 32 partitions, its two indexes and its triggers go with it
+--   DROP TABLE noi_dung_mini_app;    -- its two indexes and its triggers go with it
 --   DROP TABLE danh_muc_mini_app;    -- LAST: the foreign key points at it
 --   DROP FUNCTION noi_dung_mini_app_bat_bien();
 --
@@ -552,7 +536,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

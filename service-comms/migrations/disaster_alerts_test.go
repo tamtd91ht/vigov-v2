@@ -11,12 +11,13 @@ import (
 
 const file0026 = "0026_disaster_alerts.sql"
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a key or index without tenant_id first; a missing partition
-// loop; a kind dropped or spelled in English (ADR 0011); a JSONB list allowed to be a non-array or
+// THE MUTATIONS THAT MUST TURN THIS RED: a key or index without tenant_id first; the table
+// partitioned (ADR 0096); a kind dropped or spelled in English (ADR 0011); a JSONB list allowed to be a non-array or
 // unbounded; the ended pair no longer both-or-neither; the guard no longer refusing DELETE, edits of a
 // deleted row, or edits of an ended alert; the soft-delete trio no longer all-or-none; a row seeded.
 func TestMigration0026DisasterAlerts(t *testing.T) {
 	sql := executableSQL(t, file0026)
+	requirePlainTable(t, file0026, sql, "disaster_alerts")
 	for _, c := range []struct{ want, why string }{
 		{"create table if not exists disaster_alerts ( tenant_id text not null, id text not null,", "tenant_id and ULID id, both required"},
 		{"kind text not null, title text not null, level text, headline text, detail text not null,", "the agreed text columns; level and headline nullable"},
@@ -35,7 +36,6 @@ func TestMigration0026DisasterAlerts(t *testing.T) {
 		{"jsonb_typeof(emergency_contacts) = 'array' and jsonb_array_length(emergency_contacts) <= 50", "contacts a bounded array"},
 		{"check (btrim(created_by) <> '' and btrim(updated_by) <> '')", "signed"},
 		{"check ((deleted_at is null) = (deleted_by is null) and (deleted_at is null) = (delete_reason is null))", "soft-delete trio all or none (rule 7)"},
-		{"partition of disaster_alerts ' 'for values with (modulus 32, remainder %s)", "MODULUS 32 partition loop (ADR 0010)"},
 		{"on disaster_alerts (tenant_id, effective_from) where deleted_at is null", "public read index leads with tenant_id, live rows only"},
 		{"before update or delete on disaster_alerts for each row execute function disaster_alerts_guard()", "guard on update and delete"},
 	} {

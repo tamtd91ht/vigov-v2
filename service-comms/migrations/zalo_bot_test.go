@@ -11,16 +11,17 @@ import (
 
 const file0018 = "0018_zalo_bot.sql"
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a tenant table without its MODULUS 32 loop; a unique key on a
+// THE MUTATIONS THAT MUST TURN THIS RED: zalo_delivery without its MODULUS 8 loop, or the settings and
+// pairing-code tables partitioned again (ADR 0096); a unique key on a
 // tenant table without tenant_id (other than the declared cross-tenant chat key); the platform DEK
 // becoming a row under a fake tenant_id; a guard that stops refusing DELETE; a seed row; an enum value
 // translated to English (ADR 0011); the chat key losing its live-only predicate or gaining tenant_id.
 func TestMigration0018ZaloBotKeysAndPartitions(t *testing.T) {
 	sql := executableSQL(t, file0018)
+	requirePlainTable(t, file0018, sql, "zalo_channel_setting")
+	requirePlainTable(t, file0018, sql, "zalo_pairing_code")
+	requireHashPartitionedBy8(t, file0018, sql, "zalo_delivery")
 	for _, c := range []struct{ want, why string }{
-		{"partition of zalo_channel_setting ' 'for values with (modulus 32, remainder %s)", "settings partition loop"},
-		{"partition of zalo_pairing_code ' 'for values with (modulus 32, remainder %s)", "pairing code partition loop"},
-		{"partition of zalo_delivery ' 'for values with (modulus 32, remainder %s)", "delivery partition loop"},
 		{"primary key (tenant_id), constraint zalo_channel_setting_kinds_known", "one settings row per commune"},
 		{"primary key (tenant_id, id), unique (tenant_id, code_hash),", "a hash never reissued within a commune"},
 		{"on zalo_pairing_code (tenant_id, staff_code) where used_at is null and cancelled_at is null", "one open code per staff"},

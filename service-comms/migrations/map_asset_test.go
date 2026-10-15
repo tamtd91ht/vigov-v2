@@ -10,13 +10,14 @@ import (
 
 const file0015 = "0015_map_asset.sql"
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a key or index without tenant_id first; a missing partition
-// loop; the tax-code key turned into a partial unique index (tools/check_khoa_duy_nhat.py) or into a
+// THE MUTATIONS THAT MUST TURN THIS RED: a key or index without tenant_id first; the table
+// partitioned (ADR 0096); the tax-code key turned into a partial unique index (tools/check_khoa_duy_nhat.py) or into a
 // key that ignores soft delete; the type foreign key losing tenant_id; a coordinate, status, VSIC or
 // verified CHECK dropped; the guard no longer refusing DELETE / edits of a deleted row; a seed row; a
 // hard delete or drop; PostGIS sneaking in.
 func TestMigration0015MapAsset(t *testing.T) {
 	sql := executableSQL(t, file0015)
+	requirePlainTable(t, file0015, sql, "map_asset")
 	for _, c := range []struct{ want, why string }{
 		{"create table if not exists map_asset ( tenant_id text not null, id text not null, asset_type_code text not null, name text not null,", "tenant_id, ULID id, type and name required"},
 		{"lat numeric(10,6) not null, lng numeric(10,6) not null,", "coordinates required, spec §10 type"},
@@ -26,7 +27,6 @@ func TestMigration0015MapAsset(t *testing.T) {
 		{"live_tax_code text generated always as (case when deleted_at is null then tax_code end) stored,", "tax-code marker is NULL on soft-deleted rows"},
 		{"primary key (tenant_id, id), unique (tenant_id, live_tax_code),", "keys composite with tenant_id (rule 1 inv 6)"},
 		{"foreign key (tenant_id, asset_type_code) references loai_tai_nguyen_ban_do (tenant_id, ma)", "type issued in THIS commune's catalogue, as 0007"},
-		{"partition of map_asset ' 'for values with (modulus 32, remainder %s)", "MODULUS 32 partition loop (ADR 0010)"},
 		{"btrim(name) <> '' and char_length(name) <= 255", "name not blank, bounded"},
 		{"check (lat between -90 and 90)", "latitude range"},
 		{"check (lng between -180 and 180)", "longitude range"},

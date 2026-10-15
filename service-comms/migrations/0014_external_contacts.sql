@@ -42,7 +42,7 @@
 -- THE FIVE MIGRATION QUESTIONS.
 --
 --   1. ROWS PER COMMUNE: this file writes NO row. Steady state a few dozen per commune — one per
---      institution a resident might call. Partitioned like every other table (ADR 0010).
+--      institution a resident might call. A plain table, not partitioned (ADR 0096).
 --   2. IF IT STOPS HALF-WAY: it cannot land half-applied — one file, one transaction. Every
 --      statement is IF NOT EXISTS / CREATE OR REPLACE / DROP TRIGGER IF EXISTS; a retry costs
 --      nothing. No backfill, so nothing to resume per commune.
@@ -151,15 +151,7 @@ CREATE TABLE IF NOT EXISTS external_contacts (
     CONSTRAINT external_contacts_soft_delete_complete
         CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)
                AND (deleted_at IS NULL) = (delete_reason IS NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS external_contacts_p%s PARTITION OF external_contacts '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The public read (and the staff list): one commune's live contacts in display order, id as the
 -- tie-break. Leads with tenant_id (rule 1); soft-deleted rows excluded (rule 7, invariant 2).
@@ -184,7 +176,7 @@ CREATE TRIGGER external_contacts_guard
 --
 -- ZERO → in this order:
 --
---   DROP TABLE external_contacts;      -- partitions, index, trigger go with it
+--   DROP TABLE external_contacts;      -- index, trigger go with it
 --   DROP FUNCTION external_contacts_guard();
 --   DELETE FROM schema_migration WHERE <this file's row>;  -- the runner's own bookkeeping, not business data
 --
@@ -211,7 +203,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

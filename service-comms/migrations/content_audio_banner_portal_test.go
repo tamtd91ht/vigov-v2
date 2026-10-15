@@ -63,8 +63,8 @@ func TestMigration0012AudioBannerHidden(t *testing.T) {
 	}
 }
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a plaintext key column; a key or index without tenant_id; a
-// missing partition loop; a partial unique on external_id; the run log editable after finish or
+// THE MUTATIONS THAT MUST TURN THIS RED: a plaintext key column; a key or index without tenant_id; the
+// run log without its MODULUS 8 loop or the settings / categories partitioned (ADR 0096); a partial unique on external_id; the run log editable after finish or
 // deletable; the portal category merged into danh_muc_mini_app; the portal category made mutable.
 func TestMigration0013PortalSync(t *testing.T) {
 	sql := executableSQL(t, file0013)
@@ -100,11 +100,9 @@ func TestMigration0013PortalSync(t *testing.T) {
 			t.Errorf("0013 lacks %q — %s", c.want, c.why)
 		}
 	}
-	for _, table := range []string{"portal_sync_settings", "portal_categories", "portal_sync_runs"} {
-		if !strings.Contains(sql, "partition of "+table+" ' 'for values with (modulus 32, remainder %s)") {
-			t.Errorf("0013: %s has no MODULUS 32 partition loop", table)
-		}
-	}
+	requirePlainTable(t, file0013, sql, "portal_sync_settings")
+	requirePlainTable(t, file0013, sql, "portal_categories")
+	requireHashPartitionedBy8(t, file0013, sql, "portal_sync_runs")
 	for _, c := range []struct{ banned, why string }{
 		{"drop table", "drops a table"},
 		{"drop column", "drops a column"},

@@ -59,9 +59,9 @@ func functionBody(t *testing.T, sql, name string) string {
 // loop; removing the guard or the cover check; a per-type CHECK dropped; a single-column key.
 func TestMigration0011KeysPartitionsConstraints(t *testing.T) {
 	sql := executableSQL(t, file0011)
+	requireHashPartitionedBy8(t, file0011, sql, "stored_file")
 	for _, c := range []struct{ want, why string }{
 		{"primary key (tenant_id, id), unique (tenant_id, object_key), unique (tenant_id, public_object_key),", "stored_file keys composite with tenant_id (rule 1 inv 6)"},
-		{"partition of stored_file ' 'for values with (modulus 32, remainder %s)", "stored_file partition loop"},
 		{"on stored_file (tenant_id, subject_type, subject_id, created_at desc) where deleted_at is null", "subject index leads with tenant_id"},
 		{"before update or delete on stored_file for each row execute function stored_file_guard()", "metadata guard"},
 		{"check (subject_type in ('content-item'))", "subject is a content item"},

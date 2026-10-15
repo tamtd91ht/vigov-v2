@@ -27,7 +27,7 @@
 -- WHY VALIDATED, NOT `NOT VALID`: 0011:332-341 (not portable on a partitioned table; ADD COLUMN already
 -- holds ACCESS EXCLUSIVE until COMMIT). Every value validated is NULL.
 --
--- THE LOCK: ACCESS EXCLUSIVE on noi_dung_mini_app and its 32 partitions until COMMIT (0012's figure).
+-- THE LOCK: ACCESS EXCLUSIVE on noi_dung_mini_app (a plain table, ADR 0096) until COMMIT.
 -- PG FLOOR: 13, enforced by 0006. Cluster: 16. PERSONAL DATA (rule 3): none.
 -- ---------------------------------------------------------------------------
 
@@ -93,7 +93,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

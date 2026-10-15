@@ -10,18 +10,18 @@ import (
 
 const file0016 = "0016_map_frame.sql"
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a key other than tenant_id alone; a missing partition loop;
+// THE MUTATIONS THAT MUST TURN THIS RED: a key other than tenant_id alone; the table partitioned (ADR 0096);
 // the mainland box widened east toward Hoàng Sa / Trường Sa or dropped; the radius bound raised or
 // dropped (both ADR 0072 H3 stop condition 2); the guard no longer refusing DELETE or freezing who
 // created the row; a seed row (a default centre is one commune's value — rule 1, invariant 10); soft
 // delete columns that no read path would know to exclude; a hard delete or drop.
 func TestMigration0016MapFrame(t *testing.T) {
 	sql := executableSQL(t, file0016)
+	requirePlainTable(t, file0016, sql, "map_frame")
 	for _, c := range []struct{ want, why string }{
 		{"create table if not exists map_frame ( tenant_id text not null, center_lat numeric(10,6) not null, center_lng numeric(10,6) not null, radius_km numeric(4,1) not null,", "centre and radius required, map_asset's coordinate type"},
 		{"created_at timestamptz not null default now(), created_by text not null, updated_at timestamptz not null default now(), updated_by text not null,", "signed by business codes"},
 		{"primary key (tenant_id),", "one row per commune"},
-		{"partition of map_frame ' 'for values with (modulus 32, remainder %s)", "MODULUS 32 partition loop (ADR 0010)"},
 		{"check ( center_lat between 8.4 and 23.4 and center_lng between 102.1 and 109.5)", "centre inside the mainland box (H3), east edge short of Hoàng Sa / Trường Sa"},
 		{"check (radius_km between 1 and 30)", "radius proposal 1–30 km (H3)"},
 		{"check (btrim(created_by) <> '' and btrim(updated_by) <> '')", "signed"},

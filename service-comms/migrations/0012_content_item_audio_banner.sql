@@ -49,8 +49,8 @@
 -- PG FLOOR: 13 (BEFORE ... FOR EACH ROW triggers on a partitioned table), already enforced by 0006.
 -- The real cluster is 16. Nothing here needs more.
 --
--- THE LOCK: ADD COLUMN / ADD CONSTRAINT take ACCESS EXCLUSIVE on both tables and their 32 partitions
--- until COMMIT; CREATE INDEX on the parent takes SHARE. Acceptable at today's size (0006 question 1).
+-- THE LOCK: ADD COLUMN / ADD CONSTRAINT take ACCESS EXCLUSIVE on both tables (plain, ADR 0096)
+-- until COMMIT; CREATE INDEX takes SHARE. Acceptable at today's size (0006 question 1).
 -- AN ASSUMPTION, NOT A MEASUREMENT — check first:
 --   SELECT count(*), pg_size_pretty(pg_total_relation_size('noi_dung_mini_app')) FROM noi_dung_mini_app;
 -- ---------------------------------------------------------------------------
@@ -339,7 +339,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

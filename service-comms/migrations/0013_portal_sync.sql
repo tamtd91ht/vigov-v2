@@ -159,15 +159,7 @@ CREATE TABLE IF NOT EXISTS portal_sync_settings (
     CONSTRAINT portal_sync_settings_window_range CHECK (window_days BETWEEN 1 AND 3650),
     CONSTRAINT portal_sync_settings_max_items_range CHECK (max_items_per_run BETWEEN 1 AND 1000),
     CONSTRAINT portal_sync_settings_updated_by_present CHECK (btrim(updated_by) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS portal_sync_settings_p%s PARTITION OF portal_sync_settings '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS portal_sync_settings_guard ON portal_sync_settings;
 CREATE TRIGGER portal_sync_settings_guard
@@ -260,15 +252,7 @@ CREATE TABLE IF NOT EXISTS portal_categories (
     CONSTRAINT portal_categories_target_kind_known
         CHECK (target_kind IN ('tin-tuc', 'su-kien', 'thong-bao')),
     CONSTRAINT portal_categories_signed CHECK (btrim(created_by) <> '' AND btrim(updated_by) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS portal_categories_p%s PARTITION OF portal_categories '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS portal_categories_guard ON portal_categories;
 CREATE TRIGGER portal_categories_guard
@@ -391,10 +375,10 @@ CREATE TABLE IF NOT EXISTS portal_sync_runs (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS portal_sync_runs_p%s PARTITION OF portal_sync_runs '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -431,7 +415,7 @@ DO $$
 DECLARE parent oid := 'noi_dung_mini_app'::regclass;
 BEGIN
     -- SAME SERVICE, SAME SCHEMA, composite with tenant_id: an item cannot name another commune's
-    -- portal category. Both sides hash-partitioned on tenant_id; the referenced pair is the PK.
+    -- portal category. Both sides plain tables (ADR 0096); the referenced pair is the PK.
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = parent
                    AND conname = 'noi_dung_mini_app_portal_category_fk') THEN
         ALTER TABLE noi_dung_mini_app ADD CONSTRAINT noi_dung_mini_app_portal_category_fk
@@ -524,7 +508,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

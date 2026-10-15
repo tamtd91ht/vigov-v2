@@ -284,10 +284,10 @@ CREATE TABLE IF NOT EXISTS thong_bao_gui_cong_dan (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS thong_bao_gui_cong_dan_p%s PARTITION OF thong_bao_gui_cong_dan '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -396,7 +396,7 @@ CREATE TRIGGER thong_bao_gui_cong_dan_bat_bien
 -- REVERSAL (migration question 3). Every object here is new, and while the table is still empty
 -- the reversal is complete and loses nothing: drop the table, then the trigger function, and in
 -- the same transaction remove this file's row from `schema_migration`, otherwise the runner
--- still believes the schema is in place. The 32 partitions, the two indexes and the trigger go
+-- still believes the schema is in place. The 8 partitions, the two indexes and the trigger go
 -- with the parent table.
 --
 -- ONCE A COMMUNE HAS ROWS HERE, THAT IS NO LONGER A REVERSAL — it is the destruction of the
@@ -429,7 +429,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -160,15 +160,7 @@ CREATE TABLE IF NOT EXISTS zalo_channel_setting (
         CHECK (overdue_repeat_every_days IS NULL OR overdue_repeat_every_days BETWEEN 1 AND 365),
     CONSTRAINT zalo_channel_setting_signed
         CHECK (btrim(updated_by) <> '' AND char_length(updated_by) <= 64)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS zalo_channel_setting_p%s PARTITION OF zalo_channel_setting '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS zalo_channel_setting_guard ON zalo_channel_setting;
 CREATE TRIGGER zalo_channel_setting_guard
@@ -258,15 +250,7 @@ CREATE TABLE IF NOT EXISTS zalo_pairing_code (
     CONSTRAINT zalo_pairing_code_expiry_after_issue CHECK (expires_at > created_at),
     CONSTRAINT zalo_pairing_code_closed_once CHECK (used_at IS NULL OR cancelled_at IS NULL),
     CONSTRAINT zalo_pairing_code_attempts_non_negative CHECK (failed_attempts >= 0)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS zalo_pairing_code_p%s PARTITION OF zalo_pairing_code '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- AT MOST ONE OPEN CODE PER MEMBER OF STAFF. "Open" = neither used nor cancelled; expiry cannot sit in
 -- an index predicate (now() is not immutable), so issuing a new code CANCELS the previous open one in
@@ -562,10 +546,10 @@ CREATE TABLE IF NOT EXISTS zalo_delivery (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS zalo_delivery_p%s PARTITION OF zalo_delivery '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -926,7 +910,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

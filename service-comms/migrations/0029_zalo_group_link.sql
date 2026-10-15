@@ -92,7 +92,7 @@
 -- NOT PARTITIONED (zalo_group_link) — the departure 0018 states above zalo_link (0018:336-346), for the
 -- same reason: `zalo_group_link_one_live_per_chat` is platform-wide and cannot contain tenant_id, and the
 -- webhook's lookup is BY CHAT, with no commune known yet. Hundreds to low thousands of rows platform-wide.
--- The two other tables ARE partitioned (ADR 0010).
+-- Of the two other tables, zalo_group_delivery is partitioned and zalo_group_pairing_code is plain (ADR 0096).
 --
 -- SWITCHING BOTS (ADR 0079 Q1 #4, 0018's account change) ENDS LIVE GROUP LINKS TOO. Same three points, same
 -- locks as 0022: the commune lock 'zalo-commune-bot-tenant:' || tenant_id is taken by the pairing trigger
@@ -244,15 +244,7 @@ CREATE TABLE IF NOT EXISTS zalo_group_pairing_code (
     CONSTRAINT zalo_group_pairing_code_expiry_after_issue CHECK (expires_at > created_at),
     CONSTRAINT zalo_group_pairing_code_closed_once CHECK (used_at IS NULL OR cancelled_at IS NULL),
     CONSTRAINT zalo_group_pairing_code_attempts_non_negative CHECK (failed_attempts >= 0)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS zalo_group_pairing_code_p%s PARTITION OF zalo_group_pairing_code '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- THE WEBHOOK'S LOOKUP: hash -> (commune, scope). Cross-commune by nature (see above); open codes only,
 -- so the index stays the size of the codes alive right now. Not unique — see zalo_pairing_code (0018:229-235).
@@ -685,10 +677,10 @@ CREATE TABLE IF NOT EXISTS zalo_group_delivery (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS zalo_group_delivery_p%s PARTITION OF zalo_group_delivery '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -748,7 +740,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

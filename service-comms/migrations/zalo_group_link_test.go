@@ -50,16 +50,17 @@ func kindList(t *testing.T, sql, name string) []string {
 	return got
 }
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a tenant table without its MODULUS 32 loop; zalo_group_link
+// THE MUTATIONS THAT MUST TURN THIS RED: the outbox without its MODULUS 8 loop or the code table
+// partitioned again (ADR 0096); zalo_group_link
 // partitioned (its platform-wide chat key cannot exist then) or its chat key losing the live-only predicate
 // or gaining tenant_id; the dedupe key without tenant_id or made partial; a guard no longer refusing DELETE,
 // no longer freezing a closed code / ended link / finished delivery, or no longer fixing the scope of a
 // code; the cross-table chat trigger detached from either table; a seed row.
 func TestMigration0029ZaloGroupKeysAndGuards(t *testing.T) {
 	sql := executableSQL(t, file0029)
+	requirePlainTable(t, file0029, sql, "zalo_group_pairing_code")
+	requireHashPartitionedBy8(t, file0029, sql, "zalo_group_delivery")
 	for _, c := range []struct{ want, why string }{
-		{"partition of zalo_group_pairing_code ' 'for values with (modulus 32, remainder %s)", "code partition loop (ADR 0010)"},
-		{"partition of zalo_group_delivery ' 'for values with (modulus 32, remainder %s)", "outbox partition loop (ADR 0010)"},
 		{"primary key (tenant_id, id), unique (tenant_id, code_hash),", "a hash never reissued within a commune"},
 		{"check (octet_length(code_hash) = 32)", "a hash, never the code"},
 		{"on zalo_group_pairing_code (code_hash) where used_at is null and cancelled_at is null", "the webhook's open-code lookup"},

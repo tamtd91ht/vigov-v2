@@ -45,7 +45,7 @@
 --   * `verified` ⇔ (`verified_at`, `verified_by`) both set. Un-verifying clears both; the audit entry
 --     the service writes for every change (rule 6) keeps who had verified and when.
 --   * NO NAME INDEX. pg_trgm is used nowhere in this repository, and adding an extension is not a
---     migration's call. Name search is `ILIKE '%…%'` inside one commune's partition, narrowed by the
+--     migration's call. Name search is `ILIKE '%…%'` inside one commune's rows, narrowed by the
 --     type index; a btree on lower(name) would not serve a substring match anyway. The ceiling in
 --     sight (below) makes that a sequential read of a few thousand rows at most.
 --   * LENGTH BOUNDS are vendor guards against a bogus value, in the style of 0007/0014: name 255,
@@ -60,7 +60,7 @@
 --
 --   1. ROWS PER COMMUNE: this file writes NO row (no seed: a seed row belongs to a commune and this
 --      code path has none — 0003, REASON ONE). Steady state: hundreds to a few thousand per commune
---      (the prototype's sample is 26). Partitioned like every other table (ADR 0010).
+--      (the prototype's sample is 26). A plain table, not partitioned (ADR 0096).
 --   2. IF IT STOPS HALF-WAY: it cannot land half-applied — one file, one transaction. Every statement
 --      is IF NOT EXISTS / CREATE OR REPLACE / DROP TRIGGER IF EXISTS; a retry costs nothing. No
 --      backfill, so nothing to resume per commune.
@@ -225,15 +225,7 @@ CREATE TABLE IF NOT EXISTS map_asset (
     CONSTRAINT map_asset_soft_delete_complete
         CHECK ((deleted_at IS NULL) = (deleted_by IS NULL)
                AND (deleted_at IS NULL) = (delete_reason IS NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS map_asset_p%s PARTITION OF map_asset '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The layer counts, the map and the `Sổ địa điểm` table: one commune's live assets per group, id as
 -- the tie-break. Leads with tenant_id (rule 1); soft-deleted rows excluded (rule 7, invariant 2).
@@ -263,7 +255,7 @@ CREATE TRIGGER map_asset_guard
 --
 -- ZERO → in this order:
 --
---   DROP TABLE map_asset;              -- partitions, indexes, trigger, foreign key go with it
+--   DROP TABLE map_asset;              -- indexes, trigger, foreign key go with it
 --   DROP FUNCTION map_asset_guard();
 --   DELETE FROM schema_migration WHERE <this file's row>;  -- the runner's own bookkeeping, not business data
 --
@@ -289,7 +281,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

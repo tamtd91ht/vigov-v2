@@ -17,10 +17,10 @@ const file0027 = "0027_citizen_notification_preferences.sql"
 // VALID on the partitioned ledger; a row written.
 func TestMigration0027CitizenNotificationPreferences(t *testing.T) {
 	sql := executableSQL(t, file0027)
+	requirePlainTable(t, file0027, sql, "citizen_notification_preferences") // ADR 0096: one row per citizen per commune, plain
 	for _, c := range []struct{ want, why string }{
 		{"create table if not exists citizen_notification_preferences ( tenant_id text not null, citizen_id text not null, zalo_enabled boolean not null,", "the agreed columns, no default on the switch"},
 		{"primary key (tenant_id, citizen_id),", "one preference per citizen per commune, composite with tenant_id (rule 1 inv 6)"},
-		{"partition of citizen_notification_preferences ' 'for values with (modulus 32, remainder %s)", "MODULUS 32 partition loop (ADR 0010)"},
 		{"before update or delete on citizen_notification_preferences for each row execute function citizen_notification_preferences_guard()", "guard on update and delete"},
 		{"check (trang_thai in ('cho-gui', 'da-gui', 'that-bai', 'chua-cau-hinh-kenh', 'dan-da-tat-nhan'))", "0004's four values kept, the opt-out added"},
 	} {

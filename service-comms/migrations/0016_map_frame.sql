@@ -13,7 +13,7 @@
 -- WHY A NEW FILE: core/migrate compares the checksum of every applied file at startup.
 --
 -- SHAPE: 0008's mail_settings / 0013's portal_sync_settings — one row per commune, tenant_id IS the
--- primary key, hash-partitioned MODULUS 32 (ADR 0010), a guard trigger refusing DELETE. Two columns
+-- primary key, a plain table (ADR 0096), a guard trigger refusing DELETE. Two columns
 -- they do not have, because the brief for this table asks for them: `created_by`, and a guard that
 -- also freezes `created_at` / `created_by` (0015's identity rule).
 --
@@ -127,15 +127,7 @@ CREATE TABLE IF NOT EXISTS map_frame (
     -- OWNER-PENDING (ADR 0072 H3) — proposal 1–30 km, see header.
     CONSTRAINT map_frame_radius_range CHECK (radius_km BETWEEN 1 AND 30),
     CONSTRAINT map_frame_signed CHECK (btrim(created_by) <> '' AND btrim(updated_by) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS map_frame_p%s PARTITION OF map_frame '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS map_frame_guard ON map_frame;
 CREATE TRIGGER map_frame_guard
@@ -154,7 +146,7 @@ CREATE TRIGGER map_frame_guard
 --
 -- ZERO → in this order:
 --
---   DROP TABLE map_frame;              -- partitions and trigger go with it
+--   DROP TABLE map_frame;              -- trigger goes with it
 --   DROP FUNCTION map_frame_guard();
 --   DELETE FROM schema_migration WHERE <this file's row>;  -- the runner's own bookkeeping, not business data
 --
@@ -182,7 +174,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

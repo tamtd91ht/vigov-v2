@@ -48,7 +48,7 @@
 -- WHY VALIDATED, NOT `NOT VALID`: the new CHECK admits every value the old one did, so the scan cannot
 -- fail; and NOT VALID on a partitioned table is not portable across PG versions (0011:332-341, 0025).
 --
--- THE LOCK: ACCESS EXCLUSIVE on thong_bao_gui_cong_dan and its 32 partitions until COMMIT — the
+-- THE LOCK: ACCESS EXCLUSIVE on thong_bao_gui_cong_dan and its 8 partitions until COMMIT — the
 -- validating scan is the cost. The send worker waits for it. On a large deployment, run it in a quiet
 -- window.
 --
@@ -106,15 +106,7 @@ CREATE TABLE IF NOT EXISTS citizen_notification_preferences (
 
     CONSTRAINT citizen_notification_preferences_citizen_id_shape CHECK (
         btrim(citizen_id) <> '' AND char_length(citizen_id) <= 64 AND citizen_id !~ '[[:space:][:cntrl:]]')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS citizen_notification_preferences_p%s PARTITION OF citizen_notification_preferences '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- No secondary index: the primary key (tenant_id, citizen_id) is exactly the send path's lookup and the
 -- citizen's own read.
@@ -157,7 +149,7 @@ ALTER TABLE thong_bao_gui_cong_dan DROP CONSTRAINT IF EXISTS thong_bao_gui_cong_
 --
 -- ZERO → re-add 0004's `thong_bao_gui_cong_dan_trang_thai_hop_le` VERBATIM, drop
 -- `thong_bao_gui_cong_dan_trang_thai_with_opt_out`, drop table citizen_notification_preferences
--- (partitions and trigger go with it), drop function citizen_notification_preferences_guard(), and
+-- (trigger goes with it), drop function citizen_notification_preferences_guard(), and
 -- remove this file's row from `schema_migration` (ten = '0027_citizen_notification_preferences.sql').
 --
 -- NON-ZERO → a preference row is a citizen's stated choice; dropping it turns their notifications back
@@ -184,7 +176,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -11,18 +11,18 @@ import (
 
 const file0014 = "0014_external_contacts.sql"
 
-// THE MUTATIONS THAT MUST TURN THIS RED: a key or index without tenant_id first; a missing partition
-// loop; the guard removed or no longer refusing DELETE / edits of a deleted row; a blank name,
+// THE MUTATIONS THAT MUST TURN THIS RED: a key or index without tenant_id first; the table
+// partitioned (ADR 0096); the guard removed or no longer refusing DELETE / edits of a deleted row; a blank name,
 // category or phone accepted; the soft-delete trio no longer all-or-none; a publish flag or a
 // catalogue foreign key sneaking in; a hard delete or drop.
 func TestMigration0014ExternalContacts(t *testing.T) {
 	sql := executableSQL(t, file0014)
+	requirePlainTable(t, file0014, sql, "external_contacts")
 	for _, c := range []struct{ want, why string }{
 		{"create table if not exists external_contacts ( tenant_id text not null, id text not null,", "tenant_id and ULID id, both required"},
 		{"name text not null, category text not null, phone text not null, address text, display_order int,", "the agreed columns, address and order nullable"},
 		{"created_by text not null, updated_at timestamptz not null default now(), updated_by text not null,", "signed by business codes"},
 		{"primary key (tenant_id, id),", "key composite with tenant_id (rule 1 inv 6)"},
-		{"partition of external_contacts ' 'for values with (modulus 32, remainder %s)", "MODULUS 32 partition loop (ADR 0010)"},
 		{"btrim(name) <> '' and char_length(name) <= 255", "name not blank, bounded"},
 		{"btrim(category) <> '' and char_length(category) <= 100", "category not blank, bounded"},
 		{"btrim(phone) <> '' and char_length(phone) <= 32 and phone ~ '^[0-9+(). -]+$'", "phone is dial characters only"},
