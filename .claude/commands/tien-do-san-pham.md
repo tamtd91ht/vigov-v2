@@ -117,9 +117,10 @@ Xong: báo người dùng đường dẫn tệp và 3–5 con số chính đọc
 | Không dữ liệu cá nhân (SĐT, CCCD, họ tên công dân) | Luật 3 — tool soi mọi ô trước khi ghi |
 
 ⚠ **Hai cột đã dựng / chưa dựng không cộng được thành %.** "Chưa dựng" là danh sách màn tự khai
-(`PHAN_CHUA_DUNG`); "đã dựng" là tóm tắt của agent. Một chức năng đã dựng có thể bằng một hay
-nhiều phần chưa dựng. Màn **không khai** `PHAN_CHUA_DUNG` in `0` kèm dòng "chưa khai" ở mục B —
-đọc là *chưa đếm được*, không phải *không còn gì*.
+(`PHAN_CHUA_DUNG`, gán vào mục menu bằng dòng `// @screens`); "đã dựng" là tóm tắt của agent. Một
+chức năng đã dựng có thể bằng một hay nhiều phần chưa dựng. Mục menu mà không khối nào nêu trong
+`@screens` in `0` kèm dòng "chưa khai" ở mục B — đọc là *chưa đếm được*, không phải *không còn gì*.
+Một chương đặc tả nhiều mục menu (chương 14: `Cấu hình` và `Hệ thống`) gộp phần chưa dựng của cả hai.
 
 ### Đẩy lên Google Sheet — thủ công, có chủ ý
 
@@ -171,8 +172,13 @@ nên nó không nằm trong mẫu số.
 vào mẫu số cho ra `6/8` và đọc thành "còn thiếu hai màn" — sai.
 
 **`không khai` ≠ `0`.** `0` nghĩa là màn có khai một danh sách phần-chưa-dựng và danh sách ấy
-rỗng. `không khai` nghĩa là **chưa ai nói màn ấy còn thiếu gì**. Ba màn đang ở trạng thái sau,
-và in `0` cho chúng là một lời trấn an không có gì đứng sau.
+rỗng. `không khai` nghĩa là **không khối nào nêu mục menu ấy trong `@screens`** — chưa ai nói màn
+ấy còn thiếu gì — và in `0` cho nó là một lời trấn an không có gì đứng sau. Danh sách mục đang
+`không khai` đọc ở bảng menu của tệp sinh ra, không chép vào đây (nó đổi theo mã).
+
+**Mỗi phần đếm một lần, ở màn gốc.** Ngăn chi tiết mở tại chỗ từ màn khác (ngăn nhiệm vụ, văn bản
+đến, dự án mở từ Tổng quan hay Sổ tay lãnh đạo) vẽ dấu "?" của màn gốc, nhưng không đếm thêm cho màn
+mở nó (chủ dự án 15/10/2026) — nếu không tổng sẽ cộng trùng.
 
 **Phần Mini App đo hai thứ rời nhau, và khoảng cách giữa chúng mới là tin.** Một bên là tuyến
 ViGov khai `citizen-only` trong hợp đồng; một bên là tuyến `citizen-app` thật sự gọi. Hôm nay là
@@ -206,7 +212,7 @@ bất biến 8). Sửa **nguồn**:
 | tuyến của một chương | `@screen` trên câu lệnh route trong `*/internal/http/routes.go` |
 | một tuyến "chưa gọi" mà đã có màn | `tools/apidoc/manhinh.go` — nó suy từ `web-admin/src/lib/api/**` |
 | mục menu, đường dẫn, khoá quyền | `web-admin/src/components/muc-menu.ts` |
-| số phần chưa dựng | mảng `PHAN_CHUA_DUNG` của chính màn ấy |
+| số phần chưa dựng | mảng `PHAN_CHUA_DUNG` của chính màn ấy, và dòng `// @screens /route …` ngay trên `export const` (hoặc trên `{` của từng mục) — nó quyết mục menu nào được đếm. Thiếu dòng hay đường lạ thì tool thoát 1 kèm `file:line` |
 | trạng thái module | `kb/90-ephemeral/tien-do/<module>.json`, rồi `/progress` |
 
 → Bảng theo module: `/progress` · Sức khoẻ tầng tri thức: `/knowledge-health`

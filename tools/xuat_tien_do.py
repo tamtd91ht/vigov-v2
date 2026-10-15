@@ -161,14 +161,19 @@ def tu(s: str) -> list[str]:
     return [g for g in (sp.gon(w) for w in re.split(r"[\s&–—-]+", s)) if g]
 
 
-def ghep_menu(chuong: list[dict], menu: list[dict]) -> dict[str, dict]:
-    """slug chương → dòng menu. Khớp khi MỌI từ của nhãn menu có trong tiêu đề chương; hoà thì
-    chọn tiêu đề ít từ thừa nhất ("Tổng quan" → 01 "Tổng quan điều hành", không phải 00).
+def ghep_menu(chuong: list[dict], menu: list[dict]) -> dict[str, list[dict]]:
+    """slug chương → các dòng menu của nó. Khớp khi MỌI từ của nhãn menu có trong tiêu đề chương;
+    hoà thì chọn tiêu đề ít từ thừa nhất ("Tổng quan" → 01 "Tổng quan điều hành", không phải 00).
+
+    MỘT CHƯƠNG CÓ THỂ CÓ NHIỀU MỤC MENU: chương 14 "Cấu hình hệ thống" đặc tả cả `Cấu hình` lẫn
+    `Hệ thống` (ba thẻ Lịch làm việc, Nhật ký hệ thống, Nhận diện xã tách thành mục menu riêng). Bản
+    trước bắt một-một và đỏ "hai mục menu cùng khớp chương 14" từ ngày có mục `Hệ thống`. Một mục
+    menu khớp HAI chương như nhau thì vẫn từ chối: đó mới là chỗ đoán.
 
     Không khớp theo thứ tự: menu và chương tình cờ cùng thứ tự hôm nay, và một mục chèn thêm là
     mọi dòng sau lệch một bậc mà không ô nào báo.
     """
-    ra: dict[str, dict] = {}
+    ra: dict[str, list[dict]] = {}
     for m in menu:
         nhan = set(tu(m["nhan"]))
         ung = [(len(set(tu(r["ten"])) - nhan), r["slug"]) for r in chuong
@@ -178,9 +183,7 @@ def ghep_menu(chuong: list[dict], menu: list[dict]) -> dict[str, dict]:
             if len(ung) > 1 and ung[0][0] == ung[1][0]:
                 raise RuntimeError(f"mục menu {m['nhan']!r} khớp hai chương như nhau: "
                                    f"{ung[0][1]}, {ung[1][1]}")
-            if ung[0][1] in ra:
-                raise RuntimeError(f"hai mục menu cùng khớp chương {ung[0][1]}")
-            ra[ung[0][1]] = m
+            ra.setdefault(ung[0][1], []).append(m)
     return ra
 
 
@@ -286,26 +289,26 @@ def thu_thap() -> dict:
         dem_sv[t["slug"]][t["service"]] += 1
     ds_chuong, ds_menu = [], []
     for r in chuong:
-        m = menu_theo_chuong.get(r["slug"])
+        ms = menu_theo_chuong.get(r["slug"], [])
         # Chương không có menu, tuyến hay việc (00) là phần giới thiệu của đặc tả, không phải menu.
-        if not m and not r["tuyen"] and not viec_chuong.get(r["slug"]):
+        if not ms and not r["tuyen"] and not viec_chuong.get(r["slug"]):
             continue
         cd = [t for t in theo_chuong.get(r["slug"], []) if sp.la_cong_dan(t)]
         api = (f"{r['da_goi']}/{r['web']}" if r["web"] else "0")
         if cd:
             api += f" (+{len(cd)} công dân)"
-        if m is None:
-            web = "Không có mục menu"
-        elif m["duong"] is None:
-            web = "Chưa có màn (mục menu giữ chỗ)"
-        else:
-            web = m["duong"] + (" — có màn" if m["co_man"] else " — chưa có trang")
+
+        def o_web(m: dict) -> str:
+            if m["duong"] is None:
+                return "Chưa có màn (mục menu giữ chỗ)"
+            return m["duong"] + (" — có màn" if m["co_man"] else " — chưa có trang")
+        web = "; ".join(o_web(m) for m in ms) if ms else "Không có mục menu"
         ds_chuong.append({
             "so": r["so"], "slug": r["slug"], "ten": r["ten"],
             "service": " · ".join(s for s, _n in dem_sv[r["slug"]].most_common()) or "—",
             "api": api, "web": web,
-            "chua_dung": ((sp.pending_parts_of_route(m["duong"], menu_goc) or [])
-                          if m and m["duong"] else []),
+            "chua_dung": [p for m in ms if m["duong"]
+                          for p in (sp.pending_parts_of_route(m["duong"], menu_goc) or [])],
             "tuyen": [f"{t['pt']} {t['duong']}" for t in tuyen if t["slug"] == r["slug"]],
             "viec": viec_chuong.get(r["slug"], []),
         })

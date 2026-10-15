@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 0f443250
+derived_from_commit: 4471e8fe
 expires: 2027-01-13
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -1553,7 +1553,7 @@ Cập nhật 2026-10-15 · 23 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
-| `tien-do-san-pham-screens-15-10` — tien_do_san_pham.py gán số 'Chưa dựng' theo dòng // @screens của từng khối PHAN_CHUA_DUNG, không suy từ import; mỗi phần đếm một lần ở màn gốc | xong | Thiếu dòng @screens hoặc đường không có trong muc-menu.ts → thoát 1 kèm file:line. Bảng sau sửa: Tổng quan 1, Nhiệm vụ 3, Báo cáo 2, Người dùng/Phân quyền/Hệ thống 0, tổng 42. test_hooks.py 316/316 (6 ca mới). | — | `--excel --khung` đỏ trước thay đổi này: 'hai mục menu cùng khớp chương 14-cau-hinh' (xuat_tien_do.py:179-182) — chưa sửa. .claude/commands/tien-do-san-pham.md dòng 120-121, 174, 209 còn tả cách cũ. Mục ten viết một dòng `{ ten: … }` không được đếm (giới hạn cũ). |
+| `tien-do-san-pham-screens-15-10` — tien_do_san_pham.py gán số 'Chưa dựng' theo dòng // @screens của từng khối PHAN_CHUA_DUNG, không suy từ import; mỗi phần đếm một lần ở màn gốc | xong | Thiếu dòng @screens hoặc đường không có trong muc-menu.ts → thoát 1 kèm file:line. Bảng sau sửa: Tổng quan 1, Nhiệm vụ 3, Báo cáo 2, Người dùng/Phân quyền/Hệ thống 0, tổng 42. test_hooks.py 316/316 (6 ca mới). Lệnh xuất Excel: một chương nhận nhiều mục menu (chương 14 = Cấu hình + Hệ thống), `--excel --khung` thoát 0. .claude/commands/tien-do-san-pham.md tả cách gán @screens và đếm một lần ở màn gốc. | — | Mục ten viết một dòng `{ ten: … }` không được đếm (giới hạn cũ). Bước --tu của bản Excel chưa chạy thử trọn (cần phần chữ `viet` do agent viết). |
 | `bo-sinh-tien-do` — tools/tien_do.py — sinh tệp đọc tien-do.md từ các tệp ghi theo module | xong | tools/tien_do.py:1; `python tools/tien_do.py` chạy thật, sinh ra kb/90-ephemeral/tien-do.md; đã nối vào mục `kb` của Makefile:125. KHÔNG ghi số module/mục ở đây — con số nào chép vào cũng sai trong vài ngày | — | hạn của tệp sinh tính từ `cap_nhat` MỚI NHẤT của các module, không phải ngày sinh — quá hạn nghĩa là 90 ngày không ai cập nhật tiến độ |
 | `check-brain-bo-qua-tmp` — check_brain bất biến 6 đỏ vì một tệp .md nháp trong tmp/ (đã nằm trong .gitignore) | xong | tools/check_brain.py:277 thêm `tmp` vào danh sách loại trừ khi duyệt cây; `python tools/check_brain.py` 7/7 — số dòng kiểm lại 2026-09-20 (bản cũ ghi :272, đã lệch) | — | phép kiểm đi bằng hệ tệp chứ không đi bằng git. Nếu còn thư mục nào khác trong .gitignore mà sinh .md thì sẽ đỏ lại theo đúng cách này |
 | `apidoc-mau-route-hang-chuoi` — apidoc từ chối mẫu route là hằng chuỗi — bộ sinh hợp đồng REST hỏng từ 1a8ce11 | xong | tools/apidoc/route.go — mauRoute + hangChuoiTrongTep; 3 ca mới trong route_test.go, đã đột biến (bỏ phần tra hằng -> 2 ca đỏ). `make kb` chạy lại được: hợp đồng đi từ 9 lên 17 tuyến — kiểm 2026-09-20 | — | Chỉ tra hằng khai trong CÙNG tệp, có chủ ý; mẫu dựng lúc chạy vẫn là lỗi và có ca test giữ. Bài học ghi trong mã: bộ sinh từng phạt đúng khuôn mã luật 9 đòi (một đường dẫn, một nguồn) và đẩy người viết đi chép đường dẫn ra hai chỗ |

@@ -7,9 +7,9 @@
       "id": "tien-do-san-pham-screens-15-10",
       "viec": "tien_do_san_pham.py gán số 'Chưa dựng' theo dòng // @screens của từng khối PHAN_CHUA_DUNG, không suy từ import; mỗi phần đếm một lần ở màn gốc",
       "trang_thai": "xong",
-      "bang_chung": "Thiếu dòng @screens hoặc đường không có trong muc-menu.ts → thoát 1 kèm file:line. Bảng sau sửa: Tổng quan 1, Nhiệm vụ 3, Báo cáo 2, Người dùng/Phân quyền/Hệ thống 0, tổng 42. test_hooks.py 316/316 (6 ca mới).",
+      "bang_chung": "Thiếu dòng @screens hoặc đường không có trong muc-menu.ts → thoát 1 kèm file:line. Bảng sau sửa: Tổng quan 1, Nhiệm vụ 3, Báo cáo 2, Người dùng/Phân quyền/Hệ thống 0, tổng 42. test_hooks.py 316/316 (6 ca mới). Lệnh xuất Excel: một chương nhận nhiều mục menu (chương 14 = Cấu hình + Hệ thống), `--excel --khung` thoát 0. .claude/commands/tien-do-san-pham.md tả cách gán @screens và đếm một lần ở màn gốc.",
       "no_confirm": [],
-      "tiep_theo": "`--excel --khung` đỏ trước thay đổi này: 'hai mục menu cùng khớp chương 14-cau-hinh' (xuat_tien_do.py:179-182) — chưa sửa. .claude/commands/tien-do-san-pham.md dòng 120-121, 174, 209 còn tả cách cũ. Mục ten viết một dòng `{ ten: … }` không được đếm (giới hạn cũ)."
+      "tiep_theo": "Mục ten viết một dòng `{ ten: … }` không được đếm (giới hạn cũ). Bước --tu của bản Excel chưa chạy thử trọn (cần phần chữ `viet` do agent viết)."
     },
     {
       "id": "bo-sinh-tien-do",
