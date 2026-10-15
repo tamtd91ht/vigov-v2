@@ -705,11 +705,11 @@
     {
       "id": "bl141026-khoa-quyen-rieng-cau-hinh",
       "menu": "cau-hinh",
-      "trang_thai": "treo",
+      "trang_thai": "xong",
       "no_confirm": [],
-      "viec": "Tester (bảng lỗi web-admin-141026) đòi khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo trên màn Phân quyền. Chủ dự án 15/10/2026: 'tạm bỏ qua, back lại sau' — CHƯA quyết.",
-      "bang_chung": "Lời chủ dự án do phiên chính chuyển lại, 15/10/2026. Không có mã.",
-      "tiep_theo": "Không làm tới khi chủ dự án mở lại. Khi mở: khoá mới phải qua câu mở #27 (đã DECIDED: chỉ nạp khoá có tuyến thật cần) và luật 5 bất biến 3c — không tự INSERT INTO quyen. Ghi chéo ở ADR 0090 §Sửa đổi 15/10/2026."
+      "viec": "Tester (bảng lỗi web-admin-141026) đòi khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo trên màn Phân quyền. Chủ dự án 15/10/2026 cho đối chiếu prototype → Reject: không thêm khoá.",
+      "bang_chung": "Prototype https://vigov-admin-production.up.railway.app/nguoi-dung/phan-quyen (xem 15/10/2026): nhóm QUẢN TRỊ chỉ có admin.audit, admin.lookup, admin.org, admin.role, admin.sla, admin.user; ConfigWorkspace.tsx:37 mở các tab cấu hình bằng admin.lookup. Mã hiện tại khớp: 4 tab dùng admin.lookup, ghi thôn dùng admin.org. Sheet dòng 22 ghi Reject.",
+      "tiep_theo": "Không còn việc. Mở lại chỉ khi chủ dự án đổi ý; khoá mới vẫn phải qua câu #27 và luật 5 bất biến 3c."
     }
   ]
 }

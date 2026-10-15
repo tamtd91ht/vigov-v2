@@ -151,4 +151,4 @@ do từng dòng.
 | Điểm | Chốt | Chủ sở hữu |
 |---|---|---|
 | Tab "Cảnh báo thiên tai" trong Nội dung Mini App — bảng lỗi đòi gỡ | **Giữ.** Đây là màn duy nhất đăng cảnh báo thiên tai (#2 ở trên) | ADR 0091 §2 |
-| Khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo — bảng lỗi đòi | **Chưa quyết.** Chủ dự án: *"tạm bỏ qua, back lại sau"*. Khoá mới nào cũng phải qua câu mở #27 và luật 5 bất biến 3c | Sổ `kb/90-ephemeral/tien-do/service-identity.json`, mục `bl141026-khoa-quyen-rieng-cau-hinh` |
+| Khoá quyền riêng cho Thôn/TDP, Lời hệ thống, Máy chủ thư, Kênh Zalo — bảng lỗi đòi | **Không thêm khoá** (chủ dự án 15/10/2026, theo prototype: nhóm Quản trị chỉ 6 khoá; 4 tab thuộc `admin.lookup`, ghi thôn thuộc `admin.org`). Khoá mới nào sau này vẫn phải qua câu mở #27 và luật 5 bất biến 3c | Sổ `kb/90-ephemeral/tien-do/service-identity.json`, mục `bl141026-khoa-quyen-rieng-cau-hinh` |
