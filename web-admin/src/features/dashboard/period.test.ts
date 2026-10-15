@@ -6,6 +6,7 @@ import {
   formatDateTime,
   periodMetaLabel,
   periodWindows,
+  toDateRange,
   toQueryPeriod,
   toRfc3339,
   zoneYear,
@@ -143,5 +144,30 @@ describe("formatting — always in Viet Nam, never the machine's zone", () => {
       from: "2026-09-01T00:00:00+07:00",
       to: "2026-09-28T16:43:01+07:00",
     });
+  });
+});
+
+describe("toDateRange — the letter register's INCLUSIVE received_from / received_to", () => {
+  it("month to now: from the 1st to TODAY in Viet Nam; the previous window ends on the same day number", () => {
+    // 09:43 UTC 28/09 = 16:43 in Viet Nam
+    const w = periodWindows("month", at("2026-09-28T09:43:00Z"));
+    expect(toDateRange(w.current)).toEqual({ from: "2026-09-01", to: "2026-09-28" });
+    expect(toDateRange(w.previous)).toEqual({ from: "2026-08-01", to: "2026-08-28" });
+  });
+
+  it("a whole period never names the next period's first day (end is exclusive, received_to is not)", () => {
+    // the previous window of 31/03 is capped at 01/03 00:00 — its last day is 28/02, not 01/03
+    const w = periodWindows("month", at("2026-03-31T10:00:00Z"));
+    expect(toDateRange(w.previous)).toEqual({ from: "2026-02-01", to: "2026-02-28" });
+    expect(toDateRange({ start: Date.parse("2026-09-01T00:00:00+07:00"), end: Date.parse("2026-10-01T00:00:00+07:00") })).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-30",
+    });
+  });
+
+  it("dates are Viet Nam's, not the machine's (TZ=UTC here): 23:30 UTC is already tomorrow", () => {
+    // 23:30 UTC 30/09 = 06:30 01/10 in Viet Nam: "Tháng này" is October, one day long
+    const w = periodWindows("month", at("2026-09-30T23:30:00Z"));
+    expect(toDateRange(w.current)).toEqual({ from: "2026-10-01", to: "2026-10-01" });
   });
 });

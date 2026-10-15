@@ -18,34 +18,23 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
  */
 // vi-name-ok: the progress tool (`tools/tien_do_san_pham.py`) matches this exact constant name
 export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
-  {
-    ten: "Đơn thư trong kỳ",
-    viSao:
-      "Số đơn thư công dân vào sổ trong kỳ. Hệ thống chưa có sổ đơn thư, nên chưa có gì để đếm.",
-  },
+  // "Đơn thư trong kỳ" was built on 15/10/2026 from `citizen-letter-counts` (`view.tsx` `letterFigure`)
+  // and left this list; so did the block "Kinh tế & Tài nguyên" (`EconomyBlock`, `map-asset-summary`),
+  // except the one figure below.
   // "Giải ngân ngân sách" was built on 10/10/2026 from `investment-project-summary` (`view.tsx`
   // `BudgetBlock`, customer sheet row 6) and left this list.
   {
-    ten: "Kinh tế & Tài nguyên",
+    // The map summary counts the register AS IT STANDS — per group, total, verified — and nothing per
+    // creation date; a count of "new in the period" would need the server to count by `created_at`.
+    ten: "Thành lập mới",
     viSao:
-      "Số doanh nghiệp, hộ kinh doanh, cơ sở thành lập mới trong kỳ và tổng tài nguyên trên địa " +
-      "bàn, đếm từ Bản đồ kinh tế số. Bản đồ đã có, nhưng phép đếm các số này cho màn Tổng quan " +
-      "chưa được làm.",
+      "Số cơ sở được đưa lên Bản đồ kinh tế số trong kỳ. Số liệu bản đồ hiện chỉ đếm tổng số đang có " +
+      "theo từng nhóm, chưa đếm theo ngày thêm vào, nên chưa có số của kỳ.",
   },
   // "Xuất báo cáo PDF, XLSX, PPTX" was built on 06/10/2026 (`export-actions.tsx`) and left this list;
   // `/bao-cao`'s followed on 09/10/2026 (`features/report/report-export-actions.tsx`).
   // "Chế độ trình chiếu phòng họp" was built on 07/10/2026 (`presentation.tsx`) and left it too.
 ];
-
-/**
- * The tiles an unbuilt BLOCK will have, drawn as "—" under the block's one "?" so the block keeps
- * its shape and place in the grid (prototype `DashboardWorkspace`, owner 05/10/2026). The labels are
- * the prototype's metric names (`report-display.ts` METRIC_LABELS) — the same figures each entry's
- * `viSao` above lists in words. Keyed by the entry's `ten`: build the block → delete both together.
- */
-export const PENDING_BLOCK_METRICS = {
-  "Kinh tế & Tài nguyên": ["Doanh nghiệp", "Hộ kinh doanh", "Thành lập mới", "Tổng tài nguyên"],
-} as const satisfies Readonly<Record<string, readonly string[]>>;
 
 /**
  * One entry by its `ten`. THROWS on an unknown name rather than drawing a "?" with no description:

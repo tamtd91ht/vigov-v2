@@ -184,6 +184,28 @@ export function toQueryPeriod(b: Bounds): { from: string; to: string } {
   return { from: toRfc3339(b.start), to: toRfc3339(b.end) };
 }
 
+/** `2026-09-01` — the wall date in Viet Nam of an instant, the shape a DATE query parameter takes. */
+function toIsoDate(instant: number): string {
+  const p = wallParts(new Date(instant));
+  return `${p.year}-${pad2(p.month + 1)}-${pad2(p.day)}`;
+}
+
+/**
+ * A half-open window as the INCLUSIVE pair of wall dates a register dated by DAY is filtered with —
+ * the citizen-letter register's `received_from` / `received_to` (`received_date` is a DATE column, and
+ * the store filters `received_date >= from AND received_date <= to`, both ends INCLUDED:
+ * `service-documents/internal/store/citizen_letter.go:273-278`).
+ *
+ * `to` IS THE DAY OF THE LAST INSTANT INSIDE THE WINDOW (`end - 1`), never the day of `end`: `end` of a
+ * whole month is the next month's first midnight, and sending its date would count the 1st of the next
+ * month into this one. A window ending mid-day ("Tháng này" up to now) counts its last day whole — a
+ * letter carries a date, not an hour — and its comparison window does the same, so both sides count
+ * the same number of days.
+ */
+export function toDateRange(b: Bounds): { from: string; to: string } {
+  return { from: toIsoDate(b.start), to: toIsoDate(b.end - 1) };
+}
+
 /** `1/9/2026` — the wall date in Viet Nam, unpadded as spec §2 prints it. */
 export function formatDate(instant: number): string {
   const p = wallParts(new Date(instant));

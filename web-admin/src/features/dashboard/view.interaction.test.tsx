@@ -40,6 +40,8 @@ function data(patch: Partial<DashboardData>): DashboardData {
     budget: null,
     queue: { ok: true, duLieu: { rows: [], failures: [] } },
     taskTypeLabels: null,
+    citizenLetters: { current: null, previous: null },
+    mapAssets: null,
     ...patch,
   };
 }

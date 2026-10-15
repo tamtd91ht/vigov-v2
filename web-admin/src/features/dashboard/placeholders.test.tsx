@@ -56,9 +56,19 @@ const DATA: DashboardData = {
   budget: null,
   queue: { ok: true, duLieu: { rows: [], failures: [] } },
   taskTypeLabels: null,
+  citizenLetters: { current: null, previous: null },
+  mapAssets: null,
 };
 
-const ALL_KEYS = blockVisibility(["report.read", "task.read", "document.read", "feedback.read", "budget.read"]);
+const ALL_KEYS = blockVisibility([
+  "report.read",
+  "task.read",
+  "document.read",
+  "feedback.read",
+  "budget.read",
+  "petition.read",
+  "asset.read",
+]);
 
 function page(visible = ALL_KEYS): HTMLDivElement {
   // The view draws its own header (PDF/XLSX/PPTX, Trình chiếu) — the prototype's frame.
@@ -98,9 +108,19 @@ describe("Tổng quan — unbuilt parts at their spec position (ADR 0068 §14)",
 
   it("the unbuilt KPI card shows '—', never a figure and never a link", () => {
     const el = page();
-    const card = marker(el, "Đơn thư trong kỳ")!.closest("[data-pending]")!;
+    const card = marker(el, "Thành lập mới")!.closest("[data-pending]")!;
     expect(card.textContent).toContain("—");
     expect(card.querySelector("a")).toBeNull();
+  });
+
+  it("built on 15/10/2026: 'Đơn thư trong kỳ' and the block 'Kinh tế & Tài nguyên' carry no '?' and no entry", () => {
+    const el = page();
+    for (const ten of ["Đơn thư trong kỳ", "Kinh tế & Tài nguyên"]) {
+      expect(marker(el, ten)).toBeNull();
+      expect(PHAN_CHUA_DUNG.some((p) => p.ten === ten)).toBe(false);
+    }
+    // the one '?' left on the page body is 'Thành lập mới'
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual(["Thành lập mới"]);
   });
 
   it("'Điểm hài lòng' is a real figure now (owner, 02/10/2026): no '?' for it anywhere", () => {
@@ -109,21 +129,20 @@ describe("Tổng quan — unbuilt parts at their spec position (ADR 0068 §14)",
     expect(PHAN_CHUA_DUNG.some((p) => p.ten === "Điểm hài lòng")).toBe(false);
   });
 
-  it("DENIED: without budget.read the 'Giải ngân ngân sách' placeholder is not drawn either", () => {
+  it("DENIED: without asset.read the 'Thành lập mới' placeholder is not drawn either", () => {
     const el = page(blockVisibility(["report.read"]));
     expect(marker(el, "Giải ngân ngân sách")).toBeNull();
-    expect(marker(el, "Đơn thư trong kỳ")).toBeNull();
-    // no key of its own: shown under the page gate alone
-    expect(marker(el, "Kinh tế & Tài nguyên")).not.toBeNull();
+    expect(marker(el, "Thành lập mới")).toBeNull();
+    expect(el.querySelector('[data-block="economy"]')).toBeNull();
   });
 
   it("pressing a '?' opens its description and calls no server", () => {
     const fetchSpy = vi.fn();
     vi.stubGlobal("fetch", fetchSpy);
     const el = page();
-    act(() => marker(el, "Kinh tế & Tài nguyên")!.click());
+    act(() => marker(el, "Thành lập mới")!.click());
     const dialog = document.body.querySelector('[role="dialog"]');
-    expect(dialog?.textContent).toContain(PHAN_CHUA_DUNG.find((p) => p.ten === "Kinh tế & Tài nguyên")!.viSao);
+    expect(dialog?.textContent).toContain(PHAN_CHUA_DUNG.find((p) => p.ten === "Thành lập mới")!.viSao);
     // a block placeholder is not marked Phase 2 — the Phase-2 note belonged to Trình chiếu, now built
     expect(dialog?.textContent).not.toContain(PHASE_2_NOTE);
     expect(fetchSpy).not.toHaveBeenCalled();

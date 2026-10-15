@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCauHinhXa } from "@/components/cau-hinh-xa";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { usePhien } from "@/features/phien/phien-hien-tai";
+import { countCitizenLetters } from "@/lib/api/citizen-letters";
 import {
   fetchCitizenReportSummary,
   fetchIncomingDocumentOverdueQueue,
@@ -17,12 +18,13 @@ import type { SummaryPeriod } from "@/lib/api/dashboard";
 import { layLoaiNhiemVu } from "@/lib/api/danh-muc-nghiep-vu";
 import { getProjectSummary } from "@/lib/api/du-an";
 import type { KetQua } from "@/lib/api/goi";
+import { getMapAssetSummary } from "@/lib/api/map-assets";
 import { layChiSoNganSach } from "@/lib/api/thu-chi";
 import { coQuyen, quyetDinhTheoKhoa, REPORT_EXPORT_PERMISSION, REPORT_READ_PERMISSION } from "@/lib/quyen";
 
 import { mergeQueues } from "./figures";
 import type { QueueSource } from "./figures";
-import { DEFAULT_PERIOD_KIND, periodWindows, toQueryPeriod, zoneYear } from "./period";
+import { DEFAULT_PERIOD_KIND, periodWindows, toDateRange, toQueryPeriod, zoneYear } from "./period";
 import type { PeriodKind } from "./period";
 import { useDashboardTaskDrill } from "./task-drill";
 import { blockVisibility, DashboardHeader, DashboardView } from "./view";
@@ -68,10 +70,10 @@ export function DashboardPage() {
  * One summary asked for twice — current window and previous window — as two INDEPENDENT calls: a
  * failed previous-period call must not blank the current figures, and the reverse.
  */
-function loadPair<T>(
-  call: (p: SummaryPeriod) => Promise<KetQua<T>>,
-  current: SummaryPeriod,
-  previous: SummaryPeriod,
+function loadPair<T, P>(
+  call: (p: P) => Promise<KetQua<T>>,
+  current: P,
+  previous: P,
   onUpdate: (pair: SummaryPair<T>) => void,
 ): void {
   let cur: Loaded<T> = null;
@@ -96,10 +98,12 @@ function emptyResults(token: string): Results {
     tasks: { current: null, previous: null },
     incomingDocuments: { current: null, previous: null },
     citizenReports: { current: null, previous: null },
+    citizenLetters: { current: null, previous: null },
     fiscal: null,
     budget: null,
     queue: null,
     taskTypeLabels: null,
+    mapAssets: null,
   };
 }
 
@@ -172,10 +176,17 @@ export function useDashboardFigures(
   visible: BlockVisibility,
   withQueues: boolean,
 ): BlocksData {
-  const visibleKey = `${visible.tasks}|${visible.incomingDocuments}|${visible.citizenReports}|${visible.budget}`;
+  // "Đơn thư trong kỳ" sits INSIDE the documents block, so it needs that block's keys AND its own.
+  const lettersVisible = visible.incomingDocuments && visible.citizenLetters;
+  const visibleKey =
+    `${visible.tasks}|${visible.incomingDocuments}|${visible.citizenReports}|${visible.budget}` +
+    `|${lettersVisible}|${visible.economy}`;
   // Primitives, not the window objects: the effect re-runs on what is ASKED, not on object identity.
   const { from: curFrom, to: curTo } = toQueryPeriod(windows.current);
   const { from: prevFrom, to: prevTo } = toQueryPeriod(windows.previous);
+  // The letter register is dated by DAY: the same two windows as inclusive wall dates (`toDateRange`).
+  const { from: curDayFrom, to: curDayTo } = toDateRange(windows.current);
+  const { from: prevDayFrom, to: prevDayTo } = toDateRange(windows.previous);
   const fiscalYear = zoneYear(at);
   const token = `${curFrom}|${curTo}|${prevFrom}|${prevTo}|${at}|${visibleKey}|${withQueues}`;
 
@@ -189,7 +200,7 @@ export function useDashboardFigures(
     };
     const current: SummaryPeriod = { from: curFrom, to: curTo };
     const previous: SummaryPeriod = { from: prevFrom, to: prevTo };
-    const [showTasks, showDocuments, showReports, showBudget] = visibleKey
+    const [showTasks, showDocuments, showReports, showBudget, showLetters, showEconomy] = visibleKey
       .split("|")
       .map((v) => v === "true");
 
@@ -199,6 +210,18 @@ export function useDashboardFigures(
         put({ incomingDocuments }),
       );
     }
+    if (showLetters) {
+      // `scope` is not sent: the server's default is the whole register of the commune (`all`), the
+      // same scope the documents block counts. The commune is the Host's (rule 1).
+      loadPair(
+        (d: { from: string; to: string }) => countCitizenLetters({ receivedFrom: d.from, receivedTo: d.to }),
+        { from: curDayFrom, to: curDayTo },
+        { from: prevDayFrom, to: prevDayTo },
+        (citizenLetters) => put({ citizenLetters }),
+      );
+    }
+    // Khối Kinh tế & Tài nguyên: the map register as it stands now — one call, no period, no pair.
+    if (showEconomy) getMapAssetSummary().then((kq) => put({ mapAssets: kq }));
     if (showReports) {
       loadPair(fetchCitizenReportSummary, current, previous, (citizenReports) =>
         put({ citizenReports }),
@@ -238,7 +261,20 @@ export function useDashboardFigures(
     return () => {
       cancelled = true;
     };
-  }, [token, curFrom, curTo, prevFrom, prevTo, visibleKey, fiscalYear, withQueues]);
+  }, [
+    token,
+    curFrom,
+    curTo,
+    prevFrom,
+    prevTo,
+    curDayFrom,
+    curDayTo,
+    prevDayFrom,
+    prevDayTo,
+    visibleKey,
+    fiscalYear,
+    withQueues,
+  ]);
 
   const shown = results.token === token ? results : emptyResults(token);
   return {
@@ -247,9 +283,11 @@ export function useDashboardFigures(
     tasks: shown.tasks,
     incomingDocuments: shown.incomingDocuments,
     citizenReports: shown.citizenReports,
+    citizenLetters: shown.citizenLetters,
     fiscal: shown.fiscal,
     budget: shown.budget,
     queue: shown.queue,
     taskTypeLabels: shown.taskTypeLabels,
+    mapAssets: shown.mapAssets,
   };
 }

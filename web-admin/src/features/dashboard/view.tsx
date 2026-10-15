@@ -37,6 +37,8 @@ import {
 } from "@/features/thu-chi/nhan-thu-chi";
 import type { KetQua } from "@/lib/api/goi";
 import type {
+  comms_mapAssetSummaryOut,
+  documents_citizenLetterCountOut,
   documents_incomingSummaryOut,
   finance_chiSoNamRa,
   finance_chiSoRa,
@@ -48,6 +50,8 @@ import { cn } from "@/lib/cn";
 import { compactDong, compactDongReport } from "@/lib/compact-dong";
 import type { CitizenReportMetric, IncomingDocumentMetric, TaskMetric } from "@/lib/drill-down";
 import {
+  ASSET_READ_PERMISSION,
+  PETITION_READ_PERMISSION,
   QUYEN_XEM_GIAI_NGAN,
   QUYEN_XEM_NHIEM_VU,
   QUYEN_XEM_PHAN_ANH,
@@ -77,7 +81,7 @@ import { buildDashboardExport, EXPORT_NO_FIGURE, urgentSummary } from "./export-
 import type { DashboardExport, ExportBlock, ExportCommune, ExportFigure } from "./export-model";
 import { DashboardHeaderActions } from "./header-actions";
 import type { ExportSource } from "./header-actions";
-import { PENDING_BLOCK_METRICS, pendingPart } from "./labels";
+import { pendingPart } from "./labels";
 import { PresentationContext, PresentationFrame } from "./presentation";
 import type { PresentationControl, PresentationState } from "./presentation";
 import {
@@ -341,9 +345,9 @@ function taskFigures(pair: SummaryPair<petitions_taskSummaryOut>, windows: Compa
 }
 
 /**
- * Khối VĂN BẢN ĐẾN's figures — incoming documents only. The spec's block also counts citizen
- * letters (`don_thu`), which no service holds yet; that tile and the on-time rate (the register
- * stores no settled instant, `incoming_dashboard.go`) say so in `DocumentBlock`.
+ * Khối VĂN BẢN ĐẾN's figures — incoming documents. The block's citizen-letter count is
+ * `letterFigure` (another register, another key); the on-time rate has no source (the register
+ * stores no settled instant, `incoming_dashboard.go`) and says so in `DocumentBlock`.
  */
 function incomingDocumentFigures(
   pair: SummaryPair<documents_incomingSummaryOut>,
@@ -378,6 +382,40 @@ function incomingDocumentFigures(
         alert: true,      }),
       note: stockNote,
     },
+  };
+}
+
+/** The citizen-letter register's screen — the tab "Đơn thư công dân" of `/van-ban`. */
+const LETTERS_SCREEN_PATH = "/van-ban";
+
+/**
+ * "Đơn thư trong kỳ" — letters RECEIVED in the window (`GET /api/v1/citizen-letter-counts`,
+ * `received_from` / `received_to`, `toDateRange`), compared with the previous window like every
+ * period count. The count route takes the LIST's filters, so the number is the one the register shows
+ * for those dates under its default scope (`all`).
+ *
+ * SHOWN, NOT PRESSED (`displayOnly`): the drill-down contract (`lib/drill-down.ts`) has no letter
+ * register, and a tile opening the whole register under a heading naming one period's count would
+ * promise rows it does not filter. `href` stays for the files only.
+ */
+function letterFigure(pair: SummaryPair<documents_citizenLetterCountOut>): Figure {
+  const current = read(pair.current, (c) => c.count);
+  const previous = read(pair.previous, (c) => c.count);
+  return {
+    id: "citizen-letters-received",
+    label: LETTERS_LABEL,
+    display: display(current, formatCount),
+    href: LETTERS_SCREEN_PATH,
+    comparison:
+      current === undefined || previous === undefined
+        ? null
+        : comparisonLine("period", current, previous, "neutral", formatCount),
+    movement: movement(current, previous),
+    raw: typeof current === "number" ? current : undefined,
+    displayOnly: true,
+    kind: "period",
+    trend: "neutral",
+    values: pairValues("period", current, previous, formatCount),
   };
 }
 
@@ -1099,12 +1137,12 @@ export function TaskBlock({
 
 /**
  * Khối VĂN BẢN & ĐƠN THƯ — the prototype's second block ("register"). The incoming-document counts
- * of the old "Cần xử lý" / "Tình hình trong kỳ" rows live here now, beside the two figures that are
- * not drawn yet:
- *   · "Tỷ lệ đúng hạn văn bản" is a NO-SOURCE tile (the register stores no settled instant): a data
+ * of the old "Cần xử lý" / "Tình hình trong kỳ" rows live here now, beside:
+ *   · "Tỷ lệ đúng hạn văn bản", a NO-SOURCE tile (the register stores no settled instant): a data
  *     gap, not an unbuilt feature, so it keeps "Chưa có dữ liệu";
- *   · "Đơn thư trong kỳ" is an unbuilt part — there is no citizen-letter register to count — so it
- *     is the tile it will be, with the "?" of ADR 0068 §14 (`labels.ts`).
+ *   · "Đơn thư trong kỳ" (`letterFigure`), counted from the citizen-letter register. It needs
+ *     `petition.read` on top of the block's keys (`citizenLetters` of `BlockVisibility`); `letters`
+ *     absent = the account lacks it, and the tile is NOT RENDERED, like any figure whose key is missing.
  */
 const DOCUMENT_ON_TIME_LABEL = "Tỷ lệ đúng hạn văn bản";
 const LETTERS_LABEL = "Đơn thư trong kỳ";
@@ -1112,61 +1150,123 @@ const LETTERS_LABEL = "Đơn thư trong kỳ";
 export function DocumentBlock({
   pair,
   windows,
+  letters,
   onReload,
 }: {
   pair: SummaryPair<documents_incomingSummaryOut>;
   windows: ComparedWindows;
+  letters?: SummaryPair<documents_citizenLetterCountOut>;
   onReload?: () => void;
 }) {
   const layout = useContext(BlockLayoutContext);
   const d = incomingDocumentFigures(pair, windows);
   const figures = [d.arrived, d.open, d.overdue];
   const onTime = <NoSourceTile key="on-time" label={DOCUMENT_ON_TIME_LABEL} />;
-  const letters = <PendingTile key="letters" label={LETTERS_LABEL} info={pendingPart(LETTERS_LABEL)} />;
+  const letterTile =
+    letters === undefined ? null : <FigureTile key="letters" figure={figureFor(layout, letterFigure(letters))} />;
   return (
     <Panel blockKey="documents" title="Văn bản & Đơn thư">
       <PairErrors pair={pair} noun="văn bản đến" onReload={onReload} />
-      <TileGrid count={figures.length + 2}>
+      {letters !== undefined && <PairErrors pair={letters} noun="đơn thư" onReload={onReload} />}
+      <TileGrid count={figures.length + (letters === undefined ? 1 : 2)}>
         {figures.map((f) => (
           <FigureTile key={f.id} figure={f} />
         ))}
         {/* Báo cáo: "Đơn thư trong kỳ" at the prototype's 4th place (`register.petition_arrived`), our
             extra on-time tile after it. Tổng quan keeps its order. */}
-        {layout === "report" ? [letters, onTime] : [onTime, letters]}
+        {layout === "report" ? [letterTile, onTime] : [onTime, letterTile]}
       </TileGrid>
     </Panel>
   );
 }
 
+export const ECONOMY_TITLE = "Kinh tế & Tài nguyên";
+
+/** The prototype's labels (`report-display.ts` METRIC_LABELS `economy.*`). */
+const ECONOMY_LABELS = {
+  enterprises: "Doanh nghiệp",
+  householdBusinesses: "Hộ kinh doanh",
+  newInPeriod: "Thành lập mới",
+  total: "Tổng tài nguyên",
+} as const;
+
+/** The economic map screen — where every one of these counts comes from. */
+const MAP_SCREEN_PATH = "/ban-do";
+
 /**
- * A whole block that is an unbuilt part (Giải ngân ngân sách, Kinh tế & Tài nguyên): it stays at its
- * place in the grid, with the tiles it will have — "—", no figure, no link, no call — and ONE "?" in
- * its header that reads the reason from `labels.ts`.
+ * The two group codes the block counts — the DEFAULT catalogue's slugs (`service-comms/internal/domain/
+ * map_asset_type_defaults.go`, owned by ADR 0072 §3), not spec §4.6's `enterprise` /
+ * `household_business`, which no commune's records hold. A code is never renumbered once sown (rule 7
+ * inv. 3), so the constant cannot drift away from records already filed.
  */
-function PendingBlock({
-  blockKey,
-  name,
+const ENTERPRISE_TYPE_CODE = "doanh-nghiep";
+const HOUSEHOLD_BUSINESS_TYPE_CODE = "ho-kinh-doanh";
+
+/**
+ * Khối KINH TẾ & TÀI NGUYÊN's three counted figures, from `GET /api/v1/map-asset-summary` — the map
+ * register AS IT STANDS (spec §4.6: current totals, not period counts), so no comparison exists. A
+ * group missing from `by_type` holds no live asset: the server groups the live rows and lists only
+ * groups that have one (`service-comms/internal/store/map_asset.go` `Summary`), so it counts 0.
+ *
+ * Tổng quan says "chưa có kỳ trước để so" under each, as the prototype's tile does — a `movement` of
+ * "none", so Trình chiếu drops the line as it drops every line with nothing to compare. `/bao-cao`'s
+ * tile writes that sentence itself (`ReportDeltaLine`), so it gets no comparison here.
+ *
+ * SHOWN, NOT PRESSED: no list on this page filters the map register by group.
+ */
+function economyFigures(result: Loaded<comms_mapAssetSummaryOut>, layout: BlockLayout): Figure[] {
+  const s = result !== null && result.ok ? result.duLieu : null;
+  const typeCount = (code: string) => s?.by_type.find((t) => t.asset_type_code === code)?.count ?? 0;
+  const fig = (id: string, label: string, value: number | null): Figure => ({
+    id: `economy-${id}`,
+    label,
+    display: result === null ? LOADING : value === null ? NO_VALUE : formatCount(value),
+    href: MAP_SCREEN_PATH,
+    comparison: layout === "dashboard" && value !== null ? { text: NO_PREVIOUS_PERIOD, tone: "neutral" } : null,
+    movement: "none",
+    raw: value ?? undefined,
+    displayOnly: true,
+    kind: "stock",
+    trend: "neutral",
+  });
+  return [
+    fig("enterprises", ECONOMY_LABELS.enterprises, s === null ? null : typeCount(ENTERPRISE_TYPE_CODE)),
+    fig(
+      "household-businesses",
+      ECONOMY_LABELS.householdBusinesses,
+      s === null ? null : typeCount(HOUSEHOLD_BUSINESS_TYPE_CODE),
+    ),
+    fig("total", ECONOMY_LABELS.total, s === null ? null : s.total),
+  ];
+}
+
+/**
+ * Khối KINH TẾ & TÀI NGUYÊN — the prototype's four figures in its order: Doanh nghiệp · Hộ kinh doanh ·
+ * Thành lập mới · Tổng tài nguyên. "Thành lập mới" (created in the period) has no count on the server
+ * yet, so it is the tile it will be with its own "?" (`labels.ts`). Drawn under `report.read` AND
+ * `asset.read` (`BlockVisibility.economy`), the key of the summary route it reads.
+ */
+export function EconomyBlock({
+  result,
+  onReload,
 }: {
-  blockKey: BlockKey;
-  name: keyof typeof PENDING_BLOCK_METRICS;
+  result: Loaded<comms_mapAssetSummaryOut>;
+  onReload?: () => void;
 }) {
   const layout = useContext(BlockLayoutContext);
-  const metrics = PENDING_BLOCK_METRICS[name];
+  const [enterprises, households, total] = economyFigures(result, layout);
   return (
-    <Panel
-      blockKey={blockKey}
-      title={name}
-      aside={
-        <PendingMarker
-          info={pendingPart(name)}
-          className={layout === "report" ? REPORT_PENDING_MARKER : undefined}
-        />
-      }
-    >
-      <TileGrid count={metrics.length}>
-        {metrics.map((label) => (
-          <PendingTile key={label} label={label} />
-        ))}
+    <Panel blockKey="economy" title={ECONOMY_TITLE}>
+      {result !== null && !result.ok && (
+        <LoadError title="Chưa tải được số liệu bản đồ kinh tế số" onReload={onReload}>
+          {result.thongBao}
+        </LoadError>
+      )}
+      <TileGrid count={4}>
+        <FigureTile figure={enterprises!} />
+        <FigureTile figure={households!} />
+        <PendingTile label={ECONOMY_LABELS.newInPeriod} info={pendingPart(ECONOMY_LABELS.newInPeriod)} />
+        <FigureTile figure={total!} />
       </TileGrid>
     </Panel>
   );
@@ -1353,7 +1453,12 @@ const REPORT_LABELS: Readonly<Record<string, string>> = {
  * its tile and chart colour them by it (owner, 11/10/2026 — prototype first). Report tile and chart
  * only; Tổng quan and the files keep "neutral".
  */
-const REPORT_HIGHER_IS_BETTER: ReadonlySet<string> = new Set(["incoming-documents-arrived", "citizen-reports-received"]);
+const REPORT_HIGHER_IS_BETTER: ReadonlySet<string> = new Set([
+  "incoming-documents-arrived",
+  "citizen-reports-received",
+  // `register.petition_arrived`: the prototype's `_metric` default, `higher_is_better=True`.
+  "citizen-letters-received",
+]);
 
 /** The direction `/bao-cao`'s tile and chart colour a figure by. */
 export function reportTrend(f: Pick<Figure, "id" | "trend">): Trend | undefined {
@@ -1921,6 +2026,8 @@ export type BlocksData = {
   readonly tasks: SummaryPair<petitions_taskSummaryOut>;
   readonly incomingDocuments: SummaryPair<documents_incomingSummaryOut>;
   readonly citizenReports: SummaryPair<petitions_citizenReportSummaryOut>;
+  /** `GET /api/v1/citizen-letter-counts` of each window — "Đơn thư trong kỳ" (`letterFigure`). */
+  readonly citizenLetters: SummaryPair<documents_citizenLetterCountOut>;
   readonly fiscal: Loaded<finance_chiSoNamRa>;
   readonly fiscalYear: number;
   /** `GET /api/v1/investment-project-summary` of `fiscalYear` — Khối Giải ngân (`BudgetBlock`). */
@@ -1928,14 +2035,22 @@ export type BlocksData = {
   /** `null` while loading; `{ok:false}` only if the merge itself could not run. */
   readonly queue: Loaded<MergedQueue>;
   readonly taskTypeLabels: TaskTypeLabels;
+  /** `GET /api/v1/map-asset-summary` — Khối Kinh tế & Tài nguyên (`EconomyBlock`), no period. */
+  readonly mapAssets: Loaded<comms_mapAssetSummaryOut>;
 };
 
-/** The module keys whose blocks exist on this page. `report.read` is the other half of each gate. */
+/**
+ * The module keys whose blocks exist on this page. `report.read` is the other half of each gate.
+ * `citizenLetters` gates ONE TILE, not a block: "Đơn thư trong kỳ" inside Văn bản & Đơn thư, drawn
+ * only when that block is too (`petition.read`, the count route's key).
+ */
 export const BLOCK_KEYS = {
   tasks: QUYEN_XEM_NHIEM_VU,
   incomingDocuments: QUYEN_XEM_VAN_BAN,
   citizenReports: QUYEN_XEM_PHAN_ANH,
   budget: QUYEN_XEM_GIAI_NGAN,
+  citizenLetters: PETITION_READ_PERMISSION,
+  economy: ASSET_READ_PERMISSION,
 } as const;
 
 export type BlockVisibility = Readonly<Record<keyof typeof BLOCK_KEYS, boolean>>;
@@ -1947,6 +2062,8 @@ export function blockVisibility(permissions: readonly string[]): BlockVisibility
     incomingDocuments: canSeeBlock(permissions, BLOCK_KEYS.incomingDocuments),
     citizenReports: canSeeBlock(permissions, BLOCK_KEYS.citizenReports),
     budget: canSeeBlock(permissions, BLOCK_KEYS.budget),
+    citizenLetters: canSeeBlock(permissions, BLOCK_KEYS.citizenLetters),
+    economy: canSeeBlock(permissions, BLOCK_KEYS.economy),
   };
 }
 
@@ -2103,9 +2220,8 @@ const NO_DRILL: DashboardDrill = {};
  * spacing (`layout="report"`): `gap-4`, 2 columns from 768px, 3 from 1280px. The prototype starts at 2
  * columns on any width; 1 column under 768px is kept so a 320px screen does not halve every card.
  *
- * `Kinh tế & Tài nguyên` has no source data and no read key of its own in wave 1; it opens nothing,
- * so it shows under the page gate (`report.read`) alone. `Giải ngân ngân sách` stays under
- * `budget.read`, the key of the summary route it reads.
+ * `Kinh tế & Tài nguyên` shows under `asset.read`, the key of the map summary it reads; `Giải ngân
+ * ngân sách` under `budget.read`, the key of the summary route it reads.
  */
 export function DashboardBlocks({
   data,
@@ -2130,14 +2246,19 @@ export function DashboardBlocks({
       >
         {visible.tasks && <TaskBlock pair={data.tasks} windows={data.windows} onReload={onReload} />}
         {visible.incomingDocuments && (
-          <DocumentBlock pair={data.incomingDocuments} windows={data.windows} onReload={onReload} />
+          <DocumentBlock
+            pair={data.incomingDocuments}
+            windows={data.windows}
+            letters={visible.citizenLetters ? data.citizenLetters : undefined}
+            onReload={onReload}
+          />
         )}
         {visible.budget && <BudgetBlock result={data.budget} year={data.fiscalYear} onReload={onReload} />}
         {visible.budget && <FiscalBlock result={data.fiscal} year={data.fiscalYear} onReload={onReload} />}
         {visible.citizenReports && (
           <CitizenReportBlock pair={data.citizenReports} windows={data.windows} onReload={onReload} />
         )}
-        <PendingBlock blockKey="economy" name="Kinh tế & Tài nguyên" />
+        {visible.economy && <EconomyBlock result={data.mapAssets} onReload={onReload} />}
         {layout === "dashboard" && anyQueue && (
           <UrgentPanel queue={data.queue} taskTypeLabels={data.taskTypeLabels} />
         )}
@@ -2157,9 +2278,13 @@ export function DashboardBlocks({
  */
 export function figuresSettled(data: BlocksData, visible: BlockVisibility, withQueue = true): boolean {
   const settled = <T,>(p: SummaryPair<T>) => p.current !== null && p.previous !== null;
-  if (!(visible.tasks || visible.incomingDocuments || visible.citizenReports || visible.budget)) return false;
+  if (!(visible.tasks || visible.incomingDocuments || visible.citizenReports || visible.budget || visible.economy)) {
+    return false;
+  }
   if (visible.tasks && !settled(data.tasks)) return false;
   if (visible.incomingDocuments && !settled(data.incomingDocuments)) return false;
+  if (visible.incomingDocuments && visible.citizenLetters && !settled(data.citizenLetters)) return false;
+  if (visible.economy && data.mapAssets === null) return false;
   if (visible.citizenReports && !settled(data.citizenReports)) return false;
   if (visible.budget && (data.fiscal === null || data.budget === null)) return false;
   // `/bao-cao` never reads the queues (no "Cần xử lý ngay"), so it passes `withQueue = false`.
@@ -2209,13 +2334,20 @@ function budgetExportBlock(
   };
 }
 
-function pendingExportBlock(name: keyof typeof PENDING_BLOCK_METRICS): ExportBlock {
+/** Khối Kinh tế & Tài nguyên as the files carry it: the screen's order, "Thành lập mới" with its reason. */
+function economyExportBlock(result: Loaded<comms_mapAssetSummaryOut>, layout: BlockLayout): ExportBlock {
+  const [enterprises, households, total] = economyFigures(result, layout).map((f) => toExportFigure(f, "count", layout));
+  const newInPeriod: ExportFigure = {
+    label: ECONOMY_LABELS.newInPeriod,
+    value: EXPORT_NO_FIGURE,
+    note: pendingPart(ECONOMY_LABELS.newInPeriod).viSao,
+    noFigure: true,
+  };
   return {
-    title: name,
-    figures: PENDING_BLOCK_METRICS[name].map((label) => ({ label, value: EXPORT_NO_FIGURE, noFigure: true })),
+    title: ECONOMY_TITLE,
+    figures: [enterprises!, households!, newInPeriod, total!],
     notes: [],
-    errors: [],
-    pending: pendingPart(name).viSao,
+    errors: result !== null && !result.ok ? [`Chưa tải được số liệu bản đồ kinh tế số: ${result.thongBao}`] : [],
   };
 }
 
@@ -2294,15 +2426,20 @@ export function exportBlocks(
   }
   if (visible.incomingDocuments) {
     const d = incomingDocumentFigures(data.incomingDocuments, data.windows);
+    const onTime: ExportFigure = { label: DOCUMENT_ON_TIME_LABEL, value: NO_DATA_CAPTION, note: NO_SOURCE_DATA, noFigure: true };
+    // The tile only where the screen draws it (`petition.read`), in each page's order (`DocumentBlock`).
+    const letters = visible.citizenLetters ? [out(letterFigure(data.citizenLetters))] : [];
     blocks.push({
       title: "Văn bản & Đơn thư",
       figures: [
         ...[d.arrived, d.open, d.overdue].map(out),
-        { label: DOCUMENT_ON_TIME_LABEL, value: NO_DATA_CAPTION, note: NO_SOURCE_DATA, noFigure: true },
-        { label: LETTERS_LABEL, value: EXPORT_NO_FIGURE, note: pendingPart(LETTERS_LABEL).viSao, noFigure: true },
+        ...(layout === "report" ? [...letters, onTime] : [onTime, ...letters]),
       ],
       notes: [],
-      errors: pairErrors(data.incomingDocuments, "văn bản đến"),
+      errors: [
+        ...pairErrors(data.incomingDocuments, "văn bản đến"),
+        ...(visible.citizenLetters ? pairErrors(data.citizenLetters, "đơn thư") : []),
+      ],
     });
   }
   if (visible.budget) {
@@ -2317,7 +2454,7 @@ export function exportBlocks(
       errors: pairErrors(data.citizenReports, "phản ánh"),
     });
   }
-  blocks.push(pendingExportBlock("Kinh tế & Tài nguyên"));
+  if (visible.economy) blocks.push(economyExportBlock(data.mapAssets, layout));
   return blocks;
 }
 
@@ -2412,6 +2549,8 @@ function periodPairs(
   const settled = <T,>(p: SummaryPair<T>) => p.current !== null && p.previous !== null;
   if (visible.tasks && !settled(data.tasks)) return null;
   if (visible.incomingDocuments && !settled(data.incomingDocuments)) return null;
+  const letters = visible.incomingDocuments && visible.citizenLetters;
+  if (letters && !settled(data.citizenLetters)) return null;
   if (visible.citizenReports && !settled(data.citizenReports)) return null;
 
   const groups: { figures: Figure[]; block: string }[] = [];
@@ -2420,7 +2559,11 @@ function periodPairs(
     groups.push({ figures: [t.completed, t.onTime], block: "nhiệm vụ" });
   }
   if (visible.incomingDocuments) {
-    groups.push({ figures: [incomingDocumentFigures(data.incomingDocuments, data.windows).arrived], block: "văn bản" });
+    const arrived = incomingDocumentFigures(data.incomingDocuments, data.windows).arrived;
+    groups.push({
+      figures: letters ? [arrived, letterFigure(data.citizenLetters)] : [arrived],
+      block: "văn bản",
+    });
   }
   if (visible.citizenReports) {
     groups.push({ figures: citizenReportFigures(data.citizenReports, data.windows), block: "phản ánh" });

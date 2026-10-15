@@ -77,6 +77,8 @@ function loaded(): DashboardData {
     fiscal: null,
     queue: ok({ rows: [], failures: [] }),
     taskTypeLabels: null,
+    citizenLetters: { current: null, previous: null },
+    mapAssets: null,
   };
 }
 

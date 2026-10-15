@@ -30,6 +30,8 @@ const AT = Date.parse("2026-09-28T09:43:00Z"); // 16:43 in Viet Nam
 const MONTH = reportWindows({ kind: "month" }, new Date(AT));
 
 const ALL = ["report.read", "report.export", "task.read", "document.read", "feedback.read", "budget.read"];
+/** ALL plus the two keys of the tiles built 15/10/2026: "Đơn thư trong kỳ" and Kinh tế & Tài nguyên. */
+const ALL_WITH_LETTERS_AND_MAP = [...ALL, "petition.read", "asset.read"];
 const COMMUNE = { displayName: "Xã Kiểm Thử", parentAuthority: "" };
 
 const ok = <T,>(duLieu: T) => ({ ok: true as const, duLieu });
@@ -99,6 +101,8 @@ function loading(windows: ReportWindows): BlocksData {
     budget: null,
     queue: null,
     taskTypeLabels: null,
+    citizenLetters: { current: null, previous: null },
+    mapAssets: null,
   };
 }
 
@@ -111,6 +115,23 @@ function loaded(windows: ReportWindows = MONTH): BlocksData {
     citizenReports: { current: ok(REPORTS), previous: ok({ ...REPORTS, received: 20, late: 2 }) },
     fiscal: ok(FISCAL),
     budget: ok(BUDGET),
+  };
+}
+
+/** `loaded()` plus a letter count (3 now, 2 before) and the map summary. */
+function loadedWithLettersAndMap(windows: ReportWindows = MONTH): BlocksData {
+  return {
+    ...loaded(windows),
+    citizenLetters: { current: ok({ count: 3 }), previous: ok({ count: 2 }) },
+    mapAssets: ok({
+      total: 26,
+      verified: 10,
+      verified_ratio: 0.3846,
+      by_type: [
+        { asset_type_code: "doanh-nghiep", count: 5, verified: 3 },
+        { asset_type_code: "ho-kinh-doanh", count: 3, verified: 3 },
+      ],
+    }),
   };
 }
 
@@ -169,7 +190,23 @@ describe("reportAccess — permission gating (rule 5: UI convenience, the server
 
   it("blocks follow /tong-quan's rule exactly", () => {
     const a = reportAccess(ALL).blocks;
-    expect(a).toEqual({ tasks: true, incomingDocuments: true, citizenReports: true, budget: true });
+    expect(a).toEqual({
+      tasks: true,
+      incomingDocuments: true,
+      citizenReports: true,
+      budget: true,
+      citizenLetters: false,
+      economy: false,
+    });
+    const more = reportAccess(ALL_WITH_LETTERS_AND_MAP).blocks;
+    expect(more.citizenLetters).toBe(true);
+    expect(more.economy).toBe(true);
+  });
+
+  it("DENIED: without petition.read no letters tile; without asset.read no Kinh tế & Tài nguyên block", () => {
+    const html = render(ALL, undefined, MONTH, loadedWithLettersAndMap());
+    expect(html).not.toContain("Đơn thư trong kỳ");
+    expect(html).not.toContain('data-block="economy"');
   });
 });
 
@@ -420,19 +457,35 @@ describe("ReportView — the report tile (D4)", () => {
   });
 
   it("unbuilt tile: '—' navy bold and 'Tính năng đang phát triển' visible; no-source tile: '—' + 'Chưa có dữ liệu', no icon", () => {
-    const letters = /<li[^>]*data-pending=""[^>]*>(?:(?!<\/li>).)*Đơn thư trong kỳ(?:(?!<\/li>).)*<\/li>/s.exec(grid)?.[0] ?? "";
-    expect(letters).toMatch(/<span aria-hidden="true" class="[^"]*font-bold[^"]*text-navy[^"]*">—<\/span>/);
-    expect(letters).toContain('<span class="mt-1 block text-[11px] text-ink-muted/60">Tính năng đang phát triển</span>');
-    expect(letters).toContain(`aria-label="${pendingMarkerLabel("Đơn thư trong kỳ")}"`);
+    const full = render(ALL_WITH_LETTERS_AND_MAP, undefined, MONTH, loadedWithLettersAndMap());
+    const fresh = /<li[^>]*data-pending=""[^>]*>(?:(?!<\/li>).)*Thành lập mới(?:(?!<\/li>).)*<\/li>/s.exec(full)?.[0] ?? "";
+    expect(fresh).toMatch(/<span aria-hidden="true" class="[^"]*font-bold[^"]*text-navy[^"]*">—<\/span>/);
+    expect(fresh).toContain('<span class="mt-1 block text-[11px] text-ink-muted/60">Tính năng đang phát triển</span>');
+    expect(fresh).toContain(`aria-label="${pendingMarkerLabel("Thành lập mới")}"`);
     const noSource = /<li[^>]*title="Hệ thống chưa có nguồn số liệu cho mục này\."[^>]*>.*?<\/li>/s.exec(grid)?.[0] ?? "";
     expect(noSource).toContain(">Chưa có dữ liệu</span>");
     expect(noSource).not.toContain("<svg");
   });
 
-  it("the '?' beside a block title is the small muted ring, right after the title (gap-1)", () => {
-    const economy = /<section[^>]*data-block="economy".*?<\/section>/s.exec(grid)?.[0] ?? "";
-    expect(economy).toMatch(/<div class="flex shrink-0 items-center gap-1 mb-3">/);
+  it("Kinh tế & Tài nguyên: no '?' beside its title any more; its one '?' is the 'Thành lập mới' tile, small and muted", () => {
+    const full = render(ALL_WITH_LETTERS_AND_MAP, undefined, MONTH, loadedWithLettersAndMap());
+    const economy = /<section[^>]*data-block="economy".*?<\/section>/s.exec(full)?.[0] ?? "";
+    expect(economy).toMatch(/<div class="flex shrink-0 items-center gap-1 mb-3"><h2[^>]*>Kinh tế &amp; Tài nguyên<\/h2><\/div>/);
+    expect(economy.match(/data-pending-marker=""/g)).toHaveLength(1);
     expect(economy).toMatch(/data-pending-marker=""[^>]*class="[^"]*size-3\.5[^"]*text-ink-muted\/70/);
+    // current totals, as the prototype: the value, its label, then "chưa có kỳ trước để so"
+    expect(economy).toMatch(/>5<\/span><\/span><span class="mt-0\.5 block text-\[12px\] text-ink-muted">Doanh nghiệp<\/span><span class="mt-1 block text-\[11px\] text-ink-muted\/60">chưa có kỳ trước để so<\/span>/);
+    expect(economy).toContain(">Hộ kinh doanh<");
+    expect(economy).toContain(">26<");
+  });
+
+  it("'Đơn thư trong kỳ' on the report: the count and the prototype's delta line (higher is better)", () => {
+    const full = render(ALL_WITH_LETTERS_AND_MAP, undefined, MONTH, loadedWithLettersAndMap());
+    const tile = /<li[^>]*>(?:(?!<\/li>).)*citizen-letters-received-value(?:(?!<\/li>).)*<\/li>/s.exec(full)?.[0] ?? "";
+    expect(tile).toContain(">3<");
+    expect(tile).toContain(">Đơn thư trong kỳ<");
+    expect(tile).toMatch(/text-leaf"><svg[^>]*>.*?<\/svg><span class="min-w-0">\+50,0% so với kỳ trước<\/span>/s);
+    expect(tile).not.toContain("data-pending");
   });
 });
 
@@ -595,7 +648,8 @@ describe("ui-ux baseline 11/10/2026 — /bao-cao against ReportWorkspace", () =>
   });
 
   it("M4 Văn bản & Đơn thư: 'Đơn thư trong kỳ' 4th, 'Tỷ lệ đúng hạn văn bản' after it", () => {
-    expect(tileLabels(html, "documents")).toEqual([
+    const full = render(ALL_WITH_LETTERS_AND_MAP, undefined, MONTH, loadedWithLettersAndMap());
+    expect(tileLabels(full, "documents")).toEqual([
       "Đến trong kỳ",
       "Chưa xử lý xong",
       "Quá hạn xử lý",

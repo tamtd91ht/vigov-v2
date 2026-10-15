@@ -163,7 +163,7 @@ describe("incoming document figures", () => {
     expect(html).not.toContain('href="/nhiem-vu');
   });
 
-  it("the no-source tile says so, the unbuilt figure carries the '?' — never 0, never a link", () => {
+  it("the no-source tile says so — never 0, never a link; no '?' is left in the block", () => {
     const block = renderToStaticMarkup(
       <DocumentBlock pair={{ current: ok(doc), previous: ok(doc) }} windows={WINDOWS} />,
     );
@@ -171,13 +171,126 @@ describe("incoming document figures", () => {
     const noSource = new RegExp(`<li[^>]*title="${NO_SOURCE_DATA}"[^>]*>.*?</li>`, "s").exec(block)?.[0] ?? "";
     expect(noSource).toContain("Tỷ lệ đúng hạn văn bản");
     expect(noSource).not.toContain("href=");
-    const pending = /<li[^>]*data-pending=""[^>]*>.*?<\/li>/s.exec(block)?.[0] ?? "";
-    expect(pending).toContain("Đơn thư trong kỳ");
-    expect(pending).toContain(`aria-label="${pendingMarkerLabel("Đơn thư trong kỳ")}"`);
-    expect(pending).toContain("—");
-    expect(pending).not.toContain("href=");
+    expect(block).not.toContain("data-pending");
     // the three document counts are links, each once
     expect(block.match(/href="\/van-ban\?/g)).toHaveLength(3);
+  });
+
+  it("'Đơn thư trong kỳ': the period's count and the line against the previous period", () => {
+    const block = renderToStaticMarkup(
+      <DocumentBlock
+        pair={{ current: ok(doc), previous: ok(doc) }}
+        windows={WINDOWS}
+        letters={{ current: ok({ count: 0 }), previous: ok({ count: 3 }) }}
+      />,
+    );
+    expect(valueOf(block, "citizen-letters-received")).toBe("0");
+    const tile = /<li[^>]*>(?:(?!<\/li>).)*citizen-letters-received(?:(?!<\/li>).)*<\/li>/s.exec(block)?.[0] ?? "";
+    expect(tile).toContain("Đơn thư trong kỳ");
+    // the prototype's "-100% so với kỳ trước", in the sibling tiles' one-decimal form
+    expect(tile).toContain("-100,0% so với kỳ trước");
+    // shown, not pressed: no list on this page is filtered by it
+    expect(tile).not.toContain("href=");
+    expect(tile).not.toContain("<button");
+    expect(tile).not.toContain("data-pending");
+  });
+
+  it("'Đơn thư trong kỳ': a previous of 0 says 'Kỳ trước: 0'; a failed count says why, never 0", () => {
+    const zero = renderToStaticMarkup(
+      <DocumentBlock
+        pair={{ current: ok(doc), previous: ok(doc) }}
+        windows={WINDOWS}
+        letters={{ current: ok({ count: 4 }), previous: ok({ count: 0 }) }}
+      />,
+    );
+    expect(valueOf(zero, "citizen-letters-received")).toBe("4");
+    expect(zero).toContain("Kỳ trước: 0");
+    const broken = renderToStaticMarkup(
+      <DocumentBlock
+        pair={{ current: ok(doc), previous: ok(doc) }}
+        windows={WINDOWS}
+        letters={{ current: failed("Sổ đơn thư tạm không đọc được."), previous: ok({ count: 1 }) }}
+      />,
+    );
+    expect(valueOf(broken, "citizen-letters-received")).toBe("—");
+    expect(broken).toContain("Chưa tải được số liệu đơn thư");
+    expect(broken).toContain("Sổ đơn thư tạm không đọc được.");
+  });
+
+  it("DENIED: without petition.read the letters tile is NOT RENDERED — not 0, not '—', not '?'", () => {
+    expect(DOCUMENT_KEYS.citizenLetters).toBe(false);
+    expect(html).not.toContain("Đơn thư trong kỳ");
+    expect(html).not.toContain("citizen-letters-received");
+    const allowed = blockVisibility(["report.read", "document.read", "petition.read"]);
+    expect(allowed.citizenLetters).toBe(true);
+    const shown = page(
+      {
+        incomingDocuments: { current: ok(doc), previous: ok(doc) },
+        citizenLetters: { current: ok({ count: 2 }), previous: ok({ count: 2 }) },
+      },
+      allowed,
+    );
+    expect(valueOf(shown, "citizen-letters-received")).toBe("2");
+    expect(shown).toContain("không đổi");
+    // petition.read without the block's own key: the block, and so the tile, is not drawn
+    const noBlock = page({}, blockVisibility(["report.read", "petition.read"]));
+    expect(noBlock).not.toContain("Đơn thư trong kỳ");
+  });
+});
+
+describe("EconomyBlock (khối Kinh tế & Tài nguyên)", () => {
+  const summary = {
+    total: 26,
+    verified: 10,
+    verified_ratio: 0.3846,
+    by_type: [
+      { asset_type_code: "cho", count: 18, verified: 4 },
+      { asset_type_code: "doanh-nghiep", count: 5, verified: 3 },
+      { asset_type_code: "ho-kinh-doanh", count: 3, verified: 3 },
+    ],
+  };
+  const economy = (patch: Partial<DashboardData>) =>
+    page(patch, blockVisibility(["report.read", "asset.read"]));
+
+  it("counts by the catalogue's codes, the total of every object; 'Thành lập mới' stays '?'", () => {
+    const html = economy({ mapAssets: ok(summary) });
+    expect(valueOf(html, "economy-enterprises")).toBe("5");
+    expect(valueOf(html, "economy-household-businesses")).toBe("3");
+    expect(valueOf(html, "economy-total")).toBe("26");
+    const block = /<section[^>]*data-block="economy".*?<\/section>/s.exec(html)?.[0] ?? "";
+    const labels = [...block.matchAll(/<span class="mt-0\.5 block[^"]*">([^<]+)</g)].map((m) => m[1]);
+    expect(labels).toEqual(["Doanh nghiệp", "Hộ kinh doanh", "Thành lập mới", "Tổng tài nguyên"]);
+    const pending = /<li[^>]*data-pending=""[^>]*>.*?<\/li>/s.exec(block)?.[0] ?? "";
+    expect(pending).toContain("Thành lập mới");
+    expect(pending).toContain(`aria-label="${pendingMarkerLabel("Thành lập mới")}"`);
+    expect(pending).toContain("—");
+    // current totals: no previous period, said as the prototype says it, once per counted tile
+    expect(block.split("chưa có kỳ trước để so")).toHaveLength(4);
+    expect(block).not.toContain("href=");
+  });
+
+  it("a group with no live object counts 0 — the server lists only groups that have one", () => {
+    const html = economy({ mapAssets: ok({ total: 2, verified: 0, verified_ratio: 0, by_type: [{ asset_type_code: "cho", count: 2, verified: 0 }] }) });
+    expect(valueOf(html, "economy-enterprises")).toBe("0");
+    expect(valueOf(html, "economy-household-businesses")).toBe("0");
+    expect(valueOf(html, "economy-total")).toBe("2");
+  });
+
+  it("loading is '…'; a failed call is '—' with the server's sentence — never 0", () => {
+    expect(valueOf(economy({ mapAssets: null }), "economy-total")).toBe("…");
+    const html = economy({ mapAssets: failed("Bản đồ tạm không đọc được.") });
+    expect(valueOf(html, "economy-enterprises")).toBe("—");
+    expect(valueOf(html, "economy-total")).toBe("—");
+    expect(html).toContain("Chưa tải được số liệu bản đồ kinh tế số");
+    expect(html).toContain("Bản đồ tạm không đọc được.");
+  });
+
+  it("DENIED: without asset.read the block is not rendered", () => {
+    expect(blockVisibility(["report.read"]).economy).toBe(false);
+    expect(blockVisibility(["asset.read"]).economy).toBe(false);
+    const html = page({ mapAssets: ok(summary) }, blockVisibility(["report.read", "task.read"]));
+    expect(html).not.toContain('data-block="economy"');
+    expect(html).not.toContain("Doanh nghiệp");
   });
 });
 
@@ -374,6 +487,8 @@ function emptyData(): DashboardData {
     budget: null,
     queue: ok({ rows: [], failures: [] }),
     taskTypeLabels: null,
+    citizenLetters: { current: null, previous: null },
+    mapAssets: null,
   };
 }
 
@@ -385,6 +500,8 @@ describe("DashboardView — access per block", () => {
       incomingDocuments: false,
       citizenReports: false,
       budget: false,
+      citizenLetters: false,
+      economy: false,
     });
     const html = renderToStaticMarkup(
       <DashboardView data={emptyData()} visible={visible} onPeriodChange={() => {}} />,
@@ -400,8 +517,8 @@ describe("DashboardView — access per block", () => {
     expect(html).not.toContain("Thu - Chi ngân sách xã");
     expect(html).not.toContain("Giải ngân ngân sách");
     expect(html).not.toContain("Cần xử lý ngay");
-    // the block with no source and no key of its own stays, muted
-    expect(html).toContain("Kinh tế &amp; Tài nguyên");
+    // Kinh tế & Tài nguyên reads the map summary now: it needs asset.read like any module block
+    expect(html).not.toContain("Kinh tế &amp; Tài nguyên");
   });
 
   it("task.read without report.read opens nothing — both keys are needed", () => {
@@ -502,7 +619,15 @@ describe("page gate — report.read", () => {
 });
 
 describe("layout — the prototype frame (owner, 05/10/2026)", () => {
-  const ALL = blockVisibility(["report.read", "task.read", "document.read", "feedback.read", "budget.read"]);
+  const ALL = blockVisibility([
+    "report.read",
+    "task.read",
+    "document.read",
+    "feedback.read",
+    "budget.read",
+    "petition.read",
+    "asset.read",
+  ]);
   const blocksOf = (html: string) => [...html.matchAll(/data-block="([^"]+)"/g)].map((m) => m[1]);
   const all = () =>
     renderToStaticMarkup(<DashboardView data={emptyData()} visible={ALL} onPeriodChange={() => {}} />);
@@ -551,14 +676,13 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
     expect(fiscal).not.toContain("grid-cols-3");
   });
 
-  it("unbuilt blocks stay in place with their '?' in the header, tiles '—', no link", () => {
+  it("no whole block is unbuilt any more: the one '?' of Kinh tế & Tài nguyên is its 'Thành lập mới' tile", () => {
     const html = all();
-    for (const [key, name] of [["economy", "Kinh tế & Tài nguyên"]] as const) {
-      const block = new RegExp(`<section[^>]*data-block="${key}".*?</section>`, "s").exec(html)?.[0] ?? "";
-      expect(block).toContain(`aria-label="${pendingMarkerLabel(name).replaceAll("&", "&amp;")}"`);
-      expect(block).not.toContain("href=");
-      expect(block).toContain("—");
-    }
+    const block = /<section[^>]*data-block="economy".*?<\/section>/s.exec(html)?.[0] ?? "";
+    expect(block).not.toContain(pendingMarkerLabel("Kinh tế & Tài nguyên").replaceAll("&", "&amp;"));
+    expect(block.match(/data-pending-marker=""/g)).toHaveLength(1);
+    expect(block).toContain(`aria-label="${pendingMarkerLabel("Thành lập mới")}"`);
+    expect(block).not.toContain("href=");
   });
 
   it("the header: period buttons, the BUILT PDF/XLSX/PPTX and Trình chiếu (no '?') — no refresh, no stale badge", () => {
@@ -597,7 +721,7 @@ describe("layout — the prototype frame (owner, 05/10/2026)", () => {
     const html = renderToStaticMarkup(
       <DashboardView
         data={emptyData()}
-        visible={blockVisibility(["report.read", "document.read", "feedback.read"])}
+        visible={blockVisibility(["report.read", "document.read", "feedback.read", "asset.read"])}
         onPeriodChange={() => {}}
       />,
     );
@@ -723,7 +847,7 @@ describe("composition — the prototype's Panel / MetricTile / alert row (ADR 00
 });
 
 describe("/tong-quan is untouched by /bao-cao's tile (owner 09/10/2026: D4 and D6 are report-only)", () => {
-  const ALL = blockVisibility(["report.read", "task.read", "document.read", "feedback.read", "budget.read"]);
+  const ALL = blockVisibility(["report.read", "task.read", "document.read", "feedback.read", "budget.read", "asset.read"]);
   const rep: petitions_citizenReportSummaryOut = { received: 3, in_progress: 1, on_time_sample: 2, on_time: 1, late: 1 };
   const fiscal: finance_chiSoNamRa = {
     year: 2026,
@@ -806,8 +930,8 @@ describe("/tong-quan is untouched by /bao-cao's tile (owner 09/10/2026: D4 and D
 
   it("Tổng quan's '?' keeps PendingMarker's default look; Báo cáo restyles it", () => {
     const marker = (html: string) =>
-      /<button[^>]*aria-label="Kinh tế &amp; Tài nguyên — [^"]*"[^>]*class="([^"]*)"/.exec(html)?.[1] ??
-      /<button[^>]*class="([^"]*)"[^>]*aria-label="Kinh tế &amp; Tài nguyên — /.exec(html)?.[1] ??
+      /<button[^>]*aria-label="Thành lập mới — [^"]*"[^>]*class="([^"]*)"/.exec(html)?.[1] ??
+      /<button[^>]*class="([^"]*)"[^>]*aria-label="Thành lập mới — /.exec(html)?.[1] ??
       "";
     expect(marker(dashboard)).toContain("size-[18px]");
     expect(marker(dashboard)).not.toContain("size-3.5");

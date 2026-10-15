@@ -54,6 +54,8 @@ function figures(): BlocksData {
     budget: null,
     queue: null,
     taskTypeLabels: null,
+    citizenLetters: { current: null, previous: null },
+    mapAssets: null,
   };
 }
 

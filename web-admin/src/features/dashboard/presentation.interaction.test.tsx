@@ -25,7 +25,7 @@ import { blockVisibility, DashboardBlocks, DashboardHeader, DashboardView } from
 import type { DashboardData, SummaryPair } from "./view";
 
 const COMMUNE = { displayName: "Xã Kiểm Thử", parentAuthority: "", logoUrl: "", webAdminBannerUrl: "" };
-const PERMISSIONS = ["report.read", "task.read", "document.read", "feedback.read", "budget.read"];
+const PERMISSIONS = ["report.read", "task.read", "document.read", "feedback.read", "budget.read", "asset.read"];
 
 vi.mock("@/lib/api/phien", () => ({
   layPhienHienTai: () => Promise.resolve({ ok: true, duLieu: { permissions: PERMISSIONS } }),
@@ -208,7 +208,7 @@ describe("Trình chiếu — the keyboard", () => {
     const el = await mountPage();
     act(() => toggle(el).click());
     const marker = el.querySelector<HTMLButtonElement>(
-      `button[aria-label="${pendingMarkerLabel("Kinh tế & Tài nguyên")}"]`,
+      `button[aria-label="${pendingMarkerLabel("Thành lập mới")}"]`,
     )!;
     act(() => marker.click());
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
@@ -248,6 +248,8 @@ function data(tasks: SummaryPair<petitions_taskSummaryOut>): DashboardData {
     budget: null,
     queue: ok({ rows: [], failures: [] }),
     taskTypeLabels: null,
+    citizenLetters: { current: null, previous: null },
+    mapAssets: null,
   };
 }
 
@@ -301,10 +303,25 @@ describe("Trình chiếu — what it draws", () => {
     expect(render(failed, true)).toContain("Không tải được số liệu kỳ trước: Mạng hỏng.");
   });
 
-  it("'Cần xử lý ngay' and the '?' blocks stay in the mode", () => {
-    const html = render(data(none), true);
+  it("'Cần xử lý ngay' and the '?' tiles stay in the mode; 'chưa có kỳ trước để so' does not", () => {
+    const visible = blockVisibility(["report.read", "task.read", "asset.read"]);
+    const summary = { total: 4, verified: 0, verified_ratio: 0, by_type: [{ asset_type_code: "doanh-nghiep", count: 4, verified: 0 }] };
+    const draw = (on: boolean) =>
+      renderToStaticMarkup(
+        <DashboardView
+          data={{ ...data(none), mapAssets: ok(summary) }}
+          visible={visible}
+          onPeriodChange={() => {}}
+          presentation={{ on, onChange: () => {} }}
+        />,
+      );
+    const html = draw(true);
     expect(html).toContain('data-block="urgent"');
-    expect(html).toContain(pendingMarkerLabel("Kinh tế & Tài nguyên").replaceAll("&", "&amp;"));
+    expect(html).toContain('data-block="economy"');
+    expect(html).toContain(pendingMarkerLabel("Thành lập mới"));
+    // the prototype drops the line with nothing to compare on a projector; off the projector it is said
+    expect(html).not.toContain("chưa có kỳ trước để so");
+    expect(draw(false)).toContain("chưa có kỳ trước để so");
   });
 
   it("the gate-closed header draws the toggle DISABLED, with no '?' and no overlay", () => {

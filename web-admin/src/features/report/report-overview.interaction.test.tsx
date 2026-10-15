@@ -118,6 +118,49 @@ describe("/bao-cao asks the servers what /tong-quan asks (spec 13 §10)", () => 
   });
 });
 
+describe("Đơn thư trong kỳ and Kinh tế & Tài nguyên — asked only behind their keys", () => {
+  const EXTRA = ["petition.read", "asset.read"];
+  beforeEach(() => {
+    PERMISSIONS.push(...EXTRA);
+  });
+  afterEach(() => {
+    PERMISSIONS.splice(PERMISSIONS.length - EXTRA.length, EXTRA.length);
+  });
+
+  it("the letter count is asked for both windows as INCLUSIVE dates; the map summary once, with no period", async () => {
+    await mount(<DashboardPage />);
+    const letters = calls
+      .filter((c) => c.startsWith("/api/v1/citizen-letter-counts?"))
+      .map((c) => Object.fromEntries(new URLSearchParams(c.split("?")[1])))
+      .sort((x, y) => String(x.received_from).localeCompare(String(y.received_from)));
+    // 16:43 on 28/09 in Viet Nam: this month to today, and the previous month to the same day number.
+    // No `scope`: the server's default is the commune's whole register.
+    expect(letters).toEqual([
+      { received_from: "2026-08-01", received_to: "2026-08-28" },
+      { received_from: "2026-09-01", received_to: "2026-09-28" },
+    ]);
+    expect(calls.filter((c) => c === "/api/v1/map-asset-summary")).toHaveLength(1);
+  });
+
+  it("/bao-cao asks the very same two things", async () => {
+    await mount(<DashboardPage />);
+    const overview = calls.filter((c) => c.includes("citizen-letter-counts") || c.includes("map-asset-summary")).sort();
+    act(() => root?.unmount());
+    host?.remove();
+    calls = [];
+    await mount(<ReportPage />);
+    expect(calls.filter((c) => c.includes("citizen-letter-counts") || c.includes("map-asset-summary")).sort()).toEqual(overview);
+  });
+});
+
+describe("Đơn thư trong kỳ and Kinh tế & Tài nguyên — DENIED", () => {
+  it("without petition.read / asset.read neither route is called", async () => {
+    await mount(<DashboardPage />);
+    expect(calls.some((c) => c.includes("citizen-letter-counts"))).toBe(false);
+    expect(calls.some((c) => c.includes("map-asset-summary"))).toBe(false);
+  });
+});
+
 describe("Tuỳ chọn — the prototype's behaviour (D5): empty inputs, applies at once, never a refused range", () => {
   const taskWindows = () =>
     calls

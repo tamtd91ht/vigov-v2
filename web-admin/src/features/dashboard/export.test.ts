@@ -93,7 +93,27 @@ const QUEUE: MergedQueue = {
   failures: [],
 };
 
-const ALL = blockVisibility(["report.read", "task.read", "document.read", "feedback.read", "budget.read"]);
+const ALL = blockVisibility([
+  "report.read",
+  "task.read",
+  "document.read",
+  "feedback.read",
+  "budget.read",
+  "petition.read",
+  "asset.read",
+]);
+
+// `map-asset-summary`: the register as it stands, by the default catalogue's codes.
+const MAP_ASSETS = {
+  total: 26,
+  verified: 10,
+  verified_ratio: 0.3846,
+  by_type: [
+    { asset_type_code: "cho", count: 18, verified: 4 },
+    { asset_type_code: "doanh-nghiep", count: 5, verified: 3 },
+    { asset_type_code: "ho-kinh-doanh", count: 3, verified: 3 },
+  ],
+};
 
 function data(): DashboardData {
   return {
@@ -107,6 +127,8 @@ function data(): DashboardData {
     fiscal: ok(FISCAL),
     queue: ok(QUEUE),
     taskTypeLabels: null,
+    citizenLetters: { current: ok({ count: 0 }), previous: ok({ count: 3 }) },
+    mapAssets: ok(MAP_ASSETS),
   };
 }
 
@@ -197,23 +219,44 @@ describe("export model — the figures on screen, nothing else", () => {
     expect(failed.errors).toEqual(["Chưa tải được số liệu giải ngân: Máy chủ bận."]);
   });
 
-  it("'?' parts carry NO number: unbuilt blocks and the letters tile say 'Chưa có số liệu'", () => {
-    for (const title of ["Kinh tế & Tài nguyên"]) {
-      const b = DOC.blocks.find((x) => x.title === title)!;
-      expect(b.pending).toBeTruthy();
-      expect(b.figures.length).toBeGreaterThan(0);
-      for (const f of b.figures) {
-        expect(f.value).toBe(EXPORT_NO_FIGURE);
-        expect(f.number).toBeUndefined();
-        expect(f.noFigure).toBe(true);
-      }
-    }
-    const letters = DOC.blocks[1]!.figures.find((f) => f.label === "Đơn thư trong kỳ")!;
-    expect(letters).toMatchObject({ value: EXPORT_NO_FIGURE, noFigure: true });
-    expect(letters.number).toBeUndefined();
-    const onTime = DOC.blocks[1]!.figures.find((f) => f.label === "Tỷ lệ đúng hạn văn bản")!;
+  it("'Đơn thư trong kỳ' carries its count and its comparison line, as the tile draws them", () => {
+    const docs = DOC.blocks[1]!.figures;
+    expect(docs.map((f) => f.label)).toEqual([
+      "Đến trong kỳ",
+      "Chưa xử lý xong",
+      "Quá hạn xử lý",
+      "Tỷ lệ đúng hạn văn bản",
+      "Đơn thư trong kỳ",
+    ]);
+    const letters = docs.find((f) => f.label === "Đơn thư trong kỳ")!;
+    expect(letters).toMatchObject({ value: "0", number: 0, unit: "count", comparison: "-100,0% so với kỳ trước" });
+    expect(letters.noFigure).toBeUndefined();
+    const onTime = docs.find((f) => f.label === "Tỷ lệ đúng hạn văn bản")!;
     expect(onTime).toMatchObject({ value: "Chưa có dữ liệu", noFigure: true });
     expect(onTime.number).toBeUndefined();
+    const failed = exportBlocks({ ...data(), citizenLetters: { current: { ok: false, thongBao: "Máy chủ bận." }, previous: ok({ count: 1 }) } }, ALL)[1]!;
+    expect(failed.figures.find((f) => f.label === "Đơn thư trong kỳ")).toMatchObject({ value: "—" });
+    expect(failed.errors).toEqual(["Chưa tải được số liệu đơn thư: Máy chủ bận."]);
+  });
+
+  it("Kinh tế & Tài nguyên: the map's totals by type; only 'Thành lập mới' is '?' and carries NO number", () => {
+    const b = DOC.blocks.find((x) => x.title === "Kinh tế & Tài nguyên")!;
+    expect(b.pending).toBeUndefined();
+    expect(b.figures.map((f) => [f.label, f.value])).toEqual([
+      ["Doanh nghiệp", "5"],
+      ["Hộ kinh doanh", "3"],
+      ["Thành lập mới", EXPORT_NO_FIGURE],
+      ["Tổng tài nguyên", "26"],
+    ]);
+    expect(b.figures[0]).toMatchObject({ number: 5, unit: "count", comparison: "chưa có kỳ trước để so" });
+    expect(b.figures[3]).toMatchObject({ number: 26, unit: "count" });
+    const newInPeriod = b.figures[2]!;
+    expect(newInPeriod.noFigure).toBe(true);
+    expect(newInPeriod.number).toBeUndefined();
+    expect(newInPeriod.note).toContain("chưa đếm theo ngày thêm vào");
+    const failed = exportBlocks({ ...data(), mapAssets: { ok: false, thongBao: "Máy chủ bận." } }, ALL).at(-1)!;
+    expect(failed.figures.filter((f) => !f.noFigure).every((f) => f.value === "—")).toBe(true);
+    expect(failed.errors).toEqual(["Chưa tải được số liệu bản đồ kinh tế số: Máy chủ bận."]);
   });
 
   it("'Cần xử lý ngay' is an aggregate: a count and a sentence, never a record code", () => {
@@ -240,7 +283,11 @@ describe("export model — the figures on screen, nothing else", () => {
   it("DENIED module: a block the account cannot see is not in the file either", () => {
     const only = blockVisibility(["report.read", "task.read"]);
     const titles = exportBlocks(data(), only).map((b) => b.title);
-    expect(titles).toEqual(["Nhiệm vụ", "Kinh tế & Tài nguyên"]);
+    expect(titles).toEqual(["Nhiệm vụ"]);
+    // without petition.read the letters tile is absent from the file as from the screen
+    const noLetters = blockVisibility(["report.read", "document.read"]);
+    const docs = exportBlocks(data(), noLetters)[0]!;
+    expect(docs.figures.map((f) => f.label)).not.toContain("Đơn thư trong kỳ");
   });
 
   it("a FAILED call goes in as '—' with the server's sentence, never as 0", () => {
@@ -260,6 +307,10 @@ describe("export model — the figures on screen, nothing else", () => {
     expect(figuresSettled({ ...data(), fiscal: null }, ALL)).toBe(false);
     expect(figuresSettled({ ...data(), budget: null }, ALL)).toBe(false);
     expect(figuresSettled({ ...data(), tasks: { current: ok(TASKS), previous: null } }, ALL)).toBe(false);
+    expect(figuresSettled({ ...data(), citizenLetters: { current: ok({ count: 1 }), previous: null } }, ALL)).toBe(false);
+    expect(figuresSettled({ ...data(), mapAssets: null }, ALL)).toBe(false);
+    // a block the account cannot see is never waited for
+    expect(figuresSettled({ ...data(), mapAssets: null }, blockVisibility(["report.read", "task.read"]))).toBe(true);
     expect(figuresSettled({ ...data(), fiscal: { ok: false, thongBao: "x" } }, ALL)).toBe(true);
     // report.read alone: no figure block, nothing to export
     expect(figuresSettled(data(), blockVisibility(["report.read"]))).toBe(false);
@@ -282,6 +333,8 @@ describe("XLSX", () => {
       "Thu - Chi ngân sách xã",
       "Luỹ kế năm 2026, không so với kỳ trước.",
       "+12,5% so với kỳ trước",
+      "Đơn thư trong kỳ",
+      "Tổng tài nguyên",
       EXPORT_NO_FIGURE,
       URGENT_ROWS_OMITTED,
     ]) {
@@ -303,8 +356,8 @@ describe("PPTX", () => {
     expect(blob.size).toBeGreaterThan(1000);
     const { all, parts } = await ooxmlText(blob);
     const slides = Object.keys(parts).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
-    // cover + 5 built blocks (Giải ngân built 10/10/2026) + Cần xử lý ngay + Ghi chú
-    expect(slides).toHaveLength(8);
+    // cover + 6 built blocks (Giải ngân 10/10/2026, Kinh tế & Tài nguyên 15/10/2026) + Cần xử lý ngay + Ghi chú
+    expect(slides).toHaveLength(9);
     for (const s of [
       "Tổng quan điều hành",
       COMMUNE.displayName,
@@ -315,7 +368,9 @@ describe("PPTX", () => {
       "75,0%",
       "9,64 tỷ đồng",
       "Cần xử lý ngay",
-      "Kinh tế & Tài nguyên — chưa có số liệu",
+      "Kinh tế & Tài nguyên",
+      "Doanh nghiệp",
+      "Đơn thư trong kỳ",
       "Tỷ lệ giải ngân",
     ]) {
       expect(all).toContain(s.replaceAll("&", "&amp;"));

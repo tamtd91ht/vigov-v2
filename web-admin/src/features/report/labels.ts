@@ -10,7 +10,8 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
  * BUILT ON 09/10/2026 and therefore gone from this list (owner, ADR 0053 §Sửa đổi 09/10/2026 lần 2):
  * "So sánh với kỳ trước" (the hand-drawn chart, `comparison-chart.tsx`) and "Xuất báo cáo PDF, XLSX,
  * PPTX" (Tổng quan's browser-side builders reused, `report-export-actions.tsx`). The scheduled report
- * job and the "Thành lập mới" indicator have no position on this page, so they get no placeholder here.
+ * job has no position on this page, so it gets no placeholder here; "Thành lập mới" is a tile of the
+ * reused Kinh tế & Tài nguyên block and is declared once, in `features/dashboard/labels.ts`.
  *
  * WHY THE CONSTANT KEEPS ITS VIETNAMESE NAME: `tools/tien_do_san_pham.py` finds a screen's unbuilt
  * parts by the `PHAN_CHUA_DUNG` declaration in any `features/<dir>/*.ts`.
