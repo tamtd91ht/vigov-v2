@@ -20,7 +20,7 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *
  * KHÔNG CÓ CỔNG QUYỀN Ở ĐÂY, đúng khuôn `/van-ban` đang dùng: `src/proxy.ts` chặn người CHƯA ĐĂNG
  * NHẬP ở phía máy chủ, còn `task.*` do dịch vụ `petitions` kiểm trên TỪNG lời gọi API thật (luật 5,
- * cấm #1). Trong thân màn chỉ nút Ký ẩn theo `task.approve` — tiện dụng, xem chú thích đầu
+ * cấm #1). Thân màn không còn nút Ký (danh sách lỗi của tester 15/10/2026) — xem chú thích đầu
  * `features/bien-ban/so-bien-ban.tsx`.
  *
  * XÃ ĐỌC LÚC CHẠY TỪ `Host`, như mọi trang khác: không có giá trị riêng của xã nào nằm trong

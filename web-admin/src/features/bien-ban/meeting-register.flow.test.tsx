@@ -293,7 +293,8 @@ describe("Gỡ — hộp thoại có ô lý do bắt buộc", () => {
   it("Gỡ biên bản mở một <dialog>; lý do trống thì nút gỡ tắt; gõ lý do rồi gỡ là gửi đúng lý do", async () => {
     api.xoaBienBan.mockImplementation(() => ok(null));
     const page = await mount();
-    act(() => buttonByText(page, "Gỡ biên bản").click());
+    // An icon button now (tester bug list 15/10/2026): found by its accessible name, which names the record.
+    act(() => page.querySelector<HTMLButtonElement>('button[aria-label^="Gỡ biên bản “"]')!.click());
     const dialog = page.querySelector("dialog")!;
     const submit = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
     expect(submit.disabled).toBe(true);

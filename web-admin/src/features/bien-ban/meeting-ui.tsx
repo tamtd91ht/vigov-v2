@@ -1,20 +1,9 @@
-import {
-  AlarmClock,
-  CircleCheck,
-  CircleDashed,
-  CircleMinus,
-  FileCheck2,
-  FilePen,
-  Loader,
-  type LucideIcon,
-} from "lucide-react";
+import { AlarmClock, CircleCheck, CircleDashed, CircleMinus, Loader, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { Badge, type BadgeTone } from "@/components/ui/badge";
-import type { petitions_bienBanRa, petitions_ketLuanRa } from "@/lib/api/schema.gen";
+import type { petitions_ketLuanRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
-
-import { TRANG_THAI_DA_KY, TRANG_THAI_DU_THAO } from "./nhan-bien-ban";
 
 /**
  * Presentation shared by the Biên bản họp screen (ADR 0068, spec §8.5). Nothing here reads data or
@@ -25,21 +14,7 @@ import { TRANG_THAI_DA_KY, TRANG_THAI_DU_THAO } from "./nhan-bien-ban";
  * ICON + WORD, never colour alone (spec §7) — every tone below also has its own icon shape.
  */
 
-// Dự thảo = tangerine, Đã ký = leaf (spec 05 §B: the record's two states, prototype chip colours).
-const MEETING_LOOK: Readonly<Record<string, { tone: BadgeTone; icon: LucideIcon }>> = {
-  [TRANG_THAI_DU_THAO]: { tone: "warning", icon: FilePen },
-  [TRANG_THAI_DA_KY]: { tone: "success", icon: FileCheck2 },
-};
-
-/** Status pill of a meeting record. An unknown code keeps the neutral pill and its raw word. */
-export function MeetingStatusBadge({ meeting, children }: { meeting: petitions_bienBanRa; children: ReactNode }) {
-  const look = MEETING_LOOK[meeting.status];
-  return (
-    <Badge tone={look?.tone ?? "neutral"} icon={look?.icon}>
-      {children}
-    </Badge>
-  );
-}
+// No status pill for the RECORD (Dự thảo / Đã ký): the card dropped it (tester bug list 15/10/2026).
 
 /**
  * The conclusion status is DERIVED BY THE SERVER (rule 10, invariant 3) — this only draws it.

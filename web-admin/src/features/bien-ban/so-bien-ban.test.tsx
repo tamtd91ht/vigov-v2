@@ -228,12 +228,14 @@ describe("thẻ biên bản §2", () => {
     expect(tag).not.toContain("font-bold");
   });
 
-  it("prototype header: ô icon navy/8, tiêu đề là h2 navy 14.5px đậm, Dự thảo là badge cam", () => {
+  it("prototype header: ô icon navy/8, tiêu đề là h2 navy 14.5px đậm, KHÔNG còn chip Dự thảo / Đã ký", () => {
     const html = veThe(bienBan());
     expect(html).toContain("bg-navy/8 text-navy grid size-9 place-items-center rounded-[9px]");
     expect(html).toMatch(/<h2 class="[^"]*text-\[14\.5px\][^"]*font-bold[^"]*">Giao ban Uỷ ban/);
     expect(html).not.toContain("<h3");
-    expect(pillClassOf(html, "Dự thảo")).toContain("text-tangerine");
+    // Tester bug list 15/10/2026 (D): the "Dự thảo" pill is gone from the card.
+    expect(pillClassOf(html, "Dự thảo")).toBe("");
+    expect(html).not.toContain(">Dự thảo<");
   });
 
   it("thiếu số hiệu và địa điểm thì dòng meta chỉ còn ngày — không có dấu chấm bơ vơ", () => {
@@ -561,14 +563,16 @@ describe("prototype composition", () => {
     expect(html).toMatch(/^<p class="[^"]*border-dashed[^"]*">Chưa có biên bản nào được nhập\.<\/p>$/);
   });
 
-  it("card: an `article`; header = title · meta · status · count pill; then the conclusions, then the add row", () => {
-    const html = veThe(bienBan());
+  it("card: an `article`; header = title · meta · count pill · Sửa · Gỡ; then the conclusions, then the add row", () => {
+    const html = veThe(bienBan({ task_count: 0 }));
     expect(html.startsWith("<article")).toBe(true);
     const at = (s: string) => html.indexOf(s);
     expect(at("Giao ban Uỷ ban nhân dân xã")).toBeLessThan(at("5/8/2026 · 31/BB-UBND"));
-    expect(at("5/8/2026 · 31/BB-UBND")).toBeLessThan(at(">Dự thảo<"));
-    expect(at(">Dự thảo<")).toBeLessThan(at("0/1 kết luận xong · 1/3 nhiệm vụ xong"));
-    expect(at("1/3 nhiệm vụ xong")).toBeLessThan(at("<ol"));
+    expect(at("5/8/2026 · 31/BB-UBND")).toBeLessThan(at("kết luận xong"));
+    expect(at("nhiệm vụ xong")).toBeLessThan(at('class="ml-auto flex shrink-0 justify-end gap-1"'));
+    expect(at('class="ml-auto flex shrink-0 justify-end gap-1"')).toBeLessThan(at(`aria-label="${NHAN_NUT_SUA_BIEN_BAN}`));
+    expect(at(`aria-label="${NHAN_NUT_SUA_BIEN_BAN}`)).toBeLessThan(at(`aria-label="${NHAN_NUT_XOA_BIEN_BAN}`));
+    expect(at(`aria-label="${NHAN_NUT_XOA_BIEN_BAN}`)).toBeLessThan(at("<ol"));
     expect(at("<ol")).toBeLessThan(at(nhuTrongHTML(PLACEHOLDER_KET_LUAN)));
   });
 
@@ -627,13 +631,7 @@ describe("prototype composition", () => {
       'id="ten-cuoc-hop"',
       'id="ngay-hop"',
       'id="so-hieu-bien-ban"',
-      'id="dia-diem-hop"',
       'id="noi-dung-bien-ban"',
-      'id="chu-tri-bien-ban"',
-      'id="thu-ky-bien-ban"',
-      'id="chon-thanh-phan"',
-      'id="cac-ket-luan"',
-      'id="tep-dinh-kem-bien-ban"',
       ">Huỷ</button>",
       // Not the words: `Lưu biên bản` is also the start of the prototype's line under the title.
       '<button type="submit"',
@@ -685,7 +683,7 @@ describe("biểu mẫu nhập biên bản §4", () => {
     );
   }
 
-  it("có đủ các ô dựng được, và chỉ hai ô là bắt buộc", () => {
+  it("nhập mới: đúng bốn ô của prototype, và chỉ hai ô là bắt buộc", () => {
     const html = veForm();
 
     // Labels are `Field`'s (spec 04: navy 13px semibold, the `*` a red span after the word).
@@ -694,14 +692,31 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).toContain(`Ngày họp${SAO}`);
     expect(html.split(SAO).length - 1).toBe(2);
     expect(html).toContain("Số hiệu biên bản");
-    expect(html).toContain("Địa điểm");
-    expect(html).toContain("Thành phần tham dự");
     expect(html).toContain("Nội dung biên bản");
-    expect(html).toContain("Các kết luận");
     // Số hiệu KHÔNG mang dấu sao: nó tuỳ chọn, và nó không phải mã định danh.
     expect(html).not.toContain("Số hiệu biên bản *");
-    expect(html).not.toContain("Chủ trì *");
-    expect(html).not.toContain("Thư ký *");
+  });
+
+  // Tester bug list 15/10/2026 (C): the create popup had six fields the prototype's
+  // `NewMeetingDialog` (MeetingMinutes.tsx:353-390) does not. All six are optional on the server.
+  it("nhập mới VÀ bổ sung: KHÔNG có Địa điểm, Chủ trì, Thư ký, Thành phần, Các kết luận, Tệp đính kèm", () => {
+    const goc = bienBan({ status: "da-ky", title: "Giao ban tháng 7" });
+    for (const html of [veForm(), veForm(null, { loai: "tao", boSungCho: goc })]) {
+      for (const id of [
+        'id="dia-diem-hop"',
+        'id="chu-tri-bien-ban"',
+        'id="thu-ky-bien-ban"',
+        'id="chon-thanh-phan"',
+        'id="thanh-phan-khac"',
+        'id="cac-ket-luan"',
+        'id="tep-dinh-kem-bien-ban"',
+      ]) {
+        expect(html).not.toContain(id);
+      }
+      for (const word of ["Địa điểm", ">Chủ trì<", ">Thư ký<", "Thành phần tham dự", "Các kết luận", "Tệp đính kèm"]) {
+        expect(html).not.toContain(word);
+      }
+    }
   });
 
   it("prototype: không còn hai dòng gợi ý dưới Số hiệu và dưới Nội dung biên bản", () => {
@@ -738,8 +753,8 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).not.toMatch(/>\s*Mật\s*</);
   });
 
-  it("Chủ trì và Thư ký là ô CHỌN từ danh bạ: giá trị là MÃ, chữ hiện là họ tên · chức vụ", () => {
-    const html = veForm();
+  it("bản SỬA giữ Chủ trì và Thư ký là ô CHỌN từ danh bạ: giá trị là MÃ, chữ hiện là họ tên · chức vụ", () => {
+    const html = veForm(null, { loai: "sua", ban: bienBan() });
     expect(html).toContain(">Chủ trì<");
     expect(html).toContain(">Thư ký<");
     // Giá trị gửi đi là MÃ nghiệp vụ; họ tên chỉ là chữ hiện.
@@ -748,8 +763,9 @@ describe("biểu mẫu nhập biên bản §4", () => {
     expect(html).not.toContain('value="Nguyễn Văn An"');
   });
 
-  it("thành phần: ô chọn cán bộ VÀ ô chữ tự do — khách mời không có tài khoản vẫn ghi được", () => {
-    const html = veForm();
+  it("bản SỬA giữ Địa điểm và thành phần: ô chọn cán bộ VÀ ô chữ tự do", () => {
+    const html = veForm(null, { loai: "sua", ban: bienBan() });
+    expect(html).toContain('id="dia-diem-hop"');
     expect(html).toContain('id="chon-thanh-phan"');
     expect(html).toContain('id="thanh-phan-khac"');
   });
@@ -758,17 +774,15 @@ describe("biểu mẫu nhập biên bản §4", () => {
    * Ô tệp ở CUỐI biểu mẫu (§4) là chỗ giữ: vô hiệu, mang dấu "?", và KHÔNG có `name` — nên nó không
    * bao giờ đi lên cùng thân yêu cầu, kể cả khi ai đó gỡ `disabled`.
    */
-  it("ô Tệp đính kèm là ô tệp VÔ HIỆU, không `name`, có dấu “?”, đứng sau ô cuối cùng dựng được", () => {
-    const html = veForm();
+  it("bản SỬA: ô Tệp đính kèm là ô tệp VÔ HIỆU, không `name`, có dấu “?”, đứng sau ô cuối cùng dựng được", () => {
+    const html = veForm(null, { loai: "sua", ban: bienBan() });
     const tep = /<input[^>]*type="file"[^>]*>/.exec(html)?.[0] ?? "";
 
     expect(tep).toContain('id="tep-dinh-kem-bien-ban"');
     expect(tep).toContain('disabled=""');
     expect(tep).not.toContain("name=");
     expect(html).toContain("Tệp đính kèm — bản scan biên bản — tính năng đang phát triển");
-    expect(html.indexOf('id="tep-dinh-kem-bien-ban"')).toBeGreaterThan(html.indexOf('id="cac-ket-luan"'));
-    // Bản sửa cũng có ô ấy: đặc tả §4 dùng một biểu mẫu cho cả hai.
-    expect(veForm(null, { loai: "sua", ban: bienBan() })).toContain('id="tep-dinh-kem-bien-ban"');
+    expect(html.indexOf('id="tep-dinh-kem-bien-ban"')).toBeGreaterThan(html.indexOf('id="thanh-phan-khac"'));
   });
 
   it("biểu mẫu BỔ SUNG nói nó bổ sung cho biên bản đã ký nào", () => {
@@ -805,9 +819,9 @@ describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
     signed_at: "2026-08-06T03:00:00Z",
   });
 
-  it("chip trạng thái: “Dự thảo” và “Đã ký”", () => {
-    expect(veThe(bienBan())).toContain(">Dự thảo<");
-    expect(veThe(DA_KY)).toContain(">Đã ký<");
+  it("không còn chip trạng thái “Dự thảo” / “Đã ký” trên thẻ (tester 15/10/2026)", () => {
+    expect(veThe(bienBan())).not.toContain(">Dự thảo<");
+    expect(veThe(DA_KY)).not.toContain(">Đã ký<");
   });
 
   it("dự thảo: Sửa · Gỡ · Thêm kết luận có; Ghi Thông báo · Lập bổ sung KHÔNG", () => {
@@ -839,13 +853,14 @@ describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
     expect(html).not.toContain(NHAN_NUT_GHI_THONG_BAO);
   });
 
-  it("nút Ký CHỈ hiện khi phiên có `task.approve` — ca BỊ TỪ CHỐI trước", () => {
-    expect(veThe(bienBan(), phepTach(), vongDoi({ coQuyenKy: false }))).not.toContain(
-      `>${NHAN_NUT_KY}<`,
-    );
-    expect(veThe(bienBan(), phepTach(), vongDoi({ coQuyenKy: true }))).toContain(
-      `>${NHAN_NUT_KY}<`,
-    );
+  // Tester bug list 15/10/2026 (D): no `Ký biên bản` and no `Xem biên bản` on the card, with or
+  // without `task.approve`.
+  it("KHÔNG có nút Ký biên bản và Xem biên bản — kể cả khi phiên có `task.approve`", () => {
+    for (const coQuyenKy of [false, true]) {
+      const html = veThe(bienBan(), phepTach(), vongDoi({ coQuyenKy }));
+      expect(html).not.toContain(NHAN_NUT_KY);
+      expect(html).not.toContain("Xem biên bản");
+    }
   });
 
   it("hộp Ký nói rõ hệ quả và có hai ô Thông báo tuỳ chọn", () => {
@@ -866,16 +881,28 @@ describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
     const nut = html.slice(dau, html.indexOf("</button>", dau));
     expect(nut).toContain("disabled");
     expect(nut).toContain(NHAN_NUT_XOA_BIEN_BAN);
-    // Spec 05 §B: the reason is ALSO the disabled button's `title`, and sits under the row.
-    expect(nut).toContain(`title="${VI_SAO_BIEN_BAN_CON_NHIEM_VU}"`);
+    // The reason shows on hover through the wrapper (a disabled button gets no pointer events), and
+    // sits under the header as a sentence.
+    expect(html.slice(html.lastIndexOf("<span", dau), dau)).toContain(`title="${VI_SAO_BIEN_BAN_CON_NHIEM_VU}"`);
     expect(html).toContain(
-      `<p class="m-0 -mt-1 mb-3 text-[11.5px] text-ink-muted" id="ly-do-xoa-01JBB1">${VI_SAO_BIEN_BAN_CON_NHIEM_VU}</p>`,
+      `<p class="m-0 mb-3 text-[11.5px] text-ink-muted" id="ly-do-xoa-01JBB1">${VI_SAO_BIEN_BAN_CON_NHIEM_VU}</p>`,
     );
   });
 
-  it("nút Gỡ biên bản: viền (outline) chữ đỏ — không nền đỏ", () => {
+  // Tester bug list 15/10/2026 (D): Sửa / Gỡ are outline ICON buttons at the right edge of the
+  // header — the row actions of the other list screens (`IconButton` secondary: pencil, red trash).
+  it("Sửa · Gỡ biên bản: nút icon viền, tên đọc được mang tiêu đề; Gỡ chữ đỏ không nền đỏ", () => {
     const html = veThe(bienBan({ task_count: 0 }));
-    const dau = html.lastIndexOf("<button", html.indexOf(`${NHAN_NUT_XOA_BIEN_BAN}</button>`));
+    for (const nhan of [NHAN_NUT_SUA_BIEN_BAN, NHAN_NUT_XOA_BIEN_BAN]) {
+      const label = `${nhan} “Giao ban Uỷ ban nhân dân xã tháng 8 năm 2026”`;
+      const start = html.lastIndexOf("<button", html.indexOf(`aria-label="${label}"`));
+      const button = html.slice(start, html.indexOf("</button>", start));
+      expect(button).toContain(`title="${label}"`);
+      expect(button).toContain("<svg");
+      // Icon only: no visible word inside the button.
+      expect(button.replace(/<[^>]*>/g, "")).toBe("");
+    }
+    const dau = html.lastIndexOf("<button", html.indexOf(`aria-label="${NHAN_NUT_XOA_BIEN_BAN}`));
     const tag = html.slice(dau, html.indexOf(">", dau));
     expect(tag).toContain("text-danger");
     expect(tag).toContain("border-border");
@@ -911,8 +938,8 @@ describe("vòng đời trên thẻ — dự thảo và đã ký", () => {
     expect(veThe(bienBan({ supplements_id: "01JBBGOC" }))).toContain('href="#bien-ban-01JBBGOC"');
   });
 
-  it("“Xem biên bản” là neo tới chính thẻ — không mang dữ liệu nào ngoài id", () => {
-    expect(veThe(bienBan())).toContain('href="#bien-ban-01JBB1"');
+  it("không còn neo “Xem biên bản” trên thẻ", () => {
+    expect(veThe(bienBan())).not.toContain('href="#bien-ban-01JBB1"');
   });
 });
 
@@ -1019,11 +1046,13 @@ describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nú
     expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
   });
 
-  it("dự thảo, chưa có nhiệm vụ: Sửa · Gỡ bấm được, Đánh dấu có", () => {
+  // Tester bug list 15/10/2026 (E): no `Đánh dấu “không phát sinh nhiệm vụ”` button any more.
+  it("dự thảo, chưa có nhiệm vụ: Sửa · Gỡ bấm được, KHÔNG có nút Đánh dấu", () => {
     const html = veDong(ketLuan({ ordinal: 3, task_count: 0 }));
     expect(html).toContain('aria-label="Sửa kết luận số 3"');
     expect(html).toContain('aria-label="Gỡ kết luận số 3"');
-    expect(html).toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
+    expect(html).not.toContain(nhuTrongHTML(NHAN_NUT_DANH_DAU));
+    expect(html).not.toContain("Đánh dấu");
     expect(html).not.toContain(VI_SAO_KET_LUAN_KHOA);
   });
 
@@ -1040,23 +1069,37 @@ describe("dòng kết luận — chip trạng thái từ MÁY CHỦ và các nú
 
   it("câu khoá kết luận nằm MỘT lần trong DOM; Sửa và Gỡ cùng trỏ vào nó, và mang nó ở `title`", () => {
     const html = veDong(ketLuan({ id: "k3", ordinal: 3, task_count: 2, status: "dang-thuc-hien" }));
-    expect(html.split(VI_SAO_KET_LUAN_KHOA).length - 1).toBe(3); // the <p> + two `title`s
+    // the <p> + the `title` of each locked button's wrapper (a disabled button gets no hover)
+    expect(html.split(VI_SAO_KET_LUAN_KHOA).length - 1).toBe(3);
     expect(html.split(`>${VI_SAO_KET_LUAN_KHOA}</p>`).length - 1).toBe(1);
     expect(html).toContain('<p class="m-0 mt-1 text-[11px] text-ink-muted" id="ly-do-kl-k3">');
     expect(html.split('aria-describedby="ly-do-kl-k3"').length - 1).toBe(2);
     expect(html).not.toContain("an-thi-giac");
   });
 
-  it("hàng thao tác kết luận: ghost sm h-7 px-2 11.5px; Gỡ chữ đỏ không nền đỏ", () => {
+  // Tester bug list 15/10/2026 (E): Sửa / Gỡ of a conclusion are outline ICON buttons at the right
+  // edge of the row, after `Tách thành nhiệm vụ` — the other list screens' row actions.
+  it("Sửa · Gỡ kết luận: nút icon viền ở lề phải, sau Tách; Gỡ chữ đỏ không nền đỏ", () => {
     const html = veDong(ketLuan({ ordinal: 3, task_count: 0 }));
-    expect(html).toContain('<div class="mt-2 flex flex-wrap items-center gap-1">');
-    const dau = html.lastIndexOf("<button", html.indexOf('aria-label="Gỡ kết luận số 3"'));
+    const at = (x: string) => html.indexOf(x);
+    expect(at('class="ml-auto flex shrink-0 items-center justify-end gap-1"')).toBeGreaterThan(at(CHUA_TACH_NHIEM_VU));
+    expect(at('class="ml-auto flex shrink-0 items-center justify-end gap-1"')).toBeLessThan(
+      at('aria-label="Tách thành nhiệm vụ — kết luận số 3"'),
+    );
+    expect(at('aria-label="Tách thành nhiệm vụ — kết luận số 3"')).toBeLessThan(at('aria-label="Sửa kết luận số 3"'));
+    expect(at('aria-label="Sửa kết luận số 3"')).toBeLessThan(at('aria-label="Gỡ kết luận số 3"'));
+    // No action row under the sentence any more when there is no task list to open.
+    expect(html).not.toContain('<div class="mt-2 flex flex-wrap items-center gap-1">');
+    for (const nhan of ["Sửa kết luận số 3", "Gỡ kết luận số 3"]) {
+      const start = html.lastIndexOf("<button", at(`aria-label="${nhan}"`));
+      const button = html.slice(start, html.indexOf("</button>", start));
+      expect(button).toContain(`title="${nhan}"`);
+      expect(button.replace(/<[^>]*>/g, "")).toBe("");
+    }
+    const dau = html.lastIndexOf("<button", at('aria-label="Gỡ kết luận số 3"'));
     const tag = html.slice(dau, html.indexOf(">", dau));
-    expect(tag).toContain("h-7");
-    expect(tag).toContain("px-2 ");
-    expect(tag).toContain("text-[11.5px]");
     expect(tag).toContain("text-danger");
-    expect(tag).toContain("hover:bg-danger/10");
+    expect(tag).toContain("border-border");
     expect(tag).not.toContain("bg-destructive");
   });
 
