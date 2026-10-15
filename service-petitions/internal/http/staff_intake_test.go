@@ -113,6 +113,9 @@ func TestStaffIntake_RightKeyRightCommuneIs201(t *testing.T) {
 		f.req.ReporterName != "Nguyễn Văn An" || f.req.ReporterPhone != "0900000000" || f.req.Anonymous {
 		t.Errorf("biểu mẫu xuống use case sai: %+v", f.req)
 	}
+	if f.req.Channel != "" {
+		t.Errorf("không gửi channel mà use case nhận %q — mặc định là của use case (can-bo-nhap-ho)", f.req.Channel)
+	}
 	if !f.req.ClockFrom.IsZero() {
 		t.Errorf("không gửi clock_from mà use case nhận %v — mặc định là của use case (lúc vào sổ)", f.req.ClockFrom)
 	}
@@ -170,7 +173,7 @@ func TestStaffIntake_MissingIdempotencyKeyIs400(t *testing.T) {
 // --- the body ------------------------------------------------------------------------------------
 
 func TestStaffIntake_SystemDecidedFieldsAre400(t *testing.T) {
-	for _, k := range []string{"citizen_id", "cong_dan_id", "linh_vuc", "channel", "code", "status",
+	for _, k := range []string{"citizen_id", "cong_dan_id", "linh_vuc", "code", "status",
 		"acknowledge_due", "resolve_due"} {
 		t.Run(k, func(t *testing.T) {
 			m := dungMayChu(t)
@@ -181,6 +184,26 @@ func TestStaffIntake_SystemDecidedFieldsAre400(t *testing.T) {
 			doiMa(t, w, http.StatusBadRequest)
 			if m.staffIntake.calls != 0 {
 				t.Errorf("use case chạy dù thân tự đặt %q", k)
+			}
+		})
+	}
+}
+
+// OWNER DECISION 15/10/2026: the officer's `channel` pick reaches the use case as sent (spaces trimmed),
+// which decides it — the handler maps nothing, so a misspelling cannot be "repaired" into a channel.
+func TestStaffIntake_ChannelReachesUseCase(t *testing.T) {
+	for sent, want := range map[string]string{
+		"tong-dai": "tong-dai", "web-xa": "web-xa", "zalo-oa": "zalo-oa", "can-bo-nhap-ho": "can-bo-nhap-ho",
+		" tong-dai ": "tong-dai", "": "", "zalo-mini-app": "zalo-mini-app",
+	} {
+		t.Run(sent, func(t *testing.T) {
+			m := dungMayChu(t)
+			m.capQuyen(t, "feedback.create")
+			b := staffIntakeBody()
+			b["channel"] = sent
+			doiMa(t, m.goiGhiNV(t, http.MethodPost, hostA, staffIntakePath, canBoCuaXa(xaA), b), http.StatusCreated)
+			if m.staffIntake.req.Channel != want {
+				t.Errorf("channel xuống use case = %q, muốn %q", m.staffIntake.req.Channel, want)
 			}
 		})
 	}
@@ -255,18 +278,19 @@ func TestStaffIntake_RefusalsMapToTheirAnswers(t *testing.T) {
 		status int
 		code   string
 	}{
-		"lĩnh vực xã không nhận":    {app.ErrFieldNotOffered, http.StatusBadRequest, "field_not_offered"},
-		"chưa đọc được bộ mã":       {wrapped(app.ErrFieldCatalogueUnavailable), http.StatusServiceUnavailable, "field_catalogue_unavailable"},
-		"mốc ngoài khoảng 7 ngày":   {fmt.Errorf("%w: sớm hơn 7 ngày", domain.ErrGocDemHanNgoaiKhoang), http.StatusBadRequest, "clock_from_out_of_range"},
-		"thiếu nội dung":            {domain.ErrNoiDungTrong, http.StatusBadRequest, "invalid_request"},
-		"thiếu lĩnh vực":            {domain.ErrThieuLinhVuc, http.StatusBadRequest, "invalid_request"},
-		"lĩnh vực sai dạng":         {domain.ErrLinhVucSaiDang, http.StatusBadRequest, "invalid_request"},
-		"số điện thoại quá dài":     {domain.ErrDienThoaiQuaDai, http.StatusBadRequest, "invalid_request"},
-		"chưa ấn định được hạn":     {wrapped(app.ErrChuaAnDinhDuocHan), http.StatusServiceUnavailable, "intake_not_configured"},
-		"thôn không thuộc xã":       {app.ErrResidentialUnitNotActive, http.StatusBadRequest, "residential_unit_not_offered"},
-		"chưa kiểm được thôn":       {wrapped(app.ErrResidentialUnitCheckUnavailable), http.StatusServiceUnavailable, "residential_unit_check_unavailable"},
-		"lỗi hệ thống":              {errors.New("kho hỏng"), http.StatusInternalServerError, "internal"},
-		"chủ thể không phải cán bộ": {errors.New("xu_ly_phan_anh: chủ thể không phải cán bộ"), http.StatusInternalServerError, "internal"},
+		"lĩnh vực xã không nhận":      {app.ErrFieldNotOffered, http.StatusBadRequest, "field_not_offered"},
+		"chưa đọc được bộ mã":         {wrapped(app.ErrFieldCatalogueUnavailable), http.StatusServiceUnavailable, "field_catalogue_unavailable"},
+		"mốc ngoài khoảng 7 ngày":     {fmt.Errorf("%w: sớm hơn 7 ngày", domain.ErrGocDemHanNgoaiKhoang), http.StatusBadRequest, "clock_from_out_of_range"},
+		"thiếu nội dung":              {domain.ErrNoiDungTrong, http.StatusBadRequest, "invalid_request"},
+		"thiếu lĩnh vực":              {domain.ErrThieuLinhVuc, http.StatusBadRequest, "invalid_request"},
+		"lĩnh vực sai dạng":           {domain.ErrLinhVucSaiDang, http.StatusBadRequest, "invalid_request"},
+		"số điện thoại quá dài":       {domain.ErrDienThoaiQuaDai, http.StatusBadRequest, "invalid_request"},
+		"chưa ấn định được hạn":       {wrapped(app.ErrChuaAnDinhDuocHan), http.StatusServiceUnavailable, "intake_not_configured"},
+		"thôn không thuộc xã":         {app.ErrResidentialUnitNotActive, http.StatusBadRequest, "residential_unit_not_offered"},
+		"chưa kiểm được thôn":         {wrapped(app.ErrResidentialUnitCheckUnavailable), http.StatusServiceUnavailable, "residential_unit_check_unavailable"},
+		"kênh cán bộ không được chọn": {fmt.Errorf("x: %w", domain.ErrChannelNotStaffSelectable), http.StatusBadRequest, "invalid_request"},
+		"lỗi hệ thống":                {errors.New("kho hỏng"), http.StatusInternalServerError, "internal"},
+		"chủ thể không phải cán bộ":   {errors.New("xu_ly_phan_anh: chủ thể không phải cán bộ"), http.StatusInternalServerError, "internal"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := dungMayChu(t)

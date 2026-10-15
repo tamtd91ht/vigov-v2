@@ -123,7 +123,7 @@ func (t TrangThai) KetThuc() bool {
 	return t.HopLe() && len(chuyenDuocSang[t]) == 0
 }
 
-// --- the four intake channels --------------------------------------------------------------
+// --- the five intake channels --------------------------------------------------------------
 
 // KenhTiepNhan is where the petition came in (docs/ui-ux/09 §12).
 type KenhTiepNhan string
@@ -133,14 +133,67 @@ const (
 	KenhZaloOA      KenhTiepNhan = "zalo-oa"
 	KenhWebXa       KenhTiepNhan = "web-xa"
 	KenhCanBoNhapHo KenhTiepNhan = "can-bo-nhap-ho"
+
+	// ChannelSwitchboard is "Tổng đài điện thoại" (owner decision 15/10/2026, bug sheet web-admin-141026):
+	// a citizen rang the commune's switchboard and an officer booked it. Only ever booked by staff — no
+	// citizen-facing form exists for it — so it carries the staff-booked deadline shape in the domain AND
+	// in migration 0045's CHECKs. The value is Vietnamese kebab-case like its siblings (ADR 0011).
+	ChannelSwitchboard KenhTiepNhan = "tong-dai"
 )
 
 func (k KenhTiepNhan) HopLe() bool {
 	switch k {
-	case KenhZaloMiniApp, KenhZaloOA, KenhWebXa, KenhCanBoNhapHo:
+	case KenhZaloMiniApp, KenhZaloOA, KenhWebXa, KenhCanBoNhapHo, ChannelSwitchboard:
 		return true
 	}
 	return false
+}
+
+// StaffMayRecord reports whether an officer may record this channel on the staff intake form ("Tiếp nhận
+// qua kênh", docs/ui-ux/09 §11). Owner decision 15/10/2026: `can-bo-nhap-ho` (the default), `tong-dai`,
+// `web-xa`, `zalo-oa`.
+//
+// NEVER `zalo-mini-app`: that is the citizen's OWN channel, and a staff-booked row carrying it would be
+// read as an accountless Mini App petition (PhieuPhanAnh.Accountless — channel + no owner, ADR 0083),
+// counted against that path's daily ceiling and served by its public lookup.
+//
+// THE CHANNEL IS ONLY THE RECORDED SOURCE on this form. Whatever is picked, the deadline shape is the
+// staff intake's (field at booking, `han_xu_ly_xong` fixed now, `han_tiep_nhan` NULL = "KHÔNG ÁP DỤNG"):
+// the owner ruled that the act, not the label, decides it. That is why app.StaffIntake does not consult
+// CoLinhVucLucVaoSo / HanTiepNhanApDung for the picked channel.
+func (k KenhTiepNhan) StaffMayRecord() bool {
+	switch k {
+	case KenhCanBoNhapHo, ChannelSwitchboard, KenhWebXa, KenhZaloOA:
+		return true
+	}
+	return false
+}
+
+// ErrChannelNotStaffSelectable: the intake form named a channel an officer may not record (StaffMayRecord).
+var ErrChannelNotStaffSelectable = errors.New("phieu_phan_anh: kênh tiếp nhận không thuộc danh sách cán bộ được chọn " +
+	"(can-bo-nhap-ho, tong-dai, web-xa, zalo-oa)")
+
+// StaffIntakeChannel reads the channel an officer picked. "" (absent) is `can-bo-nhap-ho`, the form's
+// default — a documented default of the FORM, not of the isolation path. Anything else outside
+// StaffMayRecord is refused, never mapped.
+func StaffIntakeChannel(raw string) (KenhTiepNhan, error) {
+	if raw == "" {
+		return KenhCanBoNhapHo, nil
+	}
+	k := KenhTiepNhan(raw)
+	if !k.StaffMayRecord() {
+		return "", ErrChannelNotStaffSelectable
+	}
+	return k, nil
+}
+
+// BookedByStaff reports that an officer booked this petition through the staff intake: no owner (no
+// citizen account, no Zalo account) and a channel only staff may record. DERIVED from columns every row
+// has, like Accountless — no flag column (rule 9). It holds because the staff intake is the only writer of
+// ownerless rows on those four channels; the day another path writes an ownerless `web-xa` / `zalo-oa`
+// row, this predicate must be revisited.
+func (p PhieuPhanAnh) BookedByStaff() bool {
+	return p.CongDanID == "" && p.ZaloAccountID == "" && p.Kenh.StaffMayRecord()
 }
 
 // CoLinhVucLucVaoSo reports whether this channel's FORM carries the field at booking.
@@ -157,11 +210,16 @@ func (k KenhTiepNhan) HopLe() bool {
 // field would let every pothole be filed as `An ninh trật tự` and take that field's 16-hour
 // commitment, which is open question #23, closed in the other direction.
 //
-// ADDING A FIFTH CHANNEL WITHOUT ANSWERING THIS QUESTION IS A STOP CONDITION (ADR 0028, stop
+// ADDING A CHANNEL WITHOUT ANSWERING THIS QUESTION IS A STOP CONDITION (ADR 0028, stop
 // condition #6). A channel that falls through to `false` by default gets the deferred deadline
 // by accident rather than by decision.
+//
+// `tong-dai` (owner decision 15/10/2026) answers it: booked only by staff, on the staff form, so it
+// is here. `web-xa` / `zalo-oa` describe THEIR OWN citizen-facing forms (none built yet), not the
+// staff form an officer may also record them on — a staff-booked row of either takes the staff
+// shape from the act (KenhTiepNhan.StaffMayRecord).
 func (k KenhTiepNhan) CoLinhVucLucVaoSo() bool {
-	return k == KenhCanBoNhapHo
+	return k == KenhCanBoNhapHo || k == ChannelSwitchboard
 }
 
 // HanTiepNhanApDung reports whether the "somebody has read it" clock means anything here.
@@ -171,8 +229,11 @@ func (k KenhTiepNhan) CoLinhVucLucVaoSo() bool {
 // `0 giờ`, because zero is a valid sample and would drag a commune's average acknowledge time
 // toward nothing. Reports must EXCLUDE those rows, never COALESCE them (ADR 0028, decision F #5
 // and its stop conditions #2 and #3).
+//
+// `tong-dai` is staff-booked by definition, so it is excluded with `can-bo-nhap-ho` (and migration
+// 0045 extends the two CHECKs to it).
 func (k KenhTiepNhan) HanTiepNhanApDung() bool {
-	return k != KenhCanBoNhapHo
+	return k != KenhCanBoNhapHo && k != ChannelSwitchboard
 }
 
 // --- the record ------------------------------------------------------------------------------

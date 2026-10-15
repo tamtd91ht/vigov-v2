@@ -119,6 +119,52 @@ func TestKenhNaoChotLinhVucLucVaoSo(t *testing.T) {
 	}
 }
 
+// `tong-dai` (owner decision 15/10/2026) is booked only by staff, so it has the staff shape too.
+func TestSwitchboardChannelHasTheStaffShape(t *testing.T) {
+	if !ChannelSwitchboard.HopLe() {
+		t.Fatal("tong-dai is not a valid channel")
+	}
+	if !ChannelSwitchboard.CoLinhVucLucVaoSo() || ChannelSwitchboard.HanTiepNhanApDung() {
+		t.Error("tong-dai lost the staff-booked shape (field at booking, no acknowledge clock)")
+	}
+}
+
+// What an officer may pick on the intake form — and the citizen's own channel is not among it.
+func TestStaffIntakeChannel(t *testing.T) {
+	for raw, want := range map[string]KenhTiepNhan{
+		"": KenhCanBoNhapHo, "can-bo-nhap-ho": KenhCanBoNhapHo, "tong-dai": ChannelSwitchboard,
+		"web-xa": KenhWebXa, "zalo-oa": KenhZaloOA,
+	} {
+		got, err := StaffIntakeChannel(raw)
+		if err != nil || got != want {
+			t.Errorf("StaffIntakeChannel(%q) = %q, %v; want %q", raw, got, err, want)
+		}
+	}
+	for _, raw := range []string{"zalo-mini-app", "Tổng đài", "TONG-DAI", "khac", " tong-dai"} {
+		if _, err := StaffIntakeChannel(raw); !errors.Is(err, ErrChannelNotStaffSelectable) {
+			t.Errorf("StaffIntakeChannel(%q) err = %v, want ErrChannelNotStaffSelectable", raw, err)
+		}
+	}
+}
+
+func TestBookedByStaff(t *testing.T) {
+	for _, k := range []KenhTiepNhan{KenhCanBoNhapHo, ChannelSwitchboard, KenhWebXa, KenhZaloOA} {
+		if !(PhieuPhanAnh{Kenh: k}).BookedByStaff() {
+			t.Errorf("ownerless %s petition not read as staff-booked", k)
+		}
+	}
+	for name, p := range map[string]PhieuPhanAnh{
+		"accountless Mini App": {Kenh: KenhZaloMiniApp},
+		"citizen-filed":        {Kenh: KenhZaloMiniApp, CongDanID: "cd-1"},
+		"citizen on web-xa":    {Kenh: KenhWebXa, CongDanID: "cd-1"},
+		"Zalo account owner":   {Kenh: KenhZaloMiniApp, ZaloAccountID: "za-1"},
+	} {
+		if p.BookedByStaff() {
+			t.Errorf("%s read as staff-booked", name)
+		}
+	}
+}
+
 func TestChiKenhNhapHoMoiKhongApDungHanTiepNhan(t *testing.T) {
 	if KenhCanBoNhapHo.HanTiepNhanApDung() {
 		t.Error("kênh nhập hộ áp dụng hạn tiếp nhận — chính cán bộ là người đọc, khoảng ấy không tồn tại")

@@ -248,6 +248,9 @@ type mayChu struct {
 	verificationPhotos *verificationPhotosFake
 	petitionLogFiles   *petitionLogAttachmentsFake
 
+	// staffScenePhotos is the officer's scene-photo upload at intake — staff_scene_photo_test.go.
+	staffScenePhotos *staffScenePhotosFake
+
 	// fields is the petition field catalogue — petition_fields_test.go.
 	fields *fieldCatalogueFake
 
@@ -321,6 +324,8 @@ func dungMayChu(t *testing.T) *mayChu {
 	// The petition's staff files — petition_staff_file_test.go.
 	verificationPhotos := &verificationPhotosFake{}
 	petitionLogFiles := &petitionLogAttachmentsFake{}
+	// The officer's scene photos at intake — staff_scene_photo_test.go.
+	staffScenePhotos := &staffScenePhotosFake{}
 	// The field catalogue — petition_fields_test.go.
 	fields := newFieldCatalogueFake()
 	// The residential-unit names — residential_unit_test.go.
@@ -384,6 +389,7 @@ func dungMayChu(t *testing.T) *mayChu {
 			PetitionPhotos:      staffPhotos,
 			// The petition's staff files — petition_staff_file_test.go.
 			VerificationPhotos:           verificationPhotos,
+			StaffScenePhotos:             staffScenePhotos,
 			PetitionLogAttachments:       petitionLogFiles,
 			PetitionLogAttachmentsReader: petitionLogFiles,
 			DanhSachBienBan:              bienBan,
@@ -444,6 +450,7 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		verificationPhotos: verificationPhotos,
 		petitionLogFiles:   petitionLogFiles,
+		staffScenePhotos:   staffScenePhotos,
 
 		fields: fields,
 
@@ -560,6 +567,7 @@ func depsDay() Deps {
 		PetitionPhotos:     &staffPhotosFake{},
 		// The petition's staff files.
 		VerificationPhotos:           &verificationPhotosFake{},
+		StaffScenePhotos:             &staffScenePhotosFake{},
 		PetitionLogAttachments:       &petitionLogAttachmentsFake{},
 		PetitionLogAttachmentsReader: &petitionLogAttachmentsFake{},
 		DanhSachBienBan:              bienBanMau(),

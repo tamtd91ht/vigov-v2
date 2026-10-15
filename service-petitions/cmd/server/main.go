@@ -474,6 +474,9 @@ func chay(log *slog.Logger) error {
 		PetitionPhotos: app.NewStaffPetitionPhotos(kho, phieu, storedFiles, photoObjects),
 		// "SAU KHI XỬ LÝ" (migration 0027): built on the citizen photo flow's slots — see above.
 		VerificationPhotos: verificationPhotos,
+		// The officer's scene photos on a petition they booked (owner decision 15/10/2026): the citizen
+		// upload's store, object store, scanner, policy and slots — one pipeline, one decode budget.
+		StaffScenePhotos: app.NewStaffScenePhotos(kho, phieu, storedFiles, citizenPhotos),
 		// §8.7's `📎 Đính kèm` on the petition log: the SAME stored-file store the note links through.
 		PetitionLogAttachments: app.NewPetitionLogAttachments(kho, phieu, storedFiles, objects, scanner,
 			policies),

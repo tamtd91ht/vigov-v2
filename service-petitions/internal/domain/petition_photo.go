@@ -30,6 +30,16 @@ func IsCitizenPhotoOf(f StoredFile, petitionID string) bool {
 		f.Purpose == PurposePetitionPhoto && f.UploadedBy == CitizenLogActor
 }
 
+// IsScenePhotoOf reports whether f is a SCENE photo of the petition — whoever attached it: the citizen
+// who filed it (IsCitizenPhotoOf), or the officer who booked it on the citizen's behalf (owner decision
+// 15/10/2026, app.StaffScenePhotos — uploader = the officer's business code). This is what every READ of
+// "ảnh hiện trường" binds; the WRITE paths keep their own, narrower ownership predicate, so a citizen can
+// never complete an officer's upload or the reverse.
+func IsScenePhotoOf(f StoredFile, petitionID string) bool {
+	return petitionID != "" && f.SubjectType == StoredFileSubjectPetition && f.SubjectID == petitionID &&
+		f.Purpose == PurposePetitionPhoto && f.UploadedBy != ""
+}
+
 // PurposePetitionPhoto is core/storage.PurposePetitionPhoto as a plain string (domain imports nothing
 // outside the standard library — see the note at the top of stored_file.go). Pinned against
 // core/storage by petition_photo_test.go in internal/app.

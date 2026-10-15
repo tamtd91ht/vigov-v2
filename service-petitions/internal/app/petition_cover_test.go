@@ -41,7 +41,7 @@ func (f *ppFiles) PetitionCoverPhotos(ctx context.Context, petitionIDs []string)
 	seen := map[string]bool{}
 	for _, id := range petitionIDs {
 		for _, sf := range all {
-			if !seen[id] && domain.IsCitizenPhotoOf(sf, id) && sf.Status.Attachable() {
+			if !seen[id] && domain.IsScenePhotoOf(sf, id) && sf.Status.Attachable() {
 				seen[id] = true
 				out = append(out, sf)
 			}

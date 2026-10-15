@@ -32,13 +32,21 @@ package app
 // response. With no recipient there is also no `petitions.status_changed.v1` row (ghiSuKienDoiTrangThai,
 // "no recipient, no row") — the notification gap that ADR names as still open.
 //
-// # THE RESIDENTIAL UNIT IS ACCEPTED (ADR 0088); PHOTOS STILL ARE NOT
+// # THE RESIDENTIAL UNIT IS ACCEPTED (ADR 0088)
 //
 // §11's `Thôn, tổ dân phố` is optional and checked against identity (ResolveActiveResidentialUnits)
 // BEFORE the code is minted — residential_unit.go. Unknown/retired/another commune's = 400; identity down
 // = 503 and nothing written: never a petition without the unit the officer chose, never an unchecked id.
-// `Đính ảnh hiện trường` is still refused: the scene-photo flow is bound to a citizen session (migration
-// 0026 refuses a petition with no `cong_dan_id`).
+// `Đính ảnh hiện trường` is NOT part of this request: the officer attaches photos right after, one
+// multipart request per photo, on the returned code (staff_scene_photo.go, owner decision 15/10/2026).
+//
+// # THE CHANNEL IS PICKED BY THE OFFICER, THE DEADLINE SHAPE IS NOT (owner decision 15/10/2026)
+//
+// §11's "Tiếp nhận qua kênh": `can-bo-nhap-ho` (default) · `tong-dai` · `web-xa` · `zalo-oa`
+// (domain.StaffIntakeChannel). The owner ruled that whatever is picked, the deadline is set exactly as
+// this act always set it (E/F/F5 above) — the channel is only the recorded source for statistics. So the
+// shape below is decided by THE ACT, and the channel predicates (CoLinhVucLucVaoSo, HanTiepNhanApDung) are
+// deliberately not consulted for it. This supersedes ADR 0028's "the channel is always can-bo-nhap-ho".
 
 import (
 	"context"
@@ -78,11 +86,6 @@ type StaffIntakeFields interface {
 	CheckStaffIntakeField(ctx context.Context, code string) (string, error)
 }
 
-// staffIntakeChannel is the channel EVERY petition booked through this use case carries. A constant,
-// never a request field: `kenh_tiep_nhan` decides which deadline rules apply (ADR 0028 decision E) and
-// is immutable once written. §11's "Tiếp nhận qua kênh" select is NOT honoured — see the route comment.
-const staffIntakeChannel = domain.KenhCanBoNhapHo
-
 // ActionStaffIntake is the business verb in the trail. A DIFFERENT verb from HanhViGuiPhanAnh, as that
 // constant's comment asks: "who filed this" is the first question of a disputed petition. The value is
 // Vietnamese snake_case like the citizen verb it sits beside, because an inspection reads the two
@@ -106,6 +109,11 @@ type StaffIntakeRequest struct {
 	// ResidentialUnitID is the `thon_to_dan_pho` id the officer picked (ADR 0088). "" = none. Checked
 	// against identity before anything is written; stored as the id, never the name.
 	ResidentialUnitID string
+
+	// Channel is the "Tiếp nhận qua kênh" the officer picked, as sent. "" = the form's default
+	// `can-bo-nhap-ho`; anything outside domain.KenhTiepNhan.StaffMayRecord is refused (400). It changes
+	// NOTHING about the deadlines (see the file header) — it is the recorded source, immutable once written.
+	Channel string
 }
 
 // StaffIntake owns the staff-booked intake.
@@ -158,14 +166,12 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 	if err := coCanBoThucHien(officer); err != nil {
 		return domain.PhieuPhanAnh{}, err
 	}
-	// The channel's own predicates, consulted rather than assumed — the day this constant changes,
-	// these are what must fail before a wrong deadline shape reaches a record.
-	if staffIntakeChannel.HanTiepNhanApDung() || !staffIntakeChannel.CoLinhVucLucVaoSo() {
-		return domain.PhieuPhanAnh{}, fmt.Errorf(
-			"nhap_ho_phan_anh: kênh %q không phải kênh cán bộ nhập hộ (ADR 0028 quyết định E)", staffIntakeChannel)
+	// Validated BEFORE identity is asked and before any transaction opens. The channel FIRST among them:
+	// `zalo-mini-app` here would make the row read as an accountless Mini App petition (ADR 0083).
+	channel, err := domain.StaffIntakeChannel(req.Channel)
+	if err != nil {
+		return domain.PhieuPhanAnh{}, err
 	}
-
-	// Validated BEFORE identity is asked and before any transaction opens.
 	content, err := domain.ChuanHoaNoiDung(req.Content)
 	if err != nil {
 		return domain.PhieuPhanAnh{}, err
@@ -252,7 +258,7 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 	p := domain.PhieuPhanAnh{
 		ID:       id,
 		MaTraCuu: code,
-		Kenh:     staffIntakeChannel,
+		Kenh:     channel, // the officer's pick — the recorded source only; the shape below is the act's
 		// CongDanID deliberately empty — ADR 0028 §Bổ sung 2026-10-02.
 		NoiDung:           content,
 		LinhVuc:           field,
@@ -299,7 +305,11 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 		}
 		// NO PERSONAL DATA IN THE DELTA, not even masked — the reasoning is on the citizen intake's delta.
 		d := map[string]any{
+			// The channel the officer recorded (owner decision 15/10/2026), and whether they PICKED it or
+			// the form's default applied — the two are different statements by an officer. English key
+			// (rule 12).
 			"kenh_tiep_nhan": string(p.Kenh),
+			"channel_chosen": req.Channel != "",
 			"trang_thai":     string(p.TrangThai),
 			"an_danh":        p.AnDanh,
 			"linh_vuc":       p.LinhVuc,
@@ -348,5 +358,6 @@ func (uc *StaffIntake) Book(ctx context.Context, req StaffIntakeRequest, officer
 // the same discipline as domain.LaLoiGuiPhanAnh — so an outage never turns into a 400.
 func IsStaffIntakeInputError(err error) bool {
 	return domain.LaLoiGuiPhanAnh(err) ||
-		errors.Is(err, domain.ErrThieuLinhVuc) || errors.Is(err, domain.ErrLinhVucSaiDang)
+		errors.Is(err, domain.ErrThieuLinhVuc) || errors.Is(err, domain.ErrLinhVucSaiDang) ||
+		errors.Is(err, domain.ErrChannelNotStaffSelectable)
 }

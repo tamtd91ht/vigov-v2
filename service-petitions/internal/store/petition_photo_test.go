@@ -28,13 +28,17 @@ func TestPetitionPhotosScopedBoundAndLiveOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	st := d.stmts[0]
-	for _, frag := range []string{"WHERE tenant_id = $1", "subject_type = $2 AND subject_id = $3 AND purpose = $4 AND uploaded_by = $5",
+	if strings.Contains(st.sql, "uploaded_by =") {
+		t.Errorf("statement still binds the uploader — an officer's scene photo would be invisible: %s", st.sql)
+	}
+	for _, frag := range []string{"WHERE tenant_id = $1", "subject_type = $2 AND subject_id = $3 AND purpose = $4",
 		"deleted_at IS NULL", "status IN ('stored', 'ready')", "ORDER BY created_at, id"} {
 		if !strings.Contains(st.sql, frag) {
 			t.Errorf("statement lacks %q: %s", frag, st.sql)
 		}
 	}
-	want := []driver.Value{string(xaThu), "petition", "pa-1", "petition-photo", "cong-dan"}
+	// NO UPLOADER BOUND (owner decision 15/10/2026): an officer's scene photo at intake is read too.
+	want := []driver.Value{string(xaThu), "petition", "pa-1", "petition-photo"}
 	if !reflect.DeepEqual(st.args, want) {
 		t.Errorf("args = %v, want %v", st.args, want)
 	}
@@ -74,14 +78,17 @@ func TestPetitionCoverPhotosOneStatementFirstPerPetition(t *testing.T) {
 		t.Fatalf("%d statements for one page — want ONE", len(d.stmts))
 	}
 	st := d.stmts[0]
+	if strings.Contains(st.sql, "uploaded_by =") {
+		t.Errorf("cover statement still binds the uploader: %s", st.sql)
+	}
 	for _, frag := range []string{"WHERE tenant_id = $1",
-		"subject_type = $2 AND subject_id = ANY($3) AND purpose = $4 AND uploaded_by = $5",
+		"subject_type = $2 AND subject_id = ANY($3) AND purpose = $4",
 		"deleted_at IS NULL", "status IN ('stored', 'ready')", "ORDER BY subject_id, created_at, id"} {
 		if !strings.Contains(st.sql, frag) {
 			t.Errorf("statement lacks %q: %s", frag, st.sql)
 		}
 	}
-	want := []driver.Value{string(xaThu), "petition", []string{"pa-1", "pa-2", "pa-3"}, "petition-photo", "cong-dan"}
+	want := []driver.Value{string(xaThu), "petition", []string{"pa-1", "pa-2", "pa-3"}, "petition-photo"}
 	if !reflect.DeepEqual(st.args, want) {
 		t.Errorf("args = %v, want %v", st.args, want)
 	}

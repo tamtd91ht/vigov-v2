@@ -5,7 +5,11 @@ package http
 //
 // FACTS THE BODY DOES NOT DECIDE, and a body naming one is REFUSED rather than silently dropped (the
 // citizen intake's discipline, gui_phan_anh.go): whose petition it is (`citizen_id`, ADR 0028 §Bổ sung
-// 2026-10-02 — none), the channel, the code, the status, the two deadlines. The scene location is
+// 2026-10-02 — none), the code, the status, the two deadlines.
+//
+// THE CHANNEL IS ACCEPTED (owner decision 15/10/2026) as `channel`, among the four an officer may
+// record (domain.StaffIntakeChannel); absent = `can-bo-nhap-ho`. It is the recorded source only — the
+// deadlines are this act's whatever is picked (app/staff_intake.go header). The scene location is
 // refused too, as NOT ACCEPTED YET. The commune is not even declared (rule 1, forbidden #2 — the reason
 // is on guiPhanAnhVao).
 //
@@ -64,13 +68,19 @@ type staffIntakeIn struct {
 	// nothing written, no code issued. Stored as the id, never the name; never derived from coordinates.
 	ResidentialUnitID string `json:"residential_unit_id,omitempty"`
 
+	// Channel is §11's "Tiếp nhận qua kênh" (owner decision 15/10/2026). OPTIONAL; absent = `can-bo-nhap-ho`
+	// ("Cán bộ, trưởng thôn nhập hộ"). One of `can-bo-nhap-ho` · `tong-dai` ("Tổng đài điện thoại") ·
+	// `web-xa` ("Trang thông tin của xã") · `zalo-oa` ("Zalo OA"); anything else — `zalo-mini-app`, the
+	// citizen's own channel, included — is 400 `invalid_request`. It does NOT change the deadlines: they
+	// are fixed as on every staff-booked petition.
+	Channel *string `json:"channel,omitempty"`
+
 	// --- refused, every one of them. The Vietnamese spellings are caught too: a refusal that only
 	// catches the English one catches only the integrator who read the contract. ------------------
 
 	CitizenID       *string  `json:"citizen_id,omitempty"`
 	CitizenIDLegacy *string  `json:"cong_dan_id,omitempty"`
 	FieldLegacy     *string  `json:"linh_vuc,omitempty"`
-	Channel         *string  `json:"channel,omitempty"`
 	Code            *string  `json:"code,omitempty"`
 	Status          *string  `json:"status,omitempty"`
 	AcknowledgeDue  *string  `json:"acknowledge_due,omitempty"`
@@ -83,7 +93,7 @@ type staffIntakeIn struct {
 
 func (v staffIntakeIn) notTheClients() bool {
 	return v.CitizenID != nil || v.CitizenIDLegacy != nil || v.FieldLegacy != nil ||
-		v.Channel != nil || v.Code != nil || v.Status != nil ||
+		v.Code != nil || v.Status != nil ||
 		v.AcknowledgeDue != nil || v.ResolveDue != nil
 }
 
@@ -112,7 +122,7 @@ func (h *Handler) BookStaffIntake(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.notTheClients() {
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
-			"Yêu cầu chứa thông tin do hệ thống tự xác định (người dân, kênh, mã tra cứu, trạng thái "+
+			"Yêu cầu chứa thông tin do hệ thống tự xác định (người dân, mã tra cứu, trạng thái "+
 				"hoặc thời hạn), hoặc ghi lĩnh vực bằng `linh_vuc` thay vì `field`.", "")
 		return
 	}
@@ -158,6 +168,7 @@ func (h *Handler) BookStaffIntake(w http.ResponseWriter, r *http.Request) {
 		ClockFrom:     clockFrom,
 
 		ResidentialUnitID: in.ResidentialUnitID,
+		Channel:           channelPicked(in.Channel),
 	}, officer)
 	if err != nil {
 		h.writeStaffIntakeError(w, r, err)
@@ -184,6 +195,16 @@ func (h *Handler) BookStaffIntake(w http.ResponseWriter, r *http.Request) {
 	vietJSON(w, http.StatusCreated, ra)
 }
 
+// channelPicked is the body's `channel` as the use case reads it: absent and blank are the form's
+// default (""); any other value goes through as sent (spaces trimmed only), so a misspelling is refused
+// by the use case rather than repaired here.
+func channelPicked(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return strings.TrimSpace(*v)
+}
+
 // writeStaffIntakeError maps one failure onto a status and a sentence an officer can act on. The
 // default is the narrow one (500), as in every mapping of this service.
 func (h *Handler) writeStaffIntakeError(w http.ResponseWriter, r *http.Request, err error) {
@@ -208,6 +229,10 @@ func (h *Handler) writeStaffIntakeError(w http.ResponseWriter, r *http.Request, 
 		httpx.WriteError(w, http.StatusBadRequest, "clock_from_out_of_range",
 			"Thời điểm người dân phản ánh không được sớm hơn 7 ngày trước lúc vào sổ, và không được muộn "+
 				"hơn lúc vào sổ. Hãy kiểm tra lại ô \"Dân phản ánh lúc\".", "")
+	case errors.Is(err, domain.ErrChannelNotStaffSelectable):
+		httpx.WriteError(w, http.StatusBadRequest, "invalid_request",
+			"Kênh tiếp nhận chỉ được chọn một trong: Cán bộ, trưởng thôn nhập hộ (`can-bo-nhap-ho`), Tổng đài "+
+				"điện thoại (`tong-dai`), Trang thông tin của xã (`web-xa`), Zalo OA (`zalo-oa`).", "")
 	case app.IsStaffIntakeInputError(err):
 		httpx.WriteError(w, http.StatusBadRequest, "invalid_request", err.Error(), "")
 	case errors.Is(err, app.ErrChuaAnDinhDuocHan):

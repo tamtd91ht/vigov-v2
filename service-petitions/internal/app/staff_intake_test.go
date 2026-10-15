@@ -389,6 +389,11 @@ func TestStaffIntakeRefusalsProduceNothing(t *testing.T) {
 		"identity trả rỗng": {func(_ *StaffIntakeRequest, _ *staffFieldsFake, h *hanGia) {
 			h.tra = map[identityv1.DeadlineKind]time.Time{}
 		}, ErrChuaAnDinhDuocHan},
+		// The citizen's own channel is never an officer's pick (owner decision 15/10/2026).
+		"kênh của người dân": {func(r *StaffIntakeRequest, _ *staffFieldsFake, _ *hanGia) { r.Channel = "zalo-mini-app" },
+			domain.ErrChannelNotStaffSelectable},
+		"kênh lạ": {func(r *StaffIntakeRequest, _ *staffFieldsFake, _ *hanGia) { r.Channel = "facebook" },
+			domain.ErrChannelNotStaffSelectable},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -471,5 +476,65 @@ func TestStaffIntakeFieldCheck(t *testing.T) {
 	if _, err := catalogueForIntake(fmt.Errorf("%w: x", ErrFieldCatalogueUnavailable)).
 		CheckStaffIntakeField(ctx, "rac-thai"); !errors.Is(err, ErrFieldCatalogueUnavailable) {
 		t.Errorf("platform down: err = %v", err)
+	}
+}
+
+// OWNER DECISION 15/10/2026: the officer picks the channel; the deadline is set EXACTLY as the staff intake
+// sets it whatever is picked — field checked, ONLY the resolve clock asked, `han_tiep_nhan` and
+// `han_phan_loai` NULL — and the trail records the pick.
+func TestStaffIntakeChannelIsRecordedAndNeverChangesTheDeadline(t *testing.T) {
+	for raw, want := range map[string]domain.KenhTiepNhan{
+		"":               domain.KenhCanBoNhapHo,
+		"can-bo-nhap-ho": domain.KenhCanBoNhapHo,
+		"tong-dai":       domain.ChannelSwitchboard,
+		"web-xa":         domain.KenhWebXa,
+		"zalo-oa":        domain.KenhZaloOA,
+	} {
+		t.Run("kenh="+raw, func(t *testing.T) {
+			k, kho, han := &khoGia{}, &khoPhieuGia{}, staffDeadlines()
+			req := staffRequest()
+			req.Channel = raw
+			if _, err := newStaffIntakeForTest(k, kho, han, &staffFieldsFake{}).Book(ctxXa(xaThu), req, staffOfficer()); err != nil {
+				t.Fatalf("Book: %v", err)
+			}
+			row := kho.thay[0]
+			if row.Kenh != want {
+				t.Errorf("kenh = %q, muốn %q", row.Kenh, want)
+			}
+			if han.goi != 1 || han.goiTran != 0 {
+				t.Errorf("hỏi hạn %d lần, trần %d lần — muốn đúng 1 lần hạn xử lý xong", han.goi, han.goiTran)
+			}
+			if c := han.thayCanMoc[0]; len(c) != 1 || c[0] != identityv1.DeadlineKind_DEADLINE_KIND_XU_LY_XONG {
+				t.Errorf("đồng hồ đã hỏi = %v, muốn CHỈ XU_LY_XONG", c)
+			}
+			if !row.HanTiepNhanKhongApDung() || !row.TranPhanLoaiKhongApDung() || !row.HanXuLyXong.Equal(staffResolveDue) {
+				t.Errorf("kênh %q đổi hình hạn: tiếp nhận %v, phân loại %v, xử lý xong %v",
+					raw, row.HanTiepNhan, row.HanPhanLoai, row.HanXuLyXong)
+			}
+			if !row.BookedByStaff() {
+				t.Errorf("phiếu kênh %q không còn đọc là cán bộ nhập hộ", raw)
+			}
+			var d map[string]any
+			if err := json.Unmarshal(k.lenh[2].args[7].([]byte), &d); err != nil {
+				t.Fatal(err)
+			}
+			if d["kenh_tiep_nhan"] != string(want) || d["channel_chosen"] != (raw != "") {
+				t.Errorf("vết kênh: kenh_tiep_nhan=%v channel_chosen=%v", d["kenh_tiep_nhan"], d["channel_chosen"])
+			}
+		})
+	}
+}
+
+// A refused channel is refused BEFORE anything is asked: no field check, no identity call, no row.
+func TestStaffIntakeRefusedChannelAsksNothing(t *testing.T) {
+	han, fields := staffDeadlines(), &staffFieldsFake{}
+	req := staffRequest()
+	req.Channel = string(domain.KenhZaloMiniApp)
+	_, err := newStaffIntakeForTest(&khoGia{}, &khoPhieuGia{}, han, fields).Book(ctxXa(xaThu), req, staffOfficer())
+	if !IsStaffIntakeInputError(err) {
+		t.Fatalf("err = %v, muốn lỗi đầu vào (400)", err)
+	}
+	if han.goi != 0 || fields.calls != 0 {
+		t.Errorf("kênh bị từ chối mà vẫn hỏi: hạn %d, lĩnh vực %d", han.goi, fields.calls)
 	}
 }

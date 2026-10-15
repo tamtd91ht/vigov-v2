@@ -12,25 +12,32 @@ import (
 	"github.com/vihat/vigov/service-petitions/internal/domain"
 )
 
-// petitionPhotosTail selects the photos a reader can be shown: a citizen photo of THIS petition that
+// petitionPhotosTail selects the photos a reader can be shown: a SCENE photo of THIS petition that
 // REACHED THE DESTINATION (stored / ready) and is not soft-deleted (rule 7, invariant 2). Pending,
 // rejected, failed and purged rows are upload attempts, not photos of the case.
 //
-// The subject type, purpose and uploader are BOUND from the domain constants rather than written as
-// literals, so the shape migration 0026 forces and the shape read here have one source in Go.
-const petitionPhotosTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4 AND uploaded_by = $5
+// ANY UPLOADER, BY PURPOSE (owner decision 15/10/2026): the citizen's own (`uploaded_by = 'cong-dan'`) or
+// the officer's who booked the petition on the citizen's behalf (their business code,
+// app.StaffScenePhotos). `petition-photo` is a scene photo whoever took it; staff's OTHER files on a
+// petition have their own purposes (verification photo, log attachment) and never match. The domain twin
+// is domain.IsScenePhotoOf. Who may WRITE which row is each use case's ownership check, not this read.
+//
+// The subject type and purpose are BOUND from the domain constants rather than written as literals, so
+// the shape migration 0026 forces and the shape read here have one source in Go.
+const petitionPhotosTail = `AND subject_type = $2 AND subject_id = $3 AND purpose = $4
 	AND deleted_at IS NULL AND status IN ('stored', 'ready')
 	ORDER BY created_at, id`
 
-// PetitionPhotos reads the citizen scene photos of ONE petition of this commune, oldest first.
+// PetitionPhotos reads the scene photos of ONE petition of this commune, oldest first.
 //
 // petitionID is the petition's INTERNAL id (`phieu_phan_anh.id`), which the caller obtained from a
 // read that already applied its own isolation — the citizen's (cong_dan_id from the session) or the
 // staff register's. The commune is $1 from the context (core/store Scoped.Query): another commune's
-// id matches nothing. At most 5 rows exist by migration 0026's trigger, so there is no paging.
+// id matches nothing. No paging: platform's `petition-photo` count (5) is applied by both upload use cases
+// under the petition's row lock, all uploaders counted; 0026's trigger is the floor for citizen rows.
 func (s *StoredFileStore) PetitionPhotos(ctx context.Context, petitionID string) ([]domain.StoredFile, error) {
 	rows, err := s.db.For(ctx).Query(ctx, storedFileCols, "stored_file", petitionPhotosTail,
-		domain.StoredFileSubjectPetition, petitionID, domain.PurposePetitionPhoto, domain.CitizenLogActor)
+		domain.StoredFileSubjectPetition, petitionID, domain.PurposePetitionPhoto)
 	if err != nil {
 		return nil, fmt.Errorf("stored_file: đọc ảnh hiện trường: %w", err)
 	}
@@ -49,10 +56,10 @@ func (s *StoredFileStore) PetitionPhotos(ctx context.Context, petitionID string)
 	return out, nil
 }
 
-// petitionCoverPhotosTail is petitionPhotosTail for MANY petitions at once — the same purpose, uploader,
-// liveness and status, bound the same way — ordered so the FIRST row of each petition is its oldest
+// petitionCoverPhotosTail is petitionPhotosTail for MANY petitions at once — the same purpose (any
+// uploader), liveness and status, bound the same way — ordered so the FIRST row of each petition is its oldest
 // photo, the one ListPhotos would list first.
-const petitionCoverPhotosTail = `AND subject_type = $2 AND subject_id = ANY($3) AND purpose = $4 AND uploaded_by = $5
+const petitionCoverPhotosTail = `AND subject_type = $2 AND subject_id = ANY($3) AND purpose = $4
 	AND deleted_at IS NULL AND status IN ('stored', 'ready')
 	ORDER BY subject_id, created_at, id`
 
@@ -60,7 +67,7 @@ const petitionCoverPhotosTail = `AND subject_type = $2 AND subject_id = ANY($3) 
 var errCoverPetitionList = errors.New("stored_file: danh sách phiếu đọc ảnh bìa không hợp lệ")
 
 // PetitionCoverPhotos reads the COVER of each petition of one register page in ONE statement: the
-// oldest citizen scene photo per petition, exactly the first item PetitionPhotos would return for it.
+// oldest scene photo per petition, exactly the first item PetitionPhotos would return for it.
 // A petition with no such photo is simply absent. Rows come back at most 5 per petition (migration
 // 0026's trigger) and the first per petition is kept here — a DISTINCT ON would do the same in SQL,
 // and is not used so the statement keeps Scoped.Query's `SELECT <cols> FROM` shape.
@@ -77,7 +84,7 @@ func (s *StoredFileStore) PetitionCoverPhotos(ctx context.Context, petitionIDs [
 		return nil, errCoverPetitionList
 	}
 	rows, err := s.db.For(ctx).Query(ctx, storedFileCols, "stored_file", petitionCoverPhotosTail,
-		domain.StoredFileSubjectPetition, petitionIDs, domain.PurposePetitionPhoto, domain.CitizenLogActor)
+		domain.StoredFileSubjectPetition, petitionIDs, domain.PurposePetitionPhoto)
 	if err != nil {
 		return nil, fmt.Errorf("stored_file: đọc ảnh bìa phản ánh: %w", err)
 	}

@@ -1005,7 +1005,9 @@ func signPhotos(ctx context.Context, files photoLister, objects PhotoObjectStore
 		return nil, bocPhieu(ctx, "đọc ảnh hiện trường", err)
 	}
 	return signPhotoList(ctx, objects, photos, func(f domain.StoredFile) bool {
-		return domain.IsCitizenPhotoOf(f, petitionID) // exactly what migration 0026 shapes
+		// A SCENE photo of this petition, whoever attached it — the citizen, or the officer who booked it
+		// (owner decision 15/10/2026, staff_scene_photo.go); never a file of another purpose.
+		return domain.IsScenePhotoOf(f, petitionID)
 	}, now)
 }
 
@@ -1046,7 +1048,8 @@ type StaffPhotoFiles interface {
 	PetitionCoverPhotos(ctx context.Context, petitionIDs []string) ([]domain.StoredFile, error)
 }
 
-// StaffPetitionPhotos lists a petition's citizen photos to a member of staff who may read the petition.
+// StaffPetitionPhotos lists a petition's scene photos (the citizen's, or the officer's on a staff-booked
+// petition — staff_scene_photo.go) to a member of staff who may read the petition.
 type StaffPetitionPhotos struct {
 	db        *store.DB
 	petitions StaffPhotoPetitions
@@ -1175,8 +1178,8 @@ func (uc *StaffPetitionPhotos) Covers(ctx context.Context, petitions []domain.Ph
 	}
 	now := uc.clock()
 	links, err := signPhotoList(ctx, uc.objects, photos, func(f domain.StoredFile) bool {
-		// The second wall: a cover must be a citizen photo of a petition THIS call asked for.
-		return open[f.SubjectID] && domain.IsCitizenPhotoOf(f, f.SubjectID)
+		// The second wall: a cover must be a scene photo of a petition THIS call asked for.
+		return open[f.SubjectID] && domain.IsScenePhotoOf(f, f.SubjectID)
 	}, now)
 	if err != nil {
 		return nil, err

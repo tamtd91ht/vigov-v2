@@ -313,7 +313,7 @@ func (f *ppFiles) CountForSubject(ctx context.Context, _, subjectID, _ string, p
 func (f *ppFiles) PetitionPhotos(ctx context.Context, petitionID string) ([]domain.StoredFile, error) {
 	out := []domain.StoredFile{}
 	for _, sf := range f.all(tenant.MustFrom(ctx)) {
-		if domain.IsCitizenPhotoOf(sf, petitionID) && sf.Status.Attachable() {
+		if domain.IsScenePhotoOf(sf, petitionID) && sf.Status.Attachable() {
 			out = append(out, sf)
 		}
 	}

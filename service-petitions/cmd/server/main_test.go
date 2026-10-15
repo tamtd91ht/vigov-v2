@@ -462,6 +462,7 @@ func dungMayChuCORS(t *testing.T, pg *phanGiaiGia, nguonCORS httpx.NguonCORS) *m
 		// The petition's staff files, unconfigured — never invoked here; Register refuses a nil. Own
 		// suites: internal/app/petition_staff_file_test.go and internal/http/petition_staff_file_test.go.
 		VerificationPhotos:           app.NewStaffVerificationPhotos(nil, nil, nil, nil),
+		StaffScenePhotos:             app.NewStaffScenePhotos(nil, nil, nil, nil),
 		PetitionLogAttachments:       app.NewPetitionLogAttachments(nil, nil, nil, nil, nil, nil),
 		PetitionLogAttachmentsReader: petstore.NewStoredFileStore(nil),
 		DanhSachBienBan:              khoBienBan{},

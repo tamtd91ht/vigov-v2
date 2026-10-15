@@ -601,6 +601,9 @@ type Deps struct {
 	// VerificationPhotos is "SAU KHI XỬ LÝ": staff's upload, completion and audited list
 	// (app.StaffVerificationPhotos — built even without object storage; its routes then answer 503).
 	VerificationPhotos StaffVerificationPhotoActs
+	// StaffScenePhotos is the officer's scene-photo upload on a petition THEY booked (owner decision
+	// 15/10/2026; app.StaffScenePhotos — built even without object storage; its route then answers 503).
+	StaffScenePhotos StaffScenePhotoActs
 	// §8.7's `📎 Đính kèm` on the petition log: the three acts (app.PetitionLogAttachments) and the
 	// batched read the timeline renders them from. STAFF-ONLY — nothing on the citizen Deps reaches them.
 	PetitionLogAttachments       PetitionLogAttachmentActs
@@ -749,6 +752,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("petitions/http: thiếu đường đọc ảnh hiện trường — GET /api/v1/citizen-reports/{maTraCuu}/photos sẽ panic khi có người gọi")
 	case d.VerificationPhotos == nil:
 		panic("petitions/http: thiếu use case ảnh sau xử lý — hai tuyến /api/v1/citizen-reports/{maTraCuu}/verification-photos sẽ panic khi có người gọi")
+	case d.StaffScenePhotos == nil:
+		panic("petitions/http: thiếu use case cán bộ đính ảnh hiện trường — POST /api/v1/citizen-reports/{maTraCuu}/photos sẽ panic khi có người gọi")
 	case d.PetitionLogAttachments == nil:
 		panic("petitions/http: thiếu use case tệp đính kèm nhật ký phiếu — các tuyến /api/v1/citizen-reports/{maTraCuu}/log-attachments sẽ panic khi có người gọi")
 	case d.PetitionLogAttachmentsReader == nil:
@@ -1004,33 +1009,34 @@ func Register(mux *http.ServeMux, d Deps) {
 	// biết lĩnh vực ngay, hạn xử lý được ấn định luôn", replacing "cùng thời hạn với phiếu gửi từ
 	// Zalo", per ADR 0028 E/F). The residential unit (`residential_unit_id`, ADR 0088) is optional and
 	// checked with identity's ResolveActiveResidentialUnits before anything is written. Scene photos are
-	// out: that flow is bound to a citizen session. app.StaffIntake carries ADR 0028 E/F decision by
-	// decision.
+	// NOT in this body: the officer attaches them right after, on the returned code, through POST
+	// /api/v1/citizen-reports/{maTraCuu}/photos (owner decision 15/10/2026). app.StaffIntake carries ADR
+	// 0028 E/F decision by decision.
 	//
 	// `feedback.create` ("Tiếp nhận phản ánh"), seeded at service-identity/migrations/0001_init.sql:298
 	// and named by spec 09 §14.6. The petition is linked to NO citizen account (ADR 0028 §Bổ sung
 	// 2026-10-02): the officer hands over the lookup code in the 201.
 	//
-	// `channel` IS NOT A BODY FIELD although §11 draws a "Tiếp nhận qua kênh" select defaulting to `Cán
-	// bộ, trưởng thôn nhập hộ`. Every row booked here is `can-bo-nhap-ho`: another value would change
-	// which deadline shape applies (ADR 0028 E, stop condition #6), and nobody has said whether a call
-	// logged as `zalo-oa` or `web-xa` from this modal gets the field-at-booking shape. A body naming it
-	// is a 400.
+	// `channel` IS AN OPTIONAL BODY FIELD (owner decision 15/10/2026): §11's "Tiếp nhận qua kênh" —
+	// `can-bo-nhap-ho` (absent = this) · `tong-dai` · `web-xa` · `zalo-oa`; `zalo-mini-app` and anything
+	// else are 400. The owner ruled the deadline is set EXACTLY as on every staff-booked petition whatever
+	// is picked (field at booking, resolve deadline fixed now, acknowledge clock NULL) — the channel is
+	// the recorded source for statistics only. This answers ADR 0028 stop condition #6 for this form.
 	//
 	// idem.Required(idem.MoKhiHong): a double click books a SECOND petition with a second code, which
 	// can only be soft deleted (rule 7). MoKhiHong, the citizen intake's choice: refusing an officer
 	// with a citizen on the telephone because a cache is down is worse than a rare visible duplicate.
 	// A replay is told the code (idem.RecordCode).
 	//
-	// 400 `invalid_request` (shape, missing field/content, lengths, a system-decided field, coordinates
-	// sent, the unit under `hamlet`/`thon_id`) · `field_not_offered` · `residential_unit_not_offered` ·
+	// 400 `invalid_request` (shape, missing field/content, lengths, a system-decided field, a channel staff
+	// may not pick, coordinates sent, the unit under `hamlet`/`thon_id`) · `field_not_offered` · `residential_unit_not_offered` ·
 	// `clock_from_out_of_range` (ADR 0028 F3 — refused, never clamped). 401 no session AND a session of
 	// another commune (authz compares the commune before the key). 403 no `feedback.create`. 409
 	// `request_in_progress` (idem). 503 `intake_not_configured` (identity could not fix the resolve
 	// deadline — no SLA table, calendar, or identity down) · `field_catalogue_unavailable` ·
 	// `residential_unit_check_unavailable`. Nothing is written and no code is issued on any refusal.
 	//
-	// @summary  Cán bộ nhập hộ một phản ánh của người dân (gọi điện, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu
+	// @summary  Cán bộ nhập hộ một phản ánh của người dân (gọi điện, tổng đài, ghé trụ sở, gặp trưởng thôn) — lĩnh vực bắt buộc, chọn kênh tiếp nhận (mặc định cán bộ nhập hộ, kênh không đổi cách đặt hạn), hạn xử lý ấn định ngay, không gắn tài khoản người dân, trả mã tra cứu
 	// @screen   09-phan-anh-nguoi-dan §11
 	// @request  staffIntakeIn
 	// @reply    201 phieuPhanAnhRa
@@ -1083,7 +1089,8 @@ func Register(mux *http.ServeMux, d Deps) {
 			http.HandlerFunc(h.DocPhieuPhanAnh)))
 
 	// ẢNH HIỆN TRƯỜNG — "TRƯỚC KHI XỬ LÝ" on the petition detail (docs/ui-ux/09 §8.4): the photos the
-	// citizen attached (internal/app/petition_photo.go), each with a presigned GET of at most 15 minutes.
+	// citizen attached (internal/app/petition_photo.go) — or, on a staff-booked petition, the officer who
+	// booked it (the POST below, owner decision 15/10/2026) — each with a presigned GET of at most 15 minutes.
 	//
 	// `feedback.read` — THE KEY THE PETITION DETAIL ITSELF DECLARES, two statements up, seeded in
 	// service-identity/migrations/0001_init.sql (rule 5, invariant 3c: NO KEY INVENTED). The owner's
@@ -1109,6 +1116,60 @@ func Register(mux *http.ServeMux, d Deps) {
 	mux.Handle("GET /api/v1/citizen-reports/{maTraCuu}/photos",
 		authz.RequirePermission(d.Checker, "feedback.read")(
 			http.HandlerFunc(h.ListPetitionPhotos)))
+
+	// CÁN BỘ ĐÍNH ẢNH HIỆN TRƯỜNG KHI NHẬP HỘ — owner decision 15/10/2026 (bug sheet web-admin-141026,
+	// §11 "Đính ảnh hiện trường"). The officer who booked a petition through POST /api/v1/citizen-reports
+	// attaches the citizen's scene photos right after, on the returned code: ONE multipart upload per
+	// photo, the citizen photo's pipeline unchanged (internal/app/staff_scene_photo.go) — platform's
+	// `petition-photo` policy (JPEG / PNG / WebP, its size cap, at most 5 per petition counting every
+	// uploader), clamd scan, RE-ENCODED WITHOUT EXIF, private bucket, class citizen-media, key
+	// `citizen-media/t_<tenant>/…`. Answered with the STORED photo; it then appears on the GET above.
+	//
+	// A SEPARATE HANDLER from the citizen's POST /api/v1/my-citizen-reports/{maTraCuu}/photos, on the staff
+	// mux (rule 4, invariant 5). The same path as the staff GET, the other method: it is the same
+	// collection — the petition's scene photos — and a staff `scene-photos` noun would name it twice.
+	//
+	// `feedback.create` — THE INTAKE'S OWN KEY ("Tiếp nhận phản ánh", seeded at
+	// service-identity/migrations/0001_init.sql:298; NO KEY INVENTED, rule 5 invariant 3c): this is the
+	// rest of the intake act. `feedback.restricted` narrows inside: a `can-bo` petition without it is the
+	// detail's 404.
+	//
+	// WHICH PETITIONS: only one the staff intake booked (no citizen / Zalo owner, a staff channel) — a
+	// citizen's petition is 409 `petition_not_staff_booked`. WHEN: while it is `da-tiep-nhan`.
+	//
+	// THE BODY IS multipart/form-data (core/httpx.ReadUpload): text fields FIRST — `size` (required, the
+	// byte count) and `content_type` (optional; else the file part's Content-Type) — then exactly ONE part
+	// named `file`. The part's file name is ignored. idem.Required(idem.MoKhiHong): a replay answers the
+	// FILE ID, never a second file. Audited per upload (`can_bo_xin_tai_anh_hien_truong`,
+	// `can_bo_luu_anh_hien_truong`, the officer's business code, in the row's own transactions).
+	//
+	// @summary  Cán bộ đính MỘT ảnh hiện trường cho phiếu mình vừa nhập hộ (multipart) — quét mã độc, mã hoá lại bỏ toàn bộ EXIF, lưu kho riêng tư như ảnh người dân gửi
+	// @screen   09-phan-anh-nguoi-dan §11
+	// 401 is no session AND a session of another commune (authz compares the commune before the key).
+	// 403: no `feedback.create`. 404: unknown, another commune's, soft-deleted, or `can-bo` without
+	// `feedback.restricted` — one body. 400 `invalid_upload` · `invalid_request`. 408 `upload_timeout`.
+	// 409 `petition_not_staff_booked` · `petition_state` (no longer `da-tiep-nhan`) · `photo_limit` ·
+	// `photo_state` · `upload_changed` · `request_in_progress`. 413 `file_too_large`. 415
+	// `unsupported_media_type`. 422 `photo_rejected`. 503 `upload_busy` · `storage_not_configured` ·
+	// `upload_limits_unavailable` · `malware_scan_unavailable`: nothing stored, never stored unscanned.
+	//
+	// @multipart size content_type? file
+	// @reply    201 photoOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error
+	// @reply    408 httpx.Error
+	// @reply    409 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    422 httpx.Error
+	// @reply    500 httpx.Error
+	// @reply    503 httpx.Error
+	mux.Handle("POST /api/v1/citizen-reports/{maTraCuu}/photos",
+		authz.RequirePermission(d.Checker, "feedback.create")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.UploadStaffScenePhoto))))
 
 	// ẢNH SAU XỬ LÝ — "SAU KHI XỬ LÝ" on the petition detail (docs/ui-ux/09 §8.4), owner decisions of
 	// 02/10/2026 (ADR 0047 row "Ảnh 'sau xử lý' của cán bộ — THAY G8"; ADR 0008 decision 3). ONE

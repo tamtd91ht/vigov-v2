@@ -71,7 +71,7 @@ type phieuPhanAnhRa struct {
 	// petition by this code.
 	Code string `json:"code"`
 
-	Channel string `json:"channel"` // `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho`
+	Channel string `json:"channel"` // `zalo-mini-app` | `zalo-oa` | `web-xa` | `can-bo-nhap-ho` | `tong-dai`
 	Status  string `json:"status"`  // one of the nine (ADR 0027)
 
 	// Field is the tier-1 code, EMPTY while the petition is unclassified. It is a code and not a

@@ -190,6 +190,7 @@ func dungMayChuGhiUuTien(t *testing.T) *mayChuGhiUuTien {
 		TaskLogAttachments:           &logAttachmentsFake{},
 		PetitionPhotos:               &staffPhotosFake{},
 		VerificationPhotos:           &verificationPhotosFake{},
+		StaffScenePhotos:             &staffScenePhotosFake{},
 		PetitionLogAttachments:       &petitionLogAttachmentsFake{},
 		PetitionLogAttachmentsReader: &petitionLogAttachmentsFake{},
 		DanhSachBienBan:              bienBanMau(),
