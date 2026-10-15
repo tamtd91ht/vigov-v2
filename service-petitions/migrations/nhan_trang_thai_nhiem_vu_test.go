@@ -84,15 +84,12 @@ func TestMigration0010MaTrungKhopMayTrangThai(t *testing.T) {
 }
 
 // TestMigration0010KhoaVaRangBuoc — the key is composite with tenant_id (rule 1, invariant 6), the
-// table is hash-partitioned like its siblings, and the label / order / author CHECKs are there.
+// table is a plain table (ADR 0096), and the label / order / author CHECKs are there.
 func TestMigration0010KhoaVaRangBuoc(t *testing.T) {
 	sql := maChay(t, tep0010)
 
 	for _, c := range []struct{ can, vi string }{
 		{"primary key (tenant_id, ma)", "khoá chính phải hợp thành với tenant_id (luật 1 bất biến 6)"},
-		{") partition by hash (tenant_id);", "bảng phải phân mảnh hash theo tenant_id như các bảng anh em (ADR 0010)"},
-		{"partition of nhan_trang_thai_nhiem_vu ' 'for values with (modulus 32, remainder %s)",
-			"thiếu vòng tạo 32 mảnh — bảng phân mảnh không mảnh từ chối mọi INSERT"},
 		{"constraint nhan_trang_thai_nhiem_vu_nhan_khong_rong check (btrim(nhan) <> '')",
 			"nhãn rỗng là một cột Kanban không tên"},
 		{"constraint nhan_trang_thai_nhiem_vu_nhan_toi_da check (char_length(nhan) <= 100)",
@@ -106,6 +103,12 @@ func TestMigration0010KhoaVaRangBuoc(t *testing.T) {
 	} {
 		if !strings.Contains(sql, c.can) {
 			t.Errorf("0010 thiếu %q — %s", c.can, c.vi)
+		}
+	}
+	// ADR 0096: bảng cấu hình là BẢNG THƯỜNG, không phân mảnh.
+	for _, cam := range []string{") partition by hash", "partition of nhan_trang_thai_nhiem_vu"} {
+		if strings.Contains(sql, cam) {
+			t.Errorf("0010 chứa %q — nhan_trang_thai_nhiem_vu là bảng thường (ADR 0096)", cam)
 		}
 	}
 }

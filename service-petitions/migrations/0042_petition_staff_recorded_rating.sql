@@ -104,22 +104,13 @@ CREATE TABLE IF NOT EXISTS petition_staff_recorded_rating (
     CONSTRAINT petition_staff_recorded_rating_recorded_by_valid
         CHECK (btrim(recorded_by) <> '' AND char_length(recorded_by) <= 64),
     CONSTRAINT petition_staff_recorded_rating_petition_present CHECK (btrim(petition_id) <> '')
-) PARTITION BY HASH (tenant_id);
-
--- 32 partitions, the modulus every partitioned table of this service uses (ADR 0010).
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS petition_staff_recorded_rating_p%s PARTITION OF petition_staff_recorded_rating '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- No secondary index: the UNIQUE key (tenant_id, petition_id) is exactly the drawer's read and the use
 -- case's "already recorded?" check.
 
--- Append-only guard: 0013's / 0037's shape. Row-level on the parent (cloned to every partition, now and
--- later); TRUNCATE per partition, because PostgreSQL refuses a TRUNCATE trigger on a partitioned table.
+-- Append-only guard: 0013's / 0037's refusals. Row-level for UPDATE/DELETE, statement-level for TRUNCATE,
+-- both on the table itself — it is a plain table (ADR 0096), so there are no partitions to cover one by one.
 CREATE OR REPLACE FUNCTION petition_staff_recorded_rating_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
@@ -134,19 +125,10 @@ CREATE TRIGGER petition_staff_recorded_rating_no_update_delete
     BEFORE UPDATE OR DELETE ON petition_staff_recorded_rating
     FOR EACH ROW EXECUTE FUNCTION petition_staff_recorded_rating_append_only();
 
-DO $$
-DECLARE part regclass;
-BEGIN
-    FOR part IN
-        SELECT inhrelid::regclass FROM pg_inherits
-        WHERE inhparent = 'petition_staff_recorded_rating'::regclass
-    LOOP
-        EXECUTE format('DROP TRIGGER IF EXISTS petition_staff_recorded_rating_no_truncate ON %s', part);
-        EXECUTE format(
-            'CREATE TRIGGER petition_staff_recorded_rating_no_truncate BEFORE TRUNCATE ON %s '
-            'FOR EACH STATEMENT EXECUTE FUNCTION petition_staff_recorded_rating_append_only()', part);
-    END LOOP;
-END $$;
+DROP TRIGGER IF EXISTS petition_staff_recorded_rating_no_truncate ON petition_staff_recorded_rating;
+CREATE TRIGGER petition_staff_recorded_rating_no_truncate
+    BEFORE TRUNCATE ON petition_staff_recorded_rating
+    FOR EACH STATEMENT EXECUTE FUNCTION petition_staff_recorded_rating_append_only();
 
 COMMENT ON TABLE petition_staff_recorded_rating IS
     'Owner rule 11/10/2026 (ADR 0062 decisions 1/3 reversed): a rating the citizen gave by phone or at the '
@@ -164,7 +146,7 @@ COMMENT ON TABLE petition_staff_recorded_rating IS
 --   SELECT count(*) FROM petition_staff_recorded_rating;   -- must be 0
 --
 -- ZERO → in this order:
---   DROP TABLE petition_staff_recorded_rating;             (partitions and triggers go with it)
+--   DROP TABLE petition_staff_recorded_rating;             (its triggers go with it)
 --   DROP FUNCTION petition_staff_recorded_rating_append_only();
 -- and remove this file's row from `schema_migration`.
 --
@@ -188,7 +170,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

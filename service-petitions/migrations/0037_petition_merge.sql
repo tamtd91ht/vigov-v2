@@ -61,7 +61,7 @@
 --
 -- ---------------------------------------------------------------------------
 -- THE LOCK THIS TAKES. ADD COLUMN with no default is catalogue-only, but takes ACCESS EXCLUSIVE on the
--- parent and all 32 partitions; each ADD CONSTRAINT … CHECK scans every row under it and passes
+-- parent and all 8 partitions; each ADD CONSTRAINT … CHECK scans every row under it and passes
 -- vacuously (every new column is NULL). ADD FOREIGN KEY validates every row — trivially, MATCH SIMPLE
 -- skips NULL. CREATE INDEX is plain (CONCURRENTLY is refused on a partitioned parent and inside
 -- core/migrate's transaction — 0014's header). Held until COMMIT. The register is small — AN ASSUMPTION,
@@ -416,10 +416,10 @@ CREATE TABLE IF NOT EXISTS petition_merge_event (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS petition_merge_event_p%s PARTITION OF petition_merge_event '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -531,7 +531,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

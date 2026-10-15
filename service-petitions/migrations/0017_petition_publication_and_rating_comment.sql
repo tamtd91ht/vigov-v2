@@ -83,7 +83,7 @@
 -- ---------------------------------------------------------------------------
 -- THE LOCK THIS TAKES, AND WHY IT IS ACCEPTABLE — read before applying to a large register.
 --
---   * ADD COLUMN on the partitioned parent cascades to all 32 partitions. With a CONSTANT default
+--   * ADD COLUMN on the partitioned parent cascades to all 8 partitions. With a CONSTANT default
 --     (`'cho-duyet'`) or none (`rating_comment`), PostgreSQL 11+ records the default in the catalogue
 --     (attmissingval) and REWRITES NO ROW — metadata only. It still takes an ACCESS EXCLUSIVE lock on
 --     the parent and on every partition: READS AND WRITES BOTH WAIT.

@@ -486,21 +486,33 @@ func TestPgChiMucNguonNhiemVuTonTai(t *testing.T) {
 	}
 }
 
-// TestPgPhanManhCuaHaiBangDuyDu — a partitioned table with no partitions REJECTS EVERY INSERT,
-// silently, until the first real write. The migration's own BACKSTOP block checks this at apply
-// time; this checks it from the outside, against the number ADR 0010 fixes.
+// TestPgPhanManhCuaHaiBangDuyDu — ADR 0096 made both tables PLAIN (minutes are not a register that
+// grows with citizens). This checks it from the outside: each is an ordinary table ('r', not the
+// partitioned 'p'), and the hard-delete refusal the migrations attach is on the table itself — a
+// guard written for leaves would leave a plain table unprotected without any error.
 func TestPgPhanManhCuaHaiBangDuyDu(t *testing.T) {
 	db := moKetNoi(t)
 
-	for _, bang := range []string{"bien_ban_hop", "ket_luan_hop"} {
-		var n int
-		err := db.QueryRow(
-			`SELECT count(*) FROM pg_inherits WHERE inhparent = $1::regclass`, bang).Scan(&n)
-		if err != nil {
-			t.Fatalf("đếm phân mảnh của %s: %v", bang, err)
+	for bang, trigger := range map[string]string{
+		"bien_ban_hop": "bien_ban_hop_cam_xoa_cung",
+		"ket_luan_hop": "ket_luan_hop_cam_xoa_cung",
+	} {
+		var kind string
+		if err := db.QueryRow(
+			`SELECT relkind::text FROM pg_class WHERE oid = $1::regclass`, bang).Scan(&kind); err != nil {
+			t.Fatalf("đọc relkind của %s: %v", bang, err)
 		}
-		if n != 32 {
-			t.Errorf("bảng %s có %d phân mảnh, muốn 32 (ADR 0010)", bang, n)
+		if kind != "r" {
+			t.Errorf("bảng %s có relkind %q, muốn 'r' — bảng thường (ADR 0096)", bang, kind)
+		}
+		var co bool
+		if err := db.QueryRow(
+			`SELECT EXISTS (SELECT 1 FROM pg_trigger WHERE tgrelid = $1::regclass AND tgname = $2)`,
+			bang, trigger).Scan(&co); err != nil {
+			t.Fatalf("tra trigger của %s: %v", bang, err)
+		}
+		if !co {
+			t.Errorf("bảng %s thiếu trigger %s — xoá cứng không còn bị chặn", bang, trigger)
 		}
 	}
 }

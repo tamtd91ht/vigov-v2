@@ -13,7 +13,7 @@
 --
 -- THE FIVE MIGRATION QUESTIONS.
 --
---   1. ROWS PER COMMUNE: zero written; every row of all 32 partitions is read once (0039's NOTICE gave
+--   1. ROWS PER COMMUNE: zero written; every row of all 8 partitions is read once (0039's NOTICE gave
 --      the counts).
 --   2. IF IT STOPS HALF-WAY: one transaction; nothing is half-validated. Re-running is a no-op once valid.
 --   3. HOW IT IS REVERSED: together with 0039 — see 0039's REVERSAL. "Validated" has no object to drop.
@@ -71,7 +71,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -53,7 +53,7 @@
 --
 -- ---------------------------------------------------------------------------
 -- THE LOCK THIS TAKES. ADD COLUMN with no default is catalogue-only (no row rewritten) but takes ACCESS
--- EXCLUSIVE on the parent and all 32 partitions. The two ADD CONSTRAINT … CHECK statements scan every
+-- EXCLUSIVE on the table. The two ADD CONSTRAINT … CHECK statements scan every
 -- row under that lock; on a column that is NULL in every row both pass. core/migrate holds the locks
 -- until COMMIT. The register is small (one commune live, 0014's header) — AN ASSUMPTION, NOT A
 -- MEASUREMENT; the operator checks first:
@@ -88,8 +88,8 @@ ALTER TABLE de_nghi_lui_han ADD COLUMN IF NOT EXISTS decision_note TEXT;
 
 -- ---------------------------------------------------------------------------
 -- THE CONSTRAINTS. DO $$ … $$ because ADD CONSTRAINT has no IF NOT EXISTS (question 2). The lookup is
--- bound to this table's oid: a CHECK on a partitioned parent is copied to every partition under the same
--- name, and a bare conname match could be satisfied by some other table's constraint.
+-- bound to this table's oid: constraint names are unique only per table, and a bare conname match
+-- could be satisfied by some other table's constraint.
 -- ---------------------------------------------------------------------------
 DO $$ BEGIN
     -- Present means non-blank and bounded in characters (domain.NoiDungNhatKyToiDa).
@@ -221,7 +221,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

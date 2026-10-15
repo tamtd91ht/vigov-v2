@@ -20,7 +20,7 @@
 -- ---------------------------------------------------------------------------
 -- WHY TWO FILES (0039 + 0040) AND NOT 0030's ONE-STATEMENT SWAP.
 --
--- 0018/0023/0030 did DROP + ADD in one transaction: ADD CONSTRAINT scans every row of all 32 partitions
+-- 0018/0023/0030 did DROP + ADD in one transaction: ADD CONSTRAINT scans every row of all 8 partitions
 -- while holding ACCESS EXCLUSIVE, so every timeline read and write of every commune waits for the scan.
 -- The table is now POPULATED and grows with every act on every petition. Here:
 --
@@ -144,7 +144,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

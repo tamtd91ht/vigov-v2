@@ -205,8 +205,8 @@ CREATE TABLE IF NOT EXISTS nhiem_vu_van_ban (
     --                                    CHIẾU trên bảng phân mảnh: cha không tham gia khoá phân
     --                                    mảnh nên PostgreSQL không bảo đảm được cùng mảnh. Không
     --                                    áp vào đây — đây là hai bảng khác nhau.
-    --   `ket_luan_hop.bien_ban_id`       CÓ khoá ngoại (0007), hợp thành với `tenant_id`, cả hai
-    --                                    phía phân mảnh hash theo `tenant_id`, và cặp được trỏ
+    --   `ket_luan_hop.bien_ban_id`       CÓ khoá ngoại (0007), hợp thành với `tenant_id` ở cả hai
+    --                                    phía, và cặp được trỏ
     --                                    tới đúng là khoá chính của bảng cha. ĐÓ LÀ HÌNH DẠNG
     --                                    NÀY, và `noi_dung_mini_app` -> `danh_muc_mini_app`
     --                                    (service-comms 0006) là bản thứ hai của cùng hình dạng.
@@ -276,15 +276,7 @@ CREATE TABLE IF NOT EXISTS nhiem_vu_van_ban (
     CONSTRAINT nhiem_vu_van_ban_xoa_mem_day_du
         CHECK ((deleted_at IS NULL AND deleted_by IS NULL)
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS nhiem_vu_van_ban_p%s PARTITION OF nhiem_vu_van_ban '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- Ba danh sách của một nhiệm vụ, mỗi nhóm theo đúng thứ tự đã cấp — đúng thứ ngăn chi tiết vẽ.
 --
@@ -310,7 +302,7 @@ CREATE TRIGGER nhiem_vu_van_ban_cam_xoa
 --
 -- HOÀN NGUYÊN (câu hỏi 3). Mọi đối tượng ở đây đều mới, và trong khi bảng còn rỗng — đúng trạng
 -- thái của mọi môi trường hôm nay — hoàn nguyên là trọn vẹn và không mất gì: bỏ bảng
--- `nhiem_vu_van_ban` (32 mảnh và trigger đi theo nó), rồi bỏ hàm
+-- `nhiem_vu_van_ban` (trigger đi theo nó), rồi bỏ hàm
 -- `nhiem_vu_van_ban_cam_xoa_cung()`.
 --
 -- và TRONG CÙNG giao dịch, xoá hàng của tệp này khỏi `schema_migration`, nếu không trình chạy
@@ -346,7 +338,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

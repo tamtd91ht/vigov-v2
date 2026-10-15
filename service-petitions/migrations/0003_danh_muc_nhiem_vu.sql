@@ -44,7 +44,7 @@
 --   * A catalogue row here carries tenant_id, so every seeded row would belong to ONE NAMED
 --     COMMUNE (ADR 0024, §Vì sao MỌI bảng ở đây mang tenant_id, consequence #2).
 --   * The migration runner has no commune in it and deliberately accepts none: the schema is
---     one set of tables for the whole service database, partitioned by tenant_id (ADR 0013,
+--     one set of tables for the whole service database, keyed by tenant_id (ADR 0013,
 --     §Giới hạn — "đường chạy này không có xã trong nó"; ADR 0010). There is no list of
 --     communes on this code path, and fetching one would mean reading `platform`'s tenant
 --     registry from another service's migration — rule 2, forbidden #2.
@@ -259,15 +259,7 @@ CREATE TABLE IF NOT EXISTS loai_nhiem_vu (
     -- never seen.
     CONSTRAINT loai_nhiem_vu_re_nhanh_thi_he_thong
         CHECK (NOT ma_nguon_re_nhanh OR nguon = 'he-thong')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS loai_nhiem_vu_p%s PARTITION OF loai_nhiem_vu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The catalogue screen lists every row of one commune in display order, rows out of use
 -- included (they carry a "Đã tắt" chip); only soft-deleted rows drop out — everywhere, always
@@ -320,15 +312,7 @@ CREATE TABLE IF NOT EXISTS muc_uu_tien_nhiem_vu (
         CHECK (nguon IN ('he-thong', 'don-vi')),
     CONSTRAINT muc_uu_tien_nhiem_vu_re_nhanh_thi_he_thong
         CHECK (NOT ma_nguon_re_nhanh OR nguon = 'he-thong')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS muc_uu_tien_nhiem_vu_p%s PARTITION OF muc_uu_tien_nhiem_vu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 CREATE INDEX IF NOT EXISTS muc_uu_tien_nhiem_vu_danh_sach
     ON muc_uu_tien_nhiem_vu (tenant_id, thu_tu) WHERE deleted_at IS NULL;
@@ -348,8 +332,8 @@ CREATE TRIGGER muc_uu_tien_nhiem_vu_ba_tang
 -- REVERSAL (migration question 3). Every object here is new, and while the tables are still
 -- empty the reversal is complete and loses nothing: drop the two tables, then the trigger
 -- function, and in the same transaction remove this file's row from `schema_migration`,
--- otherwise the runner still believes the schema is in place. The 32 partitions and the
--- triggers go with their parent tables.
+-- otherwise the runner still believes the schema is in place. The triggers go with their
+-- tables.
 --
 -- ONCE A COMMUNE HAS ROWS HERE, THAT IS NO LONGER A REVERSAL — it is the destruction of commune
 -- records, which is rule 7's first stop condition and needs the user, not a command. From that
@@ -382,7 +366,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

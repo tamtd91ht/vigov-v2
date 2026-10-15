@@ -24,7 +24,7 @@
 -- THE FIVE MIGRATION QUESTIONS.
 --
 --   1. ROWS PER COMMUNE: no business value is written, but ADD COLUMN … STORED REWRITES both tables
---      (all 32 partitions each) under ACCESS EXCLUSIVE, computing the fold for every row. Reads and
+--      (all 8 partitions each) under ACCESS EXCLUSIVE, computing the fold for every row. Reads and
 --      writes of the two registers wait for the rewrite. Size today: hundreds to low thousands of rows
 --      per commune — seconds. The NOTICE below gives the counts (tenant ids and counts only).
 --   2. IF IT STOPS HALF-WAY: one file, one transaction (core/migrate); a rewrite either commits whole or
@@ -122,7 +122,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

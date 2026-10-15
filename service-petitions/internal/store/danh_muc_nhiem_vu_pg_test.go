@@ -32,8 +32,8 @@ import (
 // means the handler tests ran; it does not mean the SQL here was verified. The DSN carries a
 // password and lives only in the environment (rule 8).
 
-// The schema is built ONCE for the whole package, not per test: migration 0003 alone creates two
-// partitioned tables with 32 partitions each. Tests isolate themselves with their own commune ids
+// The schema is built ONCE for the whole package, not per test: the migrations create dozens of
+// tables and their partitions. Tests isolate themselves with their own commune ids
 // instead, which is also closer to how the data really looks.
 var (
 	dbChung     *sql.DB

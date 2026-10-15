@@ -214,15 +214,7 @@ CREATE TABLE IF NOT EXISTS nhan_trang_thai_nhiem_vu (
 
     -- A setting nobody can be named for is a change nobody answers for (rule 6, invariant 8).
     CONSTRAINT nhan_trang_thai_nhiem_vu_cap_nhat_boi_khong_rong CHECK (btrim(cap_nhat_boi) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS nhan_trang_thai_nhiem_vu_p%s PARTITION OF nhan_trang_thai_nhiem_vu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 DROP TRIGGER IF EXISTS nhan_trang_thai_nhiem_vu_bat_bien ON nhan_trang_thai_nhiem_vu;
 CREATE TRIGGER nhan_trang_thai_nhiem_vu_bat_bien
@@ -234,7 +226,7 @@ CREATE TRIGGER nhan_trang_thai_nhiem_vu_bat_bien
 -- ... DISABLE TRIGGER, dropping the table). Same line ADR 0013 draws for the audit ledger.
 --
 -- REVERSAL (migration question 3). Every object here is new. In one transaction: drop the table
--- `nhan_trang_thai_nhiem_vu` (its 32 partitions and its trigger go with it), drop the function
+-- `nhan_trang_thai_nhiem_vu` (its trigger goes with it), drop the function
 -- `nhan_trang_thai_nhiem_vu_bat_bien()`, and remove this file's row from `schema_migration` —
 -- otherwise the runner still believes the schema is in place. No other table references this
 -- one, so nothing else needs resetting.
@@ -271,7 +263,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

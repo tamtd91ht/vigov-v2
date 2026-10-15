@@ -53,8 +53,8 @@ func TestMigration0013KhoaRangBuocVaTrigger(t *testing.T) {
 	for _, c := range []struct{ can, vi string }{
 		{"primary key (tenant_id, id)", "khoá chính phải hợp thành với tenant_id (luật 1 bất biến 6)"},
 		{") partition by hash (tenant_id);", "bảng phải phân mảnh hash theo tenant_id như các bảng anh em (ADR 0010)"},
-		{"partition of nhat_ky_phan_anh ' 'for values with (modulus 32, remainder %s)",
-			"thiếu vòng tạo 32 mảnh — bảng phân mảnh không mảnh từ chối mọi INSERT"},
+		{"partition of nhat_ky_phan_anh ' 'for values with (modulus 8, remainder %s)",
+			"thiếu vòng tạo 8 mảnh (ADR 0096) — bảng phân mảnh không mảnh từ chối mọi INSERT"},
 		{"phieu_phan_anh_id text not null", "mục nhật ký phải gắn một phiếu"},
 		{"thoi_diem timestamptz not null", "thiếu thời điểm"},
 		{"nguoi_ma text not null", "người làm phải NOT NULL — CHECK coi NULL là đạt"},

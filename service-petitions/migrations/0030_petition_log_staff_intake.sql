@@ -25,7 +25,7 @@
 -- THE FIVE MIGRATION QUESTIONS.
 --
 --   1. ROWS PER COMMUNE: zero are written. ADD CONSTRAINT validates EVERY row of `nhat_ky_phan_anh` (all
---      32 partitions) under ACCESS EXCLUSIVE for one scan; every existing row holds one of 0023's ten
+--      8 partitions) under ACCESS EXCLUSIVE for one scan; every existing row holds one of 0023's ten
 --      codes and passes. The NOTICE below measures rows per commune (counts and tenant ids only).
 --   2. IF IT STOPS HALF-WAY: it cannot land half-applied — one file, one transaction (core/migrate), with
 --      its progress row; the DROP and the ADD commit together or not at all, so there is no instant with
@@ -90,7 +90,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

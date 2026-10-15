@@ -202,10 +202,10 @@ CREATE TABLE IF NOT EXISTS su_kien_di (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS su_kien_di_p%s PARTITION OF su_kien_di '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -221,7 +221,7 @@ CREATE INDEX IF NOT EXISTS su_kien_di_cho_gui
 --
 -- WHILE `phieu_phan_anh` IS STILL EMPTY — which it is in every environment today — the reversal is
 -- complete and loses nothing: drop the two indexes and the CHECK, drop the two columns, drop
--- `su_kien_di` (its 32 partitions go with it), and in the same transaction remove this file's row
+-- `su_kien_di` (its 8 partitions go with it), and in the same transaction remove this file's row
 -- from `schema_migration`.
 --
 -- ONCE A COMMUNE HAS CLOSED ONE PETITION, `ket_qua_xu_ly` HOLDS A RESULT THAT WAS SHOWN TO A
@@ -255,7 +255,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -377,10 +377,10 @@ CREATE TABLE IF NOT EXISTS nhiem_vu (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS nhiem_vu_p%s PARTITION OF nhiem_vu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -499,10 +499,10 @@ CREATE TABLE IF NOT EXISTS nhat_ky_nhiem_vu (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS nhat_ky_nhiem_vu_p%s PARTITION OF nhat_ky_nhiem_vu '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -518,8 +518,8 @@ CREATE INDEX IF NOT EXISTS nhat_ky_theo_nhiem_vu
 --     partition added later, and an UPDATE against a partitioned table fires on the leaf — so a
 --     statement typed straight at `nhat_ky_nhiem_vu_p07` hits the clone too;
 --   * PostgreSQL refuses a TRUNCATE trigger on a partitioned table, and statement-level triggers
---     are not cloned — so TRUNCATE is covered leaf by leaf. MODULUS 32 is fixed for the life of the
---     system (ADR 0010), and this file is re-runnable if that ever changes.
+--     are not cloned — so TRUNCATE is covered leaf by leaf. MODULUS 8 (ADR 0096); a partition
+--     added later by a split needs this file re-run, and it is re-runnable.
 --
 -- INSERT is absent from the event list on purpose: the write path pays nothing.
 -- ---------------------------------------------------------------------------
@@ -653,15 +653,7 @@ CREATE TABLE IF NOT EXISTS de_nghi_lui_han (
     CONSTRAINT de_nghi_lui_han_xoa_mem_day_du
         CHECK ((deleted_at IS NULL AND deleted_by IS NULL AND delete_reason IS NULL)
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND delete_reason IS NOT NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS de_nghi_lui_han_p%s PARTITION OF de_nghi_lui_han '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The drawer reads one task's requests, newest first.
 CREATE INDEX IF NOT EXISTS de_nghi_lui_han_theo_nhiem_vu
@@ -714,7 +706,7 @@ CREATE TRIGGER de_nghi_lui_han_luu_tru
 -- empty — which they are in every environment today — the reversal is complete and loses nothing:
 -- drop the three tables, then the three trigger functions, and in the same transaction remove this
 -- file's row from `schema_migration`, otherwise the runner still believes the schema is in place.
--- The 96 partitions and the triggers go with their parents. The two foreign keys into 0003's
+-- The 16 partitions and the triggers go with their parents. The two foreign keys into 0003's
 -- catalogues go with `nhiem_vu`; nothing in 0003 is altered by this file, so nothing there has to
 -- be put back.
 --
@@ -748,7 +740,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

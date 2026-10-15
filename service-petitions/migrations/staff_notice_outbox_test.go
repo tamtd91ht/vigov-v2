@@ -25,8 +25,8 @@ func TestMigration0036(t *testing.T) {
 		{"attempts integer not null default 0", "failed attempts are counted"},
 		{"failed_class text,", "a refused row is set aside, not retried for ever"},
 		{") partition by hash (tenant_id);", "hash-partitioned by commune like su_kien_di"},
-		{"partition of staff_notice_outbox", "the 32 partitions exist — a partitioned table without them rejects every insert"},
-		{"for values with (modulus 32, remainder %s)", "the modulus every partitioned table here uses"},
+		{"partition of staff_notice_outbox", "the 8 partitions exist — a partitioned table without them rejects every insert"},
+		{"for values with (modulus 8, remainder %s)", "MODULUS 8, the modulus every partitioned table here uses (ADR 0096)"},
 		{"where delivered_at is null and failed_class is null", "the relay's index is partial and shrinks as rows leave"},
 	} {
 		if !strings.Contains(sql, c.want) {

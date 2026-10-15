@@ -27,8 +27,8 @@ func TestMigration0021KeysPartitionsTriggers(t *testing.T) {
 	for _, c := range []struct{ want, why string }{
 		{"primary key (tenant_id, id), unique (tenant_id, object_key),", "stored_file keys must be composite with tenant_id (rule 1 inv 6)"},
 		{"primary key (tenant_id, stored_file_id) ) partition by hash (tenant_id);", "one file, one entry, per commune"},
-		{"partition of stored_file ' 'for values with (modulus 32, remainder %s)", "stored_file partition loop"},
-		{"partition of task_log_attachment ' 'for values with (modulus 32, remainder %s)", "link partition loop"},
+		{"partition of stored_file ' 'for values with (modulus 8, remainder %s)", "stored_file partition loop"},
+		{"partition of task_log_attachment ' 'for values with (modulus 8, remainder %s)", "link partition loop"},
 		{"on stored_file (tenant_id, subject_type, subject_id, uploaded_by, created_at desc) where deleted_at is null",
 			"the 'my files for this task' index must start with tenant_id and skip soft-deleted rows"},
 		{"on task_log_attachment (tenant_id, log_entry_id, attached_at)", "batched read index must start with tenant_id"},

@@ -198,8 +198,8 @@ DO $$ BEGIN
     END IF;
 
     -- THE ORIGINAL IS A REAL ROW IN THE SAME COMMUNE. A composite self-referencing foreign key, the
-    -- same shape as ket_luan_hop -> bien_ban_hop (0007:321): the referenced pair is the partitioned
-    -- parent's primary key, which PostgreSQL 12+ accepts. `tenant_id` on both sides means a
+    -- same shape as ket_luan_hop -> bien_ban_hop (0007:321): the referenced pair is the table's
+    -- primary key. `tenant_id` on both sides means a
     -- supplement cannot point at another commune's minutes even if two ids ever collided (rule 1).
     -- MATCH SIMPLE (the default): a NULL `bo_sung_cho_id` is not checked, so ordinary minutes pass.
     -- Validation over existing rows is trivial — every one is NULL.
@@ -295,7 +295,7 @@ CREATE TRIGGER bien_ban_hop_da_ky_bat_bien
 -- get no new conclusions.
 --
 -- THE PARENT ROW IS READ IN THE SAME TENANT (`tenant_id = NEW/OLD.tenant_id`), so the lookup is a
--- primary-key probe into one hash partition and can never read another commune's minutes.
+-- primary-key probe within one commune and can never read another commune's minutes.
 --
 -- `FOR SHARE`, AND WITHOUT IT THE LOCK HAS A HOLE. Under READ COMMITTED, a conclusion edit could read
 -- the parent as `du-thao` while a concurrent transaction is signing it, and both would commit: an
@@ -369,11 +369,10 @@ CREATE TRIGGER ket_luan_hop_da_ky_bat_bien
 -- `id` as the tie-break core/store.QueryPage pages on. Soft-deleted rows excluded (rule 7,
 -- invariant 2). Starts with `tenant_id`, like every index in this system.
 --
--- PLAIN `CREATE INDEX` ON THE PARTITIONED PARENT, the convention of 0007:261 and every migration in
--- this repository: CONCURRENTLY is refused on a partitioned parent, and core/migrate runs each file
--- in one transaction where CONCURRENTLY is refused anyway (core/migrate/migrate.go:47). The parent
--- index cascades to all 32 partitions and to every partition added later. Cost: each partition is
--- SHARE-locked (writes wait, reads do not) for the length of its build — milliseconds on registers
+-- PLAIN `CREATE INDEX`, the convention of 0007:261 and every migration in this repository:
+-- core/migrate runs each file in one transaction, where CONCURRENTLY is refused
+-- (core/migrate/migrate.go:47). Cost: the table is SHARE-locked (writes wait, reads do not) for
+-- the length of the build — milliseconds on registers
 -- of this size.
 --
 -- ⚠ THE DATE-CURSOR CAVEAT OF 0007:257-260 STILL APPLIES to whoever switches the read path to this

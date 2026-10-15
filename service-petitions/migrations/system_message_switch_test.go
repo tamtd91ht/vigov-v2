@@ -15,7 +15,7 @@ const file0033 = "0033_system_message_switch_custom_messages_catalogue_color.sql
 // override would silently switch off); the unique key losing tenant_id or becoming live-rows-only (a
 // deleted key reissued — rule 7 invariant 3); the key no longer bound to its group prefix (a commune key
 // able to equal a shipped one); the delete CHECK admitting a NULL who; the guards losing DELETE refusal;
-// the table without partitions; a destructive statement.
+// the table partitioned again (ADR 0096); a destructive statement.
 func TestMigration0033(t *testing.T) {
 	sql := maChay(t, file0033)
 	for _, c := range []struct{ want, why string }{
@@ -32,8 +32,6 @@ func TestMigration0033(t *testing.T) {
 			"all three delete facts or none, both directions — no half-delete, no blank who/why"},
 		{"check (btrim(created_by) <> '' and char_length(created_by) <= 64 and btrim(updated_by) <> '' and char_length(updated_by) <= 64)",
 			"actors present and bounded (rule 6, invariant 8)"},
-		{") partition by hash (tenant_id);", "partitioned by commune (ADR 0010)"},
-		{"partition of custom_system_message ' 'for values with (modulus 32, remainder %s)", "32 partitions"},
 		{"before update or delete on custom_system_message for each row execute function custom_system_message_guard()",
 			"guard attached"},
 		{"if new.message_key is distinct from old.message_key or new.group_code is distinct from old.group_code then raise exception",
@@ -54,6 +52,12 @@ func TestMigration0033(t *testing.T) {
 		"update loai_nhiem_vu set", "update muc_uu_tien_nhiem_vu set", "truncate"} {
 		if strings.Contains(sql, banned) {
 			t.Errorf("0033 contains %q — this file only adds", banned)
+		}
+	}
+	// ADR 0096: custom_system_message is a PLAIN table (a catalogue, not a growing register).
+	for _, banned := range []string{") partition by hash", "partition of custom_system_message"} {
+		if strings.Contains(sql, banned) {
+			t.Errorf("0033 contains %q — custom_system_message is a plain table (ADR 0096)", banned)
 		}
 	}
 	b, err := FS.ReadFile(file0033)

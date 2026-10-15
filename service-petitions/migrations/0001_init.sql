@@ -33,10 +33,10 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- that is not a missing trail — it is the first business write in this service rolling back in
 -- full, with nothing in the schema looking wrong.
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS audit_log_p%s PARTITION OF audit_log '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -57,7 +57,8 @@ CREATE INDEX IF NOT EXISTS audit_log_lookup
 --       delete_reason TEXT,
 --       PRIMARY KEY (tenant_id, id),
 --       UNIQUE (tenant_id, code)             -- COMPOSITE, always
---   ) PARTITION BY HASH (tenant_id);
+--   ) PARTITION BY HASH (tenant_id);   -- ONLY if it grows with time or citizens (ADR 0096);
+--                                       -- a catalogue / setting / counter ends with `);`
 --
 --   -- AND, IN THE SAME MIGRATION, the partitions. This half is not optional decoration:
 --   -- PARTITION BY on its own yields a table that REJECTS EVERY INSERT. The template used to
@@ -65,10 +66,10 @@ CREATE INDEX IF NOT EXISTS audit_log_lookup
 --   -- partitions in this service — a table copied from a template inherits the template's
 --   -- omissions, silently, in every table written after it.
 --   DO $$ BEGIN
---       FOR i IN 0..31 LOOP
+--       FOR i IN 0..7 LOOP
 --           EXECUTE format(
 --               'CREATE TABLE IF NOT EXISTS example_p%s PARTITION OF example '
---               'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+--               'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
 --       END LOOP;
 --   END $$;
 --

@@ -16,21 +16,18 @@ const tep0015 = "0015_task_issued_code.sql"
 
 // TestMigration0015LedgerKeyTriggersAndBackfill — THE MUTATIONS THAT MUST TURN THIS RED: a key without
 // tenant_id; a `deleted_at` filter on the backfill (a soft-deleted task's code would become free);
-// removing the append-only trigger, the per-leaf TRUNCATE guard, or the insert registration.
+// removing the append-only trigger, the TRUNCATE guard, or the insert registration.
 func TestMigration0015LedgerKeyTriggersAndBackfill(t *testing.T) {
 	sql := maChay(t, tep0015)
 
 	for _, c := range []struct{ can, vi string }{
 		{"primary key (tenant_id, code)", "khoá sổ mã đã cấp phải ghép với tenant_id (luật 1 bất biến 6)"},
-		{") partition by hash (tenant_id);", "bảng phải phân mảnh hash theo tenant_id (ADR 0010)"},
-		{"partition of task_issued_code ' 'for values with (modulus 32, remainder %s)",
-			"thiếu vòng tạo 32 mảnh — bảng phân mảnh không mảnh từ chối mọi INSERT"},
 		{"insert into task_issued_code (tenant_id, code, task_id, issued_at) select tenant_id, ma, id, tao_luc from nhiem_vu on conflict (tenant_id, code) do nothing;",
 			"backfill phải lấy MỌI dòng nhiem_vu, kể cả đã xoá mềm, và chạy lại được"},
 		{"before update or delete on task_issued_code for each row execute function task_issued_code_append_only()",
 			"sổ mã đã cấp phải chỉ-thêm"},
-		{"before truncate on %s ' 'for each statement execute function task_issued_code_append_only()",
-			"thiếu chặn TRUNCATE từng mảnh"},
+		{"before truncate on task_issued_code for each statement execute function task_issued_code_append_only()",
+			"thiếu chặn TRUNCATE trên chính bảng (bảng thường, ADR 0096 — không còn mảnh để gắn từng cái)"},
 		{"after insert on nhiem_vu for each row execute function task_register_issued_code()",
 			"nhiệm vụ mới phải tự vào sổ mã đã cấp — mọi đường ghi, không chỉ service"},
 		{"on task_issued_code (tenant_id, task_id, issued_at)", "chỉ mục tra ngược theo nhiệm vụ, bắt đầu bằng tenant_id"},
@@ -66,6 +63,10 @@ func TestMigration0015GuardStillRefusesWhatItRefused(t *testing.T) {
 		{"deleted_at timestamptz", "sổ mã đã cấp không có trạng thái 'đã ẩn'"},
 		{"deleted_at is null", "backfill không được lọc xoá mềm — mã của việc đã xoá vẫn là mã đã cấp"},
 		{"drop table", "xoá bảng"},
+		// ADR 0096: the ledger is a PLAIN table. Declared partitioned again, its TRUNCATE guard (attached
+		// to the table above) would be refused by PostgreSQL — the file would stop the service.
+		{") partition by hash", "sổ mã đã cấp là bảng thường (ADR 0096)"},
+		{"inhparent = 'task_issued_code'::regclass", "vòng gắn chặn theo mảnh trên bảng thường không tìm thấy mảnh nào — chặn mất lặng lẽ"},
 		{"drop column", "xoá cột"},
 		{"alter table", "sửa một bảng có sẵn — tệp này chỉ thêm bảng, trigger và thay hàm"},
 	} {

@@ -28,7 +28,7 @@
 -- WHY A NEW FILE AND NOT AN EDIT OF 0004: core/migrate compares the checksum of every applied file.
 --
 -- ---------------------------------------------------------------------------
--- PG 16 ON A PARTITIONED TABLE (ADR 0010): a CHECK added on the parent is created on all 32 partitions
+-- PG 16 ON A PARTITIONED TABLE (ADR 0010): a CHECK added on the parent is created on all 8 partitions
 -- and validated there. NOT VALID is avoided — not portable on a partitioned table (0044's note). DROP and
 -- ADD of each constraint commit together (one file, one transaction), so there is never an instant with
 -- no CHECK.
@@ -122,7 +122,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

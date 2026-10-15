@@ -17,7 +17,7 @@ const file0028 = "0028_petition_settings.sql"
 // per commune — which one is in force?); the switch becoming nullable or its default flipping to false
 // (a commune with no row would then read differently from a row written with the default, and the
 // decided default of ADR 0008 would be silently dropped); the who-columns becoming optional; the guard
-// losing its DELETE refusal or its tenant / creation-stamp immutability; the table without partitions.
+// losing its DELETE refusal or its tenant / creation-stamp immutability; the table partitioned again (ADR 0096: a plain table).
 func TestMigration0028PetitionSettings(t *testing.T) {
 	sql := maChay(t, file0028)
 	for _, c := range []struct{ want, why string }{
@@ -29,8 +29,6 @@ func TestMigration0028PetitionSettings(t *testing.T) {
 		{"primary key (tenant_id),", "one row per commune (rule 1, invariant 6)"},
 		{"constraint petition_settings_created_by_present check (btrim(created_by) <> '')", "no blank who"},
 		{"constraint petition_settings_updated_by_present check (btrim(updated_by) <> '')", "no blank who"},
-		{") partition by hash (tenant_id);", "partitioned by commune (ADR 0010)"},
-		{"partition of petition_settings ' 'for values with (modulus 32, remainder %s)", "32 partitions"},
 		{"if tg_op = 'delete' then raise exception", "DELETE refused — no silent return to the default"},
 		{"if new.tenant_id is distinct from old.tenant_id then raise exception", "commune immutable"},
 		{"if new.created_at is distinct from old.created_at or new.created_by is distinct from old.created_by then raise exception",
@@ -50,6 +48,8 @@ func TestMigration0028PetitionSettings(t *testing.T) {
 		{"insert into", "writes rows — schema only; a seeded row would hide the no-row default"},
 		{"update petition_settings", "writes rows — schema only"},
 		{"deleted_at", "configuration has no soft delete; DELETE is refused instead (header)"},
+		{") partition by hash", "a plain table — one row per commune is not a table that grows (ADR 0096)"},
+		{"partition of petition_settings", "a plain table has no partitions to create (ADR 0096)"},
 	} {
 		if strings.Contains(sql, c.banned) {
 			t.Errorf("0028 contains %q — %s", c.banned, c.why)

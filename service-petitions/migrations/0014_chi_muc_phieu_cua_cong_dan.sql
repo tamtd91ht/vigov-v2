@@ -49,7 +49,7 @@
 --   * core/migrate runs each file in ONE transaction with its progress row
 --     (core/migrate/migrate.go:32-33, 46-49), where CONCURRENTLY is refused anyway.
 --
--- The statement on the parent cascades to all 32 partitions and to every partition attached later.
+-- The statement on the parent cascades to all 8 partitions and to every partition attached later.
 -- It takes a SHARE lock on the parent and on each partition: READS PROCEED, WRITES WAIT — citizen
 -- intake, staff transitions and the petition logbook's same-transaction writes all queue behind it.
 -- Because the whole file is one transaction, those locks are held until COMMIT, i.e. for the sum of
@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS phieu_phan_anh_cua_cong_dan
 -- REVERSAL (migration question 3). Complete and lossless at any time — an index holds no record,
 -- only a copy of columns that stay in the table. In ONE transaction:
 --
---   DROP INDEX IF EXISTS phieu_phan_anh_cua_cong_dan;   (the 32 partition indexes go with it)
+--   DROP INDEX IF EXISTS phieu_phan_anh_cua_cong_dan;   (the 8 partition indexes go with it)
 --
 -- and remove this file's row from `schema_migration` in the same transaction, otherwise the runner
 -- still believes the index is in place. DROP INDEX on a partitioned parent is not CONCURRENTLY

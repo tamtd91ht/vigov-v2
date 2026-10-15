@@ -197,15 +197,7 @@ CREATE TABLE IF NOT EXISTS nhan_linh_vuc (
     -- commune: two live rows for `rac-thai` would make the label a commune sees depend on read
     -- order, which is to say random, with nothing on the screen showing it.
     UNIQUE (tenant_id, ma)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS nhan_linh_vuc_p%s PARTITION OF nhan_linh_vuc '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 CREATE INDEX IF NOT EXISTS nhan_linh_vuc_danh_sach
     ON nhan_linh_vuc (tenant_id, thu_tu, ma) WHERE deleted_at IS NULL;
@@ -382,10 +374,10 @@ CREATE TABLE IF NOT EXISTS phieu_phan_anh (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS phieu_phan_anh_p%s PARTITION OF phieu_phan_anh '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -421,8 +413,8 @@ CREATE TRIGGER phieu_phan_anh_luu_tru
 --
 -- REVERSAL (migration question 3). Every object here is new, and while the tables are still
 -- empty the reversal is complete and loses nothing: drop the two tables, then the trigger
--- function, and in the same transaction remove this file's row from `schema_migration`. The 32
--- partitions and the triggers go with their parent tables.
+-- function, and in the same transaction remove this file's row from `schema_migration`. The 8
+-- partitions of phieu_phan_anh and the triggers go with their tables.
 --
 -- ONCE A COMMUNE HAS A PETITION HERE, THAT IS NO LONGER A REVERSAL — it is the destruction of
 -- archival records with a statutory retention period, which is rule 7's first stop condition and
@@ -452,7 +444,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

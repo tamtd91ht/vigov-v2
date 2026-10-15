@@ -241,15 +241,7 @@ CREATE TABLE IF NOT EXISTS bien_ban_hop (
     CONSTRAINT bien_ban_hop_xoa_mem_day_du
         CHECK ((deleted_at IS NULL AND deleted_by IS NULL AND delete_reason IS NULL)
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND delete_reason IS NOT NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS bien_ban_hop_p%s PARTITION OF bien_ban_hop '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The page of cards, newest first, and the tie-break the cursor pages on (core/store.QueryPage
 -- orders by `(sort, id)`). Soft-deleted rows excluded EVERYWHERE, ALWAYS (rule 7, invariant 2).
@@ -316,8 +308,8 @@ CREATE TABLE IF NOT EXISTS ket_luan_hop (
     UNIQUE (tenant_id, bien_ban_id, thu_tu),
 
     -- SAME SERVICE, SAME SCHEMA — the key crosses nothing (rule 2, forbidden #2 does not apply).
-    -- Both sides are partitioned by hash on `tenant_id` and the referenced pair is the parent's
-    -- primary key, which is the shape `nhiem_vu` -> `loai_nhiem_vu` already proved out in 0006.
+    -- Composite with `tenant_id` on both sides, and the referenced pair is the parent's primary
+    -- key, which is the shape `nhiem_vu` -> `loai_nhiem_vu` already proved out in 0006.
     FOREIGN KEY (tenant_id, bien_ban_id) REFERENCES bien_ban_hop (tenant_id, id),
 
     -- ① IS THE FIRST NUMBER. A zero or a negative ordinal would render as a circle nobody can read
@@ -329,15 +321,7 @@ CREATE TABLE IF NOT EXISTS ket_luan_hop (
     CONSTRAINT ket_luan_hop_xoa_mem_day_du
         CHECK ((deleted_at IS NULL AND deleted_by IS NULL AND delete_reason IS NULL)
             OR (deleted_at IS NOT NULL AND deleted_by IS NOT NULL AND delete_reason IS NOT NULL))
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS ket_luan_hop_p%s PARTITION OF ket_luan_hop '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- One card's conclusions, in the order the circles are drawn (§2). The read path fetches them for a
 -- whole page of cards at once, so this index carries the meeting id AND the ordinal.
@@ -382,7 +366,7 @@ CREATE INDEX IF NOT EXISTS nhiem_vu_nguon
 -- REVERSAL (migration question 3). Every object here is new, and while the two tables are still
 -- empty — which they are in every environment today — the reversal is complete and loses nothing:
 --
---   DROP TABLE ket_luan_hop;               -- its 32 partitions and its trigger go with it
+--   DROP TABLE ket_luan_hop;               -- its trigger goes with it
 --   DROP TABLE bien_ban_hop;               -- same; drop this one SECOND, the FK points at it
 --   DROP FUNCTION ho_so_luu_tru_cam_xoa_cung();
 --   DROP INDEX nhiem_vu_nguon;             -- the only object this file put on an existing table
@@ -422,7 +406,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

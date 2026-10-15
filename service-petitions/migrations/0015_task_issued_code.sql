@@ -78,7 +78,7 @@
 --      the register's codes — a code that was valid to mint yesterday and is not today is exactly a
 --      code that was renamed away, i.e. the point.
 --   5. RETENTION: the ledger is a HISTORICAL RECORD of which number was issued to which task (rule 7,
---      invariant 3; forbidden #4). Append-only, enforced by a trigger on UPDATE/DELETE and per leaf on
+--      invariant 3; forbidden #4). Append-only, enforced by a trigger on UPDATE/DELETE and one on
 --      TRUNCATE. `nhiem_vu` keeps every other refusal of 0006 unchanged: hard removal and any change
 --      to `han_ban_dau` are still refused, word for word.
 --
@@ -91,7 +91,7 @@
 --   * It holds no personal data. A task code is a staff-surface register number (0006:189-196).
 --   * No soft-delete columns on the ledger: there is no state of it other than "everything issued".
 --   * No foreign key to `nhiem_vu`: the triggers already bind every row to a task, and a key between
---     two partitioned tables would make the reversal order-dependent for nothing.
+--     the two tables would make the reversal order-dependent for nothing.
 
 -- ---------------------------------------------------------------------------
 -- PostgreSQL 13 is the floor, checked explicitly so the failure is readable (same reason as 0006:
@@ -134,15 +134,7 @@ CREATE TABLE IF NOT EXISTS task_issued_code (
     PRIMARY KEY (tenant_id, code),
 
     CONSTRAINT task_issued_code_not_blank CHECK (btrim(code) <> '')
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS task_issued_code_p%s PARTITION OF task_issued_code '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- "Which codes did this task carry" — the reverse lookup a complaint handler needs, and what the
 -- rename guard below asks. tenant_id first, like every index here (rule 1).
@@ -177,9 +169,9 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------------
--- The append-only guard. Same shape as 0006's `nhat_ky_nhiem_vu_chi_them`: a row-level trigger on the
--- parent (cloned onto every partition, present and future), and TRUNCATE per leaf because PostgreSQL
--- refuses a TRUNCATE trigger on a partitioned table. INSERT is absent on purpose.
+-- The append-only guard. A row-level trigger for UPDATE/DELETE and a statement-level one for TRUNCATE,
+-- both on the table itself: it is a plain table (ADR 0096), so there are no leaves to cover one by one
+-- as 0006's partitioned `nhat_ky_nhiem_vu` needs. INSERT is absent on purpose.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION task_issued_code_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
@@ -194,19 +186,10 @@ CREATE TRIGGER task_issued_code_no_update_delete
     BEFORE UPDATE OR DELETE ON task_issued_code
     FOR EACH ROW EXECUTE FUNCTION task_issued_code_append_only();
 
-DO $$
-DECLARE part regclass;
-BEGIN
-    FOR part IN
-        SELECT inhrelid::regclass FROM pg_inherits
-        WHERE inhparent = 'task_issued_code'::regclass
-    LOOP
-        EXECUTE format('DROP TRIGGER IF EXISTS task_issued_code_no_truncate ON %s', part);
-        EXECUTE format(
-            'CREATE TRIGGER task_issued_code_no_truncate BEFORE TRUNCATE ON %s '
-            'FOR EACH STATEMENT EXECUTE FUNCTION task_issued_code_append_only()', part);
-    END LOOP;
-END $$;
+DROP TRIGGER IF EXISTS task_issued_code_no_truncate ON task_issued_code;
+CREATE TRIGGER task_issued_code_no_truncate
+    BEFORE TRUNCATE ON task_issued_code
+    FOR EACH STATEMENT EXECUTE FUNCTION task_issued_code_append_only();
 
 -- ---------------------------------------------------------------------------
 -- Registration on insert. AFTER, so the task row has passed its own constraints first; a code already
@@ -289,7 +272,7 @@ END $$;
 --   ZERO → the ledger holds nothing the register does not, and the reversal is lossless: drop the
 --   trigger `task_register_issued_code` on nhiem_vu and its function; re-run 0006's
 --   `CREATE OR REPLACE FUNCTION nhiem_vu_bat_bien()` (0006:145-171) verbatim; drop the table
---   `task_issued_code` (its partitions and triggers go with it) and the function
+--   `task_issued_code` (its triggers go with it) and the function
 --   `task_issued_code_append_only()`; and remove this file's row from `schema_migration` in the same
 --   transaction, otherwise the runner still believes the schema is in place.
 --
@@ -301,8 +284,7 @@ END $$;
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
--- BACKSTOP: every partitioned table in this schema must actually have partitions (0002, §BACKSTOP) —
--- repeated because this file declares a new PARTITION BY table.
+-- BACKSTOP: every partitioned table in this schema must actually have partitions (0002, §BACKSTOP).
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE missing_partitions text;
@@ -319,7 +301,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

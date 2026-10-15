@@ -24,12 +24,12 @@
 --
 -- ---------------------------------------------------------------------------
 -- PG 16 ON A PARTITIONED TABLE (the real cluster, ADR 0010): ADD COLUMN on the partitioned parent
--- propagates to all 32 partitions (a partition cannot have a column the parent lacks, nor be altered
+-- propagates to all 8 partitions (a partition cannot have a column the parent lacks, nor be altered
 -- alone); a nullable column with no default is catalogue-only, no rewrite. ADD CONSTRAINT … CHECK on the
 -- parent is inherited by every partition and validated there. NOT VALID is avoided — not portable on a
 -- partitioned table (comms 0011:332-341); nothing to gain, every value validated is NULL.
 --
--- THE LOCK: ACCESS EXCLUSIVE on phieu_phan_anh and its 32 partitions until COMMIT; each CHECK scans
+-- THE LOCK: ACCESS EXCLUSIVE on phieu_phan_anh and its 8 partitions until COMMIT; each CHECK scans
 -- the register once and passes vacuously. The register is small — AN ASSUMPTION, NOT A MEASUREMENT; the
 -- operator checks first:
 --
@@ -119,7 +119,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

@@ -11,7 +11,7 @@ import (
 //
 // THE MUTATIONS THAT MUST TURN THIS RED: a key without tenant_id (rule 1, invariant 6); a second staff
 // record per petition; `source` able to hold anything but 'staff_recorded' (a row could then pass for the
-// citizen's own verdict); the table left unpartitioned; the append-only trigger missing; and — the one that
+// citizen's own verdict); the table partitioned again (ADR 0096); the append-only or TRUNCATE trigger missing; and — the one that
 // matters most — the file touching `diem_hai_long`, the citizen's column every satisfaction figure reads.
 func TestMigration0042(t *testing.T) {
 	const file = "0042_petition_staff_recorded_rating.sql"
@@ -23,13 +23,20 @@ func TestMigration0042(t *testing.T) {
 		{"check (source = 'staff_recorded')", "a row here can never claim to be the citizen's own verdict"},
 		{"check (stars between 1 and 5)", "the range of the citizen's rating"},
 		{"check (channel in ('dien-thoai', 'tai-quay'))", "the two channels the prototype names"},
-		{") partition by hash (tenant_id);", "hash-partitioned by commune"},
-		{"for values with (modulus 32, remainder %s)", "the 32 partitions exist"},
 		{"before update or delete on petition_staff_recorded_rating", "append-only"},
-		{"before truncate on %s", "truncate refused per partition"},
+		{"before truncate on petition_staff_recorded_rating for each statement execute function petition_staff_recorded_rating_append_only()",
+			"truncate refused on the table itself (plain table, ADR 0096)"},
 	} {
 		if !strings.Contains(sql, c.want) {
 			t.Errorf("0042 lacks %q — %s", c.want, c.why)
+		}
+	}
+	// ADR 0096: a PLAIN table. Partitioned again, the TRUNCATE trigger above would be refused by
+	// PostgreSQL; and a per-leaf loop over pg_inherits on a plain table finds no leaf, so the guard
+	// would vanish without an error.
+	for _, banned := range []string{") partition by hash", "inhparent = 'petition_staff_recorded_rating'::regclass"} {
+		if strings.Contains(sql, banned) {
+			t.Errorf("0042 contains %q — petition_staff_recorded_rating is a plain table (ADR 0096)", banned)
 		}
 	}
 	for _, banned := range []string{"diem_hai_long", "alter table phieu_phan_anh", "drop table", "drop column",

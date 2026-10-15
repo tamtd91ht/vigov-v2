@@ -91,7 +91,7 @@
 --
 -- ---------------------------------------------------------------------------
 -- THE LOCK THIS TAKES. ADD COLUMN with no default is catalogue-only (no row rewritten) but takes
--- ACCESS EXCLUSIVE on the parent and all 32 partitions. The four ADD CONSTRAINT … CHECK statements scan
+-- ACCESS EXCLUSIVE on the parent and all 8 partitions. The four ADD CONSTRAINT … CHECK statements scan
 -- every row under that lock; on a column that is NULL in every row each one passes vacuously
 -- (`phieu_phan_anh_single_owner` included: no row has an account). The CREATE INDEX is plain, not
 -- CONCURRENTLY — refused on a partitioned parent and inside core/migrate's one transaction (0014's
@@ -363,7 +363,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

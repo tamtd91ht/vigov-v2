@@ -108,17 +108,9 @@ CREATE TABLE IF NOT EXISTS petition_settings (
     -- A blank "who" is a write nobody can be asked about. The shape of the code is the use case's.
     CONSTRAINT petition_settings_created_by_present CHECK (btrim(created_by) <> ''),
     CONSTRAINT petition_settings_updated_by_present CHECK (btrim(updated_by) <> '')
-) PARTITION BY HASH (tenant_id);
+);
 
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS petition_settings_p%s PARTITION OF petition_settings '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
-
--- Row-level, so PostgreSQL clones it onto every partition (PG >= 13).
+-- Row-level, on the table itself (a plain table, ADR 0096).
 DROP TRIGGER IF EXISTS petition_settings_guard ON petition_settings;
 CREATE TRIGGER petition_settings_guard
     BEFORE UPDATE OR DELETE ON petition_settings
@@ -134,7 +126,7 @@ CREATE TRIGGER petition_settings_guard
 -- rollback (ADR 0013). Lossless WHILE THE TABLE IS EMPTY — check
 --   SELECT count(*) FROM petition_settings;   -- must be 0
 -- then:
---   DROP TABLE petition_settings;             (partitions and the trigger go with it)
+--   DROP TABLE petition_settings;             (the trigger goes with it)
 --   DROP FUNCTION petition_settings_guard();
 --   and remove this file's row from `schema_migration`.
 -- ONCE A COMMUNE HAS A ROW, dropping the table silently returns that commune to the default — a
@@ -143,8 +135,7 @@ CREATE TRIGGER petition_settings_guard
 -- ---------------------------------------------------------------------------
 
 -- ---------------------------------------------------------------------------
--- BACKSTOP: every partitioned table in this schema must actually have partitions (0002, §BACKSTOP)
--- — repeated because this file declares a new PARTITION BY table.
+-- BACKSTOP: every partitioned table in this schema must actually have partitions (0002, §BACKSTOP).
 -- ---------------------------------------------------------------------------
 DO $$
 DECLARE missing_partitions text;
@@ -161,7 +152,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;
