@@ -3,8 +3,11 @@ package store
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgconn"
 
 	pkgstore "github.com/vihat/vigov/core/store"
 )
@@ -214,6 +217,12 @@ func TestPgCitizenLetterLogAppendOnly(t *testing.T) {
 	mustRefuse(t, err, "editing a log entry")
 	_, err = db.ExecContext(ctx, `DELETE FROM citizen_letter_log WHERE tenant_id = $1 AND id = 'G1'`, a)
 	mustRefuse(t, err, "removing a log entry")
+	// Only the append-only trigger's own refusal counts (RAISE EXCEPTION = SQLSTATE P0001). Any error
+	// would satisfy mustRefuse — including "relation does not exist" (42P01) if the leaf were renamed
+	// or the table stopped being partitioned, which is the guard GONE, not the guard holding.
 	_, err = db.ExecContext(ctx, `TRUNCATE citizen_letter_log_p00`)
-	mustRefuse(t, err, "truncating a log partition")
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) || pgErr.Code != "P0001" {
+		t.Errorf("truncating a log partition: want the append-only trigger's refusal (SQLSTATE P0001), got %v", err)
+	}
 }

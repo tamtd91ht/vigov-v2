@@ -238,15 +238,7 @@ CREATE TABLE IF NOT EXISTS day_so_van_ban (
     -- series nobody can see on any screen.
     CONSTRAINT day_so_van_ban_nam_hop_le
         CHECK (nam BETWEEN 2000 AND 2200)
-) PARTITION BY HASH (tenant_id);
-
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS day_so_van_ban_p%s PARTITION OF day_so_van_ban '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- A counter row is never removed — not soft, not hard. Without this, taking the row away resets a
 -- commune's series to zero and every number of the year is issued a second time.
@@ -375,10 +367,10 @@ CREATE TABLE IF NOT EXISTS van_ban_den (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS van_ban_den_p%s PARTITION OF van_ban_den '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -456,10 +448,10 @@ CREATE TABLE IF NOT EXISTS van_ban_di (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS van_ban_di_p%s PARTITION OF van_ban_di '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -532,10 +524,10 @@ CREATE TABLE IF NOT EXISTS lich_su_chuyen_van_ban (
 ) PARTITION BY HASH (tenant_id);
 
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS lich_su_chuyen_van_ban_p%s PARTITION OF lich_su_chuyen_van_ban '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -552,8 +544,8 @@ CREATE INDEX IF NOT EXISTS lich_su_chuyen_theo_van_ban
 --     statement typed straight at `lich_su_chuyen_van_ban_p07` hits the clone too;
 --   * PostgreSQL refuses a TRUNCATE trigger on a partitioned table, and statement-level triggers
 --     are not cloned — so TRUNCATE is covered leaf by leaf. A partition added AFTER this migration
---     would get the first guard and not the second; MODULUS 32 is fixed for the life of the system
---     (ADR 0010), and this file is re-runnable if that ever changes.
+--     would get the first guard and not the second; MODULUS 8 (ADR 0096) grows only by splitting a
+--     partition, and this file is re-runnable when that happens.
 --
 -- INSERT is absent from the event list on purpose: the write path pays nothing.
 -- ---------------------------------------------------------------------------
@@ -596,7 +588,7 @@ END $$;
 -- the reversal is complete and loses nothing: drop the four tables, then the four trigger functions
 -- (`ho_so_luu_tru_cam_xoa_cung` is this service's only copy and goes too), and in the same
 -- transaction remove this file's row from `schema_migration` — otherwise the runner still believes
--- the schema is in place. The 128 partitions and the triggers go with their parents.
+-- the schema is in place. The 24 partitions and the triggers go with their parents.
 --
 -- ONCE A COMMUNE HAS BOOKED ONE DOCUMENT, THAT IS NO LONGER A REVERSAL — it is the destruction of
 -- commune records AND of an issued number series, which is rule 7's first stop condition and needs
@@ -628,7 +620,7 @@ BEGIN
             'partitioned table(s) with no partitions in schema %: %',
             current_schema(), missing_partitions
             USING HINT = 'A partitioned table with no partitions rejects every INSERT. Add the '
-                         'MODULUS 32 partition loop (ADR 0010) in the same migration that '
+                         'MODULUS 8 partition loop (ADR 0096) in the same migration that '
                          'declares PARTITION BY.';
     END IF;
 END $$;

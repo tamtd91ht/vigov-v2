@@ -28,7 +28,7 @@
 --
 -- PLAIN `CREATE INDEX` on the partitioned parent, the convention of service-petitions 0014:
 -- CONCURRENTLY is refused on a partitioned parent, and core/migrate runs each file in ONE
--- transaction where CONCURRENTLY is refused anyway. The statement cascades to all 32 partitions and
+-- transaction where CONCURRENTLY is refused anyway. The statement cascades to all 8 partitions and
 -- to every partition attached later. It takes a SHARE lock on the parent and each partition: READS
 -- PROCEED, WRITES WAIT — and every business write in this service writes `audit_log` in its own
 -- transaction (rule 6, invariant 3), so EVERY write of this service waits, until COMMIT of the sum
@@ -64,7 +64,7 @@ CREATE INDEX IF NOT EXISTS audit_log_by_time
 -- ---------------------------------------------------------------------------
 -- REVERSAL. Complete and lossless at any time — an index holds no record. In ONE transaction:
 --
---   DROP INDEX IF EXISTS audit_log_by_time;   (the 32 partition indexes go with it)
+--   DROP INDEX IF EXISTS audit_log_by_time;   (the 8 partition indexes go with it)
 --
 -- and remove this file's row from `schema_migration`, otherwise the runner still believes it is in
 -- place. core/migrate has no automatic rollback (ADR 0013); this is done by a person. The only

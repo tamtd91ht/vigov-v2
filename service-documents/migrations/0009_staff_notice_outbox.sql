@@ -81,12 +81,12 @@ CREATE TABLE IF NOT EXISTS staff_notice_outbox (
     CONSTRAINT staff_notice_outbox_failed_class_shape CHECK (failed_class IS NULL OR failed_class <> '')
 ) PARTITION BY HASH (tenant_id);
 
--- 32 partitions, the modulus every partitioned table of this service uses (0001 `audit_log`, ADR 0010).
+-- 8 partitions, the modulus every partitioned table of this service uses (0001 `audit_log`, ADR 0096).
 DO $$ BEGIN
-    FOR i IN 0..31 LOOP
+    FOR i IN 0..7 LOOP
         EXECUTE format(
             'CREATE TABLE IF NOT EXISTS staff_notice_outbox_p%s PARTITION OF staff_notice_outbox '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
+            'FOR VALUES WITH (MODULUS 8, REMAINDER %s)', lpad(i::text, 2, '0'), i);
     END LOOP;
 END $$;
 
@@ -120,7 +120,7 @@ END $$;
 -- REVERSAL (migration question 3).
 --
 -- WHILE THE TABLE HOLDS NO UNDELIVERED ROW the reversal loses nothing: drop `staff_notice_outbox` (its
--- 32 partitions and the index go with it) and, in the same transaction, remove this file's row from
+-- 8 partitions and the index go with it) and, in the same transaction, remove this file's row from
 -- the migration progress table. ONCE IT HOLDS UNDELIVERED ROWS, dropping it throws away notices owed
 -- to staff — drain it first (the relay, or a deliberate re-run). The table is not archival; the
 -- obligations in it are still owed.

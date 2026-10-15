@@ -56,16 +56,7 @@ CREATE TABLE IF NOT EXISTS citizen_letter_type (
             AND deleted_by IS NOT NULL AND btrim(deleted_by) <> ''
             AND delete_reason IS NOT NULL AND btrim(delete_reason) <> '')),
     CONSTRAINT citizen_letter_type_delete_reason_max CHECK (char_length(delete_reason) <= 500)
-) PARTITION BY HASH (tenant_id);
-
--- 32 partitions, the modulus every partitioned table of this service uses (ADR 0010).
-DO $$ BEGIN
-    FOR i IN 0..31 LOOP
-        EXECUTE format(
-            'CREATE TABLE IF NOT EXISTS citizen_letter_type_p%s PARTITION OF citizen_letter_type '
-            'FOR VALUES WITH (MODULUS 32, REMAINDER %s)', lpad(i::text, 2, '0'), i);
-    END LOOP;
-END $$;
+);
 
 -- The one read: the commune's live rows in its order (rule 7, invariant 2 — partial on deleted_at).
 CREATE INDEX IF NOT EXISTS citizen_letter_type_list
@@ -80,7 +71,7 @@ CREATE TRIGGER citizen_letter_type_no_hard_delete
 -- ---------------------------------------------------------------------------
 -- REVERSAL (rule 7, invariant 4). By a person, in ONE transaction, then remove this file's row from
 -- the migration progress table (core/migrate has no automatic rollback, ADR 0013):
---   DROP TABLE citizen_letter_type;      -- its 32 partitions, index and trigger go with it
+--   DROP TABLE citizen_letter_type;      -- its index and trigger go with it
 -- Lossless only while
 --   SELECT count(*) FROM citizen_letter_type;   -- must be 0
 -- otherwise it discards the labels communes chose — a user decision (rule 7, stop condition 2).
