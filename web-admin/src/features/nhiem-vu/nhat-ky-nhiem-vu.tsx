@@ -41,6 +41,7 @@ import {
   logEntryNote,
   nhanCanBoNgan,
   nhanTrangThai,
+  taskPendingPart,
   type BangNhanTrangThai,
 } from "./nhan-nhiem-vu";
 import { TEXTAREA_CLASS, staffInitials } from "./task-spec";
@@ -62,13 +63,8 @@ import { TEXTAREA_CLASS, staffInitials } from "./task-spec";
 /** Bao nhiêu dòng một lần tải. Máy chủ nhận 1–100. */
 const SO_DONG_MOI_TRANG = 20;
 
-/** Spec 08: the files not attached to any entry need a task-level file list (BACKEND DEPENDENCY). */
-export const LOOSE_FILES_PENDING = {
-  ten: "Tệp chưa gắn với ghi chép nào",
-  viSao:
-    "Nhật ký chỉ đọc được tệp gắn theo từng dòng ghi. Danh sách tệp của nhiệm vụ không thuộc dòng nào " +
-    "cần máy chủ trả thêm một tuyến đọc riêng.",
-} as const;
+/** Spec 08: the files not attached to any entry need a task-level file list (`PHAN_CHUA_DUNG`). */
+export const LOOSE_FILES_PENDING = taskPendingPart("Tệp chưa gắn với ghi chép nào");
 
 type TrangDoc =
   | {

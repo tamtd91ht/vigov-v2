@@ -693,6 +693,7 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// @screens /nhiem-vu/bien-ban
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   // §3 suggested deadline of the Tách form. The button and the pre-filled content ARE built (it opens
   // `02-nhiem-vu.md` §7's "Giao việc mới", reusing `FormGiaoViec`). What is missing is reading a date

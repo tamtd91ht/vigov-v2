@@ -1143,6 +1143,25 @@ VAN_PHONG_XLSX_CASES = [
     ("Chờ API thống kê.", False, "phụ thuộc kỹ thuật, không phải chờ khách"),
 ]
 
+# Which MENU ITEM a `PHAN_CHUA_DUNG*` entry counts on: only what the block's `// @screens` line (or the
+# entry's own, narrower one) names. Before 15/10/2026 it was guessed from page imports and counted the
+# /cau-hinh Excel "?" on three other screens. Expected: the parsed blocks, or "refused".
+SCREENS_ANNOTATION_CASES = [
+    ('export const PHAN_CHUA_DUNG = [\n  {\n    ten: "x",\n  },\n];\n',
+     "refused", "khối thiếu dòng @screens"),
+    ('// @screens /a /zz\nexport const PHAN_CHUA_DUNG = [\n];\n',
+     "refused", "đường không phải mục menu"),
+    ('// @screens /a\nexport const PHAN_CHUA_DUNG = [\n  // @screens /b\n  {\n    ten: "x",\n  },\n];\n',
+     "refused", "mục khai đường ngoài khối"),
+    ('// @screens /a\nexport const PHAN_CHUA_DUNG = [\n  {\n    // @screens /a\n    ten: "x",\n  },\n];\n',
+     "refused", "@screens đặt lệch chỗ trong khối"),
+    ('// @screens /a /b\nexport const PHAN_CHUA_DUNG_GHI = [\n];\n',
+     [(["/a", "/b"], [])], "mảng rỗng = có khai, 0 phần"),
+    ('// @screens /a /b\nexport const PHAN_CHUA_DUNG = [\n  // why\n  // @screens /b\n  {\n    ten: "x",\n'
+     '  },\n  {\n    ten: "y",\n  },\n];\n',
+     [(["/a", "/b"], [("x", ["/b"]), ("y", ["/a", "/b"])])], "mục thu hẹp màn; mục khác theo khối"),
+]
+
 # Which SURFACE a route counts on in the product report. `public` alone decides nothing: the
 # sign-in route is public and web-admin's, the commune news board is public and the Mini App's
 # (`x-vigov-consumer`, tools/apidoc/route.go). Measured 27/09/2026: three Mini App routes counted
@@ -1573,6 +1592,28 @@ def chay_thuan() -> list[tuple[str, str, bool, bool]]:
               f"{'tien_do_san_pham.la_cong_dan':24s} {nhan}")
         if not ok:
             sai.append((str(t), nhan, mong, duoc))
+    # A `PHAN_CHUA_DUNG*` block is counted ONLY on the menu items its `// @screens` line names; a
+    # missing or wrong line must refuse (exit 1), never fall back to a guess (15/10/2026).
+    import tempfile  # noqa: E402
+    saved_dirs = (tdsp.FEATURES_DIR, tdsp.ROOT)
+    try:
+        for src, mong, nhan in SCREENS_ANNOTATION_CASES:
+            d = tempfile.mkdtemp()
+            with open(os.path.join(d, "f.ts"), "w", encoding="utf-8") as f:
+                f.write(src)
+            tdsp.FEATURES_DIR, tdsp.ROOT = d, d
+            try:
+                blocks = tdsp.pending_blocks({"/a", "/b"})
+                duoc = [(b["routes"], [(t, r) for t, r in b["parts"]]) for b in blocks]
+            except tdsp.ScreenAnnotationError:
+                duoc = "refused"
+            ok = duoc == mong
+            print(f"{'  OK   ' if ok else '  FAIL '} [{'CHẶN' if mong == 'refused' else 'QUA '}] "
+                  f"{'tien_do_san_pham.pending_blocks':24s} {nhan}")
+            if not ok:
+                sai.append((src, nhan, mong, duoc))
+    finally:
+        tdsp.FEATURES_DIR, tdsp.ROOT = saved_dirs
     # The sheet-1 formulas count column G by the prefixes in KENH_CONG_DAN. A label for a citizen
     # route that no prefix matches puts that route back into the WEB denominator with no error.
     for kind, consumer, mong_app, nhan in NHAN_KIEM_SOAT_CASES:

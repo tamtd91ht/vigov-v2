@@ -4,6 +4,14 @@
   "cap_nhat": "2026-10-15",
   "muc": [
     {
+      "id": "phan-chua-dung-screens-15-10",
+      "viec": "13 khối PHAN_CHUA_DUNG mang dòng // @screens; 3 dấu '?' của chi tiết nhiệm vụ vào mảng nhiem-vu; bỏ khối gập 'N phần chưa dựng' ở sổ Nhiệm vụ (ADR 0068 §14)",
+      "trang_thai": "xong",
+      "bang_chung": "Giao diện dấu '?' không đổi (taskPendingPart tra từ mảng). vitest 242 tệp / 4918 ca, tsc sạch.",
+      "no_confirm": [],
+      "tiep_theo": "TASK_PROGRESS_PENDING 'Cập nhật tiến độ (%)' (nhan-nhiem-vu.ts) không được dùng ở đâu — chưa quyết. 'Ghim lên đầu cả sổ' (thong-bao) có khai, không vẽ."
+    },
+    {
       "id": "tong-quan-don-thu-kinh-te-15-10",
       "viec": "Tổng quan + Báo cáo: nối 'Đơn thư trong kỳ' (citizen-letter-counts, có so kỳ trước) và 'Kinh tế & Tài nguyên' (map-asset-summary: Doanh nghiệp, Hộ kinh doanh, Tổng tài nguyên)",
       "trang_thai": "dang_lam",

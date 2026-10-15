@@ -218,6 +218,7 @@ export type PhanChuaDung = { readonly ten: string; readonly viSao: string };
  * Ba mục cũ đã ra khỏi danh sách (09/10/2026): hai thẻ KPI nay đọc `GET /api/v1/staff-counts`, và
  * cột / ô Ảnh đại diện bỏ hẳn vì bản mẫu không có.
  */
+// @screens /mini-app
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   // No bulk soft-delete route: the server deletes one staff row per call, each with its own reason
   // (#10, rule 7). A loop of single deletes would record ONE reason for many archival records.

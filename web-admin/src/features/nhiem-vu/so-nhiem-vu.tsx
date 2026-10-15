@@ -164,7 +164,7 @@ import {
   SCOPE_RELATED_LABEL,
   DUE_SOON_FILTER_LABEL,
   PHAM_VI_TOAN_XA,
-  PHAN_CHUA_DUNG,
+  taskPendingPart,
   SO_KY_HIEU_VAN_BAN_TOI_DA,
   SO_RONG,
   TIEU_DE_KHOI_VAN_BAN,
@@ -1453,7 +1453,8 @@ export function SoNhiemVu({
         Sổ nhiệm vụ của xã
       </h2>
 
-      <KhoiChuaDung />
+      {/* No "N phần … chưa dựng được" block here: ADR 0068 §14 removed it from every screen — each
+          `PHAN_CHUA_DUNG` entry is the description behind a disabled "?" at its own spot instead. */}
 
       {openTaskError !== null && (
         <p className="thong-bao-loi" role="alert">
@@ -1891,33 +1892,6 @@ export function CanhBaoNhanTrangThai({ canhBao }: { canhBao: string | null }) {
     <p className="canh-bao-pham-vi" role="status">
       {canhBao}
     </p>
-  );
-}
-
-/**
- * Những phần đặc tả đòi mà hợp đồng không có — HIỆN LÊN ĐẦU MÀN, không giấu trong chú thích mã.
- *
- * `<details>` chứ không phải một khối luôn mở: danh sách dài hơn quyển sổ ở những ngày đầu, và một
- * bức tường chữ trên đầu màn hình là bức tường người ta học cách không đọc.
- */
-export function KhoiChuaDung() {
-  // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): every part of the spec is built — `0 phần … chưa dựng được`
-  // above a register would read as a broken screen. An empty list draws nothing.
-  if (PHAN_CHUA_DUNG.length === 0) return null;
-  return (
-    <details className="khoi-chua-khai">
-      <summary>
-        {PHAN_CHUA_DUNG.length} phần của bản thiết kế chưa dựng được — bấm để xem từng phần và lý do
-      </summary>
-      <dl className="danh-sach-truong">
-        {PHAN_CHUA_DUNG.map((p) => (
-          <div key={p.ten}>
-            <dt>{p.ten}</dt>
-            <dd>{p.viSao}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
   );
 }
 
@@ -5246,13 +5220,8 @@ function StaffPicker({
   );
 }
 
-/** One free-text box per document needs the server to parse the reference (owner 07/10/2026 #11). */
-export const SINGLE_REFERENCE_BOX_PENDING = {
-  ten: "Một ô văn bản tự do",
-  viSao:
-    "Bản thiết kế nhập mỗi văn bản trong MỘT ô chữ (số, ngày, trích yếu viết liền). Máy chủ chưa tách " +
-    "được số và ngày từ câu ấy, nên mỗi văn bản vẫn nhập ba ô: trích yếu, số ký hiệu, ngày.",
-} as const;
+/** One free-text box per document needs the server to parse the reference (`PHAN_CHUA_DUNG`). */
+export const SINGLE_REFERENCE_BOX_PENDING = taskPendingPart("Một ô văn bản tự do");
 
 /**
  * Một trong ba danh sách văn bản động của §7.2 — spec 06 `TaskReferenceEditor`: the group label, the

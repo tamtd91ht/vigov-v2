@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: ad52d674
+derived_from_commit: 0f443250
 expires: 2027-01-13
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -50,13 +50,14 @@ Tổng **397 tuyến** trong hợp đồng. **22** tuyến chưa khai `@screen` 
 ## 2 · web-admin, theo từng mục menu
 
 `duong: null` nghĩa là mục **cố ý hiện mà không bấm được** — `muc-menu.ts` giải thích vì sao giữ
-chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`, tức số câu cán bộ THẬT SỰ
-đọc được trên màn, không phải số việc ai đó nhớ ra lúc viết tài liệu.
+chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG*`, tức số câu cán bộ THẬT SỰ
+đọc được trên màn, không phải số việc ai đó nhớ ra lúc viết tài liệu. Mục nào hiện ở mục menu nào do
+dòng `// @screens` của khối nói; mỗi phần đếm một lần, ở màn gốc của nó (ngăn mở tại chỗ từ Tổng quan, Sổ tay lãnh đạo không đếm thêm).
 
 | # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |
 |---|---|---|---|---|---|
 | 1 | Tổng quan | `/tong-quan` | `REPORT_READ_PERMISSION` | ✓ | 1 |
-| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 0 |
+| 2 | Nhiệm vụ | `/nhiem-vu` | `QUYEN_XEM_NHIEM_VU` | ✓ | 3 |
 | 3 | Sổ tay lãnh đạo | `/nhiem-vu/so-tay` | `QUYEN_XEM_NHIEM_VU` | ✓ | **không khai** |
 | 4 | Biên bản họp | `/nhiem-vu/bien-ban` | `QUYEN_XEM_NHIEM_VU` | ✓ | 2 |
 | 5 | Văn bản & Đơn thư | `/van-ban` | `QUYEN_XEM_VAN_BAN` | ✓ | 9 |
@@ -68,14 +69,14 @@ chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`,
 | 11 | Phản ánh người dân | `/phan-anh` | `QUYEN_XEM_PHAN_ANH` | ✓ | 0 |
 | 12 | Bản đồ kinh tế số | `/ban-do` | `ASSET_READ_PERMISSION` | ✓ | 5 |
 | 13 | Nội dung Mini App | `/mini-app` | `MINI_APP_MENU_KEYS` | ✓ | 10 |
-| 14 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 1 |
-| 15 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 1 |
-| 16 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 1 |
+| 14 | Báo cáo | `/bao-cao` | `REPORT_READ_PERMISSION` | ✓ | 2 |
+| 15 | Người dùng | `/nguoi-dung` | `QUYEN_QUAN_LY_NGUOI_DUNG` | ✓ | 0 |
+| 16 | Phân quyền | `/nguoi-dung/phan-quyen` | `QUYEN_PHAN_QUYEN` | ✓ | 0 |
 | 17 | Hướng dẫn sử dụng | — | — | ✗ | |
 | 18 | Cấu hình | `/cau-hinh` | `KHOA_MO_CAU_HINH` | ✓ | 1 |
-| 19 | Hệ thống | `/he-thong` | `SYSTEM_MENU_KEYS` | ✓ | 1 |
+| 19 | Hệ thống | `/he-thong` | `SYSTEM_MENU_KEYS` | ✓ | 0 |
 
-**16/19** mục menu có màn thật. **41** phần chưa dựng đang hiện trên các màn ấy.
+**16/19** mục menu có màn thật. **42** phần chưa dựng đang hiện trên các màn ấy.
 
 ⚠ **1 màn KHÔNG KHAI khối `PHAN_CHUA_DUNG`**, và ô của chúng đọc là `không khai` chứ không phải `0` —
 hai thứ khác hẳn nhau. `0` nghĩa là màn có khai một danh sách và danh sách ấy rỗng, tức mọi phần
@@ -133,6 +134,6 @@ Chi tiết từng mục — bằng chứng, câu chờ khách, bước kế ti�
 | `service-petitions` | 66 | 25 | 7 | 0 |
 | `service-platform` | 23 | 22 | 5 | 1 |
 | `service-reporting` | 6 | 0 | 1 | 0 |
-| `tools` | 22 | 0 | 0 | 0 |
-| `web-admin` | 135 | 46 | 4 | 1 |
+| `tools` | 23 | 0 | 0 | 0 |
+| `web-admin` | 136 | 46 | 4 | 1 |
 

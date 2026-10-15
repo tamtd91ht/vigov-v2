@@ -941,6 +941,7 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// @screens /giai-ngan/thu-chi
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   // §6 `⬆ Nạp từ Excel` ĐÃ DỰNG (08/10/2026, ADR 0081 #6): tuyến `budget-sheets/imports` của `service-finance`,
   // nạp ngay khi chọn tệp như prototype — `budget-import-button.tsx`.

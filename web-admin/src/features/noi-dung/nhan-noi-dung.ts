@@ -1375,6 +1375,7 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// @screens /mini-app
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   // §3 `{n} chuyên mục` on the card's meta line. The SELECTION is stored (service-comms
   // `PortalSyncStore.Categories`, rows served as `portalStoredCategoryOut`), but the only route that

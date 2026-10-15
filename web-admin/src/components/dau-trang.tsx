@@ -108,9 +108,8 @@ export function DauTrang({ navigation = true, menuPath }: { navigation?: boolean
 
 /**
  * Description behind the search placeholder's "?". A constant HERE, not a `PHAN_CHUA_DUNG` entry: the
- * shell is no screen of its own — `tools/tien_do_san_pham.py` counts `PHAN_CHUA_DUNG` per
- * `features/<dir>` and maps each page to the dirs it imports, so an entry in any feature would be
- * counted under that one screen, and an entry in every feature would count it eleven times. Like the
+ * shell is no screen of its own — `tools/tien_do_san_pham.py` counts each entry under every menu item its
+ * block's `// @screens` line names, so the one header box would be counted once per menu item. Like the
  * menu's `PENDING_SCREENS` (`muc-menu.ts`), the shell keeps its own one sentence.
  *
  * TRUE TODAY: the contract has staff search (`/api/v1/staff/searches`) and per-register filters, but

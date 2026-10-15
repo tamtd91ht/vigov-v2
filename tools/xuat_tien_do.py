@@ -304,8 +304,7 @@ def thu_thap() -> dict:
             "so": r["so"], "slug": r["slug"], "ten": r["ten"],
             "service": " · ".join(s for s, _n in dem_sv[r["slug"]].most_common()) or "—",
             "api": api, "web": web,
-            "chua_dung": ([x for f in sp.feature_cua_trang(m["duong"])
-                           for x in (sp.phan_chua_dung(f) or [])]
+            "chua_dung": ((sp.pending_parts_of_route(m["duong"], menu_goc) or [])
                           if m and m["duong"] else []),
             "tuyen": [f"{t['pt']} {t['duong']}" for t in tuyen if t["slug"] == r["slug"]],
             "viec": viec_chuong.get(r["slug"], []),
@@ -313,9 +312,7 @@ def thu_thap() -> dict:
     for m in menu:
         pcd = None
         if m["duong"] is not None:
-            khai = [p for p in (sp.phan_chua_dung(f) for f in sp.feature_cua_trang(m["duong"]))
-                    if p is not None]
-            pcd = [x for p in khai for x in p] if khai else None
+            pcd = sp.pending_parts_of_route(m["duong"], menu_goc)
             # Hai phép đếm trên cùng một nguồn phải ra một số — lệch là bản Excel in một danh
             # sách khác với con số `.md` đang báo. Từ chối thay vì chọn một bên.
             if (m["chua_dung"] is None) != (pcd is None) or (pcd is not None and len(pcd) != m["chua_dung"]):

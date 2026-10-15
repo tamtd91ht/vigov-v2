@@ -16,9 +16,9 @@ import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
  *
  * `/noi-dung` and `/danh-ba` are now redirects to here (`app/noi-dung/page.tsx`, `app/danh-ba/page.tsx`).
  *
- * THE PAGE IMPORTS BOTH SCREENS FROM THEIR OWN `features/` FOLDERS, on purpose: `tools/tien_do_san_pham.py`
- * reads a page's `@/features/<x>/` imports to count the screen's "?" parts (`PHAN_CHUA_DUNG`). Routing the
- * two screens through `features/mini-app/` alone would make both lists vanish from the progress table.
+ * The "?" parts of both tabs count toward this menu item in the progress table because their
+ * `PHAN_CHUA_DUNG` blocks say `// @screens /mini-app` (`tools/tien_do_san_pham.py`, NGUỒN 5) — not
+ * because of which folders this page imports.
  *
  * GATES, ONE PER TAB, EACH THE KEY ITS READ ROUTES DECLARE (`features/mini-app/mini-app-tabs.ts`):
  *

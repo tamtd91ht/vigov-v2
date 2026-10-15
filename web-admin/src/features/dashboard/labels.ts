@@ -17,6 +17,7 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
  * EVERY ENTRY MUST BE TRUE ON THE DAY IT IS READ. Build a part → delete its entry in the same change.
  */
 // vi-name-ok: the progress tool (`tools/tien_do_san_pham.py`) matches this exact constant name
+// @screens /tong-quan /bao-cao
 export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
   // "Đơn thư trong kỳ" was built on 15/10/2026 from `citizen-letter-counts` (`view.tsx` `letterFigure`)
   // and left this list; so did the block "Kinh tế & Tài nguyên" (`EconomyBlock`, `map-asset-summary`),

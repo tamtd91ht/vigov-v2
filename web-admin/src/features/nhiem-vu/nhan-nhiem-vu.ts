@@ -1750,18 +1750,6 @@ export const TASK_PROGRESS_PENDING = {
     "nhiệm vụ; muốn theo dõi tiến độ, ghi vào nhật ký nhiệm vụ.",
 } as const;
 
-/**
- * The prototype's per-child completion tick and weight (`TaskDetailDrawer.tsx:465-496`), drawn
- * DISABLED with a "?" (ADR 0068 §14, lần 5 #5; user decision 07/10/2026): the server stores no weight
- * and the parent's progress is not computed from its children, so a working tick would be a fake.
- */
-export const CHILD_TASK_WEIGHT_PENDING = {
-  ten: "Đánh dấu việc con và trọng số",
-  viSao:
-    "Chưa đánh dấu hoàn thành việc con ngay tại đây, và chưa có trọng số cho từng việc con để tính " +
-    "tiến độ của việc cha. Mở việc con để đổi trạng thái của nó.",
-} as const;
-
 /** Under a child's title where the prototype shows its weight; no weight is stored yet. */
 export const CHILD_TASK_WEIGHT_NONE = "trọng số —";
 
@@ -2952,8 +2940,47 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// All three are drawn inside the task detail drawer (`TaskDetailHost`). Sổ tay lãnh đạo and Tổng quan open
+// that drawer too, but a part is counted once, at its home screen (owner 15/10/2026).
+// @screens /nhiem-vu
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  // The prototype's per-child completion tick and weight (`TaskDetailDrawer.tsx:465-496`), drawn
+  // DISABLED with a "?" (ADR 0068 §14, lần 5 #5; user decision 07/10/2026): the server stores no weight
+  // and the parent's progress is not computed from its children, so a working tick would be a fake.
+  // Drawn by `child-tasks.tsx`.
+  {
+    ten: "Đánh dấu việc con và trọng số",
+    viSao:
+      "Chưa đánh dấu hoàn thành việc con ngay tại đây, và chưa có trọng số cho từng việc con để tính " +
+      "tiến độ của việc cha. Mở việc con để đổi trạng thái của nó.",
+  },
+  // Spec 08: the files not attached to any entry need a task-level file list (BACKEND DEPENDENCY).
+  // Drawn by `nhat-ky-nhiem-vu.tsx`.
+  {
+    ten: "Tệp chưa gắn với ghi chép nào",
+    viSao:
+      "Nhật ký chỉ đọc được tệp gắn theo từng dòng ghi. Danh sách tệp của nhiệm vụ không thuộc dòng nào " +
+      "cần máy chủ trả thêm một tuyến đọc riêng.",
+  },
+  // One free-text box per document needs the server to parse the reference (owner 07/10/2026 #11).
+  // Drawn beside the first document group of the detail's `Sửa` form (`so-nhiem-vu.tsx`).
+  {
+    ten: "Một ô văn bản tự do",
+    viSao:
+      "Bản thiết kế nhập mỗi văn bản trong MỘT ô chữ (số, ngày, trích yếu viết liền). Máy chủ chưa tách " +
+      "được số và ngày từ câu ấy, nên mỗi văn bản vẫn nhập ba ô: trích yếu, số ký hiệu, ngày.",
+  },
 ];
+
+/** One entry by its exact `ten`. Throws on an unknown name — a "?" with no description is never drawn. */
+export function taskPendingPart(ten: string): PhanChuaDung {
+  const found = PHAN_CHUA_DUNG.find((p) => p.ten === ten);
+  if (found === undefined) throw new Error(`PHAN_CHUA_DUNG has no entry "${ten}"`);
+  return found;
+}
+
+/** The "?" of the children block's disabled completion tick and weight (`child-tasks.tsx`). */
+export const CHILD_TASK_WEIGHT_PENDING = taskPendingPart("Đánh dấu việc con và trọng số");
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
  * KHÔNG CÓ HÀM NÀO Ở ĐÂY VIẾT LẠI MỘT CÂU TỪ CHỐI CỦA MÁY CHỦ, VÀ SỰ VẮNG MẶT ẤY LÀ CHỦ Ý

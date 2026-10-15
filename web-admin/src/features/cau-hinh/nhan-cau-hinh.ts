@@ -25,7 +25,12 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// The tabs of `features/cau-hinh` live on four menu items (`/nguoi-dung`, `/nguoi-dung/phan-quyen` and
+// `/he-thong` took theirs out of `/cau-hinh`), so this list speaks for all four; each entry names the
+// one it is drawn on — the Excel "?" only on `/cau-hinh` (tab Danh mục, `tab-danh-muc.tsx`).
+// @screens /cau-hinh /nguoi-dung /nguoi-dung/phan-quyen /he-thong
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
+  // @screens /cau-hinh
   {
     ten: "Nhập Excel chung cho mọi nhóm danh mục",
     viSao:

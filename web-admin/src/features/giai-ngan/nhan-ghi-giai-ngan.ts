@@ -864,6 +864,9 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// Counted on Giải ngân only: Tổng quan's record dialog opens the same project detail, but a part is
+// counted once, at its home screen (owner 15/10/2026).
+// @screens /giai-ngan
 export const PHAN_CHUA_DUNG_GHI: readonly PhanChuaDung[] = [
   // §8.2 voucher table + its `NGUỒN VỐN` column + the form's `Rút từ nguồn vốn` select: BUILT
   // (db94b35c, `GET /api/v1/investment-projects/{id}/disbursements`; `chung-tu-du-an.tsx`).

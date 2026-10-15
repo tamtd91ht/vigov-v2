@@ -253,6 +253,7 @@ export const MAP_COLLAPSE = "Thu gọn";
  * hint beside "Quy mô lao động" and "Mật độ theo thôn" (spec 08 B), the "?" of the form's place search.
  */
 // vi-name-ok: the product-progress tool (`tools/tien_do_san_pham.py`) counts every `PHAN_CHUA_DUNG*` block by this exact name
+// @screens /ban-do
 export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
   {
     ten: "Mẫu Excel",

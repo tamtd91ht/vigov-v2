@@ -519,6 +519,9 @@ export type PendingPart = {
   readonly viSao: string;
 };
 
+// Counted on the register only: Tổng quan's record dialog also opens the incoming-document drawer
+// (`dashboard/record-detail.tsx`), but a part is counted once, at its home screen (owner 15/10/2026).
+// @screens /van-ban
 export const PHAN_CHUA_DUNG: readonly PendingPart[] = [
   // "Đơn thư công dân" and "Báo cáo" LEFT THIS LIST 08/10/2026: both tabs are built on the
   // citizen-letter register of `service-documents` (ADR 0078 #2). "Nhập đơn thư từ Excel" and "Xuất báo

@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: ad52d674
+derived_from_commit: 0f443250
 expires: 2027-01-13
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 203 |
 | chưa làm | 43 |
 | treo | 13 |
-| xong | 582 |
+| xong | 584 |
 
 ## Theo menu
 
@@ -1549,10 +1549,11 @@ Cập nhật 2026-10-15 · 7 mục
 
 ## `tools`
 
-Cập nhật 2026-10-11 · 22 mục
+Cập nhật 2026-10-15 · 23 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
+| `tien-do-san-pham-screens-15-10` — tien_do_san_pham.py gán số 'Chưa dựng' theo dòng // @screens của từng khối PHAN_CHUA_DUNG, không suy từ import; mỗi phần đếm một lần ở màn gốc | xong | Thiếu dòng @screens hoặc đường không có trong muc-menu.ts → thoát 1 kèm file:line. Bảng sau sửa: Tổng quan 1, Nhiệm vụ 3, Báo cáo 2, Người dùng/Phân quyền/Hệ thống 0, tổng 42. test_hooks.py 316/316 (6 ca mới). | — | `--excel --khung` đỏ trước thay đổi này: 'hai mục menu cùng khớp chương 14-cau-hinh' (xuat_tien_do.py:179-182) — chưa sửa. .claude/commands/tien-do-san-pham.md dòng 120-121, 174, 209 còn tả cách cũ. Mục ten viết một dòng `{ ten: … }` không được đếm (giới hạn cũ). |
 | `bo-sinh-tien-do` — tools/tien_do.py — sinh tệp đọc tien-do.md từ các tệp ghi theo module | xong | tools/tien_do.py:1; `python tools/tien_do.py` chạy thật, sinh ra kb/90-ephemeral/tien-do.md; đã nối vào mục `kb` của Makefile:125. KHÔNG ghi số module/mục ở đây — con số nào chép vào cũng sai trong vài ngày | — | hạn của tệp sinh tính từ `cap_nhat` MỚI NHẤT của các module, không phải ngày sinh — quá hạn nghĩa là 90 ngày không ai cập nhật tiến độ |
 | `check-brain-bo-qua-tmp` — check_brain bất biến 6 đỏ vì một tệp .md nháp trong tmp/ (đã nằm trong .gitignore) | xong | tools/check_brain.py:277 thêm `tmp` vào danh sách loại trừ khi duyệt cây; `python tools/check_brain.py` 7/7 — số dòng kiểm lại 2026-09-20 (bản cũ ghi :272, đã lệch) | — | phép kiểm đi bằng hệ tệp chứ không đi bằng git. Nếu còn thư mục nào khác trong .gitignore mà sinh .md thì sẽ đỏ lại theo đúng cách này |
 | `apidoc-mau-route-hang-chuoi` — apidoc từ chối mẫu route là hằng chuỗi — bộ sinh hợp đồng REST hỏng từ 1a8ce11 | xong | tools/apidoc/route.go — mauRoute + hangChuoiTrongTep; 3 ca mới trong route_test.go, đã đột biến (bỏ phần tra hằng -> 2 ca đỏ). `make kb` chạy lại được: hợp đồng đi từ 9 lên 17 tuyến — kiểm 2026-09-20 | — | Chỉ tra hằng khai trong CÙNG tệp, có chủ ý; mẫu dựng lúc chạy vẫn là lỗi và có ca test giữ. Bài học ghi trong mã: bộ sinh từng phạt đúng khuôn mã luật 9 đòi (một đường dẫn, một nguồn) và đẩy người viết đi chép đường dẫn ra hai chỗ |
@@ -1580,7 +1581,7 @@ Cập nhật 2026-10-11 · 22 mục
 
 ## `web-admin`
 
-Cập nhật 2026-10-15 · 186 mục
+Cập nhật 2026-10-15 · 187 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1635,6 +1636,7 @@ Cập nhật 2026-10-15 · 186 mục
 | `doi-chieu-26-09-nhiem-vu-truoc-neo` — Tiếp nhận ghi chú đối chiếu trước neo cho màn Nhiệm vụ — bảng chuyển trạng thái, ô sửa mã/hạn, Xoá đã chọn | chưa làm | `kb/50-doi-chieu/2026-09-26-feat-m8-multitenant-foundation-nhiem-vu.md` — anh_huong gồm web-admin. | — | Phía web chỉ đổi SAU khi service-petitions/doi-chieu-26-09-nhiem-vu-truoc-neo có quyết định: CHUYEN_DUOC (nhan-nhiem-vu.ts:208-231) theo bảng máy chủ; ô sửa mã/hạn §5.4 chỉ khi (2)/(3) được chốt; `🗑 Xoá đã chọn` dựng được bằng vòng DELETE từng dòng khi chốt được lý do theo lô hay từng dòng. Chi tiết và hai phía: xem ghi chú. Chú thích nhan-nhiem-vu.ts:210 trỏ domain/nhiem_vu.go:77-85, đúng ra :76-84. |
 | `con-lai-10-11` — Bảng lỗi khách 10/10/2026 — phần CHƯA làm sau đợt 2: (1) dòng 18, nhập Excel nhiệm vụ báo lỗi dù dữ liệu hợp lệ; (2) thẻ 'Tính lại số liệu Tổng quan' ở Cấu hình vẫn là control vô hiệu '?' (ADR 0068 §14); (3) Thu - Chi dòng 49, 54, 55 (bảng tính gốc 50, 55, 56: tiêu đề báo cáo chi, cụm số tổng, cột bảng thu) là DỮ LIỆU, không phải mã; (4) tệp đính kèm nhiệm vụ trên cụm cần biến triển khai. | chưa làm | (1) XONG ở 4bf0f0a6 (máy chủ; sổ service-petitions, mục `nhap-nhiem-vu-excel-10-11`). (3) đã có mẫu và đã sửa cách ghép %: 62cb1878 — popup 'Tải file mẫu' ở Nạp từ Excel (thu-chi/budget-template.ts sinh .xlsx đúng bố cục máy chủ nhận, budget-import-button.tsx); 982ab9ad — máy chủ ghép tử/mẫu cột % theo luật prototype (sổ service-finance, mục `nap-excel-ghep-cot-phan-tram-11-10`). (4) ở sổ service-petitions, mục `trien-khai-tep-nhiem-vu-10-11`. | — | (1) xong; CÒN TREO chờ chủ dự án: hạn chỉ có ngày vẫn bị từ chối theo quyết định 28/09/2026 dù prototype nhận (giờ mặc định là quyết định của chủ dự án); nhập đơn vị theo tên cần hợp đồng identity mới. Chưa thử với tệp Excel thật của khách. (2) chưa có máy chủ cho thao tác này. (3) dòng dữ liệu bảng vẫn do xã đổi qua 'Sửa thông tin bảng' hoặc nạp lại từ mẫu — không đổi mã (thân 62cb1878). (4) người vận hành cụm đặt OBJECT_STORAGE_* + MALWARE_SCANNER_ADDRESS cho petitions. |
 | `can-bo-khong-co-vai-tro` — Cán bộ không có vai trò nào thì vào `/` thấy gì | treo | đặc tả docs/ui-ux §1 chỉ chia "Lãnh đạo" / "vai trò khác" | — | chưa ghi thành câu hỏi mở vì chưa biết trạng thái ấy có tồn tại thật trên dữ liệu xã hay không |
+| `phan-chua-dung-screens-15-10` — 13 khối PHAN_CHUA_DUNG mang dòng // @screens; 3 dấu '?' của chi tiết nhiệm vụ vào mảng nhiem-vu; bỏ khối gập 'N phần chưa dựng' ở sổ Nhiệm vụ (ADR 0068 §14) | xong | Giao diện dấu '?' không đổi (taskPendingPart tra từ mảng). vitest 242 tệp / 4918 ca, tsc sạch. | — | TASK_PROGRESS_PENDING 'Cập nhật tiến độ (%)' (nhan-nhiem-vu.ts) không được dùng ở đâu — chưa quyết. 'Ghim lên đầu cả sổ' (thong-bao) có khai, không vẽ. |
 | `phan-chua-dung-ra-soat-15-10` — Rà 43 mục PHAN_CHUA_DUNG với mã: 36 còn thiếu thật, 5 lý do lỗi thời (đã sửa/nối), 2 là quyết định không làm | xong | Commit 3c75cbee: overdueDays rời mảng thành OVERDUE_DAYS_NOT_SHOWN (ADR 0007 10a); lý do Mật độ theo thôn, Số chuyên mục đang đồng bộ viết lại; chú thích 0001_init.sql trỏ đúng dòng (ad52d674). | — | Ký biên bản không còn đường mở từ 15/10 (so-bien-ban.tsx: không ai gọi moHop(…,'ky')) → 'Ghi số Thông báo kết luận', 'Lập biên bản bổ sung' không bao giờ tới được với biên bản mới — chờ người dùng chọn hướng. Thông báo: đọc danh sách vẫn cần announcement.create (không có khoá chỉ đọc). 'Ghim lên đầu cả sổ' có thể là quyết định bố cục chứ không phải chưa dựng — chưa kiểm. |
 | `tam-viec-web-tu-hop-dong` — Tám màn hình danh mục đã mở việc trong tasks/web/open/, chưa ai nhận | xong | cả 8 tệp nay ở tasks/web/done/, claimed/ rỗng. Hai tab mới: web-admin/src/features/cau-hinh/{tab-danh-muc.tsx,tab-thon-to-dan-pho.tsx}, mắc vào app/cau-hinh/page.tsx theo thứ tự đặc tả §0. `npx tsc --noEmit` sạch · `npm test` 172/172 · `npm run check:api` khớp hợp đồng · `npm run lint` sạch — kiểm 2026-09-20 | — | MỘT LỖ HỔNG PHÉP KIỂM ĐÃ ĐO VÀ ĐÃ VÁ trong cùng lượt, đáng đọc trước khi viết màn tiếp theo: bôi trắng câu báo danh mục rỗng — câu quan trọng nhất trên màn hình — làm 167 ca vẫn xanh và tsc vẫn sạch, vì vitest chỉ gom `*.test.ts` và mọi ca đều canh QUYẾT ĐỊNH trong module thuần, không ca nào canh quyết định ấy có ra tới trang. Nay `*.test.tsx` được gom, và tab-danh-muc.test.tsx kết xuất bằng react-dom/server; đột biến ấy làm 2 ca đỏ. KHÔNG thêm phụ thuộc nào: kiểu của react-dom/server khai tại chỗ ở src/types/, vì cài @types/react-dom là đổi đầu vào của npm ci trong Dockerfile. Màn nào còn lại cũng nên có một ca kết xuất như thế cho câu chữ quan trọng nhất của nó |
 | `giai-ngan-doc-du-an` — Giải ngân (06): danh sách dự án đầu tư theo năm ngân sách + trang chi tiết dự án, CHỈ ĐỌC | xong | ĐỔI SANG xong 06/10/2026: mọi phần 'CHƯA DỰNG' trong tiep_theo nay có tuyến và đã lên màn — 4 thẻ KPI, luỹ kế, bảng theo hạng mục, vạch thời gian, tab Biểu đồ: 95d84ff0 · khối và chip nguồn vốn: cc76427c, 4338918a · tab Chứng từ đọc từ máy chủ: 2d4d4c55 · cột và tab Vướng mắc, tab Trao đổi: b0a880e0 · tên đơn vị và cán bộ phụ trách: 744582d7. Thẻ việc web tương ứng đã sang tasks/web/done (5feba41cf51c, c67ec56c473e, 8988f622f145, 00b6294fba85, 32d14ae3fe0a, 9acfe6fdd3c3, a887bf8444ae, f1b487ffca7d). Còn lại theo dõi ở `giai-ngan-theo-prototype-06-10` và `giai-ngan-nhap-excel-hop-thoai`. || tasks/web/done/{e0b90d44eae7,24bc22b6d477}.json. web-admin/src/app/giai-ngan/page.tsx + app/giai-ngan/du-an/[id]/page.tsx; features/giai-ngan/{bang-du-an.tsx,chi-tiet-du-an.tsx,nhan-du-an.ts}; lib/api/du-an.ts. Quyền `budget.read` lấy từ x-vigov-permission của hai tuyến trong kb/20-contracts/openapi.json. `npx tsc --noEmit` sạch · `npm test` 283/283 · `npm run check:api` khớp hợp đồng · `npm run lint` sạch · `npm run build` xanh — kiểm 2026-09-21 | — | SỬA 24/09/2026 (progress-reviewer trước /handover): tham số truy vấn year/category ĐÃ có trong hợp đồng (683a45c, openapi.json:4088-4104). || HỢP ĐỒNG THIẾU HAI THAM SỐ TRUY VẤN của GET /api/v1/investment-projects: `year` (BẮT BUỘC, máy chủ trả 400 nếu thiếu) và `category`. openapi.json không khai `parameters` nào, dù bộ sinh kiểu có hỗ trợ và GET /api/v1/staff thì có đủ bốn — lỗ hổng nằm ở tools/apidoc. Hệ quả: `finance_get_investment_projects["truyVan"]` rỗng nên tsc không canh được hai tên ấy. CHƯA DỰNG và không được bịa: 4 thẻ KPI, biểu đồ luỹ kế, bảng theo hạng mục, khối nguồn vốn, chip nguồn vốn, cột vướng mắc, tab Chứng từ/Vướng mắc/Biểu đồ/Trao đổi, vạch 'thời gian đã trôi qua' — không thứ nào có tuyến. Tên bộ phận và cán bộ phụ trách cũng chưa: hợp đồng chỉ trả ID nội bộ |

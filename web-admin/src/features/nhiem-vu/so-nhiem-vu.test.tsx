@@ -23,6 +23,7 @@ import type {
 
 import {
   BANG_NHAN_MAC_DINH,
+  CHILD_TASK_WEIGHT_PENDING,
   GHI_CHU_LANH_DAO_GIAO_VIEC,
   GHI_CHU_TU_SINH_MA,
   MO_TA_FORM_GIAO_VIEC,
@@ -98,7 +99,7 @@ import {
   FormGiaoViec,
   FormSuaKhoiVanBan,
   HangLoc,
-  KhoiChuaDung,
+  SINGLE_REFERENCE_BOX_PENDING,
   LEADER_EMPTY_LABEL,
   LEADER_HINT_SPEC,
   TASK_DELETE_BUTTON,
@@ -110,7 +111,7 @@ import {
   type DrawerNhiemVu,
   type TrangThaiTai,
 } from "./so-nhiem-vu";
-import { KhoiNhatKyNhiemVu, type TaiNhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
+import { KhoiNhatKyNhiemVu, LOOSE_FILES_PENDING, type TaiNhatKyNhiemVu } from "./nhat-ky-nhiem-vu";
 import { NOT_SENT, serverTransitions } from "./task-transitions.fixture";
 import {
   STATUS_MOVE_DENIED,
@@ -1310,28 +1311,30 @@ describe("ô ngày ↔ mốc của hợp đồng", () => {
   });
 });
 
-describe("phần chưa dựng được — ra tới màn hình, không giấu trong chú thích mã", () => {
-  it("mọi mục có mặt, kể cả ba chỗ phát hiện trong lượt này", () => {
-    const html = renderToStaticMarkup(<KhoiChuaDung />);
-    for (const p of PHAN_CHUA_DUNG) {
-      expect(html).toContain(nhuTrongHTML(p.ten));
-    }
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026: bài này từng canh chữ "KHÔNG phát ra `id`" — lý do Thêm việc
-    // con không gửi được. Từ ad7f821 `parent` nhận MÃ SỔ, khối Nhiệm vụ con đã dựng
-    // (`child-tasks.tsx`), nên mục ấy rời danh sách.
-    expect(html).not.toContain("KHÔNG phát ra `id`");
-    // ĐỔI CHIỀU CÓ CHỦ Ý 27/09/2026 (nhóm A, mục 7): bài này từng canh chữ `task.extend` — nó đến từ
-    // mục "CỔNG QUYỀN Ở GIAO DIỆN cho bảy khoá `task.*`". Cổng nay đã dựng (`quyenNhiemVu`), nên mục
-    // ấy rời danh sách; một mục còn nằm đó sau khi đã dựng là mục đẩy người sau đi dựng lại.
-    expect(html).not.toContain("CỔNG QUYỀN Ở GIAO DIỆN");
-    expect(html).not.toContain("chưa có hằng nào cho chúng");
-    // ĐỔI CÓ CHỦ Ý 27/09/2026 (TASK-05): bài này từng canh chữ `admin.user` — lý do ba ô cán bộ là
-    // ô gõ mã. Ba ô nay đổ từ `GET /api/v1/staff-directory`, nên mục ấy rời danh sách; phần còn
-    // thiếu thu lại đúng một điều — ô tìm theo tên đặc tả vẽ.
-    expect(html).not.toContain("admin.user");
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (TASK-02 lượt web 1): ô tìm theo tên nay đã dựng, nên mục
-    // cuối cùng của nhóm ấy cũng rời danh sách.
-    expect(html).not.toContain("Gõ tên để tìm…");
+describe("phần chưa dựng được — mô tả sau dấu \"?\" tại chỗ, không thành khối gập (ADR 0068 §14)", () => {
+  it("ba dấu \"?\" của ngăn chi tiết đọc ĐÚNG mục của PHAN_CHUA_DUNG — một bản câu chữ, không hai", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 15/10/2026: the three were loose constants, so `tools/tien_do_san_pham.py`
+    // counted 0 for Nhiệm vụ while the drawer drew three "?". They now ARE the list's entries.
+    const entry = (ten: string) => PHAN_CHUA_DUNG.find((p) => p.ten === ten);
+    expect(CHILD_TASK_WEIGHT_PENDING).toBe(entry("Đánh dấu việc con và trọng số"));
+    expect(LOOSE_FILES_PENDING).toBe(entry("Tệp chưa gắn với ghi chép nào"));
+    expect(SINGLE_REFERENCE_BOX_PENDING).toBe(entry("Một ô văn bản tự do"));
+  });
+
+  it("sổ KHÔNG vẽ khối gập \"N phần … chưa dựng được\" dù danh sách nay khác rỗng", () => {
+    // ĐỔI CHIỀU CÓ CHỦ Ý 15/10/2026: this case rendered `KhoiChuaDung` and required every entry in
+    // it. ADR 0068 §14 removed that block from every screen; it drew nothing only because the list was
+    // empty, and three entries would have brought it back above the register. The component is gone.
+    const src = readFileSync(fileURLToPath(new URL("./so-nhiem-vu.tsx", import.meta.url)), "utf8");
+    expect(src).not.toContain("KhoiChuaDung");
+    expect(src).not.toContain("phần của bản thiết kế chưa dựng được");
+    // The entries that left the list when their parts were built stay gone (cases kept from before).
+    const all = PHAN_CHUA_DUNG.map((p) => `${p.ten} ${p.viSao}`).join(" ");
+    expect(all).not.toContain("KHÔNG phát ra `id`");
+    expect(all).not.toContain("CỔNG QUYỀN Ở GIAO DIỆN");
+    expect(all).not.toContain("chưa có hằng nào cho chúng");
+    expect(all).not.toContain("admin.user");
+    expect(all).not.toContain("Gõ tên để tìm…");
   });
 });
 

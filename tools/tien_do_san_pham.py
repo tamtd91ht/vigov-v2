@@ -22,7 +22,7 @@ không?"* — với mọi cột dưới đây câu trả lời là CÓ, nên vi�
     đã có màn gọi      tasks/web/done/ vs open/               (`x-vigov-task` là id việc)
     mục menu           web-admin/src/components/muc-menu.ts
     màn hình có thật   web-admin/src/app/**/page.tsx
-    phần chưa dựng     PHAN_CHUA_DUNG trong features/*/nhan-*.ts
+    phần chưa dựng     PHAN_CHUA_DUNG* trong features/**, gán màn bằng `// @screens` (NGUỒN 5)
     trạng thái sổ      kb/90-ephemeral/tien-do/<module>.json
 
 ⚠ VÀ KHÔNG CÓ CỘT "% HOÀN THÀNH" TỰ NGHĨ RA. Ngày 23/09/2026 chủ dự án đọc một con số tiến độ
@@ -37,7 +37,7 @@ phần nào của đặc tả chưa có tuyến nào. Một chương 100% vẫn 
 ═══════════════════════════════════════════════════════════════════════════════════════════
 
 Chạy:  python tools/tien_do_san_pham.py      (đi kèm `make kb`)
-Mã thoát: 0 = sinh xong · 1 = thiếu một nguồn bắt buộc.
+Mã thoát: 0 = sinh xong · 1 = thiếu một nguồn bắt buộc, hoặc một khối `PHAN_CHUA_DUNG*` khai màn sai.
 """
 
 from __future__ import annotations
@@ -202,64 +202,153 @@ def cac_muc_menu() -> list[tuple[str, str | None, str | None]]:
 # TRANG: mỗi màn có một ca kiểm đòi từng mục phải có trong HTML. Tức con số này là số câu mà cán
 # bộ thật sự đọc được trên màn, không phải số việc ai đó nhớ ra lúc viết tài liệu.
 # Khối khai báo, tới dấu `];` đầu dòng. Hậu tố tên được phép (`PHAN_CHUA_DUNG_GHI` của giai-ngan).
-# Một khối viết khác hình này thì màn đọc thành `không khai` — hiện ra, không tụt về 0 im lặng.
+# Mảng rỗng viết `[` … `\n];` vẫn là MỘT KHỐI — "có khai, 0 phần" (phan-anh, thu-chi dựa vào đó).
+#
+# MỖI KHỐI TỰ NÓI NÓ HIỆN Ở MỤC MENU NÀO, bằng một dòng ngay trên `export const`:
+#
+#     // @screens /tong-quan /bao-cao
+#
+# mỗi đường là một `duong` có thật của `muc-menu.ts`. Phần tới được qua một tuyến con (chi tiết dự án
+# `/giai-ngan/du-an/[id]`) ghi đường của MỤC MENU người ta đi từ đó vào. MỘT PHẦN ĐẾM MỘT LẦN, Ở MÀN
+# GỐC của nó (chủ dự án 15/10/2026): ngăn mở tại chỗ từ màn khác — ngăn nhiệm vụ, văn bản đến, dự án
+# mở từ Tổng quan hay Sổ tay lãnh đạo — KHÔNG ghi thêm đường của màn mở nó, nếu không tổng cộng trùng. Một mục cụ thể hiện ở ÍT màn hơn cả khối thì mang dòng `@screens`
+# riêng ngay trên dấu `{` của nó, và dòng ấy THAY dòng của khối cho riêng mục đó (phải là tập con).
+# Đường khối nêu mà không mục nào hiện ở đó vẫn đọc là `0` — "có khai, không thiếu gì" — chứ không
+# phải `không khai`.
+#
+# VÌ SAO KHAI TAY MÀ KHÔNG SUY TỪ `import`: bản trước gán khối theo thư mục `features/<x>` mà
+# `app/<duong>/page.tsx` import, và đo ngày 15/10/2026 nó sai theo cả hai chiều. Thừa: `/nguoi-dung`,
+# `/nguoi-dung/phan-quyen`, `/he-thong` cùng import `features/cau-hinh` nên mỗi màn nhận mục "Nhập
+# Excel chung" chỉ vẽ trên `/cau-hinh`. Thiếu: `/bao-cao` vẽ "Thành lập mới" qua khung dùng chung của
+# `features/dashboard` mà trang không import trực tiếp. Một phép suy theo đồ thị import không biết
+# thành phần nào thật sự VẼ dấu "?"; người viết khối thì biết.
+#
+# SAI THÌ ĐỎ (mã thoát 1), không đoán: khối thiếu dòng `@screens`, đường không phải mục menu, mục khai
+# đường ngoài khối, hay một dòng `@screens` đặt lệch chỗ. Đoán ở đây là in một con số không ai khai.
 MAU_KHOI_CHUA_DUNG = re.compile(
     r"(?:export\s+)?const\s+PHAN_CHUA_DUNG\w*\b[^=]*=\s*\[(.*?)\n\];", re.S)
 MAU_TEN_CHUA_DUNG = re.compile(r'^\s*ten:\s*"((?:[^"\\]|\\.)*)"', re.M)
+SCREENS_LINE = re.compile(r"^\s*//\s*@screens\b(.*)$")
+FEATURES_DIR = os.path.join(ROOT, "web-admin", "src", "features")
 
 
-def phan_chua_dung(thu_muc: str) -> list[str] | None:
-    """Tên từng phần chưa dựng của một thư mục `features/` — cho bản Excel, cần CÂU chứ không cần số.
+class ScreenAnnotationError(Exception):
+    """One or more `PHAN_CHUA_DUNG*` blocks name their screens wrongly — every problem, file:line."""
 
-    `None` khi màn không khai khối nào, cùng nghĩa với `so_chua_dung`.
+
+def _parse_screens(text: str, where: str, menu_routes: set[str], problems: list[str]) -> list[str]:
+    routes = text.split()
+    if not routes:
+        problems.append(f"{where}: dòng `// @screens` không nêu đường nào / names no route")
+    for r in routes:
+        if r not in menu_routes:
+            problems.append(f"{where}: `{r}` không phải `duong` của mục menu nào trong muc-menu.ts / "
+                            "is not a sidebar route")
+    if len(set(routes)) != len(routes):
+        problems.append(f"{where}: một đường nêu hai lần / a route is named twice")
+    return routes
+
+
+def _entry_brace_line(lines: list[str], ten_idx: int, stop_idx: int) -> int:
+    """Index of the `{` opening the entry whose `ten:` is at `ten_idx` — its own line when it opens
+    there, else the nearest line above that is only `{`, never crossing the previous entry's end."""
+    if lines[ten_idx].lstrip().startswith("{"):
+        return ten_idx
+    i = ten_idx - 1
+    while i > stop_idx:
+        s = lines[i].strip()
+        if s == "{":
+            return i
+        if s.endswith("},") or s.endswith("}"):
+            break
+        i -= 1
+    return ten_idx
+
+
+def pending_blocks(menu_routes: set[str]) -> list[dict]:
+    """Every `PHAN_CHUA_DUNG*` block under `web-admin/src/features/**`:
+    `{"file", "line", "routes", "parts": [(ten, routes)]}`. Raises `ScreenAnnotationError` listing
+    EVERY problem at once, so one run shows the whole fix.
+
+    Quét MỌI tệp nguồn, không chỉ `nhan-*.ts`: chỗ đặt hằng số là quy ước, và một quy ước không có
+    rào nào canh thì một khối đặt chỗ khác là con số ở đây tụt về 0 trong im lặng. Đếm TRONG KHỐI,
+    không đếm mọi `ten:` từ lần đầu chữ ấy xuất hiện: bản cũ cắt từ một câu chú thích nhắc tên hằng,
+    nên `ten: ""` của một biểu mẫu nằm sau đó bị đếm vào (giai-ngan in 7 khi màn hiện 6, 24/09/2026).
     """
-    thu = os.path.join(ROOT, "web-admin", "src", "features", thu_muc)
-    if not os.path.isdir(thu):
-        return None
-    ra: list[str] = []
-    thay = False
-    for goc, _d, tep in os.walk(thu):
+    blocks: list[dict] = []
+    problems: list[str] = []
+    for goc, _d, tep in sorted(os.walk(FEATURES_DIR)):
         for t in sorted(tep):
             if not t.endswith((".ts", ".tsx")) or t.endswith((".test.ts", ".test.tsx")):
                 continue
-            for m in MAU_KHOI_CHUA_DUNG.finditer(doc(os.path.join(goc, t))):
-                thay = True
-                ra.extend(MAU_TEN_CHUA_DUNG.findall(m.group(1)))
-    return ra if thay else None
+            path = os.path.join(goc, t)
+            src = doc(path)
+            lines = src.split("\n")
+            rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+            for m in MAU_KHOI_CHUA_DUNG.finditer(src):
+                decl = src.count("\n", 0, m.start())  # 0-based line of `export const`
+                where = f"{rel}:{decl + 1}"
+                above = SCREENS_LINE.match(lines[decl - 1]) if decl > 0 else None
+                if above is None:
+                    problems.append(f"{where}: khối `PHAN_CHUA_DUNG*` thiếu dòng `// @screens /duong …` "
+                                    "ngay trên nó / block has no `// @screens` line directly above it")
+                    routes: list[str] = []
+                else:
+                    routes = _parse_screens(above.group(1), where, menu_routes, problems)
+                first = src.count("\n", 0, m.start(1))
+                last = src.count("\n", 0, m.end(1))
+                annotated = {i for i in range(first, last + 1) if SCREENS_LINE.match(lines[i])}
+                used: set[int] = set()
+                parts: list[tuple[str, list[str]]] = []
+                prev_ten = first
+                for tm in MAU_TEN_CHUA_DUNG.finditer(m.group(1)):
+                    ten_idx = src.count("\n", 0, m.start(1) + tm.start(1))
+                    brace = _entry_brace_line(lines, ten_idx, prev_ten)
+                    prev_ten = ten_idx
+                    own = SCREENS_LINE.match(lines[brace - 1])
+                    if own is None or brace - 1 < first:
+                        parts.append((tm.group(1), routes))
+                        continue
+                    used.add(brace - 1)
+                    w = f"{rel}:{brace}"
+                    sub = _parse_screens(own.group(1), w, menu_routes, problems)
+                    outside = [r for r in sub if r not in routes]
+                    if outside:
+                        problems.append(f"{w}: mục khai {' '.join(outside)} mà dòng `@screens` của khối "
+                                        "không có / entry names routes its block does not")
+                    parts.append((tm.group(1), sub))
+                for i in sorted(annotated - used):
+                    problems.append(f"{rel}:{i + 1}: dòng `@screens` trong khối phải nằm ngay trên dấu "
+                                    "`{` của một mục / a `@screens` line inside a block must sit directly "
+                                    "above an entry's `{`")
+                blocks.append({"file": rel, "line": decl + 1, "routes": routes, "parts": parts})
+    if problems:
+        raise ScreenAnnotationError("\n".join(problems))
+    return blocks
 
 
-def so_chua_dung(thu_muc: str) -> int | None:
-    """Số mục chưa dựng của một thư mục `features/`, hoặc `None` khi màn KHÔNG KHAI khối ấy.
+def pending_parts_by_route(menu) -> dict[str, list[str]]:
+    """`{duong: [ten, …]}` for every sidebar route some block names. A route ABSENT from the map is a
+    screen no block speaks for — `không khai`, which is not `0` (see `dong_menu`)."""
+    menu_routes = {duong for _n, duong, _k in menu if duong is not None}
+    out: dict[str, list[str]] = {}
+    for b in pending_blocks(menu_routes):
+        for r in b["routes"]:
+            out.setdefault(r, [])
+        for ten, routes in b["parts"]:
+            for r in routes:
+                out[r].append(ten)
+    return out
 
-    `None` KHÁC `0`, và gộp hai thứ lại là chỗ bảng này nói dối dễ nhất: `0` nghĩa là màn có
-    khai một danh sách và danh sách ấy rỗng — tức mọi phần của đặc tả đã dựng. `None` nghĩa là
-    màn chưa bao giờ khai, nên không ai biết nó còn thiếu gì. Màn nào đang ở trạng thái sau thì
-    bảng tự in `không khai` (đếm từ mã, không liệt kê tay ở đây), và in `—` cho cả hai sẽ đọc ra
-    thành "xong rồi".
 
-    Quét MỌI tệp nguồn trong thư mục, không chỉ `nhan-*.ts`: chỗ đặt hằng số là quy ước, và một
-    quy ước không có rào nào canh thì một màn đặt chỗ khác là con số ở đây tụt về 0 trong im lặng.
+def pending_parts_of_route(duong: str, menu=None) -> list[str] | None:
+    """Tên từng phần chưa dựng hiện trên một mục menu — cho bản Excel, cần CÂU chứ không cần số.
 
-    Đếm TRONG KHỐI khai báo (`phan_chua_dung`), không đếm mọi `ten:` từ lần đầu chữ ấy xuất hiện:
-    bản cũ cắt từ một câu chú thích nhắc tên hằng, nên `ten: ""` của một biểu mẫu nằm sau đó bị
-    đếm vào — giai-ngan in 7 trong khi màn hiện 6. Đo 24/09/2026 khi bản Excel đọc từng câu.
+    `None` KHÁC `[]`, và gộp hai thứ lại là chỗ bảng này nói dối dễ nhất: `[]` nghĩa là có khối khai
+    màn ấy và không mục nào còn thiếu — mọi phần đặc tả đã dựng. `None` nghĩa là chưa khối nào nói màn
+    ấy còn thiếu gì, nên bảng in `không khai`; in `—` cho cả hai sẽ đọc ra thành "xong rồi".
     """
-    ds = phan_chua_dung(thu_muc)
-    return None if ds is None else len(ds)
-
-
-# Một trang gọi vào những thư mục `features/` nào — đọc từ chính câu `import`, nên một màn đổi
-# chỗ lấy thành phần là bảng này đi theo, không cần ai sửa.
-MAU_IMPORT_FEATURE = re.compile(r"from\s+\"@/features/([a-z0-9-]+)/")
-
-
-def feature_cua_trang(duong: str) -> list[str]:
-    p = os.path.join(ROOT, "web-admin", "src", "app", duong.strip("/").replace("/", os.sep),
-                     "page.tsx")
-    s = doc(p)
-    if not s:
-        return []
-    return sorted(set(MAU_IMPORT_FEATURE.findall(s)))
+    return pending_parts_by_route(menu if menu is not None else cac_muc_menu()).get(duong)
 
 
 def co_trang(duong: str) -> bool:
@@ -378,16 +467,17 @@ def dong_chuong(chuong, theo_chuong, xong, biet_web) -> list[dict]:
 
 
 def dong_menu(menu) -> list[dict]:
-    """`chua_dung` là None khi màn KHÔNG KHAI khối — khác 0, xem `so_chua_dung`."""
+    """`chua_dung` là None khi KHÔNG KHỐI NÀO khai màn ấy — khác 0, xem `pending_parts_of_route`.
+    Raises `ScreenAnnotationError` when a block's `@screens` is missing or wrong."""
+    by_route = pending_parts_by_route(menu)
     ra = []
     for i, (nhan, duong, khoa) in enumerate(menu, 1):
         d = {"stt": i, "nhan": nhan, "duong": duong, "khoa": khoa, "co_man": False,
              "chua_dung": None}
         if duong is not None:
             d["co_man"] = co_trang(duong)
-            co_khai = [x for x in (so_chua_dung(f) for f in feature_cua_trang(duong))
-                       if x is not None]
-            d["chua_dung"] = sum(co_khai) if co_khai else None
+            parts = by_route.get(duong)
+            d["chua_dung"] = None if parts is None else len(parts)
         ra.append(d)
     return ra
 
@@ -414,6 +504,19 @@ def main() -> int:
     xong, biet_web = viec_da_xong()
     menu = cac_muc_menu()
     so = so_tien_do()
+
+    # Khai màn sai thì đỏ TRƯỚC khi in hay ghi bất cứ gì — kể cả khi lọc (xem NGUỒN 5).
+    try:
+        pending_parts_by_route(menu)
+    except ScreenAnnotationError as ex:
+        print("[tien_do_san_pham] ĐỎ — khối `PHAN_CHUA_DUNG*` khai màn sai / a pending-parts block "
+              "names its screens wrongly:", file=sys.stderr)
+        for dong in str(ex).split("\n"):
+            print("  " + dong, file=sys.stderr)
+        print("  Sửa: một dòng `// @screens /duong …` ngay trên `export const PHAN_CHUA_DUNG…`, mỗi "
+              "đường là `duong` của web-admin/src/components/muc-menu.ts (tools/tien_do_san_pham.py, "
+              "NGUỒN 5).", file=sys.stderr)
+        return 1
 
     # BỘ LỌC ĐỌC SAU KHI CÓ DANH SÁCH CHƯƠNG, vì tên phân hệ được đối chiếu với chương thật —
     # không có bảng tên viết tay nào, nên thêm một chương vào `docs/ui-ux/` là lọc được ngay.
@@ -486,13 +589,6 @@ def main() -> int:
     L.append("| Chương | Tuyến | Đã gọi | Màn web |")
     L.append("|---|---|---|---|")
 
-    # Ghép chương -> mục menu qua các trang web thật sự tồn tại, để cột "màn web" không phải đoán.
-    trang_theo_feature: dict[str, str] = {}
-    for nhan, duong, _k in menu:
-        if duong and co_trang(duong):
-            for ft in feature_cua_trang(duong):
-                trang_theo_feature.setdefault(ft, duong)
-
     for r in dong_chuong(chuong, theo_chuong, xong, biet_web):
         n, da, khac = r["tuyen"], r["da_goi"], r["ngoai_web"]
         ty = (f"{da}/{r['web']}" if r["web"] else "—") + (f" +{khac} ngoài web" if khac else "")
@@ -512,9 +608,12 @@ def main() -> int:
     L.append("")
     L.append("`duong: null` nghĩa là mục **cố ý hiện mà không bấm được** — `muc-menu.ts` giải "
              "thích vì sao giữ")
-    L.append("chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG`, tức số câu "
+    L.append("chúng thay vì xoá. **Chưa dựng** đếm các mục trong `PHAN_CHUA_DUNG*`, tức số câu "
              "cán bộ THẬT SỰ")
-    L.append("đọc được trên màn, không phải số việc ai đó nhớ ra lúc viết tài liệu.")
+    L.append("đọc được trên màn, không phải số việc ai đó nhớ ra lúc viết tài liệu. Mục nào hiện ở "
+             "mục menu nào do")
+    L.append("dòng `// @screens` của khối nói; mỗi phần đếm một lần, ở màn gốc của nó (ngăn mở tại "
+             "chỗ từ Tổng quan, Sổ tay lãnh đạo không đếm thêm).")
     L.append("")
     L.append("| # | Mục menu | Đường dẫn | Khoá quyền | Màn | Chưa dựng |")
     L.append("|---|---|---|---|---|---|")
@@ -667,9 +766,8 @@ def loc_theo_chuong(be, slug, theo_chuong, xong, biet_web, menu) -> list[str]:
 
 
 def so_chua_dung_gop(duong: str) -> str:
-    dem = [so_chua_dung(f) for f in feature_cua_trang(duong)]
-    co = [x for x in dem if x is not None]
-    return str(sum(co)) if co else "**không khai**"
+    parts = pending_parts_of_route(duong)
+    return "**không khai**" if parts is None else str(len(parts))
 
 
 if __name__ == "__main__":

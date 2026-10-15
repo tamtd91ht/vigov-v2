@@ -1720,6 +1720,7 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// @screens /phan-anh
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   // Empty since 15/10/2026: every part of the spec left on this screen is built, or decided against
   // (`OVERDUE_DAYS_NOT_SHOWN`). §11 scene photos of the intake modal left on 15/10/2026 (POST

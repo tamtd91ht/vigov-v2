@@ -19,6 +19,7 @@ import type { PendingFeatureInfo } from "@/components/ui/pending-feature";
  * EVERY ENTRY MUST BE TRUE ON THE DAY IT IS READ. Build a part → delete its entry in the same change.
  */
 // vi-name-ok: the progress tool (`tools/tien_do_san_pham.py`) matches this exact constant name
+// @screens /bao-cao
 export const PHAN_CHUA_DUNG: readonly PendingFeatureInfo[] = [
   // The prototype's fiscal block has "Tổng chi" between "Chi đạt dự toán" and the balance (D6). The
   // fiscal summary route (`finance_chiSoNamRa`) returns revenue totals and the balance but NO

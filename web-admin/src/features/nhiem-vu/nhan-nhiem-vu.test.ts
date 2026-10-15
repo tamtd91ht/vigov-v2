@@ -403,9 +403,14 @@ describe("phần chưa dựng được", () => {
   it("mỗi mục có TÊN và LÝ DO — không mục nào để trống lý do", () => {
     // Một mục không nói vì sao là một mục người sau đọc thành "chưa làm tới", rồi dựng nó lên và
     // gặp lại đúng bức tường cũ.
-    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): the list is EMPTY — every part of the spec is built. The
-    // rule for an entry still holds for any entry added later.
-    expect(PHAN_CHUA_DUNG).toEqual([]);
+    // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): the list was EMPTY — every part of the spec was built.
+    // ĐỔI CHIỀU CÓ CHỦ Ý 15/10/2026: three "?" the task drawer already drew (07/10/2026) from loose
+    // constants moved INTO this list, so the progress tool counts them (`tools/tien_do_san_pham.py`).
+    expect(PHAN_CHUA_DUNG.map((p) => p.ten)).toEqual([
+      "Đánh dấu việc con và trọng số",
+      "Tệp chưa gắn với ghi chép nào",
+      "Một ô văn bản tự do",
+    ]);
     for (const p of PHAN_CHUA_DUNG) {
       expect(p.ten).not.toBe("");
       expect(p.viSao.length).toBeGreaterThan(40);
@@ -453,8 +458,13 @@ describe("phần chưa dựng được", () => {
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W6): 3 → 2 — the Sổ theo dõi view was built.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (W7): 2 → 1 — the Excel import was built; only 📎 remains.
     // ĐỔI CHIỀU CÓ CHỦ Ý 28/09/2026 (A4): 1 → 0 — `📎 Đính kèm` was built (ADR 0052, b37ec2d).
-    expect(PHAN_CHUA_DUNG.length).toBe(0);
-    const ten = PHAN_CHUA_DUNG.map((p) => p.ten).join(" | ");
+    // ĐỔI CHIỀU CÓ CHỦ Ý 15/10/2026: 0 → 3 — the drawer's three loose "?" moved in (see above). The
+    // old child-task entries (#6 chip/children, #10 add child/move parent) stay gone: the one new entry
+    // naming `việc con` is the completion tick and weight, a different part, so it is left out here.
+    expect(PHAN_CHUA_DUNG.length).toBe(3);
+    const ten = PHAN_CHUA_DUNG.map((p) => p.ten)
+      .filter((t) => t !== "Đánh dấu việc con và trọng số")
+      .join(" | ");
     expect(ten).not.toContain("việc con");
     expect(ten).not.toContain("VIỆC CON");
     expect(ten).not.toContain("ngay trong drawer");

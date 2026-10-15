@@ -413,6 +413,7 @@ export type PhanChuaDung = {
   readonly viSao: string;
 };
 
+// @screens /thong-bao
 export const PHAN_CHUA_DUNG: readonly PhanChuaDung[] = [
   // §5 chips + §4 `BỘ PHẬN NHẬN`. `POST /api/v1/announcements` answers 501 `not_implemented` to any
   // body carrying `org_unit_ids` (service-comms/internal/http/thong_bao_noi_bo.go, re-read
