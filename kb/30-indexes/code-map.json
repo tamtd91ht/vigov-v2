@@ -14500,7 +14500,7 @@
     },
     "store.ClaimScope": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:186"
+      "at": "service-identity/internal/store/automation.go:187"
     },
     "store.ClearPendingWebhookSecret": {
       "kind": "func",
@@ -15180,11 +15180,11 @@
     },
     "store.InsertRun": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:204"
+      "at": "service-identity/internal/store/automation.go:205"
     },
     "store.InsertSetting": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:91"
+      "at": "service-identity/internal/store/automation.go:92"
     },
     "store.InsertSource": {
       "kind": "func",
@@ -15224,7 +15224,7 @@
     },
     "store.Khoa": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:468"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:469"
     },
     "store.KhoaBoPhan": {
       "kind": "func",
@@ -15268,7 +15268,7 @@
     },
     "store.LastRuns": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:270"
+      "at": "service-identity/internal/store/automation.go:271"
     },
     "store.LatestIssuesOfYear": {
       "kind": "func",
@@ -15624,7 +15624,7 @@
     },
     "store.MaDuAnConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:189"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:190"
     },
     "store.MaGhepDaTao": {
       "kind": "type",
@@ -15696,7 +15696,7 @@
     },
     "store.MarkRunRequested": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:128"
+      "at": "service-identity/internal/store/automation.go:129"
     },
     "store.MarkRunStarted": {
       "kind": "func",
@@ -15732,7 +15732,7 @@
     },
     "store.MoKhoa": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:502"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:503"
     },
     "store.Moc": {
       "kind": "type",
@@ -16120,7 +16120,7 @@
     },
     "store.NguonVonConSong": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:298"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:299"
     },
     "store.NguonVonConSongTrongNam": {
       "kind": "func",
@@ -16352,7 +16352,7 @@
     },
     "store.ProjectForVoucherWrite": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:248"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:249"
     },
     "store.ProjectsForVoucherImport": {
       "kind": "func",
@@ -16468,7 +16468,7 @@
     },
     "store.RecordRun": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:240"
+      "at": "service-identity/internal/store/automation.go:241"
     },
     "store.RecordTest": {
       "kind": "func",
@@ -16568,7 +16568,7 @@
     },
     "store.RunForUpdate": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:222"
+      "at": "service-identity/internal/store/automation.go:223"
     },
     "store.Runs": {
       "kind": "func",
@@ -16588,7 +16588,7 @@
     },
     "store.ScopeStates": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:141"
+      "at": "service-identity/internal/store/automation.go:142"
     },
     "store.Scoped": {
       "kind": "type",
@@ -17100,7 +17100,7 @@
     },
     "store.UpdateSetting": {
       "kind": "func",
-      "at": "service-identity/internal/store/automation.go:112"
+      "at": "service-identity/internal/store/automation.go:113"
     },
     "store.UpdateStatus": {
       "kind": "func",
@@ -17176,7 +17176,7 @@
     },
     "store.VeNhapSauKhiSua": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:419"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:420"
     },
     "store.VerificationPhotoRequired": {
       "kind": "func",
@@ -17200,7 +17200,7 @@
     },
     "store.XacNhan": {
       "kind": "func",
-      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:434"
+      "at": "service-finance/internal/store/chung_tu_giai_ngan.go:435"
     },
     "store.XoaMem": {
       "kind": "func",

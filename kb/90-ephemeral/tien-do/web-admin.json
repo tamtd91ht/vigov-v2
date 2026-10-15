@@ -1611,6 +1611,15 @@
       "viec": "Cấu hình: tab Lời hệ thống → admin.message, Máy chủ thư → admin.mail, Kênh Zalo (kể cả QR mở Mini App) → admin.zalo; admin.lookup không còn mở ba tab này. Tab Thôn/TDP hiện cho mọi cán bộ, nút ghi + nhập Excel → admin.village (trước admin.org); nhóm Danh mục 'Loại đơn vị dân cư' → admin.village, quyết từng dòng theo khoá của nhóm, các nhóm khác giữ admin.lookup. Menu Cấu hình mở với 4 khoá mới. Ma trận Phân quyền đọc khoá từ máy chủ — không sửa mã (chủ dự án 15/10/2026, bảng lỗi web-admin-141026 dòng 22, ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
       "bang_chung": "336f4b25 · src/lib/quyen.ts, features/cau-hinh/quyen-tab.ts, thanh-tab-cau-hinh.ts, tab-thon-to-dan-pho.tsx, tab-danh-muc.tsx, excel-import-targets.tsx, components/muc-menu.ts: tsc 0, eslint sạch, vitest 325 tệp / 6087 test, check_quyen PASS. 95c4f50c đổi tên khoá: tsc 0; vitest cau-hinh + components + nguoi-dung 1569/1569. Chưa kiểm bằng ảnh render.",
       "tiep_theo": "Người dùng build + kiểm ảnh: cán bộ chỉ có admin.lookup không còn thấy 3 tab Lời hệ thống · Máy chủ thư · Kênh Zalo. Migration identity 0032 CHƯA chạy trên PostgreSQL thật. Mã lên cụm trước 0032 thì khoá chưa có trong quyen, tuyến này 403 với mọi tài khoản (suy theo luật 5 bất biến 3c, chưa chạy) — chạy 0032 cùng lần triển khai."
+    },
+    {
+      "id": "kanban-khoang-trong-tieu-de-han-15-10",
+      "menu": "nhiem-vu",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Thẻ Kanban nhiệm vụ: thu khoảng trống giữa tên nhiệm vụ và Hạn theo prototype (chủ dự án 15/10/2026, ảnh tmp/kaban-nhiem-vu.png). Bỏ min-height 3 dòng của .tieu-de-the và min-h-4 của dòng việc con/đã gia hạn; tên vẫn kẹp tối đa 3 dòng. Đổi chiều có chủ ý: thẻ các cột không còn cao bằng nhau theo hàng (luật tester 09/10/2026).",
+      "bang_chung": "e6ac2308 — globals.css .tieu-de-the, so-nhiem-vu.tsx TheNhiemVu; prototype TaskCard.tsx:74,78. tsc 0, eslint sạch, vitest nhiem-vu + ui-foundation 737/737 (15/10/2026). Chưa kiểm bằng ảnh render.",
+      "tiep_theo": "Người dùng build web-admin và xem lại thẻ Kanban."
     }
   ]
 }
