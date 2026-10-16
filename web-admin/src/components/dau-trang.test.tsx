@@ -86,7 +86,8 @@ describe("DauTrang — session not read yet", () => {
     expect(sidebar).toContain('class="side-nav"');
     // Only the unbuilt placeholders: they open no data, so they need no key.
     expect(sidebar).not.toContain("<a ");
-    expect(sidebar.match(/class="side-nav-item is-pending"/g)).toHaveLength(3);
+    // Two since 16/10/2026: "Danh bạ người dân" has its screen (`/nguoi-dan`, ADR 0097).
+    expect(sidebar.match(/class="side-nav-item is-pending"/g)).toHaveLength(2);
     expect(sidebar).not.toContain("Cấu hình");
   });
 

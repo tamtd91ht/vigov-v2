@@ -65,6 +65,7 @@ describe("sidebar — what it draws (expanded)", () => {
       "/giai-ngan",
       "/giai-ngan/thu-chi",
       "/thong-bao",
+      "/nguoi-dan", // since 16/10/2026 (ADR 0097)
       "/phan-anh",
       "/ban-do",
       "/mini-app",
@@ -140,7 +141,8 @@ describe("sidebar — what it draws (expanded)", () => {
     for (const p of [[], null, ["admin.user.delete", "report.export"]]) {
       const html = sidebar(p);
       expect(html).not.toContain("<a ");
-      expect(html.match(/aria-disabled="true"/g)).toHaveLength(3);
+      // Two unbuilt items since 16/10/2026 ("Danh bạ người dân" got `/nguoi-dan`, ADR 0097).
+      expect(html.match(/aria-disabled="true"/g)).toHaveLength(2);
       expect(html).toContain('class="side-nav"');
       expect(html).toContain(`aria-label="${SIDEBAR_COLLAPSE_LABEL}"`);
     }
@@ -262,13 +264,14 @@ describe("sidebar — collapsed to icons", () => {
  * inside a screen, §14). Their word stays, so a screen reader still hears the whole menu.
  */
 describe("items with no screen", () => {
-  const PENDING = ["Danh bạ người dân", "Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
+  // Two since 16/10/2026: "Danh bạ người dân" has its screen (`/nguoi-dan`, ADR 0097).
+  const PENDING = ["Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
 
-  it("the prototype's three unbuilt items: disabled, their word, the hover sentence, no '?' — expanded and collapsed", () => {
+  it("the prototype's two unbuilt items: disabled, their word, the hover sentence, no '?' — expanded and collapsed", () => {
     for (const collapsed of [false, true]) {
       const html = sidebar(ALL_PERMISSIONS, { collapsed });
       expect(html).not.toContain("data-pending-marker");
-      expect(html.match(/class="side-nav-item is-pending"/g)).toHaveLength(3);
+      expect(html.match(/class="side-nav-item is-pending"/g)).toHaveLength(2);
       for (const nhan of PENDING) {
         expect(html, nhan).toContain(collapsed ? `<span class="an-thi-giac">${nhan}</span>` : `<span class="side-nav-label">${nhan}</span>`);
         const title = collapsed ? `${nhan} — ${PENDING_HOVER_TEXT}` : PENDING_HOVER_TEXT;

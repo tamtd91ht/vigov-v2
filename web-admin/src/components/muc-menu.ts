@@ -4,6 +4,7 @@ import { coQuyen } from "@/lib/quyen";
 import {
   ASSET_READ_PERMISSION,
   AUDIT_READ_PERMISSION,
+  CITIZEN_READ_PERMISSION,
   MAIL_SERVER_PERMISSION,
   RESIDENTIAL_UNIT_PERMISSION,
   SYSTEM_MESSAGE_PERMISSION,
@@ -159,13 +160,9 @@ export type NhomMenu = {
  */
 // Empty from 04/10/2026 ("Báo cáo" got `/bao-cao`) until 06/10/2026, when the prototype's menu brought
 // three items no screen and no backend route serve yet (ADR 0068 lần 5 #5: placed where the prototype
-// has them, disabled with "?", never faked).
+// has them, disabled with "?", never faked). Two since 16/10/2026: "Danh bạ người dân" got `/nguoi-dan`
+// (ADR 0097).
 export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
-  "Danh bạ người dân": {
-    ten: "Danh bạ người dân",
-    viSao:
-      "Danh sách người dân của xã cùng thông tin liên hệ. Máy chủ chưa có tuyến nào cung cấp danh sách này, nên màn chưa được dựng.",
-  },
   "Gửi tin ZNS / SMS": {
     ten: "Gửi tin ZNS / SMS",
     viSao:
@@ -208,7 +205,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
       { nhan: "Thu - Chi ngân sách", duong: "/giai-ngan/thu-chi", khoa: QUYEN_XEM_GIAI_NGAN },
       // "nội bộ": "Gửi tin ZNS / SMS" sends to citizens; this one is the book read inside the software.
       { nhan: "Thông báo nội bộ", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },
-      { nhan: "Danh bạ người dân", duong: null, khoa: null },
+      { nhan: "Danh bạ người dân", duong: "/nguoi-dan", khoa: CITIZEN_READ_PERMISSION },
       { nhan: "Gửi tin ZNS / SMS", duong: null, khoa: null },
       { nhan: "Phản ánh người dân", duong: "/phan-anh", khoa: QUYEN_XEM_PHAN_ANH },
       { nhan: "Bản đồ kinh tế số", duong: "/ban-do", khoa: ASSET_READ_PERMISSION },

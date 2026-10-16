@@ -33,6 +33,7 @@ const DU_QUYEN = [
   "content.read",
   "report.read",
   "asset.read",
+  "citizen.read",
 ] as const;
 
 /** Mục CÓ MÀN (con của mục cha tính như mục thường) — mục chưa có màn luôn hiện, xem ca riêng dưới. */
@@ -44,16 +45,20 @@ function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
   return builtItems(nhom).map((m) => m.nhan);
 }
 
-/** Ba mục của bản mẫu chưa có màn và chưa có tuyến (ADR 0068 lần 5 #5). */
-const PENDING_NAMES = ["Danh bạ người dân", "Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
+/**
+ * Hai mục của bản mẫu chưa có màn và chưa có tuyến (ADR 0068 lần 5 #5). "Danh bạ người dân" rời danh
+ * sách này 16/10/2026 — `/nguoi-dan`, khoá `citizen.read` (ADR 0097).
+ */
+const PENDING_NAMES = ["Gửi tin ZNS / SMS", "Hướng dẫn sử dụng"];
 
 describe("locMenu", () => {
-  it("đủ quyền: thấy cả 15 mục có màn", () => {
+  it("đủ quyền: thấy cả 16 mục có màn", () => {
     // 15 since 06/10/2026: "Danh bạ cán bộ" became a tab of "Nội dung Mini App" (ADR 0068 lần 5).
-    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(15);
+    // 16 since 16/10/2026: "Danh bạ người dân" has its screen (`/nguoi-dan`, ADR 0097).
+    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(16);
   });
 
-  it("KHÔNG quyền nào: mọi mục có màn biến mất, chỉ còn ba mục chưa có màn", () => {
+  it("KHÔNG quyền nào: mọi mục có màn biến mất, chỉ còn hai mục chưa có màn", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
     // Mười mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
@@ -76,12 +81,14 @@ describe("locMenu", () => {
       "Báo cáo",
       "Người dùng",
       "Phân quyền",
+      "Danh bạ người dân",
     ]) {
       expect(ten).not.toContain(n);
     }
     // Mục chưa có màn không mở ra dữ liệu nào cả nên không bị lọc (`locMenu`). `Tổng quan` rời nhóm
     // ấy ngày 28/09/2026; `Sổ tay lãnh đạo`, `Bản đồ kinh tế số` (ADR 0071, ADR 0072) và `Báo cáo`
-    // (`/bao-cao`, ADR 0053 sửa đổi 04/10/2026) ngày 04/10/2026. Ba mục của bản mẫu vào nhóm ấy 06/10/2026.
+    // (`/bao-cao`, ADR 0053 sửa đổi 04/10/2026) ngày 04/10/2026. Ba mục của bản mẫu vào nhóm ấy 06/10/2026;
+    // `Danh bạ người dân` rời nhóm ấy 16/10/2026 (`/nguoi-dan`, ADR 0097).
     expect(ten).toHaveLength(0);
     expect(flattenMenu(locMenu(NHOM_MENU, [])).map((m) => m.nhan)).toEqual(PENDING_NAMES);
   });
@@ -429,7 +436,7 @@ describe("cấu trúc menu theo bản mẫu (ADR 0068 lần 5, 06/10/2026)", () 
     expect(flattenMenu(NHOM_MENU).map((m) => m.duong)).not.toContain("/noi-dung");
   });
 
-  it("ba mục chưa có màn: không đường dẫn, không khoá, mỗi mục một mô tả — và không mô tả thừa", () => {
+  it("hai mục chưa có màn: không đường dẫn, không khoá, mỗi mục một mô tả — và không mô tả thừa", () => {
     const pending = flattenMenu(NHOM_MENU).filter((m) => m.duong === null);
     expect(pending.map((m) => m.nhan)).toEqual(PENDING_NAMES);
     for (const m of pending) {
