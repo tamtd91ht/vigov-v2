@@ -14,6 +14,10 @@ import (
 var hashPartitionedTables = []string{
 	"audit_log",
 	"automation_run",
+	// 0033 (owner, 16/10/2026): the directory grows with citizens, its membership with citizens ×
+	// groups; citizen_group is a catalogue and stays plain.
+	"citizen_contact",
+	"citizen_contact_group",
 	"ghep_phien",
 	"phien",
 	"phien_cong_dan",

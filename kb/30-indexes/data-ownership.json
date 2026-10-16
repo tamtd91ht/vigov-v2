@@ -110,6 +110,27 @@
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:211"
     },
     {
+      "entity": "CitizenContact",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "citizen_contact",
+      "source": "service-identity/migrations/0033_citizen_directory.sql:128"
+    },
+    {
+      "entity": "CitizenContactGroup",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "citizen_contact_group",
+      "source": "service-identity/migrations/0033_citizen_directory.sql:283"
+    },
+    {
+      "entity": "CitizenGroup",
+      "service": "identity",
+      "scope": "tenant",
+      "table": "citizen_group",
+      "source": "service-identity/migrations/0033_citizen_directory.sql:234"
+    },
+    {
       "entity": "CitizenIdentity",
       "service": "identity",
       "scope": "cross-tenant",
