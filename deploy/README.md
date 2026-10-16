@@ -1013,3 +1013,129 @@ có thể gặp khi `getAccessToken` trả -1401, và việc phải làm với t
 **Giới hạn đã biết:** pod đọc IP từ `RemoteAddr`, chưa khai proxy tin cậy (NỢ trong README của kho kia).
 Vì vậy đứng sau ingress thì mọi người dân chung **một xô** giới hạn trong mỗi pod. Chủ dự án chấp nhận
 tạm ngày 08/10/2026.
+
+## 14. Zalo App gửi tin OA của xã — thiết lập lần đầu (ADR 0098)
+
+**Là gì.** Một Zalo App **mới, riêng** của ViHAT (chủ dự án chốt 16/10/2026). Các xã uỷ quyền OA của
+mình cho app này từ web-admin (**Cấu hình → Kênh Zalo → OA Zalo của xã → Kết nối OA**); `service-comms`
+dùng App ID + Secret của app để đổi mã uỷ quyền lấy token của OA, làm mới token và nạp mẫu ZBS. **Không**
+dùng lại App ID của Mini App hay ba app có sẵn (VihatGroup, VIHAT Software, VihatSoftware Giải pháp số):
+secret của app này chỉ có một chủ là comms (phép thử ADR 0032).
+
+App này **không có mã riêng, không có repo riêng**: nó là một bản đăng ký trên developers.zalo.me. Mã dùng
+nó nằm trong `service-comms` (`internal/zalooa`, `internal/app/zalo_commune_oa.go`,
+`internal/http/zalo_oa*.go`) và màn `web-admin/src/features/cau-hinh/zalo-oa-section.tsx`.
+
+Logo dùng khi tạo app: `deploy/zalo-oa-app/vioa-logo-1024.png` (nền trong suốt) ·
+`vioa-logo-1024.jpg` (nền trắng, nếu Zalo đòi ảnh không trong suốt) · `vioa-logo.svg` (bản vector).
+
+### 14.1 Thứ tự — làm đúng từ trên xuống
+
+| # | Việc | Ở đâu | Xong khi |
+|---|---|---|---|
+| 1 | Bấm job `service-comms` rồi `web-admin`, nhánh `dev` | Jenkins | Pod comms xanh; log có `migration xong` (0031 là tệp **mới** — tự áp, KHÔNG cần làm rỗng CSDL) |
+| 2 | Chọn host callback | — | Có một host đã có DNS + TLS + Ingress vào comms (14.2) |
+| 3 | Tạo Zalo App, khai callback, chọn quyền, gắn ZBS | developers.zalo.me · zalo.solutions | 14.3 làm hết |
+| 4 | Đặt ba biến, khởi động lại comms | Rancher | 14.4 |
+| 5 | Thử bằng một OA thử nghiệm | web-admin của một xã trên dev | 14.5 |
+
+Chưa có ba biến thì comms ở `vigov-dev` **vẫn chạy**; mục OA trên web-admin hiện "Nền tảng chưa khai
+ứng dụng Zalo dùng chung" và các nút bị vô hiệu. Ở **`vigov-prod` ba biến là BẮT BUỘC**: thiếu một là comms
+không khởi động — đặt đủ ở namespace prod **trước** khi merge `dev` vào `main`.
+
+### 14.2 Host callback
+
+Cách nhanh nhất: **dùng chung host của bot Zalo** — đặt `ZALO_OA_CALLBACK_HOST` bằng đúng giá trị
+`ZALO_BOT_WEBHOOK_HOST` của namespace ấy. Host ấy đã có DNS + TLS + Ingress vào comms; comms tách hai tuyến
+theo đường dẫn (`/api/v1/zalo-bot-updates` và `/api/v1/zalo-oa-authorizations`). Muốn host riêng thì làm
+DNS + TLS + Ingress cho nó giống host bot, trỏ tới Service comms cổng `rest`.
+
+Host trần, chữ thường, không `https://`, không cổng, không đường dẫn, **không bao giờ là tên miền của một
+xã** (`<xa>.vigov.vn` → comms không khởi động).
+
+Callback URL đầy đủ, dùng ở 14.3:
+
+```
+https://<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-authorizations
+```
+
+### 14.3 Trên trang của Zalo
+
+Người làm: admin tài khoản developer của ViHAT, đồng thời là admin ZBS Account. Tên menu dưới đây theo
+tài liệu Zalo (16/10/2026); giao diện có thể đặt tên hơi khác.
+
+**a. Tạo app** — `https://developers.zalo.me` → ảnh đại diện góc phải → **Thêm ứng dụng mới**.
+
+| Ô | Điền |
+|---|---|
+| Tên ứng dụng | Tên admin OA của xã sẽ thấy trên màn "Cho phép", vd `ViOA – Thông báo xã` |
+| Danh mục / mô tả | Ứng dụng gửi thông báo của UBND xã/phường tới người dân qua OA của xã |
+| Logo | `deploy/zalo-oa-app/vioa-logo-1024.png` |
+
+**b. Lấy khoá** — mở app → **Cài đặt**:
+
+| Trên trang | Đặt vào |
+|---|---|
+| ID ứng dụng | `ZALO_OA_APP_ID` |
+| Khoá bí mật của ứng dụng | `ZALO_OA_APP_SECRET` — **chỉ** Secret `comms-secrets`. Không dán vào chat, email, tài liệu, ticket. Lộ thì bấm tạo lại khoá trên trang này rồi cập nhật Secret |
+
+**c. Callback + quyền** — mục **Official Account** → **Thiết lập đường dẫn yêu cầu cấp quyền** (tài liệu
+gọi là *Official Account Callback URL*):
+
+- Callback URL: đúng chuỗi ở 14.2, https, không `/` ở cuối.
+- Tích **đúng hai** nhóm quyền của ZBS Template Message: **Gửi tin qua số điện thoại** và **Quản lý
+  Message Template**. Không tích quyền khác.
+- Ô *code challenge* (nếu có): để trống hoặc điền tạm — hệ thống tự sinh code challenge mới cho mỗi lần uỷ
+  quyền (PKCE), ô ấy chỉ dùng khi tạo link bằng tay.
+- **Lưu**.
+
+**d. Thanh toán** — `zalo.solutions` → **ZBS Account** → liên kết app vừa tạo. Người liên kết phải là admin
+của cả app lẫn ZBS Account. Giá theo bảng ZBS (đo 16/10/2026: 200 ₫/tin thường, chưa VAT). Mỗi OA của xã
+cũng phải gắn một ZBS Account — gắn chung của ViHAT hay xã tự có là câu "**ai trả phí ZNS**", CHƯA chốt
+(ADR 0018 còn mở #1).
+
+### 14.4 Đặt biến trên cụm
+
+| Biến | Đối tượng | Giá trị |
+|---|---|---|
+| `ZALO_OA_APP_ID` | ConfigMap `common-config` | ID ứng dụng (chuỗi số) |
+| `ZALO_OA_APP_SECRET` | Secret `comms-secrets` | Khoá bí mật của ứng dụng |
+| `ZALO_OA_CALLBACK_HOST` | khối `env:` của Deployment `vigov-service-comms` | host ở 14.2 |
+
+```
+kubectl -n vigov-dev rollout restart deploy/vigov-service-comms
+```
+
+(`envFrom` chỉ đọc lúc pod khởi động.) Log khởi động không còn dòng `CẢNH BÁO CẤU HÌNH` về `ZALO_OA_*`.
+Bảng đầy đủ: `deploy/cau-hinh/README.md`.
+
+### 14.5 Thử lần đầu
+
+1. Đăng nhập web-admin của một xã trên dev bằng tài khoản có quyền `admin.zalo`.
+2. **Cấu hình → Kênh Zalo → OA Zalo của xã → Kết nối OA** — tab mới mở trang Zalo.
+3. Đăng nhập Zalo bằng **admin của một OA thử nghiệm**, chọn đúng OA, bấm **Cho phép**.
+4. Trang quay về Kênh Zalo với thông báo **"Đã nối OA"**; mục hiện tên OA và "nối lúc … bởi …".
+5. **Kiểm tra kết nối** → thành công. **Nạp mẫu từ OA** → bảng mẫu hiện (OA chưa có mẫu thì bảng rỗng).
+6. **Chụp lại màn "Cho phép" của Zalo** và mọi thông báo lỗi — ba điều chưa xác nhận được trên giao diện
+   thật: app mới có phải chờ Zalo duyệt không; màn Cho phép có hiện tên doanh nghiệp sở hữu ngoài tên app
+   không; mã lỗi token và tên trường JSON của ZBS có khớp tài liệu không.
+
+| Quay về với `oa=` | Nghĩa | Làm gì |
+|---|---|---|
+| `da-noi` | Nối xong | — |
+| `zalo-tu-choi` | Admin OA bấm Từ chối, hoặc Zalo từ chối đổi mã | Bấm Kết nối OA lại; vẫn lỗi thì kiểm App ID/Secret và callback URL ở 14.3 |
+| `khong-kha-dung` | Không gọi được Zalo | Kiểm comms ra được `oauth.zaloapp.com:443` (NetworkPolicy), thử lại |
+| `phan-hoi-sai-dang` | Zalo trả lời lạ, hoặc OA trả về khác OA trên callback | Gửi ảnh + giờ cho người dựng |
+| `oa-dang-o-xa-khac` | OA này đang nối với một đơn vị khác | Đúng OA của xã chưa? Đơn vị kia phải Ngắt OA trước |
+| `sai-khuon` | Tham số callback không đúng dạng | Gửi ảnh + giờ cho người dựng |
+| Trang 404 "Liên kết uỷ quyền không còn hiệu lực" | Link quá 10 phút hoặc đã dùng | Bấm Kết nối OA lại để có link mới |
+
+### 14.6 Việc của từng xã (ngoài hệ thống, trên oa.zalo.me / zalo.solutions)
+
+1. OA của UBND xã đã **xác thực**.
+2. OA gắn **ZBS Account** (xem 14.3 d).
+3. **Đăng ký mẫu tin ZBS** cho từng mốc báo dân, mỗi mẫu có **đúng ba tham số** tên `ma_tra_cuu`,
+   `moc_nhan`, `viec_tiep_theo` — thiếu hay sai tên thì web-admin không cho gắn mốc (ADR 0098 #9).
+4. Chờ Zalo duyệt mẫu, rồi trên web-admin: **Kết nối OA → Nạp mẫu từ OA → gắn mỗi mẫu vào một mốc**.
+
+Ngắt OA trên web-admin **không** thu hồi quyền ở Zalo: admin OA phải tự gỡ quyền của app trong OA Manager.

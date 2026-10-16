@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" rx="225" fill="#0068FF"/>
+  <rect x="573" y="143" width="307" height="246" rx="72" fill="#FFFFFF"/>
+  <polygon points="635,379 594,461 717,379" fill="#FFFFFF"/>
+  <circle cx="666" cy="266" r="22" fill="#0068FF"/>
+  <circle cx="727" cy="266" r="22" fill="#0068FF"/>
+  <circle cx="788" cy="266" r="22" fill="#FFB800"/>
+  <text x="512" y="790" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-weight="700" font-size="307" fill="#FFFFFF">ViOA</text>
+  <rect x="307" y="850" width="410" height="26" rx="13" fill="#FFB800"/>
+</svg>
