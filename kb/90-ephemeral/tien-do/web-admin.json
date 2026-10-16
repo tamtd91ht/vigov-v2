@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-15",
+  "cap_nhat": "2026-10-16",
   "muc": [
     {
       "id": "phan-chua-dung-screens-15-10",
@@ -1652,6 +1652,15 @@
       "viec": "Thẻ Kanban nhiệm vụ: thu khoảng trống giữa tên nhiệm vụ và Hạn theo prototype (chủ dự án 15/10/2026, ảnh tmp/kaban-nhiem-vu.png). Bỏ min-height 3 dòng của .tieu-de-the và min-h-4 của dòng việc con/đã gia hạn; tên vẫn kẹp tối đa 3 dòng. Đổi chiều có chủ ý: thẻ các cột không còn cao bằng nhau theo hàng (luật tester 09/10/2026).",
       "bang_chung": "e6ac2308 — globals.css .tieu-de-the, so-nhiem-vu.tsx TheNhiemVu; prototype TaskCard.tsx:74,78. tsc 0, eslint sạch, vitest nhiem-vu + ui-foundation 737/737 (15/10/2026). Chưa kiểm bằng ảnh render.",
       "tiep_theo": "Người dùng build web-admin và xem lại thẻ Kanban."
+    },
+    {
+      "id": "danh-ba-nguoi-dan-man-16-10",
+      "menu": "danh-ba-nguoi-dan",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Màn /nguoi-dan Danh bạ người dân (ADR 0097, chương 16): API client, danh sách số che + lọc nhóm/Zalo/từ khoá, tab Nhóm, hộp Thêm/Sửa với nút Xem số đầy đủ (mỗi bấm một vết), gỡ có lý do, nhập Excel; menu bật khoá citizen.read.",
+      "bang_chung": "9f1a5871 · 0dc085ba · 543b05ca — make web: tsc sạch, vitest 332 tệp / 6168 ca, check:api khớp (16/10/2026). CHƯA KIỂM BẰNG ẢNH RENDER.",
+      "tiep_theo": "(1) Người dùng build vigov-web-admin + vigov-service-identity, thêm 8 prefix Ingress, xem màn. (2) BACKEND: PATCH citizen-contacts đòi số đầy đủ → hộp sửa phải bấm Xem số trước khi lưu; cân nhắc cho PATCH bỏ trống phone = giữ nguyên. (3) BACKEND: tuyến tìm chưa có trường nhãn → chip lọc nhãn đang là '?'. (4) Hợp đồng chưa khai query active/has_own_app_session của GET và header Idempotency-Key. (5) test-designer TASK-13/14 chưa chạy."
     }
   ]
 }
