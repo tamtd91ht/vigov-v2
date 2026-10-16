@@ -41,6 +41,7 @@ import (
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
+	"github.com/vihat/vigov/service-comms/internal/event"
 	svcgrpc "github.com/vihat/vigov/service-comms/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
 	"github.com/vihat/vigov/service-comms/internal/imagefetch"
@@ -50,6 +51,7 @@ import (
 	"github.com/vihat/vigov/service-comms/internal/store/crosstenant"
 	"github.com/vihat/vigov/service-comms/internal/store/platformstore"
 	"github.com/vihat/vigov/service-comms/internal/zalobot"
+	"github.com/vihat/vigov/service-comms/internal/zalooa"
 	"github.com/vihat/vigov/service-comms/migrations"
 )
 
@@ -65,7 +67,9 @@ import (
 // ⇒ required in staging and prod (ADR 0057): comms refuses to start there without them. Since 2026-10-05
 // it holds the ONE shared Zalo Bot (ADR 0074): ZaloBotWebhook is the host its webhook points at. Since
 // 2026-10-11 it serves the self-hosted basemap to the Mini App (ADR 0072 M1): Basemap is BASEMAP_URL —
-// the one group here that stays OPTIONAL in prod (core/config/basemap.go).
+// the one group here that stays OPTIONAL in prod (core/config/basemap.go). Since 2026-10-16 it holds the
+// platform's ONE Zalo App every commune authorises its OA to (ADR 0098 #2, #3): ZaloOA is that app's id,
+// secret and callback host — declared here only, so only comms refuses to start in prod without them.
 var configUses = config.Uses(
 	config.HTTPServer,
 	config.GRPCServer,
@@ -79,6 +83,7 @@ var configUses = config.Uses(
 	config.PublicMedia,
 	config.MalwareScan,
 	config.ZaloBotWebhook,
+	config.ZaloOA,
 	config.Basemap,
 )
 
@@ -98,18 +103,16 @@ func main() {
 	//   5. consumers   the HANDLER now exists — internal/event.PhieuDoiTrangThai, which consumes
 	//                  `petitions.status_changed.v1` and writes the citizen notification ledger.
 	//                  TWO THINGS ARE MISSING BEFORE IT CAN BE WIRED HERE, and both are decisions
-	//                  rather than code: (a) a Kafka client — ADR 0010 puts inter-service events on
-	//                  Kafka, but `core/events.Publisher` is still a bare interface with no
-	//                  implementation, and a broker client nobody has decided does not belong in a
-	//                  wiring file; (b) an implementation of event.MauTinXa — which APPROVED ZNS
-	//                  template this commune sends for a transition is per-commune configuration
-	//                  (ADR 0018, consequence 1) with no store, no adapter and no customer answer
-	//                  yet. A constant here would be one commune's template id serving 200+.
+	//                  rather than code — and since 16/10/2026 only ONE of them is still missing:
+	//                  a Kafka client. ADR 0010 puts inter-service events on Kafka, but
+	//                  `core/events.Publisher` is still a bare interface with no implementation,
+	//                  and a broker client nobody has decided does not belong in a wiring file.
+	//                  The other half is BUILT (ADR 0098 #10): event.MauTinXa is
+	//                  app.ZaloOATemplateResolver (`zaloOATemplates` below), reading the template
+	//                  each commune attached to each milestone from its own OA — the status codes
+	//                  AND `gop-phieu` / `tach-phieu` — so
 	//                  internal/event.PetitionMergeChangedConsumer (`petitions.merge_changed.v1`,
-	//                  ADR 0087) waits on the SAME two things and is wired beside it on that day.
-	//                  Its MauTinXa keys are `gop-phieu` / `tach-phieu`: whoever builds the template
-	//                  store must give each commune an approved template for both, not only for
-	//                  the status codes.
+	//                  ADR 0087) is wired beside it, with the same resolver, on the queue's day.
 	//
 	// A consumer is NOT covered by the edge chain below: a message carries its commune inside
 	// itself (rule 1, invariant 9), and a consumer that finds none refuses rather than guessing.
@@ -403,6 +406,48 @@ func main() {
 		os.Exit(1)
 	}
 
+	// A COMMUNE'S ZALO OA (migration 0031, ADR 0098 block A): the commune authorises its OA to the
+	// platform's ONE Zalo App (ZALO_OA_*), its tokens sealed by the COMMUNE envelope (the mail password's,
+	// above; nil without SECRET_ENCRYPTION_KEYS → every act that seals answers 503 by name). Its OWN Zalo
+	// client (internal/zalooa: OAuth v4 + PKCE, getoa, templates — no proxy, verified TLS, no redirects),
+	// not the bot's. crosstenant.ZaloOA is the callback's state → commune lookup AND the refresh job's
+	// commune list and lock, on the raw pool like the other countable unscoped statements. `nenTang` gives
+	// the commune's host for the callback's redirect back to Cấu hình › Kênh Zalo.
+	//
+	// ZALO_OA_* unset (dev only — staging and prod refuse to start without them): the OA feature is off by
+	// name — "Kết nối OA" answers 503 zalo_oa_not_configured, and no callback is served.
+	zaloOACross := crosstenant.NewZaloOA(db)
+	communeZaloOAs := commsapp.NewCommuneZaloOAs(kho, zaloOACross, envelope, zalooa.New(zalooa.DefaultTimeout),
+		commsapp.ZaloOAConfig{AppID: cfg.ZaloOAAppID(), AppSecret: cfg.ZaloOAAppSecret(), CallbackHost: cfg.ZaloOACallbackHost()},
+		nenTang, log)
+	if cfg.ZaloOACallbackHost() == "" || cfg.ZaloOAAppID() == "" || cfg.ZaloOAAppSecret().Rong() {
+		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
+			"ZALO_OA_APP_ID / ZALO_OA_APP_SECRET / ZALO_OA_CALLBACK_HOST chưa đủ — nút Kết nối OA của xã trả 503 và "+
+				"callback uỷ quyền OA không được phục vụ ở host nào (chỉ dev; ADR 0098 #2)")
+	}
+	// event.MauTinXa's implementation (ADR 0098 #10). Built now so a missing dependency fails at startup
+	// rather than on the queue's first message; handed to event.NewPhieuDoiTrangThai and
+	// event.NewPetitionMergeChangedConsumer the day the Kafka client exists (step 5 above).
+	zaloOATemplates := commsapp.NewZaloOATemplateResolver(commsstore.NewZaloOATemplateStore(kho), event.ErrXaChuaCauHinhKenh)
+	_ = zaloOATemplates
+	// The token keeper (ADR 0098 #6): refreshes each commune's OA access token while less than 2 hours
+	// remain, flags "needs re-authorization" when Zalo refuses, and closes expired authorization links —
+	// the dispatcher's shape (one advisory lock per tick, each commune in its own context).
+	zaloOARefreshJob, err := commsapp.NewZaloOARefreshJob(commsapp.ZaloOARefreshJobDeps{
+		Locks: zaloOACross, Keeper: communeZaloOAs, Registry: nenTang, Log: log,
+	})
+	if err != nil {
+		log.Error("không dựng được việc nền làm mới token OA Zalo", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+	// The callback's limit — the OWNER's figure (ADR 0098 #7): 60 per minute per client network. Fails
+	// closed: without Redis the callback answers 503.
+	zaloOACallbackLimiter, err := ratelimit.New(rateCounter, ratelimit.ZaloOACallback)
+	if err != nil {
+		log.Error("không dựng được bộ giới hạn tần suất callback OA Zalo", "service", "comms", "err", err)
+		os.Exit(1)
+	}
+
 	mux := http.NewServeMux()
 	svchttp.Register(mux, svchttp.Deps{
 		Checker:       staffauth.Checker{},
@@ -510,6 +555,15 @@ func main() {
 		Bots:    commsapp.NewCommuneZaloBots(kho, zaloCommuneBots, zaloLinks, envelope, zaloClient, nenTang, log),
 		Log:     log,
 	})
+	// The commune's Zalo OA (ADR 0098 #7) — seven admin.zalo routes on the SAME staff mux, over the use case
+	// the callback chain completes. Identity gives the staff names (authorized_by_name, milestone_set_by_name)
+	// over the client the edge already holds.
+	svchttp.RegisterZaloCommuneOA(mux, svchttp.ZaloCommuneOADeps{
+		Checker: staffauth.Checker{},
+		OAs:     communeZaloOAs,
+		Names:   dinhDanh,
+		Log:     log,
+	})
 	// Zalo GROUP chats (ADR 0092) — four admin.zalo routes on the SAME staff mux. Identity answers whether
 	// a unit is live and the unit and staff names, over the client the edge already holds.
 	svchttp.RegisterZaloGroups(mux, svchttp.ZaloGroupDeps{
@@ -534,6 +588,16 @@ func main() {
 		log.Warn("CẢNH BÁO CẤU HÌNH", "chi_tiet",
 			"ZALO_BOT_WEBHOOK_HOST trống — webhook Zalo Bot không được phục vụ ở host nào (chỉ dev)")
 	}
+
+	// THE FOURTH EDGE CHAIN — the OA authorization callback (ADR 0098 #3, #4). Its own mux: no session, no
+	// commune Host, no CORS. Mounted by withZaloOACallback on ZALO_OA_CALLBACK_HOST ONLY; the commune is
+	// found from the state inside the use case, never from Host.
+	muxZaloOA := http.NewServeMux()
+	svchttp.RegisterZaloOAAuthorizations(muxZaloOA, svchttp.ZaloOAAuthorizationDeps{
+		Authorizations: communeZaloOAs,
+		Limiter:        zaloOACallbackLimiter,
+		Log:            log,
+	})
 
 	// THE PUBLIC SURFACE (owner decision 2026-09-27) — its own mux, its own Deps, its own chain. `nenTang`
 	// is the SAME platform client the Host edge uses, asked through XaTheoHost so an outage is a 503 and
@@ -658,9 +722,10 @@ func main() {
 		Addr: addr,
 		// OUTERMOST, around BOTH chains: every layer reads one client address per request, crossing
 		// only the proxies TRUSTED_PROXY_CIDRS names (rule 6, invariant 2).
-		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(withZaloBotWebhook(
+		Handler: httpx.ClientIPTuProxyTinCay(cfg.TrustedProxies())(withZaloOACallback(withZaloBotWebhook(
 			dungBien(mux, congKhai, basemapEdge, citizenEdge, directory, dinhDanh, idemStore, log),
-			zaloBotChain(muxZaloBot), communeZaloBotChain(muxZaloBot, directory), cfg.ZaloBotWebhookHost())),
+			zaloBotChain(muxZaloBot), communeZaloBotChain(muxZaloBot, directory), cfg.ZaloBotWebhookHost()),
+			zaloOACallbackChain(muxZaloOA), cfg.ZaloOACallbackHost())),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -718,6 +783,14 @@ func main() {
 	go func() {
 		defer close(zaloDone)
 		zaloDispatcher.Run(jobs)
+	}()
+	// The OA token keeper (ADR 0098 #6) on the same context. A tick cut mid-commune loses nothing: each
+	// refresh is one transaction, and a commune it did not reach is refreshed next tick (the 2-hour lead
+	// leaves eight).
+	zaloOADone := make(chan struct{})
+	go func() {
+		defer close(zaloOADone)
+		zaloOARefreshJob.Run(jobs)
 	}()
 
 	// Buffered for two: either server may fail, and a send nobody reads would leak its goroutine.
@@ -793,6 +866,11 @@ func main() {
 		case <-zaloDone:
 		case <-ctx.Done():
 			log.Warn("việc nền gửi Zalo chưa dừng kịp hạn — tin đang giữ sẽ được gửi lại sau hạn giữ", "service", "comms")
+		}
+		select {
+		case <-zaloOADone:
+		case <-ctx.Done():
+			log.Warn("việc nền làm mới token OA Zalo chưa dừng kịp hạn — giao dịch dở bị cuộn lại, lượt sau làm tiếp", "service", "comms")
 		}
 		if errHTTP != nil {
 			log.Error("đóng không sạch", "err", errHTTP)
@@ -1020,6 +1098,47 @@ func withZaloBotWebhook(rest, sharedBot, communeBot http.Handler, host string) h
 		m.Handle(host+svchttp.ZaloBotUpdatesPath, sharedBot)
 	}
 	m.Handle(svchttp.ZaloBotUpdatesPath, communeBot)
+	m.Handle("/", rest)
+	return m
+}
+
+// zaloOACallbackChain builds the FOURTH edge chain — the OA authorization callback (ADR 0098 #3, #4),
+// outermost last:
+//
+//	StripTenantHeaders  a client naming its own commune is granting itself access; here the commune comes
+//	                    from the state alone, and nothing else may name one
+//	Recover             a panic becomes a traceable 500 — including tenant.MustFrom's, if the handler ever
+//	                    reached a scoped store before the state named a commune
+//
+// NO TenantMiddleware (the callback host maps to no commune), NO staffauth (the OA admin's browser has no
+// ViGov session), NO idem (a browser sends no key; the state is single-use), NO CORS (a top-level
+// navigation, not a fetch). The route bounds itself: rate limit, then the state (internal/http).
+func zaloOACallbackChain(muxZaloOA http.Handler) http.Handler {
+	h := muxZaloOA
+	h = httpx.Recover(traceID)(h)
+	h = httpx.StripTenantHeaders(h)
+	return h
+}
+
+// withZaloOACallback puts the OA callback in front of everything else — for ONE host and ONE path:
+//
+//	<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-authorizations   the callback chain (no commune). A HOST
+//	                                                        PATTERN: ServeMux prefers it over "/"
+//	anything else, any host                                 rest (the bot webhook split, then the staff,
+//	                                                        public and citizen chains)
+//
+// The callback host MAY be the same host as ZALO_BOT_WEBHOOK_HOST (ADR 0098 #3): two host patterns with
+// two different paths on two muxes, no conflict, and every other path on that host still falls to rest —
+// where the staff chain 404s it, because no commune holds a platform host. A commune's host never reaches
+// the callback chain: the path there falls to rest and is no route of the staff mux.
+//
+// host "" (dev only — staging and prod refuse to start without it): no callback at all, fail closed.
+func withZaloOACallback(rest, callback http.Handler, host string) http.Handler {
+	if host == "" {
+		return rest
+	}
+	m := http.NewServeMux()
+	m.Handle(host+svchttp.ZaloOAAuthorizationsPath, callback)
 	m.Handle("/", rest)
 	return m
 }

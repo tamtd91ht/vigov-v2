@@ -763,6 +763,44 @@ func TestZaloBotPoliciesArePinnedAndFailClosed(t *testing.T) {
 	}
 }
 
+// The Zalo OA callback policy (ADR 0098 #7, owner 16/10/2026): 60 per minute per client network, fails
+// CLOSED (503 with Redis down), its own counters and event. Pinned so a change turns red.
+func TestZaloOACallbackPolicyIsPinnedFailClosedAndPerNetwork(t *testing.T) {
+	if ZaloOACallbackLimit != 60 || ZaloOACallbackWindow != time.Minute {
+		t.Fatalf("ADR 0098 #7 decided 60 per minute per network, got %d / %v", ZaloOACallbackLimit, ZaloOACallbackWindow)
+	}
+	if ZaloOACallback.FailsOpen() {
+		t.Fatal("zalo-oa-callback must fail closed")
+	}
+	if ZaloOACallback.event != "zalo_oa_callback.rate_limited" || ZaloOACallback.name == ZaloBotWebhook.name {
+		t.Fatalf("policy = %+v", ZaloOACallback)
+	}
+	f := newFake()
+	l, err := New(f, ZaloOACallback)
+	if err != nil {
+		t.Fatal(err)
+	}
+	k := WebhookIPKey("203.0.113.7")
+	for i := 0; i < ZaloOACallbackLimit; i++ {
+		if ok, _, _ := l.Allow(context.Background(), k); !ok {
+			t.Fatalf("call %d refused", i+1)
+		}
+	}
+	if ok, _, _ := l.Allow(context.Background(), k); ok {
+		t.Fatal("the 61st call in the minute was allowed")
+	}
+	if f.keys[0] != "rl:zalo-oa-callback:ip:203.0.113.7" {
+		t.Errorf("key = %q", f.keys[0])
+	}
+	down := newFake()
+	down.fail = errors.New("dial tcp: connection refused")
+	ld, _ := New(down, ZaloOACallback)
+	rec := httptest.NewRecorder()
+	if Gate(rec, gateReq(), ld, k, slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))) || rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("Redis down = %d, want 503", rec.Code)
+	}
+}
+
 // Platform-realm keys: no commune prefix, chat id hashed, never written as is; an empty chat id is
 // refused rather than counted under a shared key.
 func TestZaloKeysShape(t *testing.T) {

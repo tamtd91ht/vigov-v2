@@ -124,6 +124,16 @@ const (
 	ZaloBotWebhookWindow = time.Minute
 )
 
+// The Zalo OA authorization callback threshold — DECIDED BY THE OWNER (ADR 0098 #7, 16/10/2026): "giới
+// hạn 60 lượt/phút mỗi mạng máy gọi" on service-comms' public GET /api/v1/zalo-oa-authorizations. The
+// legitimate caller is one OA administrator's browser, redirected once per authorization; the bound caps
+// how fast one network can probe states (counted BEFORE the state is read). Changing either number is a
+// rule 13 stop condition.
+const (
+	ZaloOACallbackLimit  = 60
+	ZaloOACallbackWindow = time.Minute
+)
+
 // The public Mini App ID lookup threshold (service-platform GET /api/v1/mini-app-ids; owner chose
 // option A on 06/10/2026: the deploy script reads App IDs from the platform registry). PROVISIONAL, NOT
 // AN OWNER FIGURE: the owner approved the unauthenticated route and named no number. 30 per minute per
@@ -247,6 +257,15 @@ var ZaloBotWebhook = Policy{name: "zalo-bot-webhook", limit: ZaloBotWebhookLimit
 // only known once the authenticated body is parsed — so its refusal is a reply in the chat, never a 429.
 var ZaloBotPairing = Policy{name: "zalo-bot-pairing", limit: ZaloBotPairingLimit,
 	window: ZaloBotPairingWindow, event: "zalo_bot_pairing.rate_limited"}
+
+// ZaloOACallback is the policy of service-comms' public GET /api/v1/zalo-oa-authorizations (ADR 0098 #7),
+// on the platform's callback host. Keys from WebhookIPKey: the host carries no commune, so the key carries
+// none either. Its OWN name and event, so a probe of the callback is told apart from the bot webhook's
+// traffic in the counters and in the security log. FAILS CLOSED, the default: the route is
+// unauthenticated until the state is matched, and nobody decided that a Redis outage may lift the bound
+// on guessing one.
+var ZaloOACallback = Policy{name: "zalo-oa-callback", limit: ZaloOACallbackLimit,
+	window: ZaloOACallbackWindow, event: "zalo_oa_callback.rate_limited"}
 
 // MiniAppIDLookup is the policy of service-platform's public GET /api/v1/mini-app-ids. Keys from
 // PlatformIPKey. FAILS CLOSED, the default: nobody decided that a Redis outage may lift the bound on an
