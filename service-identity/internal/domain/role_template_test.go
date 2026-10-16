@@ -68,12 +68,13 @@ func TestRoleTemplatesAreTheEightOfSpec41WithTheirCounts(t *testing.T) {
 	}{
 		{1, "chu-tich-ubnd", "Chủ tịch UBND", true, 43},
 		{2, "pho-chu-tich-ubnd", "Phó Chủ tịch UBND", true, 29},
-		{3, "chanh-van-phong", "Chánh Văn phòng", false, 20},
-		{4, "truong-bo-phan", "Trưởng bộ phận", false, 12},
-		{5, "chuyen-vien", "Chuyên viên chuyên môn", false, 8},
+		// Migration 0034 (owner 16/10/2026) moved five of these: 20→22, 12→13, 8→9, 6→8, 4→6.
+		{3, "chanh-van-phong", "Chánh Văn phòng", false, 22},
+		{4, "truong-bo-phan", "Trưởng bộ phận", false, 13},
+		{5, "chuyen-vien", "Chuyên viên chuyên môn", false, 9},
 		{6, "ke-toan", "Kế toán", false, 6},
-		{7, "can-bo-mot-cua", "Cán bộ một cửa", false, 6},
-		{8, "truong-thon", "Trưởng thôn, Tổ trưởng dân phố", false, 4},
+		{7, "can-bo-mot-cua", "Cán bộ một cửa", false, 8},
+		{8, "truong-thon", "Trưởng thôn, Tổ trưởng dân phố", false, 6},
 	}
 	got := RoleTemplates()
 	if len(got) != len(want) {
@@ -169,6 +170,46 @@ func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 	sort.Strings(extra)
 	if len(missing) > 0 || len(extra) > 0 {
 		t.Errorf("Chủ tịch UBND: thiếu %v, thừa %v so với 33 khoá của 0001 + 6 khoá của 0028 + 4 khoá của 0032", missing, extra)
+	}
+}
+
+// MIGRATION 0034'S EIGHT (role, key) PAIRS ARE IN THE TEMPLATES — read off the SQL, so a commune
+// seeded after 0034 and one seeded before end in the same state (0034 header). And NO other
+// template holds either key beyond those pairs and the two leader roles of 0028 (ADR 0097 D12).
+func TestRoleTemplatesCarryMigration0034Grants(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "migrations", "0034_citizen_directory_role_grants.sql"))
+	if err != nil {
+		t.Fatalf("đọc migration 0034: %v", err)
+	}
+	pair := regexp.MustCompile(`\('([a-z-]+)',\s*'(citizen\.[a-z]+)'\)`)
+	want := map[string]map[string]bool{}
+	for _, m := range pair.FindAllStringSubmatch(string(b), -1) {
+		if want[m[1]] == nil {
+			want[m[1]] = map[string]bool{}
+		}
+		want[m[1]][m[2]] = true
+	}
+	if len(want) != 5 {
+		t.Fatalf("0034 names %d roles, phép kiểm này viết cho 5 — đọc lại quyết định trước khi sửa", len(want))
+	}
+	leaders := map[string]bool{"chu-tich-ubnd": true, "pho-chu-tich-ubnd": true}
+	for _, r := range RoleTemplates() {
+		held := map[string]bool{}
+		for _, k := range r.Permissions {
+			if strings.HasPrefix(k, "citizen.") {
+				held[k] = true
+			}
+		}
+		for k := range want[r.Code] {
+			if !held[k] {
+				t.Errorf("%s: 0034 cấp %q mà bộ mẫu không có — xã gieo sau 0034 sẽ thiếu khoá", r.Code, k)
+			}
+		}
+		for k := range held {
+			if !want[r.Code][k] && !leaders[r.Code] {
+				t.Errorf("%s: bộ mẫu cấp %q mà 0034 không cấp — ngoài D12", r.Code, k)
+			}
+		}
 	}
 }
 

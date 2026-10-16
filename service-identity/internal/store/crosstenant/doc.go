@@ -15,7 +15,7 @@
 //
 // # WHAT MAY BE ADDED HERE
 //
-// Exactly four shapes, and every one of them needs a decision already written down in an ADR
+// Exactly five shapes, and every one of them needs a decision already written down in an ADR
 // before the code is written:
 //
 //  1. A table that has NO tenant_id at all because a decision put it above the commune —
@@ -40,6 +40,20 @@
 //     any person; it answers only to a live `op1.` session holding an ops.* key, and every answer
 //     is audited in operator_audit_log or not returned. The yes was for THIS read and carries over
 //     to no other: a second count needs its own decision, written down first.
+//
+//  5. ONE BOOLEAN per (commune, phone number in the commune's own citizen contact directory):
+//     "is this number signed in to THIS commune's Mini App right now?" — the "Zalo" column of the
+//     directory (ADR 0097 §3, owner's decision 16/10/2026). It joins the commune-scoped session
+//     table, bound to $1, to dinh_danh_cong_dan (no tenant_id, shape 1), and returns the boolean
+//     and nothing else: no citizen id, no session, no sign-in time, and never whether the number
+//     holds a session in ANOTHER commune or exists on the platform at all. It is keyed on a number
+//     in the asking commune's directory and asks about a person other than the caller, which is
+//     why it is neither shape 1 nor shape 3; it is not the rollup forbidden below because every
+//     answer belongs to one row of one commune. It lives beside the directory it fills, in the
+//     parent package (store/citizen_directory_app_usage.go, `ownAppSessionPredicate`), with its
+//     `@cross-tenant` mark, because it is the directory's column and has no second caller.
+//     The two tests ADR 0097 §3 names (a live session in commune B reads "—" in commune A; a
+//     revoked or expired session in A reads "—") live next to it and must keep passing.
 //
 // SHAPE 3 WAS ADDED ON 2026-09-20, AND THE PARAGRAPH BELOW IS WHY IT IS NOT A LOOSENING. This
 // file used to say "exactly two shapes" while migration 0004 already named this exact query as

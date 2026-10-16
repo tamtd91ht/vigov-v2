@@ -50,6 +50,14 @@ package domain
 // template holds admin.org without admin.lookup. 0032 applies the same rule to existing roles, so a
 // commune seeded after 0032 and one seeded before end in the same state. The caller of a template
 // run must hold these four too (#14); 0032 grants them to every administrator role that predates it.
+//
+// OWNER DECISION 16/10/2026 (ADR 0097 D12, migration 0034): the two DANH BẠ NGƯỜI DÂN keys of 0028
+// are granted by the prototype's matrix to five more roles — citizen.read to Chánh Văn phòng, Trưởng
+// bộ phận, Chuyên viên, Cán bộ một cửa and Trưởng thôn; citizen.update to Chánh Văn phòng, Cán bộ một
+// cửa and Trưởng thôn. The two leader templates already hold both (0028). 0034 grants the same eight
+// (role, key) pairs to existing roles, so a commune seeded after it and one seeded before end in the
+// same state; the caller of a template run already had to hold both keys (they are in the chairman's
+// template), so the set #14 checks does not grow.
 
 // RoleTemplate is one template role.
 type RoleTemplate struct {
@@ -132,6 +140,8 @@ func RoleTemplates() []RoleTemplate {
 				"admin.village", "admin.message", "admin.mail", "admin.zalo",
 				"content.read", "content.update",
 				"announcement.create",
+				// Migration 0034, owner decision 16/10/2026 (file comment).
+				"citizen.read", "citizen.update",
 			},
 		},
 		{
@@ -142,6 +152,8 @@ func RoleTemplates() []RoleTemplate {
 				"feedback.read", "feedback.assign",
 				"report.read",
 				"content.read", "content.update",
+				// Migration 0034, owner decision 16/10/2026 (file comment).
+				"citizen.read",
 			},
 		},
 		{
@@ -152,6 +164,8 @@ func RoleTemplates() []RoleTemplate {
 				"petition.read",
 				"feedback.read", "feedback.resolve",
 				"asset.read", "asset.update",
+				// Migration 0034, owner decision 16/10/2026 (file comment).
+				"citizen.read",
 			},
 		},
 		{
@@ -169,6 +183,8 @@ func RoleTemplates() []RoleTemplate {
 				"petition.create", "petition.read",
 				"feedback.create", "feedback.read",
 				"task.read",
+				// Migration 0034, owner decision 16/10/2026 (file comment).
+				"citizen.read", "citizen.update",
 			},
 		},
 		{
@@ -177,6 +193,9 @@ func RoleTemplates() []RoleTemplate {
 				"task.read", "task.update",
 				"feedback.read",
 				"asset.read",
+				// Migration 0034, owner decision 16/10/2026 (file comment). Reads the WHOLE commune's
+				// directory, not only their own hamlet — ADR 0097 D12, accepted for this round.
+				"citizen.read", "citizen.update",
 			},
 		},
 	}
