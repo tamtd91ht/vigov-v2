@@ -232,6 +232,31 @@ var envHints = map[string]envHint{
 		place: inDeploymentEnv,
 		shape: "bot.api.vigov.vn",
 	},
+	"ZALO_OA_APP_ID": {
+		meaning: "App ID của Zalo App DÙNG CHUNG cả nền tảng mà mỗi xã uỷ quyền OA của mình cho (ADR 0098) — " +
+			"thiếu thì không xã nào bấm được \"Kết nối OA\", không gửi được ZNS/ZBS cho dân.",
+		source: "developers.zalo.me > ứng dụng của ViHAT > trang tổng quan: dòng \"ID ứng dụng\" (một dãy số). " +
+			"Một giá trị cho mọi xã — không phải App ID của app riêng từng xã (ADR 0066).",
+		place: inConfigMap,
+		shape: "<dãy số App ID, 1–32 chữ số>",
+	},
+	"ZALO_OA_APP_SECRET": {
+		meaning: "Secret key của Zalo App dùng chung — comms gửi làm header secret_key khi đổi mã uỷ quyền và làm mới token OA của xã (ADR 0098). " +
+			"Khoá này mở được token của MỌI xã: lộ là phải xoay ở Zalo và mọi xã uỷ quyền lại.",
+		source: "developers.zalo.me > ứng dụng của ViHAT > Cài đặt > \"Secret key\" (người giữ tài khoản developer của ViHAT cấp). " +
+			"Không dán vào chat, tài liệu hay manifest; chỉ đặt thẳng vào Secret.",
+		place: inSecret,
+		shape: "<Secret key của ứng dụng trên developers.zalo.me > Cài đặt — không bao giờ ghi giá trị ở đâu khác>",
+	},
+	"ZALO_OA_CALLBACK_HOST": {
+		meaning: "Tên máy (host) mà Zalo gọi về sau khi admin OA của xã bấm Cho phép — comms tự dựng địa chỉ callback https://<host>/api/v1/zalo-oa-authorizations (ADR 0098 #3). " +
+			"Thiếu thì không xã nào nối được OA. Zalo chỉ cho MỘT callback mỗi app nên host này là của nền tảng, không bao giờ của một xã.",
+		source: "Tên miền đã trỏ DNS và có chứng chỉ TLS + Ingress vào service-comms; ĐƯỢC PHÉP trùng giá trị với ZALO_BOT_WEBHOOK_HOST (bot.api.vigov.vn ở prod) — hai tên vì hai vai trò. " +
+			"Đặt xong phải khai đúng địa chỉ https://<host>/api/v1/zalo-oa-authorizations vào mục Callback URL của app trên developers.zalo.me. " +
+			"Chỉ tên máy: chữ thường, không https://, không cổng, không đường dẫn, không bao giờ là tên miền của một xã.",
+		place: inDeploymentEnv,
+		shape: "bot.api.vigov.vn",
+	},
 	"RABBITMQ_DSN": {
 		meaning: "Kết nối RabbitMQ cho tác vụ nền có hẹn giờ (ADR 0010) — không dùng cho sự kiện giữa các dịch vụ.",
 		source:  "Người vận hành RabbitMQ cấp user, mật khẩu và vhost.",

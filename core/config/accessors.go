@@ -179,6 +179,27 @@ func (c Config) ZaloBotWebhookHost() string {
 	return c.zaloBotWebhookHost
 }
 
+// ZaloOAAppID is ZALO_OA_APP_ID, validated (digits only) — the ONE Zalo App every commune authorises
+// its OA to (ADR 0098). "" only in dev (required in staging/prod): the OA group is off.
+func (c Config) ZaloOAAppID() string {
+	c.require("ZaloOAAppID", ZaloOA)
+	return c.zaloOAAppID
+}
+
+// ZaloOAAppSecret is ZALO_OA_APP_SECRET — the `secret_key` of every OA token exchange and refresh.
+// nil only in dev (required in staging/prod). Never printed: it opens the tokens of every commune.
+func (c Config) ZaloOAAppSecret() secret.Secret {
+	c.require("ZaloOAAppSecret", ZaloOA)
+	return c.zaloOAAppSecret
+}
+
+// ZaloOACallbackHost is ZALO_OA_CALLBACK_HOST, validated — the bare host comms builds the OA
+// authorisation callback `https://<host>/api/v1/zalo-oa-authorizations` from. "" only in dev.
+func (c Config) ZaloOACallbackHost() string {
+	c.require("ZaloOACallbackHost", ZaloOA)
+	return c.zaloOACallbackHost
+}
+
 // BasemapURL is BASEMAP_URL, validated (https, no credentials, no query) and ending in "/" — the
 // storage prefix the public basemap route reads from. "" means not configured, in every environment.
 func (c Config) BasemapURL() string {
@@ -264,6 +285,9 @@ type configView struct {
 	OperatorGRPCListenAddr         string
 	IdentityOperatorGRPCAddr       string
 	ZaloBotWebhookHost             string
+	ZaloOAAppID                    string
+	ZaloOAAppSecret                secret.Secret // redacts itself on every rendering path (core/secret)
+	ZaloOACallbackHost             string
 	BasemapURL                     string
 	MiniAppProfileCode             secret.Secret
 	RabbitMQDSN                    secret.DSN
@@ -310,6 +334,9 @@ func (c Config) view() configView {
 		OperatorGRPCListenAddr:         c.operatorGRPCListenAddr,
 		IdentityOperatorGRPCAddr:       c.identityOperatorGRPCAddr,
 		ZaloBotWebhookHost:             c.zaloBotWebhookHost,
+		ZaloOAAppID:                    c.zaloOAAppID,
+		ZaloOAAppSecret:                c.zaloOAAppSecret,
+		ZaloOACallbackHost:             c.zaloOACallbackHost,
 		BasemapURL:                     c.basemapURL,
 		MiniAppProfileCode:             c.miniAppProfileCode,
 		RabbitMQDSN:                    c.rabbitMQDSN,

@@ -102,6 +102,12 @@ const (
 	// dev hosts (ADR 0046 §Sửa đổi 14/10/2026 #9). service-platform only. NEVER REQUIRED, and REFUSED
 	// when set in staging/prod: see mini_app_profile.go. APPENDED.
 	MiniAppProfile
+	// ZaloOA: ZALO_OA_APP_ID, ZALO_OA_APP_SECRET, ZALO_OA_CALLBACK_HOST — the ONE Zalo App of the
+	// platform that every commune authorises its own OA to (ADR 0098 #2, #3; owner 16/10/2026).
+	// service-comms only, required in staging/prod. A SEPARATE GROUP FROM ZaloBotWebhook: the bot and
+	// the OA app are two Zalo products with two secrets and two lifecycles, and a deployment that runs
+	// one without the other must not be forced to set the other's variables. See zalo_oa.go. APPENDED.
+	ZaloOA
 
 	groupEnd // not a group: the bound Uses checks against
 )
@@ -131,6 +137,7 @@ var groupNames = map[Group]string{
 	DocumentsClient:     "DocumentsClient",
 	Basemap:             "Basemap",
 	MiniAppProfile:      "MiniAppProfile",
+	ZaloOA:              "ZaloOA",
 }
 
 // String is the identifier a main writes (`config.Redis`), so a message names what to add.

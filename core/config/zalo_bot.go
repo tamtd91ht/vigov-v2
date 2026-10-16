@@ -35,20 +35,29 @@ var ErrZaloBotWebhookHostInvalid = errors.New("config: ZALO_BOT_WEBHOOK_HOST is 
 // root itself is refused too. Hosts deeper than one label (`bot.api.vigov.vn`) and hosts outside the
 // platform's domains are not judged further: there is no rule in this repository for them.
 func parseZaloBotWebhookHost(h string) (string, error) {
+	return parsePlatformZaloHost(h, ErrZaloBotWebhookHostInvalid, "the shared bot's webhook")
+}
+
+// parsePlatformZaloHost is the ONE check behind every host Zalo calls the platform on —
+// ZALO_BOT_WEBHOOK_HOST and ZALO_OA_CALLBACK_HOST (ADR 0098 #3: "cùng hình dạng và cùng phép kiểm").
+// Two variables share it instead of each carrying a copy because the commune-host refusal is the
+// security property: a copy that drifts is a host Zalo can be pointed at that one of the two never
+// refuses. errInvalid names the variable; what names the thing being pointed, for the message.
+func parsePlatformZaloHost(h string, errInvalid error, what string) (string, error) {
 	if h == "" {
 		return "", nil
 	}
-	if err := checkBareHost(h, ErrZaloBotWebhookHostInvalid); err != nil {
+	if err := checkBareHost(h, errInvalid); err != nil {
 		return "", err
 	}
 	if slices.Contains(platformWebRoots, h) {
-		return "", fmt.Errorf("%w: %q is the platform's root domain", ErrZaloBotWebhookHostInvalid, h)
+		return "", fmt.Errorf("%w: %q is the platform's root domain", errInvalid, h)
 	}
 	for _, root := range platformWebRoots {
 		if under, ok := strings.CutSuffix(h, "."+root); ok {
 			if !strings.Contains(under, ".") {
-				return "", fmt.Errorf("%w: %q is shaped like a commune's web host under %s — the shared bot's "+
-					"webhook must never sit on a commune's host; use bot.api.%s", ErrZaloBotWebhookHostInvalid, h, root, root)
+				return "", fmt.Errorf("%w: %q is shaped like a commune's web host under %s — %s "+
+					"must never sit on a commune's host; use bot.api.%s", errInvalid, h, root, what, root)
 			}
 			break
 		}

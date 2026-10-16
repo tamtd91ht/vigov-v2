@@ -67,6 +67,9 @@
 //	ZALO_BOT_WEBHOOK_HOST                 Deploy env ZaloBotWebhook         refused in staging/prod; dev: "Trỏ webhook" refused by name
 //	BASEMAP_URL                           ConfigMap  Basemap                off, in EVERY environment: the basemap route answers 503
 //	MINI_APP_PROFILE_CODE                 Secret     MiniAppProfile         off (QR links carry no pf); SET is refused in staging/prod
+//	ZALO_OA_APP_ID                        ConfigMap  ZaloOA                 refused in staging/prod; dev: "Kết nối OA" refused by name
+//	ZALO_OA_APP_SECRET                    Secret     ZaloOA                 as above
+//	ZALO_OA_CALLBACK_HOST                 Deploy env ZaloOA                 as above
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ              refused in staging/prod once declared
 //	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
 //
@@ -544,6 +547,15 @@ type Config struct {
 	// OPERATOR_HOST shape, and never a commune's web host. A platform-wide constant (rule 8, invariant 5).
 	zaloBotWebhookHost string
 
+	// ZaloOAAppID, ZaloOAAppSecret and ZaloOACallbackHost are the ONE Zalo App every commune
+	// authorises its own OA to (ADR 0098 #2, #3; zalo_oa.go). Group ZaloOA, comms only. The id is
+	// Zalo's numeric app id, validated; the secret is the `secret_key` of every token exchange and
+	// never prints; the host is validated like zaloBotWebhookHost (same check, own error) — comms
+	// builds `https://<host>/api/v1/zalo-oa-authorizations` from it. All three empty = OFF (dev only).
+	zaloOAAppID        string
+	zaloOAAppSecret    secret.Secret
+	zaloOACallbackHost string
+
 	// BasemapURL is the self-hosted basemap's storage prefix (BASEMAP_URL, basemap.go), validated and
 	// ending in "/"; "" = not configured. Group Basemap, comms only.
 	basemapURL string
@@ -721,6 +733,14 @@ func Load(serviceName string, uses Usage) (Config, error) {
 	// operator's "Trỏ webhook" is refused by name.
 	zaloBotHostRaw := r.read("ZALO_BOT_WEBHOOK_HOST", os.Getenv("ZALO_BOT_WEBHOOK_HOST"), requiredInProd, ZaloBotWebhook)
 
+	// ---- ZaloOA (ADR 0098; comms only) --------------------------------------------------------
+	// Required in prod once declared (owner, 16/10/2026: "bắt buộc ở staging/prod"): without the
+	// app no commune can authorise its OA, and without the callback host Zalo has nowhere to send
+	// the authorisation code. In dev, all three empty means "Kết nối OA" is refused by name.
+	zaloOAAppIDRaw := r.read("ZALO_OA_APP_ID", os.Getenv("ZALO_OA_APP_ID"), requiredInProd, ZaloOA)
+	zaloOAAppSecretRaw := r.read("ZALO_OA_APP_SECRET", os.Getenv("ZALO_OA_APP_SECRET"), requiredInProd, ZaloOA)
+	zaloOACallbackHostRaw := r.read("ZALO_OA_CALLBACK_HOST", os.Getenv("ZALO_OA_CALLBACK_HOST"), requiredInProd, ZaloOA)
+
 	// ---- Basemap (ADR 0072 M1; comms only) --------------------------------------------------
 	// Optional IN EVERY ENVIRONMENT, prod included: operations sets it only after the signed
 	// sovereignty check of the archive (ADR 0072 §Còn mở #3). Empty = the public basemap route answers
@@ -821,6 +841,16 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Same rule for the OA app: a malformed id or a commune-shaped callback host is fatal, by name.
+	zaloOAAppID, err := parseZaloOAAppID(zaloOAAppIDRaw)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+	zaloOACallbackHost, err := parseZaloOACallbackHost(zaloOACallbackHostRaw)
+	if err != nil {
+		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
+	}
+
 	// Malformed is fatal, never repaired (the OPERATOR_HOST rule) — even though empty is allowed.
 	basemapURL, err := parseBasemapURL(basemapRaw)
 	if err != nil {
@@ -876,6 +906,9 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		operatorGRPCListenAddr:     firstNonEmpty(opGRPCListen, ":9093"),
 		identityOperatorGRPCAddr:   opIdentityAddr,
 		zaloBotWebhookHost:         zaloBotWebhookHost,
+		zaloOAAppID:                zaloOAAppID,
+		zaloOAAppSecret:            parseZaloOAAppSecret(zaloOAAppSecretRaw),
+		zaloOACallbackHost:         zaloOACallbackHost,
 		basemapURL:                 basemapURL,
 		miniAppProfileCode:         miniAppProfileCode,
 

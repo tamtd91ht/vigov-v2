@@ -26,7 +26,7 @@ var allGroupVars = []string{
 	"OPERATOR_GRPC_LISTEN_ADDR", "IDENTITY_OPERATOR_GRPC_ADDR", "ZALO_BOT_WEBHOOK_HOST",
 	"RABBITMQ_DSN", "RABBITMQ_EXCHANGE", "ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY",
 	"ELASTICSEARCH_INDEX_PREFIX", "DANGEROUS_AUTH_BYPASS", "BASEMAP_URL",
-	"MINI_APP_PROFILE_CODE",
+	"MINI_APP_PROFILE_CODE", "ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST",
 }
 
 func clean(t *testing.T, env string, set map[string]string) {
@@ -75,6 +75,8 @@ var prodRequired = map[Group][]string{
 	Basemap: nil,
 	// MINI_APP_PROFILE_CODE is never required: empty is the prod link (mini_app_profile.go).
 	MiniAppProfile: nil,
+	// Owner, 16/10/2026 (ADR 0098 #2): "bắt buộc ở staging/prod" — all three, there is no half an app.
+	ZaloOA: {"ZALO_OA_APP_ID", "ZALO_OA_APP_SECRET", "ZALO_OA_CALLBACK_HOST"},
 }
 
 func TestEveryGroupHasAProdDecision(t *testing.T) {
