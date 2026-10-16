@@ -561,6 +561,72 @@ func TestCallbackFailuresSpendTheRequestWithTheirOutcome(t *testing.T) {
 	}
 }
 
+// Every spent request names its outcome and the commune's host, so the edge sends the OA admin back to the
+// commune's screen with what happened; success says thanh-cong.
+func TestCallbackResultCarriesOutcomeAndHostOnEveryPath(t *testing.T) {
+	cases := map[string]struct {
+		setup   func(*oaRig, *CompleteAuthorizationInput)
+		outcome string
+	}{
+		"success":      {func(*oaRig, *CompleteAuthorizationInput) {}, domain.AuthorizationSucceeded},
+		"no code":      {func(_ *oaRig, in *CompleteAuthorizationInput) { in.Code = "" }, domain.AuthorizationMalformedCallback},
+		"zalo refuses": {func(r *oaRig, _ *CompleteAuthorizationInput) { r.zalo.exchange = zalooa.OutcomeRejected }, domain.AuthorizationZaloRefused},
+		"zalo down":    {func(r *oaRig, _ *CompleteAuthorizationInput) { r.zalo.exchange = zalooa.OutcomeUnavailable }, domain.AuthorizationZaloUnavailable},
+		"getoa other":  {func(r *oaRig, _ *CompleteAuthorizationInput) { r.zalo.getoa.OAID = "111" }, domain.AuthorizationMalformedResponse},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			r := newOARig(t)
+			r.withOpenAuthorization(t)
+			in := r.callbackInput()
+			c.setup(r, &in)
+			res, _ := r.uc.CompleteAuthorization(context.Background(), in)
+			if res.Outcome != c.outcome || res.Host != oaHost || res.Tenant != xaA {
+				t.Fatalf("result = %+v, want outcome %q host %q", res, c.outcome, oaHost)
+			}
+		})
+	}
+	r := newOARig(t)
+	r.resolver.found = false
+	res, err := r.uc.CompleteAuthorization(context.Background(), r.callbackInput())
+	if !errors.Is(err, ErrAuthorizationNotFound) || res != (CompleteAuthorizationResult{}) {
+		t.Fatalf("unknown state: %+v %v — names a commune or a host", res, err)
+	}
+}
+
+// The OA admin pressing Từ chối at Zalo: Zalo comes back with `error`, no code. The request is spent as
+// zalo-tu-choi with its entry; Zalo is never asked to exchange anything.
+func TestCallbackDeniedAtZaloSpendsTheRequestWithoutCallingZalo(t *testing.T) {
+	r := newOARig(t)
+	r.withOpenAuthorization(t)
+	in := r.callbackInput()
+	in.Code, in.Denied = "", true
+	res, err := r.uc.CompleteAuthorization(context.Background(), in)
+	if !errors.Is(err, ErrAuthorizationDenied) || res.Outcome != domain.AuthorizationZaloRefused || res.Host != oaHost {
+		t.Fatalf("res = %+v err = %v", res, err)
+	}
+	if r.zalo.calls["exchange"] != 0 || len(r.f.with("INSERT INTO zalo_commune_oa")) != 0 {
+		t.Fatal("a denied authorization reached Zalo or wrote an OA row")
+	}
+	cl := r.f.with("oa_row_id = $5")
+	if len(cl) != 1 || cl[0].args[3] != domain.AuthorizationZaloRefused {
+		t.Fatalf("close = %v", cl)
+	}
+	if e, _ := oaEntry(t, r.f, domain.ActionZaloOAAuthorizationFailed); e.args[1] != "CB-00123" {
+		t.Fatalf("entry actor = %v", e.args[1])
+	}
+	r.noSecretAnywhere(t)
+
+	// A denial with an unknown state is the same 404 as any unknown state: nothing spent.
+	r2 := newOARig(t)
+	r2.resolver.found = false
+	in2 := r2.callbackInput()
+	in2.Denied = true
+	if _, err := r2.uc.CompleteAuthorization(context.Background(), in2); !errors.Is(err, ErrAuthorizationNotFound) || r2.f.begun != 0 {
+		t.Fatalf("err = %v, tx %d", err, r2.f.begun)
+	}
+}
+
 func TestCallbackGetOAOutageStillConnectsWithTheClass(t *testing.T) {
 	r := newOARig(t)
 	r.withOpenAuthorization(t)

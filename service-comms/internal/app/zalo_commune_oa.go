@@ -114,6 +114,9 @@ var (
 	// ErrAuthorizationMalformed — the callback carried a state that found a request, but no code or an
 	// oa_id outside Zalo's shape; the request is spent as sai-khuon (400 at the edge).
 	ErrAuthorizationMalformed = errors.New("zalo oa: the callback is not the shape Zalo documents")
+	// ErrAuthorizationDenied — the OA admin pressed Huỷ/Từ chối at Zalo: the callback came back with
+	// `error` instead of a code. The request is spent as zalo-tu-choi; nothing is exchanged.
+	ErrAuthorizationDenied = errors.New("zalo oa: the OA admin denied the authorization")
 	// ErrZaloOATemplateMissing — no such template row in this commune's live OA.
 	ErrZaloOATemplateMissing = errors.New("zalo oa: no such template")
 )
@@ -146,6 +149,9 @@ type CompleteAuthorizationInput struct {
 	Code     string
 	OAID     string
 	ClientIP string
+	// Denied: Zalo came back with `error` (the OA admin refused). With a valid state the request is
+	// spent as zalo-tu-choi; the code, if any, is never exchanged.
+	Denied bool
 }
 
 // CompleteAuthorizationResult — the commune the request belonged to and where to send the browser.
@@ -154,7 +160,11 @@ type CompleteAuthorizationResult struct {
 	// Host is the commune's web host for the redirect back to Cấu hình › Kênh Zalo; "" when the registry
 	// does not know it (the edge then answers a plain page — never a guessed host).
 	Host string
-	OA   domain.CommuneZaloOA
+	// Outcome is the domain.Authorization* value the request was spent with, on success AND on every
+	// failure that spent it — so the edge sends the browser back with the result the screen names. ""
+	// when nothing was spent (no commune found, or a fault before the request could be closed).
+	Outcome string
+	OA      domain.CommuneZaloOA
 }
 
 // ZaloOACheckOutput is POST zalo-oas/current/check.
@@ -349,6 +359,7 @@ func (uc *CommuneZaloOAs) StartAuthorization(ctx context.Context, actor audit.Ac
 // ctx carries NO commune: the commune is found from the state (ADR 0098 #4), and the rest runs in it.
 //
 //	state unreadable, unknown, used, expired   ErrAuthorizationNotFound — one sentence, no commune
+//	Zalo came back with `error` (Denied)       request spent as zalo-tu-choi; ErrAuthorizationDenied
 //	code missing / oa_id not Zalo's shape      request spent as sai-khuon; ErrAuthorizationMalformed
 //	Zalo refuses the exchange                  request spent with the class; *ZaloOACallError
 //	getoa answers another oa_id                request spent as phan-hoi-sai-dang; *ZaloOACallError
@@ -390,13 +401,26 @@ func (uc *CommuneZaloOAs) CompleteAuthorization(ctx context.Context, in Complete
 	// The callback is an act of somebody outside any session: the trail's "who" is the staff member who
 	// asked for the link; the IP is the OA admin's browser (ADR 0098 #12).
 	actor := audit.Actor{ID: open.Auth.RequestedBy, Kind: "staff", IP: in.ClientIP}
-	result := CompleteAuthorizationResult{Tenant: tid}
+	// The commune's host, for sending the browser back to Cấu hình › Kênh Zalo with the outcome — failures
+	// included, so the OA admin reads what happened where they started. Unknown = "": the edge shows a
+	// plain page; it never guesses a host.
+	result := CompleteAuthorizationResult{Tenant: tid, Host: uc.communeHost(cctx)}
 
+	if in.Denied {
+		if err := uc.closeAuthorization(cctx, reqID, now, domain.AuthorizationZaloRefused, actor,
+			map[string]any{"reason": "denied_at_zalo"}); err != nil {
+			return result, err
+		}
+		uc.securityEvent(cctx, SecEventCommuneOAAuthFailed, "denied_at_zalo", actor, "")
+		result.Outcome = domain.AuthorizationZaloRefused
+		return result, ErrAuthorizationDenied
+	}
 	if in.Code == "" || !domain.ValidZaloOAID(in.OAID) {
 		if err := uc.closeAuthorization(cctx, reqID, now, domain.AuthorizationMalformedCallback, actor, nil); err != nil {
 			return result, err
 		}
 		uc.securityEvent(cctx, SecEventCommuneOAAuthFailed, domain.AuthorizationMalformedCallback, actor, "")
+		result.Outcome = domain.AuthorizationMalformedCallback
 		return result, ErrAuthorizationMalformed
 	}
 	if uc.envelope == nil {
@@ -417,6 +441,7 @@ func (uc *CommuneZaloOAs) CompleteAuthorization(ctx context.Context, in Complete
 			return result, err
 		}
 		uc.securityEvent(cctx, SecEventCommuneOAAuthFailed, outcome, actor, in.OAID)
+		result.Outcome = outcome
 		return result, &ZaloOACallError{Step: "exchange", Class: class}
 	}
 	defer clear(tokens.Access)
@@ -431,6 +456,7 @@ func (uc *CommuneZaloOAs) CompleteAuthorization(ctx context.Context, in Complete
 				return result, err
 			}
 			uc.securityEvent(cctx, SecEventCommuneOAAuthFailed, "oa_id_mismatch", actor, in.OAID)
+			result.Outcome = domain.AuthorizationMalformedResponse
 			return result, &ZaloOACallError{Step: "getoa", Class: domain.ZaloCallMalformedResponse}
 		}
 		name = domain.ClipZaloOAName(info.Name)
@@ -491,6 +517,7 @@ func (uc *CommuneZaloOAs) CompleteAuthorization(ctx context.Context, in Complete
 				return result, cerr
 			}
 			uc.securityEvent(cctx, SecEventCommuneOAAuthFailed, domain.AuthorizationOALiveElsewhere, actor, in.OAID)
+			result.Outcome = domain.AuthorizationOALiveElsewhere
 			return result, docstore.ErrZaloOATaken
 		}
 		if errors.Is(err, ErrAuthorizationNotFound) {
@@ -498,18 +525,22 @@ func (uc *CommuneZaloOAs) CompleteAuthorization(ctx context.Context, in Complete
 		}
 		return result, fmt.Errorf("zalo oa: connect the OA: %w", err)
 	}
-	result.OA = after
+	result.OA, result.Outcome = after, domain.AuthorizationSucceeded
 	outcome := "connected"
 	if replaced != nil {
 		outcome = "replaced"
 	}
 	uc.securityEvent(cctx, SecEventCommuneOAConnected, outcome, actor, in.OAID)
-	// The commune's host, for the redirect back to Cấu hình › Kênh Zalo. Unknown = "" — the edge shows a
-	// plain page; it never guesses a host.
-	if t, ok, err := uc.registry.XaTrongNguCanh(cctx); err == nil && ok && t.Active {
-		result.Host = t.Host
-	}
 	return result, nil
+}
+
+// communeHost is the commune's web host from the platform registry; "" when unknown, inactive or the
+// registry did not answer — never a guessed host.
+func (uc *CommuneZaloOAs) communeHost(ctx context.Context) string {
+	if t, ok, err := uc.registry.XaTrongNguCanh(ctx); err == nil && ok && t.Active {
+		return t.Host
+	}
+	return ""
 }
 
 // closeAuthorization spends the request with outcome and writes its entry, in one transaction. A request
