@@ -520,6 +520,10 @@ CASES = [
     # Narrower than check_brain on purpose: "a NAMED exception, not an open door".
     ("doc_guard", "a NEW .md under docs/", BLOCK,
      w("docs/ui-ux/99-ghi-chu-moi.md", "# Ghi chú")),
+    # The one NAMED creation exception (owner, 16/10/2026): chapter 16 is a menu row without a chapter.
+    # A file, not a pattern — the case above must keep blocking every other new chapter.
+    ("doc_guard", "the named chapter-16 exception", PASS,
+     w("docs/ui-ux/16-danh-ba-nguoi-dan.md", "# 16 — Danh bạ người dân")),
     ("doc_guard", "a new .md outside every allowed place", BLOCK,
      w("notes/ke-hoach.md", "# Kế hoạch")),
     # Ca vá ngày 17/09/2026. Sửa ba dòng ở GIỮA một tệp kb/ đang có frontmatter hợp lệ phải

@@ -53,6 +53,13 @@ ALLOWED = (
 # starts scattering again, so that stays blocked.
 SUA_DUOC = re.compile(r"(^|/)docs/ui-ux/[^/]+\.md$")
 
+# NAMED creation exceptions — FILES, never a pattern. A new chapter is a new menu, and a new menu is
+# the owner's call each time. Chapter 16 (owner, 16/10/2026): "Danh bạ người dân" had a row in
+# web-admin/src/components/muc-menu.ts since 06/10 but no chapter, because the prototype added it after
+# the 16/09 transcription. The ledger groups by chapter slug and every route's @screen points at a
+# chapter, so a menu without one is a menu nobody can track.
+TAO_DUOC = ("docs/ui-ux/16-danh-ba-nguoi-dan.md",)
+
 # GENERATED tiers — hand edits are silently lost on the next generate
 GENERATED_TIERS = (re.compile(r"/kb/20-contracts/"), re.compile(r"/kb/30-indexes/"))
 
@@ -183,8 +190,9 @@ def main() -> None:
     #
     # The docs/ui-ux/ exception applies only to a file that ALREADY EXISTS: maintaining the
     # transcribed spec is allowed, starting a new one there is not.
-    da_co = SUA_DUOC.search("/" + rel) and os.path.exists(
-        os.path.join(c.project_root(), rel.replace("/", os.sep)))
+    da_co = SUA_DUOC.search("/" + rel) and (
+        os.path.exists(os.path.join(c.project_root(), rel.replace("/", os.sep)))
+        or rel.replace("\\", "/") in TAO_DUOC)
     if not da_co and not any(p.search("/" + rel) for p in ALLOWED):
         c.block(HOOK, f"documentation in the wrong place — {rel}",
                 [".md files belong in kb/, <đơn vị>/README.md, or .claude/"],
