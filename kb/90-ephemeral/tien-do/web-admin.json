@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "web-admin",
-  "cap_nhat": "2026-10-16",
+  "cap_nhat": "2026-10-17",
   "muc": [
     {
       "id": "phan-chua-dung-screens-15-10",
@@ -1661,6 +1661,15 @@
       "viec": "Màn /nguoi-dan Danh bạ người dân (ADR 0097, chương 16): API client, danh sách số che + lọc nhóm/Zalo/từ khoá, tab Nhóm, hộp Thêm/Sửa với nút Xem số đầy đủ (mỗi bấm một vết), gỡ có lý do, nhập Excel; menu bật khoá citizen.read.",
       "bang_chung": "9f1a5871 · 0dc085ba · 543b05ca — make web: tsc sạch, vitest 332 tệp / 6168 ca, check:api khớp (16/10/2026). CHƯA KIỂM BẰNG ẢNH RENDER.",
       "tiep_theo": "(1) Người dùng build vigov-web-admin + vigov-service-identity, thêm 8 prefix Ingress, xem màn. (2) BACKEND: PATCH citizen-contacts đòi số đầy đủ → hộp sửa phải bấm Xem số trước khi lưu; cân nhắc cho PATCH bỏ trống phone = giữ nguyên. (3) BACKEND: tuyến tìm chưa có trường nhãn → chip lọc nhãn đang là '?'. (4) Hợp đồng chưa khai query active/has_own_app_session của GET và header Idempotency-Key. (5) test-designer TASK-13/14 chưa chạy."
+    },
+    {
+      "id": "gui-tin-zns-sms-giao-dien-17-10",
+      "viec": "Menu Gửi tin ZNS / SMS (/gui-thong-bao, notice.send) theo prototype NoticeWorkspace, kèm thẻ OA Zalo của xã (ADR 0098) — lượt GIAO DIỆN",
+      "trang_thai": "dang_lam",
+      "menu": "gui-tin-zns-sms",
+      "bang_chung": "e1675e6d: app/gui-thong-bao, features/notice-send (màn, form, thẻ OA, 17 test); menu mở bằng notice.send (khoá có ở identity 0028). Thật: nhóm/nhãn/bộ phận, số người nhận 1 nhóm/1 nhãn/cán bộ, mẫu ZBS từ OA xã, trạng thái OA. tsc + eslint + vitest 2545 ca xanh, check_quyen + check_security PASS.",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA xem ảnh render cạnh prototype (không có trình duyệt). Còn '?': xem trước, gửi đợt, lịch sử đợt gửi, đơn giá/chi phí (câu mở ai trả phí ZNS), toàn bộ SMS — tích hợp eSMS (developers.esms.vn) lượt sau. Backend cần: tuyến đọc mẫu OA cho notice.send (hiện chỉ admin.zalo), tuyến xem trước/gửi/lịch sử (khối D, ADR mới), bộ phát ZNS (khối B). Số người dân đếm cả người ngừng liên hệ — tuyến gửi phải quyết bỏ qua hay không. Chưa có PHAN_CHUA_DUNG // @screens /gui-thong-bao cho tien_do_san_pham."
     }
   ]
 }
