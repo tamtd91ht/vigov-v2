@@ -488,6 +488,31 @@ export const ZALO_CHANNEL_PERMISSION = "admin.zalo";
  */
 export const CITIZEN_REPORT_UNMASK_PERMISSION = "feedback.unmask";
 
+/*
+ * TWO KEYS OF THE CITIZEN DIRECTORY (`/nguoi-dan`, ADR 0097 D12), seeded by
+ * `service-identity/migrations/0028_citizen_dossier_notice_permissions.sql:85-86` in group DANH BẠ NGƯỜI
+ * DÂN. Neither implies the other (rule 5, invariant 3b): a village head who may read the directory is
+ * not thereby allowed to edit it, and the reveal of a full number rides on the WRITE key on purpose
+ * (ADR 0097 §1 — the person fixing a typo is the one who needs the digits).
+ *
+ * HIDING IS CONVENIENCE, NOT PROTECTION — `service-identity` checks the key on every one of the sixteen
+ * `citizen-contacts*` / `citizen-groups*` routes (rule 5, #1).
+ */
+
+/**
+ * `citizen.read` — "Xem danh bạ người dân". The key of every READ route of the directory
+ * (`x-vigov-permission` in `kb/20-contracts/openapi.json`): the list, the search, the count, the tag strip,
+ * the detail and the groups. The gate of the whole `/nguoi-dan` screen and of its menu item.
+ */
+export const CITIZEN_READ_PERMISSION = "citizen.read";
+
+/**
+ * `citizen.update` — "Thêm, sửa, xoá người dân và nhóm". Every WRITE route of the directory, the three
+ * Excel-import routes, AND `GET /api/v1/citizen-contacts/{id}/phone` ("Xem số đầy đủ", ADR 0097 D2). The
+ * screen draws its header buttons, the row click, the trash icons and the reveal button on this key.
+ */
+export const CITIZEN_UPDATE_PERMISSION = "citizen.update";
+
 /**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
