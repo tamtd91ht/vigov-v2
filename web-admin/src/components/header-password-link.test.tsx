@@ -139,8 +139,8 @@ describe("DauTrang — the left sidebar follows the session's permissions (UX; t
   it("DENIED: a read session with no key → no link; only the two unbuilt items, disabled (ADR 0068 §14)", () => {
     const el = mount(session(["admin.user.delete", "report.export"]));
     expect(el.querySelectorAll(".side-nav a")).toHaveLength(0);
-    // Two since 16/10/2026: "Danh bạ người dân" has its screen (`/nguoi-dan`, ADR 0097).
-    expect(el.querySelectorAll('.side-nav [aria-disabled="true"]')).toHaveLength(2);
+    // One since 17/10/2026: "Gửi tin ZNS / SMS" has its screen (`/gui-thong-bao`).
+    expect(el.querySelectorAll('.side-nav [aria-disabled="true"]')).toHaveLength(1);
     expect(el.querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
 

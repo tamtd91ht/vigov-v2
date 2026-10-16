@@ -514,6 +514,17 @@ export const CITIZEN_READ_PERMISSION = "citizen.read";
 export const CITIZEN_UPDATE_PERMISSION = "citizen.update";
 
 /**
+ * `notice.send` — "Gửi tin ZNS / SMS" (`service-identity/migrations/0028_citizen_dossier_notice_permissions.sql:90`).
+ * The gate of the `/gui-thong-bao` screen and of its menu item (owner, 17/10/2026).
+ *
+ * NO ROUTE DECLARES IT YET: the send, preview and history routes are not built, and the screen draws them
+ * as "?" (ADR 0068 §14). The OA templates it lists still ride on `admin.zalo` (`zalo-oa.ts`) and the
+ * recipient counts on `citizen.read` — an account holding only this key sees those parts say why they are
+ * empty. Hiding is convenience: the day the send route exists, it checks this key itself (rule 5, #1).
+ */
+export const NOTICE_SEND_PERMISSION = "notice.send";
+
+/**
  * Quyết định một phần giao diện có hiện hay không — BA trạng thái, không hai.
  *
  * TỪNG NẰM RIÊNG TRONG `features/cau-hinh/quyen-tab.ts` VÀ NAY Ở ĐÂY, vì nó có người dùng thứ

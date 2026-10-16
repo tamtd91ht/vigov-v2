@@ -146,6 +146,28 @@ export function useZaloOA(allowed: boolean): ZaloOAState {
   return { current, reload };
 }
 
+/**
+ * "Kết nối OA" / "Uỷ quyền lại": asks comms for a one-time authorisation link and opens it in a new tab.
+ * SHARED with the OA card of `/gui-thong-bao` (`features/notice-send/oa-status-card.tsx`) — one copy of
+ * the only code that ever holds the link, so the rule below cannot drift between two screens.
+ *
+ * The link exists only between the 201 and `window.open`, inside this function: never returned, never set
+ * into state, never logged (rule 8, ADR 0098 #5). Returns comms' `zalo_oa_not_configured` sentence when
+ * the platform has not declared its shared app — the caller keeps its button disabled with it; every
+ * other refusal is toasted here.
+ */
+export async function openZaloOAAuthorization(): Promise<{ refused: string | null }> {
+  const r = await createZaloOAAuthorizationLink();
+  if (!r.ok) {
+    if (r.code === ZALO_OA_NOT_CONFIGURED) return { refused: r.thongBao };
+    toast.error(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED_TOAST : r.thongBao);
+    return { refused: null };
+  }
+  window.open(r.duLieu.url, "_blank", "noopener");
+  toast.success(LINK_OPENED_TOAST);
+  return { refused: null };
+}
+
 type OABusy = "link" | "check" | "disconnect" | null;
 
 export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
@@ -195,19 +217,9 @@ export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
 
   async function authorize() {
     setBusy("link");
-    const r = await createZaloOAAuthorizationLink();
+    const { refused } = await openZaloOAAuthorization();
     setBusy(null);
-    if (!r.ok) {
-      if (r.code === ZALO_OA_NOT_CONFIGURED) {
-        setLinkRefused(r.thongBao);
-        return;
-      }
-      toast.error(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED_TOAST : r.thongBao);
-      return;
-    }
-    // The only place the link exists: opened, then dropped with this scope. Never set into state.
-    window.open(r.duLieu.url, "_blank", "noopener");
-    toast.success(LINK_OPENED_TOAST);
+    if (refused !== null) setLinkRefused(refused);
   }
 
   async function check() {

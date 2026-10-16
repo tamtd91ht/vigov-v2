@@ -6,6 +6,7 @@ import {
   AUDIT_READ_PERMISSION,
   CITIZEN_READ_PERMISSION,
   MAIL_SERVER_PERMISSION,
+  NOTICE_SEND_PERMISSION,
   RESIDENTIAL_UNIT_PERMISSION,
   SYSTEM_MESSAGE_PERMISSION,
   ZALO_CHANNEL_PERMISSION,
@@ -161,13 +162,9 @@ export type NhomMenu = {
 // Empty from 04/10/2026 ("Báo cáo" got `/bao-cao`) until 06/10/2026, when the prototype's menu brought
 // three items no screen and no backend route serve yet (ADR 0068 lần 5 #5: placed where the prototype
 // has them, disabled with "?", never faked). Two since 16/10/2026: "Danh bạ người dân" got `/nguoi-dan`
-// (ADR 0097).
+// (ADR 0097). One since 17/10/2026: "Gửi tin ZNS / SMS" got `/gui-thong-bao` (owner: the prototype's
+// screen first, its send route later — the screen draws that part as "?").
 export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
-  "Gửi tin ZNS / SMS": {
-    ten: "Gửi tin ZNS / SMS",
-    viSao:
-      "Soạn và gửi tin Zalo (ZNS) hoặc tin nhắn SMS tới người dân. Máy chủ chưa có tuyến gửi tin này, nên màn chưa được dựng.",
-  },
   "Hướng dẫn sử dụng": {
     ten: "Hướng dẫn sử dụng",
     viSao: "Tài liệu hướng dẫn cán bộ dùng phần mềm. Nội dung hướng dẫn chưa được soạn, nên màn chưa được dựng.",
@@ -206,7 +203,7 @@ export const NHOM_MENU: readonly NhomMenu[] = [
       // "nội bộ": "Gửi tin ZNS / SMS" sends to citizens; this one is the book read inside the software.
       { nhan: "Thông báo nội bộ", duong: "/thong-bao", khoa: QUYEN_SOAN_THONG_BAO },
       { nhan: "Danh bạ người dân", duong: "/nguoi-dan", khoa: CITIZEN_READ_PERMISSION },
-      { nhan: "Gửi tin ZNS / SMS", duong: null, khoa: null },
+      { nhan: "Gửi tin ZNS / SMS", duong: "/gui-thong-bao", khoa: NOTICE_SEND_PERMISSION },
       { nhan: "Phản ánh người dân", duong: "/phan-anh", khoa: QUYEN_XEM_PHAN_ANH },
       { nhan: "Bản đồ kinh tế số", duong: "/ban-do", khoa: ASSET_READ_PERMISSION },
     ],
