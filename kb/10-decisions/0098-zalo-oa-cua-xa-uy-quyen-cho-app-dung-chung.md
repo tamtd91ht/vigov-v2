@@ -9,7 +9,8 @@ owns_facts:
   - "MỘT Zalo App dùng chung cho cả nền tảng gọi API OA/ZBS; mỗi xã UỶ QUYỀN OA của mình cho app ấy qua OAuth v4 + PKCE (chủ dự án chốt 16/10/2026)"
   - "App ID, secret và host callback của app dùng chung là BIẾN MÔI TRƯỜNG ZALO_OA_APP_ID / ZALO_OA_APP_SECRET / ZALO_OA_CALLBACK_HOST, nhóm config ZaloOA, chỉ comms khai, bắt buộc ở staging/prod (chủ dự án chốt 16/10/2026)"
   - "callback uỷ quyền OA nhận trên host nền tảng ZALO_OA_CALLBACK_HOST (Zalo chỉ cho một callback URL mỗi app); xã tìm từ `state` CSPRNG của dòng yêu cầu uỷ quyền, đọc chéo xã có @cross-tenant, không bao giờ từ Host; giới hạn 60 lượt/phút mỗi mạng máy gọi"
-  - "access token + refresh token OA của xã niêm bằng DEK riêng từng xã của comms (như bot xã, 0022), chỉ ghi; việc nền làm mới trước 25 giờ; refresh token hỏng/quá 3 tháng = dòng 'cần uỷ quyền lại', sổ 0004 ghi chua-cau-hinh-kenh"
+  - "access token + refresh token OA của xã niêm bằng DEK riêng từng xã của comms (như bot xã, 0022), chỉ ghi; việc nền làm mới khi access token (sống 25 giờ) còn dưới 2 giờ; refresh token hỏng/quá 90 ngày = dòng 'cần uỷ quyền lại', sổ 0004 ghi chua-cau-hinh-kenh"
+  - "Zalo App dùng chung cho OA là một app MỚI, RIÊNG, chỉ để các xã uỷ quyền OA và gửi tin — không dùng lại App ID của Mini App hay app nào có sẵn (VihatGroup, VIHAT Software, VihatSoftware Giải pháp số); secret chỉ nằm ở comms-secrets (chủ dự án chốt 16/10/2026)"
   - "tài nguyên URL: zalo-oas/current (+ /authorization-links, /check, /templates, /templates/sync, /templates/{id}) dưới admin.zalo; callback công khai GET zalo-oa-authorizations (chủ dự án chốt 16/10/2026)"
   - "mẫu ZBS nạp từ OA của xã (template/all + template/info), chỉ mẫu ENABLE được gắn mốc; tham số mẫu BẮT BUỘC đúng tên ma_tra_cuu / moc_nhan / viec_tiep_theo, không có bảng ánh xạ (chủ dự án chốt 16/10/2026); bản cài event.MauTinXa đọc bảng mẫu đã gắn mốc"
   - "kết quả tra tài liệu Zalo ngày 16/10/2026 (developers.zalo.me, mức CAO): access token 25 giờ, refresh token 3 tháng dùng một lần và xoay sau mỗi lần làm mới, authorization code 10 phút, callback URL khai trong cấu hình app, ZNS gộp vào ZBS Template Message từ 01/01/2026"
@@ -118,6 +119,20 @@ phần chưa có).
   openapi, `go run ./tools/ingress` cho web-admin chuyển tiếp `zalo-oas`.
 - **Rủi ro nhận:** secret app là khoá mở token của mọi xã; lộ là xoay secret ở Zalo và uỷ quyền lại mọi xã.
   Chủ dự án chọn biến môi trường (Secret k8s) thay vì màn vận hành; xoay secret = thay Secret + rollout.
+
+## Sửa đổi 16/10/2026 (cùng ngày) — app nào, và hai con số
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác.
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Zalo App nào là "app dùng chung" của #1, #2 | **Một app MỚI, RIÊNG** trên developers.zalo.me, chỉ cho OA của các xã (chủ dự án chốt 16/10/2026, phiếu hỏi, theo đề xuất). **Không** dùng lại App ID của Mini App hay ba app có sẵn của tài khoản (VihatGroup, VIHAT Software, VihatSoftware Giải pháp số) |
+| 2 | Ngưỡng làm mới | Làm mới khi access token còn **dưới 2 giờ** (#6). Câu "làm mới trước 25 giờ" của bản đầu frontmatter là đọc nhầm thời hạn thành ngưỡng — đã sửa trong frontmatter |
+| 3 | Hạn refresh token | Zalo ghi "3 tháng"; mã dùng **90 ngày** (`domain.RefreshTokenTTL`) — ngắn hơn hoặc bằng mọi cách đếm "3 tháng", nên dòng chuyển "cần uỷ quyền lại" không bao giờ muộn hơn Zalo |
+
+**Vì sao app riêng (#1).** ADR 0032: một bề mặt Zalo thuộc hệ thống nào là do **secret của app nào ký nó** quyết. Dùng lại App ID của Mini App chung thì việc đổi token OA ký bằng secret của `vihat-miniapp` — secret ấy phải nằm cả ở `comms-secrets`, xoay nó là chạm hai hệ thống, và ranh giới ADR 0032 vẽ không còn đúng. App riêng thì secret có **một** chủ (comms), thu hồi hay xoay chỉ ảnh hưởng việc gửi tin OA, không ảnh hưởng đăng nhập Mini App.
+
+**Việc của ViHAT với app mới (một lần, ngoài mã):** tạo app → lấy App ID + Secret key vào `ZALO_OA_APP_ID` / `ZALO_OA_APP_SECRET` → khai *Official Account Callback URL* `https://<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-authorizations` → chọn nhóm quyền *Gửi tin qua SĐT* và *Quản lý Message Template* → gắn app với ZBS Account.
 
 ## Còn mở — không tự quyết
 
