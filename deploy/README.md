@@ -1029,6 +1029,13 @@ nó nằm trong `service-comms` (`internal/zalooa`, `internal/app/zalo_commune_o
 Logo dùng khi tạo app: `deploy/zalo-oa-app/vioa-logo-1024.png` (nền trong suốt) ·
 `vioa-logo-1024.jpg` (nền trắng, nếu Zalo đòi ảnh không trong suốt) · `vioa-logo.svg` (bản vector).
 
+**Một app cho cả dev và prod** (ADR 0098 §Sửa đổi lần 2): hai namespace đặt **cùng** `ZALO_OA_APP_ID` /
+`ZALO_OA_APP_SECRET`; `ZALO_OA_CALLBACK_HOST` thì theo môi trường. Callback khai với Zalo là URL **prod**.
+⚠ **OA thật của xã CHỈ nối ở prod; dev CHỈ dùng OA thử nghiệm.** Cùng một OA nối ở cả hai môi trường thì mỗi
+lần một bên làm mới token, bên kia mất token — tin cho dân ở prod dừng mà không báo vì sao. Lần thử đầu ở dev
+(14.5) cũng là lần đo xem Zalo có nhận callback của dev khi URL đã khai là prod hay không; ghi kết quả vào
+ADR 0098.
+
 ### 14.1 Thứ tự — làm đúng từ trên xuống
 
 | # | Việc | Ở đâu | Xong khi |

@@ -10,6 +10,7 @@ owns_facts:
   - "App ID, secret và host callback của app dùng chung là BIẾN MÔI TRƯỜNG ZALO_OA_APP_ID / ZALO_OA_APP_SECRET / ZALO_OA_CALLBACK_HOST, nhóm config ZaloOA, chỉ comms khai, bắt buộc ở staging/prod (chủ dự án chốt 16/10/2026)"
   - "callback uỷ quyền OA nhận trên host nền tảng ZALO_OA_CALLBACK_HOST (Zalo chỉ cho một callback URL mỗi app); xã tìm từ `state` CSPRNG của dòng yêu cầu uỷ quyền, đọc chéo xã có @cross-tenant, không bao giờ từ Host; giới hạn 60 lượt/phút mỗi mạng máy gọi"
   - "access token + refresh token OA của xã niêm bằng DEK riêng từng xã của comms (như bot xã, 0022), chỉ ghi; việc nền làm mới khi access token (sống 25 giờ) còn dưới 2 giờ; refresh token hỏng/quá 90 ngày = dòng 'cần uỷ quyền lại', sổ 0004 ghi chua-cau-hinh-kenh"
+  - "MỘT Zalo App cho cả vigov-dev và vigov-prod (cùng ZALO_OA_APP_ID/SECRET, token và oa_id ở CSDL riêng mỗi môi trường); callback khai với Zalo là URL prod; OA thật của xã CHỈ nối ở prod, dev CHỈ dùng OA thử nghiệm — cùng OA ở hai môi trường thì hai bên làm mất token của nhau (chủ dự án chốt 16/10/2026)"
   - "Zalo App dùng chung cho OA là một app MỚI, RIÊNG, chỉ để các xã uỷ quyền OA và gửi tin — không dùng lại App ID của Mini App hay app nào có sẵn (VihatGroup, VIHAT Software, VihatSoftware Giải pháp số); secret chỉ nằm ở comms-secrets (chủ dự án chốt 16/10/2026)"
   - "tài nguyên URL: zalo-oas/current (+ /authorization-links, /check, /templates, /templates/sync, /templates/{id}) dưới admin.zalo; callback công khai GET zalo-oa-authorizations (chủ dự án chốt 16/10/2026)"
   - "mẫu ZBS nạp từ OA của xã (template/all + template/info), chỉ mẫu ENABLE được gắn mốc; tham số mẫu BẮT BUỘC đúng tên ma_tra_cuu / moc_nhan / viec_tiep_theo, không có bảng ánh xạ (chủ dự án chốt 16/10/2026); bản cài event.MauTinXa đọc bảng mẫu đã gắn mốc"
@@ -133,6 +134,37 @@ Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói kh�
 **Vì sao app riêng (#1).** ADR 0032: một bề mặt Zalo thuộc hệ thống nào là do **secret của app nào ký nó** quyết. Dùng lại App ID của Mini App chung thì việc đổi token OA ký bằng secret của `vihat-miniapp` — secret ấy phải nằm cả ở `comms-secrets`, xoay nó là chạm hai hệ thống, và ranh giới ADR 0032 vẽ không còn đúng. App riêng thì secret có **một** chủ (comms), thu hồi hay xoay chỉ ảnh hưởng việc gửi tin OA, không ảnh hưởng đăng nhập Mini App.
 
 **Việc của ViHAT với app mới (một lần, ngoài mã):** tạo app → lấy App ID + Secret key vào `ZALO_OA_APP_ID` / `ZALO_OA_APP_SECRET` → khai *Official Account Callback URL* `https://<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-authorizations` → chọn nhóm quyền *Gửi tin qua SĐT* và *Quản lý Message Template* → gắn app với ZBS Account.
+
+## Sửa đổi 16/10/2026 (lần 2) — một app cho cả dev và prod
+
+Mục này ghi thêm, không sửa phần trên; mục này thắng khi nói khác. **Người quyết:** chủ dự án, 16/10/2026:
+*"chỉ tạo 1 app này nhưng có thể dùng cho cả profile dev và prod, mục đích cuối cùng vẫn chỉ là access
+token và oa id"*.
+
+| # | Điểm | Chốt |
+|---|---|---|
+| 1 | Số app | **MỘT** Zalo App cho cả `vigov-dev` và `vigov-prod`: hai namespace đặt **cùng** `ZALO_OA_APP_ID` / `ZALO_OA_APP_SECRET`. Mỗi môi trường giữ token và `oa_id` trong CSDL comms **của riêng nó**; không bảng, không token nào dùng chung giữa hai môi trường |
+| 2 | Host callback | Vẫn theo môi trường: `ZALO_OA_CALLBACK_HOST` của dev khác của prod. Hệ thống gửi `redirect_uri` theo host của môi trường đang chạy |
+| 3 | Callback khai với Zalo | Khai URL **prod**. Zalo chỉ có một ô *Official Account Callback URL* mỗi app |
+| 4 | Một OA, một môi trường | **OA thật của xã CHỈ nối ở prod; dev CHỈ dùng OA thử nghiệm.** Không bao giờ nối cùng một OA ở cả hai môi trường bằng app này |
+
+**Vì sao #4 là bắt buộc, không phải khuyến nghị.** Tài liệu Zalo (§Kết quả tra #4): cấp token mới cho một
+cặp app + OA thì **access token cũ hết hiệu lực ngay**, và refresh token dùng một lần. Cùng OA nối ở hai môi
+trường bằng cùng app thì mỗi lần một bên làm mới (2 giờ trước hạn) là bên kia mất token. Prod chuyển "cần
+uỷ quyền lại", tin cho dân dừng (`chua-cau-hinh-kenh`), và không có gì báo nguyên nhân là môi trường dev.
+Hệ thống **không chặn được** việc này bằng mã: hai CSDL không nhìn thấy nhau. Đây là quy ước vận hành, ghi ở
+`deploy/README.md` mục 14.
+
+### Còn mở — đo bằng một lần thử, không đoán
+
+Tài liệu Zalo đã đọc **không nói** `redirect_uri` có phải khớp đúng từng chữ URL đã khai hay không, hay chỉ
+cần cùng tên miền, hay khai được nhiều URL. Cách đo: khai callback là URL prod (#3), rồi bấm **Kết nối OA**
+trên web-admin **dev**.
+
+| Zalo xử lý | Hệ quả | Việc phải làm |
+|---|---|---|
+| Chấp nhận `redirect_uri` của dev, hoặc cho khai nhiều URL | Một app chạy cả hai môi trường | Không đổi mã. Ghi kết quả đo vào đây |
+| Chỉ chấp nhận đúng URL đã khai | Uỷ quyền từ dev bị Zalo từ chối | **Chuyển tiếp ở prod**: callback prod không tìm thấy `state` trong CSDL của mình thì `302` nguyên đường dẫn và query sang host callback của dev (một biến môi trường mới, chỉ đặt ở prod). An toàn vì `code` vô dụng nếu thiếu `code_verifier`, mà verifier chỉ nằm, đã niêm, ở CSDL dev (PKCE). Là thay đổi luật 11 điều kiện dừng #1 (biến mới) và luật 13 (tuyến công khai chuyển hướng) — **hỏi lại chủ dự án trước khi viết mã** |
 
 ## Còn mở — không tự quyết
 
