@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "service-identity",
-  "cap_nhat": "2026-10-15",
+  "cap_nhat": "2026-10-16",
   "muc": [
     {
       "id": "xa-tu-quan-ly-vai-tro-15-10",
@@ -710,6 +710,50 @@
       "viec": "Bảng lỗi web-admin-141026 dòng 22: thêm 4 khoá nhóm QUẢN TRỊ — admin.village 'Cấu hình thôn/tổ dân phố', admin.message 'Cấu hình lời hệ thống', admin.mail 'Cấu hình máy chủ thư', admin.zalo 'Cấu hình kênh Zalo' (thu_tu 44–47; admin.org/role/sla/user dời 48–51). Cấp sẵn: vai trò đang dùng có admin.lookup → cả 4, có admin.org → admin.village, mỗi vai trò một dòng audit_log (system); vai trò mẫu Chủ tịch UBND, Chánh Văn phòng thêm 4 khoá. 11 tuyến ghi + nhập Excel thôn/TDP và loại thôn → admin.village (đọc giữ AnyAuthenticated). Lần chốt đầu 15/10 là Reject 'theo prototype'; chủ dự án đảo cùng ngày: \"tôi thấy tách ra thêm 4 mục trên là hợp lý đó, làm đi\". Tên ban đầu có gạch dưới, đổi theo ADR 0030 trước khi 0032 chạy ở đâu (ADR 0090 §Sửa đổi 15/10/2026 — Bốn khoá cấu hình riêng).",
       "bang_chung": "54bb094f (migration 0032 + vai trò mẫu): go vet + go test -p 1 ./... service-identity xanh; check_quyen PASS (47 khoá); ca PG SKIP. f81168fe (tuyến identity: internal/http/routes.go, residential_unit_write.go, residential_unit_import.go, loai_don_vi_dan_cu.go, catalogue_import.go): go vet + go test -p 1 ./... xanh 6 dịch vụ; make check xanh tới web. 95c4f50c (đổi tên 4 khoá, sửa thẳng 0032): go vet + go test xanh 6 dịch vụ; check_quyen PASS (0 khoá lạ). Migration 0032 CHƯA chạy trên PostgreSQL thật.",
       "tiep_theo": "Chạy migration 0032 trên cụm dev rồi prod; kiểm vai trò giữ admin.lookup/admin.org đã nhận khoá mới và có dòng audit_log. Sheet dòng 22: đổi Reject → Fixed."
+    },
+    {
+      "id": "danh-ba-nguoi-dan-migration-0033-16-10",
+      "menu": "danh-ba-nguoi-dan",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Migration 0033: bảng citizen_contact (MODULUS 8), citizen_group (bảng thường), citizen_contact_group (MODULUS 8) cho menu Danh bạ người dân — ADR 0097 (chủ dự án 16/10/2026: identity sở hữu, một số một dòng sống qua live_key, is_active, nguồn nhap-tay/nhap-excel, household_code để dành, thành viên nhóm xoá mềm theo khuôn 0031).",
+      "bang_chung": "85006bc3 — make khoaduynhat PASS (227 khai báo); go test -race ./service-identity/migrations OK (9 test mới + TestOnlyGrowingTablesArePartitioned); make kb sinh 3 thực thể vào data-ownership.json. CHƯA ÁP LÊN POSTGRESQL THẬT (máy không có PG).",
+      "tiep_theo": "Cụm thật xác nhận FK từ bảng phân mảnh sang thon_to_dan_pho (bảng thường). Chú thích đầu tệp 0033:51-52 nói app lưu '849xx' nhưng domain lưu dạng quốc gia '0…' (CHECK nhận cả hai, không hỏng) — không sửa tệp đã commit vì checksum core/migrate; ghi ở đây để người đọc không tin chú thích ấy."
+    },
+    {
+      "id": "danh-ba-nguoi-dan-0034-cap-vai-tro-16-10",
+      "menu": "danh-ba-nguoi-dan",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Migration 0034: cấp mặc định citizen.read → chanh-van-phong · truong-bo-phan · chuyen-vien · can-bo-mot-cua · truong-thon; citizen.update → chanh-van-phong · can-bo-mot-cua · truong-thon (theo ma trận prototype; CT/PCT/QTHT đã có ở 0028, không cấp lại). 'tiep-nhan' của prototype = 'can-bo-mot-cua' (ADR 0055 §4, prototype default_config.json:306-307); chủ dự án chốt sau khi phiên chính đánh giá tác động phương án tạo vai trò mẫu thứ 9 (trùng nghĩa, đụng ADR 0055/0095, test ghim 8, ma trận web).",
+      "bang_chung": "d7261020 — go test -race ./service-identity/migrations OK (test ghim đúng 8 cặp, mọi mã vai trò phải có trong domain.RoleTemplates). CHƯA ÁP LÊN POSTGRESQL THẬT.",
+      "tiep_theo": "Mẫu vai trò Go (domain.RoleTemplates) thêm đúng 8 cặp ấy cùng test đếm — làm trong thẻ store (TASK-05)."
+    },
+    {
+      "id": "danh-ba-nguoi-dan-domain-16-10",
+      "menu": "danh-ba-nguoi-dan",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "Tầng domain danh bạ người dân: CitizenContact/CitizenGroup/CitizenContactSource; NormalizeCitizenPhone (dạng quốc gia 0…), CitizenPhoneIdentityForm (dạng 84… của dinh_danh_cong_dan, round trip hai chiều) để phép nối cột Zalo là so bằng; kiểm đầu vào; lý do xoá bắt buộc với người, tuỳ chọn với nhóm; TagSensitiveWarning; đặc tả tệp mẫu Excel 7 cột (Họ và tên · Số điện thoại · Thôn, tổ dân phố · Địa chỉ · Nhóm · Nhãn · Ghi chú), 200 dòng, lỗi nêu dòng/cột không nêu giá trị.",
+      "bang_chung": "d2df3408 — go build/vet; go test -race ./service-identity/internal/domain OK (24 bài mới); gofmt sạch; make test toàn kho exit 0 (16/10/2026). golangci-lint không có trên máy này.",
+      "tiep_theo": "Trần độ dài (địa chỉ 500, ghi chú 1000, nhãn 20×50, 20 nhóm/dòng) là lựa chọn của người dựng, chưa chủ dự án chốt — nêu nếu khách hỏi."
+    },
+    {
+      "id": "danh-ba-nguoi-dan-backend-con-lai-16-10",
+      "menu": "danh-ba-nguoi-dan",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "viec": "Phần backend còn lại của Danh bạ người dân (ADR 0097): store (danh sách keyset + đếm cùng điều kiện, tìm từ khoá khớp cả một phần số, nhóm/nhãn/thôn, mở số đầy đủ, thành viên nhóm) + hàm nối cột Zalo (hình xuyên xã thứ năm, chỉ boolean theo (tenant, số)) + mẫu vai trò Go theo 0034; app (vết cùng giao dịch, che số, nhập Excel tất-cả-hoặc-không); http (tuyến citizen-contacts / citizen-groups / tìm, đếm, mở số, 3 tuyến nhập; Deps, mount, wiring; make kb → openapi).",
+      "bang_chung": "Đang làm — thẻ TASK-05 (store) giao go-service-builder 16/10/2026.",
+      "tiep_theo": "Thứ tự: TASK-05 store → TASK-06 app → TASK-07 http + routes + main.go + make kb → TASK-08 npm run gen:api. Sau đó web-admin (TASK-10..12) và test-designer (TASK-13/14). Ngoài lượt: Gửi tin ZNS/SMS, xuất Excel danh bạ, đồng bộ Mini App, lọc theo thôn của trưởng thôn. Nợ khách: chính sách riêng tư Mini App phải nói về phép nối số ↔ phiên trước khi lên thật (ADR 0097 §6)."
+    },
+    {
+      "id": "co-che-them-vai-tro-mau-16-10",
+      "trang_thai": "chua_lam",
+      "no_confirm": [],
+      "viec": "Cơ chế thêm vai trò mẫu mới khi nghiệp vụ phát sinh — chủ dự án 16/10/2026 (lúc chốt 'tiep-nhan' = can-bo-mot-cua): 'nên có cơ chế thêm role này vì lâu dài kiểu gì cũng có phát sinh role theo nghiệp vụ mới'. Hiện: vai trò mẫu ghim cứng trong domain.RoleTemplates + migration cấp quyền mỗi lần; xã tự tạo vai trò riêng đã có (ADR 0095).",
+      "bang_chung": "Chưa làm. Phiên chính đã hỏi lại chủ dự án: ý là vai trò mẫu CẤP NỀN TẢNG thêm được không cần sửa mã (áp cho mọi xã), hay lớp xã-tự-tạo của ADR 0095 đã đủ — chưa có trả lời (16/10/2026).",
+      "tiep_theo": "Chờ chủ dự án trả lời rồi mới bàn thiết kế (nơi lưu mẫu: bảng ở platform hay identity; ai được thêm; cách lan tới xã cũ; ADR 0055/0095 sửa đổi). Không thiết kế trước."
     }
   ]
 }

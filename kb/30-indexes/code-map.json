@@ -4858,6 +4858,14 @@
       "kind": "func",
       "at": "service-comms/internal/domain/noi_dung_mini_app.go:568"
     },
+    "domain.CheckCitizenContactInput": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:261"
+    },
+    "domain.CheckCitizenGroupInput": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:405"
+    },
     "domain.CheckCitizenID": {
       "kind": "func",
       "at": "service-comms/internal/domain/citizen_notification_preference.go:38"
@@ -5346,6 +5354,46 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/petition_field.go:128"
     },
+    "domain.CitizenContact": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_directory.go:53"
+    },
+    "domain.CitizenContactImportColumns": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory_import.go:47"
+    },
+    "domain.CitizenContactImportError": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_directory_import.go:118"
+    },
+    "domain.CitizenContactImportExampleRow": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory_import.go:77"
+    },
+    "domain.CitizenContactImportGuide": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory_import.go:86"
+    },
+    "domain.CitizenContactImportRow": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_directory_import.go:105"
+    },
+    "domain.CitizenContactInput": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_directory.go:242"
+    },
+    "domain.CitizenContactSource": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_directory.go:33"
+    },
+    "domain.CitizenGroup": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_directory.go:76"
+    },
+    "domain.CitizenGroupInput": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/citizen_directory.go:396"
+    },
     "domain.CitizenLetter": {
       "kind": "type",
       "at": "service-documents/internal/domain/citizen_letter.go:449"
@@ -5385,6 +5433,10 @@
     "domain.CitizenNotificationPreference": {
       "kind": "type",
       "at": "service-comms/internal/domain/citizen_notification_preference.go:20"
+    },
+    "domain.CitizenPhoneIdentityForm": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:233"
     },
     "domain.CitizenReportBreakdown": {
       "kind": "type",
@@ -7254,6 +7306,34 @@
       "kind": "func",
       "at": "service-petitions/internal/domain/catalogue_color.go:23"
     },
+    "domain.NormalizeCitizenContactAddress": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:301"
+    },
+    "domain.NormalizeCitizenContactDeleteReason": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:428"
+    },
+    "domain.NormalizeCitizenContactFullName": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:288"
+    },
+    "domain.NormalizeCitizenContactNote": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:310"
+    },
+    "domain.NormalizeCitizenContactTags": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:325"
+    },
+    "domain.NormalizeCitizenContactUnitRef": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:366"
+    },
+    "domain.NormalizeCitizenGroupDeleteReason": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:439"
+    },
     "domain.NormalizeCitizenLetterDeleteReason": {
       "kind": "func",
       "at": "service-identity/internal/domain/citizen_letter_deadline.go:186"
@@ -7265,6 +7345,10 @@
     "domain.NormalizeCitizenLetterTypeDeleteReason": {
       "kind": "func",
       "at": "service-documents/internal/domain/citizen_letter_type.go:58"
+    },
+    "domain.NormalizeCitizenPhone": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:177"
     },
     "domain.NormalizeCommuneZaloBotName": {
       "kind": "func",
@@ -7946,6 +8030,10 @@
       "kind": "func",
       "at": "service-comms/internal/domain/staff_notification.go:99"
     },
+    "domain.ReadCitizenContactImportSheet": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory_import.go:129"
+    },
     "domain.ReadDocumentTypeSheet": {
       "kind": "func",
       "at": "service-documents/internal/domain/document_type_import.go:87"
@@ -8025,6 +8113,10 @@
     "domain.RequiresIssuedResult": {
       "kind": "func",
       "at": "service-documents/internal/domain/citizen_letter.go:152"
+    },
+    "domain.ResidentialUnitChoiceLabel": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory_import.go:73"
     },
     "domain.ResidentialUnitCodeCandidate": {
       "kind": "func",
@@ -8281,6 +8373,10 @@
     "domain.SortedKinds": {
       "kind": "func",
       "at": "service-finance/internal/domain/budget_import.go:1117"
+    },
+    "domain.SplitCitizenContactTags": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/citizen_directory.go:355"
     },
     "domain.SplitIssueText": {
       "kind": "func",

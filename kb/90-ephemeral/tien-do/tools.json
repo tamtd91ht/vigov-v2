@@ -1,7 +1,7 @@
 {
   "_luoc_do": "Thủ tục + lược đồ: /progress. Rào: .claude/hooks/progress_guard.py. KHÔNG xoá mục của người khác — xong thì đổi trang_thai, không xoá dòng. Sửa xong: make kb",
   "module": "tools",
-  "cap_nhat": "2026-10-15",
+  "cap_nhat": "2026-10-16",
   "muc": [
     {
       "id": "tien-do-san-pham-screens-15-10",
@@ -190,6 +190,14 @@
       "no_confirm": [],
       "bang_chung": "b5cd41c6 — tools/apidoc/route.go openAPIPath + TestTrailingWildcardBecomesPlainPathParam; go test tools/apidoc tools/ingress xanh; 5e8aceb1 openapi có /api/v1/commune-basemap/{file}, operationId comms_get_commune_basemap_by_file.",
       "tiep_theo": ""
+    },
+    {
+      "id": "doc-guard-ngoai-le-chuong-16-16-10",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "viec": "doc_guard: ngoại lệ CÓ TÊN (một tệp, không phải mẫu) cho phép tạo docs/ui-ux/16-danh-ba-nguoi-dan.md — menu có dòng trong muc-menu.ts từ 06/10 nhưng không có chương vì prototype thêm sau lần chép 16/09; sổ tiến độ gom theo slug chương và @screen cần chương để trỏ (chủ dự án 16/10/2026).",
+      "bang_chung": "18e5dd34 — .claude/hooks/doc_guard.py TAO_DUOC + tools/test_hooks.py ca 'the named chapter-16 exception' PASS; make hooks 317/317. Ca 'a NEW .md under docs/' vẫn BLOCK.",
+      "tiep_theo": "Chương mới cho một menu khác = thêm một tên vào TAO_DUOC, mỗi lần là quyết định của chủ dự án."
     }
   ]
 }
