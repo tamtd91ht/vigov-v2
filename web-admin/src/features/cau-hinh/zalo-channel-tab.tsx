@@ -127,6 +127,7 @@ import {
   type Refusal,
   type RefusalField,
 } from "./zalo-groups-form";
+import { CommuneZaloOASection, useZaloOA, ZaloOATemplatesSection } from "./zalo-oa-section";
 
 type Directory = KetQua<{ items: DirectoryPerson[] }>;
 /** `GET /api/v1/org-units` as read: the people join needs `UnitName`, the group scope picker the tree. */
@@ -170,6 +171,8 @@ export function ZaloChannelTab() {
   const [platformReady, setPlatformReady] = useState<boolean | null>(null);
   /** Bumped after a bot switch: comms ended every group link with it (ADR 0092), so the list is read again. */
   const [groupsVersion, setGroupsVersion] = useState(0);
+  /** The commune's OA (ADR 0098), shared by its two sections; also reads the callback's `?oa=` once. */
+  const oa = useZaloOA(allowed);
 
   const readPlatformReady = useCallback(() => {
     // After a bot switch the answer may change. A failed re-read keeps what was shown.
@@ -289,6 +292,13 @@ export function ZaloChannelTab() {
             setGroupsVersion((v) => v + 1);
           }}
         />
+      }
+      oaSection={<CommuneZaloOASection state={oa} />}
+      templateSection={
+        // Only with a live OA (ADR 0098): keyed on the OA so a reconnect reads the templates afresh.
+        oa.current !== null && oa.current.ok && oa.current.duLieu.has_oa && oa.current.duLieu.oa !== null ? (
+          <ZaloOATemplatesSection key={oa.current.duLieu.oa.oa_id} />
+        ) : null
       }
       groupSection={
         <ZaloGroupsSection
@@ -468,6 +478,8 @@ export function ZaloChannelView({
   dueSoonError = null,
   people,
   botSection,
+  oaSection = null,
+  templateSection = null,
   groupSection = null,
   launchQrSection = null,
 }: {
@@ -484,6 +496,10 @@ export function ZaloChannelView({
   people: PeopleState;
   /** §3, stateful (`CommuneBotSection`) — a slot, so this view stays pure for the tests. */
   botSection: ReactNode;
+  /** "OA Zalo của xã" (ADR 0098), stateful (`CommuneZaloOASection`) — a slot for the same reason. */
+  oaSection?: ReactNode;
+  /** "Mẫu tin ZBS" (ADR 0098), stateful (`ZaloOATemplatesSection`), only with a live OA — a slot for the same reason. */
+  templateSection?: ReactNode;
   /** "Nhóm Zalo" (ADR 0092), stateful (`ZaloGroupsSection`) — a slot for the same reason. */
   groupSection?: ReactNode;
   /** "Mã QR mở Mini App của xã" (ADR 0070 §13/10), stateful (`CommuneLaunchQrSection`) — a slot for the same reason. */
@@ -668,6 +684,10 @@ export function ZaloChannelView({
       </section>
 
       {botSection}
+
+      {oaSection}
+
+      {templateSection}
 
       {groupSection}
 

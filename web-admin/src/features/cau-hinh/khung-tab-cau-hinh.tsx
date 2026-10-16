@@ -55,8 +55,10 @@ const SYSTEM_PANELS: Record<SystemTabId, (active: boolean) => ReactNode> = {
 
 /** Thanh tab + các panel của màn Cấu hình — the prototype's nine tabs (owner, 12/10/2026). */
 // vi-name-ok: existing export of this file, kept so its callers do not change (rule 12 inv 3)
-export function KhungTabCauHinh() {
-  return <TabFrame tabs={TAB_CAU_HINH} panels={NOI_DUNG} idPrefix="cau-hinh" label="Các phần cấu hình" />;
+export function KhungTabCauHinh({ initialTab = null }: { initialTab?: MaTabCauHinh | null }) {
+  return (
+    <TabFrame tabs={TAB_CAU_HINH} panels={NOI_DUNG} idPrefix="cau-hinh" label="Các phần cấu hình" initialTab={initialTab} />
+  );
 }
 
 /**

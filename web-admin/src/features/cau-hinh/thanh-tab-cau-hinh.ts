@@ -128,6 +128,17 @@ export function systemTabFromQuery(tab: string | string[] | undefined): SystemTa
 }
 
 /**
+ * The `/cau-hinh` tab a `?tab=` value names, or `null` — same matching as `systemTabFromQuery`. Needed
+ * since ADR 0098: comms' OA-authorisation callback sends the browser back to `/cau-hinh?tab=kenh-zalo&oa=…`,
+ * and without it the screen opened on its first tab with the outcome toasted over the wrong panel. It only
+ * picks the starting tab: the gate still decides whether that tab shows.
+ */
+export function configTabFromQuery(tab: string | string[] | undefined): MaTabCauHinh | null {
+  if (typeof tab !== "string") return null;
+  return TAB_CAU_HINH.find((t) => t.ma === tab)?.ma ?? null;
+}
+
+/**
  * Các tab được hiện, giữ nguyên thứ tự của `ds`.
  *
  * FAIL CLOSED với tab có cổng: chưa đọc xong phiên (`null`) hoặc đọc hỏng thì tab ấy KHÔNG hiện —

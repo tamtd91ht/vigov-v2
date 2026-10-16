@@ -7,6 +7,7 @@ import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { ConfigPageHeader } from "@/features/cau-hinh/config-page-header";
 import { KhungTabCauHinh } from "@/features/cau-hinh/khung-tab-cau-hinh";
 import { movedTabRoute } from "@/features/cau-hinh/moved-tabs";
+import { configTabFromQuery } from "@/features/cau-hinh/thanh-tab-cau-hinh";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -93,8 +94,11 @@ export default async function TrangCauHinh({
   // Người dùng and Phân quyền moved to `/nguoi-dung` (05/10/2026); Lịch làm việc, Nhật ký hệ thống and
   // Nhận diện xã to `/he-thong` (12/10/2026). A saved `?tab=` link to any of them lands on its new
   // screen instead of on the first tab here (`moved-tabs.ts`).
-  const moved = movedTabRoute((await searchParams).tab);
+  const tab = (await searchParams).tab;
+  const moved = movedTabRoute(tab);
   if (moved !== null) redirect(moved);
+  // The starting tab only (ADR 0098: the OA callback returns to `?tab=kenh-zalo`); the gate still decides.
+  const initialTab = configTabFromQuery(tab);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -109,7 +113,7 @@ export default async function TrangCauHinh({
               inside its own region, never the page. No gap here: the frame owns the 28px between the
               strip and the content (`khung-tab-cau-hinh.tsx`). */}
           <div className="min-w-0">
-            <KhungTabCauHinh />
+            <KhungTabCauHinh initialTab={initialTab} />
           </div>
         </main>
         </div>
