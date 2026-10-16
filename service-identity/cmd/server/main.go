@@ -224,6 +224,11 @@ func run(log *slog.Logger) error {
 	// The commune's citizen-letter deadline rules (migration 0027, ADR 0085 B). One store behind the
 	// gRPC ResolveCitizenLetterDeadline and the configuration routes, so both read one place.
 	letterRules := idstore.NewCitizenLetterDeadlineRuleStore(kho)
+	// Danh bạ người dân (migration 0033, ADR 0097): the contact rows (with the Zalo column's join to
+	// this commune's citizen sessions — crosstenant shape 5) and the commune's groups. Both on `kho`:
+	// every statement binds tenant_id from the context or the transaction.
+	citizenContacts := idstore.NewCitizenDirectoryStore(kho)
+	citizenGroups := idstore.NewCitizenGroupStore(kho)
 	// The CITIZEN session registry (migration 0004) — the only store here built on the RAW *sql.DB
 	// rather than on `kho`, and the exemption is argued in full at NewPhienCongDanStore: this
 	// lookup is what ESTABLISHES the commune, so there is no commune with which to scope it
@@ -542,7 +547,11 @@ func run(log *slog.Logger) error {
 		// Citizen-letter deadline rules: the read store and the write use case (audit in the same tx).
 		CitizenLetterDeadlineRules:      letterRules,
 		WriteCitizenLetterDeadlineRules: app.NewCitizenLetterDeadlineRules(kho, letterRules),
-		Automation:                      automation,
+		// Danh bạ người dân (ADR 0097): one use case for the reads (the mask lives there), the writes
+		// (each with its audit entry in one transaction) and the Excel import. The template's and the
+		// import's residential units come from ThonToDanPho above, active only.
+		CitizenDirectory: app.NewCitizenDirectory(kho, citizenContacts, citizenGroups),
+		Automation:       automation,
 		// This service's OWN audit_log, on its own handle — never another service's (ADR 0054 §1).
 		AuditLog: audit.NewLog(kho),
 		// Logo + web-admin banner on GET /api/v1/communes/current (ADR 0069 #8): the SAME platform client

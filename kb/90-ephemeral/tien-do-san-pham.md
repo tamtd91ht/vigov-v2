@@ -3,7 +3,7 @@ id: tien-do-san-pham
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: d2df3408
+derived_from_commit: a384a3fa
 expires: 2027-01-14
 owns_facts:
   - "tiến độ theo PHÂN HỆ SẢN PHẨM: chương đặc tả nào có bao nhiêu tuyến, bao nhiêu tuyến đã có màn gọi, và mỗi mục menu web-admin đang ở đâu"
@@ -44,9 +44,9 @@ phần nào của đặc tả chưa có tuyến nào. Một chương `4/4` vẫn
 | **13** Báo cáo điều hành | 1 | 1/1 | ✓ |
 | **14** Cấu hình hệ thống | 142 | 140/142 | ✓ |
 | **15** Phụ lục: giao diện dùng chung & xác thực | 9 | 9/9 | ✓ |
-| **16** Danh bạ người dân | — | — | — |
+| **16** Danh bạ người dân | 16 | 0/16 | ✗ |
 
-Tổng **397 tuyến** trong hợp đồng. **22** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
+Tổng **413 tuyến** trong hợp đồng. **22** tuyến chưa khai `@screen` nên không gom được vào chương nào — chúng không mất đi, chỉ chưa nói được mình phục vụ màn nào.
 
 ## 2 · web-admin, theo từng mục menu
 

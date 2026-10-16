@@ -728,6 +728,8 @@ type mayChu struct {
 	// The citizen-letter deadline rules, read store and write use case — citizen_letter_deadline_rule_test.go.
 	letterRules      *letterRulesReadFake
 	writeLetterRules *letterRulesWriteFake
+	// The citizen contact directory use case (ADR 0097) — citizen_directory_test.go.
+	citizenDirectory *citizenDirectoryFake
 	// The audit-log reader — see audit_entries_test.go.
 	auditLog *auditLogFake
 	// The automation use case — see automationFake in automation_test.go.
@@ -796,6 +798,7 @@ func dungMayChu(t *testing.T) *mayChu {
 	ghiSLA := ghiSLAMau()
 	letterRules := letterRulesReadSample()
 	writeLetterRules := letterRulesWriteSample()
+	citizenDirectory := citizenDirectorySample()
 	auditLog := &auditLogFake{}
 	automation := automationSample()
 	idleSessions := &idleRevokerFake{}
@@ -855,6 +858,8 @@ func dungMayChu(t *testing.T) *mayChu {
 		// The citizen-letter deadline rules. Register panics without either.
 		CitizenLetterDeadlineRules:      letterRules,
 		WriteCitizenLetterDeadlineRules: writeLetterRules,
+		// The sixteen citizen-directory routes. Register panics without it.
+		CitizenDirectory: citizenDirectory,
 		// The audit-log reader — audit_entries_test.go.
 		AuditLog: auditLog,
 		// The logo/banner read behind /communes/current — xa_test.go. Commune A has both images,
@@ -948,6 +953,8 @@ func dungMayChu(t *testing.T) *mayChu {
 
 		letterRules:      letterRules,
 		writeLetterRules: writeLetterRules,
+
+		citizenDirectory: citizenDirectory,
 
 		auditLog:   auditLog,
 		automation: automation,

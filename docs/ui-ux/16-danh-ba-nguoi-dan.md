@@ -208,7 +208,7 @@ sau khi dựng** (sinh từ mã, ADR 0014) — không chép tay ở đây.
 | `citizen-groups` | danh sách kèm `member_count` · lập · (sửa) · gỡ mềm | đọc `citizen.read` · ghi `citizen.update` |
 
 Phản hồi danh sách: `id`, `full_name`, `phone` **đã che**, `residential_unit_id` + tên, `tags`,
-`has_zalo`, `is_active`, `group_ids`, `source`, `created_at`. **Không** `address`, **không** `note`.
+`has_own_app_session` (cột Zalo — tên theo nghĩa thật của giá trị: số đã đăng nhập Mini App của xã), `is_active`, `group_ids`, `source`, `created_at`. **Không** `address`, **không** `note`.
 
 ---
 

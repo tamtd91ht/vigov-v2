@@ -592,6 +592,11 @@ type Deps struct {
 	// surface a commune has no way to give its letters a deadline at all.
 	CitizenLetterDeadlineRules      CitizenLetterDeadlineRuleReader
 	WriteCitizenLetterDeadlineRules CitizenLetterDeadlineRuleWriting
+	// CitizenDirectory — Danh bạ người dân (migration 0033, ADR 0097): the sixteen routes on
+	// /api/v1/citizen-contacts, citizen-groups and the three import nouns. ONE use case for reads
+	// and writes, because the mask on every number is applied there (citizen_directory.go).
+	// *app.CitizenDirectory in production.
+	CitizenDirectory CitizenDirectoryUseCases
 	// Automation —Cấu hình → Tự động hoá (migration 0017, ADR 0058): the three job cards, their
 	// settings, and "run now". A use case (every write shares its audit entry's transaction). See
 	// AutomationJobs in automation.go. *app.Automation in production.
@@ -729,6 +734,8 @@ func Register(mux *http.ServeMux, d Deps) {
 		panic("identity/http: thiếu use case ghi thời hạn xử lý — xã sẽ không có cách nào cấu hình SLA, và mọi tuyến vào sổ vẫn bị từ chối")
 	case d.CitizenLetterDeadlineRules == nil || d.WriteCitizenLetterDeadlineRules == nil:
 		panic("identity/http: thiếu kho hoặc use case quy tắc hạn đơn thư — bốn tuyến /api/v1/citizen-letter-deadline-rules sẽ panic, và xã không có cách nào đặt hạn cho đơn thư")
+	case d.CitizenDirectory == nil:
+		panic("identity/http: thiếu use case danh bạ người dân — mười sáu tuyến /api/v1/citizen-contacts*, /api/v1/citizen-groups* sẽ panic khi có người gọi")
 	case d.AuditLog == nil:
 		panic("identity/http: thiếu bộ đọc nhật ký hệ thống — GET /api/v1/identity-audit-entries sẽ panic khi có người gọi")
 	case d.Automation == nil:
@@ -3122,6 +3129,294 @@ func Register(mux *http.ServeMux, d Deps) {
 		authz.RequirePermission(d.Checker, "admin.sla")(
 			idem.KhongCan("xoá một quy tắc đã xoá trả 404 ở cả hai lần vì câu lệnh mang `deleted_at IS NULL`; lần gửi thứ hai không ghi đè người xoá và lý do của lần xoá thật")(
 				http.HandlerFunc(h.RemoveCitizenLetterDeadlineRule))))
+
+	// ---- Danh bạ người dân (16-danh-ba-nguoi-dan.md, migration 0033, ADR 0097) ---------------------
+	//
+	// TWO KEYS, BOTH SEEDED BY MIGRATION 0028 (rule 5, invariant 3c): `citizen.read` on the reads,
+	// `citizen.update` on the writes, the three import routes AND the full-number read — the owner's
+	// choice of 16/10/2026 instead of a third unmask key (ADR 0097 §1). No key invented. The nouns
+	// `citizen-contacts` / `citizen-groups` are the ADR's (D1) and ubiquitous-language.md's.
+	//
+	// EVERY NUMBER IS MASKED on every route but GET …/{id}/phone (ADR 0097 D2); the keyword of the
+	// search and the count travels in the BODY (D11). No export route exists, masked or not (§2).
+
+	// @summary  Danh bạ người dân của xã — một trang, số điện thoại đã che, không địa chỉ, không ghi chú; lọc theo nhóm, thôn/tổ, đang liên hệ, đã đăng nhập Mini App
+	// @screen   16-danh-ba-nguoi-dan §3
+	// Filters: `group_id`, `residential_unit_id` (ULIDs), `active` (true = only people still contacted;
+	// absent = everyone), `has_own_app_session` (true/false = the Zalo column's value). No keyword here —
+	// POST /api/v1/citizen-contact-searches carries it in the body. 400 is a malformed filter or page request.
+	//
+	// @reply    200 page.Result[citizenContactOut]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-contacts",
+		authz.RequirePermission(d.Checker, "citizen.read")(
+			http.HandlerFunc(h.ListCitizenContacts)))
+
+	// A POST for a read, for the reason POST /api/v1/staff/searches gives: the keyword matches ANY PART
+	// of a phone number (ADR 0097 D11, risk accepted in §4), and a number fragment on a URL is personal
+	// data in every access log (rule 3, forbidden #4). Same rows, same shape, same key as the list.
+	//
+	// @summary  Tìm trong danh bạ người dân theo họ tên, địa chỉ (bỏ dấu) hoặc bất kỳ phần nào của số điện thoại — từ khoá đi trong THÂN, không lên URL
+	// @screen   16-danh-ba-nguoi-dan §3
+	// @request  citizenContactSearchIn
+	// @reply    200 page.Result[citizenContactOut]
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-contact-searches",
+		authz.RequirePermission(d.Checker, "citizen.read")(
+			idem.KhongCan("tìm kiếm chỉ đọc, không đổi trạng thái nào — gửi lại chỉ là đọc lại, không sinh dòng, mã hay vết thứ hai")(
+				http.HandlerFunc(h.SearchCitizenContacts))))
+
+	// The separate count route (ADR 0097 D8; ADR 0071): the "n người" on the tab label under the current
+	// filter. core/page refuses a total inside the page on purpose. The same filter through the same code
+	// as the search, so the count and the list it heads cannot disagree.
+	//
+	// @summary  Đếm số người dân khớp bộ lọc và từ khoá hiện tại của danh bạ — từ khoá đi trong THÂN
+	// @screen   16-danh-ba-nguoi-dan §2
+	// @request  citizenContactCountQueryIn
+	// @reply    200 citizenContactCountOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-contact-count-queries",
+		authz.RequirePermission(d.Checker, "citizen.read")(
+			idem.KhongCan("đếm chỉ đọc, không đổi trạng thái nào — gửi lại chỉ là đếm lại, không sinh dòng, mã hay vết thứ hai")(
+				http.HandlerFunc(h.CountCitizenContacts))))
+
+	// @summary  Các nhãn đang dùng trong danh bạ người dân của xã và số người mang mỗi nhãn — dải lọc trên bảng
+	// @screen   16-danh-ba-nguoi-dan §3
+	// @reply    200 citizenContactTagsOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-contact-tags",
+		authz.RequirePermission(d.Checker, "citizen.read")(
+			http.HandlerFunc(h.ListCitizenContactTags)))
+
+	// POST idem.Required(idem.MoKhiHong), AND TWO LAYERS PROTECT IT: the key replays the 201 (and the
+	// row id) to a retry, and the live-unique key (tenant_id, phone) refuses a second live row with the
+	// same number whether or not the header was sent — so the cache failing OPEN costs nothing.
+	//
+	// @summary  Thêm một người dân vào danh bạ của xã — họ tên và số điện thoại bắt buộc; nhóm, nhãn, thôn/tổ, địa chỉ, ghi chú tuỳ chọn
+	// @screen   16-danh-ba-nguoi-dan §5
+	// 400 is a body that is not JSON, a missing name or number, a number that is not a national mobile
+	// / landline, an over-long field, a tag with a comma, a malformed unit id, or a `citizen_group_not_found`
+	// group id. 409 `phone_taken` is a live row of this commune with the same (normalised) number.
+	//
+	// @request  citizenContactIn
+	// @reply    201 citizenContactCreatedOut
+	// @reply    400 httpx.Error invalid_request citizen_group_not_found
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error phone_taken
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-contacts",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.CreateCitizenContact))))
+
+	// @summary  Chi tiết một người dân trong danh bạ cho hộp thoại sửa — kèm địa chỉ và ghi chú, số điện thoại vẫn che
+	// @screen   16-danh-ba-nguoi-dan §5
+	// 404 is an id matching no live row OF THIS COMMUNE — one answer for an invented id, a removed row
+	// and another authority's row.
+	//
+	// @reply    200 citizenContactDetailOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_contact_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-contacts/{id}",
+		authz.RequirePermission(d.Checker, "citizen.read")(
+			http.HandlerFunc(h.GetCitizenContact)))
+
+	// idem.KhongCan, AND THE STATE IS THE PROTECTION: the use case writes nothing — no UPDATE, no
+	// membership change, no audit entry — when the form equals the row, so a second identical PATCH
+	// leaves one row and one entry.
+	//
+	// @summary  Lưu hộp thoại sửa thông tin người dân — cả biểu mẫu, kể cả nhóm, nhãn và ô Đang liên hệ
+	// @screen   16-danh-ba-nguoi-dan §5
+	// @request  citizenContactIn
+	// @reply    204 -
+	// @reply    400 httpx.Error invalid_request citizen_group_not_found
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_contact_not_found
+	// @reply    409 httpx.Error phone_taken
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/citizen-contacts/{id}",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì và không để vết khi biểu mẫu không đổi, nên lần gửi thứ hai để lại đúng một dòng và một vết")(
+				http.HandlerFunc(h.UpdateCitizenContact))))
+
+	// A NOMINALISED SUB-RESOURCE carrying a MANDATORY reason (ADR 0097 D7; skills/rest-api-design §3),
+	// the shape of POST /api/v1/roles/{id}/deletion. 204 and not 201: the use case returns no record
+	// of the act to echo, and the row is unreadable through GET the moment this answers.
+	//
+	// idem.KhongCan — the UPDATE carries `deleted_at IS NULL`, so a second request answers 404 and
+	// cannot overwrite who removed the person or why.
+	//
+	// @summary  Gỡ một người dân khỏi danh bạ (xoá mềm), kèm lý do bắt buộc
+	// @screen   16-danh-ba-nguoi-dan §4
+	// @request  citizenContactDeletionIn
+	// @reply    204 -
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_contact_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-contacts/{id}/deletion",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.KhongCan("gỡ một người đã gỡ cho cùng một kết quả: câu UPDATE mang `deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.RemoveCitizenContact))))
+
+	// "Xem số đầy đủ" (ADR 0097 §1). `citizen.update` BY THE OWNER'S CHOICE, 16/10/2026: whoever may fix
+	// a mistyped number must see it; whoever only sends notices does not. Seeded by migration 0028; no
+	// unmask key invented (rule 5, invariant 3c).
+	//
+	// EVERY READ IS AUDITED (rule 6, invariant 7) — `xem_so_dien_thoai_nguoi_dan`, actor = the reader's
+	// staff code, subject = the row id, the FIELD and the KEY in the delta, never the number — in the same
+	// transaction as the read; a failed entry answers 500 with nothing disclosed. NO idem.* DECLARATION:
+	// a GET changes no business state, and two reads are two disclosures, two rows.
+	//
+	// @summary  Số điện thoại đầy đủ của một người dân trong danh bạ — mỗi lần xem ghi nhật ký kiểm toán
+	// @screen   16-danh-ba-nguoi-dan §5
+	// @reply    200 citizenContactPhoneOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_contact_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-contacts/{id}/phone",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			http.HandlerFunc(h.RevealCitizenContactPhone)))
+
+	// --- the groups (16-danh-ba-nguoi-dan.md §6; ADR 0097 D4) -----------------------------------------
+
+	// @summary  Các nhóm người dân của xã, kèm số người đang trong mỗi nhóm
+	// @screen   16-danh-ba-nguoi-dan §6
+	// @reply    200 citizenGroupsOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-groups",
+		authz.RequirePermission(d.Checker, "citizen.read")(
+			http.HandlerFunc(h.ListCitizenGroups)))
+
+	// POST idem.Required(idem.MoKhiHong), AND TWO LAYERS PROTECT IT: the key replays the 201 to a retry,
+	// and the live-unique key on the folded name refuses a second live group with the same name.
+	//
+	// @summary  Lập một nhóm người dân của xã — tên duy nhất trong xã trên dòng sống
+	// @screen   16-danh-ba-nguoi-dan §6
+	// @request  citizenGroupIn
+	// @reply    201 citizenGroupCreatedOut
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error name_taken
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-groups",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.Required(idem.MoKhiHong)(
+				http.HandlerFunc(h.CreateCitizenGroup))))
+
+	// The screen has no edit button (chapter 16 §6); the route exists because the prototype's API does
+	// and the group's description and order have no other way in.
+	//
+	// @summary  Sửa tên, mô tả hoặc thứ tự của một nhóm người dân
+	// @screen   16-danh-ba-nguoi-dan §6
+	// @request  citizenGroupIn
+	// @reply    204 -
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_group_not_found
+	// @reply    409 httpx.Error name_taken
+	// @reply    500 httpx.Error
+	mux.Handle("PATCH /api/v1/citizen-groups/{id}",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.KhongCan("sửa là ghi đè một trạng thái đã biết; use case không ghi gì và không để vết khi tên, mô tả và thứ tự không đổi, nên lần gửi thứ hai để lại đúng một dòng và một vết")(
+				http.HandlerFunc(h.UpdateCitizenGroup))))
+
+	// The reason is OPTIONAL here (ADR 0097 D7): removing a group tidies a catalogue; the members stay in
+	// the directory. `{}` is a valid body.
+	//
+	// @summary  Gỡ một nhóm người dân (xoá mềm), lý do tuỳ chọn — người trong nhóm vẫn còn trong danh bạ
+	// @screen   16-danh-ba-nguoi-dan §6
+	// @request  citizenGroupDeletionIn
+	// @reply    204 -
+	// @reply    400 httpx.Error invalid_request
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    404 httpx.Error citizen_group_not_found
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-groups/{id}/deletion",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.KhongCan("gỡ một nhóm đã gỡ cho cùng một kết quả: câu UPDATE mang `deleted_at IS NULL`, nên lần thứ hai trả 404 và không ghi đè được người gỡ và lý do")(
+				http.HandlerFunc(h.RemoveCitizenGroup))))
+
+	// --- the Excel import (16-danh-ba-nguoi-dan.md §7; ADR 0097 D3, D13; ADR 0059 §1 precedent) -------
+	//
+	// ALL THREE DECLARE `citizen.update`, the key the add form declares. Top-level nouns because
+	// `citizen-contacts/{id}` owns the second segment. The template: NO idem.* (a GET changes nothing).
+	// The preview: idem.KhongCan (writes and audits nothing — its transaction is rolled back on purpose).
+	// The import: idem.Required(idem.DongKhiHong) — N rows of personal data in one batch with no natural
+	// key under a person beyond the number; a duplicate batch is permanent (rule 7). core/idem never
+	// stores a body: a retry with the same key is answered `{"code":"<batch_id>","replayed":true}`.
+	// THE FILE IS NOT STORED (ADR 0097 D13).
+
+	// @summary  Tải tệp Excel mẫu để nhập danh bạ người dân — bảy cột, một dòng ví dụ với số giả, danh sách chọn thôn/tổ dân phố đang dùng
+	// @screen   16-danh-ba-nguoi-dan §7
+	// 200 is the .xlsx itself (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet).
+	//
+	// @reply    200 -
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("GET /api/v1/citizen-contact-import-template",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			http.HandlerFunc(h.CitizenContactImportTemplate)))
+
+	// multipart/form-data, one part `file` (.xlsx, ≤ 2 MB, ≤ 200 data rows). 200 WHETHER OR NOT THE FILE
+	// IS VALID: `valid: false` with every {row, column, message} is the answer. The rows are NOT echoed
+	// back — the person has the file. Cache-Control: no-store.
+	//
+	// @summary  Kiểm tra một tệp Excel danh bạ người dân trước khi nhập — không ghi gì; trả số dòng và các lỗi theo dòng, cột
+	// @screen   16-danh-ba-nguoi-dan §7
+	// @reply    200 citizenContactImportPreviewOut
+	// @reply    400 httpx.Error
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-contact-import-previews",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.KhongCan("xem trước không ghi gì và không kiểm toán gì — giao dịch được huỷ có chủ ý; gửi lại bao nhiêu lần cũng cho đúng một câu trả lời trên cùng trạng thái danh bạ")(
+				http.HandlerFunc(h.PreviewCitizenContactImport))))
+
+	// ALL OR NOTHING. 201 carries `batch_id` (the `import_batch_id` of every row written) and `row_count`.
+	// 400 `import_invalid` carries EVERY error; nothing was written. 409 `citizen_contacts_changed`: a
+	// number, group or unit the plan saw changed between the check and the write; the whole file rolled back.
+	//
+	// @summary  Nhập danh bạ người dân từ tệp Excel — toàn bộ tệp hoặc không gì cả; một vết cho cả lượt, tệp không lưu
+	// @screen   16-danh-ba-nguoi-dan §7
+	// @reply    201 citizenContactImportCreatedOut
+	// @reply    400 citizenContactImportRejectedOut
+	// @reply    401 httpx.Error
+	// @reply    403 httpx.Error
+	// @reply    409 httpx.Error citizen_contacts_changed
+	// @reply    413 httpx.Error
+	// @reply    415 httpx.Error
+	// @reply    500 httpx.Error
+	mux.Handle("POST /api/v1/citizen-contact-imports",
+		authz.RequirePermission(d.Checker, "citizen.update")(
+			idem.Required(idem.DongKhiHong)(
+				http.HandlerFunc(h.ImportCitizenContacts))))
 
 	// ---- Cấu hình → Tự động hoá (14-cau-hinh.md §9, migration 0017, ADR 0058) -------------------
 	//
