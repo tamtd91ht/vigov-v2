@@ -2616,6 +2616,147 @@ export type identity_catalogueImportRejectedOut = {
   "errors": Array<identity_catalogueImportErrorOut>;
 };
 
+export type identity_citizenContactCountOut = {
+  "count": number;
+};
+
+export type identity_citizenContactCountQueryIn = {
+  "q": string;
+  "group_id": string;
+  "residential_unit_id": string;
+  "active": boolean | null;
+  "has_own_app_session": boolean | null;
+};
+
+export type identity_citizenContactCreatedOut = {
+  "id": string;
+};
+
+export type identity_citizenContactDeletionIn = {
+  "reason": string;
+};
+
+export type identity_citizenContactDetailOut = {
+  "id": string;
+  "full_name": string;
+  "phone_masked": string;
+  "residential_unit_id": string;
+  "address": string;
+  "note": string;
+  "tags": Array<string>;
+  "group_ids": Array<string>;
+  "is_active": boolean;
+  "source": string;
+  /** "" unless source is nhap-excel */
+  "import_batch_id": string;
+  "created_at": string;
+  "updated_at": string;
+};
+
+export type identity_citizenContactImportCreatedOut = {
+  "batch_id": string;
+  "row_count": number;
+};
+
+export type identity_citizenContactImportErrorOut = {
+  /** dòng trong bảng tính (tiêu đề là dòng 1); 0 = lỗi của cả tệp */
+  "row": number;
+  /** tên cột như trên tiêu đề; "" = lỗi của cả dòng hoặc cả tệp */
+  "column": string;
+  "message": string;
+};
+
+export type identity_citizenContactImportPreviewOut = {
+  "valid": boolean;
+  "row_count": number;
+  "errors": Array<identity_citizenContactImportErrorOut>;
+};
+
+export type identity_citizenContactImportRejectedOut = {
+  "code": string;
+  "message": string;
+  "trace_id": string;
+  "errors": Array<identity_citizenContactImportErrorOut>;
+};
+
+export type identity_citizenContactIn = {
+  "full_name": string;
+  /** any spelling; the server normalises to 0… */
+  "phone": string;
+  "residential_unit_id": string;
+  "address": string;
+  "note": string;
+  "tags": Array<string>;
+  "group_ids": Array<string>;
+  "is_active": boolean | null;
+};
+
+export type identity_citizenContactOut = {
+  "id": string;
+  "full_name": string;
+  "phone_masked": string;
+  "residential_unit_id": string;
+  "residential_unit_name": string;
+  "tags": Array<string>;
+  "group_ids": Array<string>;
+  "is_active": boolean;
+  "source": string;
+  "has_own_app_session": boolean;
+  "created_at": string;
+};
+
+export type identity_citizenContactPhoneOut = {
+  "phone": string;
+};
+
+export type identity_citizenContactSearchIn = {
+  "q": string;
+  "group_id": string;
+  "residential_unit_id": string;
+  "active": boolean | null;
+  "has_own_app_session": boolean | null;
+  "limit": number | null;
+  "cursor": string;
+};
+
+export type identity_citizenContactTagOut = {
+  "tag": string;
+  "count": number;
+};
+
+export type identity_citizenContactTagsOut = {
+  "items": Array<identity_citizenContactTagOut>;
+};
+
+export type identity_citizenGroupCreatedOut = {
+  "id": string;
+};
+
+export type identity_citizenGroupDeletionIn = {
+  "reason": string;
+};
+
+export type identity_citizenGroupIn = {
+  "name": string;
+  "description": string;
+  "sort_order": number;
+};
+
+export type identity_citizenGroupOut = {
+  "id": string;
+  "name": string;
+  "description": string;
+  "sort_order": number;
+  /** live members */
+  "member_count": number;
+  "created_at": string;
+  "updated_at": string;
+};
+
+export type identity_citizenGroupsOut = {
+  "items": Array<identity_citizenGroupOut>;
+};
+
 export type identity_citizenLetterDeadlineRuleOut = {
   /** ULID — what PATCH / DELETE reference */
   "id": string;
@@ -3420,6 +3561,13 @@ export type page_Result_documents_vanBanDiRa = {
 
 export type page_Result_identity_canBoTomTat = {
   "items": Array<identity_canBoTomTat>;
+  /** empty when has_more is false */
+  "next_cursor": string;
+  "has_more": boolean;
+};
+
+export type page_Result_identity_citizenContactOut = {
+  "items": Array<identity_citizenContactOut>;
   /** empty when has_more is false */
   "next_cursor": string;
   "has_more": boolean;
@@ -5079,6 +5227,351 @@ export type finance_delete_capital_plan_categories_by_id = {
     404: httpx_Error;
     409: httpx_Error;
     500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-contact-count-queries — Đếm số người dân khớp bộ lọc và từ khoá hiện tại của danh bạ — từ khoá đi trong THÂN */
+export type identity_post_citizen_contact_count_queries = {
+  duongDan: "/api/v1/citizen-contact-count-queries";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_citizenContactCountQueryIn;
+  phanHoi: {
+    200: identity_citizenContactCountOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-contact-import-previews — Kiểm tra một tệp Excel danh bạ người dân trước khi nhập — không ghi gì; trả số dòng và các lỗi theo dòng, cột */
+export type identity_post_citizen_contact_import_previews = {
+  duongDan: "/api/v1/citizen-contact-import-previews";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenContactImportPreviewOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-contact-import-template — Tải tệp Excel mẫu để nhập danh bạ người dân — bảy cột, một dòng ví dụ với số giả, danh sách chọn thôn/tổ dân phố đang dùng */
+export type identity_get_citizen_contact_import_template = {
+  duongDan: "/api/v1/citizen-contact-import-template";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-contact-imports — Nhập danh bạ người dân từ tệp Excel — toàn bộ tệp hoặc không gì cả; một vết cho cả lượt, tệp không lưu */
+export type identity_post_citizen_contact_imports = {
+  duongDan: "/api/v1/citizen-contact-imports";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: identity_citizenContactImportCreatedOut;
+    400: identity_citizenContactImportRejectedOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    413: httpx_Error;
+    415: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    409: "citizen_contacts_changed";
+  };
+};
+
+/** POST /api/v1/citizen-contact-searches — Tìm trong danh bạ người dân theo họ tên, địa chỉ (bỏ dấu) hoặc bất kỳ phần nào của số điện thoại — từ khoá đi trong THÂN, không lên URL */
+export type identity_post_citizen_contact_searches = {
+  duongDan: "/api/v1/citizen-contact-searches";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_citizenContactSearchIn;
+  phanHoi: {
+    200: page_Result_identity_citizenContactOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-contact-tags — Các nhãn đang dùng trong danh bạ người dân của xã và số người mang mỗi nhãn — dải lọc trên bảng */
+export type identity_get_citizen_contact_tags = {
+  duongDan: "/api/v1/citizen-contact-tags";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenContactTagsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** GET /api/v1/citizen-contacts — Danh bạ người dân của xã — một trang, số điện thoại đã che, không địa chỉ, không ghi chú; lọc theo nhóm, thôn/tổ, đang liên hệ, đã đăng nhập Mini App */
+export type identity_get_citizen_contacts = {
+  duongDan: "/api/v1/citizen-contacts";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "limit"?: number;
+    "cursor"?: string;
+    "sort"?: "created_at";
+    "order"?: "asc" | "desc";
+    "group_id"?: string;
+    "residential_unit_id"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: page_Result_identity_citizenContactOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-contacts — Thêm một người dân vào danh bạ của xã — họ tên và số điện thoại bắt buộc; nhóm, nhãn, thôn/tổ, địa chỉ, ghi chú tuỳ chọn */
+export type identity_post_citizen_contacts = {
+  duongDan: "/api/v1/citizen-contacts";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_citizenContactIn;
+  phanHoi: {
+    201: identity_citizenContactCreatedOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "citizen_group_not_found" | "invalid_request";
+    409: "phone_taken";
+  };
+};
+
+/** GET /api/v1/citizen-contacts/{id} — Chi tiết một người dân trong danh bạ cho hộp thoại sửa — kèm địa chỉ và ghi chú, số điện thoại vẫn che */
+export type identity_get_citizen_contacts_by_id = {
+  duongDan: "/api/v1/citizen-contacts/{id}";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenContactDetailOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "citizen_contact_not_found";
+  };
+};
+
+/** PATCH /api/v1/citizen-contacts/{id} — Lưu hộp thoại sửa thông tin người dân — cả biểu mẫu, kể cả nhóm, nhãn và ô Đang liên hệ */
+export type identity_patch_citizen_contacts_by_id = {
+  duongDan: "/api/v1/citizen-contacts/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_citizenContactIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "citizen_group_not_found" | "invalid_request";
+    404: "citizen_contact_not_found";
+    409: "phone_taken";
+  };
+};
+
+/** POST /api/v1/citizen-contacts/{id}/deletion — Gỡ một người dân khỏi danh bạ (xoá mềm), kèm lý do bắt buộc */
+export type identity_post_citizen_contacts_by_id_deletion = {
+  duongDan: "/api/v1/citizen-contacts/{id}/deletion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_citizenContactDeletionIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "citizen_contact_not_found";
+  };
+};
+
+/** GET /api/v1/citizen-contacts/{id}/phone — Số điện thoại đầy đủ của một người dân trong danh bạ — mỗi lần xem ghi nhật ký kiểm toán */
+export type identity_get_citizen_contacts_by_id_phone = {
+  duongDan: "/api/v1/citizen-contacts/{id}/phone";
+  phuongThuc: "GET";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenContactPhoneOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    404: "citizen_contact_not_found";
+  };
+};
+
+/** GET /api/v1/citizen-groups — Các nhóm người dân của xã, kèm số người đang trong mỗi nhóm */
+export type identity_get_citizen_groups = {
+  duongDan: "/api/v1/citizen-groups";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: identity_citizenGroupsOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/citizen-groups — Lập một nhóm người dân của xã — tên duy nhất trong xã trên dòng sống */
+export type identity_post_citizen_groups = {
+  duongDan: "/api/v1/citizen-groups";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: identity_citizenGroupIn;
+  phanHoi: {
+    201: identity_citizenGroupCreatedOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    409: "name_taken";
+  };
+};
+
+/** PATCH /api/v1/citizen-groups/{id} — Sửa tên, mô tả hoặc thứ tự của một nhóm người dân */
+export type identity_patch_citizen_groups_by_id = {
+  duongDan: "/api/v1/citizen-groups/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_citizenGroupIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "citizen_group_not_found";
+    409: "name_taken";
+  };
+};
+
+/** POST /api/v1/citizen-groups/{id}/deletion — Gỡ một nhóm người dân (xoá mềm), lý do tuỳ chọn — người trong nhóm vẫn còn trong danh bạ */
+export type identity_post_citizen_groups_by_id_deletion = {
+  duongDan: "/api/v1/citizen-groups/{id}/deletion";
+  phuongThuc: "POST";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: identity_citizenGroupDeletionIn;
+  phanHoi: {
+    204: void;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "citizen_group_not_found";
   };
 };
 
