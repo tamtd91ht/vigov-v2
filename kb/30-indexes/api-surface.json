@@ -9189,6 +9189,181 @@
         "502": "httpx.Error"
       },
       "declared_in": "service-comms/internal/http/zalo_links.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/zalo-oa-authorizations",
+      "operation_id": "comms_get_zalo_oa_authorizations",
+      "task_id": "56da715bf528",
+      "summary": "Callback uỷ quyền OA Zalo — Zalo chuyển trình duyệt của quản trị viên OA về đây sau khi bấm Cho phép/Từ chối; xã tìm từ state một lần (không từ Host), đổi code lấy token (PKCE), niêm token bằng khoá của xã, rồi chuyển về Cấu hình › Kênh Zalo của xã kèm kết quả; state lạ/hết hạn/đã dùng trả 404 một câu",
+      "screen": "ADR 0098 #3 #4 #7 — Cấu hình → tab Kênh Zalo, mục \"OA Zalo của xã\"",
+      "permission_kind": "public",
+      "permission_reason": "Zalo chuyển hướng trình duyệt của quản trị viên OA về đây sau khi bấm Cho phép, không có phiên và không có Host của xã: xã tìm từ state một lần đã niêm (ADR 0098 #4); state lạ/hết hạn/đã dùng trả 404 một câu; giới hạn 60 lượt/phút mỗi mạng máy gọi trước mọi việc",
+      "idempotency": "khong-can",
+      "idempotency_reason": "trình duyệt không gửi Idempotency-Key; state chỉ dùng một lần nên lần gọi lại gặp yêu cầu đã đóng và nhận cùng câu 404 như state lạ",
+      "reply_schemas": {
+        "200": "",
+        "302": "",
+        "404": "",
+        "429": "httpx.Error",
+        "500": "",
+        "503": ""
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa_authorizations.go"
+    },
+    {
+      "service": "comms",
+      "method": "DELETE",
+      "path": "/api/v1/zalo-oas/current",
+      "operation_id": "comms_delete_zalo_oas_current",
+      "task_id": "2738ef4aca26",
+      "summary": "Ngắt OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo",
+      "screen": "ADR 0098 #11 — Cấu hình → tab Kênh Zalo, \"Ngắt OA\"",
+      "permission_kind": "permission",
+      "permission": "admin.zalo",
+      "idempotency": "khong-can",
+      "idempotency_reason": "lần thứ hai không còn OA nào đang sống nên không ghi gì và không có vết",
+      "request_schema": "comms.communeZaloOADisconnectIn",
+      "reply_schemas": {
+        "200": "comms.communeZaloOADisconnectedOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/zalo-oas/current",
+      "operation_id": "comms_get_zalo_oas_current",
+      "task_id": "088edde934bb",
+      "summary": "OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa, xã đã nối OA chưa, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc; không bao giờ trả token",
+      "screen": "ADR 0098 #7 — Cấu hình → tab Kênh Zalo, mục \"OA Zalo của xã\"",
+      "permission_kind": "permission",
+      "permission": "admin.zalo",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.communeZaloOACurrentOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/zalo-oas/current/authorization-links",
+      "operation_id": "comms_post_zalo_oas_current_authorization_links",
+      "task_id": "df3e3be22456",
+      "summary": "Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; link sống 10 phút, có ghi vết; Cache-Control no-store",
+      "screen": "ADR 0098 #4 #7 — Cấu hình → tab Kênh Zalo, \"Kết nối OA\" / \"Uỷ quyền lại\"",
+      "permission_kind": "permission",
+      "permission": "admin.zalo",
+      "idempotency": "khong-can",
+      "idempotency_reason": "mỗi lần gọi là một link mới với state riêng; gửi lại chỉ để thêm một link mở cũng sống 10 phút và chỉ dùng được một lần, không state nào bị trao hai lần",
+      "reply_schemas": {
+        "201": "comms.zaloOAAuthorizationLinkOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/zalo-oas/current/check",
+      "operation_id": "comms_post_zalo_oas_current_check",
+      "task_id": "87319bd89c12",
+      "summary": "Kiểm tra OA của xã — gọi getoa bằng token đã lưu (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết",
+      "screen": "ADR 0098 #7 — Cấu hình → tab Kênh Zalo, \"Kiểm tra kết nối\"",
+      "permission_kind": "permission",
+      "permission": "admin.zalo",
+      "idempotency": "khong-can",
+      "idempotency_reason": "kiểm tra chỉ hỏi Zalo rồi ghi kết quả mới nhất; lần thứ hai là một lần kiểm khác, không đổi gì khác",
+      "reply_schemas": {
+        "200": "comms.zaloOACheckResultOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "500": "httpx.Error",
+        "502": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa.go"
+    },
+    {
+      "service": "comms",
+      "method": "GET",
+      "path": "/api/v1/zalo-oas/current/templates",
+      "operation_id": "comms_get_zalo_oas_current_templates",
+      "task_id": "9d0374ac113f",
+      "summary": "Mẫu tin ZBS đã nạp từ OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất",
+      "screen": "ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
+      "permission_kind": "permission",
+      "permission": "admin.zalo",
+      "idempotency": "",
+      "reply_schemas": {
+        "200": "comms.zaloOATemplateListOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa.go"
+    },
+    {
+      "service": "comms",
+      "method": "POST",
+      "path": "/api/v1/zalo-oas/current/templates/sync",
+      "operation_id": "comms_post_zalo_oas_current_templates_sync",
+      "task_id": "c111eb076343",
+      "summary": "Nạp mẫu từ OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết",
+      "screen": "ADR 0098 #8 — Cấu hình → tab Kênh Zalo, \"Nạp mẫu từ OA\"",
+      "permission_kind": "permission",
+      "permission": "admin.zalo",
+      "idempotency": "khong-can",
+      "idempotency_reason": "nạp mẫu ghi lại cột của Zalo theo câu trả lời của Zalo và giữ mốc của xã; lần thứ hai là một lần đọc nữa của cùng OA",
+      "reply_schemas": {
+        "200": "comms.zaloOASyncResultOut",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error",
+        "502": "httpx.Error",
+        "503": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa.go"
+    },
+    {
+      "service": "comms",
+      "method": "PATCH",
+      "path": "/api/v1/zalo-oas/current/templates/{id}",
+      "operation_id": "comms_patch_zalo_oas_current_templates_by_id",
+      "task_id": "38dc01fd1db9",
+      "summary": "Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu, một mẫu một mốc; milestone null là gỡ; có ghi vết",
+      "screen": "ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
+      "permission_kind": "permission",
+      "permission": "admin.zalo",
+      "idempotency": "khong-can",
+      "idempotency_reason": "thân nêu trạng thái đích: cùng mốc lần nữa thì không đổi gì và không có vết, gỡ một mẫu chưa gắn cũng không ghi gì",
+      "request_schema": "comms.zaloOATemplatePatchIn",
+      "reply_schemas": {
+        "200": "comms.zaloOATemplateOut",
+        "400": "httpx.Error",
+        "401": "httpx.Error",
+        "403": "httpx.Error",
+        "404": "httpx.Error",
+        "409": "httpx.Error",
+        "422": "httpx.Error",
+        "500": "httpx.Error"
+      },
+      "declared_in": "service-comms/internal/http/zalo_oa.go"
     }
   ]
 }

@@ -138,6 +138,37 @@ export type comms_communeZaloBotSavedOut = {
   "revoke_notice"?: string;
 };
 
+export type comms_communeZaloOACurrentOut = {
+  "configured": boolean;
+  "has_oa": boolean;
+  "oa": comms_communeZaloOAOut | null;
+  "template_count": number;
+  "attached_count": number;
+};
+
+export type comms_communeZaloOADisconnectIn = {
+  "reason": string;
+};
+
+export type comms_communeZaloOADisconnectedOut = {
+  "disconnected": boolean;
+  "detached_template_count": number;
+  "revoke_notice": string;
+};
+
+export type comms_communeZaloOAOut = {
+  "oa_id": string;
+  "oa_name": string;
+  "authorized_at": string;
+  "authorized_by": string;
+  "authorized_by_name": string;
+  "access_expires_at": string;
+  /** ⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — KHÔNG phải bí mật — chỉ là THỜI ĐIỂM token được ghi lần cuối (ADR 0098 §Hai cột thời điểm), không mang giá trị token nào; tên do hợp đồng web-admin TASK-A6 đặt */
+  "token_refreshed_at": string;
+  "needs_reauthorization": comms_zaloOAReauthorizationOut | null;
+  "last_check": comms_zaloOALastCheckOut | null;
+};
+
 export type comms_coverFileOut = {
   "id": string;
   "content_item_id": string;
@@ -1025,6 +1056,68 @@ export type comms_zaloLinkedStaffOut = {
   "staff_code": string;
   "staff_name": string;
   "linked_at": string;
+};
+
+export type comms_zaloOAAuthorizationLinkOut = {
+  /** ⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — ADR 0098 #4 #7 — chủ dự án chốt 16/10/2026: link uỷ quyền của Zalo mang state CSPRNG một lần, sống 10 phút; trả MỘT lần cho cán bộ vừa bấm Kết nối OA để mở ngay, Cache-Control no-store, không lưu, không ghi log */
+  "url": string;
+  "expires_at": string;
+};
+
+export type comms_zaloOACheckResultOut = {
+  "result": string;
+  "checked_at": string;
+  "oa_name"?: string;
+};
+
+export type comms_zaloOALastCheckOut = {
+  "at": string;
+  "result": string;
+};
+
+export type comms_zaloOAReauthorizationOut = {
+  "since": string;
+  "reason": string;
+};
+
+export type comms_zaloOASyncResultOut = {
+  "loaded": number;
+  "enabled": number;
+  "matching": number;
+  "changed": number;
+  "synced_at": string;
+};
+
+export type comms_zaloOATemplateListOut = {
+  "items": Array<comms_zaloOATemplateOut>;
+  "synced_at": string | null;
+};
+
+export type comms_zaloOATemplateOut = {
+  "id": string;
+  "template_id": string;
+  "template_name": string;
+  "zalo_status": string;
+  "zalo_quality": string;
+  "zalo_tag": string;
+  "params": Array<comms_zaloOATemplateParamOut>;
+  "params_match": boolean;
+  "missing_params": Array<string>;
+  "milestone": string | null;
+  "milestone_set_at": string | null;
+  "milestone_set_by": string | null;
+  "milestone_set_by_name": string | null;
+};
+
+export type comms_zaloOATemplateParamOut = {
+  "name": string;
+  "required": boolean;
+  "type": string;
+  "max_length": number;
+};
+
+export type comms_zaloOATemplatePatchIn = {
+  "milestone": string | null;
 };
 
 export type comms_zaloUpdateAck = {
@@ -13450,5 +13543,187 @@ export type comms_post_zalo_links_current_test_messages = {
   errorCodes: {
     409: "zalo_bot_not_configured" | "zalo_channel_disabled" | "zalo_not_linked";
     502: "zalo_send_failed";
+  };
+};
+
+/** GET /api/v1/zalo-oa-authorizations — Callback uỷ quyền OA Zalo — Zalo chuyển trình duyệt của quản trị viên OA về đây sau khi bấm Cho phép/Từ chối; xã tìm từ state một lần (không từ Host), đổi code lấy token (PKCE), niêm token bằng khoá của xã, rồi chuyển về Cấu hình › Kênh Zalo của xã kèm kết quả; state lạ/hết hạn/đã dùng trả 404 một câu */
+export type comms_get_zalo_oa_authorizations = {
+  duongDan: "/api/v1/zalo-oa-authorizations";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+    "code"?: string;
+    "error"?: string;
+    "oa_id"?: string;
+    "state"?: string;
+  };
+  than: never;
+  phanHoi: {
+    200: void;
+    302: void;
+    404: void;
+    429: httpx_Error;
+    500: void;
+    503: void;
+  };
+  errorCodes: {
+    429: "rate_limited";
+  };
+};
+
+/** GET /api/v1/zalo-oas/current — OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa, xã đã nối OA chưa, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc; không bao giờ trả token */
+export type comms_get_zalo_oas_current = {
+  duongDan: "/api/v1/zalo-oas/current";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_communeZaloOACurrentOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** DELETE /api/v1/zalo-oas/current — Ngắt OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo */
+export type comms_delete_zalo_oas_current = {
+  duongDan: "/api/v1/zalo-oas/current";
+  phuongThuc: "DELETE";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: comms_communeZaloOADisconnectIn;
+  phanHoi: {
+    200: comms_communeZaloOADisconnectedOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+  };
+};
+
+/** POST /api/v1/zalo-oas/current/authorization-links — Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; link sống 10 phút, có ghi vết; Cache-Control no-store */
+export type comms_post_zalo_oas_current_authorization_links = {
+  duongDan: "/api/v1/zalo-oas/current/authorization-links";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    201: comms_zaloOAAuthorizationLinkOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    503: "encryption_not_configured" | "zalo_oa_not_configured";
+  };
+};
+
+/** POST /api/v1/zalo-oas/current/check — Kiểm tra OA của xã — gọi getoa bằng token đã lưu (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết */
+export type comms_post_zalo_oas_current_check = {
+  duongDan: "/api/v1/zalo-oas/current/check";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloOACheckResultOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    409: "zalo_oa_changed" | "zalo_oa_missing" | "zalo_oa_needs_reauthorization";
+    502: "zalo_unavailable";
+    503: "encryption_not_configured" | "zalo_oa_not_configured";
+  };
+};
+
+/** GET /api/v1/zalo-oas/current/templates — Mẫu tin ZBS đã nạp từ OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất */
+export type comms_get_zalo_oas_current_templates = {
+  duongDan: "/api/v1/zalo-oas/current/templates";
+  phuongThuc: "GET";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloOATemplateListOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    500: httpx_Error;
+  };
+};
+
+/** POST /api/v1/zalo-oas/current/templates/sync — Nạp mẫu từ OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết */
+export type comms_post_zalo_oas_current_templates_sync = {
+  duongDan: "/api/v1/zalo-oas/current/templates/sync";
+  phuongThuc: "POST";
+  thamSo: {
+  };
+  truyVan: {
+  };
+  than: never;
+  phanHoi: {
+    200: comms_zaloOASyncResultOut;
+    401: httpx_Error;
+    403: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+    502: httpx_Error;
+    503: httpx_Error;
+  };
+  errorCodes: {
+    409: "zalo_oa_changed" | "zalo_oa_missing" | "zalo_oa_needs_reauthorization";
+    422: "zalo_token_rejected";
+    502: "zalo_unavailable";
+    503: "encryption_not_configured" | "zalo_oa_not_configured";
+  };
+};
+
+/** PATCH /api/v1/zalo-oas/current/templates/{id} — Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu, một mẫu một mốc; milestone null là gỡ; có ghi vết */
+export type comms_patch_zalo_oas_current_templates_by_id = {
+  duongDan: "/api/v1/zalo-oas/current/templates/{id}";
+  phuongThuc: "PATCH";
+  thamSo: {
+    "id": string;
+  };
+  truyVan: {
+  };
+  than: comms_zaloOATemplatePatchIn;
+  phanHoi: {
+    200: comms_zaloOATemplateOut;
+    400: httpx_Error;
+    401: httpx_Error;
+    403: httpx_Error;
+    404: httpx_Error;
+    409: httpx_Error;
+    422: httpx_Error;
+    500: httpx_Error;
+  };
+  errorCodes: {
+    400: "invalid_request";
+    404: "not_found";
+    409: "milestone_taken" | "zalo_oa_changed" | "zalo_oa_missing";
+    422: "template_not_attachable";
   };
 };

@@ -6,7 +6,7 @@
 # phải sửa tệp này: khai route trong Go, chạy `make kb`. Quên sinh lại thì
 # `go test ./tools/ingress` ĐỎ.
 #
-#     301 tuyến của 7 dịch vụ — identity 82 · petitions 81 · comms 58 · finance 40 · documents 31 · platform 7 · reporting 2
+#     308 tuyến của 7 dịch vụ — identity 82 · petitions 81 · comms 65 · finance 40 · documents 31 · platform 7 · reporting 2
 #
 # MÔ HÌNH TÊN MIỀN — chủ dự án chốt 26/09/2026:
 #   <xã>.vigov.vn          → web-admin, chỉ một luật `/`. Web tự chuyển tiếp /api/v1/* tới
@@ -76,7 +76,7 @@ spec:
                 name: web-admin
                 port: { name: http }
     #
-    # comms — 27 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
+    # comms — 29 tài nguyên: /api/v1/announcements · /api/v1/comms-audit-entries
     #   /api/v1/commune-basemap · /api/v1/commune-disaster-alerts
     #   /api/v1/commune-external-contacts · /api/v1/commune-map-frame · /api/v1/commune-news
     #   /api/v1/content-categories · /api/v1/content-items · /api/v1/disaster-alerts
@@ -85,7 +85,7 @@ spec:
     #   /api/v1/map-field-schemas · /api/v1/map-frame · /api/v1/my-notification-preferences
     #   /api/v1/notifications · /api/v1/portal-sync · /api/v1/zalo-bot-updates · /api/v1/zalo-bots
     #   /api/v1/zalo-channel-settings · /api/v1/zalo-group-pairing-codes · /api/v1/zalo-groups
-    #   /api/v1/zalo-links
+    #   /api/v1/zalo-links · /api/v1/zalo-oa-authorizations · /api/v1/zalo-oas
     - host: "comms.api.vigov.vn"
       http:
         paths:

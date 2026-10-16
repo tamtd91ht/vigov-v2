@@ -39950,6 +39950,690 @@
           }
         }
       }
+    },
+    "/api/v1/zalo-oa-authorizations": {
+      "get": {
+        "summary": "Callback uỷ quyền OA Zalo — Zalo chuyển trình duyệt của quản trị viên OA về đây sau khi bấm Cho phép/Từ chối; xã tìm từ state một lần (không từ Host), đổi code lấy token (PKCE), niêm token bằng khoá của xã, rồi chuyển về Cấu hình › Kênh Zalo của xã kèm kết quả; state lạ/hết hạn/đã dùng trả 404 một câu",
+        "operationId": "comms_get_zalo_oa_authorizations",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #3 #4 #7 — Cấu hình → tab Kênh Zalo, mục \"OA Zalo của xã\"",
+        "x-vigov-permission": {
+          "kind": "public",
+          "reason": "Zalo chuyển hướng trình duyệt của quản trị viên OA về đây sau khi bấm Cho phép, không có phiên và không có Host của xã: xã tìm từ state một lần đã niêm (ADR 0098 #4); state lạ/hết hạn/đã dùng trả 404 một câu; giới hạn 60 lượt/phút mỗi mạng máy gọi trước mọi việc"
+        },
+        "x-vigov-task": "56da715bf528",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "oa_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "302": {
+            "description": "Found"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "rate_limited"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "description": "Service Unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/current": {
+      "delete": {
+        "summary": "Ngắt OA của xã — xoá mềm dòng OA (giữ token đã niêm làm lịch sử, cần lý do), gỡ mọi mốc đã gắn mẫu trong cùng giao dịch, có ghi vết; câu trả lời nhắc xã thu hồi quyền của ứng dụng trong OA Manager vì ngắt ở đây không thu hồi gì ở Zalo",
+        "operationId": "comms_delete_zalo_oas_current",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #11 — Cấu hình → tab Kênh Zalo, \"Ngắt OA\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "2738ef4aca26",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.communeZaloOADisconnectIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.communeZaloOADisconnectedOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "OA Zalo của xã — nền tảng đã khai ứng dụng Zalo dùng chung chưa, xã đã nối OA chưa, tên và mã OA, nối lúc nào bởi ai, token hết hạn lúc nào, có cần uỷ quyền lại không, lần kiểm gần nhất, số mẫu đã nạp và đã gắn mốc; không bao giờ trả token",
+        "operationId": "comms_get_zalo_oas_current",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #7 — Cấu hình → tab Kênh Zalo, mục \"OA Zalo của xã\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "088edde934bb",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.communeZaloOACurrentOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/current/authorization-links": {
+      "post": {
+        "summary": "Tạo link uỷ quyền OA — sinh state CSPRNG một lần (chỉ lưu băm) và cặp PKCE (code verifier niêm bằng khoá của xã), trả link Zalo để quản trị viên OA mở và bấm Cho phép; link sống 10 phút, có ghi vết; Cache-Control no-store",
+        "operationId": "comms_post_zalo_oas_current_authorization_links",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #4 #7 — Cấu hình → tab Kênh Zalo, \"Kết nối OA\" / \"Uỷ quyền lại\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "df3e3be22456",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOAAuthorizationLinkOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "zalo_oa_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/current/check": {
+      "post": {
+        "summary": "Kiểm tra OA của xã — gọi getoa bằng token đã lưu (làm mới trước nếu sắp hết hạn), ghi kết quả (lớp lỗi, không bao giờ chữ của Zalo), cập nhật tên OA và ghi vết",
+        "operationId": "comms_post_zalo_oas_current_check",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #7 — Cấu hình → tab Kênh Zalo, \"Kiểm tra kết nối\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "87319bd89c12",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOACheckResultOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_oa_changed",
+              "zalo_oa_missing",
+              "zalo_oa_needs_reauthorization"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "zalo_oa_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/current/templates": {
+      "get": {
+        "summary": "Mẫu tin ZBS đã nạp từ OA của xã — mã và tên mẫu, trạng thái và chất lượng Zalo, tham số, có đủ ba tham số bắt buộc không (thiếu gì), mốc đã gắn, gắn lúc nào bởi ai; lần nạp gần nhất",
+        "operationId": "comms_get_zalo_oas_current_templates",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "9d0374ac113f",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOATemplateListOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/current/templates/sync": {
+      "post": {
+        "summary": "Nạp mẫu từ OA — gọi template/all rồi template/info từng mẫu, ghi mọi mẫu trong một giao dịch (mẫu Zalo không còn liệt kê thì đánh DELETE), giữ mốc đã gắn, có ghi vết",
+        "operationId": "comms_post_zalo_oas_current_templates_sync",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #8 — Cấu hình → tab Kênh Zalo, \"Nạp mẫu từ OA\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "c111eb076343",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOASyncResultOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_oa_changed",
+              "zalo_oa_missing",
+              "zalo_oa_needs_reauthorization"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_token_rejected"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "zalo_unavailable"
+            ]
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "encryption_not_configured",
+              "zalo_oa_not_configured"
+            ]
+          }
+        }
+      }
+    },
+    "/api/v1/zalo-oas/current/templates/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Gắn hoặc gỡ mốc cho một mẫu ZBS — chỉ mẫu ENABLE có đủ ba tham số ma_tra_cuu, moc_nhan, viec_tiep_theo mới gắn được (thiếu thì nói thiếu gì); một mốc một mẫu, một mẫu một mốc; milestone null là gỡ; có ghi vết",
+        "operationId": "comms_patch_zalo_oas_current_templates_by_id",
+        "tags": [
+          "comms"
+        ],
+        "x-vigov-screen": "ADR 0098 #8 #9 — Cấu hình → tab Kênh Zalo, mục \"Mẫu tin ZBS\"",
+        "x-vigov-permission": {
+          "kind": "permission",
+          "key": "admin.zalo"
+        },
+        "x-vigov-task": "38dc01fd1db9",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/comms.zaloOATemplatePatchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/comms.zaloOATemplateOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "invalid_request"
+            ]
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "not_found"
+            ]
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "milestone_taken",
+              "zalo_oa_changed",
+              "zalo_oa_missing"
+            ]
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            },
+            "x-vigov-error-codes": [
+              "template_not_attachable"
+            ]
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/httpx.Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -40416,6 +41100,135 @@
           "bot",
           "ended_group_count",
           "ended_link_count"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloOACurrentOut": {
+        "type": "object",
+        "properties": {
+          "configured": {
+            "type": "boolean"
+          },
+          "has_oa": {
+            "type": "boolean"
+          },
+          "oa": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.communeZaloOAOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "template_count": {
+            "type": "integer"
+          },
+          "attached_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "attached_count",
+          "configured",
+          "has_oa",
+          "oa",
+          "template_count"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloOADisconnectIn": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloOADisconnectedOut": {
+        "type": "object",
+        "properties": {
+          "disconnected": {
+            "type": "boolean"
+          },
+          "detached_template_count": {
+            "type": "integer"
+          },
+          "revoke_notice": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "detached_template_count",
+          "disconnected",
+          "revoke_notice"
+        ],
+        "additionalProperties": false
+      },
+      "comms.communeZaloOAOut": {
+        "type": "object",
+        "properties": {
+          "oa_id": {
+            "type": "string"
+          },
+          "oa_name": {
+            "type": "string"
+          },
+          "authorized_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "authorized_by": {
+            "type": "string"
+          },
+          "authorized_by_name": {
+            "type": "string"
+          },
+          "access_expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "token_refreshed_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — KHÔNG phải bí mật — chỉ là THỜI ĐIỂM token được ghi lần cuối (ADR 0098 §Hai cột thời điểm), không mang giá trị token nào; tên do hợp đồng web-admin TASK-A6 đặt"
+          },
+          "needs_reauthorization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.zaloOAReauthorizationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/comms.zaloOALastCheckOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "access_expires_at",
+          "authorized_at",
+          "authorized_by",
+          "authorized_by_name",
+          "last_check",
+          "needs_reauthorization",
+          "oa_id",
+          "oa_name",
+          "token_refreshed_at"
         ],
         "additionalProperties": false
       },
@@ -43911,6 +44724,248 @@
           "linked_at",
           "staff_code",
           "staff_name"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOAAuthorizationLinkOut": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "⚠ BÍ MẬT ĐI RA, CÓ CHỦ Ý — ADR 0098 #4 #7 — chủ dự án chốt 16/10/2026: link uỷ quyền của Zalo mang state CSPRNG một lần, sống 10 phút; trả MỘT lần cho cán bộ vừa bấm Kết nối OA để mở ngay, Cache-Control no-store, không lưu, không ghi log"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "expires_at",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOACheckResultOut": {
+        "type": "object",
+        "properties": {
+          "result": {
+            "type": "string"
+          },
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "oa_name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "checked_at",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOALastCheckOut": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "result": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "result"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOAReauthorizationOut": {
+        "type": "object",
+        "properties": {
+          "since": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "since"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOASyncResultOut": {
+        "type": "object",
+        "properties": {
+          "loaded": {
+            "type": "integer"
+          },
+          "enabled": {
+            "type": "integer"
+          },
+          "matching": {
+            "type": "integer"
+          },
+          "changed": {
+            "type": "integer"
+          },
+          "synced_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "changed",
+          "enabled",
+          "loaded",
+          "matching",
+          "synced_at"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOATemplateListOut": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.zaloOATemplateOut"
+            }
+          },
+          "synced_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "items",
+          "synced_at"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOATemplateOut": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": "string"
+          },
+          "template_name": {
+            "type": "string"
+          },
+          "zalo_status": {
+            "type": "string"
+          },
+          "zalo_quality": {
+            "type": "string"
+          },
+          "zalo_tag": {
+            "type": "string"
+          },
+          "params": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/comms.zaloOATemplateParamOut"
+            }
+          },
+          "params_match": {
+            "type": "boolean"
+          },
+          "missing_params": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "milestone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "milestone_set_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "milestone_set_by": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "milestone_set_by_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "milestone",
+          "milestone_set_at",
+          "milestone_set_by",
+          "milestone_set_by_name",
+          "missing_params",
+          "params",
+          "params_match",
+          "template_id",
+          "template_name",
+          "zalo_quality",
+          "zalo_status",
+          "zalo_tag"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOATemplateParamOut": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          },
+          "max_length": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_length",
+          "name",
+          "required",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "comms.zaloOATemplatePatchIn": {
+        "type": "object",
+        "properties": {
+          "milestone": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "milestone"
         ],
         "additionalProperties": false
       },
