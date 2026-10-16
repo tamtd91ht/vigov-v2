@@ -149,7 +149,7 @@ thêm** màn sửa; tuyến có hay không do người dựng theo prototype API
 
 | Điều | Chốt |
 |---|---|
-| Mẫu cột | `Họ và tên \| Số điện thoại \| Thôn/Tổ dân phố \| Địa chỉ \| Nhãn \| Nhóm \| Ghi chú` — nhãn và nhóm cách nhau dấu phẩy, nhóm khớp theo **tên** nhóm đang có |
+| Mẫu cột | `Họ và tên \| Số điện thoại \| Thôn, tổ dân phố \| Địa chỉ \| Nhóm \| Nhãn \| Ghi chú` (đúng thứ tự `domain.CitizenContactImportColumns()`) — nhóm và nhãn cách nhau dấu phẩy, nhóm khớp theo **tên** nhóm đang có; cột thôn là ô thả xuống `mã · tên`; tối đa 200 dòng một tệp |
 | Số giả trong mẫu | `0900000000` (luật 3 bất biến 5) |
 | Ba tuyến | tải mẫu · xem trước · ghi — cả ba quyền `citizen.update` |
 | Tệp tải lên | **không lưu**. Mỗi dòng ghi `source = nhap-excel` và `import_batch_id`; **một vết** cho cả lượt (số dòng, mã lượt, không giá trị) — tiền lệ ADR 0059 §1 |
