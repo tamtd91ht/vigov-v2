@@ -741,11 +741,11 @@
     {
       "id": "danh-ba-nguoi-dan-backend-con-lai-16-10",
       "menu": "danh-ba-nguoi-dan",
-      "trang_thai": "dang_lam",
+      "trang_thai": "xong",
       "no_confirm": [],
-      "viec": "Phần backend còn lại của Danh bạ người dân (ADR 0097): store (danh sách keyset + đếm cùng điều kiện, tìm từ khoá khớp cả một phần số, nhóm/nhãn/thôn, mở số đầy đủ, thành viên nhóm) + hàm nối cột Zalo (hình xuyên xã thứ năm, chỉ boolean theo (tenant, số)) + mẫu vai trò Go theo 0034; app (vết cùng giao dịch, che số, nhập Excel tất-cả-hoặc-không); http (tuyến citizen-contacts / citizen-groups / tìm, đếm, mở số, 3 tuyến nhập; Deps, mount, wiring; make kb → openapi).",
-      "bang_chung": "Đang làm — thẻ TASK-05 (store) giao go-service-builder 16/10/2026.",
-      "tiep_theo": "Thứ tự: TASK-05 store → TASK-06 app → TASK-07 http + routes + main.go + make kb → TASK-08 npm run gen:api. Sau đó web-admin (TASK-10..12) và test-designer (TASK-13/14). Ngoài lượt: Gửi tin ZNS/SMS, xuất Excel danh bạ, đồng bộ Mini App, lọc theo thôn của trưởng thôn. Nợ khách: chính sách riêng tư Mini App phải nói về phép nối số ↔ phiên trước khi lên thật (ADR 0097 §6)."
+      "viec": "Backend Danh bạ người dân (ADR 0097): store (danh sách keyset created_at DESC + đếm cùng điều kiện, tìm từ khoá khớp cả một phần số, nhóm/nhãn/thôn, mở số, thành viên nhóm xoá mềm) + OwnAppSessionByPhone (hình xuyên xã thứ năm, chỉ boolean theo (tenant, số 84…)) + mẫu vai trò Go theo 0034; app (vết cùng giao dịch, che số, xem số có vết mỗi lần, nhập Excel tất-cả-hoặc-không một lô một vết); http 16 tuyến citizen-contacts / citizen-contact-searches / -count-queries / -tags / citizen-groups / 3 tuyến nhập Excel, Deps + mount + wiring, make kb → openapi + schema.gen.ts.",
+      "bang_chung": "16217bce (store, crosstenant/doc.go hình 5, RoleTemplates 22/13/9/6/8/6) · a384a3fa (app, 20 ca) · e4e39a64 (http, 4 ca luật 5 × 16 tuyến; openapi +16; ingress +8 prefix; 16 thẻ tasks/web/open) · 10bbd08c (schema.gen.ts, check:api khớp). go test -race ./service-identity/... ./tools/{ingress,apidoc} OK; go vet; gofmt; make quyen PASS 47 khoá; make vet-actor PASS; make hooks 317/317. CHƯA CHẠY POSTGRESQL THẬT: 7 ca store *_pg_test SKIP (không VIGOV_TEST_DSN); migration 0033/0034 chưa áp.",
+      "tiep_theo": "Web Admin: TASK-10 API client · TASK-11 feature citizen-directory · TASK-12 /nguoi-dan + menu + 4 test (đang làm, admin-web-builder 16/10). Sau đó test-designer (TASK-13 backend, TASK-14 web). Trên cụm: chạy 0033/0034, chạy 7 ca pg (Jenkins có DSN), kiểm bằng tay: mở số 3 lần → 3 vết không chứa số; xã B không thấy dòng xã A; cột Zalo không đổi khi số có phiên ở xã khác. Ngoài lượt: Gửi tin ZNS/SMS, xuất Excel danh bạ, đồng bộ Mini App, lọc theo thôn của trưởng thôn. Nợ khách: chính sách riêng tư Mini App phải nói về phép nối số ↔ phiên trước khi lên thật (ADR 0097 §6)."
     },
     {
       "id": "co-che-them-vai-tro-mau-16-10",
