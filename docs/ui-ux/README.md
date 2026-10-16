@@ -39,6 +39,7 @@ Tài liệu này mô tả đầy đủ bản web prototype **ViGov — Điều h
 | [`13-bao-cao.md`](13-bao-cao.md) | Báo cáo theo kỳ, xếp hạng bộ phận, xuất PDF/XLSX/PPTX | `/bao-cao` |
 | [`14-cau-hinh.md`](14-cau-hinh.md) | **Dựng trước.** 10 tab: tổ chức, thôn/tổ, người dùng, 43 quyền, 55 danh mục, trường bản đồ, lời hệ thống, SLA, tự động hoá, máy chủ thư | `/cau-hinh` |
 | [`15-phu-luc-giao-dien-chung.md`](15-phu-luc-giao-dien-chung.md) | Xác thực, sidebar, header, tìm kiếm, chuông, trình chiếu, component dùng chung, responsive, a11y | mọi trang |
+| [`16-danh-ba-nguoi-dan.md`](16-danh-ba-nguoi-dan.md) | **Thêm 16/10/2026** (chép từ mã prototype, ADR 0097). Danh bạ liên lạc người dân của xã: số che, cột Zalo suy ra, nhóm + nhãn, nhập Excel | `/nguoi-dan` |
 
 ---
 

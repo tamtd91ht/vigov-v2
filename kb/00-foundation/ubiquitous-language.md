@@ -3,7 +3,7 @@ id: ubiquitous-language
 tier: T0
 source: CURATED
 owner: domain
-derived_from_commit: f81168fe
+derived_from_commit: bdf36a29
 expires: null
 owns_facts:
   - "ánh xạ thuật ngữ hành chính sang tên dùng trong mã"
@@ -25,6 +25,7 @@ owns_facts:
   - "quy tắc: tên theo khái niệm, quyền sở hữu theo nhịp đổi"
   - "tên tiếng Anh của Cảnh báo thiên tai (DisasterAlert) và Lựa chọn nhận thông báo (CitizenNotificationPreference)"
   - "tên của kênh tiếp nhận phiếu phản ánh và tên tiếng Anh của Tổng đài điện thoại (tong-dai, ChannelSwitchboard)"
+  - "tên của danh bạ người dân (CitizenContact, citizen_contact, citizen-contacts) và nhóm người dân (CitizenGroup, citizen_group, citizen_contact_group, citizen-groups) — và vì sao không phải citizens, không lẫn với citizen_contact_phone"
 ---
 
 # Ngôn ngữ chung
@@ -207,6 +208,8 @@ có thể.
 | **Phân bổ nguồn vốn** (dự án rút từ nguồn nào, bao nhiêu) | `phan_bo_nguon_von` · **`@entity: FundingAllocation`** (`0007_nguon_von.sql:196`) | **Không có tài nguyên riêng** — trường `funding_allocations` của `investment-projects` (`GET`, `POST`, `PATCH`) | Sửa là **thay cả tập** qua `PATCH` dự án; luật vượt/thiếu/trùng/gỡ: ADR 0075 #2a |
 | **Vướng mắc** (của dự án đầu tư) | `project_issues` · **`@entity: ProjectIssue`** (`0015_project_issues_and_comments.sql:29`) | `issues` — `GET`/`POST /api/v1/investment-projects/{id}/issues` · đã gỡ: `POST /api/v1/project-issues/{id}/resolution` (`finance`) | `resolution` ghi **một lần**, không mở lại (đầu `0015`). Nhiệm vụ theo dõi sinh từ vướng mắc đi qua sự kiện — ADR 0075 #5. Danh từ **đang dùng trong mã**, chưa người dùng chốt |
 | **Trao đổi** (ý kiến về dự án đầu tư) | `project_comments` · **`@entity: ProjectComment`** (`0015…sql:136`) | `comments` — `GET`/`POST /api/v1/investment-projects/{id}/comments`, quyền `budget.read` · người được nhắc: trường `mentioned_staff_codes` (mã cán bộ) | **Khác** *Nhật ký & Trao đổi của nhiệm vụ* (`log-entries`, dòng trên): đó là dòng thời gian của nhiệm vụ ở `petitions`, đây là ý kiến về dự án ở `finance` — hai thực thể, hai service. Danh từ **đang dùng trong mã**, chưa người dùng chốt |
+| **Người dân trong danh bạ** (menu *Danh bạ người dân*, `/nguoi-dan`) | `citizen_contact` · **`@entity: CitizenContact`** · tệp Go `citizen_directory*.go` (`identity`) *(bảng chưa tạo — ADR 0097, chủ dự án 16/10/2026)* | `citizen-contacts` — quyền `citizen.read` (đọc) · `citizen.update` (ghi, nhập Excel, "Xem số đầy đủ") (`identity`) | Người dân trong **danh bạ liên lạc của xã** — **không phải** sổ hộ tịch, **không phải** định danh công dân (`CitizenIdentity`, bảng `dinh_danh_cong_dan` ở §Kênh công dân: toàn nền tảng, không `tenant_id`). Một dòng là *xã muốn liên lạc với số này*, theo xã. **Không dùng `citizens`** (danh từ của prototype): `citizen` trần trong kho này đã là lớp tin cậy công dân (`CitizenOnly`, `citizen-sessions`), và `cong_dan` là công dân nói chung. **Đừng lẫn với `citizen_contact_phone*.go`** (fd620abf): đó là *số đã xác thực của một phiên công dân* gắn vào phiếu (ADR 0050 §Sửa đổi 08/10/2026) — khác khái niệm, nên tệp Go của danh bạ cố ý mang tiền tố khác |
+| **Nhóm người dân** (tab *Nhóm* của danh bạ) | `citizen_group` · **`@entity: CitizenGroup`** · bảng thành viên **`citizen_contact_group`** (`identity`) *(chưa tạo — ADR 0097)* | `citizen-groups` — `citizen.read` (đọc) · `citizen.update` (lập, sửa, gỡ) (`identity`) | Danh mục **của xã** (bảng, vài chục dòng, bảng thường theo ADR 0096 #3), khác **Nhãn** là chữ tự do trên từng dòng `citizen_contact` — giữ cả hai như prototype, ADR 0097 D4. Thành viên là bảng riêng `citizen_contact_group` (nhiều nhóm một người), không phải cột mảng trên dòng. Không `citizen-group-members` làm tài nguyên: nhóm của một người đặt qua `PATCH citizen-contacts/{id}` như prototype |
 
 **Ba danh từ `lockout` · `account` · `password` chốt 22/09/2026 bởi NHÀ CUNG CẤP, không phải
 khách** (ADR 0035). Ghi ra vì ADR 0011 bảo hỏi chứ đừng tự dịch, và ở đây đã tự dịch có chủ ý:
