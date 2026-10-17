@@ -13,7 +13,7 @@ import {
   type Announcements,
 } from "@dnd-kit/core";
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, GripVertical, Pencil, Plus, RotateCcw, X } from "lucide-react";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { NUT_HUY } from "@/components/danh-ba/nhan-ghi-danh-ba";
@@ -43,6 +43,11 @@ import {
   ADD_FIELD_BUTTON,
   ADD_FIELD_TITLE,
   CITIZEN_FIELD_DESCRIPTION,
+  CODE_AUTO_HINT,
+  CODE_EDIT_BUTTON,
+  CODE_LOCKED_HINT,
+  CODE_MANUAL_HINT,
+  CODE_REGENERATE,
   CITIZEN_FIELD_TAB_TITLE,
   DATE_PATTERNS,
   EDIT_FIELD_TITLE,
@@ -64,13 +69,17 @@ import {
   buildCreateBody,
   buildUpdateBody,
   checkRetireReason,
+  codeRegeneratedText,
   draftFromField,
   fieldCountText,
   fieldTypeLabel,
+  generateFieldCode,
   hasErrors,
   hasOptions,
   hasPlaceholder,
+  isCodeCollision,
   limitReachedText,
+  manualCodeError,
   moveCode,
   newFieldDraft,
   orderAfterDrop,
@@ -295,6 +304,7 @@ export function CitizenFieldTab() {
           key={dialog.mode === "edit" ? dialog.field.code : dialog.idempotencyKey}
           state={dialog}
           takenCodes={fields.duLieu.map((f) => f.code)}
+          retiredCodes={retired.map((f) => f.code)}
           onClose={(saved) => {
             setDialog(null);
             if (saved) void reload();
@@ -480,15 +490,21 @@ function FieldRow({
 
 /**
  * "Thêm thuộc tính" / "Sửa thuộc tính". On edit, Mã and Loại are drawn read-only (#1: neither changes).
+ * On add, Mã is generated from Tên hiển thị and never proposes a code the commune holds, live or retired
+ * (owner, 17/10/2026); "Sửa" switches to a hand-typed code checked live, "Tự sinh lại" switches back.
  * The Idempotency-Key of the POST is made when the dialog opens and kept across a retry inside it.
  */
 export function CitizenFieldDialog({
   state,
   takenCodes,
+  retiredCodes,
   onClose,
 }: {
   state: DialogState;
+  /** Every code the commune holds, retired ones included (the DB key covers both). */
   takenCodes: readonly string[];
+  /** The retired subset of `takenCodes` — only changes the sentence. */
+  retiredCodes: readonly string[];
   onClose: (saved: boolean) => void;
 }) {
   const editing = state.mode === "edit";
@@ -496,11 +512,39 @@ export function CitizenFieldDialog({
   const [errors, setErrors] = useState<FieldFormErrors>({});
   const [formError, setFormError] = useState("");
   const [busy, setBusy] = useState(false);
+  // Add only. "auto": the code follows Tên hiển thị; "manual": typed by hand, the label no longer overwrites it.
+  const [codeMode, setCodeMode] = useState<"auto" | "manual">("auto");
+  // Codes the server refused with 409 while this dialog was open — another staff member took them meanwhile.
+  const [serverTaken, setServerTaken] = useState<readonly string[]>([]);
+  const codeInput = useRef<HTMLInputElement>(null);
+  const focusCode = useRef(false);
   const id = (s: string) => `citizen-field-${s}`;
+
+  const allTaken = [...takenCodes, ...serverTaken];
+  const retiredSet = new Set(retiredCodes);
+  const liveSet = new Set(allTaken.filter((c) => !retiredSet.has(c)));
+  const autoCode = (label: string, extra: readonly string[] = []) =>
+    label.trim() === "" ? "" : (generateFieldCode(label, new Set([...allTaken, ...extra])) ?? "");
+  const manualError = !editing && codeMode === "manual" ? manualCodeError(draft.code, liveSet, retiredSet) : undefined;
+  const codeError = errors.code ?? manualError;
+
+  useEffect(() => {
+    if (codeMode === "manual" && focusCode.current) {
+      focusCode.current = false;
+      codeInput.current?.focus();
+    }
+  }, [codeMode]);
+
+  function setLabel(label: string) {
+    if (!editing && codeMode === "auto") {
+      setDraft({ ...draft, label, code: autoCode(label) });
+      setErrors({ ...errors, code: undefined });
+    } else setDraft({ ...draft, label });
+  }
 
   async function submit() {
     if (busy) return;
-    const found = validateFieldDraft(draft, !editing, takenCodes);
+    const found = validateFieldDraft(draft, !editing, allTaken, retiredCodes);
     setErrors(found);
     setFormError("");
     if (hasErrors(found)) return;
@@ -521,7 +565,18 @@ export function CitizenFieldDialog({
     if (!r.ok) {
       const text = r.thongBao === LOI_KHONG_RO ? SAVE_FAILED : r.thongBao;
       // A taken code is drawn under "Mã"; every other refusal (`citizen_field_limit` included) at the bottom.
-      if (r.code === CITIZEN_FIELD_CODE_TAKEN) setErrors({ code: text });
+      // The server's key is the final guard: another staff member may have saved the same code meanwhile.
+      // In auto mode the next free code is put in at once and said; the person presses Lưu again (the
+      // Idempotency-Key was released on the 4xx, so the retry under it is a fresh attempt).
+      if (r.code === CITIZEN_FIELD_CODE_TAKEN && state.mode === "add") {
+        const refused = draft.code.trim();
+        setServerTaken([...serverTaken, refused]);
+        const next = codeMode === "auto" ? autoCode(draft.label, [refused]) : "";
+        if (next !== "") {
+          setDraft({ ...draft, code: next });
+          setErrors({ code: codeRegeneratedText(refused, next) });
+        } else setErrors({ code: text });
+      } else if (r.code === CITIZEN_FIELD_CODE_TAKEN) setErrors({ code: text });
       else setFormError(text);
       return;
     }
@@ -551,20 +606,6 @@ export function CitizenFieldDialog({
       >
         <fieldset disabled={busy} className="m-0 flex min-w-0 flex-col gap-4 border-0 p-0">
           <div className="grid gap-4 sm:grid-cols-2">
-            <FormField id={id("code")} label="Mã" required={!editing} error={errors.code} hint={editing ? "Mã không đổi sau khi tạo." : "6–8 ký tự a–z, 0–9, bắt đầu bằng chữ cái. Không đổi được sau khi tạo."}>
-              <input
-                id={id("code")}
-                type="text"
-                spellCheck={false}
-                className={cn(inputCls, "font-mono")}
-                maxLength={8}
-                value={draft.code}
-                readOnly={editing}
-                aria-readonly={editing || undefined}
-                aria-invalid={errors.code !== undefined}
-                onChange={(e) => setDraft({ ...draft, code: e.target.value.toLowerCase() })}
-              />
-            </FormField>
             <FormField id={id("label")} label="Tên hiển thị" required error={errors.label}>
               <input
                 id={id("label")}
@@ -572,8 +613,65 @@ export function CitizenFieldDialog({
                 className={inputCls}
                 value={draft.label}
                 aria-invalid={errors.label !== undefined}
-                onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                onChange={(e) => setLabel(e.target.value)}
               />
+            </FormField>
+            <FormField
+              id={id("code")}
+              label="Mã"
+              required={!editing}
+              error={codeError}
+              hint={editing ? CODE_LOCKED_HINT : codeMode === "auto" ? CODE_AUTO_HINT : CODE_MANUAL_HINT}
+            >
+              {/* Edit: read-only, no Sửa — every value typed on every person is keyed by this code (ADR 0101 #1). */}
+              <div className="flex min-w-0 items-center gap-2">
+                <input
+                  ref={codeInput}
+                  id={id("code")}
+                  type="text"
+                  spellCheck={false}
+                  className={cn(inputCls, "min-w-0 flex-1 font-mono", (editing || codeMode === "auto") && "bg-surface-muted")}
+                  maxLength={8}
+                  value={draft.code}
+                  readOnly={editing || codeMode === "auto"}
+                  aria-readonly={editing || codeMode === "auto" || undefined}
+                  aria-invalid={codeError !== undefined}
+                  data-code-mode={editing ? "locked" : codeMode}
+                  onChange={(e) => {
+                    setDraft({ ...draft, code: e.target.value.toLowerCase() });
+                    setErrors({ ...errors, code: undefined });
+                  }}
+                />
+                {!editing && codeMode === "auto" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-0 shrink-0"
+                    aria-label="Sửa mã thuộc tính"
+                    icon={<Pencil aria-hidden="true" focusable="false" className="size-3.5" />}
+                    onClick={() => {
+                      focusCode.current = true;
+                      setCodeMode("manual");
+                    }}
+                  >
+                    {CODE_EDIT_BUTTON}
+                  </Button>
+                )}
+                {!editing && codeMode === "manual" && (
+                  <button
+                    type="button"
+                    className="text-brand shrink-0 cursor-pointer border-0 bg-transparent p-0 text-[12.5px] font-semibold underline-offset-2 hover:underline"
+                    onClick={() => {
+                      setCodeMode("auto");
+                      setDraft({ ...draft, code: autoCode(draft.label) });
+                      setErrors({ ...errors, code: undefined });
+                    }}
+                  >
+                    {CODE_REGENERATE}
+                  </button>
+                )}
+              </div>
             </FormField>
             <FormField id={id("type")} label="Loại" required={!editing} hint={editing ? "Loại không đổi sau khi tạo." : undefined}>
               {editing ? (
@@ -675,7 +773,7 @@ export function CitizenFieldDialog({
           </p>
         )}
         <div className="flex flex-wrap justify-end gap-2">
-          <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
+          <Button type="submit" variant="primary" disabled={busy || isCodeCollision(manualError)} aria-busy={busy}>
             Lưu
           </Button>
           <Button type="button" variant="outline" disabled={busy} onClick={() => onClose(false)}>

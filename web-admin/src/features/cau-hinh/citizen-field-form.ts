@@ -204,7 +204,82 @@ export type FieldFormErrors = Partial<Record<"code" | "label" | "placeholder" | 
 
 export const CODE_REQUIRED = "Nhập mã thuộc tính.";
 export const CODE_INVALID = "Mã gồm 6–8 ký tự a–z, 0–9 và bắt đầu bằng chữ cái, ví dụ: hongheo1.";
-export const CODE_TAKEN = "Mã này xã đã dùng cho một thuộc tính khác (kể cả thuộc tính đã ngừng dùng).";
+export const CODE_TAKEN = "Mã này đã có trong xã.";
+export const CODE_TAKEN_RETIRED = "Mã này đã có trong xã (đã ngừng dùng).";
+export const CODE_AUTO_HINT = "Tự sinh từ tên hiển thị. Không đổi được sau khi tạo.";
+export const CODE_MANUAL_HINT = "6–8 ký tự a–z, 0–9, bắt đầu bằng chữ cái. Không đổi được sau khi tạo.";
+export const CODE_LOCKED_HINT = "Mã không đổi được sau khi tạo vì dữ liệu đã nhập gắn với mã.";
+export const CODE_EDIT_BUTTON = "Sửa";
+export const CODE_REGENERATE = "Tự sinh lại";
+
+/** What the dialog says when the server took the auto code meanwhile and the next free one was put in. */
+export function codeRegeneratedText(taken: string, next: string): string {
+  return `Mã ${taken} vừa được dùng trong xã. Đã đổi sang mã ${next} — bấm Lưu để thử lại.`;
+}
+
+/* ---- the generated code (owner, 17/10/2026: "mã thuộc tính hãy tự gen, cho phép sửa, chống trùng trong xã") ---- */
+
+/** Digits appended to a folded label shorter than 6: `ho` → `ho2345`. Starts at 2 so `…1` never reads as `…l`. */
+const PAD_DIGITS = "234567890";
+const CODE_MIN = 6;
+const CODE_MAX = 8;
+
+/** `Hộ nghèo 2026` → `hongheo2026`: diacritics folded (đ → d), lower case, only a–z / 0–9 kept. */
+export function foldLabel(label: string): string {
+  return label
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[đĐ]/g, "d")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * The code a label suggests, before any collision: folded, `tt` in front when it would not start with a
+ * letter (or is empty), cut to 8, padded with digits to 6. Always matches FIELD_CODE_PATTERN.
+ */
+export function baseCodeFromLabel(label: string): string {
+  let s = foldLabel(label);
+  if (!/^[a-z]/.test(s)) s = `tt${s}`;
+  s = s.slice(0, CODE_MAX);
+  for (let i = 0; s.length < CODE_MIN; i++) s += PAD_DIGITS[i % PAD_DIGITS.length];
+  return s;
+}
+
+/**
+ * The first code for `label` that no field of the commune holds — `taken` is EVERY code, retired ones
+ * included: PRIMARY KEY (tenant_id, code) covers both, so a retired code proposed here is a 409 later.
+ * On collision the tail becomes a counter at the base's length (`hongheo` → `hongh01` → `hongh02`), 2
+ * digits, then 3 once 99 are gone. `null` only when all 999 are taken — the dialog then asks for a hand-typed code.
+ */
+export function generateFieldCode(label: string, taken: ReadonlySet<string>): string | null {
+  const base = baseCodeFromLabel(label);
+  if (!taken.has(base)) return base;
+  for (let n = 1; n <= 999; n++) {
+    const tail = String(n).padStart(n < 100 ? 2 : 3, "0");
+    const candidate = base.slice(0, base.length - tail.length) + tail;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * The sentence under a hand-typed code, live: pattern first, then whether the commune already holds it
+ * (and says so when the holder is retired — the person may look for it in the list and not find it).
+ */
+export function manualCodeError(code: string, liveCodes: ReadonlySet<string>, retiredCodes: ReadonlySet<string>): string | undefined {
+  const c = code.trim();
+  if (c === "") return CODE_REQUIRED;
+  if (!FIELD_CODE_PATTERN.test(c)) return CODE_INVALID;
+  if (retiredCodes.has(c)) return CODE_TAKEN_RETIRED;
+  if (liveCodes.has(c)) return CODE_TAKEN;
+  return undefined;
+}
+
+/** A collision is the one code error that disables Lưu while typing (the pattern errors still let Lưu show every other problem). */
+export function isCodeCollision(error: string | undefined): boolean {
+  return error === CODE_TAKEN || error === CODE_TAKEN_RETIRED;
+}
 export const LABEL_REQUIRED = "Nhập tên hiển thị.";
 export const LABEL_TOO_LONG = `Tên hiển thị tối đa ${LABEL_MAX} ký tự.`;
 export const PLACEHOLDER_TOO_LONG = `Gợi ý nhập tối đa ${PLACEHOLDER_MAX} ký tự.`;
@@ -225,13 +300,20 @@ function charCount(s: string): number {
 /**
  * Every problem of the draft, keyed by the control it belongs under. `takenCodes` are the codes the commune
  * already holds, retired fields included — a retired code is still a code (rule 7, invariant 3).
+ * `retiredCodes` (a subset of `takenCodes`) only changes the sentence: "(đã ngừng dùng)".
  */
-export function validateFieldDraft(d: CitizenFieldDraft, creating: boolean, takenCodes: readonly string[]): FieldFormErrors {
+export function validateFieldDraft(
+  d: CitizenFieldDraft,
+  creating: boolean,
+  takenCodes: readonly string[],
+  retiredCodes: readonly string[] = [],
+): FieldFormErrors {
   const errors: { -readonly [K in keyof FieldFormErrors]: FieldFormErrors[K] } = {};
   if (creating) {
     const code = d.code.trim();
     if (code === "") errors.code = CODE_REQUIRED;
     else if (!FIELD_CODE_PATTERN.test(code)) errors.code = CODE_INVALID;
+    else if (retiredCodes.includes(code)) errors.code = CODE_TAKEN_RETIRED;
     else if (takenCodes.includes(code)) errors.code = CODE_TAKEN;
   }
   const label = d.label.trim();

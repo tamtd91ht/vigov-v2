@@ -189,6 +189,101 @@ describe("reorder — Lên / Xuống (keyboard-reachable buttons) and rollback",
   });
 });
 
+function openAdd(el: HTMLElement): HTMLFormElement {
+  act(() => button(el, "Thêm thuộc tính").click());
+  return document.querySelector<HTMLFormElement>("form[aria-label='Thêm thuộc tính']")!;
+}
+const codeOf = (dlg: ParentNode) => dlg.querySelector<HTMLInputElement>("#citizen-field-code")!;
+const labelOf = (dlg: ParentNode) => dlg.querySelector<HTMLInputElement>("#citizen-field-label")!;
+const saveButton = (dlg: ParentNode) => button(dlg, "Lưu");
+
+describe("add dialog — generated code", () => {
+  it("the code follows Tên hiển thị, read-only, and skips codes held live AND retired", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    items = [BASE, NUMBER, DATE, RETIRED, { ...RETIRED, code: "hongheo", label: "Hộ nghèo cũ" }, { ...BASE, code: "hongh01", sort_order: 9 }];
+    const el = await mount();
+    const dlg = openAdd(el);
+    expect(codeOf(dlg).readOnly).toBe(true);
+    expect(codeOf(dlg).value).toBe("");
+    typeInto(labelOf(dlg), "Hộ");
+    expect(codeOf(dlg).value).toBe("ho2345");
+    typeInto(labelOf(dlg), "Hộ nghèo");
+    // `hongheo` retired, `hongh01` live → the next free one.
+    expect(codeOf(dlg).value).toBe("hongh02");
+    expect(saveButton(dlg).disabled).toBe(false);
+  });
+
+  it("Sửa → editable; typing the label no longer overwrites it; a collision says so inline and disables Lưu", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    const el = await mount();
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "Phân loại");
+    expect(codeOf(dlg).value).toBe("phanloai");
+    act(() => byLabel(dlg, "Sửa mã thuộc tính").click());
+    expect(codeOf(dlg).readOnly).toBe(false);
+    expect(document.activeElement).toBe(codeOf(dlg));
+    typeInto(codeOf(dlg), "hongheo1");
+    expect(dlg.textContent).toContain(form.CODE_TAKEN);
+    expect(saveButton(dlg).disabled).toBe(true);
+    typeInto(codeOf(dlg), "cucu0001");
+    expect(dlg.textContent).toContain(form.CODE_TAKEN_RETIRED);
+    expect(saveButton(dlg).disabled).toBe(true);
+    typeInto(labelOf(dlg), "Phân loại khác");
+    expect(codeOf(dlg).value).toBe("cucu0001");
+    typeInto(codeOf(dlg), "plkhac01");
+    expect(dlg.textContent).not.toContain(form.CODE_TAKEN);
+    expect(saveButton(dlg).disabled).toBe(false);
+  });
+
+  it("auto → manual → Tự sinh lại: back to the label's code, read-only again", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    const el = await mount();
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "Ghi chú");
+    act(() => byLabel(dlg, "Sửa mã thuộc tính").click());
+    typeInto(codeOf(dlg), "tuychon1");
+    act(() => button(dlg, form.CODE_REGENERATE).click());
+    expect(codeOf(dlg).value).toBe("ghichu");
+    expect(codeOf(dlg).readOnly).toBe(true);
+    typeInto(labelOf(dlg), "Ghi chú thêm");
+    expect(codeOf(dlg).value).toBe("ghichuth");
+  });
+
+  it("409 citizen_field_code_taken in auto mode: the next free code is put in and said; the retry POSTs it", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["POST /api/v1/citizen-fields"] = { status: 409, body: { code: "citizen_field_code_taken", message: "Mã đã dùng.", trace_id: "" } };
+    const el = await mount();
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "Hộ nghèo");
+    act(() => saveButton(dlg).click());
+    await settle();
+    expect(JSON.parse(writes()[0]!.body!).code).toBe("hongheo");
+    expect(codeOf(dlg).value).toBe("hongh01");
+    expect(dlg.textContent).toContain(form.codeRegeneratedText("hongheo", "hongh01"));
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    act(() => saveButton(dlg).click());
+    await settle();
+    const second = writes()[1]!;
+    expect(JSON.parse(second.body!).code).toBe("hongh01");
+    expect(second.headers["Idempotency-Key"]).toBe(writes()[0]!.headers["Idempotency-Key"]);
+    expect(H.toast.success).toHaveBeenCalledWith(form.FIELD_ADDED_TOAST);
+  });
+
+  it("409 in manual mode: the server's sentence under Mã, the code left as typed", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["POST /api/v1/citizen-fields"] = { status: 409, body: { code: "citizen_field_code_taken", message: "Mã đã dùng.", trace_id: "" } };
+    const el = await mount();
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "X");
+    act(() => byLabel(dlg, "Sửa mã thuộc tính").click());
+    typeInto(codeOf(dlg), "tuychon1");
+    act(() => saveButton(dlg).click());
+    await settle();
+    expect(codeOf(dlg).value).toBe("tuychon1");
+    expect(dlg.querySelector("[data-field-error]")!.textContent).toBe("Mã đã dùng.");
+  });
+});
+
 describe("add dialog", () => {
   it("refuses a bad code and an empty option list BEFORE sending; a clean draft POSTs the body with the key", async () => {
     H.phien = session(["admin.citizen_field"]);
@@ -196,6 +291,7 @@ describe("add dialog", () => {
     const el = await mount();
     act(() => button(el, "Thêm thuộc tính").click());
     const dlg = document.querySelector<HTMLFormElement>("form[aria-label='Thêm thuộc tính']")!;
+    act(() => byLabel(dlg, "Sửa mã thuộc tính").click());
     typeInto(dlg.querySelector<HTMLInputElement>("#citizen-field-code")!, "1abc");
     typeInto(dlg.querySelector<HTMLInputElement>("#citizen-field-label")!, "Nhu cầu hỗ trợ");
     selectValue(dlg.querySelector<HTMLSelectElement>("#citizen-field-type")!, "combobox");
@@ -227,16 +323,17 @@ describe("add dialog", () => {
     expect(H.toast.success).toHaveBeenCalledWith(form.FIELD_ADDED_TOAST);
   });
 
-  it("a code the commune already holds (a retired one too) is refused locally", async () => {
+  it("a code the commune already holds (a retired one too) is refused locally — Lưu disabled, nothing sent", async () => {
     H.phien = session(["admin.citizen_field"]);
     const el = await mount();
-    act(() => button(el, "Thêm thuộc tính").click());
-    const dlg = document.querySelector<HTMLFormElement>("form[aria-label='Thêm thuộc tính']")!;
-    typeInto(dlg.querySelector<HTMLInputElement>("#citizen-field-code")!, "cucu0001");
-    typeInto(dlg.querySelector<HTMLInputElement>("#citizen-field-label")!, "X");
-    act(() => button(dlg, "Lưu").click());
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "X");
+    act(() => byLabel(dlg, "Sửa mã thuộc tính").click());
+    typeInto(codeOf(dlg), "cucu0001");
+    expect(dlg.textContent).toContain(form.CODE_TAKEN_RETIRED);
+    expect(saveButton(dlg).disabled).toBe(true);
+    act(() => saveButton(dlg).click());
     await settle();
-    expect(dlg.textContent).toContain(form.CODE_TAKEN);
     expect(writes()).toHaveLength(0);
   });
 
@@ -257,6 +354,10 @@ describe("edit and retire", () => {
     act(() => byLabel(el, "Sửa thuộc tính Phân loại hộ").click());
     const dlg = document.querySelector<HTMLFormElement>("form[aria-label='Sửa thuộc tính']")!;
     expect(dlg.querySelector<HTMLInputElement>("#citizen-field-code")!.readOnly).toBe(true);
+    // No Sửa / Tự sinh lại for the code on edit: values on every person are keyed by it (ADR 0101 #1).
+    expect(dlg.querySelector("button[aria-label='Sửa mã thuộc tính']")).toBeNull();
+    expect(dlg.textContent).not.toContain(form.CODE_REGENERATE);
+    expect(dlg.textContent).toContain(form.CODE_LOCKED_HINT);
     expect(dlg.querySelector<HTMLInputElement>("#citizen-field-type")!.readOnly).toBe(true);
     expect(dlg.querySelector<HTMLInputElement>("#citizen-field-option-value-0")!.readOnly).toBe(true);
     // No delete for a saved option: only "Ngừng dùng".

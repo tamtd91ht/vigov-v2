@@ -6,6 +6,8 @@ import {
   CODE_INVALID,
   CODE_REQUIRED,
   CODE_TAKEN,
+  CODE_TAKEN_RETIRED,
+  FIELD_CODE_PATTERN,
   LABEL_REQUIRED,
   OPTION_LABEL_REQUIRED,
   OPTION_VALUE_DUPLICATE,
@@ -15,6 +17,11 @@ import {
   PLACEHOLDER_TOO_LONG,
   RETIRE_REASON_REQUIRED,
   addOption,
+  baseCodeFromLabel,
+  foldLabel,
+  generateFieldCode,
+  isCodeCollision,
+  manualCodeError,
   buildCreateBody,
   buildUpdateBody,
   checkRetireReason,
@@ -70,6 +77,7 @@ describe("field code (ADR 0101 #1: 6–8 chars, a–z 0–9, starts with a lette
 
   it("a code the commune already holds — a retired one included — is taken", () => {
     expect(validateFieldDraft(draft({ code: "hongheo1" }), true, ["hongheo1"]).code).toBe(CODE_TAKEN);
+    expect(validateFieldDraft(draft({ code: "cucu0001" }), true, ["hongheo1", "cucu0001"], ["cucu0001"]).code).toBe(CODE_TAKEN_RETIRED);
   });
 
   it("on edit the code is not checked at all (it cannot change)", () => {
@@ -215,5 +223,69 @@ describe("order", () => {
   it("type labels are the owner's words", () => {
     expect(fieldTypeLabel("combobox")).toBe("Chọn nhiều");
     expect(fieldTypeLabel("singleBox")).toBe("Chọn một");
+  });
+});
+
+describe("generated code (owner 17/10/2026: tự sinh, sửa được, chống trùng trong xã)", () => {
+  it("folds Vietnamese diacritics, đ → d, keeps a–z 0–9 only", () => {
+    expect(foldLabel("Hộ nghèo")).toBe("hongheo");
+    expect(foldLabel("Đối tượng ĐẶC BIỆT")).toBe("doituongdacbiet");
+    expect(foldLabel("Số nhân-khẩu (2026)!")).toBe("sonhankhau2026");
+  });
+
+  it.each([
+    ["Hộ nghèo", "hongheo"], // 7, as is
+    ["Đối tượng đặc biệt", "doituong"], // long → cut to 8
+    ["Năm 2026", "nam2026"],
+    ["2026 hộ", "tt2026ho"], // digit first → tt prefix, then cut
+    ["Hộ", "ho2345"], // short → padded with 2,3,4…
+    ["Ấp", "ap2345"],
+    ["Tổ", "to2345"],
+    ["a", "a23456"],
+    ["", "tt2345"], // empty → tt + padding
+    ["!!!", "tt2345"],
+    ["12", "tt1223"],
+  ])("%j → %s", (label, code) => {
+    expect(baseCodeFromLabel(label)).toBe(code);
+    expect(FIELD_CODE_PATTERN.test(code)).toBe(true);
+  });
+
+  it("a free base is proposed as is", () => {
+    expect(generateFieldCode("Hộ nghèo", new Set(["sonhan01"]))).toBe("hongheo");
+  });
+
+  it("collision → 2-digit counter at the base's length, live AND retired codes both count", () => {
+    // `hongheo` live, `hongh01` retired: neither may be proposed (PRIMARY KEY (tenant_id, code) covers both).
+    expect(generateFieldCode("Hộ nghèo", new Set(["hongheo", "hongh01"]))).toBe("hongh02");
+    expect(generateFieldCode("Đối tượng đặc biệt", new Set(["doituong"]))).toBe("doituo01");
+    expect(generateFieldCode("Hộ", new Set(["ho2345"]))).toBe("ho2301");
+  });
+
+  it("past 99 the counter takes 3 digits, still ≤ 8 and matching the pattern; all 999 gone → null", () => {
+    const taken = new Set(["hongheo", ...Array.from({ length: 99 }, (_, i) => `hongh${String(i + 1).padStart(2, "0")}`)]);
+    const c = generateFieldCode("Hộ nghèo", taken)!;
+    expect(c).toBe("hong100");
+    expect(FIELD_CODE_PATTERN.test(c)).toBe(true);
+    const all = new Set(["abcdef"]);
+    for (let n = 1; n <= 999; n++) {
+      const tail = String(n).padStart(n < 100 ? 2 : 3, "0");
+      all.add("abcdef".slice(0, 6 - tail.length) + tail);
+    }
+    expect(generateFieldCode("abcdef", all)).toBeNull();
+  });
+
+  it("manual code: pattern, then live collision, then retired collision with its own sentence", () => {
+    const live = new Set(["hongheo1"]);
+    const retired = new Set(["cucu0001"]);
+    expect(manualCodeError("", live, retired)).toBe(CODE_REQUIRED);
+    expect(manualCodeError("1abcde", live, retired)).toBe(CODE_INVALID);
+    expect(manualCodeError("abc", live, retired)).toBe(CODE_INVALID);
+    expect(manualCodeError("hongheo1", live, retired)).toBe(CODE_TAKEN);
+    expect(manualCodeError("cucu0001", live, retired)).toBe(CODE_TAKEN_RETIRED);
+    expect(manualCodeError("moi12345", live, retired)).toBeUndefined();
+    expect(isCodeCollision(CODE_TAKEN)).toBe(true);
+    expect(isCodeCollision(CODE_TAKEN_RETIRED)).toBe(true);
+    expect(isCodeCollision(CODE_INVALID)).toBe(false);
+    expect(isCodeCollision(undefined)).toBe(false);
   });
 });
