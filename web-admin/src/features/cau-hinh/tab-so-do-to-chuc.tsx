@@ -538,7 +538,7 @@ export function BieuMauBoPhan({
           onGui();
         }}
       >
-        <div className="min-h-0 space-y-4 overflow-y-auto">
+        <div className="min-h-0 space-y-4 overflow-y-auto -m-1 p-1">
           <div className="block">
             <label htmlFor={O_TEN_ID} className={DIALOG_LABEL_CLASS}>
               {O_TEN}

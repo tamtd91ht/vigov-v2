@@ -231,7 +231,7 @@ export function StaffDirectoryImportView({
     return (
       <>
         {header}
-        <div className="mt-4 min-h-0 min-w-0 overflow-y-auto">
+        <div className="mt-4 min-h-0 min-w-0 overflow-y-auto -mx-1 px-1 pb-1">
           <StaffImportResult created={result.created} onClose={onClose} />
         </div>
       </>
@@ -250,7 +250,7 @@ export function StaffDirectoryImportView({
   return (
     <>
       {header}
-      <div className="mt-4 min-h-0 min-w-0 space-y-4 overflow-y-auto">
+      <div className="mt-4 min-h-0 min-w-0 space-y-4 overflow-y-auto -mx-1 px-1 pb-1">
         <Button
           type="button"
           variant="ghost"

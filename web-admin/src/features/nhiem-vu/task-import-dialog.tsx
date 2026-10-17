@@ -209,7 +209,7 @@ export function TaskImportView({
   const clean = report !== null && report.errors.length === 0;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
+    <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto -m-1 p-1">
       <div>
         <Button
           type="button"

@@ -345,7 +345,7 @@ function AccountForm({
         onGui();
       }}
     >
-      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto -m-1 p-1">
         {profile && (
           <div className="grid grid-cols-2 gap-4">
             <div className="col-span-2 block">

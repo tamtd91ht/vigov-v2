@@ -2046,7 +2046,7 @@ export function FormNhapBienBan({
         {/* The fields scroll between the header and the buttons (`ModalDialog` layout contract).
             `[&_.o-nhap]:mb-0`: the column `gap` is the one spacing between fields; the legacy 1rem
             bottom margin of `.o-nhap` would double it. Labels stay above their controls. */}
-        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto pr-1 [&_.o-nhap]:mb-0">
+        <div className="flex min-h-0 flex-col gap-4 overflow-y-auto [&_.o-nhap]:mb-0 -m-1 p-1">
           {/* ĐÃ QUYẾT 25/09/2026: nội dung mật không bao giờ vào ViGov — không có cờ "mật" nào. */}
           <Notice tone="legal" role="note">
             {CANH_BAO_BI_MAT}

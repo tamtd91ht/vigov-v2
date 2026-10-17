@@ -93,7 +93,7 @@ export function SeedRolesDialog({
           void submit();
         }}
       >
-        <div className="min-h-0 space-y-3 overflow-y-auto">
+        <div className="min-h-0 space-y-3 overflow-y-auto -m-1 p-1">
           <ul className="text-navy m-0 list-disc space-y-0.5 pl-5 text-[13px]">
             {ROLE_TEMPLATE_NAMES.map((n) => (
               <li key={n}>{n}</li>
@@ -183,7 +183,7 @@ export function RoleFormDialog({
           void submit();
         }}
       >
-        <div className="min-h-0 space-y-4 overflow-y-auto">
+        <div className="min-h-0 space-y-4 overflow-y-auto -m-1 p-1">
           <div className="block">
             <label htmlFor={nameId} className={DIALOG_LABEL_CLASS}>
               {ROLE_NAME_LABEL}
@@ -305,7 +305,7 @@ export function DeleteRoleDialog({
           void submit();
         }}
       >
-        <div className="min-h-0 space-y-4 overflow-y-auto">
+        <div className="min-h-0 space-y-4 overflow-y-auto -m-1 p-1">
           <div className="block">
             <label htmlFor={reasonId} className={DIALOG_LABEL_CLASS}>
               {DELETE_REASON_LABEL}

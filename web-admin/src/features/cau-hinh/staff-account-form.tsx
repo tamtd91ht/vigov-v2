@@ -166,7 +166,7 @@ export function StaffAccountForm({
         onSubmit();
       }}
     >
-      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+      <div className="flex min-h-0 flex-col gap-3 overflow-y-auto -m-1 p-1">
         <div className="grid grid-cols-2 gap-4">
           <div className="col-span-2 block">
             <label htmlFor="o-ho-ten-can-bo" className={DIALOG_LABEL_CLASS}>

@@ -209,7 +209,7 @@ export function CategoryManagerDialog({ onClose, onChanged }: { onClose: () => v
         </Button>
       </form>
 
-      <div className="max-h-[26rem] min-h-0 overflow-y-auto pr-1">
+      <div className="max-h-[26rem] min-h-0 overflow-y-auto -m-1 p-1">
         {current === null && (
           <>
             <p role="status" className="an-thi-giac">

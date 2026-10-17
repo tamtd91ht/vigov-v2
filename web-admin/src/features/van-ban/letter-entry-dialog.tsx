@@ -152,7 +152,7 @@ export function LetterEntryDialog({
       <form className="flex min-h-0 flex-col gap-4" aria-label={LETTER_ENTRY_TITLE} onSubmit={submit}>
         <ModalDialogHeader titleId={ENTRY_TITLE_ID} title={LETTER_ENTRY_TITLE} description={LETTER_ENTRY_DESCRIPTION} />
 
-        <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto">
+        <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto -m-1 p-1">
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-[1fr_12rem]">
             <Field label="Người gửi" htmlFor="don-thu-nguoi-gui" grow="auto">
               <input

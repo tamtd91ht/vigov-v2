@@ -486,7 +486,7 @@ export function StaffIntakeFormView({
         </IconButton>
       </div>
 
-      <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto pr-1 [&>*]:my-0">
+      <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto [&>*]:my-0 -m-1 p-1">
 
       {/* LĨNH VỰC — REQUIRED on this channel (§11): the field is known at booking, so both deadlines
           are fixed at once (ADR 0028). The list is the commune's (`citizen-report-intake-fields`). */}

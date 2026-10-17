@@ -39,7 +39,7 @@ export function ConfigDialog({
     <ModalDialog titleId={titleId} onDismiss={onDismiss} size={size} className="hop-thoai-cau-hinh">
       {hideHeader ? <div className="an-thi-giac">{header}</div> : header}
       {/* The scroll region the dialog's layout contract asks for: a tall form keeps its buttons reachable. */}
-      <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto [&>*]:my-0">{children}</div>
+      <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-y-auto [&>*]:my-0 -m-1 p-1">{children}</div>
     </ModalDialog>
   );
 }

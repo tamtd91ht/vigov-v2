@@ -976,7 +976,7 @@ function AddProjectDialog({
         title="Thêm dự án"
         description={`Chọn hạng mục, đặt tên dự án và nhập số tiền bố trí cho năm ${nam}. Những mục còn lại bổ sung sau lúc nào cũng được.`}
       />
-      <div className="min-h-0 overflow-y-auto">
+      <div className="min-h-0 overflow-y-auto -m-1 p-1">
         <FormDuAn
           tieuDeForm={`Thêm dự án — năm ngân sách ${nam}`}
           budgetYear={nam}

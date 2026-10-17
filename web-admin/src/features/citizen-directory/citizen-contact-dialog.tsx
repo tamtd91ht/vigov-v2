@@ -262,7 +262,7 @@ export function CitizenContactDialog({
       )}
 
       <form
-        className="m-0 flex min-h-0 flex-col gap-4 overflow-y-auto"
+        className="flex min-h-0 flex-col gap-4 overflow-y-auto -m-1 p-1"
         aria-label={editing ? CONTACT_EDIT_TITLE : CONTACT_ADD_TITLE}
         noValidate
         onSubmit={(e) => {

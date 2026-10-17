@@ -141,7 +141,7 @@ export function FundingSourceProjectsDialog({
         title={source.name}
         description={`Đã phân bổ ${nhanTien(source.allocated_amount)} cho ${source.project_count} dự án trong năm ${year}.`}
       />
-      <div className="min-h-0 overflow-y-auto">
+      <div className="min-h-0 overflow-y-auto -m-1 p-1">
         {current === null && (
           <>
             <p role="status" className="an-thi-giac">
@@ -549,7 +549,7 @@ function AddFundingSourceForm({
   return (
     // The existing list holds its own small forms (`Sửa`), so it sits OUTSIDE this form — forms do not
     // nest — and the footer's submit button reaches back with `form=`.
-    <div className="flex min-h-0 min-w-0 flex-col gap-3.5 overflow-y-auto">
+    <div className="flex min-h-0 min-w-0 flex-col gap-3.5 overflow-y-auto -m-1 p-1">
       <form
         id={ADD_FORM_ID}
         onSubmit={submit}

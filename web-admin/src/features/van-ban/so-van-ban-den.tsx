@@ -1320,7 +1320,7 @@ export function BieuMauVanBanDen({
       <ModalDialog titleId={INCOMING_FORM_TITLE_ID} onDismiss={dismiss}>
         <form className="flex min-h-0 flex-col gap-4" aria-label={question} onSubmit={submit}>
           <ModalDialogHeader titleId={INCOMING_FORM_TITLE_ID} title={question} />
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto -m-1 p-1">
             {/* CÂU QUAN TRỌNG NHẤT MÀN HÌNH, và nó đứng ĐÚNG CHỖ sắp bấm xoá. */}
             <Notice tone="legal" icon={Trash2}>
               {CANH_BAO_GO_KHONG_TRA_SO}
@@ -1384,7 +1384,7 @@ export function BieuMauVanBanDen({
 
         {/* The prototype's body (`DocumentEntryForm.tsx:189-359`): `space-y-3.5`, the number and the
             arrival date side by side, then the issuing body, the summary, the deadline, the fold. */}
-        <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto">
+        <div className="flex min-h-0 flex-col gap-3.5 overflow-y-auto -m-1 p-1">
           {/* 10rem, not the prototype's 8rem: our cell holds a sentence ("Hệ thống cấp khi lưu"),
               not a two-digit number, and at 8rem it broke out of its 32px box. */}
           <div className="grid min-w-0 grid-cols-[10rem_1fr] gap-3">

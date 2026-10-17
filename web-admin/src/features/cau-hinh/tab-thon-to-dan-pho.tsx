@@ -672,7 +672,7 @@ export function ResidentialUnitForm({
           onSubmit();
         }}
       >
-        <div className="min-h-0 space-y-4 overflow-y-auto">
+        <div className="min-h-0 space-y-4 overflow-y-auto -m-1 p-1">
           <ConfigField label={FIELD_NAME} htmlFor={NAME_INPUT_ID}>
             <input
               id={NAME_INPUT_ID}

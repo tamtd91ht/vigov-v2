@@ -1948,7 +1948,7 @@ export function FormThemKhoanMuc({
           );
         }}
       >
-        <div className="grid min-h-0 min-w-0 gap-4 overflow-y-auto sm:grid-cols-2">
+        <div className="grid min-h-0 min-w-0 gap-4 overflow-y-auto sm:grid-cols-2 -m-1 p-1">
           <Field label="Nội dung khoản mục" htmlFor="them-name" grow="auto" className="sm:col-span-2">
             <input id="them-name" name="name" className="o-nhap" type="text" required />
           </Field>

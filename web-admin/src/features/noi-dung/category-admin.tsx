@@ -88,7 +88,7 @@ export function CategoryAdmin({
   }
 
   return (
-    <div className="category-admin max-h-[26rem] space-y-3 overflow-y-auto pr-1">
+    <div className="category-admin max-h-[26rem] space-y-3 overflow-y-auto -m-1 p-1">
       {categories.length === 0 ? (
         <p className="m-0 py-6 text-center text-[12.5px] text-ink-muted">{CATEGORY_EMPTY}</p>
       ) : (

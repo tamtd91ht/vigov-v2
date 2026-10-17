@@ -198,7 +198,7 @@ export function DisbursementImportDialog({ onClose, onImported }: { onClose: () 
     <ModalDialog titleId={TITLE_ID} className="max-w-[42rem]" onDismiss={() => busy !== "import" && onClose()}>
       <ModalDialogHeader titleId={TITLE_ID} title={IMPORT_TITLE} description={IMPORT_DESCRIPTION} />
 
-      <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
+      <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto -m-1 p-1">
         <div>
           <Button
             type="button"

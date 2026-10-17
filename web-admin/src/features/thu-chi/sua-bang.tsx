@@ -68,7 +68,7 @@ export function FormSuaBang({
         }}
       >
         {/* Labels above, 40px controls, two columns from 640px (spec §6.3, §6.5). */}
-        <div className="grid min-h-0 min-w-0 gap-4 overflow-y-auto sm:grid-cols-2">
+        <div className="grid min-h-0 min-w-0 gap-4 overflow-y-auto sm:grid-cols-2 -m-1 p-1">
           <Field
             label="Tiêu đề bảng (in trên đầu báo cáo)"
             htmlFor="sua-bang-title"

@@ -1710,6 +1710,14 @@
       "bang_chung": "citizen-field-layout.tsx viết lại thành FormDesigner (phần tĩnh inert theo citizen-contact-dialog, ô thuộc tính vẽ bằng CitizenAttributeInputs inert, + trước mỗi ô / ô phải còn trống / cuối lưới, bảng bên cạnh sticky từ lg); citizen-field-tab.tsx tách CitizenFieldEditor khỏi CitizenFieldDialog, mặc định chế độ Biểu mẫu, thêm giữa = POST rồi PUT citizen-field-order (insertCode), PUT lỗi báo PLACE_FAILED_TOAST. Test: 7 ca mới ở citizen-field-tab.test.tsx + 2 ca thuần ở citizen-field-form.test.ts; tsc sạch, eslint sạch, vitest cau-hinh + citizen-directory 75 tệp / 1346 ca xanh (17/10/2026). Bổ sung (17/10/2026): nút Bỏ thuộc tính mới trên ô nháp; kéo thả ô nháp (DRAFT_DRAG_ID, draftIndexAfterDrop) và thuộc tính đã có vào ô phải còn trống (slot:<mã>) hoặc cuối lưới (orderAfterDesignerDrop); vitest 1349/1349.",
       "no_confirm": [],
       "tiep_theo": "(1) CHƯA xem ảnh render thật (rộng ≥1024 có bảng bên cạnh; hẹp bảng xuống dưới và tự cuộn tới) — người dùng kiểm trên máy build. (2) Phần tĩnh vẽ lại theo citizen-contact-dialog.tsx: đổi ô tĩnh bên đó thì phải đổi StaticFields theo (có test khoá danh sách nhãn). (3) Kéo thả chỉ kiểm qua hàm thuần + nút, chưa kéo bằng chuột/cảm ứng thật. (4) Chọn ô khác khi đang gõ dở trong bảng sẽ bỏ bản nháp, chưa hỏi lại."
+    },
+    {
+      "id": "vien-focus-bi-cat-vung-cuon-17-10",
+      "viec": "Viền focus của ô nhập sát mép trái/phải bị cắt trong hộp thoại (Thêm người dân và mọi hộp có vùng cuộn) — rà toàn bộ web-admin",
+      "trang_thai": "xong",
+      "bang_chung": "32 vùng overflow-y-auto chứa ô nhập ở 25 tệp (gồm ConfigDialog dùng chung của Cấu hình, citizen-contact-dialog) thêm -m-1 p-1 (vùng có mt-* thì -mx-1 px-1 pb-1), bỏ pr-1 cũ; quy ước ghi ở modal-dialog.tsx (LAYOUT CONTRACT). tsc sạch; vitest web-admin trừ notice-send 344 tệp / 6386 ca xanh (notice-send đỏ do việc chưa commit của phiên khác) (17/10/2026).",
+      "no_confirm": [],
+      "tiep_theo": "CHƯA xem ảnh render — người dùng kiểm trên máy build. Vùng cuộn có sẵn padding (p-4, px-5…) không đổi vì vòng focus không bị cắt."
     }
   ]
 }

@@ -115,7 +115,7 @@ export function LapBang({
           taoBang(dung.than, khoaChongTrung).then(xong);
         }}
       >
-        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto -m-1 p-1">
           <Notice tone="neutral">
             Chức năng nạp tệp Excel của Phòng Tài chính chưa có, nên bảng được lập bằng biểu mẫu này.
             Bộ cột dưới đây điền sẵn theo biểu mẫu thường gặp và sửa được — cột là dữ liệu của bảng,

@@ -24,7 +24,11 @@ import { IconButton } from "./icon-button";
  * pin it to the top of the window.
  *
  * LAYOUT CONTRACT: a flex column capped at 90dvh with no scroll of its own; the caller puts an
- * `overflow-y-auto` region inside so the header and the buttons stay in sight.
+ * `overflow-y-auto` region inside so the header and the buttons stay in sight. THAT REGION CARRIES
+ * `-m-1 p-1` (or `-mx-1 px-1 pb-1` when it sets its own top margin): a scroll box clips at its padding
+ * edge, and a control's 3px focus ring is drawn OUTSIDE its border — with no padding the ring of every
+ * field touching the left or right edge was cut off (bug sheet 17/10/2026, Thêm người dân). The 4px
+ * padding gives the ring room; the matching negative margin keeps the fields where they were.
  *
  * THE ✕ IS DRAWN BY DEFAULT, as the prototype's `DialogContent` does on every dialog
  * (`vigov-require/apps/admin/src/components/ui/dialog.tsx:53,83-95`: `showCloseButton = true`, ghost

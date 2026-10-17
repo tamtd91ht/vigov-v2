@@ -672,7 +672,7 @@ export function BieuMauVanBanDi({
       <ModalDialog titleId={OUTGOING_FORM_TITLE_ID} onDismiss={dismiss}>
         <form className="flex min-h-0 flex-col gap-4" aria-label={question} onSubmit={submit}>
           <ModalDialogHeader titleId={OUTGOING_FORM_TITLE_ID} title={question} />
-          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto">
+          <div className="flex min-h-0 flex-col gap-4 overflow-y-auto -m-1 p-1">
             {/* CÂU QUAN TRỌNG NHẤT, đứng ĐÚNG CHỖ sắp bấm gỡ. */}
             <Notice tone="legal" icon={Trash2}>
               {CANH_BAO_GO_KHONG_TRA_SO}
@@ -721,7 +721,7 @@ export function BieuMauVanBanDi({
           }
         />
 
-        <div className="grid min-h-0 min-w-0 gap-3.5 overflow-y-auto sm:grid-cols-2">
+        <div className="grid min-h-0 min-w-0 gap-3.5 overflow-y-auto sm:grid-cols-2 -m-1 p-1">
           <Field label={O_NGAY_VAN_BAN} htmlFor="o-ngay-van-ban-di" grow="auto">
             <input
               id="o-ngay-van-ban-di"

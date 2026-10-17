@@ -600,7 +600,7 @@ export function PortalSyncConfig({
         </IconButton>
       </div>
 
-      <div className="max-h-[62vh] space-y-4 overflow-y-auto pr-1">
+      <div className="max-h-[62vh] space-y-4 overflow-y-auto -m-1 p-1">
         <Field
           label="Địa chỉ API của Cổng"
           htmlFor="portal-sync-api-url"

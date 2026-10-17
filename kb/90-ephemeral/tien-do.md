@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: 4e4196d3
+derived_from_commit: 06bfb6fb
 expires: 2027-01-15
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 211 |
 | chưa làm | 44 |
 | treo | 13 |
-| xong | 599 |
+| xong | 600 |
 
 ## Theo menu
 
@@ -1614,7 +1614,7 @@ Cập nhật 2026-10-16 · 24 mục
 
 ## `web-admin`
 
-Cập nhật 2026-10-17 · 194 mục
+Cập nhật 2026-10-17 · 195 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1812,3 +1812,4 @@ Cập nhật 2026-10-17 · 194 mục
 | `gui-tin-nhap-so-nhap-tep-17-10` — Gửi tin: người nhận nhập số / nhập tệp, SMS cột nội dung hoặc nội dung chung {{variable_N}}, ZNS tham số theo cột, chi tiết đợt + Thông tin map biến + lịch sử từng số (ADR 0099 §Sửa đổi) | xong | f3be1daf (TASK D-7w) + 633f0d1d (D-7r kiểu sinh). tsc + eslint sạch, vitest notice-send xanh (17/10/2026). Phụ thuộc read-excel-file 9.3.10. | — | CHƯA xem ảnh render. Ô tài khoản SMS cho nguồn nhập chỉ hiện tài khoản đã có mẫu (chưa có tuyến liệt kê tài khoản cho notice.send). |
 | `gui-tin-map-thuoc-tinh-web-17-10` — Gửi tin tới danh bạ: mỗi tham số ZNS / ô SMS chọn Giá trị chung hoặc Theo thuộc tính (dấu ? hướng dẫn); lịch sử hiện Tham số → Thuộc tính (ADR 0101 #12) | xong | TASK E-2w (17/10/2026): notice-campaigns.ts listNoticeAttributes + attribute_mapping; notice-send-form/screen. tsc 0 lỗi, eslint sạch, vitest 80/80. | — | CHƯA xem ảnh render. attribute_mapping trong schema.gen khai không-null nhưng comms trả null — web nới kiểu tại chỗ; sửa khai báo phía comms (con trỏ) để apidoc sinh nullable. |
 | `kenh-zalo-thu-gon-va-o-oa-17-10` — Cấu hình → Kênh Zalo: mọi khối có nút mũi tên thu gọn/mở rộng ở góc phải (nhớ theo trình duyệt); OA Zalo của xã xếp thành ô ngang, tối đa 4 ô một hàng, ô cuối nét đứt có dấu + để kết nối thêm OA (yêu cầu người dùng 17/10/2026) | xong | features/cau-hinh/collapsible-section.tsx (mới); zalo-channel-tab.tsx, zalo-oa-section.tsx, commune-launch-qr.tsx dùng CollapsibleSection; lưới OA_GRID 1/2/3/4 cột (md/xl/2xl). Test mới trong zalo-oa.test.tsx (lưới, ô +, thu gọn giữ thẻ trong DOM). tsc sạch ở các tệp này, eslint sạch, vitest 3 tệp / 125 ca xanh (17/10/2026). | — | CHƯA xem ảnh render thật trên trình duyệt — người dùng kiểm trên máy build. |
+| `vien-focus-bi-cat-vung-cuon-17-10` — Viền focus của ô nhập sát mép trái/phải bị cắt trong hộp thoại (Thêm người dân và mọi hộp có vùng cuộn) — rà toàn bộ web-admin | xong | 32 vùng overflow-y-auto chứa ô nhập ở 25 tệp (gồm ConfigDialog dùng chung của Cấu hình, citizen-contact-dialog) thêm -m-1 p-1 (vùng có mt-* thì -mx-1 px-1 pb-1), bỏ pr-1 cũ; quy ước ghi ở modal-dialog.tsx (LAYOUT CONTRACT). tsc sạch; vitest web-admin trừ notice-send 344 tệp / 6386 ca xanh (notice-send đỏ do việc chưa commit của phiên khác) (17/10/2026). | — | CHƯA xem ảnh render — người dùng kiểm trên máy build. Vùng cuộn có sẵn padding (p-4, px-5…) không đổi vì vòng focus không bị cắt. |
