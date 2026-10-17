@@ -39,7 +39,10 @@ export function PetitionWorkspace({
   drillDown = NO_DRILL_DOWN,
   openCode = null,
   basemapAvailable = false,
+  openCreateOnLoad = false,
 }: {
+  /** `?create=1` (`create-link.ts`), read on the server: `Nhập hộ phản ánh` opened once, under `feedback.create`. */
+  openCreateOnLoad?: boolean;
   /** Overview filter, read on the SERVER (`app/phan-anh/page.tsx`). */
   drillDown?: DrillDown<"citizen-reports">;
   /** `?id=<lookup code>` deep link, read on the server: the register opens that petition's drawer. */
@@ -61,7 +64,11 @@ export function PetitionWorkspace({
         subtitle={PETITION_PAGE_SUBTITLE}
         actions={
           coQuyen(permissions, PETITION_INTAKE_PERMISSION) ? (
-            <StaffIntakeButton permissions={permissions} onBooked={() => setBookings((n) => n + 1)} />
+            <StaffIntakeButton
+              permissions={permissions}
+              onBooked={() => setBookings((n) => n + 1)}
+              openCreateOnLoad={openCreateOnLoad}
+            />
           ) : undefined
         }
       />

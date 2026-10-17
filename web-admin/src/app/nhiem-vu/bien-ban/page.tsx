@@ -3,6 +3,8 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { SoBienBan } from "@/features/bien-ban/so-bien-ban";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { parseOpenCreate } from "@/lib/create-link";
+import type { RawSearchParams } from "@/lib/drill-down";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -35,8 +37,14 @@ export function generateMetadata() {
   return communePageMetadata("Biên bản và kết luận họp");
 }
 
-export default async function TrangBienBanHop() {
+export default async function TrangBienBanHop({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa();
+  // `?create=1` — the Hướng dẫn sử dụng link to `Nhập biên bản`, read here and passed down.
+  const openCreateOnLoad = parseOpenCreate(await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -47,7 +55,7 @@ export default async function TrangBienBanHop() {
             {/* The page header (`<h1>` = `TIEU_DE_MAN`, subtitle = `MO_TA_MAN`, the `Nhập biên bản`
                 button) is drawn by `SoBienBan`: the button sits on the title row (spec §5) and the
                 dialog it opens is that component's state. */}
-            <SoBienBan />
+            <SoBienBan openCreateOnLoad={openCreateOnLoad} />
           </main>
         </div>
       </PhienProvider>

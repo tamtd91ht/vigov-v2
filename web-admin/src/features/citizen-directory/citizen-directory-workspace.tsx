@@ -28,6 +28,7 @@ import { listCitizenFields, type CitizenField } from "@/lib/api/citizen-fields";
 import { listCitizenGroups, type CitizenGroup } from "@/lib/api/citizen-groups";
 import type { identity_thonToDanPhoRa } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho"; // vi-name-ok: existing export of thon-to-dan-pho.ts, imported not declared (rule 12 inv 3)
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 
 import { CitizenContactDeleteDialog } from "./citizen-contact-delete-dialog";
 import { CitizenContactDialog, type ContactDialogMode } from "./citizen-contact-dialog";
@@ -82,7 +83,14 @@ type ListQuery = { readonly filter: CitizenContactFilter; readonly stack: NganXe
  * `reads` bumps after a write and re-runs every read that depends on it; nothing is spliced into a
  * loaded page by hand.
  */
-export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
+export function CitizenDirectoryWorkspace({
+  canEdit,
+  openCreateOnLoad = false,
+}: {
+  canEdit: boolean;
+  /** `?create=1` (`create-link.ts`), read on the server: open `Thêm người dân` once, for an editor. */
+  openCreateOnLoad?: boolean;
+}) {
   const [tab, setTab] = useState<TabId>("contacts");
   const [query, setQuery] = useState<ListQuery>({ filter: NO_CITIZEN_CONTACT_FILTER, stack: TRANG_DAU });
   const [page, setPage] = useState<ContactPageState>({ phase: "loading" });
@@ -102,6 +110,9 @@ export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
   const [deleteBusy, setDeleteBusy] = useState(false);
 
   const reread = useCallback(() => setReads((n) => n + 1), []);
+  const openAdd = useCallback(() => setContactDialog({ kind: "add", idempotencyKey: crypto.randomUUID() }), []);
+  // Mounted only behind the `citizen.read` gate, so the session is read and `canEdit` is final here.
+  useConsumeCreateParam(openCreateOnLoad, canEdit, openAdd);
 
   useEffect(() => {
     let dropped = false;
@@ -249,7 +260,7 @@ export function CitizenDirectoryWorkspace({ canEdit }: { canEdit: boolean }) {
                 type="button"
                 variant="primary"
                 icon={<Plus aria-hidden="true" />}
-                onClick={() => setContactDialog({ kind: "add", idempotencyKey: crypto.randomUUID() })}
+                onClick={openAdd}
               >
                 {ADD_CONTACT_BUTTON}
               </Button>

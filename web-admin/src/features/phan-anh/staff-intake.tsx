@@ -14,7 +14,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ import type {
 } from "@/lib/api/schema.gen";
 import { layDanhSachThonToDanPho } from "@/lib/api/thon-to-dan-pho";
 import { coQuyen } from "@/lib/quyen";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 
 import {
   HAMLET_NONE,
@@ -104,13 +105,19 @@ import { afterPhotoUpload } from "./verification-photos";
 export function StaffIntakeButton({
   permissions,
   onBooked,
+  openCreateOnLoad = false,
 }: {
   permissions: readonly string[];
   /** A petition was booked — the register re-reads. */
   onBooked: () => void;
+  /** `?create=1` (`create-link.ts`), read on the server: open the dialog once, under the same key. */
+  openCreateOnLoad?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  if (!coQuyen(permissions, PETITION_INTAKE_PERMISSION)) return null;
+  const allowed = coQuyen(permissions, PETITION_INTAKE_PERMISSION);
+  const openDialog = useCallback(() => setOpen(true), []);
+  useConsumeCreateParam(openCreateOnLoad, allowed, openDialog);
+  if (!allowed) return null;
   return (
     <>
       <Button

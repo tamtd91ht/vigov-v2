@@ -3,6 +3,8 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { SoThongBao } from "@/features/thong-bao/so-thong-bao";
+import { parseOpenCreate } from "@/lib/create-link";
+import type { RawSearchParams } from "@/lib/drill-down";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -37,8 +39,15 @@ export function generateMetadata() {
   return communePageMetadata("Thông báo");
 }
 
-export default async function TrangThongBao() {
+export default async function TrangThongBao({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa();
+  // `?create=1` — the Hướng dẫn sử dụng link to `Soạn thông báo`. Read here and passed down, like
+  // every server-read parameter: the screen does not decide from the address bar alone.
+  const openCreateOnLoad = parseOpenCreate(await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -46,7 +55,7 @@ export default async function TrangThongBao() {
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <SoThongBao />
+            <SoThongBao openCreateOnLoad={openCreateOnLoad} />
           </main>
         </div>
       </PhienProvider>

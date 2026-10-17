@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
+import type { RawSearchParams } from "@/lib/drill-down";
 
 /**
  * `/nguoi-dung` and `/nguoi-dung/phan-quyen` — the two screens that were tabs of `/cau-hinh` until
@@ -30,9 +31,17 @@ vi.mock("@/lib/tenant.server", () => ({
 // The header carries the navigation since the text sidebar was replaced (ADR 0068 §Sửa đổi 05/10/2026 lần 2).
 vi.mock("@/components/dau-trang", () => ({ DauTrang: () => <header>HEADER</header> }));
 vi.mock("@/features/cau-hinh/danh-ba-can-bo", () => ({
-  DanhBaCanBo: ({ active, canDelete }: { active?: boolean; canDelete?: boolean }) => (
+  DanhBaCanBo: ({
+    active,
+    canDelete,
+    openCreateOnLoad,
+  }: {
+    active?: boolean;
+    canDelete?: boolean;
+    openCreateOnLoad?: boolean;
+  }) => (
     <section>
-      STAFF-ACCOUNTS active={String(active)} canDelete={String(canDelete)}
+      STAFF-ACCOUNTS active={String(active)} canDelete={String(canDelete)} create={String(openCreateOnLoad)}
     </section>
   ),
 }));
@@ -55,8 +64,11 @@ function sessionWith(permissions: readonly string[]): PhienDaDoc {
   } as PhienDaDoc;
 }
 
-async function render(page: () => Promise<ReactElement>): Promise<string> {
-  return renderToStaticMarkup(await page());
+async function render(
+  page: (props: { searchParams: Promise<RawSearchParams> }) => Promise<ReactElement>,
+  params: RawSearchParams = {},
+): Promise<string> {
+  return renderToStaticMarkup(await page({ searchParams: Promise.resolve(params) }));
 }
 
 afterEach(() => {
@@ -132,6 +144,17 @@ describe("/nguoi-dung", () => {
     const html = await render(UsersPage);
     expect(html).not.toContain("STAFF-ACCOUNTS");
     expect(html).toContain("Phiên làm việc đã hết hạn");
+  });
+
+  it("`?create=1` reaches the list as `openCreateOnLoad` only past the `admin.user` gate; any other value is false", async () => {
+    fakeSession = sessionWith(["admin.user"]);
+    expect(await render(UsersPage, { create: "1" })).toContain("create=true");
+    expect(await render(UsersPage)).toContain("create=false");
+    expect(await render(UsersPage, { create: "0" })).toContain("create=false");
+    expect(await render(UsersPage, { create: ["1", "1"] })).toContain("create=false");
+    // DENIED: no `admin.user` → the list (and so `Thêm cán bộ`) is never mounted, whatever the link says.
+    fakeSession = sessionWith(["admin.role"]);
+    expect(await render(UsersPage, { create: "1" })).not.toContain("STAFF-ACCOUNTS");
   });
 });
 

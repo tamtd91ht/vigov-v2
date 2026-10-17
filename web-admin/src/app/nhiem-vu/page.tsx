@@ -4,6 +4,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { SoNhiemVu } from "@/features/nhiem-vu/so-nhiem-vu";
 import { parseOpenTask } from "@/features/nhiem-vu/task-link";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { parseOpenCreate } from "@/lib/create-link";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
@@ -43,6 +44,8 @@ export default async function TrangNhiemVu({
   // `?task=NV19` — a link from another screen (Sổ tay lãnh đạo) opening one task's detail. Read here,
   // like the drill-down, so the register never reads the address bar for it.
   const openTask = parseOpenTask(params);
+  // `?create=1` — the Hướng dẫn sử dụng link to `Giao việc mới`; coexists with `?task=`.
+  const openCreateOnLoad = parseOpenCreate(params);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -53,7 +56,7 @@ export default async function TrangNhiemVu({
             {/* The page header (`<h1>`, subtitle, `Nhập từ Excel` · `Giao việc mới`) is drawn by
                 `SoNhiemVu`: the two buttons sit on the title row (spec §5) and their state — the
                 open dialog, the open form, the `task.create` gate — lives in that component. */}
-            <SoNhiemVu key={drillDownKey(drillDown)} drillDown={drillDown} openTask={openTask} />
+            <SoNhiemVu key={drillDownKey(drillDown)} drillDown={drillDown} openTask={openTask} openCreateOnLoad={openCreateOnLoad} />
           </main>
         </div>
       </PhienProvider>

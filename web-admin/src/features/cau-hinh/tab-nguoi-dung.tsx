@@ -79,7 +79,14 @@ export function UsersLoading({ label }: { label: string }) {
 }
 
 /** `active` — whether this tab is on display; passed through so the staff screen re-reads its catalogues. */
-export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
+export function TabNguoiDung({
+  active = true,
+  openCreateOnLoad = false,
+}: {
+  active?: boolean;
+  /** `?create=1` (`create-link.ts`): reaches `Thêm cán bộ` only past the `admin.user` gate below. */
+  openCreateOnLoad?: boolean;
+} = {}) {
   // Phiên đọc MỘT LẦN cho cả trang, ở `PhienProvider`. Trước đây component này tự gọi, nên
   // mở một màn hình là hai lời gọi cùng một tuyến — và tệ hơn: hai câu trả lời có thể khác
   // nhau, cho ra một màn hình vừa hiện tên cán bộ trên đầu trang vừa báo phiên đã hết hạn ở
@@ -157,6 +164,7 @@ export function TabNguoiDung({ active = true }: { active?: boolean } = {}) {
         onImportClose={() => setImportOpen(false)}
         // Own row's role choice is disabled (#14) — the session's staff code; the server still refuses.
         selfCode={phien !== null && phien.ok ? phien.duLieu.staff.code : null}
+        openCreateOnLoad={openCreateOnLoad}
       />
     </>
   );

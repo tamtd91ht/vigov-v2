@@ -98,6 +98,7 @@ import {
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
 import { NO_DRILL_DOWN, type DrillDown } from "@/lib/drill-down";
 import { coQuyen, QUYEN_DUYET_GIA_HAN, QUYEN_XEM_NHIEM_VU } from "@/lib/quyen";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 import { DrillDownBanner } from "@/components/drill-down-banner";
 import type {
   identity_boPhanRa,
@@ -827,11 +828,14 @@ type MorePages = {
 export function SoNhiemVu({
   drillDown = NO_DRILL_DOWN,
   openTask = null,
+  openCreateOnLoad = false,
 }: {
   /** Lọc mở từ trang Tổng quan, đọc ở máy chủ (`app/nhiem-vu/page.tsx`). */
   drillDown?: DrillDown<"tasks">;
   /** `?task=NV19` (`task-link.ts`), read server-side: open this task's detail once, on arrival. */
   openTask?: string | null;
+  /** `?create=1` (`create-link.ts`), read server-side: open `Giao việc mới` once, if this account may. */
+  openCreateOnLoad?: boolean;
 } = {}) {
   const drillDownActive = drillDown.kind === "active";
   /**
@@ -1366,6 +1370,8 @@ export function SoNhiemVu({
     datMoFormTao(true);
     detailState.setChildFormFor(null);
   };
+  // `?create=1` (Hướng dẫn sử dụng): the button's own gate, decided once the session is read.
+  useConsumeCreateParam(openCreateOnLoad, phien === null ? null : quyen.giaoViec, openCreate);
   const emptyList = noFilter ? (
     <EmptyState
       icon={ClipboardList}

@@ -33,6 +33,7 @@ import type {
   page_Result_documents_citizenLetterItemOut,
 } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 
 import { HeaderOr, LetterImportButton } from "./document-pending";
 import { Glyph, plainFrame, type RegisterFrame } from "./document-ui";
@@ -112,10 +113,13 @@ function todayISO(): string {
 export function LetterRegister({
   frame = plainFrame,
   onBooked,
+  openCreateOnLoad = false,
 }: {
   frame?: RegisterFrame;
   /** A letter was booked (by hand or from Excel) — the workspace re-reads the tab's count. */
   onBooked?: () => void;
+  /** `?create=1` (`create-link.ts`): open `Vào sổ đơn thư` once, if this account may book. */
+  openCreateOnLoad?: boolean;
 } = {}) {
   const [scope, setScope] = useState<LetterScope>("all");
   const [filters, setFilters] = useState<LetterFilters>(NO_FILTERS);
@@ -130,6 +134,7 @@ export function LetterRegister({
   const [staff, setStaff] = useState<KetQua<identity_danhBaChonNguoiRa> | null>(null);
 
   const [entry, setEntry] = useState<number | null>(null);
+  const openEntry = useCallback(() => setEntry((n) => (n ?? 0) + 1), []);
   // Bumped per opening, as the dialog's `key`: a new opening is a new attempt (file, check, key).
   const [importing, setImporting] = useState<number | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -145,6 +150,8 @@ export function LetterRegister({
   const staffCode = session !== null && session.ok ? session.duLieu.staff.code : "";
   const canBook = canBookLetters(permissions);
   const canRaiseTask = canRaiseLetterTask(permissions);
+  // The header button's own gate, decided once the session is read.
+  useConsumeCreateParam(openCreateOnLoad, session === null ? null : canBook, openEntry);
 
   const query = useMemo<LetterListFilter>(
     () => ({
@@ -219,7 +226,7 @@ export function LetterRegister({
         className="h-10 justify-center px-4 text-[13px]"
         icon={<Glyph icon={Plus} />}
         aria-haspopup="dialog"
-        onClick={() => setEntry((n) => (n ?? 0) + 1)}
+        onClick={openEntry}
       >
         {LETTER_ENTRY_SUBMIT}
       </Button>

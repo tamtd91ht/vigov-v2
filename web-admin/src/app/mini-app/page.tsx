@@ -7,6 +7,7 @@ import { requestedTab } from "@/features/mini-app/mini-app-tabs";
 import { SoNoiDung } from "@/features/noi-dung/so-noi-dung";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
+import { parseOpenCreate } from "@/lib/create-link";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -54,7 +55,11 @@ export default async function MiniAppPage({
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const commune = await layCauHinhXa();
-  const tab = requestedTab((await searchParams).tab);
+  const params = await searchParams;
+  const tab = requestedTab(params.tab);
+  // `?create=1` — the Hướng dẫn sử dụng link to `Thêm nội dung`. Only the `Nội dung` tab (the default
+  // one) has that dialog; on the other tabs the parameter names nothing and opens nothing.
+  const openCreateOnLoad = tab === "noi-dung" && parseOpenCreate(params);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(commune)}>
@@ -70,7 +75,7 @@ export default async function MiniAppPage({
             <MiniAppWorkspace
               key={tab}
               requested={tab}
-              content={<SoNoiDung />}
+              content={<SoNoiDung openCreateOnLoad={openCreateOnLoad} />}
               alerts={<DisasterAlertsTab />}
               directory={<StaffDirectoryTab />}
             />

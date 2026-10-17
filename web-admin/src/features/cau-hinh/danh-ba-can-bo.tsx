@@ -51,6 +51,7 @@ import { docDanhMucDanhBa, type DanhMucDanhBa } from "@/lib/api/danh-muc";
 import type { identity_canBoTomTat, page_Result_identity_canBoTomTat } from "@/lib/api/schema.gen";
 import { capTaiKhoan, datLaiMatKhau } from "@/lib/api/tai-khoan";
 import { cn } from "@/lib/cn";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 
 import { ConfigDialog } from "./config-dialog";
 import { ConfigTable, EmptyRow, RowActions, SMALL_BUTTON_CLASS } from "./config-ui";
@@ -159,8 +160,14 @@ export function DanhBaCanBo({
   importOpen = false,
   onImportClose = () => {},
   selfCode = null,
+  openCreateOnLoad = false,
 }: {
   active?: boolean;
+  /**
+   * `?create=1` (`create-link.ts`), read on the server: open `Thêm cán bộ` once. The button below has
+   * no gate of its own — the host mounts this component only behind `admin.user` — so neither does this.
+   */
+  openCreateOnLoad?: boolean;
   /**
    * The signed-in officer's staff code (`GET /api/v1/sessions/current` → `staff.code`), to disable the
    * role choice on their OWN row (#14). `null` = unknown: nothing is disabled, the server still refuses
@@ -378,6 +385,9 @@ export function DanhBaCanBo({
     datMoTaiKhoan(null);
     datLoiTaiKhoan("");
   }, []);
+
+  const openAdd = useCallback(() => moBieuMau({ kieu: "them", khoaChongTrung: khoaChongTrungMoi() }), [moBieuMau]);
+  useConsumeCreateParam(openCreateOnLoad, true, openAdd);
 
   const dongBieuMau = useCallback(() => {
     datDangMo(null);
@@ -657,7 +667,7 @@ export function DanhBaCanBo({
           className="ml-auto"
           icon={<Plus aria-hidden="true" focusable="false" className="size-4" />}
           aria-haspopup="dialog"
-          onClick={() => moBieuMau({ kieu: "them", khoaChongTrung: khoaChongTrungMoi() })}
+          onClick={openAdd}
         >
           {NUT_THEM_CAN_BO}
         </Button>

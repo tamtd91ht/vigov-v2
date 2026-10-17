@@ -22,6 +22,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -107,6 +108,7 @@ import type {
 } from "@/lib/api/schema.gen";
 import { layTrangThaiNhiemVu } from "@/lib/api/trang-thai-nhiem-vu";
 import { coQuyen, QUYEN_DUYET_GIA_HAN, QUYEN_KY_BIEN_BAN } from "@/lib/quyen";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 
 import {
   BIEU_MAU_TRONG,
@@ -327,7 +329,12 @@ function boKhoa<V>(bang: ReadonlyMap<string, V>, khoa: string): ReadonlyMap<stri
   return new Map([...bang].filter(([k]) => k !== khoa));
 }
 
-export function SoBienBan() {
+export function SoBienBan({
+  openCreateOnLoad = false,
+}: {
+  /** `?create=1` (`create-link.ts`), read on the server: open `Nhập biên bản` once, on arrival. */
+  openCreateOnLoad?: boolean;
+} = {}) {
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [lanTai, datLanTai] = useState(0);
   const [daTai, datDaTai] = useState<{
@@ -376,6 +383,15 @@ export function SoBienBan() {
   // FAIL CLOSED: chưa đọc xong phiên, hoặc đọc hỏng, thì KHÔNG có quyền nào (luật 1, cấm #1).
   const dsQuyen: readonly string[] = phien !== null && phien.ok ? phien.duLieu.permissions : [];
   const coQuyenKy = coQuyen(dsQuyen, QUYEN_KY_BIEN_BAN);
+
+  const openCreate = useCallback(() => {
+    datBieuMau({ loai: "tao", boSungCho: null });
+    datLoiBieuMau(null);
+  }, []);
+  // `true`, not a permission: `Nhập biên bản` is drawn for every account (the page's header comment —
+  // `petitions` checks `task.create` on the POST). The link opens exactly what the button would. The
+  // strip keeps the detail's `#…` anchor, which `dongChiTiet` owns.
+  useConsumeCreateParam(openCreateOnLoad, true, openCreate);
 
   const neo = useSyncExternalStore(dangKyNeo, docNeo, docNeoMayChu);
   const idChiTiet = idTuNeo(neo);
@@ -675,10 +691,7 @@ export function SoBienBan() {
             variant="primary"
             icon={<Glyph icon={Plus} />}
             aria-haspopup="dialog"
-            onClick={() => {
-              datBieuMau({ loai: "tao", boSungCho: null });
-              datLoiBieuMau(null);
-            }}
+            onClick={openCreate}
           >
             {NHAN_NUT_NHAP_BIEN_BAN}
           </Button>

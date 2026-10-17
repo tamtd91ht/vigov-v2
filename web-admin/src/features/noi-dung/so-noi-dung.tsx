@@ -41,6 +41,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/cn";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 import {
   sangTrangSau,
   TRANG_DAU,
@@ -316,7 +317,12 @@ function withoutLeadingGlyph(label: string): string {
   return label.replace(/^[^\p{L}\p{N}]+\s*/u, "");
 }
 
-export function SoNoiDung() {
+export function SoNoiDung({
+  openCreateOnLoad = false,
+}: {
+  /** `?create=1` (`create-link.ts`), read on the server for the `Nội dung` tab: `Thêm nội dung` once. */
+  openCreateOnLoad?: boolean;
+} = {}) {
   const [loc, datLoc] = useState<BoLocMan>(LOC_TRONG);
   const [tim, datTim] = useState("");
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
@@ -652,6 +658,13 @@ export function SoNoiDung() {
 
   const pageIndex = nganXep.daQua.length;
 
+  function openAdd(): void {
+    dongMoiBieuMau();
+    datDangMoThem(true);
+  }
+  // `?create=1`: the button's own gate (`content.update`), decided once the session is read.
+  useConsumeCreateParam(openCreateOnLoad, session === null ? null : canEdit, openAdd);
+
   return (
     <div className="man-noi-dung mt-0 min-w-0">
       {/* Prototype `ContentWorkspace.tsx:164-186`: title and sentence on the left, `Thêm nội dung` pushed
@@ -661,14 +674,7 @@ export function SoNoiDung() {
           <h1 className="m-0 text-[22px] leading-tight font-bold text-navy">{TIEU_DE_MAN}</h1>
           <p className="m-0 mt-1 text-[13px] text-ink-muted">{MO_TA_MAN}</p>
         </div>
-        <HeaderActions
-          canEdit={canEdit}
-          addOpen={dangMoThem}
-          openAdd={() => {
-            dongMoiBieuMau();
-            datDangMoThem(true);
-          }}
-        />
+        <HeaderActions canEdit={canEdit} addOpen={dangMoThem} openAdd={openAdd} />
       </div>
 
       <PortalSyncCard canEdit={canEdit} />

@@ -3,6 +3,8 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { CitizenDirectoryScreen } from "@/features/citizen-directory/citizen-directory-screen";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { parseOpenCreate } from "@/lib/create-link";
+import type { RawSearchParams } from "@/lib/drill-down";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -25,8 +27,14 @@ export function generateMetadata() {
   return communePageMetadata("Danh bạ người dân");
 }
 
-export default async function CitizenDirectoryPage() {
+export default async function CitizenDirectoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa(); // vi-name-ok: existing export of tenant.server.ts, the shell every page copies
+  // `?create=1` — the Hướng dẫn sử dụng link to `Thêm người dân`, read here and passed down.
+  const openCreateOnLoad = parseOpenCreate(await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -34,7 +42,7 @@ export default async function CitizenDirectoryPage() {
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <CitizenDirectoryScreen />
+            <CitizenDirectoryScreen openCreateOnLoad={openCreateOnLoad} />
           </main>
         </div>
       </PhienProvider>

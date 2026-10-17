@@ -32,7 +32,12 @@ import { SELECT_CLASS } from "./spec-classes";
  * (`lib/nam.ts`). The anchor year is read ONCE at mount, so the list of years does not jump under an
  * officer working across midnight of 31/12.
  */
-export function DisbursementWorkspace() {
+export function DisbursementWorkspace({
+  openCreateOnLoad = false,
+}: {
+  /** `?create=1` (`create-link.ts`), read on the server: `Thêm dự án` opened once, under `budget.update`. */
+  openCreateOnLoad?: boolean;
+} = {}) {
   const [anchorYear] = useState(namTheoDongHoMay);
   const [year, setYear] = useState(anchorYear);
   /** Bumped after a project is added: the register re-reads the whole list (see `bang-du-an.tsx`). */
@@ -94,7 +99,14 @@ export function DisbursementWorkspace() {
                     setImports((n) => n + 1);
                   }}
                 />
-                {addProject}
+                {/* The header's copy alone takes the link: the empty list's copy is the same button. */}
+                <KhoiThemDuAn
+                  nam={year}
+                  danhMuc={categories}
+                  coGhi={canRecord}
+                  daGhiXong={() => setSaves((n) => n + 1)}
+                  openCreateOnLoad={openCreateOnLoad}
+                />
               </>
             )}
           </div>

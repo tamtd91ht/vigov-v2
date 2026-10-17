@@ -3,6 +3,8 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { DisbursementWorkspace } from "@/features/giai-ngan/disbursement-workspace";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { parseOpenCreate } from "@/lib/create-link";
+import type { RawSearchParams } from "@/lib/drill-down";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -32,8 +34,14 @@ export function generateMetadata() {
   return communePageMetadata("Theo dõi giải ngân");
 }
 
-export default async function TrangGiaiNgan() {
+export default async function TrangGiaiNgan({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa();
+  // `?create=1` — the Hướng dẫn sử dụng link to `Thêm dự án`, read here and passed down.
+  const openCreateOnLoad = parseOpenCreate(await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -41,7 +49,7 @@ export default async function TrangGiaiNgan() {
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <DisbursementWorkspace />
+            <DisbursementWorkspace openCreateOnLoad={openCreateOnLoad} />
           </main>
         </div>
       </PhienProvider>

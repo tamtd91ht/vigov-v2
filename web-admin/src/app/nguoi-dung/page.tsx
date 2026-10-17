@@ -3,6 +3,8 @@ import { DauTrang } from "@/components/dau-trang";
 import { TabNguoiDung } from "@/features/cau-hinh/tab-nguoi-dung";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
+import { parseOpenCreate } from "@/lib/create-link";
+import type { RawSearchParams } from "@/lib/drill-down";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
 /**
@@ -30,8 +32,14 @@ export function generateMetadata() {
   return communePageMetadata("Người dùng");
 }
 
-export default async function UsersPage() {
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<RawSearchParams>;
+}) {
   const xa = await layCauHinhXa();
+  // `?create=1` — the Hướng dẫn sử dụng link to `Thêm cán bộ`, read here and passed down.
+  const openCreateOnLoad = parseOpenCreate(await searchParams);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -44,7 +52,7 @@ export default async function UsersPage() {
                 `space-y-3` are the prototype's spacing (`AccountWorkspace.tsx`), so this wrapper adds
                 none. `min-w-0`: the table scrolls inside its own frame, never the page. */}
             <div className="min-w-0">
-              <TabNguoiDung />
+              <TabNguoiDung openCreateOnLoad={openCreateOnLoad} />
             </div>
           </main>
         </div>

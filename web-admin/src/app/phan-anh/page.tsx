@@ -9,6 +9,7 @@ import { DauTrang } from "@/components/dau-trang";
 import { petitionDeepLinkCode } from "@/features/phan-anh/nhan-phieu";
 import { PetitionWorkspace } from "@/features/phan-anh/petition-workspace";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
+import { parseOpenCreate } from "@/lib/create-link";
 import { parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { basemapConfigured } from "@/lib/may-chu/basemap";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
@@ -51,6 +52,8 @@ export default async function TrangPhanAnh({
   // SERVER variable, read here and passed down as a flag — never a `NEXT_PUBLIC_*`, never a URL in the
   // bundle. Unset → the maps say one sentence and fetch no coordinates (no fallback host).
   const basemapAvailable = basemapConfigured();
+  // `?create=1` — the Hướng dẫn sử dụng link to `Nhập hộ phản ánh`; coexists with `?id=`.
+  const openCreateOnLoad = parseOpenCreate(params);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -58,7 +61,12 @@ export default async function TrangPhanAnh({
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <PetitionWorkspace drillDown={drillDown} openCode={openCode} basemapAvailable={basemapAvailable} />
+            <PetitionWorkspace
+              drillDown={drillDown}
+              openCode={openCode}
+              basemapAvailable={basemapAvailable}
+              openCreateOnLoad={openCreateOnLoad}
+            />
           </main>
         </div>
       </PhienProvider>

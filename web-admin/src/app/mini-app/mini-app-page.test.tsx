@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
  */
 
 let tenantResolves = true;
-const seen: { requested?: string } = {};
+const seen: { requested?: string; openCreate?: boolean } = {};
 
 vi.mock("@/lib/tenant.server", () => ({
   layCauHinhXa: async () => {
@@ -27,8 +27,9 @@ vi.mock("@/components/dau-trang", () => ({ DauTrang: () => null }));
 vi.mock("@/features/noi-dung/so-noi-dung", () => ({ SoNoiDung: () => null }));
 vi.mock("@/features/danh-ba/staff-directory-tab", () => ({ StaffDirectoryTab: () => null }));
 vi.mock("@/features/mini-app/mini-app-workspace", () => ({
-  MiniAppWorkspace: (p: { requested: string }) => {
+  MiniAppWorkspace: (p: { requested: string; content: { props: { openCreateOnLoad?: boolean } } }) => {
     seen.requested = p.requested;
+    seen.openCreate = p.content.props.openCreateOnLoad;
     return null;
   },
 }));
@@ -39,6 +40,7 @@ const MiniAppPage = (await import("./page")).default;
 afterEach(() => {
   tenantResolves = true;
   delete seen.requested;
+  delete seen.openCreate;
 });
 
 async function open(params: Record<string, string | string[] | undefined>) {
@@ -51,6 +53,21 @@ describe("/mini-app", () => {
     expect(await open({ tab: "danh-ba" })).toBe("danh-ba");
     expect(await open({})).toBe("noi-dung");
     expect(await open({ tab: "x" })).toBe("noi-dung");
+  });
+
+  it("`?create=1` reaches `Nội dung` (default tab or `?tab=noi-dung`) only; other tabs and values ignore it", async () => {
+    await open({ create: "1" });
+    expect(seen.openCreate).toBe(true);
+    await open({ tab: "noi-dung", create: "1" });
+    expect(seen.openCreate).toBe(true);
+    await open({ tab: "danh-ba", create: "1" });
+    expect(seen.openCreate).toBe(false);
+    await open({ tab: "canh-bao", create: "1" });
+    expect(seen.openCreate).toBe(false);
+    await open({ create: "0" });
+    expect(seen.openCreate).toBe(false);
+    await open({});
+    expect(seen.openCreate).toBe(false);
   });
 
   it("the page's own padding is off (`p-0`): the tab band is flush, the workspace pads its body", async () => {

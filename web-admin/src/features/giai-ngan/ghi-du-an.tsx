@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, ChevronRight, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
@@ -22,6 +22,7 @@ import type {
 } from "@/lib/api/schema.gen";
 import { formatAmountInput, groupAmountDigits } from "@/lib/amount-input";
 import { cn } from "@/lib/cn";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 
 import { nhanTien, shortDongLabel } from "./nhan-du-an";
 import {
@@ -889,13 +890,21 @@ export function KhoiThemDuAn({
   danhMuc,
   coGhi,
   daGhiXong,
+  openCreateOnLoad = false,
 }: {
   nam: number;
   danhMuc: readonly finance_hangMucRa[];
   coGhi: boolean;
   daGhiXong: () => void;
+  /**
+   * `?create=1` (`create-link.ts`): open the dialog once, on arrival — under `coGhi`, like the button.
+   * Passed to the header's copy only; the empty list's copy would be a second opener of one link.
+   */
+  openCreateOnLoad?: boolean;
 }) {
   const [dangMo, datDangMo] = useState(false);
+  const open = useCallback(() => datDangMo(true), []);
+  useConsumeCreateParam(openCreateOnLoad, coGhi, open);
   if (!coGhi) return null;
   return (
     <>

@@ -72,9 +72,15 @@ const HEADER_ACTIONS_CLASS =
  */
 export function DocumentWorkspace({
   drillDown = NO_DRILL_DOWN,
+  openCreateOnLoad = false,
 }: {
   /** Overview filter, read on the SERVER (`app/van-ban/page.tsx`) — it applies to Văn bản đến. */
   drillDown?: DrillDown<"incoming-documents">;
+  /**
+   * `?create=1` (`create-link.ts`), read on the server: `Vào sổ đơn thư` on the opening tab. Only the
+   * petition register honours it — the tab is not in the URL, so `create` names that tab's dialog.
+   */
+  openCreateOnLoad?: boolean;
 }) {
   const [tab, setTab] = useState<DocumentTabId>(() => initialDocumentTab(drillDown));
   // Each tab's body renders its own frame, so switching tabs REMOUNTS the tab bar with it and the
@@ -145,7 +151,13 @@ export function DocumentWorkspace({
       content = <SoVanBanDi frame={frame} />;
       break;
     case "petitions":
-      content = <LetterRegister frame={frame} onBooked={() => setCountReads((n) => n + 1)} />;
+      content = (
+        <LetterRegister
+          frame={frame}
+          onBooked={() => setCountReads((n) => n + 1)}
+          openCreateOnLoad={openCreateOnLoad}
+        />
+      );
       break;
     default:
       content = <LetterReport frame={frame} onBooked={() => setCountReads((n) => n + 1)} />;

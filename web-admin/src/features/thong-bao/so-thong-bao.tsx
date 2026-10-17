@@ -13,7 +13,7 @@ import {
   Trash2,
   UserPlus,
 } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 
 import { khoaChongTrungMoi } from "@/components/danh-ba/nhan-ghi-danh-ba";
 import { Button, buttonVariants, LEGACY_BUTTON_CLASS } from "@/components/ui/button";
@@ -40,6 +40,7 @@ import type {
   page_Result_comms_thongBaoRa,
 } from "@/lib/api/schema.gen";
 import { laySoThongBao, phatHanhThongBao, type PhatHanhThongBaoVao } from "@/lib/api/thong-bao";
+import { useConsumeCreateParam } from "@/lib/use-consume-create-param";
 
 import {
   CANH_BAO_CHUA_GUI_THU,
@@ -166,7 +167,12 @@ function taiTu<T>(daTai: { khoa: string; kq: KetQua<T> } | null, khoa: string): 
     : { pha: "loi", thongBao: daTai.kq.thongBao };
 }
 
-export function SoThongBao() {
+export function SoThongBao({
+  openCreateOnLoad = false,
+}: {
+  /** `?create=1` (`create-link.ts`), read on the server: open `Soạn thông báo` once, on arrival. */
+  openCreateOnLoad?: boolean;
+} = {}) {
   const [nganXep, datNganXep] = useState<NganXepConTro>(TRANG_DAU);
   const [lanTai, datLanTai] = useState(0);
   const [daTai, datDaTai] = useState<{
@@ -242,6 +248,14 @@ export function SoThongBao() {
     datLoiBieuMau(null);
   }
 
+  const openForm = useCallback(() => {
+    datDangMoBieuMau(true);
+    datLoiBieuMau(null);
+  }, []);
+  // `true`, not a permission: the `Soạn thông báo` button is drawn for every account on purpose (no
+  // client gate, header comment above) — the link opens exactly what the button would.
+  useConsumeCreateParam(openCreateOnLoad, true, openForm);
+
   // Thẻ đang chọn được TÌM LẠI trong dữ liệu vừa tải, không giữ riêng. Sang trang khác hoặc sau
   // một lần phát hành, thẻ ấy có thể không còn trong trang — khi đó cột phải quay về câu "Chọn một
   // thông báo để xem." thay vì hiện một bản ghi không còn nằm trong danh sách bên trái.
@@ -288,10 +302,7 @@ export function SoThongBao() {
               variant="primary"
               icon={<Glyph icon={Plus} />}
               aria-haspopup="dialog"
-              onClick={() => {
-                datDangMoBieuMau(true);
-                datLoiBieuMau(null);
-              }}
+              onClick={openForm}
             >
               {NHAN_NUT_SOAN}
             </Button>

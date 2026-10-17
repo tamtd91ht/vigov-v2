@@ -3,6 +3,7 @@ import { phanHienThi } from "@/lib/cau-hinh-xa-hien-thi";
 import { DauTrang } from "@/components/dau-trang";
 import { PhienProvider } from "@/features/phien/phien-hien-tai";
 import { DocumentWorkspace } from "@/features/van-ban/document-workspace";
+import { parseOpenCreate } from "@/lib/create-link";
 import { drillDownKey, parseDrillDown, type RawSearchParams } from "@/lib/drill-down";
 import { communePageMetadata, layCauHinhXa } from "@/lib/tenant.server";
 
@@ -49,7 +50,11 @@ export default async function TrangVanBan({
   // Lọc mở từ trang Tổng quan (SRS M7.2.2). Đọc ở MÁY CHỦ và chuyển xuống bằng prop: màn danh sách
   // không tự đọc thanh địa chỉ. `key` theo lọc — đổi lọc là dựng lại màn từ trang đầu (và về tab
   // Văn bản đến, nơi lọc ấy áp vào).
-  const drillDown = parseDrillDown("incoming-documents", await searchParams);
+  const params = await searchParams;
+  const drillDown = parseDrillDown("incoming-documents", params);
+  // `?create=1` — the Hướng dẫn sử dụng link to `Vào sổ đơn thư`, on the opening (petition) tab. Still
+  // no tab parameter: `create` names the dialog of the tab the page opens on.
+  const openCreateOnLoad = parseOpenCreate(params);
 
   return (
     <CauHinhXaProvider giaTri={phanHienThi(xa)}>
@@ -57,7 +62,7 @@ export default async function TrangVanBan({
         <div className="khung-trang">
           <DauTrang />
           <main className="than-trang">
-            <DocumentWorkspace key={drillDownKey(drillDown)} drillDown={drillDown} />
+            <DocumentWorkspace key={drillDownKey(drillDown)} drillDown={drillDown} openCreateOnLoad={openCreateOnLoad} />
           </main>
         </div>
       </PhienProvider>

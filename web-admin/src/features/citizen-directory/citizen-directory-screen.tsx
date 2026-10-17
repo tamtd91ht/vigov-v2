@@ -20,7 +20,7 @@ import { CITIZEN_DIRECTORY_SUBTITLE, CITIZEN_DIRECTORY_TITLE, NO_READ_PERMISSION
  * and "Xem số đầy đủ" ride on `citizen.update`, decided once here (`canEdit`) and passed down. Both are
  * convenience: the server checks each key on every call (rule 5, forbidden #1).
  */
-export function CitizenDirectoryScreen() {
+export function CitizenDirectoryScreen({ openCreateOnLoad = false }: { openCreateOnLoad?: boolean } = {}) {
   const phien = usePhien();
   const open = phien !== null && quyetDinhTheoKhoa(phien, CITIZEN_READ_PERMISSION).hien;
   const canEdit = phien !== null && quyetDinhTheoKhoa(phien, CITIZEN_UPDATE_PERMISSION).hien;
@@ -28,7 +28,7 @@ export function CitizenDirectoryScreen() {
     <div className="min-w-0">
       {!open && <PageHeader title={CITIZEN_DIRECTORY_TITLE} subtitle={CITIZEN_DIRECTORY_SUBTITLE} className="mb-5" />}
       <CongQuyen khoa={CITIZEN_READ_PERMISSION} cauThieuQuyen={NO_READ_PERMISSION}>
-        <CitizenDirectoryWorkspace canEdit={canEdit} />
+        <CitizenDirectoryWorkspace canEdit={canEdit} openCreateOnLoad={openCreateOnLoad} />
       </CongQuyen>
     </div>
   );
