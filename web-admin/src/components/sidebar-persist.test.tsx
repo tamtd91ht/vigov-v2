@@ -88,14 +88,15 @@ const sideHrefs = (el: HTMLElement) => [...el.querySelectorAll(".side-nav a")].m
 describe("the sidebar across a move between screens", () => {
   it("DENIED before any read in this tab: the first screen lists no keyed item until its session answers", () => {
     const el = mountScreen(null, "/tong-quan");
-    expect(sideHrefs(el)).toEqual([]);
+    // Only the item with no key ("Hướng dẫn sử dụng", 17/10/2026) — it needs no session to decide.
+    expect(sideHrefs(el)).toEqual(["/huong-dan"]);
   });
 
   it("the next screen lists the previous screen's items while its own read is in flight — no empty-then-refill", () => {
     mountScreen(session(["task.read", "feedback.read"]), "/nhiem-vu");
     unmount();
     const el = mountScreen(null, "/phan-anh");
-    expect(sideHrefs(el)).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/phan-anh"]);
+    expect(sideHrefs(el)).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/phan-anh", "/huong-dan"]);
     expect(el.querySelector('.side-nav [aria-current="page"]')?.getAttribute("href")).toBe("/phan-anh");
   });
 
@@ -103,10 +104,10 @@ describe("the sidebar across a move between screens", () => {
     mountScreen(session(["task.read", "feedback.read"]), "/nhiem-vu");
     unmount();
     const el = mountScreen(session(["task.read"]), "/nhiem-vu");
-    expect(sideHrefs(el)).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban"]);
+    expect(sideHrefs(el)).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/huong-dan"]);
     unmount();
     // …and the screen after that starts from THAT answer.
-    expect(sideHrefs(mountScreen(null, "/nhiem-vu"))).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban"]);
+    expect(sideHrefs(mountScreen(null, "/nhiem-vu"))).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/huong-dan"]);
   });
 
   it("the menu list is put back at the scroll position the previous screen's list was left at", () => {

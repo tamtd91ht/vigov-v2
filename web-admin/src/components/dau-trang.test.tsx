@@ -81,13 +81,14 @@ describe("DauTrang — session not read yet", () => {
     expect(html).not.toContain("role-pill");
   });
 
-  it("draws the sidebar frame with no screen link (every screen needs a key) — the menu never shows then withdraws", () => {
+  it("draws the sidebar frame with no keyed screen link — the menu never shows then withdraws", () => {
     const sidebar = sidebarOf(render());
     expect(sidebar).toContain('class="side-nav"');
-    // Only the unbuilt placeholders: they open no data, so they need no key.
-    expect(sidebar).not.toContain("<a ");
-    // One since 17/10/2026: "Gửi tin ZNS / SMS" has its screen (`/gui-thong-bao`).
-    expect(sidebar.match(/class="side-nav-item is-pending"/g)).toHaveLength(1);
+    // Only the item with no key (17/10/2026: "Hướng dẫn sử dụng", open to every account): it needs no
+    // session to decide, so it cannot appear late or vanish.
+    expect([...sidebar.matchAll(/<a [^>]*href="([^"]*)"/g)].map((m) => m[1])).toEqual(["/huong-dan"]);
+    // No unbuilt placeholder since 17/10/2026 ("Hướng dẫn sử dụng" got `/huong-dan`).
+    expect(sidebar).not.toContain("is-pending");
     expect(sidebar).not.toContain("Cấu hình");
   });
 

@@ -121,7 +121,8 @@ describe("DauTrang — person block and its menu", () => {
 describe("DauTrang — the left sidebar follows the session's permissions (UX; the server still checks)", () => {
   it("`task.read`: the three task screens with their words, the current one marked; nothing in the header", () => {
     const el = mount(session(["task.read"]));
-    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp"]);
+    // "Hướng dẫn sử dụng": no key, every account sees it (17/10/2026).
+    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp", "Hướng dẫn sử dụng"]);
     const current = el.querySelectorAll('.side-nav [aria-current="page"]');
     expect([...current].map((a) => a.textContent)).toEqual(["Nhiệm vụ"]);
     expect(header(el).querySelector('a[href="/nhiem-vu"]')).toBeNull();
@@ -131,16 +132,16 @@ describe("DauTrang — the left sidebar follows the session's permissions (UX; t
   it("`admin.sla`: Cấu hình in the sidebar, to /cau-hinh — not a header button", () => {
     const el = mount(session(["admin.sla"]));
     // "Hệ thống" too: `admin.sla` writes its Lịch làm việc tab (owner 12/10/2026, S27).
-    expect(sideNames(el)).toEqual(["Cấu hình", "Hệ thống"]);
+    expect(sideNames(el)).toEqual(["Hướng dẫn sử dụng", "Cấu hình", "Hệ thống"]);
     expect(el.querySelector<HTMLAnchorElement>('.side-nav a[href="/cau-hinh"]')).not.toBeNull();
     expect(header(el).querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
 
-  it("DENIED: a read session with no key → no link; only the two unbuilt items, disabled (ADR 0068 §14)", () => {
+  it("DENIED: a read session with no key → only the key-less Hướng dẫn sử dụng link; no unbuilt item left", () => {
     const el = mount(session(["admin.user.delete", "report.export"]));
-    expect(el.querySelectorAll(".side-nav a")).toHaveLength(0);
-    // One since 17/10/2026: "Gửi tin ZNS / SMS" has its screen (`/gui-thong-bao`).
-    expect(el.querySelectorAll('.side-nav [aria-disabled="true"]')).toHaveLength(1);
+    expect([...el.querySelectorAll(".side-nav a")].map((a) => a.getAttribute("href"))).toEqual(["/huong-dan"]);
+    // None since 17/10/2026: "Hướng dẫn sử dụng" has its screen (`/huong-dan`).
+    expect(el.querySelectorAll('.side-nav [aria-disabled="true"]')).toHaveLength(0);
     expect(el.querySelector('a[href="/cau-hinh"]')).toBeNull();
   });
 
@@ -159,7 +160,7 @@ describe("DauTrang — the left sidebar follows the session's permissions (UX; t
     expect(el.querySelector(".side-nav")!.classList.contains("is-collapsed")).toBe(true);
     expect(window.localStorage.getItem(SIDEBAR_STORAGE_KEY)).toBe("1");
     // Still named while collapsed.
-    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp"]);
+    expect(sideNames(el)).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp", "Hướng dẫn sử dụng"]);
     expect(el.querySelector(".side-nav-toggle")!.getAttribute("aria-label")).toBe("Mở rộng menu");
   });
 });

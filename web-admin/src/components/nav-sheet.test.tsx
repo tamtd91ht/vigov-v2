@@ -24,8 +24,8 @@ const ALL_PERMISSIONS = flattenMenu(NHOM_MENU).flatMap((m) =>
   m.khoa === null ? [] : typeof m.khoa === "string" ? [m.khoa] : [...m.khoa],
 );
 const PARENT = "Người dùng & Phân quyền";
-// One since 17/10/2026: "Gửi tin ZNS / SMS" has its screen (`/gui-thong-bao`).
-const PENDING = ["Hướng dẫn sử dụng"];
+// None since 17/10/2026: "Hướng dẫn sử dụng" has its screen (`/huong-dan`), open to every account.
+const PENDING: string[] = [];
 const PERSON: KhoiNguoiDung = { hien: true, hoTen: "Nguyễn Văn Hùng", chucVu: "Chuyên viên" };
 const NOT_READ: KhoiNguoiDung = { hien: false, vi: "dang-doc" };
 
@@ -93,12 +93,13 @@ describe("nav sheet content — small screens show TEXT labels (touch has no too
   });
 
   // ADR 0068 lần 6 #11: as in the sidebar — muted, the hover sentence, no "?".
-  it("the unbuilt items: disabled, their word, the hover sentence, no '?'", () => {
+  it("no key: the unbuilt items (none today) disabled with no '?'; the only menu link is the key-less guide", () => {
     const html = content([], PERSON);
     expect(html).not.toContain("data-pending-marker");
-    expect(html.match(/<span aria-disabled="true" class="nav-sheet-link" title="Tính năng đang phát triển">/g)).toHaveLength(PENDING.length);
+    expect(html.match(/<span aria-disabled="true" class="nav-sheet-link" title="Tính năng đang phát triển">/g) ?? []).toHaveLength(PENDING.length);
     for (const nhan of PENDING) expect(html).toContain(`<span class="nav-sheet-label">${nhan}</span>`);
-    expect(html).not.toMatch(/<a href="(?!\/doi-mat-khau)/);
+    expect(html).toMatch(/<a href="\/huong-dan"/);
+    expect(html).not.toMatch(/<a href="(?!\/doi-mat-khau|\/huong-dan")/);
   });
 
   it("opens on the sidebar's brand row (navy sheet = the sidebar below 768px); the dialog is still named 'Menu'", () => {
@@ -116,13 +117,14 @@ describe("nav sheet content — small screens show TEXT labels (touch has no too
   it("DENIED: only `task.read` → the three task screens and nothing else", () => {
     const html = content(["task.read"], PERSON);
     const hrefs = [...html.matchAll(/<a href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/doi-mat-khau"]);
+    expect(hrefs).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/huong-dan", "/doi-mat-khau"]);
   });
 
-  it("session not read: no menu link (only the unbuilt placeholders), no person, no change-password link", () => {
+  it("session not read: no gated menu link (only the key-less guide), no person, no change-password link", () => {
     const html = content(null, NOT_READ);
-    expect(html).not.toMatch(/<a href="(?!\/dang-nhap)/);
-    expect(html.match(/class="nav-sheet-item is-pending"/g)).toHaveLength(PENDING.length);
+    expect(html).toMatch(/<a href="\/huong-dan"/);
+    expect(html).not.toMatch(/<a href="(?!\/dang-nhap|\/huong-dan")/);
+    expect(html.match(/class="nav-sheet-item is-pending"/g) ?? []).toHaveLength(PENDING.length);
     expect(html).not.toContain("ho-ten");
     expect(html).not.toContain('href="/doi-mat-khau"');
     expect(html).toContain("khoi-dang-xuat");
@@ -170,6 +172,7 @@ describe("nav sheet — opening and closing", () => {
     const labels = [...dialog!.querySelectorAll(".nav-sheet-nav .nav-sheet-label")].map((s) => s.textContent);
     // "Danh bạ người dân" is a built item gated on `citizen.read` since 16/10/2026 (ADR 0097): not seen on `task.read`.
     // "Gửi tin ZNS / SMS" is gated on `notice.send` since 17/10/2026: not seen on `task.read` either.
+    // "Hướng dẫn sử dụng" is a LINK since 17/10/2026 (`/huong-dan`, no key) — still listed, now built.
     expect(labels).toEqual(["Nhiệm vụ", "Sổ tay lãnh đạo", "Biên bản họp", "Hướng dẫn sử dụng"]);
     act(() => dialog!.querySelector<HTMLAnchorElement>('a[href="/nhiem-vu/so-tay"]')!.click());
     expect(el.querySelector("dialog")).toBeNull();

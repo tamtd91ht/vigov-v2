@@ -49,19 +49,26 @@ function tenMuc(nhom: ReturnType<typeof locMenu>): string[] {
 /**
  * Mục của bản mẫu chưa có màn và chưa có tuyến (ADR 0068 lần 5 #5). "Danh bạ người dân" rời danh
  * sách này 16/10/2026 — `/nguoi-dan`, khoá `citizen.read` (ADR 0097); "Gửi tin ZNS / SMS" 17/10/2026 —
- * `/gui-thong-bao`, khoá `notice.send`.
+ * `/gui-thong-bao`, khoá `notice.send`; "Hướng dẫn sử dụng" cùng ngày — `/huong-dan`. Rỗng từ đó.
  */
-const PENDING_NAMES = ["Hướng dẫn sử dụng"];
+const PENDING_NAMES: string[] = [];
+
+/**
+ * The one built item with NO key (owner 17/10/2026): the guide is open to every signed-in account, so it
+ * is in every filtered menu — the lists below name it wherever it now shows.
+ */
+const GUIDE = "Hướng dẫn sử dụng";
 
 describe("locMenu", () => {
-  it("đủ quyền: thấy cả 17 mục có màn", () => {
+  it("đủ quyền: thấy cả 18 mục có màn", () => {
     // 15 since 06/10/2026: "Danh bạ cán bộ" became a tab of "Nội dung Mini App" (ADR 0068 lần 5).
     // 16 since 16/10/2026: "Danh bạ người dân" has its screen (`/nguoi-dan`, ADR 0097).
     // 17 since 17/10/2026: "Gửi tin ZNS / SMS" has its screen (`/gui-thong-bao`).
-    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(17);
+    // 18 since 17/10/2026: "Hướng dẫn sử dụng" has its screen (`/huong-dan`).
+    expect(tenMuc(locMenu(NHOM_MENU, DU_QUYEN))).toHaveLength(18);
   });
 
-  it("KHÔNG quyền nào: mọi mục có màn biến mất, chỉ còn mục chưa có màn", () => {
+  it("KHÔNG quyền nào: mọi mục có khoá biến mất, chỉ còn Hướng dẫn sử dụng (mục không khoá)", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, []));
 
     // Mười mục có màn đều mở ra dữ liệu thật, nên chúng đi theo quyền. `Thu - Chi ngân sách` vào
@@ -93,8 +100,9 @@ describe("locMenu", () => {
     // ấy ngày 28/09/2026; `Sổ tay lãnh đạo`, `Bản đồ kinh tế số` (ADR 0071, ADR 0072) và `Báo cáo`
     // (`/bao-cao`, ADR 0053 sửa đổi 04/10/2026) ngày 04/10/2026. Ba mục của bản mẫu vào nhóm ấy 06/10/2026;
     // `Danh bạ người dân` rời nhóm ấy 16/10/2026 (`/nguoi-dan`, ADR 0097); `Gửi tin ZNS / SMS` 17/10/2026.
-    expect(ten).toHaveLength(0);
-    expect(flattenMenu(locMenu(NHOM_MENU, [])).map((m) => m.nhan)).toEqual(PENDING_NAMES);
+    // `Hướng dẫn sử dụng` có màn 17/10/2026 và KHÔNG khoá: nó là mục có màn duy nhất còn lại.
+    expect(ten).toEqual([GUIDE]);
+    expect(flattenMenu(locMenu(NHOM_MENU, [])).map((m) => m.nhan)).toEqual([GUIDE]);
   });
 
   it("CHƯA ĐỌC XONG phiên (null) hành xử như KHÔNG có quyền, không như có", () => {
@@ -113,12 +121,12 @@ describe("locMenu", () => {
     expect(ten).not.toContain("Cấu hình");
     expect(ten).not.toContain("Hệ thống");
     expect(ten).not.toContain("Nội dung Mini App");
-    expect(ten).toHaveLength(0);
+    expect(ten).toEqual([GUIDE]);
   });
 
   it("chỉ có `admin.audit`: THẤY mục Hệ thống (tab Nhật ký hệ thống), KHÔNG thấy Cấu hình (12/10/2026)", () => {
     const names = tenMuc(locMenu(NHOM_MENU, ["admin.audit"]));
-    expect(names).toEqual(["Hệ thống"]);
+    expect(names).toEqual([GUIDE, "Hệ thống"]);
   });
 
   it("chỉ có `document.read`: THẤY mục Văn bản & Đơn thư", () => {
@@ -126,7 +134,7 @@ describe("locMenu", () => {
     // này. Máy chủ trả sổ cho người ấy, nên menu không được giấu lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.read"]));
     expect(ten).toContain("Văn bản & Đơn thư");
-    expect(ten).toHaveLength(1);
+    expect(ten).toEqual(["Văn bản & Đơn thư", GUIDE]);
   });
 
   it("chỉ có `document.route` (KHÔNG có `document.read`): KHÔNG thấy mục Văn bản & Đơn thư", () => {
@@ -134,19 +142,19 @@ describe("locMenu", () => {
     // lượt đọc, nên một mục menu dẫn tới đó là hứa một chức năng không dùng được.
     const ten = tenMuc(locMenu(NHOM_MENU, ["document.route", "document.create"]));
     expect(ten).not.toContain("Văn bản & Đơn thư");
-    expect(ten).toHaveLength(0);
+    expect(ten).toEqual([GUIDE]);
   });
 
   it("chỉ có `report.read`: THẤY Tổng quan và Báo cáo, và không mục nào khác", () => {
     const ten = tenMuc(locMenu(NHOM_MENU, ["report.read"]));
     expect(ten).toContain("Tổng quan");
     expect(ten).toContain("Báo cáo");
-    expect(ten).toHaveLength(2);
+    expect(ten).toEqual(["Tổng quan", "Báo cáo", GUIDE]);
   });
 
   it("chỉ có `notice.send`: THẤY đúng mục Gửi tin ZNS / SMS, dẫn tới /gui-thong-bao (17/10/2026)", () => {
     const muc = builtItems(locMenu(NHOM_MENU, ["notice.send"]));
-    expect(muc.map((m) => m.nhan)).toEqual(["Gửi tin ZNS / SMS"]);
+    expect(muc.map((m) => m.nhan)).toEqual(["Gửi tin ZNS / SMS", GUIDE]);
     expect(muc[0]?.duong).toBe("/gui-thong-bao");
     expect(muc[0]?.khoa).toBe("notice.send");
   });
@@ -212,13 +220,35 @@ describe("locMenu", () => {
   });
 });
 
+describe("mục Hướng dẫn sử dụng — mở cho mọi tài khoản đã đăng nhập (17/10/2026)", () => {
+  const item = (ds: readonly string[] | null) => builtItems(locMenu(NHOM_MENU, ds)).find((m) => m.nhan === GUIDE);
+
+  it("có màn /huong-dan, không khoá", () => {
+    const m = flattenMenu(NHOM_MENU).find((x) => x.nhan === GUIDE);
+    expect(m?.duong).toBe("/huong-dan");
+    expect(m?.khoa).toBeNull();
+  });
+
+  it("hiện với mọi tập quyền — đủ quyền, không quyền nào, và cả lúc CHƯA đọc xong phiên", () => {
+    // `null` too: an item with no key needs no session to decide, so it never appears late or vanishes.
+    for (const ds of [DU_QUYEN, [], null, ["admin.user.delete"]]) {
+      expect(item(ds)?.duong).toBe("/huong-dan");
+    }
+  });
+
+  it("không còn trong PENDING_SCREENS, và sáng đúng mục khi đang ở /huong-dan", () => {
+    expect(Object.keys(PENDING_SCREENS)).not.toContain(GUIDE);
+    expect(activeMenuRoute(NHOM_MENU, "/huong-dan")).toBe("/huong-dan");
+  });
+});
+
 describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một tab trên /cau-hinh", () => {
   it("chỉ có `admin.sla`: THẤY mục Cấu hình — lối vào tab Thời hạn xử lý", () => {
     // Ca thật đã hỏng: menu từng canh bằng riêng `admin.lookup`, nên người được giao gieo bảng
     // thời hạn — việc mà thiếu nó xã không nhận được phản ánh nào — không tìm thấy lối vào.
     const ten = tenMuc(locMenu(NHOM_MENU, ["admin.sla"]));
     // Cấu hình (Thời hạn xử lý) and Hệ thống (Lịch làm việc write buttons) — and nothing else.
-    expect(ten).toEqual(["Cấu hình", "Hệ thống"]);
+    expect(ten).toEqual([GUIDE, "Cấu hình", "Hệ thống"]);
   });
 
   it.each([
@@ -243,7 +273,7 @@ describe("mục Cấu hình — mở khi có BẤT KỲ khoá nào canh một ta
     const ten = tenMuc(
       locMenu(NHOM_MENU, ["admin.village", "admin.message", "admin.mail", "admin.zalo"]),
     );
-    expect(ten).toEqual(["Cấu hình"]);
+    expect(ten).toEqual([GUIDE, "Cấu hình"]);
   });
 
   it("không khoá nào trong tập ấy: KHÔNG thấy mục Cấu hình — ca bị từ chối", () => {
@@ -332,7 +362,7 @@ describe("mục Nội dung Mini App — mở khi có khoá của BẤT KỲ tab 
 
   it("chỉ có `content.read` (tab Nội dung): THẤY mục, dẫn tới /mini-app", () => {
     expect(item(["content.read"])?.duong).toBe("/mini-app");
-    expect(tenMuc(locMenu(NHOM_MENU, ["content.read"]))).toEqual(["Nội dung Mini App"]);
+    expect(tenMuc(locMenu(NHOM_MENU, ["content.read"]))).toEqual(["Nội dung Mini App", GUIDE]);
   });
 
   it("chỉ có `admin.user` (tab Danh bạ cán bộ): THẤY mục", () => {
@@ -351,13 +381,13 @@ describe("mục Người dùng và Phân quyền — mỗi mục đúng một kh
   it("chỉ có `admin.user`: THẤY Người dùng, dẫn tới /nguoi-dung, và không mục nào khác", () => {
     const muc = builtItems(locMenu(NHOM_MENU, ["admin.user"]));
     // "Nội dung Mini App" too: its Danh bạ cán bộ tab opens on `admin.user` (06/10/2026).
-    expect(muc.map((m) => m.nhan)).toEqual(["Nội dung Mini App", "Người dùng"]);
+    expect(muc.map((m) => m.nhan)).toEqual(["Nội dung Mini App", "Người dùng", GUIDE]);
     expect(muc.find((m) => m.nhan === "Người dùng")?.duong).toBe("/nguoi-dung");
   });
 
   it("chỉ có `admin.role`: THẤY Phân quyền, dẫn tới /nguoi-dung/phan-quyen, và không mục nào khác", () => {
     const muc = builtItems(locMenu(NHOM_MENU, ["admin.role"]));
-    expect(muc.map((m) => m.nhan)).toEqual(["Phân quyền"]);
+    expect(muc.map((m) => m.nhan)).toEqual(["Phân quyền", GUIDE]);
     expect(muc[0]?.duong).toBe("/nguoi-dung/phan-quyen");
   });
 

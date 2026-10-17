@@ -165,13 +165,9 @@ export type NhomMenu = {
 // three items no screen and no backend route serve yet (ADR 0068 lần 5 #5: placed where the prototype
 // has them, disabled with "?", never faked). Two since 16/10/2026: "Danh bạ người dân" got `/nguoi-dan`
 // (ADR 0097). One since 17/10/2026: "Gửi tin ZNS / SMS" got `/gui-thong-bao` (owner: the prototype's
-// screen first, its send route later — the screen draws that part as "?").
-export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {
-  "Hướng dẫn sử dụng": {
-    ten: "Hướng dẫn sử dụng",
-    viSao: "Tài liệu hướng dẫn cán bộ dùng phần mềm. Nội dung hướng dẫn chưa được soạn, nên màn chưa được dựng.",
-  },
-};
+// screen first, its send route later — the screen draws that part as "?"). Empty again since 17/10/2026:
+// "Hướng dẫn sử dụng" got `/huong-dan`. Kept, empty, for the next prototype item that has no screen yet.
+export const PENDING_SCREENS: Readonly<Record<string, PendingFeatureInfo>> = {};
 
 /**
  * The prototype's menu (`vigov-require` `apps/admin/src/lib/navigation.ts`, ADR 0068 lần 5, 06/10/2026):
@@ -222,7 +218,8 @@ export const NHOM_MENU: readonly NhomMenu[] = [
           { nhan: "Phân quyền", duong: "/nguoi-dung/phan-quyen", khoa: QUYEN_PHAN_QUYEN },
         ],
       },
-      { nhan: "Hướng dẫn sử dụng", duong: null, khoa: null },
+      // `khoa: null` — open to every signed-in account (owner 17/10/2026); the page filters its own sections.
+      { nhan: "Hướng dẫn sử dụng", duong: "/huong-dan", khoa: null },
       { nhan: "Cấu hình", duong: "/cau-hinh", khoa: KHOA_MO_CAU_HINH },
       // Not in the prototype: the three tabs `/cau-hinh` carried beyond its nine (owner 12/10/2026, S27).
       { nhan: "Hệ thống", duong: "/he-thong", khoa: SYSTEM_MENU_KEYS },

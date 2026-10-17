@@ -74,6 +74,7 @@ describe("sidebar — what it draws (expanded)", () => {
       "/nguoi-dung", // the parent row
       "/nguoi-dung",
       "/nguoi-dung/phan-quyen",
+      "/huong-dan", // since 17/10/2026, open to every account
       "/cau-hinh",
       "/he-thong", // not a prototype row: owner 12/10/2026 (S27)
     ]);
@@ -103,10 +104,11 @@ describe("sidebar — what it draws (expanded)", () => {
   it("only `admin.user`: the parent with Người dùng only; only `admin.role`: the parent leads to Phân quyền", () => {
     const user = sidebar(["admin.user"]);
     // `admin.user` also opens "Nội dung Mini App": its Danh bạ cán bộ tab is gated by that key.
-    expect(hrefs(user)).toEqual(["/mini-app", "/nguoi-dung", "/nguoi-dung"]);
+    // "/huong-dan" in every list below: the guide has no key (17/10/2026).
+    expect(hrefs(user)).toEqual(["/mini-app", "/nguoi-dung", "/nguoi-dung", "/huong-dan"]);
     expect(hrefs(childList(user)!)).toEqual(["/nguoi-dung"]);
     const role = sidebar(["admin.role"]);
-    expect(hrefs(role)).toEqual(["/nguoi-dung/phan-quyen", "/nguoi-dung/phan-quyen"]);
+    expect(hrefs(role)).toEqual(["/nguoi-dung/phan-quyen", "/nguoi-dung/phan-quyen", "/huong-dan"]);
     expect(hrefs(childList(role)!)).toEqual(["/nguoi-dung/phan-quyen"]);
   });
 
@@ -119,31 +121,32 @@ describe("sidebar — what it draws (expanded)", () => {
   });
 
   it("only `content.read`: exactly Nội dung Mini App, at /mini-app", () => {
-    expect(hrefs(sidebar(["content.read"]))).toEqual(["/mini-app"]);
+    expect(hrefs(sidebar(["content.read"]))).toEqual(["/mini-app", "/huong-dan"]);
   });
 
   it("only `report.read`: exactly Tổng quan and Báo cáo", () => {
-    expect(hrefs(sidebar(["report.read"]))).toEqual(["/tong-quan", "/bao-cao"]);
+    expect(hrefs(sidebar(["report.read"]))).toEqual(["/tong-quan", "/bao-cao", "/huong-dan"]);
   });
 
   it("only `task.read`: the three task screens, nothing else, in the prototype's order", () => {
-    expect(hrefs(sidebar(["task.read"]))).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban"]);
+    expect(hrefs(sidebar(["task.read"]))).toEqual(["/nhiem-vu", "/nhiem-vu/so-tay", "/nhiem-vu/bien-ban", "/huong-dan"]);
   });
 
   it("`admin.sla` alone opens Cấu hình and Hệ thống (one key of each tab set)", () => {
-    expect(hrefs(sidebar(["admin.sla"]))).toEqual(["/cau-hinh", "/he-thong"]);
+    expect(hrefs(sidebar(["admin.sla"]))).toEqual(["/huong-dan", "/cau-hinh", "/he-thong"]);
   });
 
   it("`admin.audit` alone opens Hệ thống only — Nhật ký hệ thống left /cau-hinh (12/10/2026)", () => {
-    expect(hrefs(sidebar(["admin.audit"]))).toEqual(["/he-thong"]);
+    expect(hrefs(sidebar(["admin.audit"]))).toEqual(["/huong-dan", "/he-thong"]);
   });
 
-  it("DENIED: no key, or the session not read yet → no link at all; only the unbuilt items, disabled; the toggle stays", () => {
+  it("DENIED: no key, or the session not read yet → only the key-less Hướng dẫn sử dụng link; the toggle stays", () => {
     for (const p of [[], null, ["admin.user.delete", "report.export"]]) {
       const html = sidebar(p);
-      expect(html).not.toContain("<a ");
-      // One unbuilt item since 17/10/2026 ("Gửi tin ZNS / SMS" got `/gui-thong-bao`).
-      expect(html.match(/aria-disabled="true"/g)).toHaveLength(1);
+      // The guide is the one item with no key (17/10/2026): it is the only link, and no gated one leaks.
+      expect(hrefs(html)).toEqual(["/huong-dan"]);
+      // No unbuilt item since 17/10/2026 ("Hướng dẫn sử dụng" got `/huong-dan`).
+      expect(html).not.toContain('aria-disabled="true"');
       expect(html).toContain('class="side-nav"');
       expect(html).toContain(`aria-label="${SIDEBAR_COLLAPSE_LABEL}"`);
     }
@@ -265,14 +268,15 @@ describe("sidebar — collapsed to icons", () => {
  * inside a screen, §14). Their word stays, so a screen reader still hears the whole menu.
  */
 describe("items with no screen", () => {
-  // One since 17/10/2026: "Gửi tin ZNS / SMS" has its screen (`/gui-thong-bao`).
-  const PENDING = ["Hướng dẫn sử dụng"];
+  // None since 17/10/2026: "Hướng dẫn sử dụng" has its screen (`/huong-dan`). The rendering of such an
+  // item stays pinned by the synthetic case below.
+  const PENDING: string[] = [];
 
   it("the prototype's unbuilt items: disabled, their word, the hover sentence, no '?' — expanded and collapsed", () => {
     for (const collapsed of [false, true]) {
       const html = sidebar(ALL_PERMISSIONS, { collapsed });
       expect(html).not.toContain("data-pending-marker");
-      expect(html.match(/class="side-nav-item is-pending"/g)).toHaveLength(PENDING.length);
+      expect(html.match(/class="side-nav-item is-pending"/g) ?? []).toHaveLength(PENDING.length);
       for (const nhan of PENDING) {
         expect(html, nhan).toContain(collapsed ? `<span class="an-thi-giac">${nhan}</span>` : `<span class="side-nav-label">${nhan}</span>`);
         const title = collapsed ? `${nhan} — ${PENDING_HOVER_TEXT}` : PENDING_HOVER_TEXT;
