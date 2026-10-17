@@ -9491,7 +9491,7 @@
       "path": "/api/v1/zalo-oa-events",
       "operation_id": "comms_post_zalo_oa_events",
       "task_id": "cc2829b0a359",
-      "summary": "Webhook sự kiện OA Zalo — Zalo gửi mọi sự kiện của OA các xã đã uỷ quyền cho app dùng chung; kiểm chữ ký X-ZEvent-Signature (so thời gian hằng) và app_id, tìm xã đang giữ OA ấy, rồi chuyển NGUYÊN thân sự kiện lên Kafka (comms.zalo_oa_event_received.v1, khoá = xã); OA không thuộc xã nào thì trả 200 và không chuyển gì",
+      "summary": "Webhook sự kiện OA Zalo — Zalo gửi mọi sự kiện của OA các xã đã uỷ quyền cho app dùng chung; kiểm chữ ký X-ZEvent-Signature (so thời gian hằng) và app_id, tìm xã đang giữ OA ấy, rồi chuyển NGUYÊN thân sự kiện lên Kafka (topic <ENV>.comms.zalo_oa_event_received.v1, khoá = xã); OA không thuộc xã nào thì trả 200 và không chuyển gì",
       "screen": "Chủ dự án chốt 17/10/2026 — TASK W-1 (ADR 0098: app Zalo dùng chung)",
       "permission_kind": "public",
       "permission_reason": "Zalo gọi webhook khi có sự kiện ở OA của một xã, không có phiên và không có Host của xã: xác thực bằng chữ ký X-ZEvent-Signature (sha256 của app_id + thân + timestamp + OA Secret Key của app dùng chung) so thời gian hằng cùng app_id của nền tảng, sai trả 403 và không chuyển gì; xã lấy từ OA đang hoạt động trong sự kiện, không từ Host; giới hạn 600 lượt/phút mỗi mạng máy gọi trước khi đọc thân",

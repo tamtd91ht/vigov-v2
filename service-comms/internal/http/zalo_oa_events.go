@@ -99,7 +99,7 @@ func RegisterZaloOAEvents(mux *http.ServeMux, d ZaloOAEventDeps) {
 	//	429   the rate limit
 	//	503   not configured (dev), the commune lookup or the broker failed, or the counter store is down
 	//
-	// @summary  Webhook sự kiện OA Zalo — Zalo gửi mọi sự kiện của OA các xã đã uỷ quyền cho app dùng chung; kiểm chữ ký X-ZEvent-Signature (so thời gian hằng) và app_id, tìm xã đang giữ OA ấy, rồi chuyển NGUYÊN thân sự kiện lên Kafka (comms.zalo_oa_event_received.v1, khoá = xã); OA không thuộc xã nào thì trả 200 và không chuyển gì
+	// @summary  Webhook sự kiện OA Zalo — Zalo gửi mọi sự kiện của OA các xã đã uỷ quyền cho app dùng chung; kiểm chữ ký X-ZEvent-Signature (so thời gian hằng) và app_id, tìm xã đang giữ OA ấy, rồi chuyển NGUYÊN thân sự kiện lên Kafka (topic <ENV>.comms.zalo_oa_event_received.v1, khoá = xã); OA không thuộc xã nào thì trả 200 và không chuyển gì
 	// @screen   Chủ dự án chốt 17/10/2026 — TASK W-1 (ADR 0098: app Zalo dùng chung)
 	// @reply    200 zaloOAEventAck
 	// @reply    403 httpx.Error

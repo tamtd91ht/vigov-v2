@@ -383,7 +383,7 @@
       "viec": "Nhóm cấu hình KafkaEvent (KAFKA_EVENT_ADDRESS, USERNAME/PASSWORD/SASL_MECHANISM tuỳ chọn) + core/events/kafka Publisher (franz-go) + ratelimit ZaloOAWebhook (ADR 0100)",
       "trang_thai": "xong",
       "no_confirm": [],
-      "bang_chung": "core/config/kafka_event.go, uses/accessors/hints, .env.example, deploy/cau-hinh/README.md; core/events/kafka/kafka.go (SASL+TLS khi có tài khoản, plaintext có @security-exception khi không); franz-go v1.21.6. go test config/events/ratelimit xanh, check_env_map + check_security PASS (17/10/2026).",
+      "bang_chung": "core/config/kafka_event.go, uses/accessors/hints, .env.example, deploy/cau-hinh/README.md; core/events/kafka/kafka.go (SASL+TLS khi có tài khoản, plaintext có @security-exception khi không); franz-go v1.21.6. go test config/events/ratelimit xanh, check_env_map + check_security PASS (17/10/2026). Tiền tố profile (chủ dự án 17/10/2026, dev+prod chung một cụm): core/events/names.go events.Topic → <ENV>.<sự kiện>, events.ConsumerGroup → <ENV>.<dịch vụ>.<việc>, ENV thiếu/lạ bị từ chối; kafka.New nhận profile; service_boundary_guard kiểm 5 chặn import thư viện Kafka ngoài core/events và tên topic/group gõ tay; skill events-and-queues §Kafka names. go test core/events + test_hooks 322/322 xanh.",
       "tiep_theo": "Chưa nối broker thật. check_vuln.py đỏ SẴN (stdlib go1.26.6 GO-2026-66xx, sửa ở 1.26.9) — cần nâng toolchain mọi module, việc riêng."
     }
   ]

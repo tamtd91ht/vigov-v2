@@ -264,6 +264,24 @@ CASES = [
      w("service-identity/internal/store/kho.go",
        'func open() {\n\tdb, err := sql.Open("pgx", "postgres://u:p@h:5432/petitions?sslmode=disable")\n}')),
 
+    # Kafka dùng chung một cụm cho dev và prod (chủ dự án 17/10/2026): tên topic / group chỉ
+    # core/events ghép, có tiền tố <ENV>. Tên gõ tay là tên thiếu profile.
+    ("service_boundary_guard", "import thư viện Kafka ngoài core/events", BLOCK,
+     w("service-comms/internal/app/a.go",
+       'import (\n\t"github.com/twmb/franz-go/pkg/kgo"\n)')),
+    ("service_boundary_guard", "import thư viện Kafka trong core/events", PASS,
+     w("core/events/kafka/kafka.go",
+       'import (\n\t"github.com/twmb/franz-go/pkg/kgo"\n)\nfunc f() { topic, _ := events.Topic(p.profile, e.Name)\n_ = &kgo.Record{Topic: topic} }')),
+    ("service_boundary_guard", "topic gõ tay trong core/events", BLOCK,
+     w("core/events/kafka/kafka.go",
+       'func f() { _ = &kgo.Record{Topic: "comms.zalo_oa_event_received.v1"} }')),
+    ("service_boundary_guard", "topic = e.Name không tiền tố", BLOCK,
+     w("core/events/kafka/kafka.go",
+       'func f() { _ = &kgo.Record{Topic: e.Name} }')),
+    ("service_boundary_guard", "consumer group gõ tay", BLOCK,
+     w("core/events/kafka/consumer.go",
+       'func f() { _ = kgo.ConsumerGroup("comms-zalo") }')),
+
     # ---- rule 3 · personal data -----------------------------------------
     ("pii_guard", "logs a phone number", BLOCK,
      w("congdan/internal/app/otp.go", "log.Info(citizenPhone)")),

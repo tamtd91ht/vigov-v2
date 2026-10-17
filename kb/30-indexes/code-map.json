@@ -10122,6 +10122,10 @@
       "kind": "type",
       "at": "service-comms/internal/event/phieu_doi_trang_thai.go:46"
     },
+    "events.ConsumerGroup": {
+      "kind": "func",
+      "at": "core/events/names.go:47"
+    },
     "events.Dispatch": {
       "kind": "func",
       "at": "core/events/events.go:45"
@@ -10137,6 +10141,10 @@
     "events.Publisher": {
       "kind": "type",
       "at": "core/events/events.go:33"
+    },
+    "events.Topic": {
+      "kind": "func",
+      "at": "core/events/names.go:35"
     },
     "grpc.ActiveResidentialUnitReader": {
       "kind": "type",
@@ -13744,19 +13752,19 @@
     },
     "kafka.Close": {
       "kind": "func",
-      "at": "core/events/kafka/kafka.go:148"
+      "at": "core/events/kafka/kafka.go:158"
     },
     "kafka.New": {
       "kind": "func",
-      "at": "core/events/kafka/kafka.go:62"
+      "at": "core/events/kafka/kafka.go:65"
     },
     "kafka.Publish": {
       "kind": "func",
-      "at": "core/events/kafka/kafka.go:134"
+      "at": "core/events/kafka/kafka.go:140"
     },
     "kafka.Publisher": {
       "kind": "type",
-      "at": "core/events/kafka/kafka.go:53"
+      "at": "core/events/kafka/kafka.go:54"
     },
     "mail.Account": {
       "kind": "type",

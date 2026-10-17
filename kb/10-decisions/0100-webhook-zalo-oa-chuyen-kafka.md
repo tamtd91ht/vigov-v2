@@ -8,8 +8,9 @@ expires: null
 owns_facts:
   - "webhook Zalo OA: POST https://<ZALO_OA_CALLBACK_HOST>/api/v1/zalo-oa-events ở service-comms, kiểm chữ ký X-ZEvent-Signature bằng ZALO_OA_WEBHOOK_SECRET (OA Secret Key của Zalo App dùng chung); sai ký → 403 (chủ dự án 17/10/2026)"
   - "xã của sự kiện webhook tìm từ oa_id qua dòng zalo_commune_oa đang sống; OA không thuộc xã nào → 200, không đẩy gì (chủ dự án 17/10/2026)"
-  - "sự kiện webhook chuyển NGUYÊN VĂN thân gói Zalo vào Kafka, bọc Envelope core/events tên/topic comms.zalo_oa_event_received.v1, khoá = tenant_id; chủ dự án nhận dữ liệu cá nhân nằm trong Kafka (17/10/2026)"
+  - "sự kiện webhook chuyển NGUYÊN VĂN thân gói Zalo vào Kafka, bọc Envelope core/events tên comms.zalo_oa_event_received.v1, topic <ENV>.comms.zalo_oa_event_received.v1, khoá = tenant_id; chủ dự án nhận dữ liệu cá nhân nằm trong Kafka (17/10/2026)"
   - "biến Kafka: KAFKA_EVENT_ADDRESS; KAFKA_EVENT_USERNAME, KAFKA_EVENT_PASSWORD, KAFKA_EVENT_SASL_MECHANISM TUỲ CHỌN — có thì SASL qua TLS, không có thì nối thẳng địa chỉ không xác thực (chủ dự án 17/10/2026)"
+  - "dev và prod dùng CHUNG một cụm Kafka: mọi topic là <ENV>.<tên sự kiện>, mọi consumer group là <ENV>.<dịch vụ>.<việc>, tiền tố là giá trị ENV, chỉ core/events ghép (events.Topic / events.ConsumerGroup); hook service_boundary_guard chặn tên gõ tay (chủ dự án 17/10/2026)"
 ---
 
 # 0100. Webhook Zalo OA chuyển nguyên văn vào Kafka
@@ -29,12 +30,13 @@ bắn vào kafka, hãy cấu hình kafka trên env luôn, thông số tôi sẽ 
 | 4 | Nội dung | **Nguyên văn** thân gói Zalo trong `Envelope.Payload`, kèm `tenant_id`. Không ghi thân gói vào log |
 | 5 | Kafka | Đẩy đồng bộ; broker chưa nhận → **503** để Zalo gửi lại, không bao giờ trả 200 trước khi broker nhận |
 | 6 | Biến | `KAFKA_EVENT_ADDRESS` (danh sách host:port, ConfigMap). Tài khoản **tuỳ chọn**: có `KAFKA_EVENT_USERNAME` + `KAFKA_EVENT_PASSWORD` (Secret) thì SASL (`KAFKA_EVENT_SASL_MECHANISM`: PLAIN · SCRAM-SHA-256 · SCRAM-SHA-512) qua TLS; không có thì nối thẳng, không xác thực |
+| 7 | Tên trên Kafka | dev và prod **dùng chung một cụm** (chủ dự án 17/10/2026). Topic = `<ENV>.<tên sự kiện>` (`prod.comms.zalo_oa_event_received.v1`), consumer group = `<ENV>.<dịch vụ>.<việc>`; tiền tố (không hậu tố) để ACL cấp theo tiền tố `prod.`. Tên sự kiện trong phong bì và `.proto` **không** mang profile. Chỉ `core/events` ghép tên (`events.Topic`, `events.ConsumerGroup`); `ENV` thiếu/lạ → từ chối, không mặc định. `service_boundary_guard` chặn import thư viện Kafka ngoài `core/events` và tên topic/group gõ tay |
 
 ## Hệ quả
 
 - **Rủi ro nhận:** (a) Kafka chứa dữ liệu cá nhân người dân (tin nhắn, user id Zalo, có thể số điện thoại) —
   trái ADR 0006 hệ quả 5 cho riêng topic này; thời gian giữ topic và ai được đọc là việc vận hành. (b) Khi
-  không đặt tài khoản, kênh tới Kafka **không mã hoá** — lệch luật 13 #1, ghi ở `tools/security_debt.json`.
+  không đặt tài khoản, kênh tới Kafka **không mã hoá** — lệch luật 13 #1, đánh dấu `@security-exception` ở `core/events/kafka/kafka.go` và cảnh báo mỗi lần khởi động (`config.CanhBao`).
 - Bên tiêu thụ topic phải coi mỗi bản tin là dữ liệu cá nhân của đúng một xã (`tenant_id`) và xử lý lặp
   (Zalo gửi lại, Kafka giao ít nhất một lần).
 - Phải đặt URL webhook và OA Secret Key ở mục Webhook của Zalo App (`deploy/README.md` §14).

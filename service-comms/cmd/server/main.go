@@ -464,7 +464,8 @@ func main() {
 	// that is down makes publishes fail (503 to Zalo, which retries) rather than stopping comms.
 	var eventPublisher events.Publisher
 	if broker := cfg.KafkaEventBroker(); broker.Configured() {
-		p, err := kafka.New("vigov-comms", broker)
+		// cfg.Env prefixes every topic: dev and prod share one cluster (owner 17/10/2026, core/events/names.go).
+		p, err := kafka.New("vigov-comms", cfg.Env, broker)
 		if err != nil {
 			log.Error("không dựng được client Kafka sự kiện", "service", "comms", "err", err)
 			os.Exit(1)

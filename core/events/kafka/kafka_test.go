@@ -57,14 +57,23 @@ func TestUnknownMechanismRefused(t *testing.T) {
 }
 
 func TestNewRefusesNoAddress(t *testing.T) {
-	if _, err := New("comms", config.KafkaEventBroker{}); !errors.Is(err, ErrNotConfigured) {
+	if _, err := New("comms", "dev", config.KafkaEventBroker{}); !errors.Is(err, ErrNotConfigured) {
 		t.Errorf("want ErrNotConfigured, got %v", err)
+	}
+}
+
+// A missing profile is refused at startup: on the shared cluster an unprefixed topic is prod's topic.
+func TestNewRefusesNoProfile(t *testing.T) {
+	for _, p := range []string{"", "production"} {
+		if _, err := New("comms", p, config.KafkaEventBroker{Addresses: []string{"127.0.0.1:1"}}); !errors.Is(err, events.ErrNoProfile) {
+			t.Errorf("profile %q: want ErrNoProfile, got %v", p, err)
+		}
 	}
 }
 
 // New dials nothing: a broker that is down must not stop the service from starting.
 func TestNewDoesNotDial(t *testing.T) {
-	p, err := New("comms", config.KafkaEventBroker{Addresses: []string{"127.0.0.1:1", "127.0.0.1:2"}})
+	p, err := New("comms", "dev", config.KafkaEventBroker{Addresses: []string{"127.0.0.1:1", "127.0.0.1:2"}})
 	if err != nil {
 		t.Fatal(err)
 	}

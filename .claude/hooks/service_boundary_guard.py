@@ -12,6 +12,11 @@ Four things blocked:
   2. Opening a DB this service does not own  — a read path that bypasses the contract
   3. Hand-editing .proto-generated files     — silently lost on the next generate
   4. (advisory) breaking a published event contract
+  5. A Kafka name built by hand — dev and prod share ONE cluster (owner, 17/10/2026), so every topic
+     and consumer group carries the profile prefix `<ENV>.`, and only core/events builds it
+     (events.Topic / events.ConsumerGroup). Blocked: a Kafka client import outside core/events, and a
+     literal or unprefixed topic / group inside it. A name typed by hand is a name typed without the
+     profile — a dev pod writing into prod's stream, or stealing prod's partitions.
 """
 
 from __future__ import annotations
@@ -40,6 +45,19 @@ DB_CONNECT = re.compile(
 
 # Database name inside a DSN — compared against the service being edited
 DSN_DBNAME = re.compile(r"(?:dbname=|/)([a-z0-9_]{3,})(?:[\?\"'`\s]|$)")
+
+# Kafka client libraries. Only core/events/** may import one.
+KAFKA_IMPORT = re.compile(
+    r"[\"'](github\.com/twmb/franz-go[^\"']*|github\.com/segmentio/kafka-go[^\"']*|"
+    r"github\.com/IBM/sarama[^\"']*|github\.com/Shopify/sarama[^\"']*|"
+    r"github\.com/confluentinc/confluent-kafka-go[^\"']*)[\"']"
+)
+# Inside core/events: a topic or group not produced by events.Topic / events.ConsumerGroup.
+KAFKA_HAND_NAME = re.compile(
+    r"\bTopic:\s*(?:\"|`|e\.Name\b)|"
+    r"\b(?:ConsumeTopics|ConsumerGroup|DefaultProduceTopic)\(\s*(?:\"|`)"
+)
+EVENTS_PKG = "core/events/"
 
 PROTO_GEN = (".pb.go", "_grpc.pb.go", ".pb.gw.go", "_pb2.py", ".connect.go")
 
@@ -92,6 +110,22 @@ def scan(content: str, path: str) -> list[str]:
     return hits
 
 
+def scan_kafka(content: str, path: str) -> list[str]:
+    """Check 5. Applies to every .go file, service or core — not only inside a service."""
+    p = path.replace("\\", "/")
+    in_events = ("/" + EVENTS_PKG) in ("/" + p) or p.startswith(EVENTS_PKG)
+    hits: list[str] = []
+    for i, line in enumerate(content.splitlines()):
+        if line.lstrip().startswith("//"):
+            continue
+        m = KAFKA_IMPORT.search(line)
+        if m and not in_events:
+            hits.append(f"line {i+1}: imports Kafka client '{m.group(1)}' outside core/events")
+        if in_events and KAFKA_HAND_NAME.search(line):
+            hits.append(f"line {i+1}: Kafka topic/group named by hand — build it with events.Topic / events.ConsumerGroup")
+    return hits
+
+
 def main() -> None:
     c.utf8_streams()
     data = c.read_input()
@@ -126,6 +160,33 @@ def main() -> None:
 
     if not path.endswith(".go") or c.should_skip(path):
         sys.exit(0)
+
+    # 5. Kafka names carry the profile — every .go file, before the service-only checks.
+    if not path.endswith("_test.go"):
+        kcontent = c.new_content(ti)
+        khits = scan_kafka(kcontent, path) if kcontent else []
+        if khits:
+            c.block(
+                HOOK,
+                f"Kafka name without the profile prefix — {os.path.basename(path)}",
+                khits,
+                [
+                    "  dev and prod share ONE Kafka cluster (owner, 17/10/2026). Every topic is",
+                    "  `<ENV>.<event>.vN` and every consumer group `<ENV>.<service>.<purpose>`, built",
+                    "  ONLY by core/events: events.Topic(cfg.Env, name) / events.ConsumerGroup(cfg.Env, …).",
+                    "  A name typed by hand lands dev's events in prod's topic, or lets a dev consumer",
+                    "  take prod's partitions — silently, tests green.",
+                    "",
+                    "  Correct approach: publish through events.Publisher (core/events/kafka); consume",
+                    "  through core/events with a group from events.ConsumerGroup.",
+                    "",
+                    "  → Skill: .claude/skills/events-and-queues/SKILL.md §Kafka names",
+                    "  → Rule 2: .claude/rules/critical/2-service-boundary.md",
+                ],
+                tool=tool,
+                path=path,
+            )
+
     if service_of(path) is None:
         sys.exit(0)
 

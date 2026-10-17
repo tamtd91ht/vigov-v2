@@ -3,9 +3,10 @@
 //
 // ONE RECORD PER ENVELOPE, AND THE SHAPE IS THE CONTRACT A CONSUMER READS:
 //
-//	topic   the envelope's Name — "comms.zalo_oa_event_received.v1". One topic per event and version, so
-//	        a .v2 runs beside its .v1 during a migration (rule 2, invariant 4) without either consumer
-//	        filtering the other's messages out
+//	topic   events.Topic(profile, envelope Name) — "prod.comms.zalo_oa_event_received.v1". The profile
+//	        prefix keeps dev and prod apart on the ONE cluster they share (owner, 17/10/2026; names.go).
+//	        One topic per event and version, so a .v2 runs beside its .v1 during a migration (rule 2,
+//	        invariant 4) without either consumer filtering the other's messages out
 //	key     the envelope's TenantID — every event of one commune lands on one partition, so a consumer
 //	        sees one commune's events in the order they were published, and no commune is ever keyless
 //	value   the envelope as one JSON document: {"id","name","tenant_id","at","payload"}. The payload's
@@ -51,15 +52,20 @@ var (
 
 // Publisher publishes envelopes to Kafka. Safe for concurrent use.
 type Publisher struct {
-	cl *kgo.Client
+	cl      *kgo.Client
+	profile string // ENV — the topic prefix; checked once in New
 }
 
 var _ events.Publisher = (*Publisher)(nil)
 
-// New builds the client. clientID names the service in the brokers' logs and quotas. No connection is
-// opened here — franz-go dials on first use — so a broker that is down does not stop the service from
-// starting; it makes Publish fail.
-func New(clientID string, b config.KafkaEventBroker) (*Publisher, error) {
+// New builds the client. clientID names the service in the brokers' logs and quotas; profile is ENV
+// (config.Config.Env) and prefixes every topic. An invalid profile is refused HERE, at startup, rather
+// than at the first Publish. No connection is opened — franz-go dials on first use — so a broker that is
+// down does not stop the service from starting; it makes Publish fail.
+func New(clientID, profile string, b config.KafkaEventBroker) (*Publisher, error) {
+	if _, err := events.Topic(profile, "probe.profile.v1"); err != nil {
+		return nil, fmt.Errorf("kafka: %w", err)
+	}
 	opts, err := clientOptions(clientID, b)
 	if err != nil {
 		return nil, err
@@ -68,7 +74,7 @@ func New(clientID string, b config.KafkaEventBroker) (*Publisher, error) {
 	if err != nil {
 		return nil, fmt.Errorf("kafka: build the client: %w", err)
 	}
-	return &Publisher{cl: cl}, nil
+	return &Publisher{cl: cl, profile: profile}, nil
 }
 
 // security is how the connection is protected: TLS on or off, and the SASL mechanism (nil = none).
@@ -136,10 +142,14 @@ func (p *Publisher) Publish(ctx context.Context, e events.Envelope) error {
 	if err != nil {
 		return err
 	}
-	rec := &kgo.Record{Topic: e.Name, Key: []byte(e.TenantID), Value: value}
+	topic, err := events.Topic(p.profile, e.Name)
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidEnvelope, err)
+	}
+	rec := &kgo.Record{Topic: topic, Key: []byte(e.TenantID), Value: value}
 	if err := p.cl.ProduceSync(ctx, rec).FirstErr(); err != nil {
 		// The error names the topic, never the payload.
-		return fmt.Errorf("kafka: publish to %q: %w", e.Name, err)
+		return fmt.Errorf("kafka: publish to %q: %w", topic, err)
 	}
 	return nil
 }

@@ -17,9 +17,34 @@ description: Use when working with events, queues, consumers, background jobs, o
 | 6 | Exhausted retries go to a dead-letter queue plus a flag staff can see |
 | 7 | Scheduled work runs **per commune**, and is resumable |
 
+## Kafka names — the profile is part of every name
+
+dev and prod share **one** Kafka cluster (owner, 17/10/2026). The event NAME stays
+profile-free (`comms.zalo_oa_event_received.v1`, inside the envelope and the `.proto`); the
+Kafka NAMES carry `ENV` as a **prefix**:
+
+| Kafka object | Shape | Example | Built by |
+|---|---|---|---|
+| Topic | `<ENV>.<event name>` | `prod.comms.zalo_oa_event_received.v1` | `events.Topic(cfg.Env, name)` |
+| Consumer group | `<ENV>.<service>.<purpose>` | `prod.comms.zalo-oa-events` | `events.ConsumerGroup(cfg.Env, service, purpose)` |
+
+- `ENV` is the existing variable (`dev` · `staging` · `prod`). Missing or unknown → **refused**
+  (`events.ErrNoProfile`), never defaulted — the default would be another environment's stream.
+- Prefix, not suffix: the broker's ACLs grant `prod.` as one prefixed resource.
+- Only `core/events/**` imports a Kafka client and builds a name. Services publish through
+  `events.Publisher` (`core/events/kafka`) and never type a topic or group.
+- Ops create each topic once per profile (`dev.…` and `prod.…`); code never auto-creates.
+
+**Why:** an unprefixed name is the same topic for both environments — a dev pod publishes test
+events into prod's stream, and a dev consumer joining the same group takes prod's partitions,
+processing prod messages against the dev database. Silent, tests green.
+
+→ Enforcement: `hooks/service_boundary_guard.py` check 5 (BLOCK) · code: `core/events/names.go`
+
 ## FORBIDDEN
 
-Publishing inside an uncommitted transaction (the event arrives before the data) · adding a
+A Kafka topic or consumer group typed by hand, or without the `<ENV>.` prefix ·
+publishing inside an uncommitted transaction (the event arrives before the data) · adding a
 **required** field to a published event · consumers assuming ordering · messages carrying
 full personal data (carry the **code**; the receiver looks it up).
 
