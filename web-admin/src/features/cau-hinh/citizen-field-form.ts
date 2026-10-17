@@ -3,8 +3,8 @@
  * draft, its validation per type, the option list, the order. No JSX, no network, so every rule here has
  * a test that does not need a browser.
  *
- * THE CLIENT CHECKS MIRROR WHAT THE OWNER FIXED (#1): a code of 6–8 characters `[a-z][a-z0-9]{5,7}`,
- * immutable; the type immutable; options `{value, label}` where a saved value is never deleted, only
+ * THE CLIENT CHECKS MIRROR WHAT THE OWNER FIXED (#1, 17/10/2026): a code of 8–12 characters
+ * `[a-z][a-z0-9]{7,11}`, drawn at random, immutable; the type immutable; options `{value, label}` where a saved value is never deleted, only
  * retired. The server checks all of it again — a check here only saves a round trip, it protects nothing.
  *
  * LENGTH CAPS ARE THIS SCREEN'S ASSUMPTION (label 100, placeholder 200, option label 100, option value 40,
@@ -94,8 +94,11 @@ export function hasPlaceholder(t: CitizenFieldType): boolean {
 
 /* ---- limits ---------------------------------------------------------------------------------------- */
 
-/** ADR 0101 #1, verbatim: 6–8 characters, a–z and 0–9, starting with a letter. */
-export const FIELD_CODE_PATTERN = /^[a-z][a-z0-9]{5,7}$/;
+/**
+ * A NEW code (owner, 17/10/2026): 8–12 characters, a–z and 0–9, starting with a letter. Codes saved under
+ * the earlier 6–8 rule stay as they are — the edit dialog shows them read-only and never checks them.
+ */
+export const FIELD_CODE_PATTERN = /^[a-z][a-z0-9]{7,11}$/;
 /** kebab-case: lowercase words of a–z / 0–9 joined by single hyphens (`ho-ngheo`, `can-ngheo`). */
 export const OPTION_VALUE_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 export const LABEL_MAX = 100;
@@ -203,62 +206,60 @@ export type FieldFormErrors = Partial<Record<"code" | "label" | "placeholder" | 
 };
 
 export const CODE_REQUIRED = "Nhập mã thuộc tính.";
-export const CODE_INVALID = "Mã gồm 6–8 ký tự a–z, 0–9 và bắt đầu bằng chữ cái, ví dụ: hongheo1.";
-export const CODE_TAKEN = "Mã này đã có trong xã.";
-export const CODE_TAKEN_RETIRED = "Mã này đã có trong xã (đã ngừng dùng).";
-export const CODE_AUTO_HINT = "Tự sinh từ tên hiển thị. Không đổi được sau khi tạo.";
-export const CODE_MANUAL_HINT = "6–8 ký tự a–z, 0–9, bắt đầu bằng chữ cái. Không đổi được sau khi tạo.";
-export const CODE_LOCKED_HINT = "Mã không đổi được sau khi tạo vì dữ liệu đã nhập gắn với mã.";
+export const CODE_INVALID = "Mã gồm 8–12 ký tự a–z, 0–9, bắt đầu bằng chữ";
+export const CODE_TAKEN = "Mã này đã có trong xã";
+export const CODE_TAKEN_RETIRED = "Mã này đã có trong xã (đã ngừng dùng)";
+export const CODE_HINT = "Mã dùng để ghép biến khi gửi tin ZNS/SMS; không đổi được sau khi tạo.";
+export const CODE_LOCKED_HINT = "Mã không đổi được sau khi tạo vì dữ liệu đã nhập và biến ZNS/SMS gắn với mã.";
 export const CODE_EDIT_BUTTON = "Sửa";
-export const CODE_REGENERATE = "Tự sinh lại";
+export const CODE_REDRAW = "Sinh mã khác";
+/** Said under Mã when the server refused a random code with 409 and a fresh one was drawn in its place. */
+export const CODE_REDRAWN_AFTER_CONFLICT = "Mã vừa trùng trong xã, đã sinh mã khác — bấm Lưu lại";
 
-/** What the dialog says when the server took the auto code meanwhile and the next free one was put in. */
-export function codeRegeneratedText(taken: string, next: string): string {
-  return `Mã ${taken} vừa được dùng trong xã. Đã đổi sang mã ${next} — bấm Lưu để thử lại.`;
-}
+/* ---- the random code (owner, 17/10/2026: "web tự gen random 1 mã có từ 8-12 ký tự, khi lưu thì có check
+ * trùng theo tenant/xã và nó chính là thứ dùng để map biến trong các luồng liên quan như sms, zns") ---- */
 
-/* ---- the generated code (owner, 17/10/2026: "mã thuộc tính hãy tự gen, cho phép sửa, chống trùng trong xã") ---- */
-
-/** Digits appended to a folded label shorter than 6: `ho` → `ho2345`. Starts at 2 so `…1` never reads as `…l`. */
-const PAD_DIGITS = "234567890";
-const CODE_MIN = 6;
-const CODE_MAX = 8;
-
-/** `Hộ nghèo 2026` → `hongheo2026`: diacritics folded (đ → d), lower case, only a–z / 0–9 kept. */
-export function foldLabel(label: string): string {
-  return label
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[đĐ]/g, "d")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-}
+const CODE_FIRST = "abcdefghijklmnopqrstuvwxyz";
+const CODE_REST = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 /**
- * The code a label suggests, before any collision: folded, `tt` in front when it would not start with a
- * letter (or is empty), cut to 8, padded with digits to 6. Always matches FIELD_CODE_PATTERN.
+ * Length of a drawn code. The owner allows 8–12; the caller asked for 10. It is 8 because service-identity
+ * (`citizenFieldCodeShape`, domain/citizen_field.go) and the DB CHECK (migration 0036) still accept only
+ * `[a-z][a-z0-9]{5,7}` — 8 is the one length both sides accept today. Raise it once identity accepts 8–12;
+ * drawing 10 before that makes every save a 400.
  */
-export function baseCodeFromLabel(label: string): string {
-  let s = foldLabel(label);
-  if (!/^[a-z]/.test(s)) s = `tt${s}`;
-  s = s.slice(0, CODE_MAX);
-  for (let i = 0; s.length < CODE_MIN; i++) s += PAD_DIGITS[i % PAD_DIGITS.length];
+export const RANDOM_CODE_LENGTH = 8;
+
+/**
+ * One uniformly random character of `alphabet` from the CSPRNG (rule 13: never Math.random). Bytes at or
+ * above the largest multiple of the alphabet size are thrown away, so no letter is favoured by the modulo.
+ */
+function randomChar(alphabet: string): string {
+  const limit = 256 - (256 % alphabet.length);
+  const buf = new Uint8Array(1);
+  for (;;) {
+    crypto.getRandomValues(buf);
+    if (buf[0]! < limit) return alphabet[buf[0]! % alphabet.length]!;
+  }
+}
+
+/** A fresh code: a letter, then a–z / 0–9, `length` characters in all. Always matches FIELD_CODE_PATTERN. */
+export function randomFieldCode(length: number = RANDOM_CODE_LENGTH): string {
+  let s = randomChar(CODE_FIRST);
+  while (s.length < length) s += randomChar(CODE_REST);
   return s;
 }
 
 /**
- * The first code for `label` that no field of the commune holds — `taken` is EVERY code, retired ones
- * included: PRIMARY KEY (tenant_id, code) covers both, so a retired code proposed here is a 409 later.
- * On collision the tail becomes a counter at the base's length (`hongheo` → `hongh01` → `hongh02`), 2
- * digits, then 3 once 99 are gone. `null` only when all 999 are taken — the dialog then asks for a hand-typed code.
+ * A random code no field of the commune holds — `taken` is EVERY code, retired ones included (PRIMARY KEY
+ * (tenant_id, code) covers both). A collision is redrawn silently; the space (26·36⁷) makes a second draw
+ * already improbable, so the cap only guards a broken random source. `null` past it: the dialog then asks
+ * for a hand-typed code rather than proposing one it knows is taken.
  */
-export function generateFieldCode(label: string, taken: ReadonlySet<string>): string | null {
-  const base = baseCodeFromLabel(label);
-  if (!taken.has(base)) return base;
-  for (let n = 1; n <= 999; n++) {
-    const tail = String(n).padStart(n < 100 ? 2 : 3, "0");
-    const candidate = base.slice(0, base.length - tail.length) + tail;
-    if (!taken.has(candidate)) return candidate;
+export function freeRandomFieldCode(taken: ReadonlySet<string>): string | null {
+  for (let i = 0; i < 20; i++) {
+    const c = randomFieldCode();
+    if (!taken.has(c)) return c;
   }
   return null;
 }

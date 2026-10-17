@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { CitizenField } from "@/lib/api/citizen-fields";
 
@@ -16,10 +16,10 @@ import {
   OPTIONS_NONE,
   PLACEHOLDER_TOO_LONG,
   RETIRE_REASON_REQUIRED,
+  RANDOM_CODE_LENGTH,
   addOption,
-  baseCodeFromLabel,
-  foldLabel,
-  generateFieldCode,
+  freeRandomFieldCode,
+  randomFieldCode,
   isCodeCollision,
   manualCodeError,
   buildCreateBody,
@@ -59,18 +59,19 @@ const CHOICE: CitizenField = {
   retired_at: null,
 };
 
-const draft = (over: Partial<CitizenFieldDraft>): CitizenFieldDraft => ({ ...newFieldDraft(), code: "abcdef", label: "Tên", ...over });
+const draft = (over: Partial<CitizenFieldDraft>): CitizenFieldDraft => ({ ...newFieldDraft(), code: "abcdefgh", label: "Tên", ...over });
 
-describe("field code (ADR 0101 #1: 6–8 chars, a–z 0–9, starts with a letter)", () => {
+describe("new field code (owner 17/10/2026: 8–12 chars, a–z 0–9, starts with a letter)", () => {
   it.each([
-    ["abcdef", undefined],
+    ["abcdefgh", undefined],
     ["a1b2c3d4", undefined],
+    ["a1b2c3d4e5f6", undefined],
     ["", CODE_REQUIRED],
-    ["abcde", CODE_INVALID],
-    ["abcdefghi", CODE_INVALID],
-    ["1abcdef", CODE_INVALID],
-    ["abc-def", CODE_INVALID],
-    ["Abcdef", CODE_INVALID],
+    ["abcdefg", CODE_INVALID],
+    ["abcdefghijklm", CODE_INVALID],
+    ["1abcdefgh", CODE_INVALID],
+    ["abcd-efgh", CODE_INVALID],
+    ["Abcdefgh", CODE_INVALID],
   ])("%j → %s", (code, error) => {
     expect(validateFieldDraft(draft({ code }), true, []).code).toBe(error);
   });
@@ -126,8 +127,11 @@ describe("validation per type", () => {
 });
 
 describe("options — add, relabel, retire, never delete a saved value", () => {
-  it("choosing a choice type starts with one empty row", () => {
-    expect(setFieldType(newFieldDraft(), "combobox").options).toEqual([{ value: "", label: "", retired: false, saved: false }]);
+  it.each(["combobox", "singleBox"] as const)("choosing %s starts with one empty row; with none left Lưu is refused", (t) => {
+    const d = setFieldType(newFieldDraft(), t);
+    expect(d.options).toEqual([{ value: "", label: "", retired: false, saved: false }]);
+    expect(validateFieldDraft({ ...d, code: "abcdefgh", label: "Tên" }, true, []).optionRows).toEqual({ 0: OPTION_VALUE_REQUIRED });
+    expect(validateFieldDraft({ ...retireOrRemoveOption(d, 0), code: "abcdefgh", label: "Tên" }, true, []).options).toBe(OPTIONS_NONE);
   });
 
   it("a saved value is locked; its label changes; it retires instead of disappearing, and comes back", () => {
@@ -226,63 +230,66 @@ describe("order", () => {
   });
 });
 
-describe("generated code (owner 17/10/2026: tự sinh, sửa được, chống trùng trong xã)", () => {
-  it("folds Vietnamese diacritics, đ → d, keeps a–z 0–9 only", () => {
-    expect(foldLabel("Hộ nghèo")).toBe("hongheo");
-    expect(foldLabel("Đối tượng ĐẶC BIỆT")).toBe("doituongdacbiet");
-    expect(foldLabel("Số nhân-khẩu (2026)!")).toBe("sonhankhau2026");
+/** Feeds `getRandomValues` the given bytes, in order, across calls (each call fills the whole buffer). */
+function feedBytes(bytes: number[]) {
+  let k = 0;
+  return vi.spyOn(crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(buf: T): T => {
+    const a = buf as unknown as Uint8Array;
+    for (let i = 0; i < a.length; i++) a[i] = bytes[k++ % bytes.length]!;
+    return buf;
   });
+}
 
-  it.each([
-    ["Hộ nghèo", "hongheo"], // 7, as is
-    ["Đối tượng đặc biệt", "doituong"], // long → cut to 8
-    ["Năm 2026", "nam2026"],
-    ["2026 hộ", "tt2026ho"], // digit first → tt prefix, then cut
-    ["Hộ", "ho2345"], // short → padded with 2,3,4…
-    ["Ấp", "ap2345"],
-    ["Tổ", "to2345"],
-    ["a", "a23456"],
-    ["", "tt2345"], // empty → tt + padding
-    ["!!!", "tt2345"],
-    ["12", "tt1223"],
-  ])("%j → %s", (label, code) => {
-    expect(baseCodeFromLabel(label)).toBe(code);
-    expect(FIELD_CODE_PATTERN.test(code)).toBe(true);
-  });
+describe("random code (owner 17/10/2026: web tự gen random, chống trùng theo xã)", () => {
+  afterEach(() => vi.restoreAllMocks());
 
-  it("a free base is proposed as is", () => {
-    expect(generateFieldCode("Hộ nghèo", new Set(["sonhan01"]))).toBe("hongheo");
-  });
-
-  it("collision → 2-digit counter at the base's length, live AND retired codes both count", () => {
-    // `hongheo` live, `hongh01` retired: neither may be proposed (PRIMARY KEY (tenant_id, code) covers both).
-    expect(generateFieldCode("Hộ nghèo", new Set(["hongheo", "hongh01"]))).toBe("hongh02");
-    expect(generateFieldCode("Đối tượng đặc biệt", new Set(["doituong"]))).toBe("doituo01");
-    expect(generateFieldCode("Hộ", new Set(["ho2345"]))).toBe("ho2301");
-  });
-
-  it("past 99 the counter takes 3 digits, still ≤ 8 and matching the pattern; all 999 gone → null", () => {
-    const taken = new Set(["hongheo", ...Array.from({ length: 99 }, (_, i) => `hongh${String(i + 1).padStart(2, "0")}`)]);
-    const c = generateFieldCode("Hộ nghèo", taken)!;
-    expect(c).toBe("hong100");
-    expect(FIELD_CODE_PATTERN.test(c)).toBe(true);
-    const all = new Set(["abcdef"]);
-    for (let n = 1; n <= 999; n++) {
-      const tail = String(n).padStart(n < 100 ? 2 : 3, "0");
-      all.add("abcdef".slice(0, 6 - tail.length) + tail);
+  it("length, charset and first letter hold over many draws", () => {
+    for (let i = 0; i < 500; i++) {
+      const c = randomFieldCode();
+      expect(c).toHaveLength(RANDOM_CODE_LENGTH);
+      expect(c).toMatch(/^[a-z][a-z0-9]+$/);
+      expect(FIELD_CODE_PATTERN.test(c)).toBe(true);
     }
-    expect(generateFieldCode("abcdef", all)).toBeNull();
+    expect(randomFieldCode(12)).toHaveLength(12);
   });
 
-  it("manual code: pattern, then live collision, then retired collision with its own sentence", () => {
+  it("draws from crypto.getRandomValues, never Math.random; biased bytes are thrown away", () => {
+    const math = vi.spyOn(Math, "random");
+    // 255 ≥ 256-(256%26)=234 and ≥ 256-(256%36)=252: rejected. 0 → 'a', 25 → 'z', 26 → '0' (rest alphabet).
+    const spy = feedBytes([255, 0, 25, 26, 35, 1, 2, 3, 4]);
+    const c = randomFieldCode(8);
+    expect(spy).toHaveBeenCalled();
+    expect(math).not.toHaveBeenCalled();
+    expect(c[0]).toBe("a");
+    expect(c.slice(1, 4)).toBe("z09");
+  });
+
+  it("a code the commune holds (live or retired) is redrawn silently", () => {
+    // First draw: all bytes 0 → "aaaaaaaa"; second draw: all bytes 1 → "bbbbbbbb".
+    let call = 0;
+    vi.spyOn(crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(buf: T): T => {
+      const a = buf as unknown as Uint8Array;
+      a.fill(call++ < RANDOM_CODE_LENGTH ? 0 : 1);
+      return buf;
+    });
+    expect(freeRandomFieldCode(new Set(["aaaaaaaa"]))).toBe("bbbbbbbb");
+  });
+
+  it("a source that only ever repeats a taken code gives null (the dialog then asks for a typed code)", () => {
+    feedBytes([0]);
+    expect(freeRandomFieldCode(new Set(["aaaaaaaa"]))).toBeNull();
+  });
+
+  it("manual code: pattern 8–12, then live collision, then retired collision with its own sentence", () => {
     const live = new Set(["hongheo1"]);
     const retired = new Set(["cucu0001"]);
     expect(manualCodeError("", live, retired)).toBe(CODE_REQUIRED);
-    expect(manualCodeError("1abcde", live, retired)).toBe(CODE_INVALID);
-    expect(manualCodeError("abc", live, retired)).toBe(CODE_INVALID);
+    expect(manualCodeError("1abcdefg", live, retired)).toBe(CODE_INVALID);
+    expect(manualCodeError("abcdefg", live, retired)).toBe(CODE_INVALID);
+    expect(manualCodeError("abcdefghijklm", live, retired)).toBe(CODE_INVALID);
     expect(manualCodeError("hongheo1", live, retired)).toBe(CODE_TAKEN);
     expect(manualCodeError("cucu0001", live, retired)).toBe(CODE_TAKEN_RETIRED);
-    expect(manualCodeError("moi12345", live, retired)).toBeUndefined();
+    expect(manualCodeError("moi123456789", live, retired)).toBeUndefined();
     expect(isCodeCollision(CODE_TAKEN)).toBe(true);
     expect(isCodeCollision(CODE_TAKEN_RETIRED)).toBe(true);
     expect(isCodeCollision(CODE_INVALID)).toBe(false);
