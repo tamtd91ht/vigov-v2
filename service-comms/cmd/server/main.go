@@ -41,6 +41,7 @@ import (
 	pkgstore "github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/core/tenant"
 	commsapp "github.com/vihat/vigov/service-comms/internal/app"
+	"github.com/vihat/vigov/service-comms/internal/esms"
 	"github.com/vihat/vigov/service-comms/internal/event"
 	svcgrpc "github.com/vihat/vigov/service-comms/internal/grpc"
 	svchttp "github.com/vihat/vigov/service-comms/internal/http"
@@ -563,6 +564,16 @@ func main() {
 		OAs:     communeZaloOAs,
 		Names:   dinhDanh,
 		Log:     log,
+	})
+	// The commune's eSMS accounts (ADR 0099 #2, #3) — seven admin.sms routes on the SAME staff mux. Keys
+	// sealed by the COMMUNE envelope (nil without SECRET_ENCRYPTION_KEYS → every act that seals or opens
+	// answers 503 by name). Its own eSMS client (internal/esms: constant host, verified TLS, no proxy, no
+	// redirects, sandbox OFF — a dev sandbox switch is an open decision, not a variable added here).
+	svchttp.RegisterSmsAccounts(mux, svchttp.SmsAccountDeps{
+		Checker: staffauth.Checker{},
+		Accounts: commsapp.NewSmsAccounts(kho, commsstore.NewSmsAccountStore(kho), commsstore.NewSmsTemplateStore(kho),
+			envelope, esms.New(esms.DefaultTimeout), log),
+		Log: log,
 	})
 	// Zalo GROUP chats (ADR 0092) — four admin.zalo routes on the SAME staff mux. Identity answers whether
 	// a unit is live and the unit and staff names, over the client the edge already holds.
