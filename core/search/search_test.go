@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,24 +14,45 @@ import (
 	"github.com/vihat/vigov/core/secret"
 )
 
-const fakeKey = "api-key-GIA-KHONG-PHAI-THAT"
+const (
+	fakeUser = "vigov-test-citizen-contacts"
+	fakePass = "mat-khau-GIA-KHONG-PHAI-THAT"
+)
+
+var (
+	user = secret.Secret(fakeUser)
+	pass = secret.Secret(fakePass)
+)
 
 func TestNewRefusesInsecureOrIncomplete(t *testing.T) {
-	if _, err := New(nil, secret.Secret(fakeKey), false); !errors.Is(err, ErrNotConfigured) {
+	if _, err := New(nil, user, pass, false); !errors.Is(err, ErrNotConfigured) {
 		t.Errorf("no address: %v", err)
 	}
-	if _, err := New([]string{"http://es:9200"}, secret.Secret(fakeKey), false); !errors.Is(err, ErrInsecureAddress) {
+	if _, err := New([]string{"http://es:9200"}, user, pass, false); !errors.Is(err, ErrInsecureAddress) {
 		t.Errorf("http outside dev: %v", err)
 	}
-	if _, err := New([]string{"https://user:pw@es:9200"}, secret.Secret(fakeKey), false); !errors.Is(err, ErrInsecureAddress) ||
+	if _, err := New([]string{"https://user:pw@es:9200"}, user, pass, false); !errors.Is(err, ErrInsecureAddress) ||
 		strings.Contains(err.Error(), "pw") {
 		t.Errorf("credentials in the URL: %v", err)
 	}
-	if _, err := New([]string{"https://es:9200"}, nil, false); !errors.Is(err, ErrNoAPIKey) {
-		t.Errorf("no key outside dev: %v", err)
+	if _, err := New([]string{"https://es:9200"}, nil, nil, false); !errors.Is(err, ErrNoCredentials) {
+		t.Errorf("no credentials outside dev: %v", err)
 	}
-	if _, err := New([]string{"http://es:9200"}, nil, true); err != nil {
-		t.Errorf("dev may use plain http without a key: %v", err)
+	if _, err := New([]string{"http://es:9200"}, nil, nil, true); err != nil {
+		t.Errorf("dev may use plain http without credentials: %v", err)
+	}
+	// Exactly one of the pair is refused in EVERY environment, dev included: never a fall back to no auth.
+	for _, allow := range []bool{false, true} {
+		for _, half := range [][2]secret.Secret{{user, nil}, {nil, pass}} {
+			_, err := New([]string{"https://es:9200"}, half[0], half[1], allow)
+			if !errors.Is(err, ErrHalfCredentials) {
+				t.Errorf("half credentials (dev=%v): %v", allow, err)
+				continue
+			}
+			if strings.Contains(err.Error(), fakeUser) || strings.Contains(err.Error(), fakePass) {
+				t.Errorf("error carries a credential: %v", err)
+			}
+		}
 	}
 }
 
@@ -38,7 +60,7 @@ func TestNewRefusesInsecureOrIncomplete(t *testing.T) {
 func TestTLSIsVerified(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer srv.Close()
-	c, err := New([]string{srv.URL}, secret.Secret(fakeKey), false)
+	c, err := New([]string{srv.URL}, user, pass, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +69,7 @@ func TestTLSIsVerified(t *testing.T) {
 	}
 }
 
-func TestAPIKeyHeaderFailoverAndErrorWithoutReason(t *testing.T) {
+func TestBasicAuthHeaderFailoverAndErrorWithoutReason(t *testing.T) {
 	var gotAuth, gotPath string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth, gotPath = r.Header.Get("Authorization"), r.URL.RequestURI()
@@ -60,7 +82,7 @@ func TestAPIKeyHeaderFailoverAndErrorWithoutReason(t *testing.T) {
 	}))
 	defer srv.Close()
 	// The first node is dead: the client fails over.
-	c, err := New([]string{"http://127.0.0.1:1", srv.URL}, secret.Secret(fakeKey), true)
+	c, err := New([]string{"http://127.0.0.1:1", srv.URL}, user, pass, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +92,10 @@ func TestAPIKeyHeaderFailoverAndErrorWithoutReason(t *testing.T) {
 			t.Fatalf("count = %d, %v", n, err)
 		}
 	}
-	if gotAuth != "ApiKey "+fakeKey {
-		t.Errorf("Authorization = %q", gotAuth)
+	// HTTP Basic, never an ApiKey header (owner 17/10/2026).
+	wantAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fakeUser+":"+fakePass))
+	if gotAuth != wantAuth || strings.HasPrefix(gotAuth, "ApiKey") {
+		t.Errorf("Authorization header is not HTTP Basic of the configured pair")
 	}
 	if !strings.Contains(gotPath, "routing=T1") {
 		t.Errorf("routing not sent: %s", gotPath)
@@ -108,7 +132,7 @@ func TestEnsureIndexAndMeta(t *testing.T) {
 		}
 	}))
 	defer srv.Close()
-	c, _ := New([]string{srv.URL}, nil, true)
+	c, _ := New([]string{srv.URL}, nil, nil, true)
 	ctx := context.Background()
 	ok, err := c.EnsureIndex(ctx, "idx", map[string]any{"mappings": map[string]any{"_meta": map[string]any{"fp": "a"}}})
 	if err != nil || !ok {
@@ -138,7 +162,7 @@ func TestBulkPartialFailureNamesCountOnly(t *testing.T) {
 		_, _ = io.WriteString(w, `{"errors":true,"items":[{"index":{"status":201}},{"index":{"status":400,"error":{"type":"strict_dynamic_mapping_exception","reason":"x Nguyễn"}}}]}`)
 	}))
 	defer srv.Close()
-	c, _ := New([]string{srv.URL}, nil, true)
+	c, _ := New([]string{srv.URL}, nil, nil, true)
 	err := c.Bulk(context.Background(), "idx", []BulkIndex{{ID: "a", Doc: map[string]any{}}, {ID: "b", Doc: map[string]any{}}})
 	if err == nil || !strings.Contains(err.Error(), "1 of 2") || strings.Contains(err.Error(), "Nguyễn") {
 		t.Errorf("bulk error = %v", err)
@@ -151,7 +175,7 @@ func TestDeleteDocAbsentIsSuccess(t *testing.T) {
 		_, _ = io.WriteString(w, `{"result":"not_found"}`)
 	}))
 	defer srv.Close()
-	c, _ := New([]string{srv.URL}, nil, true)
+	c, _ := New([]string{srv.URL}, nil, nil, true)
 	if err := c.DeleteDoc(context.Background(), "idx", "a", "T"); err != nil {
 		t.Errorf("deleting an absent document: %v", err)
 	}

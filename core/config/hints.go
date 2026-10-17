@@ -298,11 +298,18 @@ var envHints = map[string]envHint{
 		place:   inConfigMap,
 		shape:   "https://<nút 1>:9200,https://<nút 2>:9200",
 	},
-	"ELASTICSEARCH_API_KEY": {
-		meaning: "API key xác thực tới Elasticsearch — index chứa nội dung phản ánh là dữ liệu cá nhân.",
-		source:  "Tạo trong Elasticsearch (POST /_security/api_key), chỉ quyền trên index có tiền tố của môi trường này.",
+	"ELASTICSEARCH_USERNAME": {
+		meaning: "Tên người dùng Elasticsearch (xác thực Basic, đi cặp với ELASTICSEARCH_PASSWORD) — chỉ mục danh bạ là dữ liệu cá nhân.",
+		source: "Tạo user RIÊNG cho môi trường này, vai trò chỉ trên chỉ mục <ELASTICSEARCH_INDEX_PREFIX>-citizen-contacts " +
+			"(create_index, index, delete, read, view_index_metadata, manage); KHÔNG dùng user elastic. Dev và prod là hai user khác nhau.",
+		place: inSecret,
+		shape: "<tên user do người vận hành Elasticsearch tạo>",
+	},
+	"ELASTICSEARCH_PASSWORD": {
+		meaning: "Mật khẩu của ELASTICSEARCH_USERNAME — có một thì phải có cả hai.",
+		source:  "Đặt khi tạo user đó trong Elasticsearch. Đổi mật khẩu = sửa Secret rồi khởi động lại identity; dữ liệu không mất.",
 		place:   inSecret,
-		shape:   "<api key do Elasticsearch cấp>",
+		shape:   "<mật khẩu của user đó>",
 	},
 	"ELASTICSEARCH_INDEX_PREFIX": {
 		meaning: "Tiền tố tên index của môi trường này.",

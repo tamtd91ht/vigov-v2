@@ -54,6 +54,9 @@ thuộc tính thì gửi tin zns, sms có thể map nội dung theo thuộc tín
 - Chuỗi con 3 chữ số chỉ có 1.000 giá trị: băm có khoá chặn đoán ngược, không chặn được thống kê tần suất
   trong một xã — chấp nhận theo thiết kế chủ dự án.
 - Cùng một cụm ES cho dev và prod thì tên chỉ mục phải khác nhau theo `ELASTICSEARCH_INDEX_PREFIX` (vận hành đặt).
+- Xác thực ES bằng **user + mật khẩu** cấu hình trên k8s (`ELASTICSEARCH_USERNAME` / `_PASSWORD`, Secret
+  `identity-secrets`), **không** dùng API key (chủ dự án 17/10/2026): mỗi môi trường một user riêng chỉ có quyền trên
+  chỉ mục danh bạ; có một thiếu một là identity không khởi động.
 
 ## Còn mở
 

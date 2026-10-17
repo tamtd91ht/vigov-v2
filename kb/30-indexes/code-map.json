@@ -4476,11 +4476,11 @@
     },
     "config.CanhBao": {
       "kind": "func",
-      "at": "core/config/config.go:995"
+      "at": "core/config/config.go:1014"
     },
     "config.CauPhienBat": {
       "kind": "func",
-      "at": "core/config/config.go:1204"
+      "at": "core/config/config.go:1223"
     },
     "config.CheckBucketPrefix": {
       "kind": "func",
@@ -4526,25 +4526,29 @@
       "kind": "func",
       "at": "core/config/accessors.go:64"
     },
-    "config.ElasticsearchAPIKey": {
-      "kind": "func",
-      "at": "core/config/accessors.go:249"
-    },
     "config.ElasticsearchAddrs": {
       "kind": "func",
       "at": "core/config/accessors.go:243"
     },
     "config.ElasticsearchIndexPrefix": {
       "kind": "func",
+      "at": "core/config/accessors.go:261"
+    },
+    "config.ElasticsearchPassword": {
+      "kind": "func",
       "at": "core/config/accessors.go:255"
+    },
+    "config.ElasticsearchUsername": {
+      "kind": "func",
+      "at": "core/config/accessors.go:249"
     },
     "config.Error": {
       "kind": "func",
-      "at": "core/config/uses.go:260"
+      "at": "core/config/uses.go:261"
     },
     "config.Format": {
       "kind": "func",
-      "at": "core/config/accessors.go:370"
+      "at": "core/config/accessors.go:378"
     },
     "config.GRPCCallerKey": {
       "kind": "func",
@@ -4560,7 +4564,7 @@
     },
     "config.Groups": {
       "kind": "func",
-      "at": "core/config/uses.go:194"
+      "at": "core/config/uses.go:195"
     },
     "config.IdentityAdminSeedPassword": {
       "kind": "func",
@@ -4580,11 +4584,11 @@
     },
     "config.Khoa": {
       "kind": "type",
-      "at": "core/config/config.go:609"
+      "at": "core/config/config.go:611"
     },
     "config.KhoaKyBytes": {
       "kind": "func",
-      "at": "core/config/config.go:1195"
+      "at": "core/config/config.go:1214"
     },
     "config.ListenAddr": {
       "kind": "func",
@@ -4592,11 +4596,11 @@
     },
     "config.Load": {
       "kind": "func",
-      "at": "core/config/config.go:630"
+      "at": "core/config/config.go:634"
     },
     "config.LogValue": {
       "kind": "func",
-      "at": "core/config/accessors.go:375"
+      "at": "core/config/accessors.go:383"
     },
     "config.MalwareScanner": {
       "kind": "type",
@@ -4604,7 +4608,7 @@
     },
     "config.MarshalJSON": {
       "kind": "func",
-      "at": "core/config/accessors.go:378"
+      "at": "core/config/accessors.go:386"
     },
     "config.MiniAppProfileCode": {
       "kind": "func",
@@ -4676,7 +4680,7 @@
     },
     "config.Redacted": {
       "kind": "func",
-      "at": "core/config/config.go:1067"
+      "at": "core/config/config.go:1086"
     },
     "config.RedisDSN": {
       "kind": "func",
@@ -4704,7 +4708,7 @@
     },
     "config.String": {
       "kind": "func",
-      "at": "core/config/uses.go:156"
+      "at": "core/config/uses.go:157"
     },
     "config.TenantCacheTTL": {
       "kind": "func",
@@ -4716,11 +4720,11 @@
     },
     "config.Usage": {
       "kind": "type",
-      "at": "core/config/uses.go:165"
+      "at": "core/config/uses.go:166"
     },
     "config.Uses": {
       "kind": "func",
-      "at": "core/config/uses.go:171"
+      "at": "core/config/uses.go:172"
     },
     "config.UsesSASL": {
       "kind": "func",
@@ -15520,11 +15524,11 @@
     },
     "search.Bulk": {
       "kind": "func",
-      "at": "core/search/search.go:332"
+      "at": "core/search/search.go:341"
     },
     "search.BulkIndex": {
       "kind": "type",
-      "at": "core/search/search.go:324"
+      "at": "core/search/search.go:333"
     },
     "search.BulkUpsert": {
       "kind": "func",
@@ -15536,7 +15540,7 @@
     },
     "search.Client": {
       "kind": "type",
-      "at": "core/search/search.go:75"
+      "at": "core/search/search.go:78"
     },
     "search.Count": {
       "kind": "func",
@@ -15544,7 +15548,7 @@
     },
     "search.DeleteByQuery": {
       "kind": "func",
-      "at": "core/search/search.go:316"
+      "at": "core/search/search.go:325"
     },
     "search.DeleteCommune": {
       "kind": "func",
@@ -15552,7 +15556,7 @@
     },
     "search.DeleteDoc": {
       "kind": "func",
-      "at": "core/search/search.go:260"
+      "at": "core/search/search.go:269"
     },
     "search.DeleteEverything": {
       "kind": "func",
@@ -15564,15 +15568,15 @@
     },
     "search.EnsureIndex": {
       "kind": "func",
-      "at": "core/search/search.go:204"
+      "at": "core/search/search.go:213"
     },
     "search.Error": {
       "kind": "func",
-      "at": "core/search/search.go:61"
+      "at": "core/search/search.go:64"
     },
     "search.Hit": {
       "kind": "type",
-      "at": "core/search/search.go:269"
+      "at": "core/search/search.go:278"
     },
     "search.IndexName": {
       "kind": "func",
@@ -15580,11 +15584,11 @@
     },
     "search.IsStatus": {
       "kind": "func",
-      "at": "core/search/search.go:69"
+      "at": "core/search/search.go:72"
     },
     "search.Meta": {
       "kind": "func",
-      "at": "core/search/search.go:225"
+      "at": "core/search/search.go:234"
     },
     "search.Name": {
       "kind": "func",
@@ -15608,11 +15612,11 @@
     },
     "search.PutDoc": {
       "kind": "func",
-      "at": "core/search/search.go:254"
+      "at": "core/search/search.go:263"
     },
     "search.PutMeta": {
       "kind": "func",
-      "at": "core/search/search.go:248"
+      "at": "core/search/search.go:257"
     },
     "search.Query": {
       "kind": "type",
@@ -15632,7 +15636,7 @@
     },
     "search.SearchResult": {
       "kind": "type",
-      "at": "core/search/search.go:275"
+      "at": "core/search/search.go:284"
     },
     "search.Unindex": {
       "kind": "func",

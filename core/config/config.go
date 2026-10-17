@@ -76,7 +76,7 @@
 //	KAFKA_EVENT_SASL_MECHANISM            ConfigMap  KafkaEvent             required only WITH the credentials
 //	SEARCH_HASH_KEY                       Secret     SearchHash             refused in staging/prod; dev: directory ES search off
 //	RABBITMQ_DSN, RABBITMQ_EXCHANGE       Secret/CM  RabbitMQ              refused in staging/prod once declared
-//	ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX   Elasticsearch          refused in staging/prod once declared
+//	ELASTICSEARCH_ADDRS / _USERNAME / _PASSWORD / _INDEX_PREFIX   Elasticsearch   refused in staging/prod once declared; user/pass both or neither
 //
 // An UNDECLARED group is not read at all, in any environment — see Group (uses.go). Which service
 // declares which group is each main's `configUses`; a malformed value of a declared group is
@@ -218,16 +218,18 @@ type Config struct {
 	// commune, and that it should be added when search is measured slow rather than assumed so.
 	elasticsearchAddrs []string
 
-	// ElasticsearchAPIKey authenticates to the search cluster.
+	// ElasticsearchUsername / ElasticsearchPassword authenticate to the search cluster with HTTP
+	// Basic auth — username + password, NOT an API key (owner, 17/10/2026; ADR 0101 §Hệ quả).
 	//
-	// k8s SECRET: the bytes ARE the credential, so the type has to refuse to render them — same
-	// reason as GRPCCallerKey. An API key differs from a DSN in that there is no host inside it
-	// worth keeping readable, so it collapses to *** on every path.
+	// k8s SECRET, both: the password IS the credential; the username is not on its own, but it
+	// sits in the same Secret and is printed by nothing (the KAFKA_EVENT_USERNAME reasoning).
 	//
-	// Required in staging/prod with the rest of the group: an index holding petition contents
-	// holds citizen personal data (rule 3), and "reachable without authentication" is not a
-	// default anybody should inherit. It used to be a CanhBao warning.
-	elasticsearchAPIKey secret.Secret
+	// Required in staging/prod with the rest of the group: the index holds citizens' names and
+	// contact data (rule 3), and "reachable without authentication" is not a default anybody
+	// should inherit. In dev both may be empty; exactly one set is refused at Load — a half pair
+	// would otherwise connect unauthenticated while the operator believes it authenticates.
+	elasticsearchUsername secret.Secret
+	elasticsearchPassword secret.Secret
 
 	// ElasticsearchIndexPrefix namespaces this deployment's indices.
 	//
@@ -615,6 +617,8 @@ var (
 	ErrProxyTinCayHong    = errors.New("config: TRUSTED_PROXY_CIDRS không hợp lệ")
 	ErrCauPhienNuaVoi     = errors.New("config: cầu phiên công dân cấu hình nửa vời")
 	ErrThoiHanPhienHong   = errors.New("config: CITIZEN_SESSION_TTL không hợp lệ")
+	// ErrElasticsearchCredentialsHalf is exactly one of ELASTICSEARCH_USERNAME / _PASSWORD set.
+	ErrElasticsearchCredentialsHalf = errors.New("config: ELASTICSEARCH_USERNAME/PASSWORD cấu hình nửa vời")
 )
 
 // Load reads the configuration for one service: the base variables, plus the groups in uses.
@@ -790,11 +794,12 @@ func Load(serviceName string, uses Usage) (Config, error) {
 
 	// ---- RabbitMQ / Elasticsearch (ADR 0010; no service declares them yet) ----------------
 	// Required in prod once declared — the service that declares one is the one that connects to
-	// it. An Elasticsearch without an API key would hold petition contents unguarded (rule 3).
+	// it. An Elasticsearch without credentials would hold citizens' data unguarded (rule 3).
 	rabbitDSN := r.read("RABBITMQ_DSN", os.Getenv("RABBITMQ_DSN"), requiredInProd, RabbitMQ)
 	rabbitExchange := r.read("RABBITMQ_EXCHANGE", os.Getenv("RABBITMQ_EXCHANGE"), requiredInProd, RabbitMQ)
 	esAddrs := r.read("ELASTICSEARCH_ADDRS", os.Getenv("ELASTICSEARCH_ADDRS"), requiredInProd, Elasticsearch)
-	esKey := r.read("ELASTICSEARCH_API_KEY", os.Getenv("ELASTICSEARCH_API_KEY"), requiredInProd, Elasticsearch)
+	esUser := r.read("ELASTICSEARCH_USERNAME", os.Getenv("ELASTICSEARCH_USERNAME"), requiredInProd, Elasticsearch)
+	esPass := r.read("ELASTICSEARCH_PASSWORD", os.Getenv("ELASTICSEARCH_PASSWORD"), requiredInProd, Elasticsearch)
 	esPrefix := r.read("ELASTICSEARCH_INDEX_PREFIX", os.Getenv("ELASTICSEARCH_INDEX_PREFIX"), requiredInProd, Elasticsearch)
 
 	// The first line is the one log searches and alerts match on, so it keeps its shape; the lines
@@ -894,6 +899,19 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		return Config{}, fmt.Errorf("%w (service %s)", err, serviceName)
 	}
 
+	// Elasticsearch credentials: both or neither (neither is reachable in dev only — prod already
+	// refused above). Named in the error, never with a value (rule 8).
+	switch {
+	case esUser != "" && esPass == "":
+		return Config{}, fmt.Errorf("%w: ELASTICSEARCH_USERNAME có giá trị nhưng ELASTICSEARCH_PASSWORD trống — "+
+			"đặt cả hai (trong Secret identity-secrets) hoặc để trống cả hai (chỉ ở dev) (service %s)",
+			ErrElasticsearchCredentialsHalf, serviceName)
+	case esUser == "" && esPass != "":
+		return Config{}, fmt.Errorf("%w: ELASTICSEARCH_PASSWORD có giá trị nhưng ELASTICSEARCH_USERNAME trống — "+
+			"đặt cả hai (trong Secret identity-secrets) hoặc để trống cả hai (chỉ ở dev) (service %s)",
+			ErrElasticsearchCredentialsHalf, serviceName)
+	}
+
 	// Malformed or short is fatal, by name and never with the value: a key the hashes cannot trust.
 	searchHashKey, err := parseSearchHashKey(searchHashRaw)
 	if err != nil {
@@ -967,7 +985,8 @@ func Load(serviceName string, uses Usage) (Config, error) {
 		rabbitMQDSN:              secret.DSN(rabbitDSN),
 		rabbitMQExchange:         rabbitExchange,
 		elasticsearchAddrs:       danhSach(esAddrs),
-		elasticsearchAPIKey:      secret.Secret(esKey),
+		elasticsearchUsername:    secret.Secret(esUser),
+		elasticsearchPassword:    secret.Secret(esPass),
 		elasticsearchIndexPrefix: esPrefix,
 	}
 
@@ -1007,9 +1026,9 @@ func (c Config) CanhBao() []string {
 		ra = append(ra, "RABBITMQ_EXCHANGE có giá trị nhưng RABBITMQ_DSN trống — "+
 			"tác vụ nền không có chỗ để gửi; kiểm lại tên khoá trong k8s Secret")
 	}
-	if c.uses.has(Elasticsearch) && !c.elasticsearchAPIKey.Rong() && len(c.elasticsearchAddrs) == 0 {
-		ra = append(ra, "ELASTICSEARCH_API_KEY có giá trị nhưng ELASTICSEARCH_ADDRS trống — "+
-			"một khoá đang nằm trong môi trường của tiến trình không bao giờ dùng tới nó")
+	if c.uses.has(Elasticsearch) && !c.elasticsearchUsername.Rong() && len(c.elasticsearchAddrs) == 0 {
+		ra = append(ra, "ELASTICSEARCH_USERNAME/ELASTICSEARCH_PASSWORD có giá trị nhưng ELASTICSEARCH_ADDRS trống — "+
+			"một mật khẩu đang nằm trong môi trường của tiến trình không bao giờ dùng tới nó")
 	}
 	if c.uses.has(ObjectStore) {
 		// Object storage half-configured: the same "typo'd key" shape. Silent when nothing is set.

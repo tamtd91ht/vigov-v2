@@ -1,5 +1,5 @@
 // Package search is the Elasticsearch client of the platform (ADR 0010: Elasticsearch serves SEARCH only,
-// never a reported figure), on the existing config group ELASTICSEARCH_ADDRS / _API_KEY / _INDEX_PREFIX.
+// never a reported figure), on the config group ELASTICSEARCH_ADDRS / _USERNAME / _PASSWORD / _INDEX_PREFIX.
 //
 // PLAIN net/http, NOT github.com/elastic/go-elasticsearch. The service needs eight calls (create an index,
 // read and write its metadata, put / delete one document, search, count, delete-by-query, bulk), each one
@@ -13,7 +13,8 @@
 //     http:// address is refused unless the caller allows it, which only dev does.
 //   - Every node of ELASTICSEARCH_ADDRS is kept (rule 11 invariant 5); requests go round-robin and fail over
 //     to the next node on a network error. An HTTP answer, even a 5xx, is ES's answer and is returned.
-//   - The API key travels in the Authorization header and nowhere else; secret.Secret keeps it out of logs.
+//   - Username + password travel as HTTP Basic auth in the Authorization header and nowhere else (owner
+//     17/10/2026: user/pass, not an API key); secret.Secret keeps both out of logs and errors.
 //   - NO DOCUMENT, NO QUERY AND NO RESPONSE BODY IS EVER LOGGED OR PUT IN AN ERROR: documents carry citizens'
 //     names, and an ES error `reason` can quote a field value. An error names the HTTP status and ES's
 //     error TYPE only.
@@ -48,8 +49,10 @@ var (
 	ErrNotConfigured = errors.New("search: ELASTICSEARCH_ADDRS is not set")
 	// ErrInsecureAddress is an http:// node outside dev, or an address that is not a URL.
 	ErrInsecureAddress = errors.New("search: ELASTICSEARCH_ADDRS entry must be an https URL")
-	// ErrNoAPIKey is a production client without ELASTICSEARCH_API_KEY.
-	ErrNoAPIKey = errors.New("search: ELASTICSEARCH_API_KEY is not set")
+	// ErrNoCredentials is a client outside dev without ELASTICSEARCH_USERNAME / ELASTICSEARCH_PASSWORD.
+	ErrNoCredentials = errors.New("search: ELASTICSEARCH_USERNAME and ELASTICSEARCH_PASSWORD are not set")
+	// ErrHalfCredentials is exactly one of the two set: never a silent fall back to no authentication.
+	ErrHalfCredentials = errors.New("search: set both ELASTICSEARCH_USERNAME and ELASTICSEARCH_PASSWORD, or neither (dev only)")
 )
 
 // Error is a non-2xx answer: the status and ES's error type ("index_not_found_exception"), never the reason.
@@ -73,15 +76,17 @@ func IsStatus(err error, status int) bool {
 
 // Client talks to one Elasticsearch cluster. Safe for concurrent use.
 type Client struct {
-	addrs  []string
-	apiKey secret.Secret
-	hc     *http.Client
-	next   atomic.Uint32
+	addrs    []string
+	username secret.Secret
+	password secret.Secret
+	hc       *http.Client
+	next     atomic.Uint32
 }
 
-// New builds the client. allowPlainHTTP is true in dev ONLY: an http:// node sends the API key and every
-// document in the clear. The key is required whenever plain http is not allowed.
-func New(addrs []string, apiKey secret.Secret, allowPlainHTTP bool) (*Client, error) {
+// New builds the client. allowPlainHTTP is true in dev ONLY: an http:// node sends the credentials and
+// every document in the clear. Username and password are required whenever plain http is not allowed;
+// exactly one of them is refused in every environment.
+func New(addrs []string, username, password secret.Secret, allowPlainHTTP bool) (*Client, error) {
 	if len(addrs) == 0 {
 		return nil, ErrNotConfigured
 	}
@@ -97,13 +102,17 @@ func New(addrs []string, apiKey secret.Secret, allowPlainHTTP bool) (*Client, er
 		}
 		clean = append(clean, strings.TrimRight(u.Scheme+"://"+u.Host+u.Path, "/"))
 	}
-	if apiKey.Rong() && !allowPlainHTTP {
-		return nil, ErrNoAPIKey
+	if username.Rong() != password.Rong() {
+		return nil, ErrHalfCredentials
+	}
+	if username.Rong() && !allowPlainHTTP {
+		return nil, ErrNoCredentials
 	}
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	// Verified against the system roots — never InsecureSkipVerify (rule 13 #1).
 	tr.TLSClientConfig = &tls.Config{MinVersion: tls.VersionTLS12}
-	return &Client{addrs: clean, apiKey: apiKey, hc: &http.Client{Transport: tr, Timeout: RequestTimeout}}, nil
+	return &Client{addrs: clean, username: username, password: password,
+		hc: &http.Client{Transport: tr, Timeout: RequestTimeout}}, nil
 }
 
 // do sends one request, trying each node once from the round-robin position. ndjson selects the bulk
@@ -128,8 +137,8 @@ func (c *Client) do(ctx context.Context, method, path string, body []byte, ndjso
 				req.Header.Set("Content-Type", "application/json")
 			}
 		}
-		if !c.apiKey.Rong() {
-			req.Header.Set("Authorization", "ApiKey "+string(c.apiKey.Lo()))
+		if !c.username.Rong() {
+			req.SetBasicAuth(string(c.username.Lo()), string(c.password.Lo()))
 		}
 		resp, err := c.hc.Do(req)
 		if err != nil {

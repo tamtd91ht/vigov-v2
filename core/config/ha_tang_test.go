@@ -29,7 +29,8 @@ import (
 // that this is not a real value (rule 8, forbidden #1).
 const (
 	amqpGia   = "amqp://vigov:khong-phai-mat-khau-that@rabbit.noi-bo:5672/vigov"
-	esKhoaGia = "khoa-api-elastic-GIA-KHONG-PHAI-KHOA-THAT"
+	esUserGia = "vigov-test-citizen-contacts"
+	esPassGia = "mat-khau-elastic-GIA-KHONG-PHAI-THAT"
 )
 
 // nenChay is the smallest environment in which Load succeeds AND CanhBao is empty, so a test
@@ -62,7 +63,7 @@ func TestHaTangTuyChonVangMatVanKhoiDongDuoc(t *testing.T) {
 			datMoiTruong(t, nenChay(env))
 			for _, bien := range []string{
 				"RABBITMQ_DSN", "RABBITMQ_EXCHANGE",
-				"ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY", "ELASTICSEARCH_INDEX_PREFIX",
+				"ELASTICSEARCH_ADDRS", "ELASTICSEARCH_USERNAME", "ELASTICSEARCH_PASSWORD", "ELASTICSEARCH_INDEX_PREFIX",
 			} {
 				t.Setenv(bien, "")
 			}
@@ -85,7 +86,7 @@ func TestHaTangTuyChonVangMatVanKhoiDongDuoc(t *testing.T) {
 	datMoiTruong(t, nenChay(EnvDev))
 	for _, bien := range []string{
 		"RABBITMQ_DSN", "RABBITMQ_EXCHANGE",
-		"ELASTICSEARCH_ADDRS", "ELASTICSEARCH_API_KEY", "ELASTICSEARCH_INDEX_PREFIX",
+		"ELASTICSEARCH_ADDRS", "ELASTICSEARCH_USERNAME", "ELASTICSEARCH_PASSWORD", "ELASTICSEARCH_INDEX_PREFIX",
 	} {
 		t.Setenv(bien, "")
 	}
@@ -96,7 +97,7 @@ func TestHaTangTuyChonVangMatVanKhoiDongDuoc(t *testing.T) {
 	if cfg.RabbitMQDSN() != "" || cfg.RabbitMQExchange() != "" {
 		t.Errorf("RabbitMQ phải rỗng chứ không đoán: %q %q", cfg.RabbitMQDSN(), cfg.RabbitMQExchange())
 	}
-	if len(cfg.ElasticsearchAddrs()) != 0 || !cfg.ElasticsearchAPIKey().Rong() ||
+	if len(cfg.ElasticsearchAddrs()) != 0 || !cfg.ElasticsearchUsername().Rong() || !cfg.ElasticsearchPassword().Rong() ||
 		cfg.ElasticsearchIndexPrefix() != "" {
 		t.Errorf("Elasticsearch phải rỗng chứ không đoán: %v", cfg.ElasticsearchAddrs())
 	}
@@ -112,7 +113,8 @@ func TestHaTangDocTuMoiTruong(t *testing.T) {
 		"RABBITMQ_EXCHANGE":    " vigov.tac-vu \n",
 		// Trailing comma and stray spaces: what a hand-edited ConfigMap actually contains.
 		"ELASTICSEARCH_ADDRS":        " http://es-1.noi-bo:9200 , http://es-2.noi-bo:9200 ,,",
-		"ELASTICSEARCH_API_KEY":      "  " + esKhoaGia + "\n",
+		"ELASTICSEARCH_USERNAME":     " " + esUserGia + "\n",
+		"ELASTICSEARCH_PASSWORD":     "  " + esPassGia + "\n",
 		"ELASTICSEARCH_INDEX_PREFIX": " vigov \n",
 	})
 
@@ -128,8 +130,8 @@ func TestHaTangDocTuMoiTruong(t *testing.T) {
 	if cfg.RabbitMQExchange() != "vigov.tac-vu" {
 		t.Errorf("RabbitMQExchange = %q", cfg.RabbitMQExchange())
 	}
-	if string(cfg.ElasticsearchAPIKey().Lo()) != esKhoaGia {
-		t.Error("ElasticsearchAPIKey đọc sai — client sẽ bị cụm tìm kiếm từ chối")
+	if string(cfg.ElasticsearchUsername().Lo()) != esUserGia || string(cfg.ElasticsearchPassword().Lo()) != esPassGia {
+		t.Error("ElasticsearchUsername/Password đọc sai — client sẽ bị cụm tìm kiếm từ chối")
 	}
 	if cfg.ElasticsearchIndexPrefix() != "vigov" {
 		t.Errorf("ElasticsearchIndexPrefix = %q", cfg.ElasticsearchIndexPrefix())
@@ -236,16 +238,17 @@ func TestRabbitMQDSNKhongLoMatKhau(t *testing.T) {
 	}
 }
 
-func TestElasticsearchAPIKeyKhongHienRaKhiGhiLog(t *testing.T) {
-	// An API key is key material, not a URL: there is no host inside worth keeping readable, so
-	// every rendering path must collapse it to *** — including the NUMERIC verbs, which fmt
-	// never routes through String(). secret.Secret.Format is what closes those.
+func TestElasticsearchCredentialsNeverRenderedInLogs(t *testing.T) {
+	// The password is key material: every rendering path must collapse it to *** — including the
+	// NUMERIC verbs, which fmt never routes through String(). secret.Secret.Format closes those. The
+	// username sits in the same Secret and is held to the same rule.
 	datMoiTruong(t, map[string]string{
-		"DATABASE_DSN":          dsnGia,
-		"ENV":                   EnvProd,
-		"SESSION_SIGNING_KEYS":  khoaGia,
-		"ELASTICSEARCH_ADDRS":   "http://es-1.noi-bo:9200",
-		"ELASTICSEARCH_API_KEY": esKhoaGia,
+		"DATABASE_DSN":           dsnGia,
+		"ENV":                    EnvProd,
+		"SESSION_SIGNING_KEYS":   khoaGia,
+		"ELASTICSEARCH_ADDRS":    "https://es-1.noi-bo:9200",
+		"ELASTICSEARCH_USERNAME": esUserGia,
+		"ELASTICSEARCH_PASSWORD": esPassGia,
 		// Declared in prod means every variable of the group, so the prefix too.
 		"ELASTICSEARCH_INDEX_PREFIX": "vigov",
 	})
@@ -262,34 +265,99 @@ func TestElasticsearchAPIKeyKhongHienRaKhiGhiLog(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewJSONHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	log.Info("khởi động", "cfg", cfg)
-	log.Info("chỉ khoá", "k", cfg.ElasticsearchAPIKey())
+	log.Info("chỉ thông tin xác thực", "u", cfg.ElasticsearchUsername(), "p", cfg.ElasticsearchPassword())
 	log.With("cfg", cfg.Redacted()).Info("kèm sẵn")
 
-	ra := []string{
-		fmt.Sprintf("%v", cfg.ElasticsearchAPIKey()),
-		fmt.Sprintf("%s", cfg.ElasticsearchAPIKey()),
-		fmt.Sprintf("%q", cfg.ElasticsearchAPIKey()),
-		fmt.Sprintf("%#v", cfg.ElasticsearchAPIKey()),
-		fmt.Sprintf("%d", cfg.ElasticsearchAPIKey()),
-		fmt.Sprintf("%c", cfg.ElasticsearchAPIKey()),
-		fmt.Sprintf("%+v", cfg),
-		fmt.Sprintf("%v", cfg.Redacted()),
-		string(tho),
-		buf.String(),
+	var ra []string
+	for _, s := range []any{cfg.ElasticsearchUsername(), cfg.ElasticsearchPassword()} {
+		for _, verb := range []string{"%v", "%s", "%q", "%#v", "%d", "%c"} {
+			ra = append(ra, fmt.Sprintf(verb, s))
+		}
 	}
+	ra = append(ra, fmt.Sprintf("%+v", cfg), fmt.Sprintf("%v", cfg.Redacted()), string(tho), buf.String())
 	for _, r := range ra {
-		if strings.Contains(r, esKhoaGia) {
-			t.Errorf("khoá API Elastic lọt ra nguyên văn: %q", r)
-		}
-		// A key printed as bytes is still the key: a grep of the log pipeline would miss it,
-		// a person reading the line would not.
-		if strings.Contains(r, fmt.Sprintf("%d %d", esKhoaGia[0], esKhoaGia[1])) {
-			t.Errorf("khoá API Elastic lọt ra dưới dạng byte: %q", r)
+		for _, gia := range []string{esUserGia, esPassGia} {
+			if strings.Contains(r, gia) {
+				t.Errorf("thông tin xác thực Elastic lọt ra nguyên văn: %q", r)
+			}
+			// A secret printed as bytes is still the secret.
+			if strings.Contains(r, fmt.Sprintf("%d %d", gia[0], gia[1])) {
+				t.Errorf("thông tin xác thực Elastic lọt ra dưới dạng byte: %q", r)
+			}
 		}
 	}
-	// ...but it must still be reachable for whoever builds the client.
-	if string(cfg.ElasticsearchAPIKey().Lo()) != esKhoaGia {
-		t.Error("Lo() không trả về khoá thật — cụm tìm kiếm sẽ từ chối")
+	// ...but both must still be reachable for whoever builds the client.
+	if string(cfg.ElasticsearchUsername().Lo()) != esUserGia || string(cfg.ElasticsearchPassword().Lo()) != esPassGia {
+		t.Error("Lo() không trả về giá trị thật — cụm tìm kiếm sẽ từ chối")
+	}
+}
+
+// --- the credential pair: both or neither, never one -------------------------------------
+
+func TestElasticsearchCredentialsPairRule(t *testing.T) {
+	cases := []struct {
+		name       string
+		user, pass string
+		wantErr    bool
+	}{
+		{"both", esUserGia, esPassGia, false},
+		{"none", "", "", false},
+		{"username only", esUserGia, "", true},
+		{"password only", "", esPassGia, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			datMoiTruong(t, nenChay(EnvDev))
+			datMoiTruong(t, map[string]string{
+				"ELASTICSEARCH_ADDRS":    "http://localhost:9200",
+				"ELASTICSEARCH_USERNAME": c.user,
+				"ELASTICSEARCH_PASSWORD": c.pass,
+			})
+			cfg, err := Load("identity", Uses(Elasticsearch))
+			if !c.wantErr {
+				if err != nil {
+					t.Fatalf("muốn khởi động được, nhận %v", err)
+				}
+				if cfg.ElasticsearchUsername().Rong() != (c.user == "") {
+					t.Error("username đọc sai")
+				}
+				return
+			}
+			// A half pair would connect unauthenticated while the operator believes it authenticates.
+			if !errors.Is(err, ErrElasticsearchCredentialsHalf) {
+				t.Fatalf("nửa cặp phải bị từ chối khởi động, nhận %v", err)
+			}
+			for _, name := range []string{"ELASTICSEARCH_USERNAME", "ELASTICSEARCH_PASSWORD"} {
+				if !strings.Contains(err.Error(), name) {
+					t.Errorf("thông báo phải gọi tên %s: %v", name, err)
+				}
+			}
+			// Names the variables, never the values (rule 8).
+			if strings.Contains(err.Error(), esUserGia) || strings.Contains(err.Error(), esPassGia) {
+				t.Errorf("thông báo lỗi chứa giá trị bí mật: %v", err)
+			}
+		})
+	}
+}
+
+// Prod requires BOTH (ADR 0057: identity declares the group), refused by name, never with a value.
+func TestElasticsearchProdRequiresBothCredentials(t *testing.T) {
+	for _, missing := range []string{"ELASTICSEARCH_USERNAME", "ELASTICSEARCH_PASSWORD"} {
+		t.Run(missing, func(t *testing.T) {
+			datMoiTruong(t, nenChay(EnvProd))
+			datMoiTruong(t, map[string]string{
+				"ELASTICSEARCH_ADDRS": "https://es-1.noi-bo:9200", "ELASTICSEARCH_INDEX_PREFIX": "vigov",
+				"ELASTICSEARCH_USERNAME": esUserGia, "ELASTICSEARCH_PASSWORD": esPassGia,
+			})
+			t.Setenv(missing, "")
+			_, err := Load("identity", Uses(Elasticsearch))
+			if !errors.Is(err, ErrThieuBienMoiTruong) || !strings.Contains(err.Error(), missing) {
+				t.Fatalf("prod thiếu %s phải bị từ chối và gọi tên biến, nhận %v", missing, err)
+			}
+			if strings.Contains(err.Error(), esUserGia) || strings.Contains(err.Error(), esPassGia) {
+				t.Errorf("thông báo lỗi chứa giá trị bí mật: %v", err)
+			}
+		})
 	}
 }
 
@@ -310,13 +378,14 @@ func TestCanhBaoKhiHaTangCauHinhNuaVoi(t *testing.T) {
 			phaiC: "RABBITMQ_DSN",
 		},
 		{
-			ten:   "khoá API có nhưng địa chỉ trống",
-			moi:   map[string]string{"ELASTICSEARCH_API_KEY": esKhoaGia, "ELASTICSEARCH_ADDRS": ""},
+			ten: "thông tin xác thực có nhưng địa chỉ trống",
+			moi: map[string]string{"ELASTICSEARCH_USERNAME": esUserGia, "ELASTICSEARCH_PASSWORD": esPassGia,
+				"ELASTICSEARCH_ADDRS": ""},
 			phaiC: "ELASTICSEARCH_ADDRS",
 		},
 	}
 	// Dev only: in staging and prod a declared group with an empty variable no longer loads at
-	// all — the case below, which used to be a warning, is now that refusal.
+	// all.
 	for _, c := range cases {
 		t.Run(c.ten, func(t *testing.T) {
 			datMoiTruong(t, nenChay(EnvDev))
@@ -330,20 +399,10 @@ func TestCanhBaoKhiHaTangCauHinhNuaVoi(t *testing.T) {
 			if !strings.Contains(canh, c.phaiC) {
 				t.Errorf("cảnh báo phải gọi đúng tên biến %s, nhận: %q", c.phaiC, canh)
 			}
+			if strings.Contains(canh, esPassGia) || strings.Contains(canh, esUserGia) {
+				t.Errorf("cảnh báo chứa giá trị bí mật: %q", canh)
+			}
 		})
-	}
-
-	// An index holding petition contents is an index holding citizen personal data (rule 3).
-	// Outside dev, a declared Elasticsearch with no API key used to be a warning; it is refused
-	// now, by name, because every variable of a declared group is required there.
-	datMoiTruong(t, nenChay(EnvProd))
-	datMoiTruong(t, map[string]string{
-		"ELASTICSEARCH_ADDRS": "http://es-1.noi-bo:9200", "ELASTICSEARCH_API_KEY": "",
-		"ELASTICSEARCH_INDEX_PREFIX": "vigov",
-	})
-	_, err := Load("reporting", Uses(Elasticsearch))
-	if !errors.Is(err, ErrThieuBienMoiTruong) || !strings.Contains(err.Error(), "ELASTICSEARCH_API_KEY") {
-		t.Errorf("Elastic không xác thực ở prod phải bị từ chối và gọi tên biến, nhận %v", err)
 	}
 }
 
@@ -352,8 +411,9 @@ func TestElasticKhongXacThucODevThiKhongCanhBao(t *testing.T) {
 	// on is a warning that trains people to ignore the list.
 	datMoiTruong(t, nenChay(EnvDev))
 	datMoiTruong(t, map[string]string{
-		"ELASTICSEARCH_ADDRS":   "http://localhost:9200",
-		"ELASTICSEARCH_API_KEY": "",
+		"ELASTICSEARCH_ADDRS":    "http://localhost:9200",
+		"ELASTICSEARCH_USERNAME": "",
+		"ELASTICSEARCH_PASSWORD": "",
 	})
 
 	cfg, err := Load("reporting", Uses(Elasticsearch))

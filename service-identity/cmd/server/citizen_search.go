@@ -55,7 +55,7 @@ func buildCitizenIndex(ctx context.Context, cfg config.Config, log *slog.Logger)
 			"ELASTICSEARCH_ADDRS hoặc SEARCH_HASH_KEY trống — tìm kiếm danh bạ chạy trên PostgreSQL, lọc theo thuộc tính/ngày tạo trả 503, không ghi chỉ mục (ADR 0101)")
 		return nil, nil
 	}
-	client, err := coresearch.New(addrs, cfg.ElasticsearchAPIKey(), cfg.Env == config.EnvDev)
+	client, err := coresearch.New(addrs, cfg.ElasticsearchUsername(), cfg.ElasticsearchPassword(), cfg.Env == config.EnvDev)
 	if err != nil {
 		return nil, fmt.Errorf("identity: Elasticsearch: %w", err)
 	}
@@ -148,7 +148,8 @@ func runReindex(log *slog.Logger, target string) error {
 	if len(cfg.ElasticsearchAddrs()) == 0 || cfg.SearchHashKey().Rong() {
 		return errors.New("dựng lại chỉ mục: ELASTICSEARCH_ADDRS và SEARCH_HASH_KEY phải có giá trị")
 	}
-	client, err := coresearch.New(cfg.ElasticsearchAddrs(), cfg.ElasticsearchAPIKey(), cfg.Env == config.EnvDev)
+	client, err := coresearch.New(cfg.ElasticsearchAddrs(), cfg.ElasticsearchUsername(), cfg.ElasticsearchPassword(),
+		cfg.Env == config.EnvDev)
 	if err != nil {
 		return err
 	}

@@ -245,10 +245,16 @@ func (c Config) ElasticsearchAddrs() []string {
 	return c.elasticsearchAddrs
 }
 
-// ElasticsearchAPIKey is ELASTICSEARCH_API_KEY.
-func (c Config) ElasticsearchAPIKey() secret.Secret {
-	c.require("ElasticsearchAPIKey", Elasticsearch)
-	return c.elasticsearchAPIKey
+// ElasticsearchUsername is ELASTICSEARCH_USERNAME. Empty only in dev, and then so is the password.
+func (c Config) ElasticsearchUsername() secret.Secret {
+	c.require("ElasticsearchUsername", Elasticsearch)
+	return c.elasticsearchUsername
+}
+
+// ElasticsearchPassword is ELASTICSEARCH_PASSWORD. Empty only in dev, and then so is the username.
+func (c Config) ElasticsearchPassword() secret.Secret {
+	c.require("ElasticsearchPassword", Elasticsearch)
+	return c.elasticsearchPassword
 }
 
 // ElasticsearchIndexPrefix is ELASTICSEARCH_INDEX_PREFIX.
@@ -309,7 +315,8 @@ type configView struct {
 	RabbitMQDSN                    secret.DSN
 	RabbitMQExchange               string
 	ElasticsearchAddrs             []string
-	ElasticsearchAPIKey            secret.Secret
+	ElasticsearchUsername          secret.Secret
+	ElasticsearchPassword          secret.Secret
 	ElasticsearchIndexPrefix       string
 }
 
@@ -361,7 +368,8 @@ func (c Config) view() configView {
 		RabbitMQDSN:                    c.rabbitMQDSN,
 		RabbitMQExchange:               c.rabbitMQExchange,
 		ElasticsearchAddrs:             c.elasticsearchAddrs,
-		ElasticsearchAPIKey:            c.elasticsearchAPIKey,
+		ElasticsearchUsername:          c.elasticsearchUsername,
+		ElasticsearchPassword:          c.elasticsearchPassword,
 		ElasticsearchIndexPrefix:       c.elasticsearchIndexPrefix,
 	}
 }

@@ -70,7 +70,8 @@ const (
 	OperatorRealm
 	// RabbitMQ: RABBITMQ_DSN, RABBITMQ_EXCHANGE (ADR 0010).
 	RabbitMQ
-	// Elasticsearch: ELASTICSEARCH_ADDRS, ELASTICSEARCH_API_KEY, ELASTICSEARCH_INDEX_PREFIX.
+	// Elasticsearch: ELASTICSEARCH_ADDRS, ELASTICSEARCH_USERNAME, ELASTICSEARCH_PASSWORD,
+	// ELASTICSEARCH_INDEX_PREFIX.
 	Elasticsearch
 	// CommsClient: COMMS_GRPC_ADDR, GRPC_CALLER_KEY — an automation runner delivering staff
 	// notices into comms' bell inbox (ADR 0058 §3), and platform relaying the operator area's
