@@ -33,7 +33,8 @@ var (
 
 const citizenFieldCols = `code, label, field_type, coalesce(placeholder, ''), coalesce(options::text, ''), ` +
 	`coalesce(number_kind, ''), coalesce(date_pattern, ''), required, show_in_list, sort_order, ` +
-	`created_at, updated_at, retired_at, coalesce(retired_by, ''), coalesce(retire_reason, '')`
+	`created_at, updated_at, retired_at, coalesce(retired_by, ''), coalesce(retire_reason, ''), ` +
+	`display_mode, layout_width`
 
 func scanCitizenField(scan func(...any) error) (domain.CitizenField, error) {
 	var f domain.CitizenField
@@ -41,7 +42,7 @@ func scanCitizenField(scan func(...any) error) (domain.CitizenField, error) {
 	var retired sql.NullTime
 	if err := scan(&f.Code, &f.Label, &typ, &f.Placeholder, &opts, &f.NumberKind, &f.DatePattern,
 		&f.Required, &f.ShowInList, &f.SortOrder, &f.CreatedAt, &f.UpdatedAt, &retired, &f.RetiredBy,
-		&f.RetireReason); err != nil {
+		&f.RetireReason, &f.DisplayMode, &f.LayoutWidth); err != nil {
 		return domain.CitizenField{}, fmt.Errorf("thuộc tính danh bạ: đọc dòng: %w", err)
 	}
 	f.Type = domain.CitizenFieldType(typ)
@@ -132,10 +133,13 @@ func (s *CitizenFieldStore) Insert(ctx context.Context, tx *store.ScopedTx, f do
 		return err
 	}
 	const stmt = `INSERT INTO citizen_field (tenant_id, code, label, field_type, placeholder, options,
-			number_kind, date_pattern, required, show_in_list, sort_order, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, nullif($5, ''), $6::jsonb, nullif($7, ''), nullif($8, ''), $9, $10, $11, $12, $12)`
+			number_kind, date_pattern, required, show_in_list, sort_order, created_at, updated_at,
+			display_mode, layout_width)
+		VALUES ($1, $2, $3, $4, nullif($5, ''), $6::jsonb, nullif($7, ''), nullif($8, ''), $9, $10, $11, $12, $12,
+			$13, $14)`
 	if _, err := tx.Exec(ctx, stmt, string(tx.TenantID()), f.Code, f.Label, string(f.Type), f.Placeholder, opts,
-		f.NumberKind, f.DatePattern, f.Required, f.ShowInList, f.SortOrder, f.CreatedAt); err != nil {
+		f.NumberKind, f.DatePattern, f.Required, f.ShowInList, f.SortOrder, f.CreatedAt,
+		f.DisplayMode, f.LayoutWidth); err != nil {
 		if strings.Contains(err.Error(), "citizen_field_pkey") {
 			return ErrCitizenFieldCodeTaken
 		}
@@ -145,7 +149,8 @@ func (s *CitizenFieldStore) Insert(ctx context.Context, tx *store.ScopedTx, f do
 }
 
 // Update rewrites the editable columns of one field (label, placeholder, options, date_pattern, required,
-// show_in_list) and updated_at. Code and type are not in the statement — the trigger refuses them anyway.
+// show_in_list, display_mode, layout_width) and updated_at. Code and type are not in the statement — the
+// trigger refuses them anyway.
 func (s *CitizenFieldStore) Update(ctx context.Context, tx *store.ScopedTx, f domain.CitizenField) error {
 	if tx == nil {
 		return ErrThieuGiaoDich
@@ -155,10 +160,11 @@ func (s *CitizenFieldStore) Update(ctx context.Context, tx *store.ScopedTx, f do
 		return err
 	}
 	const stmt = `UPDATE citizen_field SET label = $3, placeholder = nullif($4, ''), options = $5::jsonb,
-			date_pattern = nullif($6, ''), required = $7, show_in_list = $8, updated_at = $9
+			date_pattern = nullif($6, ''), required = $7, show_in_list = $8, updated_at = $9,
+			display_mode = $10, layout_width = $11
 		WHERE tenant_id = $1 AND code = $2`
 	res, err := tx.Exec(ctx, stmt, string(tx.TenantID()), f.Code, f.Label, f.Placeholder, opts, f.DatePattern,
-		f.Required, f.ShowInList, f.UpdatedAt)
+		f.Required, f.ShowInList, f.UpdatedAt, f.DisplayMode, f.LayoutWidth)
 	if err != nil {
 		return fmt.Errorf("thuộc tính danh bạ: sửa: %w", err)
 	}

@@ -337,9 +337,12 @@ func auditOf(g *ghiChep) []lenhGhi {
 func TestCitizenFieldCreateAuditsInTheSameTxAndCapsAt50(t *testing.T) {
 	uc, f, g := newFieldsUC(t)
 	ctx := ctxXa(xaThu)
-	got, err := uc.Create(ctx, nguoiThucHienGia(), domain.CitizenFieldInput{Code: "sonhan01", Label: "Số nhân khẩu", Type: domain.FieldNumber, NumberKind: domain.NumberInteger})
+	got, err := uc.Create(ctx, nguoiThucHienGia(), domain.CitizenFieldInput{Code: "sonhan01", Label: "Số nhân khẩu", Type: domain.FieldNumber, NumberKind: domain.NumberInteger, LayoutWidth: domain.LayoutHalf})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if got.LayoutWidth != domain.LayoutHalf || got.DisplayMode != "" {
+		t.Errorf("created field carries width %q mode %q", got.LayoutWidth, got.DisplayMode)
 	}
 	ins := g.tim("FAKE citizen_field insert")
 	e := auditOf(g)
@@ -349,11 +352,43 @@ func TestCitizenFieldCreateAuditsInTheSameTxAndCapsAt50(t *testing.T) {
 	for i := len(f.rows); i < domain.MaxCitizenFieldsLive; i++ {
 		f.rows = append(f.rows, domain.CitizenField{Code: "f" + strings.Repeat("x", 4) + string(rune('a'+i%26)) + string(rune('a'+i/26)), SortOrder: i})
 	}
-	if _, err := uc.Create(ctx, nguoiThucHienGia(), domain.CitizenFieldInput{Code: "thuocmoi", Label: "Mới", Type: domain.FieldSingleText}); !errors.Is(err, ErrCitizenFieldLimit) {
+	if _, err := uc.Create(ctx, nguoiThucHienGia(), domain.CitizenFieldInput{Code: "thuocmoi", Label: "Mới", Type: domain.FieldSingleText, LayoutWidth: domain.LayoutHalf}); !errors.Is(err, ErrCitizenFieldLimit) {
 		t.Errorf("51st live field: %v", err)
 	}
 	if _, err := uc.Create(ctx, nguoiThucHienGia(), domain.CitizenFieldInput{Code: "x", Label: "Mới", Type: domain.FieldSingleText}); !IsCitizenFieldInputError(err) {
 		t.Errorf("bad code must be a 400: %v", err)
+	}
+}
+
+// display_mode / layout_width (migration 0038) are editable, written with the row, and their before/after
+// reach the trail entry of the same transaction.
+func TestCitizenFieldDisplayModeAndWidthEditIsAudited(t *testing.T) {
+	uc, f, g := newFieldsUC(t)
+	ctx := ctxXa(xaThu)
+	f.rows = sampleFields()
+	f.rows[0].DisplayMode, f.rows[0].LayoutWidth = domain.DisplayFull, domain.LayoutHalf
+	dd, full := domain.DisplayDropdown, domain.LayoutFull
+	got, err := uc.Update(ctx, nguoiThucHienGia(), "hongheo1", domain.CitizenFieldPatch{DisplayMode: &dd, LayoutWidth: &full})
+	if err != nil || got.DisplayMode != dd || got.LayoutWidth != full || len(f.updates) != 1 || f.updates[0].DisplayMode != dd || f.updates[0].LayoutWidth != full {
+		t.Fatalf("mode/width edit: %+v %v %+v", got, err, f.updates)
+	}
+	entries := auditOf(g)
+	if len(entries) != 1 || entries[0].tx != g.tim("FAKE citizen_field update").tx {
+		t.Fatalf("entries %v", entries)
+	}
+	var b strings.Builder
+	for _, a := range entries[0].args {
+		if s, ok := a.(string); ok {
+			b.WriteString(s)
+		} else if bs, ok := a.([]byte); ok {
+			b.Write(bs)
+		}
+	}
+	delta := b.String()
+	for _, want := range []string{"display_mode", "layout_width", `"cach_hien_thi":"full"`, `"cach_hien_thi":"dropdown"`, `"do_rong":"half"`, `"do_rong":"full"`} {
+		if !strings.Contains(delta, want) {
+			t.Errorf("mode/width delta lacks %s: %s", want, delta)
+		}
 	}
 }
 

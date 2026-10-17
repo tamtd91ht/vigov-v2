@@ -15,7 +15,7 @@ func optionField() CitizenField {
 }
 
 func TestCheckNewCitizenFieldRules(t *testing.T) {
-	ok := CitizenFieldInput{Code: "ngaysinh", Label: " Ngày  sinh ", Type: FieldDateTime, DatePattern: "dd/MM/yyyy"}
+	ok := CitizenFieldInput{Code: "ngaysinh", Label: " Ngày  sinh ", Type: FieldDateTime, DatePattern: "dd/MM/yyyy", LayoutWidth: LayoutHalf}
 	got, err := CheckNewCitizenField(ok)
 	if err != nil || got.Label != "Ngày sinh" {
 		t.Fatalf("valid field refused or not normalised: %+v %v", got, err)
@@ -45,6 +45,54 @@ func TestCheckNewCitizenFieldRules(t *testing.T) {
 		if _, err := CheckNewCitizenField(c.in); !errors.Is(err, c.want) {
 			t.Errorf("%s: err = %v, want %v", c.name, err, c.want)
 		}
+	}
+}
+
+// Display mode (owner 17/10/2026): full|dropdown exactly for the two choice types, "" for the rest, never
+// defaulted here. Layout width: half|full for every type, never defaulted here.
+func TestCitizenFieldDisplayModeAndLayoutWidth(t *testing.T) {
+	opts := []CitizenFieldOption{{Value: "a", Label: "A"}}
+	for _, c := range []struct {
+		name string
+		in   CitizenFieldInput
+		want error
+	}{
+		{"combobox full", CitizenFieldInput{Type: FieldCombobox, Options: opts, DisplayMode: DisplayFull, LayoutWidth: LayoutHalf}, nil},
+		{"singleBox dropdown", CitizenFieldInput{Type: FieldSingleBox, Options: opts, DisplayMode: DisplayDropdown, LayoutWidth: LayoutFull}, nil},
+		{"text no mode, full width", CitizenFieldInput{Type: FieldMultiText, LayoutWidth: LayoutFull}, nil},
+		{"combobox without mode", CitizenFieldInput{Type: FieldCombobox, Options: opts, LayoutWidth: LayoutHalf}, ErrCitizenFieldDisplayMode},
+		{"singleBox unknown mode", CitizenFieldInput{Type: FieldSingleBox, Options: opts, DisplayMode: "list", LayoutWidth: LayoutHalf}, ErrCitizenFieldDisplayMode},
+		{"mode on text", CitizenFieldInput{Type: FieldSingleText, DisplayMode: DisplayFull, LayoutWidth: LayoutHalf}, ErrCitizenFieldDisplayMode},
+		{"mode on number", CitizenFieldInput{Type: FieldNumber, NumberKind: NumberInteger, DisplayMode: DisplayDropdown, LayoutWidth: LayoutHalf}, ErrCitizenFieldDisplayMode},
+		{"no width", CitizenFieldInput{Type: FieldSingleText}, ErrCitizenFieldLayoutWidth},
+		{"unknown width", CitizenFieldInput{Type: FieldSingleText, LayoutWidth: "third"}, ErrCitizenFieldLayoutWidth},
+	} {
+		c.in.Code, c.in.Label = "abcdefgh", "x"
+		if _, err := CheckNewCitizenField(c.in); !errors.Is(err, c.want) && !(c.want == nil && err == nil) {
+			t.Errorf("%s: err = %v, want %v", c.name, err, c.want)
+		}
+	}
+
+	cur := optionField()
+	cur.DisplayMode, cur.LayoutWidth = DisplayFull, LayoutHalf
+	dd, full := DisplayDropdown, LayoutFull
+	got, changed, err := ApplyCitizenFieldPatch(cur, CitizenFieldPatch{DisplayMode: &dd, LayoutWidth: &full})
+	if err != nil || got.DisplayMode != DisplayDropdown || got.LayoutWidth != LayoutFull || strings.Join(changed, ",") != "display_mode,layout_width" {
+		t.Errorf("patch mode+width: %+v %v %v", got, changed, err)
+	}
+	empty, bad := "", "third"
+	if _, _, err := ApplyCitizenFieldPatch(cur, CitizenFieldPatch{DisplayMode: &empty}); !errors.Is(err, ErrCitizenFieldDisplayMode) {
+		t.Errorf("clearing a combobox mode: %v", err)
+	}
+	if _, _, err := ApplyCitizenFieldPatch(cur, CitizenFieldPatch{LayoutWidth: &bad}); !errors.Is(err, ErrCitizenFieldLayoutWidth) {
+		t.Errorf("unknown width: %v", err)
+	}
+	text := CitizenField{Code: "ghichu01", Label: "Ghi chú", Type: FieldSingleText, LayoutWidth: LayoutHalf}
+	if _, _, err := ApplyCitizenFieldPatch(text, CitizenFieldPatch{DisplayMode: &dd}); !errors.Is(err, ErrCitizenFieldDisplayMode) {
+		t.Errorf("mode on text by patch: %v", err)
+	}
+	if _, changed, err := ApplyCitizenFieldPatch(cur, CitizenFieldPatch{}); err != nil || len(changed) != 0 {
+		t.Errorf("absent = unchanged: %v %v", changed, err)
 	}
 }
 

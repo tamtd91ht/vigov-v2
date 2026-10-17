@@ -22,7 +22,7 @@ import (
 //	                                             them); ?include_retired=true adds retired ones and needs
 //	                                             admin.citizen_field (the configuration screen)
 //	POST   /api/v1/citizen-fields                add a field                       201 + the field
-//	PATCH  /api/v1/citizen-fields/{code}         edit label/placeholder/options/…  200 + the field
+//	PATCH  /api/v1/citizen-fields/{code}         edit label/options/display/width… 200 + the field
 //	DELETE /api/v1/citizen-fields/{code}         retire (soft), reason mandatory   204
 //	PUT    /api/v1/citizen-field-order           the whole drag-and-drop order     204
 //
@@ -52,7 +52,10 @@ type citizenFieldOptionWire struct {
 }
 
 // citizenFieldOut is one field. `options` is [] for a type without options; `number_kind` / `date_pattern`
-// are "" where they do not apply; `retired_at` is null for a live field.
+// / `display_mode` are "" where they do not apply; `retired_at` is null for a live field. `display_mode` is
+// "full" (every option on screen: checkboxes for combobox, radios for singleBox) or "dropdown";
+// `layout_width` is "half" (one column of the form's two) or "full" (the whole row) — the form's layout is
+// sort_order plus this width (migration 0038).
 type citizenFieldOut struct {
 	Code        string                   `json:"code"`
 	Label       string                   `json:"label"`
@@ -61,6 +64,8 @@ type citizenFieldOut struct {
 	Options     []citizenFieldOptionWire `json:"options"`
 	NumberKind  string                   `json:"number_kind"`
 	DatePattern string                   `json:"date_pattern"`
+	DisplayMode string                   `json:"display_mode"`
+	LayoutWidth string                   `json:"layout_width"`
 	Required    bool                     `json:"required"`
 	ShowInList  bool                     `json:"show_in_list"`
 	SortOrder   int                      `json:"sort_order"`
@@ -74,6 +79,12 @@ type citizenFieldsOut struct {
 }
 
 // citizenFieldIn is the body of POST: the whole definition.
+//
+// WIRE DEFAULTS, and only here (the domain rule takes one explicit value): an ABSENT `display_mode` is
+// "full" for combobox / singleBox — the list as it was shown before the mode existed (the same value
+// migration 0038 backfilled) — and stays "" for every other type, which is the only value they may hold.
+// An ABSENT `layout_width` is "full" for multiText (a text area) and "half" otherwise — the values 0038's
+// column default and backfill give existing rows. A PRESENT value, "" included, is checked as sent.
 type citizenFieldIn struct {
 	Code        string                   `json:"code"`
 	Label       string                   `json:"label"`
@@ -82,13 +93,34 @@ type citizenFieldIn struct {
 	Options     []citizenFieldOptionWire `json:"options"`
 	NumberKind  string                   `json:"number_kind"`
 	DatePattern string                   `json:"date_pattern"`
+	DisplayMode *string                  `json:"display_mode"`
+	LayoutWidth *string                  `json:"layout_width"`
 	Required    bool                     `json:"required"`
 	ShowInList  bool                     `json:"show_in_list"`
 }
 
+// displayModeAndWidth applies the wire defaults above.
+func (in citizenFieldIn) displayModeAndWidth() (string, string) {
+	t := domain.CitizenFieldType(in.FieldType)
+	mode := ""
+	if in.DisplayMode != nil {
+		mode = *in.DisplayMode
+	} else if t.HasOptions() {
+		mode = domain.DisplayFull
+	}
+	width := domain.LayoutHalf
+	if in.LayoutWidth != nil {
+		width = *in.LayoutWidth
+	} else if t == domain.FieldMultiText {
+		width = domain.LayoutFull
+	}
+	return mode, width
+}
+
 // citizenFieldPatchIn is the body of PATCH: every member optional. `options` is the WHOLE list — every
 // value already defined must still be there (relabel, retire, add; never remove). `code`, `field_type`
-// and `number_kind` are immutable: sending a different value is 400.
+// and `number_kind` are immutable: sending a different value is 400. `display_mode` and `layout_width`
+// are editable; null or absent leaves them unchanged.
 type citizenFieldPatchIn struct {
 	Code        *string                   `json:"code"`
 	Label       *string                   `json:"label"`
@@ -97,6 +129,8 @@ type citizenFieldPatchIn struct {
 	Options     *[]citizenFieldOptionWire `json:"options"`
 	NumberKind  *string                   `json:"number_kind"`
 	DatePattern *string                   `json:"date_pattern"`
+	DisplayMode *string                   `json:"display_mode"`
+	LayoutWidth *string                   `json:"layout_width"`
 	Required    *bool                     `json:"required"`
 	ShowInList  *bool                     `json:"show_in_list"`
 }
@@ -124,8 +158,8 @@ func citizenFieldToOut(f domain.CitizenField) citizenFieldOut {
 	}
 	out := citizenFieldOut{
 		Code: f.Code, Label: f.Label, FieldType: string(f.Type), Placeholder: f.Placeholder, Options: opts,
-		NumberKind: f.NumberKind, DatePattern: f.DatePattern, Required: f.Required, ShowInList: f.ShowInList,
-		SortOrder: f.SortOrder, CreatedAt: f.CreatedAt.UTC(), UpdatedAt: f.UpdatedAt.UTC(),
+		NumberKind: f.NumberKind, DatePattern: f.DatePattern, DisplayMode: f.DisplayMode, LayoutWidth: f.LayoutWidth,
+		Required: f.Required, ShowInList: f.ShowInList, SortOrder: f.SortOrder, CreatedAt: f.CreatedAt.UTC(), UpdatedAt: f.UpdatedAt.UTC(),
 	}
 	if f.RetiredAt != nil {
 		t := f.RetiredAt.UTC()
@@ -176,11 +210,12 @@ func (h *Handler) CreateCitizenField(w http.ResponseWriter, r *http.Request) {
 	if !readCitizenDirectoryBody(w, r, &in) {
 		return
 	}
+	mode, width := in.displayModeAndWidth()
 	// tenant_id: the context's, from Host; the use case opens store.DB.For(ctx).Tx.
 	f, err := h.d.CitizenFields.Create(r.Context(), actor, domain.CitizenFieldInput{
 		Code: in.Code, Label: in.Label, Type: domain.CitizenFieldType(in.FieldType), Placeholder: in.Placeholder,
 		Options: optionsFromWire(in.Options), NumberKind: in.NumberKind, DatePattern: in.DatePattern,
-		Required: in.Required, ShowInList: in.ShowInList,
+		DisplayMode: mode, LayoutWidth: width, Required: in.Required, ShowInList: in.ShowInList,
 	})
 	if err != nil {
 		h.writeCitizenFieldError(w, r, "thêm", err)
@@ -207,7 +242,8 @@ func (h *Handler) UpdateCitizenField(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := domain.CitizenFieldPatch{Label: in.Label, Placeholder: in.Placeholder, Required: in.Required,
-		ShowInList: in.ShowInList, DatePattern: in.DatePattern, NumberKind: in.NumberKind}
+		ShowInList: in.ShowInList, DatePattern: in.DatePattern, NumberKind: in.NumberKind,
+		DisplayMode: in.DisplayMode, LayoutWidth: in.LayoutWidth}
 	if in.FieldType != nil {
 		t := domain.CitizenFieldType(*in.FieldType)
 		p.Type = &t

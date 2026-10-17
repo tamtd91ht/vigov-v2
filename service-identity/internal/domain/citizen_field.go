@@ -55,6 +55,21 @@ const (
 	NumberDecimal = "decimal"
 )
 
+// The two display modes of a combobox / singleBox (owner 17/10/2026, migration 0038): every option on
+// screen (checkboxes for combobox, radios for singleBox), or the options opened from one dropdown. The
+// other types have no mode and carry "".
+const (
+	DisplayFull     = "full"
+	DisplayDropdown = "dropdown"
+)
+
+// The two widths of the contact form's two-column layout (owner 17/10/2026, migration 0038): one column or
+// the whole row. The layout is sort_order plus this width, flowing into two columns — no coordinates.
+const (
+	LayoutHalf = "half"
+	LayoutFull = "full"
+)
+
 // CitizenFieldDatePatterns is the fixed list of display patterns (0036 CHECK citizen_field_date_pattern_valid).
 var CitizenFieldDatePatterns = []string{"dd/MM/yyyy", "dd/MM/yyyy HH:mm", "MM/yyyy", "yyyy"}
 
@@ -106,6 +121,8 @@ var (
 	ErrCitizenFieldReasonMissing   = errors.New("thuộc tính danh bạ: phải nêu lý do ngừng dùng")
 	ErrCitizenFieldReasonTooLong   = errors.New("thuộc tính danh bạ: lý do ngừng dùng quá dài")
 	ErrCitizenFieldOrderMismatch   = errors.New("thuộc tính danh bạ: danh sách sắp xếp phải gồm đúng mọi mã thuộc tính đang dùng, mỗi mã một lần")
+	ErrCitizenFieldLayoutWidth     = errors.New("thuộc tính danh bạ: độ rộng phải là half (nửa hàng) hoặc full (cả hàng)")
+	ErrCitizenFieldDisplayMode     = errors.New("thuộc tính danh bạ: combobox và singleBox phải chọn cách hiển thị full hoặc dropdown; loại khác không có cách hiển thị")
 )
 
 // Value refusals. Each is wrapped with the field's LABEL, never the value.
@@ -133,6 +150,8 @@ type CitizenField struct {
 	Options      []CitizenFieldOption
 	NumberKind   string
 	DatePattern  string
+	DisplayMode  string // DisplayFull | DisplayDropdown for combobox / singleBox, "" otherwise
+	LayoutWidth  string // LayoutHalf | LayoutFull
 	Required     bool
 	ShowInList   bool
 	SortOrder    int
@@ -155,6 +174,11 @@ type CitizenFieldInput struct {
 	Options     []CitizenFieldOption
 	NumberKind  string
 	DatePattern string
+	// Required for combobox / singleBox, "" otherwise. No default HERE: the HTTP create body defaults an
+	// ABSENT mode to "full" for those two types, so this rule sees one explicit value.
+	DisplayMode string
+	// LayoutHalf | LayoutFull, required — likewise defaulted by the HTTP body when absent.
+	LayoutWidth string
 	Required    bool
 	ShowInList  bool
 }
@@ -188,6 +212,12 @@ func CheckNewCitizenField(in CitizenFieldInput) (CitizenFieldInput, error) {
 	if out.Options, err = normalizeOptions(in.Type, in.Options, nil); err != nil {
 		return CitizenFieldInput{}, err
 	}
+	if err := checkDisplayMode(in.Type, in.DisplayMode); err != nil {
+		return CitizenFieldInput{}, err
+	}
+	if err := checkLayoutWidth(in.LayoutWidth); err != nil {
+		return CitizenFieldInput{}, err
+	}
 	for i := range out.Options {
 		out.Options[i].Retired = false
 	}
@@ -203,6 +233,8 @@ type CitizenFieldPatch struct {
 	Required    *bool
 	ShowInList  *bool
 	DatePattern *string
+	DisplayMode *string
+	LayoutWidth *string
 	Type        *CitizenFieldType
 	NumberKind  *string
 }
@@ -241,6 +273,20 @@ func ApplyCitizenFieldPatch(cur CitizenField, p CitizenFieldPatch) (CitizenField
 		}
 		next.DatePattern = *p.DatePattern
 		changed = append(changed, "date_pattern")
+	}
+	if p.DisplayMode != nil && *p.DisplayMode != cur.DisplayMode {
+		if err := checkDisplayMode(cur.Type, *p.DisplayMode); err != nil {
+			return CitizenField{}, nil, err
+		}
+		next.DisplayMode = *p.DisplayMode
+		changed = append(changed, "display_mode")
+	}
+	if p.LayoutWidth != nil && *p.LayoutWidth != cur.LayoutWidth {
+		if err := checkLayoutWidth(*p.LayoutWidth); err != nil {
+			return CitizenField{}, nil, err
+		}
+		next.LayoutWidth = *p.LayoutWidth
+		changed = append(changed, "layout_width")
 	}
 	if p.Options != nil {
 		opts, err := normalizeOptions(cur.Type, *p.Options, cur.Options)
@@ -329,6 +375,29 @@ func checkDatePattern(t CitizenFieldType, p string) error {
 		}
 	}
 	return ErrCitizenFieldDatePattern
+}
+
+// checkDisplayMode: one of the two modes for a type with options, "" for any other (0038 CHECK
+// citizen_field_display_mode_valid).
+func checkDisplayMode(t CitizenFieldType, m string) error {
+	if !t.HasOptions() {
+		if m != "" {
+			return ErrCitizenFieldDisplayMode
+		}
+		return nil
+	}
+	if m != DisplayFull && m != DisplayDropdown {
+		return ErrCitizenFieldDisplayMode
+	}
+	return nil
+}
+
+// checkLayoutWidth: one of the two widths, for every type (0038 CHECK citizen_field_layout_width_valid).
+func checkLayoutWidth(w string) error {
+	if w != LayoutHalf && w != LayoutFull {
+		return ErrCitizenFieldLayoutWidth
+	}
+	return nil
 }
 
 // normalizeOptions validates an option list. `prev` is the stored list on an edit: every value of it must

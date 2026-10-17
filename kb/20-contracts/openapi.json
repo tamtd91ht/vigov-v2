@@ -4064,7 +4064,7 @@
         }
       },
       "post": {
-        "summary": "Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng",
+        "summary": "Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng; cách hiển thị full/dropdown cho combobox, singleBox (vắng = full); độ rộng half/full (vắng = full cho multiText, half cho loại khác)",
         "operationId": "identity_post_citizen_fields",
         "tags": [
           "identity"
@@ -4268,7 +4268,7 @@
         }
       },
       "patch": {
-        "summary": "Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày của một thuộc tính",
+        "summary": "Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày, cách hiển thị (full/dropdown), độ rộng (half/full) của một thuộc tính",
         "operationId": "identity_patch_citizen_fields_by_code",
         "tags": [
           "identity"
@@ -54430,6 +54430,18 @@
           "date_pattern": {
             "type": "string"
           },
+          "display_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "layout_width": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "required": {
             "type": "boolean"
           },
@@ -54440,8 +54452,10 @@
         "required": [
           "code",
           "date_pattern",
+          "display_mode",
           "field_type",
           "label",
+          "layout_width",
           "number_kind",
           "options",
           "placeholder",
@@ -54512,6 +54526,12 @@
           "date_pattern": {
             "type": "string"
           },
+          "display_mode": {
+            "type": "string"
+          },
+          "layout_width": {
+            "type": "string"
+          },
           "required": {
             "type": "boolean"
           },
@@ -54541,8 +54561,10 @@
           "code",
           "created_at",
           "date_pattern",
+          "display_mode",
           "field_type",
           "label",
+          "layout_width",
           "number_kind",
           "options",
           "placeholder",
@@ -54602,6 +54624,18 @@
               "null"
             ]
           },
+          "display_mode": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "layout_width": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "required": {
             "type": [
               "boolean",
@@ -54618,8 +54652,10 @@
         "required": [
           "code",
           "date_pattern",
+          "display_mode",
           "field_type",
           "label",
+          "layout_width",
           "number_kind",
           "options",
           "placeholder",

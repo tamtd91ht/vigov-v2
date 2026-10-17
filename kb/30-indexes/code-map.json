@@ -1288,7 +1288,7 @@
     },
     "app.IsCitizenFieldInputError": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_field.go:216"
+      "at": "service-identity/internal/app/citizen_field.go:219"
     },
     "app.IsCitizenLetterDeadlineRuleInputError": {
       "kind": "func",
@@ -2936,7 +2936,7 @@
     },
     "app.Reorder": {
       "kind": "func",
-      "at": "service-identity/internal/app/citizen_field.go:180"
+      "at": "service-identity/internal/app/citizen_field.go:183"
     },
     "app.Reply": {
       "kind": "func",
@@ -5208,7 +5208,7 @@
     },
     "domain.ApplyCitizenFieldPatch": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:212"
+      "at": "service-identity/internal/domain/citizen_field.go:244"
     },
     "domain.ApplyCustomValues": {
       "kind": "func",
@@ -5548,7 +5548,7 @@
     },
     "domain.CheckCitizenAttributes": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:399"
+      "at": "service-identity/internal/domain/citizen_field.go:468"
     },
     "domain.CheckCitizenContactInput": {
       "kind": "func",
@@ -5556,7 +5556,7 @@
     },
     "domain.CheckCitizenFieldOrder": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:279"
+      "at": "service-identity/internal/domain/citizen_field.go:325"
     },
     "domain.CheckCitizenGroupInput": {
       "kind": "func",
@@ -5636,7 +5636,7 @@
     },
     "domain.CheckNewCitizenField": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:164"
+      "at": "service-identity/internal/domain/citizen_field.go:188"
     },
     "domain.CheckNoticeAttributeCodes": {
       "kind": "func",
@@ -6096,19 +6096,19 @@
     },
     "domain.CitizenField": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_field.go:128"
+      "at": "service-identity/internal/domain/citizen_field.go:145"
     },
     "domain.CitizenFieldInput": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_field.go:150"
+      "at": "service-identity/internal/domain/citizen_field.go:169"
     },
     "domain.CitizenFieldOption": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_field.go:121"
+      "at": "service-identity/internal/domain/citizen_field.go:138"
     },
     "domain.CitizenFieldPatch": {
       "kind": "type",
-      "at": "service-identity/internal/domain/citizen_field.go:199"
+      "at": "service-identity/internal/domain/citizen_field.go:229"
     },
     "domain.CitizenFieldType": {
       "kind": "type",
@@ -7616,7 +7616,7 @@
     },
     "domain.Live": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:147"
+      "at": "service-identity/internal/domain/citizen_field.go:166"
     },
     "domain.LiveAllocationLines": {
       "kind": "func",
@@ -7624,7 +7624,7 @@
     },
     "domain.LiveAttributes": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:586"
+      "at": "service-identity/internal/domain/citizen_field.go:655"
     },
     "domain.LoaiBang": {
       "kind": "type",
@@ -8160,7 +8160,7 @@
     },
     "domain.NormalizeCitizenContactEmail": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:598"
+      "at": "service-identity/internal/domain/citizen_field.go:667"
     },
     "domain.NormalizeCitizenContactFullName": {
       "kind": "func",
@@ -8180,7 +8180,7 @@
     },
     "domain.NormalizeCitizenFieldRetireReason": {
       "kind": "func",
-      "at": "service-identity/internal/domain/citizen_field.go:267"
+      "at": "service-identity/internal/domain/citizen_field.go:313"
     },
     "domain.NormalizeCitizenGroupDeleteReason": {
       "kind": "func",
@@ -11340,7 +11340,7 @@
     },
     "http.CreateCitizenField": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_field.go:169"
+      "at": "service-identity/internal/http/citizen_field.go:203"
     },
     "http.CreateCitizenGroup": {
       "kind": "func",
@@ -12104,7 +12104,7 @@
     },
     "http.ListCitizenFields": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_field.go:138"
+      "at": "service-identity/internal/http/citizen_field.go:172"
     },
     "http.ListCitizenGroups": {
       "kind": "func",
@@ -12932,7 +12932,7 @@
     },
     "http.RetireCitizenField": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_field.go:230"
+      "at": "service-identity/internal/http/citizen_field.go:266"
     },
     "http.RevealCitizenContactEmail": {
       "kind": "func",
@@ -13008,7 +13008,7 @@
     },
     "http.SetCitizenFieldOrder": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_field.go:249"
+      "at": "service-identity/internal/http/citizen_field.go:285"
     },
     "http.SetCitizenLetterDeadline": {
       "kind": "func",
@@ -13428,7 +13428,7 @@
     },
     "http.UpdateCitizenField": {
       "kind": "func",
-      "at": "service-identity/internal/http/citizen_field.go:194"
+      "at": "service-identity/internal/http/citizen_field.go:229"
     },
     "http.UpdateCitizenGroup": {
       "kind": "func",
@@ -17464,7 +17464,7 @@
     },
     "store.LockAndListLive": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_field.go:100"
+      "at": "service-identity/internal/store/citizen_field.go:101"
     },
     "store.LockBudgetYears": {
       "kind": "func",
@@ -18748,7 +18748,7 @@
     },
     "store.SetOrder": {
       "kind": "func",
-      "at": "service-identity/internal/store/citizen_field.go:187"
+      "at": "service-identity/internal/store/citizen_field.go:193"
     },
     "store.SetPendingWebhookSecret": {
       "kind": "func",

@@ -50,3 +50,32 @@ func TestMigration0036CitizenFieldShape(t *testing.T) {
 		}
 	}
 }
+
+const migration0038 = "0038_citizen_field_display_mode.sql"
+
+// THE MUTATIONS THAT MUST TURN THIS RED: a column made nullable or given a non-constant default (a
+// rewrite), a backfill's filter widened or dropped (an UPDATE over every row — rule 7), a mode allowed on
+// a type without options, a third mode or width, or the immutability trigger redefined to cover either.
+func TestMigration0038CitizenFieldDisplayMode(t *testing.T) {
+	sql := maChay(t, migration0038)
+	for _, c := range []struct{ want, why string }{
+		{"alter table citizen_field add column if not exists display_mode text not null default '';", "additive, constant default (no rewrite)"},
+		{"update citizen_field set display_mode = 'full' where field_type in ('combobox', 'singlebox') and display_mode = '';", "backfill filtered to the rows the CHECK would refuse"},
+		{"check ((field_type in ('combobox', 'singlebox') and display_mode in ('full', 'dropdown')) or (field_type not in ('combobox', 'singlebox') and display_mode = ''))", "full|dropdown for the two choice types, '' for the rest"},
+		{"alter table citizen_field add column if not exists layout_width text not null default 'half';", "additive, constant default (no rewrite)"},
+		{"update citizen_field set layout_width = 'full' where field_type = 'multitext' and layout_width = 'half';", "backfill filtered to multiText rows"},
+		{"check (layout_width in ('half', 'full'))", "two widths of the two-column form"},
+	} {
+		if !strings.Contains(sql, c.want) {
+			t.Errorf("0038 does not contain %q — %s", c.want, c.why)
+		}
+	}
+	if n := strings.Count(sql, "update "); n != 2 {
+		t.Errorf("0038 has %d UPDATE statements, want exactly the two filtered backfills", n)
+	}
+	for _, bad := range []string{"dr" + "op table", "dr" + "op column", "del" + "ete from", "trunc" + "ate", "citizen_field_keep"} {
+		if strings.Contains(sql, bad) {
+			t.Errorf("0038 contains %q in its executable part", bad)
+		}
+	}
+}

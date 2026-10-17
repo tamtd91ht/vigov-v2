@@ -194,6 +194,73 @@ func TestCitizenFieldErrorsMapToStatuses(t *testing.T) {
 	}
 }
 
+// display_mode / layout_width: the create body's wire defaults (absent only), a present value passed as
+// sent, PATCH null/absent = unchanged, and both fields on the way out.
+func TestCitizenFieldDisplayModeAndLayoutWidthOnTheWire(t *testing.T) {
+	m := serverGranting(t, citizenFieldKey)
+	tok := m.tokenCho(t, xaA, sidA)
+	f := m.citizenFields
+	opts := `"options":[{"value":"ho-ngheo","label":"Hộ nghèo"}]`
+	for _, c := range []struct {
+		name, body, mode, width string
+	}{
+		{"combobox absent", `{"code":"hongheo1","label":"x","field_type":"combobox",` + opts + `}`, "full", "half"},
+		{"singleBox dropdown full", `{"code":"hongheo1","label":"x","field_type":"singleBox",` + opts + `,"display_mode":"dropdown","layout_width":"full"}`, "dropdown", "full"},
+		{"multiText absent", `{"code":"motaxxx1","label":"x","field_type":"multiText"}`, "", "full"},
+		{"multiText half", `{"code":"motaxxx1","label":"x","field_type":"multiText","layout_width":"half"}`, "", "half"},
+		{"singleText absent", `{"code":"ghichu01","label":"x","field_type":"singleText"}`, "", "half"},
+		{"combobox explicit empty is not defaulted", `{"code":"hongheo1","label":"x","field_type":"combobox",` + opts + `,"display_mode":""}`, "", "half"},
+		{"text with a mode is passed on to be refused", `{"code":"ghichu01","label":"x","field_type":"singleText","display_mode":"full"}`, "full", "half"},
+	} {
+		if w := m.goiIdem(t, "POST", hostA, "/api/v1/citizen-fields", c.body, tok); w.Code != http.StatusCreated {
+			t.Errorf("%s: %d %s", c.name, w.Code, w.Body.String())
+		}
+		if f.lastInput.DisplayMode != c.mode || f.lastInput.LayoutWidth != c.width {
+			t.Errorf("%s: use case saw mode %q width %q, want %q %q", c.name, f.lastInput.DisplayMode, f.lastInput.LayoutWidth, c.mode, c.width)
+		}
+	}
+
+	for _, c := range []struct {
+		body        string
+		mode, width string // "-" = nil (unchanged)
+	}{
+		{`{"display_mode":"dropdown","layout_width":"full"}`, "dropdown", "full"},
+		{`{"display_mode":null,"layout_width":null}`, "-", "-"},
+		{`{"label":"y"}`, "-", "-"},
+	} {
+		if w := m.goi(t, "PATCH", hostA, "/api/v1/citizen-fields/hongheo1", c.body, tok); w.Code != http.StatusOK {
+			t.Fatalf("%s: %d %s", c.body, w.Code, w.Body.String())
+		}
+		got := func(p *string) string {
+			if p == nil {
+				return "-"
+			}
+			return *p
+		}
+		if got(f.lastPatch.DisplayMode) != c.mode || got(f.lastPatch.LayoutWidth) != c.width {
+			t.Errorf("%s: patch saw mode %s width %s", c.body, got(f.lastPatch.DisplayMode), got(f.lastPatch.LayoutWidth))
+		}
+	}
+
+	out := citizenFieldToOut(domain.CitizenField{Code: "hongheo1", Type: domain.FieldCombobox, DisplayMode: domain.DisplayDropdown, LayoutWidth: domain.LayoutFull})
+	b, _ := json.Marshal(out)
+	if !strings.Contains(string(b), `"display_mode":"dropdown"`) || !strings.Contains(string(b), `"layout_width":"full"`) {
+		t.Errorf("out: %s", b)
+	}
+	b, _ = json.Marshal(citizenFieldToOut(domain.CitizenField{Code: "ghichu01", Type: domain.FieldSingleText, LayoutWidth: domain.LayoutHalf}))
+	if !strings.Contains(string(b), `"display_mode":""`) {
+		t.Errorf("display_mode must be \"\" for a type without options: %s", b)
+	}
+
+	for _, e := range []error{domain.ErrCitizenFieldDisplayMode, domain.ErrCitizenFieldLayoutWidth} {
+		m.citizenFields.err = e
+		if w := m.goiIdem(t, "POST", hostA, "/api/v1/citizen-fields", `{"code":"ghichu01","label":"x","field_type":"singleText"}`, tok); w.Code != http.StatusBadRequest {
+			t.Errorf("%v: %d, want 400", e, w.Code)
+		}
+	}
+	m.citizenFields.err = nil
+}
+
 // --- the search body ------------------------------------------------------------------------------------
 
 func TestSearchBodyCarriesFiltersAndMaps503(t *testing.T) {

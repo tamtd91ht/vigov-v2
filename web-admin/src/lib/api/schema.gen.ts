@@ -3088,6 +3088,8 @@ export type identity_citizenFieldIn = {
   "options": Array<identity_citizenFieldOptionWire>;
   "number_kind": string;
   "date_pattern": string;
+  "display_mode": string | null;
+  "layout_width": string | null;
   "required": boolean;
   "show_in_list": boolean;
 };
@@ -3110,6 +3112,8 @@ export type identity_citizenFieldOut = {
   "options": Array<identity_citizenFieldOptionWire>;
   "number_kind": string;
   "date_pattern": string;
+  "display_mode": string;
+  "layout_width": string;
   "required": boolean;
   "show_in_list": boolean;
   "sort_order": number;
@@ -3126,6 +3130,8 @@ export type identity_citizenFieldPatchIn = {
   "options": Array<identity_citizenFieldOptionWire> | null;
   "number_kind": string | null;
   "date_pattern": string | null;
+  "display_mode": string | null;
+  "layout_width": string | null;
   "required": boolean | null;
   "show_in_list": boolean | null;
 };
@@ -5956,7 +5962,7 @@ export type identity_get_citizen_fields = {
   };
 };
 
-/** POST /api/v1/citizen-fields — Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng */
+/** POST /api/v1/citizen-fields — Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng; cách hiển thị full/dropdown cho combobox, singleBox (vắng = full); độ rộng half/full (vắng = full cho multiText, half cho loại khác) */
 export type identity_post_citizen_fields = {
   duongDan: "/api/v1/citizen-fields";
   phuongThuc: "POST";
@@ -5979,7 +5985,7 @@ export type identity_post_citizen_fields = {
   };
 };
 
-/** PATCH /api/v1/citizen-fields/{code} — Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày của một thuộc tính */
+/** PATCH /api/v1/citizen-fields/{code} — Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày, cách hiển thị (full/dropdown), độ rộng (half/full) của một thuộc tính */
 export type identity_patch_citizen_fields_by_code = {
   duongDan: "/api/v1/citizen-fields/{code}";
   phuongThuc: "PATCH";

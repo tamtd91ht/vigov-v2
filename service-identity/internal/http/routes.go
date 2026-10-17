@@ -3338,10 +3338,12 @@ func Register(mux *http.ServeMux, d Deps) {
 	// POST idem.Required(idem.MoKhiHong), AND THE KEY PROTECTS IT: PRIMARY KEY (tenant_id, code) refuses a
 	// second field with the code whether or not the header was sent.
 	//
-	// @summary  Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng
+	// @summary  Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng; cách hiển thị full/dropdown cho combobox, singleBox (vắng = full); độ rộng half/full (vắng = full cho multiText, half cho loại khác)
 	// @screen   14-cau-hinh Thuộc tính danh bạ
 	// 409 `citizen_field_code_taken` is a code the commune has ever used (retired included);
 	// 409 `citizen_field_limit` is a 51st live field.
+	// 400 for a display_mode other than full/dropdown on combobox / singleBox, any non-empty display_mode on
+	// another type, or a layout_width other than half/full.
 	//
 	// @request  citizenFieldIn
 	// @reply    201 citizenFieldOut
@@ -3355,9 +3357,10 @@ func Register(mux *http.ServeMux, d Deps) {
 			idem.Required(idem.MoKhiHong)(
 				http.HandlerFunc(h.CreateCitizenField))))
 
-	// @summary  Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày của một thuộc tính
+	// @summary  Sửa tên, placeholder, lựa chọn (thêm, đổi nhãn, ngừng — không xoá), bắt buộc, hiện ở danh sách, định dạng ngày, cách hiển thị (full/dropdown), độ rộng (half/full) của một thuộc tính
 	// @screen   14-cau-hinh Thuộc tính danh bạ
-	// 400 for a changed code / field_type / number_kind, or an option list missing a value already defined.
+	// 400 for a changed code / field_type / number_kind, an option list missing a value already defined, or
+	// a display_mode / layout_width outside its rule. null or absent display_mode / layout_width = unchanged.
 	// 404 is a code matching no LIVE field of this commune.
 	//
 	// @request  citizenFieldPatchIn

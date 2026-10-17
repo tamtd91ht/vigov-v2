@@ -78,7 +78,7 @@ func (uc *CitizenFields) Create(ctx context.Context, actor NguoiThucHien, in dom
 	f := domain.CitizenField{
 		Code: in.Code, Label: in.Label, Type: in.Type, Placeholder: in.Placeholder, Options: in.Options,
 		NumberKind: in.NumberKind, DatePattern: in.DatePattern, Required: in.Required, ShowInList: in.ShowInList,
-		CreatedAt: at, UpdatedAt: at,
+		DisplayMode: in.DisplayMode, LayoutWidth: in.LayoutWidth, CreatedAt: at, UpdatedAt: at,
 	}
 	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		live, err := uc.fields.LockAndListLive(ctx, tx)
@@ -102,6 +102,7 @@ func (uc *CitizenFields) Create(ctx context.Context, actor NguoiThucHien, in dom
 			Delta: deltaSLA(map[string]any{
 				"ma": f.Code, "loai": string(f.Type), "bat_buoc": f.Required, "hien_o_danh_sach": f.ShowInList,
 				"so_lua_chon": len(f.Options), "thu_tu": f.SortOrder,
+				"cach_hien_thi": f.DisplayMode, "do_rong": f.LayoutWidth,
 			}),
 		})
 	})
@@ -142,8 +143,10 @@ func (uc *CitizenFields) Update(ctx context.Context, actor NguoiThucHien, code s
 			Actor: actor.Vet, Action: ActionEditCitizenField, Subject: code, At: next.UpdatedAt,
 			Delta: deltaSLA(map[string]any{
 				"truong_da_doi": changed,
-				"truoc":         map[string]any{"bat_buoc": cur.Required, "hien_o_danh_sach": cur.ShowInList, "so_lua_chon": len(cur.Options)},
-				"sau":           map[string]any{"bat_buoc": next.Required, "hien_o_danh_sach": next.ShowInList, "so_lua_chon": len(next.Options)},
+				"truoc": map[string]any{"bat_buoc": cur.Required, "hien_o_danh_sach": cur.ShowInList, "so_lua_chon": len(cur.Options),
+					"cach_hien_thi": cur.DisplayMode, "do_rong": cur.LayoutWidth},
+				"sau": map[string]any{"bat_buoc": next.Required, "hien_o_danh_sach": next.ShowInList, "so_lua_chon": len(next.Options),
+					"cach_hien_thi": next.DisplayMode, "do_rong": next.LayoutWidth},
 			}),
 		})
 	})
@@ -221,6 +224,7 @@ func IsCitizenFieldInputError(err error) bool {
 		domain.ErrCitizenFieldOptionInvalid, domain.ErrCitizenFieldOptionDuplicate, domain.ErrCitizenFieldOptionRemoved,
 		domain.ErrCitizenFieldTooManyOptions, domain.ErrCitizenFieldSortOrderRange, domain.ErrCitizenFieldReasonMissing,
 		domain.ErrCitizenFieldReasonTooLong, domain.ErrCitizenFieldOrderMismatch,
+		domain.ErrCitizenFieldDisplayMode, domain.ErrCitizenFieldLayoutWidth,
 	} {
 		if errors.Is(err, e) {
 			return true
