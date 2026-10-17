@@ -639,6 +639,7 @@ export type comms_noticeCampaignIn = {
   "sms_content_mode"?: string;
   "content"?: string;
   "mapping"?: comms_noticeMappingIn | null;
+  "attribute_mapping"?: Record<string, string>;
 };
 
 export type comms_noticeCampaignListOut = {
@@ -665,6 +666,7 @@ export type comms_noticeCampaignOut = {
   "content": string | null;
   "sms_content_mode": string | null;
   "recipient_mapping": comms_noticeMappingIn | null;
+  "attribute_mapping": Record<string, string>;
   "unit_price": string | null;
   "estimated_cost": string | null;
   "status": string;
@@ -692,6 +694,7 @@ export type comms_noticePreviewIn = {
   "sms_content_mode"?: string;
   "content"?: string;
   "mapping"?: comms_noticeMappingIn | null;
+  "attribute_mapping"?: Record<string, string>;
 };
 
 export type comms_noticePreviewOut = {

@@ -29,7 +29,9 @@ import (
 // only after the entry commits (rule 6, invariants 3 and 7).
 type NoticeAudienceService interface {
 	Resolve(ctx context.Context, a domain.NoticeAudience, after string, countOnly bool) (app.NoticeAudiencePage, error)
-	Reveal(ctx context.Context, kind domain.NoticeRecipientKind, refs []string, campaignRef, actorCode string) ([]domain.NoticeRecipient, error)
+	Reveal(ctx context.Context, kind domain.NoticeRecipientKind, refs []string, campaignRef, actorCode string,
+		attributeCodes []string) ([]domain.NoticeRecipient, error)
+	Attributes(ctx context.Context, kind domain.NoticeRecipientKind) ([]domain.NoticeAttribute, error)
 }
 
 func (s *Server) ResolveNoticeAudience(ctx context.Context, req *identityv1.ResolveNoticeAudienceRequest) (
@@ -96,7 +98,13 @@ func (s *Server) RevealNoticeRecipientPhones(ctx context.Context, req *identityv
 			"refs có %d mục, vượt trần %d — bên gọi phải chia lô", n, domain.MaxNoticeRevealRefs)
 	}
 
-	items, err := s.d.NoticeAudience.Reveal(ctx, kind, req.GetRefs(), req.GetCampaignRef(), req.GetActorCode())
+	if n := len(req.GetAttributeCodes()); n > domain.MaxNoticeAttributeCodes {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"attribute_codes có %d mục, vượt trần %d", n, domain.MaxNoticeAttributeCodes)
+	}
+
+	items, err := s.d.NoticeAudience.Reveal(ctx, kind, req.GetRefs(), req.GetCampaignRef(), req.GetActorCode(),
+		req.GetAttributeCodes())
 	if err != nil {
 		if errors.Is(err, app.ErrNoticeRevealInvalid) {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -108,7 +116,32 @@ func (s *Server) RevealNoticeRecipientPhones(ctx context.Context, req *identityv
 		Items: make([]*identityv1.NoticeRecipientPhone, 0, len(items)),
 	}
 	for _, it := range items {
-		out.Items = append(out.Items, &identityv1.NoticeRecipientPhone{Ref: it.Ref, Phone: it.Phone})
+		// Field by field; the attributes only as the use case formatted them, one per requested code.
+		out.Items = append(out.Items, &identityv1.NoticeRecipientPhone{Ref: it.Ref, Phone: it.Phone, Attributes: it.Attributes})
+	}
+	return out, nil
+}
+
+func (s *Server) ListNoticeAttributes(ctx context.Context, req *identityv1.ListNoticeAttributesRequest) (
+	*identityv1.ListNoticeAttributesResponse, error) {
+
+	if _, err := s.xa(ctx); err != nil {
+		return nil, err
+	}
+	kind := recipientKindFromProto(req.GetKind())
+	if kind == domain.NoticeRecipientUnspecified {
+		return nil, status.Error(codes.InvalidArgument, "thiếu loại người nhận")
+	}
+	attrs, err := s.d.NoticeAudience.Attributes(ctx, kind)
+	if err != nil {
+		if errors.Is(err, app.ErrNoticeRevealInvalid) {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		return nil, s.loi(ctx, err, "ListNoticeAttributes")
+	}
+	out := &identityv1.ListNoticeAttributesResponse{Attributes: make([]*identityv1.NoticeAttribute, 0, len(attrs))}
+	for _, a := range attrs {
+		out.Attributes = append(out.Attributes, &identityv1.NoticeAttribute{Code: a.Code, Label: a.Label})
 	}
 	return out, nil
 }

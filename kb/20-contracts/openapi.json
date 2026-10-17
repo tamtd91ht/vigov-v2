@@ -45029,6 +45029,12 @@
                 "type": "null"
               }
             ]
+          },
+          "attribute_mapping": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
         "required": [
@@ -45138,6 +45144,12 @@
               }
             ]
           },
+          "attribute_mapping": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
           "unit_price": {
             "type": [
               "string",
@@ -45172,6 +45184,7 @@
           }
         },
         "required": [
+          "attribute_mapping",
           "audience_ids",
           "audience_kind",
           "channel",
@@ -45272,6 +45285,12 @@
                 "type": "null"
               }
             ]
+          },
+          "attribute_mapping": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
           }
         },
         "required": [

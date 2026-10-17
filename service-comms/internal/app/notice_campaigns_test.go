@@ -149,6 +149,24 @@ type fakeAudience struct {
 	err            error
 	asked          []identityclient.NoticeAudience
 	begunWhenAsked []int
+	attrs          []identityclient.NoticeAttribute
+	attrErr        error
+	attrKinds      []identityclient.NoticeRecipientKind
+}
+
+func (a *fakeAudience) ListNoticeAttributes(_ context.Context, kind identityclient.NoticeRecipientKind) ([]identityclient.NoticeAttribute, error) {
+	a.attrKinds = append(a.attrKinds, kind)
+	if a.attrErr != nil {
+		return nil, a.attrErr
+	}
+	if a.attrs != nil {
+		return a.attrs, nil
+	}
+	if kind == identityclient.NoticeRecipientStaff {
+		return []identityclient.NoticeAttribute{{Code: "full_name", Label: "Họ và tên"}}, nil
+	}
+	return []identityclient.NoticeAttribute{{Code: "full_name", Label: "Họ và tên"}, {Code: "address", Label: "Địa chỉ"},
+		{Code: "hongheo", Label: "Diện hộ"}}, nil
 }
 
 func (a *fakeAudience) note(x identityclient.NoticeAudience) {
@@ -497,5 +515,106 @@ func TestNoticeListPagesAndDerivesSkipped(t *testing.T) {
 	}
 	if _, err := r.uc.Get(r.ctx, "nope"); !errors.Is(err, ErrNoticeCampaignNotFound) {
 		t.Fatalf("get: %v", err)
+	}
+}
+
+// ---- attribute mapping (ADR 0101 #12) ---------------------------------------------------------------------
+
+// SMS preview: a mapped slot shows "[label]" (no value is revealed), is never missing, and a fixed value sent
+// for it is dropped; identity is asked for the attribute list of the audience's directory.
+func TestNoticePreviewSmsMappedSlotShowsTheLabel(t *testing.T) {
+	r := newNoticeRig(t)
+	in := smsInput(map[string]string{"1": "bị bỏ"})
+	in.AttributeMapping = map[string]string{"1": "full_name"}
+	p, err := r.uc.Preview(r.ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Content == nil || *p.Content != "Xa [Họ và tên] moi ba con hop luc {P2,10}" || strings.Join(p.MissingParams, ",") != "2" {
+		t.Fatalf("preview = %+v content %v", p, p.Content)
+	}
+	if len(r.audience.attrKinds) != 1 || r.audience.attrKinds[0] != identityclient.NoticeRecipientCitizen {
+		t.Fatalf("attribute list asked for %v", r.audience.attrKinds)
+	}
+	if r.f.begun != 0 {
+		t.Fatal("the preview opened a transaction")
+	}
+}
+
+// ZNS: a mapped parameter is not missing; its key must be one of the template's.
+func TestNoticePreviewZnsMappedParamIsProvided(t *testing.T) {
+	r := newNoticeRig(t)
+	in := znsInput(map[string]string{"su_kien": "Họp dân"})
+	in.AttributeMapping = map[string]string{"thoi_gian": "hongheo"}
+	p, err := r.uc.Preview(r.ctx, in)
+	if err != nil || len(p.MissingParams) != 0 {
+		t.Fatalf("preview = %+v, %v — want nothing missing", p, err)
+	}
+	in.AttributeMapping = map[string]string{"khong_co": "full_name"}
+	if _, err := r.uc.Preview(r.ctx, in); !errors.Is(err, domain.ErrNoticeAttributeMapping) {
+		t.Fatalf("a key outside the template: %v", err)
+	}
+}
+
+func TestNoticeAttributeMappingRefusals(t *testing.T) {
+	r := newNoticeRig(t)
+
+	typed := smsInput(nil)
+	typed.TemplateRef, typed.AudienceKind, typed.SmsContentMode, typed.Content = "", domain.NoticeAudienceTypedList, domain.SmsContentShared, "Chào"
+	typed.Recipients = []NoticeRecipientInput{{Phone: "0900000000"}}
+	typed.AttributeMapping = map[string]string{"1": "full_name"}
+	if _, err := r.uc.Preview(r.ctx, typed); !errors.Is(err, domain.ErrNoticeAttributeMapping) {
+		t.Errorf("typed audience with a mapping: %v, want ErrNoticeAttributeMapping", err)
+	}
+
+	staff := smsInput(map[string]string{"2": "8h"})
+	staff.AudienceKind = domain.NoticeAudienceStaffAll
+	staff.AttributeMapping = map[string]string{"1": "address"}
+	if _, err := r.uc.Preview(r.ctx, staff); !errors.Is(err, domain.ErrNoticeAttributeStaff) {
+		t.Errorf("staff + address: %v, want ErrNoticeAttributeStaff", err)
+	}
+	staff.AttributeMapping = map[string]string{"1": "full_name"}
+	if p, err := r.uc.Preview(r.ctx, staff); err != nil || *p.Content != "Xa [Họ và tên] moi ba con hop luc 8h" {
+		t.Errorf("staff + full_name: %+v, %v", p, err)
+	}
+
+	unknown := smsInput(map[string]string{"2": "8h"})
+	unknown.AttributeMapping = map[string]string{"1": "dagone"}
+	if _, err := r.uc.Preview(r.ctx, unknown); !errors.Is(err, domain.ErrNoticeAttributeUnknown) {
+		t.Errorf("unknown / retired code: %v, want ErrNoticeAttributeUnknown", err)
+	}
+
+	slot := smsInput(map[string]string{"2": "8h"})
+	slot.AttributeMapping = map[string]string{"3": "full_name"}
+	if _, err := r.uc.Preview(r.ctx, slot); !errors.Is(err, domain.ErrNoticeAttributeMapping) {
+		t.Errorf("a slot the template lacks: %v, want ErrNoticeAttributeMapping", err)
+	}
+
+	r.audience.attrErr = identityclient.ErrIdentityUnavailable
+	down := smsInput(map[string]string{"2": "8h"})
+	down.AttributeMapping = map[string]string{"1": "full_name"}
+	if _, err := r.uc.Preview(r.ctx, down); !errors.Is(err, ErrNoticeIdentityUnavailable) {
+		t.Errorf("identity down: %v, want ErrNoticeIdentityUnavailable", err)
+	}
+}
+
+// Send stores the mapping (codes) and only the FIXED params; the audit entry names the mapping, no value.
+func TestNoticeSendStoresTheAttributeMapping(t *testing.T) {
+	r := newNoticeRig(t)
+	in := smsInput(map[string]string{"1": "bị bỏ", "2": "8h"})
+	in.AttributeMapping = map[string]string{"1": "full_name"}
+	if _, err := r.uc.Send(r.ctx, in, noticeStaff()); err != nil {
+		t.Fatal(err)
+	}
+	c := r.repo.campaigns[0]
+	if len(c.AttributeMapping) != 1 || c.AttributeMapping["1"] != "full_name" {
+		t.Fatalf("stored mapping = %v", c.AttributeMapping)
+	}
+	if _, ok := c.Params["1"]; ok || c.Params["2"] != "8h" {
+		t.Fatalf("stored params = %v — the mapped key must hold no fixed value", c.Params)
+	}
+	aud := r.f.with("INSERT INTO audit_log")
+	if len(aud) != 1 || !strings.Contains(fmt.Sprintf("%s", aud[0].args), `"attribute_mapping":{"1":"full_name"}`) {
+		t.Fatalf("audit = %v", aud)
 	}
 }

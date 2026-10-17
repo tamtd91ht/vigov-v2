@@ -594,6 +594,14 @@
       "no_confirm": [],
       "bang_chung": "TASK D-7 (17/10/2026): migration 0033 (2 audience mới, so-nhap, khong-hop-le, phone_sealed/payload_sealed mã hoá DEK xã, error_message che dãy ≥7 số, recipient_mapping, đóng failure_class); domain/app/sender typed; tuyến GET notice-campaigns/{id}/recipients; esms/zalooa *Report trả lời từ chối. go vet + go test service-comms 17 gói xanh; check_audit_actor/security/khoa_duy_nhat PASS; make kb.",
       "tiep_theo": "CHƯA KIỂM: pg test TestPgNoticeTypedRecipients/TestPgNoticeCampaignLifecycle trên PG16 (VIGOV_TEST_DSN); tên trường lỗi ErrorMessage (eSMS) / message (Zalo) chưa đối chiếu phản hồi thật; chưa gửi thật. Web còn khối UNTIL REGEN (TASK D-7) trong lib/api/notice-campaigns.ts — thay bằng kiểu schema.gen (đã sinh)."
+    },
+    {
+      "id": "dot-tin-map-thuoc-tinh-17-10",
+      "viec": "Gửi đợt tin tới danh bạ: tham số ZNS / ô SMS map theo thuộc tính từng người (ADR 0101 #12)",
+      "trang_thai": "dang_lam",
+      "no_confirm": [],
+      "bang_chung": "TASK E-2 (17/10/2026): migration 0034 attribute_mapping (bất biến; cán bộ chỉ full_name); kiểm mapping qua RPC identity ListNoticeAttributes; sender Reveal kèm mã thuộc tính mỗi lô, ghép trong bộ nhớ, cắt theo ô, ghi mã dòng bị cắt vào vết lô. go test core+identity+comms 67 gói xanh; buf lint/breaking xanh; 4 tool PASS; make kb.",
+      "tiep_theo": "CHƯA KIỂM: pg test 0034; gửi thật. Web chưa có ô chọn thuộc tính (TASK E-2w) — cần tuyến HTTP liệt kê thuộc tính cho notice.send. Deploy identity TRƯỚC comms."
     }
   ]
 }

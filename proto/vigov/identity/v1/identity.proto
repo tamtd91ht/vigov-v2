@@ -2355,7 +2355,36 @@ service IdentityService {
   // batched further, not cached — a cached number outlives the switch-off that should have stopped it.
   //
   // Declared in kb/30-indexes/transaction-boundaries.json, `gui_dot_tin_zns_sms`.
+  //
+  // # Attribute values (ADR 0101 #12, owner 17/10/2026)
+  //
+  // A campaign may map template parameters to the recipient's OWN attributes. `attribute_codes` names
+  // them (codes from ListNoticeAttributes); each item then carries `attributes`, one entry per requested
+  // code, the value FORMATTED AS TEXT here — identity owns the definitions, so a label, a date pattern
+  // or a retired option is resolved where it is defined, never re-implemented by the caller. An absent
+  // value is "". THE SAME DISCLOSURE AS THE NUMBER: personal data, read in the same transaction, recorded
+  // on the same entry (`delta` gains the CODES opened — never a value), held in memory for the provider
+  // call only. Codes are checked against the commune's definitions LIVE OR RETIRED (the mapping was fixed
+  // at POST, like the audience); a code that is neither static nor defined, more than 20 codes, or a
+  // code other than `full_name` for STAFF is INVALID_ARGUMENT.
   rpc RevealNoticeRecipientPhones(RevealNoticeRecipientPhonesRequest) returns (RevealNoticeRecipientPhonesResponse);
+
+  // ListNoticeAttributes answers which recipient attributes a notice campaign may map a template
+  // parameter to (ADR 0101 #12) — the commune's CONFIGURATION, no person's data, nothing audited.
+  //
+  //   CITIZEN  the static attributes of `citizen_contact` (`full_name`, `address`, `email`,
+  //            `household_code`) followed by every LIVE dynamic field of the commune (`citizen_field`,
+  //            configured order). A dynamic code equal to a static one is NOT listed: the static
+  //            attribute owns that code.
+  //   STAFF    `full_name` only — the staff directory exposes nothing else to a campaign.
+  //
+  // comms checks a campaign's mapping against this list at preview and at POST (a retired or unknown
+  // code is refused there) and labels the SMS preview with `label`.
+  //
+  //   OK                  the list (never empty for a valid kind: `full_name` is always there).
+  //   INVALID_ARGUMENT    no "x-tenant-id"; `kind` unspecified.
+  //   UNIMPLEMENTED       an identity older than this RPC: deploy identity FIRST.
+  rpc ListNoticeAttributes(ListNoticeAttributesRequest) returns (ListNoticeAttributesResponse);
 }
 
 message Staff {
@@ -4220,6 +4249,10 @@ message RevealNoticeRecipientPhonesRequest {
   // at POST and stored on the campaign (rule 6, invariant 8). The audit entry's actor. Required; must be
   // a `nguoi_dung.ma` of this commune.
   string actor_code = 4;
+
+  // OPTIONAL (ADR 0101 #12). Attribute codes whose values each item must carry in `attributes`. At most
+  // 20; duplicates collapsed; blank ignored; empty = numbers only, exactly as before this field existed.
+  repeated string attribute_codes = 5;
 }
 
 // Wrapped: adding a field later must not change the RPC signature.
@@ -4235,4 +4268,26 @@ message NoticeRecipientPhone {
   // THE FULL NUMBER, UNMASKED, national form "0…" — personal data (rule 3). Already disclosed and
   // audited when this arrives. Held in memory for the provider call only; never stored, never logged.
   string phone = 2;
+  // One entry per requested `attribute_codes` code, the value formatted as text ("" when absent).
+  // PERSONAL DATA, disclosed and audited with the number; same handling. Empty when no code was asked.
+  map<string, string> attributes = 3;
+}
+
+message ListNoticeAttributesRequest {
+  // Which directory the campaign addresses. UNSPECIFIED is INVALID_ARGUMENT.
+  NoticeRecipientKind kind = 1;
+}
+
+// Wrapped: adding a field later must not change the RPC signature.
+message ListNoticeAttributesResponse {
+  // Static attributes first, then live dynamic ones in the configured order.
+  repeated NoticeAttribute attributes = 1;
+}
+
+// One attribute a template parameter may be mapped to. Configuration, not personal data.
+message NoticeAttribute {
+  // `full_name`, `address`, `email`, `household_code`, or a `citizen_field.code`.
+  string code = 1;
+  // The display name — the commune's own label for a dynamic field.
+  string label = 2;
 }

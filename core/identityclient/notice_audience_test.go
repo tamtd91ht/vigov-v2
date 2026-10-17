@@ -33,6 +33,8 @@ type noticeServer struct {
 	resolved []*identityv1.ResolveNoticeAudienceRequest
 	revealed []*identityv1.RevealNoticeRecipientPhonesRequest
 	seenXa   []string
+	attrs    []*identityv1.NoticeAttribute
+	listed   []*identityv1.ListNoticeAttributesRequest
 }
 
 func (s *noticeServer) ResolveNoticeAudience(ctx context.Context, in *identityv1.ResolveNoticeAudienceRequest) (
@@ -217,5 +219,57 @@ func TestNoticeAudienceWithoutCommuneIsRefusedLocally(t *testing.T) {
 	_, err := moMay(t, srv).CountNoticeAudience(context.Background(), NoticeAudience{Kind: NoticeAudienceCitizenAll})
 	if status.Code(err) != codes.InvalidArgument || len(srv.resolved) != 0 {
 		t.Errorf("code = %v, calls %d — want InvalidArgument before the wire", status.Code(err), len(srv.resolved))
+	}
+}
+
+func (s *noticeServer) ListNoticeAttributes(_ context.Context, in *identityv1.ListNoticeAttributesRequest) (
+	*identityv1.ListNoticeAttributesResponse, error) {
+	s.listed = append(s.listed, in)
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &identityv1.ListNoticeAttributesResponse{Attributes: s.attrs}, nil
+}
+
+// ADR 0101 #12: the codes go on the wire; only REQUESTED codes come back, one entry each ("" when the
+// server sent none), whatever else the server added.
+func TestRevealNoticeRecipientsCarriesRequestedAttributesOnly(t *testing.T) {
+	srv := &noticeServer{items: []*identityv1.NoticeRecipientPhone{
+		{Ref: "01A", Phone: noticePhone, Attributes: map[string]string{"full_name": "Nguyễn Văn A", "address": "không hỏi"}},
+	}}
+	got, err := moMay(t, srv).RevealNoticeRecipients(ngucCanh(), NoticeRecipientCitizen, []string{"01A"}, "NC-1", "CB-1",
+		[]string{"full_name", "hongheo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := got["01A"]
+	if r.Phone != noticePhone || len(r.Attributes) != 2 || r.Attributes["full_name"] != "Nguyễn Văn A" || r.Attributes["hongheo"] != "" {
+		t.Errorf("got %+v", r)
+	}
+	if strings.Join(srv.revealed[0].GetAttributeCodes(), ",") != "full_name,hongheo" {
+		t.Errorf("attribute_codes sent = %v", srv.revealed[0].GetAttributeCodes())
+	}
+	over := make([]string, MaxNoticeAttributeCodes+1)
+	if _, err := moMay(t, &noticeServer{}).RevealNoticeRecipients(ngucCanh(), NoticeRecipientCitizen, []string{"01A"},
+		"NC-1", "CB-1", over); err == nil {
+		t.Error("21 attribute codes were sent")
+	}
+}
+
+func TestListNoticeAttributes(t *testing.T) {
+	srv := &noticeServer{attrs: []*identityv1.NoticeAttribute{{Code: "full_name", Label: "Họ và tên"}}}
+	got, err := moMay(t, srv).ListNoticeAttributes(ngucCanh(), NoticeRecipientStaff)
+	if err != nil || len(got) != 1 || got[0] != (NoticeAttribute{Code: "full_name", Label: "Họ và tên"}) {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	if srv.listed[0].GetKind() != identityv1.NoticeRecipientKind_NOTICE_RECIPIENT_KIND_STAFF {
+		t.Errorf("kind sent = %v", srv.listed[0].GetKind())
+	}
+	if _, err := moMay(t, &noticeServer{err: status.Error(codes.Unavailable, "down")}).ListNoticeAttributes(ngucCanh(),
+		NoticeRecipientCitizen); !errors.Is(err, ErrIdentityUnavailable) {
+		t.Errorf("outage: %v, want ErrIdentityUnavailable", err)
+	}
+	if _, err := moMay(t, &noticeServer{}).ListNoticeAttributes(ngucCanh(), 0); err == nil {
+		t.Error("no kind: no error")
 	}
 }

@@ -117,29 +117,42 @@ func (r *senderRepo) Settle(_ context.Context, _ *store.ScopedTx, id string, _ t
 
 type senderPhones struct {
 	phones map[string]string
+	attrs  map[string]map[string]string // by ref
 	err    error
-	calls  []string // "kind|refs|campaign|actor"
+	calls  []string   // "kind|refs|campaign|actor"
+	codes  [][]string // attribute_codes of each call
 }
 
-func (p *senderPhones) RevealNoticeRecipientPhones(_ context.Context, kind identityclient.NoticeRecipientKind, refs []string,
-	campaignRef, actorCode string) (map[string]string, error) {
+func (p *senderPhones) RevealNoticeRecipients(_ context.Context, kind identityclient.NoticeRecipientKind, refs []string,
+	campaignRef, actorCode string, codes []string) (map[string]identityclient.NoticeRevealedRecipient, error) {
 	p.calls = append(p.calls, fmt.Sprintf("%d|%s|%s|%s", kind, strings.Join(refs, ","), campaignRef, actorCode))
+	p.codes = append(p.codes, codes)
 	if p.err != nil {
 		return nil, p.err
 	}
-	out := map[string]string{}
+	out := map[string]identityclient.NoticeRevealedRecipient{}
 	for _, r := range refs {
 		if v, ok := p.phones[r]; ok {
-			out[r] = v
+			rec := identityclient.NoticeRevealedRecipient{Phone: v}
+			if len(codes) > 0 {
+				rec.Attributes = map[string]string{}
+				for _, c := range codes {
+					rec.Attributes[c] = p.attrs[r][c]
+				}
+			}
+			out[r] = rec
 		}
 	}
 	return out, nil
 }
 
-type senderOAs struct{ templateErr, tokenErr error }
+type senderOAs struct {
+	templateErr, tokenErr error
+	params                []domain.TemplateParam
+}
 
 func (o *senderOAs) TemplateForSend(context.Context, string, string) (domain.ZaloOATemplate, error) {
-	return domain.ZaloOATemplate{}, o.templateErr
+	return domain.ZaloOATemplate{Params: o.params}, o.templateErr
 }
 
 func (o *senderOAs) OpenAccessToken(context.Context, string) (secret.Secret, string, error) {
@@ -162,10 +175,12 @@ type senderZns struct {
 	outcomes map[string]zalooa.Outcome // by phone
 	texts    map[string]string         // provider message by phone
 	sent     []string                  // "phone|template|tracking|param"
+	data     []map[string]string
 }
 
 func (z *senderZns) SendTemplateMessageReport(_ context.Context, _ secret.Secret, phone, tpl string, data map[string]string, tracking string) (string, zalooa.Outcome, string) {
 	z.sent = append(z.sent, phone+"|"+tpl+"|"+tracking+"|"+data["su_kien"])
+	z.data = append(z.data, data)
 	if o, ok := z.outcomes[phone]; ok {
 		return "", o, z.texts[phone]
 	}
@@ -375,5 +390,78 @@ func TestNoticeSenderLeavesMergedCommuneAndOtherReplicaAlone(t *testing.T) {
 	r.tick(t)
 	if r.repo.claimed != 0 {
 		t.Fatal("sent while another replica holds the lock")
+	}
+}
+
+// ---- attribute mapping (ADR 0101 #12) ---------------------------------------------------------------------
+
+// SMS: one reveal carries the mapped codes; each recipient's text is rendered with their own value, cut to
+// the slot; the batch entry names the cut row — and no value reaches the log, the store or the trail.
+func TestNoticeSenderSmsRendersEachRecipientsAttribute(t *testing.T) {
+	r := newSenderRig(t, domain.NoticeChannelSMS)
+	r.repo.campaign.Params = map[string]string{"2": "8h"}
+	r.repo.campaign.AttributeMapping = map[string]string{"1": "full_name"}
+	long := "Nguyễn Thị Thanh Hương Hoàng Thị Mỹ Lệ Bảo" // 42 characters; slot {P1,30}
+	r.phones.attrs = map[string]map[string]string{"C1": {"full_name": "Nguyễn Văn An"}, "C2": {"full_name": long}}
+	r.tick(t)
+
+	if len(r.phones.calls) != 1 || strings.Join(r.phones.codes[0], ",") != "full_name" {
+		t.Fatalf("reveals = %v codes %v — want ONE call carrying the mapped code", r.phones.calls, r.phones.codes)
+	}
+	if len(r.sms.messages) != 2 {
+		t.Fatalf("%d SMS sent", len(r.sms.messages))
+	}
+	if got := r.sms.messages[0].Content; got != "Xa Nguyễn Văn An moi ba con hop luc 8h" {
+		t.Errorf("C1 text = %q", got)
+	}
+	cut := string([]rune(long)[:30])
+	if got := r.sms.messages[1].Content; got != "Xa "+strings.TrimSpace(cut)+" moi ba con hop luc 8h" {
+		t.Errorf("C2 text = %q — want the value cut to the slot's 30 characters", got)
+	}
+	if !r.sms.messages[0].IsUnicode {
+		t.Error("a Vietnamese text must go as Unicode")
+	}
+	aud := r.f.with("INSERT INTO audit_log")
+	if len(aud) != 1 || !strings.Contains(fmt.Sprintf("%s", aud[0].args), `"tham_so_cat_ngan":["R2"]`) {
+		t.Fatalf("audit = %v — want the cut row named", aud)
+	}
+	for _, v := range []string{"Nguyễn Văn An", "Hương"} {
+		if strings.Contains(r.logs.String(), v) || strings.Contains(fmt.Sprintf("%s", aud[0].args), v) ||
+			strings.Contains(strings.Join(r.repo.calls, " "), v) {
+			t.Fatalf("an attribute value %q escaped", v)
+		}
+	}
+	r.assertNoPhoneEscaped(t)
+}
+
+// No mapping: identity is asked for numbers only, exactly as before (no attribute_codes).
+func TestNoticeSenderWithoutMappingAsksNoAttribute(t *testing.T) {
+	r := newSenderRig(t, domain.NoticeChannelSMS)
+	r.tick(t)
+	if len(r.phones.codes) != 1 || r.phones.codes[0] != nil {
+		t.Fatalf("codes = %v, want none", r.phones.codes)
+	}
+}
+
+// ZNS: fixed params merged with each recipient's value, cut to max_length; an empty value leaves the
+// parameter out (Zalo decides that row).
+func TestNoticeSenderZnsMergesAttributeParams(t *testing.T) {
+	r := newSenderRig(t, domain.NoticeChannelZNS)
+	r.oas.params = []domain.TemplateParam{{Name: "su_kien", MaxLength: 30}, {Name: "thoi_gian", MaxLength: 5}}
+	r.repo.campaign.AttributeMapping = map[string]string{"thoi_gian": "ngaysinh"}
+	r.phones.attrs = map[string]map[string]string{"C1": {"ngaysinh": "17/10/2026"}, "C2": {"ngaysinh": ""}}
+	r.tick(t)
+
+	if len(r.zns.data) != 2 {
+		t.Fatalf("%d ZNS sent", len(r.zns.data))
+	}
+	if d := r.zns.data[0]; d["su_kien"] != "Hop dan" || d["thoi_gian"] != "17/10" {
+		t.Errorf("C1 params = %v — want fixed + the value cut to 5", d)
+	}
+	if d := r.zns.data[1]; d["su_kien"] != "Hop dan" || len(d) != 1 {
+		t.Errorf("C2 params = %v — an empty value is left out", d)
+	}
+	if aud := r.f.with("INSERT INTO audit_log"); len(aud) != 1 || !strings.Contains(fmt.Sprintf("%s", aud[0].args), `"tham_so_cat_ngan":["R1"]`) {
+		t.Fatalf("audit = %v", aud)
 	}
 }

@@ -150,40 +150,46 @@ type noticeMappingIn struct {
 // value counts as missing. `recipients` (≤ 1 000 / ≤ 10 000), `sms_content_mode` (cot-trong-tep |
 // noi-dung-chung, SMS only), `content` (noi-dung-chung's shared text with optional {{variable_i}}) and
 // `mapping` (tep-nhap only) belong to the two typed audiences and are refused for any other.
+// `attribute_mapping` (directory audiences only, ADR 0101 #12): {param `field` → attribute code} — the
+// parameter takes each recipient's own value (codes from identity: full_name, address, email,
+// household_code, or a live dynamic field; a staff audience maps full_name only; ≤ 20). A mapped `field`
+// needs no value in `params`. Refused for danh-sach-so / tep-nhap.
 type noticePreviewIn struct {
-	Channel        string              `json:"channel"`
-	OAID           string              `json:"oa_id,omitempty"`
-	SmsAccountID   string              `json:"sms_account_id,omitempty"`
-	TemplateRef    string              `json:"template_ref"`
-	Audience       noticeAudienceIn    `json:"audience"`
-	Params         map[string]string   `json:"params"`
-	Recipients     []noticeRecipientIn `json:"recipients,omitempty"`
-	SmsContentMode string              `json:"sms_content_mode,omitempty"`
-	Content        string              `json:"content,omitempty"`
-	Mapping        *noticeMappingIn    `json:"mapping,omitempty"`
+	Channel          string              `json:"channel"`
+	OAID             string              `json:"oa_id,omitempty"`
+	SmsAccountID     string              `json:"sms_account_id,omitempty"`
+	TemplateRef      string              `json:"template_ref"`
+	Audience         noticeAudienceIn    `json:"audience"`
+	Params           map[string]string   `json:"params"`
+	Recipients       []noticeRecipientIn `json:"recipients,omitempty"`
+	SmsContentMode   string              `json:"sms_content_mode,omitempty"`
+	Content          string              `json:"content,omitempty"`
+	Mapping          *noticeMappingIn    `json:"mapping,omitempty"`
+	AttributeMapping map[string]string   `json:"attribute_mapping,omitempty"`
 }
 
 // noticeCampaignIn is the body of POST notice-campaigns: the preview's body plus `title` (≤ 200).
 // The fields are spelled out rather than embedding noticePreviewIn: apidoc does not read embedded fields,
 // and a contract it cannot read is a contract the web types silently lose. preview() converts.
 type noticeCampaignIn struct {
-	Title          string              `json:"title"`
-	Channel        string              `json:"channel"`
-	OAID           string              `json:"oa_id,omitempty"`
-	SmsAccountID   string              `json:"sms_account_id,omitempty"`
-	TemplateRef    string              `json:"template_ref"`
-	Audience       noticeAudienceIn    `json:"audience"`
-	Params         map[string]string   `json:"params"`
-	Recipients     []noticeRecipientIn `json:"recipients,omitempty"`
-	SmsContentMode string              `json:"sms_content_mode,omitempty"`
-	Content        string              `json:"content,omitempty"`
-	Mapping        *noticeMappingIn    `json:"mapping,omitempty"`
+	Title            string              `json:"title"`
+	Channel          string              `json:"channel"`
+	OAID             string              `json:"oa_id,omitempty"`
+	SmsAccountID     string              `json:"sms_account_id,omitempty"`
+	TemplateRef      string              `json:"template_ref"`
+	Audience         noticeAudienceIn    `json:"audience"`
+	Params           map[string]string   `json:"params"`
+	Recipients       []noticeRecipientIn `json:"recipients,omitempty"`
+	SmsContentMode   string              `json:"sms_content_mode,omitempty"`
+	Content          string              `json:"content,omitempty"`
+	Mapping          *noticeMappingIn    `json:"mapping,omitempty"`
+	AttributeMapping map[string]string   `json:"attribute_mapping,omitempty"`
 }
 
 func (in noticeCampaignIn) preview() noticePreviewIn {
 	return noticePreviewIn{Channel: in.Channel, OAID: in.OAID, SmsAccountID: in.SmsAccountID,
 		TemplateRef: in.TemplateRef, Audience: in.Audience, Params: in.Params, Recipients: in.Recipients,
-		SmsContentMode: in.SmsContentMode, Content: in.Content, Mapping: in.Mapping}
+		SmsContentMode: in.SmsContentMode, Content: in.Content, Mapping: in.Mapping, AttributeMapping: in.AttributeMapping}
 }
 
 // noticePreviewOut — `content`: the SMS text with the typed values filled and the missing slots left as
@@ -216,33 +222,36 @@ type noticePreviewOut struct {
 // be asked. `invalid_count`: typed / imported numbers that did not normalise (never sent, never in
 // failed_count). `content` / `sms_content_mode`: the SMS text kept as sent (the template text, or the
 // shared text with its {{variable_i}}) and the typed-audience mode; `recipient_mapping`: tep-nhap's column
-// headers (null otherwise) — so the history shows what was mapped into what.
+// headers (null otherwise) — so the history shows what was mapped into what. `attribute_mapping`: directory
+// audiences' {param `field` → attribute code} (null when nothing was mapped) — "Tham số → Thuộc tính"; codes
+// only, no recipient's value is kept anywhere.
 type noticeCampaignOut struct {
-	ID            string           `json:"id"`
-	Title         string           `json:"title"`
-	Channel       string           `json:"channel"`
-	OAID          *string          `json:"oa_id"`
-	SmsAccountID  *string          `json:"sms_account_id"`
-	SourceName    string           `json:"source_name"`
-	TemplateRef   string           `json:"template_ref"`
-	TemplateName  string           `json:"template_name"`
-	AudienceKind  string           `json:"audience_kind"`
-	AudienceIDs   []string         `json:"audience_ids"`
-	Recipients    int              `json:"recipient_count"`
-	Skipped       int              `json:"skipped_count"`
-	Sent          int              `json:"sent_count"`
-	Failed        int              `json:"failed_count"`
-	Invalid       int              `json:"invalid_count"`
-	Content       *string          `json:"content"`
-	SmsMode       *string          `json:"sms_content_mode"`
-	Mapping       *noticeMappingIn `json:"recipient_mapping"`
-	UnitPrice     *string          `json:"unit_price"`
-	EstimatedCost *string          `json:"estimated_cost"`
-	Status        string           `json:"status"`
-	CreatedAt     time.Time        `json:"created_at"`
-	CreatedBy     string           `json:"created_by"`
-	CreatedByName string           `json:"created_by_name"`
-	FinishedAt    *time.Time       `json:"finished_at"`
+	ID            string            `json:"id"`
+	Title         string            `json:"title"`
+	Channel       string            `json:"channel"`
+	OAID          *string           `json:"oa_id"`
+	SmsAccountID  *string           `json:"sms_account_id"`
+	SourceName    string            `json:"source_name"`
+	TemplateRef   string            `json:"template_ref"`
+	TemplateName  string            `json:"template_name"`
+	AudienceKind  string            `json:"audience_kind"`
+	AudienceIDs   []string          `json:"audience_ids"`
+	Recipients    int               `json:"recipient_count"`
+	Skipped       int               `json:"skipped_count"`
+	Sent          int               `json:"sent_count"`
+	Failed        int               `json:"failed_count"`
+	Invalid       int               `json:"invalid_count"`
+	Content       *string           `json:"content"`
+	SmsMode       *string           `json:"sms_content_mode"`
+	Mapping       *noticeMappingIn  `json:"recipient_mapping"`
+	AttrMapping   map[string]string `json:"attribute_mapping"`
+	UnitPrice     *string           `json:"unit_price"`
+	EstimatedCost *string           `json:"estimated_cost"`
+	Status        string            `json:"status"`
+	CreatedAt     time.Time         `json:"created_at"`
+	CreatedBy     string            `json:"created_by"`
+	CreatedByName string            `json:"created_by_name"`
+	FinishedAt    *time.Time        `json:"finished_at"`
 }
 
 // noticeCampaignListOut — `next_cursor` "" on the last page; pass it back as `?cursor=`.
@@ -271,6 +280,9 @@ func noticeCampaignToOut(it app.NoticeCampaignItem, names map[string]string) not
 		EstimatedCost: optText(c.EstimatedCost), Status: c.Status, CreatedAt: c.CreatedAt, CreatedBy: c.CreatedBy,
 		CreatedByName: names[c.CreatedBy], Invalid: c.InvalidCount, Content: optText(c.TemplateContent),
 		SmsMode: optText(c.SmsContentMode)}
+	if len(c.AttributeMapping) > 0 {
+		out.AttrMapping = c.AttributeMapping
+	}
 	if m := c.RecipientMapping; m != nil {
 		out.Mapping = &noticeMappingIn{PhoneColumn: m.PhoneColumn, ContentColumn: m.ContentColumn, Variables: m.Variables,
 			Params: m.Params}
@@ -482,7 +494,7 @@ func (h *noticeCampaignHandler) Templates(w http.ResponseWriter, r *http.Request
 func previewInput(in noticePreviewIn) app.NoticeInput {
 	out := app.NoticeInput{Channel: in.Channel, OARowID: in.OAID, SmsAccountID: in.SmsAccountID, TemplateRef: in.TemplateRef,
 		AudienceKind: in.Audience.Kind, AudienceIDs: in.Audience.IDs, AudienceTags: in.Audience.Tags, Params: in.Params,
-		SmsContentMode: in.SmsContentMode, Content: in.Content}
+		SmsContentMode: in.SmsContentMode, Content: in.Content, AttributeMapping: in.AttributeMapping}
 	if len(in.Recipients) > 0 {
 		out.Recipients = make([]app.NoticeRecipientInput, len(in.Recipients))
 		for i, r := range in.Recipients {
@@ -615,6 +627,9 @@ var noticeRefusals = []refusal{
 	{domain.ErrNoticeContent, "Nội dung chung cần nhập (tối đa 1.000 ký tự) khi chọn nội dung chung, và để trống trong các trường hợp khác."},
 	{domain.ErrNoticeRowContent, "Có dòng thiếu nội dung tin, hoặc nội dung sau khi điền biến dài quá 1.000 ký tự."},
 	{domain.ErrNoticeRowValues, "Có dòng mang giá trị cột không hợp lệ (tối đa 50 cột, mỗi giá trị tối đa 500 ký tự, không ký tự điều khiển)."},
+	{domain.ErrNoticeAttributeStaff, "Gửi tới cán bộ chỉ ghép được tham số với thuộc tính Họ và tên."},
+	{domain.ErrNoticeAttributeUnknown, "Có thuộc tính đã ghép không còn trong cấu hình danh bạ của xã (không có hoặc đã ngừng dùng). Hãy chọn lại."},
+	{domain.ErrNoticeAttributeMapping, "Ghép tham số với thuộc tính không hợp lệ: chỉ dùng khi gửi tới danh bạ (không dùng cho danh sách số / tệp), tối đa 20 tham số, mỗi tham số phải có trong mẫu."},
 	{domain.ErrNoticeMapping, "Thông tin ghép cột của tệp không hợp lệ: cần cột số điện thoại; SMS theo cột cần cột nội dung; nội dung chung cần ghép đúng các biến có trong nội dung; ZNS chỉ ghép cột cho tham số của mẫu. Tên cột tối đa 100 ký tự."},
 }
 

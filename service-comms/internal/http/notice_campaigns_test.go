@@ -536,3 +536,48 @@ func TestNoticeCampaignOutCarriesMappingAndContent(t *testing.T) {
 		t.Fatalf("directory campaign out = %s", b)
 	}
 }
+
+// ADR 0101 #12: attribute_mapping reaches the use case from both bodies; the campaign out carries it (null when
+// nothing was mapped); its refusals are 400 notice_invalid with their own sentence.
+func TestNoticeAttributeMappingOnTheWire(t *testing.T) {
+	s := newNoticeServer(t)
+	s.grant(xaA, "notice.send")
+	body := `{"channel":"sms","sms_account_id":"ACC1","template_ref":"TPL1","audience":{"kind":"nguoi-dan-tat-ca"},` +
+		`"params":{"2":"8h"},"attribute_mapping":{"1":"full_name"}}`
+	doiMa(t, s.call(t, http.MethodPost, "/api/v1/notice-campaign-previews", hostA, canBoGhi(xaA), body), http.StatusOK)
+	if s.fake.lastInput.AttributeMapping["1"] != "full_name" {
+		t.Fatalf("preview input = %+v", s.fake.lastInput)
+	}
+	send := `{"title":"Họp dân",` + body[1:]
+	doiMa(t, s.call(t, http.MethodPost, "/api/v1/notice-campaigns", hostA, canBoGhi(xaA), send), http.StatusCreated)
+	if s.fake.lastInput.AttributeMapping["1"] != "full_name" {
+		t.Fatalf("send input = %+v", s.fake.lastInput)
+	}
+
+	it := sampleNoticeItem()
+	it.Campaign.AttributeMapping = map[string]string{"1": "full_name"}
+	b, _ := json.Marshal(noticeCampaignToOut(it, nil))
+	if !strings.Contains(string(b), `"attribute_mapping":{"1":"full_name"}`) {
+		t.Errorf("out = %s", b)
+	}
+	b, _ = json.Marshal(noticeCampaignToOut(sampleNoticeItem(), nil))
+	if !strings.Contains(string(b), `"attribute_mapping":null`) {
+		t.Errorf("unmapped out = %s", b)
+	}
+
+	for _, tc := range []struct {
+		err  error
+		want string
+	}{
+		{domain.ErrNoticeAttributeStaff, "Họ và tên"},
+		{domain.ErrNoticeAttributeUnknown, "ngừng dùng"},
+		{domain.ErrNoticeAttributeMapping, "tối đa 20"},
+	} {
+		s.fake.err = tc.err
+		w := s.call(t, http.MethodPost, "/api/v1/notice-campaign-previews", hostA, canBoGhi(xaA), body)
+		if w.Code != http.StatusBadRequest || !strings.Contains(w.Body.String(), `"notice_invalid"`) ||
+			!strings.Contains(w.Body.String(), tc.want) {
+			t.Errorf("%v → %d %s", tc.err, w.Code, w.Body.String())
+		}
+	}
+}

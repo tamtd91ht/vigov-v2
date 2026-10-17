@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vihat/vigov/core/store"
 	"github.com/vihat/vigov/service-identity/internal/domain"
@@ -29,6 +30,17 @@ type citizenNoticeFake struct {
 	reveal   []domain.NoticeCandidate
 	err      error
 	pageArgs []string
+	sources  map[string]domain.NoticeAttributeSource
+	srcArgs  []string
+}
+
+func (f *citizenNoticeFake) NoticeRevealAttributeSources(_ context.Context, tx *store.ScopedTx, refs []string) (
+	map[string]domain.NoticeAttributeSource, error) {
+	if tx == nil {
+		return nil, errors.New("read outside the transaction")
+	}
+	f.srcArgs = refs
+	return f.sources, nil
 }
 
 func (f *citizenNoticeFake) NoticeAudienceCounts(_ context.Context, _ domain.NoticeAudience) (int, int, error) {
@@ -69,6 +81,28 @@ type staffNoticeFake struct {
 	reveal    []domain.NoticeCandidate
 	codes     map[string]bool
 	revealArg []string
+	sources   map[string]domain.NoticeAttributeSource
+}
+
+func (f *staffNoticeFake) NoticeRevealAttributeSources(_ context.Context, tx *store.ScopedTx, _ []string) (
+	map[string]domain.NoticeAttributeSource, error) {
+	if tx == nil {
+		return nil, errors.New("read outside the transaction")
+	}
+	return f.sources, nil
+}
+
+// noticeFieldsFake is the commune's attribute definitions; List honours includeRetired.
+type noticeFieldsFake struct{ defs []domain.CitizenField }
+
+func (f noticeFieldsFake) List(_ context.Context, includeRetired bool) ([]domain.CitizenField, error) {
+	out := []domain.CitizenField{}
+	for _, d := range f.defs {
+		if includeRetired || d.Live() {
+			out = append(out, d)
+		}
+	}
+	return out, nil
 }
 
 func (f *staffNoticeFake) NoticeAudienceCandidates(context.Context, domain.NoticeAudience) ([]domain.NoticeCandidate, error) {
@@ -90,13 +124,13 @@ func (f *staffNoticeFake) StaffCodeExists(_ context.Context, tx *store.ScopedTx,
 	return f.codes[code], nil
 }
 
-func noticeHarness(t *testing.T, c *citizenNoticeFake, s *staffNoticeFake) (*NoticeAudience, *ghiChep) {
+func noticeHarness(t *testing.T, c *citizenNoticeFake, s *staffNoticeFake, defs ...domain.CitizenField) (*NoticeAudience, *ghiChep) {
 	t.Helper()
 	db, g := moDB(t)
 	if s.codes == nil {
 		s.codes = map[string]bool{noticeActor: true}
 	}
-	return NewNoticeAudience(db, c, s), g
+	return NewNoticeAudience(db, c, s, noticeFieldsFake{defs: defs}), g
 }
 
 // STAFF: one number shared by two rows is ONE recipient under the smaller ref; a locked account and a
@@ -191,7 +225,7 @@ func TestNoticeRevealOneEntryInTheReadsCommittedTransaction(t *testing.T) {
 	uc, g := noticeHarness(t, &citizenNoticeFake{}, staff)
 
 	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientStaff,
-		[]string{"CB-00001", "CB-00002", "CB-00003", "CB-00001", ""}, noticeCampaign, noticeActor)
+		[]string{"CB-00001", "CB-00002", "CB-00003", "CB-00001", ""}, noticeCampaign, noticeActor, nil)
 	if err != nil {
 		t.Fatalf("Reveal: %v", err)
 	}
@@ -232,7 +266,7 @@ func TestNoticeRevealNothingDeliverableWritesNothing(t *testing.T) {
 	cit := &citizenNoticeFake{reveal: []domain.NoticeCandidate{{Ref: "01A", Phone: fakePhone(1), Inactive: true}}}
 	uc, g := noticeHarness(t, cit, &staffNoticeFake{})
 
-	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A", "01Z"}, noticeCampaign, noticeActor)
+	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A", "01Z"}, noticeCampaign, noticeActor, nil)
 	if err != nil || len(got) != 0 {
 		t.Fatalf("got %v, %v — want nothing, no error", got, err)
 	}
@@ -245,7 +279,7 @@ func TestNoticeRevealUnknownActorIsInvalidAndUnaudited(t *testing.T) {
 	cit := &citizenNoticeFake{reveal: []domain.NoticeCandidate{{Ref: "01A", Phone: fakePhone(1)}}}
 	uc, g := noticeHarness(t, cit, &staffNoticeFake{})
 
-	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A"}, noticeCampaign, "CB-99999")
+	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A"}, noticeCampaign, "CB-99999", nil)
 	if !errors.Is(err, ErrNoticeRevealInvalid) || got != nil {
 		t.Fatalf("got %v, %v — want ErrNoticeRevealInvalid", got, err)
 	}
@@ -259,7 +293,7 @@ func TestNoticeRevealAuditFailureDisclosesNothing(t *testing.T) {
 	uc, g := noticeHarness(t, cit, &staffNoticeFake{})
 	g.loiTheo["audit_log"] = errors.New("audit write failed")
 
-	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A"}, noticeCampaign, noticeActor)
+	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A"}, noticeCampaign, noticeActor, nil)
 	if err == nil || got != nil {
 		t.Fatalf("audit failed and numbers were returned: %v, %v", got, err)
 	}
@@ -291,15 +325,157 @@ func TestNoticeRevealShapeRefusalsTouchNothing(t *testing.T) {
 		"campaign too long": {domain.NoticeRecipientCitizen, []string{"01A"}, strings.Repeat("x", 65), noticeActor},
 		"no actor":          {domain.NoticeRecipientCitizen, []string{"01A"}, noticeCampaign, ""},
 	} {
-		if _, err := uc.Reveal(ctxXa(xaThu), c.kind, c.refs, c.campaign, c.actor); !errors.Is(err, ErrNoticeRevealInvalid) {
+		if _, err := uc.Reveal(ctxXa(xaThu), c.kind, c.refs, c.campaign, c.actor, nil); !errors.Is(err, ErrNoticeRevealInvalid) {
 			t.Errorf("%s: err = %v, want ErrNoticeRevealInvalid", name, err)
 		}
 	}
 	// Empty refs: empty answer, not "everyone", and no transaction.
-	if got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"", ""}, noticeCampaign, noticeActor); err != nil || got != nil {
+	if got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"", ""}, noticeCampaign, noticeActor, nil); err != nil || got != nil {
 		t.Errorf("empty refs = %v, %v — want empty", got, err)
 	}
 	if n := g.soGiaoDich(); n != 0 {
 		t.Errorf("%d transactions opened for refused requests", n)
+	}
+}
+
+// ---- attributes (ADR 0101 #12) ---------------------------------------------------------------------------
+
+func noticeDefs() []domain.CitizenField {
+	gone := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+	return []domain.CitizenField{
+		{Code: "hongheo", Label: "Diện hộ", Type: domain.FieldSingleBox,
+			Options: []domain.CitizenFieldOption{{Value: "ho-ngheo", Label: "Hộ nghèo"}}},
+		{Code: "ngaysinh", Label: "Ngày sinh", Type: domain.FieldDateTime, DatePattern: "dd/MM/yyyy"},
+		{Code: "cucu01", Label: "Cũ", Type: domain.FieldSingleText, RetiredAt: &gone},
+	}
+}
+
+// Only the requested codes come back, formatted; the read is the transaction's; the ONE entry records the
+// codes and never a value.
+func TestNoticeRevealAttributesOnlyRequestedAndAudited(t *testing.T) {
+	cit := &citizenNoticeFake{
+		reveal: []domain.NoticeCandidate{{Ref: "01A", Phone: fakePhone(1)}, {Ref: "01B", Phone: fakePhone(2)}},
+		sources: map[string]domain.NoticeAttributeSource{
+			"01A": {Static: map[string]string{"full_name": "Nguyễn Văn A", "address": "Thôn 1"},
+				Dynamic: map[string]json.RawMessage{"hongheo": json.RawMessage(`"ho-ngheo"`),
+					"ngaysinh": json.RawMessage(`0`), "cucu01": json.RawMessage(`"giữ"`)}},
+		},
+	}
+	uc, g := noticeHarness(t, cit, &staffNoticeFake{}, noticeDefs()...)
+
+	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A", "01B"}, noticeCampaign, noticeActor,
+		[]string{"full_name", "hongheo", "cucu01", "full_name", ""})
+	if err != nil {
+		t.Fatalf("Reveal: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d recipients, want 2", len(got))
+	}
+	a := got[0].Attributes
+	if len(a) != 3 || a["full_name"] != "Nguyễn Văn A" || a["hongheo"] != "Hộ nghèo" || a["cucu01"] != "giữ" {
+		t.Errorf("01A attributes = %v — want exactly the three requested codes, formatted (a retired field still answers)", a)
+	}
+	if _, leaked := a["address"]; leaked {
+		t.Error("an attribute that was not requested came back")
+	}
+	if b := got[1].Attributes; len(b) != 3 || b["full_name"] != "" || b["hongheo"] != "" {
+		t.Errorf("01B (no source row) = %v — want every requested code, empty", b)
+	}
+	if strings.Join(cit.srcArgs, ",") != "01A,01B" {
+		t.Errorf("sources read for %v — want the recipients selected", cit.srcArgs)
+	}
+	entry := g.tim("INSERT INTO audit_log")
+	if entry == nil || countStatements(g, "INSERT INTO audit_log") != 1 {
+		t.Fatal("want exactly one audit entry")
+	}
+	raw := entry.args[7].([]byte)
+	for _, leak := range []string{"Nguyễn Văn A", "Hộ nghèo", "giữ"} {
+		if strings.Contains(string(raw), leak) {
+			t.Errorf("the delta carries a value %q: %s", leak, raw)
+		}
+	}
+	var delta struct {
+		Attributes []string `json:"attributes"`
+	}
+	if err := json.Unmarshal(raw, &delta); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(delta.Attributes, ",") != "full_name,hongheo,cucu01" {
+		t.Errorf("delta attributes = %v, want the codes opened, collapsed", delta.Attributes)
+	}
+}
+
+// No attribute asked: no attribute read, no `attributes` key on the entry — the numbers-only call as before.
+func TestNoticeRevealWithoutAttributesReadsNone(t *testing.T) {
+	cit := &citizenNoticeFake{reveal: []domain.NoticeCandidate{{Ref: "01A", Phone: fakePhone(1)}}}
+	uc, g := noticeHarness(t, cit, &staffNoticeFake{})
+	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientCitizen, []string{"01A"}, noticeCampaign, noticeActor, nil)
+	if err != nil || len(got) != 1 || got[0].Attributes != nil {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	if cit.srcArgs != nil {
+		t.Error("attribute sources were read for a call that asked none")
+	}
+	if raw := g.tim("INSERT INTO audit_log").args[7].([]byte); strings.Contains(string(raw), "attributes") {
+		t.Errorf("delta = %s, want no attributes key", raw)
+	}
+}
+
+func TestNoticeRevealStaffFullName(t *testing.T) {
+	staff := &staffNoticeFake{reveal: []domain.NoticeCandidate{{Ref: "CB-00001", Phone: fakePhone(1)}},
+		sources: map[string]domain.NoticeAttributeSource{"CB-00001": {Static: map[string]string{"full_name": "Trần Thị B"}}}}
+	uc, _ := noticeHarness(t, &citizenNoticeFake{}, staff)
+	got, err := uc.Reveal(ctxXa(xaThu), domain.NoticeRecipientStaff, []string{"CB-00001"}, noticeCampaign, noticeActor,
+		[]string{"full_name"})
+	if err != nil || len(got) != 1 || got[0].Attributes["full_name"] != "Trần Thị B" {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+}
+
+// Unknown code, a staff attribute other than full_name, more than 20 codes: refused before a transaction.
+func TestNoticeRevealAttributeRefusals(t *testing.T) {
+	uc, g := noticeHarness(t, &citizenNoticeFake{}, &staffNoticeFake{}, noticeDefs()...)
+	over := make([]string, domain.MaxNoticeAttributeCodes+1)
+	for i := range over {
+		over[i] = fmt.Sprintf("attr%02dx", i)
+	}
+	for name, c := range map[string]struct {
+		kind  domain.NoticeRecipientKind
+		codes []string
+	}{
+		"unknown code":       {domain.NoticeRecipientCitizen, []string{"khongco"}},
+		"staff address":      {domain.NoticeRecipientStaff, []string{"address"}},
+		"staff dynamic code": {domain.NoticeRecipientStaff, []string{"hongheo"}},
+		"21 codes":           {domain.NoticeRecipientCitizen, over},
+	} {
+		if _, err := uc.Reveal(ctxXa(xaThu), c.kind, []string{"01A"}, noticeCampaign, noticeActor, c.codes); !errors.Is(err, ErrNoticeRevealInvalid) {
+			t.Errorf("%s: err = %v, want ErrNoticeRevealInvalid", name, err)
+		}
+	}
+	if n := g.soGiaoDich(); n != 0 {
+		t.Errorf("%d transactions opened for refused requests", n)
+	}
+}
+
+// ListNoticeAttributes: staff full_name only; citizens static then LIVE dynamic, retired hidden.
+func TestNoticeAttributesList(t *testing.T) {
+	uc, _ := noticeHarness(t, &citizenNoticeFake{}, &staffNoticeFake{}, noticeDefs()...)
+	staff, err := uc.Attributes(ctxXa(xaThu), domain.NoticeRecipientStaff)
+	if err != nil || len(staff) != 1 || staff[0].Code != "full_name" {
+		t.Fatalf("staff = %v, %v", staff, err)
+	}
+	cit, err := uc.Attributes(ctxXa(xaThu), domain.NoticeRecipientCitizen)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var codes []string
+	for _, a := range cit {
+		codes = append(codes, a.Code)
+	}
+	if strings.Join(codes, ",") != "full_name,address,email,household_code,hongheo,ngaysinh" {
+		t.Errorf("citizen codes = %v", codes)
+	}
+	if _, err := uc.Attributes(ctxXa(xaThu), domain.NoticeRecipientUnspecified); !errors.Is(err, ErrNoticeRevealInvalid) {
+		t.Errorf("unspecified kind: %v", err)
 	}
 }

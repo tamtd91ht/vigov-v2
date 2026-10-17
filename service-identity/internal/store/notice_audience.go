@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -203,6 +204,79 @@ func scanNoticeCandidates(rows *sql.Rows, withInactive bool) ([]domain.NoticeCan
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("đối tượng gửi tin: duyệt dòng: %w", err)
+	}
+	return out, nil
+}
+
+// NoticeRevealAttributeSources reads, inside the caller's Reveal transaction, what the attributes of the
+// contacts behind `refs` are made of: the static columns and the stored dynamic values (ADR 0101 #12).
+// Live rows only. Called ONLY when the campaign mapped an attribute — a campaign that did not reads no
+// name, no address. Personal data: nothing here logs.
+func (s *CitizenDirectoryStore) NoticeRevealAttributeSources(ctx context.Context, tx *store.ScopedTx, refs []string) (
+	map[string]domain.NoticeAttributeSource, error) {
+
+	if tx == nil {
+		return nil, ErrThieuGiaoDich
+	}
+	if len(refs) == 0 {
+		return map[string]domain.NoticeAttributeSource{}, nil
+	}
+	// ScopedTx.Query binds tenant_id = $1 from the transaction's commune (rule 1, invariant 5).
+	rows, err := tx.Query(ctx, `id, full_name, coalesce(address, ''), coalesce(email, ''), coalesce(household_code, ''), `+
+		`attributes::text`, "citizen_contact", citizenContactLiveFilter+` AND id = ANY($2)`, refs)
+	if err != nil {
+		return nil, fmt.Errorf("đối tượng gửi tin: đọc thuộc tính người dân để gửi: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]domain.NoticeAttributeSource, len(refs))
+	for rows.Next() {
+		var id, name, address, email, household, attrs string
+		if err := rows.Scan(&id, &name, &address, &email, &household, &attrs); err != nil {
+			return nil, fmt.Errorf("đối tượng gửi tin: đọc dòng thuộc tính: %w", err)
+		}
+		src := domain.NoticeAttributeSource{Static: map[string]string{
+			domain.NoticeAttrFullName: name, domain.NoticeAttrAddress: address,
+			domain.NoticeAttrEmail: email, domain.NoticeAttrHouseholdCode: household,
+		}}
+		if err := json.Unmarshal([]byte(attrs), &src.Dynamic); err != nil {
+			// Never the value in the message: the stored object is personal data.
+			return nil, errors.New("đối tượng gửi tin: thuộc tính đã lưu không đọc được")
+		}
+		out[id] = src
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("đối tượng gửi tin: duyệt dòng thuộc tính: %w", err)
+	}
+	return out, nil
+}
+
+// NoticeRevealAttributeSources reads the staff names behind `codes` inside the caller's Reveal
+// transaction — `full_name` is the only attribute the staff directory exposes to a campaign. Live rows.
+func (s *CanBoStore) NoticeRevealAttributeSources(ctx context.Context, tx *store.ScopedTx, codes []string) (
+	map[string]domain.NoticeAttributeSource, error) {
+
+	if tx == nil {
+		return nil, ErrThieuGiaoDich
+	}
+	if len(codes) == 0 {
+		return map[string]domain.NoticeAttributeSource{}, nil
+	}
+	// ScopedTx.Query binds tenant_id = $1 from the transaction's commune (rule 1, invariant 5).
+	rows, err := tx.Query(ctx, `ma, ho_ten`, "nguoi_dung", `AND deleted_at IS NULL AND ma = ANY($2)`, codes)
+	if err != nil {
+		return nil, fmt.Errorf("đối tượng gửi tin: đọc tên cán bộ để gửi: %w", err)
+	}
+	defer rows.Close()
+	out := make(map[string]domain.NoticeAttributeSource, len(codes))
+	for rows.Next() {
+		var code, name string
+		if err := rows.Scan(&code, &name); err != nil {
+			return nil, fmt.Errorf("đối tượng gửi tin: đọc dòng tên cán bộ: %w", err)
+		}
+		out[code] = domain.NoticeAttributeSource{Static: map[string]string{domain.NoticeAttrFullName: name}}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("đối tượng gửi tin: duyệt dòng tên cán bộ: %w", err)
 	}
 	return out, nil
 }

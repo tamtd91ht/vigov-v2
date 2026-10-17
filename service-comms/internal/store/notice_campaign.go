@@ -63,7 +63,8 @@ const noticeCampaignColumns = `c.id, c.title, c.channel, COALESCE(c.oa_row_id, '
 	COALESCE(c.template_ref, ''), c.template_name, COALESCE(c.template_content, ''), c.params::text, c.audience_kind,
 	c.audience_ids::text, c.recipient_count, c.skipped_count, COALESCE(c.unit_price::text, ''),
 	COALESCE(c.estimated_cost::text, ''), c.status, c.sent_count, c.failed_count, c.created_at, c.created_by,
-	c.finished_at, COALESCE(c.sms_content_mode, ''), c.invalid_count, COALESCE(c.recipient_mapping::text, '')`
+	c.finished_at, COALESCE(c.sms_content_mode, ''), c.invalid_count, COALESCE(c.recipient_mapping::text, ''),
+	COALESCE(c.attribute_mapping::text, '')`
 
 func scanNoticeCampaign(scan func(...any) error, extra ...any) (domain.NoticeCampaign, error) {
 	var (
@@ -72,11 +73,12 @@ func scanNoticeCampaign(scan func(...any) error, extra ...any) (domain.NoticeCam
 		audience string
 		finished sql.NullTime
 		mapping  string
+		attrMap  string
 	)
 	dest := append([]any{&c.ID, &c.Title, &c.Channel, &c.OARowID, &c.SmsAccountID, &c.TemplateRef, &c.TemplateName,
 		&c.TemplateContent, &params, &c.Audience.Kind, &audience, &c.RecipientCount, &c.SkippedCount, &c.UnitPrice,
 		&c.EstimatedCost, &c.Status, &c.SentCount, &c.FailedCount, &c.CreatedAt, &c.CreatedBy, &finished,
-		&c.SmsContentMode, &c.InvalidCount, &mapping}, extra...)
+		&c.SmsContentMode, &c.InvalidCount, &mapping, &attrMap}, extra...)
 	if err := scan(dest...); err != nil {
 		return domain.NoticeCampaign{}, err
 	}
@@ -92,6 +94,11 @@ func scanNoticeCampaign(scan func(...any) error, extra ...any) (domain.NoticeCam
 			return domain.NoticeCampaign{}, fmt.Errorf("notice_campaign: decode recipient_mapping: %w", err)
 		}
 	}
+	if attrMap != "" {
+		if err := json.Unmarshal([]byte(attrMap), &c.AttributeMapping); err != nil {
+			return domain.NoticeCampaign{}, fmt.Errorf("notice_campaign: decode attribute_mapping: %w", err)
+		}
+	}
 	c.FinishedAt = finished.Time
 	return c, nil
 }
@@ -99,9 +106,9 @@ func scanNoticeCampaign(scan func(...any) error, extra ...any) (domain.NoticeCam
 const insertNoticeCampaign = `INSERT INTO notice_campaign (tenant_id, id, title, channel, oa_row_id, sms_account_id,
 		template_ref, template_name, template_content, params, audience_kind, audience_ids, recipient_count,
 		skipped_count, unit_price, estimated_cost, status, created_at, created_by, sms_content_mode, invalid_count,
-		recipient_mapping)
+		recipient_mapping, attribute_mapping)
 	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15::numeric, $16::numeric, 'dang-gui', $17, $18,
-		$19, $20, $21::jsonb)`
+		$19, $20, $21::jsonb, $22::jsonb)`
 
 // InsertCampaign writes the campaign row ('dang-gui') in the transaction's commune. The recipient rows go
 // in with InsertRecipients in the SAME transaction (ADR 0099 #8).
@@ -130,10 +137,18 @@ func (s *NoticeCampaignStore) InsertCampaign(ctx context.Context, tx *store.Scop
 		}
 		mapping = string(b)
 	}
+	var attrMap any // NULL unless a directory campaign mapped an attribute (0034)
+	if len(c.AttributeMapping) > 0 {
+		b, err := json.Marshal(c.AttributeMapping)
+		if err != nil {
+			return fmt.Errorf("notice_campaign: encode attribute_mapping: %w", err)
+		}
+		attrMap = string(b)
+	}
 	if _, err := tx.Exec(ctx, insertNoticeCampaign, string(tx.TenantID()), c.ID, c.Title, c.Channel, nullText(c.OARowID),
 		nullText(c.SmsAccountID), nullText(c.TemplateRef), c.TemplateName, nullText(c.TemplateContent), params, c.Audience.Kind,
 		audience, c.RecipientCount, c.SkippedCount, nullText(c.UnitPrice), nullText(c.EstimatedCost), c.CreatedAt.UTC(),
-		c.CreatedBy, nullText(c.SmsContentMode), c.InvalidCount, mapping); err != nil {
+		c.CreatedBy, nullText(c.SmsContentMode), c.InvalidCount, mapping, attrMap); err != nil {
 		return fmt.Errorf("notice_campaign: insert: %w", err)
 	}
 	return nil

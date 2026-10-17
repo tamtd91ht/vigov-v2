@@ -30,6 +30,9 @@ type noticeAudienceFake struct {
 	gotAfter    string
 	gotCount    bool
 	gotAudience domain.NoticeAudience
+	gotCodes    []string
+	attrs       []domain.NoticeAttribute
+	gotKind     domain.NoticeRecipientKind
 }
 
 func (f *noticeAudienceFake) Resolve(_ context.Context, a domain.NoticeAudience, after string, countOnly bool) (app.NoticeAudiencePage, error) {
@@ -38,10 +41,21 @@ func (f *noticeAudienceFake) Resolve(_ context.Context, a domain.NoticeAudience,
 	return f.page, f.err
 }
 
-func (f *noticeAudienceFake) Reveal(context.Context, domain.NoticeRecipientKind, []string, string, string) ([]domain.NoticeRecipient, error) {
+func (f *noticeAudienceFake) Reveal(_ context.Context, _ domain.NoticeRecipientKind, _ []string, _, _ string,
+	codes []string) ([]domain.NoticeRecipient, error) {
 	f.reveals++
+	f.gotCodes = codes
 	return f.items, f.err
 }
+
+func (f *noticeAudienceFake) Attributes(_ context.Context, kind domain.NoticeRecipientKind) ([]domain.NoticeAttribute, error) {
+	f.gotKind = kind
+	return f.attrs, f.err
+}
+
+type fieldsFake struct{}
+
+func (fieldsFake) List(context.Context, bool) ([]domain.CitizenField, error) { return nil, nil }
 
 // staffDirectoryFake is the staff store for the end-to-end case; Resolve never opens a transaction.
 type staffDirectoryFake struct{ rows []domain.NoticeCandidate }
@@ -50,6 +64,9 @@ func (f staffDirectoryFake) NoticeAudienceCandidates(context.Context, domain.Not
 	return f.rows, nil
 }
 func (staffDirectoryFake) NoticeRevealCandidates(context.Context, *pkgstore.ScopedTx, []string) ([]domain.NoticeCandidate, error) {
+	return nil, errors.New("not used")
+}
+func (staffDirectoryFake) NoticeRevealAttributeSources(context.Context, *pkgstore.ScopedTx, []string) (map[string]domain.NoticeAttributeSource, error) {
 	return nil, errors.New("not used")
 }
 func (staffDirectoryFake) StaffCodeExists(context.Context, *pkgstore.ScopedTx, string) (bool, error) {
@@ -67,6 +84,9 @@ func (citizenDirectoryFake) NoticeAudiencePage(context.Context, domain.NoticeAud
 func (citizenDirectoryFake) NoticeRevealCandidates(context.Context, *pkgstore.ScopedTx, []string) ([]domain.NoticeCandidate, error) {
 	return nil, nil
 }
+func (citizenDirectoryFake) NoticeRevealAttributeSources(context.Context, *pkgstore.ScopedTx, []string) (map[string]domain.NoticeAttributeSource, error) {
+	return nil, nil
+}
 
 func staffAll() *identityv1.NoticeAudience {
 	return &identityv1.NoticeAudience{Kind: identityv1.NoticeAudienceKind_NOTICE_AUDIENCE_KIND_STAFF_ALL}
@@ -81,7 +101,7 @@ func TestNoticeResolveDedupAndSkipsOnTheWire(t *testing.T) {
 		{Ref: "CB-00001", Phone: phoneSample},
 		{Ref: "CB-00003", Phone: "0900000003", Inactive: true},
 		{Ref: "CB-00004", Phone: "không có"},
-	}})
+	}}, fieldsFake{})
 	s, logs := may(t, func(d *Deps) { d.NoticeAudience = uc })
 
 	resp, err := s.ResolveNoticeAudience(ctxXa(xaA), &identityv1.ResolveNoticeAudienceRequest{Audience: staffAll()})
@@ -264,5 +284,73 @@ func TestNoticeRevealRefusals(t *testing.T) {
 	})
 	if status.Code(err) != codes.Internal {
 		t.Errorf("code = %v, want Internal", status.Code(err))
+	}
+}
+
+// ADR 0101 #12: the requested codes reach the use case as sent, and each item's attributes reach the wire
+// as the use case formatted them — never logged.
+func TestNoticeRevealCarriesAttributes(t *testing.T) {
+	f := &noticeAudienceFake{items: []domain.NoticeRecipient{{Ref: "01A", Phone: phoneSample,
+		Attributes: map[string]string{"full_name": "Nguyễn Văn A", "hongheo": "Hộ nghèo"}}}}
+	s, logs := may(t, func(d *Deps) { d.NoticeAudience = f })
+
+	resp, err := s.RevealNoticeRecipientPhones(ctxXa(xaA), &identityv1.RevealNoticeRecipientPhonesRequest{
+		Kind: identityv1.NoticeRecipientKind_NOTICE_RECIPIENT_KIND_CITIZEN, Refs: []string{"01A"},
+		CampaignRef: "NC-1", ActorCode: "CB-00123", AttributeCodes: []string{"full_name", "hongheo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(f.gotCodes, ",") != "full_name,hongheo" {
+		t.Errorf("codes passed = %v", f.gotCodes)
+	}
+	got := resp.GetItems()[0].GetAttributes()
+	if len(got) != 2 || got["full_name"] != "Nguyễn Văn A" || got["hongheo"] != "Hộ nghèo" {
+		t.Errorf("attributes = %v", got)
+	}
+	if strings.Contains(logs.String(), "Nguyễn Văn A") {
+		t.Error("an attribute value reached the log")
+	}
+}
+
+func TestNoticeRevealRefusesTooManyAttributeCodes(t *testing.T) {
+	f := &noticeAudienceFake{}
+	s, _ := may(t, func(d *Deps) { d.NoticeAudience = f })
+	over := make([]string, domain.MaxNoticeAttributeCodes+1)
+	for i := range over {
+		over[i] = fmt.Sprintf("attr%02dx", i)
+	}
+	_, err := s.RevealNoticeRecipientPhones(ctxXa(xaA), &identityv1.RevealNoticeRecipientPhonesRequest{
+		Kind: identityv1.NoticeRecipientKind_NOTICE_RECIPIENT_KIND_CITIZEN, Refs: []string{"01A"},
+		CampaignRef: "NC-1", ActorCode: "CB-1", AttributeCodes: over,
+	})
+	if status.Code(err) != codes.InvalidArgument || f.reveals != 0 {
+		t.Errorf("code %v, use case ran %d times — want InvalidArgument before it", status.Code(err), f.reveals)
+	}
+}
+
+func TestListNoticeAttributes(t *testing.T) {
+	f := &noticeAudienceFake{attrs: []domain.NoticeAttribute{{Code: "full_name", Label: "Họ và tên"}, {Code: "hongheo", Label: "Hộ nghèo"}}}
+	s, _ := may(t, func(d *Deps) { d.NoticeAudience = f })
+
+	resp, err := s.ListNoticeAttributes(ctxXa(xaA), &identityv1.ListNoticeAttributesRequest{
+		Kind: identityv1.NoticeRecipientKind_NOTICE_RECIPIENT_KIND_CITIZEN,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.gotKind != domain.NoticeRecipientCitizen || len(resp.GetAttributes()) != 2 ||
+		resp.GetAttributes()[1].GetCode() != "hongheo" || resp.GetAttributes()[1].GetLabel() != "Hộ nghèo" {
+		t.Errorf("kind %v, attributes %v", f.gotKind, resp.GetAttributes())
+	}
+
+	if _, err := s.ListNoticeAttributes(ctxXa(xaA), &identityv1.ListNoticeAttributesRequest{}); status.Code(err) != codes.InvalidArgument {
+		t.Errorf("kind unspecified: code %v, want InvalidArgument", status.Code(err))
+	}
+	f.err = errors.New("db down")
+	if _, err := s.ListNoticeAttributes(ctxXa(xaA), &identityv1.ListNoticeAttributesRequest{
+		Kind: identityv1.NoticeRecipientKind_NOTICE_RECIPIENT_KIND_STAFF,
+	}); status.Code(err) != codes.Internal {
+		t.Errorf("store failure: code %v, want Internal", status.Code(err))
 	}
 }

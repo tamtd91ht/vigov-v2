@@ -801,7 +801,7 @@ func run(log *slog.Logger) error {
 		// ResolveNoticeAudience / RevealNoticeRecipientPhones (ADR 0099 #5): the SAME citizen directory
 		// and staff stores the HTTP routes read, so a preview counts exactly what the directory screens
 		// show; Reveal writes its one audit entry in the read's transaction.
-		NoticeAudience: app.NewNoticeAudience(kho, citizenContacts, canBo),
+		NoticeAudience: app.NewNoticeAudience(kho, citizenContacts, canBo, citizenFields),
 		Log:            log,
 	}, log)
 

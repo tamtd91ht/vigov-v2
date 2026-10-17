@@ -187,6 +187,9 @@ type NoticeCampaign struct {
 	SmsContentMode string
 	// RecipientMapping — tep-nhap only: which file column fed what (0033 recipient_mapping); nil otherwise.
 	RecipientMapping *NoticeRecipientMapping
+	// AttributeMapping — directory audiences only (0034; ADR 0101 #12): {param key → attribute code}; nil when
+	// nothing is mapped. CODES, never values: the sender asks identity per batch.
+	AttributeMapping map[string]string
 	// Params — what staff typed for the whole campaign (ADR 0099 #6): ZNS keyed by Zalo's param name,
 	// SMS keyed by slot position ("1", "2", … — names may repeat, see SmsTemplateParam).
 	Params         map[string]string

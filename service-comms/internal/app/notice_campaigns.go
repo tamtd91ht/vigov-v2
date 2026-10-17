@@ -50,6 +50,8 @@ type NoticeAudienceSource interface {
 	CountNoticeAudience(ctx context.Context, a identityclient.NoticeAudience) (identityclient.NoticeAudienceCounts, error)
 	ResolveNoticeAudience(ctx context.Context, a identityclient.NoticeAudience) ([]identityclient.NoticeAudienceMember,
 		identityclient.NoticeAudienceCounts, error)
+	// ListNoticeAttributes — what a campaign may map a parameter to (ADR 0101 #12): configuration only.
+	ListNoticeAttributes(ctx context.Context, kind identityclient.NoticeRecipientKind) ([]identityclient.NoticeAttribute, error)
 }
 
 // NoticeOASource is what a campaign needs of the commune's OAs. *CommuneZaloOAs satisfies it.
@@ -135,6 +137,9 @@ type NoticeInput struct {
 	Content        string
 	// Mapping — tep-nhap only: which file column fed what (stored on the campaign). Refused otherwise.
 	Mapping *domain.NoticeRecipientMapping
+	// AttributeMapping — directory audiences only (ADR 0101 #12): {param key → attribute code}. A mapped key
+	// needs no fixed value in Params (one sent is dropped); refused for typed / imported numbers.
+	AttributeMapping map[string]string
 }
 
 // NoticeRecipientInput is one typed / imported row as the browser sent it. Phone is the cell as typed — it
@@ -302,6 +307,10 @@ type composed struct {
 	duplicate        int
 	missingVariables bool // c.missing names the shared SMS text's variables, not template parameters
 	mapping          *domain.NoticeRecipientMapping
+	// Directory audiences only (ADR 0101 #12): the attribute mapping, checked against the template and
+	// identity's list, and the attributes' labels by code (the SMS preview's "[label]").
+	attrMapping map[string]string
+	attrLabels  map[string]string
 }
 
 // compose validates the request alone, then against its source and template — the checks Preview and
@@ -312,6 +321,11 @@ func (uc *NoticeCampaigns) compose(ctx context.Context, in NoticeInput) (compose
 		return composed{}, err
 	}
 	params, err := domain.NormalizeNoticeParams(in.Params)
+	if err != nil {
+		return composed{}, err
+	}
+	// Refused for typed / imported numbers (they map file columns — recipient_mapping), so it is nil there.
+	attrMapping, err := domain.NormalizeNoticeAttributeMapping(in.AttributeMapping, audience)
 	if err != nil {
 		return composed{}, err
 	}
@@ -333,7 +347,14 @@ func (uc *NoticeCampaigns) compose(ctx context.Context, in NoticeInput) (compose
 		return composed{}, err
 	}
 	c := composed{channel: in.Channel, oaRowID: in.OARowID, smsAccountID: in.SmsAccountID, templateRef: in.TemplateRef,
-		audience: audience}
+		audience: audience, attrMapping: attrMapping}
+	if len(attrMapping) > 0 {
+		if c.attrLabels, err = uc.attributeLabels(ctx, audience, attrMapping); err != nil {
+			return composed{}, err
+		}
+		// A mapped key takes its value from each recipient: a fixed value sent for it is dropped, never stored.
+		params = withoutMapped(params, attrMapping)
+	}
 	if in.Channel == domain.NoticeChannelZNS {
 		return uc.composeZNS(ctx, c, params)
 	}
@@ -358,12 +379,62 @@ func (uc *NoticeCampaigns) znsTemplate(ctx context.Context, oaRowID, templateRef
 	return t, nil
 }
 
+// attributeLabels checks every mapped code against identity's list for the audience's directory — an
+// unknown or retired code is ErrNoticeAttributeUnknown — and returns the labels by code. identity not
+// answering is ErrNoticeIdentityUnavailable: nothing is decided on a list that could not be read.
+func (uc *NoticeCampaigns) attributeLabels(ctx context.Context, a domain.NoticeAudience, m map[string]string) (map[string]string, error) {
+	list, err := uc.audience.ListNoticeAttributes(ctx, identityRecipientKind(a.RecipientKind()))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrNoticeIdentityUnavailable, err)
+	}
+	labels := make(map[string]string, len(list))
+	for _, x := range list {
+		labels[x.Code] = x.Label
+	}
+	for _, code := range m {
+		if _, ok := labels[code]; !ok {
+			return nil, domain.ErrNoticeAttributeUnknown
+		}
+	}
+	return labels, nil
+}
+
+// withoutMapped is params minus the mapped keys.
+func withoutMapped(params, m map[string]string) map[string]string {
+	out := make(map[string]string, len(params))
+	for k, v := range params {
+		if _, mapped := m[k]; !mapped {
+			out[k] = v
+		}
+	}
+	return out
+}
+
 func (uc *NoticeCampaigns) composeZNS(ctx context.Context, c composed, params map[string]string) (composed, error) {
 	t, err := uc.znsTemplate(ctx, c.oaRowID, c.templateRef)
 	if err != nil {
 		return composed{}, err
 	}
-	missing, err := domain.MissingZnsParams(t.Params, params)
+	// A mapped parameter is PROVIDED (each recipient's value, cut to max_length at send); its key must be one of
+	// the template's parameters.
+	provided := params
+	if len(c.attrMapping) > 0 {
+		declared := make(map[string]bool, len(t.Params))
+		for _, p := range t.Params {
+			declared[p.Name] = true
+		}
+		provided = make(map[string]string, len(params)+len(c.attrMapping))
+		for k, v := range params {
+			provided[k] = v
+		}
+		for k := range c.attrMapping {
+			if !declared[k] {
+				return composed{}, domain.ErrNoticeAttributeMapping
+			}
+			provided[k] = ""
+		}
+	}
+	missing, err := domain.MissingZnsParams(t.Params, provided)
 	if err != nil {
 		return composed{}, err
 	}
@@ -402,7 +473,19 @@ func (uc *NoticeCampaigns) composeSMS(ctx context.Context, c composed, params ma
 	case err != nil:
 		return composed{}, fmt.Errorf("notice_campaign: read the SMS template: %w", err)
 	}
-	content, missing, err := domain.PreviewSmsContent(t.Content, params)
+	if len(c.attrMapping) > 0 {
+		slots, err := domain.ParseSmsTemplateParams(t.Content)
+		if err != nil {
+			return composed{}, err
+		}
+		for k := range c.attrMapping {
+			if !isSlotKey(k, len(slots)) {
+				return composed{}, domain.ErrNoticeAttributeMapping
+			}
+		}
+	}
+	// Mapped slots show "[label]" — the preview reveals nobody's value (ADR 0101 #12).
+	content, missing, err := domain.PreviewSmsContentMapped(t.Content, params, c.attrMapping, c.attrLabels)
 	if err != nil {
 		return composed{}, err
 	}
@@ -420,6 +503,16 @@ func (uc *NoticeCampaigns) composeSMS(ctx context.Context, c composed, params ma
 		c.unitPrice = price
 	}
 	return c, nil
+}
+
+// isSlotKey — k is the params key of one of n slots ("1".."n").
+func isSlotKey(k string, n int) bool {
+	for i := 0; i < n; i++ {
+		if domain.SmsSlotKey(i) == k {
+			return true
+		}
+	}
+	return false
 }
 
 // smsTemplateName — an eSMS template has no name, only its text; the campaign's template_name (≤ 255
@@ -587,7 +680,7 @@ func (uc *NoticeCampaigns) Send(ctx context.Context, in NoticeInput, actor audit
 	camp := domain.NoticeCampaign{ID: id, Title: title, Channel: c.channel, OARowID: c.oaRowID, SmsAccountID: c.smsAccountID,
 		TemplateRef: c.templateRef, TemplateName: c.templateName, TemplateContent: c.templateContent, Params: c.params,
 		Audience: c.audience, RecipientCount: len(rows), SkippedCount: counts.SkippedInactive + counts.SkippedNoPhone,
-		Status: domain.NoticeCampaignSending, CreatedAt: at, CreatedBy: actor.ID}
+		Status: domain.NoticeCampaignSending, CreatedAt: at, CreatedBy: actor.ID, AttributeMapping: c.attrMapping}
 	if c.unitPrice != "" {
 		if unit, cost, ok := domain.EstimateCost(c.unitPrice, len(rows)); ok {
 			camp.UnitPrice, camp.EstimatedCost = unit, cost
@@ -620,6 +713,9 @@ func writeNoticeCampaignAudit(ctx context.Context, tx *store.ScopedTx, actor aud
 		"template_ref": c.TemplateRef, "template_name": c.TemplateName, "params": c.Params,
 		"audience_kind": c.Audience.Kind, "audience_ids": c.Audience.IDs, "recipient_count": c.RecipientCount,
 		"skipped_count": c.SkippedCount, "unit_price": c.UnitPrice, "estimated_cost": c.EstimatedCost,
+	}
+	if len(c.AttributeMapping) > 0 {
+		fields["attribute_mapping"] = c.AttributeMapping // param → attribute CODE; no recipient's value (ADR 0101 #12)
 	}
 	if c.Audience.Typed() {
 		// COUNTS ONLY for typed / imported numbers: the shared text and the fixed parameters stay on the

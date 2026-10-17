@@ -229,7 +229,10 @@ func (noticeAudienceWiringFake) Resolve(context.Context, domain.NoticeAudience, 
 	return app.NoticeAudiencePage{}, nil
 }
 
-func (noticeAudienceWiringFake) Reveal(context.Context, domain.NoticeRecipientKind, []string, string, string) ([]domain.NoticeRecipient, error) {
+func (noticeAudienceWiringFake) Attributes(context.Context, domain.NoticeRecipientKind) ([]domain.NoticeAttribute, error) {
+	return nil, nil
+}
+func (noticeAudienceWiringFake) Reveal(context.Context, domain.NoticeRecipientKind, []string, string, string, []string) ([]domain.NoticeRecipient, error) {
 	return nil, nil
 }
 

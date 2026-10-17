@@ -98,6 +98,10 @@
       "kind": "type",
       "at": "service-identity/internal/app/citizen_directory_search.go:39"
     },
+    "app.Attributes": {
+      "kind": "func",
+      "at": "service-identity/internal/app/notice_audience.go:89"
+    },
     "app.AudioCompletion": {
       "kind": "type",
       "at": "service-comms/internal/app/content_audio.go:426"
@@ -524,7 +528,7 @@
     },
     "app.CitizenNoticeReader": {
       "kind": "type",
-      "at": "service-identity/internal/app/notice_audience.go:30"
+      "at": "service-identity/internal/app/notice_audience.go:31"
     },
     "app.CitizenNotificationPreferenceRepo": {
       "kind": "type",
@@ -2084,15 +2088,15 @@
     },
     "app.NewNoticeAudience": {
       "kind": "func",
-      "at": "service-identity/internal/app/notice_audience.go:72"
+      "at": "service-identity/internal/app/notice_audience.go:80"
     },
     "app.NewNoticeCampaigns": {
       "kind": "func",
-      "at": "service-comms/internal/app/notice_campaigns.go:221"
+      "at": "service-comms/internal/app/notice_campaigns.go:226"
     },
     "app.NewNoticeSender": {
       "kind": "func",
-      "at": "service-comms/internal/app/notice_sender.go:147"
+      "at": "service-comms/internal/app/notice_sender.go:148"
     },
     "app.NewOperatorAdmin": {
       "kind": "func",
@@ -2352,15 +2356,15 @@
     },
     "app.NoticeAudience": {
       "kind": "type",
-      "at": "service-identity/internal/app/notice_audience.go:64"
+      "at": "service-identity/internal/app/notice_audience.go:71"
     },
     "app.NoticeAudienceMember": {
       "kind": "type",
-      "at": "service-identity/internal/app/notice_audience.go:48"
+      "at": "service-identity/internal/app/notice_audience.go:55"
     },
     "app.NoticeAudiencePage": {
       "kind": "type",
-      "at": "service-identity/internal/app/notice_audience.go:54"
+      "at": "service-identity/internal/app/notice_audience.go:61"
     },
     "app.NoticeAudienceSource": {
       "kind": "type",
@@ -2368,55 +2372,59 @@
     },
     "app.NoticeCampaignItem": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:194"
+      "at": "service-comms/internal/app/notice_campaigns.go:199"
     },
     "app.NoticeCampaignRepo": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:85"
+      "at": "service-comms/internal/app/notice_campaigns.go:87"
     },
     "app.NoticeCampaigns": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:205"
+      "at": "service-comms/internal/app/notice_campaigns.go:210"
     },
     "app.NoticeDeliverer": {
       "kind": "type",
       "at": "service-petitions/internal/app/automation_runner.go:84"
     },
+    "app.NoticeFieldReader": {
+      "kind": "type",
+      "at": "service-identity/internal/app/notice_audience.go:44"
+    },
     "app.NoticeInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:121"
+      "at": "service-comms/internal/app/notice_campaigns.go:123"
     },
     "app.NoticeMissingParamsError": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:114"
+      "at": "service-comms/internal/app/notice_campaigns.go:116"
     },
     "app.NoticeOASender": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:94"
+      "at": "service-comms/internal/app/notice_sender.go:95"
     },
     "app.NoticeOASource": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:56"
+      "at": "service-comms/internal/app/notice_campaigns.go:58"
     },
     "app.NoticeOpener": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:119"
+      "at": "service-comms/internal/app/notice_sender.go:120"
     },
     "app.NoticePhoneRevealer": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:88"
+      "at": "service-comms/internal/app/notice_sender.go:89"
     },
     "app.NoticePreview": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:153"
+      "at": "service-comms/internal/app/notice_campaigns.go:158"
     },
     "app.NoticeRecipientInput": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:143"
+      "at": "service-comms/internal/app/notice_campaigns.go:148"
     },
     "app.NoticeSealer": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:78"
+      "at": "service-comms/internal/app/notice_campaigns.go:80"
     },
     "app.NoticeSendLocks": {
       "kind": "type",
@@ -2428,27 +2436,27 @@
     },
     "app.NoticeSender": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:139"
+      "at": "service-comms/internal/app/notice_sender.go:140"
     },
     "app.NoticeSenderDeps": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:124"
+      "at": "service-comms/internal/app/notice_sender.go:125"
     },
     "app.NoticeSmsOpener": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:100"
+      "at": "service-comms/internal/app/notice_sender.go:101"
     },
     "app.NoticeSmsPricer": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:72"
+      "at": "service-comms/internal/app/notice_campaigns.go:74"
     },
     "app.NoticeSmsSource": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:64"
+      "at": "service-comms/internal/app/notice_campaigns.go:66"
     },
     "app.NoticeTemplates": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:188"
+      "at": "service-comms/internal/app/notice_campaigns.go:193"
     },
     "app.NotifyMentionsThrough": {
       "kind": "func",
@@ -2852,7 +2860,7 @@
     },
     "app.Recipients": {
       "kind": "func",
-      "at": "service-comms/internal/app/notice_campaigns.go:686"
+      "at": "service-comms/internal/app/notice_campaigns.go:782"
     },
     "app.Record": {
       "kind": "func",
@@ -2988,7 +2996,7 @@
     },
     "app.Resolve": {
       "kind": "func",
-      "at": "service-identity/internal/app/notice_audience.go:84"
+      "at": "service-identity/internal/app/notice_audience.go:155"
     },
     "app.ResolveCitizenLetterDeadline": {
       "kind": "func",
@@ -3152,7 +3160,7 @@
     },
     "app.Send": {
       "kind": "func",
-      "at": "service-comms/internal/app/notice_campaigns.go:530"
+      "at": "service-comms/internal/app/notice_campaigns.go:623"
     },
     "app.SendTestMessage": {
       "kind": "func",
@@ -3276,11 +3284,11 @@
     },
     "app.SmsMessenger": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:113"
+      "at": "service-comms/internal/app/notice_sender.go:114"
     },
     "app.SmsNoticeTemplate": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:178"
+      "at": "service-comms/internal/app/notice_campaigns.go:183"
     },
     "app.SmsProviderError": {
       "kind": "type",
@@ -3372,7 +3380,7 @@
     },
     "app.StaffNoticeReader": {
       "kind": "type",
-      "at": "service-identity/internal/app/notice_audience.go:35"
+      "at": "service-identity/internal/app/notice_audience.go:37"
     },
     "app.StaffNoticeRelay": {
       "kind": "type",
@@ -3624,7 +3632,7 @@
     },
     "app.Templates": {
       "kind": "func",
-      "at": "service-comms/internal/app/notice_campaigns.go:238"
+      "at": "service-comms/internal/app/notice_campaigns.go:243"
     },
     "app.Text": {
       "kind": "func",
@@ -4308,11 +4316,11 @@
     },
     "app.ZnsMessenger": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_sender.go:106"
+      "at": "service-comms/internal/app/notice_sender.go:107"
     },
     "app.ZnsNoticeTemplate": {
       "kind": "type",
-      "at": "service-comms/internal/app/notice_campaigns.go:165"
+      "at": "service-comms/internal/app/notice_campaigns.go:170"
     },
     "audit.Actor": {
       "kind": "type",
@@ -5626,6 +5634,10 @@
       "kind": "func",
       "at": "service-identity/internal/domain/citizen_field.go:162"
     },
+    "domain.CheckNoticeAttributeCodes": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/notice_attributes.go:84"
+    },
     "domain.CheckNoticeAudience": {
       "kind": "func",
       "at": "service-identity/internal/domain/notice_audience.go:84"
@@ -6380,7 +6392,7 @@
     },
     "domain.DecodeNoticeCursor": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:609"
+      "at": "service-comms/internal/domain/notice_campaign.go:612"
     },
     "domain.DecodeNoticeRecipientCursor": {
       "kind": "func",
@@ -6552,7 +6564,7 @@
     },
     "domain.DueNoticeRecipient": {
       "kind": "type",
-      "at": "service-comms/internal/domain/notice_campaign.go:232"
+      "at": "service-comms/internal/domain/notice_campaign.go:235"
     },
     "domain.DueSoon": {
       "kind": "func",
@@ -6600,7 +6612,7 @@
     },
     "domain.DuplicateRequestMessageID": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:593"
+      "at": "service-comms/internal/domain/notice_campaign.go:596"
     },
     "domain.EmergencyContact": {
       "kind": "type",
@@ -6612,7 +6624,7 @@
     },
     "domain.Encode": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:604"
+      "at": "service-comms/internal/domain/notice_campaign.go:607"
     },
     "domain.EncodeNoticeRecipientCursor": {
       "kind": "func",
@@ -6656,7 +6668,7 @@
     },
     "domain.EstimateCost": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:547"
+      "at": "service-comms/internal/domain/notice_campaign.go:550"
     },
     "domain.EvacuationPoint": {
       "kind": "type",
@@ -6746,6 +6758,10 @@
       "kind": "func",
       "at": "service-documents/internal/domain/incoming_dashboard.go:77"
     },
+    "domain.FitAttributeValue": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/notice_attribute_mapping.go:87"
+    },
     "domain.FoldResidentialUnitName": {
       "kind": "func",
       "at": "service-identity/internal/domain/residential_unit_write.go:139"
@@ -6757,6 +6773,10 @@
     "domain.Format": {
       "kind": "func",
       "at": "service-identity/internal/domain/operator.go:258"
+    },
+    "domain.FormatCitizenAttributeValue": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/notice_attributes.go:147"
     },
     "domain.FormatClock": {
       "kind": "func",
@@ -6772,7 +6792,11 @@
     },
     "domain.FormatMoney": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:538"
+      "at": "service-comms/internal/domain/notice_campaign.go:541"
+    },
+    "domain.FormatNoticeAttributes": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/notice_attributes.go:121"
     },
     "domain.FormatOperatorCode": {
       "kind": "func",
@@ -7045,6 +7069,10 @@
     "domain.IsMessageInputError": {
       "kind": "func",
       "at": "service-reporting/internal/domain/system_message.go:261"
+    },
+    "domain.IsNoticeStaticAttribute": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/notice_attributes.go:53"
     },
     "domain.IsOverdue": {
       "kind": "func",
@@ -7916,7 +7944,7 @@
     },
     "domain.MissingZnsParams": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:439"
+      "at": "service-comms/internal/domain/notice_campaign.go:442"
     },
     "domain.MocDatDuoc": {
       "kind": "type",
@@ -8290,9 +8318,13 @@
       "kind": "func",
       "at": "service-identity/internal/domain/danh_ba_ghi.go:221"
     },
+    "domain.NormalizeNoticeAttributeMapping": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/notice_attribute_mapping.go:47"
+    },
     "domain.NormalizeNoticeAudience": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:294"
+      "at": "service-comms/internal/domain/notice_campaign.go:297"
     },
     "domain.NormalizeNoticeMapping": {
       "kind": "func",
@@ -8304,7 +8336,7 @@
     },
     "domain.NormalizeNoticeParams": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:340"
+      "at": "service-comms/internal/domain/notice_campaign.go:343"
     },
     "domain.NormalizeNoticeRowValues": {
       "kind": "func",
@@ -8312,7 +8344,7 @@
     },
     "domain.NormalizeNoticeTitle": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:246"
+      "at": "service-comms/internal/domain/notice_campaign.go:249"
     },
     "domain.NormalizeOptionalEmail": {
       "kind": "func",
@@ -8402,6 +8434,22 @@
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_group.go:184"
     },
+    "domain.NoticeAttribute": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/notice_attributes.go:38"
+    },
+    "domain.NoticeAttributeCodes": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/notice_attribute_mapping.go:69"
+    },
+    "domain.NoticeAttributeSource": {
+      "kind": "type",
+      "at": "service-identity/internal/domain/notice_attributes.go:113"
+    },
+    "domain.NoticeAttributesFor": {
+      "kind": "func",
+      "at": "service-identity/internal/domain/notice_attributes.go:68"
+    },
     "domain.NoticeAudience": {
       "kind": "type",
       "at": "service-identity/internal/domain/notice_audience.go:59"
@@ -8416,7 +8464,7 @@
     },
     "domain.NoticeCampaignOutcome": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:577"
+      "at": "service-comms/internal/domain/notice_campaign.go:580"
     },
     "domain.NoticeCandidate": {
       "kind": "type",
@@ -8428,7 +8476,7 @@
     },
     "domain.NoticeCursor": {
       "kind": "type",
-      "at": "service-comms/internal/domain/notice_campaign.go:598"
+      "at": "service-comms/internal/domain/notice_campaign.go:601"
     },
     "domain.NoticeFailureClasses": {
       "kind": "func",
@@ -8448,7 +8496,7 @@
     },
     "domain.NoticeRecipient": {
       "kind": "type",
-      "at": "service-identity/internal/domain/notice_audience.go:170"
+      "at": "service-identity/internal/domain/notice_audience.go:171"
     },
     "domain.NoticeRecipientKind": {
       "kind": "type",
@@ -8468,7 +8516,7 @@
     },
     "domain.NoticeRetryBackoff": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:563"
+      "at": "service-comms/internal/domain/notice_campaign.go:566"
     },
     "domain.NoticeRowContentError": {
       "kind": "type",
@@ -8476,7 +8524,7 @@
     },
     "domain.NoticeSelection": {
       "kind": "type",
-      "at": "service-identity/internal/domain/notice_audience.go:176"
+      "at": "service-identity/internal/domain/notice_audience.go:178"
     },
     "domain.NotificationDelivery": {
       "kind": "type",
@@ -8616,7 +8664,7 @@
     },
     "domain.ParseMoney": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:514"
+      "at": "service-comms/internal/domain/notice_campaign.go:517"
     },
     "domain.ParseOperatorPermission": {
       "kind": "func",
@@ -8864,7 +8912,11 @@
     },
     "domain.PreviewSmsContent": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:388"
+      "at": "service-comms/internal/domain/notice_campaign.go:391"
+    },
+    "domain.PreviewSmsContentMapped": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/notice_attribute_mapping.go:113"
     },
     "domain.ProfileBranding": {
       "kind": "type",
@@ -9025,6 +9077,10 @@
     "domain.RenderNoticeContent": {
       "kind": "func",
       "at": "service-comms/internal/domain/notice_typed_recipients.go:162"
+    },
+    "domain.RenderSmsRow": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/notice_attribute_mapping.go:160"
     },
     "domain.ReopenByRatingAllowed": {
       "kind": "func",
@@ -9228,7 +9284,7 @@
     },
     "domain.SelectNoticeRecipients": {
       "kind": "func",
-      "at": "service-identity/internal/domain/notice_audience.go:190"
+      "at": "service-identity/internal/domain/notice_audience.go:192"
     },
     "domain.SenderUnknown": {
       "kind": "func",
@@ -9332,11 +9388,11 @@
     },
     "domain.SmsSlotKey": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:383"
+      "at": "service-comms/internal/domain/notice_campaign.go:386"
     },
     "domain.SmsSlotValues": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:422"
+      "at": "service-comms/internal/domain/notice_campaign.go:425"
     },
     "domain.SmsTemplate": {
       "kind": "type",
@@ -9344,7 +9400,7 @@
     },
     "domain.SmsTemplateData": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:467"
+      "at": "service-comms/internal/domain/notice_campaign.go:470"
     },
     "domain.SmsTemplateParam": {
       "kind": "type",
@@ -9956,7 +10012,7 @@
     },
     "domain.ValidMaskedPhone": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:366"
+      "at": "service-comms/internal/domain/notice_campaign.go:369"
     },
     "domain.ValidMaskedTestRecipient": {
       "kind": "func",
@@ -10056,7 +10112,7 @@
     },
     "domain.ValidateNoticeSource": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:256"
+      "at": "service-comms/internal/domain/notice_campaign.go:259"
     },
     "domain.ValidatePetitionFieldCode": {
       "kind": "func",
@@ -10310,13 +10366,17 @@
       "kind": "func",
       "at": "service-comms/internal/domain/zalo_bot.go:35"
     },
+    "domain.ZnsRowParams": {
+      "kind": "func",
+      "at": "service-comms/internal/domain/notice_attribute_mapping.go:200"
+    },
     "domain.ZnsTemplateData": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:456"
+      "at": "service-comms/internal/domain/notice_campaign.go:459"
     },
     "domain.ZnsUnitPrice": {
       "kind": "func",
-      "at": "service-comms/internal/domain/notice_campaign.go:500"
+      "at": "service-comms/internal/domain/notice_campaign.go:503"
     },
     "esms.Accepted": {
       "kind": "func",
@@ -10586,6 +10646,10 @@
       "kind": "func",
       "at": "service-identity/internal/grpc/operator.go:405"
     },
+    "grpc.ListNoticeAttributes": {
+      "kind": "func",
+      "at": "service-identity/internal/grpc/notice_audience.go:125"
+    },
     "grpc.ListOperatorAccounts": {
       "kind": "func",
       "at": "service-identity/internal/grpc/operator_owner.go:131"
@@ -10796,7 +10860,7 @@
     },
     "grpc.ResolveNoticeAudience": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/notice_audience.go:35"
+      "at": "service-identity/internal/grpc/notice_audience.go:37"
     },
     "grpc.ResolveOperatorSession": {
       "kind": "func",
@@ -10844,7 +10908,7 @@
     },
     "grpc.RevealNoticeRecipientPhones": {
       "kind": "func",
-      "at": "service-identity/internal/grpc/notice_audience.go:86"
+      "at": "service-identity/internal/grpc/notice_audience.go:88"
     },
     "grpc.RevokeOperatorSession": {
       "kind": "func",
@@ -11692,7 +11756,7 @@
     },
     "http.Get": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:565"
+      "at": "service-comms/internal/http/notice_campaigns.go:577"
     },
     "http.GetCitizenContact": {
       "kind": "func",
@@ -12492,7 +12556,7 @@
     },
     "http.Preview": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:500"
+      "at": "service-comms/internal/http/notice_campaigns.go:512"
     },
     "http.PreviewBudgetImport": {
       "kind": "func",
@@ -12680,7 +12744,7 @@
     },
     "http.Recipients": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:431"
+      "at": "service-comms/internal/http/notice_campaigns.go:443"
     },
     "http.RecordCitizenLetterResult": {
       "kind": "func",
@@ -12736,7 +12800,7 @@
     },
     "http.RegisterNoticeCampaigns": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:289"
+      "at": "service-comms/internal/http/notice_campaigns.go:301"
     },
     "http.RegisterPublicBasemap": {
       "kind": "func",
@@ -12916,7 +12980,7 @@
     },
     "http.Send": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:520"
+      "at": "service-comms/internal/http/notice_campaigns.go:532"
     },
     "http.SendAccountless": {
       "kind": "func",
@@ -13216,7 +13280,7 @@
     },
     "http.Templates": {
       "kind": "func",
-      "at": "service-comms/internal/http/notice_campaigns.go:455"
+      "at": "service-comms/internal/http/notice_campaigns.go:467"
     },
     "http.TenantProfileReader": {
       "kind": "type",
@@ -13862,6 +13926,10 @@
       "kind": "func",
       "at": "core/identityclient/automation.go:247"
     },
+    "identityclient.ListNoticeAttributes": {
+      "kind": "func",
+      "at": "core/identityclient/notice_audience.go:246"
+    },
     "identityclient.LiveOrgUnitIDsByCode": {
       "kind": "func",
       "at": "core/identityclient/reference_names.go:152"
@@ -13882,6 +13950,10 @@
       "kind": "func",
       "at": "core/identityclient/phien_cong_dan.go:61"
     },
+    "identityclient.NoticeAttribute": {
+      "kind": "type",
+      "at": "core/identityclient/notice_audience.go:238"
+    },
     "identityclient.NoticeAudience": {
       "kind": "type",
       "at": "core/identityclient/notice_audience.go:46"
@@ -13901,6 +13973,10 @@
     "identityclient.NoticeRecipientKind": {
       "kind": "type",
       "at": "core/identityclient/notice_audience.go:35"
+    },
+    "identityclient.NoticeRevealedRecipient": {
+      "kind": "type",
+      "at": "core/identityclient/notice_audience.go:173"
     },
     "identityclient.OrgUnitName": {
       "kind": "type",
@@ -13949,6 +14025,10 @@
     "identityclient.RevealNoticeRecipientPhones": {
       "kind": "func",
       "at": "core/identityclient/notice_audience.go:153"
+    },
+    "identityclient.RevealNoticeRecipients": {
+      "kind": "func",
+      "at": "core/identityclient/notice_audience.go:182"
     },
     "identityclient.SoPhienCongDan": {
       "kind": "type",
@@ -16048,7 +16128,7 @@
     },
     "store.CampaignsByID": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:259"
+      "at": "service-comms/internal/store/notice_campaign.go:274"
     },
     "store.CanBoStore": {
       "kind": "type",
@@ -16264,7 +16344,7 @@
     },
     "store.ClaimDue": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:301"
+      "at": "service-comms/internal/store/notice_campaign.go:316"
     },
     "store.ClaimDueDeliveries": {
       "kind": "func",
@@ -16744,7 +16824,7 @@
     },
     "store.Fail": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:359"
+      "at": "service-comms/internal/store/notice_campaign.go:374"
     },
     "store.FailDelivery": {
       "kind": "func",
@@ -16948,7 +17028,7 @@
     },
     "store.InsertCampaign": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:108"
+      "at": "service-comms/internal/store/notice_campaign.go:115"
     },
     "store.InsertCategory": {
       "kind": "func",
@@ -17000,7 +17080,7 @@
     },
     "store.InsertRecipients": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:167"
+      "at": "service-comms/internal/store/notice_campaign.go:182"
     },
     "store.InsertRole": {
       "kind": "func",
@@ -17200,7 +17280,7 @@
     },
     "store.ListRecipients": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:410"
+      "at": "service-comms/internal/store/notice_campaign.go:425"
     },
     "store.ListSignInAccounts": {
       "kind": "func",
@@ -17592,7 +17672,7 @@
     },
     "store.MarkSent": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:346"
+      "at": "service-comms/internal/store/notice_campaign.go:361"
     },
     "store.MarkStored": {
       "kind": "func",
@@ -18104,15 +18184,15 @@
     },
     "store.NoticeAudienceCandidates": {
       "kind": "func",
-      "at": "service-identity/internal/store/notice_audience.go:127"
+      "at": "service-identity/internal/store/notice_audience.go:128"
     },
     "store.NoticeAudienceCounts": {
       "kind": "func",
-      "at": "service-identity/internal/store/notice_audience.go:49"
+      "at": "service-identity/internal/store/notice_audience.go:50"
     },
     "store.NoticeAudiencePage": {
       "kind": "func",
-      "at": "service-identity/internal/store/notice_audience.go:77"
+      "at": "service-identity/internal/store/notice_audience.go:78"
     },
     "store.NoticeCampaignStore": {
       "kind": "type",
@@ -18122,9 +18202,13 @@
       "kind": "type",
       "at": "service-comms/internal/store/notice_campaign.go:53"
     },
+    "store.NoticeRevealAttributeSources": {
+      "kind": "func",
+      "at": "service-identity/internal/store/notice_audience.go:255"
+    },
     "store.NoticeRevealCandidates": {
       "kind": "func",
-      "at": "service-identity/internal/store/notice_audience.go:150"
+      "at": "service-identity/internal/store/notice_audience.go:151"
     },
     "store.OpenAuthorization": {
       "kind": "type",
@@ -18524,7 +18608,7 @@
     },
     "store.Retry": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:352"
+      "at": "service-comms/internal/store/notice_campaign.go:367"
     },
     "store.RetryDelivery": {
       "kind": "func",
@@ -18704,7 +18788,7 @@
     },
     "store.Settle": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:390"
+      "at": "service-comms/internal/store/notice_campaign.go:405"
     },
     "store.SharedMiniApp": {
       "kind": "func",
@@ -18724,7 +18808,7 @@
     },
     "store.Skip": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:365"
+      "at": "service-comms/internal/store/notice_campaign.go:380"
     },
     "store.SkipDelivery": {
       "kind": "func",
@@ -18796,7 +18880,7 @@
     },
     "store.StaffCodeExists": {
       "kind": "func",
-      "at": "service-identity/internal/store/notice_audience.go:168"
+      "at": "service-identity/internal/store/notice_audience.go:169"
     },
     "store.StaffCounts": {
       "kind": "func",
@@ -18944,7 +19028,7 @@
     },
     "store.TemplateOfAccount": {
       "kind": "func",
-      "at": "service-comms/internal/store/notice_campaign.go:451"
+      "at": "service-comms/internal/store/notice_campaign.go:466"
     },
     "store.TenTheoNhieuMa": {
       "kind": "func",

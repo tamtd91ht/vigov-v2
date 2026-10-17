@@ -153,6 +153,35 @@ func (c *Client) resolveNoticePage(ctx context.Context, a NoticeAudience, token 
 func (c *Client) RevealNoticeRecipientPhones(ctx context.Context, kind NoticeRecipientKind, refs []string,
 	campaignRef, actorCode string) (map[string]string, error) {
 
+	got, err := c.RevealNoticeRecipients(ctx, kind, refs, campaignRef, actorCode, nil)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(got))
+	for ref, r := range got {
+		out[ref] = r.Phone
+	}
+	return out, nil
+}
+
+// MaxNoticeAttributeCodes is the contract's ceiling on attribute_codes in one reveal (ADR 0101 #12).
+const MaxNoticeAttributeCodes = 20
+
+// NoticeRevealedRecipient is one deliverable recipient as RevealNoticeRecipients returns it: the FULL
+// number and, when attribute codes were asked, one formatted value per code ("" when absent). ALL OF IT IS
+// PERSONAL DATA — held for the provider call only, never stored, never logged (ADR 0099 #5, ADR 0101 #12).
+type NoticeRevealedRecipient struct {
+	Phone      string
+	Attributes map[string]string
+}
+
+// RevealNoticeRecipients is RevealNoticeRecipientPhones with the recipients' attribute values (ADR 0101
+// #12): attributeCodes are the codes a campaign mapped (≤ 20). identity reads and audits them with the
+// numbers. Only the requested codes are kept from the answer, whatever the server sent. Same error
+// contract: err != nil is "the call did not happen".
+func (c *Client) RevealNoticeRecipients(ctx context.Context, kind NoticeRecipientKind, refs []string,
+	campaignRef, actorCode string, attributeCodes []string) (map[string]NoticeRevealedRecipient, error) {
+
 	// REFUSED LOCALLY: identity answers INVALID_ARGUMENT for each, and an operator reading that would
 	// inspect the contract for a fault in this caller's batching.
 	switch {
@@ -163,14 +192,18 @@ func (c *Client) RevealNoticeRecipientPhones(ctx context.Context, kind NoticeRec
 		return nil, fmt.Errorf("identityclient: RevealNoticeRecipientPhones: thiếu campaign_ref hoặc actor_code")
 	case kind != NoticeRecipientCitizen && kind != NoticeRecipientStaff:
 		return nil, fmt.Errorf("identityclient: RevealNoticeRecipientPhones: thiếu loại người nhận")
+	case len(attributeCodes) > MaxNoticeAttributeCodes:
+		return nil, fmt.Errorf("identityclient: RevealNoticeRecipientPhones: %d mã thuộc tính, vượt trần %d",
+			len(attributeCodes), MaxNoticeAttributeCodes)
 	case len(refs) == 0:
-		return map[string]string{}, nil // nothing asked, nothing disclosed, no call
+		return map[string]NoticeRevealedRecipient{}, nil // nothing asked, nothing disclosed, no call
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, HanGoi)
 	defer cancel()
 	resp, err := c.cl.RevealNoticeRecipientPhones(ctx, &identityv1.RevealNoticeRecipientPhonesRequest{
 		Kind: recipientKindToProto(kind), Refs: refs, CampaignRef: campaignRef, ActorCode: actorCode,
+		AttributeCodes: attributeCodes,
 	})
 	if err != nil {
 		c.warnNotice(ctx, "RevealNoticeRecipientPhones", err)
@@ -180,12 +213,50 @@ func (c *Client) RevealNoticeRecipientPhones(ctx context.Context, kind NoticeRec
 	for _, r := range refs {
 		asked[r] = true
 	}
-	out := make(map[string]string, len(resp.GetItems()))
+	out := make(map[string]NoticeRevealedRecipient, len(resp.GetItems()))
 	for _, it := range resp.GetItems() {
 		// Only refs this call asked for, whatever the server sent (identity.proto: a SUBSET of refs).
-		if asked[it.GetRef()] && it.GetPhone() != "" {
-			out[it.GetRef()] = it.GetPhone()
+		if !asked[it.GetRef()] || it.GetPhone() == "" {
+			continue
 		}
+		r := NoticeRevealedRecipient{Phone: it.GetPhone()}
+		if len(attributeCodes) > 0 {
+			// One entry per REQUESTED code — a code the server added is dropped, a missing one is "".
+			r.Attributes = make(map[string]string, len(attributeCodes))
+			got := it.GetAttributes()
+			for _, code := range attributeCodes {
+				r.Attributes[code] = got[code]
+			}
+		}
+		out[it.GetRef()] = r
+	}
+	return out, nil
+}
+
+// NoticeAttribute is one attribute a campaign may map a template parameter to: its code and display label.
+// Configuration, not personal data.
+type NoticeAttribute struct {
+	Code  string
+	Label string
+}
+
+// ListNoticeAttributes answers which attributes a campaign addressing `kind` may map to (ADR 0101 #12):
+// CITIZEN the static ones then every live dynamic field, STAFF `full_name` only. err != nil is "the call did
+// not happen" — never "no attribute".
+func (c *Client) ListNoticeAttributes(ctx context.Context, kind NoticeRecipientKind) ([]NoticeAttribute, error) {
+	if kind != NoticeRecipientCitizen && kind != NoticeRecipientStaff {
+		return nil, fmt.Errorf("identityclient: ListNoticeAttributes: thiếu loại người nhận")
+	}
+	ctx, cancel := context.WithTimeout(ctx, HanGoi)
+	defer cancel()
+	resp, err := c.cl.ListNoticeAttributes(ctx, &identityv1.ListNoticeAttributesRequest{Kind: recipientKindToProto(kind)})
+	if err != nil {
+		c.warnNotice(ctx, "ListNoticeAttributes", err)
+		return nil, wrapCallError("ListNoticeAttributes", err, nil)
+	}
+	out := make([]NoticeAttribute, 0, len(resp.GetAttributes()))
+	for _, a := range resp.GetAttributes() {
+		out = append(out, NoticeAttribute{Code: a.GetCode(), Label: a.GetLabel()})
 	}
 	return out, nil
 }

@@ -84,10 +84,11 @@ type NoticeSendRepo interface {
 	Settle(ctx context.Context, tx *store.ScopedTx, campaignID string, at time.Time) (string, error)
 }
 
-// NoticePhoneRevealer is identity's reveal (ADR 0099 #5). *identityclient.Client satisfies it.
+// NoticePhoneRevealer is identity's reveal (ADR 0099 #5) — with the recipients' attribute values when the
+// campaign mapped any (ADR 0101 #12). *identityclient.Client satisfies it.
 type NoticePhoneRevealer interface {
-	RevealNoticeRecipientPhones(ctx context.Context, kind identityclient.NoticeRecipientKind, refs []string,
-		campaignRef, actorCode string) (map[string]string, error)
+	RevealNoticeRecipients(ctx context.Context, kind identityclient.NoticeRecipientKind, refs []string,
+		campaignRef, actorCode string, attributeCodes []string) (map[string]identityclient.NoticeRevealedRecipient, error)
 }
 
 // NoticeOASender is what the sender needs of the commune's OAs. *CommuneZaloOAs satisfies it.
@@ -209,6 +210,9 @@ type noticeResult struct {
 	class     string // failure class (fail / skip), or the retryable fault's class (retry)
 	messageID string // sent only
 	errorText string // the provider's message, SCRUBBED (domain.ScrubProviderMessage); fail only
+	// truncated — a mapped attribute value was cut to its slot / max_length (ADR 0101 #12). Named by row id in
+	// the batch's audit entry; the value itself is nowhere.
+	truncated bool
 }
 
 // withProviderText attaches a provider's refusal text, scrubbed, to a failure (nothing else keeps it).
@@ -348,10 +352,11 @@ func byKind(rows []domain.DueNoticeRecipient) map[string][]domain.DueNoticeRecip
 	return out
 }
 
-// reveal asks identity for the full numbers of one kind's rows ONCE. ok=false: identity did not answer —
-// every row is a retry (transaction-boundaries gui_dot_tin_zns_sms (b)), NEVER bo-qua.
+// reveal asks identity for the full numbers of one kind's rows ONCE — and the mapped attributes' values in
+// the same call (ADR 0101 #12). ok=false: identity did not answer — every row is a retry
+// (transaction-boundaries gui_dot_tin_zns_sms (b)), NEVER bo-qua.
 func (s *NoticeSender) reveal(ctx context.Context, c domain.NoticeCampaign, kind string, rows []domain.DueNoticeRecipient,
-	results map[string]noticeResult) (map[string]string, bool) {
+	results map[string]noticeResult) (map[string]identityclient.NoticeRevealedRecipient, bool) {
 
 	ik := identityRecipientKind(kind)
 	if ik == 0 {
@@ -362,7 +367,11 @@ func (s *NoticeSender) reveal(ctx context.Context, c domain.NoticeCampaign, kind
 	for _, d := range rows {
 		refs = append(refs, d.Ref)
 	}
-	phones, err := s.d.Phones.RevealNoticeRecipientPhones(ctx, ik, refs, c.ID, c.CreatedBy)
+	var codes []string
+	if len(c.AttributeMapping) > 0 {
+		codes = domain.NoticeAttributeCodes(c.AttributeMapping)
+	}
+	phones, err := s.d.Phones.RevealNoticeRecipients(ctx, ik, refs, c.ID, c.CreatedBy, codes)
 	if err != nil {
 		s.d.Log.WarnContext(ctx, "CẢNH BÁO: identity không mở được số cho lô đợt tin — giữ chờ gửi", "service", "comms",
 			"xa", string(tenant.MustFrom(ctx)), "dot", c.ID, "so_dong", len(rows), "err", err)
@@ -376,7 +385,8 @@ func (s *NoticeSender) sendZNS(ctx context.Context, c domain.NoticeCampaign, row
 	results map[string]noticeResult) {
 
 	// The source BEFORE any number is revealed: a campaign that cannot go out discloses nothing.
-	if _, err := s.d.OAs.TemplateForSend(ctx, c.OARowID, c.TemplateRef); err != nil {
+	tpl, err := s.d.OAs.TemplateForSend(ctx, c.OARowID, c.TemplateRef)
+	if err != nil {
 		setAll(results, rows, oaSourceResult(err))
 		return
 	}
@@ -392,33 +402,54 @@ func (s *NoticeSender) sendZNS(ctx context.Context, c domain.NoticeCampaign, row
 			continue
 		}
 		for _, d := range part {
-			phone, deliverable := phones[d.Ref]
+			rec, deliverable := phones[d.Ref]
 			switch {
 			case !deliverable:
 				results[d.ID] = skipResult(domain.NoticeFailRecipientInactive)
 			case ctx.Err() != nil:
 				results[d.ID] = retryResult(domain.NoticeFailUnavailable)
 			default:
-				msgID, o, text := s.d.Zns.SendTemplateMessageReport(ctx, token, phone, c.TemplateRef, c.Params, d.ID)
-				results[d.ID] = withProviderText(znsResult(msgID, o), text)
+				// Fixed parameters, plus this recipient's own values when the campaign mapped any — merged in
+				// memory, gone with the call (ADR 0101 #12).
+				params, cut := c.Params, false
+				if len(c.AttributeMapping) > 0 {
+					params, cut = domain.ZnsRowParams(tpl.Params, c.Params, c.AttributeMapping, rec.Attributes)
+				}
+				msgID, o, text := s.d.Zns.SendTemplateMessageReport(ctx, token, rec.Phone, c.TemplateRef, params, d.ID)
+				r := withProviderText(znsResult(msgID, o), text)
+				r.truncated = cut
+				results[d.ID] = r
 			}
 		}
-		clear(phones)
+		forgetRevealed(phones)
 	}
+}
+
+// forgetRevealed drops every number and attribute value of one reveal — the end of their life (ADR 0099 #5).
+func forgetRevealed(m map[string]identityclient.NoticeRevealedRecipient) {
+	for _, r := range m {
+		clear(r.Attributes)
+	}
+	clear(m)
 }
 
 func (s *NoticeSender) sendSMS(ctx context.Context, c domain.NoticeCampaign, rows []domain.DueNoticeRecipient,
 	results map[string]noticeResult) {
 
-	values, err := domain.SmsSlotValues(c.TemplateContent, c.Params)
-	if err != nil {
-		setAll(results, rows, failResult(domain.NoticeFailTemplateRejected))
-		return
-	}
-	content, err := domain.FillSmsTemplate(c.TemplateContent, values)
-	if err != nil {
-		setAll(results, rows, failResult(domain.NoticeFailTemplateRejected))
-		return
+	// One text for everyone — unless the campaign mapped attributes, then each recipient's text is rendered
+	// at their call (ADR 0101 #12).
+	mapped := len(c.AttributeMapping) > 0
+	content := ""
+	if !mapped {
+		values, err := domain.SmsSlotValues(c.TemplateContent, c.Params)
+		if err != nil {
+			setAll(results, rows, failResult(domain.NoticeFailTemplateRejected))
+			return
+		}
+		if content, err = domain.FillSmsTemplate(c.TemplateContent, values); err != nil {
+			setAll(results, rows, failResult(domain.NoticeFailTemplateRejected))
+			return
+		}
 	}
 	account, creds, err := s.d.Accounts.OpenForSend(ctx, c.SmsAccountID)
 	switch {
@@ -435,26 +466,35 @@ func (s *NoticeSender) sendSMS(ctx context.Context, c domain.NoticeCampaign, row
 	}
 	defer clear(creds.APIKey)
 	defer clear(creds.SecretKey)
-	unicode := domain.SmsContentIsUnicode(content)
 	for kind, part := range byKind(rows) {
 		phones, ok := s.reveal(ctx, c, kind, part, results)
 		if !ok {
 			continue
 		}
 		for _, d := range part {
-			phone, deliverable := phones[d.Ref]
+			rec, deliverable := phones[d.Ref]
 			switch {
 			case !deliverable:
 				results[d.ID] = skipResult(domain.NoticeFailRecipientInactive)
 			case ctx.Err() != nil:
 				results[d.ID] = retryResult(domain.NoticeFailUnavailable)
 			default:
-				msgID, o, text := s.d.Sms.SendCSKHReport(ctx, creds, esms.Message{Phone: phone, Content: content,
-					Brandname: account.Brandname, IsUnicode: unicode, RequestID: d.ID, CampaignID: c.ID})
-				results[d.ID] = withProviderText(smsResult(d.ID, msgID, o), text)
+				text, cut := content, false
+				if mapped {
+					var err error
+					if text, cut, err = domain.RenderSmsRow(c.TemplateContent, c.Params, c.AttributeMapping, rec.Attributes); err != nil {
+						results[d.ID] = failResult(domain.NoticeFailTemplateRejected)
+						continue
+					}
+				}
+				msgID, o, ptext := s.d.Sms.SendCSKHReport(ctx, creds, esms.Message{Phone: rec.Phone, Content: text,
+					Brandname: account.Brandname, IsUnicode: domain.SmsContentIsUnicode(text), RequestID: d.ID, CampaignID: c.ID})
+				r := withProviderText(smsResult(d.ID, msgID, o), ptext)
+				r.truncated = cut
+				results[d.ID] = r
 			}
 		}
-		clear(phones)
+		forgetRevealed(phones)
 	}
 }
 
@@ -522,10 +562,14 @@ func (s *NoticeSender) record(ctx context.Context, due []domain.DueNoticeRecipie
 		tally := map[string][]string{}
 		touched := []string{}
 		seen := map[string]bool{}
+		var truncated []string
 		for _, d := range due {
 			r, ok := results[d.ID]
 			if !ok {
 				r = retryResult(domain.NoticeFailUnavailable)
+			}
+			if r.truncated {
+				truncated = append(truncated, d.ID)
 			}
 			var err error
 			label := r.kind
@@ -569,19 +613,24 @@ func (s *NoticeSender) record(ctx context.Context, due []domain.DueNoticeRecipie
 				finished[cid] = status
 			}
 		}
-		return writeNoticeBatchAudit(ctx, tx, tally, finished, done)
+		return writeNoticeBatchAudit(ctx, tx, tally, finished, truncated, done)
 	})
 }
 
 // writeNoticeBatchAudit is one entry per batch, by the system principal (rule 6, invariant 6): the row ids
-// under each outcome and the campaigns the batch closed. Never a number, a ref, a content or a key.
+// under each outcome, the campaigns the batch closed, and the rows whose mapped attribute value was cut to its
+// slot (ADR 0101 #12). Never a number, a ref, a content, a value or a key.
 func writeNoticeBatchAudit(ctx context.Context, tx *store.ScopedTx, tally map[string][]string, finished map[string]string,
-	at time.Time) error {
+	truncated []string, at time.Time) error {
 
 	if len(tally) == 0 {
 		return nil
 	}
-	delta, err := json.Marshal(map[string]any{"ket_qua": tally, "dot_ket_thuc": finished})
+	fields := map[string]any{"ket_qua": tally, "dot_ket_thuc": finished}
+	if len(truncated) > 0 {
+		fields["tham_so_cat_ngan"] = truncated
+	}
+	delta, err := json.Marshal(fields)
 	if err != nil {
 		return fmt.Errorf("gui_dot_tin: encode delta: %w", err)
 	}

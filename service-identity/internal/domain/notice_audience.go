@@ -166,10 +166,12 @@ type NoticeCandidate struct {
 	Inactive bool
 }
 
-// NoticeRecipient is one deliverable recipient: the ref and the FULL number in national form.
+// NoticeRecipient is one deliverable recipient: the ref and the FULL number in national form — and, when
+// the campaign mapped attributes (ADR 0101 #12), their formatted values by code. All personal data.
 type NoticeRecipient struct {
-	Ref   string
-	Phone string
+	Ref        string
+	Phone      string
+	Attributes map[string]string
 }
 
 // NoticeSelection is the outcome of SelectNoticeRecipients.

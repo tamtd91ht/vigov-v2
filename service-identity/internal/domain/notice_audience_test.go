@@ -44,7 +44,7 @@ func TestSelectNoticeRecipients(t *testing.T) {
 		{Ref: "F", Phone: "0900000002"},
 		{Ref: "F", Phone: "0900000002"}, // the same row twice — one recipient, not a skip
 	})
-	if len(sel.Recipients) != 2 || sel.Recipients[0] != (NoticeRecipient{Ref: "A", Phone: "0900000000"}) ||
+	if len(sel.Recipients) != 2 || sel.Recipients[0].Ref != "A" || sel.Recipients[0].Phone != "0900000000" ||
 		sel.Recipients[1].Ref != "F" {
 		t.Errorf("recipients = %+v, want A (national form) then F", sel.Recipients)
 	}

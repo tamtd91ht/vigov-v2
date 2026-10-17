@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/vihat/vigov/core/audit"
 	"github.com/vihat/vigov/core/privacy"
@@ -31,11 +32,17 @@ type (
 		NoticeAudienceCounts(ctx context.Context, a domain.NoticeAudience) (active, inactive int, err error)
 		NoticeAudiencePage(ctx context.Context, a domain.NoticeAudience, after string, limit int) ([]domain.NoticeCandidate, error)
 		NoticeRevealCandidates(ctx context.Context, tx *store.ScopedTx, refs []string) ([]domain.NoticeCandidate, error)
+		NoticeRevealAttributeSources(ctx context.Context, tx *store.ScopedTx, refs []string) (map[string]domain.NoticeAttributeSource, error)
 	}
 	StaffNoticeReader interface {
 		NoticeAudienceCandidates(ctx context.Context, a domain.NoticeAudience) ([]domain.NoticeCandidate, error)
 		NoticeRevealCandidates(ctx context.Context, tx *store.ScopedTx, codes []string) ([]domain.NoticeCandidate, error)
+		NoticeRevealAttributeSources(ctx context.Context, tx *store.ScopedTx, codes []string) (map[string]domain.NoticeAttributeSource, error)
 		StaffCodeExists(ctx context.Context, tx *store.ScopedTx, code string) (bool, error)
+	}
+	// NoticeFieldReader is the commune's attribute definitions (ADR 0101). *idstore.CitizenFieldStore.
+	NoticeFieldReader interface {
+		List(ctx context.Context, includeRetired bool) ([]domain.CitizenField, error)
 	}
 )
 
@@ -65,15 +72,79 @@ type NoticeAudience struct {
 	db       *store.DB
 	citizens CitizenNoticeReader
 	staff    StaffNoticeReader
+	fields   NoticeFieldReader
 	// pageSize is domain.MaxNoticeAudiencePage; a field only so a test can walk pages of two.
 	pageSize int
 }
 
-func NewNoticeAudience(db *store.DB, citizens CitizenNoticeReader, staff StaffNoticeReader) *NoticeAudience {
-	if db == nil || citizens == nil || staff == nil {
-		panic("app.NewNoticeAudience: db, citizens and staff are required")
+func NewNoticeAudience(db *store.DB, citizens CitizenNoticeReader, staff StaffNoticeReader, fields NoticeFieldReader) *NoticeAudience {
+	if db == nil || citizens == nil || staff == nil || fields == nil {
+		panic("app.NewNoticeAudience: db, citizens, staff and fields are required")
 	}
-	return &NoticeAudience{db: db, citizens: citizens, staff: staff, pageSize: domain.MaxNoticeAudiencePage}
+	return &NoticeAudience{db: db, citizens: citizens, staff: staff, fields: fields, pageSize: domain.MaxNoticeAudiencePage}
+}
+
+// Attributes lists what a campaign of `kind` may map a template parameter to (ListNoticeAttributes, ADR
+// 0101 #12): configuration only — nothing personal is read, nothing audited.
+func (uc *NoticeAudience) Attributes(ctx context.Context, kind domain.NoticeRecipientKind) ([]domain.NoticeAttribute, error) {
+	switch kind {
+	case domain.NoticeRecipientStaff:
+		return domain.NoticeAttributesFor(kind, nil), nil
+	case domain.NoticeRecipientCitizen:
+		// Scoped: CitizenFieldStore reads through db.For(ctx) — the context's commune is tenant_id = $1.
+		defs, err := uc.fields.List(ctx, false)
+		if err != nil {
+			return nil, fmt.Errorf("thuoc_tinh_dot_gui: xã %s: %w", tenant.MustFrom(ctx), err)
+		}
+		return domain.NoticeAttributesFor(kind, defs), nil
+	}
+	return nil, errors.Join(ErrNoticeRevealInvalid, errors.New("thiếu loại người nhận"))
+}
+
+// noticeAttributePlan is a checked attribute_codes request: the codes, the definitions by code (live and
+// retired) and the commune's zone. Zero when no attribute was asked.
+type noticeAttributePlan struct {
+	codes []string
+	defs  map[string]domain.CitizenField
+	loc   *time.Location
+}
+
+// planAttributes checks attribute_codes BEFORE the transaction: the definitions are configuration, read
+// once per call, never per recipient.
+func (uc *NoticeAudience) planAttributes(ctx context.Context, kind domain.NoticeRecipientKind, codes []string) (noticeAttributePlan, error) {
+	if len(codes) > domain.MaxNoticeAttributeCodes {
+		return noticeAttributePlan{}, errors.Join(ErrNoticeRevealInvalid,
+			fmt.Errorf("quá %d mã thuộc tính trong một lần mở", domain.MaxNoticeAttributeCodes))
+	}
+	nonBlank := false
+	for _, c := range codes {
+		nonBlank = nonBlank || strings.TrimSpace(c) != ""
+	}
+	if !nonBlank {
+		return noticeAttributePlan{}, nil
+	}
+	var defs []domain.CitizenField
+	if kind == domain.NoticeRecipientCitizen {
+		var err error
+		// Live AND retired: the mapping was fixed at POST (identity.proto). Scoped through db.For(ctx).
+		if defs, err = uc.fields.List(ctx, true); err != nil {
+			return noticeAttributePlan{}, fmt.Errorf("mo_so_cho_dot_gui: đọc cấu hình thuộc tính: %w", err)
+		}
+	}
+	checked, err := domain.CheckNoticeAttributeCodes(kind, codes, defs)
+	if err != nil {
+		return noticeAttributePlan{}, errors.Join(ErrNoticeRevealInvalid, err)
+	}
+	// The commune's zone for dateTime — an error, never a fallback to UTC (domain.MuiGio).
+	loc, err := domain.MuiGio()
+	if err != nil {
+		return noticeAttributePlan{}, err
+	}
+	byCode := make(map[string]domain.CitizenField, len(defs))
+	for _, d := range defs {
+		byCode[d.Code] = d
+	}
+	return noticeAttributePlan{codes: checked, defs: byCode, loc: loc}, nil
 }
 
 // Resolve answers one page of a CHECKED audience (domain.CheckNoticeAudience) after the ref `after`
@@ -167,8 +238,11 @@ func maskMembers(rs []domain.NoticeRecipient) []NoticeAudienceMember {
 // comms captured from authz.Principal.Ma at POST. It must be a `nguoi_dung.ma` of this commune
 // (soft-deleted included), checked inside the same transaction; anything else is
 // ErrNoticeRevealInvalid. IP is EMPTY: identity observes no browser on this hop (identity.proto).
+//
+// ATTRIBUTES (ADR 0101 #12): attributeCodes, when given, are read for the SAME recipients in the SAME
+// transaction and recorded on the SAME entry — the codes, never a value.
 func (uc *NoticeAudience) Reveal(ctx context.Context, kind domain.NoticeRecipientKind, refs []string,
-	campaignRef, actorCode string) ([]domain.NoticeRecipient, error) {
+	campaignRef, actorCode string, attributeCodes []string) ([]domain.NoticeRecipient, error) {
 
 	switch {
 	case kind != domain.NoticeRecipientCitizen && kind != domain.NoticeRecipientStaff:
@@ -184,13 +258,20 @@ func (uc *NoticeAudience) Reveal(ctx context.Context, kind domain.NoticeRecipien
 		// whole commune" with nobody (identity.proto).
 		return nil, errors.Join(ErrNoticeRevealInvalid, errors.New("thiếu actor_code"))
 	}
+	plan, err := uc.planAttributes(ctx, kind, attributeCodes)
+	if err != nil {
+		if errors.Is(err, ErrNoticeRevealInvalid) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("mo_so_cho_dot_gui: xã %s: %w", tenant.MustFrom(ctx), err)
+	}
 	wanted := collapseRefs(refs)
 	if len(wanted) == 0 {
 		return nil, nil // empty answers empty — never "everyone"
 	}
 
 	var out []domain.NoticeRecipient
-	err := uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
+	err = uc.db.For(ctx).Tx(ctx, func(tx *store.ScopedTx) error {
 		ok, err := uc.staff.StaffCodeExists(ctx, tx, actorCode)
 		if err != nil {
 			return err
@@ -225,13 +306,23 @@ func (uc *NoticeAudience) Reveal(ctx context.Context, kind domain.NoticeRecipien
 			return nil // nothing disclosed, nothing written
 		}
 
-		delta, err := json.Marshal(map[string]any{
+		if len(plan.codes) > 0 {
+			if err := uc.attachAttributes(ctx, tx, kind, plan, sel.Recipients); err != nil {
+				return err
+			}
+		}
+
+		fields := map[string]any{
 			// The FIELD opened, the kind and the COUNT — never a number, never a ref list (rule 6,
 			// forbidden #4).
 			"field": "phone",
 			"kind":  recipientKindLabel(kind),
 			"count": len(sel.Recipients),
-		})
+		}
+		if len(plan.codes) > 0 {
+			fields["attributes"] = plan.codes // the CODES opened (ADR 0101 #12) — never a value
+		}
+		delta, err := json.Marshal(fields)
 		if err != nil {
 			return fmt.Errorf("mo_so_cho_dot_gui: delta: %w", err)
 		}
@@ -256,6 +347,33 @@ func (uc *NoticeAudience) Reveal(ctx context.Context, kind domain.NoticeRecipien
 		return nil, fmt.Errorf("mo_so_cho_dot_gui: xã %s: %w", tenant.MustFrom(ctx), err)
 	}
 	return out, nil
+}
+
+// attachAttributes reads the attribute sources of the selected recipients in the Reveal transaction and
+// sets each recipient's formatted values — one entry per requested code, "" when absent.
+func (uc *NoticeAudience) attachAttributes(ctx context.Context, tx *store.ScopedTx, kind domain.NoticeRecipientKind,
+	plan noticeAttributePlan, rs []domain.NoticeRecipient) error {
+
+	refs := make([]string, 0, len(rs))
+	for _, r := range rs {
+		refs = append(refs, r.Ref)
+	}
+	var (
+		srcs map[string]domain.NoticeAttributeSource
+		err  error
+	)
+	if kind == domain.NoticeRecipientCitizen {
+		srcs, err = uc.citizens.NoticeRevealAttributeSources(ctx, tx, refs)
+	} else {
+		srcs, err = uc.staff.NoticeRevealAttributeSources(ctx, tx, refs)
+	}
+	if err != nil {
+		return err
+	}
+	for i := range rs {
+		rs[i].Attributes = domain.FormatNoticeAttributes(plan.codes, plan.defs, srcs[rs[i].Ref], plan.loc)
+	}
+	return nil
 }
 
 // recipientKindLabel is the delta's spelling of the recipient kind.
