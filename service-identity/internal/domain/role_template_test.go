@@ -66,10 +66,10 @@ func TestRoleTemplatesAreTheEightOfSpec41WithTheirCounts(t *testing.T) {
 		isLeader bool
 		count    int
 	}{
-		{1, "chu-tich-ubnd", "Chủ tịch UBND", true, 43},
+		{1, "chu-tich-ubnd", "Chủ tịch UBND", true, 44},
 		{2, "pho-chu-tich-ubnd", "Phó Chủ tịch UBND", true, 29},
 		// Migration 0034 (owner 16/10/2026) moved five of these: 20→22, 12→13, 8→9, 6→8, 4→6.
-		{3, "chanh-van-phong", "Chánh Văn phòng", false, 22},
+		{3, "chanh-van-phong", "Chánh Văn phòng", false, 23},
 		{4, "truong-bo-phan", "Trưởng bộ phận", false, 13},
 		{5, "chuyen-vien", "Chuyên viên chuyên môn", false, 9},
 		{6, "ke-toan", "Kế toán", false, 6},
@@ -150,6 +150,12 @@ func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 	if added0032 != 4 {
 		t.Fatalf("migration 0032 thêm %d khoá mới, phép kiểm này viết cho 4 — đọc lại quyết định trước khi sửa", added0032)
 	}
+	// Migration 0035 (ADR 0099 #3, owner 17/10/2026): admin.sms, granted wherever admin.zalo is.
+	of0035 := seededKeys(t, filepath.Join("..", "..", "migrations", "0035_sms_channel_permission.sql"))
+	if len(of0035) != 1 || !of0035["admin.sms"] {
+		t.Fatalf("migration 0035 gieo %v, phép kiểm này viết cho đúng admin.sms — đọc lại quyết định trước khi sửa", of0035)
+	}
+	of0001["admin.sms"] = true
 	chair := RoleTemplates()[0]
 	got := map[string]bool{}
 	for _, k := range chair.Permissions {
@@ -169,7 +175,7 @@ func TestChairmanHoldsExactlyTheKeysOf0001(t *testing.T) {
 	sort.Strings(missing)
 	sort.Strings(extra)
 	if len(missing) > 0 || len(extra) > 0 {
-		t.Errorf("Chủ tịch UBND: thiếu %v, thừa %v so với 33 khoá của 0001 + 6 khoá của 0028 + 4 khoá của 0032", missing, extra)
+		t.Errorf("Chủ tịch UBND: thiếu %v, thừa %v so với 33 khoá của 0001 + 6 khoá của 0028 + 4 khoá của 0032 + admin.sms của 0035", missing, extra)
 	}
 }
 
@@ -233,12 +239,12 @@ func TestRoleTemplatesNeverGrantTheNarrowKeysNorTheAdminRole(t *testing.T) {
 	}
 }
 
-// THE UNION IS WHAT THE CALLER MUST HOLD — and, because Chủ tịch holds all 43 (0001's 33 + 0028's
-// six + 0032's four), it is exactly those 43.
+// THE UNION IS WHAT THE CALLER MUST HOLD — and, because Chủ tịch holds all 44 (0001's 33 + 0028's
+// six + 0032's four + 0035's admin.sms), it is exactly those 44.
 func TestRoleTemplatePermissionsIsTheUnion(t *testing.T) {
 	u := RoleTemplatePermissions()
-	if len(u) != 43 {
-		t.Fatalf("hợp các quyền của bộ mẫu có %d khoá, muốn 43", len(u))
+	if len(u) != 44 {
+		t.Fatalf("hợp các quyền của bộ mẫu có %d khoá, muốn 44", len(u))
 	}
 	in := map[string]bool{}
 	for _, k := range u {

@@ -107,6 +107,8 @@ func RoleTemplates() []RoleTemplate {
 				"notice.send",
 				// Migration 0032, owner decision 15/10/2026 (file comment).
 				"admin.village", "admin.message", "admin.mail", "admin.zalo",
+				// Migration 0035 (ADR 0099 #3): admin.sms goes wherever admin.zalo is.
+				"admin.sms",
 			},
 		},
 		{
@@ -138,6 +140,8 @@ func RoleTemplates() []RoleTemplate {
 				"admin.lookup",
 				// Migration 0032, owner decision 15/10/2026 (file comment): holds admin.lookup, so holds the four.
 				"admin.village", "admin.message", "admin.mail", "admin.zalo",
+				// Migration 0035 (ADR 0099 #3): admin.sms goes wherever admin.zalo is.
+				"admin.sms",
 				"content.read", "content.update",
 				"announcement.create",
 				// Migration 0034, owner decision 16/10/2026 (file comment).

@@ -376,6 +376,20 @@
       "source": "service-identity/migrations/0021_mini_app_secret.sql:176"
     },
     {
+      "entity": "NoticeCampaign",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "notice_campaign",
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:471"
+    },
+    {
+      "entity": "NoticeRecipient",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "notice_recipient",
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:638"
+    },
+    {
       "entity": "OperatorAccount",
       "service": "identity",
       "scope": "platform",
@@ -626,6 +640,20 @@
       "scope": "tenant",
       "table": "ghep_phien",
       "source": "service-identity/migrations/0004_kenh_cong_dan.sql:453"
+    },
+    {
+      "entity": "SmsAccount",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "sms_account",
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:232"
+    },
+    {
+      "entity": "SmsTemplate",
+      "service": "comms",
+      "scope": "tenant",
+      "table": "sms_template",
+      "source": "service-comms/migrations/0032_notice_campaigns_sms_multi_oa.sql:366"
     },
     {
       "entity": "StaffNotification",

@@ -13,6 +13,8 @@ import (
 // list IS that decision for this service: moving a table across the line changes it here, in review.
 var hashPartitionedTables = []string{
 	"audit_log",
+	"notice_campaign",  // 0032, ADR 0099: one row per campaign, for ever
+	"notice_recipient", // 0032, ADR 0099: campaign × the commune's directory
 	"portal_sync_runs",
 	"staff_notification",
 	"stored_file",
