@@ -197,7 +197,8 @@ hiệu lực 01/01/2026, chưa được kiểm** — ai dựng hay nghiệm thu 
 ## ĐIỀU KIỆN DỪNG
 
 1. Truy vấn cột Zalo trả bất cứ gì ngoài một boolean, hoặc được gọi với `tenant_id` không từ `Host`
-2. Một tuyến trả số đầy đủ ngoài nút "Xem số đầy đủ" — kể cả xuất, kể cả gRPC cho service khác
+2. Một tuyến trả số đầy đủ ngoài nút "Xem số đầy đủ" — kể cả xuất, kể cả gRPC cho service khác (ngoại lệ duy
+   nhất, chủ dự án 17/10/2026: `GetCitizenContactMatchPhone` cho service-petitions — ADR 0102 #2)
 3. Thêm khoá quyền mới cho danh bạ (câu mở #27) hay gán khoá cho vai trò ngoài D12
 4. Giá trị nguồn thứ ba, đồng bộ từ Mini App, hoặc ghi `zalo_uid` / `cong_dan_id` lên dòng danh bạ
 5. Thu hẹp hay nới ô tìm so với D11 mà không hỏi lại
