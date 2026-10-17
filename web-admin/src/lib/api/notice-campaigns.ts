@@ -1,5 +1,5 @@
 /**
- * Notice campaigns (ADR 0099 #4–#9) — web-admin "Gửi tin ZNS / SMS" (`/gui-thong-bao`). Five routes, all
+ * Notice campaigns (ADR 0099 #4–#9) — web-admin "Gửi tin ZNS / SMS" (`/gui-thong-bao`). Six routes, all
  * `notice.send` (`service-comms/internal/http/notice_campaigns.go`):
  *
  *   GET  /api/v1/notice-templates            what a campaign can be composed from (every OA, every SMS account)
@@ -7,10 +7,13 @@
  *   POST /api/v1/notice-campaigns            "Gửi thông báo" — Idempotency-Key REQUIRED
  *   GET  /api/v1/notice-campaigns            the "Đã gửi" history, newest first, `?cursor=` pages
  *   GET  /api/v1/notice-campaigns/{id}       one campaign (its progress while it sends)
+ *   GET  /api/v1/notice-campaigns/{id}/recipients   one campaign's recipients: MASKED number, result, error
  *
- * NO PHONE NUMBER travels either way: a request names an AUDIENCE (a kind plus group / tag / unit ids),
- * never a person; a reply carries counts, never recipients (rule 3). No tenant, no staff code in any
- * request: the commune is the `Host`'s, the actor the session's (rule 1 forbidden #2).
+ * A DIRECTORY audience names a kind plus group / tag / unit ids, never a person. The two IMPORTED sources
+ * (ADR 0099 §Sửa đổi S1–S2: a typed list, a file read in the browser) are the one case where numbers go
+ * UP, in the body of a POST — never in a URL, never logged; the file itself is never uploaded. A reply
+ * carries counts, and the recipients route numbers MASKED by comms, never full (rule 3). No tenant, no
+ * staff code in any request: the commune is the `Host`'s, the actor the session's (rule 1 forbidden #2).
  *
  * MONEY IS DECIMAL TEXT ("3500.00", an ESTIMATE, VAT excluded) and stays text here: the screen formats the
  * string, never a float (`formatMoney` in the screen's form module).
@@ -43,30 +46,120 @@ import type {
 /** `channel` on the wire (comms `domain.NoticeChannelZNS` / `NoticeChannelSMS`). */
 export type NoticeChannel = "zalo-zns" | "sms";
 
-/** `audience.kind` — the five chips of step 1, as comms stores them. */
+/**
+ * `audience.kind` — the five directory chips of step 1, and the two imported sources (ADR 0099 §Sửa đổi
+ * S1): `danh-sach-so` a typed list, `tep-nhap` a file. As comms stores them.
+ */
 export type NoticeAudienceKind =
   | "nguoi-dan-tat-ca"
   | "nguoi-dan-theo-nhom"
   | "nguoi-dan-theo-nhan"
   | "can-bo-tat-ca"
-  | "can-bo-theo-bo-phan";
+  | "can-bo-theo-bo-phan"
+  | "danh-sach-so"
+  | "tep-nhap";
 
 /** A campaign's state (migration 0032). `da-gui` = the PROVIDER accepted the messages (ADR 0099 #9). */
 export type NoticeCampaignStatus = "dang-gui" | "da-gui" | "gui-mot-phan" | "that-bai";
+
+/**
+ * One recipient row's result (ADR 0099 #8 and §Sửa đổi S5). `da-gui` = the provider accepted it;
+ * `khong-hop-le` = the number did not normalise, kept in the history all the same.
+ */
+export type NoticeRecipientStatus = "cho-gui" | "da-gui" | "that-bai" | "bo-qua" | "khong-hop-le";
+
+/** How an SMS to an imported list gets its text (S3): a file column per row, or one shared text. */
+export type SmsContentMode = "cot-trong-tep" | "noi-dung-chung";
+
+// ---- UNTIL REGEN (TASK D-7) ------------------------------------------------------------------------
+//
+// `schema.gen.ts` does not carry the imported sources yet: the backend half of TASK D-7 is built in
+// parallel and `make kb` has not run. Every shape below is the contract the task fixed (ADR 0099 §Sửa đổi
+// S1–S5), named as the generator is expected to name it.
+//
+// DELETE THIS WHOLE BLOCK in the commit that lands the regen: import the row / recipient shapes and the
+// recipients route type from `schema.gen`, drop the `…UntilRegen` types below, and turn `RecipientsRoute`
+// into the generated route type in the `satisfies`. A shape that drifted from the server is then a red
+// `tsc` — the point of agent rule 6.
+
+/**
+ * One imported row. `phone` exactly as typed or read (comms normalises `0…` / `84…` / `+84…` and counts
+ * what does not normalise); `content` the row's own SMS text (`cot-trong-tep`); `values` the row's
+ * variables (`{"variable_1": …}`, SMS `noi-dung-chung`) or ZNS parameters keyed by field.
+ */
+export type comms_noticeRecipientRowIn = { phone: string; content?: string; values?: Record<string, string> };
+
+/**
+ * Which file column fed what (`tep-nhap` only; owner 17/10/2026: "lịch sử nên lưu thông tin map biến").
+ * Values are the HEADERS of file row 1 — names of columns, never a cell. `content_column` for SMS
+ * `cot-trong-tep`, `variables` for SMS `noi-dung-chung`, `params` for ZNS parameters read from a column.
+ */
+export type comms_noticeRecipientMapping = {
+  phone_column: string;
+  content_column?: string;
+  variables?: Record<string, string>;
+  params?: Record<string, string>;
+};
+
+/** What the two POSTs take on top of the generated body. `template_ref` is absent for SMS to an imported list. */
+type NoticeBodyUntilRegen = {
+  template_ref?: string;
+  recipients?: comms_noticeRecipientRowIn[];
+  sms_content_mode?: SmsContentMode;
+  content?: string;
+  mapping?: comms_noticeRecipientMapping;
+};
+type NoticePreviewInUntilRegen = Omit<comms_noticePreviewIn, "template_ref"> & NoticeBodyUntilRegen;
+type NoticeCampaignInUntilRegen = Omit<comms_noticeCampaignIn, "template_ref"> & NoticeBodyUntilRegen;
+
+/** The preview's two new counts: numbers that did not normalise, and repeats dropped. */
+type NoticePreviewCountsUntilRegen = { invalid_count: number; duplicate_count: number };
+/** The campaign's own record of how an imported list was read: `null` for every other source. */
+type NoticeCampaignCountsUntilRegen = {
+  invalid_count: number;
+  recipient_mapping: comms_noticeRecipientMapping | null;
+  content: string | null;
+  sms_content_mode: SmsContentMode | null;
+};
+
+/** GET notice-campaigns/{id}/recipients — one row. `phone_masked` comes masked from comms; never the full number. */
+export type comms_noticeRecipientOut = {
+  id: string;
+  phone_masked: string;
+  status: string;
+  error_message: string;
+  sent_at: string | null;
+  created_at: string;
+};
+export type comms_noticeRecipientListOut = { items: comms_noticeRecipientOut[]; next_cursor: string };
+
+type RecipientsRoute = { duongDan: "/api/v1/notice-campaigns/{id}/recipients"; truyVan: { cursor?: string } };
+
+// ---- end UNTIL REGEN -------------------------------------------------------------------------------
 
 export type NoticeTemplateParam = comms_noticeTemplateParamOut;
 export type ZnsNoticeTemplate = comms_znsNoticeTemplateOut;
 export type SmsNoticeTemplate = comms_smsNoticeTemplateOut;
 export type NoticeTemplates = comms_noticeTemplatesOut;
-export type NoticePreview = comms_noticePreviewOut;
+export type NoticePreview = comms_noticePreviewOut & NoticePreviewCountsUntilRegen;
 
-export type NoticeCampaign = Omit<gen_noticeCampaignOut, "status"> & { status: NoticeCampaignStatus };
+export type NoticeCampaign = Omit<gen_noticeCampaignOut, "status"> &
+  NoticeCampaignCountsUntilRegen & { status: NoticeCampaignStatus };
 export type NoticeCampaignPage = Omit<gen_noticeCampaignListOut, "items"> & { items: NoticeCampaign[] };
+
+export type NoticeRecipient = Omit<comms_noticeRecipientOut, "status"> & { status: NoticeRecipientStatus };
+export type NoticeRecipientPage = Omit<comms_noticeRecipientListOut, "items"> & { items: NoticeRecipient[] };
+export type NoticeRecipientRow = comms_noticeRecipientRowIn;
+export type NoticeRecipientMapping = comms_noticeRecipientMapping;
 
 /**
  * What the officer composed. Exactly one source: `oaId` for ZNS, `smsAccountId` for SMS — the other is
  * not sent at all (comms refuses both). `params` is keyed by the template parameters' `field`: the Zalo
  * parameter NAME for ZNS, the slot POSITION ("1", "2", …) for SMS.
+ *
+ * The imported sources add `recipients` (the rows), and for SMS `smsContentMode` + `content` with
+ * `templateRef` "" — an SMS to an imported list is free text, not a registered template (S3). Each is
+ * sent only when set, so a directory draft's body is byte-for-byte what it was.
  */
 export type NoticeDraft = {
   channel: NoticeChannel;
@@ -74,6 +167,11 @@ export type NoticeDraft = {
   templateRef: string;
   audience: { kind: NoticeAudienceKind; ids: readonly string[]; tags: readonly string[] };
   params: Readonly<Record<string, string>>;
+  recipients?: readonly NoticeRecipientRow[];
+  smsContentMode?: SmsContentMode;
+  content?: string;
+  /** `tep-nhap` only: which header fed the phone, the content, each variable / parameter. */
+  mapping?: NoticeRecipientMapping;
 };
 
 const TEMPLATES_PATH = "/api/v1/notice-templates" satisfies comms_get_notice_templates["duongDan"];
@@ -81,6 +179,7 @@ const PREVIEWS_PATH = "/api/v1/notice-campaign-previews" satisfies comms_post_no
 const CAMPAIGNS_PATH = "/api/v1/notice-campaigns" satisfies comms_post_notice_campaigns["duongDan"];
 const CAMPAIGNS_LIST_PATH = "/api/v1/notice-campaigns" satisfies comms_get_notice_campaigns["duongDan"];
 const CAMPAIGN_TEMPLATE = "/api/v1/notice-campaigns/{id}" satisfies comms_get_notice_campaigns_by_id["duongDan"];
+const RECIPIENTS_TEMPLATE = "/api/v1/notice-campaigns/{id}/recipients" satisfies RecipientsRoute["duongDan"];
 
 /** Success statuses, as `notice_campaigns.go` declares them (`@reply`). */
 export const NOTICE_STATUS = { previewed: 200, created: 201 } as const;
@@ -106,16 +205,37 @@ export function listNoticeTemplates(): Promise<KetQua<NoticeTemplates>> {
 }
 
 /** The preview body, built key by key (a `...draft` is how a stray field goes up). */
-function previewBody(d: NoticeDraft): comms_noticePreviewIn {
-  const body: comms_noticePreviewIn = {
+function previewBody(d: NoticeDraft): NoticePreviewInUntilRegen {
+  const body: NoticePreviewInUntilRegen = {
     channel: d.channel,
-    template_ref: d.templateRef,
     audience: { kind: d.audience.kind, ids: [...d.audience.ids], tags: [...d.audience.tags] },
     params: { ...d.params },
   };
+  if (d.templateRef !== "") body.template_ref = d.templateRef;
   if (d.channel === "zalo-zns") body.oa_id = d.sourceId;
   else body.sms_account_id = d.sourceId;
+  if (d.recipients !== undefined) body.recipients = d.recipients.map(rowBody);
+  if (d.smsContentMode !== undefined) body.sms_content_mode = d.smsContentMode;
+  if (d.content !== undefined) body.content = d.content;
+  if (d.mapping !== undefined) body.mapping = mappingBody(d.mapping);
   return body;
+}
+
+/** The mapping, key by key: an optional part only when it is there. */
+function mappingBody(m: NoticeRecipientMapping): comms_noticeRecipientMapping {
+  const out: comms_noticeRecipientMapping = { phone_column: m.phone_column };
+  if (m.content_column !== undefined) out.content_column = m.content_column;
+  if (m.variables !== undefined) out.variables = { ...m.variables };
+  if (m.params !== undefined) out.params = { ...m.params };
+  return out;
+}
+
+/** One row, key by key: `content` / `values` only when the row has them. */
+function rowBody(r: NoticeRecipientRow): comms_noticeRecipientRowIn {
+  const out: comms_noticeRecipientRowIn = { phone: r.phone };
+  if (r.content !== undefined) out.content = r.content;
+  if (r.values !== undefined) out.values = { ...r.values };
+  return out;
 }
 
 /** POST notice-campaign-previews — writes nothing; asked twice, it answers twice. */
@@ -138,7 +258,7 @@ export function createNoticeCampaign(
   title: string,
   idempotencyKey: string,
 ): Promise<KetQua<NoticeCampaign>> {
-  const sent: comms_noticeCampaignIn = { title, ...previewBody(d) };
+  const sent: NoticeCampaignInUntilRegen = { title, ...previewBody(d) };
   return docThanLoiGoi<NoticeCampaign>(
     goiGhi(CAMPAIGNS_PATH, "POST", sent, NOTICE_STATUS.created, { "Idempotency-Key": idempotencyKey }, { withCode: true }),
   );
@@ -155,4 +275,16 @@ export function listNoticeCampaigns(cursor = ""): Promise<KetQua<NoticeCampaignP
 /** GET notice-campaigns/{id} — another commune's id is the same 404 as an unknown one. */
 export function getNoticeCampaign(id: string): Promise<KetQua<NoticeCampaign>> {
   return docJSON<NoticeCampaign>(CAMPAIGN_TEMPLATE.replace("{id}", encodeURIComponent(id)));
+}
+
+/**
+ * GET notice-campaigns/{id}/recipients — one page of one campaign's recipients, numbers MASKED by comms
+ * (S5–S6). `next_cursor` "" = the last page; an empty cursor is not sent. Another commune's id is a 404.
+ */
+export function listNoticeRecipients(id: string, cursor = ""): Promise<KetQua<NoticeRecipientPage>> {
+  const q = new URLSearchParams();
+  thamSoTheoHopDong<RecipientsRoute["truyVan"]>(q)("cursor", cursor);
+  const qs = q.toString();
+  const path = RECIPIENTS_TEMPLATE.replace("{id}", encodeURIComponent(id));
+  return docJSON<NoticeRecipientPage>(qs === "" ? path : `${path}?${qs}`);
 }

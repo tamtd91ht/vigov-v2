@@ -4,6 +4,7 @@ import {
   createNoticeCampaign,
   getNoticeCampaign,
   listNoticeCampaigns,
+  listNoticeRecipients,
   listNoticeTemplates,
   previewNoticeCampaign,
   type NoticeDraft,
@@ -134,6 +135,57 @@ describe("preview", () => {
       thongBao: "OA này cần được uỷ quyền lại trước khi gửi.",
       code: "source_unavailable",
     });
+  });
+});
+
+describe("imported sources (ADR 0099 §Sửa đổi S1–S4)", () => {
+  const FILE_SMS: NoticeDraft = {
+    channel: "sms",
+    sourceId: "01JSMS",
+    templateRef: "",
+    audience: { kind: "tep-nhap", ids: [], tags: [] },
+    params: {},
+    recipients: [{ phone: "0900000000", values: { variable_1: "Bà A" } }, { phone: "0900000001" }],
+    smsContentMode: "noi-dung-chung",
+    content: "Mời {{variable_1}}",
+    mapping: { phone_column: "Số điện thoại", variables: { variable_1: "Họ tên" } },
+  };
+  const PREVIEW = { content: "Mời Bà A", recipient_count: 2, skipped_count: 0, invalid_count: 0, duplicate_count: 0, unit_price: null, estimated_cost: null, missing_params: [] };
+
+  it("SMS from a file: rows, mode, shared text and mapping go up; NO template_ref; a row without values sends none", async () => {
+    const fake = stubFetch(json(PREVIEW, 200));
+    expect(await previewNoticeCampaign(FILE_SMS)).toEqual({ ok: true, duLieu: PREVIEW });
+    expect(sentBody(fake)).toEqual({
+      channel: "sms",
+      sms_account_id: "01JSMS",
+      audience: { kind: "tep-nhap", ids: [], tags: [] },
+      params: {},
+      recipients: [{ phone: "0900000000", values: { variable_1: "Bà A" } }, { phone: "0900000001" }],
+      sms_content_mode: "noi-dung-chung",
+      content: "Mời {{variable_1}}",
+      mapping: { phone_column: "Số điện thoại", variables: { variable_1: "Họ tên" } },
+    });
+  });
+
+  it("the send carries the same body plus the title; a typed list sends no mapping key at all", async () => {
+    const fake = stubFetch(json({ ...CAMPAIGN, invalid_count: 0, recipient_mapping: null, content: null, sms_content_mode: null }, 201));
+    const typed: NoticeDraft = { ...ZNS, audience: { kind: "danh-sach-so", ids: [], tags: [] }, recipients: [{ phone: "0900000000" }] };
+    await createNoticeCampaign(typed, "t", "k");
+    const body = sentBody(fake)!;
+    expect(body).toMatchObject({ title: "t", template_ref: "zt-1", oa_id: "01JOA1", recipients: [{ phone: "0900000000" }] });
+    expect("mapping" in body).toBe(false);
+    expect("sms_content_mode" in body).toBe(false);
+    expect("content" in body).toBe(false);
+  });
+
+  it("recipients: GET /api/v1/notice-campaigns/{id}/recipients, the id encoded, no empty cursor, the next cursor encoded", async () => {
+    const page = { items: [{ id: "r1", phone_masked: "09****0000", status: "that-bai", error_message: "Sai mẫu (146)", sent_at: null, created_at: "2026-10-17T01:00:00Z" }], next_cursor: "" };
+    const fake = stubFetch(json(page, 200));
+    expect(await listNoticeRecipients("a/b")).toEqual({ ok: true, duLieu: page });
+    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/notice-campaigns/a%2Fb/recipients");
+    expect(fake.mock.calls[0]?.[1]?.method).toBe("GET");
+    await listNoticeRecipients("01JC1", "x y");
+    expect(fake.mock.calls[1]?.[0]).toBe("/api/v1/notice-campaigns/01JC1/recipients?cursor=x+y");
   });
 });
 

@@ -157,6 +157,7 @@ let previewReply: (b: PreviewBody) => Response = defaultPreview;
 let sendReplies: Response[] = [];
 let historyPages: Record<string, { items: unknown[]; next_cursor: string }> = { "": { items: [], next_cursor: "" } };
 let campaignById: Record<string, unknown> = {};
+let recipientPages: Record<string, { items: unknown[]; next_cursor: string }> = {};
 
 function serve() {
   vi.stubGlobal(
@@ -195,6 +196,8 @@ function serve() {
       if (url === "/api/v1/notice-campaigns" && init?.method === "POST") return sendReplies.shift() ?? json(campaign("01JNEW", "dang-gui", { recipient_count: 11 }), 201);
       const list = /^\/api\/v1\/notice-campaigns(?:\?cursor=(.*))?$/.exec(url);
       if (list) return json(historyPages[decodeURIComponent(list[1] ?? "")] ?? { items: [], next_cursor: "" });
+      const recips = /^\/api\/v1\/notice-campaigns\/([^/?]+)\/recipients(?:\?cursor=(.*))?$/.exec(url);
+      if (recips) return json(recipientPages[decodeURIComponent(recips[2] ?? "")] ?? { items: [], next_cursor: "" });
       const one = /^\/api\/v1\/notice-campaigns\/([^/?]+)$/.exec(url);
       if (one && campaignById[one[1]!]) return json(campaignById[one[1]!]);
       return json({ code: "not_found", message: "Không có tuyến này.", trace_id: "" }, 404);
@@ -213,6 +216,7 @@ beforeEach(() => {
   sendReplies = [];
   historyPages = { "": { items: [], next_cursor: "" } };
   campaignById = {};
+  recipientPages = {};
   serve();
 });
 
@@ -713,5 +717,298 @@ describe("the OA card (ADR 0098, several OAs since ADR 0099 #1)", () => {
     const card = el.querySelector('[data-oa-card="not-configured"]')!;
     expect(card.textContent).toContain("Nền tảng chưa khai ứng dụng Zalo dùng chung");
     expect(card.querySelector("button")).toBeNull();
+  });
+});
+
+// ---- the imported sources (ADR 0099 §Sửa đổi S1–S4) -------------------------------------------------
+
+async function typeArea(el: HTMLElement, id: string, value: string) {
+  const area = el.querySelector<HTMLTextAreaElement>(`#${id}`)!;
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  await act(async () => {
+    setter.call(area, value);
+    area.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+async function choose(el: HTMLElement, id: string, value: string) {
+  const select = el.querySelector<HTMLSelectElement>(`#${id}`)!;
+  await act(async () => {
+    select.value = value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+async function upload(el: HTMLElement, file: File) {
+  const input = el.querySelector<HTMLInputElement>("#notice-file")!;
+  Object.defineProperty(input, "files", { value: [file], configurable: true });
+  await act(async () => {
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  for (let i = 0; i < 5; i++) await settle();
+}
+
+const CSV = "﻿Họ tên,Số điện thoại,Ngày\r\nBà A,0900000000,20/10\r\nÔng B,0900000001,21/10\r\nBà C,0900000000,22/10\r\n";
+const importedPreview = (extra: Record<string, unknown> = {}) =>
+  json({ content: "Mời Bà A họp", recipient_count: 2, skipped_count: 0, invalid_count: 1, duplicate_count: 1, unit_price: null, estimated_cost: null, missing_params: [], ...extra });
+
+describe("imported source — typed list", () => {
+  it("SMS: live count, account select, shared content with a counter; the body carries danh-sach-so, rows, the content, NO template_ref, NO mapping", async () => {
+    previewReply = () => importedPreview();
+    const el = await mount(session(["notice.send"]));
+    await click(el, "Nhập số điện thoại");
+    await typeArea(el, "notice-typed-phones", "0900000000\n0900000001, 0900000002\n");
+    expect(el.querySelector("[data-typed-count]")!.textContent).toBe("3 số đã nhập");
+    expect(recipientsRow(el).textContent).toContain("3 số đã nhập");
+    await toTemplateStep(el);
+    await click(el, "Tin nhắn SMS");
+    expect(el.querySelector("[data-template-id]")).toBeNull();
+    expect(el.querySelector<HTMLSelectElement>("#notice-sms-account")!.value).toBe("01JSMS1");
+    await click(el, "Tiếp tục");
+    expect(stepOpen(el, 3)).toBe(true);
+    // A typed list has no columns: no mode switch, no "?" for variables.
+    expect(el.querySelector('input[name="notice-sms-mode"]')).toBeNull();
+    expect(el.querySelector("[data-variables-help]")).toBeNull();
+    await typeArea(el, "notice-sms-content", "UBND xa thong bao lich tiem");
+    expect(el.querySelector("[data-char-counter]")!.textContent).toBe("27/1.000 ký tự");
+    await click(el, "Xem trước");
+    const body = bodyOf(posts("/api/v1/notice-campaign-previews").at(-1));
+    expect(body).toEqual({
+      channel: "sms",
+      sms_account_id: "01JSMS1",
+      audience: { kind: "danh-sach-so", ids: [], tags: [] },
+      params: {},
+      recipients: [{ phone: "0900000000" }, { phone: "0900000001" }, { phone: "0900000002" }],
+      sms_content_mode: "noi-dung-chung",
+      content: "UBND xa thong bao lich tiem",
+    });
+    expect(row(el, "preview-invalid")).toBe("1");
+    expect(row(el, "preview-duplicate")).toBe("1");
+    expect(el.querySelector('[data-row="preview-invalid"] dt')!.textContent).toBe("Số không hợp lệ");
+    expect(el.querySelector('[data-row="preview-duplicate"] dt')!.textContent).toBe("Trùng, đã bỏ");
+    expect(sendButton(el)!.disabled).toBe(false);
+
+    await act(async () => sendButton(el)!.click());
+    await settle();
+    expect(bodyOf(posts("/api/v1/notice-campaigns")[0])).toMatchObject({ title: "UBND xa thong bao lich tiem", audience: { kind: "danh-sach-so" } });
+  });
+
+  it("refusals: variables in a typed list, over 1.000 numbers — Xem trước locked, nothing posted", async () => {
+    const el = await mount(session(["notice.send"]));
+    await click(el, "Nhập số điện thoại");
+    await typeArea(el, "notice-typed-phones", Array.from({ length: 1001 }, () => "0900000000").join("\n"));
+    expect(el.querySelector('[data-typed-phones] [role="alert"]')!.textContent).toContain("Tối đa 1.000 số");
+    await typeArea(el, "notice-typed-phones", "0900000000");
+    await toTemplateStep(el);
+    await click(el, "Tin nhắn SMS");
+    await click(el, "Tiếp tục");
+    await typeArea(el, "notice-sms-content", "Chào {{variable_1}}");
+    expect(el.querySelector("[data-import-errors]")!.textContent).toContain("Danh sách nhập tay không có cột để thay biến");
+    expect(button(el, "Xem trước")!.disabled).toBe(true);
+    expect(posts("/api/v1/notice-campaign-previews")).toHaveLength(0);
+  });
+});
+
+describe("imported source — file read in the browser", () => {
+  it("SMS shared text with {{variable_N}}: summary, guessed phone column, MASKED preview, one select per variable, the '?' help, rows + mapping in the body", async () => {
+    const el = await mount(session(["notice.send"]));
+    await click(el, "Nhập tệp");
+    await upload(el, new File([CSV], "ds.csv"));
+    expect(el.querySelector("[data-file-summary]")!.textContent).toBe("ds.csv · 3 dòng");
+    expect(el.querySelector<HTMLSelectElement>("#notice-phone-column")!.value).toBe("1");
+    const preview = el.querySelector("[data-file-preview]")!;
+    expect(preview.querySelectorAll("tbody tr")).toHaveLength(3);
+    expect(preview.textContent).toContain("09****0000");
+    expect(el.textContent).not.toMatch(/0900000000|0900000001/);
+    expect(calls.some((c) => c.url.includes("0900"))).toBe(false);
+
+    await toTemplateStep(el);
+    await click(el, "Tin nhắn SMS");
+    await click(el, "Tiếp tục");
+    const shared = el.querySelector<HTMLInputElement>('input[name="notice-sms-mode"][value="noi-dung-chung"]')!;
+    await act(async () => shared.click());
+    await typeArea(el, "notice-sms-content", "Mời {{variable_1}} họp ngày {{variable_2}}");
+    expect([...el.querySelectorAll("[data-variables] label")].map((l) => l.textContent)).toEqual(["{{variable_1}}", "{{variable_2}}"]);
+
+    const help = el.querySelector<HTMLButtonElement>("[data-variables-help]")!;
+    expect(help.getAttribute("aria-label")).toBe("Cách dùng biến trong nội dung");
+    await act(async () => help.click());
+    expect(el.querySelector("[data-variables-help-text]")!.textContent).toContain("{{variable_1}}, {{variable_2}}");
+
+    await choose(el, "notice-variable-1", "0");
+    await click(el, "Xem trước");
+    // variable_2 unmapped: the request goes, comms names it, the aside shows it as written.
+    previewReply = () => importedPreview({ missing_params: ["variable_2"] });
+    await click(el, "Xem trước");
+    expect(el.querySelector("[data-missing-params]")!.textContent).toBe("Còn chỗ trống chưa điền: {{variable_2}}.");
+    expect(sendButton(el)!.disabled).toBe(true);
+
+    await choose(el, "notice-variable-2", "2");
+    previewReply = () => importedPreview();
+    await click(el, "Xem trước");
+    expect(bodyOf(posts("/api/v1/notice-campaign-previews").at(-1))).toEqual({
+      channel: "sms",
+      sms_account_id: "01JSMS1",
+      audience: { kind: "tep-nhap", ids: [], tags: [] },
+      params: {},
+      recipients: [
+        { phone: "0900000000", values: { variable_1: "Bà A", variable_2: "20/10" } },
+        { phone: "0900000001", values: { variable_1: "Ông B", variable_2: "21/10" } },
+        { phone: "0900000000", values: { variable_1: "Bà C", variable_2: "22/10" } },
+      ],
+      sms_content_mode: "noi-dung-chung",
+      content: "Mời {{variable_1}} họp ngày {{variable_2}}",
+      mapping: { phone_column: "Số điện thoại", variables: { variable_1: "Họ tên", variable_2: "Ngày" } },
+    });
+    expect(sendButton(el)!.disabled).toBe(false);
+  });
+
+  it("SMS from a content column: {phone, content} rows, content_column in the mapping; no column = a sentence", async () => {
+    const el = await mount(session(["notice.send"]));
+    await click(el, "Nhập tệp");
+    await upload(el, new File(["SĐT,Nội dung\n0900000000,Mời họp\n"], "a.csv"));
+    await toTemplateStep(el);
+    await click(el, "Tin nhắn SMS");
+    await click(el, "Tiếp tục");
+    expect(el.querySelector("[data-import-errors]")!.textContent).toBe("Chọn cột nội dung.");
+    await choose(el, "notice-content-column", "1");
+    await click(el, "Xem trước");
+    expect(bodyOf(posts("/api/v1/notice-campaign-previews").at(-1))).toMatchObject({
+      recipients: [{ phone: "0900000000", content: "Mời họp" }],
+      sms_content_mode: "cot-trong-tep",
+      mapping: { phone_column: "SĐT", content_column: "Nội dung" },
+    });
+    expect("content" in bodyOf(posts("/api/v1/notice-campaign-previews").at(-1))).toBe(false);
+  });
+
+  it("ZNS: each parameter 'Giá trị chung | Lấy từ cột …'; a column-fed parameter goes in each row's values and the mapping", async () => {
+    const el = await mount(session(["notice.send"]));
+    await click(el, "Nhập tệp");
+    await upload(el, new File([CSV], "ds.csv"));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    expect([...el.querySelectorAll<HTMLOptionElement>("#notice-param-src-0 option")].map((o) => o.textContent)).toEqual([
+      "Giá trị chung",
+      "Lấy từ Họ tên (cột A)",
+      "Lấy từ Số điện thoại (cột B)",
+      "Lấy từ Ngày (cột C)",
+    ]);
+    await choose(el, "notice-param-src-0", "2");
+    expect(el.querySelector("#notice-param-0")).toBeNull();
+    await type(el, "notice-param-1", "Trạm y tế");
+    await click(el, "Xem trước");
+    expect(bodyOf(posts("/api/v1/notice-campaign-previews").at(-1))).toEqual({
+      channel: "zalo-zns",
+      oa_id: "01JOA1",
+      template_ref: "zt-1",
+      audience: { kind: "tep-nhap", ids: [], tags: [] },
+      params: { ngay_tiem: "", dia_diem: "Trạm y tế" },
+      recipients: [
+        { phone: "0900000000", values: { ngay_tiem: "20/10" } },
+        { phone: "0900000001", values: { ngay_tiem: "21/10" } },
+        { phone: "0900000000", values: { ngay_tiem: "22/10" } },
+      ],
+      mapping: { phone_column: "Số điện thoại", params: { ngay_tiem: "Ngày" } },
+    });
+  });
+
+  it("a wrong file: the sentence, no table, nothing posted", async () => {
+    const el = await mount(session(["notice.send"]));
+    await click(el, "Nhập tệp");
+    await upload(el, new File(["x"], "ds.xls"));
+    expect(el.querySelector('[data-file-import] [role="alert"]')!.textContent).toContain("Chỉ nhận tệp .xlsx hoặc .csv");
+    expect(el.querySelector("[data-file-summary]")).toBeNull();
+    expect(posts("/api/v1/notice-campaign-previews")).toHaveLength(0);
+  });
+});
+
+describe("history — one campaign's recipients and its mapping (S5)", () => {
+  const recipient = (id: string, status: string, extra: Record<string, unknown> = {}) => ({
+    id,
+    phone_masked: "09****0000",
+    status,
+    error_message: "",
+    sent_at: null,
+    created_at: "2026-10-17T01:00:00Z",
+    ...extra,
+  });
+
+  it("the row shows the invalid count; a click opens the masked recipients, the five results in words, the provider error, Tải thêm, the mapping block", async () => {
+    const imported = campaign("01JC9", "gui-mot-phan", {
+      channel: "sms",
+      template_name: "",
+      audience_kind: "tep-nhap",
+      invalid_count: 2,
+      sent_count: 1,
+      recipient_mapping: { phone_column: "Số điện thoại", variables: { variable_1: "Họ tên" } },
+      content: "Mời {{variable_1}} họp",
+      sms_content_mode: "noi-dung-chung",
+    });
+    historyPages = { "": { items: [imported], next_cursor: "" } };
+    recipientPages = {
+      "": {
+        items: [
+          recipient("r1", "da-gui", { sent_at: "2026-10-17T02:05:00Z" }),
+          recipient("r2", "that-bai", { error_message: "Brandname chưa kích hoạt (104)" }),
+          recipient("r3", "khong-hop-le", { phone_masked: "12" }),
+          recipient("r4", "cho-gui"),
+          recipient("r5", "bo-qua"),
+        ],
+        next_cursor: "p2",
+      },
+      p2: { items: [recipient("r6", "da-gui")], next_cursor: "" },
+    };
+    const el = await mount(session(ALL));
+    await act(async () => tabs(el)[1]!.click());
+    const cells = [...el.querySelectorAll('[data-campaign-id="01JC9"] td')].map((td) => td.textContent);
+    expect(cells[0]).toBe("Đợt 01JC9Lê Thị Gửi");
+    expect(cells[1]).toBe("Danh sách từ tệp");
+    expect(el.querySelector('[data-campaign-id="01JC9"] [data-invalid-count]')!.textContent).toBe("2 số không hợp lệ");
+
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-open-campaign="01JC9"]')!.click());
+    await settle();
+    expect(calls.map((c) => c.url)).toContain("/api/v1/notice-campaigns/01JC9/recipients");
+    const statuses = [...el.querySelectorAll("[data-recipient-status]")].map((b) => b.textContent);
+    expect(statuses).toEqual(["Đã gửi", "Gửi thất bại", "Số không hợp lệ", "Đang chờ gửi", "Bỏ qua"]);
+    const r2 = [...el.querySelectorAll('[data-recipient-id="r2"] td')].map((td) => td.textContent);
+    expect(r2[0]).toBe("09****0000");
+    expect(r2[2]).toBe("Brandname chưa kích hoạt (104)");
+    expect([...el.querySelectorAll('[data-recipient-id="r1"] td')][3]!.textContent).toBe("17/10/2026 09:05");
+
+    const mapping = el.querySelector("[data-mapping]")!;
+    expect(mapping.querySelector("h3")!.textContent).toBe("Thông tin map biến");
+    expect(mapping.querySelector('[data-mapping-row="phone"]')!.textContent).toBe("Cột số điện thoại:Số điện thoại");
+    expect(mapping.querySelector('[data-mapping-row="shared-content"]')!.textContent).toBe("Nội dung chung:Mời {{variable_1}} họp");
+    expect([...mapping.querySelectorAll('[data-mapping-table="variables"] td')].map((td) => td.textContent)).toEqual(["{{variable_1}}", "Họ tên"]);
+
+    await click(el, "Tải thêm");
+    expect(calls.map((c) => c.url)).toContain("/api/v1/notice-campaigns/01JC9/recipients?cursor=p2");
+    expect(el.querySelector('[data-recipient-id="r6"]')).not.toBeNull();
+    expect(button(el, "Tải thêm")).toBeNull();
+
+    await click(el, "Quay lại danh sách đợt");
+    expect(el.querySelector('[data-campaign-id="01JC9"]')).not.toBeNull();
+  });
+
+  it("ZNS mapping: Tham số → Cột, the rest shared; a directory campaign has no mapping block", async () => {
+    historyPages = {
+      "": {
+        items: [
+          campaign("01JZ", "da-gui", { audience_kind: "tep-nhap", recipient_mapping: { phone_column: "SĐT", params: { ngay_tiem: "Ngày" } }, content: null, sms_content_mode: null }),
+          campaign("01JD", "da-gui", { recipient_mapping: null, content: null, sms_content_mode: null }),
+        ],
+        next_cursor: "",
+      },
+    };
+    const el = await mount(session(ALL));
+    await act(async () => tabs(el)[1]!.click());
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-open-campaign="01JZ"]')!.click());
+    await settle();
+    const mapping = el.querySelector("[data-mapping]")!;
+    expect([...mapping.querySelectorAll('[data-mapping-table="params"] td')].map((td) => td.textContent)).toEqual(["ngay_tiem", "Ngày"]);
+    expect(mapping.textContent).toContain("Tham số không có trong bảng dùng giá trị chung.");
+    await click(el, "Quay lại danh sách đợt");
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-open-campaign="01JD"]')!.click());
+    await settle();
+    expect(el.querySelector("[data-mapping]")).toBeNull();
+    expect(el.textContent).toContain("Đợt này chưa có dòng người nhận nào.");
   });
 });

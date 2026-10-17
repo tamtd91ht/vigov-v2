@@ -10,8 +10,9 @@
  * recipient figure the client cannot count without double-counting (two groups, two tags) — the aside
  * uses the preview's figure, which the server deduplicates.
  *
- * NO PERSONAL DATA ON THIS SCREEN (rule 3): no number, no name of any recipient. The prototype's
- * "Ví dụ người nhận" block (`full_name · phone`) is dropped, not replaced (ADR 0099 "Lệch prototype").
+ * NO PERSONAL DATA ON THIS SCREEN (rule 3): no name of any recipient, and a number only MASKED. The
+ * prototype's "Ví dụ người nhận" block (`full_name · phone`) is dropped, not replaced (ADR 0099 "Lệch
+ * prototype"). The imported sources (typed list, file) live in `recipient-import.ts`.
  */
 
 import type { CitizenContactTag } from "@/lib/api/citizen-contacts";
@@ -20,6 +21,7 @@ import type {
   NoticeAudienceKind,
   NoticeCampaign,
   NoticeChannel,
+  NoticeRecipient,
   NoticeTemplateParam,
   SmsNoticeTemplate,
   ZnsNoticeTemplate,
@@ -62,8 +64,15 @@ export const AUDIENCE_WIRE: Readonly<Record<AudienceKind, NoticeAudienceKind>> =
   staff_unit: "can-bo-theo-bo-phan",
 };
 
+/** The two imported sources as the history names them (ADR 0099 §Sửa đổi S1). */
+export const IMPORTED_AUDIENCE_LABEL: Readonly<Record<"danh-sach-so" | "tep-nhap", string>> = {
+  "danh-sach-so": "Danh sách số nhập tay",
+  "tep-nhap": "Danh sách từ tệp",
+};
+
 /** The history's "Đối tượng" column: the chip's label for a stored kind; an unknown kind is shown as stored. */
 export function audienceKindLabel(wire: string): string {
+  if (wire === "danh-sach-so" || wire === "tep-nhap") return IMPORTED_AUDIENCE_LABEL[wire];
   const k = AUDIENCE_KINDS.find((key) => AUDIENCE_WIRE[key] === wire);
   return k === undefined ? wire : AUDIENCE_LABEL[k];
 }
@@ -271,8 +280,12 @@ export function paramLabel(channel: Channel, p: NoticeTemplateParam): string {
   return p.max_length > 0 ? `Ô ${p.field} (≤${p.max_length} ký tự)` : `Ô ${p.field}`;
 }
 
-/** A missing key as the officer reads it: ZNS the name, SMS "Ô 1". */
+/**
+ * A missing key as the officer reads it: ZNS the name, SMS "Ô 1"; a `variable_N` of a shared SMS text to
+ * an imported file is shown as it is written in the text, `{{variable_N}}`.
+ */
 export function missingLabel(channel: Channel, field: string): string {
+  if (/^variable_[1-9]\d*$/.test(field)) return `{{${field}}}`;
   return channel === "zns" ? field : `Ô ${field}`;
 }
 
@@ -289,6 +302,9 @@ export const PREVIEW_EMPTY =
 export const ZNS_CONTENT = "Nội dung theo mẫu đã duyệt trên Zalo";
 export const ROW_RECIPIENTS = "Người nhận";
 export const ROW_SKIPPED = "Bỏ qua (ngừng liên hệ / thiếu số)";
+/** The imported sources' two counts (S1): numbers comms could not normalise, and repeats dropped. */
+export const ROW_INVALID = "Số không hợp lệ";
+export const ROW_DUPLICATE = "Trùng, đã bỏ";
 export const ROW_UNIT_PRICE = "Đơn giá";
 export const ROW_COST = "Chi phí dự kiến";
 export const SEND_BUTTON = "Gửi thông báo";
@@ -336,9 +352,73 @@ export function statusTone(status: NoticeCampaign["status"]): StatusTone {
   return status === "da-gui" ? "success" : status === "that-bai" ? "danger" : status === "gui-mot-phan" ? "warn" : "neutral";
 }
 
+/** The "Người nhận" cell's second line when some numbers of an imported list did not normalise. */
+export function invalidCountText(n: number): string {
+  return `${n.toLocaleString("vi-VN")} số không hợp lệ`;
+}
+
+// ---- one campaign's recipients (S5) -----------------------------------------------------------------
+
+export const OPEN_CAMPAIGN_HINT = "Xem từng người nhận";
+export const BACK_TO_HISTORY = "Quay lại danh sách đợt";
+export const RECIPIENTS_TITLE = "Người nhận của đợt";
+export const RECIPIENTS_EMPTY = "Đợt này chưa có dòng người nhận nào.";
+export const RECIPIENT_COLUMNS = ["Số điện thoại", "Kết quả", "Lỗi", "Thời điểm"] as const;
+
+/**
+ * "Thông tin map biến" — how an imported FILE was read, as the campaign recorded it (owner 17/10/2026).
+ * Column names only, never a cell. A ZNS parameter absent from `params` took the shared value.
+ */
+export const MAPPING_TITLE = "Thông tin map biến";
+export const MAPPING_PHONE = "Cột số điện thoại";
+export const MAPPING_CONTENT_COLUMN = "Cột nội dung";
+export const MAPPING_SHARED_CONTENT = "Nội dung chung";
+export const MAPPING_VARIABLE_COLUMNS = ["Biến", "Cột"] as const;
+export const MAPPING_PARAM_COLUMNS = ["Tham số", "Cột"] as const;
+export const MAPPING_PARAMS_SHARED = "Mọi tham số dùng giá trị chung.";
+export const MAPPING_OTHER_PARAMS_SHARED = "Tham số không có trong bảng dùng giá trị chung.";
+
+/** `variable_1` → `{{variable_1}}`, as the officer wrote it. */
+export function mappingVariableLabel(key: string): string {
+  return `{{${key}}}`;
+}
+
+/** The five results in words. "Gửi thất bại" carries the provider's own message beside it. */
+export const RECIPIENT_STATUS_LABEL: Readonly<Record<NoticeRecipient["status"], string>> = {
+  "cho-gui": "Đang chờ gửi",
+  "da-gui": "Đã gửi",
+  "that-bai": "Gửi thất bại",
+  "bo-qua": "Bỏ qua",
+  "khong-hop-le": "Số không hợp lệ",
+};
+
+/** A status this screen does not know yet is shown as stored, never as a guessed word. */
+export function recipientStatusLabel(status: string): string {
+  return (RECIPIENT_STATUS_LABEL as Readonly<Record<string, string>>)[status] ?? status;
+}
+
+export function recipientStatusTone(status: NoticeRecipient["status"]): StatusTone {
+  return status === "da-gui" ? "success" : status === "that-bai" ? "danger" : status === "khong-hop-le" ? "warn" : "neutral";
+}
+
+const DATE = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", day: "2-digit", month: "2-digit", year: "numeric" });
+const TIME = new Intl.DateTimeFormat("vi-VN", { timeZone: "Asia/Ho_Chi_Minh", hour: "2-digit", minute: "2-digit", hour12: false });
+
+/**
+ * "17/10/2026 09:05" — when the row reached its result (`sent_at`), else when it was written. Date first,
+ * formatted in two parts: vi-VN's combined format puts the time first. An unreadable string as sent.
+ */
+export function recipientTimeText(r: Pick<NoticeRecipient, "sent_at" | "created_at">): string {
+  const iso = r.sent_at ?? r.created_at;
+  const at = new Date(iso);
+  return Number.isNaN(at.getTime()) ? iso : `${DATE.format(at)} ${TIME.format(at)}`;
+}
+
 /** "<mẫu> · <người gửi>" — the business code when identity could not name the sender. */
 export function campaignSubline(c: Pick<NoticeCampaign, "template_name" | "created_by" | "created_by_name">): string {
-  return `${c.template_name} · ${c.created_by_name !== "" ? c.created_by_name : c.created_by}`;
+  const who = c.created_by_name !== "" ? c.created_by_name : c.created_by;
+  // An SMS to an imported list has no template (S3): no empty name before the "·".
+  return c.template_name === "" ? who : `${c.template_name} · ${who}`;
 }
 
 // ---- the OA card --------------------------------------------------------------------------------------

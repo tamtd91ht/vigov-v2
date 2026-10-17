@@ -2,7 +2,7 @@
 
 import { Loader2, Send } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent, type ReactNode } from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -10,8 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
 import { PendingMarker } from "@/components/ui/pending-feature";
+import { Segmented } from "@/components/ui/segmented";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tab, TabList } from "@/components/ui/tabs";
+import { Tooltip } from "@/components/ui/tooltip";
 import { usePhien } from "@/features/phien/phien-hien-tai";
 import { CongQuyen } from "@/features/quyen/cong-quyen";
 import { countCitizenContacts, listCitizenContactTags, NO_CITIZEN_CONTACT_FILTER, type CitizenContactTag } from "@/lib/api/citizen-contacts";
@@ -24,14 +26,20 @@ import {
   createNoticeCampaign,
   getNoticeCampaign,
   listNoticeCampaigns,
+  listNoticeRecipients,
   listNoticeTemplates,
   NOTICE_ERROR,
   previewNoticeCampaign,
+  type NoticeAudienceKind,
   type NoticeCampaign,
   type NoticeCampaignPage,
   type NoticeDraft,
   type NoticePreview,
+  type NoticeRecipient,
+  type NoticeRecipientMapping,
   type NoticeTemplates,
+  type SmsContentMode,
+  type SmsNoticeTemplate,
 } from "@/lib/api/notice-campaigns";
 import type { identity_boPhanRa, identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
 import { cn } from "@/lib/cn";
@@ -42,6 +50,7 @@ import {
   audienceKindLabel,
   AUDIENCE_KINDS,
   AUDIENCE_LABEL,
+  BACK_TO_HISTORY,
   CAMPAIGN_TITLE_LABEL,
   campaignSubline,
   CHANNEL_LABEL,
@@ -53,8 +62,18 @@ import {
   HISTORY_COLUMNS,
   HISTORY_EMPTY,
   historyTabLabel,
+  invalidCountText,
   isStaffAudience,
   LOAD_MORE,
+  MAPPING_CONTENT_COLUMN,
+  MAPPING_OTHER_PARAMS_SHARED,
+  MAPPING_PARAM_COLUMNS,
+  MAPPING_PARAMS_SHARED,
+  MAPPING_PHONE,
+  MAPPING_SHARED_CONTENT,
+  MAPPING_TITLE,
+  MAPPING_VARIABLE_COLUMNS,
+  mappingVariableLabel,
   missingLabel,
   missingParamsText,
   moneyOrNotPriced,
@@ -65,6 +84,7 @@ import {
   NOTICE_SEND_TITLE,
   OA_REAUTH_REASON,
   OA_REAUTH_TAG,
+  OPEN_CAMPAIGN_HINT,
   OPEN_SMS_CONFIG,
   OPEN_ZALO_CONFIG,
   paramLabel,
@@ -79,9 +99,17 @@ import {
   PREVIEW_STALE,
   PREVIEW_TITLE,
   queuedToast,
+  RECIPIENT_COLUMNS,
   recipientSource,
+  recipientStatusLabel,
+  recipientStatusTone,
   recipientsText,
+  recipientTimeText,
+  RECIPIENTS_EMPTY,
+  RECIPIENTS_TITLE,
   ROW_COST,
+  ROW_DUPLICATE,
+  ROW_INVALID,
   ROW_RECIPIENTS,
   ROW_SKIPPED,
   ROW_UNIT_PRICE,
@@ -108,6 +136,47 @@ import {
   type PickedTemplate,
 } from "./notice-send-form";
 import { OAStatusCard, useCommuneOA } from "./oa-status-card";
+import {
+  buildMapping,
+  buildRows,
+  charCounterText,
+  columnLabel,
+  CONTENT_COLUMN_LABEL,
+  FILE_HINT,
+  FILE_LABEL,
+  fileSummary,
+  guessPhoneColumn,
+  importErrors,
+  importTitle,
+  maskedPreview,
+  MAX_CONTENT_LENGTH,
+  PARAM_SOURCE_SHARED,
+  paramSourceColumn,
+  PHONE_COLUMN_LABEL,
+  PICK_COLUMN,
+  readRecipientFile,
+  SHARED_CONTENT_LABEL,
+  SMS_MODE_LABEL,
+  SMS_MODE_LEGEND,
+  SMS_NO_TEMPLATE_NOTE,
+  SOURCE_KINDS,
+  SOURCE_LABEL,
+  SOURCE_LEGEND,
+  splitTypedPhones,
+  TYPED_HINT,
+  TYPED_LABEL,
+  typedCountText,
+  typedPhonesError,
+  VARIABLES_HELP,
+  VARIABLES_HELP_LABEL,
+  VARIABLES_TITLE,
+  variableToken,
+  detectVariables,
+  type ImportedSource,
+  type ImportedTable,
+  type RecipientSourceKind,
+  type SmsImportComposition,
+} from "./recipient-import";
 
 /**
  * `/gui-thong-bao` — "Gửi tin ZNS / SMS", the prototype's `NoticeWorkspace`, on the real routes of
@@ -158,6 +227,30 @@ function firstPage(r: KetQua<NoticeCampaignPage>): KetQua<History> {
   return r.ok ? { ok: true, duLieu: { items: r.duLieu.items, next: r.duLieu.next_cursor } } : r;
 }
 
+function importedSourceOf(
+  kind: RecipientSourceKind,
+  phones: readonly string[],
+  table: ImportedTable | null,
+  phoneColumn: number | null,
+): ImportedSource | null {
+  if (kind === "typed") return { kind: "typed", phones };
+  if (kind === "file" && table !== null) return { kind: "file", table, phoneColumn };
+  return null;
+}
+
+/** A typed list has no columns: its SMS text is always the shared one, variables refused (S3). */
+function smsCompositionOf(
+  smsFree: boolean,
+  kind: RecipientSourceKind,
+  mode: SmsContentMode,
+  contentColumn: number | null,
+  content: string,
+  variableColumns: Readonly<Record<number, number | null>>,
+): SmsImportComposition | null {
+  if (!smsFree) return null;
+  return { mode: kind === "typed" ? "noi-dung-chung" : mode, contentColumn, content, variableColumns };
+}
+
 function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitizens: boolean; canManageZalo: boolean }) {
   const [tab, setTab] = useState<TabId>("compose");
   const [step, setStep] = useState<Step>("audience");
@@ -169,6 +262,20 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   const [picked, setPicked] = useState<PickedTemplate | null>(null);
   const [title, setTitle] = useState("");
   const [params, setParams] = useState<Record<string, string>>({});
+
+  // The imported sources (ADR 0099 §Sửa đổi S1–S4). The file's cells live HERE, in memory, and nowhere else.
+  const [sourceKind, setSourceKind] = useState<RecipientSourceKind>("directory");
+  const [typedText, setTypedText] = useState("");
+  const [table, setTable] = useState<ImportedTable | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [phoneColumn, setPhoneColumn] = useState<number | null>(null);
+  const [smsMode, setSmsMode] = useState<SmsContentMode>("cot-trong-tep");
+  const [contentColumn, setContentColumn] = useState<number | null>(null);
+  const [sharedContent, setSharedContent] = useState("");
+  const [variableColumns, setVariableColumns] = useState<Record<number, number | null>>({});
+  const [paramColumns, setParamColumns] = useState<Record<string, number | null>>({});
+  const [openCampaign, setOpenCampaign] = useState<NoticeCampaign | null>(null);
 
   const [groups, setGroups] = useState<KetQua<{ items: CitizenGroup[] }> | null>(null);
   const [tagList, setTagList] = useState<KetQua<{ items: CitizenContactTag[] }> | null>(null);
@@ -318,23 +425,82 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
 
   // ---- composition ----------------------------------------------------------------------------------
 
-  function draftOf(p: PickedTemplate, values: Readonly<Record<string, string>>): NoticeDraft {
-    return {
+  // ---- the imported sources ---------------------------------------------------------------------------
+
+  const imported = sourceKind !== "directory";
+  /** SMS to an imported list is free text on an account, not a template (S3): step 2 picks no card. */
+  const smsFree = imported && channel === "sms";
+  const typedPhones = useMemo(() => (sourceKind === "typed" ? splitTypedPhones(typedText) : []), [sourceKind, typedText]);
+  const importedSource = importedSourceOf(sourceKind, typedPhones, table, phoneColumn);
+  const smsComposition = smsCompositionOf(smsFree, sourceKind, smsMode, contentColumn, sharedContent, variableColumns);
+  const rows = useMemo(() => {
+    const src = importedSourceOf(sourceKind, typedPhones, table, phoneColumn);
+    if (src === null) return [];
+    const sms = smsCompositionOf(smsFree, sourceKind, smsMode, contentColumn, sharedContent, variableColumns);
+    return buildRows(src, channel, sms, sourceKind === "file" && channel === "zns" ? paramColumns : {});
+  }, [sourceKind, typedPhones, table, phoneColumn, smsFree, channel, smsMode, contentColumn, sharedContent, variableColumns, paramColumns]);
+  /** Stringified once per change of the rows, not on every keystroke elsewhere (10.000 rows). */
+  const rowsKey = useMemo(() => JSON.stringify(rows), [rows]);
+  const errors: string[] = !imported
+    ? []
+    : importedSource === null
+      ? [fileError ?? "Chọn tệp danh sách."]
+      : importErrors(importedSource, channel, smsComposition, rows);
+
+  const freeAccounts = templates !== null && templates.ok ? smsAccounts(templates.duLieu.sms) : [];
+  const freeAccount = freeAccounts.find((a) => a.sms_account_id === smsAccountId) ?? freeAccounts[0] ?? null;
+
+  function wireKind(): NoticeAudienceKind {
+    return sourceKind === "typed" ? "danh-sach-so" : "tep-nhap";
+  }
+
+  function draftOf(p: PickedTemplate | null, values: Readonly<Record<string, string>>): NoticeDraft | null {
+    if (smsFree) {
+      if (freeAccount === null || smsComposition === null) return null;
+      const d: NoticeDraft = {
+        channel: "sms",
+        sourceId: freeAccount.sms_account_id,
+        templateRef: "",
+        audience: { kind: wireKind(), ids: [], tags: [] },
+        params: {},
+        recipients: rows,
+        smsContentMode: smsComposition.mode,
+      };
+      if (smsComposition.mode === "noi-dung-chung") d.content = smsComposition.content;
+      const mapping = importedSource === null ? undefined : buildMapping(importedSource, "sms", smsComposition, {});
+      if (mapping !== undefined) d.mapping = mapping;
+      return d;
+    }
+    if (p === null) return null;
+    const d: NoticeDraft = {
       channel: CHANNEL_WIRE[p.channel],
       sourceId: templateSourceId(p),
       templateRef: p.t.template_ref,
-      audience: audienceBody(kind, ids, tags),
+      audience: imported ? { kind: wireKind(), ids: [], tags: [] } : audienceBody(kind, ids, tags),
       // Exactly the template's fields, each one present: an empty value is what comms reports as missing.
+      // A parameter taken from a file column goes up empty here and filled in each row's `values` (S4).
       params: Object.fromEntries(p.t.params.map((x) => [x.field, values[x.field] ?? ""])),
     };
+    if (imported) d.recipients = rows;
+    const mapping =
+      importedSource === null ? undefined : buildMapping(importedSource, p.channel, null, p.channel === "zns" ? paramColumns : {});
+    if (mapping !== undefined) d.mapping = mapping;
+    return d;
   }
 
-  const draftKey = picked === null ? "" : JSON.stringify(draftOf(picked, params));
+  /** The composition's identity: the draft without its rows, plus the rows' own key. */
+  function keyOf(d: NoticeDraft): string {
+    return JSON.stringify({ ...d, recipients: undefined }) + (d.recipients === undefined ? "" : rowsKey);
+  }
+
+  const currentDraft = draftOf(picked, params);
+  const draftKey = currentDraft === null ? "" : keyOf(currentDraft);
 
   async function runPreview(p: PickedTemplate | null = picked, values: Readonly<Record<string, string>> = params) {
-    if (p === null) return;
+    if (errors.length > 0) return;
     const d = draftOf(p, values);
-    const key = JSON.stringify(d);
+    if (d === null) return;
+    const key = keyOf(d);
     const seq = ++previewSeq.current;
     setPreview({ key, result: null });
     const result = await previewNoticeCampaign(d);
@@ -357,24 +523,62 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   function pickChannel(next: Channel) {
     setChannel(next);
     setPicked(null);
+    setParamColumns({});
     clearPreview();
+  }
+
+  function pickSource(next: RecipientSourceKind) {
+    setSourceKind(next);
+    setPicked(null);
+    setParamColumns({});
+    clearPreview();
+  }
+
+  /** The file is read here and dropped from the input at once: nothing keeps a handle on it (S2). */
+  async function onFile(e: ChangeEvent<HTMLInputElement>) {
+    const input = e.target;
+    const file = input.files?.[0];
+    if (file === undefined) return;
+    setReading(true);
+    const r = await readRecipientFile(file);
+    input.value = "";
+    setReading(false);
+    clearPreview();
+    setContentColumn(null);
+    setVariableColumns({});
+    setParamColumns({});
+    if (!r.ok) {
+      setTable(null);
+      setPhoneColumn(null);
+      setFileError(r.error);
+      return;
+    }
+    setFileError(null);
+    setTable(r.table);
+    setPhoneColumn(guessPhoneColumn(r.table.headers));
   }
 
   function pickTemplate(p: PickedTemplate) {
     setPicked(p);
     setParams({});
+    setParamColumns({});
     setTitle(templateName(p));
     setStep("content");
     // Prototype: picking a template runs the preview at once; a changed parameter is previewed again by
-    // pressing "Xem trước".
+    // pressing "Xem trước". An imported list still in error is not previewed (`runPreview` refuses).
     void runPreview(p, {});
   }
 
+  function defaultTitle(): string {
+    if (picked !== null && !smsFree) return templateName(picked);
+    return smsComposition === null ? "" : importTitle(smsComposition, sourceKind === "typed" ? "typed" : "file");
+  }
+
   async function send() {
-    if (picked === null) return;
     const d = draftOf(picked, params);
-    const finalTitle = title.trim() !== "" ? title.trim() : templateName(picked);
-    const of = JSON.stringify([d, finalTitle]);
+    if (d === null) return;
+    const finalTitle = title.trim() !== "" ? title.trim() : defaultTitle();
+    const of = keyOf(d) + JSON.stringify(finalTitle);
     const key = sendKey !== null && sendKey.of === of ? sendKey.key : crypto.randomUUID();
     setSendKey({ of, key });
     setSending(true);
@@ -400,6 +604,8 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   function recipients(): ReactNode {
     const pending = (reason: string) => <PendingMarker info={{ ten: ROW_RECIPIENTS, viSao: reason }} side="right" />;
     const loading = <span className="text-ink-muted">…</span>;
+    if (sourceKind === "typed") return typedCountText(typedPhones.length);
+    if (sourceKind === "file") return table === null ? "—" : `${table.rows.length.toLocaleString("vi-VN")} dòng`;
     switch (source.type) {
       case "unknown":
         return pending(source.reason);
@@ -464,15 +670,48 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                 done={step !== "audience"}
                 open={step === "audience"}
                 onOpen={() => setStep("audience")}
-                summary={AUDIENCE_LABEL[kind]}
+                summary={imported ? SOURCE_LABEL[sourceKind] : AUDIENCE_LABEL[kind]}
               >
+                <Segmented
+                  legend={SOURCE_LEGEND}
+                  name="notice-source"
+                  mode="buttons"
+                  value={sourceKind}
+                  options={SOURCE_KINDS.map((k) => ({ value: k, label: SOURCE_LABEL[k] }))}
+                  onChange={(v) => pickSource(v as RecipientSourceKind)}
+                  className="mb-4"
+                />
+
+                {sourceKind === "typed" && (
+                  <TypedPhones
+                    text={typedText}
+                    count={typedPhones.length}
+                    // An empty box says nothing yet; the over-limit sentence shows as soon as it is true.
+                    error={typedPhones.length > 0 ? (typedPhonesError(typedPhones) ?? undefined) : undefined}
+                    onChange={setTypedText}
+                  />
+                )}
+
+                {sourceKind === "file" && (
+                  <FileImport
+                    table={table}
+                    error={fileError}
+                    reading={reading}
+                    phoneColumn={phoneColumn}
+                    onFile={(e) => void onFile(e)}
+                    onPhoneColumn={setPhoneColumn}
+                  />
+                )}
+
+                {sourceKind === "directory" && (
                 <div className="flex flex-wrap gap-1.5">
                   {AUDIENCE_KINDS.map((k) => (
                     <Chip key={k} label={AUDIENCE_LABEL[k]} active={kind === k} onClick={() => pickKind(k)} />
                   ))}
                 </div>
+                )}
 
-                {kind === "citizen_group" &&
+                {sourceKind === "directory" && kind === "citizen_group" &&
                   (canReadCitizens ? (
                     <Picker
                       label={PICK_GROUP}
@@ -487,7 +726,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                     </p>
                   ))}
 
-                {kind === "citizen_tag" &&
+                {sourceKind === "directory" && kind === "citizen_tag" &&
                   (canReadCitizens ? (
                     <Picker
                       label={PICK_TAG}
@@ -502,7 +741,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                     </p>
                   ))}
 
-                {kind === "staff_unit" && (
+                {sourceKind === "directory" && kind === "staff_unit" && (
                   <Picker
                     label={PICK_UNIT}
                     state={units}
@@ -525,10 +764,18 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
               <StepCard
                 index={2}
                 title="Mẫu tin"
-                done={picked !== null && step === "content"}
+                done={(smsFree ? freeAccount !== null : picked !== null) && step === "content"}
                 open={step === "template"}
                 onOpen={() => setStep("template")}
-                summary={picked === null ? "Chưa chọn" : templateName(picked)}
+                summary={
+                  smsFree
+                    ? freeAccount === null
+                      ? "Chưa chọn"
+                      : `${CHANNEL_LABEL.sms} · ${smsAccountOptionLabel(freeAccount)}`
+                    : picked === null
+                      ? "Chưa chọn"
+                      : templateName(picked)
+                }
               >
                 <p className="text-navy m-0 mb-1.5 text-[13px] font-semibold">{CHANNEL_PICK_LABEL}</p>
                 <div className="mb-4 flex flex-wrap gap-1.5">
@@ -536,6 +783,18 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                     <Chip key={c} label={CHANNEL_LABEL[c]} active={channel === c} onClick={() => pickChannel(c)} />
                   ))}
                 </div>
+                {smsFree ? (
+                  <FreeSmsAccount
+                    templates={templates}
+                    account={freeAccount}
+                    accounts={freeAccounts}
+                    onAccount={(id) => {
+                      setSmsAccountId(id);
+                      clearPreview();
+                    }}
+                    onNext={() => setStep("content")}
+                  />
+                ) : (
                 <TemplateList
                   channel={channel}
                   templates={templates}
@@ -550,6 +809,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                   }}
                   onPick={pickTemplate}
                 />
+                )}
               </StepCard>
 
               <StepCard
@@ -560,29 +820,85 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                 onOpen={() => setStep("content")}
                 summary={title || "Chưa điền"}
               >
-                {picked === null ? (
+                {currentDraft === null ? (
                   <p className={MUTED}>{PICK_TEMPLATE_FIRST}</p>
                 ) : (
                   <div className="flex flex-col gap-4">
                     <Field label={CAMPAIGN_TITLE_LABEL} htmlFor="notice-title" grow="auto">
-                      <input id="notice-title" value={title} maxLength={200} autoComplete="off" onChange={(e) => setTitle(e.target.value)} />
+                      <input
+                        id="notice-title"
+                        value={title}
+                        maxLength={200}
+                        autoComplete="off"
+                        placeholder={title === "" ? defaultTitle() : undefined}
+                        onChange={(e) => setTitle(e.target.value)}
+                      />
                     </Field>
-                    {picked.t.params.map((p, i) => (
-                      <Field key={p.field} label={paramLabel(picked.channel, p)} htmlFor={`notice-param-${i}`} grow="auto">
-                        <input
-                          id={`notice-param-${i}`}
-                          value={params[p.field] ?? ""}
-                          maxLength={p.max_length > 0 ? p.max_length : undefined}
-                          autoComplete="off"
-                          onChange={(e) => setParams((cur) => ({ ...cur, [p.field]: e.target.value }))}
-                        />
-                      </Field>
-                    ))}
+                    {smsFree && smsComposition !== null && (
+                      <SmsImportContent
+                        sourceKind={sourceKind === "typed" ? "typed" : "file"}
+                        table={table}
+                        composition={smsComposition}
+                        onMode={setSmsMode}
+                        onContentColumn={setContentColumn}
+                        onContent={setSharedContent}
+                        onVariableColumn={(n, col) => setVariableColumns((cur) => ({ ...cur, [n]: col }))}
+                      />
+                    )}
+                    {!smsFree &&
+                      picked !== null &&
+                      picked.t.params.map((p, i) => {
+                        const fromFile = sourceKind === "file" && picked.channel === "zns" && table !== null;
+                        const column = fromFile ? (paramColumns[p.field] ?? null) : null;
+                        return (
+                          <div key={p.field} className="flex flex-wrap items-end gap-3" data-param={p.field}>
+                            {fromFile && (
+                              <Field label={`Nguồn · ${paramLabel(picked.channel, p)}`} htmlFor={`notice-param-src-${i}`} kind="select" grow="auto" className="min-w-0">
+                                <select
+                                  id={`notice-param-src-${i}`}
+                                  value={column === null ? "" : String(column)}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    setParamColumns((cur) => ({ ...cur, [p.field]: v === "" ? null : Number(v) }));
+                                  }}
+                                >
+                                  <option value="">{PARAM_SOURCE_SHARED}</option>
+                                  {table.headers.map((_, col) => (
+                                    <option key={col} value={String(col)}>
+                                      {paramSourceColumn(table.headers, col)}
+                                    </option>
+                                  ))}
+                                </select>
+                              </Field>
+                            )}
+                            {column === null && (
+                              <Field label={paramLabel(picked.channel, p)} htmlFor={`notice-param-${i}`} grow="auto">
+                                <input
+                                  id={`notice-param-${i}`}
+                                  value={params[p.field] ?? ""}
+                                  maxLength={p.max_length > 0 ? p.max_length : undefined}
+                                  autoComplete="off"
+                                  onChange={(e) => setParams((cur) => ({ ...cur, [p.field]: e.target.value }))}
+                                />
+                              </Field>
+                            )}
+                          </div>
+                        );
+                      })}
+                    {errors.length > 0 && (
+                      <ul className="m-0 flex list-none flex-col gap-1 p-0" data-import-errors="">
+                        {errors.map((e) => (
+                          <li key={e} className={ALERT} role="alert">
+                            {e}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <div>
                       <Button
                         type="button"
                         variant="outline"
-                        disabled={preview !== null && preview.result === null}
+                        disabled={errors.length > 0 || (preview !== null && preview.result === null)}
                         icon={preview !== null && preview.result === null ? <Loader2 aria-hidden="true" focusable="false" className="animate-spin" /> : undefined}
                         onClick={() => void runPreview()}
                       >
@@ -598,7 +914,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
               <h2 id="notice-preview-title" className="text-navy m-0 text-[14px] font-bold">
                 {PREVIEW_TITLE}
               </h2>
-              {picked === null || preview === null ? (
+              {currentDraft === null || preview === null ? (
                 <p className={cn(MUTED, "mt-3")}>{PREVIEW_EMPTY}</p>
               ) : preview.result === null && shown === null ? (
                 <div className="mt-3 flex flex-col gap-2" role="status" aria-label="Đang xem trước">
@@ -623,12 +939,23 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                     {shown.skipped_count > 0 && (
                       <Row label={ROW_SKIPPED} value={recipientsText(shown.skipped_count)} tone="warn" dataName="preview-skipped" />
                     )}
+                    {imported && (
+                      <>
+                        <Row
+                          label={ROW_INVALID}
+                          value={(shown.invalid_count ?? 0).toLocaleString("vi-VN")}
+                          tone={(shown.invalid_count ?? 0) > 0 ? "warn" : undefined}
+                          dataName="preview-invalid"
+                        />
+                        <Row label={ROW_DUPLICATE} value={(shown.duplicate_count ?? 0).toLocaleString("vi-VN")} dataName="preview-duplicate" />
+                      </>
+                    )}
                     <Row label={ROW_UNIT_PRICE} value={moneyOrNotPriced(shown.unit_price)} dataName="preview-unit-price" />
                     <Row label={ROW_COST} value={moneyOrNotPriced(shown.estimated_cost)} strong dataName="preview-cost" />
                   </dl>
                   {shown.missing_params.length > 0 && (
                     <p className="border-tangerine/30 bg-tangerine/8 text-navy m-0 mt-3 rounded-[10px] border border-solid p-3 text-[12px]" data-missing-params="">
-                      {missingParamsText(shown.missing_params.map((f) => missingLabel(picked.channel, f)))}
+                      {missingParamsText(shown.missing_params.map((f) => missingLabel(channel, f)))}
                     </p>
                   )}
                   {stale && (
@@ -660,7 +987,17 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
             </aside>
           </div>
         ) : (
-          <HistoryTable history={history} loadingMore={loadingMore} moreRefused={moreRefused} onMore={() => void loadMore()} />
+          openCampaign !== null ? (
+            <CampaignRecipients campaign={openCampaign} onBack={() => setOpenCampaign(null)} />
+          ) : (
+            <HistoryTable
+              history={history}
+              loadingMore={loadingMore}
+              moreRefused={moreRefused}
+              onMore={() => void loadMore()}
+              onOpen={setOpenCampaign}
+            />
+          )
         )}
       </div>
     </div>
@@ -833,11 +1170,13 @@ function HistoryTable({
   loadingMore,
   moreRefused,
   onMore,
+  onOpen,
 }: {
   history: KetQua<History> | null;
   loadingMore: boolean;
   moreRefused: string | null;
   onMore: () => void;
+  onOpen: (c: NoticeCampaign) => void;
 }) {
   if (history === null) {
     return (
@@ -876,11 +1215,26 @@ function HistoryTable({
               {items.map((row) => (
                 <tr key={row.id} className="border-line border-b border-solid last:border-b-0" data-campaign-id={row.id}>
                   <td className="px-4 py-2.5">
-                    <p className="text-navy m-0 font-semibold break-words">{row.title}</p>
+                    <button
+                      type="button"
+                      title={OPEN_CAMPAIGN_HINT}
+                      data-open-campaign={row.id}
+                      onClick={() => onOpen(row)}
+                      className="text-navy hover:text-brand m-0 cursor-pointer border-0 bg-transparent p-0 text-left [font-family:inherit] text-[12.5px] font-semibold break-words underline-offset-2 hover:underline"
+                    >
+                      {row.title}
+                    </button>
                     <p className="text-ink-muted m-0 text-[11.5px]">{campaignSubline(row)}</p>
                   </td>
                   <td className="px-4 py-2.5">{audienceKindLabel(row.audience_kind)}</td>
-                  <td className="px-4 py-2.5 tabular-nums">{row.recipient_count.toLocaleString("vi-VN")}</td>
+                  <td className="px-4 py-2.5 tabular-nums">
+                    {row.recipient_count.toLocaleString("vi-VN")}
+                    {row.invalid_count > 0 && (
+                      <p className="text-tangerine m-0 text-[11.5px]" data-invalid-count="">
+                        {invalidCountText(row.invalid_count)}
+                      </p>
+                    )}
+                  </td>
                   <td className="px-4 py-2.5 tabular-nums">{moneyOrNotPriced(row.estimated_cost)}</td>
                   <td className="px-4 py-2.5">
                     <Badge tone={STATUS_BADGE[statusTone(row.status)]} icon={null} data-status={row.status}>
@@ -1045,5 +1399,463 @@ function Row({
         {value}
       </dd>
     </div>
+  );
+}
+
+// ---- the imported sources (ADR 0099 §Sửa đổi S1–S4) ---------------------------------------------------
+
+/** "Nhập số điện thoại": one per line or comma separated, the live count beside it. */
+function TypedPhones({
+  text,
+  count,
+  error,
+  onChange,
+}: {
+  text: string;
+  count: number;
+  error: string | undefined;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5" data-typed-phones="">
+      <Field label={TYPED_LABEL} htmlFor="notice-typed-phones" grow="auto" hint={TYPED_HINT} error={error}>
+        <textarea
+          id="notice-typed-phones"
+          rows={6}
+          value={text}
+          autoComplete="off"
+          spellCheck={false}
+          className="py-2"
+          onChange={(e) => onChange(e.target.value)}
+        />
+      </Field>
+      <p className={MUTED} data-typed-count="">
+        {typedCountText(count)}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * "Nhập tệp": the picker, then the file's name and rows, the phone column, and the first rows with
+ * every number MASKED. The `<input type="file">` is emptied after each read — nothing keeps the file.
+ */
+function FileImport({
+  table,
+  error,
+  reading,
+  phoneColumn,
+  onFile,
+  onPhoneColumn,
+}: {
+  table: ImportedTable | null;
+  error: string | null;
+  reading: boolean;
+  phoneColumn: number | null;
+  onFile: (e: ChangeEvent<HTMLInputElement>) => void;
+  onPhoneColumn: (col: number | null) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3" data-file-import="">
+      <Field label={FILE_LABEL} htmlFor="notice-file" grow="auto" hint={FILE_HINT} error={error ?? undefined}>
+        <input id="notice-file" type="file" accept=".xlsx,.csv" disabled={reading} aria-busy={reading} onChange={onFile} />
+      </Field>
+      {reading && <p className={MUTED}>Đang đọc tệp…</p>}
+      {table !== null && (
+        <>
+          <p className="text-ink m-0 text-[12.5px] font-semibold" data-file-summary="">
+            {fileSummary(table)}
+          </p>
+          <ColumnSelect id="notice-phone-column" label={PHONE_COLUMN_LABEL} headers={table.headers} value={phoneColumn} onChange={onPhoneColumn} />
+          <div className="border-line overflow-x-auto rounded-[10px] border border-solid" data-file-preview="">
+            <table className="w-full border-collapse text-[12px]">
+              <thead>
+                <tr className="text-ink-muted border-line border-b border-solid text-left">
+                  {table.headers.map((_, i) => (
+                    <th key={i} scope="col" className="px-3 py-2 font-semibold whitespace-nowrap">
+                      {columnLabel(table.headers, i)}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {maskedPreview(table, phoneColumn).map((r, ri) => (
+                  <tr key={ri} className="border-line border-b border-solid last:border-b-0">
+                    {r.map((c, ci) => (
+                      <td key={ci} className="max-w-[16rem] truncate px-3 py-2 tabular-nums">
+                        {c}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ColumnSelect({
+  id,
+  label,
+  headers,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: ReactNode;
+  headers: readonly string[];
+  value: number | null;
+  onChange: (col: number | null) => void;
+}) {
+  return (
+    <Field label={label} htmlFor={id} kind="select" grow="auto" className="min-w-0">
+      <select id={id} value={value === null ? "" : String(value)} onChange={(e) => onChange(e.target.value === "" ? null : Number(e.target.value))}>
+        <option value="">{PICK_COLUMN}</option>
+        {headers.map((_, i) => (
+          <option key={i} value={String(i)}>
+            {columnLabel(headers, i)}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
+/** Step 2 for SMS to an imported list: the account it leaves from — no template card (S3). */
+function FreeSmsAccount({
+  templates,
+  account,
+  accounts,
+  onAccount,
+  onNext,
+}: {
+  templates: KetQua<NoticeTemplates> | null;
+  account: SmsNoticeTemplate | null;
+  accounts: readonly SmsNoticeTemplate[];
+  onAccount: (id: string) => void;
+  onNext: () => void;
+}) {
+  if (templates === null) return <Skeleton className="h-16 w-full" />;
+  if (!templates.ok) {
+    return (
+      <p className={ALERT} role="alert">
+        {templates.thongBao}
+      </p>
+    );
+  }
+  if (account === null) {
+    return (
+      <div className="flex flex-col gap-2" data-templates-empty="">
+        <p className={MUTED}>{NO_TEMPLATES}</p>
+        <Link href={SMS_CONFIG_HREF} className={LINK}>
+          {OPEN_SMS_CONFIG}
+        </Link>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-3" data-free-sms="">
+      <Field label={SMS_ACCOUNT_PICK_LABEL} htmlFor="notice-sms-account" kind="select" grow="auto" className="min-w-0">
+        <select id="notice-sms-account" value={account.sms_account_id} onChange={(e) => onAccount(e.target.value)}>
+          {accounts.map((a) => (
+            <option key={a.sms_account_id} value={a.sms_account_id}>
+              {smsAccountOptionLabel(a)}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <p className={MUTED}>{SMS_NO_TEMPLATE_NOTE}</p>
+      <div>
+        <Button type="button" variant="primary" onClick={onNext}>
+          Tiếp tục
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Step 3 for SMS to an imported list (S3): from a file, a column per row or one shared text; from a
+ * typed list, the shared text only. The shared text may carry `{{variable_N}}` — each N found gets a
+ * column select. The "?" explains it on hover AND on press: a tooltip never holds the only copy, and
+ * there is no hover on a phone (`tooltip.tsx`).
+ */
+function SmsImportContent({
+  sourceKind,
+  table,
+  composition,
+  onMode,
+  onContentColumn,
+  onContent,
+  onVariableColumn,
+}: {
+  sourceKind: "typed" | "file";
+  table: ImportedTable | null;
+  composition: SmsImportComposition;
+  onMode: (m: SmsContentMode) => void;
+  onContentColumn: (col: number | null) => void;
+  onContent: (v: string) => void;
+  onVariableColumn: (n: number, col: number | null) => void;
+}) {
+  const [helpOpen, setHelpOpen] = useState(false);
+  const fileTable = sourceKind === "file" ? table : null;
+  const shared = composition.mode === "noi-dung-chung";
+  const vars = fileTable !== null && shared ? detectVariables(composition.content) : [];
+  const length = composition.content.length;
+  return (
+    <div className="flex flex-col gap-3" data-sms-import="">
+      {fileTable !== null && (
+        <Segmented
+          legend={SMS_MODE_LEGEND}
+          showLegend
+          name="notice-sms-mode"
+          value={composition.mode}
+          options={(Object.keys(SMS_MODE_LABEL) as SmsContentMode[]).map((m) => ({ value: m, label: SMS_MODE_LABEL[m] }))}
+          onChange={(v) => onMode(v as SmsContentMode)}
+        />
+      )}
+      {fileTable !== null && !shared && (
+        <ColumnSelect
+          id="notice-content-column"
+          label={CONTENT_COLUMN_LABEL}
+          headers={fileTable.headers}
+          value={composition.contentColumn}
+          onChange={onContentColumn}
+        />
+      )}
+      {shared && (
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5">
+            <label htmlFor="notice-sms-content" className="text-navy block text-[13px] leading-tight font-semibold">
+              {SHARED_CONTENT_LABEL}
+            </label>
+            {fileTable !== null && (
+              <Tooltip content={VARIABLES_HELP}>
+                <button
+                  type="button"
+                  aria-label={VARIABLES_HELP_LABEL}
+                  aria-expanded={helpOpen}
+                  aria-controls="notice-variables-help"
+                  data-variables-help=""
+                  onClick={() => setHelpOpen((o) => !o)}
+                  className="border-line text-ink-muted hover:text-brand grid size-[18px] cursor-pointer place-items-center rounded-full border border-solid bg-white p-0 [font-family:inherit] text-[11px] font-bold"
+                >
+                  ?
+                </button>
+              </Tooltip>
+            )}
+          </div>
+          {helpOpen && fileTable !== null && (
+            <p id="notice-variables-help" className={MUTED} data-variables-help-text="">
+              {VARIABLES_HELP}
+            </p>
+          )}
+          <Field label={SHARED_CONTENT_LABEL} hideLabel htmlFor="notice-sms-content-frame" grow="auto">
+            <textarea
+              id="notice-sms-content"
+              rows={4}
+              value={composition.content}
+              autoComplete="off"
+              className="py-2"
+              onChange={(e) => onContent(e.target.value)}
+            />
+          </Field>
+          <p className={cn(MUTED, length > MAX_CONTENT_LENGTH && "text-danger")} data-char-counter="">
+            {charCounterText(length)}
+          </p>
+        </div>
+      )}
+      {vars.length > 0 && fileTable !== null && (
+        <div className="flex flex-col gap-2" data-variables="">
+          <p className="text-navy m-0 text-[13px] font-semibold">{VARIABLES_TITLE}</p>
+          {vars.map((n) => (
+            <ColumnSelect
+              key={n}
+              id={`notice-variable-${n}`}
+              label={variableToken(n)}
+              headers={fileTable.headers}
+              value={composition.variableColumns[n] ?? null}
+              onChange={(col) => onVariableColumn(n, col)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---- one campaign's recipients (S5) -----------------------------------------------------------------
+
+/**
+ * One campaign's recipients: the number MASKED by comms, the result in words, the provider's error for a
+ * failure, the time. Read page by page ("Tải thêm"); nothing here holds a full number.
+ */
+function CampaignRecipients({ campaign, onBack }: { campaign: NoticeCampaign; onBack: () => void }) {
+  const [page, setPage] = useState<KetQua<{ items: NoticeRecipient[]; next: string }> | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreRefused, setMoreRefused] = useState<string | null>(null);
+
+  useEffect(() => {
+    let gone = false;
+    listNoticeRecipients(campaign.id).then((r) => {
+      if (!gone) setPage(r.ok ? { ok: true, duLieu: { items: r.duLieu.items, next: r.duLieu.next_cursor } } : r);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [campaign.id]);
+
+  async function more() {
+    if (page === null || !page.ok || page.duLieu.next === "") return;
+    setLoadingMore(true);
+    const r = await listNoticeRecipients(campaign.id, page.duLieu.next);
+    setLoadingMore(false);
+    if (!r.ok) {
+      setMoreRefused(r.thongBao);
+      return;
+    }
+    setMoreRefused(null);
+    setPage((cur) =>
+      cur !== null && cur.ok ? { ok: true, duLieu: { items: [...cur.duLieu.items, ...r.duLieu.items], next: r.duLieu.next_cursor } } : cur,
+    );
+  }
+
+  return (
+    <div className={CARD} data-campaign-recipients={campaign.id}>
+      <div className="border-line flex flex-wrap items-center justify-between gap-3 border-b border-solid px-4 py-3">
+        <div className="min-w-0">
+          <p className="text-ink-muted m-0 text-[11.5px]">{RECIPIENTS_TITLE}</p>
+          <h2 className="text-navy m-0 text-[14px] font-bold break-words">{campaign.title}</h2>
+          <p className="text-ink-muted m-0 text-[11.5px]">
+            {audienceKindLabel(campaign.audience_kind)} · {recipientsText(campaign.recipient_count)}
+            {campaign.invalid_count > 0 ? ` · ${invalidCountText(campaign.invalid_count)}` : ""}
+          </p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={onBack}>
+          {BACK_TO_HISTORY}
+        </Button>
+      </div>
+      {campaign.recipient_mapping !== null && campaign.recipient_mapping !== undefined && (
+        <MappingBlock campaign={campaign} mapping={campaign.recipient_mapping} />
+      )}
+      {page === null ? (
+        <div className="p-5">
+          <Skeleton className="h-24 w-full" />
+        </div>
+      ) : !page.ok ? (
+        <p className={cn(ALERT, "p-5")} role="alert">
+          {page.thongBao}
+        </p>
+      ) : page.duLieu.items.length === 0 ? (
+        <p className="text-ink-muted m-0 p-8 text-center text-[12.5px]">{RECIPIENTS_EMPTY}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[36rem] border-collapse text-[12.5px]">
+            <thead>
+              <tr className="text-ink-muted border-line border-b border-solid text-left text-[11px] uppercase">
+                {RECIPIENT_COLUMNS.map((c) => (
+                  <th key={c} scope="col" className="px-4 py-2.5 font-semibold">
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {page.duLieu.items.map((r) => (
+                <tr key={r.id} className="border-line border-b border-solid last:border-b-0" data-recipient-id={r.id}>
+                  <td className="px-4 py-2.5 tabular-nums">{r.phone_masked}</td>
+                  <td className="px-4 py-2.5">
+                    <Badge tone={STATUS_BADGE[recipientStatusTone(r.status)]} icon={null} data-recipient-status={r.status}>
+                      {recipientStatusLabel(r.status)}
+                    </Badge>
+                  </td>
+                  <td className="text-ink-muted px-4 py-2.5 break-words">{r.error_message}</td>
+                  <td className="px-4 py-2.5 whitespace-nowrap tabular-nums">{recipientTimeText(r)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {page !== null && page.ok && (page.duLieu.next !== "" || moreRefused !== null) && (
+        <div className="border-line flex flex-col items-center gap-2 border-t border-solid p-3">
+          {moreRefused !== null && (
+            <p className={ALERT} role="alert">
+              {moreRefused}
+            </p>
+          )}
+          {page.duLieu.next !== "" && (
+            <Button type="button" variant="outline" size="sm" disabled={loadingMore} aria-busy={loadingMore} onClick={() => void more()}>
+              {LOAD_MORE}
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "Thông tin map biến": which file column fed the phone, the content, each variable or parameter. */
+function MappingBlock({ campaign, mapping }: { campaign: NoticeCampaign; mapping: NoticeRecipientMapping }) {
+  const variables = Object.entries(mapping.variables ?? {});
+  const params = Object.entries(mapping.params ?? {});
+  const isSms = campaign.channel === "sms";
+  return (
+    <section className="border-line flex flex-col gap-2 border-b border-solid px-4 py-3 text-[12.5px]" data-mapping="">
+      <h3 className="text-navy m-0 text-[13px] font-bold">{MAPPING_TITLE}</h3>
+      <dl className="m-0 flex flex-col gap-1.5">
+        <MappingRow label={MAPPING_PHONE} value={mapping.phone_column} name="phone" />
+        {mapping.content_column !== undefined && <MappingRow label={MAPPING_CONTENT_COLUMN} value={mapping.content_column} name="content-column" />}
+        {isSms && campaign.sms_content_mode === "noi-dung-chung" && campaign.content !== null && (
+          <MappingRow label={MAPPING_SHARED_CONTENT} value={<span className="whitespace-pre-wrap">{campaign.content}</span>} name="shared-content" />
+        )}
+      </dl>
+      {variables.length > 0 && <PairTable columns={MAPPING_VARIABLE_COLUMNS} rows={variables.map(([k, v]) => [mappingVariableLabel(k), v])} name="variables" />}
+      {!isSms &&
+        (params.length > 0 ? (
+          <>
+            <PairTable columns={MAPPING_PARAM_COLUMNS} rows={params} name="params" />
+            <p className={MUTED}>{MAPPING_OTHER_PARAMS_SHARED}</p>
+          </>
+        ) : (
+          <p className={MUTED}>{MAPPING_PARAMS_SHARED}</p>
+        ))}
+    </section>
+  );
+}
+
+function MappingRow({ label, value, name }: { label: string; value: ReactNode; name: string }) {
+  return (
+    <div className="flex flex-wrap gap-x-3" data-mapping-row={name}>
+      <dt className="text-ink-muted">{label}:</dt>
+      <dd className="text-ink m-0 font-semibold break-words">{value}</dd>
+    </div>
+  );
+}
+
+function PairTable({ columns, rows, name }: { columns: readonly [string, string]; rows: readonly (readonly [string, string])[]; name: string }) {
+  return (
+    <table className="border-line w-full max-w-md border-collapse border border-solid text-[12px]" data-mapping-table={name}>
+      <thead>
+        <tr className="text-ink-muted border-line border-b border-solid text-left">
+          {columns.map((c) => (
+            <th key={c} scope="col" className="px-3 py-1.5 font-semibold">
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(([a, b]) => (
+          <tr key={a} className="border-line border-b border-solid last:border-b-0">
+            <td className="px-3 py-1.5">{a}</td>
+            <td className="px-3 py-1.5">{b}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
