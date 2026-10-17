@@ -3338,7 +3338,7 @@ func Register(mux *http.ServeMux, d Deps) {
 	// POST idem.Required(idem.MoKhiHong), AND THE KEY PROTECTS IT: PRIMARY KEY (tenant_id, code) refuses a
 	// second field with the code whether or not the header was sent.
 	//
-	// @summary  Thêm một thuộc tính động cho danh bạ người dân — mã 6–8 ký tự, loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng
+	// @summary  Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng
 	// @screen   14-cau-hinh Thuộc tính danh bạ
 	// 409 `citizen_field_code_taken` is a code the commune has ever used (retired included);
 	// 409 `citizen_field_limit` is a 51st live field.

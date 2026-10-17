@@ -984,7 +984,7 @@
       "path": "/api/v1/citizen-fields",
       "operation_id": "identity_post_citizen_fields",
       "task_id": "3a975436ec11",
-      "summary": "Thêm một thuộc tính động cho danh bạ người dân — mã 6–8 ký tự, loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng",
+      "summary": "Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng",
       "screen": "14-cau-hinh Thuộc tính danh bạ",
       "permission_kind": "permission",
       "permission": "admin.citizen_field",

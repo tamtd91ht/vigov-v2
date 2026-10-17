@@ -79,7 +79,9 @@ const (
 )
 
 var (
-	citizenFieldCodeShape   = regexp.MustCompile(`^[a-z][a-z0-9]{5,7}$`)
+	// A NEW code is 8–12 characters (owner 17/10/2026: the web draws it at random); the database also
+	// keeps 6–8 character codes created under 0036 valid (0037).
+	citizenFieldCodeShape   = regexp.MustCompile(`^[a-z][a-z0-9]{7,11}$`)
 	citizenOptionValueShape = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
 	integerShape            = regexp.MustCompile(`^-?[0-9]{1,15}$`)
 	decimalShape            = regexp.MustCompile(`^-?[0-9]{1,15}(\.[0-9]{1,4})?$`)
@@ -87,7 +89,7 @@ var (
 
 // Definition refusals.
 var (
-	ErrCitizenFieldCodeInvalid     = errors.New("thuộc tính danh bạ: mã gồm 6–8 ký tự a-z, 0-9 và bắt đầu bằng chữ cái")
+	ErrCitizenFieldCodeInvalid     = errors.New("thuộc tính danh bạ: mã gồm 8–12 ký tự a-z, 0-9 và bắt đầu bằng chữ cái")
 	ErrCitizenFieldLabelMissing    = errors.New("thuộc tính danh bạ: thiếu tên hiển thị")
 	ErrCitizenFieldLabelTooLong    = errors.New("thuộc tính danh bạ: tên hiển thị quá dài")
 	ErrCitizenFieldTypeInvalid     = errors.New("thuộc tính danh bạ: loại không hợp lệ (singleText, multiText, combobox, singleBox, number, dateTime)")

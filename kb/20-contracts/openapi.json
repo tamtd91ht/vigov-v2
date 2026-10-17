@@ -4064,7 +4064,7 @@
         }
       },
       "post": {
-        "summary": "Thêm một thuộc tính động cho danh bạ người dân — mã 6–8 ký tự, loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng",
+        "summary": "Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng",
         "operationId": "identity_post_citizen_fields",
         "tags": [
           "identity"

@@ -25,21 +25,21 @@ func TestCheckNewCitizenFieldRules(t *testing.T) {
 		in   CitizenFieldInput
 		want error
 	}{
-		{"code too short", CitizenFieldInput{Code: "abc12", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
-		{"code digit first", CitizenFieldInput{Code: "1abcdef", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
-		{"code upper", CitizenFieldInput{Code: "Abcdefg", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
-		{"code nine", CitizenFieldInput{Code: "abcdefghi", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
-		{"type", CitizenFieldInput{Code: "abcdef", Label: "x", Type: "text"}, ErrCitizenFieldTypeInvalid},
-		{"no label", CitizenFieldInput{Code: "abcdef", Label: " ", Type: FieldSingleText}, ErrCitizenFieldLabelMissing},
-		{"number without kind", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldNumber}, ErrCitizenFieldNumberKind},
-		{"kind on text", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldSingleText, NumberKind: NumberInteger}, ErrCitizenFieldNumberKind},
-		{"date pattern off list", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldDateTime, DatePattern: "yyyy-MM-dd"}, ErrCitizenFieldDatePattern},
-		{"date pattern on number", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldNumber, NumberKind: NumberDecimal, DatePattern: "yyyy"}, ErrCitizenFieldDatePattern},
-		{"combobox without options", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldCombobox}, ErrCitizenFieldOptionsMissing},
-		{"options on text", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldSingleText, Options: []CitizenFieldOption{{Value: "a", Label: "A"}}}, ErrCitizenFieldOptionsMissing},
-		{"option shape", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldSingleBox, Options: []CitizenFieldOption{{Value: "Hộ nghèo", Label: "A"}}}, ErrCitizenFieldOptionInvalid},
-		{"option dup", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldSingleBox, Options: []CitizenFieldOption{{Value: "a", Label: "A"}, {Value: "a", Label: "B"}}}, ErrCitizenFieldOptionDuplicate},
-		{"placeholder on number", CitizenFieldInput{Code: "abcdef", Label: "x", Type: FieldNumber, NumberKind: NumberInteger, Placeholder: "nhập"}, ErrCitizenFieldPlaceholder},
+		{"code too short", CitizenFieldInput{Code: "abcdef1", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
+		{"code digit first", CitizenFieldInput{Code: "1abcdefg", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
+		{"code upper", CitizenFieldInput{Code: "Abcdefgh", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
+		{"code thirteen", CitizenFieldInput{Code: "abcdefghijklm", Label: "x", Type: FieldSingleText}, ErrCitizenFieldCodeInvalid},
+		{"type", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: "text"}, ErrCitizenFieldTypeInvalid},
+		{"no label", CitizenFieldInput{Code: "abcdefgh", Label: " ", Type: FieldSingleText}, ErrCitizenFieldLabelMissing},
+		{"number without kind", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldNumber}, ErrCitizenFieldNumberKind},
+		{"kind on text", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldSingleText, NumberKind: NumberInteger}, ErrCitizenFieldNumberKind},
+		{"date pattern off list", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldDateTime, DatePattern: "yyyy-MM-dd"}, ErrCitizenFieldDatePattern},
+		{"date pattern on number", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldNumber, NumberKind: NumberDecimal, DatePattern: "yyyy"}, ErrCitizenFieldDatePattern},
+		{"combobox without options", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldCombobox}, ErrCitizenFieldOptionsMissing},
+		{"options on text", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldSingleText, Options: []CitizenFieldOption{{Value: "a", Label: "A"}}}, ErrCitizenFieldOptionsMissing},
+		{"option shape", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldSingleBox, Options: []CitizenFieldOption{{Value: "Hộ nghèo", Label: "A"}}}, ErrCitizenFieldOptionInvalid},
+		{"option dup", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldSingleBox, Options: []CitizenFieldOption{{Value: "a", Label: "A"}, {Value: "a", Label: "B"}}}, ErrCitizenFieldOptionDuplicate},
+		{"placeholder on number", CitizenFieldInput{Code: "abcdefgh", Label: "x", Type: FieldNumber, NumberKind: NumberInteger, Placeholder: "nhập"}, ErrCitizenFieldPlaceholder},
 	}
 	for _, c := range cases {
 		if _, err := CheckNewCitizenField(c.in); !errors.Is(err, c.want) {

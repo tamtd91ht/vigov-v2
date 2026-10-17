@@ -17,7 +17,7 @@ import (
 )
 
 // The static attribute codes — columns of `citizen_contact` (0033, 0036). Underscored, so most cannot
-// collide with a dynamic code (`[a-z][a-z0-9]{5,7}`); `address` CAN, and the static one wins (identity.proto).
+// collide with a dynamic code; `address` (7 characters) could under 0036's 6–8 rule, and the static one wins (identity.proto) — new codes are 8–12 (0037).
 const (
 	NoticeAttrFullName      = "full_name"
 	NoticeAttrAddress       = "address"

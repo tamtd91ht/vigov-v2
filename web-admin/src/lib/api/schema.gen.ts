@@ -5956,7 +5956,7 @@ export type identity_get_citizen_fields = {
   };
 };
 
-/** POST /api/v1/citizen-fields — Thêm một thuộc tính động cho danh bạ người dân — mã 6–8 ký tự, loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng */
+/** POST /api/v1/citizen-fields — Thêm một thuộc tính động cho danh bạ người dân — mã 8–12 ký tự (web sinh ngẫu nhiên, trùng trong xã → 409), loại không đổi sau khi tạo; tối đa 50 thuộc tính đang dùng */
 export type identity_post_citizen_fields = {
   duongDan: "/api/v1/citizen-fields";
   phuongThuc: "POST";
