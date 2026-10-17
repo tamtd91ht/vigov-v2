@@ -38,7 +38,7 @@ export function useCommuneOA(canManage: boolean): KetQua<comms_communeZaloOAList
 
 /**
  * The OAs a ZNS can leave from NOW: the platform's app declared, and the OA not waiting for
- * re-authorisation (Zalo refuses its token). Shared with the screen, which reads templates from these only.
+ * re-authorisation (Zalo refuses its token) — the names this card lists.
  */
 export function sendingOAs(list: comms_communeZaloOAListOut): comms_communeZaloOAOut[] {
   return list.configured ? list.items.filter((o) => o.needs_reauthorization === null) : [];
@@ -56,7 +56,7 @@ const LINK = "text-brand text-[12.5px] font-semibold underline-offset-2 hover:un
  * needing re-authorisation. "Kết nối OA" / "Uỷ quyền lại" call the SAME function as Cấu hình → Kênh Zalo
  * (`openZaloOAAuthorization`); the link never reaches state or the DOM here either. Zalo sends the browser
  * back to Cấu hình when the commune's administrator is done (ADR 0098 #4) — this card does not re-read on
- * its own. Picking the OA a campaign leaves from is D-6c, not this card.
+ * its own. The OA a campaign leaves from is the one of the template picked in step 2, not this card.
  */
 export function OAStatusCard({
   canManage,

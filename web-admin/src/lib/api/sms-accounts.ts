@@ -23,19 +23,44 @@
 import { docJSON, docThanLoiGoi, goiGhi } from "./goi";
 import type { KetQua } from "./goi";
 
-// ---- UNTIL REGEN: SMS accounts (ADR 0099, comms 49197086) ----------------------------------------
-//
-// `schema.gen.ts` is NOT regenerated yet: the routes landed in 49197086 but `make kb` / `gen:api` has not
-// run in the shared tree, and regenerating it here would mix in other sessions' uncommitted routes (the
-// same stopgap as the Zalo groups block in `zalo.ts`). Every shape below is copied from
-// `service-comms/internal/http/sms_accounts.go` (smsAccountOut · smsCheckOut · smsAccountListOut ·
-// smsAccountCreateIn · smsAccountUpdateIn · smsAccountRetireIn · smsAccountRetiredOut · smsCheckResultOut ·
-// smsTemplateParamOut · smsTemplateNetworkOut · smsTemplateOut · smsTemplateListOut · smsTemplateSyncOut),
-// named as the generator will name them.
-//
-// DELETE THIS WHOLE BLOCK in the commit that lands the regen: import the `comms_*` names from
-// `schema.gen` instead, and turn each `…Route` below into the generated route type in the `satisfies`.
-// A shape that drifted from the server is then a red `tsc`, which is the point of rule 6.
+import type {
+  comms_delete_sms_accounts_by_id,
+  comms_get_sms_accounts,
+  comms_get_sms_accounts_by_id_templates,
+  comms_post_sms_accounts_by_id_check,
+  comms_post_sms_accounts_by_id_templates_sync,
+  comms_smsAccountCreateIn,
+  comms_smsAccountListOut,
+  comms_smsAccountOut,
+  comms_smsAccountRetiredOut,
+  comms_smsAccountRetireIn,
+  comms_smsAccountUpdateIn,
+  comms_smsCheckOut,
+  comms_smsCheckResultOut,
+  comms_smsTemplateListOut,
+  comms_smsTemplateNetworkOut,
+  comms_smsTemplateOut,
+  comms_smsTemplateParamOut,
+  comms_smsTemplateSyncOut,
+} from "./schema.gen";
+
+// Every shape is `schema.gen.ts`'s (agent rule 6), generated from service-comms/internal/http/sms_accounts.go;
+// each path below carries its generated route's `satisfies …["duongDan"]`, so a renamed route is a red `tsc`.
+export type {
+  comms_smsAccountCreateIn,
+  comms_smsAccountListOut,
+  comms_smsAccountOut,
+  comms_smsAccountRetiredOut,
+  comms_smsAccountRetireIn,
+  comms_smsAccountUpdateIn,
+  comms_smsCheckOut,
+  comms_smsCheckResultOut,
+  comms_smsTemplateListOut,
+  comms_smsTemplateNetworkOut,
+  comms_smsTemplateOut,
+  comms_smsTemplateParamOut,
+  comms_smsTemplateSyncOut,
+};
 
 /**
  * The class comms records for a call to eSMS (migration 0032). `balance` only with `thanh-cong`.
@@ -49,77 +74,11 @@ export type SmsCheckResult =
   | "bi-tu-choi"
   | "phan-hoi-sai-dang";
 
-/** The last check of an account. `balance`: eSMS's decimal as TEXT ("36693.00"), or null. */
-export type comms_smsCheckOut = { at: string; result: string; balance: string | null };
-
-/** One account as the screen reads it. NO key, no part of a key, by contract. `set_by` is a staff code. */
-export type comms_smsAccountOut = {
-  id: string;
-  provider: string;
-  label: string;
-  brandname: string;
-  is_default: boolean;
-  set_at: string;
-  set_by: string;
-  last_check: comms_smsCheckOut | null;
-  created_at: string;
-};
-export type comms_smsAccountListOut = { items: comms_smsAccountOut[] };
-
-/** POST body. `api_key` / `secret_key` ARE WRITE-ONLY and required on create. */
-export type comms_smsAccountCreateIn = {
-  label: string;
-  api_key: string;
-  secret_key: string;
-  brandname: string;
-  is_default: boolean;
-};
-/** PATCH body. An absent field, or an empty key, keeps the stored value. */
-export type comms_smsAccountUpdateIn = {
-  label?: string;
-  api_key?: string;
-  secret_key?: string;
-  brandname?: string;
-  is_default?: boolean;
-};
-export type comms_smsAccountRetireIn = { reason: string };
-export type comms_smsAccountRetiredOut = { retired: boolean };
-export type comms_smsCheckResultOut = { result: string; checked_at: string; balance: string | null };
-
-/** One slot of a template, IN ORDER (`{P1,20}` → name P1, at most 20 characters). Names may repeat. */
-export type comms_smsTemplateParamOut = { name: string; max_length: number };
-/** One network's registration: eSMS NetworkID and its TempId. */
-export type comms_smsTemplateNetworkOut = { network_id: number; template_id: string };
-/** One template TEXT with the networks it is registered on. */
-export type comms_smsTemplateOut = {
-  content: string;
-  params: comms_smsTemplateParamOut[];
-  networks: comms_smsTemplateNetworkOut[];
-  synced_at: string;
-};
-export type comms_smsTemplateListOut = { items: comms_smsTemplateOut[] };
-/** `skipped`: templates eSMS listed that cannot be stored (counted, never quoted). */
-export type comms_smsTemplateSyncOut = {
-  added: number;
-  updated: number;
-  vanished: number;
-  skipped: number;
-  items: comms_smsTemplateOut[];
-};
-
-type AccountsRoute = { duongDan: "/api/v1/sms-accounts" };
-type AccountByIdRoute = { duongDan: "/api/v1/sms-accounts/{id}" };
-type AccountCheckRoute = { duongDan: "/api/v1/sms-accounts/{id}/check" };
-type AccountTemplatesRoute = { duongDan: "/api/v1/sms-accounts/{id}/templates" };
-type AccountTemplatesSyncRoute = { duongDan: "/api/v1/sms-accounts/{id}/templates/sync" };
-
-// ---- end UNTIL REGEN ---------------------------------------------------------------------------
-
-const ACCOUNTS_PATH = "/api/v1/sms-accounts" satisfies AccountsRoute["duongDan"];
-const ACCOUNT_TEMPLATE = "/api/v1/sms-accounts/{id}" satisfies AccountByIdRoute["duongDan"];
-const CHECK_TEMPLATE = "/api/v1/sms-accounts/{id}/check" satisfies AccountCheckRoute["duongDan"];
-const TEMPLATES_TEMPLATE = "/api/v1/sms-accounts/{id}/templates" satisfies AccountTemplatesRoute["duongDan"];
-const SYNC_TEMPLATE = "/api/v1/sms-accounts/{id}/templates/sync" satisfies AccountTemplatesSyncRoute["duongDan"];
+const ACCOUNTS_PATH = "/api/v1/sms-accounts" satisfies comms_get_sms_accounts["duongDan"];
+const ACCOUNT_TEMPLATE = "/api/v1/sms-accounts/{id}" satisfies comms_delete_sms_accounts_by_id["duongDan"];
+const CHECK_TEMPLATE = "/api/v1/sms-accounts/{id}/check" satisfies comms_post_sms_accounts_by_id_check["duongDan"];
+const TEMPLATES_TEMPLATE = "/api/v1/sms-accounts/{id}/templates" satisfies comms_get_sms_accounts_by_id_templates["duongDan"];
+const SYNC_TEMPLATE = "/api/v1/sms-accounts/{id}/templates/sync" satisfies comms_post_sms_accounts_by_id_templates_sync["duongDan"];
 
 /** `encodeURIComponent`: the id goes into the PATH, not the body. */
 function withId(template: string, id: string): string {

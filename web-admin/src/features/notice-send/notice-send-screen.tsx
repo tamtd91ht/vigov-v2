@@ -1,13 +1,15 @@
 "use client";
 
-import { Send } from "lucide-react";
+import { Loader2, Send } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { toast } from "sonner";
 
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { PageHeader } from "@/components/ui/page-header";
-import { PendingButton, PendingMarker, type PendingFeatureInfo } from "@/components/ui/pending-feature";
+import { PendingMarker } from "@/components/ui/pending-feature";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tab, TabList } from "@/components/ui/tabs";
 import { usePhien } from "@/features/phien/phien-hien-tai";
@@ -18,73 +20,106 @@ import { layDanhBaChonNguoi } from "@/lib/api/danh-ba-chon-nguoi"; // vi-name-ok
 import { layDanhMucBoPhan } from "@/lib/api/danh-muc"; // vi-name-ok: existing export of danh-muc.ts, imported not declared (rule 12 inv 3)
 // vi-name-ok: the existing result type of lib/api/goi.ts, imported, not a new name
 import type { KetQua } from "@/lib/api/goi";
+import {
+  createNoticeCampaign,
+  getNoticeCampaign,
+  listNoticeCampaigns,
+  listNoticeTemplates,
+  NOTICE_ERROR,
+  previewNoticeCampaign,
+  type NoticeCampaign,
+  type NoticeCampaignPage,
+  type NoticeDraft,
+  type NoticePreview,
+  type NoticeTemplates,
+} from "@/lib/api/notice-campaigns";
 import type { identity_boPhanRa, identity_canBoChonNguoiRa } from "@/lib/api/schema.gen";
-import { listZaloOATemplates, type comms_zaloOATemplateList, type comms_zaloOATemplateOut } from "@/lib/api/zalo-oa";
 import { cn } from "@/lib/cn";
 import { CITIZEN_READ_PERMISSION, NOTICE_SEND_PERMISSION, quyetDinhTheoKhoa, ZALO_CHANNEL_PERMISSION } from "@/lib/quyen";
 
 import {
+  audienceBody,
+  audienceKindLabel,
   AUDIENCE_KINDS,
   AUDIENCE_LABEL,
   CAMPAIGN_TITLE_LABEL,
+  campaignSubline,
   CHANNEL_LABEL,
   CHANNEL_PICK_LABEL,
-  CONTENT_PENDING,
-  COST_PENDING,
+  CHANNEL_WIRE,
   countStaff,
+  groupByOA,
   groupChipLabel,
+  HISTORY_COLUMNS,
   HISTORY_EMPTY,
-  HISTORY_PENDING,
+  historyTabLabel,
   isStaffAudience,
-  isTemplateUsable,
-  missingParams,
+  LOAD_MORE,
+  missingLabel,
   missingParamsText,
+  moneyOrNotPriced,
   NO_CITIZEN_READ,
+  NO_RECIPIENTS,
   NO_SEND_PERMISSION,
-  NO_TEMPLATE_PERMISSION,
   NO_TEMPLATES,
   NOTICE_SEND_TITLE,
+  OA_REAUTH_REASON,
+  OA_REAUTH_TAG,
+  OPEN_SMS_CONFIG,
   OPEN_ZALO_CONFIG,
+  paramLabel,
   paramsLine,
   PICK_GROUP,
   PICK_TAG,
   PICK_TEMPLATE_FIRST,
   PICK_UNIT,
   PICKER_EMPTY,
+  PREVIEW_BUTTON,
   PREVIEW_EMPTY,
-  PREVIEW_PENDING,
+  PREVIEW_STALE,
   PREVIEW_TITLE,
-  PRICE_PENDING,
-  recipientPendingInfo,
+  queuedToast,
   recipientSource,
   recipientsText,
   ROW_COST,
   ROW_RECIPIENTS,
+  ROW_SKIPPED,
   ROW_UNIT_PRICE,
   SEND_BUTTON,
   SEND_NOTE,
-  SEND_PENDING,
-  SMS_PENDING,
+  SENDING_POLL_MS,
+  SMS_ACCOUNT_PICK_LABEL,
+  SMS_CONFIG_HREF,
+  smsAccountOptionLabel,
+  smsAccounts,
+  smsSubline,
+  statusLabel,
+  statusTone,
   TAB_COMPOSE,
-  TAB_HISTORY,
   tagChipLabel,
-  templateSubline,
-  zaloStatusText,
+  templateKey,
+  templateName,
+  templateSourceId,
   ZALO_CONFIG_HREF,
+  ZNS_CONTENT,
+  znsSubline,
   type AudienceKind,
   type Channel,
+  type PickedTemplate,
 } from "./notice-send-form";
-import { OAStatusCard, sendingOAs, useCommuneOA } from "./oa-status-card";
+import { OAStatusCard, useCommuneOA } from "./oa-status-card";
 
 /**
- * `/gui-thong-bao` — "Gửi tin ZNS / SMS", the prototype's `NoticeWorkspace` (owner, 17/10/2026: the
- * prototype's screen first, with the OA link of ADR 0098; the send itself later).
+ * `/gui-thong-bao` — "Gửi tin ZNS / SMS", the prototype's `NoticeWorkspace`, on the real routes of
+ * ADR 0099 (`service-comms/internal/http/notice_campaigns.go`).
  *
- * THE GATE is `notice.send` (`CongQuyen`), with the title drawn in every state as `/nguoi-dan` does. The
- * parts behind the gate read with OTHER keys, and say so when the session lacks them instead of failing:
- *   citizen.read  groups, tags and the citizen recipient count
- *   admin.zalo    the OA card and the OAs' ZBS templates (`zalo-oas`, `zalo-oas/{id}/templates`)
- * A route the session surely lacks the key for is NOT called (the `CongQuyen` rule: no certain 403).
+ * THE GATE is `notice.send` (`CongQuyen`), with the title drawn in every state as `/nguoi-dan` does. Every
+ * notice route declares that key, so the templates, the preview, the send and the history all read with
+ * it. Two parts read with OTHER keys, and say so when the session lacks them instead of failing:
+ *   citizen.read  groups, tags and the step-1 citizen recipient count
+ *   admin.zalo    the OA card (`zalo-oas`)
+ * A route the session surely lacks the key for is NOT called (the `CongQuyen` rule: no certain 403). The
+ * server still checks every one (agent rule 5): hiding is UX.
  *
  * The order is the prototype's on purpose: audience first, then template — a template written for staff
  * and one written for citizens address people differently, and picking the template first is how
@@ -107,16 +142,21 @@ export function NoticeSendScreen() {
 
 type Step = "audience" | "template" | "content";
 type TabId = "compose" | "history";
-const TABS: readonly { id: TabId; label: string }[] = [
-  { id: "compose", label: TAB_COMPOSE },
-  { id: "history", label: TAB_HISTORY },
-];
 const PANEL_ID = "notice-send-panel";
 const tabDomId = (id: TabId) => `notice-send-tab-${id}`;
 
 const CARD = "border-line shadow-card rounded-card border border-solid bg-white";
 const MUTED = "text-ink-muted m-0 text-[12.5px]";
 const LINK = "text-brand text-[12.5px] font-semibold underline-offset-2 hover:underline";
+const ALERT = "text-danger m-0 text-[12.5px] font-medium";
+
+/** A preview, tied to the composition it was asked for; `result` null = in flight. */
+type PreviewState = { key: string; result: KetQua<NoticePreview> | null };
+type History = { items: NoticeCampaign[]; next: string };
+
+function firstPage(r: KetQua<NoticeCampaignPage>): KetQua<History> {
+  return r.ok ? { ok: true, duLieu: { items: r.duLieu.items, next: r.duLieu.next_cursor } } : r;
+}
 
 function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitizens: boolean; canManageZalo: boolean }) {
   const [tab, setTab] = useState<TabId>("compose");
@@ -125,7 +165,8 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   const [ids, setIds] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [channel, setChannel] = useState<Channel>("zns");
-  const [template, setTemplate] = useState<comms_zaloOATemplateOut | null>(null);
+  const [smsAccountId, setSmsAccountId] = useState("");
+  const [picked, setPicked] = useState<PickedTemplate | null>(null);
   const [title, setTitle] = useState("");
   const [params, setParams] = useState<Record<string, string>>({});
 
@@ -134,13 +175,35 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   const [units, setUnits] = useState<KetQua<{ items: identity_boPhanRa[] }> | null>(null);
   const [staff, setStaff] = useState<KetQua<{ items: identity_canBoChonNguoiRa[] }> | null>(null);
   const [count, setCount] = useState<{ key: string; result: KetQua<number> } | null>(null);
-  const [templates, setTemplates] = useState<KetQua<comms_zaloOATemplateList> | null>(null);
+  const [templates, setTemplates] = useState<KetQua<NoticeTemplates> | null>(null);
+
+  const [preview, setPreview] = useState<PreviewState | null>(null);
+  /** The latest preview asked for: an older answer arriving late must not overwrite a newer one. */
+  const previewSeq = useRef(0);
+  const [sending, setSending] = useState(false);
+  /**
+   * The Idempotency-Key of the send, kept for the SAME composition (title included): a retry after a
+   * refusal or a lost answer — or a second press — replays the first send instead of writing a second
+   * campaign and paying for every message twice. A changed composition gets a new key.
+   */
+  const [sendKey, setSendKey] = useState<{ of: string; key: string } | null>(null);
+
+  const [history, setHistory] = useState<KetQua<History> | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreRefused, setMoreRefused] = useState<string | null>(null);
 
   const oa = useCommuneOA(canManageZalo);
-  // The OAs that can send now (ADR 0099 #1). Picking one at send time is D-6c; until then step 2 lists the
-  // templates of all of them.
-  const sendingOAIds = oa !== null && oa.ok ? sendingOAs(oa.duLieu).map((o) => o.id).join(",") : "";
-  const oaUsable = sendingOAIds !== "";
+
+  // Every template of every OA and SMS account: ONE call, readable with notice.send (ADR 0099 #4).
+  useEffect(() => {
+    let gone = false;
+    listNoticeTemplates().then((r) => {
+      if (!gone) setTemplates(r);
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
 
   // Groups and tags: only with citizen.read — every directory read route declares it.
   useEffect(() => {
@@ -182,21 +245,6 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
     };
   }, [wantStaff]);
 
-  // The OAs' templates: only with admin.zalo, and only from OAs that can send. One refusal is shown as is
-  // rather than a partial list that looks complete.
-  useEffect(() => {
-    if (!canManageZalo || sendingOAIds === "") return;
-    let gone = false;
-    Promise.all(sendingOAIds.split(",").map((id) => listZaloOATemplates(id))).then((rs) => {
-      if (gone) return;
-      const refused = rs.find((r) => !r.ok);
-      setTemplates(refused ?? { ok: true, duLieu: { items: rs.flatMap((r) => (r.ok ? r.duLieu.items : [])), synced_at: null } });
-    });
-    return () => {
-      gone = true;
-    };
-  }, [canManageZalo, sendingOAIds]);
-
   const tagRows = tagList !== null && tagList.ok ? tagList.duLieu.items : [];
   const source = recipientSource(kind, ids, tags, tagRows, canReadCitizens);
   const countKey = source.type === "citizen-count" ? `group:${source.groupId}` : null;
@@ -212,41 +260,132 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
     };
   }, [countKey]);
 
-  /** The recipient figure, or a "?" with its reason — never a number nobody counted. */
-  function recipients(): ReactNode {
-    const pending = (info: PendingFeatureInfo) => <PendingMarker info={info} side="left" />;
-    const loading = <span className="text-ink-muted">…</span>;
-    switch (source.type) {
-      case "unknown":
-        return pending(recipientPendingInfo(source.reason));
-      case "tag":
-        return recipientsText(source.count);
-      case "citizen-count":
-        if (count === null || count.key !== countKey) return loading;
-        return count.result.ok ? recipientsText(count.result.duLieu) : pending(recipientPendingInfo(count.result.thongBao));
-      case "staff":
-        if (staff === null) return loading;
-        return staff.ok ? recipientsText(countStaff(staff.duLieu.items, source.unitIds)) : pending(recipientPendingInfo(staff.thongBao));
+  // ---- the history ----------------------------------------------------------------------------------
+
+  useEffect(() => {
+    let gone = false;
+    listNoticeCampaigns().then((r) => {
+      if (!gone) setHistory(firstPage(r));
+    });
+    return () => {
+      gone = true;
+    };
+  }, []);
+
+  /** After a send: the first page again — the new campaign is the newest row. */
+  async function reloadHistory() {
+    const r = await listNoticeCampaigns();
+    setMoreRefused(null);
+    setHistory(firstPage(r));
+  }
+
+  async function loadMore() {
+    if (history === null || !history.ok || history.duLieu.next === "") return;
+    setLoadingMore(true);
+    const r = await listNoticeCampaigns(history.duLieu.next);
+    setLoadingMore(false);
+    if (!r.ok) {
+      setMoreRefused(r.thongBao);
+      return;
     }
+    setMoreRefused(null);
+    setHistory((cur) =>
+      cur !== null && cur.ok
+        ? { ok: true, duLieu: { items: [...cur.duLieu.items, ...r.duLieu.items], next: r.duLieu.next_cursor } }
+        : cur,
+    );
+  }
+
+  // A campaign still sending is re-read every 10 s while the tab is open — one by one, so the pages
+  // already loaded stay where they are.
+  const sendingIds = history !== null && history.ok ? history.duLieu.items.filter((c) => c.status === "dang-gui").map((c) => c.id).join(",") : "";
+  useEffect(() => {
+    if (tab !== "history" || sendingIds === "") return;
+    const timer = setInterval(() => {
+      for (const id of sendingIds.split(",")) {
+        getNoticeCampaign(id).then((r) => {
+          if (!r.ok) return;
+          setHistory((cur) =>
+            cur !== null && cur.ok
+              ? { ok: true, duLieu: { ...cur.duLieu, items: cur.duLieu.items.map((c) => (c.id === r.duLieu.id ? r.duLieu : c)) } }
+              : cur,
+          );
+        });
+      }
+    }, SENDING_POLL_MS);
+    return () => clearInterval(timer);
+  }, [tab, sendingIds]);
+
+  // ---- composition ----------------------------------------------------------------------------------
+
+  function draftOf(p: PickedTemplate, values: Readonly<Record<string, string>>): NoticeDraft {
+    return {
+      channel: CHANNEL_WIRE[p.channel],
+      sourceId: templateSourceId(p),
+      templateRef: p.t.template_ref,
+      audience: audienceBody(kind, ids, tags),
+      // Exactly the template's fields, each one present: an empty value is what comms reports as missing.
+      params: Object.fromEntries(p.t.params.map((x) => [x.field, values[x.field] ?? ""])),
+    };
+  }
+
+  const draftKey = picked === null ? "" : JSON.stringify(draftOf(picked, params));
+
+  async function runPreview(p: PickedTemplate | null = picked, values: Readonly<Record<string, string>> = params) {
+    if (p === null) return;
+    const d = draftOf(p, values);
+    const key = JSON.stringify(d);
+    const seq = ++previewSeq.current;
+    setPreview({ key, result: null });
+    const result = await previewNoticeCampaign(d);
+    if (seq === previewSeq.current) setPreview({ key, result });
+  }
+
+  function clearPreview() {
+    previewSeq.current++;
+    setPreview(null);
   }
 
   function pickKind(next: AudienceKind) {
     setKind(next);
     setIds([]);
     setTags([]);
-    setTemplate(null);
+    setPicked(null);
+    clearPreview();
   }
 
   function pickChannel(next: Channel) {
     setChannel(next);
-    setTemplate(null);
+    setPicked(null);
+    clearPreview();
   }
 
-  function pickTemplate(t: comms_zaloOATemplateOut) {
-    setTemplate(t);
+  function pickTemplate(p: PickedTemplate) {
+    setPicked(p);
     setParams({});
-    setTitle(t.template_name);
+    setTitle(templateName(p));
     setStep("content");
+    // Prototype: picking a template runs the preview at once; a changed parameter is previewed again by
+    // pressing "Xem trước".
+    void runPreview(p, {});
+  }
+
+  async function send() {
+    if (picked === null) return;
+    const d = draftOf(picked, params);
+    const finalTitle = title.trim() !== "" ? title.trim() : templateName(picked);
+    const of = JSON.stringify([d, finalTitle]);
+    const key = sendKey !== null && sendKey.of === of ? sendKey.key : crypto.randomUUID();
+    setSendKey({ of, key });
+    setSending(true);
+    const r = await createNoticeCampaign(d, finalTitle, key);
+    setSending(false);
+    if (!r.ok) {
+      toast.error(r.code === NOTICE_ERROR.noRecipients ? NO_RECIPIENTS : r.thongBao);
+      return;
+    }
+    toast.success(queuedToast(r.duLieu.recipient_count));
+    void reloadHistory();
   }
 
   function onTabKeyDown(e: KeyboardEvent<HTMLDivElement>) {
@@ -257,8 +396,32 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
     document.getElementById(tabDomId(next))?.focus();
   }
 
-  const paramNames = template?.params.map((p) => p.name) ?? [];
-  const missing = missingParams(paramNames, params);
+  /** The step-1 figure, or a "?" with its reason — never a number nobody counted. */
+  function recipients(): ReactNode {
+    const pending = (reason: string) => <PendingMarker info={{ ten: ROW_RECIPIENTS, viSao: reason }} side="right" />;
+    const loading = <span className="text-ink-muted">…</span>;
+    switch (source.type) {
+      case "unknown":
+        return pending(source.reason);
+      case "tag":
+        return recipientsText(source.count);
+      case "citizen-count":
+        if (count === null || count.key !== countKey) return loading;
+        return count.result.ok ? recipientsText(count.result.duLieu) : pending(count.result.thongBao);
+      case "staff":
+        if (staff === null) return loading;
+        return staff.ok ? recipientsText(countStaff(staff.duLieu.items, source.unitIds)) : pending(staff.thongBao);
+    }
+  }
+
+  const loadedCount = history !== null && history.ok ? history.duLieu.items.length : null;
+  const tabs: readonly { id: TabId; label: string }[] = [
+    { id: "compose", label: TAB_COMPOSE },
+    { id: "history", label: historyTabLabel(loadedCount) },
+  ];
+
+  const shown = preview !== null && preview.result !== null && preview.result.ok ? preview.result.duLieu : null;
+  const stale = preview !== null && preview.key !== draftKey;
 
   return (
     <div className="min-w-0">
@@ -276,23 +439,20 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
 
       <OAStatusCard canManage={canManageZalo} current={oa} />
 
-      <div className="flex items-center gap-2">
-        <TabList aria-label="Phần của màn Gửi tin ZNS / SMS" onKeyDown={onTabKeyDown}>
-          {TABS.map((t) => (
-            <Tab
-              key={t.id}
-              id={tabDomId(t.id)}
-              selected={t.id === tab}
-              aria-controls={PANEL_ID}
-              tabIndex={t.id === tab ? 0 : -1}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </Tab>
-          ))}
-        </TabList>
-        <PendingMarker info={HISTORY_PENDING} side="bottom" />
-      </div>
+      <TabList aria-label="Phần của màn Gửi tin ZNS / SMS" onKeyDown={onTabKeyDown}>
+        {tabs.map((t) => (
+          <Tab
+            key={t.id}
+            id={tabDomId(t.id)}
+            selected={t.id === tab}
+            aria-controls={PANEL_ID}
+            tabIndex={t.id === tab ? 0 : -1}
+            onClick={() => setTab(t.id)}
+          >
+            {t.label}
+          </Tab>
+        ))}
+      </TabList>
 
       <div role="tabpanel" id={PANEL_ID} aria-labelledby={tabDomId(tab)} className="mt-4 min-w-0">
         {tab === "compose" ? (
@@ -352,12 +512,12 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                   />
                 )}
 
-                <Button
-                  type="button"
-                  variant="primary"
-                  className="mt-4"
-                  onClick={() => setStep("template")}
-                >
+                <p className="m-0 mt-4 flex items-center gap-2 text-[12.5px]" data-row="recipients">
+                  <span className="text-ink-muted">{ROW_RECIPIENTS}:</span>
+                  <span className="text-ink font-semibold tabular-nums">{recipients()}</span>
+                </p>
+
+                <Button type="button" variant="primary" className="mt-4" onClick={() => setStep("template")}>
                   Tiếp tục
                 </Button>
               </StepCard>
@@ -365,10 +525,10 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
               <StepCard
                 index={2}
                 title="Mẫu tin"
-                done={template !== null && step === "content"}
+                done={picked !== null && step === "content"}
                 open={step === "template"}
                 onOpen={() => setStep("template")}
-                summary={template?.template_name ?? "Chưa chọn"}
+                summary={picked === null ? "Chưa chọn" : templateName(picked)}
               >
                 <p className="text-navy m-0 mb-1.5 text-[13px] font-semibold">{CHANNEL_PICK_LABEL}</p>
                 <div className="mb-4 flex flex-wrap gap-1.5">
@@ -376,65 +536,20 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                     <Chip key={c} label={CHANNEL_LABEL[c]} active={channel === c} onClick={() => pickChannel(c)} />
                   ))}
                 </div>
-                {channel === "sms" ? (
-                  <div className="border-line flex items-center gap-2 rounded-[10px] border border-dashed p-3" data-sms-pending="">
-                    <span className="text-ink-muted text-[12.5px]">{SMS_PENDING.ten}</span>
-                    <PendingMarker info={SMS_PENDING} />
-                  </div>
-                ) : !canManageZalo ? (
-                  <p className={MUTED} data-no-template-permission="">
-                    {NO_TEMPLATE_PERMISSION}
-                  </p>
-                ) : oa === null ? (
-                  <Skeleton className="h-24 w-full" />
-                ) : !oaUsable ? (
-                  <OAStatusCard canManage={canManageZalo} current={oa} where="step" />
-                ) : templates === null ? (
-                  <Skeleton className="h-24 w-full" />
-                ) : !templates.ok ? (
-                  <p className="text-danger m-0 text-[12.5px] font-medium" role="alert">
-                    {templates.thongBao}
-                  </p>
-                ) : templates.duLieu.items.length === 0 ? (
-                  <div className="flex flex-col gap-2" data-templates-empty="">
-                    <p className={MUTED}>{NO_TEMPLATES}</p>
-                    <Link href={ZALO_CONFIG_HREF} className={LINK}>
-                      {OPEN_ZALO_CONFIG}
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {templates.duLieu.items.map((row) => {
-                      const usable = isTemplateUsable(row.zalo_status);
-                      return (
-                        <button
-                          key={row.id}
-                          type="button"
-                          disabled={!usable}
-                          aria-pressed={template?.id === row.id}
-                          data-template-id={row.id}
-                          onClick={() => pickTemplate(row)}
-                          className={cn(
-                            "w-full cursor-pointer rounded-[10px] border border-solid p-3 text-left [font-family:inherit] transition-colors",
-                            template?.id === row.id ? "border-brand/40 bg-brand/5" : "border-line hover:border-brand/30 bg-white",
-                            !usable && "cursor-not-allowed opacity-50 hover:border-line",
-                          )}
-                        >
-                          <span className="text-navy block text-[13px] font-semibold">
-                            {row.template_name}
-                            {!usable && (
-                              <span className="text-tangerine ml-2 text-[11px] font-semibold">{zaloStatusText(row.zalo_status)}</span>
-                            )}
-                          </span>
-                          <span className="text-ink-muted mt-1 line-clamp-2 block text-[12px]">
-                            {paramsLine(row.params.map((p) => p.name))}
-                          </span>
-                          <span className="text-ink-muted mt-1 block text-[11.5px]">{templateSubline(row.zalo_status)}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+                <TemplateList
+                  channel={channel}
+                  templates={templates}
+                  picked={picked}
+                  smsAccountId={smsAccountId}
+                  onSmsAccount={(id) => {
+                    setSmsAccountId(id);
+                    if (picked?.channel === "sms") {
+                      setPicked(null);
+                      clearPreview();
+                    }
+                  }}
+                  onPick={pickTemplate}
+                />
               </StepCard>
 
               <StepCard
@@ -445,72 +560,353 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                 onOpen={() => setStep("content")}
                 summary={title || "Chưa điền"}
               >
-                {template === null ? (
+                {picked === null ? (
                   <p className={MUTED}>{PICK_TEMPLATE_FIRST}</p>
                 ) : (
                   <div className="flex flex-col gap-4">
                     <Field label={CAMPAIGN_TITLE_LABEL} htmlFor="notice-title" grow="auto">
-                      <input id="notice-title" value={title} autoComplete="off" onChange={(e) => setTitle(e.target.value)} />
+                      <input id="notice-title" value={title} maxLength={200} autoComplete="off" onChange={(e) => setTitle(e.target.value)} />
                     </Field>
-                    {paramNames.map((name, i) => (
-                      <Field key={name} label={name} htmlFor={`notice-param-${i}`} grow="auto">
+                    {picked.t.params.map((p, i) => (
+                      <Field key={p.field} label={paramLabel(picked.channel, p)} htmlFor={`notice-param-${i}`} grow="auto">
                         <input
                           id={`notice-param-${i}`}
-                          value={params[name] ?? ""}
+                          value={params[p.field] ?? ""}
+                          maxLength={p.max_length > 0 ? p.max_length : undefined}
                           autoComplete="off"
-                          onChange={(e) => setParams((cur) => ({ ...cur, [name]: e.target.value }))}
+                          onChange={(e) => setParams((cur) => ({ ...cur, [p.field]: e.target.value }))}
                         />
                       </Field>
                     ))}
                     <div>
-                      <PendingButton info={PREVIEW_PENDING} variant="outline">
-                        Xem trước
-                      </PendingButton>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={preview !== null && preview.result === null}
+                        icon={preview !== null && preview.result === null ? <Loader2 aria-hidden="true" focusable="false" className="animate-spin" /> : undefined}
+                        onClick={() => void runPreview()}
+                      >
+                        {PREVIEW_BUTTON}
+                      </Button>
                     </div>
                   </div>
                 )}
               </StepCard>
             </div>
 
-            <aside className={cn(CARD, "h-fit p-5")} aria-labelledby="notice-preview-title">
+            <aside className={cn(CARD, "h-fit p-5")} aria-labelledby="notice-preview-title" data-preview="">
               <h2 id="notice-preview-title" className="text-navy m-0 text-[14px] font-bold">
                 {PREVIEW_TITLE}
               </h2>
-              {template === null ? (
+              {picked === null || preview === null ? (
                 <p className={cn(MUTED, "mt-3")}>{PREVIEW_EMPTY}</p>
-              ) : (
+              ) : preview.result === null && shown === null ? (
+                <div className="mt-3 flex flex-col gap-2" role="status" aria-label="Đang xem trước">
+                  <Skeleton className="h-16 w-full" />
+                  <Skeleton className="h-5 w-full" />
+                  <Skeleton className="h-5 w-full" />
+                </div>
+              ) : preview.result !== null && !preview.result.ok ? (
+                <p className={cn(ALERT, "mt-3")} role="alert" data-preview-refused="">
+                  {preview.result.thongBao}
+                </p>
+              ) : shown !== null ? (
                 <>
-                  <div className="border-line bg-surface mt-3 flex items-center gap-2 rounded-[10px] border border-solid p-3" data-content-pending="">
-                    <span className="text-ink-muted text-[12.5px]">{CONTENT_PENDING.ten}</span>
-                    <PendingMarker info={CONTENT_PENDING} side="left" />
-                  </div>
+                  <p
+                    className="border-line bg-surface text-ink m-0 mt-3 rounded-[10px] border border-solid p-3 text-[12.5px] whitespace-pre-wrap"
+                    data-preview-content=""
+                  >
+                    {shown.content ?? ZNS_CONTENT}
+                  </p>
                   <dl className="m-0 mt-4 flex flex-col gap-2 text-[12.5px]">
-                    <Row label={ROW_RECIPIENTS} value={recipients()} dataName="recipients" />
-                    <Row label={ROW_UNIT_PRICE} value={<PendingMarker info={PRICE_PENDING} side="left" />} />
-                    <Row label={ROW_COST} value={<PendingMarker info={COST_PENDING} side="left" />} strong />
+                    <Row label={ROW_RECIPIENTS} value={recipientsText(shown.recipient_count)} dataName="preview-recipients" />
+                    {shown.skipped_count > 0 && (
+                      <Row label={ROW_SKIPPED} value={recipientsText(shown.skipped_count)} tone="warn" dataName="preview-skipped" />
+                    )}
+                    <Row label={ROW_UNIT_PRICE} value={moneyOrNotPriced(shown.unit_price)} dataName="preview-unit-price" />
+                    <Row label={ROW_COST} value={moneyOrNotPriced(shown.estimated_cost)} strong dataName="preview-cost" />
                   </dl>
-                  {missing.length > 0 && (
+                  {shown.missing_params.length > 0 && (
                     <p className="border-tangerine/30 bg-tangerine/8 text-navy m-0 mt-3 rounded-[10px] border border-solid p-3 text-[12px]" data-missing-params="">
-                      {missingParamsText(missing)}
+                      {missingParamsText(shown.missing_params.map((f) => missingLabel(picked.channel, f)))}
                     </p>
                   )}
-                  <span className="relative mt-4 flex" data-pending="" data-send="">
-                    <Button type="button" variant="primary" disabled className="w-full pr-9" icon={<Send aria-hidden="true" focusable="false" />}>
-                      {SEND_BUTTON}
-                    </Button>
-                    <PendingMarker info={SEND_PENDING} placement="end" side="left" />
-                  </span>
+                  {stale && (
+                    <p className="text-tangerine m-0 mt-3 text-[12px] font-medium" data-preview-stale="">
+                      {PREVIEW_STALE}
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="mt-4 w-full"
+                    data-send=""
+                    disabled={sending || stale || preview.result === null || shown.recipient_count === 0 || shown.missing_params.length > 0}
+                    aria-busy={sending}
+                    icon={
+                      sending ? (
+                        <Loader2 aria-hidden="true" focusable="false" className="animate-spin" />
+                      ) : (
+                        <Send aria-hidden="true" focusable="false" />
+                      )
+                    }
+                    onClick={() => void send()}
+                  >
+                    {SEND_BUTTON}
+                  </Button>
                   <p className="text-ink-muted m-0 mt-2 text-[11.5px]">{SEND_NOTE}</p>
                 </>
-              )}
+              ) : null}
             </aside>
           </div>
         ) : (
-          <div className={CARD} data-history="">
-            <p className="text-ink-muted m-0 p-8 text-center text-[12.5px]">{HISTORY_EMPTY}</p>
-          </div>
+          <HistoryTable history={history} loadingMore={loadingMore} moreRefused={moreRefused} onMore={() => void loadMore()} />
         )}
       </div>
+    </div>
+  );
+}
+
+/** Step 2's list for the picked channel: loading, refused (the server's sentence), empty, or cards. */
+function TemplateList({
+  channel,
+  templates,
+  picked,
+  smsAccountId,
+  onSmsAccount,
+  onPick,
+}: {
+  channel: Channel;
+  templates: KetQua<NoticeTemplates> | null;
+  picked: PickedTemplate | null;
+  smsAccountId: string;
+  onSmsAccount: (id: string) => void;
+  onPick: (p: PickedTemplate) => void;
+}) {
+  if (templates === null) return <Skeleton className="h-24 w-full" />;
+  if (!templates.ok) {
+    return (
+      <p className={ALERT} role="alert">
+        {templates.thongBao}
+      </p>
+    );
+  }
+  const pickedKey = picked === null ? null : templateKey(picked);
+  const empty = (href: string, label: string) => (
+    <div className="flex flex-col gap-2" data-templates-empty="">
+      <p className={MUTED}>{NO_TEMPLATES}</p>
+      <Link href={href} className={LINK}>
+        {label}
+      </Link>
+    </div>
+  );
+
+  if (channel === "zns") {
+    const groups = groupByOA(templates.duLieu.zns);
+    if (groups.length === 0) return empty(ZALO_CONFIG_HREF, OPEN_ZALO_CONFIG);
+    const several = groups.length >= 2;
+    return (
+      <div className="flex flex-col gap-4">
+        {groups.map((g) => (
+          <div key={g.oaId} className="flex flex-col gap-2" data-oa-group={g.oaId}>
+            {several && <p className="text-navy m-0 text-[12.5px] font-semibold">{g.oaName}</p>}
+            {g.items.map((t) => {
+              const p: PickedTemplate = { channel: "zns", t };
+              const usable = !t.oa_needs_reauthorization;
+              return (
+                <TemplateCard
+                  key={templateKey(p)}
+                  id={templateKey(p)}
+                  selected={pickedKey === templateKey(p)}
+                  disabled={!usable}
+                  disabledReason={usable ? undefined : OA_REAUTH_REASON}
+                  name={t.template_name}
+                  tag={usable ? undefined : OA_REAUTH_TAG}
+                  body={paramsLine(t.params.map((x) => x.name))}
+                  subline={znsSubline(t, several)}
+                  onClick={() => onPick(p)}
+                />
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const accounts = smsAccounts(templates.duLieu.sms);
+  if (accounts.length === 0) return empty(SMS_CONFIG_HREF, OPEN_SMS_CONFIG);
+  const account = accounts.some((a) => a.sms_account_id === smsAccountId) ? smsAccountId : accounts[0]!.sms_account_id;
+  const list = templates.duLieu.sms.filter((t) => t.sms_account_id === account);
+  return (
+    <div className="flex flex-col gap-3">
+      {accounts.length >= 2 && (
+        <Field label={SMS_ACCOUNT_PICK_LABEL} htmlFor="notice-sms-account" kind="select" grow="auto" className="min-w-0">
+          <select id="notice-sms-account" value={account} onChange={(e) => onSmsAccount(e.target.value)}>
+            {accounts.map((a) => (
+              <option key={a.sms_account_id} value={a.sms_account_id}>
+                {smsAccountOptionLabel(a)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <div className="flex flex-col gap-2">
+        {list.map((t) => {
+          const p: PickedTemplate = { channel: "sms", t };
+          return (
+            <TemplateCard
+              key={templateKey(p)}
+              id={templateKey(p)}
+              selected={pickedKey === templateKey(p)}
+              disabled={false}
+              body={t.content}
+              subline={smsSubline(t)}
+              onClick={() => onPick(p)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** The prototype's template card: name (and a tag when it cannot be picked), body, channel line. */
+function TemplateCard({
+  id,
+  selected,
+  disabled,
+  disabledReason,
+  name,
+  tag,
+  body,
+  subline,
+  onClick,
+}: {
+  id: string;
+  selected: boolean;
+  disabled: boolean;
+  disabledReason?: string;
+  name?: string;
+  tag?: string;
+  body: string;
+  subline: string;
+  onClick: () => void;
+}) {
+  const reasonId = disabledReason === undefined ? undefined : `${id}-reason`;
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-pressed={selected}
+      aria-describedby={reasonId}
+      data-template-id={id}
+      onClick={onClick}
+      className={cn(
+        "w-full cursor-pointer rounded-[10px] border border-solid p-3 text-left [font-family:inherit] transition-colors",
+        selected ? "border-brand/40 bg-brand/5" : "border-line hover:border-brand/30 bg-white",
+        disabled && "cursor-not-allowed opacity-50 hover:border-line",
+      )}
+    >
+      {name !== undefined && (
+        <span className="text-navy block text-[13px] font-semibold">
+          {name}
+          {tag !== undefined && <span className="text-tangerine ml-2 text-[11px] font-semibold">{tag}</span>}
+        </span>
+      )}
+      <span className={cn("text-ink-muted line-clamp-2 block text-[12px] break-words", name !== undefined && "mt-1")}>{body}</span>
+      <span className="text-ink-muted mt-1 block text-[11.5px]">{subline}</span>
+      {reasonId !== undefined && (
+        <span id={reasonId} className="text-ink-muted mt-1 block text-[11.5px]">
+          {disabledReason}
+        </span>
+      )}
+    </button>
+  );
+}
+
+const STATUS_BADGE = { success: "success", danger: "danger", warn: "warning", neutral: "neutral" } as const;
+
+/** The "Đã gửi" tab — prototype :398-457: five columns, newest first, "Tải thêm" while pages remain. */
+function HistoryTable({
+  history,
+  loadingMore,
+  moreRefused,
+  onMore,
+}: {
+  history: KetQua<History> | null;
+  loadingMore: boolean;
+  moreRefused: string | null;
+  onMore: () => void;
+}) {
+  if (history === null) {
+    return (
+      <div className={cn(CARD, "p-5")} data-history="">
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+  if (!history.ok) {
+    return (
+      <div className={cn(CARD, "p-5")} data-history="">
+        <p className={ALERT} role="alert">
+          {history.thongBao}
+        </p>
+      </div>
+    );
+  }
+  const { items, next } = history.duLieu;
+  return (
+    <div className={CARD} data-history="">
+      {items.length === 0 ? (
+        <p className="text-ink-muted m-0 p-8 text-center text-[12.5px]">{HISTORY_EMPTY}</p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[40rem] border-collapse text-[12.5px]">
+            <thead>
+              <tr className="text-ink-muted border-line border-b border-solid text-left text-[11px] uppercase">
+                {HISTORY_COLUMNS.map((c) => (
+                  <th key={c} scope="col" className="px-4 py-2.5 font-semibold">
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((row) => (
+                <tr key={row.id} className="border-line border-b border-solid last:border-b-0" data-campaign-id={row.id}>
+                  <td className="px-4 py-2.5">
+                    <p className="text-navy m-0 font-semibold break-words">{row.title}</p>
+                    <p className="text-ink-muted m-0 text-[11.5px]">{campaignSubline(row)}</p>
+                  </td>
+                  <td className="px-4 py-2.5">{audienceKindLabel(row.audience_kind)}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{row.recipient_count.toLocaleString("vi-VN")}</td>
+                  <td className="px-4 py-2.5 tabular-nums">{moneyOrNotPriced(row.estimated_cost)}</td>
+                  <td className="px-4 py-2.5">
+                    <Badge tone={STATUS_BADGE[statusTone(row.status)]} icon={null} data-status={row.status}>
+                      {statusLabel(row)}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {(next !== "" || moreRefused !== null) && (
+        <div className="border-line flex flex-col items-center gap-2 border-t border-solid p-3">
+          {moreRefused !== null && (
+            <p className={ALERT} role="alert">
+              {moreRefused}
+            </p>
+          )}
+          {next !== "" && (
+            <Button type="button" variant="outline" size="sm" disabled={loadingMore} aria-busy={loadingMore} onClick={onMore}>
+              {LOAD_MORE}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -548,9 +944,9 @@ function StepCard({
         >
           {index}
         </span>
-        <span className="flex-1">
+        <span className="min-w-0 flex-1">
           <span className="text-navy block text-[13.5px] font-bold">{title}</span>
-          {!open && <span className="text-ink-muted block text-[12px]">{summary}</span>}
+          {!open && <span className="text-ink-muted block truncate text-[12px]">{summary}</span>}
         </span>
       </button>
       {open && <div className="border-line border-t border-solid px-5 py-4">{children}</div>}
@@ -592,7 +988,7 @@ function Picker<T>({
   if (state === null) body = <Skeleton className="h-7 w-full" />;
   else if (!state.ok)
     body = (
-      <p className="text-danger m-0 text-[12.5px] font-medium" role="alert">
+      <p className={ALERT} role="alert">
         {state.thongBao}
       </p>
     );
@@ -623,11 +1019,31 @@ function Picker<T>({
   );
 }
 
-function Row({ label, value, strong, dataName }: { label: string; value: ReactNode; strong?: boolean; dataName?: string }) {
+function Row({
+  label,
+  value,
+  strong,
+  tone,
+  dataName,
+}: {
+  label: string;
+  value: ReactNode;
+  strong?: boolean;
+  tone?: "warn";
+  dataName?: string;
+}) {
   return (
     <div className="flex items-center justify-between gap-3" data-row={dataName}>
       <dt className="text-ink-muted">{label}</dt>
-      <dd className={cn("m-0 tabular-nums", strong ? "text-navy text-[14px] font-bold" : "text-ink font-semibold")}>{value}</dd>
+      <dd
+        className={cn(
+          "m-0 tabular-nums",
+          strong ? "text-navy text-[14px] font-bold" : "text-ink font-semibold",
+          tone === "warn" && "text-tangerine",
+        )}
+      >
+        {value}
+      </dd>
     </div>
   );
 }

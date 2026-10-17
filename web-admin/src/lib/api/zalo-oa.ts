@@ -22,16 +22,26 @@ import type { KetQua } from "./goi";
 import type {
   comms_communeZaloOADisconnectedOut,
   comms_communeZaloOADisconnectIn,
+  comms_communeZaloOAListOut as gen_communeZaloOAListOut,
+  comms_communeZaloOAOut as gen_communeZaloOAOut,
+  comms_delete_zalo_oas_by_id,
+  comms_get_zalo_oas,
+  comms_get_zalo_oas_by_id_templates,
+  comms_patch_zalo_oa_templates_by_id,
+  comms_post_zalo_oas_authorization_links,
+  comms_post_zalo_oas_by_id_check,
+  comms_post_zalo_oas_by_id_templates_sync,
   comms_zaloOAAuthorizationLinkOut,
   comms_zaloOACheckResultOut,
-  comms_zaloOALastCheckOut,
   comms_zaloOASyncResultOut,
+  comms_zaloOATemplateListOut as gen_zaloOATemplateListOut,
+  comms_zaloOATemplateOut as gen_zaloOATemplateOut,
   comms_zaloOATemplateParamOut,
   comms_zaloOATemplatePatchIn,
 } from "./schema.gen";
 
-// The shapes imported above are `schema.gen.ts`'s and did not change with ADR 0099 (agent rule 6). The
-// ONLY additions here narrow three server strings to the closed sets the screen labels: Zalo's own
+// Every shape is `schema.gen.ts`'s (agent rule 6), generated from service-comms/internal/http/zalo_oa.go.
+// The ONLY additions here narrow three server strings to the closed sets the screen labels: Zalo's own
 // template status and quality words (ADR 0098 #8, migration 0031 CHECKs) and the two re-authorization
 // reasons (ADR 0098 #6). A value outside them is a red `tsc` at the label tables, not a blank cell.
 
@@ -42,75 +52,26 @@ export type ZaloTemplateStatus =
   "ENABLE" | "PENDING_REVIEW" | "REJECT" | "DISABLE" | "DELETE";
 export type ZaloTemplateQuality = "HIGH" | "MEDIUM" | "LOW" | "UNDEFINED";
 
-// ---- UNTIL REGEN: several OAs per commune (ADR 0099 #1 #10, comms 2ed395e8) --------------------------
-//
-// `schema.gen.ts` is NOT regenerated yet: `make kb` has not run in the shared tree, and regenerating it
-// here would mix in other sessions' uncommitted routes (the same stopgap as the UNTIL REGEN block of
-// `zalo.ts`). It still describes the GONE one-OA routes under `zalo-oas/` + `current`. Every shape below is copied from
-// `service-comms/internal/http/zalo_oa.go` (communeZaloOAOut · communeZaloOAListOut · zaloOATemplateOut ·
-// zaloOATemplateListOut), named as the generator will name them, and every route type is the path
-// registered there.
-//
-// DELETE THIS WHOLE BLOCK in the commit that lands the regen: build the three narrowed types below with
-// `Omit<gen_…>` from `schema.gen` as before, and turn each `…Route` into the generated route type in the
-// `satisfies`. A shape that drifted from the server is then a red `tsc`, which is the point of rule 6.
-
 /** One live OA. `id` is the row id every other route names. NO token field exists on this shape, by contract. */
-export type comms_communeZaloOAOut = {
-  id: string;
-  oa_id: string;
-  oa_name: string;
-  authorized_at: string;
-  authorized_by: string;
-  authorized_by_name: string;
-  access_expires_at: string;
-  /** The INSTANT the token row was last written — never a token value (ADR 0098 §Hai cột thời điểm). */
-  token_refreshed_at: string;
+export type comms_communeZaloOAOut = Omit<gen_communeZaloOAOut, "needs_reauthorization"> & {
   needs_reauthorization: null | { since: string; reason: ZaloOAReauthorizationReason };
-  last_check: comms_zaloOALastCheckOut | null;
-  template_count: number;
-  attached_count: number;
 };
 
 /** GET zalo-oas: every live OA, oldest first; `items` is [] when none. `configured`: ZALO_OA_* set on the platform. */
-export type comms_communeZaloOAListOut = {
-  configured: boolean;
+export type comms_communeZaloOAListOut = Omit<gen_communeZaloOAListOut, "items"> & {
   items: comms_communeZaloOAOut[];
 };
 
 /** One template loaded from an OA (ADR 0098 #8–#10). `oa_row_id` is the `id` of the OA it belongs to. */
-export type comms_zaloOATemplateOut = {
-  id: string;
-  oa_row_id: string;
-  template_id: string;
-  template_name: string;
+export type comms_zaloOATemplateOut = Omit<gen_zaloOATemplateOut, "zalo_status" | "zalo_quality"> & {
   zalo_status: ZaloTemplateStatus;
   zalo_quality: ZaloTemplateQuality;
-  zalo_tag: string;
-  params: comms_zaloOATemplateParamOut[];
-  params_match: boolean;
-  missing_params: string[];
-  milestone: string | null;
-  milestone_set_at: string | null;
-  milestone_set_by: string | null;
-  milestone_set_by_name: string | null;
 };
 
 /** GET zalo-oas/{id}/templates. `synced_at` null = never loaded from that OA. */
-export type comms_zaloOATemplateList = {
+export type comms_zaloOATemplateList = Omit<gen_zaloOATemplateListOut, "items"> & {
   items: comms_zaloOATemplateOut[];
-  synced_at: string | null;
 };
-
-type OAsRoute = { duongDan: "/api/v1/zalo-oas" };
-type OAAuthorizationLinksRoute = { duongDan: "/api/v1/zalo-oas/authorization-links" };
-type OAByIdRoute = { duongDan: "/api/v1/zalo-oas/{id}" };
-type OACheckRoute = { duongDan: "/api/v1/zalo-oas/{id}/check" };
-type OATemplatesRoute = { duongDan: "/api/v1/zalo-oas/{id}/templates" };
-type OATemplatesSyncRoute = { duongDan: "/api/v1/zalo-oas/{id}/templates/sync" };
-type OATemplateByIdRoute = { duongDan: "/api/v1/zalo-oa-templates/{id}" };
-
-// ---- end UNTIL REGEN ---------------------------------------------------------------------------------
 
 /** One parameter a template declares on Zalo's portal, as `template/info` returns it. */
 export type comms_zaloOATemplateParam = comms_zaloOATemplateParamOut;
@@ -124,15 +85,15 @@ export type {
   comms_zaloOATemplatePatchIn,
 };
 
-const OAS_PATH = "/api/v1/zalo-oas" satisfies OAsRoute["duongDan"];
+const OAS_PATH = "/api/v1/zalo-oas" satisfies comms_get_zalo_oas["duongDan"];
 const OA_AUTHORIZATION_LINKS_PATH =
-  "/api/v1/zalo-oas/authorization-links" satisfies OAAuthorizationLinksRoute["duongDan"];
-const OA_TEMPLATE = "/api/v1/zalo-oas/{id}" satisfies OAByIdRoute["duongDan"];
-const OA_CHECK_TEMPLATE = "/api/v1/zalo-oas/{id}/check" satisfies OACheckRoute["duongDan"];
-const OA_TEMPLATES_TEMPLATE = "/api/v1/zalo-oas/{id}/templates" satisfies OATemplatesRoute["duongDan"];
+  "/api/v1/zalo-oas/authorization-links" satisfies comms_post_zalo_oas_authorization_links["duongDan"];
+const OA_TEMPLATE = "/api/v1/zalo-oas/{id}" satisfies comms_delete_zalo_oas_by_id["duongDan"];
+const OA_CHECK_TEMPLATE = "/api/v1/zalo-oas/{id}/check" satisfies comms_post_zalo_oas_by_id_check["duongDan"];
+const OA_TEMPLATES_TEMPLATE = "/api/v1/zalo-oas/{id}/templates" satisfies comms_get_zalo_oas_by_id_templates["duongDan"];
 const OA_TEMPLATES_SYNC_TEMPLATE =
-  "/api/v1/zalo-oas/{id}/templates/sync" satisfies OATemplatesSyncRoute["duongDan"];
-const OA_TEMPLATE_BY_ID_TEMPLATE = "/api/v1/zalo-oa-templates/{id}" satisfies OATemplateByIdRoute["duongDan"];
+  "/api/v1/zalo-oas/{id}/templates/sync" satisfies comms_post_zalo_oas_by_id_templates_sync["duongDan"];
+const OA_TEMPLATE_BY_ID_TEMPLATE = "/api/v1/zalo-oa-templates/{id}" satisfies comms_patch_zalo_oa_templates_by_id["duongDan"];
 
 /** `encodeURIComponent`: the id goes into the PATH, not the body. */
 function withId(template: string, id: string): string {
