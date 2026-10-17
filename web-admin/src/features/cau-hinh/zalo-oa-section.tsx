@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Loader2, RefreshCw, TriangleAlert, Unlink } from "lucide-react";
+import { ExternalLink, Loader2, Plus, RefreshCw, TriangleAlert, Unlink } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -30,6 +30,7 @@ import {
   type comms_zaloOATemplateOut,
 } from "@/lib/api/zalo-oa";
 
+import { CollapsibleSection } from "./collapsible-section";
 import { ConfigDialog } from "./config-dialog";
 import { ConfigTable, selectCls } from "./config-ui";
 import { SAVE_FAILED_TOAST, SAVED_TOAST } from "./zalo-channel-form";
@@ -102,7 +103,12 @@ const HINT = "text-ink-muted m-0 text-[12px]";
 const WARNING_BOX =
   "border-tangerine/30 bg-tangerine/8 text-navy m-0 rounded-[10px] border border-solid px-4 py-3 text-[12.5px]";
 const DANGER_OUTLINE = "border-danger/30 text-danger hover:not-disabled:bg-danger/5 bg-white";
-const OA_CARD = "border-line m-0 min-w-0 rounded-[10px] border border-solid p-4";
+const OA_CARD = "border-line m-0 flex min-w-0 flex-col rounded-[10px] border border-solid p-4";
+/** 1 → 2 → 3 → 4 tiles a row as the page widens, never more than 4; extra OAs wrap to the next row. */
+const OA_GRID = "m-0 mt-4 grid list-none grid-cols-1 gap-3 p-0 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
+/** The "+" tile: a full-height dashed card, so it reads as "one more OA goes here", not as one more action. */
+const ADD_TILE =
+  "border-line flex h-full min-h-40 w-full flex-col items-center justify-center gap-2 rounded-[10px] border-2 border-dashed p-4 text-[13px] font-semibold whitespace-normal";
 const milestoneSelectCls = cn(selectCls, "w-full min-w-44 pr-8");
 const AUTHORIZE_HINT_ID = "zalo-oa-authorize-hint";
 
@@ -207,23 +213,23 @@ export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
 
   if (current === null) {
     return (
-      <section className={SECTION} aria-labelledby="zalo-oa-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-oa-title">
         {heading}
         <p role="status" className="an-thi-giac">
           Đang tải OA Zalo của xã…
         </p>
         <Skeleton className="mt-4 h-20 w-full" />
-      </section>
+      </CollapsibleSection>
     );
   }
   if (!current.ok) {
     return (
-      <section className={SECTION} aria-labelledby="zalo-oa-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-oa-title">
         {heading}
         <p className="text-danger m-0 mt-2 text-[12.5px] font-medium" role="alert">
           {current.thongBao}
         </p>
-      </section>
+      </CollapsibleSection>
     );
   }
   const now = current.duLieu;
@@ -274,7 +280,7 @@ export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
     await reload();
   }
 
-  /** The one authorise button, in three places: the section's head, and each card needing re-authorisation. */
+  /** The authorise button of each card needing re-authorisation; the "+" tile below makes the same call. */
   const authorizeButton = (label: string) =>
     !now.configured ? (
       <PendingButton info={NOT_CONFIGURED_INFO(label)} variant="primary">
@@ -300,8 +306,37 @@ export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
       </Button>
     );
 
+  /** The "+" tile closing the grid: the same authorise call as every other button here, drawn as a dashed tile. */
+  const addTile = (label: string) =>
+    !now.configured ? (
+      <div className={cn(ADD_TILE, "cursor-not-allowed")}>
+        <PendingButton info={NOT_CONFIGURED_INFO(label)} variant="outline" icon={<Plus aria-hidden="true" focusable="false" />}>
+          {label}
+        </PendingButton>
+      </div>
+    ) : (
+      <Button
+        type="button"
+        variant="outline"
+        className={cn(ADD_TILE, "hover:not-disabled:border-brand hover:not-disabled:text-brand text-ink-muted bg-white")}
+        disabled={!idle || linkRefused !== null}
+        aria-busy={busy?.kind === "link"}
+        aria-describedby={AUTHORIZE_HINT_ID}
+        icon={
+          busy?.kind === "link" ? (
+            <Loader2 aria-hidden="true" focusable="false" className="size-6 animate-spin" />
+          ) : (
+            <Plus aria-hidden="true" focusable="false" className="size-6" />
+          )
+        }
+        onClick={() => void authorize()}
+      >
+        {label}
+      </Button>
+    );
+
   return (
-    <section className={SECTION} aria-labelledby="zalo-oa-title" data-zalo-oa="">
+    <CollapsibleSection className={SECTION} aria-labelledby="zalo-oa-title" data-zalo-oa="">
       <div className="flex flex-wrap items-start gap-3">
         {heading}
         <div className="flex flex-wrap items-center gap-2">
@@ -314,7 +349,6 @@ export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
           >
             {oaListPill(oas)}
           </span>
-          {authorizeButton(oas.length === 0 ? CONNECT_FIRST_LABEL : CONNECT_MORE_LABEL)}
         </div>
       </div>
 
@@ -336,110 +370,112 @@ export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
         </p>
       )}
 
-      {oas.length > 0 && (
-        <ul className="m-0 mt-4 flex list-none flex-col gap-3 p-0" aria-label="Các OA đang nối">
-          {oas.map((oa) => {
-            const reauth = oa.needs_reauthorization;
-            const checking = busy?.kind === "check" && busy.id === oa.id;
-            return (
-              <li key={oa.id} className={OA_CARD} data-oa-row-id={oa.id}>
-                <div className="flex flex-wrap items-start gap-2">
-                  <h4 className="text-navy m-0 min-w-0 flex-1 text-[13.5px] font-bold break-words" data-oa-name="">
-                    {oa.oa_name}
-                  </h4>
-                  {reauth !== null ? (
-                    <Badge tone="warning" icon={TriangleAlert} data-oa-card-pill="">
-                      {oaPill(oa)}
-                    </Badge>
-                  ) : (
-                    <span className="bg-violet/10 text-violet rounded-full px-3 py-1 text-[12px] font-semibold" data-oa-card-pill="">
-                      {oaPill(oa)}
-                    </span>
-                  )}
-                </div>
+      {/* One tile per OA, side by side, at most 4 to a row (user request 17/10/2026); the last tile is "+". */}
+      <ul className={OA_GRID} aria-label="Các OA đang nối">
+        {oas.map((oa) => {
+          const reauth = oa.needs_reauthorization;
+          const checking = busy?.kind === "check" && busy.id === oa.id;
+          return (
+            <li key={oa.id} className={OA_CARD} data-oa-row-id={oa.id}>
+              <div className="flex flex-wrap items-start gap-2">
+                <h4 className="text-navy m-0 min-w-0 flex-1 text-[13.5px] font-bold break-words" data-oa-name="">
+                  {oa.oa_name}
+                </h4>
+                {reauth !== null ? (
+                  <Badge tone="warning" icon={TriangleAlert} data-oa-card-pill="">
+                    {oaPill(oa)}
+                  </Badge>
+                ) : (
+                  <span className="bg-violet/10 text-violet rounded-full px-3 py-1 text-[12px] font-semibold" data-oa-card-pill="">
+                    {oaPill(oa)}
+                  </span>
+                )}
+              </div>
 
-                <dl className="m-0 mt-2 grid gap-x-6 gap-y-1 text-[12.5px] sm:grid-cols-[auto_1fr]">
-                  <dt className="text-ink-muted">Mã OA</dt>
-                  <dd className="text-navy m-0 font-mono break-all" data-oa-id="">
-                    {oa.oa_id}
-                  </dd>
-                  <dt className="text-ink-muted">Mẫu tin</dt>
-                  <dd className="text-navy m-0" data-oa-template-count="">
-                    {templateCountText(oa)}
-                  </dd>
-                </dl>
+              <dl className="m-0 mt-2 grid gap-x-6 gap-y-1 text-[12.5px] sm:grid-cols-[auto_1fr]">
+                <dt className="text-ink-muted">Mã OA</dt>
+                <dd className="text-navy m-0 font-mono break-all" data-oa-id="">
+                  {oa.oa_id}
+                </dd>
+                <dt className="text-ink-muted">Mẫu tin</dt>
+                <dd className="text-navy m-0" data-oa-template-count="">
+                  {templateCountText(oa)}
+                </dd>
+              </dl>
 
-                <div className="mt-2 flex flex-col gap-1">
-                  <p className={HINT} data-oa-authorized="">
-                    {authorizedText(formatVietnamDateTime(oa.authorized_at), oa.authorized_by, oa.authorized_by_name)}
-                  </p>
-                  <p className={HINT} data-oa-refreshed="">
-                    {`Token làm mới lúc ${formatVietnamDateTime(oa.token_refreshed_at)}`}
-                  </p>
-                  {oa.last_check !== null && (
-                    <p className={HINT} data-oa-last-check="">
-                      {oaLastCheckText(formatVietnamDateTime(oa.last_check.at), oa.last_check.result)}
-                    </p>
-                  )}
-                </div>
-
-                {reauth !== null && (
-                  <p className={cn(WARNING_BOX, "mt-3")} role="alert" data-oa-reauth="">
-                    {`Từ ${formatVietnamDateTime(reauth.since)}: ${reauthorizationText(reauth.reason)}`}
+              <div className="mt-2 flex flex-col gap-1">
+                <p className={HINT} data-oa-authorized="">
+                  {authorizedText(formatVietnamDateTime(oa.authorized_at), oa.authorized_by, oa.authorized_by_name)}
+                </p>
+                <p className={HINT} data-oa-refreshed="">
+                  {`Token làm mới lúc ${formatVietnamDateTime(oa.token_refreshed_at)}`}
+                </p>
+                {oa.last_check !== null && (
+                  <p className={HINT} data-oa-last-check="">
+                    {oaLastCheckText(formatVietnamDateTime(oa.last_check.at), oa.last_check.result)}
                   </p>
                 )}
+              </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  {reauth !== null && authorizeButton(REAUTHORIZE_LABEL)}
-                  {!now.configured ? (
-                    <PendingButton info={NOT_CONFIGURED_INFO("Kiểm tra kết nối")} variant="outline">
-                      Kiểm tra kết nối
-                    </PendingButton>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="bg-white"
-                      disabled={!idle}
-                      aria-busy={checking}
-                      icon={
-                        checking ? (
-                          <Loader2 aria-hidden="true" focusable="false" className="animate-spin" />
-                        ) : (
-                          <RefreshCw aria-hidden="true" focusable="false" />
-                        )
-                      }
-                      onClick={() => void check(oa)}
-                    >
-                      Kiểm tra kết nối
-                    </Button>
-                  )}
-                  {!now.configured ? (
-                    <PendingButton info={NOT_CONFIGURED_INFO("Ngắt OA")} variant="outline">
-                      Ngắt OA
-                    </PendingButton>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className={DANGER_OUTLINE}
-                      disabled={!idle}
-                      icon={<Unlink aria-hidden="true" focusable="false" />}
-                      onClick={() => {
-                        setReason("");
-                        setReasonError(null);
-                        setDisconnecting(oa);
-                      }}
-                    >
-                      Ngắt OA
-                    </Button>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+              {reauth !== null && (
+                <p className={cn(WARNING_BOX, "mt-3")} role="alert" data-oa-reauth="">
+                  {`Từ ${formatVietnamDateTime(reauth.since)}: ${reauthorizationText(reauth.reason)}`}
+                </p>
+              )}
+
+              <div className="mt-auto flex flex-wrap items-center gap-2 pt-3">
+                {reauth !== null && authorizeButton(REAUTHORIZE_LABEL)}
+                {!now.configured ? (
+                  <PendingButton info={NOT_CONFIGURED_INFO("Kiểm tra kết nối")} variant="outline">
+                    Kiểm tra kết nối
+                  </PendingButton>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="bg-white"
+                    disabled={!idle}
+                    aria-busy={checking}
+                    icon={
+                      checking ? (
+                        <Loader2 aria-hidden="true" focusable="false" className="animate-spin" />
+                      ) : (
+                        <RefreshCw aria-hidden="true" focusable="false" />
+                      )
+                    }
+                    onClick={() => void check(oa)}
+                  >
+                    Kiểm tra kết nối
+                  </Button>
+                )}
+                {!now.configured ? (
+                  <PendingButton info={NOT_CONFIGURED_INFO("Ngắt OA")} variant="outline">
+                    Ngắt OA
+                  </PendingButton>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className={DANGER_OUTLINE}
+                    disabled={!idle}
+                    icon={<Unlink aria-hidden="true" focusable="false" />}
+                    onClick={() => {
+                      setReason("");
+                      setReasonError(null);
+                      setDisconnecting(oa);
+                    }}
+                  >
+                    Ngắt OA
+                  </Button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+        <li className="min-w-0" data-oa-add-tile="">
+          {addTile(oas.length === 0 ? CONNECT_FIRST_LABEL : CONNECT_MORE_LABEL)}
+        </li>
+      </ul>
 
       {disconnecting !== null && (
         <ConfigDialog
@@ -497,7 +533,7 @@ export function CommuneZaloOASection({ state }: { state: ZaloOAState }) {
           </ConfirmDialog>
         </ConfigDialog>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -654,7 +690,7 @@ export function ZaloOATemplatesSection({
   }
 
   return (
-    <section className={SECTION} aria-labelledby="zalo-oa-templates-title" data-zalo-oa-templates="">
+    <CollapsibleSection className={SECTION} aria-labelledby="zalo-oa-templates-title" data-zalo-oa-templates="">
       <div className="flex flex-wrap items-start gap-3">
         {heading}
         <div className="flex flex-col items-end gap-1">
@@ -719,7 +755,7 @@ export function ZaloOATemplatesSection({
           ))}
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 

@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getCommuneLaunchLink } from "@/lib/api/commune-launch-link";
 
+import { CollapsibleSection } from "./collapsible-section";
+
 /**
  * "Mã QR mở Mini App của xã" in Cấu hình → Kênh Zalo (owner 13/10/2026, ADR 0070 §Sửa đổi 13/10/2026):
  * exactly ONE QR — the link the server picks for this commune — and NOTHING about which app it opens:
@@ -59,7 +61,7 @@ export function CommuneLaunchQrView({
   actions: LaunchQrActions;
 }) {
   return (
-    <section className={SECTION} aria-labelledby="zalo-launch-qr-title" data-launch-qr="">
+    <CollapsibleSection className={SECTION} aria-labelledby="zalo-launch-qr-title" data-launch-qr="">
       <h3 id="zalo-launch-qr-title" className={TITLE}>
         Mã QR mở Mini App của xã
       </h3>
@@ -106,7 +108,7 @@ export function CommuneLaunchQrView({
           </div>
         </div>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 

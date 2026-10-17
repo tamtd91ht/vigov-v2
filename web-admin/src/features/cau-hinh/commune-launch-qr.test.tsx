@@ -25,7 +25,8 @@ function render(state: LaunchQrState): HTMLElement {
 }
 
 function buttonTexts(el: HTMLElement): string[] {
-  return [...el.querySelectorAll("button")].map((b) => b.textContent?.trim() ?? "");
+  // The section's fold chevron (`CollapsibleSection`) is not one of the QR's actions.
+  return [...el.querySelectorAll("button:not([data-section-toggle])")].map((b) => b.textContent?.trim() ?? "");
 }
 
 describe("CommuneLaunchQrView", () => {
@@ -42,14 +43,14 @@ describe("CommuneLaunchQrView", () => {
   it("refused: the neutral sentence, no QR and no action", () => {
     const el = render({ status: "refused", message: LAUNCH_QR_UNAVAILABLE });
     expect(el.querySelector('[role="alert"]')?.textContent).toBe(LAUNCH_QR_UNAVAILABLE);
-    expect(el.querySelector("svg")).toBeNull();
+    expect(el.querySelector('svg[role="img"]')).toBeNull();
     expect(buttonTexts(el)).toEqual([]);
     expect(el.textContent).not.toMatch(SHARED_APP_WORDING);
   });
 
   it("loading: no QR yet", () => {
     const el = render({ status: "loading" });
-    expect(el.querySelector("svg")).toBeNull();
+    expect(el.querySelector('svg[role="img"]')).toBeNull();
     expect(el.querySelector('[role="status"]')?.textContent).toContain("Đang tạo mã QR");
   });
 

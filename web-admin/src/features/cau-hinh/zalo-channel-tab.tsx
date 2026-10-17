@@ -45,6 +45,7 @@ import {
 
 // vi-name-ok: the existing org-chart tree helpers of cay-bo-phan.ts, imported, not new names
 import { dungCay, traiPhang } from "./cay-bo-phan";
+import { CollapsibleSection } from "./collapsible-section";
 import { CommuneLaunchQrSection } from "./commune-launch-qr";
 import { ConfigDialog } from "./config-dialog";
 import { selectCls } from "./config-ui";
@@ -523,7 +524,7 @@ export function ZaloChannelView({
       )}
 
       {/* §1 — ZaloChannelPanel.tsx:62-109 */}
-      <section className={SECTION} aria-labelledby="zalo-channel-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-channel-title">
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-0 flex-1">
             <h3 id="zalo-channel-title" className={TITLE}>
@@ -573,10 +574,10 @@ export function ZaloChannelView({
             </p>
           </ZaloField>
         </div>
-      </section>
+      </CollapsibleSection>
 
       {/* §2 — ZaloChannelPanel.tsx:111-204 */}
-      <section className={SECTION} aria-labelledby="zalo-when-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-when-title">
         <h3 id="zalo-when-title" className={TITLE}>
           Nhắc khi nào
         </h3>
@@ -686,7 +687,7 @@ export function ZaloChannelView({
             </div>
           ))}
         </div>
-      </section>
+      </CollapsibleSection>
 
       {botSection}
 
@@ -768,7 +769,7 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
 
   if (current === null) {
     return (
-      <section className={SECTION} aria-labelledby="zalo-bot-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-bot-title">
         <h3 id="zalo-bot-title" className={TITLE}>
           Con bot của xã
         </h3>
@@ -776,19 +777,19 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
           Đang tải con bot của xã…
         </p>
         <Skeleton className="mt-4 h-24 w-full" />
-      </section>
+      </CollapsibleSection>
     );
   }
   if (!current.ok) {
     return (
-      <section className={SECTION} aria-labelledby="zalo-bot-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-bot-title">
         <h3 id="zalo-bot-title" className={TITLE}>
           Con bot của xã
         </h3>
         <p className="text-danger m-0 mt-2 text-[12.5px] font-medium" role="alert">
           {current.thongBao}
         </p>
-      </section>
+      </CollapsibleSection>
     );
   }
   const bot = current.duLieu;
@@ -895,7 +896,7 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
   const idle = busy === null;
   const lastCheck = bot.bot?.last_check ?? null;
   return (
-    <section className={SECTION} aria-labelledby="zalo-bot-title">
+    <CollapsibleSection className={SECTION} aria-labelledby="zalo-bot-title">
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <h3 id="zalo-bot-title" className={TITLE}>
@@ -1141,7 +1142,7 @@ function CommuneBotSection({ onSwitched }: { onSwitched: () => void }) {
           </ConfirmDialog>
         </ConfigDialog>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -1224,11 +1225,14 @@ function LinkedStaffSection({ people }: { people: PeopleState }) {
           }))
         : [];
   return (
-    <section
+    <CollapsibleSection
       className="border-line shadow-card rounded-card m-0 min-w-0 border border-solid bg-white"
       aria-labelledby="zalo-linked-title"
+      padRight={false}
+      toggleClassName="top-2.5"
     >
-      <div className={cn(HAIRLINE_BOTTOM, "flex flex-wrap items-center gap-3 px-5 py-3")}>
+      {/* `pr-12`: room for the fold chevron, kept inside this row so its hairline still runs edge to edge. */}
+      <div className={cn(HAIRLINE_BOTTOM, "flex flex-wrap items-center gap-3 px-5 py-3 pr-12")}>
         <h3 id="zalo-linked-title" className={TITLE}>
           Ai đã ghép nối
         </h3>
@@ -1311,7 +1315,7 @@ function LinkedStaffSection({ people }: { people: PeopleState }) {
         Cán bộ tự ghép nối trong hệ thống: bấm tên mình ở góc trên, chọn “Hồ sơ cá nhân”. Không ai bật hộ được — Zalo
         chỉ cho bot nhắn cho người đã nhắn cho nó trước.
       </p>
-    </section>
+    </CollapsibleSection>
   );
 }
 
@@ -1387,23 +1391,23 @@ function ZaloGroupsSection({
 
   if (groups === null) {
     return (
-      <section className={SECTION} aria-labelledby="zalo-groups-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-groups-title">
         {heading}
         <p role="status" className="an-thi-giac">
           Đang tải các nhóm Zalo…
         </p>
         <Skeleton className="mt-4 h-16 w-full" />
-      </section>
+      </CollapsibleSection>
     );
   }
   if (!groups.ok) {
     return (
-      <section className={SECTION} aria-labelledby="zalo-groups-title">
+      <CollapsibleSection className={SECTION} aria-labelledby="zalo-groups-title">
         {heading}
         <p className="text-danger m-0 mt-2 text-[12.5px] font-medium" role="alert">
           {groups.thongBao}
         </p>
-      </section>
+      </CollapsibleSection>
     );
   }
   const list = groups.duLieu;
@@ -1430,7 +1434,7 @@ function ZaloGroupsSection({
   }
 
   return (
-    <section className={SECTION} aria-labelledby="zalo-groups-title">
+    <CollapsibleSection className={SECTION} aria-labelledby="zalo-groups-title">
       <div className="flex flex-wrap items-start gap-3">
         {heading}
         <Button
@@ -1526,7 +1530,7 @@ function ZaloGroupsSection({
         />
       )}
       {dialog?.mode === "unlink" && <UnlinkGroupDialog group={dialog.group} onClose={close} />}
-    </section>
+    </CollapsibleSection>
   );
 }
 

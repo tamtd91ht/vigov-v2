@@ -45,31 +45,50 @@ export type CitizenFieldType = "singleText" | "multiText" | "combobox" | "single
 
 export type CitizenFieldNumberKind = "integer" | "decimal";
 
+/**
+ * How a `combobox` / `singleBox` is drawn on the contact form (owner, 17/10/2026): `full` lists every option
+ * (checkboxes / radios), `dropdown` folds them into a drop-down. `""` for every other type.
+ */
+export type CitizenFieldDisplayMode = "full" | "dropdown";
+
 /** One choice of a `combobox` / `singleBox` field. A saved value is never deleted, only `retired` (#1). */
 export type CitizenFieldOption = identity_citizenFieldOptionWire;
 
 /**
  * One field. `number_kind` is `""` unless `field_type` is `number`, `date_pattern` is `""` unless it is
- * `dateTime`; `options` is `[]` for a type without options; `retired_at` is `null` for a live field.
+ * `dateTime`, `display_mode` is `""` unless it has options; `options` is `[]` for a type without options;
+ * `retired_at` is `null` for a live field.
  */
-export type CitizenField = Omit<identity_citizenFieldOut, "field_type" | "number_kind"> & {
+export type CitizenField = Omit<identity_citizenFieldOut, "field_type" | "number_kind" | "display_mode"> & {
   field_type: CitizenFieldType;
   number_kind: CitizenFieldNumberKind | "";
+  display_mode: CitizenFieldDisplayMode | "";
 };
 
 export type CitizenFieldList = Omit<identity_citizenFieldsOut, "items"> & { items: CitizenField[] };
 
-/** POST body: the whole definition; what does not apply to the type is `""` / `[]`. */
-export type CitizenFieldCreateBody = Omit<identity_citizenFieldIn, "field_type" | "number_kind"> & {
+/**
+ * POST body: the whole definition; what does not apply to the type is `""` / `[]`. `layout_width` `null` =
+ * the server's default (this screen does not set the width yet).
+ */
+export type CitizenFieldCreateBody = Omit<identity_citizenFieldIn, "field_type" | "number_kind" | "display_mode"> & {
   field_type: CitizenFieldType;
   number_kind: CitizenFieldNumberKind | "";
+  display_mode: CitizenFieldDisplayMode | "" | null;
 };
 
 /**
  * PATCH body: every key present, `null` = unchanged. `code`, `field_type` and `number_kind` are immutable
  * (#1) and always sent `null` by this screen; `options`, when set, is the WHOLE list.
  */
-export type CitizenFieldUpdateBody = identity_citizenFieldPatchIn;
+export type CitizenFieldUpdateBody = Omit<identity_citizenFieldPatchIn, "display_mode"> & {
+  display_mode: CitizenFieldDisplayMode | null;
+};
+
+/** The drawing a field asks for — `full` unless the server says `dropdown` (owner: full is the default). */
+export function displayModeOf(f: { display_mode?: string }): CitizenFieldDisplayMode {
+  return f.display_mode === "dropdown" ? "dropdown" : "full";
+}
 
 /** The 409 of a code the commune already holds, retired fields included. */
 export const CITIZEN_FIELD_CODE_TAKEN = "citizen_field_code_taken" satisfies identity_post_citizen_fields["errorCodes"][409];

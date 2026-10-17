@@ -2,7 +2,8 @@
 //
 // Cấu hình → Thuộc tính danh bạ (ADR 0101 #1–#5): the `admin.citizen_field` gate (denied case first), the
 // ordered list with Lên / Xuống (the keyboard path of the reorder) and its rollback on refusal, the add
-// dialog's validation and body, the edit dialog's read-only code and type, and "Ngừng dùng" with a reason.
+// dialog's validation and body, the edit dialog's read-only code and type, and "Xoá" (soft delete) with a
+// warning and a reason — deleted fields hidden but their codes still reserved.
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -38,13 +39,15 @@ const BASE: CitizenField = {
   created_at: "2026-10-17T00:00:00Z",
   updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
+  display_mode: "",
+  layout_width: "full",
 };
 const NUMBER: CitizenField = { ...BASE, code: "sonhan01", label: "Số nhân khẩu", field_type: "number", options: [], number_kind: "integer", sort_order: 2 };
 const DATE: CitizenField = { ...BASE, code: "ngaysinh", label: "Ngày sinh chủ hộ", field_type: "dateTime", options: [], date_pattern: "dd/MM/yyyy", sort_order: 3 };
 const RETIRED: CitizenField = { ...BASE, code: "cucu0001", label: "Thuộc tính cũ", field_type: "singleText", options: [], sort_order: 0, retired_at: "2026-10-17T01:00:00Z" };
 
 /** The PATCH body with nothing changed: every key the contract names, null. */
-const UNCHANGED = { code: null, label: null, field_type: null, placeholder: null, options: null, number_kind: null, date_pattern: null, required: null, show_in_list: null };
+const UNCHANGED = { code: null, label: null, field_type: null, placeholder: null, options: null, number_kind: null, date_pattern: null, required: null, show_in_list: null, display_mode: null, layout_width: null };
 
 function session(permissions: string[]): PhienDaDoc {
   return { ok: true, duLieu: { staff: { full_name: "A", position: "B" }, role: null, permissions } } as unknown as PhienDaDoc;
@@ -143,15 +146,17 @@ describe("gate — admin.citizen_field, denied case first", () => {
     expect(calls).toHaveLength(0);
   });
 
-  it("ALLOWED: reads the definitions WITH the retired ones; live in sort order, retired collapsed", async () => {
+  it("ALLOWED: reads the definitions WITH the deleted ones, draws only the live ones in sort order", async () => {
     H.phien = session(["admin.citizen_field"]);
     const el = await mount();
     expect(calls.map((c) => `${c.method} ${c.url}`)).toEqual(["GET /api/v1/citizen-fields?include_retired=true"]);
     expect(liveOrder(el)).toEqual(["hongheo1", "sonhan01", "ngaysinh"]);
     expect(el.querySelector("[data-field-count]")!.textContent).toBe("3/50 thuộc tính đang dùng");
+    // No "Đã ngừng dùng" section any more: a deleted field is nowhere on the screen.
+    expect(el.textContent).not.toContain("Thuộc tính cũ");
+    expect(el.textContent).not.toContain("cucu0001");
+    expect(el.textContent).not.toContain("ngừng dùng");
     expect(el.querySelector("[data-retired-fields]")).toBeNull();
-    act(() => button(el, "Đã ngừng dùng (1)").click());
-    expect(el.querySelector("[data-retired-fields]")!.textContent).toContain("Thuộc tính cũ");
   });
 });
 
@@ -216,10 +221,10 @@ describe("add dialog — random code", () => {
     expect(codeOf(dlg).value).toBe(code);
   });
 
-  it("a random code the commune already holds (retired included) is redrawn silently at open", async () => {
+  it("a random code the commune already holds (deleted included) is redrawn silently at open", async () => {
     H.phien = session(["admin.citizen_field"]);
     items = [BASE, NUMBER, DATE, RETIRED, { ...RETIRED, code: "aaaaaaaaaa", label: "Cũ" }];
-    // First code drawn: every byte 0 → "aaaaaaaaaa" (held, retired); then every byte 1 → "bbbbbbbbbb".
+    // First code drawn: every byte 0 → "aaaaaaaaaa" (held, deleted); then every byte 1 → "bbbbbbbbbb".
     let call = 0;
     vi.spyOn(crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(buf: T): T => {
       (buf as unknown as Uint8Array).fill(call++ < form.RANDOM_CODE_LENGTH ? 0 : 1);
@@ -246,7 +251,7 @@ describe("add dialog — random code", () => {
     expect(codeOf(dlg).readOnly).toBe(true);
   });
 
-  it("Sửa → editable, checked live (8–12, a letter first; taken / taken-retired disable Lưu); Sinh mã khác goes back to random", async () => {
+  it("Sửa → editable, checked live (8–12, a letter first; taken / taken-deleted disable Lưu); Sinh mã khác goes back to random", async () => {
     H.phien = session(["admin.citizen_field"]);
     const el = await mount();
     const dlg = openAdd(el);
@@ -261,7 +266,7 @@ describe("add dialog — random code", () => {
     expect(dlg.textContent).toContain(form.CODE_TAKEN);
     expect(saveButton(dlg).disabled).toBe(true);
     typeInto(codeOf(dlg), "cucu0001");
-    expect(dlg.textContent).toContain(form.CODE_TAKEN_RETIRED);
+    expect(dlg.textContent).toContain(form.CODE_TAKEN_DELETED);
     expect(saveButton(dlg).disabled).toBe(true);
     typeInto(codeOf(dlg), "plkhac012345");
     expect(dlg.querySelector("[data-field-error]")).toBeNull();
@@ -379,18 +384,57 @@ describe("add dialog", () => {
       date_pattern: "",
       required: false,
       show_in_list: false,
+      display_mode: "full",
+      layout_width: null,
     });
     expect(H.toast.success).toHaveBeenCalledWith(form.FIELD_ADDED_TOAST);
   });
 
-  it("a code the commune already holds (a retired one too) is refused locally — Lưu disabled, nothing sent", async () => {
+  it("Kiểu hiển thị: only for Chọn nhiều / Chọn một, full by default, dropdown sent when chosen; other types send \"\"", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    const el = await mount();
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "Phân loại");
+    expect(dlg.querySelector("[data-display-mode]")).toBeNull();
+    selectValue(dlg.querySelector<HTMLSelectElement>("#citizen-field-type")!, "singleBox");
+    const group = dlg.querySelector<HTMLFieldSetElement>("[data-display-mode]")!;
+    expect(group.querySelector("legend")!.textContent).toBe("Kiểu hiển thị");
+    const radios = Array.from(group.querySelectorAll<HTMLInputElement>("input[type=radio]"));
+    expect(radios.map((r) => [r.value, r.checked, r.parentElement!.textContent])).toEqual([
+      ["full", true, "Hiện đủ các lựa chọn"],
+      ["dropdown", false, "Danh sách thả xuống"],
+    ]);
+    act(() => radios[1]!.click());
+    typeInto(dlg.querySelector<HTMLInputElement>("#citizen-field-option-value-0")!, "ho-ngheo");
+    typeInto(dlg.querySelector<HTMLInputElement>("#citizen-field-option-label-0")!, "Hộ nghèo");
+    act(() => saveButton(dlg).click());
+    await settle();
+    expect(JSON.parse(writes()[0]!.body!).display_mode).toBe("dropdown");
+  });
+
+  it("a type without options sends display_mode \"\" and shows no Kiểu hiển thị", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["POST /api/v1/citizen-fields"] = { status: 201, body: {} };
+    const el = await mount();
+    const dlg = openAdd(el);
+    typeInto(labelOf(dlg), "Ghi chú");
+    selectValue(dlg.querySelector<HTMLSelectElement>("#citizen-field-type")!, "combobox");
+    selectValue(dlg.querySelector<HTMLSelectElement>("#citizen-field-type")!, "singleText");
+    expect(dlg.querySelector("[data-display-mode]")).toBeNull();
+    act(() => saveButton(dlg).click());
+    await settle();
+    expect(JSON.parse(writes()[0]!.body!).display_mode).toBe("");
+  });
+
+  it("a code of a DELETED field is refused locally with its own sentence — Lưu disabled, nothing sent", async () => {
     H.phien = session(["admin.citizen_field"]);
     const el = await mount();
     const dlg = openAdd(el);
     typeInto(labelOf(dlg), "X");
     act(() => byLabel(dlg, "Sửa mã thuộc tính").click());
     typeInto(codeOf(dlg), "cucu0001");
-    expect(dlg.textContent).toContain(form.CODE_TAKEN_RETIRED);
+    expect(dlg.querySelector("[data-field-error]")!.textContent).toBe("Mã này đã dùng cho một thuộc tính đã xoá, không dùng lại được");
     expect(saveButton(dlg).disabled).toBe(true);
     act(() => saveButton(dlg).click());
     await settle();
@@ -406,7 +450,7 @@ describe("add dialog", () => {
   });
 });
 
-describe("edit and retire", () => {
+describe("edit and delete", () => {
   it("edit: code and type read-only; relabel an option + retire another → PATCH with only what changed (the rest null)", async () => {
     H.phien = session(["admin.citizen_field"]);
     answers["PATCH /api/v1/citizen-fields/hongheo1"] = { status: 200, body: BASE };
@@ -436,22 +480,112 @@ describe("edit and retire", () => {
     });
   });
 
-  it("Ngừng dùng: no reason → the sentence, nothing sent; with a reason → DELETE {reason}", async () => {
+  it("edit: Kiểu hiển thị is editable; a choice field with display_mode \"\" reads as full; switching PATCHes only display_mode (layout_width untouched)", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    answers["PATCH /api/v1/citizen-fields/hongheo1"] = { status: 200, body: BASE };
+    const el = await mount();
+    act(() => byLabel(el, "Sửa thuộc tính Phân loại hộ").click());
+    const dlg = document.querySelector<HTMLFormElement>("form[aria-label='Sửa thuộc tính']")!;
+    const radios = Array.from(dlg.querySelectorAll<HTMLInputElement>("[data-display-mode] input[type=radio]"));
+    expect(radios.map((r) => r.checked)).toEqual([true, false]);
+    expect(radios[1]!.disabled).toBe(false);
+    act(() => radios[1]!.click());
+    act(() => button(dlg, "Lưu").click());
+    await settle();
+    const patch = writes().find((c) => c.method === "PATCH")!;
+    expect(JSON.parse(patch.body!)).toEqual({ ...UNCHANGED, display_mode: "dropdown" });
+  });
+
+  it("edit with nothing changed on a dropdown field sends nothing", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    items = [{ ...BASE, display_mode: "dropdown" }, NUMBER, DATE, RETIRED];
+    const el = await mount();
+    act(() => byLabel(el, "Sửa thuộc tính Phân loại hộ").click());
+    const dlg = document.querySelector<HTMLFormElement>("form[aria-label='Sửa thuộc tính']")!;
+    const radios = Array.from(dlg.querySelectorAll<HTMLInputElement>("[data-display-mode] input[type=radio]"));
+    expect(radios.map((r) => r.checked)).toEqual([false, true]);
+    act(() => button(dlg, "Lưu").click());
+    await settle();
+    expect(writes()).toHaveLength(0);
+  });
+
+  it("Xoá: the confirm names the field and its code, needs a reason, sends DELETE {reason}, then the field is gone", async () => {
     H.phien = session(["admin.citizen_field"]);
     answers["DELETE /api/v1/citizen-fields/sonhan01"] = { status: 204, body: null };
     const el = await mount();
-    act(() => byLabel(el, "Ngừng dùng thuộc tính Số nhân khẩu").click());
-    const box = document.querySelector<HTMLFormElement>("form[aria-label='Ngừng dùng thuộc tính']")!;
-    expect(box.textContent).toContain(form.RETIRE_CONSEQUENCE);
-    act(() => button(box, "Ngừng dùng").click());
+    // No "Ngừng dùng" action on a row any more.
+    expect(el.querySelector("button[aria-label='Ngừng dùng thuộc tính Số nhân khẩu']")).toBeNull();
+    act(() => byLabel(el, "Xoá thuộc tính Số nhân khẩu").click());
+    const box = document.querySelector<HTMLFormElement>("form[aria-label='Xoá thuộc tính']")!;
+    expect(box.querySelector("h3")!.textContent).toBe("Xoá thuộc tính “Số nhân khẩu”?");
+    expect(box.querySelector("[data-delete-consequence]")!.textContent).toBe(
+      "Thuộc tính sẽ không còn hiện ở biểu mẫu, danh sách và bộ lọc danh bạ, cũng không chọn được khi gửi tin ZNS/SMS. Dữ liệu đã nhập cho người dân được giữ nguyên. Mã sonhan01 sẽ không dùng lại được cho thuộc tính mới.",
+    );
+    expect(box.textContent).toContain("Lý do xoá");
+    button(box, "Huỷ");
+    // Disabled until a reason is typed; whitespace is not a reason.
+    expect(button(box, "Xoá thuộc tính").disabled).toBe(true);
+    const reason = box.querySelector<HTMLTextAreaElement>("textarea#citizen-field-sonhan01-delete-reason")!;
+    typeIntoArea(reason, "   ");
+    expect(button(box, "Xoá thuộc tính").disabled).toBe(true);
+    act(() => box.requestSubmit());
     await settle();
-    expect(box.textContent).toContain(form.RETIRE_REASON_REQUIRED);
+    expect(box.textContent).toContain(form.DELETE_REASON_REQUIRED);
     expect(writes()).toHaveLength(0);
-    typeInto(box.querySelector<HTMLInputElement>("#citizen-field-sonhan01-retire-reason")!, "Không thu thập nữa");
-    act(() => button(box, "Ngừng dùng").click());
+
+    // The server now answers the list without the deleted field among the live ones.
+    items = [BASE, DATE, RETIRED, { ...NUMBER, retired_at: "2026-10-17T02:00:00Z" }];
+    typeIntoArea(reason, "Không thu thập nữa");
+    expect(button(box, "Xoá thuộc tính").disabled).toBe(false);
+    act(() => button(box, "Xoá thuộc tính").click());
     await settle();
     const del = writes().find((c) => c.method === "DELETE")!;
     expect(del.url).toBe("/api/v1/citizen-fields/sonhan01");
     expect(JSON.parse(del.body!)).toEqual({ reason: "Không thu thập nữa" });
+    expect(H.toast.success).toHaveBeenCalledWith("Đã xoá thuộc tính");
+    expect(document.querySelector("form[aria-label='Xoá thuộc tính']")).toBeNull();
+    expect(calls.filter((c) => c.method === "GET")).toHaveLength(2);
+    expect(liveOrder(el)).toEqual(["hongheo1", "ngaysinh"]);
+    expect(el.textContent).not.toContain("Số nhân khẩu");
+    expect(el.querySelector("[data-field-count]")!.textContent).toBe("2/50 thuộc tính đang dùng");
+  });
+
+  it("Huỷ closes the confirm and sends nothing", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    const el = await mount();
+    act(() => byLabel(el, "Xoá thuộc tính Số nhân khẩu").click());
+    const box = document.querySelector<HTMLFormElement>("form[aria-label='Xoá thuộc tính']")!;
+    act(() => button(box, "Huỷ").click());
+    expect(document.querySelector("form[aria-label='Xoá thuộc tính']")).toBeNull();
+    expect(writes()).toHaveLength(0);
+    expect(liveOrder(el)).toEqual(["hongheo1", "sonhan01", "ngaysinh"]);
+  });
+
+  it("a just-deleted code stays reserved: manual reuse is refused, a random draw skips it", async () => {
+    H.phien = session(["admin.citizen_field"]);
+    items = [BASE, DATE, RETIRED, { ...NUMBER, code: "bbbbbbbbbb", retired_at: "2026-10-17T02:00:00Z" }];
+    // First draw: every byte 1 → "bbbbbbbbbb" (the deleted field's code); then every byte 2 → "cccccccccc".
+    let call = 0;
+    vi.spyOn(crypto, "getRandomValues").mockImplementation(<T extends ArrayBufferView | null>(buf: T): T => {
+      (buf as unknown as Uint8Array).fill(call++ < form.RANDOM_CODE_LENGTH ? 1 : 2);
+      return buf;
+    });
+    const el = await mount();
+    const dlg = openAdd(el);
+    expect(codeOf(dlg).value).toBe("cccccccccc");
+    expect(dlg.querySelector("[data-field-error]")).toBeNull();
+    act(() => byLabel(dlg, "Sửa mã thuộc tính").click());
+    typeInto(codeOf(dlg), "bbbbbbbbbb");
+    expect(dlg.querySelector("[data-field-error]")!.textContent).toBe(form.CODE_TAKEN_DELETED);
+    expect(saveButton(dlg).disabled).toBe(true);
+    vi.restoreAllMocks();
   });
 });
+
+function typeIntoArea(el: HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  act(() => {
+    setter.call(el, value);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}

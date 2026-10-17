@@ -6,7 +6,7 @@ import {
   CODE_INVALID,
   CODE_REQUIRED,
   CODE_TAKEN,
-  CODE_TAKEN_RETIRED,
+  CODE_TAKEN_DELETED,
   FIELD_CODE_PATTERN,
   LABEL_REQUIRED,
   OPTION_LABEL_REQUIRED,
@@ -15,7 +15,7 @@ import {
   OPTION_VALUE_REQUIRED,
   OPTIONS_NONE,
   PLACEHOLDER_TOO_LONG,
-  RETIRE_REASON_REQUIRED,
+  DELETE_REASON_REQUIRED,
   RANDOM_CODE_LENGTH,
   addOption,
   freeRandomFieldCode,
@@ -57,6 +57,8 @@ const CHOICE: CitizenField = {
   created_at: "2026-10-17T00:00:00Z",
   updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
+  display_mode: "full",
+  layout_width: "full",
 };
 
 const draft = (over: Partial<CitizenFieldDraft>): CitizenFieldDraft => ({ ...newFieldDraft(), code: "abcdefgh", label: "Tên", ...over });
@@ -78,7 +80,7 @@ describe("new field code (owner 17/10/2026: 8–12 chars, a–z 0–9, starts wi
 
   it("a code the commune already holds — a retired one included — is taken", () => {
     expect(validateFieldDraft(draft({ code: "hongheo1" }), true, ["hongheo1"]).code).toBe(CODE_TAKEN);
-    expect(validateFieldDraft(draft({ code: "cucu0001" }), true, ["hongheo1", "cucu0001"], ["cucu0001"]).code).toBe(CODE_TAKEN_RETIRED);
+    expect(validateFieldDraft(draft({ code: "cucu0001" }), true, ["hongheo1", "cucu0001"], ["cucu0001"]).code).toBe(CODE_TAKEN_DELETED);
   });
 
   it("on edit the code is not checked at all (it cannot change)", () => {
@@ -169,8 +171,20 @@ describe("bodies", () => {
       date_pattern: "",
       required: false,
       show_in_list: false,
+      display_mode: "",
+      layout_width: null,
     });
     expect(buildCreateBody(draft({ fieldType: "dateTime", datePattern: "MM/yyyy" }))).toMatchObject({ date_pattern: "MM/yyyy", number_kind: "" });
+  });
+
+  it("display_mode: kept for a choice type (full by default), \"\" otherwise; missing on a field reads as full", () => {
+    expect(buildCreateBody(setFieldType(draft({}), "combobox")).display_mode).toBe("full");
+    expect(buildCreateBody({ ...setFieldType(draft({}), "singleBox"), displayMode: "dropdown" }).display_mode).toBe("dropdown");
+    expect(buildCreateBody({ ...draft({}), displayMode: "dropdown" }).display_mode).toBe("");
+    expect(draftFromField(CHOICE).displayMode).toBe("full");
+    expect(draftFromField({ ...CHOICE, display_mode: "" }).displayMode).toBe("full");
+    expect(draftFromField({ ...CHOICE, display_mode: "dropdown" }).displayMode).toBe("dropdown");
+    expect(buildUpdateBody(CHOICE, { ...draftFromField(CHOICE), displayMode: "dropdown" })).toMatchObject({ display_mode: "dropdown" });
   });
 
   it("update: only what changed, every other key null; nothing changed → null", () => {
@@ -183,6 +197,8 @@ describe("bodies", () => {
       number_kind: null,
       date_pattern: null,
       show_in_list: null,
+      display_mode: null,
+      layout_width: null,
       label: "Hộ",
       required: true,
       options: [
@@ -193,7 +209,7 @@ describe("bodies", () => {
   });
 
   it("retire reason is required", () => {
-    expect(checkRetireReason("  ")).toEqual({ ok: false, text: RETIRE_REASON_REQUIRED });
+    expect(checkRetireReason("  ")).toEqual({ ok: false, text: DELETE_REASON_REQUIRED });
     expect(checkRetireReason(" Thôi dùng ")).toEqual({ ok: true, reason: "Thôi dùng" });
   });
 });
@@ -288,10 +304,10 @@ describe("random code (owner 17/10/2026: web tự gen random, chống trùng the
     expect(manualCodeError("abcdefg", live, retired)).toBe(CODE_INVALID);
     expect(manualCodeError("abcdefghijklm", live, retired)).toBe(CODE_INVALID);
     expect(manualCodeError("hongheo1", live, retired)).toBe(CODE_TAKEN);
-    expect(manualCodeError("cucu0001", live, retired)).toBe(CODE_TAKEN_RETIRED);
+    expect(manualCodeError("cucu0001", live, retired)).toBe(CODE_TAKEN_DELETED);
     expect(manualCodeError("moi123456789", live, retired)).toBeUndefined();
     expect(isCodeCollision(CODE_TAKEN)).toBe(true);
-    expect(isCodeCollision(CODE_TAKEN_RETIRED)).toBe(true);
+    expect(isCodeCollision(CODE_TAKEN_DELETED)).toBe(true);
     expect(isCodeCollision(CODE_INVALID)).toBe(false);
     expect(isCodeCollision(undefined)).toBe(false);
   });

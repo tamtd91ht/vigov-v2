@@ -40,6 +40,8 @@ const base = (over: Partial<CitizenField>): CitizenField => ({
   created_at: "2026-10-17T00:00:00Z",
   updated_at: "2026-10-17T00:00:00Z",
   retired_at: null,
+  display_mode: "",
+  layout_width: "half",
   ...over,
 });
 const FIELDS: CitizenField[] = [

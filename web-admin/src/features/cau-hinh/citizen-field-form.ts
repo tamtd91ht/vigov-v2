@@ -12,13 +12,15 @@
  * which the dialog shows verbatim.
  */
 
-import type {
-  CitizenField,
-  CitizenFieldCreateBody,
-  CitizenFieldNumberKind,
-  CitizenFieldOption,
-  CitizenFieldType,
-  CitizenFieldUpdateBody,
+import {
+  displayModeOf,
+  type CitizenField,
+  type CitizenFieldCreateBody,
+  type CitizenFieldDisplayMode,
+  type CitizenFieldNumberKind,
+  type CitizenFieldOption,
+  type CitizenFieldType,
+  type CitizenFieldUpdateBody,
 } from "@/lib/api/citizen-fields";
 
 /* ---- wording -------------------------------------------------------------------------------------- */
@@ -30,17 +32,28 @@ export const ADD_FIELD_BUTTON = "Thêm thuộc tính";
 export const ADD_FIELD_TITLE = "Thêm thuộc tính";
 export const EDIT_FIELD_TITLE = "Sửa thuộc tính";
 export const NO_FIELDS = "Xã chưa khai thuộc tính nào. Bấm “Thêm thuộc tính” để bắt đầu.";
-export const RETIRED_SECTION = "Đã ngừng dùng";
 export const FIELD_SAVED_TOAST = "Đã lưu thuộc tính.";
 export const FIELD_ADDED_TOAST = "Đã thêm thuộc tính.";
-export const FIELD_RETIRED_TOAST = "Đã ngừng dùng thuộc tính.";
+export const FIELD_DELETED_TOAST = "Đã xoá thuộc tính";
 export const ORDER_SAVED_TOAST = "Đã lưu thứ tự.";
 export const ORDER_FAILED_TOAST = "Chưa lưu được thứ tự. Thứ tự cũ được giữ.";
-export const RETIRE_CONSEQUENCE =
-  "Thuộc tính sẽ ẩn khỏi biểu mẫu, cột danh sách và bộ lọc. Giá trị đã nhập cho từng người vẫn được giữ, không xoá.";
-export const RETIRE_REASON_LABEL = "Lý do ngừng dùng";
-export const RETIRE_REASON_REQUIRED = "Nhập lý do trước khi ngừng dùng.";
+export const DELETE_FIELD_BUTTON = "Xoá thuộc tính";
+export const DELETE_REASON_LABEL = "Lý do xoá";
+export const DELETE_REASON_REQUIRED = "Nhập lý do xoá.";
 export const RETIRE_REASON_MAX = 500;
+
+/** `Xoá thuộc tính “Hộ nghèo”?` — the specific question of the confirm box (spec v2 §7). */
+export function deleteFieldTitle(label: string): string {
+  return `Xoá thuộc tính “${label}”?`;
+}
+
+/**
+ * What "Xoá" does (owner, 17/10/2026): only the definition goes; every value typed stays (rule 7) and the
+ * code stays reserved, because ZNS / SMS templates map it and a new field reusing it would inherit them.
+ */
+export function deleteFieldConsequence(code: string): string {
+  return `Thuộc tính sẽ không còn hiện ở biểu mẫu, danh sách và bộ lọc danh bạ, cũng không chọn được khi gửi tin ZNS/SMS. Dữ liệu đã nhập cho người dân được giữ nguyên. Mã ${code} sẽ không dùng lại được cho thuộc tính mới.`;
+}
 export const NO_PERMISSION =
   "Tài khoản của bạn không có quyền cấu hình thuộc tính danh bạ người dân (admin.citizen_field), nên tab này không hiển thị.";
 export const OPTIONS_HINT =
@@ -52,7 +65,7 @@ export function fieldCountText(live: number, limit: number): string {
 }
 
 export function limitReachedText(limit: number): string {
-  return `Đã đủ ${limit} thuộc tính đang dùng. Ngừng dùng một thuộc tính trước khi thêm thuộc tính mới.`;
+  return `Đã đủ ${limit} thuộc tính đang dùng. Xoá một thuộc tính trước khi thêm thuộc tính mới.`;
 }
 
 /* ---- the catalogue of types and patterns ---------------------------------------------------------- */
@@ -70,6 +83,13 @@ export const FIELD_TYPES: readonly { readonly value: CitizenFieldType; readonly 
 export function fieldTypeLabel(t: CitizenFieldType): string {
   return FIELD_TYPES.find((x) => x.value === t)?.label ?? t;
 }
+
+/** "Kiểu hiển thị" of a choice type, `full` first: the default (owner, 17/10/2026). */
+export const DISPLAY_MODE_LABEL = "Kiểu hiển thị";
+export const DISPLAY_MODES: readonly { readonly value: CitizenFieldDisplayMode; readonly label: string }[] = [
+  { value: "full", label: "Hiện đủ các lựa chọn" },
+  { value: "dropdown", label: "Danh sách thả xuống" },
+];
 
 export const NUMBER_KINDS: readonly { readonly value: CitizenFieldNumberKind; readonly label: string }[] = [
   { value: "integer", label: "Nguyên" },
@@ -127,6 +147,8 @@ export type CitizenFieldDraft = {
   readonly datePattern: DatePattern;
   readonly required: boolean;
   readonly showInList: boolean;
+  /** Only read for a type with options; kept across a type change inside the dialog. */
+  readonly displayMode: CitizenFieldDisplayMode;
 };
 
 export function newFieldDraft(): CitizenFieldDraft {
@@ -140,6 +162,7 @@ export function newFieldDraft(): CitizenFieldDraft {
     datePattern: "dd/MM/yyyy",
     required: false,
     showInList: false,
+    displayMode: "full",
   };
 }
 
@@ -154,6 +177,7 @@ export function draftFromField(f: CitizenField): CitizenFieldDraft {
     datePattern: isDatePattern(f.date_pattern) ? f.date_pattern : "dd/MM/yyyy",
     required: f.required,
     showInList: f.show_in_list,
+    displayMode: displayModeOf(f),
   };
 }
 
@@ -208,7 +232,7 @@ export type FieldFormErrors = Partial<Record<"code" | "label" | "placeholder" | 
 export const CODE_REQUIRED = "Nhập mã thuộc tính.";
 export const CODE_INVALID = "Mã gồm 8–12 ký tự a–z, 0–9, bắt đầu bằng chữ";
 export const CODE_TAKEN = "Mã này đã có trong xã";
-export const CODE_TAKEN_RETIRED = "Mã này đã có trong xã (đã ngừng dùng)";
+export const CODE_TAKEN_DELETED = "Mã này đã dùng cho một thuộc tính đã xoá, không dùng lại được";
 export const CODE_HINT = "Mã dùng để ghép biến khi gửi tin ZNS/SMS; không đổi được sau khi tạo.";
 export const CODE_LOCKED_HINT = "Mã không đổi được sau khi tạo vì dữ liệu đã nhập và biến ZNS/SMS gắn với mã.";
 export const CODE_EDIT_BUTTON = "Sửa";
@@ -264,20 +288,21 @@ export function freeRandomFieldCode(taken: ReadonlySet<string>): string | null {
 
 /**
  * The sentence under a hand-typed code, live: pattern first, then whether the commune already holds it
- * (and says so when the holder is retired — the person may look for it in the list and not find it).
+ * (and says so when the holder was deleted — the screen hides deleted fields, so the person would look
+ * for it in the list and not find it).
  */
 export function manualCodeError(code: string, liveCodes: ReadonlySet<string>, retiredCodes: ReadonlySet<string>): string | undefined {
   const c = code.trim();
   if (c === "") return CODE_REQUIRED;
   if (!FIELD_CODE_PATTERN.test(c)) return CODE_INVALID;
-  if (retiredCodes.has(c)) return CODE_TAKEN_RETIRED;
+  if (retiredCodes.has(c)) return CODE_TAKEN_DELETED;
   if (liveCodes.has(c)) return CODE_TAKEN;
   return undefined;
 }
 
 /** A collision is the one code error that disables Lưu while typing (the pattern errors still let Lưu show every other problem). */
 export function isCodeCollision(error: string | undefined): boolean {
-  return error === CODE_TAKEN || error === CODE_TAKEN_RETIRED;
+  return error === CODE_TAKEN || error === CODE_TAKEN_DELETED;
 }
 export const LABEL_REQUIRED = "Nhập tên hiển thị.";
 export const LABEL_TOO_LONG = `Tên hiển thị tối đa ${LABEL_MAX} ký tự.`;
@@ -298,8 +323,8 @@ function charCount(s: string): number {
 
 /**
  * Every problem of the draft, keyed by the control it belongs under. `takenCodes` are the codes the commune
- * already holds, retired fields included — a retired code is still a code (rule 7, invariant 3).
- * `retiredCodes` (a subset of `takenCodes`) only changes the sentence: "(đã ngừng dùng)".
+ * already holds, deleted (retired) fields included — a deleted code is still a code (rule 7, invariant 3).
+ * `retiredCodes` (a subset of `takenCodes`) only changes the sentence.
  */
 export function validateFieldDraft(
   d: CitizenFieldDraft,
@@ -312,7 +337,7 @@ export function validateFieldDraft(
     const code = d.code.trim();
     if (code === "") errors.code = CODE_REQUIRED;
     else if (!FIELD_CODE_PATTERN.test(code)) errors.code = CODE_INVALID;
-    else if (retiredCodes.includes(code)) errors.code = CODE_TAKEN_RETIRED;
+    else if (retiredCodes.includes(code)) errors.code = CODE_TAKEN_DELETED;
     else if (takenCodes.includes(code)) errors.code = CODE_TAKEN;
   }
   const label = d.label.trim();
@@ -368,6 +393,9 @@ export function buildCreateBody(d: CitizenFieldDraft): CitizenFieldCreateBody {
     date_pattern: d.fieldType === "dateTime" ? d.datePattern : "",
     required: d.required,
     show_in_list: d.showInList,
+    display_mode: hasOptions(d.fieldType) ? d.displayMode : "",
+    // Not set by this screen yet (the layout task owns it): null = the server's default.
+    layout_width: null,
   };
 }
 
@@ -391,6 +419,9 @@ export function buildUpdateBody(f: CitizenField, d: CitizenFieldDraft): CitizenF
     date_pattern: null,
     required: null,
     show_in_list: null,
+    display_mode: null,
+    // Never touched here: the field keeps the width it has (the layout task owns it).
+    layout_width: null,
   };
   const label = d.label.trim();
   if (label !== f.label) body.label = label;
@@ -402,6 +433,8 @@ export function buildUpdateBody(f: CitizenField, d: CitizenFieldDraft): CitizenF
   if (f.field_type === "dateTime" && d.datePattern !== f.date_pattern) body.date_pattern = d.datePattern;
   if (d.required !== f.required) body.required = d.required;
   if (d.showInList !== f.show_in_list) body.show_in_list = d.showInList;
+  // Only when it changed: opening and saving a field never rewrites its drawing.
+  if (hasOptions(f.field_type) && d.displayMode !== displayModeOf(f)) body.display_mode = d.displayMode;
   return Object.values(body).every((v) => v === null) ? null : body;
 }
 
@@ -409,7 +442,7 @@ export function buildUpdateBody(f: CitizenField, d: CitizenFieldDraft): CitizenF
 
 export function checkRetireReason(reason: string): { ok: true; reason: string } | { ok: false; text: string } {
   const r = reason.trim();
-  if (r === "") return { ok: false, text: RETIRE_REASON_REQUIRED };
+  if (r === "") return { ok: false, text: DELETE_REASON_REQUIRED };
   if (charCount(r) > RETIRE_REASON_MAX) return { ok: false, text: `Lý do tối đa ${RETIRE_REASON_MAX} ký tự.` };
   return { ok: true, reason: r };
 }

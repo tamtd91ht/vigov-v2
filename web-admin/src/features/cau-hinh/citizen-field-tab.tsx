@@ -12,7 +12,7 @@ import {
   useSensors,
   type Announcements,
 } from "@dnd-kit/core";
-import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, GripVertical, Pencil, Plus, RotateCcw, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Ban, GripVertical, Pencil, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 
@@ -50,9 +50,13 @@ import {
   CODE_REDRAWN_AFTER_CONFLICT,
   CITIZEN_FIELD_TAB_TITLE,
   DATE_PATTERNS,
+  DELETE_FIELD_BUTTON,
+  DELETE_REASON_LABEL,
+  DISPLAY_MODE_LABEL,
+  DISPLAY_MODES,
   EDIT_FIELD_TITLE,
   FIELD_ADDED_TOAST,
-  FIELD_RETIRED_TOAST,
+  FIELD_DELETED_TOAST,
   FIELD_SAVED_TOAST,
   FIELD_TYPES,
   NO_FIELDS,
@@ -61,14 +65,13 @@ import {
   OPTIONS_HINT,
   ORDER_FAILED_TOAST,
   ORDER_SAVED_TOAST,
-  RETIRE_CONSEQUENCE,
-  RETIRE_REASON_LABEL,
   RETIRE_REASON_MAX,
-  RETIRED_SECTION,
   addOption,
   buildCreateBody,
   buildUpdateBody,
   checkRetireReason,
+  deleteFieldConsequence,
+  deleteFieldTitle,
   draftFromField,
   fieldCountText,
   fieldTypeLabel,
@@ -133,15 +136,17 @@ type DialogState = { mode: "add"; idempotencyKey: string } | { mode: "edit"; fie
 /**
  * "Cấu hình → Thuộc tính danh bạ" (ADR 0101 #1–#5): the commune's own fields of the citizen directory.
  * One key, `admin.citizen_field`, opens the tab (convenience: identity checks it on every write, rule 5
- * forbidden #1). NO PROTOTYPE: the card, the dialog and the reasoned "Ngừng dùng" follow Kênh SMS; the
+ * forbidden #1). NO PROTOTYPE: the card, the dialog and the reasoned confirm follow Kênh SMS; the
  * options editor follows Trường bản đồ.
  *
  * THE ORDER IS THE FORM'S ORDER (#3). A drag (mouse, touch, keyboard via dnd-kit) or the Lên / Xuống buttons
  * move a row; the new order shows at once and `PUT` saves the whole live list. A refusal puts the old
  * order back and says so — the screen never shows an order the server does not hold.
  *
- * RETIRED FIELDS STAY LISTED, collapsed under "Đã ngừng dùng": their values are still on every person who
- * had them (#4, rule 7), and their codes stay taken.
+ * "XOÁ" IS A SOFT DELETE OF THE DEFINITION ONLY (owner, 17/10/2026): `DELETE` retires it server-side, the values
+ * already typed on every person stay (#4, rule 7). Deleted fields are NOT drawn, but they are still loaded
+ * (`include_retired=true`): their codes stay reserved, and the Add dialog must refuse them by hand and skip
+ * them when drawing — the server's 409 is the final guard, this only says it before the click.
  */
 export function CitizenFieldTab() {
   const phien = usePhien();
@@ -152,8 +157,7 @@ export function CitizenFieldTab() {
   /** The live order while a reorder is being saved — shown at once, dropped on success or refusal. */
   const [pendingOrder, setPendingOrder] = useState<readonly string[] | null>(null);
   const [dialog, setDialog] = useState<DialogState | null>(null);
-  const [retiring, setRetiring] = useState<CitizenField | null>(null);
-  const [retiredOpen, setRetiredOpen] = useState(false);
+  const [deleting, setDeleting] = useState<CitizenField | null>(null);
 
   const reload = useCallback(async () => {
     const r = await listCitizenFields(true);
@@ -263,40 +267,10 @@ export function CitizenFieldTab() {
             onMove={(from, to) => void saveOrder(moveCode(codes, from, to))}
             onDrop={(active, over) => void saveOrder(orderAfterDrop(codes, active, over))}
             onEdit={(f) => setDialog({ mode: "edit", field: f })}
-            onRetire={setRetiring}
+            onDelete={setDeleting}
           />
         )}
       </section>
-
-      {retired.length > 0 && (
-        <section className={SECTION} aria-label={RETIRED_SECTION}>
-          <button
-            type="button"
-            className="text-navy m-0 flex cursor-pointer items-center gap-1.5 border-0 bg-transparent p-0 text-[13px] font-semibold"
-            aria-expanded={retiredOpen}
-            aria-controls="citizen-fields-retired"
-            onClick={() => setRetiredOpen(!retiredOpen)}
-          >
-            {retiredOpen ? (
-              <ChevronDown aria-hidden="true" focusable="false" className="size-4" />
-            ) : (
-              <ChevronRight aria-hidden="true" focusable="false" className="size-4" />
-            )}
-            {`${RETIRED_SECTION} (${retired.length})`}
-          </button>
-          {retiredOpen && (
-            <ul id="citizen-fields-retired" className="m-0 mt-3 flex list-none flex-col gap-2 p-0" data-retired-fields="">
-              {retired.map((f) => (
-                <li key={f.code} className="border-line flex flex-wrap items-center gap-2 rounded-[10px] border border-solid px-3 py-2 opacity-70">
-                  <span className="text-navy text-[13px] font-semibold">{f.label}</span>
-                  <code className="text-ink-muted text-[11.5px]">{f.code}</code>
-                  <span className="text-ink-muted text-[12px]">{fieldTypeLabel(f.field_type)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
 
       {dialog !== null && (
         <CitizenFieldDialog
@@ -311,11 +285,11 @@ export function CitizenFieldTab() {
         />
       )}
 
-      {retiring !== null && (
-        <RetireFieldDialog
-          field={retiring}
+      {deleting !== null && (
+        <DeleteFieldDialog
+          field={deleting}
           onClose={(done) => {
-            setRetiring(null);
+            setDeleting(null);
             if (done) void reload();
           }}
         />
@@ -337,7 +311,7 @@ export function LiveFieldList({
   onMove,
   onDrop,
   onEdit,
-  onRetire,
+  onDelete,
 }: {
   fields: readonly CitizenField[];
   /** A reorder is being saved: every move control waits, so two orders never race. */
@@ -345,7 +319,7 @@ export function LiveFieldList({
   onMove: (from: number, to: number) => void;
   onDrop: (active: string, over: string | null) => void;
   onEdit: (f: CitizenField) => void;
-  onRetire: (f: CitizenField) => void;
+  onDelete: (f: CitizenField) => void;
 }) {
   const sensors = useSensors(
     // Mouse, not Pointer: a pointer sensor would race the touch sensor for one finger (`so-nhiem-vu.tsx`).
@@ -378,7 +352,7 @@ export function LiveFieldList({
             onUp={() => onMove(i, i - 1)}
             onDown={() => onMove(i, i + 1)}
             onEdit={() => onEdit(f)}
-            onRetire={() => onRetire(f)}
+            onDelete={() => onDelete(f)}
           />
         ))}
       </ol>
@@ -394,7 +368,7 @@ function FieldRow({
   onUp,
   onDown,
   onEdit,
-  onRetire,
+  onDelete,
 }: {
   field: CitizenField;
   index: number;
@@ -403,7 +377,7 @@ function FieldRow({
   onUp: () => void;
   onDown: () => void;
   onEdit: () => void;
-  onRetire: () => void;
+  onDelete: () => void;
 }) {
   const { setNodeRef: setDropRef, isOver } = useDroppable({ id: f.code });
   const drag = useDraggable({ id: f.code, disabled: busy });
@@ -477,8 +451,8 @@ function FieldRow({
         <Button type="button" variant="outline" size="sm" aria-label={`Sửa thuộc tính ${f.label}`} onClick={onEdit}>
           <Pencil aria-hidden="true" focusable="false" className="size-3.5" />
         </Button>
-        <Button type="button" variant="outline" size="sm" className={DANGER_OUTLINE} aria-label={`Ngừng dùng thuộc tính ${f.label}`} onClick={onRetire}>
-          <Ban aria-hidden="true" focusable="false" className="size-3.5" />
+        <Button type="button" variant="outline" size="sm" className={DANGER_OUTLINE} aria-label={`Xoá thuộc tính ${f.label}`} onClick={onDelete}>
+          <Trash2 aria-hidden="true" focusable="false" className="size-3.5" />
         </Button>
       </div>
     </li>
@@ -502,9 +476,9 @@ export function CitizenFieldDialog({
   onClose,
 }: {
   state: DialogState;
-  /** Every code the commune holds, retired ones included (the DB key covers both). */
+  /** Every code the commune holds, deleted (retired) ones included (the DB key covers both). */
   takenCodes: readonly string[];
-  /** The retired subset of `takenCodes` — only changes the sentence. */
+  /** The deleted subset of `takenCodes` — only changes the sentence. */
   retiredCodes: readonly string[];
   onClose: (saved: boolean) => void;
 }) {
@@ -750,6 +724,28 @@ export function CitizenFieldDialog({
 
           {hasOptions(t) && <OptionsEditor draft={draft} setDraft={setDraft} errors={errors} idPrefix={id("option")} />}
 
+          {hasOptions(t) && (
+            // Editable on edit too: it changes the drawing only, never a stored value.
+            <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-display-mode="">
+              <legend className={cn(FIELD_LABEL, "p-0")}>{DISPLAY_MODE_LABEL}</legend>
+              <div className="flex flex-wrap gap-x-6 gap-y-2">
+                {DISPLAY_MODES.map((m) => (
+                  <label key={m.value} className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
+                    <input
+                      type="radio"
+                      name={id("display-mode")}
+                      value={m.value}
+                      className="accent-brand m-0 size-4 shrink-0"
+                      checked={draft.displayMode === m.value}
+                      onChange={() => setDraft({ ...draft, displayMode: m.value })}
+                    />
+                    {m.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          )}
+
           <div className="flex flex-wrap gap-x-6 gap-y-2">
             <label className="text-ink m-0 flex cursor-pointer items-center gap-2 text-[13px] font-normal">
               <input
@@ -927,16 +923,21 @@ function FormField({
   );
 }
 
-/* ---- retire ----------------------------------------------------------------------------------------- */
+/* ---- delete ----------------------------------------------------------------------------------------- */
 
-/** "Ngừng dùng": a required reason, then DELETE — the field hides, every value stays (ADR 0101 #4, rule 7). */
-export function RetireFieldDialog({ field, onClose }: { field: CitizenField; onClose: (done: boolean) => void }) {
+/**
+ * "Xoá": a warning naming the code, a required reason, then DELETE — the definition is soft deleted, every
+ * value stays and the code stays reserved (owner, 17/10/2026; ADR 0101 #4, rule 7). The confirm button waits
+ * for a reason, so the person cannot press it without having read the box.
+ */
+export function DeleteFieldDialog({ field, onClose }: { field: CitizenField; onClose: (done: boolean) => void }) {
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const inputId = `citizen-field-${field.code}-retire-reason`;
+  const inputId = `citizen-field-${field.code}-delete-reason`;
+  const title = deleteFieldTitle(field.label);
 
-  async function retire() {
+  async function remove() {
     const checked = checkRetireReason(reason);
     if (!checked.ok) {
       setError(checked.text);
@@ -950,13 +951,13 @@ export function RetireFieldDialog({ field, onClose }: { field: CitizenField; onC
       setError(r.thongBao === LOI_KHONG_RO ? SAVE_FAILED : r.thongBao);
       return;
     }
-    toast.success(FIELD_RETIRED_TOAST);
+    toast.success(FIELD_DELETED_TOAST);
     onClose(true);
   }
 
   return (
     <ConfigDialog
-      title="Ngừng dùng thuộc tính?"
+      title={title}
       hideHeader
       onDismiss={() => {
         if (!busy) onClose(false);
@@ -964,19 +965,19 @@ export function RetireFieldDialog({ field, onClose }: { field: CitizenField; onC
     >
       <ConfirmDialog
         as="form"
-        aria-label="Ngừng dùng thuộc tính"
-        icon={Ban}
+        aria-label={DELETE_FIELD_BUTTON}
+        icon={Trash2}
         tone="danger"
-        title={`Ngừng dùng thuộc tính “${field.label}”?`}
+        title={title}
         className="m-0 p-0 shadow-none"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!busy) void retire();
+          if (!busy) void remove();
         }}
         actions={
           <>
-            <Button type="submit" variant="primary" disabled={busy} aria-busy={busy}>
-              Ngừng dùng
+            <Button type="submit" variant="danger" disabled={busy || reason.trim() === ""} aria-busy={busy}>
+              {DELETE_FIELD_BUTTON}
             </Button>
             <Button type="button" variant="outline" disabled={busy} onClick={() => onClose(false)}>
               {NUT_HUY}
@@ -984,20 +985,23 @@ export function RetireFieldDialog({ field, onClose }: { field: CitizenField; onC
           </>
         }
       >
-        <p className="m-0" data-retire-consequence="">
-          {RETIRE_CONSEQUENCE}
+        <p className="m-0" data-delete-consequence="">
+          {deleteFieldConsequence(field.code)}
         </p>
-        <div className="mt-3 flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5">
           <label htmlFor={inputId} className={FIELD_LABEL}>
-            {RETIRE_REASON_LABEL}
+            {DELETE_REASON_LABEL}
+            <span className="text-danger ml-1">*</span>
           </label>
-          <input
+          <textarea
             id={inputId}
-            type="text"
-            className={inputCls}
+            rows={3}
+            className={cn(inputCls, "h-auto min-h-[72px] py-2")}
             maxLength={RETIRE_REASON_MAX}
             value={reason}
             disabled={busy}
+            required
+            aria-required="true"
             aria-invalid={error !== null}
             onChange={(e) => setReason(e.target.value)}
           />

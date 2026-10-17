@@ -40,6 +40,8 @@ const CREATE: CitizenFieldCreateBody = {
   date_pattern: "",
   required: true,
   show_in_list: true,
+  display_mode: "dropdown",
+  layout_width: null,
 };
 
 const UNCHANGED: CitizenFieldUpdateBody = {
@@ -52,6 +54,8 @@ const UNCHANGED: CitizenFieldUpdateBody = {
   date_pattern: null,
   required: null,
   show_in_list: null,
+  display_mode: null,
+  layout_width: null,
 };
 
 afterEach(() => {

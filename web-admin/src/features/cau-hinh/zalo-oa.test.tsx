@@ -393,7 +393,30 @@ describe("OA Zalo của xã — a list, one card per OA", () => {
     expect(button(oaSection(el), "Kết nối OA").disabled).toBe(false);
   });
 
-  it("one OA: name, id, counts, 'nối lúc … bởi …', refresh time, last check; 'Kết nối thêm OA' at the head; check toasts", async () => {
+  it("tiles side by side, at most 4 a row; the '+' tile closes the grid and folding keeps only the heading", async () => {
+    H.phien = session(["admin.zalo"]);
+    oaNow = { status: 200, body: LIVE_OA };
+    const el = await mount();
+    const sec = oaSection(el);
+    const grid = sec.querySelector<HTMLUListElement>('ul[aria-label="Các OA đang nối"]')!;
+    expect(grid.className).toContain("2xl:grid-cols-4");
+    expect(grid.className).not.toMatch(/grid-cols-[5-9]/);
+    const tiles = Array.from(grid.children);
+    expect(tiles.map((t) => t.hasAttribute("data-oa-add-tile"))).toEqual([false, true]);
+    expect(tiles.at(-1)!.textContent?.trim()).toBe("Kết nối thêm OA");
+
+    // The fold: an attribute the CSS hides the body by, never an unmount — the card is still in the DOM.
+    const toggle = sec.querySelector<HTMLButtonElement>("[data-section-toggle]")!;
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    act(() => toggle.click());
+    expect(sec.hasAttribute("data-collapsed")).toBe(true);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(oaCard(el, "01OAA")).not.toBeNull();
+    act(() => toggle.click());
+    expect(sec.hasAttribute("data-collapsed")).toBe(false);
+  });
+
+  it("one OA: name, id, counts, 'nối lúc … bởi …', refresh time, last check; 'Kết nối thêm OA' in the '+' tile; check toasts", async () => {
     H.phien = session(["admin.zalo"]);
     oaNow = { status: 200, body: LIVE_OA };
     answers["POST /api/v1/zalo-oas/01OAA/check"] = {
