@@ -12,6 +12,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import type { PhienDaDoc } from "@/features/phien/phien-hien-tai";
 
 import {
+  allowedAttributeChoice,
+  attributeMappingBody,
   countStaff,
   COUNT_OVERLAP,
   formatMoney,
@@ -158,6 +160,14 @@ let sendReplies: Response[] = [];
 let historyPages: Record<string, { items: unknown[]; next_cursor: string }> = { "": { items: [], next_cursor: "" } };
 let campaignById: Record<string, unknown> = {};
 let recipientPages: Record<string, { items: unknown[]; next_cursor: string }> = {};
+const CITIZEN_ATTRS = [
+  { code: "full_name", label: "Họ và tên" },
+  { code: "address", label: "Địa chỉ" },
+  { code: "hongheo", label: "Phân loại hộ" },
+];
+const defaultAttributes = (audience: string): Response =>
+  json({ items: audience === "can-bo" ? [{ code: "full_name", label: "Họ và tên" }] : CITIZEN_ATTRS });
+let attributesReply: (audience: string) => Response = defaultAttributes;
 
 function serve() {
   vi.stubGlobal(
@@ -192,6 +202,8 @@ function serve() {
         return json({ url: "https://oauth.zaloapp.com/v4/oa/permission?state=SECRET-STATE", expires_at: "2026-10-17T01:10:00Z" }, 201);
       }
       if (url === "/api/v1/notice-templates") return json(templatesAnswer);
+      const attrs = /^\/api\/v1\/notice-attributes\?audience=(.*)$/.exec(url);
+      if (attrs) return attributesReply(attrs[1]!);
       if (url === "/api/v1/notice-campaign-previews") return previewReply(JSON.parse(String(init?.body)) as PreviewBody);
       if (url === "/api/v1/notice-campaigns" && init?.method === "POST") return sendReplies.shift() ?? json(campaign("01JNEW", "dang-gui", { recipient_count: 11 }), 201);
       const list = /^\/api\/v1\/notice-campaigns(?:\?cursor=(.*))?$/.exec(url);
@@ -217,6 +229,7 @@ beforeEach(() => {
   historyPages = { "": { items: [], next_cursor: "" } };
   campaignById = {};
   recipientPages = {};
+  attributesReply = defaultAttributes;
   serve();
 });
 
@@ -1012,5 +1025,189 @@ describe("history — one campaign's recipients and its mapping (S5)", () => {
     await settle();
     expect(el.querySelector("[data-mapping]")).toBeNull();
     expect(el.textContent).toContain("Đợt này chưa có dòng người nhận nào.");
+  });
+});
+
+// ---- ADR 0101 #12: a parameter fed by each recipient's attribute -------------------------------------
+
+describe("directory — parameters mapped to an attribute (ADR 0101 #12)", () => {
+  async function rowSource(el: HTMLElement, field: string, label: "Giá trị chung" | "Theo thuộc tính") {
+    const b = [...el.querySelectorAll<HTMLButtonElement>(`[data-param="${field}"] button`)].find((x) => x.textContent === label);
+    expect(b, `${field} ${label}`).toBeDefined();
+    await act(async () => b!.click());
+    await settle();
+  }
+  const optionTexts = (el: HTMLElement, id: string) => [...el.querySelector<HTMLSelectElement>(`#${id}`)!.options].map((o) => o.textContent);
+
+  it("ZNS: 'Theo thuộc tính' picks from the citizen list; the mapped key goes up '' in params (not the typed value) and in attribute_mapping — preview and send", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    expect(calls.map((c) => c.url)).toContain("/api/v1/notice-attributes?audience=nguoi-dan");
+    expect(bodyOf(posts("/api/v1/notice-campaign-previews")[0])).not.toHaveProperty("attribute_mapping");
+
+    await type(el, "notice-param-0", "giá trị gõ trước");
+    await type(el, "notice-param-1", "Trạm y tế");
+    await rowSource(el, "ngay_tiem", "Theo thuộc tính");
+    expect(el.querySelector("#notice-param-0")).toBeNull();
+    expect(optionTexts(el, "notice-param-attr-0")).toEqual(["Chọn thuộc tính", "Họ và tên", "Địa chỉ", "Phân loại hộ"]);
+    await choose(el, "notice-param-attr-0", "hongheo");
+    await click(el, "Xem trước");
+    const body = bodyOf(posts("/api/v1/notice-campaign-previews").at(-1));
+    expect(body.params).toEqual({ ngay_tiem: "", dia_diem: "Trạm y tế" });
+    expect(body.attribute_mapping).toEqual({ ngay_tiem: "hongheo" });
+
+    previewReply = () => json({ content: null, recipient_count: 3, skipped_count: 0, unit_price: "200.00", estimated_cost: "600.00", missing_params: [] });
+    await click(el, "Xem trước");
+    await act(async () => sendButton(el)!.click());
+    await settle();
+    const sent = bodyOf(posts("/api/v1/notice-campaigns")[0]);
+    expect(sent.params).toEqual({ ngay_tiem: "", dia_diem: "Trạm y tế" });
+    expect(sent.attribute_mapping).toEqual({ ngay_tiem: "hongheo" });
+
+    // Back to "Giá trị chung": the mapping leaves the body.
+    await rowSource(el, "ngay_tiem", "Giá trị chung");
+    await type(el, "notice-param-0", "20/10");
+    await click(el, "Xem trước");
+    const back = bodyOf(posts("/api/v1/notice-campaign-previews").at(-1));
+    expect(back).not.toHaveProperty("attribute_mapping");
+    expect(back.params).toEqual({ ngay_tiem: "20/10", dia_diem: "Trạm y tế" });
+  });
+
+  it("'Theo thuộc tính' with nothing picked: no mapping, the key empty — the server reports it missing", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    await rowSource(el, "ngay_tiem", "Theo thuộc tính");
+    await click(el, "Xem trước");
+    const body = bodyOf(posts("/api/v1/notice-campaign-previews").at(-1));
+    expect(body).not.toHaveProperty("attribute_mapping");
+    expect(el.querySelector("[data-missing-params]")!.textContent).toContain("ngay_tiem");
+  });
+
+  it("SMS: slot keys '1','2' map; the preview shows the server's sample with [Nhãn] as returned", async () => {
+    templatesAnswer = { zns: [ZNS_ONE], sms: [SMS_B] };
+    previewReply = () => json({ content: "Hop dan [Họ và tên] luc 8h", recipient_count: 2, skipped_count: 0, unit_price: null, estimated_cost: null, missing_params: [] });
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await click(el, "Tin nhắn SMS");
+    await pickTemplate(el, "sms:01JSMS2:st-2");
+    await rowSource(el, "1", "Theo thuộc tính");
+    await choose(el, "notice-param-attr-0", "full_name");
+    await type(el, "notice-param-1", "8h");
+    await click(el, "Xem trước");
+    const body = bodyOf(posts("/api/v1/notice-campaign-previews").at(-1));
+    expect(body).toMatchObject({ channel: "sms", params: { "1": "", "2": "8h" }, attribute_mapping: { "1": "full_name" } });
+    expect(el.querySelector("[data-preview-content]")!.textContent).toBe("Hop dan [Họ và tên] luc 8h");
+  });
+
+  it("staff audience: the can-bo list (Họ và tên only); switching citizen → staff drops the mapping back to 'Giá trị chung'", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    await rowSource(el, "ngay_tiem", "Theo thuộc tính");
+    await choose(el, "notice-param-attr-0", "address");
+
+    await act(async () => step(el, 1).querySelector("button")!.click());
+    await click(el, "Toàn bộ cán bộ");
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    expect(calls.map((c) => c.url)).toContain("/api/v1/notice-attributes?audience=can-bo");
+    expect(el.querySelector('[data-param="ngay_tiem"] button[aria-pressed="true"]')!.textContent).toBe("Giá trị chung");
+    expect(el.querySelector("#notice-param-attr-0")).toBeNull();
+    const first = bodyOf(posts("/api/v1/notice-campaign-previews").at(-1));
+    expect(first).toMatchObject({ audience: { kind: "can-bo-tat-ca" } });
+    expect(first).not.toHaveProperty("attribute_mapping");
+
+    await rowSource(el, "ngay_tiem", "Theo thuộc tính");
+    expect(optionTexts(el, "notice-param-attr-0")).toEqual(["Chọn thuộc tính", "Họ và tên"]);
+  });
+
+  it("the attribute list refused: the server's sentence, the select disabled", async () => {
+    attributesReply = () => json({ code: "identity_unavailable", message: "Danh bạ tạm thời không trả lời.", trace_id: "" }, 503);
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    await rowSource(el, "ngay_tiem", "Theo thuộc tính");
+    expect(el.querySelector<HTMLSelectElement>("#notice-param-attr-0")!.disabled).toBe(true);
+    expect(el.querySelector("[data-attributes-refused]")!.textContent).toBe("Danh bạ tạm thời không trả lời.");
+  });
+
+  it("the '?' opens the explanation on press; imported sources show no attribute toggle", async () => {
+    const el = await mount(session(ALL));
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    await act(async () => el.querySelector<HTMLButtonElement>("[data-attribute-help]")!.click());
+    const help = el.querySelector("[data-attribute-help-text]")!.textContent!;
+    expect(help).toContain("giá trị thuộc tính đó của chính mình");
+    expect(help).toContain("ô trống");
+    expect(help).toContain("cắt bớt");
+
+    await act(async () => step(el, 1).querySelector("button")!.click());
+    await click(el, "Nhập số điện thoại");
+    await toTemplateStep(el);
+    await pickTemplate(el);
+    expect(el.querySelector("[data-attribute-help]")).toBeNull();
+    expect([...el.querySelectorAll('[data-param="ngay_tiem"] button')].map((b) => b.textContent)).not.toContain("Theo thuộc tính");
+  });
+
+  it("history: Tham số → Thuộc tính with the label from the list, the code when the list lacks it; SMS slots as 'Ô n'", async () => {
+    historyPages = {
+      "": {
+        items: [
+          campaign("01JA", "da-gui", { recipient_mapping: null, content: null, sms_content_mode: null, attribute_mapping: { ngay_tiem: "hongheo", dia_diem: "da_xoa" } }),
+          campaign("01JS", "da-gui", {
+            channel: "sms",
+            audience_kind: "can-bo-tat-ca",
+            recipient_mapping: null,
+            content: null,
+            sms_content_mode: null,
+            attribute_mapping: { "1": "full_name" },
+          }),
+        ],
+        next_cursor: "",
+      },
+    };
+    const el = await mount(session(ALL));
+    await act(async () => tabs(el)[1]!.click());
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-open-campaign="01JA"]')!.click());
+    await settle();
+    expect(calls.map((c) => c.url)).toContain("/api/v1/notice-attributes?audience=nguoi-dan");
+    const mapping = el.querySelector("[data-mapping]")!;
+    expect(mapping.querySelector("h3")!.textContent).toBe("Thông tin map biến");
+    expect([...mapping.querySelectorAll('[data-mapping-table="attributes"] th')].map((th) => th.textContent)).toEqual(["Tham số", "Thuộc tính"]);
+    expect([...mapping.querySelectorAll('[data-mapping-table="attributes"] td')].map((td) => td.textContent)).toEqual([
+      "ngay_tiem",
+      "Phân loại hộ",
+      "dia_diem",
+      "da_xoa",
+    ]);
+    expect(mapping.querySelector('[data-mapping-row="phone"]')).toBeNull();
+
+    await click(el, "Quay lại danh sách đợt");
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-open-campaign="01JS"]')!.click());
+    await settle();
+    expect(calls.map((c) => c.url)).toContain("/api/v1/notice-attributes?audience=can-bo");
+    expect([...el.querySelectorAll('[data-mapping-table="attributes"] td')].map((td) => td.textContent)).toEqual(["Ô 1", "Họ và tên"]);
+  });
+
+  it("history: attribute_mapping null → no block, no attribute read", async () => {
+    historyPages = { "": { items: [campaign("01JN", "da-gui", { recipient_mapping: null, content: null, sms_content_mode: null, attribute_mapping: null })], next_cursor: "" } };
+    const el = await mount(session(ALL));
+    await act(async () => tabs(el)[1]!.click());
+    await act(async () => el.querySelector<HTMLButtonElement>('[data-open-campaign="01JN"]')!.click());
+    await settle();
+    expect(el.querySelector("[data-mapping]")).toBeNull();
+    expect(calls.some((c) => c.url.startsWith("/api/v1/notice-attributes"))).toBe(false);
+  });
+});
+
+describe("attributeMappingBody / allowedAttributeChoice (pure)", () => {
+  it("only the template's fields, only a picked code; a staff audience keeps full_name only", () => {
+    const choice = { a: "address", b: "full_name", c: "", stray: "address" };
+    expect(attributeMappingBody(["a", "b", "c"], choice, "citizen_all")).toEqual({ a: "address", b: "full_name" });
+    expect(attributeMappingBody(["a", "b", "c"], choice, "staff_unit")).toEqual({ b: "full_name" });
+    expect(allowedAttributeChoice(choice, "staff_all")).toEqual({ b: "full_name", c: "" });
+    expect(allowedAttributeChoice(choice, "citizen_tag")).toEqual(choice);
   });
 });

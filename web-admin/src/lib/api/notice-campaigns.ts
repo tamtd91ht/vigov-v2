@@ -8,6 +8,7 @@
  *   GET  /api/v1/notice-campaigns            the "Đã gửi" history, newest first, `?cursor=` pages
  *   GET  /api/v1/notice-campaigns/{id}       one campaign (its progress while it sends)
  *   GET  /api/v1/notice-campaigns/{id}/recipients   one campaign's recipients: MASKED number, result, error
+ *   GET  /api/v1/notice-attributes?audience=        what a template parameter may be mapped to (ADR 0101 #12)
  *
  * A DIRECTORY audience names a kind plus group / tag / unit ids, never a person. The two IMPORTED sources
  * (ADR 0099 §Sửa đổi S1–S2: a typed list, a file read in the browser) are the one case where numbers go
@@ -24,10 +25,13 @@
 import { docJSON, docThanLoiGoi, goiGhi, thamSoTheoHopDong } from "./goi";
 import type { KetQua } from "./goi";
 import type {
+  comms_get_notice_attributes,
   comms_get_notice_campaigns,
   comms_get_notice_campaigns_by_id,
   comms_get_notice_campaigns_by_id_recipients,
   comms_get_notice_templates,
+  comms_noticeAttributeListOut,
+  comms_noticeAttributeOut,
   comms_noticeCampaignIn,
   comms_noticeCampaignListOut as gen_noticeCampaignListOut,
   comms_noticeCampaignOut as gen_noticeCampaignOut,
@@ -82,9 +86,13 @@ export type SmsNoticeTemplate = comms_smsNoticeTemplateOut;
 export type NoticeTemplates = comms_noticeTemplatesOut;
 export type NoticePreview = comms_noticePreviewOut;
 
-export type NoticeCampaign = Omit<gen_noticeCampaignOut, "status" | "sms_content_mode"> & {
+// `attribute_mapping` is WIDENED to null: comms writes `null` for a campaign that mapped nothing (and for
+// every imported-list campaign) — `notice_campaigns_test.go` asserts the literal — which the generator,
+// reading a Go map, declares non-null. Typed as generated, the history would dereference a null.
+export type NoticeCampaign = Omit<gen_noticeCampaignOut, "status" | "sms_content_mode" | "attribute_mapping"> & {
   status: NoticeCampaignStatus;
   sms_content_mode: SmsContentMode | null;
+  attribute_mapping: Record<string, string> | null;
 };
 export type NoticeCampaignPage = Omit<gen_noticeCampaignListOut, "items"> & { items: NoticeCampaign[] };
 
@@ -122,6 +130,12 @@ export type NoticeDraft = {
   content?: string;
   /** `tep-nhap` only: which header fed the phone, the content, each variable / parameter. */
   mapping?: NoticeRecipientMapping;
+  /**
+   * DIRECTORY audiences only (ADR 0101 #12): parameter `field` → attribute `code`, each recipient getting
+   * their own value. A mapped key goes up "" in `params` — the value is the recipient's, not a shared one.
+   * Not sent at all when empty, so a draft that maps nothing has the body it always had.
+   */
+  attributeMapping?: Readonly<Record<string, string>>;
 };
 
 const TEMPLATES_PATH = "/api/v1/notice-templates" satisfies comms_get_notice_templates["duongDan"];
@@ -169,6 +183,7 @@ function previewBody(d: NoticeDraft): comms_noticePreviewIn {
   if (d.smsContentMode !== undefined) body.sms_content_mode = d.smsContentMode;
   if (d.content !== undefined) body.content = d.content;
   if (d.mapping !== undefined) body.mapping = mappingBody(d.mapping);
+  if (d.attributeMapping !== undefined && Object.keys(d.attributeMapping).length > 0) body.attribute_mapping = { ...d.attributeMapping };
   return body;
 }
 
@@ -238,4 +253,23 @@ export function listNoticeRecipients(id: string, cursor = ""): Promise<KetQua<No
   const qs = q.toString();
   const path = RECIPIENTS_TEMPLATE.replace("{id}", encodeURIComponent(id));
   return docJSON<NoticeRecipientPage>(qs === "" ? path : `${path}?${qs}`);
+}
+
+/** One attribute a parameter may take: `code` goes into `attribute_mapping`, `label` is shown. Never a value. */
+export type NoticeAttribute = comms_noticeAttributeOut;
+
+/** `audience` of notice-attributes: the prefix of the audience kinds (ADR 0011). */
+export type NoticeAttributeAudience = "nguoi-dan" | "can-bo";
+
+const ATTRIBUTES_PATH = "/api/v1/notice-attributes" satisfies comms_get_notice_attributes["duongDan"];
+
+/**
+ * GET notice-attributes — `nguoi-dan`: the fixed attributes then every live dynamic field of the commune;
+ * `can-bo`: Họ và tên only. Codes and labels, nobody's value. 400 `notice_invalid` (unknown audience),
+ * 503 `identity_unavailable`: the server's sentence, as every other refusal here.
+ */
+export function listNoticeAttributes(audience: NoticeAttributeAudience): Promise<KetQua<comms_noticeAttributeListOut>> {
+  const q = new URLSearchParams();
+  thamSoTheoHopDong<comms_get_notice_attributes["truyVan"]>(q)("audience", audience);
+  return docJSON<comms_noticeAttributeListOut>(`${ATTRIBUTES_PATH}?${q.toString()}`);
 }

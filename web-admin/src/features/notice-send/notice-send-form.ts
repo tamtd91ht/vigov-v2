@@ -18,6 +18,8 @@
 import type { CitizenContactTag } from "@/lib/api/citizen-contacts";
 import type { CitizenGroup } from "@/lib/api/citizen-groups";
 import type {
+  NoticeAttribute,
+  NoticeAttributeAudience,
   NoticeAudienceKind,
   NoticeCampaign,
   NoticeChannel,
@@ -291,6 +293,85 @@ export function missingLabel(channel: Channel, field: string): string {
 
 export function missingParamsText(labels: readonly string[]): string {
   return `Còn chỗ trống chưa điền: ${labels.join(", ")}.`;
+}
+
+// ---- step 3: a parameter fed by each recipient's attribute (ADR 0101 #12) -----------------------------
+
+/**
+ * Where a parameter's value comes from, DIRECTORY audiences only: one shared value typed here, or each
+ * recipient's own value of a directory attribute (identity hands it to comms with the number, and comms
+ * keeps it in memory — ADR 0101 #12, replacing ADR 0099 #6).
+ */
+export type ParamSource = "shared" | "attribute";
+
+export const PARAM_SOURCE_LABEL: Readonly<Record<ParamSource, string>> = { shared: "Giá trị chung", attribute: "Theo thuộc tính" };
+export const PARAM_SOURCES = Object.keys(PARAM_SOURCE_LABEL) as ParamSource[];
+
+/** The toggle's group name, per parameter (read by a screen reader, not drawn). */
+export function paramSourceLegend(label: string): string {
+  return `Nguồn giá trị · ${label}`;
+}
+
+export const PARAMS_SOURCE_TITLE = "Giá trị tham số";
+export const ATTRIBUTE_PICK = "Chọn thuộc tính";
+export const ATTRIBUTE_HELP_LABEL = "Giải thích Theo thuộc tính";
+export const ATTRIBUTE_HELP =
+  "Theo thuộc tính: mỗi người nhận được giá trị thuộc tính đó của chính mình. Người chưa có giá trị ở thuộc tính ấy nhận ô trống. Giá trị dài hơn giới hạn của ô bị cắt bớt.";
+
+/** A staff audience may map this attribute only (comms `ErrNoticeAttributeStaff`). */
+export const STAFF_ATTRIBUTE = "full_name";
+
+/** Which attribute list an audience reads: the citizen directory's, or the staff one (Họ và tên only). */
+export function attributeAudience(kind: AudienceKind): NoticeAttributeAudience {
+  return isStaffAudience(kind) ? "can-bo" : "nguoi-dan";
+}
+
+/** The same for a STORED kind (the history); an imported list maps nothing, so null. */
+export function attributeAudienceOfWire(wire: string): NoticeAttributeAudience | null {
+  if (wire.startsWith("can-bo-")) return "can-bo";
+  if (wire.startsWith("nguoi-dan-")) return "nguoi-dan";
+  return null;
+}
+
+/**
+ * The per-parameter choice kept by the screen: a key PRESENT = "Theo thuộc tính", its value the picked
+ * code ("" = not picked yet). Narrowed to what `kind` may map: a staff audience keeps only Họ và tên, so
+ * switching from citizens to staff drops every other mapping back to "Giá trị chung".
+ */
+export function allowedAttributeChoice(choice: Readonly<Record<string, string>>, kind: AudienceKind): Record<string, string> {
+  if (!isStaffAudience(kind)) return { ...choice };
+  return Object.fromEntries(Object.entries(choice).filter(([, code]) => code === "" || code === STAFF_ATTRIBUTE));
+}
+
+/**
+ * `attribute_mapping` as the body carries it: only the template's own fields, only a picked code, only
+ * what the audience may map. The server checks all three again; this keeps a stale choice (another
+ * template's field, a citizen attribute after a switch to staff) from going up at all.
+ */
+export function attributeMappingBody(
+  fields: readonly string[],
+  choice: Readonly<Record<string, string>>,
+  kind: AudienceKind,
+): Record<string, string> {
+  const allowed = allowedAttributeChoice(choice, kind);
+  return Object.fromEntries(fields.filter((f) => (allowed[f] ?? "") !== "").map((f) => [f, allowed[f]!]));
+}
+
+/** The history's "Tham số → Thuộc tính" rows: the parameter as the officer read it, the attribute's label or its code. */
+export const ATTRIBUTE_MAPPING_COLUMNS = ["Tham số", "Thuộc tính"] as const;
+
+export function attributeMappingRows(
+  channel: NoticeChannel,
+  mapping: Readonly<Record<string, string>> | null | undefined,
+  attributes: readonly NoticeAttribute[],
+): [string, string][] {
+  const ch: Channel = channel === "sms" ? "sms" : "zns";
+  // SMS slots "1","2",… in numeric order; ZNS names as stored.
+  const keys = Object.keys(mapping ?? {}).sort((a, b) => (ch === "sms" ? Number(a) - Number(b) : 0));
+  return keys.map((k) => {
+    const code = mapping![k]!;
+    return [missingLabel(ch, k), attributes.find((a) => a.code === code)?.label ?? code];
+  });
 }
 
 // ---- the "Xem trước" aside (prototype :287-393) -----------------------------------------------------

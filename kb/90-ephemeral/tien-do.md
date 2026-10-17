@@ -3,7 +3,7 @@ id: tien-do
 tier: T5
 source: GENERATED
 owner: architecture
-derived_from_commit: f0ef8c3d
+derived_from_commit: 
 expires: 2027-01-15
 owns_facts:
   - "tiến độ từng module: mục nào đã làm, chưa làm, đang treo, và nợ câu hỏi nào"
@@ -30,7 +30,7 @@ tức tin `git log` chứ đừng tin tệp này.
 | ĐANG LÀM | 210 |
 | chưa làm | 44 |
 | treo | 13 |
-| xong | 597 |
+| xong | 598 |
 
 ## Theo menu
 
@@ -1614,7 +1614,7 @@ Cập nhật 2026-10-16 · 24 mục
 
 ## `web-admin`
 
-Cập nhật 2026-10-17 · 191 mục
+Cập nhật 2026-10-17 · 192 mục
 
 | Mục | Trạng thái | Bằng chứng | Nợ | Kế tiếp |
 |---|---|---|---|---|
@@ -1809,3 +1809,4 @@ Cập nhật 2026-10-17 · 191 mục
 | `kanban-khoang-trong-tieu-de-han-15-10` — Thẻ Kanban nhiệm vụ: thu khoảng trống giữa tên nhiệm vụ và Hạn theo prototype (chủ dự án 15/10/2026, ảnh tmp/kaban-nhiem-vu.png). Bỏ min-height 3 dòng của .tieu-de-the và min-h-4 của dòng việc con/đã gia hạn; tên vẫn kẹp tối đa 3 dòng. Đổi chiều có chủ ý: thẻ các cột không còn cao bằng nhau theo hàng (luật tester 09/10/2026). | xong | e6ac2308 — globals.css .tieu-de-the, so-nhiem-vu.tsx TheNhiemVu; prototype TaskCard.tsx:74,78. tsc 0, eslint sạch, vitest nhiem-vu + ui-foundation 737/737 (15/10/2026). Chưa kiểm bằng ảnh render. | — | Người dùng build web-admin và xem lại thẻ Kanban. |
 | `danh-ba-nguoi-dan-man-16-10` — Màn /nguoi-dan Danh bạ người dân (ADR 0097, chương 16): API client, danh sách số che + lọc nhóm/Zalo/từ khoá, tab Nhóm, hộp Thêm/Sửa với nút Xem số đầy đủ (mỗi bấm một vết), gỡ có lý do, nhập Excel; menu bật khoá citizen.read. | xong | 9f1a5871 · 0dc085ba · 543b05ca — make web: tsc sạch, vitest 332 tệp / 6168 ca, check:api khớp (16/10/2026). CHƯA KIỂM BẰNG ẢNH RENDER. | — | (1) Người dùng build vigov-web-admin + vigov-service-identity, thêm 8 prefix Ingress, xem màn. (2) BACKEND: PATCH citizen-contacts đòi số đầy đủ → hộp sửa phải bấm Xem số trước khi lưu; cân nhắc cho PATCH bỏ trống phone = giữ nguyên. (3) BACKEND: tuyến tìm chưa có trường nhãn → chip lọc nhãn đang là '?'. (4) Hợp đồng chưa khai query active/has_own_app_session của GET và header Idempotency-Key. (5) test-designer TASK-13/14 chưa chạy. |
 | `gui-tin-nhap-so-nhap-tep-17-10` — Gửi tin: người nhận nhập số / nhập tệp, SMS cột nội dung hoặc nội dung chung {{variable_N}}, ZNS tham số theo cột, chi tiết đợt + Thông tin map biến + lịch sử từng số (ADR 0099 §Sửa đổi) | xong | f3be1daf (TASK D-7w) + 633f0d1d (D-7r kiểu sinh). tsc + eslint sạch, vitest notice-send xanh (17/10/2026). Phụ thuộc read-excel-file 9.3.10. | — | CHƯA xem ảnh render. Ô tài khoản SMS cho nguồn nhập chỉ hiện tài khoản đã có mẫu (chưa có tuyến liệt kê tài khoản cho notice.send). |
+| `gui-tin-map-thuoc-tinh-web-17-10` — Gửi tin tới danh bạ: mỗi tham số ZNS / ô SMS chọn Giá trị chung hoặc Theo thuộc tính (dấu ? hướng dẫn); lịch sử hiện Tham số → Thuộc tính (ADR 0101 #12) | xong | TASK E-2w (17/10/2026): notice-campaigns.ts listNoticeAttributes + attribute_mapping; notice-send-form/screen. tsc 0 lỗi, eslint sạch, vitest 80/80. | — | CHƯA xem ảnh render. attribute_mapping trong schema.gen khai không-null nhưng comms trả null — web nới kiểu tại chỗ; sửa khai báo phía comms (con trỏ) để apidoc sinh nullable. |

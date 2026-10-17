@@ -1686,6 +1686,14 @@
       "no_confirm": [],
       "bang_chung": "TASK E-1w (17/10/2026): lib/api/citizen-fields.ts, features/cau-hinh/citizen-field-*, features/citizen-directory/citizen-attribute*, citizen-contact-filters. tsc + eslint sạch, vitest 130 tệp / 2204 ca xanh.",
       "tiep_theo": "Kiểu API viết tay trong khối UNTIL REGEN (TASK E-1) ở citizen-contacts.ts và citizen-fields.ts — thay sau khi backend E-1 lên + make kb. CHƯA xem ảnh render."
+    },
+    {
+      "id": "gui-tin-map-thuoc-tinh-web-17-10",
+      "viec": "Gửi tin tới danh bạ: mỗi tham số ZNS / ô SMS chọn Giá trị chung hoặc Theo thuộc tính (dấu ? hướng dẫn); lịch sử hiện Tham số → Thuộc tính (ADR 0101 #12)",
+      "trang_thai": "xong",
+      "no_confirm": [],
+      "bang_chung": "TASK E-2w (17/10/2026): notice-campaigns.ts listNoticeAttributes + attribute_mapping; notice-send-form/screen. tsc 0 lỗi, eslint sạch, vitest 80/80.",
+      "tiep_theo": "CHƯA xem ảnh render. attribute_mapping trong schema.gen khai không-null nhưng comms trả null — web nới kiểu tại chỗ; sửa khai báo phía comms (con trỏ) để apidoc sinh nullable."
     }
   ]
 }

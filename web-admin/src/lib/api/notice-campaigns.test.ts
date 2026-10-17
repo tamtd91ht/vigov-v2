@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createNoticeCampaign,
   getNoticeCampaign,
+  listNoticeAttributes,
   listNoticeCampaigns,
   listNoticeRecipients,
   listNoticeTemplates,
@@ -135,6 +136,30 @@ describe("preview", () => {
       thongBao: "OA này cần được uỷ quyền lại trước khi gửi.",
       code: "source_unavailable",
     });
+  });
+});
+
+describe("attribute mapping (ADR 0101 #12)", () => {
+  it("attributes: GET /api/v1/notice-attributes?audience=…, the list as it came", async () => {
+    const fake = stubFetch(json({ items: [{ code: "full_name", label: "Họ và tên" }] }, 200));
+    expect(await listNoticeAttributes("can-bo")).toEqual({ ok: true, duLieu: { items: [{ code: "full_name", label: "Họ và tên" }] } });
+    expect(fake.mock.calls[0]?.[0]).toBe("/api/v1/notice-attributes?audience=can-bo");
+    expect(fake.mock.calls[0]?.[1]?.method).toBe("GET");
+    await listNoticeAttributes("nguoi-dan");
+    expect(fake.mock.calls[1]?.[0]).toBe("/api/v1/notice-attributes?audience=nguoi-dan");
+  });
+
+  it("a mapping goes up as attribute_mapping in preview and send; an empty one is not sent at all", async () => {
+    const fake = stubFetch(json({ content: null, recipient_count: 1, skipped_count: 0, unit_price: null, estimated_cost: null, missing_params: [] }, 200));
+    await previewNoticeCampaign({ ...SMS, params: { "1": "" }, attributeMapping: { "1": "full_name" } });
+    expect(sentBody(fake)).toMatchObject({ params: { "1": "" }, attribute_mapping: { "1": "full_name" } });
+    await previewNoticeCampaign({ ...ZNS, attributeMapping: {} });
+    const raw = fake.mock.calls[1]?.[1]?.body;
+    expect(JSON.parse(String(raw))).not.toHaveProperty("attribute_mapping");
+
+    const send = stubFetch(json(CAMPAIGN, 201));
+    await createNoticeCampaign({ ...ZNS, params: { ngay_tiem: "" }, attributeMapping: { ngay_tiem: "hongheo" } }, "T", "k1");
+    expect(sentBody(send)).toMatchObject({ title: "T", params: { ngay_tiem: "" }, attribute_mapping: { ngay_tiem: "hongheo" } });
   });
 });
 

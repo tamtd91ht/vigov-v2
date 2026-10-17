@@ -27,9 +27,12 @@ import {
   getNoticeCampaign,
   listNoticeCampaigns,
   listNoticeRecipients,
+  listNoticeAttributes,
   listNoticeTemplates,
   NOTICE_ERROR,
   previewNoticeCampaign,
+  type NoticeAttribute,
+  type NoticeAttributeAudience,
   type NoticeAudienceKind,
   type NoticeCampaign,
   type NoticeCampaignPage,
@@ -46,6 +49,15 @@ import { cn } from "@/lib/cn";
 import { CITIZEN_READ_PERMISSION, NOTICE_SEND_PERMISSION, quyetDinhTheoKhoa, ZALO_CHANNEL_PERMISSION } from "@/lib/quyen";
 
 import {
+  allowedAttributeChoice,
+  ATTRIBUTE_HELP,
+  ATTRIBUTE_HELP_LABEL,
+  ATTRIBUTE_MAPPING_COLUMNS,
+  ATTRIBUTE_PICK,
+  attributeAudience,
+  attributeAudienceOfWire,
+  attributeMappingBody,
+  attributeMappingRows,
   audienceBody,
   audienceKindLabel,
   AUDIENCE_KINDS,
@@ -87,7 +99,11 @@ import {
   OPEN_CAMPAIGN_HINT,
   OPEN_SMS_CONFIG,
   OPEN_ZALO_CONFIG,
+  PARAM_SOURCE_LABEL,
+  PARAM_SOURCES,
   paramLabel,
+  PARAMS_SOURCE_TITLE,
+  paramSourceLegend,
   paramsLine,
   PICK_GROUP,
   PICK_TAG,
@@ -133,6 +149,7 @@ import {
   znsSubline,
   type AudienceKind,
   type Channel,
+  type ParamSource,
   type PickedTemplate,
 } from "./notice-send-form";
 import { OAStatusCard, useCommuneOA } from "./oa-status-card";
@@ -262,6 +279,9 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   const [picked, setPicked] = useState<PickedTemplate | null>(null);
   const [title, setTitle] = useState("");
   const [params, setParams] = useState<Record<string, string>>({});
+  /** Directory only (ADR 0101 #12): a key present = "Theo thuộc tính", its value the code ("" = not picked). */
+  const [attributeChoice, setAttributeChoice] = useState<Record<string, string>>({});
+  const [attributeHelpOpen, setAttributeHelpOpen] = useState(false);
 
   // The imported sources (ADR 0099 §Sửa đổi S1–S4). The file's cells live HERE, in memory, and nowhere else.
   const [sourceKind, setSourceKind] = useState<RecipientSourceKind>("directory");
@@ -283,6 +303,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
   const [staff, setStaff] = useState<KetQua<{ items: identity_canBoChonNguoiRa[] }> | null>(null);
   const [count, setCount] = useState<{ key: string; result: KetQua<number> } | null>(null);
   const [templates, setTemplates] = useState<KetQua<NoticeTemplates> | null>(null);
+  const [attributes, setAttributes] = useState<Partial<Record<NoticeAttributeAudience, KetQua<NoticeAttribute[]>>>>({});
 
   const [preview, setPreview] = useState<PreviewState | null>(null);
   /** The latest preview asked for: an older answer arriving late must not overwrite a newer one. */
@@ -351,6 +372,22 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
       gone = true;
     };
   }, [wantStaff]);
+
+  // The attributes a parameter may take, read once per audience group the first time a template is picked
+  // for the directory — the imported sources map columns, not attributes.
+  const attrAudience = attributeAudience(kind);
+  const wantAttributes = sourceKind === "directory" && picked !== null && attributes[attrAudience] === undefined;
+  useEffect(() => {
+    if (!wantAttributes) return;
+    let gone = false;
+    listNoticeAttributes(attrAudience).then((r) => {
+      if (!gone) setAttributes((cur) => ({ ...cur, [attrAudience]: r.ok ? { ok: true, duLieu: r.duLieu.items } : r }));
+    });
+    return () => {
+      gone = true;
+    };
+  }, [wantAttributes, attrAudience]);
+  const attributeList = attributes[attrAudience];
 
   const tagRows = tagList !== null && tagList.ok ? tagList.duLieu.items : [];
   const source = recipientSource(kind, ids, tags, tagRows, canReadCitizens);
@@ -472,6 +509,10 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
       return d;
     }
     if (p === null) return null;
+    const fields = p.t.params.map((x) => x.field);
+    // Directory only: a parameter fed by each recipient's attribute goes up "" in `params` — never a shared
+    // value the officer typed before switching the row.
+    const attributeMapping = imported ? {} : attributeMappingBody(fields, attributeChoice, kind);
     const d: NoticeDraft = {
       channel: CHANNEL_WIRE[p.channel],
       sourceId: templateSourceId(p),
@@ -479,8 +520,9 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
       audience: imported ? { kind: wireKind(), ids: [], tags: [] } : audienceBody(kind, ids, tags),
       // Exactly the template's fields, each one present: an empty value is what comms reports as missing.
       // A parameter taken from a file column goes up empty here and filled in each row's `values` (S4).
-      params: Object.fromEntries(p.t.params.map((x) => [x.field, values[x.field] ?? ""])),
+      params: Object.fromEntries(fields.map((f) => [f, f in attributeMapping ? "" : (values[f] ?? "")])),
     };
+    if (Object.keys(attributeMapping).length > 0) d.attributeMapping = attributeMapping;
     if (imported) d.recipients = rows;
     const mapping =
       importedSource === null ? undefined : buildMapping(importedSource, p.channel, null, p.channel === "zns" ? paramColumns : {});
@@ -514,6 +556,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
 
   function pickKind(next: AudienceKind) {
     setKind(next);
+    setAttributeChoice((cur) => allowedAttributeChoice(cur, next));
     setIds([]);
     setTags([]);
     setPicked(null);
@@ -562,6 +605,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
     setPicked(p);
     setParams({});
     setParamColumns({});
+    setAttributeChoice({});
     setTitle(templateName(p));
     setStep("content");
     // Prototype: picking a template runs the preview at once; a changed parameter is previewed again by
@@ -845,13 +889,83 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                         onVariableColumn={(n, col) => setVariableColumns((cur) => ({ ...cur, [n]: col }))}
                       />
                     )}
+                    {!smsFree && !imported && picked !== null && picked.t.params.length > 0 && (
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-navy text-[13px] leading-tight font-semibold">{PARAMS_SOURCE_TITLE}</span>
+                          <Tooltip content={ATTRIBUTE_HELP}>
+                            <button
+                              type="button"
+                              aria-label={ATTRIBUTE_HELP_LABEL}
+                              aria-expanded={attributeHelpOpen}
+                              aria-controls="notice-attribute-help"
+                              data-attribute-help=""
+                              onClick={() => setAttributeHelpOpen((o) => !o)}
+                              className="border-line text-ink-muted hover:text-brand grid size-[18px] cursor-pointer place-items-center rounded-full border border-solid bg-white p-0 [font-family:inherit] text-[11px] font-bold"
+                            >
+                              ?
+                            </button>
+                          </Tooltip>
+                        </div>
+                        {attributeHelpOpen && (
+                          <p id="notice-attribute-help" className={MUTED} data-attribute-help-text="">
+                            {ATTRIBUTE_HELP}
+                          </p>
+                        )}
+                      </div>
+                    )}
                     {!smsFree &&
                       picked !== null &&
                       picked.t.params.map((p, i) => {
                         const fromFile = sourceKind === "file" && picked.channel === "zns" && table !== null;
                         const column = fromFile ? (paramColumns[p.field] ?? null) : null;
+                        const paramSource: ParamSource = !imported && p.field in attributeChoice ? "attribute" : "shared";
                         return (
                           <div key={p.field} className="flex flex-wrap items-end gap-3" data-param={p.field}>
+                            {!imported && (
+                              <Segmented
+                                legend={paramSourceLegend(paramLabel(picked.channel, p))}
+                                name={`notice-param-source-${i}`}
+                                mode="buttons"
+                                value={paramSource}
+                                options={PARAM_SOURCES.map((v) => ({ value: v, label: PARAM_SOURCE_LABEL[v] }))}
+                                onChange={(v) =>
+                                  setAttributeChoice((cur) => {
+                                    const next = { ...cur };
+                                    if (v === "attribute") next[p.field] = cur[p.field] ?? "";
+                                    else delete next[p.field];
+                                    return next;
+                                  })
+                                }
+                              />
+                            )}
+                            {paramSource === "attribute" && (
+                              <Field label={paramLabel(picked.channel, p)} htmlFor={`notice-param-attr-${i}`} kind="select" grow="auto" className="min-w-0">
+                                <select
+                                  id={`notice-param-attr-${i}`}
+                                  value={attributeChoice[p.field] ?? ""}
+                                  disabled={attributeList === undefined || !attributeList.ok}
+                                  onChange={(e) => {
+                                    const code = e.target.value;
+                                    setAttributeChoice((cur) => ({ ...cur, [p.field]: code }));
+                                  }}
+                                >
+                                  <option value="">{attributeList === undefined ? "…" : ATTRIBUTE_PICK}</option>
+                                  {attributeList !== undefined &&
+                                    attributeList.ok &&
+                                    attributeList.duLieu.map((a) => (
+                                      <option key={a.code} value={a.code}>
+                                        {a.label}
+                                      </option>
+                                    ))}
+                                </select>
+                              </Field>
+                            )}
+                            {paramSource === "attribute" && attributeList !== undefined && !attributeList.ok && (
+                              <p className={ALERT} role="alert" data-attributes-refused="">
+                                {attributeList.thongBao}
+                              </p>
+                            )}
                             {fromFile && (
                               <Field label={`Nguồn · ${paramLabel(picked.channel, p)}`} htmlFor={`notice-param-src-${i}`} kind="select" grow="auto" className="min-w-0">
                                 <select
@@ -871,7 +985,7 @@ function NoticeSendWorkspace({ canReadCitizens, canManageZalo }: { canReadCitize
                                 </select>
                               </Field>
                             )}
-                            {column === null && (
+                            {column === null && paramSource === "shared" && (
                               <Field label={paramLabel(picked.channel, p)} htmlFor={`notice-param-${i}`} grow="auto">
                                 <input
                                   id={`notice-param-${i}`}
@@ -1697,6 +1811,23 @@ function CampaignRecipients({ campaign, onBack }: { campaign: NoticeCampaign; on
   const [page, setPage] = useState<KetQua<{ items: NoticeRecipient[]; next: string }> | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [moreRefused, setMoreRefused] = useState<string | null>(null);
+  const [attributes, setAttributes] = useState<NoticeAttribute[]>([]);
+
+  // The labels of a directory campaign's mapped attributes. Not readable = the codes stand in: the code is
+  // what the campaign stored, the label only a courtesy.
+  const mapped = Object.keys(campaign.attribute_mapping ?? {}).length > 0;
+  const attrAudience = attributeAudienceOfWire(campaign.audience_kind);
+  useEffect(() => {
+    if (!mapped || attrAudience === null) return;
+    let gone = false;
+    listNoticeAttributes(attrAudience).then((r) => {
+      if (!gone && r.ok) setAttributes(r.duLieu.items);
+    });
+    return () => {
+      gone = true;
+    };
+  }, [mapped, attrAudience]);
+  const attributeRows = attributeMappingRows(campaign.channel === "sms" ? "sms" : "zalo-zns", campaign.attribute_mapping, attributes);
 
   useEffect(() => {
     let gone = false;
@@ -1738,8 +1869,8 @@ function CampaignRecipients({ campaign, onBack }: { campaign: NoticeCampaign; on
           {BACK_TO_HISTORY}
         </Button>
       </div>
-      {campaign.recipient_mapping !== null && campaign.recipient_mapping !== undefined && (
-        <MappingBlock campaign={campaign} mapping={campaign.recipient_mapping} />
+      {((campaign.recipient_mapping !== null && campaign.recipient_mapping !== undefined) || attributeRows.length > 0) && (
+        <MappingBlock campaign={campaign} mapping={campaign.recipient_mapping ?? null} attributeRows={attributeRows} />
       )}
       {page === null ? (
         <div className="p-5">
@@ -1798,14 +1929,34 @@ function CampaignRecipients({ campaign, onBack }: { campaign: NoticeCampaign; on
   );
 }
 
-/** "Thông tin map biến": which file column fed the phone, the content, each variable or parameter. */
-function MappingBlock({ campaign, mapping }: { campaign: NoticeCampaign; mapping: NoticeRecipientMapping }) {
+/**
+ * "Thông tin map biến": which file column fed the phone, the content, each variable or parameter — and,
+ * for a directory campaign, which attribute fed each parameter (ADR 0101 #12).
+ */
+function MappingBlock({
+  campaign,
+  mapping,
+  attributeRows,
+}: {
+  campaign: NoticeCampaign;
+  mapping: NoticeRecipientMapping | null;
+  attributeRows: readonly (readonly [string, string])[];
+}) {
+  return (
+    <section className="border-line flex flex-col gap-2 border-b border-solid px-4 py-3 text-[12.5px]" data-mapping="">
+      <h3 className="text-navy m-0 text-[13px] font-bold">{MAPPING_TITLE}</h3>
+      {mapping !== null && <FileMapping campaign={campaign} mapping={mapping} />}
+      {attributeRows.length > 0 && <PairTable columns={ATTRIBUTE_MAPPING_COLUMNS} rows={attributeRows} name="attributes" />}
+    </section>
+  );
+}
+
+function FileMapping({ campaign, mapping }: { campaign: NoticeCampaign; mapping: NoticeRecipientMapping }) {
   const variables = Object.entries(mapping.variables ?? {});
   const params = Object.entries(mapping.params ?? {});
   const isSms = campaign.channel === "sms";
   return (
-    <section className="border-line flex flex-col gap-2 border-b border-solid px-4 py-3 text-[12.5px]" data-mapping="">
-      <h3 className="text-navy m-0 text-[13px] font-bold">{MAPPING_TITLE}</h3>
+    <>
       <dl className="m-0 flex flex-col gap-1.5">
         <MappingRow label={MAPPING_PHONE} value={mapping.phone_column} name="phone" />
         {mapping.content_column !== undefined && <MappingRow label={MAPPING_CONTENT_COLUMN} value={mapping.content_column} name="content-column" />}
@@ -1823,7 +1974,7 @@ function MappingBlock({ campaign, mapping }: { campaign: NoticeCampaign; mapping
         ) : (
           <p className={MUTED}>{MAPPING_PARAMS_SHARED}</p>
         ))}
-    </section>
+    </>
   );
 }
 
